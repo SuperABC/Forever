@@ -23,8 +23,7 @@ int main() {
 
 	// 读取Populace相关类及Mod
 	shared_ptr<Populace> populace = make_shared<Populace>();
-	shared_ptr<JobFactory> jobs = make_shared<JobFactory>();
-	populace->InitJobs(jobs);
+	populace->InitJobs();
 
 	// 读取命令行
 	string cmd;
@@ -47,9 +46,9 @@ int main() {
 			switch (type) {
 			case CMD_INIT: { // 初始化世界、人口、剧本
 				parser.AddOption("--block", 0, "Block num both horizontally and vertically.", true, "4");
-				parser.AddOption("--story", 0, "Story file.", true, "script/ys.json");
 				parser.ParseCmd(cmd);
-
+				int size = atoi(parser.GetOption("--block").data());
+				map->Init(size, size);
 				break;
 			}
 			case CMD_PASS: { // 时间流逝

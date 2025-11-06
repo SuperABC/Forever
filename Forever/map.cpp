@@ -4,6 +4,52 @@
 
 using namespace std;
 
+void Element::SetZoneId(int zoneId) {
+    this->zoneId = zoneId;
+}
+
+void Element::SetBuildingId(int buildingId) {
+    this->buildingId = buildingId;
+}
+
+int Element::GetZoneId() {
+    return this->zoneId;
+}
+
+int Element::GetBuildingId() {
+    return this->buildingId;
+}
+
+Block::Block(int x, int y) {
+    elements = vector<vector<shared_ptr<Element>>>(BLOCK_SIZE,
+        vector<shared_ptr<Element>>(BLOCK_SIZE, nullptr));
+
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            elements[j][i] = make_shared<Element>();
+        }
+    }
+}
+
+Block::~Block() {
+
+}
+
+shared_ptr<Element> Block::GetElement(int x, int y) {
+    if (CheckXY(x, y))
+        return elements[y - offsetY][x - offsetX];
+    else
+        return nullptr;
+}
+
+bool Block::CheckXY(int x, int y) {
+    if (x < offsetX)return false;
+    if (y < offsetY)return false;
+    if (x >= offsetX + BLOCK_SIZE)return false;
+    if (y >= offsetY + BLOCK_SIZE)return false;
+    return true;
+}
+
 Map::Map() {
     terrainFactory = make_shared<TerrainFactory>();
     roadnetFactory = make_shared<RoadnetFactory>();
@@ -231,3 +277,56 @@ void Map::InitRooms() {
 #endif // MOD_TEST
 
 }
+
+int Map::Init(int blockX, int blockY) {
+    // 清除已有内容
+    Destroy();
+
+    // 地图尺寸需要为正
+    if (blockX < 1 || blockY < 1) {
+        throw invalid_argument("Invalid map size.\n");
+        return 0;
+    }
+
+    // 计算地图实际长宽
+    width = blockX * BLOCK_SIZE;
+    height = blockY * BLOCK_SIZE;
+
+    // 构建区块
+    blocks = vector<vector<shared_ptr<Block>>>(blockY,
+        vector<shared_ptr<Block>>(blockX, nullptr));
+    for (int i = 0; i < blockX; i++) {
+        for (int j = 0; j < blockY; j++) {
+            blocks[j][i] = make_shared<Block>(i * BLOCK_SIZE, j * BLOCK_SIZE);
+        }
+    }
+
+    return 0;
+}
+
+void Map::Destroy() {
+
+}
+
+void Map::Tick() {
+
+}
+
+void Map::Load(string path) {
+
+}
+
+void Map::Save(string path) {
+
+}
+
+bool Map::CheckXY(int x, int y) {
+    if (x < 0)return false;
+    if (y < 0)return false;
+    if (x >= width)return false;
+    if (y >= height)return false;
+    return true;
+}
+
+
+
