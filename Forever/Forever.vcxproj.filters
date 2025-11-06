@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="头文件\map">
+      <UniqueIdentifier>{d51b57a7-391b-40c6-8e7a-f0671164e148}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\populace">
+      <UniqueIdentifier>{71e425ab-3db2-475f-b7ac-21f046aa20bf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\map">
+      <UniqueIdentifier>{1a2a3c6f-814f-40a3-9fce-26f2a62593fc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\populace">
+      <UniqueIdentifier>{07124be6-6d47-4666-b52b-5bcfa01db3c6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\common">
+      <UniqueIdentifier>{2e2a827f-2cb1-4eef-bde1-cc723ed12761}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\common">
+      <UniqueIdentifier>{57e34ca8-eb5d-415d-a88e-771f60fd406d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\script">
+      <UniqueIdentifier>{424c4198-ca8c-42e7-ba96-6b171e8256f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\script">
+      <UniqueIdentifier>{522c465e-dcce-4cf4-82da-3a73bfd60768}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\organization">
+      <UniqueIdentifier>{f6fb025e-1737-40b3-8290-7bd137828366}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\organization">
+      <UniqueIdentifier>{aa33c486-95f6-41f3-a80b-22c908fa88b2}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="map.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="populace.h">
+      <Filter>头文件\populace</Filter>
+    </ClInclude>
+    <ClInclude Include="job.h">
+      <Filter>头文件\populace</Filter>
+    </ClInclude>
+    <ClInclude Include="roadnet.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="zone.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="building.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="component.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="room.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="util.h">
+      <Filter>头文件\common</Filter>
+    </ClInclude>
+    <ClInclude Include="terrain.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="map.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="building.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="component.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="roadnet.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="room.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="zone.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="util.cpp">
+      <Filter>源文件\common</Filter>
+    </ClCompile>
+    <ClCompile Include="job.cpp">
+      <Filter>源文件\populace</Filter>
+    </ClCompile>
+    <ClCompile Include="populace.cpp">
+      <Filter>源文件\populace</Filter>
+    </ClCompile>
+    <ClCompile Include="terrain.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

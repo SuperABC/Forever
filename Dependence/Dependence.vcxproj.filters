@@ -1,0 +1,75 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="头文件\map">
+      <UniqueIdentifier>{f26e5715-f93f-4fac-9d9a-6a50684af839}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\map">
+      <UniqueIdentifier>{427de04e-904c-4755-8792-31e6eea6b3d2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\populace">
+      <UniqueIdentifier>{e5dde0e1-c627-4631-b830-c71905249f3a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\populace">
+      <UniqueIdentifier>{43c987d4-1e5d-4b91-8676-4093098577b3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="map\roadnet_base.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_base.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\room_base.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\zone_base.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_base.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\job_base.h">
+      <Filter>头文件\populace</Filter>
+    </ClInclude>
+    <ClInclude Include="map\terrain_base.h">
+      <Filter>头文件\map</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="map\roadnet_base.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_base.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_base.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_base.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\zone_base.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\job_base.cpp">
+      <Filter>源文件\populace</Filter>
+    </ClCompile>
+    <ClCompile Include="map\terrain_base.cpp">
+      <Filter>源文件\map</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
