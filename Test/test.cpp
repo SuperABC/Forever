@@ -14,18 +14,12 @@ using namespace std;
 int main() {
 	// 读取Map相关类及Mod
 	shared_ptr<Map> map = make_shared<Map>();
-	shared_ptr<TerrainFactory> terrains = make_shared<TerrainFactory>();
-	shared_ptr<RoadnetFactory> roadnets = make_shared<RoadnetFactory>();
-	shared_ptr<ZoneFactory> zones = make_shared<ZoneFactory>();
-	shared_ptr<BuildingFactory> buildings = make_shared<BuildingFactory>();
-	shared_ptr<ComponentFactory> components = make_shared<ComponentFactory>();
-	shared_ptr<RoomFactory> rooms = make_shared<RoomFactory>();
-	map->InitTerrains(terrains);
-	map->InitRoadnets(roadnets);
-	map->InitZones(zones);
-	map->InitBuildings(buildings);
-	map->InitComponents(components);
-	map->InitRooms(rooms);
+	map->InitTerrains();
+	map->InitRoadnets();
+	map->InitZones();
+	map->InitBuildings();
+	map->InitComponents();
+	map->InitRooms();
 
 	// 读取Populace相关类及Mod
 	shared_ptr<Populace> populace = make_shared<Populace>();

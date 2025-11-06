@@ -15,14 +15,23 @@ public:
 	Map();
 	~Map();
 
-	void InitTerrains(std::shared_ptr<TerrainFactory> factory);
-	void InitRoadnets(std::shared_ptr<RoadnetFactory> factory);
-	void InitZones(std::shared_ptr<ZoneFactory> factory);
-	void InitBuildings(std::shared_ptr<BuildingFactory> factory);
-	void InitComponents(std::shared_ptr<ComponentFactory> factory);
-	void InitRooms(std::shared_ptr<RoomFactory> factory);
+	// 读取Mods
+	void InitTerrains();
+	void InitRoadnets();
+	void InitZones();
+	void InitBuildings();
+	void InitComponents();
+	void InitRooms();
 
 private:
 	std::vector<HMODULE> modHandles;
+	shared_ptr<TerrainFactory> terrainFactory;
+	shared_ptr<RoadnetFactory> roadnetFactory;
+	shared_ptr<ZoneFactory> zoneFactory;
+	shared_ptr<BuildingFactory> buildingFactory;
+	shared_ptr<ComponentFactory> componentFactory;
+	shared_ptr<RoomFactory> roomFactory;
+
+	int width = 0, height = 0;
 };
 

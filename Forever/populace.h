@@ -10,9 +10,10 @@ public:
 	Populace();
 	~Populace();
 
-	void InitJobs(std::shared_ptr<JobFactory> factory);
+	void InitJobs();
 
 private:
 	std::vector<HMODULE> modHandles;
+	shared_ptr<JobFactory> jobFactory;
 };
 

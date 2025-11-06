@@ -17,8 +17,8 @@ Populace::~Populace() {
     modHandles.clear();
 }
 
-void Populace::InitJobs(std::shared_ptr<JobFactory> factory) {
-    factory->RegisterJob("test", []() { return std::make_unique<TestJob>(); });
+void Populace::InitJobs() {
+    jobFactory->RegisterJob("test", []() { return std::make_unique<TestJob>(); });
 
     HMODULE modHandle = LoadLibraryA("Mod.dll");
     if (modHandle) {
@@ -27,7 +27,7 @@ void Populace::InitJobs(std::shared_ptr<JobFactory> factory) {
 
         RegisterModJobsFunc registerFunc = (RegisterModJobsFunc)GetProcAddress(modHandle, "RegisterModJobs");
         if (registerFunc) {
-            registerFunc(factory.get());
+            registerFunc(jobFactory.get());
         }
         else {
             debugf("Incorrect dll content.");
@@ -40,8 +40,8 @@ void Populace::InitJobs(std::shared_ptr<JobFactory> factory) {
 #ifdef MOD_TEST
     auto jobList = { "test", "mod" };
     for (const auto& jobId : jobList) {
-        if (factory->CheckRegistered(jobId)) {
-            auto job = factory->CreateJob(jobId);
+        if (jobFactory->CheckRegistered(jobId)) {
+            auto job = jobFactory->CreateJob(jobId);
             debugf(("Created job: " + job->GetName() + " (ID: " + jobId + ")\n").data());
         }
         else {

@@ -5,7 +5,12 @@
 using namespace std;
 
 Map::Map() {
-
+    terrainFactory = make_shared<TerrainFactory>();
+    roadnetFactory = make_shared<RoadnetFactory>();
+    zoneFactory = make_shared<ZoneFactory>();
+    buildingFactory = make_shared<BuildingFactory>();
+    componentFactory = make_shared<ComponentFactory>();
+    roomFactory = make_shared<RoomFactory>();
 }
 
 Map::~Map() {
@@ -17,8 +22,8 @@ Map::~Map() {
     modHandles.clear();
 }
 
-void Map::InitTerrains(std::shared_ptr<TerrainFactory> factory) {
-    factory->RegisterTerrain("test", []() { return std::make_unique<TestTerrain>(); });
+void Map::InitTerrains() {
+    terrainFactory->RegisterTerrain("test", []() { return std::make_unique<TestTerrain>(); });
 
     HMODULE modHandle = LoadLibraryA("Mod.dll");
     if (modHandle) {
@@ -27,7 +32,7 @@ void Map::InitTerrains(std::shared_ptr<TerrainFactory> factory) {
 
         RegisterModTerrainsFunc registerFunc = (RegisterModTerrainsFunc)GetProcAddress(modHandle, "RegisterModTerrains");
         if (registerFunc) {
-            registerFunc(factory.get());
+            registerFunc(terrainFactory.get());
         }
         else {
             debugf("Incorrect dll content.");
@@ -40,8 +45,8 @@ void Map::InitTerrains(std::shared_ptr<TerrainFactory> factory) {
 #ifdef MOD_TEST
     auto terrainList = { "test", "mod" };
     for (const auto& terrainId : terrainList) {
-        if (factory->CheckRegistered(terrainId)) {
-            auto terrain = factory->CreateTerrain(terrainId);
+        if (terrainFactory->CheckRegistered(terrainId)) {
+            auto terrain = terrainFactory->CreateTerrain(terrainId);
             debugf(("Created terrain: " + terrain->GetName() + " (ID: " + terrainId + ")\n").data());
         }
         else {
@@ -52,8 +57,8 @@ void Map::InitTerrains(std::shared_ptr<TerrainFactory> factory) {
 
 }
 
-void Map::InitRoadnets(std::shared_ptr<RoadnetFactory> factory) {
-    factory->RegisterRoadnet("test", []() { return std::make_unique<TestRoadnet>(); });
+void Map::InitRoadnets() {
+    roadnetFactory->RegisterRoadnet("test", []() { return std::make_unique<TestRoadnet>(); });
 
     HMODULE modHandle = LoadLibraryA("Mod.dll");
     if (modHandle) {
@@ -62,7 +67,7 @@ void Map::InitRoadnets(std::shared_ptr<RoadnetFactory> factory) {
 
         RegisterModRoadnetsFunc registerFunc = (RegisterModRoadnetsFunc)GetProcAddress(modHandle, "RegisterModRoadnets");
         if (registerFunc) {
-            registerFunc(factory.get());
+            registerFunc(roadnetFactory.get());
         }
         else {
             debugf("Incorrect dll content.");
@@ -75,8 +80,8 @@ void Map::InitRoadnets(std::shared_ptr<RoadnetFactory> factory) {
 #ifdef MOD_TEST
     auto roadnetList = { "test", "mod" };
     for (const auto& roadnetId : roadnetList) {
-        if (factory->CheckRegistered(roadnetId)) {
-            auto roadnet = factory->CreateRoadnet(roadnetId);
+        if (roadnetFactory->CheckRegistered(roadnetId)) {
+            auto roadnet = roadnetFactory->CreateRoadnet(roadnetId);
             debugf(("Created roadnet: " + roadnet->GetName() + " (ID: " + roadnetId + ")\n").data());
         }
         else {
@@ -87,8 +92,8 @@ void Map::InitRoadnets(std::shared_ptr<RoadnetFactory> factory) {
 
 }
 
-void Map::InitZones(std::shared_ptr<ZoneFactory> factory) {
-    factory->RegisterZone("test", []() { return std::make_unique<TestZone>(); });
+void Map::InitZones() {
+    zoneFactory->RegisterZone("test", []() { return std::make_unique<TestZone>(); });
 
     HMODULE modHandle = LoadLibraryA("Mod.dll");
     if (modHandle) {
@@ -97,7 +102,7 @@ void Map::InitZones(std::shared_ptr<ZoneFactory> factory) {
 
         RegisterModZonesFunc registerFunc = (RegisterModZonesFunc)GetProcAddress(modHandle, "RegisterModZones");
         if (registerFunc) {
-            registerFunc(factory.get());
+            registerFunc(zoneFactory.get());
         }
         else {
             debugf("Incorrect dll content.");
@@ -110,8 +115,8 @@ void Map::InitZones(std::shared_ptr<ZoneFactory> factory) {
 #ifdef MOD_TEST
     auto zoneList = { "test", "mod" };
     for (const auto& zoneId : zoneList) {
-        if (factory->CheckRegistered(zoneId)) {
-            auto zone = factory->CreateZone(zoneId);
+        if (zoneFactory->CheckRegistered(zoneId)) {
+            auto zone = zoneFactory->CreateZone(zoneId);
             debugf(("Created zone: " + zone->GetName() + " (ID: " + zoneId + ")\n").data());
         }
         else {
@@ -122,8 +127,8 @@ void Map::InitZones(std::shared_ptr<ZoneFactory> factory) {
 
 }
 
-void Map::InitBuildings(std::shared_ptr<BuildingFactory> factory) {
-    factory->RegisterBuilding("test", []() { return std::make_unique<TestBuilding>(); });
+void Map::InitBuildings() {
+    buildingFactory->RegisterBuilding("test", []() { return std::make_unique<TestBuilding>(); });
 
     HMODULE modHandle = LoadLibraryA("Mod.dll");
     if (modHandle) {
@@ -132,7 +137,7 @@ void Map::InitBuildings(std::shared_ptr<BuildingFactory> factory) {
 
         RegisterModBuildingsFunc registerFunc = (RegisterModBuildingsFunc)GetProcAddress(modHandle, "RegisterModBuildings");
         if (registerFunc) {
-            registerFunc(factory.get());
+            registerFunc(buildingFactory.get());
         }
         else {
             debugf("Incorrect dll content.");
@@ -145,8 +150,8 @@ void Map::InitBuildings(std::shared_ptr<BuildingFactory> factory) {
 #ifdef MOD_TEST
     auto buildingList = { "test", "mod" };
     for (const auto& buildingId : buildingList) {
-        if (factory->CheckRegistered(buildingId)) {
-            auto building = factory->CreateBuilding(buildingId);
+        if (buildingFactory->CheckRegistered(buildingId)) {
+            auto building = buildingFactory->CreateBuilding(buildingId);
             debugf(("Created building: " + building->GetName() + " (ID: " + buildingId + ")\n").data());
         }
         else {
@@ -157,8 +162,8 @@ void Map::InitBuildings(std::shared_ptr<BuildingFactory> factory) {
 
 }
 
-void Map::InitComponents(std::shared_ptr<ComponentFactory> factory) {
-    factory->RegisterComponent("test", []() { return std::make_unique<TestComponent>(); });
+void Map::InitComponents() {
+    componentFactory->RegisterComponent("test", []() { return std::make_unique<TestComponent>(); });
 
     HMODULE modHandle = LoadLibraryA("Mod.dll");
     if (modHandle) {
@@ -167,7 +172,7 @@ void Map::InitComponents(std::shared_ptr<ComponentFactory> factory) {
 
         RegisterModComponentsFunc registerFunc = (RegisterModComponentsFunc)GetProcAddress(modHandle, "RegisterModComponents");
         if (registerFunc) {
-            registerFunc(factory.get());
+            registerFunc(componentFactory.get());
         }
         else {
             debugf("Incorrect dll content.");
@@ -180,8 +185,8 @@ void Map::InitComponents(std::shared_ptr<ComponentFactory> factory) {
 #ifdef MOD_TEST
     auto componentList = { "test", "mod" };
     for (const auto& componentId : componentList) {
-        if (factory->CheckRegistered(componentId)) {
-            auto component = factory->CreateComponent(componentId);
+        if (componentFactory->CheckRegistered(componentId)) {
+            auto component = componentFactory->CreateComponent(componentId);
             debugf(("Created component: " + component->GetName() + " (ID: " + componentId + ")\n").data());
         }
         else {
@@ -192,8 +197,8 @@ void Map::InitComponents(std::shared_ptr<ComponentFactory> factory) {
 
 }
 
-void Map::InitRooms(std::shared_ptr<RoomFactory> factory) {
-    factory->RegisterRoom("test", []() { return std::make_unique<TestRoom>(); });
+void Map::InitRooms() {
+    roomFactory->RegisterRoom("test", []() { return std::make_unique<TestRoom>(); });
 
     HMODULE modHandle = LoadLibraryA("Mod.dll");
     if (modHandle) {
@@ -202,7 +207,7 @@ void Map::InitRooms(std::shared_ptr<RoomFactory> factory) {
 
         RegisterModRoomsFunc registerFunc = (RegisterModRoomsFunc)GetProcAddress(modHandle, "RegisterModRooms");
         if (registerFunc) {
-            registerFunc(factory.get());
+            registerFunc(roomFactory.get());
         }
         else {
             debugf("Incorrect dll content.");
@@ -215,8 +220,8 @@ void Map::InitRooms(std::shared_ptr<RoomFactory> factory) {
 #ifdef MOD_TEST
     auto roomList = { "test", "mod" };
     for (const auto& roomId : roomList) {
-        if (factory->CheckRegistered(roomId)) {
-            auto room = factory->CreateRoom(roomId);
+        if (roomFactory->CheckRegistered(roomId)) {
+            auto room = roomFactory->CreateRoom(roomId);
             debugf(("Created room: " + room->GetName() + " (ID: " + roomId + ")\n").data());
         }
         else {
