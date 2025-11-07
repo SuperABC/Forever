@@ -21,7 +21,7 @@ int Element::GetBuildingId() {
     return this->buildingId;
 }
 
-Block::Block(int x, int y) {
+Block::Block(int x, int y) : offsetX(x), offsetY(y) {
     elements = vector<vector<shared_ptr<Element>>>(BLOCK_SIZE,
         vector<shared_ptr<Element>>(BLOCK_SIZE, nullptr));
 
@@ -82,11 +82,11 @@ void Map::InitTerrains() {
             registerFunc(terrainFactory.get());
         }
         else {
-            debugf("Incorrect dll content.");
+            debugf("Incorrect dll content.\n");
         }
     }
     else {
-        debugf("Failed to load mod.dll.");
+        debugf("Failed to load mod.dll.\n");
     }
 
 #ifdef MOD_TEST
@@ -94,10 +94,10 @@ void Map::InitTerrains() {
     for (const auto& terrainId : terrainList) {
         if (terrainFactory->CheckRegistered(terrainId)) {
             auto terrain = terrainFactory->CreateTerrain(terrainId);
-            debugf(("Created terrain: " + terrain->GetName() + " (ID: " + terrainId + ")\n").data());
+            debugf(("Created terrain: " + terrain->GetName() + " (ID: " + terrainId + ").\n").data());
         }
         else {
-            debugf("Terrain not registered: %s\n", terrainId);
+            debugf("Terrain not registered: %s.\n", terrainId);
         }
     }
 #endif // MOD_TEST
@@ -117,11 +117,11 @@ void Map::InitRoadnets() {
             registerFunc(roadnetFactory.get());
         }
         else {
-            debugf("Incorrect dll content.");
+            debugf("Incorrect dll content.\n");
         }
     }
     else {
-        debugf("Failed to load mod.dll.");
+        debugf("Failed to load mod.dll.\n");
     }
 
 #ifdef MOD_TEST
@@ -129,10 +129,10 @@ void Map::InitRoadnets() {
     for (const auto& roadnetId : roadnetList) {
         if (roadnetFactory->CheckRegistered(roadnetId)) {
             auto roadnet = roadnetFactory->CreateRoadnet(roadnetId);
-            debugf(("Created roadnet: " + roadnet->GetName() + " (ID: " + roadnetId + ")\n").data());
+            debugf(("Created roadnet: " + roadnet->GetName() + " (ID: " + roadnetId + ").\n").data());
         }
         else {
-            debugf("Roadnet not registered: %s\n", roadnetId);
+            debugf("Roadnet not registered: %s.\n", roadnetId);
         }
     }
 #endif // MOD_TEST
@@ -152,11 +152,11 @@ void Map::InitZones() {
             registerFunc(zoneFactory.get());
         }
         else {
-            debugf("Incorrect dll content.");
+            debugf("Incorrect dll content.\n");
         }
     }
     else {
-        debugf("Failed to load mod.dll.");
+        debugf("Failed to load mod.dll.\n");
     }
 
 #ifdef MOD_TEST
@@ -164,10 +164,10 @@ void Map::InitZones() {
     for (const auto& zoneId : zoneList) {
         if (zoneFactory->CheckRegistered(zoneId)) {
             auto zone = zoneFactory->CreateZone(zoneId);
-            debugf(("Created zone: " + zone->GetName() + " (ID: " + zoneId + ")\n").data());
+            debugf(("Created zone: " + zone->GetName() + " (ID: " + zoneId + ").\n").data());
         }
         else {
-            debugf("Zone not registered: %s\n", zoneId);
+            debugf("Zone not registered: %s.\n", zoneId);
         }
     }
 #endif // MOD_TEST
@@ -187,11 +187,11 @@ void Map::InitBuildings() {
             registerFunc(buildingFactory.get());
         }
         else {
-            debugf("Incorrect dll content.");
+            debugf("Incorrect dll content.\n");
         }
     }
     else {
-        debugf("Failed to load mod.dll.");
+        debugf("Failed to load mod.dll.\n");
     }
 
 #ifdef MOD_TEST
@@ -199,10 +199,10 @@ void Map::InitBuildings() {
     for (const auto& buildingId : buildingList) {
         if (buildingFactory->CheckRegistered(buildingId)) {
             auto building = buildingFactory->CreateBuilding(buildingId);
-            debugf(("Created building: " + building->GetName() + " (ID: " + buildingId + ")\n").data());
+            debugf(("Created building: " + building->GetName() + " (ID: " + buildingId + ").\n").data());
         }
         else {
-            debugf("Building not registered: %s\n", buildingId);
+            debugf("Building not registered: %s.\n", buildingId);
         }
     }
 #endif // MOD_TEST
@@ -222,11 +222,11 @@ void Map::InitComponents() {
             registerFunc(componentFactory.get());
         }
         else {
-            debugf("Incorrect dll content.");
+            debugf("Incorrect dll content.\n");
         }
     }
     else {
-        debugf("Failed to load mod.dll.");
+        debugf("Failed to load mod.dll.\n");
     }
 
 #ifdef MOD_TEST
@@ -234,10 +234,10 @@ void Map::InitComponents() {
     for (const auto& componentId : componentList) {
         if (componentFactory->CheckRegistered(componentId)) {
             auto component = componentFactory->CreateComponent(componentId);
-            debugf(("Created component: " + component->GetName() + " (ID: " + componentId + ")\n").data());
+            debugf(("Created component: " + component->GetName() + " (ID: " + componentId + ").\n").data());
         }
         else {
-            debugf("Component not registered: %s\n", componentId);
+            debugf("Component not registered: %s.\n", componentId);
         }
     }
 #endif // MOD_TEST
@@ -257,11 +257,11 @@ void Map::InitRooms() {
             registerFunc(roomFactory.get());
         }
         else {
-            debugf("Incorrect dll content.");
+            debugf("Incorrect dll content.\n");
         }
     }
     else {
-        debugf("Failed to load mod.dll.");
+        debugf("Failed to load mod.dll.\n");
     }
 
 #ifdef MOD_TEST
@@ -269,10 +269,10 @@ void Map::InitRooms() {
     for (const auto& roomId : roomList) {
         if (roomFactory->CheckRegistered(roomId)) {
             auto room = roomFactory->CreateRoom(roomId);
-            debugf(("Created room: " + room->GetName() + " (ID: " + roomId + ")\n").data());
+            debugf(("Created room: " + room->GetName() + " (ID: " + roomId + ").\n").data());
         }
         else {
-            debugf("Room not registered: %s\n", roomId);
+            debugf("Room not registered: %s.\n", roomId);
         }
     }
 #endif // MOD_TEST
