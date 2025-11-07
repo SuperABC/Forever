@@ -342,6 +342,9 @@ int Map::Init(int blockX, int blockY) {
         terrain->DistributeTerrain(width, height, setTerrain, getTerrain);
     }
 
+    // 随机生成路网
+
+
     return 0;
 }
 

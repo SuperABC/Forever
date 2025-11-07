@@ -46,6 +46,7 @@ public:
 	bool SetTerrain(int x, int y, std::string terrain);
 
 private:
+	// 基础内容
 	int offsetX, offsetY;
 	std::vector<std::vector<std::shared_ptr<Element>>> elements;
 
@@ -80,6 +81,7 @@ public:
 	void Save(std::string path);
 
 private:
+	// Mod管理
 	std::vector<HMODULE> modHandles;
 	std::unique_ptr<TerrainFactory> terrainFactory;
 	std::unique_ptr<RoadnetFactory> roadnetFactory;
@@ -88,6 +90,7 @@ private:
 	std::unique_ptr<ComponentFactory> componentFactory;
 	std::unique_ptr<RoomFactory> roomFactory;
 
+	// 基础内容
 	int width = 0, height = 0;
 	std::vector<std::vector<std::shared_ptr<Block>>> blocks;
 
