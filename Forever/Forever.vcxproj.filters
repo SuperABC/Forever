@@ -31,10 +31,10 @@
     <Filter Include="源文件\script">
       <UniqueIdentifier>{522c465e-dcce-4cf4-82da-3a73bfd60768}</UniqueIdentifier>
     </Filter>
-    <Filter Include="头文件\organization">
+    <Filter Include="头文件\society">
       <UniqueIdentifier>{f6fb025e-1737-40b3-8290-7bd137828366}</UniqueIdentifier>
     </Filter>
-    <Filter Include="源文件\organization">
+    <Filter Include="源文件\society">
       <UniqueIdentifier>{aa33c486-95f6-41f3-a80b-22c908fa88b2}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -66,6 +66,12 @@
     <ClInclude Include="terrain.h">
       <Filter>头文件\map</Filter>
     </ClInclude>
+    <ClInclude Include="society.h">
+      <Filter>头文件\society</Filter>
+    </ClInclude>
+    <ClInclude Include="organization.h">
+      <Filter>头文件\society</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map.cpp">
@@ -94,6 +100,12 @@
     </ClCompile>
     <ClCompile Include="terrain.cpp">
       <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="society.cpp">
+      <Filter>源文件\society</Filter>
+    </ClCompile>
+    <ClCompile Include="organization.cpp">
+      <Filter>源文件\society</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

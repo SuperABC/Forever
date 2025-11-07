@@ -1,6 +1,7 @@
 ﻿#include "parser.h"
 #include "map.h"
 #include "populace.h"
+#include "society.h"
 #include "error.h"
 
 #include <iostream>
@@ -25,6 +26,10 @@ int main() {
 	// 读取Populace相关类及Mod
 	shared_ptr<Populace> populace = make_shared<Populace>();
 	populace->InitJobs();
+
+	// 读取Society相关类及Mod
+	shared_ptr<Society> society = make_shared<Society>();
+	society->InitOrganizations();
 
 	// 读取命令行
 	string cmd;

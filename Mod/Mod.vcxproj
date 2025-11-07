@@ -25,6 +25,7 @@
     <ClInclude Include="building_mod.h" />
     <ClInclude Include="component_mod.h" />
     <ClInclude Include="job_mod.h" />
+    <ClInclude Include="organization_mod.h" />
     <ClInclude Include="roadnet_mod.h" />
     <ClInclude Include="room_mod.h" />
     <ClInclude Include="terrain_mod.h" />
@@ -83,11 +84,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>../Dependence/map;../Dependence/populace;../Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>../Dependence/map;../Dependence/populace;../Dependence/Society;../Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>../x64/Debug;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>../Dependence/map;../Dependence/populace;../Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>../Dependence/map;../Dependence/populace;../Dependence/Society;../Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>../x64/Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">

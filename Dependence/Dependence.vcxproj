@@ -28,6 +28,7 @@
     <ClInclude Include="map\terrain_base.h" />
     <ClInclude Include="map\zone_base.h" />
     <ClInclude Include="populace\job_base.h" />
+    <ClInclude Include="society\organization_base.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="common\error.cpp" />
@@ -39,6 +40,7 @@
     <ClCompile Include="map\terrain_base.cpp" />
     <ClCompile Include="map\zone_base.cpp" />
     <ClCompile Include="populace\job_base.cpp" />
+    <ClCompile Include="society\organization_base.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

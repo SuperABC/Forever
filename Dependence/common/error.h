@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include <string>
 #include <sstream>
@@ -14,7 +14,7 @@ public:
 
     virtual ~ExceptionBase() noexcept = default;
 
-    // »ñÈ¡±¨´í
+    // è·å–æŠ¥é”™
     const char* what() const noexcept override;
     virtual std::string GetDetailedInfo() const;
     const std::string& getMessage() const noexcept { return m_message; }

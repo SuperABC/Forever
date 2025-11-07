@@ -34,6 +34,9 @@
     <Filter Include="头文件\terrain">
       <UniqueIdentifier>{0a30ecd4-2282-437e-944a-9271ead095ff}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\organization">
+      <UniqueIdentifier>{38407681-1e03-4b42-b10c-6d40cd613485}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mod.cpp">
@@ -61,6 +64,9 @@
     </ClInclude>
     <ClInclude Include="terrain_mod.h">
       <Filter>头文件\terrain</Filter>
+    </ClInclude>
+    <ClInclude Include="organization_mod.h">
+      <Filter>头文件\organization</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
