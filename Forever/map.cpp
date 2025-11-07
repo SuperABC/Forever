@@ -2,23 +2,39 @@
 #include "error.h"
 #include "map.h"
 
+#include <algorithm>
+
 
 using namespace std;
 
-void Element::SetZoneId(int zoneId) {
-    this->zoneId = zoneId;
+string Element::GetTerrain() const {
+    return terrain;
 }
 
-void Element::SetBuildingId(int buildingId) {
-    this->buildingId = buildingId;
+bool Element::SetTerrain(string terrain) {
+    this->terrain = terrain;
+
+    return true;
 }
 
-int Element::GetZoneId() {
-    return this->zoneId;
+int Element::GetZone() const {
+    return this->zone;
 }
 
-int Element::GetBuildingId() {
-    return this->buildingId;
+bool Element::SetZone(int zone) {
+    this->zone = zone;
+
+    return true;
+}
+
+int Element::GetBuilding() const {
+    return this->building;
+}
+
+bool Element::SetBuilding(int building) {
+    this->building = building;
+
+    return true;
 }
 
 Block::Block(int x, int y) : offsetX(x), offsetY(y) {
@@ -36,14 +52,22 @@ Block::~Block() {
 
 }
 
-shared_ptr<Element> Block::GetElement(int x, int y) {
-    if (CheckXY(x, y))
-        return elements[y - offsetY][x - offsetX];
-    else
-        return nullptr;
+string Block::GetTerrain(int x, int y) const {
+    if (!CheckXY(x, y))
+        return "";
+
+    return elements[y - offsetY][x - offsetX]->GetTerrain();
 }
 
-bool Block::CheckXY(int x, int y) {
+bool Block::SetTerrain(int x, int y, std::string terrain) {
+    if (!CheckXY(x, y)) {
+        return false;
+    }
+
+    return elements[y - offsetY][x - offsetX]->SetTerrain(terrain);
+}
+
+bool Block::CheckXY(int x, int y) const {
     if (x < offsetX)return false;
     if (y < offsetY)return false;
     if (x >= offsetX + BLOCK_SIZE)return false;
@@ -52,12 +76,12 @@ bool Block::CheckXY(int x, int y) {
 }
 
 Map::Map() {
-    terrainFactory = make_shared<TerrainFactory>();
-    roadnetFactory = make_shared<RoadnetFactory>();
-    zoneFactory = make_shared<ZoneFactory>();
-    buildingFactory = make_shared<BuildingFactory>();
-    componentFactory = make_shared<ComponentFactory>();
-    roomFactory = make_shared<RoomFactory>();
+    terrainFactory.reset(new TerrainFactory());
+    roadnetFactory.reset(new RoadnetFactory());
+    zoneFactory.reset(new ZoneFactory());
+    buildingFactory.reset(new BuildingFactory());
+    componentFactory.reset(new ComponentFactory());
+    roomFactory.reset(new RoomFactory());
 }
 
 Map::~Map() {
@@ -302,11 +326,27 @@ int Map::Init(int blockX, int blockY) {
         }
     }
 
+    // 生成地形
+    auto getTerrain = [this](int x, int y) -> string {
+        return this->GetTerrain(x, y);
+        };
+    auto setTerrain = [this](int x, int y, const string terrain) -> bool {
+        return this->SetTerrain(x, y, terrain);
+        };
+    auto terrains = terrainFactory->GetTerrains();
+    sort(terrains.begin(), terrains.end(),
+        [](const unique_ptr<Terrain>& a, const unique_ptr<Terrain>& b) {
+            return a->GetPriority() < b->GetPriority();
+        });
+    for (auto &terrain : terrains) {
+        terrain->DistributeTerrain(width, height, setTerrain, getTerrain);
+    }
+
     return 0;
 }
 
 void Map::Destroy() {
-
+    blocks.clear();
 }
 
 void Map::Tick() {
@@ -321,12 +361,42 @@ void Map::Save(string path) {
 
 }
 
-bool Map::CheckXY(int x, int y) {
+bool Map::CheckXY(int x, int y) const {
     if (x < 0)return false;
     if (y < 0)return false;
     if (x >= width)return false;
     if (y >= height)return false;
     return true;
+}
+
+std::string Map::GetTerrain(int x, int y) const {
+    if (!CheckXY(x, y)) {
+        return "";
+    }
+
+    int blockX = x / BLOCK_SIZE;
+    int blockY = y / BLOCK_SIZE;
+
+    if (blockX >= blocks.size() || blockY >= blocks[0].size()) {
+        return "";
+    }
+
+    return blocks[blockX][blockY]->GetTerrain(x, y);
+}
+
+bool Map::SetTerrain(int x, int y, std::string terrain) {
+    if (!CheckXY(x, y)) {
+        return false;
+    }
+
+    int blockX = x / BLOCK_SIZE;
+    int blockY = y / BLOCK_SIZE;
+
+    if (blockX >= blocks.size() || blockY >= blocks[0].size()) {
+        return false;
+    }
+
+    return blocks[blockX][blockY]->SetTerrain(x, y, terrain);
 }
 
 

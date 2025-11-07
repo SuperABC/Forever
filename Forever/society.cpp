@@ -5,7 +5,7 @@
 using namespace std;
 
 Society::Society() {
-    organizationFactory = make_shared<OrganizationFactory>();
+    organizationFactory.reset(new OrganizationFactory());
 }
 
 Society::~Society() {

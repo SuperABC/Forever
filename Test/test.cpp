@@ -15,7 +15,7 @@ using namespace std;
 
 int main() {
 	// 读取Map相关类及Mod
-	shared_ptr<Map> map = make_shared<Map>();
+	unique_ptr<Map> map(new Map());
 	map->InitTerrains();
 	map->InitRoadnets();
 	map->InitZones();
@@ -24,11 +24,11 @@ int main() {
 	map->InitRooms();
 
 	// 读取Populace相关类及Mod
-	shared_ptr<Populace> populace = make_shared<Populace>();
+	unique_ptr<Populace> populace(new Populace());
 	populace->InitJobs();
 
 	// 读取Society相关类及Mod
-	shared_ptr<Society> society = make_shared<Society>();
+	unique_ptr<Society> society(new Society());
 	society->InitOrganizations();
 
 	// 读取命令行

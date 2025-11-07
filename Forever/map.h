@@ -17,17 +17,22 @@ public:
 	Element() = default;
 	~Element() = default;
 
+	//获取/设置地形名称
+	std::string GetTerrain() const;
+	bool SetTerrain(std::string terrain);
+
 	//获取/设置园区标识
-	int GetZoneId();
-	void SetZoneId(int zoneId);
+	int GetZone() const;
+	bool SetZone(int zone);
 
 	//获取/设置建筑标识
-	int GetBuildingId();
-	void SetBuildingId(int buildingId);
+	int GetBuilding() const;
+	bool SetBuilding(int building);
 
 private:
-	int zoneId = -1;
-	int buildingId = -1;
+	std::string terrain = "平原地形";
+	int zone = -1;
+	int building = -1;
 };
 
 class Block {
@@ -36,15 +41,16 @@ public:
 	Block(int x, int y);
 	~Block();
 
-	//获取地块内某全局坐标的信息
-	std::shared_ptr<Element> GetElement(int x, int y);
+	//获取/设置地形名称
+	std::string GetTerrain(int x, int y) const;
+	bool SetTerrain(int x, int y, std::string terrain);
 
 private:
 	int offsetX, offsetY;
 	std::vector<std::vector<std::shared_ptr<Element>>> elements;
 
 	//检查全局坐标是否在地块内
-	bool CheckXY(int x, int y);
+	bool CheckXY(int x, int y) const;
 };
 
 class Map {
@@ -75,18 +81,22 @@ public:
 
 private:
 	std::vector<HMODULE> modHandles;
-	std::shared_ptr<TerrainFactory> terrainFactory;
-	std::shared_ptr<RoadnetFactory> roadnetFactory;
-	std::shared_ptr<ZoneFactory> zoneFactory;
-	std::shared_ptr<BuildingFactory> buildingFactory;
-	std::shared_ptr<ComponentFactory> componentFactory;
-	std::shared_ptr<RoomFactory> roomFactory;
+	std::unique_ptr<TerrainFactory> terrainFactory;
+	std::unique_ptr<RoadnetFactory> roadnetFactory;
+	std::unique_ptr<ZoneFactory> zoneFactory;
+	std::unique_ptr<BuildingFactory> buildingFactory;
+	std::unique_ptr<ComponentFactory> componentFactory;
+	std::unique_ptr<RoomFactory> roomFactory;
 
 	int width = 0, height = 0;
 	std::vector<std::vector<std::shared_ptr<Block>>> blocks;
 
 	//检查全局坐标是否在地图内
-	bool CheckXY(int x, int y);
+	bool CheckXY(int x, int y) const;
+
+	//获取/设置地形名称
+	std::string GetTerrain(int x, int y) const;
+	bool SetTerrain(int x, int y, std::string terrain);
 
 };
 

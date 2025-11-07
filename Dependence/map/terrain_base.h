@@ -14,14 +14,22 @@ public:
     // 动态返回地形名称
     virtual std::string GetName() const = 0;
 
+    // 动态返回生成优先级
+    virtual float GetPriority() const = 0;
+
+    // 在地图上生成地形
+    virtual void DistributeTerrain(int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const = 0;
+
 private:
 };
 
 class TerrainFactory {
 public:
     void RegisterTerrain(const std::string& id, std::function<std::unique_ptr<Terrain>()> creator);
-    std::unique_ptr<Terrain> CreateTerrain(const std::string& id);
-    bool CheckRegistered(const std::string& id);
+    std::unique_ptr<Terrain> CreateTerrain(const std::string& id) const;
+    bool CheckRegistered(const std::string& id) const;
+    std::vector<std::unique_ptr<Terrain>> GetTerrains() const;
 
 private:
     std::unordered_map<std::string, std::function<std::unique_ptr<Terrain>()>> registry;

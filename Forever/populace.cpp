@@ -5,7 +5,7 @@
 using namespace std;
 
 Populace::Populace() {
-    jobFactory = make_shared<JobFactory>();
+    jobFactory.reset(new JobFactory());
 }
 
 Populace::~Populace() {

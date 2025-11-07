@@ -2,6 +2,8 @@
     "files.associations": {
         "xstring": "cpp",
         "stdexcept": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "memory": "cpp",
+        "string": "cpp"
     }
 }

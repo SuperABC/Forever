@@ -14,6 +14,6 @@ public:
 
 private:
 	std::vector<HMODULE> modHandles;
-	std::shared_ptr<JobFactory> jobFactory;
+	std::unique_ptr<JobFactory> jobFactory;
 };
 
