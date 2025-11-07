@@ -71,11 +71,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>../Dependence/map;../Dependence/populace;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>../Dependence/map;../Dependence/populace;../Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>../x64/Debug;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>../Dependence/map;../Dependence/populace;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>../Dependence/map;../Dependence/populace;../Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>../x64/Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -139,7 +139,6 @@
     <ClInclude Include="roadnet.h" />
     <ClInclude Include="room.h" />
     <ClInclude Include="terrain.h" />
-    <ClInclude Include="util.h" />
     <ClInclude Include="zone.h" />
   </ItemGroup>
   <ItemGroup>
@@ -151,7 +150,6 @@
     <ClCompile Include="roadnet.cpp" />
     <ClCompile Include="room.cpp" />
     <ClCompile Include="terrain.cpp" />
-    <ClCompile Include="util.cpp" />
     <ClCompile Include="zone.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

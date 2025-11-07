@@ -75,12 +75,12 @@ public:
 
 private:
 	std::vector<HMODULE> modHandles;
-	shared_ptr<TerrainFactory> terrainFactory;
-	shared_ptr<RoadnetFactory> roadnetFactory;
-	shared_ptr<ZoneFactory> zoneFactory;
-	shared_ptr<BuildingFactory> buildingFactory;
-	shared_ptr<ComponentFactory> componentFactory;
-	shared_ptr<RoomFactory> roomFactory;
+	std::shared_ptr<TerrainFactory> terrainFactory;
+	std::shared_ptr<RoadnetFactory> roadnetFactory;
+	std::shared_ptr<ZoneFactory> zoneFactory;
+	std::shared_ptr<BuildingFactory> buildingFactory;
+	std::shared_ptr<ComponentFactory> componentFactory;
+	std::shared_ptr<RoomFactory> roomFactory;
 
 	int width = 0, height = 0;
 	std::vector<std::vector<std::shared_ptr<Block>>> blocks;

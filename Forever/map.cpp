@@ -1,4 +1,5 @@
 ﻿#include "util.h"
+#include "error.h"
 #include "map.h"
 
 
@@ -284,7 +285,7 @@ int Map::Init(int blockX, int blockY) {
 
     // 地图尺寸需要为正
     if (blockX < 1 || blockY < 1) {
-        throw invalid_argument("Invalid map size.\n");
+        THROW_EXCEPTION(InvalidArgumentException, "Invalid map size.");
         return 0;
     }
 

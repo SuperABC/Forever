@@ -25,12 +25,6 @@
     <Filter Include="源文件\populace">
       <UniqueIdentifier>{07124be6-6d47-4666-b52b-5bcfa01db3c6}</UniqueIdentifier>
     </Filter>
-    <Filter Include="头文件\common">
-      <UniqueIdentifier>{2e2a827f-2cb1-4eef-bde1-cc723ed12761}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="源文件\common">
-      <UniqueIdentifier>{57e34ca8-eb5d-415d-a88e-771f60fd406d}</UniqueIdentifier>
-    </Filter>
     <Filter Include="头文件\script">
       <UniqueIdentifier>{424c4198-ca8c-42e7-ba96-6b171e8256f9}</UniqueIdentifier>
     </Filter>
@@ -69,9 +63,6 @@
     <ClInclude Include="room.h">
       <Filter>头文件\map</Filter>
     </ClInclude>
-    <ClInclude Include="util.h">
-      <Filter>头文件\common</Filter>
-    </ClInclude>
     <ClInclude Include="terrain.h">
       <Filter>头文件\map</Filter>
     </ClInclude>
@@ -94,9 +85,6 @@
     </ClCompile>
     <ClCompile Include="zone.cpp">
       <Filter>源文件\map</Filter>
-    </ClCompile>
-    <ClCompile Include="util.cpp">
-      <Filter>源文件\common</Filter>
     </ClCompile>
     <ClCompile Include="job.cpp">
       <Filter>源文件\populace</Filter>

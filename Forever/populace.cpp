@@ -5,7 +5,7 @@
 using namespace std;
 
 Populace::Populace() {
-
+    jobFactory = make_shared<JobFactory>();
 }
 
 Populace::~Populace() {

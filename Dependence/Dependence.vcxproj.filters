@@ -25,6 +25,15 @@
     <Filter Include="源文件\populace">
       <UniqueIdentifier>{43c987d4-1e5d-4b91-8676-4093098577b3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\organization">
+      <UniqueIdentifier>{9aea9dd1-284a-4375-9d10-34166a9b532f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\common">
+      <UniqueIdentifier>{a3b269b1-defe-41f2-96b8-a3f125ade659}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\common">
+      <UniqueIdentifier>{d85fb118-2a90-4373-978f-a259ca4bda38}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\roadnet_base.h">
@@ -48,6 +57,12 @@
     <ClInclude Include="map\terrain_base.h">
       <Filter>头文件\map</Filter>
     </ClInclude>
+    <ClInclude Include="common\util.h">
+      <Filter>头文件\common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\error.h">
+      <Filter>头文件\common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map\roadnet_base.cpp">
@@ -70,6 +85,12 @@
     </ClCompile>
     <ClCompile Include="map\terrain_base.cpp">
       <Filter>源文件\map</Filter>
+    </ClCompile>
+    <ClCompile Include="common\util.cpp">
+      <Filter>源文件\common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\error.cpp">
+      <Filter>源文件\common</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

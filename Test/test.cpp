@@ -1,6 +1,7 @@
 ﻿#include "parser.h"
 #include "map.h"
 #include "populace.h"
+#include "error.h"
 
 #include <iostream>
 #include <memory>
@@ -84,8 +85,8 @@ int main() {
 				parser.PrintHelp(type);
 			}
 		}
-		catch (exception e) {
-			cout << e.what() << endl;
+		catch (ExceptionBase &e) {
+			cout << e.GetDetailedInfo() << endl;
 		}
 
 	} while (type != CMD_EXIT);
