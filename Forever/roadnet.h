@@ -9,6 +9,7 @@ typedef void (*RegisterModRoadnetsFunc)(RoadnetFactory* factory);
 // 主程序检测子类
 class TestRoadnet : public Roadnet {
 public:
+    static std::string GetId() { return "test"; }
     virtual std::string GetName() const override { return "测试路网"; }
 
     virtual void DistributeRoadnet(int width, int height,
@@ -25,6 +26,6 @@ public:
         connections.push_back(Connection(n2, n3));
         connections.push_back(Connection(n3, n4));
         connections.push_back(Connection(n4, n1));
-        plots.push_back(Plot(n1, n2, n3, n4));
+        plots.push_back(std::make_shared<Plot>(n1, n2, n3, n4));
     }
 };

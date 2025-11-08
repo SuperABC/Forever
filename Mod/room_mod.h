@@ -9,6 +9,7 @@
 // 模组检测子类
 class ModRoom : public Room {
 public:
-    std::string GetName() const override { return "模组房间"; }
+    static std::string GetId() { return "mod"; }
+    virtual std::string GetName() const override { return "模组房间"; }
 };
 

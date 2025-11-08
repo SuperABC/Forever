@@ -1,17 +1,20 @@
 ﻿#pragma once
 
+#include "../common/plot.h"
+
 #include <string>
 #include <functional>
 #include <memory>
 #include <unordered_map>
 
 
-class Zone {
+class Zone : public Rect {
 public:
     Zone() = default;
     virtual ~Zone() = default;
 
-    // 动态返回园区名称
+    // 动态返回园区静态信息
+    static std::string GetId();
     virtual std::string GetName() const = 0;
 
 protected:

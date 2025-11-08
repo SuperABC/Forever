@@ -23,7 +23,7 @@ Society::~Society() {
 }
 
 void Society::InitOrganizations() {
-    organizationFactory->RegisterOrganization("test", []() { return std::make_unique<TestOrganization>(); });
+    organizationFactory->RegisterOrganization(TestOrganization::GetId(), []() { return std::make_unique<TestOrganization>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {

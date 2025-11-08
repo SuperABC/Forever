@@ -11,7 +11,8 @@ public:
     Organization() = default;
     virtual ~Organization() = default;
 
-    // 动态返回园区名称
+    // 动态返回组织静态信息
+    static std::string GetId();
     virtual std::string GetName() const = 0;
 
 protected:

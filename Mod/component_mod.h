@@ -9,6 +9,7 @@
 // 模组检测子类
 class ModComponent : public Component {
 public:
-    std::string GetName() const override { return "模组组合"; }
+    static std::string GetId() { return "mod"; }
+    virtual std::string GetName() const override { return "模组组合"; }
 };
 

@@ -9,6 +9,7 @@
 // 模组检测子类
 class ModJob : public Job {
 public:
-    std::string GetName() const override { return "模组职业"; }
+    static std::string GetId() { return "mod"; }
+    virtual std::string GetName() const override { return "模组职业"; }
 };
 

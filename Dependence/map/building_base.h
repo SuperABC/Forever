@@ -11,7 +11,8 @@ public:
     Building() = default;
     virtual ~Building() = default;
 
-    // 动态返回建筑名称
+    // 动态返回建筑静态信息
+    static std::string GetId();
     virtual std::string GetName() const = 0;
 
 protected:

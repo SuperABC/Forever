@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "organization.h"
 
@@ -10,14 +10,14 @@ public:
 	Society();
 	~Society();
 
-	// ¶ÁÈ¡Mods
+	// è¯»å–Mods
 	void InitOrganizations();
 
-	// ¶ÁÈ¡ÅäÖÃÎÄ¼ş
+	// è¯»å–é…ç½®æ–‡ä»¶
 	void ReadConfigs(std::string path) const;
 
 private:
-	// Mod¹ÜÀí
+	// Modç®¡ç†
 	std::vector<HMODULE> modHandles;
 	std::unique_ptr<OrganizationFactory> organizationFactory;
 };

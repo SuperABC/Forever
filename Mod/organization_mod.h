@@ -9,6 +9,7 @@
 // 模组检测子类
 class ModOrganization : public Organization {
 public:
-    std::string GetName() const override { return "模组组织"; }
+    static std::string GetId() { return "mod"; }
+    virtual std::string GetName() const override { return "模组组织"; }
 };
 

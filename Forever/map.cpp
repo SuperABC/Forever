@@ -97,7 +97,7 @@ Map::~Map() {
 }
 
 void Map::InitTerrains() {
-    terrainFactory->RegisterTerrain("test", []() { return std::make_unique<TestTerrain>(); });
+    terrainFactory->RegisterTerrain(TestTerrain::GetId(), []() { return std::make_unique<TestTerrain>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -132,7 +132,7 @@ void Map::InitTerrains() {
 }
 
 void Map::InitRoadnets() {
-    roadnetFactory->RegisterRoadnet("test", []() { return std::make_unique<TestRoadnet>(); });
+    roadnetFactory->RegisterRoadnet(TestRoadnet::GetId(), []() { return std::make_unique<TestRoadnet>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -167,7 +167,7 @@ void Map::InitRoadnets() {
 }
 
 void Map::InitZones() {
-    zoneFactory->RegisterZone("test", []() { return std::make_unique<TestZone>(); });
+    zoneFactory->RegisterZone(TestZone::GetId(), []() { return std::make_unique<TestZone>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -202,7 +202,7 @@ void Map::InitZones() {
 }
 
 void Map::InitBuildings() {
-    buildingFactory->RegisterBuilding("test", []() { return std::make_unique<TestBuilding>(); });
+    buildingFactory->RegisterBuilding(TestBuilding::GetId(), []() { return std::make_unique<TestBuilding>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -237,7 +237,7 @@ void Map::InitBuildings() {
 }
 
 void Map::InitComponents() {
-    componentFactory->RegisterComponent("test", []() { return std::make_unique<TestComponent>(); });
+    componentFactory->RegisterComponent(TestComponent::GetId(), []() { return std::make_unique<TestComponent>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -272,7 +272,7 @@ void Map::InitComponents() {
 }
 
 void Map::InitRooms() {
-    roomFactory->RegisterRoom("test", []() { return std::make_unique<TestRoom>(); });
+    roomFactory->RegisterRoom(TestRoom::GetId(), []() { return std::make_unique<TestRoom>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -336,7 +336,7 @@ int Map::Init(int blockX, int blockY) {
     auto setTerrain = [this](int x, int y, const string terrain) -> bool {
         return this->SetTerrain(x, y, terrain);
         };
-    terrains = terrainFactory->GetTerrains();
+    auto terrains = terrainFactory->GetTerrains();
     sort(terrains.begin(), terrains.end(),
         [](const unique_ptr<Terrain>& a, const unique_ptr<Terrain>& b) {
             return a->GetPriority() < b->GetPriority();
@@ -353,6 +353,7 @@ int Map::Init(int blockX, int blockY) {
     roadnet->DistributeRoadnet(width, height, getTerrain);
 
     // 随机生成园区
+
 
     return 0;
 }

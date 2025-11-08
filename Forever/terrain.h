@@ -9,6 +9,7 @@ typedef void (*RegisterModTerrainsFunc)(TerrainFactory* factory);
 // 主程序检测子类
 class TestTerrain : public Terrain {
 public:
+    static std::string GetId() { return "test"; }
     virtual std::string GetName() const override { return "测试地形"; }
 
     virtual float GetPriority() const override { return 1.0f; };

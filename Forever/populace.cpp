@@ -23,7 +23,7 @@ Populace::~Populace() {
 }
 
 void Populace::InitJobs() {
-    jobFactory->RegisterJob("test", []() { return std::make_unique<TestJob>(); });
+    jobFactory->RegisterJob(TestJob::GetId(), []() { return std::make_unique<TestJob>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {

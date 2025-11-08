@@ -9,6 +9,7 @@
 // 模组检测子类
 class ModBuilding : public Building {
 public:
-    std::string GetName() const override { return "模组建筑"; }
+    static std::string GetId() { return "mod"; }
+    virtual std::string GetName() const override { return "模组建筑"; }
 };
 

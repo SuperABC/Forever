@@ -31,29 +31,47 @@ Node Connection::GetV1() const {
 Node Connection::GetV2() const {
     return vertices.second;
 }
-
-float Plot::GetCenterX() {
-	return centerX;
+float Rect::GetPosX() {
+    return posX;
 }
 
-float Plot::GetCenterY() {
-	return centerY;
+void Rect::SetPosX(float x) {
+    posX = x;
 }
 
-float Plot::GetSizeX() {
-	return sizeX;
+float Rect::GetPosY() {
+    return posY;
 }
 
-float Plot::GetSizeY() {
-	return sizeY;
+void Rect::SetPosY(float y) {
+    posY = y;
+}
+
+float Rect::GetSizeX() {
+    return sizeX;
+}
+
+void Rect::SetSizeX(float w) {
+    sizeX = w;
+}
+
+float Rect::GetSizeY() {
+    return sizeY;
+}
+
+void Rect::SetSizeY(float h) {
+    sizeY = h;
 }
 
 float Plot::GetRotation() {
 	return rotation;
 }
 
+void Plot::SetRotation(float r) {
+    rotation = r;
+}
 pair<float, float> Plot::GetVertex(int idx) {
-	if (idx <= 0 || idx > 4) {
+	if (idx < 1 || idx > 4) {
 		THROW_EXCEPTION(InvalidArgumentException, "Plot has only 4 vertices.\n");
 	}
 
@@ -64,29 +82,20 @@ pair<float, float> Plot::GetVertex(int idx) {
 
     switch (idx) {
     case 1: // 右上
-        return { centerX + hx * c - hy * s,
-                 centerY + hx * s + hy * c };
+        return { posX + hx * c - hy * s,
+                 posY + hx * s + hy * c };
     case 2: // 左上
-        return { centerX - hx * c - hy * s,
-                 centerY - hx * s + hy * c };
+        return { posX - hx * c - hy * s,
+                 posY - hx * s + hy * c };
     case 3: // 左下
-        return { centerX - hx * c + hy * s,
-                 centerY - hx * s - hy * c };
+        return { posX - hx * c + hy * s,
+                 posY - hx * s - hy * c };
     case 4: // 右下
-        return { centerX + hx * c + hy * s,
-                 centerY + hx * s - hy * c };
+        return { posX + hx * c + hy * s,
+                 posY + hx * s - hy * c };
     default:
         return { 0.f, 0.f };
     }
-}
-
-void Plot::SetPosition(float x, float y, float w, float h, float r) {
-    centerX = x;
-    centerY = y;
-    sizeX = w;
-    sizeY = h;
-    rotation = r;
-    acreage = w * h * 100.f;
 }
 
 void Plot::SetPosition(Node n1, Node n2, Node n3) {
@@ -117,8 +126,8 @@ void Plot::SetPosition(Node n1, Node n2, Node n3) {
     float rot = std::atan2(uy, ux);
 
     // 更新成员变量
-    centerX = cx;
-    centerY = cy;
+    posX = cx;
+    posY = cy;
     sizeX = sx;
     sizeY = sy;
     rotation = rot;
@@ -187,11 +196,38 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     float rot = std::atan2(u1y, u1x);
 
     // 更新成员变量
-    centerX = cx;
-    centerY = cy;
+    posX = cx;
+    posY = cy;
     sizeX = sx;
     sizeY = sy;
     rotation = rot;
     acreage = sx * sy * 100.f;
 }
 
+void Plot::AddRect(std::string name, std::shared_ptr<Rect> rect) {
+    std::unordered_map<std::string, std::shared_ptr<Rect>> rectMap;
+    rectMap[name] = rect;
+    rects.push_back(rectMap);
+}
+
+std::shared_ptr<Rect> Plot::GetRect(std::string name) {
+    for (auto& rectMap : rects) {
+        auto it = rectMap.find(name);
+        if (it != rectMap.end()) {
+            return it->second;
+        }
+    }
+    return nullptr;
+}
+
+void Plot::RemoveRect(std::string name) {
+    for (auto it = rects.begin(); it != rects.end(); ) {
+        auto rectIt = it->find(name);
+        if (rectIt != it->end()) {
+            it = rects.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}

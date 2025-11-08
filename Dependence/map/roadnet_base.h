@@ -14,16 +14,22 @@ public:
     virtual ~Roadnet() = default;
 
     // 动态返回路网名称
+    static std::string GetId();
     virtual std::string GetName() const = 0;
 
     // 在平原上生成路网
     virtual void DistributeRoadnet(int width, int height,
         std::function<std::string(int, int)> get) = 0;
 
+    // 提供只读访问接口
+    const std::vector<Node>& GetNodes() const { return nodes; }
+    const std::vector<Connection>& GetConnections() const { return connections; }
+    const std::vector<std::shared_ptr<Plot>>& GetPlots() const { return plots; }
+
 protected:
     std::vector<Node> nodes;
     std::vector<Connection> connections;
-    std::vector<Plot> plots;
+    std::vector<std::shared_ptr<Plot>> plots;
 };
 
 class RoadnetFactory {

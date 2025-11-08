@@ -9,8 +9,11 @@
 // 模组检测子类
 class ModTerrain : public Terrain {
 public:
-    std::string GetName() const override { return "模组地形"; }
+    static std::string GetId() { return "mod"; }
+    virtual std::string GetName() const override { return "模组地形"; }
+
     virtual float GetPriority() const override { return 2.0f; };
+
     virtual void DistributeTerrain(int width, int height,
         std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const override {
         for (int i = 0; i < width; i++) {

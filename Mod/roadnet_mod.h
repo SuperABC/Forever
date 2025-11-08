@@ -9,7 +9,8 @@
 // 模组检测子类
 class ModRoadnet : public Roadnet {
 public:
-    std::string GetName() const override { return "模组职业"; }
+    static std::string GetId() { return "mod"; }
+    virtual std::string GetName() const override { return "模组职业"; }
 
     virtual void DistributeRoadnet(int width, int height,
         std::function<std::string(int, int)> get) override {
