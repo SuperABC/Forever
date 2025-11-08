@@ -14,7 +14,7 @@ public:
     // 动态返回园区名称
     virtual std::string GetName() const = 0;
 
-private:
+protected:
 };
 
 class OrganizationFactory {

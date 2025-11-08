@@ -1,7 +1,7 @@
 {
 	"mods":{
 		"terrain": [],
-		"roadnet": "",
+		"roadnet": "test",
 		"zone": [],
 		"building": [],
 		"component": [],

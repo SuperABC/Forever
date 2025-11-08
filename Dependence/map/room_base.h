@@ -14,7 +14,7 @@ public:
     // 动态返回房间名称
     virtual std::string GetName() const = 0;
 
-private:
+protected:
 };
 
 class RoomFactory {

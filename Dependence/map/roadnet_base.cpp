@@ -26,3 +26,9 @@ void RoadnetFactory::SetConfig(std::string name, bool config) {
     }
 }
 
+unique_ptr<Roadnet> RoadnetFactory::GetRoadnet() {
+    for (auto config : configs) {
+        if (config.second)return registries[config.first]();
+    }
+    return nullptr;
+}

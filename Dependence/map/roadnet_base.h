@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "../common/plot.h"
+
 #include <string>
 #include <functional>
 #include <memory>
@@ -14,7 +16,14 @@ public:
     // 动态返回路网名称
     virtual std::string GetName() const = 0;
 
-private:
+    // 在平原上生成路网
+    virtual void DistributeRoadnet(int width, int height,
+        std::function<std::string(int, int)> get) = 0;
+
+protected:
+    std::vector<Node> nodes;
+    std::vector<Connection> connections;
+    std::vector<Plot> plots;
 };
 
 class RoadnetFactory {
@@ -23,6 +32,7 @@ public:
     std::unique_ptr<Roadnet> CreateRoadnet(const std::string& id);
     bool CheckRegistered(const std::string& id);
     void SetConfig(std::string name, bool config);
+    std::unique_ptr<Roadnet> GetRoadnet();
 
 private:
     std::unordered_map<std::string, std::function<std::unique_ptr<Roadnet>()>> registries;

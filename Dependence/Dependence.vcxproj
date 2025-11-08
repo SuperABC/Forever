@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClInclude Include="common\error.h" />
     <ClInclude Include="common\json.h" />
+    <ClInclude Include="common\plot.h" />
     <ClInclude Include="common\util.h" />
     <ClInclude Include="map\building_base.h" />
     <ClInclude Include="map\component_base.h" />
@@ -34,6 +35,7 @@
   <ItemGroup>
     <ClCompile Include="common\error.cpp" />
     <ClCompile Include="common\json.cpp" />
+    <ClCompile Include="common\plot.cpp" />
     <ClCompile Include="common\util.cpp" />
     <ClCompile Include="map\building_base.cpp" />
     <ClCompile Include="map\component_base.cpp" />

@@ -13,11 +13,11 @@ void Parser::AddOption(const string& name, char abbreviation,
 	// 如果给定简写字符，则构建与名称的映射
 	if (abbreviation != '\0') {
 		if (abbreviation == '-') {
-			THROW_EXCEPTION(InvalidArgumentException, "Short option cannot be '-'.");
+			THROW_EXCEPTION(InvalidArgumentException, "Short option cannot be '-'.\n");
 		}
 
 		if (names.find(abbreviation) != names.end()) {
-			THROW_EXCEPTION(InvalidArgumentException, string("Short option '") + abbreviation + "' already used.");
+			THROW_EXCEPTION(InvalidArgumentException, string("Short option '") + abbreviation + "' already used.\n");
 		}
 
 		names[abbreviation] = name;
@@ -95,7 +95,7 @@ void Parser::ParseCmd(vector<string> cmd) {
 
 			auto it = options.find(optionName);
 			if (it == options.end()) {
-				THROW_EXCEPTION(CommandException, "Unknown option: " + optionName + ".");
+				THROW_EXCEPTION(CommandException, "Unknown option: " + optionName + ".\n");
 			}
 
 			Option& opt = it->second;
@@ -108,7 +108,7 @@ void Parser::ParseCmd(vector<string> cmd) {
 				}
 				else {
 					if (i + 1 >= cmd.size() || cmd[i + 1][0] == '-') {
-						THROW_EXCEPTION(CommandException, "Option " + optionName + " requires a value.");
+						THROW_EXCEPTION(CommandException, "Option " + optionName + " requires a value.\n");
 					}
 					opt.value = cmd[++i];
 				}
@@ -120,7 +120,7 @@ void Parser::ParseCmd(vector<string> cmd) {
 				char abbreviation = arg[j];
 				auto it = names.find(abbreviation);
 				if (it == names.end()) {
-					THROW_EXCEPTION(CommandException, string("Unknown option: -") + abbreviation + ".");
+					THROW_EXCEPTION(CommandException, string("Unknown option: -") + abbreviation + ".\n");
 				}
 
 				const string& optionName = it->second;
@@ -139,7 +139,7 @@ void Parser::ParseCmd(vector<string> cmd) {
 						break;
 					}
 					else {
-						THROW_EXCEPTION(CommandException, "Option -" + string(1, abbreviation) + " requires a value.");
+						THROW_EXCEPTION(CommandException, "Option -" + string(1, abbreviation) + " requires a value.\n");
 					}
 				}
 			}
@@ -150,7 +150,7 @@ void Parser::ParseCmd(vector<string> cmd) {
 bool Parser::HasOption(const string& name) const {
 	auto it = options.find(name);
 	if (it == options.end()) {
-		THROW_EXCEPTION(CommandException, "Unknown option: " + name + ".");
+		THROW_EXCEPTION(CommandException, "Unknown option: " + name + ".\n");
 	}
 	return it->second.present;
 }
@@ -158,13 +158,13 @@ bool Parser::HasOption(const string& name) const {
 const string& Parser::GetOption(const string& name) const {
 	auto it = options.find(name);
 	if (it == options.end()) {
-		THROW_EXCEPTION(CommandException, "Unknown option: " + name + ".");
+		THROW_EXCEPTION(CommandException, "Unknown option: " + name + ".\n");
 	}
 	if (!it->second.assigned) {
-		THROW_EXCEPTION(CommandException, "Option " + name + " does not require a value.");
+		THROW_EXCEPTION(CommandException, "Option " + name + " does not require a value.\n");
 	}
 	if (!it->second.present) {
-		THROW_EXCEPTION(CommandException, "Option " + name + " not present.");
+		THROW_EXCEPTION(CommandException, "Option " + name + " not present.\n");
 	}
 	return it->second.value;
 }
@@ -217,15 +217,15 @@ void Parser::PrintHelp(CMD_TYPE type) const {
 
 void Parser::ValidateName(const string& name) const {
 	if (name.empty()) {
-		THROW_EXCEPTION(InvalidArgumentException, "Option name cannot be empty.");
+		THROW_EXCEPTION(InvalidArgumentException, "Option name cannot be empty.\n");
 	}
 
 	if (name.size() < 2 || name[0] != '-' || name[1] != '-') {
-		THROW_EXCEPTION(InvalidArgumentException, "Long option name must start with '--'.");
+		THROW_EXCEPTION(InvalidArgumentException, "Long option name must start with '--'.\n");
 	}
 
 	if (name.find('=') != string::npos) {
-		THROW_EXCEPTION(InvalidArgumentException, "Option name cannot contain '='.");
+		THROW_EXCEPTION(InvalidArgumentException, "Option name cannot contain '='.\n");
 	}
 }
 

@@ -14,7 +14,7 @@ public:
     // 动态返回组合名称
     virtual std::string GetName() const = 0;
 
-private:
+protected:
 };
 
 class ComponentFactory {

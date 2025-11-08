@@ -312,7 +312,7 @@ int Map::Init(int blockX, int blockY) {
 
     // 地图尺寸需要为正
     if (blockX < 1 || blockY < 1) {
-        THROW_EXCEPTION(InvalidArgumentException, "Invalid map size.");
+        THROW_EXCEPTION(InvalidArgumentException, "Invalid map size.\n");
         return 0;
     }
 
@@ -336,7 +336,7 @@ int Map::Init(int blockX, int blockY) {
     auto setTerrain = [this](int x, int y, const string terrain) -> bool {
         return this->SetTerrain(x, y, terrain);
         };
-    auto terrains = terrainFactory->GetTerrains();
+    terrains = terrainFactory->GetTerrains();
     sort(terrains.begin(), terrains.end(),
         [](const unique_ptr<Terrain>& a, const unique_ptr<Terrain>& b) {
             return a->GetPriority() < b->GetPriority();
@@ -346,7 +346,13 @@ int Map::Init(int blockX, int blockY) {
     }
 
     // 随机生成路网
+    roadnet = roadnetFactory->GetRoadnet();
+    if (!roadnet) {
+        THROW_EXCEPTION(InvalidConfigException, "No enabled roadnet in config.\n");
+    }
+    roadnet->DistributeRoadnet(width, height, getTerrain);
 
+    // 随机生成园区
 
     return 0;
 }
@@ -380,7 +386,7 @@ void Map::ReadConfigs(std::string path) const {
         THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
     }
     if (reader.parse(fin, root)) {
-        roadnetFactory->SetConfig(root["roadnet"].asString(), true);
+        roadnetFactory->SetConfig(root["mods"]["roadnet"].asString(), true);
     }
     else {
         fin.close();

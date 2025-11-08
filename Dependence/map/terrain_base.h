@@ -21,7 +21,7 @@ public:
     virtual void DistributeTerrain(int width, int height,
         std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const = 0;
 
-private:
+protected:
 };
 
 class TerrainFactory {

@@ -35,8 +35,6 @@ int main() {
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
-	
-
 	// 读取命令行
 	string cmd;
 	CMD_TYPE type = CMD_UNKOWN;

@@ -13,7 +13,7 @@ public:
 
     virtual std::string GetName() const = 0;
 
-private:
+protected:
 };
 
 class JobFactory {

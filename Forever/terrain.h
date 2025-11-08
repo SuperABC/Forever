@@ -10,7 +10,9 @@ typedef void (*RegisterModTerrainsFunc)(TerrainFactory* factory);
 class TestTerrain : public Terrain {
 public:
     virtual std::string GetName() const override { return "测试地形"; }
+
     virtual float GetPriority() const override { return 1.0f; };
+
     virtual void DistributeTerrain(int width, int height,
         std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const override {
         for (int i = 0; i < width; i++) {

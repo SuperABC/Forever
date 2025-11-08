@@ -47,6 +47,11 @@ public:
     using ExceptionBase::ExceptionBase;
 };
 
+class InvalidConfigException : public ExceptionBase {
+public:
+    using ExceptionBase::ExceptionBase;
+};
+
 class IOException : public ExceptionBase {
 public:
     using ExceptionBase::ExceptionBase;

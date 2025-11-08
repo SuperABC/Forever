@@ -10,5 +10,10 @@
 class ModRoadnet : public Roadnet {
 public:
     std::string GetName() const override { return "模组职业"; }
+
+    virtual void DistributeRoadnet(int width, int height,
+        std::function<std::string(int, int)> get) override {
+
+    }
 };
 

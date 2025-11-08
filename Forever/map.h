@@ -97,6 +97,10 @@ private:
 	int width = 0, height = 0;
 	std::vector<std::vector<std::shared_ptr<Block>>> blocks;
 
+	// 地图架构
+	std::vector<std::unique_ptr<Terrain>> terrains;
+	std::unique_ptr<Roadnet> roadnet;
+
 	// 检查全局坐标是否在地图内
 	bool CheckXY(int x, int y) const;
 
