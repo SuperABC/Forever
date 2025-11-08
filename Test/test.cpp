@@ -2,6 +2,7 @@
 #include "map.h"
 #include "populace.h"
 #include "society.h"
+#include "util.h"
 #include "error.h"
 
 #include <iostream>
@@ -22,14 +23,19 @@ int main() {
 	map->InitBuildings();
 	map->InitComponents();
 	map->InitRooms();
+	map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 
 	// 读取Populace相关类及Mod
 	unique_ptr<Populace> populace(new Populace());
 	populace->InitJobs();
+	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
 	// 读取Society相关类及Mod
 	unique_ptr<Society> society(new Society());
 	society->InitOrganizations();
+	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
+
+	
 
 	// 读取命令行
 	string cmd;

@@ -29,8 +29,10 @@ public:
     void RegisterTerrain(const std::string& id, std::function<std::unique_ptr<Terrain>()> creator);
     std::unique_ptr<Terrain> CreateTerrain(const std::string& id) const;
     bool CheckRegistered(const std::string& id) const;
+    void SetConfig(std::string name, bool config);
     std::vector<std::unique_ptr<Terrain>> GetTerrains() const;
 
 private:
-    std::unordered_map<std::string, std::function<std::unique_ptr<Terrain>()>> registry;
+    std::unordered_map<std::string, std::function<std::unique_ptr<Terrain>()>> registries;
+    std::unordered_map<std::string, bool> configs;
 };

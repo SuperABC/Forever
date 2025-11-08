@@ -1,0 +1,10 @@
+{
+	"mods":{
+		"terrain": [],
+		"roadnet": "",
+		"zone": [],
+		"building": [],
+		"component": [],
+		"room": []
+	}
+}

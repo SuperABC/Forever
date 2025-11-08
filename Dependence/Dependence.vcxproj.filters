@@ -69,6 +69,9 @@
     <ClInclude Include="society\organization_base.h">
       <Filter>头文件\society</Filter>
     </ClInclude>
+    <ClInclude Include="common\json.h">
+      <Filter>头文件\common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map\roadnet_base.cpp">
@@ -100,6 +103,9 @@
     </ClCompile>
     <ClCompile Include="society\organization_base.cpp">
       <Filter>源文件\society</Filter>
+    </ClCompile>
+    <ClCompile Include="common\json.cpp">
+      <Filter>源文件\common</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

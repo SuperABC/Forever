@@ -4,18 +4,25 @@
 using namespace std;
 
 void ComponentFactory::RegisterComponent(const string& id, function<unique_ptr<Component>()> creator) {
-    registry[id] = creator;
+    registries[id] = creator;
+    configs[id] = false;
 }
 
 unique_ptr<Component> ComponentFactory::CreateComponent(const string& id) {
-    auto it = registry.find(id);
-    if (it != registry.end()) {
+    auto it = registries.find(id);
+    if (it != registries.end()) {
         return it->second();
     }
     return nullptr;
 }
 
 bool ComponentFactory::CheckRegistered(const string& id) {
-    return registry.find(id) != registry.end();
+    return registries.find(id) != registries.end();
+}
+
+void ComponentFactory::SetConfig(std::string name, bool config) {
+    if (configs.find(name) != configs.end()) {
+        configs[name] = config;
+    }
 }
 

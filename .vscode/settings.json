@@ -4,6 +4,7 @@
         "stdexcept": "cpp",
         "algorithm": "cpp",
         "memory": "cpp",
-        "string": "cpp"
+        "string": "cpp",
+        "xhash": "cpp"
     }
 }

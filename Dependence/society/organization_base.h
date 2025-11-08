@@ -22,7 +22,9 @@ public:
     void RegisterOrganization(const std::string& id, std::function<std::unique_ptr<Organization>()> creator);
     std::unique_ptr<Organization> CreateOrganization(const std::string& id);
     bool CheckRegistered(const std::string& id);
+    void SetConfig(std::string name, bool config);
 
 private:
-    std::unordered_map<std::string, std::function<std::unique_ptr<Organization>()>> registry;
+    std::unordered_map<std::string, std::function<std::unique_ptr<Organization>()>> registries;
+    std::unordered_map<std::string, bool> configs;
 };

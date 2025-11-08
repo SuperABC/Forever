@@ -70,6 +70,9 @@ public:
 	// 初始化全部静态地图
 	int Init(int blockX, int blockY);
 
+	// 读取配置文件
+	void ReadConfigs(std::string path) const;
+
 	// 释放空间
 	void Destroy();
 
@@ -94,10 +97,10 @@ private:
 	int width = 0, height = 0;
 	std::vector<std::vector<std::shared_ptr<Block>>> blocks;
 
-	//检查全局坐标是否在地图内
+	// 检查全局坐标是否在地图内
 	bool CheckXY(int x, int y) const;
 
-	//获取/设置地形名称
+	// 获取/设置地形名称
 	std::string GetTerrain(int x, int y) const;
 	bool SetTerrain(int x, int y, std::string terrain);
 

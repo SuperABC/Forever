@@ -1,5 +1,10 @@
 ﻿#include "util.h"
+#include "error.h"
 #include "populace.h"
+#include "json.h"
+
+#include <fstream>
+#include <filesystem>
 
 
 using namespace std;
@@ -20,7 +25,7 @@ Populace::~Populace() {
 void Populace::InitJobs() {
     jobFactory->RegisterJob("test", []() { return std::make_unique<TestJob>(); });
 
-    HMODULE modHandle = LoadLibraryA("Mod.dll");
+    HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
         modHandles.push_back(modHandle);
         debugf("Mod dll loaded successfully.\n");
@@ -50,4 +55,26 @@ void Populace::InitJobs() {
     }
 #endif // MOD_TEST
 
+}
+
+void Populace::ReadConfigs(std::string path) const {
+    if (!filesystem::exists(path)) {
+        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+    }
+
+    Json::Reader reader;
+    Json::Value root;
+
+    ifstream fin(path);
+    if (!fin.is_open()) {
+        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
+    }
+    if (reader.parse(fin, root)) {
+
+    }
+    else {
+        fin.close();
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+    }
+    fin.close();
 }

@@ -4,19 +4,26 @@
 using namespace std;
 
 void OrganizationFactory::RegisterOrganization(const string& id, function<unique_ptr<Organization>()> creator) {
-    registry[id] = creator;
+    registries[id] = creator;
+    configs[id] = false;
 }
 
 unique_ptr<Organization> OrganizationFactory::CreateOrganization(const string& id) {
-    auto it = registry.find(id);
-    if (it != registry.end()) {
+    auto it = registries.find(id);
+    if (it != registries.end()) {
         return it->second();
     }
     return nullptr;
 }
 
 bool OrganizationFactory::CheckRegistered(const string& id) {
-    return registry.find(id) != registry.end();
+    return registries.find(id) != registries.end();
+}
+
+void OrganizationFactory::SetConfig(std::string name, bool config) {
+    if (configs.find(name) != configs.end()) {
+        configs[name] = config;
+    }
 }
 
 

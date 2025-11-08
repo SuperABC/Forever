@@ -1,8 +1,11 @@
 ﻿#include "util.h"
 #include "error.h"
 #include "map.h"
+#include "json.h"
 
 #include <algorithm>
+#include <fstream>
+#include <filesystem>
 
 
 using namespace std;
@@ -96,7 +99,7 @@ Map::~Map() {
 void Map::InitTerrains() {
     terrainFactory->RegisterTerrain("test", []() { return std::make_unique<TestTerrain>(); });
 
-    HMODULE modHandle = LoadLibraryA("Mod.dll");
+    HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
         modHandles.push_back(modHandle);
         debugf("Mod dll loaded successfully.\n");
@@ -131,7 +134,7 @@ void Map::InitTerrains() {
 void Map::InitRoadnets() {
     roadnetFactory->RegisterRoadnet("test", []() { return std::make_unique<TestRoadnet>(); });
 
-    HMODULE modHandle = LoadLibraryA("Mod.dll");
+    HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
         modHandles.push_back(modHandle);
         debugf("Mod dll loaded successfully.\n");
@@ -166,7 +169,7 @@ void Map::InitRoadnets() {
 void Map::InitZones() {
     zoneFactory->RegisterZone("test", []() { return std::make_unique<TestZone>(); });
 
-    HMODULE modHandle = LoadLibraryA("Mod.dll");
+    HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
         modHandles.push_back(modHandle);
         debugf("Mod dll loaded successfully.\n");
@@ -201,7 +204,7 @@ void Map::InitZones() {
 void Map::InitBuildings() {
     buildingFactory->RegisterBuilding("test", []() { return std::make_unique<TestBuilding>(); });
 
-    HMODULE modHandle = LoadLibraryA("Mod.dll");
+    HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
         modHandles.push_back(modHandle);
         debugf("Mod dll loaded successfully.\n");
@@ -236,7 +239,7 @@ void Map::InitBuildings() {
 void Map::InitComponents() {
     componentFactory->RegisterComponent("test", []() { return std::make_unique<TestComponent>(); });
 
-    HMODULE modHandle = LoadLibraryA("Mod.dll");
+    HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
         modHandles.push_back(modHandle);
         debugf("Mod dll loaded successfully.\n");
@@ -271,7 +274,7 @@ void Map::InitComponents() {
 void Map::InitRooms() {
     roomFactory->RegisterRoom("test", []() { return std::make_unique<TestRoom>(); });
 
-    HMODULE modHandle = LoadLibraryA("Mod.dll");
+    HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
         modHandles.push_back(modHandle);
         debugf("Mod dll loaded successfully.\n");
@@ -338,7 +341,7 @@ int Map::Init(int blockX, int blockY) {
         [](const unique_ptr<Terrain>& a, const unique_ptr<Terrain>& b) {
             return a->GetPriority() < b->GetPriority();
         });
-    for (auto &terrain : terrains) {
+    for (auto& terrain : terrains) {
         terrain->DistributeTerrain(width, height, setTerrain, getTerrain);
     }
 
@@ -362,6 +365,28 @@ void Map::Load(string path) {
 
 void Map::Save(string path) {
 
+}
+
+void Map::ReadConfigs(std::string path) const {
+    if (!filesystem::exists(path)) {
+        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+    }
+
+    Json::Reader reader;
+    Json::Value root;
+
+    ifstream fin(path);
+    if (!fin.is_open()) {
+        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
+    }
+    if (reader.parse(fin, root)) {
+        roadnetFactory->SetConfig(root["roadnet"].asString(), true);
+    }
+    else {
+        fin.close();
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+    }
+    fin.close();
 }
 
 bool Map::CheckXY(int x, int y) const {

@@ -12,6 +12,7 @@
 #include <strsafe.h>
 
 #define MOD_TEST
+#define REPLACE_PATH(path) (path)
 
 
 // 调试控制台输出
