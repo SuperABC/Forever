@@ -31,37 +31,6 @@ Node Connection::GetV1() const {
 Node Connection::GetV2() const {
     return vertices.second;
 }
-float Rect::GetPosX() {
-    return posX;
-}
-
-void Rect::SetPosX(float x) {
-    posX = x;
-}
-
-float Rect::GetPosY() {
-    return posY;
-}
-
-void Rect::SetPosY(float y) {
-    posY = y;
-}
-
-float Rect::GetSizeX() {
-    return sizeX;
-}
-
-void Rect::SetSizeX(float w) {
-    sizeX = w;
-}
-
-float Rect::GetSizeY() {
-    return sizeY;
-}
-
-void Rect::SetSizeY(float h) {
-    sizeY = h;
-}
 
 float Plot::GetRotation() {
 	return rotation;
@@ -204,27 +173,47 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     acreage = sx * sy * 100.f;
 }
 
-void Plot::AddRect(std::string name, std::shared_ptr<Rect> rect) {
-    std::unordered_map<std::string, std::shared_ptr<Rect>> rectMap;
-    rectMap[name] = rect;
-    rects.push_back(rectMap);
+void Plot::AddZone(std::string name, std::shared_ptr<Zone> zone) {
+    zones.push_back(make_pair(name, zone));
 }
 
-std::shared_ptr<Rect> Plot::GetRect(std::string name) {
-    for (auto& rectMap : rects) {
-        auto it = rectMap.find(name);
-        if (it != rectMap.end()) {
-            return it->second;
+void Plot::AddBuilding(std::string name, std::shared_ptr<Building> building) {
+    buildings.push_back(make_pair(name, building));
+}
+
+std::shared_ptr<Zone> Plot::GetZone(std::string name) {
+    for (auto& zone : zones) {
+        if(zone.first == name){
+            return zone.second;
         }
     }
     return nullptr;
 }
 
-void Plot::RemoveRect(std::string name) {
-    for (auto it = rects.begin(); it != rects.end(); ) {
-        auto rectIt = it->find(name);
-        if (rectIt != it->end()) {
-            it = rects.erase(it);
+std::shared_ptr<Building> Plot::GetBuilding(std::string name) {
+    for (auto& building : buildings) {
+        if (building.first == name) {
+            return building.second;
+        }
+    }
+    return nullptr;
+}
+
+void Plot::RemoveZone(std::string name) {
+    for (auto it = zones.begin(); it != zones.end(); ) {
+        if(it->first == name){
+            it = zones.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
+void Plot::RemoveBuilding(std::string name) {
+    for (auto it = buildings.begin(); it != buildings.end(); ) {
+        if (it->first == name) {
+            it = buildings.erase(it);
         }
         else {
             ++it;

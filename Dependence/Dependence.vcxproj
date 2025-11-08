@@ -22,6 +22,7 @@
     <ClInclude Include="common\error.h" />
     <ClInclude Include="common\json.h" />
     <ClInclude Include="common\plot.h" />
+    <ClInclude Include="common\rect.h" />
     <ClInclude Include="common\util.h" />
     <ClInclude Include="map\building_base.h" />
     <ClInclude Include="map\component_base.h" />
@@ -36,6 +37,7 @@
     <ClCompile Include="common\error.cpp" />
     <ClCompile Include="common\json.cpp" />
     <ClCompile Include="common\plot.cpp" />
+    <ClCompile Include="common\rect.cpp" />
     <ClCompile Include="common\util.cpp" />
     <ClCompile Include="map\building_base.cpp" />
     <ClCompile Include="map\component_base.cpp" />
@@ -130,6 +132,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -144,6 +147,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

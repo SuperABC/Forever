@@ -1,10 +1,17 @@
 ﻿#pragma once
 
+#include "../map/zone_base.h"
+#include "../map/building_base.h"
+
 #include "util.h"
+#include "rect.h"
 
 #include <vector>
 #include <unordered_map>
 
+
+class Zone;
+class Building;
 
 class Node {
 public:
@@ -30,26 +37,6 @@ private:
 	std::pair<Node, Node> vertices;
 };
 
-class Rect {
-public:
-	Rect() : posX(0.f), posY(0.f), sizeX(0.f), sizeY(0.f) {}
-	Rect(float x, float y, float w, float h) : posX(x), posY(y), sizeX(w), sizeY(h) {}
-
-	// 获取/设置属性
-	float GetPosX();
-	void SetPosX(float x);
-	float GetPosY();
-	void SetPosY(float y);
-	float GetSizeX();
-	void SetSizeX(float w);
-	float GetSizeY();
-	void SetSizeY(float h);
-
-protected:
-	float posX, posY;
-	float sizeX, sizeY;
-};
-
 class Plot : public Rect {
 public:
 	Plot() : Rect(), rotation(0.f), acreage(0.f) {}
@@ -69,13 +56,17 @@ public:
 	void SetPosition(Node n1, Node n2, Node n3, Node n4);
 
 	// 内部Rect管理
-	void AddRect(std::string name, std::shared_ptr<Rect> rect);
-	std::shared_ptr<Rect> GetRect(std::string name);
-	void RemoveRect(std::string name);
+	void AddZone(std::string name, std::shared_ptr<Zone> zone);
+	void AddBuilding(std::string name, std::shared_ptr<Building> building);
+	std::shared_ptr<Zone> GetZone(std::string name);
+	std::shared_ptr<Building> GetBuilding(std::string name);
+	void RemoveZone(std::string name);
+	void RemoveBuilding(std::string name);
 
 protected:
 	float rotation;
 	float acreage;
 
-	std::vector<std::unordered_map<std::string, std::shared_ptr<Rect>>> rects;
+	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
+	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;
 };

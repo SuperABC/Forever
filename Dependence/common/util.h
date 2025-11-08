@@ -11,8 +11,11 @@
 #include <windows.h>
 #include <strsafe.h>
 
-#define MOD_TEST
 #define REPLACE_PATH(path) (path)
+
+#ifdef _DEBUG
+#define MOD_TEST
+#endif // DEBUG
 
 
 // 调试控制台输出

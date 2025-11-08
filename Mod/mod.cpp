@@ -25,9 +25,8 @@ extern "C" __declspec(dllexport) void RegisterModRoadnets(RoadnetFactory* factor
 }
 
 extern "C" __declspec(dllexport) void RegisterModZones(ZoneFactory* factory) {
-    factory->RegisterZone(ModZone::GetId(), []() {
-        return make_unique<ModZone>();
-        });
+    factory->RegisterZone(ModZone::GetId(),
+        []() { return std::make_unique<ModZone>(); }, ModZone::ZoneGenerator);
 }
 
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {

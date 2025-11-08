@@ -75,6 +75,9 @@
     <ClInclude Include="common\plot.h">
       <Filter>头文件\common</Filter>
     </ClInclude>
+    <ClInclude Include="common\rect.h">
+      <Filter>头文件\common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map\roadnet_base.cpp">
@@ -111,6 +114,9 @@
       <Filter>源文件\common</Filter>
     </ClCompile>
     <ClCompile Include="common\plot.cpp">
+      <Filter>源文件\common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\rect.cpp">
       <Filter>源文件\common</Filter>
     </ClCompile>
   </ItemGroup>

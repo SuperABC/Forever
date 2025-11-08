@@ -3,9 +3,11 @@
 
 using namespace std;
 
-void ZoneFactory::RegisterZone(const string& id, function<unique_ptr<Zone>()> creator) {
+void ZoneFactory::RegisterZone(const string& id,
+    function<unique_ptr<Zone>()> creator,  GeneratorFunc generator) {
     registries[id] = creator;
     configs[id] = false;
+    generators[id] = generator;
 }
 
 unique_ptr<Zone> ZoneFactory::CreateZone(const string& id) {
@@ -26,4 +28,11 @@ void ZoneFactory::SetConfig(std::string name, bool config) {
     }
 }
 
+void ZoneFactory::GenerateAll(const std::vector<std::shared_ptr<Plot>>& plots) {
+    for (const auto& [id, generator] : generators) {
+        if (generator && configs[id]) {
+            generator(this, plots);
+        }
+    }
+}
 

@@ -10,7 +10,18 @@
 class ModZone : public Zone {
 public:
     static std::string GetId() { return "mod"; }
-    virtual std::string GetName() const override { return "模组职业"; }
+    virtual std::string GetName() const override { return "模组园区"; }
 
+    static std::function<void(ZoneFactory*, const std::vector<std::shared_ptr<Plot>>&)> ZoneGenerator;
 };
 
+std::function<void(ZoneFactory*, const std::vector<std::shared_ptr<Plot>>&)> ModZone::ZoneGenerator =
+    [](ZoneFactory* factory, const std::vector<std::shared_ptr<Plot>>& plots) {
+        for (const auto& plot : plots) {
+            auto zone = factory->CreateZone(ModZone::GetId());
+            if (zone) {
+                std::string name = zone->GetName();
+                plot->AddZone(name, std::move(zone));
+            }
+        }
+    };

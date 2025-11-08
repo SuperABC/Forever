@@ -97,7 +97,8 @@ Map::~Map() {
 }
 
 void Map::InitTerrains() {
-    terrainFactory->RegisterTerrain(TestTerrain::GetId(), []() { return std::make_unique<TestTerrain>(); });
+    terrainFactory->RegisterTerrain(TestTerrain::GetId(),
+        []() { return std::make_unique<TestTerrain>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -167,7 +168,8 @@ void Map::InitRoadnets() {
 }
 
 void Map::InitZones() {
-    zoneFactory->RegisterZone(TestZone::GetId(), []() { return std::make_unique<TestZone>(); });
+    zoneFactory->RegisterZone(TestZone::GetId(),
+        []() { return std::make_unique<TestZone>(); }, TestZone::ZoneGenerator);
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -353,6 +355,9 @@ int Map::Init(int blockX, int blockY) {
     roadnet->DistributeRoadnet(width, height, getTerrain);
 
     // 随机生成园区
+    zoneFactory->GenerateAll(roadnet->GetPlots());
+
+    // 随机生成建筑
 
 
     return 0;
@@ -387,7 +392,23 @@ void Map::ReadConfigs(std::string path) const {
         THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
     }
     if (reader.parse(fin, root)) {
+        for (auto terrain : root["mods"]["terrain"]) {
+            terrainFactory->SetConfig(terrain.asString(), true);
+        }
         roadnetFactory->SetConfig(root["mods"]["roadnet"].asString(), true);
+        for (auto zone : root["mods"]["zone"]) {
+            zoneFactory->SetConfig(zone.asString(), true);
+        }
+        for (auto building : root["mods"]["building"]) {
+            buildingFactory->SetConfig(building.asString(), true);
+        }
+        for (auto component : root["mods"]["component"]) {
+            componentFactory->SetConfig(component.asString(), true);
+        }
+        for (auto room : root["mods"]["room"]) {
+            roomFactory->SetConfig(room.asString(), true);
+        }
+
     }
     else {
         fin.close();
