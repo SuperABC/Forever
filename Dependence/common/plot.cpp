@@ -32,7 +32,7 @@ Node Connection::GetV2() const {
     return vertices.second;
 }
 
-float Plot::GetRotation() {
+float Plot::GetRotation() const {
 	return rotation;
 }
 

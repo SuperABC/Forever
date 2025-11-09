@@ -11,5 +11,15 @@ class ModBuilding : public Building {
 public:
     static std::string GetId() { return "mod"; }
     virtual std::string GetName() const override { return "模组建筑"; }
+
+    static float GetPower() { return 1.f; }
+
+    virtual float RandomAcreage() const { return 10000.f; }
+    virtual float GetAcreageMin() const { return 2000.f; }
+    virtual float GetAcreageMax() const { return 20000.f; }
+
+    virtual void LayoutRooms() {
+
+    }
 };
 

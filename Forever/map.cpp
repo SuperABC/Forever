@@ -204,7 +204,8 @@ void Map::InitZones() {
 }
 
 void Map::InitBuildings() {
-    buildingFactory->RegisterBuilding(TestBuilding::GetId(), []() { return std::make_unique<TestBuilding>(); });
+    buildingFactory->RegisterBuilding(TestBuilding::GetId(),
+        []() { return std::make_unique<TestBuilding>(); }, TestBuilding::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -362,6 +363,66 @@ int Map::Init(int blockX, int blockY) {
     }
 
     // 随机生成建筑
+    auto powers = buildingFactory->GetPowers();
+    vector<pair<string, float>> cdfs;
+    float sum = 0.f;
+    for (auto power : powers) {
+        sum += power.second;
+        cdfs.emplace_back(power.first, sum);
+    }
+    if (sum == 0.f) {
+        THROW_EXCEPTION(InvalidArgumentException, "No valid building for generation.\n");
+    }
+    for (auto &cdf : cdfs) {
+        cdf.second /= sum;
+    }
+    for (auto plot : roadnet->GetPlots()) {
+        float acreagePlot = plot->GetAcreage();
+        for (auto zone : plot->GetZones()) {
+            acreagePlot -= zone.second->GetAcreage();
+        }
+        if (acreagePlot <= 0.f)continue;
+
+        float acreageTmp = 0.f;
+        int attempt = 0;
+        while (acreageTmp < acreagePlot) {
+            if (attempt++ > 16)break;
+
+            std::shared_ptr<Building> building;
+
+            float rand = GetRandom(int(1e5)) / 1e5f;
+            for (auto cdf : cdfs) {
+                if (rand < cdf.second) {
+                    building = buildingFactory->CreateBuilding(cdf.first);
+                    break;
+                }
+            }
+
+            if (!building)continue;
+            
+            float acreageBuilding = building->RandomAcreage();
+            float acreageMin = building->GetAcreageMin();
+            float acreageMax = building->GetAcreageMax();
+            if (acreagePlot - acreageTmp < acreageMin) {
+                continue;
+            }
+            else if (acreagePlot - acreageTmp < acreageBuilding) {
+                acreageBuilding = acreagePlot - acreageTmp;
+            }
+
+            acreageTmp += acreageBuilding;
+            building->SetAcreage(acreageBuilding);
+            plot->AddBuilding(building->GetName(), building);
+            buildings.emplace_back(building->GetName(), building);
+        }
+    }
+
+    // 随机生成组合与房间
+    for (auto &building : buildings) {
+        building.second->LayoutRooms();
+    }
+
+    // 随机分布建筑与园区
 
 
     return 0;

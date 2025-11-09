@@ -20,3 +20,6 @@
 
 // 调试控制台输出
 void debugf(LPCSTR format, ...);
+
+// 获取[0, range - 1]的随机整数
+int GetRandom(int range);

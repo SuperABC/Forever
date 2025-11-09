@@ -39,13 +39,13 @@ private:
 
 class Plot : public Rect {
 public:
-	Plot() : Rect(), rotation(0.f), acreage(0.f) {}
-	Plot(float x, float y, float w, float h, float r) : Rect(x, y, w, h), rotation(r), acreage(w * h * 100.f) {}
+	Plot() : Rect(), rotation(0.f) {}
+	Plot(float x, float y, float w, float h, float r) : Rect(x, y, w, h), rotation(r) {}
 	Plot(Node n1, Node n2, Node n3) { SetPosition(n1, n2, n3); }
 	Plot(Node n1, Node n2, Node n3, Node n4) { SetPosition(n1, n2, n3, n4); }
 
-	// 获取属性
-	float GetRotation();
+	// 获取/设置属性
+	float GetRotation() const;
 	void SetRotation(float r);
 	std::pair<float, float> GetVertex(int idx);
 
@@ -67,7 +67,6 @@ public:
 
 protected:
 	float rotation;
-	float acreage;
 
 	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
 	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;

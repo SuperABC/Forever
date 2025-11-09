@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "building_base.h"
+#include "component_base.h"
 
 
 // 子类注册函数
@@ -11,4 +12,14 @@ class TestBuilding : public Building {
 public:
     static std::string GetId() { return "test"; }
     virtual std::string GetName() const override { return "测试建筑"; }
+
+    static float GetPower() { return 1.f; }
+
+    virtual float RandomAcreage() const { return 10000.f; }
+    virtual float GetAcreageMin() const { return 2000.f; }
+    virtual float GetAcreageMax() const { return 20000.f; }
+
+    virtual void LayoutRooms() {
+
+    }
 };

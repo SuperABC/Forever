@@ -3,9 +3,10 @@
 
 using namespace std;
 
-void BuildingFactory::RegisterBuilding(const string& id, function<unique_ptr<Building>()> creator) {
+void BuildingFactory::RegisterBuilding(const string& id, function<unique_ptr<Building>()> creator, float power) {
     registries[id] = creator;
     configs[id] = false;
+    powers[id] = power;
 }
 
 unique_ptr<Building> BuildingFactory::CreateBuilding(const string& id) {
@@ -24,5 +25,9 @@ void BuildingFactory::SetConfig(std::string name, bool config) {
     if (configs.find(name) != configs.end()) {
         configs[name] = config;
     }
+}
+
+const unordered_map<string, float>& BuildingFactory::GetPowers() const {
+    return powers;
 }
 

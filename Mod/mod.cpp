@@ -30,9 +30,8 @@ extern "C" __declspec(dllexport) void RegisterModZones(ZoneFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
-    factory->RegisterBuilding(ModZone::GetId(), []() {
-        return make_unique<ModBuilding>();
-        });
+    factory->RegisterBuilding(ModZone::GetId(),
+        []() { return make_unique<ModBuilding>(); }, ModBuilding::GetPower());
 }
 
 extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* factory) {
