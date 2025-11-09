@@ -356,6 +356,10 @@ int Map::Init(int blockX, int blockY) {
 
     // 随机生成园区
     zoneFactory->GenerateAll(roadnet->GetPlots());
+    for (auto plot : roadnet->GetPlots()) {
+        auto z = plot->GetZones();
+        zones.insert(zones.end(), z.begin(), z.end());
+    }
 
     // 随机生成建筑
 

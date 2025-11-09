@@ -56,10 +56,12 @@ public:
 	void SetPosition(Node n1, Node n2, Node n3, Node n4);
 
 	// 内部Rect管理
+	const std::vector<std::pair<std::string, std::shared_ptr<Zone>>> GetZones() const;
+	const std::vector<std::pair<std::string, std::shared_ptr<Building>>>GetBuildings() const;
 	void AddZone(std::string name, std::shared_ptr<Zone> zone);
 	void AddBuilding(std::string name, std::shared_ptr<Building> building);
-	std::shared_ptr<Zone> GetZone(std::string name);
-	std::shared_ptr<Building> GetBuilding(std::string name);
+	std::shared_ptr<Zone> GetZone(std::string name) const;
+	std::shared_ptr<Building> GetBuilding(std::string name) const;
 	void RemoveZone(std::string name);
 	void RemoveBuilding(std::string name);
 

@@ -173,6 +173,14 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     acreage = sx * sy * 100.f;
 }
 
+const std::vector<std::pair<std::string, std::shared_ptr<Zone>>> Plot::GetZones() const {
+    return zones;
+}
+
+const std::vector<std::pair<std::string, std::shared_ptr<Building>>> Plot::GetBuildings() const {
+    return buildings;
+}
+
 void Plot::AddZone(std::string name, std::shared_ptr<Zone> zone) {
     zones.push_back(make_pair(name, zone));
 }
@@ -181,7 +189,7 @@ void Plot::AddBuilding(std::string name, std::shared_ptr<Building> building) {
     buildings.push_back(make_pair(name, building));
 }
 
-std::shared_ptr<Zone> Plot::GetZone(std::string name) {
+std::shared_ptr<Zone> Plot::GetZone(std::string name) const {
     for (auto& zone : zones) {
         if(zone.first == name){
             return zone.second;
@@ -190,7 +198,7 @@ std::shared_ptr<Zone> Plot::GetZone(std::string name) {
     return nullptr;
 }
 
-std::shared_ptr<Building> Plot::GetBuilding(std::string name) {
+std::shared_ptr<Building> Plot::GetBuilding(std::string name) const {
     for (auto& building : buildings) {
         if (building.first == name) {
             return building.second;

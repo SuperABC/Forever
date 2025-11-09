@@ -99,8 +99,8 @@ private:
 
 	// 地图架构
 	std::unique_ptr<Roadnet> roadnet;
-	std::vector<std::shared_ptr<Zone>> zones;
-	std::vector<std::shared_ptr<Building>> buildings;
+	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
+	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;
 
 	// 检查全局坐标是否在地图内
 	bool CheckXY(int x, int y) const;
