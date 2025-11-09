@@ -386,7 +386,7 @@ int Map::Init(int blockX, int blockY) {
         float acreageTmp = 0.f;
         int attempt = 0;
         while (acreageTmp < acreagePlot) {
-            if (attempt++ > 16)break;
+            if (attempt > 16)break;
 
             std::shared_ptr<Building> building;
 
@@ -398,12 +398,16 @@ int Map::Init(int blockX, int blockY) {
                 }
             }
 
-            if (!building)continue;
+            if (!building) {
+                attempt++;
+                continue;
+            }
             
             float acreageBuilding = building->RandomAcreage();
             float acreageMin = building->GetAcreageMin();
             float acreageMax = building->GetAcreageMax();
             if (acreagePlot - acreageTmp < acreageMin) {
+                attempt++;
                 continue;
             }
             else if (acreagePlot - acreageTmp < acreageBuilding) {
@@ -417,13 +421,13 @@ int Map::Init(int blockX, int blockY) {
         }
     }
 
+    // 随机分布建筑与园区
+    ArrangePlots();
+
     // 随机生成组合与房间
     for (auto &building : buildings) {
         building.second->LayoutRooms();
     }
-
-    // 随机分布建筑与园区
-
 
     return 0;
 }
@@ -518,6 +522,183 @@ bool Map::SetTerrain(int x, int y, std::string terrain) {
     }
 
     return blocks[blockX][blockY]->SetTerrain(x, y, terrain);
+}
+
+void Map::ArrangePlots() {
+    auto plots = roadnet->GetPlots();
+    for (auto plot : plots) {
+        auto zones = plot->GetZones();
+        auto buildings = plot->GetBuildings();
+
+        if (zones.empty() && buildings.empty()) continue;
+
+        float acreageTotal = plot->GetAcreage();
+        float acreageUsed = 0.f;
+
+        for (const auto& zone : zones) {
+            acreageUsed += zone.second->GetAcreage();
+        }
+        for (const auto& building : buildings) {
+            acreageUsed += building.second->GetAcreage();
+        }
+        float acreageRemain = acreageTotal - acreageUsed;
+
+        bool acreageAllocate = false;
+        if (acreageRemain > 0) {
+            for (auto& building : buildings) {
+                float acreageTmp = building.second->GetAcreage();
+                float acreageMax = building.second->GetAcreageMax();
+                float acreageMin = building.second->GetAcreageMin();
+
+                float acreageExpand = acreageMax - acreageTmp;
+
+                if (acreageExpand > acreageRemain && acreageRemain > 0) {
+                    float acreageNew = acreageTmp + acreageRemain;
+                    if (acreageNew >= acreageMin && acreageNew <= acreageMax) {
+                        building.second->SetAcreage(acreageNew);
+                        acreageUsed += acreageRemain;
+                        acreageRemain = 0.f;
+                        acreageAllocate = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        vector<shared_ptr<Rect>> elements;
+        if (acreageRemain > 0 && !acreageAllocate) {
+            auto emptyRect = make_shared<Plot>();
+            emptyRect->SetAcreage(acreageRemain);
+            elements.push_back(emptyRect);
+        }
+
+        for (const auto& zone : zones) {
+            elements.push_back(static_pointer_cast<Rect>(zone.second));
+        }
+        for (const auto& building : buildings) {
+            elements.push_back(static_pointer_cast<Rect>(building.second));
+        }
+
+        if (elements.empty()) continue;
+
+        sort(elements.begin(), elements.end(), [](shared_ptr<Rect> a, shared_ptr<Rect> b) {
+            return a->GetAcreage() > b->GetAcreage();
+            });
+
+        Rect container = Rect(plot->GetSizeX() / 2, plot->GetSizeY() / 2, plot->GetSizeX(), plot->GetSizeY());
+        if (elements.size() == 1) {
+            elements[0]->SetPosition(container.GetPosX(), container.GetPosY(), container.GetSizeX(), container.GetSizeY());
+        }
+        else {
+            class Chunk : public Rect {
+            public:
+                Chunk(shared_ptr<Rect> r1, shared_ptr<Rect> r2) : r1(r1), r2(r2) { acreage = r1->GetAcreage() + r2->GetAcreage(); }
+                shared_ptr<Rect> r1, r2;
+            };
+            while (elements.size() > 2) {
+                shared_ptr<Chunk> tmp = make_shared<Chunk>(elements[elements.size() - 1], elements[elements.size() - 2]);
+                elements.pop_back();
+                int i = elements.size() - 2;
+                for (; i >= 0; i--) {
+                    if (tmp->GetAcreage() > elements[i]->GetAcreage()) {
+                        elements[i + 1] = elements[i];
+                    }
+                    else {
+                        elements[i + 1] = tmp;
+                        break;
+                    }
+                }
+                if (i < 0)elements[0] = tmp;
+            }
+
+            if (container.GetSizeX() > container.GetSizeY()) {
+                if (GetRandom(2)) {
+                    int divX = container.GetLeft() +
+                        (container.GetRight() - container.GetLeft()) * elements[0]->GetAcreage() / container.GetAcreage();
+                    if (abs(divX - container.GetLeft()) < 2)divX = container.GetLeft();
+                    if (abs(divX - container.GetRight()) < 2)divX = container.GetRight();
+                    elements[0]->SetVertices(container.GetLeft(), container.GetBottom(), divX, container.GetTop());
+                    elements[1]->SetVertices(divX, container.GetBottom(), container.GetRight(), container.GetTop());
+                }
+                else {
+                    int divX = container.GetLeft() +
+                        (container.GetRight() - container.GetLeft()) * elements[1]->GetAcreage() / container.GetAcreage();
+                    if (abs(divX - container.GetLeft()) < 2)divX = container.GetLeft();
+                    if (abs(divX - container.GetRight()) < 2)divX = container.GetRight();
+                    elements[1]->SetVertices(container.GetLeft(), container.GetBottom(), divX, container.GetTop());
+                    elements[0]->SetVertices(divX, container.GetBottom(), container.GetRight(), container.GetTop());
+                }
+            }
+            else {
+                if (GetRandom(2)) {
+                    int divY = container.GetBottom() +
+                        (container.GetTop() - container.GetBottom()) * elements[0]->GetAcreage() / container.GetAcreage();
+                    if (abs(divY - container.GetBottom()) < 2)divY = container.GetBottom();
+                    if (abs(divY - container.GetTop()) < 2)divY = container.GetTop();
+                    elements[0]->SetVertices(container.GetLeft(), container.GetBottom(), container.GetRight(), divY);
+                    elements[1]->SetVertices(container.GetLeft(), divY, container.GetRight(), container.GetTop());
+                }
+                else {
+                    int divY = container.GetBottom() +
+                        (container.GetTop() - container.GetBottom()) * elements[1]->GetAcreage() / container.GetAcreage();
+                    if (abs(divY - container.GetBottom()) < 2)divY = container.GetBottom();
+                    if (abs(divY - container.GetTop()) < 2)divY = container.GetTop();
+                    elements[1]->SetVertices(container.GetLeft(), container.GetBottom(), container.GetRight(), divY);
+                    elements[0]->SetVertices(container.GetLeft(), divY, container.GetRight(), container.GetTop());
+                }
+            }
+
+            while (elements.size() > 0) {
+                auto tmp = elements.back();
+                elements.pop_back();
+                if (auto chunk = dynamic_pointer_cast<Chunk>(tmp)) {
+                    shared_ptr<Rect> rect1 = chunk->r1;
+                    shared_ptr<Rect> rect2 = chunk->r2;
+
+                    if (tmp->GetAcreage() > 0) {
+                        if (tmp->GetSizeX() > tmp->GetSizeY()) {
+                            if (GetRandom(2)) {
+                                int divX = tmp->GetLeft() +
+                                    tmp->GetSizeX() * rect1->GetAcreage() / tmp->GetAcreage();
+                                if (abs(divX - tmp->GetLeft()) < 2)divX = tmp->GetLeft();
+                                if (abs(divX - tmp->GetRight()) < 2)divX = tmp->GetRight();
+                                rect1->SetVertices(tmp->GetLeft(), tmp->GetBottom(), divX, tmp->GetTop());
+                                rect2->SetVertices(divX, tmp->GetBottom(), tmp->GetRight(), tmp->GetTop());
+                            }
+                            else {
+                                int divX = tmp->GetLeft() +
+                                    tmp->GetSizeX() * rect2->GetAcreage() / tmp->GetAcreage();
+                                if (abs(divX - tmp->GetLeft()) < 2)divX = tmp->GetLeft();
+                                if (abs(divX - tmp->GetRight()) < 2)divX = tmp->GetRight();
+                                rect2->SetVertices(tmp->GetLeft(), tmp->GetBottom(), divX, tmp->GetTop());
+                                rect1->SetVertices(divX, tmp->GetBottom(), tmp->GetRight(), tmp->GetTop());
+                            }
+                        }
+                        else {
+                            if (GetRandom(2)) {
+                                int divY = tmp->GetBottom() +
+                                    tmp->GetSizeY() * rect1->GetAcreage() / tmp->GetAcreage();
+                                if (abs(divY - tmp->GetBottom()) < 2)divY = tmp->GetBottom();
+                                if (abs(divY - tmp->GetTop()) < 2)divY = tmp->GetTop();
+                                rect1->SetVertices(tmp->GetLeft(), tmp->GetBottom(), tmp->GetRight(), divY);
+                                rect2->SetVertices(tmp->GetLeft(), divY, tmp->GetRight(), tmp->GetTop());
+                            }
+                            else {
+                                int divY = tmp->GetBottom() +
+                                    tmp->GetSizeY() * rect2->GetAcreage() / tmp->GetAcreage();
+                                if (abs(divY - tmp->GetBottom()) < 2)divY = tmp->GetBottom();
+                                if (abs(divY - tmp->GetTop()) < 2)divY = tmp->GetTop();
+                                rect2->SetVertices(tmp->GetLeft(), tmp->GetBottom(), tmp->GetRight(), divY);
+                                rect1->SetVertices(tmp->GetLeft(), divY, tmp->GetRight(), tmp->GetTop());
+                            }
+                        }
+                        if (dynamic_pointer_cast<Chunk>(rect1))elements.push_back(rect1);
+                        if (dynamic_pointer_cast<Chunk>(rect2))elements.push_back(rect2);
+                    }
+                }
+            }
+        }
+    }
 }
 
 

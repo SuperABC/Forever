@@ -109,5 +109,7 @@ private:
 	std::string GetTerrain(int x, int y) const;
 	bool SetTerrain(int x, int y, std::string terrain);
 
+	// 排列地块中的园区与建筑
+	void ArrangePlots();
 };
 
