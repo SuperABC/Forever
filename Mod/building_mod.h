@@ -12,7 +12,7 @@ public:
     static std::string GetId() { return "mod"; }
     virtual std::string GetName() const override { return "模组建筑"; }
 
-    static float GetPower() { return 1.f; }
+    static std::vector<float> GetPower() { return std::vector<float>(13, 1.f); }
 
     virtual float RandomAcreage() const { return 10000.f; }
     virtual float GetAcreageMin() const { return 2000.f; }

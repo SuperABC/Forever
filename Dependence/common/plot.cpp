@@ -39,6 +39,15 @@ float Plot::GetRotation() const {
 void Plot::SetRotation(float r) {
     rotation = r;
 }
+
+AREA_TYPE Plot::GetArea() const {
+    return area;
+}
+
+void Plot::SetArea(AREA_TYPE area) {
+    this->area = area;
+}
+
 pair<float, float> Plot::GetVertex(int idx) {
 	if (idx < 1 || idx > 4) {
 		THROW_EXCEPTION(InvalidArgumentException, "Plot has only 4 vertices.\n");

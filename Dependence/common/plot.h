@@ -37,6 +37,22 @@ private:
 	std::pair<Node, Node> vertices;
 };
 
+enum AREA_TYPE {
+	AREA_GREEN,
+	AREA_RESIDENTIAL_HIGH,
+	AREA_RESIDENTIAL_MIDDLE,
+	AREA_RESIDENTAIL_LOW,
+	AREA_COMMERCIAL_HIGH,
+	AREA_COMMERCIAL_MIDDLE,
+	AREA_COMMERCIAL_LOW,
+	AREA_INDUSTRIAL_HIGH,
+	AREA_INDUSTRIAL_MIDDLE,
+	AREA_INDUSTRIAL_LOW,
+	AREA_OFFICIAL_HIGH,
+	AREA_OFFICIAL_MIDDLE,
+	AREA_OFFICIAL_LOW,
+};
+
 class Plot : public Rect {
 public:
 	Plot() : Rect(), rotation(0.f) {}
@@ -47,6 +63,8 @@ public:
 	// 获取/设置属性
 	float GetRotation() const;
 	void SetRotation(float r);
+	AREA_TYPE GetArea() const;
+	void SetArea(AREA_TYPE area);
 	std::pair<float, float> GetVertex(int idx);
 
 	// 通过逆时针顺序三个顶点设置矩形
@@ -67,6 +85,7 @@ public:
 
 protected:
 	float rotation;
+	AREA_TYPE area;
 
 	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
 	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;

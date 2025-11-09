@@ -364,17 +364,19 @@ int Map::Init(int blockX, int blockY) {
 
     // 随机生成建筑
     auto powers = buildingFactory->GetPowers();
-    vector<pair<string, float>> cdfs;
-    float sum = 0.f;
-    for (auto power : powers) {
-        sum += power.second;
-        cdfs.emplace_back(power.first, sum);
-    }
-    if (sum == 0.f) {
-        THROW_EXCEPTION(InvalidArgumentException, "No valid building for generation.\n");
-    }
-    for (auto &cdf : cdfs) {
-        cdf.second /= sum;
+    vector<vector<pair<string, float>>> cdfs(AREA_OFFICIAL_LOW + 1);
+    for (int area = 0; area <= AREA_OFFICIAL_LOW; area++) {
+        float sum = 0.f;
+        for (auto power : powers) {
+            sum += power.second[area];
+            cdfs[area].emplace_back(power.first, sum);
+        }
+        if (sum == 0.f) {
+            THROW_EXCEPTION(InvalidArgumentException, "No valid building for generation.\n");
+        }
+        for (auto& cdf : cdfs[area]) {
+            cdf.second /= sum;
+        }
     }
     for (auto plot : roadnet->GetPlots()) {
         float acreagePlot = plot->GetAcreage();
@@ -391,7 +393,7 @@ int Map::Init(int blockX, int blockY) {
             std::shared_ptr<Building> building;
 
             float rand = GetRandom(int(1e5)) / 1e5f;
-            for (auto cdf : cdfs) {
+            for (auto cdf : cdfs[plot->GetArea()]) {
                 if (rand < cdf.second) {
                     building = buildingFactory->CreateBuilding(cdf.first);
                     break;

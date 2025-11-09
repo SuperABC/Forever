@@ -27,5 +27,6 @@ public:
         connections.push_back(Connection(n3, n4));
         connections.push_back(Connection(n4, n1));
         plots.push_back(std::make_shared<Plot>(n1, n2, n3, n4));
+        plots.back()->SetArea(AREA_GREEN);
     }
 };

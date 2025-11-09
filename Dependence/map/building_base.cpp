@@ -3,7 +3,7 @@
 
 using namespace std;
 
-void BuildingFactory::RegisterBuilding(const string& id, function<unique_ptr<Building>()> creator, float power) {
+void BuildingFactory::RegisterBuilding(const string& id, function<unique_ptr<Building>()> creator, vector<float> power) {
     registries[id] = creator;
     configs[id] = false;
     powers[id] = power;
@@ -27,7 +27,7 @@ void BuildingFactory::SetConfig(std::string name, bool config) {
     }
 }
 
-const unordered_map<string, float>& BuildingFactory::GetPowers() const {
+const unordered_map<string, vector<float>>& BuildingFactory::GetPowers() const {
     return powers;
 }
 

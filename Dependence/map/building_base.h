@@ -12,6 +12,8 @@
 #include <unordered_map>
 
 
+enum AREA_TYPE;
+
 // 建筑方向
 enum FACE_DIRECTION {
 	FACE_WEST,
@@ -94,8 +96,8 @@ public:
 		else return nullptr;
 	}
 
-    // 建筑权重
-    static float GetPower();
+    // 功能区中的建筑权重
+    static std::vector<float> GetPower();
 
     // 建筑面积范围
     virtual float RandomAcreage() const = 0;
@@ -134,14 +136,15 @@ protected:
 
 class BuildingFactory {
 public:
-    void RegisterBuilding(const std::string& id, std::function<std::unique_ptr<Building>()> creator, float power);
+    void RegisterBuilding(const std::string& id,
+		std::function<std::unique_ptr<Building>()> creator, std::vector<float> powers);
     std::unique_ptr<Building> CreateBuilding(const std::string& id);
     bool CheckRegistered(const std::string& id);
     void SetConfig(std::string name, bool config);
-    const std::unordered_map<std::string, float>& GetPowers() const;
+    const std::unordered_map<std::string, std::vector<float>>& GetPowers() const;
 
 private:
     std::unordered_map<std::string, std::function<std::unique_ptr<Building>()>> registries;
     std::unordered_map<std::string, bool> configs;
-    std::unordered_map<std::string, float> powers;
+    std::unordered_map<std::string, std::vector<float>> powers;
 };
