@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "room_base.h"
+
 #include <string>
 #include <functional>
 #include <memory>
@@ -15,7 +17,12 @@ public:
     static std::string GetId();
     virtual std::string GetName() const = 0;
 
+    // 获取/添加房间
+    std::vector<std::shared_ptr<Room>>& GetRooms() { return rooms; }
+    void AddRoom(std::shared_ptr<Room> room) { rooms.push_back(room); }
+
 protected:
+    std::vector<std::shared_ptr<Room>> rooms;
 };
 
 class ComponentFactory {

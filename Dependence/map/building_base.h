@@ -125,7 +125,7 @@ protected:
 
 	// 建筑中添加房间
 	template<class T>
-	std::shared_ptr<T> CreateRoom(int layer, int acreage) {
+	std::shared_ptr<T> CreateRoom(int layer, float acreage) {
 		std::shared_ptr<T> room = std::make_shared<T>();
 		room->SetLayer(layer);
 		room->SetAcreage(acreage);

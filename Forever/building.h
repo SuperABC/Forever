@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "room.h"
+#include "component.h"
 #include "building_base.h"
 #include "component_base.h"
 
@@ -20,6 +22,7 @@ public:
     virtual float GetAcreageMax() const { return 20000.f; }
 
     virtual void LayoutRooms() {
-
+        auto component = CreateComponent<TestComponent>();
+        component->AddRoom(CreateRoom<TestRoom>(1, 100.f));
     }
 };

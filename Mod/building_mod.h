@@ -2,6 +2,9 @@
 
 #include "building_base.h"
 
+#include "component_mod.h"
+#include "room_mod.h"
+
 #include <memory>
 #include <string>
 
@@ -19,7 +22,8 @@ public:
     virtual float GetAcreageMax() const { return 20000.f; }
 
     virtual void LayoutRooms() {
-
+        auto component = CreateComponent<ModComponent>();
+        component->AddRoom(CreateRoom<ModRoom>(1, 100.f));
     }
 };
 

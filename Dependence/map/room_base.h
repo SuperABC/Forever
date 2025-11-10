@@ -1,12 +1,14 @@
 ﻿#pragma once
 
+#include "../common/rect.h"
+
 #include <string>
 #include <functional>
 #include <memory>
 #include <unordered_map>
 
 
-class Room {
+class Room : public Rect {
 public:
     Room() = default;
     virtual ~Room() = default;
@@ -15,7 +17,11 @@ public:
     static std::string GetId();
     virtual std::string GetName() const = 0;
 
+    int GetLayer() const { return layer; }
+    void SetLayer(int layer) { this->layer = layer; }
+
 protected:
+    int layer;
 };
 
 class RoomFactory {
