@@ -3,6 +3,14 @@
 
 using namespace std;
 
+void Zone::SetParent(std::shared_ptr<Plot> plot) {
+    parentPlot = plot;
+}
+
+std::shared_ptr<Plot> Zone::GetParent() const {
+    return parentPlot;
+}
+
 void ZoneFactory::RegisterZone(const string& id,
     function<unique_ptr<Zone>()> creator,  GeneratorFunc generator) {
     registries[id] = creator;

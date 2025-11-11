@@ -65,7 +65,7 @@ public:
 	void SetRotation(float r);
 	AREA_TYPE GetArea() const;
 	void SetArea(AREA_TYPE area);
-	std::pair<float, float> GetVertex(int idx);
+	std::pair<float, float> GetVertex(int idx) const;
 
 	// 通过逆时针顺序三个顶点设置矩形
 	void SetPosition(Node n1, Node n2, Node n3);

@@ -48,7 +48,7 @@ void Plot::SetArea(AREA_TYPE area) {
     this->area = area;
 }
 
-pair<float, float> Plot::GetVertex(int idx) {
+pair<float, float> Plot::GetVertex(int idx) const {
 	if (idx < 1 || idx > 4) {
 		THROW_EXCEPTION(InvalidArgumentException, "Plot has only 4 vertices.\n");
 	}

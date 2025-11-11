@@ -14,6 +14,11 @@
 
 enum AREA_TYPE;
 
+class Plot;
+class Zone;
+class Component;
+class Room;
+
 // 建筑方向
 enum FACE_DIRECTION {
 	FACE_WEST,
@@ -79,22 +84,11 @@ public:
     Building() = default;
     virtual ~Building() = default;
 
+	// 子类实现方法
+
     // 动态返回建筑静态信息
     static std::string GetId();
     virtual std::string GetName() const = 0;
-
-	// 获取/设置属性
-	int GetLayers() { return layers; }
-	int GetBasements() { return basements; }
-
-	// 获取/设置组织/房间/楼层
-	std::vector<std::shared_ptr<Component>>& GetComponents() { return components; }
-	std::vector<std::shared_ptr<Room>>& GetRooms() { return rooms; }
-	std::shared_ptr<Floor> GetFloor(int floor) {
-		if (basements + floor >= 0 && basements + floor < floors.size())
-			return floors[basements + floor];
-		else return nullptr;
-	}
 
     // 功能区中的建筑权重
     static std::vector<float> GetPower();
@@ -107,7 +101,31 @@ public:
     // 内部房间布局
     virtual void LayoutRooms() = 0;
 
+	// 父类实现方法
+
+	// 关联地块
+	void SetParent(std::shared_ptr<Plot> plot);
+	void SetParent(std::shared_ptr<Zone> zone);
+	std::shared_ptr<Plot> GetParentPlot() const;
+	std::shared_ptr<Zone> GetParentZone() const;
+
+	// 获取/设置属性
+	int GetLayers() const { return layers; }
+	int GetBasements() const { return basements; }
+
+	// 获取/设置组织/房间/楼层
+	std::vector<std::shared_ptr<Component>>& GetComponents() { return components; }
+	std::vector<std::shared_ptr<Room>>& GetRooms() { return rooms; }
+	std::shared_ptr<Floor> GetFloor(int floor) const {
+		if (basements + floor >= 0 && basements + floor < floors.size())
+			return floors[basements + floor];
+		else return nullptr;
+	}
+
 protected:
+	std::shared_ptr<Zone> parentZone;
+	std::shared_ptr<Plot> parentPlot;
+
 	std::vector<std::shared_ptr<Floor>> floors;
 	std::vector<std::shared_ptr<Component>> components;
 	std::vector<std::shared_ptr<Room>> rooms;

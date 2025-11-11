@@ -10,23 +10,32 @@
 #include <unordered_map>
 
 
-class ZoneFactory;
 class Rect;
 class Plot;
+class ZoneFactory;
 
 class Zone : public Rect {
 public:
     Zone() = default;
     virtual ~Zone() = default;
 
+	// 子类实现方法
+
     // 动态返回园区静态信息
     static std::string GetId();
     virtual std::string GetName() const = 0;
-
+    
     // 在地图中生成园区
     static std::function<void(ZoneFactory*, const std::vector<std::shared_ptr<Plot>>&)> ZoneGenerator;
 
+	// 父类实现方法
+
+    // 关联地块
+    void SetParent(std::shared_ptr<Plot> plot);
+    std::shared_ptr<Plot> GetParent() const;
+
 protected:
+    std::shared_ptr<Plot> parentPlot;
 };
 
 class ZoneFactory {

@@ -13,6 +13,8 @@ public:
     Roadnet() = default;
     virtual ~Roadnet() = default;
 
+	// 子类实现方法
+
     // 动态返回路网名称
     static std::string GetId();
     virtual std::string GetName() const = 0;
@@ -20,6 +22,8 @@ public:
     // 在平原上生成路网
     virtual void DistributeRoadnet(int width, int height,
         std::function<std::string(int, int)> get) = 0;
+
+	// 父类实现方法
 
     // 提供只读访问接口
     const std::vector<Node>& GetNodes() const { return nodes; }
@@ -38,7 +42,7 @@ public:
     std::unique_ptr<Roadnet> CreateRoadnet(const std::string& id);
     bool CheckRegistered(const std::string& id);
     void SetConfig(std::string name, bool config);
-    std::unique_ptr<Roadnet> GetRoadnet();
+    std::unique_ptr<Roadnet> GetRoadnet() const;
 
 private:
     std::unordered_map<std::string, std::function<std::unique_ptr<Roadnet>()>> registries;

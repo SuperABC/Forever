@@ -11,9 +11,13 @@ public:
     Job() = default;
     virtual ~Job() = default;
 
+	// 子类实现方法
+
     // 动态返回职业静态信息
     static std::string GetId();
     virtual std::string GetName() const = 0;
+
+	// 父类实现方法
 
 protected:
 };

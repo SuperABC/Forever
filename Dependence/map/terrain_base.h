@@ -11,6 +11,8 @@ public:
     Terrain() = default;
     virtual ~Terrain() = default;
 
+	// 子类实现方法
+
     // 动态返回地形静态信息
     static std::string GetId();
     virtual std::string GetName() const = 0;
@@ -21,6 +23,8 @@ public:
     // 在地图上生成地形
     virtual void DistributeTerrain(int width, int height,
         std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const = 0;
+
+	// 父类实现方法
 
 protected:
 };

@@ -3,6 +3,22 @@
 
 using namespace std;
 
+void Room::SetParent(std::shared_ptr<Building> building) {
+    parentBuilding = building;
+}
+
+void Room::SetParent(std::shared_ptr<Component> component) {
+    parentComponent = component;
+}
+
+std::shared_ptr<Building> Room::GetParentBuilding() const {
+    return parentBuilding;
+}
+
+std::shared_ptr<Component> Room::GetParentComponent() const {
+    return parentComponent;
+}
+
 void RoomFactory::RegisterRoom(const string& id, function<unique_ptr<Room>()> creator) {
     registries[id] = creator;
     configs[id] = false;

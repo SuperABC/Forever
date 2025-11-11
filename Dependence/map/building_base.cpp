@@ -3,6 +3,22 @@
 
 using namespace std;
 
+void Building::SetParent(std::shared_ptr<Plot> plot) {
+    parentPlot = plot;
+}
+
+void Building::SetParent(std::shared_ptr<Zone> zone) {
+    parentZone = zone;
+}
+
+std::shared_ptr<Plot> Building::GetParentPlot() const {
+    return parentPlot;
+}
+
+std::shared_ptr<Zone> Building::GetParentZone() const {
+    return parentZone;
+}
+
 void BuildingFactory::RegisterBuilding(const string& id, function<unique_ptr<Building>()> creator, vector<float> power) {
     registries[id] = creator;
     configs[id] = false;

@@ -358,8 +358,11 @@ int Map::Init(int blockX, int blockY) {
     // 随机生成园区
     zoneFactory->GenerateAll(roadnet->GetPlots());
     for (auto plot : roadnet->GetPlots()) {
-        auto z = plot->GetZones();
-        zones.insert(zones.end(), z.begin(), z.end());
+        auto zs = plot->GetZones();
+        for (auto z : zs) {
+            z.second->SetParent(plot);
+            zones.push_back(z);
+        }
     }
 
     // 随机生成建筑
@@ -404,7 +407,9 @@ int Map::Init(int blockX, int blockY) {
                 attempt++;
                 continue;
             }
-            
+
+            building->SetParent(plot);
+
             float acreageBuilding = building->RandomAcreage();
             float acreageMin = building->GetAcreageMin();
             float acreageMax = building->GetAcreageMax();
@@ -429,6 +434,13 @@ int Map::Init(int blockX, int blockY) {
     // 随机生成组合与房间
     for (auto &building : buildings) {
         building.second->LayoutRooms();
+        for (auto component : building.second->GetComponents()) {
+            component->SetParent(building.second);
+            for (auto room : component->GetRooms()) {
+                room->SetParent(component);
+                room->SetParent(building.second);
+            }
+        }
     }
 
     return 0;
