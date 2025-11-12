@@ -19,6 +19,27 @@ std::shared_ptr<Zone> Building::GetParentZone() const {
     return parentZone;
 }
 
+void Building::ReadFloor(int layer, std::string path) {
+
+}
+
+void Building::ReadFloors(std::string path) {
+
+}
+
+void Building::ReadFloors(std::vector<std::string> path) {
+
+}
+
+void Building::AssignRoom(int floor, int slot, std::string room) {
+
+}
+
+void Building::ArrangeRow(int floor, int slot, std::string room) {
+
+}
+
+
 void BuildingFactory::RegisterBuilding(const string& id, function<unique_ptr<Building>()> creator, vector<float> power) {
     registries[id] = creator;
     configs[id] = false;

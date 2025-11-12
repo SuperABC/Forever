@@ -12,6 +12,6 @@ public:
     static std::string GetId() { return "test"; }
     virtual std::string GetName() const override { return "测试园区"; }
 
-    static std::function<void(ZoneFactory*, const std::vector<std::shared_ptr<Plot>>&)> ZoneGenerator;
+    static std::function<void(ZoneFactory*, BuildingFactory*, const std::vector<std::shared_ptr<Plot>>&)> ZoneGenerator;
 };
 

@@ -59,7 +59,7 @@ public:
 		rows.push_back(row);
 	}
 
-	void AddRoom(std::shared_ptr<Room> room) {
+	void AddRoom(Rect room) {
 		rooms.push_back(room);
 	}
 
@@ -69,14 +69,14 @@ public:
 	// 访问组件
 	std::vector<Facility>& GetFacilities() { return facilities; }
 	std::vector<std::pair<Rect, int>>& GetRows() { return rows; }
-	std::vector<std::shared_ptr<Room>>& GetRooms() { return rooms; }
+	std::vector<Rect>& GetRooms() { return rooms; }
 
 private:
 	int level;
 
 	std::vector<Facility> facilities;
 	std::vector<std::pair<Rect, int>> rows;
-	std::vector<std::shared_ptr<Room>> rooms;
+	std::vector<Rect> rooms;
 };
 
 class Building : public Rect {
@@ -121,6 +121,13 @@ public:
 			return floors[basements + floor];
 		else return nullptr;
 	}
+
+	// 根据布局文件分配房间
+	void ReadFloor(int layer, std::string path);
+	void ReadFloors(std::string path);
+	void ReadFloors(std::vector<std::string> path);
+	void AssignRoom(int floor, int slot, std::string room);
+	void ArrangeRow(int floor, int slot, std::string room);
 
 protected:
 	std::shared_ptr<Zone> parentZone;

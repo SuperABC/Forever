@@ -28,7 +28,7 @@ void RoadnetFactory::SetConfig(std::string name, bool config) {
 
 unique_ptr<Roadnet> RoadnetFactory::GetRoadnet() const {
     for (auto config : configs) {
-        if (config.second)return registries[config.first]();
+        if (config.second)return registries.find(config.first)->second();
     }
     return nullptr;
 }

@@ -356,11 +356,14 @@ int Map::Init(int blockX, int blockY) {
     roadnet->DistributeRoadnet(width, height, getTerrain);
 
     // 随机生成园区
-    zoneFactory->GenerateAll(roadnet->GetPlots());
+    zoneFactory->GenerateAll(roadnet->GetPlots(), buildingFactory.get());
     for (auto plot : roadnet->GetPlots()) {
         auto zs = plot->GetZones();
         for (auto z : zs) {
             z.second->SetParent(plot);
+            for (auto b : z.second->GetBuildings()) {
+                b.second->SetParent(z.second);
+            }
             zones.push_back(z);
         }
     }
@@ -408,8 +411,6 @@ int Map::Init(int blockX, int blockY) {
                 continue;
             }
 
-            building->SetParent(plot);
-
             float acreageBuilding = building->RandomAcreage();
             float acreageMin = building->GetAcreageMin();
             float acreageMax = building->GetAcreageMax();
@@ -423,6 +424,7 @@ int Map::Init(int blockX, int blockY) {
 
             acreageTmp += acreageBuilding;
             building->SetAcreage(acreageBuilding);
+            building->SetParent(plot);
             plot->AddBuilding(building->GetName(), building);
             buildings.emplace_back(building->GetName(), building);
         }

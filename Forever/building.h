@@ -22,6 +22,8 @@ public:
     virtual float GetAcreageMax() const { return 20000.f; }
 
     virtual void LayoutRooms() {
+        
+
         auto component = CreateComponent<TestComponent>();
         component->AddRoom(CreateRoom<TestRoom>(1, 100.f));
     }
