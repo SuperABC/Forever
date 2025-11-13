@@ -3,3 +3,4 @@
 
 using namespace std;
 
+int TestBuilding::count = 0;

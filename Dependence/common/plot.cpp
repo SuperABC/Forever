@@ -76,6 +76,22 @@ pair<float, float> Plot::GetVertex(int idx) const {
     }
 }
 
+std::pair<float, float> Plot::GetPosition(float x, float y) const {
+    float cosR = cos(rotation);
+    float sinR = sin(rotation);
+
+    float originX = posX - sizeX / 2.0f;
+    float originY = posY - sizeY / 2.0f;
+
+    float relativeX = x - sizeX / 2.0f;
+    float relativeY = y - sizeY / 2.0f;
+
+    float rotatedX = relativeX * cosR - relativeY * sinR;
+    float rotatedY = relativeX * sinR + relativeY * cosR;
+
+    return { posX + rotatedX , posY + rotatedY };
+}
+
 void Plot::SetPosition(Node n1, Node n2, Node n3) {
     float x1 = n1.GetX(), y1 = n1.GetY();
     float x2 = n2.GetX(), y2 = n2.GetY();

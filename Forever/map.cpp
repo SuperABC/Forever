@@ -20,21 +20,21 @@ bool Element::SetTerrain(string terrain) {
     return true;
 }
 
-int Element::GetZone() const {
+std::string Element::GetZone() const {
     return this->zone;
 }
 
-bool Element::SetZone(int zone) {
+bool Element::SetZone(std::string zone) {
     this->zone = zone;
 
     return true;
 }
 
-int Element::GetBuilding() const {
+std::string Element::GetBuilding() const {
     return this->building;
 }
 
-bool Element::SetBuilding(int building) {
+bool Element::SetBuilding(std::string building) {
     this->building = building;
 
     return true;
@@ -78,6 +78,13 @@ bool Block::CheckXY(int x, int y) const {
     return true;
 }
 
+shared_ptr<Element> Block::GetElement(int x, int y) {
+    if (CheckXY(x, y))
+        return elements[y - offsetY][x - offsetX];
+    else
+        return nullptr;
+}
+
 Map::Map() {
     terrainFactory.reset(new TerrainFactory());
     roadnetFactory.reset(new RoadnetFactory());
@@ -90,7 +97,7 @@ Map::Map() {
 Map::~Map() {
     for (auto& mod : modHandles) {
         if (mod) {
-            FreeLibrary(mod);
+            //FreeLibrary(mod);
         }
     }
     modHandles.clear();
@@ -432,6 +439,16 @@ int Map::Init(int blockX, int blockY) {
 
     // 随机分布建筑与园区
     ArrangePlots();
+    for (auto plot : roadnet->GetPlots()) {
+        auto zones = plot->GetZones();
+        for (auto zone : zones) {
+            SetZone(zone.second, zone.first);
+        }
+        auto buildings = plot->GetBuildings();
+        for (auto building : buildings) {
+            SetBuilding(building.second, building.first);
+        }
+    }
 
     // 随机生成组合与房间
     for (auto &building : buildings) {
@@ -446,22 +463,6 @@ int Map::Init(int blockX, int blockY) {
     }
 
     return 0;
-}
-
-void Map::Destroy() {
-    blocks.clear();
-}
-
-void Map::Tick() {
-
-}
-
-void Map::Load(string path) {
-
-}
-
-void Map::Save(string path) {
-
 }
 
 void Map::ReadConfigs(std::string path) const {
@@ -502,12 +503,136 @@ void Map::ReadConfigs(std::string path) const {
     fin.close();
 }
 
+void Map::Destroy() {
+    blocks.clear();
+}
+
+void Map::Tick() {
+
+}
+
+void Map::Load(string path) {
+
+}
+
+void Map::Save(string path) {
+
+}
+
+pair<int, int> Map::GetSize() {
+    return make_pair(width, height);
+}
+
 bool Map::CheckXY(int x, int y) const {
     if (x < 0)return false;
     if (y < 0)return false;
     if (x >= width)return false;
     if (y >= height)return false;
     return true;
+}
+
+shared_ptr<Block> Map::GetBlock(int x, int y) const {
+    if (!CheckXY(x, y)) {
+        throw invalid_argument("invalid block query position.\n");
+        return nullptr;
+    }
+
+    int blockX = x / BLOCK_SIZE;
+    int blockY = y / BLOCK_SIZE;
+
+    return blocks[blockY][blockX];
+}
+
+shared_ptr<Element> Map::GetElement(int x, int y) const {
+    if (!CheckXY(x, y)) {
+        throw invalid_argument("invalid block query position.\n");
+        return nullptr;
+    }
+
+    int blockX = x / BLOCK_SIZE;
+    int blockY = y / BLOCK_SIZE;
+
+    return blocks[blockY][blockX]->GetElement(x, y);
+}
+
+shared_ptr<Roadnet> Map::GetRoadnet() const {
+    return roadnet;
+}
+
+void Map::SetZone(std::shared_ptr<Zone> zone, std::string name) {
+    auto plot = zone->GetParent();
+
+    auto v1 = plot->GetPosition(zone->GetPosX() + zone->GetSizeX() / 2.f, zone->GetPosY() + zone->GetSizeY() / 2.f);
+    auto v2 = plot->GetPosition(zone->GetPosX() - zone->GetSizeX() / 2.f, zone->GetPosY() + zone->GetSizeY() / 2.f);
+    auto v3 = plot->GetPosition(zone->GetPosX() - zone->GetSizeX() / 2.f, zone->GetPosY() - zone->GetSizeY() / 2.f);
+    auto v4 = plot->GetPosition(zone->GetPosX() + zone->GetSizeX() / 2.f, zone->GetPosY() - zone->GetSizeY() / 2.f);
+
+    std::vector<std::pair<float, float>> points = { v1, v2, v3, v4 };
+    float minX = points[0].first;
+    float maxX = points[0].first;
+    float minY = points[0].second;
+    float maxY = points[0].second;
+    for (const auto& point : points) {
+        minX = min(minX, point.first);
+        maxX = max(maxX, point.first);
+        minY = min(minY, point.second);
+        maxY = max(maxY, point.second);
+    }
+
+    for (float x = minX; x <= maxX; x += 1.0f) {
+        for (float y = minY; y <= maxY; y += 1.0f) {
+            bool inside = false;
+            for (size_t i = 0, j = points.size() - 1; i < points.size(); j = i++) {
+                if (((points[i].second > y) != (points[j].second > y)) &&
+                    (x < (points[j].first - points[i].first) * (y - points[i].second) /
+                        (points[j].second - points[i].second) + points[i].first)) {
+                    inside = !inside;
+                }
+            }
+
+            if (inside) {
+                GetElement((int)x, (int)y)->SetZone(name);
+            }
+        }
+    }
+}
+
+void Map::SetBuilding(std::shared_ptr<Building> building, std::string name) {
+    auto plot = building->GetParentPlot();
+
+    auto v1 = plot->GetPosition(building->GetPosX() + building->GetSizeX() / 2.f, building->GetPosY() + building->GetSizeY() / 2.f);
+    auto v2 = plot->GetPosition(building->GetPosX() - building->GetSizeX() / 2.f, building->GetPosY() + building->GetSizeY() / 2.f);
+    auto v3 = plot->GetPosition(building->GetPosX() - building->GetSizeX() / 2.f, building->GetPosY() - building->GetSizeY() / 2.f);
+    auto v4 = plot->GetPosition(building->GetPosX() + building->GetSizeX() / 2.f, building->GetPosY() - building->GetSizeY() / 2.f);
+
+    std::vector<std::pair<float, float>> points = { v1, v2, v3, v4 };
+    float minX = points[0].first;
+    float maxX = points[0].first;
+    float minY = points[0].second;
+    float maxY = points[0].second;
+    for (const auto& point : points) {
+        minX = min(minX, point.first);
+        maxX = max(maxX, point.first);
+        minY = min(minY, point.second);
+        maxY = max(maxY, point.second);
+    }
+
+    for (float x = minX; x <= maxX; x += 1.0f) {
+        for (float y = minY; y <= maxY; y += 1.0f) {
+            bool inside = false;
+            for (size_t i = 0, j = points.size() - 1; i < points.size(); j = i++) {
+                if (((points[i].second > y) != (points[j].second > y)) &&
+                    (x < (points[j].first - points[i].first) * (y - points[i].second) /
+                        (points[j].second - points[i].second) + points[i].first)) {
+                    inside = !inside;
+                }
+            }
+
+            if (inside) {
+                GetElement((int)x, (int)y)->SetBuilding(name);
+            }
+        }
+    }
 }
 
 std::string Map::GetTerrain(int x, int y) const {
@@ -537,7 +662,7 @@ bool Map::SetTerrain(int x, int y, std::string terrain) {
         return false;
     }
 
-    return blocks[blockX][blockY]->SetTerrain(x, y, terrain);
+    return blocks[blockY][blockX]->SetTerrain(x, y, terrain);
 }
 
 void Map::ArrangePlots() {

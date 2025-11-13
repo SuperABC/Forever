@@ -65,7 +65,10 @@ public:
 	void SetRotation(float r);
 	AREA_TYPE GetArea() const;
 	void SetArea(AREA_TYPE area);
+
+	// 世界坐标变换
 	std::pair<float, float> GetVertex(int idx) const;
+	std::pair<float, float> GetPosition(float x, float y) const;
 
 	// 通过逆时针顺序三个顶点设置矩形
 	void SetPosition(Node n1, Node n2, Node n3);

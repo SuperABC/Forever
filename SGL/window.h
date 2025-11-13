@@ -1042,18 +1042,68 @@ public:
 		return SG_NO_ERROR;
 	}
 	void putTriangle(int x1, int y1, int x2, int y2, int x3, int y3, int mode) {
-		::rgb c;
+		int temp, minX, maxX;
+		int x, y, startX, endX;
+		float invSlope1, invSlope2, invSlope3;
+		float curX1, curX2;
 
 		if (sglMode != BIT_MAP && !innerFunc)return;
 		if (checkThread())return;
 
-		c.r = rgb[0];
-		c.g = rgb[1];
-		c.b = rgb[2];
-		putLine(x1, y1, x2, y2, SOLID_LINE);
-		putLine(x1, y1, x3, y3, SOLID_LINE);
-		putLine(x2, y2, x3, y3, SOLID_LINE);
-		if (mode == SOLID_FILL)floodFill((x1 + x2 + x3) / 3, (y1 + y2 + y3) / 3, c);
+		if (mode == EMPTY_FILL) {
+			putLine(x1, y1, x2, y2, SOLID_LINE);
+			putLine(x1, y1, x3, y3, SOLID_LINE);
+			putLine(x2, y2, x3, y3, SOLID_LINE);
+		}
+		else if (mode == SOLID_FILL) {
+			if (y1 > y2) { temp = x1; x1 = x2; x2 = temp; temp = y1; y1 = y2; y2 = temp; }
+			if (y1 > y3) { temp = x1; x1 = x3; x3 = temp; temp = y1; y1 = y3; y3 = temp; }
+			if (y2 > y3) { temp = x2; x2 = x3; x3 = temp; temp = y2; y2 = y3; y3 = temp; }
+
+			if (y1 == y2 && y2 == y3) {
+				minX = x1;
+				maxX = x1;
+				if (x2 < minX) minX = x2; if (x2 > maxX) maxX = x2;
+				if (x3 < minX) minX = x3; if (x3 > maxX) maxX = x3;
+				for (x = minX; x <= maxX; x++) {
+					putPixel(x, y1);
+				}
+				return;
+			}
+			if (y2 != y1) invSlope1 = (float)(x2 - x1) / (y2 - y1);
+			else invSlope1 = 0;
+			if (y3 != y1) invSlope2 = (float)(x3 - x1) / (y3 - y1);
+			else invSlope2 = 0;
+			if (y3 != y2) invSlope3 = (float)(x3 - x2) / (y3 - y2);
+			else invSlope3 = 0;
+			curX1 = x1;
+			curX2 = x1;
+			for (y = y1; y <= y2; y++) {
+				startX = (int)(curX1 < curX2 ? curX1 : curX2);
+				endX = (int)(curX1 > curX2 ? curX1 : curX2);
+				for (x = startX; x <= endX; x++) {
+					putPixel(x, y);
+				}
+				curX1 += invSlope1;
+				curX2 += invSlope2;
+			}
+			if (y1 != y2) {
+				curX1 = x2;
+			}
+			else {
+				curX1 = x1;
+			}
+			curX2 = x2;
+			for (y = y2; y <= y3; y++) {
+				startX = (int)(curX1 < curX2 ? curX1 : curX2);
+				endX = (int)(curX1 > curX2 ? curX1 : curX2);
+				for (x = startX; x <= endX; x++) {
+					putPixel(x, y);
+				}
+				curX1 += invSlope2;
+				curX2 += invSlope3;
+			}
+		}
 	}
 	void putCircle(int xc, int yc, int r, int mode) {
 		int x, y, yi, d;
@@ -1633,10 +1683,10 @@ public:
 
 		while (!ISEMPTY()) {
 			tmp = DEQUE();
-			p = (tmp.y*buffer->sizeX + tmp.x) * 3;
-			if ((buffer->data[p] == c.b&&buffer->data[p + 1] == c.g&&buffer->data[p + 2] == c.r) || (buffer->data[p] == rgb[2] && buffer->data[p + 1] == rgb[1] && buffer->data[p + 2] == rgb[0]))continue;
 			if (tmp.x < 0 || tmp.x >= buffer->sizeX)continue;
 			if (tmp.y < 0 || tmp.y >= buffer->sizeY)continue;
+			p = (tmp.y*buffer->sizeX + tmp.x) * 3;
+			if ((buffer->data[p] == c.b&&buffer->data[p + 1] == c.g&&buffer->data[p + 2] == c.r) || (buffer->data[p] == rgb[2] && buffer->data[p + 1] == rgb[1] && buffer->data[p + 2] == rgb[0]))continue;
 			putPixel(tmp.x, tmp.y);
 			tmp.x--;
 			ENQUE(tmp);

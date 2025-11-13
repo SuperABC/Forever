@@ -22,17 +22,17 @@ public:
 	bool SetTerrain(std::string terrain);
 
 	//获取/设置园区标识
-	int GetZone() const;
-	bool SetZone(int zone);
+	std::string GetZone() const;
+	bool SetZone(std::string zone);
 
 	//获取/设置建筑标识
-	int GetBuilding() const;
-	bool SetBuilding(int building);
+	std::string GetBuilding() const;
+	bool SetBuilding(std::string building);
 
 private:
 	std::string terrain = "平原地形";
-	int zone = -1;
-	int building = -1;
+	std::string zone;
+	std::string building;
 };
 
 class Block {
@@ -45,13 +45,16 @@ public:
 	std::string GetTerrain(int x, int y) const;
 	bool SetTerrain(int x, int y, std::string terrain);
 
+	//检查全局坐标是否在地块内
+	bool CheckXY(int x, int y) const;
+
+	//获取地块内某全局坐标的信息
+	std::shared_ptr<Element> GetElement(int x, int y);
+
 private:
 	// 基础内容
 	int offsetX, offsetY;
 	std::vector<std::vector<std::shared_ptr<Element>>> elements;
-
-	//检查全局坐标是否在地块内
-	bool CheckXY(int x, int y) const;
 };
 
 class Map {
@@ -83,6 +86,25 @@ public:
 	void Load(std::string path);
 	void Save(std::string path);
 
+	// 获取地图尺寸
+	std::pair<int, int> GetSize();
+
+	// 检查全局坐标是否在地图内
+	bool CheckXY(int x, int y) const;
+
+	// 获取地块
+	std::shared_ptr<Block> GetBlock(int x, int y) const;
+
+	// 获取元素
+	std::shared_ptr<Element> GetElement(int x, int y) const;
+
+	// 获取路网
+	std::shared_ptr<Roadnet> GetRoadnet() const;
+
+	// 设置元素所属园区/建筑
+	void SetZone(std::shared_ptr<Zone> zone, std::string name);
+	void SetBuilding(std::shared_ptr<Building> building, std::string name);
+
 private:
 	// Mod管理
 	std::vector<HMODULE> modHandles;
@@ -98,12 +120,9 @@ private:
 	std::vector<std::vector<std::shared_ptr<Block>>> blocks;
 
 	// 地图架构
-	std::unique_ptr<Roadnet> roadnet;
+	std::shared_ptr<Roadnet> roadnet;
 	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
 	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;
-
-	// 检查全局坐标是否在地图内
-	bool CheckXY(int x, int y) const;
 
 	// 获取/设置地形名称
 	std::string GetTerrain(int x, int y) const;
