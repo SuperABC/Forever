@@ -55,10 +55,10 @@ enum AREA_TYPE {
 
 class Plot : public Rect {
 public:
-	Plot() : Rect(), rotation(0.f) {}
-	Plot(float x, float y, float w, float h, float r) : Rect(x, y, w, h), rotation(r) {}
-	Plot(Node n1, Node n2, Node n3) { SetPosition(n1, n2, n3); }
-	Plot(Node n1, Node n2, Node n3, Node n4) { SetPosition(n1, n2, n3, n4); }
+	Plot();
+	Plot(float x, float y, float w, float h, float r);
+	Plot(Node n1, Node n2, Node n3);
+	Plot(Node n1, Node n2, Node n3, Node n4);
 
 	// 获取/设置属性
 	float GetRotation() const;

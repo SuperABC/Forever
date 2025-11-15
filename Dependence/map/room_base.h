@@ -34,8 +34,8 @@ public:
     std::shared_ptr<Component> GetParentComponent() const;
 
     // 获取/设置属性
-    int GetLayer() const { return layer; }
-    void SetLayer(int layer) { this->layer = layer; }
+    int GetLayer() const;
+    void SetLayer(int layer);
 
 protected:
     std::shared_ptr<Building> parentBuilding;

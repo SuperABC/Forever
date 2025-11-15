@@ -19,6 +19,14 @@ std::shared_ptr<Component> Room::GetParentComponent() const {
     return parentComponent;
 }
 
+int Room::GetLayer() const {
+    return layer;
+}
+
+void Room::SetLayer(int layer) {
+    this->layer = layer;
+}
+
 void RoomFactory::RegisterRoom(const string& id, function<unique_ptr<Room>()> creator) {
     registries[id] = creator;
     configs[id] = false;

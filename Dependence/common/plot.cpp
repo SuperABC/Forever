@@ -32,6 +32,22 @@ Node Connection::GetV2() const {
     return vertices.second;
 }
 
+Plot::Plot() : Rect(), rotation(0.f) {
+
+}
+
+Plot::Plot(float x, float y, float w, float h, float r) : Rect(x, y, w, h), rotation(r) {
+
+}
+
+Plot::Plot(Node n1, Node n2, Node n3) {
+    SetPosition(n1, n2, n3);
+}
+
+Plot::Plot(Node n1, Node n2, Node n3, Node n4) {
+    SetPosition(n1, n2, n3, n4);
+}
+
 float Plot::GetRotation() const {
 	return rotation;
 }

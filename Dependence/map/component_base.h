@@ -30,8 +30,8 @@ public:
     std::shared_ptr<Building> GetParent() const;
 
     // 获取/添加房间
-    std::vector<std::shared_ptr<Room>>& GetRooms() { return rooms; }
-    void AddRoom(std::shared_ptr<Room> room) { rooms.push_back(room); }
+    std::vector<std::shared_ptr<Room>>& GetRooms();
+    void AddRoom(std::shared_ptr<Room> room);
 
 protected:
     std::shared_ptr<Building> parentBuilding;

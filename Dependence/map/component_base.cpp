@@ -12,6 +12,14 @@ std::shared_ptr<Building> Component::GetParent() const {
     return parentBuilding;
 }
 
+std::vector<std::shared_ptr<Room>>& Component::GetRooms() {
+    return rooms;
+}
+
+void Component::AddRoom(std::shared_ptr<Room> room) {
+    rooms.push_back(room);
+}
+
 void ComponentFactory::RegisterComponent(const string& id, function<unique_ptr<Component>()> creator) {
     registries[id] = creator;
     configs[id] = false;

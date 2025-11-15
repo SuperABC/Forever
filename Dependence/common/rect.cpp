@@ -5,6 +5,14 @@
 
 using namespace std;
 
+Rect::Rect() : posX(0.f), posY(0.f), sizeX(0.f), sizeY(0.f), acreage(0.f) {
+
+}
+
+Rect::Rect(float x, float y, float w, float h) : posX(x), posY(y), sizeX(w), sizeY(h), acreage(w * h * 100.f) {
+    
+}
+
 float Rect::GetPosX() const {
     return posX;
 }

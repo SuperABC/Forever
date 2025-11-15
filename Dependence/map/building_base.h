@@ -33,11 +33,9 @@ class Facility : public Rect {
 public:
 	enum FACILITY_TYPE { FACILITY_CORRIDOR, FACILITY_STAIR, FACILITY_ELEVATOR };
 
-	Facility(FACILITY_TYPE type, float x, float y, float w, float h)
-		: Rect(x, y, w, h), type(type) {
-	}
+	Facility(FACILITY_TYPE type, float x, float y, float w, float h);
 
-	FACILITY_TYPE getType() const { return type; }
+	FACILITY_TYPE getType() const;
 
 private:
 	FACILITY_TYPE type;
@@ -46,30 +44,22 @@ private:
 // 楼层
 class Floor : public Rect {
 public:
-	Floor(int level, float width, float height)
-		: level(level), Rect(0, 0, width, height) {
-	}
-	~Floor() {}
+	Floor(int level, float width, float height);
+	~Floor();
 
-	void AddFacility(Facility facility) {
-		facilities.push_back(facility);
-	}
+	void AddFacility(Facility facility);
 
-	void AddUsage(std::pair<Rect, int> row) {
-		rows.push_back(row);
-	}
+	void AddUsage(std::pair<Rect, int> row);
 
-	void AddRoom(Rect room) {
-		rooms.push_back(room);
-	}
+	void AddRoom(Rect room);
 
 	// 获取楼层
-	int GetLevel() const { return level; }
+	int GetLevel() const;
 
 	// 访问组件
-	std::vector<Facility>& GetFacilities() { return facilities; }
-	std::vector<std::pair<Rect, int>>& GetRows() { return rows; }
-	std::vector<Rect>& GetRooms() { return rooms; }
+	std::vector<Facility>& GetFacilities();
+	std::vector<std::pair<Rect, int>>& GetRows();
+	std::vector<Rect>& GetRooms();
 
 private:
 	int level;
@@ -110,17 +100,13 @@ public:
 	std::shared_ptr<Zone> GetParentZone() const;
 
 	// 获取/设置属性
-	int GetLayers() const { return layers; }
-	int GetBasements() const { return basements; }
+	int GetLayers() const;
+	int GetBasements() const;
 
 	// 获取/设置组织/房间/楼层
-	std::vector<std::shared_ptr<Component>>& GetComponents() { return components; }
-	std::vector<std::shared_ptr<Room>>& GetRooms() { return rooms; }
-	std::shared_ptr<Floor> GetFloor(int floor) const {
-		if (basements + floor >= 0 && basements + floor < floors.size())
-			return floors[basements + floor];
-		else return nullptr;
-	}
+	std::vector<std::shared_ptr<Component>>& GetComponents();
+	std::vector<std::shared_ptr<Room>>& GetRooms();
+	std::shared_ptr<Floor> GetFloor(int floor) const;
 
 	// 根据布局文件分配房间
 	void ReadFloor(int layer, std::string path);
