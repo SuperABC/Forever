@@ -101,7 +101,9 @@ public:
 	// 获取路网
 	std::shared_ptr<Roadnet> GetRoadnet() const;
 
-	// 设置元素所属园区/建筑
+	// 获取/设置元素所属园区/建筑
+	std::shared_ptr<Zone> GetZone(std::string name);
+	std::shared_ptr<Building> GetBuilding(std::string name);
 	void SetZone(std::shared_ptr<Zone> zone, std::string name);
 	void SetBuilding(std::shared_ptr<Building> building, std::string name);
 
@@ -121,8 +123,8 @@ private:
 
 	// 地图架构
 	std::shared_ptr<Roadnet> roadnet;
-	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
-	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;
+	std::unordered_map<std::string, std::shared_ptr<Zone>> zones;
+	std::unordered_map<std::string, std::shared_ptr<Building>> buildings;
 
 	// 获取/设置地形名称
 	std::string GetTerrain(int x, int y) const;

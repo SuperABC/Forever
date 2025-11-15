@@ -38,10 +38,9 @@ public:
     void SetParent(std::shared_ptr<Plot> plot);
     std::shared_ptr<Plot> GetParent() const;
 
-    // 获取园区内所有建筑
-    std::vector<std::pair<std::string, std::shared_ptr<Building>>>& GetBuildings();
-
-    // 添加建筑
+    // 获取/添加园区内建筑
+    std::shared_ptr<Building> GetBuilding(std::string name);
+    std::unordered_map<std::string, std::shared_ptr<Building>>& GetBuildings();
     void AddBuildings(BuildingFactory* factory, std::vector<std::pair<std::string, float>> list);
 
     // 自动分布建筑
@@ -50,7 +49,7 @@ public:
 protected:
     std::shared_ptr<Plot> parentPlot;
 
-    std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;
+    std::unordered_map<std::string, std::shared_ptr<Building>> buildings;
 };
 
 class ZoneFactory {

@@ -40,11 +40,124 @@ bool buildingInfo = false;
 Zone* currentZone = NULL;
 int zoneWindow = 0;
 bool zoneInfo = false;
-int populaceWindow = 0;
-bool populaceInfo = false;
 
 unordered_map<string, rgb> terrainColors;
 unordered_map<string, rgb> chunkColors;
+
+void updateBuilding(int floor, int scroll) {
+
+}
+
+void buildingSetup(void* b) {
+	currentBuilding = (Building*)b;
+
+	windowFinish([]() {
+		currentBuilding = NULL;
+		buildingInfo = false;
+		});
+}
+
+void buildingLoop() {
+	static int floor = 0;
+	static int scroll = 0;
+
+	if (!buildingInfo) {
+		buildingInfo = true;
+
+		updateBuilding(floor, scroll);
+	}
+
+	int key;
+	if (biosKey(1)) {
+		key = biosKey(0);
+		switch (key) {
+		case 'e':
+			floor++;
+			break;
+		case 'q':
+			floor--;
+			break;
+		}
+		floor = clamp(floor, -currentBuilding->GetBasements(), currentBuilding->GetLayers());
+
+		updateBuilding(floor, scroll);
+	}
+
+	vec3i mouse;
+	setColor(0, 0, 0);
+	if (biosMouse(1).z) {
+		mouse = biosMouse(0);
+		if (mouse.z == SG_MIDDLE_BUTTON_UP) {
+			scroll--;
+			scroll = max(0, scroll);
+			updateBuilding(floor, scroll);
+		}
+		if (mouse.z == SG_MIDDLE_BUTTON_DOWN) {
+			scroll++;
+			updateBuilding(floor, scroll);
+		}
+	}
+}
+
+void updateZone() {
+	int off = 0;
+	for (auto building : currentZone->GetBuildings()) {
+		if (building.second->GetAcreage() == 0)continue;
+		srand(off);
+		setColor(64 + rand() % 192, 64 + rand() % 192, 64 + rand() % 192);
+		putQuad(building.second->GetLeft() * 20 + 1, building.second->GetTop() * 20 + 1,
+			building.second->GetRight() * 20 - 1, building.second->GetBottom() * 20 - 1, SOLID_FILL);
+		setColor(0, 0, 0);
+		setFontSize(32);
+		putString(building.first.data(),
+			building.second->GetLeft() * 20,
+			building.second->GetBottom() * 20);
+		off++;
+	}
+}
+
+void zoneSetup(void* z) {
+	currentZone = (Zone*)z;
+
+	windowFinish([]() {
+		currentZone = NULL;
+		zoneInfo = false;
+		});
+}
+
+void zoneLoop() {
+	if (!zoneInfo) {
+		zoneInfo = true;
+		setColor(0, 0, 0);
+		putString((currentZone->GetName() + "\n" +
+			"宽" + to_string(currentZone->GetSizeX() * 10) + "m" + "\n" +
+			"高" + to_string(currentZone->GetSizeY() * 10) + "m" + "\n" +
+			"面积" + to_string(currentZone->GetAcreage()) + "m2" + "\n" +
+			"").data(), currentZone->GetSizeX() * 20, 0);
+
+		updateZone();
+	}
+
+	vec3i mouse;
+	if (biosMouse(1).z) {
+		mouse = biosMouse(0);
+		if (mouse.z == SG_LEFT_BUTTON) {
+			int posX = mouse.x / 20;
+			int posY = mouse.y / 20;
+			auto element = map->GetElement(currentZone->GetLeft() + posX, currentZone->GetTop() + posY);
+			if (element && element->GetBuilding().size() > 0) {
+				auto building = currentZone->GetBuilding(element->GetBuilding());
+				if (building) {
+					if (currentBuilding) {
+						closeWindow(buildingWindow);
+					}
+					buildingWindow = createParamWindow(
+						building->GetSizeX() * 20 + 200, building->GetSizeY() * 20, element->GetBuilding().data(), BIT_MAP, buildingSetup, buildingLoop, building.get());
+				}
+			}
+		}
+	}
+}
 
 void updateGraph(int x, int y, int zoom, int left = 0, int right = sizeX, int top = 0, int bottom = sizeY) {
 	for (int i = top; i < bottom; i++) {
@@ -75,18 +188,6 @@ void updateGraph(int x, int y, int zoom, int left = 0, int right = sizeX, int to
 	}
 
 	auto roadnet = map->GetRoadnet();
-	setColor(255, 255, 255);
-	for (auto road : roadnet->GetConnections()) {
-		float x1 = road.GetV1().GetX();
-		float y1 = road.GetV1().GetY();
-		float x2 = road.GetV2().GetX();
-		float y2 = road.GetV2().GetY();
-		x1 = sizeX / 2 + (x1 - cameraX) * (8 / steps[zoom]);
-		y1 = sizeY / 2 + (y1 - cameraY) * (8 / steps[zoom]);
-		x2 = sizeX / 2 + (x2 - cameraX) * (8 / steps[zoom]);
-		y2 = sizeY / 2 + (y2 - cameraY) * (8 / steps[zoom]);
-		putLine(x1, y1, x2, y2, SOLID_LINE);
-	}
 
 	if (dispMode == DISP_PLOT) {
 		auto plots = roadnet->GetPlots();
@@ -177,6 +278,20 @@ void updateGraph(int x, int y, int zoom, int left = 0, int right = sizeX, int to
 			}
 		}
 	}
+
+	setColor(255, 255, 255);
+	for (auto road : roadnet->GetConnections()) {
+		float x1 = road.GetV1().GetX();
+		float y1 = road.GetV1().GetY();
+		float x2 = road.GetV2().GetX();
+		float y2 = road.GetV2().GetY();
+		x1 = sizeX / 2 + (x1 - cameraX) * (8 / steps[zoom]);
+		y1 = sizeY / 2 + (y1 - cameraY) * (8 / steps[zoom]);
+		x2 = sizeX / 2 + (x2 - cameraX) * (8 / steps[zoom]);
+		y2 = sizeY / 2 + (y2 - cameraY) * (8 / steps[zoom]);
+		putLine(x1, y1, x2, y2, SOLID_LINE);
+	}
+
 }
 
 void resize(int x, int y) {
@@ -301,21 +416,28 @@ void sgLoop() {
 		if (biosMouse(1).z) {
 			mouse = biosMouse(0);
 			if (mouse.z == SG_LEFT_BUTTON) {
-				auto pos = mousePos();
-				int posX = cameraX + (pos.x - sizeX / 2) / (8 / steps[zoom]);
-				int posY = cameraY + (pos.y - sizeY / 2) / (8 / steps[zoom]);
+				int posX = cameraX + (mouse.x - sizeX / 2) / (8 / steps[zoom]);
+				int posY = cameraY + (mouse.y - sizeY / 2) / (8 / steps[zoom]);
 				auto element = map->GetElement(posX, posY);
 				if (element && element->GetZone().size() > 0) {
-					setColor(255, 255, 255);
-					putQuad(0, sizeY, sizeX - 1, sizeY + 20 - 1, SOLID_FILL);
-					setColor(0, 0, 0);
-					putString(element->GetZone().data(), 0, sizeY);
+					auto zone = map->GetZone(element->GetZone());
+					if (zone) {
+						if (currentZone) {
+							closeWindow(zoneWindow);
+						}
+						zoneWindow = createParamWindow(
+							zone->GetSizeX() * 20 + 200, zone->GetSizeY() * 20, element->GetZone().data(), BIT_MAP, zoneSetup, zoneLoop, zone.get());
+					}
 				}
 				else if (element && element->GetBuilding().size() > 0) {
-					setColor(255, 255, 255);
-					putQuad(0, sizeY, sizeX - 1, sizeY + 20 - 1, SOLID_FILL);
-					setColor(0, 0, 0);
-					putString(element->GetBuilding().data(), 0, sizeY);
+					auto building = map->GetBuilding(element->GetBuilding());
+					if (building) {
+						if (currentBuilding) {
+							closeWindow(buildingWindow);
+						}
+						buildingWindow = createParamWindow(
+							building->GetSizeX() * 20 + 200, building->GetSizeY() * 20, element->GetBuilding().data(), BIT_MAP, buildingSetup, buildingLoop, building.get());
+					}
 				}
 			}
 			else {

@@ -1,5 +1,7 @@
 ﻿#include "zone_base.h"
 
+#include "../common/error.h"
+
 #include <algorithm>
 
 
@@ -13,7 +15,11 @@ std::shared_ptr<Plot> Zone::GetParent() const {
     return parentPlot;
 }
 
-std::vector<std::pair<std::string, std::shared_ptr<Building>>>& Zone::GetBuildings() {
+std::shared_ptr<Building> Zone::GetBuilding(std::string name) {
+    return buildings[name];
+}
+
+std::unordered_map<std::string, std::shared_ptr<Building>>& Zone::GetBuildings() {
     return buildings;
 }
 
@@ -44,7 +50,10 @@ void Zone::AddBuildings(BuildingFactory* factory, std::vector<std::pair<std::str
 
         acreageTmp += acreageBuilding;
         building->SetAcreage(acreageBuilding);
-        buildings.emplace_back(building->GetName(), building);
+        if(buildings.find(building->GetName()) != buildings.end()) {
+            THROW_EXCEPTION(InvalidConfigException, "Duplicate building name: " + building->GetName() + ".\n");
+		}
+        buildings[building->GetName()] = building;
     }
 }
 
