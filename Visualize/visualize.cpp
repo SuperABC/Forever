@@ -45,7 +45,43 @@ unordered_map<string, rgb> terrainColors;
 unordered_map<string, rgb> chunkColors;
 
 void updateBuilding(int floor, int scroll) {
+	setColor(255, 255, 255);
+	clearScreen();
 
+	auto currentFloor = currentBuilding->GetFloor(floor);
+	if (currentFloor) {
+		for (auto facility : currentFloor->GetFacilities()) {
+			switch (facility.getType()) {
+			case Facility::FACILITY_CORRIDOR:
+				setColor(127, 127, 127);
+				break;
+			case Facility::FACILITY_STAIR:
+				setColor(0, 255, 0);
+				break;
+			case Facility::FACILITY_ELEVATOR:
+				setColor(0, 255, 255);
+				break;
+			default:
+				break;
+			}
+			putQuad(facility.GetLeft() * 20, facility.GetTop() * 20, facility.GetRight() * 20, facility.GetBottom() * 20, SOLID_FILL);
+		}
+		setColor(0, 0, 0);
+		for (auto room : currentBuilding->GetRooms()) {
+			if(room->GetLayer() == floor)
+			putQuad(room->GetLeft() * 20, room->GetTop() * 20, room->GetRight() * 20, room->GetBottom() * 20, EMPTY_FILL);
+		}
+	}
+
+	setColor(0, 0, 0);
+	string text = currentBuilding->GetName() + "\n" +
+		"宽" + to_string(currentBuilding->GetSizeX() * 10) + "m" + "\n" +
+		"高" + to_string(currentBuilding->GetSizeY() * 10) + "m" + "\n" +
+		"面积" + to_string(currentBuilding->GetAcreage()) + "m2" + "\n" +
+		"地面层高" + to_string(currentBuilding->GetLayers()) + "层" + "\n" +
+		"地下层高" + to_string(currentBuilding->GetBasements()) + "层" + "\n";
+
+	text += "\n";
 }
 
 void buildingSetup(void* b) {

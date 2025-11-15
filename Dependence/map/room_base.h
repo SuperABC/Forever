@@ -36,12 +36,15 @@ public:
     // 获取/设置属性
     int GetLayer() const;
     void SetLayer(int layer);
+    int GetFace() const;
+    void SetFace(int face);
 
 protected:
     std::shared_ptr<Building> parentBuilding;
     std::shared_ptr<Component> parentComponent;
 
     int layer;
+    int face;
 };
 
 class RoomFactory {

@@ -27,6 +27,14 @@ void Room::SetLayer(int layer) {
     this->layer = layer;
 }
 
+int Room::GetFace() const {
+    return face;
+}
+
+void Room::SetFace(int face) {
+    this->face = face;
+}
+
 void RoomFactory::RegisterRoom(const string& id, function<unique_ptr<Room>()> creator) {
     registries[id] = creator;
     configs[id] = false;

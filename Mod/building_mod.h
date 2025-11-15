@@ -12,10 +12,12 @@
 // 模组检测子类
 class ModBuilding : public Building {
 public:
-    ModBuilding() { count++; }
+    ModBuilding() {
+        name = count++;
+    }
 
     static std::string GetId() { return "mod"; }
-    virtual std::string GetName() const override { return std::string("模组建筑") + std::to_string(count); }
+    virtual std::string GetName() const override { return std::string("模组建筑") + std::to_string(name); }
 
     static std::vector<float> GetPower() { return std::vector<float>(13, 1.f); }
 
@@ -24,12 +26,15 @@ public:
     virtual float GetAcreageMax() const { return 20000.f; }
 
     virtual void LayoutRooms() {
-        auto component = CreateComponent<ModComponent>();
-        component->AddRoom(CreateRoom<ModRoom>(1, 100.f));
+        //auto component = CreateComponent<ModComponent>();
+        //ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, "linear");
+        //AssignRoom(0, 0, "mod", component);
     }
 
 private:
     static int count;
+
+    int name;
 };
 
 int ModBuilding::count = 0;

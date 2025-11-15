@@ -458,7 +458,10 @@ int Map::Init(int blockX, int blockY) {
     }
 
     // 随机生成组合与房间
+    Building::ReadTemplates(REPLACE_PATH("../Resources/layouts/"));
+    Building::SetFactory(roomFactory.get());
     for (auto &building : buildings) {
+        building.second->FinishInit();
         building.second->LayoutRooms();
         for (auto component : building.second->GetComponents()) {
             component->SetParent(building.second);

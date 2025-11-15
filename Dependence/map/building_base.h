@@ -19,6 +19,8 @@ class Zone;
 class Component;
 class Room;
 
+class RoomFactory;
+
 // 建筑方向
 enum FACE_DIRECTION {
 	FACE_WEST,
@@ -49,9 +51,9 @@ public:
 
 	void AddFacility(Facility facility);
 
-	void AddUsage(std::pair<Rect, int> row);
+	void AddRow(std::pair<Rect, int> row);
 
-	void AddRoom(Rect room);
+	void AddRoom(std::pair<Rect, int> room);
 
 	// 获取楼层
 	int GetLevel() const;
@@ -59,14 +61,14 @@ public:
 	// 访问组件
 	std::vector<Facility>& GetFacilities();
 	std::vector<std::pair<Rect, int>>& GetRows();
-	std::vector<Rect>& GetRooms();
+	std::vector<std::pair<Rect, int>>& GetRooms();
 
 private:
 	int level;
 
 	std::vector<Facility> facilities;
 	std::vector<std::pair<Rect, int>> rows;
-	std::vector<Rect> rooms;
+	std::vector<std::pair<Rect, int>> rooms;
 };
 
 class Building : public Rect {
@@ -106,14 +108,16 @@ public:
 	// 获取/设置组织/房间/楼层
 	std::vector<std::shared_ptr<Component>>& GetComponents();
 	std::vector<std::shared_ptr<Room>>& GetRooms();
-	std::shared_ptr<Floor> GetFloor(int floor) const;
+	std::shared_ptr<Floor> GetFloor(int level) const;
 
-	// 根据布局文件分配房间
-	void ReadFloor(int layer, std::string path);
-	void ReadFloors(std::string path);
-	void ReadFloors(std::vector<std::string> path);
-	void AssignRoom(int floor, int slot, std::string room);
-	void ArrangeRow(int floor, int slot, std::string room);
+	// 补充初始化
+	void FinishInit();
+
+	// 读入布局模板
+	static void ReadTemplates(std::string path);
+
+	// 记录房间生成器
+	static void SetFactory(RoomFactory *factory);
 
 protected:
 	std::shared_ptr<Zone> parentZone;
@@ -126,6 +130,13 @@ protected:
 	int layers = 1;
 	int basements = 0;
 
+	// 根据布局文件分配房间
+	void ReadFloor(int level, float width, float height, std::string name);
+	void ReadFloors(float width, float height, std::string name);
+	void ReadFloors(float width, float height, std::vector<std::string> names);
+	void AssignRoom(int level, int slot, std::string name, std::shared_ptr<Component> component);
+	void ArrangeRow(int level, int slot, std::string name, float acreage, std::shared_ptr<Component> component);
+
 	// 建筑中添加组织
 	template<class T>
 	std::shared_ptr<T> CreateComponent() {
@@ -136,13 +147,20 @@ protected:
 
 	// 建筑中添加房间
 	template<class T>
-	std::shared_ptr<T> CreateRoom(int layer, float acreage) {
+	std::shared_ptr<T> CreateRoom(int level, float acreage) {
 		std::shared_ptr<T> room = std::make_shared<T>();
-		room->SetLayer(layer);
+		room->SetLayer(level);
 		room->SetAcreage(acreage);
 		rooms.push_back(room);
 		return room;
 	}
+
+private:
+	static std::unordered_map<std::string, std::vector<std::pair<Facility::FACILITY_TYPE, std::vector<float>>>> templateFacilities;
+	static std::unordered_map<std::string, std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>> templateRows;
+	static std::unordered_map<std::string, std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>> templateRooms;
+
+	static RoomFactory* roomFactory;
 };
 
 class BuildingFactory {
