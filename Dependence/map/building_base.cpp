@@ -9,11 +9,6 @@
 
 using namespace std;
 
-unordered_map<string, vector<pair<Facility::FACILITY_TYPE, vector<float>>>> Building::templateFacilities = {};
-unordered_map<string, vector<pair<FACE_DIRECTION, vector<float>>>> Building::templateRows = {};
-unordered_map<string, vector<pair<FACE_DIRECTION, vector<float>>>> Building::templateRooms = {};
-RoomFactory* Building::roomFactory = nullptr;
-
 Facility::Facility(FACILITY_TYPE type, float x, float y, float w, float h)
     : Rect(x, y, w, h), type(type) {
 
@@ -101,10 +96,12 @@ void Building::FinishInit() {
     floors = vector<shared_ptr<Floor>>(basements + layers);
 }
 
-void Building::ReadTemplates(string path) {
+std::unique_ptr<Layout> Building::ReadTemplates(string path) {
     if (!filesystem::exists(REPLACE_PATH(path))) {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
     }
+
+    auto layout = make_unique<Layout>();
 
     for (const auto& entry : filesystem::directory_iterator(path)) {
         if (entry.is_regular_file()) {
@@ -119,9 +116,9 @@ void Building::ReadTemplates(string path) {
             }
 
             // 初始化当前文件的模板存储
-            templateFacilities[basename] = vector<pair<Facility::FACILITY_TYPE, vector<float>>>();
-            templateRows[basename] = vector<pair<FACE_DIRECTION, vector<float>>>();
-            templateRooms[basename] = vector<pair<FACE_DIRECTION, vector<float>>>();
+            layout->templateFacilities[basename] = vector<pair<Facility::FACILITY_TYPE, vector<float>>>();
+            layout->templateRows[basename] = vector<pair<FACE_DIRECTION, vector<float>>>();
+            layout->templateRooms[basename] = vector<pair<FACE_DIRECTION, vector<float>>>();
 
             string type;
             while (fin >> type) {
@@ -154,7 +151,7 @@ void Building::ReadTemplates(string path) {
                     else if (type == "stair")facType = Facility::FACILITY_STAIR;
                     else facType = Facility::FACILITY_ELEVATOR;
 
-                    templateFacilities[basename].push_back({ facType, params });
+                    layout->templateFacilities[basename].push_back({ facType, params });
                 }
                 // 处理房间排
                 else if (type == "row") {
@@ -183,7 +180,7 @@ void Building::ReadTemplates(string path) {
                         THROW_EXCEPTION(InvalidConfigException, "Incomplete parameters for row in file: " + filename + "\n");
                     }
 
-                    templateRows[basename].push_back({ direction, params });
+                    layout->templateRows[basename].push_back({ direction, params });
                 }
                 // 处理房间
                 else if (type == "room") {
@@ -212,7 +209,7 @@ void Building::ReadTemplates(string path) {
                         THROW_EXCEPTION(InvalidConfigException, "Incomplete parameters for room in file: " + filename + "\n");
                     }
 
-                    templateRooms[basename].push_back({ direction, params });
+                    layout->templateRooms[basename].push_back({ direction, params });
                 }
                 // 处理未知类型
                 else {
@@ -223,16 +220,14 @@ void Building::ReadTemplates(string path) {
             }
         }
     }
+
+    return layout;
 }
 
-void Building::SetFactory(RoomFactory* factory) {
-    roomFactory = factory;
-}
-
-void Building::ReadFloor(int level, float width, float height, std::string name) {
+void Building::ReadFloor(int level, float width, float height, std::string name, std::unique_ptr<Layout>& layout) {
     auto floor = make_shared<Floor>(level, width, height);
 
-    for (auto facility : templateFacilities[name]) {
+    for (auto facility : layout->templateFacilities[name]) {
         float x = (facility.second[0] * width + facility.second[1] + facility.second[4] * width + facility.second[5]) / 2.f;
         float y = (facility.second[2] * height + facility.second[3] + facility.second[6] * height + facility.second[7]) / 2.f;
         float w = facility.second[4] * width + facility.second[5] - facility.second[0] * width - facility.second[1];
@@ -240,7 +235,7 @@ void Building::ReadFloor(int level, float width, float height, std::string name)
         floor->AddFacility(Facility(facility.first, x, y, w, h));
     }
 
-    for (auto row : templateRows[name]) {
+    for (auto row : layout->templateRows[name]) {
         float x = (row.second[0] * width + row.second[1] + row.second[4] * width + row.second[5]) / 2.f;
         float y = (row.second[2] * height + row.second[3] + row.second[6] * height + row.second[7]) / 2.f;
         float w = row.second[4] * width + row.second[5] - row.second[0] * width - row.second[1];
@@ -248,7 +243,7 @@ void Building::ReadFloor(int level, float width, float height, std::string name)
         floor->AddRow(make_pair(Rect(x, y, w, h), row.first));
     }
 
-    for (auto room : templateRooms[name]) {
+    for (auto room : layout->templateRooms[name]) {
         float x = (room.second[0] * width + room.second[1] + room.second[4] * width + room.second[5]) / 2.f;
         float y = (room.second[2] * height + room.second[3] + room.second[6] * height + room.second[7]) / 2.f;
         float w = room.second[4] * width + room.second[5] - room.second[0] * width - room.second[1];
@@ -259,24 +254,24 @@ void Building::ReadFloor(int level, float width, float height, std::string name)
     floors[basements + level] = floor;
 }
 
-void Building::ReadFloors(float width, float height, std::string name) {
+void Building::ReadFloors(float width, float height, std::string name, std::unique_ptr<Layout>& layout) {
     for (int i = 0; i < basements + layers; i++) {
-        ReadFloor(i, width, height, name);
+        ReadFloor(i, width, height, name, layout);
     }
 }
 
-void Building::ReadFloors(float width, float height, std::vector<std::string> names) {
+void Building::ReadFloors(float width, float height, std::vector<std::string> names, std::unique_ptr<Layout>& layout) {
     if (names.size() != basements + layers) {
         THROW_EXCEPTION(InvalidArgumentException, "Template number and building layers mismatch.\n");
     }
 
     for (int i = 0; i < basements + layers; i++) {
-        ReadFloor(i, width, height, names[i]);
+        ReadFloor(i, width, height, names[i], layout);
     }
 }
 
-void Building::AssignRoom(int level, int slot, std::string name, std::shared_ptr<Component> component) {
-    auto room = roomFactory->CreateRoom(name);
+void Building::AssignRoom(int level, int slot, std::string name, std::shared_ptr<Component> component, RoomFactory* factory) {
+    auto room = factory->CreateRoom(name);
     room->SetLayer(level);
     room->SetPosition(
         floors[basements + level]->GetRooms()[slot].first.GetPosX(),
@@ -287,7 +282,7 @@ void Building::AssignRoom(int level, int slot, std::string name, std::shared_ptr
     rooms.push_back(std::move(room));
 }
 
-void Building::ArrangeRow(int level, int slot, std::string name, float acreage, std::shared_ptr<Component> component) {
+void Building::ArrangeRow(int level, int slot, std::string name, float acreage, std::shared_ptr<Component> component, RoomFactory* factory) {
     auto row = floors[basements + level]->GetRows()[slot];
 
     float num = row.first.GetAcreage() / acreage;
@@ -296,7 +291,7 @@ void Building::ArrangeRow(int level, int slot, std::string name, float acreage, 
     if (row.second == 0 || row.second == 1) {
         float div = row.first.GetSizeY() / (int)num;
         for (int i = 0; i <= (int)num; i++) {
-            auto room = roomFactory->CreateRoom(name);
+            auto room = factory->CreateRoom(name);
             room->SetLayer(level);
             room->SetVertices(row.first.GetLeft(), row.first.GetBottom() + div * i,
                 row.first.GetRight(), row.first.GetBottom() + div * (i + 1));
@@ -307,7 +302,7 @@ void Building::ArrangeRow(int level, int slot, std::string name, float acreage, 
     else {
         float div = row.first.GetSizeX() / (int)num;
         for (int i = 0; i <= (int)num; i++) {
-            auto room = roomFactory->CreateRoom(name);
+            auto room = factory->CreateRoom(name);
             room->SetLayer(level);
             room->SetVertices(row.first.GetLeft() + div * i, row.first.GetBottom(),
                 row.first.GetLeft() + div * (i + 1), row.first.GetTop());

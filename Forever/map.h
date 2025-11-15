@@ -106,6 +106,7 @@ public:
 	std::shared_ptr<Building> GetBuilding(std::string name);
 	void SetZone(std::shared_ptr<Zone> zone, std::string name);
 	void SetBuilding(std::shared_ptr<Building> building, std::string name);
+	void SetBuilding(std::shared_ptr<Building> building, std::string name, std::pair<float, float> offset);
 
 private:
 	// Mod管理
@@ -125,6 +126,7 @@ private:
 	std::shared_ptr<Roadnet> roadnet;
 	std::unordered_map<std::string, std::shared_ptr<Zone>> zones;
 	std::unordered_map<std::string, std::shared_ptr<Building>> buildings;
+	std::unique_ptr<Layout> layout;
 
 	// 获取/设置地形名称
 	std::string GetTerrain(int x, int y) const;

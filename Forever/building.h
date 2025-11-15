@@ -27,16 +27,16 @@ public:
     virtual float GetAcreageMin() const { return 2000.f; }
     virtual float GetAcreageMax() const { return 20000.f; }
 
-    virtual void LayoutRooms() {
+    virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) {
         auto component = CreateComponent<TestComponent>();
-        ReadFloor(-1, GetSizeX() / 2.f, GetSizeY() / 2.f, "single_room");
-        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, "straight_linear");
-        ReadFloor(1, GetSizeX() / 2.f, GetSizeY() / 2.f, "straight_linear");
-        AssignRoom(-1, 0, "test", component);
-        ArrangeRow(0, 0, "test", 100.f, component);
-        ArrangeRow(0, 1, "test", 100.f, component);
-        ArrangeRow(1, 0, "test", 100.f, component);
-        ArrangeRow(1, 1, "test", 100.f, component);
+        ReadFloor(-1, GetSizeX() / 2.f, GetSizeY() / 2.f, "single_room", layout);
+        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, "straight_linear", layout);
+        ReadFloor(1, GetSizeX() / 2.f, GetSizeY() / 2.f, "straight_linear", layout);
+        AssignRoom(-1, 0, "test", component, factory);
+        ArrangeRow(0, 0, "test", 120.f, component, factory);
+        ArrangeRow(0, 1, "test", 120.f, component, factory);
+        ArrangeRow(1, 0, "test", 120.f, component, factory);
+        ArrangeRow(1, 1, "test", 120.f, component, factory);
     }
 
 private:

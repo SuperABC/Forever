@@ -25,10 +25,10 @@ public:
     virtual float GetAcreageMin() const { return 2000.f; }
     virtual float GetAcreageMax() const { return 20000.f; }
 
-    virtual void LayoutRooms() {
-        //auto component = CreateComponent<ModComponent>();
-        //ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, "linear");
-        //AssignRoom(0, 0, "mod", component);
+    virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) {
+        auto component = CreateComponent<ModComponent>();
+        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, "single_room", layout);
+        AssignRoom(0, 0, "mod", component, factory);
     }
 
 private:

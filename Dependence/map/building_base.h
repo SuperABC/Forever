@@ -71,6 +71,13 @@ private:
 	std::vector<std::pair<Rect, int>> rooms;
 };
 
+class Layout {
+public:
+	std::unordered_map<std::string, std::vector<std::pair<Facility::FACILITY_TYPE, std::vector<float>>>> templateFacilities;
+	std::unordered_map<std::string, std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>> templateRows;
+	std::unordered_map<std::string, std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>> templateRooms;
+};
+
 class Building : public Rect {
 public:
     Building() = default;
@@ -91,7 +98,7 @@ public:
     virtual float GetAcreageMax() const = 0;
 
     // 内部房间布局
-    virtual void LayoutRooms() = 0;
+    virtual void LayoutRooms(RoomFactory *factory, std::unique_ptr<Layout>& layout) = 0;
 
 	// 父类实现方法
 
@@ -114,10 +121,7 @@ public:
 	void FinishInit();
 
 	// 读入布局模板
-	static void ReadTemplates(std::string path);
-
-	// 记录房间生成器
-	static void SetFactory(RoomFactory *factory);
+	static std::unique_ptr<Layout> ReadTemplates(std::string path);
 
 protected:
 	std::shared_ptr<Zone> parentZone;
@@ -131,11 +135,11 @@ protected:
 	int basements = 0;
 
 	// 根据布局文件分配房间
-	void ReadFloor(int level, float width, float height, std::string name);
-	void ReadFloors(float width, float height, std::string name);
-	void ReadFloors(float width, float height, std::vector<std::string> names);
-	void AssignRoom(int level, int slot, std::string name, std::shared_ptr<Component> component);
-	void ArrangeRow(int level, int slot, std::string name, float acreage, std::shared_ptr<Component> component);
+	void ReadFloor(int level, float width, float height, std::string name, std::unique_ptr<Layout>& layout);
+	void ReadFloors(float width, float height, std::string name, std::unique_ptr<Layout>& layout);
+	void ReadFloors(float width, float height, std::vector<std::string> names, std::unique_ptr<Layout>& layout);
+	void AssignRoom(int level, int slot, std::string name, std::shared_ptr<Component> component, RoomFactory* factory);
+	void ArrangeRow(int level, int slot, std::string name, float acreage, std::shared_ptr<Component> component, RoomFactory* factory);
 
 	// 建筑中添加组织
 	template<class T>
@@ -155,12 +159,6 @@ protected:
 		return room;
 	}
 
-private:
-	static std::unordered_map<std::string, std::vector<std::pair<Facility::FACILITY_TYPE, std::vector<float>>>> templateFacilities;
-	static std::unordered_map<std::string, std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>> templateRows;
-	static std::unordered_map<std::string, std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>> templateRooms;
-
-	static RoomFactory* roomFactory;
 };
 
 class BuildingFactory {

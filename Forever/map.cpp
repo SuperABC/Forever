@@ -370,6 +370,7 @@ int Map::Init(int blockX, int blockY) {
             z.second->SetParent(plot);
             for (auto b : z.second->GetBuildings()) {
                 b.second->SetParent(z.second);
+                b.second->SetParent(plot);
             }
             if(zones.find(z.first) != zones.end()) {
                 THROW_EXCEPTION(InvalidConfigException, "Duplicate zone name: " + z.first + ".\n");
@@ -450,6 +451,9 @@ int Map::Init(int blockX, int blockY) {
         for (auto zone : zones) {
             zone.second->ArrangeBuildings();
             SetZone(zone.second, zone.first);
+            for (auto building : zone.second->GetBuildings()) {
+                SetBuilding(building.second, building.first, make_pair(zone.second->GetLeft(), zone.second->GetBottom()));
+            }
         }
         auto buildings = plot->GetBuildings();
         for (auto building : buildings) {
@@ -458,16 +462,28 @@ int Map::Init(int blockX, int blockY) {
     }
 
     // 随机生成组合与房间
-    Building::ReadTemplates(REPLACE_PATH("../Resources/layouts/"));
-    Building::SetFactory(roomFactory.get());
+    layout = Building::ReadTemplates(REPLACE_PATH("../Resources/layouts/"));
     for (auto &building : buildings) {
         building.second->FinishInit();
-        building.second->LayoutRooms();
+        building.second->LayoutRooms(roomFactory.get(), layout);
         for (auto component : building.second->GetComponents()) {
             component->SetParent(building.second);
             for (auto room : component->GetRooms()) {
                 room->SetParent(component);
                 room->SetParent(building.second);
+            }
+        }
+    }
+    for (auto zone : zones) {
+        for (auto& building : zone.second->GetBuildings()) {
+            building.second->FinishInit();
+            building.second->LayoutRooms(roomFactory.get(), layout);
+            for (auto component : building.second->GetComponents()) {
+                component->SetParent(building.second);
+                for (auto room : component->GetRooms()) {
+                    room->SetParent(component);
+                    room->SetParent(building.second);
+                }
             }
         }
     }
@@ -623,6 +639,45 @@ void Map::SetBuilding(std::shared_ptr<Building> building, std::string name) {
     auto v2 = plot->GetPosition(building->GetPosX() - building->GetSizeX() / 2.f, building->GetPosY() + building->GetSizeY() / 2.f);
     auto v3 = plot->GetPosition(building->GetPosX() - building->GetSizeX() / 2.f, building->GetPosY() - building->GetSizeY() / 2.f);
     auto v4 = plot->GetPosition(building->GetPosX() + building->GetSizeX() / 2.f, building->GetPosY() - building->GetSizeY() / 2.f);
+
+    std::vector<std::pair<float, float>> points = { v1, v2, v3, v4 };
+    int minX = (int)points[0].first;
+    int maxX = (int)points[0].first;
+    int minY = (int)points[0].second;
+    int maxY = (int)points[0].second;
+    for (const auto& point : points) {
+        minX = min(minX, (int)point.first);
+        maxX = max(maxX, (int)point.first);
+        minY = min(minY, (int)point.second);
+        maxY = max(maxY, (int)point.second);
+    }
+
+    for (int x = minX; x <= maxX; x++) {
+        for (int y = minY; y <= maxY; y++) {
+            bool inside = false;
+            for (size_t i = 0, j = points.size() - 1; i < points.size(); j = i++) {
+                if (((points[i].second > y) != (points[j].second > y)) &&
+                    (x < (points[j].first - points[i].first) * (y - points[i].second) /
+                        (points[j].second - points[i].second) + points[i].first)) {
+                    inside = !inside;
+                }
+            }
+
+            if (inside) {
+                auto element = GetElement((int)x, (int)y);
+                if (element)element->SetBuilding(name);
+            }
+        }
+    }
+}
+
+void Map::SetBuilding(std::shared_ptr<Building> building, std::string name, std::pair<float, float> offset) {
+    auto plot = building->GetParentPlot();
+
+    auto v1 = plot->GetPosition(offset.first + building->GetPosX() + building->GetSizeX() / 2.f, offset.second + building->GetPosY() + building->GetSizeY() / 2.f);
+    auto v2 = plot->GetPosition(offset.first + building->GetPosX() - building->GetSizeX() / 2.f, offset.second + building->GetPosY() + building->GetSizeY() / 2.f);
+    auto v3 = plot->GetPosition(offset.first + building->GetPosX() - building->GetSizeX() / 2.f, offset.second + building->GetPosY() - building->GetSizeY() / 2.f);
+    auto v4 = plot->GetPosition(offset.first + building->GetPosX() + building->GetSizeX() / 2.f, offset.second + building->GetPosY() - building->GetSizeY() / 2.f);
 
     std::vector<std::pair<float, float>> points = { v1, v2, v3, v4 };
     int minX = (int)points[0].first;

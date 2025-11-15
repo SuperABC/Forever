@@ -114,7 +114,7 @@ void buildingLoop() {
 			floor--;
 			break;
 		}
-		floor = clamp(floor, -currentBuilding->GetBasements(), currentBuilding->GetLayers());
+		floor = clamp(floor, -currentBuilding->GetBasements(), currentBuilding->GetLayers() - 1);
 
 		updateBuilding(floor, scroll);
 	}
@@ -180,7 +180,8 @@ void zoneLoop() {
 		if (mouse.z == SG_LEFT_BUTTON) {
 			int posX = mouse.x / 20;
 			int posY = mouse.y / 20;
-			auto element = map->GetElement(currentZone->GetLeft() + posX, currentZone->GetTop() + posY);
+			auto pos = currentZone->GetParent()->GetPosition(currentZone->GetLeft() + posX, currentZone->GetBottom() + posY);
+			auto element = map->GetElement(pos.first, pos.second);
 			if (element && element->GetBuilding().size() > 0) {
 				auto building = currentZone->GetBuilding(element->GetBuilding());
 				if (building) {
