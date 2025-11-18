@@ -37,6 +37,9 @@
     <Filter Include="头文件\organization">
       <UniqueIdentifier>{38407681-1e03-4b42-b10c-6d40cd613485}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\name">
+      <UniqueIdentifier>{6c99689a-42bf-42fc-ac45-a84bec57230f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mod.cpp">
@@ -67,6 +70,9 @@
     </ClInclude>
     <ClInclude Include="organization_mod.h">
       <Filter>头文件\organization</Filter>
+    </ClInclude>
+    <ClInclude Include="name_mod.h">
+      <Filter>头文件\name</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

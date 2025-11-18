@@ -23,7 +23,7 @@
     <ClInclude Include="common\json.h" />
     <ClInclude Include="common\plot.h" />
     <ClInclude Include="common\rect.h" />
-    <ClInclude Include="common\util.h" />
+    <ClInclude Include="common\utility.h" />
     <ClInclude Include="map\building_base.h" />
     <ClInclude Include="map\component_base.h" />
     <ClInclude Include="map\roadnet_base.h" />
@@ -31,6 +31,7 @@
     <ClInclude Include="map\terrain_base.h" />
     <ClInclude Include="map\zone_base.h" />
     <ClInclude Include="populace\job_base.h" />
+    <ClInclude Include="populace\name_base.h" />
     <ClInclude Include="society\organization_base.h" />
   </ItemGroup>
   <ItemGroup>
@@ -38,7 +39,7 @@
     <ClCompile Include="common\json.cpp" />
     <ClCompile Include="common\plot.cpp" />
     <ClCompile Include="common\rect.cpp" />
-    <ClCompile Include="common\util.cpp" />
+    <ClCompile Include="common\utility.cpp" />
     <ClCompile Include="map\building_base.cpp" />
     <ClCompile Include="map\component_base.cpp" />
     <ClCompile Include="map\roadnet_base.cpp" />
@@ -46,6 +47,7 @@
     <ClCompile Include="map\terrain_base.cpp" />
     <ClCompile Include="map\zone_base.cpp" />
     <ClCompile Include="populace\job_base.cpp" />
+    <ClCompile Include="populace\name_base.cpp" />
     <ClCompile Include="society\organization_base.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

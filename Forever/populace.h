@@ -1,6 +1,10 @@
 ﻿#pragma once
 
+#include "utility.h"
 #include "job.h"
+#include "name.h"
+#include "person.h"
+#include "room.h"
 
 #include <windows.h>
 
@@ -16,9 +20,44 @@ public:
 	// 读取配置文件
 	void ReadConfigs(std::string path) const;
 
+	// 初始化市民
+	void Init(int accomodation);
+
+	// 释放空间
+	void Destroy();
+
+	// 时钟前进
+	void Tick();
+
+	// 保存/加载人口
+	void Load(std::string path);
+	void Save(std::string path);
+
+	// 获取当前时间
+	Time GetTime();
+
+	// 获取全部市民
+	std::vector<std::shared_ptr<Person>>& GetCitizens();
+
+	// 获取附近市民
+	std::vector<std::shared_ptr<Person>> GetPasser(int x, int y);
+	std::vector<std::shared_ptr<Person>> GetPasser(std::shared_ptr<Room>);
+	std::vector<std::shared_ptr<Person>> GetComer(int x, int y);
+	std::vector<std::shared_ptr<Person>> GetComer(std::shared_ptr<Room>);
+
 private:
 	// Mod管理
 	std::vector<HMODULE> modHandles;
 	std::unique_ptr<JobFactory> jobFactory;
+	std::unique_ptr<NameFactory> nameFactory;
+
+	// 游戏内时间
+	Time time;
+
+	// 市民管理
+	std::vector<std::shared_ptr<Person>> citizens;
+
+	// 生成市民
+	void GenerateCitizens(int num);
 };
 

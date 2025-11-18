@@ -5,6 +5,7 @@
 #include "component_mod.h"
 #include "room_mod.h"
 #include "job_mod.h"
+#include "name_mod.h"
 #include "organization_mod.h"
 
 #pragma comment(lib, "Dependence.lib")
@@ -49,6 +50,12 @@ extern "C" __declspec(dllexport) void RegisterModRooms(RoomFactory* factory) {
 extern "C" __declspec(dllexport) void RegisterModJobs(JobFactory* factory) {
     factory->RegisterJob(ModJob::GetId(), []() {
         return make_unique<ModJob>();
+        });
+}
+
+extern "C" __declspec(dllexport) void RegisterModNames(NameFactory* factory) {
+    factory->RegisterName(ModName::GetId(), []() {
+        return make_unique<ModName>();
         });
 }
 

@@ -72,6 +72,12 @@
     <ClInclude Include="organization.h">
       <Filter>头文件\society</Filter>
     </ClInclude>
+    <ClInclude Include="person.h">
+      <Filter>头文件\populace</Filter>
+    </ClInclude>
+    <ClInclude Include="name.h">
+      <Filter>头文件\populace</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map.cpp">
@@ -106,6 +112,12 @@
     </ClCompile>
     <ClCompile Include="organization.cpp">
       <Filter>源文件\society</Filter>
+    </ClCompile>
+    <ClCompile Include="person.cpp">
+      <Filter>源文件\populace</Filter>
+    </ClCompile>
+    <ClCompile Include="name.cpp">
+      <Filter>源文件\populace</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

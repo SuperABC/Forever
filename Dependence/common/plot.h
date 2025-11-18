@@ -3,7 +3,7 @@
 #include "../map/zone_base.h"
 #include "../map/building_base.h"
 
-#include "util.h"
+#include "utility.h"
 #include "rect.h"
 
 #include <vector>

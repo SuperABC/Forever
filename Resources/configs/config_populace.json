@@ -1,5 +1,6 @@
 {
 	"mods":{
-		"job": []
+		"job": ["test", "mod"],
+		"name": "chinese"
 	}
 }

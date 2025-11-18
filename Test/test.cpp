@@ -2,7 +2,7 @@
 #include "map.h"
 #include "populace.h"
 #include "society.h"
-#include "util.h"
+#include "utility.h"
 #include "error.h"
 
 #include <iostream>

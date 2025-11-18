@@ -135,9 +135,11 @@
   <ItemGroup>
     <ClInclude Include="building.h" />
     <ClInclude Include="component.h" />
+    <ClInclude Include="name.h" />
     <ClInclude Include="organization.h" />
     <ClInclude Include="job.h" />
     <ClInclude Include="map.h" />
+    <ClInclude Include="person.h" />
     <ClInclude Include="society.h" />
     <ClInclude Include="populace.h" />
     <ClInclude Include="roadnet.h" />
@@ -148,9 +150,11 @@
   <ItemGroup>
     <ClCompile Include="building.cpp" />
     <ClCompile Include="component.cpp" />
+    <ClCompile Include="name.cpp" />
     <ClCompile Include="organization.cpp" />
     <ClCompile Include="job.cpp" />
     <ClCompile Include="map.cpp" />
+    <ClCompile Include="person.cpp" />
     <ClCompile Include="society.cpp" />
     <ClCompile Include="populace.cpp" />
     <ClCompile Include="roadnet.cpp" />
