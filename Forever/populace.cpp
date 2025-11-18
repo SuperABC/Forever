@@ -23,7 +23,7 @@ Populace::~Populace() {
 }
 
 void Populace::InitJobs() {
-    jobFactory->RegisterJob(TestJob::GetId(), []() { return std::make_unique<TestJob>(); });
+    jobFactory->RegisterJob(TestJob::GetId(), []() { return make_unique<TestJob>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -57,7 +57,7 @@ void Populace::InitJobs() {
 
 }
 
-void Populace::ReadConfigs(std::string path) const {
+void Populace::ReadConfigs(string path) const {
     if (!filesystem::exists(path)) {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
     }

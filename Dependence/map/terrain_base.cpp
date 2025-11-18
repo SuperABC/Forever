@@ -20,7 +20,7 @@ bool TerrainFactory::CheckRegistered(const string& id) const {
     return registries.find(id) != registries.end();
 }
 
-void TerrainFactory::SetConfig(std::string name, bool config) {
+void TerrainFactory::SetConfig(string name, bool config) {
     if (configs.find(name) != configs.end()) {
         configs[name] = config;
     }

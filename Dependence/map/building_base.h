@@ -73,9 +73,9 @@ private:
 
 class Layout {
 public:
-	std::unordered_map<std::string, std::vector<std::pair<Facility::FACILITY_TYPE, std::vector<float>>>> templateFacilities;
-	std::unordered_map<std::string, std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>> templateRows;
-	std::unordered_map<std::string, std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>> templateRooms;
+	std::unordered_map<std::string, std::vector<std::vector<std::pair<Facility::FACILITY_TYPE, std::vector<float>>>>> templateFacilities;
+	std::unordered_map<std::string, std::vector<std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>>> templateRows;
+	std::unordered_map<std::string, std::vector<std::vector<std::pair<FACE_DIRECTION, std::vector<float>>>>> templateRooms;
 };
 
 class Building : public Rect {
@@ -135,9 +135,9 @@ protected:
 	int basements = 0;
 
 	// 根据布局文件分配房间
-	void ReadFloor(int level, float width, float height, std::string name, std::unique_ptr<Layout>& layout);
-	void ReadFloors(float width, float height, std::string name, std::unique_ptr<Layout>& layout);
-	void ReadFloors(float width, float height, std::vector<std::string> names, std::unique_ptr<Layout>& layout);
+	void ReadFloor(int level, float width, float height, int face, std::string name, std::unique_ptr<Layout>& layout);
+	void ReadFloors(float width, float height, int face, std::string name, std::unique_ptr<Layout>& layout);
+	void ReadFloors(float width, float height, int face, std::vector<std::string> names, std::unique_ptr<Layout>& layout);
 	void AssignRoom(int level, int slot, std::string name, std::shared_ptr<Component> component, RoomFactory* factory);
 	void ArrangeRow(int level, int slot, std::string name, float acreage, std::shared_ptr<Component> component, RoomFactory* factory);
 
@@ -159,6 +159,9 @@ protected:
 		return room;
 	}
 
+private:
+	static std::vector<float> InverseParams(std::vector<float>& params, int face);
+	static int InverseDirection(int direction, int face);
 };
 
 class BuildingFactory {

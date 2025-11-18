@@ -20,7 +20,7 @@ bool OrganizationFactory::CheckRegistered(const string& id) {
     return registries.find(id) != registries.end();
 }
 
-void OrganizationFactory::SetConfig(std::string name, bool config) {
+void OrganizationFactory::SetConfig(string name, bool config) {
     if (configs.find(name) != configs.end()) {
         configs[name] = config;
     }

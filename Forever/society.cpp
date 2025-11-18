@@ -23,7 +23,7 @@ Society::~Society() {
 }
 
 void Society::InitOrganizations() {
-    organizationFactory->RegisterOrganization(TestOrganization::GetId(), []() { return std::make_unique<TestOrganization>(); });
+    organizationFactory->RegisterOrganization(TestOrganization::GetId(), []() { return make_unique<TestOrganization>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -57,7 +57,7 @@ void Society::InitOrganizations() {
 
 }
 
-void Society::ReadConfigs(std::string path) const {
+void Society::ReadConfigs(string path) const {
     if (!filesystem::exists(path)) {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
     }

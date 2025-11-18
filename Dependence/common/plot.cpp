@@ -92,7 +92,7 @@ pair<float, float> Plot::GetVertex(int idx) const {
     }
 }
 
-std::pair<float, float> Plot::GetPosition(float x, float y) const {
+pair<float, float> Plot::GetPosition(float x, float y) const {
     float cosR = cos(rotation);
     float sinR = sin(rotation);
 
@@ -120,20 +120,20 @@ void Plot::SetPosition(Node n1, Node n2, Node n3) {
     // 检查垂直
     float dot = ux * vx + uy * vy;
     const float eps = 1e-5f;
-    if (std::abs(dot) > eps) {
+    if (abs(dot) > eps) {
         THROW_EXCEPTION(InvalidArgumentException, "The given edges are not perpendicular.\n");
     }
 
     // 计算尺寸
-    float sx = std::sqrt(ux * ux + uy * uy);
-    float sy = std::sqrt(vx * vx + vy * vy);
+    float sx = sqrt(ux * ux + uy * uy);
+    float sy = sqrt(vx * vx + vy * vy);
 
     // 计算中心点：p1 和 p3 的对角线中心
     float cx = (x1 + x3) / 2.0f;
     float cy = (y1 + y3) / 2.0f;
 
     // 计算旋转角度（p1p2 与 x 轴夹角）
-    float rot = std::atan2(uy, ux);
+    float rot = atan2(uy, ux);
 
     // 更新成员变量
     posX = cx;
@@ -144,7 +144,7 @@ void Plot::SetPosition(Node n1, Node n2, Node n3) {
     acreage = sx * sy * 100.f;
 }
 void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
-    std::vector<Node> nodes = { n1, n2, n3, n4 };
+    vector<Node> nodes = { n1, n2, n3, n4 };
 
     // 计算中心点
     float cx = 0.0f, cy = 0.0f;
@@ -156,10 +156,10 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     cy /= 4.0f;
 
     // 按极角排序（逆时针）
-    std::sort(nodes.begin(), nodes.end(),
+    sort(nodes.begin(), nodes.end(),
         [cx, cy](const Node& a, const Node& b) {
-            return std::atan2(a.GetY() - cy, a.GetX() - cx) <
-                std::atan2(b.GetY() - cy, b.GetX() - cx);
+            return atan2(a.GetY() - cy, a.GetX() - cx) <
+                atan2(b.GetY() - cy, b.GetX() - cx);
         });
 
     // 现在 nodes[0], nodes[1], nodes[2], nodes[3] 是逆时针顺序
@@ -183,18 +183,18 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     float dot3 = u3x * u4x + u3y * u4y;
     float dot4 = u4x * u1x + u4y * u1y;
 
-    if (std::abs(dot1) > eps || std::abs(dot2) > eps ||
-        std::abs(dot3) > eps || std::abs(dot4) > eps) {
+    if (abs(dot1) > eps || abs(dot2) > eps ||
+        abs(dot3) > eps || abs(dot4) > eps) {
         THROW_EXCEPTION(InvalidArgumentException, "The given points do not form a rectangle (not all angles are 90 degrees).\n");
     }
 
     // 检查对边长度相等
-    float len1 = std::sqrt(u1x * u1x + u1y * u1y);
-    float len2 = std::sqrt(u2x * u2x + u2y * u2y);
-    float len3 = std::sqrt(u3x * u3x + u3y * u3y);
-    float len4 = std::sqrt(u4x * u4x + u4y * u4y);
+    float len1 = sqrt(u1x * u1x + u1y * u1y);
+    float len2 = sqrt(u2x * u2x + u2y * u2y);
+    float len3 = sqrt(u3x * u3x + u3y * u3y);
+    float len4 = sqrt(u4x * u4x + u4y * u4y);
 
-    if (std::abs(len1 - len3) > eps || std::abs(len2 - len4) > eps) {
+    if (abs(len1 - len3) > eps || abs(len2 - len4) > eps) {
         THROW_EXCEPTION(InvalidArgumentException, "The given points do not form a rectangle (opposite sides not equal).\n");
     }
 
@@ -203,7 +203,7 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     float sy = len2;
 
     // 计算旋转角度（使用第一条边 nodes[0]->nodes[1]）
-    float rot = std::atan2(u1y, u1x);
+    float rot = atan2(u1y, u1x);
 
     // 更新成员变量
     posX = cx;
@@ -214,23 +214,23 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     acreage = sx * sy * 100.f;
 }
 
-const std::vector<std::pair<std::string, std::shared_ptr<Zone>>> Plot::GetZones() const {
+const vector<pair<string, shared_ptr<Zone>>> Plot::GetZones() const {
     return zones;
 }
 
-const std::vector<std::pair<std::string, std::shared_ptr<Building>>> Plot::GetBuildings() const {
+const vector<pair<string, shared_ptr<Building>>> Plot::GetBuildings() const {
     return buildings;
 }
 
-void Plot::AddZone(std::string name, std::shared_ptr<Zone> zone) {
+void Plot::AddZone(string name, shared_ptr<Zone> zone) {
     zones.push_back(make_pair(name, zone));
 }
 
-void Plot::AddBuilding(std::string name, std::shared_ptr<Building> building) {
+void Plot::AddBuilding(string name, shared_ptr<Building> building) {
     buildings.push_back(make_pair(name, building));
 }
 
-std::shared_ptr<Zone> Plot::GetZone(std::string name) const {
+shared_ptr<Zone> Plot::GetZone(string name) const {
     for (auto& zone : zones) {
         if(zone.first == name){
             return zone.second;
@@ -239,7 +239,7 @@ std::shared_ptr<Zone> Plot::GetZone(std::string name) const {
     return nullptr;
 }
 
-std::shared_ptr<Building> Plot::GetBuilding(std::string name) const {
+shared_ptr<Building> Plot::GetBuilding(string name) const {
     for (auto& building : buildings) {
         if (building.first == name) {
             return building.second;
@@ -248,7 +248,7 @@ std::shared_ptr<Building> Plot::GetBuilding(std::string name) const {
     return nullptr;
 }
 
-void Plot::RemoveZone(std::string name) {
+void Plot::RemoveZone(string name) {
     for (auto it = zones.begin(); it != zones.end(); ) {
         if(it->first == name){
             it = zones.erase(it);
@@ -259,7 +259,7 @@ void Plot::RemoveZone(std::string name) {
     }
 }
 
-void Plot::RemoveBuilding(std::string name) {
+void Plot::RemoveBuilding(string name) {
     for (auto it = buildings.begin(); it != buildings.end(); ) {
         if (it->first == name) {
             it = buildings.erase(it);

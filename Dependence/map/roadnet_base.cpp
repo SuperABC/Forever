@@ -20,7 +20,7 @@ bool RoadnetFactory::CheckRegistered(const string& id) {
     return registries.find(id) != registries.end();
 }
 
-void RoadnetFactory::SetConfig(std::string name, bool config) {
+void RoadnetFactory::SetConfig(string name, bool config) {
     if (configs.find(name) != configs.end()) {
         configs[name] = config;
     }

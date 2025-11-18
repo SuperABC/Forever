@@ -20,21 +20,21 @@ bool Element::SetTerrain(string terrain) {
     return true;
 }
 
-std::string Element::GetZone() const {
+string Element::GetZone() const {
     return this->zone;
 }
 
-bool Element::SetZone(std::string zone) {
+bool Element::SetZone(string zone) {
     this->zone = zone;
 
     return true;
 }
 
-std::string Element::GetBuilding() const {
+string Element::GetBuilding() const {
     return this->building;
 }
 
-bool Element::SetBuilding(std::string building) {
+bool Element::SetBuilding(string building) {
     this->building = building;
 
     return true;
@@ -62,7 +62,7 @@ string Block::GetTerrain(int x, int y) const {
     return elements[y - offsetY][x - offsetX]->GetTerrain();
 }
 
-bool Block::SetTerrain(int x, int y, std::string terrain) {
+bool Block::SetTerrain(int x, int y, string terrain) {
     if (!CheckXY(x, y)) {
         return false;
     }
@@ -105,7 +105,7 @@ Map::~Map() {
 
 void Map::InitTerrains() {
     terrainFactory->RegisterTerrain(TestTerrain::GetId(),
-        []() { return std::make_unique<TestTerrain>(); });
+        []() { return make_unique<TestTerrain>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -140,7 +140,7 @@ void Map::InitTerrains() {
 }
 
 void Map::InitRoadnets() {
-    roadnetFactory->RegisterRoadnet(TestRoadnet::GetId(), []() { return std::make_unique<TestRoadnet>(); });
+    roadnetFactory->RegisterRoadnet(TestRoadnet::GetId(), []() { return make_unique<TestRoadnet>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -176,7 +176,7 @@ void Map::InitRoadnets() {
 
 void Map::InitZones() {
     zoneFactory->RegisterZone(TestZone::GetId(),
-        []() { return std::make_unique<TestZone>(); }, TestZone::ZoneGenerator);
+        []() { return make_unique<TestZone>(); }, TestZone::ZoneGenerator);
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -212,7 +212,7 @@ void Map::InitZones() {
 
 void Map::InitBuildings() {
     buildingFactory->RegisterBuilding(TestBuilding::GetId(),
-        []() { return std::make_unique<TestBuilding>(); }, TestBuilding::GetPower());
+        []() { return make_unique<TestBuilding>(); }, TestBuilding::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -247,7 +247,7 @@ void Map::InitBuildings() {
 }
 
 void Map::InitComponents() {
-    componentFactory->RegisterComponent(TestComponent::GetId(), []() { return std::make_unique<TestComponent>(); });
+    componentFactory->RegisterComponent(TestComponent::GetId(), []() { return make_unique<TestComponent>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -282,7 +282,7 @@ void Map::InitComponents() {
 }
 
 void Map::InitRooms() {
-    roomFactory->RegisterRoom(TestRoom::GetId(), []() { return std::make_unique<TestRoom>(); });
+    roomFactory->RegisterRoom(TestRoom::GetId(), []() { return make_unique<TestRoom>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -407,7 +407,7 @@ int Map::Init(int blockX, int blockY) {
         while (acreageTmp < acreagePlot) {
             if (attempt > 16)break;
 
-            std::shared_ptr<Building> building;
+            shared_ptr<Building> building;
 
             float rand = GetRandom(int(1e5)) / 1e5f;
             for (auto cdf : cdfs[plot->GetArea()]) {
@@ -491,7 +491,7 @@ int Map::Init(int blockX, int blockY) {
     return 0;
 }
 
-void Map::ReadConfigs(std::string path) const {
+void Map::ReadConfigs(string path) const {
     if (!filesystem::exists(path)) {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
     }
@@ -585,15 +585,15 @@ shared_ptr<Roadnet> Map::GetRoadnet() const {
     return roadnet;
 }
 
-std::shared_ptr<Zone> Map::GetZone(std::string name) {
+shared_ptr<Zone> Map::GetZone(string name) {
 	return zones[name];
 }
 
-std::shared_ptr<Building> Map::GetBuilding(std::string name) {
+shared_ptr<Building> Map::GetBuilding(string name) {
 	return buildings[name];
 }
 
-void Map::SetZone(std::shared_ptr<Zone> zone, std::string name) {
+void Map::SetZone(shared_ptr<Zone> zone, string name) {
     auto plot = zone->GetParent();
 
     auto v1 = plot->GetPosition(zone->GetPosX() + zone->GetSizeX() / 2.f, zone->GetPosY() + zone->GetSizeY() / 2.f);
@@ -601,7 +601,7 @@ void Map::SetZone(std::shared_ptr<Zone> zone, std::string name) {
     auto v3 = plot->GetPosition(zone->GetPosX() - zone->GetSizeX() / 2.f, zone->GetPosY() - zone->GetSizeY() / 2.f);
     auto v4 = plot->GetPosition(zone->GetPosX() + zone->GetSizeX() / 2.f, zone->GetPosY() - zone->GetSizeY() / 2.f);
 
-    std::vector<std::pair<float, float>> points = { v1, v2, v3, v4 };
+    vector<pair<float, float>> points = { v1, v2, v3, v4 };
     int minX = (int)points[0].first;
     int maxX = (int)points[0].first;
     int minY = (int)points[0].second;
@@ -632,7 +632,7 @@ void Map::SetZone(std::shared_ptr<Zone> zone, std::string name) {
     }
 }
 
-void Map::SetBuilding(std::shared_ptr<Building> building, std::string name) {
+void Map::SetBuilding(shared_ptr<Building> building, string name) {
     auto plot = building->GetParentPlot();
 
     auto v1 = plot->GetPosition(building->GetPosX() + building->GetSizeX() / 2.f, building->GetPosY() + building->GetSizeY() / 2.f);
@@ -640,7 +640,7 @@ void Map::SetBuilding(std::shared_ptr<Building> building, std::string name) {
     auto v3 = plot->GetPosition(building->GetPosX() - building->GetSizeX() / 2.f, building->GetPosY() - building->GetSizeY() / 2.f);
     auto v4 = plot->GetPosition(building->GetPosX() + building->GetSizeX() / 2.f, building->GetPosY() - building->GetSizeY() / 2.f);
 
-    std::vector<std::pair<float, float>> points = { v1, v2, v3, v4 };
+    vector<pair<float, float>> points = { v1, v2, v3, v4 };
     int minX = (int)points[0].first;
     int maxX = (int)points[0].first;
     int minY = (int)points[0].second;
@@ -671,7 +671,7 @@ void Map::SetBuilding(std::shared_ptr<Building> building, std::string name) {
     }
 }
 
-void Map::SetBuilding(std::shared_ptr<Building> building, std::string name, std::pair<float, float> offset) {
+void Map::SetBuilding(shared_ptr<Building> building, string name, pair<float, float> offset) {
     auto plot = building->GetParentPlot();
 
     auto v1 = plot->GetPosition(offset.first + building->GetPosX() + building->GetSizeX() / 2.f, offset.second + building->GetPosY() + building->GetSizeY() / 2.f);
@@ -679,7 +679,7 @@ void Map::SetBuilding(std::shared_ptr<Building> building, std::string name, std:
     auto v3 = plot->GetPosition(offset.first + building->GetPosX() - building->GetSizeX() / 2.f, offset.second + building->GetPosY() - building->GetSizeY() / 2.f);
     auto v4 = plot->GetPosition(offset.first + building->GetPosX() + building->GetSizeX() / 2.f, offset.second + building->GetPosY() - building->GetSizeY() / 2.f);
 
-    std::vector<std::pair<float, float>> points = { v1, v2, v3, v4 };
+    vector<pair<float, float>> points = { v1, v2, v3, v4 };
     int minX = (int)points[0].first;
     int maxX = (int)points[0].first;
     int minY = (int)points[0].second;
@@ -710,7 +710,7 @@ void Map::SetBuilding(std::shared_ptr<Building> building, std::string name, std:
     }
 }
 
-std::string Map::GetTerrain(int x, int y) const {
+string Map::GetTerrain(int x, int y) const {
     if (!CheckXY(x, y)) {
         return "";
     }
@@ -725,7 +725,7 @@ std::string Map::GetTerrain(int x, int y) const {
     return blocks[blockY][blockX]->GetTerrain(x, y);
 }
 
-bool Map::SetTerrain(int x, int y, std::string terrain) {
+bool Map::SetTerrain(int x, int y, string terrain) {
     if (!CheckXY(x, y)) {
         return false;
     }

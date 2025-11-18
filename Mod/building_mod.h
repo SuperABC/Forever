@@ -26,8 +26,10 @@ public:
     virtual float GetAcreageMax() const { return 20000.f; }
 
     virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) {
+        int direction = GetRandom(4);
+
         auto component = CreateComponent<ModComponent>();
-        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, "single_room", layout);
+        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "single_room", layout);
         AssignRoom(0, 0, "mod", component, factory);
     }
 

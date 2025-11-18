@@ -3,19 +3,19 @@
 
 using namespace std;
 
-void Room::SetParent(std::shared_ptr<Building> building) {
+void Room::SetParent(shared_ptr<Building> building) {
     parentBuilding = building;
 }
 
-void Room::SetParent(std::shared_ptr<Component> component) {
+void Room::SetParent(shared_ptr<Component> component) {
     parentComponent = component;
 }
 
-std::shared_ptr<Building> Room::GetParentBuilding() const {
+shared_ptr<Building> Room::GetParentBuilding() const {
     return parentBuilding;
 }
 
-std::shared_ptr<Component> Room::GetParentComponent() const {
+shared_ptr<Component> Room::GetParentComponent() const {
     return parentComponent;
 }
 
@@ -52,7 +52,7 @@ bool RoomFactory::CheckRegistered(const string& id) {
     return registries.find(id) != registries.end();
 }
 
-void RoomFactory::SetConfig(std::string name, bool config) {
+void RoomFactory::SetConfig(string name, bool config) {
     if (configs.find(name) != configs.end()) {
         configs[name] = config;
     }

@@ -20,7 +20,7 @@ bool JobFactory::CheckRegistered(const string& id) {
     return registries.find(id) != registries.end();
 }
 
-void JobFactory::SetConfig(std::string name, bool config) {
+void JobFactory::SetConfig(string name, bool config) {
     if (configs.find(name) != configs.end()) {
         configs[name] = config;
     }

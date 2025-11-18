@@ -7,29 +7,29 @@
 
 using namespace std;
 
-void Zone::SetParent(std::shared_ptr<Plot> plot) {
+void Zone::SetParent(shared_ptr<Plot> plot) {
     parentPlot = plot;
 }
 
-std::shared_ptr<Plot> Zone::GetParent() const {
+shared_ptr<Plot> Zone::GetParent() const {
     return parentPlot;
 }
 
-std::shared_ptr<Building> Zone::GetBuilding(std::string name) {
+shared_ptr<Building> Zone::GetBuilding(string name) {
     return buildings[name];
 }
 
-std::unordered_map<std::string, std::shared_ptr<Building>>& Zone::GetBuildings() {
+unordered_map<string, shared_ptr<Building>>& Zone::GetBuildings() {
     return buildings;
 }
 
-void Zone::AddBuildings(BuildingFactory* factory, std::vector<std::pair<std::string, float>> list) {
+void Zone::AddBuildings(BuildingFactory* factory, vector<pair<string, float>> list) {
     float acreageTmp = 0.f;
     int attempt = 0;
     for (size_t i = 0; i < list.size(); i++) {
         if (acreageTmp >= GetAcreage() || attempt > 16)break;
 
-        std::shared_ptr<Building> building = factory->CreateBuilding(list[i].first);
+        shared_ptr<Building> building = factory->CreateBuilding(list[i].first);
         if (!building) {
             attempt++;
             i--;
@@ -242,13 +242,13 @@ bool ZoneFactory::CheckRegistered(const string& id) {
     return registries.find(id) != registries.end();
 }
 
-void ZoneFactory::SetConfig(std::string name, bool config) {
+void ZoneFactory::SetConfig(string name, bool config) {
     if (configs.find(name) != configs.end()) {
         configs[name] = config;
     }
 }
 
-void ZoneFactory::GenerateAll(const std::vector<std::shared_ptr<Plot>>& plots, BuildingFactory* factory) {
+void ZoneFactory::GenerateAll(const vector<shared_ptr<Plot>>& plots, BuildingFactory* factory) {
     for (const auto& [id, generator] : generators) {
         if (generator && configs[id]) {
             generator(this, factory, plots);

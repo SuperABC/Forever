@@ -28,10 +28,12 @@ public:
     virtual float GetAcreageMax() const { return 20000.f; }
 
     virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) {
+        int direction = GetRandom(4);
+
         auto component = CreateComponent<TestComponent>();
-        ReadFloor(-1, GetSizeX() / 2.f, GetSizeY() / 2.f, "single_room", layout);
-        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, "straight_linear", layout);
-        ReadFloor(1, GetSizeX() / 2.f, GetSizeY() / 2.f, "straight_linear", layout);
+        ReadFloor(-1, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "single_room", layout);
+        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "straight_linear", layout);
+        ReadFloor(1, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "straight_linear", layout);
         AssignRoom(-1, 0, "test", component, factory);
         ArrangeRow(0, 0, "test", 120.f, component, factory);
         ArrangeRow(0, 1, "test", 120.f, component, factory);

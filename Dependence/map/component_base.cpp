@@ -4,19 +4,19 @@
 
 using namespace std;
 
-void Component::SetParent(std::shared_ptr<Building> building) {
+void Component::SetParent(shared_ptr<Building> building) {
     parentBuilding = building;
 }
 
-std::shared_ptr<Building> Component::GetParent() const {
+shared_ptr<Building> Component::GetParent() const {
     return parentBuilding;
 }
 
-std::vector<std::shared_ptr<Room>>& Component::GetRooms() {
+vector<shared_ptr<Room>>& Component::GetRooms() {
     return rooms;
 }
 
-void Component::AddRoom(std::shared_ptr<Room> room) {
+void Component::AddRoom(shared_ptr<Room> room) {
     rooms.push_back(room);
 }
 
@@ -37,7 +37,7 @@ bool ComponentFactory::CheckRegistered(const string& id) {
     return registries.find(id) != registries.end();
 }
 
-void ComponentFactory::SetConfig(std::string name, bool config) {
+void ComponentFactory::SetConfig(string name, bool config) {
     if (configs.find(name) != configs.end()) {
         configs[name] = config;
     }
