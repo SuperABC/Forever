@@ -58,6 +58,41 @@ void Populace::InitJobs() {
 
 }
 
+void Populace::InitNames() {
+	nameFactory->RegisterName(TestName::GetId(), []() { return make_unique<TestName>(); });
+
+	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
+	if (modHandle) {
+		modHandles.push_back(modHandle);
+		debugf("Mod dll loaded successfully.\n");
+
+		RegisterModNamesFunc registerFunc = (RegisterModNamesFunc)GetProcAddress(modHandle, "RegisterModNames");
+		if (registerFunc) {
+			registerFunc(nameFactory.get());
+		}
+		else {
+			debugf("Incorrect dll content.");
+		}
+	}
+	else {
+		debugf("Failed to load mod.dll.");
+	}
+
+#ifdef MOD_TEST
+	auto nameList = { "test", "mod" };
+	for (const auto& nameId : nameList) {
+		if (nameFactory->CheckRegistered(nameId)) {
+			auto name = nameFactory->CreateName(nameId);
+			debugf(("Created name: " + name->GetName() + " (ID: " + nameId + ")\n").data());
+		}
+		else {
+			debugf("Name not registered: %s\n", nameId);
+		}
+	}
+#endif // MOD_TEST
+
+}
+
 void Populace::ReadConfigs(string path) const {
     if (!filesystem::exists(path)) {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
@@ -71,7 +106,10 @@ void Populace::ReadConfigs(string path) const {
         THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
     }
     if (reader.parse(fin, root)) {
-
+		for (auto job : root["mods"]["job"]) {
+			jobFactory->SetConfig(job.asString(), true);
+		}
+		nameFactory->SetConfig(root["mods"]["name"].asString(), true);
     }
     else {
         fin.close();
@@ -95,6 +133,7 @@ void Populace::GenerateCitizens(int num) {
 
 	struct Human {
 		int idx;
+		string name;
 		int birth;
 		int marry;
 		LIFE_TYPE life;
@@ -105,9 +144,15 @@ void Populace::GenerateCitizens(int num) {
 		vector<pair<GENDER_TYPE, int>> childs;
 	};
 
+	// 分配姓名
+	auto name = nameFactory->GetName();
+	if (!name) {
+		THROW_EXCEPTION(InvalidConfigException, "No enabled name in config.\n");
+	}
+
 	// 临时男女数组及年表
-	vector<Human> females(1, { -1, 0, LIFE_DEAD });
-	vector<Human> males(1, { -1, 0, LIFE_DEAD });
+	vector<Human> females(1, { -1, "", 0, 0, LIFE_DEAD });
+	vector<Human> males(1, { -1, "", 0, 0, LIFE_DEAD });
 	vector<int> maleBirths(4096, -1);
 	int currentBirth = 0;
 	vector<vector<pair<int, LIFE_TYPE>>> chronology(4096);
@@ -115,12 +160,14 @@ void Populace::GenerateCitizens(int num) {
 	// 初始添加100男100女
 	int year = 1;
 	for (int i = 1; i <= 100; i++) {
-		females.push_back({ -1, GetRandom(20), -1, LIFE_SINGLE, GENDER_FEMALE, -1, -1, -1, {} });
+		auto n = name->GenerateName(false, true);
+		females.push_back({ -1, n, GetRandom(20), -1, LIFE_SINGLE, GENDER_FEMALE, -1, -1, -1, {} });
 		chronology[females.back().birth + 20 + GetRandom(15)].push_back(make_pair((int)females.size() - 1, LIFE_MARRY));
 		chronology[females.back().birth + 60 + GetRandom(40)].push_back(make_pair((int)females.size() - 1, LIFE_DEAD));
 	}
 	for (int i = 1; i <= 100; i++) {
-		males.push_back({ -1, GetRandom(20), -1, LIFE_SINGLE, GENDER_MALE, -1, -1, -1, {} });
+		auto n = name->GenerateName(true, false);
+		males.push_back({ -1, n, GetRandom(20), -1, LIFE_SINGLE, GENDER_MALE, -1, -1, -1, {} });
 	}
 	sort(males.begin(), males.end(), [](Human x, Human y) {return x.birth < y.birth; });
 	maleBirths[0] = 0;
@@ -173,10 +220,12 @@ void Populace::GenerateCitizens(int num) {
 				}
 				case LIFE_BIRTH: {
 					int gender = GetRandom(2);
+					auto n = name->GenerateName(name->GetSurname(males[females[event.first].spouse].name),
+						gender == GENDER_MALE, gender == GENDER_FEMALE);
 					if (gender == GENDER_FEMALE) {
 						females[event.first].childs.push_back(make_pair(GENDER_FEMALE, (int)females.size()));
 						males[females[event.first].spouse].childs.push_back(make_pair(GENDER_FEMALE, (int)females.size()));
-						females.push_back({ -1, year, -1, LIFE_SINGLE, GENDER_FEMALE, females[event.first].spouse, event.first, -1, {} });
+						females.push_back({ -1, n, year, -1, LIFE_SINGLE, GENDER_FEMALE, females[event.first].spouse, event.first, -1, {} });
 						if (GetRandom(10) > 0)
 							chronology[females.back().birth + 20 + GetRandom(15)].push_back(make_pair((int)females.size() - 1, LIFE_MARRY));
 						chronology[females.back().birth + 60 + GetRandom(40)].push_back(make_pair((int)females.size() - 1, LIFE_DEAD));
@@ -184,7 +233,7 @@ void Populace::GenerateCitizens(int num) {
 					else {
 						females[event.first].childs.push_back(make_pair(GENDER_MALE, (int)males.size()));
 						males[females[event.first].spouse].childs.push_back(make_pair(GENDER_MALE, (int)males.size()));
-						males.push_back({ -1, year, -1, LIFE_SINGLE, GENDER_MALE, females[event.first].spouse, event.first, -1, {} });
+						males.push_back({ -1, n, year, -1, LIFE_SINGLE, GENDER_MALE, females[event.first].spouse, event.first, -1, {} });
 						if (males.back().birth > currentBirth) {
 							for (int j = currentBirth + 1; j <= males.back().birth; j++) {
 								maleBirths[j] = (int)males.size() - 1;
@@ -222,6 +271,7 @@ void Populace::GenerateCitizens(int num) {
 			shared_ptr<Person> person = make_shared<Person>();
 			person->SetId((int)citizens.size());
 			females[i].idx = (int)citizens.size();
+			person->SetName(females[i].name);
 			person->SetGender(GENDER_FEMALE);
 			int month = 1 + GetRandom(12);
 			person->SetBirthday({ 2000 + females[i].birth, month, 1 + GetRandom(Time::DaysInMonth(2000 + females[i].birth, month)) });
@@ -233,21 +283,12 @@ void Populace::GenerateCitizens(int num) {
 			shared_ptr<Person> person = make_shared<Person>();
 			person->SetId((int)citizens.size());
 			males[i].idx = (int)citizens.size();
+			person->SetName(males[i].name);
 			person->SetGender(GENDER_MALE);
 			int month = 1 + GetRandom(12);
 			person->SetBirthday({ 2000 + males[i].birth, month, 1 + GetRandom(Time::DaysInMonth(2000 + males[i].birth, month)) });
 			citizens.push_back(person);
 		}
-	}
-
-	// 为所有人分配姓名
-	auto name = nameFactory->GetName();
-	if (!name) {
-		THROW_EXCEPTION(InvalidConfigException, "No enabled name in config.\n");
-	}
-	for (auto& citizen : citizens) {
-		citizen->SetName(name->GenerateName(
-			citizen->GetGender() == GENDER_MALE, citizen->GetGender() == GENDER_FEMALE));
 	}
 
 	// 记录有配偶的市民的结婚日期

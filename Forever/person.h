@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "job.h"
 #include "utility.h"
@@ -9,17 +9,17 @@
 
 
 enum GENDER_TYPE {
-	GENDER_FEMALE, // Ů��
-	GENDER_MALE // ����
+	GENDER_FEMALE, // 女性
+	GENDER_MALE // 男性
 };
 
 enum RELATIVE_TYPE {
-	RELATIVE_FATHER, // ����
-	RELATIVE_MOTHER, // ĸ��
-	RELATIVE_WIFE, // ����
-	RELATIVE_HUSBAND, // �ɷ�
-	RELATIVE_SON, // ����
-	RELATIVE_DAUGHTER // Ů��
+	RELATIVE_FATHER, // 父亲
+	RELATIVE_MOTHER, // 母亲
+	RELATIVE_WIFE, // 妻子
+	RELATIVE_HUSBAND, // 丈夫
+	RELATIVE_SON, // 儿子
+	RELATIVE_DAUGHTER // 女儿
 };
 
 class Person {
@@ -27,7 +27,7 @@ public:
 	Person();
 	~Person();
 
-	// ��ȡ/���û�����Ϣ
+	// 获取/设置基础信息
 	int GetId() const;
 	void SetId(int id);
 	const std::string& GetName() const;
@@ -42,18 +42,16 @@ public:
 	void SetBirthday(const Time& birthday);
 	const Time& GetMarryday() const;
 	void SetMarryday(const Time& marryday);
-	const std::shared_ptr<Job> GetJob() const;
-	void SetJob(const std::shared_ptr<Job>& job);
 	const std::string& GetNick() const;
 	void SetNick(const std::string& nick);
 	int GetDeposit() const;
 	void SetDeposit(int deposit);
 
-	// ʵʱģ��
+	// 实时模拟
 	int GetSimulate() const;
 	void SetSimulate(int simulate);
 
-	// ��������
+	// 管理亲属
 	void AddRelative(RELATIVE_TYPE type, std::shared_ptr<Person> person);
 	std::shared_ptr<Person> GetFather();
 	std::shared_ptr<Person> GetMother();
@@ -67,7 +65,6 @@ private:
 	Time birthday;
 	Time marryday;
 	int height, weight;
-	std::shared_ptr<Job> job;
 	std::string nick;
 	int deposit;
 
@@ -75,4 +72,5 @@ private:
 
 	std::vector<std::pair<RELATIVE_TYPE, std::shared_ptr<Person>>> relatives;
 
+	std::vector<std::shared_ptr<Job>> jobs;
 };

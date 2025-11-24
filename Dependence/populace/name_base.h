@@ -18,7 +18,9 @@ public:
     virtual std::string GetName() const = 0;
 
     // 生成随机姓名
+    virtual std::string GetSurname(std::string name) = 0;
     virtual std::string GenerateName(bool male = true, bool female = true, bool neutral = true) = 0;
+    virtual std::string GenerateName(std::string surname, bool male = true, bool female = true, bool neutral = true) = 0;
 
     // 父类实现方法
 

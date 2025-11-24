@@ -12,7 +12,13 @@ public:
     static std::string GetId() { return "mod"; }
     virtual std::string GetName() const override { return "模组姓名"; }
 
+    std::string GetSurname(std::string name) {
+        return "";
+    }
     virtual std::string GenerateName(bool male = true, bool female = true, bool neutral = true) {
+        return "";
+    }
+    virtual std::string GenerateName(std::string surname, bool male = true, bool female = true, bool neutral = true) {
         return "";
     }
 };

@@ -94,9 +94,50 @@ void TestName::InitializeNames() {
     };
 }
 
-std::string TestName::GenerateName(bool male, bool female, bool neutral) {
+string TestName::GetSurname(std::string name) {
+    return name.substr(0, 2);
+}
+
+string TestName::GenerateName(bool male, bool female, bool neutral) {
     string surname = surnames[GetRandom((int)surnames.size())];
 
+    string givenName;
+    vector<int> nameList;
+
+    nameList.push_back(male ? (int)maleNames.size() : 0);
+    nameList.push_back(female ? (int)femaleNames.size() : 0);
+    nameList.push_back(neutral ? (int)neutralNames.size() : 0);
+
+    int nameLength = 1 + (bool)GetRandom(9);
+    int listLength = nameList[0] + nameList[1] + nameList[2];
+
+    if (listLength == 0) {
+        neutral = true;
+        nameList[2] = (int)neutralNames.size();
+        listLength = (int)neutralNames.size();
+    }
+
+    for (int i = 0; i < nameLength; ++i) {
+        int idx = GetRandom(listLength);
+        if (idx < nameList[0]) {
+            givenName += maleNames[idx];
+        }
+        else {
+            idx -= nameList[0];
+            if (idx < nameList[1]) {
+                givenName += femaleNames[idx];
+            }
+            else {
+                idx -= nameList[1];
+                givenName += neutralNames[idx];
+            }
+        }
+    }
+
+    return surname + givenName;
+}
+
+string TestName::GenerateName(string surname, bool male, bool female, bool neutral) {
     string givenName;
     vector<int> nameList;
 

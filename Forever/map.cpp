@@ -488,7 +488,7 @@ int Map::Init(int blockX, int blockY) {
         }
     }
 
-    return 0;
+    return 20000;
 }
 
 void Map::ReadConfigs(string path) const {

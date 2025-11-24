@@ -351,13 +351,14 @@ void sgSetup() {
 	map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 
 	populace->InitJobs();
+	populace->InitNames();
 	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
 	try {
-		map->Init(3, 3);
+		populace->Init(map->Init(3, 3));
 	}
 	catch (exception e) {
 		debugf("%s", e.what());

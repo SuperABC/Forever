@@ -149,6 +149,10 @@ Time::Time(string time) {
     throw invalid_argument("无法解析时间字符串: " + time);
 }
 
+bool Time::IsValid() const {
+    return year > 0;
+}
+
 void Time::SetYear(int y) {
     year = y; Validate();
 }
@@ -574,7 +578,7 @@ int Time::OrdinalDate() const {
     return days;
 }
 
-Time GetRandom(Time begin, Time end, int (*cdf)(int, int)) {
+Time GetRandom(Time begin, Time end) {
     // 矫正起始与结束时间
     if (begin > end) {
         swap(begin, end);

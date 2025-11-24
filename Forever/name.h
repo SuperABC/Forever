@@ -15,7 +15,9 @@ public:
     static std::string GetId() { return "chinese"; }
     virtual std::string GetName() const override { return "中文姓名"; }
 
+    virtual std::string GetSurname(std::string name);
     virtual std::string GenerateName(bool male = true, bool female = true, bool neutral = true);
+    virtual std::string GenerateName(std::string surname, bool male = true, bool female = true, bool neutral = true);
 
 private:
     std::vector<std::string> surnames;

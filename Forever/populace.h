@@ -16,6 +16,7 @@ public:
 
 	// 读取Mods
 	void InitJobs();
+	void InitNames();
 
 	// 读取配置文件
 	void ReadConfigs(std::string path) const;

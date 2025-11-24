@@ -28,6 +28,7 @@ int main() {
 	// 读取Populace相关类及Mod
 	unique_ptr<Populace> populace(new Populace());
 	populace->InitJobs();
+	populace->InitNames();
 	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
 	// 读取Society相关类及Mod
@@ -58,7 +59,7 @@ int main() {
 				parser.AddOption("--block", 0, "Block num both horizontally and vertically.", true, "4");
 				parser.ParseCmd(cmd);
 				int size = atoi(parser.GetOption("--block").data());
-				map->Init(size, size);
+				populace->Init(map->Init(size, size));
 				break;
 			}
 			case CMD_PASS: { // 时间流逝

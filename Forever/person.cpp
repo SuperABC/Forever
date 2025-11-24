@@ -67,14 +67,6 @@ void Person::SetMarryday(const Time& marryday) {
 	this->marryday = marryday;
 }
 
-const shared_ptr<Job> Person::GetJob() const {
-	return job;
-}
-
-void Person::SetJob(const shared_ptr<Job>& job) {
-	this->job = job;
-}
-
 const string& Person::GetNick() const {
 	return nick;
 }

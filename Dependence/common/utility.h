@@ -31,6 +31,9 @@ public:
     Time(int y, int mon = 1, int d = 1, int h = 0, int min = 0, int s = 0, int ms = 0);
     Time(std::string time);
 
+    // 判断是否为空
+    bool IsValid() const;
+
     // 获取/设置时间
     int GetYear() const;
     int GetMonth() const;
