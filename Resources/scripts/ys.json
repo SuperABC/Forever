@@ -1,0 +1,61 @@
+[
+{
+	"milestone": "arrive_teyvat",
+	"visible": false,
+	"trigger": {"type": "game_start"},
+	"dialogs": [
+		{"list": [
+			{"content": ""}
+		]}
+	],
+	"changes": [],
+	"subsequences": ["meet_ab", "meet_ky", "meet_ls", "meet_wd", "meet_q", "meet_nae", "meet_fxe", "meet_bbl",
+		"meet_lz", "meet_dlk", "meet_st", "meet_mn", "meet_bnt", "meet_abd", "meet_lsly", "meet_yl",
+		"meet_mk", "meet_kq", "meet_xl", "meet_x", "meet_bd", "meet_ng", "meet_xq", "meet_cy",
+		"meet_gy", "meet_ht", "meet_bz", "meet_xy", "meet_zl", "meet_ddly", "meet_yf", "meet_yj",
+		"meet_sh", "meet_yl", "meet_jm", "meet_xy", "meet_fywy", "meet_sllh", "meet_xg", "meet_tm",
+		"meet_ldjj", "meet_jtsl", "meet_bcsz", "meet_shgxh", "meet_wl", "meet_hlyd", "meet_jqr", "meet_sllr",
+		"meet_lyypc", "meet_qll", "meet_tnl", "meet_kl", "meet_kds", "meet_sn", "meet_nl", "meet_lyl",
+		"meet_sb", "meet_fls", "meet_aehs", "meet_dxy", "meet_kw", "meet_sss", "meet_ln", "meet_lnt",
+		"meet_fmn", "meet_nwlt", "meet_losl", "meet_fnn", "meet_xld", "meet_nwy", "meet_xwl", "meet_qz",
+		"meet_klld", "meet_alqn", "meet_amla", "meet_oll", "meet_jnq", "meet_mln", "meet_xnn", "meet_qsk",
+		"meet_qtll", "meet_mwk", "meet_ly", "meet_mjyrx", "meet_wls", "meet_yf", "meet_tly", "meet_skk",
+		"meet_ynf", "meet_lwm", "meet_fls", "meet_nfe"
+	]
+},
+{
+	"milestone": "meet_ht",
+	"visible": false,
+	"trigger": {"condition": "$$system.control_person==\"空\"", "type": "option_dialog", "target": "胡桃", "option": "破处"},
+	"dialogs": [
+		{"list": [
+			{"speaker": "胡桃", "content": "哎呀呀，你终于来我们往生堂做客啦。"},
+			{"speaker": "空", "content": "是呀，早就听说往生堂堂主的大名了，今天终于有时间来拜访了。"},
+			{"content": "胡桃打完招呼之后，就快速锁上了大门。"},
+			{"speaker": "空", "content": "你锁门是准备要做什么呢？"},
+			{"content": "胡桃没有说话，而是自顾自地脱掉了自己所有的衣服，然后又扒光了空的衣服"},
+			{"speaker": "空", "content": "你想和我性交就直说嘛，我又不会拒绝你。"},
+			{"speaker": "胡桃", "content": "那可太好了，不过我还是处女，没有经验，需要你指导我。"},
+			{"speaker": "空", "content": "只可惜你身材不太行，乳房和屁股都太小了。"},
+			{"speaker": "胡桃", "content": "还说呢，那你的阴茎怎么这么快就硬起来了？我滴天啊，怎么这么大。"},
+			{"speaker": "空", "content": "嫌大你也躲不开了，你先趴到桌子上去。"},
+			{"content": "胡桃听话地来到桌子旁边，弯腰趴在了桌子上，屁股对着空。"},
+			{"content": "空顺势把龟头对准了胡桃的阴道口，然后一使劲，就把阴茎全部插进了胡桃的阴道里。"},
+			{"speaker": "胡桃", "content": "啊！快拔出去！疼！"},
+			{"speaker": "空", "content": "忍着点，破处都要经历这个过程的。"},
+			{"content": "空并没有理会已经疼到颤抖的胡桃，而是紧接着就开始了快速的抽插。"},
+			{"speaker": "空", "content": "只有破处的时候我才能体会到这么紧的阴道，这个过程很珍贵的，你要用心体会。"},
+			{"content": "胡桃终于疼的晕了过去，没有了声音。"},
+			{"content": "于是空把趴着的胡桃翻了过来，然后一只胳膊搂着胡桃的一条腿，继续在她的阴道里抽插。"},
+			{"content": "虽然胡桃的大脑已经晕过去了，但身体还清醒着，随着空的抽插一下一下地颤抖。"},
+			{"content": "处女的阴道就是跟非处女有着明显的区别，空并没有持续抽插很久，就忍不住射了出来。"},
+			{"content": "空全力把阴茎插到最深，几乎捅穿了胡桃的子宫，然后射出了全部的精液。"},
+			{"content": "又在胡桃的阴道里感受了一会被包裹的感觉，空就拔出了阴茎。"},
+			{"content": "虽然在性交过程中胡桃的阴道被撑开了很大，但阴茎刚拔出来她的阴道就又恢复了紧缩，也没有一点精液流出来。"},
+			{"content": "空把胡桃完全放在了桌子上，离开了往生堂。"}
+		]}
+	],
+	"changes": [],
+	"subsequences": []
+}
+]

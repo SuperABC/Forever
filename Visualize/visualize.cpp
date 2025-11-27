@@ -4,6 +4,7 @@
 #include "map.h"
 #include "populace.h"
 #include "society.h"
+#include "script.h"
 #include "error.h"
 
 #include <iostream>
@@ -27,6 +28,8 @@ int dispMode = 0;
 unique_ptr<Map> map = make_unique<Map>();
 unique_ptr<Populace> populace = make_unique<Populace>();
 unique_ptr<Society> society = make_unique<Society>();
+unique_ptr<Script> script = make_unique<Script>();
+
 
 int sizeX = 640, sizeY = 460;
 int steps[] = { 8, 4, 2, 1 };
@@ -181,7 +184,7 @@ void zoneLoop() {
 			int posX = mouse.x / 20;
 			int posY = mouse.y / 20;
 			auto pos = currentZone->GetParent()->GetPosition(currentZone->GetLeft() + posX, currentZone->GetBottom() + posY);
-			auto element = map->GetElement(pos.first, pos.second);
+			auto element = ::map->GetElement(pos.first, pos.second);
 			if (element && element->GetBuilding().size() > 0) {
 				auto building = currentZone->GetBuilding(element->GetBuilding());
 				if (building) {
@@ -204,13 +207,13 @@ void updateGraph(int x, int y, int zoom, int left = 0, int right = sizeX, int to
 			int posX = x + (j - sizeX / 2) / (8 / steps[zoom]);
 			int posY = y + (i - sizeY / 2) / (8 / steps[zoom]);
 
-			if (!map->CheckXY(posX, posY)) {
+			if (!::map->CheckXY(posX, posY)) {
 				setColor(color.r, color.g, color.b);
 				putPixel(j, i);
 				continue;
 			}
 
-			auto terrain = map->GetElement(posX, posY)->GetTerrain();
+			auto terrain = ::map->GetElement(posX, posY)->GetTerrain();
 			if (terrainColors.find(terrain) != terrainColors.end()) {
 				color = terrainColors[terrain];
 			}
@@ -224,7 +227,7 @@ void updateGraph(int x, int y, int zoom, int left = 0, int right = sizeX, int to
 		}
 	}
 
-	auto roadnet = map->GetRoadnet();
+	auto roadnet = ::map->GetRoadnet();
 
 	if (dispMode == DISP_PLOT) {
 		auto plots = roadnet->GetPlots();
@@ -342,13 +345,13 @@ void sgSetup() {
 	initWindow(sizeX, sizeY, "Map", BIT_MAP);
 	resizeFuntion(resize);
 
-	map->InitTerrains();
-	map->InitRoadnets();
-	map->InitZones();
-	map->InitBuildings();
-	map->InitComponents();
-	map->InitRooms();
-	map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
+	::map->InitTerrains();
+	::map->InitRoadnets();
+	::map->InitZones();
+	::map->InitBuildings();
+	::map->InitComponents();
+	::map->InitRooms();
+	::map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 
 	populace->InitJobs();
 	populace->InitNames();
@@ -358,14 +361,14 @@ void sgSetup() {
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
 	try {
-		populace->Init(map->Init(3, 3));
+		populace->Init(::map->Init(3, 3));
 	}
 	catch (exception e) {
 		debugf("%s", e.what());
 	}
 
-	cameraX = map->GetSize().first / 2;
-	cameraY = map->GetSize().second / 2;
+	cameraX = ::map->GetSize().first / 2;
+	cameraY = ::map->GetSize().second / 2;
 }
 
 void sgLoop() {
@@ -391,7 +394,7 @@ void sgLoop() {
 			case SG_DOWN:
 			case 's':
 				cameraY += steps[zoom];
-				if (cameraY > map->GetSize().second) {
+				if (cameraY > ::map->GetSize().second) {
 					cameraY -= steps[zoom];
 					break;
 				}
@@ -413,7 +416,7 @@ void sgLoop() {
 			case SG_RIGHT:
 			case 'd':
 				cameraX += steps[zoom];
-				if (cameraX > map->GetSize().first) {
+				if (cameraX > ::map->GetSize().first) {
 					cameraX -= steps[zoom];
 					break;
 				}
@@ -435,7 +438,7 @@ void sgLoop() {
 		auto pos = mousePos();
 		int posX = cameraX + (pos.x - sizeX / 2) / (8 / steps[zoom]);
 		int posY = cameraY + (pos.y - sizeY / 2) / (8 / steps[zoom]);
-		auto element = map->GetElement(posX, posY);
+		auto element = ::map->GetElement(posX, posY);
 		if (element && element->GetZone().size() > 0) {
 			setColor(255, 255, 255);
 			putQuad(0, sizeY, sizeX - 1, sizeY + 20 - 1, SOLID_FILL);
@@ -456,9 +459,9 @@ void sgLoop() {
 			if (mouse.z == SG_LEFT_BUTTON) {
 				int posX = cameraX + (mouse.x - sizeX / 2) / (8 / steps[zoom]);
 				int posY = cameraY + (mouse.y - sizeY / 2) / (8 / steps[zoom]);
-				auto element = map->GetElement(posX, posY);
+				auto element = ::map->GetElement(posX, posY);
 				if (element && element->GetZone().size() > 0) {
-					auto zone = map->GetZone(element->GetZone());
+					auto zone = ::map->GetZone(element->GetZone());
 					if (zone) {
 						if (currentZone) {
 							closeWindow(zoneWindow);
@@ -468,7 +471,7 @@ void sgLoop() {
 					}
 				}
 				else if (element && element->GetBuilding().size() > 0) {
-					auto building = map->GetBuilding(element->GetBuilding());
+					auto building = ::map->GetBuilding(element->GetBuilding());
 					if (building) {
 						if (currentBuilding) {
 							closeWindow(buildingWindow);

@@ -134,12 +134,18 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="building.h" />
+    <ClInclude Include="change.h" />
     <ClInclude Include="component.h" />
+    <ClInclude Include="condition.h" />
+    <ClInclude Include="dialog.h" />
+    <ClInclude Include="event.h" />
+    <ClInclude Include="milestone.h" />
     <ClInclude Include="name.h" />
     <ClInclude Include="organization.h" />
     <ClInclude Include="job.h" />
     <ClInclude Include="map.h" />
     <ClInclude Include="person.h" />
+    <ClInclude Include="script.h" />
     <ClInclude Include="society.h" />
     <ClInclude Include="populace.h" />
     <ClInclude Include="roadnet.h" />
@@ -149,12 +155,18 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="building.cpp" />
+    <ClCompile Include="change.cpp" />
     <ClCompile Include="component.cpp" />
+    <ClCompile Include="condition.cpp" />
+    <ClCompile Include="dialog.cpp" />
+    <ClCompile Include="event.cpp" />
+    <ClCompile Include="milestone.cpp" />
     <ClCompile Include="name.cpp" />
     <ClCompile Include="organization.cpp" />
     <ClCompile Include="job.cpp" />
     <ClCompile Include="map.cpp" />
     <ClCompile Include="person.cpp" />
+    <ClCompile Include="script.cpp" />
     <ClCompile Include="society.cpp" />
     <ClCompile Include="populace.cpp" />
     <ClCompile Include="roadnet.cpp" />

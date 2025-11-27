@@ -537,6 +537,10 @@ void Map::Tick() {
 
 }
 
+void Map::Print() {
+
+}
+
 void Map::Load(string path) {
 
 }

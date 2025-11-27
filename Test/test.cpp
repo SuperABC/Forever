@@ -2,6 +2,7 @@
 #include "map.h"
 #include "populace.h"
 #include "society.h"
+#include "script.h"
 #include "utility.h"
 #include "error.h"
 
@@ -36,6 +37,9 @@ int main() {
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
+	// 读取Script相关类及Mod
+	unique_ptr<Script> script(new Script());
+
 	// 读取命令行
 	string cmd;
 	CMD_TYPE type = CMD_UNKOWN;
@@ -57,9 +61,12 @@ int main() {
 			switch (type) {
 			case CMD_INIT: { // 初始化世界、人口、剧本
 				parser.AddOption("--block", 0, "Block num both horizontally and vertically.", true, "4");
+				parser.AddOption("--story", 0, "Story file.", true, REPLACE_PATH("../Resources/scripts/ys.json"));
 				parser.ParseCmd(cmd);
 				int size = atoi(parser.GetOption("--block").data());
 				populace->Init(map->Init(size, size));
+				string path = parser.GetOption("--story");
+				script->ReadScript(path);
 				break;
 			}
 			case CMD_PASS: { // 时间流逝

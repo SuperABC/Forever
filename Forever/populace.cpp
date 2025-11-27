@@ -123,6 +123,34 @@ void Populace::Init(int accomodation) {
     GenerateCitizens((int)(accomodation * exp(GetRandom(1000) / 1000.0f - 0.5f)));
 }
 
+void Populace::Destroy() {
+
+}
+
+void Populace::Tick() {
+
+}
+
+void Populace::Print() {
+
+}
+
+void Populace::Load(string path) {
+
+}
+
+void Populace::Save(string path) {
+
+}
+
+Time Populace::GetTime() {
+	return time;
+}
+
+std::vector<std::shared_ptr<Person>>& Populace::GetCitizens() {
+	return citizens;
+}
+
 void Populace::GenerateCitizens(int num) {
 	enum LIFE_TYPE {
 		LIFE_SINGLE,

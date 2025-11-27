@@ -82,6 +82,9 @@ public:
 	// 时钟前进
 	void Tick();
 
+	// 输出当前地图
+	void Print();
+
 	// 保存/加载地图
 	void Load(std::string path);
 	void Save(std::string path);
