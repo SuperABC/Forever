@@ -26,7 +26,7 @@
 {
 	"milestone": "meet_ht",
 	"visible": false,
-	"trigger": {"condition": "$$system.control_person==\"空\"", "type": "option_dialog", "target": "胡桃", "option": "破处"},
+	"trigger": {"condition": "$$system.control_person==空", "type": "option_dialog", "target": "胡桃", "option": "破处"},
 	"dialogs": [
 		{"list": [
 			{"speaker": "胡桃", "content": "哎呀呀，你终于来我们往生堂做客啦。"},

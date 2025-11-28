@@ -6,6 +6,8 @@
 #include "building.h"
 #include "component.h"
 #include "room.h"
+#include "change.h"
+#include "script.h"
 
 #include <windows.h>
 
@@ -84,6 +86,9 @@ public:
 
 	// 输出当前地图
 	void Print();
+
+	// 应用变更
+	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Script>& script);
 
 	// 保存/加载地图
 	void Load(std::string path);

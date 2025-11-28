@@ -541,6 +541,17 @@ void Map::Print() {
 
 }
 
+void Map::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Script>& script) {
+    switch (change->GetType()) {
+    case CHANGE_SET_VALUE:
+        break;
+    case CHANGE_REMOVE_VALUE:
+        break;
+    default:
+        break;
+    }
+}
+
 void Map::Load(string path) {
 
 }

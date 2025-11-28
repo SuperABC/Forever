@@ -15,6 +15,24 @@
 
 using namespace std;
 
+// 解析命令行输入事件
+shared_ptr<Event> ParseEvent(Parser& parser) {
+    string type = parser.GetOption("--type");
+    string target = "";
+    string option = "";
+
+    if (type == "game_start") {
+        return make_shared<GameStartEvent>();
+    }
+	else if (type == "option_dialog") {
+		if (parser.HasOption("--target")) target = parser.GetOption("--target");
+		if (parser.HasOption("--option")) option = parser.GetOption("--option");
+		return make_shared<OptionDialogEvent>(target, option);
+	}
+
+    return nullptr;
+}
+
 int main() {
 	// 读取Map相关类及Mod
 	unique_ptr<Map> map(new Map());
@@ -81,6 +99,34 @@ int main() {
 			case CMD_EVENT: { // 文本模拟事件
 				parser.AddOption("--type", 0, "Event type.", true, "nothing_happen");
 
+				parser.AddOption("--target", 0, "Event target.", true, "");
+				parser.AddOption("--option", 0, "Event option.", true, "");
+
+				parser.ParseCmd(cmd);
+				auto event = ParseEvent(parser);
+				auto actions = script->MatchEvent(event);
+				auto dialogs = actions.first;
+				auto changes = actions.second;
+				for (auto dialog : dialogs) {
+					if (script->JudgeCondition(dialog.GetCondition())) {
+						auto contents = dialog.GetDialogs();
+						if (contents.size() > 0) {
+							for (auto content : contents) {
+								if (content.first.size() == 0)
+									cout << script->ReplaceContent(content.second) << endl;
+								else
+									cout << script->ReplaceContent(content.first) << ": " << script->ReplaceContent(content.second) << endl;
+							}
+							break;
+						}
+					}
+				}
+				for (auto change : changes) {
+					if (!script->JudgeCondition(change->GetCondition()))continue;
+					map->ApplyChange(change, script);
+					populace->ApplyChange(change, script);
+					script->ApplyChange(change);
+				}
 				break;
 			}
 			case CMD_PRINT: { // 输出当前状态
