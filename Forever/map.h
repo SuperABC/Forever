@@ -109,6 +109,9 @@ public:
 	// 获取路网
 	std::shared_ptr<Roadnet> GetRoadnet() const;
 
+	// 获取组合
+	std::vector<std::shared_ptr<Component>> GetComponents() const;
+
 	// 获取/设置元素所属园区/建筑
 	std::shared_ptr<Zone> GetZone(std::string name);
 	std::shared_ptr<Building> GetBuilding(std::string name);

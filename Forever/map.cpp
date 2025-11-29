@@ -593,6 +593,15 @@ shared_ptr<Roadnet> Map::GetRoadnet() const {
     return roadnet;
 }
 
+std::vector<std::shared_ptr<Component>> Map::GetComponents() const {
+    std::vector<std::shared_ptr<Component>> components;
+    for (const auto& building : buildings) {
+        const auto& current = building.second->GetComponents();
+        components.insert(components.end(), current.begin(), current.end());
+    }
+	return components;
+}
+
 shared_ptr<Zone> Map::GetZone(string name) {
 	return zones[name];
 }

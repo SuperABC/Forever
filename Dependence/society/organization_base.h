@@ -1,5 +1,8 @@
 ﻿#pragma once
 
+#include "../map/component_base.h"
+#include "../populace/job_base.h"
+
 #include <string>
 #include <functional>
 #include <memory>
@@ -20,6 +23,8 @@ public:
 	// 父类实现方法
 
 protected:
+	std::vector<std::shared_ptr<Component>> components;
+    std::vector<std::shared_ptr<Job>> jobs;
 };
 
 class OrganizationFactory {

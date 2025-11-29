@@ -57,6 +57,12 @@ void Society::InitOrganizations() {
 
 }
 
+void Society::Init(std::shared_ptr<Map> map, std::shared_ptr<Populace> populace) {
+    for(auto building : map->GetBuildings()) {
+        
+	}
+}
+
 void Society::ReadConfigs(string path) const {
     if (!filesystem::exists(path)) {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
@@ -78,3 +84,30 @@ void Society::ReadConfigs(string path) const {
     }
     fin.close();
 }
+
+void Society::Destroy() {
+    organizations.clear();
+}
+
+void Society::Tick() {
+
+}
+
+void Society::Print() {
+
+}
+
+void Society::ApplyChange(shared_ptr<Change> change, unique_ptr<Script>& script) {
+
+}
+
+void Society::Load(string path) {
+
+}
+
+void Society::Save(string path) {
+
+}
+
+
+
