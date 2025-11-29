@@ -26,9 +26,9 @@ void Script::Print() {
 		cout << active->content.GetName() << ": " << active->content.GetGoal() << endl;
 	}
 
-	cout << "全局变量数量 " << values.size() << endl;
-	for (auto value : values) {
-		cout << value.first << ": " << value.second << endl;
+	cout << "全局变量数量 " << variables.size() << endl;
+	for (auto value : variables) {
+		cout << value.first << ": " << ToString(value.second) << endl;
 	}
 }
 
@@ -90,7 +90,7 @@ void Script::ApplyChange(shared_ptr<Change> change) {
         if (obj->GetName().substr(0, 7) == "system.") {
             break;
         }
-		values[obj->GetName()] = obj->GetValue();
+		variables[obj->GetName()] = FromString(obj->GetValue());
 		break;
 	}
 	case CHANGE_REMOVE_VALUE: {
@@ -98,7 +98,7 @@ void Script::ApplyChange(shared_ptr<Change> change) {
         if (obj->GetName().substr(0, 7) == "system.") {
             break;
         }
-        values.erase(obj->GetName());
+        variables.erase(obj->GetName());
         break;
     }
 	default:
@@ -115,7 +115,11 @@ void Script::LoadStory(string path) {
 }
 
 bool Script::JudgeCondition(Condition& condition) {
-    return true;
+	auto getValue = [this](string name) -> ValueType {
+		return this->GetValue(name);
+	};
+
+	return condition.EvaluateResult(getValue);
 }
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(shared_ptr<Event> event) {
@@ -154,7 +158,7 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(shared_ptr<E
 	return results;
 }
 
-string Script::ReplaceContent(string content) {
+string Script::ReplaceContent(const string& content) {
 	string result;
 	size_t start = 0;
 	size_t pos = 0;
@@ -168,7 +172,7 @@ string Script::ReplaceContent(string content) {
 			break;
 		}
 		
-		result.append(values[content.substr(pos + 2, end_pos - pos - 2)]);
+		result.append(ToString(variables[content.substr(pos + 2, end_pos - pos - 2)]));
 
 		start = end_pos + 2;
 	}
@@ -244,9 +248,25 @@ vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root) {
 }
 
 Condition Script::BuildCondition(Json::Value root) {
-    return Condition();
+	Condition condition;
+
+	condition.ParseCondition(root.asString());
+
+	return condition;
 }
 
-void Script::InitValues() {
-    values["system.health_status"] = "healthy";
+void Script::InitVariables() {
+    variables["system.health_status"] = "healthy";
+}
+
+ValueType Script::GetValue(const std::string& name) {
+	auto it = variables.find(name);
+	if (it != variables.end()) {
+		return it->second;
+	}
+	return 0; // 默认返回0
+}
+
+void Script::SetValue(const std::string& name, ValueType value) {
+	variables[name] = value;
 }

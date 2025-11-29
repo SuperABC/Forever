@@ -8,25 +8,26 @@
 			{"content": ""}
 		]}
 	],
-	"changes": [],
-	"subsequences": ["meet_ab", "meet_ky", "meet_ls", "meet_wd", "meet_q", "meet_nae", "meet_fxe", "meet_bbl",
-		"meet_lz", "meet_dlk", "meet_st", "meet_mn", "meet_bnt", "meet_abd", "meet_lsly", "meet_yl",
-		"meet_mk", "meet_kq", "meet_xl", "meet_x", "meet_bd", "meet_ng", "meet_xq", "meet_cy",
-		"meet_gy", "meet_ht", "meet_bz", "meet_xy", "meet_zl", "meet_ddly", "meet_yf", "meet_yj",
-		"meet_sh", "meet_yl", "meet_jm", "meet_xy", "meet_fywy", "meet_sllh", "meet_xg", "meet_tm",
-		"meet_ldjj", "meet_jtsl", "meet_bcsz", "meet_shgxh", "meet_wl", "meet_hlyd", "meet_jqr", "meet_sllr",
-		"meet_lyypc", "meet_qll", "meet_tnl", "meet_kl", "meet_kds", "meet_sn", "meet_nl", "meet_lyl",
-		"meet_sb", "meet_fls", "meet_aehs", "meet_dxy", "meet_kw", "meet_sss", "meet_ln", "meet_lnt",
-		"meet_fmn", "meet_nwlt", "meet_losl", "meet_fnn", "meet_xld", "meet_nwy", "meet_xwl", "meet_qz",
-		"meet_klld", "meet_alqn", "meet_amla", "meet_oll", "meet_jnq", "meet_mln", "meet_xnn", "meet_qsk",
-		"meet_qtll", "meet_mwk", "meet_ly", "meet_mjyrx", "meet_wls", "meet_yf", "meet_tly", "meet_skk",
-		"meet_ynf", "meet_lwm", "meet_fls", "meet_nfe"
+	"changes": [
+		{"type": "set_value", "name": "control_person", "value": "ø’"}
+	],
+	"subsequences": [
+		"meet_ht", 
+		"meet_ng",
+		"meet_q",
+		"meet_yl",
+		"meet_kq",
+		"meet_gy",
+		"meet_mn",
+		"meet_ldjj",
+		"meet_fnn",
+		"meet_xld"
 	]
 },
 {
 	"milestone": "meet_ht",
 	"visible": false,
-	"trigger": {"condition": "$$system.control_person==ø’", "type": "option_dialog", "target": "∫˙Ã“", "option": "∆∆¥¶"},
+	"trigger": {"condition": "$$control_person==ø’", "type": "option_dialog", "target": "∫˙Ã“", "option": "∆∆¥¶"},
 	"dialogs": [
 		{"list": [
 			{"speaker": "∫˙Ã“", "content": "∞•—Ω—Ω£¨ƒ„÷’”⁄¿¥Œ“√«Õ˘…˙Ã√◊ˆøÕ¿≤°£"},

@@ -3,7 +3,7 @@
 
 using namespace std;
 
-Change::Change(CHANGE_TYPE type) {
+Change::Change(CHANGE_TYPE type) : type(type) {
 
 }
 

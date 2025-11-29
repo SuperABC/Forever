@@ -42,13 +42,13 @@ public:
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
 
 	// 替换文本变量
-	std::string ReplaceContent(std::string content);
+	std::string ReplaceContent(const std::string& content);
 
 private:
 	std::vector<MilestoneNode> milestones;
 	std::vector<MilestoneNode*> actives;
 
-	std::unordered_map<std::string, std::string> values;
+	std::unordered_map<std::string, ValueType> variables;
 
 	// 复合对象读取
 	std::shared_ptr<Event> BuildEvent(Json::Value root);
@@ -57,6 +57,8 @@ private:
 	Condition BuildCondition(Json::Value root);
 
 	// 初始化全局变量
-	void InitValues();
+	void InitVariables();
+	void SetValue(const std::string& name, ValueType value);
+	ValueType GetValue(const std::string& name);
 };
 

@@ -52,6 +52,10 @@ public:
     using ExceptionBase::ExceptionBase;
 };
 
+class ArithmaticException : public ExceptionBase {
+    using ExceptionBase::ExceptionBase;
+};
+
 class IOException : public ExceptionBase {
 public:
     using ExceptionBase::ExceptionBase;
