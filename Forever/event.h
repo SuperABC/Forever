@@ -16,11 +16,12 @@ public:
 	virtual ~GameStartEvent() {}
 
 	static std::string GetId() { return "game_start"; }
+    virtual std::string GetType() const override { return "game_start"; }
 	virtual std::string GetName() const override { return "game_start"; }
 
 	virtual bool operator==(std::shared_ptr<Event> e) {
 		if (!e)return false;
-		if (GetName() != e->GetName())return false;
+		if (GetType() != e->GetType())return false;
 
 		return true;
 	}
@@ -35,11 +36,12 @@ public:
 	virtual ~OptionDialogEvent() {}
 
 	static std::string GetId() { return "option_dialog"; }
+    virtual std::string GetType() const override { return "option_dialog"; }
 	virtual std::string GetName() const override { return "option_dialog"; }
 
 	virtual bool operator==(std::shared_ptr<Event> e) {
 		if(!e)return false;
-		if (GetName() != e->GetName())return false;
+		if (GetType() != e->GetType())return false;
 
 		return target == std::dynamic_pointer_cast<OptionDialogEvent>(e)->target &&
 			option == std::dynamic_pointer_cast<OptionDialogEvent>(e)->option;

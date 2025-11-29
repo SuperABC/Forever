@@ -155,20 +155,20 @@ void Script::ReadScript(string path) {
 }
 
 void Script::ApplyChange(shared_ptr<Change> change) {
-	auto type = change->GetName();
+	auto type = change->GetType();
 	if(type == "set_value") {
 		auto obj = dynamic_pointer_cast<SetValueChange>(change);
-		if (obj->GetName().substr(0, 7) == "system.") {
+		if (obj->GetVariable().substr(0, 7) == "system.") {
 			return;
 		}
-		variables[obj->GetName()] = FromString(obj->GetValue());
+		variables[obj->GetVariable()] = FromString(obj->GetValue());
 	}
 	else if(type == "remove_value") {
 		auto obj = dynamic_pointer_cast<RemoveValueChange>(change);
-		if (obj->GetName().substr(0, 7) == "system.") {
+		if (obj->GetVariable().substr(0, 7) == "system.") {
 			return;
 		}
-		variables.erase(obj->GetName());
+		variables.erase(obj->GetVariable());
 	}
 }
 
@@ -299,12 +299,12 @@ vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root) {
         shared_ptr<Change> change = nullptr;
 
         if (type == "set_value") {
-            change = make_shared<SetValueChange>(obj["name"].asString(), obj["value"].asString());
+            change = make_shared<SetValueChange>(obj["variable"].asString(), obj["value"].asString());
         }
         else if (type == "remove_value") {
-            change = make_shared<RemoveValueChange>(obj["name"].asString());
+            change = make_shared<RemoveValueChange>(obj["variable"].asString());
         }
-		else  if (changeFactory->CheckRegistered(type)) {
+		else if (changeFactory->CheckRegistered(type)) {
 			change = changeFactory->CreateChange(type);
 		}
 

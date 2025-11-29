@@ -10,6 +10,7 @@
 class ModRoom : public Room {
 public:
     static std::string GetId() { return "mod"; }
+    virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "模组房间"; }
 };
 

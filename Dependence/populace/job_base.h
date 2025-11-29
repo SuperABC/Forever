@@ -15,6 +15,7 @@ public:
 
     // 动态返回职业静态信息
     static std::string GetId();
+    virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
 	// 父类实现方法

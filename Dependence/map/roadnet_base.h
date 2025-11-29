@@ -17,6 +17,7 @@ public:
 
     // 动态返回路网名称
     static std::string GetId();
+    virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
     // 在平原上生成路网

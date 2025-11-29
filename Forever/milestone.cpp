@@ -28,7 +28,7 @@ shared_ptr<Event> Milestone::GetTrigger() {
 bool Milestone::MatchTrigger(shared_ptr<Event> e) {
 	if (!trigger)return false;
 	if (!e)return false;
-	if (trigger->GetName() != e->GetName())return false;
+	if (trigger->GetType() != e->GetType())return false;
 
 	return trigger->operator==(e);
 }

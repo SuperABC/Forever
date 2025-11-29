@@ -17,6 +17,7 @@ public:
     }
 
     static std::string GetId() { return "mod"; }
+    virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return std::string("模组建筑") + std::to_string(name); }
 
     static std::vector<float> GetPower() { return std::vector<float>(13, 1.f); }

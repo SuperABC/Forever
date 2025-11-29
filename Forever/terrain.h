@@ -10,6 +10,7 @@ typedef void (*RegisterModTerrainsFunc)(TerrainFactory* factory);
 class TestTerrain : public Terrain {
 public:
     static std::string GetId() { return "test"; }
+    virtual std::string GetType() const override { return "test"; }
     virtual std::string GetName() const override { return "测试地形"; }
 
     virtual float GetPriority() const override { return 1.0f; };
@@ -18,14 +19,14 @@ public:
         std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const override {
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < 32; j++) {
-                set(i, j, GetName());
-                set(i, height - j - 1, GetName());
+                set(i, j, GetType());
+                set(i, height - j - 1, GetType());
             }
         }
         for (int j = 0; j < height; j++) {
             for (int i = 0; i < 32; i++) {
-                set(i, j, GetName());
-                set(width - i - 1, j, GetName());
+                set(i, j, GetType());
+                set(width - i - 1, j, GetType());
             }
         }
     }

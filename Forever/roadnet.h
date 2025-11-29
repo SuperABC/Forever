@@ -10,6 +10,7 @@ typedef void (*RegisterModRoadnetsFunc)(RoadnetFactory* factory);
 class TestRoadnet : public Roadnet {
 public:
     static std::string GetId() { return "test"; }
+    virtual std::string GetType() const override { return "test"; }
     virtual std::string GetName() const override { return "测试路网"; }
 
     virtual void DistributeRoadnet(int width, int height,

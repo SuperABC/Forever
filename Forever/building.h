@@ -19,6 +19,7 @@ public:
     }
 
     static std::string GetId() { return "test"; }
+    virtual std::string GetType() const override { return "test"; }
     virtual std::string GetName() const override { return std::string("测试建筑") + std::to_string(name); }
 
     static std::vector<float> GetPower() { return std::vector<float>(13, 1.f); }

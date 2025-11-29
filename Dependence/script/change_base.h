@@ -17,6 +17,7 @@ public:
 
     // 动态返回组织静态信息
     static std::string GetId();
+    virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
     // 基变更列表

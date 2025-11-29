@@ -10,5 +10,6 @@ typedef void (*RegisterModJobsFunc)(JobFactory* factory);
 class TestJob : public Job {
 public:
     static std::string GetId() { return "test"; }
+    virtual std::string GetType() const override { return "test"; }
     virtual std::string GetName() const override { return "测试职业"; }
 };

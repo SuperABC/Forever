@@ -9,11 +9,23 @@
 // 模组检测子类
 class ModZone : public Zone {
 public:
+    ModZone() {
+        name = count++;
+    }
+
     static std::string GetId() { return "mod"; }
-    virtual std::string GetName() const override { return "模组园区"; }
+    virtual std::string GetType() const override { return "mod"; }
+    virtual std::string GetName() const override { return "模组园区" + std::to_string(name); }
 
     static std::function<void(ZoneFactory*, BuildingFactory*, const std::vector<std::shared_ptr<Plot>>&)> ZoneGenerator;
+    
+private:
+    static int count;
+
+    int name;
 };
+
+int ModZone::count = 0;
 
 std::function<void(ZoneFactory*, BuildingFactory*, const std::vector<std::shared_ptr<Plot>>&)> ModZone::ZoneGenerator =
     [](ZoneFactory* zoneFactory, BuildingFactory* buildingFactory, const std::vector<std::shared_ptr<Plot>>& plots) {

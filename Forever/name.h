@@ -13,6 +13,7 @@ public:
     ~TestName();
 
     static std::string GetId() { return "chinese"; }
+    virtual std::string GetType() const override { return "chinese"; }
     virtual std::string GetName() const override { return "中文姓名"; }
 
     virtual std::string GetSurname(std::string name);

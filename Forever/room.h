@@ -10,5 +10,6 @@ typedef void (*RegisterModRoomsFunc)(RoomFactory* factory);
 class TestRoom : public Room {
 public:
     static std::string GetId() { return "test"; }
+    virtual std::string GetType() const override { return "test"; }
     virtual std::string GetName() const override { return "测试房间"; }
 };

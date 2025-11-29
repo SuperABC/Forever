@@ -10,12 +10,13 @@
 class ModEvent : public Event {
 public:
     static std::string GetId() { return "mod"; }
+    virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "mod"; }
 
 	virtual bool operator==(std::shared_ptr<Event> e) {
 		if (!e)return false;
 
-		return GetName() == e->GetName();
+		return GetType() == e->GetType();
 	}
 };
 

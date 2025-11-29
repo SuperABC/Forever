@@ -9,7 +9,7 @@
 		]}
 	],
 	"changes": [
-		{"type": "set_value", "name": "control_person", "value": "Пе"}
+		{"type": "set_value", "variable": "control_person", "value": "Пе"}
 	],
 	"subsequences": [
 		"meet_ht", 

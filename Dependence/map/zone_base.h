@@ -27,6 +27,7 @@ public:
 
     // 动态返回园区静态信息
     static std::string GetId();
+    virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
     
     // 在地图中生成园区

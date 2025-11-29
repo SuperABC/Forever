@@ -32,7 +32,7 @@ public:
 	bool SetBuilding(std::string building);
 
 private:
-	std::string terrain = "平原地形";
+	std::string terrain = "plain";
 	std::string zone;
 	std::string building;
 };

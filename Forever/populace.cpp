@@ -79,7 +79,7 @@ void Populace::InitNames() {
 	}
 
 #ifdef MOD_TEST
-	auto nameList = { "test", "mod" };
+	auto nameList = { "chinese", "mod" };
 	for (const auto& nameId : nameList) {
 		if (nameFactory->CheckRegistered(nameId)) {
 			auto name = nameFactory->CreateName(nameId);

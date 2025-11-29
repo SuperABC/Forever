@@ -58,9 +58,8 @@ void Society::InitOrganizations() {
 }
 
 void Society::Init(std::shared_ptr<Map> map, std::shared_ptr<Populace> populace) {
-    for(auto building : map->GetBuildings()) {
-        
-	}
+	auto components = map->GetComponents();
+
 }
 
 void Society::ReadConfigs(string path) const {
