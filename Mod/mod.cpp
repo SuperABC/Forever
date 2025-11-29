@@ -6,6 +6,8 @@
 #include "room_mod.h"
 #include "job_mod.h"
 #include "name_mod.h"
+#include "event_mod.h"
+#include "change_mod.h"
 #include "organization_mod.h"
 
 #pragma comment(lib, "Dependence.lib")
@@ -56,6 +58,18 @@ extern "C" __declspec(dllexport) void RegisterModJobs(JobFactory* factory) {
 extern "C" __declspec(dllexport) void RegisterModNames(NameFactory* factory) {
     factory->RegisterName(ModName::GetId(), []() {
         return make_unique<ModName>();
+        });
+}
+
+extern "C" __declspec(dllexport) void RegisterModEvents(EventFactory* factory) {
+    factory->RegisterEvent(ModEvent::GetId(), []() {
+        return make_unique<ModEvent>();
+        });
+}
+
+extern "C" __declspec(dllexport) void RegisterModChanges(ChangeFactory* factory) {
+    factory->RegisterChange(ModChange::GetId(), []() {
+        return make_unique<ModChange>();
         });
 }
 

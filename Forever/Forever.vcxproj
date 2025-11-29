@@ -71,11 +71,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/Society;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/society;$(SolutionDir)Dependence/script;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)x64/Debug;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/Society;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/society;$(SolutionDir)Dependence/script;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)x64/Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -136,7 +136,6 @@
     <ClInclude Include="building.h" />
     <ClInclude Include="change.h" />
     <ClInclude Include="component.h" />
-    <ClInclude Include="condition.h" />
     <ClInclude Include="dialog.h" />
     <ClInclude Include="event.h" />
     <ClInclude Include="milestone.h" />
@@ -157,7 +156,6 @@
     <ClCompile Include="building.cpp" />
     <ClCompile Include="change.cpp" />
     <ClCompile Include="component.cpp" />
-    <ClCompile Include="condition.cpp" />
     <ClCompile Include="dialog.cpp" />
     <ClCompile Include="event.cpp" />
     <ClCompile Include="milestone.cpp" />

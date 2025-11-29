@@ -3,23 +3,10 @@
 
 using namespace std;
 
-Change::Change(CHANGE_TYPE type) : type(type) {
-
+std::vector<std::shared_ptr<Change>> SetValueChange::ApplyChange() {
+	return std::vector<std::shared_ptr<Change>>();
 }
 
-Change::~Change() {
-
+std::vector<std::shared_ptr<Change>> RemoveValueChange::ApplyChange() {
+	return std::vector<std::shared_ptr<Change>>();
 }
-
-CHANGE_TYPE Change::GetType() {
-	return type;
-}
-
-void Change::SetCondition(Condition condition) {
-	this->condition = condition;
-}
-Condition& Change::GetCondition() {
-	return condition;
-}
-
-

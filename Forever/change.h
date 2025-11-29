@@ -1,44 +1,31 @@
 ﻿#pragma once
 
+#include "change_base.h"
 #include "condition.h"
 
 #include <string>
 #include <vector>
 
 
-enum CHANGE_TYPE {
-	CHANGE_NOTHING_HAPPEN, // 无
-
-	CHANGE_SET_VALUE, // 设置全局变量
-	CHANGE_REMOVE_VALUE, // 移除全局变量
-};
-
-class Change {
-public:
-	Change(CHANGE_TYPE type);
-	virtual ~Change();
-
-	// 获取变更类型
-	CHANGE_TYPE GetType();
-
-	// 设置/获取控制条件
-	void SetCondition(Condition condition);
-	Condition& GetCondition();
-
-protected:
-	CHANGE_TYPE type = CHANGE_NOTHING_HAPPEN;
-
-	Condition condition;
-};
+// 子类注册函数
+typedef void (*RegisterModChangesFunc)(ChangeFactory* factory);
 
 class SetValueChange : public Change {
 public:
-	SetValueChange(std::string name, std::string value) :
-		Change(CHANGE_SET_VALUE), name(name), value(value) {
+	SetValueChange() {}
+	SetValueChange(std::string name, std::string value)
+		: name(name), value(value) {
 	}
 	virtual ~SetValueChange() {}
 
+	static std::string GetId() { return "set_value"; }
+	virtual std::string GetName() const override { return "set_value"; }
+
+	virtual std::vector<std::shared_ptr<Change>> ApplyChange();
+
+	void SetName(std::string name) { this->name = name; }
 	std::string GetName() { return name; }
+	void SetValue(std::string value) { this->value = value; }
 	std::string GetValue() { return value; }
 
 private:
@@ -48,12 +35,19 @@ private:
 
 class RemoveValueChange : public Change {
 public:
-	RemoveValueChange(std::string name) :
-		Change(CHANGE_REMOVE_VALUE), name(name) {
+	RemoveValueChange() {}
+	RemoveValueChange(std::string name)
+		: name(name) {
 	}
 	virtual ~RemoveValueChange() {}
 
+	static std::string GetId() { return "remove_value"; }
+	virtual std::string GetName() const override { return "remove_value"; }
+
+	void SetName(std::string name) { this->name = name; }
 	std::string GetName() { return name; }
+
+	virtual std::vector<std::shared_ptr<Change>> ApplyChange();
 
 private:
 	std::string name;

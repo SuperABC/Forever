@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="common\condition.h" />
     <ClInclude Include="common\error.h" />
     <ClInclude Include="common\json.h" />
     <ClInclude Include="common\plot.h" />
@@ -32,9 +33,12 @@
     <ClInclude Include="map\zone_base.h" />
     <ClInclude Include="populace\job_base.h" />
     <ClInclude Include="populace\name_base.h" />
+    <ClInclude Include="script\change_base.h" />
+    <ClInclude Include="script\event_base.h" />
     <ClInclude Include="society\organization_base.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="common\condition.cpp" />
     <ClCompile Include="common\error.cpp" />
     <ClCompile Include="common\json.cpp" />
     <ClCompile Include="common\plot.cpp" />
@@ -48,6 +52,8 @@
     <ClCompile Include="map\zone_base.cpp" />
     <ClCompile Include="populace\job_base.cpp" />
     <ClCompile Include="populace\name_base.cpp" />
+    <ClCompile Include="script\change_base.cpp" />
+    <ClCompile Include="script\event_base.cpp" />
     <ClCompile Include="society\organization_base.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

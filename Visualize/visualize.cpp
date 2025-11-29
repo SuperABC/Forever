@@ -360,6 +360,9 @@ void sgSetup() {
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
+	script->InitEvents();
+	script->InitChanges();
+
 	try {
 		populace->Init(::map->Init(3, 3));
 	}

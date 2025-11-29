@@ -346,7 +346,7 @@ private:
 bool Condition::ParseCondition(const std::string& conditionStr) {
     try {
         std::vector<std::string> tokens = Tokenize(conditionStr);
-        if(tokens.size() > 0)root = ParseExpression(tokens);
+        if (tokens.size() > 0)root = ParseExpression(tokens);
         return true;
     }
     catch (const std::exception& e) {

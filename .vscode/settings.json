@@ -73,6 +73,8 @@
         "xtree": "cpp",
         "xutility": "cpp",
         "bitset": "cpp",
-        "random": "cpp"
+        "random": "cpp",
+        "regex": "cpp",
+        "variant": "cpp"
     }
 }

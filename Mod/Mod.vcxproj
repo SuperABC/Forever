@@ -23,7 +23,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="building_mod.h" />
+    <ClInclude Include="change_mod.h" />
     <ClInclude Include="component_mod.h" />
+    <ClInclude Include="event_mod.h" />
     <ClInclude Include="job_mod.h" />
     <ClInclude Include="name_mod.h" />
     <ClInclude Include="organization_mod.h" />
@@ -85,11 +87,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/Society;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/society;$(SolutionDir)Dependence/script;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)x64/Debug;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/Society;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/society;$(SolutionDir)Dependence/script;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)x64/Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -124,6 +126,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -138,6 +141,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

@@ -57,6 +57,8 @@ int main() {
 
 	// 读取Script相关类及Mod
 	unique_ptr<Script> script(new Script());
+	script->InitEvents();
+	script->InitChanges();
 
 	// 读取命令行
 	string cmd;

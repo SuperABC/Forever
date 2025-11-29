@@ -93,9 +93,6 @@
     <ClInclude Include="change.h">
       <Filter>头文件\script</Filter>
     </ClInclude>
-    <ClInclude Include="condition.h">
-      <Filter>头文件\script</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map.cpp">
@@ -150,9 +147,6 @@
       <Filter>源文件\script</Filter>
     </ClCompile>
     <ClCompile Include="script.cpp">
-      <Filter>源文件\script</Filter>
-    </ClCompile>
-    <ClCompile Include="condition.cpp">
       <Filter>源文件\script</Filter>
     </ClCompile>
   </ItemGroup>

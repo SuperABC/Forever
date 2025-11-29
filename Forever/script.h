@@ -7,7 +7,6 @@
 #include "change.h"
 #include "milestone.h"
 #include "condition.h"
-#include "person.h"
 
 #include <vector>
 #include <string>
@@ -15,12 +14,14 @@
 #include <unordered_map>
 
 
-class Person;
-
 class Script {
 public:
 	Script();
 	~Script();
+
+	// 读取Mods
+	void InitEvents();
+	void InitChanges();
 
 	// 输出当前剧本信息
 	void Print();
@@ -45,6 +46,11 @@ public:
 	std::string ReplaceContent(const std::string& content);
 
 private:
+	// Mod管理
+	std::vector<HMODULE> modHandles;
+	std::unique_ptr<EventFactory> eventFactory;
+	std::unique_ptr<ChangeFactory> changeFactory;
+
 	std::vector<MilestoneNode> milestones;
 	std::vector<MilestoneNode*> actives;
 

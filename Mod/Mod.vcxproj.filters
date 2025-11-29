@@ -40,6 +40,12 @@
     <Filter Include="头文件\name">
       <UniqueIdentifier>{6c99689a-42bf-42fc-ac45-a84bec57230f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\event">
+      <UniqueIdentifier>{f07576db-b5ca-40e7-a6a3-31c4792ff8ff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\change">
+      <UniqueIdentifier>{5ee430c0-2cfa-4a02-a8f5-a57fc106942c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mod.cpp">
@@ -73,6 +79,12 @@
     </ClInclude>
     <ClInclude Include="name_mod.h">
       <Filter>头文件\name</Filter>
+    </ClInclude>
+    <ClInclude Include="event_mod.h">
+      <Filter>头文件\event</Filter>
+    </ClInclude>
+    <ClInclude Include="change_mod.h">
+      <Filter>头文件\change</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

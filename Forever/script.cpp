@@ -13,11 +13,82 @@
 using namespace std;
 
 Script::Script() {
-
+	eventFactory.reset(new EventFactory());
+	changeFactory.reset(new ChangeFactory());
 }
 
 Script::~Script() {
 
+}
+
+void Script::InitEvents() {
+	eventFactory->RegisterEvent(GameStartEvent::GetId(), []() { return make_unique<GameStartEvent>(); });
+	eventFactory->RegisterEvent(OptionDialogEvent::GetId(), []() { return make_unique<OptionDialogEvent>(); });
+
+	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
+	if (modHandle) {
+		modHandles.push_back(modHandle);
+		debugf("Mod dll loaded successfully.\n");
+
+		RegisterModEventsFunc registerFunc = (RegisterModEventsFunc)GetProcAddress(modHandle, "RegisterModEvents");
+		if (registerFunc) {
+			registerFunc(eventFactory.get());
+		}
+		else {
+			debugf("Incorrect dll content.");
+		}
+	}
+	else {
+		debugf("Failed to load mod.dll.");
+	}
+
+#ifdef MOD_TEST
+	auto eventList = { "game_start", "option_dialog", "mod"};
+	for (const auto& eventId : eventList) {
+		if (eventFactory->CheckRegistered(eventId)) {
+			auto event = eventFactory->CreateEvent(eventId);
+			debugf(("Created event: " + event->GetName() + " (ID: " + eventId + ")\n").data());
+		}
+		else {
+			debugf("Event not registered: %s\n", eventId);
+		}
+	}
+#endif // MOD_TEST
+}
+
+void Script::InitChanges() {
+	changeFactory->RegisterChange(SetValueChange::GetId(), []() { return make_unique<SetValueChange>(); });
+	changeFactory->RegisterChange(RemoveValueChange::GetId(), []() { return make_unique<RemoveValueChange>(); });
+
+	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
+	if (modHandle) {
+		modHandles.push_back(modHandle);
+		debugf("Mod dll loaded successfully.\n");
+
+		RegisterModChangesFunc registerFunc = (RegisterModChangesFunc)GetProcAddress(modHandle, "RegisterModChanges");
+		if (registerFunc) {
+			registerFunc(changeFactory.get());
+		}
+		else {
+			debugf("Incorrect dll content.");
+		}
+	}
+	else {
+		debugf("Failed to load mod.dll.");
+	}
+
+#ifdef MOD_TEST
+	auto changeList = { "set_value", "remove_value", "mod" };
+	for (const auto& changeId : changeList) {
+		if (changeFactory->CheckRegistered(changeId)) {
+			auto change = changeFactory->CreateChange(changeId);
+			debugf(("Created change: " + change->GetName() + " (ID: " + changeId + ")\n").data());
+		}
+		else {
+			debugf("Change not registered: %s\n", changeId);
+		}
+	}
+#endif // MOD_TEST
 }
 
 void Script::Print() {
@@ -84,25 +155,20 @@ void Script::ReadScript(string path) {
 }
 
 void Script::ApplyChange(shared_ptr<Change> change) {
-	switch (change->GetType()) {
-	case CHANGE_SET_VALUE: {
+	auto type = change->GetName();
+	if(type == "set_value") {
 		auto obj = dynamic_pointer_cast<SetValueChange>(change);
-        if (obj->GetName().substr(0, 7) == "system.") {
-            break;
-        }
+		if (obj->GetName().substr(0, 7) == "system.") {
+			return;
+		}
 		variables[obj->GetName()] = FromString(obj->GetValue());
-		break;
 	}
-	case CHANGE_REMOVE_VALUE: {
-        auto obj = dynamic_pointer_cast<RemoveValueChange>(change);
-        if (obj->GetName().substr(0, 7) == "system.") {
-            break;
-        }
-        variables.erase(obj->GetName());
-        break;
-    }
-	default:
-		break;
+	else if(type == "remove_value") {
+		auto obj = dynamic_pointer_cast<RemoveValueChange>(change);
+		if (obj->GetName().substr(0, 7) == "system.") {
+			return;
+		}
+		variables.erase(obj->GetName());
 	}
 }
 
@@ -195,6 +261,9 @@ shared_ptr<Event> Script::BuildEvent(Json::Value root) {
     else if (type == "option_dialog") {
         event = make_shared<OptionDialogEvent>(root["target"].asString(), root["option"].asString());
     }
+	else if (eventFactory->CheckRegistered(type)) {
+		event = eventFactory->CreateEvent(type);
+	}
 
     if (!event) {
         THROW_EXCEPTION(InvalidArgumentException, "Invalid event type: " + type + ".\n");
@@ -235,6 +304,9 @@ vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root) {
         else if (type == "remove_value") {
             change = make_shared<RemoveValueChange>(obj["name"].asString());
         }
+		else  if (changeFactory->CheckRegistered(type)) {
+			change = changeFactory->CreateChange(type);
+		}
 
         if (!change) {
             THROW_EXCEPTION(InvalidArgumentException, "Invalid change type: " + type + ".\n");
@@ -270,3 +342,5 @@ ValueType Script::GetValue(const std::string& name) {
 void Script::SetValue(const std::string& name, ValueType value) {
 	variables[name] = value;
 }
+
+

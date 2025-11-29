@@ -1,52 +1,26 @@
 ﻿#pragma once
 
-#include "utility.h"
+#include "event_base.h"
 #include "condition.h"
 
 #include <string>
 #include <vector>
 
 
-enum EVENT_TYPE {
-	EVENT_NOTHING_HAPPEN, // 无
-
-	EVENT_GAME_START, // 游戏开始
-	EVENT_OPTION_DIALOG, // 使用选项对话
-};
-
-class Event {
-public:
-	Event(EVENT_TYPE type) : type(type) {}
-	virtual ~Event() {}
-
-	// 获取类型
-	EVENT_TYPE GetType();
-
-	// 判断匹配
-	virtual bool operator==(std::shared_ptr<Event> e) {
-		if(!e)return false;
-		return type == e->type;
-	}
-
-    // 设置/获取控制条件
-    void SetCondition(Condition condition);
-    Condition& GetCondition();
-
-protected:
-	EVENT_TYPE type = EVENT_NOTHING_HAPPEN;
-
-    Condition condition;
-};
+// 子类注册函数
+typedef void (*RegisterModEventsFunc)(EventFactory* factory);
 
 class GameStartEvent : public Event {
 public:
-	GameStartEvent() :
-		Event(EVENT_GAME_START) {}
+	GameStartEvent() {}
 	virtual ~GameStartEvent() {}
+
+	static std::string GetId() { return "game_start"; }
+	virtual std::string GetName() const override { return "game_start"; }
 
 	virtual bool operator==(std::shared_ptr<Event> e) {
 		if (!e)return false;
-		if (!Event::operator==(e))return false;
+		if (GetName() != e->GetName())return false;
 
 		return true;
 	}
@@ -54,17 +28,27 @@ public:
 
 class OptionDialogEvent : public Event {
 public:
-	OptionDialogEvent(std::string target, std::string option) :
-		Event(EVENT_OPTION_DIALOG), target(target), option(option) {}
+	OptionDialogEvent() {}
+	OptionDialogEvent(std::string target, std::string option)
+		: target(target), option(option) {
+	}
 	virtual ~OptionDialogEvent() {}
+
+	static std::string GetId() { return "option_dialog"; }
+	virtual std::string GetName() const override { return "option_dialog"; }
 
 	virtual bool operator==(std::shared_ptr<Event> e) {
 		if(!e)return false;
-		if (!Event::operator==(e))return false;
+		if (GetName() != e->GetName())return false;
 
 		return target == std::dynamic_pointer_cast<OptionDialogEvent>(e)->target &&
 			option == std::dynamic_pointer_cast<OptionDialogEvent>(e)->option;
 	}
+
+	void SetTarget(std::string target) { this->target = target; }
+	std::string GetTarget() const { return target; }
+	void SetOption(std::string option) { this->option = option; }
+	std::string GetOption() const { return option; }
 
 private:
 	std::string target;
