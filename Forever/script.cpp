@@ -161,7 +161,11 @@ void Script::ApplyChange(shared_ptr<Change> change) {
 		if (obj->GetVariable().substr(0, 7) == "system.") {
 			return;
 		}
-		variables[obj->GetVariable()] = FromString(obj->GetValue());
+		Condition condition;
+		condition.ParseCondition(obj->GetValue());
+		variables[obj->GetVariable()] = condition.EvaluateValue([this](string name) -> ValueType {
+			return this->GetValue(name);
+			});
 	}
 	else if(type == "remove_value") {
 		auto obj = dynamic_pointer_cast<RemoveValueChange>(change);
@@ -181,11 +185,9 @@ void Script::LoadStory(string path) {
 }
 
 bool Script::JudgeCondition(Condition& condition) {
-	auto getValue = [this](string name) -> ValueType {
+	return condition.EvaluateBool([this](string name) -> ValueType {
 		return this->GetValue(name);
-	};
-
-	return condition.EvaluateResult(getValue);
+		});
 }
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(shared_ptr<Event> event) {
@@ -225,27 +227,35 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(shared_ptr<E
 }
 
 string Script::ReplaceContent(const string& content) {
-	string result;
-	size_t start = 0;
+	std::string result;
 	size_t pos = 0;
+	size_t lastPos = 0;
 
-	while ((pos = content.find("$$", start)) != string::npos) {
-		result.append(content, start, pos - start);
+	while ((pos = content.find("$$", lastPos)) != std::string::npos) {
+		result.append(content, lastPos, pos - lastPos);
 
-		size_t end_pos = content.find("$$", pos + 2);
-		if (end_pos == string::npos) {
-			result.append(content, pos, content.length() - pos);
-			break;
+		size_t varStart = pos + 2;
+		size_t varEnd = varStart;
+		while (varEnd < content.length() && IsIdentifierChar(content[varEnd])) {
+			varEnd++;
 		}
-		
-		result.append(ToString(variables[content.substr(pos + 2, end_pos - pos - 2)]));
 
-		start = end_pos + 2;
+		std::string varName = content.substr(varStart, varEnd - varStart);
+		if (!varName.empty()) {
+			auto it = variables.find(varName);
+			if (it != variables.end()) {
+				result += ToString(it->second);
+			}
+			else {
+				result.append(content, pos, varEnd - pos);
+			}
+		}
+		else {
+			result.append(content, pos, 2);
+		}
+		lastPos = varEnd;
 	}
-
-	if (start < content.length()) {
-		result.append(content, start, content.length() - start);
-	}
+	result.append(content, lastPos, content.length() - lastPos);
 
 	return result;
 }

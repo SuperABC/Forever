@@ -51,7 +51,8 @@ class Condition {
 public:
     bool ParseCondition(const std::string& conditionStr);
 
-    bool EvaluateResult(std::function<ValueType(const std::string&)> getValue) const;
+    bool EvaluateBool(std::function<ValueType(const std::string&)> getValue) const;
+	ValueType EvaluateValue(std::function<ValueType(const std::string&)> getValue) const;
 
 private:
     std::shared_ptr<Expression> root;
@@ -69,6 +70,10 @@ private:
     std::shared_ptr<Expression> ParseConstant(const std::string& token);
     bool OperatorChar(char c);
 };
+
+bool IsOperatorChar(char c);
+bool IsSpaceChar(char c);
+bool IsIdentifierChar(char c);
 
 std::string ToString(const ValueType& value);
 ValueType FromString(const std::string& s);

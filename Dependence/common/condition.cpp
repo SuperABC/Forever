@@ -13,30 +13,13 @@
 
 using namespace std;
 
-bool IsOperatorChar(char c) {
-    return c == '=' || c == '!' || c == '>' || c == '<' ||
-        c == '+' || c == '-' || c == '*' || c == '/' ||
-        c == '%' || c == '^' || c == '&' || c == '|';
-}
-
-bool IsSpaceChar(char c) {
-    return std::isspace(static_cast<unsigned char>(c)) ||
-        c == '　'; // 中文全角空格
-}
-
-bool IsIdentifierChar(char c) {
-    return std::isalnum(static_cast<unsigned char>(c)) ||
-        c == '_' ||
-        (c >= 0x80 && c <= 0xFF); // 支持中文字符和其他扩展字符
-}
-
 class VariableExpression : public Expression {
 private:
-    std::string name;
+    string name;
 public:
-    VariableExpression(const std::string& n) : name(n) {}
+    VariableExpression(const string& n) : name(n) {}
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override {
+    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
         return getValue(name);
     }
 };
@@ -47,22 +30,22 @@ private:
 public:
     ConstantExpression(ValueType v) : value(v) {}
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override {
+    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
         return value;
     }
 };
 
 class ArrayExpression : public Expression {
 private:
-    std::vector<std::shared_ptr<Expression>> elements;
+    vector<shared_ptr<Expression>> elements;
 
 public:
-    ArrayExpression(std::vector<std::shared_ptr<Expression>> es)
-        : elements(std::move(es)) {
+    ArrayExpression(vector<shared_ptr<Expression>> es)
+        : elements(move(es)) {
     }
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override {
-        std::string result = "[";
+    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
+        string result = "[";
         for (size_t i = 0; i < elements.size(); ++i) {
             auto value = elements[i]->Evaluate(getValue);
             result += ToString(value);
@@ -75,8 +58,8 @@ public:
     }
 
     // 获取数组元素的值（用于in操作符）
-    std::vector<ValueType> GetElementValues(std::function<ValueType(const std::string&)> getValue) const {
-        std::vector<ValueType> values;
+    vector<ValueType> GetElementValues(function<ValueType(const string&)> getValue) const {
+        vector<ValueType> values;
         for (const auto& element : elements) {
             values.push_back(element->Evaluate(getValue));
         }
@@ -87,14 +70,14 @@ public:
 class UnaryExpression : public Expression {
 private:
     UnaryOperator operand;
-    std::shared_ptr<Expression> expression;
+    shared_ptr<Expression> expression;
 
 public:
-    UnaryExpression(UnaryOperator op, std::shared_ptr<Expression> operand)
-        : operand(op), expression(std::move(operand)) {
+    UnaryExpression(UnaryOperator op, shared_ptr<Expression> operand)
+        : operand(op), expression(move(operand)) {
     }
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override {
+    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
         auto value = expression->Evaluate(getValue);
 
         switch (operand) {
@@ -109,9 +92,9 @@ public:
 
 private:
     ValueType ApplyNegate(const ValueType& value) const {
-        return std::visit([](const auto& v) -> ValueType {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+        return visit([](const auto& v) -> ValueType {
+            using T = decay_t<decltype(v)>;
+            if constexpr (is_arithmetic_v<T> && !is_same_v<T, bool>) {
                 return -v;
             }
             else {
@@ -126,18 +109,18 @@ private:
     }
 
     bool ConvertToBool(const ValueType& value) const {
-        return std::visit([](const auto& v) -> bool {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr (std::is_same_v<T, bool>) {
+        return visit([](const auto& v) -> bool {
+            using T = decay_t<decltype(v)>;
+            if constexpr (is_same_v<T, bool>) {
                 return v;
             }
-            else if constexpr (std::is_same_v<T, int>) {
+            else if constexpr (is_same_v<T, int>) {
                 return v != 0;
             }
-            else if constexpr (std::is_same_v<T, double>) {
-                return std::abs(v) > 1e-10; // 考虑浮点误差
+            else if constexpr (is_same_v<T, double>) {
+                return abs(v) > 1e-10; // 考虑浮点误差
             }
-            else if constexpr (std::is_same_v<T, std::string>) {
+            else if constexpr (is_same_v<T, string>) {
                 return !v.empty();
             }
             else {
@@ -149,18 +132,18 @@ private:
 
 class BinaryExpression : public Expression {
 private:
-    std::shared_ptr<Expression> left;
-    std::shared_ptr<Expression> right;
+    shared_ptr<Expression> left;
+    shared_ptr<Expression> right;
     Operator operand;
 
 public:
-    BinaryExpression(std::shared_ptr<Expression> l,
-        std::shared_ptr<Expression> r,
+    BinaryExpression(shared_ptr<Expression> l,
+        shared_ptr<Expression> r,
         Operator op)
-        : left(std::move(l)), right(std::move(r)), operand(op) {
+        : left(move(l)), right(move(r)), operand(op) {
     }
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override {
+    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
         if (operand == Operator::INCLUDE) {
             auto array_expr = dynamic_cast<ArrayExpression*>(right.get());
             if (!array_expr) {
@@ -184,13 +167,15 @@ public:
         if (operand == Operator::LOGICAL_AND) {
             bool left_val = ConvertToBool(left->Evaluate(getValue));
             if (!left_val) return false;
-            return ConvertToBool(right->Evaluate(getValue));
+            bool right_val = ConvertToBool(right->Evaluate(getValue));
+            return right_val;
         }
 
         if (operand == Operator::LOGICAL_OR) {
             bool left_val = ConvertToBool(left->Evaluate(getValue));
             if (left_val) return true;
-            return ConvertToBool(right->Evaluate(getValue));
+            bool right_val = ConvertToBool(right->Evaluate(getValue));
+            return right_val;
         }
 
         auto left_val = left->Evaluate(getValue);
@@ -221,18 +206,18 @@ public:
 private:
     bool GetComparisonResult(const ValueType& left, const ValueType& right, Operator op) const {
         ValueType result = CompareValues(left, right, op);
-        if (auto bool_result = std::get_if<bool>(&result)) {
+        if (auto bool_result = get_if<bool>(&result)) {
             return *bool_result;
         }
         THROW_EXCEPTION(InvalidConfigException, "Comparison must return boolean value.\n");
     }
 
     ValueType CompareValues(const ValueType& left, const ValueType& right, Operator op) const {
-        bool result = std::visit([op](const auto& l, const auto& r) -> bool {
-            using T1 = std::decay_t<decltype(l)>;
-            using T2 = std::decay_t<decltype(r)>;
+        bool result = visit([op](const auto& l, const auto& r) -> bool {
+            using T1 = decay_t<decltype(l)>;
+            using T2 = decay_t<decltype(r)>;
 
-            if constexpr (std::is_same_v<T1, T2>) {
+            if constexpr (is_same_v<T1, T2>) {
                 return CompareSameType(l, r, op);
             }
             else {
@@ -258,14 +243,14 @@ private:
 
     template<typename T1, typename T2>
     static bool CompareDifferentType(const T1& left, const T2& right, Operator op) {
-        if constexpr (std::is_arithmetic_v<T1> && std::is_arithmetic_v<T2>) {
+        if constexpr (is_arithmetic_v<T1> && is_arithmetic_v<T2>) {
             double l = static_cast<double>(left);
             double r = static_cast<double>(right);
             return CompareSameType(l, r, op);
         }
-        else if constexpr (std::is_same_v<T1, std::string> || std::is_same_v<T2, std::string>) {
-            std::string l_str = toString(left);
-            std::string r_str = toString(right);
+        else if constexpr (is_same_v<T1, string> || is_same_v<T2, string>) {
+            string l_str = toString(left);
+            string r_str = toString(right);
             return CompareSameType(l_str, r_str, op);
         }
         else {
@@ -274,11 +259,48 @@ private:
     }
 
     ValueType ComputeArithmetic(const ValueType& left, const ValueType& right, Operator op) const {
-        return std::visit([op](const auto& l, const auto& r) -> ValueType {
-            using T1 = std::decay_t<decltype(l)>;
-            using T2 = std::decay_t<decltype(r)>;
+        return visit([op](const auto& l, const auto& r) -> ValueType {
+            using T1 = decay_t<decltype(l)>;
+            using T2 = decay_t<decltype(r)>;
 
-            if constexpr (std::is_arithmetic_v<T1> && std::is_arithmetic_v<T2>) {
+            // 如果两个操作数都是整数，进行整数运算
+            if constexpr (is_same_v<T1, int> && is_same_v<T2, int>) {
+                switch (op) {
+                case Operator::ADD: return l + r;
+                case Operator::SUBTRACT: return l - r;
+                case Operator::MULTIPLY: return l * r;
+                case Operator::DIVIDE:
+                    if (r == 0) {
+                        THROW_EXCEPTION(ArithmaticException, "Division by zero.\n");
+                    }
+                    // 整数除法，返回整数结果
+                    return l / r;
+                case Operator::MODULO:
+                    if (r == 0) {
+                        THROW_EXCEPTION(ArithmaticException, "Modulo by zero.\n");
+                    }
+                    return l % r;
+                case Operator::EXPONENT: {
+                    // 整数指数运算
+                    if (r < 0) {
+                        // 负指数会产生浮点数，转为double计算
+                        double result = pow(static_cast<double>(l), static_cast<double>(r));
+                        return result;
+                    }
+                    // 非负指数，进行整数运算
+                    int result = 1;
+                    for (int i = 0; i < r; ++i) {
+                        result *= l;
+                    }
+                    return result;
+                }
+                default:
+                    THROW_EXCEPTION(ArithmaticException, "Unsupported arithmetic operator.\n");
+                }
+            }
+            // 如果至少有一个操作数是浮点数，进行浮点数运算
+            else if constexpr ((is_arithmetic_v<T1> && is_arithmetic_v<T2>) &&
+                !(is_same_v<T1, bool> || is_same_v<T2, bool>)) {
                 double l_val = static_cast<double>(l);
                 double r_val = static_cast<double>(r);
 
@@ -287,17 +309,17 @@ private:
                 case Operator::SUBTRACT: return l_val - r_val;
                 case Operator::MULTIPLY: return l_val * r_val;
                 case Operator::DIVIDE:
-                    if (std::abs(r_val) < 1e-10) {
+                    if (abs(r_val) < 1e-10) {
                         THROW_EXCEPTION(ArithmaticException, "Division by zero.\n");
                     }
                     return l_val / r_val;
                 case Operator::MODULO:
-                    if (std::abs(r_val) < 1e-10) {
+                    if (abs(r_val) < 1e-10) {
                         THROW_EXCEPTION(ArithmaticException, "Modulo by zero.\n");
                     }
-                    return std::fmod(l_val, r_val);
+                    return fmod(l_val, r_val);
                 case Operator::EXPONENT:
-                    return std::pow(l_val, r_val);
+                    return pow(l_val, r_val);
                 default:
                     THROW_EXCEPTION(ArithmaticException, "Unsupported arithmetic operator.\n");
                 }
@@ -309,18 +331,18 @@ private:
     }
 
     bool ConvertToBool(const ValueType& value) const {
-        return std::visit([](const auto& v) -> bool {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr (std::is_same_v<T, bool>) {
+        return visit([](const auto& v) -> bool {
+            using T = decay_t<decltype(v)>;
+            if constexpr (is_same_v<T, bool>) {
                 return v;
             }
-            else if constexpr (std::is_same_v<T, int>) {
-                return v != 0;
+            else if constexpr (is_same_v<T, int>) {
+                return v != 0;  // 整数不为0就是true
             }
-            else if constexpr (std::is_same_v<T, double>) {
-                return std::abs(v) > 1e-10;
+            else if constexpr (is_same_v<T, double>) {
+                return abs(v) > 1e-10; // 浮点数不为0就是true
             }
-            else if constexpr (std::is_same_v<T, std::string>) {
+            else if constexpr (is_same_v<T, string>) {
                 return !v.empty();
             }
             else {
@@ -330,46 +352,53 @@ private:
     }
 
     template<typename T>
-    static std::string toString(const T& value) {
-        if constexpr (std::is_same_v<T, std::string>) {
+    static string toString(const T& value) {
+        if constexpr (is_same_v<T, string>) {
             return value;
         }
-        else if constexpr (std::is_same_v<T, bool>) {
+        else if constexpr (is_same_v<T, bool>) {
             return value ? "true" : "false";
         }
         else {
-            return std::to_string(value);
+            return to_string(value);
         }
     }
 };
 
-bool Condition::ParseCondition(const std::string& conditionStr) {
+bool Condition::ParseCondition(const string& conditionStr) {
     try {
-        std::vector<std::string> tokens = Tokenize(conditionStr);
+        vector<string> tokens = Tokenize(conditionStr);
         if (tokens.size() > 0)root = ParseExpression(tokens);
         return true;
     }
-    catch (const std::exception& e) {
-        std::cerr << "Parse error: " << e.what() << std::endl;
+    catch (const exception& e) {
+        cerr << "Parse error: " << e.what() << endl;
         return false;
     }
 }
 
-bool Condition::EvaluateResult(std::function<ValueType(const std::string&)> getValue) const {
+bool Condition::EvaluateBool(function<ValueType(const string&)> getValue) const {
     if (!root) {
         return true;
     }
 
     auto result = root->Evaluate(getValue);
-    if (auto bool_val = std::get_if<bool>(&result)) {
+    if (auto bool_val = get_if<bool>(&result)) {
         return *bool_val;
     }
     THROW_EXCEPTION(InvalidConfigException, "Condition must Evaluate to boolean.\n");
 }
 
-std::vector<std::string> Condition::Tokenize(const std::string& expr) {
-    std::vector<std::string> tokens;
-    std::string current;
+ValueType Condition::EvaluateValue(function<ValueType(const string&)> getValue) const {
+    if (!root) {
+        return 0;
+    }
+    return root->Evaluate(getValue);
+}
+
+vector<string> Condition::Tokenize(const string& expr) {
+    vector<string> tokens;
+    string current;
 
     for (size_t i = 0; i < expr.length(); ++i) {
         char c = expr[i];
@@ -393,11 +422,11 @@ std::vector<std::string> Condition::Tokenize(const std::string& expr) {
                 (c == '!' && i + 1 < expr.length() && expr[i + 1] == '=') ||
                 (c == '<' && i + 1 < expr.length() && expr[i + 1] == '=') ||
                 (c == '>' && i + 1 < expr.length() && expr[i + 1] == '=')) {
-                tokens.push_back(std::string(1, c) + std::string(1, expr[i + 1]));
+                tokens.push_back(string(1, c) + string(1, expr[i + 1]));
                 i++;
             }
             else {
-                tokens.push_back(std::string(1, c));
+                tokens.push_back(string(1, c));
             }
         }
         else {
@@ -416,14 +445,14 @@ bool Condition::OperatorChar(char c) {
     return IsOperatorChar(c);
 }
 
-std::shared_ptr<Expression> Condition::ParseExpression(const std::vector<std::string>& tokens) {
-    std::vector<std::string> postfix = InfixToPostfix(tokens);
+shared_ptr<Expression> Condition::ParseExpression(const vector<string>& tokens) {
+    vector<string> postfix = InfixToPostfix(tokens);
     return ParsePostfix(postfix);
 }
 
-std::vector<std::string> Condition::InfixToPostfix(const std::vector<std::string>& infix) {
-    std::vector<std::string> postfix;
-    std::stack<std::string> opStack;
+vector<string> Condition::InfixToPostfix(const vector<string>& infix) {
+    vector<string> postfix;
+    stack<string> opStack;
 
     for (const auto& token : infix) {
         if (IsOperator(token)) {
@@ -469,14 +498,14 @@ std::vector<std::string> Condition::InfixToPostfix(const std::vector<std::string
     return postfix;
 }
 
-std::shared_ptr<Expression> Condition::ParsePostfix(const std::vector<std::string>& postfix) {
-    std::stack<std::shared_ptr<Expression>> exprStack;
+shared_ptr<Expression> Condition::ParsePostfix(const vector<string>& postfix) {
+    stack<shared_ptr<Expression>> exprStack;
 
     for (size_t i = 0; i < postfix.size(); ++i) {
         const auto& token = postfix[i];
 
         if (token == "[") {
-            std::vector<std::shared_ptr<Expression>> elements;
+            vector<shared_ptr<Expression>> elements;
             size_t j = i + 1;
 
             while (j < postfix.size() && postfix[j] != "]") {
@@ -497,7 +526,7 @@ std::shared_ptr<Expression> Condition::ParsePostfix(const std::vector<std::strin
                 THROW_EXCEPTION(InvalidConfigException, "Unclosed array.\n");
             }
 
-            exprStack.push(std::make_unique<ArrayExpression>(std::move(elements)));
+            exprStack.push(make_unique<ArrayExpression>(move(elements)));
             i = j;
         }
         else if (IsOperator(token)) {
@@ -505,23 +534,23 @@ std::shared_ptr<Expression> Condition::ParsePostfix(const std::vector<std::strin
                 THROW_EXCEPTION(InvalidConfigException, "Insufficient operands for operator: " + token + ".\n");
             }
 
-            auto right = std::move(exprStack.top());
+            auto right = move(exprStack.top());
             exprStack.pop();
-            auto left = std::move(exprStack.top());
+            auto left = move(exprStack.top());
             exprStack.pop();
 
             Operator op = GetOperator(token);
-            exprStack.push(std::make_unique<BinaryExpression>(std::move(left), std::move(right), op));
+            exprStack.push(make_unique<BinaryExpression>(move(left), move(right), op));
         }
         else if (token == "-" && exprStack.size() == 1) {
-            auto operand = std::move(exprStack.top());
+            auto operand = move(exprStack.top());
             exprStack.pop();
-            exprStack.push(std::make_unique<UnaryExpression>(UnaryOperator::NEGATE, std::move(operand)));
+            exprStack.push(make_unique<UnaryExpression>(UnaryOperator::NEGATE, move(operand)));
         }
         else if (token == "!" && exprStack.size() >= 1) {
-            auto operand = std::move(exprStack.top());
+            auto operand = move(exprStack.top());
             exprStack.pop();
-            exprStack.push(std::make_unique<UnaryExpression>(UnaryOperator::LOGICAL_NOT, std::move(operand)));
+            exprStack.push(make_unique<UnaryExpression>(UnaryOperator::LOGICAL_NOT, move(operand)));
         }
         else {
             exprStack.push(ParseOperand(token));
@@ -532,17 +561,17 @@ std::shared_ptr<Expression> Condition::ParsePostfix(const std::vector<std::strin
         THROW_EXCEPTION(InvalidConfigException, "Invalid expression.\n");
     }
 
-    return std::move(exprStack.top());
+    return move(exprStack.top());
 }
 
-bool Condition::IsOperator(const std::string& token) {
+bool Condition::IsOperator(const string& token) {
     return token == "+" || token == "-" || token == "*" || token == "/" ||
         token == "%" || token == "^" || token == "==" || token == "!=" ||
         token == ">" || token == ">=" || token == "<" || token == "<=" ||
         token == "in" || token == "&&" || token == "||";
 }
 
-bool Condition::HigherPrecedence(const std::string& op1, const std::string& op2) {
+bool Condition::HigherPrecedence(const string& op1, const string& op2) {
     int prec1 = GetPrecedence(op1);
     int prec2 = GetPrecedence(op2);
 
@@ -552,7 +581,7 @@ bool Condition::HigherPrecedence(const std::string& op1, const std::string& op2)
     return prec1 > prec2;
 }
 
-int Condition::GetPrecedence(const std::string& op) {
+int Condition::GetPrecedence(const string& op) {
     if (op == "!" || op == "negate") return 8;
     if (op == "^") return 7;
     if (op == "*" || op == "/" || op == "%") return 6;
@@ -564,11 +593,11 @@ int Condition::GetPrecedence(const std::string& op) {
     return 0;
 }
 
-bool Condition::RightAssociative(const std::string& op) {
+bool Condition::RightAssociative(const string& op) {
     return op == "^" || op == "!";
 }
 
-Operator Condition::GetOperator(const std::string& token) {
+Operator Condition::GetOperator(const string& token) {
     if (token == "==") return Operator::EQUAL;
     else if (token == "!=") return Operator::NOT_EQUAL;
     else if (token == ">") return Operator::GREATER;
@@ -584,18 +613,18 @@ Operator Condition::GetOperator(const std::string& token) {
     else if (token == "^") return Operator::EXPONENT;
     else if (token == "&&") return Operator::LOGICAL_AND;
     else if (token == "||") return Operator::LOGICAL_OR;
-    else throw std::runtime_error("Unknown operator: " + token);
+    else throw runtime_error("Unknown operator: " + token);
 }
 
-std::shared_ptr<Expression> Condition::ParseOperand(const std::string& token) {
+shared_ptr<Expression> Condition::ParseOperand(const string& token) {
     // 变量（支持中文变量名）
     if (token.length() >= 2 && token.substr(0, 2) == "$$") {
-        std::string varName = token.substr(2);
+        string varName = token.substr(2);
         // 检查变量名是否合法（支持中文字符）
-        if (!varName.empty() && (std::isalpha(static_cast<unsigned char>(varName[0])) ||
+        if (!varName.empty() && (isalpha(static_cast<unsigned char>(varName[0])) ||
             varName[0] == '_' ||
             (varName[0] & 0x80))) {
-            return std::make_unique<VariableExpression>(varName);
+            return make_unique<VariableExpression>(varName);
         }
     }
 
@@ -603,20 +632,26 @@ std::shared_ptr<Expression> Condition::ParseOperand(const std::string& token) {
     return ParseConstant(token);
 }
 
-std::shared_ptr<Expression> Condition::ParseConstant(const std::string& token) {
+shared_ptr<Expression> Condition::ParseConstant(const string& token) {
     if (token == "true") {
-        return std::make_unique<ConstantExpression>(true);
+        return make_unique<ConstantExpression>(true);
     }
     else if (token == "false") {
-        return std::make_unique<ConstantExpression>(false);
+        return make_unique<ConstantExpression>(false);
     }
 
-    // 尝试解析为整数
+    // 首先尝试解析为整数
     try {
         size_t pos;
-        int int_val = std::stoi(token, &pos);
+        int int_val = stoi(token, &pos);
         if (pos == token.length()) {
-            return std::make_unique<ConstantExpression>(int_val);
+            // 检查是否是以0开头的多位数（如"01"），这种情况应该保持为字符串
+            if (token.length() > 1 && token[0] == '0' && isdigit(token[1])) {
+                // 这种情况应该保持为字符串
+            }
+            else {
+                return make_unique<ConstantExpression>(int_val);
+            }
         }
     }
     catch (...) {}
@@ -624,37 +659,48 @@ std::shared_ptr<Expression> Condition::ParseConstant(const std::string& token) {
     // 尝试解析为浮点数
     try {
         size_t pos;
-        double double_val = std::stod(token, &pos);
+        double double_val = stod(token, &pos);
         if (pos == token.length()) {
-            return std::make_unique<ConstantExpression>(double_val);
+            // 检查是否包含小数点或科学计数法
+            if (token.find('.') != string::npos ||
+                token.find('e') != string::npos ||
+                token.find('E') != string::npos) {
+                return make_unique<ConstantExpression>(double_val);
+            }
+            else {
+                // 没有小数点但解析为double，说明数字太大，保持为整数
+                return make_unique<ConstantExpression>(static_cast<int>(double_val));
+            }
         }
     }
     catch (...) {}
 
     // 处理字符串（支持中文字符串）
-    std::string str_val = token;
+    string str_val = token;
     if (str_val.length() >= 2 &&
         ((str_val.front() == '"' && str_val.back() == '"') ||
             (str_val.front() == '\'' && str_val.back() == '\''))) {
         str_val = str_val.substr(1, str_val.length() - 2);
     }
 
-    // 检查是否是纯数字字符串（如果是，保持为字符串类型）
-    bool is_all_digit = !str_val.empty();
-    for (char c : str_val) {
-        if (!std::isdigit(static_cast<unsigned char>(c))) {
-            is_all_digit = false;
-            break;
-        }
-    }
+    return make_unique<ConstantExpression>(str_val);
+}
 
-    if (is_all_digit && str_val.length() > 1 && str_val[0] == '0') {
-        // 以0开头的多位数数字，保持为字符串
-        return std::make_unique<ConstantExpression>(str_val);
-    }
+bool IsOperatorChar(char c) {
+    return c == '=' || c == '!' || c == '>' || c == '<' ||
+        c == '+' || c == '-' || c == '*' || c == '/' ||
+        c == '%' || c == '^' || c == '&' || c == '|';
+}
 
-    // 其他情况都作为字符串处理（支持中文）
-    return std::make_unique<ConstantExpression>(str_val);
+bool IsSpaceChar(char c) {
+    return isspace(static_cast<unsigned char>(c)) ||
+        c == '　'; // 中文全角空格
+}
+
+bool IsIdentifierChar(char c) {
+    return isalnum(static_cast<unsigned char>(c)) ||
+        c == '_' ||
+        (c >= 0x80 && c <= 0xFF); // 支持中文字符和其他扩展字符
 }
 
 string ToString(const ValueType& value) {
@@ -692,9 +738,9 @@ string ToString(const ValueType& value) {
         }, value);
 }
 
-ValueType FromString(const std::string& s) {
+ValueType FromString(const string& s) {
     if (s.empty()) {
-        return std::string("");
+        return string("");
     }
 
     if (s == "true") {
@@ -721,26 +767,26 @@ ValueType FromString(const std::string& s) {
 
     try {
         size_t pos;
-        int int_val = std::stoi(s, &pos);
+        int int_val = stoi(s, &pos);
         if (pos == s.length()) {
             return int_val;
         }
     }
-    catch (const std::exception&) {}
+    catch (const exception&) {}
 
     // 尝试解析为浮点数
     try {
         size_t pos;
-        double double_val = std::stod(s, &pos);
+        double double_val = stod(s, &pos);
         if (pos == s.length()) {
             return double_val;
         }
     }
-    catch (const std::exception&) {}
+    catch (const exception&) {}
 
     bool is_all_digit = !s.empty();
     for (char c : s) {
-        if (!std::isdigit(static_cast<unsigned char>(c))) {
+        if (!isdigit(static_cast<unsigned char>(c))) {
             is_all_digit = false;
             break;
         }
@@ -751,21 +797,21 @@ ValueType FromString(const std::string& s) {
             return s;
         }
         try {
-            return std::stoi(s);
+            return stoi(s);
         }
         catch (...) {
             return s;
         }
     }
 
-    if (!s.empty() && std::isdigit(static_cast<unsigned char>(s[0]))) {
+    if (!s.empty() && isdigit(static_cast<unsigned char>(s[0]))) {
         bool has_non_digit = false;
         bool has_dot = false;
         bool has_exponent = false;
 
         for (size_t i = 0; i < s.length(); ++i) {
             char c = s[i];
-            if (!std::isdigit(static_cast<unsigned char>(c))) {
+            if (!isdigit(static_cast<unsigned char>(c))) {
                 if (c == '.' && !has_dot) {
                     has_dot = true;
                 }
@@ -784,7 +830,7 @@ ValueType FromString(const std::string& s) {
 
         if (!has_non_digit && (has_dot || has_exponent)) {
             try {
-                return std::stod(s);
+                return stod(s);
             }
             catch (...) {}
         }
