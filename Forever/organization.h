@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "../map/component_base.h"
+#include "../populace/job_base.h"
 #include "organization_base.h"
 
 
@@ -13,7 +15,28 @@ public:
     virtual std::string GetType() const override { return "test"; }
     virtual std::string GetName() const override { return "测试组织"; }
 
-    virtual std::vector<std::pair<std::string, int>> ComponentRequirements() const {
-		return std::vector<std::pair<std::string, int>>();
+    static float GetPower() {
+        return 1.0f;
+    }
+
+    virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const {
+        std::vector<std::pair<std::string, std::pair<int, int>>> requirements;
+		requirements.emplace_back("test", std::make_pair(1, 3));
+
+		return requirements;
+    }
+
+    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageJobs(
+        std::vector<std::pair<std::string, int>> components) const {
+        std::vector<std::pair<std::string, std::vector<std::string>>> jobs;
+        for(auto& comp : components) {
+            jobs.emplace_back(comp.first, std::vector<std::string>(comp.second, "test"));
+		}
+
+		return jobs;
+    }
+
+    virtual void SetCalendar() {
+
     }
 };

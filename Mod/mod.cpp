@@ -76,5 +76,5 @@ extern "C" __declspec(dllexport) void RegisterModChanges(ChangeFactory* factory)
 extern "C" __declspec(dllexport) void RegisterModOrganizations(OrganizationFactory* factory) {
     factory->RegisterOrganization(ModOrganization::GetId(), []() {
         return make_unique<ModOrganization>();
-        });
+        }, ModOrganization::GetPower());
 }

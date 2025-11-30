@@ -155,6 +155,10 @@ std::vector<std::shared_ptr<Person>>& Populace::GetCitizens() {
 	return citizens;
 }
 
+std::unique_ptr<JobFactory>& Populace::GetJobFactory() {
+	return jobFactory;
+}
+
 void Populace::GenerateCitizens(int num) {
 	enum LIFE_TYPE {
 		LIFE_SINGLE,

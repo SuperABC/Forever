@@ -54,6 +54,8 @@ public:
 	std::vector<std::shared_ptr<Person>> GetComer(int x, int y);
 	std::vector<std::shared_ptr<Person>> GetComer(std::shared_ptr<Room>);
 
+	std::unique_ptr<JobFactory>& GetJobFactory();
+
 private:
 	// Mod管理
 	std::vector<HMODULE> modHandles;

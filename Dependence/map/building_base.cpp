@@ -288,7 +288,7 @@ void Building::ReadFloors(float width, float height, int face, vector<string> na
 }
 
 void Building::AssignRoom(int level, int slot, string name, shared_ptr<Component> component, RoomFactory* factory) {
-    auto room = factory->CreateRoom(name);
+    shared_ptr<Room> room = factory->CreateRoom(name);
     room->SetLayer(level);
     room->SetPosition(
         floors[basements + level]->GetRooms()[slot].first.GetPosX(),
@@ -296,7 +296,8 @@ void Building::AssignRoom(int level, int slot, string name, shared_ptr<Component
         floors[basements + level]->GetRooms()[slot].first.GetSizeX(),
         floors[basements + level]->GetRooms()[slot].first.GetSizeY());
     room->SetFace(floors[basements + level]->GetRooms()[slot].second);
-    rooms.push_back(move(room));
+    component->AddRoom(room);
+    rooms.push_back(room);
 }
 
 void Building::ArrangeRow(int level, int slot, string name, float acreage, shared_ptr<Component> component, RoomFactory* factory) {
@@ -308,22 +309,24 @@ void Building::ArrangeRow(int level, int slot, string name, float acreage, share
     if (row.second == 0 || row.second == 1) {
         float div = row.first.GetSizeY() / (int)num;
         for (int i = 0; i < (int)num; i++) {
-            auto room = factory->CreateRoom(name);
+            shared_ptr<Room> room = factory->CreateRoom(name);
             room->SetLayer(level);
             room->SetVertices(row.first.GetLeft(), row.first.GetBottom() + div * i,
                 row.first.GetRight(), row.first.GetBottom() + div * (i + 1));
             room->SetFace(floors[basements + level]->GetRows()[slot].second);
+            component->AddRoom(room);
             rooms.push_back(move(room));
         }
     }
     else {
         float div = row.first.GetSizeX() / (int)num;
         for (int i = 0; i < (int)num; i++) {
-            auto room = factory->CreateRoom(name);
+            shared_ptr<Room> room = factory->CreateRoom(name);
             room->SetLayer(level);
             room->SetVertices(row.first.GetLeft() + div * i, row.first.GetBottom(),
                 row.first.GetLeft() + div * (i + 1), row.first.GetTop());
             room->SetFace(floors[basements + level]->GetRows()[slot].second);
+            component->AddRoom(room);
             rooms.push_back(move(room));
         }
     }

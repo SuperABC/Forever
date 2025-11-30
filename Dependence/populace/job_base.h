@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "../common/utility.h"
+
 #include <string>
 #include <functional>
 #include <memory>
@@ -21,6 +23,7 @@ public:
 	// 父类实现方法
 
 protected:
+
 };
 
 class JobFactory {

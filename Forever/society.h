@@ -16,7 +16,7 @@ public:
 	void InitOrganizations();
 
 	// 初始化全部组织
-	void Init(std::shared_ptr<Map> map, std::shared_ptr<Populace>populace);
+	void Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populace);
 
 	// 读取配置文件
 	void ReadConfigs(std::string path) const;

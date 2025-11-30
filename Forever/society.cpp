@@ -23,7 +23,8 @@ Society::~Society() {
 }
 
 void Society::InitOrganizations() {
-    organizationFactory->RegisterOrganization(TestOrganization::GetId(), []() { return make_unique<TestOrganization>(); });
+    organizationFactory->RegisterOrganization(TestOrganization::GetId(),
+        []() { return make_unique<TestOrganization>(); }, TestOrganization::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -57,9 +58,97 @@ void Society::InitOrganizations() {
 
 }
 
-void Society::Init(std::shared_ptr<Map> map, std::shared_ptr<Populace> populace) {
+void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populace) {
 	auto components = map->GetComponents();
 
+	unordered_map<string, vector<shared_ptr<Component>>> componentMap;
+    for (auto component : components) {
+        if(componentMap.find(component->GetType()) == componentMap.end())
+			componentMap[component->GetType()] = vector<shared_ptr<Component>>();
+		componentMap[component->GetType()].push_back(component);
+    }
+
+    auto powers = organizationFactory->GetPowers();
+    vector<pair<string, float>> cdfs;
+    float sum = 0.f;
+    for (auto power : powers) {
+        sum += power.second;
+        cdfs.emplace_back(power.first, sum);
+    }
+    if (sum == 0.f) {
+        THROW_EXCEPTION(InvalidArgumentException, "No valid organization for generation.\n");
+    }
+    for (auto& cdf : cdfs) {
+        cdf.second /= sum;
+    }
+
+	int attempt = 0;
+    while(attempt < 16) {
+        float r = GetRandom(1000) / 1000.f;
+        string selectedOrganization;
+        for (auto& cdf : cdfs) {
+            if (r <= cdf.second) {
+                selectedOrganization = cdf.first;
+                break;
+            }
+        }
+        shared_ptr<Organization> organization = organizationFactory->CreateOrganization(selectedOrganization);
+        if (!organization) {
+            attempt++;
+            continue;
+        }
+
+        auto requirements = organization->ComponentRequirements();
+        bool valid = true;
+        for (auto& req : requirements) {
+            auto it = componentMap.find(req.first);
+            if (it == componentMap.end()) {
+                valid = false;
+                break;
+            }
+            if(it->second.size() < req.second.first) {
+                valid = false;
+                break;
+			}
+        }
+        if (!valid) {
+            attempt++;
+            continue;
+        }
+
+        organizations.push_back(shared_ptr<Organization>(organization));
+		std::vector<std::pair<std::string, int>> usedComponents;
+        for (auto& req : requirements) {
+            auto it = componentMap.find(req.first);
+            if (it->second.size() < req.second.second) {
+                usedComponents.emplace_back(req.first, (int)it->second.size());
+            }
+            else {
+                usedComponents.emplace_back(req.first, req.second.first + GetRandom(req.second.second - req.second.first));
+            }
+        }
+
+		auto jobArrangements = organization->ArrageJobs(usedComponents);
+        for (int i = 0; i < usedComponents.size(); i++) {
+            auto& type = usedComponents[i].first;
+            auto& count = usedComponents[i].second;
+            auto& availableComponents = componentMap[type];
+            for (int j = 0; j < count; j++) {
+                auto component = availableComponents.back();
+                availableComponents.pop_back();
+                vector<shared_ptr<Job>> jobs;
+                for (auto& jobName : jobArrangements[i].second) {
+                    shared_ptr<Job> job = populace->GetJobFactory()->CreateJob(jobName);
+                    if (job) {
+                        jobs.push_back(job);
+                    }
+                }
+                organization->AddMapping(component, jobs);
+            }
+        }
+
+		organization->SetCalendar();
+	}
 }
 
 void Society::ReadConfigs(string path) const {
