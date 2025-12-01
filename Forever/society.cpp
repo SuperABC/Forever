@@ -1,4 +1,4 @@
-#include "utility.h"
+﻿#include "utility.h"
 #include "error.h"
 #include "society.h"
 #include "json.h"
