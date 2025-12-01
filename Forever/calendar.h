@@ -6,7 +6,7 @@
 #include <vector>
 
 
-// ×ÓÀà×¢²áº¯Êı
+// ï¿½ï¿½ï¿½ï¿½×¢ï¿½áº¯ï¿½ï¿½
 typedef void (*RegisterModCalendarsFunc)(CalendarFactory* factory);
 
 class TestCalendar : public Calendar {
@@ -16,9 +16,9 @@ public:
 
 	static std::string GetId() { return "test"; }
 	virtual std::string GetType() const override { return "test"; }
-	virtual std::string GetName() const override { return "²âÊÔÈÕ³Ì"; }
+	virtual std::string GetName() const override { return "ï¿½ï¿½ï¿½ï¿½ï¿½Õ³ï¿½"; }
 
-	virtual std::pair<Time, Time> WorkingTime(Time date) const {
+	virtual std::pair<Time, Time> WorkingTime(Time date) const override {
 		int day = date.DayOfWeek();
 		if (day >= 1 && day <= 5)return { Time("09:00:00.000"), Time("09:00:00.000")};
 		else return { Time(), Time() };

@@ -17,16 +17,16 @@ public:
         return 1.0f;
     }
 
-    virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const {
+    virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const override {
         return std::vector<std::pair<std::string, std::pair<int, int>>>();
     }
 
     virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageJobs(
-        std::vector<std::pair<std::string, int>> components) const {
+        std::vector<std::pair<std::string, int>> components) const override {
 		return std::vector<std::pair<std::string, std::vector<std::string>>>();
     }
 
-    virtual void SetCalendar(CalendarFactory* factory) {
+    virtual void SetCalendar(CalendarFactory* factory) override {
         for (auto component : mappings) {
             for (auto job : component.second) {
                 std::shared_ptr<Calendar> calendar = factory->CreateCalendar("mod");

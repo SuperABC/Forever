@@ -22,7 +22,7 @@ public:
     virtual std::string GetType() const override { return "set_value"; }
 	virtual std::string GetName() const override { return "set_value"; }
 
-	virtual std::vector<std::shared_ptr<Change>> ApplyChange();
+	virtual std::vector<std::shared_ptr<Change>> ApplyChange() override;
 
 	void SetVariable(std::string variable) { this->variable = variable; }
 	std::string GetVariable() { return variable; }

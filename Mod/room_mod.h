@@ -12,5 +12,7 @@ public:
     static std::string GetId() { return "mod"; }
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "模组房间"; }
+
+    virtual int GetAccomodation() const override { return 3; }
 };
 

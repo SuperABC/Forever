@@ -19,7 +19,7 @@ public:
         return 1.0f;
     }
 
-    virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const {
+    virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const override {
         std::vector<std::pair<std::string, std::pair<int, int>>> requirements;
 		requirements.emplace_back("test", std::make_pair(1, 3));
 
@@ -27,7 +27,7 @@ public:
     }
 
     virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageJobs(
-        std::vector<std::pair<std::string, int>> components) const {
+        std::vector<std::pair<std::string, int>> components) const override {
         std::vector<std::pair<std::string, std::vector<std::string>>> jobs;
         for(auto& comp : components) {
             jobs.emplace_back(comp.first, std::vector<std::string>(comp.second, "test"));
@@ -36,7 +36,7 @@ public:
 		return jobs;
     }
 
-    virtual void SetCalendar(CalendarFactory* factory) {
+    virtual void SetCalendar(CalendarFactory* factory) override {
         for (auto component : mappings) {
             for (auto job : component.second) {
                 std::shared_ptr<Calendar> calendar = factory->CreateCalendar("test");

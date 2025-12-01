@@ -13,7 +13,7 @@ public:
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "mod"; }
 
-	virtual bool operator==(std::shared_ptr<Event> e) {
+	virtual bool operator==(std::shared_ptr<Event> e) override {
 		if (!e)return false;
 
 		return GetType() == e->GetType();

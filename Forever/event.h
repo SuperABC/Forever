@@ -19,7 +19,7 @@ public:
     virtual std::string GetType() const override { return "game_start"; }
 	virtual std::string GetName() const override { return "game_start"; }
 
-	virtual bool operator==(std::shared_ptr<Event> e) {
+	virtual bool operator==(std::shared_ptr<Event> e) override {
 		if (!e)return false;
 		if (GetType() != e->GetType())return false;
 

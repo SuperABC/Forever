@@ -13,13 +13,13 @@ public:
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "模组姓名"; }
 
-    std::string GetSurname(std::string name) {
+    std::string GetSurname(std::string name) override {
         return "";
     }
-    virtual std::string GenerateName(bool male = true, bool female = true, bool neutral = true) {
+    virtual std::string GenerateName(bool male = true, bool female = true, bool neutral = true) override {
         return "";
     }
-    virtual std::string GenerateName(std::string surname, bool male = true, bool female = true, bool neutral = true) {
+    virtual std::string GenerateName(std::string surname, bool male = true, bool female = true, bool neutral = true) override {
         return "";
     }
 };

@@ -6,14 +6,14 @@
 #include <string>
 
 
-// Ä£×é¼ì²â×ÓÀà
+// Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 class ModCalendar : public Calendar {
 public:
     static std::string GetId() { return "mod"; }
     virtual std::string GetType() const override { return "mod"; }
-    virtual std::string GetName() const override { return "Ä£×éÈÕ³Ì"; }
+    virtual std::string GetName() const override { return "Ä£ï¿½ï¿½ï¿½Õ³ï¿½"; }
 
-    virtual std::pair<Time, Time> WorkingTime(Time date) const {
+    virtual std::pair<Time, Time> WorkingTime(Time date) const override {
         return { Time("09:00:00.000"), Time("09:00:00.000") };
     }
 };

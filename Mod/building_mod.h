@@ -22,11 +22,11 @@ public:
 
     static std::vector<float> GetPower() { return std::vector<float>(13, 1.f); }
 
-    virtual float RandomAcreage() const { return 10000.f; }
-    virtual float GetAcreageMin() const { return 2000.f; }
-    virtual float GetAcreageMax() const { return 20000.f; }
+    virtual float RandomAcreage() const override { return 10000.f; }
+    virtual float GetAcreageMin() const override { return 2000.f; }
+    virtual float GetAcreageMax() const override { return 20000.f; }
 
-    virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) {
+    virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override {
         int direction = GetRandom(4);
 
         auto component = CreateComponent<ModComponent>();

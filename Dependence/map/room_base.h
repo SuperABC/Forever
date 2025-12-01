@@ -26,6 +26,9 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
+    // 居住容纳量
+    virtual int GetAccomodation() const = 0;
+
 	// 父类实现方法
 
     // 关联建筑

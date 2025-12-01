@@ -13,7 +13,7 @@ public:
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "mod"; }
 
-    virtual std::vector<std::shared_ptr<Change>> ApplyChange() {
+    virtual std::vector<std::shared_ptr<Change>> ApplyChange() override {
         return std::vector<std::shared_ptr<Change>>();
     }
 };
