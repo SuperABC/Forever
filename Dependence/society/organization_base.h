@@ -2,6 +2,7 @@
 
 #include "../map/component_base.h"
 #include "../populace/job_base.h"
+#include "../society/calendar_base.h"
 
 #include <string>
 #include <functional>
@@ -34,7 +35,7 @@ public:
         std::vector<std::pair<std::string, int>> components) const = 0;
 
     // 设定工作日历
-    virtual void SetCalendar() = 0;
+    virtual void SetCalendar(CalendarFactory* factory) = 0;
 
 	// 父类实现方法
 

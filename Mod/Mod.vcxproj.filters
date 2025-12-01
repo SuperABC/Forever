@@ -46,6 +46,9 @@
     <Filter Include="头文件\change">
       <UniqueIdentifier>{5ee430c0-2cfa-4a02-a8f5-a57fc106942c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\calendar">
+      <UniqueIdentifier>{1fc3e376-1742-4811-8766-d6604818595e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mod.cpp">
@@ -85,6 +88,9 @@
     </ClInclude>
     <ClInclude Include="change_mod.h">
       <Filter>头文件\change</Filter>
+    </ClInclude>
+    <ClInclude Include="calendar_mod.h">
+      <Filter>头文件\calendar</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -35,6 +35,7 @@
     <ClInclude Include="populace\name_base.h" />
     <ClInclude Include="script\change_base.h" />
     <ClInclude Include="script\event_base.h" />
+    <ClInclude Include="society\calendar_base.h" />
     <ClInclude Include="society\organization_base.h" />
   </ItemGroup>
   <ItemGroup>
@@ -54,6 +55,7 @@
     <ClCompile Include="populace\name_base.cpp" />
     <ClCompile Include="script\change_base.cpp" />
     <ClCompile Include="script\event_base.cpp" />
+    <ClCompile Include="society\calendar_base.cpp" />
     <ClCompile Include="society\organization_base.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

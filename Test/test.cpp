@@ -52,6 +52,7 @@ int main() {
 
 	// 读取Society相关类及Mod
 	unique_ptr<Society> society(new Society());
+	society->InitCalendars();
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 

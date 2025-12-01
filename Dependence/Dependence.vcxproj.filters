@@ -96,6 +96,9 @@
     <ClInclude Include="script\change_base.h">
       <Filter>头文件\script</Filter>
     </ClInclude>
+    <ClInclude Include="society\calendar_base.h">
+      <Filter>头文件\society</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map\roadnet_base.cpp">
@@ -148,6 +151,9 @@
     </ClCompile>
     <ClCompile Include="script\change_base.cpp">
       <Filter>源文件\script</Filter>
+    </ClCompile>
+    <ClCompile Include="society\calendar_base.cpp">
+      <Filter>源文件\society</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

@@ -3,6 +3,14 @@
 
 using namespace std;
 
+void Job::SetCalendar(std::shared_ptr<Calendar>& calendar) {
+    this->calendar = calendar;
+}
+
+std::shared_ptr<Calendar>& Job::GetCalendar() {
+    return calendar;
+}
+
 void JobFactory::RegisterJob(const string& id, function<unique_ptr<Job>()> creator) {
     registries[id] = creator;
     configs[id] = false;

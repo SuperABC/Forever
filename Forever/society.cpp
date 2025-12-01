@@ -10,6 +10,7 @@
 using namespace std;
 
 Society::Society() {
+    calendarFactory.reset(new CalendarFactory());
     organizationFactory.reset(new OrganizationFactory());
 }
 
@@ -20,6 +21,40 @@ Society::~Society() {
         }
     }
     modHandles.clear();
+}
+
+void Society::InitCalendars() {
+    calendarFactory->RegisterCalendar(TestCalendar::GetId(), []() { return make_unique<TestCalendar>(); });
+
+    HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
+    if (modHandle) {
+        modHandles.push_back(modHandle);
+        debugf("Mod dll loaded successfully.\n");
+
+        RegisterModCalendarsFunc registerFunc = (RegisterModCalendarsFunc)GetProcAddress(modHandle, "RegisterModCalendars");
+        if (registerFunc) {
+            registerFunc(calendarFactory.get());
+        }
+        else {
+            debugf("Incorrect dll content.");
+        }
+    }
+    else {
+        debugf("Failed to load mod.dll.");
+    }
+
+#ifdef MOD_TEST
+    auto calendarList = { "test", "mod" };
+    for (const auto& calendarId : calendarList) {
+        if (calendarFactory->CheckRegistered(calendarId)) {
+            auto calendar = calendarFactory->CreateCalendar(calendarId);
+            debugf(("Created calendar: " + calendar->GetName() + " (ID: " + calendarId + ")\n").data());
+        }
+        else {
+            debugf("Calendar not registered: %s\n", calendarId);
+        }
+    }
+#endif // MOD_TEST
 }
 
 void Society::InitOrganizations() {
@@ -116,7 +151,7 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
             continue;
         }
 
-        organizations.push_back(shared_ptr<Organization>(organization));
+        organizations.push_back(organization);
 		std::vector<std::pair<std::string, int>> usedComponents;
         for (auto& req : requirements) {
             auto it = componentMap.find(req.first);
@@ -147,7 +182,7 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
             }
         }
 
-		organization->SetCalendar();
+		organization->SetCalendar(calendarFactory.get());
 	}
 }
 

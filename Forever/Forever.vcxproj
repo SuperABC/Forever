@@ -134,6 +134,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="building.h" />
+    <ClInclude Include="calendar.h" />
     <ClInclude Include="change.h" />
     <ClInclude Include="component.h" />
     <ClInclude Include="dialog.h" />
@@ -154,6 +155,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="building.cpp" />
+    <ClCompile Include="calendar.cpp" />
     <ClCompile Include="change.cpp" />
     <ClCompile Include="component.cpp" />
     <ClCompile Include="dialog.cpp" />

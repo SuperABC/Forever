@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "../common/utility.h"
+#include "../society/calendar_base.h"
 
 #include <string>
 #include <functional>
@@ -21,8 +22,11 @@ public:
     virtual std::string GetName() const = 0;
 
 	// 父类实现方法
+    void SetCalendar(std::shared_ptr<Calendar> &calendar);
+    std::shared_ptr<Calendar> &GetCalendar();
 
 protected:
+    std::shared_ptr<Calendar> calendar;
 
 };
 

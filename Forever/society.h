@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "calendar.h"
 #include "organization.h"
 #include "map.h"
 #include "populace.h"
@@ -13,6 +14,7 @@ public:
 	~Society();
 
 	// 读取Mods
+	void InitCalendars();
 	void InitOrganizations();
 
 	// 初始化全部组织
@@ -40,6 +42,7 @@ public:
 private:
 	// Mod管理
 	std::vector<HMODULE> modHandles;
+	std::unique_ptr<CalendarFactory> calendarFactory;
 	std::unique_ptr<OrganizationFactory> organizationFactory;
 
 	std::vector<std::shared_ptr<Organization>> organizations;

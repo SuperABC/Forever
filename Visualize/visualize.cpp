@@ -357,6 +357,7 @@ void sgSetup() {
 	populace->InitNames();
 	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
+	society->InitCalendars();
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 

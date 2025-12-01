@@ -54,6 +54,7 @@ public:
 	std::vector<std::shared_ptr<Person>> GetComer(int x, int y);
 	std::vector<std::shared_ptr<Person>> GetComer(std::shared_ptr<Room>);
 
+	// 获取Job工厂
 	std::unique_ptr<JobFactory>& GetJobFactory();
 
 private:

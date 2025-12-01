@@ -93,6 +93,9 @@
     <ClInclude Include="change.h">
       <Filter>头文件\script</Filter>
     </ClInclude>
+    <ClInclude Include="calendar.h">
+      <Filter>头文件\society</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map.cpp">
@@ -148,6 +151,9 @@
     </ClCompile>
     <ClCompile Include="script.cpp">
       <Filter>源文件\script</Filter>
+    </ClCompile>
+    <ClCompile Include="calendar.cpp">
+      <Filter>源文件\society</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

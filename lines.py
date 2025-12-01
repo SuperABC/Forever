@@ -55,3 +55,4 @@ if __name__ == '__main__':
     for file, lines in details.items():
         print(f"{file}: {lines} 行")
     print(f"总代码行数: {total}")
+    print(f"总文件数: {len(details)}")

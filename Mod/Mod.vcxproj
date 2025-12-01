@@ -23,6 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="building_mod.h" />
+    <ClInclude Include="calendar_mod.h" />
     <ClInclude Include="change_mod.h" />
     <ClInclude Include="component_mod.h" />
     <ClInclude Include="event_mod.h" />

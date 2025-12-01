@@ -36,7 +36,12 @@ public:
 		return jobs;
     }
 
-    virtual void SetCalendar() {
-
+    virtual void SetCalendar(CalendarFactory* factory) {
+        for (auto component : mappings) {
+            for (auto job : component.second) {
+                std::shared_ptr<Calendar> calendar = factory->CreateCalendar("test");
+                job->SetCalendar(calendar);
+            }
+        }
     }
 };
