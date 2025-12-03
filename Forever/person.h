@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "asset.h"
 #include "job.h"
 #include "utility.h"
 
@@ -59,6 +60,12 @@ public:
 	std::shared_ptr<Person> GetSpouse();
 	std::vector<std::shared_ptr<Person>> GetChilds();
 
+	//管理资产
+	void AddAsset(std::shared_ptr<Asset> asset);
+	std::vector<std::shared_ptr<Asset>>& GetAssets();
+	std::vector<std::shared_ptr<Asset>> GetAssets(std::string name);
+	std::shared_ptr<Asset> GetAsset(std::string name);
+
 private:
 	int id;
 	std::string name;
@@ -73,5 +80,6 @@ private:
 
 	std::vector<std::pair<RELATIVE_TYPE, std::shared_ptr<Person>>> relatives;
 
+	std::vector<std::shared_ptr<Asset>> assets;
 	std::vector<std::shared_ptr<Job>> jobs;
 };

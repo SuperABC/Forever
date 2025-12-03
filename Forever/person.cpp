@@ -134,4 +134,34 @@ vector<shared_ptr<Person>> Person::GetChilds() {
 	return childs;
 }
 
+void Person::AddAsset(std::shared_ptr<Asset> asset) {
+	assets.push_back(asset);
+}
+
+std::vector<std::shared_ptr<Asset>>& Person::GetAssets() {
+	return assets;
+}
+
+std::vector<std::shared_ptr<Asset>> Person::GetAssets(std::string type) {
+	std::vector<std::shared_ptr<Asset>> results;
+
+	for (auto& asset : assets) {
+		if (asset->GetType() == type) {
+			results.push_back(asset);
+		}
+	}
+
+	return results;
+}
+
+std::shared_ptr<Asset> Person::GetAsset(std::string name) {
+	for (auto& asset : assets) {
+		if (asset->GetName() == name) {
+			return asset;
+		}
+	}
+
+	return nullptr;
+}
+
 

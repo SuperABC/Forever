@@ -559,6 +559,7 @@ void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
         if(GetRandom(100) < 2) {
             int index = GetRandom(int(adults.size()));
 			zone.second->SetOwner(index);
+            citizens[index]->AddAsset(make_shared<ZoneAsset>(zone));
             for (auto building : zone.second->GetBuildings()) {
 				building.second->SetOwner(index);
                 for (auto room : building.second->GetRooms()) {
@@ -576,6 +577,7 @@ void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
                 if (GetRandom(100) < 5) {
                     int index = GetRandom(int(adults.size()));
                     building.second->SetOwner(index);
+                    citizens[index]->AddAsset(make_shared<BuildingAsset>(building));
                     for (auto room : building.second->GetRooms()) {
                         room->SetOwner(index);
                         if (room->IsResidential()) {
@@ -588,6 +590,7 @@ void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
                     for(auto room : building.second->GetRooms()) {
                         int index = GetRandom(int(adults.size()));
                         room->SetOwner(index);
+                        citizens[index]->AddAsset(make_shared<RoomAsset>(room));
                         if (room->IsResidential()) {
                             residences.push_back({ room, 0 });
                         }
@@ -612,6 +615,7 @@ void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
         if (GetRandom(100) < 5) {
             int index = GetRandom(int(adults.size()));
             building.second->SetOwner(index);
+            citizens[index]->AddAsset(make_shared<BuildingAsset>(building));
             for(auto room : building.second->GetRooms()) {
                 room->SetOwner(index);
                 if (room->IsResidential()) {
@@ -624,6 +628,7 @@ void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
             for (auto room : building.second->GetRooms()) {
                 int index = GetRandom(int(adults.size()));
                 room->SetOwner(index);
+                citizens[index]->AddAsset(make_shared<RoomAsset>(room));
                 if (room->IsResidential()) {
                     residences.push_back({ room, 0 });
                 }
