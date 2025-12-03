@@ -10,6 +10,7 @@
 using namespace std;
 
 Populace::Populace() {
+	assetFactory.reset(new AssetFactory());
     jobFactory.reset(new JobFactory());
 	nameFactory.reset(new NameFactory());
 }
@@ -21,6 +22,41 @@ Populace::~Populace() {
         }
     }
     modHandles.clear();
+}
+
+void Populace::InitAssets() {
+	assetFactory->RegisterAsset(TestAsset::GetId(), []() { return make_unique<TestAsset>(); });
+
+	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
+	if (modHandle) {
+		modHandles.push_back(modHandle);
+		debugf("Mod dll loaded successfully.\n");
+
+		RegisterModAssetsFunc registerFunc = (RegisterModAssetsFunc)GetProcAddress(modHandle, "RegisterModAssets");
+		if (registerFunc) {
+			registerFunc(assetFactory.get());
+		}
+		else {
+			debugf("Incorrect dll content.");
+		}
+	}
+	else {
+		debugf("Failed to load mod.dll.");
+	}
+
+#ifdef MOD_TEST
+	auto assetList = { "test", "mod" };
+	for (const auto& assetId : assetList) {
+		if (assetFactory->CheckRegistered(assetId)) {
+			auto asset = assetFactory->CreateAsset(assetId);
+			debugf(("Created asset: " + asset->GetName() + " (ID: " + assetId + ")\n").data());
+		}
+		else {
+			debugf("Asset not registered: %s\n", assetId);
+		}
+	}
+#endif // MOD_TEST
+
 }
 
 void Populace::InitJobs() {

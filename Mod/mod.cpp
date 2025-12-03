@@ -4,6 +4,7 @@
 #include "building_mod.h"
 #include "component_mod.h"
 #include "room_mod.h"
+#include "asset_mod.h"
 #include "job_mod.h"
 #include "name_mod.h"
 #include "calendar_mod.h"
@@ -47,6 +48,12 @@ extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* fa
 extern "C" __declspec(dllexport) void RegisterModRooms(RoomFactory* factory) {
     factory->RegisterRoom(ModRoom::GetId(), []() {
         return make_unique<ModRoom>();
+        });
+}
+
+extern "C" __declspec(dllexport) void RegisterModAssets(AssetFactory* factory) {
+    factory->RegisterAsset(ModAsset::GetId(), []() {
+        return make_unique<ModAsset>();
         });
 }
 

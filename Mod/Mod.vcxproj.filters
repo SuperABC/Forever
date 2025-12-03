@@ -49,6 +49,9 @@
     <Filter Include="头文件\calendar">
       <UniqueIdentifier>{1fc3e376-1742-4811-8766-d6604818595e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\asset">
+      <UniqueIdentifier>{bd91df9d-841a-4c1a-a3b4-939a9fb8e6c3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mod.cpp">
@@ -91,6 +94,9 @@
     </ClInclude>
     <ClInclude Include="calendar_mod.h">
       <Filter>头文件\calendar</Filter>
+    </ClInclude>
+    <ClInclude Include="asset_mod.h">
+      <Filter>头文件\asset</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -99,6 +99,9 @@
     <ClInclude Include="society\calendar_base.h">
       <Filter>头文件\society</Filter>
     </ClInclude>
+    <ClInclude Include="populace\asset_base.h">
+      <Filter>头文件\populace</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map\roadnet_base.cpp">
@@ -154,6 +157,9 @@
     </ClCompile>
     <ClCompile Include="society\calendar_base.cpp">
       <Filter>源文件\society</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\asset_base.cpp">
+      <Filter>源文件\populace</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

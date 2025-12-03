@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "utility.h"
+#include "asset.h"
 #include "job.h"
 #include "name.h"
 #include "person.h"
@@ -17,6 +18,7 @@ public:
 	~Populace();
 
 	// 读取Mods
+	void InitAssets();
 	void InitJobs();
 	void InitNames();
 
@@ -60,6 +62,7 @@ public:
 private:
 	// Mod管理
 	std::vector<HMODULE> modHandles;
+	std::unique_ptr<AssetFactory> assetFactory;
 	std::unique_ptr<JobFactory> jobFactory;
 	std::unique_ptr<NameFactory> nameFactory;
 
