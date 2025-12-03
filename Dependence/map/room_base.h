@@ -26,8 +26,11 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
-    // 居住容纳量
-    virtual int GetAccomodation() const = 0;
+    // 房间类型
+    virtual bool IsResidential() const = 0;
+    virtual bool IsWorkspace() const = 0;
+    virtual int GetLivingCapacity() const = 0;
+    virtual int GetPersonnelCapacity() const = 0;
 
 	// 父类实现方法
 
@@ -36,6 +39,12 @@ public:
     void SetParent(std::shared_ptr<Component> component);
     std::shared_ptr<Building> GetParentBuilding() const;
     std::shared_ptr<Component> GetParentComponent() const;
+
+    // 获取/设置房东
+    int GetOwner() const;
+    void SetOwner(int id);
+    bool GetStateOwned() const;
+    void SetStateOwned(bool state);
 
     // 获取/设置属性
     int GetLayer() const;
@@ -46,6 +55,9 @@ public:
 protected:
     std::shared_ptr<Building> parentBuilding;
     std::shared_ptr<Component> parentComponent;
+
+    bool stateOwned = false;
+	int ownerId = -1;
 
     int layer;
     int face;

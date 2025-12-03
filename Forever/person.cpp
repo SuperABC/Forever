@@ -59,6 +59,15 @@ void Person::SetBirthday(const Time& birthday) {
 	this->birthday = birthday;
 }
 
+int Person::GetAge(const Time& currentTime) const {
+	int age = currentTime.GetYear() - birthday.GetYear();
+	if (currentTime.GetMonth() < birthday.GetMonth() ||
+		(currentTime.GetMonth() == birthday.GetMonth() && currentTime.GetDay() < birthday.GetDay())) {
+		age--;
+	}
+	return age;
+}
+
 const Time& Person::GetMarryday() const {
 	return marryday;
 }

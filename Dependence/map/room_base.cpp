@@ -19,6 +19,22 @@ shared_ptr<Component> Room::GetParentComponent() const {
     return parentComponent;
 }
 
+int Room::GetOwner() const {
+    return ownerId;
+}
+
+void Room::SetOwner(int id) {
+    this->ownerId = id;
+}
+
+bool Room::GetStateOwned() const {
+    return stateOwned;
+}
+
+void Room::SetStateOwned(bool state) {
+    this->stateOwned = state;
+}
+
 int Room::GetLayer() const {
     return layer;
 }

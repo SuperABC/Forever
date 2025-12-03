@@ -109,6 +109,12 @@ public:
 	std::shared_ptr<Plot> GetParentPlot() const;
 	std::shared_ptr<Zone> GetParentZone() const;
 
+	// 获取/设置房东
+	int GetOwner() const;
+	void SetOwner(int id);
+	bool GetStateOwned() const;
+	void SetStateOwned(bool state);
+
 	// 获取/设置属性
 	int GetLayers() const;
 	int GetBasements() const;
@@ -127,6 +133,9 @@ public:
 protected:
 	std::shared_ptr<Zone> parentZone;
 	std::shared_ptr<Plot> parentPlot;
+
+	bool stateOwned = false;
+	int ownerId = -1;
 
 	std::vector<std::shared_ptr<Floor>> floors;
 	std::vector<std::shared_ptr<Component>> components;

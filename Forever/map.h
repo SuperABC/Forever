@@ -6,6 +6,7 @@
 #include "building.h"
 #include "component.h"
 #include "room.h"
+#include "person.h"
 #include "change.h"
 #include "script.h"
 
@@ -72,11 +73,14 @@ public:
 	void InitComponents();
 	void InitRooms();
 
+	// 读取配置文件
+	void ReadConfigs(std::string path) const;
+
 	// 初始化全部静态地图
 	int Init(int blockX, int blockY);
 
-	// 读取配置文件
-	void ReadConfigs(std::string path) const;
+	// 市民入驻
+	void Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time);
 
 	// 释放空间
 	void Destroy();

@@ -29,7 +29,7 @@ public:
     static std::string GetId();
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
-    
+
     // 在地图中生成园区
     static std::function<void(ZoneFactory*, const std::vector<std::shared_ptr<Plot>>&)> ZoneGenerator;
 
@@ -38,6 +38,12 @@ public:
     // 关联地块
     void SetParent(std::shared_ptr<Plot> plot);
     std::shared_ptr<Plot> GetParent() const;
+
+    // 获取/设置房东
+    int GetOwner() const;
+    void SetOwner(int id);
+	bool GetStateOwned() const;
+	void SetStateOwned(bool state);
 
     // 获取/添加园区内建筑
     std::shared_ptr<Building> GetBuilding(std::string name);
@@ -49,6 +55,9 @@ public:
 
 protected:
     std::shared_ptr<Plot> parentPlot;
+
+	bool stateOwned = false;
+    int ownerId = -1;
 
     std::unordered_map<std::string, std::shared_ptr<Building>> buildings;
 };

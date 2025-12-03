@@ -70,6 +70,22 @@ shared_ptr<Zone> Building::GetParentZone() const {
     return parentZone;
 }
 
+int Building::GetOwner() const {
+    return ownerId;
+}
+
+void Building::SetOwner(int id) {
+    ownerId = id;
+}
+
+bool Building::GetStateOwned() const {
+    return stateOwned;
+}
+
+void Building::SetStateOwned(bool state) {
+    stateOwned = state;
+}
+
 int Building::GetLayers() const {
     return layers;
 }

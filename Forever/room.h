@@ -13,5 +13,8 @@ public:
     virtual std::string GetType() const override { return "test"; }
     virtual std::string GetName() const override { return "测试房间"; }
 
-    virtual int GetAccomodation() const override { return 3; }
+    virtual bool IsResidential() const override { return true; };
+    virtual bool IsWorkspace() const override { return false; }
+    virtual int GetLivingCapacity() const override { return 2; }
+    virtual int GetPersonnelCapacity() const override { return 0; }
 };

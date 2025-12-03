@@ -15,6 +15,22 @@ shared_ptr<Plot> Zone::GetParent() const {
     return parentPlot;
 }
 
+int Zone::GetOwner() const {
+    return ownerId;
+}
+
+void Zone::SetOwner(int id) {
+    ownerId = id;
+}
+
+bool Zone::GetStateOwned() const {
+    return stateOwned;
+}
+
+void Zone::SetStateOwned(bool state) {
+    stateOwned = state;
+}
+
 shared_ptr<Building> Zone::GetBuilding(string name) {
     return buildings[name];
 }

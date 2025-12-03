@@ -316,6 +316,44 @@ void Map::InitRooms() {
 
 }
 
+void Map::ReadConfigs(string path) const {
+    if (!filesystem::exists(path)) {
+        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+    }
+
+    Json::Reader reader;
+    Json::Value root;
+
+    ifstream fin(path);
+    if (!fin.is_open()) {
+        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
+    }
+    if (reader.parse(fin, root)) {
+        for (auto terrain : root["mods"]["terrain"]) {
+            terrainFactory->SetConfig(terrain.asString(), true);
+        }
+        roadnetFactory->SetConfig(root["mods"]["roadnet"].asString(), true);
+        for (auto zone : root["mods"]["zone"]) {
+            zoneFactory->SetConfig(zone.asString(), true);
+        }
+        for (auto building : root["mods"]["building"]) {
+            buildingFactory->SetConfig(building.asString(), true);
+        }
+        for (auto component : root["mods"]["component"]) {
+            componentFactory->SetConfig(component.asString(), true);
+        }
+        for (auto room : root["mods"]["room"]) {
+            roomFactory->SetConfig(room.asString(), true);
+        }
+
+    }
+    else {
+        fin.close();
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+    }
+    fin.close();
+}
+
 int Map::Init(int blockX, int blockY) {
     // 清除已有内容
     Destroy();
@@ -491,42 +529,115 @@ int Map::Init(int blockX, int blockY) {
     return 20000;
 }
 
-void Map::ReadConfigs(string path) const {
-    if (!filesystem::exists(path)) {
-        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
+	// 筛选成年市民
+	auto adults = vector<shared_ptr<Person>>();
+    for (auto citizen : citizens) {
+		if (citizen->GetAge(time) < 18)continue;
+		adults.push_back(citizen);
     }
+	if (adults.size() == 0)return;
 
-    Json::Reader reader;
-    Json::Value root;
-
-    ifstream fin(path);
-    if (!fin.is_open()) {
-        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
-    }
-    if (reader.parse(fin, root)) {
-        for (auto terrain : root["mods"]["terrain"]) {
-            terrainFactory->SetConfig(terrain.asString(), true);
-        }
-        roadnetFactory->SetConfig(root["mods"]["roadnet"].asString(), true);
-        for (auto zone : root["mods"]["zone"]) {
-            zoneFactory->SetConfig(zone.asString(), true);
-        }
-        for (auto building : root["mods"]["building"]) {
-            buildingFactory->SetConfig(building.asString(), true);
-        }
-        for (auto component : root["mods"]["component"]) {
-            componentFactory->SetConfig(component.asString(), true);
-        }
-        for (auto room : root["mods"]["room"]) {
-            roomFactory->SetConfig(room.asString(), true);
+    // 为房产分配房东
+	auto residences = vector<pair<shared_ptr<Room>, int>>();
+    for(auto zone : zones) {
+        // 政府园区
+        if (zone.second->GetStateOwned()) {
+            for (auto building : zone.second->GetBuildings()) {
+				building.second->SetStateOwned(true);
+                for (auto room : building.second->GetRooms()) {
+					room->SetStateOwned(true);
+                    if(room->IsResidential()) {
+                        residences.push_back({ room, 0 });
+					}
+                }
+            }
+            continue;
         }
 
+        // 私人单人园区
+        if(GetRandom(100) < 2) {
+            int index = GetRandom(int(adults.size()));
+			zone.second->SetOwner(index);
+            for (auto building : zone.second->GetBuildings()) {
+				building.second->SetOwner(index);
+                for (auto room : building.second->GetRooms()) {
+                    room->SetOwner(index);
+                    if (room->IsResidential()) {
+                        residences.push_back({ room, 0 });
+                    }
+                }
+            }
+        }
+        // 私人混合园区
+        else {
+            for(auto building : zone.second->GetBuildings()) {
+                // 私人单人建筑
+                if (GetRandom(100) < 5) {
+                    int index = GetRandom(int(adults.size()));
+                    building.second->SetOwner(index);
+                    for (auto room : building.second->GetRooms()) {
+                        room->SetOwner(index);
+                        if (room->IsResidential()) {
+                            residences.push_back({ room, 0 });
+                        }
+                    }
+                }
+				// 私人混合建筑
+                else {
+                    for(auto room : building.second->GetRooms()) {
+                        int index = GetRandom(int(adults.size()));
+                        room->SetOwner(index);
+                        if (room->IsResidential()) {
+                            residences.push_back({ room, 0 });
+                        }
+					}
+                }
+			}
+        }
+	}
+    for(auto building : buildings) {
+		// 政府建筑
+        if (building.second->GetStateOwned()) {
+            for (auto room : building.second->GetRooms()) {
+                room->SetStateOwned(true);
+                if (room->IsResidential()) {
+                    residences.push_back({ room, 0 });
+                }
+            }
+            continue;
+        }
+
+        // 私人单人建筑
+        if (GetRandom(100) < 5) {
+            int index = GetRandom(int(adults.size()));
+            building.second->SetOwner(index);
+            for(auto room : building.second->GetRooms()) {
+                room->SetOwner(index);
+                if (room->IsResidential()) {
+                    residences.push_back({ room, 0 });
+                }
+			}
+		}
+		// 私人混合建筑
+        else {
+            for (auto room : building.second->GetRooms()) {
+                int index = GetRandom(int(adults.size()));
+                room->SetOwner(index);
+                if (room->IsResidential()) {
+                    residences.push_back({ room, 0 });
+                }
+            }
+        }
+	}
+
+	// 分配市民住所
+    for (auto adult : adults) {
+		int index = GetRandom((int)residences.size());
+        auto& residence = residences[index];
+
+
     }
-    else {
-        fin.close();
-        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
-    }
-    fin.close();
 }
 
 void Map::Destroy() {
@@ -595,6 +706,12 @@ shared_ptr<Roadnet> Map::GetRoadnet() const {
 
 std::vector<std::shared_ptr<Component>> Map::GetComponents() const {
     std::vector<std::shared_ptr<Component>> components;
+    for(const auto & zone : zones) {
+        for(auto building : zone.second->GetBuildings()) {
+            const auto& current = building.second->GetComponents();
+            components.insert(components.end(), current.begin(), current.end());
+		}
+	}
     for (const auto& building : buildings) {
         const auto& current = building.second->GetComponents();
         components.insert(components.end(), current.begin(), current.end());
