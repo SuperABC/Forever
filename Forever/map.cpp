@@ -638,10 +638,31 @@ void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
 
 	// 分配市民住所
     for (auto adult : adults) {
+        if (adult->GetHome())continue;
+        if (residences.size() <= 0)break;
+
 		int index = GetRandom((int)residences.size());
         auto& residence = residences[index];
 
+        int num = 1;
+        adult->SetHome(residence.first);
+        if (adult->GetSpouse() && adult->GetSpouse()->GetHome() == nullptr) {
+            if (GetRandom(10) > 0) {
+                adult->GetSpouse()->SetHome(residence.first);
+                num++;
+                for (auto child : adult->GetChilds()) {
+                    if (child->GetAge(time) < 18) {
+                        child->SetHome(residence.first);
+                        num++;
+                    }
+                }
+            }
+        }
 
+        if (num >= residence.second) {
+            residences[index] = residences.back();
+            residences.pop_back();
+        }
     }
 }
 

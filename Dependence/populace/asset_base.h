@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include <string>
 #include <functional>
@@ -11,14 +11,14 @@ public:
     Asset() = default;
     virtual ~Asset() = default;
 
-    // ×ÓÀàÊµÏÖ·½·¨
+    // å­ç±»å®ç°æ–¹æ³•
 
-    // ¶¯Ì¬·µ»ØĞÕÃû¾²Ì¬ĞÅÏ¢
+    // åŠ¨æ€è¿”å›å§“åé™æ€ä¿¡æ¯
     static std::string GetId();
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
-    // ¸¸ÀàÊµÏÖ·½·¨
+    // çˆ¶ç±»å®ç°æ–¹æ³•
 
 protected:
 };

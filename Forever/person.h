@@ -60,11 +60,16 @@ public:
 	std::shared_ptr<Person> GetSpouse();
 	std::vector<std::shared_ptr<Person>> GetChilds();
 
-	//管理资产
+	// 管理资产
 	void AddAsset(std::shared_ptr<Asset> asset);
 	std::vector<std::shared_ptr<Asset>>& GetAssets();
 	std::vector<std::shared_ptr<Asset>> GetAssets(std::string name);
 	std::shared_ptr<Asset> GetAsset(std::string name);
+
+	// 管理住址
+	std::shared_ptr<Room> GetHome();
+	void SetHome(std::shared_ptr<Room> room);
+	void RemoveHome();
 
 private:
 	int id;
@@ -82,4 +87,6 @@ private:
 
 	std::vector<std::shared_ptr<Asset>> assets;
 	std::vector<std::shared_ptr<Job>> jobs;
+
+	std::shared_ptr<Room> home;
 };

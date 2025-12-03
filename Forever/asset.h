@@ -1,13 +1,13 @@
-#pragma once
+ï»¿#pragma once
 
 #include "asset_base.h"
 #include "zone_base.h"
 
 
-// ×ÓÀà×¢²áº¯Êı
+// å­ç±»æ³¨å†Œå‡½æ•°
 typedef void (*RegisterModAssetsFunc)(AssetFactory* factory);
 
-// Ö÷³ÌĞò¼ì²â×ÓÀà
+// ä¸»ç¨‹åºæ£€æµ‹å­ç±»
 class TestAsset : public Asset {
 public:
     TestAsset();
@@ -15,13 +15,13 @@ public:
 
     static std::string GetId() { return "test"; }
     virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "²âÊÔ×Ê²ú"; }
+    virtual std::string GetName() const override { return "æµ‹è¯•èµ„äº§"; }
 
 private:
 
 };
 
-// Ô°Çø×Ê²ú×ÓÀà
+// å›­åŒºèµ„äº§å­ç±»
 class ZoneAsset : public Asset {
 public:
     ZoneAsset(std::shared_ptr<Zone> zone);
@@ -29,7 +29,7 @@ public:
 
     static std::string GetId() { return "zoneAsset"; }
     virtual std::string GetType() const override { return "zoneAsset"; }
-    virtual std::string GetName() const override { return "Ô°Çø×Ê²ú"; }
+    virtual std::string GetName() const override { return "å›­åŒºèµ„äº§"; }
 
     std::shared_ptr<Zone> GetZone();
     void SetZone(std::shared_ptr<Zone> zone);
@@ -38,7 +38,7 @@ private:
     std::shared_ptr<Zone> zone;
 };
 
-// ½¨Öş×Ê²ú×ÓÀà
+// å»ºç­‘èµ„äº§å­ç±»
 class BuildingAsset : public Asset {
 public:
     BuildingAsset(std::shared_ptr<Building> building);
@@ -46,7 +46,7 @@ public:
 
     static std::string GetId() { return "buildingAsset"; }
     virtual std::string GetType() const override { return "buildingAsset"; }
-    virtual std::string GetName() const override { return "Ô°Çø×Ê²ú"; }
+    virtual std::string GetName() const override { return "å›­åŒºèµ„äº§"; }
 
     std::shared_ptr<Building> GetBuilding();
     void SetBuilding(std::shared_ptr<Building> building);
@@ -55,7 +55,7 @@ private:
     std::shared_ptr<Building> building;
 };
 
-// ·¿¼ä×Ê²ú×ÓÀà
+// æˆ¿é—´èµ„äº§å­ç±»
 class RoomAsset : public Asset {
 public:
     RoomAsset(std::shared_ptr<Room> room);
@@ -63,7 +63,7 @@ public:
 
     static std::string GetId() { return "roomAsset"; }
     virtual std::string GetType() const override { return "roomAsset"; }
-    virtual std::string GetName() const override { return "Ô°Çø×Ê²ú"; }
+    virtual std::string GetName() const override { return "å›­åŒºèµ„äº§"; }
 
     std::shared_ptr<Room> GetRoom();
     void SetRoom(std::shared_ptr<Room> room);

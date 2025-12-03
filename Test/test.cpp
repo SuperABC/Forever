@@ -86,6 +86,7 @@ int main() {
 				parser.ParseCmd(cmd);
 				int size = atoi(parser.GetOption("--block").data());
 				populace->Init(map->Init(size, size));
+				map->Checkin(populace->GetCitizens(), populace->GetTime());
 				society->Init(map, populace);
 				string path = parser.GetOption("--story");
 				script->ReadScript(path);

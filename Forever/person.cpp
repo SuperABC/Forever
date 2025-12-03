@@ -164,4 +164,16 @@ std::shared_ptr<Asset> Person::GetAsset(std::string name) {
 	return nullptr;
 }
 
+shared_ptr<Room> Person::GetHome() {
+	return home
+}
+
+void Person::SetHome(std::shared_ptr<Room> room) {
+	home = room;
+}
+
+void Person::RemoveHome() {
+	home = nullptr;
+}
+
 

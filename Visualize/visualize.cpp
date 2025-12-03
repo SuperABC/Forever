@@ -366,6 +366,8 @@ void sgSetup() {
 
 	try {
 		populace->Init(::map->Init(3, 3));
+		::map->Checkin(populace->GetCitizens(), populace->GetTime());
+		society->Init(::map, populace);
 	}
 	catch (exception e) {
 		debugf("%s", e.what());

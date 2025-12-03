@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "asset_base.h"
 
@@ -6,12 +6,12 @@
 #include <string>
 
 
-// Ä£×é¼ì²â×ÓÀà
+// æ¨¡ç»„æ£€æµ‹å­ç±»
 class ModAsset : public Asset {
 public:
     static std::string GetId() { return "mod"; }
     virtual std::string GetType() const override { return "mod"; }
-    virtual std::string GetName() const override { return "Ä£×é×Ê²ú"; }
+    virtual std::string GetName() const override { return "æ¨¡ç»„èµ„äº§"; }
 
 };
 
