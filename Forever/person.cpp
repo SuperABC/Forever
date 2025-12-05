@@ -202,3 +202,47 @@ void Person::SetScheduler(std::shared_ptr<Scheduler> scheduler) {
 	this->scheduler = scheduler;
 }
 
+void Person::AddEducationExperience(EducationExperience exp) {
+	educationExperiences.push_back(exp);
+}
+
+void Person::AddEmotionExperience(EmotionExperience exp) {
+	emotionExperiences.push_back(exp);
+}
+
+void Person::AddJobExperience(JobExperience exp) {
+	jobExperiences.push_back(exp);
+}
+
+vector<EducationExperience>& Person::GetEducationExperiences() {
+	return educationExperiences;
+}
+
+vector<EmotionExperience>& Person::GetEmotionExperiences() {
+	return emotionExperiences;
+}
+
+vector<JobExperience>& Person::GetJobExperiences() {
+	return jobExperiences;
+}
+
+void Person::ExperienceComposition() {
+	if (educationExperiences.size() == 0)return;
+
+	int idx = 0;
+	EducationExperience education = educationExperiences[0];
+	for (int i = 1; i < educationExperiences.size(); i++) {
+		if (education.GetSchool() == educationExperiences[i].GetSchool() &&
+			education.GetEndTime().GetYear() == educationExperiences[i].GetBeginTime().GetYear()) {
+			education.SetTime(education.GetBeginTime(), educationExperiences[i].GetEndTime());
+			education.SetGraduate(educationExperiences[i].GetGraduate());
+		}
+		else {
+			educationExperiences[idx++] = education;
+			education = educationExperiences[i];
+		}
+	}
+	educationExperiences[idx++] = education;
+	educationExperiences.resize(idx);
+}
+

@@ -102,6 +102,9 @@
     <ClInclude Include="scheduler.h">
       <Filter>头文件\populace</Filter>
     </ClInclude>
+    <ClInclude Include="experience.h">
+      <Filter>头文件\populace</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map.cpp">
@@ -165,6 +168,9 @@
       <Filter>源文件\society</Filter>
     </ClCompile>
     <ClCompile Include="scheduler.cpp">
+      <Filter>源文件\populace</Filter>
+    </ClCompile>
+    <ClCompile Include="experience.cpp">
       <Filter>源文件\populace</Filter>
     </ClCompile>
   </ItemGroup>

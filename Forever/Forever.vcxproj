@@ -140,6 +140,7 @@
     <ClInclude Include="component.h" />
     <ClInclude Include="dialog.h" />
     <ClInclude Include="event.h" />
+    <ClInclude Include="experience.h" />
     <ClInclude Include="milestone.h" />
     <ClInclude Include="name.h" />
     <ClInclude Include="organization.h" />
@@ -163,6 +164,7 @@
     <ClCompile Include="component.cpp" />
     <ClCompile Include="dialog.cpp" />
     <ClCompile Include="event.cpp" />
+    <ClCompile Include="experience.cpp" />
     <ClCompile Include="milestone.cpp" />
     <ClCompile Include="name.cpp" />
     <ClCompile Include="organization.cpp" />

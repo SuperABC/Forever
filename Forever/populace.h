@@ -80,5 +80,10 @@ private:
 
 	// 生成市民
 	void GenerateCitizens(int num);
+
+	// 生成经历
+	void GenerateEducations();
+	void GenerateEmotions();
+	void GenerateJobs();
 };
 

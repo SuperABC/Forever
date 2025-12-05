@@ -3,6 +3,7 @@
 #include "asset.h"
 #include "scheduler.h"
 #include "job.h"
+#include "experience.h"
 #include "utility.h"
 
 #include <string>
@@ -84,6 +85,15 @@ public:
 	std::shared_ptr<Scheduler> GetScheduler();
 	void SetScheduler(std::shared_ptr<Scheduler> scheduler);
 
+	// 管理经历
+	void AddEducationExperience(EducationExperience exp);
+	void AddEmotionExperience(EmotionExperience exp);
+	void AddJobExperience(JobExperience exp);
+	std::vector<EducationExperience>& GetEducationExperiences();
+	std::vector<EmotionExperience>& GetEmotionExperiences();
+	std::vector<JobExperience>& GetJobExperiences();
+	void ExperienceComposition();
+
 private:
 	int id;
 	std::string name;
@@ -103,4 +113,8 @@ private:
 
 	std::shared_ptr<Room> home;
 	std::shared_ptr<Scheduler> scheduler;
+
+	std::vector<EducationExperience> educationExperiences;
+	std::vector<EmotionExperience> emotionExperiences;
+	std::vector<JobExperience> jobExperiences;
 };
