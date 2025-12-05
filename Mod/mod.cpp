@@ -7,6 +7,7 @@
 #include "asset_mod.h"
 #include "job_mod.h"
 #include "name_mod.h"
+#include "scheduler_mod.h"
 #include "calendar_mod.h"
 #include "event_mod.h"
 #include "change_mod.h"
@@ -67,6 +68,12 @@ extern "C" __declspec(dllexport) void RegisterModNames(NameFactory* factory) {
     factory->RegisterName(ModName::GetId(), []() {
         return make_unique<ModName>();
         });
+}
+
+extern "C" __declspec(dllexport) void RegisterModSchedulers(SchedulerFactory* factory) {
+    factory->RegisterScheduler(ModScheduler::GetId(), []() {
+        return make_unique<ModScheduler>();
+        }, ModScheduler::GetPower());
 }
 
 extern "C" __declspec(dllexport) void RegisterModCalendars(CalendarFactory* factory) {

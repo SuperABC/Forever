@@ -164,8 +164,26 @@ std::shared_ptr<Asset> Person::GetAsset(std::string name) {
 	return nullptr;
 }
 
+vector<shared_ptr<Job>> Person::GetJobs() {
+	return jobs;
+}
+
+void Person::AddJob(shared_ptr<Job> job) {
+	jobs.push_back(job);
+}
+
+void Person::RemoveJob(std::shared_ptr<Job> job) {
+	for (auto &j : jobs) {
+		if (j == job) {
+			j = *jobs.end();
+			jobs.pop_back();
+			break;
+		}
+	}
+}
+
 shared_ptr<Room> Person::GetHome() {
-	return home
+	return home;
 }
 
 void Person::SetHome(std::shared_ptr<Room> room) {
@@ -176,4 +194,11 @@ void Person::RemoveHome() {
 	home = nullptr;
 }
 
+shared_ptr<Scheduler> Person::GetScheduler() {
+	return scheduler;
+}
+
+void Person::SetScheduler(std::shared_ptr<Scheduler> scheduler) {
+	this->scheduler = scheduler;
+}
 

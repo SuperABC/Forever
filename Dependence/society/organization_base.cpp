@@ -3,12 +3,33 @@
 
 using namespace std;
 
-vector<pair<shared_ptr<Component>, vector<shared_ptr<Job>>>> Organization::GetMappings() const {
-    return mappings;
+vector<shared_ptr<Job>> Organization::EnrollEmployee(vector<int> ids) {
+    vector<shared_ptr<Job>> positions;
+
+    int i = 0;
+    for (auto& component : jobs) {
+        for (auto& vacancy : component.second) {
+            if (vacancy.second < 0) {
+                positions.push_back(vacancy.first);
+                vacancy.second = ids[i++];
+                if (i >= ids.size())return positions;
+            }
+        }
+    }
+
+    return positions;
 }
 
-void Organization::AddMapping(shared_ptr<Component> component, vector<shared_ptr<Job>> jobs) {
-    mappings.push_back(make_pair(component, jobs));
+vector<pair<shared_ptr<Component>, vector<pair<shared_ptr<Job>, int>>>> Organization::GetJobs() const {
+    return jobs;
+}
+
+void Organization::AddVacancy(shared_ptr<Component> component, vector<shared_ptr<Job>> vacancies) {
+    vector< pair<shared_ptr<Job>, int>> positions;
+    for (auto vacancy : vacancies) {
+        positions.push_back(make_pair(vacancy, -1));
+    }
+    jobs.push_back(make_pair(component, positions));
 }
 
 void OrganizationFactory::RegisterOrganization(const string& id, function<unique_ptr<Organization>()> creator, float power) {

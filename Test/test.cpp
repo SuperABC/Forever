@@ -46,8 +46,10 @@ int main() {
 
 	// 读取Populace相关类及Mod
 	unique_ptr<Populace> populace(new Populace());
+	populace->InitAssets();
 	populace->InitJobs();
 	populace->InitNames();
+	populace->InitSchedulers();
 	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
 	// 读取Society相关类及Mod
@@ -88,6 +90,7 @@ int main() {
 				populace->Init(map->Init(size, size));
 				map->Checkin(populace->GetCitizens(), populace->GetTime());
 				society->Init(map, populace);
+				populace->Schedule();
 				string path = parser.GetOption("--story");
 				script->ReadScript(path);
 				break;

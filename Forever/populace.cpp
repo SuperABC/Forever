@@ -13,6 +13,7 @@ Populace::Populace() {
 	assetFactory.reset(new AssetFactory());
     jobFactory.reset(new JobFactory());
 	nameFactory.reset(new NameFactory());
+	schedulerFactory.reset(new SchedulerFactory());
 }
 
 Populace::~Populace() {
@@ -129,6 +130,42 @@ void Populace::InitNames() {
 
 }
 
+void Populace::InitSchedulers() {
+	schedulerFactory->RegisterScheduler(TestScheduler::GetId(),
+		[]() { return make_unique<TestScheduler>(); }, TestScheduler::GetPower());
+
+	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
+	if (modHandle) {
+		modHandles.push_back(modHandle);
+		debugf("Mod dll loaded successfully.\n");
+
+		RegisterModSchedulersFunc registerFunc = (RegisterModSchedulersFunc)GetProcAddress(modHandle, "RegisterModSchedulers");
+		if (registerFunc) {
+			registerFunc(schedulerFactory.get());
+		}
+		else {
+			debugf("Incorrect dll content.");
+		}
+	}
+	else {
+		debugf("Failed to load mod.dll.");
+	}
+
+#ifdef MOD_TEST
+	auto schedulerList = { "test", "mod" };
+	for (const auto& schedulerId : schedulerList) {
+		if (schedulerFactory->CheckRegistered(schedulerId)) {
+			auto scheduler = schedulerFactory->CreateScheduler(schedulerId);
+			debugf(("Created scheduler: " + scheduler->GetName() + " (ID: " + schedulerId + ")\n").data());
+		}
+		else {
+			debugf("Scheduler not registered: %s\n", schedulerId);
+		}
+	}
+#endif // MOD_TEST
+
+}
+
 void Populace::ReadConfigs(string path) const {
     if (!filesystem::exists(path)) {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
@@ -157,6 +194,39 @@ void Populace::ReadConfigs(string path) const {
 void Populace::Init(int accomodation) {
     // 生成市民
     GenerateCitizens((int)(accomodation * exp(GetRandom(1000) / 1000.0f - 0.5f)));
+}
+
+void Populace::Schedule() {
+	auto powers = schedulerFactory->GetPowers();
+	vector<pair<string, float>> cdfs;
+	float sum = 0.f;
+	for (auto power : powers) {
+		sum += power.second;
+		cdfs.emplace_back(power.first, sum);
+	}
+	if (sum == 0.f) {
+		THROW_EXCEPTION(InvalidArgumentException, "No valid organization for generation.\n");
+	}
+	for (auto& cdf : cdfs) {
+		cdf.second /= sum;
+	}
+
+	for(auto & citizen : citizens) {
+		float r = GetRandom(1000) / 1000.f;
+		string selectedScheduler;
+		for (auto& cdf : cdfs) {
+			if (r <= cdf.second) {
+				selectedScheduler = cdf.first;
+				break;
+			}
+		}
+		shared_ptr<Scheduler> scheduler = schedulerFactory->CreateScheduler(selectedScheduler);
+		if (!scheduler) {
+			continue;
+		}
+
+		citizen->SetScheduler(scheduler);
+	}
 }
 
 void Populace::Destroy() {

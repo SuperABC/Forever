@@ -24,27 +24,30 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
-    // 功能区中的建筑权重
+    // 组织权重
     static float GetPower();
 
 	// 所需组合及数量范围
 	virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const = 0;
 
 	// 根据实际组合安排工作岗位
-    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageJobs(
+    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageVacancies(
         std::vector<std::pair<std::string, int>> components) const = 0;
 
     // 设定工作日历
     virtual void SetCalendar(CalendarFactory* factory) = 0;
 
+    // 员工入职
+    virtual std::vector<std::shared_ptr<Job>> EnrollEmployee(std::vector<int> ids);
+
 	// 父类实现方法
 
-	// 获取/添加组合与岗位映射
-    std::vector<std::pair<std::shared_ptr<Component>, std::vector<std::shared_ptr<Job>>>> GetMappings() const;
-	void AddMapping(std::shared_ptr<Component> component, std::vector<std::shared_ptr<Job>> jobs);
+	// 管理职位
+    std::vector<std::pair<std::shared_ptr<Component>, std::vector<std::pair<std::shared_ptr<Job>, int>>>> GetJobs() const;
+	void AddVacancy(std::shared_ptr<Component> component, std::vector<std::shared_ptr<Job>> vacancies);
 
 protected:
-	std::vector<std::pair<std::shared_ptr<Component>, std::vector<std::shared_ptr<Job>>>> mappings;
+	std::vector<std::pair<std::shared_ptr<Component>, std::vector<std::pair<std::shared_ptr<Job>, int>>>> jobs;
 };
 
 class OrganizationFactory {

@@ -34,6 +34,7 @@
     <ClInclude Include="populace\asset_base.h" />
     <ClInclude Include="populace\job_base.h" />
     <ClInclude Include="populace\name_base.h" />
+    <ClInclude Include="populace\scheduler_base.h" />
     <ClInclude Include="script\change_base.h" />
     <ClInclude Include="script\event_base.h" />
     <ClInclude Include="society\calendar_base.h" />
@@ -55,6 +56,7 @@
     <ClCompile Include="populace\asset_base.cpp" />
     <ClCompile Include="populace\job_base.cpp" />
     <ClCompile Include="populace\name_base.cpp" />
+    <ClCompile Include="populace\scheduler_base.cpp" />
     <ClCompile Include="script\change_base.cpp" />
     <ClCompile Include="script\event_base.cpp" />
     <ClCompile Include="society\calendar_base.cpp" />

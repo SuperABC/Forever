@@ -353,8 +353,10 @@ void sgSetup() {
 	::map->InitRooms();
 	::map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 
+	populace->InitAssets();
 	populace->InitJobs();
 	populace->InitNames();
+	populace->InitSchedulers();
 	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
 	society->InitCalendars();
@@ -368,6 +370,7 @@ void sgSetup() {
 		populace->Init(::map->Init(3, 3));
 		::map->Checkin(populace->GetCitizens(), populace->GetTime());
 		society->Init(::map, populace);
+		populace->Schedule();
 	}
 	catch (exception e) {
 		debugf("%s", e.what());

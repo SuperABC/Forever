@@ -21,18 +21,19 @@ public:
         return std::vector<std::pair<std::string, std::pair<int, int>>>();
     }
 
-    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageJobs(
+    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageVacancies(
         std::vector<std::pair<std::string, int>> components) const override {
 		return std::vector<std::pair<std::string, std::vector<std::string>>>();
     }
 
     virtual void SetCalendar(CalendarFactory* factory) override {
-        for (auto component : mappings) {
+        for (auto component : jobs) {
             for (auto job : component.second) {
                 std::shared_ptr<Calendar> calendar = factory->CreateCalendar("mod");
-                job->SetCalendar(calendar);
+                job.first->SetCalendar(calendar);
             }
         }
     }
+
 };
 

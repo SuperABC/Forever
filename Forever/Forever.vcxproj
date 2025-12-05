@@ -146,6 +146,7 @@
     <ClInclude Include="job.h" />
     <ClInclude Include="map.h" />
     <ClInclude Include="person.h" />
+    <ClInclude Include="scheduler.h" />
     <ClInclude Include="script.h" />
     <ClInclude Include="society.h" />
     <ClInclude Include="populace.h" />
@@ -168,6 +169,7 @@
     <ClCompile Include="job.cpp" />
     <ClCompile Include="map.cpp" />
     <ClCompile Include="person.cpp" />
+    <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="script.cpp" />
     <ClCompile Include="society.cpp" />
     <ClCompile Include="populace.cpp" />

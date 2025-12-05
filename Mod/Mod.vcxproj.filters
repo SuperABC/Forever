@@ -52,6 +52,9 @@
     <Filter Include="头文件\asset">
       <UniqueIdentifier>{bd91df9d-841a-4c1a-a3b4-939a9fb8e6c3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="头文件\scheduler">
+      <UniqueIdentifier>{048aa51b-f1ba-459a-afb7-85d8dac53285}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mod.cpp">
@@ -97,6 +100,9 @@
     </ClInclude>
     <ClInclude Include="asset_mod.h">
       <Filter>头文件\asset</Filter>
+    </ClInclude>
+    <ClInclude Include="scheduler_mod.h">
+      <Filter>头文件\scheduler</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

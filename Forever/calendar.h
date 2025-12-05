@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "calendar_base.h"
 
@@ -6,9 +6,10 @@
 #include <vector>
 
 
-// ����ע�ắ��
+// 子类注册函数
 typedef void (*RegisterModCalendarsFunc)(CalendarFactory* factory);
 
+// 主程序检测子类
 class TestCalendar : public Calendar {
 public:
 	TestCalendar() {}
@@ -16,11 +17,11 @@ public:
 
 	static std::string GetId() { return "test"; }
 	virtual std::string GetType() const override { return "test"; }
-	virtual std::string GetName() const override { return "�����ճ�"; }
+	virtual std::string GetName() const override { return "测试日程"; }
 
 	virtual std::pair<Time, Time> WorkingTime(Time date) const override {
 		int day = date.DayOfWeek();
-		if (day >= 1 && day <= 5)return { Time("09:00:00.000"), Time("09:00:00.000")};
+		if (day >= 1 && day <= 5)return { Time("09:00:00.000"), Time("09:00:00.000") };
 		else return { Time(), Time() };
 	}
 };

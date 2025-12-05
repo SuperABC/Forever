@@ -163,7 +163,7 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
             }
         }
 
-		auto jobArrangements = organization->ArrageJobs(usedComponents);
+		auto jobArrangements = organization->ArrageVacancies(usedComponents);
         for (int i = 0; i < usedComponents.size(); i++) {
             auto& type = usedComponents[i].first;
             auto& count = usedComponents[i].second;
@@ -178,12 +178,37 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
                         jobs.push_back(job);
                     }
                 }
-                organization->AddMapping(component, jobs);
+                organization->AddVacancy(component, jobs);
             }
         }
 
 		organization->SetCalendar(calendarFactory.get());
 	}
+
+    // 分配工作
+    std::vector<std::shared_ptr<Organization>> temps;
+    for (auto organization : organizations) {
+        temps.push_back(organization);
+    }
+    auto adults = vector<shared_ptr<Person>>();
+    for (auto citizen : populace->GetCitizens()) {
+        if (citizen->GetAge(populace->GetTime()) < 18)continue;
+        adults.push_back(citizen);
+    }
+    for (auto adult : adults) {
+        vector<int> ids;
+        ids.push_back(adult->GetId());
+        int r = GetRandom((int)temps.size());
+        auto jobs = temps[r]->EnrollEmployee(ids);
+        if (jobs.size() > 0) {
+            adult->AddJob(jobs[0]);
+        }
+        else {
+            temps[r] = temps.back();
+            temps.pop_back();
+            if (temps.size() <= 0)break;
+        }
+    }
 }
 
 void Society::ReadConfigs(string path) const {

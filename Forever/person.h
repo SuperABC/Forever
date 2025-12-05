@@ -1,12 +1,16 @@
 ﻿#pragma once
 
 #include "asset.h"
+#include "scheduler.h"
 #include "job.h"
 #include "utility.h"
 
 #include <string>
 #include <memory>
 #include <vector>
+
+#undef GetJob
+#undef AddJob
 
 
 enum GENDER_TYPE {
@@ -66,10 +70,19 @@ public:
 	std::vector<std::shared_ptr<Asset>> GetAssets(std::string name);
 	std::shared_ptr<Asset> GetAsset(std::string name);
 
+	// 管理职业
+	std::vector<std::shared_ptr<Job>> GetJobs();
+	void AddJob(std::shared_ptr<Job> job);
+	void RemoveJob(std::shared_ptr<Job> job);
+
 	// 管理住址
 	std::shared_ptr<Room> GetHome();
 	void SetHome(std::shared_ptr<Room> room);
 	void RemoveHome();
+
+	// 管理调度
+	std::shared_ptr<Scheduler> GetScheduler();
+	void SetScheduler(std::shared_ptr<Scheduler> scheduler);
 
 private:
 	int id;
@@ -89,4 +102,5 @@ private:
 	std::vector<std::shared_ptr<Job>> jobs;
 
 	std::shared_ptr<Room> home;
+	std::shared_ptr<Scheduler> scheduler;
 };

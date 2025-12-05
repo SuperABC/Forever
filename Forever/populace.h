@@ -5,6 +5,7 @@
 #include "job.h"
 #include "name.h"
 #include "person.h"
+#include "scheduler.h"
 #include "room.h"
 #include "change.h"
 #include "script.h"
@@ -21,12 +22,16 @@ public:
 	void InitAssets();
 	void InitJobs();
 	void InitNames();
+	void InitSchedulers();
 
 	// 读取配置文件
 	void ReadConfigs(std::string path) const;
 
 	// 初始化市民
 	void Init(int accomodation);
+
+	// 分配调度
+	void Schedule();
 
 	// 释放空间
 	void Destroy();
@@ -65,6 +70,7 @@ private:
 	std::unique_ptr<AssetFactory> assetFactory;
 	std::unique_ptr<JobFactory> jobFactory;
 	std::unique_ptr<NameFactory> nameFactory;
+	std::unique_ptr<SchedulerFactory> schedulerFactory;
 
 	// 游戏内时间
 	Time time;
