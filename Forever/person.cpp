@@ -35,19 +35,19 @@ void Person::SetGender(GENDER_TYPE gender) {
 	this->gender = gender;
 }
 
-int Person::GetHeight() const {
+float Person::GetHeight() const {
 	return height;
 }
 
-void Person::SetHeight(int height) {
+void Person::SetHeight(float height) {
 	this->height = height;
 }
 
-int Person::GetWeight() const {
+float Person::GetWeight() const {
 	return weight;
 }
 
-void Person::SetWeight(int weight) {
+void Person::SetWeight(float weight) {
 	this->weight = weight;
 }
 

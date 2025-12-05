@@ -22,27 +22,27 @@
 		{"type": "set_value", "variable": "fuck_xld", "value": "0"}
 	],
 	"subsequences": [
-		"meet_ht", 
-		"meet_ng",
-		"meet_q",
-		"meet_yl",
-		"meet_kq",
-		"meet_gy",
-		"meet_mn",
-		"meet_ldjj",
-		"meet_fnn",
-		"meet_xld"
+		"meet_ht1", 
+		"meet_ng1",
+		"meet_q1",
+		"meet_yl1",
+		"meet_kq1",
+		"meet_gy1",
+		"meet_mn1",
+		"meet_ldjj1",
+		"meet_fnn1",
+		"meet_xld1"
 	]
 },
 {
-	"milestone": "meet_ht",
+	"milestone": "meet_ht1",
 	"visible": false,
 	"trigger": {"condition": "$$control_person==空 && $$fuck_ht==0", "type": "option_dialog", "target": "胡桃", "option": "性交"},
 	"dialogs": [
 		{"list": [
-			{"speaker": "胡桃", "content": "哎呀呀，你终于来我们往生堂做客啦。"},
-			{"speaker": "空", "content": "是呀，早就听说往生堂堂主的大名了，今天终于有时间来拜访了。"},
-			{"content": "胡桃打完招呼之后，就快速锁上了大门。"},
+			{"speaker": "胡桃", "content": "哎呀呀，这不是空嘛。"},
+			{"speaker": "空", "content": "是呀，早就听说往生堂堂主的大名了，今天终于见到了。"},
+			{"content": "胡桃拉起空的手，就朝往生堂走去。把空拉进往生堂之后，她快速锁上了大门。"},
 			{"speaker": "空", "content": "你锁门是准备要做什么呢？"},
 			{"content": "胡桃没有说话，而是自顾自地脱掉了自己所有的衣服，然后又扒光了空的衣服"},
 			{"speaker": "空", "content": "你想和我性交就直说嘛，我又不会拒绝你。"},
@@ -73,6 +73,23 @@
 			{"content": "空又感受了一会胡桃脖子的包裹感之后，才把阴茎拔了出来，胡桃立刻坐了起来剧烈地咳嗽起来。"},
 			{"speaker": "空", "content": "好了，现在你已经被完全开发了，下次我们再性交的时候就不会难受了。"},
 			{"content": "胡桃还在穿着粗气咳嗽着，空穿好了衣服就离开了往生堂。"}
+		]}
+	],
+	"changes": [
+		{"type": "set_value", "variable": "fuck_ht", "value": "$$fuck_ht+1"}
+	],
+	"subsequences": ["meet_ht2"]
+},
+{
+	"milestone": "meet_ht2",
+	"visible": false,
+	"drop": "false",
+	"trigger": {"condition": "$$control_person==空 && $$fuck_ht>0", "type": "option_dialog", "target": "胡桃", "option": "性交"},
+	"dialogs": [
+		{"list": [
+			{"speaker": "胡桃", "content": "空空，快点再肏我一次，上次你肏完我之后我就一直等着下一次呢。"},
+			{"speaker": "空", "content": "那还是你来找个地方吧。"},
+			{"speaker": "胡桃", "content": "我忍不了了，就在街上吧，你站着抱着我肏，快点。"}
 		]}
 	],
 	"changes": [

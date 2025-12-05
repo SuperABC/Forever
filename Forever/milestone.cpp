@@ -3,9 +3,10 @@
 
 using namespace std;
 
-Milestone::Milestone(string name, shared_ptr<Event> trigger, bool visible, string description, string goal,
-	vector<Dialog> dialogs, vector<shared_ptr<Change>> changes) :
-	name(name), trigger(trigger), visible(visible), description(description), goal(goal), dialogs(dialogs), changes(changes) {
+Milestone::Milestone(string name, shared_ptr<Event> trigger, bool visible, Condition drop,
+	string description, string goal, vector<Dialog> dialogs, vector<shared_ptr<Change>> changes) :
+	name(name), trigger(trigger), visible(visible), drop(drop),
+	description(description), goal(goal), dialogs(dialogs), changes(changes) {
 
 }
 
@@ -39,6 +40,10 @@ string Milestone::GetName() {
 
 bool Milestone::IsVisible() {
 	return visible;
+}
+
+bool Milestone::DropSelf(function<ValueType(const string&)> getValue) {
+	return drop.EvaluateBool(getValue);
 }
 
 string Milestone::GetDescription() {

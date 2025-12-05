@@ -14,6 +14,10 @@
 #undef AddJob
 
 
+class EducationExperience;
+class EmotionExperience;
+class JobExperience;
+
 enum GENDER_TYPE {
 	GENDER_FEMALE, // 女性
 	GENDER_MALE // 男性
@@ -40,10 +44,10 @@ public:
 	void SetName(const std::string& name);
 	GENDER_TYPE GetGender() const;
 	void SetGender(GENDER_TYPE gender);
-	int GetHeight() const;
-	void SetHeight(int height);
-	int GetWeight() const;
-	void SetWeight(int weight);
+	float GetHeight() const;
+	void SetHeight(float height);
+	float GetWeight() const;
+	void SetWeight(float weight);
 	const Time& GetBirthday() const;
 	void SetBirthday(const Time& birthday);
 	int GetAge(const Time& currentTime) const;
@@ -102,7 +106,7 @@ private:
 	GENDER_TYPE gender;
 	Time birthday;
 	Time marryday;
-	int height, weight;
+	float height, weight;
 	std::string nick;
 	int deposit;
 	int phone;

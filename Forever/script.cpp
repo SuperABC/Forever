@@ -125,6 +125,7 @@ void Script::ReadScript(string path) {
 				milestone["milestone"].asString(),
 				BuildEvent(milestone["trigger"]),
 				milestone["visible"].asBool(),
+				BuildCondition(milestone["drop"].asString()),
 				milestone["description"].asString(),
 				milestone["goal"].asString(),
 				BuildDialogs(milestone["dialogs"]),
@@ -215,7 +216,14 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(shared_ptr<E
             auto changes = (*it)->content.GetChanges();
             results.second.insert(results.second.end(), changes.begin(), changes.end());
 
-            it = actives.erase(it);
+			if ((*it)->content.DropSelf([this](string name) -> ValueType {
+				return this->GetValue(name);
+				})) {
+				it = actives.erase(it);
+			}
+			else {
+				it++;
+			}
         }
         else {
             ++it;

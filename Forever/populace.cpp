@@ -496,9 +496,9 @@ void Populace::GeneratePhones() {
 	for (auto citizen : citizens) {
 		int number;
 		do {
-			number = pow(10, 9);
+			number = (int)pow(10, 9);
 			for (int i = 0; i < 9; i++) {
-				number += GetRandom(10) * pow(10, i);
+				number += GetRandom(10) * (int)pow(10, i);
 			}
 		} while (phoneRoll.find(number) != phoneRoll.end() && phoneRoll[number] != citizen);
 
@@ -512,7 +512,7 @@ void Populace::GeneratePhones() {
 void Populace::GeneratePhysics() {
 	for (auto citizen : citizens) {
 		float r = GetRandom(1000) / 1000.f;
-		r = pow(r, 4);
+		r = pow(r, 4.f);
 		if (GetRandom(2))r = -r;
 
 		int age = citizen->GetAge(time);
@@ -540,9 +540,9 @@ void Populace::GeneratePhysics() {
 void Populace::GenerateFinance() {
 	for (auto citizen : citizens) {
 		float r = GetRandom(1000) / 1000.f;
-		r = pow(r, 12);
+		r = pow(r, 12.f);
 
-		citizen->SetDeposit(1e8 * r); 
+		citizen->SetDeposit((int)(1e8f * r));
 	}
 
 	debugf("Generate deposit.\n");
@@ -599,7 +599,7 @@ void Populace::GenerateEducations() {
 							}
 						}
 						if (!targetClasses.empty()) {
-							SchoolClass* targetClass = targetClasses[GetRandom(targetClasses.size())];
+							SchoolClass* targetClass = targetClasses[GetRandom((int)targetClasses.size())];
 							targetClass->students.push_back(*studentIt);
 							studentIt = cls.students.erase(studentIt);
 						}
@@ -616,7 +616,7 @@ void Populace::GenerateEducations() {
 							}
 						}
 						if (!targetClasses.empty()) {
-							SchoolClass* targetClass = targetClasses[GetRandom(targetClasses.size())];
+							SchoolClass* targetClass = targetClasses[GetRandom((int)targetClasses.size())];
 							targetClass->students.push_back(*studentIt);
 							studentIt = cls.students.erase(studentIt);
 						}
@@ -648,7 +648,7 @@ void Populace::GenerateEducations() {
 								}
 							}
 							if (!targetClasses.empty()) {
-								SchoolClass* targetClass = targetClasses[GetRandom(targetClasses.size())];
+								SchoolClass* targetClass = targetClasses[GetRandom((int)targetClasses.size())];
 								targetClass->students.push_back(*studentIt);
 								studentIt = cls.students.erase(studentIt);
 							}
@@ -692,13 +692,13 @@ void Populace::GenerateEducations() {
 					}
 
 					if (cls.grade > maxGrade) {
-						cls.students.resize(cls.students.size() * continueRatio);
+						cls.students.resize((int)(cls.students.size() * continueRatio));
 						levelPotentials[level + 1].insert(levelPotentials[level + 1].end(), cls.students.begin(), cls.students.end());
 						cls.students.clear();
 					}
 					else {
-						float ratio = (100 - GetRandom((1.0f - stayRatio) * 100)) / 100.0f;
-						size_t newSize = cls.students.size() * ratio;
+						float ratio = (100 - GetRandom((int)((1.0f - stayRatio) * 100))) / 100.0f;
+						size_t newSize = (int)(cls.students.size() * ratio);
 						for (auto studentIt = cls.students.begin() + newSize; studentIt != cls.students.end(); ++studentIt) {
 							if (citizens[*studentIt]->GetEducationExperiences().size() > 0)
 								citizens[*studentIt]->GetEducationExperiences().back().SetGraduate(false);
@@ -736,7 +736,7 @@ void Populace::GenerateEducations() {
 
 		// 小学入学
 		if (!levelPotentials[EDUCATION_PRIMARY].empty()) {
-			int classCount = max(1, levelPotentials[EDUCATION_PRIMARY].size() / (20 + GetRandom(20)));
+			int classCount = max(1, (int)levelPotentials[EDUCATION_PRIMARY].size() / (20 + GetRandom(20)));
 			if (classCount == 0)classCount = 1;
 
 			int schoolCount = max(1, classCount / 5);
@@ -745,7 +745,7 @@ void Populace::GenerateEducations() {
 				schoolNames.push_back("第" + to_string(i + 1) + "小学");
 			}
 			shuffle(levelPotentials[EDUCATION_PRIMARY].begin(), levelPotentials[EDUCATION_PRIMARY].end(), generator);
-			int studentsPerClass = levelPotentials[EDUCATION_PRIMARY].size() / classCount;
+			int studentsPerClass = (int)levelPotentials[EDUCATION_PRIMARY].size() / classCount;
 
 			for (int i = 0; i < classCount; i++) {
 				SchoolClass newClass;
@@ -755,7 +755,7 @@ void Populace::GenerateEducations() {
 				newClass.level = EDUCATION_PRIMARY;
 
 				int startIdx = i * studentsPerClass;
-				int endIdx = (i == classCount - 1) ? levelPotentials[EDUCATION_PRIMARY].size() : (i + 1) * studentsPerClass;
+				int endIdx = (i == classCount - 1) ? (int)levelPotentials[EDUCATION_PRIMARY].size() : (i + 1) * studentsPerClass;
 				for (int j = startIdx; j < endIdx; j++) {
 					newClass.students.push_back(levelPotentials[EDUCATION_PRIMARY][j]);
 				}
@@ -767,7 +767,7 @@ void Populace::GenerateEducations() {
 
 		// 初中入学
 		if (!levelPotentials[EDUCATION_JUNIOR].empty()) {
-			int classCount = max(1, levelPotentials[EDUCATION_JUNIOR].size() / (20 + GetRandom(20)));
+			int classCount = max(1, (int)levelPotentials[EDUCATION_JUNIOR].size() / (20 + GetRandom(20)));
 			if (classCount == 0)classCount = 1;
 
 			int schoolCount = max(1, classCount / 4);
@@ -777,7 +777,7 @@ void Populace::GenerateEducations() {
 			}
 
 			shuffle(levelPotentials[EDUCATION_JUNIOR].begin(), levelPotentials[EDUCATION_JUNIOR].end(), generator);
-			int studentsPerClass = levelPotentials[EDUCATION_JUNIOR].size() / classCount;
+			int studentsPerClass = (int)levelPotentials[EDUCATION_JUNIOR].size() / classCount;
 
 			for (int i = 0; i < classCount; i++) {
 				SchoolClass newClass;
@@ -787,7 +787,7 @@ void Populace::GenerateEducations() {
 				newClass.level = EDUCATION_JUNIOR;
 
 				int startIdx = i * studentsPerClass;
-				int endIdx = (i == classCount - 1) ? levelPotentials[EDUCATION_JUNIOR].size() : (i + 1) * studentsPerClass;
+				int endIdx = (i == classCount - 1) ? (int)levelPotentials[EDUCATION_JUNIOR].size() : (i + 1) * studentsPerClass;
 				for (int j = startIdx; j < endIdx; j++) {
 					newClass.students.push_back(levelPotentials[EDUCATION_JUNIOR][j]);
 				}
@@ -799,7 +799,7 @@ void Populace::GenerateEducations() {
 
 		// 高中入学
 		if (!levelPotentials[EDUCATION_SENIOR].empty()) {
-			int classCount = max(1, levelPotentials[EDUCATION_SENIOR].size() / (30 + GetRandom(20)));
+			int classCount = max(1, (int)levelPotentials[EDUCATION_SENIOR].size() / (30 + GetRandom(20)));
 			if (classCount == 0)classCount = 1;
 
 			int schoolCount = max(1, classCount / 4);
@@ -809,7 +809,7 @@ void Populace::GenerateEducations() {
 			}
 
 			shuffle(levelPotentials[EDUCATION_SENIOR].begin(), levelPotentials[EDUCATION_SENIOR].end(), generator);
-			int studentsPerClass = levelPotentials[EDUCATION_SENIOR].size() / classCount;
+			int studentsPerClass = (int)levelPotentials[EDUCATION_SENIOR].size() / classCount;
 
 			for (int i = 0; i < classCount; i++) {
 				SchoolClass newClass;
@@ -819,7 +819,7 @@ void Populace::GenerateEducations() {
 				newClass.level = EDUCATION_SENIOR;
 
 				int startIdx = i * studentsPerClass;
-				int endIdx = (i == classCount - 1) ? levelPotentials[EDUCATION_SENIOR].size() : (i + 1) * studentsPerClass;
+				int endIdx = (i == classCount - 1) ? (int)levelPotentials[EDUCATION_SENIOR].size() : (i + 1) * studentsPerClass;
 				for (int j = startIdx; j < endIdx; j++) {
 					newClass.students.push_back(levelPotentials[EDUCATION_SENIOR][j]);
 				}
@@ -838,7 +838,7 @@ void Populace::GenerateEducations() {
 			}
 
 			shuffle(levelPotentials[EDUCATION_COLLEGE].begin(), levelPotentials[EDUCATION_COLLEGE].end(), generator);
-			int studentsPerMajor = levelPotentials[EDUCATION_COLLEGE].size() / majorCount;
+			int studentsPerMajor = (int)levelPotentials[EDUCATION_COLLEGE].size() / majorCount;
 
 			for (int i = 0; i < majorCount; i++) {
 				SchoolClass newClass;
@@ -848,7 +848,7 @@ void Populace::GenerateEducations() {
 				newClass.level = EDUCATION_COLLEGE;
 
 				int startIdx = i * studentsPerMajor;
-				int endIdx = (i == majorCount - 1) ? levelPotentials[EDUCATION_COLLEGE].size() : (i + 1) * studentsPerMajor;
+				int endIdx = (i == majorCount - 1) ? (int)levelPotentials[EDUCATION_COLLEGE].size() : (i + 1) * studentsPerMajor;
 				for (int j = startIdx; j < endIdx; j++) {
 					newClass.students.push_back(levelPotentials[EDUCATION_COLLEGE][j]);
 				}
@@ -867,7 +867,7 @@ void Populace::GenerateEducations() {
 			}
 
 			shuffle(levelPotentials[EDUCATION_POST].begin(), levelPotentials[EDUCATION_POST].end(), generator);
-			int studentsPerMajor = levelPotentials[EDUCATION_POST].size() / majorCount;
+			int studentsPerMajor = (int)levelPotentials[EDUCATION_POST].size() / majorCount;
 
 			for (int i = 0; i < majorCount; i++) {
 				SchoolClass newClass;
@@ -877,7 +877,7 @@ void Populace::GenerateEducations() {
 				newClass.level = EDUCATION_POST;
 
 				int startIdx = i * studentsPerMajor;
-				int endIdx = (i == majorCount - 1) ? levelPotentials[EDUCATION_POST].size() : (i + 1) * studentsPerMajor;
+				int endIdx = (i == majorCount - 1) ? (int)levelPotentials[EDUCATION_POST].size() : (i + 1) * studentsPerMajor;
 				for (int j = startIdx; j < endIdx; j++) {
 					newClass.students.push_back(levelPotentials[EDUCATION_POST][j]);
 				}
@@ -914,7 +914,7 @@ void Populace::GenerateEmotions() {
 
 		int maxRelationships = min(10, (endBound - startBound).GetYear() / 3 + 1);
 		int relationshipCount = GetRandom(maxRelationships + 1);
-		relationshipCount = max(relationshipCount - citizen->GetEmotionExperiences().size(), 0);
+		relationshipCount = max(relationshipCount - (int)citizen->GetEmotionExperiences().size(), 0);
 
 		// 随机生成指定段数的经历
 		vector<EmotionExperience> newEmotions;
@@ -933,7 +933,7 @@ void Populace::GenerateEmotions() {
 				int minDuration = 1;
 				int maxDuration = Time::DaysBetween(startTime, endBound) + 1;
 				float r = GetRandom(1000) / 1000.0f;
-				int durationDays = minDuration + (maxDuration - minDuration + 1) * pow(r, 4);
+				int durationDays = minDuration + (int)((maxDuration - minDuration + 1) * pow(r, 4.f));
 				endTime = startTime;
 				endTime.AddDays(durationDays - 1);
 				if (endTime > endBound) endTime = endBound;
@@ -963,7 +963,7 @@ void Populace::GenerateEmotions() {
 			while (!partner && candidateAttempts < 100) {
 				candidateAttempts++;
 
-				int idx = GetRandom(citizens.size());
+				int idx = GetRandom((int)citizens.size());
 				shared_ptr<Person> candidate = citizens[idx];
 				if (candidate->GetGender() == citizen->GetGender())continue;
 				if (candidate == citizen) continue;
@@ -1046,7 +1046,7 @@ void Populace::GenerateEmotions() {
 			while (!currentPartner && candidateAttempts < 100) {
 				candidateAttempts++;
 
-				int idx = GetRandom(citizens.size());
+				int idx = GetRandom((int)citizens.size());
 				shared_ptr<Person> candidate = citizens[idx];
 				if (candidate->GetGender() == citizen->GetGender())continue;
 				if (candidate == citizen || candidate->GetSpouse()) continue;

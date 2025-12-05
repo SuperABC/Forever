@@ -10,8 +10,8 @@
 
 class Milestone {
 public:
-    Milestone(std::string name, std::shared_ptr<Event> trigger, bool visible, std::string description, std::string goal,
-        std::vector<Dialog> dialogs, std::vector<std::shared_ptr<Change>> changes);
+    Milestone(std::string name, std::shared_ptr<Event> trigger, bool visible, Condition keep,
+        std::string description, std::string goal, std::vector<Dialog> dialogs, std::vector<std::shared_ptr<Change>> changes);
     ~Milestone();
 
     // 复合对象类型
@@ -25,6 +25,7 @@ public:
     // 获取参数
     std::string GetName();
     bool IsVisible();
+    bool DropSelf(std::function<ValueType(const std::string&)> getValue);
     std::string GetDescription();
     std::string GetGoal();
 
@@ -32,6 +33,7 @@ private:
     std::string name;
     std::shared_ptr<Event> trigger;
     bool visible;
+    Condition drop;
     std::string description;
     std::string goal;
     std::vector<Dialog> dialogs;

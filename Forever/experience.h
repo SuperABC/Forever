@@ -4,6 +4,8 @@
 #include "person.h"
 
 
+class Person;
+
 class Experience {
 public:
     Experience() = default;
