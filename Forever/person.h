@@ -53,6 +53,8 @@ public:
 	void SetNick(const std::string& nick);
 	int GetDeposit() const;
 	void SetDeposit(int deposit);
+	int GetPhone() const;
+	void SetPhone(int phone);
 
 	// 实时模拟
 	int GetSimulate() const;
@@ -103,6 +105,7 @@ private:
 	int height, weight;
 	std::string nick;
 	int deposit;
+	int phone;
 
 	bool simulate = true;
 

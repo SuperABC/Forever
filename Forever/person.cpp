@@ -92,6 +92,14 @@ void Person::SetDeposit(int deposit) {
 	this->deposit = deposit;
 }
 
+int Person::GetPhone() const {
+	return phone;
+}
+
+void Person::SetPhone(int phone) {
+	this->phone = phone;
+}
+
 int Person::GetSimulate() const {
 	return simulate;
 }

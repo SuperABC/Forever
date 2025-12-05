@@ -492,6 +492,62 @@ void Populace::GenerateCitizens(int num) {
 	debugf("Generate %d citizens.\n", citizens.size());
 }
 
+void Populace::GeneratePhones() {
+	for (auto citizen : citizens) {
+		int number;
+		do {
+			number = pow(10, 9);
+			for (int i = 0; i < 9; i++) {
+				number += GetRandom(10) * pow(10, i);
+			}
+		} while (phoneRoll.find(number) != phoneRoll.end() && phoneRoll[number] != citizen);
+
+		phoneRoll[number] = citizen;
+		citizen->SetPhone(number);
+	}
+
+	debugf("Generate phones.\n");
+}
+
+void Populace::GeneratePhysics() {
+	for (auto citizen : citizens) {
+		float r = GetRandom(1000) / 1000.f;
+		r = pow(r, 4);
+		if (GetRandom(2))r = -r;
+
+		int age = citizen->GetAge(time);
+		if (age > 15) {
+			if (citizen->GetGender() == GENDER_MALE) {
+				citizen->SetHeight(1.75f + r * 0.2f);
+			}
+			else {
+				citizen->SetHeight(1.65f + r * 0.15f);
+			}
+		}
+		else {
+			if (citizen->GetGender() == GENDER_MALE) {
+				citizen->SetHeight((1.75f + r * 0.2f) * (0.3f + age / 15.f * 0.7f));
+			}
+			else {
+				citizen->SetHeight((1.65f + r * 0.15f) * (0.3f + age / 15.f * 0.7f));
+			}
+		}
+	}
+
+	debugf("Generate height and weight.\n");
+}
+
+void Populace::GenerateFinance() {
+	for (auto citizen : citizens) {
+		float r = GetRandom(1000) / 1000.f;
+		r = pow(r, 12);
+
+		citizen->SetDeposit(1e8 * r); 
+	}
+
+	debugf("Generate deposit.\n");
+}
+
 void Populace::GenerateEducations() {
 	enum EducationLevel {
 		EDUCATION_PRIMARY,
@@ -834,6 +890,8 @@ void Populace::GenerateEducations() {
 	for (auto citizen : citizens) {
 		citizen->ExperienceComposition();
 	}
+
+	debugf("Generate educations.\n");
 }
 
 void Populace::GenerateEmotions() {
@@ -1044,8 +1102,12 @@ void Populace::GenerateEmotions() {
 			}
 		}
 	}
+
+	debugf("Generate emotions.\n");
 }
 
 void Populace::GenerateJobs() {
 
+
+	debugf("Generate jobs.\n");
 }

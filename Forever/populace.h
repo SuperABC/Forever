@@ -77,9 +77,15 @@ private:
 
 	// 市民管理
 	std::vector<std::shared_ptr<Person>> citizens;
+	std::unordered_map<int, std::shared_ptr<Person>> phoneRoll;
 
 	// 生成市民
 	void GenerateCitizens(int num);
+
+	// 生成基础属性
+	void GeneratePhones();
+	void GeneratePhysics();
+	void GenerateFinance();
 
 	// 生成经历
 	void GenerateEducations();
