@@ -271,13 +271,13 @@ private:
                 case Operator::MULTIPLY: return l * r;
                 case Operator::DIVIDE:
                     if (r == 0) {
-                        THROW_EXCEPTION(ArithmaticException, "Division by zero.\n");
+                        THROW_EXCEPTION(ArithmeticException, "Division by zero.\n");
                     }
                     // 整数除法，返回整数结果
                     return l / r;
                 case Operator::MODULO:
                     if (r == 0) {
-                        THROW_EXCEPTION(ArithmaticException, "Modulo by zero.\n");
+                        THROW_EXCEPTION(ArithmeticException, "Modulo by zero.\n");
                     }
                     return l % r;
                 case Operator::EXPONENT: {
@@ -295,7 +295,7 @@ private:
                     return result;
                 }
                 default:
-                    THROW_EXCEPTION(ArithmaticException, "Unsupported arithmetic operator.\n");
+                    THROW_EXCEPTION(ArithmeticException, "Unsupported arithmetic operator.\n");
                 }
             }
             // 如果至少有一个操作数是浮点数，进行浮点数运算
@@ -310,22 +310,22 @@ private:
                 case Operator::MULTIPLY: return l_val * r_val;
                 case Operator::DIVIDE:
                     if (abs(r_val) < 1e-10) {
-                        THROW_EXCEPTION(ArithmaticException, "Division by zero.\n");
+                        THROW_EXCEPTION(ArithmeticException, "Division by zero.\n");
                     }
                     return l_val / r_val;
                 case Operator::MODULO:
                     if (abs(r_val) < 1e-10) {
-                        THROW_EXCEPTION(ArithmaticException, "Modulo by zero.\n");
+                        THROW_EXCEPTION(ArithmeticException, "Modulo by zero.\n");
                     }
                     return fmod(l_val, r_val);
                 case Operator::EXPONENT:
                     return pow(l_val, r_val);
                 default:
-                    THROW_EXCEPTION(ArithmaticException, "Unsupported arithmetic operator.\n");
+                    THROW_EXCEPTION(ArithmeticException, "Unsupported arithmetic operator.\n");
                 }
             }
             else {
-                THROW_EXCEPTION(ArithmaticException, "Arithmetic operations only supported for numeric types.\n");
+                THROW_EXCEPTION(ArithmeticException, "Arithmetic operations only supported for numeric types.\n");
             }
             }, left, right);
     }

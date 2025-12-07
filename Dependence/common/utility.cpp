@@ -13,11 +13,13 @@
 using namespace std;
 
 void debugf(LPCSTR format, ...) {
-	va_list args;
-	va_start(args, format);
-	CHAR buf[1024] = { 0 };
-	StringCchVPrintfA(buf, 1023, format, args);
-	OutputDebugStringA(buf);
+    va_list args;
+    va_start(args, format);
+    int len = _vscprintf(format, args);
+    std::vector<char> buf(len + 1);
+    vsprintf_s(buf.data(), buf.size(), format, args);
+    OutputDebugStringA(buf.data());
+    va_end(args);
 }
 
 int GetRandom(int range) {

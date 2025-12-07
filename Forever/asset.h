@@ -46,7 +46,7 @@ public:
 
     static std::string GetId() { return "buildingAsset"; }
     virtual std::string GetType() const override { return "buildingAsset"; }
-    virtual std::string GetName() const override { return "园区资产"; }
+    virtual std::string GetName() const override { return "建筑资产"; }
 
     std::shared_ptr<Building> GetBuilding();
     void SetBuilding(std::shared_ptr<Building> building);
@@ -63,7 +63,7 @@ public:
 
     static std::string GetId() { return "roomAsset"; }
     virtual std::string GetType() const override { return "roomAsset"; }
-    virtual std::string GetName() const override { return "园区资产"; }
+    virtual std::string GetName() const override { return "房间资产"; }
 
     std::shared_ptr<Room> GetRoom();
     void SetRoom(std::shared_ptr<Room> room);

@@ -52,7 +52,7 @@ public:
     using ExceptionBase::ExceptionBase;
 };
 
-class ArithmaticException : public ExceptionBase {
+class ArithmeticException : public ExceptionBase {
     using ExceptionBase::ExceptionBase;
 };
 

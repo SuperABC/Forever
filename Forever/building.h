@@ -3,7 +3,6 @@
 #include "room.h"
 #include "component.h"
 #include "building_base.h"
-#include "component_base.h"
 
 
 // 子类注册函数
