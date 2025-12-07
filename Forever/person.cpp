@@ -254,3 +254,19 @@ void Person::ExperienceComposition() {
 	educationExperiences.resize(idx);
 }
 
+void Person::AddScript(string path, unique_ptr<Story>& story) {
+	scripts.push_back(make_shared<Script>());
+	scripts.back()->ReadScript(path,
+		story->GetEventFactory(), story->GetChangeFactory());
+}
+
+pair<vector<Dialog>, vector<shared_ptr<Change>>> Person::MatchEvent(
+	shared_ptr<Event> event, unique_ptr<Story>& story) {
+	for (auto& script : scripts) {
+		auto result = script->MatchEvent(event, story.get());
+		if (!result.first.empty() || !result.second.empty()) {
+			return result;
+		}
+	}
+	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
+}

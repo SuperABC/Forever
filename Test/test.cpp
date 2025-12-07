@@ -113,28 +113,57 @@ int main() {
 
 				parser.ParseCmd(cmd);
 				auto event = ParseEvent(parser);
-				auto actions = story->MatchEvent(event);
-				auto dialogs = actions.first;
-				auto changes = actions.second;
-				for (auto dialog : dialogs) {
-					if (story->JudgeCondition(dialog.GetCondition())) {
-						auto contents = dialog.GetDialogs();
-						if (contents.size() > 0) {
-							for (auto content : contents) {
-								if (content.first.size() == 0)
-									cout << story->ReplaceContent(content.second) << endl;
-								else
-									cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+
+				if (true) {
+					auto actions = story->MatchEvent(event);
+					auto dialogs = actions.first;
+					auto changes = actions.second;
+					for (auto dialog : dialogs) {
+						if (story->JudgeCondition(dialog.GetCondition())) {
+							auto contents = dialog.GetDialogs();
+							if (contents.size() > 0) {
+								for (auto content : contents) {
+									if (content.first.size() == 0)
+										cout << story->ReplaceContent(content.second) << endl;
+									else
+										cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+								}
+								break;
 							}
-							break;
 						}
 					}
+					for (auto change : changes) {
+						if (!story->JudgeCondition(change->GetCondition()))continue;
+						map->ApplyChange(change, story);
+						populace->ApplyChange(change, story);
+						story->ApplyChange(change);
+					}
 				}
-				for (auto change : changes) {
-					if (!story->JudgeCondition(change->GetCondition()))continue;
-					map->ApplyChange(change, story);
-					populace->ApplyChange(change, story);
-					story->ApplyChange(change);
+				if (event->GetType() == "option_dialog") {
+					auto actions = populace->TriggerEvent(
+						dynamic_pointer_cast<OptionDialogEvent>(event)->GetTarget(), event, story);
+					auto dialogs = actions.first;
+					auto changes = actions.second;
+					for (auto dialog : dialogs) {
+						if (story->JudgeCondition(dialog.GetCondition())) {
+							auto contents = dialog.GetDialogs();
+							if (contents.size() > 0) {
+								for (auto content : contents) {
+									if (content.first.size() == 0)
+										cout << story->ReplaceContent(content.second) << endl;
+									else
+										cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+								}
+								break;
+							}
+						}
+					}
+					for (auto change : changes) {
+						if (!story->JudgeCondition(change->GetCondition()))continue;
+						map->ApplyChange(change, story);
+						populace->ApplyChange(change, story);
+						story->ApplyChange(change);
+					}
 				}
 				break;
 			}

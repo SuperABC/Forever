@@ -91,6 +91,14 @@ void Story::InitChanges() {
 #endif // MOD_TEST
 }
 
+unique_ptr<EventFactory>& Story::GetEventFactory() {
+	return eventFactory;
+}
+
+unique_ptr<ChangeFactory>& Story::GetChangeFactory() {
+	return changeFactory;
+}
+
 void Story::Init() {
 	InitVariables();
 

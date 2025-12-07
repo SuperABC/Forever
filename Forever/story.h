@@ -25,6 +25,8 @@ public:
 	// 读取Mods
 	void InitEvents();
 	void InitChanges();
+	std::unique_ptr<EventFactory>& GetEventFactory();
+	std::unique_ptr<ChangeFactory>& GetChangeFactory();
 
 	// 剧情初始化
 	void Init();

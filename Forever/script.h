@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "milestone.h"
 #include "change.h"
@@ -14,11 +14,11 @@ public:
 	Script();
 	~Script();
 
-	// ¶ÁÈ¡¾ç±¾
+	// è¯»å–å‰§æœ¬
 	void ReadScript(std::string path,
 		std::unique_ptr<EventFactory> &eventFactory, std::unique_ptr<ChangeFactory> &changeFactory);
 
-	// Æ¥ÅäÊÂ¼ş
+	// åŒ¹é…äº‹ä»¶
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
 		std::shared_ptr<Event> event, Story *story);
 
@@ -26,7 +26,7 @@ private:
 	std::vector<MilestoneNode> milestones;
 	std::vector<MilestoneNode*> actives;
 
-	// ¸´ºÏ¶ÔÏó¶ÁÈ¡
+	// å¤åˆå¯¹è±¡è¯»å–
 	std::vector<std::shared_ptr<Event>> BuildEvent(Json::Value root, std::unique_ptr<EventFactory> &factory);
 	std::vector<Dialog> BuildDialogs(Json::Value root);
 	std::vector<std::shared_ptr<Change>> BuildChanges(Json::Value root, std::unique_ptr<ChangeFactory> &factory);

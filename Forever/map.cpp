@@ -704,8 +704,7 @@ bool Map::CheckXY(int x, int y) const {
 
 shared_ptr<Block> Map::GetBlock(int x, int y) const {
     if (!CheckXY(x, y)) {
-        throw invalid_argument("invalid block query position.\n");
-        return nullptr;
+        THROW_EXCEPTION(InvalidArgumentException, "invalid block query position.\n");
     }
 
     int blockX = x / BLOCK_SIZE;
@@ -716,8 +715,7 @@ shared_ptr<Block> Map::GetBlock(int x, int y) const {
 
 shared_ptr<Element> Map::GetElement(int x, int y) const {
     if (!CheckXY(x, y)) {
-        throw invalid_argument("invalid block query position.\n");
-        return nullptr;
+        THROW_EXCEPTION(InvalidArgumentException, "invalid block query position.\n");
     }
 
     int blockX = x / BLOCK_SIZE;

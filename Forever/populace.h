@@ -61,6 +61,13 @@ public:
 	std::vector<std::shared_ptr<Person>> GetComer(int x, int y);
 	std::vector<std::shared_ptr<Person>> GetComer(std::shared_ptr<Room>);
 
+	// 触发事件
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> TriggerEvent(
+		std::string name, std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> TriggerEvent(
+		int id, std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+
+
 	// 获取Job工厂
 	std::unique_ptr<JobFactory>& GetJobFactory();
 

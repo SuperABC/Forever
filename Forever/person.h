@@ -4,6 +4,7 @@
 #include "scheduler.h"
 #include "job.h"
 #include "experience.h"
+#include "script.h"
 #include "utility.h"
 
 #include <string>
@@ -100,6 +101,11 @@ public:
 	std::vector<JobExperience>& GetJobExperiences();
 	void ExperienceComposition();
 
+	// 管理剧本
+	void AddScript(std::string path, std::unique_ptr<Story>& story);
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
+		std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+
 private:
 	int id;
 	std::string name;
@@ -124,4 +130,6 @@ private:
 	std::vector<EducationExperience> educationExperiences;
 	std::vector<EmotionExperience> emotionExperiences;
 	std::vector<JobExperience> jobExperiences;
+
+	std::vector<std::shared_ptr<Script>> scripts;
 };

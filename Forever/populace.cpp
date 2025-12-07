@@ -269,6 +269,27 @@ std::vector<std::shared_ptr<Person>>& Populace::GetCitizens() {
 	return citizens;
 }
 
+pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
+	string name, shared_ptr<Event> event, unique_ptr<Story>& story) {
+
+	for(auto & citizen : citizens) {
+		if (citizen->GetName() == name) {
+			return citizen->MatchEvent(event, story);
+		}
+	}
+
+	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
+}
+
+pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
+	int id, shared_ptr<Event> event, unique_ptr<Story>& story) {
+	if (id >= 0 && id < citizens.size()) {
+		return citizens[id]->MatchEvent(event, story);
+	}
+
+	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
+}
+
 std::unique_ptr<JobFactory>& Populace::GetJobFactory() {
 	return jobFactory;
 }
