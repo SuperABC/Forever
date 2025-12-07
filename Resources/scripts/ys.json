@@ -2,7 +2,7 @@
 {
 	"milestone": "arrive_teyvat",
 	"visible": false,
-	"trigger": {"type": "game_start"},
+	"triggers": [{"type": "game_start"}],
 	"dialogs": [
 		{"list": [
 			{"content": ""}
@@ -37,7 +37,7 @@
 {
 	"milestone": "meet_ht1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_ht==0", "type": "option_dialog", "target": "胡桃", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_ht==0", "type": "option_dialog", "target": "胡桃", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "胡桃", "content": "哎呀呀，这不是空嘛。"},
@@ -84,11 +84,11 @@
 	"milestone": "meet_ht2",
 	"visible": false,
 	"drop": "false",
-	"trigger": {"condition": "$$control_person==空 && $$fuck_ht>0", "type": "option_dialog", "target": "胡桃", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_ht>0", "type": "option_dialog", "target": "胡桃", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "胡桃", "content": "空空，快点再肏我一次，上次你肏完我之后我就一直等着下一次呢。"},
-			{"content": "说完胡桃就脱掉了裤子和内裤，然后又扒下了空的裤子，抓起空的阴茎。"}
+			{"content": "说完胡桃就脱掉了裤子和内裤，然后又扒下了空的裤子，抓起空的阴茎。"},
 			{"speaker": "空", "content": "就在大街上吗？"},
 			{"speaker": "胡桃", "content": "我忍不了了，就在这，你站着抱着我肏，快点。"}
 		]}
@@ -101,7 +101,7 @@
 {
 	"milestone": "meet_ng1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_ng==0", "type": "option_dialog", "target": "凝光", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_ng==0", "type": "option_dialog", "target": "凝光", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "凝光", "content": "你好，旅行者。"},
@@ -138,7 +138,7 @@
 {
 	"milestone": "meet_q1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_q==0", "type": "option_dialog", "target": "琴", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_q==0", "type": "option_dialog", "target": "琴", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "琴", "content": "旅行者，你来了。我正在处理一些文件，请稍等片刻。"},
@@ -182,7 +182,7 @@
 {
 	"milestone": "meet_yl1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_yl==0", "type": "option_dialog", "target": "夜兰", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_yl==0", "type": "option_dialog", "target": "优菈", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "优菈", "content": "哦？这不是旅行者吗？来得正好，我有个重要的请求。"},
@@ -203,7 +203,7 @@
 			{"content": "空配合着抽插着自己的已经，同时积极回应着优菈的舌头。"},
 			{"content": "优菈移动的速度越来越快，叫声也越来越放荡。"},
 			{"speaker": "优菈", "content": "啊！好舒服！这就是成为女人的感觉吗？"},
-			{"speaker": "空", "content": "加油优菈，争取就这样射出来。"},
+			{"speaker": "空", "content": "加油优菈，争取就这样让我射出来。"},
 			{"content": "得益于日常的锻炼，优菈的耐力非常出色，就一直高强度性交了很久。"},
 			{"speaker": "空", "content": "准备好了吗？我马上就要射了。"},
 			{"speaker": "优菈", "content": "射进来！全部射进我的子宫里！"},
@@ -222,7 +222,7 @@
 {
 	"milestone": "meet_kq1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_kq==0", "type": "option_dialog", "target": "刻晴", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_kq==0", "type": "option_dialog", "target": "刻晴", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "刻晴", "content": "旅行者，你来得正好，我正想找你呢。"},
@@ -259,7 +259,7 @@
 {
 	"milestone": "meet_gy1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_gy==0", "type": "option_dialog", "target": "甘雨", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_gy==0", "type": "option_dialog", "target": "甘雨", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "甘雨", "content": "旅行者，你终于来了。我等你很久了。"},
@@ -299,7 +299,7 @@
 {
 	"milestone": "meet_mn1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_mn==0", "type": "option_dialog", "target": "莫娜", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_mn==0", "type": "option_dialog", "target": "莫娜", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "莫娜", "content": "你来了，脱衣服吧。"},
@@ -345,7 +345,7 @@
 {
 	"milestone": "meet_ldjj1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_ldjj==0", "type": "option_dialog", "target": "雷电将军", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_ldjj==0", "type": "option_dialog", "target": "雷电将军", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "雷电将军", "content": "异乡的旅人，你终于来了。"},
@@ -378,7 +378,7 @@
 {
 	"milestone": "meet_fnn1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_fnn==0", "type": "option_dialog", "target": "芙宁娜", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_fnn==0", "type": "option_dialog", "target": "芙宁娜", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "芙宁娜", "content": "啊~亲爱的观众，欢迎来到我的舞台！今天我将为你献上最精彩的表演！"},
@@ -422,7 +422,7 @@
 {
 	"milestone": "meet_xld1",
 	"visible": false,
-	"trigger": {"condition": "$$control_person==空 && $$fuck_xld==0", "type": "option_dialog", "target": "夏洛蒂", "option": "性交"},
+	"triggers": [{"condition": "$$control_person==空 && $$fuck_xld==0", "type": "option_dialog", "target": "夏洛蒂", "option": "性交"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "夏洛蒂", "content": "各位观众朋友们好！我是蒸汽鸟报的记者夏洛蒂！今天我将为大家带来一场前所未有的直播！"},

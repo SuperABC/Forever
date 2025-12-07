@@ -3,9 +3,9 @@
 
 using namespace std;
 
-Milestone::Milestone(string name, shared_ptr<Event> trigger, bool visible, Condition drop,
+Milestone::Milestone(string name, vector<shared_ptr<Event>> triggers, bool visible, Condition drop,
 	string description, string goal, vector<Dialog> dialogs, vector<shared_ptr<Change>> changes) :
-	name(name), trigger(trigger), visible(visible), drop(drop),
+	name(name), triggers(triggers), visible(visible), drop(drop),
 	description(description), goal(goal), dialogs(dialogs), changes(changes) {
 
 }
@@ -22,16 +22,22 @@ vector<shared_ptr<Change>> Milestone::GetChanges() {
 	return changes;
 }
 
-shared_ptr<Event> Milestone::GetTrigger() {
-	return trigger;
+vector<shared_ptr<Event>> Milestone::GetTriggers() {
+	return triggers;
 }
 
 bool Milestone::MatchTrigger(shared_ptr<Event> e) {
-	if (!trigger)return false;
+	if (triggers.size() <= 0)return false;
 	if (!e)return false;
-	if (trigger->GetType() != e->GetType())return false;
 
-	return trigger->operator==(e);
+	for(auto trigger : triggers) {
+		if (trigger->GetType() != e->GetType())continue;
+		if (trigger->operator==(e)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 string Milestone::GetName() {

@@ -23,6 +23,9 @@ public:
 	void InitEvents();
 	void InitChanges();
 
+	// 初始化剧本
+	void Init();
+
 	// 输出当前剧本信息
 	void Print();
 
@@ -45,6 +48,10 @@ public:
 	// 替换文本变量
 	std::string ReplaceContent(const std::string& content);
 
+	// 变量管理
+	void SetValue(const std::string& name, ValueType value);
+	ValueType GetValue(const std::string& name);
+
 private:
 	// Mod管理
 	std::vector<HMODULE> modHandles;
@@ -57,14 +64,12 @@ private:
 	std::unordered_map<std::string, ValueType> variables;
 
 	// 复合对象读取
-	std::shared_ptr<Event> BuildEvent(Json::Value root);
+	std::vector<std::shared_ptr<Event>> BuildEvent(Json::Value root);
 	std::vector<Dialog> BuildDialogs(Json::Value root);
 	std::vector<std::shared_ptr<Change>> BuildChanges(Json::Value root);
 	Condition BuildCondition(Json::Value root);
 
 	// 初始化全局变量
 	void InitVariables();
-	void SetValue(const std::string& name, ValueType value);
-	ValueType GetValue(const std::string& name);
 };
 

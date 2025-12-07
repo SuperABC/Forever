@@ -91,6 +91,7 @@ int main() {
 				map->Checkin(populace->GetCitizens(), populace->GetTime());
 				society->Init(map, populace);
 				populace->Schedule();
+				script->Init();
 				string path = parser.GetOption("--story");
 				script->ReadScript(path);
 				break;

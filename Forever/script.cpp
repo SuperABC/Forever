@@ -91,6 +91,10 @@ void Script::InitChanges() {
 #endif // MOD_TEST
 }
 
+void Script::Init() {
+	InitVariables();
+}
+
 void Script::Print() {
 	cout << "活动里程碑数量 " << actives.size() << endl;
 	for (auto active : actives) {
@@ -123,7 +127,7 @@ void Script::ReadScript(string path) {
 		for (auto milestone : root) {
 			Milestone content(
 				milestone["milestone"].asString(),
-				BuildEvent(milestone["trigger"]),
+				BuildEvent(milestone["triggers"]),
 				milestone["visible"].asBool(),
 				BuildCondition(milestone["drop"].asString()),
 				milestone["description"].asString(),
@@ -198,23 +202,31 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(shared_ptr<E
 
 	vector<MilestoneNode*> tmps;
     for (auto it = actives.begin(); it != actives.end(); ) {
-        if (!JudgeCondition((*it)->content.GetTrigger()->GetCondition())) {
-            ++it;
-            continue;
-        }
-        if ((*it)->content.MatchTrigger(event)) {
-            auto subsequents = (*it)->subsequents;
-            for (auto subsequent : subsequents) {
-                subsequent->premise--;
-                if (subsequent->premise <= 0) {
-                    tmps.push_back(subsequent);
-                }
-            }
+		bool match = false;
+		for (auto trigger : (*it)->content.GetTriggers()) {
+			if (!JudgeCondition(trigger->GetCondition())) {
+				continue;
+			}
 
-            auto dialogs = (*it)->content.GetDialogs();
-            results.first.insert(results.first.end(), dialogs.begin(), dialogs.end());
-            auto changes = (*it)->content.GetChanges();
-            results.second.insert(results.second.end(), changes.begin(), changes.end());
+			if ((*it)->content.MatchTrigger(event)) {
+				match = true;
+				break;
+			}
+		}
+
+		if (match) {
+			auto subsequents = (*it)->subsequents;
+			for (auto subsequent : subsequents) {
+				subsequent->premise--;
+				if (subsequent->premise <= 0) {
+					tmps.push_back(subsequent);
+				}
+			}
+
+			auto dialogs = (*it)->content.GetDialogs();
+			results.first.insert(results.first.end(), dialogs.begin(), dialogs.end());
+			auto changes = (*it)->content.GetChanges();
+			results.second.insert(results.second.end(), changes.begin(), changes.end());
 
 			if ((*it)->content.DropSelf([this](string name) -> ValueType {
 				return this->GetValue(name);
@@ -224,10 +236,10 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(shared_ptr<E
 			else {
 				it++;
 			}
-        }
-        else {
-            ++it;
-        }
+		}
+		else {
+			it++;
+		}
     }
 	actives.insert(actives.end(), tmps.begin(), tmps.end());
 
@@ -268,27 +280,31 @@ string Script::ReplaceContent(const string& content) {
 	return result;
 }
 
-shared_ptr<Event> Script::BuildEvent(Json::Value root) {
-    shared_ptr<Event> event = nullptr;
+vector<shared_ptr<Event>> Script::BuildEvent(Json::Value root) {
+    vector<shared_ptr<Event>> events;
 
-    string type = root["type"].asString();
+	for (auto obj : root) {
+		shared_ptr<Event> event;
 
-	if (type == "game_start") {
-		event = make_shared<GameStartEvent>();
+		string type = obj["type"].asString();
+		if (type == "game_start") {
+			event = make_shared<GameStartEvent>();
+		}
+		else if (type == "option_dialog") {
+			event = make_shared<OptionDialogEvent>(obj["target"].asString(), obj["option"].asString());
+		}
+		else if (eventFactory->CheckRegistered(type)) {
+			event = eventFactory->CreateEvent(type);
+		}
+
+		if (!event) {
+			THROW_EXCEPTION(InvalidArgumentException, "Invalid event type: " + type + ".\n");
+		}
+		event->SetCondition(BuildCondition(obj["condition"]));
+		events.push_back(event);
 	}
-    else if (type == "option_dialog") {
-        event = make_shared<OptionDialogEvent>(root["target"].asString(), root["option"].asString());
-    }
-	else if (eventFactory->CheckRegistered(type)) {
-		event = eventFactory->CreateEvent(type);
-	}
 
-    if (!event) {
-        THROW_EXCEPTION(InvalidArgumentException, "Invalid event type: " + type + ".\n");
-    }
-    event->SetCondition(BuildCondition(root["condition"]));
-
-    return event;
+    return events;
 }
 
 vector<Dialog> Script::BuildDialogs(Json::Value root) {
