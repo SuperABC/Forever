@@ -2,7 +2,7 @@
 #include "map.h"
 #include "populace.h"
 #include "society.h"
-#include "script.h"
+#include "story.h"
 #include "utility.h"
 #include "error.h"
 
@@ -58,10 +58,10 @@ int main() {
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
-	// 读取Script相关类及Mod
-	unique_ptr<Script> script(new Script());
-	script->InitEvents();
-	script->InitChanges();
+	// 读取Story相关类及Mod
+	unique_ptr<Story> story(new Story());
+	story->InitEvents();
+	story->InitChanges();
 
 	// 读取命令行
 	string cmd;
@@ -91,9 +91,9 @@ int main() {
 				map->Checkin(populace->GetCitizens(), populace->GetTime());
 				society->Init(map, populace);
 				populace->Schedule();
-				script->Init();
+				story->Init();
 				string path = parser.GetOption("--story");
-				script->ReadScript(path);
+				story->ReadStory(path);
 				break;
 			}
 			case CMD_PASS: { // 时间流逝
@@ -113,35 +113,35 @@ int main() {
 
 				parser.ParseCmd(cmd);
 				auto event = ParseEvent(parser);
-				auto actions = script->MatchEvent(event);
+				auto actions = story->MatchEvent(event);
 				auto dialogs = actions.first;
 				auto changes = actions.second;
 				for (auto dialog : dialogs) {
-					if (script->JudgeCondition(dialog.GetCondition())) {
+					if (story->JudgeCondition(dialog.GetCondition())) {
 						auto contents = dialog.GetDialogs();
 						if (contents.size() > 0) {
 							for (auto content : contents) {
 								if (content.first.size() == 0)
-									cout << script->ReplaceContent(content.second) << endl;
+									cout << story->ReplaceContent(content.second) << endl;
 								else
-									cout << script->ReplaceContent(content.first) << ": " << script->ReplaceContent(content.second) << endl;
+									cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
 							}
 							break;
 						}
 					}
 				}
 				for (auto change : changes) {
-					if (!script->JudgeCondition(change->GetCondition()))continue;
-					map->ApplyChange(change, script);
-					populace->ApplyChange(change, script);
-					script->ApplyChange(change);
+					if (!story->JudgeCondition(change->GetCondition()))continue;
+					map->ApplyChange(change, story);
+					populace->ApplyChange(change, story);
+					story->ApplyChange(change);
 				}
 				break;
 			}
 			case CMD_PRINT: { // 输出当前状态
 				parser.AddOption("--map", 'm', "Whether to print the map.", false);
 				parser.AddOption("--populace", 'p', "Whether to print the populace.", false);
-				parser.AddOption("--script", 's', "Whether to print the script.", false);
+				parser.AddOption("--story", 's', "Whether to print the story.", false);
 
 				parser.ParseCmd(cmd);
 				break;

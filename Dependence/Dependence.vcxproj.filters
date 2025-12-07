@@ -37,11 +37,11 @@
     <Filter Include="源文件\society">
       <UniqueIdentifier>{47929c36-10bb-4b41-95da-1980f0ebc7c4}</UniqueIdentifier>
     </Filter>
-    <Filter Include="头文件\script">
-      <UniqueIdentifier>{096a7211-9303-4370-879f-c25989da3a5d}</UniqueIdentifier>
+    <Filter Include="头文件\story">
+      <UniqueIdentifier>{85cb96e4-734d-4a27-ac90-edf3d1a92f4d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="源文件\script">
-      <UniqueIdentifier>{de209309-f48e-4a6e-a1ed-55c51d281d2d}</UniqueIdentifier>
+    <Filter Include="源文件\story">
+      <UniqueIdentifier>{a622ec36-acb6-4a9f-adcf-f8ff1cc99407}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -87,14 +87,8 @@
     <ClInclude Include="populace\name_base.h">
       <Filter>头文件\populace</Filter>
     </ClInclude>
-    <ClInclude Include="script\event_base.h">
-      <Filter>头文件\script</Filter>
-    </ClInclude>
     <ClInclude Include="common\condition.h">
       <Filter>头文件\common</Filter>
-    </ClInclude>
-    <ClInclude Include="script\change_base.h">
-      <Filter>头文件\script</Filter>
     </ClInclude>
     <ClInclude Include="society\calendar_base.h">
       <Filter>头文件\society</Filter>
@@ -104,6 +98,12 @@
     </ClInclude>
     <ClInclude Include="populace\scheduler_base.h">
       <Filter>头文件\populace</Filter>
+    </ClInclude>
+    <ClInclude Include="story\event_base.h">
+      <Filter>头文件\story</Filter>
+    </ClInclude>
+    <ClInclude Include="story\change_base.h">
+      <Filter>头文件\story</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -149,14 +149,8 @@
     <ClCompile Include="populace\name_base.cpp">
       <Filter>源文件\populace</Filter>
     </ClCompile>
-    <ClCompile Include="script\event_base.cpp">
-      <Filter>源文件\script</Filter>
-    </ClCompile>
     <ClCompile Include="common\condition.cpp">
       <Filter>源文件\common</Filter>
-    </ClCompile>
-    <ClCompile Include="script\change_base.cpp">
-      <Filter>源文件\script</Filter>
     </ClCompile>
     <ClCompile Include="society\calendar_base.cpp">
       <Filter>源文件\society</Filter>
@@ -166,6 +160,12 @@
     </ClCompile>
     <ClCompile Include="populace\scheduler_base.cpp">
       <Filter>源文件\populace</Filter>
+    </ClCompile>
+    <ClCompile Include="story\change_base.cpp">
+      <Filter>源文件\story</Filter>
+    </ClCompile>
+    <ClCompile Include="story\event_base.cpp">
+      <Filter>源文件\story</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

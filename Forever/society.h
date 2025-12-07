@@ -33,7 +33,7 @@ public:
 	void Print();
 
 	// 应用变更
-	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Script>& script);
+	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Story>& story);
 
 	// 保存/加载地图
 	void Load(std::string path);

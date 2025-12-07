@@ -249,7 +249,7 @@ void Populace::Print() {
 
 }
 
-void Populace::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Script>& script) {
+void Populace::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Story>& story) {
 
 }
 

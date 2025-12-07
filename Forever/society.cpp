@@ -245,7 +245,7 @@ void Society::Print() {
 
 }
 
-void Society::ApplyChange(shared_ptr<Change> change, unique_ptr<Script>& script) {
+void Society::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) {
 
 }
 

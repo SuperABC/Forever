@@ -4,7 +4,7 @@
 #include "map.h"
 #include "populace.h"
 #include "society.h"
-#include "script.h"
+#include "story.h"
 #include "error.h"
 
 #include <iostream>
@@ -28,7 +28,7 @@ int dispMode = 0;
 unique_ptr<Map> map = make_unique<Map>();
 unique_ptr<Populace> populace = make_unique<Populace>();
 unique_ptr<Society> society = make_unique<Society>();
-unique_ptr<Script> script = make_unique<Script>();
+unique_ptr<Story> story = make_unique<Story>();
 
 
 int sizeX = 640, sizeY = 460;
@@ -363,8 +363,8 @@ void sgSetup() {
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
-	script->InitEvents();
-	script->InitChanges();
+	story->InitEvents();
+	story->InitChanges();
 
 	try {
 		populace->Init(::map->Init(3, 3));

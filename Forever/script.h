@@ -1,75 +1,35 @@
-﻿#pragma once
+#pragma once
 
-#include "utility.h"
-#include "json.h"
-#include "dialog.h"
-#include "event.h"
-#include "change.h"
 #include "milestone.h"
-#include "condition.h"
+#include "change.h"
+#include "story.h"
+#include "json.h"
+#include "error.h"
 
-#include <vector>
-#include <string>
-#include <set>
-#include <unordered_map>
 
+class Story;
 
 class Script {
 public:
 	Script();
 	~Script();
 
-	// 读取Mods
-	void InitEvents();
-	void InitChanges();
+	// ��ȡ�籾
+	void ReadScript(std::string path,
+		std::unique_ptr<EventFactory> &eventFactory, std::unique_ptr<ChangeFactory> &changeFactory);
 
-	// 初始化剧本
-	void Init();
-
-	// 输出当前剧本信息
-	void Print();
-
-	// 读取剧本
-	void ReadScript(std::string path);
-
-	// 应用变更
-	void ApplyChange(std::shared_ptr<Change> change);
-
-	// 保存/读取存档
-	void SaveStory(std::string path);
-	void LoadStory(std::string path);
-
-	// 判断条件
-	bool JudgeCondition(Condition &condition);
-
-	// 匹配事件
-	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
-
-	// 替换文本变量
-	std::string ReplaceContent(const std::string& content);
-
-	// 变量管理
-	void SetValue(const std::string& name, ValueType value);
-	ValueType GetValue(const std::string& name);
+	// ƥ���¼�
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
+		std::shared_ptr<Event> event, Story *story);
 
 private:
-	// Mod管理
-	std::vector<HMODULE> modHandles;
-	std::unique_ptr<EventFactory> eventFactory;
-	std::unique_ptr<ChangeFactory> changeFactory;
-
 	std::vector<MilestoneNode> milestones;
 	std::vector<MilestoneNode*> actives;
 
-	std::unordered_map<std::string, ValueType> variables;
-
-	// 复合对象读取
-	std::vector<std::shared_ptr<Event>> BuildEvent(Json::Value root);
+	// ���϶����ȡ
+	std::vector<std::shared_ptr<Event>> BuildEvent(Json::Value root, std::unique_ptr<EventFactory> &factory);
 	std::vector<Dialog> BuildDialogs(Json::Value root);
-	std::vector<std::shared_ptr<Change>> BuildChanges(Json::Value root);
+	std::vector<std::shared_ptr<Change>> BuildChanges(Json::Value root, std::unique_ptr<ChangeFactory> &factory);
 	Condition BuildCondition(Json::Value root);
 
-	// 初始化全局变量
-	void InitVariables();
 };
-

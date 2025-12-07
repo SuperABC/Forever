@@ -678,7 +678,7 @@ void Map::Print() {
 
 }
 
-void Map::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Script>& script) {
+void Map::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Story>& story) {
 
 }
 

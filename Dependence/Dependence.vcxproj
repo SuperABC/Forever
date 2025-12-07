@@ -35,10 +35,10 @@
     <ClInclude Include="populace\job_base.h" />
     <ClInclude Include="populace\name_base.h" />
     <ClInclude Include="populace\scheduler_base.h" />
-    <ClInclude Include="script\change_base.h" />
-    <ClInclude Include="script\event_base.h" />
     <ClInclude Include="society\calendar_base.h" />
     <ClInclude Include="society\organization_base.h" />
+    <ClInclude Include="story\change_base.h" />
+    <ClInclude Include="story\event_base.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="common\condition.cpp" />
@@ -57,10 +57,10 @@
     <ClCompile Include="populace\job_base.cpp" />
     <ClCompile Include="populace\name_base.cpp" />
     <ClCompile Include="populace\scheduler_base.cpp" />
-    <ClCompile Include="script\change_base.cpp" />
-    <ClCompile Include="script\event_base.cpp" />
     <ClCompile Include="society\calendar_base.cpp" />
     <ClCompile Include="society\organization_base.cpp" />
+    <ClCompile Include="story\change_base.cpp" />
+    <ClCompile Include="story\event_base.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

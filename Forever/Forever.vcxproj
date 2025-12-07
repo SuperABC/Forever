@@ -71,11 +71,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/society;$(SolutionDir)Dependence/script;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/society;$(SolutionDir)Dependence/story;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)x64/Debug;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/society;$(SolutionDir)Dependence/script;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Dependence/map;$(SolutionDir)Dependence/populace;$(SolutionDir)Dependence/society;$(SolutionDir)Dependence/story;$(SolutionDir)Dependence/common;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)x64/Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -149,6 +149,7 @@
     <ClInclude Include="person.h" />
     <ClInclude Include="scheduler.h" />
     <ClInclude Include="script.h" />
+    <ClInclude Include="story.h" />
     <ClInclude Include="society.h" />
     <ClInclude Include="populace.h" />
     <ClInclude Include="roadnet.h" />
@@ -173,6 +174,7 @@
     <ClCompile Include="person.cpp" />
     <ClCompile Include="scheduler.cpp" />
     <ClCompile Include="script.cpp" />
+    <ClCompile Include="story.cpp" />
     <ClCompile Include="society.cpp" />
     <ClCompile Include="populace.cpp" />
     <ClCompile Include="roadnet.cpp" />
