@@ -237,6 +237,26 @@ void Populace::Schedule() {
 	}
 }
 
+void Populace::Jobstory(std::unique_ptr<Story>& story) {
+	unordered_map<string, shared_ptr<Script>> jobScripts;
+
+	for (auto citizen : citizens) {
+		for (auto job : citizen->GetJobs()) {
+			if (jobScripts.find(job->GetType()) == jobScripts.end()) {
+				auto script = make_shared<Script>();
+				for (auto scriptPath : job->GetScripts()) {
+					script->ReadScript(REPLACE_PATH(scriptPath),
+						story->GetEventFactory(), story->GetChangeFactory());
+				}
+				jobScripts[job->GetType()] = script;
+			}
+			citizen->AddScript(make_shared<Script>(jobScripts[job->GetType()]));
+		}
+	}
+
+	debugf("Generate jobstories.\n");
+}
+
 void Populace::Characterize(string path, unique_ptr<Story>& story) {
 	vector<shared_ptr<Script>> scripts;
 	for (const auto& entry : filesystem::directory_iterator(path)) {

@@ -12,5 +12,9 @@ public:
     static std::string GetId() { return "mod"; }
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "模组职业"; }
+
+    virtual std::vector<std::string> GetScripts() const override {
+        return { "../Resources/scripts/jobs/mod.json" };
+    }
 };
 

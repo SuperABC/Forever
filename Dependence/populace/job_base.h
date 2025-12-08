@@ -21,6 +21,9 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
+    // 职业剧本
+    virtual std::vector<std::string> GetScripts() const = 0;
+
 	// 父类实现方法
     void SetCalendar(std::shared_ptr<Calendar> &calendar);
     std::shared_ptr<Calendar> &GetCalendar();

@@ -34,6 +34,7 @@ public:
 	void Schedule();
 
 	// 分配剧情
+	void Jobstory(std::unique_ptr<Story>& story);
 	void Characterize(std::string path, std::unique_ptr<Story>& story);
 
 	// 释放空间

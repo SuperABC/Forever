@@ -6,7 +6,7 @@
 	"triggers": [{"type": "option_dialog", "option": "测试"}],
 	"dialogs": [
 		{"list": [
-			{"content": "测试成功。"}
+			{"content": "测试职业脚本成功。"}
 		]}
 	],
 	"changes": [
