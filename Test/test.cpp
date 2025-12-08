@@ -18,6 +18,7 @@ using namespace std;
 // 解析命令行输入事件
 shared_ptr<Event> ParseEvent(Parser& parser) {
     string type = parser.GetOption("--type");
+	int id;
     string target = "";
     string option = "";
 
@@ -25,9 +26,14 @@ shared_ptr<Event> ParseEvent(Parser& parser) {
         return make_shared<GameStartEvent>();
     }
 	else if (type == "option_dialog") {
+		if (parser.HasOption("--id")) id = stoi(parser.GetOption("--id"));
 		if (parser.HasOption("--target")) target = parser.GetOption("--target");
 		if (parser.HasOption("--option")) option = parser.GetOption("--option");
-		return make_shared<OptionDialogEvent>(target, option);
+		if (target.size() == 0)
+			return make_shared<OptionDialogEvent>(id, option);
+		else {
+			return make_shared<OptionDialogEvent>(target, option);
+		}
 	}
 
     return nullptr;
@@ -94,6 +100,7 @@ int main() {
 				story->Init();
 				string path = parser.GetOption("--story");
 				story->ReadStory(path);
+				populace->Characterize("../Resources/scripts/characters/", story);
 				break;
 			}
 			case CMD_PASS: { // 时间流逝
@@ -108,7 +115,8 @@ int main() {
 			case CMD_EVENT: { // 文本模拟事件
 				parser.AddOption("--type", 0, "Event type.", true, "nothing_happen");
 
-				parser.AddOption("--target", 0, "Event target.", true, "");
+				parser.AddOption("--id", 0, "Event target id.", true, "");
+				parser.AddOption("--target", 0, "Event target name.", true, "");
 				parser.AddOption("--option", 0, "Event option.", true, "");
 
 				parser.ParseCmd(cmd);
@@ -140,8 +148,15 @@ int main() {
 					}
 				}
 				if (event->GetType() == "option_dialog") {
-					auto actions = populace->TriggerEvent(
-						dynamic_pointer_cast<OptionDialogEvent>(event)->GetTarget(), event, story);
+					auto target = dynamic_pointer_cast<OptionDialogEvent>(event)->GetTarget();
+					auto idx = dynamic_pointer_cast<OptionDialogEvent>(event)->GetIdx();
+					pair<vector<Dialog>, vector<shared_ptr<Change>>> actions;
+					if (target.size() == 0) {
+						actions = populace->TriggerEvent(idx, event, story);
+					}
+					else {
+						actions = populace->TriggerEvent(target, event, story);
+					}
 					auto dialogs = actions.first;
 					auto changes = actions.second;
 					for (auto dialog : dialogs) {

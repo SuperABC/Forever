@@ -33,6 +33,9 @@ public:
 	// 分配调度
 	void Schedule();
 
+	// 分配剧情
+	void Characterize(std::string path, std::unique_ptr<Story>& story);
+
 	// 释放空间
 	void Destroy();
 
@@ -67,7 +70,6 @@ public:
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> TriggerEvent(
 		int id, std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
 
-
 	// 获取Job工厂
 	std::unique_ptr<JobFactory>& GetJobFactory();
 
@@ -98,5 +100,6 @@ private:
 	void GenerateEducations();
 	void GenerateEmotions();
 	void GenerateJobs();
+
 };
 

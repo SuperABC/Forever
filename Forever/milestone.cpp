@@ -48,6 +48,10 @@ bool Milestone::IsVisible() {
 	return visible;
 }
 
+Condition Milestone::DropCondition() {
+	return drop;
+}
+
 bool Milestone::DropSelf(function<ValueType(const string&)> getValue) {
 	return drop.EvaluateBool(getValue);
 }

@@ -33,6 +33,9 @@ public:
 	OptionDialogEvent(std::string target, std::string option)
 		: target(target), option(option) {
 	}
+	OptionDialogEvent(int idx, std::string option)
+		: idx(idx), option(option) {
+	}
 	virtual ~OptionDialogEvent() {}
 
 	static std::string GetId() { return "option_dialog"; }
@@ -47,12 +50,15 @@ public:
 			option == std::dynamic_pointer_cast<OptionDialogEvent>(e)->option;
 	}
 
+	void SetIdx(int idx) { this->idx = idx; }
+	int GetIdx() const { return idx; }
 	void SetTarget(std::string target) { this->target = target; }
 	std::string GetTarget() const { return target; }
 	void SetOption(std::string option) { this->option = option; }
 	std::string GetOption() const { return option; }
 
 private:
+	int idx;
 	std::string target;
 	std::string option;
 };

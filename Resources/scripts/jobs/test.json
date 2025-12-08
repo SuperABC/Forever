@@ -1,0 +1,16 @@
+[
+{
+	"milestone": "test_dialog",
+	"visible": false,
+	"drop": "false",
+	"triggers": [{"type": "option_dialog", "option": "≤‚ ‘"}],
+	"dialogs": [
+		{"list": [
+			{"content": "≤‚ ‘≥…π¶°£"}
+		]}
+	],
+	"changes": [
+	],
+	"subsequences": []
+}
+]

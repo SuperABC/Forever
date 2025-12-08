@@ -102,7 +102,7 @@ public:
 	void ExperienceComposition();
 
 	// 管理剧本
-	void AddScript(std::string path, std::unique_ptr<Story>& story);
+	void AddScript(std::shared_ptr<Script> script);
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
 		std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
 

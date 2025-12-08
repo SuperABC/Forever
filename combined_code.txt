@@ -4057,187 +4057,6 @@ private:
     std::unordered_map<std::string, float> powers;
 };
 
-// ===== .\Dependence\script\change_base.cpp =====
-
-﻿#include "change_base.h"
-
-
-using namespace std;
-
-void Change::SetCondition(Condition condition) {
-    this->condition = condition;
-}
-Condition& Change::GetCondition() {
-    return condition;
-}
-
-void ChangeFactory::RegisterChange(const string& id, function<unique_ptr<Change>()> creator) {
-    registries[id] = creator;
-    configs[id] = false;
-}
-
-unique_ptr<Change> ChangeFactory::CreateChange(const string& id) {
-    auto it = registries.find(id);
-    if (it != registries.end()) {
-        return it->second();
-    }
-    return nullptr;
-}
-
-bool ChangeFactory::CheckRegistered(const string& id) {
-    return registries.find(id) != registries.end();
-}
-
-void ChangeFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
-}
-
-
-
-
-// ===== .\Dependence\script\change_base.h =====
-
-﻿#pragma once
-
-#include "../common/condition.h"
-
-#include <string>
-#include <functional>
-#include <memory>
-#include <unordered_map>
-
-
-class Change {
-public:
-    Change() = default;
-    virtual ~Change() = default;
-
-    // 子类实现方法
-
-    // 动态返回组织静态信息
-    static std::string GetId();
-    virtual std::string GetType() const = 0;
-    virtual std::string GetName() const = 0;
-
-    // 基变更列表
-    virtual std::vector<std::shared_ptr<Change>> ApplyChange() = 0;
-
-    // 父类实现方法
-
-    // 设置/获取控制条件
-    void SetCondition(Condition condition);
-    Condition& GetCondition();
-
-protected:
-    Condition condition;
-};
-
-class ChangeFactory {
-public:
-    void RegisterChange(const std::string& id, std::function<std::unique_ptr<Change>()> creator);
-    std::unique_ptr<Change> CreateChange(const std::string& id);
-    bool CheckRegistered(const std::string& id);
-    void SetConfig(std::string name, bool config);
-
-private:
-    std::unordered_map<std::string, std::function<std::unique_ptr<Change>()>> registries;
-    std::unordered_map<std::string, bool> configs;
-};
-
-// ===== .\Dependence\script\event_base.cpp =====
-
-﻿#include "event_base.h"
-
-
-using namespace std;
-
-void Event::SetCondition(Condition condition) {
-    this->condition = condition;
-}
-
-Condition& Event::GetCondition() {
-    return condition;
-}
-
-void EventFactory::RegisterEvent(const string& id, function<unique_ptr<Event>()> creator) {
-    registries[id] = creator;
-    configs[id] = false;
-}
-
-unique_ptr<Event> EventFactory::CreateEvent(const string& id) {
-    auto it = registries.find(id);
-    if (it != registries.end()) {
-        return it->second();
-    }
-    return nullptr;
-}
-
-bool EventFactory::CheckRegistered(const string& id) {
-    return registries.find(id) != registries.end();
-}
-
-void EventFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
-}
-
-
-
-
-// ===== .\Dependence\script\event_base.h =====
-
-﻿#pragma once
-
-#include "../common/condition.h"
-
-#include <string>
-#include <functional>
-#include <memory>
-#include <unordered_map>
-
-#undef CreateEvent
-
-
-class Event {
-public:
-    Event() = default;
-    virtual ~Event() = default;
-
-    // 子类实现方法
-
-    // 动态返回组织静态信息
-    static std::string GetId();
-    virtual std::string GetType() const = 0;
-    virtual std::string GetName() const = 0;
-
-    // 判断匹配
-    virtual bool operator==(std::shared_ptr<Event> e) = 0;
-
-    // 父类实现方法
-
-    // 设置/获取控制条件
-    void SetCondition(Condition condition);
-    Condition& GetCondition();
-
-protected:
-    Condition condition;
-};
-
-class EventFactory {
-public:
-    void RegisterEvent(const std::string& id, std::function<std::unique_ptr<Event>()> creator);
-    std::unique_ptr<Event> CreateEvent(const std::string& id);
-    bool CheckRegistered(const std::string& id);
-    void SetConfig(std::string name, bool config);
-
-private:
-    std::unordered_map<std::string, std::function<std::unique_ptr<Event>()>> registries;
-    std::unordered_map<std::string, bool> configs;
-};
-
 // ===== .\Dependence\society\calendar_base.cpp =====
 
 ﻿#include "calendar_base.h"
@@ -4447,6 +4266,187 @@ private:
     std::unordered_map<std::string, std::function<std::unique_ptr<Organization>()>> registries;
     std::unordered_map<std::string, bool> configs;
     std::unordered_map<std::string, float> powers;
+};
+
+// ===== .\Dependence\story\change_base.cpp =====
+
+﻿#include "change_base.h"
+
+
+using namespace std;
+
+void Change::SetCondition(Condition condition) {
+    this->condition = condition;
+}
+Condition& Change::GetCondition() {
+    return condition;
+}
+
+void ChangeFactory::RegisterChange(const string& id, function<unique_ptr<Change>()> creator) {
+    registries[id] = creator;
+    configs[id] = false;
+}
+
+unique_ptr<Change> ChangeFactory::CreateChange(const string& id) {
+    auto it = registries.find(id);
+    if (it != registries.end()) {
+        return it->second();
+    }
+    return nullptr;
+}
+
+bool ChangeFactory::CheckRegistered(const string& id) {
+    return registries.find(id) != registries.end();
+}
+
+void ChangeFactory::SetConfig(string name, bool config) {
+    if (configs.find(name) != configs.end()) {
+        configs[name] = config;
+    }
+}
+
+
+
+
+// ===== .\Dependence\story\change_base.h =====
+
+﻿#pragma once
+
+#include "../common/condition.h"
+
+#include <string>
+#include <functional>
+#include <memory>
+#include <unordered_map>
+
+
+class Change {
+public:
+    Change() = default;
+    virtual ~Change() = default;
+
+    // 子类实现方法
+
+    // 动态返回组织静态信息
+    static std::string GetId();
+    virtual std::string GetType() const = 0;
+    virtual std::string GetName() const = 0;
+
+    // 基变更列表
+    virtual std::vector<std::shared_ptr<Change>> ApplyChange() = 0;
+
+    // 父类实现方法
+
+    // 设置/获取控制条件
+    void SetCondition(Condition condition);
+    Condition& GetCondition();
+
+protected:
+    Condition condition;
+};
+
+class ChangeFactory {
+public:
+    void RegisterChange(const std::string& id, std::function<std::unique_ptr<Change>()> creator);
+    std::unique_ptr<Change> CreateChange(const std::string& id);
+    bool CheckRegistered(const std::string& id);
+    void SetConfig(std::string name, bool config);
+
+private:
+    std::unordered_map<std::string, std::function<std::unique_ptr<Change>()>> registries;
+    std::unordered_map<std::string, bool> configs;
+};
+
+// ===== .\Dependence\story\event_base.cpp =====
+
+﻿#include "event_base.h"
+
+
+using namespace std;
+
+void Event::SetCondition(Condition condition) {
+    this->condition = condition;
+}
+
+Condition& Event::GetCondition() {
+    return condition;
+}
+
+void EventFactory::RegisterEvent(const string& id, function<unique_ptr<Event>()> creator) {
+    registries[id] = creator;
+    configs[id] = false;
+}
+
+unique_ptr<Event> EventFactory::CreateEvent(const string& id) {
+    auto it = registries.find(id);
+    if (it != registries.end()) {
+        return it->second();
+    }
+    return nullptr;
+}
+
+bool EventFactory::CheckRegistered(const string& id) {
+    return registries.find(id) != registries.end();
+}
+
+void EventFactory::SetConfig(string name, bool config) {
+    if (configs.find(name) != configs.end()) {
+        configs[name] = config;
+    }
+}
+
+
+
+
+// ===== .\Dependence\story\event_base.h =====
+
+﻿#pragma once
+
+#include "../common/condition.h"
+
+#include <string>
+#include <functional>
+#include <memory>
+#include <unordered_map>
+
+#undef CreateEvent
+
+
+class Event {
+public:
+    Event() = default;
+    virtual ~Event() = default;
+
+    // 子类实现方法
+
+    // 动态返回组织静态信息
+    static std::string GetId();
+    virtual std::string GetType() const = 0;
+    virtual std::string GetName() const = 0;
+
+    // 判断匹配
+    virtual bool operator==(std::shared_ptr<Event> e) = 0;
+
+    // 父类实现方法
+
+    // 设置/获取控制条件
+    void SetCondition(Condition condition);
+    Condition& GetCondition();
+
+protected:
+    Condition condition;
+};
+
+class EventFactory {
+public:
+    void RegisterEvent(const std::string& id, std::function<std::unique_ptr<Event>()> creator);
+    std::unique_ptr<Event> CreateEvent(const std::string& id);
+    bool CheckRegistered(const std::string& id);
+    void SetConfig(std::string name, bool config);
+
+private:
+    std::unordered_map<std::string, std::function<std::unique_ptr<Event>()>> registries;
+    std::unordered_map<std::string, bool> configs;
 };
 
 // ===== .\Forever\asset.cpp =====
@@ -4903,6 +4903,9 @@ public:
 	OptionDialogEvent(std::string target, std::string option)
 		: target(target), option(option) {
 	}
+	OptionDialogEvent(int idx, std::string option)
+		: idx(idx), option(option) {
+	}
 	virtual ~OptionDialogEvent() {}
 
 	static std::string GetId() { return "option_dialog"; }
@@ -4917,12 +4920,15 @@ public:
 			option == std::dynamic_pointer_cast<OptionDialogEvent>(e)->option;
 	}
 
+	void SetIdx(int idx) { this->idx = idx; }
+	int GetIdx() const { return idx; }
 	void SetTarget(std::string target) { this->target = target; }
 	std::string GetTarget() const { return target; }
 	void SetOption(std::string option) { this->option = option; }
 	std::string GetOption() const { return option; }
 
 private:
+	int idx;
 	std::string target;
 	std::string option;
 };
@@ -5722,7 +5728,7 @@ void Map::Print() {
 
 }
 
-void Map::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Script>& script) {
+void Map::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Story>& story) {
 
 }
 
@@ -5748,8 +5754,7 @@ bool Map::CheckXY(int x, int y) const {
 
 shared_ptr<Block> Map::GetBlock(int x, int y) const {
     if (!CheckXY(x, y)) {
-        throw invalid_argument("invalid block query position.\n");
-        return nullptr;
+        THROW_EXCEPTION(InvalidArgumentException, "invalid block query position.\n");
     }
 
     int blockX = x / BLOCK_SIZE;
@@ -5760,8 +5765,7 @@ shared_ptr<Block> Map::GetBlock(int x, int y) const {
 
 shared_ptr<Element> Map::GetElement(int x, int y) const {
     if (!CheckXY(x, y)) {
-        throw invalid_argument("invalid block query position.\n");
-        return nullptr;
+        THROW_EXCEPTION(InvalidArgumentException, "invalid block query position.\n");
     }
 
     int blockX = x / BLOCK_SIZE;
@@ -6137,7 +6141,7 @@ void Map::ArrangePlots() {
 #include "room.h"
 #include "person.h"
 #include "change.h"
-#include "script.h"
+#include "story.h"
 
 #include <windows.h>
 
@@ -6221,7 +6225,7 @@ public:
 	void Print();
 
 	// 应用变更
-	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Script>& script);
+	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Story>& story);
 
 	// 保存/加载地图
 	void Load(std::string path);
@@ -6289,9 +6293,9 @@ private:
 
 using namespace std;
 
-Milestone::Milestone(string name, shared_ptr<Event> trigger, bool visible, Condition drop,
+Milestone::Milestone(string name, vector<shared_ptr<Event>> triggers, bool visible, Condition drop,
 	string description, string goal, vector<Dialog> dialogs, vector<shared_ptr<Change>> changes) :
-	name(name), trigger(trigger), visible(visible), drop(drop),
+	name(name), triggers(triggers), visible(visible), drop(drop),
 	description(description), goal(goal), dialogs(dialogs), changes(changes) {
 
 }
@@ -6308,16 +6312,22 @@ vector<shared_ptr<Change>> Milestone::GetChanges() {
 	return changes;
 }
 
-shared_ptr<Event> Milestone::GetTrigger() {
-	return trigger;
+vector<shared_ptr<Event>> Milestone::GetTriggers() {
+	return triggers;
 }
 
 bool Milestone::MatchTrigger(shared_ptr<Event> e) {
-	if (!trigger)return false;
+	if (triggers.size() <= 0)return false;
 	if (!e)return false;
-	if (trigger->GetType() != e->GetType())return false;
 
-	return trigger->operator==(e);
+	for(auto trigger : triggers) {
+		if (trigger->GetType() != e->GetType())continue;
+		if (trigger->operator==(e)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 string Milestone::GetName() {
@@ -6326,6 +6336,10 @@ string Milestone::GetName() {
 
 bool Milestone::IsVisible() {
 	return visible;
+}
+
+Condition Milestone::DropCondition() {
+	return drop;
 }
 
 bool Milestone::DropSelf(function<ValueType(const string&)> getValue) {
@@ -6360,12 +6374,12 @@ MilestoneNode::MilestoneNode(Milestone milestone) : content(milestone) {
 
 class Milestone {
 public:
-    Milestone(std::string name, std::shared_ptr<Event> trigger, bool visible, Condition keep,
+    Milestone(std::string name, std::vector<std::shared_ptr<Event>> triggers, bool visible, Condition keep,
         std::string description, std::string goal, std::vector<Dialog> dialogs, std::vector<std::shared_ptr<Change>> changes);
     ~Milestone();
 
     // 复合对象类型
-    std::shared_ptr<Event> GetTrigger();
+    std::vector<std::shared_ptr<Event>> GetTriggers();
     std::vector<Dialog> GetDialogs();
     std::vector<std::shared_ptr<Change>> GetChanges();
 
@@ -6375,13 +6389,14 @@ public:
     // 获取参数
     std::string GetName();
     bool IsVisible();
+	Condition DropCondition();
     bool DropSelf(std::function<ValueType(const std::string&)> getValue);
     std::string GetDescription();
     std::string GetGoal();
 
 private:
     std::string name;
-    std::shared_ptr<Event> trigger;
+    std::vector<std::shared_ptr<Event>> triggers;
     bool visible;
     Condition drop;
     std::string description;
@@ -6940,6 +6955,20 @@ void Person::ExperienceComposition() {
 	educationExperiences.resize(idx);
 }
 
+void Person::AddScript(shared_ptr<Script> script) {
+	scripts.push_back(script);
+}
+
+pair<vector<Dialog>, vector<shared_ptr<Change>>> Person::MatchEvent(
+	shared_ptr<Event> event, unique_ptr<Story>& story) {
+	for (auto& script : scripts) {
+		auto result = script->MatchEvent(event, story.get());
+		if (!result.first.empty() || !result.second.empty()) {
+			return result;
+		}
+	}
+	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
+}
 
 
 // ===== .\Forever\person.h =====
@@ -6950,6 +6979,7 @@ void Person::ExperienceComposition() {
 #include "scheduler.h"
 #include "job.h"
 #include "experience.h"
+#include "script.h"
 #include "utility.h"
 
 #include <string>
@@ -7046,6 +7076,11 @@ public:
 	std::vector<JobExperience>& GetJobExperiences();
 	void ExperienceComposition();
 
+	// 管理剧本
+	void AddScript(std::shared_ptr<Script> script);
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
+		std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+
 private:
 	int id;
 	std::string name;
@@ -7070,6 +7105,8 @@ private:
 	std::vector<EducationExperience> educationExperiences;
 	std::vector<EmotionExperience> emotionExperiences;
 	std::vector<JobExperience> jobExperiences;
+
+	std::vector<std::shared_ptr<Script>> scripts;
 };
 
 // ===== .\Forever\populace.cpp =====
@@ -7313,6 +7350,24 @@ void Populace::Schedule() {
 	}
 }
 
+void Populace::Characterize(string path, unique_ptr<Story>& story) {
+	vector<shared_ptr<Script>> scripts;
+	for (const auto& entry : filesystem::directory_iterator(path)) {
+		if (entry.is_regular_file() && entry.path().extension() == ".json") {
+			auto script = make_shared<Script>();
+			script->ReadScript(entry.path().string(), story->GetEventFactory(), story->GetChangeFactory());
+			scripts.push_back(script);
+		}
+	}
+
+	for (auto citizen : citizens) {
+		int r = GetRandom((int)scripts.size());
+		citizen->AddScript(make_shared<Script>(scripts[r]));
+	}
+
+	debugf("Generate characters.\n");
+}
+
 void Populace::Destroy() {
 
 }
@@ -7325,7 +7380,7 @@ void Populace::Print() {
 
 }
 
-void Populace::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Script>& script) {
+void Populace::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Story>& story) {
 
 }
 
@@ -7343,6 +7398,27 @@ Time Populace::GetTime() {
 
 std::vector<std::shared_ptr<Person>>& Populace::GetCitizens() {
 	return citizens;
+}
+
+pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
+	string name, shared_ptr<Event> event, unique_ptr<Story>& story) {
+
+	for(auto & citizen : citizens) {
+		if (citizen->GetName() == name) {
+			return citizen->MatchEvent(event, story);
+		}
+	}
+
+	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
+}
+
+pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
+	int id, shared_ptr<Event> event, unique_ptr<Story>& story) {
+	if (id >= 0 && id < citizens.size()) {
+		return citizens[id]->MatchEvent(event, story);
+	}
+
+	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
 }
 
 std::unique_ptr<JobFactory>& Populace::GetJobFactory() {
@@ -8201,7 +8277,7 @@ void Populace::GenerateJobs() {
 #include "scheduler.h"
 #include "room.h"
 #include "change.h"
-#include "script.h"
+#include "story.h"
 
 #include <windows.h>
 
@@ -8226,6 +8302,9 @@ public:
 	// 分配调度
 	void Schedule();
 
+	// 分配剧情
+	void Characterize(std::string path, std::unique_ptr<Story>& story);
+
 	// 释放空间
 	void Destroy();
 
@@ -8236,7 +8315,7 @@ public:
 	void Print();
 
 	// 应用变更
-	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Script>& script);
+	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Story>& story);
 
 	// 保存/加载人口
 	void Load(std::string path);
@@ -8253,6 +8332,12 @@ public:
 	std::vector<std::shared_ptr<Person>> GetPasser(std::shared_ptr<Room>);
 	std::vector<std::shared_ptr<Person>> GetComer(int x, int y);
 	std::vector<std::shared_ptr<Person>> GetComer(std::shared_ptr<Room>);
+
+	// 触发事件
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> TriggerEvent(
+		std::string name, std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> TriggerEvent(
+		int id, std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
 
 	// 获取Job工厂
 	std::unique_ptr<JobFactory>& GetJobFactory();
@@ -8284,6 +8369,7 @@ private:
 	void GenerateEducations();
 	void GenerateEmotions();
 	void GenerateJobs();
+
 };
 
 
@@ -8416,9 +8502,6 @@ private:
 // ===== .\Forever\script.cpp =====
 
 ﻿#include "script.h"
-#include "change.h"
-#include "json.h"
-#include "error.h"
 
 #include <iostream>
 #include <string>
@@ -8430,107 +8513,60 @@ private:
 using namespace std;
 
 Script::Script() {
-	eventFactory.reset(new EventFactory());
-	changeFactory.reset(new ChangeFactory());
+
+}
+
+Script::Script(const std::shared_ptr<Script> script) {
+	unordered_map<string, int> hash;
+	hash["game_finish"] = -1;
+	hash["game_fail"] = -2;
+
+	for(auto& milestone : script->milestones) {
+		Milestone content(
+			milestone.content.GetName(),
+			milestone.content.GetTriggers(),
+			milestone.content.IsVisible(),
+			milestone.content.DropCondition(),
+			milestone.content.GetDescription(),
+			milestone.content.GetGoal(),
+			milestone.content.GetDialogs(),
+			milestone.content.GetChanges()
+		);
+		hash.insert(make_pair(content.GetName(), (int)milestones.size()));
+		milestones.push_back(MilestoneNode(content));
+	}
+	for (int i = 0; i < milestones.size(); i++) {
+		for (auto subsequence : script->milestones[i].subsequents) {
+			if (hash.find(subsequence->content.GetName()) == hash.end())continue;
+			if (hash[subsequence->content.GetName()] < 0)continue;
+
+			milestones[i].subsequents.push_back(&milestones[hash[subsequence->content.GetName()]]);
+			milestones[hash[subsequence->content.GetName()]].premise++;
+		}
+	}
+	for (auto& milestone : milestones) {
+		if (milestone.premise == 0) {
+			actives.push_back(&milestone);
+		}
+	}
 }
 
 Script::~Script() {
 
 }
 
-void Script::InitEvents() {
-	eventFactory->RegisterEvent(GameStartEvent::GetId(), []() { return make_unique<GameStartEvent>(); });
-	eventFactory->RegisterEvent(OptionDialogEvent::GetId(), []() { return make_unique<OptionDialogEvent>(); });
-
-	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
-	if (modHandle) {
-		modHandles.push_back(modHandle);
-		debugf("Mod dll loaded successfully.\n");
-
-		RegisterModEventsFunc registerFunc = (RegisterModEventsFunc)GetProcAddress(modHandle, "RegisterModEvents");
-		if (registerFunc) {
-			registerFunc(eventFactory.get());
-		}
-		else {
-			debugf("Incorrect dll content.");
-		}
+void Script::ReadScript(string path,
+	std::unique_ptr<EventFactory> &eventFactory, std::unique_ptr<ChangeFactory> &changeFactory) {
+	if (!filesystem::exists(path)) {
+		THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
 	}
-	else {
-		debugf("Failed to load mod.dll.");
-	}
-
-#ifdef MOD_TEST
-	auto eventList = { "game_start", "option_dialog", "mod"};
-	for (const auto& eventId : eventList) {
-		if (eventFactory->CheckRegistered(eventId)) {
-			auto event = eventFactory->CreateEvent(eventId);
-			debugf(("Created event: " + event->GetName() + " (ID: " + eventId + ")\n").data());
-		}
-		else {
-			debugf("Event not registered: %s\n", eventId);
-		}
-	}
-#endif // MOD_TEST
-}
-
-void Script::InitChanges() {
-	changeFactory->RegisterChange(SetValueChange::GetId(), []() { return make_unique<SetValueChange>(); });
-	changeFactory->RegisterChange(RemoveValueChange::GetId(), []() { return make_unique<RemoveValueChange>(); });
-
-	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
-	if (modHandle) {
-		modHandles.push_back(modHandle);
-		debugf("Mod dll loaded successfully.\n");
-
-		RegisterModChangesFunc registerFunc = (RegisterModChangesFunc)GetProcAddress(modHandle, "RegisterModChanges");
-		if (registerFunc) {
-			registerFunc(changeFactory.get());
-		}
-		else {
-			debugf("Incorrect dll content.");
-		}
-	}
-	else {
-		debugf("Failed to load mod.dll.");
-	}
-
-#ifdef MOD_TEST
-	auto changeList = { "set_value", "remove_value", "mod" };
-	for (const auto& changeId : changeList) {
-		if (changeFactory->CheckRegistered(changeId)) {
-			auto change = changeFactory->CreateChange(changeId);
-			debugf(("Created change: " + change->GetName() + " (ID: " + changeId + ")\n").data());
-		}
-		else {
-			debugf("Change not registered: %s\n", changeId);
-		}
-	}
-#endif // MOD_TEST
-}
-
-void Script::Print() {
-	cout << "活动里程碑数量 " << actives.size() << endl;
-	for (auto active : actives) {
-		cout << active->content.GetName() << ": " << active->content.GetGoal() << endl;
-	}
-
-	cout << "全局变量数量 " << variables.size() << endl;
-	for (auto value : variables) {
-		cout << value.first << ": " << ToString(value.second) << endl;
-	}
-}
-
-void Script::ReadScript(string path) {
-    if (!filesystem::exists(path)) {
-        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
-    }
 
 	Json::Reader reader;
 	Json::Value root;
 
 	ifstream fin(path);
 	if (!fin.is_open()) {
-        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
+		THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
 	}
 	if (reader.parse(fin, root)) {
 		unordered_map<string, int> hash;
@@ -8540,218 +8576,161 @@ void Script::ReadScript(string path) {
 		for (auto milestone : root) {
 			Milestone content(
 				milestone["milestone"].asString(),
-				BuildEvent(milestone["trigger"]),
+				BuildEvent(milestone["triggers"], eventFactory),
 				milestone["visible"].asBool(),
 				BuildCondition(milestone["drop"].asString()),
 				milestone["description"].asString(),
 				milestone["goal"].asString(),
 				BuildDialogs(milestone["dialogs"]),
-				BuildChanges(milestone["changes"])
+				BuildChanges(milestone["changes"], changeFactory)
 			);
 			hash.insert(make_pair(milestone["milestone"].asString(), (int)milestones.size()));
 			milestones.push_back(MilestoneNode(content));
 		}
 		for (int i = 0; i < milestones.size(); i++) {
 			for (auto subsequence : root[i]["subsequences"]) {
-                if (hash.find(subsequence.asString()) == hash.end())continue;
+				if (hash.find(subsequence.asString()) == hash.end())continue;
 				if (hash[subsequence.asString()] < 0)continue;
 
 				milestones[i].subsequents.push_back(&milestones[hash[subsequence.asString()]]);
 				milestones[hash[subsequence.asString()]].premise++;
 			}
 		}
-		for (auto &milestone : milestones) {
+		for (auto& milestone : milestones) {
 			if (milestone.premise == 0) {
 				actives.push_back(&milestone);
 			}
 		}
 	}
-	else{
-        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+	else {
+		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
 	}
 	fin.close();
 }
 
-void Script::ApplyChange(shared_ptr<Change> change) {
-	auto type = change->GetType();
-	if(type == "set_value") {
-		auto obj = dynamic_pointer_cast<SetValueChange>(change);
-		if (obj->GetVariable().substr(0, 7) == "system.") {
-			return;
-		}
-		Condition condition;
-		condition.ParseCondition(obj->GetValue());
-		variables[obj->GetVariable()] = condition.EvaluateValue([this](string name) -> ValueType {
-			return this->GetValue(name);
-			});
-	}
-	else if(type == "remove_value") {
-		auto obj = dynamic_pointer_cast<RemoveValueChange>(change);
-		if (obj->GetVariable().substr(0, 7) == "system.") {
-			return;
-		}
-		variables.erase(obj->GetVariable());
-	}
-}
-
-void Script::SaveStory(string path) {
-
-}
-
-void Script::LoadStory(string path) {
-
-}
-
-bool Script::JudgeCondition(Condition& condition) {
-	return condition.EvaluateBool([this](string name) -> ValueType {
-		return this->GetValue(name);
-		});
-}
-
-pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(shared_ptr<Event> event) {
+pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(
+	shared_ptr<Event> event, Story *story) {
 	pair<vector<Dialog>, vector<shared_ptr<Change>>> results;
 	results.first.clear();
 	results.second.clear();
 
 	vector<MilestoneNode*> tmps;
-    for (auto it = actives.begin(); it != actives.end(); ) {
-        if (!JudgeCondition((*it)->content.GetTrigger()->GetCondition())) {
-            ++it;
-            continue;
-        }
-        if ((*it)->content.MatchTrigger(event)) {
-            auto subsequents = (*it)->subsequents;
-            for (auto subsequent : subsequents) {
-                subsequent->premise--;
-                if (subsequent->premise <= 0) {
-                    tmps.push_back(subsequent);
-                }
-            }
+	for (auto it = actives.begin(); it != actives.end(); ) {
+		bool match = false;
+		for (auto trigger : (*it)->content.GetTriggers()) {
+			if (!story->JudgeCondition(trigger->GetCondition())) {
+				continue;
+			}
 
-            auto dialogs = (*it)->content.GetDialogs();
-            results.first.insert(results.first.end(), dialogs.begin(), dialogs.end());
-            auto changes = (*it)->content.GetChanges();
-            results.second.insert(results.second.end(), changes.begin(), changes.end());
+			if ((*it)->content.MatchTrigger(event)) {
+				match = true;
+				break;
+			}
+		}
 
-			if ((*it)->content.DropSelf([this](string name) -> ValueType {
-				return this->GetValue(name);
+		if (match) {
+			auto subsequents = (*it)->subsequents;
+			for (auto subsequent : subsequents) {
+				subsequent->premise--;
+				if (subsequent->premise <= 0) {
+					tmps.push_back(subsequent);
+				}
+			}
+
+			auto dialogs = (*it)->content.GetDialogs();
+			results.first.insert(results.first.end(), dialogs.begin(), dialogs.end());
+			auto changes = (*it)->content.GetChanges();
+			results.second.insert(results.second.end(), changes.begin(), changes.end());
+
+			if ((*it)->content.DropSelf([&story](string name) -> ValueType {
+				return story->GetValue(name);
 				})) {
 				it = actives.erase(it);
 			}
 			else {
 				it++;
 			}
-        }
-        else {
-            ++it;
-        }
-    }
+		}
+		else {
+			it++;
+		}
+	}
 	actives.insert(actives.end(), tmps.begin(), tmps.end());
 
 	return results;
 }
 
-string Script::ReplaceContent(const string& content) {
-	std::string result;
-	size_t pos = 0;
-	size_t lastPos = 0;
+vector<shared_ptr<Event>> Script::BuildEvent(Json::Value root, unique_ptr<EventFactory> &factory) {
+	vector<shared_ptr<Event>> events;
 
-	while ((pos = content.find("$$", lastPos)) != std::string::npos) {
-		result.append(content, lastPos, pos - lastPos);
+	for (auto obj : root) {
+		shared_ptr<Event> event;
 
-		size_t varStart = pos + 2;
-		size_t varEnd = varStart;
-		while (varEnd < content.length() && IsIdentifierChar(content[varEnd])) {
-			varEnd++;
+		string type = obj["type"].asString();
+		if (type == "game_start") {
+			event = make_shared<GameStartEvent>();
+		}
+		else if (type == "option_dialog") {
+			event = make_shared<OptionDialogEvent>(obj["target"].asString(), obj["option"].asString());
+		}
+		else if (factory->CheckRegistered(type)) {
+			event = factory->CreateEvent(type);
 		}
 
-		std::string varName = content.substr(varStart, varEnd - varStart);
-		if (!varName.empty()) {
-			auto it = variables.find(varName);
-			if (it != variables.end()) {
-				result += ToString(it->second);
-			}
-			else {
-				result.append(content, pos, varEnd - pos);
-			}
+		if (!event) {
+			THROW_EXCEPTION(InvalidArgumentException, "Invalid event type: " + type + ".\n");
 		}
-		else {
-			result.append(content, pos, 2);
-		}
-		lastPos = varEnd;
-	}
-	result.append(content, lastPos, content.length() - lastPos);
-
-	return result;
-}
-
-shared_ptr<Event> Script::BuildEvent(Json::Value root) {
-    shared_ptr<Event> event = nullptr;
-
-    string type = root["type"].asString();
-
-	if (type == "game_start") {
-		event = make_shared<GameStartEvent>();
-	}
-    else if (type == "option_dialog") {
-        event = make_shared<OptionDialogEvent>(root["target"].asString(), root["option"].asString());
-    }
-	else if (eventFactory->CheckRegistered(type)) {
-		event = eventFactory->CreateEvent(type);
+		event->SetCondition(BuildCondition(obj["condition"]));
+		events.push_back(event);
 	}
 
-    if (!event) {
-        THROW_EXCEPTION(InvalidArgumentException, "Invalid event type: " + type + ".\n");
-    }
-    event->SetCondition(BuildCondition(root["condition"]));
-
-    return event;
+	return events;
 }
 
 vector<Dialog> Script::BuildDialogs(Json::Value root) {
-    vector<Dialog> dialogs;
+	vector<Dialog> dialogs;
 
-    for (auto obj : root) {
-        Dialog dialog;
+	for (auto obj : root) {
+		Dialog dialog;
 
-        dialog.SetCondition(BuildCondition(obj["condition"]));
+		dialog.SetCondition(BuildCondition(obj["condition"]));
 
-        for (auto speak : obj["list"]) {
-            dialog.AddDialog(speak["speaker"].asString(), speak["content"].asString());
-        }
-
-        dialogs.push_back(dialog);
-    }
-
-    return dialogs;
-}
-
-vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root) {
-    vector<shared_ptr<Change>> changes;
-
-    for (auto obj : root) {
-        string type = obj["type"].asString();
-        shared_ptr<Change> change = nullptr;
-
-        if (type == "set_value") {
-            change = make_shared<SetValueChange>(obj["variable"].asString(), obj["value"].asString());
-        }
-        else if (type == "remove_value") {
-            change = make_shared<RemoveValueChange>(obj["variable"].asString());
-        }
-		else if (changeFactory->CheckRegistered(type)) {
-			change = changeFactory->CreateChange(type);
+		for (auto speak : obj["list"]) {
+			dialog.AddDialog(speak["speaker"].asString(), speak["content"].asString());
 		}
 
-        if (!change) {
-            THROW_EXCEPTION(InvalidArgumentException, "Invalid change type: " + type + ".\n");
-        }
+		dialogs.push_back(dialog);
+	}
+
+	return dialogs;
+}
+
+vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root, unique_ptr<ChangeFactory> &factory) {
+	vector<shared_ptr<Change>> changes;
+
+	for (auto obj : root) {
+		string type = obj["type"].asString();
+		shared_ptr<Change> change = nullptr;
+
+		if (type == "set_value") {
+			change = make_shared<SetValueChange>(obj["variable"].asString(), obj["value"].asString());
+		}
+		else if (type == "remove_value") {
+			change = make_shared<RemoveValueChange>(obj["variable"].asString());
+		}
+		else if (factory->CheckRegistered(type)) {
+			change = factory->CreateChange(type);
+		}
+
+		if (!change) {
+			THROW_EXCEPTION(InvalidArgumentException, "Invalid change type: " + type + ".\n");
+		}
 
 		change->SetCondition(BuildCondition(obj["condition"]));
-        changes.push_back(change);
-    }
+		changes.push_back(change);
+	}
 
-    return changes;
+	return changes;
 }
 
 Condition Script::BuildCondition(Json::Value root) {
@@ -8762,98 +8741,45 @@ Condition Script::BuildCondition(Json::Value root) {
 	return condition;
 }
 
-void Script::InitVariables() {
-    variables["system.health_status"] = "healthy";
-}
-
-ValueType Script::GetValue(const std::string& name) {
-	auto it = variables.find(name);
-	if (it != variables.end()) {
-		return it->second;
-	}
-	return 0; // 默认返回0
-}
-
-void Script::SetValue(const std::string& name, ValueType value) {
-	variables[name] = value;
-}
-
-
-
 
 // ===== .\Forever\script.h =====
 
 ﻿#pragma once
 
-#include "utility.h"
-#include "json.h"
-#include "dialog.h"
-#include "event.h"
-#include "change.h"
 #include "milestone.h"
-#include "condition.h"
+#include "change.h"
+#include "story.h"
+#include "json.h"
+#include "error.h"
 
-#include <vector>
-#include <string>
-#include <set>
-#include <unordered_map>
 
+class Story;
 
 class Script {
 public:
 	Script();
+	Script(const std::shared_ptr<Script> script);
 	~Script();
 
-	// 读取Mods
-	void InitEvents();
-	void InitChanges();
-
-	// 输出当前剧本信息
-	void Print();
-
 	// 读取剧本
-	void ReadScript(std::string path);
-
-	// 应用变更
-	void ApplyChange(std::shared_ptr<Change> change);
-
-	// 保存/读取存档
-	void SaveStory(std::string path);
-	void LoadStory(std::string path);
-
-	// 判断条件
-	bool JudgeCondition(Condition &condition);
+	void ReadScript(std::string path,
+		std::unique_ptr<EventFactory>& eventFactory, std::unique_ptr<ChangeFactory>& changeFactory);
 
 	// 匹配事件
-	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
-
-	// 替换文本变量
-	std::string ReplaceContent(const std::string& content);
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
+		std::shared_ptr<Event> event, Story* story);
 
 private:
-	// Mod管理
-	std::vector<HMODULE> modHandles;
-	std::unique_ptr<EventFactory> eventFactory;
-	std::unique_ptr<ChangeFactory> changeFactory;
-
 	std::vector<MilestoneNode> milestones;
 	std::vector<MilestoneNode*> actives;
 
-	std::unordered_map<std::string, ValueType> variables;
-
 	// 复合对象读取
-	std::shared_ptr<Event> BuildEvent(Json::Value root);
+	std::vector<std::shared_ptr<Event>> BuildEvent(Json::Value root, std::unique_ptr<EventFactory>& factory);
 	std::vector<Dialog> BuildDialogs(Json::Value root);
-	std::vector<std::shared_ptr<Change>> BuildChanges(Json::Value root);
+	std::vector<std::shared_ptr<Change>> BuildChanges(Json::Value root, std::unique_ptr<ChangeFactory>& factory);
 	Condition BuildCondition(Json::Value root);
 
-	// 初始化全局变量
-	void InitVariables();
-	void SetValue(const std::string& name, ValueType value);
-	ValueType GetValue(const std::string& name);
 };
-
-
 
 // ===== .\Forever\society.cpp =====
 
@@ -9104,7 +9030,7 @@ void Society::Print() {
 
 }
 
-void Society::ApplyChange(shared_ptr<Change> change, unique_ptr<Script>& script) {
+void Society::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) {
 
 }
 
@@ -9157,7 +9083,7 @@ public:
 	void Print();
 
 	// 应用变更
-	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Script>& script);
+	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Story>& story);
 
 	// 保存/加载地图
 	void Load(std::string path);
@@ -9170,6 +9096,296 @@ private:
 	std::unique_ptr<OrganizationFactory> organizationFactory;
 
 	std::vector<std::shared_ptr<Organization>> organizations;
+};
+
+
+
+// ===== .\Forever\story.cpp =====
+
+﻿#include "story.h"
+#include "change.h"
+#include "json.h"
+#include "error.h"
+
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <filesystem>
+#include <unordered_map>
+
+
+using namespace std;
+
+Story::Story() {
+	eventFactory.reset(new EventFactory());
+	changeFactory.reset(new ChangeFactory());
+}
+
+Story::~Story() {
+
+}
+
+void Story::InitEvents() {
+	eventFactory->RegisterEvent(GameStartEvent::GetId(), []() { return make_unique<GameStartEvent>(); });
+	eventFactory->RegisterEvent(OptionDialogEvent::GetId(), []() { return make_unique<OptionDialogEvent>(); });
+
+	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
+	if (modHandle) {
+		modHandles.push_back(modHandle);
+		debugf("Mod dll loaded successfully.\n");
+
+		RegisterModEventsFunc registerFunc = (RegisterModEventsFunc)GetProcAddress(modHandle, "RegisterModEvents");
+		if (registerFunc) {
+			registerFunc(eventFactory.get());
+		}
+		else {
+			debugf("Incorrect dll content.");
+		}
+	}
+	else {
+		debugf("Failed to load mod.dll.");
+	}
+
+#ifdef MOD_TEST
+	auto eventList = { "game_start", "option_dialog", "mod"};
+	for (const auto& eventId : eventList) {
+		if (eventFactory->CheckRegistered(eventId)) {
+			auto event = eventFactory->CreateEvent(eventId);
+			debugf(("Created event: " + event->GetName() + " (ID: " + eventId + ")\n").data());
+		}
+		else {
+			debugf("Event not registered: %s\n", eventId);
+		}
+	}
+#endif // MOD_TEST
+}
+
+void Story::InitChanges() {
+	changeFactory->RegisterChange(SetValueChange::GetId(), []() { return make_unique<SetValueChange>(); });
+	changeFactory->RegisterChange(RemoveValueChange::GetId(), []() { return make_unique<RemoveValueChange>(); });
+
+	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
+	if (modHandle) {
+		modHandles.push_back(modHandle);
+		debugf("Mod dll loaded successfully.\n");
+
+		RegisterModChangesFunc registerFunc = (RegisterModChangesFunc)GetProcAddress(modHandle, "RegisterModChanges");
+		if (registerFunc) {
+			registerFunc(changeFactory.get());
+		}
+		else {
+			debugf("Incorrect dll content.");
+		}
+	}
+	else {
+		debugf("Failed to load mod.dll.");
+	}
+
+#ifdef MOD_TEST
+	auto changeList = { "set_value", "remove_value", "mod" };
+	for (const auto& changeId : changeList) {
+		if (changeFactory->CheckRegistered(changeId)) {
+			auto change = changeFactory->CreateChange(changeId);
+			debugf(("Created change: " + change->GetName() + " (ID: " + changeId + ")\n").data());
+		}
+		else {
+			debugf("Change not registered: %s\n", changeId);
+		}
+	}
+#endif // MOD_TEST
+}
+
+unique_ptr<EventFactory>& Story::GetEventFactory() {
+	return eventFactory;
+}
+
+unique_ptr<ChangeFactory>& Story::GetChangeFactory() {
+	return changeFactory;
+}
+
+void Story::Init() {
+	InitVariables();
+
+	script.reset(new Script());
+}
+
+void Story::Print() {
+	cout << "全局变量数量 " << variables.size() << endl;
+	for (auto value : variables) {
+		cout << value.first << ": " << ToString(value.second) << endl;
+	}
+}
+
+void Story::ReadStory(string path) {
+	script->ReadScript(path, eventFactory, changeFactory);
+}
+
+void Story::ApplyChange(shared_ptr<Change> change) {
+	auto type = change->GetType();
+	if(type == "set_value") {
+		auto obj = dynamic_pointer_cast<SetValueChange>(change);
+		if (obj->GetVariable().substr(0, 7) == "system.") {
+			return;
+		}
+		Condition condition;
+		condition.ParseCondition(obj->GetValue());
+		variables[obj->GetVariable()] = condition.EvaluateValue([this](string name) -> ValueType {
+			return this->GetValue(name);
+			});
+	}
+	else if(type == "remove_value") {
+		auto obj = dynamic_pointer_cast<RemoveValueChange>(change);
+		if (obj->GetVariable().substr(0, 7) == "system.") {
+			return;
+		}
+		variables.erase(obj->GetVariable());
+	}
+}
+
+void Story::SaveStory(string path) {
+
+}
+
+void Story::LoadStory(string path) {
+
+}
+
+bool Story::JudgeCondition(Condition& condition) {
+	return condition.EvaluateBool([this](string name) -> ValueType {
+		return this->GetValue(name);
+		});
+}
+
+pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Event> event) {
+	return script->MatchEvent(event, this);
+}
+
+string Story::ReplaceContent(const string& content) {
+	std::string result;
+	size_t pos = 0;
+	size_t lastPos = 0;
+
+	while ((pos = content.find("$$", lastPos)) != std::string::npos) {
+		result.append(content, lastPos, pos - lastPos);
+
+		size_t varStart = pos + 2;
+		size_t varEnd = varStart;
+		while (varEnd < content.length() && IsIdentifierChar(content[varEnd])) {
+			varEnd++;
+		}
+
+		std::string varName = content.substr(varStart, varEnd - varStart);
+		if (!varName.empty()) {
+			auto it = variables.find(varName);
+			if (it != variables.end()) {
+				result += ToString(it->second);
+			}
+			else {
+				result.append(content, pos, varEnd - pos);
+			}
+		}
+		else {
+			result.append(content, pos, 2);
+		}
+		lastPos = varEnd;
+	}
+	result.append(content, lastPos, content.length() - lastPos);
+
+	return result;
+}
+
+void Story::InitVariables() {
+    variables["system.health_status"] = "healthy";
+}
+
+ValueType Story::GetValue(const std::string& name) {
+	auto it = variables.find(name);
+	if (it != variables.end()) {
+		return it->second;
+	}
+	return 0; // 默认返回0
+}
+
+void Story::SetValue(const std::string& name, ValueType value) {
+	variables[name] = value;
+}
+
+
+
+
+// ===== .\Forever\story.h =====
+
+﻿#pragma once
+
+#include "utility.h"
+#include "json.h"
+#include "script.h"
+#include "dialog.h"
+#include "event.h"
+#include "change.h"
+#include "milestone.h"
+#include "condition.h"
+
+#include <vector>
+#include <string>
+#include <set>
+#include <unordered_map>
+
+
+class Script;
+
+class Story {
+public:
+	Story();
+	~Story();
+
+	// 读取Mods
+	void InitEvents();
+	void InitChanges();
+	std::unique_ptr<EventFactory>& GetEventFactory();
+	std::unique_ptr<ChangeFactory>& GetChangeFactory();
+
+	// 剧情初始化
+	void Init();
+
+	// 输出当前剧本信息
+	void Print();
+
+	// 读取剧本
+	void ReadStory(std::string path);
+
+	// 应用变更
+	void ApplyChange(std::shared_ptr<Change> change);
+
+	// 保存/读取存档
+	void SaveStory(std::string path);
+	void LoadStory(std::string path);
+
+	// 判断条件
+	bool JudgeCondition(Condition &condition);
+
+	// 匹配事件
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
+
+	// 替换文本变量
+	std::string ReplaceContent(const std::string& content);
+
+	// 变量管理
+	void SetValue(const std::string& name, ValueType value);
+	ValueType GetValue(const std::string& name);
+
+private:
+	// Mod管理
+	std::vector<HMODULE> modHandles;
+	std::unique_ptr<EventFactory> eventFactory;
+	std::unique_ptr<ChangeFactory> changeFactory;
+
+	std::unordered_map<std::string, ValueType> variables;
+
+	std::unique_ptr<Script> script;
+
+	// 初始化全局变量
+	void InitVariables();
 };
 
 
@@ -10096,7 +10312,7 @@ private:
 #include "map.h"
 #include "populace.h"
 #include "society.h"
-#include "script.h"
+#include "story.h"
 #include "utility.h"
 #include "error.h"
 
@@ -10112,6 +10328,7 @@ using namespace std;
 // 解析命令行输入事件
 shared_ptr<Event> ParseEvent(Parser& parser) {
     string type = parser.GetOption("--type");
+	int id;
     string target = "";
     string option = "";
 
@@ -10119,9 +10336,14 @@ shared_ptr<Event> ParseEvent(Parser& parser) {
         return make_shared<GameStartEvent>();
     }
 	else if (type == "option_dialog") {
+		if (parser.HasOption("--id")) id = stoi(parser.GetOption("--id"));
 		if (parser.HasOption("--target")) target = parser.GetOption("--target");
 		if (parser.HasOption("--option")) option = parser.GetOption("--option");
-		return make_shared<OptionDialogEvent>(target, option);
+		if (target.size() == 0)
+			return make_shared<OptionDialogEvent>(id, option);
+		else {
+			return make_shared<OptionDialogEvent>(target, option);
+		}
 	}
 
     return nullptr;
@@ -10152,10 +10374,10 @@ int main() {
 	society->InitOrganizations();
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
-	// 读取Script相关类及Mod
-	unique_ptr<Script> script(new Script());
-	script->InitEvents();
-	script->InitChanges();
+	// 读取Story相关类及Mod
+	unique_ptr<Story> story(new Story());
+	story->InitEvents();
+	story->InitChanges();
 
 	// 读取命令行
 	string cmd;
@@ -10185,8 +10407,10 @@ int main() {
 				map->Checkin(populace->GetCitizens(), populace->GetTime());
 				society->Init(map, populace);
 				populace->Schedule();
+				story->Init();
 				string path = parser.GetOption("--story");
-				script->ReadScript(path);
+				story->ReadStory(path);
+				populace->Characterize("../Resources/scripts/characters/", story);
 				break;
 			}
 			case CMD_PASS: { // 时间流逝
@@ -10201,40 +10425,77 @@ int main() {
 			case CMD_EVENT: { // 文本模拟事件
 				parser.AddOption("--type", 0, "Event type.", true, "nothing_happen");
 
-				parser.AddOption("--target", 0, "Event target.", true, "");
+				parser.AddOption("--id", 0, "Event target id.", true, "");
+				parser.AddOption("--target", 0, "Event target name.", true, "");
 				parser.AddOption("--option", 0, "Event option.", true, "");
 
 				parser.ParseCmd(cmd);
 				auto event = ParseEvent(parser);
-				auto actions = script->MatchEvent(event);
-				auto dialogs = actions.first;
-				auto changes = actions.second;
-				for (auto dialog : dialogs) {
-					if (script->JudgeCondition(dialog.GetCondition())) {
-						auto contents = dialog.GetDialogs();
-						if (contents.size() > 0) {
-							for (auto content : contents) {
-								if (content.first.size() == 0)
-									cout << script->ReplaceContent(content.second) << endl;
-								else
-									cout << script->ReplaceContent(content.first) << ": " << script->ReplaceContent(content.second) << endl;
+
+				if (true) {
+					auto actions = story->MatchEvent(event);
+					auto dialogs = actions.first;
+					auto changes = actions.second;
+					for (auto dialog : dialogs) {
+						if (story->JudgeCondition(dialog.GetCondition())) {
+							auto contents = dialog.GetDialogs();
+							if (contents.size() > 0) {
+								for (auto content : contents) {
+									if (content.first.size() == 0)
+										cout << story->ReplaceContent(content.second) << endl;
+									else
+										cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+								}
+								break;
 							}
-							break;
 						}
 					}
+					for (auto change : changes) {
+						if (!story->JudgeCondition(change->GetCondition()))continue;
+						map->ApplyChange(change, story);
+						populace->ApplyChange(change, story);
+						story->ApplyChange(change);
+					}
 				}
-				for (auto change : changes) {
-					if (!script->JudgeCondition(change->GetCondition()))continue;
-					map->ApplyChange(change, script);
-					populace->ApplyChange(change, script);
-					script->ApplyChange(change);
+				if (event->GetType() == "option_dialog") {
+					auto target = dynamic_pointer_cast<OptionDialogEvent>(event)->GetTarget();
+					auto idx = dynamic_pointer_cast<OptionDialogEvent>(event)->GetIdx();
+					pair<vector<Dialog>, vector<shared_ptr<Change>>> actions;
+					if (target.size() == 0) {
+						actions = populace->TriggerEvent(idx, event, story);
+					}
+					else {
+						actions = populace->TriggerEvent(target, event, story);
+					}
+					auto dialogs = actions.first;
+					auto changes = actions.second;
+					for (auto dialog : dialogs) {
+						if (story->JudgeCondition(dialog.GetCondition())) {
+							auto contents = dialog.GetDialogs();
+							if (contents.size() > 0) {
+								for (auto content : contents) {
+									if (content.first.size() == 0)
+										cout << story->ReplaceContent(content.second) << endl;
+									else
+										cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+								}
+								break;
+							}
+						}
+					}
+					for (auto change : changes) {
+						if (!story->JudgeCondition(change->GetCondition()))continue;
+						map->ApplyChange(change, story);
+						populace->ApplyChange(change, story);
+						story->ApplyChange(change);
+					}
 				}
 				break;
 			}
 			case CMD_PRINT: { // 输出当前状态
 				parser.AddOption("--map", 'm', "Whether to print the map.", false);
 				parser.AddOption("--populace", 'p', "Whether to print the populace.", false);
-				parser.AddOption("--script", 's', "Whether to print the script.", false);
+				parser.AddOption("--story", 's', "Whether to print the story.", false);
 
 				parser.ParseCmd(cmd);
 				break;

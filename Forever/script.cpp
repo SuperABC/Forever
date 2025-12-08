@@ -13,6 +13,41 @@ Script::Script() {
 
 }
 
+Script::Script(const std::shared_ptr<Script> script) {
+	unordered_map<string, int> hash;
+	hash["game_finish"] = -1;
+	hash["game_fail"] = -2;
+
+	for(auto& milestone : script->milestones) {
+		Milestone content(
+			milestone.content.GetName(),
+			milestone.content.GetTriggers(),
+			milestone.content.IsVisible(),
+			milestone.content.DropCondition(),
+			milestone.content.GetDescription(),
+			milestone.content.GetGoal(),
+			milestone.content.GetDialogs(),
+			milestone.content.GetChanges()
+		);
+		hash.insert(make_pair(content.GetName(), (int)milestones.size()));
+		milestones.push_back(MilestoneNode(content));
+	}
+	for (int i = 0; i < milestones.size(); i++) {
+		for (auto subsequence : script->milestones[i].subsequents) {
+			if (hash.find(subsequence->content.GetName()) == hash.end())continue;
+			if (hash[subsequence->content.GetName()] < 0)continue;
+
+			milestones[i].subsequents.push_back(&milestones[hash[subsequence->content.GetName()]]);
+			milestones[hash[subsequence->content.GetName()]].premise++;
+		}
+	}
+	for (auto& milestone : milestones) {
+		if (milestone.premise == 0) {
+			actives.push_back(&milestone);
+		}
+	}
+}
+
 Script::~Script() {
 
 }

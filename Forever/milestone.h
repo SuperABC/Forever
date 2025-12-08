@@ -25,6 +25,7 @@ public:
     // 获取参数
     std::string GetName();
     bool IsVisible();
+	Condition DropCondition();
     bool DropSelf(std::function<ValueType(const std::string&)> getValue);
     std::string GetDescription();
     std::string GetGoal();

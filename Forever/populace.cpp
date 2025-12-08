@@ -237,6 +237,24 @@ void Populace::Schedule() {
 	}
 }
 
+void Populace::Characterize(string path, unique_ptr<Story>& story) {
+	vector<shared_ptr<Script>> scripts;
+	for (const auto& entry : filesystem::directory_iterator(path)) {
+		if (entry.is_regular_file() && entry.path().extension() == ".json") {
+			auto script = make_shared<Script>();
+			script->ReadScript(entry.path().string(), story->GetEventFactory(), story->GetChangeFactory());
+			scripts.push_back(script);
+		}
+	}
+
+	for (auto citizen : citizens) {
+		int r = GetRandom((int)scripts.size());
+		citizen->AddScript(make_shared<Script>(scripts[r]));
+	}
+
+	debugf("Generate characters.\n");
+}
+
 void Populace::Destroy() {
 
 }
