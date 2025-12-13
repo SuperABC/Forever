@@ -10,32 +10,29 @@
 #include <unordered_map>
 
 
-enum class Operator {
-    // 比较运算符
-    EQUAL,          // ==
-    NOT_EQUAL,      // !=
-    GREATER,        // >
-    GREATER_EQUAL,  // >=
-    LESS,           // <
-    LESS_EQUAL,     // <=
-    INCLUDE,             // in
+enum class BinaryOperator {
+    EQUAL,
+    NOT_EQUAL,
+    GREATER,
+    GREATER_EQUAL,
+    LESS,
+    LESS_EQUAL,
+    INCLUDE,
 
-    // 算术运算符
-    ADD,            // +
-    SUBTRACT,       // -
-    MULTIPLY,       // *
-    DIVIDE,         // /
-    MODULO,         // %
-    EXPONENT,       // ^
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE,
+    MODULO,
+    EXPONENT,
 
-    // 逻辑运算符
-    LOGICAL_AND,    // &&
-    LOGICAL_OR      // ||
+    LOGICAL_AND,
+    LOGICAL_OR
 };
 
 enum class UnaryOperator {
-    NEGATE,         // 负号 -
-    LOGICAL_NOT     // 逻辑非 !
+    NEGATE,
+    LOGICAL_NOT
 };
 
 using ValueType = std::variant<int, double, bool, std::string>;
@@ -45,6 +42,118 @@ public:
     virtual ~Expression() = default;
 
     virtual ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const = 0;
+};
+
+class VariableExpression : public Expression {
+private:
+    std::string name;
+public:
+    VariableExpression(const std::string& n);
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+};
+
+class ConstantExpression : public Expression {
+private:
+    ValueType value;
+public:
+    ConstantExpression(ValueType v);
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+};
+
+class ArrayExpression : public Expression {
+private:
+    std::vector<std::shared_ptr<Expression>> elements;
+
+public:
+    ArrayExpression(std::vector<std::shared_ptr<Expression>> es);
+
+    std::vector<ValueType> GetElementValues(std::function<ValueType(const std::string&)> getValue) const;
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+};
+
+class UnaryExpression : public Expression {
+private:
+    UnaryOperator operand;
+    std::shared_ptr<Expression> expression;
+
+public:
+    UnaryExpression(UnaryOperator op, std::shared_ptr<Expression> operand);
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+
+private:
+    ValueType ApplyNegate(const ValueType& value) const;
+
+    ValueType ApplyLogicalNot(const ValueType& value) const;
+
+    bool ConvertToBool(const ValueType& value) const;
+};
+
+class BinaryExpression : public Expression {
+private:
+    std::shared_ptr<Expression> left;
+    std::shared_ptr<Expression> right;
+    BinaryOperator operand;
+
+public:
+    BinaryExpression(std::shared_ptr<Expression> l, std::shared_ptr<Expression> r, BinaryOperator op);
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+
+private:
+    bool GetComparisonResult(const ValueType& left, const ValueType& right, BinaryOperator op) const;
+
+    ValueType CompareValues(const ValueType& left, const ValueType& right, BinaryOperator op) const;
+
+    template<typename T>
+    static bool CompareSameType(const T& left, const T& right, BinaryOperator op) {
+        switch (op) {
+        case BinaryOperator::EQUAL: return left == right;
+        case BinaryOperator::NOT_EQUAL: return left != right;
+        case BinaryOperator::GREATER: return left > right;
+        case BinaryOperator::GREATER_EQUAL: return left >= right;
+        case BinaryOperator::LESS: return left < right;
+        case BinaryOperator::LESS_EQUAL: return left <= right;
+        default: return false;
+        }
+    }
+
+    template<typename T1, typename T2>
+    static bool CompareDifferentType(const T1& left, const T2& right, BinaryOperator op) {
+        if constexpr (std::is_arithmetic_v<T1> && std::is_arithmetic_v<T2>) {
+            double l = static_cast<double>(left);
+            double r = static_cast<double>(right);
+            return CompareSameType(l, r, op);
+        }
+        else if constexpr (std::is_same_v<T1, std::string> || std::is_same_v<T2, std::string>) {
+            std::string l_str = toString(left);
+            std::string r_str = toString(right);
+            return CompareSameType(l_str, r_str, op);
+        }
+        else {
+            return false;
+        }
+    }
+
+    ValueType ComputeArithmetic(const ValueType& left, const ValueType& right, BinaryOperator op) const;
+
+    bool ConvertToBool(const ValueType& value) const;
+
+    template<typename T>
+    static std::string toString(const T& value) {
+        if constexpr (std::is_same_v<T, std::string>) {
+            return value;
+        }
+        else if constexpr (std::is_same_v<T, bool>) {
+            return value ? "true" : "false";
+        }
+        else {
+            return std::to_string(value);
+        }
+    }
 };
 
 class Condition {
@@ -65,7 +174,7 @@ private:
     bool HigherPrecedence(const std::string& op1, const std::string& op2);
     int GetPrecedence(const std::string& op);
     bool RightAssociative(const std::string& op);
-    Operator GetOperator(const std::string& token);
+    BinaryOperator GetOperator(const std::string& token);
     std::shared_ptr<Expression> ParseOperand(const std::string& token);
     std::shared_ptr<Expression> ParseConstant(const std::string& token);
     bool OperatorChar(char c);

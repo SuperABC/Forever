@@ -14,7 +14,7 @@ public:
 
     virtual ~ExceptionBase() noexcept = default;
 
-    // 获取报错
+    // 获取报错信息
     const char* what() const noexcept override;
     virtual std::string GetDetailedInfo() const;
     const std::string& getMessage() const noexcept { return m_message; }
@@ -74,6 +74,10 @@ class MemoryException : public ExceptionBase {
 };
 
 class JsonFormatException : public ExceptionBase {
+    using ExceptionBase::ExceptionBase;
+};
+
+class RuntimeException : public ExceptionBase {
     using ExceptionBase::ExceptionBase;
 };
 
