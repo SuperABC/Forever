@@ -174,22 +174,22 @@ void Populace::ReadConfigs(string path) const {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
     }
 
-    Json::Reader reader;
-    Json::Value root;
+    JsonReader reader;
+    JsonValue root;
 
     ifstream fin(path);
     if (!fin.is_open()) {
         THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
     }
-    if (reader.parse(fin, root)) {
+    if (reader.Parse(fin, root)) {
 		for (auto job : root["mods"]["job"]) {
-			jobFactory->SetConfig(job.asString(), true);
+			jobFactory->SetConfig(job.AsString(), true);
 		}
-		nameFactory->SetConfig(root["mods"]["name"].asString(), true);
+		nameFactory->SetConfig(root["mods"]["name"].AsString(), true);
     }
     else {
         fin.close();
-        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
     }
     fin.close();
 }

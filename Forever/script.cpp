@@ -58,39 +58,39 @@ void Script::ReadScript(string path,
 		THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
 	}
 
-	Json::Reader reader;
-	Json::Value root;
+	JsonReader reader;
+	JsonValue root;
 
 	ifstream fin(path);
 	if (!fin.is_open()) {
 		THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
 	}
-	if (reader.parse(fin, root)) {
+	if (reader.Parse(fin, root)) {
 		unordered_map<string, int> hash;
 		hash["game_finish"] = -1;
 		hash["game_fail"] = -2;
 
 		for (auto milestone : root) {
 			Milestone content(
-				milestone["milestone"].asString(),
+				milestone["milestone"].AsString(),
 				BuildEvent(milestone["triggers"], eventFactory),
-				milestone["visible"].asBool(),
-				BuildCondition(milestone["drop"].asString()),
-				milestone["description"].asString(),
-				milestone["goal"].asString(),
+				milestone["visible"].AsBool(),
+				BuildCondition(milestone["drop"].AsString()),
+				milestone["description"].AsString(),
+				milestone["goal"].AsString(),
 				BuildDialogs(milestone["dialogs"]),
 				BuildChanges(milestone["changes"], changeFactory)
 			);
-			hash.insert(make_pair(milestone["milestone"].asString(), (int)milestones.size()));
+			hash.insert(make_pair(milestone["milestone"].AsString(), (int)milestones.size()));
 			milestones.push_back(MilestoneNode(content));
 		}
 		for (int i = 0; i < milestones.size(); i++) {
 			for (auto subsequence : root[i]["subsequences"]) {
-				if (hash.find(subsequence.asString()) == hash.end())continue;
-				if (hash[subsequence.asString()] < 0)continue;
+				if (hash.find(subsequence.AsString()) == hash.end())continue;
+				if (hash[subsequence.AsString()] < 0)continue;
 
-				milestones[i].subsequents.push_back(&milestones[hash[subsequence.asString()]]);
-				milestones[hash[subsequence.asString()]].premise++;
+				milestones[i].subsequents.push_back(&milestones[hash[subsequence.AsString()]]);
+				milestones[hash[subsequence.AsString()]].premise++;
 			}
 		}
 		for (auto& milestone : milestones) {
@@ -100,7 +100,7 @@ void Script::ReadScript(string path,
 		}
 	}
 	else {
-		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
 	}
 	fin.close();
 }
@@ -157,18 +157,18 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(
 	return results;
 }
 
-vector<shared_ptr<Event>> Script::BuildEvent(Json::Value root, unique_ptr<EventFactory> &factory) {
+vector<shared_ptr<Event>> Script::BuildEvent(JsonValue root, unique_ptr<EventFactory> &factory) {
 	vector<shared_ptr<Event>> events;
 
 	for (auto obj : root) {
 		shared_ptr<Event> event;
 
-		string type = obj["type"].asString();
+		string type = obj["type"].AsString();
 		if (type == "game_start") {
 			event = make_shared<GameStartEvent>();
 		}
 		else if (type == "option_dialog") {
-			event = make_shared<OptionDialogEvent>(obj["target"].asString(), obj["option"].asString());
+			event = make_shared<OptionDialogEvent>(obj["target"].AsString(), obj["option"].AsString());
 		}
 		else if (factory->CheckRegistered(type)) {
 			event = factory->CreateEvent(type);
@@ -184,7 +184,7 @@ vector<shared_ptr<Event>> Script::BuildEvent(Json::Value root, unique_ptr<EventF
 	return events;
 }
 
-vector<Dialog> Script::BuildDialogs(Json::Value root) {
+vector<Dialog> Script::BuildDialogs(JsonValue root) {
 	vector<Dialog> dialogs;
 
 	for (auto obj : root) {
@@ -193,7 +193,7 @@ vector<Dialog> Script::BuildDialogs(Json::Value root) {
 		dialog.SetCondition(BuildCondition(obj["condition"]));
 
 		for (auto speak : obj["list"]) {
-			dialog.AddDialog(speak["speaker"].asString(), speak["content"].asString());
+			dialog.AddDialog(speak["speaker"].AsString(), speak["content"].AsString());
 		}
 
 		dialogs.push_back(dialog);
@@ -202,18 +202,18 @@ vector<Dialog> Script::BuildDialogs(Json::Value root) {
 	return dialogs;
 }
 
-vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root, unique_ptr<ChangeFactory> &factory) {
+vector<shared_ptr<Change>> Script::BuildChanges(JsonValue root, unique_ptr<ChangeFactory> &factory) {
 	vector<shared_ptr<Change>> changes;
 
 	for (auto obj : root) {
-		string type = obj["type"].asString();
+		string type = obj["type"].AsString();
 		shared_ptr<Change> change = nullptr;
 
 		if (type == "set_value") {
-			change = make_shared<SetValueChange>(obj["variable"].asString(), obj["value"].asString());
+			change = make_shared<SetValueChange>(obj["variable"].AsString(), obj["value"].AsString());
 		}
 		else if (type == "remove_value") {
-			change = make_shared<RemoveValueChange>(obj["variable"].asString());
+			change = make_shared<RemoveValueChange>(obj["variable"].AsString());
 		}
 		else if (factory->CheckRegistered(type)) {
 			change = factory->CreateChange(type);
@@ -230,10 +230,10 @@ vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root, unique_ptr<Cha
 	return changes;
 }
 
-Condition Script::BuildCondition(Json::Value root) {
+Condition Script::BuildCondition(JsonValue root) {
 	Condition condition;
 
-	condition.ParseCondition(root.asString());
+	condition.ParseCondition(root.AsString());
 
 	return condition;
 }

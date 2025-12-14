@@ -321,35 +321,35 @@ void Map::ReadConfigs(string path) const {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
     }
 
-    Json::Reader reader;
-    Json::Value root;
+    JsonReader reader;
+    JsonValue root;
 
     ifstream fin(path);
     if (!fin.is_open()) {
         THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
     }
-    if (reader.parse(fin, root)) {
+    if (reader.Parse(fin, root)) {
         for (auto terrain : root["mods"]["terrain"]) {
-            terrainFactory->SetConfig(terrain.asString(), true);
+            terrainFactory->SetConfig(terrain.AsString(), true);
         }
-        roadnetFactory->SetConfig(root["mods"]["roadnet"].asString(), true);
+        roadnetFactory->SetConfig(root["mods"]["roadnet"].AsString(), true);
         for (auto zone : root["mods"]["zone"]) {
-            zoneFactory->SetConfig(zone.asString(), true);
+            zoneFactory->SetConfig(zone.AsString(), true);
         }
         for (auto building : root["mods"]["building"]) {
-            buildingFactory->SetConfig(building.asString(), true);
+            buildingFactory->SetConfig(building.AsString(), true);
         }
         for (auto component : root["mods"]["component"]) {
-            componentFactory->SetConfig(component.asString(), true);
+            componentFactory->SetConfig(component.AsString(), true);
         }
         for (auto room : root["mods"]["room"]) {
-            roomFactory->SetConfig(room.asString(), true);
+            roomFactory->SetConfig(room.AsString(), true);
         }
 
     }
     else {
         fin.close();
-        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
     }
     fin.close();
 }
