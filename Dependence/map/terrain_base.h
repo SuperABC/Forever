@@ -18,7 +18,7 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
-    // 动态返回生成优先级
+    // 动态返回生成优先级，高优先级会被低优先级覆盖
     virtual float GetPriority() const = 0;
 
     // 在地图上生成地形
@@ -27,7 +27,20 @@ public:
 
 	// 父类实现方法
 
+    // 地形填充，若ovewrite为true，则全图填充，否则只填充平原
+    int FloodTerrain(int x, int y, int num, bool overwrite, int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const;
+
 protected:
+    // 地形填充辅助内容
+    std::vector<int> dx = { -1, 1, 0, 0 };
+    std::vector<int> dy = { 0, 0, -1, 1 };
+    bool CheckBoundary(int x, int y, bool overwrite, int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const;
+    void UpdateBoundary(int x, int y, std::vector<std::pair<int, int>>& q, bool overwrite, int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const;
+    void ShapeFilter(int x, int y, int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get, int side = 1, float threshold = 0.5f) const;
 };
 
 class TerrainFactory {

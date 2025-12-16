@@ -1,6 +1,6 @@
 {
 	"mods":{
-		"terrain": ["test", "mod"],
+		"terrain": ["ocean", "mountain", "mod"],
 		"roadnet": "test",
 		"zone": ["test", "mod"],
 		"building": ["test", "mod"],

@@ -104,8 +104,10 @@ Map::~Map() {
 }
 
 void Map::InitTerrains() {
-    terrainFactory->RegisterTerrain(TestTerrain::GetId(),
-        []() { return make_unique<TestTerrain>(); });
+    terrainFactory->RegisterTerrain(OceanTerrain::GetId(),
+        []() { return make_unique<OceanTerrain>(); });
+    terrainFactory->RegisterTerrain(MountainTerrain::GetId(),
+        []() { return make_unique<MountainTerrain>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -125,7 +127,7 @@ void Map::InitTerrains() {
     }
 
 #ifdef MOD_TEST
-    auto terrainList = { "test", "mod" };
+    auto terrainList = { "mod" };
     for (const auto& terrainId : terrainList) {
         if (terrainFactory->CheckRegistered(terrainId)) {
             auto terrain = terrainFactory->CreateTerrain(terrainId);
@@ -387,7 +389,7 @@ int Map::Init(int blockX, int blockY) {
     auto terrains = terrainFactory->GetTerrains();
     sort(terrains.begin(), terrains.end(),
         [](const unique_ptr<Terrain>& a, const unique_ptr<Terrain>& b) {
-            return a->GetPriority() < b->GetPriority();
+            return a->GetPriority() > b->GetPriority();
         });
     for (auto& terrain : terrains) {
         terrain->DistributeTerrain(width, height, setTerrain, getTerrain);

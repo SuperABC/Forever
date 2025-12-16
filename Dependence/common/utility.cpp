@@ -605,3 +605,11 @@ Time GetRandom(Time begin, Time end) {
 
     return result;
 }
+
+Counter::Counter(int count) : num(count) {
+
+}
+
+bool Counter::count() {
+    return --num <= 0;
+}

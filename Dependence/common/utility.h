@@ -113,3 +113,14 @@ private:
 
 // 时间范围内随机采样
 Time GetRandom(Time begin, Time end);
+
+// 计数器
+class Counter {
+public:
+    Counter(int count);
+
+    bool count();
+
+private:
+    int num;
+};
