@@ -27,9 +27,9 @@ public:
 	// 父类实现方法
 
     // 提供只读访问接口
-    const std::vector<Node>& GetNodes() const { return nodes; }
-    const std::vector<Connection>& GetConnections() const { return connections; }
-    const std::vector<std::shared_ptr<Plot>>& GetPlots() const { return plots; }
+    const std::vector<Node>& GetNodes() const;
+    const std::vector<Connection>& GetConnections() const;
+    const std::vector<std::shared_ptr<Plot>>& GetPlots() const;
 
 protected:
     std::vector<Node> nodes;

@@ -142,7 +142,7 @@ void Map::InitTerrains() {
 }
 
 void Map::InitRoadnets() {
-    roadnetFactory->RegisterRoadnet(TestRoadnet::GetId(), []() { return make_unique<TestRoadnet>(); });
+    roadnetFactory->RegisterRoadnet(JingRoadnet::GetId(), []() { return make_unique<JingRoadnet>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -162,7 +162,7 @@ void Map::InitRoadnets() {
     }
 
 #ifdef MOD_TEST
-    auto roadnetList = { "test", "mod" };
+    auto roadnetList = { "mod" };
     for (const auto& roadnetId : roadnetList) {
         if (roadnetFactory->CheckRegistered(roadnetId)) {
             auto roadnet = roadnetFactory->CreateRoadnet(roadnetId);

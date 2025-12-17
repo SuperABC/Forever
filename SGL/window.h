@@ -1047,8 +1047,8 @@ public:
 		float invSlope1, invSlope2, invSlope3;
 		float curX1, curX2;
 
-		if (sglMode != BIT_MAP && !innerFunc)return;
-		if (checkThread())return;
+		if (sglMode != BIT_MAP && !innerFunc) return;
+		if (checkThread()) return;
 
 		if (mode == EMPTY_FILL) {
 			putLine(x1, y1, x2, y2, SOLID_LINE);
@@ -1070,12 +1070,14 @@ public:
 				}
 				return;
 			}
+
 			if (y2 != y1) invSlope1 = (float)(x2 - x1) / (y2 - y1);
 			else invSlope1 = 0;
 			if (y3 != y1) invSlope2 = (float)(x3 - x1) / (y3 - y1);
 			else invSlope2 = 0;
 			if (y3 != y2) invSlope3 = (float)(x3 - x2) / (y3 - y2);
 			else invSlope3 = 0;
+
 			curX1 = x1;
 			curX2 = x1;
 			for (y = y1; y <= y2; y++) {
@@ -1087,13 +1089,15 @@ public:
 				curX1 += invSlope1;
 				curX2 += invSlope2;
 			}
-			if (y1 != y2) {
-				curX1 = x2;
-			}
-			else {
+
+			if (y1 == y2) {
 				curX1 = x1;
 			}
+			else {
+				curX1 = curX2;
+			}
 			curX2 = x2;
+
 			for (y = y2; y <= y3; y++) {
 				startX = (int)(curX1 < curX2 ? curX1 : curX2);
 				endX = (int)(curX1 > curX2 ? curX1 : curX2);

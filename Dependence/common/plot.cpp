@@ -165,7 +165,7 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     // 现在 nodes[0], nodes[1], nodes[2], nodes[3] 是逆时针顺序
 
     // 检查矩形条件
-    const float eps = 1e-5f;
+    const float eps = 1e-2f;
 
     // 计算四个边向量
     float u1x = nodes[1].GetX() - nodes[0].GetX();

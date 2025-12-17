@@ -3,6 +3,18 @@
 
 using namespace std;
 
+const std::vector<Node>& Roadnet::GetNodes() const {
+    return nodes;
+}
+
+const std::vector<Connection>& Roadnet::GetConnections() const {
+    return connections;
+}
+
+const std::vector<std::shared_ptr<Plot>>& Roadnet::GetPlots() const {
+    return plots;
+}
+
 void RoadnetFactory::RegisterRoadnet(const string& id, function<unique_ptr<Roadnet>()> creator) {
     registries[id] = creator;
     configs[id] = false;

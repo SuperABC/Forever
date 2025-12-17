@@ -444,19 +444,17 @@ void sgLoop() {
 		if (bmp->data)free(bmp->data);
 		free(bmp);
 
+		setColor(255, 255, 255);
+		putQuad(0, sizeY, sizeX - 1, sizeY + 20 - 1, SOLID_FILL);
 		auto pos = mousePos();
 		int posX = cameraX + (pos.x - sizeX / 2) / (8 / steps[zoom]);
 		int posY = cameraY + (pos.y - sizeY / 2) / (8 / steps[zoom]);
 		auto element = ::map->GetElement(posX, posY);
 		if (element && element->GetZone().size() > 0) {
-			setColor(255, 255, 255);
-			putQuad(0, sizeY, sizeX - 1, sizeY + 20 - 1, SOLID_FILL);
 			setColor(0, 0, 0);
 			putString(element->GetZone().data(), 0, sizeY);
 		}
 		else if (element && element->GetBuilding().size() > 0) {
-			setColor(255, 255, 255);
-			putQuad(0, sizeY, sizeX - 1, sizeY + 20 - 1, SOLID_FILL);
 			setColor(0, 0, 0);
 			putString(element->GetBuilding().data(), 0, sizeY);
 		}
