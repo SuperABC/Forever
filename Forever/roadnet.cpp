@@ -93,37 +93,37 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
     plots.push_back(std::make_shared<Plot>(northWest, northEast, southEast, southWest));
     plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     for (int i = 1; i < min(horizontalNode1w.size(), horizontalNode2w.size()); i++) {
-        if (get(horizontalNode1w[i].GetX(), horizontalNode1w[i].GetY()) != "plain")continue;
-        if (get(horizontalNode1w[i - i].GetX(), horizontalNode1w[i - 1].GetY()) != "plain")continue;
-        if (get(horizontalNode2w[i].GetX(), horizontalNode2w[i].GetY()) != "plain")continue;
-        if (get(horizontalNode2w[i - 1].GetX(), horizontalNode2w[i - 1].GetY()) != "plain")continue;
+        if (get((int)horizontalNode1w[i].GetX(), (int)horizontalNode1w[i].GetY()) != "plain")continue;
+        if (get((int)horizontalNode1w[i - 1].GetX(), (int)horizontalNode1w[i - 1].GetY()) != "plain")continue;
+        if (get((int)horizontalNode2w[i].GetX(), (int)horizontalNode2w[i].GetY()) != "plain")continue;
+        if (get((int)horizontalNode2w[i - 1].GetX(), (int)horizontalNode2w[i - 1].GetY()) != "plain")continue;
         plots.push_back(std::make_shared<Plot>(
             horizontalNode1w[i], horizontalNode1w[i - 1], horizontalNode2w[i - 1], horizontalNode2w[i]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     }
     for (int i = 1; i < min(horizontalNode1e.size(), horizontalNode2e.size()); i++) {
-        if (get(horizontalNode1e[i].GetX(), horizontalNode1e[i].GetY()) != "plain")continue;
-        if (get(horizontalNode1e[i - i].GetX(), horizontalNode1e[i - 1].GetY()) != "plain")continue;
-        if (get(horizontalNode2e[i].GetX(), horizontalNode2e[i].GetY()) != "plain")continue;
-        if (get(horizontalNode2e[i - 1].GetX(), horizontalNode2e[i - 1].GetY()) != "plain")continue;
+        if (get((int)horizontalNode1e[i].GetX(), (int)horizontalNode1e[i].GetY()) != "plain")continue;
+        if (get((int)horizontalNode1e[i - 1].GetX(), (int)horizontalNode1e[i - 1].GetY()) != "plain")continue;
+        if (get((int)horizontalNode2e[i].GetX(), (int)horizontalNode2e[i].GetY()) != "plain")continue;
+        if (get((int)horizontalNode2e[i - 1].GetX(), (int)horizontalNode2e[i - 1].GetY()) != "plain")continue;
         plots.push_back(std::make_shared<Plot>(
             horizontalNode1e[i - 1], horizontalNode1e[i], horizontalNode2e[i], horizontalNode2e[i - 1]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     }
     for (int i = 1; i < min(verticalNode1n.size(), verticalNode2n.size()); i++) {
-        if (get(verticalNode1n[i].GetX(), verticalNode1n[i].GetY()) != "plain")continue;
-        if (get(verticalNode1n[i - i].GetX(), verticalNode1n[i - 1].GetY()) != "plain")continue;
-        if (get(verticalNode2n[i].GetX(), verticalNode2n[i].GetY()) != "plain")continue;
-        if (get(verticalNode2n[i - 1].GetX(), verticalNode2n[i - 1].GetY()) != "plain")continue;
+        if (get((int)verticalNode1n[i].GetX(), (int)verticalNode1n[i].GetY()) != "plain")continue;
+        if (get((int)verticalNode1n[i - 1].GetX(), (int)verticalNode1n[i - 1].GetY()) != "plain")continue;
+        if (get((int)verticalNode2n[i].GetX(), (int)verticalNode2n[i].GetY()) != "plain")continue;
+        if (get((int)verticalNode2n[i - 1].GetX(), (int)verticalNode2n[i - 1].GetY()) != "plain")continue;
         plots.push_back(std::make_shared<Plot>(
             verticalNode1n[i], verticalNode2n[i], verticalNode2n[i - 1], verticalNode1n[i - 1]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     }
     for (int i = 1; i < min(verticalNode1s.size(), verticalNode2s.size()); i++) {
-        if (get(verticalNode1s[i].GetX(), verticalNode1s[i].GetY()) != "plain")continue;
-        if (get(verticalNode1s[i - i].GetX(), verticalNode1s[i - 1].GetY()) != "plain")continue;
-        if (get(verticalNode2s[i].GetX(), verticalNode2s[i].GetY()) != "plain")continue;
-        if (get(verticalNode2s[i - 1].GetX(), verticalNode2s[i - 1].GetY()) != "plain")continue;
+        if (get((int)verticalNode1s[i].GetX(), (int)verticalNode1s[i].GetY()) != "plain")continue;
+        if (get((int)verticalNode1s[i - 1].GetX(), (int)verticalNode1s[i - 1].GetY()) != "plain")continue;
+        if (get((int)verticalNode2s[i].GetX(), (int)verticalNode2s[i].GetY()) != "plain")continue;
+        if (get((int)verticalNode2s[i - 1].GetX(), (int)verticalNode2s[i - 1].GetY()) != "plain")continue;
         plots.push_back(std::make_shared<Plot>(
             verticalNode1s[i - 1], verticalNode2s[i - 1], verticalNode2s[i], verticalNode1s[i]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);

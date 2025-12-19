@@ -20,17 +20,20 @@ public:
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return std::string("模组建筑") + std::to_string(name); }
 
-    static std::vector<float> GetPower() { return std::vector<float>(13, 1.f); }
+    static std::vector<float> GetPower() { return std::vector<float>(13, 0.1f); }
 
     virtual float RandomAcreage() const override { return 10000.f; }
     virtual float GetAcreageMin() const override { return 2000.f; }
     virtual float GetAcreageMax() const override { return 20000.f; }
 
+    virtual Rect LayoutConstruction() const override {
+        return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
+    }
     virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override {
         int direction = GetRandom(4);
 
         auto component = CreateComponent<ModComponent>();
-        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "single_room", layout);
+        ReadFloor(0, direction, "single_room", layout);
         AssignRoom(0, 0, "mod", component, factory);
     }
 

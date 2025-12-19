@@ -67,24 +67,29 @@ void updateBuilding(int floor, int scroll) {
 			default:
 				break;
 			}
-			putQuad(facility.GetLeft() * 20, facility.GetTop() * 20, facility.GetRight() * 20, facility.GetBottom() * 20, SOLID_FILL);
+			putQuad(currentBuilding->GetConstruction().GetLeft() * 20 + facility.GetLeft() * 20,
+				currentBuilding->GetConstruction().GetBottom() * 20 + facility.GetBottom() * 20,
+				currentBuilding->GetConstruction().GetLeft() * 20 + facility.GetRight() * 20,
+				currentBuilding->GetConstruction().GetBottom() * 20 + facility.GetTop() * 20, SOLID_FILL);
 		}
 		setColor(0, 0, 0);
 		for (auto room : currentBuilding->GetRooms()) {
 			if(room->GetLayer() == floor)
-			putQuad(room->GetLeft() * 20, room->GetTop() * 20, room->GetRight() * 20, room->GetBottom() * 20, EMPTY_FILL);
+			putQuad(currentBuilding->GetConstruction().GetLeft() * 20 + room->GetLeft() * 20,
+				currentBuilding->GetConstruction().GetBottom() * 20 + room->GetBottom() * 20,
+				currentBuilding->GetConstruction().GetLeft() * 20 + room->GetRight() * 20,
+				currentBuilding->GetConstruction().GetBottom() * 20 + room->GetTop() * 20, EMPTY_FILL);
 		}
 	}
 
 	setColor(0, 0, 0);
-	string text = currentBuilding->GetName() + "\n" +
+	putString((currentBuilding->GetName() + "\n" +
 		"宽" + to_string(currentBuilding->GetSizeX() * 10) + "m" + "\n" +
 		"高" + to_string(currentBuilding->GetSizeY() * 10) + "m" + "\n" +
 		"面积" + to_string(currentBuilding->GetAcreage()) + "m2" + "\n" +
 		"地面层高" + to_string(currentBuilding->GetLayers()) + "层" + "\n" +
-		"地下层高" + to_string(currentBuilding->GetBasements()) + "层" + "\n";
-
-	text += "\n";
+		"地下层高" + to_string(currentBuilding->GetBasements()) + "层" + "\n" +
+		"").data(), currentBuilding->GetSizeX() * 20, 0);
 }
 
 void buildingSetup(void* b) {
@@ -144,8 +149,8 @@ void updateZone() {
 		if (building.second->GetAcreage() == 0)continue;
 		srand(off);
 		setColor(64 + rand() % 192, 64 + rand() % 192, 64 + rand() % 192);
-		putQuad(building.second->GetLeft() * 20 + 1, building.second->GetTop() * 20 + 1,
-			building.second->GetRight() * 20 - 1, building.second->GetBottom() * 20 - 1, SOLID_FILL);
+		putQuad(building.second->GetLeft() * 20, building.second->GetBottom() * 20,
+			building.second->GetRight() * 20, building.second->GetTop() * 20, SOLID_FILL);
 		setColor(0, 0, 0);
 		setFontSize(32);
 		putString(building.first.data(),
@@ -192,7 +197,8 @@ void zoneLoop() {
 						closeWindow(buildingWindow);
 					}
 					buildingWindow = createParamWindow(
-						building->GetSizeX() * 20 + 200, building->GetSizeY() * 20, element->GetBuilding().data(), BIT_MAP, buildingSetup, buildingLoop, building.get());
+						round(building->GetSizeX()) * 20 + 200, round(building->GetSizeY()) * 20,
+						element->GetBuilding().data(), BIT_MAP, buildingSetup, buildingLoop, building.get());
 				}
 			}
 		}
@@ -474,7 +480,8 @@ void sgLoop() {
 							closeWindow(zoneWindow);
 						}
 						zoneWindow = createParamWindow(
-							zone->GetSizeX() * 20 + 200, zone->GetSizeY() * 20, element->GetZone().data(), BIT_MAP, zoneSetup, zoneLoop, zone.get());
+							round(zone->GetSizeX()) * 20 + 200, round(zone->GetSizeY()) * 20,
+							element->GetZone().data(), BIT_MAP, zoneSetup, zoneLoop, zone.get());
 					}
 				}
 				else if (element && element->GetBuilding().size() > 0) {
@@ -484,7 +491,8 @@ void sgLoop() {
 							closeWindow(buildingWindow);
 						}
 						buildingWindow = createParamWindow(
-							building->GetSizeX() * 20 + 200, building->GetSizeY() * 20, element->GetBuilding().data(), BIT_MAP, buildingSetup, buildingLoop, building.get());
+							round(building->GetSizeX()) * 20 + 200, round(building->GetSizeY()) * 20,
+							element->GetBuilding().data(), BIT_MAP, buildingSetup, buildingLoop, building.get());
 					}
 				}
 			}

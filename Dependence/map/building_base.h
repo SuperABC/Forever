@@ -98,7 +98,8 @@ public:
     virtual float GetAcreageMin() const = 0;
     virtual float GetAcreageMax() const = 0;
 
-    // 内部房间布局
+    // 建筑房间布局
+	virtual Rect LayoutConstruction() const = 0;
     virtual void LayoutRooms(RoomFactory *factory, std::unique_ptr<Layout>& layout) = 0;
 
 	// 父类实现方法
@@ -118,6 +119,7 @@ public:
 	// 获取/设置属性
 	int GetLayers() const;
 	int GetBasements() const;
+	const Rect GetConstruction() const;
 
 	// 获取/设置组织/房间/楼层
 	std::vector<std::shared_ptr<Component>>& GetComponents();
@@ -143,11 +145,12 @@ protected:
 
 	int layers = 1;
 	int basements = 0;
+	Rect construction;
 
 	// 根据布局文件分配房间
-	void ReadFloor(int level, float width, float height, int face, std::string name, std::unique_ptr<Layout>& layout);
-	void ReadFloors(float width, float height, int face, std::string name, std::unique_ptr<Layout>& layout);
-	void ReadFloors(float width, float height, int face, std::vector<std::string> names, std::unique_ptr<Layout>& layout);
+	void ReadFloor(int level, int face, std::string name, std::unique_ptr<Layout>& layout);
+	void ReadFloors(int face, std::string name, std::unique_ptr<Layout>& layout);
+	void ReadFloors(int face, std::vector<std::string> names, std::unique_ptr<Layout>& layout);
 	void AssignRoom(int level, int slot, std::string name, std::shared_ptr<Component> component, RoomFactory* factory);
 	void ArrangeRow(int level, int slot, std::string name, float acreage, std::shared_ptr<Component> component, RoomFactory* factory);
 

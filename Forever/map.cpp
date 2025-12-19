@@ -213,8 +213,8 @@ void Map::InitZones() {
 }
 
 void Map::InitBuildings() {
-    buildingFactory->RegisterBuilding(TestBuilding::GetId(),
-        []() { return make_unique<TestBuilding>(); }, TestBuilding::GetPower());
+    buildingFactory->RegisterBuilding(FlatBuilding::GetId(),
+        []() { return make_unique<FlatBuilding>(); }, FlatBuilding::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {

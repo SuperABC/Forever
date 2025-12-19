@@ -94,6 +94,10 @@ int Building::GetBasements() const {
     return basements;
 }
 
+const Rect Building::GetConstruction() const {
+	return construction;
+}
+
 vector<shared_ptr<Component>>& Building::GetComponents() {
     return components;
 }
@@ -110,6 +114,7 @@ shared_ptr<Floor> Building::GetFloor(int level) const {
 
 void Building::FinishInit() {
     floors = vector<shared_ptr<Floor>>(basements + layers);
+	construction = LayoutConstruction();
 }
 
 unique_ptr<Layout> Building::ReadTemplates(string path) {
@@ -257,49 +262,51 @@ unique_ptr<Layout> Building::ReadTemplates(string path) {
     return layout;
 }
 
-void Building::ReadFloor(int level, float width, float height, int face, string name, unique_ptr<Layout>& layout) {
+void Building::ReadFloor(int level, int face, string name, unique_ptr<Layout>& layout) {
+    auto width = construction.GetSizeX();
+    auto height = construction.GetSizeY();
     auto floor = make_shared<Floor>(level, width, height);
 
     for (auto facility : layout->templateFacilities[name][face]) {
         float x = (facility.second[0] * width + facility.second[1] + facility.second[4] * width + facility.second[5]) / 2.f;
         float y = (facility.second[2] * height + facility.second[3] + facility.second[6] * height + facility.second[7]) / 2.f;
-        float w = facility.second[4] * width + facility.second[5] - facility.second[0] * width - facility.second[1];
-        float h = facility.second[6] * height + facility.second[7] - facility.second[2] * height - facility.second[3];
+        float w = abs(facility.second[4] * width + facility.second[5] - facility.second[0] * width - facility.second[1]);
+        float h = abs(facility.second[6] * height + facility.second[7] - facility.second[2] * height - facility.second[3]);
         floor->AddFacility(Facility(facility.first, x, y, w, h));
     }
 
     for (auto row : layout->templateRows[name][face]) {
         float x = (row.second[0] * width + row.second[1] + row.second[4] * width + row.second[5]) / 2.f;
         float y = (row.second[2] * height + row.second[3] + row.second[6] * height + row.second[7]) / 2.f;
-        float w = row.second[4] * width + row.second[5] - row.second[0] * width - row.second[1];
-        float h = row.second[6] * height + row.second[7] - row.second[2] * height - row.second[3];
+        float w = abs(row.second[4] * width + row.second[5] - row.second[0] * width - row.second[1]);
+        float h = abs(row.second[6] * height + row.second[7] - row.second[2] * height - row.second[3]);
         floor->AddRow(make_pair(Rect(x, y, w, h), row.first));
     }
 
     for (auto room : layout->templateRooms[name][face]) {
         float x = (room.second[0] * width + room.second[1] + room.second[4] * width + room.second[5]) / 2.f;
         float y = (room.second[2] * height + room.second[3] + room.second[6] * height + room.second[7]) / 2.f;
-        float w = room.second[4] * width + room.second[5] - room.second[0] * width - room.second[1];
-        float h = room.second[6] * height + room.second[7] - room.second[2] * height - room.second[3];
+        float w = abs(room.second[4] * width + room.second[5] - room.second[0] * width - room.second[1]);
+        float h = abs(room.second[6] * height + room.second[7] - room.second[2] * height - room.second[3]);
         floor->AddRoom(make_pair(Rect(x, y, w, h), room.first));
     }
 
     floors[basements + level] = floor;
 }
 
-void Building::ReadFloors(float width, float height, int face, string name, unique_ptr<Layout>& layout) {
+void Building::ReadFloors(int face, string name, unique_ptr<Layout>& layout) {
     for (int i = 0; i < basements + layers; i++) {
-        ReadFloor(i, width, height, face, name, layout);
+        ReadFloor(i, face, name, layout);
     }
 }
 
-void Building::ReadFloors(float width, float height, int face, vector<string> names, unique_ptr<Layout>& layout) {
+void Building::ReadFloors(int face, vector<string> names, unique_ptr<Layout>& layout) {
     if (names.size() != basements + layers) {
         THROW_EXCEPTION(InvalidArgumentException, "Template number and building layers mismatch.\n");
     }
 
     for (int i = 0; i < basements + layers; i++) {
-        ReadFloor(i, width, height, face, names[i], layout);
+        ReadFloor(i, face, names[i], layout);
     }
 }
 
