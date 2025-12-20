@@ -152,7 +152,6 @@ void updateZone() {
 		putQuad(building.second->GetLeft() * 20, building.second->GetBottom() * 20,
 			building.second->GetRight() * 20, building.second->GetTop() * 20, SOLID_FILL);
 		setColor(0, 0, 0);
-		setFontSize(32);
 		putString(building.first.data(),
 			building.second->GetLeft() * 20,
 			building.second->GetBottom() * 20);
@@ -186,8 +185,8 @@ void zoneLoop() {
 	if (biosMouse(1).z) {
 		mouse = biosMouse(0);
 		if (mouse.z == SG_LEFT_BUTTON) {
-			int posX = mouse.x / 20;
-			int posY = mouse.y / 20;
+			int posX = mouse.x / 20 + 1;
+			int posY = mouse.y / 20 + 1;
 			auto pos = currentZone->GetParent()->GetPosition(currentZone->GetLeft() + posX, currentZone->GetBottom() + posY);
 			auto element = ::map->GetElement(pos.first, pos.second);
 			if (element && element->GetBuilding().size() > 0) {

@@ -177,8 +177,8 @@ void Map::InitRoadnets() {
 }
 
 void Map::InitZones() {
-    zoneFactory->RegisterZone(TestZone::GetId(),
-        []() { return make_unique<TestZone>(); }, TestZone::ZoneGenerator);
+    zoneFactory->RegisterZone(FlatZone::GetId(),
+        []() { return make_unique<FlatZone>(); }, FlatZone::ZoneGenerator);
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {

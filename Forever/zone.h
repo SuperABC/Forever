@@ -7,15 +7,13 @@
 typedef void (*RegisterModZonesFunc)(ZoneFactory* factory);
 
 // 主程序检测子类
-class TestZone : public Zone {
+class FlatZone : public Zone {
 public:
-    TestZone() {
-        name = count++;
-    }
+    FlatZone();
 
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试园区" + std::to_string(name); }
+    static std::string GetId();
+    virtual std::string GetType() const;
+    virtual std::string GetName() const;
 
     static std::function<void(ZoneFactory*, BuildingFactory*, const std::vector<std::shared_ptr<Plot>>&)> ZoneGenerator;
     

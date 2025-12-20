@@ -73,6 +73,7 @@ void Rect::SetVertices(float x1, float y1, float x2, float y2) {
     posY = (y1 + y2) / 2.f;
     sizeX = x2 - x1;
     sizeY = y2 - y1;
+	acreage = sizeX * sizeY * 100.f;
 }
 
 void Rect::SetPosition(float x, float y, float w, float h) {
@@ -80,6 +81,7 @@ void Rect::SetPosition(float x, float y, float w, float h) {
     posY = y;
     sizeX = w;
     sizeY = h;
+    acreage = sizeX * sizeY * 100.f;
 }
 
 float Rect::GetAcreage() const {

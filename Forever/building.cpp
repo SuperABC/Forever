@@ -55,10 +55,20 @@ Rect FlatBuilding::LayoutConstruction() const {
 void FlatBuilding::LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) {
     int direction = 0;
     if (GetSizeX() > GetSizeY()) {
-        direction = GetRandom(2);
+        if (GetSizeY() > 3.f) {
+            direction = GetRandom(2);
+        }
+        else {
+            direction = 2 + GetRandom(2);
+        }
     }
     else {
-        direction = 2 + GetRandom(2);
+        if (GetSizeX() > 3.f) {
+            direction = 2 + GetRandom(2);
+        }
+        else {
+            direction = GetRandom(2);
+        }
     }
 
     auto component = CreateComponent<TestComponent>();
@@ -66,8 +76,8 @@ void FlatBuilding::LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& la
     AssignRoom(-1, 0, "test", component, factory);
     for (int i = 0; i < layers; i++) {
         ReadFloor(i, direction, "straight_linear", layout);
-        ArrangeRow(i, 0, "test", 120.f, component, factory);
-        ArrangeRow(i, 1, "test", 120.f, component, factory);
+        ArrangeRow(i, 0, "test", 100.f, component, factory);
+        ArrangeRow(i, 1, "test", 100.f, component, factory);
     }
 }
 
