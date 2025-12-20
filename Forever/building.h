@@ -9,7 +9,7 @@
 // 子类注册函数
 typedef void (*RegisterModBuildingsFunc)(BuildingFactory* factory);
 
-// 主程序检测子类
+// 公寓建筑
 class FlatBuilding : public Building {
 public:
     FlatBuilding();

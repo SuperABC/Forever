@@ -6,7 +6,7 @@
 // 子类注册函数
 typedef void (*RegisterModRoadnetsFunc)(RoadnetFactory* factory);
 
-// 主程序检测子类
+// 井字路网
 class JingRoadnet : public Roadnet {
 public:
     static std::string GetId();

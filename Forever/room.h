@@ -6,15 +6,15 @@
 // 子类注册函数
 typedef void (*RegisterModRoomsFunc)(RoomFactory* factory);
 
-// 主程序检测子类
-class TestRoom : public Room {
+// 公寓房间
+class FlatRoom : public Room {
 public:
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试房间"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
-    virtual bool IsResidential() const override { return true; };
-    virtual bool IsWorkspace() const override { return false; }
-    virtual int GetLivingCapacity() const override { return 2; }
-    virtual int GetPersonnelCapacity() const override { return 0; }
+    virtual bool IsResidential() const override;
+    virtual bool IsWorkspace() const override;
+    virtual int GetLivingCapacity() const override;
+    virtual int GetPersonnelCapacity() const override;
 };

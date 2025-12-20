@@ -6,7 +6,7 @@
 // 子类注册函数
 typedef void (*RegisterModZonesFunc)(ZoneFactory* factory);
 
-// 主程序检测子类
+// 公寓园区
 class FlatZone : public Zone {
 public:
     FlatZone();
