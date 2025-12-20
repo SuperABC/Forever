@@ -28,6 +28,9 @@ public:
 	std::unique_ptr<EventFactory>& GetEventFactory();
 	std::unique_ptr<ChangeFactory>& GetChangeFactory();
 
+	// 读取配置文件
+	void ReadConfigs(std::string path) const;
+
 	// 剧情初始化
 	void Init();
 

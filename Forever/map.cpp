@@ -165,8 +165,7 @@ void Map::InitRoadnets() {
     auto roadnetList = { "mod" };
     for (const auto& roadnetId : roadnetList) {
         if (roadnetFactory->CheckRegistered(roadnetId)) {
-            auto roadnet = roadnetFactory->CreateRoadnet(roadnetId);
-            debugf(("Created roadnet: " + roadnet->GetName() + " (ID: " + roadnetId + ").\n").data());
+            debugf("Created roadnet: mod.\n");
         }
         else {
             debugf("Roadnet not registered: %s.\n", roadnetId);
@@ -198,7 +197,7 @@ void Map::InitZones() {
     }
 
 #ifdef MOD_TEST
-    auto zoneList = { "test", "mod" };
+    auto zoneList = { "mod" };
     for (const auto& zoneId : zoneList) {
         if (zoneFactory->CheckRegistered(zoneId)) {
             auto zone = zoneFactory->CreateZone(zoneId);
@@ -234,7 +233,7 @@ void Map::InitBuildings() {
     }
 
 #ifdef MOD_TEST
-    auto buildingList = { "test", "mod" };
+    auto buildingList = { "mod" };
     for (const auto& buildingId : buildingList) {
         if (buildingFactory->CheckRegistered(buildingId)) {
             auto building = buildingFactory->CreateBuilding(buildingId);
@@ -249,7 +248,7 @@ void Map::InitBuildings() {
 }
 
 void Map::InitComponents() {
-    componentFactory->RegisterComponent(TestComponent::GetId(), []() { return make_unique<TestComponent>(); });
+    componentFactory->RegisterComponent(FlatComponent::GetId(), []() { return make_unique<FlatComponent>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -269,7 +268,7 @@ void Map::InitComponents() {
     }
 
 #ifdef MOD_TEST
-    auto componentList = { "test", "mod" };
+    auto componentList = { "mod" };
     for (const auto& componentId : componentList) {
         if (componentFactory->CheckRegistered(componentId)) {
             auto component = componentFactory->CreateComponent(componentId);
@@ -284,7 +283,7 @@ void Map::InitComponents() {
 }
 
 void Map::InitRooms() {
-    roomFactory->RegisterRoom(TestRoom::GetId(), []() { return make_unique<TestRoom>(); });
+    roomFactory->RegisterRoom(FlatRoom::GetId(), []() { return make_unique<FlatRoom>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -304,7 +303,7 @@ void Map::InitRooms() {
     }
 
 #ifdef MOD_TEST
-    auto roomList = { "test", "mod" };
+    auto roomList = { "mod" };
     for (const auto& roomId : roomList) {
         if (roomFactory->CheckRegistered(roomId)) {
             auto room = roomFactory->CreateRoom(roomId);
@@ -502,6 +501,7 @@ int Map::Init(int blockX, int blockY) {
     }
 
     // 随机生成组合与房间
+	int capacity = 0;
     layout = Building::ReadTemplates(REPLACE_PATH("../Resources/layouts/"));
     for (auto &building : buildings) {
         building.second->FinishInit();
@@ -511,6 +511,7 @@ int Map::Init(int blockX, int blockY) {
             for (auto room : component->GetRooms()) {
                 room->SetParent(component);
                 room->SetParent(building.second);
+				capacity += room->GetLivingCapacity();
             }
         }
     }
@@ -523,12 +524,13 @@ int Map::Init(int blockX, int blockY) {
                 for (auto room : component->GetRooms()) {
                     room->SetParent(component);
                     room->SetParent(building.second);
+					capacity += room->GetLivingCapacity();
                 }
             }
         }
     }
 
-    return 20000;
+    return capacity;
 }
 
 void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {

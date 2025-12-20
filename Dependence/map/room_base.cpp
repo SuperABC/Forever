@@ -53,10 +53,11 @@ void Room::SetFace(int face) {
 
 void RoomFactory::RegisterRoom(const string& id, function<unique_ptr<Room>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Room> RoomFactory::CreateRoom(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -69,8 +70,6 @@ bool RoomFactory::CheckRegistered(const string& id) {
 }
 
 void RoomFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 

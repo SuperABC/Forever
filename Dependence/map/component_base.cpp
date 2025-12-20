@@ -22,10 +22,11 @@ void Component::AddRoom(shared_ptr<Room> room) {
 
 void ComponentFactory::RegisterComponent(const string& id, function<unique_ptr<Component>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Component> ComponentFactory::CreateComponent(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -38,8 +39,6 @@ bool ComponentFactory::CheckRegistered(const string& id) {
 }
 
 void ComponentFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 

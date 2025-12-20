@@ -1,6 +1,8 @@
 {
 	"mods":{
+		"asset": ["test", "mod"],
 		"job": ["test", "mod"],
-		"name": "chinese"
+		"name": "chinese",
+		"scheduler": ["test", "mod"]
 	}
 }

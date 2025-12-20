@@ -88,10 +88,11 @@ void Terrain::ShapeFilter(int x, int y, int width, int height,
 
 void TerrainFactory::RegisterTerrain(const string& id, function<unique_ptr<Terrain>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Terrain> TerrainFactory::CreateTerrain(const string& id) const {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -104,9 +105,7 @@ bool TerrainFactory::CheckRegistered(const string& id) const {
 }
 
 void TerrainFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 vector<unique_ptr<Terrain>> TerrainFactory::GetTerrains() const {

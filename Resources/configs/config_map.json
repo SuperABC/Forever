@@ -4,7 +4,7 @@
 		"roadnet": "jing",
 		"zone": ["flat", "mod"],
 		"building": ["flat", "mod"],
-		"component": ["test", "mod"],
-		"room": ["test", "mod"]
+		"component": ["flat", "mod"],
+		"room": ["flat", "mod"]
 	}
 }

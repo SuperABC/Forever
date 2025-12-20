@@ -350,24 +350,25 @@ void sgSetup() {
 	initWindow(sizeX, sizeY, "Map", BIT_MAP);
 	resizeFuntion(resize);
 
+	::map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 	::map->InitTerrains();
 	::map->InitRoadnets();
 	::map->InitZones();
 	::map->InitBuildings();
 	::map->InitComponents();
 	::map->InitRooms();
-	::map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 
+	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 	populace->InitAssets();
 	populace->InitJobs();
 	populace->InitNames();
 	populace->InitSchedulers();
-	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
+	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 	society->InitCalendars();
 	society->InitOrganizations();
-	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
+	story->ReadConfigs(REPLACE_PATH("../Resources/configs/config_story.json"));
 	story->InitEvents();
 	story->InitChanges();
 

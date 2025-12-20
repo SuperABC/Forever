@@ -44,7 +44,7 @@ void Society::InitCalendars() {
     }
 
 #ifdef MOD_TEST
-    auto calendarList = { "test", "mod" };
+    auto calendarList = { "mod" };
     for (const auto& calendarId : calendarList) {
         if (calendarFactory->CheckRegistered(calendarId)) {
             auto calendar = calendarFactory->CreateCalendar(calendarId);
@@ -79,7 +79,7 @@ void Society::InitOrganizations() {
     }
 
 #ifdef MOD_TEST
-    auto organizationList = { "test", "mod" };
+    auto organizationList = { "mod" };
     for (const auto& organizationId : organizationList) {
         if (organizationFactory->CheckRegistered(organizationId)) {
             auto organization = organizationFactory->CreateOrganization(organizationId);
@@ -91,6 +91,33 @@ void Society::InitOrganizations() {
     }
 #endif // MOD_TEST
 
+}
+
+void Society::ReadConfigs(string path) const {
+    if (!filesystem::exists(path)) {
+        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+    }
+
+    JsonReader reader;
+    JsonValue root;
+
+    ifstream fin(path);
+    if (!fin.is_open()) {
+        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
+    }
+    if (reader.Parse(fin, root)) {
+        for (auto calendar : root["mods"]["calendar"]) {
+            calendarFactory->SetConfig(calendar.AsString(), true);
+        }
+        for (auto organization : root["mods"]["organization"]) {
+            organizationFactory->SetConfig(organization.AsString(), true);
+        }
+    }
+    else {
+        fin.close();
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
+    }
+    fin.close();
 }
 
 void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populace) {
@@ -209,28 +236,6 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
             if (temps.size() <= 0)break;
         }
     }
-}
-
-void Society::ReadConfigs(string path) const {
-    if (!filesystem::exists(path)) {
-        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
-    }
-
-    JsonReader reader;
-    JsonValue root;
-
-    ifstream fin(path);
-    if (!fin.is_open()) {
-        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
-    }
-    if (reader.Parse(fin, root)) {
-
-    }
-    else {
-        fin.close();
-        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
-    }
-    fin.close();
 }
 
 void Society::Destroy() {

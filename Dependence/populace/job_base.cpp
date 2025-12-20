@@ -13,10 +13,11 @@ std::shared_ptr<Calendar>& Job::GetCalendar() {
 
 void JobFactory::RegisterJob(const string& id, function<unique_ptr<Job>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Job> JobFactory::CreateJob(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -29,8 +30,6 @@ bool JobFactory::CheckRegistered(const string& id) {
 }
 
 void JobFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 

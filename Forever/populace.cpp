@@ -49,7 +49,7 @@ void Populace::InitAssets() {
 	}
 
 #ifdef MOD_TEST
-	auto assetList = { "test", "mod" };
+	auto assetList = { "mod" };
 	for (const auto& assetId : assetList) {
 		if (assetFactory->CheckRegistered(assetId)) {
 			auto asset = assetFactory->CreateAsset(assetId);
@@ -84,7 +84,7 @@ void Populace::InitJobs() {
     }
 
 #ifdef MOD_TEST
-    auto jobList = { "test", "mod" };
+    auto jobList = { "mod" };
     for (const auto& jobId : jobList) {
         if (jobFactory->CheckRegistered(jobId)) {
             auto job = jobFactory->CreateJob(jobId);
@@ -119,11 +119,10 @@ void Populace::InitNames() {
 	}
 
 #ifdef MOD_TEST
-	auto nameList = { "chinese", "mod" };
+	auto nameList = { "mod" };
 	for (const auto& nameId : nameList) {
 		if (nameFactory->CheckRegistered(nameId)) {
-			auto name = nameFactory->CreateName(nameId);
-			debugf(("Created name: " + name->GetName() + " (ID: " + nameId + ")\n").data());
+			debugf("Created name: mod.\n");
 		}
 		else {
 			debugf("Name not registered: %s\n", nameId);
@@ -155,7 +154,7 @@ void Populace::InitSchedulers() {
 	}
 
 #ifdef MOD_TEST
-	auto schedulerList = { "test", "mod" };
+	auto schedulerList = { "mod" };
 	for (const auto& schedulerId : schedulerList) {
 		if (schedulerFactory->CheckRegistered(schedulerId)) {
 			auto scheduler = schedulerFactory->CreateScheduler(schedulerId);
@@ -182,10 +181,16 @@ void Populace::ReadConfigs(string path) const {
         THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
     }
     if (reader.Parse(fin, root)) {
+		for (auto asset : root["mods"]["asset"]) {
+			assetFactory->SetConfig(asset.AsString(), true);
+		}
 		for (auto job : root["mods"]["job"]) {
 			jobFactory->SetConfig(job.AsString(), true);
 		}
 		nameFactory->SetConfig(root["mods"]["name"].AsString(), true);
+		for (auto scheduler : root["mods"]["scheduler"]) {
+			schedulerFactory->SetConfig(scheduler.AsString(), true);
+		}
     }
     else {
         fin.close();

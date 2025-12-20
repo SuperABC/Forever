@@ -242,11 +242,12 @@ void Zone::ArrangeBuildings() {
 void ZoneFactory::RegisterZone(const string& id,
     function<unique_ptr<Zone>()> creator,  GeneratorFunc generator) {
     registries[id] = creator;
-    configs[id] = false;
     generators[id] = generator;
 }
 
 unique_ptr<Zone> ZoneFactory::CreateZone(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -259,9 +260,7 @@ bool ZoneFactory::CheckRegistered(const string& id) {
 }
 
 void ZoneFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 void ZoneFactory::GenerateAll(const vector<shared_ptr<Plot>>& plots, BuildingFactory* factory) {

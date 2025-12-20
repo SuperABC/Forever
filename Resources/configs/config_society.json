@@ -1,5 +1,6 @@
 {
 	"mods":{
-		"organization": []
+		"organization": ["test", "mod"],
+		"calendar": ["test", "mod"]
 	}
 }

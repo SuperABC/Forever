@@ -5,10 +5,11 @@ using namespace std;
 
 void AssetFactory::RegisterAsset(const string& id, function<unique_ptr<Asset>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Asset> AssetFactory::CreateAsset(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -21,7 +22,5 @@ bool AssetFactory::CheckRegistered(const string& id) {
 }
 
 void AssetFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }

@@ -5,10 +5,11 @@ using namespace std;
 
 void CalendarFactory::RegisterCalendar(const string& id, function<unique_ptr<Calendar>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Calendar> CalendarFactory::CreateCalendar(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -21,9 +22,7 @@ bool CalendarFactory::CheckRegistered(const string& id) {
 }
 
 void CalendarFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 

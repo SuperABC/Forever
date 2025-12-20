@@ -34,11 +34,12 @@ void Organization::AddVacancy(shared_ptr<Component> component, vector<shared_ptr
 
 void OrganizationFactory::RegisterOrganization(const string& id, function<unique_ptr<Organization>()> creator, float power) {
     registries[id] = creator;
-    configs[id] = false;
     powers[id] = power;
 }
 
 unique_ptr<Organization> OrganizationFactory::CreateOrganization(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -51,9 +52,7 @@ bool OrganizationFactory::CheckRegistered(const string& id) {
 }
 
 void OrganizationFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 const unordered_map<string, float>& OrganizationFactory::GetPowers() const {

@@ -43,7 +43,7 @@ void Story::InitEvents() {
 	}
 
 #ifdef MOD_TEST
-	auto eventList = { "game_start", "option_dialog", "mod"};
+	auto eventList = { "mod"};
 	for (const auto& eventId : eventList) {
 		if (eventFactory->CheckRegistered(eventId)) {
 			auto event = eventFactory->CreateEvent(eventId);
@@ -78,7 +78,7 @@ void Story::InitChanges() {
 	}
 
 #ifdef MOD_TEST
-	auto changeList = { "set_value", "remove_value", "mod" };
+	auto changeList = { "mod" };
 	for (const auto& changeId : changeList) {
 		if (changeFactory->CheckRegistered(changeId)) {
 			auto change = changeFactory->CreateChange(changeId);
@@ -97,6 +97,34 @@ unique_ptr<EventFactory>& Story::GetEventFactory() {
 
 unique_ptr<ChangeFactory>& Story::GetChangeFactory() {
 	return changeFactory;
+}
+
+void Story::ReadConfigs(string path) const {
+	if (!filesystem::exists(path)) {
+		THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+	}
+
+	JsonReader reader;
+	JsonValue root;
+
+	ifstream fin(path);
+	if (!fin.is_open()) {
+		THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
+	}
+	if (reader.Parse(fin, root)) {
+		for (auto event : root["mods"]["event"]) {
+			eventFactory->SetConfig(event.AsString(), true);
+		}
+		for (auto change : root["mods"]["change"]) {
+			changeFactory->SetConfig(change.AsString(), true);
+		}
+
+	}
+	else {
+		fin.close();
+		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
+	}
+	fin.close();
 }
 
 void Story::Init() {

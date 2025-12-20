@@ -42,30 +42,31 @@ shared_ptr<Event> ParseEvent(Parser& parser) {
 int main() {
 	// 读取Map相关类及Mod
 	unique_ptr<Map> map(new Map());
+	map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 	map->InitTerrains();
 	map->InitRoadnets();
 	map->InitZones();
 	map->InitBuildings();
 	map->InitComponents();
 	map->InitRooms();
-	map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 
 	// 读取Populace相关类及Mod
 	unique_ptr<Populace> populace(new Populace());
+	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 	populace->InitAssets();
 	populace->InitJobs();
 	populace->InitNames();
 	populace->InitSchedulers();
-	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
 	// 读取Society相关类及Mod
 	unique_ptr<Society> society(new Society());
+	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 	society->InitCalendars();
 	society->InitOrganizations();
-	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
 	// 读取Story相关类及Mod
 	unique_ptr<Story> story(new Story());
+	story->ReadConfigs(REPLACE_PATH("../Resources/configs/config_story.json"));
 	story->InitEvents();
 	story->InitChanges();
 

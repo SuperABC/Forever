@@ -37,15 +37,15 @@ std::vector<float> FlatBuilding::GetPower() {
 }
 
 float FlatBuilding::RandomAcreage() const {
-    return 400.f * powf(1.f + GetRandom(1000) / 1000.f * 3.f, 2);
+    return 600.f * powf(1.f + GetRandom(1000) / 1000.f * 3.f, 2);
 }
 
 float FlatBuilding::GetAcreageMin() const {
-    return 400.f;
+    return 600.f;
 }
 
 float FlatBuilding::GetAcreageMax() const {
-    return 6400.f;
+    return 9600.f;
 }
 
 Rect FlatBuilding::LayoutConstruction() const {
@@ -71,13 +71,13 @@ void FlatBuilding::LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& la
         }
     }
 
-    auto component = CreateComponent<TestComponent>();
+    auto component = CreateComponent<FlatComponent>();
     ReadFloor(-1, direction, "single_room", layout);
-    AssignRoom(-1, 0, "test", component, factory);
+    AssignRoom(-1, 0, "flat", component, factory);
     for (int i = 0; i < layers; i++) {
         ReadFloor(i, direction, "straight_linear", layout);
-        ArrangeRow(i, 0, "test", 100.f, component, factory);
-        ArrangeRow(i, 1, "test", 100.f, component, factory);
+        ArrangeRow(i, 0, "flat", 100.f, component, factory);
+        ArrangeRow(i, 1, "flat", 100.f, component, factory);
     }
 }
 
