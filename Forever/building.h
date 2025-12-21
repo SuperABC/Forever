@@ -24,7 +24,31 @@ public:
     virtual float GetAcreageMin() const override;
     virtual float GetAcreageMax() const override;
 
-    virtual Rect LayoutConstruction() const override;
+    virtual Rect LayoutConstruction() override;
+    virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override;
+
+private:
+    static int count;
+
+    int name;
+};
+
+// 酒店建筑
+class HotelBuilding : public Building {
+public:
+    HotelBuilding();
+
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
+
+    static std::vector<float> GetPower();
+
+    virtual float RandomAcreage() const override;
+    virtual float GetAcreageMin() const override;
+    virtual float GetAcreageMax() const override;
+
+    virtual Rect LayoutConstruction() override;
     virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override;
 
 private:

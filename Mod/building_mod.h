@@ -26,7 +26,7 @@ public:
     virtual float GetAcreageMin() const override { return 2000.f; }
     virtual float GetAcreageMax() const override { return 20000.f; }
 
-    virtual Rect LayoutConstruction() const override {
+    virtual Rect LayoutConstruction() override {
         return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
     }
     virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override {

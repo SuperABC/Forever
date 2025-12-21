@@ -214,6 +214,8 @@ void Map::InitZones() {
 void Map::InitBuildings() {
     buildingFactory->RegisterBuilding(FlatBuilding::GetId(),
         []() { return make_unique<FlatBuilding>(); }, FlatBuilding::GetPower());
+    buildingFactory->RegisterBuilding(HotelBuilding::GetId(),
+        []() { return make_unique<HotelBuilding>(); }, HotelBuilding::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -249,6 +251,7 @@ void Map::InitBuildings() {
 
 void Map::InitComponents() {
     componentFactory->RegisterComponent(FlatComponent::GetId(), []() { return make_unique<FlatComponent>(); });
+    componentFactory->RegisterComponent(HotelComponent::GetId(), []() { return make_unique<HotelComponent>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -283,7 +286,10 @@ void Map::InitComponents() {
 }
 
 void Map::InitRooms() {
+    roomFactory->RegisterRoom(ParkingRoom::GetId(), []() { return make_unique<ParkingRoom>(); });
     roomFactory->RegisterRoom(FlatRoom::GetId(), []() { return make_unique<FlatRoom>(); });
+    roomFactory->RegisterRoom(HotelRoom::GetId(), []() { return make_unique<HotelRoom>(); });
+    roomFactory->RegisterRoom(LobbyRoom::GetId(), []() { return make_unique<LobbyRoom>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {

@@ -3,8 +3,8 @@
 		"terrain": ["ocean", "mountain", "mod"],
 		"roadnet": "jing",
 		"zone": ["flat", "mod"],
-		"building": ["flat", "mod"],
-		"component": ["flat", "mod"],
-		"room": ["flat", "mod"]
+		"building": ["flat", "hotel", "mod"],
+		"component": ["flat", "hotel", "mod"],
+		"room": ["parking", "flat", "hotel", "lobby", "mod"]
 	}
 }

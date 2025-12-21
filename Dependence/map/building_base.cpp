@@ -113,8 +113,8 @@ shared_ptr<Floor> Building::GetFloor(int level) const {
 }
 
 void Building::FinishInit() {
-    floors = vector<shared_ptr<Floor>>(basements + layers);
 	construction = LayoutConstruction();
+    floors = vector<shared_ptr<Floor>>(basements + layers);
 }
 
 unique_ptr<Layout> Building::ReadTemplates(string path) {

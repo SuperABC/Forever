@@ -99,7 +99,7 @@ public:
     virtual float GetAcreageMax() const = 0;
 
     // 建筑房间布局
-	virtual Rect LayoutConstruction() const = 0;
+	virtual Rect LayoutConstruction() = 0;
     virtual void LayoutRooms(RoomFactory *factory, std::unique_ptr<Layout>& layout) = 0;
 
 	// 父类实现方法
