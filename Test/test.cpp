@@ -101,6 +101,7 @@ int main() {
 				story->Init();
 				string path = parser.GetOption("--story");
 				story->ReadStory(path);
+				populace->Jobstory(story);
 				populace->Characterize("../Resources/scripts/characters/", story);
 				break;
 			}

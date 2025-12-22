@@ -31,7 +31,7 @@ public:
 	virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const = 0;
 
 	// 根据实际组合安排工作岗位
-    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageVacancies(
+    virtual std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> ArrageVacancies(
         std::vector<std::pair<std::string, int>> components) const = 0;
 
     // 设定工作日历

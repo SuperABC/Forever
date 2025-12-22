@@ -21,16 +21,19 @@ public:
 
     virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const override {
         std::vector<std::pair<std::string, std::pair<int, int>>> requirements;
-		requirements.emplace_back("test", std::make_pair(1, 3));
+		requirements.emplace_back("hotel", std::make_pair(1, 1));
 
 		return requirements;
     }
 
-    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageVacancies(
+    virtual std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> ArrageVacancies(
         std::vector<std::pair<std::string, int>> components) const override {
-        std::vector<std::pair<std::string, std::vector<std::string>>> jobs;
+        std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> jobs;
         for(auto& comp : components) {
-            jobs.emplace_back(comp.first, std::vector<std::string>(comp.second, "test"));
+            jobs.emplace_back(comp.first, std::vector<std::vector<std::string>>(comp.second));
+            for(int i = 0; i < comp.second; i++) {
+                jobs.back().second[i] = std::vector<std::string>(10, "hotel_cleaner");
+			}
 		}
 
 		return jobs;

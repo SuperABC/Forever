@@ -3,10 +3,10 @@
 	"milestone": "test_dialog",
 	"visible": false,
 	"drop": "false",
-	"triggers": [{"type": "option_dialog", "option": "测试"}],
+	"triggers": [{"type": "option_dialog", "option": "你好"}],
 	"dialogs": [
 		{"list": [
-			{"content": "测试职业脚本成功。"}
+			{"content": "客官您好。"}
 		]}
 	],
 	"changes": [

@@ -29,8 +29,6 @@ Populace::~Populace() {
 }
 
 void Populace::InitAssets() {
-	assetFactory->RegisterAsset(TestAsset::GetId(), []() { return make_unique<TestAsset>(); });
-
 	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
 	if (modHandle) {
 		modHandles.push_back(modHandle);
@@ -64,7 +62,7 @@ void Populace::InitAssets() {
 }
 
 void Populace::InitJobs() {
-    jobFactory->RegisterJob(TestJob::GetId(), []() { return make_unique<TestJob>(); });
+    jobFactory->RegisterJob(HotelCleanerJob::GetId(), []() { return make_unique<HotelCleanerJob>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -200,6 +198,8 @@ void Populace::ReadConfigs(string path) const {
 }
 
 void Populace::Init(int accomodation) {
+	accomodation = 5000;
+
     // 生成市民
     GenerateCitizens((int)(accomodation * exp(GetRandom(1000) / 1000.0f - 0.5f)));
 

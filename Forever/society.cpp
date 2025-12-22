@@ -186,7 +186,7 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
                 usedComponents.emplace_back(req.first, (int)it->second.size());
             }
             else {
-                usedComponents.emplace_back(req.first, req.second.first + GetRandom(req.second.second - req.second.first));
+                usedComponents.emplace_back(req.first, req.second.first + GetRandom(req.second.second - req.second.first + 1));
             }
         }
 
@@ -199,10 +199,12 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
                 auto component = availableComponents.back();
                 availableComponents.pop_back();
                 vector<shared_ptr<Job>> jobs;
-                for (auto& jobName : jobArrangements[i].second) {
-                    shared_ptr<Job> job = populace->GetJobFactory()->CreateJob(jobName);
-                    if (job) {
-                        jobs.push_back(job);
+                for (auto& componentName : jobArrangements[i].second) {
+                    for (auto& jobName : componentName) {
+                        shared_ptr<Job> job = populace->GetJobFactory()->CreateJob(jobName);
+                        if (job) {
+                            jobs.push_back(job);
+                        }
                     }
                 }
                 organization->AddVacancy(component, jobs);
@@ -222,18 +224,19 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
         if (citizen->GetAge(populace->GetTime()) < 18)continue;
         adults.push_back(citizen);
     }
-    for (auto adult : adults) {
+    for (int i = 0; i < adults.size(); i++) {
         vector<int> ids;
-        ids.push_back(adult->GetId());
+        ids.push_back(adults[i]->GetId());
         int r = GetRandom((int)temps.size());
         auto jobs = temps[r]->EnrollEmployee(ids);
         if (jobs.size() > 0) {
-            adult->AddJob(jobs[0]);
+            adults[i]->AddJob(jobs[0]);
         }
         else {
             temps[r] = temps.back();
             temps.pop_back();
             if (temps.size() <= 0)break;
+            i--;
         }
     }
 }

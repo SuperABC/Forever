@@ -3,6 +3,18 @@
 
 using namespace std;
 
-std::vector<std::string> TestJob::GetScripts() const {
-	return { "../Resources/scripts/jobs/test.json" };
+std::string HotelCleanerJob::GetId() {
+	return "hotel_cleaner";
+}
+
+std::string HotelCleanerJob::GetType() const {
+	return "hotel_cleaner";
+}
+
+std::string HotelCleanerJob::GetName() const {
+	return "酒店保洁";
+}
+
+std::vector<std::string> HotelCleanerJob::GetScripts() const {
+	return { "../Resources/scripts/jobs/hotel_cleaner.json" };
 }

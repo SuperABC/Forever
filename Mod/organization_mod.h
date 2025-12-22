@@ -21,9 +21,9 @@ public:
         return std::vector<std::pair<std::string, std::pair<int, int>>>();
     }
 
-    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageVacancies(
+    virtual std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> ArrageVacancies(
         std::vector<std::pair<std::string, int>> components) const override {
-		return std::vector<std::pair<std::string, std::vector<std::string>>>();
+		return std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>>();
     }
 
     virtual void SetCalendar(CalendarFactory* factory) override {

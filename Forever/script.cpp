@@ -65,6 +65,8 @@ void Script::ReadScript(string path,
 	if (!fin.is_open()) {
 		THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
 	}
+
+	//TODO: 多脚本合并
 	if (reader.Parse(fin, root)) {
 		unordered_map<string, int> hash;
 		hash["game_finish"] = -1;

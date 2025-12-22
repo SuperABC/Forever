@@ -25,6 +25,8 @@ public:
     virtual std::vector<std::string> GetScripts() const = 0;
 
 	// 父类实现方法
+
+	// 设置/获取日历
     void SetCalendar(std::shared_ptr<Calendar> &calendar);
     std::shared_ptr<Calendar> &GetCalendar();
 

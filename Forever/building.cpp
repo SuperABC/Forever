@@ -149,7 +149,7 @@ void HotelBuilding::LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& l
         }
     }
 
-    auto component = CreateComponent<FlatComponent>();
+    auto component = CreateComponent<HotelComponent>();
     ReadFloor(-1, direction, "single_room", layout);
     AssignRoom(-1, 0, "parking", component, factory);
     ReadFloor(0, direction, "lobby_linear", layout);

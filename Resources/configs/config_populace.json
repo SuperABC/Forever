@@ -1,7 +1,7 @@
 {
 	"mods":{
-		"asset": ["test", "mod"],
-		"job": ["test", "mod"],
+		"asset": ["zone", "building", "room", "mod"],
+		"job": ["hotel_cleaner", "mod"],
 		"name": "chinese",
 		"scheduler": ["test", "mod"]
 	}
