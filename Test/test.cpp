@@ -184,6 +184,19 @@ int main() {
 				}
 				break;
 			}
+			case CMD_LOOKUP: { // 查找信息
+				parser.AddOption("--id", 0, "Lookup citizen by id.", true, "");
+				parser.ParseCmd(cmd);
+
+				int id = atoi(parser.GetOption("--id").data());
+				auto citizen = populace->GetCitizens()[id];
+
+				cout << "Citizen ID: " << citizen->GetId() << endl;
+				cout << "Name: " << citizen->GetName() << endl;
+				cout << "Age: " << populace->GetTime().GetYear() - citizen->GetBirthday().GetYear() << endl;
+
+				break;
+			}
 			case CMD_PRINT: { // 输出当前状态
 				parser.AddOption("--map", 'm', "Whether to print the map.", false);
 				parser.AddOption("--populace", 'p', "Whether to print the populace.", false);

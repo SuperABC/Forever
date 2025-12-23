@@ -6,7 +6,7 @@
 // 子类注册函数
 typedef void (*RegisterModJobsFunc)(JobFactory* factory);
 
-// 主程序检测子类
+// 酒店保洁职业
 class HotelCleanerJob : public Job {
 public:
     static std::string GetId();

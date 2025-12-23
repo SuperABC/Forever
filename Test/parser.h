@@ -11,6 +11,7 @@ enum CMD_TYPE {
 	CMD_INIT, //全局初始化
 	CMD_PASS, //时钟前进
 	CMD_EVENT, //触发事件
+	CMD_LOOKUP, //查找对象
 	CMD_PRINT, //状态输出
 	CMD_EXIT //退出程序
 };

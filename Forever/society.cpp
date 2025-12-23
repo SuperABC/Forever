@@ -121,6 +121,7 @@ void Society::ReadConfigs(string path) const {
 }
 
 void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populace) {
+    // 计算职缺
 	auto components = map->GetComponents();
 
 	unordered_map<string, vector<shared_ptr<Component>>> componentMap;

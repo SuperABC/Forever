@@ -97,7 +97,7 @@ void Populace::InitJobs() {
 }
 
 void Populace::InitNames() {
-	nameFactory->RegisterName(TestName::GetId(), []() { return make_unique<TestName>(); });
+	nameFactory->RegisterName(ChineseName::GetId(), []() { return make_unique<ChineseName>(); });
 
 	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
 	if (modHandle) {

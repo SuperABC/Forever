@@ -5,17 +5,17 @@
 
 using namespace std;
 
-TestName::TestName() {
+ChineseName::ChineseName() {
     InitializeSurnames();
     InitializeNames();
 }
 
-TestName::~TestName() {
+ChineseName::~ChineseName() {
 
 }
 
 // 初始化姓氏列表
-void TestName::InitializeSurnames() {
+void ChineseName::InitializeSurnames() {
     surnames = {
         "王", "李", "张", "刘", "陈", "杨", "赵", "黄", "周", "吴",
         "徐", "孙", "胡", "朱", "高", "林", "何", "郭", "马", "罗",
@@ -47,7 +47,7 @@ void TestName::InitializeSurnames() {
 }
 
 // 初始化名字列表
-void TestName::InitializeNames() {
+void ChineseName::InitializeNames() {
     maleNames = {
         "伟", "强", "勇", "军", "磊", "洋", "超", "健", "明", "涛",
         "鹏", "华", "亮", "刚", "杰", "峰", "建", "波", "浩", "凯",
@@ -94,12 +94,12 @@ void TestName::InitializeNames() {
     };
 }
 
-string TestName::GetSurname(std::string name) {
+string ChineseName::GetSurname(std::string name) {
     return name.substr(0, 2);
 }
 
-string TestName::GenerateName(bool male, bool female, bool neutral) {
-    string surname = surnames[GetRandom((int)surnames.size())];
+string ChineseName::GenerateName(bool male, bool female, bool neutral) {
+    string surname = surnames[surnames.size() - 1 - (int)sqrt(GetRandom((int)(surnames.size() * surnames.size())))];
 
     string givenName;
     vector<int> nameList;
@@ -137,7 +137,7 @@ string TestName::GenerateName(bool male, bool female, bool neutral) {
     return surname + givenName;
 }
 
-string TestName::GenerateName(string surname, bool male, bool female, bool neutral) {
+string ChineseName::GenerateName(string surname, bool male, bool female, bool neutral) {
     string givenName;
     vector<int> nameList;
 

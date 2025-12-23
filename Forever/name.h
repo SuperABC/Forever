@@ -6,11 +6,11 @@
 // 子类注册函数
 typedef void (*RegisterModNamesFunc)(NameFactory* factory);
 
-// 主程序检测子类
-class TestName : public Name {
+// 中文姓名
+class ChineseName : public Name {
 public:
-    TestName();
-    ~TestName();
+    ChineseName();
+    ~ChineseName();
 
     static std::string GetId() { return "chinese"; }
     virtual std::string GetType() const override { return "chinese"; }
