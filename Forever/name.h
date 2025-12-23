@@ -12,9 +12,9 @@ public:
     ChineseName();
     ~ChineseName();
 
-    static std::string GetId() { return "chinese"; }
-    virtual std::string GetType() const override { return "chinese"; }
-    virtual std::string GetName() const override { return "中文姓名"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
     virtual std::string GetSurname(std::string name) override;
     virtual std::string GenerateName(bool male = true, bool female = true, bool neutral = true) override;

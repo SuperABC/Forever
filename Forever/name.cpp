@@ -14,6 +14,18 @@ ChineseName::~ChineseName() {
 
 }
 
+std::string ChineseName::GetId() {
+    return "chinese";
+}
+
+std::string ChineseName::GetType() const {
+    return "chinese";
+}
+
+std::string ChineseName::GetName() const {
+    return "中文姓名";
+}
+
 // 初始化姓氏列表
 void ChineseName::InitializeSurnames() {
     surnames = {
