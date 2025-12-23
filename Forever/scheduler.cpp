@@ -3,10 +3,10 @@
 
 using namespace std;
 
-TestScheduler::TestScheduler() {
+WorkOnlyScheduler::WorkOnlyScheduler() {
 
 }
 
-TestScheduler::~TestScheduler() {
+WorkOnlyScheduler::~WorkOnlyScheduler() {
 
 }

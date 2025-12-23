@@ -8,10 +8,10 @@
 typedef void (*RegisterModSchedulersFunc)(SchedulerFactory* factory);
 
 // 主程序检测子类
-class TestScheduler : public Scheduler {
+class WorkOnlyScheduler : public Scheduler {
 public:
-    TestScheduler();
-    ~TestScheduler();
+    WorkOnlyScheduler();
+    ~WorkOnlyScheduler();
 
     static std::string GetId() { return "test"; }
     virtual std::string GetType() const override { return "test"; }
