@@ -268,3 +268,23 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Person::MatchEvent(
 	}
 	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
 }
+
+bool Person::AddOption(std::string option) {
+	if (options.find(option) == options.end()) {
+		options.insert(option);
+		return true;
+	}
+	return false;
+}
+
+bool Person::RemoveOption(std::string option) {
+	if (options.find(option) != options.end()) {
+		options.erase(option);
+		return true;
+	}
+	return false;
+}
+
+std::unordered_set<std::string> Person::GetOptions() {
+	return options;
+}

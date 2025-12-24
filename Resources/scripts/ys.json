@@ -19,7 +19,9 @@
 		{"type": "set_value", "variable": "fuck_mn", "value": "0"},
 		{"type": "set_value", "variable": "fuck_ldjj", "value": "0"},
 		{"type": "set_value", "variable": "fuck_fnn", "value": "0"},
-		{"type": "set_value", "variable": "fuck_xld", "value": "0"}
+		{"type": "set_value", "variable": "fuck_xld", "value": "0"},
+		{"type": "spawn_npc", "target": "胡桃", "gender": "female", "birthday": "$$system.time.year-18+\"年7月15日\""},
+		{"type": "add_option", "target": "胡桃", "option": "性交"}
 	],
 	"subsequences": [
 		"meet_ht1", 
@@ -226,7 +228,7 @@
 			{"speaker": "空顺势抓住了优菈的一对大乳房，用力地揉着。"},
 			{"content": "围观的蒙德居民发出阵阵惊呼，有人鼓掌，有人吹口哨。"},
 			{"content": "优菈就这么在空的身上坐了一会，感觉不那么疼了，就开始上下移动着身体。"},
-			{"content": "空配合着抽插着自己的已经，同时积极回应着优菈的舌头。"},
+			{"content": "空配合着抽插着自己的阴茎，同时积极回应着优菈的舌头。"},
 			{"content": "优菈移动的速度越来越快，叫声也越来越放荡。"},
 			{"speaker": "优菈", "content": "啊！好舒服！这就是成为女人的感觉吗？"},
 			{"speaker": "空", "content": "加油优菈，争取就这样让我射出来。"},

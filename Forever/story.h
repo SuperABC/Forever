@@ -34,6 +34,12 @@ public:
 	// 剧情初始化
 	void Init();
 
+	// 释放空间
+	void Destroy();
+
+	// 时钟前进
+	void Tick();
+
 	// 输出当前剧本信息
 	void Print();
 
@@ -52,9 +58,6 @@ public:
 
 	// 匹配事件
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
-
-	// 替换文本变量
-	std::string ReplaceContent(const std::string& content);
 
 	// 变量管理
 	void SetValue(const std::string& name, ValueType value);

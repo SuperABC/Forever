@@ -133,6 +133,14 @@ void Story::Init() {
 	script.reset(new Script());
 }
 
+void Story::Destroy() {
+
+}
+
+void Story::Tick() {
+
+}
+
 void Story::Print() {
 	cout << "全局变量数量 " << variables.size() << endl;
 	for (auto value : variables) {
@@ -184,42 +192,9 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Ev
 	return script->MatchEvent(event, this);
 }
 
-string Story::ReplaceContent(const string& content) {
-	string result;
-	size_t pos = 0;
-	size_t lastPos = 0;
-
-	while ((pos = content.find("$$", lastPos)) != string::npos) {
-		result.append(content, lastPos, pos - lastPos);
-
-		size_t varStart = pos + 2;
-		size_t varEnd = varStart;
-		while (varEnd < content.length() && IsIdentifierChar(content[varEnd])) {
-			varEnd++;
-		}
-
-		string varName = content.substr(varStart, varEnd - varStart);
-		if (!varName.empty()) {
-			auto it = variables.find(varName);
-			if (it != variables.end()) {
-				result += ToString(it->second);
-			}
-			else {
-				result.append(content, pos, varEnd - pos);
-			}
-		}
-		else {
-			result.append(content, pos, 2);
-		}
-		lastPos = varEnd;
-	}
-	result.append(content, lastPos, content.length() - lastPos);
-
-	return result;
-}
-
 void Story::InitVariables() {
     variables["system.health_status"] = "healthy";
+	variables["system.time.year"] = 2025;
 }
 
 ValueType Story::GetValue(const string& name) {

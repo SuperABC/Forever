@@ -293,7 +293,44 @@ void Populace::Print() {
 }
 
 void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) {
+	auto type = change->GetType();
+	if (type == "spawn_npc") {
+		auto obj = dynamic_pointer_cast<SpawnNpcChange>(change);
 
+		Condition condition;
+		auto person = make_shared<Person>();
+
+		person->SetId((int)citizens.size());
+		condition.ParseCondition(obj->GetTarget());
+		person->SetName(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			})));
+		condition.ParseCondition(obj->GetGender());
+		person->SetGender(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			})) == "male" ? GENDER_MALE : GENDER_FEMALE);
+		condition.ParseCondition(obj->GetBirthday());
+		person->SetBirthday(Time(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			}))));
+		citizens.push_back(person);
+		ids[person->GetName()] = person->GetId();
+	}
+	else if (type == "add_option") {
+		auto obj = dynamic_pointer_cast<AddOptionChange>(change);
+
+		Condition condition;
+
+		condition.ParseCondition(obj->GetTarget());
+		auto person = GetCitizen(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			})));
+
+		condition.ParseCondition(obj->GetOption());
+		person->AddOption(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			})));
+	}
 }
 
 void Populace::Load(string path) {
@@ -310,6 +347,15 @@ Time Populace::GetTime() {
 
 vector<shared_ptr<Person>>& Populace::GetCitizens() {
 	return citizens;
+}
+
+std::shared_ptr<Person> Populace::GetCitizen(std::string name) {
+	if (ids.find(name) == ids.end()) {
+		return nullptr;
+	}
+	else {
+		return citizens[ids[name]];
+	}
 }
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
@@ -490,6 +536,7 @@ void Populace::GenerateCitizens(int num) {
 			int month = 1 + GetRandom(12);
 			person->SetBirthday({ 2000 + females[i].birth, month, 1 + GetRandom(Time::DaysInMonth(2000 + females[i].birth, month)) });
 			citizens.push_back(person);
+			ids[person->GetName()] = person->GetId();
 		}
 	}
 	for (int i = 1; i < males.size(); i++) {
@@ -502,6 +549,7 @@ void Populace::GenerateCitizens(int num) {
 			int month = 1 + GetRandom(12);
 			person->SetBirthday({ 2000 + males[i].birth, month, 1 + GetRandom(Time::DaysInMonth(2000 + males[i].birth, month)) });
 			citizens.push_back(person);
+			ids[person->GetName()] = person->GetId();
 		}
 	}
 

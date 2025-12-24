@@ -201,6 +201,45 @@ ValueType BinaryExpression::CompareValues(const ValueType& left, const ValueType
 }
 
 ValueType BinaryExpression::ComputeArithmetic(const ValueType& left, const ValueType& right, BinaryOperator op) const {
+    if (op == BinaryOperator::ADD) {
+        // 如果至少有一个操作数是字符串，进行字符串连接
+        if (holds_alternative<string>(left) || holds_alternative<string>(right)) {
+            string left_str = visit([](const auto& v) -> string {
+                using T = decay_t<decltype(v)>;
+                if constexpr (is_same_v<T, string>) {
+                    return v;
+                }
+                else if constexpr (is_same_v<T, bool>) {
+                    return v ? "true" : "false";
+                }
+                else if constexpr (is_arithmetic_v<T>) {
+                    return to_string(v);
+                }
+                else {
+                    THROW_EXCEPTION(ArithmeticException, "Unsupported type for string concatenation.\n");
+                }
+                }, left);
+
+            string right_str = visit([](const auto& v) -> string {
+                using T = decay_t<decltype(v)>;
+                if constexpr (is_same_v<T, string>) {
+                    return v;
+                }
+                else if constexpr (is_same_v<T, bool>) {
+                    return v ? "true" : "false";
+                }
+                else if constexpr (is_arithmetic_v<T>) {
+                    return to_string(v);
+                }
+                else {
+                    THROW_EXCEPTION(ArithmeticException, "Unsupported type for string concatenation.\n");
+                }
+                }, right);
+
+            return left_str + right_str;
+        }
+    }
+
     return visit([op](const auto& l, const auto& r) -> ValueType {
         using T1 = decay_t<decltype(l)>;
         using T2 = decay_t<decltype(r)>;
@@ -293,6 +332,7 @@ bool Condition::ParseCondition(const string& conditionStr) {
     try {
         vector<string> tokens = Tokenize(conditionStr);
         if (tokens.size() > 0)root = ParseExpression(tokens);
+        else root = nullptr;
         return true;
     }
     catch (const exception& e) {

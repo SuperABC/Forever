@@ -10,3 +10,11 @@ vector<shared_ptr<Change>> SetValueChange::ApplyChange() {
 vector<shared_ptr<Change>> RemoveValueChange::ApplyChange() {
 	return vector<shared_ptr<Change>>();
 }
+
+vector<shared_ptr<Change>> SpawnNpcChange::ApplyChange() {
+	return vector<shared_ptr<Change>>();
+}
+
+vector<shared_ptr<Change>> AddOptionChange::ApplyChange() {
+	return vector<shared_ptr<Change>>();
+}

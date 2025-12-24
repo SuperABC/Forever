@@ -58,6 +58,7 @@ public:
 
 	// 获取全部市民
 	std::vector<std::shared_ptr<Person>>& GetCitizens();
+	std::shared_ptr<Person> GetCitizen(std::string name);
 
 	// 获取附近市民
 	std::vector<std::shared_ptr<Person>> GetPasser(int x, int y);
@@ -87,6 +88,7 @@ private:
 
 	// 市民管理
 	std::vector<std::shared_ptr<Person>> citizens;
+	std::unordered_map<std::string, int> ids;
 	std::unordered_map<int, std::shared_ptr<Person>> phoneRoll;
 
 	// 生成市民

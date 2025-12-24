@@ -10,6 +10,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <unordered_set>
 
 #undef GetJob
 #undef AddJob
@@ -105,6 +106,9 @@ public:
 	void AddScript(std::shared_ptr<Script> script);
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
 		std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+	bool AddOption(std::string option);
+	bool RemoveOption(std::string option);
+	std::unordered_set<std::string> GetOptions();
 
 private:
 	int id;
@@ -132,4 +136,5 @@ private:
 	std::vector<JobExperience> jobExperiences;
 
 	std::vector<std::shared_ptr<Script>> scripts;
+	std::unordered_set<std::string> options;
 };

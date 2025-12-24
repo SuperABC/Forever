@@ -112,6 +112,11 @@ int main() {
 				parser.AddOption("--day", 0, "Days num to pass.", true, "0");
 				parser.ParseCmd(cmd);
 
+				map->Tick();
+				populace->Tick();
+				society->Tick();
+				story->Tick();
+
 				break;
 			}
 			case CMD_EVENT: { // 文本模拟事件
@@ -133,10 +138,20 @@ int main() {
 							auto contents = dialog.GetDialogs();
 							if (contents.size() > 0) {
 								for (auto content : contents) {
-									if (content.first.size() == 0)
-										cout << story->ReplaceContent(content.second) << endl;
-									else
-										cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+									if (content.first.size() == 0) {
+										Condition condition;
+										condition.ParseCondition(content.second);
+										cout << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+											return story->GetValue(name);
+											})) << endl;
+									}
+									else{
+										Condition condition;
+										condition.ParseCondition(content.second);
+										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+											return story->GetValue(name);
+											})) << endl;
+									}
 								}
 								break;
 							}
@@ -166,10 +181,20 @@ int main() {
 							auto contents = dialog.GetDialogs();
 							if (contents.size() > 0) {
 								for (auto content : contents) {
-									if (content.first.size() == 0)
-										cout << story->ReplaceContent(content.second) << endl;
-									else
-										cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+									if (content.first.size() == 0) {
+										Condition condition;
+										condition.ParseCondition(content.second);
+										cout << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+											return story->GetValue(name);
+											})) << endl;
+									}
+									else {
+										Condition condition;
+										condition.ParseCondition(content.second);
+										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+											return story->GetValue(name);
+											})) << endl;
+									}
 								}
 								break;
 							}
@@ -186,15 +211,36 @@ int main() {
 			}
 			case CMD_LOOKUP: { // 查找信息
 				parser.AddOption("--id", 0, "Lookup citizen by id.", true, "");
+				parser.AddOption("--name", 0, "Lookup citizen by name.", true, "");
 				parser.ParseCmd(cmd);
 
-				int id = atoi(parser.GetOption("--id").data());
-				auto citizen = populace->GetCitizens()[id];
+				if (parser.HasOption("--id")) {
+					int id = atoi(parser.GetOption("--id").data());
+					auto citizen = populace->GetCitizens()[id];
 
-				cout << "Citizen ID: " << citizen->GetId() << endl;
-				cout << "Name: " << citizen->GetName() << endl;
-				cout << "Age: " << populace->GetTime().GetYear() - citizen->GetBirthday().GetYear() << endl;
-
+					cout << "Citizen ID: " << citizen->GetId() << endl;
+					cout << "Name: " << citizen->GetName() << endl;
+					cout << "Age: " << populace->GetTime().GetYear() - citizen->GetBirthday().GetYear() << endl;
+					cout << "Options: " << endl;
+					for (auto option : citizen->GetOptions()) {
+						cout << "--" << option << endl;
+					}
+				}
+				else if (parser.HasOption("--name")) {
+					string name = parser.GetOption("--name");
+					for (auto citizen : populace->GetCitizens()) {
+						if (citizen->GetName() == name) {
+							cout << "Citizen ID: " << citizen->GetId() << endl;
+							cout << "Name: " << citizen->GetName() << endl;
+							cout << "Age: " << populace->GetTime().GetYear() - citizen->GetBirthday().GetYear() << endl;
+							cout << "Options: " << endl;
+							for (auto option : citizen->GetOptions()) {
+								cout << "--" << option << endl;
+							}
+							break;
+						}
+					}
+				}
 				break;
 			}
 			case CMD_PRINT: { // 输出当前状态

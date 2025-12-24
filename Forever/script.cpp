@@ -217,6 +217,12 @@ vector<shared_ptr<Change>> Script::BuildChanges(JsonValue root, unique_ptr<Chang
 		else if (type == "remove_value") {
 			change = make_shared<RemoveValueChange>(obj["variable"].AsString());
 		}
+		else if (type == "spawn_npc") {
+			change = make_shared<SpawnNpcChange>(obj["target"].AsString(), obj["gender"].AsString(), obj["birthday"].AsString());
+		}
+		else if (type == "add_option") {
+			change = make_shared<AddOptionChange>(obj["target"].AsString(), obj["option"].AsString());
+		}
 		else if (factory->CheckRegistered(type)) {
 			change = factory->CreateChange(type);
 		}
