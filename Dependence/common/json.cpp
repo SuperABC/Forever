@@ -687,7 +687,7 @@ bool JsonReader::DecodeUnicodeEscapeSequence(Token& token, const char*& current,
     return true;
 }
 
-bool JsonReader::AddError(const std::string& message, Token& token, const char* extra) {
+bool JsonReader::AddError(const string& message, Token& token, const char* extra) {
     ErrorInfo info;
     info.token = token;
     info.message = message;
@@ -709,7 +709,7 @@ bool JsonReader::RecoverFromError(TokenType skipUntilToken) {
     return false;
 }
 
-bool JsonReader::AddErrorAndRecover(const std::string& message, Token& token, TokenType skipUntilToken) {
+bool JsonReader::AddErrorAndRecover(const string& message, Token& token, TokenType skipUntilToken) {
     AddError(message, token);
     return RecoverFromError(skipUntilToken);
 }
@@ -807,7 +807,7 @@ JsonValue::CommentInfo::CommentInfo() : comment() {}
 JsonValue::CommentInfo::~CommentInfo() {
 }
 
-void JsonValue::CommentInfo::setComment(const std::string& text) {
+void JsonValue::CommentInfo::setComment(const string& text) {
     comment = text;
     assert(comment.empty() || comment[0] == '/' || comment[0] == '\0');
 }
@@ -830,7 +830,7 @@ JsonValue::JsonValue(DataType type)
     case DATA_ARRAY:
     case DATA_OBJECT:
         // 使用自定义比较函数创建 map
-        valueObject = new std::map<std::string, JsonValue, StringCompare>();
+        valueObject = new map<string, JsonValue, StringCompare>();
         break;
     case DATA_BOOL:
         value.valueBool = false;
@@ -899,7 +899,7 @@ JsonValue::JsonValue(const JsonValue& other)
     // 复制对象/数组
     if (type == DATA_ARRAY || type == DATA_OBJECT) {
         // 使用拷贝构造函数，会自动使用相同的比较函数
-        valueObject = new std::map<std::string, JsonValue, StringCompare>(*other.valueObject);
+        valueObject = new map<string, JsonValue, StringCompare>(*other.valueObject);
     }
 
     // 复制注释
@@ -1527,7 +1527,7 @@ ValueIteratorBase::ValueIteratorBase()
     : current(), isNull(true) {
 }
 
-ValueIteratorBase::ValueIteratorBase(const std::map<std::string, JsonValue, StringCompare>::iterator& current)
+ValueIteratorBase::ValueIteratorBase(const map<string, JsonValue, StringCompare>::iterator& current)
     : current(current), isNull(false) {
 }
 
@@ -1579,7 +1579,7 @@ const char* ValueIteratorBase::name() const {
 ValueConstIterator::ValueConstIterator() {
 }
 
-ValueConstIterator::ValueConstIterator(const std::map<std::string, JsonValue, StringCompare>::iterator& current)
+ValueConstIterator::ValueConstIterator(const map<string, JsonValue, StringCompare>::iterator& current)
     : ValueIteratorBase(current) {
 }
 
@@ -1625,7 +1625,7 @@ ValueIterator::ValueIterator(const ValueIterator& other)
     : ValueIteratorBase(other) {
 }
 
-ValueIterator::ValueIterator(const std::map<std::string, JsonValue, StringCompare>::iterator& current)
+ValueIterator::ValueIterator(const map<string, JsonValue, StringCompare>::iterator& current)
     : ValueIteratorBase(current) {
 }
 

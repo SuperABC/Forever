@@ -9,19 +9,19 @@ FlatBuilding::FlatBuilding() {
     name = count++;
 }
 
-std::string FlatBuilding::GetId() {
+string FlatBuilding::GetId() {
     return "flat";
 }
 
-std::string FlatBuilding::GetType() const {
+string FlatBuilding::GetType() const {
     return "flat";
 }
 
-std::string FlatBuilding::GetName() const {
-    return std::string("公寓建筑") + std::to_string(name);
+string FlatBuilding::GetName() const {
+    return string("公寓建筑") + to_string(name);
 }
 
-std::vector<float> FlatBuilding::GetPower() {
+vector<float> FlatBuilding::GetPower() {
     return { 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
 }
 
@@ -52,7 +52,7 @@ Rect FlatBuilding::LayoutConstruction() {
     return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
 }
 
-void FlatBuilding::LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) {
+void FlatBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout) {
     int direction = 0;
     if (GetSizeX() > GetSizeY()) {
         if (GetSizeY() > 3.f) {
@@ -87,19 +87,19 @@ HotelBuilding::HotelBuilding() {
     name = count++;
 }
 
-std::string HotelBuilding::GetId() {
+string HotelBuilding::GetId() {
     return "hotel";
 }
 
-std::string HotelBuilding::GetType() const {
+string HotelBuilding::GetType() const {
     return "hotel";
 }
 
-std::string HotelBuilding::GetName() const {
-    return std::string("酒店建筑") + std::to_string(name);
+string HotelBuilding::GetName() const {
+    return string("酒店建筑") + to_string(name);
 }
 
-std::vector<float> HotelBuilding::GetPower() {
+vector<float> HotelBuilding::GetPower() {
     return { 0.f, .5f, .5f, .5f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
 }
 
@@ -130,7 +130,7 @@ Rect HotelBuilding::LayoutConstruction() {
     return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
 }
 
-void HotelBuilding::LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) {
+void HotelBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout) {
     int direction = 0;
     if (GetSizeX() > GetSizeY()) {
         if (GetSizeY() > 3.f) {

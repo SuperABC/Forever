@@ -14,15 +14,15 @@ ChineseName::~ChineseName() {
 
 }
 
-std::string ChineseName::GetId() {
+string ChineseName::GetId() {
     return "chinese";
 }
 
-std::string ChineseName::GetType() const {
+string ChineseName::GetType() const {
     return "chinese";
 }
 
-std::string ChineseName::GetName() const {
+string ChineseName::GetName() const {
     return "中文姓名";
 }
 
@@ -106,7 +106,7 @@ void ChineseName::InitializeNames() {
     };
 }
 
-string ChineseName::GetSurname(std::string name) {
+string ChineseName::GetSurname(string name) {
     return name.substr(0, 2);
 }
 

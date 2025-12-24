@@ -3,15 +3,15 @@
 
 using namespace std;
 
-std::string HotelOrganization::GetId() {
+string HotelOrganization::GetId() {
 	return "hotel";
 }
 
-std::string HotelOrganization::GetType() const {
+string HotelOrganization::GetType() const {
 	return "hotel";
 }
 
-std::string HotelOrganization::GetName() const {
+string HotelOrganization::GetName() const {
 	return "酒店组织";
 }
 
@@ -19,20 +19,20 @@ float HotelOrganization::GetPower() {
     return 1.0f;
 }
 
-std::vector<std::pair<std::string, std::pair<int, int>>> HotelOrganization::ComponentRequirements() const {
-    std::vector<std::pair<std::string, std::pair<int, int>>> requirements;
-    requirements.emplace_back("hotel", std::make_pair(1, 1));
+vector<pair<string, pair<int, int>>> HotelOrganization::ComponentRequirements() const {
+    vector<pair<string, pair<int, int>>> requirements;
+    requirements.emplace_back("hotel", make_pair(1, 1));
 
     return requirements;
 }
 
-std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> HotelOrganization::ArrageVacancies(
-    std::vector<std::pair<std::string, int>> components) const {
-    std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> jobs;
+vector<pair<string, vector<vector<string>>>> HotelOrganization::ArrageVacancies(
+    vector<pair<string, int>> components) const {
+    vector<pair<string, vector<vector<string>>>> jobs;
     for (auto& comp : components) {
-        jobs.emplace_back(comp.first, std::vector<std::vector<std::string>>(comp.second));
+        jobs.emplace_back(comp.first, vector<vector<string>>(comp.second));
         for (int i = 0; i < comp.second; i++) {
-            jobs.back().second[i] = std::vector<std::string>(10, "hotel_cleaner");
+            jobs.back().second[i] = vector<string>(10, "hotel_cleaner");
         }
     }
 
@@ -42,7 +42,7 @@ std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> Hotel
 void HotelOrganization::SetCalendar(CalendarFactory* factory) {
     for (auto component : jobs) {
         for (auto job : component.second) {
-            std::shared_ptr<Calendar> calendar = factory->CreateCalendar("test");
+            shared_ptr<Calendar> calendar = factory->CreateCalendar("test");
             job.first->SetCalendar(calendar);
         }
     }

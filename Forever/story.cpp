@@ -185,11 +185,11 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Ev
 }
 
 string Story::ReplaceContent(const string& content) {
-	std::string result;
+	string result;
 	size_t pos = 0;
 	size_t lastPos = 0;
 
-	while ((pos = content.find("$$", lastPos)) != std::string::npos) {
+	while ((pos = content.find("$$", lastPos)) != string::npos) {
 		result.append(content, lastPos, pos - lastPos);
 
 		size_t varStart = pos + 2;
@@ -198,7 +198,7 @@ string Story::ReplaceContent(const string& content) {
 			varEnd++;
 		}
 
-		std::string varName = content.substr(varStart, varEnd - varStart);
+		string varName = content.substr(varStart, varEnd - varStart);
 		if (!varName.empty()) {
 			auto it = variables.find(varName);
 			if (it != variables.end()) {
@@ -222,7 +222,7 @@ void Story::InitVariables() {
     variables["system.health_status"] = "healthy";
 }
 
-ValueType Story::GetValue(const std::string& name) {
+ValueType Story::GetValue(const string& name) {
 	auto it = variables.find(name);
 	if (it != variables.end()) {
 		return it->second;
@@ -230,7 +230,7 @@ ValueType Story::GetValue(const std::string& name) {
 	return 0; // 默认返回0
 }
 
-void Story::SetValue(const std::string& name, ValueType value) {
+void Story::SetValue(const string& name, ValueType value) {
 	variables[name] = value;
 }
 

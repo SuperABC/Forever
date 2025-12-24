@@ -3,26 +3,26 @@
 
 using namespace std;
 
-std::string FlatComponent::GetId() {
+string FlatComponent::GetId() {
 	return "flat";
 }
 
-std::string FlatComponent::GetType() const {
+string FlatComponent::GetType() const {
 	return "flat";
 }
 
-std::string FlatComponent::GetName() const {
+string FlatComponent::GetName() const {
 	return "公寓组合";
 }
 
-std::string HotelComponent::GetId() {
+string HotelComponent::GetId() {
 	return "hotel";
 }
 
-std::string HotelComponent::GetType() const {
+string HotelComponent::GetType() const {
 	return "hotel";
 }
 
-std::string HotelComponent::GetName() const {
+string HotelComponent::GetName() const {
 	return "酒店组合";
 }

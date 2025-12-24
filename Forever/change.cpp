@@ -3,10 +3,10 @@
 
 using namespace std;
 
-std::vector<std::shared_ptr<Change>> SetValueChange::ApplyChange() {
-	return std::vector<std::shared_ptr<Change>>();
+vector<shared_ptr<Change>> SetValueChange::ApplyChange() {
+	return vector<shared_ptr<Change>>();
 }
 
-std::vector<std::shared_ptr<Change>> RemoveValueChange::ApplyChange() {
-	return std::vector<std::shared_ptr<Change>>();
+vector<shared_ptr<Change>> RemoveValueChange::ApplyChange() {
+	return vector<shared_ptr<Change>>();
 }

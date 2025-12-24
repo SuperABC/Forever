@@ -131,8 +131,8 @@ void Populace::InitNames() {
 }
 
 void Populace::InitSchedulers() {
-	schedulerFactory->RegisterScheduler(TestScheduler::GetId(),
-		[]() { return make_unique<TestScheduler>(); }, TestScheduler::GetPower());
+	schedulerFactory->RegisterScheduler(WorkOnlyScheduler::GetId(),
+		[]() { return make_unique<WorkOnlyScheduler>(); }, WorkOnlyScheduler::GetPower());
 
 	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
 	if (modHandle) {
@@ -242,7 +242,7 @@ void Populace::Schedule() {
 	}
 }
 
-void Populace::Jobstory(std::unique_ptr<Story>& story) {
+void Populace::Jobstory(unique_ptr<Story>& story) {
 	unordered_map<string, shared_ptr<Script>> jobScripts;
 
 	for (auto citizen : citizens) {
@@ -292,7 +292,7 @@ void Populace::Print() {
 
 }
 
-void Populace::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Story>& story) {
+void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) {
 
 }
 
@@ -308,7 +308,7 @@ Time Populace::GetTime() {
 	return time;
 }
 
-std::vector<std::shared_ptr<Person>>& Populace::GetCitizens() {
+vector<shared_ptr<Person>>& Populace::GetCitizens() {
 	return citizens;
 }
 
@@ -333,7 +333,7 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
 	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
 }
 
-std::unique_ptr<JobFactory>& Populace::GetJobFactory() {
+unique_ptr<JobFactory>& Populace::GetJobFactory() {
 	return jobFactory;
 }
 

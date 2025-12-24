@@ -3,15 +3,15 @@
 
 using namespace std;
 
-std::string ZoneAsset::GetId() {
+string ZoneAsset::GetId() {
 	return "zoneAsset";
 }
 
-std::string ZoneAsset::GetType() const {
+string ZoneAsset::GetType() const {
 	return "zoneAsset";
 }
 
-std::string ZoneAsset::GetName() const {
+string ZoneAsset::GetName() const {
 	return "园区资产";
 }
 
@@ -31,15 +31,15 @@ void ZoneAsset::SetZone(shared_ptr<Zone> zone) {
 	this->zone = zone;
 }
 
-std::string BuildingAsset::GetId() {
+string BuildingAsset::GetId() {
 	return "buildingAsset";
 }
 
-std::string BuildingAsset::GetType() const {
+string BuildingAsset::GetType() const {
 	return "buildingAsset";
 }
 
-std::string BuildingAsset::GetName() const {
+string BuildingAsset::GetName() const {
 	return "建筑资产";
 }
 
@@ -59,15 +59,15 @@ void BuildingAsset::SetBuilding(shared_ptr<Building> building) {
 	this->building = building;
 }
 
-std::string RoomAsset::GetId() {
+string RoomAsset::GetId() {
 	return "roomAsset";
 }
 
-std::string RoomAsset::GetType() const {
+string RoomAsset::GetType() const {
 	return "roomAsset";
 }
 
-std::string RoomAsset::GetName() const {
+string RoomAsset::GetName() const {
 	return "房间资产";
 }
 

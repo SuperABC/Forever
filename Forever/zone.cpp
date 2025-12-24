@@ -9,16 +9,16 @@ FlatZone::FlatZone() {
     name = count++;
 }
 
-std::string FlatZone::GetId() {
+string FlatZone::GetId() {
     return "flat";
 }
 
-std::string FlatZone::GetType() const {
+string FlatZone::GetType() const {
     return "flat";
 }
 
-std::string FlatZone::GetName() const {
-    return "公寓园区" + std::to_string(name);
+string FlatZone::GetName() const {
+    return "公寓园区" + to_string(name);
 }
 
 function<void(ZoneFactory*, BuildingFactory*, const vector<shared_ptr<Plot>>&)> FlatZone::ZoneGenerator =

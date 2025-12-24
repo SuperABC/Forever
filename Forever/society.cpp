@@ -24,7 +24,7 @@ Society::~Society() {
 }
 
 void Society::InitCalendars() {
-    calendarFactory->RegisterCalendar(TestCalendar::GetId(), []() { return make_unique<TestCalendar>(); });
+    calendarFactory->RegisterCalendar(StandardCalendar::GetId(), []() { return make_unique<StandardCalendar>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -58,8 +58,8 @@ void Society::InitCalendars() {
 }
 
 void Society::InitOrganizations() {
-    organizationFactory->RegisterOrganization(TestOrganization::GetId(),
-        []() { return make_unique<TestOrganization>(); }, TestOrganization::GetPower());
+    organizationFactory->RegisterOrganization(HotelOrganization::GetId(),
+        []() { return make_unique<HotelOrganization>(); }, HotelOrganization::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -120,7 +120,7 @@ void Society::ReadConfigs(string path) const {
     fin.close();
 }
 
-void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populace) {
+void Society::Init(unique_ptr<Map>& map, unique_ptr<Populace>& populace) {
     // 计算职缺
 	auto components = map->GetComponents();
 
@@ -180,7 +180,7 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
         }
 
         organizations.push_back(organization);
-		std::vector<std::pair<std::string, int>> usedComponents;
+		vector<pair<string, int>> usedComponents;
         for (auto& req : requirements) {
             auto it = componentMap.find(req.first);
             if (it->second.size() < req.second.second) {
@@ -216,7 +216,7 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
 	}
 
     // 分配工作
-    std::vector<std::shared_ptr<Organization>> temps;
+    vector<shared_ptr<Organization>> temps;
     for (auto organization : organizations) {
         temps.push_back(organization);
     }

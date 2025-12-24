@@ -142,16 +142,16 @@ vector<shared_ptr<Person>> Person::GetChilds() {
 	return childs;
 }
 
-void Person::AddAsset(std::shared_ptr<Asset> asset) {
+void Person::AddAsset(shared_ptr<Asset> asset) {
 	assets.push_back(asset);
 }
 
-std::vector<std::shared_ptr<Asset>>& Person::GetAssets() {
+vector<shared_ptr<Asset>>& Person::GetAssets() {
 	return assets;
 }
 
-std::vector<std::shared_ptr<Asset>> Person::GetAssets(std::string type) {
-	std::vector<std::shared_ptr<Asset>> results;
+vector<shared_ptr<Asset>> Person::GetAssets(string type) {
+	vector<shared_ptr<Asset>> results;
 
 	for (auto& asset : assets) {
 		if (asset->GetType() == type) {
@@ -162,7 +162,7 @@ std::vector<std::shared_ptr<Asset>> Person::GetAssets(std::string type) {
 	return results;
 }
 
-std::shared_ptr<Asset> Person::GetAsset(std::string name) {
+shared_ptr<Asset> Person::GetAsset(string name) {
 	for (auto& asset : assets) {
 		if (asset->GetName() == name) {
 			return asset;
@@ -180,7 +180,7 @@ void Person::AddJob(shared_ptr<Job> job) {
 	jobs.push_back(job);
 }
 
-void Person::RemoveJob(std::shared_ptr<Job> job) {
+void Person::RemoveJob(shared_ptr<Job> job) {
 	for (auto &j : jobs) {
 		if (j == job) {
 			j = *jobs.end();
@@ -194,7 +194,7 @@ shared_ptr<Room> Person::GetHome() {
 	return home;
 }
 
-void Person::SetHome(std::shared_ptr<Room> room) {
+void Person::SetHome(shared_ptr<Room> room) {
 	home = room;
 }
 
@@ -206,7 +206,7 @@ shared_ptr<Scheduler> Person::GetScheduler() {
 	return scheduler;
 }
 
-void Person::SetScheduler(std::shared_ptr<Scheduler> scheduler) {
+void Person::SetScheduler(shared_ptr<Scheduler> scheduler) {
 	this->scheduler = scheduler;
 }
 

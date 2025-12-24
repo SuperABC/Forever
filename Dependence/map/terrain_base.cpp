@@ -5,7 +5,7 @@
 using namespace std;
 
 int Terrain::FloodTerrain(int x, int y, int num, bool overwrite, int width, int height,
-    std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const {
+    function<bool(int, int, const string)> set, function<string(int, int)> get) const {
     vector<pair<int, int>> q;
 
     if (x < 0 || x >= width - 1 || y < 0 || y >= width - 1)return 0;
@@ -41,7 +41,7 @@ int Terrain::FloodTerrain(int x, int y, int num, bool overwrite, int width, int 
 }
 
 bool Terrain::CheckBoundary(int x, int y, bool overwrite, int width, int height,
-    std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const {
+    function<bool(int, int, const string)> set, function<string(int, int)> get) const {
     if (x == 0 || x == width - 1 || y == 0 || y == height - 1) return true;
     for (int i = 0; i < 4; ++i) {
         int nx = x + dx[i];
@@ -56,8 +56,8 @@ bool Terrain::CheckBoundary(int x, int y, bool overwrite, int width, int height,
     return false;
 }
 
-void Terrain::UpdateBoundary(int x, int y, std::vector<std::pair<int, int>>& q, bool overwrite, int width, int height,
-    std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const {
+void Terrain::UpdateBoundary(int x, int y, vector<pair<int, int>>& q, bool overwrite, int width, int height,
+    function<bool(int, int, const string)> set, function<string(int, int)> get) const {
     for (int i = 0; i < 4; ++i) {
         int nx = x + dx[i];
         int ny = y + dy[i];
@@ -74,7 +74,7 @@ void Terrain::UpdateBoundary(int x, int y, std::vector<std::pair<int, int>>& q, 
 }
 
 void Terrain::ShapeFilter(int x, int y, int width, int height,
-    std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get, int side, float threshold) const {
+    function<bool(int, int, const string)> set, function<string(int, int)> get, int side, float threshold) const {
     if (get(x, y) == GetType())return;
 
     int count = 0;

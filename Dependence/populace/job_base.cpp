@@ -3,11 +3,11 @@
 
 using namespace std;
 
-void Job::SetCalendar(std::shared_ptr<Calendar>& calendar) {
+void Job::SetCalendar(shared_ptr<Calendar>& calendar) {
     this->calendar = calendar;
 }
 
-std::shared_ptr<Calendar>& Job::GetCalendar() {
+shared_ptr<Calendar>& Job::GetCalendar() {
     return calendar;
 }
 

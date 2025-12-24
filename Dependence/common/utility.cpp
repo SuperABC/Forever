@@ -16,7 +16,7 @@ void debugf(LPCSTR format, ...) {
     va_list args;
     va_start(args, format);
     int len = _vscprintf(format, args);
-    std::vector<char> buf(len + 1);
+    vector<char> buf(len + 1);
     vsprintf_s(buf.data(), buf.size(), format, args);
     OutputDebugStringA(buf.data());
     va_end(args);

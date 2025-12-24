@@ -3,15 +3,15 @@
 
 using namespace std;
 
-std::string ParkingRoom::GetId() {
+string ParkingRoom::GetId() {
 	return "parking";
 }
 
-std::string ParkingRoom::GetType() const {
+string ParkingRoom::GetType() const {
 	return "parking";
 }
 
-std::string ParkingRoom::GetName() const {
+string ParkingRoom::GetName() const {
 	return "停车场房间";
 }
 
@@ -31,15 +31,15 @@ int ParkingRoom::GetPersonnelCapacity() const {
 	return 0;
 }
 
-std::string FlatRoom::GetId() {
+string FlatRoom::GetId() {
 	return "flat";
 }
 
-std::string FlatRoom::GetType() const {
+string FlatRoom::GetType() const {
 	return "flat";
 }
 
-std::string FlatRoom::GetName() const {
+string FlatRoom::GetName() const {
 	return "公寓房间";
 }
 
@@ -59,15 +59,15 @@ int FlatRoom::GetPersonnelCapacity() const {
 	return 0;
 }
 
-std::string HotelRoom::GetId() {
+string HotelRoom::GetId() {
 	return "hotel";
 }
 
-std::string HotelRoom::GetType() const {
+string HotelRoom::GetType() const {
 	return "hotel";
 }
 
-std::string HotelRoom::GetName() const {
+string HotelRoom::GetName() const {
 	return "酒店房间";
 }
 
@@ -87,15 +87,15 @@ int HotelRoom::GetPersonnelCapacity() const {
 	return 0;
 }
 
-std::string LobbyRoom::GetId() {
+string LobbyRoom::GetId() {
 	return "lobby";
 }
 
-std::string LobbyRoom::GetType() const {
+string LobbyRoom::GetType() const {
 	return "lobby";
 }
 
-std::string LobbyRoom::GetName() const {
+string LobbyRoom::GetName() const {
 	return "大堂房间";
 }
 

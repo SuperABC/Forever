@@ -3,6 +3,6 @@
 		"asset": ["zone", "building", "room", "mod"],
 		"job": ["hotel_cleaner", "mod"],
 		"name": "chinese",
-		"scheduler": ["test", "mod"]
+		"scheduler": ["work_only", "mod"]
 	}
 }

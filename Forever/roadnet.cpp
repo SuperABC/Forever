@@ -3,20 +3,20 @@
 
 using namespace std;
 
-std::string JingRoadnet::GetId() {
+string JingRoadnet::GetId() {
     return "jing";
 }
 
-std::string JingRoadnet::GetType() const {
+string JingRoadnet::GetType() const {
     return "jing";
 }
 
-std::string JingRoadnet::GetName() const {
+string JingRoadnet::GetName() const {
     return "井字路网";
 }
 
 void JingRoadnet::DistributeRoadnet(int width, int height,
-    std::function<std::string(int, int)> get) {
+    function<string(int, int)> get) {
     vector<Node> horizontalNode1w;
     vector<Node> horizontalNode1e;
     vector<Node> horizontalNode2w;
@@ -90,14 +90,14 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
         connections.push_back(Connection(verticalNode2s[i], verticalNode2s[i - 1]));
     }
 
-    plots.push_back(std::make_shared<Plot>(northWest, northEast, southEast, southWest));
+    plots.push_back(make_shared<Plot>(northWest, northEast, southEast, southWest));
     plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     for (int i = 1; i < min(horizontalNode1w.size(), horizontalNode2w.size()); i++) {
         if (get((int)horizontalNode1w[i].GetX(), (int)horizontalNode1w[i].GetY()) != "plain")continue;
         if (get((int)horizontalNode1w[i - 1].GetX(), (int)horizontalNode1w[i - 1].GetY()) != "plain")continue;
         if (get((int)horizontalNode2w[i].GetX(), (int)horizontalNode2w[i].GetY()) != "plain")continue;
         if (get((int)horizontalNode2w[i - 1].GetX(), (int)horizontalNode2w[i - 1].GetY()) != "plain")continue;
-        plots.push_back(std::make_shared<Plot>(
+        plots.push_back(make_shared<Plot>(
             horizontalNode1w[i], horizontalNode1w[i - 1], horizontalNode2w[i - 1], horizontalNode2w[i]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     }
@@ -106,7 +106,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
         if (get((int)horizontalNode1e[i - 1].GetX(), (int)horizontalNode1e[i - 1].GetY()) != "plain")continue;
         if (get((int)horizontalNode2e[i].GetX(), (int)horizontalNode2e[i].GetY()) != "plain")continue;
         if (get((int)horizontalNode2e[i - 1].GetX(), (int)horizontalNode2e[i - 1].GetY()) != "plain")continue;
-        plots.push_back(std::make_shared<Plot>(
+        plots.push_back(make_shared<Plot>(
             horizontalNode1e[i - 1], horizontalNode1e[i], horizontalNode2e[i], horizontalNode2e[i - 1]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     }
@@ -115,7 +115,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
         if (get((int)verticalNode1n[i - 1].GetX(), (int)verticalNode1n[i - 1].GetY()) != "plain")continue;
         if (get((int)verticalNode2n[i].GetX(), (int)verticalNode2n[i].GetY()) != "plain")continue;
         if (get((int)verticalNode2n[i - 1].GetX(), (int)verticalNode2n[i - 1].GetY()) != "plain")continue;
-        plots.push_back(std::make_shared<Plot>(
+        plots.push_back(make_shared<Plot>(
             verticalNode1n[i], verticalNode2n[i], verticalNode2n[i - 1], verticalNode1n[i - 1]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     }
@@ -124,7 +124,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
         if (get((int)verticalNode1s[i - 1].GetX(), (int)verticalNode1s[i - 1].GetY()) != "plain")continue;
         if (get((int)verticalNode2s[i].GetX(), (int)verticalNode2s[i].GetY()) != "plain")continue;
         if (get((int)verticalNode2s[i - 1].GetX(), (int)verticalNode2s[i - 1].GetY()) != "plain")continue;
-        plots.push_back(std::make_shared<Plot>(
+        plots.push_back(make_shared<Plot>(
             verticalNode1s[i - 1], verticalNode2s[i - 1], verticalNode2s[i], verticalNode1s[i]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
     }

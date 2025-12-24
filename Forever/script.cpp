@@ -13,7 +13,7 @@ Script::Script() {
 
 }
 
-Script::Script(const std::shared_ptr<Script> script) {
+Script::Script(const shared_ptr<Script> script) {
 	unordered_map<string, int> hash;
 	hash["game_finish"] = -1;
 	hash["game_fail"] = -2;
@@ -53,7 +53,7 @@ Script::~Script() {
 }
 
 void Script::ReadScript(string path,
-	std::unique_ptr<EventFactory> &eventFactory, std::unique_ptr<ChangeFactory> &changeFactory) {
+	unique_ptr<EventFactory> &eventFactory, unique_ptr<ChangeFactory> &changeFactory) {
 	if (!filesystem::exists(path)) {
 		THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
 	}

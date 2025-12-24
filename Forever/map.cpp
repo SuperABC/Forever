@@ -539,7 +539,7 @@ int Map::Init(int blockX, int blockY) {
     return capacity;
 }
 
-void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
+void Map::Checkin(vector<shared_ptr<Person>> citizens, Time time) {
 	// 筛选成年市民
 	auto adults = vector<shared_ptr<Person>>();
     for (auto citizen : citizens) {
@@ -688,7 +688,7 @@ void Map::Print() {
 
 }
 
-void Map::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Story>& story) {
+void Map::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) {
 
 }
 
@@ -738,8 +738,8 @@ shared_ptr<Roadnet> Map::GetRoadnet() const {
     return roadnet;
 }
 
-std::vector<std::shared_ptr<Component>> Map::GetComponents() const {
-    std::vector<std::shared_ptr<Component>> components;
+vector<shared_ptr<Component>> Map::GetComponents() const {
+    vector<shared_ptr<Component>> components;
     for(const auto & zone : zones) {
         for(auto building : zone.second->GetBuildings()) {
             const auto& current = building.second->GetComponents();

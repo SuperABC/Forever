@@ -3,15 +3,15 @@
 
 using namespace std;
 
-const std::vector<Node>& Roadnet::GetNodes() const {
+const vector<Node>& Roadnet::GetNodes() const {
     return nodes;
 }
 
-const std::vector<Connection>& Roadnet::GetConnections() const {
+const vector<Connection>& Roadnet::GetConnections() const {
     return connections;
 }
 
-const std::vector<std::shared_ptr<Plot>>& Roadnet::GetPlots() const {
+const vector<shared_ptr<Plot>>& Roadnet::GetPlots() const {
     return plots;
 }
 
