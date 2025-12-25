@@ -8,8 +8,8 @@
 
 class Scheduler {
 public:
-    Scheduler() = default;
-    virtual ~Scheduler() = default;
+    Scheduler();
+    virtual ~Scheduler();
 
     // 子类实现方法
 
@@ -23,7 +23,12 @@ public:
 
     // 父类实现方法
 
+    // 管理状态
+    std::string GetStatus();
+    void SetStatus(std::string status);
+
 protected:
+    std::string status;
 };
 
 class SchedulerFactory {

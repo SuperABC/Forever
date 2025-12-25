@@ -15,6 +15,14 @@ const vector<shared_ptr<Plot>>& Roadnet::GetPlots() const {
     return plots;
 }
 
+const vector<pair<Connection, Node>> Roadnet::AutoNavigate(Node n1, Node n2, Node target) const {
+    vector<pair<Connection, Node>> paths;
+
+    // 自动寻路
+
+    return paths;
+}
+
 void RoadnetFactory::RegisterRoadnet(const string& id, function<unique_ptr<Roadnet>()> creator) {
     registries[id] = creator;
 }

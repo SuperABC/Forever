@@ -105,6 +105,9 @@
     <ClInclude Include="story\change_base.h">
       <Filter>头文件\story</Filter>
     </ClInclude>
+    <ClInclude Include="common\commute.h">
+      <Filter>头文件\common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="map\roadnet_base.cpp">
@@ -166,6 +169,9 @@
     </ClCompile>
     <ClCompile Include="story\event_base.cpp">
       <Filter>源文件\story</Filter>
+    </ClCompile>
+    <ClCompile Include="common\commute.cpp">
+      <Filter>源文件\common</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

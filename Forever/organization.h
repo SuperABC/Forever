@@ -24,6 +24,7 @@ public:
 
     virtual void SetCalendar(CalendarFactory* factory) override;
 
+    virtual void ArrangeRooms() override;
 };
 
 

@@ -190,6 +190,14 @@ void Person::RemoveJob(shared_ptr<Job> job) {
 	}
 }
 
+void Person::SetWork(int job) {
+	working = job;
+}
+
+std::shared_ptr<Job> Person::GetWork() {
+	return jobs[working];
+}
+
 shared_ptr<Room> Person::GetHome() {
 	return home;
 }
@@ -288,3 +296,58 @@ bool Person::RemoveOption(std::string option) {
 std::unordered_set<std::string> Person::GetOptions() {
 	return options;
 }
+
+void Person::SetStatus(std::shared_ptr<Zone> zone) {
+	currentPlot = zone->GetParent();
+	currentZone = zone;
+	currentBuilding = nullptr;
+	currentRoom = nullptr;
+	commute.SetNull();
+}
+
+void Person::SetStatus(std::shared_ptr<Building> building) {
+	currentPlot = building->GetParentPlot();
+	currentZone = building->GetParentZone();
+	currentBuilding = building;
+	currentRoom = nullptr;
+	commute.SetNull();
+}
+
+void Person::SetStatus(std::shared_ptr<Room> room) {
+	currentPlot = room->GetParentBuilding()->GetParentPlot();
+	currentZone = room->GetParentBuilding()->GetParentZone();
+	currentBuilding = room->GetParentBuilding();
+	currentRoom = room;
+	commute.SetNull();
+}
+
+void Person::SetStatus(std::shared_ptr<Room> target, std::vector<std::pair<Connection, Node>> paths, Time time) {
+	currentPlot = nullptr;
+	currentZone = nullptr;
+	currentBuilding = nullptr;
+	currentRoom = nullptr;
+	commute.SetTarget(target);
+	commute.SetPaths(paths);
+	commute.StartCommute(time);
+}
+
+shared_ptr<Plot> Person::GetCurrentPlot() {
+	return currentPlot;
+}
+
+shared_ptr<Zone> Person::GetCurrentZone() {
+	return currentZone;
+}
+
+shared_ptr<Building> Person::GetCurrentBuilding() {
+	return currentBuilding;
+}
+
+shared_ptr<Room> Person::GetCurrentRoom() {
+	return currentRoom;
+}
+
+Commute Person::GetCurrentCommute() {
+	return commute;
+}
+

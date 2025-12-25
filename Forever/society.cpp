@@ -213,6 +213,7 @@ void Society::Init(unique_ptr<Map>& map, unique_ptr<Populace>& populace) {
         }
 
 		organization->SetCalendar(calendarFactory.get());
+        organization->ArrangeRooms();
 	}
 
     // 分配工作

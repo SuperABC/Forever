@@ -285,7 +285,43 @@ void Populace::Destroy() {
 }
 
 void Populace::Tick() {
+	time.AddSeconds(1);
 
+	for (auto citizen : citizens) {
+		if (citizen->GetScheduler()->GetStatus() == "home_rest") {
+			int i = 0;
+			for (auto job : citizen->GetJobs()) {
+				if (time > job->GetCalendar()->WorkingTime(time).first && time < job->GetCalendar()->WorkingTime(time).second) {
+					citizen->SetStatus(job->GetPosition(), {}, time);
+					citizen->GetScheduler()->SetStatus("commute_work");
+					citizen->SetWork(i);
+					break;
+				}
+				i++;
+			}
+		}
+		else if (citizen->GetScheduler()->GetStatus() == "commute_work") {
+			if (citizen->GetCurrentCommute().FinishCommute(time)) {
+				citizen->SetStatus(citizen->GetCurrentCommute().GetTarget());
+				citizen->GetScheduler()->SetStatus("work_job");
+			}
+		}
+		else if (citizen->GetScheduler()->GetStatus() == "work_job") {
+			auto work = citizen->GetWork();
+			if (time < work->GetCalendar()->WorkingTime(time).first || time > work->GetCalendar()->WorkingTime(time).second) {
+				citizen->SetStatus(citizen->GetHome(), {}, time);
+				citizen->GetScheduler()->SetStatus("commute_home");
+				citizen->SetWork(-1);
+				break;
+			}
+		}
+		else if (citizen->GetScheduler()->GetStatus() == "commute_home") {
+			if (citizen->GetCurrentCommute().FinishCommute(time)) {
+				citizen->SetStatus(citizen->GetCurrentCommute().GetTarget());
+				citizen->GetScheduler()->SetStatus("home_rest");
+			}
+		}
+	}
 }
 
 void Populace::Print() {

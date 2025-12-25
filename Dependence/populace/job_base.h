@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "../common/utility.h"
+#include "../map/room_base.h"
 #include "../society/calendar_base.h"
 
 #include <string>
@@ -27,12 +28,17 @@ public:
 	// 父类实现方法
 
 	// 设置/获取日历
-    void SetCalendar(std::shared_ptr<Calendar> &calendar);
-    std::shared_ptr<Calendar> &GetCalendar();
+    void SetCalendar(std::shared_ptr<Calendar> calendar);
+    std::shared_ptr<Calendar> GetCalendar() const;
+
+    // 设置/获取工位
+    void SetPosition(std::shared_ptr<Room> room);
+    std::shared_ptr<Room> GetPosition() const;
 
 protected:
     std::shared_ptr<Calendar> calendar;
 
+    std::shared_ptr<Room> position;
 };
 
 class JobFactory {

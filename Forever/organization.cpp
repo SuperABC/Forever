@@ -48,3 +48,11 @@ void HotelOrganization::SetCalendar(CalendarFactory* factory) {
     }
 }
 
+void HotelOrganization::ArrangeRooms() {
+    for (auto component : jobs) {
+        for (auto job : component.second) {
+            job.first->SetPosition(component.first->GetRooms()[0]);
+        }
+    }
+}
+

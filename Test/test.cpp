@@ -106,16 +106,20 @@ int main() {
 				break;
 			}
 			case CMD_PASS: { // 时间流逝
-				parser.AddOption("--tick", 0, "Ticks num to pass.", true, "0");
 				parser.AddOption("--sec", 0, "Seconds num to pass.", true, "0");
 				parser.AddOption("--min", 0, "Minutes num to pass.", true, "0");
 				parser.AddOption("--day", 0, "Days num to pass.", true, "0");
 				parser.ParseCmd(cmd);
 
-				map->Tick();
-				populace->Tick();
-				society->Tick();
-				story->Tick();
+				if (parser.HasOption("--sec")) {
+					int secs = atoi(parser.GetOption("--sec").data());
+					for (int i = 0; i < secs; i++) {
+						map->Tick();
+						populace->Tick();
+						society->Tick();
+						story->Tick();
+					}
+				}
 
 				break;
 			}
@@ -128,6 +132,9 @@ int main() {
 
 				parser.ParseCmd(cmd);
 				auto event = ParseEvent(parser);
+				if (!event) {
+					THROW_EXCEPTION(CommandException, "Wrong input format.");
+				}
 
 				if (true) {
 					auto actions = story->MatchEvent(event);
@@ -252,8 +259,7 @@ int main() {
 				break;
 			}
 			default:
-				parser.ParseCmd(cmd);
-
+				THROW_EXCEPTION(CommandException, "Wrong input format.");
 				break;
 			}
 

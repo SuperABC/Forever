@@ -35,5 +35,8 @@ public:
         }
     }
 
+    virtual void ArrangeRooms() override {
+
+    }
 };
 

@@ -1,5 +1,6 @@
 ﻿#include "name_base.h"
 #include "job_base.h"
+#include "scheduler_base.h"
 
 
 using namespace std;

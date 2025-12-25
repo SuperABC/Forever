@@ -6,6 +6,7 @@
 #include "experience.h"
 #include "script.h"
 #include "utility.h"
+#include "commute.h"
 
 #include <string>
 #include <memory>
@@ -83,6 +84,8 @@ public:
 	std::vector<std::shared_ptr<Job>> GetJobs();
 	void AddJob(std::shared_ptr<Job> job);
 	void RemoveJob(std::shared_ptr<Job> job);
+	void SetWork(int job);
+	std::shared_ptr<Job> GetWork();
 
 	// 管理住址
 	std::shared_ptr<Room> GetHome();
@@ -110,6 +113,17 @@ public:
 	bool RemoveOption(std::string option);
 	std::unordered_set<std::string> GetOptions();
 
+	// 实时状态
+	void SetStatus(std::shared_ptr<Zone> zone);
+	void SetStatus(std::shared_ptr<Building> building);
+	void SetStatus(std::shared_ptr<Room> room);
+	void SetStatus(std::shared_ptr<Room> target, std::vector<std::pair<Connection, Node>> paths, Time time);
+	std::shared_ptr<Plot> GetCurrentPlot();
+	std::shared_ptr<Zone> GetCurrentZone();
+	std::shared_ptr<Building> GetCurrentBuilding();
+	std::shared_ptr<Room> GetCurrentRoom();
+	Commute GetCurrentCommute();
+
 private:
 	int id;
 	std::string name;
@@ -127,6 +141,7 @@ private:
 
 	std::vector<std::shared_ptr<Asset>> assets;
 	std::vector<std::shared_ptr<Job>> jobs;
+	int working = -1;
 
 	std::shared_ptr<Room> home;
 	std::shared_ptr<Scheduler> scheduler;
@@ -137,4 +152,10 @@ private:
 
 	std::vector<std::shared_ptr<Script>> scripts;
 	std::unordered_set<std::string> options;
+
+	std::shared_ptr<Plot> currentPlot;
+	std::shared_ptr<Zone> currentZone;
+	std::shared_ptr<Building> currentBuilding;
+	std::shared_ptr<Room> currentRoom;
+	Commute commute;
 };

@@ -31,6 +31,9 @@ public:
     const std::vector<Connection>& GetConnections() const;
     const std::vector<std::shared_ptr<Plot>>& GetPlots() const;
 
+    // 自动寻路
+    const std::vector<std::pair<Connection, Node>> AutoNavigate(Node n1, Node n2, Node target) const;
+
 protected:
     std::vector<Node> nodes;
     std::vector<Connection> connections;

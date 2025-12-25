@@ -37,10 +37,13 @@ public:
     // 设定工作日历
     virtual void SetCalendar(CalendarFactory* factory) = 0;
 
-    // 员工入职
-    virtual std::vector<std::shared_ptr<Job>> EnrollEmployee(std::vector<int> ids);
+    // 分配工位
+    virtual void ArrangeRooms() = 0;
 
 	// 父类实现方法
+
+    // 员工入职
+    virtual std::vector<std::shared_ptr<Job>> EnrollEmployee(std::vector<int> ids);
 
 	// 管理职位
     std::vector<std::pair<std::shared_ptr<Component>, std::vector<std::pair<std::shared_ptr<Job>, int>>>> GetJobs() const;

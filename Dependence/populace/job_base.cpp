@@ -3,12 +3,20 @@
 
 using namespace std;
 
-void Job::SetCalendar(shared_ptr<Calendar>& calendar) {
+void Job::SetCalendar(shared_ptr<Calendar> calendar) {
     this->calendar = calendar;
 }
 
-shared_ptr<Calendar>& Job::GetCalendar() {
+shared_ptr<Calendar> Job::GetCalendar() const {
     return calendar;
+}
+
+void Job::SetPosition(shared_ptr<Room> room) {
+    position = room;
+}
+
+shared_ptr<Room> Job::GetPosition() const {
+    return position;
 }
 
 void JobFactory::RegisterJob(const string& id, function<unique_ptr<Job>()> creator) {

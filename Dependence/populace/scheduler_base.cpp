@@ -3,6 +3,22 @@
 
 using namespace std;
 
+Scheduler::Scheduler() {
+    status = "resting";
+}
+
+Scheduler::~Scheduler() {
+
+}
+
+std::string Scheduler::GetStatus() {
+    return status;
+}
+
+void Scheduler::SetStatus(std::string status) {
+    this->status = status;
+}
+
 void SchedulerFactory::RegisterScheduler(const string& id, function<unique_ptr<Scheduler>()> creator, float power) {
     registries[id] = creator;
     powers[id] = power;
