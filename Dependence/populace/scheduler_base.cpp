@@ -4,7 +4,7 @@
 using namespace std;
 
 Scheduler::Scheduler() {
-    status = "resting";
+    status = "home_rest";
 }
 
 Scheduler::~Scheduler() {

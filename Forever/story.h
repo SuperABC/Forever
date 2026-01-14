@@ -8,6 +8,7 @@
 #include "change.h"
 #include "milestone.h"
 #include "condition.h"
+#include "populace.h"
 
 #include <vector>
 #include <string>
@@ -16,6 +17,7 @@
 
 
 class Script;
+class Populace;
 
 class Story {
 public:
@@ -32,7 +34,7 @@ public:
 	void ReadConfigs(std::string path) const;
 
 	// 剧情初始化
-	void Init();
+	void Init(std::unique_ptr<Populace> &populace);
 
 	// 释放空间
 	void Destroy();
@@ -74,6 +76,6 @@ private:
 	std::unique_ptr<Script> script;
 
 	// 初始化全局变量
-	void InitVariables();
+	void InitVariables(std::unique_ptr<Populace>& populace);
 };
 

@@ -9,9 +9,13 @@
 #include "room.h"
 #include "change.h"
 #include "story.h"
+#include "map.h"
 
 #include <windows.h>
 
+
+class Map;
+class Story;
 
 class Populace {
 public:
@@ -41,7 +45,7 @@ public:
 	void Destroy();
 
 	// 时钟前进
-	void Tick();
+	void Tick(std::unique_ptr<Map>& map);
 
 	// 输出当前地图
 	void Print();

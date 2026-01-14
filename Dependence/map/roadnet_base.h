@@ -31,13 +31,26 @@ public:
     const std::vector<Connection>& GetConnections() const;
     const std::vector<std::shared_ptr<Plot>>& GetPlots() const;
 
+    // 构建或重建邻接表
+    void BuildAdjacency();
+
     // 自动寻路
-    const std::vector<std::pair<Connection, Node>> AutoNavigate(Node n1, Node n2, Node target) const;
+    const std::vector<std::pair<Connection, Node>> AutoNavigate(
+        std::shared_ptr<Plot> start, std::shared_ptr<Plot> end) const;
 
 protected:
     std::vector<Node> nodes;
     std::vector<Connection> connections;
     std::vector<std::shared_ptr<Plot>> plots;
+
+private:
+    mutable std::unordered_map<Node, std::vector<std::pair<Node, Connection>>, NodeHash, NodeEqual> adjacencyList;
+    mutable bool adjacencyFlag = true;
+
+    const std::unordered_map<Node, std::vector<std::pair<Node, Connection>>, NodeHash, NodeEqual>&
+        GetAdjacency() const;
+
+    std::vector<Node> BFSPath(const Node& start, const Node& end) const;
 };
 
 class RoadnetFactory {

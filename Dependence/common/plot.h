@@ -15,6 +15,7 @@ class Building;
 
 class Node {
 public:
+	Node();
 	Node(float x, float y);
 	~Node() = default;
 
@@ -25,10 +26,27 @@ private:
 	float posX, posY;
 };
 
+struct NodeHash {
+	std::size_t operator()(const Node& node) const {
+		std::size_t h1 = std::hash<float>()(node.GetX());
+		std::size_t h2 = std::hash<float>()(node.GetY());
+		return h1 ^ (h2 << 1);
+	}
+};
+
+struct NodeEqual {
+	bool operator()(const Node& lhs, const Node& rhs) const {
+		return abs(lhs.GetX() - rhs.GetX()) < FLT_EPSILON && abs(lhs.GetY() - rhs.GetY() < FLT_EPSILON);
+	}
+};
+
 class Connection {
 public:
+	Connection();
 	Connection(Node n1, Node n2);
 	~Connection() = default;
+
+	float distance() const;
 
 	Node GetV1() const;
 	Node GetV2() const;
@@ -65,6 +83,8 @@ public:
 	void SetRotation(float r);
 	AREA_TYPE GetArea() const;
 	void SetArea(AREA_TYPE area);
+	std::vector<Connection> GetRoads();
+	void SetRoads(std::vector<Connection> roads);
 
 	// 世界坐标变换
 	std::pair<float, float> GetVertex(int idx) const;
@@ -89,6 +109,8 @@ public:
 protected:
 	float rotation;
 	AREA_TYPE area;
+
+	std::vector<Connection> roads;
 
 	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
 	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;

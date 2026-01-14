@@ -127,8 +127,8 @@ void Story::ReadConfigs(string path) const {
 	fin.close();
 }
 
-void Story::Init() {
-	InitVariables();
+void Story::Init(unique_ptr<Populace>& populace) {
+	InitVariables(populace);
 
 	script.reset(new Script());
 }
@@ -192,9 +192,9 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Ev
 	return script->MatchEvent(event, this);
 }
 
-void Story::InitVariables() {
+void Story::InitVariables(unique_ptr<Populace>& populace) {
     variables["system.health_status"] = "healthy";
-	variables["system.time.year"] = 2025;
+	variables["system.time.year"] = populace->GetTime().GetYear();
 }
 
 ValueType Story::GetValue(const string& name) {

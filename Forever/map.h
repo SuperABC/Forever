@@ -15,6 +15,9 @@
 #define BLOCK_SIZE 256
 
 
+class Person;
+class Story;
+
 class Element {
 public:
 	Element() = default;

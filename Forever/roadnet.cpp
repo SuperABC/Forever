@@ -100,6 +100,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
         plots.push_back(make_shared<Plot>(
             horizontalNode1w[i], horizontalNode1w[i - 1], horizontalNode2w[i - 1], horizontalNode2w[i]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetRoads({
+            Connection(horizontalNode1w[i], horizontalNode1w[i - 1]),
+            Connection(horizontalNode2w[i], horizontalNode2w[i - 1]) });
     }
     for (int i = 1; i < min(horizontalNode1e.size(), horizontalNode2e.size()); i++) {
         if (get((int)horizontalNode1e[i].GetX(), (int)horizontalNode1e[i].GetY()) != "plain")continue;
@@ -109,6 +112,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
         plots.push_back(make_shared<Plot>(
             horizontalNode1e[i - 1], horizontalNode1e[i], horizontalNode2e[i], horizontalNode2e[i - 1]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetRoads({
+            Connection(horizontalNode1e[i], horizontalNode1e[i - 1]),
+            Connection(horizontalNode2e[i], horizontalNode2e[i - 1]) });
     }
     for (int i = 1; i < min(verticalNode1n.size(), verticalNode2n.size()); i++) {
         if (get((int)verticalNode1n[i].GetX(), (int)verticalNode1n[i].GetY()) != "plain")continue;
@@ -118,6 +124,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
         plots.push_back(make_shared<Plot>(
             verticalNode1n[i], verticalNode2n[i], verticalNode2n[i - 1], verticalNode1n[i - 1]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetRoads({
+            Connection(verticalNode1n[i], verticalNode1n[i - 1]),
+            Connection(verticalNode2n[i], verticalNode2n[i - 1]) });
     }
     for (int i = 1; i < min(verticalNode1s.size(), verticalNode2s.size()); i++) {
         if (get((int)verticalNode1s[i].GetX(), (int)verticalNode1s[i].GetY()) != "plain")continue;
@@ -127,5 +136,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
         plots.push_back(make_shared<Plot>(
             verticalNode1s[i - 1], verticalNode2s[i - 1], verticalNode2s[i], verticalNode1s[i]));
         plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetRoads({
+            Connection(verticalNode1s[i], verticalNode1s[i - 1]),
+            Connection(verticalNode2s[i], verticalNode2s[i - 1]) });
     }
 }

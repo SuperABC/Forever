@@ -98,7 +98,7 @@ int main() {
 				map->Checkin(populace->GetCitizens(), populace->GetTime());
 				society->Init(map, populace);
 				populace->Schedule();
-				story->Init();
+				story->Init(populace);
 				string path = parser.GetOption("--story");
 				story->ReadStory(path);
 				populace->Jobstory(story);
@@ -115,7 +115,7 @@ int main() {
 					int secs = atoi(parser.GetOption("--sec").data());
 					for (int i = 0; i < secs; i++) {
 						map->Tick();
-						populace->Tick();
+						populace->Tick(map);
 						society->Tick();
 						story->Tick();
 					}

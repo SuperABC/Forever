@@ -8,6 +8,10 @@
 
 using namespace std;
 
+Node::Node() {
+
+}
+
 Node::Node(float x, float y) : posX(x), posY(y) {
 
 }
@@ -20,8 +24,18 @@ float Node::GetY() const {
     return posY;
 }
 
+Connection::Connection() {
+
+}
+
 Connection::Connection(Node n1, Node n2) : vertices(n1, n2) {
 
+}
+
+float Connection::distance() const {
+    float dx = vertices.first.GetX() - vertices.second.GetX();
+    float dy = vertices.first.GetY() - vertices.second.GetY();
+    return std::sqrt(dx * dx + dy * dy);
 }
 
 Node Connection::GetV1() const {
@@ -62,6 +76,14 @@ AREA_TYPE Plot::GetArea() const {
 
 void Plot::SetArea(AREA_TYPE area) {
     this->area = area;
+}
+
+std::vector<Connection> Plot::GetRoads() {
+    return roads;
+}
+
+void Plot::SetRoads(std::vector<Connection> roads) {
+    this->roads = roads;
 }
 
 pair<float, float> Plot::GetVertex(int idx) const {

@@ -284,7 +284,7 @@ void Populace::Destroy() {
 
 }
 
-void Populace::Tick() {
+void Populace::Tick(unique_ptr<Map> &map) {
 	time.AddSeconds(1);
 
 	for (auto citizen : citizens) {
@@ -292,7 +292,9 @@ void Populace::Tick() {
 			int i = 0;
 			for (auto job : citizen->GetJobs()) {
 				if (time > job->GetCalendar()->WorkingTime(time).first && time < job->GetCalendar()->WorkingTime(time).second) {
-					citizen->SetStatus(job->GetPosition(), {}, time);
+					citizen->SetStatus(job->GetPosition(),
+						map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
+							job->GetPosition()->GetParentBuilding()->GetParentPlot()), time);
 					citizen->GetScheduler()->SetStatus("commute_work");
 					citizen->SetWork(i);
 					break;
@@ -309,7 +311,9 @@ void Populace::Tick() {
 		else if (citizen->GetScheduler()->GetStatus() == "work_job") {
 			auto work = citizen->GetWork();
 			if (time < work->GetCalendar()->WorkingTime(time).first || time > work->GetCalendar()->WorkingTime(time).second) {
-				citizen->SetStatus(citizen->GetHome(), {}, time);
+				citizen->SetStatus(citizen->GetHome(), 
+					map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
+						work->GetPosition()->GetParentBuilding()->GetParentPlot()), time);
 				citizen->GetScheduler()->SetStatus("commute_home");
 				citizen->SetWork(-1);
 				break;

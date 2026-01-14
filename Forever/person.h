@@ -17,6 +17,8 @@
 #undef AddJob
 
 
+class Script;
+class Story;
 class EducationExperience;
 class EmotionExperience;
 class JobExperience;

@@ -25,7 +25,11 @@ string StandardCalendar::GetName() const {
 
 pair<Time, Time> StandardCalendar::WorkingTime(Time date) const {
 	int day = date.DayOfWeek();
-	if (day >= 1 && day <= 5)return { Time("09:00:00.000"), Time("17:00:00.000") };
+	Time on("09:00:00.000");
+	Time off("17:00:00.000");
+	on.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+	off.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+	if (day >= 1 && day <= 5)return { on, off };
 	else return { Time(), Time() };
 }
 
