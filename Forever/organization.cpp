@@ -42,7 +42,7 @@ vector<pair<string, vector<vector<string>>>> HotelOrganization::ArrageVacancies(
 void HotelOrganization::SetCalendar(CalendarFactory* factory) {
     for (auto &component : jobs) {
         for (auto &job : component.second) {
-            shared_ptr<Calendar> calendar = factory->CreateCalendar("standard");
+            shared_ptr<Calendar> calendar = factory->CreateCalendar("full");
             job.first->SetCalendar(calendar);
         }
     }

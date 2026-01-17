@@ -291,7 +291,8 @@ void Populace::Tick(unique_ptr<Map> &map) {
 		if (citizen->GetScheduler()->GetStatus() == "home_rest") {
 			int i = 0;
 			for (auto job : citizen->GetJobs()) {
-				if (time > job->GetCalendar()->WorkingTime(time).first && time < job->GetCalendar()->WorkingTime(time).second) {
+				auto signin = job->GetCalendar()->SigninTime(time);
+				if (signin.GetYear() > 0 && time > signin) {
 					citizen->SetStatus(job->GetPosition(),
 						map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
 							job->GetPosition()->GetParentBuilding()->GetParentPlot()), time);
@@ -310,7 +311,8 @@ void Populace::Tick(unique_ptr<Map> &map) {
 		}
 		else if (citizen->GetScheduler()->GetStatus() == "work_job") {
 			auto work = citizen->GetWork();
-			if (time < work->GetCalendar()->WorkingTime(time).first || time > work->GetCalendar()->WorkingTime(time).second) {
+			auto signout = work->GetCalendar()->SignoutTime(time);
+			if (signout.GetYear() > 0 && time > signout) {
 				citizen->SetStatus(citizen->GetHome(), 
 					map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
 						work->GetPosition()->GetParentBuilding()->GetParentPlot()), time);

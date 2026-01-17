@@ -25,6 +25,7 @@ Society::~Society() {
 
 void Society::InitCalendars() {
     calendarFactory->RegisterCalendar(StandardCalendar::GetId(), []() { return make_unique<StandardCalendar>(); });
+    calendarFactory->RegisterCalendar(FullCalendar::GetId(), []() { return make_unique<FullCalendar>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -224,6 +225,7 @@ void Society::Init(unique_ptr<Map>& map, unique_ptr<Populace>& populace) {
     auto adults = vector<shared_ptr<Person>>();
     for (auto citizen : populace->GetCitizens()) {
         if (citizen->GetAge(populace->GetTime()) < 18)continue;
+        if (citizen->GetAge(populace->GetTime()) >= 60)continue;
         adults.push_back(citizen);
     }
     for (int i = 0; i < adults.size(); i++) {

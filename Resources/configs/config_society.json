@@ -1,6 +1,6 @@
 {
 	"mods":{
 		"organization": ["hotel", "mod"],
-		"calendar": ["standard", "mod"]
+		"calendar": ["standard", "full", "mod"]
 	}
 }

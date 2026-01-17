@@ -13,8 +13,15 @@ public:
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "模组日程"; }
 
-    virtual std::pair<Time, Time> WorkingTime(Time date) const override {
-        return { Time("09:00:00.000"), Time("09:00:00.000") };
+    virtual Time SigninTime(Time date) const override {
+        Time t("09:00:00.000");
+        t.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+        return t;
+    }
+    virtual Time SignoutTime(Time date) const override {
+        Time t("17:00:00.000");
+        t.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+        return t;
     }
 };
 

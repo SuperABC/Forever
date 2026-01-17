@@ -19,5 +19,23 @@ public:
 	virtual std::string GetType() const override;
 	virtual std::string GetName() const override;
 
-	virtual std::pair<Time, Time> WorkingTime(Time date) const override;
+	virtual Time SigninTime(Time date) const override;
+	virtual Time SignoutTime(Time date) const override;
+};
+
+// 全勤无休日程
+class FullCalendar : public Calendar {
+public:
+	FullCalendar();
+	virtual ~FullCalendar();
+
+	static std::string GetId();
+	virtual std::string GetType() const override;
+	virtual std::string GetName() const override;
+
+	virtual Time SigninTime(Time date) const override;
+	virtual Time SignoutTime(Time date) const override;
+
+private:
+	Time on, off;
 };

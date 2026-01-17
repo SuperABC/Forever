@@ -20,7 +20,8 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
-    virtual std::pair<Time, Time> WorkingTime(Time date) const = 0;
+    virtual Time SigninTime(Time date) const = 0;
+    virtual Time SignoutTime(Time date) const = 0;
 
     // 父类实现方法
 
