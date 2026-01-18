@@ -10,12 +10,12 @@
 #include <unordered_map>
 
 
+class Roadnet;
 class Zone;
 class Building;
 
 class Node {
 public:
-	Node();
 	Node(float x, float y);
 	~Node() = default;
 
@@ -26,33 +26,21 @@ private:
 	float posX, posY;
 };
 
-struct NodeHash {
-	std::size_t operator()(const Node& node) const {
-		std::size_t h1 = std::hash<float>()(node.GetX());
-		std::size_t h2 = std::hash<float>()(node.GetY());
-		return h1 ^ (h2 << 1);
-	}
-};
-
-struct NodeEqual {
-	bool operator()(const Node& lhs, const Node& rhs) const {
-		return abs(lhs.GetX() - rhs.GetX()) < FLT_EPSILON && abs(lhs.GetY() - rhs.GetY() < FLT_EPSILON);
-	}
-};
-
 class Connection {
 public:
-	Connection();
-	Connection(Node n1, Node n2);
+	Connection(std::shared_ptr<Roadnet> roadnet, int n1, int n2, float begin = 0.0f, float end = 1.0f);
 	~Connection() = default;
 
 	float distance() const;
 
-	Node GetV1() const;
-	Node GetV2() const;
+	int GetV1() const;
+	int GetV2() const;
 
 private:
-	std::pair<Node, Node> vertices;
+	std::shared_ptr<Roadnet> roadnet;
+
+	std::pair<int, int> vertices;
+	float begin, end;
 };
 
 enum AREA_TYPE {
@@ -108,7 +96,7 @@ public:
 
 protected:
 	float rotation;
-	AREA_TYPE area;
+	AREA_TYPE area = AREA_GREEN;
 
 	std::vector<Connection> roads;
 

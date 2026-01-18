@@ -326,10 +326,10 @@ void updateGraph(int x, int y, int zoom, int left = 0, int right = sizeX, int to
 
 	setColor(255, 255, 255);
 	for (auto road : roadnet->GetConnections()) {
-		float x1 = road.GetV1().GetX();
-		float y1 = road.GetV1().GetY();
-		float x2 = road.GetV2().GetX();
-		float y2 = road.GetV2().GetY();
+		float x1 = roadnet->GetNodes()[road.GetV1()].GetX();
+		float y1 = roadnet->GetNodes()[road.GetV1()].GetY();
+		float x2 = roadnet->GetNodes()[road.GetV2()].GetX();
+		float y2 = roadnet->GetNodes()[road.GetV2()].GetY();
 		x1 = sizeX / 2 + (x1 - cameraX) * (8 / steps[zoom]);
 		y1 = sizeY / 2 + (y1 - cameraY) * (8 / steps[zoom]);
 		x2 = sizeX / 2 + (x2 - cameraX) * (8 / steps[zoom]);

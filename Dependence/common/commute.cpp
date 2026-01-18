@@ -27,7 +27,7 @@ shared_ptr<Room> Commute::GetTarget() {
 	return targetRoom;
 }
 
-void Commute::SetPaths(std::vector<std::pair<Connection, Node>> paths) {
+void Commute::SetPaths(std::vector<Connection> paths) {
 	currentPaths = paths;
 }
 

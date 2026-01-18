@@ -13,6 +13,6 @@ public:
     virtual std::string GetType() const override;
     virtual std::string GetName() const override;
 
-    virtual void DistributeRoadnet(int width, int height,
+    virtual void DistributeRoadnet(std::shared_ptr<Roadnet> self, int width, int height,
         std::function<std::string(int, int)> get) override;
 };

@@ -321,7 +321,7 @@ void Person::SetStatus(std::shared_ptr<Room> room) {
 	commute.SetNull();
 }
 
-void Person::SetStatus(std::shared_ptr<Room> target, std::vector<std::pair<Connection, Node>> paths, Time time) {
+void Person::SetStatus(std::shared_ptr<Room> target, std::vector<Connection> paths, Time time) {
 	currentPlot = nullptr;
 	currentZone = nullptr;
 	currentBuilding = nullptr;

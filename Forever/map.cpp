@@ -405,7 +405,7 @@ int Map::Init(int blockX, int blockY) {
     if (!roadnet) {
         THROW_EXCEPTION(InvalidConfigException, "No enabled roadnet in config.\n");
     }
-    roadnet->DistributeRoadnet(width, height, getTerrain);
+    roadnet->DistributeRoadnet(roadnet, width, height, getTerrain);
 
     // 随机生成园区
     zoneFactory->GenerateAll(roadnet->GetPlots(), buildingFactory.get());

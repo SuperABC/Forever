@@ -1,5 +1,6 @@
 ﻿#include "error.h"
 #include "plot.h"
+#include "../map/roadnet_base.h"
 
 #include <cmath>
 #include <utility>
@@ -7,10 +8,6 @@
 
 
 using namespace std;
-
-Node::Node() {
-
-}
 
 Node::Node(float x, float y) : posX(x), posY(y) {
 
@@ -24,25 +21,22 @@ float Node::GetY() const {
     return posY;
 }
 
-Connection::Connection() {
-
-}
-
-Connection::Connection(Node n1, Node n2) : vertices(n1, n2) {
+Connection::Connection(shared_ptr<Roadnet> roadnet, int n1, int n2, float begin, float end) :
+    roadnet(roadnet), vertices(n1, n2), begin(begin), end(end) {
 
 }
 
 float Connection::distance() const {
-    float dx = vertices.first.GetX() - vertices.second.GetX();
-    float dy = vertices.first.GetY() - vertices.second.GetY();
+    float dx = roadnet->GetNodes()[vertices.first].GetX() - roadnet->GetNodes()[vertices.second].GetX();
+    float dy = roadnet->GetNodes()[vertices.first].GetY() - roadnet->GetNodes()[vertices.second].GetY();
     return std::sqrt(dx * dx + dy * dy);
 }
 
-Node Connection::GetV1() const {
+int Connection::GetV1() const {
     return vertices.first;
 }
 
-Node Connection::GetV2() const {
+int Connection::GetV2() const {
     return vertices.second;
 }
 

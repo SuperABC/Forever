@@ -119,7 +119,7 @@ public:
 	void SetStatus(std::shared_ptr<Zone> zone);
 	void SetStatus(std::shared_ptr<Building> building);
 	void SetStatus(std::shared_ptr<Room> room);
-	void SetStatus(std::shared_ptr<Room> target, std::vector<std::pair<Connection, Node>> paths, Time time);
+	void SetStatus(std::shared_ptr<Room> target, std::vector<Connection> paths, Time time);
 	std::shared_ptr<Plot> GetCurrentPlot();
 	std::shared_ptr<Zone> GetCurrentZone();
 	std::shared_ptr<Building> GetCurrentBuilding();

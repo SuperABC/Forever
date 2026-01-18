@@ -1,3 +1,86 @@
+// ===== .\Dependence\common\commute.cpp =====
+
+﻿#include "commute.h"
+
+
+using namespace std;
+
+Commute::Commute() {
+
+}
+
+Commute::~Commute() {
+
+}
+
+void Commute::SetNull() {
+	currentPaths.clear();
+}
+
+bool Commute::IsNull() {
+	return currentPaths.size() == 0;
+}
+
+void Commute::SetTarget(shared_ptr<Room> target) {
+	targetRoom = target;
+}
+
+shared_ptr<Room> Commute::GetTarget() {
+	return targetRoom;
+}
+
+void Commute::SetPaths(std::vector<Connection> paths) {
+	currentPaths = paths;
+}
+
+void Commute::StartCommute(Time time) {
+	startTime = time;
+}
+
+bool Commute::AtConnection(Connection connection, Time time) {
+	return false;
+}
+
+bool Commute::FinishCommute(Time time) {
+	return false;
+}
+
+
+// ===== .\Dependence\common\commute.h =====
+
+﻿#pragma once
+
+#include <vector>
+
+#include "../map/roadnet_base.h"
+#include "utility.h"
+
+
+class Commute {
+public:
+	Commute();
+	~Commute();
+
+	void SetNull();
+	bool IsNull();
+
+	void SetTarget(std::shared_ptr<Room> target);
+	std::shared_ptr<Room> GetTarget();
+
+	void SetPaths(std::vector<Connection> paths);
+	void StartCommute(Time time);
+
+	bool AtConnection(Connection connection, Time time);
+	bool FinishCommute(Time time);
+
+
+private:
+	std::vector<Connection> currentPaths;
+	Time startTime;
+
+	std::shared_ptr<Room> targetRoom;
+};
+
 // ===== .\Dependence\common\condition.cpp =====
 
 ﻿#include "condition.h"
@@ -15,362 +98,326 @@
 
 using namespace std;
 
-class VariableExpression : public Expression {
-private:
-    string name;
-public:
-    VariableExpression(const string& n) : name(n) {}
+VariableExpression::VariableExpression(const string& n) : name(n) {
 
-    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
-        return getValue(name);
-    }
-};
+}
 
-class ConstantExpression : public Expression {
-private:
-    ValueType value;
-public:
-    ConstantExpression(ValueType v) : value(v) {}
+ValueType VariableExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+    return getValue(name);
+}
 
-    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
-        return value;
-    }
-};
+ConstantExpression::ConstantExpression(ValueType v) : value(v) {
 
-class ArrayExpression : public Expression {
-private:
-    vector<shared_ptr<Expression>> elements;
+}
 
-public:
-    ArrayExpression(vector<shared_ptr<Expression>> es)
-        : elements(move(es)) {
-    }
+ValueType ConstantExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+    return value;
+}
 
-    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
-        string result = "[";
-        for (size_t i = 0; i < elements.size(); ++i) {
-            auto value = elements[i]->Evaluate(getValue);
-            result += ToString(value);
-            if (i < elements.size() - 1) {
-                result += ", ";
-            }
-        }
-        result += "]";
-        return result;
-    }
+ArrayExpression::ArrayExpression(vector<shared_ptr<Expression>> es)
+    : elements(move(es)) {
+}
 
-    // 获取数组元素的值（用于in操作符）
-    vector<ValueType> GetElementValues(function<ValueType(const string&)> getValue) const {
-        vector<ValueType> values;
-        for (const auto& element : elements) {
-            values.push_back(element->Evaluate(getValue));
-        }
-        return values;
-    }
-};
-
-class UnaryExpression : public Expression {
-private:
-    UnaryOperator operand;
-    shared_ptr<Expression> expression;
-
-public:
-    UnaryExpression(UnaryOperator op, shared_ptr<Expression> operand)
-        : operand(op), expression(move(operand)) {
-    }
-
-    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
-        auto value = expression->Evaluate(getValue);
-
-        switch (operand) {
-        case UnaryOperator::NEGATE:
-            return ApplyNegate(value);
-        case UnaryOperator::LOGICAL_NOT:
-            return ApplyLogicalNot(value);
-        default:
-            THROW_EXCEPTION(InvalidConfigException, "Unknown unary operator.\n");
+ValueType ArrayExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+    string result = "[";
+    for (size_t i = 0; i < elements.size(); ++i) {
+        auto value = elements[i]->Evaluate(getValue);
+        result += ToString(value);
+        if (i < elements.size() - 1) {
+            result += ", ";
         }
     }
+    result += "]";
+    return result;
+}
 
-private:
-    ValueType ApplyNegate(const ValueType& value) const {
-        return visit([](const auto& v) -> ValueType {
-            using T = decay_t<decltype(v)>;
-            if constexpr (is_arithmetic_v<T> && !is_same_v<T, bool>) {
-                return -v;
-            }
-            else {
-                THROW_EXCEPTION(InvalidConfigException, "Cannot apply negate to boolean or non-numeric type.\n");
-            }
-            }, value);
+vector<ValueType> ArrayExpression::GetElementValues(function<ValueType(const string&)> getValue) const {
+    vector<ValueType> values;
+    for (const auto& element : elements) {
+        values.push_back(element->Evaluate(getValue));
     }
+    return values;
+}
 
-    ValueType ApplyLogicalNot(const ValueType& value) const {
-        bool bool_val = ConvertToBool(value);
-        return !bool_val;
+UnaryExpression::UnaryExpression(UnaryOperator op, shared_ptr<Expression> operand)
+    : operand(op), expression(move(operand)) {
+
+}
+
+ValueType UnaryExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+    auto value = expression->Evaluate(getValue);
+
+    switch (operand) {
+    case UnaryOperator::NEGATE:
+        return ApplyNegate(value);
+    case UnaryOperator::LOGICAL_NOT:
+        return ApplyLogicalNot(value);
+    default:
+        THROW_EXCEPTION(InvalidConfigException, "Unknown unary operator.\n");
     }
+}
 
-    bool ConvertToBool(const ValueType& value) const {
-        return visit([](const auto& v) -> bool {
-            using T = decay_t<decltype(v)>;
-            if constexpr (is_same_v<T, bool>) {
-                return v;
-            }
-            else if constexpr (is_same_v<T, int>) {
-                return v != 0;
-            }
-            else if constexpr (is_same_v<T, double>) {
-                return abs(v) > 1e-10; // 考虑浮点误差
-            }
-            else if constexpr (is_same_v<T, string>) {
-                return !v.empty();
-            }
-            else {
-                return false;
-            }
-            }, value);
-    }
-};
-
-class BinaryExpression : public Expression {
-private:
-    shared_ptr<Expression> left;
-    shared_ptr<Expression> right;
-    Operator operand;
-
-public:
-    BinaryExpression(shared_ptr<Expression> l,
-        shared_ptr<Expression> r,
-        Operator op)
-        : left(move(l)), right(move(r)), operand(op) {
-    }
-
-    ValueType Evaluate(function<ValueType(const string&)> getValue) const override {
-        if (operand == Operator::INCLUDE) {
-            auto array_expr = dynamic_cast<ArrayExpression*>(right.get());
-            if (!array_expr) {
-                THROW_EXCEPTION(InvalidConfigException, "Right operand of 'in' must be an array.\n");
-            }
-
-            auto array_values = array_expr->GetElementValues(getValue);
-            bool found = false;
-
-            auto left_val = left->Evaluate(getValue);
-            for (const auto& array_val : array_values) {
-                if (GetComparisonResult(left_val, array_val, Operator::EQUAL)) {
-                    found = true;
-                    break;
-                }
-            }
-
-            return found;
+ValueType UnaryExpression::ApplyNegate(const ValueType& value) const {
+    return visit([](const auto& v) -> ValueType {
+        using T = decay_t<decltype(v)>;
+        if constexpr (is_arithmetic_v<T> && !is_same_v<T, bool>) {
+            return -v;
         }
-
-        if (operand == Operator::LOGICAL_AND) {
-            bool left_val = ConvertToBool(left->Evaluate(getValue));
-            if (!left_val) return false;
-            bool right_val = ConvertToBool(right->Evaluate(getValue));
-            return right_val;
+        else {
+            THROW_EXCEPTION(InvalidConfigException, "Cannot apply negate to boolean or non-numeric type.\n");
         }
+        }, value);
+}
 
-        if (operand == Operator::LOGICAL_OR) {
-            bool left_val = ConvertToBool(left->Evaluate(getValue));
-            if (left_val) return true;
-            bool right_val = ConvertToBool(right->Evaluate(getValue));
-            return right_val;
+ValueType UnaryExpression::ApplyLogicalNot(const ValueType& value) const {
+    bool bool_val = ConvertToBool(value);
+    return !bool_val;
+}
+
+bool UnaryExpression::ConvertToBool(const ValueType& value) const {
+    return visit([](const auto& v) -> bool {
+        using T = decay_t<decltype(v)>;
+        if constexpr (is_same_v<T, bool>) {
+            return v;
         }
-
-        auto left_val = left->Evaluate(getValue);
-        auto right_val = right->Evaluate(getValue);
-
-        switch (operand) {
-        case Operator::EQUAL:
-        case Operator::NOT_EQUAL:
-        case Operator::GREATER:
-        case Operator::GREATER_EQUAL:
-        case Operator::LESS:
-        case Operator::LESS_EQUAL:
-            return CompareValues(left_val, right_val, operand);
-
-        case Operator::ADD:
-        case Operator::SUBTRACT:
-        case Operator::MULTIPLY:
-        case Operator::DIVIDE:
-        case Operator::MODULO:
-        case Operator::EXPONENT:
-            return ComputeArithmetic(left_val, right_val, operand);
-
-        default:
-            THROW_EXCEPTION(InvalidConfigException, "Unknown operator.\n");
+        else if constexpr (is_same_v<T, int>) {
+            return v != 0;
         }
-    }
-
-private:
-    bool GetComparisonResult(const ValueType& left, const ValueType& right, Operator op) const {
-        ValueType result = CompareValues(left, right, op);
-        if (auto bool_result = get_if<bool>(&result)) {
-            return *bool_result;
+        else if constexpr (is_same_v<T, double>) {
+            return abs(v) > 1e-10;
         }
-        THROW_EXCEPTION(InvalidConfigException, "Comparison must return boolean value.\n");
-    }
-
-    ValueType CompareValues(const ValueType& left, const ValueType& right, Operator op) const {
-        bool result = visit([op](const auto& l, const auto& r) -> bool {
-            using T1 = decay_t<decltype(l)>;
-            using T2 = decay_t<decltype(r)>;
-
-            if constexpr (is_same_v<T1, T2>) {
-                return CompareSameType(l, r, op);
-            }
-            else {
-                return CompareDifferentType(l, r, op);
-            }
-            }, left, right);
-
-        return result;
-    }
-
-    template<typename T>
-    static bool CompareSameType(const T& left, const T& right, Operator op) {
-        switch (op) {
-        case Operator::EQUAL: return left == right;
-        case Operator::NOT_EQUAL: return left != right;
-        case Operator::GREATER: return left > right;
-        case Operator::GREATER_EQUAL: return left >= right;
-        case Operator::LESS: return left < right;
-        case Operator::LESS_EQUAL: return left <= right;
-        default: return false;
-        }
-    }
-
-    template<typename T1, typename T2>
-    static bool CompareDifferentType(const T1& left, const T2& right, Operator op) {
-        if constexpr (is_arithmetic_v<T1> && is_arithmetic_v<T2>) {
-            double l = static_cast<double>(left);
-            double r = static_cast<double>(right);
-            return CompareSameType(l, r, op);
-        }
-        else if constexpr (is_same_v<T1, string> || is_same_v<T2, string>) {
-            string l_str = toString(left);
-            string r_str = toString(right);
-            return CompareSameType(l_str, r_str, op);
+        else if constexpr (is_same_v<T, string>) {
+            return !v.empty();
         }
         else {
             return false;
         }
-    }
+        }, value);
+}
 
-    ValueType ComputeArithmetic(const ValueType& left, const ValueType& right, Operator op) const {
-        return visit([op](const auto& l, const auto& r) -> ValueType {
-            using T1 = decay_t<decltype(l)>;
-            using T2 = decay_t<decltype(r)>;
+BinaryExpression::BinaryExpression(shared_ptr<Expression> l,
+    shared_ptr<Expression> r,
+    BinaryOperator op)
+    : left(move(l)), right(move(r)), operand(op) {
+}
 
-            // 如果两个操作数都是整数，进行整数运算
-            if constexpr (is_same_v<T1, int> && is_same_v<T2, int>) {
-                switch (op) {
-                case Operator::ADD: return l + r;
-                case Operator::SUBTRACT: return l - r;
-                case Operator::MULTIPLY: return l * r;
-                case Operator::DIVIDE:
-                    if (r == 0) {
-                        THROW_EXCEPTION(ArithmeticException, "Division by zero.\n");
-                    }
-                    // 整数除法，返回整数结果
-                    return l / r;
-                case Operator::MODULO:
-                    if (r == 0) {
-                        THROW_EXCEPTION(ArithmeticException, "Modulo by zero.\n");
-                    }
-                    return l % r;
-                case Operator::EXPONENT: {
-                    // 整数指数运算
-                    if (r < 0) {
-                        // 负指数会产生浮点数，转为double计算
-                        double result = pow(static_cast<double>(l), static_cast<double>(r));
-                        return result;
-                    }
-                    // 非负指数，进行整数运算
-                    int result = 1;
-                    for (int i = 0; i < r; ++i) {
-                        result *= l;
-                    }
-                    return result;
-                }
-                default:
-                    THROW_EXCEPTION(ArithmeticException, "Unsupported arithmetic operator.\n");
-                }
-            }
-            // 如果至少有一个操作数是浮点数，进行浮点数运算
-            else if constexpr ((is_arithmetic_v<T1> && is_arithmetic_v<T2>) &&
-                !(is_same_v<T1, bool> || is_same_v<T2, bool>)) {
-                double l_val = static_cast<double>(l);
-                double r_val = static_cast<double>(r);
-
-                switch (op) {
-                case Operator::ADD: return l_val + r_val;
-                case Operator::SUBTRACT: return l_val - r_val;
-                case Operator::MULTIPLY: return l_val * r_val;
-                case Operator::DIVIDE:
-                    if (abs(r_val) < 1e-10) {
-                        THROW_EXCEPTION(ArithmeticException, "Division by zero.\n");
-                    }
-                    return l_val / r_val;
-                case Operator::MODULO:
-                    if (abs(r_val) < 1e-10) {
-                        THROW_EXCEPTION(ArithmeticException, "Modulo by zero.\n");
-                    }
-                    return fmod(l_val, r_val);
-                case Operator::EXPONENT:
-                    return pow(l_val, r_val);
-                default:
-                    THROW_EXCEPTION(ArithmeticException, "Unsupported arithmetic operator.\n");
-                }
-            }
-            else {
-                THROW_EXCEPTION(ArithmeticException, "Arithmetic operations only supported for numeric types.\n");
-            }
-            }, left, right);
-    }
-
-    bool ConvertToBool(const ValueType& value) const {
-        return visit([](const auto& v) -> bool {
-            using T = decay_t<decltype(v)>;
-            if constexpr (is_same_v<T, bool>) {
-                return v;
-            }
-            else if constexpr (is_same_v<T, int>) {
-                return v != 0;  // 整数不为0就是true
-            }
-            else if constexpr (is_same_v<T, double>) {
-                return abs(v) > 1e-10; // 浮点数不为0就是true
-            }
-            else if constexpr (is_same_v<T, string>) {
-                return !v.empty();
-            }
-            else {
-                return false;
-            }
-            }, value);
-    }
-
-    template<typename T>
-    static string toString(const T& value) {
-        if constexpr (is_same_v<T, string>) {
-            return value;
+ValueType BinaryExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+    if (operand == BinaryOperator::INCLUDE) {
+        auto array_expr = dynamic_cast<ArrayExpression*>(right.get());
+        if (!array_expr) {
+            THROW_EXCEPTION(InvalidConfigException, "Right operand of 'in' must be an array.\n");
         }
-        else if constexpr (is_same_v<T, bool>) {
-            return value ? "true" : "false";
+
+        auto array_values = array_expr->GetElementValues(getValue);
+        bool found = false;
+
+        auto left_val = left->Evaluate(getValue);
+        for (const auto& array_val : array_values) {
+            if (GetComparisonResult(left_val, array_val, BinaryOperator::EQUAL)) {
+                found = true;
+                break;
+            }
+        }
+
+        return found;
+    }
+
+    if (operand == BinaryOperator::LOGICAL_AND) {
+        bool left_val = ConvertToBool(left->Evaluate(getValue));
+        if (!left_val) return false;
+        bool right_val = ConvertToBool(right->Evaluate(getValue));
+        return right_val;
+    }
+
+    if (operand == BinaryOperator::LOGICAL_OR) {
+        bool left_val = ConvertToBool(left->Evaluate(getValue));
+        if (left_val) return true;
+        bool right_val = ConvertToBool(right->Evaluate(getValue));
+        return right_val;
+    }
+
+    auto left_val = left->Evaluate(getValue);
+    auto right_val = right->Evaluate(getValue);
+
+    switch (operand) {
+    case BinaryOperator::EQUAL:
+    case BinaryOperator::NOT_EQUAL:
+    case BinaryOperator::GREATER:
+    case BinaryOperator::GREATER_EQUAL:
+    case BinaryOperator::LESS:
+    case BinaryOperator::LESS_EQUAL:
+        return CompareValues(left_val, right_val, operand);
+
+    case BinaryOperator::ADD:
+    case BinaryOperator::SUBTRACT:
+    case BinaryOperator::MULTIPLY:
+    case BinaryOperator::DIVIDE:
+    case BinaryOperator::MODULO:
+    case BinaryOperator::EXPONENT:
+        return ComputeArithmetic(left_val, right_val, operand);
+
+    default:
+        THROW_EXCEPTION(InvalidConfigException, "Unknown operator.\n");
+    }
+}
+
+bool BinaryExpression::GetComparisonResult(const ValueType& left, const ValueType& right, BinaryOperator op) const {
+    ValueType result = CompareValues(left, right, op);
+    if (auto bool_result = get_if<bool>(&result)) {
+        return *bool_result;
+    }
+    THROW_EXCEPTION(InvalidConfigException, "Comparison must return boolean value.\n");
+}
+
+ValueType BinaryExpression::CompareValues(const ValueType& left, const ValueType& right, BinaryOperator op) const {
+    bool result = visit([op](const auto& l, const auto& r) -> bool {
+        using T1 = decay_t<decltype(l)>;
+        using T2 = decay_t<decltype(r)>;
+
+        if constexpr (is_same_v<T1, T2>) {
+            return CompareSameType(l, r, op);
         }
         else {
-            return to_string(value);
+            return CompareDifferentType(l, r, op);
+        }
+        }, left, right);
+
+    return result;
+}
+
+ValueType BinaryExpression::ComputeArithmetic(const ValueType& left, const ValueType& right, BinaryOperator op) const {
+    if (op == BinaryOperator::ADD) {
+        // 如果至少有一个操作数是字符串，进行字符串连接
+        if (holds_alternative<string>(left) || holds_alternative<string>(right)) {
+            string left_str = visit([](const auto& v) -> string {
+                using T = decay_t<decltype(v)>;
+                if constexpr (is_same_v<T, string>) {
+                    return v;
+                }
+                else if constexpr (is_same_v<T, bool>) {
+                    return v ? "true" : "false";
+                }
+                else if constexpr (is_arithmetic_v<T>) {
+                    return to_string(v);
+                }
+                else {
+                    THROW_EXCEPTION(ArithmeticException, "Unsupported type for string concatenation.\n");
+                }
+                }, left);
+
+            string right_str = visit([](const auto& v) -> string {
+                using T = decay_t<decltype(v)>;
+                if constexpr (is_same_v<T, string>) {
+                    return v;
+                }
+                else if constexpr (is_same_v<T, bool>) {
+                    return v ? "true" : "false";
+                }
+                else if constexpr (is_arithmetic_v<T>) {
+                    return to_string(v);
+                }
+                else {
+                    THROW_EXCEPTION(ArithmeticException, "Unsupported type for string concatenation.\n");
+                }
+                }, right);
+
+            return left_str + right_str;
         }
     }
-};
+
+    return visit([op](const auto& l, const auto& r) -> ValueType {
+        using T1 = decay_t<decltype(l)>;
+        using T2 = decay_t<decltype(r)>;
+
+        // 如果两个操作数都是整数，进行整数运算
+        if constexpr (is_same_v<T1, int> && is_same_v<T2, int>) {
+            switch (op) {
+            case BinaryOperator::ADD: return l + r;
+            case BinaryOperator::SUBTRACT: return l - r;
+            case BinaryOperator::MULTIPLY: return l * r;
+            case BinaryOperator::DIVIDE:
+                if (r == 0) {
+                    THROW_EXCEPTION(ArithmeticException, "Division by zero.\n");
+                }
+                return l / r;
+            case BinaryOperator::MODULO:
+                if (r == 0) {
+                    THROW_EXCEPTION(ArithmeticException, "Modulo by zero.\n");
+                }
+                return l % r;
+            case BinaryOperator::EXPONENT: {
+                if (r < 0) {
+                    double result = pow(static_cast<double>(l), static_cast<double>(r));
+                    return result;
+                }
+                int result = 1;
+                for (int i = 0; i < r; ++i) {
+                    result *= l;
+                }
+                return result;
+            }
+            default:
+                THROW_EXCEPTION(ArithmeticException, "Unsupported arithmetic operator.\n");
+            }
+        }
+        // 如果至少有一个操作数是浮点数，进行浮点数运算
+        else if constexpr ((is_arithmetic_v<T1> && is_arithmetic_v<T2>) &&
+            !(is_same_v<T1, bool> || is_same_v<T2, bool>)) {
+            double l_val = static_cast<double>(l);
+            double r_val = static_cast<double>(r);
+
+            switch (op) {
+            case BinaryOperator::ADD: return l_val + r_val;
+            case BinaryOperator::SUBTRACT: return l_val - r_val;
+            case BinaryOperator::MULTIPLY: return l_val * r_val;
+            case BinaryOperator::DIVIDE:
+                if (abs(r_val) < 1e-10) {
+                    THROW_EXCEPTION(ArithmeticException, "Division by zero.\n");
+                }
+                return l_val / r_val;
+            case BinaryOperator::MODULO:
+                if (abs(r_val) < 1e-10) {
+                    THROW_EXCEPTION(ArithmeticException, "Modulo by zero.\n");
+                }
+                return fmod(l_val, r_val);
+            case BinaryOperator::EXPONENT:
+                return pow(l_val, r_val);
+            default:
+                THROW_EXCEPTION(ArithmeticException, "Unsupported arithmetic operator.\n");
+            }
+        }
+        else {
+            THROW_EXCEPTION(ArithmeticException, "Arithmetic operations only supported for numeric types.\n");
+        }
+        }, left, right);
+}
+
+bool BinaryExpression::ConvertToBool(const ValueType& value) const {
+    return visit([](const auto& v) -> bool {
+        using T = decay_t<decltype(v)>;
+        if constexpr (is_same_v<T, bool>) {
+            return v;
+        }
+        else if constexpr (is_same_v<T, int>) {
+            return v != 0;
+        }
+        else if constexpr (is_same_v<T, double>) {
+            return abs(v) > 1e-10;
+        }
+        else if constexpr (is_same_v<T, string>) {
+            return !v.empty();
+        }
+        else {
+            return false;
+        }
+        }, value);
+}
 
 bool Condition::ParseCondition(const string& conditionStr) {
     try {
         vector<string> tokens = Tokenize(conditionStr);
         if (tokens.size() > 0)root = ParseExpression(tokens);
+        else root = nullptr;
         return true;
     }
     catch (const exception& e) {
@@ -417,7 +464,6 @@ vector<string> Condition::Tokenize(const string& expr) {
                 current.clear();
             }
 
-            // 处理双字符运算符
             if ((c == '&' && i + 1 < expr.length() && expr[i + 1] == '&') ||
                 (c == '|' && i + 1 < expr.length() && expr[i + 1] == '|') ||
                 (c == '=' && i + 1 < expr.length() && expr[i + 1] == '=') ||
@@ -541,7 +587,7 @@ shared_ptr<Expression> Condition::ParsePostfix(const vector<string>& postfix) {
             auto left = move(exprStack.top());
             exprStack.pop();
 
-            Operator op = GetOperator(token);
+            BinaryOperator op = GetOperator(token);
             exprStack.push(make_unique<BinaryExpression>(move(left), move(right), op));
         }
         else if (token == "-" && exprStack.size() == 1) {
@@ -599,30 +645,28 @@ bool Condition::RightAssociative(const string& op) {
     return op == "^" || op == "!";
 }
 
-Operator Condition::GetOperator(const string& token) {
-    if (token == "==") return Operator::EQUAL;
-    else if (token == "!=") return Operator::NOT_EQUAL;
-    else if (token == ">") return Operator::GREATER;
-    else if (token == ">=") return Operator::GREATER_EQUAL;
-    else if (token == "<") return Operator::LESS;
-    else if (token == "<=") return Operator::LESS_EQUAL;
-    else if (token == "in") return Operator::INCLUDE;
-    else if (token == "+") return Operator::ADD;
-    else if (token == "-") return Operator::SUBTRACT;
-    else if (token == "*") return Operator::MULTIPLY;
-    else if (token == "/") return Operator::DIVIDE;
-    else if (token == "%") return Operator::MODULO;
-    else if (token == "^") return Operator::EXPONENT;
-    else if (token == "&&") return Operator::LOGICAL_AND;
-    else if (token == "||") return Operator::LOGICAL_OR;
+BinaryOperator Condition::GetOperator(const string& token) {
+    if (token == "==") return BinaryOperator::EQUAL;
+    else if (token == "!=") return BinaryOperator::NOT_EQUAL;
+    else if (token == ">") return BinaryOperator::GREATER;
+    else if (token == ">=") return BinaryOperator::GREATER_EQUAL;
+    else if (token == "<") return BinaryOperator::LESS;
+    else if (token == "<=") return BinaryOperator::LESS_EQUAL;
+    else if (token == "in") return BinaryOperator::INCLUDE;
+    else if (token == "+") return BinaryOperator::ADD;
+    else if (token == "-") return BinaryOperator::SUBTRACT;
+    else if (token == "*") return BinaryOperator::MULTIPLY;
+    else if (token == "/") return BinaryOperator::DIVIDE;
+    else if (token == "%") return BinaryOperator::MODULO;
+    else if (token == "^") return BinaryOperator::EXPONENT;
+    else if (token == "&&") return BinaryOperator::LOGICAL_AND;
+    else if (token == "||") return BinaryOperator::LOGICAL_OR;
     else throw runtime_error("Unknown operator: " + token);
 }
 
 shared_ptr<Expression> Condition::ParseOperand(const string& token) {
-    // 变量（支持中文变量名）
     if (token.length() >= 2 && token.substr(0, 2) == "$$") {
         string varName = token.substr(2);
-        // 检查变量名是否合法（支持中文字符）
         if (!varName.empty() && (isalpha(static_cast<unsigned char>(varName[0])) ||
             varName[0] == '_' ||
             (varName[0] & 0x80))) {
@@ -630,7 +674,6 @@ shared_ptr<Expression> Condition::ParseOperand(const string& token) {
         }
     }
 
-    // 常量
     return ParseConstant(token);
 }
 
@@ -642,42 +685,34 @@ shared_ptr<Expression> Condition::ParseConstant(const string& token) {
         return make_unique<ConstantExpression>(false);
     }
 
-    // 首先尝试解析为整数
+    // 尝试解析为整数
     try {
         size_t pos;
         int int_val = stoi(token, &pos);
-        if (pos == token.length()) {
-            // 检查是否是以0开头的多位数（如"01"），这种情况应该保持为字符串
-            if (token.length() > 1 && token[0] == '0' && isdigit(token[1])) {
-                // 这种情况应该保持为字符串
-            }
-            else {
-                return make_unique<ConstantExpression>(int_val);
-            }
+        if (pos == token.length() && !(token.length() > 1 && token[0] == '0' && isdigit(token[1]))) {
+            return make_unique<ConstantExpression>(int_val);
         }
     }
-    catch (...) {}
+    catch (const exception&) {}
 
     // 尝试解析为浮点数
     try {
         size_t pos;
         double double_val = stod(token, &pos);
         if (pos == token.length()) {
-            // 检查是否包含小数点或科学计数法
             if (token.find('.') != string::npos ||
                 token.find('e') != string::npos ||
                 token.find('E') != string::npos) {
                 return make_unique<ConstantExpression>(double_val);
             }
             else {
-                // 没有小数点但解析为double，说明数字太大，保持为整数
                 return make_unique<ConstantExpression>(static_cast<int>(double_val));
             }
         }
     }
-    catch (...) {}
+    catch (const exception&) {}
 
-    // 处理字符串（支持中文字符串）
+    // 处理字符串
     string str_val = token;
     if (str_val.length() >= 2 &&
         ((str_val.front() == '"' && str_val.back() == '"') ||
@@ -695,14 +730,11 @@ bool IsOperatorChar(char c) {
 }
 
 bool IsSpaceChar(char c) {
-    return isspace(static_cast<unsigned char>(c)) ||
-        c == '　'; // 中文全角空格
+    return isspace(static_cast<unsigned char>(c)) || c == '　';
 }
 
 bool IsIdentifierChar(char c) {
-    return isalnum(static_cast<unsigned char>(c)) ||
-        c == '_' ||
-        (c >= 0x80 && c <= 0xFF); // 支持中文字符和其他扩展字符
+    return isalnum(static_cast<unsigned char>(c)) || c == '_' || (c >= 0x80 && c <= 0xFF);
 }
 
 string ToString(const ValueType& value) {
@@ -753,20 +785,21 @@ ValueType FromString(const string& s) {
         return false;
     }
 
-    // 处理带引号的字符串（支持中文）
+    // 处理带引号的字符串
     if (s.length() >= 2 &&
         ((s.front() == '"' && s.back() == '"') ||
             (s.front() == '\'' && s.back() == '\''))) {
         return s.substr(1, s.length() - 2);
     }
 
-    // 检查是否包含非ASCII字符，如果有则直接返回字符串
+    // 非ASCII字符直接返回字符串
     for (char c : s) {
         if (static_cast<unsigned char>(c) > 127) {
             return s;
         }
     }
 
+    // 尝试解析为整数
     try {
         size_t pos;
         int int_val = stoi(s, &pos);
@@ -801,7 +834,7 @@ ValueType FromString(const string& s) {
         try {
             return stoi(s);
         }
-        catch (...) {
+        catch (const exception&) {
             return s;
         }
     }
@@ -834,13 +867,12 @@ ValueType FromString(const string& s) {
             try {
                 return stod(s);
             }
-            catch (...) {}
+            catch (const exception&) {}
         }
     }
 
     return s;
 }
-
 
 
 
@@ -858,32 +890,29 @@ ValueType FromString(const string& s) {
 #include <unordered_map>
 
 
-enum class Operator {
-    // 比较运算符
-    EQUAL,          // ==
-    NOT_EQUAL,      // !=
-    GREATER,        // >
-    GREATER_EQUAL,  // >=
-    LESS,           // <
-    LESS_EQUAL,     // <=
-    INCLUDE,             // in
+enum class BinaryOperator {
+    EQUAL,
+    NOT_EQUAL,
+    GREATER,
+    GREATER_EQUAL,
+    LESS,
+    LESS_EQUAL,
+    INCLUDE,
 
-    // 算术运算符
-    ADD,            // +
-    SUBTRACT,       // -
-    MULTIPLY,       // *
-    DIVIDE,         // /
-    MODULO,         // %
-    EXPONENT,       // ^
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE,
+    MODULO,
+    EXPONENT,
 
-    // 逻辑运算符
-    LOGICAL_AND,    // &&
-    LOGICAL_OR      // ||
+    LOGICAL_AND,
+    LOGICAL_OR
 };
 
 enum class UnaryOperator {
-    NEGATE,         // 负号 -
-    LOGICAL_NOT     // 逻辑非 !
+    NEGATE,
+    LOGICAL_NOT
 };
 
 using ValueType = std::variant<int, double, bool, std::string>;
@@ -893,6 +922,118 @@ public:
     virtual ~Expression() = default;
 
     virtual ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const = 0;
+};
+
+class VariableExpression : public Expression {
+private:
+    std::string name;
+public:
+    VariableExpression(const std::string& n);
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+};
+
+class ConstantExpression : public Expression {
+private:
+    ValueType value;
+public:
+    ConstantExpression(ValueType v);
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+};
+
+class ArrayExpression : public Expression {
+private:
+    std::vector<std::shared_ptr<Expression>> elements;
+
+public:
+    ArrayExpression(std::vector<std::shared_ptr<Expression>> es);
+
+    std::vector<ValueType> GetElementValues(std::function<ValueType(const std::string&)> getValue) const;
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+};
+
+class UnaryExpression : public Expression {
+private:
+    UnaryOperator operand;
+    std::shared_ptr<Expression> expression;
+
+public:
+    UnaryExpression(UnaryOperator op, std::shared_ptr<Expression> operand);
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+
+private:
+    ValueType ApplyNegate(const ValueType& value) const;
+
+    ValueType ApplyLogicalNot(const ValueType& value) const;
+
+    bool ConvertToBool(const ValueType& value) const;
+};
+
+class BinaryExpression : public Expression {
+private:
+    std::shared_ptr<Expression> left;
+    std::shared_ptr<Expression> right;
+    BinaryOperator operand;
+
+public:
+    BinaryExpression(std::shared_ptr<Expression> l, std::shared_ptr<Expression> r, BinaryOperator op);
+
+    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+
+private:
+    bool GetComparisonResult(const ValueType& left, const ValueType& right, BinaryOperator op) const;
+
+    ValueType CompareValues(const ValueType& left, const ValueType& right, BinaryOperator op) const;
+
+    template<typename T>
+    static bool CompareSameType(const T& left, const T& right, BinaryOperator op) {
+        switch (op) {
+        case BinaryOperator::EQUAL: return left == right;
+        case BinaryOperator::NOT_EQUAL: return left != right;
+        case BinaryOperator::GREATER: return left > right;
+        case BinaryOperator::GREATER_EQUAL: return left >= right;
+        case BinaryOperator::LESS: return left < right;
+        case BinaryOperator::LESS_EQUAL: return left <= right;
+        default: return false;
+        }
+    }
+
+    template<typename T1, typename T2>
+    static bool CompareDifferentType(const T1& left, const T2& right, BinaryOperator op) {
+        if constexpr (std::is_arithmetic_v<T1> && std::is_arithmetic_v<T2>) {
+            double l = static_cast<double>(left);
+            double r = static_cast<double>(right);
+            return CompareSameType(l, r, op);
+        }
+        else if constexpr (std::is_same_v<T1, std::string> || std::is_same_v<T2, std::string>) {
+            std::string l_str = toString(left);
+            std::string r_str = toString(right);
+            return CompareSameType(l_str, r_str, op);
+        }
+        else {
+            return false;
+        }
+    }
+
+    ValueType ComputeArithmetic(const ValueType& left, const ValueType& right, BinaryOperator op) const;
+
+    bool ConvertToBool(const ValueType& value) const;
+
+    template<typename T>
+    static std::string toString(const T& value) {
+        if constexpr (std::is_same_v<T, std::string>) {
+            return value;
+        }
+        else if constexpr (std::is_same_v<T, bool>) {
+            return value ? "true" : "false";
+        }
+        else {
+            return std::to_string(value);
+        }
+    }
 };
 
 class Condition {
@@ -913,7 +1054,7 @@ private:
     bool HigherPrecedence(const std::string& op1, const std::string& op2);
     int GetPrecedence(const std::string& op);
     bool RightAssociative(const std::string& op);
-    Operator GetOperator(const std::string& token);
+    BinaryOperator GetOperator(const std::string& token);
     std::shared_ptr<Expression> ParseOperand(const std::string& token);
     std::shared_ptr<Expression> ParseConstant(const std::string& token);
     bool OperatorChar(char c);
@@ -983,7 +1124,7 @@ public:
 
     virtual ~ExceptionBase() noexcept = default;
 
-    // 获取报错
+    // 获取报错信息
     const char* what() const noexcept override;
     virtual std::string GetDetailedInfo() const;
     const std::string& getMessage() const noexcept { return m_message; }
@@ -1046,6 +1187,10 @@ class JsonFormatException : public ExceptionBase {
     using ExceptionBase::ExceptionBase;
 };
 
+class RuntimeException : public ExceptionBase {
+    using ExceptionBase::ExceptionBase;
+};
+
 template<typename ExceptionClass>
 [[noreturn]] void ThrowException(const std::string& message,
     const char* file,
@@ -1061,6 +1206,7 @@ template<typename ExceptionClass>
 
 ﻿#include "error.h"
 #include "plot.h"
+#include "../map/roadnet_base.h"
 
 #include <cmath>
 #include <utility>
@@ -1081,15 +1227,22 @@ float Node::GetY() const {
     return posY;
 }
 
-Connection::Connection(Node n1, Node n2) : vertices(n1, n2) {
+Connection::Connection(Roadnet* roadnet, int n1, int n2, float begin, float end) :
+    roadnet(roadnet), vertices(n1, n2), begin(begin), end(end) {
 
 }
 
-Node Connection::GetV1() const {
+float Connection::distance() const {
+    float dx = roadnet->GetNodes()[vertices.first].GetX() - roadnet->GetNodes()[vertices.second].GetX();
+    float dy = roadnet->GetNodes()[vertices.first].GetY() - roadnet->GetNodes()[vertices.second].GetY();
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+int Connection::GetV1() const {
     return vertices.first;
 }
 
-Node Connection::GetV2() const {
+int Connection::GetV2() const {
     return vertices.second;
 }
 
@@ -1123,6 +1276,14 @@ AREA_TYPE Plot::GetArea() const {
 
 void Plot::SetArea(AREA_TYPE area) {
     this->area = area;
+}
+
+std::vector<Connection> Plot::GetRoads() {
+    return roads;
+}
+
+void Plot::SetRoads(std::vector<Connection> roads) {
+    this->roads = roads;
 }
 
 pair<float, float> Plot::GetVertex(int idx) const {
@@ -1226,7 +1387,7 @@ void Plot::SetPosition(Node n1, Node n2, Node n3, Node n4) {
     // 现在 nodes[0], nodes[1], nodes[2], nodes[3] 是逆时针顺序
 
     // 检查矩形条件
-    const float eps = 1e-5f;
+    const float eps = 1e-2f;
 
     // 计算四个边向量
     float u1x = nodes[1].GetX() - nodes[0].GetX();
@@ -1346,6 +1507,7 @@ void Plot::RemoveBuilding(string name) {
 #include <unordered_map>
 
 
+class Roadnet;
 class Zone;
 class Building;
 
@@ -1363,14 +1525,19 @@ private:
 
 class Connection {
 public:
-	Connection(Node n1, Node n2);
+	Connection(Roadnet* roadnet, int n1, int n2, float begin = 0.0f, float end = 1.0f);
 	~Connection() = default;
 
-	Node GetV1() const;
-	Node GetV2() const;
+	float distance() const;
+
+	int GetV1() const;
+	int GetV2() const;
 
 private:
-	std::pair<Node, Node> vertices;
+	Roadnet* roadnet;
+
+	std::pair<int, int> vertices;
+	float begin, end;
 };
 
 enum AREA_TYPE {
@@ -1401,6 +1568,8 @@ public:
 	void SetRotation(float r);
 	AREA_TYPE GetArea() const;
 	void SetArea(AREA_TYPE area);
+	std::vector<Connection> GetRoads();
+	void SetRoads(std::vector<Connection> roads);
 
 	// 世界坐标变换
 	std::pair<float, float> GetVertex(int idx) const;
@@ -1424,7 +1593,9 @@ public:
 
 protected:
 	float rotation;
-	AREA_TYPE area;
+	AREA_TYPE area = AREA_GREEN;
+
+	std::vector<Connection> roads;
 
 	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
 	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;
@@ -1508,6 +1679,7 @@ void Rect::SetVertices(float x1, float y1, float x2, float y2) {
     posY = (y1 + y2) / 2.f;
     sizeX = x2 - x1;
     sizeY = y2 - y1;
+	acreage = sizeX * sizeY * 100.f;
 }
 
 void Rect::SetPosition(float x, float y, float w, float h) {
@@ -1515,6 +1687,7 @@ void Rect::SetPosition(float x, float y, float w, float h) {
     posY = y;
     sizeX = w;
     sizeY = h;
+    acreage = sizeX * sizeY * 100.f;
 }
 
 float Rect::GetAcreage() const {
@@ -1582,7 +1755,7 @@ void debugf(LPCSTR format, ...) {
     va_list args;
     va_start(args, format);
     int len = _vscprintf(format, args);
-    std::vector<char> buf(len + 1);
+    vector<char> buf(len + 1);
     vsprintf_s(buf.data(), buf.size(), format, args);
     OutputDebugStringA(buf.data());
     va_end(args);
@@ -2172,6 +2345,15 @@ Time GetRandom(Time begin, Time end) {
     return result;
 }
 
+Counter::Counter(int count) : num(count) {
+
+}
+
+bool Counter::count() {
+    return --num <= 0;
+}
+
+
 // ===== .\Dependence\common\utility.h =====
 
 ﻿#pragma once
@@ -2290,6 +2472,17 @@ private:
 // 时间范围内随机采样
 Time GetRandom(Time begin, Time end);
 
+// 计数器
+class Counter {
+public:
+    Counter(int count);
+
+    bool count();
+
+private:
+    int num;
+};
+
 
 // ===== .\Dependence\map\building_base.cpp =====
 
@@ -2389,6 +2582,10 @@ int Building::GetBasements() const {
     return basements;
 }
 
+const Rect Building::GetConstruction() const {
+	return construction;
+}
+
 vector<shared_ptr<Component>>& Building::GetComponents() {
     return components;
 }
@@ -2404,6 +2601,7 @@ shared_ptr<Floor> Building::GetFloor(int level) const {
 }
 
 void Building::FinishInit() {
+	construction = LayoutConstruction();
     floors = vector<shared_ptr<Floor>>(basements + layers);
 }
 
@@ -2552,49 +2750,51 @@ unique_ptr<Layout> Building::ReadTemplates(string path) {
     return layout;
 }
 
-void Building::ReadFloor(int level, float width, float height, int face, string name, unique_ptr<Layout>& layout) {
+void Building::ReadFloor(int level, int face, string name, unique_ptr<Layout>& layout) {
+    auto width = construction.GetSizeX();
+    auto height = construction.GetSizeY();
     auto floor = make_shared<Floor>(level, width, height);
 
     for (auto facility : layout->templateFacilities[name][face]) {
         float x = (facility.second[0] * width + facility.second[1] + facility.second[4] * width + facility.second[5]) / 2.f;
         float y = (facility.second[2] * height + facility.second[3] + facility.second[6] * height + facility.second[7]) / 2.f;
-        float w = facility.second[4] * width + facility.second[5] - facility.second[0] * width - facility.second[1];
-        float h = facility.second[6] * height + facility.second[7] - facility.second[2] * height - facility.second[3];
+        float w = abs(facility.second[4] * width + facility.second[5] - facility.second[0] * width - facility.second[1]);
+        float h = abs(facility.second[6] * height + facility.second[7] - facility.second[2] * height - facility.second[3]);
         floor->AddFacility(Facility(facility.first, x, y, w, h));
     }
 
     for (auto row : layout->templateRows[name][face]) {
         float x = (row.second[0] * width + row.second[1] + row.second[4] * width + row.second[5]) / 2.f;
         float y = (row.second[2] * height + row.second[3] + row.second[6] * height + row.second[7]) / 2.f;
-        float w = row.second[4] * width + row.second[5] - row.second[0] * width - row.second[1];
-        float h = row.second[6] * height + row.second[7] - row.second[2] * height - row.second[3];
+        float w = abs(row.second[4] * width + row.second[5] - row.second[0] * width - row.second[1]);
+        float h = abs(row.second[6] * height + row.second[7] - row.second[2] * height - row.second[3]);
         floor->AddRow(make_pair(Rect(x, y, w, h), row.first));
     }
 
     for (auto room : layout->templateRooms[name][face]) {
         float x = (room.second[0] * width + room.second[1] + room.second[4] * width + room.second[5]) / 2.f;
         float y = (room.second[2] * height + room.second[3] + room.second[6] * height + room.second[7]) / 2.f;
-        float w = room.second[4] * width + room.second[5] - room.second[0] * width - room.second[1];
-        float h = room.second[6] * height + room.second[7] - room.second[2] * height - room.second[3];
+        float w = abs(room.second[4] * width + room.second[5] - room.second[0] * width - room.second[1]);
+        float h = abs(room.second[6] * height + room.second[7] - room.second[2] * height - room.second[3]);
         floor->AddRoom(make_pair(Rect(x, y, w, h), room.first));
     }
 
     floors[basements + level] = floor;
 }
 
-void Building::ReadFloors(float width, float height, int face, string name, unique_ptr<Layout>& layout) {
+void Building::ReadFloors(int face, string name, unique_ptr<Layout>& layout) {
     for (int i = 0; i < basements + layers; i++) {
-        ReadFloor(i, width, height, face, name, layout);
+        ReadFloor(i, face, name, layout);
     }
 }
 
-void Building::ReadFloors(float width, float height, int face, vector<string> names, unique_ptr<Layout>& layout) {
+void Building::ReadFloors(int face, vector<string> names, unique_ptr<Layout>& layout) {
     if (names.size() != basements + layers) {
         THROW_EXCEPTION(InvalidArgumentException, "Template number and building layers mismatch.\n");
     }
 
     for (int i = 0; i < basements + layers; i++) {
-        ReadFloor(i, width, height, face, names[i], layout);
+        ReadFloor(i, face, names[i], layout);
     }
 }
 
@@ -2710,11 +2910,12 @@ int Building::InverseDirection(int direction, int face) {
 
 void BuildingFactory::RegisterBuilding(const string& id, function<unique_ptr<Building>()> creator, vector<float> power) {
     registries[id] = creator;
-    configs[id] = false;
     powers[id] = power;
 }
 
 unique_ptr<Building> BuildingFactory::CreateBuilding(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -2727,9 +2928,7 @@ bool BuildingFactory::CheckRegistered(const string& id) {
 }
 
 void BuildingFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 const unordered_map<string, vector<float>>& BuildingFactory::GetPowers() const {
@@ -2840,7 +3039,8 @@ public:
     virtual float GetAcreageMin() const = 0;
     virtual float GetAcreageMax() const = 0;
 
-    // 内部房间布局
+    // 建筑房间布局
+	virtual Rect LayoutConstruction() = 0;
     virtual void LayoutRooms(RoomFactory *factory, std::unique_ptr<Layout>& layout) = 0;
 
 	// 父类实现方法
@@ -2860,6 +3060,7 @@ public:
 	// 获取/设置属性
 	int GetLayers() const;
 	int GetBasements() const;
+	const Rect GetConstruction() const;
 
 	// 获取/设置组织/房间/楼层
 	std::vector<std::shared_ptr<Component>>& GetComponents();
@@ -2885,11 +3086,12 @@ protected:
 
 	int layers = 1;
 	int basements = 0;
+	Rect construction;
 
 	// 根据布局文件分配房间
-	void ReadFloor(int level, float width, float height, int face, std::string name, std::unique_ptr<Layout>& layout);
-	void ReadFloors(float width, float height, int face, std::string name, std::unique_ptr<Layout>& layout);
-	void ReadFloors(float width, float height, int face, std::vector<std::string> names, std::unique_ptr<Layout>& layout);
+	void ReadFloor(int level, int face, std::string name, std::unique_ptr<Layout>& layout);
+	void ReadFloors(int face, std::string name, std::unique_ptr<Layout>& layout);
+	void ReadFloors(int face, std::vector<std::string> names, std::unique_ptr<Layout>& layout);
 	void AssignRoom(int level, int slot, std::string name, std::shared_ptr<Component> component, RoomFactory* factory);
 	void ArrangeRow(int level, int slot, std::string name, float acreage, std::shared_ptr<Component> component, RoomFactory* factory);
 
@@ -2957,10 +3159,11 @@ void Component::AddRoom(shared_ptr<Room> room) {
 
 void ComponentFactory::RegisterComponent(const string& id, function<unique_ptr<Component>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Component> ComponentFactory::CreateComponent(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -2973,9 +3176,7 @@ bool ComponentFactory::CheckRegistered(const string& id) {
 }
 
 void ComponentFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 
@@ -3040,15 +3241,39 @@ private:
 
 ﻿#include "roadnet_base.h"
 
+#include <queue>
+
+#undef max
+
 
 using namespace std;
 
+const vector<Node>& Roadnet::GetNodes() const {
+    return nodes;
+}
+
+const vector<Connection>& Roadnet::GetConnections() const {
+    return connections;
+}
+
+const vector<shared_ptr<Plot>>& Roadnet::GetPlots() const {
+    return plots;
+}
+
+const std::vector<Connection> Roadnet::AutoNavigate(
+    std::shared_ptr<Plot> start, std::shared_ptr<Plot> end) const {
+    std::vector<Connection> result;
+
+    return result;
+}
+
 void RoadnetFactory::RegisterRoadnet(const string& id, function<unique_ptr<Roadnet>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Roadnet> RoadnetFactory::CreateRoadnet(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -3061,9 +3286,7 @@ bool RoadnetFactory::CheckRegistered(const string& id) {
 }
 
 void RoadnetFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 unique_ptr<Roadnet> RoadnetFactory::GetRoadnet() const {
@@ -3105,9 +3328,13 @@ public:
 	// 父类实现方法
 
     // 提供只读访问接口
-    const std::vector<Node>& GetNodes() const { return nodes; }
-    const std::vector<Connection>& GetConnections() const { return connections; }
-    const std::vector<std::shared_ptr<Plot>>& GetPlots() const { return plots; }
+    const std::vector<Node>& GetNodes() const;
+    const std::vector<Connection>& GetConnections() const;
+    const std::vector<std::shared_ptr<Plot>>& GetPlots() const;
+
+    // 自动寻路
+    const std::vector<Connection> AutoNavigate(
+        std::shared_ptr<Plot> start, std::shared_ptr<Plot> end) const;
 
 protected:
     std::vector<Node> nodes;
@@ -3185,10 +3412,11 @@ void Room::SetFace(int face) {
 
 void RoomFactory::RegisterRoom(const string& id, function<unique_ptr<Room>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Room> RoomFactory::CreateRoom(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -3201,9 +3429,7 @@ bool RoomFactory::CheckRegistered(const string& id) {
 }
 
 void RoomFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 
@@ -3290,16 +3516,100 @@ private:
 // ===== .\Dependence\map\terrain_base.cpp =====
 
 ﻿#include "terrain_base.h"
+#include "../common/utility.h"
 
 
 using namespace std;
 
+int Terrain::FloodTerrain(int x, int y, int num, bool overwrite, int width, int height,
+    function<bool(int, int, const string)> set, function<string(int, int)> get) const {
+    vector<pair<int, int>> q;
+
+    if (x < 0 || x >= width - 1 || y < 0 || y >= width - 1)return 0;
+    if (get(x, y) == GetType())return 0;
+
+    set(x, y, GetType());
+    int count = 1;
+
+    for (int i = 0; i < 4; ++i) {
+        int nx = x + dx[i];
+        int ny = y + dy[i];
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            q.push_back(make_pair(nx, ny));
+        }
+    }
+
+    while (count < num && !q.empty()) {
+        int idx = GetRandom((int)q.size());
+        pair<int, int> current = q[idx];
+        int cx = current.first;
+        int cy = current.second;
+
+        q[idx] = q.back();
+        q.pop_back();
+
+        set(cx, cy, GetType());
+        ++count;
+
+        UpdateBoundary(cx, cy, q, overwrite, width, height, set, get);
+    }
+
+    return count;
+}
+
+bool Terrain::CheckBoundary(int x, int y, bool overwrite, int width, int height,
+    function<bool(int, int, const string)> set, function<string(int, int)> get) const {
+    if (x == 0 || x == width - 1 || y == 0 || y == height - 1) return true;
+    for (int i = 0; i < 4; ++i) {
+        int nx = x + dx[i];
+        int ny = y + dy[i];
+        if (overwrite) {
+            if (get(nx, ny) != GetType()) return true;
+        }
+        else {
+            if (get(nx, ny) == "plain") return true;
+        }
+    }
+    return false;
+}
+
+void Terrain::UpdateBoundary(int x, int y, vector<pair<int, int>>& q, bool overwrite, int width, int height,
+    function<bool(int, int, const string)> set, function<string(int, int)> get) const {
+    for (int i = 0; i < 4; ++i) {
+        int nx = x + dx[i];
+        int ny = y + dy[i];
+        if (nx >= 0 && nx < width &&
+            ny >= 0 && ny < height &&
+            CheckBoundary(nx, ny, overwrite, width, height, set, get)) {
+            bool overlap = false;
+            for (auto b : q) {
+                if (b.first == nx && b.second == ny)overlap = true;
+            }
+            if (!overlap)q.push_back(make_pair(nx, ny));
+        }
+    }
+}
+
+void Terrain::ShapeFilter(int x, int y, int width, int height,
+    function<bool(int, int, const string)> set, function<string(int, int)> get, int side, float threshold) const {
+    if (get(x, y) == GetType())return;
+
+    int count = 0;
+    for (int i = x - side; i <= x + side; i++) {
+        for (int j = y - side; j <= y + side; j++) {
+            if (get(i, j) == GetType())count++;
+        }
+    }
+    if (count > (side * 2 + 1) * (side * 2 + 1) * threshold)set(x, y, GetType());
+}
+
 void TerrainFactory::RegisterTerrain(const string& id, function<unique_ptr<Terrain>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Terrain> TerrainFactory::CreateTerrain(const string& id) const {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -3312,15 +3622,15 @@ bool TerrainFactory::CheckRegistered(const string& id) const {
 }
 
 void TerrainFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 vector<unique_ptr<Terrain>> TerrainFactory::GetTerrains() const {
     vector<unique_ptr<Terrain>> terrains;
     for (auto r : registries) {
-        terrains.push_back(r.second());
+        if (configs.find(r.first)->second) {
+            terrains.push_back(r.second());
+        }
     }
     return terrains;
 }
@@ -3349,7 +3659,7 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
-    // 动态返回生成优先级
+    // 动态返回生成优先级，高优先级会被低优先级覆盖
     virtual float GetPriority() const = 0;
 
     // 在地图上生成地形
@@ -3358,7 +3668,20 @@ public:
 
 	// 父类实现方法
 
+    // 地形填充，若ovewrite为true，则全图填充，否则只填充平原
+    int FloodTerrain(int x, int y, int num, bool overwrite, int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const;
+
 protected:
+    // 地形填充辅助内容
+    std::vector<int> dx = { -1, 1, 0, 0 };
+    std::vector<int> dy = { 0, 0, -1, 1 };
+    bool CheckBoundary(int x, int y, bool overwrite, int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const;
+    void UpdateBoundary(int x, int y, std::vector<std::pair<int, int>>& q, bool overwrite, int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const;
+    void ShapeFilter(int x, int y, int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get, int side = 1, float threshold = 0.5f) const;
 };
 
 class TerrainFactory {
@@ -3620,11 +3943,12 @@ void Zone::ArrangeBuildings() {
 void ZoneFactory::RegisterZone(const string& id,
     function<unique_ptr<Zone>()> creator,  GeneratorFunc generator) {
     registries[id] = creator;
-    configs[id] = false;
     generators[id] = generator;
 }
 
 unique_ptr<Zone> ZoneFactory::CreateZone(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -3637,9 +3961,7 @@ bool ZoneFactory::CheckRegistered(const string& id) {
 }
 
 void ZoneFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 void ZoneFactory::GenerateAll(const vector<shared_ptr<Plot>>& plots, BuildingFactory* factory) {
@@ -3746,10 +4068,11 @@ using namespace std;
 
 void AssetFactory::RegisterAsset(const string& id, function<unique_ptr<Asset>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Asset> AssetFactory::CreateAsset(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -3762,9 +4085,7 @@ bool AssetFactory::CheckRegistered(const string& id) {
 }
 
 void AssetFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 
@@ -3814,20 +4135,29 @@ private:
 
 using namespace std;
 
-void Job::SetCalendar(std::shared_ptr<Calendar>& calendar) {
+void Job::SetCalendar(shared_ptr<Calendar> calendar) {
     this->calendar = calendar;
 }
 
-std::shared_ptr<Calendar>& Job::GetCalendar() {
+shared_ptr<Calendar> Job::GetCalendar() const {
     return calendar;
+}
+
+void Job::SetPosition(shared_ptr<Room> room) {
+    position = room;
+}
+
+shared_ptr<Room> Job::GetPosition() const {
+    return position;
 }
 
 void JobFactory::RegisterJob(const string& id, function<unique_ptr<Job>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Job> JobFactory::CreateJob(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -3840,9 +4170,7 @@ bool JobFactory::CheckRegistered(const string& id) {
 }
 
 void JobFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 
@@ -3852,6 +4180,7 @@ void JobFactory::SetConfig(string name, bool config) {
 ﻿#pragma once
 
 #include "../common/utility.h"
+#include "../map/room_base.h"
 #include "../society/calendar_base.h"
 
 #include <string>
@@ -3872,13 +4201,23 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
+    // 职业剧本
+    virtual std::vector<std::string> GetScripts() const = 0;
+
 	// 父类实现方法
-    void SetCalendar(std::shared_ptr<Calendar> &calendar);
-    std::shared_ptr<Calendar> &GetCalendar();
+
+	// 设置/获取日历
+    void SetCalendar(std::shared_ptr<Calendar> calendar);
+    std::shared_ptr<Calendar> GetCalendar() const;
+
+    // 设置/获取工位
+    void SetPosition(std::shared_ptr<Room> room);
+    std::shared_ptr<Room> GetPosition() const;
 
 protected:
     std::shared_ptr<Calendar> calendar;
 
+    std::shared_ptr<Room> position;
 };
 
 class JobFactory {
@@ -3897,16 +4236,18 @@ private:
 
 ﻿#include "name_base.h"
 #include "job_base.h"
+#include "scheduler_base.h"
 
 
 using namespace std;
 
 void NameFactory::RegisterName(const string& id, function<unique_ptr<Name>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Name> NameFactory::CreateName(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -3919,9 +4260,7 @@ bool NameFactory::CheckRegistered(const string& id) {
 }
 
 void NameFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 unique_ptr<Name> NameFactory::GetName() const {
@@ -3984,13 +4323,30 @@ private:
 
 using namespace std;
 
+Scheduler::Scheduler() {
+    status = "home_rest";
+}
+
+Scheduler::~Scheduler() {
+
+}
+
+std::string Scheduler::GetStatus() {
+    return status;
+}
+
+void Scheduler::SetStatus(std::string status) {
+    this->status = status;
+}
+
 void SchedulerFactory::RegisterScheduler(const string& id, function<unique_ptr<Scheduler>()> creator, float power) {
     registries[id] = creator;
-    configs[id] = false;
     powers[id] = power;
 }
 
 unique_ptr<Scheduler> SchedulerFactory::CreateScheduler(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -4003,9 +4359,7 @@ bool SchedulerFactory::CheckRegistered(const string& id) {
 }
 
 void SchedulerFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 const unordered_map<string, float>& SchedulerFactory::GetPowers() const {
@@ -4025,8 +4379,8 @@ const unordered_map<string, float>& SchedulerFactory::GetPowers() const {
 
 class Scheduler {
 public:
-    Scheduler() = default;
-    virtual ~Scheduler() = default;
+    Scheduler();
+    virtual ~Scheduler();
 
     // 子类实现方法
 
@@ -4040,7 +4394,12 @@ public:
 
     // 父类实现方法
 
+    // 管理状态
+    std::string GetStatus();
+    void SetStatus(std::string status);
+
 protected:
+    std::string status;
 };
 
 class SchedulerFactory {
@@ -4066,10 +4425,11 @@ using namespace std;
 
 void CalendarFactory::RegisterCalendar(const string& id, function<unique_ptr<Calendar>()> creator) {
     registries[id] = creator;
-    configs[id] = false;
 }
 
 unique_ptr<Calendar> CalendarFactory::CreateCalendar(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -4082,9 +4442,7 @@ bool CalendarFactory::CheckRegistered(const string& id) {
 }
 
 void CalendarFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 
@@ -4114,7 +4472,8 @@ public:
     virtual std::string GetType() const = 0;
     virtual std::string GetName() const = 0;
 
-    virtual std::pair<Time, Time> WorkingTime(Time date) const = 0;
+    virtual Time SigninTime(Time date) const = 0;
+    virtual Time SignoutTime(Time date) const = 0;
 
     // 父类实现方法
 
@@ -4171,11 +4530,12 @@ void Organization::AddVacancy(shared_ptr<Component> component, vector<shared_ptr
 
 void OrganizationFactory::RegisterOrganization(const string& id, function<unique_ptr<Organization>()> creator, float power) {
     registries[id] = creator;
-    configs[id] = false;
     powers[id] = power;
 }
 
 unique_ptr<Organization> OrganizationFactory::CreateOrganization(const string& id) {
+    if(configs.find(id) == configs.end() || !configs.find(id)->second)return nullptr;
+    
     auto it = registries.find(id);
     if (it != registries.end()) {
         return it->second();
@@ -4188,9 +4548,7 @@ bool OrganizationFactory::CheckRegistered(const string& id) {
 }
 
 void OrganizationFactory::SetConfig(string name, bool config) {
-    if (configs.find(name) != configs.end()) {
-        configs[name] = config;
-    }
+    configs[name] = config;
 }
 
 const unordered_map<string, float>& OrganizationFactory::GetPowers() const {
@@ -4235,16 +4593,19 @@ public:
 	virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const = 0;
 
 	// 根据实际组合安排工作岗位
-    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageVacancies(
+    virtual std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> ArrageVacancies(
         std::vector<std::pair<std::string, int>> components) const = 0;
 
     // 设定工作日历
     virtual void SetCalendar(CalendarFactory* factory) = 0;
 
-    // 员工入职
-    virtual std::vector<std::shared_ptr<Job>> EnrollEmployee(std::vector<int> ids);
+    // 分配工位
+    virtual void ArrangeRooms() = 0;
 
 	// 父类实现方法
+
+    // 员工入职
+    virtual std::vector<std::shared_ptr<Job>> EnrollEmployee(std::vector<int> ids);
 
 	// 管理职位
     std::vector<std::pair<std::shared_ptr<Component>, std::vector<std::pair<std::shared_ptr<Job>, int>>>> GetJobs() const;
@@ -4456,12 +4817,16 @@ private:
 
 using namespace std;
 
-TestAsset::TestAsset() {
-
+string ZoneAsset::GetId() {
+	return "zoneAsset";
 }
 
-TestAsset::~TestAsset() {
+string ZoneAsset::GetType() const {
+	return "zoneAsset";
+}
 
+string ZoneAsset::GetName() const {
+	return "园区资产";
 }
 
 ZoneAsset::ZoneAsset(shared_ptr<Zone> zone) : zone(zone) {
@@ -4480,6 +4845,18 @@ void ZoneAsset::SetZone(shared_ptr<Zone> zone) {
 	this->zone = zone;
 }
 
+string BuildingAsset::GetId() {
+	return "buildingAsset";
+}
+
+string BuildingAsset::GetType() const {
+	return "buildingAsset";
+}
+
+string BuildingAsset::GetName() const {
+	return "建筑资产";
+}
+
 BuildingAsset::BuildingAsset(shared_ptr<Building> building) : building(building) {
 
 }
@@ -4494,6 +4871,18 @@ shared_ptr<Building> BuildingAsset::GetBuilding() {
 
 void BuildingAsset::SetBuilding(shared_ptr<Building> building) {
 	this->building = building;
+}
+
+string RoomAsset::GetId() {
+	return "roomAsset";
+}
+
+string RoomAsset::GetType() const {
+	return "roomAsset";
+}
+
+string RoomAsset::GetName() const {
+	return "房间资产";
 }
 
 RoomAsset::RoomAsset(shared_ptr<Room> room) : room(room) {
@@ -4524,29 +4913,15 @@ void RoomAsset::SetRoom(shared_ptr<Room> room) {
 // 子类注册函数
 typedef void (*RegisterModAssetsFunc)(AssetFactory* factory);
 
-// 主程序检测子类
-class TestAsset : public Asset {
-public:
-    TestAsset();
-    ~TestAsset();
-
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试资产"; }
-
-private:
-
-};
-
 // 园区资产子类
 class ZoneAsset : public Asset {
 public:
     ZoneAsset(std::shared_ptr<Zone> zone);
     ~ZoneAsset();
 
-    static std::string GetId() { return "zoneAsset"; }
-    virtual std::string GetType() const override { return "zoneAsset"; }
-    virtual std::string GetName() const override { return "园区资产"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
     std::shared_ptr<Zone> GetZone();
     void SetZone(std::shared_ptr<Zone> zone);
@@ -4561,9 +4936,9 @@ public:
     BuildingAsset(std::shared_ptr<Building> building);
     ~BuildingAsset();
 
-    static std::string GetId() { return "buildingAsset"; }
-    virtual std::string GetType() const override { return "buildingAsset"; }
-    virtual std::string GetName() const override { return "建筑资产"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
     std::shared_ptr<Building> GetBuilding();
     void SetBuilding(std::shared_ptr<Building> building);
@@ -4578,9 +4953,9 @@ public:
     RoomAsset(std::shared_ptr<Room> room);
     ~RoomAsset();
 
-    static std::string GetId() { return "roomAsset"; }
-    virtual std::string GetType() const override { return "roomAsset"; }
-    virtual std::string GetName() const override { return "房间资产"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
     std::shared_ptr<Room> GetRoom();
     void SetRoom(std::shared_ptr<Room> room);
@@ -4597,53 +4972,224 @@ private:
 
 using namespace std;
 
-int TestBuilding::count = 0;
+int FlatBuilding::count = 0;
+
+FlatBuilding::FlatBuilding() {
+    name = count++;
+}
+
+string FlatBuilding::GetId() {
+    return "flat";
+}
+
+string FlatBuilding::GetType() const {
+    return "flat";
+}
+
+string FlatBuilding::GetName() const {
+    return string("公寓建筑") + to_string(name);
+}
+
+vector<float> FlatBuilding::GetPower() {
+    return { 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
+}
+
+float FlatBuilding::RandomAcreage() const {
+    return 600.f * powf(1.f + GetRandom(1000) / 1000.f * 3.f, 2);
+}
+
+float FlatBuilding::GetAcreageMin() const {
+    return 600.f;
+}
+
+float FlatBuilding::GetAcreageMax() const {
+    return 9600.f;
+}
+
+Rect FlatBuilding::LayoutConstruction() {
+    if (GetAcreage() < 1000) {
+        layers = 1 + GetRandom(4);
+    }
+    else if (GetAcreage() < 4000) {
+        layers = 4 + GetRandom(7);
+    }
+    else {
+        layers = 8 + GetRandom(13);
+    }
+    basements = 1;
+
+    return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
+}
+
+void FlatBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout) {
+    int direction = 0;
+    if (GetSizeX() > GetSizeY()) {
+        if (GetSizeY() > 3.f) {
+            direction = GetRandom(2);
+        }
+        else {
+            direction = 2 + GetRandom(2);
+        }
+    }
+    else {
+        if (GetSizeX() > 3.f) {
+            direction = 2 + GetRandom(2);
+        }
+        else {
+            direction = GetRandom(2);
+        }
+    }
+
+    auto component = CreateComponent<FlatComponent>();
+    ReadFloor(-1, direction, "single_room", layout);
+    AssignRoom(-1, 0, "parking", component, factory);
+    for (int i = 0; i < layers; i++) {
+        ReadFloor(i, direction, "straight_linear", layout);
+        ArrangeRow(i, 0, "flat", 100.f, component, factory);
+        ArrangeRow(i, 1, "flat", 100.f, component, factory);
+    }
+}
+
+int HotelBuilding::count = 0;
+
+HotelBuilding::HotelBuilding() {
+    name = count++;
+}
+
+string HotelBuilding::GetId() {
+    return "hotel";
+}
+
+string HotelBuilding::GetType() const {
+    return "hotel";
+}
+
+string HotelBuilding::GetName() const {
+    return string("酒店建筑") + to_string(name);
+}
+
+vector<float> HotelBuilding::GetPower() {
+    return { 0.f, .5f, .5f, .5f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
+}
+
+float HotelBuilding::RandomAcreage() const {
+    return 1000.f * powf(1.f + GetRandom(1000) / 1000.f * 3.f, 2);
+}
+
+float HotelBuilding::GetAcreageMin() const {
+    return 1000.f;
+}
+
+float HotelBuilding::GetAcreageMax() const {
+    return 16000.f;
+}
+
+Rect HotelBuilding::LayoutConstruction() {
+    if (GetAcreage() < 3000) {
+        layers = 2 + GetRandom(4);
+    }
+    else if (GetAcreage() < 10000) {
+        layers = 4 + GetRandom(7);
+    }
+    else {
+        layers = 8 + GetRandom(13);
+    }
+    basements = 1;
+
+    return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
+}
+
+void HotelBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout) {
+    int direction = 0;
+    if (GetSizeX() > GetSizeY()) {
+        if (GetSizeY() > 3.f) {
+            direction = GetRandom(2);
+        }
+        else {
+            direction = 2 + GetRandom(2);
+        }
+    }
+    else {
+        if (GetSizeX() > 3.f) {
+            direction = 2 + GetRandom(2);
+        }
+        else {
+            direction = GetRandom(2);
+        }
+    }
+
+    auto component = CreateComponent<HotelComponent>();
+    ReadFloor(-1, direction, "single_room", layout);
+    AssignRoom(-1, 0, "parking", component, factory);
+    ReadFloor(0, direction, "lobby_linear", layout);
+    AssignRoom(0, 0, "lobby", component, factory);
+    ArrangeRow(0, 0, "hotel", 100.f, component, factory);
+    ArrangeRow(0, 1, "hotel", 100.f, component, factory);
+    for (int i = 1; i < layers; i++) {
+        ReadFloor(i, direction, "straight_linear", layout);
+        ArrangeRow(i, 0, "hotel", 100.f, component, factory);
+        ArrangeRow(i, 1, "hotel", 100.f, component, factory);
+    }
+}
+
+
+
 
 
 // ===== .\Forever\building.h =====
 
 ﻿#pragma once
 
+#include "building_base.h"
+
 #include "room.h"
 #include "component.h"
-#include "building_base.h"
 
 
 // 子类注册函数
 typedef void (*RegisterModBuildingsFunc)(BuildingFactory* factory);
 
-// 主程序检测子类
-class TestBuilding : public Building {
+// 公寓建筑
+class FlatBuilding : public Building {
 public:
-    TestBuilding() {
-        name = count++;
-        layers = 2;
-        basements = 1;
-    }
+    FlatBuilding();
 
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return std::string("测试建筑") + std::to_string(name); }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
-    static std::vector<float> GetPower() { return std::vector<float>(13, 1.f); }
+    static std::vector<float> GetPower();
 
-    virtual float RandomAcreage() const override { return 10000.f; }
-    virtual float GetAcreageMin() const override { return 2000.f; }
-    virtual float GetAcreageMax() const override { return 20000.f; }
+    virtual float RandomAcreage() const override;
+    virtual float GetAcreageMin() const override;
+    virtual float GetAcreageMax() const override;
 
-    virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override {
-        int direction = GetRandom(4);
+    virtual Rect LayoutConstruction() override;
+    virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override;
 
-        auto component = CreateComponent<TestComponent>();
-        ReadFloor(-1, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "single_room", layout);
-        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "straight_linear", layout);
-        ReadFloor(1, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "straight_linear", layout);
-        AssignRoom(-1, 0, "test", component, factory);
-        ArrangeRow(0, 0, "test", 120.f, component, factory);
-        ArrangeRow(0, 1, "test", 120.f, component, factory);
-        ArrangeRow(1, 0, "test", 120.f, component, factory);
-        ArrangeRow(1, 1, "test", 120.f, component, factory);
-    }
+private:
+    static int count;
+
+    int name;
+};
+
+// 酒店建筑
+class HotelBuilding : public Building {
+public:
+    HotelBuilding();
+
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
+
+    static std::vector<float> GetPower();
+
+    virtual float RandomAcreage() const override;
+    virtual float GetAcreageMin() const override;
+    virtual float GetAcreageMax() const override;
+
+    virtual Rect LayoutConstruction() override;
+    virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override;
 
 private:
     static int count;
@@ -4659,7 +5205,78 @@ private:
 
 using namespace std;
 
+StandardCalendar::StandardCalendar() {
 
+}
+
+StandardCalendar::~StandardCalendar() {
+
+}
+
+string StandardCalendar::GetId() {
+	return "standard";
+}
+
+string StandardCalendar::GetType() const {
+	return "standard";
+}
+
+string StandardCalendar::GetName() const {
+	return "标准双休日程";
+}
+
+Time StandardCalendar::SigninTime(Time date) const {
+	int day = date.DayOfWeek();
+	if (day >= 0 && day <= 4) {
+		Time t(string("09:00:00.000"));
+		t.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+		return t;
+	}
+	else return Time();
+}
+
+Time StandardCalendar::SignoutTime(Time date) const {
+	int day = date.DayOfWeek();
+	if (day >= 0 && day <= 4) {
+		Time t(string("17:00:00.000"));
+		t.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+		return t;
+	}
+	else return Time();
+}
+
+FullCalendar::FullCalendar() {
+	on = Time(string("06:00:00.000"));
+	off = Time(string("18:00:00.000"));
+}
+
+FullCalendar::~FullCalendar() {
+
+}
+
+string FullCalendar::GetId() {
+	return "full";
+}
+
+string FullCalendar::GetType() const {
+	return "full";
+}
+
+string FullCalendar::GetName() const {
+	return "全勤无休日程";
+}
+
+Time FullCalendar::SigninTime(Time date) const {
+	Time t = on;
+	t.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+	return t;
+}
+
+Time FullCalendar::SignoutTime(Time date) const {
+	Time t = off;
+	t.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+	return t;
+}
 
 
 // ===== .\Forever\calendar.h =====
@@ -4675,21 +5292,35 @@ using namespace std;
 // 子类注册函数
 typedef void (*RegisterModCalendarsFunc)(CalendarFactory* factory);
 
-// 主程序检测子类
-class TestCalendar : public Calendar {
+// 标准双休日程
+class StandardCalendar : public Calendar {
 public:
-	TestCalendar() {}
-	virtual ~TestCalendar() {}
+	StandardCalendar();
+	virtual ~StandardCalendar();
 
-	static std::string GetId() { return "test"; }
-	virtual std::string GetType() const override { return "test"; }
-	virtual std::string GetName() const override { return "测试日程"; }
+	static std::string GetId();
+	virtual std::string GetType() const override;
+	virtual std::string GetName() const override;
 
-	virtual std::pair<Time, Time> WorkingTime(Time date) const override {
-		int day = date.DayOfWeek();
-		if (day >= 1 && day <= 5)return { Time("09:00:00.000"), Time("09:00:00.000") };
-		else return { Time(), Time() };
-	}
+	virtual Time SigninTime(Time date) const override;
+	virtual Time SignoutTime(Time date) const override;
+};
+
+// 全勤无休日程
+class FullCalendar : public Calendar {
+public:
+	FullCalendar();
+	virtual ~FullCalendar();
+
+	static std::string GetId();
+	virtual std::string GetType() const override;
+	virtual std::string GetName() const override;
+
+	virtual Time SigninTime(Time date) const override;
+	virtual Time SignoutTime(Time date) const override;
+
+private:
+	Time on, off;
 };
 
 
@@ -4700,12 +5331,20 @@ public:
 
 using namespace std;
 
-std::vector<std::shared_ptr<Change>> SetValueChange::ApplyChange() {
-	return std::vector<std::shared_ptr<Change>>();
+vector<shared_ptr<Change>> SetValueChange::ApplyChange() {
+	return vector<shared_ptr<Change>>();
 }
 
-std::vector<std::shared_ptr<Change>> RemoveValueChange::ApplyChange() {
-	return std::vector<std::shared_ptr<Change>>();
+vector<shared_ptr<Change>> RemoveValueChange::ApplyChange() {
+	return vector<shared_ptr<Change>>();
+}
+
+vector<shared_ptr<Change>> SpawnNpcChange::ApplyChange() {
+	return vector<shared_ptr<Change>>();
+}
+
+vector<shared_ptr<Change>> AddOptionChange::ApplyChange() {
+	return vector<shared_ptr<Change>>();
 }
 
 
@@ -4732,7 +5371,7 @@ public:
 	virtual ~SetValueChange() {}
 
 	static std::string GetId() { return "set_value"; }
-    virtual std::string GetType() const override { return "set_value"; }
+	virtual std::string GetType() const override { return "set_value"; }
 	virtual std::string GetName() const override { return "set_value"; }
 
 	virtual std::vector<std::shared_ptr<Change>> ApplyChange() override;
@@ -4750,13 +5389,13 @@ private:
 class RemoveValueChange : public Change {
 public:
 	RemoveValueChange() {}
-	RemoveValueChange(std::string name)
+	RemoveValueChange(std::string variable)
 		: variable(variable) {
 	}
 	virtual ~RemoveValueChange() {}
 
 	static std::string GetId() { return "remove_value"; }
-    virtual std::string GetType() const override { return "remove_value"; }
+	virtual std::string GetType() const override { return "remove_value"; }
 	virtual std::string GetName() const override { return "remove_value"; }
 
 	void SetVariable(std::string variable) { this->variable = variable; }
@@ -4768,6 +5407,58 @@ private:
 	std::string variable;
 };
 
+class SpawnNpcChange : public Change {
+public:
+	SpawnNpcChange() {}
+	SpawnNpcChange(std::string target, std::string gender, std::string birthday)
+		: target(target), gender(gender), birthday(birthday) {
+	}
+	virtual ~SpawnNpcChange() {}
+
+	static std::string GetId() { return "spawn_npc"; }
+	virtual std::string GetType() const override { return "spawn_npc"; }
+	virtual std::string GetName() const override { return "spawn_npc"; }
+
+	void SetTarget(std::string target) { this->target = target; }
+	std::string GetTarget() { return target; }
+	void SetGender(std::string gender) { this->gender = gender; }
+	std::string GetGender() { return gender; }
+	void SetBirthday(std::string birthday) { this->birthday = birthday; }
+	std::string GetBirthday() { return birthday; }
+
+	virtual std::vector<std::shared_ptr<Change>> ApplyChange();
+
+private:
+	std::string target;
+	std::string gender;
+	std::string birthday;
+};
+
+class AddOptionChange : public Change {
+public:
+	AddOptionChange() {}
+	AddOptionChange(std::string target, std::string option)
+		: target(target), option(option) {
+	}
+	virtual ~AddOptionChange() {}
+
+	static std::string GetId() { return "add_option"; }
+	virtual std::string GetType() const override { return "add_option"; }
+	virtual std::string GetName() const override { return "add_option"; }
+
+	void SetTarget(std::string target) { this->target = target; }
+	std::string GetTarget() { return target; }
+	void SetOption(std::string option) { this->option = option; }
+	std::string GetOption() { return option; }
+
+	virtual std::vector<std::shared_ptr<Change>> ApplyChange();
+
+private:
+	std::string target;
+	std::string option;
+};
+
+
 // ===== .\Forever\component.cpp =====
 
 ﻿#include "component.h"
@@ -4775,6 +5466,29 @@ private:
 
 using namespace std;
 
+string FlatComponent::GetId() {
+	return "flat";
+}
+
+string FlatComponent::GetType() const {
+	return "flat";
+}
+
+string FlatComponent::GetName() const {
+	return "公寓组合";
+}
+
+string HotelComponent::GetId() {
+	return "hotel";
+}
+
+string HotelComponent::GetType() const {
+	return "hotel";
+}
+
+string HotelComponent::GetName() const {
+	return "酒店组合";
+}
 
 
 // ===== .\Forever\component.h =====
@@ -4787,12 +5501,20 @@ using namespace std;
 // 子类注册函数
 typedef void (*RegisterModComponentsFunc)(ComponentFactory* factory);
 
-// 主程序检测子类
-class TestComponent : public Component {
+// 公寓组合
+class FlatComponent : public Component {
 public:
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试组合"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
+};
+
+// 酒店组合
+class HotelComponent : public Component {
+public:
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 };
 
 
@@ -5025,6 +5747,21 @@ private:
 
 using namespace std;
 
+string HotelCleanerJob::GetId() {
+	return "hotel_cleaner";
+}
+
+string HotelCleanerJob::GetType() const {
+	return "hotel_cleaner";
+}
+
+string HotelCleanerJob::GetName() const {
+	return "酒店保洁";
+}
+
+vector<string> HotelCleanerJob::GetScripts() const {
+	return { "../Resources/scripts/jobs/hotel_cleaner.json" };
+}
 
 
 // ===== .\Forever\job.h =====
@@ -5037,12 +5774,14 @@ using namespace std;
 // 子类注册函数
 typedef void (*RegisterModJobsFunc)(JobFactory* factory);
 
-// 主程序检测子类
-class TestJob : public Job {
+// 酒店保洁职业
+class HotelCleanerJob : public Job {
 public:
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试职业"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
+
+	virtual std::vector<std::string> GetScripts() const override;
 };
 
 
@@ -5154,8 +5893,10 @@ Map::~Map() {
 }
 
 void Map::InitTerrains() {
-    terrainFactory->RegisterTerrain(TestTerrain::GetId(),
-        []() { return make_unique<TestTerrain>(); });
+    terrainFactory->RegisterTerrain(OceanTerrain::GetId(),
+        []() { return make_unique<OceanTerrain>(); });
+    terrainFactory->RegisterTerrain(MountainTerrain::GetId(),
+        []() { return make_unique<MountainTerrain>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -5175,7 +5916,7 @@ void Map::InitTerrains() {
     }
 
 #ifdef MOD_TEST
-    auto terrainList = { "test", "mod" };
+    auto terrainList = { "mod" };
     for (const auto& terrainId : terrainList) {
         if (terrainFactory->CheckRegistered(terrainId)) {
             auto terrain = terrainFactory->CreateTerrain(terrainId);
@@ -5190,7 +5931,7 @@ void Map::InitTerrains() {
 }
 
 void Map::InitRoadnets() {
-    roadnetFactory->RegisterRoadnet(TestRoadnet::GetId(), []() { return make_unique<TestRoadnet>(); });
+    roadnetFactory->RegisterRoadnet(JingRoadnet::GetId(), []() { return make_unique<JingRoadnet>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -5210,11 +5951,10 @@ void Map::InitRoadnets() {
     }
 
 #ifdef MOD_TEST
-    auto roadnetList = { "test", "mod" };
+    auto roadnetList = { "mod" };
     for (const auto& roadnetId : roadnetList) {
         if (roadnetFactory->CheckRegistered(roadnetId)) {
-            auto roadnet = roadnetFactory->CreateRoadnet(roadnetId);
-            debugf(("Created roadnet: " + roadnet->GetName() + " (ID: " + roadnetId + ").\n").data());
+            debugf("Created roadnet: mod.\n");
         }
         else {
             debugf("Roadnet not registered: %s.\n", roadnetId);
@@ -5225,8 +5965,8 @@ void Map::InitRoadnets() {
 }
 
 void Map::InitZones() {
-    zoneFactory->RegisterZone(TestZone::GetId(),
-        []() { return make_unique<TestZone>(); }, TestZone::ZoneGenerator);
+    zoneFactory->RegisterZone(FlatZone::GetId(),
+        []() { return make_unique<FlatZone>(); }, FlatZone::ZoneGenerator);
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -5246,7 +5986,7 @@ void Map::InitZones() {
     }
 
 #ifdef MOD_TEST
-    auto zoneList = { "test", "mod" };
+    auto zoneList = { "mod" };
     for (const auto& zoneId : zoneList) {
         if (zoneFactory->CheckRegistered(zoneId)) {
             auto zone = zoneFactory->CreateZone(zoneId);
@@ -5261,8 +6001,10 @@ void Map::InitZones() {
 }
 
 void Map::InitBuildings() {
-    buildingFactory->RegisterBuilding(TestBuilding::GetId(),
-        []() { return make_unique<TestBuilding>(); }, TestBuilding::GetPower());
+    buildingFactory->RegisterBuilding(FlatBuilding::GetId(),
+        []() { return make_unique<FlatBuilding>(); }, FlatBuilding::GetPower());
+    buildingFactory->RegisterBuilding(HotelBuilding::GetId(),
+        []() { return make_unique<HotelBuilding>(); }, HotelBuilding::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -5282,7 +6024,7 @@ void Map::InitBuildings() {
     }
 
 #ifdef MOD_TEST
-    auto buildingList = { "test", "mod" };
+    auto buildingList = { "mod" };
     for (const auto& buildingId : buildingList) {
         if (buildingFactory->CheckRegistered(buildingId)) {
             auto building = buildingFactory->CreateBuilding(buildingId);
@@ -5297,7 +6039,8 @@ void Map::InitBuildings() {
 }
 
 void Map::InitComponents() {
-    componentFactory->RegisterComponent(TestComponent::GetId(), []() { return make_unique<TestComponent>(); });
+    componentFactory->RegisterComponent(FlatComponent::GetId(), []() { return make_unique<FlatComponent>(); });
+    componentFactory->RegisterComponent(HotelComponent::GetId(), []() { return make_unique<HotelComponent>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -5317,7 +6060,7 @@ void Map::InitComponents() {
     }
 
 #ifdef MOD_TEST
-    auto componentList = { "test", "mod" };
+    auto componentList = { "mod" };
     for (const auto& componentId : componentList) {
         if (componentFactory->CheckRegistered(componentId)) {
             auto component = componentFactory->CreateComponent(componentId);
@@ -5332,7 +6075,10 @@ void Map::InitComponents() {
 }
 
 void Map::InitRooms() {
-    roomFactory->RegisterRoom(TestRoom::GetId(), []() { return make_unique<TestRoom>(); });
+    roomFactory->RegisterRoom(ParkingRoom::GetId(), []() { return make_unique<ParkingRoom>(); });
+    roomFactory->RegisterRoom(FlatRoom::GetId(), []() { return make_unique<FlatRoom>(); });
+    roomFactory->RegisterRoom(HotelRoom::GetId(), []() { return make_unique<HotelRoom>(); });
+    roomFactory->RegisterRoom(LobbyRoom::GetId(), []() { return make_unique<LobbyRoom>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -5352,7 +6098,7 @@ void Map::InitRooms() {
     }
 
 #ifdef MOD_TEST
-    auto roomList = { "test", "mod" };
+    auto roomList = { "mod" };
     for (const auto& roomId : roomList) {
         if (roomFactory->CheckRegistered(roomId)) {
             auto room = roomFactory->CreateRoom(roomId);
@@ -5371,35 +6117,35 @@ void Map::ReadConfigs(string path) const {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
     }
 
-    Json::Reader reader;
-    Json::Value root;
+    JsonReader reader;
+    JsonValue root;
 
     ifstream fin(path);
     if (!fin.is_open()) {
         THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
     }
-    if (reader.parse(fin, root)) {
+    if (reader.Parse(fin, root)) {
         for (auto terrain : root["mods"]["terrain"]) {
-            terrainFactory->SetConfig(terrain.asString(), true);
+            terrainFactory->SetConfig(terrain.AsString(), true);
         }
-        roadnetFactory->SetConfig(root["mods"]["roadnet"].asString(), true);
+        roadnetFactory->SetConfig(root["mods"]["roadnet"].AsString(), true);
         for (auto zone : root["mods"]["zone"]) {
-            zoneFactory->SetConfig(zone.asString(), true);
+            zoneFactory->SetConfig(zone.AsString(), true);
         }
         for (auto building : root["mods"]["building"]) {
-            buildingFactory->SetConfig(building.asString(), true);
+            buildingFactory->SetConfig(building.AsString(), true);
         }
         for (auto component : root["mods"]["component"]) {
-            componentFactory->SetConfig(component.asString(), true);
+            componentFactory->SetConfig(component.AsString(), true);
         }
         for (auto room : root["mods"]["room"]) {
-            roomFactory->SetConfig(room.asString(), true);
+            roomFactory->SetConfig(room.AsString(), true);
         }
 
     }
     else {
         fin.close();
-        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
     }
     fin.close();
 }
@@ -5437,7 +6183,7 @@ int Map::Init(int blockX, int blockY) {
     auto terrains = terrainFactory->GetTerrains();
     sort(terrains.begin(), terrains.end(),
         [](const unique_ptr<Terrain>& a, const unique_ptr<Terrain>& b) {
-            return a->GetPriority() < b->GetPriority();
+            return a->GetPriority() > b->GetPriority();
         });
     for (auto& terrain : terrains) {
         terrain->DistributeTerrain(width, height, setTerrain, getTerrain);
@@ -5550,6 +6296,7 @@ int Map::Init(int blockX, int blockY) {
     }
 
     // 随机生成组合与房间
+	int capacity = 0;
     layout = Building::ReadTemplates(REPLACE_PATH("../Resources/layouts/"));
     for (auto &building : buildings) {
         building.second->FinishInit();
@@ -5559,6 +6306,7 @@ int Map::Init(int blockX, int blockY) {
             for (auto room : component->GetRooms()) {
                 room->SetParent(component);
                 room->SetParent(building.second);
+				capacity += room->GetLivingCapacity();
             }
         }
     }
@@ -5571,15 +6319,16 @@ int Map::Init(int blockX, int blockY) {
                 for (auto room : component->GetRooms()) {
                     room->SetParent(component);
                     room->SetParent(building.second);
+					capacity += room->GetLivingCapacity();
                 }
             }
         }
     }
 
-    return 20000;
+    return capacity;
 }
 
-void Map::Checkin(std::vector<std::shared_ptr<Person>> citizens, Time time) {
+void Map::Checkin(vector<shared_ptr<Person>> citizens, Time time) {
 	// 筛选成年市民
 	auto adults = vector<shared_ptr<Person>>();
     for (auto citizen : citizens) {
@@ -5728,7 +6477,7 @@ void Map::Print() {
 
 }
 
-void Map::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Story>& story) {
+void Map::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) {
 
 }
 
@@ -5778,8 +6527,8 @@ shared_ptr<Roadnet> Map::GetRoadnet() const {
     return roadnet;
 }
 
-std::vector<std::shared_ptr<Component>> Map::GetComponents() const {
-    std::vector<std::shared_ptr<Component>> components;
+vector<shared_ptr<Component>> Map::GetComponents() const {
+    vector<shared_ptr<Component>> components;
     for(const auto & zone : zones) {
         for(auto building : zone.second->GetBuildings()) {
             const auto& current = building.second->GetComponents();
@@ -6148,6 +6897,9 @@ void Map::ArrangePlots() {
 #define BLOCK_SIZE 256
 
 
+class Person;
+class Story;
+
 class Element {
 public:
 	Element() = default;
@@ -6428,17 +7180,29 @@ public:
 
 using namespace std;
 
-TestName::TestName() {
+ChineseName::ChineseName() {
     InitializeSurnames();
     InitializeNames();
 }
 
-TestName::~TestName() {
+ChineseName::~ChineseName() {
 
 }
 
+string ChineseName::GetId() {
+    return "chinese";
+}
+
+string ChineseName::GetType() const {
+    return "chinese";
+}
+
+string ChineseName::GetName() const {
+    return "中文姓名";
+}
+
 // 初始化姓氏列表
-void TestName::InitializeSurnames() {
+void ChineseName::InitializeSurnames() {
     surnames = {
         "王", "李", "张", "刘", "陈", "杨", "赵", "黄", "周", "吴",
         "徐", "孙", "胡", "朱", "高", "林", "何", "郭", "马", "罗",
@@ -6470,7 +7234,7 @@ void TestName::InitializeSurnames() {
 }
 
 // 初始化名字列表
-void TestName::InitializeNames() {
+void ChineseName::InitializeNames() {
     maleNames = {
         "伟", "强", "勇", "军", "磊", "洋", "超", "健", "明", "涛",
         "鹏", "华", "亮", "刚", "杰", "峰", "建", "波", "浩", "凯",
@@ -6517,12 +7281,12 @@ void TestName::InitializeNames() {
     };
 }
 
-string TestName::GetSurname(std::string name) {
+string ChineseName::GetSurname(string name) {
     return name.substr(0, 2);
 }
 
-string TestName::GenerateName(bool male, bool female, bool neutral) {
-    string surname = surnames[GetRandom((int)surnames.size())];
+string ChineseName::GenerateName(bool male, bool female, bool neutral) {
+    string surname = surnames[surnames.size() - 1 - (int)sqrt(GetRandom((int)(surnames.size() * surnames.size())))];
 
     string givenName;
     vector<int> nameList;
@@ -6560,7 +7324,7 @@ string TestName::GenerateName(bool male, bool female, bool neutral) {
     return surname + givenName;
 }
 
-string TestName::GenerateName(string surname, bool male, bool female, bool neutral) {
+string ChineseName::GenerateName(string surname, bool male, bool female, bool neutral) {
     string givenName;
     vector<int> nameList;
 
@@ -6608,15 +7372,15 @@ string TestName::GenerateName(string surname, bool male, bool female, bool neutr
 // 子类注册函数
 typedef void (*RegisterModNamesFunc)(NameFactory* factory);
 
-// 主程序检测子类
-class TestName : public Name {
+// 中文姓名
+class ChineseName : public Name {
 public:
-    TestName();
-    ~TestName();
+    ChineseName();
+    ~ChineseName();
 
-    static std::string GetId() { return "chinese"; }
-    virtual std::string GetType() const override { return "chinese"; }
-    virtual std::string GetName() const override { return "中文姓名"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
     virtual std::string GetSurname(std::string name) override;
     virtual std::string GenerateName(bool male = true, bool female = true, bool neutral = true) override;
@@ -6641,6 +7405,59 @@ private:
 
 using namespace std;
 
+string HotelOrganization::GetId() {
+	return "hotel";
+}
+
+string HotelOrganization::GetType() const {
+	return "hotel";
+}
+
+string HotelOrganization::GetName() const {
+	return "酒店组织";
+}
+
+float HotelOrganization::GetPower() {
+    return 1.0f;
+}
+
+vector<pair<string, pair<int, int>>> HotelOrganization::ComponentRequirements() const {
+    vector<pair<string, pair<int, int>>> requirements;
+    requirements.emplace_back("hotel", make_pair(1, 1));
+
+    return requirements;
+}
+
+vector<pair<string, vector<vector<string>>>> HotelOrganization::ArrageVacancies(
+    vector<pair<string, int>> components) const {
+    vector<pair<string, vector<vector<string>>>> jobs;
+    for (auto& comp : components) {
+        jobs.emplace_back(comp.first, vector<vector<string>>(comp.second));
+        for (int i = 0; i < comp.second; i++) {
+            jobs.back().second[i] = vector<string>(10, "hotel_cleaner");
+        }
+    }
+
+    return jobs;
+}
+
+void HotelOrganization::SetCalendar(CalendarFactory* factory) {
+    for (auto &component : jobs) {
+        for (auto &job : component.second) {
+            shared_ptr<Calendar> calendar = factory->CreateCalendar("full");
+            job.first->SetCalendar(calendar);
+        }
+    }
+}
+
+void HotelOrganization::ArrangeRooms() {
+    for (auto &component : jobs) {
+        for (auto &job : component.second) {
+            job.first->SetPosition(component.first->GetRooms()[0]);
+        }
+    }
+}
+
 
 
 // ===== .\Forever\organization.h =====
@@ -6655,43 +7472,23 @@ using namespace std;
 // 子类注册函数
 typedef void (*RegisterModOrganizationsFunc)(OrganizationFactory* factory);
 
-// 主程序检测子类
-class TestOrganization : public Organization {
+// 酒店组织
+class HotelOrganization : public Organization {
 public:
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试组织"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
-    static float GetPower() {
-        return 1.0f;
-    }
+    static float GetPower();
 
-    virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const override {
-        std::vector<std::pair<std::string, std::pair<int, int>>> requirements;
-		requirements.emplace_back("test", std::make_pair(1, 3));
+    virtual std::vector<std::pair<std::string, std::pair<int, int>>> ComponentRequirements() const override;
 
-		return requirements;
-    }
+    virtual std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> ArrageVacancies(
+        std::vector<std::pair<std::string, int>> components) const override;
 
-    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageVacancies(
-        std::vector<std::pair<std::string, int>> components) const override {
-        std::vector<std::pair<std::string, std::vector<std::string>>> jobs;
-        for(auto& comp : components) {
-            jobs.emplace_back(comp.first, std::vector<std::string>(comp.second, "test"));
-		}
+    virtual void SetCalendar(CalendarFactory* factory) override;
 
-		return jobs;
-    }
-
-    virtual void SetCalendar(CalendarFactory* factory) override {
-        for (auto component : jobs) {
-            for (auto job : component.second) {
-                std::shared_ptr<Calendar> calendar = factory->CreateCalendar("test");
-                job.first->SetCalendar(calendar);
-            }
-        }
-    }
-
+    virtual void ArrangeRooms() override;
 };
 
 
@@ -6843,16 +7640,16 @@ vector<shared_ptr<Person>> Person::GetChilds() {
 	return childs;
 }
 
-void Person::AddAsset(std::shared_ptr<Asset> asset) {
+void Person::AddAsset(shared_ptr<Asset> asset) {
 	assets.push_back(asset);
 }
 
-std::vector<std::shared_ptr<Asset>>& Person::GetAssets() {
+vector<shared_ptr<Asset>>& Person::GetAssets() {
 	return assets;
 }
 
-std::vector<std::shared_ptr<Asset>> Person::GetAssets(std::string type) {
-	std::vector<std::shared_ptr<Asset>> results;
+vector<shared_ptr<Asset>> Person::GetAssets(string type) {
+	vector<shared_ptr<Asset>> results;
 
 	for (auto& asset : assets) {
 		if (asset->GetType() == type) {
@@ -6863,7 +7660,7 @@ std::vector<std::shared_ptr<Asset>> Person::GetAssets(std::string type) {
 	return results;
 }
 
-std::shared_ptr<Asset> Person::GetAsset(std::string name) {
+shared_ptr<Asset> Person::GetAsset(string name) {
 	for (auto& asset : assets) {
 		if (asset->GetName() == name) {
 			return asset;
@@ -6881,7 +7678,7 @@ void Person::AddJob(shared_ptr<Job> job) {
 	jobs.push_back(job);
 }
 
-void Person::RemoveJob(std::shared_ptr<Job> job) {
+void Person::RemoveJob(shared_ptr<Job> job) {
 	for (auto &j : jobs) {
 		if (j == job) {
 			j = *jobs.end();
@@ -6891,11 +7688,19 @@ void Person::RemoveJob(std::shared_ptr<Job> job) {
 	}
 }
 
+void Person::SetWork(int job) {
+	working = job;
+}
+
+std::shared_ptr<Job> Person::GetWork() {
+	return jobs[working];
+}
+
 shared_ptr<Room> Person::GetHome() {
 	return home;
 }
 
-void Person::SetHome(std::shared_ptr<Room> room) {
+void Person::SetHome(shared_ptr<Room> room) {
 	home = room;
 }
 
@@ -6907,7 +7712,7 @@ shared_ptr<Scheduler> Person::GetScheduler() {
 	return scheduler;
 }
 
-void Person::SetScheduler(std::shared_ptr<Scheduler> scheduler) {
+void Person::SetScheduler(shared_ptr<Scheduler> scheduler) {
 	this->scheduler = scheduler;
 }
 
@@ -6970,6 +7775,81 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Person::MatchEvent(
 	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
 }
 
+bool Person::AddOption(std::string option) {
+	if (options.find(option) == options.end()) {
+		options.insert(option);
+		return true;
+	}
+	return false;
+}
+
+bool Person::RemoveOption(std::string option) {
+	if (options.find(option) != options.end()) {
+		options.erase(option);
+		return true;
+	}
+	return false;
+}
+
+std::unordered_set<std::string> Person::GetOptions() {
+	return options;
+}
+
+void Person::SetStatus(std::shared_ptr<Zone> zone) {
+	currentPlot = zone->GetParent();
+	currentZone = zone;
+	currentBuilding = nullptr;
+	currentRoom = nullptr;
+	commute.SetNull();
+}
+
+void Person::SetStatus(std::shared_ptr<Building> building) {
+	currentPlot = building->GetParentPlot();
+	currentZone = building->GetParentZone();
+	currentBuilding = building;
+	currentRoom = nullptr;
+	commute.SetNull();
+}
+
+void Person::SetStatus(std::shared_ptr<Room> room) {
+	currentPlot = room->GetParentBuilding()->GetParentPlot();
+	currentZone = room->GetParentBuilding()->GetParentZone();
+	currentBuilding = room->GetParentBuilding();
+	currentRoom = room;
+	commute.SetNull();
+}
+
+void Person::SetStatus(std::shared_ptr<Room> target, std::vector<Connection> paths, Time time) {
+	currentPlot = nullptr;
+	currentZone = nullptr;
+	currentBuilding = nullptr;
+	currentRoom = nullptr;
+	commute.SetTarget(target);
+	commute.SetPaths(paths);
+	commute.StartCommute(time);
+}
+
+shared_ptr<Plot> Person::GetCurrentPlot() {
+	return currentPlot;
+}
+
+shared_ptr<Zone> Person::GetCurrentZone() {
+	return currentZone;
+}
+
+shared_ptr<Building> Person::GetCurrentBuilding() {
+	return currentBuilding;
+}
+
+shared_ptr<Room> Person::GetCurrentRoom() {
+	return currentRoom;
+}
+
+Commute Person::GetCurrentCommute() {
+	return commute;
+}
+
+
 
 // ===== .\Forever\person.h =====
 
@@ -6981,15 +7861,19 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Person::MatchEvent(
 #include "experience.h"
 #include "script.h"
 #include "utility.h"
+#include "commute.h"
 
 #include <string>
 #include <memory>
 #include <vector>
+#include <unordered_set>
 
 #undef GetJob
 #undef AddJob
 
 
+class Script;
+class Story;
 class EducationExperience;
 class EmotionExperience;
 class JobExperience;
@@ -7057,6 +7941,8 @@ public:
 	std::vector<std::shared_ptr<Job>> GetJobs();
 	void AddJob(std::shared_ptr<Job> job);
 	void RemoveJob(std::shared_ptr<Job> job);
+	void SetWork(int job);
+	std::shared_ptr<Job> GetWork();
 
 	// 管理住址
 	std::shared_ptr<Room> GetHome();
@@ -7080,6 +7966,20 @@ public:
 	void AddScript(std::shared_ptr<Script> script);
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
 		std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+	bool AddOption(std::string option);
+	bool RemoveOption(std::string option);
+	std::unordered_set<std::string> GetOptions();
+
+	// 实时状态
+	void SetStatus(std::shared_ptr<Zone> zone);
+	void SetStatus(std::shared_ptr<Building> building);
+	void SetStatus(std::shared_ptr<Room> room);
+	void SetStatus(std::shared_ptr<Room> target, std::vector<Connection> paths, Time time);
+	std::shared_ptr<Plot> GetCurrentPlot();
+	std::shared_ptr<Zone> GetCurrentZone();
+	std::shared_ptr<Building> GetCurrentBuilding();
+	std::shared_ptr<Room> GetCurrentRoom();
+	Commute GetCurrentCommute();
 
 private:
 	int id;
@@ -7098,6 +7998,7 @@ private:
 
 	std::vector<std::shared_ptr<Asset>> assets;
 	std::vector<std::shared_ptr<Job>> jobs;
+	int working = -1;
 
 	std::shared_ptr<Room> home;
 	std::shared_ptr<Scheduler> scheduler;
@@ -7107,6 +8008,13 @@ private:
 	std::vector<JobExperience> jobExperiences;
 
 	std::vector<std::shared_ptr<Script>> scripts;
+	std::unordered_set<std::string> options;
+
+	std::shared_ptr<Plot> currentPlot;
+	std::shared_ptr<Zone> currentZone;
+	std::shared_ptr<Building> currentBuilding;
+	std::shared_ptr<Room> currentRoom;
+	Commute commute;
 };
 
 // ===== .\Forever\populace.cpp =====
@@ -7142,8 +8050,6 @@ Populace::~Populace() {
 }
 
 void Populace::InitAssets() {
-	assetFactory->RegisterAsset(TestAsset::GetId(), []() { return make_unique<TestAsset>(); });
-
 	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
 	if (modHandle) {
 		modHandles.push_back(modHandle);
@@ -7162,7 +8068,7 @@ void Populace::InitAssets() {
 	}
 
 #ifdef MOD_TEST
-	auto assetList = { "test", "mod" };
+	auto assetList = { "mod" };
 	for (const auto& assetId : assetList) {
 		if (assetFactory->CheckRegistered(assetId)) {
 			auto asset = assetFactory->CreateAsset(assetId);
@@ -7177,7 +8083,7 @@ void Populace::InitAssets() {
 }
 
 void Populace::InitJobs() {
-    jobFactory->RegisterJob(TestJob::GetId(), []() { return make_unique<TestJob>(); });
+    jobFactory->RegisterJob(HotelCleanerJob::GetId(), []() { return make_unique<HotelCleanerJob>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -7197,7 +8103,7 @@ void Populace::InitJobs() {
     }
 
 #ifdef MOD_TEST
-    auto jobList = { "test", "mod" };
+    auto jobList = { "mod" };
     for (const auto& jobId : jobList) {
         if (jobFactory->CheckRegistered(jobId)) {
             auto job = jobFactory->CreateJob(jobId);
@@ -7212,7 +8118,7 @@ void Populace::InitJobs() {
 }
 
 void Populace::InitNames() {
-	nameFactory->RegisterName(TestName::GetId(), []() { return make_unique<TestName>(); });
+	nameFactory->RegisterName(ChineseName::GetId(), []() { return make_unique<ChineseName>(); });
 
 	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
 	if (modHandle) {
@@ -7232,11 +8138,10 @@ void Populace::InitNames() {
 	}
 
 #ifdef MOD_TEST
-	auto nameList = { "chinese", "mod" };
+	auto nameList = { "mod" };
 	for (const auto& nameId : nameList) {
 		if (nameFactory->CheckRegistered(nameId)) {
-			auto name = nameFactory->CreateName(nameId);
-			debugf(("Created name: " + name->GetName() + " (ID: " + nameId + ")\n").data());
+			debugf("Created name: mod.\n");
 		}
 		else {
 			debugf("Name not registered: %s\n", nameId);
@@ -7247,8 +8152,8 @@ void Populace::InitNames() {
 }
 
 void Populace::InitSchedulers() {
-	schedulerFactory->RegisterScheduler(TestScheduler::GetId(),
-		[]() { return make_unique<TestScheduler>(); }, TestScheduler::GetPower());
+	schedulerFactory->RegisterScheduler(WorkOnlyScheduler::GetId(),
+		[]() { return make_unique<WorkOnlyScheduler>(); }, WorkOnlyScheduler::GetPower());
 
 	HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
 	if (modHandle) {
@@ -7268,7 +8173,7 @@ void Populace::InitSchedulers() {
 	}
 
 #ifdef MOD_TEST
-	auto schedulerList = { "test", "mod" };
+	auto schedulerList = { "mod" };
 	for (const auto& schedulerId : schedulerList) {
 		if (schedulerFactory->CheckRegistered(schedulerId)) {
 			auto scheduler = schedulerFactory->CreateScheduler(schedulerId);
@@ -7287,27 +8192,35 @@ void Populace::ReadConfigs(string path) const {
         THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
     }
 
-    Json::Reader reader;
-    Json::Value root;
+    JsonReader reader;
+    JsonValue root;
 
     ifstream fin(path);
     if (!fin.is_open()) {
         THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
     }
-    if (reader.parse(fin, root)) {
-		for (auto job : root["mods"]["job"]) {
-			jobFactory->SetConfig(job.asString(), true);
+    if (reader.Parse(fin, root)) {
+		for (auto asset : root["mods"]["asset"]) {
+			assetFactory->SetConfig(asset.AsString(), true);
 		}
-		nameFactory->SetConfig(root["mods"]["name"].asString(), true);
+		for (auto job : root["mods"]["job"]) {
+			jobFactory->SetConfig(job.AsString(), true);
+		}
+		nameFactory->SetConfig(root["mods"]["name"].AsString(), true);
+		for (auto scheduler : root["mods"]["scheduler"]) {
+			schedulerFactory->SetConfig(scheduler.AsString(), true);
+		}
     }
     else {
         fin.close();
-        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
     }
     fin.close();
 }
 
 void Populace::Init(int accomodation) {
+	accomodation = 5000;
+
     // 生成市民
     GenerateCitizens((int)(accomodation * exp(GetRandom(1000) / 1000.0f - 0.5f)));
 
@@ -7350,6 +8263,26 @@ void Populace::Schedule() {
 	}
 }
 
+void Populace::Jobstory(unique_ptr<Story>& story) {
+	unordered_map<string, shared_ptr<Script>> jobScripts;
+
+	for (auto citizen : citizens) {
+		for (auto job : citizen->GetJobs()) {
+			if (jobScripts.find(job->GetType()) == jobScripts.end()) {
+				auto script = make_shared<Script>();
+				for (auto scriptPath : job->GetScripts()) {
+					script->ReadScript(REPLACE_PATH(scriptPath),
+						story->GetEventFactory(), story->GetChangeFactory());
+				}
+				jobScripts[job->GetType()] = script;
+			}
+			citizen->AddScript(make_shared<Script>(jobScripts[job->GetType()]));
+		}
+	}
+
+	debugf("Generate jobstories.\n");
+}
+
 void Populace::Characterize(string path, unique_ptr<Story>& story) {
 	vector<shared_ptr<Script>> scripts;
 	for (const auto& entry : filesystem::directory_iterator(path)) {
@@ -7372,16 +8305,95 @@ void Populace::Destroy() {
 
 }
 
-void Populace::Tick() {
+void Populace::Tick(unique_ptr<Map> &map) {
+	time.AddSeconds(1);
 
+	for (auto citizen : citizens) {
+		if (citizen->GetScheduler()->GetStatus() == "home_rest") {
+			int i = 0;
+			for (auto job : citizen->GetJobs()) {
+				auto signin = job->GetCalendar()->SigninTime(time);
+				if (signin.GetYear() > 0 && time > signin) {
+					citizen->SetStatus(job->GetPosition(),
+						map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
+							job->GetPosition()->GetParentBuilding()->GetParentPlot()), time);
+					citizen->GetScheduler()->SetStatus("commute_work");
+					citizen->SetWork(i);
+					break;
+				}
+				i++;
+			}
+		}
+		else if (citizen->GetScheduler()->GetStatus() == "commute_work") {
+			if (citizen->GetCurrentCommute().FinishCommute(time)) {
+				citizen->SetStatus(citizen->GetCurrentCommute().GetTarget());
+				citizen->GetScheduler()->SetStatus("work_job");
+			}
+		}
+		else if (citizen->GetScheduler()->GetStatus() == "work_job") {
+			auto work = citizen->GetWork();
+			auto signout = work->GetCalendar()->SignoutTime(time);
+			if (signout.GetYear() > 0 && time > signout) {
+				citizen->SetStatus(citizen->GetHome(), 
+					map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
+						work->GetPosition()->GetParentBuilding()->GetParentPlot()), time);
+				citizen->GetScheduler()->SetStatus("commute_home");
+				citizen->SetWork(-1);
+				break;
+			}
+		}
+		else if (citizen->GetScheduler()->GetStatus() == "commute_home") {
+			if (citizen->GetCurrentCommute().FinishCommute(time)) {
+				citizen->SetStatus(citizen->GetCurrentCommute().GetTarget());
+				citizen->GetScheduler()->SetStatus("home_rest");
+			}
+		}
+	}
 }
 
 void Populace::Print() {
 
 }
 
-void Populace::ApplyChange(shared_ptr<Change> change, std::unique_ptr<Story>& story) {
+void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) {
+	auto type = change->GetType();
+	if (type == "spawn_npc") {
+		auto obj = dynamic_pointer_cast<SpawnNpcChange>(change);
 
+		Condition condition;
+		auto person = make_shared<Person>();
+
+		person->SetId((int)citizens.size());
+		condition.ParseCondition(obj->GetTarget());
+		person->SetName(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			})));
+		condition.ParseCondition(obj->GetGender());
+		person->SetGender(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			})) == "male" ? GENDER_MALE : GENDER_FEMALE);
+		condition.ParseCondition(obj->GetBirthday());
+		person->SetBirthday(Time(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			}))));
+		citizens.push_back(person);
+		ids[person->GetName()] = person->GetId();
+	}
+	else if (type == "add_option") {
+		auto obj = dynamic_pointer_cast<AddOptionChange>(change);
+
+		Condition condition;
+
+		condition.ParseCondition(obj->GetTarget());
+		auto person = GetCitizen(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			})));
+
+		condition.ParseCondition(obj->GetOption());
+		person->AddOption(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+			return story->GetValue(name);
+			})));
+	}
 }
 
 void Populace::Load(string path) {
@@ -7396,8 +8408,17 @@ Time Populace::GetTime() {
 	return time;
 }
 
-std::vector<std::shared_ptr<Person>>& Populace::GetCitizens() {
+vector<shared_ptr<Person>>& Populace::GetCitizens() {
 	return citizens;
+}
+
+std::shared_ptr<Person> Populace::GetCitizen(std::string name) {
+	if (ids.find(name) == ids.end()) {
+		return nullptr;
+	}
+	else {
+		return citizens[ids[name]];
+	}
 }
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
@@ -7421,7 +8442,7 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
 	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
 }
 
-std::unique_ptr<JobFactory>& Populace::GetJobFactory() {
+unique_ptr<JobFactory>& Populace::GetJobFactory() {
 	return jobFactory;
 }
 
@@ -7578,6 +8599,7 @@ void Populace::GenerateCitizens(int num) {
 			int month = 1 + GetRandom(12);
 			person->SetBirthday({ 2000 + females[i].birth, month, 1 + GetRandom(Time::DaysInMonth(2000 + females[i].birth, month)) });
 			citizens.push_back(person);
+			ids[person->GetName()] = person->GetId();
 		}
 	}
 	for (int i = 1; i < males.size(); i++) {
@@ -7590,6 +8612,7 @@ void Populace::GenerateCitizens(int num) {
 			int month = 1 + GetRandom(12);
 			person->SetBirthday({ 2000 + males[i].birth, month, 1 + GetRandom(Time::DaysInMonth(2000 + males[i].birth, month)) });
 			citizens.push_back(person);
+			ids[person->GetName()] = person->GetId();
 		}
 	}
 
@@ -8278,9 +9301,13 @@ void Populace::GenerateJobs() {
 #include "room.h"
 #include "change.h"
 #include "story.h"
+#include "map.h"
 
 #include <windows.h>
 
+
+class Map;
+class Story;
 
 class Populace {
 public:
@@ -8303,13 +9330,14 @@ public:
 	void Schedule();
 
 	// 分配剧情
+	void Jobstory(std::unique_ptr<Story>& story);
 	void Characterize(std::string path, std::unique_ptr<Story>& story);
 
 	// 释放空间
 	void Destroy();
 
 	// 时钟前进
-	void Tick();
+	void Tick(std::unique_ptr<Map>& map);
 
 	// 输出当前地图
 	void Print();
@@ -8326,6 +9354,7 @@ public:
 
 	// 获取全部市民
 	std::vector<std::shared_ptr<Person>>& GetCitizens();
+	std::shared_ptr<Person> GetCitizen(std::string name);
 
 	// 获取附近市民
 	std::vector<std::shared_ptr<Person>> GetPasser(int x, int y);
@@ -8355,6 +9384,7 @@ private:
 
 	// 市民管理
 	std::vector<std::shared_ptr<Person>> citizens;
+	std::unordered_map<std::string, int> ids;
 	std::unordered_map<int, std::shared_ptr<Person>> phoneRoll;
 
 	// 生成市民
@@ -8381,6 +9411,160 @@ private:
 
 using namespace std;
 
+string JingRoadnet::GetId() {
+    return "jing";
+}
+
+string JingRoadnet::GetType() const {
+    return "jing";
+}
+
+string JingRoadnet::GetName() const {
+    return "井字路网";
+}
+
+void JingRoadnet::DistributeRoadnet(int width, int height,
+    function<string(int, int)> get) {
+    nodes.clear();
+    connections.clear();
+    plots.clear();
+
+    vector<pair<Node, int>> horizontalNode1w;
+    vector<pair<Node, int>> horizontalNode1e;
+    vector<pair<Node, int>> horizontalNode2w;
+    vector<pair<Node, int>> horizontalNode2e;
+    vector<pair<Node, int>> verticalNode1n;
+    vector<pair<Node, int>> verticalNode1s;
+    vector<pair<Node, int>> verticalNode2n;
+    vector<pair<Node, int>> verticalNode2s;
+
+    float theta = GetRandom(1000) / 1000.f * 0.4f - 0.2f;
+
+    Node northWest(width / 2.f + 32.f * (sin(theta) - cos(theta)), height / 2.f + 32.f * (-cos(theta) - sin(theta)));
+    Node northEast(width / 2.f + 32.f * (sin(theta) + cos(theta)), height / 2.f + 32.f * (-cos(theta) + sin(theta)));
+    Node southWest(width / 2.f + 32.f * (-sin(theta) - cos(theta)), height / 2.f + 32.f * (cos(theta) - sin(theta)));
+    Node southEast(width / 2.f + 32.f * (-sin(theta) + cos(theta)), height / 2.f + 32.f * (cos(theta) + sin(theta)));
+    nodes.push_back(northWest);
+    nodes.push_back(northEast);
+    nodes.push_back(southWest);
+    nodes.push_back(southEast);
+
+    float s = northEast.GetY() - northWest.GetY();
+    float c = northEast.GetX() - northWest.GetX();
+    
+    for (float x = northWest.GetX(), y = northWest.GetY(); get((int)x, (int)y) != ""; x -= c, y -= s) {
+        nodes.emplace_back(x, y);
+        horizontalNode1w.emplace_back(nodes.back(), (int)nodes.size() - 1);
+    }
+    for (float x = northEast.GetX(), y = northEast.GetY(); get((int)x, (int)y) != ""; x += c, y += s) {
+        nodes.emplace_back(x, y);
+        horizontalNode1e.emplace_back(nodes.back(), (int)nodes.size() - 1);
+    }
+    for (float x = southWest.GetX(), y = southWest.GetY(); get((int)x, (int)y) != ""; x -= c, y -= s) {
+        nodes.emplace_back(x, y);
+        horizontalNode2w.emplace_back(nodes.back(), (int)nodes.size() - 1);
+    }
+    for (float x = southEast.GetX(), y = southEast.GetY(); get((int)x, (int)y) != ""; x += c, y += s) {
+        nodes.emplace_back(x, y);
+        horizontalNode2e.emplace_back(nodes.back(), (int)nodes.size() - 1);
+    }
+    for (float x = northWest.GetX(), y = northWest.GetY(); get((int)x, (int)y) != ""; x += s, y -= c) {
+        nodes.emplace_back(x, y);
+        verticalNode1n.emplace_back(nodes.back(), (int)nodes.size() - 1);
+    }
+    for (float x = southWest.GetX(), y = southWest.GetY(); get((int)x, (int)y) != ""; x -= s, y += c) {
+        nodes.emplace_back(x, y);
+        verticalNode1s.emplace_back(nodes.back(), (int)nodes.size() - 1);
+    }
+    for (float x = northEast.GetX(), y = northEast.GetY(); get((int)x, (int)y) != ""; x += s, y -= c) {
+        nodes.emplace_back(x, y);
+        verticalNode2n.emplace_back(nodes.back(), (int)nodes.size() - 1);
+    }
+    for (float x = southEast.GetX(), y = southEast.GetY(); get((int)x, (int)y) != ""; x -= s, y += c) {
+        nodes.emplace_back(x, y);
+        verticalNode2s.emplace_back(nodes.back(), (int)nodes.size() - 1);
+    }
+
+    connections.push_back(Connection(this, 0, 1));
+    connections.push_back(Connection(this, 1, 3));
+    connections.push_back(Connection(this, 3, 2));
+    connections.push_back(Connection(this, 2, 0));
+    for (int i = 1; i < horizontalNode1w.size(); i++) {
+        connections.push_back(Connection(this, horizontalNode1w[i].second, horizontalNode1w[i - 1].second));
+    }
+    for (int i = 1; i < horizontalNode1e.size(); i++) {
+        connections.push_back(Connection(this, horizontalNode1e[i].second, horizontalNode1e[i - 1].second));
+    }
+    for (int i = 1; i < horizontalNode2w.size(); i++) {
+        connections.push_back(Connection(this, horizontalNode2w[i].second, horizontalNode2w[i - 1].second));
+    }
+    for (int i = 1; i < horizontalNode2e.size(); i++) {
+        connections.push_back(Connection(this, horizontalNode2e[i].second, horizontalNode2e[i - 1].second));
+    }
+    for (int i = 1; i < verticalNode1n.size(); i++) {
+        connections.push_back(Connection(this, verticalNode1n[i].second, verticalNode1n[i - 1].second));
+    }
+    for (int i = 1; i < verticalNode1s.size(); i++) {
+        connections.push_back(Connection(this, verticalNode1s[i].second, verticalNode1s[i - 1].second));
+    }
+    for (int i = 1; i < verticalNode2n.size(); i++) {
+        connections.push_back(Connection(this, verticalNode2n[i].second, verticalNode2n[i - 1].second));
+    }
+    for (int i = 1; i < verticalNode2s.size(); i++) {
+        connections.push_back(Connection(this, verticalNode2s[i].second, verticalNode2s[i - 1].second));
+    }
+
+    plots.push_back(make_shared<Plot>(northWest, northEast, southEast, southWest));
+    plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+    for (int i = 1; i < min(horizontalNode1w.size(), horizontalNode2w.size()); i++) {
+        if (get((int)horizontalNode1w[i].first.GetX(), (int)horizontalNode1w[i].first.GetY()) != "plain")continue;
+        if (get((int)horizontalNode1w[i - 1].first.GetX(), (int)horizontalNode1w[i - 1].first.GetY()) != "plain")continue;
+        if (get((int)horizontalNode2w[i].first.GetX(), (int)horizontalNode2w[i].first.GetY()) != "plain")continue;
+        if (get((int)horizontalNode2w[i - 1].first.GetX(), (int)horizontalNode2w[i - 1].first.GetY()) != "plain")continue;
+        plots.push_back(make_shared<Plot>(
+            horizontalNode1w[i].first, horizontalNode1w[i - 1].first, horizontalNode2w[i - 1].first, horizontalNode2w[i].first));
+        plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetRoads({
+            Connection(this, horizontalNode1w[i].second, horizontalNode1w[i - 1].second),
+            Connection(this, horizontalNode2w[i].second, horizontalNode2w[i - 1].second) });
+    }
+    for (int i = 1; i < min(horizontalNode1e.size(), horizontalNode2e.size()); i++) {
+        if (get((int)horizontalNode1e[i].first.GetX(), (int)horizontalNode1e[i].first.GetY()) != "plain")continue;
+        if (get((int)horizontalNode1e[i - 1].first.GetX(), (int)horizontalNode1e[i - 1].first.GetY()) != "plain")continue;
+        if (get((int)horizontalNode2e[i].first.GetX(), (int)horizontalNode2e[i].first.GetY()) != "plain")continue;
+        if (get((int)horizontalNode2e[i - 1].first.GetX(), (int)horizontalNode2e[i - 1].first.GetY()) != "plain")continue;
+        plots.push_back(make_shared<Plot>(
+            horizontalNode1e[i - 1].first, horizontalNode1e[i].first, horizontalNode2e[i].first, horizontalNode2e[i - 1].first));
+        plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetRoads({
+            Connection(this, horizontalNode1e[i].second, horizontalNode1e[i - 1].second),
+            Connection(this, horizontalNode2e[i].second, horizontalNode2e[i - 1].second) });
+    }
+    for (int i = 1; i < min(verticalNode1n.size(), verticalNode2n.size()); i++) {
+        if (get((int)verticalNode1n[i].first.GetX(), (int)verticalNode1n[i].first.GetY()) != "plain")continue;
+        if (get((int)verticalNode1n[i - 1].first.GetX(), (int)verticalNode1n[i - 1].first.GetY()) != "plain")continue;
+        if (get((int)verticalNode2n[i].first.GetX(), (int)verticalNode2n[i].first.GetY()) != "plain")continue;
+        if (get((int)verticalNode2n[i - 1].first.GetX(), (int)verticalNode2n[i - 1].first.GetY()) != "plain")continue;
+        plots.push_back(make_shared<Plot>(
+            verticalNode1n[i].first, verticalNode2n[i].first, verticalNode2n[i - 1].first, verticalNode1n[i - 1].first));
+        plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetRoads({
+            Connection(this, verticalNode1n[i].second, verticalNode1n[i - 1].second),
+            Connection(this, verticalNode2n[i].second, verticalNode2n[i - 1].second) });
+    }
+    for (int i = 1; i < min(verticalNode1s.size(), verticalNode2s.size()); i++) {
+        if (get((int)verticalNode1s[i].first.GetX(), (int)verticalNode1s[i].first.GetY()) != "plain")continue;
+        if (get((int)verticalNode1s[i - 1].first.GetX(), (int)verticalNode1s[i - 1].first.GetY()) != "plain")continue;
+        if (get((int)verticalNode2s[i].first.GetX(), (int)verticalNode2s[i].first.GetY()) != "plain")continue;
+        if (get((int)verticalNode2s[i - 1].first.GetX(), (int)verticalNode2s[i - 1].first.GetY()) != "plain")continue;
+        plots.push_back(make_shared<Plot>(
+            verticalNode1s[i - 1].first, verticalNode2s[i - 1].first, verticalNode2s[i].first, verticalNode1s[i].first));
+        plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetRoads({
+            Connection(this, verticalNode1s[i].second, verticalNode1s[i - 1].second),
+            Connection(this, verticalNode2s[i].second, verticalNode2s[i - 1].second) });
+    }
+}
 
 
 // ===== .\Forever\roadnet.h =====
@@ -8393,30 +9577,15 @@ using namespace std;
 // 子类注册函数
 typedef void (*RegisterModRoadnetsFunc)(RoadnetFactory* factory);
 
-// 主程序检测子类
-class TestRoadnet : public Roadnet {
+// 井字路网
+class JingRoadnet : public Roadnet {
 public:
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试路网"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
     virtual void DistributeRoadnet(int width, int height,
-        std::function<std::string(int, int)> get) override {
-        Node n1 = Node(width / 2.f + 32.f, height / 2.f + 32.f);
-        Node n2 = Node(width / 2.f - 32.f, height / 2.f + 32.f);
-        Node n3 = Node(width / 2.f - 32.f, height / 2.f - 32.f);
-        Node n4 = Node(width / 2.f + 32.f, height / 2.f - 32.f);
-        nodes.push_back(n1);
-        nodes.push_back(n2);
-        nodes.push_back(n3);
-        nodes.push_back(n4);
-        connections.push_back(Connection(n1, n2));
-        connections.push_back(Connection(n2, n3));
-        connections.push_back(Connection(n3, n4));
-        connections.push_back(Connection(n4, n1));
-        plots.push_back(std::make_shared<Plot>(n1, n2, n3, n4));
-        plots.back()->SetArea(AREA_GREEN);
-    }
+        std::function<std::string(int, int)> get) override;
 };
 
 
@@ -8427,6 +9596,117 @@ public:
 
 using namespace std;
 
+string ParkingRoom::GetId() {
+	return "parking";
+}
+
+string ParkingRoom::GetType() const {
+	return "parking";
+}
+
+string ParkingRoom::GetName() const {
+	return "停车场房间";
+}
+
+bool ParkingRoom::IsResidential() const {
+	return false;
+}
+
+bool ParkingRoom::IsWorkspace() const {
+	return false;
+}
+
+int ParkingRoom::GetLivingCapacity() const {
+	return 0;
+}
+
+int ParkingRoom::GetPersonnelCapacity() const {
+	return 0;
+}
+
+string FlatRoom::GetId() {
+	return "flat";
+}
+
+string FlatRoom::GetType() const {
+	return "flat";
+}
+
+string FlatRoom::GetName() const {
+	return "公寓房间";
+}
+
+bool FlatRoom::IsResidential() const {
+	return true;
+}
+
+bool FlatRoom::IsWorkspace() const {
+	return false;
+}
+
+int FlatRoom::GetLivingCapacity() const {
+	return 2;
+}
+
+int FlatRoom::GetPersonnelCapacity() const {
+	return 0;
+}
+
+string HotelRoom::GetId() {
+	return "hotel";
+}
+
+string HotelRoom::GetType() const {
+	return "hotel";
+}
+
+string HotelRoom::GetName() const {
+	return "酒店房间";
+}
+
+bool HotelRoom::IsResidential() const {
+	return false;
+}
+
+bool HotelRoom::IsWorkspace() const {
+	return false;
+}
+
+int HotelRoom::GetLivingCapacity() const {
+	return 0;
+}
+
+int HotelRoom::GetPersonnelCapacity() const {
+	return 0;
+}
+
+string LobbyRoom::GetId() {
+	return "lobby";
+}
+
+string LobbyRoom::GetType() const {
+	return "lobby";
+}
+
+string LobbyRoom::GetName() const {
+	return "大堂房间";
+}
+
+bool LobbyRoom::IsResidential() const {
+	return false;
+}
+
+bool LobbyRoom::IsWorkspace() const {
+	return true;
+}
+
+int LobbyRoom::GetLivingCapacity() const {
+	return 0;
+}
+
+int LobbyRoom::GetPersonnelCapacity() const {
+	return 100;
+}
 
 
 // ===== .\Forever\room.h =====
@@ -8439,17 +9719,56 @@ using namespace std;
 // 子类注册函数
 typedef void (*RegisterModRoomsFunc)(RoomFactory* factory);
 
-// 主程序检测子类
-class TestRoom : public Room {
+// 停车场房间
+class ParkingRoom : public Room {
 public:
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试房间"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
-    virtual bool IsResidential() const override { return true; };
-    virtual bool IsWorkspace() const override { return false; }
-    virtual int GetLivingCapacity() const override { return 2; }
-    virtual int GetPersonnelCapacity() const override { return 0; }
+    virtual bool IsResidential() const override;
+    virtual bool IsWorkspace() const override;
+    virtual int GetLivingCapacity() const override;
+    virtual int GetPersonnelCapacity() const override;
+};
+
+// 公寓房间
+class FlatRoom : public Room {
+public:
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
+
+    virtual bool IsResidential() const override;
+    virtual bool IsWorkspace() const override;
+    virtual int GetLivingCapacity() const override;
+    virtual int GetPersonnelCapacity() const override;
+};
+
+// 酒店房间
+class HotelRoom : public Room {
+public:
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
+
+    virtual bool IsResidential() const override;
+    virtual bool IsWorkspace() const override;
+    virtual int GetLivingCapacity() const override;
+    virtual int GetPersonnelCapacity() const override;
+};
+
+// 大堂房间
+class LobbyRoom : public Room {
+public:
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
+
+    virtual bool IsResidential() const override;
+    virtual bool IsWorkspace() const override;
+    virtual int GetLivingCapacity() const override;
+    virtual int GetPersonnelCapacity() const override;
 };
 
 
@@ -8460,12 +9779,24 @@ public:
 
 using namespace std;
 
-TestScheduler::TestScheduler() {
+WorkOnlyScheduler::WorkOnlyScheduler() {
 
 }
 
-TestScheduler::~TestScheduler() {
+WorkOnlyScheduler::~WorkOnlyScheduler() {
 
+}
+
+string WorkOnlyScheduler::GetId() {
+	return "work_only";
+}
+
+string WorkOnlyScheduler::GetType() const {
+	return "work_only";
+}
+
+string WorkOnlyScheduler::GetName() const {
+	return "纯工作调度";
 }
 
 
@@ -8480,15 +9811,15 @@ TestScheduler::~TestScheduler() {
 // 子类注册函数
 typedef void (*RegisterModSchedulersFunc)(SchedulerFactory* factory);
 
-// 主程序检测子类
-class TestScheduler : public Scheduler {
+// 纯工作调度
+class WorkOnlyScheduler : public Scheduler {
 public:
-    TestScheduler();
-    ~TestScheduler();
+    WorkOnlyScheduler();
+    ~WorkOnlyScheduler();
 
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试调度"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
     static float GetPower() {
         return 1.0f;
@@ -8516,7 +9847,7 @@ Script::Script() {
 
 }
 
-Script::Script(const std::shared_ptr<Script> script) {
+Script::Script(const shared_ptr<Script> script) {
 	unordered_map<string, int> hash;
 	hash["game_finish"] = -1;
 	hash["game_fail"] = -2;
@@ -8556,44 +9887,46 @@ Script::~Script() {
 }
 
 void Script::ReadScript(string path,
-	std::unique_ptr<EventFactory> &eventFactory, std::unique_ptr<ChangeFactory> &changeFactory) {
+	unique_ptr<EventFactory> &eventFactory, unique_ptr<ChangeFactory> &changeFactory) {
 	if (!filesystem::exists(path)) {
 		THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
 	}
 
-	Json::Reader reader;
-	Json::Value root;
+	JsonReader reader;
+	JsonValue root;
 
 	ifstream fin(path);
 	if (!fin.is_open()) {
 		THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
 	}
-	if (reader.parse(fin, root)) {
+
+	//TODO: 多脚本合并
+	if (reader.Parse(fin, root)) {
 		unordered_map<string, int> hash;
 		hash["game_finish"] = -1;
 		hash["game_fail"] = -2;
 
 		for (auto milestone : root) {
 			Milestone content(
-				milestone["milestone"].asString(),
+				milestone["milestone"].AsString(),
 				BuildEvent(milestone["triggers"], eventFactory),
-				milestone["visible"].asBool(),
-				BuildCondition(milestone["drop"].asString()),
-				milestone["description"].asString(),
-				milestone["goal"].asString(),
+				milestone["visible"].AsBool(),
+				BuildCondition(milestone["drop"].AsString()),
+				milestone["description"].AsString(),
+				milestone["goal"].AsString(),
 				BuildDialogs(milestone["dialogs"]),
 				BuildChanges(milestone["changes"], changeFactory)
 			);
-			hash.insert(make_pair(milestone["milestone"].asString(), (int)milestones.size()));
+			hash.insert(make_pair(milestone["milestone"].AsString(), (int)milestones.size()));
 			milestones.push_back(MilestoneNode(content));
 		}
 		for (int i = 0; i < milestones.size(); i++) {
 			for (auto subsequence : root[i]["subsequences"]) {
-				if (hash.find(subsequence.asString()) == hash.end())continue;
-				if (hash[subsequence.asString()] < 0)continue;
+				if (hash.find(subsequence.AsString()) == hash.end())continue;
+				if (hash[subsequence.AsString()] < 0)continue;
 
-				milestones[i].subsequents.push_back(&milestones[hash[subsequence.asString()]]);
-				milestones[hash[subsequence.asString()]].premise++;
+				milestones[i].subsequents.push_back(&milestones[hash[subsequence.AsString()]]);
+				milestones[hash[subsequence.AsString()]].premise++;
 			}
 		}
 		for (auto& milestone : milestones) {
@@ -8603,7 +9936,7 @@ void Script::ReadScript(string path,
 		}
 	}
 	else {
-		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
+		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
 	}
 	fin.close();
 }
@@ -8660,18 +9993,18 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(
 	return results;
 }
 
-vector<shared_ptr<Event>> Script::BuildEvent(Json::Value root, unique_ptr<EventFactory> &factory) {
+vector<shared_ptr<Event>> Script::BuildEvent(JsonValue root, unique_ptr<EventFactory> &factory) {
 	vector<shared_ptr<Event>> events;
 
 	for (auto obj : root) {
 		shared_ptr<Event> event;
 
-		string type = obj["type"].asString();
+		string type = obj["type"].AsString();
 		if (type == "game_start") {
 			event = make_shared<GameStartEvent>();
 		}
 		else if (type == "option_dialog") {
-			event = make_shared<OptionDialogEvent>(obj["target"].asString(), obj["option"].asString());
+			event = make_shared<OptionDialogEvent>(obj["target"].AsString(), obj["option"].AsString());
 		}
 		else if (factory->CheckRegistered(type)) {
 			event = factory->CreateEvent(type);
@@ -8687,7 +10020,7 @@ vector<shared_ptr<Event>> Script::BuildEvent(Json::Value root, unique_ptr<EventF
 	return events;
 }
 
-vector<Dialog> Script::BuildDialogs(Json::Value root) {
+vector<Dialog> Script::BuildDialogs(JsonValue root) {
 	vector<Dialog> dialogs;
 
 	for (auto obj : root) {
@@ -8696,7 +10029,7 @@ vector<Dialog> Script::BuildDialogs(Json::Value root) {
 		dialog.SetCondition(BuildCondition(obj["condition"]));
 
 		for (auto speak : obj["list"]) {
-			dialog.AddDialog(speak["speaker"].asString(), speak["content"].asString());
+			dialog.AddDialog(speak["speaker"].AsString(), speak["content"].AsString());
 		}
 
 		dialogs.push_back(dialog);
@@ -8705,18 +10038,24 @@ vector<Dialog> Script::BuildDialogs(Json::Value root) {
 	return dialogs;
 }
 
-vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root, unique_ptr<ChangeFactory> &factory) {
+vector<shared_ptr<Change>> Script::BuildChanges(JsonValue root, unique_ptr<ChangeFactory> &factory) {
 	vector<shared_ptr<Change>> changes;
 
 	for (auto obj : root) {
-		string type = obj["type"].asString();
+		string type = obj["type"].AsString();
 		shared_ptr<Change> change = nullptr;
 
 		if (type == "set_value") {
-			change = make_shared<SetValueChange>(obj["variable"].asString(), obj["value"].asString());
+			change = make_shared<SetValueChange>(obj["variable"].AsString(), obj["value"].AsString());
 		}
 		else if (type == "remove_value") {
-			change = make_shared<RemoveValueChange>(obj["variable"].asString());
+			change = make_shared<RemoveValueChange>(obj["variable"].AsString());
+		}
+		else if (type == "spawn_npc") {
+			change = make_shared<SpawnNpcChange>(obj["target"].AsString(), obj["gender"].AsString(), obj["birthday"].AsString());
+		}
+		else if (type == "add_option") {
+			change = make_shared<AddOptionChange>(obj["target"].AsString(), obj["option"].AsString());
 		}
 		else if (factory->CheckRegistered(type)) {
 			change = factory->CreateChange(type);
@@ -8733,10 +10072,10 @@ vector<shared_ptr<Change>> Script::BuildChanges(Json::Value root, unique_ptr<Cha
 	return changes;
 }
 
-Condition Script::BuildCondition(Json::Value root) {
+Condition Script::BuildCondition(JsonValue root) {
 	Condition condition;
 
-	condition.ParseCondition(root.asString());
+	condition.ParseCondition(root.AsString());
 
 	return condition;
 }
@@ -8774,10 +10113,10 @@ private:
 	std::vector<MilestoneNode*> actives;
 
 	// 复合对象读取
-	std::vector<std::shared_ptr<Event>> BuildEvent(Json::Value root, std::unique_ptr<EventFactory>& factory);
-	std::vector<Dialog> BuildDialogs(Json::Value root);
-	std::vector<std::shared_ptr<Change>> BuildChanges(Json::Value root, std::unique_ptr<ChangeFactory>& factory);
-	Condition BuildCondition(Json::Value root);
+	std::vector<std::shared_ptr<Event>> BuildEvent(JsonValue root, std::unique_ptr<EventFactory>& factory);
+	std::vector<Dialog> BuildDialogs(JsonValue root);
+	std::vector<std::shared_ptr<Change>> BuildChanges(JsonValue root, std::unique_ptr<ChangeFactory>& factory);
+	Condition BuildCondition(JsonValue root);
 
 };
 
@@ -8809,7 +10148,8 @@ Society::~Society() {
 }
 
 void Society::InitCalendars() {
-    calendarFactory->RegisterCalendar(TestCalendar::GetId(), []() { return make_unique<TestCalendar>(); });
+    calendarFactory->RegisterCalendar(StandardCalendar::GetId(), []() { return make_unique<StandardCalendar>(); });
+    calendarFactory->RegisterCalendar(FullCalendar::GetId(), []() { return make_unique<FullCalendar>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -8829,7 +10169,7 @@ void Society::InitCalendars() {
     }
 
 #ifdef MOD_TEST
-    auto calendarList = { "test", "mod" };
+    auto calendarList = { "mod" };
     for (const auto& calendarId : calendarList) {
         if (calendarFactory->CheckRegistered(calendarId)) {
             auto calendar = calendarFactory->CreateCalendar(calendarId);
@@ -8843,8 +10183,8 @@ void Society::InitCalendars() {
 }
 
 void Society::InitOrganizations() {
-    organizationFactory->RegisterOrganization(TestOrganization::GetId(),
-        []() { return make_unique<TestOrganization>(); }, TestOrganization::GetPower());
+    organizationFactory->RegisterOrganization(HotelOrganization::GetId(),
+        []() { return make_unique<HotelOrganization>(); }, HotelOrganization::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -8864,7 +10204,7 @@ void Society::InitOrganizations() {
     }
 
 #ifdef MOD_TEST
-    auto organizationList = { "test", "mod" };
+    auto organizationList = { "mod" };
     for (const auto& organizationId : organizationList) {
         if (organizationFactory->CheckRegistered(organizationId)) {
             auto organization = organizationFactory->CreateOrganization(organizationId);
@@ -8878,7 +10218,35 @@ void Society::InitOrganizations() {
 
 }
 
-void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populace) {
+void Society::ReadConfigs(string path) const {
+    if (!filesystem::exists(path)) {
+        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+    }
+
+    JsonReader reader;
+    JsonValue root;
+
+    ifstream fin(path);
+    if (!fin.is_open()) {
+        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
+    }
+    if (reader.Parse(fin, root)) {
+        for (auto calendar : root["mods"]["calendar"]) {
+            calendarFactory->SetConfig(calendar.AsString(), true);
+        }
+        for (auto organization : root["mods"]["organization"]) {
+            organizationFactory->SetConfig(organization.AsString(), true);
+        }
+    }
+    else {
+        fin.close();
+        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
+    }
+    fin.close();
+}
+
+void Society::Init(unique_ptr<Map>& map, unique_ptr<Populace>& populace) {
+    // 计算职缺
 	auto components = map->GetComponents();
 
 	unordered_map<string, vector<shared_ptr<Component>>> componentMap;
@@ -8937,14 +10305,14 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
         }
 
         organizations.push_back(organization);
-		std::vector<std::pair<std::string, int>> usedComponents;
+		vector<pair<string, int>> usedComponents;
         for (auto& req : requirements) {
             auto it = componentMap.find(req.first);
             if (it->second.size() < req.second.second) {
                 usedComponents.emplace_back(req.first, (int)it->second.size());
             }
             else {
-                usedComponents.emplace_back(req.first, req.second.first + GetRandom(req.second.second - req.second.first));
+                usedComponents.emplace_back(req.first, req.second.first + GetRandom(req.second.second - req.second.first + 1));
             }
         }
 
@@ -8957,10 +10325,12 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
                 auto component = availableComponents.back();
                 availableComponents.pop_back();
                 vector<shared_ptr<Job>> jobs;
-                for (auto& jobName : jobArrangements[i].second) {
-                    shared_ptr<Job> job = populace->GetJobFactory()->CreateJob(jobName);
-                    if (job) {
-                        jobs.push_back(job);
+                for (auto& componentName : jobArrangements[i].second) {
+                    for (auto& jobName : componentName) {
+                        shared_ptr<Job> job = populace->GetJobFactory()->CreateJob(jobName);
+                        if (job) {
+                            jobs.push_back(job);
+                        }
                     }
                 }
                 organization->AddVacancy(component, jobs);
@@ -8968,54 +10338,35 @@ void Society::Init(std::unique_ptr<Map>& map, std::unique_ptr<Populace>& populac
         }
 
 		organization->SetCalendar(calendarFactory.get());
+        organization->ArrangeRooms();
 	}
 
     // 分配工作
-    std::vector<std::shared_ptr<Organization>> temps;
+    vector<shared_ptr<Organization>> temps;
     for (auto organization : organizations) {
         temps.push_back(organization);
     }
     auto adults = vector<shared_ptr<Person>>();
     for (auto citizen : populace->GetCitizens()) {
         if (citizen->GetAge(populace->GetTime()) < 18)continue;
+        if (citizen->GetAge(populace->GetTime()) >= 60)continue;
         adults.push_back(citizen);
     }
-    for (auto adult : adults) {
+    for (int i = 0; i < adults.size(); i++) {
         vector<int> ids;
-        ids.push_back(adult->GetId());
+        ids.push_back(adults[i]->GetId());
         int r = GetRandom((int)temps.size());
         auto jobs = temps[r]->EnrollEmployee(ids);
         if (jobs.size() > 0) {
-            adult->AddJob(jobs[0]);
+            adults[i]->AddJob(jobs[0]);
         }
         else {
             temps[r] = temps.back();
             temps.pop_back();
             if (temps.size() <= 0)break;
+            i--;
         }
     }
-}
-
-void Society::ReadConfigs(string path) const {
-    if (!filesystem::exists(path)) {
-        THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
-    }
-
-    Json::Reader reader;
-    Json::Value root;
-
-    ifstream fin(path);
-    if (!fin.is_open()) {
-        THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
-    }
-    if (reader.parse(fin, root)) {
-
-    }
-    else {
-        fin.close();
-        THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.getFormattedErrorMessages() + ".\n");
-    }
-    fin.close();
 }
 
 void Society::Destroy() {
@@ -9147,7 +10498,7 @@ void Story::InitEvents() {
 	}
 
 #ifdef MOD_TEST
-	auto eventList = { "game_start", "option_dialog", "mod"};
+	auto eventList = { "mod"};
 	for (const auto& eventId : eventList) {
 		if (eventFactory->CheckRegistered(eventId)) {
 			auto event = eventFactory->CreateEvent(eventId);
@@ -9182,7 +10533,7 @@ void Story::InitChanges() {
 	}
 
 #ifdef MOD_TEST
-	auto changeList = { "set_value", "remove_value", "mod" };
+	auto changeList = { "mod" };
 	for (const auto& changeId : changeList) {
 		if (changeFactory->CheckRegistered(changeId)) {
 			auto change = changeFactory->CreateChange(changeId);
@@ -9203,10 +10554,46 @@ unique_ptr<ChangeFactory>& Story::GetChangeFactory() {
 	return changeFactory;
 }
 
-void Story::Init() {
-	InitVariables();
+void Story::ReadConfigs(string path) const {
+	if (!filesystem::exists(path)) {
+		THROW_EXCEPTION(IOException, "Path does not exist: " + path + ".\n");
+	}
+
+	JsonReader reader;
+	JsonValue root;
+
+	ifstream fin(path);
+	if (!fin.is_open()) {
+		THROW_EXCEPTION(IOException, "Failed to open file: " + path + ".\n");
+	}
+	if (reader.Parse(fin, root)) {
+		for (auto event : root["mods"]["event"]) {
+			eventFactory->SetConfig(event.AsString(), true);
+		}
+		for (auto change : root["mods"]["change"]) {
+			changeFactory->SetConfig(change.AsString(), true);
+		}
+
+	}
+	else {
+		fin.close();
+		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
+	}
+	fin.close();
+}
+
+void Story::Init(unique_ptr<Populace>& populace) {
+	InitVariables(populace);
 
 	script.reset(new Script());
+}
+
+void Story::Destroy() {
+
+}
+
+void Story::Tick() {
+
 }
 
 void Story::Print() {
@@ -9260,45 +10647,12 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Ev
 	return script->MatchEvent(event, this);
 }
 
-string Story::ReplaceContent(const string& content) {
-	std::string result;
-	size_t pos = 0;
-	size_t lastPos = 0;
-
-	while ((pos = content.find("$$", lastPos)) != std::string::npos) {
-		result.append(content, lastPos, pos - lastPos);
-
-		size_t varStart = pos + 2;
-		size_t varEnd = varStart;
-		while (varEnd < content.length() && IsIdentifierChar(content[varEnd])) {
-			varEnd++;
-		}
-
-		std::string varName = content.substr(varStart, varEnd - varStart);
-		if (!varName.empty()) {
-			auto it = variables.find(varName);
-			if (it != variables.end()) {
-				result += ToString(it->second);
-			}
-			else {
-				result.append(content, pos, varEnd - pos);
-			}
-		}
-		else {
-			result.append(content, pos, 2);
-		}
-		lastPos = varEnd;
-	}
-	result.append(content, lastPos, content.length() - lastPos);
-
-	return result;
-}
-
-void Story::InitVariables() {
+void Story::InitVariables(unique_ptr<Populace>& populace) {
     variables["system.health_status"] = "healthy";
+	variables["system.time.year"] = populace->GetTime().GetYear();
 }
 
-ValueType Story::GetValue(const std::string& name) {
+ValueType Story::GetValue(const string& name) {
 	auto it = variables.find(name);
 	if (it != variables.end()) {
 		return it->second;
@@ -9306,7 +10660,7 @@ ValueType Story::GetValue(const std::string& name) {
 	return 0; // 默认返回0
 }
 
-void Story::SetValue(const std::string& name, ValueType value) {
+void Story::SetValue(const string& name, ValueType value) {
 	variables[name] = value;
 }
 
@@ -9325,6 +10679,7 @@ void Story::SetValue(const std::string& name, ValueType value) {
 #include "change.h"
 #include "milestone.h"
 #include "condition.h"
+#include "populace.h"
 
 #include <vector>
 #include <string>
@@ -9333,6 +10688,7 @@ void Story::SetValue(const std::string& name, ValueType value) {
 
 
 class Script;
+class Populace;
 
 class Story {
 public:
@@ -9345,8 +10701,17 @@ public:
 	std::unique_ptr<EventFactory>& GetEventFactory();
 	std::unique_ptr<ChangeFactory>& GetChangeFactory();
 
+	// 读取配置文件
+	void ReadConfigs(std::string path) const;
+
 	// 剧情初始化
-	void Init();
+	void Init(std::unique_ptr<Populace> &populace);
+
+	// 释放空间
+	void Destroy();
+
+	// 时钟前进
+	void Tick();
 
 	// 输出当前剧本信息
 	void Print();
@@ -9367,9 +10732,6 @@ public:
 	// 匹配事件
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
 
-	// 替换文本变量
-	std::string ReplaceContent(const std::string& content);
-
 	// 变量管理
 	void SetValue(const std::string& name, ValueType value);
 	ValueType GetValue(const std::string& name);
@@ -9385,7 +10747,7 @@ private:
 	std::unique_ptr<Script> script;
 
 	// 初始化全局变量
-	void InitVariables();
+	void InitVariables(std::unique_ptr<Populace>& populace);
 };
 
 
@@ -9393,9 +10755,167 @@ private:
 // ===== .\Forever\terrain.cpp =====
 
 ﻿#include "terrain.h"
+#include "utility.h"
 
 
 using namespace std;
+
+string OceanTerrain::GetId() {
+    return "ocean";
+}
+
+string OceanTerrain::GetType() const {
+    return "ocean";
+}
+
+string OceanTerrain::GetName() const {
+    return "海洋地形";
+}
+
+float OceanTerrain::GetPriority() const {
+    return 1.0f;
+};
+
+void OceanTerrain::DistributeTerrain(int width, int height,
+    function<bool(int, int, const string)> set, function<string(int, int)> get) const {
+	// 随机生成四个方向是否临海，并保证至少有一面临海
+	int distribute = 0;
+	while (distribute == 0) {
+		distribute = GetRandom(16);
+	}
+
+	// 处理西面海面区域
+	if (distribute & 1) {
+		int distance = width / 16 + GetRandom(width / 16);
+		debugf("Sea in the west %d.\n", distance);
+		float shift = 0.0f, slope = 0.0f;
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < distance + shift; x++) {
+				set(x, y, GetType());
+			}
+			slope += float(GetRandom(33) - 16) / 256.0f;
+			shift += slope;
+			if (distance + shift <= width / 64) {
+				slope = 0.0f;
+				shift = width / 64 - (float)distance;
+			}
+			if (distance + shift >= width / 8) {
+				slope = 0.0f;
+				shift = width / 8 - (float)distance;
+			}
+		}
+	}
+
+	// 处理东面海面区域
+	if (distribute & 2) {
+		int distance = width / 16 + GetRandom(width / 16);
+		debugf("Sea in the east %d.\n", distance);
+		float shift = 0.0f, slope = 0.0f;
+		for (int y = 0; y < height; y++) {
+			for (int x = width - 1; x >= width - distance - shift; x--) {
+				set(x, y, GetType());
+			}
+			slope += float(GetRandom(33) - 16) / 256.0f;
+			shift += slope;
+			if (distance + shift <= width / 64) {
+				slope = 0.0f;
+				shift = width / 64.f - distance;
+			}
+			if (distance + shift >= width / 8) {
+				slope = 0.0f;
+				shift = width / 8.f - distance;
+			}
+		}
+	}
+
+	// 处理北面海面区域
+	if (distribute & 4) {
+		int distance = height / 16 + GetRandom(height / 16);
+		debugf("Sea in the north %d.\n", distance);
+		float shift = 0.0f, slope = 0.0f;
+		for (int x = 0; x < width; x++) {
+			for (int y = 0; y < distance + shift; y++) {
+				set(x, y, GetType());
+			}
+			slope += float(GetRandom(33) - 16) / 256.0f;
+			shift += slope;
+			if (distance + shift <= width / 64) {
+				slope = 0.0f;
+				shift = width / 64.f - distance;
+			}
+			if (distance + shift >= width / 8) {
+				slope = 0.0f;
+				shift = width / 8.f - distance;
+			}
+		}
+	}
+
+	// 处理南面海面区域
+	if (distribute & 8) {
+		int distance = height / 16 + GetRandom(height / 16);
+		debugf("Sea in the south %d.\n", distance);
+		float shift = 0.0f, slope = 0.0f;
+		for (int x = 0; x < width; x++) {
+			for (int y = height - 1; y >= height - distance - shift; y--) {
+				set(x, y, GetType());
+			}
+			slope += float(GetRandom(33) - 16) / 256.0f;
+			shift += slope;
+			if (distance + shift <= width / 64) {
+				slope = 0.0f;
+				shift = width / 64.f - distance;
+			}
+			if (distance + shift >= width / 8) {
+				slope = 0.0f;
+				shift = width / 8.f - distance;
+			}
+		}
+	}
+}
+
+string MountainTerrain::GetId() {
+	return "mountain";
+}
+
+string MountainTerrain::GetType() const {
+	return "mountain";
+}
+
+string MountainTerrain::GetName() const {
+	return "山区地形";
+}
+
+float MountainTerrain::GetPriority() const {
+	return 0.9f;
+};
+
+void MountainTerrain::DistributeTerrain(int width, int height,
+	function<bool(int, int, const string)> set, function<string(int, int)> get) const {
+	int scalar = width * height / (512 * 512);
+	int num = scalar > 1 ? (4 + GetRandom(scalar * 2)) : 0;
+
+	Counter counter(100);
+	int mountain = 0;
+	for (int i = 0; i < num; i++) {
+		int x = width / 8 + GetRandom(width * 3 / 4);
+		int y = height / 8 + GetRandom(height * 3 / 4);
+
+		if (get(x, y) != "plain" ||
+			sqrt(pow(x - width / 2, 2) + pow(y - height / 2, 2)) < 128) {
+			if (!counter.count())i--;
+			continue;
+		}
+		FloodTerrain(x, y, (int)(64 * 64 + scalar * 0.2f * ((GetRandom(4) ? 0 : 1) * GetRandom(512 * 512)) + GetRandom(128 * 128)),
+			false, width, height, set, get);
+		mountain++;
+	}
+	for (int i = 2; i < width - 2; i++) {
+		for (int j = 2; j < height - 2; j++) {
+			ShapeFilter(i, j, width, height, set, get, 2, 0.5f);
+		}
+	}
+	debugf("Generate mountain %d.\n", mountain);
+}
 
 
 
@@ -9409,31 +10929,34 @@ using namespace std;
 // 子类注册函数
 typedef void (*RegisterModTerrainsFunc)(TerrainFactory* factory);
 
-// 主程序检测子类
-class TestTerrain : public Terrain {
+// 海洋地形
+class OceanTerrain : public Terrain {
 public:
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试地形"; }
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
 
-    virtual float GetPriority() const override { return 1.0f; };
+    virtual float GetPriority() const override;
 
     virtual void DistributeTerrain(int width, int height,
-        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const override {
-        for (int i = 0; i < width; i++) {
-            for (int j = 0; j < 32; j++) {
-                set(i, j, GetType());
-                set(i, height - j - 1, GetType());
-            }
-        }
-        for (int j = 0; j < height; j++) {
-            for (int i = 0; i < 32; i++) {
-                set(i, j, GetType());
-                set(width - i - 1, j, GetType());
-            }
-        }
-    }
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const override;
 };
+
+// 山区地形
+class MountainTerrain : public Terrain {
+public:
+    static std::string GetId();
+    virtual std::string GetType() const override;
+    virtual std::string GetName() const override;
+
+    virtual float GetPriority() const override;
+
+    virtual void DistributeTerrain(int width, int height,
+        std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const override;
+};
+
+
+
 
 
 // ===== .\Forever\zone.cpp =====
@@ -9443,15 +10966,38 @@ public:
 
 using namespace std;
 
-int TestZone::count = 0;
+int FlatZone::count = 0;
 
-function<void(ZoneFactory*, BuildingFactory*, const vector<shared_ptr<Plot>>&)> TestZone::ZoneGenerator =
+FlatZone::FlatZone() {
+    name = count++;
+}
+
+string FlatZone::GetId() {
+    return "flat";
+}
+
+string FlatZone::GetType() const {
+    return "flat";
+}
+
+string FlatZone::GetName() const {
+    return "公寓园区" + to_string(name);
+}
+
+function<void(ZoneFactory*, BuildingFactory*, const vector<shared_ptr<Plot>>&)> FlatZone::ZoneGenerator =
     [](ZoneFactory* zoneFactory, BuildingFactory* buildingFactory, const vector<shared_ptr<Plot>>& plots) {
         for (const auto& plot : plots) {
-            auto zone = zoneFactory->CreateZone(TestZone::GetId());
+            auto zone = zoneFactory->CreateZone(FlatZone::GetId());
             if (zone) {
                 zone->SetAcreage(40000.f);
-				zone->AddBuildings(buildingFactory, { {"test", 1.f}, {"test", 1.f} });
+
+                vector<pair<string, float>> buildings;
+                int num = 40;
+                for (int i = 0; i < num; i++) {
+					buildings.push_back({ "flat", 1.f });
+                }
+				zone->AddBuildings(buildingFactory, buildings);
+
                 string name = zone->GetName();
                 plot->AddZone(name, move(zone));
             }
@@ -9468,16 +11014,14 @@ function<void(ZoneFactory*, BuildingFactory*, const vector<shared_ptr<Plot>>&)> 
 // 子类注册函数
 typedef void (*RegisterModZonesFunc)(ZoneFactory* factory);
 
-// 主程序检测子类
-class TestZone : public Zone {
+// 公寓园区
+class FlatZone : public Zone {
 public:
-    TestZone() {
-        name = count++;
-    }
+    FlatZone();
 
-    static std::string GetId() { return "test"; }
-    virtual std::string GetType() const override { return "test"; }
-    virtual std::string GetName() const override { return "测试园区" + std::to_string(name); }
+    static std::string GetId();
+    virtual std::string GetType() const;
+    virtual std::string GetName() const;
 
     static std::function<void(ZoneFactory*, BuildingFactory*, const std::vector<std::shared_ptr<Plot>>&)> ZoneGenerator;
     
@@ -9534,17 +11078,20 @@ public:
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return std::string("模组建筑") + std::to_string(name); }
 
-    static std::vector<float> GetPower() { return std::vector<float>(13, 1.f); }
+    static std::vector<float> GetPower() { return std::vector<float>(13, 0.1f); }
 
     virtual float RandomAcreage() const override { return 10000.f; }
     virtual float GetAcreageMin() const override { return 2000.f; }
     virtual float GetAcreageMax() const override { return 20000.f; }
 
+    virtual Rect LayoutConstruction() override {
+        return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
+    }
     virtual void LayoutRooms(RoomFactory* factory, std::unique_ptr<Layout>& layout) override {
         int direction = GetRandom(4);
 
         auto component = CreateComponent<ModComponent>();
-        ReadFloor(0, GetSizeX() / 2.f, GetSizeY() / 2.f, direction, "single_room", layout);
+        ReadFloor(0, direction, "single_room", layout);
         AssignRoom(0, 0, "mod", component, factory);
     }
 
@@ -9574,8 +11121,15 @@ public:
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "模组日程"; }
 
-    virtual std::pair<Time, Time> WorkingTime(Time date) const override {
-        return { Time("09:00:00.000"), Time("09:00:00.000") };
+    virtual Time SigninTime(Time date) const override {
+        Time t("09:00:00.000");
+        t.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+        return t;
+    }
+    virtual Time SignoutTime(Time date) const override {
+        Time t("17:00:00.000");
+        t.SetDate(date.GetYear(), date.GetMonth(), date.GetDay());
+        return t;
     }
 };
 
@@ -9667,6 +11221,10 @@ public:
     static std::string GetId() { return "mod"; }
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "模组职业"; }
+
+    virtual std::vector<std::string> GetScripts() const override {
+        return { "../Resources/scripts/jobs/mod.json" };
+    }
 };
 
 
@@ -9831,9 +11389,9 @@ public:
         return std::vector<std::pair<std::string, std::pair<int, int>>>();
     }
 
-    virtual std::vector<std::pair<std::string, std::vector<std::string>>> ArrageVacancies(
+    virtual std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>> ArrageVacancies(
         std::vector<std::pair<std::string, int>> components) const override {
-		return std::vector<std::pair<std::string, std::vector<std::string>>>();
+		return std::vector<std::pair<std::string, std::vector<std::vector<std::string>>>>();
     }
 
     virtual void SetCalendar(CalendarFactory* factory) override {
@@ -9845,6 +11403,9 @@ public:
         }
     }
 
+    virtual void ArrangeRooms() override {
+
+    }
 };
 
 
@@ -9868,7 +11429,20 @@ public:
 
     virtual void DistributeRoadnet(int width, int height,
         std::function<std::string(int, int)> get) override {
-
+        Node n1 = Node(width / 2.f + 32.f, height / 2.f + 32.f);
+        Node n2 = Node(width / 2.f - 32.f, height / 2.f + 32.f);
+        Node n3 = Node(width / 2.f - 32.f, height / 2.f - 32.f);
+        Node n4 = Node(width / 2.f + 32.f, height / 2.f - 32.f);
+        nodes.push_back(n1);
+        nodes.push_back(n2);
+        nodes.push_back(n3);
+        nodes.push_back(n4);
+        connections.push_back(Connection(this, 0, 1));
+        connections.push_back(Connection(this, 1, 2));
+        connections.push_back(Connection(this, 2, 3));
+        connections.push_back(Connection(this, 3, 0));
+        plots.push_back(std::make_shared<Plot>(n1, n2, n3, n4));
+        plots.back()->SetArea(AREA_GREEN);
     }
 };
 
@@ -9941,20 +11515,13 @@ public:
     virtual std::string GetType() const override { return "mod"; }
     virtual std::string GetName() const override { return "模组地形"; }
 
-    virtual float GetPriority() const override { return 2.0f; };
+    virtual float GetPriority() const override { return 0.0f; };
 
     virtual void DistributeTerrain(int width, int height,
         std::function<bool(int, int, const std::string)> set, std::function<std::string(int, int)> get) const override {
-        for (int i = 0; i < width; i++) {
-            for (int j = 32; j < 64; j++) {
+        for (int i = 0; i < 32; i++) {
+            for (int j = 0; j < 32; j++) {
                 set(i, j, GetType());
-                set(i, height - j - 1, GetType());
-            }
-        }
-        for (int j = 0; j < height; j++) {
-            for (int i = 32; i < 64; i++) {
-                set(i, j, GetType());
-                set(width - i - 1, j, GetType());
             }
         }
     }
@@ -10190,6 +11757,9 @@ CMD_TYPE Parser::GetAction(const string& action) const {
 	if (action == "event") {
 		return CMD_EVENT;
 	}
+	if (action == "lookup") {
+		return CMD_LOOKUP;
+	}
 	if (action == "print") {
 		return CMD_PRINT;
 	}
@@ -10257,6 +11827,7 @@ enum CMD_TYPE {
 	CMD_INIT, //全局初始化
 	CMD_PASS, //时钟前进
 	CMD_EVENT, //触发事件
+	CMD_LOOKUP, //查找对象
 	CMD_PRINT, //状态输出
 	CMD_EXIT //退出程序
 };
@@ -10352,30 +11923,31 @@ shared_ptr<Event> ParseEvent(Parser& parser) {
 int main() {
 	// 读取Map相关类及Mod
 	unique_ptr<Map> map(new Map());
+	map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 	map->InitTerrains();
 	map->InitRoadnets();
 	map->InitZones();
 	map->InitBuildings();
 	map->InitComponents();
 	map->InitRooms();
-	map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
 
 	// 读取Populace相关类及Mod
 	unique_ptr<Populace> populace(new Populace());
+	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 	populace->InitAssets();
 	populace->InitJobs();
 	populace->InitNames();
 	populace->InitSchedulers();
-	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 
 	// 读取Society相关类及Mod
 	unique_ptr<Society> society(new Society());
+	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 	society->InitCalendars();
 	society->InitOrganizations();
-	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 
 	// 读取Story相关类及Mod
 	unique_ptr<Story> story(new Story());
+	story->ReadConfigs(REPLACE_PATH("../Resources/configs/config_story.json"));
 	story->InitEvents();
 	story->InitChanges();
 
@@ -10407,18 +11979,28 @@ int main() {
 				map->Checkin(populace->GetCitizens(), populace->GetTime());
 				society->Init(map, populace);
 				populace->Schedule();
-				story->Init();
+				story->Init(populace);
 				string path = parser.GetOption("--story");
 				story->ReadStory(path);
+				populace->Jobstory(story);
 				populace->Characterize("../Resources/scripts/characters/", story);
 				break;
 			}
 			case CMD_PASS: { // 时间流逝
-				parser.AddOption("--tick", 0, "Ticks num to pass.", true, "0");
 				parser.AddOption("--sec", 0, "Seconds num to pass.", true, "0");
 				parser.AddOption("--min", 0, "Minutes num to pass.", true, "0");
 				parser.AddOption("--day", 0, "Days num to pass.", true, "0");
 				parser.ParseCmd(cmd);
+
+				if (parser.HasOption("--sec")) {
+					int secs = atoi(parser.GetOption("--sec").data());
+					for (int i = 0; i < secs; i++) {
+						map->Tick();
+						populace->Tick(map);
+						society->Tick();
+						story->Tick();
+					}
+				}
 
 				break;
 			}
@@ -10431,6 +12013,9 @@ int main() {
 
 				parser.ParseCmd(cmd);
 				auto event = ParseEvent(parser);
+				if (!event) {
+					THROW_EXCEPTION(CommandException, "Wrong input format.");
+				}
 
 				if (true) {
 					auto actions = story->MatchEvent(event);
@@ -10441,10 +12026,20 @@ int main() {
 							auto contents = dialog.GetDialogs();
 							if (contents.size() > 0) {
 								for (auto content : contents) {
-									if (content.first.size() == 0)
-										cout << story->ReplaceContent(content.second) << endl;
-									else
-										cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+									if (content.first.size() == 0) {
+										Condition condition;
+										condition.ParseCondition(content.second);
+										cout << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+											return story->GetValue(name);
+											})) << endl;
+									}
+									else{
+										Condition condition;
+										condition.ParseCondition(content.second);
+										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+											return story->GetValue(name);
+											})) << endl;
+									}
 								}
 								break;
 							}
@@ -10474,10 +12069,20 @@ int main() {
 							auto contents = dialog.GetDialogs();
 							if (contents.size() > 0) {
 								for (auto content : contents) {
-									if (content.first.size() == 0)
-										cout << story->ReplaceContent(content.second) << endl;
-									else
-										cout << story->ReplaceContent(content.first) << ": " << story->ReplaceContent(content.second) << endl;
+									if (content.first.size() == 0) {
+										Condition condition;
+										condition.ParseCondition(content.second);
+										cout << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+											return story->GetValue(name);
+											})) << endl;
+									}
+									else {
+										Condition condition;
+										condition.ParseCondition(content.second);
+										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+											return story->GetValue(name);
+											})) << endl;
+									}
 								}
 								break;
 							}
@@ -10492,6 +12097,40 @@ int main() {
 				}
 				break;
 			}
+			case CMD_LOOKUP: { // 查找信息
+				parser.AddOption("--id", 0, "Lookup citizen by id.", true, "");
+				parser.AddOption("--name", 0, "Lookup citizen by name.", true, "");
+				parser.ParseCmd(cmd);
+
+				if (parser.HasOption("--id")) {
+					int id = atoi(parser.GetOption("--id").data());
+					auto citizen = populace->GetCitizens()[id];
+
+					cout << "Citizen ID: " << citizen->GetId() << endl;
+					cout << "Name: " << citizen->GetName() << endl;
+					cout << "Age: " << populace->GetTime().GetYear() - citizen->GetBirthday().GetYear() << endl;
+					cout << "Options: " << endl;
+					for (auto option : citizen->GetOptions()) {
+						cout << "--" << option << endl;
+					}
+				}
+				else if (parser.HasOption("--name")) {
+					string name = parser.GetOption("--name");
+					for (auto citizen : populace->GetCitizens()) {
+						if (citizen->GetName() == name) {
+							cout << "Citizen ID: " << citizen->GetId() << endl;
+							cout << "Name: " << citizen->GetName() << endl;
+							cout << "Age: " << populace->GetTime().GetYear() - citizen->GetBirthday().GetYear() << endl;
+							cout << "Options: " << endl;
+							for (auto option : citizen->GetOptions()) {
+								cout << "--" << option << endl;
+							}
+							break;
+						}
+					}
+				}
+				break;
+			}
 			case CMD_PRINT: { // 输出当前状态
 				parser.AddOption("--map", 'm', "Whether to print the map.", false);
 				parser.AddOption("--populace", 'p', "Whether to print the populace.", false);
@@ -10501,8 +12140,7 @@ int main() {
 				break;
 			}
 			default:
-				parser.ParseCmd(cmd);
-
+				THROW_EXCEPTION(CommandException, "Wrong input format.");
 				break;
 			}
 
