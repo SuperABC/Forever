@@ -1,0 +1,105 @@
+[
+{
+	"milestone": "fuck_teen",
+	"visible": false,
+	"drop": "false",
+	"triggers": [{"condition": "$$self.gender == female && $$self.age > 14 && $$self.age < 18", "type": "option_dialog", "option": "约炮"}],
+	"dialogs": [
+		{"list": [
+			{"speaker": "$$player.name", "content": "$$self.name你好呀，很高兴认识你！"},
+			{"speaker": "$$self.name", "content": "你是谁呀？"},
+			{"speaker": "$$player.name", "content": "我是来带你玩的叔叔，今天我教你玩一个你从来没玩过的游戏好不好？"},
+			{"speaker": "$$self.name", "content": "你笑的太淫荡了，你不会是想和我约炮吧？"},
+			{"speaker": "$$player.name", "content": "你知道的还挺多呀，以前和别人性交过吗？"},
+			{"speaker": "$$self.name", "content": "那倒没有，不过看你也挺帅的，既然你想和我性交的话我就和你体验一下吧。"},
+			{"speaker": "$$player.name", "content": "我们到旁边的花园里吧，那边环境好一点。"},
+			{"speaker": "$$self.name", "content": "哇，要在室外吗？好刺激啊！"},
+			{"speaker": "$$player.name", "content": "特别刺激，旁边会有人围观的，你要好好表现。"},
+			{"content": "你拉着$$self.name的手来到了花园里。"},
+			{"content": "你们找到了一个长椅，$$self.name坐下就想开始脱衣服，但被你制止了。"},
+			{"speaker": "$$player.name", "content": "不用着急，按我说的做就好了。"},
+			{"content": "你坐到$$self.name旁边，一手抬起她的双腿放在你自己的腿上，然后另一只手搂着她的小蛮腰，从她后面按着她的头亲到了自己嘴上。"},
+			{"content": "在$$self.name不知所措的时候，你用舌头撬开了她的嘴，然后伸进她的嘴里开始舔她的舌头。"},
+			{"content": "$$self.name身体剧烈颤抖了一下，但很快她的舌头就开始回应你了，两个舌头快速地互相舔着。"},
+			{"content": "你的手从$$self.name的短裙下面摸了进去，把内裤掰到一边，然后摸了摸$$self.name的阴道口。"},
+			{"content": "$$self.name的身体是非常敏感的，只是亲了一小会，就已经有非常多的淫水流了出来。"},
+			{"speaker": "$$player.name", "content": "你能感觉到你的淫水不停地在往外流吗？"},
+			{"speaker": "$$self.name", "content": "能感觉到，是该开始性交了吗？"},
+			{"speaker": "$$player.name", "content": "嗯，你把内裤脱下来就可以了，短裙不影响的，另外胸罩也要解开。"},
+			{"content": "$$self.name脱下了内裤和胸罩放在了一边。"},
+			{"speaker": "$$player.name", "content": "来，你坐在旁边，破处让我来就可以了。"},
+			{"content": "你飞快地脱下了自己的裤子，阴茎这时候已经滚烫了。"},
+			{"content": "你抓着$$self.name的两条大白腿，扛在了肩膀上，然后半蹲着把龟头对准了$$self.name的阴道口。"},
+			{"speaker": "$$player.name", "content": "你准备好了吗？我要开始了哟。"},
+			{"speaker": "$$self.name", "content": "你开始吧，我看看是怎么回事。"},
+			{"content": "于是你往前一顶，龟头就塞进了$$self.name的阴道里。"},
+			{"speaker": "$$self.name", "content": "啊！好疼啊！"},
+			{"speaker": "$$player.name", "content": "疼是正常的，大声叫出来就好了。"},
+			{"speaker": "$$self.name", "content": "啊！啊！"},
+			{"content": "你掀起了$$self.name的衣服，然后双手抓住两个又大又白的乳房，继续使劲把阴茎往阴道里插。"},
+			{"speaker": "$$self.name", "content": "啊！啊！啊！啊！"},
+			{"content": "努力了很长时间，你终于把阴茎全部插进了阴道里。"},
+			{"speaker": "$$self.name", "content": "歇一会，歇一会，太疼了。"},
+			{"content": "由于$$self.name叫的声音太大，这时候已经来了一些路人在围观了。"},
+			{"speaker": "路人A", "content": "小妹妹这是在破处吧？第一次就敢在公园里，很勇敢！。"},
+			{"speaker": "路人B", "content": "好好珍惜破处的感觉吧，以后会怀念的。"},
+			{"content": "你并不想管其他人在想什么说什么，在感觉到$$self.name的身体已经不那么抗拒了之后，你抓着$$self.name的乳房就开始抽插起来。"},
+			{"speaker": "$$self.name", "content": "啊！啊！啊！啊！"},
+			{"content": "$$self.name又开始放声呻吟了起来。"},
+			{"content": "你弯下腰，整个人贴在了$$self.name身上，然后一口咬住了她的嘴唇。"},
+			{"speaker": "$$self.name", "content": "呜呜呜！"},
+			{"content": "$$self.name嘴被封住叫不出来了，只剩每次抽插时睾丸打在$$self.name屁股上的啪啪声。"},
+			{"content": "$$self.name"},
+			{"content": "$$self.name"},
+			{"content": "$$self.name"},
+			{"content": "$$self.name"},
+			{"content": "$$self.name"}
+		]}
+	],
+	"changes": [
+	],
+	"subsequences": []
+},
+{
+	"milestone": "fuck_girl",
+	"visible": false,
+	"drop": "false",
+	"triggers": [{"condition": "$$self.gender == female && $$self.age > 18 && $$self.age < 22", "type": "option_dialog", "option": "约炮"}],
+	"dialogs": [
+		{"list": [
+			{"content": "性格脚本测试成功。"}
+		]}
+	],
+	"changes": [
+	],
+	"subsequences": []
+},
+{
+	"milestone": "fuck_young",
+	"visible": false,
+	"drop": "false",
+	"triggers": [{"condition": "$$self.gender == female && $$self.age > 22 && $$self.age < 30", "type": "option_dialog", "option": "约炮"}],
+	"dialogs": [
+		{"list": [
+			{"content": "性格脚本测试成功。"}
+		]}
+	],
+	"changes": [
+	],
+	"subsequences": []
+},
+{
+	"milestone": "fuck_women",
+	"visible": false,
+	"drop": "false",
+	"triggers": [{"condition": "$$self.gender == female && $$self.age > 30 && $$self.age < 40", "type": "option_dialog", "option": "约炮"}],
+	"dialogs": [
+		{"list": [
+			{"content": "性格脚本测试成功。"}
+		]}
+	],
+	"changes": [
+	],
+	"subsequences": []
+}
+]

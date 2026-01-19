@@ -40,7 +40,7 @@ public:
 	void Destroy();
 
 	// 时钟前进
-	void Tick();
+	void Tick(int day, int hour, int min, int sec);
 
 	// 输出当前剧本信息
 	void Print();

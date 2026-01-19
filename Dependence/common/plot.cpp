@@ -32,6 +32,16 @@ float Connection::distance() const {
     return std::sqrt(dx * dx + dy * dy);
 }
 
+bool Connection::operator==(Connection& other) {
+    if (vertices.first == other.vertices.first && vertices.second == other.vertices.second)return true;
+    if (vertices.first == other.vertices.second && vertices.second == other.vertices.first)return true;
+    return false;
+}
+
+std::shared_ptr<Roadnet> Connection::GetRoadnet() const {
+    return roadnet;
+}
+
 int Connection::GetV1() const {
     return vertices.first;
 }
@@ -72,11 +82,11 @@ void Plot::SetArea(AREA_TYPE area) {
     this->area = area;
 }
 
-std::vector<Connection> Plot::GetRoads() {
+std::vector<std::pair<Connection, float>> Plot::GetRoads() {
     return roads;
 }
 
-void Plot::SetRoads(std::vector<Connection> roads) {
+void Plot::SetRoads(std::vector<std::pair<Connection, float>> roads) {
     this->roads = roads;
 }
 

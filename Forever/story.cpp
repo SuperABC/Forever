@@ -137,7 +137,7 @@ void Story::Destroy() {
 
 }
 
-void Story::Tick() {
+void Story::Tick(int day, int hour, int min, int sec) {
 
 }
 

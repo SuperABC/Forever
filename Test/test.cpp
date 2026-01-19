@@ -108,18 +108,28 @@ int main() {
 			case CMD_PASS: { // 时间流逝
 				parser.AddOption("--sec", 0, "Seconds num to pass.", true, "0");
 				parser.AddOption("--min", 0, "Minutes num to pass.", true, "0");
+				parser.AddOption("--hour", 0, "Hours num to pass.", true, "0");
 				parser.AddOption("--day", 0, "Days num to pass.", true, "0");
 				parser.ParseCmd(cmd);
 
+				int days, hours, mins, secs;
 				if (parser.HasOption("--sec")) {
-					int secs = atoi(parser.GetOption("--sec").data());
-					for (int i = 0; i < secs; i++) {
-						map->Tick();
-						populace->Tick(map);
-						society->Tick();
-						story->Tick();
-					}
+					secs = atoi(parser.GetOption("--sec").data());
 				}
+				if (parser.HasOption("--min")) {
+					mins = atoi(parser.GetOption("--min").data());
+				}
+				if (parser.HasOption("--hour")) {
+					hours = atoi(parser.GetOption("--hour").data());
+				}
+				if (parser.HasOption("--day")) {
+					days = atoi(parser.GetOption("--day").data());
+				}
+
+				map->Tick(days, hours, mins, secs);
+				populace->Tick(map, days, hours, mins, secs);
+				society->Tick(days, hours, mins, secs);
+				story->Tick(days, hours, mins, secs);
 
 				break;
 			}
@@ -152,7 +162,7 @@ int main() {
 											return story->GetValue(name);
 											})) << endl;
 									}
-									else{
+									else {
 										Condition condition;
 										condition.ParseCondition(content.second);
 										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> ValueType {

@@ -249,7 +249,7 @@ void Society::Destroy() {
     organizations.clear();
 }
 
-void Society::Tick() {
+void Society::Tick(int day, int hour, int min, int sec) {
 
 }
 

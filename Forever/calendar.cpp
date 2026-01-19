@@ -44,8 +44,8 @@ Time StandardCalendar::SignoutTime(Time date) const {
 }
 
 FullCalendar::FullCalendar() {
-	on = Time(string("06:00:00.000"));
-	off = Time(string("18:00:00.000"));
+	on = Time(string("00:00:01.000"));
+	off = Time(string("23:59:59.000"));
 }
 
 FullCalendar::~FullCalendar() {

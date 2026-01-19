@@ -680,7 +680,7 @@ void Map::Destroy() {
     blocks.clear();
 }
 
-void Map::Tick() {
+void Map::Tick(int day, int hour, int min, int sec) {
 
 }
 

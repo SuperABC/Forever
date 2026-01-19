@@ -284,48 +284,48 @@ void Populace::Destroy() {
 
 }
 
-void Populace::Tick(unique_ptr<Map> &map) {
-	time.AddSeconds(1);
+void Populace::Tick(unique_ptr<Map> &map, int day, int hour, int min, int sec) {
+	time.AddSeconds(sec);
+	time.AddMinutes(min);
+	time.AddHours(hour);
+	time.AddDays(day);
 
 	for (auto citizen : citizens) {
-		if (citizen->GetScheduler()->GetStatus() == "home_rest") {
+		bool idle = true;
+		for (auto job : citizen->GetJobs()) {
+			auto signin = job->GetCalendar()->SigninTime(time);
+			auto signout = job->GetCalendar()->SignoutTime(time);
+
 			int i = 0;
-			for (auto job : citizen->GetJobs()) {
-				auto signin = job->GetCalendar()->SigninTime(time);
-				if (signin.GetYear() > 0 && time > signin) {
-					citizen->SetStatus(job->GetPosition(),
-						map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
-							job->GetPosition()->GetParentBuilding()->GetParentPlot()), time);
-					citizen->GetScheduler()->SetStatus("commute_work");
-					citizen->SetWork(i);
-					break;
-				}
-				i++;
-			}
-		}
-		else if (citizen->GetScheduler()->GetStatus() == "commute_work") {
-			if (citizen->GetCurrentCommute().FinishCommute(time)) {
-				citizen->SetStatus(citizen->GetCurrentCommute().GetTarget());
+			if (signin.GetYear() > 0 && time > signin && signout.GetYear() > 0 && time < signout) {
+				citizen->SetStatus(job->GetPosition());
 				citizen->GetScheduler()->SetStatus("work_job");
-			}
-		}
-		else if (citizen->GetScheduler()->GetStatus() == "work_job") {
-			auto work = citizen->GetWork();
-			auto signout = work->GetCalendar()->SignoutTime(time);
-			if (signout.GetYear() > 0 && time > signout) {
-				citizen->SetStatus(citizen->GetHome(), 
-					map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
-						work->GetPosition()->GetParentBuilding()->GetParentPlot()), time);
-				citizen->GetScheduler()->SetStatus("commute_home");
-				citizen->SetWork(-1);
+				idle = false;
 				break;
 			}
-		}
-		else if (citizen->GetScheduler()->GetStatus() == "commute_home") {
-			if (citizen->GetCurrentCommute().FinishCommute(time)) {
-				citizen->SetStatus(citizen->GetCurrentCommute().GetTarget());
-				citizen->GetScheduler()->SetStatus("home_rest");
+			else if (signin.GetYear() > 0 && time > signin - Time(0, 0, 0, 0, 30, 0)) {
+				citizen->SetStatus(job->GetPosition(),
+					map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
+						job->GetPosition()->GetParentBuilding()->GetParentPlot()), signin - Time(0, 0, 0, 0, 30, 0));
+				citizen->GetScheduler()->SetStatus("commute_work");
+				citizen->SetWork(i);
+				idle = false;
+				break;
 			}
+			else if (signout.GetYear() > 0 && time < signout + Time(0, 0, 0, 0, 30, 0)) {
+				citizen->SetStatus(citizen->GetHome(),
+					map->GetRoadnet()->AutoNavigate(job->GetPosition()->GetParentBuilding()->GetParentPlot(),
+						citizen->GetHome()->GetParentBuilding()->GetParentPlot()), signout);
+				citizen->GetScheduler()->SetStatus("commute_home");
+				citizen->SetWork(-1);
+				idle = false;
+				break;
+			}
+			i++;
+		}
+		if (idle) {
+			citizen->SetStatus(citizen->GetHome());
+			citizen->GetScheduler()->SetStatus("home_rest");
 		}
 	}
 }

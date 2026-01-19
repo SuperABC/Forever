@@ -45,7 +45,7 @@ public:
 	void Destroy();
 
 	// 时钟前进
-	void Tick(std::unique_ptr<Map>& map);
+	void Tick(std::unique_ptr<Map>& map, int day, int hour, int min, int sec);
 
 	// 输出当前地图
 	void Print();

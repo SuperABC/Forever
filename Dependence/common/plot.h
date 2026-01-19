@@ -31,10 +31,13 @@ public:
 	Connection(std::shared_ptr<Roadnet> roadnet, int n1, int n2, float begin = 0.0f, float end = 1.0f);
 	~Connection() = default;
 
-	float distance() const;
+	bool operator==(Connection& other);
+
+	std::shared_ptr<Roadnet> GetRoadnet() const;
 
 	int GetV1() const;
 	int GetV2() const;
+	float distance() const;
 
 private:
 	std::shared_ptr<Roadnet> roadnet;
@@ -71,8 +74,8 @@ public:
 	void SetRotation(float r);
 	AREA_TYPE GetArea() const;
 	void SetArea(AREA_TYPE area);
-	std::vector<Connection> GetRoads();
-	void SetRoads(std::vector<Connection> roads);
+	std::vector<std::pair<Connection, float>> GetRoads();
+	void SetRoads(std::vector<std::pair<Connection, float>> roads);
 
 	// 世界坐标变换
 	std::pair<float, float> GetVertex(int idx) const;
@@ -98,7 +101,7 @@ protected:
 	float rotation;
 	AREA_TYPE area = AREA_GREEN;
 
-	std::vector<Connection> roads;
+	std::vector<std::pair<Connection, float>> roads;
 
 	std::vector<std::pair<std::string, std::shared_ptr<Zone>>> zones;
 	std::vector<std::pair<std::string, std::shared_ptr<Building>>> buildings;
