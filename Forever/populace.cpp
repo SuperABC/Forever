@@ -207,6 +207,10 @@ void Populace::Init(int accomodation) {
 	GenerateEducations();
 	GenerateEmotions();
 	GenerateJobs();
+
+	for (auto citizen : citizens) {
+		citizen->UpdateValues(time);
+	}
 }
 
 void Populace::Schedule() {
@@ -327,6 +331,8 @@ void Populace::Tick(unique_ptr<Map> &map, int day, int hour, int min, int sec) {
 			citizen->SetStatus(citizen->GetHome());
 			citizen->GetScheduler()->SetStatus("home_rest");
 		}
+
+		citizen->UpdateValues(time);
 	}
 }
 
@@ -405,7 +411,7 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
 
 	for(auto & citizen : citizens) {
 		if (citizen->GetName() == name) {
-			return citizen->MatchEvent(event, story);
+			return citizen->MatchEvent(event, story, citizen);
 		}
 	}
 
@@ -415,7 +421,7 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
 	int id, shared_ptr<Event> event, unique_ptr<Story>& story) {
 	if (id >= 0 && id < citizens.size()) {
-		return citizens[id]->MatchEvent(event, story);
+		return citizens[id]->MatchEvent(event, story, citizens[id]);
 	}
 
 	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());

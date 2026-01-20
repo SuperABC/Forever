@@ -3,7 +3,7 @@
 	"milestone": "fuck_teen",
 	"visible": false,
 	"drop": "false",
-	"triggers": [{"condition": "$$self.gender == female && $$self.age > 14 && $$self.age < 18", "type": "option_dialog", "option": "约炮"}],
+	"triggers": [{"condition": "$$self.gender == female && $$self.age >= 14 && $$self.age < 18", "type": "option_dialog", "option": "约炮"}],
 	"dialogs": [
 		{"list": [
 			{"speaker": "$$player.name", "content": "$$self.name你好呀，很高兴认识你！"},
@@ -77,7 +77,7 @@
 	"milestone": "fuck_girl",
 	"visible": false,
 	"drop": "false",
-	"triggers": [{"condition": "$$self.gender == female && $$self.age > 18 && $$self.age < 22", "type": "option_dialog", "option": "约炮"}],
+	"triggers": [{"condition": "$$self.gender == female && $$self.age >= 18 && $$self.age < 22", "type": "option_dialog", "option": "约炮"}],
 	"dialogs": [
 		{"list": [
 			{"content": ""}
@@ -91,7 +91,7 @@
 	"milestone": "fuck_young",
 	"visible": false,
 	"drop": "false",
-	"triggers": [{"condition": "$$self.gender == female && $$self.age > 22 && $$self.age < 30", "type": "option_dialog", "option": "约炮"}],
+	"triggers": [{"condition": "$$self.gender == female && $$self.age >= 22 && $$self.age < 30", "type": "option_dialog", "option": "约炮"}],
 	"dialogs": [
 		{"list": [
 			{"content": ""}
@@ -105,7 +105,7 @@
 	"milestone": "fuck_women",
 	"visible": false,
 	"drop": "false",
-	"triggers": [{"condition": "$$self.gender == female && $$self.age > 30 && $$self.age < 40", "type": "option_dialog", "option": "约炮"}],
+	"triggers": [{"condition": "$$self.gender == female && $$self.age >= 30 && $$self.age < 40", "type": "option_dialog", "option": "约炮"}],
 	"dialogs": [
 		{"list": [
 			{"content": ""}

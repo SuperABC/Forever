@@ -8,6 +8,7 @@
 
 
 class Story;
+class Person;
 
 class Script {
 public:
@@ -22,6 +23,8 @@ public:
 	// 匹配事件
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
 		std::shared_ptr<Event> event, Story* story);
+	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
+		std::shared_ptr<Event> event, Story* story, std::shared_ptr<Person> person);
 
 private:
 	std::vector<MilestoneNode> milestones;

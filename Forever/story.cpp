@@ -188,6 +188,17 @@ bool Story::JudgeCondition(Condition& condition) {
 		});
 }
 
+bool Story::JudgeCondition(Condition& condition, shared_ptr<Person> person) {
+	return condition.EvaluateBool({
+		[this](string name) -> pair<bool, ValueType> {
+			return this->GetValue(name);
+		},
+		[person](string name) -> pair<bool, ValueType> {
+			return person->GetValue(name);
+		}
+	});
+}
+
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Event> event) {
 	return script->MatchEvent(event, this);
 }

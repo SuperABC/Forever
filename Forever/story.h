@@ -57,6 +57,7 @@ public:
 
 	// 判断条件
 	bool JudgeCondition(Condition &condition);
+	bool JudgeCondition(Condition& condition, std::shared_ptr<Person> person);
 
 	// 匹配事件
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
@@ -71,9 +72,8 @@ private:
 	std::unique_ptr<EventFactory> eventFactory;
 	std::unique_ptr<ChangeFactory> changeFactory;
 
-	std::unordered_map<std::string, ValueType> variables;
-
 	std::unique_ptr<Script> script;
+	std::unordered_map<std::string, ValueType> variables;
 
 	// 初始化全局变量
 	void InitVariables(std::unique_ptr<Populace>& populace);

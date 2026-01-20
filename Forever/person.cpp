@@ -267,14 +267,32 @@ void Person::AddScript(shared_ptr<Script> script) {
 }
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Person::MatchEvent(
-	shared_ptr<Event> event, unique_ptr<Story>& story) {
+	shared_ptr<Event> event, unique_ptr<Story>& story, shared_ptr<Person> person) {
 	for (auto& script : scripts) {
-		auto result = script->MatchEvent(event, story.get());
+		auto result = script->MatchEvent(event, story.get(), person);
 		if (!result.first.empty() || !result.second.empty()) {
 			return result;
 		}
 	}
 	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
+}
+
+pair<bool, ValueType> Person::GetValue(const string& name) {
+	auto it = variables.find(name);
+	if (it != variables.end()) {
+		return { true, it->second };
+	}
+	return { false, 0 };
+}
+
+void Person::UpdateValues(Time t) {
+	variables["self.name"] = name;
+	variables["self.gender"] = gender == GENDER_FEMALE ? "female" : "male";
+	variables["self.age"] = GetAge(t);
+}
+
+void Person::SetValue(const string& name, ValueType value) {
+	variables[name] = value;
 }
 
 bool Person::AddOption(std::string option) {

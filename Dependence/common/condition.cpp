@@ -18,13 +18,18 @@ VariableExpression::VariableExpression(const string& n) : name(n) {
 }
 
 ValueType VariableExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
-    auto value = getValue(name);
-    if (value.first) {
-        return value.second;
-    }
-    else {
-        return 0;
-    }
+	std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = { getValue };
+    return Evaluate(getValues);
+}
+
+ValueType VariableExpression::Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
+    for(auto getValue : getValues) {
+        auto value = getValue(name);
+        if (value.first) {
+            return value.second;
+        }
+	}
+    return 0;
 }
 
 ConstantExpression::ConstantExpression(ValueType v) : value(v) {
@@ -35,14 +40,23 @@ ValueType ConstantExpression::Evaluate(function<pair<bool, ValueType>(const stri
     return value;
 }
 
+ValueType ConstantExpression::Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
+    return value;
+}
+
 ArrayExpression::ArrayExpression(vector<shared_ptr<Expression>> es)
     : elements(move(es)) {
 }
 
 ValueType ArrayExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
+    std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = { getValue };
+    return Evaluate(getValues);
+}
+
+ValueType ArrayExpression::Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
     string result = "[";
     for (size_t i = 0; i < elements.size(); ++i) {
-        auto value = elements[i]->Evaluate(getValue);
+        auto value = elements[i]->Evaluate(getValues);
         result += ToString(value);
         if (i < elements.size() - 1) {
             result += ", ";
@@ -53,9 +67,14 @@ ValueType ArrayExpression::Evaluate(function<pair<bool, ValueType>(const string&
 }
 
 vector<ValueType> ArrayExpression::GetElementValues(function<pair<bool, ValueType>(const string&)> getValue) const {
+    std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = { getValue };
+    return GetElementValues(getValues);
+}
+
+std::vector<ValueType> ArrayExpression::GetElementValues(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
     vector<ValueType> values;
     for (const auto& element : elements) {
-        values.push_back(element->Evaluate(getValue));
+        values.push_back(element->Evaluate(getValues));
     }
     return values;
 }
@@ -66,7 +85,12 @@ UnaryExpression::UnaryExpression(UnaryOperator op, shared_ptr<Expression> operan
 }
 
 ValueType UnaryExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
-    auto value = expression->Evaluate(getValue);
+    std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = { getValue };
+    return Evaluate(getValues);
+}
+
+ValueType UnaryExpression::Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
+    auto value = expression->Evaluate(getValues);
 
     switch (operand) {
     case UnaryOperator::NEGATE:
@@ -123,16 +147,21 @@ BinaryExpression::BinaryExpression(shared_ptr<Expression> l,
 }
 
 ValueType BinaryExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
+    std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = { getValue };
+    return Evaluate(getValues);
+}
+
+ValueType BinaryExpression::Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
     if (operand == BinaryOperator::INCLUDE) {
         auto array_expr = dynamic_cast<ArrayExpression*>(right.get());
         if (!array_expr) {
             THROW_EXCEPTION(InvalidConfigException, "Right operand of 'in' must be an array.\n");
         }
 
-        auto array_values = array_expr->GetElementValues(getValue);
+        auto array_values = array_expr->GetElementValues(getValues);
         bool found = false;
 
-        auto left_val = left->Evaluate(getValue);
+        auto left_val = left->Evaluate(getValues);
         for (const auto& array_val : array_values) {
             if (GetComparisonResult(left_val, array_val, BinaryOperator::EQUAL)) {
                 found = true;
@@ -144,21 +173,21 @@ ValueType BinaryExpression::Evaluate(function<pair<bool, ValueType>(const string
     }
 
     if (operand == BinaryOperator::LOGICAL_AND) {
-        bool left_val = ConvertToBool(left->Evaluate(getValue));
+        bool left_val = ConvertToBool(left->Evaluate(getValues));
         if (!left_val) return false;
-        bool right_val = ConvertToBool(right->Evaluate(getValue));
+        bool right_val = ConvertToBool(right->Evaluate(getValues));
         return right_val;
     }
 
     if (operand == BinaryOperator::LOGICAL_OR) {
-        bool left_val = ConvertToBool(left->Evaluate(getValue));
+        bool left_val = ConvertToBool(left->Evaluate(getValues));
         if (left_val) return true;
-        bool right_val = ConvertToBool(right->Evaluate(getValue));
+        bool right_val = ConvertToBool(right->Evaluate(getValues));
         return right_val;
     }
 
-    auto left_val = left->Evaluate(getValue);
-    auto right_val = right->Evaluate(getValue);
+    auto left_val = left->Evaluate(getValues);
+    auto right_val = right->Evaluate(getValues);
 
     switch (operand) {
     case BinaryOperator::EQUAL:
@@ -348,11 +377,16 @@ bool Condition::ParseCondition(const string& conditionStr) {
 }
 
 bool Condition::EvaluateBool(function<pair<bool, ValueType>(const string&)> getValue) const {
+    std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = { getValue };
+    return EvaluateBool(getValues);
+}
+
+bool Condition::EvaluateBool(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
     if (!root) {
         return true;
     }
 
-    auto result = root->Evaluate(getValue);
+    auto result = root->Evaluate(getValues);
     if (auto bool_val = get_if<bool>(&result)) {
         return *bool_val;
     }
@@ -360,10 +394,15 @@ bool Condition::EvaluateBool(function<pair<bool, ValueType>(const string&)> getV
 }
 
 ValueType Condition::EvaluateValue(function<pair<bool, ValueType>(const string&)> getValue) const {
+    std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = { getValue };
+    return EvaluateValue(getValues);
+}
+
+ValueType Condition::EvaluateValue(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
     if (!root) {
         return 0;
     }
-    return root->Evaluate(getValue);
+    return root->Evaluate(getValues);
 }
 
 vector<string> Condition::Tokenize(const string& expr) {

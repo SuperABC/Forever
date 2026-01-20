@@ -17,14 +17,14 @@ using namespace std;
 
 // 解析命令行输入事件
 shared_ptr<Event> ParseEvent(Parser& parser) {
-    string type = parser.GetOption("--type");
-	int id;
-    string target = "";
-    string option = "";
+	string type = parser.GetOption("--type");
+	int id = -1;
+	string target = "";
+	string option = "";
 
-    if (type == "game_start") {
-        return make_shared<GameStartEvent>();
-    }
+	if (type == "game_start") {
+		return make_shared<GameStartEvent>();
+	}
 	else if (type == "option_dialog") {
 		if (parser.HasOption("--id")) id = stoi(parser.GetOption("--id"));
 		if (parser.HasOption("--target")) target = parser.GetOption("--target");
@@ -36,7 +36,7 @@ shared_ptr<Event> ParseEvent(Parser& parser) {
 		}
 	}
 
-    return nullptr;
+	return nullptr;
 }
 
 int main() {
@@ -185,12 +185,20 @@ int main() {
 					auto target = dynamic_pointer_cast<OptionDialogEvent>(event)->GetTarget();
 					auto idx = dynamic_pointer_cast<OptionDialogEvent>(event)->GetIdx();
 					pair<vector<Dialog>, vector<shared_ptr<Change>>> actions;
+					shared_ptr<Person> person = nullptr;
 					if (target.size() == 0) {
 						actions = populace->TriggerEvent(idx, event, story);
+						person = populace->GetCitizens()[idx];
 					}
 					else {
 						actions = populace->TriggerEvent(target, event, story);
+						person = populace->GetCitizen(target);
 					}
+
+					if (person == nullptr) {
+						THROW_EXCEPTION(CommandException, "Citizen not found.");
+					}
+
 					auto dialogs = actions.first;
 					auto changes = actions.second;
 					for (auto dialog : dialogs) {
@@ -201,16 +209,31 @@ int main() {
 									if (content.first.size() == 0) {
 										Condition condition;
 										condition.ParseCondition(content.second);
-										cout << ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
-											return story->GetValue(name);
-											})) << endl;
+										std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = {
+											[&](string name) -> pair<bool, ValueType> {
+												return story->GetValue(name);
+											},
+											[&](string name) -> pair<bool, ValueType> {
+												return person->GetValue(name);
+											}
+										};
+										cout << ToString(condition.EvaluateValue(getValues)) << endl;
 									}
 									else {
-										Condition condition;
-										condition.ParseCondition(content.second);
-										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
-											return story->GetValue(name);
-											})) << endl;
+										Condition conditionSpeaker;
+										conditionSpeaker.ParseCondition(content.first);
+										Condition conditionContent;
+										conditionContent.ParseCondition(content.second);
+										std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = {
+											[&](string name) -> pair<bool, ValueType> {
+												return story->GetValue(name);
+											},
+											[&](string name) -> pair<bool, ValueType> {
+												return person->GetValue(name);
+											}
+										};
+										cout << ToString(conditionSpeaker.EvaluateValue(getValues)) << ": " <<
+											ToString(conditionContent.EvaluateValue(getValues)) << endl;
 									}
 								}
 								break;
@@ -237,7 +260,7 @@ int main() {
 
 					cout << "Citizen ID: " << citizen->GetId() << endl;
 					cout << "Name: " << citizen->GetName() << endl;
-					cout << "Age: " << populace->GetTime().GetYear() - citizen->GetBirthday().GetYear() << endl;
+					cout << "Age: " << citizen->GetAge(populace->GetTime()) << endl;
 					cout << "Options: " << endl;
 					for (auto option : citizen->GetOptions()) {
 						cout << "--" << option << endl;
@@ -278,7 +301,7 @@ int main() {
 				parser.PrintHelp(type);
 			}
 		}
-		catch (ExceptionBase &e) {
+		catch (ExceptionBase& e) {
 			cout << e.GetDetailedInfo() << endl;
 		}
 

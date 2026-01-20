@@ -31,10 +31,10 @@ class OptionDialogEvent : public Event {
 public:
 	OptionDialogEvent() {}
 	OptionDialogEvent(std::string target, std::string option)
-		: target(target), option(option) {
+		: idx(-1), target(target), option(option) {
 	}
 	OptionDialogEvent(int idx, std::string option)
-		: idx(idx), option(option) {
+		: idx(idx), target(""), option(option) {
 	}
 	virtual ~OptionDialogEvent() {}
 
@@ -45,6 +45,10 @@ public:
 	virtual bool operator==(std::shared_ptr<Event> e) {
 		if(!e)return false;
 		if (GetType() != e->GetType())return false;
+		if (idx == -1 && target == "" ||
+			std::dynamic_pointer_cast<OptionDialogEvent>(e)->idx == -1 && std::dynamic_pointer_cast<OptionDialogEvent>(e)->target == "") {
+			return option == std::dynamic_pointer_cast<OptionDialogEvent>(e)->option;
+		}
 
 		return target == std::dynamic_pointer_cast<OptionDialogEvent>(e)->target &&
 			option == std::dynamic_pointer_cast<OptionDialogEvent>(e)->option;

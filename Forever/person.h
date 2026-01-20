@@ -110,7 +110,10 @@ public:
 	// 管理剧本
 	void AddScript(std::shared_ptr<Script> script);
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(
-		std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+		std::shared_ptr<Event> event, std::unique_ptr<Story>& story, std::shared_ptr<Person> person);
+	void SetValue(const std::string& name, ValueType value);
+	std::pair<bool, ValueType> GetValue(const std::string& name);
+	void UpdateValues(Time t);
 	bool AddOption(std::string option);
 	bool RemoveOption(std::string option);
 	std::unordered_set<std::string> GetOptions();
@@ -154,6 +157,7 @@ private:
 	std::vector<JobExperience> jobExperiences;
 
 	std::vector<std::shared_ptr<Script>> scripts;
+	std::unordered_map<std::string, ValueType> variables;
 	std::unordered_set<std::string> options;
 
 	std::shared_ptr<Plot> currentPlot;

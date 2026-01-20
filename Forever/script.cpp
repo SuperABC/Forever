@@ -159,6 +159,57 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(
 	return results;
 }
 
+std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> Script::MatchEvent(std::shared_ptr<Event> event, Story* story, std::shared_ptr<Person> person) {
+	pair<vector<Dialog>, vector<shared_ptr<Change>>> results;
+	results.first.clear();
+	results.second.clear();
+
+	vector<MilestoneNode*> tmps;
+	for (auto it = actives.begin(); it != actives.end(); ) {
+		bool match = false;
+		for (auto trigger : (*it)->content.GetTriggers()) {
+			if (!story->JudgeCondition(trigger->GetCondition(), person)) {
+				continue;
+			}
+
+			if ((*it)->content.MatchTrigger(event)) {
+				match = true;
+				break;
+			}
+		}
+
+		if (match) {
+			auto subsequents = (*it)->subsequents;
+			for (auto subsequent : subsequents) {
+				subsequent->premise--;
+				if (subsequent->premise <= 0) {
+					tmps.push_back(subsequent);
+				}
+			}
+
+			auto dialogs = (*it)->content.GetDialogs();
+			results.first.insert(results.first.end(), dialogs.begin(), dialogs.end());
+			auto changes = (*it)->content.GetChanges();
+			results.second.insert(results.second.end(), changes.begin(), changes.end());
+
+			if ((*it)->content.DropSelf([&story](string name) -> pair<bool, ValueType> {
+				return story->GetValue(name);
+				})) {
+				it = actives.erase(it);
+			}
+			else {
+				it++;
+			}
+		}
+		else {
+			it++;
+		}
+	}
+	actives.insert(actives.end(), tmps.begin(), tmps.end());
+
+	return results;
+}
+
 vector<shared_ptr<Event>> Script::BuildEvent(JsonValue root, unique_ptr<EventFactory> &factory) {
 	vector<shared_ptr<Event>> events;
 
