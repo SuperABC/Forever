@@ -26,7 +26,7 @@ public:
     std::string GetName();
     bool IsVisible();
 	Condition DropCondition();
-    bool DropSelf(std::function<ValueType(const std::string&)> getValue);
+    bool DropSelf(std::function<std::pair<bool, ValueType>(const std::string&)> getValue);
     std::string GetDescription();
     std::string GetGoal();
 

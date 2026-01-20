@@ -140,6 +140,7 @@ private:
 	bool simulate = true;
 
 	std::vector<std::pair<RELATIVE_TYPE, std::shared_ptr<Person>>> relatives;
+	std::vector<std::pair<std::string, std::shared_ptr<Person>>> acquaintances;
 
 	std::vector<std::shared_ptr<Asset>> assets;
 	std::vector<std::shared_ptr<Job>> jobs;

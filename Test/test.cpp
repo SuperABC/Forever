@@ -112,7 +112,7 @@ int main() {
 				parser.AddOption("--day", 0, "Days num to pass.", true, "0");
 				parser.ParseCmd(cmd);
 
-				int days, hours, mins, secs;
+				int days = 0, hours = 0, mins = 0, secs = 0;
 				if (parser.HasOption("--sec")) {
 					secs = atoi(parser.GetOption("--sec").data());
 				}
@@ -158,14 +158,14 @@ int main() {
 									if (content.first.size() == 0) {
 										Condition condition;
 										condition.ParseCondition(content.second);
-										cout << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+										cout << ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 											return story->GetValue(name);
 											})) << endl;
 									}
 									else {
 										Condition condition;
 										condition.ParseCondition(content.second);
-										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 											return story->GetValue(name);
 											})) << endl;
 									}
@@ -201,14 +201,14 @@ int main() {
 									if (content.first.size() == 0) {
 										Condition condition;
 										condition.ParseCondition(content.second);
-										cout << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+										cout << ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 											return story->GetValue(name);
 											})) << endl;
 									}
 									else {
 										Condition condition;
 										condition.ParseCondition(content.second);
-										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> ValueType {
+										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 											return story->GetValue(name);
 											})) << endl;
 									}

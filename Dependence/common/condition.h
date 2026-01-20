@@ -41,7 +41,7 @@ class Expression {
 public:
     virtual ~Expression() = default;
 
-    virtual ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const = 0;
+    virtual ValueType Evaluate(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const = 0;
 };
 
 class VariableExpression : public Expression {
@@ -50,7 +50,7 @@ private:
 public:
     VariableExpression(const std::string& n);
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+    ValueType Evaluate(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const override;
 };
 
 class ConstantExpression : public Expression {
@@ -59,7 +59,7 @@ private:
 public:
     ConstantExpression(ValueType v);
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+    ValueType Evaluate(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const override;
 };
 
 class ArrayExpression : public Expression {
@@ -69,9 +69,9 @@ private:
 public:
     ArrayExpression(std::vector<std::shared_ptr<Expression>> es);
 
-    std::vector<ValueType> GetElementValues(std::function<ValueType(const std::string&)> getValue) const;
+    std::vector<ValueType> GetElementValues(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const;
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+    ValueType Evaluate(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const override;
 };
 
 class UnaryExpression : public Expression {
@@ -82,7 +82,7 @@ private:
 public:
     UnaryExpression(UnaryOperator op, std::shared_ptr<Expression> operand);
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+    ValueType Evaluate(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const override;
 
 private:
     ValueType ApplyNegate(const ValueType& value) const;
@@ -101,7 +101,7 @@ private:
 public:
     BinaryExpression(std::shared_ptr<Expression> l, std::shared_ptr<Expression> r, BinaryOperator op);
 
-    ValueType Evaluate(std::function<ValueType(const std::string&)> getValue) const override;
+    ValueType Evaluate(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const override;
 
 private:
     bool GetComparisonResult(const ValueType& left, const ValueType& right, BinaryOperator op) const;
@@ -160,8 +160,8 @@ class Condition {
 public:
     bool ParseCondition(const std::string& conditionStr);
 
-    bool EvaluateBool(std::function<ValueType(const std::string&)> getValue) const;
-	ValueType EvaluateValue(std::function<ValueType(const std::string&)> getValue) const;
+    bool EvaluateBool(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const;
+    ValueType EvaluateValue(std::function<std::pair<bool, ValueType>(const std::string&)> getValue) const;
 
 private:
     std::shared_ptr<Expression> root;

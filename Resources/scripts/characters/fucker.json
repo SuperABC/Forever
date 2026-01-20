@@ -43,17 +43,30 @@
 			{"content": "由于$$self.name叫的声音太大，这时候已经来了一些路人在围观了。"},
 			{"speaker": "路人A", "content": "小妹妹这是在破处吧？第一次就敢在公园里，很勇敢！。"},
 			{"speaker": "路人B", "content": "好好珍惜破处的感觉吧，以后会怀念的。"},
+			{"speaker": "路人C", "content": "第一次性交能体验这么大的阴茎，运气真好。"},
 			{"content": "你并不想管其他人在想什么说什么，在感觉到$$self.name的身体已经不那么抗拒了之后，你抓着$$self.name的乳房就开始抽插起来。"},
 			{"speaker": "$$self.name", "content": "啊！啊！啊！啊！"},
 			{"content": "$$self.name又开始放声呻吟了起来。"},
 			{"content": "你弯下腰，整个人贴在了$$self.name身上，然后一口咬住了她的嘴唇。"},
 			{"speaker": "$$self.name", "content": "呜呜呜！"},
 			{"content": "$$self.name嘴被封住叫不出来了，只剩每次抽插时睾丸打在$$self.name屁股上的啪啪声。"},
-			{"content": "$$self.name"},
-			{"content": "$$self.name"},
-			{"content": "$$self.name"},
-			{"content": "$$self.name"},
-			{"content": "$$self.name"}
+			{"content": "又抽插了一会，你更加兴奋了，一手搂着$$self.name的腰，一手托着$$self.name的屁股，就给她从长椅上抱了起来。"},
+			{"content": "把$$self.name抱在空中，你更加快速地抽插了起来。"},
+			{"speaker": "$$self.name", "content": "啊！啊！啊！啊！"},
+			{"content": "你刚一松开$$self.name的嘴，她就放声呻吟了起来，整个公园的人都知道了这里有人在性交。"},
+			{"content": "淫荡的呻吟声让你更加有力，虽然手臂已经有点酸了，但你坚持抱着$$self.name又抽插了好长时间。"},
+			{"content": "在又一次完全把阴茎全部插进阴道里之后，你抱着$$self.name坐在了长椅上，$$self.name顺势趴在了你身上。"},
+			{"speaker": "$$player.name", "content": "现在换你来肏我，看你发挥了。"},
+			{"content": "$$self.name试着上下移动着身体，用阴道来摩擦阴茎，虽然很笨拙，但两只大乳房被甩的花枝乱颤，你顺手就抓了上去。"},
+			{"content": "由于$$self.name完全不熟练，她每次还都是完全坐在你的身上，阴茎也是完全插在阴道里。"},
+			{"content": "就这样又性交了一会，你感觉快要射出来了。"},
+			{"content": "你搂紧了$$self.name的腰，再次亲住$$self.name的嘴，开始快速抽插起来。"},
+			{"content": "在一次插入之后，$$self.name被你牢牢按在自己身上，龟头完全捅进了$$self.name的子宫里，紧接着精液喷涌而出。。"},
+			{"content": "这时，围观的人们响起了热烈的掌声。"},
+			{"speaker": "路人A", "content": "恭喜恭喜，第一次性交就是内射，而且是这么大的阴茎内射，现在一定很幸福。"},
+			{"content": "$$self.name这时也已经很累了，不知道是性交累的还是大声呻吟累的。"},
+			{"content": "在你身上趴了一会，$$self.name恢复了一些精力，就站起来想要离开了。"},
+			{"content": "刚一站起来，精液就从$$self.name的阴道流了出来，$$self.name只好站着等精液流完。"}
 		]}
 	],
 	"changes": [
@@ -67,7 +80,7 @@
 	"triggers": [{"condition": "$$self.gender == female && $$self.age > 18 && $$self.age < 22", "type": "option_dialog", "option": "约炮"}],
 	"dialogs": [
 		{"list": [
-			{"content": "性格脚本测试成功。"}
+			{"content": ""}
 		]}
 	],
 	"changes": [
@@ -81,7 +94,7 @@
 	"triggers": [{"condition": "$$self.gender == female && $$self.age > 22 && $$self.age < 30", "type": "option_dialog", "option": "约炮"}],
 	"dialogs": [
 		{"list": [
-			{"content": "性格脚本测试成功。"}
+			{"content": ""}
 		]}
 	],
 	"changes": [
@@ -95,7 +108,7 @@
 	"triggers": [{"condition": "$$self.gender == female && $$self.age > 30 && $$self.age < 40", "type": "option_dialog", "option": "约炮"}],
 	"dialogs": [
 		{"list": [
-			{"content": "性格脚本测试成功。"}
+			{"content": ""}
 		]}
 	],
 	"changes": [

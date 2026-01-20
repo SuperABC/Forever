@@ -161,7 +161,7 @@ void Story::ApplyChange(shared_ptr<Change> change) {
 		}
 		Condition condition;
 		condition.ParseCondition(obj->GetValue());
-		variables[obj->GetVariable()] = condition.EvaluateValue([this](string name) -> ValueType {
+		variables[obj->GetVariable()] = condition.EvaluateValue([this](string name) -> pair<bool, ValueType> {
 			return this->GetValue(name);
 			});
 	}
@@ -183,7 +183,7 @@ void Story::LoadStory(string path) {
 }
 
 bool Story::JudgeCondition(Condition& condition) {
-	return condition.EvaluateBool([this](string name) -> ValueType {
+	return condition.EvaluateBool([this](string name) -> pair<bool, ValueType> {
 		return this->GetValue(name);
 		});
 }
@@ -193,16 +193,19 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Ev
 }
 
 void Story::InitVariables(unique_ptr<Populace>& populace) {
-    variables["system.health_status"] = "healthy";
 	variables["system.time.year"] = populace->GetTime().GetYear();
+
+	variables["player.name"] = "玩家";
+    variables["player.health"] = "健康";
+
 }
 
-ValueType Story::GetValue(const string& name) {
+pair<bool, ValueType> Story::GetValue(const string& name) {
 	auto it = variables.find(name);
 	if (it != variables.end()) {
-		return it->second;
+		return { true, it->second };
 	}
-	return 0; // 默认返回0
+	return { false, 0 };
 }
 
 void Story::SetValue(const string& name, ValueType value) {

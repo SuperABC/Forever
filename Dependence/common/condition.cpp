@@ -17,15 +17,21 @@ VariableExpression::VariableExpression(const string& n) : name(n) {
 
 }
 
-ValueType VariableExpression::Evaluate(function<ValueType(const string&)> getValue) const {
-    return getValue(name);
+ValueType VariableExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
+    auto value = getValue(name);
+    if (value.first) {
+        return value.second;
+    }
+    else {
+        return 0;
+    }
 }
 
 ConstantExpression::ConstantExpression(ValueType v) : value(v) {
 
 }
 
-ValueType ConstantExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+ValueType ConstantExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
     return value;
 }
 
@@ -33,7 +39,7 @@ ArrayExpression::ArrayExpression(vector<shared_ptr<Expression>> es)
     : elements(move(es)) {
 }
 
-ValueType ArrayExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+ValueType ArrayExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
     string result = "[";
     for (size_t i = 0; i < elements.size(); ++i) {
         auto value = elements[i]->Evaluate(getValue);
@@ -46,7 +52,7 @@ ValueType ArrayExpression::Evaluate(function<ValueType(const string&)> getValue)
     return result;
 }
 
-vector<ValueType> ArrayExpression::GetElementValues(function<ValueType(const string&)> getValue) const {
+vector<ValueType> ArrayExpression::GetElementValues(function<pair<bool, ValueType>(const string&)> getValue) const {
     vector<ValueType> values;
     for (const auto& element : elements) {
         values.push_back(element->Evaluate(getValue));
@@ -59,7 +65,7 @@ UnaryExpression::UnaryExpression(UnaryOperator op, shared_ptr<Expression> operan
 
 }
 
-ValueType UnaryExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+ValueType UnaryExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
     auto value = expression->Evaluate(getValue);
 
     switch (operand) {
@@ -116,7 +122,7 @@ BinaryExpression::BinaryExpression(shared_ptr<Expression> l,
     : left(move(l)), right(move(r)), operand(op) {
 }
 
-ValueType BinaryExpression::Evaluate(function<ValueType(const string&)> getValue) const {
+ValueType BinaryExpression::Evaluate(function<pair<bool, ValueType>(const string&)> getValue) const {
     if (operand == BinaryOperator::INCLUDE) {
         auto array_expr = dynamic_cast<ArrayExpression*>(right.get());
         if (!array_expr) {
@@ -341,7 +347,7 @@ bool Condition::ParseCondition(const string& conditionStr) {
     }
 }
 
-bool Condition::EvaluateBool(function<ValueType(const string&)> getValue) const {
+bool Condition::EvaluateBool(function<pair<bool, ValueType>(const string&)> getValue) const {
     if (!root) {
         return true;
     }
@@ -353,7 +359,7 @@ bool Condition::EvaluateBool(function<ValueType(const string&)> getValue) const 
     THROW_EXCEPTION(InvalidConfigException, "Condition must Evaluate to boolean.\n");
 }
 
-ValueType Condition::EvaluateValue(function<ValueType(const string&)> getValue) const {
+ValueType Condition::EvaluateValue(function<pair<bool, ValueType>(const string&)> getValue) const {
     if (!root) {
         return 0;
     }

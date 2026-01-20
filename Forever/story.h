@@ -63,7 +63,7 @@ public:
 
 	// 变量管理
 	void SetValue(const std::string& name, ValueType value);
-	ValueType GetValue(const std::string& name);
+	std::pair<bool, ValueType> GetValue(const std::string& name);
 
 private:
 	// Mod管理

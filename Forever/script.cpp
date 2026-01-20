@@ -141,7 +141,7 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(
 			auto changes = (*it)->content.GetChanges();
 			results.second.insert(results.second.end(), changes.begin(), changes.end());
 
-			if ((*it)->content.DropSelf([&story](string name) -> ValueType {
+			if ((*it)->content.DropSelf([&story](string name) -> pair<bool, ValueType> {
 				return story->GetValue(name);
 				})) {
 				it = actives.erase(it);

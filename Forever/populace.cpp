@@ -344,15 +344,15 @@ void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) 
 
 		person->SetId((int)citizens.size());
 		condition.ParseCondition(obj->GetTarget());
-		person->SetName(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+		person->SetName(ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 			return story->GetValue(name);
 			})));
 		condition.ParseCondition(obj->GetGender());
-		person->SetGender(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+		person->SetGender(ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 			return story->GetValue(name);
 			})) == "male" ? GENDER_MALE : GENDER_FEMALE);
 		condition.ParseCondition(obj->GetBirthday());
-		person->SetBirthday(Time(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+		person->SetBirthday(Time(ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 			return story->GetValue(name);
 			}))));
 		citizens.push_back(person);
@@ -364,12 +364,12 @@ void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) 
 		Condition condition;
 
 		condition.ParseCondition(obj->GetTarget());
-		auto person = GetCitizen(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+		auto person = GetCitizen(ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 			return story->GetValue(name);
 			})));
 
 		condition.ParseCondition(obj->GetOption());
-		person->AddOption(ToString(condition.EvaluateValue([&](string name) -> ValueType {
+		person->AddOption(ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 			return story->GetValue(name);
 			})));
 	}

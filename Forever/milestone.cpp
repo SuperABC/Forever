@@ -52,7 +52,7 @@ Condition Milestone::DropCondition() {
 	return drop;
 }
 
-bool Milestone::DropSelf(function<ValueType(const string&)> getValue) {
+bool Milestone::DropSelf(function<pair<bool, ValueType>(const string&)> getValue) {
 	return drop.EvaluateBool(getValue);
 }
 
