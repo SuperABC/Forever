@@ -199,6 +199,10 @@ bool Story::JudgeCondition(Condition& condition, shared_ptr<Person> person) {
 	});
 }
 
+bool Story::JudgeCondition(Condition& condition, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) {
+	return condition.EvaluateBool(getValues);
+}
+
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Event> event) {
 	return script->MatchEvent(event, this);
 }

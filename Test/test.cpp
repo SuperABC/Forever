@@ -15,6 +15,11 @@
 
 using namespace std;
 
+unique_ptr<Map> map = make_unique<Map>();
+unique_ptr<Populace> populace = make_unique<Populace>();
+unique_ptr<Society> society = make_unique<Society>();
+unique_ptr<Story> story = make_unique<Story>();
+
 // 解析命令行输入事件
 shared_ptr<Event> ParseEvent(Parser& parser) {
 	string type = parser.GetOption("--type");
@@ -39,19 +44,64 @@ shared_ptr<Event> ParseEvent(Parser& parser) {
 	return nullptr;
 }
 
+bool PrintDialog(Dialog dialog, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) {
+	auto sections = dialog.GetDialogs();
+	if (sections.size() == 0)return false;
+
+	for (auto section : sections) {
+		if (section.IsBranch()) {
+			auto options = section.GetOptions();
+			vector<int> indices;
+			int i = 0, j = 0;
+			for (auto option : options) {
+				if (story->JudgeCondition(option.GetCondition(), getValues)) {
+					indices.push_back(i++);
+				}
+			}
+			cout << "Options: " << endl;
+			for (auto index : indices) {
+				cout << j << ": " << options[indices[j++]].GetOption() << endl;
+			}
+			cin >> j;
+			auto selected = options[indices[j]];
+			for (auto dialog : selected.GetDialogs()) {
+				PrintDialog(dialog, getValues);
+			}
+			for (auto change : selected.GetChanges()) {
+				if (!story->JudgeCondition(change->GetCondition()))continue;
+				::map->ApplyChange(change, story);
+				populace->ApplyChange(change, story);
+				story->ApplyChange(change);
+			}
+		}
+		else {
+			Condition conditionContent;
+			conditionContent.ParseCondition(section.GetSpeaking().second);
+			if (section.GetSpeaking().first.size() == 0) {
+				cout << ToString(conditionContent.EvaluateValue(getValues)) << endl;
+			}
+			else {
+				Condition conditionSpeaker;
+				conditionSpeaker.ParseCondition(section.GetSpeaking().first);
+				cout << ToString(conditionSpeaker.EvaluateValue(getValues)) << ": " <<
+					ToString(conditionContent.EvaluateValue(getValues)) << endl;
+			}
+		}
+	}
+	return true;
+}
+
 int main() {
 	// 读取Map相关类及Mod
-	unique_ptr<Map> map(new Map());
-	map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
-	map->InitTerrains();
-	map->InitRoadnets();
-	map->InitZones();
-	map->InitBuildings();
-	map->InitComponents();
-	map->InitRooms();
+	::map->ReadConfigs(REPLACE_PATH("../Resources/configs/config_map.json"));
+	::map->InitTerrains();
+	::map->InitRoadnets();
+	::map->InitZones();
+	::map->InitBuildings();
+	::map->InitComponents();
+	::map->InitRooms();
 
 	// 读取Populace相关类及Mod
-	unique_ptr<Populace> populace(new Populace());
 	populace->ReadConfigs(REPLACE_PATH("../Resources/configs/config_populace.json"));
 	populace->InitAssets();
 	populace->InitJobs();
@@ -59,13 +109,11 @@ int main() {
 	populace->InitSchedulers();
 
 	// 读取Society相关类及Mod
-	unique_ptr<Society> society(new Society());
 	society->ReadConfigs(REPLACE_PATH("../Resources/configs/config_society.json"));
 	society->InitCalendars();
 	society->InitOrganizations();
 
 	// 读取Story相关类及Mod
-	unique_ptr<Story> story(new Story());
 	story->ReadConfigs(REPLACE_PATH("../Resources/configs/config_story.json"));
 	story->InitEvents();
 	story->InitChanges();
@@ -94,9 +142,9 @@ int main() {
 				parser.AddOption("--story", 0, "Story file.", true, REPLACE_PATH("../Resources/scripts/ys.json"));
 				parser.ParseCmd(cmd);
 				int size = atoi(parser.GetOption("--block").data());
-				populace->Init(map->Init(size, size));
-				map->Checkin(populace->GetCitizens(), populace->GetTime());
-				society->Init(map, populace);
+				populace->Init(::map->Init(size, size));
+				::map->Checkin(populace->GetCitizens(), populace->GetTime());
+				society->Init(::map, populace);
 				populace->Schedule();
 				story->Init(populace);
 				string path = parser.GetOption("--story");
@@ -126,8 +174,8 @@ int main() {
 					days = atoi(parser.GetOption("--day").data());
 				}
 
-				map->Tick(days, hours, mins, secs);
-				populace->Tick(map, days, hours, mins, secs);
+				::map->Tick(days, hours, mins, secs);
+				populace->Tick(::map, days, hours, mins, secs);
 				society->Tick(days, hours, mins, secs);
 				story->Tick(days, hours, mins, secs);
 
@@ -147,36 +195,25 @@ int main() {
 				}
 
 				if (true) {
+					std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = {
+						[&](string name) -> pair<bool, ValueType> {
+							return story->GetValue(name);
+						}
+					};
+
 					auto actions = story->MatchEvent(event);
 					auto dialogs = actions.first;
 					auto changes = actions.second;
 					for (auto dialog : dialogs) {
 						if (story->JudgeCondition(dialog.GetCondition())) {
-							auto contents = dialog.GetDialogs();
-							if (contents.size() > 0) {
-								for (auto content : contents) {
-									if (content.first.size() == 0) {
-										Condition condition;
-										condition.ParseCondition(content.second);
-										cout << ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
-											return story->GetValue(name);
-											})) << endl;
-									}
-									else {
-										Condition condition;
-										condition.ParseCondition(content.second);
-										cout << content.first << ": " << ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
-											return story->GetValue(name);
-											})) << endl;
-									}
-								}
+							if(PrintDialog(dialog, getValues)) {
 								break;
 							}
 						}
 					}
 					for (auto change : changes) {
 						if (!story->JudgeCondition(change->GetCondition()))continue;
-						map->ApplyChange(change, story);
+						::map->ApplyChange(change, story);
 						populace->ApplyChange(change, story);
 						story->ApplyChange(change);
 					}
@@ -199,50 +236,27 @@ int main() {
 						THROW_EXCEPTION(CommandException, "Citizen not found.");
 					}
 
+					std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = {
+						[&](string name) -> pair<bool, ValueType> {
+							return story->GetValue(name);
+						},
+						[&](string name) -> pair<bool, ValueType> {
+							return person->GetValue(name);
+						}
+					};
+
 					auto dialogs = actions.first;
 					auto changes = actions.second;
 					for (auto dialog : dialogs) {
 						if (story->JudgeCondition(dialog.GetCondition())) {
-							auto contents = dialog.GetDialogs();
-							if (contents.size() > 0) {
-								for (auto content : contents) {
-									if (content.first.size() == 0) {
-										Condition condition;
-										condition.ParseCondition(content.second);
-										std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = {
-											[&](string name) -> pair<bool, ValueType> {
-												return story->GetValue(name);
-											},
-											[&](string name) -> pair<bool, ValueType> {
-												return person->GetValue(name);
-											}
-										};
-										cout << ToString(condition.EvaluateValue(getValues)) << endl;
-									}
-									else {
-										Condition conditionSpeaker;
-										conditionSpeaker.ParseCondition(content.first);
-										Condition conditionContent;
-										conditionContent.ParseCondition(content.second);
-										std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = {
-											[&](string name) -> pair<bool, ValueType> {
-												return story->GetValue(name);
-											},
-											[&](string name) -> pair<bool, ValueType> {
-												return person->GetValue(name);
-											}
-										};
-										cout << ToString(conditionSpeaker.EvaluateValue(getValues)) << ": " <<
-											ToString(conditionContent.EvaluateValue(getValues)) << endl;
-									}
-								}
+							if (PrintDialog(dialog, getValues)) {
 								break;
 							}
 						}
 					}
 					for (auto change : changes) {
 						if (!story->JudgeCondition(change->GetCondition()))continue;
-						map->ApplyChange(change, story);
+						::map->ApplyChange(change, story);
 						populace->ApplyChange(change, story);
 						story->ApplyChange(change);
 					}

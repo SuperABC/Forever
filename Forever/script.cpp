@@ -80,7 +80,7 @@ void Script::ReadScript(string path,
 				BuildCondition(milestone["drop"].AsString()),
 				milestone["description"].AsString(),
 				milestone["goal"].AsString(),
-				BuildDialogs(milestone["dialogs"]),
+				BuildDialogs(milestone["dialogs"], changeFactory),
 				BuildChanges(milestone["changes"], changeFactory)
 			);
 			hash.insert(make_pair(milestone["milestone"].AsString(), (int)milestones.size()));
@@ -237,7 +237,7 @@ vector<shared_ptr<Event>> Script::BuildEvent(JsonValue root, unique_ptr<EventFac
 	return events;
 }
 
-vector<Dialog> Script::BuildDialogs(JsonValue root) {
+vector<Dialog> Script::BuildDialogs(JsonValue root, std::unique_ptr<ChangeFactory>& factory) {
 	vector<Dialog> dialogs;
 
 	for (auto obj : root) {
@@ -245,8 +245,18 @@ vector<Dialog> Script::BuildDialogs(JsonValue root) {
 
 		dialog.SetCondition(BuildCondition(obj["condition"]));
 
-		for (auto speak : obj["list"]) {
-			dialog.AddDialog(speak["speaker"].AsString(), speak["content"].AsString());
+		for (auto section : obj["list"]) {
+			if (section.IsObject()) {
+				dialog.AddDialog(section["speaker"].AsString(), section["content"].AsString());
+			}
+			else if (section.IsArray()) {
+				vector<Option> options;
+				for (auto item : section) {
+					options.emplace_back(BuildCondition(item["condition"]), item["option"].AsString(),
+						BuildDialogs(item["dialogs"], factory), BuildChanges(item["changes"], factory));
+				}
+				dialog.AddDialog(options);
+			}
 		}
 
 		dialogs.push_back(dialog);

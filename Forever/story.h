@@ -56,8 +56,9 @@ public:
 	void LoadStory(std::string path);
 
 	// 判断条件
-	bool JudgeCondition(Condition &condition);
+	bool JudgeCondition(Condition& condition);
 	bool JudgeCondition(Condition& condition, std::shared_ptr<Person> person);
+	bool JudgeCondition(Condition& condition, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues);
 
 	// 匹配事件
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
