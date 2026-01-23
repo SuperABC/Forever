@@ -340,7 +340,7 @@ void Populace::Print() {
 
 }
 
-void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) {
+void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story, std::shared_ptr<Person> person) {
 	auto type = change->GetType();
 	if (type == "spawn_npc") {
 		auto obj = dynamic_pointer_cast<SpawnNpcChange>(change);
@@ -367,15 +367,31 @@ void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story) 
 	else if (type == "add_option") {
 		auto obj = dynamic_pointer_cast<AddOptionChange>(change);
 
-		Condition condition;
-
-		condition.ParseCondition(obj->GetTarget());
-		auto person = GetCitizen(ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
-			return story->GetValue(name);
+		shared_ptr<Person> target;
+		if (person == nullptr) {
+			Condition conditionTarget;
+			conditionTarget.ParseCondition(obj->GetTarget());
+			target = GetCitizen(ToString(conditionTarget.EvaluateValue(
+				[&](string name) -> pair<bool, ValueType> {
+					return story->GetValue(name);
+				}
+			)));
+		}
+		else {
+			Condition conditionTarget;
+			conditionTarget.ParseCondition(obj->GetTarget());
+			target = GetCitizen(ToString(conditionTarget.EvaluateValue({
+				[&](string name) -> pair<bool, ValueType> {
+					return story->GetValue(name);
+				},
+				[&](string name) -> pair<bool, ValueType> {
+					return person->GetValue(name);
+				}
 			})));
-
-		condition.ParseCondition(obj->GetOption());
-		person->AddOption(ToString(condition.EvaluateValue([&](string name) -> pair<bool, ValueType> {
+		}
+		Condition conditionOption;
+		conditionOption.ParseCondition(obj->GetOption());
+		target->AddOption(ToString(conditionOption.EvaluateValue([&](string name) -> pair<bool, ValueType> {
 			return story->GetValue(name);
 			})));
 	}

@@ -1,5 +1,21 @@
 [
 {
+	"milestone": "game_start",
+	"visible": false,
+	"triggers": [{"type": "game_start"}],
+	"dialogs": [
+	],
+	"changes": [
+		{"condition": "$$self.gender == female && $$self.age >= 14 && $$self.age < 40", "type": "add_option", "target": "$$self.name", "option": "Ô¼ÅÚ"}
+	],
+	"subsequences": [
+		"fuck_teen", 
+		"fuck_girl",
+		"fuck_young",
+		"fuck_women"
+	]
+},
+{
 	"milestone": "fuck_teen",
 	"visible": false,
 	"drop": "false",

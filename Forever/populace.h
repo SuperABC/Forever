@@ -51,7 +51,8 @@ public:
 	void Print();
 
 	// 应用变更
-	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Story>& story);
+	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Story>& story,
+		std::shared_ptr<Person> person = nullptr);
 
 	// 保存/加载人口
 	void Load(std::string path);

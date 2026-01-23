@@ -44,12 +44,13 @@ shared_ptr<Event> ParseEvent(Parser& parser) {
 	return nullptr;
 }
 
-bool PrintDialog(Dialog dialog, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) {
+// 递归输出对话与选项
+bool PrintDialog(Dialog &dialog, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>>& getValues) {
 	auto sections = dialog.GetDialogs();
 	if (sections.size() == 0)return false;
 
 	for (auto section : sections) {
-		if (section.IsBranch()) {
+		if (section.IsBranch()) { // 如果当前段是选项
 			auto options = section.GetOptions();
 			vector<int> indices;
 			int i = 0, j = 0;
@@ -74,7 +75,7 @@ bool PrintDialog(Dialog dialog, std::vector<std::function<std::pair<bool, ValueT
 				story->ApplyChange(change);
 			}
 		}
-		else {
+		else { // 如果当前段是对话
 			Condition conditionContent;
 			conditionContent.ParseCondition(section.GetSpeaking().second);
 			if (section.GetSpeaking().first.size() == 0) {
@@ -174,6 +175,10 @@ int main() {
 					days = atoi(parser.GetOption("--day").data());
 				}
 
+				if (secs == 0 && mins == 0 && hours == 0 && days == 0) {
+					THROW_EXCEPTION(CommandException, "It makes no sense to pass 0 time.");
+				}
+
 				::map->Tick(days, hours, mins, secs);
 				populace->Tick(::map, days, hours, mins, secs);
 				society->Tick(days, hours, mins, secs);
@@ -191,10 +196,10 @@ int main() {
 				parser.ParseCmd(cmd);
 				auto event = ParseEvent(parser);
 				if (!event) {
-					THROW_EXCEPTION(CommandException, "Wrong input format.");
+					THROW_EXCEPTION(CommandException, "Wrong input event format.");
 				}
 
-				if (true) {
+				if (true) { // 全局事件
 					std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = {
 						[&](string name) -> pair<bool, ValueType> {
 							return story->GetValue(name);
@@ -218,7 +223,35 @@ int main() {
 						story->ApplyChange(change);
 					}
 				}
-				if (event->GetType() == "option_dialog") {
+				if (event->GetType() == "game_start") { // 市民独立开始事件
+					for(int i = 0; i < populace->GetCitizens().size(); i++) {
+						auto actions = populace->TriggerEvent(i, event, story);
+						auto dialogs = actions.first;
+						auto changes = actions.second;
+						std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues = {
+							[&](string name) -> pair<bool, ValueType> {
+								return story->GetValue(name);
+							},
+							[&](string name) -> pair<bool, ValueType> {
+								return populace->GetCitizens()[i]->GetValue(name);
+							}
+						};
+						for (auto dialog : dialogs) {
+							if (story->JudgeCondition(dialog.GetCondition())) {
+								if (PrintDialog(dialog, getValues)) {
+									break;
+								}
+							}
+						}
+						for (auto change : changes) {
+							if (!story->JudgeCondition(change->GetCondition(), populace->GetCitizens()[i]))continue;
+							::map->ApplyChange(change, story);
+							populace->ApplyChange(change, story, populace->GetCitizens()[i]);
+							story->ApplyChange(change);
+						}
+					}
+				}
+				if (event->GetType() == "option_dialog") { // 市民独立对话事件
 					auto target = dynamic_pointer_cast<OptionDialogEvent>(event)->GetTarget();
 					auto idx = dynamic_pointer_cast<OptionDialogEvent>(event)->GetIdx();
 					pair<vector<Dialog>, vector<shared_ptr<Change>>> actions;
@@ -248,7 +281,7 @@ int main() {
 					auto dialogs = actions.first;
 					auto changes = actions.second;
 					for (auto dialog : dialogs) {
-						if (story->JudgeCondition(dialog.GetCondition())) {
+						if (story->JudgeCondition(dialog.GetCondition(), person)) {
 							if (PrintDialog(dialog, getValues)) {
 								break;
 							}
@@ -268,11 +301,15 @@ int main() {
 				parser.AddOption("--name", 0, "Lookup citizen by name.", true, "");
 				parser.ParseCmd(cmd);
 
-				if (parser.HasOption("--id")) {
+				if (parser.HasOption("--id")) { // 按ID查找
 					int id = atoi(parser.GetOption("--id").data());
+					if (id < 0 || id >= populace->GetCitizens().size()) {
+						THROW_EXCEPTION(CommandException, "Wrong input citizen ID.");
+					}
 					auto citizen = populace->GetCitizens()[id];
 
 					cout << "Citizen ID: " << citizen->GetId() << endl;
+					cout << "Gender: " << (citizen->GetGender() == GENDER_FEMALE ? "female" : "male") << endl;
 					cout << "Name: " << citizen->GetName() << endl;
 					cout << "Age: " << citizen->GetAge(populace->GetTime()) << endl;
 					cout << "Options: " << endl;
@@ -280,8 +317,11 @@ int main() {
 						cout << "--" << option << endl;
 					}
 				}
-				else if (parser.HasOption("--name")) {
+				else if (parser.HasOption("--name")) { // 按名字查找
 					string name = parser.GetOption("--name");
+					if (name.size() == 0) {
+						THROW_EXCEPTION(CommandException, "Wrong input citizen name.");
+					}
 					for (auto citizen : populace->GetCitizens()) {
 						if (citizen->GetName() == name) {
 							cout << "Citizen ID: " << citizen->GetId() << endl;
