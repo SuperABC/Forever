@@ -6,7 +6,7 @@
 	"dialogs": [
 	],
 	"changes": [
-		{"type": "add_option", "target": "$$self.name", "option": "测试"}
+		{"type": "add_option", "target": "$$self.name", "option": "你好"}
 	],
 	"subsequences": [
 		"test_dialog"
@@ -16,10 +16,10 @@
 	"milestone": "test_dialog",
 	"visible": false,
 	"drop": "false",
-	"triggers": [{"type": "option_dialog", "option": "测试"}],
+	"triggers": [{"type": "option_dialog", "option": "你好"}],
 	"dialogs": [
 		{"list": [
-			{"content": "性格脚本测试成功。"}
+			{"content": "你好。"}
 		]}
 	],
 	"changes": [

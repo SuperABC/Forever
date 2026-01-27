@@ -3,114 +3,58 @@
 
 using namespace std;
 
-string ParkingRoom::GetId() {
-	return "parking";
+string DefaultResidentialRoom::GetId() {
+	return "default_residential";
 }
 
-string ParkingRoom::GetType() const {
-	return "parking";
+string DefaultResidentialRoom::GetType() const {
+	return "default_residential";
 }
 
-string ParkingRoom::GetName() const {
-	return "停车场房间";
+string DefaultResidentialRoom::GetName() const {
+	return "默认住宅房间";
 }
 
-bool ParkingRoom::IsResidential() const {
-	return false;
-}
-
-bool ParkingRoom::IsWorkspace() const {
-	return false;
-}
-
-int ParkingRoom::GetLivingCapacity() const {
-	return 0;
-}
-
-int ParkingRoom::GetPersonnelCapacity() const {
-	return 0;
-}
-
-string FlatRoom::GetId() {
-	return "flat";
-}
-
-string FlatRoom::GetType() const {
-	return "flat";
-}
-
-string FlatRoom::GetName() const {
-	return "公寓房间";
-}
-
-bool FlatRoom::IsResidential() const {
+bool DefaultResidentialRoom::IsResidential() const {
 	return true;
 }
 
-bool FlatRoom::IsWorkspace() const {
+bool DefaultResidentialRoom::IsWorkspace() const {
 	return false;
 }
 
-int FlatRoom::GetLivingCapacity() const {
-	return 2;
+int DefaultResidentialRoom::GetLivingCapacity() const {
+	return 1;
 }
 
-int FlatRoom::GetPersonnelCapacity() const {
+int DefaultResidentialRoom::GetPersonnelCapacity() const {
 	return 0;
 }
 
-string HotelRoom::GetId() {
-	return "hotel";
+string DefaultWorkingRoom::GetId() {
+	return "default_working";
 }
 
-string HotelRoom::GetType() const {
-	return "hotel";
+string DefaultWorkingRoom::GetType() const {
+	return "default_working";
 }
 
-string HotelRoom::GetName() const {
-	return "酒店房间";
+string DefaultWorkingRoom::GetName() const {
+	return "默认工作房间";
 }
 
-bool HotelRoom::IsResidential() const {
+bool DefaultWorkingRoom::IsResidential() const {
 	return false;
 }
 
-bool HotelRoom::IsWorkspace() const {
-	return false;
-}
-
-int HotelRoom::GetLivingCapacity() const {
-	return 0;
-}
-
-int HotelRoom::GetPersonnelCapacity() const {
-	return 0;
-}
-
-string LobbyRoom::GetId() {
-	return "lobby";
-}
-
-string LobbyRoom::GetType() const {
-	return "lobby";
-}
-
-string LobbyRoom::GetName() const {
-	return "大堂房间";
-}
-
-bool LobbyRoom::IsResidential() const {
-	return false;
-}
-
-bool LobbyRoom::IsWorkspace() const {
+bool DefaultWorkingRoom::IsWorkspace() const {
 	return true;
 }
 
-int LobbyRoom::GetLivingCapacity() const {
+int DefaultWorkingRoom::GetLivingCapacity() const {
 	return 0;
 }
 
-int LobbyRoom::GetPersonnelCapacity() const {
-	return 100;
+int DefaultWorkingRoom::GetPersonnelCapacity() const {
+	return 10;
 }

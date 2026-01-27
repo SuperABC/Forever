@@ -107,7 +107,13 @@ void JingRoadnet::DistributeRoadnet(std::shared_ptr<Roadnet> self, int width, in
     }
 
     plots.push_back(make_shared<Plot>(northWest, northEast, southEast, southWest));
-    plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+    plots.back()->SetArea(AREA_RESIDENTIAL_LOW);
+    plots.back()->SetRoads({
+        {connections[0], 0.5f},
+        {connections[1], 0.5f},
+        {connections[2], 0.5f},
+        {connections[3], 0.5f}
+        });
     for (int i = 1; i < min(horizontalNode1w.size(), horizontalNode2w.size()); i++) {
         if (get((int)horizontalNode1w[i].first.GetX(), (int)horizontalNode1w[i].first.GetY()) != "plain")continue;
         if (get((int)horizontalNode1w[i - 1].first.GetX(), (int)horizontalNode1w[i - 1].first.GetY()) != "plain")continue;
@@ -115,7 +121,7 @@ void JingRoadnet::DistributeRoadnet(std::shared_ptr<Roadnet> self, int width, in
         if (get((int)horizontalNode2w[i - 1].first.GetX(), (int)horizontalNode2w[i - 1].first.GetY()) != "plain")continue;
         plots.push_back(make_shared<Plot>(
             horizontalNode1w[i].first, horizontalNode1w[i - 1].first, horizontalNode2w[i - 1].first, horizontalNode2w[i].first));
-        plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetArea(AREA_RESIDENTIAL_LOW);
         plots.back()->SetRoads({
             {Connection(self, horizontalNode1w[i].second, horizontalNode1w[i - 1].second), 0.5f},
             {Connection(self, horizontalNode2w[i].second, horizontalNode2w[i - 1].second), 0.5f}
@@ -128,7 +134,7 @@ void JingRoadnet::DistributeRoadnet(std::shared_ptr<Roadnet> self, int width, in
         if (get((int)horizontalNode2e[i - 1].first.GetX(), (int)horizontalNode2e[i - 1].first.GetY()) != "plain")continue;
         plots.push_back(make_shared<Plot>(
             horizontalNode1e[i - 1].first, horizontalNode1e[i].first, horizontalNode2e[i].first, horizontalNode2e[i - 1].first));
-        plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetArea(AREA_RESIDENTIAL_LOW);
         plots.back()->SetRoads({
             {Connection(self, horizontalNode1e[i].second, horizontalNode1e[i - 1].second), 0.5f},
             {Connection(self, horizontalNode2e[i].second, horizontalNode2e[i - 1].second), 0.5f}
@@ -141,7 +147,7 @@ void JingRoadnet::DistributeRoadnet(std::shared_ptr<Roadnet> self, int width, in
         if (get((int)verticalNode2n[i - 1].first.GetX(), (int)verticalNode2n[i - 1].first.GetY()) != "plain")continue;
         plots.push_back(make_shared<Plot>(
             verticalNode1n[i].first, verticalNode2n[i].first, verticalNode2n[i - 1].first, verticalNode1n[i - 1].first));
-        plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetArea(AREA_RESIDENTIAL_LOW);
         plots.back()->SetRoads({
             {Connection(self, verticalNode1n[i].second, verticalNode1n[i - 1].second), 0.5f},
             {Connection(self, verticalNode2n[i].second, verticalNode2n[i - 1].second), 0.5f}
@@ -154,7 +160,7 @@ void JingRoadnet::DistributeRoadnet(std::shared_ptr<Roadnet> self, int width, in
         if (get((int)verticalNode2s[i - 1].first.GetX(), (int)verticalNode2s[i - 1].first.GetY()) != "plain")continue;
         plots.push_back(make_shared<Plot>(
             verticalNode1s[i - 1].first, verticalNode2s[i - 1].first, verticalNode2s[i].first, verticalNode1s[i].first));
-        plots.back()->SetArea(AREA_RESIDENTIAL_HIGH);
+        plots.back()->SetArea(AREA_RESIDENTIAL_LOW);
         plots.back()->SetRoads({
             {Connection(self, verticalNode1s[i].second, verticalNode1s[i - 1].second), 0.5f},
             {Connection(self, verticalNode2s[i].second, verticalNode2s[i - 1].second), 0.5f}

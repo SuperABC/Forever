@@ -62,7 +62,8 @@ void Populace::InitAssets() {
 }
 
 void Populace::InitJobs() {
-    jobFactory->RegisterJob(HotelCleanerJob::GetId(), []() { return make_unique<HotelCleanerJob>(); });
+    jobFactory->RegisterJob(DefaultJob::GetId(),
+		[]() { return make_unique<DefaultJob>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -198,8 +199,6 @@ void Populace::ReadConfigs(string path) const {
 }
 
 void Populace::Init(int accomodation) {
-	accomodation = 5000;
-
     // 生成市民
     GenerateCitizens((int)(accomodation * exp(GetRandom(1000) / 1000.0f - 0.5f)));
 
@@ -208,12 +207,14 @@ void Populace::Init(int accomodation) {
 	GenerateEmotions();
 	GenerateJobs();
 
+	// 更新个人变量
 	for (auto citizen : citizens) {
 		citizen->UpdateValues(time);
 	}
 }
 
-void Populace::Schedule() {
+void Populace::Schedule() const {
+	// 汇总权重
 	auto powers = schedulerFactory->GetPowers();
 	vector<pair<string, float>> cdfs;
 	float sum = 0.f;
@@ -228,6 +229,7 @@ void Populace::Schedule() {
 		cdf.second /= sum;
 	}
 
+	// 加权分配调度
 	for(auto & citizen : citizens) {
 		float r = GetRandom(1000) / 1000.f;
 		string selectedScheduler;
@@ -246,9 +248,9 @@ void Populace::Schedule() {
 	}
 }
 
-void Populace::Jobstory(unique_ptr<Story>& story) {
+void Populace::Jobstory(unique_ptr<Story>& story) const {
+	// 添加职业剧本
 	unordered_map<string, shared_ptr<Script>> jobScripts;
-
 	for (auto citizen : citizens) {
 		for (auto job : citizen->GetJobs()) {
 			if (jobScripts.find(job->GetType()) == jobScripts.end()) {
@@ -266,7 +268,8 @@ void Populace::Jobstory(unique_ptr<Story>& story) {
 	debugf("Generate jobstories.\n");
 }
 
-void Populace::Characterize(string path, unique_ptr<Story>& story) {
+void Populace::Characterize(string path, unique_ptr<Story>& story) const {
+	// 汇总个性剧本
 	vector<shared_ptr<Script>> scripts;
 	for (const auto& entry : filesystem::directory_iterator(path)) {
 		if (entry.is_regular_file() && entry.path().extension() == ".json") {
@@ -275,7 +278,12 @@ void Populace::Characterize(string path, unique_ptr<Story>& story) {
 			scripts.push_back(script);
 		}
 	}
+	if(scripts.size() == 0) {
+		debugf("No character scripts found.\n");
+		return;
+	}
 
+	// 随机选择个性剧本
 	for (auto citizen : citizens) {
 		int r = GetRandom((int)scripts.size());
 		citizen->AddScript(make_shared<Script>(scripts[r]));
@@ -285,7 +293,8 @@ void Populace::Characterize(string path, unique_ptr<Story>& story) {
 }
 
 void Populace::Destroy() {
-
+	time = Time();
+	citizens.clear();
 }
 
 void Populace::Tick(unique_ptr<Map> &map, int day, int hour, int min, int sec) {
@@ -296,6 +305,7 @@ void Populace::Tick(unique_ptr<Map> &map, int day, int hour, int min, int sec) {
 
 	for (auto citizen : citizens) {
 		bool idle = true;
+
 		for (auto job : citizen->GetJobs()) {
 			auto signin = job->GetCalendar()->SigninTime(time);
 			auto signout = job->GetCalendar()->SignoutTime(time);
@@ -303,7 +313,7 @@ void Populace::Tick(unique_ptr<Map> &map, int day, int hour, int min, int sec) {
 			int i = 0;
 			if (signin.GetYear() > 0 && time > signin && signout.GetYear() > 0 && time < signout) {
 				citizen->SetStatus(job->GetPosition());
-				citizen->GetScheduler()->SetStatus("work_job");
+				if (citizen->GetScheduler())citizen->GetScheduler()->SetStatus("work_job");
 				idle = false;
 				break;
 			}
@@ -311,7 +321,7 @@ void Populace::Tick(unique_ptr<Map> &map, int day, int hour, int min, int sec) {
 				citizen->SetStatus(job->GetPosition(),
 					map->GetRoadnet()->AutoNavigate(citizen->GetHome()->GetParentBuilding()->GetParentPlot(),
 						job->GetPosition()->GetParentBuilding()->GetParentPlot()), signin - Time(0, 0, 0, 0, 30, 0));
-				citizen->GetScheduler()->SetStatus("commute_work");
+				if (citizen->GetScheduler())citizen->GetScheduler()->SetStatus("commute_work");
 				citizen->SetWork(i);
 				idle = false;
 				break;
@@ -320,7 +330,7 @@ void Populace::Tick(unique_ptr<Map> &map, int day, int hour, int min, int sec) {
 				citizen->SetStatus(citizen->GetHome(),
 					map->GetRoadnet()->AutoNavigate(job->GetPosition()->GetParentBuilding()->GetParentPlot(),
 						citizen->GetHome()->GetParentBuilding()->GetParentPlot()), signout);
-				citizen->GetScheduler()->SetStatus("commute_home");
+				if (citizen->GetScheduler())citizen->GetScheduler()->SetStatus("commute_home");
 				citizen->SetWork(-1);
 				idle = false;
 				break;
@@ -329,19 +339,20 @@ void Populace::Tick(unique_ptr<Map> &map, int day, int hour, int min, int sec) {
 		}
 		if (idle) {
 			citizen->SetStatus(citizen->GetHome());
-			citizen->GetScheduler()->SetStatus("home_rest");
+			if (citizen->GetScheduler())citizen->GetScheduler()->SetStatus("home_rest");
 		}
 
 		citizen->UpdateValues(time);
 	}
 }
 
-void Populace::Print() {
+void Populace::Print() const {
 
 }
 
 void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story, std::shared_ptr<Person> person) {
 	auto type = change->GetType();
+
 	if (type == "spawn_npc") {
 		auto obj = dynamic_pointer_cast<SpawnNpcChange>(change);
 
@@ -389,6 +400,10 @@ void Populace::ApplyChange(shared_ptr<Change> change, unique_ptr<Story>& story, 
 				}
 			})));
 		}
+		if (!target) {
+			THROW_EXCEPTION(InvalidArgumentException, "Target citizen not found.\n");
+		}
+
 		Condition conditionOption;
 		conditionOption.ParseCondition(obj->GetOption());
 		target->AddOption(ToString(conditionOption.EvaluateValue([&](string name) -> pair<bool, ValueType> {
@@ -401,11 +416,11 @@ void Populace::Load(string path) {
 
 }
 
-void Populace::Save(string path) {
+void Populace::Save(string path) const {
 
 }
 
-Time Populace::GetTime() {
+Time Populace::GetTime() const {
 	return time;
 }
 
@@ -423,7 +438,7 @@ std::shared_ptr<Person> Populace::GetCitizen(std::string name) {
 }
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
-	string name, shared_ptr<Event> event, unique_ptr<Story>& story) {
+	string name, shared_ptr<Event> event, unique_ptr<Story>& story) const {
 
 	for(auto & citizen : citizens) {
 		if (citizen->GetName() == name) {
@@ -435,7 +450,7 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
 }
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Populace::TriggerEvent(
-	int id, shared_ptr<Event> event, unique_ptr<Story>& story) {
+	int id, shared_ptr<Event> event, unique_ptr<Story>& story)  const {
 	if (id >= 0 && id < citizens.size()) {
 		return citizens[id]->MatchEvent(event, story, citizens[id]);
 	}

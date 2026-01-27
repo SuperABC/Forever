@@ -9,10 +9,10 @@
 // 子类注册函数
 typedef void (*RegisterModBuildingsFunc)(BuildingFactory* factory);
 
-// 公寓建筑
-class FlatBuilding : public Building {
+// 默认住宅建筑
+class DefaultResidentialBuilding : public Building {
 public:
-    FlatBuilding();
+    DefaultResidentialBuilding();
 
     static std::string GetId();
     virtual std::string GetType() const override;
@@ -33,10 +33,10 @@ private:
     int name;
 };
 
-// 酒店建筑
-class HotelBuilding : public Building {
+// 默认工作建筑
+class DefaultWorkingBuilding : public Building {
 public:
-    HotelBuilding();
+    DefaultWorkingBuilding();
 
     static std::string GetId();
     virtual std::string GetType() const override;

@@ -6,10 +6,10 @@
 // 子类注册函数
 typedef void (*RegisterModZonesFunc)(ZoneFactory* factory);
 
-// 公寓园区
-class FlatZone : public Zone {
+// 默认园区
+class DefaultZone : public Zone {
 public:
-    FlatZone();
+    DefaultZone();
 
     static std::string GetId();
     virtual std::string GetType() const;

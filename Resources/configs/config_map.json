@@ -2,9 +2,9 @@
 	"mods":{
 		"terrain": ["ocean", "mountain", "mod"],
 		"roadnet": "jing",
-		"zone": ["flat", "mod"],
-		"building": ["flat", "hotel", "mod"],
-		"component": ["flat", "hotel", "mod"],
-		"room": ["parking", "flat", "hotel", "lobby", "mod"]
+		"zone": ["default", "mod"],
+		"building": ["default_residential", "default_working", "mod"],
+		"component": ["default_residential", "default_working", "mod"],
+		"room": ["default_residential", "default_working", "mod"]
 	}
 }

@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <string>
+#include <unordered_set>
 #include <functional>
 #include <memory>
 #include <unordered_map>
@@ -24,8 +25,10 @@ public:
     virtual std::string GenerateName(std::string surname, bool male = true, bool female = true, bool neutral = true) = 0;
 
     // 父类实现方法
+    bool RegisterName(std::string name);
 
 protected:
+    std::unordered_set<std::string> roll;
 };
 
 class NameFactory {

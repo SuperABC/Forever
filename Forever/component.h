@@ -6,8 +6,8 @@
 // 子类注册函数
 typedef void (*RegisterModComponentsFunc)(ComponentFactory* factory);
 
-// 公寓组合
-class FlatComponent : public Component {
+// 默认住宅组合
+class DefaultResidentialComponent : public Component {
 public:
     static std::string GetId();
     virtual std::string GetType() const override;
@@ -15,7 +15,7 @@ public:
 };
 
 // 酒店组合
-class HotelComponent : public Component {
+class DefaultWorkingComponent : public Component {
 public:
     static std::string GetId();
     virtual std::string GetType() const override;

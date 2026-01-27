@@ -3,26 +3,26 @@
 
 using namespace std;
 
-string FlatComponent::GetId() {
-	return "flat";
+string DefaultResidentialComponent::GetId() {
+	return "default_residential";
 }
 
-string FlatComponent::GetType() const {
-	return "flat";
+string DefaultResidentialComponent::GetType() const {
+	return "default_residential";
 }
 
-string FlatComponent::GetName() const {
-	return "公寓组合";
+string DefaultResidentialComponent::GetName() const {
+	return "默认住宅组合";
 }
 
-string HotelComponent::GetId() {
-	return "hotel";
+string DefaultWorkingComponent::GetId() {
+	return "default_working";
 }
 
-string HotelComponent::GetType() const {
-	return "hotel";
+string DefaultWorkingComponent::GetType() const {
+	return "default_working";
 }
 
-string HotelComponent::GetName() const {
-	return "酒店组合";
+string DefaultWorkingComponent::GetName() const {
+	return "默认工作组合";
 }

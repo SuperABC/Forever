@@ -159,7 +159,8 @@ pair<vector<Dialog>, vector<shared_ptr<Change>>> Script::MatchEvent(
 	return results;
 }
 
-std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> Script::MatchEvent(std::shared_ptr<Event> event, Story* story, std::shared_ptr<Person> person) {
+std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> Script::MatchEvent(
+	std::shared_ptr<Event> event, Story* story, std::shared_ptr<Person> person) {
 	pair<vector<Dialog>, vector<shared_ptr<Change>>> results;
 	results.first.clear();
 	results.second.clear();
@@ -210,7 +211,7 @@ std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> Script::Mat
 	return results;
 }
 
-vector<shared_ptr<Event>> Script::BuildEvent(JsonValue root, unique_ptr<EventFactory> &factory) {
+vector<shared_ptr<Event>> Script::BuildEvent(JsonValue root, unique_ptr<EventFactory> &factory) const {
 	vector<shared_ptr<Event>> events;
 
 	for (auto obj : root) {
@@ -237,7 +238,7 @@ vector<shared_ptr<Event>> Script::BuildEvent(JsonValue root, unique_ptr<EventFac
 	return events;
 }
 
-vector<Dialog> Script::BuildDialogs(JsonValue root, std::unique_ptr<ChangeFactory>& factory) {
+vector<Dialog> Script::BuildDialogs(JsonValue root, std::unique_ptr<ChangeFactory>& factory) const {
 	vector<Dialog> dialogs;
 
 	for (auto obj : root) {
@@ -265,7 +266,7 @@ vector<Dialog> Script::BuildDialogs(JsonValue root, std::unique_ptr<ChangeFactor
 	return dialogs;
 }
 
-vector<shared_ptr<Change>> Script::BuildChanges(JsonValue root, unique_ptr<ChangeFactory> &factory) {
+vector<shared_ptr<Change>> Script::BuildChanges(JsonValue root, unique_ptr<ChangeFactory> &factory) const {
 	vector<shared_ptr<Change>> changes;
 
 	for (auto obj : root) {
@@ -299,7 +300,7 @@ vector<shared_ptr<Change>> Script::BuildChanges(JsonValue root, unique_ptr<Chang
 	return changes;
 }
 
-Condition Script::BuildCondition(JsonValue root) {
+Condition Script::BuildCondition(JsonValue root) const {
 	Condition condition;
 
 	condition.ParseCondition(root.AsString());

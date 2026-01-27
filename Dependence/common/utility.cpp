@@ -45,11 +45,9 @@ Time::Time(int y, int mon, int d, int h, int min, int s, int ms)
 }
 
 Time::Time(string time) {
-    // 移除字符串前后的空白字符
     time.erase(0, time.find_first_not_of(" \t\n\r\f\v"));
     time.erase(time.find_last_not_of(" \t\n\r\f\v") + 1);
 
-    // 如果字符串为空，设置为当前时间
     if (time.empty()) {
         return;
     }

@@ -7,7 +7,7 @@
 typedef void (*RegisterModJobsFunc)(JobFactory* factory);
 
 // 酒店保洁职业
-class HotelCleanerJob : public Job {
+class DefaultJob : public Job {
 public:
     static std::string GetId();
     virtual std::string GetType() const override;

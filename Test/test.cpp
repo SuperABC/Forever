@@ -176,7 +176,7 @@ int main() {
 				}
 
 				if (secs == 0 && mins == 0 && hours == 0 && days == 0) {
-					THROW_EXCEPTION(CommandException, "It makes no sense to pass 0 time.");
+					secs = 1;
 				}
 
 				::map->Tick(days, hours, mins, secs);
@@ -357,6 +357,16 @@ int main() {
 		}
 		catch (ExceptionBase& e) {
 			cout << e.GetDetailedInfo() << endl;
+
+			switch (type) {
+			case CMD_INIT:
+				::map->Destroy();
+				populace->Destroy();
+				society->Destroy();
+				break;
+			default:
+				break;
+			}
 		}
 
 	} while (type != CMD_EXIT);

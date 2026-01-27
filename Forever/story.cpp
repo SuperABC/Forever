@@ -141,7 +141,7 @@ void Story::Tick(int day, int hour, int min, int sec) {
 
 }
 
-void Story::Print() {
+void Story::Print() const {
 	cout << "全局变量数量 " << variables.size() << endl;
 	for (auto value : variables) {
 		cout << value.first << ": " << ToString(value.second) << endl;
@@ -174,21 +174,21 @@ void Story::ApplyChange(shared_ptr<Change> change) {
 	}
 }
 
-void Story::SaveStory(string path) {
+void Story::Load(string path) {
 
 }
 
-void Story::LoadStory(string path) {
+void Story::Save(string path) const {
 
 }
 
-bool Story::JudgeCondition(Condition& condition) {
+bool Story::JudgeCondition(Condition& condition) const {
 	return condition.EvaluateBool([this](string name) -> pair<bool, ValueType> {
 		return this->GetValue(name);
 		});
 }
 
-bool Story::JudgeCondition(Condition& condition, shared_ptr<Person> person) {
+bool Story::JudgeCondition(Condition& condition, shared_ptr<Person> person) const {
 	return condition.EvaluateBool({
 		[this](string name) -> pair<bool, ValueType> {
 			return this->GetValue(name);
@@ -199,11 +199,15 @@ bool Story::JudgeCondition(Condition& condition, shared_ptr<Person> person) {
 	});
 }
 
-bool Story::JudgeCondition(Condition& condition, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) {
+bool Story::JudgeCondition(Condition& condition, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const {
 	return condition.EvaluateBool(getValues);
 }
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Story::MatchEvent(shared_ptr<Event> event) {
+	if(!script) {
+		THROW_EXCEPTION(StructureCrashException, "Script not initialized.\n");
+	}
+
 	return script->MatchEvent(event, this);
 }
 
@@ -215,7 +219,7 @@ void Story::InitVariables(unique_ptr<Populace>& populace) {
 
 }
 
-pair<bool, ValueType> Story::GetValue(const string& name) {
+pair<bool, ValueType> Story::GetValue(const string& name) const {
 	auto it = variables.find(name);
 	if (it != variables.end()) {
 		return { true, it->second };

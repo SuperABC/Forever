@@ -43,7 +43,7 @@ public:
 	void Tick(int day, int hour, int min, int sec);
 
 	// 输出当前剧本信息
-	void Print();
+	void Print() const;
 
 	// 读取剧本
 	void ReadStory(std::string path);
@@ -52,20 +52,20 @@ public:
 	void ApplyChange(std::shared_ptr<Change> change);
 
 	// 保存/读取存档
-	void SaveStory(std::string path);
-	void LoadStory(std::string path);
+	void Load(std::string path);
+	void Save(std::string path) const;
 
 	// 判断条件
-	bool JudgeCondition(Condition& condition);
-	bool JudgeCondition(Condition& condition, std::shared_ptr<Person> person);
-	bool JudgeCondition(Condition& condition, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues);
+	bool JudgeCondition(Condition& condition) const;
+	bool JudgeCondition(Condition& condition, std::shared_ptr<Person> person) const;
+	bool JudgeCondition(Condition& condition, std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const;
 
 	// 匹配事件
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> MatchEvent(std::shared_ptr<Event> event);
 
 	// 变量管理
 	void SetValue(const std::string& name, ValueType value);
-	std::pair<bool, ValueType> GetValue(const std::string& name);
+	std::pair<bool, ValueType> GetValue(const std::string& name) const;
 
 private:
 	// Mod管理

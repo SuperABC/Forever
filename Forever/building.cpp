@@ -3,56 +3,56 @@
 
 using namespace std;
 
-int FlatBuilding::count = 0;
+int DefaultResidentialBuilding::count = 0;
 
-FlatBuilding::FlatBuilding() {
+DefaultResidentialBuilding::DefaultResidentialBuilding() {
     name = count++;
 }
 
-string FlatBuilding::GetId() {
-    return "flat";
+string DefaultResidentialBuilding::GetId() {
+    return "default_residential";
 }
 
-string FlatBuilding::GetType() const {
-    return "flat";
+string DefaultResidentialBuilding::GetType() const {
+    return "default_residential";
 }
 
-string FlatBuilding::GetName() const {
-    return string("公寓建筑") + to_string(name);
+string DefaultResidentialBuilding::GetName() const {
+    return string("默认住宅建筑") + to_string(name);
 }
 
-vector<float> FlatBuilding::GetPower() {
+vector<float> DefaultResidentialBuilding::GetPower() {
     return { 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
 }
 
-float FlatBuilding::RandomAcreage() const {
+float DefaultResidentialBuilding::RandomAcreage() const {
     return 600.f * powf(1.f + GetRandom(1000) / 1000.f * 3.f, 2);
 }
 
-float FlatBuilding::GetAcreageMin() const {
+float DefaultResidentialBuilding::GetAcreageMin() const {
     return 600.f;
 }
 
-float FlatBuilding::GetAcreageMax() const {
+float DefaultResidentialBuilding::GetAcreageMax() const {
     return 9600.f;
 }
 
-Rect FlatBuilding::LayoutConstruction() {
+Rect DefaultResidentialBuilding::LayoutConstruction() {
     if (GetAcreage() < 1000) {
-        layers = 1 + GetRandom(4);
+        layers = 1 + GetRandom(2);
     }
     else if (GetAcreage() < 4000) {
-        layers = 4 + GetRandom(7);
+        layers = 2 + GetRandom(3);
     }
     else {
-        layers = 8 + GetRandom(13);
+        layers = 4 + GetRandom(4);
     }
     basements = 1;
 
     return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
 }
 
-void FlatBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout) {
+void DefaultResidentialBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout) {
     int direction = 0;
     if (GetSizeX() > GetSizeY()) {
         if (GetSizeY() > 3.f) {
@@ -71,66 +71,66 @@ void FlatBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout)
         }
     }
 
-    auto component = CreateComponent<FlatComponent>();
+    auto component = CreateComponent<DefaultResidentialComponent>();
     ReadFloor(-1, direction, "single_room", layout);
-    AssignRoom(-1, 0, "parking", component, factory);
+    AssignRoom(-1, 0, "default_residential", component, factory);
     for (int i = 0; i < layers; i++) {
         ReadFloor(i, direction, "straight_linear", layout);
-        ArrangeRow(i, 0, "flat", 100.f, component, factory);
-        ArrangeRow(i, 1, "flat", 100.f, component, factory);
+        ArrangeRow(i, 0, "default_residential", 100.f, component, factory);
+        ArrangeRow(i, 1, "default_residential", 100.f, component, factory);
     }
 }
 
-int HotelBuilding::count = 0;
+int DefaultWorkingBuilding::count = 0;
 
-HotelBuilding::HotelBuilding() {
+DefaultWorkingBuilding::DefaultWorkingBuilding() {
     name = count++;
 }
 
-string HotelBuilding::GetId() {
-    return "hotel";
+string DefaultWorkingBuilding::GetId() {
+    return "default_working";
 }
 
-string HotelBuilding::GetType() const {
-    return "hotel";
+string DefaultWorkingBuilding::GetType() const {
+    return "default_working";
 }
 
-string HotelBuilding::GetName() const {
-    return string("酒店建筑") + to_string(name);
+string DefaultWorkingBuilding::GetName() const {
+    return string("默认工作建筑") + to_string(name);
 }
 
-vector<float> HotelBuilding::GetPower() {
+vector<float> DefaultWorkingBuilding::GetPower() {
     return { 0.f, .5f, .5f, .5f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
 }
 
-float HotelBuilding::RandomAcreage() const {
+float DefaultWorkingBuilding::RandomAcreage() const {
     return 1000.f * powf(1.f + GetRandom(1000) / 1000.f * 3.f, 2);
 }
 
-float HotelBuilding::GetAcreageMin() const {
+float DefaultWorkingBuilding::GetAcreageMin() const {
     return 1000.f;
 }
 
-float HotelBuilding::GetAcreageMax() const {
+float DefaultWorkingBuilding::GetAcreageMax() const {
     return 16000.f;
 }
 
-Rect HotelBuilding::LayoutConstruction() {
+Rect DefaultWorkingBuilding::LayoutConstruction() {
     if (GetAcreage() < 3000) {
-        layers = 2 + GetRandom(4);
+        layers = 1 + GetRandom(2);
     }
     else if (GetAcreage() < 10000) {
-        layers = 4 + GetRandom(7);
+        layers = 2 + GetRandom(3);
     }
     else {
-        layers = 8 + GetRandom(13);
+        layers = 4 + GetRandom(4);
     }
     basements = 1;
 
     return Rect(0.5f * GetSizeX(), 0.5f * GetSizeY(), 0.5f * GetSizeX(), 0.5f * GetSizeY());
 }
 
-void HotelBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout) {
+void DefaultWorkingBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout) {
     int direction = 0;
     if (GetSizeX() > GetSizeY()) {
         if (GetSizeY() > 3.f) {
@@ -149,17 +149,17 @@ void HotelBuilding::LayoutRooms(RoomFactory* factory, unique_ptr<Layout>& layout
         }
     }
 
-    auto component = CreateComponent<HotelComponent>();
+    auto component = CreateComponent<DefaultWorkingComponent>();
     ReadFloor(-1, direction, "single_room", layout);
-    AssignRoom(-1, 0, "parking", component, factory);
+    AssignRoom(-1, 0, "default_working", component, factory);
     ReadFloor(0, direction, "lobby_linear", layout);
-    AssignRoom(0, 0, "lobby", component, factory);
-    ArrangeRow(0, 0, "hotel", 100.f, component, factory);
-    ArrangeRow(0, 1, "hotel", 100.f, component, factory);
+    AssignRoom(0, 0, "default_working", component, factory);
+    ArrangeRow(0, 0, "default_working", 100.f, component, factory);
+    ArrangeRow(0, 1, "default_working", 100.f, component, factory);
     for (int i = 1; i < layers; i++) {
         ReadFloor(i, direction, "straight_linear", layout);
-        ArrangeRow(i, 0, "hotel", 100.f, component, factory);
-        ArrangeRow(i, 1, "hotel", 100.f, component, factory);
+        ArrangeRow(i, 0, "default_working", 100.f, component, factory);
+        ArrangeRow(i, 1, "default_working", 100.f, component, factory);
     }
 }
 

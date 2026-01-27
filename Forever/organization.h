@@ -8,8 +8,8 @@
 // 子类注册函数
 typedef void (*RegisterModOrganizationsFunc)(OrganizationFactory* factory);
 
-// 酒店组织
-class HotelOrganization : public Organization {
+// 默认组织
+class DefaultOrganization : public Organization {
 public:
     static std::string GetId();
     virtual std::string GetType() const override;

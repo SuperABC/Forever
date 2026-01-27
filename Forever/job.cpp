@@ -3,18 +3,18 @@
 
 using namespace std;
 
-string HotelCleanerJob::GetId() {
-	return "hotel_cleaner";
+string DefaultJob::GetId() {
+	return "default";
 }
 
-string HotelCleanerJob::GetType() const {
-	return "hotel_cleaner";
+string DefaultJob::GetType() const {
+	return "default";
 }
 
-string HotelCleanerJob::GetName() const {
-	return "酒店保洁";
+string DefaultJob::GetName() const {
+	return "默认工作";
 }
 
-vector<string> HotelCleanerJob::GetScripts() const {
-	return { "../Resources/scripts/jobs/hotel_cleaner.json" };
+vector<string> DefaultJob::GetScripts() const {
+	return { "../Resources/scripts/jobs/default.json" };
 }

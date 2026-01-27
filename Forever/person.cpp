@@ -268,13 +268,13 @@ void Person::AddScript(shared_ptr<Script> script) {
 
 pair<vector<Dialog>, vector<shared_ptr<Change>>> Person::MatchEvent(
 	shared_ptr<Event> event, unique_ptr<Story>& story, shared_ptr<Person> person) {
+	pair<vector<Dialog>, vector<shared_ptr<Change>>> results;
 	for (auto& script : scripts) {
 		auto result = script->MatchEvent(event, story.get(), person);
-		if (!result.first.empty() || !result.second.empty()) {
-			return result;
-		}
+		results.first.insert(results.first.end(), result.first.begin(), result.first.end());
+		results.second.insert(results.second.end(), result.second.begin(), result.second.end());
 	}
-	return make_pair(vector<Dialog>(), vector<shared_ptr<Change>>());
+	return results;
 }
 
 pair<bool, ValueType> Person::GetValue(const string& name) {

@@ -59,8 +59,8 @@ void Society::InitCalendars() {
 }
 
 void Society::InitOrganizations() {
-    organizationFactory->RegisterOrganization(HotelOrganization::GetId(),
-        []() { return make_unique<HotelOrganization>(); }, HotelOrganization::GetPower());
+    organizationFactory->RegisterOrganization(DefaultOrganization::GetId(),
+        []() { return make_unique<DefaultOrganization>(); }, DefaultOrganization::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -253,7 +253,7 @@ void Society::Tick(int day, int hour, int min, int sec) {
 
 }
 
-void Society::Print() {
+void Society::Print() const {
 
 }
 
@@ -265,7 +265,7 @@ void Society::Load(string path) {
 
 }
 
-void Society::Save(string path) {
+void Society::Save(string path) const {
 
 }
 

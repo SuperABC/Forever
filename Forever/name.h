@@ -28,5 +28,4 @@ private:
 
     void InitializeSurnames();
     void InitializeNames();
-
 };

@@ -30,14 +30,14 @@ public:
 	void Tick(int day, int hour, int min, int sec);
 
 	// 输出当前地图
-	void Print();
+	void Print() const;
 
 	// 应用变更
 	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Story>& story);
 
 	// 保存/加载地图
 	void Load(std::string path);
-	void Save(std::string path);
+	void Save(std::string path) const;
 
 private:
 	// Mod管理

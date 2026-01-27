@@ -31,9 +31,9 @@ private:
 	std::vector<MilestoneNode*> actives;
 
 	// 复合对象读取
-	std::vector<std::shared_ptr<Event>> BuildEvent(JsonValue root, std::unique_ptr<EventFactory>& factory);
-	std::vector<Dialog> BuildDialogs(JsonValue root, std::unique_ptr<ChangeFactory>& factory);
-	std::vector<std::shared_ptr<Change>> BuildChanges(JsonValue root, std::unique_ptr<ChangeFactory>& factory);
-	Condition BuildCondition(JsonValue root);
+	std::vector<std::shared_ptr<Event>> BuildEvent(JsonValue root, std::unique_ptr<EventFactory>& factory) const;
+	std::vector<Dialog> BuildDialogs(JsonValue root, std::unique_ptr<ChangeFactory>& factory) const;
+	std::vector<std::shared_ptr<Change>> BuildChanges(JsonValue root, std::unique_ptr<ChangeFactory>& factory) const;
+	Condition BuildCondition(JsonValue root) const;
 
 };

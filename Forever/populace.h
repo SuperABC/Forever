@@ -35,11 +35,11 @@ public:
 	void Init(int accomodation);
 
 	// 分配调度
-	void Schedule();
+	void Schedule() const;
 
 	// 分配剧情
-	void Jobstory(std::unique_ptr<Story>& story);
-	void Characterize(std::string path, std::unique_ptr<Story>& story);
+	void Jobstory(std::unique_ptr<Story>& story) const;
+	void Characterize(std::string path, std::unique_ptr<Story>& story) const;
 
 	// 释放空间
 	void Destroy();
@@ -48,7 +48,7 @@ public:
 	void Tick(std::unique_ptr<Map>& map, int day, int hour, int min, int sec);
 
 	// 输出当前地图
-	void Print();
+	void Print() const;
 
 	// 应用变更
 	void ApplyChange(std::shared_ptr<Change> change, std::unique_ptr<Story>& story,
@@ -56,10 +56,10 @@ public:
 
 	// 保存/加载人口
 	void Load(std::string path);
-	void Save(std::string path);
+	void Save(std::string path) const;
 
 	// 获取当前时间
-	Time GetTime();
+	Time GetTime() const;
 
 	// 获取全部市民
 	std::vector<std::shared_ptr<Person>>& GetCitizens();
@@ -73,9 +73,9 @@ public:
 
 	// 触发事件
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> TriggerEvent(
-		std::string name, std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+		std::string name, std::shared_ptr<Event> event, std::unique_ptr<Story>& story) const;
 	std::pair<std::vector<Dialog>, std::vector<std::shared_ptr<Change>>> TriggerEvent(
-		int id, std::shared_ptr<Event> event, std::unique_ptr<Story>& story);
+		int id, std::shared_ptr<Event> event, std::unique_ptr<Story>& story) const;
 
 	// 获取Job工厂
 	std::unique_ptr<JobFactory>& GetJobFactory();

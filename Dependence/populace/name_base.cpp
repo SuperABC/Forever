@@ -5,6 +5,14 @@
 
 using namespace std;
 
+bool Name::RegisterName(string name) {
+    if (roll.find(name) == roll.end()) {
+        roll.insert(name);
+        return true;
+    }
+    return false;
+}
+
 void NameFactory::RegisterName(const string& id, function<unique_ptr<Name>()> creator) {
     registries[id] = creator;
 }

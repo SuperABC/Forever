@@ -10,6 +10,14 @@
 
 using namespace std;
 
+Element::Element() {
+
+}
+
+Element::~Element() {
+
+}
+
 string Element::GetTerrain() const {
     return terrain;
 }
@@ -142,7 +150,8 @@ void Map::InitTerrains() {
 }
 
 void Map::InitRoadnets() {
-    roadnetFactory->RegisterRoadnet(JingRoadnet::GetId(), []() { return make_unique<JingRoadnet>(); });
+    roadnetFactory->RegisterRoadnet(JingRoadnet::GetId(),
+        []() { return make_unique<JingRoadnet>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -176,8 +185,8 @@ void Map::InitRoadnets() {
 }
 
 void Map::InitZones() {
-    zoneFactory->RegisterZone(FlatZone::GetId(),
-        []() { return make_unique<FlatZone>(); }, FlatZone::ZoneGenerator);
+    zoneFactory->RegisterZone(DefaultZone::GetId(),
+        []() { return make_unique<DefaultZone>(); }, DefaultZone::ZoneGenerator);
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -212,10 +221,10 @@ void Map::InitZones() {
 }
 
 void Map::InitBuildings() {
-    buildingFactory->RegisterBuilding(FlatBuilding::GetId(),
-        []() { return make_unique<FlatBuilding>(); }, FlatBuilding::GetPower());
-    buildingFactory->RegisterBuilding(HotelBuilding::GetId(),
-        []() { return make_unique<HotelBuilding>(); }, HotelBuilding::GetPower());
+    buildingFactory->RegisterBuilding(DefaultResidentialBuilding::GetId(),
+        []() { return make_unique<DefaultResidentialBuilding>(); }, DefaultResidentialBuilding::GetPower());
+    buildingFactory->RegisterBuilding(DefaultWorkingBuilding::GetId(),
+        []() { return make_unique<DefaultWorkingBuilding>(); }, DefaultWorkingBuilding::GetPower());
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -250,8 +259,10 @@ void Map::InitBuildings() {
 }
 
 void Map::InitComponents() {
-    componentFactory->RegisterComponent(FlatComponent::GetId(), []() { return make_unique<FlatComponent>(); });
-    componentFactory->RegisterComponent(HotelComponent::GetId(), []() { return make_unique<HotelComponent>(); });
+    componentFactory->RegisterComponent(DefaultResidentialComponent::GetId(),
+        []() { return make_unique<DefaultResidentialComponent>(); });
+    componentFactory->RegisterComponent(DefaultWorkingComponent::GetId(),
+        []() { return make_unique<DefaultWorkingComponent>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -286,10 +297,10 @@ void Map::InitComponents() {
 }
 
 void Map::InitRooms() {
-    roomFactory->RegisterRoom(ParkingRoom::GetId(), []() { return make_unique<ParkingRoom>(); });
-    roomFactory->RegisterRoom(FlatRoom::GetId(), []() { return make_unique<FlatRoom>(); });
-    roomFactory->RegisterRoom(HotelRoom::GetId(), []() { return make_unique<HotelRoom>(); });
-    roomFactory->RegisterRoom(LobbyRoom::GetId(), []() { return make_unique<LobbyRoom>(); });
+    roomFactory->RegisterRoom(DefaultResidentialRoom::GetId(),
+        []() { return make_unique<DefaultResidentialRoom>(); });
+    roomFactory->RegisterRoom(DefaultWorkingRoom::GetId(),
+        []() { return make_unique<DefaultWorkingRoom>(); });
 
     HMODULE modHandle = LoadLibraryA(REPLACE_PATH("Mod.dll"));
     if (modHandle) {
@@ -539,7 +550,7 @@ int Map::Init(int blockX, int blockY) {
     return capacity;
 }
 
-void Map::Checkin(vector<shared_ptr<Person>> citizens, Time time) {
+void Map::Checkin(vector<shared_ptr<Person>> citizens, Time time) const {
 	// 筛选成年市民
 	auto adults = vector<shared_ptr<Person>>();
     for (auto citizen : citizens) {
@@ -684,7 +695,7 @@ void Map::Tick(int day, int hour, int min, int sec) {
 
 }
 
-void Map::Print() {
+void Map::Print() const {
 
 }
 
@@ -696,11 +707,11 @@ void Map::Load(string path) {
 
 }
 
-void Map::Save(string path) {
+void Map::Save(string path) const {
 
 }
 
-pair<int, int> Map::GetSize() {
+pair<int, int> Map::GetSize() const {
     return make_pair(width, height);
 }
 

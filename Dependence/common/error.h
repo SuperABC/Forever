@@ -42,6 +42,11 @@ public:
     using ExceptionBase::ExceptionBase;
 };
 
+class StructureCrashException : public ExceptionBase {
+public:
+    using ExceptionBase::ExceptionBase;
+};
+
 class InvalidArgumentException : public ExceptionBase {
 public:
     using ExceptionBase::ExceptionBase;
@@ -62,6 +67,10 @@ public:
 };
 
 class OutOfRangeException : public ExceptionBase {
+    using ExceptionBase::ExceptionBase;
+};
+
+class DeadLoopException : public ExceptionBase {
     using ExceptionBase::ExceptionBase;
 };
 

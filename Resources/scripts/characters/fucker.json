@@ -25,7 +25,7 @@
 			{"speaker": "$$player.name", "content": "$$self.name+你好呀，很高兴认识你！"},
 			{"speaker": "$$self.name", "content": "你是谁呀？"},
 			{"speaker": "$$player.name", "content": "我是来带你玩的叔叔，今天我教你玩一个你从来没玩过的游戏好不好？"},
-			{"speaker": "$$self.name", "content": "你笑的太淫荡了，你不会是想和我约炮吧？"},
+			{"speaker": "$$self.name", "content": "你笑的太淫荡了，你不会是想和我约炮吧？还想把我当小孩骗呢？"},
 			{"speaker": "$$player.name", "content": "你知道的还挺多呀，以前和别人性交过吗？"},
 			{"speaker": "$$self.name", "content": "那倒没有，不过看你也挺帅的，既然你想和我性交的话我就和你体验一下吧。"},
 			[
@@ -86,7 +86,15 @@
 							{"speaker": "路人A", "content": "恭喜恭喜，第一次性交就是内射，而且是这么大的阴茎内射，现在一定很幸福。"},
 							{"content": "$$self.name+这时也已经很累了，不知道是性交累的还是大声呻吟累的。"},
 							{"content": "在你身上趴了一会，+$$self.name+恢复了一些精力，就站起来想要离开了。"},
-							{"content": "刚一站起来，精液就从+$$self.name+的阴道流了出来，+$$self.name+只好站着等精液流完。"}
+							{"content": "刚一站起来，精液就从+$$self.name+的阴道流了出来，+$$self.name+只好站着等精液流完。"},
+							{"content": "你知道这么干等着要等好久，于是就把手指伸进+$$self.name+阴道里帮助她把精液往外抠。"},
+							{"content": "等到精液基本流干净了，你抽出了手指，然后放到嘴里尝了尝。"},
+							{"speaker": "$$self.name", "content": "好吃吗？"},
+							{"speaker": "$$player.name", "content": "还行，给你也尝尝。"},
+							{"content": "于是你又一把搂住+$$self.name+，然后亲住嘴，开始舔她的舌头。"},
+							{"content": "$$self.name+尝到了你舌头上残留的一些淫水和精液的混合物，并没有排斥，而是给你的舌头舔的很干净。"},
+							{"speaker": "$$self.name", "content": "是不是结束了，那我可以穿好衣服了吗？"},
+							{"speaker": "$$player.name", "content": "嗯，从今以后你就不是处女了。"}
 						]}
 					],
 					"changes": [
@@ -96,7 +104,45 @@
 					"option": "我们到旁边的酒店开一个房间吧，我好好教教你。",
 					"dialogs": [
 						{"list": [
-							{"speaker": "$$self.name", "content": "嗯嗯，走吧."}
+							{"speaker": "$$self.name", "content": "嗯嗯，走吧。"},
+							{"content": "你带着+$$self.name+开了一间情趣大床房。"},
+							{"content": "刚一进房间，你就忍不住捧着+$$self.name+的脸亲上了嘴。"},
+							{"speaker": "$$self.name", "content": "呜，呜呜，呜呜呜！"},
+							{"content": "你并不关心+$$self.name+的反应，而是直接用舌头撬开了她的嘴，然后伸进嘴里舔到了她的舌头。"},
+							{"content": "$$self.name+身体猛地一颤，僵直了一会之后，+$$self.name+就开始用舌头回应你了。"},
+							{"content": "你和+$$self.name+就这么互相舔着舌头舔了很久很久，你感觉+$$self.name+的身体已经完全软了下来。"},
+							[
+								{
+									"option": "先洗个澡吧。",
+									"dialogs": [
+										{"list": [
+										
+										]}
+									],
+									"changes": [
+									]
+								},
+								{
+									"option": "先教你怎么给我口交吧。",
+									"dialogs": [
+										{"list": [
+										
+										]}
+									],
+									"changes": [
+									]
+								},
+								{
+									"option": "那我现在就给你破处吧。",
+									"dialogs": [
+										{"list": [
+										
+										]}
+									],
+									"changes": [
+									]
+								}
+							]
 						]}
 					],
 					"changes": [
