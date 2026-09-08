@@ -69,3 +69,6 @@ Thumbs.db
 
 # ---- Claude Code runtime state ----
 .claude/scheduled_tasks.lock
+
+# ---- Blueprint text dumps (local scratch input for migration work, not repo content) ----
+.dump/

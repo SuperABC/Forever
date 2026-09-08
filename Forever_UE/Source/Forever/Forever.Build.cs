@@ -12,9 +12,13 @@ public class Forever : ModuleRules
 		bEnableExceptions = true;
 		bUseRTTI = true;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
+
+		// 本模块内部按子文件夹(Player/Input/...)组织,没有Public/Private/Classes三段式结构,
+		// 把模块根目录加进来才能用"Player/Xxx.h"、"Input/Xxx.h"这种跨子目录相对路径互相include。
+		PublicIncludePaths.Add(ModuleDirectory);
 
 		// Dependence/Core 是与UE无关的纯C++城市模拟内核,以独立的VS静态库工程
 		// (Source/Framework.sln)编译,产出的.lib在此手动链接进UE模块。
