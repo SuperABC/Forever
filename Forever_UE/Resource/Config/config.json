@@ -1,0 +1,41 @@
+{
+   // dll_paths: 递归扫描这些目录,识别其中实现了任意Mod接口(GetMod<Concept>符号)的dll。
+   // 路径相对本文件所在目录(Forever_UE/Resource/Config/)解析,不用旧工程那种写死的绝对
+   // 路径,避免机器相关。"../../x64/Release"是Basic.dll(Source/Basic,内置默认Mod,和其余
+   // 三个一样通过Config/ModLoader在运行时加载,不静态链进Forever.Build.cs,见
+   // Source/Basic/README.md)的构建输出目录,同目录下的Dependence.lib/Core.lib不是.dll,
+   // 会被Config::AddDllPath按扩展名跳过。
+   "dll_paths" : [
+      "../../x64/Release",
+      "../../../Forever_Mod/Test",
+      "../../../Forever_Mod/Wxdj",
+      "../../../Forever_Mod/Empty"
+   ],
+
+   // "<concept>_mods": 和旧工程格式一致,每个concept一个数组,数组元素是"id"或"id 参数..."
+   // (命令行式写法,和旧工程"test ---name value"的写法相同)——按第一个空格切开,前半段是
+   // mod id,后半段(可以没有)原样传给该id对应实例的ApplyArgs(),格式由mod自己解析,Config
+   // 只负责切分。没在这里列出的id依然会被正常创建(阶段3不做启用/禁用过滤,只做参数配置),
+   // 只是拿不到参数(ApplyArgs收到空串)。
+   "terrain_mods" : [ "empty --test true" ],
+   "roadnet_mods" : [ "empty --test true" ],
+   "zone_mods" : [ "empty --test true" ],
+   "building_mods" : [ "pengzhan", "yizhong", "yuanshen", "empty --test true" ],
+   "component_mods" : [ "empty --test true" ],
+   "room_mods" : [ "empty --test true" ],
+   "asset_mods" : [ "empty --test true" ],
+   "app_mods" : [ "empty --test true" ],
+   "puzzle_mods" : [ "empty --test true" ],
+   "name_mods" : [ "empty --test true" ],
+   "scheduler_mods" : [ "empty --test true" ],
+   "job_mods" : [ "empty --test true" ],
+   "calendar_mods" : [ "empty --test true" ],
+   "organization_mods" : [ "empty --test true" ],
+   "script_mods" : [ "wxdj", "empty --test true" ],
+   "product_mods" : [ "empty --test true" ],
+   "storage_mods" : [ "empty --test true" ],
+   "manufacture_mods" : [ "empty --test true" ],
+   "route_mods" : [ "empty --test true" ],
+   "station_mods" : [ "empty --test true" ],
+   "vehicle_mods" : [ "empty --test true" ]
+}

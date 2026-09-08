@@ -22,4 +22,8 @@ protected:
 	// 阶段4 Map/Terrain系统落地后应移除。
 	UPROPERTY(EditDefaultsOnly, Category = "Placeholder")
 	TObjectPtr<UStaticMesh> placeholderFloorMesh;
+
+	// 阶段2临时兜底:场景里没有手动放置AForeverFrameworkActor时动态生成一个。
+	// 一旦关卡里手动放置了真实实例应移除这段逻辑。
+	void EnsureFrameworkActorExists();
 };

@@ -45,9 +45,11 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(ProjectDir)..\..\x64\Debug\</OutDir>
+    <IncludePath>$(ProjectDir);$(ProjectDir)common;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(ProjectDir)..\..\x64\Release\</OutDir>
+    <IncludePath>$(ProjectDir);$(ProjectDir)common;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -78,11 +80,76 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Dependence.cpp" />
-  </ItemGroup>
+    <ClCompile Include="common\error.cpp" />
+    <ClCompile Include="common\json.cpp" />
+    <ClCompile Include="map\terrain_factory.cpp" />
+    <ClCompile Include="map\roadnet_factory.cpp" />
+    <ClCompile Include="map\zone_factory.cpp" />
+    <ClCompile Include="map\building_factory.cpp" />
+    <ClCompile Include="map\component_factory.cpp" />
+    <ClCompile Include="map\room_factory.cpp" />
+    <ClCompile Include="player\asset_factory.cpp" />
+    <ClCompile Include="player\app_factory.cpp" />
+    <ClCompile Include="player\puzzle_factory.cpp" />
+    <ClCompile Include="populace\name_factory.cpp" />
+    <ClCompile Include="populace\scheduler_factory.cpp" />
+    <ClCompile Include="society\job_factory.cpp" />
+    <ClCompile Include="society\calendar_factory.cpp" />
+    <ClCompile Include="society\organization_factory.cpp" />
+    <ClCompile Include="story\script_factory.cpp" />
+    <ClCompile Include="industry\product_factory.cpp" />
+    <ClCompile Include="industry\storage_factory.cpp" />
+    <ClCompile Include="industry\manufacture_factory.cpp" />
+    <ClCompile Include="traffic\route_factory.cpp" />
+    <ClCompile Include="traffic\station_factory.cpp" />
+    <ClCompile Include="traffic\vehicle_factory.cpp" />
+</ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Dependence.h" />
-  </ItemGroup>
+    <ClInclude Include="common\error.h" />
+    <ClInclude Include="common\json.h" />
+    <ClInclude Include="map\terrain_mod.h" />
+    <ClInclude Include="map\roadnet_mod.h" />
+    <ClInclude Include="map\zone_mod.h" />
+    <ClInclude Include="map\building_mod.h" />
+    <ClInclude Include="map\component_mod.h" />
+    <ClInclude Include="map\room_mod.h" />
+    <ClInclude Include="player\asset_mod.h" />
+    <ClInclude Include="player\app_mod.h" />
+    <ClInclude Include="player\puzzle_mod.h" />
+    <ClInclude Include="populace\name_mod.h" />
+    <ClInclude Include="populace\scheduler_mod.h" />
+    <ClInclude Include="society\job_mod.h" />
+    <ClInclude Include="society\calendar_mod.h" />
+    <ClInclude Include="society\organization_mod.h" />
+    <ClInclude Include="story\script_mod.h" />
+    <ClInclude Include="industry\product_mod.h" />
+    <ClInclude Include="industry\storage_mod.h" />
+    <ClInclude Include="industry\manufacture_mod.h" />
+    <ClInclude Include="traffic\route_mod.h" />
+    <ClInclude Include="traffic\station_mod.h" />
+    <ClInclude Include="traffic\vehicle_mod.h" />
+    <ClInclude Include="map\terrain_factory.h" />
+    <ClInclude Include="map\roadnet_factory.h" />
+    <ClInclude Include="map\zone_factory.h" />
+    <ClInclude Include="map\building_factory.h" />
+    <ClInclude Include="map\component_factory.h" />
+    <ClInclude Include="map\room_factory.h" />
+    <ClInclude Include="player\asset_factory.h" />
+    <ClInclude Include="player\app_factory.h" />
+    <ClInclude Include="player\puzzle_factory.h" />
+    <ClInclude Include="populace\name_factory.h" />
+    <ClInclude Include="populace\scheduler_factory.h" />
+    <ClInclude Include="society\job_factory.h" />
+    <ClInclude Include="society\calendar_factory.h" />
+    <ClInclude Include="society\organization_factory.h" />
+    <ClInclude Include="story\script_factory.h" />
+    <ClInclude Include="industry\product_factory.h" />
+    <ClInclude Include="industry\storage_factory.h" />
+    <ClInclude Include="industry\manufacture_factory.h" />
+    <ClInclude Include="traffic\route_factory.h" />
+    <ClInclude Include="traffic\station_factory.h" />
+    <ClInclude Include="traffic\vehicle_factory.h" />
+</ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

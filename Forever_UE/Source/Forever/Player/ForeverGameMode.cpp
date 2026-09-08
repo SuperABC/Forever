@@ -3,6 +3,7 @@
 #include "ForeverCharacter.h"
 #include "ForeverPlayerController.h"
 #include "ForeverPlayerState.h"
+#include "Framework/ForeverFrameworkActor.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMeshActor.h"
@@ -43,6 +44,20 @@ void AForeverGameMode::BeginPlay()
 			floor->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		}
 	}
+
+	EnsureFrameworkActorExists();
+}
+
+void AForeverGameMode::EnsureFrameworkActorExists()
+{
+	// 阶段2临时兜底:场景里一个AForeverFrameworkActor都没有时动态生成一个,
+	// 保证阶段2骨架能在PIE里跑起来并触发BeginPlay日志。阶段4之后关卡里应该
+	// 手动放置真实实例,再移除这段逻辑。
+	for (TActorIterator<AForeverFrameworkActor> it(GetWorld()); it; ++it) {
+		return;
+	}
+
+	GetWorld()->SpawnActor<AForeverFrameworkActor>(FVector::ZeroVector, FRotator::ZeroRotator);
 }
 
 AActor* AForeverGameMode::FindPlayerStart_Implementation(AController* player, const FString& incomingName)
