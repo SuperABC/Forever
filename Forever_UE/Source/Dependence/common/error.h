@@ -125,7 +125,7 @@ class MemoryException : public ExceptionBase {
 	using ExceptionBase::ExceptionBase;
 };
 
-// Jsong格式有误
+// Json格式有误
 class JsonFormatException : public ExceptionBase {
 	using ExceptionBase::ExceptionBase;
 };
