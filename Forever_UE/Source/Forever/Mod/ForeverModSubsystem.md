@@ -41,7 +41,7 @@ Factory.SetModArgs→ModLoader加载并注册进Factory→创建实例(自动App
 ## 依赖关系
 
 - 依赖:`Source/Core/common/config.h`(`Config::ReadConfig`/`GetMods`/`AddDllPath`)、
-  `Source/Core/common/mod_loader.h`(`ModLoader::RegisterConcept`/`UnloadAll`)、
+  `Source/Core/common/loader.h`(`ModLoader::RegisterConcept`/`UnloadAll`)、
   `Source/Dependence`下全部21个`<domain>/<concept>_factory.h`。
 - 被谁依赖:无(UE会在game instance启动时自动实例化所有`UGameInstanceSubsystem`,不需要
   手动获取)。

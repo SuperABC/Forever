@@ -1,4 +1,4 @@
-# ModLoader (mod_loader.h / mod_loader.cpp)
+# ModLoader (loader.h / loader.cpp)
 
 ## 职责
 
@@ -18,8 +18,8 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   `getModSymbol`/`registerModSymbol`/`finishModSymbol`三个字符串,和旧工程
   `Config::AddDllPath`里探测的21个固定`GetMod<Concept>`符号名一一对应。`Config::AddDllPath`
   复用这份列表的`getModSymbol`做探测,避免两处维护同一份符号表。
-- **头文件不`#include <windows.h>`**——`HMODULE`/`FARPROC`只在`mod_loader.cpp`里出现,句柄
-  对外一律是`void*`。这是因为`mod_loader.h`会被`Source/Forever/Mod/ForeverModSubsystem.cpp`
+- **头文件不`#include <windows.h>`**——`HMODULE`/`FARPROC`只在`loader.cpp`里出现,句柄
+  对外一律是`void*`。这是因为`loader.h`会被`Source/Forever/Mod/ForeverModSubsystem.cpp`
   间接引用,而UE的`CoreMinimal.h`已经拉了一套宏安全的Windows类型子集,再让这个头文件自己
   `#include <windows.h>`有和UE宏冲突的风险,隔离在.cpp里彻底避免这类问题。
 - **`RegisterConcept`是模板方法**——直接用`FactoryT*`承接调用方传入的具体Factory类型

@@ -1,6 +1,6 @@
 #include "config.h"
 
-#include "mod_loader.h"
+#include "loader.h"
 #include "json.h"
 
 #include <fstream>

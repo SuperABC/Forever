@@ -7,8 +7,8 @@ society/story/traffic`域文件夹本阶段全部搬去了`Source/Dependence`,�
 
 - `common/config.h/.cpp`:移植并裁剪自旧工程的`Config`类,负责读取`config.json`+扫描
   `dll_paths`目录,详见`common/config.md`。
-- `common/mod_loader.h/.cpp`:按concept把`Config`发现的合法mod dll真正`LoadLibrary`并
-  注册进具体的`<Concept>Factory`,详见`common/mod_loader.md`。
+- `common/loader.h/.cpp`:按concept把`Config`发现的合法mod dll真正`LoadLibrary`并
+  注册进具体的`<Concept>Factory`,详见`common/loader.md`。
 
 ## 实现期修正:`<Concept>Factory`不在这里
 
@@ -22,7 +22,7 @@ society/story/traffic`域文件夹本阶段全部搬去了`Source/Dependence`,�
 
 ## 依赖关系
 
-- 依赖:`Source/Dependence`(`config.cpp`用`common/json.h`解析JSON、`mod_loader.h`的
+- 依赖:`Source/Dependence`(`config.cpp`用`common/json.h`解析JSON、`loader.h`的
   `RegisterConcept`模板方法接受任意`<Concept>Factory*`,不需要知道具体是哪个)。
 - 被谁依赖:`Source/Forever/Mod/ForeverModSubsystem.cpp`(构造`ModLoader`实例、调用
   `Config::ReadConfig`/`Config::GetMods`/`ModLoader::RegisterConcept`)。

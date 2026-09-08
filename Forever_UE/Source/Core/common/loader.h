@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_map>
 
-// 21个concept对应的DLL导出符号名,和8个domain/概念的完整对照表见同目录mod_loader.md。
+// 21个concept对应的DLL导出符号名,和8个domain/概念的完整对照表见同目录loader.md。
 // Config::AddDllPath用getModSymbol探测某个dll是否是合法mod;ModLoader::RegisterConcept
 // 用registerSymbol/finishSymbol把探测通过的dll真正接入某个具体Factory。
 struct ModConceptDescriptor {
@@ -17,7 +17,7 @@ struct ModConceptDescriptor {
 const std::vector<ModConceptDescriptor>& GetModConceptDescriptors();
 
 // 不在头文件里include windows.h,避免和UE头文件的宏产生冲突——句柄一律存成void*,
-// LoadLibrary/GetProcAddress/FreeLibrary只在mod_loader.cpp里出现。
+// LoadLibrary/GetProcAddress/FreeLibrary只在loader.cpp里出现。
 //
 // 参数(config.json里"<concept>_mods"数组每项"id 参数..."中的参数部分)不经过ModLoader——
 // 那是按mod id配置的,而ModLoader只按dll路径工作、不知道一个dll会注册哪些id。参数改由

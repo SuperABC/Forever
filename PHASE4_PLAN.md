@@ -21,7 +21,7 @@ domain 内部怎么再拆，原文写明"本阶段开始时另开session确定"�
   Terrain/Traffic/Zone），全部空实现，等阶段4填逻辑。
 - **Mod加载/参数化链路已跑通**（阶段3）：`Config` + `ModLoader` + `ForeverModSubsystem` 验证过
   "config.json → 扫描dll → 加载注册 → 创建实例(自动ApplyArgs) → 读身份信息"整条链路，21个
-  concept全覆盖，但目前是`ForeverModSubsystem`临时代管，`Core/common/mod_loader.md`已经写明
+  concept全覆盖，但目前是`ForeverModSubsystem`临时代管，`Core/common/loader.md`已经写明
   阶段4要把这份职责转移给"真正的领域系统类"（如`Map`/`Story`）。
 - **视角/输入/PlayerController骨架已就绪**（阶段1）：`ForeverCharacter`/
   `ForeverPlayerController`/`ForeverGameMode`/`ForeverPlayerState`。`MainController`旧蓝图里
@@ -142,7 +142,7 @@ player`、`Source/Basic/player`已有目录一致，改名反而制造新的不�
    步接入`Forever_Mod/Test`并验证。
 4. `Roadnet`——路网数据，为阶段4-3 Traffic和阶段7车辆导航打基础。
 5. `Map`（聚合类）——持有以上6个的`<Concept>Factory`，取代`ForeverModSubsystem`临时代管
-   Building/Script两个Factory的做法（`Core/common/mod_loader.md`待办项之一）。
+   Building/Script两个Factory的做法（`Core/common/loader.md`待办项之一）。
 
 解锁的Framework组件：`UForeverTerrainFrameworkComponent`/`RoadnetFrameworkComponent`/
 `ZoneFrameworkComponent`/`BuildingFrameworkComponent`/`RoomFrameworkComponent`。

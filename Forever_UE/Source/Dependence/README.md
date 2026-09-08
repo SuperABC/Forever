@@ -104,6 +104,25 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
 `Core/common/config.cpp`用`json.h`解析`config.json`;`json.cpp`的`AsString`/`AsInt`等
 类型转换方法用`error.h`的`THROW_EXCEPTION(JsonFormatException, ...)`在类型不匹配时抛异常。
 
+## 阶段4-0共享基础设施(不属于21个concept)
+
+`common/`、`map/`、`story/`三个目录下,除了以上21个concept的Mod/Factory文件,还各自多了几份
+"跨domain共享的原语",在`PHASE4_PLAN.md`里称为"阶段4-0",比Map域还早迁移,因为它们不感知任何
+具体domain数据、却被多个domain的Core层代码依赖:
+
+- `common/utility.h/.cpp`:`ValueType`(脚本引擎值类型)、`Time`、`Counter`、`debugf`等,详见
+  `common/utility.md`。
+- `common/handle.h/.cpp`:`PostHandle`跨模块查询接口,详见`common/handle.md`。
+- `map/geometry.h/.cpp`:`Node`/`Connection`/`Quad`/`Lot`等几何与导航图原语,详见
+  `map/geometry.md`。
+- `story/condition.h/.cpp`、`story/change.h/.cpp`、`story/event.h/.cpp`:通用脚本表达式引擎
+  +"动作"/"事件"词汇表,详见各自同名`.md`。这三个文件不是`story`域21个concept之一(`Script`
+  才是),是`Script`将来会用到的底层机制,提前迁移。
+
+这几份文件均**原样移植**,唯一的例外是`utility.h`把`debugf`的`LPCSTR`参数改成了`const char*`
+并将`<windows.h>`挪进`.cpp`(避免头文件污染,呼应`loader.md`已定的先例),详见
+`common/utility.md`。
+
 ## 待办/后续阶段
 
 - 阶段4:按系统迁移进度,逐个把对应concept的`<Concept>Mod`从"只有GetType/GetName"升级成

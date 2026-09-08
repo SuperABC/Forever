@@ -29,9 +29,9 @@
   (`ForeverModSubsystem`)决定要不要回退到扫描默认目录。
 - **`AddDllPath`探测完立即`FreeLibrary`,不长期持有句柄**——探测阶段只是为了确认"这是不是
   一个合法mod dll"(是否存在任意一个`GetMod<Concept>`符号),不需要长期持有;真正常驻加载
-  是`ModLoader`(`mod_loader.h`)的职责,`Config`和`ModLoader`各自独立`LoadLibraryA`同一个
+  是`ModLoader`(`loader.h`)的职责,`Config`和`ModLoader`各自独立`LoadLibraryA`同一个
   dll两次(一次探测、一次注册)在Windows上是安全的(`LoadLibraryA`内部按路径做引用计数)。
-- **`AddDllPath`探测用的21个`GetMod<Concept>`符号名来自`mod_loader.h`的
+- **`AddDllPath`探测用的21个`GetMod<Concept>`符号名来自`loader.h`的
   `GetModConceptDescriptors()`**,不在`config.cpp`里重复维护一份列表,避免两处列表不同步。
 - **`<concept>_mods`数组按mod id配置参数,格式和旧工程一致**——`ReadConfig`扫描所有以
   `_mods`结尾的顶层key(不硬编码21个concept名字,配置文件本身决定内容有哪些),每个数组
@@ -48,7 +48,7 @@
 
 ## 依赖关系
 
-- 依赖:`Dependence/common/json.h`(解析JSON)、`Core/common/mod_loader.h`
+- 依赖:`Dependence/common/json.h`(解析JSON)、`Core/common/loader.h`
   (`GetModConceptDescriptors()`探测符号表)、`<windows.h>`(`LoadLibraryA`/`GetProcAddress`/
   `FreeLibrary`,只在`.cpp`里出现,头文件不引入)。
 - 被谁依赖:`Source/Forever/Mod/ForeverModSubsystem.cpp`。

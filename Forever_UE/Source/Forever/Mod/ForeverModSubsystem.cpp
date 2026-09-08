@@ -1,7 +1,7 @@
 #include "ForeverModSubsystem.h"
 
 #include "common/config.h"
-#include "common/mod_loader.h"
+#include "common/loader.h"
 
 #include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"

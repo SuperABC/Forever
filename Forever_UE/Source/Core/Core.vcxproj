@@ -81,11 +81,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="common\config.cpp" />
-    <ClCompile Include="common\mod_loader.cpp" />
+    <ClCompile Include="common\loader.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\config.h" />
-    <ClInclude Include="common\mod_loader.h" />
+    <ClInclude Include="common\loader.h" />
 </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

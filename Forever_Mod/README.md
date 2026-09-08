@@ -38,7 +38,7 @@
 ## 每个mod DLL必须导出的三个函数
 
 以`Building`概念为例(其余概念符号名把`Buildings`换成对应复数,参见
-`Forever_UE/Source/Core/common/mod_loader.md`的21符号表):
+`Forever_UE/Source/Core/common/loader.md`的21符号表):
 
 ```cpp
 extern "C" __declspec(dllexport) void* GetModBuildings();                    // 返回该dll提供的static id列表

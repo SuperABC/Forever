@@ -82,6 +82,12 @@
   <ItemGroup>
     <ClCompile Include="common\error.cpp" />
     <ClCompile Include="common\json.cpp" />
+    <ClCompile Include="common\utility.cpp" />
+    <ClCompile Include="common\handle.cpp" />
+    <ClCompile Include="map\geometry.cpp" />
+    <ClCompile Include="story\condition.cpp" />
+    <ClCompile Include="story\change.cpp" />
+    <ClCompile Include="story\event.cpp" />
     <ClCompile Include="map\terrain_factory.cpp" />
     <ClCompile Include="map\roadnet_factory.cpp" />
     <ClCompile Include="map\zone_factory.cpp" />
@@ -107,6 +113,12 @@
   <ItemGroup>
     <ClInclude Include="common\error.h" />
     <ClInclude Include="common\json.h" />
+    <ClInclude Include="common\utility.h" />
+    <ClInclude Include="common\handle.h" />
+    <ClInclude Include="map\geometry.h" />
+    <ClInclude Include="story\condition.h" />
+    <ClInclude Include="story\change.h" />
+    <ClInclude Include="story\event.h" />
     <ClInclude Include="map\terrain_mod.h" />
     <ClInclude Include="map\roadnet_mod.h" />
     <ClInclude Include="map\zone_mod.h" />
