@@ -15,8 +15,8 @@
   - 两个摄像机同一时刻只有一个`Active`(`UCameraComponent::SetActive`),不是靠`SetViewTarget`——因为两个摄像机都挂在同一个Pawn上,引擎会自动选取"活跃"的那个作为视图目标。
   - 切第一人称时`GetMesh()->SetOwnerNoSee(true)`,避免本地玩家在第一人称视角下看到自己身体穿模;`bUseControllerRotationYaw`和`CharacterMovement.bOrientRotationToMovement`两组标志位在第一/三人称间对调,让第一人称下角色朝向跟随视角、第三人称下角色朝向跟随移动方向(和大多数第三人称射击/动作游戏的惯例一致)。
   - 已知限制:`firstPersonCamera`没有挂到`head`socket时的兜底位置(眼高近似值)是构造函数里算一次的固定`RelativeLocation`,不会随角色姿态动态调整,先记录。
-- **Shift冲刺**(`StartSprint`/`StopSprint`,按住触发,不是切换):把`CharacterMovementComponent->MaxWalkSpeed`在`walkSpeed`(默认500)和`walkSpeed * sprintSpeedMultiplier`(倍数默认3)之间切换——冲刺速度是走路速度的倍数而不是独立的固定值,改`walkSpeed`时冲刺速度会跟着联动。
-  - **没有专属冲刺动画**:`Anims/Unarmed/`目录下没有区别于Jog的Sprint动画集,所以冲刺目前只是数值变化——角色跑得更快,但`BS_Idle_Walk_Run`这个BlendSpace是按速度采样的,超出它原本给"Run"档位设定的速度上限后画面上会有一点脚下打滑感,是这套动画资产本身的限制,不是bug。
+- **Shift冲刺**(`StartSprint`/`StopSprint`,按住触发,不是切换):把`CharacterMovementComponent->MaxWalkSpeed`在`walkSpeed`(默认500)和`walkSpeed * sprintSpeedMultiplier`(倍数默认10,阶段4-1把默认3调到10——地图从10x10个Element的占位地板变成1024x1024个Element、10.24km见方的真实地形后,3倍走路速度跑到山区太慢,调大纯粹是为了实机验证效率,不是这套移动手感设计的最终数值)之间切换——冲刺速度是走路速度的倍数而不是独立的固定值,改`walkSpeed`时冲刺速度会跟着联动。
+  - **没有专属冲刺动画**:`Anims/Unarmed/`目录下没有区别于Jog的Sprint动画集,所以冲刺目前只是数值变化——角色跑得更快,但`BS_Idle_Walk_Run`这个BlendSpace是按速度采样的,超出它原本给"Run"档位设定的速度上限后画面上会有一点脚下打滑感,是这套动画资产本身的限制,不是bug。10倍速度下这个打滑感会比3倍时更明显。
 - **蹲下(C键)和挥拳(左键)最终没有做**:两者都试过——挥拳方案(运行时`PlaySlotAnimationAsDynamicMontage`接现有`DefaultSlot`)本身没问题,但蹲姿要做出平滑过渡得改AnimGraph加`Blend Poses by bool`节点,操作繁琐、效果也不理想,用户决定放弃,两部分代码和阶段1额外导入的`Anims/Unarmed/Crouch/*`动画资产、`UForeverAnimInstance`类都已经移除,`ABP_Unarmed`也恢复成了原始的`AnimInstance`父类。
 
 ## 依赖关系

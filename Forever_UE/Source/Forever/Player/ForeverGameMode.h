@@ -4,7 +4,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "ForeverGameMode.generated.h"
 
-class UStaticMesh;
+class AForeverFrameworkActor;
 
 UCLASS()
 class FOREVER_API AForeverGameMode : public AGameModeBase
@@ -18,12 +18,9 @@ public:
 	virtual AActor* FindPlayerStart_Implementation(AController* player, const FString& incomingName) override;
 
 protected:
-	// 阶段0临时占位:场景里没有可行走地面时生成一块大平面。
-	// 阶段4 Map/Terrain系统落地后应移除。
-	UPROPERTY(EditDefaultsOnly, Category = "Placeholder")
-	TObjectPtr<UStaticMesh> placeholderFloorMesh;
-
-	// 阶段2临时兜底:场景里没有手动放置AForeverFrameworkActor时动态生成一个。
-	// 一旦关卡里手动放置了真实实例应移除这段逻辑。
-	void EnsureFrameworkActorExists();
+	// 阶段2临时兜底:场景里没有手动放置AForeverFrameworkActor时动态生成一个,顺带确保它的
+	// 地形已生成(EnsureTerrainGenerated幂等,重复调用无副作用)。一旦关卡里手动放置了真实
+	// 实例应移除这段查找/生成逻辑。BeginPlay和FindPlayerStart_Implementation都会调用它,
+	// 保证不论两者实际调用顺序如何,出生点计算时地形都已经生成好。
+	AForeverFrameworkActor* EnsureFrameworkActorExists();
 };

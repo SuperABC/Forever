@@ -89,6 +89,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="basic.cpp" />
+    <ClCompile Include="map\terrain_basic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\terrain_basic.h" />

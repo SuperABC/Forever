@@ -69,7 +69,7 @@ protected:
 	float walkSpeed = 500.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
-	float sprintSpeedMultiplier = 3.f;
+	float sprintSpeedMultiplier = 10.f;
 
 	bool bIsSprinting = false;
 

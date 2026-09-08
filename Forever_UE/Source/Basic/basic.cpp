@@ -56,12 +56,15 @@
 using namespace std;
 
 extern "C" __declspec(dllexport) void* GetModTerrains() {
-	static vector<string> mods = { TerrainBasic::GetId() };
+	static vector<string> mods = { OceanTerrain::GetId(), MountainTerrain::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModTerrains(TerrainFactory* factory) {
-	factory->RegisterTerrain(TerrainBasic::GetId(),
-		[]() -> TerrainMod* { return new TerrainBasic(); },
+	factory->RegisterTerrain(OceanTerrain::GetId(),
+		[]() -> TerrainMod* { return new OceanTerrain(); },
+		[](TerrainMod* m) { delete m; });
+	factory->RegisterTerrain(MountainTerrain::GetId(),
+		[]() -> TerrainMod* { return new MountainTerrain(); },
 		[](TerrainMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModTerrains(TerrainFactory* factory) {

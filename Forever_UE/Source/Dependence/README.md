@@ -11,7 +11,7 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
 
 | Domain | Concept | Mod接口 | Factory(创建/销毁/枚举) | 加载器探测符号 |
 |---|---|---|---|---|
-| map | Terrain | `map/terrain_mod.h` → `TerrainMod` | `map/terrain_factory.h/.cpp` → `TerrainFactory` | `GetModTerrains` |
+| map | Terrain（阶段4-1已毕业，见`map/terrain_mod.md`/`map/terrain_factory.md`） | `map/terrain_mod.h` → `TerrainMod` | `map/terrain_factory.h/.cpp` → `TerrainFactory` | `GetModTerrains` |
 | map | Roadnet | `map/roadnet_mod.h` → `RoadnetMod` | `map/roadnet_factory.h/.cpp` → `RoadnetFactory` | `GetModRoadnets` |
 | map | Zone | `map/zone_mod.h` → `ZoneMod` | `map/zone_factory.h/.cpp` → `ZoneFactory` | `GetModZones` |
 | map | Building | `map/building_mod.h` → `BuildingMod` | `map/building_factory.h/.cpp` → `BuildingFactory` | `GetModBuildings` |
@@ -126,7 +126,9 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
 ## 待办/后续阶段
 
 - 阶段4:按系统迁移进度,逐个把对应concept的`<Concept>Mod`从"只有GetType/GetName"升级成
-  真正的业务接口(对照旧工程同名`_mod.h`补齐),并从共用文档升级为独立`.md`。
+  真正的业务接口(对照旧工程同名`_mod.h`补齐),并从共用文档升级为独立`.md`。Terrain
+  (阶段4-1)是第一个这样做的,`terrain_mod.h`/`terrain_factory.h`已经不在这份共用文档
+  覆盖范围内,毕业方式照抄即可。
 - 阶段4:`<Concept>Factory`目前只有最小注册表(`registries`+`liveInstances`两个map),旧工程
   的`Temp`暂存区+`MergeTemp()`两段式注册(用于隔离"探测阶段"和"正式生效阶段")这次简化掉了,
   如果阶段4发现多个mod并发注册确实需要这层隔离,再按需恢复。

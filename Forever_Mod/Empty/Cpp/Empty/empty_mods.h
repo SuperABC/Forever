@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <functional>
 
 #include "map/terrain_mod.h"
 #include "map/roadnet_mod.h"
@@ -40,6 +41,14 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 	virtual void ApplyArgs(const std::string& args) override { name = "empty(" + args + ")"; }
+
+	virtual float GetPriority() const override { return 0.0f; }
+	virtual void SetupTexture() override {}
+	virtual void DistributeTerrain(int width, int height,
+		const std::function<std::string(int, int)>& getTerrain,
+		const std::function<bool(int, int, std::string)>& setTerrain,
+		const std::function<float(int, int)>& getHeight,
+		const std::function<bool(int, int, float)>& setHeight) const override {}
 
 private:
 	std::string name;

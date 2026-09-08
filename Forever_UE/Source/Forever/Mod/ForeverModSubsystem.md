@@ -7,8 +7,13 @@
 设置参数表、发现/加载/注册该concept下的所有mod,并把每个已注册id创建出来的临时实例的
 `GetType()`/`GetName()`打进Output Log,验证"config.json→Config解析(dll+参数)→
 Factory.SetModArgs→ModLoader加载并注册进Factory→创建实例(自动ApplyArgs)→读身份信息"
-整条链路可用,21个concept全部覆盖。**这是阶段3的验证手段,不是最终产品UX**——真正的mod
-启用/禁用UI、按系统接入等能力留到阶段4及以后。
+整条链路可用。**这是阶段3的验证手段,不是最终产品UX**——真正的mod启用/禁用UI、按系统接入
+等能力留到阶段4及以后。
+
+**阶段4-1起,Terrain这一个concept已经不在这份代码里了**——它的`TerrainFactory`现在由
+`Source/Core/map/map.h`的`Map`类长期持有(`Map::InitTerrains()`自己调用
+`ModLoader::RegisterConcept<TerrainFactory>`),不再需要`ForeverModSubsystem`临时代管+
+验证。目前还剩20个concept的验证块。
 
 ## 关键设计
 
@@ -48,9 +53,9 @@ Factory.SetModArgs→ModLoader加载并注册进Factory→创建实例(自动App
 
 ## 待办/后续阶段
 
-- 阶段4:随着Map/Story等系统在Core里落地,每个concept真正需要长期存在的Factory实例应该
-  转移给对应的领域系统类持有,`ForeverModSubsystem`这份一次性验证代码到时候可以删掉或大幅
-  精简。
+- 阶段4:随着Zone/Story等系统在Core里落地,每个concept真正需要长期存在的Factory实例应该
+  转移给对应的领域系统类持有(Terrain/`Map`已经是第一个例子,见`Source/Core/map/
+  terrain_factory.md`),`ForeverModSubsystem`这份一次性验证代码到时候可以删掉或大幅精简。
 - 阶段4/参数化机制的后续扩展:目前"参数"只是Core透传的原始字符串,mod自己决定怎么解析;
   如果要支持`REFACTOR_PLAN.md`原文提到的"命令行式参数"(`--density 1.0 --max 1000`)这种
   结构化格式,可以在Dependence层加一个共享的小型参数解析工具函数供各mod调用,避免每个mod

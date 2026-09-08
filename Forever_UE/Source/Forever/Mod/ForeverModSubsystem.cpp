@@ -3,7 +3,6 @@
 #include "common/config.h"
 #include "common/loader.h"
 
-#include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
 #include "map/building_factory.h"
@@ -77,15 +76,6 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 
 	ModLoader modLoader;
-
-	{
-		TerrainFactory factory;
-		factory.SetModArgs(ToArgsMap(Config::GetConceptMods("terrain_mods")));
-		modLoader.RegisterConcept<TerrainFactory>(mods, "RegisterModTerrains", "FinishModTerrains", &factory);
-		ValidateFactory(factory, TEXT("Terrain"),
-			[](TerrainFactory& f, const std::string& id) { return f.CreateTerrain(id); },
-			[](TerrainFactory& f, TerrainMod* m) { f.DestroyTerrain(m); });
-	}
 
 	{
 		RoadnetFactory factory;

@@ -4,10 +4,11 @@
 #include "GameFramework/Actor.h"
 #include "ForeverFrameworkActor.generated.h"
 
+class Map;
+
 class USceneComponent;
 class UForeverAssetFrameworkComponent;
 class UForeverBuildingFrameworkComponent;
-class UForeverGlobalFrameworkComponent;
 class UForeverPopulaceFrameworkComponent;
 class UForeverRoadnetFrameworkComponent;
 class UForeverRoomFrameworkComponent;
@@ -18,7 +19,11 @@ class UForeverZoneFrameworkComponent;
 
 // 阶段2:场景里唯一的Framework入口Actor,取代旧工程里分散的9个Framework Actor
 // (Asset/Building/Global/Populace/Roadnet/Room/Story/Terrain/Traffic/Zone)。
-// 内部按域组件划分职责,详见ForeverFrameworkActor.md。
+// 内部按域组件划分职责,详见ForeverFrameworkActor.md。**不含Global域组件**——旧工程里
+// `GlobalBase`本身就是那个唯一放在关卡里、串联其它Framework Actor的入口,而这个角色现在由
+// `AForeverFrameworkActor`自己承担了,不需要再嵌一个"Global"子组件重复这件事;`GlobalBase`
+// 剩下的编排逻辑(GlobalPause/DrawMap/InitPhone等)将来直接落在这个Actor自己身上,详见
+// PHASE4_PLAN.md。
 UCLASS()
 class FOREVER_API AForeverFrameworkActor : public AActor
 {
@@ -27,8 +32,26 @@ class FOREVER_API AForeverFrameworkActor : public AActor
 public:
 	AForeverFrameworkActor();
 
+	// 显式声明+在.cpp里定义(那里map/map.h已完整include)——map是原生指针手动管理,
+	// Map在这个头文件里只有前置声明。用unique_ptr<Map>试过,UHT为每个UCLASS生成的
+	// VTableHelper构造函数(定义在.gen.cpp,看不到map/map.h)会在异常展开路径里引用
+	// ~unique_ptr<Map>而编译失败,所以这里改回原生指针+显式delete(纯C++类型,不跨模块
+	// 边界——Core.lib静态链接进本模块,不是REFACTOR_PLAN.md说的那种跨DLL new/delete场景)。
+	virtual ~AForeverFrameworkActor();
+
+	// 幂等:Map已存在则直接返回,否则新建Map、跑InitTerrains/InitContents、
+	// 交给terrainFramework生成地形网格。BeginPlay和ForeverGameMode::FindPlayerStart_Implementation
+	// 都会调用它,保证不论两者实际调用顺序如何,出生点计算时地形都已经生成好,详见ForeverFrameworkActor.md。
+	void EnsureTerrainGenerated();
+
+	Map* GetMap() const { return map; }
+
 protected:
 	virtual void BeginPlay() override;
+
+	// 阶段4-1:Terrain域落地,Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
+	// Zone/Building/Roadnet等后续系统迁移时会继续扩展同一个Map实例,不是各自另建一个。
+	Map* map = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<USceneComponent> sceneRoot;
@@ -38,9 +61,6 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverBuildingFrameworkComponent> buildingFramework;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
-	TObjectPtr<UForeverGlobalFrameworkComponent> globalFramework;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverPopulaceFrameworkComponent> populaceFramework;
@@ -66,7 +86,6 @@ protected:
 public:
 	FORCEINLINE UForeverAssetFrameworkComponent* GetAssetFramework() const { return assetFramework; }
 	FORCEINLINE UForeverBuildingFrameworkComponent* GetBuildingFramework() const { return buildingFramework; }
-	FORCEINLINE UForeverGlobalFrameworkComponent* GetGlobalFramework() const { return globalFramework; }
 	FORCEINLINE UForeverPopulaceFrameworkComponent* GetPopulaceFramework() const { return populaceFramework; }
 	FORCEINLINE UForeverRoadnetFrameworkComponent* GetRoadnetFramework() const { return roadnetFramework; }
 	FORCEINLINE UForeverRoomFrameworkComponent* GetRoomFramework() const { return roomFramework; }

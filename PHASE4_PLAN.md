@@ -16,9 +16,11 @@ domain 内部怎么再拆，原文写明"本阶段开始时另开session确定"�
   的"domain × concept × Mod接口 × Factory × 探测符号"对照表，21个 `<Concept>Mod`/
   `<Concept>Factory` 现在都只有 `GetType()`/`GetName()`/`ApplyArgs()`，业务接口留白。
   `Source/Basic/<domain>/<concept>_basic.h` 对应21个占位默认实现。
-- **Framework Actor 收敛骨架已搭好**（阶段2）：`AForeverFrameworkActor` + 10个
-  `UForeverFrameworkComponent` 子类（Asset/Building/Global/Populace/Roadnet/Room/Story/
-  Terrain/Traffic/Zone），全部空实现，等阶段4填逻辑。
+- **Framework Actor 收敛骨架已搭好**（阶段2）：`AForeverFrameworkActor` + 9个
+  `UForeverFrameworkComponent` 子类（Asset/Building/Populace/Roadnet/Room/Story/
+  Terrain/Traffic/Zone），等阶段4填逻辑（`Terrain`已在阶段4-1完成）。**没有Global域组件**——
+  阶段4-1确认这个角色已经由`AForeverFrameworkActor`自己承担，不需要单独的子组件，详见
+  `ForeverFrameworkActor.md`。
 - **Mod加载/参数化链路已跑通**（阶段3）：`Config` + `ModLoader` + `ForeverModSubsystem` 验证过
   "config.json → 扫描dll → 加载注册 → 创建实例(自动ApplyArgs) → 读身份信息"整条链路，21个
   concept全覆盖，但目前是`ForeverModSubsystem`临时代管，`Core/common/loader.md`已经写明
@@ -102,11 +104,11 @@ domain的业务代码"，而是一套**通用、不感知任何具体domain**的
 | map | Terrain、Roadnet、Zone、Building、Component、Room | `Block`、`Map`（聚合）、`geometry.h`原语 | Terrain/Roadnet/Zone/Building/Room（5个） | BuildingElement、RoomElement、ZoneElement、ElevatorElement | Building→`Xiaohua`、`Yuanshen`（`Forever_Mod/Test`） |
 | populace | Name、Scheduler | `Person`、`Commute`、`Experience`、`Populace`（聚合） | Populace | CharacterElement | 无 |
 | traffic | Route、Station、Vehicle | `Traffic`（聚合） | Traffic | VehicleElement | 无 |
-| society | Job、Calendar、Organization | `Society`（聚合） | 无独立Framework组件（并入Global或按需新增，待细化时确认） | 无 | 无 |
+| society | Job、Calendar、Organization | `Society`（聚合） | 无独立Framework组件（是否新增第9个域组件，还是直接落在`AForeverFrameworkActor`自己身上，待细化时确认——**不再考虑"并入Global"，因为Global域组件本身已经在阶段4-1移除**） | 无 | 无 |
 | industry | Product、Storage、Manufacture | `Industry`（聚合） | 同上，待确认 | 无 | 无 |
 | story | Script | `Milestone`、`Story`（聚合）、脚本引擎原语（`condition`/`change`/`event`，见上节） | Story | 无 | Script→`Wxdj`（`Forever_Mod/Wxdj`） |
 | player（**注意**：这是旧内核的domain名，和阶段1已经做完的`Source/Forever/Player`模块**不是一回事**，见下方专门说明） | Asset、App、Puzzle | `Phone`、`Player`（聚合，游戏内"玩家存档态"，不是`AForeverPlayerController`） | Asset | AssetElement | 无 |
-| （无对应Dependence domain） | 无 | `GlobalBase`对应的编排逻辑（`GlobalPause`/`DrawMap`/`InitPhone`等，通过`common/implement.h`门面单例引用其余7个domain） | Global | 无 | 无 |
+| （无对应Dependence domain） | 无 | `GlobalBase`对应的编排逻辑（`GlobalPause`/`DrawMap`/`InitPhone`等，通过`common/implement.h`门面单例引用其余7个domain） | 无独立Framework组件——**阶段4-1确认这个角色已经由`AForeverFrameworkActor`自己承担**（旧工程`GlobalBase`本来就是"放在关卡里、串起其它Framework Actor"的入口，新工程里这件事整个由`AForeverFrameworkActor`做了），`GlobalBase`剩下的编排逻辑将来直接落在这个Actor自己身上，不会有单独的`UForeverGlobalFrameworkComponent`，详见`ForeverFrameworkActor.md` | 无 | 无 |
 
 **关于"player"domain改名的说明**：为避免和阶段1已经写好的`ForeverPlayerController`等混淆，
 后续在新工程`Source/Core/`落地这个domain时建议目录名保持`player/`（和`Source/Dependence/
@@ -144,12 +146,23 @@ player`、`Source/Basic/player`已有目录一致，改名反而制造新的不�
 5. `Map`（聚合类）——持有以上6个的`<Concept>Factory`，取代`ForeverModSubsystem`临时代管
    Building/Script两个Factory的做法（`Core/common/loader.md`待办项之一）。
 
-解锁的Framework组件：`UForeverTerrainFrameworkComponent`/`RoadnetFrameworkComponent`/
+**实现期修正**：`Map`的类骨架实际上从第1步`Terrain`就开始存在了，不是等到第5步才创建——
+`Terrain`（`Source/Core/map/terrain.h`的`Terrain`包装类）本身不持有任何格子数据，没有一个
+持有`Element`格子数据+驱动`DistributeTerrain`的东西，就没有能在PIE里实际看到的地形。所以
+`Terrain`落地时顺带创建了`Source/Core/map/map.h`的`Map`类，但**只实现Terrain需要的部分**
+（宽高、`Element{terrain,height,water,hatches}`、`TerrainFactory`归属、地形分发+
+construction晋升规则），详见`Source/Core/map/map.md`。第2-4步（Zone/Component/Room/
+Building/Roadnet）不是"创建"`Map`，是在同一个类上继续扩展字段和方法（各自的Factory、
+`zone`/`building`归属字段等）——这和本节开头"先写全部类的骨架签名，再统一实现细节"的建议是
+一致的，只是骨架创建的时间点比第5步这个字面顺序更早。
+
+解锁的Framework组件：`UForeverTerrainFrameworkComponent`（已完成，见其独立`.md`）/`RoadnetFrameworkComponent`/
 `ZoneFrameworkComponent`/`BuildingFrameworkComponent`/`RoomFrameworkComponent`。
 解锁的Element：`BuildingElement`/`RoomElement`/`ZoneElement`/`ElevatorElement`（电梯楼层逻辑，
 阶段8会再深化自定义电梯，这里先按现有旧蓝图逻辑迁）。
 解锁的`MAINCONTROLLER_TODO.md`热键：无直接热键（`M`键需要`GlobalBase::DrawMap`，属于4-8
-Global；但`M`键依赖的`RoadnetBase::GetNavigations`间接依赖这里的`Roadnet`）。
+Global（现在直接落在`AForeverFrameworkActor`自己身上，不是单独的域组件，见下）；但`M`键
+依赖的`RoadnetBase::GetNavigations`间接依赖这里的`Roadnet`）。
 
 ### 4-2　Populace域（Name / Scheduler / Person / Commute / Experience / Populace聚合）
 
@@ -165,10 +178,11 @@ Society（组织成员）、阶段6（玩家/NPC数据统一）打基础。
 
 ### 4-4　Society域（Job / Calendar / Organization / Society聚合）
 
-依赖4-1的`Component`/`Room`、4-2的`Person`/`Scheduler`。无对应Framework组件（10个Framework
-组件列表里没有"Society"），落地位置留到实现时确认——大概率并入`Global`组件或者证明确实需要给
-`AForeverFrameworkActor`新增第11个域组件（如果这样，需要回头更新`ForeverFrameworkComponent.md`
-的对照表并说明是阶段2遗漏还是有意排除）。
+依赖4-1的`Component`/`Room`、4-2的`Person`/`Scheduler`。无对应Framework组件（Framework
+组件列表里没有"Society"，Global域组件本身也已经在阶段4-1移除，不再是"并入Global"的候选），
+落地位置留到实现时确认——大概率直接落在`AForeverFrameworkActor`自己身上（呼应Global的处理
+方式），或者证明确实需要给它新增第9个域组件（如果这样，需要回头更新
+`ForeverFrameworkComponent.md`的对照表并说明是阶段2遗漏还是有意排除）。
 
 ### 4-5　Industry域（Product / Storage / Manufacture / Industry聚合）
 
@@ -194,8 +208,13 @@ Society（组织成员）、阶段6（玩家/NPC数据统一）打基础。
 ### 4-8　Global域（`GlobalBase`编排逻辑，收口）
 
 `GlobalBase`通过`common/implement.h`这个门面单例引用全部7个domain，是名副其实的"最后一块拼
-图"——只有前面全部迁完，`GlobalPause`/`DrawMap`才有真实内容可以编排。落地到
-`UForeverGlobalFrameworkComponent`。解锁`MAINCONTROLLER_TODO.md`剩余的**`Tab`键**（暂停菜单，
+图"——只有前面全部迁完，`GlobalPause`/`DrawMap`才有真实内容可以编排。**不落地到单独的域
+组件**——阶段4-1（Terrain）实现期间确认`UForeverGlobalFrameworkComponent`这个域组件本身没有
+存在的必要：旧工程`GlobalBase`原本就是"放在关卡里、串起其它Framework Actor"的那个入口，这个
+角色现在整个由`AForeverFrameworkActor`自己承担了，已经把对应的域组件删掉（见
+`ForeverFrameworkActor.md`）。所以这一步的`GlobalPause`/`DrawMap`/`InitPhone`等编排逻辑要
+直接实现成`AForeverFrameworkActor`自己的方法，不是某个`UForeverGlobalFrameworkComponent`
+的方法。解锁`MAINCONTROLLER_TODO.md`剩余的**`Tab`键**（暂停菜单，
 还需阶段5`PausePanel`）、**`M`键**（地图面板，还需新建`CanvasBuffer`工具类+阶段5地图UI）、
 **`B`键**（背包面板，还需阶段5`BagPanel`）。这几个热键即使Global域内核逻辑到位，仍然会因为
 对应UMG Widget未迁移（阶段5）而无法完整接回，需要在`MAINCONTROLLER_TODO.md`里更新阻塞依赖
@@ -268,8 +287,8 @@ Society（组织成员）、阶段6（玩家/NPC数据统一）打基础。
   只需要把`Source/Basic/<domain>/<concept>_basic.h`里的占位类换成旧工程真正的默认内容目录，
   并在根目录`Basic.cpp`里把对应`RegisterMod<Concept>`从"注册一个占位类"改成"注册多个真实
   类"，不涉及链接方式的变动。
-- Society/Industry两个domain没有对应的Framework组件，落地位置（并入Global，还是新增第11个
-  域组件）留到4-4开始时确认，确认后要回头补一句更新到
-  `ForeverFrameworkComponent.md`的对照表说明里。
+- Society/Industry两个domain没有对应的Framework组件，落地位置（直接落在`AForeverFrameworkActor`
+  自己身上，还是新增第9个域组件——Global域组件本身已经在阶段4-1移除，不再是候选之一）留到
+  4-4开始时确认，确认后要回头补一句更新到`ForeverFrameworkComponent.md`的对照表说明里。
 - `industry`是否依赖`society/organization`（产业归属组织），需要读`industry.cpp`实际代码后
   才能确认4-5是否要反过来放到4-4之前，目前只是按"读到的include关系"做的初步排序，不是最终结论。

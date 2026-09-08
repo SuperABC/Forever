@@ -12,7 +12,7 @@ public class Forever : ModuleRules
 		bEnableExceptions = true;
 		bUseRTTI = true;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "ProceduralMeshComponent", "Water" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
