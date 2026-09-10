@@ -167,6 +167,12 @@ void Map::InitRoadnet() {
 	roadnet->DistributeRoadnet(width, height, getTerrain, getWater, Node::GetCount());
 	roadnet->AllocateAddress();
 
+	// 把mod通过RoadnetMod::AddHatch产出的地形挖洞标记(隧道口用)转发进Map::AddHatch，
+	// 复用Terrain已有的挖洞渲染机制——AddHatch自己会按Quad的旋转AABB分发到重叠的Element。
+	for (const auto& [quad, rotation] : roadnet->GetHatches()) {
+		AddHatch(quad, rotation);
+	}
+
 	// 按Intersection收集与之相连的Road，逐个建RoadJunction。
 	unordered_map<int, vector<Road*>> roadsByIntersection;
 	for (Road* road : roadnet->GetRoads()) {
@@ -286,10 +292,15 @@ Node* Map::AddRoadAccessNode(const string& roadName, float t, bool isVehicle, bo
 	float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
 	float sideSign = (side == 0) ? 1.f : -1.f;
 	float offsetDist = LaneCenterOffset(lanes, 0);
-	float nx = basePoint.GetX() + perp0X * offsetDist * sideSign;
-	float ny = basePoint.GetY() + perp0Y * offsetDist * sideSign;
+	// 车道横断面以Connection连线为几何中心居中(见Source/Core/map/roadnet.md"车道居中"一节)，
+	// 和RoadJunction::Build的makeAnchor是同一个换算：offsetDist*sideSign是"以老的side0/side1
+	// 分界线为原点"算出来的有符号偏移，减去shift才是"以居中后的连线为原点"的偏移。
+	float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
+	float signedOffset = offsetDist * sideSign - shift;
+	float nx = basePoint.GetX() + perp0X * signedOffset;
+	float ny = basePoint.GetY() + perp0Y * signedOffset;
 
-	Node* newNode = new Node(isVehicle ? "vehicle" : "pedestrian", nx, ny, 0.f);
+	Node* newNode = new Node(isVehicle ? "vehicle" : "pedestrian", nx, ny, basePoint.GetZ());
 	navAnchorNodes.push_back(newNode);
 
 	auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;

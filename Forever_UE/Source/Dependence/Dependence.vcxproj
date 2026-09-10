@@ -85,6 +85,7 @@
     <ClCompile Include="common\utility.cpp" />
     <ClCompile Include="common\handle.cpp" />
     <ClCompile Include="map\geometry.cpp" />
+    <ClCompile Include="map\roadnet_mod.cpp" />
     <ClCompile Include="story\condition.cpp" />
     <ClCompile Include="story\change.cpp" />
     <ClCompile Include="story\event.cpp" />

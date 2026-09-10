@@ -287,7 +287,11 @@ void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FStr
 	if (!map) return;
 
 	type = FString(map->GetTerrain(elemX, elemY).c_str());
-	if (type != "construction") return;
+	// 挖洞不再只限"construction"格子——Roadnet阶段-2给隧道口调用Map::AddHatch时，落点的格子
+	// 地形类型是"mountain"（或紧邻的"plain"），只要这个格子有hatch就要继续走矩形分解逻辑，
+	// 不能在这里直接退出，否则隧道段会被山体实心地形完全挡住看不见，详见roadnet_basic.md
+	// "隧道"一节。
+	if (type != "construction" && map->GetHatches(elemX, elemY).empty()) return;
 
 	height = map->GetHeight(elemX, elemY);
 	rects.Empty();
@@ -430,11 +434,13 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		for (int vy = 1; vy < 32; vy += 2)
 			vertices[vertIdx(edgeVx, vy)] = (vertices[vertIdx(edgeVx, vy - 1)] + vertices[vertIdx(edgeVx, vy + 1)]) * 0.5f;
 
-	// construction格子挖洞(取代旧工程的ISM立方体):只在levelIdx<=1(近处精细LOD)生效,和旧工程
-	// constructionRegion的作用范围一致。每个quad按其中心所属Element判断,是construction则查
-	// LookupTerrain的矩形分解结果,quad中心落在剩余矩形之外就跳过(=洞)。目前map->GetHatches
-	// 恒为空,LookupTerrain恒返回整格一个矩形,所以construction格子现在会画成完整实心地面;
-	// 等Roadnet/Building阶段开始调用Map::AddHatch,这里会自动开始产生真正的洞,不需要再改这段代码。
+	// construction/挖洞格子(取代旧工程的ISM立方体):只在levelIdx<=1(近处精细LOD)生效,和旧工程
+	// constructionRegion的作用范围一致。前提：所有挖洞都发生在平地上，construction格子不需要
+	// 更细的LOD细分——没有hatch命中时LookupTerrain恒返回"整格一个矩形"，直接画成一个大quad
+	// (2个三角形)；有hatch命中时返回精确的轴对齐矩形集合(rects)+角落补丁三角形(tris)，两者都
+	// 直接按精确坐标建geometry，不再对着一个固定的sub-quad网格做"quad中心是否落在矩形内"的
+	// 近似测试——那种测试量出来的洞边界只能精确到sub-quad网格的粒度，和真实矩形边界对不上，
+	// 会带出明显的格子锯齿，详见ForeverTerrainFrameworkComponent.md"挖洞"一节这次的修正说明。
 	TMap<TPair<int32, int32>, TPair<TArray<FRect2D>, TArray<FTri2D>>> constructionCache;
 	auto lookupCached = [this, &constructionCache](int ex, int ey) -> const TPair<TArray<FRect2D>, TArray<FTri2D>>& {
 		TPair<int32, int32> key(ex, ey);
@@ -456,18 +462,12 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 				float quadCenterMapY = startY + (cy + 0.5f) * cellSize;
 				int ex = FMath::Clamp(FMath::FloorToInt(quadCenterMapX), 0, mapSize.first - 1);
 				int ey = FMath::Clamp(FMath::FloorToInt(quadCenterMapY), 0, mapSize.second - 1);
-				if (map->GetTerrain(ex, ey) == "construction") {
-					const auto& lookup = lookupCached(ex, ey);
-					float localX = quadCenterMapX - ex;
-					float localY = quadCenterMapY - ey;
+				// "construction"格子或者被Map::AddHatch记过洞(目前只有Roadnet隧道口这一个来源)
+				// 的格子，整格都交给下面精确geometry那一段处理，这里只负责登记(触发lookupCached
+				// 缓存)+跳过常规两三角形画法，不再做任何"quad中心是否在矩形内"的判断。
+				if (map->GetTerrain(ex, ey) == "construction" || !map->GetHatches(ex, ey).empty()) {
+					lookupCached(ex, ey);
 					drawQuad = false;
-					for (const FRect2D& rect : lookup.Key) {
-						if (FMath::Abs(localX - rect.Center.X) <= rect.Size.X * 0.5f &&
-							FMath::Abs(localY - rect.Center.Y) <= rect.Size.Y * 0.5f) {
-							drawQuad = true;
-							break;
-						}
-					}
 				}
 			}
 			if (!drawQuad) continue;
@@ -481,10 +481,35 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		}
 	}
 
-	// 为涉及到的每个construction Element补上hatch角落三角(目前tris恒为空,这段循环体不会真的执行)
+	// 为每个涉及到的construction/挖洞Element画出LookupTerrain返回的精确矩形(rects，没有hatch
+	// 命中时就是完整一格、2个三角形)+角落补丁三角形(tris，只有旋转hatch跨格时才非空)。
 	if (levelIdx <= 1) {
 		for (const auto& entry : constructionCache) {
 			int32 ex = entry.Key.Key, ey = entry.Key.Value;
+
+			for (const FRect2D& rect : entry.Value.Key) {
+				float localLeft = rect.Center.X - rect.Size.X * 0.5f;
+				float localRight = rect.Center.X + rect.Size.X * 0.5f;
+				float localBottom = rect.Center.Y - rect.Size.Y * 0.5f;
+				float localTop = rect.Center.Y + rect.Size.Y * 0.5f;
+				FVector2D corners[4] = {
+					{ localLeft, localBottom }, { localRight, localBottom },
+					{ localRight, localTop }, { localLeft, localTop },
+				};
+				int32 baseIdx = vertices.Num();
+				for (const FVector2D& corner : corners) {
+					float mapX = ex + corner.X;
+					float mapY = ey + corner.Y;
+					float h = SampleHeight(mapX, mapY) + HEIGHT_EPSILON;
+					vertices.Add(FVector(mapX * worldScale, mapY * worldScale, h * worldScale));
+					uvs.Add(FVector2D(mapX, mapY));
+				}
+				// (v0,v1,v2,v3)=(左下,右下,右上,左上)，环绕顺序和本函数主网格quad
+				// (v00,v11,v10)/(v00,v01,v11)是同一套已验证过的写法。
+				triangles.Add(baseIdx); triangles.Add(baseIdx + 2); triangles.Add(baseIdx + 1);
+				triangles.Add(baseIdx); triangles.Add(baseIdx + 3); triangles.Add(baseIdx + 2);
+			}
+
 			for (const FTri2D& tri : entry.Value.Value) {
 				FVector2D corners[3] = {
 					{ tri.Corner.X, tri.Corner.Y },

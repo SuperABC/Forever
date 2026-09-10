@@ -46,7 +46,17 @@ const vector<RoadJunctionApproach>& RoadJunction::GetApproaches() const {
 }
 
 RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads, vector<Node*>& outCreatedNodes) {
-	vector<RoadJunctionApproach> approaches;
+	// 先扫一遍这个路口连着的所有路，记下每条路自己的Start->End切线/outward方向/两侧宽度，
+	// 顺便求出这个路口全局最宽的一侧(globalSetback)。这一步不生成任何几何，只收集数据。
+	struct PendingApproach {
+		Road* road;
+		bool isStart;
+		float fwdX, fwdY;
+		float outX, outY;
+		float side0Width, side1Width;
+	};
+	vector<PendingApproach> pending;
+	float globalSetback = 0.f;
 
 	for (Road* road : roads) {
 		Node start = road->GetStart();
@@ -54,10 +64,6 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 		bool isStart = (start.GetId() == node->GetId());
 		bool isEnd = (end.GetId() == node->GetId());
 		if (!isStart && !isEnd) continue;
-
-		RoadJunctionApproach approach;
-		approach.road = road;
-		approach.isStart = isStart;
 
 		// road的Start->End方向切线(非单位向量)，isStart/isEnd都取同一个"前进方向"参考，
 		// 车道side0/side1的物理位置由这个方向的右手垂线一致定义，不随取哪一端而翻转。
@@ -71,29 +77,83 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 		// isEnd时是前进方向的反向(因为前进方向在End端是"驶入路口")。
 		float outX = isStart ? fwdX : -fwdX;
 		float outY = isStart ? fwdY : -fwdY;
-		approach.angle = atan2(outY, outX);
+
+		float side0Width = road->GetSideWidth(0);
+		float side1Width = road->GetSideWidth(1);
+
+		// 这条路的车道横断面现在以Connection连线为几何中心居中(见roadnet.md"车道居中"一节)，
+		// 不管side0/side1怎么分配，两侧最外缘到连线的距离永远都是GetTotalWidth()/2——所以
+		// 路口收缩距离只需要取"整个总宽度的一半"，不再需要side0Width/side1Width的较大值。
+		globalSetback = max(globalSetback, road->GetTotalWidth() * 0.5f);
+		pending.push_back({ road, isStart, fwdX, fwdY, outX, outY, side0Width, side1Width });
+	}
+
+	vector<RoadJunctionApproach> approaches;
+
+	for (const PendingApproach& p : pending) {
+		Road* road = p.road;
+		bool isStart = p.isStart;
+		float side0Width = p.side0Width;
+		float side1Width = p.side1Width;
+
+		RoadJunctionApproach approach;
+		approach.road = road;
+		approach.isStart = isStart;
+		approach.angle = atan2(p.outY, p.outX);
 
 		// side0方向 = 前进方向顺时针旋转90度(右手边)
-		float perp0X = fwdY, perp0Y = -fwdX;
+		float perp0X = p.fwdY, perp0Y = -p.fwdX;
 
-		float side0Width = SumWidths(road->GetVehicleLanes(0)) + SumWidths(road->GetParkingLanes(0)) + SumWidths(road->GetPedestrianLanes(0));
-		float side1Width = SumWidths(road->GetVehicleLanes(1)) + SumWidths(road->GetParkingLanes(1)) + SumWidths(road->GetPedestrianLanes(1));
+		// 车道横断面重新居中(见下面side0X/side1X的注释)后，这条路自己的中心偏移量：
+		// side0比side1宽多少，连线就要比side0Width少这么多、比side1Width多这么多，才能让
+		// 两侧最外缘到连线的距离相等(都等于GetTotalWidth()/2)。shift=0时(两侧对称，默认车道
+		// 配置就是这样)，下面的计算和居中之前完全等价，不会有任何回归。
+		float shift = (side0Width - side1Width) * 0.5f;
 
-		// 这条路在这一端的收缩距离：取较宽一侧的宽度，让路口mesh沿这条路的方向也有一段真实
-		// 进深(不再是零深度的点状扇形)，Forever层的道路tiling要用同一个值往回收缩，两者边界
-		// 才能对上，见roadnet.h的setback字段注释。
-		approach.setback = max(side0Width, side1Width);
+		// 这条路在这一端的收缩距离：不是这条路自己两侧宽度的较大值，而是**整个路口**所有
+		// 连接路里最宽的一侧(globalSetback)——原因见roadnet.md"路口收缩距离"一节：如果只按
+		// 自己两侧算，窄路retreat得不够深，宽路那一侧真正需要贯穿路口的车道会被逼着从窄路
+		// 已经开始铺的可见路面上穿过去(车道逻辑上"认错主人")，哪怕两块mesh本身没有空间上
+		// 重叠也是错的。Forever层的道路tiling要用同一个值往回收缩，两者边界才能对上，见
+		// roadnet.h的setback字段注释。
+		approach.setback = globalSetback;
 
-		float nodeX = isStart ? start.GetX() : end.GetX();
-		float nodeY = isStart ? start.GetY() : end.GetY();
+		// 路缘角点/导航锚点的基准点是沿road弧长、离端点setback距离处的真实曲线坐标
+		// (road->GetPoint)，不是"Intersection原坐标+直线外移"的近似——弧长比例算法和Forever层
+		// BuildRoadInstances算tLow/tHigh用的是同一个clamp(setback/totalLen, 0, 0.45)，两边
+		// 采样到的必然是曲线上同一个点，路口mesh的边界和可见路面的起点因此严丝合缝，不会有
+		// 高度断层(隧道场景下curve高度沿途连续变化，直线近似会漏掉这段变化，见roadnet.md
+		// "路口高度"一节)。
+		float totalLen = road->CalcDistance();
+		float tFrac = 0.f;
+		if (totalLen > 1e-6f) {
+			tFrac = approach.setback / totalLen;
+			tFrac = min(max(tFrac, 0.f), 0.45f);
+		}
+		float sampleT = isStart ? tFrac : (1.f - tFrac);
+		Node samplePoint = road->GetPoint(sampleT);
+		float baseX = samplePoint.GetX();
+		float baseY = samplePoint.GetY();
+		float baseZ = samplePoint.GetZ();
+		approach.curbZ = baseZ;
 
-		// 路缘角点/导航锚点的基准点沿outward方向外移setback距离，不再直接用Intersection原坐标——
-		// 这样路口多边形对每条路都有真实的"喇叭口"进深，和收缩后的道路tiling终点重合。
-		float baseX = nodeX + outX * approach.setback;
-		float baseY = nodeY + outY * approach.setback;
+		// 在采样点(而不是端点)处重新取切线定lateral方向，和baseX/baseY/baseZ用的是同一个
+		// sampleT，几何上完全一致。
+		float sdx, sdy, sdz;
+		road->GetTangent(sampleT, sdx, sdy, sdz);
+		float slen = sqrt(sdx * sdx + sdy * sdy);
+		if (slen < 1e-6f) slen = 1.f;
+		float sfwdX = sdx / slen, sfwdY = sdy / slen;
+		float sperp0X = sfwdY, sperp0Y = -sfwdX;
 
-		float side0X = baseX + perp0X * side0Width, side0Y = baseY + perp0Y * side0Width;
-		float side1X = baseX - perp0X * side1Width, side1Y = baseY - perp0Y * side1Width;
+		// 车道横断面以Connection连线为几何中心居中：side0这一侧最外缘不再是"离连线side0Width
+		// 远"，而是"离连线(side0Width-shift)远"(side1同理，方向相反、减去(side1Width+shift))——
+		// 两侧宽度对称时shift=0，退化成居中之前的公式；单行道等side0/side1严重不对称时，
+		// 两侧最外缘到连线的距离都精确等于GetTotalWidth()/2(可以代入验证：
+		// (side0Width-shift) = (side1Width+shift) = (side0Width+side1Width)/2)，不会出现
+		// "单行道所有车道都堆在连线一侧、路口形状被撑得很怪"的问题，见roadnet.md"车道居中"一节。
+		float side0X = baseX + sperp0X * (side0Width - shift), side0Y = baseY + sperp0Y * (side0Width - shift);
+		float side1X = baseX - sperp0X * (side1Width + shift), side1Y = baseY - sperp0Y * (side1Width + shift);
 
 		// 面朝outward方向站立时：isStart端side0在右手边，isEnd端side0在左手边(因为outward反向了)
 		if (isStart) {
@@ -105,10 +165,14 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 			approach.curbRight = { side1X, side1Y };
 		}
 
+		// offsetDist*sideSign是"以老的side0/side1分界线为原点"算出来的有符号偏移(side0方向为正)，
+		// 统一减去shift就换算成"以居中后的连线为原点"的偏移——和上面side0X/side1X是同一个换算，
+		// 只是这里offsetDist可以是任意一条车道的中心(不止是最外缘)。
 		auto makeAnchor = [&](float sideSign, float offsetDist, const char* category) -> Node* {
-			float x = baseX + perp0X * offsetDist * sideSign;
-			float y = baseY + perp0Y * offsetDist * sideSign;
-			Node* n = new Node(category, x, y, 0.f);
+			float signedOffset = offsetDist * sideSign - shift;
+			float x = baseX + sperp0X * signedOffset;
+			float y = baseY + sperp0Y * signedOffset;
+			Node* n = new Node(category, x, y, baseZ);
 			outCreatedNodes.push_back(n);
 			return n;
 			};
@@ -229,6 +293,9 @@ void Roadnet::DistributeRoadnet(int width, int height,
 		}
 		lots.emplace_back(new Lot(lot), std::move(boundaryCopy));
 	}
+
+	// Quad+float是纯值类型，不含所有权指针，直接整体拷贝，不需要像上面几个逐个new。
+	hatches = mod->hatches;
 }
 
 const vector<Node*>& Roadnet::GetExterns() const {
@@ -245,6 +312,10 @@ const vector<Road*>& Roadnet::GetRoads() const {
 
 const vector<pair<Lot*, unordered_map<int, Road*>>>& Roadnet::GetLots() const {
 	return lots;
+}
+
+const vector<pair<Quad, float>>& Roadnet::GetHatches() const {
+	return hatches;
 }
 
 void Roadnet::AllocateAddress() {

@@ -1,4 +1,4 @@
-# roadnet_mod.h
+# roadnet_mod.h / roadnet_mod.cpp
 
 ## 职责
 
@@ -13,10 +13,11 @@ Node分裂车道，这些老工程完全没有对应实现，是本次会话跟�
 
 - **一次只应该有一个路网布局方案生效**，不是Terrain那种`GetPriority()`多mod叠加分发——
   `RoadnetFactory::SetConfig`/`GetRoadnet()`做单选，详见`roadnet_factory.md`。
-- **`DistributeRoadnet`不传`getHeight`回调，也不传`setTerrain`/`setHeight`**——这次道路一律
-  铺在Z=0，不采样/不跟随地形高度（用户明确要求的范围裁剪），`getTerrain`/`getWater`两个回调
-  仍然保留（`JingRoadnet`的隧道判断逻辑虽然被去掉了，但地形/水域采样本身是通用能力，留着给
-  以后可能的mod用）。
+- **`DistributeRoadnet`不传`getHeight`回调，也不传`setTerrain`/`setHeight`**——道路默认高度
+  仍然是Z=0，不采样/不跟随真实地形高度起伏（用户明确要求的范围裁剪，第二轮迁移加回隧道后
+  依然成立，隧道段用的是固定`TUNNEL_HEIGHT`常量，不是采样出来的真实深度）。`getTerrain`/
+  `getWater`两个回调保留，`JingRoadnet`的隧道判断（探测`mountain`地形）就是靠`getTerrain`，
+  `getWater`目前仍未被用到，留着给以后可能的mod用。
 - **`nodeStaticCount`延续`Node`跨DLL计数器传递的写法**——mod实现必须在`DistributeRoadnet`开头
   第一步调`Node::SetCount(nodeStaticCount)`，构造的所有`Node`/`Intersection`/`Road`都必须通过
   `externs`/`intersections`/`roads`/`lots`四个成员返回，不能留下"野"实例（否则宿主侧的id计数器
@@ -30,8 +31,15 @@ Node分裂车道，这些老工程完全没有对应实现，是本次会话跟�
 - **车道/开口数据直接挂在`Road`自己身上**（`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/
   `openings`，见`geometry.h`），不是`RoadnetMod`这一层的字段——`RoadnetMod`只负责产出`Road`
   实例，实例本身已经携带了这些数据。
-- **没有恢复老工程`RoadnetMod`的`AddHatch`工具方法**——那是给隧道场景的入口/出口开个洞用的，
-  这次不做隧道，不需要。
+- **`AddHatch`工具方法+`hatches`输出成员已恢复（第三轮迁移）**——第二轮迁移加回隧道高度/
+  几何逻辑时曾判断"这个hatch搬过来也不会有可见效果"而没迁移，后来PIE验证发现隧道段会被
+  山体实心地形完全挡住看不见，倒推回来确认这个判断是错的：不是hatch本身没用，是消费方
+  （`ForeverTerrainFrameworkComponent::LookupTerrain`）当时把挖洞逻辑锁死在只认
+  `"construction"`地形——把这个锁放宽成"`construction`或者这个格子有hatch"之后，隧道口的
+  hatch就能正常在山体地形上挖出一个缺口，详见`Source/Forever/Framework/
+  ForeverTerrainFrameworkComponent.md`。`AddHatch(connection, t1, t2, width)`签名和实现
+  （`roadnet_mod.cpp`）照抄老工程语义：取`connection`在`[t1,t2]`两端的点，中点定位、两点
+  连线方向定朝向、弧长定长度、`width`定宽度，包成一个`Quad`追加进`hatches`。
 
 ## 依赖关系
 

@@ -17,11 +17,11 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
   扁平数组已经足够，没必要现在就引入分块的复杂度。如果后续实测证明大地图下`Chunk`分块确实
   必要（比如支持更大地图或流式卸载），再补，不算重新设计（`GetTerrain`/`SetTerrain`等
   accessor的对外签名不用变，只是内部存储换掉）。
-- **`Element`现在就带上了`hatches`字段**——虽然目前没有任何系统（Roadnet/Building还没迁移）
-  会真的往里面塞hatch，`GetHatches`永远返回空列表。这不是"为假设的未来需求"预留：
-  `Source/Forever/Framework/ForeverTerrainFrameworkComponent.cpp`的挖洞逻辑（要求#2）就是
-  按`hatches`永远为空来实现并验证的，字段本身是这次迁移范围的一部分，只是消费方（Roadnet/
-  Building）还没接上。
+- **`Element`的`hatches`字段最初（Terrain阶段）验证时永远是空的**——`Source/Forever/
+  Framework/ForeverTerrainFrameworkComponent.cpp`的挖洞逻辑（要求#2）当时是按`hatches`
+  永远为空来实现并验证的，字段本身是那次迁移范围的一部分，只是消费方还没接上。Roadnet
+  的隧道口是第一个真正往里面塞数据的消费方（`InitRoadnet()`把`roadnet->GetHatches()`转发进
+  `AddHatch`），Building迁移时大概率也会有自己的hatch来源。
 - **`InitTerrains()`只做Mod发现/注册，不含地形分发**——对照老工程`Map::InitTerrains`
   （`modHandles`+`dlls`两个参数，手动`LoadLibraryA`+函数指针类型`RegisterModTerrainsFunc`），
   新版直接复用`Core/common/loader.h`已经验证过的`ModLoader::RegisterConcept<TerrainFactory>`
@@ -48,7 +48,10 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
   发现/注册roadnet mod dll（复用`Map`已有的`modLoader`成员，不新建）；②按
   `RoadnetFactory::GetRoadnet()`（单选，见`roadnet_factory.md`）选出唯一启用的mod，
   `new Roadnet(&roadnetFactory, id)`；③`roadnet->DistributeRoadnet(...)`+
-  `roadnet->AllocateAddress()`；④按每个`Intersection`收集与之相连的`Road`，
+  `roadnet->AllocateAddress()`，随后把`roadnet->GetHatches()`（目前唯一的来源是Roadnet隧道口，
+  见`Source/Basic/map/roadnet_basic.md`"隧道"一节）逐个转发进`this->AddHatch(quad,rotation)`
+  ——复用Terrain阶段已经建好的挖洞机制，不需要为Roadnet另起一套；④按每个`Intersection`
+  收集与之相连的`Road`，
   `RoadJunction::Build`逐个建路口（车行/行人锚点+路缘角点）；⑤遍历每条`Road`建"最内侧车道
   贯通线"+遍历每个`RoadJunction`建路口内部连接，一起构成`vehicleNavGraph`/
   `pedestrianNavGraph`两张导航图。具体设计理由（车道级偏移锚点、车行全联通/行人人行横道+

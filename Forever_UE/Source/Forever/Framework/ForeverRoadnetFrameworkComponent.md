@@ -34,17 +34,52 @@
   夹角排好序，把`curbRight[i]`/`curbLeft[i]`两两相邻连成边界点序列（`(right_i,left_i)`是
   road i自己的"开口宽度"边，`(left_i,right_{i+1})`是road i与road i+1之间的桥接边），从路口
   中心（`Intersection`自身坐标）扇形三角剖分，贴`RoadPlain`材质。不做圆角/斜切。
+- **开口cube和路口mesh都带碰撞**——`CreateMeshSection`的`bCreateCollision`参数从`false`改成
+  `true`（两处都要改，PIE验证发现最初漏加，玩家会直接从开口/路口掉到地形挖出的洞里）。道路
+  本身的ISM实例走`UInstancedStaticMeshComponent`默认碰撞（跟着`default_1_1`资产自带的
+  collision setup走，不用额外设置）。
 - **车道分裂demo是临时验证代码**（`SpawnAccessNodeDemo`，函数注释里明确标注"临时验证"）：
   取`map->GetLots()`第一个lot的边界`Road`映射中任意一条，调一次`Map::AddRoadAccessNode`
   （车行、demo宽度0.6地图单位=6m）。这段demo代码要**在**`BuildRoadInstances`/
   `BuildOpeningMeshes`遍历所有Road**之前**先跑，这样它新增的开口才能被正确画出来（否则
   开口mesh在demo调用之前就已经CreateMeshSection完毕，不会再刷新）。
-- **Lot调试可视化（黄色扁cube）和车行/行人导航图可视化都已按用户要求删除**——两者都只是
-  阶段性调试手段，确认对应数据（lot几何/地址、导航图节点与边）正确无误后就移除了，不占用
-  这个组件的常驻运行开销。`Map::GetVehicleNavGraph()`/`GetPedestrianNavGraph()`/
-  `GetNavAnchorNodes()`这几个Core层accessor本身保留（未来Traffic域寻路要用），只是Forever层
-  不再消费它们画debug mesh；如果以后又需要类似的可视化，可以参考git历史里这段代码（`AppendNavBox`/
-  `AppendQuadDoubleSided`双面出三角形的debug mesh技巧仍然适用）重新加回来。
+- **Lot调试可视化（黄色扁cube）已按用户要求删除，导航图可视化后来又重新加回（第七轮迁移）**——
+  两者最初都只是阶段性调试手段，确认对应数据（lot几何/地址、导航图节点与边）正确无误后先
+  一起删掉了；后续因为要继续改路网算法（车道居中等）、以及未来Building域接入导航之后还要
+  反复核对导航图连接是否正确，导航图可视化这部分又要回来了，这次改成常驻功能、用
+  `bShowNavigationDebug`（`EditAnywhere`）开关控制，不是一次性debug代码。**这部分代码在
+  被删除时还没有提交过commit，git历史里找不到旧版本**（`ForeverRoadnetFrameworkComponent.cpp`
+  只有一个包含完整Roadnet实现的commit，删除发生在那次commit之前的工作区编辑里），这次是
+  按照删除前记录在这份文档里的设计描述（node画小box、connection画双面ribbon、车行贴White
+  材质、行人贴RoadPlain材质、元素要有实际厚度否则PIE里看不见）重新实现的，不是原样恢复旧
+  代码。`BuildNavigationDebugMesh()`（公开方法）+`BuildNavGraphDebugMesh()`（私有实现，
+  给车行/行人各调一次）：
+  - `AppendQuadDoubleSided`（匿名namespace自由函数）：四个角点无论以什么环绕顺序传入，两个
+    方向的三角形都画一遍——debug mesh的box/ribbon朝向五花八门（任意角度的路口连接线、任意
+    朝向的道路），不值得为每个面单独推导"哪个环绕顺序才是正面朝上"，双面画一遍最省心，反正
+    只是调试用不追求正确光照。
+  - `AppendNavBox`：给每个锚点画一个轴对齐的小长方体（6个面都调`AppendQuadDoubleSided`），
+    水平半边长`NAV_DEBUG_NODE_HALF_SIZE=40`，竖直范围`[锚点真实Z+ROADNET_HEIGHT_EPSILON,
+    该值+NAV_DEBUG_HEIGHT]`——用锚点自己的真实Z（不是固定0），隧道场景下的锚点会正确显示在
+    地下。`AppendNavEdgeRibbon`：两端锚点的box顶面高度之间连一条细双面ribbon
+    （`NAV_DEBUG_EDGE_HALF_WIDTH=8`），让边看起来是从box顶接出去的。
+  - **元素必须有真正的竖直厚度（`NAV_DEBUG_HEIGHT=50`，约5cm），不能是单一Z高度的纯平面**——
+    最初尝试过退化成纯平面（和开口/路口mesh一样只在Z上加`ROADNET_HEIGHT_EPSILON`），PIE验证
+    完全看不见，换成有真实厚度的3D box/ribbon才稳定可见，具体数值是反复PIE调出来的经验值，
+    不是精确物理尺寸。
+  - **同一个锚点被多条边引用时只画一次box**（`unordered_set<int> visitedNodes`按Node id去重，
+    在遍历图的边时顺带收集）——导航图数据结构本身是`unordered_map<id, vector<pair<id,
+    Connection*>>>`，同一个锚点作为多条边的起点/终点很常见（比如路口车行全联通时一个入口
+    锚点会连到好几个出口），不去重会画出好几个完全重叠的box。
+  - **不需要单独维护一份"锚点id→坐标"的查找表**——每条边的`Connection*`本身就带着两端真实
+    `Node`（`GetStart()`/`GetEnd()`），遍历边的同时就能拿到端点坐标，比反查`Map::
+    GetNavAnchorNodes()`+处理"extern端点没有生成新锚点、要用原始Node"这种特殊情况简单。
+  - `bShowNavigationDebug`为`false`时不是跳过不生成，而是显式`ClearMeshSection(0)`——避免
+    "曾经打开过再关掉"时旧的可视化mesh一直残留在场景里。
+  - **暴露成公开方法，不是只在`GenerateRoadnet`末尾私下调一次**：以后Building域会在运行时
+    继续用类似`Map::AddRoadAccessNode`的接口往导航图里加锚点/边，那时候需要能重新调用
+    `BuildNavigationDebugMesh()`刷新可视化、核对新增的导航连接对不对，不能假设只有Roadnet
+    自己生成时的那一份数据是唯一需要可视化的时机。
 - **和Terrain一样固定`worldScale=1000.f`（1地图单位=10m=1000cm）**，`Node`/`Connection`/
   `Road`等Core层几何类型的坐标都是地图单位，Forever层建mesh时统一在最后一步乘以这个系数转
   世界坐标，中间计算全部保持地图单位，避免在算式里混用两种单位。
@@ -104,3 +139,27 @@
      `[tLow,tHigh]`按每个开口的精确`[t-halfFrac,t+halfFrac]`范围切成若干互不重叠的"保留区间"
      （区间减法，支持同一条路多个开口），每个保留区间各自独立铺tiling——铺出来的缺口因此
      精确等于开口本身的宽度，不再受unit分段粒度影响。
+  4. **隧道落地后PIE发现路口mesh两个高度问题**：①隧道段内的路口完全按地表高度渲染，看起来
+     像是直接贴到地面上而不是在隧道里；②隧道口处可见路面和路口mesh衔接的地方有台阶断层。
+     根因是`BuildJunctionMeshes`原来对中心点和所有curb点统一用`ROADNET_HEIGHT_EPSILON`当Z，
+     完全不管`Intersection`/curb点实际所在弧长位置的真实高度；curb点的基准点本身在Core层
+     （`RoadJunction::Build`）也只是"Intersection坐标+沿切线方向的直线外移"，没有真正采样
+     曲线的Z（隧道口那段S形坡道Z沿途连续变化，直线近似完全漏掉这段变化，跟`BuildRoadInstances`
+     实际铺出来的路面衔接点对不上）。修复：Core层`RoadJunctionApproach`新增`curbZ`字段
+     （详见`Source/Core/map/roadnet.md`"路口高度"一节），`Build()`改成先按`setback`/
+     `road->CalcDistance()`算出和`BuildRoadInstances`的`trimStart`/`trimEnd`同一套clamp公式
+     的`sampleT`，再用`road->GetPoint(sampleT)`采样真实X/Y/Z作为curb点/导航锚点的基准点。
+     Forever层这里对应：中心点Z改用`junction->GetNode()->GetZ() * ROAD_WORLD_SCALE +
+     ROADNET_HEIGHT_EPSILON`，每个curb点Z改用`ap.curbZ * ROAD_WORLD_SCALE +
+     ROADNET_HEIGHT_EPSILON`——扇形三角化允许每个顶点独立取高度，不要求整个路口多边形共面，
+     隧道场景下中心点和各条路的curb点高度本来就可能不同（比如隧道口一侧curb点还在地表附近、
+     中心点已经在隧道内下沉）。
+  5. **"车道居中"改造（第六轮，详见`Source/Core/map/roadnet.md`"车道居中"一节）顺带简化了
+     `BuildOpeningMeshes`**：这个函数一直是按"cube以`road->GetPoint(op.t)`为中心，往
+     两侧各展开`totalWidth`的一半"来画的（`cx±perpX*halfWidth`），这个写法本身在
+     `Connection`连线被重新定义成整条车道横断面的几何中心之后才是真正成立的——居中之前，
+     这其实是一个隐藏的假设错误（默认车道配置两侧对称，连线恰好也在总宽度中点，错误从未
+     暴露；单行道等不对称配置会让cube偏出实际路面范围）。居中改造之后不需要改这个函数的
+     计算逻辑，只是把`totalWidth`的来源从本地手写的`SumLanes`对六个车道数组分别求和
+     （已删除，与`roadnet.cpp`/`roadnet_basic.cpp`里同样内容的本地helper重复三次）换成
+     `Road::GetTotalWidth()`（Dependence层收敛出的统一实现）。

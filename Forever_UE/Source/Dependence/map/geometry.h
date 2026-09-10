@@ -227,6 +227,14 @@ public:
 	void AddOpening(const RoadOpening& opening);
 	const std::vector<RoadOpening>& GetOpenings() const;
 
+	// side(0/1)车行+停车+人行道宽度总和。
+	float GetSideWidth(int side) const;
+
+	// 两侧宽度相加——Connection连线代表的是整条车道横断面的**几何中心**，不是两侧的分界线
+	// （哪怕side0/side1车道数、宽度完全不对称，甚至单行道只有一侧有车道，连线也严格居中），
+	// 这个值就是这条路在路口/lot边界处需要让出的横向总宽度。详见roadnet.md"车道居中"一节。
+	float GetTotalWidth() const;
+
 private:
 	// 道路名称
 	std::string name;

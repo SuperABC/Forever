@@ -3,6 +3,22 @@
 #include <cmath>
 #include <algorithm>
 
+// 隧道：道路延伸时如果遇到mountain地形，改成"钻进去"而不是贴着地形起伏铺过去，并且在隧道口
+// 用RoadnetMod::AddHatch给地形挖一个洞，避免隧道段完全埋没在山体实心地形里看不见——四个
+// 常量照抄老工程语义。
+#define TUNNEL_HEIGHT -1.f
+#define TUNNEL_HATCH_WIDTH 1.f
+#define TUNNEL_HATCH_LENGTH 4.f
+#define TUNNEL_LOOKAHEAD_DISTANCE 5.f
+
+// 地面端在真正开始下坡之前先接一段完全水平的引道，长度必须盖住RoadJunction::Build按setback
+// (默认车道配置下=1.0地图单位)裁掉的路口进深——否则S形下坡从groundNode本身就开始，路口按
+// "groundNode这个平面"裁掉的那一截曲线其实已经下降了一部分高度，路口mesh(强制铺成一个平面，
+// 见roadnet.md"路口高度"一节)和曲线实际高度对不上，看起来像"路口范围内已经开始下坡"。
+// 引道两端Z相同，addControls在这种情况下产出的Connection整条严格保持水平，不管路口实际裁掉
+// 多长，裁掉的部分必然还在引道以内，因此不需要精确对齐setback——只要比它大留出余量即可。
+#define TUNNEL_FLAT_APPROACH_LENGTH 1.5f
+
 using namespace std;
 
 int JingRoadnet::count = 0;
@@ -46,13 +62,30 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	vector<pair<Node, int>> verticalNode2n;
 	vector<pair<Node, int>> verticalNode2s;
 
-	// 沿给定方向延伸链条直到地图边界；这次道路高度固定0，不做隧道/地形高度判断(范围裁剪，
-	// 详见roadnet_basic.md)，getTerrain只用来判断是否还在地图内。
+	// 检查(x,y)沿(stepX,stepY)方向及其反方向TUNNEL_LOOKAHEAD_DISTANCE个单位以内是否有山体——
+	// 提前/延后进出隧道的过渡点，避免隧道口卡在山体地形正中间。
+	auto hasMountainNearby = [&](float x, float y, float stepX, float stepY) -> bool {
+		float stepLen = sqrt(stepX * stepX + stepY * stepY);
+		if (stepLen < 1e-6f) stepLen = 1.f;
+		float unitX = stepX / stepLen, unitY = stepY / stepLen;
+		for (float d = 1.f; d <= TUNNEL_LOOKAHEAD_DISTANCE; d += 1.f) {
+			if (getTerrain(static_cast<int>(x + unitX * d), static_cast<int>(y + unitY * d)) == "mountain") return true;
+			if (getTerrain(static_cast<int>(x - unitX * d), static_cast<int>(y - unitY * d)) == "mountain") return true;
+		}
+		return false;
+		};
+
+	// 沿给定方向延伸链条直到地图边界；山体节点、以及前后TUNNEL_LOOKAHEAD_DISTANCE个单位内能
+	// 探测到山体的节点都按隧道高度处理，其余节点仍然固定0（这次只恢复隧道这一部分，不恢复
+	// 老工程"全程按真实地形/水面高度起伏"的地形高度跟随，范围说明见roadnet_basic.md"隧道"
+	// 一节）。getTerrain同时也用来判断是否还在地图内。
 	auto extendChain = [&](float startX, float startY, float stepX, float stepY, vector<pair<Node, int>>& chain) {
 		for (float x = startX, y = startY; ; x += stepX, y += stepY) {
 			string t = getTerrain(static_cast<int>(x), static_cast<int>(y));
 			if (t == "") break;
-			intersections.emplace_back(x, y, 0.f);
+			bool tunnel = (t == "mountain") || hasMountainNearby(x, y, stepX, stepY);
+			float h = tunnel ? TUNNEL_HEIGHT : 0.f;
+			intersections.emplace_back(x, y, h);
 			chain.emplace_back(intersections.back(), static_cast<int>(intersections.size()) - 1);
 		}
 		};
@@ -67,17 +100,55 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		road.AddPedestrianLane(1, 0.5f);
 		};
 
-	// 两端切线各贴一个控制点(1/3、2/3处，都不与真正的端点重合)：保证节点处切线水平且非零，
-	// 相邻两段路在共享node上平滑接上，不会因为控制点和端点重合导致切线突然塌缩成0。
+	// 两端切线各贴一个控制点(1/3、2/3处，都不与真正的端点重合)：c1贴n1的高度、c2贴n2的高度，
+	// 保证节点处切线水平且非零，相邻两段路在共享node上平滑接上，不会因为控制点和端点重合
+	// 导致切线突然塌缩成0。n1.Z/n2.Z不相等时(隧道过渡段)这条曲线会在两个平缓端之间平滑升降。
 	auto addControls = [](Road& road, const Node& n1, const Node& n2) {
 		float dx = n2.GetX() - n1.GetX();
 		float dy = n2.GetY() - n1.GetY();
-		Node c1("roadnet", n1.GetX() + dx / 3.f, n1.GetY() + dy / 3.f, 0.f);
-		Node c2("roadnet", n1.GetX() + dx * 2.f / 3.f, n1.GetY() + dy * 2.f / 3.f, 0.f);
+		Node c1("roadnet", n1.GetX() + dx / 3.f, n1.GetY() + dy / 3.f, n1.GetZ());
+		Node c2("roadnet", n1.GetX() + dx * 2.f / 3.f, n1.GetY() + dy * 2.f / 3.f, n2.GetZ());
 		road.AddControls({ { c1, 1.f }, { c2, 1.f } });
 		};
 
+	// 建一条路：一端隧道一端地面(Z<0和Z>=0各一个)时，拆成三段独立Connection——①地面端水平
+	// 引道(groundNode->flatNode，长TUNNEL_FLAT_APPROACH_LENGTH，两端同高)，②真正的S形下坡
+	// (flatNode->splitNode，addControls给出平滑切线)，③平路(splitNode->隧道，两端同高)；
+	// 两端同号(都隧道或都地面)时维持整段一条S形Connection不拆分。
 	auto addRoad = [&](const string& name, const Node& n1, const Node& n2) {
+		bool n1Tunnel = n1.GetZ() < 0.f;
+		bool n2Tunnel = n2.GetZ() < 0.f;
+
+		if (n1Tunnel != n2Tunnel) {
+			const Node& groundNode = n1Tunnel ? n2 : n1;
+			const Node& tunnelNode = n1Tunnel ? n1 : n2;
+			float dx = tunnelNode.GetX() - groundNode.GetX();
+			float dy = tunnelNode.GetY() - groundNode.GetY();
+			float segLen = sqrt(dx * dx + dy * dy);
+			if (segLen < 1e-6f) segLen = 1.f;
+			float ux = dx / segLen, uy = dy / segLen;
+
+			Node flatNode("roadnet", groundNode.GetX() + ux * TUNNEL_FLAT_APPROACH_LENGTH, groundNode.GetY() + uy * TUNNEL_FLAT_APPROACH_LENGTH, groundNode.GetZ());
+			Node splitNode("roadnet", groundNode.GetX() + ux * TUNNEL_HATCH_LENGTH, groundNode.GetY() + uy * TUNNEL_HATCH_LENGTH, tunnelNode.GetZ());
+
+			// 水平引道本身也可能已经压在mountain地形上(hasMountainNearby的探测半径比这段
+			// 引道长)，所以也要单独开一个hatch，两段hatch首尾相接，合起来正好覆盖老版本
+			// "整段(groundNode到splitNode)一次性开洞"的范围，不会因为拆分出引道而漏挖。
+			roads.emplace_back(name, groundNode, flatNode, meshPath, meshUnit);
+			addControls(roads.back(), groundNode, flatNode);
+			configureLanes(roads.back());
+			AddHatch(&roads.back(), 0.f, 1.f, TUNNEL_HATCH_WIDTH);
+
+			roads.emplace_back(name, flatNode, splitNode, meshPath, meshUnit);
+			addControls(roads.back(), flatNode, splitNode);
+			configureLanes(roads.back());
+			AddHatch(&roads.back(), 0.f, 1.f, TUNNEL_HATCH_WIDTH);
+
+			roads.emplace_back(name, splitNode, tunnelNode, meshPath, meshUnit);
+			configureLanes(roads.back());
+			return;
+		}
+
 		roads.emplace_back(name, n1, n2, meshPath, meshUnit);
 		addControls(roads.back(), n1, n2);
 		configureLanes(roads.back());
@@ -88,6 +159,15 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		addControls(road, n1, n2);
 		configureLanes(road);
 		return road;
+		};
+
+	// lot的margin直接从临街road自己的车道宽度算，不再手动指定固定常量——以后车道配置一旦改动
+	// (configureLanes)，margin自动跟着变，不需要另外找一个ROAD_MARGIN常量手动保持同步。
+	// 不需要判断lot落在road哪一侧：车道横断面现在以Connection连线为几何中心居中（见
+	// Source/Core/map/roadnet.md"车道居中"一节），不管side0/side1怎么分配，两侧最外缘到
+	// 连线的距离永远都精确等于road.GetTotalWidth()的一半，两侧margin天然相等，不用再分side。
+	auto roadMargin = [](const Road& road) -> float {
+		return road.GetTotalWidth() * 0.5f;
 		};
 
 	// 判断某坐标地形是否可以铺设block(plain或construction)
@@ -225,48 +305,57 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	}
 	addRoad("城南东路", intersections[verticalNode2s.back().second], externs[7]);
 
-	// 道路总半宽(车行0.5+人行0.5=1.0)决定lot margin：lot矩形边界要卡在人行道外边缘，
-	// 不能压进道路横断面里，四条边margin一致(默认车道配置左右对称)，详见roadnet_basic.md。
-	const float ROAD_MARGIN = 1.0f;
-
 	lots.emplace_back(
-		Lot(northWest, northEast, southEast, southWest, { ROAD_MARGIN, ROAD_MARGIN, ROAD_MARGIN, ROAD_MARGIN }),
+		Lot(northWest, northEast, southEast, southWest,
+			{ roadMargin(roads[0]), roadMargin(roads[1]), roadMargin(roads[2]), roadMargin(roads[3]) }),
 		unordered_map<int, Road>{ {0, roads[0]}, {1, roads[1]}, {2, roads[2]}, {3, roads[3]} }
 	);
 	lots.back().first.SetArea(AREA_OFFICIAL_HIGH);
 
 	if (horizontalNode1w.size() >= 1 && horizontalNode2w.size() >= 1) {
-		lots.emplace_back(Lot(horizontalNode1w[0].first, intersections[0], intersections[3], horizontalNode2w[0].first, { 0.0f, ROAD_MARGIN, ROAD_MARGIN, ROAD_MARGIN }),
+		Road boundary2 = makeBoundaryRoad("城西北路", intersections[horizontalNode1w[0].second], intersections[0]);
+		Road boundary3 = makeBoundaryRoad("城西南路", intersections[horizontalNode2w[0].second], intersections[3]);
+		lots.emplace_back(Lot(horizontalNode1w[0].first, intersections[0], intersections[3], horizontalNode2w[0].first,
+				{ 0.0f, roadMargin(roads[0]), roadMargin(boundary2), roadMargin(boundary3) }),
 			unordered_map<int, Road>{
 				{ 1, roads[0] },
-				{ 2, makeBoundaryRoad("城西北路", intersections[horizontalNode1w[0].second], intersections[0]) },
-				{ 3, makeBoundaryRoad("城西南路", intersections[horizontalNode2w[0].second], intersections[3]) }
+				{ 2, boundary2 },
+				{ 3, boundary3 }
 			});
 		lots.back().first.SetArea(AREA_RESIDENTIAL_HIGH);
 	}
 	if (horizontalNode1e.size() >= 1 && horizontalNode2e.size() >= 1) {
-		lots.emplace_back(Lot(intersections[1], horizontalNode1e[0].first, horizontalNode2e[0].first, intersections[2], { ROAD_MARGIN, 0.0f, ROAD_MARGIN, ROAD_MARGIN }),
+		Road boundary2 = makeBoundaryRoad("城东北路", intersections[horizontalNode1e[0].second], intersections[1]);
+		Road boundary3 = makeBoundaryRoad("城东南路", intersections[horizontalNode2e[0].second], intersections[2]);
+		lots.emplace_back(Lot(intersections[1], horizontalNode1e[0].first, horizontalNode2e[0].first, intersections[2],
+				{ roadMargin(roads[1]), 0.0f, roadMargin(boundary2), roadMargin(boundary3) }),
 			unordered_map<int, Road>{
 				{ 0, roads[1] },
-				{ 2, makeBoundaryRoad("城东北路", intersections[horizontalNode1e[0].second], intersections[1]) },
-				{ 3, makeBoundaryRoad("城东南路", intersections[horizontalNode2e[0].second], intersections[2]) }
+				{ 2, boundary2 },
+				{ 3, boundary3 }
 			});
 		lots.back().first.SetArea(AREA_RESIDENTIAL_LOW);
 	}
 	if (verticalNode1n.size() >= 1 && verticalNode2n.size() >= 1) {
-		lots.emplace_back(Lot(verticalNode1n[0].first, verticalNode2n[0].first, intersections[1], intersections[0], { ROAD_MARGIN, ROAD_MARGIN, 0.0f, ROAD_MARGIN }),
+		Road boundary0 = makeBoundaryRoad("城北西路", intersections[verticalNode1n[0].second], intersections[0]);
+		Road boundary1 = makeBoundaryRoad("城北东路", intersections[verticalNode2n[0].second], intersections[1]);
+		lots.emplace_back(Lot(verticalNode1n[0].first, verticalNode2n[0].first, intersections[1], intersections[0],
+				{ roadMargin(boundary0), roadMargin(boundary1), 0.0f, roadMargin(roads[2]) }),
 			unordered_map<int, Road>{
-				{ 0, makeBoundaryRoad("城北西路", intersections[verticalNode1n[0].second], intersections[0]) },
-				{ 1, makeBoundaryRoad("城北东路", intersections[verticalNode2n[0].second], intersections[1]) },
+				{ 0, boundary0 },
+				{ 1, boundary1 },
 				{ 3, roads[2] }
 			});
 		lots.back().first.SetArea(AREA_COMMERCIAL_HIGH);
 	}
 	if (verticalNode1s.size() >= 1 && verticalNode2s.size() >= 1) {
-		lots.emplace_back(Lot(intersections[3], intersections[2], verticalNode2s[0].first, verticalNode1s[0].first, { ROAD_MARGIN, ROAD_MARGIN, ROAD_MARGIN, 0.0f }),
+		Road boundary0 = makeBoundaryRoad("城南西路", intersections[verticalNode1s[0].second], intersections[3]);
+		Road boundary1 = makeBoundaryRoad("城南东路", intersections[verticalNode2s[0].second], intersections[2]);
+		lots.emplace_back(Lot(intersections[3], intersections[2], verticalNode2s[0].first, verticalNode1s[0].first,
+				{ roadMargin(boundary0), roadMargin(boundary1), roadMargin(roads[3]), 0.0f }),
 			unordered_map<int, Road>{
-				{ 0, makeBoundaryRoad("城南西路", intersections[verticalNode1s[0].second], intersections[3]) },
-				{ 1, makeBoundaryRoad("城南东路", intersections[verticalNode2s[0].second], intersections[2]) },
+				{ 0, boundary0 },
+				{ 1, boundary1 },
 				{ 2, roads[3] }
 			});
 		lots.back().first.SetArea(AREA_INDUSTRIAL_HIGH);
@@ -285,10 +374,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		const auto& [seNode, seIdx] = horizontalNode2w[i - 1];
 		const auto& [swNode, swIdx] = horizontalNode2w[i];
 
-		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { 0.0f, 0.0f, ROAD_MARGIN, ROAD_MARGIN }),
+		Road boundary2 = makeBoundaryRoad("城西北路", intersections[nwIdx], intersections[neIdx]);
+		Road boundary3 = makeBoundaryRoad("城西南路", intersections[swIdx], intersections[seIdx]);
+		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { 0.0f, 0.0f, roadMargin(boundary2), roadMargin(boundary3) }),
 			unordered_map<int, Road>{
-				{ 2, makeBoundaryRoad("城西北路", intersections[nwIdx], intersections[neIdx]) },
-				{ 3, makeBoundaryRoad("城西南路", intersections[swIdx], intersections[seIdx]) }
+				{ 2, boundary2 },
+				{ 3, boundary3 }
 			});
 		lots.back().first.SetArea(AREA_RESIDENTIAL_LOW);
 	}
@@ -304,10 +395,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		const auto& [seNode, seIdx] = horizontalNode2e[i];
 		const auto& [swNode, swIdx] = horizontalNode2e[i - 1];
 
-		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { 0.0f, 0.0f, ROAD_MARGIN, ROAD_MARGIN }),
+		Road boundary2 = makeBoundaryRoad("城东北路", intersections[nwIdx], intersections[neIdx]);
+		Road boundary3 = makeBoundaryRoad("城东南路", intersections[swIdx], intersections[seIdx]);
+		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { 0.0f, 0.0f, roadMargin(boundary2), roadMargin(boundary3) }),
 			unordered_map<int, Road>{
-				{ 2, makeBoundaryRoad("城东北路", intersections[nwIdx], intersections[neIdx]) },
-				{ 3, makeBoundaryRoad("城东南路", intersections[swIdx], intersections[seIdx]) }
+				{ 2, boundary2 },
+				{ 3, boundary3 }
 			});
 		lots.back().first.SetArea(AREA_RESIDENTIAL_LOW);
 	}
@@ -323,10 +416,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		const auto& [seNode, seIdx] = verticalNode2n[i - 1];
 		const auto& [swNode, swIdx] = verticalNode1n[i - 1];
 
-		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { ROAD_MARGIN, ROAD_MARGIN, 0.0f, 0.0f }),
+		Road boundary0 = makeBoundaryRoad("城北西路", intersections[nwIdx], intersections[swIdx]);
+		Road boundary1 = makeBoundaryRoad("城北东路", intersections[neIdx], intersections[seIdx]);
+		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { roadMargin(boundary0), roadMargin(boundary1), 0.0f, 0.0f }),
 			unordered_map<int, Road>{
-				{ 0, makeBoundaryRoad("城北西路", intersections[nwIdx], intersections[swIdx]) },
-				{ 1, makeBoundaryRoad("城北东路", intersections[neIdx], intersections[seIdx]) }
+				{ 0, boundary0 },
+				{ 1, boundary1 }
 			});
 		lots.back().first.SetArea(AREA_RESIDENTIAL_LOW);
 	}
@@ -342,10 +437,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		const auto& [seNode, seIdx] = verticalNode2s[i];
 		const auto& [swNode, swIdx] = verticalNode1s[i];
 
-		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { ROAD_MARGIN, ROAD_MARGIN, 0.0f, 0.0f }),
+		Road boundary0 = makeBoundaryRoad("城南西路", intersections[nwIdx], intersections[swIdx]);
+		Road boundary1 = makeBoundaryRoad("城南东路", intersections[neIdx], intersections[seIdx]);
+		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { roadMargin(boundary0), roadMargin(boundary1), 0.0f, 0.0f }),
 			unordered_map<int, Road>{
-				{ 0, makeBoundaryRoad("城南西路", intersections[nwIdx], intersections[swIdx]) },
-				{ 1, makeBoundaryRoad("城南东路", intersections[neIdx], intersections[seIdx]) }
+				{ 0, boundary0 },
+				{ 1, boundary1 }
 			});
 		lots.back().first.SetArea(AREA_RESIDENTIAL_LOW);
 	}

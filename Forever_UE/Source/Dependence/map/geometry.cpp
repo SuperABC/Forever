@@ -509,6 +509,19 @@ const vector<RoadOpening>& Road::GetOpenings() const {
 	return openings;
 }
 
+float Road::GetSideWidth(int side) const {
+	if (side != 0 && side != 1) return 0.f;
+	float sum = 0.f;
+	for (float w : vehicleLanes[side]) sum += w;
+	for (float w : parkingLanes[side]) sum += w;
+	for (float w : pedestrianLanes[side]) sum += w;
+	return sum;
+}
+
+float Road::GetTotalWidth() const {
+	return GetSideWidth(0) + GetSideWidth(1);
+}
+
 Quad::Quad() :
 	posX(0.f),
 	posY(0.f),

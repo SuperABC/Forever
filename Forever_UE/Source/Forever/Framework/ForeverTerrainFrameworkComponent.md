@@ -18,20 +18,41 @@
 - **`Map`的生命周期不归这个组件管**——`AForeverFrameworkActor`持有`Map*`（见
   `ForeverFrameworkActor.md`），`BeginPlay`时调用`Map::InitTerrains()`+`InitContents()`
   跑完地形生成后，再调用`GenerateTerrain(map)`把指针交给这个组件，组件只是非持有地引用它。
-- **要求#2"挖洞不用ISM"的落地方式**：老工程`BuildLevel`对`levelIdx<=1`（近处精细LOD）会算出
-  `constructionRegion[4][4]`——某个8x8-quad子区域**全部**元素都是`"construction"`类型时，
-  整块跳过不画，视觉空缺交给Blueprint端的ISM小立方体填。这次不再有Blueprint/ISM消费方，改成
-  **按quad粒度**判断：每个quad算出中心所属的地图`Element`，非construction照常画两个三角形；
-  是construction则查（惰性缓存）该Element的`LookupTerrain`结果（矩形减矩形分解算法，原样搬
-  `ATerrainBase::LookupTerrain`，只是不再是`UFUNCTION(BlueprintCallable)`），quad中心落在
-  剩余矩形范围外才跳过——这就是"洞"。每个涉及到的construction Element还会额外补一次
-  `LookupTerrain`返回的角落三角形（`tris`，处理旋转hatch和轴对齐AABB减法留下的缝隙），作为
-  独立的、非网格对齐的顶点追加进mesh。
-  **这条路径目前实际上是死代码**——因为`Map::GetHatches`永远返回空列表（Roadnet/Building还
-  没迁移，没有任何系统调用`Map::AddHatch`），`LookupTerrain`对任何construction格子都只会
-  返回"整格一个矩形、tris为空"，所以construction格子现在渲染出来是**完整实心地面**，和
-  plain格子视觉上没有区别（贴图也一样，都是`PlainDiffuse`，见`map.md`）。等以后Roadnet/
-  Building阶段开始调用`Map::AddHatch`，这里会自动开始产生真正的洞，**不需要再回来改这段代码**。
+- **要求#2"挖洞不用ISM"的落地方式（经过多轮修正，这里记录最终版本）**：老工程`BuildLevel`对
+  `levelIdx<=1`（近处精细LOD）会算出`constructionRegion[4][4]`——某个8x8-quad子区域**全部**
+  元素都是`"construction"`类型时，整块跳过不画，视觉空缺交给Blueprint端的ISM小立方体填。这次
+  不再有Blueprint/ISM消费方，改用`LookupTerrain`（矩形减矩形分解算法，原样搬
+  `ATerrainBase::LookupTerrain`，只是不再是`UFUNCTION(BlueprintCallable)`）算出每个
+  construction/挖洞Element的精确几何。
+  - **前提：所有挖洞都发生在平地上**——construction Element不需要更细的LOD细分。第一版实现
+    仍然沿用主网格的32x32 sub-quad粒度，对每个sub-quad测试"中心是否落在`LookupTerrain`返回的
+    矩形内"来决定要不要画——这个近似测试量出来的洞边界只能精确到sub-quad网格的粒度（远小于
+    真实矩形边界，一般不对齐），PIE验证发现洞的边缘有明显的格子锯齿。**现在改成直接按Element
+    粒度处理**：sub-quad循环遇到construction/有hatch的Element时只负责触发`lookupCached`缓存
+    并跳过常规两三角形画法（不再测试中心点），随后统一按`LookupTerrain`返回的`rects`（没有
+    hatch命中时就是完整一格，画成2个三角形；有hatch命中时是精确的轴对齐矩形集合）直接建出
+    **精确坐标**的geometry，和sub-quad网格粒度无关——这正是"先挖出平行于坐标轴的外接矩形洞，
+    再补三角形填gap"这套老工程ISM思路的正确落地方式：`rects`本身就是那个轴对齐外接矩形集合，
+    `tris`（角落补丁三角形，只有旋转hatch跨格时才非空）就是"四个三角形填gap"的部分。
+  - 没有hatch命中的construction Element现在只贡献2个三角形（1个完整矩形），比第一版的64个
+    sub-quad三角形省了大量无意义的细分——纯平地上这些细分视觉完全等价，白白增加顶点/三角形
+    数量。
+  - 环绕顺序：`rects`产出的矩形quad用(左下,右下,右上,左上)记顶点，三角形顺序
+    `(v0,v2,v1)`+`(v0,v3,v2)`，和本函数主网格`(v00,v11,v10)`/`(v00,v01,v11)`是同一套已验证
+    过的写法，直接照抄没有另外推导。
+  **这条路径最初（Terrain阶段）是死代码，Roadnet隧道落地后已经有真实数据了**——Terrain阶段
+  验证时`Map::GetHatches`永远返回空列表，construction格子渲染出来是完整实心地面，和plain
+  视觉上没区别；Roadnet阶段实现隧道时，`RoadnetMod::AddHatch`会给隧道口对应的格子记一个
+  hatch，`Map::InitRoadnet()`把这些hatch转发进`Map::AddHatch`，这条挖洞路径这才第一次真正
+  跑出非空的`rects`/`tris`。
+  **挖洞判断条件已经从"只认`construction`"放宽成"`construction`或者这个格子有hatch"**
+  （`LookupTerrain`开头的提前返回、`BuildLevel`里调用`lookupCached`前的判断，两处都要一起
+  改，只改一处会不一致）——隧道口所在的格子地形类型是`"mountain"`（或紧邻的`"plain"`），
+  从来不会被判定成`"construction"`（3x3邻域全plain/construction才晋升，隧道口紧邻`mountain`
+  格子，邻域条件必然不满足），如果挖洞逻辑还锁死在只认`"construction"`，隧道口的hatch会被
+  白白忽略、隧道段被山体实心地形完全挡住看不见——这正是PIE验证时发现的问题，倒推出这个放宽。
+  放宽之后不影响原本construction格子的挖洞行为（`construction`这个条件本身没变，只是多了一个
+  "或"）。
 - **删掉了老工程整套ISM流式窗口机制**——`terrainInstances`/`idList`/`SetInstance`/
   `RemoveInstance`/`UpdateTerrain`（`BlueprintImplementableEvent`）、13x13 Element的加载
   窗口计算，这些全部是Blueprint端ISM cube生成/销毁用的簿记，ISM本身不要了就整套删掉，不留
@@ -67,9 +88,9 @@
 
 ## 待办/后续阶段
 
-- 阶段4（Roadnet/Building）：一旦这两个系统开始调用`Map::AddHatch`，construction格子的挖洞
-  会自动生效，不需要改这个组件的代码，但建议届时补一轮PIE验证确认挖洞的视觉效果符合预期
-  （角落三角形的绕序/UV这次没有实际数据可以验证，可能需要微调）。
+- 阶段4（Building）：一旦Building也开始调用`Map::AddHatch`，construction格子的挖洞会自动
+  跟着生效，不需要改这个组件的代码。角落三角形（`tris`）目前只有Roadnet隧道口这一个真实数据
+  来源验证过，PIE看一下绕序/UV是否符合预期，如果Building场景下发现问题再回来微调。
 - 阶段4：`TerrainTemplate`/`FineTemplate`材质图内部除了这几个已知贴图参数外是否还引用了别的
   纹理资产（比如法线/粗糙度贴图），只能在编辑器里打开材质图确认，如果发现引用了没有复制过来
   的资产需要补充复制。

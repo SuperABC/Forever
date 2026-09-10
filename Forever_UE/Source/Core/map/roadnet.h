@@ -36,9 +36,18 @@ struct RoadJunctionApproach {
 	std::pair<float, float> curbLeft;
 	std::pair<float, float> curbRight;
 
-	// 这条路在这一端的收缩距离(地图单位)=curbLeft/curbRight沿道路方向外移的距离，取该端
-	// 车道总宽度两侧中较宽的一侧。Forever层的道路mesh tiling要用同一个值收缩，才能让路面
-	// 和路口mesh的边界严丝合缝，不留空隙也不重叠。
+	// curbLeft/curbRight/车行行人锚点共用的高度(地图单位)——这些点都是沿road弧长在setback
+	// 对应的弧长比例处采样得到的(road->GetPoint(t))，不是Intersection原坐标的高度，因为隧道
+	// 场景下沿路的高度会连续变化(见roadnet.md"路口高度"一节)。
+	float curbZ = 0.f;
+
+	// 这条路在这一端的收缩距离(地图单位)=curbLeft/curbRight沿道路方向外移的距离，取这个
+	// 路口所有连接路里、总宽度(GetTotalWidth())最大的那条的一半——不是这条路自己的宽度，
+	// 也不是"两侧中较宽的一侧"（车道横断面居中后，一条路两侧最外缘到Connection连线的距离
+	// 永远都是它自己GetTotalWidth()的一半，不需要再分side0/side1哪个更宽，见roadnet.md
+	// "路口收缩距离"一节）；取整个路口的全局最大值，是为了保证不管哪条路多宽，它的车道在
+	// 路口范围内都不会被逼着穿过别的路已经开始铺设的可见路面。Forever层的道路mesh tiling
+	// 要用同一个值收缩，才能让路面和路口mesh的边界严丝合缝，不留空隙也不重叠。
 	float setback = 0.f;
 };
 
@@ -90,6 +99,10 @@ public:
 	const std::vector<Road*>& GetRoads() const;
 	const std::vector<std::pair<Lot*, std::unordered_map<int, Road*>>>& GetLots() const;
 
+	// mod通过RoadnetMod::AddHatch产出的地形挖洞标记(隧道口用)，纯值类型，直接拷贝自
+	// mod->hatches，不需要像Node/Road那样深拷贝。
+	const std::vector<std::pair<Quad, float>>& GetHatches() const;
+
 	// 遍历每个lot的边界Road映射，给lot分配(路名,序号)地址；照抄老工程Roadnet::AllocateAddress语义。
 	void AllocateAddress();
 	Lot* LocateLot(const std::string& road, int index) const;
@@ -104,6 +117,7 @@ private:
 	std::vector<Intersection*> intersections;
 	std::vector<Road*> roads;
 	std::vector<std::pair<Lot*, std::unordered_map<int, Road*>>> lots;
+	std::vector<std::pair<Quad, float>> hatches;
 
 	std::unordered_map<std::string, std::vector<Lot*>> addressesByRoad;
 };
