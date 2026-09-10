@@ -1,0 +1,8 @@
+﻿cmd : '�直接看游戏效果而不用打开编辑器。' is not recognized as an internal or external command,
+At line:5 char:1
++ cmd /c ".\run.bat" > run_out.log 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ('�直接看游戏效果而不用打开编...ternal command,:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+operable program or batch file.

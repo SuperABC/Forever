@@ -41,14 +41,39 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
   算出重叠的格子范围，逐个格子调用`Element::hatches.emplace_back`，和老工程`Map::AddHatch`
   同语义（老工程按`Chunk`转发，这里直接操作扁平数组）。
 
+- **`InitRoadnet()`必须在`InitTerrains()`+`InitContents()`之后调用**——`RoadnetMod::
+  DistributeRoadnet`要采样已经生成好的地形类型/水面（`getTerrain`/`getWater`两个回调），道路
+  本身高度固定0，不采样/不跟随地形高度（这是这次范围裁剪，不是遗漏，以后要做的话再加
+  `getHeight`回调和高度贴合逻辑）。内部流程：①`ModLoader::RegisterConcept<RoadnetFactory>`
+  发现/注册roadnet mod dll（复用`Map`已有的`modLoader`成员，不新建）；②按
+  `RoadnetFactory::GetRoadnet()`（单选，见`roadnet_factory.md`）选出唯一启用的mod，
+  `new Roadnet(&roadnetFactory, id)`；③`roadnet->DistributeRoadnet(...)`+
+  `roadnet->AllocateAddress()`；④按每个`Intersection`收集与之相连的`Road`，
+  `RoadJunction::Build`逐个建路口（车行/行人锚点+路缘角点）；⑤遍历每条`Road`建"最内侧车道
+  贯通线"+遍历每个`RoadJunction`建路口内部连接，一起构成`vehicleNavGraph`/
+  `pedestrianNavGraph`两张导航图。具体设计理由（车道级偏移锚点、车行全联通/行人人行横道+
+  转角连通模型）见`roadnet.md`。
+- **`AddRoadAccessNode`是给未来Building/Zone用的公开API，这次由Forever层的demo验证代码调用
+  一次**——车道分裂/开口这套逻辑目前没有真正的调用方（Building/Zone还没迁移），但接口和实现
+  都是完整、可用的，不是占位。`ThroughLine`（`Map`私有实现细节，见`roadnet.md`最后一条）记录
+  每条`Road`每个方向/类别当前的贯通线，供`AddRoadAccessNode`拆分。
+- **`GetVehicleNavGraph()`/`GetPedestrianNavGraph()`/`GetNavAnchorNodes()`是只读访问**，
+  给`Source/Forever/Framework/ForeverRoadnetFrameworkComponent.cpp`的导航图可视化用（按id画
+  锚点方块+边长方体），未来Traffic域（阶段4-3）寻路时也会用同一套接口，不需要改`Map`。
+  图里出现的id除了`GetNavAnchorNodes()`能查到坐标，还可能是地图边缘的extern残端（在
+  `GetExterns()`里），调用方要两个列表都查。
+
 ## 依赖关系
 
-- 依赖：`terrain.h`、`terrain_factory.h`、`map/geometry.h`（`Quad`，`hatches`字段类型）、
-  `common/config.h`、`common/loader.h`（`InitTerrains`用）、`common/utility.h`（`debugf`）。
-- 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有`Map*`，`BeginPlay`
-  时调用`InitTerrains`+`InitContents`）、`Source/Forever/Framework/
-  ForeverTerrainFrameworkComponent.h/.cpp`（`GenerateTerrain(Map*)`读取生成好的格子数据建
-  mesh）。
+- 依赖：`terrain.h`、`terrain_factory.h`、`roadnet.h`、`roadnet_factory.h`、`map/geometry.h`
+  （`Quad`/`Node`/`Road`/`Lot`等，`hatches`字段类型）、`common/config.h`、`common/loader.h`
+  （`InitTerrains`/`InitRoadnet`用）、`common/utility.h`（`debugf`）。
+- 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有`Map*`，
+  `EnsureMapGenerated`时依次调用`InitTerrains`+`InitContents`+`InitRoadnet`）、
+  `Source/Forever/Framework/ForeverTerrainFrameworkComponent.h/.cpp`（`GenerateTerrain(Map*)`
+  读取生成好的格子数据建mesh）、`Source/Forever/Framework/
+  ForeverRoadnetFrameworkComponent.h/.cpp`（`GenerateRoadnet(Map*)`读取`GetRoads()`/
+  `GetJunctions()`/`GetLots()`建mesh）。
 
 ## 待办/后续阶段
 

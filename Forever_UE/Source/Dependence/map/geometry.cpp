@@ -427,7 +427,11 @@ Road::Road(const Road& other) :
 	Connection(other),
 	name(other.name),
 	mesh(other.mesh),
-	unit(other.unit) {
+	unit(other.unit),
+	vehicleLanes{ other.vehicleLanes[0], other.vehicleLanes[1] },
+	parkingLanes{ other.parkingLanes[0], other.parkingLanes[1] },
+	pedestrianLanes{ other.pedestrianLanes[0], other.pedestrianLanes[1] },
+	openings(other.openings) {
 
 }
 
@@ -437,6 +441,13 @@ Road& Road::operator=(const Road& other) {
 		name = other.name;
 		mesh = other.mesh;
 		unit = other.unit;
+		vehicleLanes[0] = other.vehicleLanes[0];
+		vehicleLanes[1] = other.vehicleLanes[1];
+		parkingLanes[0] = other.parkingLanes[0];
+		parkingLanes[1] = other.parkingLanes[1];
+		pedestrianLanes[0] = other.pedestrianLanes[0];
+		pedestrianLanes[1] = other.pedestrianLanes[1];
+		openings = other.openings;
 	}
 	return *this;
 }
@@ -455,6 +466,47 @@ string Road::GetMesh() const {
 
 float Road::GetUnit() const {
 	return unit;
+}
+
+void Road::AddVehicleLane(int side, float width) {
+	if (side != 0 && side != 1) return;
+	vehicleLanes[side].push_back(width);
+}
+
+const vector<float>& Road::GetVehicleLanes(int side) const {
+	static const vector<float> empty;
+	if (side != 0 && side != 1) return empty;
+	return vehicleLanes[side];
+}
+
+void Road::AddParkingLane(int side, float width) {
+	if (side != 0 && side != 1) return;
+	parkingLanes[side].push_back(width);
+}
+
+const vector<float>& Road::GetParkingLanes(int side) const {
+	static const vector<float> empty;
+	if (side != 0 && side != 1) return empty;
+	return parkingLanes[side];
+}
+
+void Road::AddPedestrianLane(int side, float width) {
+	if (side != 0 && side != 1) return;
+	pedestrianLanes[side].push_back(width);
+}
+
+const vector<float>& Road::GetPedestrianLanes(int side) const {
+	static const vector<float> empty;
+	if (side != 0 && side != 1) return empty;
+	return pedestrianLanes[side];
+}
+
+void Road::AddOpening(const RoadOpening& opening) {
+	openings.push_back(opening);
+}
+
+const vector<RoadOpening>& Road::GetOpenings() const {
+	return openings;
 }
 
 Quad::Quad() :
@@ -882,6 +934,14 @@ void Lot::SetPosition(Node n1, Node n2, Node n3, const vector<float>& margin) {
 	sizeY = sy;
 	rotation = rot;
 	acreage = sx * sy * ACREAGE_SCALE_FACTOR;
+}
+
+void Lot::AddAddress(const string& road, int index) {
+	addresses.emplace_back(road, index);
+}
+
+const vector<pair<string, int>>& Lot::GetAddresses() const {
+	return addresses;
 }
 
 void Lot::SetPosition(Node n1, Node n2, Node n3, Node n4, const vector<float>& margin) {

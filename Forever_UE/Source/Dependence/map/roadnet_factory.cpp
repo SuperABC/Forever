@@ -54,3 +54,14 @@ vector<string> RoadnetFactory::GetRegisteredIds() const {
 void RoadnetFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
 }
+
+void RoadnetFactory::SetConfig(const string& id, bool enabled) {
+	enabledConfig[id] = enabled;
+}
+
+string RoadnetFactory::GetRoadnet() const {
+	for (const auto& [id, enabled] : enabledConfig) {
+		if (enabled) return id;
+	}
+	return string();
+}

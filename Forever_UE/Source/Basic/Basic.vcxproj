@@ -90,6 +90,7 @@
   <ItemGroup>
     <ClCompile Include="basic.cpp" />
     <ClCompile Include="map\terrain_basic.cpp" />
+    <ClCompile Include="map\roadnet_basic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\terrain_basic.h" />

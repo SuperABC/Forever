@@ -26,13 +26,13 @@ void AForeverGameMode::BeginPlay()
 AForeverFrameworkActor* AForeverGameMode::EnsureFrameworkActorExists()
 {
 	for (TActorIterator<AForeverFrameworkActor> it(GetWorld()); it; ++it) {
-		it->EnsureTerrainGenerated();
+		it->EnsureMapGenerated();
 		return *it;
 	}
 
 	AForeverFrameworkActor* spawned = GetWorld()->SpawnActor<AForeverFrameworkActor>(FVector::ZeroVector, FRotator::ZeroRotator);
 	if (spawned) {
-		spawned->EnsureTerrainGenerated();
+		spawned->EnsureMapGenerated();
 	}
 	return spawned;
 }

@@ -57,5 +57,6 @@
   `<Concept>Basic`占位类会变成多个真实类各自`RegisterMod<Concept>`一次),并从共用文档升级
   为独立`.md`。Terrain(阶段4-1)是第一个这样做的,占位`TerrainBasic`已经被真实的
   `OceanTerrain`/`MountainTerrain`替换,详见`map/terrain_basic.md`,不再受这份共用文档覆盖。
+  Roadnet紧随其后,占位`RoadnetBasic`已经被真实的`JingRoadnet`替换,详见`map/roadnet_basic.md`。
 - 阶段4:确认Mod和Basic在同一个Factory里注册时id冲突如何处理(目前`building_mods`等配置
   数组和`Basic`各自用独立的id空间,还没出现真正的冲突场景)。

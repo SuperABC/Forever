@@ -6,8 +6,8 @@
 
 #include "map/roadnet_mod.h"
 
-// 阶段3骨架:最小注册表(创建/销毁/枚举),真正的Temp暂存/合并逻辑(旧工程的
-// MergeTemp/CleanTemp两段式注册)留到阶段4按需恢复,详见 Source/Core/README.md。
+// 最小注册表(创建/销毁/枚举)+单选(SetConfig/GetRoadnet)——不恢复旧工程的Temp暂存/合并
+// 两段式注册,和terrain_factory.h的简化决定一致,详见 Source/Dependence/README.md。
 //
 // creator/deleter用裸函数指针,不用std::function——mod侧注册的都是无捕获
 // (capture-less)lambda,天然能隐式转换成函数指针;裸指针是POD类型,跨DLL传递没有
@@ -50,6 +50,12 @@ public:
 	// 拿实例创建时查不到对应参数。
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
 
+	// 一次只应该有一个路网布局方案生效——SetConfig标记某个已注册id是否启用(config.json里
+	// "roadnet_mods"数组的条目),GetRoadnet返回第一个被标记启用的id(找不到返回空字符串)。
+	// 调用方(Map::InitRoadnet)按这个id唯一决定加载哪个mod的产出。
+	virtual void SetConfig(const std::string& id, bool enabled);
+	virtual std::string GetRoadnet() const;
+
 private:
 	struct Entry {
 		CreateFunc creator;
@@ -59,4 +65,5 @@ private:
 	std::unordered_map<std::string, Entry> registries;
 	std::unordered_map<RoadnetMod*, std::string> liveInstances;
 	std::unordered_map<std::string, std::string> configuredArgs;
+	std::unordered_map<std::string, bool> enabledConfig;
 };

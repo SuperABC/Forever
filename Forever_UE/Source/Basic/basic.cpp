@@ -72,12 +72,12 @@ extern "C" __declspec(dllexport) void FinishModTerrains(TerrainFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModRoadnets() {
-	static vector<string> mods = { RoadnetBasic::GetId() };
+	static vector<string> mods = { JingRoadnet::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModRoadnets(RoadnetFactory* factory) {
-	factory->RegisterRoadnet(RoadnetBasic::GetId(),
-		[]() -> RoadnetMod* { return new RoadnetBasic(); },
+	factory->RegisterRoadnet(JingRoadnet::GetId(),
+		[]() -> RoadnetMod* { return new JingRoadnet(); },
 		[](RoadnetMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModRoadnets(RoadnetFactory* factory) {

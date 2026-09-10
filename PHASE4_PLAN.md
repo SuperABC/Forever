@@ -156,8 +156,18 @@ Building/Roadnet）不是"创建"`Map`，是在同一个类上继续扩展字段
 `zone`/`building`归属字段等）——这和本节开头"先写全部类的骨架签名，再统一实现细节"的建议是
 一致的，只是骨架创建的时间点比第5步这个字面顺序更早。
 
-解锁的Framework组件：`UForeverTerrainFrameworkComponent`（已完成，见其独立`.md`）/`RoadnetFrameworkComponent`/
-`ZoneFrameworkComponent`/`BuildingFrameworkComponent`/`RoomFrameworkComponent`。
+**实现期修正（顺序调整）**：`Roadnet`（本节建议排在第4步，Zone/Component/Room/Building之后）
+实际上在`Terrain`完成后就直接由用户点名实现了，跳过了Zone/Block/Component/Room/Building——
+这是合法的顺序调整（本文档开头就说明"具体先后顺序由用户在逐个点名时决定，本文档给的是默认
+建议，不是强制顺序"）。`Roadnet`落地时在`Map`上新增了车行/行人双导航图、`RoadJunction`路口
+数据结构、`Lot`产出（含边界`Road`地址编号）——这些是这次会话跟用户逐条确认后的**新设计**，
+老工程完全没有对应实现（导航图分离、车道级数据、路口mesh），不是照抄老工程代码，详见
+`Source/Core/map/roadnet.md`。Zone/Block/Component/Room/Building仍然未迁移，`Lot`目前只有
+纯几何+边界`Road`关联，不带`zones`/`buildings`挂载字段，等这几个concept自己迁移时再加。
+
+解锁的Framework组件：`UForeverTerrainFrameworkComponent`（已完成，见其独立`.md`）/
+`UForeverRoadnetFrameworkComponent`（已完成，见其独立`.md`）/`ZoneFrameworkComponent`/
+`BuildingFrameworkComponent`/`RoomFrameworkComponent`。
 解锁的Element：`BuildingElement`/`RoomElement`/`ZoneElement`/`ElevatorElement`（电梯楼层逻辑，
 阶段8会再深化自定义电梯，这里先按现有旧蓝图逻辑迁）。
 解锁的`MAINCONTROLLER_TODO.md`热键：无直接热键（`M`键需要`GlobalBase::DrawMap`，属于4-8

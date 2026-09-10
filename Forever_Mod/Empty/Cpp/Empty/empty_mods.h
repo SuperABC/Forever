@@ -61,6 +61,11 @@ public:
 	virtual const char* GetName() override { return name.data(); }
 	virtual void ApplyArgs(const std::string& args) override { name = "empty(" + args + ")"; }
 
+	virtual void DistributeRoadnet(int width, int height,
+		const std::function<std::string(int, int)>& getTerrain,
+		const std::function<std::pair<bool, float>(int, int)>& getWater,
+		int nodeStaticCount) override {}
+
 private:
 	std::string name;
 };

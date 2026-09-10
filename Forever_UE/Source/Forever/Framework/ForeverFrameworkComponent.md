@@ -10,7 +10,7 @@
 | `UForeverAssetFrameworkComponent` | Asset | `AssetBase` |
 | `UForeverBuildingFrameworkComponent` | Building | `BuildingBase` |
 | `UForeverPopulaceFrameworkComponent` | Populace | `PopulaceBase` |
-| `UForeverRoadnetFrameworkComponent` | Roadnet | `RoadnetBase` |
+| `UForeverRoadnetFrameworkComponent` | Roadnet | `RoadnetBase`（阶段4-1已落地，独立文档见`ForeverRoadnetFrameworkComponent.md`） |
 | `UForeverRoomFrameworkComponent` | Room | `RoomBase` |
 | `UForeverStoryFrameworkComponent` | Story | `StoryBase` |
 | `UForeverTerrainFrameworkComponent` | Terrain | `TerrainBase`（阶段4-1已落地，独立文档见`ForeverTerrainFrameworkComponent.md`） |
@@ -30,4 +30,4 @@
 - 被谁依赖:被`AForeverFrameworkActor`在构造函数里用`CreateDefaultSubobject`创建并持有。
 
 ## 待办/后续阶段
-- 阶段4:按系统迁移到哪个域,就在对应域组件的.h/.cpp里把该系统在Core层Base类(如`BuildingBase`)里的图表逻辑实现进去,并从"空实现"升级为有实际职责的类时,记得为该组件补上独立的`.md`(不再和这份共享文档合用)。`UForeverTerrainFrameworkComponent`(阶段4-1)是第一个这样毕业的,其余8个组件仍在这份共用文档里,毕业方式照抄即可。
+- 阶段4:按系统迁移到哪个域,就在对应域组件的.h/.cpp里把该系统在Core层Base类(如`BuildingBase`)里的图表逻辑实现进去,并从"空实现"升级为有实际职责的类时,记得为该组件补上独立的`.md`(不再和这份共享文档合用)。`UForeverTerrainFrameworkComponent`/`UForeverRoadnetFrameworkComponent`(阶段4-1)是第一批这样毕业的,其余7个组件仍在这份共用文档里,毕业方式照抄即可。

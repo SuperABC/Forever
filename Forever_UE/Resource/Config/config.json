@@ -18,7 +18,11 @@
    // 只负责切分。没在这里列出的id依然会被正常创建(阶段3不做启用/禁用过滤,只做参数配置),
    // 只是拿不到参数(ApplyArgs收到空串)。
    "terrain_mods" : [ "empty --test true" ],
-   "roadnet_mods" : [ "empty --test true" ],
+
+   // roadnet_mods和其余concept语义不同:Roadnet一次只应该有一个路网布局方案生效(不是Terrain
+   // 那种按GetPriority()多mod叠加),这个数组列出的id会被Map::InitRoadnet()标记为"启用",
+   // RoadnetFactory::GetRoadnet()据此选出唯一生效的那个,详见Source/Core/map/roadnet_factory.md。
+   "roadnet_mods" : [ "jing" ],
    "zone_mods" : [ "empty --test true" ],
    "building_mods" : [ "pengzhan", "yizhong", "yuanshen", "empty --test true" ],
    "component_mods" : [ "empty --test true" ],

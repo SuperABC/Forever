@@ -45,7 +45,7 @@ void AForeverFrameworkActor::BeginPlay()
 	// 阶段4逐个域落地后可以删除或改成更有用的调试信息。
 	UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor initialized with 9 framework components: Asset/Building/Populace/Roadnet/Room/Story/Terrain/Traffic/Zone"));
 
-	EnsureTerrainGenerated();
+	EnsureMapGenerated();
 }
 
 namespace {
@@ -60,15 +60,19 @@ namespace {
 	constexpr int kDefaultMapHeight = 1024;
 }
 
-void AForeverFrameworkActor::EnsureTerrainGenerated()
+void AForeverFrameworkActor::EnsureMapGenerated()
 {
 	if (map) return;
 
 	map = new Map(kDefaultMapWidth, kDefaultMapHeight);
 	map->InitTerrains();
 	map->InitContents();
+	map->InitRoadnet();
 
 	if (terrainFramework) {
 		terrainFramework->GenerateTerrain(map);
+	}
+	if (roadnetFramework) {
+		roadnetFramework->GenerateRoadnet(map);
 	}
 }

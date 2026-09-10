@@ -3,7 +3,6 @@
 #include "common/config.h"
 #include "common/loader.h"
 
-#include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
 #include "map/building_factory.h"
 #include "map/component_factory.h"
@@ -76,15 +75,6 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 
 	ModLoader modLoader;
-
-	{
-		RoadnetFactory factory;
-		factory.SetModArgs(ToArgsMap(Config::GetConceptMods("roadnet_mods")));
-		modLoader.RegisterConcept<RoadnetFactory>(mods, "RegisterModRoadnets", "FinishModRoadnets", &factory);
-		ValidateFactory(factory, TEXT("Roadnet"),
-			[](RoadnetFactory& f, const std::string& id) { return f.CreateRoadnet(id); },
-			[](RoadnetFactory& f, RoadnetMod* m) { f.DestroyRoadnet(m); });
-	}
 
 	{
 		ZoneFactory factory;

@@ -173,6 +173,16 @@ public:
 	~Intersection();
 };
 
+// 车道分裂/开口标记（Map::AddRoadAccessNode产出），直接挂在Road自己身上，不在Map侧另开表。
+// t: 沿Road弧长比例位置；width: 开口沿道路方向的长度；forwardSide: 取用road哪一侧
+// （vehicleLanes[0]/pedestrianLanes[0]为true，[1]为false）；isVehicle: 车行(true)还是行人(false)开口。
+struct RoadOpening {
+	float t = 0.f;
+	float width = 0.f;
+	bool forwardSide = true;
+	bool isVehicle = true;
+};
+
 class Road : public Connection {
 public:
 	// 禁止默认构造
@@ -196,11 +206,26 @@ public:
 	// 获取道路名称
 	std::string GetName() const;
 
-	// 获取道路3D资产路径
+	// 获取道路3D资产路径（沿路重复摆放的mesh，见vehicleLanes等注释）
 	std::string GetMesh() const;
 
-	// 获取道路mesh基准长度
+	// 获取道路mesh基准长度（沿Connection弧长按此长度重复摆放GetMesh()资产一次）
 	float GetUnit() const;
+
+	// 车道数据：每个数组下标0=沿Connection方向前进的一侧，1=反向一侧；vector每个元素是一条车道的宽度，
+	// 数组大小即车道数，0=不存在。视觉效果由GetMesh()/GetUnit()整体承担（该mesh资产本身已经画好了
+	// 车道+人行道横断面），这几组数据只用于结构计算（lot margin、路口路缘角点、导航锚点偏移）。
+	// parking/pedestrian两侧只代表物理位置，不代表通行方向；vehicle两侧的方向性由side本身隐含。
+	void AddVehicleLane(int side, float width);
+	const std::vector<float>& GetVehicleLanes(int side) const;
+	void AddParkingLane(int side, float width);
+	const std::vector<float>& GetParkingLanes(int side) const;
+	void AddPedestrianLane(int side, float width);
+	const std::vector<float>& GetPedestrianLanes(int side) const;
+
+	// 车道分裂/开口标记，见RoadOpening注释。
+	void AddOpening(const RoadOpening& opening);
+	const std::vector<RoadOpening>& GetOpenings() const;
 
 private:
 	// 道路名称
@@ -211,6 +236,11 @@ private:
 
 	// 道路mesh基准长度
 	float unit;
+
+	std::vector<float> vehicleLanes[2];
+	std::vector<float> parkingLanes[2];
+	std::vector<float> pedestrianLanes[2];
+	std::vector<RoadOpening> openings;
 };
 
 struct QuadBoundary {
@@ -405,11 +435,19 @@ public:
 	// 通过顺序无关四个顶点设置矩形
 	void SetPosition(Node n1, Node n2, Node n3, Node n4, const std::vector<float>& margin);
 
+	// 地址编号：一个lot可能临街多条路（角地块），各自记一个(路名,序号)。由Roadnet::AllocateAddress
+	// 按lot的边界Road映射填入，不是构造时就有的数据。
+	void AddAddress(const std::string& road, int index);
+	const std::vector<std::pair<std::string, int>>& GetAddresses() const;
+
 protected:
 	// 旋转角度
 	float rotation;
 
 	// 地块类型
 	AREA_TYPE area;
+
+private:
+	std::vector<std::pair<std::string, int>> addresses;
 };
 

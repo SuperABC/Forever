@@ -83,12 +83,14 @@
     <ClCompile Include="common\config.cpp" />
     <ClCompile Include="common\loader.cpp" />
     <ClCompile Include="map\terrain.cpp" />
+    <ClCompile Include="map\roadnet.cpp" />
     <ClCompile Include="map\map.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\config.h" />
     <ClInclude Include="common\loader.h" />
     <ClInclude Include="map\terrain.h" />
+    <ClInclude Include="map\roadnet.h" />
     <ClInclude Include="map\map.h" />
 </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

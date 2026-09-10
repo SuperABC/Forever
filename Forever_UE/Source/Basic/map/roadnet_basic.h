@@ -2,13 +2,25 @@
 
 #include "map/roadnet_mod.h"
 
-// 阶段3占位:trivial默认实现,真正的默认map内容目录留到阶段4从旧工程
-// Basic/map/roadnet_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
-class RoadnetBasic : public RoadnetMod {
+// 井字路网，照抄老工程E:\Projects\Forever_UE\Source\Basic\map\roadnet_basic.h的JingRoadnet
+// 算法迁移，改动点见roadnet_basic.md（去掉隧道逻辑、道路高度固定0、统一车道配置、
+// 去掉挡住lot细分的return、mesh/unit指向default_1_1.uasset）。
+class JingRoadnet : public RoadnetMod {
 public:
-	static const char* GetId() { return "roadnet_basic"; }
-	virtual const char* GetType() const override { return "roadnet_basic"; }
-	virtual const char* GetName() override { return "RoadnetBasic"; }
+	JingRoadnet();
+	virtual ~JingRoadnet();
+
+	static const char* GetId();
+	virtual const char* GetType() const override;
+	virtual const char* GetName() override;
+
+	virtual void DistributeRoadnet(int width, int height,
+		const std::function<std::string(int, int)>& getTerrain,
+		const std::function<std::pair<bool, float>(int, int)>& getWater,
+		int nodeStaticCount) override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
 };
