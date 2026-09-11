@@ -39,10 +39,17 @@
   本身的ISM实例走`UInstancedStaticMeshComponent`默认碰撞（跟着`default_1_1`资产自带的
   collision setup走，不用额外设置）。
 - **车道分裂demo是临时验证代码**（`SpawnAccessNodeDemo`，函数注释里明确标注"临时验证"）：
-  取`map->GetLots()`第一个lot的边界`Road`映射中任意一条，调一次`Map::AddRoadAccessNode`
-  （车行、demo宽度0.6地图单位=6m）。这段demo代码要**在**`BuildRoadInstances`/
-  `BuildOpeningMeshes`遍历所有Road**之前**先跑，这样它新增的开口才能被正确画出来（否则
-  开口mesh在demo调用之前就已经CreateMeshSection完毕，不会再刷新）。
+  取`map->GetLots()`第一个lot的边界`Road`映射中任意一条，在同一个位置（`t=0.5`，demo宽度
+  0.6地图单位=6m）对车行、人行各调一次`Map::AddRoadAccessNode`——真实的路面开口（比如
+  建筑车库出入口）通常也伴随一段人行道断口供行人过街，只打断车行导航图不够，这次两个都
+  打断。这段demo代码要**在**`BuildRoadInstances`/`BuildOpeningMeshes`遍历所有Road**之前**
+  先跑，这样它新增的开口才能被正确画出来（否则开口mesh在demo调用之前就已经
+  CreateMeshSection完毕，不会再刷新）。
+  - **`BuildOpeningMeshes`按`t`去重，同一个物理开口位置只画一块cube**——车行、人行两次
+    `AddRoadAccessNode`调用会各自往`road->GetOpenings()`追加一条`RoadOpening`记录，两条
+    记录的`t`/`width`如果相同（就是demo这种"同一个位置两个类别各开一次"的场景），原来的
+    实现会在完全相同的位置画两个完全重合的扁平quad，PIE里z-fighting闪烁；现在遍历
+    `openings`时按`t`（1e-4误差范围内视为同一个）去重，只画一次。
 - **Lot调试可视化（黄色扁cube）已按用户要求删除，导航图可视化后来又重新加回（第七轮迁移）**——
   两者最初都只是阶段性调试手段，确认对应数据（lot几何/地址、导航图节点与边）正确无误后先
   一起删掉了；后续因为要继续改路网算法（车道居中等）、以及未来Building域接入导航之后还要

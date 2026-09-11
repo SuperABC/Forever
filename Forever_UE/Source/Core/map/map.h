@@ -62,17 +62,22 @@ public:
 	const std::vector<Road*>& GetRoads() const;
 	const std::vector<Intersection*>& GetIntersections() const;
 	const std::vector<Node*>& GetExterns() const;
-	const std::vector<std::pair<Lot*, std::unordered_map<int, Road*>>>& GetLots() const;
+	const std::vector<Lot*>& GetLots() const;
 	const std::vector<RoadJunction*>& GetJunctions() const;
 	Lot* LocateLot(const std::string& road, int index) const;
 
 	// 车道分裂/开口(要求4/6/5):在roadName这条路上、距起点forward弧长比例t处，为vehicle(true)
-	// 或pedestrian(false)图新增一个访问点。useForwardSide=true取该路正向一侧(side0)，false取
-	// 反向一侧(side1)。openingWidth是开口沿道路方向的长度，供Forever层mesh生成时挖空对应长度、
-	// 放置开口cube(记在road自己的openings里，见geometry.h的Road::AddOpening)。
-	// 分裂规则：该侧该类车道数==1时直接把贯通线在t处切两段；>=2时贯通线(内侧车道)不动，
-	// 另外新增一条两段的外侧车道线。返回新创建的访问点Node，找不到对应Road或该侧没有对应车道
-	// 时返回nullptr。
+	// 或pedestrian(false)图新增一个访问点。useForwardSide含义分两种情况：该侧(side0/1)本身
+	// 就有对应类别车道时，效果和原来一样(true=侧0/右手边，false=侧1/左手边)；该侧是单行道的
+	// 空侧(对侧才有车道)时，重新解释成"要连最靠右(true)还是最靠左(false)的车道"，从对侧的
+	// 车道里按实际横向位置挑——单行道不存在"正向/反向"这个参照了，只能按左右分。openingWidth
+	// 是开口沿道路方向的长度，供Forever层mesh生成时挖空对应长度、放置开口cube(记在road自己的
+	// openings里，见geometry.h的Road::AddOpening)。
+	// 分裂规则：每条车道现在都有自己专属的贯通线（见ThroughLine注释），所以不管双向/单行，
+	// 都是先选出目标车道再直接把它自己的贯通线在t处切两段——双向路车道数>=2时固定选最外侧
+	// 车道（和原始设计"新访问点代表外侧车道"一致，不影响其余车道各自的贯通线）；单行路按
+	// useForwardSide要求的左右方向选最靠右/最靠左的车道，见map.md"单行道开口"一节。返回
+	// 新创建的访问点Node，两侧都没有对应类别车道时返回nullptr。
 	Node* AddRoadAccessNode(const std::string& roadName, float t, bool isVehicle, bool useForwardSide, float openingWidth);
 
 	// 车行/行人导航图只读访问，供Forever层可视化/未来Traffic域寻路使用。key/邻接id都是锚点
@@ -115,13 +120,24 @@ private:
 	// 析构时统一释放；导航图本身的Connection*从vehicleNavGraph/pedestrianNavGraph遍历去重释放。
 	std::vector<Node*> navAnchorNodes;
 
-	// 每条Road当前的"贯通线"记录(建图时创建，AddRoadAccessNode拆分单车道时会清空对应槽位)，
-	// 下标0=车行side0，1=车行side1，2=行人side0，3=行人side1。fromAnchor/toAnchor按该方向
-	// 实际通行方向排列(side0:沿Road Start->End；side1:沿End->Start)。
+	// 每条Road当前的"贯通线"记录(建图时创建，AddRoadAccessNode拆分某条车道时会清空对应
+	// entry的edge)，下标0=车行side0，1=车行side1，2=行人side0，3=行人side1，每个下标
+	// 对应一个vector，元素数量等于该side该类别的车道数——**每条物理车道都有自己独立的
+	// entry**（第九轮迁移，起因是PIE导航图可视化验证时发现多车道路段只画出一条线：早期
+	// 版本只保存"最内侧车道"或"单行道两端车道"，其余车道完全没有贯通线，车道数据和
+	// 导航图对不上）。fromAnchor/toAnchor按该方向实际通行方向排列(side0:沿Road
+	// Start->End；side1:沿End->Start)，车行取该车道在`RoadJunctionApproach::
+	// vehicleInbound`/`vehicleOutbound`(现在也是逐车道的vector)里的专属锚点，不再是
+	// 整个side共用一个锚点——否则哪怕每条车道各有一条Connection，几何上仍然会因为共用
+	// 端点而重叠成一条看不出区别的线。laneIndex是这条贯通线对应该side车道数组
+	// (vehicleLanes[side]/pedestrianLanes[side])里的下标，供AddRoadAccessNode按目标
+	// 车道直接找到并断开对应entry，不再需要"内侧线不动、外侧新增分支"那套workaround
+	// （每条车道现在都已经有自己专属的贯通线可以断），见roadnet.md"车道级导航锚点"一节。
 	struct ThroughLine {
 		Connection* edge = nullptr;
 		Node* fromAnchor = nullptr;
 		Node* toAnchor = nullptr;
+		int laneIndex = 0;
 	};
-	std::unordered_map<Road*, std::array<ThroughLine, 4>> throughLines;
+	std::unordered_map<Road*, std::array<std::vector<ThroughLine>, 4>> throughLines;
 };

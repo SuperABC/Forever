@@ -50,8 +50,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	int nodeStaticCount) {
 	Node::SetCount(nodeStaticCount);
 
-	string meshPath = "/Game/Asset/Meshes/default_1_1.default_1_1";
 	float meshUnit = 0.5f;
+	const float LANE_WIDTH = 0.5f;
 
 	vector<pair<Node, int>> horizontalNode1w;
 	vector<pair<Node, int>> horizontalNode1e;
@@ -90,14 +90,30 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		}
 		};
 
-	// 默认车道配置：车行道每个方向1条(宽0.5)，不设停车道，人行道每侧1条(宽0.5，紧贴车行道
-	// 外侧)——所有Road统一用同一套，不区分环路/放射路。数值是用户给定的确定值，详见
-	// roadnet_basic.md，不是拍脑袋的估计值，不要自行调大。
-	auto configureLanes = [](Road& road) {
-		road.AddVehicleLane(0, 0.5f);
-		road.AddVehicleLane(1, 0.5f);
-		road.AddPedestrianLane(0, 0.5f);
-		road.AddPedestrianLane(1, 0.5f);
+	// 车道配置改成按左右两侧各自的(车行,停车,人行)数量参数化——默认(1,0,1,1,0,1)是两侧对称的
+	// 老配置(车行道每个方向1条宽0.5，不设停车道，人行道每侧1条宽0.5紧贴车行道外侧)，绝大多数
+	// Road仍然用这一套；井字最中间的四条"中山X路"改用不对称/单行配置，用来验证车道居中、
+	// 单行道开口这些新逻辑，见下方addRoad调用处和roadnet_basic.md"车道资产命名"一节。
+	// left=side0，right=side1——PIE实测发现之前反了(原来写的是left=side1/right=side0)，
+	// 和perp0定义下"side0=右手边"这个既有约定对不上，导致不对称资产的车道数左右和贴图左右
+	// 对调。车道宽度统一用LANE_WIDTH，不按数量再细分，这次验证的重点是数量不对称/单行本身，
+	// 不是宽度精细调整。
+	auto configureLanesEx = [&](Road& road, int leftV, int leftP, int leftPd, int rightV, int rightP, int rightPd) {
+		for (int i = 0; i < leftV; i++) road.AddVehicleLane(0, LANE_WIDTH);
+		for (int i = 0; i < leftP; i++) road.AddParkingLane(0, LANE_WIDTH);
+		for (int i = 0; i < leftPd; i++) road.AddPedestrianLane(0, LANE_WIDTH);
+		for (int i = 0; i < rightV; i++) road.AddVehicleLane(1, LANE_WIDTH);
+		for (int i = 0; i < rightP; i++) road.AddParkingLane(1, LANE_WIDTH);
+		for (int i = 0; i < rightPd; i++) road.AddPedestrianLane(1, LANE_WIDTH);
+		};
+
+	// 道路3D资产命名规则(美术资产按此命名，见roadnet_basic.md)：default_左车行_左停车_左人行_
+	// 右车行_右停车_右人行——和configureLanesEx的六个参数一一对应，保证mesh资产的视觉横断面
+	// 和车道数据描述的横断面精确匹配。
+	auto meshPathFor = [](int leftV, int leftP, int leftPd, int rightV, int rightP, int rightPd) -> string {
+		string suffix = to_string(leftV) + "_" + to_string(leftP) + "_" + to_string(leftPd) + "_"
+			+ to_string(rightV) + "_" + to_string(rightP) + "_" + to_string(rightPd);
+		return "/Game/Asset/Meshes/default_" + suffix + ".default_" + suffix;
 		};
 
 	// 两端切线各贴一个控制点(1/3、2/3处，都不与真正的端点重合)：c1贴n1的高度、c2贴n2的高度，
@@ -114,8 +130,13 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	// 建一条路：一端隧道一端地面(Z<0和Z>=0各一个)时，拆成三段独立Connection——①地面端水平
 	// 引道(groundNode->flatNode，长TUNNEL_FLAT_APPROACH_LENGTH，两端同高)，②真正的S形下坡
 	// (flatNode->splitNode，addControls给出平滑切线)，③平路(splitNode->隧道，两端同高)；
-	// 两端同号(都隧道或都地面)时维持整段一条S形Connection不拆分。
-	auto addRoad = [&](const string& name, const Node& n1, const Node& n2) {
+	// 两端同号(都隧道或都地面)时维持整段一条S形Connection不拆分。车道配置(6个参数)默认是
+	// 两侧对称的(1,0,1,1,0,1)，只有井字最中间的四条"中山X路"显式传了不对称/单行的配置。
+	auto addRoad = [&](const string& name, const Node& n1, const Node& n2,
+		int leftV = 1, int leftP = 0, int leftPd = 1, int rightV = 1, int rightP = 0, int rightPd = 1) {
+		string thisMeshPath = meshPathFor(leftV, leftP, leftPd, rightV, rightP, rightPd);
+		auto configureThis = [&](Road& road) { configureLanesEx(road, leftV, leftP, leftPd, rightV, rightP, rightPd); };
+
 		bool n1Tunnel = n1.GetZ() < 0.f;
 		bool n2Tunnel = n2.GetZ() < 0.f;
 
@@ -134,30 +155,30 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			// 水平引道本身也可能已经压在mountain地形上(hasMountainNearby的探测半径比这段
 			// 引道长)，所以也要单独开一个hatch，两段hatch首尾相接，合起来正好覆盖老版本
 			// "整段(groundNode到splitNode)一次性开洞"的范围，不会因为拆分出引道而漏挖。
-			roads.emplace_back(name, groundNode, flatNode, meshPath, meshUnit);
+			roads.emplace_back(name, groundNode, flatNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), groundNode, flatNode);
-			configureLanes(roads.back());
+			configureThis(roads.back());
 			AddHatch(&roads.back(), 0.f, 1.f, TUNNEL_HATCH_WIDTH);
 
-			roads.emplace_back(name, flatNode, splitNode, meshPath, meshUnit);
+			roads.emplace_back(name, flatNode, splitNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), flatNode, splitNode);
-			configureLanes(roads.back());
+			configureThis(roads.back());
 			AddHatch(&roads.back(), 0.f, 1.f, TUNNEL_HATCH_WIDTH);
 
-			roads.emplace_back(name, splitNode, tunnelNode, meshPath, meshUnit);
-			configureLanes(roads.back());
+			roads.emplace_back(name, splitNode, tunnelNode, thisMeshPath, meshUnit);
+			configureThis(roads.back());
 			return;
 		}
 
-		roads.emplace_back(name, n1, n2, meshPath, meshUnit);
+		roads.emplace_back(name, n1, n2, thisMeshPath, meshUnit);
 		addControls(roads.back(), n1, n2);
-		configureLanes(roads.back());
+		configureThis(roads.back());
 		};
 
 	auto makeBoundaryRoad = [&](const string& name, const Node& n1, const Node& n2) -> Road {
-		Road road(name, n1, n2, meshPath, meshUnit);
+		Road road(name, n1, n2, meshPathFor(1, 0, 1, 1, 0, 1), meshUnit);
 		addControls(road, n1, n2);
-		configureLanes(road);
+		configureLanesEx(road, 1, 0, 1, 1, 0, 1);
 		return road;
 		};
 
@@ -227,10 +248,14 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	externs.emplace_back(verticalNode2s.back().first);
 	verticalNode2s.pop_back();
 
-	addRoad("中山西路", intersections[0], intersections[3]);
-	addRoad("中山东路", intersections[1], intersections[2]);
-	addRoad("中山北路", intersections[0], intersections[1]);
-	addRoad("中山南路", intersections[3], intersections[2]);
+	// 井字最中间的四条路故意配成不对称/单行，验证车道居中、路口收缩、单行道开口这些新逻辑
+	// (对称默认配置从来没暴露过这些问题，必须有真正不对称的数据才能在PIE里看出来)：
+	// 中山西路/中山东路是左右车道数不同的双向路(互为镜像)，中山北路/中山南路是单行道
+	// (整条路车行道全部在一侧，另一侧只有人行道，也互为镜像)。
+	addRoad("中山西路", intersections[0], intersections[3], 1, 0, 1, 2, 0, 1);
+	addRoad("中山东路", intersections[1], intersections[2], 2, 0, 1, 1, 0, 1);
+	addRoad("中山北路", intersections[0], intersections[1], 0, 0, 1, 2, 0, 1);
+	addRoad("中山南路", intersections[3], intersections[2], 2, 0, 1, 0, 0, 1);
 
 	if (horizontalNode1w.size() > 0) {
 		addRoad("城西北路", intersections[0], intersections[horizontalNode1w[0].second]);

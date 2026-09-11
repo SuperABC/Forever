@@ -49,10 +49,26 @@
   不再像第一轮迁移那样两个控制点都固定`0.f`——两端Z相同时（目前唯一场景）效果和以前完全
   一样，两端Z不同时（隧道过渡段）能在两个平缓端之间画出平滑升降的曲线，这是要求9"曲线道路"
   支撑机制的一部分，照抄老工程写法。
-- **统一车道配置**：`configureLanes`给每条`Road`加车行道每方向1条（宽0.5）+人行道每侧1条
-  （宽0.5，紧贴车行道外侧），不设停车道，不区分环路/放射路——这几个数值是用户给定的确定值
-  （对照实际用到的`default_1_1`网格资产比例：单侧车行+人行总宽=0.5+0.5=1.0），不是拍脑袋
-  的估计值，PIE视觉效果看起来车道窄也不要自作主张调大。
+- **车道配置从"全路网统一一套"改成按左右两侧车道数参数化（第八轮迁移）**：`configureLanesEx
+  (road, leftV, leftP, leftPd, rightV, rightP, rightPd)`按传入的六个数量分别调用
+  `AddVehicleLane`/`AddParkingLane`/`AddPedestrianLane`（每条车道宽度固定`LANE_WIDTH=0.5`，
+  这次验证的重点是数量不对称/单行本身，不是宽度精细调整）。`addRoad`新增六个可选参数，默认
+  `(1,0,1,1,0,1)`——两侧对称、车行道每方向1条、不设停车道、人行道每侧1条，和原来的
+  `configureLanes`行为完全一致，绝大多数Road（所有"城××路"放射臂）不传这六个参数，用的
+  还是这一套；只有井字最中间的四条"中山×路"显式传了不对称/单行的配置，专门用来验证车道
+  居中（`Source/Core/map/roadnet.md`"车道居中"一节）、单行道开口（`Source/Core/map/map.md`
+  "单行道开口"一节）这些新逻辑——对称默认配置从来没有暴露过这些问题，必须有真正不对称的
+  数据才能在PIE里看出来：
+  ```cpp
+  addRoad("中山西路", intersections[0], intersections[3], 1, 0, 1, 2, 0, 1); // 左1右2，双向不对称
+  addRoad("中山东路", intersections[1], intersections[2], 2, 0, 1, 1, 0, 1); // 左2右1，镜像
+  addRoad("中山北路", intersections[0], intersections[1], 0, 0, 1, 2, 0, 1); // 左0右2，单行道
+  addRoad("中山南路", intersections[3], intersections[2], 2, 0, 1, 0, 0, 1); // 左2右0，单行道(镜像)
+  ```
+  left/right对应`Road`的side0/side1（`perp0`定义下的右手边/左手边，和整个代码库"side0=
+  右手边"的既有约定一致）——**PIE实测发现这个映射最初写反了**（`configureLanesEx`一度把
+  left参数加到side1、right参数加到side0），导致不对称资产的贴图左右和实际车道数左右对调
+  （比如本该"左2右1"的路，实际生成成了"左1右2"），已改正。
 - **`Lot`的margin不再是手动指定的固定常量，改成从临街`Road`自己的车道宽度直接算（第五轮
   迁移，第六轮车道居中改造后进一步简化）**：`roadMargin(road)`直接返回
   `road.GetTotalWidth() * 0.5f`——不需要关心lot落在road哪一侧。第五轮迁移时曾经先判断lot
@@ -77,10 +93,16 @@
   unordered_map<int,Road>>>`，见`roadnet_mod.h`），老工程每个lot还会额外记一份
   `unordered_map<int,Intersection>`，这次不需要（导航图直接挂在`Road`/`Intersection`上，不
   通过lot中转，详见`Source/Core/map/roadnet.md`），构造时相应去掉了这部分。
-- **`mesh`/`unit`指向`default_1_1.uasset`**（`meshPath="/Game/Asset/Meshes/
-  default_1_1.default_1_1"`，`meshUnit=0.5f`）——老工程本来就是这么配的，这次沿用同一个值；
-  这个mesh资产本身画的就是"双向各一车道+两侧人行道"的组合，和上面`configureLanes`定的车道
-  宽度是同一份视觉效果的两种表现（数值给结构计算用，mesh资产给视觉用），不用另外配材质。
+- **道路3D资产命名规则改成按车道数编码，`meshPathFor`按这个规则拼路径（第八轮迁移）**：
+  `default_左车行_左停车_左人行_右车行_右停车_右人行`（六个数字，和`configureLanesEx`的
+  六个参数一一对应），比如默认对称配置对应`default_1_0_1_1_0_1`，"中山北路"（左0右2单行）
+  对应`default_0_0_1_2_0_1`。老的单一`default_1_1.uasset`资产已经被美术按这套新命名规则
+  重新拆分成多份不同车道组合的资产（`Content/Asset/Meshes/`下现在能看到
+  `default_1_0_1_1_0_1`/`default_1_0_1_2_0_1`/`default_0_0_1_2_0_1`/`default_2_0_1_0_0_1`/
+  `default_2_0_1_1_0_1`几个变体），每个资产的视觉横断面和文件名描述的车道数精确对应，不用
+  再另外配材质区分——mesh资产本身画的就是完整的车道+人行道组合。`meshUnit`固定`0.5f`不随
+  配置变化（这次假设所有变体资产都按同一个物理长度制作，是艺术资产层面的约定，不是代码
+  推导出来的）。
 
 ## 依赖关系
 

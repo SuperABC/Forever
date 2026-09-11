@@ -361,7 +361,19 @@ void UForeverRoadnetFrameworkComponent::BuildOpeningMeshes(Road* road,
 	float totalWidth = road->GetTotalWidth();
 	if (totalWidth <= 0.f) totalWidth = 1.f;
 
+	// 同一个物理开口位置常常会有车行、人行各一条RoadOpening记录(Map::AddRoadAccessNode按
+	// isVehicle分别调用、各自往road->openings里追加一条)，但视觉上只需要一块贴地cube盖住
+	// 这段路面——两条记录的t/width如果一样，就是同一个物理开口，不去重的话会在完全相同的
+	// 位置画两个完全重合的扁平quad，PIE里z-fighting闪烁。
+	vector<float> drawnTs;
 	for (const RoadOpening& op : openings) {
+		bool alreadyDrawn = false;
+		for (float t : drawnTs) {
+			if (FMath::Abs(t - op.t) < 1e-4f) { alreadyDrawn = true; break; }
+		}
+		if (alreadyDrawn) continue;
+		drawnTs.push_back(op.t);
+
 		Node center = road->GetPoint(op.t);
 		float dx, dy, dz;
 		road->GetTangent(op.t, dx, dy, dz);
@@ -457,16 +469,24 @@ void UForeverRoadnetFrameworkComponent::SpawnAccessNodeDemo() {
 	// 演示一次AddRoadAccessNode，让"车道分裂/开口cube"这套目前还没有真正调用方的逻辑也有
 	// 验证途径（效果目前只能通过Map::GetVehicleNavGraph()/GetPedestrianNavGraph()查询或
 	// Output Log确认，导航图可视化已按要求移除，见ForeverRoadnetFrameworkComponent.md）。
+	// 同一个开口位置车行、人行各调一次——真实场景里一个路面开口（比如建筑车库出入口）通常
+	// 也伴随一段人行道断口（给行人过街进入建筑），不应该只有车行导航图被打断。
 	if (!map) return;
 
-	for (const auto& [lot, boundary] : map->GetLots()) {
-		for (const auto& [dir, road] : boundary) {
+	for (Lot* lot : map->GetLots()) {
+		for (const auto& [dir, road] : lot->GetBoundaryRoads()) {
 			if (!road) continue;
 
-			Node* accessNode = map->AddRoadAccessNode(road->GetName(), 0.5f, true, true, 0.6f);
-			if (accessNode) {
-				UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时验证] demo access node on road '%s' at map(%.2f,%.2f)。"),
-					UTF8_TO_TCHAR(road->GetName().c_str()), accessNode->GetX(), accessNode->GetY());
+			Node* vehicleAccessNode = map->AddRoadAccessNode(road->GetName(), 0.5f, true, true, 0.6f);
+			if (vehicleAccessNode) {
+				UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时验证] demo vehicle access node on road '%s' at map(%.2f,%.2f)。"),
+					UTF8_TO_TCHAR(road->GetName().c_str()), vehicleAccessNode->GetX(), vehicleAccessNode->GetY());
+			}
+
+			Node* pedestrianAccessNode = map->AddRoadAccessNode(road->GetName(), 0.5f, false, true, 0.6f);
+			if (pedestrianAccessNode) {
+				UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时验证] demo pedestrian access node on road '%s' at map(%.2f,%.2f)。"),
+					UTF8_TO_TCHAR(road->GetName().c_str()), pedestrianAccessNode->GetX(), pedestrianAccessNode->GetY());
 			}
 			return;
 		}

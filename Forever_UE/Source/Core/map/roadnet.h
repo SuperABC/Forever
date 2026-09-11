@@ -19,12 +19,17 @@ struct RoadJunctionApproach {
 	// 该路从路口离开的方向角(atan2)，用于按夹角排序
 	float angle = 0.f;
 
-	// 车行导航锚点：该端存在对应方向车道才非空。isStart时side0(正向)是outbound、side1(反向)是
-	// inbound；GetEnd()端相反。
-	Node* vehicleInbound = nullptr;
-	Node* vehicleOutbound = nullptr;
+	// 车行导航锚点：每条物理车道各自一个锚点(不是只有最内侧一条)，下标对应
+	// road->GetVehicleLanes(side)的车道下标，vector为空表示该端这个方向没有车道。isStart时
+	// side0(正向)是outbound、side1(反向)是inbound；GetEnd()端相反——车道级锚点让每条车道在
+	// 导航图/可视化上都有自己独立的一条线，不会因为共用一个锚点而和同侧别的车道重叠成一条线
+	// (第九轮迁移，起因见roadnet.md"车道级导航锚点"一节)。
+	std::vector<Node*> vehicleInbound;
+	std::vector<Node*> vehicleOutbound;
 
-	// 行人导航锚点：对应road的pedestrianLanes[0]/[1]在这一端是否存在，双向都能走，不分inbound/outbound
+	// 行人导航锚点：对应road的pedestrianLanes[0]/[1]在这一端是否存在，双向都能走，不分
+	// inbound/outbound——这次没有像车行那样扩展成逐车道(现有场景人行道每侧固定1条，暂时
+	// 没有需要验证的多车道人行道场景，见roadnet.md"车道级导航锚点"一节的范围说明)。
 	Node* pedestrianSide[2] = { nullptr, nullptr };
 
 	// 世界坐标(地图元素单位)，路口mesh多边形用：curbLeft=面向路口外侧时的左手边路缘角点，
@@ -97,7 +102,7 @@ public:
 	const std::vector<Node*>& GetExterns() const;
 	const std::vector<Intersection*>& GetIntersections() const;
 	const std::vector<Road*>& GetRoads() const;
-	const std::vector<std::pair<Lot*, std::unordered_map<int, Road*>>>& GetLots() const;
+	const std::vector<Lot*>& GetLots() const;
 
 	// mod通过RoadnetMod::AddHatch产出的地形挖洞标记(隧道口用)，纯值类型，直接拷贝自
 	// mod->hatches，不需要像Node/Road那样深拷贝。
@@ -116,7 +121,7 @@ private:
 	std::vector<Node*> externs;
 	std::vector<Intersection*> intersections;
 	std::vector<Road*> roads;
-	std::vector<std::pair<Lot*, std::unordered_map<int, Road*>>> lots;
+	std::vector<Lot*> lots;
 	std::vector<std::pair<Quad, float>> hatches;
 
 	std::unordered_map<std::string, std::vector<Lot*>> addressesByRoad;

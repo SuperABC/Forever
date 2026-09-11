@@ -60,6 +60,31 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
   一次**——车道分裂/开口这套逻辑目前没有真正的调用方（Building/Zone还没迁移），但接口和实现
   都是完整、可用的，不是占位。`ThroughLine`（`Map`私有实现细节，见`roadnet.md`最后一条）记录
   每条`Road`每个方向/类别当前的贯通线，供`AddRoadAccessNode`拆分。
+- **单行道开口 + 每条车道都有专属贯通线（第八/九两轮迁移）**：`ThroughLine`最终形态是
+  "每个(类别,side)对应一个vector，元素数量=该side车道数，每条车道各有一条entry"——这是
+  两轮修复叠加的结果：
+  - **第八轮**起因是道路3D资产改成按左右车道数命名后（见`Source/Basic/map/
+    roadnet_basic.md`"车道资产命名"一节），井字最中间四条路出现了真正的单行道（一侧车道数
+    为0）。当时的修复把"每个(类别,side)固定一条"改成"单行道side额外保存最靠左/最靠右两条"，
+    双向路仍然只保存最内侧一条。
+  - **第九轮**起因是PIE用导航图可视化（`bShowNavigationDebug`）实测发现：车道数>=2的双向
+    侧（比如"中山西路"2车道那一侧）仍然只画出一条线——因为双向路多车道时，新开口走的是
+    "内侧贯通线不动、外侧另外新增一条分支线"这套workaround，从未真正给外侧车道建立持久的
+    贯通线，所以在没有任何开口发生之前，外侧车道天生就没有线可看。既然车道级导航图的目标
+    就是每条车道都能独立寻址/可视化，这次干脆去掉这套workaround：`InitRoadnet()`建图阶段
+    直接给**每条物理车道**都建一条贯通线（不再区分单行/双向，也不再只挑最内侧或两端），
+    对应的锚点也从"每个方向一个、所有车道共用"改成"每条车道各自独立"（`RoadJunctionApproach::
+    vehicleInbound`/`vehicleOutbound`从`Node*`变成`std::vector<Node*>`，见`roadnet.md`
+    "车道级导航锚点"一节——这一步是可视化上真正看到多条线的关键，只加贯通线entry而不给
+    独立锚点，几何上仍然会因为共用端点而重叠成一条线）。
+  - 有了这个基础，`AddRoadAccessNode`的分裂规则统一成："先选出目标车道，直接把它自己的
+    贯通线切两段"，不再需要按车道数/单行双向分支：双向路车道数>=2时固定选最外侧车道
+    （沿用原始设计"新访问点代表外侧车道"的意图）；单行路按调用方要"最靠右
+    (`useForwardSide=true`)"还是"最靠左(`false`)"，用居中后的真实横向偏移（和
+    `RoadJunction::Build`同一套换算，见`roadnet.md`"车道居中"一节）挑出对应车道。
+    `useForwardSide`的语义：请求的side本身有车道时效果不变（`true`=侧0/右手边，`false`=
+    侧1/左手边）；请求的side是单行道的空侧时，重新解释成"要右边还是左边的车道"，从对侧车道
+    里选。
 - **`GetVehicleNavGraph()`/`GetPedestrianNavGraph()`/`GetNavAnchorNodes()`是只读访问**，
   给`Source/Forever/Framework/ForeverRoadnetFrameworkComponent.cpp`的导航图可视化用（按id画
   锚点方块+边长方体），未来Traffic域（阶段4-3）寻路时也会用同一套接口，不需要改`Map`。

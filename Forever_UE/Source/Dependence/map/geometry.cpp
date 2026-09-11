@@ -957,6 +957,19 @@ const vector<pair<string, int>>& Lot::GetAddresses() const {
 	return addresses;
 }
 
+void Lot::SetBoundaryRoad(int direction, Road* road) {
+	boundaryRoads[direction] = road;
+}
+
+Road* Lot::GetBoundaryRoad(int direction) const {
+	auto it = boundaryRoads.find(direction);
+	return it != boundaryRoads.end() ? it->second : nullptr;
+}
+
+const unordered_map<int, Road*>& Lot::GetBoundaryRoads() const {
+	return boundaryRoads;
+}
+
 void Lot::SetPosition(Node n1, Node n2, Node n3, Node n4, const vector<float>& margin) {
 	if (margin.size() != 4) {
 		THROW_EXCEPTION(InvalidArgumentException, "Block must have 4 margins.\n");

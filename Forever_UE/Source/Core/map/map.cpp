@@ -205,14 +205,20 @@ void Map::InitRoadnet() {
 		externById[e->GetId()] = e;
 	}
 
-	auto resolveAnchor = [&](Road* road, bool atStart, bool isVehicle, int side) -> Node* {
+	// laneIndex只在isVehicle时有意义(每条车道各自的锚点)；行人固定用该侧唯一的锚点，
+	// 忽略laneIndex(见RoadJunctionApproach::pedestrianSide注释，这次没有扩展成逐车道)。
+	// extern端点(地图边缘残端)没有RoadJunction，所有车道退化成同一个Node，因为地图边缘
+	// 不需要精确车道级偏移几何。
+	auto resolveAnchor = [&](Road* road, bool atStart, bool isVehicle, int side, int laneIndex) -> Node* {
 		auto& approachMap = atStart ? startApproach : endApproach;
 		auto it = approachMap.find(road);
 		if (it != approachMap.end()) {
 			const RoadJunctionApproach* ap = it->second;
 			if (isVehicle) {
-				if (side == 0) return atStart ? ap->vehicleOutbound : ap->vehicleInbound;
-				else return atStart ? ap->vehicleInbound : ap->vehicleOutbound;
+				const vector<Node*>& anchors = (side == 0)
+					? (atStart ? ap->vehicleOutbound : ap->vehicleInbound)
+					: (atStart ? ap->vehicleInbound : ap->vehicleOutbound);
+				return (laneIndex >= 0 && laneIndex < static_cast<int>(anchors.size())) ? anchors[laneIndex] : nullptr;
 			}
 			return ap->pedestrianSide[side];
 		}
@@ -221,7 +227,13 @@ void Map::InitRoadnet() {
 		return (externIt != externById.end()) ? externIt->second : nullptr;
 		};
 
-	// 每条Road的"最内侧车道贯通线"：车行边单向插入(按该side实际通行方向)，行人边双向插入。
+	// 每条Road的贯通线：车行边单向插入(按该side实际通行方向)，行人边双向插入。每条物理车道
+	// (不只是最内侧/最靠左最靠右)都各自有一条贯通线、各自的锚点(车行；行人仍然每侧共用一个
+	// 锚点，见resolveAnchor注释)——这次(第九轮迁移)从"只保存最内侧/单行道两端车道"改成每条
+	// 车道都有自己的贯通线和锚点，起因是PIE导航图可视化验证时发现多车道路段只画出一条线、
+	// 和实际车道数对不上；如果只加贯通线条目但仍然共用同一个锚点，可视化上多条线会重叠成
+	// 一条看不出区别，所以锚点本身也要逐车道化(RoadJunction::Build，见roadnet.md"车道级
+	// 导航锚点"一节)。
 	for (Road* road : roadnet->GetRoads()) {
 		for (int cat = 0; cat < 2; cat++) { // 0=vehicle, 1=pedestrian
 			bool isVehicle = (cat == 0);
@@ -231,19 +243,21 @@ void Map::InitRoadnet() {
 
 				// side0沿Road Start->End方向通行(from=Start)，side1沿End->Start(from=End)。
 				bool fromIsStart = (side == 0);
-				Node* fromAnchor = resolveAnchor(road, fromIsStart, isVehicle, side);
-				Node* toAnchor = resolveAnchor(road, !fromIsStart, isVehicle, side);
-				if (!fromAnchor || !toAnchor) continue;
-
-				Connection* edge = new Connection(*fromAnchor, *toAnchor);
-				auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;
-				graph[fromAnchor->GetId()].emplace_back(toAnchor->GetId(), edge);
-				if (!isVehicle) {
-					graph[toAnchor->GetId()].emplace_back(fromAnchor->GetId(), edge);
-				}
-
 				int idx = cat * 2 + side;
-				throughLines[road][idx] = { edge, fromAnchor, toAnchor };
+
+				for (int laneIndex = 0; laneIndex < static_cast<int>(lanes.size()); laneIndex++) {
+					Node* fromAnchor = resolveAnchor(road, fromIsStart, isVehicle, side, laneIndex);
+					Node* toAnchor = resolveAnchor(road, !fromIsStart, isVehicle, side, laneIndex);
+					if (!fromAnchor || !toAnchor) continue;
+
+					Connection* edge = new Connection(*fromAnchor, *toAnchor);
+					auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;
+					graph[fromAnchor->GetId()].emplace_back(toAnchor->GetId(), edge);
+					if (!isVehicle) {
+						graph[toAnchor->GetId()].emplace_back(fromAnchor->GetId(), edge);
+					}
+					throughLines[road][idx].push_back({ edge, fromAnchor, toAnchor, laneIndex });
+				}
 			}
 		}
 	}
@@ -276,13 +290,65 @@ Node* Map::AddRoadAccessNode(const string& roadName, float t, bool isVehicle, bo
 	}
 	if (!road) return nullptr;
 
-	int side = useForwardSide ? 0 : 1;
+	int requestedSide = useForwardSide ? 0 : 1;
+	const vector<float>& requestedLanes = isVehicle ? road->GetVehicleLanes(requestedSide) : road->GetPedestrianLanes(requestedSide);
+	const vector<float>& oppositeLanes = isVehicle ? road->GetVehicleLanes(1 - requestedSide) : road->GetPedestrianLanes(1 - requestedSide);
+
+	// 单行道特殊情况：请求的side本身没有对应类别车道，但对侧有——说明这是单行道，
+	// useForwardSide不再表示"正向/反向"，改按"要最靠右(true)还是最靠左(false)的车道"重新
+	// 解释，实际车道从对侧取，见map.h的AddRoadAccessNode注释。两侧都没有车道就是真的没有
+	// 对应类别的通行空间，返回nullptr。
+	int side;
+	if (!requestedLanes.empty()) {
+		side = requestedSide;
+	}
+	else if (!oppositeLanes.empty()) {
+		side = 1 - requestedSide;
+	}
+	else {
+		return nullptr;
+	}
 	const vector<float>& lanes = isVehicle ? road->GetVehicleLanes(side) : road->GetPedestrianLanes(side);
-	if (lanes.empty()) return nullptr;
+	const vector<float>& otherSideLanes = isVehicle ? road->GetVehicleLanes(1 - side) : road->GetPedestrianLanes(1 - side);
+	bool oneWay = otherSideLanes.empty();
+
+	float sideSign = (side == 0) ? 1.f : -1.f;
+	float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
+
+	// 车道下标选择：每条车道现在都有自己专属的贯通线(见InitRoadnet的建图注释)，不再需要
+	// "内侧线不动、外侧新增分支"这套workaround——直接选出目标车道，找到它自己的贯通线断开
+	// 就行。双向路(对侧也有同类车道)没有方向可选，固定用最外侧车道(和原始设计"新访问点代表
+	// 外侧车道"一致，唯一车道时"最外侧"就是它自己)；单行路(对侧完全没有同类车道)没有
+	// "内外侧"参照，按useForwardSide要求的左右方向，在这一侧的车道里找有符号偏移(居中后，
+	// 见roadnet.md"车道居中"一节)最靠近那个方向极值的车道——useForwardSide=true要最靠右
+	// (偏移最大)，false要最靠左(偏移最小)。
+	int laneIndex = 0;
+	if (lanes.size() >= 2) {
+		if (oneWay) {
+			float bestOffset = 0.f;
+			bool first = true;
+			for (int i = 0; i < static_cast<int>(lanes.size()); i++) {
+				float candidate = LaneCenterOffset(lanes, i) * sideSign - shift;
+				bool better = first || (useForwardSide ? (candidate > bestOffset) : (candidate < bestOffset));
+				if (better) {
+					bestOffset = candidate;
+					laneIndex = i;
+					first = false;
+				}
+			}
+		}
+		else {
+			laneIndex = static_cast<int>(lanes.size()) - 1;
+		}
+	}
 
 	int idx = (isVehicle ? 0 : 2) + side;
-	ThroughLine& line = throughLines[road][idx];
-	if (!line.fromAnchor || !line.toAnchor) return nullptr;
+	vector<ThroughLine>& lines = throughLines[road][idx];
+	ThroughLine* line = nullptr;
+	for (ThroughLine& l : lines) {
+		if (l.laneIndex == laneIndex) { line = &l; break; }
+	}
+	if (!line || !line->fromAnchor || !line->toAnchor) return nullptr;
 
 	Node basePoint = road->GetPoint(t);
 	float tdx, tdy, tdz;
@@ -290,12 +356,10 @@ Node* Map::AddRoadAccessNode(const string& roadName, float t, bool isVehicle, bo
 	float tlen = sqrtf(tdx * tdx + tdy * tdy);
 	if (tlen < 1e-6f) tlen = 1.f;
 	float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
-	float sideSign = (side == 0) ? 1.f : -1.f;
-	float offsetDist = LaneCenterOffset(lanes, 0);
 	// 车道横断面以Connection连线为几何中心居中(见Source/Core/map/roadnet.md"车道居中"一节)，
 	// 和RoadJunction::Build的makeAnchor是同一个换算：offsetDist*sideSign是"以老的side0/side1
 	// 分界线为原点"算出来的有符号偏移，减去shift才是"以居中后的连线为原点"的偏移。
-	float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
+	float offsetDist = LaneCenterOffset(lanes, laneIndex);
 	float signedOffset = offsetDist * sideSign - shift;
 	float nx = basePoint.GetX() + perp0X * signedOffset;
 	float ny = basePoint.GetY() + perp0Y * signedOffset;
@@ -305,27 +369,23 @@ Node* Map::AddRoadAccessNode(const string& roadName, float t, bool isVehicle, bo
 
 	auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;
 
-	if (lanes.size() == 1) {
-		// 唯一车道(也就是被保存的"最内侧车道")：把现有贯通线在t处切成两段。
-		if (line.edge) {
-			RemoveGraphEdgeOneWay(graph, line.fromAnchor->GetId(), line.toAnchor->GetId());
-			if (!isVehicle) {
-				RemoveGraphEdgeOneWay(graph, line.toAnchor->GetId(), line.fromAnchor->GetId());
-			}
-			delete line.edge;
-			line.edge = nullptr;
+	// 目标车道自己的贯通线直接断开——每条车道都有专属贯通线之后，这里不再需要按车道数分支。
+	if (line->edge) {
+		RemoveGraphEdgeOneWay(graph, line->fromAnchor->GetId(), line->toAnchor->GetId());
+		if (!isVehicle) {
+			RemoveGraphEdgeOneWay(graph, line->toAnchor->GetId(), line->fromAnchor->GetId());
 		}
+		delete line->edge;
+		line->edge = nullptr;
 	}
-	// 车道数>=2时贯通线(内侧车道)保持不变，另外新增一条外侧"起点-新Node-终点"两段线，
-	// 两端仍连回该Road原本的起止锚点(和内侧线共用同一对fromAnchor/toAnchor)。
 
-	Connection* seg1 = new Connection(*line.fromAnchor, *newNode);
-	Connection* seg2 = new Connection(*newNode, *line.toAnchor);
-	graph[line.fromAnchor->GetId()].emplace_back(newNode->GetId(), seg1);
-	graph[newNode->GetId()].emplace_back(line.toAnchor->GetId(), seg2);
+	Connection* seg1 = new Connection(*line->fromAnchor, *newNode);
+	Connection* seg2 = new Connection(*newNode, *line->toAnchor);
+	graph[line->fromAnchor->GetId()].emplace_back(newNode->GetId(), seg1);
+	graph[newNode->GetId()].emplace_back(line->toAnchor->GetId(), seg2);
 	if (!isVehicle) {
-		graph[newNode->GetId()].emplace_back(line.fromAnchor->GetId(), seg1);
-		graph[line.toAnchor->GetId()].emplace_back(newNode->GetId(), seg2);
+		graph[newNode->GetId()].emplace_back(line->fromAnchor->GetId(), seg1);
+		graph[line->toAnchor->GetId()].emplace_back(newNode->GetId(), seg2);
 	}
 
 	RoadOpening opening;
@@ -353,8 +413,8 @@ const vector<Node*>& Map::GetExterns() const {
 	return roadnet ? roadnet->GetExterns() : empty;
 }
 
-const vector<pair<Lot*, unordered_map<int, Road*>>>& Map::GetLots() const {
-	static const vector<pair<Lot*, unordered_map<int, Road*>>> empty;
+const vector<Lot*>& Map::GetLots() const {
+	static const vector<Lot*> empty;
 	return roadnet ? roadnet->GetLots() : empty;
 }
 

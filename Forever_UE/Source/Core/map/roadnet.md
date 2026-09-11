@@ -16,7 +16,7 @@
 
 - **一次只应该有一个路网布局方案生效**——`RoadnetFactory::SetConfig`/`GetRoadnet()`单选，
   详见`roadnet_factory.md`。`Roadnet`本身不关心这个，只是按调用方传入的id构造。
-- **`lots`深拷贝时连同边界`Road`映射一起拷贝，但每个边界`Road`都是独立的新对象**——不是从
+- **`lots`深拷贝时连同边界`Road`一起拷贝，但每个边界`Road`都是独立的新对象**——不是从
   `Roadnet::roads`（主数组）里找同一个对象复用指针。原因：老工程`JingRoadnet`构造lot边界时，
   有些确实复用了主`roads`数组里已经`push_back`过的同一个`Road`值（比如角落大lot直接引用
   `roads[0]`），但也有一些是**临时构造的、代表某条命名道路一小段的独立`Road`对象**（比如
@@ -26,13 +26,25 @@
   深拷贝就不试图去做这个"指针复用"，每个lot的边界`Road`都独立`new`一份。这对下游没有影响——
   边界`Road`唯一的用途是地址编号（`GetName()`）和未来Zone/Building消费（大概率也只需要
   `GetName()`/端点坐标定朝向），车行/行人导航图和mesh生成永远只读`Roadnet::roads`（主数组），
-  不读lot的边界映射。
-- **`AllocateAddress()`直接用lot自带的边界`Road`映射**，不是像最初考虑过的"按几何邻近反推"
-  方案（这个方案讨论过又被推翻，见对话记录：用户明确要求lot要保留边界road信息，因为Roadnet
-  阶段划出的地就是给以后Zone/Building用的）。遍历每个lot的`unordered_map<int,Road*>`
-  （0-3=`FACE_DIRECTION`），每条非空的边界路都给这个lot调一次`lot->AddAddress(road->GetName(),
-  index)`，`index`是该路名下当前已分配lot的序号（从0递增，一个lot可能临街多条路，各自有一个
-  编号）。
+  不读lot的边界`Road`。
+- **边界`Road`指针直接存在`Lot`自己身上，不再是`Roadnet::lots`旁边单独挂一份
+  `unordered_map`（第八轮迁移）**——`Dependence/map/geometry.h`的`Lot`新增
+  `SetBoundaryRoad(dir, Road*)`/`GetBoundaryRoad(dir)`/`GetBoundaryRoads()`（`Lot`不持有
+  这些指针的生命周期，仍然由`Roadnet`统一`new`/析构时统一`delete`，只是"查询入口"从"先查
+  `Roadnet::GetLots()`那个pair的第二个元素"变成"直接问`lot`自己"）。原来`Roadnet::lots`/
+  `Map::GetLots()`是`vector<pair<Lot*, unordered_map<int,Road*>>>`，现在简化成
+  `vector<Lot*>`——这是"为了后续concept"的改动：Zone/Building迁移后拿到一个`Lot*`就能
+  直接查它周围临街的路，不需要额外维护/传递一份"lot到边界路映射"的旁路数据结构。
+  `RoadnetMod`（mod层，`RoadnetMod::lots`）不受影响，仍然是`vector<pair<Lot,
+  unordered_map<int,Road>>>`——mod实例本身在`DistributeRoadnet`跑完后就销毁，`Lot`的
+  `boundaryRoads`指针如果在mod层就指向mod自己管理的`Road`，会在mod销毁后失效；边界映射
+  只在`Roadnet::DistributeRoadnet`深拷贝时才真正"搬进"新`Lot*`自己身上，深拷贝之前
+  （mod层）仍然是旧的pair写法，两层各自独立管理生命周期，不需要保持结构一致。
+- **`AllocateAddress()`直接用`lot->GetBoundaryRoad(dir)`（0-3=`FACE_DIRECTION`）**，不是
+  像最初考虑过的"按几何邻近反推"方案（这个方案讨论过又被推翻，见对话记录：用户明确要求lot
+  要保留边界road信息，因为Roadnet阶段划出的地就是给以后Zone/Building用的）。每条非空的
+  边界路都给这个lot调一次`lot->AddAddress(road->GetName(), index)`，`index`是该路名下当前
+  已分配lot的序号（从0递增，一个lot可能临街多条路，各自有一个编号）。
 - **路缘角点/导航锚点沿道路方向外移`setback`距离，不是直接贴在Intersection原坐标上**——
   `curbLeft`/`curbRight`和车行/行人锚点的基准点都是"Intersection坐标+沿outward方向外移
   setback"之后的点，不是Intersection原坐标本身。这是PIE验证阶段的修正——最初版本没有这个
@@ -104,12 +116,27 @@
 - **`RoadJunction`的锚点模型是"全部车道各自独立锚点+显式连接"，不是共享一个图节点**——因为
   不同`Road`的车道宽度不同，车道中心线在路口处相对`Road`标称中心线（也就是`Intersection`的
   精确坐标）是有横向偏移的，几条路在同一个路口不可能都精确交汇于`Intersection`那一个点。
-  `RoadJunction::Build`为每条连到该路口的`Road`、在这一端存在的每个方向（车行）/每个物理侧
-  （行人）各生成一个锚点`Node`，贴着按车道总宽度算出的路缘偏移位置，而不是复用`Intersection`
-  本身的坐标当车道图节点。
+  `RoadJunction::Build`为每条连到该路口的`Road`、在这一端存在的每个物理侧（行人）各生成
+  一个锚点`Node`，贴着按车道总宽度算出的路缘偏移位置，而不是复用`Intersection`本身的坐标
+  当车道图节点。
+- **车行锚点是逐车道的，不是每个方向一个（第九轮迁移，`RoadJunctionApproach::
+  vehicleInbound`/`vehicleOutbound`从`Node*`改成`std::vector<Node*>`）**——起因是PIE验证
+  导航图可视化（`bShowNavigationDebug`）时发现：井字最中间几条不对称路里车道数>=2的那一侧，
+  可视化只画出一条线，和实际车道数对不上。根因是原来每个方向（不管这一侧有几条车道）只在
+  路口生成**一个**代表性锚点（`LaneCenterOffset(lanes,0)`，固定用最内侧车道的位置），这一侧
+  所有车道的贯通线因此被迫共用同一对端点——哪怕后来（第九轮迁移前半）已经改成给每条车道建
+  各自的`Connection`，这些`Connection`的起止点仍然是同一个共享锚点，几何上完全重合，肉眼
+  看起来还是只有一条线。真正的修复要往前一步：`RoadJunction::Build`给`GetVehicleLanes(side)`
+  里的**每条车道**都各自调一次`makeAnchor`，得到一个位置精确对应该车道中心的独立锚点，
+  `vehicleInbound[i]`/`vehicleOutbound[i]`的下标直接对应车道数组下标。行人锚点
+  （`pedestrianSide[2]`）这次没有同步扩展成逐车道——现有场景人行道每侧固定1条，暂时没有
+  真正需要验证多车道人行道的数据，扩展方式和车行完全类似（如果以后需要，参照这次的改法）。
 - **车行锚点全联通，行人锚点是人行横道+转角连通**（`RoadJunction::BuildConnectors`）：
-  - 车行：每个inbound锚点连到每个outbound锚点（含同一条路的inbound连自己的outbound，允许
-    U形连接），单向插入图（体现"这是一条能走的路径"，不代表能反着走）。
+  - 车行：每条inbound车道各自的锚点连到每条outbound车道各自的锚点（含同一条路的inbound连
+    自己的outbound，允许U形连接），单向插入图（体现"这是一条能走的路径"，不代表能反着走）。
+    车道级锚点化之后，这是车道对车道的叉乘，不再是approach对approach，连接数量比早期版本
+    多——路口车道数较多时图规模会明显增长，这次先按"数据正确优先"处理，性能问题留到Traffic
+    域（阶段4-3）真的跑寻路时再评估是否需要精简，和原计划"全联通规模问题" 的态度一致。
   - 行人**不是全联通**：①人行横道——同一条路自己两侧都有人行道锚点时，直接连一条
     `pedestrianSide[0]↔pedestrianSide[1]`，代表穿过这条路本身的人行横道；单侧人行道的路不
     生成人行横道。②转角人行道——按夹角排序后，每一对夹角相邻（环状，含首尾）的路，各自算出

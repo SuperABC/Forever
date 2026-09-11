@@ -448,6 +448,13 @@ public:
 	void AddAddress(const std::string& road, int index);
 	const std::vector<std::pair<std::string, int>>& GetAddresses() const;
 
+	// 四周边界Road：下标按FACE_DIRECTION(0-3)，不是每个方向都一定有entry(挨着相邻lot的
+	// 内部分界线方向没有对应的路)。Lot不持有这些指针的生命周期，由构造方(RoadnetMod/Roadnet)
+	// 各自管理，和AddAddress一样是构造完lot几何之后再由调用方填入的数据。
+	void SetBoundaryRoad(int direction, Road* road);
+	Road* GetBoundaryRoad(int direction) const;
+	const std::unordered_map<int, Road*>& GetBoundaryRoads() const;
+
 protected:
 	// 旋转角度
 	float rotation;
@@ -457,5 +464,6 @@ protected:
 
 private:
 	std::vector<std::pair<std::string, int>> addresses;
+	std::unordered_map<int, Road*> boundaryRoads;
 };
 

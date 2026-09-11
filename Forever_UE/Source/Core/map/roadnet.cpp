@@ -177,14 +177,23 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 			return n;
 			};
 
-		// 车行锚点：side0(正向)在isStart端是outbound(车辆从路口驶出)、isEnd端是inbound(驶入路口)；side1相反。
-		if (!road->GetVehicleLanes(0).empty()) {
-			Node* anchor = makeAnchor(1.f, LaneCenterOffset(road->GetVehicleLanes(0), 0), "vehicle");
-			if (isStart) approach.vehicleOutbound = anchor; else approach.vehicleInbound = anchor;
+		// 车行锚点：side0(正向)在isStart端是outbound(车辆从路口驶出)、isEnd端是inbound(驶入路口)；
+		// side1相反。每条车道(不止最内侧)各自生成一个锚点，下标对应车道数组下标。
+		{
+			const vector<float>& lanes0 = road->GetVehicleLanes(0);
+			vector<Node*> anchors0;
+			for (int i = 0; i < static_cast<int>(lanes0.size()); i++) {
+				anchors0.push_back(makeAnchor(1.f, LaneCenterOffset(lanes0, i), "vehicle"));
+			}
+			if (isStart) approach.vehicleOutbound = std::move(anchors0); else approach.vehicleInbound = std::move(anchors0);
 		}
-		if (!road->GetVehicleLanes(1).empty()) {
-			Node* anchor = makeAnchor(-1.f, LaneCenterOffset(road->GetVehicleLanes(1), 0), "vehicle");
-			if (isStart) approach.vehicleInbound = anchor; else approach.vehicleOutbound = anchor;
+		{
+			const vector<float>& lanes1 = road->GetVehicleLanes(1);
+			vector<Node*> anchors1;
+			for (int i = 0; i < static_cast<int>(lanes1.size()); i++) {
+				anchors1.push_back(makeAnchor(-1.f, LaneCenterOffset(lanes1, i), "vehicle"));
+			}
+			if (isStart) approach.vehicleInbound = std::move(anchors1); else approach.vehicleOutbound = std::move(anchors1);
 		}
 
 		// 行人锚点：只按物理侧是否存在人行道，不区分方向(双向都能走)。
@@ -208,12 +217,17 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 }
 
 void RoadJunction::BuildConnectors(vector<Connection*>& outVehicle, vector<Connection*>& outPedestrian) const {
-	// 车行：全联通，每个inbound连到每个outbound(含同一条路自己的inbound连自己的outbound，允许U形连接)。
+	// 车行：全联通，每条inbound车道各自的锚点连到每条outbound车道各自的锚点(含同一条路自己的
+	// inbound连自己的outbound，允许U形连接)——车道级锚点后，这个全联通是车道对车道的叉乘，
+	// 不再是approach对approach，路口连接线数量因此比按approach算的时候更多，是逐车道锚点
+	// 化必然的代价，见roadnet.md"车道级导航锚点"一节。
 	for (const auto& a : approaches) {
-		if (!a.vehicleInbound) continue;
-		for (const auto& b : approaches) {
-			if (!b.vehicleOutbound) continue;
-			outVehicle.push_back(new Connection(*a.vehicleInbound, *b.vehicleOutbound));
+		for (Node* inAnchor : a.vehicleInbound) {
+			for (const auto& b : approaches) {
+				for (Node* outAnchor : b.vehicleOutbound) {
+					outVehicle.push_back(new Connection(*inAnchor, *outAnchor));
+				}
+			}
 		}
 	}
 
@@ -259,8 +273,8 @@ Roadnet::~Roadnet() {
 	for (Node* n : externs) delete n;
 	for (Intersection* i : intersections) delete i;
 	for (Road* r : roads) delete r;
-	for (auto& [lot, boundary] : lots) {
-		for (auto& [dir, road] : boundary) {
+	for (Lot* lot : lots) {
+		for (auto& [dir, road] : lot->GetBoundaryRoads()) {
 			delete road;
 		}
 		delete lot;
@@ -287,11 +301,11 @@ void Roadnet::DistributeRoadnet(int width, int height,
 	for (const Road& r : mod->roads) roads.push_back(new Road(r));
 
 	for (auto& [lot, boundary] : mod->lots) {
-		unordered_map<int, Road*> boundaryCopy;
+		Lot* newLot = new Lot(lot);
 		for (auto& [dir, road] : boundary) {
-			boundaryCopy[dir] = new Road(road);
+			newLot->SetBoundaryRoad(dir, new Road(road));
 		}
-		lots.emplace_back(new Lot(lot), std::move(boundaryCopy));
+		lots.push_back(newLot);
 	}
 
 	// Quad+float是纯值类型，不含所有权指针，直接整体拷贝，不需要像上面几个逐个new。
@@ -310,7 +324,7 @@ const vector<Road*>& Roadnet::GetRoads() const {
 	return roads;
 }
 
-const vector<pair<Lot*, unordered_map<int, Road*>>>& Roadnet::GetLots() const {
+const vector<Lot*>& Roadnet::GetLots() const {
 	return lots;
 }
 
@@ -319,12 +333,11 @@ const vector<pair<Quad, float>>& Roadnet::GetHatches() const {
 }
 
 void Roadnet::AllocateAddress() {
-	for (auto& [lot, boundary] : lots) {
+	for (Lot* lot : lots) {
 		for (int dir = 0; dir < 4; dir++) {
-			auto it = boundary.find(dir);
-			if (it == boundary.end() || !it->second) continue;
+			Road* road = lot->GetBoundaryRoad(dir);
+			if (!road) continue;
 
-			Road* road = it->second;
 			string roadName = road->GetName();
 			int index = static_cast<int>(addressesByRoad[roadName].size());
 			addressesByRoad[roadName].push_back(lot);
