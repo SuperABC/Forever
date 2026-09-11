@@ -6,6 +6,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
+#include "UObject/UObjectGlobals.h"
 
 #include "map/map.h"
 #include "map/geometry.h"
@@ -117,10 +118,6 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 	junctionMesh->RegisterComponent();
 	owner->AddInstanceComponent(junctionMesh);
 
-	// 临时演示先跑一次(要在下面BuildRoadInstances/BuildOpeningMeshes之前，
-	// 这样它新增的开口能被正确画出来，见ForeverRoadnetFrameworkComponent.md)。
-	SpawnAccessNodeDemo();
-
 	// 每条road在连着真实路口的那一端要收缩tiling范围，把面积让给路口mesh，避免路口处两条路
 	// 的mesh互相重叠z-fighting——收缩距离必须用RoadJunction::Build里同一个approach.setback，
 	// 不能自己另算一套，否则路面收缩量和路口mesh路缘角点的外移量对不上，要么留空隙要么重叠
@@ -140,7 +137,7 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 	for (Road* road : map->GetRoads()) {
 		float ts = trimAtStart.Contains(road) ? trimAtStart[road] : 0.f;
 		float te = trimAtEnd.Contains(road) ? trimAtEnd[road] : 0.f;
-		BuildRoadInstances(road, ts, te);
+		BuildRoadInstances(road, ts, te, openingVertices, openingTriangles, openingUvs);
 		BuildOpeningMeshes(road, openingVertices, openingTriangles, openingUvs);
 	}
 	if (openingTriangles.Num() > 0) {
@@ -151,7 +148,70 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 
 	BuildJunctionMeshes();
 
+	BuildPathRoadMeshes();
+
 	BuildNavigationDebugMesh();
+}
+
+void UForeverRoadnetFrameworkComponent::BuildPathRoadMeshes() {
+	if (!map) return;
+
+	AActor* owner = GetOwner();
+	if (!owner) return;
+
+	UMaterialInterface* baseMaterial = roadPlainBaseMaterial;
+	const string& materialPath = map->GetPathRoadMaterial();
+	if (!materialPath.empty()) {
+		// 运行时按字符串路径加载资产——和roadPlainBaseMaterial那种只能在构造函数里用的
+		// ConstructorHelpers::FObjectFinder不是一回事，这里的路径来自RoadnetMod运行时数据，
+		// 编译期不知道具体是哪个资产。
+		UObject* loaded = StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, UTF8_TO_TCHAR(materialPath.c_str()));
+		if (UMaterialInterface* loadedMaterial = Cast<UMaterialInterface>(loaded)) {
+			baseMaterial = loadedMaterial;
+		}
+	}
+	if (baseMaterial) {
+		pathRoadMaterial = UMaterialInstanceDynamic::Create(baseMaterial, this);
+	}
+
+	if (!pathRoadMesh) {
+		pathRoadMesh = NewObject<UProceduralMeshComponent>(owner, TEXT("PathRoads"));
+		pathRoadMesh->SetupAttachment(owner->GetRootComponent());
+		pathRoadMesh->RegisterComponent();
+		owner->AddInstanceComponent(pathRoadMesh);
+	}
+
+	TArray<FVector> vertices;
+	TArray<int32> triangles;
+	for (Road* road : map->GetPathRoads()) {
+		if (!road) continue;
+		Node start = road->GetStart();
+		Node end = road->GetEnd();
+		float halfWidth = road->GetTotalWidth() * 0.5f * ROAD_WORLD_SCALE;
+
+		FVector2D dir2D(end.GetX() - start.GetX(), end.GetY() - start.GetY());
+		float len = dir2D.Size();
+		if (len < 1e-3f) continue;
+		dir2D /= len;
+		FVector offset(-dir2D.Y * halfWidth, dir2D.X * halfWidth, 0.f);
+
+		float z = ROADNET_HEIGHT_EPSILON;
+		FVector from(start.GetX() * ROAD_WORLD_SCALE, start.GetY() * ROAD_WORLD_SCALE, z);
+		FVector to(end.GetX() * ROAD_WORLD_SCALE, end.GetY() * ROAD_WORLD_SCALE, z);
+
+		int32 base = vertices.Num();
+		vertices.Add(from - offset); vertices.Add(to - offset); vertices.Add(to + offset); vertices.Add(from + offset);
+		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 1);
+		triangles.Add(base); triangles.Add(base + 3); triangles.Add(base + 2);
+		triangles.Add(base); triangles.Add(base + 1); triangles.Add(base + 2);
+		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 3);
+	}
+
+	if (triangles.Num() > 0) {
+		pathRoadMesh->CreateMeshSection(0, vertices, triangles,
+			TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), true);
+		if (pathRoadMaterial) pathRoadMesh->SetMaterial(0, pathRoadMaterial);
+	}
 }
 
 void UForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh() {
@@ -261,7 +321,8 @@ UInstancedStaticMeshComponent* UForeverRoadnetFrameworkComponent::GetOrCreateRoa
 	return ism;
 }
 
-void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float trimStart, float trimEnd) {
+void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float trimStart, float trimEnd,
+	TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs) {
 	if (!road) return;
 
 	float unit = road->GetUnit();
@@ -312,9 +373,15 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 
 		int nLow = FMath::CeilToInt(rangeLen / (1.2f * unit));
 		int nHigh = FMath::FloorToInt(rangeLen / (0.8f * unit));
-		if (nLow > nHigh || nLow <= 0) return;
-		int n = FMath::Clamp(FMath::RoundToInt(rangeLen / unit), nLow, nHigh);
-		if (n <= 0) return;
+		int n = (nLow <= nHigh && nLow > 0) ? FMath::Clamp(FMath::RoundToInt(rangeLen / unit), nLow, nHigh) : 0;
+		if (n <= 0) {
+			// 这一段(比如两个开口之间、或端点和第一个开口之间剩下的那一小截)连一节
+			// default_x_x_x实例都铺不出来(短于0.8*unit)——不留空隙，退化成贴RoadPlain材质的
+			// 扁平cube填满，和道路开口一样处理。
+			float centerT = (rangeStart + rangeEnd) * 0.5f;
+			AppendFlatRoadCube(road, centerT, rangeLen, road->GetTotalWidth(), outVertices, outTriangles, outUvs);
+			return;
+		}
 
 		float actualSegLen = rangeLen / n;
 		float scaleAlong = actualSegLen / unit;
@@ -355,11 +422,7 @@ void UForeverRoadnetFrameworkComponent::BuildOpeningMeshes(Road* road,
 	// 开口cube宽度取该road横断面总宽(两侧车行+停车+人行道加总)，覆盖整条路的宽度——
 	// 要求5的简化做法：直接用一块贴RoadPlain材质的扁平cube代替原本该段的沿路重复mesh，
 	// 不做"只挖开人行道/停车道"的精细几何裁剪，见ForeverRoadnetFrameworkComponent.md。
-	// 车道横断面现在以Connection连线为几何中心居中（见Source/Core/map/roadnet.md"车道居中"
-	// 一节），下面按cx/cy±perp*halfWidth对称展开cube的写法因此正确——不需要再关心side0/side1
-	// 具体怎么分配。
 	float totalWidth = road->GetTotalWidth();
-	if (totalWidth <= 0.f) totalWidth = 1.f;
 
 	// 同一个物理开口位置常常会有车行、人行各一条RoadOpening记录(Map::AddRoadAccessNode按
 	// isVehicle分别调用、各自往road->openings里追加一条)，但视觉上只需要一块贴地cube盖住
@@ -374,38 +437,49 @@ void UForeverRoadnetFrameworkComponent::BuildOpeningMeshes(Road* road,
 		if (alreadyDrawn) continue;
 		drawnTs.push_back(op.t);
 
-		Node center = road->GetPoint(op.t);
-		float dx, dy, dz;
-		road->GetTangent(op.t, dx, dy, dz);
-		float len = FMath::Sqrt(dx * dx + dy * dy);
-		if (len < 1e-6f) len = 1.f;
-		float fwdX = dx / len, fwdY = dy / len;
-		float perpX = fwdY, perpY = -fwdX;
-
-		float halfLen = op.width * 0.5f;
-		float halfWidth = totalWidth * 0.5f;
-		float cx = center.GetX(), cy = center.GetY();
-
-		FVector2D p00(cx - fwdX * halfLen - perpX * halfWidth, cy - fwdY * halfLen - perpY * halfWidth);
-		FVector2D p10(cx + fwdX * halfLen - perpX * halfWidth, cy + fwdY * halfLen - perpY * halfWidth);
-		FVector2D p11(cx + fwdX * halfLen + perpX * halfWidth, cy + fwdY * halfLen + perpY * halfWidth);
-		FVector2D p01(cx - fwdX * halfLen + perpX * halfWidth, cy - fwdY * halfLen + perpY * halfWidth);
-
-		int32 base = outVertices.Num();
-		outVertices.Add(FVector(p00.X * ROAD_WORLD_SCALE, p00.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
-		outVertices.Add(FVector(p10.X * ROAD_WORLD_SCALE, p10.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
-		outVertices.Add(FVector(p11.X * ROAD_WORLD_SCALE, p11.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
-		outVertices.Add(FVector(p01.X * ROAD_WORLD_SCALE, p01.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
-		outUvs.Add(FVector2D(0, 0));
-		outUvs.Add(FVector2D(1, 0));
-		outUvs.Add(FVector2D(1, 1));
-		outUvs.Add(FVector2D(0, 1));
-		// 环绕顺序：对照ForeverTerrainFrameworkComponent::BuildLevel验证过的(v00,v11,v10)/(v00,v01,v11)
-		// 模式，UE(左手坐标系)要求从上方看是"顺时针"(标准数学XY凸包意义下的负向面积)才是正面朝上；
-		// 早期版本这里写反了(正面朝下，从上方完全看不到)，PIE验证后改正。
-		outTriangles.Add(base); outTriangles.Add(base + 1); outTriangles.Add(base + 2);
-		outTriangles.Add(base); outTriangles.Add(base + 2); outTriangles.Add(base + 3);
+		AppendFlatRoadCube(road, op.t, op.width, totalWidth, outVertices, outTriangles, outUvs);
 	}
+}
+
+void UForeverRoadnetFrameworkComponent::AppendFlatRoadCube(Road* road, float centerT, float lengthAlongRoad, float crossWidth,
+	TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs) {
+	if (!road) return;
+	if (crossWidth <= 0.f) crossWidth = 1.f;
+
+	// 车道横断面现在以Connection连线为几何中心居中（见Source/Core/map/roadnet.md"车道居中"
+	// 一节），下面按cx/cy±perp*halfWidth对称展开cube的写法因此正确——不需要再关心side0/side1
+	// 具体怎么分配。
+	Node center = road->GetPoint(centerT);
+	float dx, dy, dz;
+	road->GetTangent(centerT, dx, dy, dz);
+	float len = FMath::Sqrt(dx * dx + dy * dy);
+	if (len < 1e-6f) len = 1.f;
+	float fwdX = dx / len, fwdY = dy / len;
+	float perpX = fwdY, perpY = -fwdX;
+
+	float halfLen = lengthAlongRoad * 0.5f;
+	float halfWidth = crossWidth * 0.5f;
+	float cx = center.GetX(), cy = center.GetY();
+
+	FVector2D p00(cx - fwdX * halfLen - perpX * halfWidth, cy - fwdY * halfLen - perpY * halfWidth);
+	FVector2D p10(cx + fwdX * halfLen - perpX * halfWidth, cy + fwdY * halfLen - perpY * halfWidth);
+	FVector2D p11(cx + fwdX * halfLen + perpX * halfWidth, cy + fwdY * halfLen + perpY * halfWidth);
+	FVector2D p01(cx - fwdX * halfLen + perpX * halfWidth, cy - fwdY * halfLen + perpY * halfWidth);
+
+	int32 base = outVertices.Num();
+	outVertices.Add(FVector(p00.X * ROAD_WORLD_SCALE, p00.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
+	outVertices.Add(FVector(p10.X * ROAD_WORLD_SCALE, p10.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
+	outVertices.Add(FVector(p11.X * ROAD_WORLD_SCALE, p11.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
+	outVertices.Add(FVector(p01.X * ROAD_WORLD_SCALE, p01.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
+	outUvs.Add(FVector2D(0, 0));
+	outUvs.Add(FVector2D(1, 0));
+	outUvs.Add(FVector2D(1, 1));
+	outUvs.Add(FVector2D(0, 1));
+	// 环绕顺序：对照ForeverTerrainFrameworkComponent::BuildLevel验证过的(v00,v11,v10)/(v00,v01,v11)
+	// 模式，UE(左手坐标系)要求从上方看是"顺时针"(标准数学XY凸包意义下的负向面积)才是正面朝上；
+	// 早期版本这里写反了(正面朝下，从上方完全看不到)，PIE验证后改正。
+	outTriangles.Add(base); outTriangles.Add(base + 1); outTriangles.Add(base + 2);
+	outTriangles.Add(base); outTriangles.Add(base + 2); outTriangles.Add(base + 3);
 }
 
 void UForeverRoadnetFrameworkComponent::BuildJunctionMeshes() {
@@ -464,31 +538,3 @@ void UForeverRoadnetFrameworkComponent::BuildJunctionMeshes() {
 	if (junctionMaterial) junctionMesh->SetMaterial(0, junctionMaterial);
 }
 
-void UForeverRoadnetFrameworkComponent::SpawnAccessNodeDemo() {
-	// [临时验证，Building/Zone迁移后可删除] 取第一个有边界Road的lot，在它绑定的其中一条路上
-	// 演示一次AddRoadAccessNode，让"车道分裂/开口cube"这套目前还没有真正调用方的逻辑也有
-	// 验证途径（效果目前只能通过Map::GetVehicleNavGraph()/GetPedestrianNavGraph()查询或
-	// Output Log确认，导航图可视化已按要求移除，见ForeverRoadnetFrameworkComponent.md）。
-	// 同一个开口位置车行、人行各调一次——真实场景里一个路面开口（比如建筑车库出入口）通常
-	// 也伴随一段人行道断口（给行人过街进入建筑），不应该只有车行导航图被打断。
-	if (!map) return;
-
-	for (Lot* lot : map->GetLots()) {
-		for (const auto& [dir, road] : lot->GetBoundaryRoads()) {
-			if (!road) continue;
-
-			Node* vehicleAccessNode = map->AddRoadAccessNode(road->GetName(), 0.5f, true, true, 0.6f);
-			if (vehicleAccessNode) {
-				UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时验证] demo vehicle access node on road '%s' at map(%.2f,%.2f)。"),
-					UTF8_TO_TCHAR(road->GetName().c_str()), vehicleAccessNode->GetX(), vehicleAccessNode->GetY());
-			}
-
-			Node* pedestrianAccessNode = map->AddRoadAccessNode(road->GetName(), 0.5f, false, true, 0.6f);
-			if (pedestrianAccessNode) {
-				UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时验证] demo pedestrian access node on road '%s' at map(%.2f,%.2f)。"),
-					UTF8_TO_TCHAR(road->GetName().c_str()), pedestrianAccessNode->GetX(), pedestrianAccessNode->GetY());
-			}
-			return;
-		}
-	}
-}

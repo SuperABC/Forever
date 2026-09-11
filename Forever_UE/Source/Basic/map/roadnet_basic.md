@@ -79,8 +79,10 @@
   `GetTotalWidth()/2`），margin不管lot在哪一侧结果都一样，`roadSideForPoint`/
   `lotCenterOf4`这两个专门判断"该取哪一侧"的helper因此被删掉，调用点也从
   `roadMargin(road, cx, cy)`简化回`roadMargin(road)`，边界Road仍然要先落地成局部变量
-  （`Road boundary2 = makeBoundaryRoad(...)`）算完margin后再传进`unordered_map`，纯写法
-  上的需要，不产生额外含义。原来是一个手写的`ROAD_MARGIN=1.0f`常量（对应默认车道配置车行
+  （`Road* boundary2 = makeBoundaryRoad(...)`，第十一轮迁移后改成指针，见下方
+  `makeBoundaryRoad`一节）算完margin后再传进`unordered_map`（`roadMargin`签名没变，调用点
+  相应改成`roadMargin(*boundary2)`解引用），纯写法上的需要，不产生额外含义。原来是一个手写的
+  `ROAD_MARGIN=1.0f`常量（对应默认车道配置车行
   0.5+人行0.5），如果以后改了`configureLanes`的车道宽度，这个常量必须手动跟着改；现在
   margin直接查询road自己的车道数据，默认配置下算出来的值和原来的`1.0f`完全一样，换了车道
   配置也会自动算对。margin数组里`0.0f`的位置含义不变（对照老工程保留，表示那条边不是真正
@@ -90,9 +92,28 @@
   `return`让它真正生效，除了去掉隧道判断外，逻辑原样迁移。每个新产出的lot同样带上边界`Road`
   映射（`FACE_DIRECTION`0-3索引），和角落/中心lot格式一致。
 - **`lots`不带边界`Intersection`映射**——对照新接口`RoadnetMod::lots`（`vector<pair<Lot,
-  unordered_map<int,Road>>>`，见`roadnet_mod.h`），老工程每个lot还会额外记一份
+  unordered_map<int,Road*>>>`，见`roadnet_mod.h`），老工程每个lot还会额外记一份
   `unordered_map<int,Intersection>`，这次不需要（导航图直接挂在`Road`/`Intersection`上，不
   通过lot中转，详见`Source/Core/map/roadnet.md`），构造时相应去掉了这部分。
+- **`makeBoundaryRoad`（第十一轮迁移前后语义完全不同）**：最初这个lambda是"新构造一个独立的
+  `Road`值，配置成和某条命名路默认车道一致，只是端点换成这块lot实际贴的那一小段"——这个独立
+  对象和`roads`数组里可能已经存在的同名/同端点真实路段没有任何指针关系。后来发现这正是"小路
+  接到大路上加开口画不出来"这个bug的根因（见`Source/Core/map/roadnet.md`"边界Road指针"一节）：
+  这个独立对象即使配置和真实路段完全一样，也是另一个C++对象，改它不会影响`roads`里那份。现在
+  改成**查找而不是构造**：遍历`roads`按名字+两端`Node`id（不分方向）找到对应的真实
+  `Road&`，返回它的地址（`Road*`），不再`new`/构造任何新对象。调用这个lambda时必须保证
+  `roads`不会再增长（本文件里所有调用都在最后一次`addRoad`之后），否则取到的地址会被之后的
+  `vector`扩容废掉。
+  - **找不到匹配时返回`nullptr`，调用方必须直接放弃这块lot，不铺Zone/Building**（PIE验证
+    发现过一次崩溃：某个细分lot恰好贴着隧道过渡点，那一整段被`addRoad`按`TUNNEL_HEIGHT`
+    相关逻辑拆成了引道/下坡/平路三小段，`roads`里就不再有任何一条正好首尾等于调用方传入
+    两个端点的entry，`makeBoundaryRoad`只能返回`nullptr`；当时的第一版处理是"退化成独立
+    构造一个仅用于margin计算的兜底Road"，让lot照样建出来——这个做法被用户明确否决："遇到
+    跨隧道过渡点的lot边界...就不要这个lot了"，没有必要为了保住一小块贴着隧道口的地皮硬凑
+    一个假边界，更没有必要在隧道里摆建筑。现在四个"象限"大lot和四条放射臂的细分循环里，
+    每处`makeBoundaryRoad`调用后都会检查返回值，任一为`nullptr`就跳过这块lot（象限lot用
+    `if (boundary&&boundary)`包住`lots.emplace_back`；细分循环里用`continue`跳到下一次
+    迭代，不影响链条上后续可能仍然有效的分段）。
 - **道路3D资产命名规则改成按车道数编码，`meshPathFor`按这个规则拼路径（第八轮迁移）**：
   `default_左车行_左停车_左人行_右车行_右停车_右人行`（六个数字，和`configureLanesEx`的
   六个参数一一对应），比如默认对称配置对应`default_1_0_1_1_0_1`，"中山北路"（左0右2单行）

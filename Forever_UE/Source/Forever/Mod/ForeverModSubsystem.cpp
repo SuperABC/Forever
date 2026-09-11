@@ -3,8 +3,6 @@
 #include "common/config.h"
 #include "common/loader.h"
 
-#include "map/zone_factory.h"
-#include "map/building_factory.h"
 #include "map/component_factory.h"
 #include "map/room_factory.h"
 #include "player/asset_factory.h"
@@ -75,24 +73,6 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 
 	ModLoader modLoader;
-
-	{
-		ZoneFactory factory;
-		factory.SetModArgs(ToArgsMap(Config::GetConceptMods("zone_mods")));
-		modLoader.RegisterConcept<ZoneFactory>(mods, "RegisterModZones", "FinishModZones", &factory);
-		ValidateFactory(factory, TEXT("Zone"),
-			[](ZoneFactory& f, const std::string& id) { return f.CreateZone(id); },
-			[](ZoneFactory& f, ZoneMod* m) { f.DestroyZone(m); });
-	}
-
-	{
-		BuildingFactory factory;
-		factory.SetModArgs(ToArgsMap(Config::GetConceptMods("building_mods")));
-		modLoader.RegisterConcept<BuildingFactory>(mods, "RegisterModBuildings", "FinishModBuildings", &factory);
-		ValidateFactory(factory, TEXT("Building"),
-			[](BuildingFactory& f, const std::string& id) { return f.CreateBuilding(id); },
-			[](BuildingFactory& f, BuildingMod* m) { f.DestroyBuilding(m); });
-	}
 
 	{
 		ComponentFactory factory;

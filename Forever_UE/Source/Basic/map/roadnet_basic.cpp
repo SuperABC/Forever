@@ -175,11 +175,25 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		configureThis(roads.back());
 		};
 
-	auto makeBoundaryRoad = [&](const string& name, const Node& n1, const Node& n2) -> Road {
-		Road road(name, n1, n2, meshPathFor(1, 0, 1, 1, 0, 1), meshUnit);
-		addControls(road, n1, n2);
-		configureLanesEx(road, 1, 0, 1, 1, 0, 1);
-		return road;
+	// 找到roads里名字为name、两端Node id正好是{n1,n2}(不分方向)的那一条，返回它自己的地址——
+	// 不另外new/构造一份独立的Road。lot的边界必须和roads里真正会被渲染/以后可能被
+	// Lot::SplitWithPath加开口的那个对象是同一个，不能是看起来配置一样但其实是另一个对象的
+	// 拷贝(否则改动传不到roads里，PIE验证发现过这个问题：小路接到大路上时给大路加的开口画不
+	// 出来)。调用这个lambda时roads必须已经不会再增长(所有addRoad调用都已经跑完)，取到的地址
+	// 才是稳定的——本文件里所有makeBoundaryRoad调用都在addRoad调用序列结束之后，满足这个前提。
+	// 找不到精确匹配就返回nullptr——常见原因是这一整段正好跨越隧道过渡点(n1/n2一个在地面一个
+	// 在隧道里，或者addRoad按TUNNEL_HEIGHT相关逻辑把这段拆成了引道/下坡/平路三小段，见addRoad
+	// 实现)，roads里不会再有任何一条正好首尾等于(n1,n2)的entry。这种情况下调用方(见下方几处
+	// lots.emplace_back)必须直接跳过这个lot，不铺任何Zone/Building——没必要为了保住一块紧贴
+	// 隧道的lot而给它凑一个假的边界Road。
+	auto makeBoundaryRoad = [&](const string& name, const Node& n1, const Node& n2) -> Road* {
+		int idA = n1.GetId(), idB = n2.GetId();
+		for (Road& r : roads) {
+			if (r.GetName() != name) continue;
+			int a = r.GetStart().GetId(), b = r.GetEnd().GetId();
+			if ((a == idA && b == idB) || (a == idB && b == idA)) return &r;
+		}
+		return nullptr;
 		};
 
 	// lot的margin直接从临街road自己的车道宽度算，不再手动指定固定常量——以后车道配置一旦改动
@@ -333,57 +347,67 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	lots.emplace_back(
 		Lot(northWest, northEast, southEast, southWest,
 			{ roadMargin(roads[0]), roadMargin(roads[1]), roadMargin(roads[2]), roadMargin(roads[3]) }),
-		unordered_map<int, Road>{ {0, roads[0]}, {1, roads[1]}, {2, roads[2]}, {3, roads[3]} }
+		unordered_map<int, Road*>{ {0, &roads[0]}, {1, &roads[1]}, {2, &roads[2]}, {3, &roads[3]} }
 	);
 	lots.back().first.SetArea(AREA_OFFICIAL_HIGH);
 
 	if (horizontalNode1w.size() >= 1 && horizontalNode2w.size() >= 1) {
-		Road boundary2 = makeBoundaryRoad("城西北路", intersections[horizontalNode1w[0].second], intersections[0]);
-		Road boundary3 = makeBoundaryRoad("城西南路", intersections[horizontalNode2w[0].second], intersections[3]);
-		lots.emplace_back(Lot(horizontalNode1w[0].first, intersections[0], intersections[3], horizontalNode2w[0].first,
-				{ 0.0f, roadMargin(roads[0]), roadMargin(boundary2), roadMargin(boundary3) }),
-			unordered_map<int, Road>{
-				{ 1, roads[0] },
-				{ 2, boundary2 },
-				{ 3, boundary3 }
-			});
-		lots.back().first.SetArea(AREA_RESIDENTIAL_HIGH);
+		Road* boundary2 = makeBoundaryRoad("城西北路", intersections[horizontalNode1w[0].second], intersections[0]);
+		Road* boundary3 = makeBoundaryRoad("城西南路", intersections[horizontalNode2w[0].second], intersections[3]);
+		// 找不到边界Road(这一段跨了隧道过渡点，被addRoad拆成了好几小段，见makeBoundaryRoad
+		// 注释)就直接不铺这块lot——不给隧道旁边硬凑一个假边界勉强留住它。
+		if (boundary2 && boundary3) {
+			lots.emplace_back(Lot(horizontalNode1w[0].first, intersections[0], intersections[3], horizontalNode2w[0].first,
+					{ 0.0f, roadMargin(roads[0]), roadMargin(*boundary2), roadMargin(*boundary3) }),
+				unordered_map<int, Road*>{
+					{ 1, &roads[0] },
+					{ 2, boundary2 },
+					{ 3, boundary3 }
+				});
+			lots.back().first.SetArea(AREA_RESIDENTIAL_HIGH);
+		}
 	}
 	if (horizontalNode1e.size() >= 1 && horizontalNode2e.size() >= 1) {
-		Road boundary2 = makeBoundaryRoad("城东北路", intersections[horizontalNode1e[0].second], intersections[1]);
-		Road boundary3 = makeBoundaryRoad("城东南路", intersections[horizontalNode2e[0].second], intersections[2]);
-		lots.emplace_back(Lot(intersections[1], horizontalNode1e[0].first, horizontalNode2e[0].first, intersections[2],
-				{ roadMargin(roads[1]), 0.0f, roadMargin(boundary2), roadMargin(boundary3) }),
-			unordered_map<int, Road>{
-				{ 0, roads[1] },
-				{ 2, boundary2 },
-				{ 3, boundary3 }
-			});
-		lots.back().first.SetArea(AREA_RESIDENTIAL_LOW);
+		Road* boundary2 = makeBoundaryRoad("城东北路", intersections[horizontalNode1e[0].second], intersections[1]);
+		Road* boundary3 = makeBoundaryRoad("城东南路", intersections[horizontalNode2e[0].second], intersections[2]);
+		if (boundary2 && boundary3) {
+			lots.emplace_back(Lot(intersections[1], horizontalNode1e[0].first, horizontalNode2e[0].first, intersections[2],
+					{ roadMargin(roads[1]), 0.0f, roadMargin(*boundary2), roadMargin(*boundary3) }),
+				unordered_map<int, Road*>{
+					{ 0, &roads[1] },
+					{ 2, boundary2 },
+					{ 3, boundary3 }
+				});
+			lots.back().first.SetArea(AREA_RESIDENTIAL_LOW);
+		}
 	}
 	if (verticalNode1n.size() >= 1 && verticalNode2n.size() >= 1) {
-		Road boundary0 = makeBoundaryRoad("城北西路", intersections[verticalNode1n[0].second], intersections[0]);
-		Road boundary1 = makeBoundaryRoad("城北东路", intersections[verticalNode2n[0].second], intersections[1]);
-		lots.emplace_back(Lot(verticalNode1n[0].first, verticalNode2n[0].first, intersections[1], intersections[0],
-				{ roadMargin(boundary0), roadMargin(boundary1), 0.0f, roadMargin(roads[2]) }),
-			unordered_map<int, Road>{
-				{ 0, boundary0 },
-				{ 1, boundary1 },
-				{ 3, roads[2] }
-			});
-		lots.back().first.SetArea(AREA_COMMERCIAL_HIGH);
+		Road* boundary0 = makeBoundaryRoad("城北西路", intersections[verticalNode1n[0].second], intersections[0]);
+		Road* boundary1 = makeBoundaryRoad("城北东路", intersections[verticalNode2n[0].second], intersections[1]);
+		if (boundary0 && boundary1) {
+			lots.emplace_back(Lot(verticalNode1n[0].first, verticalNode2n[0].first, intersections[1], intersections[0],
+					{ roadMargin(*boundary0), roadMargin(*boundary1), 0.0f, roadMargin(roads[2]) }),
+				unordered_map<int, Road*>{
+					{ 0, boundary0 },
+					{ 1, boundary1 },
+					{ 3, &roads[2] }
+				});
+			lots.back().first.SetArea(AREA_COMMERCIAL_HIGH);
+		}
 	}
 	if (verticalNode1s.size() >= 1 && verticalNode2s.size() >= 1) {
-		Road boundary0 = makeBoundaryRoad("城南西路", intersections[verticalNode1s[0].second], intersections[3]);
-		Road boundary1 = makeBoundaryRoad("城南东路", intersections[verticalNode2s[0].second], intersections[2]);
-		lots.emplace_back(Lot(intersections[3], intersections[2], verticalNode2s[0].first, verticalNode1s[0].first,
-				{ roadMargin(boundary0), roadMargin(boundary1), roadMargin(roads[3]), 0.0f }),
-			unordered_map<int, Road>{
-				{ 0, boundary0 },
-				{ 1, boundary1 },
-				{ 2, roads[3] }
-			});
-		lots.back().first.SetArea(AREA_INDUSTRIAL_HIGH);
+		Road* boundary0 = makeBoundaryRoad("城南西路", intersections[verticalNode1s[0].second], intersections[3]);
+		Road* boundary1 = makeBoundaryRoad("城南东路", intersections[verticalNode2s[0].second], intersections[2]);
+		if (boundary0 && boundary1) {
+			lots.emplace_back(Lot(intersections[3], intersections[2], verticalNode2s[0].first, verticalNode1s[0].first,
+					{ roadMargin(*boundary0), roadMargin(*boundary1), roadMargin(roads[3]), 0.0f }),
+				unordered_map<int, Road*>{
+					{ 0, boundary0 },
+					{ 1, boundary1 },
+					{ 2, &roads[3] }
+				});
+			lots.back().first.SetArea(AREA_INDUSTRIAL_HIGH);
+		}
 	}
 
 	// 沿每条放射臂继续按isBuildable(plain/construction)细分lot——老工程这段代码被一个
@@ -399,10 +423,13 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		const auto& [seNode, seIdx] = horizontalNode2w[i - 1];
 		const auto& [swNode, swIdx] = horizontalNode2w[i];
 
-		Road boundary2 = makeBoundaryRoad("城西北路", intersections[nwIdx], intersections[neIdx]);
-		Road boundary3 = makeBoundaryRoad("城西南路", intersections[swIdx], intersections[seIdx]);
-		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { 0.0f, 0.0f, roadMargin(boundary2), roadMargin(boundary3) }),
-			unordered_map<int, Road>{
+		Road* boundary2 = makeBoundaryRoad("城西北路", intersections[nwIdx], intersections[neIdx]);
+		Road* boundary3 = makeBoundaryRoad("城西南路", intersections[swIdx], intersections[seIdx]);
+		// 找不到边界Road(跨了隧道过渡点)就跳过这一小块，不给它凑假边界，继续尝试链条上后面
+		// 的分段(隧道段只是局部的，不代表整条链条剩下的部分也都建不出边界)。
+		if (!boundary2 || !boundary3) continue;
+		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { 0.0f, 0.0f, roadMargin(*boundary2), roadMargin(*boundary3) }),
+			unordered_map<int, Road*>{
 				{ 2, boundary2 },
 				{ 3, boundary3 }
 			});
@@ -420,10 +447,11 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		const auto& [seNode, seIdx] = horizontalNode2e[i];
 		const auto& [swNode, swIdx] = horizontalNode2e[i - 1];
 
-		Road boundary2 = makeBoundaryRoad("城东北路", intersections[nwIdx], intersections[neIdx]);
-		Road boundary3 = makeBoundaryRoad("城东南路", intersections[swIdx], intersections[seIdx]);
-		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { 0.0f, 0.0f, roadMargin(boundary2), roadMargin(boundary3) }),
-			unordered_map<int, Road>{
+		Road* boundary2 = makeBoundaryRoad("城东北路", intersections[nwIdx], intersections[neIdx]);
+		Road* boundary3 = makeBoundaryRoad("城东南路", intersections[swIdx], intersections[seIdx]);
+		if (!boundary2 || !boundary3) continue;
+		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { 0.0f, 0.0f, roadMargin(*boundary2), roadMargin(*boundary3) }),
+			unordered_map<int, Road*>{
 				{ 2, boundary2 },
 				{ 3, boundary3 }
 			});
@@ -441,10 +469,11 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		const auto& [seNode, seIdx] = verticalNode2n[i - 1];
 		const auto& [swNode, swIdx] = verticalNode1n[i - 1];
 
-		Road boundary0 = makeBoundaryRoad("城北西路", intersections[nwIdx], intersections[swIdx]);
-		Road boundary1 = makeBoundaryRoad("城北东路", intersections[neIdx], intersections[seIdx]);
-		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { roadMargin(boundary0), roadMargin(boundary1), 0.0f, 0.0f }),
-			unordered_map<int, Road>{
+		Road* boundary0 = makeBoundaryRoad("城北西路", intersections[nwIdx], intersections[swIdx]);
+		Road* boundary1 = makeBoundaryRoad("城北东路", intersections[neIdx], intersections[seIdx]);
+		if (!boundary0 || !boundary1) continue;
+		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { roadMargin(*boundary0), roadMargin(*boundary1), 0.0f, 0.0f }),
+			unordered_map<int, Road*>{
 				{ 0, boundary0 },
 				{ 1, boundary1 }
 			});
@@ -462,10 +491,11 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		const auto& [seNode, seIdx] = verticalNode2s[i];
 		const auto& [swNode, swIdx] = verticalNode1s[i];
 
-		Road boundary0 = makeBoundaryRoad("城南西路", intersections[nwIdx], intersections[swIdx]);
-		Road boundary1 = makeBoundaryRoad("城南东路", intersections[neIdx], intersections[seIdx]);
-		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { roadMargin(boundary0), roadMargin(boundary1), 0.0f, 0.0f }),
-			unordered_map<int, Road>{
+		Road* boundary0 = makeBoundaryRoad("城南西路", intersections[nwIdx], intersections[swIdx]);
+		Road* boundary1 = makeBoundaryRoad("城南东路", intersections[neIdx], intersections[seIdx]);
+		if (!boundary0 || !boundary1) continue;
+		lots.emplace_back(Lot(nwNode, neNode, seNode, swNode, { roadMargin(*boundary0), roadMargin(*boundary1), 0.0f, 0.0f }),
+			unordered_map<int, Road*>{
 				{ 0, boundary0 },
 				{ 1, boundary1 }
 			});

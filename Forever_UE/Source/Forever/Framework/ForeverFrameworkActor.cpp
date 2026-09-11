@@ -66,13 +66,23 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 
 	map = new Map(kDefaultMapWidth, kDefaultMapHeight);
 	map->InitTerrains();
-	map->InitContents();
 	map->InitRoadnet();
+	map->InitZones();
+	map->InitBuildings();
 
 	if (terrainFramework) {
 		terrainFramework->GenerateTerrain(map);
 	}
 	if (roadnetFramework) {
+		// InitZones/InitBuildings裁剪Lot自由空间时新增的小路(Map::GetPathRoads())要在这里面
+		// 一起画出来，必须放在InitZones/InitBuildings跑完之后调用，见
+		// ForeverRoadnetFrameworkComponent.md"小路可视化"一节。
 		roadnetFramework->GenerateRoadnet(map);
+	}
+	if (zoneFramework) {
+		zoneFramework->GenerateZones(map);
+	}
+	if (buildingFramework) {
+		buildingFramework->GenerateBuildings(map);
 	}
 }

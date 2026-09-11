@@ -8,22 +8,6 @@
 
 using namespace std;
 
-// DivideSpace递归过程中代表"尚未定位的合并子树"的临时矩形
-class Space : public Quad {
-public:
-	// 由两个待合并子矩形构造，面积为两者之和
-	Space(Quad* r1, Quad* r2);
-
-	// 第一个子矩形
-	Quad* r1;
-
-	// 第二个子矩形
-	Quad* r2;
-
-	// 落位后的四角四边
-	QuadBoundary boundary;
-};
-
 int Node::count = 0;
 
 Node::Node(string category, float x, float y, float z) :
@@ -431,7 +415,8 @@ Road::Road(const Road& other) :
 	vehicleLanes{ other.vehicleLanes[0], other.vehicleLanes[1] },
 	parkingLanes{ other.parkingLanes[0], other.parkingLanes[1] },
 	pedestrianLanes{ other.pedestrianLanes[0], other.pedestrianLanes[1] },
-	openings(other.openings) {
+	openings(other.openings),
+	isPathRoad(other.isPathRoad) {
 
 }
 
@@ -448,6 +433,7 @@ Road& Road::operator=(const Road& other) {
 		pedestrianLanes[0] = other.pedestrianLanes[0];
 		pedestrianLanes[1] = other.pedestrianLanes[1];
 		openings = other.openings;
+		isPathRoad = other.isPathRoad;
 	}
 	return *this;
 }
@@ -507,6 +493,14 @@ void Road::AddOpening(const RoadOpening& opening) {
 
 const vector<RoadOpening>& Road::GetOpenings() const {
 	return openings;
+}
+
+void Road::SetPathRoad(bool isPath) {
+	isPathRoad = isPath;
+}
+
+bool Road::IsPathRoad() const {
+	return isPathRoad;
 }
 
 float Road::GetSideWidth(int side) const {
@@ -623,199 +617,6 @@ void Quad::SetAcreage(float a) {
 	acreage = a;
 }
 
-void QuadBoundary::Invalidate(const vector<Connection*>& removed) {
-	for (int i = 0; i < 4; i++) {
-		if (find(removed.begin(), removed.end(), edges[i]) != removed.end()) {
-			edges[i] = nullptr;
-		}
-	}
-}
-
-Space::Space(Quad* r1, Quad* r2) :
-	r1(r1),
-	r2(r2),
-	boundary() {
-	acreage = r1->GetAcreage() + r2->GetAcreage();
-}
-
-void Quad::RecordBoundary(Quad* elem, const QuadBoundary& boundary, unordered_map<Quad*, QuadBoundary>& outElementBoundaries) {
-	if (auto space = dynamic_cast<Space*>(elem)) {
-		space->boundary = boundary;
-	}
-	else {
-		outElementBoundaries[elem] = boundary;
-	}
-}
-
-void Quad::SplitInto(float left, float right, float bottom, float top, const QuadBoundary& boundary,
-	Quad* a, Quad* b, const function<pair<float, float>(float, float)>& toWorld, string category,
-	vector<Node*>& outNewNodes, vector<Connection*>& outNewConnections, vector<Connection*>& outRemovedConnections,
-	unordered_map<Quad*, QuadBoundary>& outElementBoundaries) {
-
-	bool aIsLower = GetRandom(2) != 0;
-	Quad* lowerElem = aIsLower ? a : b;
-	Quad* upperElem = aIsLower ? b : a;
-	float lowerAcreage = lowerElem->GetAcreage();
-	float totalAcreage = a->GetAcreage() + b->GetAcreage();
-
-	QuadBoundary lowerBoundary, upperBoundary;
-
-	// 沿X分割为左右两部分，否则沿Y分割为上下两部分
-	if (right - left > top - bottom) {
-		float divX = left + (right - left) * lowerAcreage / totalAcreage;
-		if (abs(divX - left) < 3.f) divX = left;
-		if (abs(divX - right) < 3.f) divX = right;
-		lowerElem->SetVertices(left, bottom, divX, top);
-		upperElem->SetVertices(divX, bottom, right, top);
-
-		auto [bx, by] = toWorld(divX, bottom);
-		auto [tx, ty] = toWorld(divX, top);
-		Node* splitBottom = new Node(category, bx, by);
-		Node* splitTop = new Node(category, tx, ty);
-		outNewNodes.push_back(splitBottom);
-		outNewNodes.push_back(splitTop);
-
-		Connection* topLeftEdge = new Connection(*boundary.corners[3], *splitTop);
-		Connection* topRightEdge = new Connection(*splitTop, *boundary.corners[2]);
-		Connection* bottomLeftEdge = new Connection(*splitBottom, *boundary.corners[0]);
-		Connection* bottomRightEdge = new Connection(*boundary.corners[1], *splitBottom);
-		Connection* dividerEdge = new Connection(*splitBottom, *splitTop);
-		outNewConnections.push_back(topLeftEdge);
-		outNewConnections.push_back(topRightEdge);
-		outNewConnections.push_back(bottomLeftEdge);
-		outNewConnections.push_back(bottomRightEdge);
-		outNewConnections.push_back(dividerEdge);
-		if (boundary.edges[3]) outRemovedConnections.push_back(boundary.edges[3]);
-		if (boundary.edges[2]) outRemovedConnections.push_back(boundary.edges[2]);
-
-		lowerBoundary.corners[0] = boundary.corners[0];
-		lowerBoundary.corners[1] = splitBottom;
-		lowerBoundary.corners[2] = splitTop;
-		lowerBoundary.corners[3] = boundary.corners[3];
-		lowerBoundary.edges[0] = boundary.edges[0];
-		lowerBoundary.edges[1] = dividerEdge;
-		lowerBoundary.edges[2] = bottomLeftEdge;
-		lowerBoundary.edges[3] = topLeftEdge;
-
-		upperBoundary.corners[0] = splitBottom;
-		upperBoundary.corners[1] = boundary.corners[1];
-		upperBoundary.corners[2] = boundary.corners[2];
-		upperBoundary.corners[3] = splitTop;
-		upperBoundary.edges[0] = dividerEdge;
-		upperBoundary.edges[1] = boundary.edges[1];
-		upperBoundary.edges[2] = bottomRightEdge;
-		upperBoundary.edges[3] = topRightEdge;
-	}
-	else {
-		float divY = bottom + (top - bottom) * lowerAcreage / totalAcreage;
-		if (abs(divY - bottom) < 3.f) divY = bottom;
-		if (abs(divY - top) < 3.f) divY = top;
-		lowerElem->SetVertices(left, divY, right, top);
-		upperElem->SetVertices(left, bottom, right, divY);
-
-		auto [lx, ly] = toWorld(left, divY);
-		auto [rx, ry] = toWorld(right, divY);
-		Node* splitLeft = new Node(category, lx, ly);
-		Node* splitRight = new Node(category, rx, ry);
-		outNewNodes.push_back(splitLeft);
-		outNewNodes.push_back(splitRight);
-
-		Connection* leftTopEdge = new Connection(*boundary.corners[3], *splitLeft);
-		Connection* leftBottomEdge = new Connection(*splitLeft, *boundary.corners[0]);
-		Connection* rightTopEdge = new Connection(*boundary.corners[2], *splitRight);
-		Connection* rightBottomEdge = new Connection(*splitRight, *boundary.corners[1]);
-		Connection* dividerEdge = new Connection(*splitLeft, *splitRight);
-		outNewConnections.push_back(leftTopEdge);
-		outNewConnections.push_back(leftBottomEdge);
-		outNewConnections.push_back(rightTopEdge);
-		outNewConnections.push_back(rightBottomEdge);
-		outNewConnections.push_back(dividerEdge);
-		if (boundary.edges[1]) outRemovedConnections.push_back(boundary.edges[1]);
-		if (boundary.edges[0]) outRemovedConnections.push_back(boundary.edges[0]);
-
-		lowerBoundary.corners[0] = splitLeft;
-		lowerBoundary.corners[1] = splitRight;
-		lowerBoundary.corners[2] = boundary.corners[2];
-		lowerBoundary.corners[3] = boundary.corners[3];
-		lowerBoundary.edges[0] = leftTopEdge;
-		lowerBoundary.edges[1] = rightTopEdge;
-		lowerBoundary.edges[2] = dividerEdge;
-		lowerBoundary.edges[3] = boundary.edges[3];
-
-		upperBoundary.corners[0] = boundary.corners[0];
-		upperBoundary.corners[1] = boundary.corners[1];
-		upperBoundary.corners[2] = splitRight;
-		upperBoundary.corners[3] = splitLeft;
-		upperBoundary.edges[0] = leftBottomEdge;
-		upperBoundary.edges[1] = rightBottomEdge;
-		upperBoundary.edges[2] = boundary.edges[2];
-		upperBoundary.edges[3] = dividerEdge;
-	}
-
-	RecordBoundary(lowerElem, lowerBoundary, outElementBoundaries);
-	RecordBoundary(upperElem, upperBoundary, outElementBoundaries);
-}
-
-void Quad::DivideSpace(vector<Quad*>& elements, const QuadBoundary& boundary,
-	const function<pair<float, float>(float, float)>& toWorld, string category,
-	vector<Node*>& outNewNodes, vector<Connection*>& outNewConnections,
-	vector<Connection*>& outRemovedConnections, unordered_map<Quad*, QuadBoundary>& outElementBoundaries) {
-	if (elements.empty()) return;
-
-	for (int i = 0; i < 4; i++) {
-		if (!boundary.corners[i] || !boundary.edges[i]) {
-			THROW_EXCEPTION(NullPointerException, "DivideSpace boundary must have 4 valid corners and edges.\n");
-		}
-	}
-
-	sort(elements.begin(), elements.end(), [](Quad* a, Quad* b) {
-		return a->GetAcreage() > b->GetAcreage();
-	});
-
-	if (elements.size() == 1) {
-		elements[0]->SetPosition(posX, posY, sizeX, sizeY);
-		outElementBoundaries[elements[0]] = boundary;
-		return;
-	}
-
-	while (elements.size() > 2) {
-		Space* tmp = new Space(elements[elements.size() - 1], elements[elements.size() - 2]);
-		elements.pop_back();
-		int i = static_cast<int>(elements.size()) - 2;
-		for (; i >= 0; i--) {
-			if (tmp->GetAcreage() > elements[i]->GetAcreage()) {
-				elements[i + 1] = elements[i];
-			}
-			else {
-				elements[i + 1] = tmp;
-				break;
-			}
-		}
-		if (i < 0) elements[0] = tmp;
-	}
-
-	SplitInto(GetLeft(), GetRight(), GetBottom(), GetTop(), boundary, elements[0], elements[1], toWorld,
-		category, outNewNodes, outNewConnections, outRemovedConnections, outElementBoundaries);
-
-	while (!elements.empty()) {
-		auto tmp = elements.back();
-		elements.pop_back();
-		if (auto chunk = dynamic_cast<Space*>(tmp)) {
-			Quad* rect1 = chunk->r1;
-			Quad* rect2 = chunk->r2;
-
-			if (tmp->GetAcreage() > 0) {
-				SplitInto(tmp->GetLeft(), tmp->GetRight(), tmp->GetBottom(), tmp->GetTop(), chunk->boundary, rect1, rect2, toWorld,
-					category, outNewNodes, outNewConnections, outRemovedConnections, outElementBoundaries);
-
-				if (dynamic_cast<Space*>(rect1)) elements.push_back(rect1);
-				if (dynamic_cast<Space*>(rect2)) elements.push_back(rect2);
-			}
-			delete chunk;
-		}
-	}
-}
-
 Lot::Lot() :
 	Quad(),
 	rotation(0.f),
@@ -845,7 +646,12 @@ Lot::Lot(Node n1, Node n2, Node n3, Node n4, vector<float> margin) :
 }
 
 Lot::~Lot() {
-
+	for (Lot* free : freeLots) {
+		delete free;
+	}
+	for (Road* road : pathRoads) {
+		delete road;
+	}
 }
 
 float Lot::GetRotation() const {
@@ -1049,4 +855,470 @@ void Lot::SetPosition(Node n1, Node n2, Node n3, Node n4, const vector<float>& m
 	sizeY = sy;
 	rotation = rot;
 	acreage = sx * sy * ACREAGE_SCALE_FACTOR;
+}
+
+namespace {
+	// 把一个和reference共享同一个旋转角的世界坐标点，换算成reference本地坐标系下的(x,y)
+	// （原点在WEST-NORTH角，和Lot::GetPosition/GetVertex的既有约定一致：局部x=0是WEST、
+	// x=sizeX是EAST，局部y=0是NORTH、y=sizeY是SOUTH）。这是GetPosition的逆变换。
+	pair<float, float> ToLocal(const Quad& reference, float rotation, float worldX, float worldY) {
+		float dx = worldX - reference.GetPosX();
+		float dy = worldY - reference.GetPosY();
+		float c = cosf(rotation);
+		float s = sinf(rotation);
+		float relX = dx * c + dy * s;
+		float relY = -dx * s + dy * c;
+		return { relX + reference.GetSizeX() / 2.f, relY + reference.GetSizeY() / 2.f };
+	}
+
+	// 一个子块"可达"当且仅当它至少有一边的边界Road非空——真正的切分总会在分割线上生成一条
+	// Road（Lot::SplitWithPath），唯一天生没有Road的边是从顶层Lot继承下来、老工程就没有路的
+	// 内部分界边。
+	bool HasAnyBoundaryRoad(const Lot* lot) {
+		for (int dir = 0; dir < 4; dir++) {
+			if (lot->GetBoundaryRoad(dir)) return true;
+		}
+		return false;
+	}
+
+	constexpr float MIN_LOT_EXTENT = 2.f;
+	constexpr float FORCED_AXIS_SWITCH_EXTENT = 7.f;
+
+	// 把世界坐标点(px,py)反投影到road的Start->End直线上，算出近似弧长比例t——按直线而不是
+	// 真正的曲线弧长反查，只覆盖小路一般连接的基本走直线的frontage场景，弯道中间开口这次不
+	// 精确处理(和这次范围内其余投影计算一致)。
+	float ProjectT(const Road* road, float px, float py) {
+		Node start = road->GetStart();
+		Node end = road->GetEnd();
+		float dx = end.GetX() - start.GetX();
+		float dy = end.GetY() - start.GetY();
+		float lenSq = dx * dx + dy * dy;
+		if (lenSq < 1e-9f) return 0.f;
+		float t = ((px - start.GetX()) * dx + (py - start.GetY()) * dy) / lenSq;
+		return max(0.f, min(1.f, t));
+	}
+}
+
+Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, const PathLaneSpec& spec) {
+	SplitResult failResult;
+	float pathWidth = spec.vehicleWidth * 2.f + spec.pedestrianWidth * 2.f;
+	float half = pathWidth / 2.f;
+	float extent = splitAlongX ? sizeX : sizeY;
+	if (splitCoordinate - half < 0.f || splitCoordinate + half > extent) {
+		return failResult;
+	}
+
+	// 局部坐标系：X轴0=WEST、sizeX=EAST；Y轴0=NORTH、sizeY=SOUTH。splitAlongX时，切割线
+	// （一条垂直于X轴、贯穿Y范围的线）两端分别落在NORTH(y=0)和SOUTH(y=sizeY)边上；否则
+	// （一条垂直于Y轴、贯穿X范围的线）两端分别落在WEST(x=0)和EAST(x=sizeX)边上。这两个方向
+	// 也是切完之后两段都直接继承、不受这次切割影响的边界。
+	int endFace1 = splitAlongX ? FACE_NORTH : FACE_WEST;
+	int endFace2 = splitAlongX ? FACE_SOUTH : FACE_EAST;
+	Road* endRoad1 = GetBoundaryRoad(endFace1);
+	Road* endRoad2 = GetBoundaryRoad(endFace2);
+	if (!endRoad1 && !endRoad2) {
+		return failResult; // 关键设计决策8：两端都没有已有路可连，拒绝产生孤岛小路
+	}
+
+	float lx1 = splitAlongX ? splitCoordinate : 0.f;
+	float ly1 = splitAlongX ? 0.f : splitCoordinate;
+	float lx2 = splitAlongX ? splitCoordinate : sizeX;
+	float ly2 = splitAlongX ? sizeY : splitCoordinate;
+	auto [wx1, wy1] = GetPosition(lx1, ly1);
+	auto [wx2, wy2] = GetPosition(lx2, ly2);
+
+	// 受这次切割影响的一对方向：splitAlongX时是WEST/EAST，否则是NORTH/SOUTH。lower段（局部
+	// 坐标较小的一侧）保留原WEST(或NORTH)、新的一侧指向小路；upper段反过来。
+	int lowerKeepFace = splitAlongX ? FACE_WEST : FACE_NORTH;
+	int upperKeepFace = splitAlongX ? FACE_EAST : FACE_SOUTH;
+	int lowerPathFace = splitAlongX ? FACE_EAST : FACE_SOUTH;
+	int upperPathFace = splitAlongX ? FACE_WEST : FACE_NORTH;
+
+	float lowerW, lowerH, upperW, upperH, lowerLocalCX, lowerLocalCY, upperLocalCX, upperLocalCY;
+	if (splitAlongX) {
+		lowerW = splitCoordinate - half;
+		lowerH = sizeY;
+		lowerLocalCX = lowerW / 2.f;
+		lowerLocalCY = sizeY / 2.f;
+
+		upperW = sizeX - (splitCoordinate + half);
+		upperH = sizeY;
+		upperLocalCX = splitCoordinate + half + upperW / 2.f;
+		upperLocalCY = sizeY / 2.f;
+	}
+	else {
+		lowerW = sizeX;
+		lowerH = splitCoordinate - half;
+		lowerLocalCX = sizeX / 2.f;
+		lowerLocalCY = lowerH / 2.f;
+
+		upperW = sizeX;
+		upperH = sizeY - (splitCoordinate + half);
+		upperLocalCX = sizeX / 2.f;
+		upperLocalCY = splitCoordinate + half + upperH / 2.f;
+	}
+
+	if (lowerW < MIN_LOT_EXTENT || lowerH < MIN_LOT_EXTENT || upperW < MIN_LOT_EXTENT || upperH < MIN_LOT_EXTENT) {
+		return failResult;
+	}
+
+	Road* pathRoad = new Road("path", Node("path", wx1, wy1), Node("path", wx2, wy2), "", 0.f);
+	pathRoad->SetPathRoad(true);
+	pathRoad->AddVehicleLane(0, spec.vehicleWidth);
+	pathRoad->AddVehicleLane(1, spec.vehicleWidth);
+	pathRoad->AddPedestrianLane(0, spec.pedestrianWidth);
+	pathRoad->AddPedestrianLane(1, spec.pedestrianWidth);
+
+	// 小路接到一条"大路"(非小路)上的那一端，给大路标一个开口——只是几何/渲染意义上的路面
+	// 缺口标记(RoadOpening)，不触碰导航图(不调用Map::AddRoadAccessNode那套断线逻辑)，等以后
+	// 真正设计小路的导航接入方式时再处理，见geometry.md"已知简化"一节。两条小路互相连接的
+	// 路口不算"大路被开口"，不在这里标记。forwardSide/isVehicle这两个字段目前没有消费方会
+	// 读（只有Map::AddRoadAccessNode自己产出的开口才用得到，用来选车道），随便填一个值即可。
+	if (endRoad1 && !endRoad1->IsPathRoad()) {
+		RoadOpening opening;
+		opening.t = ProjectT(endRoad1, wx1, wy1);
+		opening.width = pathWidth;
+		opening.forwardSide = true;
+		opening.isVehicle = true;
+		endRoad1->AddOpening(opening);
+	}
+	if (endRoad2 && !endRoad2->IsPathRoad()) {
+		RoadOpening opening;
+		opening.t = ProjectT(endRoad2, wx2, wy2);
+		opening.width = pathWidth;
+		opening.forwardSide = true;
+		opening.isVehicle = true;
+		endRoad2->AddOpening(opening);
+	}
+
+	auto [lowerWorldX, lowerWorldY] = GetPosition(lowerLocalCX, lowerLocalCY);
+	auto [upperWorldX, upperWorldY] = GetPosition(upperLocalCX, upperLocalCY);
+
+	Lot* lowerLot = new Lot(lowerWorldX, lowerWorldY, lowerW, lowerH, rotation);
+	Lot* upperLot = new Lot(upperWorldX, upperWorldY, upperW, upperH, rotation);
+
+	if (endRoad1) { lowerLot->SetBoundaryRoad(endFace1, endRoad1); upperLot->SetBoundaryRoad(endFace1, endRoad1); }
+	if (endRoad2) { lowerLot->SetBoundaryRoad(endFace2, endRoad2); upperLot->SetBoundaryRoad(endFace2, endRoad2); }
+
+	Road* keepRoadLower = GetBoundaryRoad(lowerKeepFace);
+	Road* keepRoadUpper = GetBoundaryRoad(upperKeepFace);
+	if (keepRoadLower) lowerLot->SetBoundaryRoad(lowerKeepFace, keepRoadLower);
+	if (keepRoadUpper) upperLot->SetBoundaryRoad(upperKeepFace, keepRoadUpper);
+	lowerLot->SetBoundaryRoad(lowerPathFace, pathRoad);
+	upperLot->SetBoundaryRoad(upperPathFace, pathRoad);
+
+	SplitResult result;
+	result.lowerLot = lowerLot;
+	result.upperLot = upperLot;
+	result.pathRoad = pathRoad;
+	return result;
+}
+
+vector<Lot*>& Lot::GetFreeLots() {
+	if (!freeLotsInitialized) {
+		freeLotsInitialized = true;
+		Lot* self = new Lot(posX, posY, sizeX, sizeY, rotation);
+		for (auto& [dir, road] : boundaryRoads) {
+			self->SetBoundaryRoad(dir, road);
+		}
+		freeLots.push_back(self);
+	}
+	return freeLots;
+}
+
+float Lot::GetFreeAcreage() {
+	float sum = 0.f;
+	for (Lot* free : GetFreeLots()) {
+		sum += free->GetAcreage();
+	}
+	return sum;
+}
+
+bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, float depth,
+	const PathLaneSpec& spec, Quad* outPlaced) {
+
+	if (!GetBoundaryRoad(direction)) {
+		return false; // 关键设计决策3：方向没有路，直接拒绝
+	}
+
+	float targetXMin, targetXMax, targetYMin, targetYMax;
+	switch (direction) {
+	case FACE_WEST:
+		targetXMin = 0.f; targetXMax = depth;
+		targetYMin = marginStart; targetYMax = sizeY - marginEnd;
+		break;
+	case FACE_EAST:
+		targetXMin = sizeX - depth; targetXMax = sizeX;
+		targetYMin = marginStart; targetYMax = sizeY - marginEnd;
+		break;
+	case FACE_NORTH:
+		targetYMin = 0.f; targetYMax = depth;
+		targetXMin = marginStart; targetXMax = sizeX - marginEnd;
+		break;
+	default: // FACE_SOUTH
+		targetYMin = sizeY - depth; targetYMax = sizeY;
+		targetXMin = marginStart; targetXMax = sizeX - marginEnd;
+		break;
+	}
+	if (targetXMax - targetXMin < MIN_LOT_EXTENT || targetYMax - targetYMin < MIN_LOT_EXTENT) {
+		return false;
+	}
+
+	auto [twx1, twy1] = GetPosition(targetXMin, targetYMin);
+	auto [twx2, twy2] = GetPosition(targetXMax, targetYMax);
+
+	auto& pool = GetFreeLots();
+	for (size_t i = 0; i < pool.size(); i++) {
+		Lot* candidate = pool[i];
+		auto [lx1, ly1] = ToLocal(*candidate, rotation, twx1, twy1);
+		auto [lx2, ly2] = ToLocal(*candidate, rotation, twx2, twy2);
+		float lxmin = min(lx1, lx2), lxmax = max(lx1, lx2);
+		float lymin = min(ly1, ly2), lymax = max(ly1, ly2);
+
+		const float eps = 1e-2f;
+		if (lxmin < -eps || lymin < -eps || lxmax > candidate->GetSizeX() + eps || lymax > candidate->GetSizeY() + eps) {
+			continue; // 目标矩形没有完全落在这块自由地里，换下一块
+		}
+
+		Lot* working = candidate;
+		vector<Lot*> survivors;
+		bool ok = true;
+		float pathHalf = (spec.vehicleWidth * 2.f + spec.pedestrianWidth * 2.f) / 2.f;
+
+		auto reproject = [&]() {
+			auto [ax1, ay1] = ToLocal(*working, rotation, twx1, twy1);
+			auto [ax2, ay2] = ToLocal(*working, rotation, twx2, twy2);
+			return make_tuple(min(ax1, ax2), max(ax1, ax2), min(ay1, ay2), max(ay1, ay2));
+		};
+
+		auto cutKeepLower = [&](bool alongXAxis, float cutCoord) -> bool {
+			auto res = working->SplitWithPath(alongXAxis, cutCoord, spec);
+			if (!res.pathRoad) return false;
+			pathRoads.push_back(res.pathRoad);
+			if (res.upperLot->GetSizeX() >= MIN_LOT_EXTENT && res.upperLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.upperLot)) {
+				survivors.push_back(res.upperLot);
+			}
+			else {
+				delete res.upperLot;
+			}
+			delete working;
+			working = res.lowerLot;
+			return true;
+		};
+		auto cutKeepUpper = [&](bool alongXAxis, float cutCoord) -> bool {
+			auto res = working->SplitWithPath(alongXAxis, cutCoord, spec);
+			if (!res.pathRoad) return false;
+			pathRoads.push_back(res.pathRoad);
+			if (res.lowerLot->GetSizeX() >= MIN_LOT_EXTENT && res.lowerLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.lowerLot)) {
+				survivors.push_back(res.lowerLot);
+			}
+			else {
+				delete res.lowerLot;
+			}
+			delete working;
+			working = res.upperLot;
+			return true;
+		};
+
+		bool depthAlongX = (direction == FACE_WEST || direction == FACE_EAST);
+		bool touchesLowEnd = (direction == FACE_WEST || direction == FACE_NORTH);
+
+		// ①深度方向：裁掉目标矩形远离道路一侧的多余部分（如果目标已经顶到这块自由地的最远端
+		// 就跳过）
+		{
+			auto [wxmin, wxmax, wymin, wymax] = reproject();
+			float depthMin = depthAlongX ? wxmin : wymin;
+			float depthMax = depthAlongX ? wxmax : wymax;
+			float depthExtent = depthAlongX ? working->GetSizeX() : working->GetSizeY();
+			if (touchesLowEnd) {
+				if (depthExtent - depthMax > 1e-2f) ok = cutKeepLower(depthAlongX, depthMax + pathHalf);
+			}
+			else {
+				if (depthMin > 1e-2f) ok = cutKeepUpper(depthAlongX, depthMin - pathHalf);
+			}
+		}
+
+		// ②③沿道路方向(frontage轴)：依次裁掉marginStart端、marginEnd端的多余部分
+		if (ok) {
+			auto [wxmin, wxmax, wymin, wymax] = reproject();
+			float frontMin = depthAlongX ? wymin : wxmin;
+			if (frontMin > 1e-2f) ok = cutKeepUpper(!depthAlongX, frontMin - pathHalf);
+		}
+		if (ok) {
+			auto [wxmin, wxmax, wymin, wymax] = reproject();
+			float frontMax = depthAlongX ? wymax : wxmax;
+			float frontExtent = depthAlongX ? working->GetSizeY() : working->GetSizeX();
+			if (frontExtent - frontMax > 1e-2f) ok = cutKeepLower(!depthAlongX, frontMax + pathHalf);
+		}
+
+		if (!ok) {
+			// working是最后一次失败的裁剪之前的状态(仍然有效，没有被delete)，survivors是
+			// 期间已经成功剥离出去的存活子块——如果candidate本身已经被中途的裁剪delete掉
+			// (working != candidate)，pool[i]这个槽位就是悬空指针，必须换成working，不能
+			// 直接留着candidate的旧值。
+			pool[i] = working;
+			for (Lot* s : survivors) pool.push_back(s);
+			return false;
+		}
+
+		outPlaced->SetPosition(working->GetPosX(), working->GetPosY(), working->GetSizeX(), working->GetSizeY());
+
+		pool.erase(pool.begin() + i);
+		delete working;
+		for (Lot* s : survivors) {
+			pool.push_back(s);
+		}
+		return true;
+	}
+
+	return false;
+}
+
+vector<Lot::FillResult> Lot::FillRemainder(const PathLaneSpec& spec,
+	const function<float(const string&)>& randomAcreage,
+	const function<pair<float, float>(const string&)>& acreageMinMax) {
+
+	vector<FillResult> results;
+	if (candidates.empty()) return results;
+
+	float totalWeight = 0.f;
+	for (auto& [type, w] : candidates) totalWeight += w;
+	if (totalWeight <= 0.f) return results;
+
+	auto& pool = GetFreeLots();
+	constexpr int MAX_ATTEMPTS = 200;
+	int attempts = 0;
+	float pathWidth = spec.vehicleWidth * 2.f + spec.pedestrianWidth * 2.f;
+
+	while (attempts < MAX_ATTEMPTS && !pool.empty()) {
+		int bestIdx = -1;
+		for (size_t i = 0; i < pool.size(); i++) {
+			if (pool[i]->GetSizeX() < MIN_LOT_EXTENT || pool[i]->GetSizeY() < MIN_LOT_EXTENT) continue;
+			if (bestIdx < 0 || pool[i]->GetAcreage() > pool[(size_t)bestIdx]->GetAcreage()) bestIdx = static_cast<int>(i);
+		}
+		if (bestIdx < 0) break;
+		Lot* target = pool[static_cast<size_t>(bestIdx)];
+
+		float r = GetRandom(10000) / 10000.f * totalWeight;
+		string chosenType = candidates.back().first;
+		float acc = 0.f;
+		for (auto& [type, w] : candidates) {
+			acc += w;
+			if (r <= acc) { chosenType = type; break; }
+		}
+
+		float acreage = randomAcreage(chosenType);
+		float minA = acreageMinMax(chosenType).first;
+		if (target->GetAcreage() < minA) {
+			// 这块自由地太小，放弃它，不再参与后续尝试
+			pool.erase(pool.begin() + bestIdx);
+			attempts++;
+			continue;
+		}
+		if (acreage > target->GetAcreage()) acreage = target->GetAcreage();
+
+		bool reachableWE = target->GetBoundaryRoad(FACE_WEST) || target->GetBoundaryRoad(FACE_EAST);
+		bool reachableNS = target->GetBoundaryRoad(FACE_NORTH) || target->GetBoundaryRoad(FACE_SOUTH);
+
+		// 分割轴选择（要求5）：默认选"能让两侧都保住可达性"的那个轴——可达边在东/西侧就选
+		// 南北向切(splitAlongX=false)，两侧仍各自保留一段东/西边界；可达边在南/北侧就选东西
+		// 向切(splitAlongX=true)。只有在按这个轴切会导致某一侧宽度不足(阈值7，留余量)时才
+		// 被迫换轴——换轴意味着这个方向本来就没有可达边界，任何裁剪都可能切出孤岛，所以下面
+		// 每一刀都用SplitWithPath自己的"两端至少一端连已有路"检查兜底，失败就放弃这一刀而不是
+		// 强行执行，不会再出现"切了但两端都是孤岛"的情况。
+		bool splitAlongX;
+		if (reachableWE && !reachableNS) {
+			splitAlongX = target->GetSizeY() >= FORCED_AXIS_SWITCH_EXTENT ? false : true;
+		}
+		else if (reachableNS && !reachableWE) {
+			splitAlongX = target->GetSizeX() >= FORCED_AXIS_SWITCH_EXTENT ? true : false;
+		}
+		else {
+			// 两个方向都可达或都不可达：按较长边切(和老工程一致的默认策略)
+			splitAlongX = target->GetSizeX() > target->GetSizeY();
+		}
+
+		// 目标footprint尽量做成正方形（边长=sqrt(acreage)），面宽/进深各自被target在对应轴上
+		// 的实际尺寸夹住——老版本直接用target整条面宽反推进深，面宽远大于sqrt(acreage)时进深
+		// 会薄到不满足最小2x2单位，SplitWithPath直接失败、这块地就被整块丢弃，是之前大片
+		// 可达区域却没有铺Zone/Building的根因。这次分两刀裁：先在深度轴上裁到wantedDepth，
+		// 再在面宽轴上裁到wantedFrontage，任何一刀因为尺寸/可达性裁不动就跳过那一刀，最终
+		// 用当前实际裁出来的矩形（可能比目标footprint大）落地，不会再整块放弃。
+		float depthExtent = splitAlongX ? target->GetSizeX() : target->GetSizeY();
+		float frontageExtent = splitAlongX ? target->GetSizeY() : target->GetSizeX();
+		float side = sqrtf(acreage / ACREAGE_SCALE_FACTOR);
+		float wantedFrontage = min(side, frontageExtent);
+		float wantedDepth = acreage / (wantedFrontage * ACREAGE_SCALE_FACTOR);
+		if (wantedDepth > depthExtent) {
+			wantedDepth = depthExtent;
+			wantedFrontage = min(acreage / (wantedDepth * ACREAGE_SCALE_FACTOR), frontageExtent);
+		}
+
+		Lot* working = target;
+		bool workingIsPoolEntry = true;
+		vector<Lot*> survivors;
+
+		// ①深度方向：裁掉超出wantedDepth的远端富余（裁不动就跳过，working保持不变）
+		if (depthExtent - wantedDepth > pathWidth + 1e-3f) {
+			auto res = working->SplitWithPath(splitAlongX, wantedDepth + pathWidth / 2.f, spec);
+			if (res.pathRoad) {
+				pathRoads.push_back(res.pathRoad);
+				if (res.upperLot->GetSizeX() >= MIN_LOT_EXTENT && res.upperLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.upperLot)) {
+					survivors.push_back(res.upperLot);
+				}
+				else {
+					delete res.upperLot;
+				}
+				if (!workingIsPoolEntry) delete working;
+				working = res.lowerLot;
+				workingIsPoolEntry = false;
+			}
+		}
+
+		// ②面宽方向：裁掉超出wantedFrontage的富余（裁不动就跳过）
+		{
+			float curFrontage = splitAlongX ? working->GetSizeY() : working->GetSizeX();
+			if (curFrontage - wantedFrontage > pathWidth + 1e-3f) {
+				auto res = working->SplitWithPath(!splitAlongX, wantedFrontage + pathWidth / 2.f, spec);
+				if (res.pathRoad) {
+					pathRoads.push_back(res.pathRoad);
+					if (res.upperLot->GetSizeX() >= MIN_LOT_EXTENT && res.upperLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.upperLot)) {
+						survivors.push_back(res.upperLot);
+					}
+					else {
+						delete res.upperLot;
+					}
+					if (!workingIsPoolEntry) delete working;
+					working = res.lowerLot;
+					workingIsPoolEntry = false;
+				}
+			}
+		}
+
+		results.push_back({ chosenType, Quad(working->GetPosX(), working->GetPosY(), working->GetSizeX(), working->GetSizeY()) });
+
+		pool.erase(pool.begin() + bestIdx);
+		if (!workingIsPoolEntry) delete working;
+		for (Lot* s : survivors) pool.push_back(s);
+
+		attempts++;
+	}
+
+	return results;
+}
+
+const vector<Road*>& Lot::GetPathRoads() const {
+	return pathRoads;
+}
+
+void Lot::AddCandidate(const string& type, float weight) {
+	candidates.emplace_back(type, weight);
+}
+
+const vector<pair<string, float>>& Lot::GetCandidates() const {
+	return candidates;
+}
+
+void Lot::ClearCandidates() {
+	candidates.clear();
 }

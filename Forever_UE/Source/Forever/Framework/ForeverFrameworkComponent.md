@@ -8,14 +8,14 @@
 | 域组件 | 旧Framework Actor | 旧C++ Base类(Core层) |
 |---|---|---|
 | `UForeverAssetFrameworkComponent` | Asset | `AssetBase` |
-| `UForeverBuildingFrameworkComponent` | Building | `BuildingBase` |
+| `UForeverBuildingFrameworkComponent` | Building | `BuildingBase`（阶段4-1已落地，独立文档见`ForeverBuildingFrameworkComponent.md`） |
 | `UForeverPopulaceFrameworkComponent` | Populace | `PopulaceBase` |
 | `UForeverRoadnetFrameworkComponent` | Roadnet | `RoadnetBase`（阶段4-1已落地，独立文档见`ForeverRoadnetFrameworkComponent.md`） |
 | `UForeverRoomFrameworkComponent` | Room | `RoomBase` |
 | `UForeverStoryFrameworkComponent` | Story | `StoryBase` |
 | `UForeverTerrainFrameworkComponent` | Terrain | `TerrainBase`（阶段4-1已落地，独立文档见`ForeverTerrainFrameworkComponent.md`） |
 | `UForeverTrafficFrameworkComponent` | Traffic | `TrafficBase` |
-| `UForeverZoneFrameworkComponent` | Zone | `ZoneBase` |
+| `UForeverZoneFrameworkComponent` | Zone | `ZoneBase`（阶段4-1已落地，独立文档见`ForeverZoneFrameworkComponent.md`） |
 
 **没有`UForeverGlobalFrameworkComponent`（阶段4-1移除）**：阶段2最初按旧工程9个Framework Actor（含Global）1:1建了10个域组件，但`Global`（旧C++ Base类`GlobalBase`）原本的作用就是"旧工程里那个唯一放在关卡里、串起其它Framework Actor的入口"——这个角色现在整个由`AForeverFrameworkActor`自己承担了，不需要再在它内部嵌一个名叫"Global"的子组件重复扮演"可放置入口"这件事。`GlobalBase`真正的业务逻辑（`GlobalPause`/`DrawMap`/`InitPhone`等）将来直接落在`AForeverFrameworkActor`自己身上，不会有对应的域组件，详见`ForeverFrameworkActor.md`和`PHASE4_PLAN.md`。
 

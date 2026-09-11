@@ -26,8 +26,14 @@ Node分裂车道，这些老工程完全没有对应实现，是本次会话跟�
   地"，后面Zone/Building迁移时会在lot里继续摆内容，需要知道这块地临哪条路（建筑朝向、出入口
   该开在哪条路上），所以边界`Road`信息要留着；但lot四角对应哪个`Intersection`这次用不上——
   车行/行人导航图直接挂在`Road`/`Intersection`上（见`Source/Core/map/roadnet.h`的`RoadJunction`），
-  不需要通过lot中转。`unordered_map<int, Road>`的`int`键沿用`geometry.h`的`FACE_DIRECTION`
-  （0-3）。
+  不需要通过lot中转。`unordered_map<int, Road*>`的`int`键沿用`geometry.h`的`FACE_DIRECTION`
+  （0-3）。**这里存的是`Road*`，而且必须指向`this->roads`里的同一个元素，不能是另外
+  new/构造的独立对象**（第十一轮迁移，Zone/Building裁剪Lot空间时给"大路"加开口
+  (`Lot::SplitWithPath`调`Road::AddOpening`)才发现的问题：最初这里存的是`Road`值，编译能
+  过，PIE里却看不到开口——因为改的是lot边界这份独立拷贝，`roads`里真正会被渲染的那条路根本
+  没变。所以这个字段类型从`Road`改成了`Road*`，且要求实现方自己保证指针有效性——取地址前必须
+  确保`this->roads`不会再增长，`vector`扩容会让之前取的地址失效，具体做法见`roadnet_basic.md`
+  "`makeBoundaryRoad`"一节）。
 - **车道/开口数据直接挂在`Road`自己身上**（`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/
   `openings`，见`geometry.h`），不是`RoadnetMod`这一层的字段——`RoadnetMod`只负责产出`Road`
   实例，实例本身已经携带了这些数据。
@@ -41,13 +47,22 @@ Node分裂车道，这些老工程完全没有对应实现，是本次会话跟�
   （`roadnet_mod.cpp`）照抄老工程语义：取`connection`在`[t1,t2]`两端的点，中点定位、两点
   连线方向定朝向、弧长定长度、`width`定宽度，包成一个`Quad`追加进`hatches`。
 
+- **`pathRoadMaterial`（第九轮迁移，Zone/Building落地时新增）**：Zone/Building裁剪`Lot`自由
+  空间时，每次真正的切分都会自动生成一条1单位宽的小路`Road`（见`Source/Dependence/map/
+  geometry.md`的`Lot::SplitWithPath`）。这条小路不走现有"按左右车道数选`default_x_x_x`资产"
+  的道路mesh管线（0.3车行/0.2人行两侧这种非整车道宽度套不进那套命名约定），Forever层直接画
+  一个贴材质的扁cube，材质路径就是这个字段——留空表示mod没有指定，退化用`RoadPlain`。普通
+  `public`字符串成员，和`externs`/`roads`等现有字段风格一致，`JingRoadnet`这次不设置也是
+  合法状态。
+
 ## 依赖关系
 
 - 依赖：`map/geometry.h`（`Node`/`Intersection`/`Road`/`Lot`）。
-- 被谁依赖：`Source/Core/map/roadnet.h`（`Roadnet`包装类持有`RoadnetMod*`）、
-  `Source/Basic/map/roadnet_basic.h`（`JingRoadnet`）、`Forever_Mod/Empty`的`EmptyRoadnet`
-  demo mod。
+- 被谁依赖：`Source/Core/map/roadnet.h`（`Roadnet`包装类持有`RoadnetMod*`，`pathRoadMaterial`
+  在`DistributeRoadnet`时原样拷贝一份）、`Source/Basic/map/roadnet_basic.h`（`JingRoadnet`）、
+  `Forever_Mod/Empty`的`EmptyRoadnet`demo mod。
 
 ## 待办/后续阶段
 
-- 阶段4：Zone/Building迁移时会开始真正读取lot的边界`Road`映射（建筑朝向、出入口选路）。
+- 阶段4：Zone/Building已经开始读取lot的边界`Road`映射（`Lot::RequestPlacement`/
+  `SplitWithPath`），详见`Source/Core/map/map.md`"InitZones/InitBuildings"一节。

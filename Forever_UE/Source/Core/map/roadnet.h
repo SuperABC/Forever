@@ -108,6 +108,10 @@ public:
 	// mod->hatches，不需要像Node/Road那样深拷贝。
 	const std::vector<std::pair<Quad, float>>& GetHatches() const;
 
+	// Zone/Building裁剪Lot自由空间时用的小路材质路径，直接拷贝自mod->pathRoadMaterial
+	// (纯字符串，不需要深拷贝)。留空表示mod没有指定，Forever层退化用RoadPlain。
+	const std::string& GetPathRoadMaterial() const;
+
 	// 遍历每个lot的边界Road映射，给lot分配(路名,序号)地址；照抄老工程Roadnet::AllocateAddress语义。
 	void AllocateAddress();
 	Lot* LocateLot(const std::string& road, int index) const;
@@ -123,6 +127,7 @@ private:
 	std::vector<Road*> roads;
 	std::vector<Lot*> lots;
 	std::vector<std::pair<Quad, float>> hatches;
+	std::string pathRoadMaterial;
 
 	std::unordered_map<std::string, std::vector<Lot*>> addressesByRoad;
 };

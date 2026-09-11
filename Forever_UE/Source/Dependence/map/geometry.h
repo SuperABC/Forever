@@ -173,7 +173,10 @@ public:
 	~Intersection();
 };
 
-// 车道分裂/开口标记（Map::AddRoadAccessNode产出），直接挂在Road自己身上，不在Map侧另开表。
+// 车道分裂/开口标记，直接挂在Road自己身上，不在Map侧另开表。两个产出方：①Map::
+// AddRoadAccessNode——同时断开导航图车道贯通线、用forwardSide/isVehicle选中具体车道；
+// ②Lot::SplitWithPath——小路接到一条大路上时标一个纯几何/渲染意义的开口，不碰导航图，这种
+// 情况forwardSide/isVehicle没有意义(没有消费方会读，只是保留默认值)。
 // t: 沿Road弧长比例位置；width: 开口沿道路方向的长度；forwardSide: 取用road哪一侧
 // （vehicleLanes[0]/pedestrianLanes[0]为true，[1]为false）；isVehicle: 车行(true)还是行人(false)开口。
 struct RoadOpening {
@@ -230,6 +233,14 @@ public:
 	// side(0/1)车行+停车+人行道宽度总和。
 	float GetSideWidth(int side) const;
 
+	// 是否是Zone/Building裁剪Lot自由空间时自动生成的小路（Lot::SplitWithPath创建），
+	// 不是RoadnetMod铺设的正式路。分类信息记在Road自己身上——持有Road*的调用方（比如以后
+	// 要重新给小路接导航图时）直接问这条Road自己就够了，不需要额外拿着Map的某个列表去做
+	// 成员检查（之前ConnectPathRoad那版就是反面教材：查Map::pathRoads.find()才知道
+	// 一条Road是不是小路，被撤销的同时也带出了这个设计问题）。
+	void SetPathRoad(bool isPath = true);
+	bool IsPathRoad() const;
+
 	// 两侧宽度相加——Connection连线代表的是整条车道横断面的**几何中心**，不是两侧的分界线
 	// （哪怕side0/side1车道数、宽度完全不对称，甚至单行道只有一侧有车道，连线也严格居中），
 	// 这个值就是这条路在路口/lot边界处需要让出的横向总宽度。详见roadnet.md"车道居中"一节。
@@ -249,20 +260,7 @@ private:
 	std::vector<float> parkingLanes[2];
 	std::vector<float> pedestrianLanes[2];
 	std::vector<RoadOpening> openings;
-};
-
-struct QuadBoundary {
-	// 四角节点
-	Node* corners[4] = { nullptr, nullptr, nullptr, nullptr };
-
-	// 四边连接
-	Connection* edges[4] = { nullptr, nullptr, nullptr, nullptr };
-
-	/*
-	* 将edges里恰好出现在removed中的边引用置空（角点不会失效，只有被切断的边会失效）
-	* @removed: DivideSpace本次划分输出的失效连接列表
-	*/
-	void Invalidate(const std::vector<Connection*>& removed);
+	bool isPathRoad = false;
 };
 
 class Quad {
@@ -324,20 +322,6 @@ public:
 	// 设置面积（在指定坐标之前设置期望面积）
 	void SetAcreage(float a);
 
-	/*
-	* 递归分割内部空间，并记录分割过程中产生/失效的导航节点与连接
-	* @elements: 待分割摆放的子矩形元素
-	* @boundary: 当前矩形已有的四角四边（非持有引用，不会被回收）
-	* @toWorld: 将矩形局部坐标转换为世界坐标的方法，仅在创建新节点时调用
-	* @outNewNodes, outNewConnections: 本次调用新创建的节点与连接（追加写入）
-	* @outRemovedConnections: 因被切分而失效、需要从导航图移除并释放的旧连接（追加写入）
-	* @outElementBoundaries: 每个叶子元素最终所在的四角四边（按元素指针索引）
-	*/
-	void DivideSpace(std::vector<Quad*>& elements, const QuadBoundary& boundary,
-		const std::function<std::pair<float, float>(float, float)>& toWorld, std::string category,
-		std::vector<Node*>& outNewNodes, std::vector<Connection*>& outNewConnections,
-		std::vector<Connection*>& outRemovedConnections, std::unordered_map<Quad*, QuadBoundary>& outElementBoundaries);
-
 protected:
 	// 中心点坐标x
 	float posX;
@@ -353,32 +337,6 @@ protected:
 
 	// 面积
 	float acreage;
-
-private:
-	/*
-	* 记录elem最终落位的边界：若elem是尚待继续分割的Space则写入其boundary字段，否则写入叶子元素的输出表
-	* @elem: 待记录边界的元素
-	* @boundary: elem最终落位的四角四边
-	* @outElementBoundaries: 叶子元素最终所在的四角四边（按元素指针索引）
-	*/
-	static void RecordBoundary(Quad* elem, const QuadBoundary& boundary,
-		std::unordered_map<Quad*, QuadBoundary>& outElementBoundaries);
-
-	/*
-	* 将boundary范围内的a、b两个子矩形按面积比沿长边二分定位，记录切分产生的新节点与新旧连接
-	* @left, right, bottom, top: 当前待分割区域的边界
-	* @boundary: 当前区域已有的四角四边
-	* @a, b: 待定位的两个子矩形
-	* @toWorld: 将矩形局部坐标转换为世界坐标的方法，仅在创建新节点时调用
-	* @outNewNodes, outNewConnections: 本次调用新创建的节点与连接（追加写入）
-	* @outRemovedConnections: 因被切分而失效、需要从导航图移除并释放的旧连接（追加写入）
-	* @outElementBoundaries: 每个叶子元素最终所在的四角四边（按元素指针索引）
-	*/
-	static void SplitInto(float left, float right, float bottom, float top, const QuadBoundary& boundary,
-		Quad* a, Quad* b, const std::function<std::pair<float, float>(float, float)>& toWorld, std::string category,
-		std::vector<Node*>& outNewNodes, std::vector<Connection*>& outNewConnections,
-		std::vector<Connection*>& outRemovedConnections,
-		std::unordered_map<Quad*, QuadBoundary>& outElementBoundaries);
 };
 
 enum AREA_TYPE : int {
@@ -399,6 +357,26 @@ enum AREA_TYPE : int {
 	AREA_END
 };
 
+class Lot;
+
+// 小路车道配置：车行vehicleWidth+人行pedestrianWidth各两侧，无停车道，宽度固定
+// vehicleWidth*2+pedestrianWidth*2（默认0.3/0.2，两侧共1单位）。小路的材质是全图统一的一个
+// 值（Roadnet::GetPathRoadMaterial()），不需要每条小路自己记一份，因此不在这个结构体里。
+struct PathLaneSpec {
+	float vehicleWidth = 0.3f;
+	float pedestrianWidth = 0.2f;
+};
+
+// Zone/Building的mod往Lot里指定一块贴着某条边界路的矩形区域时使用：direction是贴哪一侧
+// (FACE_DIRECTION)，marginStart/marginEnd是沿该路方向距两端的距离，depth是离路的进深。
+struct LotPlacementRequest {
+	Lot* lot = nullptr;
+	int direction = FACE_WEST;
+	float marginStart = 0.f;
+	float marginEnd = 0.f;
+	float depth = 0.f;
+};
+
 class Lot : public Quad {
 public:
 	// 构造空地块
@@ -413,7 +391,8 @@ public:
 	// 根据连续四个端点构造地块
 	Lot(Node n1, Node n2, Node n3, Node n4, std::vector<float> margin = std::vector<float>(4, 0.f));
 
-	// 无析构
+	// 释放freeLots里持有的每个子Lot*、以及pathRoads里持有的每条小路Road*（其余成员都是非
+	// 持有指针，不需要额外清理）。
 	virtual ~Lot();
 
 	// 获取旋转
@@ -455,6 +434,66 @@ public:
 	Road* GetBoundaryRoad(int direction) const;
 	const std::unordered_map<int, Road*>& GetBoundaryRoads() const;
 
+	// 把当前矩形沿splitAlongX方向、在局部坐标splitCoordinate处（原点在左下角，参照GetPosition
+	// 的局部坐标系）切成两段，中间嵌入一条按spec配置车道的1单位宽小路Road（构造出来后立刻
+	// SetPathRoad(true)标记自己，其余调用方以后可以直接问这条Road自己，不需要另外记表）。
+	// splitAlongX为true时切割线垂直于局部X轴（南北向小路，两段都保留原NORTH/SOUTH边界，各自的
+	// WEST/EAST一个继承原边界、一个指向新小路）；为false时反过来（东西向小路，两段都保留原
+	// WEST/EAST边界，各自的NORTH/SOUTH一个继承原边界、一个指向新小路）。小路两端如果落在一条
+	// "大路"（非小路的边界Road）上，就给那条大路加一个RoadOpening标记路面缺口（宽度=小路总宽，
+	// t按直线投影近似算，见实现的ProjectT）；落在另一条小路上则不标（两条小路的路口不算"大路
+	// 被开口"）。这一步只是几何/渲染标记，不接入导航图——两端原有的边界Road不会被这次切割改动
+	// 任何Connection数据，导航图目前只覆盖RoadnetMod铺设的路（见map.md"InitRoadnet"一节），
+	// 开口处以后要不要接导航node、怎么接，留到需要时再设计。
+	// 如果this在splitAlongX对应的两个端面方向（splitAlongX时是NORTH/SOUTH，否则WEST/EAST）
+	// 都没有边界Road，直接拒绝，返回{nullptr,nullptr,nullptr}——不产生两端都不挨路的孤岛小路。
+	// splitCoordinate不在有效范围内（切不出两段有效尺寸）同样返回{nullptr,nullptr,nullptr}。
+	struct SplitResult {
+		Lot* lowerLot = nullptr;
+		Lot* upperLot = nullptr;
+		Road* pathRoad = nullptr;
+	};
+	SplitResult SplitWithPath(bool splitAlongX, float splitCoordinate, const PathLaneSpec& spec);
+
+	// 自由子地块池：只读枚举，惰性初始化——第一次通过RequestPlacement/FillRemainder访问时，
+	// 如果freeLots还是空的，先塞入一个和this自身范围重合、边界Road直接继承this->boundaryRoads
+	// 的初始元素。子地块不会再有自己的子地块，只有顶层Lot会真正用到这个池。
+	std::vector<Lot*>& GetFreeLots();
+	float GetFreeAcreage();
+
+	// 在freeLots中找一块贴着direction方向道路、放得下[marginStart,marginEnd]x[0,depth]矩形的
+	// 自由子块，精确裁剪出来。direction在this(顶层Lot)自己的边界Road表里没有对应Road时直接
+	// 返回false，不做任何回退。裁剪通过最多3次SplitWithPath调用完成，新增小路记进this自己的
+	// pathRoads（见下GetPathRoads注释——this就是RoadnetMod初始化的那个顶层Lot，调用方不需要
+	// 另外传引用出参收集）；不满足最小2x2单位或不可达的子块被丢弃，不追加回freeLots。成功
+	// 返回true，*outPlaced写入裁出的世界坐标矩形；失败返回false，freeLots不变。
+	bool RequestPlacement(int direction, float marginStart, float marginEnd, float depth,
+		const PathLaneSpec& spec, Quad* outPlaced);
+
+	// 对freeLots和候选权重表做CDF随机填充，每确定一个候选的目标面积后用SplitWithPath递归二分
+	// 定位到某个freeLot里。分割轴优先选择能让两侧都保住可达性的那个，只有在按这个轴切会导致
+	// 某一侧宽度不足2单位时才被迫换轴（阈值用7留余量），换轴后产生的不可达一侧被丢弃。没有分配
+	// 出去的剩余空间直接丢弃（对应"设成空地"）。新增小路记进this自己的pathRoads，同RequestPlacement。
+	struct FillResult {
+		std::string type;
+		Quad footprint;
+	};
+	std::vector<FillResult> FillRemainder(const PathLaneSpec& spec,
+		const std::function<float(const std::string&)>& randomAcreage,
+		const std::function<std::pair<float, float>(const std::string&)>& acreageMinMax);
+
+	// RequestPlacement/FillRemainder在this(RoadnetMod初始化的顶层Lot)自己的freeLots里切出来的
+	// 每一条小路都记在这里——小路是Zone/Building裁剪这个顶层Lot的空闲空间时产生的副产品，归属
+	// 关系上本来就该跟着这个顶层Lot走，不需要另外找个地方(比如Map)单独维护一份"这些小路是谁的"
+	// 记录。析构时一并delete。Map::GetPathRoads()汇总所有顶层Lot的这个列表供Forever层渲染用。
+	const std::vector<Road*>& GetPathRoads() const;
+
+	// 权重候选表：ZoneMod/BuildingMod的Distribute()对这个lot感兴趣时调用，供FillRemainder用；
+	// Zone阶段和Building阶段之间要显式Clear，避免Zone没用完的权重错误地参与Building阶段抽签。
+	void AddCandidate(const std::string& type, float weight);
+	const std::vector<std::pair<std::string, float>>& GetCandidates() const;
+	void ClearCandidates();
+
 protected:
 	// 旋转角度
 	float rotation;
@@ -465,5 +504,9 @@ protected:
 private:
 	std::vector<std::pair<std::string, int>> addresses;
 	std::unordered_map<int, Road*> boundaryRoads;
+	std::vector<Lot*> freeLots;
+	bool freeLotsInitialized = false;
+	std::vector<std::pair<std::string, float>> candidates;
+	std::vector<Road*> pathRoads;
 };
 

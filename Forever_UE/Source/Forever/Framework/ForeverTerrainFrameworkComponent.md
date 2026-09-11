@@ -16,8 +16,10 @@
   `GetOwner()->AddInstanceComponent(comp)`——这是相对老工程唯一的机械性改动点，LOD/接缝/
   纹理数组构建等算法逻辑本身原样搬。
 - **`Map`的生命周期不归这个组件管**——`AForeverFrameworkActor`持有`Map*`（见
-  `ForeverFrameworkActor.md`），`BeginPlay`时调用`Map::InitTerrains()`+`InitContents()`
-  跑完地形生成后，再调用`GenerateTerrain(map)`把指针交给这个组件，组件只是非持有地引用它。
+  `ForeverFrameworkActor.md`），`BeginPlay`时调用`Map::InitTerrains()`（注册mod+跑地形生成+
+  3x3晋升规则一次性做完，原来拆成`InitTerrains`+`InitContents`两个函数，应用户要求合并回
+  一个，见`Source/Core/map/map.md`）跑完地形生成后，再调用`GenerateTerrain(map)`把指针交给
+  这个组件，组件只是非持有地引用它。
 - **要求#2"挖洞不用ISM"的落地方式（经过多轮修正，这里记录最终版本）**：老工程`BuildLevel`对
   `levelIdx<=1`（近处精细LOD）会算出`constructionRegion[4][4]`——某个8x8-quad子区域**全部**
   元素都是`"construction"`类型时，整块跳过不画，视觉空缺交给Blueprint端的ISM小立方体填。这次

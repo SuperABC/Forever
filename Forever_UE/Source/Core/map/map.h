@@ -2,8 +2,12 @@
 
 #include "terrain.h"
 #include "roadnet.h"
+#include "zone.h"
+#include "building.h"
 #include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"
+#include "map/zone_factory.h"
+#include "map/building_factory.h"
 #include "map/geometry.h"
 #include "common/loader.h"
 
@@ -30,13 +34,15 @@ public:
 	Map(int width, int height);
 	~Map();
 
-	// 用ModLoader发现/注册config.json配置的terrain mod dll,假定调用方已经完成过一次
-	// Config::ReadConfig。
+	// 用ModLoader发现/注册config.json配置的terrain mod dll(假定调用方已经完成过一次
+	// Config::ReadConfig)，再按GetPriority()降序对所有已注册地形执行DistributeTerrain，
+	// 最后执行plain/construction的3x3晋升规则、重建terrainTextures索引表。原来拆成
+	// InitTerrains(只注册)+InitContents(只生成)两个函数，是因为Terrain是第一个迁移的
+	// domain、直接照抄了老工程Map::InitTerrains/InitBlocks本来就分开的结构；后面
+	// InitRoadnet/InitZones/InitBuildings都是这次全新设计、没有对应的老工程两段式可抄，
+	// 一直是注册+生成合并成一个函数，风格不统一，应用户要求合并回一个函数，看齐后面几个
+	// domain的写法。
 	void InitTerrains();
-
-	// 按GetPriority()降序对所有已注册地形执行DistributeTerrain,再执行plain/construction
-	// 的3x3晋升规则,最后重建terrainTextures索引表。
-	void InitContents();
 
 	std::pair<int, int> GetSize() const;
 
@@ -53,7 +59,7 @@ public:
 	// 地形类型 -> {纹理数组槽位索引, diffuse资产路径}
 	const std::unordered_map<std::string, std::pair<int, std::string>>& GetTerrainTextures() const;
 
-	// 用ModLoader发现/注册config.json配置的roadnet mod dll并构建路网,假定InitTerrains+InitContents
+	// 用ModLoader发现/注册config.json配置的roadnet mod dll并构建路网,假定InitTerrains
 	// 已经跑完(DistributeRoadnet要采样已生成好的地形/水面)。构建顺序见map.md:深拷贝路网数据->
 	// 地址编号->每个Intersection建RoadJunction(车行/行人锚点+路缘角点)->车行/行人双导航图
 	// (每条Road的"最内侧车道贯通线"+每个RoadJunction的路口内部连接)。
@@ -79,6 +85,31 @@ public:
 	// useForwardSide要求的左右方向选最靠右/最靠左的车道，见map.md"单行道开口"一节。返回
 	// 新创建的访问点Node，两侧都没有对应类别车道时返回nullptr。
 	Node* AddRoadAccessNode(const std::string& roadName, float t, bool isVehicle, bool useForwardSide, float openingWidth);
+
+	// 用ModLoader发现/注册config.json配置的zone mod dll。Zone这次只有"显式指定矩形"一种
+	// 生成方式（关键设计决策2）：按注册顺序对每个类型建一个"扫描用"ZoneMod实例，每次调用前
+	// 重新按Lot::GetFreeAcreage()降序排序GetLots()，调它的Distribute(lots)，读出
+	// explicitPlacements逐条调用对应lot->RequestPlacement(...)，成功的建一个新的"落地用"
+	// 实例存进zones。假定InitRoadnet()已经跑完(要用到GetLots())。
+	void InitZones();
+
+	// 用ModLoader发现/注册config.json配置的building mod dll。结构和InitZones类似：先扫描
+	// 所有building mod类型的explicitPlacements，再对每个lot调用lot->FillRemainder(...)
+	// （用lot->GetCandidates()当权重表）做权重CDF随机填充。假定InitZones()已经跑完，此时
+	// 每个lot的freeLots已经不包含被Zone占用的区域。
+	void InitBuildings();
+
+	const std::vector<Zone*>& GetZones() const;
+	const std::vector<Building*>& GetBuildings() const;
+
+	// 汇总GetLots()里每个顶层Lot自己的GetPathRoads()——小路是RequestPlacement/FillRemainder
+	// 裁剪某个顶层Lot的空闲空间时的副产品，归属和生命周期都记在那个顶层Lot自己身上（构造它的
+	// 正是RoadnetMod），Map不重复持有一份，这里只是遍历汇总供Forever层渲染用，按值返回。
+	std::vector<Road*> GetPathRoads() const;
+
+	// 转发roadnet->GetPathRoadMaterial()，供InitZones/InitBuildings构造PathLaneSpec、
+	// Forever层渲染小路时查。roadnet为空(InitRoadnet没跑或没有可用mod)时返回空字符串。
+	const std::string& GetPathRoadMaterial() const;
 
 	// 车行/行人导航图只读访问，供Forever层可视化/未来Traffic域寻路使用。key/邻接id都是锚点
 	// Node::GetId()，锚点本身的坐标通过GetNavAnchorNodes()（路口/车道分裂新增锚点）+
@@ -109,6 +140,11 @@ private:
 
 	Roadnet* roadnet = nullptr;
 	std::vector<RoadJunction*> junctions;
+
+	ZoneFactory zoneFactory;
+	BuildingFactory buildingFactory;
+	std::vector<Zone*> zones;
+	std::vector<Building*> buildings;
 
 	// 车行/行人导航图：key是锚点Node::GetId()，value是(邻接锚点id, 边)列表。车行边只按实际
 	// 通行方向单向插入；行人边(横道/转角/贯通线)双向插入，可能出现同一个Connection*被两条

@@ -57,7 +57,7 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
 
-	// 由AForeverFrameworkActor在Map::InitTerrains/InitContents跑完后调用一次:创建LOD网格
+	// 由AForeverFrameworkActor在Map::InitTerrains跑完后调用一次:创建LOD网格
 	// 组件、构建材质/纹理数组、构建海面网格。map生命周期由调用方(AForeverFrameworkActor)持有。
 	void GenerateTerrain(Map* inMap);
 

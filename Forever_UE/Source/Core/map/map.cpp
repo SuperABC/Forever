@@ -65,6 +65,9 @@ Map::~Map() {
 	for (Node* n : navAnchorNodes) delete n;
 	for (RoadJunction* j : junctions) delete j;
 	delete roadnet;
+
+	for (Zone* z : zones) delete z;
+	for (Building* b : buildings) delete b;
 }
 
 void Map::InitTerrains() {
@@ -74,9 +77,7 @@ void Map::InitTerrains() {
 	// modLoader是Map的成员(不是局部变量)——它持有的dll句柄必须活到Map析构为止,
 	// terrainFactory.CreateTerrain以后随时可能被调用,详见map.h的注释。
 	modLoader.RegisterConcept<TerrainFactory>(mods, "RegisterModTerrains", "FinishModTerrains", &terrainFactory);
-}
 
-void Map::InitContents() {
 	pair<bool, float> water{ false, 0.f };
 	auto getTerrain = [this](int x, int y) -> string {
 		return this->GetTerrain(x, y);
@@ -279,6 +280,146 @@ void Map::InitRoadnet() {
 			pedestrianNavGraph[end.GetId()].emplace_back(start.GetId(), conn);
 		}
 	}
+}
+
+namespace {
+	// 按剩余空闲面积(Lot::GetFreeAcreage())降序排序的全图lot列表——每个mod的Distribute()
+	// 调用前都要重新算一次，因为上一个mod的显式占位可能已经改变了各lot的剩余空闲面积
+	// (关键设计决策3)。
+	vector<Lot*> SortLotsByFreeAcreage(const vector<Lot*>& lots) {
+		vector<Lot*> sorted = lots;
+		std::sort(sorted.begin(), sorted.end(), [](Lot* a, Lot* b) {
+			return a->GetFreeAcreage() > b->GetFreeAcreage();
+			});
+		return sorted;
+	}
+}
+
+void Map::InitZones() {
+	vector<string> mods = Config::GetMods();
+	zoneFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("zone_mods")));
+	modLoader.RegisterConcept<ZoneFactory>(mods, "RegisterModZones", "FinishModZones", &zoneFactory);
+
+	PathLaneSpec pathSpec;
+	for (auto& id : zoneFactory.GetRegisteredIds()) {
+		ZoneMod* scanner = zoneFactory.CreateZone(id);
+		if (!scanner) continue;
+
+		vector<Lot*> lots = SortLotsByFreeAcreage(GetLots());
+		scanner->Distribute(lots);
+
+		for (auto& request : scanner->explicitPlacements) {
+			if (!request.lot) continue;
+			Quad placed;
+			bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
+				request.marginEnd, request.depth, pathSpec, &placed);
+			if (success) {
+				Zone* zone = new Zone(&zoneFactory, id);
+				zone->SetPosition(placed.GetPosX(), placed.GetPosY(), placed.GetSizeX(), placed.GetSizeY());
+				// freeLots全部继承同一个顶层Lot的rotation(Lot::SplitWithPath产出的每一段都是
+				// 同一个rotation)，所以直接从request.lot取就是这块占位实际的世界朝向。
+				zone->SetRotation(request.lot->GetRotation());
+				zone->SetParentLot(request.lot);
+				zones.push_back(zone);
+			}
+		}
+
+		zoneFactory.DestroyZone(scanner);
+	}
+}
+
+void Map::InitBuildings() {
+	vector<string> mods = Config::GetMods();
+	buildingFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("building_mods")));
+	modLoader.RegisterConcept<BuildingFactory>(mods, "RegisterModBuildings", "FinishModBuildings", &buildingFactory);
+
+	PathLaneSpec pathSpec;
+	unordered_map<string, BuildingMod*> scanners; // 留到下面FillRemainder阶段查RandomAcreage/Min/Max
+
+	for (auto& id : buildingFactory.GetRegisteredIds()) {
+		BuildingMod* scanner = buildingFactory.CreateBuilding(id);
+		if (!scanner) continue;
+
+		vector<Lot*> lots = SortLotsByFreeAcreage(GetLots());
+		scanner->Distribute(lots);
+
+		// candidateWeights是mod自己push进去的纯数据(lot指针+权重)，这里由Map(Forever.dll
+		// 编译的代码)代为调用lot->AddCandidate(...)——不能让mod自己直接调用这个非虚成员
+		// 函数，否则Lot::candidates这个vector的内部缓冲会被mod dll的分配器分配、却由
+		// Forever.dll的分配器释放，退出时析构会崩溃，详见building_mod.h的注释。
+		for (auto& cw : scanner->candidateWeights) {
+			if (cw.lot) cw.lot->AddCandidate(id, cw.weight);
+		}
+
+		for (auto& request : scanner->explicitPlacements) {
+			if (!request.lot) continue;
+			Quad placed;
+			bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
+				request.marginEnd, request.depth, pathSpec, &placed);
+			if (success) {
+				Building* building = new Building(&buildingFactory, id);
+				building->SetPosition(placed.GetPosX(), placed.GetPosY(), placed.GetSizeX(), placed.GetSizeY());
+				building->SetRotation(request.lot->GetRotation());
+				building->SetParentLot(request.lot);
+				buildings.push_back(building);
+			}
+		}
+
+		scanners[id] = scanner;
+	}
+
+	for (Lot* lot : GetLots()) {
+		auto randomAcreage = [&scanners](const string& type) -> float {
+			auto it = scanners.find(type);
+			return it != scanners.end() ? it->second->RandomAcreage() : 0.f;
+			};
+		auto acreageMinMax = [&scanners](const string& type) -> pair<float, float> {
+			auto it = scanners.find(type);
+			if (it == scanners.end()) return { 0.f, 0.f };
+			return { it->second->GetAcreageMin(), it->second->GetAcreageMax() };
+			};
+
+		auto results = lot->FillRemainder(pathSpec, randomAcreage, acreageMinMax);
+
+		for (auto& result : results) {
+			Building* building = new Building(&buildingFactory, result.type);
+			building->SetPosition(result.footprint.GetPosX(), result.footprint.GetPosY(),
+				result.footprint.GetSizeX(), result.footprint.GetSizeY());
+			// FillRemainder是在lot自己的freeLots池里切的，同样继承lot这个顶层Lot的rotation。
+			building->SetRotation(lot->GetRotation());
+			building->SetParentLot(lot);
+			buildings.push_back(building);
+		}
+
+		lot->ClearCandidates();
+	}
+
+	for (auto& [id, scanner] : scanners) {
+		buildingFactory.DestroyBuilding(scanner);
+	}
+}
+
+const vector<Zone*>& Map::GetZones() const {
+	return zones;
+}
+
+const vector<Building*>& Map::GetBuildings() const {
+	return buildings;
+}
+
+vector<Road*> Map::GetPathRoads() const {
+	vector<Road*> result;
+	for (Lot* lot : GetLots()) {
+		for (Road* r : lot->GetPathRoads()) {
+			result.push_back(r);
+		}
+	}
+	return result;
+}
+
+const string& Map::GetPathRoadMaterial() const {
+	static const string empty;
+	return roadnet ? roadnet->GetPathRoadMaterial() : empty;
 }
 
 Node* Map::AddRoadAccessNode(const string& roadName, float t, bool isVehicle, bool useForwardSide, float openingWidth) {

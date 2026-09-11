@@ -77,6 +77,8 @@ public:
 	virtual const char* GetName() override { return name.data(); }
 	virtual void ApplyArgs(const std::string& args) override { name = "empty(" + args + ")"; }
 
+	virtual void Distribute(const std::vector<Lot*>& lots) override {}
+
 private:
 	std::string name;
 };
@@ -87,6 +89,11 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 	virtual void ApplyArgs(const std::string& args) override { name = "empty(" + args + ")"; }
+
+	virtual void Distribute(const std::vector<Lot*>& lots) override {}
+	virtual float RandomAcreage() override { return 0.f; }
+	virtual float GetAcreageMin() override { return 0.f; }
+	virtual float GetAcreageMax() override { return 0.f; }
 
 private:
 	std::string name;

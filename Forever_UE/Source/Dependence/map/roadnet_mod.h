@@ -40,9 +40,20 @@ public:
 
 	// 每个lot连同它的边界Road映射(int键=FACE_DIRECTION 0-3,缺失/找不到表示那一侧没有路)。
 	// 不含边界Intersection映射——车行/行人导航图直接挂在Road/Intersection上,不需要通过lot中转。
-	std::vector<std::pair<Lot, std::unordered_map<int, Road>>> lots;
+	// 边界Road存指针，必须指向this->roads里的元素本身，不能另外new/复制一份——全图只应该有
+	// 一份"这条物理路"的Road对象，lot的边界只是记一下"我贴着哪条路"，不是另起一份自己的拷贝。
+	// 这是因为Zone/Building裁剪Lot空间时(Lot::SplitWithPath)会真的在这条边界Road上加
+	// RoadOpening标记开口，如果边界指向的是独立拷贝，改动就传不到roads里真正会被渲染的那个
+	// 对象上(PIE验证发现过这个问题：开口加了但画不出来)。实现里往这个map塞指针之前，必须确保
+	// this->roads不会再增长(vector扩容会让之前取的地址失效)，也就是说构建lots之前要先把所有
+	// addRoad-类的调用做完，再取&roads[i]这种地址。
+	std::vector<std::pair<Lot, std::unordered_map<int, Road*>>> lots;
 
 	// AddHatch产出的地形挖洞标记(Quad+旋转角)，宿主(Map::InitRoadnet)会把这里的每一项转发进
 	// Map::AddHatch，复用Terrain已有的挖洞渲染机制，见map.md。
 	std::vector<std::pair<Quad, float>> hatches;
+
+	// Zone/Building裁剪Lot自由空间时自动生成的小路材质路径。留空表示不指定，Forever层渲染
+	// 小路时退化用RoadPlain，见roadnet.md。
+	std::string pathRoadMaterial;
 };

@@ -10,7 +10,7 @@
 ## 关键设计
 
 - **自身不持有任何地图格子数据**——地形类型/高度/水面/hatch这些格子数据活在`Map`/`Element`
-  （见`map.md`），`Terrain`只是"某个地形类型的行为句柄"，`Map::InitContents()`按优先级顺序
+  （见`map.md`），`Terrain`只是"某个地形类型的行为句柄"，`Map::InitTerrains()`按优先级顺序
   临时创建一批`Terrain*`跑完`DistributeTerrain`就地析构，不长期持有。
 - **没有迁移老工程的`EmptyTerrain`**——老工程`terrain.h`里声明了一个`EmptyTerrain`
   （priority=0、`DistributeTerrain`空实现），本来是`Map::InitTerrains`里硬编码注册的兜底
@@ -25,5 +25,6 @@
 ## 依赖关系
 
 - 依赖：`terrain_mod.h`、`terrain_factory.h`、`common/error.h`（`NullPointerException`）。
-- 被谁依赖：`Source/Core/map/map.h`（`Map::InitContents()`临时构造`Terrain*`跑
-  `DistributeTerrain`）。
+- 被谁依赖：`Source/Core/map/map.h`（`Map::InitTerrains()`临时构造`Terrain*`跑
+  `DistributeTerrain`——原来这部分在单独的`InitContents()`里，应用户要求合并进`InitTerrains()`
+  一个函数，见`map.md`）。

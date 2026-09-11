@@ -30,6 +30,16 @@
   时跳过该分段mesh实例的摆放，`BuildOpeningMeshes`在同一段范围画一块覆盖整条路总宽度
   （车行+停车+人行道两侧加总）的cube。这是要求5"不再指定道路mesh资产，换成贴路面材质的
   cube"的直接体现——没有尝试对不同车道类别做精细的部分挖空，简化成"这一段整体换成扁平材质"。
+  两处cube生成共用同一份几何逻辑（`AppendFlatRoadCube`：给定road上的中心弧长比例+沿路长度+
+  横向宽度，画一块扁平quad），不是各自重复实现一遍。
+- **`BuildRoadInstances`按`unit`铺不出至少一节`default_x_x_x`实例的短缺口，同样退化成
+  `RoadPlain`扁平cube（第十二轮迁移）**：`tileRange`原来遇到"这段范围内连一个满足
+  `[0.8,1.2]×unit`约束的分段数都凑不出来"（`nLow>nHigh`或`nLow<=0`，比如两个相邻开口之间/
+  端点和第一个开口之间只剩很短一截）就直接跳过、什么都不画，导致路面出现视觉空隙；现在改成
+  调`AppendFlatRoadCube(road, centerT, rangeLen, road->GetTotalWidth(), ...)`，把这一小段
+  整个填成一块和开口处理方式完全一样的扁平cube（顶点数据追加进`BuildRoadInstances`/
+  `BuildOpeningMeshes`共用的那份`outVertices`/`outTriangles`/`outUvs`，最终都进
+  `openingMesh`那一个mesh section、贴`openingMaterial`），不再留空隙。
 - **路口mesh是直线简化版**（`BuildJunctionMeshes`）：每个`RoadJunction`的`approaches`已经按
   夹角排好序，把`curbRight[i]`/`curbLeft[i]`两两相邻连成边界点序列（`(right_i,left_i)`是
   road i自己的"开口宽度"边，`(left_i,right_{i+1})`是road i与road i+1之间的桥接边），从路口
@@ -38,18 +48,19 @@
   `true`（两处都要改，PIE验证发现最初漏加，玩家会直接从开口/路口掉到地形挖出的洞里）。道路
   本身的ISM实例走`UInstancedStaticMeshComponent`默认碰撞（跟着`default_1_1`资产自带的
   collision setup走，不用额外设置）。
-- **车道分裂demo是临时验证代码**（`SpawnAccessNodeDemo`，函数注释里明确标注"临时验证"）：
-  取`map->GetLots()`第一个lot的边界`Road`映射中任意一条，在同一个位置（`t=0.5`，demo宽度
-  0.6地图单位=6m）对车行、人行各调一次`Map::AddRoadAccessNode`——真实的路面开口（比如
-  建筑车库出入口）通常也伴随一段人行道断口供行人过街，只打断车行导航图不够，这次两个都
-  打断。这段demo代码要**在**`BuildRoadInstances`/`BuildOpeningMeshes`遍历所有Road**之前**
-  先跑，这样它新增的开口才能被正确画出来（否则开口mesh在demo调用之前就已经
-  CreateMeshSection完毕，不会再刷新）。
-  - **`BuildOpeningMeshes`按`t`去重，同一个物理开口位置只画一块cube**——车行、人行两次
-    `AddRoadAccessNode`调用会各自往`road->GetOpenings()`追加一条`RoadOpening`记录，两条
-    记录的`t`/`width`如果相同（就是demo这种"同一个位置两个类别各开一次"的场景），原来的
-    实现会在完全相同的位置画两个完全重合的扁平quad，PIE里z-fighting闪烁；现在遍历
-    `openings`时按`t`（1e-4误差范围内视为同一个）去重，只画一次。
+- **`SpawnAccessNodeDemo`这个临时验证demo已删除**（第十一轮迁移，Zone/Building裁剪Lot自由
+  空间时接到"大路"的小路现在会真正调用`Road::AddOpening`产出开口，见`Source/Dependence/
+  map/geometry.md`"关键设计"一节`Lot::SplitWithPath`——之前那个demo任意挑`map->GetLots()`
+  第一个lot的第一条边界Road在`t=0.5`处调`Map::AddRoadAccessNode`，纯粹是给"开口cube这套
+  逻辑还没有真正调用方"这个阶段性问题临时找的验证手段，现在有真实调用方了，demo连同它
+  临时演示用的车行/行人`AddRoadAccessNode`调用一起删掉）。`Map::AddRoadAccessNode`本身
+  （同时断开导航图车道贯通线+标记`RoadOpening`）作为API继续保留，只是暂时没有调用方——
+  小路开口这条路径**不**调用它，只直接`endRoad->AddOpening(...)`标记路面缺口，不碰导航图
+  （用户明确要求这次先不接导航node，等以后设计好小路的导航接入方式再改）。
+  - **`BuildOpeningMeshes`按`t`去重，同一个物理开口位置只画一块cube**——如果同一个位置先后
+    被不同来源（`Map::AddRoadAccessNode`/`Lot::SplitWithPath`）各标一次`RoadOpening`、
+    `t`/`width`恰好相同，遍历`openings`时按`t`（1e-4误差范围内视为同一个）去重，只画一次，
+    不会重叠画出两个完全重合的扁平quad。
 - **Lot调试可视化（黄色扁cube）已按用户要求删除，导航图可视化后来又重新加回（第七轮迁移）**——
   两者最初都只是阶段性调试手段，确认对应数据（lot几何/地址、导航图节点与边）正确无误后先
   一起删掉了；后续因为要继续改路网算法（车道居中等）、以及未来Building域接入导航之后还要
@@ -90,20 +101,33 @@
 - **和Terrain一样固定`worldScale=1000.f`（1地图单位=10m=1000cm）**，`Node`/`Connection`/
   `Road`等Core层几何类型的坐标都是地图单位，Forever层建mesh时统一在最后一步乘以这个系数转
   世界坐标，中间计算全部保持地图单位，避免在算式里混用两种单位。
+- **`BuildPathRoadMeshes`（Zone/Building落地时新增）**：遍历`map->GetPathRoads()`（Zone/
+  Building裁剪Lot自由空间时自动生成的小路），每条按起止点+`Road::GetTotalWidth()`生成一个
+  贴材质的扁平ribbon，不接入`BuildRoadInstances`那套按`default_x_x_x`资产选mesh的ISM管线——
+  小路车道宽度是0.3/0.2这种非整车道宽度，套不进那套命名约定，见`Source/Basic/map/
+  roadnet_basic.md`。材质优先按`map->GetPathRoadMaterial()`的字符串路径**运行时**
+  `StaticLoadObject`加载（不是`roadPlainBaseMaterial`那种只能在构造函数里用的
+  `ConstructorHelpers::FObjectFinder`，因为这个路径是`RoadnetMod`运行时数据，编译期不知道
+  具体是哪个资产），取不到就退化用`roadPlainBaseMaterial`。必须在`GenerateRoadnet`里调用
+  （紧跟`BuildJunctionMeshes`之后），且`AForeverFrameworkActor::EnsureMapGenerated()`必须
+  保证`Map::InitZones()`/`InitBuildings()`已经跑完再调`GenerateRoadnet`，否则
+  `GetPathRoads()`还是空的。
 
 ## 依赖关系
 
 - 依赖：`Source/Core/map/map.h`（`Map::GetRoads()`/`GetJunctions()`/`GetLots()`/
-  `AddRoadAccessNode`）、`Source/Core/map/geometry.h`（`Road`/`RoadJunction`/`Lot`/`Node`）、
-  `ProceduralMeshComponent`模块、`Components/InstancedStaticMeshComponent.h`（Engine模块自带，
-  不需要额外启用）。
+  `GetPathRoads()`/`GetPathRoadMaterial()`/`AddRoadAccessNode`）、`Source/Core/map/geometry.h`
+  （`Road`/`RoadJunction`/`Lot`/`Node`）、`ProceduralMeshComponent`模块、
+  `Components/InstancedStaticMeshComponent.h`（Engine模块自带，不需要额外启用）。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（`EnsureMapGenerated()`
-  在`terrainFramework->GenerateTerrain(map)`之后调用`roadnetFramework->GenerateRoadnet(map)`）。
+  在`terrainFramework->GenerateTerrain(map)`之后、`InitZones`/`InitBuildings`跑完之后调用
+  `roadnetFramework->GenerateRoadnet(map)`）。
 
 ## 待办/后续阶段
 
-- 阶段4：Zone/Building迁移后，`SpawnAccessNodeDemo`应该被移除或改造成真正由Building/Zone
-  在放置建筑时调用`Map::AddRoadAccessNode`。
+- 阶段4：小路接大路的开口这次只标`RoadOpening`几何标记，不碰导航图（`Map::
+  AddRoadAccessNode`那套断线逻辑），等以后设计好小路的导航接入方式再补，见
+  `Source/Dependence/map/geometry.md`。
 - 阶段4：路口mesh的圆角/斜切、开口cube的精细化（只挖开人行道/停车道而不是整条路宽度）如果
   以后有真实需求，再回来加，这次是明确的简化范围，不是遗漏。
 - **已修复（PIE验证发现，共两轮）**：

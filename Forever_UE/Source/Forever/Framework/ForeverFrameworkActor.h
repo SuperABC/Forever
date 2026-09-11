@@ -39,10 +39,11 @@ public:
 	// 边界——Core.lib静态链接进本模块,不是REFACTOR_PLAN.md说的那种跨DLL new/delete场景)。
 	virtual ~AForeverFrameworkActor();
 
-	// 幂等:Map已存在则直接返回,否则新建Map、依次跑InitTerrains/InitContents/InitRoadnet、
-	// 交给terrainFramework/roadnetFramework生成地形/路网网格(顺序不能反,Roadnet要采样地形/
-	// 水面)。BeginPlay和ForeverGameMode::FindPlayerStart_Implementation都会调用它,保证不论
-	// 两者实际调用顺序如何,出生点计算时地形都已经生成好,详见ForeverFrameworkActor.md。
+	// 幂等:Map已存在则直接返回,否则新建Map、依次跑InitTerrains/InitRoadnet/InitZones/
+	// InitBuildings、交给对应Framework组件生成地形/路网/Zone/Building网格(顺序不能反,
+	// Roadnet要采样地形/水面,Zone/Building要用到Roadnet产出的Lot)。BeginPlay和
+	// ForeverGameMode::FindPlayerStart_Implementation都会调用它,保证不论两者实际调用顺序
+	// 如何,出生点计算时地形都已经生成好,详见ForeverFrameworkActor.md。
 	// 阶段4-1(Roadnet落地)从EnsureTerrainGenerated改名——现在编排的不只是地形。
 	void EnsureMapGenerated();
 

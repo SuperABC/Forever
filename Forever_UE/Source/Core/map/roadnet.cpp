@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <unordered_set>
 
 using namespace std;
 
@@ -272,13 +273,20 @@ Roadnet::Roadnet(RoadnetFactory* factory, const string& roadnetId) :
 Roadnet::~Roadnet() {
 	for (Node* n : externs) delete n;
 	for (Intersection* i : intersections) delete i;
-	for (Road* r : roads) delete r;
+
+	// 一个Lot的boundary Road现在可能和roads里的某条是同一个对象(DistributeRoadnet按
+	// RoadIdentityKey匹配到就会直接共用指针，不再各自独立拷贝一份，见DistributeRoadnet注释)，
+	// 也可能是独立的一份(没匹配上时的兜底拷贝)——统一收集去重再delete一次，不按"来源"分两次
+	// 遍历删，避免共用的那部分被delete两次(double free)。
+	unordered_set<Road*> uniqueRoads(roads.begin(), roads.end());
 	for (Lot* lot : lots) {
 		for (auto& [dir, road] : lot->GetBoundaryRoads()) {
-			delete road;
+			uniqueRoads.insert(road);
 		}
-		delete lot;
 	}
+	for (Road* r : uniqueRoads) delete r;
+	for (Lot* lot : lots) delete lot;
+
 	factory->DestroyRoadnet(mod);
 }
 
@@ -298,18 +306,39 @@ void Roadnet::DistributeRoadnet(int width, int height,
 
 	for (const Node& n : mod->externs) externs.push_back(new Node(n));
 	for (const Intersection& i : mod->intersections) intersections.push_back(new Intersection(i));
-	for (const Road& r : mod->roads) roads.push_back(new Road(r));
+
+	// mod->roads是"这张路网全部真实道路"唯一的一份数据来源，逐个new成Roadnet自己拥有的副本；
+	// mod->lots里每个lot的边界Road*(RoadnetMod::lots的类型，见roadnet_mod.h的注释)必须指向
+	// mod->roads里的同一个元素，这里按下标一一对应，翻译成"mod的地址 -> Roadnet自己副本的
+	// 地址"这份映射，好让lot的边界指针跟着换成指向Roadnet自己的副本，而不是mod侧那份（mod
+	// 随时可能在DistributeRoadnet返回后的某个时机被factory销毁）。这样Lot的边界Road*和
+	// GetRoads()里的Road*从此是同一个对象——Zone/Building裁剪Lot空间时(Lot::SplitWithPath)
+	// 真的在边界Road上加RoadOpening标记开口，改的就是这个对象本身，Forever层渲染时读
+	// GetRoads()能看到同一份修改，不会出现"开口加了但画不出来"（因为以前边界Road是独立拷贝，
+	// 见map.md/roadnet.md）。
+	unordered_map<const Road*, Road*> roadPtrMap;
+	for (size_t i = 0; i < mod->roads.size(); i++) {
+		Road* copy = new Road(mod->roads[i]);
+		roads.push_back(copy);
+		roadPtrMap[&mod->roads[i]] = copy;
+	}
 
 	for (auto& [lot, boundary] : mod->lots) {
 		Lot* newLot = new Lot(lot);
-		for (auto& [dir, road] : boundary) {
-			newLot->SetBoundaryRoad(dir, new Road(road));
+		for (auto& [dir, roadPtr] : boundary) {
+			auto it = roadPtrMap.find(roadPtr);
+			// 正常情况下一定能找到——mod的边界指针本来就要求指向mod->roads里的元素（接口注释
+			// 明确写了这个约束）；找不到说明mod实现违反了这个约束，兜底独立拷贝一份，不让整个
+			// 流程崩掉，但这种情况理论上不应该出现。
+			Road* boundaryRoad = (it != roadPtrMap.end()) ? it->second : new Road(*roadPtr);
+			newLot->SetBoundaryRoad(dir, boundaryRoad);
 		}
 		lots.push_back(newLot);
 	}
 
 	// Quad+float是纯值类型，不含所有权指针，直接整体拷贝，不需要像上面几个逐个new。
 	hatches = mod->hatches;
+	pathRoadMaterial = mod->pathRoadMaterial;
 }
 
 const vector<Node*>& Roadnet::GetExterns() const {
@@ -330,6 +359,10 @@ const vector<Lot*>& Roadnet::GetLots() const {
 
 const vector<pair<Quad, float>>& Roadnet::GetHatches() const {
 	return hatches;
+}
+
+const string& Roadnet::GetPathRoadMaterial() const {
+	return pathRoadMaterial;
 }
 
 void Roadnet::AllocateAddress() {

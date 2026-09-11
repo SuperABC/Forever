@@ -49,20 +49,34 @@ private:
 	// 区间跳过实例摆放，改由BuildOpeningMeshes统一生成开口cube。trimStart/trimEnd(地图单位)：
 	// 该端如果连着真实路口，需要把tiling往回收缩这么多距离，让路口mesh独占这块面积，不然
 	// 两条路的mesh会在路口重叠、z-fighting(见ForeverRoadnetFrameworkComponent.md)；端点是
-	// extern(地图边缘)则传0，不收缩。
-	void BuildRoadInstances(Road* road, float trimStart, float trimEnd);
+	// extern(地图边缘)则传0，不收缩。outVertices/outTriangles/outUvs和BuildOpeningMeshes共用
+	// 同一份缓冲区——按default_x_x_x资产的unit铺不出至少一节实例的那一小段(比如两个开口之间/
+	// 端点和第一个开口之间剩下的长度不够0.8*unit)，退化成贴RoadPlain材质的扁平cube填满，
+	// 处理方式和道路开口完全一样，不留视觉空隙。
+	void BuildRoadInstances(Road* road, float trimStart, float trimEnd,
+		TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs);
 
 	// 每条road的每个开口，生成一个扁平cube的顶点/三角形，追加进outVertices/outTriangles/outUvs
 	// (调用方统一汇总后一次性CreateMeshSection，避免多次调用互相覆盖同一个section)。
 	void BuildOpeningMeshes(Road* road, TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs);
 
+	// 生成一块贴地扁平cube的顶点/三角形，追加进outVertices/outTriangles/outUvs：以road在
+	// centerT处的弧长点为中心，沿切线方向长lengthAlongRoad、垂直方向宽crossWidth。开口cube
+	// (BuildOpeningMeshes)和"铺不出至少一节default_x_x_x实例的短缺口"(BuildRoadInstances)
+	// 共用这一份几何生成逻辑，视觉上是同一种"用RoadPlain扁cube代替沿路重复mesh"的处理。
+	void AppendFlatRoadCube(Road* road, float centerT, float lengthAlongRoad, float crossWidth,
+		TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs);
+
 	// 遍历map->GetJunctions()，每个路口按approach.angle排序后的curbLeft/curbRight两两相邻
 	// 连线围成多边形，从路口中心做扇形三角剖分，贴RoadPlain材质。
 	void BuildJunctionMeshes();
 
-	// 临时验证用：取第一个lot的边界Road映射里任意一条路，调用一次Map::AddRoadAccessNode
-	// 演示车道分裂/开口cube效果。
-	void SpawnAccessNodeDemo();
+	// 遍历map->GetPathRoads()(Zone/Building裁剪Lot自由空间时自动生成的小路)，每条按起止点
+	// 生成一个贴小路材质的扁平cube，不接入BuildRoadInstances那套按default_x_x_x资产选mesh的
+	// ISM管线(小路车道宽度是0.3/0.2这种非整车道宽度，套不进那套命名约定，见roadnet_basic.md)。
+	// 材质优先用map->GetPathRoadMaterial()指定的路径(运行时LoadObject，不是ConstructorHelpers
+	// 那种只能在构造函数里用的编辑期引用)，取不到就退化用roadPlainBaseMaterial。
+	void BuildPathRoadMeshes();
 
 	// 按mesh资产路径复用/新建ISM组件(同一路径的mesh只创建一个ISM，不同Road共用)。
 	UInstancedStaticMeshComponent* GetOrCreateRoadISM(const std::string& meshPath);
@@ -109,4 +123,10 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> pedestrianNavMaterial;
+
+	UPROPERTY()
+	TObjectPtr<UProceduralMeshComponent> pathRoadMesh;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> pathRoadMaterial;
 };

@@ -16,30 +16,36 @@
 
 - **一次只应该有一个路网布局方案生效**——`RoadnetFactory::SetConfig`/`GetRoadnet()`单选，
   详见`roadnet_factory.md`。`Roadnet`本身不关心这个，只是按调用方传入的id构造。
-- **`lots`深拷贝时连同边界`Road`一起拷贝，但每个边界`Road`都是独立的新对象**——不是从
-  `Roadnet::roads`（主数组）里找同一个对象复用指针。原因：老工程`JingRoadnet`构造lot边界时，
-  有些确实复用了主`roads`数组里已经`push_back`过的同一个`Road`值（比如角落大lot直接引用
-  `roads[0]`），但也有一些是**临时构造的、代表某条命名道路一小段的独立`Road`对象**（比如
-  `Road("城西北路", intersections[horizontalNode1w[0].second], intersections[0], ...)`，只是
-  这条命名路的一个子段，不是`roads`数组里的任何一个entry）。`Road`没有自己的唯一id（不像
-  `Node`/`Intersection`有`GetId()`），没法可靠地按值反查回主数组的哪个entry，所以`Roadnet`的
-  深拷贝就不试图去做这个"指针复用"，每个lot的边界`Road`都独立`new`一份。这对下游没有影响——
-  边界`Road`唯一的用途是地址编号（`GetName()`）和未来Zone/Building消费（大概率也只需要
-  `GetName()`/端点坐标定朝向），车行/行人导航图和mesh生成永远只读`Roadnet::roads`（主数组），
-  不读lot的边界`Road`。
+- **边界`Road`指针现在和`Roadnet::roads`（主数组）里的对象是同一个，不再各自独立拷贝一份**
+  （第十一轮迁移，修正了一个长期存在的问题）——`RoadnetMod::lots`的边界类型是
+  `unordered_map<int, Road*>`，约定这些指针必须指向`mod->roads`里的元素本身（`roadnet_mod.h`
+  的接口注释明确写了这个约束）；`Roadnet::DistributeRoadnet`把`mod->roads`逐个`new`成自己的
+  副本时，顺手记一份`mod`侧地址到`Roadnet`侧新副本地址的映射（`unordered_map<const Road*,
+  Road*>`），再拿这份映射把每个lot的边界指针"翻译"成`Roadnet`自己副本里的指针——因此深拷贝
+  完成后，同一条物理路无论是被`GetRoads()`还是被某个`Lot::GetBoundaryRoad()`访问到，都是
+  **同一个`Road`对象**。`mod`实例本身要等到`Roadnet::~Roadnet()`最后一行`factory->
+  DestroyRoadnet(mod)`才真正销毁（不是`DistributeRoadnet()`一返回就销毁），所以`mod->roads`
+  在整个`DistributeRoadnet`执行期间地址都是稳定的，取地址、建映射都是安全的。
+  - **为什么要改**：Zone/Building裁剪Lot自由空间时(`Lot::SplitWithPath`)，如果小路的一端接
+    到一条"大路"（非小路的边界）上，会给那条大路调`Road::AddOpening`标一个开口（见
+    `Source/Dependence/map/geometry.md`）。这个操作改的是`GetBoundaryRoad()`返回的那个
+    `Road*`——在旧设计（边界`Road`各自独立拷贝一份）下，这个开口只会出现在lot自己私有的那份
+    拷贝上，`GetRoads()`真正遍历、Forever层真正拿去建mesh的那个对象完全不知道这次修改，PIE
+    里开口画不出来。这次改成"全图每条物理路只有一份`Road`对象，其余地方一律记指针"，才能让
+    这类"事后修改某条边界路"的操作正确反映到渲染/未来的导航图上。
+  - **`Roadnet::~Roadnet()`按`unordered_set<Road*>`去重后统一`delete`一次**，不再分两次遍历
+    （先删`roads`再删每个lot的边界）——因为现在两边经常是同一个指针，分两次删会造成同一块
+    内存被`delete`两次（double free）。没有匹配上真实路、走了兜底独立拷贝分支的边界`Road*`
+    （理论上不应该出现，见`roadnet_basic.md`"`makeBoundaryRoad`"一节）也会被这个去重集合
+    正确收纳，不会漏删。
 - **边界`Road`指针直接存在`Lot`自己身上，不再是`Roadnet::lots`旁边单独挂一份
   `unordered_map`（第八轮迁移）**——`Dependence/map/geometry.h`的`Lot`新增
   `SetBoundaryRoad(dir, Road*)`/`GetBoundaryRoad(dir)`/`GetBoundaryRoads()`（`Lot`不持有
-  这些指针的生命周期，仍然由`Roadnet`统一`new`/析构时统一`delete`，只是"查询入口"从"先查
-  `Roadnet::GetLots()`那个pair的第二个元素"变成"直接问`lot`自己"）。原来`Roadnet::lots`/
-  `Map::GetLots()`是`vector<pair<Lot*, unordered_map<int,Road*>>>`，现在简化成
-  `vector<Lot*>`——这是"为了后续concept"的改动：Zone/Building迁移后拿到一个`Lot*`就能
-  直接查它周围临街的路，不需要额外维护/传递一份"lot到边界路映射"的旁路数据结构。
-  `RoadnetMod`（mod层，`RoadnetMod::lots`）不受影响，仍然是`vector<pair<Lot,
-  unordered_map<int,Road>>>`——mod实例本身在`DistributeRoadnet`跑完后就销毁，`Lot`的
-  `boundaryRoads`指针如果在mod层就指向mod自己管理的`Road`，会在mod销毁后失效；边界映射
-  只在`Roadnet::DistributeRoadnet`深拷贝时才真正"搬进"新`Lot*`自己身上，深拷贝之前
-  （mod层）仍然是旧的pair写法，两层各自独立管理生命周期，不需要保持结构一致。
+  这些指针的生命周期，仍然由`Roadnet`统一`delete`——现在具体是上面说的去重`delete`，只是
+  "查询入口"从"先查`Roadnet::GetLots()`那个pair的第二个元素"变成"直接问`lot`自己"）。原来
+  `Roadnet::lots`/`Map::GetLots()`是`vector<pair<Lot*, unordered_map<int,Road*>>>`，现在
+  简化成`vector<Lot*>`——这是"为了后续concept"的改动：Zone/Building迁移后拿到一个`Lot*`
+  就能直接查它周围临街的路，不需要额外维护/传递一份"lot到边界路映射"的旁路数据结构。
 - **`AllocateAddress()`直接用`lot->GetBoundaryRoad(dir)`（0-3=`FACE_DIRECTION`）**，不是
   像最初考虑过的"按几何邻近反推"方案（这个方案讨论过又被推翻，见对话记录：用户明确要求lot
   要保留边界road信息，因为Roadnet阶段划出的地就是给以后Zone/Building用的）。每条非空的
@@ -163,15 +169,23 @@
 `RoadJunction`、车行/行人双图、`Map::AddRoadAccessNode`都是这次会话跟用户逐条确认后的新设计，
 不是照抄老工程代码，具体决策过程见对话记录和`Source/Dependence/map/roadnet_mod.md`。
 
+- **`pathRoadMaterial`（第九轮迁移）**：`DistributeRoadnet`时原样拷贝一份`mod->
+  pathRoadMaterial`（纯字符串，不需要深拷贝），`GetPathRoadMaterial()`只读转发。用途和存在
+  理由见`Source/Dependence/map/roadnet_mod.md`，这里只是深拷贝流程里顺带带过去的一个字段，
+  不是`Roadnet`自己的业务逻辑。
+
 ## 依赖关系
 
 - 依赖：`roadnet_mod.h`、`roadnet_factory.h`、`common/error.h`。
 - 被谁依赖：`Source/Core/map/map.h`（`Map::roadnet`/`Map::junctions`成员，`InitRoadnet()`
-  编排整个构建流程）、`Source/Forever/Framework/ForeverRoadnetFrameworkComponent.h/.cpp`
-  （`GenerateRoadnet(Map*)`读取`Map::GetRoads()`/`GetJunctions()`/`GetLots()`建mesh）。
+  编排整个构建流程；`Map::InitZones()`/`InitBuildings()`通过`Map::GetPathRoadMaterial()`
+  转发查询）、`Source/Forever/Framework/ForeverRoadnetFrameworkComponent.h/.cpp`
+  （`GenerateRoadnet(Map*)`读取`Map::GetRoads()`/`GetJunctions()`/`GetLots()`/`GetPathRoads()`
+  建mesh）。
 
 ## 待办/后续阶段
 
-- 阶段4：Zone/Building迁移时会开始真正消费lot的边界`Road`映射；Traffic域（阶段4-3）会开始
-  消费`vehicleNavGraph`/`pedestrianNavGraph`做寻路，目前这两张图只负责"建出来、能查询"，不
-  涉及任何寻路算法。
+- 阶段4：Zone/Building已经开始消费lot的边界`Road`映射（`Map::InitZones`/`InitBuildings`，
+  详见map.md）；Traffic域（阶段4-3）会开始消费`vehicleNavGraph`/`pedestrianNavGraph`做寻路，
+  目前这两张图只负责"建出来、能查询"，不涉及任何寻路算法，小路(`Map::GetPathRoads()`)也还
+  没有接入这两张图。

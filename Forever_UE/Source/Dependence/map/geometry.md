@@ -1,22 +1,24 @@
 # geometry.h / geometry.cpp
 
-原样移植自旧工程`E:\Projects\Forever_UE\Source\Dependence\map\geometry.h/.cpp`，未做任何
-修改（无windows/UE类型依赖，纯数学）。属于阶段4-0共享基础设施——不感知任何具体domain数据，
-但被map域几乎所有概念（Terrain/Zone/Block/Room/Building/Roadnet）用作底层几何/图结构原语，
-因此和`story`域的脚本引擎一起提前到阶段4-0迁移。
+原样移植自旧工程`E:\Projects\Forever_UE\Source\Dependence\map\geometry.h/.cpp`（无windows/UE
+类型依赖，纯数学），但阶段4-1 Zone/Building落地时（迁移`Lot`空闲区域分配+小路自动生成）做了
+不小的改动——`Quad::DivideSpace`/`Quad::SplitInto`那套老工程原样迁移的"记录导航图失效/新增
+连接"机制被**彻底删除**，`Lot`新增了一整套自己的空闲区域裁剪/填充方法。改动理由和用户逐条
+确认的设计决策见`Source/Core/map/map.md`"InitZones/InitBuildings"一节，这里只记录geometry层
+本身的职责和实现细节。
 
 ## 职责
 
-提供导航图节点/连接、矩形空间递归分割两组能力：
+提供导航图节点/连接、`Lot`空闲区域裁剪/填充两组能力：
 
 - **`Node`/`Connection`/`Intersection`/`Road`**：导航图的点和边。`Connection`支持贝塞尔曲线
   控制点（`AddControls`），`GetPoint(f)`/`GetTangent(f, ...)`按**弧长比例**（不是Bezier多项式
   参数）取点和切线，即`f=0.5`对应曲线物理中点，供道路/人行道渲染与寻路采样使用。
-- **`Quad`/`Lot`/`QuadBoundary`**：矩形空间及其递归二分算法`DivideSpace`——给定一组待摆放的
-  子矩形（如一栋楼要切出的若干房间），按面积比递归对半分割父矩形，同时维护切分过程中产生/
-  失效的导航节点与连接（切割线变成新走廊，原来贯穿的边被打断）。`Lot`在`Quad`基础上加了旋转
-  角度和地块类型，`SetPosition(n1, n2, n3[, n4], margin)`可以直接用连续几个角点+内缩边距反推
-  出矩形的中心/尺寸/旋转，这是旧工程从"三个或四个已知角点"生成建筑/房间轮廓的标准做法。
+- **`Quad`/`Lot`**：`Quad`是纯矩形（中心+尺寸+面积），`Lot`在`Quad`基础上加了旋转角度、地块
+  类型、边界`Road`映射、地址编号——以及这次新增的**自由子地块池**（`freeLots`）和围绕它的
+  裁剪/填充方法，见下"关键设计"。`SetPosition(n1, n2, n3[, n4], margin)`可以直接用连续几个
+  角点+内缩边距反推出矩形的中心/尺寸/旋转，这是旧工程从"三个或四个已知角点"生成建筑/房间
+  轮廓的标准做法，这次没有改动。
 
 ## 关键设计
 
@@ -24,22 +26,71 @@
   `new Node(...)`拷贝一份，析构时对应`delete`，不共享指针；这是因为`Node`本身很轻量（几个
   float+id），按值复制比引入引用计数更简单，唯一的例外是`Node::count`静态自增id计数器，拷贝
   构造/赋值时会同步推高`count`（保证之后新建的`Node`不会撞见已存在的旧id）。
-- **`DivideSpace`用`Space`（geometry.cpp内部类，不出现在头文件）表示"两个子矩形合并后、尚未
-  真正定位的中间节点"**——多于2个元素时先按面积从小到大两两打包成`Space`（有点像哈夫曼树的
-  构造过程），最终展开成一棵二叉切分树，展开顺序决定了切一刀是横切还是竖切（谁的边界更长就
-  沿哪个方向切）。
 - **弧长参数化用惰性缓存**——`Connection::GetPoint`/`GetTangent`如果有控制点（真正的Bezier
   曲线，不是直线），会在**首次调用时**采样128个点建立弧长查找表（`arcLengthCache`），后续
   调用直接二分查表，`AddControls`会清空缓存强制重新采样。
+- **`Quad::DivideSpace`/`Quad::SplitInto`（含内部`Space`类、`RecordBoundary`、`QuadBoundary`
+  结构体/`Invalidate`）已删除**——这套老工程的"记录四角四边失效/新增连接"机制是给导航图记账
+  用的，Zone/Building这次的空闲区域分配完全不需要它：地块之间的连通性直接靠"分割线本身就是
+  一条真正的`Road`"来体现（见下`SplitWithPath`），不需要额外维护一份`Connection`失效表。
+  确认过删除前没有除`geometry.cpp`自己以外的调用点。
+- **`Lot`的自由子地块池只有两层**：一个顶层`Lot`（由`Roadnet`持有，构造后不会再被按值复制）
+  持有若干`freeLots`（也是`Lot`类型，复用同一套矩形/边界Road能力），子地块不会再有自己的
+  子地块——所有裁剪/填充操作都直接在顶层`Lot`的`freeLots`数组上原地替换元素，不递归下钻。
+  因此`Lot`不需要处理拷贝语义：现有代码里所有"按值复制`Lot`"的地方（`RoadnetMod::lots`收集、
+  `Roadnet::DistributeRoadnet`深拷贝）都发生在`freeLots`填充之前，只需要给`Lot`补一个会
+  释放`freeLots`的析构函数，不需要自定义拷贝构造/赋值。
+- **`Lot::SplitWithPath(splitAlongX, splitCoordinate, spec)`是唯一的几何裁剪原语**：把当前
+  矩形沿局部坐标系（原点在WEST-NORTH角：局部x=0是WEST、x=sizeX是EAST，局部y=0是NORTH、
+  y=sizeY是SOUTH——这是`GetPosition`/`GetVertex`已有的约定，不是这次新发明的）某个坐标切成
+  "近端(lower)/1单位宽小路/远端(upper)"三段，只返回lower/upper两个新`Lot`（小路本身不是可用
+  地块，只作为`Road*`单独返回，不会自己保留一份——由调用方决定归属，见下）。新建的小路`Road`
+  构造完立刻`SetPathRoad(true)`标记自己——是不是小路这个分类信息记在`Road`自己身上，任何
+  持有这个`Road*`的调用方直接问它自己就够了，不需要另外查一份外部列表（见下"已知简化"）。
+  **如果this在切割线两个端面方向都没有边界Road（原边界，或更早一刀生成、如今仍是某自由子块
+  边界的小路Road），直接拒绝这次切割**，返回`{nullptr,nullptr,nullptr}`——不产生两端都不
+  连接任何路网的孤岛小路。`RequestPlacement`（显式矩形占位，通过最多3次`SplitWithPath`调用
+  实现：深度方向1刀+frontage方向最多2刀）和`FillRemainder`（权重CDF随机填充，每确定一个
+  候选的目标面积后最多用2次`SplitWithPath`切成接近正方形——深度方向1刀+面宽方向1刀，见下
+  "已修复"一节）都建立在这个原语之上，具体分配流程/可达性规则见map.md。这两个函数都是
+  RoadnetMod初始化的那个顶层`Lot`自己的成员函数（在`freeLots`池里的某个子块上调用
+  `SplitWithPath`，`this`永远是顶层`Lot`本身），每切出一条小路就直接`push_back`进
+  `this->pathRoads`——**小路的归属和生命周期都落在这个顶层`Lot`身上**，不需要调用方另外传
+  引用出参收集、也不需要`Map`另开一份列表重复持有，析构顶层`Lot`时`~Lot()`一并`delete`。
+  `GetPathRoads()`只读枚举这个列表，`Map::GetPathRoads()`遍历所有顶层`Lot`把各自的
+  `GetPathRoads()`汇总返回，供Forever层渲染小路用。
+- **已知简化（第十轮迁移尝试过接导航图，之后又撤销，恢复成这次的简化状态）**：小路只有几何
+  意义（真正的`Road`、正确记进相邻`Lot`的边界），两端原有边界Road的`Connection`数据不会被
+  这次切割改动，`Map`建`vehicleNavGraph`/`pedestrianNavGraph`时只读`RoadnetMod`铺设的
+  `roadnet->GetRoads()`，完全不遍历`Lot`产出的小路——小路要不要接、怎么接导航图，等以后
+  真正需要时再重新设计（教训是分类信息要记在`Road::IsPathRoad()`自己身上，不要靠`Map`一份
+  额外列表反查，见map.md"InitZones/InitBuildings"一节）。
+- **已修复（PIE验证发现）：`FillRemainder`原来用整条面宽反推进深，面宽远大于
+  `sqrt(acreage)`时进深会薄到不满足最小2x2单位，`SplitWithPath`直接失败，这块地就被整块
+  丢弃不铺任何Zone/Building——这是"周围明明有路但大片区域没有Zone/Building"这个bug的根因，
+  不是可达性判断错了**。修复成分两刀裁：先在深度轴上裁到`min(sqrt(acreage/
+  ACREAGE_SCALE_FACTOR), 实际面宽)`算出来的目标进深，再在面宽轴上裁到目标面宽，尽量做出
+  接近正方形的footprint；任何一刀因为尺寸或`SplitWithPath`自己的可达性检查裁不动，就跳过
+  那一刀，用当前已经裁出来的矩形（可能比理想大小大）直接落地，不会再整块放弃——之前"裁不出
+  来就把target整块丢进results"和"裁不出来就把target整块从pool移除、放弃"两条分支合并成了
+  同一套"退化成用当前working的实际尺寸"的兜底逻辑。
+- **旋转的传递方式**：`RequestPlacement`/`FillRemainder`返回的`Quad`/`FillResult::footprint`
+  本身不带旋转（`Quad`没有旋转字段），但`freeLots`池里所有子块都严格继承同一个顶层`Lot`的
+  `rotation`（`SplitWithPath`产出的近端/远端两段都用`this->rotation`构造，见实现），所以
+  调用方不需要额外传递——`Map::InitZones`/`InitBuildings`直接用`request.lot->GetRotation()`
+  （显式占位）或`lot->GetRotation()`（`FillRemainder`）赋给`Zone`/`Building`自己新增的
+  `rotation`字段即可，取的都是同一个顶层Lot的值。
 
 ## 依赖关系
 
-- 依赖：`common/utility.h`（`OBJECT_HOLDER`标记宏、`GetRandom`——`Quad::SplitInto`用它随机
-  决定两个子矩形谁在"下方"）、`common/error.h`（`THROW_EXCEPTION`）。
-- 被谁依赖：阶段4迁移map域的`Terrain`/`Zone`/`Block`/`Room`/`Building`/`Roadnet`时，这些
-  Core层类会持有/操作`Node`/`Connection`/`Quad`/`Lot`来表示自己的几何形状和导航图。
+- 依赖：`common/utility.h`（`OBJECT_HOLDER`标记宏、`GetRandom`——`Lot::FillRemainder`的CDF
+  采样用它）、`common/error.h`（`THROW_EXCEPTION`）。
+- 被谁依赖：`Source/Core/map/zone.h/.cpp`、`building.h/.cpp`、`map.h/.cpp`（`Map::InitZones`/
+  `InitBuildings`直接调用`Lot::RequestPlacement`/`FillRemainder`）；`Source/Dependence/map/
+  zone_mod.h`/`building_mod.h`（`LotPlacementRequest`定义在这里，两个mod头文件共用）。
 
 ## 待办/后续阶段
 
-- 阶段4：目前没有任何代码实例化这些类，等Map域（`Terrain`/`Zone`/`Block`起）迁移时才会真正
-  被使用和验证。
+- 阶段4：小路接入`vehicleNavGraph`/`pedestrianNavGraph`，等Traffic域需要小路参与寻路时再做
+  （`Road::IsPathRoad()`已经就位，重新设计时直接用它区分小路/正式路，不要再靠`Map`一份
+  外部列表反查）。

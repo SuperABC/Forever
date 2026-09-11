@@ -165,9 +165,23 @@ Building/Roadnet）不是"创建"`Map`，是在同一个类上继续扩展字段
 `Source/Core/map/roadnet.md`。Zone/Block/Component/Room/Building仍然未迁移，`Lot`目前只有
 纯几何+边界`Road`关联，不带`zones`/`buildings`挂载字段，等这几个concept自己迁移时再加。
 
+**实现期修正（第二次顺序调整）**：`Zone`/`Building`（本节建议排在Roadnet之前，Zone→Block→
+Component+Room→Building的顺序）实际上在`Roadnet`完成后紧接着由用户点名实现了，同样跳过了
+`Block`/`Component`/`Room`。这次相比老工程`Map::InitContents`（`Block`持有`zones`+
+`buildings`两个映射的三层嵌套）也是**新设计**：Zone/Building不再嵌套在一个单独的`Block`类
+里，直接向`Lot`要地（`Lot`新增自由子地块池`freeLots`+`RequestPlacement`/`FillRemainder`
+两套分配方法，见`Source/Dependence/map/geometry.md`）；新增"mod直接指定一块贴着某条路的
+矩形区域"这种显式占位方式，每次真正的切分都会自动生成一条1单位宽的小路`Road`
+（`Lot::SplitWithPath`）；权重不再是mod里写死的静态表，是mod被引擎调用时动态往每个`Lot`上
+push。Zone这次只有显式占位一种方式，不参与权重随机填充；Zone内部再摆Building的递归布局
+明确推迟（用户还没设计完），`Zone`/`Building`目前都只是footprint+类型的占位对象，详见
+`Source/Core/map/map.md`"InitZones/InitBuildings"一节和`Source/Dependence/map/zone_mod.md`。
+`Block`/`Component`/`Room`仍然未迁移。
+
 解锁的Framework组件：`UForeverTerrainFrameworkComponent`（已完成，见其独立`.md`）/
-`UForeverRoadnetFrameworkComponent`（已完成，见其独立`.md`）/`ZoneFrameworkComponent`/
-`BuildingFrameworkComponent`/`RoomFrameworkComponent`。
+`UForeverRoadnetFrameworkComponent`（已完成，见其独立`.md`）/`UForeverZoneFrameworkComponent`
+（已完成，见其独立`.md`）/`UForeverBuildingFrameworkComponent`（已完成，见其独立`.md`）/
+`RoomFrameworkComponent`。
 解锁的Element：`BuildingElement`/`RoomElement`/`ZoneElement`/`ElevatorElement`（电梯楼层逻辑，
 阶段8会再深化自定义电梯，这里先按现有旧蓝图逻辑迁）。
 解锁的`MAINCONTROLLER_TODO.md`热键：无直接热键（`M`键需要`GlobalBase::DrawMap`，属于4-8

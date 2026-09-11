@@ -91,6 +91,8 @@
     <ClCompile Include="basic.cpp" />
     <ClCompile Include="map\terrain_basic.cpp" />
     <ClCompile Include="map\roadnet_basic.cpp" />
+    <ClCompile Include="map\zone_basic.cpp" />
+    <ClCompile Include="map\building_basic.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\terrain_basic.h" />
