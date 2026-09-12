@@ -57,15 +57,82 @@
   的接口，都要走这个"mod自己的输出表+引擎读回去处理"模式，不能让mod直接调用Core层对象的
   非虚成员函数写它自己的容器。**
 
+- **Zone内部布局（围墙/大门/出入口/内部道路/内部建筑）也走"mod自己的输出表+引擎读回去处理"
+  这同一个模式，第十五轮迁移新增**：`ZoneMod`新增`walls`（`vector<ZoneWallSpec>`）、`gates`
+  （`vector<ZoneGateSpec>`）、`vehicleEntries`/`vehicleExits`/`pedestrianAccess`
+  （`vector<ZoneAccessPoint>`）、`internalRoads`（`vector<ZoneInternalRoadSpec>`）、
+  `internalBuildings`（`vector<ZoneInternalBuildingSpec>`）七个`public`成员，和
+  `explicitPlacements`平级。**第十六轮迁移后这些字段天然是"按每次显式占位单独配置"的**——
+  `Map::InitZones()`对每个(mod类型,lot)组合都单独`CreateZone(id)`一个新mod实例、单独调一次
+  `Distribute({lot})`（见`Source/Core/map/map.md`"InitZones/InitBuildings"一节），`mod`本身
+  就是这个lot、这一个Zone独占的，`Distribute()`里完全可以按传入的这唯一一个lot的具体情况
+  （面积、朝向、边界路等）决定不同的墙/门/内部布局，不再是"整个mod类型统一一份配置"。全是
+  值类型（`string`/`vector`/`unordered_map<int,int>`/裸`Lot*`非持有指针），符合上面
+  `BuildingMod::candidateWeights`
+  同一条跨DLL安全铁律。`walls`/`gates`不需要Core搬运——`Zone`直接持有这个mod实例，
+  `Zone::GetWalls()`/`GetGates()`就是转发`mod->walls`/`mod->gates`；`vehicleEntries`/
+  `vehicleExits`/`pedestrianAccess`/`internalRoads`由`Map::InitZones()`读一遍接图/实例化成
+  真正的`Road`；`internalBuildings`推迟到`Map::InitBuildings()`才读（`buildingFactory`此时
+  才注册好mod，见`map.md`"InitZones/InitBuildings"一节），具体每个字段的语义/Core怎么消费见
+  `Source/Core/map/zone.md`和`Source/Core/map/map.md`"Zone内部布局"一节。
+  - `ZoneWallSpec{direction,marginStart,marginEnd,depth,depthInward,mesh,unit}`：沿
+    `direction`这条参考边铺设，`marginStart`/`marginEnd`是距参考边两端的距离，`depth`是进深，
+    `depthInward`控制进深往矩形内(`true`)还是外(`false`)量——具体哪个是"正确"朝向由围墙
+    资产的实际朝向决定，先默认`true`，效果不对由PIE验证后再翻转。`mesh`/`unit`和
+    `Road::GetMesh()`/`GetUnit()`同一套语义，沿边重复铺设，算法照抄
+    `ForeverRoadnetFrameworkComponent::BuildRoadInstances`的`tileRange`（"scaled unit落在
+    `[0.8,1.2]*unit`区间内"这条约束），渲染完全在Forever层(`ForeverZoneFrameworkComponent`)，
+    Core只透传数据。
+  - `ZoneGateSpec`：字段和`ZoneWallSpec`的位置部分同构，但没有`mesh`/`unit`——这次没有大门
+    资产，只存位置数据（供围墙据此让出这段空当），不生成任何渲染。
+  - `ZoneAccessPoint{x,y,width}`：局部坐标，**原点在Zone矩形中心**——和`Lot`局部坐标系原点在
+    WEST-NORTH角不同，这是专属于这几个zone内部相关结构体的新约定（`ZoneInternalRoadSpec`/
+    `ZoneInternalBuildingSpec`同样用这套约定）。`Map::InitZones()`对每个出入口调用新增的私有
+    方法`Map::ConnectZoneAccessPoint`——在`zone->GetBoundaryRoads()`里找最近的一条真实道路，
+    按`ResolvePathEndAnchors`同一套"点积判断近侧"方法选车道，`BreakThroughLine`断出node，和
+    zone侧的孤立锚点建一条`Connection`（车行按`isEntry`单向，行人双向）。车行的"入口"和"出口"
+    是两个独立数组（每条边分开指定，不像小路那样绑定成一对），行人只有一个数组（人行边本来
+    就双向，不区分入/出）。
+  - `ZoneInternalRoadSpec{x1,y1,x2,y2,isVehicle,width}`：两端点+单一车道——**只能是"一条车辆
+    单行道"或"一条人行道"二选一**，不支持多车道/双向车行道打包进同一个spec（用户明确要求和
+    `vehicleEntries`/`vehicleExits`/`pedestrianAccess`分开指定的模型保持一致：车行入口/出口/
+    行人各自独立，内部道路也不该是"一个对象打包多条车道"的真实`Road`那种形状）。要双向车行，
+    用两条spec各自反向；要行人+车行都通，用两条spec各给一个类型，端点坐标相同的话会在
+    `anchorCache`里自动按坐标+类别合并。`Map::ConnectZoneInternalRoad`实例化成`mesh=""`/
+    `unit=0.f`的真正`Road`（和`Lot::SplitWithPath`产的小路同样"不参与`BuildRoadInstances`
+    铺设、只连导航图"的约定），固定用side0——`isVehicle=true`时沿Start->End单向，`false`时
+    双向（人行边本来就双向）——比照`Map::ConnectPathRoad`给小路建图的轻量方式，不经过
+    `RoadJunction`。端点位置用`ComputeLaneAnchorPosition`算（单一车道时这个公式的偏移量正好
+    抵消成0，等价于中轴线，但和大路/小路锚点算法保持同一套写法），和`anchorCache`
+    (`Map::InitZones()`内的局部变量，出入口和内部道路共用同一份)里已有的世界坐标(含车行/行人
+    类别)在容差内重合就直接复用同一个node。
+  - `ZoneInternalBuildingSpec{type,x,y,sizeX,sizeY,relativeRotation,roadIndices}`：
+    `<building,rotation,roads>`三元组——`type`供Core构造`Building(factory,type)`用，
+    `relativeRotation`是相对zone自身`rotation`的附加旋转，`roadIndices`是
+    `FACE_DIRECTION->internalRoads下标`的映射(mod执行阶段道路还没实例化，先存下标，Core
+    实例化完`internalRoads`后再解析成`Road*`)。`Map::PlaceZoneInternalBuilding`用
+    `building->SetParentZone(zone)`+`building->SetParentLot(zone->GetParentLot(),
+    spec.relativeRotation)`同时设置`parentZone`(纯反向查询登记)和`parentLot`(旋转转发基准，
+    直接复用zone自己的`parentLot`)——`Building`两个字段同时持有，不是二选一，详见
+    `Source/Core/map/building.md`。
+
 ## 依赖关系
 
-- 依赖：`map/geometry.h`（`Lot`、`LotPlacementRequest`）。
-- 被谁依赖：`Source/Core/map/zone.h`/`building.h`（`Zone`/`Building`包装类持有一个mod实例）、
-  `Source/Core/map/map.h`（`Map::InitZones`/`InitBuildings`）、
-  `Source/Basic/map/zone_basic.h`/`building_basic.h`（`ZoneBasic`/`BuildingBasic`默认内容）、
-  `Forever_Mod/Empty`的`EmptyZone`/`EmptyBuilding`demo mod。
+- 依赖：`map/geometry.h`（`Lot`、`LotPlacementRequest`、`FACE_DIRECTION`）。
+- 被谁依赖：`Source/Core/map/zone.h`/`building.h`（`Zone`/`Building`包装类持有一个mod实例，
+  `Zone`新增字段存放`ZoneWallSpec`/`ZoneGateSpec`/内部道路/内部建筑）、
+  `Source/Core/map/map.h`（`Map::InitZones`/`InitBuildings`及新增的
+  `ZoneLocalToWorld`/`ConnectZoneAccessPoint`/`ConnectZoneInternalRoad`/
+  `PlaceZoneInternalBuilding`）、`Source/Basic/map/zone_basic.h`/`building_basic.h`
+  （`ZoneBasic`/`BuildingBasic`默认内容，`ZoneBasic`额外用这些新字段搭了一个围墙+大门+
+  内部道路的测试场景）、`Forever_Mod/Empty`的`EmptyZone`/`EmptyBuilding`demo mod、
+  `Source/Forever/Framework/ForeverZoneFrameworkComponent`（读`Zone::GetWalls()`渲染围墙）。
 
 ## 待办/后续阶段
 
-- 阶段4：Zone内部再对自己的剩余空间跑一次Building分配流程（关键设计决策1明确推迟，等用户
-  设计好细节再做）。
+- Zone内部再对自己的剩余空间跑一次Building分配流程（关键设计决策1明确推迟，仍未做——这次
+  新增的`internalBuildings`是`ZoneMod`显式指定的固定建筑列表，不是自动填充剩余空间）。
+- 围墙"贴合不满整数unit时"的退化兜底渲染（这次先跳过，见`ForeverZoneFrameworkComponent.md`）。
+- 大门资产/渲染（这次`ZoneGateSpec`只存位置数据，没有mesh字段，等有资产了再补）。
+- Building自己的出入口逻辑（这次`ConnectZoneAccessPoint`只服务Zone，Building内部逻辑
+  留到以后）。

@@ -96,6 +96,9 @@ void UForeverBuildingFrameworkComponent::GenerateBuildings(Map* inMap) {
 	TArray<int32> triangles;
 	for (Building* building : map->GetBuildings()) {
 		if (!building) continue;
+		// 园区内部建筑单独用DefaultRoad材质在ForeverZoneFrameworkComponent里画(zone自己的
+		// 扁box删掉之后腾出来的材质)，这里跳过，不重复画一份。
+		if (building->GetParentZone()) continue;
 		BuildingAppendFlatBox(vertices, triangles, *building, building->GetRotation());
 	}
 

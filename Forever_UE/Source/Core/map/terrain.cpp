@@ -29,6 +29,10 @@ string Terrain::GetName() const {
 	return name;
 }
 
+TerrainMod* Terrain::GetMod() const {
+	return mod;
+}
+
 float Terrain::GetPriority() const {
 	return mod->GetPriority();
 }

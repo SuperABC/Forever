@@ -298,6 +298,10 @@ string Roadnet::GetName() const {
 	return name;
 }
 
+RoadnetMod* Roadnet::GetMod() const {
+	return mod;
+}
+
 void Roadnet::DistributeRoadnet(int width, int height,
 	const function<string(int, int)>& getTerrain,
 	const function<pair<bool, float>(int, int)>& getWater,

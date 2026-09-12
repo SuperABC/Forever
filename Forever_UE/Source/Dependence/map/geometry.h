@@ -483,9 +483,12 @@ public:
 	// 返回false，不做任何回退。裁剪通过最多3次SplitWithPath调用完成，新增小路记进this自己的
 	// pathRoadLinks（见下GetPathRoadLinks注释——this就是RoadnetMod初始化的那个顶层Lot，调用方
 	// 不需要另外传引用出参收集）；不满足最小2x2单位或不可达的子块被丢弃，不追加回freeLots。成功
-	// 返回true，*outPlaced写入裁出的世界坐标矩形；失败返回false，freeLots不变。
+	// 返回true，*outPlaced写入裁出的世界坐标矩形；失败返回false，freeLots不变。outBoundaryRoads
+	// 非空时，成功后写入裁出的这块地实际靠着的边界Road（真正被裁出来的Lot在返回前会被delete，
+	// 这份信息不写出来的话调用方就再也拿不到——Zone/Building要记录自己四周的road需要这个）。
 	bool RequestPlacement(int direction, float marginStart, float marginEnd, float depth,
-		const PathLaneSpec& spec, Quad* outPlaced);
+		const PathLaneSpec& spec, Quad* outPlaced,
+		std::unordered_map<int, Road*>* outBoundaryRoads = nullptr);
 
 	// 对freeLots和候选权重表做CDF随机填充，每确定一个候选的目标面积后用SplitWithPath递归二分
 	// 定位到某个freeLot里。分割轴优先选择能让两侧都保住可达性的那个，只有在按这个轴切会导致
@@ -495,6 +498,8 @@ public:
 	struct FillResult {
 		std::string type;
 		Quad footprint;
+		std::unordered_map<int, Road*> boundaryRoads;   // 这块footprint实际靠着的边界Road，
+		                                                  // 语义和RequestPlacement的outBoundaryRoads一致
 	};
 	std::vector<FillResult> FillRemainder(const PathLaneSpec& spec,
 		const std::function<float(const std::string&)>& randomAcreage,

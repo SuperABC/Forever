@@ -307,38 +307,86 @@ void Map::InitZones() {
 	zoneFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("zone_mods")));
 	modLoader.RegisterConcept<ZoneFactory>(mods, "RegisterModZones", "FinishModZones", &zoneFactory);
 
+	// 仿照老工程：不再有"扫描用实例先跑一遍全部lot、再给每个成功结果另开一个landing实例"这种
+	// 两段式——对每个(mod类型,lot)组合单独建一个新的mod实例，直接对这一个lot调用
+	// Distribute({lot})，成功就把这个mod实例原样交给新建的Zone持有（Zone从此独占这个实例，
+	// 不会有别的Zone共用它），失败就地销毁。这样mod实例的所有数据(walls/gates/
+	// internalBuildings等)从始至终只属于一个Zone，不需要再另外拷贝一份到Zone自己身上，
+	// Map::InitBuildings()要用的时候直接问zone->GetMod()就行。
 	PathLaneSpec pathSpec;
 	for (auto& id : zoneFactory.GetRegisteredIds()) {
-		ZoneMod* scanner = zoneFactory.CreateZone(id);
-		if (!scanner) continue;
-
 		vector<Lot*> lots = SortLotsByFreeAcreage(GetLots());
-		scanner->Distribute(lots);
+		for (Lot* lot : lots) {
+			ZoneMod* mod = zoneFactory.CreateZone(id);
+			if (!mod) continue;
 
-		for (auto& request : scanner->explicitPlacements) {
-			if (!request.lot) continue;
-			Quad placed;
-			size_t linksBefore = request.lot->GetPathRoadLinks().size();
-			bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
-				request.marginEnd, request.depth, pathSpec, &placed);
-			// 不管这次placement最终成功还是失败都要接图——SplitWithPath产出的小路即使整体
-			// 请求失败也已经是真实持久化的几何(被某个freeLot的边界引用着)，处理顺序天然
-			// =创建顺序(同一顶层Lot内部cascading cut时，后一刀如果连到前一刀新建的小路，
-			// 前一刀的link一定排在更靠前的位置，先被处理)。
-			const auto& allLinks = request.lot->GetPathRoadLinks();
-			for (size_t i = linksBefore; i < allLinks.size(); i++) {
-				ConnectPathRoad(allLinks[i]);
+			mod->Distribute({ lot });
+
+			bool placed = false;
+			for (auto& request : mod->explicitPlacements) {
+				if (!request.lot) continue;
+				Quad placedQuad;
+				unordered_map<int, Road*> boundaryRoads;
+				size_t linksBefore = request.lot->GetPathRoadLinks().size();
+				bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
+					request.marginEnd, request.depth, pathSpec, &placedQuad, &boundaryRoads);
+				// 不管这次placement最终成功还是失败都要接图——SplitWithPath产出的小路即使整体
+				// 请求失败也已经是真实持久化的几何(被某个freeLot的边界引用着)，处理顺序天然
+				// =创建顺序(同一顶层Lot内部cascading cut时，后一刀如果连到前一刀新建的小路，
+				// 前一刀的link一定排在更靠前的位置，先被处理)。
+				const auto& allLinks = request.lot->GetPathRoadLinks();
+				for (size_t i = linksBefore; i < allLinks.size(); i++) {
+					ConnectPathRoad(allLinks[i]);
+				}
+				if (success) {
+					Zone* zone = new Zone(&zoneFactory, mod);
+					zone->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(), placedQuad.GetSizeX(), placedQuad.GetSizeY());
+					// Zone::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
+					zone->SetParentLot(request.lot);
+					for (auto& [dir, road] : boundaryRoads) {
+						zone->SetBoundaryRoad(dir, road);
+					}
+
+					// 出入口接图 + 内部道路：同一个zone在这次调用期间共用一份anchorCache，
+					// 让内部道路端点能复用出入口已经建好的zone侧锚点(坐标+类别重合就是同一个点)。
+					// 围墙/大门(mod->walls/mod->gates)不需要在这里搬运——Zone::GetWalls()/
+					// GetGates()直接转发zone自己持有的这个mod，纯数据搬运不做任何几何/导航图
+					// 计算，渲染细节全部下放到Forever层(ForeverZoneFrameworkComponent)。
+					vector<tuple<float, float, bool, Node*>> anchorCache;
+					for (const ZoneAccessPoint& pt : mod->vehicleEntries) {
+						ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, true, anchorCache);
+					}
+					for (const ZoneAccessPoint& pt : mod->vehicleExits) {
+						ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, false, anchorCache);
+					}
+					for (const ZoneAccessPoint& pt : mod->pedestrianAccess) {
+						ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, false, true, anchorCache);
+					}
+
+					vector<Road*> builtInternalRoads;
+					for (const ZoneInternalRoadSpec& roadSpec : mod->internalRoads) {
+						builtInternalRoads.push_back(ConnectZoneInternalRoad(zone, roadSpec, anchorCache));
+					}
+					zone->SetInternalRoads(builtInternalRoads);
+
+					// 内部建筑不能在这里实例化——PlaceZoneInternalBuilding要new
+					// Building(&buildingFactory, spec.type)，但buildingFactory的mod注册在
+					// InitBuildings()里才做(InitBuildings()必须在InitZones()之后跑，要用到这里
+					// 裁剪完的剩余空闲面积)，这时候buildingFactory还是空的，CreateBuilding会
+					// 返回nullptr导致Building构造函数抛异常崩溃(PIE验证发现)。这次改成
+					// InitBuildings()里遍历zones、直接读zone->GetMod()->internalBuildings，
+					// 不需要Zone另外存一份"待实例化"的副本。
+
+					zones.push_back(zone);
+					placed = true;
+					break; // 和ZoneMod::Distribute({lot})只处理一个lot对应、最多一个explicit
+						   // placement的假设一致(ZoneBasic自己在找到第一个可用方向后也会break)。
+				}
 			}
-			if (success) {
-				Zone* zone = new Zone(&zoneFactory, id);
-				zone->SetPosition(placed.GetPosX(), placed.GetPosY(), placed.GetSizeX(), placed.GetSizeY());
-				// Zone::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
-				zone->SetParentLot(request.lot);
-				zones.push_back(zone);
+			if (!placed) {
+				zoneFactory.DestroyZone(mod);
 			}
 		}
-
-		zoneFactory.DestroyZone(scanner);
 	}
 }
 
@@ -348,7 +396,12 @@ void Map::InitBuildings() {
 	modLoader.RegisterConcept<BuildingFactory>(mods, "RegisterModBuildings", "FinishModBuildings", &buildingFactory);
 
 	PathLaneSpec pathSpec;
-	unordered_map<string, BuildingMod*> scanners; // 留到下面FillRemainder阶段查RandomAcreage/Min/Max
+	// scanners按类型持有一个共享的BuildingMod实例，活过这整个函数——同一个类型可能同时走
+	// 显式占位、FillRemainder、Zone内部建筑三条路径，产出好几个Building，全部指向同一个
+	// 实例（第十六轮迁移：Building不再各自持有独占的mod，而是共享这个按类型缓存的实例，见
+	// building.h）；FillRemainder阶段还要用它查RandomAcreage/Min/Max。函数末尾统一销毁，
+	// 是这些mod实例唯一的销毁点。
+	unordered_map<string, BuildingMod*> scanners;
 
 	for (auto& id : buildingFactory.GetRegisteredIds()) {
 		BuildingMod* scanner = buildingFactory.CreateBuilding(id);
@@ -368,22 +421,45 @@ void Map::InitBuildings() {
 		for (auto& request : scanner->explicitPlacements) {
 			if (!request.lot) continue;
 			Quad placed;
+			unordered_map<int, Road*> boundaryRoads;
 			size_t linksBefore = request.lot->GetPathRoadLinks().size();
 			bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
-				request.marginEnd, request.depth, pathSpec, &placed);
+				request.marginEnd, request.depth, pathSpec, &placed, &boundaryRoads);
 			const auto& allLinks = request.lot->GetPathRoadLinks();
 			for (size_t i = linksBefore; i < allLinks.size(); i++) {
 				ConnectPathRoad(allLinks[i]);
 			}
 			if (success) {
-				Building* building = new Building(&buildingFactory, id);
+				Building* building = new Building(scanner);
 				building->SetPosition(placed.GetPosX(), placed.GetPosY(), placed.GetSizeX(), placed.GetSizeY());
 				building->SetParentLot(request.lot);
+				for (auto& [dir, road] : boundaryRoads) {
+					building->SetBoundaryRoad(dir, road);
+				}
 				buildings.push_back(building);
 			}
 		}
 
 		scanners[id] = scanner;
+	}
+
+	// 园区内部建筑：InitZones()阶段buildingFactory还没注册mod，不能实例化Building，所以
+	// 每个Zone当时只是把mod实例本身收着(zone->GetMod())——这里scanners已经按类型建好了，
+	// 直接读zone->GetMod()->internalBuildings(mod自己的spec列表，不需要Zone另外拷贝一份)
+	// 逐个实例化，用zone->GetInternalRoads()(InitZones()阶段已经建好的Road*列表)解析
+	// spec.roadIndices，Building挂靠的mod从scanners按spec.type查(找不到说明这个类型没有
+	// 注册成功，跳过)。
+	for (Zone* zone : zones) {
+		if (!zone) continue;
+		const vector<ZoneInternalBuildingSpec>& specs = zone->GetMod()->internalBuildings;
+		const vector<Road*>& zoneInternalRoads = zone->GetInternalRoads();
+		for (const ZoneInternalBuildingSpec& spec : specs) {
+			auto it = scanners.find(spec.type);
+			if (it == scanners.end()) continue;
+			Building* building = PlaceZoneInternalBuilding(zone, spec, zoneInternalRoads, it->second);
+			zone->AddInternalBuilding(building);
+			buildings.push_back(building);
+		}
 	}
 
 	for (Lot* lot : GetLots()) {
@@ -405,11 +481,16 @@ void Map::InitBuildings() {
 		}
 
 		for (auto& result : results) {
-			Building* building = new Building(&buildingFactory, result.type);
+			auto it = scanners.find(result.type);
+			if (it == scanners.end()) continue;
+			Building* building = new Building(it->second);
 			building->SetPosition(result.footprint.GetPosX(), result.footprint.GetPosY(),
 				result.footprint.GetSizeX(), result.footprint.GetSizeY());
 			// Building::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
 			building->SetParentLot(lot);
+			for (auto& [dir, road] : result.boundaryRoads) {
+				building->SetBoundaryRoad(dir, road);
+			}
 			buildings.push_back(building);
 		}
 
@@ -861,6 +942,170 @@ void Map::ConnectPathRoad(const PathRoadLink& link) {
 	pedestrianNavGraph[startPed[1]->GetId()].emplace_back(endPed[1]->GetId(), ped1);
 	pedestrianNavGraph[endPed[1]->GetId()].emplace_back(startPed[1]->GetId(), ped1);
 	throughLines[path][3].push_back({ ped1, startPed[1], endPed[1], 0 });
+}
+
+pair<float, float> Map::ZoneLocalToWorld(const Zone* zone, float x, float y) const {
+	float rot = zone->GetRotation();
+	float cosR = cosf(rot), sinR = sinf(rot);
+	return { zone->GetPosX() + x * cosR - y * sinR, zone->GetPosY() + x * sinR + y * cosR };
+}
+
+Node* Map::ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, bool isVehicle, bool isEntry,
+	vector<tuple<float, float, bool, Node*>>& anchorCache) {
+
+	// 比较到zone四条边(局部坐标下，原点在矩形中心)的距离，找最近的一条，和FACE_DIRECTION
+	// 一一对应——和Lot局部坐标系(原点在WEST-NORTH角)的WEST=x最小/EAST=x最大/NORTH=y最小/
+	// SOUTH=y最大是同一套轴向约定，只是这里的"最小/最大"是相对矩形中心的±半尺寸。
+	float halfX = zone->GetSizeX() * 0.5f;
+	float halfY = zone->GetSizeY() * 0.5f;
+	struct EdgeCandidate { int direction; float dist; };
+	EdgeCandidate candidates[4] = {
+		{ FACE_WEST, x + halfX }, { FACE_EAST, halfX - x },
+		{ FACE_NORTH, y + halfY }, { FACE_SOUTH, halfY - y }
+	};
+	int direction = candidates[0].direction;
+	float best = candidates[0].dist;
+	for (int i = 1; i < 4; i++) {
+		if (candidates[i].dist < best) { best = candidates[i].dist; direction = candidates[i].direction; }
+	}
+
+	Road* hostRoad = zone->GetBoundaryRoad(direction);
+	if (!hostRoad) return nullptr;
+
+	auto [worldX, worldY] = ZoneLocalToWorld(zone, x, y);
+
+	// 直线投影近似算hostRoad上的弧长比例t，和geometry.cpp里ProjectT同样的做法。
+	Node hostStart = hostRoad->GetStart();
+	Node hostEnd = hostRoad->GetEnd();
+	float hdx = hostEnd.GetX() - hostStart.GetX();
+	float hdy = hostEnd.GetY() - hostStart.GetY();
+	float hLenSq = hdx * hdx + hdy * hdy;
+	float t = (hLenSq < 1e-9f) ? 0.f
+		: max(0.f, min(1.f, ((worldX - hostStart.GetX()) * hdx + (worldY - hostStart.GetY()) * hdy) / hLenSq));
+
+	Node hostPoint = hostRoad->GetPoint(t);
+	float tdx, tdy, tdz;
+	hostRoad->GetTangent(t, tdx, tdy, tdz);
+	float tLen = sqrtf(tdx * tdx + tdy * tdy);
+	if (tLen < 1e-6f) tLen = 1.f;
+	float hostPerp0X = tdy / tLen, hostPerp0Y = -tdx / tLen;
+
+	// zone中心相对hostPoint在perp0方向的点积>=0就是host的side0，否则side1——和
+	// ResolvePathEndAnchors里"小路伸向哪一端"的判断同一个方法，这里换成"zone中心在哪一侧"。
+	float dot = (zone->GetPosX() - hostPoint.GetX()) * hostPerp0X + (zone->GetPosY() - hostPoint.GetY()) * hostPerp0Y;
+	int side = (dot >= 0.f) ? 0 : 1;
+
+	const vector<float>& lanes = isVehicle ? hostRoad->GetVehicleLanes(side) : hostRoad->GetPedestrianLanes(side);
+	if (lanes.empty()) return nullptr;
+	int laneIndex = static_cast<int>(lanes.size()) - 1;
+
+	auto [lx, ly] = ComputeLaneAnchorPosition(hostRoad, t, isVehicle, side, laneIndex);
+	Node* roadNode = BreakThroughLine(hostRoad, isVehicle, side, laneIndex, lx, ly, hostPoint.GetZ());
+	if (!roadNode) return nullptr;
+
+	RoadOpening opening;
+	opening.t = t;
+	opening.width = width;
+	opening.forwardSide = true;
+	opening.isVehicle = isVehicle;
+	hostRoad->AddOpening(opening);
+
+	Node* zoneNode = MakeIsolatedAnchor(worldX, worldY, hostPoint.GetZ(), isVehicle ? "vehicle" : "pedestrian");
+	anchorCache.emplace_back(worldX, worldY, isVehicle, zoneNode);
+
+	Node* fromNode = isEntry ? roadNode : zoneNode;
+	Node* toNode = isEntry ? zoneNode : roadNode;
+	Connection* edge = new Connection(*fromNode, *toNode);
+	if (isVehicle) {
+		vehicleNavGraph[fromNode->GetId()].emplace_back(toNode->GetId(), edge);
+	}
+	else {
+		pedestrianNavGraph[fromNode->GetId()].emplace_back(toNode->GetId(), edge);
+		pedestrianNavGraph[toNode->GetId()].emplace_back(fromNode->GetId(), edge);
+	}
+
+	return zoneNode;
+}
+
+Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
+	vector<tuple<float, float, bool, Node*>>& anchorCache) {
+
+	auto [wx1, wy1] = ZoneLocalToWorld(zone, spec.x1, spec.y1);
+	auto [wx2, wy2] = ZoneLocalToWorld(zone, spec.x2, spec.y2);
+
+	Road* road = new Road("zone_internal", Node("road", wx1, wy1, 0.f), Node("road", wx2, wy2, 0.f), "", 0.f);
+	// 只能是"一条车辆单行道"或"一条人行道"二选一(和vehicleEntries/vehicleExits/
+	// pedestrianAccess分开指定的模型保持一致，不支持多车道/双向车行道混在一个spec里，见
+	// ZoneInternalRoadSpec注释)，固定用side0——这是唯一一条车道，没有"另一侧"需要区分。
+	if (spec.isVehicle) {
+		road->AddVehicleLane(0, spec.width);
+	}
+	else {
+		road->AddPedestrianLane(0, spec.width);
+	}
+
+	// 端点世界坐标+类别(车行/行人)在ZONE_ANCHOR_MERGE_RADIUS容差内重合就复用anchorCache里
+	// 已有的node(可能是出入口锚点，也可能是同一个zone里另一条内部道路的端点)，否则新建孤立
+	// 锚点并登记进cache。容差取1个地图单位——比车道偏移量级(0.15~0.4)大得多，保证出入口
+	// 锚点(落在zone声明的原始坐标上，没有车道偏移)和下面按ComputeLaneAnchorPosition算出来的
+	// 车道锚点(带偏移)还能被判定成"同一个位置"自动桥接；比zone自身尺寸(测试场景约14个单位)
+	// 小得多，不会误合并本不相关的两个点。
+	constexpr float ZONE_ANCHOR_MERGE_RADIUS_SQ = 1.f;
+	auto findOrCreate = [&](float wx, float wy, bool wantVehicle) -> Node* {
+		for (auto& [cx, cy, cIsVehicle, node] : anchorCache) {
+			if (cIsVehicle != wantVehicle) continue;
+			float dx = cx - wx, dy = cy - wy;
+			if (dx * dx + dy * dy < ZONE_ANCHOR_MERGE_RADIUS_SQ) return node;
+		}
+		Node* n = MakeIsolatedAnchor(wx, wy, 0.f, wantVehicle ? "vehicle" : "pedestrian");
+		anchorCache.emplace_back(wx, wy, wantVehicle, n);
+		return n;
+		};
+
+	// 锚点位置必须用ComputeLaneAnchorPosition算(t=0/1对应Start/End，side固定0，和
+	// InitRoadnet/ResolvePathEndAnchors同一套公式)，不能直接用road两端裸的中轴线坐标——单一
+	// 车道时这个公式算出来的偏移正好是0(shift和offsetDist抵消，见实现)，等价于直接用中轴线，
+	// 但保留这个调用是为了和大路/小路的锚点算法保持同一套写法，不需要因为"只有一条车道"另开
+	// 一套特例公式。
+	if (spec.isVehicle) {
+		auto [fx, fy] = ComputeLaneAnchorPosition(road, 0.f, true, 0, 0);
+		auto [tx, ty] = ComputeLaneAnchorPosition(road, 1.f, true, 0, 0);
+		Node* fromAnchor = findOrCreate(fx, fy, true);
+		Node* toAnchor = findOrCreate(tx, ty, true);
+		Connection* edge = new Connection(*fromAnchor, *toAnchor);
+		vehicleNavGraph[fromAnchor->GetId()].emplace_back(toAnchor->GetId(), edge);
+		throughLines[road][0].push_back({ edge, fromAnchor, toAnchor, 0 });
+	}
+	else {
+		auto [sx, sy] = ComputeLaneAnchorPosition(road, 0.f, false, 0, 0);
+		auto [ex, ey] = ComputeLaneAnchorPosition(road, 1.f, false, 0, 0);
+		Node* startAnchor = findOrCreate(sx, sy, false);
+		Node* endAnchor = findOrCreate(ex, ey, false);
+		Connection* edge = new Connection(*startAnchor, *endAnchor);
+		pedestrianNavGraph[startAnchor->GetId()].emplace_back(endAnchor->GetId(), edge);
+		pedestrianNavGraph[endAnchor->GetId()].emplace_back(startAnchor->GetId(), edge);
+		throughLines[road][2].push_back({ edge, startAnchor, endAnchor, 0 });
+	}
+
+	return road;
+}
+
+Building* Map::PlaceZoneInternalBuilding(Zone* zone, const ZoneInternalBuildingSpec& spec,
+	const vector<Road*>& builtInternalRoads, BuildingMod* mod) {
+
+	Building* building = new Building(mod);
+	auto [wx, wy] = ZoneLocalToWorld(zone, spec.x, spec.y);
+	building->SetPosition(wx, wy, spec.sizeX, spec.sizeY);
+	building->SetParentZone(zone);
+	building->SetParentLot(zone->GetParentLot(), spec.relativeRotation);
+
+	for (auto& [direction, roadIndex] : spec.roadIndices) {
+		if (roadIndex >= 0 && roadIndex < static_cast<int>(builtInternalRoads.size())) {
+			building->SetBoundaryRoad(direction, builtInternalRoads[roadIndex]);
+		}
+	}
+
+	return building;
 }
 
 const vector<Road*>& Map::GetRoads() const {

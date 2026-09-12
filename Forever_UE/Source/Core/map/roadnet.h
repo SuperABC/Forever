@@ -94,6 +94,9 @@ public:
 	std::string GetType() const;
 	std::string GetName() const;
 
+	// 持有的mod实例——以后需要读mod内部数据的调用方直接用，不需要另外拷贝。
+	RoadnetMod* GetMod() const;
+
 	void DistributeRoadnet(int width, int height,
 		const std::function<std::string(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,

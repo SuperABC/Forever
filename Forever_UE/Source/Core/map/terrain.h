@@ -20,6 +20,10 @@ public:
 
 	std::string GetType() const;
 	std::string GetName() const;
+
+	// 持有的mod实例——以后需要读mod内部数据的调用方直接用，不需要另外拷贝。
+	TerrainMod* GetMod() const;
+
 	float GetPriority() const;
 	void SetupTexture() const;
 	std::string GetTexture() const;

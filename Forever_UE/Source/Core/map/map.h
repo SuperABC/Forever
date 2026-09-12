@@ -16,6 +16,7 @@
 #include <utility>
 #include <unordered_map>
 #include <array>
+#include <tuple>
 
 // 10m*10m地图元素。当前只有Terrain域需要的字段;zone/building字段等Zone/Building阶段
 // 迁移时再补。hatches现在就接好(挖洞用),但在Roadnet/Building迁移前始终为空,详见map.md。
@@ -223,4 +224,45 @@ private:
 	// (远进入->近进入、近合并->远合并，人行道双向搭桥)，近侧2个node才是实际对应小路的锚点。
 	void ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, float hostT,
 		std::array<Node*, 2>& outVeh, std::array<Node*, 2>& outPed);
+
+	// 把zone局部坐标(x,y)(原点在zone矩形中心，和ZoneAccessPoint/ZoneInternalRoadSpec同一套
+	// 约定)转换成世界坐标——标准2D旋转，和Lot::GetPosition同一套cos/sin写法(去掉了Lot那边
+	// "局部原点在WEST-NORTH角"需要先减半尺寸再旋转那一步，因为zone局部坐标已经是中心原点)。
+	std::pair<float, float> ZoneLocalToWorld(const Zone* zone, float x, float y) const;
+
+	// 给zone的一个车行/行人出入口点接图：ZoneLocalToWorld算世界坐标后，比较到zone四条边
+	// (WEST/EAST/NORTH/SOUTH)的局部距离找到最近的一条，取zone->GetBoundaryRoad(direction)；
+	// 没有对应边界Road、或该侧没有对应类别(isVehicle)车道，返回nullptr(出入口一定要连到真实
+	// 道路，连不上说明mod配置有问题，不静默退化成孤立锚点)。找到host road后用ResolvePathEndAnchors
+	// 同一套"入zone方向和host的perp0点积判断近侧"方法选side，取该侧最外侧车道，
+	// ComputeLaneAnchorPosition算车道中心世界坐标，BreakThroughLine断出一个node并给road补一个
+	// RoadOpening标记；再在zone自己的世界坐标点MakeIsolatedAnchor一个"zone侧"锚点(登记进
+	// anchorCache，供内部道路端点复用)，两个锚点间建一条Connection——isEntry为true时单向
+	// road->zone，为false(出口)时单向zone->road；isVehicle为false(行人)时双向都插入
+	// pedestrianNavGraph，isEntry参数被忽略。anchorCache记录(x,y,isVehicle,Node*)，同一个zone
+	// 在同一次InitZones()调用期间由出入口/内部道路共用，坐标(含类别)重合的点直接复用同一个
+	// node，不重复建。
+	Node* ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, bool isVehicle, bool isEntry,
+		std::vector<std::tuple<float, float, bool, Node*>>& anchorCache);
+
+	// 把ZoneInternalRoadSpec实例化成一条真正的Road(mesh=""/unit=0.f，和SplitWithPath产的
+	// 小路同样的"不参与BuildRoadInstances铺设、只连导航图"约定)：车行side0(Start->End)/
+	// side1(End->Start)各建一条单向贯通线(每条车道各自的贯通线)，人行两侧都双向——比照
+	// InitRoadnet给普通Road建图同样的逐车道模型，但不经过RoadJunction，端点直接用
+	// anchorCache里坐标(含类别)重合就复用、否则MakeIsolatedAnchor新建。返回的Road*由调用方
+	// (Map::InitZones)收集后交给zone->SetInternalRoads持有生命周期。
+	Road* ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
+		std::vector<std::tuple<float, float, bool, Node*>>& anchorCache);
+
+	// 把ZoneInternalBuildingSpec实例化成Building：ZoneLocalToWorld算世界坐标中心，
+	// building->SetPosition(...)，building->SetParentZone(zone)，
+	// building->SetParentLot(zone->GetParentLot(), spec.relativeRotation)——parentLot直接
+	// 复用zone自己的parentLot(GetRotation()转发基准天然和zone一致)，relativeRotation叠加一个
+	// 偏移。再用builtInternalRoads(按spec.roadIndices的FACE_DIRECTION->下标)解析出Road*逐个
+	// SetBoundaryRoad。mod是调用方(Map::InitBuildings())从自己的scanners表按spec.type查到的、
+	// 已经注册好的BuildingMod实例——Building不持有它的生命周期(和普通顶层Building同一个模式，
+	// 见building.h)。返回的Building*由调用方登记进zone->AddInternalBuilding和Map::buildings
+	// (所有权在后者，和其余顶层Building一致)。
+	Building* PlaceZoneInternalBuilding(Zone* zone, const ZoneInternalBuildingSpec& spec,
+		const std::vector<Road*>& builtInternalRoads, BuildingMod* mod);
 };

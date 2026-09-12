@@ -54,9 +54,8 @@
   **如果this在切割线两个端面方向都没有边界Road（原边界，或更早一刀生成、如今仍是某自由子块
   边界的小路Road），直接拒绝这次切割**，返回`{nullptr,nullptr,nullptr}`——不产生两端都不
   连接任何路网的孤岛小路。`RequestPlacement`（显式矩形占位，通过最多3次`SplitWithPath`调用
-  实现：深度方向1刀+frontage方向最多2刀）和`FillRemainder`（权重CDF随机填充，每确定一个
-  候选的目标面积后最多用2次`SplitWithPath`切成接近正方形——深度方向1刀+面宽方向1刀，见下
-  "已修复"一节）都建立在这个原语之上，具体分配流程/可达性规则见map.md。这两个函数都是
+  实现：深度方向1刀+frontage方向最多2刀）和`FillRemainder`（采样填满+合并+递归二分，见下
+  "FillRemainder"一节）都建立在这个原语之上，具体分配流程/可达性规则见map.md。这两个函数都是
   RoadnetMod初始化的那个顶层`Lot`自己的成员函数（在`freeLots`池里的某个子块上调用
   `SplitWithPath`，`this`永远是顶层`Lot`本身），每切出一条小路就直接`push_back`一条
   `PathRoadLink`进`this->pathRoadLinks`——**小路的归属和生命周期都落在这个顶层`Lot`身上**，
@@ -72,21 +71,43 @@
   算两遍。`ConnectPathRoad`具体怎么用这两组信息断线/建锚点，见`Source/Core/map/map.md`
   "ConnectPathRoad"一节——这部分逻辑完全在Core层，`geometry.cpp`自己不触碰
   `vehicleNavGraph`/`throughLines`等Map内部结构，只负责把定位信息透传出去。
-- **已修复（PIE验证发现）：`FillRemainder`原来用整条面宽反推进深，面宽远大于
-  `sqrt(acreage)`时进深会薄到不满足最小2x2单位，`SplitWithPath`直接失败，这块地就被整块
-  丢弃不铺任何Zone/Building——这是"周围明明有路但大片区域没有Zone/Building"这个bug的根因，
-  不是可达性判断错了**。修复成分两刀裁：先在深度轴上裁到`min(sqrt(acreage/
-  ACREAGE_SCALE_FACTOR), 实际面宽)`算出来的目标进深，再在面宽轴上裁到目标面宽，尽量做出
-  接近正方形的footprint；任何一刀因为尺寸或`SplitWithPath`自己的可达性检查裁不动，就跳过
-  那一刀，用当前已经裁出来的矩形（可能比理想大小大）直接落地，不会再整块放弃——之前"裁不出
-  来就把target整块丢进results"和"裁不出来就把target整块从pool移除、放弃"两条分支合并成了
-  同一套"退化成用当前working的实际尺寸"的兜底逻辑。
+- **`FillRemainder`（第十四轮迁移，改用老工程算法重写）**：老工程`E:\Projects\Forever_UE`
+  当年的分配思路是"先采样一串元素直到面积正好填满容器，再自底向上两两合并成二叉树，最后
+  自顶向下按累计面积比例递归二分容器本身摆放每个元素"（`Quad::DivideSpace`+`Quad::SplitInto`，
+  采样部分在旧`Map::GenerateBuildings`）——比这次之前"贪心挑池子里当前最大的自由块、随机抽
+  一个类型、按面积门槛判断放不放得下"的版本更能保证容器被真正填满：旧贪心版本一旦某块自由地
+  的面积小于随机抽到类型的`GetAcreageMin()`就把它整块永久丢弃，即便这块地长宽都满足
+  `MIN_LOT_EXTENT(2)`——这正是"可达、长宽都>2却还空着"的主因，不是可达性判断错了。
+  新实现分三步，只在`geometry.cpp`内部用（不进头文件）：
+  1. **采样填满**（`SampleFillElements`，对应旧`Map::GenerateBuildings`的采样循环）：按
+     `candidates`权重CDF反复抽类型、取`randomAcreage`目标面积，累加直到达到当前这个freeLots
+     条目的总面积；只有"抽到但剩余空间连这个类型的下限都放不下"才计入尝试次数(上限16，沿用
+     老工程`MAX_ALLOCATION_ATTEMPTS`)，抽到能放的类型不计入尝试次数——保证"填满"优先于"次数"。
+     还差一点凑不满时（通常是尝试次数耗尽），补一个内部标记`FILL_EMPTY_TYPE`的空地叶子把总
+     面积账目补齐，不会有游离在任何叶子之外的面积。
+  2. **二分合并**（`BuildFillMergeTree`，对应旧`DivideSpace`合并阶段）：按面积降序排序，
+     反复把数组末尾（最小）两个元素合并成一个新内部节点（面积=两者之和），插入排序塞回数组
+     维持降序，直到只剩1或2个顶层节点。
+  3. **递归安置**（`PlaceFillMergeNode`，对应旧`SplitInto`+`DivideSpace`安置阶段）：把当前
+     region按左右子树的面积比例递归二分。**和老工程零宽度切割线不同，这里每一刀都是真实的
+     `SplitWithPath`（带宽度的小路），会失败**——优先按region较长边选轴，切不动就换另一条轴
+     再试一次，两条轴都切不动就说明这个节点没法再细分，把region整个让给面积更大的子树
+     （另一支连同它的采样结果一起作废，不产生`FillResult`），这是唯一的退化点，只在几何确实
+     分不出两段合法矩形时才触发，不再是"随机抽签运气不好就整块报废"。
 - **旋转的传递方式**：`RequestPlacement`/`FillRemainder`返回的`Quad`/`FillResult::footprint`
   本身不带旋转（`Quad`没有旋转字段），但`freeLots`池里所有子块都严格继承同一个顶层`Lot`的
   `rotation`（`SplitWithPath`产出的近端/远端两段都用`this->rotation`构造，见实现），所以
-  调用方不需要额外传递——`Map::InitZones`/`InitBuildings`直接用`request.lot->GetRotation()`
-  （显式占位）或`lot->GetRotation()`（`FillRemainder`）赋给`Zone`/`Building`自己新增的
-  `rotation`字段即可，取的都是同一个顶层Lot的值。
+  调用方不需要额外传递——`Zone::GetRotation()`/`Building::GetRotation()`直接转发
+  `parentLot->GetRotation()`就是同一个值，不需要在`Zone`/`Building`自己身上再存一份（这两个
+  类不自己存`rotation`字段，见`zone.md`）。
+- **`RequestPlacement`/`FillResult`同样会丢失边界Road信息，第十五轮迁移补上**：两者内部真正
+  裁剪出来的`Lot`（`working`/`region`）在返回前都会被`delete`，之前只把裸的`Quad`（仅
+  pos+size）透传给调用方，"这块地实际靠着哪些边界Road"这份信息就跟着丢了——`RequestPlacement`
+  新增一个可选输出参数`std::unordered_map<int, Road*>* outBoundaryRoads`（默认`nullptr`，
+  不传行为不变），非空时在`delete working`之前把`working->GetBoundaryRoads()`拷贝进去；
+  `FillResult`新增`boundaryRoads`字段，`PlaceFillMergeNode`的leaf分支在`delete region`之前
+  同样拷一份。这是`Zone`/`Building`记录"自己四周靠着哪些道路"（`boundaryRoads`字段，见
+  `zone.md`/`building.md`）的唯一数据来源。
 
 ## 依赖关系
 

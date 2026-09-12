@@ -52,6 +52,15 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	// 必须在这里(而不是只靠~AForeverFrameworkActor())同步delete map：PIE停止时Actor只是被
+	// 标记PendingKill，真正的UObject垃圾回收(进而触发C++析构函数)时机不确定，可能拖到下一次
+	// 按Play之后才发生。map持有的modLoader析构时会FreeLibrary卸载Basic.dll等mod dll——如果
+	// 这个FreeLibrary没有在下一次PIE的LoadLibraryA之前跑完，Windows会直接把已经加载在进程里
+	// 的旧dll镜像加引用计数返回，而不是重新从磁盘读取刚编译好的新dll，导致mod代码改了、
+	// 编译也成功了，但PIE里跑的还是改之前的旧逻辑(排查一次围墙缩进量对不上代码的bug才发现)。
+	// EndPlay由引擎在PIE停止时同步调用，在这里delete能保证下一次Play之前dll已经被卸载干净。
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 	// 阶段4-1:Terrain域落地,Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
 	// Zone/Building/Roadnet等后续系统迁移时会继续扩展同一个Map实例,不是各自另建一个。
 	Map* map = nullptr;

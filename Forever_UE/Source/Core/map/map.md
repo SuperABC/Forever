@@ -108,24 +108,57 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
   `Lot::AddCandidate`**——那样会跨模块写`Lot`自己的`std::vector`，退出时析构崩溃，已实测
   修复，见`Source/Dependence/map/zone_mod.md`"关键设计"一节；`Map::InitBuildings()`读到
   `candidateWeights`之后代为调用`lot->AddCandidate(...)`，保证分配器和析构在同一个模块）。
-  - `InitZones()`：发现/注册zone mod，按注册顺序对每个类型建一个"扫描用"`ZoneMod*`
-    （`zoneFactory.CreateZone(id)`），每次调用前重新按`Lot::GetFreeAcreage()`降序排序
-    `GetLots()`（上一个mod的显式占位可能已经改变了各lot的剩余空闲面积，所以每次都要重排，
-    不是构造时排一次到处传），调它的`Distribute(lots)`，读出`explicitPlacements`逐条调用
-    对应`lot->RequestPlacement(...)`，成功的立刻`zoneFactory.CreateZone(id)`建一个新的
-    "落地用"实例包成`Zone*`存进`zones`。**Zone只有这一步，不对Zone做权重/`FillRemainder`
-    填充**——用户明确要求"zone生成阶段不要填满lot"。
-  - `InitBuildings()`：结构类似，先扫描所有building mod类型的`explicitPlacements`（同
-    `InitZones`），再对每个lot调`lot->FillRemainder(...)`（用`lot->GetCandidates()`当权重表，
-    `randomAcreage`/`acreageMinMax`转发对应`BuildingMod`扫描实例的`RandomAcreage()`/
-    `GetAcreageMin()`/`GetAcreageMax()`），为每个成功结果新建一个落地实例，最后对所有lot调
-    `ClearCandidates()`（避免Zone没用完的权重——虽然Zone这次不产生权重——或者本轮
-    Building扫描剩下的候选错误地留到下一次场景重建时还在）。
-  - **两个mod扫描实例（`ZoneMod*`/`BuildingMod*`）和"落地实例"是分开的对象**——扫描实例只
-    用来跑一次`Distribute()`+（Building的话）供`FillRemainder`查`RandomAcreage`等，处理完
-    就销毁；每一条成功的占位/CDF结果都单独`new`一个全新的mod实例包成`Zone*`/`Building*`，
-    因为mod实例可能带`id`/`name`这类只应该在真正创建一个实例时才递增的状态（`ZoneBasic`/
-    `BuildingBasic`目前没有这类状态，但接口设计上不能假设所有mod都没有）。
+  - `InitZones()`：发现/注册zone mod。**第十六轮迁移改成仿照老工程"一个Zone独占一个ZoneMod
+    实例"的做法**（取代早前"扫描实例跑完`Distribute(全部lots)`、每条成功结果再另开一个
+    landing实例"的两段式设计，见`zone.md`"关键设计"一节）：按注册顺序对每个类型、每个lot
+    （按`Lot::GetFreeAcreage()`降序排序，同一类型换下一个lot前不用重排——一个lot的占位结果
+    不影响其他lot的剩余空闲面积）单独`zoneFactory.CreateZone(id)`一个新实例，直接对这一个
+    lot调用`mod->Distribute({lot})`，读出`mod->explicitPlacements`（此时至多1条，对应这唯一
+    的lot）调用`lot->RequestPlacement(...)`，成功就把这个mod实例原样交给新建的`Zone`持有、
+    存进`zones`；失败就地`zoneFactory.DestroyZone(mod)`。**Zone只有这一步，不对Zone做权重/
+    `FillRemainder`填充**——用户明确要求"zone生成阶段不要填满lot"。`Zone`落地成功后，
+    还要①从`RequestPlacement`的`outBoundaryRoads`输出参数逐个`zone->SetBoundaryRoad`；
+    ②对`mod->vehicleEntries`/`vehicleExits`/`pedestrianAccess`逐点调用新增私有方法
+    `ConnectZoneAccessPoint`接图；③对`mod->internalRoads`逐条调用新增私有方法
+    `ConnectZoneInternalRoad`实例化真正的`Road`并接图，结果`zone->SetInternalRoads`。
+    围墙/大门（`mod->walls`/`mod->gates`）不需要在这里搬运——`Zone::GetWalls()`/`GetGates()`
+    直接转发`zone`自己持有的这个`mod`，纯数据搬运不做任何几何/导航图计算，渲染细节全部下放
+    到Forever层。**内部建筑（`mod->internalBuildings`）这一步不在`InitZones()`里处理**——
+    `PlaceZoneInternalBuilding`要`new Building(&buildingFactory, spec.type)`，但
+    `buildingFactory`的mod注册在`InitBuildings()`里才做（`InitBuildings()`必须在
+    `InitZones()`之后跑，要用到这里裁剪完的剩余空闲面积），这个阶段`buildingFactory`还是
+    空的，`CreateBuilding`会返回`nullptr`导致`Building`构造函数抛异常崩溃（PIE验证发现）。
+    真正的实例化推迟到`InitBuildings()`（见下），直接读`zone->GetMod()->internalBuildings`
+    （不需要`Zone`额外存一份拷贝——`Zone`本来就独占持有这个`mod`，数据不会失效）。①②③
+    具体规则见下"Zone内部布局"一节。
+  - `InitBuildings()`：注册building mod之后，第一步是原有流程——扫描所有building mod类型的
+    `explicitPlacements`（`scanners[id]`按类型缓存`BuildingMod*`，活过整个函数），再对每个
+    lot调`lot->FillRemainder(...)`（用`lot->GetCandidates()`当权重表，`randomAcreage`/
+    `acreageMinMax`转发对应`scanners`条目的`RandomAcreage()`/`GetAcreageMin()`/
+    `GetAcreageMax()`），为每个成功结果`new Building(mod)`（见下"`Building`按类型共享mod"），
+    最后对所有lot调`ClearCandidates()`（避免Zone没用完的权重——虽然Zone这次不产生权重——
+    或者本轮Building扫描剩下的候选错误地留到下一次场景重建时还在）。**`scanners`表建好之后**
+    （不能提前，见下）**才处理`InitZones()`阶段暂存的园区内部建筑**——遍历`zones`，对每个
+    `Zone`的`zone->GetMod()->internalBuildings`逐条按`spec.type`从`scanners`查出对应
+    `BuildingMod*`，调用`PlaceZoneInternalBuilding`（用`zone->GetInternalRoads()`解析
+    `roadIndices`），结果既`zone->AddInternalBuilding`也`push_back`进`Map::buildings`；
+    `scanners`里查不到这个类型（说明没注册成功）就跳过。**第十五轮迁移新增**：显式占位
+    和`FillRemainder`两条路径落地成功后都要设置`boundaryRoads`——前者从
+    `RequestPlacement`的`outBoundaryRoads`输出参数拷贝，后者从`FillResult::boundaryRoads`
+    拷贝（这个字段是`FillRemainder`重写时新增的，见`geometry.md`）。
+  - **`Building`按类型共享同一个mod实例，不再各自持有独占的一份（第十六轮迁移）**：
+    `Building`的构造函数从`Building(BuildingFactory*, const string& buildingId)`（内部自己
+    `CreateBuilding`一个新实例，从来没跑过`Distribute()`，纯粹是`GetType()`/`GetName()`的
+    空壳）简化成`Building(BuildingMod* mod)`，直接接`scanners[id]`那个已经跑过`Distribute()`
+    的共享实例——`explicitPlacements`、`FillRemainder`、Zone内部建筑三条路径产出的所有同类型
+    `Building`，都指向`scanners`里的同一个指针。`Building`不再持有`BuildingFactory*`，
+    `~Building()`也不再调用`DestroyBuilding`（如果每个`Building`都销毁一次，同类型的第二个
+    `Building`析构时会对同一个指针重复销毁）——这个mod实例的生命周期完全交给`scanners`表，
+    函数末尾`for (auto& [id, scanner] : scanners) buildingFactory.DestroyBuilding(scanner);`
+    是唯一的销毁点，和原来完全一样，只是现在这个销毁真正对应着"没有任何Building还指着它了"。
+    `ZoneMod`没有走这条路——`Zone`一个mod从一开始就只服务一个即将落地的对象，可以放心独占
+    销毁，见上"Zone只有这一步"那段；`BuildingMod`因为`candidateWeights`/`RandomAcreage`
+    机制天然需要按类型共享，两者不是同一种关系，不能用同一套写法。
   - **`Map`自己不持有任何小路`Road*`**——`Lot::RequestPlacement`/`FillRemainder`裁剪出的每条
     小路都记在被裁剪的那个顶层`Lot`自己的`pathRoadLinks`成员里（`Lot::GetPathRoadLinks()`/
     `GetPathRoads()`），析构时也由`Lot`自己`delete`。归属关系上小路本来就是"某个顶层`Lot`的
@@ -193,6 +226,62 @@ toAnchor`，不需要额外的拼接逻辑。这条路径**不调`Road::AddOpeni
 的中间node顺序可能和物理位置顺序不完全对应（连通性依然正确，只是链条上node排列的先后不严格按
 t排序）；小路自己两侧人行道之间不建"穿过小路本身"的横道连接（真实`RoadJunction`会建，小路
 没有被要求这个）。
+
+## Zone内部布局（第十五轮迁移：围墙/大门/出入口/内部道路/内部建筑）
+
+`ZoneMod`新增`walls`/`gates`/`vehicleEntries`/`vehicleExits`/`pedestrianAccess`/
+`internalRoads`/`internalBuildings`七个成员（和`explicitPlacements`平级，字段语义见
+`zone_mod.md`），`InitZones()`对每个成功落地的`Zone`都读一遍。围墙/大门是纯数据搬运
+（`zone->SetWalls`/`SetGates`，渲染在Forever层）；出入口/内部道路/内部建筑需要Core实际接图
+/实例化，靠4个新增私有方法：
+
+- **`ZoneLocalToWorld(zone, x, y)`**：把zone局部坐标（原点在zone矩形中心——注意和`Lot`局部
+  坐标系原点在WEST-NORTH角不是同一个约定，这是专属于Zone内部布局这几个结构体的新约定）转成
+  世界坐标，标准2D旋转，和`Lot::GetPosition`同一套cos/sin写法（少了`Lot`那边"局部原点在角上
+  需要先减半尺寸"那一步，因为这里局部坐标已经是中心原点）。
+- **`ConnectZoneAccessPoint(zone, x, y, width, isVehicle, isEntry, anchorCache)`**：给一个
+  车行/行人出入口点接图。先转世界坐标，比较到zone四条边（局部坐标下）的距离找最近的一条
+  （和`FACE_DIRECTION`一一对应），取`zone->GetBoundaryRoad(direction)`；没有对应边界Road，或
+  该侧没有对应类别车道，返回`nullptr`（出入口一定要连到真实道路，连不上说明mod配置有问题，
+  不静默退化成孤立锚点——这点和`ResolvePathEndAnchors`遇到无路可退化成孤立锚点不一样，因为
+  出入口的语义就是"要连到外面"，没有"孤立端点"这个合法状态）。找到host road后：直线投影算
+  弧长比例`t`（和`ProjectT`同样的做法），用zone中心相对该点`perp0`的点积判断"zone在哪一侧"
+  （和`ResolvePathEndAnchors`"小路伸向哪一端"点积判断同一个方法，换成"zone中心在哪一侧"），
+  取该侧最外侧车道，`ComputeLaneAnchorPosition`算车道中心世界坐标，`BreakThroughLine`断出
+  一个node并给road补一个`RoadOpening`标记；再在zone自己的世界坐标点`MakeIsolatedAnchor`一个
+  "zone侧"锚点（登记进`anchorCache`，供内部道路端点复用），两个锚点间建一条`Connection`——
+  车行按`isEntry`单向（`true`=road->zone，`false`=zone->road），行人双向（忽略`isEntry`）。
+- **`ConnectZoneInternalRoad(zone, spec, anchorCache)`**：把`ZoneInternalRoadSpec`实例化成
+  一条真正的`Road`（`mesh=""`/`unit=0.f`，和`Lot::SplitWithPath`产的小路同样"不参与
+  `BuildRoadInstances`铺设、只连导航图"的约定）。**`spec`只能是"一条车辆单行道"或"一条人行道"
+  二选一**（`isVehicle`+单个`width`，不是`vehicleLanes0/1`+`pedestrianLanes0/1`那种多车道
+  打包结构——用户明确要求和`vehicleEntries`/`vehicleExits`/`pedestrianAccess`分开指定的模型
+  保持一致），固定用side0：`isVehicle=true`时沿Start->End单向插入`vehicleNavGraph`，`false`
+  时双向插入`pedestrianNavGraph`。要双向车行/车行+人行都通，`ZoneMod`需要declare多条
+  `ZoneInternalRoadSpec`（端点坐标相同的会在`anchorCache`里自动合并，不需要`Map`这边额外
+  处理）。锚点位置用`ComputeLaneAnchorPosition`算（t=0/1对应Start/End，side固定0）——单一
+  车道时这个公式的偏移量正好抵消成0，等价于直接用中轴线坐标，但保留这个调用是为了和大路/
+  小路的锚点算法保持同一套写法。端点如果和`anchorCache`里已有的世界坐标（含车行/行人类别——
+  同一个坐标车行和行人各自独立，不会混用彼此的node）在`ZONE_ANCHOR_MERGE_RADIUS_SQ`（1个
+  地图单位的平方）容差内重合，复用同一个node；否则`MakeIsolatedAnchor`新建一个并登记进
+  cache。这个容差是为了让出入口锚点(`ConnectZoneAccessPoint`产出，落在mod声明的原始坐标)
+  和内部道路的锚点能被判定成"同一个位置"自动桥接，是刻意的近似，不是精确匹配。
+- **`PlaceZoneInternalBuilding(zone, spec, builtInternalRoads, mod)`**：把
+  `ZoneInternalBuildingSpec`实例化成`Building`：`ZoneLocalToWorld`算世界坐标中心，
+  `SetPosition`，`building->SetParentZone(zone)`+`building->SetParentLot(zone->GetParentLot(),
+  spec.relativeRotation)`（`Building`同时持有`parentZone`和`parentLot`，前者只是反向查询
+  登记，`GetRotation()`走的是`parentLot`那条转发链路，`parentLot`直接复用zone自己的
+  `parentLot`所以转发基准天然一致，见`zone.md`"building.h"一节），再用`builtInternalRoads`
+  （按`spec.roadIndices`的`FACE_DIRECTION->下标`）解析出`Road*`逐个`SetBoundaryRoad`。
+  `mod`参数是调用方从`InitBuildings()`自己的`scanners`表按`spec.type`查到的共享`BuildingMod*`
+  （见"InitZones/InitBuildings"一节`Building`按类型共享mod那段）——`new Building(mod)`直接
+  用它，不会另外创建一个只用来读`GetType()`/`GetName()`的空壳实例。**这个方法在`InitZones()`
+  执行期间不能调用**（`buildingFactory`此时还没注册mod，`scanners`表也还不存在），只由
+  `InitBuildings()`遍历`zone->GetMod()->internalBuildings`时调用。
+
+`anchorCache`（`vector<tuple<float,float,bool,Node*>>`，`InitZones()`里的局部变量，一个zone
+一份）由出入口和内部道路共用——这是让"内部道路端点恰好落在出入口位置"时能自动接上外部道路的
+唯一机制：本身没有专门为这两者设计"桥接"逻辑，纯粹靠坐标（含类别）重合就复用同一个node。
 
 ## 依赖关系
 

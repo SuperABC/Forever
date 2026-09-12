@@ -888,7 +888,6 @@ namespace {
 	}
 
 	constexpr float MIN_LOT_EXTENT = 2.f;
-	constexpr float FORCED_AXIS_SWITCH_EXTENT = 7.f;
 
 	// 把世界坐标点(px,py)反投影到road的Start->End直线上，算出近似弧长比例t——按直线而不是
 	// 真正的曲线弧长反查，只覆盖小路一般连接的基本走直线的frontage场景，弯道中间开口这次不
@@ -1052,7 +1051,7 @@ float Lot::GetFreeAcreage() {
 }
 
 bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, float depth,
-	const PathLaneSpec& spec, Quad* outPlaced) {
+	const PathLaneSpec& spec, Quad* outPlaced, unordered_map<int, Road*>* outBoundaryRoads) {
 
 	if (!GetBoundaryRoad(direction)) {
 		return false; // 关键设计决策3：方向没有路，直接拒绝
@@ -1179,6 +1178,7 @@ bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, fl
 		}
 
 		outPlaced->SetPosition(working->GetPosX(), working->GetPosY(), working->GetSizeX(), working->GetSizeY());
+		if (outBoundaryRoads) *outBoundaryRoads = working->GetBoundaryRoads();
 
 		pool.erase(pool.begin() + i);
 		delete working;
@@ -1191,6 +1191,174 @@ bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, fl
 	return false;
 }
 
+namespace {
+	// FillRemainder这次改用老工程的思路：先按权重CDF采样出一串(type,acreage)一直到填满某个
+	// freeLots条目的总面积（对应老工程Map::GenerateBuildings的采样循环，
+	// E:\Projects\Forever_UE\Source\Core\map\map.cpp第687-734行），再两两合并成一棵二叉树
+	// （对应老工程Quad::DivideSpace的合并阶段，E:\Projects\Forever_UE\Source\Dependence\map\
+	// geometry.cpp第706-730行），最后递归二分真实的Lot几何、把每个叶子安置到自己最终的矩形里
+	// （对应老工程Quad::SplitInto+DivideSpace第732-751行）。只在这个文件内部使用，不进头文件。
+	struct FillMergeNode {
+		float acreage = 0.f;
+		string type; // 只有叶子有意义；FILL_EMPTY_TYPE表示这段面积主动空置，不生成FillResult
+		FillMergeNode* left = nullptr;
+		FillMergeNode* right = nullptr;
+		bool IsLeaf() const { return !left && !right; }
+	};
+
+	const string FILL_EMPTY_TYPE = "__EMPTY__";
+
+	void DeleteFillMergeTree(FillMergeNode* node) {
+		if (!node) return;
+		DeleteFillMergeTree(node->left);
+		DeleteFillMergeTree(node->right);
+		delete node;
+	}
+
+	// 老工程采样循环搬过来：按candidates权重CDF反复抽类型，直到累计面积达到acreageBlock——
+	// 只有"抽到但剩余空间连这个类型下限都放不下"才计入attempts(沿用老工程
+	// MAX_ALLOCATION_ATTEMPTS=16的值)，抽到能放的类型永远不计入尝试次数，保证"填满"优先于
+	// "尝试次数"，不会像原来贪心版本那样把成功的迭代也一起消耗进尝试预算。最后如果还差一点凑
+	// 不满(通常是attempts耗尽)，补一个FILL_EMPTY_TYPE叶子把总面积账目补齐，这样递归二分时
+	// 不会有游离在任何叶子之外的面积。
+	vector<pair<string, float>> SampleFillElements(float acreageBlock,
+		const vector<pair<string, float>>& candidates,
+		const function<float(const string&)>& randomAcreage,
+		const function<pair<float, float>(const string&)>& acreageMinMax) {
+
+		vector<pair<string, float>> elements;
+		float totalWeight = 0.f;
+		for (auto& [type, w] : candidates) totalWeight += w;
+		if (totalWeight <= 0.f) return elements;
+
+		constexpr int MAX_SAMPLE_ATTEMPTS = 16;
+		float acreageTmp = 0.f;
+		int attempts = 0;
+		while (acreageTmp < acreageBlock && attempts < MAX_SAMPLE_ATTEMPTS) {
+			float r = GetRandom(10000) / 10000.f * totalWeight;
+			string chosenType = candidates.back().first;
+			float acc = 0.f;
+			for (auto& [type, w] : candidates) {
+				acc += w;
+				if (r <= acc) { chosenType = type; break; }
+			}
+
+			float acreage = randomAcreage(chosenType);
+			float minA = acreageMinMax(chosenType).first;
+			if (acreageBlock - acreageTmp < minA) {
+				attempts++;
+				continue;
+			}
+			if (acreageBlock - acreageTmp < acreage) {
+				acreage = acreageBlock - acreageTmp;
+			}
+			elements.emplace_back(chosenType, acreage);
+			acreageTmp += acreage;
+		}
+
+		if (acreageBlock - acreageTmp > 1e-3f) {
+			elements.emplace_back(FILL_EMPTY_TYPE, acreageBlock - acreageTmp);
+		}
+		return elements;
+	}
+
+	// 老工程Quad::DivideSpace合并阶段搬过来：按面积降序排序，反复把数组末尾(最小)两个元素
+	// 合并成一个新内部节点(面积=两者之和)，插入排序塞回数组维持降序，直到只剩1或2个顶层节点
+	// (只采样出一个元素时不需要合并，直接返回那一个叶子)。
+	FillMergeNode* BuildFillMergeTree(vector<pair<string, float>>& elements) {
+		vector<FillMergeNode*> nodes;
+		nodes.reserve(elements.size());
+		for (auto& [type, acreage] : elements) {
+			FillMergeNode* leaf = new FillMergeNode();
+			leaf->acreage = acreage;
+			leaf->type = type;
+			nodes.push_back(leaf);
+		}
+		sort(nodes.begin(), nodes.end(), [](FillMergeNode* a, FillMergeNode* b) {
+			return a->acreage > b->acreage;
+			});
+
+		while (nodes.size() > 2) {
+			FillMergeNode* merged = new FillMergeNode();
+			merged->left = nodes[nodes.size() - 1];
+			merged->right = nodes[nodes.size() - 2];
+			merged->acreage = merged->left->acreage + merged->right->acreage;
+			nodes.pop_back();
+
+			int i = static_cast<int>(nodes.size()) - 2;
+			for (; i >= 0; i--) {
+				if (merged->acreage > nodes[i]->acreage) {
+					nodes[i + 1] = nodes[i];
+				}
+				else {
+					nodes[i + 1] = merged;
+					break;
+				}
+			}
+			if (i < 0) nodes[0] = merged;
+		}
+
+		if (nodes.empty()) return nullptr;
+		if (nodes.size() == 1) return nodes[0];
+
+		FillMergeNode* root = new FillMergeNode();
+		root->left = nodes[0];
+		root->right = nodes[1];
+		root->acreage = root->left->acreage + root->right->acreage;
+		return root;
+	}
+
+	// 老工程Quad::SplitInto+DivideSpace安置阶段搬过来：把region按node->left/right的面积比例
+	// 递归二分，安置到最终矩形。和老工程零宽度切割线不同，这里每一刀都是真实的
+	// Lot::SplitWithPath(带宽度的小路)，可能因为切割线两端都没有边界Road或分出来的某段小于
+	// MIN_LOT_EXTENT而失败——优先按较长边选轴，切不动就换另一条轴再试一次，两条轴都切不动就
+	// 说明这个节点没法再细分，把region整个让给面积更大的子树(另一支连同它的采样结果一起
+	// 作废，不产生FillResult，DeleteFillMergeTree释放)，这是唯一的退化点，只在几何确实分不出
+	// 两段合法矩形时才触发，不像原来贪心版本那样纯粹因为面积门槛就整块丢弃。
+	void PlaceFillMergeNode(Lot* region, FillMergeNode* node, const PathLaneSpec& spec,
+		vector<Lot::FillResult>& results, vector<PathRoadLink>& outLinks) {
+
+		if (node->IsLeaf()) {
+			if (node->type != FILL_EMPTY_TYPE) {
+				results.push_back({ node->type, Quad(region->GetPosX(), region->GetPosY(),
+					region->GetSizeX(), region->GetSizeY()), region->GetBoundaryRoads() });
+			}
+			delete region;
+			delete node;
+			return;
+		}
+
+		bool preferAlongX = region->GetSizeX() > region->GetSizeY();
+		bool aIsLower = GetRandom(2) != 0;
+		FillMergeNode* lowerChild = aIsLower ? node->left : node->right;
+		FillMergeNode* upperChild = aIsLower ? node->right : node->left;
+		float lowerRatio = lowerChild->acreage / node->acreage;
+
+		auto tryAxis = [&](bool alongX) -> Lot::SplitResult {
+			float depthExtent = alongX ? region->GetSizeX() : region->GetSizeY();
+			return region->SplitWithPath(alongX, depthExtent * lowerRatio, spec);
+			};
+
+		Lot::SplitResult res = tryAxis(preferAlongX);
+		if (!res.pathRoad) res = tryAxis(!preferAlongX);
+
+		if (!res.pathRoad) {
+			FillMergeNode* survivor = (node->left->acreage >= node->right->acreage) ? node->left : node->right;
+			FillMergeNode* dropped = (survivor == node->left) ? node->right : node->left;
+			DeleteFillMergeTree(dropped);
+			delete node;
+			PlaceFillMergeNode(region, survivor, spec, results, outLinks);
+			return;
+		}
+
+		outLinks.push_back({ res.pathRoad, res.endRoad1, res.endT1, res.endRoad2, res.endT2 });
+		delete region;
+		delete node;
+		PlaceFillMergeNode(res.lowerLot, lowerChild, spec, results, outLinks);
+		PlaceFillMergeNode(res.upperLot, upperChild, spec, results, outLinks);
+	}
+}
+
 vector<Lot::FillResult> Lot::FillRemainder(const PathLaneSpec& spec,
 	const function<float(const string&)>& randomAcreage,
 	const function<pair<float, float>(const string&)>& acreageMinMax) {
@@ -1198,129 +1366,34 @@ vector<Lot::FillResult> Lot::FillRemainder(const PathLaneSpec& spec,
 	vector<FillResult> results;
 	if (candidates.empty()) return results;
 
-	float totalWeight = 0.f;
-	for (auto& [type, w] : candidates) totalWeight += w;
-	if (totalWeight <= 0.f) return results;
-
 	auto& pool = GetFreeLots();
-	constexpr int MAX_ATTEMPTS = 200;
-	int attempts = 0;
-	float pathWidth = spec.vehicleWidth * 2.f + spec.pedestrianWidth * 2.f;
 
-	while (attempts < MAX_ATTEMPTS && !pool.empty()) {
-		int bestIdx = -1;
-		for (size_t i = 0; i < pool.size(); i++) {
-			if (pool[i]->GetSizeX() < MIN_LOT_EXTENT || pool[i]->GetSizeY() < MIN_LOT_EXTENT) continue;
-			if (bestIdx < 0 || pool[i]->GetAcreage() > pool[(size_t)bestIdx]->GetAcreage()) bestIdx = static_cast<int>(i);
-		}
-		if (bestIdx < 0) break;
-		Lot* target = pool[static_cast<size_t>(bestIdx)];
-
-		float r = GetRandom(10000) / 10000.f * totalWeight;
-		string chosenType = candidates.back().first;
-		float acc = 0.f;
-		for (auto& [type, w] : candidates) {
-			acc += w;
-			if (r <= acc) { chosenType = type; break; }
-		}
-
-		float acreage = randomAcreage(chosenType);
-		float minA = acreageMinMax(chosenType).first;
-		if (target->GetAcreage() < minA) {
-			// 这块自由地太小，放弃它，不再参与后续尝试
-			pool.erase(pool.begin() + bestIdx);
-			attempts++;
-			continue;
-		}
-		if (acreage > target->GetAcreage()) acreage = target->GetAcreage();
-
-		bool reachableWE = target->GetBoundaryRoad(FACE_WEST) || target->GetBoundaryRoad(FACE_EAST);
-		bool reachableNS = target->GetBoundaryRoad(FACE_NORTH) || target->GetBoundaryRoad(FACE_SOUTH);
-
-		// 分割轴选择（要求5）：默认选"能让两侧都保住可达性"的那个轴——可达边在东/西侧就选
-		// 南北向切(splitAlongX=false)，两侧仍各自保留一段东/西边界；可达边在南/北侧就选东西
-		// 向切(splitAlongX=true)。只有在按这个轴切会导致某一侧宽度不足(阈值7，留余量)时才
-		// 被迫换轴——换轴意味着这个方向本来就没有可达边界，任何裁剪都可能切出孤岛，所以下面
-		// 每一刀都用SplitWithPath自己的"两端至少一端连已有路"检查兜底，失败就放弃这一刀而不是
-		// 强行执行，不会再出现"切了但两端都是孤岛"的情况。
-		bool splitAlongX;
-		if (reachableWE && !reachableNS) {
-			splitAlongX = target->GetSizeY() >= FORCED_AXIS_SWITCH_EXTENT ? false : true;
-		}
-		else if (reachableNS && !reachableWE) {
-			splitAlongX = target->GetSizeX() >= FORCED_AXIS_SWITCH_EXTENT ? true : false;
+	// 每个满足MIN_LOT_EXTENT的freeLots条目当成一个独立容器，各自跑一遍"采样填满->合并->
+	// 递归二分"，互不共享采样进度(对应"通过权重填满所有子lot")；不满足MIN_LOT_EXTENT的条目
+	// (某边小于2，纯几何意义上切不出东西)保留在pool原地不动。
+	vector<Lot*> toProcess;
+	for (size_t i = 0; i < pool.size(); ) {
+		if (pool[i]->GetSizeX() >= MIN_LOT_EXTENT && pool[i]->GetSizeY() >= MIN_LOT_EXTENT) {
+			toProcess.push_back(pool[i]);
+			pool.erase(pool.begin() + i);
 		}
 		else {
-			// 两个方向都可达或都不可达：按较长边切(和老工程一致的默认策略)
-			splitAlongX = target->GetSizeX() > target->GetSizeY();
+			i++;
 		}
-
-		// 目标footprint尽量做成正方形（边长=sqrt(acreage)），面宽/进深各自被target在对应轴上
-		// 的实际尺寸夹住——老版本直接用target整条面宽反推进深，面宽远大于sqrt(acreage)时进深
-		// 会薄到不满足最小2x2单位，SplitWithPath直接失败、这块地就被整块丢弃，是之前大片
-		// 可达区域却没有铺Zone/Building的根因。这次分两刀裁：先在深度轴上裁到wantedDepth，
-		// 再在面宽轴上裁到wantedFrontage，任何一刀因为尺寸/可达性裁不动就跳过那一刀，最终
-		// 用当前实际裁出来的矩形（可能比目标footprint大）落地，不会再整块放弃。
-		float depthExtent = splitAlongX ? target->GetSizeX() : target->GetSizeY();
-		float frontageExtent = splitAlongX ? target->GetSizeY() : target->GetSizeX();
-		float side = sqrtf(acreage / ACREAGE_SCALE_FACTOR);
-		float wantedFrontage = min(side, frontageExtent);
-		float wantedDepth = acreage / (wantedFrontage * ACREAGE_SCALE_FACTOR);
-		if (wantedDepth > depthExtent) {
-			wantedDepth = depthExtent;
-			wantedFrontage = min(acreage / (wantedDepth * ACREAGE_SCALE_FACTOR), frontageExtent);
-		}
-
-		Lot* working = target;
-		bool workingIsPoolEntry = true;
-		vector<Lot*> survivors;
-
-		// ①深度方向：裁掉超出wantedDepth的远端富余（裁不动就跳过，working保持不变）
-		if (depthExtent - wantedDepth > pathWidth + 1e-3f) {
-			auto res = working->SplitWithPath(splitAlongX, wantedDepth + pathWidth / 2.f, spec);
-			if (res.pathRoad) {
-				pathRoadLinks.push_back({ res.pathRoad, res.endRoad1, res.endT1, res.endRoad2, res.endT2 });
-				if (res.upperLot->GetSizeX() >= MIN_LOT_EXTENT && res.upperLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.upperLot)) {
-					survivors.push_back(res.upperLot);
-				}
-				else {
-					delete res.upperLot;
-				}
-				if (!workingIsPoolEntry) delete working;
-				working = res.lowerLot;
-				workingIsPoolEntry = false;
-			}
-		}
-
-		// ②面宽方向：裁掉超出wantedFrontage的富余（裁不动就跳过）
-		{
-			float curFrontage = splitAlongX ? working->GetSizeY() : working->GetSizeX();
-			if (curFrontage - wantedFrontage > pathWidth + 1e-3f) {
-				auto res = working->SplitWithPath(!splitAlongX, wantedFrontage + pathWidth / 2.f, spec);
-				if (res.pathRoad) {
-					pathRoadLinks.push_back({ res.pathRoad, res.endRoad1, res.endT1, res.endRoad2, res.endT2 });
-					if (res.upperLot->GetSizeX() >= MIN_LOT_EXTENT && res.upperLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.upperLot)) {
-						survivors.push_back(res.upperLot);
-					}
-					else {
-						delete res.upperLot;
-					}
-					if (!workingIsPoolEntry) delete working;
-					working = res.lowerLot;
-					workingIsPoolEntry = false;
-				}
-			}
-		}
-
-		results.push_back({ chosenType, Quad(working->GetPosX(), working->GetPosY(), working->GetSizeX(), working->GetSizeY()) });
-
-		pool.erase(pool.begin() + bestIdx);
-		if (!workingIsPoolEntry) delete working;
-		for (Lot* s : survivors) pool.push_back(s);
-
-		attempts++;
 	}
 
+	vector<PathRoadLink> newLinks;
+	for (Lot* target : toProcess) {
+		vector<pair<string, float>> elements = SampleFillElements(target->GetAcreage(), candidates, randomAcreage, acreageMinMax);
+		if (elements.empty()) {
+			delete target;
+			continue;
+		}
+		FillMergeNode* root = BuildFillMergeTree(elements);
+		PlaceFillMergeNode(target, root, spec, results, newLinks);
+	}
+
+	pathRoadLinks.insert(pathRoadLinks.end(), newLinks.begin(), newLinks.end());
 	return results;
 }
 

@@ -36,6 +36,16 @@ AForeverFrameworkActor::~AForeverFrameworkActor()
 	delete map;
 }
 
+void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 同步释放map(见头文件EndPlay声明处的注释)——不能只靠析构函数兜底，
+	// 那个时机取决于UObject垃圾回收，不保证在下一次PIE开始前跑完。
+	delete map;
+	map = nullptr;
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void AForeverFrameworkActor::BeginPlay()
 {
 	Super::BeginPlay();
