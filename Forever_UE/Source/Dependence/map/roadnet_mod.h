@@ -38,16 +38,21 @@ public:
 	std::vector<Intersection> intersections;
 	std::vector<Road> roads;
 
-	// 每个lot连同它的边界Road映射(int键=FACE_DIRECTION 0-3,缺失/找不到表示那一侧没有路)。
-	// 不含边界Intersection映射——车行/行人导航图直接挂在Road/Intersection上,不需要通过lot中转。
-	// 边界Road存指针，必须指向this->roads里的元素本身，不能另外new/复制一份——全图只应该有
-	// 一份"这条物理路"的Road对象，lot的边界只是记一下"我贴着哪条路"，不是另起一份自己的拷贝。
-	// 这是因为Zone/Building裁剪Lot空间时(Lot::SplitWithPath)会真的在这条边界Road上加
-	// RoadOpening标记开口，如果边界指向的是独立拷贝，改动就传不到roads里真正会被渲染的那个
-	// 对象上(PIE验证发现过这个问题：开口加了但画不出来)。实现里往这个map塞指针之前，必须确保
+	// 每个lot自己（通过Lot::SetBoundaryRoad或构造函数的boundary参数）登记好边界Road映射
+	// (int键=FACE_DIRECTION 0-3,缺失/找不到表示那一侧没有路)。不含边界Intersection映射——
+	// 车行/行人导航图直接挂在Road/Intersection上,不需要通过lot中转。边界Road存指针，必须
+	// 指向this->roads里的元素本身，不能另外new/复制一份——全图只应该有一份"这条物理路"的
+	// Road对象，lot的边界只是记一下"我贴着哪条路"，不是另起一份自己的拷贝。这是因为
+	// Zone/Building裁剪Lot空间时(Lot::SplitWithPath)会真的在这条边界Road上加RoadOpening
+	// 标记开口，如果边界指向的是独立拷贝，改动就传不到roads里真正会被渲染的那个对象上
+	// (PIE验证发现过这个问题：开口加了但画不出来)。实现里给某个方向登记指针之前，必须确保
 	// this->roads不会再增长(vector扩容会让之前取的地址失效)，也就是说构建lots之前要先把所有
 	// addRoad-类的调用做完，再取&roads[i]这种地址。
-	std::vector<std::pair<Lot, std::unordered_map<int, Road*>>> lots;
+	// 这里直接是vector<Lot>而不是额外拿一个pair/map和Lot并排存边界信息——Lot本来就有
+	// SetBoundaryRoad/GetBoundaryRoads这套API，边界信息应该就记在Lot自己身上；构造时可以
+	// 直接把boundary map传给Lot的构造函数（等价于构造完再逐个调SetBoundaryRoad，见geometry.h
+	// 的Lot构造函数注释），不需要在旁边另开一份等价的数据结构。
+	std::vector<Lot> lots;
 
 	// AddHatch产出的地形挖洞标记(Quad+旋转角)，宿主(Map::InitRoadnet)会把这里的每一项转发进
 	// Map::AddHatch，复用Terrain已有的挖洞渲染机制，见map.md。

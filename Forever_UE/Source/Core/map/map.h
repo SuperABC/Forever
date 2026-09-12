@@ -86,6 +86,17 @@ public:
 	// 新创建的访问点Node，两侧都没有对应类别车道时返回nullptr。
 	Node* AddRoadAccessNode(const std::string& roadName, float t, bool isVehicle, bool useForwardSide, float openingWidth);
 
+	// 把Lot::SplitWithPath产出的一条小路正式接入vehicleNavGraph/pedestrianNavGraph：先按
+	// link.endRoad1(小路Start端)/endRoad2(小路End端)各自解出小路在该端的4个锚点(车行side0/1、
+	// 人行side0/1)——endRoad为空就是孤立端点；endRoad是"大路"(非小路)就在它最靠近小路的那一侧
+	// 断出2个node分别接小路车行/人行两条车道/人行道；endRoad本身也是小路就在它两侧车道/人行道
+	// 各断出2个node(近侧2+远侧2)，远侧单向搭桥到近侧、近侧再接新小路——再用两端的4+4个锚点建
+	// 小路自己的4条贯通线(车行side0 Start->End、side1 End->Start，人行两侧各自双向)。由
+	// InitZones()/InitBuildings()对每条新产生的PathRoadLink调用一次，调用顺序必须是link产生
+	// 的顺序(更早创建的小路可能被更晚创建的小路当成endRoad，必须先接完前者才能接后者)，具体
+	// 规则见map.md"ConnectPathRoad"一节。
+	void ConnectPathRoad(const PathRoadLink& link);
+
 	// 用ModLoader发现/注册config.json配置的zone mod dll。Zone这次只有"显式指定矩形"一种
 	// 生成方式（关键设计决策2）：按注册顺序对每个类型建一个"扫描用"ZoneMod实例，每次调用前
 	// 重新按Lot::GetFreeAcreage()降序排序GetLots()，调它的Distribute(lots)，读出
@@ -176,4 +187,40 @@ private:
 		int laneIndex = 0;
 	};
 	std::unordered_map<Road*, std::array<std::vector<ThroughLine>, 4>> throughLines;
+
+	// 在throughLines[road][idx]里找到laneIndex对应的贯通线，把它当前的fromAnchor->toAnchor
+	// 一条边断成fromAnchor->N->toAnchor两段(车行只插入该车道自己的实际通行方向；人行两段都
+	// 双向插入)，在(worldX,worldY,worldZ)新建node N，返回N。**并把这条ThroughLine的fromAnchor
+	// 更新成N、edge更新成新的N->toAnchor那条**——这样如果同一条车道之后还要被再断一次(小路的
+	// 场景里同一条临街大路很可能被沿线好几条小路连续断开)，下次断的是"剩下还没断过的那一截
+	// 尾巴"，不会因为找到的还是最初那条整段edge而和已有node脱节。找不到对应贯通线(laneIndex
+	// 越界/road不在throughLines里)返回nullptr。是AddRoadAccessNode和ConnectPathRoad共用的
+	// 底层原语——AddRoadAccessNode原来自己内联做这件事，但没有这份"回写"逻辑，因为它目前还没有
+	// 真正的调用方，从没暴露过"同一车道断第二次"这个问题；这次给小路接图必然会撞上，顺手把
+	// AddRoadAccessNode也改成调用这个统一实现，不留两份逻辑。
+	Node* BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex, float worldX, float worldY, float worldZ);
+
+	// 算road在弧长比例t处、(isVehicle,side,laneIndex)这条具体车道/人行道的车道中心世界坐标——
+	// 和AddRoadAccessNode算nx/ny用的是同一套公式(perp0偏移+shift居中换算，见
+	// Source/Core/map/roadnet.md"车道居中"一节)，行人道额外加上同侧车行+停车道的总宽度当基准
+	// (人行道在车行道外侧，不是从中轴线直接量，和RoadJunction::Build的pedestrianSide锚点算法
+	// 一致)。ConnectPathRoad在大路/小路上breakout新node时必须用这个算出实际车道位置，不能直接
+	// 用road->GetPoint(t)这个纯中轴线坐标——否则新node会紧贴中轴线，和原来车道自己真实的
+	// fromAnchor/toAnchor连起来变成从车道位置抖到中轴线又抖回去的锯齿，PIE验证发现过这个问题。
+	// 返回值只有x/y，z直接取road->GetPoint(t)的高度(车道横向偏移不影响高度)。
+	std::pair<float, float> ComputeLaneAnchorPosition(Road* road, float t, bool isVehicle, int side, int laneIndex) const;
+
+	// 新建一个不接入任何既有贯通线的孤立锚点node(小路端点没有可连的路时用)，登记进
+	// navAnchorNodes，返回新node。
+	Node* MakeIsolatedAnchor(float worldX, float worldY, float worldZ, const char* category);
+
+	// ConnectPathRoad的核心：解出小路path在isStartEnd(true=Start端,false=End端)这一端的4个
+	// 锚点(outVeh[0]/[1]=车行side0/1，outPed[0]/[1]=人行side0/1)。hostRoad为空按孤立端点处理；
+	// 非空时用小路自身连接方向和hostRoad在hostT处的perp0做点积判断"近侧"(dot>=0是hostRoad的
+	// side0，否则side1)，hostRoad不是小路("大路")时只断近侧一条车行道(优先选最外侧车道，某侧
+	// 没有车道就退化用另一侧)+近侧一条人行道各出2个node直接对应小路的2条车道/人行道；hostRoad
+	// 也是小路时近侧、远侧各自的车行道/人行道都断出2个node，远侧单向搭桥到近侧对应node
+	// (远进入->近进入、近合并->远合并，人行道双向搭桥)，近侧2个node才是实际对应小路的锚点。
+	void ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, float hostT,
+		std::array<Node*, 2>& outVeh, std::array<Node*, 2>& outPed);
 };

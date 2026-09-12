@@ -31,11 +31,7 @@ string Building::GetName() const {
 }
 
 float Building::GetRotation() const {
-	return rotation;
-}
-
-void Building::SetRotation(float r) {
-	rotation = r;
+	return parentLot ? parentLot->GetRotation() : 0.f;
 }
 
 Lot* Building::GetParentLot() const {

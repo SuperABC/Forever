@@ -22,13 +22,17 @@
 - **`parentLot`只是一个方便查询的反向引用**，`Zone`不负责这个指针的生命周期（`Lot`本身也
   不知道有哪些`Zone`落在自己身上——这次没有像老工程`Block::AddZone`那样维护双向映射，单向
   引用已经够用，`Map`直接拿着`vector<Zone*>`用）。
-- **`rotation`是`Zone`/`Building`自己新增的字段，不是继承自`Quad`**（`Quad`本身没有旋转），
-  照抄`Lot`"在`Quad`基础上自己加一个旋转角度"的同款做法——PIE验证发现斜向道路旁边裁出来的
-  Zone/Building如果不带旋转，扁cube会显示成轴对齐、和实际地块朝向对不上。`freeLots`池里所有
-  子块都继承同一个顶层`Lot`的`rotation`（`Lot::SplitWithPath`产出的两段都用同一个
-  `this->rotation`构造），所以`Map::InitZones`/`InitBuildings`直接从落地时用到的那个顶层
-  `Lot*`（显式占位是`request.lot`，`FillRemainder`是`GetLots()`遍历到的`lot`）读
-  `GetRotation()`赋值即可，不需要`Lot::RequestPlacement`/`FillRemainder`的返回值额外带一份。
+- **`GetRotation()`直接转发`parentLot->GetRotation()`，`Zone`/`Building`自己不存这个字段**
+  （第十三轮迁移，简化了一版早前的实现）——`Quad`本身没有旋转，最初照抄`Lot`"在`Quad`基础上
+  自己加一个旋转角度"的做法给`Zone`/`Building`也单独存了一份`rotation`（PIE验证发现斜向道路
+  旁边裁出来的Zone/Building如果不带旋转，扁cube会显示成轴对齐、和实际地块朝向对不上，需要
+  旋转数据本身没有错），但既然`freeLots`池里所有子块都继承同一个顶层`Lot`的`rotation`
+  （`Lot::SplitWithPath`产出的两段都用同一个`this->rotation`构造），而`Zone`/`Building`本来
+  就已经通过`parentLot`拿着这个顶层`Lot*`（见下），再自己存一份`rotation`纯粹是冗余拷贝——
+  `SetParentLot(lot)`之后`GetRotation()`直接转发`parentLot->GetRotation()`就是同一个值，不用
+  额外的`SetRotation`调用，`Map::InitZones()`/`InitBuildings()`落地时也就不需要再单独调一次
+  `SetRotation`了。唯一的约束是`GetRotation()`必须在`SetParentLot`之后调用才有意义，构造完/
+  `SetParentLot`之前调用返回0（`parentLot`还是空指针）。
 
 ## 依赖关系
 

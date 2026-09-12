@@ -19,7 +19,7 @@
 using namespace std;
 
 namespace {
-	void AppendQuadDoubleSided(TArray<FVector>& vertices, TArray<int32>& triangles,
+	void ZoneAppendQuadDoubleSided(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector& v00, const FVector& v10, const FVector& v11, const FVector& v01) {
 		int32 base = vertices.Num();
 		vertices.Add(v00); vertices.Add(v10); vertices.Add(v11); vertices.Add(v01);
@@ -33,7 +33,7 @@ namespace {
 	// 本身(Quad没有旋转字段)，由调用方从Zone::GetRotation()传入——和Lot::GetPosition的旋转
 	// 约定完全一致(局部坐标相对中心的偏移先旋转、再平移)，这样落在斜向道路旁边的Zone/Building
 	// 才能正确跟着Lot转，不会退化成轴对齐。
-	void AppendFlatBox(TArray<FVector>& vertices, TArray<int32>& triangles, const Quad& quad, float rotation) {
+	void ZoneAppendFlatBox(TArray<FVector>& vertices, TArray<int32>& triangles, const Quad& quad, float rotation) {
 		float cx = quad.GetPosX() * ZONE_WORLD_SCALE;
 		float cy = quad.GetPosY() * ZONE_WORLD_SCALE;
 		float hx = quad.GetSizeX() * 0.5f * ZONE_WORLD_SCALE;
@@ -56,12 +56,12 @@ namespace {
 		FVector v111 = RotatedCorner(hx, hy, zTop);
 		FVector v011 = RotatedCorner(-hx, hy, zTop);
 
-		AppendQuadDoubleSided(vertices, triangles, v001, v101, v111, v011); // 顶
-		AppendQuadDoubleSided(vertices, triangles, v010, v110, v100, v000); // 底
-		AppendQuadDoubleSided(vertices, triangles, v000, v100, v101, v001);
-		AppendQuadDoubleSided(vertices, triangles, v100, v110, v111, v101);
-		AppendQuadDoubleSided(vertices, triangles, v110, v010, v011, v111);
-		AppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011);
+		ZoneAppendQuadDoubleSided(vertices, triangles, v001, v101, v111, v011); // 顶
+		ZoneAppendQuadDoubleSided(vertices, triangles, v010, v110, v100, v000); // 底
+		ZoneAppendQuadDoubleSided(vertices, triangles, v000, v100, v101, v001);
+		ZoneAppendQuadDoubleSided(vertices, triangles, v100, v110, v111, v101);
+		ZoneAppendQuadDoubleSided(vertices, triangles, v110, v010, v011, v111);
+		ZoneAppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011);
 	}
 }
 
@@ -95,7 +95,7 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 	TArray<int32> triangles;
 	for (Zone* zone : map->GetZones()) {
 		if (!zone) continue;
-		AppendFlatBox(vertices, triangles, *zone, zone->GetRotation());
+		ZoneAppendFlatBox(vertices, triangles, *zone, zone->GetRotation());
 	}
 
 	if (triangles.Num() > 0) {

@@ -31,6 +31,13 @@ namespace {
 		return offset;
 	}
 
+	// 和roadnet.cpp里的同名私有helper逻辑一致，这里独立一份。
+	float SumWidths(const vector<float>& lanes) {
+		float sum = 0.f;
+		for (float w : lanes) sum += w;
+		return sum;
+	}
+
 	void RemoveGraphEdgeOneWay(unordered_map<int, vector<pair<int, Connection*>>>& graph, int fromId, int toId) {
 		auto it = graph.find(fromId);
 		if (it == graph.end()) return;
@@ -311,14 +318,21 @@ void Map::InitZones() {
 		for (auto& request : scanner->explicitPlacements) {
 			if (!request.lot) continue;
 			Quad placed;
+			size_t linksBefore = request.lot->GetPathRoadLinks().size();
 			bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
 				request.marginEnd, request.depth, pathSpec, &placed);
+			// 不管这次placement最终成功还是失败都要接图——SplitWithPath产出的小路即使整体
+			// 请求失败也已经是真实持久化的几何(被某个freeLot的边界引用着)，处理顺序天然
+			// =创建顺序(同一顶层Lot内部cascading cut时，后一刀如果连到前一刀新建的小路，
+			// 前一刀的link一定排在更靠前的位置，先被处理)。
+			const auto& allLinks = request.lot->GetPathRoadLinks();
+			for (size_t i = linksBefore; i < allLinks.size(); i++) {
+				ConnectPathRoad(allLinks[i]);
+			}
 			if (success) {
 				Zone* zone = new Zone(&zoneFactory, id);
 				zone->SetPosition(placed.GetPosX(), placed.GetPosY(), placed.GetSizeX(), placed.GetSizeY());
-				// freeLots全部继承同一个顶层Lot的rotation(Lot::SplitWithPath产出的每一段都是
-				// 同一个rotation)，所以直接从request.lot取就是这块占位实际的世界朝向。
-				zone->SetRotation(request.lot->GetRotation());
+				// Zone::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
 				zone->SetParentLot(request.lot);
 				zones.push_back(zone);
 			}
@@ -354,12 +368,16 @@ void Map::InitBuildings() {
 		for (auto& request : scanner->explicitPlacements) {
 			if (!request.lot) continue;
 			Quad placed;
+			size_t linksBefore = request.lot->GetPathRoadLinks().size();
 			bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
 				request.marginEnd, request.depth, pathSpec, &placed);
+			const auto& allLinks = request.lot->GetPathRoadLinks();
+			for (size_t i = linksBefore; i < allLinks.size(); i++) {
+				ConnectPathRoad(allLinks[i]);
+			}
 			if (success) {
 				Building* building = new Building(&buildingFactory, id);
 				building->SetPosition(placed.GetPosX(), placed.GetPosY(), placed.GetSizeX(), placed.GetSizeY());
-				building->SetRotation(request.lot->GetRotation());
 				building->SetParentLot(request.lot);
 				buildings.push_back(building);
 			}
@@ -379,14 +397,18 @@ void Map::InitBuildings() {
 			return { it->second->GetAcreageMin(), it->second->GetAcreageMax() };
 			};
 
+		size_t linksBefore = lot->GetPathRoadLinks().size();
 		auto results = lot->FillRemainder(pathSpec, randomAcreage, acreageMinMax);
+		const auto& allLinks = lot->GetPathRoadLinks();
+		for (size_t i = linksBefore; i < allLinks.size(); i++) {
+			ConnectPathRoad(allLinks[i]);
+		}
 
 		for (auto& result : results) {
 			Building* building = new Building(&buildingFactory, result.type);
 			building->SetPosition(result.footprint.GetPosX(), result.footprint.GetPosY(),
 				result.footprint.GetSizeX(), result.footprint.GetSizeY());
-			// FillRemainder是在lot自己的freeLots池里切的，同样继承lot这个顶层Lot的rotation。
-			building->SetRotation(lot->GetRotation());
+			// Building::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
 			building->SetParentLot(lot);
 			buildings.push_back(building);
 		}
@@ -483,14 +505,6 @@ Node* Map::AddRoadAccessNode(const string& roadName, float t, bool isVehicle, bo
 		}
 	}
 
-	int idx = (isVehicle ? 0 : 2) + side;
-	vector<ThroughLine>& lines = throughLines[road][idx];
-	ThroughLine* line = nullptr;
-	for (ThroughLine& l : lines) {
-		if (l.laneIndex == laneIndex) { line = &l; break; }
-	}
-	if (!line || !line->fromAnchor || !line->toAnchor) return nullptr;
-
 	Node basePoint = road->GetPoint(t);
 	float tdx, tdy, tdz;
 	road->GetTangent(t, tdx, tdy, tdz);
@@ -505,12 +519,35 @@ Node* Map::AddRoadAccessNode(const string& roadName, float t, bool isVehicle, bo
 	float nx = basePoint.GetX() + perp0X * signedOffset;
 	float ny = basePoint.GetY() + perp0Y * signedOffset;
 
-	Node* newNode = new Node(isVehicle ? "vehicle" : "pedestrian", nx, ny, basePoint.GetZ());
+	Node* newNode = BreakThroughLine(road, isVehicle, side, laneIndex, nx, ny, basePoint.GetZ());
+	if (!newNode) return nullptr;
+
+	RoadOpening opening;
+	opening.t = t;
+	opening.width = openingWidth;
+	opening.forwardSide = useForwardSide;
+	opening.isVehicle = isVehicle;
+	road->AddOpening(opening);
+
+	return newNode;
+}
+
+Node* Map::BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex, float worldX, float worldY, float worldZ) {
+	if (!road || laneIndex < 0) return nullptr;
+
+	int idx = (isVehicle ? 0 : 2) + side;
+	vector<ThroughLine>& lines = throughLines[road][idx];
+	ThroughLine* line = nullptr;
+	for (ThroughLine& l : lines) {
+		if (l.laneIndex == laneIndex) { line = &l; break; }
+	}
+	if (!line || !line->fromAnchor || !line->toAnchor) return nullptr;
+
+	Node* newNode = new Node(isVehicle ? "vehicle" : "pedestrian", worldX, worldY, worldZ);
 	navAnchorNodes.push_back(newNode);
 
 	auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;
 
-	// 目标车道自己的贯通线直接断开——每条车道都有专属贯通线之后，这里不再需要按车道数分支。
 	if (line->edge) {
 		RemoveGraphEdgeOneWay(graph, line->fromAnchor->GetId(), line->toAnchor->GetId());
 		if (!isVehicle) {
@@ -529,14 +566,301 @@ Node* Map::AddRoadAccessNode(const string& roadName, float t, bool isVehicle, bo
 		graph[line->toAnchor->GetId()].emplace_back(newNode->GetId(), seg2);
 	}
 
-	RoadOpening opening;
-	opening.t = t;
-	opening.width = openingWidth;
-	opening.forwardSide = useForwardSide;
-	opening.isVehicle = isVehicle;
-	road->AddOpening(opening);
+	// 回写成"剩下还没断过的尾巴"：下次再断同一条车道(比如同一条临街大路被沿线好几条小路
+	// 连续断开)，断的是N->原toAnchor这一截，不会和这次新插入的node脱节。
+	line->fromAnchor = newNode;
+	line->edge = seg2;
 
 	return newNode;
+}
+
+Node* Map::MakeIsolatedAnchor(float worldX, float worldY, float worldZ, const char* category) {
+	Node* node = new Node(category, worldX, worldY, worldZ);
+	navAnchorNodes.push_back(node);
+	return node;
+}
+
+pair<float, float> Map::ComputeLaneAnchorPosition(Road* road, float t, bool isVehicle, int side, int laneIndex) const {
+	Node basePoint = road->GetPoint(t);
+	float tdx, tdy, tdz;
+	road->GetTangent(t, tdx, tdy, tdz);
+	float tlen = sqrtf(tdx * tdx + tdy * tdy);
+	if (tlen < 1e-6f) tlen = 1.f;
+	float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
+
+	float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
+	float sideSign = (side == 0) ? 1.f : -1.f;
+
+	float offsetDist;
+	if (isVehicle) {
+		offsetDist = LaneCenterOffset(road->GetVehicleLanes(side), laneIndex);
+	}
+	else {
+		// 人行道在同侧车行+停车道外侧，基准要先加上那两类车道的总宽度，不是直接从中轴线量
+		// （和RoadJunction::Build里pedestrianSide锚点的算法一致）。
+		offsetDist = SumWidths(road->GetVehicleLanes(side)) + SumWidths(road->GetParkingLanes(side))
+			+ LaneCenterOffset(road->GetPedestrianLanes(side), laneIndex);
+	}
+	float signedOffset = offsetDist * sideSign - shift;
+
+	return { basePoint.GetX() + perp0X * signedOffset, basePoint.GetY() + perp0Y * signedOffset };
+}
+
+void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, float hostT,
+	array<Node*, 2>& outVeh, array<Node*, 2>& outPed) {
+
+	Node baseNode = isStartEnd ? path->GetStart() : path->GetEnd();
+	Node otherNode = isStartEnd ? path->GetEnd() : path->GetStart();
+
+	float dirX = otherNode.GetX() - baseNode.GetX();
+	float dirY = otherNode.GetY() - baseNode.GetY();
+	float dirLen = sqrtf(dirX * dirX + dirY * dirY);
+	if (dirLen < 1e-6f) dirLen = 1.f;
+	dirX /= dirLen;
+	dirY /= dirLen;
+
+	// 小路自己的横断面：车行道中心在±vehOffset，人行道中心在±pedOffset(车行道外侧)——两侧
+	// 宽度对称(PathLaneSpec保证)，取side0的值就行，side0为空时(理论上不会)退化用side1。
+	const vector<float>& pathVeh0 = path->GetVehicleLanes(0);
+	const vector<float>& pathVeh1 = path->GetVehicleLanes(1);
+	const vector<float>& pathPed0 = path->GetPedestrianLanes(0);
+	const vector<float>& pathPed1 = path->GetPedestrianLanes(1);
+	float vehWidth = !pathVeh0.empty() ? pathVeh0[0] : (!pathVeh1.empty() ? pathVeh1[0] : 0.f);
+	float pedWidth = !pathPed0.empty() ? pathPed0[0] : (!pathPed1.empty() ? pathPed1[0] : 0.f);
+	float vehOffset = vehWidth * 0.5f;
+	float pedOffset = vehWidth + pedWidth * 0.5f;
+
+	// 小路自身固定的perp0——**必须用Road自己Start->End方向算，不能用上面的dirX/dirY**：
+	// dirX/dirY是"离开当前这一端、伸向小路另一端"的方向，在Start端和End端正好相反，如果拿它
+	// 算perp0，side0/side1在两端会对应到物理上相反的两侧(西端的"+"是南侧，东端的"+"却是北侧)，
+	// 连线时(ConnectPathRoad拿两端同一个下标拼成一条line)就会拧成交叉——西端南侧车道接到了
+	// 东端北侧车道，PIE验证发现的bug。side0/side1的物理含义必须在小路全长上保持一致，
+	// 和Road自己车道数据(GetVehicleLanes(0)/(1)，SplitWithPath建小路时就是用Start->End
+	// 方向的perp0铺的)对齐，因此这里固定用path->GetStart()->GetEnd()方向，不随isStartEnd翻转。
+	Node pathStart = path->GetStart();
+	Node pathEnd = path->GetEnd();
+	float gdx = pathEnd.GetX() - pathStart.GetX();
+	float gdy = pathEnd.GetY() - pathStart.GetY();
+	float glen = sqrtf(gdx * gdx + gdy * gdy);
+	if (glen < 1e-6f) glen = 1.f;
+	float pathPerp0X = gdy / glen, pathPerp0Y = -gdx / glen;
+
+	// 小路side0沿Start->End走，side1沿End->Start走：Start端离开(entering)的是side0、
+	// 到达(exiting)的是side1；End端相反。
+	int enteringSide = isStartEnd ? 0 : 1;
+	int exitingSide = isStartEnd ? 1 : 0;
+
+	// **修复"车道/人行道都堆在中轴线上"的根因**：下面host分支里Nin/Nout(以及PnA/PnB等)如果
+	// 直接用ComputeLaneAnchorPosition算出来的同一个(vx,vy)断两次，会在完全相同的坐标上产生
+	// 两个不同的node——views上看不出区别，ConnectPathRoad拿它们连成的小路自己的side0/side1
+	// 贯通线(veh0=start[0]->end[0]，veh1=end[1]->start[1])于是首尾都落在同一对坐标上，
+	// 几何上重合成一条线，视觉上就是"只有中轴线一条车道"。这里在每个host断点上，沿小路自身
+	// 的pathPerp0方向按小路自己的车道/人行道半宽各偏移一点，让entering/exiting(或near的
+	// side0/side1)两个断点分别落在小路两条车道各自的延长线上，和小路自身中段的车道几何真正
+	// 对齐，不再是同一个点。enterSign统一控制"entering那一侧偏移量的符号"，exiting/side1
+	// 自动取反，两者始终关于host断点对称。
+	float enterSign = (enteringSide == 0) ? 1.f : -1.f;
+
+	if (!hostRoad) {
+		outVeh[0] = MakeIsolatedAnchor(baseNode.GetX() + pathPerp0X * vehOffset, baseNode.GetY() + pathPerp0Y * vehOffset, baseNode.GetZ(), "vehicle");
+		outVeh[1] = MakeIsolatedAnchor(baseNode.GetX() - pathPerp0X * vehOffset, baseNode.GetY() - pathPerp0Y * vehOffset, baseNode.GetZ(), "vehicle");
+		outPed[0] = MakeIsolatedAnchor(baseNode.GetX() + pathPerp0X * pedOffset, baseNode.GetY() + pathPerp0Y * pedOffset, baseNode.GetZ(), "pedestrian");
+		outPed[1] = MakeIsolatedAnchor(baseNode.GetX() - pathPerp0X * pedOffset, baseNode.GetY() - pathPerp0Y * pedOffset, baseNode.GetZ(), "pedestrian");
+		return;
+	}
+
+	Node hostPoint = hostRoad->GetPoint(hostT);
+	float hdx, hdy, hdz;
+	hostRoad->GetTangent(hostT, hdx, hdy, hdz);
+	float hlen = sqrtf(hdx * hdx + hdy * hdy);
+	if (hlen < 1e-6f) hlen = 1.f;
+	float hostFwdX = hdx / hlen, hostFwdY = hdy / hlen;
+	float hostPerp0X = hostFwdY, hostPerp0Y = -hostFwdX;
+
+	// 近侧判定：小路离开连接点、伸向自己另一端的方向，和host的perp0点积>=0就是host的side0，
+	// 否则side1——小路总是往它所属Lot的空闲空间那一侧延伸，这个方向天然指向近侧所在的半边。
+	float dot = dirX * hostPerp0X + dirY * hostPerp0Y;
+	int nearSide = (dot >= 0.f) ? 0 : 1;
+	int farSide = 1 - nearSide;
+
+	auto pickLaneIndex = [](const vector<float>& lanes) -> int {
+		return lanes.empty() ? -1 : static_cast<int>(lanes.size()) - 1;
+		};
+	// 单行道(近侧车道数组本身就是空的，比如"单行道双车道"只在farSide铺了2条车道)退化去用
+	// farSide时，要选**最靠近路中心线**的那条(下标0)，不是outermost(下标size()-1)——outermost
+	// 是给"这一侧本身就是near"的情况用的("离小路最近"=离curb最近=离中心线最远)，但退化到
+	// farSide时小路其实紧贴着中心线这一侧(near侧车道数为空)，farSide车道里离小路最近的反而是
+	// 下标0那条(挨着中心线)，不是下标size()-1那条(farSide自己的outermost、离小路最远那条)。
+	// 原先两种情况都用pickLaneIndex(outermost)，导致所有退化到同一farSide的小路(不管near侧
+	// 本来该是side0还是side1)全部挤到farSide同一条outermost车道上，就是"都连接到同一侧车道"
+	// 这个bug。
+	auto pickFallbackLaneIndex = [](const vector<float>& lanes) -> int {
+		return lanes.empty() ? -1 : 0;
+		};
+
+	if (!hostRoad->IsPathRoad()) {
+		// 大路：只处理近侧，某一类车道近侧没有就退化用远侧(和AddRoadAccessNode单行道回退
+		// 逻辑同样的精神——两侧都没有就彻底放弃、退化成孤立锚点)。
+		int vehSide = nearSide;
+		int vehLaneIndex = pickLaneIndex(hostRoad->GetVehicleLanes(vehSide));
+		if (vehLaneIndex < 0) {
+			vehSide = farSide;
+			vehLaneIndex = pickFallbackLaneIndex(hostRoad->GetVehicleLanes(vehSide));
+		}
+		Node* Nin = nullptr;
+		Node* Nout = nullptr;
+		if (vehLaneIndex >= 0) {
+			auto [vx, vy] = ComputeLaneAnchorPosition(hostRoad, hostT, true, vehSide, vehLaneIndex);
+			Nin = BreakThroughLine(hostRoad, true, vehSide, vehLaneIndex,
+				vx + pathPerp0X * vehOffset * enterSign, vy + pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+			Nout = BreakThroughLine(hostRoad, true, vehSide, vehLaneIndex,
+				vx - pathPerp0X * vehOffset * enterSign, vy - pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+		}
+		if (Nin && Nout) {
+			outVeh[enteringSide] = Nin;
+			outVeh[exitingSide] = Nout;
+		}
+		else {
+			outVeh[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * vehOffset, hostPoint.GetY() + pathPerp0Y * vehOffset, hostPoint.GetZ(), "vehicle");
+			outVeh[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * vehOffset, hostPoint.GetY() - pathPerp0Y * vehOffset, hostPoint.GetZ(), "vehicle");
+		}
+
+		int pedSide = nearSide;
+		int pedLaneIndex = pickLaneIndex(hostRoad->GetPedestrianLanes(pedSide));
+		if (pedLaneIndex < 0) {
+			pedSide = farSide;
+			pedLaneIndex = pickFallbackLaneIndex(hostRoad->GetPedestrianLanes(pedSide));
+		}
+		Node* Pa = nullptr;
+		Node* Pb = nullptr;
+		if (pedLaneIndex >= 0) {
+			auto [px, py] = ComputeLaneAnchorPosition(hostRoad, hostT, false, pedSide, pedLaneIndex);
+			Pa = BreakThroughLine(hostRoad, false, pedSide, pedLaneIndex,
+				px + pathPerp0X * pedOffset, py + pathPerp0Y * pedOffset, hostPoint.GetZ());
+			Pb = BreakThroughLine(hostRoad, false, pedSide, pedLaneIndex,
+				px - pathPerp0X * pedOffset, py - pathPerp0Y * pedOffset, hostPoint.GetZ());
+		}
+		if (Pa && Pb) {
+			outPed[0] = Pa;
+			outPed[1] = Pb;
+		}
+		else {
+			outPed[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * pedOffset, hostPoint.GetY() + pathPerp0Y * pedOffset, hostPoint.GetZ(), "pedestrian");
+			outPed[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * pedOffset, hostPoint.GetY() - pathPerp0Y * pedOffset, hostPoint.GetZ(), "pedestrian");
+		}
+	}
+	else {
+		// 小路接小路：近侧+远侧车行道/人行道各断2个node，远侧单向搭桥到近侧对应node，近侧
+		// 的node才是实际接新小路的锚点。host本身也是小路，两侧车道/人行道都由PathLaneSpec
+		// 保证非空，不需要像大路那样处理"某侧没有车道"的退化分支。
+		int nearVehLaneIndex = pickLaneIndex(hostRoad->GetVehicleLanes(nearSide));
+		int farVehLaneIndex = pickLaneIndex(hostRoad->GetVehicleLanes(farSide));
+
+		Node* NnIn = nullptr;
+		Node* NnOut = nullptr;
+		if (nearVehLaneIndex >= 0) {
+			auto [nvx, nvy] = ComputeLaneAnchorPosition(hostRoad, hostT, true, nearSide, nearVehLaneIndex);
+			NnIn = BreakThroughLine(hostRoad, true, nearSide, nearVehLaneIndex,
+				nvx + pathPerp0X * vehOffset * enterSign, nvy + pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+			NnOut = BreakThroughLine(hostRoad, true, nearSide, nearVehLaneIndex,
+				nvx - pathPerp0X * vehOffset * enterSign, nvy - pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+		}
+		if (farVehLaneIndex >= 0) {
+			auto [fvx, fvy] = ComputeLaneAnchorPosition(hostRoad, hostT, true, farSide, farVehLaneIndex);
+			Node* NfIn = BreakThroughLine(hostRoad, true, farSide, farVehLaneIndex,
+				fvx + pathPerp0X * vehOffset * enterSign, fvy + pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+			Node* NfOut = BreakThroughLine(hostRoad, true, farSide, farVehLaneIndex,
+				fvx - pathPerp0X * vehOffset * enterSign, fvy - pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+			if (NfIn && NnIn) {
+				Connection* bridgeIn = new Connection(*NfIn, *NnIn);
+				vehicleNavGraph[NfIn->GetId()].emplace_back(NnIn->GetId(), bridgeIn);
+			}
+			if (NnOut && NfOut) {
+				Connection* bridgeOut = new Connection(*NnOut, *NfOut);
+				vehicleNavGraph[NnOut->GetId()].emplace_back(NfOut->GetId(), bridgeOut);
+			}
+		}
+		if (NnIn && NnOut) {
+			outVeh[enteringSide] = NnIn;
+			outVeh[exitingSide] = NnOut;
+		}
+		else {
+			outVeh[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * vehOffset, hostPoint.GetY() + pathPerp0Y * vehOffset, hostPoint.GetZ(), "vehicle");
+			outVeh[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * vehOffset, hostPoint.GetY() - pathPerp0Y * vehOffset, hostPoint.GetZ(), "vehicle");
+		}
+
+		int nearPedLaneIndex = pickLaneIndex(hostRoad->GetPedestrianLanes(nearSide));
+		int farPedLaneIndex = pickLaneIndex(hostRoad->GetPedestrianLanes(farSide));
+
+		Node* PnA = nullptr;
+		Node* PnB = nullptr;
+		if (nearPedLaneIndex >= 0) {
+			auto [npx, npy] = ComputeLaneAnchorPosition(hostRoad, hostT, false, nearSide, nearPedLaneIndex);
+			PnA = BreakThroughLine(hostRoad, false, nearSide, nearPedLaneIndex,
+				npx + pathPerp0X * pedOffset, npy + pathPerp0Y * pedOffset, hostPoint.GetZ());
+			PnB = BreakThroughLine(hostRoad, false, nearSide, nearPedLaneIndex,
+				npx - pathPerp0X * pedOffset, npy - pathPerp0Y * pedOffset, hostPoint.GetZ());
+		}
+		if (farPedLaneIndex >= 0 && PnA && PnB) {
+			auto [fpx, fpy] = ComputeLaneAnchorPosition(hostRoad, hostT, false, farSide, farPedLaneIndex);
+			Node* PfA = BreakThroughLine(hostRoad, false, farSide, farPedLaneIndex,
+				fpx + pathPerp0X * pedOffset, fpy + pathPerp0Y * pedOffset, hostPoint.GetZ());
+			Node* PfB = BreakThroughLine(hostRoad, false, farSide, farPedLaneIndex,
+				fpx - pathPerp0X * pedOffset, fpy - pathPerp0Y * pedOffset, hostPoint.GetZ());
+			if (PfA) {
+				Connection* c = new Connection(*PfA, *PnA);
+				pedestrianNavGraph[PfA->GetId()].emplace_back(PnA->GetId(), c);
+				pedestrianNavGraph[PnA->GetId()].emplace_back(PfA->GetId(), c);
+			}
+			if (PfB) {
+				Connection* c = new Connection(*PfB, *PnB);
+				pedestrianNavGraph[PfB->GetId()].emplace_back(PnB->GetId(), c);
+				pedestrianNavGraph[PnB->GetId()].emplace_back(PfB->GetId(), c);
+			}
+		}
+		if (PnA && PnB) {
+			outPed[0] = PnA;
+			outPed[1] = PnB;
+		}
+		else {
+			outPed[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * pedOffset, hostPoint.GetY() + pathPerp0Y * pedOffset, hostPoint.GetZ(), "pedestrian");
+			outPed[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * pedOffset, hostPoint.GetY() - pathPerp0Y * pedOffset, hostPoint.GetZ(), "pedestrian");
+		}
+	}
+}
+
+void Map::ConnectPathRoad(const PathRoadLink& link) {
+	Road* path = link.road;
+	if (!path) return;
+
+	array<Node*, 2> startVeh{ nullptr, nullptr };
+	array<Node*, 2> startPed{ nullptr, nullptr };
+	ResolvePathEndAnchors(path, true, link.endRoad1, link.endT1, startVeh, startPed);
+
+	array<Node*, 2> endVeh{ nullptr, nullptr };
+	array<Node*, 2> endPed{ nullptr, nullptr };
+	ResolvePathEndAnchors(path, false, link.endRoad2, link.endT2, endVeh, endPed);
+
+	// 小路自己的4条贯通线：车行side0沿Start->End、side1沿End->Start(和InitRoadnet对
+	// 普通Road的建图规则一致)；人行两侧各自双向。同时登记进throughLines[path]，保持和
+	// 普通Road一样的基础设施(万一以后小路自己也要被AddRoadAccessNode打开口)。
+	Connection* veh0 = new Connection(*startVeh[0], *endVeh[0]);
+	vehicleNavGraph[startVeh[0]->GetId()].emplace_back(endVeh[0]->GetId(), veh0);
+	throughLines[path][0].push_back({ veh0, startVeh[0], endVeh[0], 0 });
+
+	Connection* veh1 = new Connection(*endVeh[1], *startVeh[1]);
+	vehicleNavGraph[endVeh[1]->GetId()].emplace_back(startVeh[1]->GetId(), veh1);
+	throughLines[path][1].push_back({ veh1, endVeh[1], startVeh[1], 0 });
+
+	Connection* ped0 = new Connection(*startPed[0], *endPed[0]);
+	pedestrianNavGraph[startPed[0]->GetId()].emplace_back(endPed[0]->GetId(), ped0);
+	pedestrianNavGraph[endPed[0]->GetId()].emplace_back(startPed[0]->GetId(), ped0);
+	throughLines[path][2].push_back({ ped0, startPed[0], endPed[0], 0 });
+
+	Connection* ped1 = new Connection(*startPed[1], *endPed[1]);
+	pedestrianNavGraph[startPed[1]->GetId()].emplace_back(endPed[1]->GetId(), ped1);
+	pedestrianNavGraph[endPed[1]->GetId()].emplace_back(startPed[1]->GetId(), ped1);
+	throughLines[path][3].push_back({ ped1, startPed[1], endPed[1], 0 });
 }
 
 const vector<Road*>& Map::GetRoads() const {

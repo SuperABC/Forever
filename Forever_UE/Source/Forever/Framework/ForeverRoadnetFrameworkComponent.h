@@ -81,6 +81,11 @@ private:
 	// 按mesh资产路径复用/新建ISM组件(同一路径的mesh只创建一个ISM，不同Road共用)。
 	UInstancedStaticMeshComponent* GetOrCreateRoadISM(const std::string& meshPath);
 
+	// [临时排查用，定位到问题后删除] 对每条小路(map->GetPathRoads())，找出
+	// GetNavAnchorNodes()里落在它Start/End附近的所有锚点，打印坐标——用来确认小路自己的
+	// 车行/人行锚点到底有没有偏离小路中轴线，定位"车道/人行道都堆在中轴线上"这个问题。
+	void LogPathRoadNavDebug();
+
 	Map* map = nullptr;
 
 	UPROPERTY()
@@ -108,9 +113,11 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Roadnet|Debug")
 	bool bShowNavigationDebug = true;
 
-	// 车行导航debug用的纯白材质，和roadPlainBaseMaterial一样走ConstructorHelpers固定加载。
+	// 车行/行人导航debug共用的基础材质(原名White，现在带了个Color参数，默认白色)，和
+	// roadPlainBaseMaterial一样走ConstructorHelpers固定加载。车行导航保持材质默认的白色不用改，
+	// 行人导航额外在自己的MID实例上把Color参数改成黑色，用颜色区分车行/行人两张导航图。
 	UPROPERTY(EditDefaultsOnly, Category = "Roadnet|Debug")
-	TObjectPtr<UMaterialInterface> whiteBaseMaterial;
+	TObjectPtr<UMaterialInterface> pureBaseMaterial;
 
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> vehicleNavMesh;

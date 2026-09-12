@@ -127,17 +127,72 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
     因为mod实例可能带`id`/`name`这类只应该在真正创建一个实例时才递增的状态（`ZoneBasic`/
     `BuildingBasic`目前没有这类状态，但接口设计上不能假设所有mod都没有）。
   - **`Map`自己不持有任何小路`Road*`**——`Lot::RequestPlacement`/`FillRemainder`裁剪出的每条
-    小路都记在被裁剪的那个顶层`Lot`自己的`pathRoads`成员里（`Lot::GetPathRoads()`），析构时
-    也由`Lot`自己`delete`。归属关系上小路本来就是"某个顶层`Lot`的空闲空间被裁剪的副产品"，
-    而这个顶层`Lot`正是`RoadnetMod`初始化、`Roadnet`持有的那个`Lot`——`Map`没有理由再单独开
-    一份列表重复记一遍"这些小路是谁的"，之前确实先后试过`Map`自己开`pathRoads`/`ownedRoads`
-    数组存这些`Road*`，都被撤销改成现在这样：分类信息（是不是小路）记在`Road::IsPathRoad()`
-    自己身上，归属/生命周期记在创造它的顶层`Lot`身上，`Map::GetPathRoads()`只是遍历
-    `GetLots()`把每个顶层`Lot`自己的`GetPathRoads()`汇总起来，按值返回，不做任何持有。
-    **小路目前完全不接入`vehicleNavGraph`/`pedestrianNavGraph`**——`InitRoadnet()`建导航图时
-    只读`roadnet->GetRoads()`（`RoadnetMod`铺设的正式路），`Lot::SplitWithPath`产出的小路只有
-    几何意义（真正的`Road`、正确记进相邻`Lot`的边界），两端原有边界Road的`Connection`数据不会
-    被这次切割改动，是不是以后要重新给小路接导航图、怎么接，留到需要时再设计。
+    小路都记在被裁剪的那个顶层`Lot`自己的`pathRoadLinks`成员里（`Lot::GetPathRoadLinks()`/
+    `GetPathRoads()`），析构时也由`Lot`自己`delete`。归属关系上小路本来就是"某个顶层`Lot`的
+    空闲空间被裁剪的副产品"，而这个顶层`Lot`正是`RoadnetMod`初始化、`Roadnet`持有的那个
+    `Lot`——`Map`没有理由再单独开一份列表重复记一遍"这些小路是谁的"，之前确实先后试过`Map`
+    自己开`pathRoads`/`ownedRoads`数组存这些`Road*`，都被撤销改成现在这样：分类信息（是不是
+    小路）记在`Road::IsPathRoad()`自己身上，归属/生命周期记在创造它的顶层`Lot`身上，`Map::
+    GetPathRoads()`只是遍历`GetLots()`把每个顶层`Lot`自己的`GetPathRoads()`汇总起来，按值
+    返回，不做任何持有。**小路现在会接入`vehicleNavGraph`/`pedestrianNavGraph`**——
+    `RequestPlacement`/`FillRemainder`每产出一条新的`PathRoadLink`，调用方就立刻对它调一次
+    `Map::ConnectPathRoad(link)`，具体规则见下"ConnectPathRoad"一节。
+
+## ConnectPathRoad（第十二轮迁移，小路正式接导航图）
+
+`Map::ConnectPathRoad(const PathRoadLink& link)`把`Lot::SplitWithPath`产出的一条小路正式接入
+`vehicleNavGraph`/`pedestrianNavGraph`，由`InitZones()`/`InitBuildings()`对每条新产生的
+`PathRoadLink`调用一次——调用点在`request.lot->RequestPlacement(...)`/`lot->FillRemainder(...)`
+调用前后各记一次`lot->GetPathRoadLinks().size()`，处理`[之前的size, 现在的size)`这一段新增的
+link，不改`RequestPlacement`/`FillRemainder`的函数签名（小路数据只存在`Lot`自己身上这条原则
+不变）。**不管`RequestPlacement`最终返回`success`还是`false`都要处理新增的link**——`SplitWithPath`
+产生的小路即使整体placement请求失败，也已经是真实持久化的几何（被某个freeLot的边界引用着）。
+处理顺序天然=创建顺序（同一顶层`Lot`内部cascading cut时，后一刀如果连到前一刀新建的小路，前一刀
+的link一定排在`pathRoadLinks`里更靠前的位置，先于后一刀被处理），这一点很重要——"小路接小路"
+这条规则要求被连的小路必须已经建好自己的贯通线。
+
+三条规则（用户逐条确认，含两轮澄清）：
+
+1. 小路横断面固定是中轴线两侧0.3单位车道、再往外0.2单位人行道（`PathLaneSpec`，`geometry.h`）。
+2. **小路接"大路"（`link.endRoad`非空且`!IsPathRoad()`）**：用小路自身连接方向和大路在
+   `endT`处`perp0`的点积判断"最靠近小路的那一侧"（`dot>=0`是大路的side0，否则side1，和
+   `roadnet.cpp`/`Lot::SplitWithPath`一直沿用的`perp0=(fwd.Y,-fwd.X)`同一个约定）——只处理
+   这一侧：车行道断出2个node（`fromAnchor->Nin->Nout->toAnchor`，保留大路直行不中断），`Nin`
+   （进入点）接小路"驶入"方向的车道、`Nout`（合并点）接小路"驶出"方向的车道（小路side0沿
+   Start->End走、side1沿End->Start走，所以Start端side0驶入/side1驶出，End端相反）；人行道
+   同理断出`Pa`/`Pb`两个node分别接小路的两条人行道（人行边本来就双向，不用区分驶入/驶出）。
+   近侧没有车道/人行道时退化用远侧；两侧都没有就退化成孤立锚点。
+3. **小路接"小路"（`link.endRoad`非空且`IsPathRoad()`）**：被连的小路两侧车道（近侧+远侧，
+   近/远同样按点积判断）各自断出2个node，一个路口共4个车行node——近侧2个直接按规则2的方式接
+   新小路的2条车道；远侧2个不直接接新小路，而是单向搭桥到近侧对应node（远进入点→近进入点、
+   近合并点→远合并点），让被连小路的远侧车流也能绕到近侧再拐进新小路，同时不影响被连小路自己
+   两侧车道各自的直行连接。人行道套用完全相同的近/远侧模型（近侧2个+近侧2个人行node，远侧和
+   近侧对应node之间双向搭桥），并入新小路的2条人行道。
+
+实现上复用/修好了`Map::AddRoadAccessNode`原来内联在自己函数体里、从未暴露过的一个问题：断开
+一条车道的贯通线插入新node后，不会回写`ThroughLine.fromAnchor`/`edge`，导致同一条车道被断
+第二次时找到的还是最初那条整段的`fromAnchor`/`toAnchor`，和第一次断出来的node脱节——小路的
+场景必然会撞上这个问题（同一条临街大路很可能被沿线好几条小路连续断开），所以把"断一条贯通线、
+插一个node、正确回写"这部分抽成了新的私有方法`Node* BreakThroughLine(Road*, bool isVehicle,
+int side, int laneIndex, float worldX, float worldY, float worldZ)`，`AddRoadAccessNode`
+自己也改成调用它（顺带修好了这个从没暴露过的bug，它当前仍然没有真正的调用方）。规则2/3里
+"断出2个node"就是对同一个`(road,isVehicle,side,laneIndex)`连续调用两次`BreakThroughLine`——
+第二次调用时`fromAnchor`已经自动指向第一次断出来的node，天然形成`fromAnchor->Nin->Nout->
+toAnchor`，不需要额外的拼接逻辑。这条路径**不调`Road::AddOpening`**——`SplitWithPath`创建
+小路时已经在大路上标过一次跨越整个`pathWidth`的开口了，这里不需要再重复标记。
+
+`ResolvePathEndAnchors`是`ConnectPathRoad`的核心：给定小路在某一端（Start或End）连到的
+`hostRoad`/`hostT`，解出小路在这一端的4个锚点（车行side0/1、人行side0/1）——`hostRoad`为空
+就是孤立端点（4个都是不接入任何既有贯通线的新node，位置按小路自己的`perp0`偏移）。`ConnectPathRoad`
+拿到两端各自的4个锚点后，建小路自己的4条贯通线（车行side0 Start->End、side1 End->Start，
+人行两侧各自双向插入，和`InitRoadnet()`对普通`Road`的建图规则完全一致），同时登记进
+`throughLines[path]`，保持和普通`Road`一样的基础设施。
+
+已知简化范围（不在这次要求内，没做）：`BreakThroughLine`按"调用顺序"而不是"沿路真实弧长顺序"
+拼接同一条车道上的多次打断——如果两条小路连到同一条大路但沿路先后顺序和处理顺序不一致，拼出来
+的中间node顺序可能和物理位置顺序不完全对应（连通性依然正确，只是链条上node排列的先后不严格按
+t排序）；小路自己两侧人行道之间不建"穿过小路本身"的横道连接（真实`RoadJunction`会建，小路
+没有被要求这个）。
 
 ## 依赖关系
 

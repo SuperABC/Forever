@@ -10,7 +10,7 @@
 // 占据的矩形）。这次不实现Room/Component布局，只是一个footprint+类型的占位对象，详见
 // map.md"InitBuildings"一节。落地那一刻采样出来的面积直接体现在继承来的矩形尺寸上，不用
 // 单独存一份。
-// rotation不是继承自Quad，是照抄Zone/Lot同款做法单独补上的，理由见zone.h同名字段注释。
+// 不自己存一份rotation，直接转发parentLot->GetRotation()，理由见zone.h同名字段注释。
 class Building : public Quad {
 public:
 	Building() = delete;
@@ -22,8 +22,8 @@ public:
 	std::string GetType() const;
 	std::string GetName() const;
 
+	// 转发parentLot->GetRotation()；parentLot为空时返回0.f。
 	float GetRotation() const;
-	void SetRotation(float r);
 
 	Lot* GetParentLot() const;
 	void SetParentLot(Lot* lot);
@@ -33,6 +33,5 @@ private:
 	BuildingFactory* factory;
 	std::string type;
 	std::string name;
-	float rotation = 0.f;
 	Lot* parentLot = nullptr;
 };

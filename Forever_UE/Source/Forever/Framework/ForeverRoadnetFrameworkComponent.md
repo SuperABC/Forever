@@ -55,8 +55,10 @@
   逻辑还没有真正调用方"这个阶段性问题临时找的验证手段，现在有真实调用方了，demo连同它
   临时演示用的车行/行人`AddRoadAccessNode`调用一起删掉）。`Map::AddRoadAccessNode`本身
   （同时断开导航图车道贯通线+标记`RoadOpening`）作为API继续保留，只是暂时没有调用方——
-  小路开口这条路径**不**调用它，只直接`endRoad->AddOpening(...)`标记路面缺口，不碰导航图
-  （用户明确要求这次先不接导航node，等以后设计好小路的导航接入方式再改）。
+  小路开口这条路径**不**调用它，只直接`endRoad->AddOpening(...)`标记路面缺口，不碰导航图——
+  纯几何/渲染标记这一步和"小路接导航图"是两回事，后者后来（第十二轮迁移）由`Map::
+  ConnectPathRoad`单独实现，见`Source/Core/map/map.md`"ConnectPathRoad"一节，不经过这条
+  开口标记路径。
   - **`BuildOpeningMeshes`按`t`去重，同一个物理开口位置只画一块cube**——如果同一个位置先后
     被不同来源（`Map::AddRoadAccessNode`/`Lot::SplitWithPath`）各标一次`RoadOpening`、
     `t`/`width`恰好相同，遍历`openings`时按`t`（1e-4误差范围内视为同一个）去重，只画一次，
@@ -125,9 +127,10 @@
 
 ## 待办/后续阶段
 
-- 阶段4：小路接大路的开口这次只标`RoadOpening`几何标记，不碰导航图（`Map::
-  AddRoadAccessNode`那套断线逻辑），等以后设计好小路的导航接入方式再补，见
-  `Source/Dependence/map/geometry.md`。
+- 已完成：小路接导航图（`Map::ConnectPathRoad`，见`Source/Core/map/map.md`）——和这里的
+  `RoadOpening`几何标记是两条独立路径，本组件的渲染代码不需要因此改动（导航图debug可视化本来
+  就是通用的`GetVehicleNavGraph()`/`GetPedestrianNavGraph()`遍历，小路的锚点/边接进去之后
+  自动就会画出来）。
 - 阶段4：路口mesh的圆角/斜切、开口cube的精细化（只挖开人行道/停车道而不是整条路宽度）如果
   以后有真实需求，再回来加，这次是明确的简化范围，不是遗漏。
 - **已修复（PIE验证发现，共两轮）**：

@@ -35,7 +35,7 @@ namespace {
 	// 双面四边形：不区分正反面，四个角点无论按什么环绕顺序传入，两个方向的三角形都会画一遍——
 	// 导航debug mesh的box/ribbon朝向五花八门(任意角度的道路/任意方向的路口连接)，用这个技巧
 	// 就不用为每个面单独推导"哪个环绕顺序才是正面朝上"，从任意角度看都不会因为背面剔除而消失。
-	void AppendQuadDoubleSided(TArray<FVector>& vertices, TArray<int32>& triangles,
+	void RoadnetAppendQuadDoubleSided(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector& v00, const FVector& v10, const FVector& v11, const FVector& v01) {
 		int32 base = vertices.Num();
 		vertices.Add(v00); vertices.Add(v10); vertices.Add(v11); vertices.Add(v01);
@@ -46,7 +46,7 @@ namespace {
 	}
 
 	// 导航锚点用的小box：以center为中心、halfSize为水平半边长、[zBottom,zTop]为竖直范围的
-	// 轴对齐长方体，6个面都用AppendQuadDoubleSided画，不需要关心每个面的外法线朝向。
+	// 轴对齐长方体，6个面都用RoadnetAppendQuadDoubleSided画，不需要关心每个面的外法线朝向。
 	void AppendNavBox(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector2D& center, float halfSize, float zBottom, float zTop) {
 		FVector v000(center.X - halfSize, center.Y - halfSize, zBottom);
@@ -58,12 +58,12 @@ namespace {
 		FVector v111(center.X + halfSize, center.Y + halfSize, zTop);
 		FVector v011(center.X - halfSize, center.Y + halfSize, zTop);
 
-		AppendQuadDoubleSided(vertices, triangles, v001, v101, v111, v011); // 顶
-		AppendQuadDoubleSided(vertices, triangles, v010, v110, v100, v000); // 底
-		AppendQuadDoubleSided(vertices, triangles, v000, v100, v101, v001); // -Y
-		AppendQuadDoubleSided(vertices, triangles, v100, v110, v111, v101); // +X
-		AppendQuadDoubleSided(vertices, triangles, v110, v010, v011, v111); // +Y
-		AppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011); // -X
+		RoadnetAppendQuadDoubleSided(vertices, triangles, v001, v101, v111, v011); // 顶
+		RoadnetAppendQuadDoubleSided(vertices, triangles, v010, v110, v100, v000); // 底
+		RoadnetAppendQuadDoubleSided(vertices, triangles, v000, v100, v101, v001); // -Y
+		RoadnetAppendQuadDoubleSided(vertices, triangles, v100, v110, v111, v101); // +X
+		RoadnetAppendQuadDoubleSided(vertices, triangles, v110, v010, v011, v111); // +Y
+		RoadnetAppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011); // -X
 	}
 
 	// 导航连接用的细ribbon：from/to是两端锚点的世界坐标(各自的Z已经是该锚点box顶面的高度，
@@ -76,7 +76,7 @@ namespace {
 		dir2D /= len;
 		FVector offset(-dir2D.Y * halfWidth, dir2D.X * halfWidth, 0.f);
 
-		AppendQuadDoubleSided(vertices, triangles, from - offset, to - offset, to + offset, from + offset);
+		RoadnetAppendQuadDoubleSided(vertices, triangles, from - offset, to - offset, to + offset, from + offset);
 	}
 }
 
@@ -89,10 +89,10 @@ UForeverRoadnetFrameworkComponent::UForeverRoadnetFrameworkComponent() {
 		roadPlainBaseMaterial = roadPlainFinder.Object;
 	}
 
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> whiteFinder(
-		TEXT("/Game/Asset/Materials/White.White"));
-	if (whiteFinder.Succeeded()) {
-		whiteBaseMaterial = whiteFinder.Object;
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> pureFinder(
+		TEXT("/Game/Asset/Materials/Pure.Pure"));
+	if (pureFinder.Succeeded()) {
+		pureBaseMaterial = pureFinder.Object;
 	}
 }
 
@@ -151,6 +151,8 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 	BuildPathRoadMeshes();
 
 	BuildNavigationDebugMesh();
+
+	LogPathRoadNavDebug();
 }
 
 void UForeverRoadnetFrameworkComponent::BuildPathRoadMeshes() {
@@ -241,11 +243,14 @@ void UForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh() {
 		return;
 	}
 
-	if (whiteBaseMaterial && !vehicleNavMaterial) {
-		vehicleNavMaterial = UMaterialInstanceDynamic::Create(whiteBaseMaterial, this);
+	// 车行/行人导航debug共用同一个Pure材质(带Color参数)，靠各自MID实例上的Color区分——
+	// 车行保持材质默认的白色不用设，行人显式设成黑色。
+	if (pureBaseMaterial && !vehicleNavMaterial) {
+		vehicleNavMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
 	}
-	if (roadPlainBaseMaterial && !pedestrianNavMaterial) {
-		pedestrianNavMaterial = UMaterialInstanceDynamic::Create(roadPlainBaseMaterial, this);
+	if (pureBaseMaterial && !pedestrianNavMaterial) {
+		pedestrianNavMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
+		pedestrianNavMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor::Black);
 	}
 
 	BuildNavGraphDebugMesh(map->GetVehicleNavGraph(), vehicleNavMesh, vehicleNavMaterial);
@@ -536,5 +541,35 @@ void UForeverRoadnetFrameworkComponent::BuildJunctionMeshes() {
 	junctionMesh->CreateMeshSection(0, vertices, triangles,
 		TArray<FVector>(), uvs, TArray<FColor>(), TArray<FProcMeshTangent>(), true);
 	if (junctionMaterial) junctionMesh->SetMaterial(0, junctionMaterial);
+}
+
+void UForeverRoadnetFrameworkComponent::LogPathRoadNavDebug() {
+	if (!map) return;
+
+	// 在GetNavAnchorNodes()(Map持有的全部导航锚点，含小路自己的+它break出的host端锚点)里，
+	// 找落在(px,py)半径2地图单位以内的所有node，打印id/类别/坐标——用来核对小路自己的车行/
+	// 人行锚点到底有没有偏离它自己的中轴线，以及host端的锚点有没有偏离host自己的车道位置。
+	auto describeNear = [&](const TCHAR* label, float px, float py) {
+		for (Node* n : map->GetNavAnchorNodes()) {
+			float dx = n->GetX() - px, dy = n->GetY() - py;
+			float dist = FMath::Sqrt(dx * dx + dy * dy);
+			if (dist < 2.f) {
+				UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时排查-小路] %s附近(%.3f,%.3f) node id=%d cat=%s pos=(%.3f,%.3f) dist=%.4f"),
+					label, px, py, n->GetId(), UTF8_TO_TCHAR(n->GetCategory().c_str()), n->GetX(), n->GetY(), dist);
+			}
+		}
+		};
+
+	int pathIndex = 0;
+	for (Road* path : map->GetPathRoads()) {
+		if (!path) continue;
+		Node start = path->GetStart();
+		Node end = path->GetEnd();
+		UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时排查-小路] ===== path[%d] Start=(%.3f,%.3f) End=(%.3f,%.3f) ====="),
+			pathIndex, start.GetX(), start.GetY(), end.GetX(), end.GetY());
+		describeNear(TEXT("Start"), start.GetX(), start.GetY());
+		describeNear(TEXT("End"), end.GetX(), end.GetY());
+		pathIndex++;
+	}
 }
 

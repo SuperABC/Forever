@@ -18,7 +18,11 @@
   类型、边界`Road`映射、地址编号——以及这次新增的**自由子地块池**（`freeLots`）和围绕它的
   裁剪/填充方法，见下"关键设计"。`SetPosition(n1, n2, n3[, n4], margin)`可以直接用连续几个
   角点+内缩边距反推出矩形的中心/尺寸/旋转，这是旧工程从"三个或四个已知角点"生成建筑/房间
-  轮廓的标准做法，这次没有改动。
+  轮廓的标准做法，这次没有改动。三点/四点构造函数（第十三轮迁移）都新增了一个可选的
+  `boundary`参数（`const std::unordered_map<int, Road*>&`，默认空），构造时直接按
+  `FACE_DIRECTION`登记边界`Road`——等价于构造完再逐个调`SetBoundaryRoad`，只是不用在调用方
+  那边另开一个`pair`/`map`和`Lot`并排存（`RoadnetMod::lots`就是这么改成`vector<Lot>`的，
+  见`roadnet_mod.md`）。指针有效性仍然由调用方保证，语义和`SetBoundaryRoad`完全一致。
 
 ## 关键设计
 
@@ -46,7 +50,7 @@
   "近端(lower)/1单位宽小路/远端(upper)"三段，只返回lower/upper两个新`Lot`（小路本身不是可用
   地块，只作为`Road*`单独返回，不会自己保留一份——由调用方决定归属，见下）。新建的小路`Road`
   构造完立刻`SetPathRoad(true)`标记自己——是不是小路这个分类信息记在`Road`自己身上，任何
-  持有这个`Road*`的调用方直接问它自己就够了，不需要另外查一份外部列表（见下"已知简化"）。
+  持有这个`Road*`的调用方直接问它自己就够了，不需要另外查一份外部列表。
   **如果this在切割线两个端面方向都没有边界Road（原边界，或更早一刀生成、如今仍是某自由子块
   边界的小路Road），直接拒绝这次切割**，返回`{nullptr,nullptr,nullptr}`——不产生两端都不
   连接任何路网的孤岛小路。`RequestPlacement`（显式矩形占位，通过最多3次`SplitWithPath`调用
@@ -54,17 +58,20 @@
   候选的目标面积后最多用2次`SplitWithPath`切成接近正方形——深度方向1刀+面宽方向1刀，见下
   "已修复"一节）都建立在这个原语之上，具体分配流程/可达性规则见map.md。这两个函数都是
   RoadnetMod初始化的那个顶层`Lot`自己的成员函数（在`freeLots`池里的某个子块上调用
-  `SplitWithPath`，`this`永远是顶层`Lot`本身），每切出一条小路就直接`push_back`进
-  `this->pathRoads`——**小路的归属和生命周期都落在这个顶层`Lot`身上**，不需要调用方另外传
-  引用出参收集、也不需要`Map`另开一份列表重复持有，析构顶层`Lot`时`~Lot()`一并`delete`。
-  `GetPathRoads()`只读枚举这个列表，`Map::GetPathRoads()`遍历所有顶层`Lot`把各自的
-  `GetPathRoads()`汇总返回，供Forever层渲染小路用。
-- **已知简化（第十轮迁移尝试过接导航图，之后又撤销，恢复成这次的简化状态）**：小路只有几何
-  意义（真正的`Road`、正确记进相邻`Lot`的边界），两端原有边界Road的`Connection`数据不会被
-  这次切割改动，`Map`建`vehicleNavGraph`/`pedestrianNavGraph`时只读`RoadnetMod`铺设的
-  `roadnet->GetRoads()`，完全不遍历`Lot`产出的小路——小路要不要接、怎么接导航图，等以后
-  真正需要时再重新设计（教训是分类信息要记在`Road::IsPathRoad()`自己身上，不要靠`Map`一份
-  额外列表反查，见map.md"InitZones/InitBuildings"一节）。
+  `SplitWithPath`，`this`永远是顶层`Lot`本身），每切出一条小路就直接`push_back`一条
+  `PathRoadLink`进`this->pathRoadLinks`——**小路的归属和生命周期都落在这个顶层`Lot`身上**，
+  不需要`Map`另开一份列表重复持有，析构顶层`Lot`时`~Lot()`一并`delete`每条link的`.road`。
+  `GetPathRoadLinks()`只读枚举这个列表；`GetPathRoads()`是从它按值筛出`.road`的便捷视图，
+  `Map::GetPathRoads()`遍历所有顶层`Lot`把各自的这个视图汇总返回，供Forever层渲染小路用。
+- **`PathRoadLink`携带两端各自连到哪条Road、哪个弧长比例t（`endRoad1/endT1`对应切割线
+  NORTH/WEST那一端，`endRoad2/endT2`对应SOUTH/EAST那一端，和`pathRoad`自己的Start/End
+  一一对应），是Core层`Map::ConnectPathRoad`把小路接入`vehicleNavGraph`/`pedestrianNavGraph`
+  唯一需要的定位信息**（第十二轮迁移，小路正式接导航图——第十轮迁移曾经做过一版类似设计，
+  后来因为设计问题被完整撤销，这次是重新设计后的实现，不是简单地"改回去"）。`endT`按
+  Start->End直线投影近似算（`ProjectT`），和`RoadOpening.t`用的是同一次计算结果，不重复
+  算两遍。`ConnectPathRoad`具体怎么用这两组信息断线/建锚点，见`Source/Core/map/map.md`
+  "ConnectPathRoad"一节——这部分逻辑完全在Core层，`geometry.cpp`自己不触碰
+  `vehicleNavGraph`/`throughLines`等Map内部结构，只负责把定位信息透传出去。
 - **已修复（PIE验证发现）：`FillRemainder`原来用整条面宽反推进深，面宽远大于
   `sqrt(acreage)`时进深会薄到不满足最小2x2单位，`SplitWithPath`直接失败，这块地就被整块
   丢弃不铺任何Zone/Building——这是"周围明明有路但大片区域没有Zone/Building"这个bug的根因，
@@ -91,6 +98,5 @@
 
 ## 待办/后续阶段
 
-- 阶段4：小路接入`vehicleNavGraph`/`pedestrianNavGraph`，等Traffic域需要小路参与寻路时再做
-  （`Road::IsPathRoad()`已经就位，重新设计时直接用它区分小路/正式路，不要再靠`Map`一份
-  外部列表反查）。
+- 已完成：小路接入`vehicleNavGraph`/`pedestrianNavGraph`，见`Source/Core/map/map.md`
+  "ConnectPathRoad"一节。

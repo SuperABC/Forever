@@ -323,9 +323,9 @@ void Roadnet::DistributeRoadnet(int width, int height,
 		roadPtrMap[&mod->roads[i]] = copy;
 	}
 
-	for (auto& [lot, boundary] : mod->lots) {
+	for (Lot& lot : mod->lots) {
 		Lot* newLot = new Lot(lot);
-		for (auto& [dir, roadPtr] : boundary) {
+		for (const auto& [dir, roadPtr] : lot.GetBoundaryRoads()) {
 			auto it = roadPtrMap.find(roadPtr);
 			// 正常情况下一定能找到——mod的边界指针本来就要求指向mod->roads里的元素（接口注释
 			// 明确写了这个约束）；找不到说明mod实现违反了这个约束，兜底独立拷贝一份，不让整个

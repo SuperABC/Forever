@@ -10,8 +10,12 @@ void ZoneBasic::Distribute(const vector<Lot*>& lots) {
 	constexpr float TARGET_ACREAGE = 20000.f;
 	float side = sqrtf(TARGET_ACREAGE / ACREAGE_SCALE_FACTOR);
 
+	// 这次暂时不区分lot->GetArea()——一视同仁，任意有边界路的lot都尝试摆一个（老工程
+	// ResidentialZone::ZoneAssigner那套按地块类型筛选的逻辑，等以后设计具体建筑/园区类型时
+	// 再按类型区分，这次GenericZone只是验证"显式指定矩形"这条链路，不细分）。
 	for (Lot* lot : lots) {
 		if (!lot) continue;
+
 		for (int dir = 0; dir < 4; dir++) {
 			if (!lot->GetBoundaryRoad(dir)) continue;
 			bool alongY = (dir == FACE_WEST || dir == FACE_EAST);

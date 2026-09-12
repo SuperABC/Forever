@@ -31,11 +31,7 @@ string Zone::GetName() const {
 }
 
 float Zone::GetRotation() const {
-	return rotation;
-}
-
-void Zone::SetRotation(float r) {
-	rotation = r;
+	return parentLot ? parentLot->GetRotation() : 0.f;
 }
 
 Lot* Zone::GetParentLot() const {

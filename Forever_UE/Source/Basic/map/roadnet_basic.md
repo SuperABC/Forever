@@ -91,10 +91,16 @@
   放射臂继续按`isBuildable`（plain/construction地形）细分lot"的代码写了但从没跑过，这次去掉
   `return`让它真正生效，除了去掉隧道判断外，逻辑原样迁移。每个新产出的lot同样带上边界`Road`
   映射（`FACE_DIRECTION`0-3索引），和角落/中心lot格式一致。
-- **`lots`不带边界`Intersection`映射**——对照新接口`RoadnetMod::lots`（`vector<pair<Lot,
-  unordered_map<int,Road*>>>`，见`roadnet_mod.h`），老工程每个lot还会额外记一份
+- **`lots`不带边界`Intersection`映射**——对照新接口`RoadnetMod::lots`（`vector<Lot>`，边界
+  `Road*`直接构造时传给`Lot`自己，见`roadnet_mod.h`），老工程每个lot还会额外记一份
   `unordered_map<int,Intersection>`，这次不需要（导航图直接挂在`Road`/`Intersection`上，不
   通过lot中转，详见`Source/Core/map/roadnet.md`），构造时相应去掉了这部分。
+  - **`lots`从`vector<pair<...>>`简化成`vector<Lot>`之后，`emplace_back`直接转发参数给
+    `Lot`构造函数——margin那个`{...}`必须显式写成`vector<float>{...}`，不能用裸的花括号
+    列表**（第十三轮迁移的一个坑）：之前包一层`Lot(...)`是普通函数调用，裸花括号能推导出
+    `vector<float>`；改成`lots.emplace_back(n1, n2, n3, n4, {...}, boundary)`之后是模板参数
+    转发，裸花括号列表在这种上下文里推导不出类型，编译不过，必须显式加上`vector<float>`。
+    本文件所有`lots.emplace_back`调用点都是这个写法，仿照抄不要漏掉`vector<float>`前缀。
 - **`makeBoundaryRoad`（第十一轮迁移前后语义完全不同）**：最初这个lambda是"新构造一个独立的
   `Road`值，配置成和某条命名路默认车道一致，只是端点换成这块lot实际贴的那一小段"——这个独立
   对象和`roads`数组里可能已经存在的同名/同端点真实路段没有任何指针关系。后来发现这正是"小路

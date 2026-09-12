@@ -631,26 +631,32 @@ Lot::Lot(float x, float y, float w, float h, float r) :
 
 }
 
-Lot::Lot(Node n1, Node n2, Node n3, vector<float> margin) :
+Lot::Lot(Node n1, Node n2, Node n3, vector<float> margin, const unordered_map<int, Road*>& boundary) :
 	Quad(),
 	rotation(0.f),
 	area(AREA_NONE) {
 	SetPosition(n1, n2, n3, margin);
+	for (const auto& [direction, road] : boundary) {
+		SetBoundaryRoad(direction, road);
+	}
 }
 
-Lot::Lot(Node n1, Node n2, Node n3, Node n4, vector<float> margin) :
+Lot::Lot(Node n1, Node n2, Node n3, Node n4, vector<float> margin, const unordered_map<int, Road*>& boundary) :
 	Quad(),
 	rotation(0.f),
 	area(AREA_NONE) {
 	SetPosition(n1, n2, n3, n4, margin);
+	for (const auto& [direction, road] : boundary) {
+		SetBoundaryRoad(direction, road);
+	}
 }
 
 Lot::~Lot() {
 	for (Lot* free : freeLots) {
 		delete free;
 	}
-	for (Road* road : pathRoads) {
-		delete road;
+	for (const PathRoadLink& link : pathRoadLinks) {
+		delete link.road;
 	}
 }
 
@@ -969,14 +975,21 @@ Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, con
 	pathRoad->AddPedestrianLane(0, spec.pedestrianWidth);
 	pathRoad->AddPedestrianLane(1, spec.pedestrianWidth);
 
+	// 小路两端各自落在的Road上的弧长比例(直线投影近似)，不管endRoad是不是小路都要算——大路
+	// 开口标记只在endRoad不是小路时才打，但这个t值本身是Core层Map::ConnectPathRoad接导航图
+	// 时唯一需要的定位信息，两种情况(大路/小路)都要提供，所以从"只在大路分支里算"挪成"只要
+	// endRoad非空就算"。
+	float endT1 = endRoad1 ? ProjectT(endRoad1, wx1, wy1) : 0.f;
+	float endT2 = endRoad2 ? ProjectT(endRoad2, wx2, wy2) : 0.f;
+
 	// 小路接到一条"大路"(非小路)上的那一端，给大路标一个开口——只是几何/渲染意义上的路面
-	// 缺口标记(RoadOpening)，不触碰导航图(不调用Map::AddRoadAccessNode那套断线逻辑)，等以后
-	// 真正设计小路的导航接入方式时再处理，见geometry.md"已知简化"一节。两条小路互相连接的
-	// 路口不算"大路被开口"，不在这里标记。forwardSide/isVehicle这两个字段目前没有消费方会
-	// 读（只有Map::AddRoadAccessNode自己产出的开口才用得到，用来选车道），随便填一个值即可。
+	// 缺口标记(RoadOpening)，不触碰导航图(那部分交给Core层Map::ConnectPathRoad，见map.md)。
+	// 两条小路互相连接的路口不算"大路被开口"，不在这里标记。forwardSide/isVehicle这两个字段
+	// 目前没有消费方会读（只有Map::AddRoadAccessNode自己产出的开口才用得到，用来选车道），
+	// 随便填一个值即可。
 	if (endRoad1 && !endRoad1->IsPathRoad()) {
 		RoadOpening opening;
-		opening.t = ProjectT(endRoad1, wx1, wy1);
+		opening.t = endT1;
 		opening.width = pathWidth;
 		opening.forwardSide = true;
 		opening.isVehicle = true;
@@ -984,7 +997,7 @@ Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, con
 	}
 	if (endRoad2 && !endRoad2->IsPathRoad()) {
 		RoadOpening opening;
-		opening.t = ProjectT(endRoad2, wx2, wy2);
+		opening.t = endT2;
 		opening.width = pathWidth;
 		opening.forwardSide = true;
 		opening.isVehicle = true;
@@ -1011,6 +1024,10 @@ Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, con
 	result.lowerLot = lowerLot;
 	result.upperLot = upperLot;
 	result.pathRoad = pathRoad;
+	result.endRoad1 = endRoad1;
+	result.endT1 = endT1;
+	result.endRoad2 = endRoad2;
+	result.endT2 = endT2;
 	return result;
 }
 
@@ -1094,7 +1111,7 @@ bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, fl
 		auto cutKeepLower = [&](bool alongXAxis, float cutCoord) -> bool {
 			auto res = working->SplitWithPath(alongXAxis, cutCoord, spec);
 			if (!res.pathRoad) return false;
-			pathRoads.push_back(res.pathRoad);
+			pathRoadLinks.push_back({ res.pathRoad, res.endRoad1, res.endT1, res.endRoad2, res.endT2 });
 			if (res.upperLot->GetSizeX() >= MIN_LOT_EXTENT && res.upperLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.upperLot)) {
 				survivors.push_back(res.upperLot);
 			}
@@ -1108,7 +1125,7 @@ bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, fl
 		auto cutKeepUpper = [&](bool alongXAxis, float cutCoord) -> bool {
 			auto res = working->SplitWithPath(alongXAxis, cutCoord, spec);
 			if (!res.pathRoad) return false;
-			pathRoads.push_back(res.pathRoad);
+			pathRoadLinks.push_back({ res.pathRoad, res.endRoad1, res.endT1, res.endRoad2, res.endT2 });
 			if (res.lowerLot->GetSizeX() >= MIN_LOT_EXTENT && res.lowerLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.lowerLot)) {
 				survivors.push_back(res.lowerLot);
 			}
@@ -1262,7 +1279,7 @@ vector<Lot::FillResult> Lot::FillRemainder(const PathLaneSpec& spec,
 		if (depthExtent - wantedDepth > pathWidth + 1e-3f) {
 			auto res = working->SplitWithPath(splitAlongX, wantedDepth + pathWidth / 2.f, spec);
 			if (res.pathRoad) {
-				pathRoads.push_back(res.pathRoad);
+				pathRoadLinks.push_back({ res.pathRoad, res.endRoad1, res.endT1, res.endRoad2, res.endT2 });
 				if (res.upperLot->GetSizeX() >= MIN_LOT_EXTENT && res.upperLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.upperLot)) {
 					survivors.push_back(res.upperLot);
 				}
@@ -1281,7 +1298,7 @@ vector<Lot::FillResult> Lot::FillRemainder(const PathLaneSpec& spec,
 			if (curFrontage - wantedFrontage > pathWidth + 1e-3f) {
 				auto res = working->SplitWithPath(!splitAlongX, wantedFrontage + pathWidth / 2.f, spec);
 				if (res.pathRoad) {
-					pathRoads.push_back(res.pathRoad);
+					pathRoadLinks.push_back({ res.pathRoad, res.endRoad1, res.endT1, res.endRoad2, res.endT2 });
 					if (res.upperLot->GetSizeX() >= MIN_LOT_EXTENT && res.upperLot->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(res.upperLot)) {
 						survivors.push_back(res.upperLot);
 					}
@@ -1307,8 +1324,17 @@ vector<Lot::FillResult> Lot::FillRemainder(const PathLaneSpec& spec,
 	return results;
 }
 
-const vector<Road*>& Lot::GetPathRoads() const {
-	return pathRoads;
+const vector<PathRoadLink>& Lot::GetPathRoadLinks() const {
+	return pathRoadLinks;
+}
+
+vector<Road*> Lot::GetPathRoads() const {
+	vector<Road*> result;
+	result.reserve(pathRoadLinks.size());
+	for (const PathRoadLink& link : pathRoadLinks) {
+		result.push_back(link.road);
+	}
+	return result;
 }
 
 void Lot::AddCandidate(const string& type, float weight) {

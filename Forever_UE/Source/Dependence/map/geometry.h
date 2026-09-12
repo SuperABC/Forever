@@ -19,14 +19,6 @@ enum FACE_DIRECTION : int {
 	FACE_SOUTH
 };
 
-// 矩形角点方向
-enum CORNER_DIRECTION : int {
-	CORNER_WEST_NORTH = 0,
-	CORNER_EAST_NORTH = 1,
-	CORNER_EAST_SOUTH = 2,
-	CORNER_WEST_SOUTH = 3
-};
-
 class Node {
 public:
 	// 禁止默认构造
@@ -377,6 +369,17 @@ struct LotPlacementRequest {
 	float depth = 0.f;
 };
 
+// Lot::SplitWithPath产出的一条小路及其两端各自连到的路+弧长位置，供Core层(Map::ConnectPathRoad)
+// 接导航图用。endRoad1/endRoad2可能为nullptr(小路这一端没有可连的路，见SplitWithPath"关键设计
+// 决策8"——但两端不能同时为空)，此时Map按孤立端点处理，不接到任何已有贯通线上。
+struct PathRoadLink {
+	Road* road = nullptr;
+	Road* endRoad1 = nullptr;
+	float endT1 = 0.f;
+	Road* endRoad2 = nullptr;
+	float endT2 = 0.f;
+};
+
 class Lot : public Quad {
 public:
 	// 构造空地块
@@ -385,13 +388,18 @@ public:
 	// 根据中心点和长宽构造地块
 	Lot(float x, float y, float w, float h, float r);
 
-	// 根据连续三个端点构造地块
-	Lot(Node n1, Node n2, Node n3, std::vector<float> margin = std::vector<float>(4, 0.f));
+	// 根据连续三个端点构造地块；boundary可选，直接在构造时按FACE_DIRECTION登记边界Road
+	// （等价于构造完再逐个调SetBoundaryRoad，只是不用在调用方那边另开一个pair/map），
+	// 指针必须由调用方保证有效性（RoadnetMod侧必须指向自己roads数组里的元素本身，语义
+	// 和SetBoundaryRoad完全一致，见该方法注释）。
+	Lot(Node n1, Node n2, Node n3, std::vector<float> margin = std::vector<float>(4, 0.f),
+		const std::unordered_map<int, Road*>& boundary = {});
 
-	// 根据连续四个端点构造地块
-	Lot(Node n1, Node n2, Node n3, Node n4, std::vector<float> margin = std::vector<float>(4, 0.f));
+	// 根据连续四个端点构造地块；boundary同上一个构造函数。
+	Lot(Node n1, Node n2, Node n3, Node n4, std::vector<float> margin = std::vector<float>(4, 0.f),
+		const std::unordered_map<int, Road*>& boundary = {});
 
-	// 释放freeLots里持有的每个子Lot*、以及pathRoads里持有的每条小路Road*（其余成员都是非
+	// 释放freeLots里持有的每个子Lot*、以及pathRoadLinks里持有的每条小路Road*（其余成员都是非
 	// 持有指针，不需要额外清理）。
 	virtual ~Lot();
 
@@ -407,7 +415,7 @@ public:
 	// 设置地块类型
 	void SetArea(AREA_TYPE area);
 
-	// 获取端点坐标（idx 按 CORNER_DIRECTION: 0=TL, 1=TR, 2=BR, 3=BL）
+	// 获取端点坐标（idx：0=WEST-NORTH, 1=EAST-NORTH, 2=EAST-SOUTH, 3=WEST-SOUTH）
 	std::pair<float, float> GetVertex(int idx) const;
 
 	// 获取矩形内任意点坐标
@@ -442,16 +450,25 @@ public:
 	// WEST/EAST边界，各自的NORTH/SOUTH一个继承原边界、一个指向新小路）。小路两端如果落在一条
 	// "大路"（非小路的边界Road）上，就给那条大路加一个RoadOpening标记路面缺口（宽度=小路总宽，
 	// t按直线投影近似算，见实现的ProjectT）；落在另一条小路上则不标（两条小路的路口不算"大路
-	// 被开口"）。这一步只是几何/渲染标记，不接入导航图——两端原有的边界Road不会被这次切割改动
-	// 任何Connection数据，导航图目前只覆盖RoadnetMod铺设的路（见map.md"InitRoadnet"一节），
-	// 开口处以后要不要接导航node、怎么接，留到需要时再设计。
+	// 被开口"）。这一步（SplitWithPath自己）只是几何/渲染标记，不接入导航图——两端原有的边界
+	// Road不会被这次切割改动任何Connection数据；真正把小路接进vehicleNavGraph/
+	// pedestrianNavGraph是Core层Map::ConnectPathRoad的职责（读下面endRoad1/endT1/endRoad2/
+	// endT2这几个字段），见map.md"ConnectPathRoad"一节，不在这个函数里做。
 	// 如果this在splitAlongX对应的两个端面方向（splitAlongX时是NORTH/SOUTH，否则WEST/EAST）
 	// 都没有边界Road，直接拒绝，返回{nullptr,nullptr,nullptr}——不产生两端都不挨路的孤岛小路。
 	// splitCoordinate不在有效范围内（切不出两段有效尺寸）同样返回{nullptr,nullptr,nullptr}。
+	// endRoad1/endT1对应splitAlongX时的NORTH端(否则WEST端)，endRoad2/endT2对应SOUTH端(否则
+	// EAST端)——和pathRoad自己的Start/End一一对应(Start落在endRoad1上，End落在endRoad2上)。
+	// endT按Start->End直线投影近似算(ProjectT)，endRoad为空时endT无意义(留默认值0)。这两组
+	// 字段供Core层Map::ConnectPathRoad接导航图用；RoadOpening.t用的是同一次ProjectT计算结果。
 	struct SplitResult {
 		Lot* lowerLot = nullptr;
 		Lot* upperLot = nullptr;
 		Road* pathRoad = nullptr;
+		Road* endRoad1 = nullptr;
+		float endT1 = 0.f;
+		Road* endRoad2 = nullptr;
+		float endT2 = 0.f;
 	};
 	SplitResult SplitWithPath(bool splitAlongX, float splitCoordinate, const PathLaneSpec& spec);
 
@@ -464,8 +481,8 @@ public:
 	// 在freeLots中找一块贴着direction方向道路、放得下[marginStart,marginEnd]x[0,depth]矩形的
 	// 自由子块，精确裁剪出来。direction在this(顶层Lot)自己的边界Road表里没有对应Road时直接
 	// 返回false，不做任何回退。裁剪通过最多3次SplitWithPath调用完成，新增小路记进this自己的
-	// pathRoads（见下GetPathRoads注释——this就是RoadnetMod初始化的那个顶层Lot，调用方不需要
-	// 另外传引用出参收集）；不满足最小2x2单位或不可达的子块被丢弃，不追加回freeLots。成功
+	// pathRoadLinks（见下GetPathRoadLinks注释——this就是RoadnetMod初始化的那个顶层Lot，调用方
+	// 不需要另外传引用出参收集）；不满足最小2x2单位或不可达的子块被丢弃，不追加回freeLots。成功
 	// 返回true，*outPlaced写入裁出的世界坐标矩形；失败返回false，freeLots不变。
 	bool RequestPlacement(int direction, float marginStart, float marginEnd, float depth,
 		const PathLaneSpec& spec, Quad* outPlaced);
@@ -473,7 +490,8 @@ public:
 	// 对freeLots和候选权重表做CDF随机填充，每确定一个候选的目标面积后用SplitWithPath递归二分
 	// 定位到某个freeLot里。分割轴优先选择能让两侧都保住可达性的那个，只有在按这个轴切会导致
 	// 某一侧宽度不足2单位时才被迫换轴（阈值用7留余量），换轴后产生的不可达一侧被丢弃。没有分配
-	// 出去的剩余空间直接丢弃（对应"设成空地"）。新增小路记进this自己的pathRoads，同RequestPlacement。
+	// 出去的剩余空间直接丢弃（对应"设成空地"）。新增小路记进this自己的pathRoadLinks，同
+	// RequestPlacement。
 	struct FillResult {
 		std::string type;
 		Quad footprint;
@@ -483,10 +501,14 @@ public:
 		const std::function<std::pair<float, float>(const std::string&)>& acreageMinMax);
 
 	// RequestPlacement/FillRemainder在this(RoadnetMod初始化的顶层Lot)自己的freeLots里切出来的
-	// 每一条小路都记在这里——小路是Zone/Building裁剪这个顶层Lot的空闲空间时产生的副产品，归属
-	// 关系上本来就该跟着这个顶层Lot走，不需要另外找个地方(比如Map)单独维护一份"这些小路是谁的"
-	// 记录。析构时一并delete。Map::GetPathRoads()汇总所有顶层Lot的这个列表供Forever层渲染用。
-	const std::vector<Road*>& GetPathRoads() const;
+	// 每一条小路(连同两端连接信息)都记在这里——小路是Zone/Building裁剪这个顶层Lot的空闲空间时
+	// 产生的副产品，归属关系上本来就该跟着这个顶层Lot走，不需要另外找个地方(比如Map)单独维护
+	// 一份"这些小路是谁的"记录。析构时一并delete每条link.road。
+	const std::vector<PathRoadLink>& GetPathRoadLinks() const;
+
+	// 从GetPathRoadLinks()按值筛出.road，纯供Forever层遍历渲染用；Map::GetPathRoads()汇总所有
+	// 顶层Lot的这个列表。按值返回(不是引用)——底层存储是PathRoadLink，这里每次现筛一份。
+	std::vector<Road*> GetPathRoads() const;
 
 	// 权重候选表：ZoneMod/BuildingMod的Distribute()对这个lot感兴趣时调用，供FillRemainder用；
 	// Zone阶段和Building阶段之间要显式Clear，避免Zone没用完的权重错误地参与Building阶段抽签。
@@ -507,6 +529,6 @@ private:
 	std::vector<Lot*> freeLots;
 	bool freeLotsInitialized = false;
 	std::vector<std::pair<std::string, float>> candidates;
-	std::vector<Road*> pathRoads;
+	std::vector<PathRoadLink> pathRoadLinks;
 };
 
