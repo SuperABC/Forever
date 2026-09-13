@@ -282,95 +282,126 @@ FVector UForeverTerrainFrameworkComponent::GetMapCenterWorldLocation() const {
 	return FVector(centerX * worldScale, centerY * worldScale, height * worldScale + 200.f);
 }
 
+namespace {
+	// 用有向线段(edgeA->edgeB)所在直线，把一个凸多边形(polygon，任意绕序，但假定和
+	// referencePoint的绕序一致——referencePoint是已知严格落在多边形"内部半平面"那一侧的点，
+	// 不会正好落在这条直线上)分成两部分：outInside(和referencePoint同一侧)/outOutside(不同
+	// 侧)，标准Sutherland-Hodgman单边裁剪算法的双输出版本——outInside/outOutside都保持
+	// 原polygon的绕序不变(交点按遍历顺序插入)，可以直接继续参与下一条边的裁剪或直接扇形三角化。
+	void SplitConvexPolygonByLine(const TArray<FVector2D>& polygon, const FVector2D& edgeA, const FVector2D& edgeB,
+		const FVector2D& referencePoint, TArray<FVector2D>& outInside, TArray<FVector2D>& outOutside) {
+		outInside.Reset();
+		outOutside.Reset();
+		int32 n = polygon.Num();
+		if (n < 3) return;
+
+		FVector2D dir = edgeB - edgeA;
+		auto side = [&](const FVector2D& p) { return dir.X * (p.Y - edgeA.Y) - dir.Y * (p.X - edgeA.X); };
+		bool refPositive = side(referencePoint) >= 0.f;
+
+		for (int32 i = 0; i < n; i++) {
+			const FVector2D& cur = polygon[i];
+			const FVector2D& next = polygon[(i + 1) % n];
+			float curSide = side(cur);
+			float nextSide = side(next);
+			bool curInside = (curSide >= 0.f) == refPositive;
+			bool nextInside = (nextSide >= 0.f) == refPositive;
+
+			if (curInside) outInside.Add(cur); else outOutside.Add(cur);
+
+			if (curInside != nextInside) {
+				float t = curSide / (curSide - nextSide);
+				FVector2D intersection = cur + (next - cur) * t;
+				outInside.Add(intersection);
+				outOutside.Add(intersection);
+			}
+		}
+	}
+
+	// 把一个凸多边形(CCW，同本文件主网格quad(v00,v11,v10)/(v00,v01,v11)那一套已验证过的绕序
+	// 约定：对(左下,右下,右上,左上)这种CCW四边形要输出(v0,v2,v1)+(v0,v3,v2)而不是朴素的
+	// (v0,v1,v2)+(v0,v2,v3)才能让法线朝上)扇形三角化成FTerrainTri2D列表——把朴素fan的每个
+	// 三角形后两个顶点对调，泛化到任意点数的凸多边形。
+	void FanTriangulate(const TArray<FVector2D>& polygon, TArray<FTerrainTri2D>& outTris) {
+		for (int32 i = 1; i + 1 < polygon.Num(); i++) {
+			outTris.Add({ polygon[0], polygon[i + 1], polygon[i] });
+		}
+	}
+}
+
 void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FString& type, float& height,
-	TArray<FRect2D>& rects, TArray<FTri2D>& tris) const {
+	TArray<FTerrainTri2D>& tris) const {
 	if (!map) return;
 
 	type = FString(map->GetTerrain(elemX, elemY).c_str());
 	// 挖洞不再只限"construction"格子——Roadnet阶段-2给隧道口调用Map::AddHatch时，落点的格子
-	// 地形类型是"mountain"（或紧邻的"plain"），只要这个格子有hatch就要继续走矩形分解逻辑，
+	// 地形类型是"mountain"（或紧邻的"plain"），只要这个格子有hatch就要继续走多边形裁剪逻辑，
 	// 不能在这里直接退出，否则隧道段会被山体实心地形完全挡住看不见，详见roadnet_basic.md
 	// "隧道"一节。
 	if (type != "construction" && map->GetHatches(elemX, elemY).empty()) return;
 
 	height = map->GetHeight(elemX, elemY);
-	rects.Empty();
 	tris.Empty();
 
-	// 局部坐标矩形,初始覆盖整个单元格[0,1]x[0,1]
-	struct RectRegion { float left, right, bottom, top; };
-	TArray<RectRegion> work;
-	work.Add({ 0.f, 1.f, 0.f, 1.f });
+	// 这个格子里"还没被判定为实心/还没被判定为洞、需要继续跟下一个hatch比对"的剩余区域，可能
+	// 不止一块(多边形列表)，局部坐标[0,1]x[0,1]，初始就是整个格子(单一多边形,CCW:
+	// 左下->右下->右上->左上，和本文件主网格quad同一套绕序约定)。
+	TArray<TArray<FVector2D>> workPolys;
+	workPolys.Add({ {0.f,0.f}, {1.f,0.f}, {1.f,1.f}, {0.f,1.f} });
 
 	for (auto& [quad, rotation] : map->GetHatches(elemX, elemY)) {
+		if (workPolys.Num() == 0) break; // 这个格子已经被之前的hatch挖空了，不用再判断了
+
 		float hatchCenterX = quad.GetPosX() - elemX;
 		float hatchCenterY = quad.GetPosY() - elemY;
 		float halfSizeX = quad.GetSizeX() * 0.5f;
 		float halfSizeY = quad.GetSizeY() * 0.5f;
-
 		float cosRot = FMath::Cos(rotation), sinRot = FMath::Sin(rotation);
-		// 旋转矩形的AABB半尺寸
+
+		// 旋转矩形AABB快速剔除：这个hatch的外接矩形都不沾这个格子的边，直接跳过，不用做4次
+		// 多边形裁剪。
 		float aabbHalfX = FMath::Abs(halfSizeX * cosRot) + FMath::Abs(halfSizeY * sinRot);
 		float aabbHalfY = FMath::Abs(halfSizeX * sinRot) + FMath::Abs(halfSizeY * cosRot);
+		if (hatchCenterX + aabbHalfX <= 0.f || hatchCenterX - aabbHalfX >= 1.f) continue;
+		if (hatchCenterY + aabbHalfY <= 0.f || hatchCenterY - aabbHalfY >= 1.f) continue;
 
-		// AABB裁剪到单元格内
-		float aabbLeft = FMath::Max(hatchCenterX - aabbHalfX, 0.f);
-		float aabbRight = FMath::Min(hatchCenterX + aabbHalfX, 1.f);
-		float aabbBottom = FMath::Max(hatchCenterY - aabbHalfY, 0.f);
-		float aabbTop = FMath::Min(hatchCenterY + aabbHalfY, 1.f);
-		if (aabbLeft >= aabbRight || aabbBottom >= aabbTop) continue;
-
-		// 用T形分割从现有矩形列表中剔除该AABB
-		TArray<RectRegion> next;
-		for (auto& workRect : work) {
-			float overlapLeft = FMath::Max(workRect.left, aabbLeft);
-			float overlapRight = FMath::Min(workRect.right, aabbRight);
-			float overlapBottom = FMath::Max(workRect.bottom, aabbBottom);
-			float overlapTop = FMath::Min(workRect.top, aabbTop);
-			if (overlapLeft >= overlapRight || overlapBottom >= overlapTop) { next.Add(workRect); continue; }
-			if (overlapBottom > workRect.bottom) next.Add({ workRect.left, workRect.right, workRect.bottom, overlapBottom });
-			if (overlapTop < workRect.top) next.Add({ workRect.left, workRect.right, overlapTop, workRect.top });
-			if (overlapLeft > workRect.left) next.Add({ workRect.left, overlapLeft, overlapBottom, overlapTop });
-			if (overlapRight < workRect.right) next.Add({ overlapRight, workRect.right, overlapBottom, overlapTop });
-		}
-		work = next;
-
-		// 角三角只在包含图案中心的格子中生成
-		if ((int)quad.GetPosX() != elemX || (int)quad.GetPosY() != elemY) continue;
-
-		// 旋转矩形的四个顶点(局部坐标)
-		FVector2D rectVerts[4] = {
+		// hatch矩形自己的4个顶点(局部坐标)——绕序(顺时针还是逆时针不重要，下面裁剪用
+		// "和hatchCenter同一侧"判断，不依赖绝对绕序方向)。
+		FVector2D hatchCenter(hatchCenterX, hatchCenterY);
+		FVector2D hatchPoly[4] = {
 			{ hatchCenterX + halfSizeX * cosRot - halfSizeY * sinRot, hatchCenterY + halfSizeX * sinRot + halfSizeY * cosRot },
 			{ hatchCenterX - halfSizeX * cosRot - halfSizeY * sinRot, hatchCenterY - halfSizeX * sinRot + halfSizeY * cosRot },
 			{ hatchCenterX - halfSizeX * cosRot + halfSizeY * sinRot, hatchCenterY - halfSizeX * sinRot - halfSizeY * cosRot },
 			{ hatchCenterX + halfSizeX * cosRot + halfSizeY * sinRot, hatchCenterY + halfSizeX * sinRot - halfSizeY * cosRot },
 		};
 
-		// 确定各顶点对应AABB的哪条边
-		int idxTop = 0, idxBottom = 0, idxLeft = 0, idxRight = 0;
-		for (int vertIdx = 1; vertIdx < 4; vertIdx++) {
-			if (rectVerts[vertIdx].Y > rectVerts[idxTop].Y) idxTop = vertIdx;
-			if (rectVerts[vertIdx].Y < rectVerts[idxBottom].Y) idxBottom = vertIdx;
-			if (rectVerts[vertIdx].X < rectVerts[idxLeft].X) idxLeft = vertIdx;
-			if (rectVerts[vertIdx].X > rectVerts[idxRight].X) idxRight = vertIdx;
+		// 依次按hatch矩形的4条边裁剪：每一块现有的剩余区域，只要在某一条边的"外侧"，就已经能
+		// 确定它落在hatch矩形整体的外面(4个半平面的交集之外)——不用再继续判断剩下的边，直接
+		// 进survivingPieces，留到下一个hatch接着比对；"内侧"的部分还要继续拿下一条边判断。
+		// 4条边全部判断完之后还留在currentInside里的，就是真正同时落在4个半平面内部、被这个
+		// hatch矩形真正挖穿的洞——直接丢弃，不进入survivingPieces。这个"依次按半平面分割、
+		// 外侧确定即收下"的结构和原来按AABB做T形分割是同一个思路，只是把"轴对齐矩形的4条边"
+		// 换成"任意旋转矩形的4条边"，因此不再需要"只在包含hatch中心的格子里补角落三角形"这个
+		// 只对"整个hatch都落在单一格子内"才成立的特例——不管hatch跨了几个格子，每个格子都独立
+		// 按自己的[0,1]范围和hatch的4条边精确裁剪，天然得到正确结果。
+		TArray<TArray<FVector2D>> survivingPieces;
+		for (const TArray<FVector2D>& piece : workPolys) {
+			TArray<FVector2D> currentInside = piece;
+			for (int32 e = 0; e < 4 && currentInside.Num() >= 3; e++) {
+				TArray<FVector2D> insidePart, outsidePart;
+				SplitConvexPolygonByLine(currentInside, hatchPoly[e], hatchPoly[(e + 1) % 4], hatchCenter, insidePart, outsidePart);
+				if (outsidePart.Num() >= 3) survivingPieces.Add(outsidePart);
+				currentInside = MoveTemp(insidePart);
+			}
 		}
-
-		float xMin = hatchCenterX - aabbHalfX, xMax = hatchCenterX + aabbHalfX;
-		float yMin = hatchCenterY - aabbHalfY, yMax = hatchCenterY + aabbHalfY;
-
-		// 逆时针角三角(图案跨格时可能超出[0,1])
-		tris.Add({ { xMin, yMax }, (float)(rectVerts[idxTop].X - xMin), (float)(rectVerts[idxLeft].Y - yMax) });
-		tris.Add({ { xMax, yMax }, (float)(rectVerts[idxTop].X - xMax), (float)(rectVerts[idxRight].Y - yMax) });
-		tris.Add({ { xMax, yMin }, (float)(rectVerts[idxBottom].X - xMax), (float)(rectVerts[idxRight].Y - yMin) });
-		tris.Add({ { xMin, yMin }, (float)(rectVerts[idxBottom].X - xMin), (float)(rectVerts[idxLeft].Y - yMin) });
+		workPolys = MoveTemp(survivingPieces);
 	}
 
-	// 转换为输出矩形
-	for (auto& workRect : work) {
-		rects.Add({
-			FVector2D((workRect.left + workRect.right) * 0.5f, (workRect.bottom + workRect.top) * 0.5f),
-			FVector2D(workRect.right - workRect.left, workRect.top - workRect.bottom)
-			});
+	// workPolys现在就是这个格子里真正的实心地形区域(可能是好几块互不相连的多边形)，扇形三角化
+	// 成最终输出——没有任何hatch命中时workPolys就是初始的整格方块，输出2个三角形，和原来
+	// "没有hatch命中时rects恒为整格一个矩形"的行为完全一致。
+	for (const TArray<FVector2D>& piece : workPolys) {
+		FanTriangulate(piece, tris);
 	}
 }
 
@@ -441,14 +472,14 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 	// 直接按精确坐标建geometry，不再对着一个固定的sub-quad网格做"quad中心是否落在矩形内"的
 	// 近似测试——那种测试量出来的洞边界只能精确到sub-quad网格的粒度，和真实矩形边界对不上，
 	// 会带出明显的格子锯齿，详见ForeverTerrainFrameworkComponent.md"挖洞"一节这次的修正说明。
-	TMap<TPair<int32, int32>, TPair<TArray<FRect2D>, TArray<FTri2D>>> constructionCache;
-	auto lookupCached = [this, &constructionCache](int ex, int ey) -> const TPair<TArray<FRect2D>, TArray<FTri2D>>& {
+	TMap<TPair<int32, int32>, TArray<FTerrainTri2D>> constructionCache;
+	auto lookupCached = [this, &constructionCache](int ex, int ey) -> const TArray<FTerrainTri2D>& {
 		TPair<int32, int32> key(ex, ey);
 		if (auto* found = constructionCache.Find(key)) return *found;
 		FString type; float h = 0.f;
-		TArray<FRect2D> rects; TArray<FTri2D> tris;
-		LookupTerrain(ex, ey, type, h, rects, tris);
-		return constructionCache.Add(key, { rects, tris });
+		TArray<FTerrainTri2D> tris;
+		LookupTerrain(ex, ey, type, h, tris);
+		return constructionCache.Add(key, MoveTemp(tris));
 		};
 
 	for (int cy = 0; cy < 32; cy++) {
@@ -481,21 +512,16 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		}
 	}
 
-	// 为每个涉及到的construction/挖洞Element画出LookupTerrain返回的精确矩形(rects，没有hatch
-	// 命中时就是完整一格、2个三角形)+角落补丁三角形(tris，只有旋转hatch跨格时才非空)。
+	// 为每个涉及到的construction/挖洞Element画出LookupTerrain精确裁剪出的实心地形三角形——
+	// 没有hatch命中时就是完整一格的2个三角形，有hatch命中(含跨格)时是裁剪出的精确形状，绕序
+	// (A,B,C)已经在LookupTerrain的FanTriangulate里按本函数主网格quad同一套约定处理过，这里
+	// 直接按原顺序建三角形，不用再对调。
 	if (levelIdx <= 1) {
 		for (const auto& entry : constructionCache) {
 			int32 ex = entry.Key.Key, ey = entry.Key.Value;
 
-			for (const FRect2D& rect : entry.Value.Key) {
-				float localLeft = rect.Center.X - rect.Size.X * 0.5f;
-				float localRight = rect.Center.X + rect.Size.X * 0.5f;
-				float localBottom = rect.Center.Y - rect.Size.Y * 0.5f;
-				float localTop = rect.Center.Y + rect.Size.Y * 0.5f;
-				FVector2D corners[4] = {
-					{ localLeft, localBottom }, { localRight, localBottom },
-					{ localRight, localTop }, { localLeft, localTop },
-				};
+			for (const FTerrainTri2D& tri : entry.Value) {
+				FVector2D corners[3] = { tri.A, tri.B, tri.C };
 				int32 baseIdx = vertices.Num();
 				for (const FVector2D& corner : corners) {
 					float mapX = ex + corner.X;
@@ -504,27 +530,7 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 					vertices.Add(FVector(mapX * worldScale, mapY * worldScale, h * worldScale));
 					uvs.Add(FVector2D(mapX, mapY));
 				}
-				// (v0,v1,v2,v3)=(左下,右下,右上,左上)，环绕顺序和本函数主网格quad
-				// (v00,v11,v10)/(v00,v01,v11)是同一套已验证过的写法。
-				triangles.Add(baseIdx); triangles.Add(baseIdx + 2); triangles.Add(baseIdx + 1);
-				triangles.Add(baseIdx); triangles.Add(baseIdx + 3); triangles.Add(baseIdx + 2);
-			}
-
-			for (const FTri2D& tri : entry.Value.Value) {
-				FVector2D corners[3] = {
-					{ tri.Corner.X, tri.Corner.Y },
-					{ tri.Corner.X + tri.SizeX, tri.Corner.Y },
-					{ tri.Corner.X, tri.Corner.Y + tri.SizeY },
-				};
-				int32 baseIdx = vertices.Num();
-				for (const FVector2D& corner : corners) {
-					float mapX = ex + corner.X;
-					float mapY = ey + corner.Y;
-					float h = SampleHeight(mapX, mapY) + HEIGHT_EPSILON;
-					vertices.Add(FVector(mapX * worldScale, mapY * worldScale, h * worldScale));
-					uvs.Add(FVector2D(mapX, mapY));
-				}
-				triangles.Add(baseIdx); triangles.Add(baseIdx + 2); triangles.Add(baseIdx + 1);
+				triangles.Add(baseIdx); triangles.Add(baseIdx + 1); triangles.Add(baseIdx + 2);
 			}
 		}
 	}

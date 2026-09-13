@@ -16,17 +16,12 @@ class UTexture2D;
 class UTexture2DArray;
 class Map;
 
-// 局部坐标矩形(单位:地形格,1格=10m),construction格子挖洞用
-struct FRect2D {
-	FVector2D Center;
-	FVector2D Size;
-};
-
-// 局部坐标直角三角形(单位:地形格,相对格子左下角;SizeX/SizeY有符号,表示两条直角边方向)
-struct FTri2D {
-	FVector2D Corner;
-	float SizeX = 0.f;
-	float SizeY = 0.f;
+// 局部坐标(单位:地形格,1格=10m,相对格子左下角)三角形,construction/挖洞格子的实心地形
+// 三角化输出用——按格子局部坐标[0,1]x[0,1]和hatch矩形做精确多边形裁剪(不再是"轴对齐外接矩形
+// 减矩形+角落补丁三角形"的近似),任意凸多边形扇形三角化后都能用这一个统一的三角形结构表示,
+// 不需要再分rects/tris两种特化形状。
+struct FTerrainTri2D {
+	FVector2D A, B, C;
 };
 
 // 精细地形混合单元:权重最高的4个地形id及其权重
@@ -80,10 +75,13 @@ private:
 	// 双线性采样地图高度(mapX/mapY为地图元素单位坐标),BuildLevel与出生点计算共用
 	float SampleHeight(float mapX, float mapY) const;
 
-	// construction格子的挖洞几何:只有该格子地形是"construction"时才有输出。原样对照旧工程
-	// ATerrainBase::LookupTerrain搬,不再是BlueprintCallable(没有Blueprint/ISM消费方了)。
+	// construction/挖洞格子的实心地形几何:只有该格子是"construction"或者命中了hatch时才有
+	// 输出。用精确的凸多边形裁剪(格子[0,1]x[0,1]依次按每个hatch矩形的4条边分割成"确定在矩形外
+	// (实心)"/"还需要继续判断"两部分,详见.cpp实现)算出真正的实心地形区域(可能不止一块,也可能
+	// 是这次会话之前"轴对齐外接矩形+角落补丁三角形"近似算法算不对的跨格hatch)，扇形三角化后
+	// 输出，不再是BlueprintCallable(没有Blueprint/ISM消费方了)。
 	void LookupTerrain(int elemX, int elemY, FString& type, float& height,
-		TArray<FRect2D>& rects, TArray<FTri2D>& tris) const;
+		TArray<FTerrainTri2D>& tris) const;
 
 	Map* map = nullptr; // 非持有,AForeverFrameworkActor拥有生命周期
 

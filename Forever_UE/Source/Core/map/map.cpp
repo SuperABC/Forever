@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <sstream>
 #include <unordered_set>
 
@@ -221,10 +222,59 @@ void Map::InitRoadnet() {
 		externById[e->GetId()] = e;
 	}
 
+	// 还有一类端点既不是RoadJunction也不是extern：某个mod把一条路自己拆成了好几段独立Road
+	// (比如JingRoadnet的隧道引道/下坡/隧道内平路三段式，见roadnet_basic.md"隧道"一节)，中间
+	// 的分段点(flatNode/splitNode)只是几何过渡、并不是真正的路口——不能把它们登记成
+	// Intersection去走RoadJunction::Build那一套(会按setback裁剪+摆一个强制水平的路口平面，
+	// PIE验证发现斜坡中间生出一个路口平面，渲染完全不对：路口本来就不该出现在斜坡上)。但每条
+	// 车道/人行道仍然要按真实宽度摆开自己的锚点——不能像"没有真正分叉"的extern端点那样退化成
+	// 所有车道共用一个点：这类分段点两端车道数/宽度配置完全一致(前后两段Road用同一套
+	// configureLanesEx参数)，只是几何上直接续接，没有理由让车道在这里挤到一起。
+	// passthroughAnchorCache按(端点id,车行/行人,side,laneIndex)缓存已经现算出来的锚点——
+	// 前一段Road在这个端点的"终点锚点"和后一段Road在这个端点的"起点锚点"用的是同一个端点id、
+	// 同一套side/laneIndex，第二次请求直接命中缓存，两条贯通线因此接到同一个Node*上；两段路
+	// 在分段点处方向连续(引道/S形曲线的切线在flatNode/splitNode处完全一致，见roadnet_basic.md
+	// "隧道"一节addControls的说明)，所以用哪一段路现算都是同一个结果，缓存本身只是为了保证
+	// 两次现算返回的是同一个Node*，不是为了避免重复计算。key用位运算手工压缩(节点id实际规模
+	// 远小于2^47，不会溢出)，避免为了一个4维小缓存另外引入<map>/<tuple>依赖。
+	unordered_map<int64_t, Node*> passthroughAnchorCache;
+	auto makePassthroughKey = [](int nodeId, bool isVehicle, int side, int laneIndex) -> int64_t {
+		return (static_cast<int64_t>(nodeId) << 16) | (isVehicle ? (1LL << 15) : 0)
+			| (static_cast<int64_t>(side) << 8) | static_cast<int64_t>(laneIndex & 0xFF);
+		};
+	// 现算一个"直接经过"锚点：位置=端点坐标+沿该端切线的右手垂线方向(和RoadJunction::Build
+	// 里makeAnchor同一套约定)按车道宽度偏移，setback=0(这类点没有喇叭口，不需要沿路收缩)。
+	auto computePassthroughAnchor = [](Road* road, bool atStart, bool isVehicle, int side, int laneIndex) -> Node* {
+		float tdx, tdy, tdz;
+		road->GetTangent(atStart ? 0.f : 1.f, tdx, tdy, tdz);
+		float tlen = sqrt(tdx * tdx + tdy * tdy);
+		if (tlen < 1e-6f) tlen = 1.f;
+		float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
+
+		float side0Width = road->GetSideWidth(0), side1Width = road->GetSideWidth(1);
+		float shift = (side0Width - side1Width) * 0.5f;
+
+		float offsetDist;
+		if (isVehicle) {
+			const vector<float>& lanes = road->GetVehicleLanes(side);
+			if (laneIndex < 0 || laneIndex >= static_cast<int>(lanes.size())) return nullptr;
+			offsetDist = LaneCenterOffset(lanes, laneIndex);
+		} else {
+			if (road->GetPedestrianLanes(side).empty()) return nullptr;
+			offsetDist = SumWidths(road->GetVehicleLanes(side)) + SumWidths(road->GetParkingLanes(side))
+				+ LaneCenterOffset(road->GetPedestrianLanes(side), 0);
+		}
+		float sideSign = (side == 0) ? 1.f : -1.f;
+		float signedOffset = offsetDist * sideSign - shift;
+
+		Node endpoint = atStart ? road->GetStart() : road->GetEnd();
+		float x = endpoint.GetX() + perp0X * signedOffset;
+		float y = endpoint.GetY() + perp0Y * signedOffset;
+		return new Node("roadnet", x, y, endpoint.GetZ());
+		};
+
 	// laneIndex只在isVehicle时有意义(每条车道各自的锚点)；行人固定用该侧唯一的锚点，
 	// 忽略laneIndex(见RoadJunctionApproach::pedestrianSide注释，这次没有扩展成逐车道)。
-	// extern端点(地图边缘残端)没有RoadJunction，所有车道退化成同一个Node，因为地图边缘
-	// 不需要精确车道级偏移几何。
 	auto resolveAnchor = [&](Road* road, bool atStart, bool isVehicle, int side, int laneIndex) -> Node* {
 		auto& approachMap = atStart ? startApproach : endApproach;
 		auto it = approachMap.find(road);
@@ -240,7 +290,17 @@ void Map::InitRoadnet() {
 		}
 		Node endpoint = atStart ? road->GetStart() : road->GetEnd();
 		auto externIt = externById.find(endpoint.GetId());
-		return (externIt != externById.end()) ? externIt->second : nullptr;
+		if (externIt != externById.end()) return externIt->second; // 地图边缘：没有真正分叉，
+			// 所有车道退化成同一个点，见上面externById注释。
+
+		int64_t key = makePassthroughKey(endpoint.GetId(), isVehicle, side, isVehicle ? laneIndex : 0);
+		auto cacheIt = passthroughAnchorCache.find(key);
+		if (cacheIt != passthroughAnchorCache.end()) return cacheIt->second;
+		Node* anchor = computePassthroughAnchor(road, atStart, isVehicle, side, laneIndex);
+		if (!anchor) return nullptr;
+		navAnchorNodes.push_back(anchor);
+		passthroughAnchorCache[key] = anchor;
+		return anchor;
 		};
 
 	// 每条Road的贯通线：车行边单向插入(按该side实际通行方向)，行人边双向插入。每条物理车道

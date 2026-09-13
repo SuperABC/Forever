@@ -95,6 +95,32 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
   锚点方块+边长方体），未来Traffic域（阶段4-3）寻路时也会用同一套接口，不需要改`Map`。
   图里出现的id除了`GetNavAnchorNodes()`能查到坐标，还可能是地图边缘的extern残端（在
   `GetExterns()`里），调用方要两个列表都查。
+- **`resolveAnchor`第三条兜底分支：既不是`RoadJunction`也不是`extern`的端点，按车道宽度
+  现算+缓存各自的锚点（第六轮迁移新增，中间有一次返工）**：起因是`JingRoadnet`的隧道口把
+  一条路自己拆成了三段独立`Road`（引道/下坡/隧道内平路，见`Source/Basic/map/roadnet_basic.md`
+  "隧道"一节），中间两个分段点(`flatNode`/`splitNode`)只是mod自己引入的几何过渡，不是
+  `RoadnetMod::intersections`里的真正路口，也不是地图边缘的`extern`——PIE验证发现隧道范围内
+  车行/人行导航线整段断掉，因为`resolveAnchor`原来只有"命中`RoadJunction`"/"命中`extern`"
+  两条分支，两条都不中就直接返回`nullptr`，`fromAnchor`/`toAnchor`有一个为空整条贯通线就
+  建不出来。
+  - 第一次修复尝试把`flatNode`/`splitNode`也注册成`Intersection`走`RoadJunction::Build`，
+    但`RoadJunction`会按`setback`裁剪+摆一个强制水平的路口平面——`splitNode`正好卡在S形下坡
+    曲线中间，PIE验证发现斜坡中间平白多出一个路口平面，渲染完全不对（路口本来就不该出现在
+    斜坡上），这个思路被否掉了。
+  - 第二次修复把所有车道/人行道在这个端点全部退化成同一个共享`Node`（照搬extern端点"没有
+    真正分叉、所有车道挤到一个点"的规则）——这个思路也被否掉了：`flatNode`/`splitNode`
+    两端的车道数/宽度配置完全一致（前后两段`Road`用同一套`configureLanesEx`参数），只是
+    几何上直接续接，并没有"车道消失、没必要按宽度区分"这个前提，仍然应该按各自车道的真实
+    宽度摆开，不能因为不是真路口就把车道全部收缮成一点。
+  - 最终修复：`resolveAnchor`第三条分支现算一个"直接经过"锚点——取该端切线的右手垂线方向
+    (和`RoadJunction::Build`的`makeAnchor`同一套约定)，按`LaneCenterOffset`/车道宽度算出
+    真实的横向偏移(`setback`固定为0，这类点没有喇叭口不需要沿路收缩)，`passthroughAnchorCache`
+    按`(端点id, 车行/行人, side, laneIndex)`缓存结果——前一段`Road`在这个端点的终点锚点和
+    后一段`Road`在这个端点的起点锚点用的是同一套key，第二次请求直接命中缓存返回同一个
+    `Node*`，两条贯通线因此接到一起；两段路在分段点处方向连续（引道/S形曲线在`flatNode`/
+    `splitNode`处切线完全一致，见`roadnet_basic.md`"隧道"一节`addControls`的说明），所以
+    用哪一段路现算结果都一样，缓存只是为了保证两次现算返回同一个`Node*`。新建的`Node`推进
+    `navAnchorNodes`（和路口/车道分裂新增锚点同一套生命周期+可视化机制，不需要另开一张表）。
 
 - **`InitZones()`/`InitBuildings()`必须在`InitRoadnet()`之后调用**（要用到`GetLots()`），
   `InitBuildings()`还必须在`InitZones()`之后（假定`InitZones()`已经把`Lot::GetFreeLots()`

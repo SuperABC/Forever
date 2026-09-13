@@ -4,10 +4,10 @@
 #include <algorithm>
 
 // 隧道：道路延伸时如果遇到mountain地形，改成"钻进去"而不是贴着地形起伏铺过去，并且在隧道口
-// 用RoadnetMod::AddHatch给地形挖一个洞，避免隧道段完全埋没在山体实心地形里看不见——四个
-// 常量照抄老工程语义。
+// 用RoadnetMod::AddHatch给地形挖一个洞，避免隧道段完全埋没在山体实心地形里看不见——三个
+// 常量照抄老工程语义(挖洞宽度不再用固定常量，改成按每条路实际配好的车道宽度算，见addRoad
+// 里AddHatch调用处的说明)。
 #define TUNNEL_HEIGHT -1.f
-#define TUNNEL_HATCH_WIDTH 1.f
 #define TUNNEL_HATCH_LENGTH 4.f
 #define TUNNEL_LOOKAHEAD_DISTANCE 5.f
 
@@ -155,15 +155,21 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			// 水平引道本身也可能已经压在mountain地形上(hasMountainNearby的探测半径比这段
 			// 引道长)，所以也要单独开一个hatch，两段hatch首尾相接，合起来正好覆盖老版本
 			// "整段(groundNode到splitNode)一次性开洞"的范围，不会因为拆分出引道而漏挖。
+			// 挖洞宽度必须用这条路配好车道之后的GetTotalWidth()(和roadMargin同一个取值)，
+			// 不能用固定的TUNNEL_HATCH_WIDTH——老工程那会儿道路统一走单一meshPath、实际宽度
+			// 正好等于这个常量，这次configureLanesEx按车道数把默认宽度改成2.0(甚至不对称
+			// 配置能到2.5)之后，固定1.0的洞就只有路面中间一半宽，两侧车道/人行道底下还留着
+			// 没挖穿的实心山体——PIE验证发现玩家沿路走近隧道口时会在这块没对齐的实心地形边缘
+			// 附近穿模掉下去(地形和路面mesh的碰撞在这条边界上互相咬合不上)。
 			roads.emplace_back(name, groundNode, flatNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), groundNode, flatNode);
 			configureThis(roads.back());
-			AddHatch(&roads.back(), 0.f, 1.f, TUNNEL_HATCH_WIDTH);
+			AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			roads.emplace_back(name, flatNode, splitNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), flatNode, splitNode);
 			configureThis(roads.back());
-			AddHatch(&roads.back(), 0.f, 1.f, TUNNEL_HATCH_WIDTH);
+			AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			roads.emplace_back(name, splitNode, tunnelNode, thisMeshPath, meshUnit);
 			configureThis(roads.back());

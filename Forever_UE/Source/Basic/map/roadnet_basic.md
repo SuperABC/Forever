@@ -16,12 +16,18 @@
   正中间），对应`Node`的`z`改成`TUNNEL_HEIGHT=-1.f`（地图单位，相对平坦Z=0基准往下10m），
   其余节点仍然是`0.f`。
 - **隧道口地形hatch已恢复（第三轮迁移）**：`addRoad`的斜坡段额外调
-  `AddHatch(&roads.back(), 0.f, 1.f, TUNNEL_HATCH_WIDTH)`，覆盖斜坡段的地形挖洞。
+  `AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`，覆盖斜坡段的地形挖洞。
   第二轮迁移时曾判断"这个hatch即使搬过来也不会有可见效果"而跳过——那个判断只在
   `ForeverTerrainFrameworkComponent::LookupTerrain`的挖洞逻辑锁死在`"construction"`地形时
   成立；PIE验证发现隧道段确实被山体实心地形完全挡住看不见后，改成把那个消费方的判断条件
   放宽到"`construction`或者这个格子有hatch"，隧道口的hatch才真正有了用武之地，详见
-  `Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。
+  `Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。挖洞宽度第五轮迁移前一直是
+  固定常量`TUNNEL_HATCH_WIDTH=1.f`（照抄老工程——老工程道路统一走单一meshPath，实际宽度正好
+  等于这个常量）；这次`configureLanesEx`把车道配置参数化之后，默认配置总宽度变成2.0（不对称
+  配置能到2.5），固定1.0的洞只能挖穿路面中间一半，两侧车道/人行道底下还留着没挖穿的实心
+  山体——PIE验证发现玩家沿路走近隧道口时会在这块宽度对不上的边界附近穿模掉下去，改成和
+  `roadMargin`同一个取值来源：`roads.back().GetTotalWidth()`，跟着这条路实际配好的车道宽度走，
+  不再有单独的`TUNNEL_HATCH_WIDTH`常量。
 - **`addRoad`的地面↔隧道分支现在拆成三段Connection，不是两段（第四轮迁移，修复路口高度
   连续性问题）**：①`groundNode→flatNode`（长`TUNNEL_FLAT_APPROACH_LENGTH=1.5`，两端Z相同，
   addControls产出的曲线严格保持水平）；②`flatNode→splitNode`（真正的S形下坡，addControls
@@ -40,11 +46,32 @@
   必然完全落在这段水平引道以内，路口mesh（强制用`Intersection`高度铺平）和裁剪边界处曲线的
   真实高度因此永远一致，S形下坡只会在引道结束之后（视觉上就是路口边缘以外）才真正开始下降。
   `TUNNEL_FLAT_APPROACH_LENGTH`不需要精确等于`setback`，比它大留出余量即可（引道本身处处
-  水平，不存在"裁多了露馅"的风险）。`flatNode`/`splitNode`都是普通`Node`（不登记进
-  `intersections`），不会产生额外的`RoadJunction`，纯几何过渡点。原来只在斜坡段开的hatch
-  现在拆成两个（引道段+下坡段各一个，首尾相接），合起来覆盖范围和原来"整段一次性开洞"完全
-  一致，不会因为拆分出引道而漏挖——引道段虽然处处水平，但探测半径更大的
-  `hasMountainNearby`仍可能已经把这段地形判成需要下坡的`mountain`，所以照样要挖。
+  水平，不存在"裁多了露馅"的风险）。原来只在斜坡段开的hatch现在拆成两个（引道段+下坡段各一个，
+  首尾相接），合起来覆盖范围和原来"整段一次性开洞"完全一致，不会因为拆分出引道而漏挖——引道
+  段虽然处处水平，但探测半径更大的`hasMountainNearby`仍可能已经把这段地形判成需要下坡的
+  `mountain`，所以照样要挖。
+  - **`flatNode`/`splitNode`不登记进`intersections`——它们不是真正的路口，导航线断开的修复
+    在`Map::InitRoadnet()`那一侧，不在这里（第六轮迁移，含一次来回反复）**：拆成三段独立
+    `Road`之后，PIE验证发现隧道范围内的车行/人行导航线整段断掉（用户反馈"隧道里的路的导航线
+    断了，估计是因为把road给break了"，一针见血）——根因是`Map::InitRoadnet()`只给
+    `roadnet->GetIntersections()`里的点调`RoadJunction::Build`建导航锚点，`resolveAnchor`
+    对不在任何`RoadJunction`里、又不是地图边缘`extern`的端点直接返回`nullptr`，而
+    `fromAnchor`/`toAnchor`只要有一个为空整条贯通线就建不出来——`flatNode`/`splitNode`两头
+    不沾，导致以它们为端点的这三段`Road`（引道/下坡/隧道内平路）全部车行/人行贯通线都是空的。
+    第一次修复曾尝试把`flatNode`/`splitNode`也用`Intersection(const Node&)`包一份登记进
+    `intersections`，让它们和`extendChain`里其它"两条路简单对接"的普通节点一样各自建一个
+    `RoadJunction`——但这个思路被否掉了：`RoadJunction::Build`会按`setback`裁剪+摆一个强制
+    水平的路口平面，`flatNode`在水平引道上还好，`splitNode`正好卡在S形下坡曲线的中间，PIE
+    验证发现斜坡中间平白生出一个路口平面，渲染完全不对——路口本来就不该出现在斜坡上，这是
+    这两个点专属的几何过渡性质决定的，不能和真正的路口一视同仁。真正的修复挪到了
+    `Map::InitRoadnet()`：给`resolveAnchor`加一个"既不是`RoadJunction`也不是`extern`"的
+    兜底分支——按该端切线的右手垂线方向+真实车道宽度现算每条车道/人行道各自的锚点(和
+    `RoadJunction::Build`同一套横向偏移换算，只是不产生`setback`/路口平面)，按
+    (端点id,车行/行人,side,laneIndex)缓存，前一段`Road`在这个端点的终点锚点和后一段`Road`
+    的起点锚点缓存命中同一个`Node*`，两条贯通线因此在这里天然接上——**不是**退化成所有车道
+    共用一个点(`flatNode`/`splitNode`两端车道数/宽度配置完全一致，没理由把车道挤到一起，这个
+    "共享一个点"的思路中途也被否掉过一次)，新建的`Node`推进`navAnchorNodes`统一管理生命周期/
+    可视化。详见`Source/Core/map/map.md`"导航图"一节。
 - **`addControls`现在按端点各自的`Z`取控制点高度**（`c1.z=n1.GetZ()`、`c2.z=n2.GetZ()`），
   不再像第一轮迁移那样两个控制点都固定`0.f`——两端Z相同时（目前唯一场景）效果和以前完全
   一样，两端Z不同时（隧道过渡段）能在两个平缓端之间画出平滑升降的曲线，这是要求9"曲线道路"
