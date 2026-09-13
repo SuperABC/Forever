@@ -68,6 +68,20 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
   的那份实现——分配和释放因此总是发生在同一侧,问题消失。这是`REFACTOR_PLAN.md`"跨模块
   new/delete安全"约定在Factory这一层的具体体现,比"Mod实例创建/销毁走deleter"这条更隐蔽,
   阶段4新增Factory方法时也要延续这个做法(公开方法一律`virtual`)。
+- **`BuildingFactory`/`ZoneFactory::RegisterBuilding`/`RegisterZone`除了`creator`/
+  `deleter`，还额外注册几个static查询函数指针**（`BuildingFactory`：`RandomAcreageFunc`/
+  `AcreageBoundFunc`(x2)/`PowerFunc`/`AssignFunc`；`ZoneFactory`只多`AssignFunc`）——这次
+  会话把`RandomAcreage`/`GetAcreageMin`/`GetAcreageMax`/`GetPower`/`Assign`（原来的
+  `Distribute`/`explicitPlacements`）从需要实例的虚方法改成不需要实例的具体子类static方法，
+  原因和`creator`/`deleter`完全一样：这几个方法本身就是无捕获的static普通函数，天然能隐式
+  转换成裸函数指针，同一套"调用哪个模块编译的代码就用哪个模块的内存管理"机制适用；
+  `AssignFunc`（`void(*)(const std::vector<Lot*>&, PlacementEmitFunc, void*)`）内部通过
+  `PlacementEmitFunc`（同样是裸函数指针）回调把结果交回调用方，回调函数体本身编译在调用方
+  那一侧，mod调它触发的任何容器操作实际执行的都是调用方自己的分配器，不会出现`candidateWeights`
+  修复之前那种"mod分配、宿主释放"的跨DLL问题（`RandomAcreage`等返回值是纯`float`，本身也没有
+  容器所有权问题）。`Factory::RandomAcreage(id)`/`GetAcreageMin(id)`/`GetAcreageMax(id)`/
+  `GetPower(id,area)`/`Assign(id,lots,emit,context)`是对应的转发方法，`id`未注册时分别返回
+  `0.f`/直接不调用`emit`，详见`Source/Dependence/map/zone_mod.md`。
 - **给mod传参数走`Factory::SetModArgs`+`Mod::ApplyArgs`,不经过DLL导出函数的参数**——这是
   按用户明确要求、仿照旧工程`config.json`格式实现的:`config.json`里每个concept一个
   `"<concept>_mods"`数组,元素是`"id"`或`"id 参数..."`(命令行式写法,和旧工程

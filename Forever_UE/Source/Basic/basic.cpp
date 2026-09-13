@@ -91,7 +91,8 @@ extern "C" __declspec(dllexport) void* GetModZones() {
 extern "C" __declspec(dllexport) void RegisterModZones(ZoneFactory* factory) {
 	factory->RegisterZone(ZoneBasic::GetId(),
 		[]() -> ZoneMod* { return new ZoneBasic(); },
-		[](ZoneMod* m) { delete m; });
+		[](ZoneMod* m) { delete m; },
+		&ZoneBasic::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 	factory->CleanTemp();
@@ -104,7 +105,9 @@ extern "C" __declspec(dllexport) void* GetModBuildings() {
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
 	factory->RegisterBuilding(BuildingBasic::GetId(),
 		[]() -> BuildingMod* { return new BuildingBasic(); },
-		[](BuildingMod* m) { delete m; });
+		[](BuildingMod* m) { delete m; },
+		&BuildingBasic::RandomAcreage, &BuildingBasic::GetAcreageMin, &BuildingBasic::GetAcreageMax,
+		&BuildingBasic::GetPower, &BuildingBasic::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {
 	factory->CleanTemp();

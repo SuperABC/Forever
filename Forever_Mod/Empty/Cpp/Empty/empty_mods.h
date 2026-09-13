@@ -70,33 +70,44 @@ private:
 	std::string name;
 };
 
+// EmptyZone/EmptyBuilding这次会话改回"一个本体独占一个mod实例"模型：Distribute()/
+// explicitPlacements改成static Assign()（空实现，不参与显式占位）；寻址用的唯一名字计数器
+// 直接写在构造函数里（老工程ResidentialZone::count同款），不再需要ApplyArgs把参数字符串拼进
+// name（参数字符串如果还需要体现可以另外存一个字段，不影响寻址用的name）。
 class EmptyZone : public ZoneMod {
 public:
+	EmptyZone() { lastName = std::string("empty") + std::to_string(count++); }
+
 	static const char* GetId() { return "empty"; }
 	virtual const char* GetType() const override { return "empty"; }
-	virtual const char* GetName() override { return name.data(); }
-	virtual void ApplyArgs(const std::string& args) override { name = "empty(" + args + ")"; }
+	virtual const char* GetName() override { return lastName.c_str(); }
 
-	virtual void Distribute(const std::vector<Lot*>& lots) override {}
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {}
+	virtual void Layout(int direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override {}
 
 private:
-	std::string name;
+	std::string lastName;
+	static int count;
 };
 
 class EmptyBuilding : public BuildingMod {
 public:
+	EmptyBuilding() { lastName = std::string("empty") + std::to_string(count++); }
+
 	static const char* GetId() { return "empty"; }
 	virtual const char* GetType() const override { return "empty"; }
-	virtual const char* GetName() override { return name.data(); }
-	virtual void ApplyArgs(const std::string& args) override { name = "empty(" + args + ")"; }
+	virtual const char* GetName() override { return lastName.c_str(); }
 
-	virtual void Distribute(const std::vector<Lot*>& lots) override {}
-	virtual float RandomAcreage() override { return 0.f; }
-	virtual float GetAcreageMin() override { return 0.f; }
-	virtual float GetAcreageMax() override { return 0.f; }
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {}
+	static float RandomAcreage() { return 0.f; }
+	static float GetAcreageMin() { return 0.f; }
+	static float GetAcreageMax() { return 0.f; }
+	static float GetPower(AREA_TYPE area) { return 0.f; }
 
 private:
-	std::string name;
+	std::string lastName;
+	static int count;
 };
 
 class EmptyComponent : public ComponentMod {

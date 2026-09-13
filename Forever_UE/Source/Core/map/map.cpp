@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 #include <unordered_set>
 
 using namespace std;
@@ -45,6 +46,13 @@ namespace {
 		edges.erase(remove_if(edges.begin(), edges.end(),
 			[toId](const pair<int, Connection*>& e) { return e.first == toId; }), edges.end());
 	}
+
+	// ZoneMod/BuildingMod::Assign()一次扫完全地图lot、通过PlacementEmitFunc回调把想要的
+	// 显式占位请求交回来——这个函数体编译在Core这一侧，mod调它触发的push_back用的是Core自己
+	// 的分配器，不会出现"mod分配、Core释放"的跨DLL问题，详见map.md"寻址"一节。
+	void EmitPlacementRequest(void* context, const LotPlacementRequest& request) {
+		static_cast<vector<LotPlacementRequest>*>(context)->push_back(request);
+	}
 }
 
 Map::Map(int width, int height) :
@@ -73,8 +81,8 @@ Map::~Map() {
 	for (RoadJunction* j : junctions) delete j;
 	delete roadnet;
 
-	for (Zone* z : zones) delete z;
-	for (Building* b : buildings) delete b;
+	for (auto& [name, z] : zones) delete z;
+	for (auto& [name, b] : buildings) delete b;
 }
 
 void Map::InitTerrains() {
@@ -307,84 +315,80 @@ void Map::InitZones() {
 	zoneFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("zone_mods")));
 	modLoader.RegisterConcept<ZoneFactory>(mods, "RegisterModZones", "FinishModZones", &zoneFactory);
 
-	// 仿照老工程：不再有"扫描用实例先跑一遍全部lot、再给每个成功结果另开一个landing实例"这种
-	// 两段式——对每个(mod类型,lot)组合单独建一个新的mod实例，直接对这一个lot调用
-	// Distribute({lot})，成功就把这个mod实例原样交给新建的Zone持有（Zone从此独占这个实例，
-	// 不会有别的Zone共用它），失败就地销毁。这样mod实例的所有数据(walls/gates/
+	// 一个本体独占一个mod实例：Distribute()/explicitPlacements改成static Assign()，一次调用
+	// 扫完全地图的lot拿到这个类型想要的所有显式占位请求(不存在任何实例)，逐条尝试
+	// RequestPlacement，只有真的成功了才CreateZone一次——不会再出现"构造了一个mod实例结果这块
+	// 地不要了、白白析构"的情况，因为问的过程完全不需要实例。这样mod实例的所有数据(walls/gates/
 	// internalBuildings等)从始至终只属于一个Zone，不需要再另外拷贝一份到Zone自己身上，
 	// Map::InitBuildings()要用的时候直接问zone->GetMod()就行。
 	PathLaneSpec pathSpec;
 	for (auto& id : zoneFactory.GetRegisteredIds()) {
 		vector<Lot*> lots = SortLotsByFreeAcreage(GetLots());
-		for (Lot* lot : lots) {
-			ZoneMod* mod = zoneFactory.CreateZone(id);
-			if (!mod) continue;
+		vector<LotPlacementRequest> requests;
+		zoneFactory.Assign(id, lots, &EmitPlacementRequest, &requests);
 
-			mod->Distribute({ lot });
-
-			bool placed = false;
-			for (auto& request : mod->explicitPlacements) {
-				if (!request.lot) continue;
-				Quad placedQuad;
-				unordered_map<int, Road*> boundaryRoads;
-				size_t linksBefore = request.lot->GetPathRoadLinks().size();
-				bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
-					request.marginEnd, request.depth, pathSpec, &placedQuad, &boundaryRoads);
-				// 不管这次placement最终成功还是失败都要接图——SplitWithPath产出的小路即使整体
-				// 请求失败也已经是真实持久化的几何(被某个freeLot的边界引用着)，处理顺序天然
-				// =创建顺序(同一顶层Lot内部cascading cut时，后一刀如果连到前一刀新建的小路，
-				// 前一刀的link一定排在更靠前的位置，先被处理)。
-				const auto& allLinks = request.lot->GetPathRoadLinks();
-				for (size_t i = linksBefore; i < allLinks.size(); i++) {
-					ConnectPathRoad(allLinks[i]);
-				}
-				if (success) {
-					Zone* zone = new Zone(&zoneFactory, mod);
-					zone->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(), placedQuad.GetSizeX(), placedQuad.GetSizeY());
-					// Zone::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
-					zone->SetParentLot(request.lot);
-					for (auto& [dir, road] : boundaryRoads) {
-						zone->SetBoundaryRoad(dir, road);
-					}
-
-					// 出入口接图 + 内部道路：同一个zone在这次调用期间共用一份anchorCache，
-					// 让内部道路端点能复用出入口已经建好的zone侧锚点(坐标+类别重合就是同一个点)。
-					// 围墙/大门(mod->walls/mod->gates)不需要在这里搬运——Zone::GetWalls()/
-					// GetGates()直接转发zone自己持有的这个mod，纯数据搬运不做任何几何/导航图
-					// 计算，渲染细节全部下放到Forever层(ForeverZoneFrameworkComponent)。
-					vector<tuple<float, float, bool, Node*>> anchorCache;
-					for (const ZoneAccessPoint& pt : mod->vehicleEntries) {
-						ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, true, anchorCache);
-					}
-					for (const ZoneAccessPoint& pt : mod->vehicleExits) {
-						ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, false, anchorCache);
-					}
-					for (const ZoneAccessPoint& pt : mod->pedestrianAccess) {
-						ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, false, true, anchorCache);
-					}
-
-					vector<Road*> builtInternalRoads;
-					for (const ZoneInternalRoadSpec& roadSpec : mod->internalRoads) {
-						builtInternalRoads.push_back(ConnectZoneInternalRoad(zone, roadSpec, anchorCache));
-					}
-					zone->SetInternalRoads(builtInternalRoads);
-
-					// 内部建筑不能在这里实例化——PlaceZoneInternalBuilding要new
-					// Building(&buildingFactory, spec.type)，但buildingFactory的mod注册在
-					// InitBuildings()里才做(InitBuildings()必须在InitZones()之后跑，要用到这里
-					// 裁剪完的剩余空闲面积)，这时候buildingFactory还是空的，CreateBuilding会
-					// 返回nullptr导致Building构造函数抛异常崩溃(PIE验证发现)。这次改成
-					// InitBuildings()里遍历zones、直接读zone->GetMod()->internalBuildings，
-					// 不需要Zone另外存一份"待实例化"的副本。
-
-					zones.push_back(zone);
-					placed = true;
-					break; // 和ZoneMod::Distribute({lot})只处理一个lot对应、最多一个explicit
-						   // placement的假设一致(ZoneBasic自己在找到第一个可用方向后也会break)。
-				}
+		for (auto& request : requests) {
+			Lot* lot = request.lot;
+			if (!lot) continue;
+			Quad placedQuad;
+			unordered_map<int, Road*> boundaryRoads;
+			size_t linksBefore = lot->GetPathRoadLinks().size();
+			bool success = lot->RequestPlacement(request.direction, request.marginStart,
+				request.marginEnd, request.depth, pathSpec, &placedQuad, &boundaryRoads);
+			// 不管这次placement最终成功还是失败都要接图——SplitWithPath产出的小路即使整体
+			// 请求失败也已经是真实持久化的几何(被某个freeLot的边界引用着)，处理顺序天然
+			// =创建顺序(同一顶层Lot内部cascading cut时，后一刀如果连到前一刀新建的小路，
+			// 前一刀的link一定排在更靠前的位置，先被处理)。
+			const auto& allLinks = lot->GetPathRoadLinks();
+			for (size_t i = linksBefore; i < allLinks.size(); i++) {
+				ConnectPathRoad(allLinks[i]);
 			}
-			if (!placed) {
-				zoneFactory.DestroyZone(mod);
+			if (!success) continue;
+
+			ZoneMod* mod = zoneFactory.CreateZone(id); // 到这里才真正创建，唯一一次
+			if (!mod) continue;
+			Zone* zone = new Zone(&zoneFactory, mod);
+			zone->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(), placedQuad.GetSizeX(), placedQuad.GetSizeY());
+			// Zone::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
+			zone->SetParentLot(lot);
+			for (auto& [dir, road] : boundaryRoads) {
+				zone->SetBoundaryRoad(dir, road);
+			}
+			zone->Layout(request.direction); // 内部自己调mod->Layout(...)，填好walls/gates/
+				// 内部道路/内部建筑——放在SetPosition/SetBoundaryRoad之后调用
+
+			// 出入口接图 + 内部道路：同一个zone在这次调用期间共用一份anchorCache，
+			// 让内部道路端点能复用出入口已经建好的zone侧锚点(坐标+类别重合就是同一个点)。
+			// 围墙/大门(mod->walls/mod->gates)不需要在这里搬运——Zone::GetWalls()/
+			// GetGates()直接转发zone自己持有的这个mod，纯数据搬运不做任何几何/导航图
+			// 计算，渲染细节全部下放到Forever层(ForeverZoneFrameworkComponent)。
+			vector<tuple<float, float, bool, Node*>> anchorCache;
+			for (const ZoneAccessPoint& pt : mod->vehicleEntries) {
+				ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, true, anchorCache);
+			}
+			for (const ZoneAccessPoint& pt : mod->vehicleExits) {
+				ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, false, anchorCache);
+			}
+			for (const ZoneAccessPoint& pt : mod->pedestrianAccess) {
+				ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, false, true, anchorCache);
+			}
+
+			vector<Road*> builtInternalRoads;
+			for (const ZoneInternalRoadSpec& roadSpec : mod->internalRoads) {
+				builtInternalRoads.push_back(ConnectZoneInternalRoad(zone, roadSpec, anchorCache));
+			}
+			zone->SetInternalRoads(builtInternalRoads);
+
+			// 内部建筑不能在这里实例化——PlaceZoneInternalBuilding要new
+			// Building(&buildingFactory, spec.type)，但buildingFactory的mod注册在
+			// InitBuildings()里才做(InitBuildings()必须在InitZones()之后跑，要用到这里
+			// 裁剪完的剩余空闲面积)，这时候buildingFactory还是空的，CreateBuilding会
+			// 返回nullptr导致Building构造函数抛异常崩溃(PIE验证发现)。这次改成
+			// InitBuildings()里遍历zones、直接读zone->GetMod()->internalBuildings，
+			// 不需要Zone另外存一份"待实例化"的副本。
+
+			if (!AddZone(zone)) {
+				delete zone; // ~Zone()里factory->DestroyZone(mod)会跟着跑，重名时不留悬空引用
 			}
 		}
 	}
@@ -396,81 +400,79 @@ void Map::InitBuildings() {
 	modLoader.RegisterConcept<BuildingFactory>(mods, "RegisterModBuildings", "FinishModBuildings", &buildingFactory);
 
 	PathLaneSpec pathSpec;
-	// scanners按类型持有一个共享的BuildingMod实例，活过这整个函数——同一个类型可能同时走
-	// 显式占位、FillRemainder、Zone内部建筑三条路径，产出好几个Building，全部指向同一个
-	// 实例（第十六轮迁移：Building不再各自持有独占的mod，而是共享这个按类型缓存的实例，见
-	// building.h）；FillRemainder阶段还要用它查RandomAcreage/Min/Max。函数末尾统一销毁，
-	// 是这些mod实例唯一的销毁点。
-	unordered_map<string, BuildingMod*> scanners;
 
+	// 显式占位：先用static Assign一次性扫完全部lot拿到这个类型想要的所有placement请求(不存在
+	// 任何实例)，再逐条尝试RequestPlacement，只有真的成功了才CreateBuilding一次——不会再出现
+	// "new了一个mod实例结果这块lot根本不要、白白构造又销毁"的情况，因为问的过程完全不需要实例。
 	for (auto& id : buildingFactory.GetRegisteredIds()) {
-		BuildingMod* scanner = buildingFactory.CreateBuilding(id);
-		if (!scanner) continue;
+		vector<LotPlacementRequest> requests;
+		buildingFactory.Assign(id, GetLots(), &EmitPlacementRequest, &requests);
 
-		vector<Lot*> lots = SortLotsByFreeAcreage(GetLots());
-		scanner->Distribute(lots);
-
-		// candidateWeights是mod自己push进去的纯数据(lot指针+权重)，这里由Map(Forever.dll
-		// 编译的代码)代为调用lot->AddCandidate(...)——不能让mod自己直接调用这个非虚成员
-		// 函数，否则Lot::candidates这个vector的内部缓冲会被mod dll的分配器分配、却由
-		// Forever.dll的分配器释放，退出时析构会崩溃，详见building_mod.h的注释。
-		for (auto& cw : scanner->candidateWeights) {
-			if (cw.lot) cw.lot->AddCandidate(id, cw.weight);
-		}
-
-		for (auto& request : scanner->explicitPlacements) {
-			if (!request.lot) continue;
-			Quad placed;
+		for (auto& request : requests) {
+			Lot* lot = request.lot;
+			if (!lot) continue;
+			Quad placedQuad;
 			unordered_map<int, Road*> boundaryRoads;
-			size_t linksBefore = request.lot->GetPathRoadLinks().size();
-			bool success = request.lot->RequestPlacement(request.direction, request.marginStart,
-				request.marginEnd, request.depth, pathSpec, &placed, &boundaryRoads);
-			const auto& allLinks = request.lot->GetPathRoadLinks();
+			size_t linksBefore = lot->GetPathRoadLinks().size();
+			bool success = lot->RequestPlacement(request.direction, request.marginStart,
+				request.marginEnd, request.depth, pathSpec, &placedQuad, &boundaryRoads);
+			const auto& allLinks = lot->GetPathRoadLinks();
 			for (size_t i = linksBefore; i < allLinks.size(); i++) {
 				ConnectPathRoad(allLinks[i]);
 			}
-			if (success) {
-				Building* building = new Building(scanner);
-				building->SetPosition(placed.GetPosX(), placed.GetPosY(), placed.GetSizeX(), placed.GetSizeY());
-				building->SetParentLot(request.lot);
-				for (auto& [dir, road] : boundaryRoads) {
-					building->SetBoundaryRoad(dir, road);
-				}
-				buildings.push_back(building);
-			}
-		}
+			if (!success) continue;
 
-		scanners[id] = scanner;
+			BuildingMod* mod = buildingFactory.CreateBuilding(id); // 到这里才真正创建，唯一一次
+			if (!mod) continue;
+			Building* building = new Building(&buildingFactory, mod);
+			building->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(),
+				placedQuad.GetSizeX(), placedQuad.GetSizeY());
+			building->SetParentLot(lot);
+			for (auto& [dir, road] : boundaryRoads) {
+				building->SetBoundaryRoad(dir, road);
+			}
+			building->Layout(request.direction); // 显式占位有真实direction；内部自己调
+				// mod->Layout(...)+解析footprint/楼层/lodMaterial
+			if (!AddBuilding(building)) delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
+		}
 	}
 
-	// 园区内部建筑：InitZones()阶段buildingFactory还没注册mod，不能实例化Building，所以
-	// 每个Zone当时只是把mod实例本身收着(zone->GetMod())——这里scanners已经按类型建好了，
-	// 直接读zone->GetMod()->internalBuildings(mod自己的spec列表，不需要Zone另外拷贝一份)
-	// 逐个实例化，用zone->GetInternalRoads()(InitZones()阶段已经建好的Road*列表)解析
-	// spec.roadIndices，Building挂靠的mod从scanners按spec.type查(找不到说明这个类型没有
-	// 注册成功，跳过)。
-	for (Zone* zone : zones) {
+	// 权重登记：不再需要任何mod实例，直接查BuildingFactory注册的static GetPower(area)，按
+	// lot->GetArea()索引，登记进lot->AddCandidate(...)供下面FillRemainder使用。
+	for (auto& id : buildingFactory.GetRegisteredIds()) {
+		for (Lot* lot : GetLots()) {
+			float weight = buildingFactory.GetPower(id, lot->GetArea());
+			if (weight > 0.f) lot->AddCandidate(id, weight);
+		}
+	}
+
+	// 园区内部建筑：每个spec单独new一个独占mod实例。
+	for (auto& [name, zone] : zones) {
 		if (!zone) continue;
 		const vector<ZoneInternalBuildingSpec>& specs = zone->GetMod()->internalBuildings;
 		const vector<Road*>& zoneInternalRoads = zone->GetInternalRoads();
 		for (const ZoneInternalBuildingSpec& spec : specs) {
-			auto it = scanners.find(spec.type);
-			if (it == scanners.end()) continue;
-			Building* building = PlaceZoneInternalBuilding(zone, spec, zoneInternalRoads, it->second);
-			zone->AddInternalBuilding(building);
-			buildings.push_back(building);
+			BuildingMod* mod = buildingFactory.CreateBuilding(spec.type);
+			if (!mod) continue;
+			Building* building = PlaceZoneInternalBuilding(zone, spec, zoneInternalRoads, mod);
+			building->Layout(spec.direction); // 用spec自己声明的朝向；
+				// PlaceZoneInternalBuilding内部已经SetPosition/SetBoundaryRoad完
+			if (AddBuilding(building)) {
+				zone->AddInternalBuilding(building);
+			} else {
+				delete building; // ~Building()里factory->DestroyBuilding(mod)会跟着跑
+			}
 		}
 	}
 
+	// FillRemainder：randomAcreage/acreageMinMax直接转发BuildingFactory的static查询，不需要
+	// scanners。真正产出一个结果才new一个独占mod实例。
 	for (Lot* lot : GetLots()) {
-		auto randomAcreage = [&scanners](const string& type) -> float {
-			auto it = scanners.find(type);
-			return it != scanners.end() ? it->second->RandomAcreage() : 0.f;
+		auto randomAcreage = [this](const string& type) -> float {
+			return buildingFactory.RandomAcreage(type);
 			};
-		auto acreageMinMax = [&scanners](const string& type) -> pair<float, float> {
-			auto it = scanners.find(type);
-			if (it == scanners.end()) return { 0.f, 0.f };
-			return { it->second->GetAcreageMin(), it->second->GetAcreageMax() };
+		auto acreageMinMax = [this](const string& type) -> pair<float, float> {
+			return { buildingFactory.GetAcreageMin(type), buildingFactory.GetAcreageMax(type) };
 			};
 
 		size_t linksBefore = lot->GetPathRoadLinks().size();
@@ -481,9 +483,9 @@ void Map::InitBuildings() {
 		}
 
 		for (auto& result : results) {
-			auto it = scanners.find(result.type);
-			if (it == scanners.end()) continue;
-			Building* building = new Building(it->second);
+			BuildingMod* mod = buildingFactory.CreateBuilding(result.type);
+			if (!mod) continue;
+			Building* building = new Building(&buildingFactory, mod);
 			building->SetPosition(result.footprint.GetPosX(), result.footprint.GetPosY(),
 				result.footprint.GetSizeX(), result.footprint.GetSizeY());
 			// Building::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
@@ -491,23 +493,106 @@ void Map::InitBuildings() {
 			for (auto& [dir, road] : result.boundaryRoads) {
 				building->SetBoundaryRoad(dir, road);
 			}
-			buildings.push_back(building);
+			building->Layout(-1); // 权重CDF/FillRemainder落地，没有direction概念，传-1
+			if (!AddBuilding(building)) delete building;
 		}
 
 		lot->ClearCandidates();
 	}
 
-	for (auto& [id, scanner] : scanners) {
-		buildingFactory.DestroyBuilding(scanner);
-	}
+	// 不再需要"scanners"表和函数末尾的统一销毁——每个mod实例的生命周期现在完全绑定它独占的
+	// Building，跟着~Building()一起销毁。
 }
 
-const vector<Zone*>& Map::GetZones() const {
+const unordered_map<string, Zone*>& Map::GetZones() const {
 	return zones;
 }
 
-const vector<Building*>& Map::GetBuildings() const {
+const unordered_map<string, Building*>& Map::GetBuildings() const {
 	return buildings;
+}
+
+bool Map::AddZone(Zone* zone) {
+	if (!zone) return false;
+	if (zones.find(zone->GetName()) != zones.end()) {
+		debugf("Warning: Duplicate zone name \"%s\", rejected.\n", zone->GetName().data());
+		return false;
+	}
+	zones[zone->GetName()] = zone;
+	return true;
+}
+
+bool Map::AddBuilding(Building* building) {
+	if (!building) return false;
+	if (buildings.find(building->GetName()) != buildings.end()) {
+		debugf("Warning: Duplicate building name \"%s\", rejected.\n", building->GetName().data());
+		return false;
+	}
+	buildings[building->GetName()] = building;
+	return true;
+}
+
+Zone* Map::GetZone(const string& name) const {
+	auto it = zones.find(name);
+	return it != zones.end() ? it->second : nullptr;
+}
+
+Building* Map::GetBuilding(const string& name) const {
+	auto it = buildings.find(name);
+	return it != buildings.end() ? it->second : nullptr;
+}
+
+Zone* Map::LocateZone(const string& address) const {
+	istringstream iss(address);
+	string road;
+	int index;
+	string zoneName;
+	if (!(iss >> road >> index >> zoneName)) return nullptr;
+	Lot* lot = LocateLot(road, index);
+	if (!lot) return nullptr;
+	for (auto& [name, zone] : zones) {
+		if (zone && zone->GetParentLot() == lot && name == zoneName) return zone;
+	}
+	return nullptr;
+}
+
+Building* Map::LocateBuilding(const string& address) const {
+	istringstream iss(address);
+	string road;
+	int index;
+	if (!(iss >> road >> index)) return nullptr;
+	vector<string> rest;
+	string token;
+	while (iss >> token) rest.push_back(token);
+	if (rest.empty()) return nullptr;
+	Lot* lot = LocateLot(road, index);
+	if (!lot) return nullptr;
+
+	if (rest.size() == 1) {
+		// "<road> <index> <buildingName>"：直接落在这个lot上、没有parentZone的building
+		const string& buildingName = rest[0];
+		for (auto& [name, building] : buildings) {
+			if (building && building->GetParentLot() == lot && !building->GetParentZone()
+				&& name == buildingName) {
+				return building;
+			}
+		}
+		return nullptr;
+	}
+	// "<road> <index> <zoneName> <buildingName>"：先定位zone，再在这个zone里找building
+	Zone* zone = nullptr;
+	for (auto& [name, z] : zones) {
+		if (z && z->GetParentLot() == lot && name == rest[0]) {
+			zone = z;
+			break;
+		}
+	}
+	if (!zone) return nullptr;
+	const string& buildingName = rest[1];
+	for (Building* building : zone->GetInternalBuildings()) {
+		if (building && building->GetName() == buildingName) return building;
+	}
+	return nullptr;
 }
 
 vector<Road*> Map::GetPathRoads() const {
@@ -1093,7 +1178,7 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 Building* Map::PlaceZoneInternalBuilding(Zone* zone, const ZoneInternalBuildingSpec& spec,
 	const vector<Road*>& builtInternalRoads, BuildingMod* mod) {
 
-	Building* building = new Building(mod);
+	Building* building = new Building(&buildingFactory, mod);
 	auto [wx, wy] = ZoneLocalToWorld(zone, spec.x, spec.y);
 	building->SetPosition(wx, wy, spec.sizeX, spec.sizeY);
 	building->SetParentZone(zone);

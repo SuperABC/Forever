@@ -4,6 +4,8 @@
 
 #pragma comment(lib, "Dependence.lib")
 
+int YuanshenBuilding::count = 0;
+
 extern "C" __declspec(dllexport) void* GetModBuildings() {
 	static std::vector<std::string> mods = { "yuanshen" };
 	return (void*)&mods;
@@ -12,7 +14,9 @@ extern "C" __declspec(dllexport) void* GetModBuildings() {
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
 	factory->RegisterBuilding(YuanshenBuilding::GetId(),
 		[]() -> BuildingMod* { return new YuanshenBuilding(); },
-		[](BuildingMod* building) { delete building; });
+		[](BuildingMod* building) { delete building; },
+		&YuanshenBuilding::RandomAcreage, &YuanshenBuilding::GetAcreageMin,
+		&YuanshenBuilding::GetAcreageMax, &YuanshenBuilding::GetPower, &YuanshenBuilding::Assign);
 }
 
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {

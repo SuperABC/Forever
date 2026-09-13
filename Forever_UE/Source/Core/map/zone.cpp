@@ -41,6 +41,10 @@ float Zone::GetRotation() const {
 	return parentLot ? parentLot->GetRotation() : 0.f;
 }
 
+void Zone::Layout(int direction) {
+	mod->Layout(direction, *this, GetBoundaryRoads());
+}
+
 Lot* Zone::GetParentLot() const {
 	return parentLot;
 }

@@ -1,14 +1,9 @@
 #include "Framework/ForeverZoneFrameworkComponent.h"
 
 #include "Components/InstancedStaticMeshComponent.h"
-#include "ProceduralMeshComponent.h"
-#include "Materials/MaterialInstanceDynamic.h"
-#include "Materials/MaterialInterface.h"
-#include "UObject/ConstructorHelpers.h"
 
 #include "map/map.h"
 #include "map/zone.h"
-#include "map/building.h"
 #include "map/geometry.h"
 
 #define ZONE_WORLD_SCALE 1000.f
@@ -16,70 +11,10 @@
 // 高度数据，围墙实例统一贴地摆在这个高度，避开和地形网格共面z-fighting。
 #define ZONE_HEIGHT_EPSILON 10.f
 
-// 园区内部建筑的扁box高度，和ForeverBuildingFrameworkComponent.cpp的
-// BUILDING_HEIGHT_EPSILON/BUILDING_BOX_HEIGHT用一样的数值——同样是"building"，只是贴的材质
-// 不同(这里贴DefaultRoad，顶层Building贴Pure)，高度上不需要刻意区分层级。
-#define ZONE_INTERNAL_BUILDING_HEIGHT_EPSILON 10.f
-#define ZONE_INTERNAL_BUILDING_BOX_HEIGHT 120.f
-
 using namespace std;
-
-namespace {
-	void ZoneAppendQuadDoubleSided(TArray<FVector>& vertices, TArray<int32>& triangles,
-		const FVector& v00, const FVector& v10, const FVector& v11, const FVector& v01) {
-		int32 base = vertices.Num();
-		vertices.Add(v00); vertices.Add(v10); vertices.Add(v11); vertices.Add(v01);
-		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 1);
-		triangles.Add(base); triangles.Add(base + 3); triangles.Add(base + 2);
-		triangles.Add(base); triangles.Add(base + 1); triangles.Add(base + 2);
-		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 3);
-	}
-
-	// 手法照抄ForeverBuildingFrameworkComponent.cpp的BuildingAppendFlatBox(双面四边形拼六个
-	// 面+按rotation旋转)，独立复制一份而不是共享调用——两边各自是匿名namespace私有实现，且
-	// 这里用的是园区内部建筑专属的高度常量。
-	void ZoneAppendFlatBox(TArray<FVector>& vertices, TArray<int32>& triangles, const Quad& quad, float rotation) {
-		float cx = quad.GetPosX() * ZONE_WORLD_SCALE;
-		float cy = quad.GetPosY() * ZONE_WORLD_SCALE;
-		float hx = quad.GetSizeX() * 0.5f * ZONE_WORLD_SCALE;
-		float hy = quad.GetSizeY() * 0.5f * ZONE_WORLD_SCALE;
-		float zBottom = ZONE_INTERNAL_BUILDING_HEIGHT_EPSILON;
-		float zTop = ZONE_INTERNAL_BUILDING_HEIGHT_EPSILON + ZONE_INTERNAL_BUILDING_BOX_HEIGHT;
-		float c = FMath::Cos(rotation);
-		float s = FMath::Sin(rotation);
-
-		auto RotatedCorner = [&](float relX, float relY, float z) {
-			return FVector(cx + relX * c - relY * s, cy + relX * s + relY * c, z);
-			};
-
-		FVector v000 = RotatedCorner(-hx, -hy, zBottom);
-		FVector v100 = RotatedCorner(hx, -hy, zBottom);
-		FVector v110 = RotatedCorner(hx, hy, zBottom);
-		FVector v010 = RotatedCorner(-hx, hy, zBottom);
-		FVector v001 = RotatedCorner(-hx, -hy, zTop);
-		FVector v101 = RotatedCorner(hx, -hy, zTop);
-		FVector v111 = RotatedCorner(hx, hy, zTop);
-		FVector v011 = RotatedCorner(-hx, hy, zTop);
-
-		ZoneAppendQuadDoubleSided(vertices, triangles, v001, v101, v111, v011); // 顶
-		ZoneAppendQuadDoubleSided(vertices, triangles, v010, v110, v100, v000); // 底
-		ZoneAppendQuadDoubleSided(vertices, triangles, v000, v100, v101, v001);
-		ZoneAppendQuadDoubleSided(vertices, triangles, v100, v110, v111, v101);
-		ZoneAppendQuadDoubleSided(vertices, triangles, v110, v010, v011, v111);
-		ZoneAppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011);
-	}
-}
 
 UForeverZoneFrameworkComponent::UForeverZoneFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = false;
-
-	// 园区内部建筑贴的材质——Zone自己的扁box可视化删掉之后腾出来的DefaultRoadnet，不需要
-	// 再单独找一个新资产。
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> internalBuildingFinder(
-		TEXT("/Game/Asset/Materials/DefaultRoadnet.DefaultRoadnet"));
-	if (internalBuildingFinder.Succeeded()) {
-		internalBuildingBaseMaterial = internalBuildingFinder.Object;
-	}
 }
 
 void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
@@ -89,32 +24,13 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 	AActor* owner = GetOwner();
 	if (!owner) return;
 
-	if (internalBuildingBaseMaterial) {
-		internalBuildingMaterial = UMaterialInstanceDynamic::Create(internalBuildingBaseMaterial, this);
-	}
-
-	internalBuildingMesh = NewObject<UProceduralMeshComponent>(owner, TEXT("ZoneInternalBuildings"));
-	internalBuildingMesh->SetupAttachment(owner->GetRootComponent());
-	internalBuildingMesh->RegisterComponent();
-	owner->AddInstanceComponent(internalBuildingMesh);
-
-	TArray<FVector> vertices;
-	TArray<int32> triangles;
-	for (Zone* zone : map->GetZones()) {
+	// 园区内部建筑改由ForeverBuildingFrameworkComponent统一渲染(map->GetBuildings()天然包含
+	// 它们，和顶层building走同一套楼体footprint/楼层/LOD逻辑)，这里只处理围墙。
+	for (auto& [name, zone] : map->GetZones()) {
 		if (!zone) continue;
 		for (const ZoneWallSpec& wall : zone->GetWalls()) {
 			BuildWallSegment(wall, *zone);
 		}
-		for (Building* building : zone->GetInternalBuildings()) {
-			if (!building) continue;
-			ZoneAppendFlatBox(vertices, triangles, *building, building->GetRotation());
-		}
-	}
-
-	if (triangles.Num() > 0) {
-		internalBuildingMesh->CreateMeshSection(0, vertices, triangles,
-			TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), true);
-		if (internalBuildingMaterial) internalBuildingMesh->SetMaterial(0, internalBuildingMaterial);
 	}
 }
 

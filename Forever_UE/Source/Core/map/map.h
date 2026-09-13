@@ -99,20 +99,36 @@ public:
 	void ConnectPathRoad(const PathRoadLink& link);
 
 	// 用ModLoader发现/注册config.json配置的zone mod dll。Zone这次只有"显式指定矩形"一种
-	// 生成方式（关键设计决策2）：按注册顺序对每个类型建一个"扫描用"ZoneMod实例，每次调用前
-	// 重新按Lot::GetFreeAcreage()降序排序GetLots()，调它的Distribute(lots)，读出
-	// explicitPlacements逐条调用对应lot->RequestPlacement(...)，成功的建一个新的"落地用"
-	// 实例存进zones。假定InitRoadnet()已经跑完(要用到GetLots())。
+	// 生成方式：按注册顺序对每个类型调一次static ZoneMod::Assign(排好序的GetLots(), emit,
+	// context)，一次性扫完全部lot拿到这个类型想要的全部LotPlacementRequest(不存在任何
+	// ZoneMod实例)，逐条调用lot->RequestPlacement(...)，真正成功了才CreateZone一次、
+	// Layout(direction)、存进zones。假定InitRoadnet()已经跑完(要用到GetLots())。
 	void InitZones();
 
-	// 用ModLoader发现/注册config.json配置的building mod dll。结构和InitZones类似：先扫描
-	// 所有building mod类型的explicitPlacements，再对每个lot调用lot->FillRemainder(...)
-	// （用lot->GetCandidates()当权重表）做权重CDF随机填充。假定InitZones()已经跑完，此时
+	// 用ModLoader发现/注册config.json配置的building mod dll。结构和InitZones类似：先对每个
+	// building mod类型调一次static Assign扫描全部lot的显式占位请求，再用static GetPower(area)
+	// 给每个lot登记权重，供lot->FillRemainder(...)做权重CDF随机填充；真正落地(显式占位/
+	// FillRemainder结果/园区内部建筑)才CreateBuilding一次。假定InitZones()已经跑完，此时
 	// 每个lot的freeLots已经不包含被Zone占用的区域。
 	void InitBuildings();
 
-	const std::vector<Zone*>& GetZones() const;
-	const std::vector<Building*>& GetBuildings() const;
+	const std::unordered_map<std::string, Zone*>& GetZones() const;
+	const std::unordered_map<std::string, Building*>& GetBuildings() const;
+
+	// 按Zone/Building自己的唯一name做扁平查找(唯一性由mod自己的GetName()/构造函数计数器
+	// 保证，Map只在AddZone/AddBuilding发现重名时拒绝加入+debugf警告作为兜底，不主动生成
+	// 名字)。找不到返回nullptr。
+	Zone* GetZone(const std::string& name) const;
+	Building* GetBuilding(const std::string& name) const;
+
+	// 分层地址查找，"Block"概念在这个新工程里等价于顶层Lot：地址格式
+	// "<road> <index> <zoneName>"定位直接落在某个Lot上的Zone；
+	// "<road> <index> <buildingName>"定位直接落在某个Lot上、没有parentZone的Building；
+	// "<road> <index> <zoneName> <buildingName>"定位某个Zone内部的Building。(road,index)
+	// 直接复用已有的LocateLot(road,index)反查Lot，角地块的多个(road,index)地址都指向同一个
+	// Lot，用哪一个都能查到同样的结果。找不到返回nullptr。
+	Zone* LocateZone(const std::string& address) const;
+	Building* LocateBuilding(const std::string& address) const;
 
 	// 汇总GetLots()里每个顶层Lot自己的GetPathRoads()——小路是RequestPlacement/FillRemainder
 	// 裁剪某个顶层Lot的空闲空间时的副产品，归属和生命周期都记在那个顶层Lot自己身上（构造它的
@@ -155,8 +171,15 @@ private:
 
 	ZoneFactory zoneFactory;
 	BuildingFactory buildingFactory;
-	std::vector<Zone*> zones;
-	std::vector<Building*> buildings;
+	// 老工程Map::zones/buildings同款存储方式(unordered_map，不是vector)——寻址用的
+	// GetZone(name)/GetBuilding(name)直接find即可，不需要另外挂一张单独的"名字->指针"表。
+	std::unordered_map<std::string, Zone*> zones;
+	std::unordered_map<std::string, Building*> buildings;
+
+	// 按name插入，重名返回false并debugf警告、不插入(不生成消歧名字——唯一性是mod自己的
+	// GetName()/构造函数计数器的责任，这里只是兜底)；成功插入返回true。
+	bool AddZone(Zone* zone);
+	bool AddBuilding(Building* building);
 
 	// 车行/行人导航图：key是锚点Node::GetId()，value是(邻接锚点id, 边)列表。车行边只按实际
 	// 通行方向单向插入；行人边(横道/转角/贯通线)双向插入，可能出现同一个Connection*被两条
@@ -259,10 +282,11 @@ private:
 	// building->SetParentLot(zone->GetParentLot(), spec.relativeRotation)——parentLot直接
 	// 复用zone自己的parentLot(GetRotation()转发基准天然和zone一致)，relativeRotation叠加一个
 	// 偏移。再用builtInternalRoads(按spec.roadIndices的FACE_DIRECTION->下标)解析出Road*逐个
-	// SetBoundaryRoad。mod是调用方(Map::InitBuildings())从自己的scanners表按spec.type查到的、
-	// 已经注册好的BuildingMod实例——Building不持有它的生命周期(和普通顶层Building同一个模式，
-	// 见building.h)。返回的Building*由调用方登记进zone->AddInternalBuilding和Map::buildings
-	// (所有权在后者，和其余顶层Building一致)。
+	// SetBoundaryRoad。mod是调用方(Map::InitBuildings())为这个spec单独CreateBuilding出来的、
+	// 独占的BuildingMod实例——Building析构时会DestroyBuilding(mod)(和普通顶层Building同一个
+	// 模式，见building.h)。返回的Building*由调用方登记进zone->AddInternalBuilding和
+	// Map::buildings(所有权在后者，和其余顶层Building一致)。不在这里调用Layout()——调用方
+	// (Map::InitBuildings())在拿到返回的Building*之后统一调用一次building->Layout(spec.direction)。
 	Building* PlaceZoneInternalBuilding(Zone* zone, const ZoneInternalBuildingSpec& spec,
 		const std::vector<Road*>& builtInternalRoads, BuildingMod* mod);
 };

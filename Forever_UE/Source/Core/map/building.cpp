@@ -2,11 +2,18 @@
 
 #include "common/error.h"
 
+#include <algorithm>
+
 using namespace std;
 
-Building::Building(BuildingMod* mod) :
+namespace {
+	constexpr float kDefaultFloorHeight = 0.4f; // 老工程Hotel同款兜底值，长度对不上时用它补齐
+}
+
+Building::Building(BuildingFactory* factory, BuildingMod* mod) :
 	Quad(),
 	mod(mod),
+	factory(factory),
 	type(),
 	name() {
 	if (!mod) {
@@ -18,8 +25,7 @@ Building::Building(BuildingMod* mod) :
 }
 
 Building::~Building() {
-	// 不在这里DestroyBuilding(mod)——这个mod实例按类型共享，可能同时被好几个Building指着，
-	// 生命周期由Map::InitBuildings()自己的scanners表统一持有/销毁，见building.h注释。
+	factory->DestroyBuilding(mod);
 }
 
 string Building::GetType() const {
@@ -32,6 +38,57 @@ string Building::GetName() const {
 
 BuildingMod* Building::GetMod() const {
 	return mod;
+}
+
+void Building::Layout(int direction) {
+	mod->Layout(direction, *this, GetBoundaryRoads());
+
+	const BuildingFootprintSpec& fp = mod->footprint;
+	bodyOffsetX = (fp.centerRatioX - 0.5f) * GetSizeX();
+	bodyOffsetY = (fp.centerRatioY - 0.5f) * GetSizeY();
+	bodySizeX = fp.sizeRatioX * GetSizeX();
+	bodySizeY = fp.sizeRatioY * GetSizeY();
+
+	basements = std::max(0, mod->basements);
+	layers = std::max(1, mod->layers);
+	int expected = basements + layers;
+	floorHeights = mod->floorHeights;
+	if (static_cast<int>(floorHeights.size()) != expected) {
+		floorHeights.assign(expected, kDefaultFloorHeight);
+	}
+	lodMaterialPath = mod->lodMaterial;
+}
+
+float Building::GetBodyOffsetX() const {
+	return bodyOffsetX;
+}
+
+float Building::GetBodyOffsetY() const {
+	return bodyOffsetY;
+}
+
+float Building::GetBodySizeX() const {
+	return bodySizeX;
+}
+
+float Building::GetBodySizeY() const {
+	return bodySizeY;
+}
+
+int Building::GetBasementCount() const {
+	return basements;
+}
+
+int Building::GetLayerCount() const {
+	return layers;
+}
+
+const vector<float>& Building::GetFloorHeights() const {
+	return floorHeights;
+}
+
+const string& Building::GetLodMaterialPath() const {
+	return lodMaterialPath;
 }
 
 float Building::GetRotation() const {

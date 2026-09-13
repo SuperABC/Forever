@@ -81,11 +81,6 @@ private:
 	// 按mesh资产路径复用/新建ISM组件(同一路径的mesh只创建一个ISM，不同Road共用)。
 	UInstancedStaticMeshComponent* GetOrCreateRoadISM(const std::string& meshPath);
 
-	// [临时排查用，定位到问题后删除] 对每条小路(map->GetPathRoads())，找出
-	// GetNavAnchorNodes()里落在它Start/End附近的所有锚点，打印坐标——用来确认小路自己的
-	// 车行/人行锚点到底有没有偏离小路中轴线，定位"车道/人行道都堆在中轴线上"这个问题。
-	void LogPathRoadNavDebug();
-
 	Map* map = nullptr;
 
 	UPROPERTY()

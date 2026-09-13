@@ -15,13 +15,13 @@ class Building;
 // 布局（关键设计决策1），所以只是一个footprint+类型的占位对象，详见map.md"InitZones"一节。
 //
 // 仿照老工程：Zone从构造到析构只持有**一个**ZoneMod实例，不存在"扫描用/落地用两个不同实例"
-// 这种分裂（第十六轮迁移，用户明确要求改成这样）——Map::InitZones()对每个(mod类型,lot)组合
-// 单独`zoneFactory.CreateZone(id)`一个新实例，直接对这一个lot调用`mod->Distribute({lot})`，
-// 成功的话这个mod实例就直接交给新建的Zone持有，失败就地销毁，不会出现"一个mod实例的
-// Distribute()结果被分给好几个Zone"这种共享所有权的情况，析构时`~Zone()`可以放心
-// `factory->DestroyZone(mod)`。围墙/大门(`ZoneWallSpec`/`ZoneGateSpec`)是mod自己的数据、
-// 不需要Core转换，`GetWalls()`/`GetGates()`直接转发`mod->walls`/`mod->gates`，不再单独
-// 拷贝一份到Zone自己身上。
+// 这种分裂——Map::InitZones()先对这个类型调一次static`ZoneMod::Assign(lots, emit, context)`
+// 一次性扫完全部lot拿到想要的显式占位请求(不需要任何实例)，只有`lot->RequestPlacement(...)`
+// 也真的成功了，才`zoneFactory.CreateZone(id)`一个新实例、调用`zone->Layout(direction)`
+// 填好围墙等数据，这个mod实例就直接交给新建的Zone持有，不会出现"一个mod实例的产出被分给好几个
+// Zone"这种共享所有权的情况，析构时`~Zone()`可以放心`factory->DestroyZone(mod)`。围墙/大门
+// (`ZoneWallSpec`/`ZoneGateSpec`)是mod自己的数据、不需要Core转换，`GetWalls()`/`GetGates()`
+// 直接转发`mod->walls`/`mod->gates`，不再单独拷贝一份到Zone自己身上。
 //
 // 不自己存一份rotation——落地的Zone来自某个Lot的freeLots切出来的一块，freeLots全部继承同一个
 // 顶层Lot的rotation(SplitWithPath产出的每一段都传了同一个rotation，见geometry.cpp)，所以
@@ -32,8 +32,8 @@ class Zone : public Quad {
 public:
 	Zone() = delete;
 
-	// @factory: zone工厂(用于~Zone()里DestroyZone); @mod: 这个Zone独占持有的、已经跑完
-	// Distribute()的mod实例(调用方保证不会再有别的Zone共用同一个mod指针)。
+	// @factory: zone工厂(用于~Zone()里DestroyZone); @mod: 这个Zone独占持有的mod实例(调用方
+	// 保证不会再有别的Zone共用同一个mod指针，Layout()会在构造之后单独调用)。
 	Zone(ZoneFactory* factory, ZoneMod* mod);
 	~Zone();
 
@@ -46,6 +46,12 @@ public:
 
 	// 转发parentLot->GetRotation()；parentLot为空时返回0.f。
 	float GetRotation() const;
+
+	// 调用方在SetPosition/SetBoundaryRoad都设好之后调用一次：转发mod->Layout(direction, *this,
+	// GetBoundaryRoads())——Zone这一层没有需要额外解析缓存的数据(GetWalls()/GetGates()本来就
+	// 直接转发mod->walls/mod->gates)，这个方法纯粹是为了和Building::Layout()同样的调用形态，
+	// 不需要Map::InitZones()自己摸mod指针。
+	void Layout(int direction);
 
 	Lot* GetParentLot() const;
 	void SetParentLot(Lot* lot);

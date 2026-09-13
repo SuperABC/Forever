@@ -2,8 +2,9 @@
 
 using namespace std;
 
-void ZoneFactory::RegisterZone(const string& id, CreateFunc creator, DestroyFunc deleter) {
-	registries[id] = { creator, deleter };
+void ZoneFactory::RegisterZone(const string& id, CreateFunc creator, DestroyFunc deleter,
+	AssignFunc assign) {
+	registries[id] = { creator, deleter, assign };
 }
 
 void ZoneFactory::CleanTemp() {
@@ -53,4 +54,12 @@ vector<string> ZoneFactory::GetRegisteredIds() const {
 
 void ZoneFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
+}
+
+void ZoneFactory::Assign(const string& id, const vector<Lot*>& lots,
+	PlacementEmitFunc emit, void* context) const {
+	auto it = registries.find(id);
+	if (it != registries.end()) {
+		it->second.assign(lots, emit, context);
+	}
 }

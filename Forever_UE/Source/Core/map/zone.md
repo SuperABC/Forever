@@ -14,16 +14,20 @@
 
 ## 关键设计
 
-- **`Zone`从构造到析构只持有一个`ZoneMod`实例，仿照老工程的做法（第十六轮迁移，取代了
-  早前"扫描用实例先跑一遍全部lot、每条成功结果再另开一个landing实例"的两段式设计）**：
-  `Map::InitZones()`对每个(mod类型,lot)组合单独`zoneFactory.CreateZone(id)`一个新实例，
-  直接对这一个lot调用`mod->Distribute({lot})`——成功就把这个mod实例原样交给新建的`Zone`
-  持有（`Zone`从此独占它，不会再有别的`Zone`共用同一个指针），失败就地
-  `zoneFactory.DestroyZone(mod)`。这样mod实例的所有数据（`walls`/`gates`/
-  `internalBuildings`等）从始至终只属于一个`Zone`，不需要再拷贝一份到`Zone`自己身上——
-  早前的两段式设计里，`walls`/`gates`等字段是从"扫描实例"拷到"落地实例"的，如果一次
-  `Distribute()`产出了不止一个`explicitPlacements`，所有落地的`Zone`会读到同一份"最后
-  一次写入"的配置，是当时没有暴露出来的潜在bug，这次的单实例设计顺带修掉了它。
+- **`Zone`从构造到析构只持有一个`ZoneMod`实例，仿照老工程的做法**：`ZoneMod::Distribute()`/
+  `explicitPlacements`已经改成不需要任何实例的static方法`ZoneMod::Assign(lots, emit,
+  context)`——`Map::InitZones()`先对这个类型调一次`zoneFactory.Assign(id, 排好序的
+  GetLots(), &EmitPlacementRequest, &requests)`，一次性扫完全地图的lot拿到这个类型想要的
+  全部`LotPlacementRequest`（不存在任何`ZoneMod`实例），只有对应的`lot->RequestPlacement(
+  ...)`也真的成功了，才`zoneFactory.CreateZone(id)`创建**唯一一次**、真正要被长期持有的
+  实例，直接交给新建的`Zone`持有（`Zone`从此独占它，不会再有别的`Zone`共用同一个指针），
+  析构时`~Zone()`可以放心`factory->DestroyZone(mod)`——不会再出现"构造了一个mod实例结果
+  这块地根本不要、白白析构"的情况，因为"要不要这块lot"这个问题完全不需要构造实例来回答。
+  `walls`/`gates`/`internalBuildings`等数据的填充时机也相应后移：不再是`Distribute()`里
+  "边声明显式占位边算围墙"，而是拆成`Assign`（只决定"要不要、往哪摆"）+`Layout(int
+  direction, const Quad& quad, const unordered_map<int,Road*>& boundaryRoads)`（只管
+  "摆下去之后长什么样"，在`Zone`真正构造出来、`SetPosition`/`SetBoundaryRoad`都设好之后
+  调用一次）两步，`direction`是`Assign`选中的真实方向。
 - **`parentLot`只是一个方便查询的反向引用**，`Zone`不负责这个指针的生命周期（`Lot`本身也
   不知道有哪些`Zone`落在自己身上——这次没有像老工程`Block::AddZone`那样维护双向映射，单向
   引用已经够用，`Map`直接拿着`vector<Zone*>`用）。
@@ -56,6 +60,17 @@
   `Map::buildings`，和其余顶层`Building`一样由`~Map()`统一释放）。围墙/大门的局部坐标语义
   （参考边+margin+depth，原点在Zone矩形中心）不需要额外坐标转换字段——渲染时Forever层直接拿
   `Zone`自己的`GetPosX/PosY/SizeX/SizeY/GetRotation()`+这份数据现算世界坐标。
+- **`Layout(int direction)`（Core编译的转发方法）**：`mod->Layout(direction, *this,
+  GetBoundaryRoads())`——`Zone`这一层没有需要额外解析缓存的数据(`GetWalls()`/`GetGates()`
+  本来就直接转发`mod->walls`/`mod->gates`)，这个方法纯粹是让`Map::InitZones()`不用自己摸
+  `mod`指针，和`Building::Layout()`保持同样的调用形态（`Building`那边因为要解析楼体/楼层/
+  LOD数据，`Layout()`内部除了转发还要做更多事，见下）。
+- **寻址唯一性**：`GetName()`直接转发`mod->GetName()`，唯一性由mod自己在**构造函数**里维护
+  static计数器保证（老工程`ResidentialZone::count`同款做法），`Zone`本身不做任何消歧——
+  `Map::AddZone`发现重名只是拒绝加入+`debugf`警告，作为mod实现有误时的兜底，不是保证唯一性
+  的主要手段。`Map::GetZone(name)`按这个唯一name做扁平查找；`Map::LocateZone(address)`则是
+  按"`<road> <index> <zoneName>`"分层地址查找（`road`/`index`对应这个Zone所在顶层Lot的
+  `(road,index)`地址，见`Roadnet::LocateLot`），两套查找方式详见`map.md`"寻址"一节。
 - **`GetMod()`暴露这个Zone持有的mod实例，供`Map::InitBuildings()`直接读
   `zone->GetMod()->internalBuildings`实例化Building**——`Map::InitZones()`阶段
   `buildingFactory`还没注册mod，不能在那时候`new Building(&buildingFactory, spec.type)`
@@ -87,26 +102,53 @@
 
 # building.h / building.cpp
 
-和`Zone`结构基本一样（同样继承`Quad`），但**第十六轮迁移后`Building`和`Zone`在"怎么持有
-mod"这件事上分道扬镳了**：`Zone`的mod是一个Zone独占一份（见上），`Building`的mod是**按类型
-共享**的——同一个类型可能同时走显式占位、`FillRemainder`、Zone内部建筑三条路径，产出好几个
-`Building`，全部指向`Map::InitBuildings()`自己的`scanners`表里同一个实例（`unordered_map<
-string, BuildingMod*>`，按类型id缓存，活过整个`InitBuildings()`）。`Building`的构造函数
-从`Building(BuildingFactory*, const string& buildingId)`（内部自己`CreateBuilding`一个新
-实例）简化成`Building(BuildingMod* mod)`（直接接一个外部已经存在、已经跑过`Distribute()`的
-实例）——`Building`不再持有`BuildingFactory*`，`~Building()`也不再调用`DestroyBuilding`，
-这个mod实例的生命周期完全由`scanners`表管理，`InitBuildings()`函数末尾统一
-`buildingFactory.DestroyBuilding(scanner)`一次，是唯一的销毁点（如果`Building`自己也销毁，
-同类型的第二个`Building`析构时会对同一个指针重复销毁）。这和`Zone`"一个mod从一开始就只服务
-一个即将落地的对象、可以放心独占销毁"的关系不是一回事，不能照抄。落地那一刻要调用
-`mod->RandomAcreage()`采样一次面积（`RandomAcreage()`每次调用都是新的随机数，只应该在落地
-那一刻调一次，不要在别处重复调），面积最终体现在`SetVertices`/`SetPosition`定出来的矩形
-尺寸上，不需要单独存一份。`Map::InitBuildings()`落地流程（含显式占位+权重CDF两条路径）见
-`Source/Core/map/map.md`。
+和`Zone`结构基本一样（同样继承`Quad`），**这次会话改回和`Zone`完全相同的独占模型**：
+`Building`从构造到析构只持有**一个**`BuildingMod`实例，`Building(BuildingFactory* factory,
+BuildingMod* mod)`构造，`~Building()`里`factory->DestroyBuilding(mod)`。中间曾经有一轮
+"按类型共享"的设计（同一个类型的`BuildingMod`实例被显式占位/`FillRemainder`/Zone内部建筑
+三条路径产出的好几个`Building`共用，`Building`不持有`factory`、也不在析构时销毁mod），当时
+是为了配合`candidateWeights`/`RandomAcreage()`这类"按类型"的查询而引入的；这次这些查询本身
+改成了不需要任何实例的static方法（见下），共享模型不再必要，改回独占反而让"寻址唯一性计数器
+写在mod构造函数里"这套和`Zone`、和老工程一致的机制能正确工作（共享模型下一个mod实例的构造
+函数只会跑一次，却要服务好几个`Building`，计数器起不到区分作用）。
+
+`BuildingMod`不再有`Distribute()`/`explicitPlacements`/`candidateWeights`：
+- **显式占位**：和`ZoneMod`同样改成static `Assign(lots, emit, context)`，一次调用扫完
+  全地图的lot；`Map::InitBuildings()`的处理流程和`InitZones()`完全同构，见`map.md`。
+- **`RandomAcreage()`/`GetAcreageMin()`/`GetAcreageMax()`（`FillRemainder`采样面积用）、
+  `GetPower(AREA_TYPE)`（按分区类型给lot登记权重，替代`candidateWeights`，老工程叫
+  `GetPowers()`/`BuildingAssigner`）**：全部改成子类必须实现的static方法，通过
+  `BuildingFactory::RegisterBuilding`的额外函数指针参数注册（和`creator`/`deleter`同样的
+  裸函数指针机制——`AssignFunc`内部用`PlacementEmitFunc`回调把结果交回调用方、回调函数体
+  编译在调用方那一侧，不返回/不持有任何容器，避免跨DLL分配器问题，`RandomAcreage`等返回值
+  是纯`float`，同样没有容器所有权问题）。这些查询完全不需要构造`BuildingMod`实例，只有真正
+  落地成功才会`CreateBuilding`一次——`Map::InitBuildings()`不再需要`scanners`表，每个mod
+  实例的生命周期从此完全绑定它独占的`Building`。
+
+**`Layout(int direction)`（Core编译，取代原来的`ResolveModAppearance()`）**：调用方在
+`SetPosition`/`SetBoundaryRoad`都设好之后调用一次，内部先调
+`mod->Layout(direction, *this, GetBoundaryRoads())`（`this`已经是`Quad`、边界路也已经是
+真实数据），再把`mod->footprint`（`BuildingFootprintSpec`，楼体在Building自身`Quad`里的
+位置：两个比例float表示楼体中心、两个比例float表示楼体长宽比例，仿照老工程但不复用`Quad`
+类型本身）/`basements`/`layers`/`floorHeights`/`lodMaterial`解析成`Building`自己的绝对
+（相对自身中心，未旋转局部坐标）数值并缓存——`GetBodyOffsetX/Y()`/`GetBodySizeX/Y()`/
+`GetBasementCount()`/`GetLayerCount()`/`GetFloorHeights()`/`GetLodMaterialPath()`
+这几个getter读的就是这份缓存。`direction`对显式占位(`Assign`产出)落地的`Building`是`Assign`
+选中的真实方向；对权重CDF/`FillRemainder`落地、以及目前的园区内部建筑，`direction`分别传
+-1、`spec.direction`（`ZoneInternalBuildingSpec`新增的字段）。`footprint`/`basements`/
+`layers`/`floorHeights`/`lodMaterial`这几个字段**不能在mod构造函数里设**——构造函数此时还
+不知道任何落地上下文，必须等`Layout()`才有意义，和`ZoneMod`的`walls`/`gates`同理。楼体/
+楼层/LOD渲染见`Source/Forever/Framework/ForeverBuildingFrameworkComponent.md`。
 
 `boundaryRoads`（四周边界Road）和`Zone`同样的字段/语义，`Map::InitBuildings()`在显式占位
 和`FillRemainder`两条路径上都会填（`FillRemainder`产出的`Lot::FillResult`这次也新增了
 `boundaryRoads`字段，见`geometry.md`）。
+
+**寻址唯一性**：和`Zone`同样，`GetName()`直接转发`mod->GetName()`，唯一性由mod自己在构造
+函数里维护static计数器保证，`Map::AddBuilding`发现重名只是拒绝加入+`debugf`警告兜底。
+`Map::GetBuilding(name)`扁平查找；`Map::LocateBuilding(address)`按"`<road> <index>
+<buildingName>`"（直接落在Lot上、没有`parentZone`的Building）或"`<road> <index>
+<zoneName> <buildingName>`"（Zone内部的Building）分层查找，详见`map.md`"寻址"一节。
 
 **`Building`比`Zone`多两个字段，第十五轮迁移新增，专门给Zone内部建筑用**：
 - `Zone* parentZone`：只是纯粹的反向查询登记（"这个building在哪个园区里"），**不参与

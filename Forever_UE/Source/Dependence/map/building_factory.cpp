@@ -2,8 +2,10 @@
 
 using namespace std;
 
-void BuildingFactory::RegisterBuilding(const string& id, CreateFunc creator, DestroyFunc deleter) {
-	registries[id] = { creator, deleter };
+void BuildingFactory::RegisterBuilding(const string& id, CreateFunc creator, DestroyFunc deleter,
+	RandomAcreageFunc randomAcreage, AcreageBoundFunc acreageMin, AcreageBoundFunc acreageMax,
+	PowerFunc power, AssignFunc assign) {
+	registries[id] = { creator, deleter, randomAcreage, acreageMin, acreageMax, power, assign };
 }
 
 void BuildingFactory::CleanTemp() {
@@ -53,4 +55,32 @@ vector<string> BuildingFactory::GetRegisteredIds() const {
 
 void BuildingFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
+}
+
+float BuildingFactory::RandomAcreage(const string& id) const {
+	auto it = registries.find(id);
+	return it != registries.end() ? it->second.randomAcreage() : 0.f;
+}
+
+float BuildingFactory::GetAcreageMin(const string& id) const {
+	auto it = registries.find(id);
+	return it != registries.end() ? it->second.acreageMin() : 0.f;
+}
+
+float BuildingFactory::GetAcreageMax(const string& id) const {
+	auto it = registries.find(id);
+	return it != registries.end() ? it->second.acreageMax() : 0.f;
+}
+
+float BuildingFactory::GetPower(const string& id, AREA_TYPE area) const {
+	auto it = registries.find(id);
+	return it != registries.end() ? it->second.power(area) : 0.f;
+}
+
+void BuildingFactory::Assign(const string& id, const vector<Lot*>& lots,
+	PlacementEmitFunc emit, void* context) const {
+	auto it = registries.find(id);
+	if (it != registries.end()) {
+		it->second.assign(lots, emit, context);
+	}
 }

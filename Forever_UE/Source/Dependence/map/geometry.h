@@ -369,6 +369,12 @@ struct LotPlacementRequest {
 	float depth = 0.f;
 };
 
+// Zone/BuildingMod的Assign()一次性扫描全地图的lot列表、决定要显式占位哪些lot时，通过这个回调把
+// 每条LotPlacementRequest交回调用方——回调函数本身（emit指向的代码）由调用方(Core编译的
+// Map::InitZones()/InitBuildings())提供，mod只是调用它，不持有/不增长/不返回任何容器，跨DLL安全
+// (原因见BuildingFactory/ZoneFactory的AssignFunc注释)。裸函数指针，和creator/deleter同一个机制。
+using PlacementEmitFunc = void(*)(void* context, const LotPlacementRequest& request);
+
 // Lot::SplitWithPath产出的一条小路及其两端各自连到的路+弧长位置，供Core层(Map::ConnectPathRoad)
 // 接导航图用。endRoad1/endRoad2可能为nullptr(小路这一端没有可连的路，见SplitWithPath"关键设计
 // 决策8"——但两端不能同时为空)，此时Map按孤立端点处理，不接到任何已有贯通线上。

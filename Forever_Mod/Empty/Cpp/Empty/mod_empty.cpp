@@ -24,6 +24,9 @@
 
 #pragma comment(lib, "Dependence.lib")
 
+int EmptyZone::count = 0;
+int EmptyBuilding::count = 0;
+
 extern "C" __declspec(dllexport) void* GetModTerrains() {
 	static std::vector<std::string> mods = { "empty" };
 	return (void*)&mods;
@@ -57,7 +60,8 @@ extern "C" __declspec(dllexport) void* GetModZones() {
 extern "C" __declspec(dllexport) void RegisterModZones(ZoneFactory* factory) {
 	factory->RegisterZone(EmptyZone::GetId(),
 		[]() -> ZoneMod* { return new EmptyZone(); },
-		[](ZoneMod* m) { delete m; });
+		[](ZoneMod* m) { delete m; },
+		&EmptyZone::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 	factory->CleanTemp();
@@ -70,7 +74,9 @@ extern "C" __declspec(dllexport) void* GetModBuildings() {
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
 	factory->RegisterBuilding(EmptyBuilding::GetId(),
 		[]() -> BuildingMod* { return new EmptyBuilding(); },
-		[](BuildingMod* m) { delete m; });
+		[](BuildingMod* m) { delete m; },
+		&EmptyBuilding::RandomAcreage, &EmptyBuilding::GetAcreageMin, &EmptyBuilding::GetAcreageMax,
+		&EmptyBuilding::GetPower, &EmptyBuilding::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {
 	factory->CleanTemp();

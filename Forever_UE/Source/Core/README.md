@@ -11,15 +11,16 @@ society/story/traffic`域文件夹本阶段全部搬去了`Source/Dependence`,�
 - `common/loader.h/.cpp`:按concept把`Config`发现的合法mod dll真正`LoadLibrary`并
   注册进具体的`<Concept>Factory`,详见`common/loader.md`。
 - **已迁移的概念本体（`Terrain`/`Roadnet`/`Zone`/`Building`，均在`map/`）都仿照老工程的
-  持有模式：构造时`factory->Create<Concept>(id)`拿一个`<Concept>Mod`实例并持有，新增
-  `GetMod()`把这个实例暴露给外部调用方直接读（不需要另外拷贝一份），各自的业务字段/方法
-  见`map/*.md`**。`Building`是例外：它的mod按类型共享（`Map::InitBuildings()`自己的
-  `scanners`表统一持有/销毁），不在`~Building()`里自己销毁，原因见`map/zone.md`
-  "building.h"一节——`BuildingMod`的`candidateWeights`/`RandomAcreage`机制天然需要按类型
-  共享一个实例，跟`Terrain`/`Roadnet`/`Zone`"一个本体独占一个mod、构造时创建、析构时销毁"
-  的默认模型不是同一种关系，仿照老工程时不能不加区分地照搬同一套写法。其余17个concept
-  还没有Core层的本体类（只有`Source/Dependence`的`<Concept>Mod`/`<Concept>Factory`），
-  等阶段4迁移到对应域时再按这个已验证过的模式补上，不在这之前提前搭骨架。
+  持有模式：构造时`factory->Create<Concept>(id)`拿一个`<Concept>Mod`实例并独占持有，析构时
+  `factory->Destroy<Concept>(mod)`，新增`GetMod()`把这个实例暴露给外部调用方直接读（不需要
+  另外拷贝一份），各自的业务字段/方法见`map/*.md`**。`Building`中间曾经有一轮"mod按类型共享"
+  的例外设计（`candidateWeights`/`RandomAcreage`机制当时天然需要按类型共享一个实例），这次
+  会话把这些查询本身改成了不需要任何实例的static方法（通过`Factory`的额外函数指针参数注册，
+  见`Source/Dependence/README.md`/`map/zone_mod.md`），共享模型不再必要，`Building`改回和
+  `Terrain`/`Roadnet`/`Zone`完全一样的"一个本体独占一个mod、构造时创建、析构时销毁"默认
+  模型，不再是例外。其余17个concept还没有Core层的本体类（只有`Source/Dependence`的
+  `<Concept>Mod`/`<Concept>Factory`），等阶段4迁移到对应域时再按这个已验证过的模式补上，
+  不在这之前提前搭骨架。
 
 ## 实现期修正:`<Concept>Factory`不在这里
 

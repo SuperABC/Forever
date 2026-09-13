@@ -151,8 +151,6 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 	BuildPathRoadMeshes();
 
 	BuildNavigationDebugMesh();
-
-	LogPathRoadNavDebug();
 }
 
 void UForeverRoadnetFrameworkComponent::BuildPathRoadMeshes() {
@@ -541,35 +539,5 @@ void UForeverRoadnetFrameworkComponent::BuildJunctionMeshes() {
 	junctionMesh->CreateMeshSection(0, vertices, triangles,
 		TArray<FVector>(), uvs, TArray<FColor>(), TArray<FProcMeshTangent>(), true);
 	if (junctionMaterial) junctionMesh->SetMaterial(0, junctionMaterial);
-}
-
-void UForeverRoadnetFrameworkComponent::LogPathRoadNavDebug() {
-	if (!map) return;
-
-	// 在GetNavAnchorNodes()(Map持有的全部导航锚点，含小路自己的+它break出的host端锚点)里，
-	// 找落在(px,py)半径2地图单位以内的所有node，打印id/类别/坐标——用来核对小路自己的车行/
-	// 人行锚点到底有没有偏离它自己的中轴线，以及host端的锚点有没有偏离host自己的车道位置。
-	auto describeNear = [&](const TCHAR* label, float px, float py) {
-		for (Node* n : map->GetNavAnchorNodes()) {
-			float dx = n->GetX() - px, dy = n->GetY() - py;
-			float dist = FMath::Sqrt(dx * dx + dy * dy);
-			if (dist < 2.f) {
-				UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时排查-小路] %s附近(%.3f,%.3f) node id=%d cat=%s pos=(%.3f,%.3f) dist=%.4f"),
-					label, px, py, n->GetId(), UTF8_TO_TCHAR(n->GetCategory().c_str()), n->GetX(), n->GetY(), dist);
-			}
-		}
-		};
-
-	int pathIndex = 0;
-	for (Road* path : map->GetPathRoads()) {
-		if (!path) continue;
-		Node start = path->GetStart();
-		Node end = path->GetEnd();
-		UE_LOG(LogTemp, Log, TEXT("UForeverRoadnetFrameworkComponent: [临时排查-小路] ===== path[%d] Start=(%.3f,%.3f) End=(%.3f,%.3f) ====="),
-			pathIndex, start.GetX(), start.GetY(), end.GetX(), end.GetY());
-		describeNear(TEXT("Start"), start.GetX(), start.GetY());
-		describeNear(TEXT("End"), end.GetX(), end.GetY());
-		pathIndex++;
-	}
 }
 

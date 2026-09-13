@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "map/zone_mod.h"
+#include "map/geometry.h"
 
 // 阶段3骨架:最小注册表(创建/销毁/枚举),真正的Temp暂存/合并逻辑(旧工程的
 // MergeTemp/CleanTemp两段式注册)留到阶段4按需恢复,详见 Source/Core/README.md。
@@ -12,7 +13,9 @@
 // creator/deleter用裸函数指针,不用std::function——mod侧注册的都是无捕获
 // (capture-less)lambda,天然能隐式转换成函数指针;裸指针是POD类型,跨DLL传递没有
 // "std::function内部堆缓冲由一侧分配、由另一侧释放"的风险(实测std::function版本会在
-// Factory析构时崩溃,详见Source/Dependence/README.md)。
+// Factory析构时崩溃,详见Source/Dependence/README.md)。AssignFunc同样是static、无捕获，
+// 天然是裸函数指针，跟着同一个约定；内部通过PlacementEmitFunc回调把结果交回调用方（回调
+// 函数体本身编译在调用方那一侧），不返回/不持有任何容器，避免跨DLL分配器问题。
 //
 // 所有公开方法(含析构函数)都标记virtual,即使目前没有任何派生类——原因见
 // Source/Dependence/README.md"关键设计"一节:Mod DLL里调用这些方法时,只有virtual
@@ -27,11 +30,13 @@ class ZoneFactory {
 public:
 	using CreateFunc = ZoneMod*(*)();
 	using DestroyFunc = void(*)(ZoneMod*);
+	using AssignFunc = void(*)(const std::vector<Lot*>&, PlacementEmitFunc, void*);
 
 	ZoneFactory() = default;
 	virtual ~ZoneFactory() = default;
 
-	virtual void RegisterZone(const std::string& id, CreateFunc creator, DestroyFunc deleter);
+	virtual void RegisterZone(const std::string& id, CreateFunc creator, DestroyFunc deleter,
+		AssignFunc assign);
 
 	// 阶段3占位:Mod导出的FinishModZones(factory)按老约定会调用它,先留空实现。
 	virtual void CleanTemp();
@@ -50,10 +55,15 @@ public:
 	// 拿实例创建时查不到对应参数。
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
 
+	// 转发调用注册时提供的static Assign函数，不需要任何ZoneMod实例存在。id未注册时不调用emit。
+	virtual void Assign(const std::string& id, const std::vector<Lot*>& lots,
+		PlacementEmitFunc emit, void* context) const;
+
 private:
 	struct Entry {
 		CreateFunc creator;
 		DestroyFunc deleter;
+		AssignFunc assign;
 	};
 
 	std::unordered_map<std::string, Entry> registries;
