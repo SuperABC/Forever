@@ -1,0 +1,372 @@
+{
+	"stairs": [
+		{
+			"rect": [
+				0.5,
+				-0.2,
+				1,
+				-0.8,
+				0.5,
+				0.2,
+				1,
+				0
+			],
+			"direction": 2
+		}
+	],
+	"ceilings": [
+		[
+			0,
+			0,
+			0,
+			0,
+			0.5,
+			-0.2,
+			1,
+			0
+		],
+		[
+			0.5,
+			0.2,
+			0,
+			0,
+			1,
+			0,
+			1,
+			0
+		],
+		[
+			0.5,
+			-0.2,
+			0,
+			0,
+			0.5,
+			0.2,
+			1,
+			-0.8
+		]
+	],
+	"grounds": [
+		[
+			0,
+			0,
+			0,
+			0,
+			0.5,
+			-0.2,
+			1,
+			0
+		],
+		[
+			0.5,
+			0.2,
+			0,
+			0,
+			1,
+			0,
+			1,
+			0
+		],
+		[
+			0.5,
+			-0.2,
+			0,
+			0,
+			0.5,
+			0.2,
+			1,
+			-0.8
+		]
+	],
+	"corridors": [
+		{
+			"rect": [
+				0.5,
+				-0.4,
+				0,
+				0,
+				0.5,
+				0.4,
+				1,
+				0
+			],
+			"walls": [
+				2,
+				3
+			],
+			"doors": [
+				{
+					"direction": 2,
+					"positions": [
+						[
+							0.5,
+							-0.2,
+							0,
+							0.1,
+							0.5,
+							0.2,
+							1,
+							0
+						]
+					]
+				}
+			],
+			"windows": [
+				{
+					"direction": 3,
+					"positions": [
+						[
+							0.5,
+							-0.2,
+							0,
+							0.1,
+							0.5,
+							0.2,
+							1,
+							-0.1
+						]
+					]
+				}
+			]
+		}
+	],
+	"rows": [
+		{
+			"rect": [
+				0,
+				0,
+				0,
+				0,
+				0.5,
+				-0.4,
+				1,
+				0
+			],
+			"direction": 1,
+			"doors": [
+				{
+					"direction": 1,
+					"positions": [
+						[
+							0.5,
+							-0.1,
+							0,
+							0.1,
+							0.5,
+							0.1,
+							1,
+							0
+						]
+					]
+				}
+			],
+			"windows": [
+				{
+					"direction": 0,
+					"positions": [
+						[
+							0.5,
+							-0.1,
+							0,
+							0.1,
+							0.5,
+							0.1,
+							1,
+							-0.1
+						]
+					]
+				}
+			]
+		},
+		{
+			"rect": [
+				0.5,
+				0.4,
+				0,
+				0,
+				1,
+				0,
+				1,
+				0
+			],
+			"direction": 0,
+			"doors": [
+				{
+					"direction": 0,
+					"positions": [
+						[
+							0.5,
+							-0.1,
+							0,
+							0.1,
+							0.5,
+							0.1,
+							1,
+							0
+						]
+					]
+				}
+			],
+			"windows": [
+				{
+					"direction": 1,
+					"positions": [
+						[
+							0.5,
+							-0.1,
+							0,
+							0.1,
+							0.5,
+							0.1,
+							1,
+							-0.1
+						]
+					]
+				}
+			]
+		}
+	],
+	"pedestrianNavigation": {
+		"nodes": [
+			{
+				"position": [
+					0.5,
+					-0.1,
+					1,
+					-0.1
+				]
+			},
+			{
+				"position": [
+					0.5,
+					0.1,
+					1,
+					-0.1
+				]
+			},
+			{
+				"position": [
+					0.5,
+					0,
+					0,
+					-0.2
+				]
+			}
+		],
+		"lines": [
+			{
+				"begin": [
+					0.5,
+					0,
+					0,
+					0
+				],
+				"end": [
+					0.5,
+					0,
+					1,
+					-1
+				]
+			}
+		],
+		"connections": [
+			{
+				"begin": {
+					"type": "line",
+					"idx": 0,
+					"vertex": 0
+				},
+				"end": {
+					"type": "outside"
+				}
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 0,
+					"vertex": 1
+				},
+				"end": {
+					"type": "node",
+					"idx": 0
+				}
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 0,
+					"vertex": 1
+				},
+				"end": {
+					"type": "node",
+					"idx": 1
+				}
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0
+				},
+				"end": {
+					"type": "downstair"
+				}
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1
+				},
+				"end": {
+					"type": "upstair"
+				}
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1
+				},
+				"end": {
+					"type": "row",
+					"idx": 0
+				}
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1
+				},
+				"end": {
+					"type": "row",
+					"idx": 1
+				}
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": 0
+				}
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2
+				},
+				"end": {
+					"type": "outside"
+				}
+			}
+		]
+	},
+	"vehicleNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": []
+	}
+}

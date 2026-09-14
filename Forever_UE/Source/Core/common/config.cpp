@@ -14,6 +14,7 @@ using namespace std;
 
 string Config::configDir = "";
 unordered_map<string, vector<string>> Config::dllPaths = {};
+unordered_map<string, vector<string>> Config::layoutPaths = {};
 unordered_map<string, vector<pair<string, string>>> Config::conceptMods = {};
 
 bool Config::CheckFileFormat(const filesystem::path& filePath, const string& format) {
@@ -28,6 +29,7 @@ bool Config::CheckFileFormat(const filesystem::path& filePath, const string& for
 
 void Config::ReadConfig(const string& path) {
 	dllPaths.clear();
+	layoutPaths.clear();
 	conceptMods.clear();
 
 	ifstream fin(path);
@@ -57,6 +59,15 @@ void Config::ReadConfig(const string& path) {
 			resolved = filesystem::path(configDir) / resolved;
 		}
 		AddDllPath(resolved.string());
+	}
+
+	for (const auto& layoutPath : root["layout_paths"]) {
+		// 和dll_paths同一个相对路径解析规则，相对configDir。
+		filesystem::path resolved(layoutPath.AsString());
+		if (resolved.is_relative()) {
+			resolved = filesystem::path(configDir) / resolved;
+		}
+		AddLayoutPath(resolved.string());
 	}
 
 	// 任何以"_mods"结尾的顶层key都当作一个concept的mod列表解析(如"building_mods"),不
@@ -144,6 +155,34 @@ void Config::AddDllPath(const string& path) {
 
 void Config::RemoveDllPath(const string& path) {
 	dllPaths.erase(path);
+}
+
+void Config::AddLayoutPath(const string& path) {
+	filesystem::path dir(path);
+	if (!filesystem::exists(dir) || !filesystem::is_directory(dir)) {
+		cerr << "[Config] Warning: layout path does not exist: " << path << "\n";
+		return;
+	}
+
+	layoutPaths.erase(path);
+
+	vector<string> found;
+	for (const auto& entry : filesystem::recursive_directory_iterator(dir)) {
+		if (!CheckFileFormat(entry.path(), ".layout"))
+			continue;
+		found.push_back(filesystem::absolute(entry.path()).string());
+	}
+	layoutPaths[path] = found;
+}
+
+vector<string> Config::GetLayouts() {
+	vector<string> paths;
+	for (const auto& [_, layouts] : layoutPaths) {
+		for (const auto& layout : layouts) {
+			paths.push_back(layout);
+		}
+	}
+	return paths;
 }
 
 vector<pair<string, string>> Config::GetConceptMods(const string& jsonKey) {

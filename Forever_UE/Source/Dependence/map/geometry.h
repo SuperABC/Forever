@@ -6,6 +6,8 @@
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#include <array>
+#include <string>
 
 // 由长宽计算默认面积时的换算系数
 #define ACREAGE_SCALE_FACTOR 100.f
@@ -384,6 +386,53 @@ struct PathRoadLink {
 	float endT1 = 0.f;
 	Road* endRoad2 = nullptr;
 	float endT2 = 0.f;
+};
+
+// Building内部布局模板(.layout文件)里，一个矩形/点在"某个尺寸的房间里"的相对位置描述——
+// ratio+offset两部分：worldCoord = ratio*floor自身宽或高 + offset，同一份模板换到不同实际
+// 楼层尺寸时套用同一个公式即可复用。矩形用8个float(两个对角点各自的x/y两套ratio+offset)，
+// 点用4个float(一个点的x/y两套ratio+offset)——照抄老工程语义，纯数学，和UE/引擎无关，
+// 见Source/Core/map/building.md"模板数据模型"一节。
+using RectParams = std::array<float, 8>;
+using PointParams = std::array<float, 4>;
+
+// 一面墙上的门/窗开口列表，按FACE_DIRECTION(0-3)分组——每个开口只保留位置ratio参数
+// (RectParams，沿墙方向+垂直方向各一对ratio+offset)，照抄老工程Corridor/Single/Row的
+// doors/windows字段；老工程原本每个开口还搭配一个Quad(供以后扩展用)，但从未被任何消费方
+// 读取过(BuildingBase.cpp::ConstructQuad解构时直接把Quad那一半丢掉)，这次不带这个用不到
+// 的字段。Building(Corridor/Single/Row)和Room都要用这个类型，放在geometry.h这个公共
+// 底层头，不需要互相include对方。
+using WallHole = std::unordered_map<int, std::vector<RectParams>>;
+
+// Building楼层导航模板里的一个固定锚点(和Stair/Row这类槽位无关，模板作者自己在画布上点出来
+// 的点，比如走廊拐角)。
+struct NavigationNodeTemplate {
+	PointParams position{};
+};
+
+// Building楼层导航模板里的一条"贯通线"(通常代表一条走廊的可通行中轴线)，两端是固定点；
+// NavigationConnectionTemplate里type=="line"、vertex==-1的连接会动态投影到这条线上，
+// 不是端点本身。
+struct NavigationLineTemplate {
+	PointParams begin{};
+	PointParams end{};
+};
+
+// 导航连接的一个端点：type取"outside"(连到building朝向的边界路，见map.md"寻址"/
+// building.md"行人导航"一节)/"node"(NavigationNodeTemplate固定锚点)/"line"(贯通线，
+// vertex=0取begin端、1取end端、-1表示动态投影到线上离对端最近的点)/"single"或"row"
+// (对应槽位实例化出的Room自己的导航锚点)/"upstair"或"downstair"(和上一层/下一层对应的
+// 竖向通道锚点做跨楼层匹配，见Building::BuildPedestrianNavigation)。idx是node/line/
+// single/row数组里的下标，outside/upstair/downstair不需要idx。
+struct NavigationEndpointTemplate {
+	std::string type;
+	int idx = -1;
+	int vertex = 0;
+};
+
+struct NavigationConnectionTemplate {
+	NavigationEndpointTemplate begin;
+	NavigationEndpointTemplate end;
 };
 
 class Lot : public Quad {

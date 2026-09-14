@@ -72,6 +72,14 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		mods = Config::GetMods();
 	}
 
+	if (Config::GetLayouts().empty()) {
+		// config.json没有配置layout_paths(或者根本没有config.json)时,回退扫描默认的
+		// Resource/Layouts/目录——和上面dll_paths的回退同一个容错风格。
+		const FString defaultLayoutDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("Resource/Layouts"));
+		UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: config.json 未提供任何layout_paths,回退扫描默认目录 %s。"), *defaultLayoutDir);
+		Config::AddLayoutPath(TCHAR_TO_UTF8(*defaultLayoutDir));
+	}
+
 	ModLoader modLoader;
 
 	{

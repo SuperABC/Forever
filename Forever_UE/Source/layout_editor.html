@@ -1,0 +1,2287 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Layout Editor</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ccc;
+       display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+#topbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+          background: #2d2d2d; border-bottom: 1px solid #444; flex-shrink: 0; }
+#topbar span { color: #666; font-size: 11px; margin-left: 6px; }
+
+#main { display: flex; flex: 1; overflow: hidden; }
+
+#canvas-wrap { flex: 0 0 40%; min-width: 0; display: grid;
+               grid-template-rows: 1fr auto;
+               align-items: center; justify-items: center;
+               background: #252525; padding: 16px; gap: 10px; overflow: hidden; }
+canvas { display: block; cursor: crosshair; border: 1px solid #333;
+         max-width: 100%; max-height: 100%; }
+#legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center;
+          min-height: 32px; width: 100%; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #aaa; }
+.legend-swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+
+#panel { flex: 0 0 30%; min-width: 0; background: #2a2a2a; border-left: 1px solid #444;
+         overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+
+.sec { border: 1px solid #3a3a3a; padding: 8px; border-radius: 2px; }
+.sec-title { color: #888; font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+             margin-bottom: 6px; }
+.row { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; flex-wrap: wrap; }
+.row:last-child { margin-bottom: 0; }
+
+label { color: #999; font-size: 12px; }
+
+input[type=number] { width: 72px; background: #333; color: #eee; border: 1px solid #555;
+                     padding: 2px 4px; font-family: monospace; font-size: 12px; }
+input[type=number].sm { width: 56px; }
+input[type=number].full { width: 100%; }
+
+select { background: #333; color: #eee; border: 1px solid #555; padding: 3px 4px;
+         font-family: monospace; font-size: 12px; cursor: pointer; }
+
+input[type=checkbox] { cursor: pointer; accent-color: #5599cc; }
+
+button { padding: 3px 10px; background: #383838; color: #ccc; border: 1px solid #555;
+         cursor: pointer; font-size: 12px; font-family: monospace; border-radius: 2px; }
+button:hover { background: #484848; }
+button.primary { border-color: #4488aa; color: #77bbdd; }
+button.primary:hover { background: #1a3040; }
+button.danger { border-color: #884444; color: #ff7777; }
+button.danger:hover { background: #3a1a1a; }
+button.sm { padding: 1px 6px; font-size: 11px; }
+
+hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
+
+.sub { border-left: 2px solid #3a3a3a; padding: 5px 0 5px 8px; margin: 4px 0; }
+
+/* 4-column grid for rect / point param labels + inputs */
+.pgrid { display: grid; grid-template-columns: 28px 1fr 28px 1fr; gap: 2px 6px; align-items: center; }
+.pgrid label { font-size: 11px; color: #777; }
+.pgrid input { width: 100%; }
+
+/* 2-column grid for single-row param pairs (used for 4-element point params) */
+.pgrid2 { display: grid; grid-template-columns: 28px 1fr 28px 1fr; gap: 2px 6px; align-items: center; }
+.pgrid2 label { font-size: 11px; color: #777; }
+.pgrid2 input { width: 100%; }
+
+.field-title { font-size: 11px; color: #777; margin: 5px 0 3px; }
+.hint { font-size: 11px; color: #666; font-style: italic; }
+
+#file-list {
+  flex: 0 0 30%; min-width: 0;
+  background: #222; border-right: 1px solid #444;
+  overflow-y: auto; display: flex; flex-direction: column;
+}
+.file-item {
+  display: flex; align-items: center; padding: 5px 8px;
+  cursor: pointer; border-bottom: 1px solid #2d2d2d; gap: 4px;
+  font-size: 11px; color: #aaa; user-select: none;
+}
+.file-item:hover { background: #2d2d2d; }
+.file-item.active {
+  background: #1a3040; color: #77bbdd;
+  border-left: 2px solid #4488aa; padding-left: 6px;
+}
+.file-item-name {
+  flex: 1; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; min-width: 0;
+}
+.file-close {
+  flex-shrink: 0; color: #555; padding: 0 2px;
+  font-size: 14px; line-height: 1; cursor: pointer;
+}
+.file-close:hover { color: #ff7777; }
+.file-dirty {
+  flex-shrink: 0; color: #ffaa44; font-weight: bold;
+  padding: 0 1px; font-size: 13px;
+}
+.file-item.dragging { opacity: 0.4; }
+.file-item.drag-over-before { box-shadow: inset 0 2px 0 0 #4488aa; }
+.file-item.drag-over-after  { box-shadow: inset 0 -2px 0 0 #4488aa; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <button class="primary" onclick="newFile()">新建</button>
+  <button class="primary" onclick="loadFile()">加载</button>
+  <button class="primary" onclick="saveFile()">保存</button>
+  <button class="primary" onclick="saveFileAs()">另存为</button>
+  <button onclick="undo()" title="Ctrl+Z">撤销</button>
+  <button onclick="redo()" title="Ctrl+Y">重做</button>
+  <span id="fname"></span>
+  <div style="flex:1"></div>
+  <label>W</label>
+  <input type="number" id="global-w" step="1" min="2" value="4" style="width:52px">
+  <label>H</label>
+  <input type="number" id="global-h" step="1" min="2" value="4" style="width:52px">
+  <button onclick="applyGlobalSize()">应用</button>
+  <select id="global-mode">
+    <option value="ceilings">房顶</option>
+    <option value="grounds">地面</option>
+    <option value="others" selected>房间</option>
+    <option value="pedestrianNavigation">行人导航</option>
+    <option value="vehicleNavigation">车辆导航</option>
+  </select>
+</div>
+<div id="main">
+  <div id="file-list"></div>
+  <div id="canvas-wrap">
+    <canvas id="c" width="600" height="600"></canvas>
+    <div id="legend"></div>
+  </div>
+  <div id="panel"></div>
+</div>
+<!-- Hidden file picker for load; onchange fires after user picks a file -->
+<input type="file" id="finput" accept=".layout" multiple style="display:none" onchange="onFileChosen(event)">
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// COORDINATE SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// UE5 left-hand coordinate system: origin top-left, X right, Y down.
+//
+// Layout files use a "normalized" coordinate system where 0-1 maps to the
+// floor's actual width (W) and height (H) in world units. Rect params are
+// encoded as ratio+offset pairs:
+//
+//   worldX       = ratio * W + offset
+//   normalizedX  = ratio + offset/W        (used internally by this editor)
+//
+// The canvas shows the range [-0.5, 1.5] in both axes so elements that
+// extend slightly outside the floor boundary are still visible.
+//
+// Canvas pixel formula (LAYOUT_MIN = -0.5, LAYOUT_RANGE = 2.0):
+//   canvasX = (normalizedX - LAYOUT_MIN) * SCALE
+//           = (normalizedX + 0.5) * 300
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// RECT PARAM FORMAT  [x1r, x1o, y1r, y1o, x2r, x2o, y2r, y2o]
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Eight floats encoding two diagonal corners of a rectangle:
+//   corner1 = (x1r*W + x1o,  y1r*H + y1o)
+//   corner2 = (x2r*W + x2o,  y2r*H + y2o)
+//
+// In the editor the rect params are divided by W or H to produce
+// "normalized" coordinates independent of floor size, which the
+// canvas transforms directly to pixels.
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// POINT PARAM FORMAT  [xr, xo, yr, yo]
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Four floats encoding a single point using the same ratio+offset formula:
+//   normalizedX = xr + xo/W
+//   normalizedY = yr + yo/H
+//
+// Used for navigation node positions and line segment endpoints.
+// evalPoint(p) converts this to [normX, normY].
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOOR / WINDOW POSITION FORMAT  (also 8 floats)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Positions encode a segment *along a wall*, using the wall's own canvas length
+// as the reference (not the floor size). For a wall of canvas length wallLenPx:
+//
+//   segmentStart = wallOriginPx + pos[0]*wallLenPx + pos[1]*(SCALE/floorDim)
+//   segmentEnd   = wallOriginPx + pos[4]*wallLenPx + pos[5]*(SCALE/floorDim)
+//
+// floorDim = W for horizontal walls (NORTH/SOUTH), H for vertical walls (WEST/EAST).
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// FACE_DIRECTION  (from Dependence/map/geometry.h)
+// ═══════════════════════════════════════════════════════════════════════════════
+//   0 = WEST  (left  edge, vertical wall)
+//   1 = EAST  (right edge, vertical wall)
+//   2 = NORTH (top   edge, horizontal wall)
+//   3 = SOUTH (bottom edge, horizontal wall)
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// NAVIGATION JSON STRUCTURE
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// pedestrianNavigation / vehicleNavigation: {
+//   nodes:       [{ position:[xr,xo,yr,yo] }, ...]
+//   lines:       [{ begin:[4], end:[4] }, ...]
+//   connections: [{ begin:endpoint, end:endpoint }, ...]
+// }
+//
+// Both layers share this identical structure and are edited independently — one
+// for pedestrian pathing, one for vehicle pathing. Both keys are always written
+// on save, even when empty. Legacy files may store the pedestrian layer under a
+// bare "navigation" key; that is accepted as a fallback alias when loading.
+//
+// endpoint types:
+//   { type:'node',      idx:N }            — standalone nav node
+//   { type:'line',      idx:N, vertex:V }  — V=0 start, V=1 end, V=-1 midpoint
+//   { type:'single',    idx:N }            — single room's implicit nav node
+//   { type:'row',       idx:N }            — row room's implicit nav node
+//   { type:'outside'  }                    — external (no position)
+//   { type:'upstair'  }                    — external (no position)
+//   { type:'downstair'}                    — external (no position)
+//
+// "Inner" connections: both endpoints have a resolvable position (node/line/single/row).
+// "Outer" connections: one endpoint is outside/upstair/downstair (no position).
+// Outer connections are represented as colored rings around the associated node.
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+// ELEMENT TYPES & JSON STRUCTURE
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Simple  (stored as bare [8] arrays in JSON):
+//   ceilings, grounds, hatches
+//
+// Complex (stored as {rect:[8], ...} in JSON):
+//   stairs, ramps, elevators  --> {rect, direction, walls:[int]}
+//   corridors                 --> {rect, walls:[int], doors:[...], windows:[...]}
+//   singles, rows             --> {rect, direction, doors:[...], windows:[...]}
+//
+// Singles and rows always have all 4 walls; no "walls" field appears in the file.
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const CANVAS_PX    = 600;
+const LAYOUT_MIN   = -0.5;   // leftmost/topmost visible normalized coord
+const LAYOUT_RANGE = 2.0;    // total visible range: -0.5 to 1.5
+// Per-axis scale: the larger floor dimension always maps to CANVAS_PX
+function scaleX() { return CANVAS_PX / LAYOUT_RANGE * S.W / Math.max(S.W, S.H); }
+function scaleY() { return CANVAS_PX / LAYOUT_RANGE * S.H / Math.max(S.W, S.H); }
+
+// Fill colors for each geometry element type
+const COLORS = {
+  ceilings:'#999999', grounds:'#999999', hatches:'#4488ff',
+  stairs:'#4488ff',   ramps:'#ff88cc',  elevators:'#44cc88',
+  corridors:'#999999', singles:'#ff4444', rows:'#aa44ff',
+};
+
+const TYPE_LABEL = {
+  ceilings:'天花板', grounds:'地板', hatches:'洞口',
+  stairs:'楼梯',     ramps:'斜坡',  elevators:'电梯',
+  corridors:'走廊',  singles:'独立房间', rows:'联排房间',
+};
+
+const DIR_LABELS = ['← 西(0)', '→ 东(1)', '↑ 北(2)', '↓ 南(3)'];
+
+// Types visible in each display mode.
+// "others" z-order (bottom to top): corridors drawn first so stairs appear on top.
+// "pedestrianNavigation" and "vehicleNavigation" are handled entirely by
+// drawNavMode() and have no geometry types.
+const MODE_TYPES = {
+  ceilings:   ['ceilings', 'hatches'],
+  grounds:    ['grounds'],
+  others:     ['corridors', 'singles', 'rows', 'elevators', 'stairs', 'ramps'],
+  pedestrianNavigation: [],
+  vehicleNavigation: [],
+};
+
+// Capability sets for geometry element types
+const SIMPLE   = new Set(['ceilings', 'grounds', 'hatches']);
+const HAS_DIR  = new Set(['stairs', 'ramps', 'elevators', 'singles', 'rows']);
+const HAS_WALL = new Set(['stairs', 'ramps', 'elevators', 'corridors']);
+const HAS_DOOR = new Set(['corridors', 'singles', 'rows']);
+const HAS_WIN  = new Set(['corridors', 'singles', 'rows']);
+
+const ALL_KEYS = ['stairs', 'elevators', 'ramps', 'ceilings', 'grounds', 'hatches', 'corridors', 'singles', 'rows'];
+
+// Navigation mode: colors for outer connection rings drawn around nodes
+const OUTER_CONN_COLORS = {
+  outside:   '#ff4444',  // red
+  upstair:   '#44cc88',  // green
+  downstair: '#4488ff',  // blue
+};
+const OUTER_CONN_LABEL = {
+  outside: '外部出口', upstair: '上楼', downstair: '下楼',
+};
+
+// Navigation mode: colors for labeled node circles
+const NAV_CIRCLE_R = 8;  // radius for all labeled nav circles
+const NAV_CIRCLE_COLOR = {
+  node:      '#ffdd44',  // yellow  — standalone nav node
+  single:    '#ff88cc',  // pink    — single room implicit nav node
+  row:       '#44cccc',  // cyan    — row room implicit nav node
+  lineStart: '#aa6633',  // brown   — path line start endpoint
+  lineEnd:   '#ff8833',  // orange  — path line end endpoint
+};
+
+// ── Application State ─────────────────────────────────────────────────────────
+
+const S = {
+  data: {
+    ceilings:[], grounds:[], hatches:[],
+    stairs:[],   ramps:[],   elevators:[],
+    corridors:[], singles:[], rows:[],
+  },
+  W: 4,           // floor width in world units
+  H: 4,           // floor height in world units
+  mode: 'others', // current display mode
+  sel: null,      // geometry selection: {type, idx} or null
+  multiSel: [],   // multi-selection: [{type,idx}] geo or [{kind,idx}] nav; non-empty means multi-select mode
+
+  // Navigation data — fully editable (replaces the old read-only rawNav).
+  // Two fully independent layers, one per navigation mode; see activeNav().
+  pedestrianNav: { nodes: [], lines: [], connections: [] },
+  vehicleNav:    { nodes: [], lines: [], connections: [] },
+  navSel: null,   // nav selection: {kind:'node'|'line'|'conn', idx:N} or null
+};
+
+// ── File Tab System ───────────────────────────────────────────────────────────
+
+const files = [];      // array of open file entries
+let activeFileIdx = -1;
+
+// ── Undo / Redo ───────────────────────────────────────────────────────────────
+
+const undoStack = [];   // past snapshots (most recent last) — swapped on file switch
+const redoStack = [];   // future snapshots after undo (most recent last)
+const MAX_HISTORY = 80;
+
+// Serialise the mutable data portion of S into a compact string for the stack.
+// W, H, mode are global — not included in per-file undo snapshots.
+function snapshotState() {
+  return JSON.stringify({ data: S.data, pedestrianNav: S.pedestrianNav, vehicleNav: S.vehicleNav });
+}
+
+// Call before any mutation to record the current state.
+function snapshot() {
+  undoStack.push(snapshotState());
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  redoStack.length = 0;
+}
+
+function applySnapshot(raw) {
+  const st = JSON.parse(raw);
+  S.data = st.data; S.pedestrianNav = st.pedestrianNav; S.vehicleNav = st.vehicleNav;
+  S.sel = null; S.navSel = null; S.multiSel = [];
+  redraw(); renderLegend(); renderPanel();
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(snapshotState());
+  applySnapshot(undoStack.pop());
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(snapshotState());
+  applySnapshot(redoStack.pop());
+}
+
+// ── File Entry Helpers ────────────────────────────────────────────────────────
+
+function makeBlankEntry(name) {
+  const data = { ceilings:[], grounds:[], hatches:[], stairs:[], ramps:[], elevators:[], corridors:[], singles:[], rows:[] };
+  const pedestrianNav = { nodes: [], lines: [], connections: [] };
+  const vehicleNav    = { nodes: [], lines: [], connections: [] };
+  return {
+    name,
+    handle: null,
+    data, pedestrianNav, vehicleNav,
+    sel: null, navSel: null, multiSel: [],
+    undoStack: [], redoStack: [],
+    // Snapshot of {data, pedestrianNav, vehicleNav} as of the last load/save — used to detect unsaved changes.
+    savedSnapshot: JSON.stringify({ data, pedestrianNav, vehicleNav }),
+  };
+}
+
+// True if entry f's content differs from what's on disk (its last load/save point).
+// Undoing back to that exact content is treated as "not modified" (no false positive star).
+function isFileDirty(f, idx) {
+  if (!f || !f.savedSnapshot) return false;
+  const current = idx === activeFileIdx ? snapshotState() : JSON.stringify({ data: f.data, pedestrianNav: f.pedestrianNav, vehicleNav: f.vehicleNav });
+  return current !== f.savedSnapshot;
+}
+
+// Cheap per-frame refresh of just the active row's star (avoids rebuilding the
+// whole file list on every redraw(), which fires on every drag/edit).
+function updateActiveDirtyMark() {
+  if (activeFileIdx < 0) return;
+  const el = document.getElementById('file-list');
+  if (!el) return;
+  const item = el.querySelector(`.file-item[data-idx="${activeFileIdx}"]`);
+  if (!item) return;
+  const mark = item.querySelector('.file-dirty');
+  if (mark) mark.style.display = isFileDirty(files[activeFileIdx], activeFileIdx) ? '' : 'none';
+}
+
+function makeNewFileName() {
+  const base = '新布局', ext = '.layout';
+  const names = new Set(files.map(f => f.name));
+  if (!names.has(base + ext)) return base + ext;
+  let n = 2;
+  while (names.has(base + n + ext)) n++;
+  return base + n + ext;
+}
+
+function saveCurrentToEntry() {
+  if (activeFileIdx < 0 || activeFileIdx >= files.length) return;
+  const f = files[activeFileIdx];
+  const snap = JSON.parse(snapshotState());
+  f.data = snap.data; f.pedestrianNav = snap.pedestrianNav; f.vehicleNav = snap.vehicleNav;
+  f.sel     = S.sel;
+  f.navSel  = S.navSel;
+  f.multiSel = S.multiSel.slice();
+  f.undoStack = undoStack.slice();
+  f.redoStack = redoStack.slice();
+}
+
+function applyEntry(idx) {
+  activeFileIdx = idx;
+  _pendingSnapshot = false;
+  const f = files[idx];
+  S.data          = JSON.parse(JSON.stringify(f.data));
+  S.pedestrianNav = JSON.parse(JSON.stringify(f.pedestrianNav));
+  S.vehicleNav    = JSON.parse(JSON.stringify(f.vehicleNav));
+  S.sel     = f.sel;
+  S.navSel  = f.navSel;
+  S.multiSel = f.multiSel ? f.multiSel.slice() : [];
+  undoStack.splice(0, undoStack.length, ...f.undoStack);
+  redoStack.splice(0, redoStack.length, ...f.redoStack);
+  document.getElementById('fname').textContent = f.name;
+  redraw(); renderLegend(); renderPanel(); renderFileList();
+}
+
+function switchToFile(idx) {
+  saveCurrentToEntry();
+  applyEntry(idx);
+}
+
+function closeFile(idx) {
+  const isActive = idx === activeFileIdx;
+  files.splice(idx, 1);
+  if (files.length === 0) {
+    activeFileIdx = -1;
+    renderFileList();
+  } else if (isActive) {
+    const newIdx = Math.min(idx, files.length - 1);
+    activeFileIdx = -1;
+    applyEntry(newIdx);
+  } else {
+    if (activeFileIdx > idx) activeFileIdx--;
+    renderFileList();
+  }
+}
+
+// Drag-to-reorder state for the open-files list
+let _dragFileIdx = null;
+
+function reorderFiles(from, to) {
+  if (from === to) return;
+  const activeEntry = activeFileIdx >= 0 ? files[activeFileIdx] : null;
+  const [moved] = files.splice(from, 1);
+  files.splice(to, 0, moved);
+  if (activeEntry) activeFileIdx = files.indexOf(activeEntry);
+  renderFileList();
+}
+
+function renderFileList() {
+  const hasFile = activeFileIdx >= 0;
+  document.getElementById('canvas-wrap').style.display = hasFile ? '' : 'none';
+  document.getElementById('panel').style.display       = hasFile ? '' : 'none';
+
+  const el = document.getElementById('file-list');
+  if (!el) return;
+  el.innerHTML = '';
+  files.forEach((f, i) => {
+    const item = document.createElement('div');
+    item.className = 'file-item' + (i === activeFileIdx ? ' active' : '');
+    item.title = f.handle ? f.handle.name : f.name;
+    item.draggable = true;
+    item.dataset.idx = i;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'file-item-name';
+    nameEl.textContent = f.name;
+
+    const dirtyEl = document.createElement('span');
+    dirtyEl.className = 'file-dirty';
+    dirtyEl.textContent = '*';
+    dirtyEl.title = '未保存的更改';
+    dirtyEl.style.display = isFileDirty(f, i) ? '' : 'none';
+
+    const closeEl = document.createElement('span');
+    closeEl.className = 'file-close';
+    closeEl.textContent = '×';
+    closeEl.onclick = e => { e.stopPropagation(); closeFile(i); };
+
+    item.appendChild(nameEl);
+    item.appendChild(dirtyEl);
+    item.appendChild(closeEl);
+    item.onclick = () => { if (i !== activeFileIdx) switchToFile(i); };
+
+    item.ondragstart = e => {
+      _dragFileIdx = i;
+      e.dataTransfer.effectAllowed = 'move';
+      item.classList.add('dragging');
+    };
+    item.ondragend = () => {
+      item.classList.remove('dragging');
+      el.querySelectorAll('.drag-over-before, .drag-over-after').forEach(n => {
+        n.classList.remove('drag-over-before', 'drag-over-after');
+      });
+      _dragFileIdx = null;
+    };
+    item.ondragover = e => {
+      if (_dragFileIdx === null || i === _dragFileIdx) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = item.getBoundingClientRect();
+      const isAfter = (e.clientY - rect.top) > rect.height / 2;
+      item.classList.toggle('drag-over-before', !isAfter);
+      item.classList.toggle('drag-over-after', isAfter);
+      item.dataset.dropAfter = isAfter ? '1' : '';
+    };
+    item.ondragleave = () => item.classList.remove('drag-over-before', 'drag-over-after');
+    item.ondrop = e => {
+      e.preventDefault();
+      const isAfter = item.dataset.dropAfter === '1';
+      item.classList.remove('drag-over-before', 'drag-over-after');
+      if (_dragFileIdx === null || _dragFileIdx === i) return;
+      const idxInRemaining = i > _dragFileIdx ? i - 1 : i;
+      reorderFiles(_dragFileIdx, isAfter ? idxInRemaining + 1 : idxInRemaining);
+    };
+
+    el.appendChild(item);
+  });
+}
+
+// Used by numInput: take a snapshot before the first edit in each focus session.
+let _pendingSnapshot = false;
+
+// Drag-select state (mousedown → mousemove → mouseup)
+let _dragStart   = null;   // {canvX, canvY} on mousedown, null when not dragging
+let _dragCurrent = null;   // {canvX, canvY} updated on mousemove
+let _isDragging  = false;  // true once pointer moves > 4px from _dragStart
+
+// ── Coordinate Helpers ────────────────────────────────────────────────────────
+
+const toCanvasX = normX => (normX - LAYOUT_MIN) * scaleX();
+const toCanvasY = normY => (normY - LAYOUT_MIN) * scaleY();
+const toLayoutX = canvX =>  canvX / scaleX() + LAYOUT_MIN;
+const toLayoutY = canvY =>  canvY / scaleY() + LAYOUT_MIN;
+
+// Evaluate an 8-element rect param array into normalized corner coordinates.
+// Formula: normalizedCoord = ratio + offset/floorDim
+function evalRect(params, W, H) {
+  return {
+    x1: params[0] + params[1] / W,
+    y1: params[2] + params[3] / H,
+    x2: params[4] + params[5] / W,
+    y2: params[6] + params[7] / H,
+  };
+}
+
+// Evaluate a 4-element point param [xr, xo, yr, yo] into [normX, normY]
+function evalPoint(p) {
+  return [p[0] + p[1] / S.W, p[2] + p[3] / S.H];
+}
+
+function getParams(type, item) {
+  return SIMPLE.has(type) ? item : item.rect;
+}
+
+function hitTest(lx, ly, params, W, H) {
+  const { x1, y1, x2, y2 } = evalRect(params, W, H);
+  return lx >= Math.min(x1, x2) && lx <= Math.max(x1, x2)
+      && ly >= Math.min(y1, y2) && ly <= Math.max(y1, y2);
+}
+
+// ── Navigation Helpers ────────────────────────────────────────────────────────
+
+// True for either of the two navigation display modes.
+function isNavMode(mode) {
+  return mode === 'pedestrianNavigation' || mode === 'vehicleNavigation';
+}
+
+// The nav data object {nodes, lines, connections} for the currently active
+// navigation layer. All navigation editing code reads/writes through this
+// single accessor so pedestrian and vehicle navigation share one code path.
+function activeNav() {
+  return S.mode === 'vehicleNavigation' ? S.vehicleNav : S.pedestrianNav;
+}
+
+// Returns true for endpoint types that have no canvas position (outside/upstair/downstair)
+function isExternalEndpoint(ep) {
+  return ep.type === 'outside' || ep.type === 'upstair' || ep.type === 'downstair';
+}
+
+// Resolve an endpoint to [normX, normY], or null if it has no position
+function resolveEndpointPos(ep) {
+  if (ep.type === 'node') {
+    const node = activeNav().nodes[ep.idx];
+    return node ? evalPoint(node.position) : null;
+  }
+  if (ep.type === 'line') {
+    const line = activeNav().lines[ep.idx];
+    if (!line) return null;
+    const pb = evalPoint(line.begin), pe = evalPoint(line.end);
+    if (ep.vertex === 0)  return pb;
+    if (ep.vertex === 1)  return pe;
+    // vertex -1 = the line's midpoint (used for line→room connections)
+    return [(pb[0] + pe[0]) / 2, (pb[1] + pe[1]) / 2];
+  }
+  if (ep.type === 'single') {
+    const item = S.data.singles[ep.idx];
+    if (!item) return null;
+    const { x1, y1, x2, y2 } = evalRect(item.rect, S.W, S.H);
+    return [(x1 + x2) / 2, (y1 + y2) / 2];
+  }
+  if (ep.type === 'row') {
+    const item = S.data.rows[ep.idx];
+    if (!item) return null;
+    const { x1, y1, x2, y2 } = evalRect(item.rect, S.W, S.H);
+    return [(x1 + x2) / 2, (y1 + y2) / 2];
+  }
+  return null;  // outside/upstair/downstair
+}
+
+// Serialize an endpoint object to a string value for use in <select> options
+function encodeEndpoint(ep) {
+  if (ep.type === 'node')   return `node:${ep.idx}`;
+  if (ep.type === 'line')   return `line:${ep.idx}:${ep.vertex}`;
+  if (ep.type === 'single') return `single:${ep.idx}`;
+  if (ep.type === 'row')    return `row:${ep.idx}`;
+  return ep.type;  // outside/upstair/downstair (not in inner-conn dropdowns)
+}
+
+// Deserialize a select value string back to an endpoint object
+function decodeEndpoint(str) {
+  const parts = str.split(':');
+  if (parts[0] === 'node')   return { type: 'node',   idx: parseInt(parts[1]) };
+  if (parts[0] === 'line')   return { type: 'line',   idx: parseInt(parts[1]), vertex: parseInt(parts[2]) };
+  if (parts[0] === 'single') return { type: 'single', idx: parseInt(parts[1]) };
+  if (parts[0] === 'row')    return { type: 'row',    idx: parseInt(parts[1]) };
+  return { type: str };
+}
+
+// Build the [[value, label], ...] options list for inner-connection endpoint dropdowns.
+// Includes all standalone nodes, line vertices, and room implicit nodes.
+function makeEndpointOpts() {
+  const opts = [];
+  const nav = activeNav();
+  nav.nodes.forEach((_, i) => opts.push([`node:${i}`, `节点 ${i}`]));
+  nav.lines.forEach((_, i) => {
+    opts.push([`line:${i}:0`,  `路径 ${i} 起点`]);
+    opts.push([`line:${i}:1`,  `路径 ${i} 终点`]);
+    opts.push([`line:${i}:-1`, `路径 ${i} 中段`]);
+  });
+  S.data.singles.forEach((_, i) => opts.push([`single:${i}`, `独立房间 ${i}`]));
+  S.data.rows.forEach((_, i)    => opts.push([`row:${i}`,    `联排房间 ${i}`]));
+  return opts;
+}
+
+// Distance from point (px, py) to line segment (x1,y1)-(x2,y2), all in canvas pixels
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+// ── Multi-select Helpers ──────────────────────────────────────────────────────
+
+function getCanvasCoords(e) {
+  const b = canvas.getBoundingClientRect();
+  return {
+    canvX: (e.clientX - b.left) * (canvas.width  / b.width),
+    canvY: (e.clientY - b.top)  * (canvas.height / b.height),
+  };
+}
+
+function toggleGeoMultiSel(type, idx) {
+  const i = S.multiSel.findIndex(s => s.type === type && s.idx === idx);
+  if (i >= 0) S.multiSel.splice(i, 1);
+  else S.multiSel.push({ type, idx });
+}
+function toggleNavMultiSel(kind, idx) {
+  const i = S.multiSel.findIndex(s => s.kind === kind && s.idx === idx);
+  if (i >= 0) S.multiSel.splice(i, 1);
+  else S.multiSel.push({ kind, idx });
+}
+function isGeoMultiSelected(type, idx) {
+  return S.multiSel.some(s => s.type === type && s.idx === idx);
+}
+function isNavMultiSelected(kind, idx) {
+  return S.multiSel.some(s => s.kind === kind && s.idx === idx);
+}
+
+// ── Canvas Setup ──────────────────────────────────────────────────────────────
+
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Draw a filled circle with a centered ID number inside.
+// Used for all navigation node types so each circle is visually identifiable.
+function drawNavCircle(cx, cy, r, fillColor, label) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+  ctx.save();
+  ctx.fillStyle = '#111111';
+  ctx.font = `bold ${String(label).length <= 2 ? 12 : 10}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(label), cx, cy);
+  ctx.restore();
+}
+
+function drawArrow(cx, cy, dir, sz) {
+  const h = sz * 0.5;
+  ctx.beginPath();
+  if      (dir === 0) { ctx.moveTo(cx-h,cy); ctx.lineTo(cx+h,cy-h*0.65); ctx.lineTo(cx+h,cy+h*0.65); }
+  else if (dir === 1) { ctx.moveTo(cx+h,cy); ctx.lineTo(cx-h,cy-h*0.65); ctx.lineTo(cx-h,cy+h*0.65); }
+  else if (dir === 2) { ctx.moveTo(cx,cy-h); ctx.lineTo(cx-h*0.65,cy+h); ctx.lineTo(cx+h*0.65,cy+h); }
+  else                { ctx.moveTo(cx,cy+h); ctx.lineTo(cx-h*0.65,cy-h); ctx.lineTo(cx+h*0.65,cy-h); }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fill();
+}
+
+// ── Wall Rendering ─────────────────────────────────────────────────────────────
+//
+// Walls are drawn as thin filled rectangles *inside* element bounds (2px thick).
+// We use fillRect only — NOT strokeRect — to avoid the 0.5px bleed that
+// ctx.strokeRect produces by centering the stroke on the path edges.
+//
+// Door openings leave a gap; window openings render as dashed lines.
+
+function drawWall(axis, wallStart, wallEnd, perpStart, thickness, col, wallDir, rect, doors, windows) {
+  // Position formula: canvasPos = wallOriginPx + pos[ratio]*wallLenPx + pos[offset]*worldUnitPx
+  const worldUnitPx  = axis === 'h' ? scaleX() / S.W : scaleY() / S.H;
+  const wallLenPx    = axis === 'h' ? rect.pw      : rect.ph;
+  const wallOriginPx = axis === 'h' ? rect.cx1     : rect.cy1;
+
+  const openings = [];
+  for (const door of (doors || [])) {
+    if (door.direction !== wallDir) continue;
+    for (const pos of (door.positions || []))
+      openings.push({
+        segStart: wallOriginPx + pos[0] * wallLenPx + pos[1] * worldUnitPx,
+        segEnd:   wallOriginPx + pos[4] * wallLenPx + pos[5] * worldUnitPx,
+        isDoor: true,
+      });
+  }
+  for (const win of (windows || [])) {
+    if (win.direction !== wallDir) continue;
+    for (const pos of (win.positions || []))
+      openings.push({
+        segStart: wallOriginPx + pos[0] * wallLenPx + pos[1] * worldUnitPx,
+        segEnd:   wallOriginPx + pos[4] * wallLenPx + pos[5] * worldUnitPx,
+        isDoor: false,
+      });
+  }
+  openings.forEach(op => {
+    if (op.segStart > op.segEnd) [op.segStart, op.segEnd] = [op.segEnd, op.segStart];
+  });
+  openings.sort((a, b) => a.segStart - b.segStart);
+
+  const fillSegment = (from, to) => {
+    if (to <= from) return;
+    ctx.fillStyle = col;
+    if (axis === 'h') ctx.fillRect(from, perpStart, to - from, thickness);
+    else              ctx.fillRect(perpStart, from, thickness, to - from);
+  };
+  const dashSegment = (from, to) => {
+    if (to <= from) return;
+    const midline = perpStart + thickness / 2;
+    ctx.save();
+    ctx.strokeStyle = col; ctx.lineWidth = thickness; ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    if (axis === 'h') { ctx.moveTo(from, midline); ctx.lineTo(to, midline); }
+    else              { ctx.moveTo(midline, from);  ctx.lineTo(midline, to); }
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  let cursor = wallStart;
+  for (const op of openings) {
+    fillSegment(cursor, Math.min(op.segStart, wallEnd));
+    if (op.segStart < wallEnd && op.segEnd > wallStart) {
+      const cs = Math.max(op.segStart, wallStart), ce = Math.min(op.segEnd, wallEnd);
+      if (!op.isDoor) dashSegment(cs, ce);  // window -> dashed; door -> empty
+    }
+    cursor = Math.max(cursor, op.segEnd);
+  }
+  fillSegment(cursor, wallEnd);
+}
+
+function drawElem(type, params, dir, isSelected, walls, doors, windows) {
+  const { x1, y1, x2, y2 } = evalRect(params, S.W, S.H);
+  const elemLeft   = toCanvasX(Math.min(x1, x2));
+  const elemTop    = toCanvasY(Math.min(y1, y2));
+  const elemRight  = toCanvasX(Math.max(x1, x2));
+  const elemBottom = toCanvasY(Math.max(y1, y2));
+  const elemWidthPx  = elemRight  - elemLeft;
+  const elemHeightPx = elemBottom - elemTop;
+  if (elemWidthPx <= 0 || elemHeightPx <= 0) return;
+
+  const col = COLORS[type] || '#888';
+
+  ctx.fillStyle = hexToRgba(col, 0.4);
+  ctx.fillRect(elemLeft, elemTop, elemWidthPx, elemHeightPx);
+
+  const wallSet    = new Set(walls || []);
+  const wallThick  = 2;
+  const rectBounds = { cx1: elemLeft, cy1: elemTop, cx2: elemRight, cy2: elemBottom,
+                        pw: elemWidthPx, ph: elemHeightPx };
+  if (wallSet.has(2)) drawWall('h', elemLeft, elemRight, elemTop,              wallThick, col, 2, rectBounds, doors, windows);
+  if (wallSet.has(3)) drawWall('h', elemLeft, elemRight, elemBottom-wallThick, wallThick, col, 3, rectBounds, doors, windows);
+  if (wallSet.has(0)) drawWall('v', elemTop, elemBottom, elemLeft,             wallThick, col, 0, rectBounds, doors, windows);
+  if (wallSet.has(1)) drawWall('v', elemTop, elemBottom, elemRight-wallThick,  wallThick, col, 1, rectBounds, doors, windows);
+
+  if (isSelected) {
+    ctx.save();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.strokeRect(elemLeft - 2, elemTop - 2, elemWidthPx + 4, elemHeightPx + 4);
+    ctx.restore();
+  }
+
+  if (dir !== undefined) {
+    const arrowSz = Math.max(8, Math.min(Math.min(elemWidthPx, elemHeightPx) * 0.4, 28));
+    if (elemWidthPx > arrowSz * 0.8 && elemHeightPx > arrowSz * 0.8)
+      drawArrow(elemLeft + elemWidthPx / 2, elemTop + elemHeightPx / 2, dir, arrowSz);
+  }
+}
+
+// ── Navigation Canvas Drawing ─────────────────────────────────────────────────
+
+// Draw the complete navigation mode canvas (called by redraw when mode is
+// pedestrianNavigation or vehicleNavigation — operates on activeNav()).
+// Rendering order (bottom to top):
+//   1. Faint geometry background (others types at 0.08 alpha)
+//   2. Inner connection lines (white, lineWidth=2)
+//   3. Path lines (white, lineWidth=4; selected: dashed); endpoints as brown/orange labeled circles
+//   4. Single/row implicit nodes (pink/cyan labeled circles, not selectable)
+//   5. Standalone nodes (yellow labeled circles)
+//   6. Outer connection rings (colored annuli around node circles)
+function drawNavMode() {
+  const nav = activeNav();
+
+  // ── 1. Faint geometry background ──
+  for (const type of MODE_TYPES.others) {
+    const arr = S.data[type] || [];
+    for (const item of arr) {
+      const params = getParams(type, item);
+      const { x1, y1, x2, y2 } = evalRect(params, S.W, S.H);
+      const left   = toCanvasX(Math.min(x1, x2)), top    = toCanvasY(Math.min(y1, y2));
+      const right  = toCanvasX(Math.max(x1, x2)), bottom = toCanvasY(Math.max(y1, y2));
+      const pw = right - left, ph = bottom - top;
+      if (pw <= 0 || ph <= 0) continue;
+      ctx.fillStyle = hexToRgba(COLORS[type] || '#888', 0.08);
+      ctx.fillRect(left, top, pw, ph);
+    }
+  }
+
+  // ── 2. Inner connection lines ──
+  for (let i = 0; i < nav.connections.length; i++) {
+    const conn = nav.connections[i];
+    if (isExternalEndpoint(conn.begin) || isExternalEndpoint(conn.end)) continue;
+    const posA = resolveEndpointPos(conn.begin);
+    const posB = resolveEndpointPos(conn.end);
+    if (!posA || !posB) continue;
+    const ax = toCanvasX(posA[0]), ay = toCanvasY(posA[1]);
+    const bx = toCanvasX(posB[0]), by = toCanvasY(posB[1]);
+    const isSel = (S.navSel && S.navSel.kind === 'conn' && S.navSel.idx === i)
+               || isNavMultiSelected('conn', i);
+    ctx.save();
+    ctx.strokeStyle = isSel ? '#ffffff' : 'rgba(255,255,255,0.7)';
+    ctx.lineWidth   = isSel ? 3 : 2;
+    ctx.setLineDash(isSel ? [5, 3] : []);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── 3. Path lines ──
+  // Line body: selected = dashed, unselected = solid. Both lineWidth=4.
+  // Endpoints: start circle = brown, end circle = orange, both show line index as label.
+  for (let i = 0; i < nav.lines.length; i++) {
+    const line = nav.lines[i];
+    const pB = evalPoint(line.begin), pE = evalPoint(line.end);
+    const bx = toCanvasX(pB[0]), by = toCanvasY(pB[1]);
+    const ex = toCanvasX(pE[0]), ey = toCanvasY(pE[1]);
+    const isSel = (S.navSel && S.navSel.kind === 'line' && S.navSel.idx === i)
+               || isNavMultiSelected('line', i);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth   = 4;
+    ctx.setLineDash(isSel ? [8, 5] : []);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.restore();
+
+    // Start = brown, End = orange; both labeled with line index i
+    drawNavCircle(bx, by, NAV_CIRCLE_R, NAV_CIRCLE_COLOR.lineStart, i);
+    drawNavCircle(ex, ey, NAV_CIRCLE_R, NAV_CIRCLE_COLOR.lineEnd,   i);
+  }
+
+  // ── 4. Single/row implicit nodes (pink/cyan labeled circles, not selectable) ──
+  // Each single and row has an implicit nav node at its rect center.
+  for (let i = 0; i < (S.data.singles || []).length; i++) {
+    const { x1, y1, x2, y2 } = evalRect(S.data.singles[i].rect, S.W, S.H);
+    drawNavCircle(toCanvasX((x1+x2)/2), toCanvasY((y1+y2)/2), NAV_CIRCLE_R, NAV_CIRCLE_COLOR.single, i);
+  }
+  for (let i = 0; i < (S.data.rows || []).length; i++) {
+    const { x1, y1, x2, y2 } = evalRect(S.data.rows[i].rect, S.W, S.H);
+    drawNavCircle(toCanvasX((x1+x2)/2), toCanvasY((y1+y2)/2), NAV_CIRCLE_R, NAV_CIRCLE_COLOR.row, i);
+  }
+
+  // ── 5. Standalone nodes (yellow labeled circles; selected: dashed outer ring) ──
+  for (let i = 0; i < nav.nodes.length; i++) {
+    const pos = evalPoint(nav.nodes[i].position);
+    const cx = toCanvasX(pos[0]), cy = toCanvasY(pos[1]);
+    const isSel = (S.navSel && S.navSel.kind === 'node' && S.navSel.idx === i)
+               || isNavMultiSelected('node', i);
+
+    drawNavCircle(cx, cy, NAV_CIRCLE_R, NAV_CIRCLE_COLOR.node, i);
+
+    if (isSel) {
+      ctx.save();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.arc(cx, cy, NAV_CIRCLE_R + 4, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // ── 6. Outer connection rings (colored annuli) ──
+  // Group outer connection types by node index; draw progressively larger rings
+  // so multiple outer connections on the same node are all visible.
+  const outerByNode = new Map();  // nodeIdx -> [extType, ...]
+  for (const conn of nav.connections) {
+    let extEp = null, nodeEp = null;
+    if (isExternalEndpoint(conn.begin) && conn.end.type   === 'node') { extEp = conn.begin; nodeEp = conn.end;   }
+    if (isExternalEndpoint(conn.end)   && conn.begin.type === 'node') { extEp = conn.end;   nodeEp = conn.begin; }
+    if (!extEp) continue;
+    if (!outerByNode.has(nodeEp.idx)) outerByNode.set(nodeEp.idx, []);
+    outerByNode.get(nodeEp.idx).push(extEp.type);
+  }
+  for (const [nodeIdx, types] of outerByNode) {
+    const node = nav.nodes[nodeIdx];
+    if (!node) continue;
+    const pos = evalPoint(node.position);
+    const cx = toCanvasX(pos[0]), cy = toCanvasY(pos[1]);
+    types.forEach((type, i) => {
+      const rOuter = 12 + i * 5;   // rings at r=12,17,22 for 1st,2nd,3rd outer type
+      const rInner = 8  + i * 5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
+      ctx.moveTo(cx + rInner, cy);  // start new sub-path for hole
+      ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+      ctx.fillStyle = OUTER_CONN_COLORS[type] || '#ffffff';
+      ctx.fill('evenodd');  // evenodd: outer region filled, inner hole removed
+    });
+  }
+
+  // Drag-select overlay
+  if (_isDragging && _dragStart && _dragCurrent) {
+    const rx = Math.min(_dragStart.canvX, _dragCurrent.canvX);
+    const ry = Math.min(_dragStart.canvY, _dragCurrent.canvY);
+    const rw = Math.abs(_dragCurrent.canvX - _dragStart.canvX);
+    const rh = Math.abs(_dragCurrent.canvY - _dragStart.canvY);
+    ctx.save();
+    ctx.fillStyle = 'rgba(100,160,255,0.08)';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = 'rgba(100,160,255,0.6)';
+    ctx.lineWidth = 1; ctx.setLineDash([4, 2]);
+    ctx.strokeRect(rx, ry, rw, rh);
+    ctx.restore();
+  }
+}
+
+// ── Main Redraw ───────────────────────────────────────────────────────────────
+
+function redraw() {
+  updateActiveDirtyMark();
+  canvas.width  = Math.round(CANVAS_PX * S.W / Math.max(S.W, S.H));
+  canvas.height = Math.round(CANVAS_PX * S.H / Math.max(S.W, S.H));
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Grid lines and 0-1 boundary (drawn in every mode)
+  const gridLeft   = toCanvasX(0), gridTop    = toCanvasY(0);
+  const gridRight  = toCanvasX(1), gridBottom = toCanvasY(1);
+  ctx.strokeStyle = '#2d2d2d'; ctx.lineWidth = 0.5;
+  for (let gridFrac = 0.25; gridFrac < 1; gridFrac += 0.25) {
+    const gx = toCanvasX(gridFrac);
+    ctx.beginPath(); ctx.moveTo(gx, gridTop);  ctx.lineTo(gx, gridBottom); ctx.stroke();
+    const gy = toCanvasY(gridFrac);
+    ctx.beginPath(); ctx.moveTo(gridLeft, gy); ctx.lineTo(gridRight, gy);  ctx.stroke();
+  }
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+  ctx.strokeRect(gridLeft, gridTop, gridRight - gridLeft, gridBottom - gridTop);
+
+  // Navigation modes: hand off to dedicated drawing function
+  if (isNavMode(S.mode)) {
+    drawNavMode();
+    return;
+  }
+
+  // Geometry modes: draw all elements in z-order for current mode
+  const typeList = MODE_TYPES[S.mode];
+  for (const type of typeList) {
+    const elemArray = S.data[type] || [];
+    for (let i = 0; i < elemArray.length; i++) {
+      const item       = elemArray[i];
+      const params     = getParams(type, item);
+      const dir        = SIMPLE.has(type) ? undefined : item.direction;
+      const isSelected = (S.sel && S.sel.type === type && S.sel.idx === i)
+                      || isGeoMultiSelected(type, i);
+      const walls   = (type === 'singles' || type === 'rows') ? [0, 1, 2, 3] : (item.walls || []);
+      const doors   = !SIMPLE.has(type) ? (item.doors   || []) : [];
+      const windows = !SIMPLE.has(type) ? (item.windows || []) : [];
+      drawElem(type, params, dir, isSelected, walls, doors, windows);
+    }
+  }
+
+  // Drag-select overlay: drawn last so it appears on top of everything
+  if (_isDragging && _dragStart && _dragCurrent) {
+    const rx = Math.min(_dragStart.canvX, _dragCurrent.canvX);
+    const ry = Math.min(_dragStart.canvY, _dragCurrent.canvY);
+    const rw = Math.abs(_dragCurrent.canvX - _dragStart.canvX);
+    const rh = Math.abs(_dragCurrent.canvY - _dragStart.canvY);
+    ctx.save();
+    ctx.fillStyle = 'rgba(100,160,255,0.08)';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = 'rgba(100,160,255,0.6)';
+    ctx.lineWidth = 1; ctx.setLineDash([4, 2]);
+    ctx.strokeRect(rx, ry, rw, rh);
+    ctx.restore();
+  }
+}
+
+// ── Navigation Hit Test ───────────────────────────────────────────────────────
+
+// Find which nav element was clicked (canvas pixel coordinates).
+// Priority: standalone nodes > path lines > inner connections.
+// Returns {kind, idx} or null.
+function navHitTest(canvX, canvY) {
+  const nav = activeNav();
+
+  // 1. Standalone nodes: within NAV_CIRCLE_R+2 px of circle center
+  let bestNode = null, bestNodeDist = NAV_CIRCLE_R + 2;
+  for (let i = 0; i < nav.nodes.length; i++) {
+    const pos = evalPoint(nav.nodes[i].position);
+    const d   = Math.hypot(canvX - toCanvasX(pos[0]), canvY - toCanvasY(pos[1]));
+    if (d < bestNodeDist) { bestNodeDist = d; bestNode = i; }
+  }
+  if (bestNode !== null) return { kind: 'node', idx: bestNode };
+
+  // 2. Path lines: within NAV_CIRCLE_R px of segment (covers both line body and endpoint circles)
+  let bestLine = null, bestLineDist = NAV_CIRCLE_R;
+  for (let i = 0; i < nav.lines.length; i++) {
+    const line = nav.lines[i];
+    const pB = evalPoint(line.begin), pE = evalPoint(line.end);
+    const d  = distToSegment(canvX, canvY,
+                  toCanvasX(pB[0]), toCanvasY(pB[1]),
+                  toCanvasX(pE[0]), toCanvasY(pE[1]));
+    if (d < bestLineDist) { bestLineDist = d; bestLine = i; }
+  }
+  if (bestLine !== null) return { kind: 'line', idx: bestLine };
+
+  // 3. Inner connections: within 5px of connection segment
+  let bestConn = null, bestConnDist = 5;
+  for (let i = 0; i < nav.connections.length; i++) {
+    const conn = nav.connections[i];
+    if (isExternalEndpoint(conn.begin) || isExternalEndpoint(conn.end)) continue;
+    const posA = resolveEndpointPos(conn.begin);
+    const posB = resolveEndpointPos(conn.end);
+    if (!posA || !posB) continue;
+    const d = distToSegment(canvX, canvY,
+                toCanvasX(posA[0]), toCanvasY(posA[1]),
+                toCanvasX(posB[0]), toCanvasY(posB[1]));
+    if (d < bestConnDist) { bestConnDist = d; bestConn = i; }
+  }
+  if (bestConn !== null) return { kind: 'conn', idx: bestConn };
+
+  return null;
+}
+
+// ── Auto-delete Zero-area on Deselect ────────────────────────────────────────
+
+// Call before any operation that clears/changes S.sel in geometry modes.
+// If the currently selected element has a negative signed area (one dimension
+// inverted), it is considered a degenerate rect and is silently removed.
+function autoDeleteZeroArea() {
+  if (!S.sel || isNavMode(S.mode)) return;
+  const { type, idx } = S.sel;
+  const elemArray = S.data[type];
+  if (!elemArray || idx >= elemArray.length) return;
+  const { x1, y1, x2, y2 } = evalRect(getParams(type, elemArray[idx]), S.W, S.H);
+  if ((x2 - x1) * (y2 - y1) < 0) {
+    elemArray.splice(idx, 1);
+    S.sel = null;
+  }
+}
+
+// ── Canvas Click / Rect-Select Handlers ──────────────────────────────────────
+
+function performClick(canvX, canvY, ctrlKey) {
+  if (isNavMode(S.mode)) {
+    const hit = navHitTest(canvX, canvY);
+    if (ctrlKey) {
+      // Promote existing single selection into multiSel before toggling the new hit
+      if (S.navSel && !isNavMultiSelected(S.navSel.kind, S.navSel.idx))
+        S.multiSel.push({ kind: S.navSel.kind, idx: S.navSel.idx });
+      if (hit) toggleNavMultiSel(hit.kind, hit.idx);
+      S.navSel = null; S.sel = null;
+    } else {
+      S.multiSel = []; S.navSel = hit; S.sel = null;
+    }
+  } else {
+    if (!ctrlKey) autoDeleteZeroArea();
+    const clickLx = toLayoutX(canvX), clickLy = toLayoutY(canvY);
+    const typeList = MODE_TYPES[S.mode];
+    let hitResult = null;
+    outer:
+    for (let typeIdx = typeList.length - 1; typeIdx >= 0; typeIdx--) {
+      const type = typeList[typeIdx];
+      const elemArray = S.data[type] || [];
+      for (let i = elemArray.length - 1; i >= 0; i--) {
+        if (hitTest(clickLx, clickLy, getParams(type, elemArray[i]), S.W, S.H)) {
+          hitResult = { type, idx: i }; break outer;
+        }
+      }
+    }
+    if (ctrlKey) {
+      // Promote existing single selection into multiSel before toggling the new hit
+      if (S.sel && !isGeoMultiSelected(S.sel.type, S.sel.idx))
+        S.multiSel.push({ type: S.sel.type, idx: S.sel.idx });
+      if (hitResult) toggleGeoMultiSel(hitResult.type, hitResult.idx);
+      S.sel = null; S.navSel = null;
+    } else {
+      S.multiSel = []; S.sel = hitResult; S.navSel = null;
+    }
+  }
+}
+
+function performRectSelect(cx1, cy1, cx2, cy2, ctrl) {
+  if (isNavMode(S.mode)) {
+    S.navSel = null;
+    const nav = activeNav();
+    for (let i = 0; i < nav.nodes.length; i++) {
+      const pos = evalPoint(nav.nodes[i].position);
+      const px = toCanvasX(pos[0]), py = toCanvasY(pos[1]);
+      if (px >= cx1 && px <= cx2 && py >= cy1 && py <= cy2) {
+        if (ctrl) toggleNavMultiSel('node', i);
+        else if (!isNavMultiSelected('node', i)) S.multiSel.push({ kind: 'node', idx: i });
+      }
+    }
+    for (let i = 0; i < nav.lines.length; i++) {
+      const line = nav.lines[i];
+      const pB = evalPoint(line.begin), pE = evalPoint(line.end);
+      const bx = toCanvasX(pB[0]), by = toCanvasY(pB[1]);
+      const ex = toCanvasX(pE[0]), ey = toCanvasY(pE[1]);
+      const hit = (bx >= cx1 && bx <= cx2 && by >= cy1 && by <= cy2) ||
+                  (ex >= cx1 && ex <= cx2 && ey >= cy1 && ey <= cy2);
+      if (hit) {
+        if (ctrl) toggleNavMultiSel('line', i);
+        else if (!isNavMultiSelected('line', i)) S.multiSel.push({ kind: 'line', idx: i });
+      }
+    }
+    for (let i = 0; i < nav.connections.length; i++) {
+      const conn = nav.connections[i];
+      if (isExternalEndpoint(conn.begin) || isExternalEndpoint(conn.end)) continue;
+      const posA = resolveEndpointPos(conn.begin), posB = resolveEndpointPos(conn.end);
+      if (!posA || !posB) continue;
+      const ax = toCanvasX(posA[0]), ay = toCanvasY(posA[1]);
+      const bx = toCanvasX(posB[0]), by = toCanvasY(posB[1]);
+      const hit = (ax >= cx1 && ax <= cx2 && ay >= cy1 && ay <= cy2) ||
+                  (bx >= cx1 && bx <= cx2 && by >= cy1 && by <= cy2);
+      if (hit) {
+        if (ctrl) toggleNavMultiSel('conn', i);
+        else if (!isNavMultiSelected('conn', i)) S.multiSel.push({ kind: 'conn', idx: i });
+      }
+    }
+  } else {
+    S.sel = null;
+    const lx1 = toLayoutX(cx1), ly1 = toLayoutY(cy1);
+    const lx2 = toLayoutX(cx2), ly2 = toLayoutY(cy2);
+    for (const type of MODE_TYPES[S.mode]) {
+      const elemArray = S.data[type] || [];
+      for (let i = 0; i < elemArray.length; i++) {
+        const { x1, y1, x2, y2 } = evalRect(getParams(type, elemArray[i]), S.W, S.H);
+        const eMinX = Math.min(x1, x2), eMaxX = Math.max(x1, x2);
+        const eMinY = Math.min(y1, y2), eMaxY = Math.max(y1, y2);
+        if (eMaxX >= lx1 && eMinX <= lx2 && eMaxY >= ly1 && eMinY <= ly2) {
+          if (ctrl) toggleGeoMultiSel(type, i);
+          else if (!isGeoMultiSelected(type, i)) S.multiSel.push({ type, idx: i });
+        }
+      }
+    }
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const inInput = document.activeElement.tagName === 'INPUT' ||
+                  document.activeElement.tagName === 'TEXTAREA' ||
+                  document.activeElement.tagName === 'SELECT';
+  switch (e.key) {
+    case 'z': e.preventDefault(); e.shiftKey ? redo() : undo(); break;
+    case 'y': e.preventDefault(); redo(); break;
+    case 's': e.preventDefault(); e.shiftKey ? saveFileAs() : saveFile(); break;
+    case 'c': if (!inInput) { e.preventDefault(); copySelected(); } break;
+    case 'v': if (!inInput) { e.preventDefault(); pasteElement(); } break;
+    case 'Delete': if (!inInput) { e.preventDefault(); deleteSelected(); } break;
+  }
+});
+
+canvas.addEventListener('mousedown', e => {
+  const { canvX, canvY } = getCanvasCoords(e);
+  _dragStart   = { canvX, canvY };
+  _dragCurrent = { canvX, canvY };
+  _isDragging  = false;
+  if (!(e.ctrlKey || e.metaKey)) {
+    S.sel = null; S.navSel = null; S.multiSel = [];
+    redraw(); renderPanel();
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!_dragStart) return;
+  const { canvX, canvY } = getCanvasCoords(e);
+  _dragCurrent = { canvX, canvY };
+  const dx = canvX - _dragStart.canvX, dy = canvY - _dragStart.canvY;
+  if (!_isDragging && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) _isDragging = true;
+  if (_isDragging) redraw();
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (!_dragStart) return;
+  const { canvX, canvY } = getCanvasCoords(e);
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (_isDragging) {
+    performRectSelect(
+      Math.min(_dragStart.canvX, canvX), Math.min(_dragStart.canvY, canvY),
+      Math.max(_dragStart.canvX, canvX), Math.max(_dragStart.canvY, canvY),
+      ctrl
+    );
+  } else {
+    performClick(canvX, canvY, ctrl);
+  }
+  _dragStart = null; _dragCurrent = null; _isDragging = false;
+  redraw(); renderPanel();
+});
+
+// ── Panel DOM Helpers ─────────────────────────────────────────────────────────
+
+function div(cls, ...children) {
+  const el = document.createElement('div');
+  if (cls) el.className = cls;
+  children.forEach(child => {
+    if (child instanceof Node) el.appendChild(child);
+    else if (child)            el.appendChild(document.createTextNode(child));
+  });
+  return el;
+}
+function btn(text, cls, onclick) {
+  const el = document.createElement('button');
+  if (cls) el.className = cls;
+  el.textContent = text; el.onclick = onclick;
+  return el;
+}
+function numInput(initialValue, onInput, cls) {
+  const el = document.createElement('input');
+  el.type = 'number'; el.step = '0.1'; el.value = initialValue;
+  if (cls) el.className = cls;
+  el.addEventListener('focus', () => { _pendingSnapshot = true; });
+  el.addEventListener('input', () => {
+    if (_pendingSnapshot) { snapshot(); _pendingSnapshot = false; }
+    onInput(parseFloat(el.value) || 0);
+  });
+  el.addEventListener('wheel', e => {
+    if (document.activeElement !== el) return;
+    e.preventDefault();
+    const step = parseFloat(el.step) || 1;
+    const newVal = (parseFloat(el.value) || 0) + (e.deltaY < 0 ? step : -step);
+    el.value = parseFloat(newVal.toPrecision(10));
+    if (_pendingSnapshot) { snapshot(); _pendingSnapshot = false; }
+    onInput(parseFloat(el.value) || 0);
+  }, { passive: false });
+  return el;
+}
+function makeSelect(optPairs, currentValue, onChange) {
+  const el = document.createElement('select');
+  optPairs.forEach(([value, label]) => {
+    const opt = document.createElement('option');
+    opt.value = value; opt.textContent = label;
+    el.appendChild(opt);
+  });
+  el.value = String(currentValue);
+  el.addEventListener('change', () => onChange(el.value));
+  return el;
+}
+function makeCheckLabel(text, isChecked, onChange) {
+  const lbl = document.createElement('label');
+  lbl.style.cssText = 'display:flex;align-items:center;gap:3px;cursor:pointer;color:#aaa;font-size:12px;';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = isChecked;
+  cb.addEventListener('change', () => { snapshot(); onChange(cb.checked); });
+  lbl.appendChild(cb);
+  lbl.appendChild(document.createTextNode(text));
+  return lbl;
+}
+function lbl(text) {
+  return Object.assign(document.createElement('label'), { textContent: text });
+}
+
+// ── Panel Rendering ───────────────────────────────────────────────────────────
+
+function renderPanel() {
+  const panel = document.getElementById('panel');
+  panel.innerHTML = '';
+
+  // ── Multi-select: show count + bulk actions, skip the rest of the panel ──
+  if (S.multiSel.length > 0) {
+    const multiSec = div('sec');
+    multiSec.appendChild(div('sec-title', `已选中 ${S.multiSel.length} 个元素`));
+    multiSec.appendChild(div('row',
+      btn('复制', 'primary', () => copySelected()),
+      btn('删除', 'danger',  () => deleteSelected()),
+    ));
+    panel.appendChild(multiSec);
+    return;
+  }
+
+  // ── Navigation modes: hand off to nav panel renderer ──
+  if (isNavMode(S.mode)) {
+    renderNavPanel(panel);
+    return;
+  }
+
+  // ── Geometry mode: element editor or new-element creator ──
+  if (S.sel) {
+    panel.appendChild(makeSelSec());
+  } else {
+    const newElemSec = div('sec');
+    newElemSec.appendChild(div('sec-title', '新建元素'));
+    const typeOpts = MODE_TYPES[S.mode].map(t => [t, TYPE_LABEL[t]]);
+    const typeSel  = makeSelect(typeOpts, typeOpts[0][0], () => {});
+    newElemSec.appendChild(div('row',
+      typeSel,
+      btn('新建', 'primary', () => {
+        snapshot();
+        const t = typeSel.value;
+        S.data[t].push(makeDefault(t));
+        S.sel = { type: t, idx: S.data[t].length - 1 };
+        redraw(); renderPanel();
+      })
+    ));
+    panel.appendChild(newElemSec);
+  }
+}
+
+// ── Navigation Panel ──────────────────────────────────────────────────────────
+
+// Build and append navigation-mode panel sections to the given panel element.
+function renderNavPanel(panel) {
+  const nav = activeNav();
+
+  if (!S.navSel) {
+    // No selection: buttons to create nodes/lines, and add inner connections
+    const newSec = div('sec');
+    newSec.appendChild(div('sec-title', '新建导航元素'));
+    newSec.appendChild(div('row',
+      btn('+ 新建节点', 'primary', () => {
+        snapshot();
+        nav.nodes.push({ position: [0, 0, 0, 0] });
+        S.navSel = { kind: 'node', idx: nav.nodes.length - 1 };
+        redraw(); renderPanel();
+      }),
+      btn('+ 新建路径', 'primary', () => {
+        snapshot();
+        nav.lines.push({ begin: [0, 0, 0, 0], end: [1, 0, 0, 0] });
+        S.navSel = { kind: 'line', idx: nav.lines.length - 1 };
+        redraw(); renderPanel();
+      })
+    ));
+    panel.appendChild(newSec);
+
+    // Add inner connection section
+    const connSec = div('sec');
+    connSec.appendChild(div('sec-title', '添加层内连接'));
+    const epOpts = makeEndpointOpts();
+    if (epOpts.length >= 2) {
+      const beginSel = makeSelect(epOpts, epOpts[0][0], () => {});
+      const endSel   = makeSelect(epOpts, epOpts[1][0], () => {});
+      connSec.appendChild(div('row', lbl('Begin'), beginSel));
+      connSec.appendChild(div('row', lbl('End'),   endSel));
+      connSec.appendChild(div('row',
+        btn('添加连接', 'primary', () => {
+          snapshot();
+          nav.connections.push({ begin: decodeEndpoint(beginSel.value), end: decodeEndpoint(endSel.value) });
+          S.navSel = { kind: 'conn', idx: nav.connections.length - 1 };
+          redraw(); renderPanel();
+        })
+      ));
+    } else {
+      connSec.appendChild(div('row', div('hint', '（需要至少两个端点才能添加连接）')));
+    }
+    panel.appendChild(connSec);
+    return;
+  }
+
+  if (S.navSel.kind === 'node') panel.appendChild(makeNavNodeSec());
+  else if (S.navSel.kind === 'line') panel.appendChild(makeNavLineSec());
+  else if (S.navSel.kind === 'conn') panel.appendChild(makeNavConnSec());
+}
+
+// Editor section for a selected standalone nav node
+function makeNavNodeSec() {
+  const { idx } = S.navSel;
+  const nav  = activeNav();
+  const node = nav.nodes[idx];
+  if (!node) { S.navSel = null; return div('sec'); }
+
+  const sec = div('sec');
+  sec.appendChild(div('sec-title', `节点 #${idx}`));
+
+  // 4-parameter position editor [xr, xo, yr, yo]
+  sec.appendChild(div('field-title', '位置'));
+  const posGrid = div('pgrid');
+  ['xr', 'xo', 'yr', 'yo'].forEach((l, i) => {
+    posGrid.appendChild(Object.assign(document.createElement('label'), { textContent: l }));
+    posGrid.appendChild(numInput(node.position[i], v => { node.position[i] = v; redraw(); }));
+  });
+  sec.appendChild(posGrid);
+
+  // Outer connections: one row per external type with colored dot + add/remove button
+  sec.appendChild(document.createElement('hr'));
+  sec.appendChild(div('field-title', '层外连接'));
+  for (const [extType, extLabel] of Object.entries(OUTER_CONN_LABEL)) {
+    // Find if this node already has an outer connection of this type
+    const connIdx = nav.connections.findIndex(c => {
+      const hasExt  = c.begin.type === extType || c.end.type === extType;
+      const hasNode = (c.begin.type === 'node' && c.begin.idx === idx)
+                   || (c.end.type   === 'node' && c.end.idx   === idx);
+      return hasExt && hasNode;
+    });
+    const exists = connIdx >= 0;
+    const row = div('row');
+    const dot = document.createElement('span');
+    dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:${OUTER_CONN_COLORS[extType]};flex-shrink:0;`;
+    row.appendChild(dot);
+    row.appendChild(lbl(extLabel));
+    if (exists) {
+      row.appendChild(btn('删除', 'sm danger', () => {
+        snapshot();
+        nav.connections.splice(connIdx, 1);
+        redraw(); renderPanel();
+      }));
+    } else {
+      row.appendChild(btn('添加', 'sm primary', () => {
+        snapshot();
+        nav.connections.push({ begin: { type: 'node', idx }, end: { type: extType } });
+        redraw(); renderPanel();
+      }));
+    }
+    sec.appendChild(row);
+  }
+
+  // Delete node: remove it and all connections that reference it, fix remaining indices
+  sec.appendChild(document.createElement('hr'));
+  sec.appendChild(div('row',
+    btn('复制节点', 'primary', () => {
+      snapshot();
+      nav.nodes.push(JSON.parse(JSON.stringify(node)));
+      S.navSel = { kind: 'node', idx: nav.nodes.length - 1 };
+      redraw(); renderPanel();
+    }),
+    btn('删除节点', 'danger', () => {
+    snapshot();
+    nav.connections = nav.connections.filter(c =>
+      !(c.begin.type === 'node' && c.begin.idx === idx) &&
+      !(c.end.type   === 'node' && c.end.idx   === idx)
+    );
+    nav.connections.forEach(c => {
+      if (c.begin.type === 'node' && c.begin.idx > idx) c.begin.idx--;
+      if (c.end.type   === 'node' && c.end.idx   > idx) c.end.idx--;
+    });
+    nav.nodes.splice(idx, 1);
+    S.navSel = null;
+    redraw(); renderPanel();
+  })));
+
+  return sec;
+}
+
+// Editor section for a selected path line (nav.lines entry)
+function makeNavLineSec() {
+  const { idx }  = S.navSel;
+  const nav  = activeNav();
+  const line = nav.lines[idx];
+  if (!line) { S.navSel = null; return div('sec'); }
+
+  const sec = div('sec');
+  sec.appendChild(div('sec-title', `路径 #${idx}`));
+
+  // Two 4-param editors: begin and end
+  for (const [key, label] of [['begin', '起点'], ['end', '终点']]) {
+    sec.appendChild(div('field-title', label));
+    const grid = div('pgrid');
+    ['xr', 'xo', 'yr', 'yo'].forEach((l, i) => {
+      grid.appendChild(Object.assign(document.createElement('label'), { textContent: l }));
+      grid.appendChild(numInput(line[key][i], v => { line[key][i] = v; redraw(); }));
+    });
+    sec.appendChild(grid);
+  }
+
+  // Delete line: remove it and all connections referencing it, fix remaining indices
+  sec.appendChild(document.createElement('hr'));
+  sec.appendChild(div('row',
+    btn('复制路径', 'primary', () => {
+      snapshot();
+      nav.lines.push(JSON.parse(JSON.stringify(line)));
+      S.navSel = { kind: 'line', idx: nav.lines.length - 1 };
+      redraw(); renderPanel();
+    }),
+    btn('删除路径', 'danger', () => {
+    snapshot();
+    nav.connections = nav.connections.filter(c =>
+      !(c.begin.type === 'line' && c.begin.idx === idx) &&
+      !(c.end.type   === 'line' && c.end.idx   === idx)
+    );
+    nav.connections.forEach(c => {
+      if (c.begin.type === 'line' && c.begin.idx > idx) c.begin.idx--;
+      if (c.end.type   === 'line' && c.end.idx   > idx) c.end.idx--;
+    });
+    nav.lines.splice(idx, 1);
+    S.navSel = null;
+    redraw(); renderPanel();
+  })));
+
+  return sec;
+}
+
+// Editor section for a selected inner connection (nav.connections entry, non-external)
+function makeNavConnSec() {
+  const { idx } = S.navSel;
+  const nav  = activeNav();
+  const conn = nav.connections[idx];
+  if (!conn) { S.navSel = null; return div('sec'); }
+
+  const sec = div('sec');
+  sec.appendChild(div('sec-title', `连接 #${idx}`));
+
+  const epOpts = makeEndpointOpts();
+  if (epOpts.length === 0) {
+    sec.appendChild(div('row', div('hint', '（没有可选的端点）')));
+  } else {
+    sec.appendChild(div('field-title', 'Begin'));
+    const beginSel = makeSelect(epOpts, encodeEndpoint(conn.begin), v => {
+      snapshot(); conn.begin = decodeEndpoint(v); redraw();
+    });
+    sec.appendChild(div('row', beginSel));
+
+    sec.appendChild(div('field-title', 'End'));
+    const endSel = makeSelect(epOpts, encodeEndpoint(conn.end), v => {
+      snapshot(); conn.end = decodeEndpoint(v); redraw();
+    });
+    sec.appendChild(div('row', endSel));
+  }
+
+  sec.appendChild(document.createElement('hr'));
+  sec.appendChild(div('row',
+    btn('复制连接', 'primary', () => {
+      snapshot();
+      nav.connections.push(JSON.parse(JSON.stringify(conn)));
+      S.navSel = { kind: 'conn', idx: nav.connections.length - 1 };
+      redraw(); renderPanel();
+    }),
+    btn('删除连接', 'danger', () => {
+      snapshot();
+      nav.connections.splice(idx, 1);
+      S.navSel = null;
+      redraw(); renderPanel();
+    })
+  ));
+
+  return sec;
+}
+
+// ── Geometry Panel ────────────────────────────────────────────────────────────
+
+function makeDefault(type) {
+  const defaultRect = [1, 0, 1, 0, 1.2, 0, 1.2, 0];
+  if (SIMPLE.has(type)) return [...defaultRect];
+  const obj = { rect: [...defaultRect] };
+  if (HAS_DIR.has(type))  obj.direction = 2;
+  if (HAS_WALL.has(type)) obj.walls     = [];
+  if (HAS_DOOR.has(type)) obj.doors     = [];
+  if (HAS_WIN.has(type))  obj.windows   = [];
+  return obj;
+}
+
+function makeSelSec() {
+  const { type, idx } = S.sel;
+  const elemArray = S.data[type];
+  if (!elemArray || idx >= elemArray.length) { S.sel = null; return div('sec'); }
+  const item = elemArray[idx];
+
+  const sec = div('sec');
+  sec.appendChild(div('sec-title', `${TYPE_LABEL[type]}  #${idx}`));
+  sec.appendChild(makeRectEdit(type, item));
+
+  if (HAS_DIR.has(type)) {
+    sec.appendChild(document.createElement('hr'));
+    sec.appendChild(div('field-title', '朝向'));
+    const dirSel = makeSelect(DIR_LABELS.map((l, i) => [i, l]), item.direction, v => {
+      snapshot(); item.direction = parseInt(v); redraw();
+    });
+    sec.appendChild(div('row', dirSel));
+  }
+
+  if (HAS_WALL.has(type)) {
+    if (!item.walls) item.walls = [];
+    sec.appendChild(document.createElement('hr'));
+    sec.appendChild(div('field-title', '墙'));
+    const wallRow = div('row');
+    DIR_LABELS.forEach((l, dirIdx) => {
+      wallRow.appendChild(makeCheckLabel(l, item.walls.includes(dirIdx), checked => {
+        if (checked) {
+          if (!item.walls.includes(dirIdx)) { item.walls.push(dirIdx); item.walls.sort((a, b) => a - b); }
+        } else {
+          item.walls = item.walls.filter(w => w !== dirIdx);
+        }
+      }));
+    });
+    sec.appendChild(wallRow);
+  }
+
+  if (HAS_DOOR.has(type)) {
+    if (!item.doors) item.doors = [];
+    sec.appendChild(document.createElement('hr'));
+    sec.appendChild(makeOpeningList(item, 'doors', '门'));
+  }
+
+  if (HAS_WIN.has(type)) {
+    if (!item.windows) item.windows = [];
+    sec.appendChild(document.createElement('hr'));
+    sec.appendChild(makeOpeningList(item, 'windows', '窗'));
+  }
+
+  sec.appendChild(document.createElement('hr'));
+  sec.appendChild(div('row',
+    btn('复制', 'primary', () => {
+      snapshot();
+      elemArray.push(JSON.parse(JSON.stringify(item)));
+      S.sel = { type, idx: elemArray.length - 1 };
+      redraw(); renderPanel();
+    }),
+    btn('删除', 'danger', () => {
+      snapshot();
+      elemArray.splice(idx, 1);
+      S.sel = null;
+      redraw(); renderPanel();
+    })
+  ));
+
+  return sec;
+}
+
+function makeRectEdit(type, item) {
+  const params      = getParams(type, item);
+  const paramLabels = ['x1r', 'x1o', 'y1r', 'y1o', 'x2r', 'x2o', 'y2r', 'y2o'];
+  const wrap = div('');
+  wrap.appendChild(div('field-title', 'Rect'));
+  const grid = div('pgrid');
+  paramLabels.forEach((l, i) => {
+    grid.appendChild(Object.assign(document.createElement('label'), { textContent: l }));
+    grid.appendChild(numInput(params[i], v => { params[i] = v; redraw(); }, null));
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+function makeOpeningList(item, fieldName, label) {
+  const openingList = item[fieldName];
+  const wrap = div('');
+
+  function rebuild() {
+    wrap.innerHTML = '';
+    wrap.appendChild(div('field-title', label));
+
+    openingList.forEach((entry, entryIdx) => {
+      if (!entry.positions) entry.positions = [];
+      const entrySub = div('sub');
+
+      const hdr = div('row');
+      hdr.appendChild(lbl('方向'));
+      hdr.appendChild(makeSelect(DIR_LABELS.map((l, i) => [i, l]), entry.direction, v => {
+        entry.direction = parseInt(v);
+      }));
+      hdr.appendChild(btn('x', 'sm danger', () => { snapshot(); openingList.splice(entryIdx, 1); rebuild(); }));
+      entrySub.appendChild(hdr);
+
+      entry.positions.forEach((pos, posIdx) => {
+        const posSub  = div('sub');
+        const posGrid = div('pgrid');
+        ['x1r', 'x1o', 'y1r', 'y1o', 'x2r', 'x2o', 'y2r', 'y2o'].forEach((l, k) => {
+          posGrid.appendChild(Object.assign(document.createElement('label'), { textContent: l }));
+          posGrid.appendChild(numInput(pos[k], v => { pos[k] = v; }));
+        });
+        posSub.appendChild(posGrid);
+        posSub.appendChild(div('row',
+          btn('- 删除位置', 'sm', () => { snapshot(); entry.positions.splice(posIdx, 1); rebuild(); })
+        ));
+        entrySub.appendChild(posSub);
+      });
+
+      entrySub.appendChild(div('row',
+        btn('+ 位置', 'sm primary', () => {
+          snapshot();
+          entry.positions.push([0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, fieldName === 'doors' ? 0 : -0.1]);
+          rebuild();
+        })
+      ));
+      wrap.appendChild(entrySub);
+    });
+
+    wrap.appendChild(div('row',
+      btn(`+ 添加${label}`, 'sm primary', () => {
+        snapshot();
+        openingList.push({ direction: 2, positions: [] });
+        rebuild();
+      })
+    ));
+  }
+
+  rebuild();
+  return wrap;
+}
+
+// ── Delete Selected ───────────────────────────────────────────────────────────
+
+function deleteSelected() {
+  if (S.multiSel.length > 0) {
+    snapshot();
+    if (!isNavMode(S.mode)) {
+      const byType = {};
+      S.multiSel.forEach(({ type, idx }) => { (byType[type] = byType[type] || []).push(idx); });
+      for (const [type, idxs] of Object.entries(byType)) {
+        idxs.sort((a, b) => b - a).forEach(i => S.data[type].splice(i, 1));
+      }
+    } else {
+      const nodeSet = new Set(S.multiSel.filter(s => s.kind === 'node').map(s => s.idx));
+      const lineSet = new Set(S.multiSel.filter(s => s.kind === 'line').map(s => s.idx));
+      const connSet = new Set(S.multiSel.filter(s => s.kind === 'conn').map(s => s.idx));
+      const nav = activeNav();
+      nav.connections = nav.connections.filter((c, i) =>
+        !connSet.has(i) &&
+        !(c.begin.type === 'node' && nodeSet.has(c.begin.idx)) &&
+        !(c.end.type   === 'node' && nodeSet.has(c.end.idx))   &&
+        !(c.begin.type === 'line' && lineSet.has(c.begin.idx)) &&
+        !(c.end.type   === 'line' && lineSet.has(c.end.idx))
+      );
+      const oldNodeCount = nav.nodes.length;
+      nav.nodes = nav.nodes.filter((_, i) => !nodeSet.has(i));
+      const nodeIdxMap = new Map();
+      let ni = 0;
+      for (let i = 0; i < oldNodeCount; i++) if (!nodeSet.has(i)) nodeIdxMap.set(i, ni++);
+      nav.connections.forEach(c => {
+        if (c.begin.type === 'node') c.begin.idx = nodeIdxMap.get(c.begin.idx) ?? c.begin.idx;
+        if (c.end.type   === 'node') c.end.idx   = nodeIdxMap.get(c.end.idx)   ?? c.end.idx;
+      });
+      const oldLineCount = nav.lines.length;
+      nav.lines = nav.lines.filter((_, i) => !lineSet.has(i));
+      const lineIdxMap = new Map();
+      let li = 0;
+      for (let i = 0; i < oldLineCount; i++) if (!lineSet.has(i)) lineIdxMap.set(i, li++);
+      nav.connections.forEach(c => {
+        if (c.begin.type === 'line') c.begin.idx = lineIdxMap.get(c.begin.idx) ?? c.begin.idx;
+        if (c.end.type   === 'line') c.end.idx   = lineIdxMap.get(c.end.idx)   ?? c.end.idx;
+      });
+    }
+    S.multiSel = []; S.sel = null; S.navSel = null;
+    redraw(); renderPanel();
+    return;
+  }
+  if (!isNavMode(S.mode) && S.sel) {
+    const { type, idx } = S.sel;
+    const arr = S.data[type];
+    if (!arr || idx >= arr.length) return;
+    snapshot();
+    arr.splice(idx, 1);
+    S.sel = null;
+    redraw(); renderPanel();
+  } else if (isNavMode(S.mode) && S.navSel) {
+    const { kind, idx } = S.navSel;
+    const nav = activeNav();
+    snapshot();
+    if (kind === 'node') {
+      nav.connections = nav.connections.filter(c =>
+        !(c.begin.type === 'node' && c.begin.idx === idx) &&
+        !(c.end.type   === 'node' && c.end.idx   === idx)
+      );
+      nav.connections.forEach(c => {
+        if (c.begin.type === 'node' && c.begin.idx > idx) c.begin.idx--;
+        if (c.end.type   === 'node' && c.end.idx   > idx) c.end.idx--;
+      });
+      nav.nodes.splice(idx, 1);
+    } else if (kind === 'line') {
+      nav.connections = nav.connections.filter(c =>
+        !(c.begin.type === 'line' && c.begin.idx === idx) &&
+        !(c.end.type   === 'line' && c.end.idx   === idx)
+      );
+      nav.connections.forEach(c => {
+        if (c.begin.type === 'line' && c.begin.idx > idx) c.begin.idx--;
+        if (c.end.type   === 'line' && c.end.idx   > idx) c.end.idx--;
+      });
+      nav.lines.splice(idx, 1);
+    } else if (kind === 'conn') {
+      nav.connections.splice(idx, 1);
+    }
+    S.navSel = null;
+    redraw(); renderPanel();
+  }
+}
+
+// ── Clipboard Copy / Paste ────────────────────────────────────────────────────
+
+// Payload format: { type, element } for geometry, { navKind, element } for nav.
+
+function copySelected() {
+  if (S.multiSel.length > 0) {
+    let elements;
+    if (!isNavMode(S.mode)) {
+      elements = S.multiSel
+        .map(({ type, idx }) => { const e = S.data[type]?.[idx]; return e ? { type, element: e } : null; })
+        .filter(Boolean);
+    } else {
+      const nav = activeNav();
+      elements = S.multiSel
+        .map(({ kind, idx }) => {
+          const src = kind === 'node' ? nav.nodes[idx]
+                    : kind === 'line' ? nav.lines[idx]
+                    : nav.connections[idx];
+          return src ? { navKind: kind, element: src } : null;
+        }).filter(Boolean);
+    }
+    if (elements.length) navigator.clipboard.writeText(JSON.stringify({ multi: true, elements })).catch(() => {});
+    return;
+  }
+  let payload = null;
+  if (!isNavMode(S.mode) && S.sel) {
+    const { type, idx } = S.sel;
+    const item = S.data[type]?.[idx];
+    if (item) payload = { type, element: item };
+  } else if (isNavMode(S.mode) && S.navSel) {
+    const { kind, idx } = S.navSel;
+    const nav = activeNav();
+    const src = kind === 'node' ? nav.nodes[idx]
+              : kind === 'line' ? nav.lines[idx]
+              : nav.connections[idx];
+    if (src) payload = { navKind: kind, element: src };
+  }
+  if (payload) navigator.clipboard.writeText(JSON.stringify(payload)).catch(() => {});
+}
+
+// Returns the display mode that contains the given geometry type, or null.
+function typeToMode(type) {
+  for (const [mode, types] of Object.entries(MODE_TYPES)) {
+    if (types.includes(type)) return mode;
+  }
+  return null;
+}
+
+async function pasteElement() {
+  let text;
+  try { text = await navigator.clipboard.readText(); } catch { return; }
+  let p;
+  try { p = JSON.parse(text); } catch { return; }
+  if (!p || typeof p !== 'object') return;
+
+  if (p.multi && Array.isArray(p.elements) && p.elements.length) {
+    snapshot();
+    S.multiSel = []; S.sel = null; S.navSel = null;
+    const first = p.elements[0];
+    if (first && first.type) {
+      p.elements.forEach(({ type, element }) => {
+        if (!type || S.data[type] === undefined || !element) return;
+        S.data[type].push(JSON.parse(JSON.stringify(element)));
+        S.multiSel.push({ type, idx: S.data[type].length - 1 });
+      });
+      S.mode = typeToMode(first.type) || S.mode;
+    } else if (first && first.navKind) {
+      // Stay on the current navigation layer if already viewing one; otherwise
+      // default to pedestrianNavigation (matches the old single-layer behavior).
+      S.mode = isNavMode(S.mode) ? S.mode : 'pedestrianNavigation';
+      const nav = activeNav();
+      p.elements.forEach(({ navKind, element }) => {
+        if (!element) return;
+        if (navKind === 'node')  { nav.nodes.push(JSON.parse(JSON.stringify(element)));       S.multiSel.push({ kind: 'node', idx: nav.nodes.length - 1 }); }
+        if (navKind === 'line')  { nav.lines.push(JSON.parse(JSON.stringify(element)));       S.multiSel.push({ kind: 'line', idx: nav.lines.length - 1 }); }
+        if (navKind === 'conn')  { nav.connections.push(JSON.parse(JSON.stringify(element))); S.multiSel.push({ kind: 'conn', idx: nav.connections.length - 1 }); }
+      });
+    }
+    redraw(); renderLegend(); renderPanel();
+    return;
+  }
+
+  if (!p.element) return;
+
+  if (p.type && S.data[p.type] !== undefined) {
+    // Geometry element — switch to its mode and select it
+    const mode = typeToMode(p.type);
+    if (!mode) return;
+    snapshot();
+    const arr = S.data[p.type];
+    arr.push(JSON.parse(JSON.stringify(p.element)));
+    S.mode   = mode;
+    S.sel    = { type: p.type, idx: arr.length - 1 };
+    S.navSel = null;
+    redraw(); renderLegend(); renderPanel();
+  } else if (p.navKind === 'node' || p.navKind === 'line' || p.navKind === 'conn') {
+    // Navigation element — switch to a navigation mode (staying on the current
+    // one if already viewing one) and select it
+    snapshot();
+    S.mode = isNavMode(S.mode) ? S.mode : 'pedestrianNavigation';
+    const nav = activeNav();
+    if (p.navKind === 'node') {
+      nav.nodes.push(JSON.parse(JSON.stringify(p.element)));
+      S.navSel = { kind: 'node', idx: nav.nodes.length - 1 };
+    } else if (p.navKind === 'line') {
+      nav.lines.push(JSON.parse(JSON.stringify(p.element)));
+      S.navSel = { kind: 'line', idx: nav.lines.length - 1 };
+    } else {
+      nav.connections.push(JSON.parse(JSON.stringify(p.element)));
+      S.navSel = { kind: 'conn', idx: nav.connections.length - 1 };
+    }
+    S.sel  = null;
+    redraw(); renderLegend(); renderPanel();
+  }
+}
+
+function applyGlobalSize() {
+  const w = parseFloat(document.getElementById('global-w').value);
+  const h = parseFloat(document.getElementById('global-h').value);
+  if (isNaN(w) || w < 2 || isNaN(h) || h < 2) { alert('W 和 H 必须 >= 2'); return; }
+  S.W = w; S.H = h;
+  redraw();
+}
+
+// ── File I/O ──────────────────────────────────────────────────────────────────
+
+function newFile() {
+  saveCurrentToEntry();
+  const entry = makeBlankEntry(makeNewFileName());
+  files.push(entry);
+  applyEntry(files.length - 1);
+}
+
+function parseAndApply(text, name, handle = null) {
+  try {
+    let src = text.replace(/,(\s*[}\]])/g, '$1');  // strip trailing commas
+    const parsed = JSON.parse(src);
+    const entry = makeBlankEntry(name);
+    entry.handle = handle;
+    ALL_KEYS.forEach(k => { entry.data[k] = parsed[k] || []; });
+    // Legacy (pre-migration) files stored the pedestrian layer under the bare
+    // "navigation" key — accept it as a fallback alias so old files still load.
+    const rawPedNav = parsed.pedestrianNavigation || parsed.navigation;
+    entry.pedestrianNav = rawPedNav
+      ? { nodes: rawPedNav.nodes || [], lines: rawPedNav.lines || [], connections: rawPedNav.connections || [] }
+      : { nodes: [], lines: [], connections: [] };
+    const rawVehNav = parsed.vehicleNavigation;
+    entry.vehicleNav = rawVehNav
+      ? { nodes: rawVehNav.nodes || [], lines: rawVehNav.lines || [], connections: rawVehNav.connections || [] }
+      : { nodes: [], lines: [], connections: [] };
+    entry.savedSnapshot = JSON.stringify({ data: entry.data, pedestrianNav: entry.pedestrianNav, vehicleNav: entry.vehicleNav });
+    saveCurrentToEntry();
+    files.push(entry);
+    applyEntry(files.length - 1);
+  } catch (err) { alert('解析失败: ' + err.message); }
+}
+
+async function loadFile() {
+  if (window.showOpenFilePicker) {
+    try {
+      const handles = await window.showOpenFilePicker({
+        types: [{ description: 'Layout', accept: { 'text/plain': ['.layout'] } }],
+        startIn: files[activeFileIdx]?.handle || 'documents',
+        multiple: true,
+      });
+      let lastIdx = -1;
+      for (const handle of handles) {
+        // Check if already open
+        let existIdx = -1;
+        for (let i = 0; i < files.length; i++) {
+          if (files[i].handle && await files[i].handle.isSameEntry(handle)) { existIdx = i; break; }
+        }
+        if (existIdx >= 0) { lastIdx = existIdx; continue; }
+        const file = await handle.getFile();
+        parseAndApply(await file.text(), file.name, handle);
+        lastIdx = files.length - 1;
+      }
+      if (lastIdx >= 0) switchToFile(lastIdx);
+    } catch (err) { if (err.name !== 'AbortError') alert('加载失败: ' + err.message); }
+  } else {
+    document.getElementById('finput').click();
+  }
+}
+
+async function onFileChosen(e) {
+  const chosen = Array.from(e.target.files);
+  e.target.value = '';
+  if (!chosen.length) return;
+  let lastIdx = -1;
+  for (const file of chosen) {
+    // Check if already open by name
+    const existIdx = files.findIndex(f => f.name === file.name);
+    if (existIdx >= 0) { lastIdx = existIdx; continue; }
+    parseAndApply(await file.text(), file.name, null);
+    lastIdx = files.length - 1;
+  }
+  if (lastIdx >= 0) switchToFile(lastIdx);
+}
+
+async function saveFileAs() {
+  const content    = serializeLayout();
+  const curEntry   = files[activeFileIdx];
+  const fileName   = curEntry ? curEntry.name : 'untitled.layout';
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        startIn: curEntry?.handle || 'documents',
+        types: [{ description: 'Layout', accept: { 'text/plain': ['.layout'] } }],
+      });
+      if (curEntry) { curEntry.handle = handle; curEntry.name = handle.name; curEntry.savedSnapshot = snapshotState(); }
+      document.getElementById('fname').textContent = handle.name;
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      renderFileList();
+    } catch (err) { if (err.name !== 'AbortError') alert('保存失败: ' + err.message); }
+  } else {
+    if (curEntry) curEntry.savedSnapshot = snapshotState();
+    const anchor    = document.createElement('a');
+    anchor.href     = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
+    renderFileList();
+  }
+}
+
+async function saveFile() {
+  const content  = serializeLayout();
+  const curEntry = files[activeFileIdx];
+  const fileName = curEntry ? curEntry.name : 'untitled.layout';
+  try {
+    if (curEntry?.handle) {
+      const writable = await curEntry.handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      curEntry.savedSnapshot = snapshotState();
+      renderFileList();
+      return;
+    }
+    if (window.showSaveFilePicker) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        startIn: curEntry?.handle || 'documents',
+        types: [{ description: 'Layout', accept: { 'text/plain': ['.layout'] } }],
+      });
+      if (curEntry) { curEntry.handle = handle; curEntry.name = handle.name; curEntry.savedSnapshot = snapshotState(); }
+      document.getElementById('fname').textContent = handle.name;
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+      renderFileList();
+    } else {
+      if (curEntry) curEntry.savedSnapshot = snapshotState();
+      const anchor    = document.createElement('a');
+      anchor.href     = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(anchor.href);
+      renderFileList();
+    }
+  } catch (err) { if (err.name !== 'AbortError') alert('保存失败: ' + err.message); }
+}
+
+// ── Serializer ────────────────────────────────────────────────────────────────
+// Reproduces the original .layout file style:
+//   - Tab indentation
+//   - Trailing comma after every value/entry
+//   - 8-element (or any) pure-number arrays on a single line
+
+function fmtNum(n) {
+  if (Number.isInteger(n)) return String(n);
+  return parseFloat(n.toPrecision(10)).toString();
+}
+function fmt8(arr) { return '[' + arr.map(fmtNum).join(', ') + ']'; }
+
+function serializeLayout() {
+  const lines       = ['{'];
+  const presentKeys = ALL_KEYS.filter(k => S.data[k] && S.data[k].length > 0);
+
+  presentKeys.forEach(key => {
+    const elemArray = S.data[key];
+    if (SIMPLE.has(key)) {
+      lines.push(`\t"${key}": [`);
+      elemArray.forEach(item => lines.push(`\t\t${fmt8(item)},`));
+      lines.push(`\t],`);
+    } else {
+      const serializedItems = elemArray.map(obj => serializeObj(obj, '\t\t'));
+      lines.push(`\t"${key}": [${serializedItems.join(',\n\t')}],`);
+    }
+  });
+
+  // Pedestrian and vehicle navigation layers are always written, even when
+  // empty, so downstream C++ parsing doesn't need to special-case a missing key.
+  lines.push(`\t"pedestrianNavigation": ${serializeValue(S.pedestrianNav, '\t')},`);
+  lines.push(`\t"vehicleNavigation": ${serializeValue(S.vehicleNav, '\t')}`);
+
+  lines.push('}');
+  return lines.join('\n');
+}
+
+function serializeObj(obj, indent) {
+  let s = '{\n';
+  if (obj.rect      !== undefined) s += `${indent}"rect": ${fmt8(obj.rect)},\n`;
+  if (obj.direction !== undefined) s += `${indent}"direction": ${obj.direction},\n`;
+  if (obj.walls && obj.walls.length > 0) s += `${indent}"walls": [${obj.walls.join(', ')}],\n`;
+  if (obj.doors   && obj.doors.length   > 0) s += serializeOpenings(obj.doors,   'doors',   indent);
+  if (obj.windows && obj.windows.length > 0) s += serializeOpenings(obj.windows, 'windows', indent);
+  s += indent.slice(1) + '}';
+  return s;
+}
+
+function serializeOpenings(openingList, fieldName, indent) {
+  let s = `${indent}"${fieldName}": [\n`;
+  openingList.forEach(entry => {
+    s += `${indent}\t{\n`;
+    s += `${indent}\t\t"direction": ${entry.direction},\n`;
+    if (entry.positions && entry.positions.length > 0) {
+      s += `${indent}\t\t"positions": [\n`;
+      entry.positions.forEach(pos => { s += `${indent}\t\t\t${fmt8(pos)},\n`; });
+      s += `${indent}\t\t],\n`;
+    } else {
+      s += `${indent}\t\t"positions": [],\n`;
+    }
+    s += `${indent}\t},\n`;
+  });
+  s += `${indent}],\n`;
+  return s;
+}
+
+// Generic recursive serializer for the navigation objects and any future arbitrary fields.
+// Pure-number arrays (e.g. 4-element point params) are always written on a single line.
+function serializeValue(val, ind) {
+  if (val === null || val === undefined) return 'null';
+  if (typeof val === 'number')  return fmtNum(val);
+  if (typeof val === 'string')  return JSON.stringify(val);
+  if (typeof val === 'boolean') return String(val);
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '[]';
+    if (val.every(v => typeof v === 'number'))
+      return '[' + val.map(fmtNum).join(', ') + ']';
+    const ni = ind + '\t';
+    const inner = val.map(v => ni + serializeValue(v, ni)).join(',\n') + ',';
+    return '[\n' + inner + '\n' + ind + ']';
+  }
+  if (typeof val === 'object') {
+    const keys = Object.keys(val);
+    if (keys.length === 0) return '{}';
+    const ni = ind + '\t';
+    const inner = keys.map(k => ni + JSON.stringify(k) + ': ' + serializeValue(val[k], ni)).join(',\n') + ',';
+    return '{\n' + inner + '\n' + ind + '}';
+  }
+  return String(val);
+}
+
+// ── Legend ────────────────────────────────────────────────────────────────────
+
+function renderLegend() {
+  const legendEl = document.getElementById('legend');
+  legendEl.innerHTML = '';
+
+  if (isNavMode(S.mode)) {
+    const navItems = [
+      { color: NAV_CIRCLE_COLOR.node,      label: '独立节点' },
+      { color: NAV_CIRCLE_COLOR.single,    label: '独立房间节点' },
+      { color: NAV_CIRCLE_COLOR.row,       label: '联排房间节点' },
+      { color: NAV_CIRCLE_COLOR.lineStart, label: '路径起点' },
+      { color: NAV_CIRCLE_COLOR.lineEnd,   label: '路径终点' },
+      { color: 'rgba(255,255,255,0.7)',     label: '层内连接' },
+      { color: '#ff4444',                  label: '外部出口' },
+      { color: '#44cc88',                  label: '上楼' },
+      { color: '#4488ff',                  label: '下楼' },
+    ];
+    for (const { color, label } of navItems) {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'legend-item';
+      const swatch = document.createElement('div');
+      swatch.className = 'legend-swatch';
+      swatch.style.background = color;
+      const nameLabel = document.createElement('span');
+      nameLabel.textContent = label;
+      itemEl.appendChild(swatch); itemEl.appendChild(nameLabel);
+      legendEl.appendChild(itemEl);
+    }
+    return;
+  }
+
+  for (const type of MODE_TYPES[S.mode]) {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'legend-item';
+    const swatch = document.createElement('div');
+    swatch.className = 'legend-swatch';
+    swatch.style.background = COLORS[type];
+    const nameLabel = document.createElement('span');
+    nameLabel.textContent = TYPE_LABEL[type];
+    itemEl.appendChild(swatch); itemEl.appendChild(nameLabel);
+    legendEl.appendChild(itemEl);
+  }
+}
+
+// ── Initialization ────────────────────────────────────────────────────────────
+
+// Global mode selector
+document.getElementById('global-mode').addEventListener('change', e => {
+  autoDeleteZeroArea();
+  S.mode = e.target.value;
+  S.sel = null; S.navSel = null; S.multiSel = [];
+  redraw(); renderLegend(); renderPanel();
+});
+
+// Wheel scroll for global W/H inputs
+['global-w', 'global-h'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('wheel', e => {
+    if (document.activeElement !== el) return;
+    e.preventDefault();
+    const step = parseFloat(el.step) || 1;
+    const newVal = Math.max(parseFloat(el.min) || 0, (parseFloat(el.value) || 0) + (e.deltaY < 0 ? step : -step));
+    el.value = newVal;
+  }, { passive: false });
+});
+
+renderFileList();  // starts with no files: hides canvas-wrap and panel
+</script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 #include "building_basic.h"
+#include "room_basic.h"
 
 #include "common/utility.h"
 
@@ -12,11 +13,22 @@ BuildingBasic::BuildingBasic() {
 	lastName = string(GetType()) + std::to_string(count++);
 }
 
-void BuildingBasic::Layout(int direction, const Quad& quad,
+void BuildingBasic::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
-	// direction对显式占位是真实方向，对权重CDF/FillRemainder落地是-1——这个测试类型的楼体/
-	// 楼层配置不需要跟着方向变化，也不需要看quad/boundaryRoads，两种情况都设成同一份固定数据
-	// 即可(更复杂的类型可以用quad.GetSizeX()/GetSizeY()按实际落地尺寸调整楼层数等)。
+	// direction对显式占位是真实方向，对权重CDF/FillRemainder落地传进来是-1——这个类型的
+	// 楼层内部布局(AssignFloor选的模板)按direction摆朝向，所以-1时要从boundaryRoads里随机
+	// 挑一个有真实边界路的方向回写，保证这栋building最终有确定方向可用(行人导航的"outside"
+	// 端点要靠这个方向找到该连去哪条路，见building_mod.h的Layout()注释)。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
 	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f }; // 楼体占地块80%，居中
 	basements = 1;
 	layers = 3 + GetRandom(5); // 地上楼层数3~7层随机(GetRandom(5)取[0,5))
@@ -28,6 +40,28 @@ void BuildingBasic::Layout(int direction, const Quad& quad,
 		floorHeights.push_back(kFloorHeightCycle[i % 4]);
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
+
+	// 楼层内部布局：地下室用"有上行楼梯"的模板，1楼用"上下都有"的模板，2楼及以上用
+	// "有下行楼梯"的模板——照抄老工程ResidentialBuilding::LayoutBuilding的调用模式，
+	// 复用从老工程迁移过来的.layout模板(见Resource/Layouts/)。每层两个row槽位都归到
+	// 同一个(component_basic,0)组合下，模拟"一栋居民楼是一个整体"。
+	constexpr const char* kComponent = "component_basic";
+	constexpr int kComponentId = 0;
+	constexpr float kRoomAcreage = 800.f;
+
+	AssignFloor(-1, "preset_straight_linear_bg+", direction);
+	ArrangeRow(-1, 0, RoomBasic::GetId(), kRoomAcreage, kComponent, kComponentId);
+	ArrangeRow(-1, 1, RoomBasic::GetId(), kRoomAcreage, kComponent, kComponentId);
+
+	AssignFloor(0, "preset_straight_linear_fg+-", direction);
+	ArrangeRow(0, 0, RoomBasic::GetId(), kRoomAcreage, kComponent, kComponentId);
+	ArrangeRow(0, 1, RoomBasic::GetId(), kRoomAcreage, kComponent, kComponentId);
+
+	for (int level = 1; level < layers; level++) {
+		AssignFloor(level, "preset_straight_linear_fu+-", direction);
+		ArrangeRow(level, 0, RoomBasic::GetId(), kRoomAcreage, kComponent, kComponentId);
+		ArrangeRow(level, 1, RoomBasic::GetId(), kRoomAcreage, kComponent, kComponentId);
+	}
 }
 
 void BuildingBasic::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

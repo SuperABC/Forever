@@ -9,12 +9,20 @@
 ## 关键设计
 
 - **移植但大幅裁剪**——旧工程`Config`类还管理启用禁用状态(`GetChecks`/`CheckMod`/
-  `GetEnables`/`modEnables`)、资源目录扫描(`GetResourcePaths`/`GetLayouts`/`GetScripts`/
-  `GetPlugins`/`GetPakFiles`/`AddResourcePath`/`RemoveResourcePath`)、全局设置
-  (`GetGlobalSettings`)、主剧情路径(`GetStories`/`AddScript`/`RemoveScript`)、运行时写回
-  (`WriteConfig`)。这些本阶段全部未迁移,等对应机制/系统在阶段4落地时再按需加回——现在
-  `config.json`本身也只保留了`dll_paths`一个key(其余旧key本阶段不迁移,见
-  `Forever_UE/Resource/Config/config.json`)。
+  `GetEnables`/`modEnables`)、老式"一个资源目录桶四种后缀分流"的资源目录扫描
+  (`GetResourcePaths`/`GetScripts`/`GetPlugins`/`GetPakFiles`/`AddResourcePath`/
+  `RemoveResourcePath`)、全局设置(`GetGlobalSettings`)、主剧情路径(`GetStories`/
+  `AddScript`/`RemoveScript`)、运行时写回(`WriteConfig`)。这些仍未迁移，等对应机制/系统
+  在阶段4落地时再按需加回。
+- **`AddLayoutPath`/`GetLayouts`(Building内部布局落地时补回)**：和`AddDllPath`同一个
+  `std::filesystem::recursive_directory_iterator`扫描手法，但不探测/加载任何东西
+  (`.layout`是纯文本模板文件，不是dll)，扫到就收。`config.json`新增`"layout_paths"`数组，
+  相对路径解析规则和`dll_paths`完全一样(相对`configDir`)。`ForeverModSubsystem::
+  Initialize`里`Config::GetLayouts()`为空时回退扫描默认的`Resource/Layouts/`目录，和
+  `dll_paths`回退扫描`../Forever_Mod`同一个容错风格。不是恢复旧工程"一个资源目录桶四种
+  后缀分流"那套`GetResourcePaths`/`AddResourcePath`设计——这次直接一个独立的
+  `layout_paths`数组更清楚，也不需要`GetScripts`/`GetPlugins`/`GetPakFiles`这些还没有
+  消费方的其它资源类型。
 - **用旧工程`Dependence/common/json.h`而不是UE自带Json模块解析`config.json`**——UE的
   `FJsonSerializer`是严格JSON,不支持注释;旧工程的解析器是JsonCpp衍生的宽松版本,支持
   `//`/`/* */`注释,更适合手写维护的配置文件。这是本次会话用户明确要求的决定。
@@ -55,8 +63,9 @@
 
 ## 待办/后续阶段
 
-- 阶段4:按需加回启用禁用状态、资源目录扫描、全局设置、剧情路径、运行时写回,恢复
-  `config.json`里对应的key。
+- 阶段4:按需加回启用禁用状态、`GetScripts`/`GetPlugins`/`GetPakFiles`、全局设置、剧情
+  路径、运行时写回,恢复`config.json`里对应的key(`layout_paths`已经在Building内部布局
+  落地时补回，见上)。
 - 阶段4:如果发现同一个dll在多次`AddDllPath`调用(如`Debug`/`Release`两个目录都被扫描到)
   下被重复记录,需要处理去重——目前`GetMods()`已经按dll绝对路径去重,但如果同一个mod id
   被两个不同dll路径各自注册一次,`ModLoader::RegisterConcept`会调用两次

@@ -1,0 +1,144 @@
+{
+	"ceilings": [
+		[
+			0,
+			0,
+			0,
+			0,
+			1,
+			0,
+			1,
+			0
+		]
+	],
+	"grounds": [
+		[
+			0,
+			0,
+			0,
+			0,
+			1,
+			0,
+			1,
+			0
+		]
+	],
+	"singles": [
+		{
+			"rect": [
+				0,
+				0,
+				0,
+				0,
+				1,
+				0,
+				1,
+				0
+			],
+			"direction": 2,
+			"doors": [
+				{
+					"direction": 2,
+					"positions": [
+						[
+							0.5,
+							-0.5,
+							0,
+							0.1,
+							0.5,
+							0.5,
+							1,
+							0
+						]
+					]
+				}
+			],
+			"windows": [
+				{
+					"direction": 0,
+					"positions": [
+						[
+							0.3,
+							0,
+							0,
+							0.1,
+							0.7,
+							0,
+							1,
+							-0.1
+						]
+					]
+				},
+				{
+					"direction": 1,
+					"positions": [
+						[
+							0.3,
+							0,
+							0,
+							0.1,
+							0.7,
+							0,
+							1,
+							-0.1
+						]
+					]
+				},
+				{
+					"direction": 3,
+					"positions": [
+						[
+							0.3,
+							0,
+							0,
+							0.1,
+							0.7,
+							0,
+							1,
+							-0.1
+						]
+					]
+				}
+			]
+		}
+	],
+	"pedestrianNavigation": {
+		"nodes": [
+			{
+				"position": [
+					0.5,
+					0,
+					0,
+					-0.2
+				]
+			}
+		],
+		"lines": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "outside"
+				},
+				"end": {
+					"type": "node",
+					"idx": 0
+				}
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0
+				},
+				"end": {
+					"type": "single",
+					"idx": 0
+				}
+			}
+		]
+	},
+	"vehicleNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": []
+	}
+}

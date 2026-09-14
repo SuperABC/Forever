@@ -65,6 +65,29 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
   一次**——车道分裂/开口这套逻辑目前没有真正的调用方（Building/Zone还没迁移），但接口和实现
   都是完整、可用的，不是占位。`ThroughLine`（`Map`私有实现细节，见`roadnet.md`最后一条）记录
   每条`Road`每个方向/类别当前的贯通线，供`AddRoadAccessNode`拆分。
+  - **Building内部布局落地后第一次有了真正的调用方（行人`outside`端点接路网），PIE验证
+    立刻炸出一个之前从未触发过的bug**：`AddRoadAccessNode`算新访问点世界坐标一直是自己
+    内联一份`offsetDist = LaneCenterOffset(lanes, laneIndex)`，直接从道路中心线量——这个
+    公式对车行道是对的，但对行人道是错的：人行道物理上在同侧车行道+停车道**外侧**，必须像
+    `ComputeLaneAnchorPosition`那样先加上`SumWidths(车行道)+SumWidths(停车道)`才是真正的
+    人行道基准（和`RoadJunction::Build`里`pedestrianSide`锚点用的是同一套算法，见下面
+    `ComputeLaneAnchorPosition`那条）。之前一直没暴露是因为这条函数从来没有真正的行人调用方；
+    这次改成直接调用`ComputeLaneAnchorPosition`算`nx/ny`，不再自己重复一份（本该一开始就
+    共用，`map.h`的`ComputeLaneAnchorPosition`注释其实早就写着"和`AddRoadAccessNode`算
+    `nx/ny`用的是同一套公式"，但实现一直没跟上）。
+  - **紧接着又炸出第二个bug：`AddRoadAccessNode`原来的参数是`const string& roadName`，
+    在`roadnet->GetRoads()`（只装"大路"）里按名字线性查找**——building贡献的outside端点
+    如果朝向的边界Road正好是一条小路（`Lot::SplitWithPath`产的path road），两个问题一起
+    炸：①小路根本不在`roadnet->GetRoads()`里（小路挂在各自`Lot::GetPathRoads()`下），
+    查找必然落空；②就算把小路也塞进查找范围，小路全部共用同一个名字字面量`"path"`（不像
+    大路每条名字唯一），按名字查根本没法在多条同名小路之间区分。PIE验证发现的现象是"建筑
+    连到大路正常，连到小路完全没反应"，正对应这两个问题。修复：`AddRoadAccessNode`签名
+    从`const string& roadName`改成`Road* road`，去掉内部按名字查找那段——调用方
+    (`Map::FlushPendingBuildingRoadAccess`)手上本来就有确定的`Road*`（来自
+    `Building::GetBoundaryRoad`，`ThroughLine`自己也是按指针不是按名字索引），直接传指针
+    既修好小路场景又省一次线性查找。这次改动前`AddRoadAccessNode`唯一的调用方就是
+    `Map`自己（Forever层那次demo验证调用早就删掉了，见
+    `ForeverRoadnetFrameworkComponent.md`），所以是纯粹的签名清理，不影响其它调用方。
 - **单行道开口 + 每条车道都有专属贯通线（第八/九两轮迁移）**：`ThroughLine`最终形态是
   "每个(类别,side)对应一个vector，元素数量=该side车道数，每条车道各有一条entry"——这是
   两轮修复叠加的结果：
@@ -210,6 +233,69 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
     返回，不做任何持有。**小路现在会接入`vehicleNavGraph`/`pedestrianNavGraph`**——
     `RequestPlacement`/`FillRemainder`每产出一条新的`PathRoadLink`，调用方就立刻对它调一次
     `Map::ConnectPathRoad(link)`，具体规则见下"ConnectPathRoad"一节。
+
+## Building内部布局（组合/房间/楼层几何/行人导航，第N轮迁移）
+
+`InitBuildings()`开头新增：注册`roomFactory`/`componentFactory`（和`buildingFactory`同一套
+`modLoader.RegisterConcept<...>`模式，`config.json`对应`"room_mods"`/`"component_mods"`
+数组）+`buildingLayoutLibrary.ReadTemplates(Config::GetLayouts())`加载一次全局共享的
+`.layout`模板仓库（`Config::GetLayouts()`见`common/config.md`，`BuildingLayoutLibrary`见
+`Source/Core/map/building.md`）。
+
+原来3处`building->Layout(direction)`调用点都改成
+`building->Layout(direction, buildingLayoutLibrary, roomFactory, componentFactory,
+navResult)`——`Building::Layout()`现在除了解析footprint/楼层高度之外，还会按mod声明的
+`AssignFloor`/`AssignRoom`/`ArrangeRow`实例化每层的`Floor`+`Room`+`Component`，并构建
+building内部的行人导航图，产出一个`BuildingNavResult`（新建节点+新建连接+`"outside"`
+类型的待接路网端点）。调用完之后立刻调`MergeBuildingNavigation(building, navResult)`：
+
+- `result.nodes`直接登记进`Map`自己的`navAnchorNodes`。
+- `result.connections`按两个方向都插入`pedestrianNavGraph`（行人边双向，和`InitRoadnet`
+  建图同一个约定）。
+- `result.outsideNodes`：用`building->GetBoundaryRoad(building->GetDirection())`找到
+  building朝向的边界`Road`，把端点投影到该`Road`中心线上求弧长比例`t`（`Road`没有中间
+  控制点时直接解析算垂足，O(1)；有控制点才退化成数值采样+局部细化），判断building在
+  `Road`哪一侧——但**这里不立即调用`Map::AddRoadAccessNode`**，只是把`(road, t,
+  useForwardSide, outsideNode)`记进`pendingBuildingRoadAccess`，真正断开延后到
+  `InitBuildings()`三段落地循环全部跑完之后统一调用`FlushPendingBuildingRoadAccess()`
+  （PIE验证发现的bug修复，第十三轮迁移）：`InitBuildings()`处理building的顺序（显式占位
+  按注册id、权重CDF按`GetLots()`遍历、园区内部按`zones`这个`unordered_map`）和building
+  在同一条Road上的实际物理位置（沿road的弧长比例`t`）完全无关，如果哪个building先跑到
+  `MergeBuildingNavigation`就立即断开，物理上靠后的building可能先断、把物理上靠前的
+  building还没轮到的那一段"剩余尾巴"抢先切掉——`Map::BreakThroughLine`"每次都断当前
+  剩余尾巴、`fromAnchor`跟着往通行方向前进"这个设计假设要求同一条车道上的连续断开必须
+  按物理顺序进行（side0沿Start→End即`t`升序，side1沿End→Start即`t`降序），否则新插入的
+  node会被接到错误的相邻锚点之间，行人贯通线在可视化上出现连线交叉/跳跃，看起来像整条
+  Road的导航图都被搞乱了。`FlushPendingBuildingRoadAccess()`按`(road, side, laneIndex)`
+  分组（`side`/`laneIndex`用新拆出的纯查询函数`Map::ResolveAccessLane`预判——和
+  `AddRoadAccessNode`内部真正断开时共用同一份判定逻辑，不会出现"排序用一套规则、断开用
+  另一套规则"的不一致），组内按上述物理顺序排序后才依次调用`AddRoadAccessNode`断开+建
+  `Connection`——这样不管building落地/遍历的顺序多乱，同一条Road上的断点次序始终和它们
+  的物理位置一致。building内部导航图和道路网导航图从此共享同一个断点，不是"两个图靠坐标
+  凑近似"（老工程`Building::BuildNavigation`是"连最近两个角"的近似，这次改掉了）。
+  building没有可用边界Road（`GetDirection()`仍然是`-1`，mod没能兜底选出任何方向）时，
+  不产生任何pending项，`outsideNode`仍然通过上面`result.nodes`那一步正常登记进
+  `navAnchorNodes`（不连道路网而已，不是完全没登记）。
+  - **`outsideNode`不能在这里重新`push_back`进`navAnchorNodes`——它本来就已经是
+    `result.nodes`的成员之一**（`Building::BuildPedestrianNavigation()`里`resolveEndpoint()`
+    解出某个"node"/"line"锚点或Room导航节点时就已经无条件收进了`navOut.nodes`，"outside"
+    只是从这些已收集的节点里再挑一份"需要接道路网"的子集，不是另开一份新节点），早期实现
+    在这个循环开头多写了一行`navAnchorNodes.push_back(outsideNode);`，导致同一个`Node*`
+    在`navAnchorNodes`里出现两次——`~Map()`按`navAnchorNodes`逐个`delete`时对它double
+    free，退出游戏必现崩溃（PIE验证发现，第十四轮迁移）。修复就是删掉这一行多余的
+    `push_back`，`outsideNode`只在上面`result.nodes`那个循环里登记一次。
+
+`InitBuildings()`三段落地循环各自在`MergeBuildingNavigation(building, navResult)`之后紧接着
+调一次`ForwardBuildingHatches(building)`，处理**地下室→世界地形的挖洞**：如果这栋building有
+basement，取`building->GetFloor(-1)->GetHatches()`（离地表最近的那层basement，不是"每层看
+下面一层"这种通用规则），把每个`Hatch`的局部ratio坐标按这栋building的位置/旋转（
+`building->LocalToWorld`换算中心，尺寸不用跟着换算——旋转由`AddHatch`的`rotation`参数单独
+处理）换算成世界坐标，逐个调用`this->AddHatch(quad, rotation)`——和roadnet隧道口完全复用
+同一套挖洞机制（见`Source/Basic/map/roadnet_basic.md`"隧道"一节），不是用来挖building自己
+楼层的`Ceiling`/`Ground`（那些照模板原样绘制，不做运行时裁剪）。**这一步之前只写进了设计
+文档、代码里一直没有真正调用**——building落地流程里从来没有出现过`GetHatches`/`AddHatch`
+字样，PIE验证发现地下室楼梯/电梯/坡道井道对应的位置完全没有在世界地形上开洞，才发现这个
+遗漏，第十五轮迁移补上。
 
 ## ConnectPathRoad（第十二轮迁移，小路正式接导航图）
 

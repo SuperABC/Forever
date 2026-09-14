@@ -21,8 +21,11 @@ public:
 	virtual const char* GetType() const override { return "building_basic"; }
 	virtual const char* GetName() override { return lastName.c_str(); }
 
-	// 这里才设footprint/basements/layers/floorHeights。
-	virtual void Layout(int direction, const Quad& quad,
+	// 这里才设footprint/basements/layers/floorHeights，以及AssignFloor/AssignRoom/
+	// ArrangeRow声明楼层内部布局。direction==-1(FillRemainder落地)时从boundaryRoads里
+	// 随机挑一个有真实边界路的方向回写，保证这栋building最终有确定方向可用(行人导航的
+	// "outside"端点要靠它找到该连去哪条路，见building_mod.h的Layout()注释)。
+	virtual void Layout(int& direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) override;
 
 	// 不用显式占位，空实现。
