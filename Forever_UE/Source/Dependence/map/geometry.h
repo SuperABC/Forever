@@ -490,6 +490,11 @@ public:
 	void AddAddress(const std::string& road, int index);
 	const std::vector<std::pair<std::string, int>>& GetAddresses() const;
 
+	// 格式"<road> <index>"，取GetAddresses()[0]（角地块有多个地址时任选其一即可——和
+	// LocateLot本来就是"用哪个地址都能查到同一个Lot"的语义一致）。没有任何地址(理论上不会，
+	// AllocateAddress保证每个临街Lot至少有一个)时返回空串。
+	std::string GetAddress() const;
+
 	// 四周边界Road：下标按FACE_DIRECTION(0-3)，不是每个方向都一定有entry(挨着相邻lot的
 	// 内部分界线方向没有对应的路)。Lot不持有这些指针的生命周期，由构造方(RoadnetMod/Roadnet)
 	// 各自管理，和AddAddress一样是构造完lot几何之后再由调用方填入的数据。

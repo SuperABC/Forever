@@ -285,6 +285,28 @@ building内部的行人导航图，产出一个`BuildingNavResult`（新建节�
     free，退出游戏必现崩溃（PIE验证发现，第十四轮迁移）。修复就是删掉这一行多余的
     `push_back`，`outsideNode`只在上面`result.nodes`那个循环里登记一次。
 
+**车辆导航（第N轮迁移，`result.vehicleNodes`/`vehicleConnections`/`vehicleOutsideNodes`）**：
+和上面行人分支平行处理——`result.vehicleNodes`登记进`navAnchorNodes`；
+`result.vehicleConnections`**只按`Connection`自己的`Start→End`方向单向插入
+`vehicleNavGraph`**（不能照抄行人"两个方向都插入"，车道本来就有方向性，和`InitRoadnet`给
+普通`Road`建车行图同一个"单向、按实际通行方向"的约定）；`result.vehicleOutsideNodes`里每个
+`outsideNode`，先在`result.vehicleConnections`里统计它的**入度/出度**（按`Node::GetId()`
+比较，某条connection的`GetEnd().GetId()`等于这个`outsideNode`算一次入度，`GetStart()`
+等于算一次出度）——**入度为0（只有出边）是出口**：车辆从building内部经这个node开到路上，
+最终连接方向`outsideNode→路面access node`（单向）；**出度为0（只有入边）是入口**：车辆
+从路面开进building，方向`路面access node→outsideNode`（单向）；入度出度都不为0（这个
+node在building内部图里本来就双向都在用）或都为0（孤立点）则**拒绝**接路网，只留在
+`navAnchorNodes`里（不产生pending项）——这是用户明确给出的判定规则。边界Road/方向判定
+（`GetBoundaryRoad(GetDirection())`+投影+`useForwardSide`符号判断，决定接到路的哪一侧
+车道）和行人分支完全复用同一段代码。`Map::PendingRoadAccess`因此新增`isVehicle`/`isExit`
+两个字段，`FlushPendingBuildingRoadAccess()`分组key也加入`isVehicle`（车行/人行是完全
+独立的车道空间，不应该混进同一组按物理顺序排序），`AddRoadAccessNode`调用时传对应的
+`isVehicle`，新`Connection`按`isVehicle`插入`vehicleNavGraph`（单向，按上面判定出的
+入口/出口方向）还是`pedestrianNavGraph`（双向，行人分支不变）。`Building`侧的实现是
+`Building::BuildVehicleNavigation`，和`BuildPedestrianNavigation`共用同一份算法
+（`Building::BuildNavigationGraph`，按`isVehicle`选读`GetPedestrianNavigation`还是
+`GetVehicleNavigation`），详见`building.md`"车辆导航"一节。
+
 `InitBuildings()`三段落地循环各自在`MergeBuildingNavigation(building, navResult)`之后紧接着
 调一次`ForwardBuildingHatches(building)`，处理**地下室→世界地形的挖洞**：如果这栋building有
 basement，取`building->GetFloor(-1)->GetHatches()`（离地表最近的那层basement，不是"每层看
@@ -410,7 +432,7 @@ t排序）；小路自己两侧人行道之间不建"穿过小路本身"的横�
 一份）由出入口和内部道路共用——这是让"内部道路端点恰好落在出入口位置"时能自动接上外部道路的
 唯一机制：本身没有专门为这两者设计"桥接"逻辑，纯粹靠坐标（含类别）重合就复用同一个node。
 
-## 寻址（Zone/Building按名字/分层地址查找）
+## 寻址（Zone/Building/Room按名字/分层地址查找）
 
 `Map::zones`/`Map::buildings`这次改成老工程`Map::zones`/`Map::buildings`同款存储方式——
 `unordered_map<string, Zone*/Building*>`，不是`vector`（`GetZones()`/`GetBuildings()`签名
@@ -439,10 +461,20 @@ t排序）；小路自己两侧人行道之间不建"穿过小路本身"的横�
   `"<road> <index> <zoneName>"`定位直接落在这个`Lot`上的`Zone`；`"<road> <index>
   <buildingName>"`定位直接落在这个`Lot`上、没有`parentZone`的`Building`；`"<road> <index>
   <zoneName> <buildingName>"`定位某个`Zone`内部的`Building`（`Zone::GetInternalBuildings()`
-  按`name`匹配）。用`istringstream`按空格切分，找不到返回`nullptr`。这次没有实现老工程更深的
-  多级路径解析（`Map::LocateZone`/`LocateBuilding`按`"<road> <blockId> <zoneName>
-  <buildingName>"`四段式地址）——这次工程的层级本来就只有`Lot→Zone→Building`三层，不需要
-  额外的`Room`等更深嵌套。
+  按`name`匹配）。用`istringstream`按空格切分，找不到返回`nullptr`。
+- **`LocateRoom(address)`（第N轮迁移补全，`Room`层级的地址解析）**：地址格式在
+  `LocateBuilding`的基础上再加一段房间号（`"... <buildingName> <number>"`或
+  `"... <zoneName> <buildingName> <number>"`）——取最后一个空格分隔的token当房间号，
+  剩下部分拼回字符串直接交给`LocateBuilding`定位`Building`，再在`building->GetRooms()`
+  里线性找`GetNumber()`匹配的`Room`，不重复实现一遍"Lot→Zone→Building"那段解析逻辑。
+  不需要`LocateComponent`——老工程`Component`本来就没有`GetAddress`，只能通过
+  `Building`/`Room`间接找到。配套的正向查询（对象→地址字符串）是`Lot::GetAddress()`/
+  `Zone::GetAddress()`/`Building::GetAddress()`/`Room::GetAddress()`这一条链子（之前只有
+  反向的字符串→对象查找，没有正向的），`Lot::GetAddress()`固定取`GetAddresses()[0]`
+  （角地块有多个地址时任选其一，语义和`LocateLot`一致），其余每一层都是"上一层的地址
+  + \" \" + 自己的Name/门牌号"，格式和上面`LocateZone`/`LocateBuilding`/`LocateRoom`的
+  解析格式一一对应，照抄老工程`Block::GetAddress`/`Zone::GetAddress`/
+  `Building::GetAddress`/`Room::GetAddress`。
 
 ## 依赖关系
 

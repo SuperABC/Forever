@@ -30,6 +30,12 @@
   `SetNavigationNode`，再在`BuildPedestrianNavigation()`结尾把它们登记进
   `BuildingNavResult::nodes`，见`building.md`"行人导航"一节）——容易漏登记，漏了会导致
   这个Node永远不会被delete。
+- **`GetAddress()`（第N轮迁移补全）**：`parentBuilding->GetAddress() + " " + number`，照抄
+  老工程`Room::GetAddress`，和`Map::LocateRoom`的解析格式一一对应（"...<buildingName>
+  <number>"）。这是这次"补全Room/Component在map域里的内容"唯一真正缺失的东西——核对过老
+  工程`Room`全部字段/方法后发现，除了`GetAddress`之外，纯map域(布局/渲染/寻址)相关的部分
+  这次会话之前已经port完了；`pivots`(家具锚点)/`ParkingSpaces`/`Is Residential`等能力
+  声明查询都明确跟其它未迁移域绑定，不算"map域缺失"，不补。
 
 ## 依赖关系
 

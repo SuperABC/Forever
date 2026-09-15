@@ -769,6 +769,11 @@ const vector<pair<string, int>>& Lot::GetAddresses() const {
 	return addresses;
 }
 
+string Lot::GetAddress() const {
+	if (addresses.empty()) return "";
+	return addresses[0].first + " " + to_string(addresses[0].second);
+}
+
 void Lot::SetBoundaryRoad(int direction, Road* road) {
 	boundaryRoads[direction] = road;
 }

@@ -47,6 +47,18 @@ struct FloorLayoutSpec {
 	FloorAssetSpec assets;
 };
 
+// 一台电梯轿厢——照抄老工程Cabin(name/temp/idx/minFloor/maxFloor/script)的模式，去掉
+// temp(未用到)和script(Script域还没迁移)，加上这次要求的可配置mesh路径。shaftIndex对应
+// 每层.layout模板"elevators"数组里的第几个(0-based)——同一个shaftIndex假定跨楼层指向同一口
+// 井道(要求mod保证模板里elevator条目顺序跨楼层一致，这次没有更强的位置匹配机制，照抄老工程
+// AddElevator用一个裸idx区分电梯、不做任何几何反推的做法)。
+struct ElevatorCabinSpec {
+	int shaftIndex = 0;
+	int minFloor = 0;  // 人类直觉层号(0=1楼，负数=地下)，含
+	int maxFloor = 0;  // 含
+	std::string cabinMeshPath; // 留空用组件默认Elevator mesh
+};
+
 // BuildingMod：Building这次有两种生成方式（显式占位 + 权重CDF随机填充，照抄老工程
 // Map::InitContents对Building的处理，见Source/Core/map/map.md"InitBuildings"一节）。
 //
@@ -122,6 +134,11 @@ public:
 	void ArrangeRow(int level, int slot, const std::string& room, float acreage,
 		const std::string& component, int id);
 
+	// 声明这栋building有一台电梯轿厢，对应shaftIndex号井道，在minFloor~maxFloor之间往返
+	// (这次没有真正的调度逻辑，Forever层只做一个占位性质的往返动画，见
+	// ForeverBuildingFrameworkComponent.md)。同一栋building可以调用多次声明多台电梯。
+	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "");
+
 	// 以下四个不再是虚方法——它们不需要任何实例状态，改成每个具体子类的static方法，通过
 	// BuildingFactory::RegisterBuilding的额外参数注册，详见building_factory.h。子类必须实现
 	// 同名static方法(不是override，因为基类不声明它们)：
@@ -143,4 +160,6 @@ public:
 	// (component,id) -> [(level, slot, roomType, acreage)]，ArrangeRow记录的row槽位。
 	std::unordered_map<std::pair<std::string, int>, std::vector<std::tuple<int, int, std::string, float>>,
 		BuildingComponentKeyHash> rows;
+	// AssignElevatorCabin记录的电梯轿厢列表。
+	std::vector<ElevatorCabinSpec> cabins;
 };

@@ -1,9 +1,13 @@
 #include "Framework/ForeverZoneFrameworkComponent.h"
 
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/BoxComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/Engine.h"
 
 #include "map/map.h"
 #include "map/zone.h"
+#include "map/building.h"
 #include "map/geometry.h"
 
 #define ZONE_WORLD_SCALE 1000.f
@@ -12,6 +16,23 @@
 #define ZONE_HEIGHT_EPSILON 10.f
 
 using namespace std;
+
+namespace {
+	// building整栋楼的Z范围(世界单位)——和ForeverBuildingFrameworkComponent.cpp的
+	// ComputeFullZRange是同一个公式(不同翻译单元的匿名namespace不能跨文件共用，这里按
+	// 同样的grade-相对约定重算一遍，用ZONE_HEIGHT_EPSILON这个和BUILDING_HEIGHT_EPSILON
+	// 数值相同的本文件专属宏)：最深地下室的底到最高楼层的顶。
+	void ComputeBuildingFullZRange(const Building& building, float& outZBottom, float& outZTop) {
+		const vector<float>& heights = building.GetFloorHeights();
+		int basements = building.GetBasementCount();
+		float totalBasementDepth = 0.f;
+		for (int i = 0; i < basements && i < static_cast<int>(heights.size()); i++) totalBasementDepth += heights[i];
+		float totalAboveHeight = 0.f;
+		for (int i = basements; i < static_cast<int>(heights.size()); i++) totalAboveHeight += heights[i];
+		outZBottom = ZONE_HEIGHT_EPSILON - totalBasementDepth * ZONE_WORLD_SCALE;
+		outZTop = ZONE_HEIGHT_EPSILON + totalAboveHeight * ZONE_WORLD_SCALE;
+	}
+}
 
 UForeverZoneFrameworkComponent::UForeverZoneFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -31,6 +52,10 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 		for (const ZoneWallSpec& wall : zone->GetWalls()) {
 			BuildWallSegment(wall, *zone);
 		}
+		// Zone碰撞盒数量级和building差不多(远小于Room)，先直接留在这个组件的单例owner上，
+		// 不像Building/Room那样拆到per-building的Actor——排查已经证实真凶是"owner身上组件
+		// 总数"，Zone数量级不大，没必要为了这么少的数量单独动这个结构。
+		BuildCollisionBox(zone);
 	}
 }
 
@@ -138,4 +163,66 @@ void UForeverZoneFrameworkComponent::BuildWallSegment(const ZoneWallSpec& wall, 
 		FTransform xform(worldFwd.Rotation(), mid, FVector(scaleAlong, 1.f, 1.f));
 		ism->AddInstance(xform);
 	}
+}
+
+void UForeverZoneFrameworkComponent::BuildCollisionBox(Zone* zone) {
+	if (!zone) return;
+	const vector<Building*>& internalBuildings = zone->GetInternalBuildings();
+	if (internalBuildings.empty()) return; // 没有内部building的zone没有意义的"内部"体验，跳过。
+
+	AActor* owner = GetOwner();
+	if (!owner) return;
+
+	float zBottom = TNumericLimits<float>::Max();
+	float zTop = TNumericLimits<float>::Lowest();
+	for (Building* building : internalBuildings) {
+		if (!building) continue;
+		float bBottom, bTop;
+		ComputeBuildingFullZRange(*building, bBottom, bTop);
+		zBottom = FMath::Min(zBottom, bBottom);
+		zTop = FMath::Max(zTop, bTop);
+	}
+	if (zBottom >= zTop) return; // 所有内部building指针都是空的极端情况，没有有效范围。
+
+	float hx = zone->GetSizeX() * 0.5f * ZONE_WORLD_SCALE;
+	float hy = zone->GetSizeY() * 0.5f * ZONE_WORLD_SCALE;
+	float cz = (zBottom + zTop) * 0.5f;
+	float hz = (zTop - zBottom) * 0.5f;
+
+	UBoxComponent* box = NewObject<UBoxComponent>(owner, NAME_None, RF_Transient);
+	box->SetBoxExtent(FVector(hx, hy, hz));
+	box->SetCollisionProfileName(TEXT("Trigger"));
+	box->SetupAttachment(owner->GetRootComponent());
+	// 常驻碰撞盒创建之后永远不会再移动——mobility+世界坐标都要在RegisterComponent()之前
+	// 设好，否则要么设置不生效要么引擎报警告，且会白白拖累渲染器动态图元八叉树/物理引擎
+	// 动态broadphase(这两套结构对Movable图元的插入/更新开销会随已有数量增长变差，是
+	// "建筑近处LOD每次整层增删都巨卡"的根因之一，见ForeverBuildingFrameworkComponent.md
+	// "性能"一节，这里的碰撞盒虽然不在那个路径上，但同样应该是Static)。
+	box->SetMobility(EComponentMobility::Static);
+	box->SetWorldLocation(FVector(zone->GetPosX() * ZONE_WORLD_SCALE, zone->GetPosY() * ZONE_WORLD_SCALE, cz));
+	box->SetWorldRotation(FRotator(0.f, FMath::RadiansToDegrees(zone->GetRotation()), 0.f));
+	box->OnComponentBeginOverlap.AddDynamic(this, &UForeverZoneFrameworkComponent::OnZoneOverlapBegin);
+	box->OnComponentEndOverlap.AddDynamic(this, &UForeverZoneFrameworkComponent::OnZoneOverlapEnd);
+	box->RegisterComponent();
+	owner->AddInstanceComponent(box);
+
+	zoneBoxLabels.Add(box, FString::Printf(TEXT("Zone: %s"), UTF8_TO_TCHAR(zone->GetAddress().c_str())));
+}
+
+void UForeverZoneFrameworkComponent::OnZoneOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn || OtherActor != pawn) return;
+	FString* label = zoneBoxLabels.Find(OverlappedComponent);
+	if (!label || !GEngine) return;
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("进入 %s"), **label));
+}
+
+void UForeverZoneFrameworkComponent::OnZoneOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn || OtherActor != pawn) return;
+	FString* label = zoneBoxLabels.Find(OverlappedComponent);
+	if (!label || !GEngine) return;
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("离开 %s"), **label));
 }

@@ -283,6 +283,16 @@ struct BuildingNavResult {
 	// 否则同一个Node*登记两次，~Map()清理时按navAnchorNodes遍历delete会对它double free
 	// (PIE验证发现的退出崩溃，见map.md"InitBuildings"一节)。
 	std::vector<Node*> outsideNodes;
+
+	// 车行导航图的平行三件套——语义和上面nodes/connections/outsideNodes完全一样(vehicleNodes
+	// 同样已经无条件包含vehicleOutsideNodes的每个成员，不需要也不能重复登记)，唯一区别是
+	// 数据来源是各楼层的vehicleNavigation模板而不是pedestrianNavigation。之所以不共用一套
+	// 字段，是因为车行图和行人图是两张独立的图(Map::vehicleNavGraph/pedestrianNavGraph)，
+	// 合并方式也不同(车行按入度/出度判定单向连接，行人固定双向)，混在一起会分不清一个
+	// Connection*该插进哪张图。
+	std::vector<Node*> vehicleNodes;
+	std::vector<Connection*> vehicleConnections;
+	std::vector<Node*> vehicleOutsideNodes;
 };
 
 // Building：持有一个具体BuildingMod实例，代表一栋已经落地的Building（继承Quad表示自己
@@ -361,6 +371,11 @@ public:
 	// 转发parentLot->GetRotation()+relativeRotation；parentLot为空时按0.f+relativeRotation算。
 	float GetRotation() const;
 
+	// 有parentZone时"<road> <index> <zoneName> <buildingName>"，否则
+	// "<road> <index> <buildingName>"——和Map::LocateBuilding的两种解析格式一一对应
+	// （照抄老工程Building::GetAddress的两分支逻辑）。
+	std::string GetAddress() const;
+
 	Lot* GetParentLot() const;
 	void SetParentLot(Lot* lot, float relativeRotation = 0.f);
 
@@ -385,8 +400,25 @@ private:
 	void ArrangeRow(int level, int slot, const std::string& roomType, float acreage, Component* component,
 		RoomFactory& roomFactory);
 
-	// 按各楼层的pedestrianNavigation模板构建building内部导航图数据，见BuildingNavResult注释。
+	// 按各楼层的pedestrianNavigation模板构建building内部行人导航图数据，见BuildingNavResult
+	// 注释。转发BuildNavigationGraph(isVehicle=false, registerRoomNodes=true)。
 	void BuildPedestrianNavigation(const BuildingLayoutLibrary& library, int direction, BuildingNavResult& navOut);
+
+	// 按各楼层的vehicleNavigation模板构建building内部车行导航图数据，写进navOut的
+	// vehicleNodes/vehicleConnections/vehicleOutsideNodes。转发BuildNavigationGraph
+	// (isVehicle=true, registerRoomNodes=false)——registerRoomNodes必须是false：
+	// Room::GetNavigationNode()只能登记进navOut.nodes一次，已经在BuildPedestrianNavigation
+	// 里做过，这里重复登记会导致同一个Node*出现在navAnchorNodes两次，~Map()清理时对它
+	// double free(和这次会话之前修过的崩溃是同一类问题，见map.md)。
+	void BuildVehicleNavigation(const BuildingLayoutLibrary& library, int direction, BuildingNavResult& navOut);
+
+	// BuildPedestrianNavigation/BuildVehicleNavigation共享的算法实现——node/line/connection
+	// 解析逻辑本来就是纯数据驱动、和"行人"这个语义无关，isVehicle只决定读
+	// library.GetPedestrianNavigation还是GetVehicleNavigation这一件事。registerRoomNodes
+	// 控制要不要在结尾把每个Room自己的导航节点登记进newNodes(只应该有一次调用传true)。
+	void BuildNavigationGraph(const BuildingLayoutLibrary& library, int inputDirection, bool isVehicle,
+		std::vector<Node*>& newNodes, std::vector<Connection*>& newConnections,
+		std::vector<Node*>& outsideNodes, bool registerRoomNodes);
 
 	static float ProjectOntoLine(float px, float py, float ax, float ay, float bx, float by);
 

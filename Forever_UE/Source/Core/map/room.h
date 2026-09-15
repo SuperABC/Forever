@@ -53,6 +53,9 @@ public:
 	const std::string& GetNumber() const;
 	void SetNumber(int level, int number);
 
+	// "<parentBuilding地址> <门牌号>"，照抄老工程Room::GetAddress。
+	std::string GetAddress() const;
+
 	// 这个房间中心点的导航锚点，Building::Layout()在实例化完所有Room之后统一创建、
 	// 供BuildPedestrianNavigation()里"single"/"row"类型的导航端点引用。不持有生命周期
 	// (和其它building导航节点一样交给Map::navAnchorNodes统一管理)。

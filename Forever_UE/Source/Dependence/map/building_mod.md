@@ -35,6 +35,17 @@
   的模式。`Building::Layout()`只读这几个容器，不会往里写。
 - **`BuildingComponentKeyHash`**：`(component名字,id)`分组key的hash函数对象，
   `unordered_map`要用。
+- **`ElevatorCabinSpec`/`AssignElevatorCabin`（第N轮迁移补上）**：照抄老工程`Cabin`
+  （`name`/`temp`/`idx`/`minFloor`/`maxFloor`/`script`）的模式，去掉`temp`（未用到）和
+  `script`（Story域还没迁移），加上用户要求的可配置mesh路径——
+  `{shaftIndex, minFloor, maxFloor, cabinMeshPath}`。`shaftIndex`对应每层`.layout`模板
+  `elevators`数组里的第几个(0-based)，**不是从几何位置反推出来的**，和老工程`AddElevator`
+  用一个裸`idx`区分电梯同一个思路——要求mod自己保证模板里elevator条目顺序跨楼层一致，这次
+  没有更强的位置匹配机制。`AssignElevatorCabin`把调用记录进`std::vector<ElevatorCabinSpec>
+  cabins`（同一栋building可以调用多次声明多台电梯），和`floors`/`singles`/`rows`同一个
+  "mod自己声明、`Building::Layout()`不处理、Forever层直接读`GetMod()->cabins`"模式——
+  `Building`（Core侧）完全不实例化任何Cabin对象，轿厢的3D网格生成+占位动画纯粹是
+  `ForeverBuildingFrameworkComponent`渲染层的事，详见该组件的md。
 
 ## 依赖关系
 
@@ -42,6 +53,7 @@
   `PlacementEmitFunc`）。
 - 被谁依赖：`Source/Dependence/map/building_factory.h`（`RegisterBuilding`的函数指针
   参数）、`Source/Core/map/building.h`/`.cpp`（`Building::Layout()`读取`floors`/
-  `singles`/`rows`）、`Source/Forever/Framework/ForeverBuildingFrameworkComponent.cpp`
-  （按`Building::GetMod()->floors[level].assets`解析这一层的材质/网格）、各具体
-  `XxxBuilding`子类（`Source/Basic/map/building_basic.h`/`.cpp`等）。
+  `singles`/`rows`，不读`cabins`）、`Source/Forever/Framework/
+  ForeverBuildingFrameworkComponent.cpp`（按`Building::GetMod()->floors[level].assets`
+  解析这一层的材质/网格，按`GetMod()->cabins`生成电梯轿厢）、各具体`XxxBuilding`子类
+  （`Source/Basic/map/building_basic.h`/`.cpp`等）。

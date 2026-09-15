@@ -64,6 +64,17 @@
   C++渲染代码里，不是per-mod可配置的）；这次要让mod能按楼层自定义楼梯/坡道用什么3D网格，
   所以`FloorAssetSpec::stairMeshPath`/`rampMeshPath`是`AssignFloor`的显式参数——模板名字
   只决定楼梯/坡道摆在楼体的哪个位置、多大、朝哪，不决定拿什么3D资产去画它。
+- **电梯轿厢（`ElevatorCabinSpec`/`BuildingMod::AssignElevatorCabin`，第N轮迁移补上）**：
+  照抄老工程`Cabin`（`name`/`temp`/`idx`/`minFloor`/`maxFloor`/`script`）的模式，去掉
+  `temp`（未用到）和`script`（Story域还没迁移），加上这次要求的可配置mesh路径——
+  `ElevatorCabinSpec{shaftIndex, minFloor, maxFloor, cabinMeshPath}`，mod显式声明"第
+  `shaftIndex`口井道(对应每层模板`elevators`数组里第几个，0-based)有一台轿厢，在
+  `minFloor`~`maxFloor`之间"，和老工程`AddElevator`一样是**mod显式配置**，不是从
+  `Elevator`几何反推出来的。`Building`自己不实例化任何Cabin对象——`Core`侧只有这份
+  声明性`spec`数据（存在`BuildingMod::cabins`，`Building::Layout()`不读取，是
+  `ForeverBuildingFrameworkComponent`直接读`building->GetMod()->cabins`），因为这次
+  没有真正的电梯调度/Script逻辑，轿厢的3D网格生成+"最低层到最高层匀速往返、两端缓入缓出"
+  的占位动画完全是Forever层渲染关注的事，详见`ForeverBuildingFrameworkComponent.md`。
 - **`Hatch`不是用来挖building自己楼层的`Ground`/`Ceiling`的**——`Ceiling`/`Ground`都是照
   模板原样绘制，不做任何运行时裁剪(和老工程一致)；`Hatch`真正的用途是喂给`Map::AddHatch`
   去挖**世界地形**的洞，而且只有地下一层(离地表最近的那层basement)的`Hatch`才有意义——只有
@@ -89,8 +100,22 @@
   位置无关，如果按处理顺序直接断（老实现），物理上靠后的building可能先断、抢占物理上靠前
   building还没轮到的那一段贯通线，导致断点次序错位、行人贯通线可视化上出现交叉/跳跃
   （PIE验证发现的bug，详见`map.md`"InitBuildings"一节）。修复后building内部导航图和
-  道路网导航图仍然共享同一个断点，不是"两个图靠坐标凑近似"。`vehicleNavigation`这次只
-  解析、不使用(留给以后车辆域真正做"车辆能进建筑内部"这个玩法时再消费)。
+  道路网导航图仍然共享同一个断点，不是"两个图靠坐标凑近似"。
+- **车辆导航（`BuildVehicleNavigation`，第N轮迁移，用户已经在.layout模板里写好车道数据后
+  补上消费方）**：和`BuildPedestrianNavigation`共用同一份算法实现
+  `BuildNavigationGraph(library, direction, isVehicle, newNodes, newConnections,
+  outsideNodes, registerRoomNodes)`——node/line/connection解析逻辑本来就是纯数据驱动、
+  和"行人"这个语义无关，`isVehicle`只决定读`library.GetPedestrianNavigation`还是
+  `GetVehicleNavigation`。`BuildVehicleNavigation`写进`BuildingNavResult`的平行字段
+  `vehicleNodes`/`vehicleConnections`/`vehicleOutsideNodes`，且必须传
+  `registerRoomNodes=false`——`Room::GetNavigationNode()`的登记只能做一次(已经在
+  `BuildPedestrianNavigation`那次调用里做过)，车辆build如果重复登记，`Map::navAnchorNodes`
+  会出现同一个`Node*`两次，`~Map()`清理时double free(和这次会话修过的崩溃是同一类问题)。
+  `outsideNode`接路网的方向（单向，车道本来就有方向性，不像行人固定双向）按这个node在
+  `vehicleConnections`里的入度/出度判定（用户明确给出的规则）：入度为0是出口
+  （`outsideNode`→路面access node）、出度为0是入口（access node→`outsideNode`）、两者
+  都不为0（building内部图里本来就双向都在用）或都为0（孤立点）则拒绝接路网，详见
+  `map.md`"InitBuildings"一节`Map::MergeBuildingNavigation`的车辆分支。
 - **`Room`自己中心点的导航节点(`Room::SetNavigationNode`)必须登记进
   `BuildingNavResult::nodes`**——这些节点由`Building::Layout()`创建、不在`floorFixedNodes`/
   `line`锚点那条链路里，容易漏登记(照抄老工程`BuildNavigation`结尾"for (auto room : rooms)
@@ -102,6 +127,14 @@
   `room.h`/`component.h`。**这次只做`Component`(组合，绑定在单个Building内部)，不做
   `Organization`(公司/组织，持有跨building的多个组合)**——`Organization`依赖的
   `Populace`/`Job`还没迁移，留到以后Society阶段。
+- **`GetAddress()`（第N轮迁移补全）**：有`parentZone`时`parentZone->GetAddress() + " " +
+  GetName()`，否则`parentLot->GetAddress() + " " + GetName()`——照抄老工程
+  `Building::GetAddress`的两分支逻辑，和`Map::LocateBuilding`的两种解析格式
+  （`"<road> <index> <buildingName>"`/`"<road> <index> <zoneName> <buildingName>"`）
+  一一对应。这次会话之前`Map`只有反向的字符串→对象查找(`LocateZone`/`LocateBuilding`)，
+  没有正向的对象→字符串，`Lot::GetAddress()`/`Zone::GetAddress()`/
+  `Building::GetAddress()`/`Room::GetAddress()`/`Map::LocateRoom()`是这一轮一起补上的
+  完整链条，详见`map.md`"寻址"一节。
 - **`RoomMod`/`ComponentMod`极简，只有`GetType()`/`GetName()`**：`Room`/`Component`不是
   像`Zone`/`Building`那样要参与"在地图上竞争地块"的顶层concept，永远是`Building`自己在
   `Layout()`里显式创建的，不需要`Assign`/`RandomAcreage`/`GetPower`这套static注册机制。
@@ -126,11 +159,14 @@
 ## 待办/后续阶段
 
 - `Organization`(公司/组织)、Society领域的跨building组合撮合——依赖还没迁移的Populace/Job。
-- 电梯轿厢(`Cabin`)/`Script`挂钩/`AddElevator` API——这次只做井道墙体几何，不创建任何
-  "电梯轿厢"数据对象。
-- 车辆导航(`vehicleNavigation`)的实例化/寻路逻辑——这次只有数据格式+编辑器UI，
-  `BuildPedestrianNavigation`解析后直接丢弃。
+- 电梯轿厢的真实调度逻辑（呼叫按钮、开关门、载客、`Script`挂钩）——这次只做`ElevatorCabinSpec`
+  声明+3D网格渲染+占位性质的"最低层到最高层匀速往返、两端缓入缓出"动画，见上面
+  "电梯轿厢"一节+`ForeverBuildingFrameworkComponent.md`。
+- 车辆导航(`vehicleNavigation`)的寻路消费方——`BuildVehicleNavigation`已经把车行图接进
+  `Map::vehicleNavGraph`，但Traffic域还没迁移，这次只负责把图接好，不含任何寻路逻辑。
 - `Room`的furniture/pivots/storages/manufactures/parkings/vehicles/ownership/tenancy等
   字段——依赖Industry/Populace/Society，等对应领域迁移到了再回来加。
-- 门的实际mesh（老工程本来就没有，纯几何缺口，窗户才有`Window.Window`网格）。
+- 门/窗的实际mesh——门老工程本来就没有；窗户第一版有`Window.Window`网格，但资产本身有
+  问题，用户明确要求删掉了窗户显示逻辑，现在门/窗都只是纯几何缺口，等以后有能用的窗户资产
+  再加回来。
 - 外墙/内墙材质区分——这次统一用一份`wallMaterial`，用户明确要求以后自己设计怎么分。

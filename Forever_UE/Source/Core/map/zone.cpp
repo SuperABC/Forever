@@ -41,6 +41,11 @@ float Zone::GetRotation() const {
 	return parentLot ? parentLot->GetRotation() : 0.f;
 }
 
+string Zone::GetAddress() const {
+	if (!parentLot) return "";
+	return parentLot->GetAddress() + " " + GetName();
+}
+
 void Zone::Layout(int direction) {
 	mod->Layout(direction, *this, GetBoundaryRoads());
 }

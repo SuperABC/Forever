@@ -47,6 +47,10 @@ public:
 	// 转发parentLot->GetRotation()；parentLot为空时返回0.f。
 	float GetRotation() const;
 
+	// 格式"<road> <index> <zoneName>"，和Map::LocateZone的解析格式一一对应
+	// （parentLot->GetAddress() + " " + GetName()，照抄老工程Zone::GetAddress）。
+	std::string GetAddress() const;
+
 	// 调用方在SetPosition/SetBoundaryRoad都设好之后调用一次：转发mod->Layout(direction, *this,
 	// GetBoundaryRoads())——Zone这一层没有需要额外解析缓存的数据(GetWalls()/GetGates()本来就
 	// 直接转发mod->walls/mod->gates)，这个方法纯粹是为了和Building::Layout()同样的调用形态，

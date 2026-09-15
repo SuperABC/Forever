@@ -37,11 +37,25 @@ helper函数已经整体删除。围墙渲染不受影响。大门（`ZoneGateSp
   两个轴都用完整的`depth`才能让两条墙的中心线端点精确重合）。
 - **`GenerateZones`必须在`Map::InitZones()`跑完之后调用**，和其余Framework组件的
   `GenerateXxx(Map*)`模式一致，`AForeverFrameworkActor::EnsureMapGenerated()`负责保证顺序。
+- **进入/离开检测碰撞盒（第N轮迁移新增）**：`GenerateZones`遍历完`GetWalls()`之后额外调一次
+  `BuildCollisionBox(zone)`——真正的`UBoxComponent`+`OnComponentBeginOverlap`/
+  `OnComponentEndOverlap`（用户已确认的方案，不是手动Tick轮询），碰撞Profile用UE自带的
+  `"Trigger"`预设。水平=Zone自己的Quad（不做尺寸调整，只有Room碰撞盒缩小0.01/Building
+  碰撞盒放大0.01，Zone维持原样）；垂直=zone内部所有building的Z范围并集——遍历
+  `zone->GetInternalBuildings()`，每个building按和`ForeverBuildingFrameworkComponent.cpp`
+  的`ComputeFullZRange`同一个公式（不同翻译单元不能共用匿名namespace函数，这里用本文件
+  专属的`ComputeBuildingFullZRange`重算一遍）算出Z范围，取全局min/max。**没有内部building
+  的zone跳过、不创建碰撞盒**——没有意义的"内部"体验。Overlap回调只使用生成时预先烘焙好的
+  `FString`显示名（`zone->GetAddress()`），绝不解引用`Zone*`/`Building*`/`Map*`（和
+  `ForeverBuildingFrameworkComponent`的`EndPlay`野指针教训同一套安全原则），测试阶段用
+  `GEngine->AddOnScreenDebugMessage`（`FColor::Yellow`）代替真实的Story事件分发。
 
 ## 依赖关系
 
-- 依赖：`map/map.h`（`Map::GetZones()`）、`map/zone.h`（`Zone`，`GetWalls()`）、
-  `map/geometry.h`（`FACE_DIRECTION`）、`Components/InstancedStaticMeshComponent.h`。
+- 依赖：`map/map.h`（`Map::GetZones()`）、`map/zone.h`（`Zone`，`GetWalls()`/
+  `GetInternalBuildings()`/`GetAddress()`）、`map/building.h`（`Building`，算碰撞盒Z范围
+  用）、`map/geometry.h`（`FACE_DIRECTION`）、`Components/InstancedStaticMeshComponent.h`、
+  `Components/BoxComponent.h`、`Kismet/GameplayStatics.h`、`Engine/Engine.h`。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`
   （`EnsureMapGenerated()`在`GenerateRoadnet`之后调用一次`GenerateZones`）。
 

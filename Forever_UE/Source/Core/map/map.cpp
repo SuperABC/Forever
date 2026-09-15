@@ -1,5 +1,6 @@
 #include "map.h"
 
+#include "map/room.h"
 #include "common/config.h"
 #include "common/utility.h"
 
@@ -632,14 +633,42 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 	for (Node* node : result.nodes) {
 		navAnchorNodes.push_back(node);
 	}
+	for (Node* node : result.vehicleNodes) {
+		navAnchorNodes.push_back(node);
+	}
 
 	for (Connection* conn : result.connections) {
 		Node start = conn->GetStart(), end = conn->GetEnd();
 		pedestrianNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
 		pedestrianNavGraph[end.GetId()].emplace_back(start.GetId(), conn);
 	}
+	// 车行图不能照抄行人"两个方向都插入"——车道本来就有方向性，这里只按Connection自己的
+	// Start->End方向单向插入，方向由Building::BuildVehicleNavigation()按模板数据(upstair/
+	// downstair贪心匹配、或line/node连接顺序)算好，Map不重新判断。
+	for (Connection* conn : result.vehicleConnections) {
+		Node start = conn->GetStart(), end = conn->GetEnd();
+		vehicleNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
+	}
 
 	Road* road = building->GetBoundaryRoad(building->GetDirection());
+
+	// building在Road哪一侧+对应弧长比例t——行人/车辆的outside端点接路网都要用这同一套算法，
+	// 拆成一个lambda共用。
+	auto computeRoadSide = [&](Node* outsideNode, float& outT, bool& outUseForwardSide) {
+		outT = ProjectPointOntoRoad(road, outsideNode->GetX(), outsideNode->GetY());
+		Node basePoint = road->GetPoint(outT);
+		float tdx, tdy, tdz;
+		road->GetTangent(outT, tdx, tdy, tdz);
+		float tlen = sqrtf(tdx * tdx + tdy * tdy);
+		if (tlen < 1e-6f) tlen = 1.f;
+		float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
+		float dx = outsideNode->GetX() - basePoint.GetX(), dy = outsideNode->GetY() - basePoint.GetY();
+		// building在Road哪一侧：比较building中心相对Road中心线在t处的法向偏移符号
+		// (和RoadJunction::Build/resolveAnchor同一套perp0=右手垂线约定，见roadnet.md
+		// "车道居中"一节)——偏移同号(>=0)就是side0(右手边)，useForwardSide=true。
+		outUseForwardSide = (dx * perp0X + dy * perp0Y) >= 0.f;
+		};
+
 	for (Node* outsideNode : result.outsideNodes) {
 		// 不在这里push进navAnchorNodes——outsideNode本来就是resolveEndpoint()解出的某个
 		// "node"/"line"锚点或Room自己的导航节点，这几种节点在Building::BuildPedestrianNavigation()
@@ -649,18 +678,8 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		if (!road) continue; // building没有可用的边界Road(mod没能兜底选出方向)，这个"outside"
 			// 端点只留在navOut.nodes里(已经在上面登记过)，不连道路网，见building.md"行人导航"一节。
 
-		float t = ProjectPointOntoRoad(road, outsideNode->GetX(), outsideNode->GetY());
-		Node basePoint = road->GetPoint(t);
-		float tdx, tdy, tdz;
-		road->GetTangent(t, tdx, tdy, tdz);
-		float tlen = sqrtf(tdx * tdx + tdy * tdy);
-		if (tlen < 1e-6f) tlen = 1.f;
-		float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
-		float dx = outsideNode->GetX() - basePoint.GetX(), dy = outsideNode->GetY() - basePoint.GetY();
-		// building在Road哪一侧：比较building中心相对Road中心线在t处的法向偏移符号
-		// (和RoadJunction::Build/resolveAnchor同一套perp0=右手垂线约定，见roadnet.md
-		// "车道居中"一节)——偏移同号(>=0)就是side0(右手边)，useForwardSide=true。
-		bool useForwardSide = (dx * perp0X + dy * perp0Y) >= 0.f;
+		float t; bool useForwardSide;
+		computeRoadSide(outsideNode, t, useForwardSide);
 
 		// 不在这里立即AddRoadAccessNode——同一条路上可能有好几栋building各自贡献一个
 		// outside端点，真正断开的先后顺序必须按它们在road上的物理位置(t)排列，不能是这里
@@ -668,7 +687,30 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		// 顺序，和物理位置无关)，否则BreakThroughLine"每次都断当前剩余尾巴"这个假设会被
 		// 打破，见FlushPendingBuildingRoadAccess()注释。这里只记下来，交给InitBuildings()
 		// 最后统一调用FlushPendingBuildingRoadAccess()处理。
-		pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, outsideNode });
+		pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, outsideNode, false, false });
+	}
+
+	// 车辆outside端点：方向(入口/出口)按这个node在result.vehicleConnections里的入度/出度
+	// 判定(用户明确要求的规则)——入度为0(只有出边)是出口，车辆从building开到路上，最终连接
+	// 方向"outsideNode->access node"；出度为0(只有入边)是入口，车辆从路开进building，方向
+	// "access node->outsideNode"；入度出度都不为0(这个node在building内部图里本来就双向都
+	// 在用)或都为0(孤立点)则拒绝接路网，不产生pending项(仍然通过上面result.vehicleNodes
+	// 那次循环留在navAnchorNodes里)。
+	for (Node* outsideNode : result.vehicleOutsideNodes) {
+		if (!road) continue;
+
+		int inDegree = 0, outDegree = 0;
+		for (Connection* conn : result.vehicleConnections) {
+			if (conn->GetEnd().GetId() == outsideNode->GetId()) inDegree++;
+			if (conn->GetStart().GetId() == outsideNode->GetId()) outDegree++;
+		}
+		bool isExit = (inDegree == 0 && outDegree > 0);
+		bool isEntrance = (outDegree == 0 && inDegree > 0);
+		if (!isExit && !isEntrance) continue; // 都不为0(内部双向都用) 或 都为0(孤立点)，拒绝
+
+		float t; bool useForwardSide;
+		computeRoadSide(outsideNode, t, useForwardSide);
+		pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, outsideNode, true, isExit });
 	}
 }
 
@@ -689,39 +731,56 @@ void Map::ForwardBuildingHatches(Building* building) {
 
 void Map::FlushPendingBuildingRoadAccess() {
 	struct Entry {
+		bool isVehicle;
 		int side;
 		int laneIndex;
 		float t;
 		Node* outsideNode;
+		bool isExit; // 仅isVehicle==true时有意义
 	};
 	unordered_map<Road*, vector<Entry>> grouped;
 	for (const PendingRoadAccess& pending : pendingBuildingRoadAccess) {
 		int side, laneIndex;
-		if (!ResolveAccessLane(pending.road, /*isVehicle=*/false, pending.useForwardSide, side, laneIndex)) continue;
-		grouped[pending.road].push_back({ side, laneIndex, pending.t, pending.outsideNode });
+		if (!ResolveAccessLane(pending.road, pending.isVehicle, pending.useForwardSide, side, laneIndex)) continue;
+		grouped[pending.road].push_back({ pending.isVehicle, side, laneIndex, pending.t, pending.outsideNode, pending.isExit });
 	}
 	pendingBuildingRoadAccess.clear();
 
 	constexpr float kAccessOpeningWidth = 1.f; // 门洞大致宽度(地图单位)，供Forever层挖空
-		// 对应长度的人行道，这次先用一个固定值，不按具体门的开口宽度精细对应。
+		// 对应长度的人行道/车行道，这次先用一个固定值，不按具体门的开口宽度精细对应。
 	for (auto& [road, entries] : grouped) {
-		// 同一条车道(同side同laneIndex)内部按它自己的实际通行方向排序：side0沿Start->End
-		// (t升序)，side1沿End->Start(t降序)——和ThroughLine/BreakThroughLine"fromAnchor
-		// 每次都往通行方向前进"的约定对齐，见map.h的FlushPendingBuildingRoadAccess()注释。
+		// 同一条车道(同isVehicle同side同laneIndex)内部按它自己的实际通行方向排序：side0沿
+		// Start->End(t升序)，side1沿End->Start(t降序)——和ThroughLine/BreakThroughLine
+		// "fromAnchor每次都往通行方向前进"的约定对齐，见map.h的FlushPendingBuildingRoadAccess()
+		// 注释。isVehicle作为第一优先级排序键，保证车行/人行两类entry不会被打乱顺序地混在一起
+		// 处理(虽然两者本来就走各自独立的ThroughLine数组、混着处理也不会互相污染状态，这里
+		// 单纯是为了同一辆road的日志/调试顺序更直观)。
 		sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) {
+			if (a.isVehicle != b.isVehicle) return a.isVehicle < b.isVehicle;
 			if (a.side != b.side) return a.side < b.side;
 			if (a.laneIndex != b.laneIndex) return a.laneIndex < b.laneIndex;
 			return a.side == 0 ? (a.t < b.t) : (a.t > b.t);
 			});
 
 		for (Entry& entry : entries) {
-			Node* accessNode = AddRoadAccessNode(road, entry.t, /*isVehicle=*/false,
+			Node* accessNode = AddRoadAccessNode(road, entry.t, entry.isVehicle,
 				entry.side == 0, kAccessOpeningWidth);
-			if (!accessNode) continue; // 这条Road两侧都没有人行道，没法接，outsideNode保持孤立。
+			if (!accessNode) continue; // 这条Road两侧都没有对应类别车道，没法接，outsideNode保持孤立。
 
-			Connection* conn = new Connection(*entry.outsideNode, *accessNode);
-			pedestrianNavGraph[entry.outsideNode->GetId()].emplace_back(accessNode->GetId(), conn);
-			pedestrianNavGraph[accessNode->GetId()].emplace_back(entry.outsideNode->GetId(), conn);
+			if (!entry.isVehicle) {
+				Connection* conn = new Connection(*entry.outsideNode, *accessNode);
+				pedestrianNavGraph[entry.outsideNode->GetId()].emplace_back(accessNode->GetId(), conn);
+				pedestrianNavGraph[accessNode->GetId()].emplace_back(entry.outsideNode->GetId(), conn);
+				continue;
+			}
+
+			// 车行单向：isExit(入度为0，用户确认的判定规则)方向"outsideNode->accessNode"
+			// (车辆从building开到路上)；否则(出度为0，入口)方向"accessNode->outsideNode"
+			// (车辆从路开进building)。
+			Connection* conn = entry.isExit
+				? new Connection(*entry.outsideNode, *accessNode)
+				: new Connection(*accessNode, *entry.outsideNode);
+			vehicleNavGraph[conn->GetStart().GetId()].emplace_back(conn->GetEnd().GetId(), conn);
 		}
 	}
 }
@@ -813,6 +872,28 @@ Building* Map::LocateBuilding(const string& address) const {
 	const string& buildingName = rest[1];
 	for (Building* building : zone->GetInternalBuildings()) {
 		if (building && building->GetName() == buildingName) return building;
+	}
+	return nullptr;
+}
+
+Room* Map::LocateRoom(const string& address) const {
+	istringstream iss(address);
+	vector<string> tokens;
+	string token;
+	while (iss >> token) tokens.push_back(token);
+	if (tokens.size() < 3) return nullptr; // 最短"<road> <index> <number>"都凑不齐
+
+	const string& number = tokens.back();
+	ostringstream buildingAddress;
+	for (size_t i = 0; i + 1 < tokens.size(); i++) {
+		if (i > 0) buildingAddress << ' ';
+		buildingAddress << tokens[i];
+	}
+	Building* building = LocateBuilding(buildingAddress.str());
+	if (!building) return nullptr;
+
+	for (Room* room : building->GetRooms()) {
+		if (room && room->GetNumber() == number) return room;
 	}
 	return nullptr;
 }

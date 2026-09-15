@@ -1,5 +1,6 @@
 #include "room.h"
 
+#include "map/building.h"
 #include "common/error.h"
 
 #include <sstream>
@@ -55,3 +56,8 @@ void Room::SetNumber(int level, int seq) {
 
 Node* Room::GetNavigationNode() const { return navigationNode; }
 void Room::SetNavigationNode(Node* node) { navigationNode = node; }
+
+string Room::GetAddress() const {
+	if (!parentBuilding) return number;
+	return parentBuilding->GetAddress() + " " + number;
+}

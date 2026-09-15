@@ -141,6 +141,13 @@ public:
 	Zone* LocateZone(const std::string& address) const;
 	Building* LocateBuilding(const std::string& address) const;
 
+	// 地址格式在LocateBuilding的基础上再加一段房间号("... <buildingName> <number>"或
+	// "... <zoneName> <buildingName> <number>")——取最后一个空格分隔的token当房间号，
+	// 剩下部分拼回字符串交给LocateBuilding定位building，再在building->GetRooms()里线性找
+	// GetNumber()匹配的Room。不需要LocateComponent：Component没有GetAddress，只能通过
+	// Building/Room间接找到（照抄老工程，Component本来就不参与地址体系）。找不到返回nullptr。
+	Room* LocateRoom(const std::string& address) const;
+
 	// 汇总GetLots()里每个顶层Lot自己的GetPathRoads()——小路是RequestPlacement/FillRemainder
 	// 裁剪某个顶层Lot的空闲空间时的副产品，归属和生命周期都记在那个顶层Lot自己身上（构造它的
 	// 正是RoadnetMod），Map不重复持有一份，这里只是遍历汇总供Forever层渲染用，按值返回。
@@ -336,6 +343,11 @@ private:
 		float t;
 		bool useForwardSide;
 		Node* outsideNode;
+		bool isVehicle = false;
+		// 仅isVehicle==true时有意义：true=这个outsideNode是"出口"(按入度出度判定，见
+		// MergeBuildingNavigation注释)，最终连接方向"outsideNode->access node"；false=
+		// "入口"，方向"access node->outsideNode"。行人分支不看这个字段(固定双向)。
+		bool isExit = false;
 	};
 	std::vector<PendingRoadAccess> pendingBuildingRoadAccess;
 

@@ -27,3 +27,7 @@ void BuildingMod::AssignRoom(int level, int slot, const string& room, const stri
 void BuildingMod::ArrangeRow(int level, int slot, const string& room, float acreage, const string& component, int id) {
 	rows[{component, id}].push_back({ level, slot, room, acreage });
 }
+
+void BuildingMod::AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, string cabinMeshPath) {
+	cabins.push_back(ElevatorCabinSpec{ shaftIndex, minFloor, maxFloor, std::move(cabinMeshPath) });
+}

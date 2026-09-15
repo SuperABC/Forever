@@ -25,6 +25,12 @@
   `factory->DestroyComponent(mod)`；`Component`对象本身由`Building`统一`new`/`delete`。
 - **`rooms`不持有生命周期**：`Room`由`Building`自己的`rooms`数组统一持有/销毁，
   `Component::rooms`只是一份引用列表（`AddRoom`时`push_back`，不`delete`）。
+- **map域没有更多东西要补全（第N轮迁移核实）**：核对过老工程`Component`全部字段/方法
+  （`type`/`name`/`parentBuilding`/`rooms`/`script`/`InitComponent`），`script`/
+  `InitComponent`（`InitComponent`实际是`new Script(...)`+读milestones+`SetValue`，纯
+  Story域逻辑）之外全部已经port完了，且老工程`Component`本来就没有`GetAddress`（不像
+  `Room`/`Building`/`Zone`那样参与寻址体系，只能通过`Room`/`Building`间接找到）——这次
+  "补全map域"对`Component`没有新增任何字段/方法。
 
 ## 依赖关系
 

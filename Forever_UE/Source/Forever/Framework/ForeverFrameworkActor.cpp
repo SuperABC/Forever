@@ -19,6 +19,14 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 
 	sceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = sceneRoot;
+	// 这个Actor整个生命周期都不会移动(纯粹是"世界生成结果的挂载点")，根组件应该是Static、
+	// 不是引擎默认的Movable——不这么做的话，挂在它下面的每一个子组件(哪怕子组件自己显式设成
+	// Static)都会被引擎按"父级更活跃"的规则强制视为Movable，导致渲染器的动态图元八叉树/
+	// 物理引擎的动态broadphase里堆积海量本该是静态的图元(每栋building的墙体分段、每个
+	// Room/Building/Zone的碰撞盒等等，数量级是成千上万)，且这两套结构对"新增/移除一个动态
+	// 图元"的开销会随着已有动态图元数量增长而变差——这正是"建筑近处LOD每次整层增删都巨卡，
+	// 而且感觉越来越卡"的根因，见ForeverBuildingFrameworkComponent.md"性能"一节。
+	sceneRoot->SetMobility(EComponentMobility::Static);
 
 	assetFramework = CreateDefaultSubobject<UForeverAssetFrameworkComponent>(TEXT("AssetFramework"));
 	buildingFramework = CreateDefaultSubobject<UForeverBuildingFrameworkComponent>(TEXT("BuildingFramework"));
@@ -92,6 +100,10 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 	if (zoneFramework) {
 		zoneFramework->GenerateZones(map);
 	}
+	// Room进入/离开检测碰撞盒现在由ABuildingElement自己生成(每栋building的所有Room都跟着
+	// 这栋楼自己的近/远LOD组件一起attach到它专属的Actor上，不再是roomFramework这个单例组件
+	// 统一生成)，buildingFramework->GenerateBuildings(map)已经涵盖了这一步，不需要在这里
+	// 再单独调用roomFramework——见Source/Forever/Element/BuildingElement.md。
 	if (buildingFramework) {
 		buildingFramework->GenerateBuildings(map);
 	}

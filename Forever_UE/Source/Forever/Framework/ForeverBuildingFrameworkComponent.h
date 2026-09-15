@@ -2,34 +2,35 @@
 
 #include "CoreMinimal.h"
 #include "Framework/ForeverFrameworkComponent.h"
-#include "Containers/Queue.h"
 
-#include <array>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 #include "ForeverBuildingFrameworkComponent.generated.h"
 
-class UProceduralMeshComponent;
-class UStaticMeshComponent;
 class UStaticMesh;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class Map;
 class Building;
-class Floor;
-struct FloorAssetSpec;
 
 // 阶段4-1 Building落地 + 楼体footprint/楼层/两级LOD + 楼层内部布局：Building的可视化cube
 // 收缩到BuildingMod声明的楼体子矩形，按basements/layers/floorHeights逐层堆叠(地下室往
 // Z=0以下堆)。两级LOD：远处整栋一个box(材质由BuildingMod::lodMaterial指定，留空用默认
-// 灰色)，继续用PMC section(buildingLodMesh，只有1个box，没有"频繁增删细节"的问题)；近处
-// 是真正的楼层内部结构(走廊/房间隔墙/门洞/窗户/楼梯/电梯井/坡道)，每面墙体分段/地板/天花板
-// slab/楼梯坡道网格都是一个独立的UStaticMeshComponent(不用PMC section也不用ISM——建筑楼体
-// 要频繁整层增删，独立组件增删最直接，见ForeverBuildingFrameworkComponent.md)。切换距离
-// lodSwitchDistance(地图单位)。LOD切换产生的mesh增删操作通过一个队列节流，TickComponent
-// 每帧最多处理maxLodOpsPerTick条，避免大量建筑同时穿越阈值时卡顿。
+// 灰色)；近处是真正的楼层内部结构(走廊/房间隔墙/门洞/窗户/楼梯/电梯井/坡道)，每面墙体分段/
+// 地板/天花板slab/楼梯坡道网格都是一个独立的UStaticMeshComponent(不用PMC section也不用
+// ISM——建筑楼体要频繁整层增删，独立组件增删最直接)。
+//
+// 这个组件本身不再直接持有任何per-building的渲染状态/组件——每栋building各有一个专属的
+// ABuildingElement Actor(见Source/Forever/Element/BuildingElement.h)，LOD状态机、近/远
+// 处组件、电梯轿厢动画全部在Element自己的Tick里做。这样每栋building的组件都attach到它自己
+// 专属的Actor上，不会像早期实现那样全地图共用一个owner Actor(会被物理引擎的碰撞体焊接开销
+// 拖累，且开销随owner身上组件总数线性增长，全地图共用就等于挨个building互相拖累，见
+// ForeverBuildingFrameworkComponent.md"性能"一节)。
+//
+// 这个组件保留的职责：GenerateBuildings()时按map->GetBuildings()各SpawnActor一个Element；
+// 集中加载/缓存全地图共用的默认资产(材质/网格，按软路径缓存，不适合每个Element各自维护一份)；
+// 通过TryConsumeLodOpBudget()给所有Element提供一个全局共享的"每帧最多处理几条LOD操作"预算，
+// 避免大量building同时穿越距离阈值时所有Element在同一帧一起疯狂建组件。
 UCLASS()
 class FOREVER_API UForeverBuildingFrameworkComponent : public UForeverFrameworkComponent
 {
@@ -39,91 +40,59 @@ public:
 	UForeverBuildingFrameworkComponent();
 
 	// 由AForeverFrameworkActor在Map::InitBuildings()跑完后调用一次。map生命周期由调用方持有。
-	// 遍历map->GetBuildings()给每栋building分配LOD状态，同步建好远处灰色cube作为基线状态；
-	// 不在这一步建任何近处楼层几何，近处楼层完全交给TickComponent按距离增量构建。
+	// 遍历map->GetBuildings()给每栋building各SpawnActor一个ABuildingElement并Init()——Element
+	// 会自己同步建好远处灰色cube作为基线状态；不在这一步建任何近处楼层几何，近处楼层完全交给
+	// 各Element自己的Tick按距离增量构建。
 	void GenerateBuildings(Map* inMap);
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
 
-	// PIE停止/退出游戏时置空map——AForeverFrameworkActor::EndPlay同步delete了Core侧的Map
-	// (含它拥有的所有Building/Room/Component)，但那是Actor自己的Map*字段，和这个组件
-	// GenerateBuildings()时缓存的map是两个不同的变量，Actor那边delete之后并不会连带把这里
-	// 也清空。这个组件的TickComponent每帧都会解引用renderStates里存的Building*(building->
-	// GetPosX()等)，如果不清空，Actor::EndPlay delete map之后、这个组件真正被引擎销毁之前
-	// 万一还有一帧Tick漏进来，就是踩野指针——退出游戏崩溃的根因(PIE验证发现)。
-	// AActor::EndPlay会自动分发调用每个ActorComponent自己的EndPlay，且分发发生在
-	// AForeverFrameworkActor::EndPlay里delete map那两行之后(Super::EndPlay(...)那一行)，
-	// 所以这里置空的时候map已经不是野指针、可以放心比较/赋值，只是不能再解引用。
+	// PIE停止/退出游戏时置空map——这个组件自己的TickComponent只用来重置每帧LOD操作预算，
+	// 不解引用任何Building*/Map*，理论上不置空也不会崩，但和其它Framework组件保持同一套
+	// 约定(见AForeverFrameworkActor::EnsureMapGenerated的Map生命周期说明)。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-private:
-	enum class EBuildingLod : uint8 { Near, Far };
-
-	enum class EBuildingLodOpType : uint8 {
-		BuildFarMesh,        // 近->远，第1步
-		DeleteAllNearMeshes, // 近->远，最后一步(执行完才更新currentLod)
-		BuildFloorMesh,      // 远->近，每层一条
-		DeleteFarMesh,       // 远->近，最后一步(执行完才更新currentLod)
-	};
-
-	struct FBuildingRenderState {
-		EBuildingLod currentLod = EBuildingLod::Far;
-		bool transitionPending = false;
-		int32 nearFloorCount = 0;           // basements+layers，BuildFloorMesh按floorIndex 0..nearFloorCount-1处理
-		int32 farSectionIndex = INDEX_NONE; // buildingLodMesh的section
-		// 近处这栋building当前占用的所有独立组件(墙体分段/地板/天花板slab/楼梯/坡道/窗户网格)，
-		// 按floorIndex分组，方便ClearNearSections只清空单层或整栋。
-		TArray<TArray<TObjectPtr<UStaticMeshComponent>>> nearComponentsByFloor;
-	};
-
-	struct FBuildingLodOp {
-		EBuildingLodOpType type = EBuildingLodOpType::BuildFarMesh;
-		Building* building = nullptr;
-		int32 floorIndex = -1; // 仅BuildFloorMesh使用
-	};
-
-	void BuildFarSection(Building* building, FBuildingRenderState& state);
-	void BuildFloorSection(Building* building, FBuildingRenderState& state, int32 floorIndex);
-	void ClearNearSections(Building* building, FBuildingRenderState& state);
-	void ClearFarSection(Building* building, FBuildingRenderState& state);
-	void ExecuteLodOp(const FBuildingLodOp& op);
+	// 供ABuildingElement调用——按BuildingMod软路径覆盖返回对应的材质/网格，路径为空或加载
+	// 失败时回退到调用方传入的fallback(通常是下面几个Get默认值)。按软路径缓存，避免同一个
+	// 软路径被不同building各自重复LoadObject。
 	UMaterialInstanceDynamic* ResolveLodMaterial(Building* building);
 	UMaterialInstanceDynamic* ResolveMaterial(const std::string& softPath, UMaterialInstanceDynamic* fallback);
 	UStaticMesh* ResolveMesh(const std::string& softPath, UStaticMesh* fallback);
 
-	// 复用一个通用的单位立方体网格，缩放到目标尺寸摆一个墙体/地板/天花板slab；返回值已经
-	// RegisterComponent+AddInstanceComponent，调用方负责收集进state.nearComponentsByFloor。
-	UStaticMeshComponent* SpawnCube(float centerX, float centerY, float centerZ,
-		float sizeX, float sizeY, float sizeZ, float rotation, UMaterialInterface* material);
+	// 全地图共用的默认资产——ABuildingElement在没有mod覆盖时用这些做ResolveMaterial/
+	// ResolveMesh的fallback参数。
+	UStaticMesh* GetCubeMesh() const { return cubeMesh; }
+	UStaticMesh* GetDefaultStairMesh() const { return defaultStairMesh; }
+	UStaticMesh* GetDefaultRampMesh() const { return defaultRampMesh; }
+	UStaticMesh* GetDefaultCabinMesh() const { return defaultCabinMesh; }
+	UMaterialInstanceDynamic* GetDefaultWallMaterial() const { return defaultWallMaterial; }
+	UMaterialInstanceDynamic* GetDefaultFloorMaterial() const { return defaultFloorMaterial; }
+	UMaterialInstanceDynamic* GetDefaultCeilingMaterial() const { return defaultCeilingMaterial; }
 
-	// 按目标尺寸缩放摆放一个网格实体，供楼梯/坡道这类有真实3D资产的元素用——和SpawnCube同一套
-	// "资产包围盒是边长BUILDING_CUBE_MESH_SIZE的正方体"约定，缩放系数=目标尺寸/这个边长，
-	// 保证不同美术资产只要包围盒统一就能互相替换，不用改代码。
-	UStaticMeshComponent* SpawnMesh(float centerX, float centerY, float centerZ,
-		float sizeX, float sizeY, float sizeZ, float rotation, UStaticMesh* mesh, UMaterialInterface* material);
+	// 共享配置，Element的Tick/动画计算直接读取。
+	// 远->近(建细节)的触发距离——比近->远的阈值小，两者不共用一个值(见下)，形成一段迟滞区间。
+	float GetLodNearEnterDistance() const { return lodNearEnterDistance; }
+	// 近->远(退化成单box)的触发距离——比远->近的阈值大。两个阈值之间(这次是20~40)是"迟滞区"：
+	// 已经是Near的building要离得比刚进入时更远才会退回Far，避免玩家在临界距离附近小范围
+	// 来回走动时，building反复Near/Far抖动式切换(每次切换都要建/删一整层楼的组件，抖动等于
+	// 反复触发这次会话花大力气排查的那个卡顿)。
+	float GetLodFarExitDistance() const { return lodFarExitDistance; }
+	float GetCabinCruiseSpeed() const { return cabinCruiseSpeed; }
+	float GetCabinEaseSeconds() const { return cabinEaseSeconds; }
 
-	// 照抄老工程BuildingBase.cpp::ConstructQuad里processFace的算法：按这一侧墙的门/窗开口
-	// 位置把墙体在水平方向切分成若干段(开口前的墙段/开口上方过梁(仅当开口没到天花板才有)/
-	// 开口下方门槛或窗台(仅当开口没到地板才有))，每段一个SpawnCube；门/窗开口本身都不生成
-	// 任何东西(窗户资产有问题，这次删掉了窗户网格显示逻辑，和门一样只是纯几何缺口)。
-	// center/size是这面墙所在Floor局部坐标下的整面墙范围(BuildWallsForElement在
-	// BuildFloorSection里按stair/elevator/ramp/corridor/single/row各自的矩形+墙标志调用
-	// 4次，每次对应FACE_DIRECTION一侧)。worldRotation是building自身的世界旋转(弧度)，
-	// 用来把局部坐标转成世界坐标摆放各个组件；建筑局部坐标到世界坐标的转换见
-	// Building::LocalToWorld(Core侧只提供点转换，墙体分段的批量生成在这里现算，
-	// 复用同一套cos/sin公式)。
-	void BuildWallsForElement(Building* building, float floorBaseZ, float floorHeight,
-		float elemCenterX, float elemCenterY, float elemSizeX, float elemSizeY,
-		bool wallWest, bool wallEast, bool wallNorth, bool wallSouth,
-		const std::unordered_map<int, std::vector<std::array<float, 8>>>& doors,
-		const std::unordered_map<int, std::vector<std::array<float, 8>>>& windows,
-		UMaterialInterface* wallMaterial, FBuildingRenderState& state, int32 floorIndex);
+	// 全地图共享的每帧LOD操作预算——每个ABuildingElement在自己的Tick里执行任何一条LOD操作
+	// (建/删一层楼、建电梯轿厢等)之前都要先来这里申请一份，申请失败就等下一帧再试。预算本身
+	// 每帧由这个组件的TickComponent重置一次，替代之前"框架组件自己维护一个全局队列、自己
+	// 挨个执行"的做法——现在队列下放到每个Element自己维护，这里只保留节流的"总闸"。
+	bool TryConsumeLodOpBudget() {
+		if (frameOpBudgetRemaining <= 0) return false;
+		frameOpBudgetRemaining--;
+		return true;
+	}
 
+private:
 	Map* map = nullptr;
-
-	UPROPERTY()
-	TObjectPtr<UProceduralMeshComponent> buildingLodMesh; // 远处，每栋building一个section
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> defaultLodMaterial; // 远处默认灰色(Pure+Color染灰)
@@ -147,6 +116,9 @@ private:
 	TObjectPtr<UStaticMesh> cubeMesh; // 单位立方体网格(/Game/Asset/Meshes/Cube.Cube)，SpawnCube用
 
 	UPROPERTY()
+	TObjectPtr<UStaticMesh> defaultCabinMesh; // 默认电梯轿厢网格(/Game/Asset/Meshes/Elevator.Elevator)
+
+	UPROPERTY()
 	TMap<FString, TObjectPtr<UMaterialInstanceDynamic>> lodMaterialCache; // 按软路径缓存MID(远处LOD/近处墙地顶材质共用一份缓存)
 
 	UPROPERTY()
@@ -156,15 +128,32 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
 	TObjectPtr<UMaterialInterface> buildingBaseMaterial;
 
-	// LOD切换距离，地图单位(1地图单位=1000 UE单位=10米)。
+	// LOD切换距离(地图单位，1地图单位=1000 UE单位=10米)，两个阈值不同形成迟滞区间，见
+	// GetLodNearEnterDistance/GetLodFarExitDistance注释。
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
-	float lodSwitchDistance = 20.f;
+	float lodNearEnterDistance = 20.f;
 
-	// 主线程Tick每帧最多处理的LOD操作队列条数，避免大量建筑同时穿越阈值时卡顿。
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
-	int32 maxLodOpsPerTick = 4;
+	float lodFarExitDistance = 40.f;
 
-	TMap<Building*, FBuildingRenderState> renderStates;
-	TQueue<FBuildingLodOp> lodOpQueue;
-	int32 nextFarSectionIndex = 0;
+	// 全地图共享的每帧最多处理LOD操作条数，避免大量建筑同时穿越阈值时卡顿——具体消耗见
+	// TryConsumeLodOpBudget()。
+	UPROPERTY(EditDefaultsOnly, Category = "Building")
+	int32 maxLodOpsPerTick = 2;
+
+	int32 frameOpBudgetRemaining = 0;
+
+	// 电梯轿厢匀速巡航速度(UE单位/秒，默认300≈3m/s)。用户要求"速度和加速度都变成2倍"——
+	// ComputeCabinZ里缓入/缓出用的speedup(u)=cruiseSpeed*smoothstep(u)这条曲线，峰值加速度
+	// =1.5*cruiseSpeed/cabinEaseSeconds，只要cabinEaseSeconds不变，cruiseSpeed翻倍就会让
+	// 峰值加速度也自动翻倍(两者都正比于cruiseSpeed)，不需要额外再调cabinEaseSeconds——原来
+	// 150(≈1.5m/s)翻倍成300(≈3m/s)。
+	UPROPERTY(EditDefaultsOnly, Category = "Building")
+	float cabinCruiseSpeed = 300.f;
+
+	// 电梯轿厢两端缓入/缓出各自的时长(秒)，超过半程距离对应时间时会被自动夹到刚好半程，
+	// 退化成"没有匀速段、只有缓入接缓出"，不会算出负的匀速时间。这次不改——上面cruiseSpeed
+	// 翻倍已经让加速度自动翻倍，这个值再改会变成加速度4倍，超出"2倍"的要求。
+	UPROPERTY(EditDefaultsOnly, Category = "Building")
+	float cabinEaseSeconds = 1.5f;
 };

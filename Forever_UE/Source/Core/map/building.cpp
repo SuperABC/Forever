@@ -2,6 +2,7 @@
 
 #include "map/room.h"
 #include "map/component.h"
+#include "map/zone.h"
 #include "common/error.h"
 #include "common/json.h"
 
@@ -695,6 +696,7 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	}
 
 	BuildPedestrianNavigation(library, resolvedDirection, navOut);
+	BuildVehicleNavigation(library, resolvedDirection, navOut);
 }
 
 void Building::ReadFloor(int level, int face, const string& templateName, const BuildingLayoutLibrary& library) {
@@ -846,6 +848,12 @@ float Building::GetRotation() const {
 	return (parentLot ? parentLot->GetRotation() : 0.f) + relativeRotation;
 }
 
+string Building::GetAddress() const {
+	if (parentZone) return parentZone->GetAddress() + " " + GetName();
+	if (parentLot) return parentLot->GetAddress() + " " + GetName();
+	return "";
+}
+
 Lot* Building::GetParentLot() const { return parentLot; }
 
 void Building::SetParentLot(Lot* lot, float relativeRot) {
@@ -888,10 +896,18 @@ namespace {
 }
 
 void Building::BuildPedestrianNavigation(const BuildingLayoutLibrary& library, int inputDirection, BuildingNavResult& navOut) {
-	vector<Node*>& newNodes = navOut.nodes;
-	vector<Connection*>& newConnections = navOut.connections;
-	vector<Node*>& outsideNodes = navOut.outsideNodes;
+	BuildNavigationGraph(library, inputDirection, /*isVehicle=*/false,
+		navOut.nodes, navOut.connections, navOut.outsideNodes, /*registerRoomNodes=*/true);
+}
 
+void Building::BuildVehicleNavigation(const BuildingLayoutLibrary& library, int inputDirection, BuildingNavResult& navOut) {
+	BuildNavigationGraph(library, inputDirection, /*isVehicle=*/true,
+		navOut.vehicleNodes, navOut.vehicleConnections, navOut.vehicleOutsideNodes, /*registerRoomNodes=*/false);
+}
+
+void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int inputDirection, bool isVehicle,
+	vector<Node*>& newNodes, vector<Connection*>& newConnections, vector<Node*>& outsideNodes,
+	bool registerRoomNodes) {
 	// 楼层间楼梯端点登记，留待所有楼层处理完后按相邻层贪心匹配。
 	vector<tuple<int, Node*, bool>> stairEndpoints;
 
@@ -904,7 +920,9 @@ void Building::BuildPedestrianNavigation(const BuildingLayoutLibrary& library, i
 		const string& templateName = specIt->second.templateName;
 		int face = specIt->second.face;
 
-		const NavigationTemplate& navTemplate = library.GetPedestrianNavigation(templateName, face);
+		const NavigationTemplate& navTemplate = isVehicle
+			? library.GetVehicleNavigation(templateName, face)
+			: library.GetPedestrianNavigation(templateName, face);
 		if (navTemplate.nodes.empty() && navTemplate.lines.empty() && navTemplate.connections.empty()) continue;
 
 		float floorWidth = floor.GetSizeX();
@@ -1128,10 +1146,14 @@ void Building::BuildPedestrianNavigation(const BuildingLayoutLibrary& library, i
 	// 锚点这条链路里，但仍然要登记进navOut.nodes，否则Map::navAnchorNodes永远拿不到它们——
 	// 既没办法在导航图可视化里按坐标画出来，也没有任何地方会delete它们(内存泄漏)。照抄
 	// 老工程BuildNavigation结尾"for (auto room : rooms) newNodes.push_back(room->
-	// GetNavigationNode())"这一步。
-	for (Room* room : rooms) {
-		if (room && room->GetNavigationNode()) {
-			newNodes.push_back(room->GetNavigationNode());
+	// GetNavigationNode())"这一步。**只有registerRoomNodes=true(行人那次调用)才做**——
+	// 车行调用如果也做一遍，同一个Room的Node*会被登记进navAnchorNodes两次，~Map()清理时
+	// double free，见BuildVehicleNavigation声明处的注释。
+	if (registerRoomNodes) {
+		for (Room* room : rooms) {
+			if (room && room->GetNavigationNode()) {
+				newNodes.push_back(room->GetNavigationNode());
+			}
 		}
 	}
 }
