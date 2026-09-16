@@ -6,9 +6,11 @@
 // Basic/map/component_basic.h迁移,完整对照表见 Source/Basic/README.md。
 // Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
 // 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
-class ComponentBasic : public ComponentMod {
+//
+// 类名从ComponentBasic改成ResidenceComponent，纯改名不改行为，见zone_residence.h顶部注释。
+class ResidenceComponent : public ComponentMod {
 public:
-	static const char* GetId() { return "component_basic"; }
-	virtual const char* GetType() const override { return "component_basic"; }
-	virtual const char* GetName() override { return "ComponentBasic"; }
+	static const char* GetId() { return "component_residence"; }
+	virtual const char* GetType() const override { return "component_residence"; }
+	virtual const char* GetName() override { return "ResidenceComponent"; }
 };

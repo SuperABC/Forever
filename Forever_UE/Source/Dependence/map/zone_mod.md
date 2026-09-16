@@ -53,7 +53,7 @@
   `quad`/`boundaryRoads`是真正落地的矩形和四周道路，都是纯只读输入，跨DLL传递安全（`Quad`
   没有动态容器，`unordered_map<int,Road*>`只是读指针值）。
 - **`Distribute(lots)`/`Assign(lots,...)`这次暂时不按`lot->GetArea()`筛选/区分权重，
-  `ZoneBasic`/`BuildingBasic`对所有lot一视同仁**——地块类型本身`RoadnetMod`已经在构造lot时
+  `ResidenceZone`/`ResidenceBuilding`对所有lot一视同仁**——地块类型本身`RoadnetMod`已经在构造lot时
   用`Lot::SetArea(AREA_TYPE)`标好了（`AREA_TYPE`定义在`geometry.h`），但这两个mod目前都
   只是验证链路用的通用占位类型（一个验证显式占位，一个验证权重CDF），用户明确要求先不区分，
   等以后设计具体建筑/园区类型（对照老工程`ResidentialZone::ZoneAssigner`/各
@@ -151,8 +151,9 @@
   `Zone`新增字段存放`ZoneWallSpec`/`ZoneGateSpec`/内部道路/内部建筑）、
   `Source/Core/map/map.h`（`Map::InitZones`/`InitBuildings`及新增的
   `ZoneLocalToWorld`/`ConnectZoneAccessPoint`/`ConnectZoneInternalRoad`/
-  `PlaceZoneInternalBuilding`）、`Source/Basic/map/zone_basic.h`/`building_basic.h`
-  （`ZoneBasic`/`BuildingBasic`默认内容，`ZoneBasic`额外用这些新字段搭了一个围墙+大门+
+  `PlaceZoneInternalBuilding`）、`Source/Basic/map/zone_residence.h`/`building_residence.h`
+  （`ResidenceZone`/`ResidenceBuilding`默认内容，改名自`ZoneBasic`/`BuildingBasic`，见
+  `Source/Core/populace/populace.md`；`ResidenceZone`额外用这些新字段搭了一个围墙+大门+
   内部道路的测试场景）、`Forever_Mod/Empty`的`EmptyZone`/`EmptyBuilding`demo mod、
   `Source/Forever/Framework/ForeverZoneFrameworkComponent`（读`Zone::GetWalls()`渲染围墙）。
 

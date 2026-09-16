@@ -873,6 +873,11 @@ Road* Building::GetBoundaryRoad(int direction) const {
 
 const unordered_map<int, Road*>& Building::GetBoundaryRoads() const { return boundaryRoads; }
 
+Citizen* Building::GetOwner() const { return owner; }
+void Building::SetOwner(Citizen* value) { owner = value; }
+bool Building::GetStated() const { return stated; }
+void Building::SetStated(bool value) { stated = value; }
+
 float Building::ProjectOntoLine(float px, float py, float ax, float ay, float bx, float by) {
 	float dx = bx - ax, dy = by - ay;
 	float lenSq = dx * dx + dy * dy;

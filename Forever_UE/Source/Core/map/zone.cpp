@@ -94,3 +94,8 @@ void Zone::AddInternalBuilding(Building* building) {
 const vector<Building*>& Zone::GetInternalBuildings() const {
 	return internalBuildings;
 }
+
+Citizen* Zone::GetOwner() const { return owner; }
+void Zone::SetOwner(Citizen* value) { owner = value; }
+bool Zone::GetStated() const { return stated; }
+void Zone::SetStated(bool value) { stated = value; }

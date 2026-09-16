@@ -78,6 +78,14 @@
   改成让`Zone`额外拷贝一份`pendingInternalBuildingSpecs`暂存到`InitBuildings()`再处理，但
   既然`Zone`现在本来就独占持有着那个mod实例（见上一条），直接在`InitBuildings()`里问
   `zone->GetMod()->internalBuildings`要更直接，不需要再多一层拷贝/暂存/清空的存取接口。
+- **`owner`/`GetStated()`（房产归属，进入populace域第四轮迁移新增）**：`Citizen*
+  owner = nullptr`+`bool stated = false`，和`Room`/`Building`同一套"owner非空=私有，
+  stated=true=公有，二者互斥"语义（见`room.md`）。`Map::Checkin()`按老工程算法给每个
+  zone随机roll一次"整个zone统一归属"（公有/私有/都不是），如果不是"整个zone统一"就下探
+  到各个`internalBuilding`各自独立决定；zone一旦统一归属，会把这个owner/stated**级联
+  写到它所有`internalBuildings`以及这些building的所有`Room`**——用户明确要求"如果一个
+  园区属于某人或公有，那么这个园区里的所有房间/建筑都属于这个人或公有"，详见
+  `Source/Core/populace/populace.md`"房产归属"一节。
 
 ## 依赖关系
 
@@ -162,3 +170,15 @@ BuildingMod* mod)`构造，`~Building()`里`factory->DestroyBuilding(mod)`。中
   `GetRotation()`现在是`(parentLot ? parentLot->GetRotation() : 0.f) + relativeRotation`。
   对应`ZoneInternalBuildingSpec::relativeRotation`（"以园区旋转为基准继续旋转"，见
   `zone_mod.md`）。
+
+**`owner`/`GetStated()`（房产归属，进入populace域第四轮迁移新增）**：和`Zone`同一套
+字段/语义（`Citizen* owner = nullptr`+`bool stated = false`，互斥），`Map::Checkin()`
+给每个不属于任何zone的独立building随机roll一次"整个building统一归属"；属于某个zone的
+building要么被zone级联下来的归属直接设定（zone统一归属时），要么在zone没有统一归属的
+情况下由zone那边的循环单独给每个internalBuilding各roll一次"整个building统一归属"——
+不会被`Map::buildings`里对同一个building再重复roll一次（老工程这里对zone内部building有
+重复roll的疏漏，这次没有照抄，见`populace.md`"房产归属"一节）。building一旦统一归属，
+会把owner/stated**级联写到它所有的`Room`**——用户明确要求"如果一个建筑属于某人或公有，
+那么这个建筑里的所有房间都属于这个人或公有"；**如果building内部不同room各自独立归属
+不同人，`owner`/`stated`保持默认值（`nullptr`/`false`）**，不需要显式重置，天然由"只在
+统一归属分支才调用setter"这个结构保证。

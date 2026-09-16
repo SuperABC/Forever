@@ -18,6 +18,8 @@
 #include <array>
 #include <tuple>
 
+class Populace;
+
 // 10m*10m地图元素。当前只有Terrain域需要的字段;zone/building字段等Zone/Building阶段
 // 迁移时再补。hatches现在就接好(挖洞用),但在Roadnet/Building迁移前始终为空,详见map.md。
 struct Element {
@@ -122,6 +124,23 @@ public:
 	// 收集到的所有building outside端点按物理顺序接上道路网(不能在每个building落地时立即接，
 	// 见FlushPendingBuildingRoadAccess()注释)。
 	void InitBuildings();
+
+	// 遍历所有building的所有room，IsResidential()的加ResidentialCapacity()，除以2——
+	// 老工程Map::InitContents()对"accomodation"的统计口径(先求和再减半)。供调用方
+	// (AForeverFrameworkActor::EnsureMapGenerated())传给Populace::Init()。假定
+	// InitBuildings()已经跑完。
+	int ComputeAccommodationTarget() const;
+
+	// 遍历所有building的所有room，IsResidential()的每个room贡献1个名额(不按
+	// ResidentialCapacity()重复贡献——老工程Checkin本来就是"一个room一个名额"的口径，
+	// capacity只用来算ComputeAccommodationTarget()的城市级目标，不在这一步重复消费)，
+	// 名额池随机打乱后按populace.GetCitizens()顺序依次消费；citizens比名额多时多出的人
+	// 分不到住处(GetRoom()==nullptr)，这次也没有"一并塞进空room"的例外处理——正常情况下
+	// target本来就≈capacity/2，名额池大小=room数量本身(明显大于target)，不会出现名额
+	// 不够。成功分配的citizen同时设置Lot/Zone/Building/Room。**不做老工程"配偶/未成年
+	// 子女一起搬进同一间"的逻辑**——这次Citizen没有配偶/亲子字段，这一步简化成纯粹的
+	// "一人一间随机分配"，见Source/Core/populace/populace.md。
+	void Checkin(const Populace& populace);
 
 	const std::unordered_map<std::string, Zone*>& GetZones() const;
 	const std::unordered_map<std::string, Building*>& GetBuildings() const;

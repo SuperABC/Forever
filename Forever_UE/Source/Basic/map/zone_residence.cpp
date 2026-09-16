@@ -1,14 +1,14 @@
-#include "zone_basic.h"
+#include "zone_residence.h"
 
-#include "building_basic.h"
+#include "building_residence.h"
 
 #include <cmath>
 
 using namespace std;
 
-int ZoneBasic::count = 0;
+int ResidenceZone::count = 0;
 
-ZoneBasic::ZoneBasic() {
+ResidenceZone::ResidenceZone() {
 	lastName = string(GetType()) + std::to_string(count++);
 }
 
@@ -19,7 +19,7 @@ namespace {
 	constexpr float TARGET_ACREAGE = 20000.f;
 }
 
-void ZoneBasic::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+void ResidenceZone::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
 	float side = sqrtf(TARGET_ACREAGE / ACREAGE_SCALE_FACTOR);
 
 	for (Lot* lot : lots) {
@@ -44,7 +44,7 @@ void ZoneBasic::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* c
 	}
 }
 
-void ZoneBasic::Layout(int direction, const Quad& quad,
+void ResidenceZone::Layout(int direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
 	float side = sqrtf(TARGET_ACREAGE / ACREAGE_SCALE_FACTOR);
 	float half = side / 2.f;
@@ -143,9 +143,9 @@ void ZoneBasic::Layout(int direction, const Quad& quad,
 	internalRoads.push_back(road);
 
 	// 内部道路把zone从中间分成两半，每一半各放一个建筑(验证需求8"两个矩形"确实各自
-	// 可用)——用和独立建筑同一个类型(BuildingBasic，同一个Basic.dll里，直接引用
-	// BuildingBasic::GetId()而不是另外发明一个占位类型)，这样园区内部建筑天然复用
-	// BuildingBasic::Layout()里的楼体footprint/地下室/楼层数据，和独立建筑在
+	// 可用)——用和独立建筑同一个类型(ResidenceBuilding，同一个Basic.dll里，直接引用
+	// ResidenceBuilding::GetId()而不是另外发明一个占位类型)，这样园区内部建筑天然复用
+	// ResidenceBuilding::Layout()里的楼体footprint/地下室/楼层数据，和独立建筑在
 	// ForeverBuildingFrameworkComponent里走同一套近/远LOD渲染时外观也一致，不需要
 	// 给"empty"这个纯占位类型另外补一份长得像的数据。尺寸留出一点余量，不贴着围墙/
 	// 内部道路。roadIndices记这个建筑贴着internalRoads[0]的哪一个面——两个半区分别是
@@ -154,7 +154,7 @@ void ZoneBasic::Layout(int direction, const Quad& quad,
 	float buildingAlong = side * 0.6f;
 	float buildingAcross = half * 0.6f;
 	ZoneInternalBuildingSpec buildingA, buildingB;
-	buildingA.type = buildingB.type = BuildingBasic::GetId();
+	buildingA.type = buildingB.type = ResidenceBuilding::GetId();
 	buildingA.relativeRotation = buildingB.relativeRotation = 0.f;
 	if (alongY) {
 		buildingA.x = 0.f; buildingA.y = -half / 2.f;

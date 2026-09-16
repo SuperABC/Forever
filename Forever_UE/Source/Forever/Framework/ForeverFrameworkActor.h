@@ -5,6 +5,7 @@
 #include "ForeverFrameworkActor.generated.h"
 
 class Map;
+class Populace;
 
 class USceneComponent;
 class UForeverAssetFrameworkComponent;
@@ -48,6 +49,7 @@ public:
 	void EnsureMapGenerated();
 
 	Map* GetMap() const { return map; }
+	Populace* GetPopulace() const { return populace; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -64,6 +66,11 @@ protected:
 	// 阶段4-1:Terrain域落地,Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
 	// Zone/Building/Roadnet等后续系统迁移时会继续扩展同一个Map实例,不是各自另建一个。
 	Map* map = nullptr;
+
+	// 进入populace域新增：和map平级持有，不是map的成员——Populace不知道Map的存在，
+	// 通过Map::Checkin(*populace)单向读取，和老工程GlobalBase同时持有map/populace两个
+	// 顶层对象、由它做两者之间编排是同一个分工，详见Source/Core/populace/populace.md。
+	Populace* populace = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<USceneComponent> sceneRoot;

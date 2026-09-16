@@ -197,7 +197,8 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
     任何mod实例，直接对每个类型、每个lot调`buildingFactory.GetPower(id, lot->GetArea())`
     （不需要实例的static方法，替代原来mod动态push`candidateWeights`那条链路——`RoadnetMod`
     （`JingRoadnet::DistributeRoadnet`）已经会给每个lot调用`Lot::SetArea()`标好实际的分区
-    类型，**不是**`AREA_NONE`；`BuildingBasic`这个通用占位类型目前不按分区细分权重，对所有
+    类型，**不是**`AREA_NONE`；`ResidenceBuilding`（改名自`BuildingBasic`，见
+    `Source/Core/populace/populace.md`）这个通用占位类型目前不按分区细分权重，对所有
     `area`一视同仁返回`1.f`，PIE验证时曾经错误假设成"所有lot都是`AREA_NONE`默认值、只给
     `AREA_NONE`非零权重"，导致每个真实lot都查到0权重、一个独立Building都生成不出来，
     已修复），非0权重登记进`lot->AddCandidate(id, weight)`。**园区内部建筑**：遍历`zones`，
@@ -476,22 +477,75 @@ t排序）；小路自己两侧人行道之间不建"穿过小路本身"的横�
   解析格式一一对应，照抄老工程`Block::GetAddress`/`Zone::GetAddress`/
   `Building::GetAddress`/`Room::GetAddress`。
 
+## 人口初始化对接（进入populace域，第N+1轮迁移）
+
+`Map`不持有任何`Citizen*`/`Populace*`——`Populace`是和`Map`平级的顶层Core类（不知道`Map`
+的存在），`Map`只提供两个方法单向"读"外部传入的`Populace`，和老工程`Map::InitContents()`/
+`Map::Checkin(populace, player)`的关系完全对应，详见`Source/Core/populace/populace.md`：
+
+- `int Map::ComputeAccommodationTarget() const`：遍历所有building的所有room，
+  `IsResidential()`的加`ResidentialCapacity()`，除以2——老工程`Map::InitContents()`对
+  "accomodation"的统计口径（先求和再减半）。供调用方（`AForeverFrameworkActor::
+  EnsureMapGenerated()`）算好之后传给`Populace::Init()`。
+- `void Map::Checkin(const Populace& populace)`：**两个完全独立的步骤**，"房产归属"决定
+  每个zone/building/room的`owner`/`stated`是什么，"住处分配"决定谁实际住在(`tenants`/
+  `occupants`)哪个room——一个room的owner可以从来没在这里住过（相当于"房东"），见
+  `Source/Core/map/room.md`。
+  1. **房产归属**：照抄老工程`Map::Checkin`"Zone→Building→Room逐级下探"的算法——对每个
+     zone先`GetRandom(100)`决定"整个zone公有"/"整个zone归一个随机成年citizen私有"/
+     "下探到各个building各自独立决定"三选一；下探到building这一级同样三选一（公有/私有/
+     下探到各个room各自独立`SetOwner`）。**一旦某一级判定"整体统一归属"，就把owner/
+     stated一路级联写到它下面所有building/room**——用户明确要求"如果一个园区/建筑属于
+     某人或公有，那么它内部所有房间/建筑都属于这个人或公有"。**如果内部不同room/building
+     各自独立归属不同人，上一级的`owner`/`stated`保持默认值（`nullptr`/`false`）**，
+     不需要额外"重置"逻辑，天然由"只在统一归属分支才调用setter"这个结构保证。独立于任何
+     zone的building单独走一遍同一套building级归属roll，但**跳过已经属于某个zone的
+     building**——老工程这里对zone内部building有重复roll的疏漏（会把zone级联下来的
+     归属静默覆盖掉），这次没有照抄，详见`Source/Core/populace/populace.md`"房产归属"
+     一节（含"公有"概率是这次新加、不是老工程原始数值的说明）。
+  2. **住处分配**：遍历所有building的所有room，`IsResidential()`的每个room贡献1个名额
+     （不按`ResidentialCapacity()`重复贡献——这个capacity只用来算上面的城市级目标，不在
+     这一步重复消费）。**按老工程"一个家庭消费一个room名额"的算法**（不是"一人一间"）：
+     只遍历成年（`Citizen::GetAge(populace.GetCurrentYear()) >= 18`）且还没有房间的
+     citizen，每人`GetRandom(pool.size())`随机抽一个名额（swap-remove出名额池），配偶
+     （`GetSpouse()`非空、还没房间）以90%概率（`GetRandom(10)>0`，老工程同款）跟着搬进
+     同一间，未成年子女（`GetChildren()`里年龄<18且还没房间的）无条件一起搬进同一间——
+     未成年citizen不会独立抽房间，只能通过父母这边被带进去。成功分配的citizen同时设置
+     `Lot`/`Zone`/`Building`/`Room`+`CurrentRoom`（`Building::GetParentLot()`/
+     `GetParentZone()`/`Room::GetParentBuilding()`逐级取），并把citizen登记进
+     `room->AddTenant()`+`room->AddOccupant()`——**这一步完全不碰`owner`/`stated`**，
+     和第1步"房产归属"是两回事。这一版是几次修正过的：第一版`Citizen`没有配偶/子女字段时
+     曾经简化成"一人一间随机分配"，被用户指出"所有人都独自一间"不对；之后补上了
+     `CurrentRoom`/owner/tenants/occupants；最后被用户指出"房产归属"和"住处分配"是两个
+     独立概念、且归属要迁移老工程的zone/building/room级联算法，才有了现在这版，见
+     `Source/Core/populace/populace.md`。
+
+调用顺序：`AForeverFrameworkActor::EnsureMapGenerated()`里`map->InitBuildings()`（residential
+room数据必须先落地）之后、任何Forever层`Generate*`渲染调用之前，依次
+`populace->Init(map->ComputeAccommodationTarget())`→`map->Checkin(*populace)`。
+
 ## 依赖关系
 
 - 依赖：`terrain.h`、`terrain_factory.h`、`roadnet.h`、`roadnet_factory.h`、`zone.h`、
-  `zone_factory.h`、`building.h`、`building_factory.h`、`map/geometry.h`（`Quad`/`Node`/
-  `Road`/`Lot`等，`hatches`字段类型）、`common/config.h`、`common/loader.h`
-  （`InitTerrains`/`InitRoadnet`/`InitZones`/`InitBuildings`用）、`common/utility.h`
-  （`debugf`）。
+  `zone_factory.h`、`building.h`、`building_factory.h`、`map/room.h`（`Checkin`要用
+  `Room::IsResidential()`/`ResidentialCapacity()`/`GetParentBuilding()`）、
+  `populace/populace.h`/`populace/citizen.h`（`ComputeAccommodationTarget`/`Checkin`的
+  `Populace`/`Citizen`参数类型——单向依赖，`Populace`/`Citizen`不反过来include任何map域
+  头文件）、`map/geometry.h`（`Quad`/`Node`/`Road`/`Lot`等，`hatches`字段类型）、
+  `common/config.h`、`common/loader.h`（`InitTerrains`/`InitRoadnet`/`InitZones`/
+  `InitBuildings`用）、`common/utility.h`（`debugf`/`GetRandom`）。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有`Map*`，
   `EnsureMapGenerated`时依次调用`InitTerrains`+`InitRoadnet`+`InitZones`+
-  `InitBuildings`）、`Source/Forever/Framework/ForeverTerrainFrameworkComponent.h/.cpp`
+  `InitBuildings`+`ComputeAccommodationTarget`+`Checkin`）、`Source/Forever/Framework/
+  ForeverTerrainFrameworkComponent.h/.cpp`
   （`GenerateTerrain(Map*)`读取生成好的格子数据建mesh）、`Source/Forever/Framework/
   ForeverRoadnetFrameworkComponent.h/.cpp`（`GenerateRoadnet(Map*)`读取`GetRoads()`/
   `GetJunctions()`/`GetLots()`/`GetPathRoads()`/`GetPathRoadMaterial()`建mesh）、
   `Source/Forever/Framework/ForeverZoneFrameworkComponent.h/.cpp`（`GenerateZones(Map*)`读
   `GetZones()`）、`Source/Forever/Framework/ForeverBuildingFrameworkComponent.h/.cpp`
-  （`GenerateBuildings(Map*)`读`GetBuildings()`）。
+  （`GenerateBuildings(Map*)`读`GetBuildings()`）、`Source/Forever/Framework/
+  ForeverPopulaceFrameworkComponent.h/.cpp`（`GenerateCitizens(Map*, Populace*)`缓存
+  `populace->GetCitizens()`列表）。
 
 ## 待办/后续阶段
 

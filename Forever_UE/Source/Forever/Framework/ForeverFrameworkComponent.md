@@ -9,7 +9,7 @@
 |---|---|---|
 | `UForeverAssetFrameworkComponent` | Asset | `AssetBase` |
 | `UForeverBuildingFrameworkComponent` | Building | `BuildingBase`（阶段4-1已落地，独立文档见`ForeverBuildingFrameworkComponent.md`） |
-| `UForeverPopulaceFrameworkComponent` | Populace | `PopulaceBase` |
+| `UForeverPopulaceFrameworkComponent` | Populace | `PopulaceBase`（进入populace域已落地，独立文档见`ForeverPopulaceFrameworkComponent.md`） |
 | `UForeverRoadnetFrameworkComponent` | Roadnet | `RoadnetBase`（阶段4-1已落地，独立文档见`ForeverRoadnetFrameworkComponent.md`） |
 | `UForeverRoomFrameworkComponent` | Room | `RoomBase`（第N轮迁移已落地，独立文档见`ForeverRoomFrameworkComponent.md`） |
 | `UForeverStoryFrameworkComponent` | Story | `StoryBase` |

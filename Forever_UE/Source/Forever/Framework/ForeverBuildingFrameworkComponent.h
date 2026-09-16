@@ -139,7 +139,7 @@ private:
 	// 全地图共享的每帧最多处理LOD操作条数，避免大量建筑同时穿越阈值时卡顿——具体消耗见
 	// TryConsumeLodOpBudget()。
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
-	int32 maxLodOpsPerTick = 2;
+	int32 maxLodOpsPerTick = 1;
 
 	int32 frameOpBudgetRemaining = 0;
 

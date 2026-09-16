@@ -56,4 +56,5 @@
   `singles`/`rows`，不读`cabins`）、`Source/Forever/Framework/
   ForeverBuildingFrameworkComponent.cpp`（按`Building::GetMod()->floors[level].assets`
   解析这一层的材质/网格，按`GetMod()->cabins`生成电梯轿厢）、各具体`XxxBuilding`子类
-  （`Source/Basic/map/building_basic.h`/`.cpp`等）。
+  （`Source/Basic/map/building_residence.h`/`.cpp`等，`BuildingBasic`进入populace域时
+  已改名`ResidenceBuilding`，见`Source/Core/populace/populace.md`）。

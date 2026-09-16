@@ -1,6 +1,8 @@
 #include "map.h"
 
 #include "map/room.h"
+#include "populace/populace.h"
+#include "populace/citizen.h"
 #include "common/config.h"
 #include "common/utility.h"
 
@@ -791,6 +793,169 @@ const unordered_map<string, Zone*>& Map::GetZones() const {
 
 const unordered_map<string, Building*>& Map::GetBuildings() const {
 	return buildings;
+}
+
+int Map::ComputeAccommodationTarget() const {
+	int capacity = 0;
+	for (auto& [name, building] : buildings) {
+		if (!building) continue;
+		for (Room* room : building->GetRooms()) {
+			if (room && room->IsResidential()) {
+				capacity += room->ResidentialCapacity();
+			}
+		}
+	}
+	return capacity / 2;
+}
+
+void Map::Checkin(const Populace& populace) {
+	constexpr int kAdultAge = 18; // 照抄老工程ADULT_AGE
+	constexpr int kProbabilityScale = 100; // 照抄老工程PROBABILITY_SCALE
+	constexpr int kZoneOwnershipChance = 2; // 照抄老工程ZONE_OWNERSHIP_CHANCE
+	constexpr int kBuildingOwnershipChance = 5; // 照抄老工程BUILDING_OWNERSHIP_CHANCE
+	// 老工程"公有(stated)"这条分支只在某个zone/building已经被别的机制预先标记时才会
+	// 触发(GetStated()是纯查询，老工程Map::Checkin本身从没有随机骰出过stated——搜了
+	// 整个老工程也没有任何mod会在初始化时SetStated(true))，等于老工程自带的内容里这条
+	// 分支从来不会被撞上。这次要求"保留公有资产的逻辑"，所以自己加两个小概率，让公有
+	// 真的能在随机分配里出现——具体数值是这次新定的，不是老工程的值，量级上比照
+	// ownership chance给，可以按需调。
+	constexpr int kZoneStatedChance = 2;
+	constexpr int kBuildingStatedChance = 3;
+
+	int currentYear = populace.GetCurrentYear();
+
+	vector<Citizen*> adults;
+	for (Citizen* citizen : populace.GetCitizens()) {
+		if (citizen && citizen->GetAge(currentYear) >= kAdultAge) {
+			adults.push_back(citizen);
+		}
+	}
+	if (adults.empty()) return;
+
+	// 房产归属：按老工程Map::Checkin"Zone→Building→Room逐级下探"的算法分配owner/stated，
+	// 每一级都是"要么整体公有，要么整体归一个citizen私有，要么下探到下一级各自独立决定"
+	// 三选一，详见Source/Core/populace/populace.md"房产归属"一节。
+	auto resolveBuildingOwnership = [&adults, kProbabilityScale, kBuildingStatedChance,
+		kBuildingOwnershipChance](Building* building) {
+		int roll = GetRandom(kProbabilityScale);
+		if (roll < kBuildingStatedChance) {
+			building->SetStated(true);
+			for (Room* room : building->GetRooms()) {
+				if (room) room->SetStated(true);
+			}
+		}
+		else if (roll < kBuildingStatedChance + kBuildingOwnershipChance) {
+			Citizen* buildingOwner = adults[GetRandom(static_cast<int>(adults.size()))];
+			building->SetOwner(buildingOwner);
+			for (Room* room : building->GetRooms()) {
+				if (room) room->SetOwner(buildingOwner);
+			}
+		}
+		else {
+			// 整栋building没有统一归属，每个room各自独立随机分配——building/zone的
+			// owner/stated保持默认值(nullptr/false)，不需要显式重置，见building.h/
+			// zone.h的owner/stated设计说明。
+			for (Room* room : building->GetRooms()) {
+				if (room) room->SetOwner(adults[GetRandom(static_cast<int>(adults.size()))]);
+			}
+		}
+	};
+
+	for (auto& [zoneName, zone] : zones) {
+		if (!zone) continue;
+		int roll = GetRandom(kProbabilityScale);
+		if (roll < kZoneStatedChance) {
+			zone->SetStated(true);
+			for (Building* building : zone->GetInternalBuildings()) {
+				if (!building) continue;
+				building->SetStated(true);
+				for (Room* room : building->GetRooms()) {
+					if (room) room->SetStated(true);
+				}
+			}
+		}
+		else if (roll < kZoneStatedChance + kZoneOwnershipChance) {
+			Citizen* zoneOwner = adults[GetRandom(static_cast<int>(adults.size()))];
+			zone->SetOwner(zoneOwner);
+			for (Building* building : zone->GetInternalBuildings()) {
+				if (!building) continue;
+				building->SetOwner(zoneOwner);
+				for (Room* room : building->GetRooms()) {
+					if (room) room->SetOwner(zoneOwner);
+				}
+			}
+		}
+		else {
+			for (Building* building : zone->GetInternalBuildings()) {
+				if (building) resolveBuildingOwnership(building);
+			}
+		}
+	}
+
+	// 不属于任何zone的独立building各自走一遍同一套building级归属逻辑——只处理
+	// GetParentZone()为空的，属于某个zone的building已经在上面的zone循环里处理过了
+	// (老工程这里是无条件遍历Map::buildings，会把zone内部building的归属重新独立骰
+	// 一次、覆盖掉刚设好的zone级归属，这次判定是老工程的疏漏，不逐字复刻，见populace.md)。
+	for (auto& [buildingName, building] : buildings) {
+		if (!building || building->GetParentZone()) continue;
+		resolveBuildingOwnership(building);
+	}
+
+	// 分配住处：和"房产归属"是两个独立的关注点——一个room的owner是谁、和谁实际住在
+	// 里面(tenants/occupants)完全无关(可以理解成"租房")，所以这里单独重新扫一遍所有
+	// 住宅room建名额池，不复用上面归属循环的中间状态。
+	vector<Room*> pool;
+	for (auto& [name, building] : buildings) {
+		if (!building) continue;
+		for (Room* room : building->GetRooms()) {
+			if (room && room->IsResidential()) {
+				pool.push_back(room);
+			}
+		}
+	}
+
+	// 人和房间的关系是3个独立概念(见room.h)：这里的"家"(GetRoom()/tenants)和"当前物理
+	// 位置"(GetCurrentRoom()/occupants)对citizen来说初始状态天然重合(刚分配住处，人也
+	// 就在那)，但存储上必须分开写，为将来"人在家但当前不在自己房间里"这类场景预留。
+	auto moveIn = [](Citizen* citizen, Room* room) {
+		Building* building = room->GetParentBuilding();
+		citizen->SetRoom(room);
+		citizen->SetCurrentRoom(room);
+		citizen->SetBuilding(building);
+		if (building) {
+			citizen->SetZone(building->GetParentZone());
+			citizen->SetLot(building->GetParentLot());
+		}
+		room->AddTenant(citizen);
+		room->AddOccupant(citizen);
+	};
+
+	// 只有成年citizen各自去随机抽一个room名额（GetRandom(pool.size())+swap-remove，照抄
+	// 老工程Map::Checkin同一套"一个家庭消费一个room名额"逻辑，不是"一人一间"）；配偶
+	// （GetSpouse()非空且还没房间）以90%概率（GetRandom(10)>0，老工程同款）跟着搬进同一间，
+	// 未成年子女（GetChildren()里年龄<18且还没房间的）无条件一起搬进同一间。未成年citizen
+	// 不会独立抽房间——只能通过父母这边被带进去，和老工程"只遍历adults"效果一致。
+	for (Citizen* citizen : adults) {
+		if (citizen->GetRoom()) continue; // 已经被配偶那边带着分到房间了
+		if (pool.empty()) break;
+
+		int index = GetRandom(static_cast<int>(pool.size()));
+		Room* room = pool[index];
+		moveIn(citizen, room);
+
+		Citizen* spouse = citizen->GetSpouse();
+		if (spouse && !spouse->GetRoom() && GetRandom(10) > 0) {
+			moveIn(spouse, room);
+			for (Citizen* child : citizen->GetChildren()) {
+				if (child && !child->GetRoom() && child->GetAge(currentYear) < kAdultAge) {
+					moveIn(child, room);
+				}
+			}
+		}
+
+		pool[index] = pool.back();
+		pool.pop_back();
+	}
 }
 
 bool Map::AddZone(Zone* zone) {

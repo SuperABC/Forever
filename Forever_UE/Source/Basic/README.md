@@ -26,7 +26,7 @@
   写法:`#include`21个`<domain>/<concept>_factory.h` + 21个`<domain>/<concept>_basic.h`,
   为每个concept导出`GetMod<Concept>`/`RegisterMod<Concept>`/`FinishMod<Concept>`,用
   `XxxBasic::GetId()`(新加的静态方法,返回和`GetType()`一致的占位字符串,如
-  `"building_basic"`)注册。
+  `"asset_basic"`)注册。
 - `Forever_UE/Resource/Config/config.json`的`dll_paths`需要加上Basic的输出目录(相对
   `config.json`所在目录是`../../x64/Release`),这样`Config::AddDllPath`才会扫描到
   `Basic.dll`并发现它导出的`GetMod<Concept>`符号。
@@ -34,7 +34,7 @@
 ## 关键设计
 
 - 每个`<Concept>Basic`都是`class XxxBasic : public XxxMod`,重写`GetType()`/`GetName()`两个
-  方法返回固定占位字符串(如`"building_basic"`/`"BuildingBasic"`),外加一个静态`GetId()`
+  方法返回固定占位字符串(如`"asset_basic"`/`"AssetBasic"`),外加一个静态`GetId()`
   方法(供`Basic.cpp`的`RegisterMod<Concept>`按id注册,和`Forever_Mod/Empty`里
   `EmptyXxx::GetId()`的用法一致),没有构造函数或成员,全部内联实现在头文件里,不配`.cpp`。
 - `Basic`和`Forever_Mod`下的Mod一样,**只**`#include`Dependence头文件、只需要
@@ -52,11 +52,17 @@
 ## 待办/后续阶段
 
 - 阶段4:按系统迁移进度,把对应`<Concept>Basic`从占位实现替换成旧工程
-  `Basic/<domain>/<concept>_basic.h`的真正默认内容目录(如`BuildingBasic`真正的
-  住宅/商店/工厂/医院/办公/酒店等内置建筑类型,届时大概率要拆成同domain下多个具体类,一个
+  `Basic/<domain>/<concept>_basic.h`的真正默认内容目录(如`AssetBasic`真正的
+  家具/道具等内置资产类型,届时大概率要拆成同domain下多个具体类,一个
   `<Concept>Basic`占位类会变成多个真实类各自`RegisterMod<Concept>`一次),并从共用文档升级
   为独立`.md`。Terrain(阶段4-1)是第一个这样做的,占位`TerrainBasic`已经被真实的
   `OceanTerrain`/`MountainTerrain`替换,详见`map/terrain_basic.md`,不再受这份共用文档覆盖。
+- map域(阶段4-1建筑内部布局)是第二个走完阶段4的:`ZoneBasic`/`BuildingBasic`/`RoomBasic`/
+  `ComponentBasic`这4个占位类进入populace域时改名成`ResidenceZone`/`ResidenceBuilding`/
+  `ResidenceRoom`/`ResidenceComponent`(纯改名，`ResidenceRoom`同时第一次填了
+  `isResidential`/`residentialCapacity`真实数据),文件路径变成`map/zone_residence.{h,cpp}`/
+  `map/building_residence.{h,cpp}`/`map/room_residence.{h,cpp}`/
+  `map/component_residence.h`,详见`Source/Core/populace/populace.md`。
   Roadnet紧随其后,占位`RoadnetBasic`已经被真实的`JingRoadnet`替换,详见`map/roadnet_basic.md`。
 - 阶段4:确认Mod和Basic在同一个Factory里注册时id冲突如何处理(目前`building_mods`等配置
   数组和`Basic`各自用独立的id空间,还没出现真正的冲突场景)。

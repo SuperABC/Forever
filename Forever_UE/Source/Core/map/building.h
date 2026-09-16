@@ -13,6 +13,7 @@
 class Zone;
 class Component;
 class Room;
+class Citizen;
 
 // 楼梯/电梯/坡道：都是"矩形+朝向+四面是否有墙"，照抄老工程Stair/Elevator/Ramp(字段/方法
 // 完全一样，只是分成三个类型名以后如果需要各自加字段更清楚)。params是从.layout模板解析出的
@@ -391,6 +392,18 @@ public:
 	Road* GetBoundaryRoad(int direction) const;
 	const std::unordered_map<int, Road*>& GetBoundaryRoads() const;
 
+	// 归属——照抄老工程Building::GetOwner/SetOwner/GetStated/SetStated(Map::Checkin()
+	// 分配房产归属时用)。owner和stated互斥：owner非空表示这整栋building(连同内部所有
+	// room)归一个citizen私有；stated为true表示公有(owner保持空)。**这栋building里不同
+	// room各自独立归属不同人时，owner/stated都保持默认值(nullptr/false)**——不需要显式
+	// "重置"，Map::Checkin()只在"整栋building统一归属"分支才会调用这两个setter，一开始
+	// 就按房间各自独立分配的话根本不会调用它们，天然保持null，见room.h同一套owner/stated
+	// 设计说明。
+	Citizen* GetOwner() const;
+	void SetOwner(Citizen* value);
+	bool GetStated() const;
+	void SetStated(bool value);
+
 private:
 	// 按mod->floors实例化每一层的Floor，塞进floors数组。
 	void ReadFloor(int level, int face, const std::string& templateName, const BuildingLayoutLibrary& library);
@@ -450,4 +463,7 @@ private:
 	// 解析"single"/"row"类型的导航端点时用。
 	std::unordered_map<int, std::unordered_map<int, Room*>> singleRoomBySlot;
 	std::unordered_map<int, std::unordered_map<int, std::vector<Room*>>> rowRoomBySlot;
+
+	Citizen* owner = nullptr;
+	bool stated = false;
 };

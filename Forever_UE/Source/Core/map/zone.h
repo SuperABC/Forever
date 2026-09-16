@@ -9,6 +9,7 @@
 #include <vector>
 
 class Building;
+class Citizen;
 
 // Zone：持有一个具体ZoneMod实例，代表一块已经落地的Zone占位（继承Quad表示自己占据的矩形，
 // 和Lot本身"继承Quad表示自己的矩形"是同一种写法）。这次不实现Zone内部再摆Building的递归
@@ -85,6 +86,17 @@ public:
 	void AddInternalBuilding(Building* building);
 	const std::vector<Building*>& GetInternalBuildings() const;
 
+	// 归属——照抄老工程Zone::GetOwner/SetOwner/GetStated/SetStated(Map::Checkin()分配
+	// 房产归属时用)。owner和stated互斥：owner非空表示这整个zone(连同内部所有
+	// building/room)归一个citizen私有；stated为true表示公有(owner保持空)。这个zone没有
+	// 整体归属(内部不同building/room各自独立归属)时两者都保持默认值(nullptr/false)，
+	// 不需要显式"重置"——Map::Checkin()只在"整个zone统一归属"分支才会调用这两个setter，
+	// 见room.h同一套owner/stated设计说明。
+	Citizen* GetOwner() const;
+	void SetOwner(Citizen* value);
+	bool GetStated() const;
+	void SetStated(bool value);
+
 private:
 	ZoneMod* mod;
 	ZoneFactory* factory;
@@ -94,4 +106,7 @@ private:
 	std::unordered_map<int, Road*> boundaryRoads;
 	std::vector<Road*> internalRoads;
 	std::vector<Building*> internalBuildings;
+
+	Citizen* owner = nullptr;
+	bool stated = false;
 };

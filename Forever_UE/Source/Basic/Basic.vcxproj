@@ -91,20 +91,22 @@
     <ClCompile Include="basic.cpp" />
     <ClCompile Include="map\terrain_basic.cpp" />
     <ClCompile Include="map\roadnet_basic.cpp" />
-    <ClCompile Include="map\zone_basic.cpp" />
-    <ClCompile Include="map\building_basic.cpp" />
+    <ClCompile Include="map\zone_residence.cpp" />
+    <ClCompile Include="map\building_residence.cpp" />
+    <ClCompile Include="map\room_residence.cpp" />
+    <ClCompile Include="populace\name_chinese.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\terrain_basic.h" />
     <ClInclude Include="map\roadnet_basic.h" />
-    <ClInclude Include="map\zone_basic.h" />
-    <ClInclude Include="map\building_basic.h" />
-    <ClInclude Include="map\component_basic.h" />
-    <ClInclude Include="map\room_basic.h" />
+    <ClInclude Include="map\zone_residence.h" />
+    <ClInclude Include="map\building_residence.h" />
+    <ClInclude Include="map\component_residence.h" />
+    <ClInclude Include="map\room_residence.h" />
     <ClInclude Include="player\asset_basic.h" />
     <ClInclude Include="player\app_basic.h" />
     <ClInclude Include="player\puzzle_basic.h" />
-    <ClInclude Include="populace\name_basic.h" />
+    <ClInclude Include="populace\name_chinese.h" />
     <ClInclude Include="populace\scheduler_basic.h" />
     <ClInclude Include="society\job_basic.h" />
     <ClInclude Include="society\calendar_basic.h" />

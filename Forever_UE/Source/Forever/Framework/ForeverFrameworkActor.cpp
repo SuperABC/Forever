@@ -1,6 +1,7 @@
 #include "Framework/ForeverFrameworkActor.h"
 
 #include "map/map.h"
+#include "populace/populace.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -41,13 +42,18 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 
 AForeverFrameworkActor::~AForeverFrameworkActor()
 {
+	delete populace;
 	delete map;
 }
 
 void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// 同步释放map(见头文件EndPlay声明处的注释)——不能只靠析构函数兜底，
-	// 那个时机取决于UObject垃圾回收，不保证在下一次PIE开始前跑完。
+	// 同步释放map/populace(见头文件EndPlay声明处的注释)——不能只靠析构函数兜底，
+	// 那个时机取决于UObject垃圾回收，不保证在下一次PIE开始前跑完。populace/map删除顺序
+	// 互不影响内存安全(Citizen只持有Zone*/Building*/Room*裸指针、析构不解引用它们；Map
+	// 也不持有任何Citizen*)，这里先删populace只是保持和创建顺序相反的直觉。
+	delete populace;
+	populace = nullptr;
 	delete map;
 	map = nullptr;
 
@@ -88,6 +94,15 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 	map->InitZones();
 	map->InitBuildings();
 
+	// Populace和Map平级，不是Map的成员——这里编排两者之间唯一的交互(Map::
+	// ComputeAccommodationTarget()喂给Populace::Init()，Populace::Init()跑完的结果再喂给
+	// Map::Checkin())，和老工程GlobalBase里"int accomodation = map->InitContents();
+	// populace->Init(accomodation, ...); map->Checkin(populace, ...);"同一个编排顺序，
+	// 详见Source/Core/populace/populace.md。
+	populace = new Populace();
+	populace->Init(map->ComputeAccommodationTarget());
+	map->Checkin(*populace);
+
 	if (terrainFramework) {
 		terrainFramework->GenerateTerrain(map);
 	}
@@ -106,5 +121,11 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 	// 再单独调用roomFramework——见Source/Forever/Element/BuildingElement.md。
 	if (buildingFramework) {
 		buildingFramework->GenerateBuildings(map);
+	}
+	if (populaceFramework) {
+		// 这里不SpawnActor任何ACitizenElement——populaceFramework只是缓存
+		// populace->GetCitizens()列表，真正的生成/销毁全部按玩家距离在TickComponent里做，
+		// 见Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md。
+		populaceFramework->GenerateCitizens(map, populace);
 	}
 }

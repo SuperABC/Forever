@@ -15,10 +15,19 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
 - 9个域组件全部用`CreateDefaultSubobject`在构造函数里创建并作为`AForeverFrameworkActor`的固定组成部分——不做成运行时按需添加,因为这个Actor本身就是"场景里唯一一份、职责固定"的单例式入口,不需要动态增删域。
 - `BeginPlay`里打一条临时日志列出9个已初始化的域组件名字,随后调用`EnsureMapGenerated()`。这条日志是阶段2专属的验证手段,其余7个域组件填入真实逻辑前会一直保留。
 - **`map`是原生指针（`Map*`），不是`std::unique_ptr<Map>`**——试过`unique_ptr`，但`Map`在这个头文件里只有前置声明，UHT给每个UCLASS生成的VTableHelper构造函数（定义在`.gen.cpp`，看不到`map/map.h`）会在异常展开路径里引用`~unique_ptr<Map>`导致编译失败（`static_assert failed: 'can't delete an incomplete type'`）。改用原生指针+析构函数里手动`delete map`绕开这个问题——`Map`不跨DLL边界（`Core.lib`静态链接进本模块），不属于`REFACTOR_PLAN.md`说的那种需要走deleter的跨模块new/delete场景，普通`delete`是安全的。为此这个类现在有一个显式声明+定义的析构函数（声明在头文件、定义在`.cpp`里`map/map.h`已完整include之后），不再用编译器隐式生成的析构函数。
-- **`EnsureMapGenerated()`**（阶段4-1 Roadnet落地时从`EnsureTerrainGenerated`改名——现在编排的不只是地形）**是幂等的**:`map`已存在直接返回,否则`new Map(1024, 1024)`(默认地图尺寸,必须是2的整数次幂——原因和选1024而不是512的经过见`ForeverFrameworkActor.cpp`里`kDefaultMapWidth`/`kDefaultMapHeight`旁的注释、`Source/Basic/map/terrain_basic.md`的`MountainTerrain`密度公式说明)→`InitTerrains()`（注册地形mod+跑`DistributeTerrain`+3x3晋升规则一次性做完，原来拆成`InitTerrains`+`InitContents`两个函数，应用户要求合并回一个，见`Source/Core/map/map.md`）→`InitRoadnet()`（这个顺序不能反,`RoadnetMod::DistributeRoadnet`要采样已经生成好的地形/水面）→`InitZones()`→`InitBuildings()`→`terrainFramework->GenerateTerrain(map)`→`roadnetFramework->GenerateRoadnet(map)`→`zoneFramework->GenerateZones(map)`→`buildingFramework->GenerateBuildings(map)`。`AForeverGameMode::BeginPlay`和`FindPlayerStart_Implementation`都会调用它(见`ForeverGameMode.md`),保证不论两者实际调用顺序如何,出生点计算时地形都已经生成好。
+- **`EnsureMapGenerated()`**（阶段4-1 Roadnet落地时从`EnsureTerrainGenerated`改名——现在编排的不只是地形）**是幂等的**:`map`已存在直接返回,否则`new Map(1024, 1024)`(默认地图尺寸,必须是2的整数次幂——原因和选1024而不是512的经过见`ForeverFrameworkActor.cpp`里`kDefaultMapWidth`/`kDefaultMapHeight`旁的注释、`Source/Basic/map/terrain_basic.md`的`MountainTerrain`密度公式说明)→`InitTerrains()`（注册地形mod+跑`DistributeTerrain`+3x3晋升规则一次性做完，原来拆成`InitTerrains`+`InitContents`两个函数，应用户要求合并回一个，见`Source/Core/map/map.md`）→`InitRoadnet()`（这个顺序不能反,`RoadnetMod::DistributeRoadnet`要采样已经生成好的地形/水面）→`InitZones()`→`InitBuildings()`→`new Populace()`+`populace->Init(map->ComputeAccommodationTarget())`+`map->Checkin(*populace)`（进入populace域新增，见下）→`terrainFramework->GenerateTerrain(map)`→`roadnetFramework->GenerateRoadnet(map)`→`zoneFramework->GenerateZones(map)`→`buildingFramework->GenerateBuildings(map)`→`populaceFramework->GenerateCitizens(map, populace)`。`AForeverGameMode::BeginPlay`和`FindPlayerStart_Implementation`都会调用它(见`ForeverGameMode.md`),保证不论两者实际调用顺序如何,出生点计算时地形都已经生成好。
+- **`populace`和`map`平级持有，不是`map`的成员（进入populace域新增）**：`Populace`是和
+  `Map`同一层级的顶层Core类，不知道`Map`的存在，只通过`Map::Checkin(*populace)`单向被
+  `Map`读取——和老工程`GlobalBase`同时持有`map`/`populace`两个顶层对象、由它做两者之间
+  编排是同一个分工，详见`Source/Core/populace/populace.md`。`populace`同样是原生指针，
+  和`map`同一个"UHT VTableHelper看不到完整类型定义"的理由，`EndPlay`/析构里的释放顺序
+  （先`populace`后`map`）互不影响内存安全——`Citizen`只持有`Zone*`/`Building*`/`Room*`
+  裸指针、析构不解引用它们；`Map`也不持有任何`Citizen*`，先删哪个都一样安全，这里选择
+  先删`populace`只是保持和创建顺序相反的直觉。
 
 ## 依赖关系
-- 依赖`Framework/ForeverFrameworkComponent.h`及其9个具体子类头文件、`Source/Core/map/map.h`。
+- 依赖`Framework/ForeverFrameworkComponent.h`及其9个具体子类头文件、`Source/Core/map/map.h`、
+  `Source/Core/populace/populace.h`（进入populace域新增，持有`Populace*`）。
 - 被`AForeverGameMode`引用:`BeginPlay`和`FindPlayerStart_Implementation`都会调用
   `EnsureFrameworkActorExists()`(场景里没有找到已放置的实例时动态`SpawnActor`一个兜底,
   找到/生成后都会调用这个Actor的`EnsureMapGenerated()`),详见`ForeverGameMode.md`。
