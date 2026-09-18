@@ -90,6 +90,7 @@
     <ClCompile Include="map\component.cpp" />
     <ClCompile Include="map\map.cpp" />
     <ClCompile Include="populace\citizen.cpp" />
+    <ClCompile Include="populace\name.cpp" />
     <ClCompile Include="populace\populace.cpp" />
     <ClCompile Include="story\milestone.cpp" />
     <ClCompile Include="story\script.cpp" />
@@ -106,6 +107,7 @@
     <ClInclude Include="map\component.h" />
     <ClInclude Include="map\map.h" />
     <ClInclude Include="populace\citizen.h" />
+    <ClInclude Include="populace\name.h" />
     <ClInclude Include="populace\populace.h" />
     <ClInclude Include="story\milestone.h" />
     <ClInclude Include="story\script.h" />

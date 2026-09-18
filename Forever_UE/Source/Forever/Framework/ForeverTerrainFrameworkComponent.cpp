@@ -20,13 +20,13 @@ UForeverTerrainFrameworkComponent::UForeverTerrainFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> terrainMatFinder(
-		TEXT("/Game/Asset/Materials/TerrainTemplate.TerrainTemplate"));
+		TEXT("/Game/Asset/Materials/TemplateTerrain.TemplateTerrain"));
 	if (terrainMatFinder.Succeeded()) {
 		terrainBaseMaterial = terrainMatFinder.Object;
 	}
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> fineMatFinder(
-		TEXT("/Game/Asset/Materials/FineTemplate.FineTemplate"));
+		TEXT("/Game/Asset/Materials/TemplateFine.TemplateFine"));
 	if (fineMatFinder.Succeeded()) {
 		fineBaseMaterial = fineMatFinder.Object;
 	}

@@ -1,10 +1,9 @@
 #include "populace/populace.h"
 
 #include "populace/citizen.h"
-#include "populace/name_mod.h"
+#include "populace/name.h"
 #include "common/utility.h"
 #include "common/config.h"
-#include "common/error.h"
 
 #include <cmath>
 #include <algorithm>
@@ -51,9 +50,7 @@ Populace::~Populace() {
 	for (Citizen* citizen : citizens) {
 		delete citizen;
 	}
-	if (nameMod) {
-		nameFactory.DestroyName(nameMod);
-	}
+	delete name;
 }
 
 void Populace::Init(int accommodation) {
@@ -76,10 +73,7 @@ void Populace::InitNames() {
 	// 直接按id引用具体类型是同一个"直接耦合到当前默认内容"的做法，不是通用的enable/
 	// disable机制(这个项目目前没有这套机制，config.json的"name_mods"数组只提供按id的
 	// 参数字符串，不做启用过滤)。
-	nameMod = nameFactory.CreateName("chinese");
-	if (!nameMod) {
-		THROW_EXCEPTION(NullPointerException, "Name mod \"chinese\" not registered.\n");
-	}
+	name = new Name(&nameFactory, "chinese");
 }
 
 const vector<Citizen*>& Populace::GetCitizens() const { return citizens; }
@@ -100,7 +94,7 @@ void Populace::GenerateCitizens(int target) {
 	// 迁移时顺手改成和LIFE_BIRTH一致的"按性别选对应词库+中性词库永远允许"，不逐字复刻
 	// 这个疑似bug。
 	for (int i = 1; i <= 100; i++) {
-		string n = nameMod->GenerateName(false, true, true);
+		string n = name->GenerateName(false, true, true);
 		if (n.empty()) continue;
 		females.push_back({ -1, n, GetRandom(20), -1, LIFE_SINGLE, GENDER_FEMALE,
 			-1, -1, -1, {} });
@@ -115,7 +109,7 @@ void Populace::GenerateCitizens(int target) {
 		}
 	}
 	for (int i = 1; i <= 100; i++) {
-		string n = nameMod->GenerateName(true, false, true);
+		string n = name->GenerateName(true, false, true);
 		if (n.empty()) continue;
 		males.push_back({ -1, n, GetRandom(20), -1, LIFE_SINGLE, GENDER_MALE,
 			-1, -1, -1, {} });
@@ -189,8 +183,8 @@ void Populace::GenerateCitizens(int target) {
 					int gender = GetRandom(2);
 					// 孩子继承父亲的姓——GetSurname()按老工程约定"取姓名的第一个UTF-8
 					// 字符"，父亲是females[eventIdx].spouse这个男性。
-					string surname = nameMod->GetSurname(males[females[eventIdx].spouse].name);
-					string n = nameMod->GenerateName(surname,
+					string surname = name->GetSurname(males[females[eventIdx].spouse].name);
+					string n = name->GenerateName(surname,
 						gender == GENDER_MALE, gender == GENDER_FEMALE, true);
 					if (n.empty()) break; // 取名失败(理论上不会发生)，这次生育事件作废
 					if (gender == GENDER_FEMALE) {

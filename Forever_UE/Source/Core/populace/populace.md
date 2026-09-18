@@ -114,7 +114,7 @@ name_mod.h`）的三个纯虚方法：`GetSurname(fullName)`/`GenerateName(male,
 vector<string> mods = Config::GetMods();
 nameFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("name_mods")));
 modLoader.RegisterConcept<NameFactory>(mods, "RegisterModNames", "FinishModNames", &nameFactory);
-nameMod = nameFactory.CreateName("chinese"); // 固定用这个具体实现，见下
+name = new Name(&nameFactory, "chinese"); // 固定用这个具体实现，见下
 ```
 **固定用`"chinese"`这个id，不做通用的enable/disable选择**——这个项目的Factory模式本来
 就没有老工程"config必须恰好enable一个name mod，否则`THROW_EXCEPTION`"这套机制（阶段3
@@ -123,7 +123,16 @@ id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有�
 不存在"多个候选选一个"的问题。但Name这个concept**需要**唯一一个"当前生效"的取名算法给
 `Populace`用，所以直接硬编码引用`ChineseName::GetId()`（`"chinese"`）——和
 `Building::Layout()`直接用`ResidenceRoom::GetId()`而不是通用查找是同一种"直接耦合到
-当前默认内容"的做法。`Populace`的析构函数通过`nameFactory.DestroyName(nameMod)`释放。
+当前默认内容"的做法。`Populace`的析构函数`delete name`（`Name`析构里调用
+`nameFactory.DestroyName(mod)`释放真正的`NameMod*`）。
+
+**架构修正：新增`Core/populace/name.h/.cpp`的`Name`类，`Populace`不再直接持有/调用
+`NameMod*`**——最初这一版迁移图省事，让`Populace`直接持有`NameMod* nameMod`并调
+`nameMod->GenerateName(...)`，被指出这和`Terrain`（`Core/map/terrain.h`）、`Script`
+（`Core/story/script.h`）等其它concept"上层聚合类只操作Core层包装类，不直接碰
+`<Concept>Mod*`"的架构不一致后改正：新增`Name`类（`factory`+`mod`+缓存的`type`/`name`，
+构造/析构/转发方法的写法逐字照抄`Terrain`），`Populace`现在只持有`Name* name`，通过它转发
+`GetSurname`/`GenerateName`两个重载，见`name.md`。
 
 **一处顺手修正的疑似bug**：老工程`Populace::GenerateCitizens`给最初100男100女种子生成
 姓名时，两个性别都传`(male=false, female=true, neutral=true)`——男性种子也只从女性+
@@ -174,11 +183,11 @@ id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有�
 ## 依赖关系
 
 - 依赖：`Source/Core/populace/citizen.h`（`GENDER_TYPE`/`Citizen`）、
-  `Source/Dependence/populace/name_mod.h`/`name_factory.h`（`NameMod`/`NameFactory`）、
-  `Source/Core/common/loader.h`（`ModLoader::RegisterConcept`）、
-  `Source/Core/common/config.h`（`Config::GetMods`/`GetConceptMods`）、
-  `Source/Dependence/common/error.h`（`THROW_EXCEPTION`/`NullPointerException`）、
-  `Source/Dependence/common/utility.h`（`GetRandom`/`Time::DaysInMonth`）。
+  `Source/Core/populace/name.h`（`Name`——`Populace`只通过这层转发访问取名算法，不直接持有
+  `NameMod*`，见`name.md`）、`Source/Dependence/populace/name_factory.h`（`NameFactory`，
+  `Populace`自己持有一份、传给`Name`的构造函数）、`Source/Core/common/loader.h`
+  （`ModLoader::RegisterConcept`）、`Source/Core/common/config.h`（`Config::GetMods`/
+  `GetConceptMods`）、`Source/Dependence/common/utility.h`（`GetRandom`/`Time::DaysInMonth`）。
 - 被谁依赖：`Source/Core/map/map.h/.cpp`（`Map::Checkin(const Populace&)`读
   `GetCitizens()`）、`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有
   `Populace*`，`EnsureMapGenerated()`里`new`+`Init`+`Checkin`）、`Source/Forever/

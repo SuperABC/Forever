@@ -84,7 +84,7 @@ UForeverRoadnetFrameworkComponent::UForeverRoadnetFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = false;
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> roadPlainFinder(
-		TEXT("/Game/Asset/Materials/RoadPlain.RoadPlain"));
+		TEXT("/Game/Asset/Materials/DefaultRoad.DefaultRoad"));
 	if (roadPlainFinder.Succeeded()) {
 		roadPlainBaseMaterial = roadPlainFinder.Object;
 	}
