@@ -34,7 +34,20 @@ public:
 	// 手动清空，和UForeverBuildingFrameworkComponent::EndPlay同一个模式。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	// 按Citizen姓名查找/强制生成对应的ACitizenElement——不看玩家距离，用于"剧情/系统指定
+	// 某个具体市民"的场景（如ChangeControlChange，见ForeverStoryFrameworkComponent.cpp）。
+	// 已经在activeInstances里直接返回；否则调用SpawnCitizen强制生成一个。找不到同名citizen
+	// 或强制生成失败时返回nullptr。
+	// @name: 目标citizen姓名（UTF-8转FString比较）
+	ACitizenElement* FindOrSpawnCitizenByName(const FString& name);
+
 private:
+	// 生成一个citizen对应的ACitizenElement并登记进activeInstances——从TickComponent的
+	// 按距离生成逻辑里提炼出来的公共部分，TickComponent和FindOrSpawnCitizenByName共用。
+	// 调用方负责保证citizen不为空、不在activeInstances里。
+	// @citizen: 待生成的citizen
+	ACitizenElement* SpawnCitizen(Citizen* citizen);
+
 	Map* map = nullptr;
 
 	// GenerateCitizens时从populace->GetCitizens()缓存一份扁平数组，方便按下标做轮询分片

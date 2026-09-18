@@ -408,8 +408,16 @@ bool JsonReader::ReadObject(Token& tokenStart) {
 	for (;;) {
 		char next = PeekNextChar();
 		if (next == '}') {
+			// PeekNextChar只探路，不消费字符——真正探到的"}"前面如果还夹着注释(比如
+			// 上一个成员是数组/对象，紧跟一行"//..."注释再换行才到"}")，current仍然停在
+			// 注释开头，这里直接ReadToken一次只会读到注释本身(ReadToken对"//..."一次性整行
+			// 消费，返回TOKEN_COMMENT)，真正的"}"还没被消费掉——必须循环跳过注释直到真正
+			// 读到"}"，否则"}"会被当成下一层的token误读，产生一条无关的语法错误。
 			Token endObject;
 			ReadToken(endObject);
+			while (endObject.type == TOKEN_COMMENT) {
+				ReadToken(endObject);
+			}
 			break;
 		}
 		Token tokenName;
@@ -440,8 +448,11 @@ bool JsonReader::ReadObject(Token& tokenStart) {
 
 		next = PeekNextChar();
 		if (next == '}') {
-			Token endObject;
+			Token endObject; // 理由同上一处"}"探测：同样要循环跳过注释才能读到真正的"}"。
 			ReadToken(endObject);
+			while (endObject.type == TOKEN_COMMENT) {
+				ReadToken(endObject);
+			}
 			break;
 		}
 		Token comma;
@@ -469,8 +480,16 @@ bool JsonReader::ReadArray(Token& tokenStart) {
 	for (;;) {
 		char next = PeekNextChar();
 		if (next == ']') {
+			// 同ReadObject"}"探测的理由：PeekNextChar探到的"]"前面可能还夹着注释，这里
+			// 必须循环跳过注释直到真正读到"]"，否则"]"会漏消费，被外层当成下一个token
+			// 误读(实测复现：changes数组最后一项换成"//"注释、只留一个逗号时，"]"没被这里
+			// 消费掉，外层milestone对象把它当成了缺失的逗号，报"Missing ',' or '}' in
+			// object declaration"，见script.md/json.md的教训记录)。
 			Token endArray;
 			ReadToken(endArray);
+			while (endArray.type == TOKEN_COMMENT) {
+				ReadToken(endArray);
+			}
 			break;
 		}
 		JsonValue& value = CurrentValue()[index++];
@@ -481,8 +500,11 @@ bool JsonReader::ReadArray(Token& tokenStart) {
 
 		next = PeekNextChar();
 		if (next == ']') {
-			Token endArray;
+			Token endArray; // 理由同上一处"]"探测。
 			ReadToken(endArray);
+			while (endArray.type == TOKEN_COMMENT) {
+				ReadToken(endArray);
+			}
 			break;
 		}
 		Token token;

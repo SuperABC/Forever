@@ -2,7 +2,11 @@
 
 #include "map/map.h"
 #include "populace/populace.h"
+#include "society/society.h"
 #include "story/story.h"
+#include "industry/industry.h"
+#include "traffic/traffic.h"
+#include "player/player.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -43,6 +47,10 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 
 AForeverFrameworkActor::~AForeverFrameworkActor()
 {
+	delete player;
+	delete traffic;
+	delete industry;
+	delete society;
 	delete story;
 	delete populace;
 	delete map;
@@ -50,11 +58,18 @@ AForeverFrameworkActor::~AForeverFrameworkActor()
 
 void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// 同步释放map/populace/story(见头文件EndPlay声明处的注释)——不能只靠析构函数兜底，
-	// 那个时机取决于UObject垃圾回收，不保证在下一次PIE开始前跑完。populace/map/story删除
-	// 顺序互不影响内存安全(Citizen只持有Zone*/Building*/Room*裸指针、析构不解引用它们；Map
-	// 也不持有任何Citizen*；Story不持有Map/Populace)，这里先删story只是保持和创建顺序相反
-	// 的直觉。
+	// 同步释放map/populace/story及新增的society/industry/traffic/player(见头文件EndPlay
+	// 声明处的注释)——不能只靠析构函数兜底，那个时机取决于UObject垃圾回收，不保证在下一次
+	// PIE开始前跑完。这几个对象删除顺序互不影响内存安全(彼此都不持有对方的裸指针)，这里
+	// 按和创建相反的顺序删只是保持直觉。
+	delete player;
+	player = nullptr;
+	delete traffic;
+	traffic = nullptr;
+	delete industry;
+	industry = nullptr;
+	delete society;
+	society = nullptr;
 	delete story;
 	story = nullptr;
 	delete populace;
@@ -133,6 +148,13 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 		// 见Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md。
 		populaceFramework->GenerateCitizens(map, populace);
 	}
+
+	// Society/Industry/Traffic/Player这四个域这次都是空骨架，新增它们纯粹是为了让
+	// PostImplement（Core/common/implement.h）能拿到7个域的真实指针，见各自的.md。
+	society = new Society();
+	industry = new Industry();
+	traffic = new Traffic();
+	player = new Player();
 
 	// 阶段4 Story落地：和map/populace不互相依赖，放在最后创建即可。Init()读取
 	// Resource/Story/test.json，随后立刻广播一次GameStartEvent，见storyFramework.md。

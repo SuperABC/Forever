@@ -65,6 +65,12 @@ protected:
 	void StartSprint();
 	void StopSprint();
 
+	// T键：切到当前"附近市民名单"（ACitizenElement::nearbyCitizens，由子类ACitizenElement的
+	// 碰撞盒维护）下标0那个。定义在基类上，不管当前被占有的是最初的ADefaultPawn（没有绑这个
+	// 方法，T键不响应）还是某个ACitizenElement，只要是AForeverCharacter的子类都自动获得同一个
+	// T键行为。名单为空、或者名单里恰好是自己时不做任何事。
+	void SwitchControlledCitizen();
+
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	float walkSpeed = 500.f;
 

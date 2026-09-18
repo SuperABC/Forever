@@ -82,6 +82,11 @@
   <ItemGroup>
     <ClCompile Include="common\config.cpp" />
     <ClCompile Include="common\loader.cpp" />
+    <ClCompile Include="common\implement.cpp" />
+    <ClCompile Include="society\society.cpp" />
+    <ClCompile Include="industry\industry.cpp" />
+    <ClCompile Include="traffic\traffic.cpp" />
+    <ClCompile Include="player\player.cpp" />
     <ClCompile Include="map\terrain.cpp" />
     <ClCompile Include="map\roadnet.cpp" />
     <ClCompile Include="map\zone.cpp" />
@@ -99,6 +104,11 @@
   <ItemGroup>
     <ClInclude Include="common\config.h" />
     <ClInclude Include="common\loader.h" />
+    <ClInclude Include="common\implement.h" />
+    <ClInclude Include="society\society.h" />
+    <ClInclude Include="industry\industry.h" />
+    <ClInclude Include="traffic\traffic.h" />
+    <ClInclude Include="player\player.h" />
     <ClInclude Include="map\terrain.h" />
     <ClInclude Include="map\roadnet.h" />
     <ClInclude Include="map\zone.h" />

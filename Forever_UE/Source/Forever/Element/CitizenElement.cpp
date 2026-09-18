@@ -3,11 +3,8 @@
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 
 #include "Components/CapsuleComponent.h"
-#include "Components/SkeletalMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Animation/AnimInstance.h"
-#include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 
@@ -56,32 +53,67 @@ namespace {
 	}
 }
 
+// 附近市民名单：静态成员定义。
+TArray<TWeakObjectPtr<ACitizenElement>> ACitizenElement::nearbyCitizens;
+
 ACitizenElement::ACitizenElement() {
 	PrimaryActorTick.bCanEverTick = false;
 
-	// 占位:UE默认小白人，和AForeverCharacter.cpp同款软路径——以后会替换成别的资产。mesh
-	// 相对Z偏移=-capsule半高，让mesh视觉上的脚底正好落在capsule底部(和AForeverCharacter.
-	// cpp的-96.f是同一个道理，这里用GetScaledCapsuleHalfHeight()动态取值而不是硬编码，
-	// 不依赖某个特定的capsule尺寸配置)。
-	static ConstructorHelpers::FObjectFinder<USkeletalMesh> meshFinder(
-		TEXT("/Game/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
-	if (meshFinder.Succeeded()) {
-		GetMesh()->SetSkeletalMesh(meshFinder.Object);
-		GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
-	}
-
-	// 没有AnimInstance的SkeletalMeshComponent会一直显示bind pose(T-pose)——和
-	// AForeverCharacter.cpp同款动画蓝图，至少有一个正常的待机姿势，不是张开手臂的T-pose。
-	static ConstructorHelpers::FClassFinder<UAnimInstance> animFinder(
-		TEXT("/Game/Asset/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));
-	if (animFinder.Succeeded()) {
-		GetMesh()->SetAnimInstanceClass(animFinder.Class);
-	}
-
-	// 这次没有真正的AI移动逻辑——显式禁用移动模式，避免CharacterMovementComponent自己的
-	// 重力/地面检测把citizen从Init()摆好的位置上挪走。以后加AI移动时改回MOVE_Walking即可，
-	// 组件骨架已经搭好，不需要额外改动。
+	// mesh/anim/摄像机/移动参数/Enhanced Input绑定这些全部由基类AForeverCharacter的构造
+	// 函数负责（同一份占位mesh，见ForeverCharacter.cpp），这里不用重复设置。这次没有真正的
+	// AI移动逻辑——显式禁用移动模式，避免CharacterMovementComponent自己的重力/地面检测把
+	// citizen从Init()摆好的位置上挪走，只有被玩家占有时才切换成MOVE_Walking，见PossessedBy。
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
+}
+
+void ACitizenElement::PossessedBy(AController* NewController) {
+	Super::PossessedBy(NewController); // AForeverCharacter::PossessedBy：增删Input Mapping Context
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+
+	// 被占有期间直接禁掉自己的proximityBox——这个box本来就是"检测玩家有没有靠近我"，
+	// 自己正好就是玩家的时候，box和自己的capsule必然贴在一起常驻重叠，会不停产生自己的
+	// Overlap事件。但disable只能防止"以后"的自我Overlap——如果在被占有之前，自己就已经
+	// 作为"别人身边的市民"被加进过nearbyCitizens(比如市民A靠近市民B时，B的proximityBox把
+	// B自己加进了名单；A随后按T切换到B，B变成新的pawn，但名单里"B"这一条早就在disable
+	// 生效之前就已经存在了，disable不会回头清掉它)，这一条陈旧的"自己"记录就会一直卡在
+	// 名单里，永远排在最前面，导致下一次按T又切回"自己"、名单卡死——这正是实测复现的
+	// "切到第二个市民后再也切不出去"的bug。所以这里必须显式地把自己从名单里摘出去，
+	// disable只是防止之后再把自己加回来。
+	if (proximityBox) proximityBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	nearbyCitizens.RemoveSingle(TWeakObjectPtr<ACitizenElement>(this));
+}
+
+void ACitizenElement::UnPossessed() {
+	GetCharacterMovement()->SetMovementMode(MOVE_None);
+	if (proximityBox) proximityBox->SetCollisionProfileName(TEXT("Trigger")); // 恢复Trigger预设(QueryOnly+各通道Overlap)
+	Super::UnPossessed(); // AForeverCharacter::UnPossessed：增删Input Mapping Context
+}
+
+ACitizenElement* ACitizenElement::GetFirstNearby() {
+	while (nearbyCitizens.Num() > 0) {
+		if (ACitizenElement* citizen = nearbyCitizens[0].Get()) {
+			return citizen;
+		}
+		nearbyCitizens.RemoveAt(0); // 清理已失效的弱引用
+	}
+	return nullptr;
+}
+
+void ACitizenElement::DebugPrintNearby() {
+	if (!GEngine) return;
+
+	if (nearbyCitizens.Num() == 0) {
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Orange, TEXT("[T] 附近市民名单为空"));
+		return;
+	}
+
+	FString combined;
+	for (int32 i = 0; i < nearbyCitizens.Num(); i++) {
+		ACitizenElement* nearby = nearbyCitizens[i].Get();
+		combined += FString::Printf(TEXT("[%d]%s"), i, nearby ? *nearby->collisionLabel : TEXT("(已失效)"));
+		if (i + 1 < nearbyCitizens.Num()) combined += TEXT(" | ");
+	}
+	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Orange, FString::Printf(TEXT("[T] 附近市民名单: %s"), *combined));
 }
 
 void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponent* inFramework) {
@@ -149,13 +181,25 @@ void ACitizenElement::BuildProximityBox() {
 void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	if (!pawn || OtherActor != pawn || !GEngine) return;
+	// OtherActor == this：这个citizen自己正好就是当前被占有的pawn，proximityBox和自己的
+	// capsule天然重叠(半径250 vs capsule半径42，box完全包住capsule)，这次一定会触发一次
+	// "自己进自己的box"——必须排除，否则自己会被塞进nearbyCitizens[0]常驻不走，
+	// GetFirstNearby()只看下标0，会一直卡在"自己"上，导致T键切换到其他citizen失效。
+	if (!pawn || OtherActor != pawn || OtherActor == this) return;
+
+	nearbyCitizens.AddUnique(TWeakObjectPtr<ACitizenElement>(this));
+
+	if (!GEngine) return;
 	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("接近 %s"), *collisionLabel));
 }
 
 void ACitizenElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	if (!pawn || OtherActor != pawn || !GEngine) return;
+	if (!pawn || OtherActor != pawn || OtherActor == this) return;
+
+	nearbyCitizens.RemoveSingle(TWeakObjectPtr<ACitizenElement>(this));
+
+	if (!GEngine) return;
 	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("离开 %s"), *collisionLabel));
 }

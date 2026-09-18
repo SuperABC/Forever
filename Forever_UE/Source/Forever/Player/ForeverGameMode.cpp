@@ -1,17 +1,21 @@
 #include "ForeverGameMode.h"
 
-#include "ForeverCharacter.h"
 #include "ForeverPlayerController.h"
 #include "ForeverPlayerState.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverTerrainFrameworkComponent.h"
 
 #include "EngineUtils.h"
+#include "GameFramework/DefaultPawn.h"
 #include "GameFramework/PlayerStart.h"
 
 AForeverGameMode::AForeverGameMode()
 {
-	DefaultPawnClass = AForeverCharacter::StaticClass();
+	// 开局不再生成一个独立于Populace之外的"玩家角色"——先用引擎自带的ADefaultPawn
+	// (纯UE默认键鼠飞相机，legacy input，见Config/DefaultInput.ini补的AxisMappings)过渡，
+	// 真正"玩家是谁"这件事交给Story系统：test.json的game_start会通过ChangeControlChange
+	// 把控制权切换到一个随机市民(ACitizenElement，见ForeverStoryFrameworkComponent.cpp)。
+	DefaultPawnClass = ADefaultPawn::StaticClass();
 	PlayerControllerClass = AForeverPlayerController::StaticClass();
 	PlayerStateClass = AForeverPlayerState::StaticClass();
 }

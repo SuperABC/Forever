@@ -6,10 +6,11 @@
 #include <vector>
 
 #include "expression.h"
+#include "change.h"
+#include "../common/handle.h"
 
 class Event;
 class Dialog;
-class Change;
 
 // 一次Script::MatchEvent匹配命中后要执行的一个动作，Dialog*/Change*都是引用（本体永远挂在
 // 某个Milestone上，见dialog.h/change.h整体注释），这里绝不delete。
@@ -50,8 +51,12 @@ public:
 	// @event: 触发这批actions的运行时事件
 	// @actions: 只读动作列表
 	// @context: 变量路由上下文
+	// @post: 向Core发起查询的句柄（如"随机挑一个citizen"），见common/handle.md、
+	// Core/common/implement.md——这个参数也遵循"引用/裸指针跨DLL传递安全，STL容器按值
+	// 传递不安全"的约定，Post()的请求JsonValue由调用方在自己模块里构造+析构，
+	// GetResult()返回的结果引用由提供查询的一侧管理，mod侧只读。
 	virtual void WrapScript(const Event* event,
-		const std::vector<ScriptAction>& actions, const ScriptContext& context) {
+		const std::vector<ScriptAction>& actions, const ScriptContext& context, PostHandle* post) {
 		AutoCopy(actions);
 	}
 
@@ -69,6 +74,26 @@ public:
 	// @actions: 只读动作列表
 	void AutoCopy(const std::vector<ScriptAction>& actions) {
 		actionStack.push_back(actions);
+	}
+
+	// 在actionStack当前层（最上层）里查找label匹配的PlaceHolderChange，返回第一个匹配到的
+	// 下标；找不到返回-1。label是Expression（也可能引用变量，不是纯字面量），按传入的context
+	// 求值后再和目标label比较。非虚，理由同AutoCopy。
+	// @label: 要查找的目标标签（已经是字符串，不是表达式）
+	// @context: 变量路由上下文，用于求值每个PlaceHolderChange自己的label表达式
+	int FindLabel(const std::string& label, const ScriptContext& context) const {
+		if (actionStack.empty()) return -1;
+		const std::vector<ScriptAction>& top = actionStack.back();
+		for (size_t i = 0; i < top.size(); i++) {
+			if (auto changePtr = std::get_if<const Change*>(&top[i])) {
+				if (auto placeholder = dynamic_cast<const PlaceHolderChange*>(*changePtr)) {
+					if (ToString(placeholder->GetLabel().EvaluateValue(context)) == label) {
+						return static_cast<int>(i);
+					}
+				}
+			}
+		}
+		return -1;
 	}
 
 	// 脚本动作栈：每次WrapScript调用对应一层，栈本身和栈里每个vector的分配/释放都发生在

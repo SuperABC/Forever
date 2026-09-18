@@ -6,7 +6,11 @@
 
 class Map;
 class Populace;
+class Society;
 class Story;
+class Industry;
+class Traffic;
+class Player;
 
 class USceneComponent;
 class UForeverAssetFrameworkComponent;
@@ -51,6 +55,11 @@ public:
 
 	Map* GetMap() const { return map; }
 	Populace* GetPopulace() const { return populace; }
+	Society* GetSociety() const { return society; }
+	Story* GetStory() const { return story; }
+	Industry* GetIndustry() const { return industry; }
+	Traffic* GetTraffic() const { return traffic; }
+	Player* GetPlayer() const { return player; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -76,6 +85,14 @@ protected:
 	// 阶段4 Story落地：和map/populace平级持有，生命周期管理方式完全一致(EnsureMapGenerated
 	// 尾部创建、EndPlay/析构函数里delete)，详见Source/Core/story/story.md。
 	Story* story = nullptr;
+
+	// Society/Industry/Traffic/Player这四个域这次还没有真正migrate，只是空骨架——新增它们
+	// 纯粹是为了让PostImplement（Core/common/implement.h）能拿到7个域的真实指针，不是提前
+	// 实现这几个域。生命周期管理方式和map/populace/story完全一致，见各自的.md。
+	Society* society = nullptr;
+	Industry* industry = nullptr;
+	Traffic* traffic = nullptr;
+	Player* player = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<USceneComponent> sceneRoot;

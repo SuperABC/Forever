@@ -4,6 +4,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Element/CitizenElement.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/GameInstance.h"
@@ -19,6 +20,14 @@
 AForeverCharacter::AForeverCharacter()
 {
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
+
+	// Mesh的碰撞预设"CharacterMesh"的ObjectType同样是Pawn，对着任何Trigger(比如
+	// ABuildingElement/ACitizenElement那些进入/离开检测盒)会各自独立生成一次Overlap——
+	// Capsule触发一次、Mesh再触发一次，表现为同一次进出打印两条一样的消息；蒙皮网格还会随
+	// 动画摆动肢体，静止不动时也可能被相邻Room盒的边界扫到，造成"明明没进房间却不停进出"的
+	// 抖动。这两个bug的根源都是Mesh不该参与游戏逻辑判定的Overlap——只有Capsule(角色的
+	// 真实包围体，不随动画摆动)才应该触发这些检测。
+	GetMesh()->SetGenerateOverlapEvents(false);
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -148,6 +157,7 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleView")), ETriggerEvent::Started, this, &AForeverCharacter::ToggleCameraView);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Started, this, &AForeverCharacter::StartSprint);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Completed, this, &AForeverCharacter::StopSprint);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Test")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchControlledCitizen);
 			}
 		}
 	}
@@ -176,6 +186,17 @@ void AForeverCharacter::StopSprint()
 {
 	bIsSprinting = false;
 	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
+}
+
+void AForeverCharacter::SwitchControlledCitizen()
+{
+	ACitizenElement::DebugPrintNearby(); // 调试：每次按T都把当前名单打印到屏幕，排查切换失败
+	ACitizenElement* target = ACitizenElement::GetFirstNearby();
+	if (!target || target == this) return;
+
+	if (AController* controller = GetController()) {
+		controller->Possess(target);
+	}
 }
 
 void AForeverCharacter::Move(const FInputActionValue& value)

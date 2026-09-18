@@ -75,9 +75,10 @@ public:
 	* @event: 触发这批actions的运行时事件
 	* @actions: 只读动作列表
 	* @context: 变量路由上下文
+	* @post: 向Core发起查询的句柄，透传给mod->WrapScript，见ScriptMod.h
 	*/
 	std::vector<ScriptAction>& WrapScript(const Event* event, const std::vector<ScriptAction>& actions,
-		const ScriptContext& context);
+		const ScriptContext& context, PostHandle* post);
 
 	/*
 	* 转调mod->AutoPop()，弹出WrapScript这次压入的那一层，见ScriptMod.h。
@@ -100,8 +101,9 @@ public:
 	* 匹配事件，返回触发的动作列表（已经过WrapScript改写）
 	* @event: 触发事件
 	* @context: 变量路由上下文（context.self会被强制设为this，忽略调用方传入的self）
+	* @post: 向Core发起查询的句柄，透传给WrapScript
 	*/
-	std::vector<ScriptAction> MatchEvent(Event* event, ScriptContext context);
+	std::vector<ScriptAction> MatchEvent(Event* event, ScriptContext context, PostHandle* post);
 
 	/*
 	* 停用指定里程碑

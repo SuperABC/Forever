@@ -10,6 +10,37 @@
   `AutoCopy(actions)`原样透传，不做任何改写；真正按`PlaceHolderChange`标签替换成mod自己
   持有的Dialog/Change这套改写逻辑，留到被点名实现时再补。
 
+## `WrapScript`补第四个参数`PostHandle* post`、新增非虚`FindLabel`——占位替换逻辑正式落地
+
+上面"阶段4占位"一节写的"留到被点名实现时再补"这次补上了（`Forever_Mod/Empty`的
+`EmptyScript::WrapScript`，见`Forever_Mod/Empty/Cpp/Empty/empty_mods.h`）：
+
+- **`WrapScript`新增`PostHandle* post`参数**：mod侧改写`actionStack`顶层动作时，如果需要的
+  内容不是mod自己能算出来的、必须问Core要（比如"随便挑一个citizen的姓名"），就通过这个
+  参数向Core发起查询——`post->Post(request)`提交请求，`post->GetResult()`取结果引用，见
+  `common/handle.md`。这个参数和`ScriptAction`一样遵循"引用/裸指针跨DLL传递安全，STL容器
+  按值传递不安全"的约定：`Post()`的请求`JsonValue`由调用方（mod侧）在自己模块里构造+析构，
+  `GetResult()`返回的结果`JsonValue`引用由提供查询的一侧（`PostImplement`，见
+  `Core/common/implement.md`）管理，mod侧只读，不持有、不释放。这个改动是给`ScriptMod`新增
+  虚方法参数、不是新增虚方法本身，不涉及vtable槽位变化，不需要重新走"新增虚方法前先确认过
+  跨DLL兼容性"那套流程——但因为函数签名变了，`Empty`/`Wxdj`/`Test`三个mod仍然全部要重新
+  编译（否则调用点传参数量对不上）。
+- **新增非虚方法`FindLabel(label, context)`**：在`actionStack`当前层（`actionStack.back()`）
+  里按标签字符串查找第一个匹配的`PlaceHolderChange`，返回它在这一层vector里的下标，找不到
+  返回`-1`。`label`参数已经是纯字符串（不是`Expression`），但`PlaceHolderChange::GetLabel()`
+  返回的是`Expression`（可能引用变量，不是纯字面量），所以要按传入的`context`先
+  `EvaluateValue`+`ToString`求值出实际标签字符串，再和`label`比较。非虚——理由和
+  `AutoCopy`/`AutoPop`一样：只会被已经虚分派到mod侧的`WrapScript`重载从内部调用，天然已经
+  跑在mod自己的模块里，不需要单独走vtable。
+- **典型用法**（`EmptyScript::WrapScript`）：`AutoCopy(actions)`之后，`FindLabel("control",
+  context)`找`test.json`里`{"type":"place_holder","label":"control"}`这一项的下标，找到后
+  `post->Post({"post":"random citizen"})`向`PostImplement`查询一个随机citizen姓名，把结果
+  解析成`Expression`塞进mod自己长期持有的`ChangeControlChange controlChange`成员，最后
+  `actionStack.back()[idx] = &controlChange`原地替换掉那个`PlaceHolderChange`——`
+  controlChange`必须是mod自己长期持有（这里是`EmptyScript`的成员变量，永不delete），不能
+  是`WrapScript`这次调用里现场`new`出来的临时对象，替换后的指针要在这次广播处理完之前一直
+  有效。
+
 ## `WrapScript`不能按值返回`vector<ScriptAction>`——这是实测踩过的坑
 
 `ScriptMod`是被`Forever_Mod`目录下几个预编译dll（`Empty`/`Wxdj`/`Test`）继承的接口，每个dll都
@@ -61,7 +92,10 @@ Core对象的STL容器mutator"，而是"mod的编译产物里默认实现构造�
 
 ## 依赖关系
 
-- 依赖：`expression.h`（`Expression`/`ScriptContext`）、`<deque>`。
+- 依赖：`expression.h`（`Expression`/`ScriptContext`）、`change.h`（`FindLabel`里
+  `dynamic_cast<const PlaceHolderChange*>`）、`../common/handle.h`（`PostHandle`）、
+  `<deque>`。
 - 被谁依赖：`script_factory.h`（`ScriptFactory::CreateFunc`/`DestroyFunc`按`ScriptMod*`工作）、
   `Core/story/script.h`（`ScriptAction`、`Script::mod`、`Script::WrapScript`/`AutoPop`转调
-  `mod->WrapScript`/`mod->AutoPop`）。
+  `mod->WrapScript`/`mod->AutoPop`）、`Forever_Mod/Empty/Cpp/Empty/empty_mods.h`
+  （`EmptyScript::WrapScript`真正override，用`FindLabel`+`post`实现占位替换）。

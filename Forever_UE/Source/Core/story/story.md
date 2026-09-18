@@ -24,8 +24,15 @@
 
 ```cpp
 void BroadcastGameStart(const std::function<void(const std::vector<ScriptAction>&,
-    const ScriptContext&)>& onActions);
+    const ScriptContext&)>& onActions, PostHandle* post);
 ```
+
+`post`是新增的第二个参数：`BroadcastGameStart`自己不解读它，只是原样转发给每个
+`script->MatchEvent(&event, context, post)`（进而透传到`mod->WrapScript`）——mod侧要用
+`PostHandle`向Core发起查询（这次唯一的例子是"随机挑一个citizen"，见`Dependence/story/
+script_mod.md`），必须先能拿到这个句柄，`Story`这一层只是编排调用的中间人，不需要关心
+`post`具体指向哪个`PostHandle`实现（这次由调用方`UForeverStoryFrameworkComponent::
+BroadcastGameStart`现场构造一个`PostImplement`传进来，见`Core/common/implement.md`）。
 
 `ScriptContext.local`指向这个函数栈上的局部`GameStartEvent`——如果直接把`vector<ScriptAction>`
 和`ScriptContext`返回给调用方、让调用方以后再处理（比如攒起来下一帧再显示），`local`就会变成
@@ -59,10 +66,11 @@ use-after-free。改成回调、在`GameStartEvent`还活着的这个函数调�
 
 - 依赖：`script.h`、`script_factory.h`、`common/loader.h`（`ModLoader`）、`common/config.h`
   （`Config::GetMods`/`GetConceptMods`/`GetConfigDir`）、`event.h`（`GameStartEvent`）、
-  `change.h`（`SetValueChange`）。
+  `change.h`（`SetValueChange`）、`Dependence/common/handle.h`（`PostHandle`，
+  `BroadcastGameStart`透传给`Script::MatchEvent`）。
 - 被谁依赖：`Forever/Framework/ForeverFrameworkActor.cpp`（持有`Story*`，生命周期管理方式和
   `Map*`/`Populace*`完全一致）、`Forever/Framework/ForeverStoryFrameworkComponent.cpp`
-  （展示`BroadcastGameStart`的结果）。
+  （展示`BroadcastGameStart`的结果，现场构造`PostImplement`作为`post`参数传入）。
 
 ## 待办/后续阶段
 

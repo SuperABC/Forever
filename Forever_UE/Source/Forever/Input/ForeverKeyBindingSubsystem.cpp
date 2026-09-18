@@ -12,6 +12,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("Jump"), EKeys::SpaceBar },
 		{ TEXT("ToggleView"), EKeys::V },
 		{ TEXT("Sprint"), EKeys::LeftShift },
+		{ TEXT("Test"), EKeys::T },
 	};
 	return definitions;
 }

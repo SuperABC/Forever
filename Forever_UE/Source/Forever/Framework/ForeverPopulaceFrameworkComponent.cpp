@@ -69,6 +69,32 @@ void UForeverPopulaceFrameworkComponent::EndPlay(const EEndPlayReason::Type EndP
 	Super::EndPlay(EndPlayReason);
 }
 
+ACitizenElement* UForeverPopulaceFrameworkComponent::SpawnCitizen(Citizen* citizen) {
+	float worldX, worldY, worldZ;
+	if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) return nullptr;
+
+	ACitizenElement* element = GetWorld()->SpawnActor<ACitizenElement>();
+	if (element) {
+		element->Init(citizen, this);
+		activeInstances.Add(citizen, element);
+	}
+	return element;
+}
+
+ACitizenElement* UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(const FString& name) {
+	for (Citizen* citizen : allCitizens) {
+		if (!citizen) continue;
+		if (name != UTF8_TO_TCHAR(citizen->GetName().c_str())) continue;
+
+		if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen)) {
+			if (*existing) return *existing;
+			activeInstances.Remove(citizen);
+		}
+		return SpawnCitizen(citizen);
+	}
+	return nullptr;
+}
+
 void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
@@ -94,11 +120,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 			float worldX, worldY, worldZ;
 			if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) continue;
 			if (FVector::Dist(playerLoc, FVector(worldX, worldY, worldZ)) < spawnDistUE) {
-				ACitizenElement* element = GetWorld()->SpawnActor<ACitizenElement>();
-				if (element) {
-					element->Init(citizen, this);
-					activeInstances.Add(citizen, element);
-				}
+				SpawnCitizen(citizen);
 			}
 		}
 		else {

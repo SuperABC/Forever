@@ -40,6 +40,49 @@ ACitizenElement>()`+立刻调用`Init(citizen, this)`；判定"该隐藏"时先�
 `CharacterMovementComponent`自己的重力/地面检测把`Init()`摆好的位置挪走；以后加AI移动
 时改回`MOVE_Walking`即可，不需要动组件骨架。
 
+### 基类改成`AForeverCharacter`（第三版修正）：市民真正可被玩家占有操控
+
+第二版的`ACharacter`只是预留了移动组件骨架，`CharacterMovementComponent`全程
+`MOVE_None`，没有摄像机、没有Enhanced Input绑定——市民本身还不能被玩家控制。这次落地
+"走近市民按T切换控制"这个需求（见`Player/ForeverCharacter.md`"T键切换市民"一节），基类
+从`ACharacter`换成`AForeverCharacter`：`AForeverCharacter`已经有摄像机（第一/三人称）/
+移动参数/Enhanced Input绑定+`PossessedBy`/`UnPossessed`增删Input Mapping Context这一整套
+东西，`ACitizenElement`直接继承复用，不需要另起一套。这不是简单的"顺带换个基类"——
+`ACitizenElement`构造函数里仍然不驱动移动（`GetCharacterMovement()->SetMovementMode(
+MOVE_None)`），只有真正被占有时才切到`MOVE_Walking`（见下`PossessedBy`覆写），未被占有
+的市民行为和第二版完全一致（静止不动，靠`AI`/`Tick`以后再接入）。
+
+### `PossessedBy`/`UnPossessed`：移动模式跟着占有状态切换，Input Mapping交给`Super`
+
+```cpp
+virtual void PossessedBy(AController* NewController) override; // Super先增Input Mapping，再切MOVE_Walking
+virtual void UnPossessed() override;                            // 先切回MOVE_None，再Super减Input Mapping
+```
+
+`ACitizenElement`自己只管`CharacterMovementComponent`的开关：被占有时切`MOVE_Walking`
+（不然按T换过来之后市民纹丝不动，看起来像switch失败），取消占有时切回`MOVE_None`（不然
+`CharacterMovementComponent`自己的重力/地面检测会在没有玩家输入的情况下把市民从原地慢慢
+挪走）。Input Mapping Context的增删完全不在这里处理，交给`Super`（
+`AForeverCharacter::PossessedBy`/`UnPossessed`）——这样不管当前占有的是最初的
+`ADefaultPawn`/`AForeverCharacter`还是某个`ACitizenElement`，输入映射的增删逻辑只有一份，
+见`[[memory:possession_driven_input_context]]`。
+
+### `nearbyCitizens`/`GetFirstNearby`：T键要切给谁，由碰撞盒名单决定
+
+`ACitizenElement`维护一个**静态**列表`nearbyCitizens`（`TArray<TWeakObjectPtr<
+ACitizenElement>>`），记录"当前被占有对象（玩家的`ADefaultPawn`/`AForeverCharacter`，也
+可能是另一个citizen）附近的市民"——`OnOverlapBegin`/`OnOverlapEnd`在原有"打印接近/离开
+提示"逻辑之外，分别`AddUnique`/`RemoveSingle`维护这份名单。之所以是**静态**成员而不是每个
+`ACitizenElement`各自的实例状态：T键处理逻辑（`AForeverCharacter::SwitchControlledCitizen`
+）定义在基类上，不知道当前被占有的具体是哪个子类实例，只能通过一个全局可查的静态入口去
+问"附近有没有市民"；用`TWeakObjectPtr`而不是裸指针是因为市民会被
+`UForeverPopulaceFrameworkComponent`按距离动态`Destroy()`，名单里的引用必须能安全感知这种
+失效。
+
+`GetFirstNearby()`返回名单里第一个仍然有效的市民（顺带清理已失效的弱引用），名单为空则
+返回`nullptr`；不做"离玩家最近"这类排序，取的就是名单下标0——这是当前阶段的简化实现，
+够用（一次只会有少量市民同时触发这个碰撞盒），排序留到后续真的需要"选最近的那个"时再加。
+
 ### 占位资产：`SKM_Manny_Simple`
 
 和`AForeverCharacter.cpp`同款软路径（`/Game/Asset/Characters/Mannequins/Meshes/
@@ -122,21 +165,29 @@ UBT判定要重算），adaptive排除名单变化，两个文件第一次被拼
 
 ## 依赖关系
 
-- 依赖：`GameFramework/Character.h`（基类）、`Components/CapsuleComponent.h`/
-  `GameFramework/CharacterMovementComponent.h`（`ACharacter`自带组件）、
+- 依赖：`Player/ForeverCharacter.h`（基类，第三版起改用，见上"基类改成
+  `AForeverCharacter`"一节）、`Components/CapsuleComponent.h`/
+  `GameFramework/CharacterMovementComponent.h`（`ACharacter`自带组件，
+  `PossessedBy`/`UnPossessed`切换`MOVE_Walking`/`MOVE_None`）、
   `Source/Forever/Framework/ForeverPopulaceFrameworkComponent.h`（`framework`弱引用
-  回调）、`Source/Core/populace/citizen.h`（`Citizen`）、`map/building.h`/`map/room.h`
+  回调；`FindOrSpawnCitizenByName`会强制生成/复用`ACitizenElement`，见该文件.md）、
+  `Source/Core/populace/citizen.h`（`Citizen`）、`map/building.h`/`map/room.h`
   （Core侧数据）、`Components/SkeletalMeshComponent.h`（占位mesh）、
   `Components/BoxComponent.h`（碰撞盒）、`Kismet/GameplayStatics.h`
   （`GetPlayerPawn`）、`Engine/Engine.h`（`GEngine->AddOnScreenDebugMessage`）。
-- 被谁依赖：`UForeverPopulaceFrameworkComponent::TickComponent`
-  （`SpawnActor<ACitizenElement>()`+`Init()`+`Destroy()`）。
+- 被谁依赖：`UForeverPopulaceFrameworkComponent::TickComponent`/
+  `FindOrSpawnCitizenByName`（`SpawnActor<ACitizenElement>()`+`Init()`+`Destroy()`）、
+  `AForeverCharacter::SwitchControlledCitizen`（T键，读`GetFirstNearby()`）、
+  `UForeverStoryFrameworkComponent::ApplyControlChange`（剧情`change_control`指定切换
+  控制权，间接通过`FindOrSpawnCitizenByName`拿到`ACitizenElement*`后`Possess`）。
 
 ## 待办/后续阶段
 
-- 真正的AI行为（走动/工作/日程驱动的移动）——这次已经是`ACharacter`+完整
-  `CharacterMovementComponent`骨架，`MOVE_None`改`MOVE_Walking`即可接入，但移动逻辑
-  本身、寻路都是后续任务。
+- 真正的AI行为（未被占有时走动/工作/日程驱动的移动）——`PossessedBy`/`UnPossessed`只解决
+  了"被玩家占有时能走"，没有玩家占有的市民仍然是`MOVE_None`静止不动，移动逻辑本身、寻路
+  都是后续任务。
 - 真实资产替换`SKM_Manny_Simple`占位。
 - 靠近检测碰撞盒尺寸（`CITIZEN_PROXIMITY_HALF_XY`/`_Z`）是按经验给的初始值，可能需要按
   真实资产的实际比例微调。
+- `GetFirstNearby()`目前不做排序，直接取名单下标0；`nearbyCitizens`名单里出现多个市民时
+  T键永远切给最早进入范围的那个，不是离玩家最近的那个，后续如有需要可以按距离排序。

@@ -24,10 +24,30 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
   （先`populace`后`map`）互不影响内存安全——`Citizen`只持有`Zone*`/`Building*`/`Room*`
   裸指针、析构不解引用它们；`Map`也不持有任何`Citizen*`，先删哪个都一样安全，这里选择
   先删`populace`只是保持和创建顺序相反的直觉。
+- **新增`society`/`industry`/`traffic`/`player`四个域指针（阶段4 Story落地新增）**：和
+  `map`/`populace`/`story`同一套生命周期管理方式（`EnsureMapGenerated()`尾部`new`、
+  `EndPlay`/析构里`delete`+置空），但这四个域这次**没有真正migrate**，`Society`/
+  `Industry`/`Traffic`/`Player`目前都是只能默认构造的空壳类。加它们纯粹是为了让
+  `PostImplement`（`Core/common/implement.h`，`PostHandle`的第一个具体实现）能在构造时
+  拿到Core全部7个domain的真实指针，不是提前实现这几个域的业务逻辑——`PostImplement`目前
+  也只真正用到`populace`一个指针（"random citizen"查询），其余几个只是存着，等对应域真正
+  迁移出业务逻辑、需要通过`Post`查询时再用。四个新指针创建顺序在`story`之前（`EnsureMapGenerated`
+  里`society`/`industry`/`traffic`/`player`先`new`，`story`最后创建），删除顺序按和创建
+  相反的直觉从`player`往前delete，理由同上——这几个域彼此都不持有对方的裸指针，删除顺序
+  不影响内存安全。
+- **补上一个此前缺失的`GetStory()`**：`story`成员本身在阶段4 Story落地时就已经加入，但当时
+  漏加了对应的getter（`GetMap()`/`GetPopulace()`都有，`GetStory()`没有）——这次和
+  `GetSociety()`/`GetIndustry()`/`GetTraffic()`/`GetPlayer()`一起补齐，是`UForeverStoryFrameworkComponent::
+  BroadcastGameStart`构造`PostImplement`时能拿到全部7个指针的前提（该函数通过
+  `Cast<AForeverFrameworkActor>(GetOwner())`拿到这个Actor后依次调用这7个getter）。
 
 ## 依赖关系
 - 依赖`Framework/ForeverFrameworkComponent.h`及其9个具体子类头文件、`Source/Core/map/map.h`、
-  `Source/Core/populace/populace.h`（进入populace域新增，持有`Populace*`）。
+  `Source/Core/populace/populace.h`（进入populace域新增，持有`Populace*`）、
+  `Source/Core/story/story.h`（持有`Story*`）、`Source/Core/society/society.h`/
+  `Source/Core/industry/industry.h`/`Source/Core/traffic/traffic.h`/
+  `Source/Core/player/player.h`（持有`Society*`/`Industry*`/`Traffic*`/`Player*`，均为
+  空骨架，见上"新增`society`/`industry`/`traffic`/`player`四个域指针"一节）。
 - 被`AForeverGameMode`引用:`BeginPlay`和`FindPlayerStart_Implementation`都会调用
   `EnsureFrameworkActorExists()`(场景里没有找到已放置的实例时动态`SpawnActor`一个兜底,
   找到/生成后都会调用这个Actor的`EnsureMapGenerated()`),详见`ForeverGameMode.md`。

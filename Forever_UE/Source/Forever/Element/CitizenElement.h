@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Character.h"
+#include "Player/ForeverCharacter.h"
 
 #include "CitizenElement.generated.h"
 
@@ -17,13 +17,13 @@ class UForeverPopulaceFrameworkComponent;
 // ACitizenElement按玩家距离由UForeverPopulaceFrameworkComponent::TickComponent流式
 // SpawnActor/Destroy，不常驻，详见Source/Forever/Element/CitizenElement.md。
 //
-// 基类是ACharacter，不是纯AActor——用户明确要求citizen不能只是静态骨架，必须是真正的
-// Character（自带CapsuleComponent/SkeletalMeshComponent/CharacterMovementComponent），
-// 为将来的行走AI预留好组件骨架，和玩家角色AForeverCharacter同一个基类。这次仍然不驱动
-// 任何移动（CharacterMovementComponent这次显式设成MOVE_None，见.cpp构造函数），只是
-// 提前把骨架搭对，避免以后加AI时还要把AActor整个换成ACharacter重新搭一遍。
+// 基类是AForeverCharacter，不是纯ACharacter——市民要能被玩家真正占有操控（走近后按T切换，
+// 见GetFirstNearby），AForeverCharacter已经有摄像机/移动/Enhanced
+// Input绑定+PossessedBy/UnPossessed这一整套东西，直接继承复用，不需要另起一套。这次仍然
+// 默认不能移动（CharacterMovementComponent这次显式设成MOVE_None，见.cpp构造函数），只有
+// 被占有时才切换成MOVE_Walking（见PossessedBy覆写）。
 UCLASS()
-class FOREVER_API ACitizenElement : public ACharacter
+class FOREVER_API ACitizenElement : public AForeverCharacter
 {
 	GENERATED_BODY()
 
@@ -39,6 +39,22 @@ public:
 	// "自己的EndPlay一跑完，自己不会再解引用citizen"，不需要关心和框架Actor/其它Element
 	// 的EndPlay谁先谁后。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	// 被占有时切换成能走动(MOVE_Walking)，取消占有时切回MOVE_None（不然会被
+	// CharacterMovementComponent的重力/地面检测挪走）。Input Mapping Context的增删交给
+	// Super（AForeverCharacter::PossessedBy/UnPossessed），见
+	// [[memory:possession_driven_input_context]]。
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void UnPossessed() override;
+
+	// 返回"当前被占有对象附近的市民名单"里第一个仍然有效的市民（顺带清理已失效的弱引用），
+	// 名单为空则返回nullptr——供AForeverCharacter::SwitchControlledCitizen（T键）使用。
+	static ACitizenElement* GetFirstNearby();
+
+	// 调试用：把nearbyCitizens当前的完整内容（含下标、每个人的姓名，失效弱引用标"已失效"，
+	// 不做清理）打印到屏幕左上角——排查"按T有时候切换失败"具体每次名单里是什么状况。
+	// AForeverCharacter::SwitchControlledCitizen每次按T都调用一次。
+	static void DebugPrintNearby();
 
 private:
 	void BuildProximityBox();
@@ -57,4 +73,9 @@ private:
 	TObjectPtr<UBoxComponent> proximityBox; // 玩家靠近检测——和流式生成/销毁的距离判定是两回事
 
 	FString collisionLabel; // Overlap回调只读这份烘焙好的字符串，绝不解引用citizen
+
+	// 当前被占有对象（可能是最初的ADefaultPawn/AForeverCharacter，也可能是另一个citizen）
+	// 附近的市民名单，OnOverlapBegin/OnOverlapEnd维护。用TWeakObjectPtr而不是裸指针——
+	// 市民会被UForeverPopulaceFrameworkComponent按距离动态Destroy。
+	static TArray<TWeakObjectPtr<ACitizenElement>> nearbyCitizens;
 };

@@ -9,6 +9,8 @@
 ## 依赖关系
 
 - 依赖：`JsonValue`（前置声明，实际定义在`common/json.h`）。
-- 被谁依赖：目前没有代码实现或使用`PostHandle`——旧工程里这是Mod向宿主查询Core状态（如某个
-  建筑当前是否存在）的通道，具体哪个系统会用到、由谁实现`Post`/`GetResult`，留到阶段4对应
-  domain迁移、确认Mod侧需要反向查询Core数据时再接入，目前只是把接口骨架先搭好。
+- 被谁依赖：`Core/common/implement.h`的`PostImplement`是第一个具体实现（阶段4 Story域接入，
+  聚合全部7个domain指针，目前只实现"random citizen"一种查询，见`Core/common/
+  implement.md`）；`Dependence/story/script_mod.h`的`ScriptMod::WrapScript`新增了
+  `PostHandle*`参数，`Forever_Mod/Empty/Cpp/Empty/empty_mods.h`的`EmptyScript::WrapScript`
+  是第一个真正调用`Post()`/`GetResult()`的mod侧代码。

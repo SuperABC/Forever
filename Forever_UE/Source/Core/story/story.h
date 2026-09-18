@@ -35,8 +35,10 @@ public:
 	* 是因为ScriptContext.local指向这个函数栈上的GameStartEvent，只在回调同步执行期间有效，
 	* 调用方不能把actions/context留到回调返回之后再用（local.前缀求值会变成悬垂指针）。
 	* @onActions: 收到匹配出的动作列表和对应变量路由上下文
+	* @post: 向Core发起查询的句柄，透传给每个Script::MatchEvent/WrapScript
 	*/
-	void BroadcastGameStart(const std::function<void(const std::vector<ScriptAction>&, const ScriptContext&)>& onActions);
+	void BroadcastGameStart(const std::function<void(const std::vector<ScriptAction>&, const ScriptContext&)>& onActions,
+		PostHandle* post);
 
 	/*
 	* 执行一个变化：dynamic_cast分派，目前只有SetValueChange分支真正执行，其余分支

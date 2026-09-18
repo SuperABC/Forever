@@ -37,6 +37,22 @@ populace)`——这一步**不`SpawnActor`任何东西**，只是把`populace->G
 building的LOD双阈值同一个防抖动理由：避免玩家在临界距离附近小范围来回走动时citizen反复
 生成/销毁。
 
+### `FindOrSpawnCitizenByName`/`SpawnCitizen`：按姓名强制生成，不看玩家距离
+
+阶段4 Story域接入`ChangeControlChange`（剧情/T键之外，第三种"切换玩家操控权"的触发源，见
+`ForeverStoryFrameworkComponent.md`"ApplyControlChange"一节）之后新增：剧情指定的目标市民
+不一定在玩家附近，不能像`TickComponent`那样等距离小于`citizenSpawnDistance`才生成——
+`FindOrSpawnCitizenByName(name)`按`Citizen::GetName()`（UTF-8转`FString`比较）在
+`allCitizens`里线性查找同名citizen，找到后：已经在`activeInstances`里就直接返回那个
+`ACitizenElement*`（弱指针失效则先从map里移除，走强制生成分支）；否则调用`SpawnCitizen`
+强制生成一个，不做任何距离判断。找不到同名citizen或生成失败统一返回`nullptr`。
+
+`SpawnCitizen(Citizen*)`是从`TickComponent`原来内联的"估算位置+`SpawnActor`+`Init`+登记
+`activeInstances`"这段逻辑里提炼出来的私有辅助函数——`TickComponent`的按距离生成分支和
+`FindOrSpawnCitizenByName`的强制生成分支现在共用同一份实现，不再各自维护一份几乎相同的
+代码。调用方（这两处）自己负责保证传入的`citizen`不为空、且不在`activeInstances`里，
+`SpawnCitizen`内部不重复检查这两个前提。
+
 ### `activeInstances`：谁映射谁，生命周期归谁管
 
 `TMap<Citizen*, TObjectPtr<ACitizenElement>> activeInstances`是这个组件自己维护的映射
@@ -57,7 +73,9 @@ building的LOD双阈值同一个防抖动理由：避免玩家在临界距离附
   `Citizen`）、`map/map.h`/`map/building.h`/`map/room.h`（估算逻辑位置要用）、
   `Kismet/GameplayStatics.h`（`GetPlayerPawn`）。
 - 被谁依赖：`AForeverFrameworkActor::EnsureMapGenerated()`（`GenerateCitizens(map,
-  populace)`）。
+  populace)`）、`UForeverStoryFrameworkComponent::ApplyControlChange`
+  （`FindOrSpawnCitizenByName`，剧情`ChangeControlChange`指定切换控制的市民不一定在附近，
+  需要强制生成，见`ForeverStoryFrameworkComponent.md`）。
 
 ## 待办/后续阶段
 

@@ -60,7 +60,8 @@ void Story::Init() {
 	mainScripts.push_back(mainScript);
 }
 
-void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, const ScriptContext&)>& onActions) {
+void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, const ScriptContext&)>& onActions,
+	PostHandle* post) {
 	GameStartEvent event;
 	for (auto script : mainScripts) {
 		ScriptContext context;
@@ -68,7 +69,7 @@ void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, 
 		context.system = systemScript;
 		context.local = &event;
 
-		auto scriptActions = script->MatchEvent(&event, context);
+		auto scriptActions = script->MatchEvent(&event, context, post);
 		onActions(scriptActions, context);
 	}
 }

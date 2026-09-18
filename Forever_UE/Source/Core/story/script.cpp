@@ -75,8 +75,8 @@ string Script::GetTask() const {
 }
 
 vector<ScriptAction>& Script::WrapScript(const Event* event, const vector<ScriptAction>& actions,
-	const ScriptContext& context) {
-	mod->WrapScript(event, actions, context);
+	const ScriptContext& context, PostHandle* post) {
+	mod->WrapScript(event, actions, context, post);
 	return mod->actionStack.back();
 }
 
@@ -125,6 +125,7 @@ void Script::ReadScript(const string& path) {
 	}
 	else {
 		fin.close();
+		debugf("Json syntax error in %s: %s.\n", path.data(), reader.GetErrorMessages().data());
 		THROW_EXCEPTION(JsonFormatException, "Json syntax error: " + reader.GetErrorMessages() + ".\n");
 	}
 	fin.close();
@@ -163,7 +164,7 @@ void Script::ReadMilestones(const string& path) {
 	}
 }
 
-vector<ScriptAction> Script::MatchEvent(Event* event, ScriptContext context) {
+vector<ScriptAction> Script::MatchEvent(Event* event, ScriptContext context, PostHandle* post) {
 	context.self = this;
 
 	vector<ScriptAction> actions;
@@ -205,7 +206,7 @@ vector<ScriptAction> Script::MatchEvent(Event* event, ScriptContext context) {
 	// 这里立刻拷贝成Script/Core自己分配的vector（ScriptAction只是两个裸指针的variant，拷贝本身
 	// 不跨堆），再AutoPop弹出mod那一层——拷贝必须在AutoPop之前，AutoPop一旦执行，前面这个引用
 	// 就失效了。
-	vector<ScriptAction> result(WrapScript(event, actions, context));
+	vector<ScriptAction> result(WrapScript(event, actions, context, post));
 	AutoPop();
 	return result;
 }
@@ -265,8 +266,11 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new SetValueChange(variable.AsString(), BuildExpression(value));
 		}
+		else if (type == "place_holder") {
+			change = new PlaceHolderChange(BuildExpression(obj["label"]));
+		}
 		else {
-			// 阶段4占位：其余41种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
+			// 阶段4占位：其余40种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Change type not implemented yet: " + type + ".\n");
 		}
 

@@ -2341,3 +2341,46 @@ private:
 	Expression policy;
 
 };
+
+// 切换控制（阶段4新增，老工程没有对应类型）：把玩家的操控权切换到指定姓名的市民身上。
+// 执行逻辑不在Core层（Story::ApplyChange认不出这个类型，Core不知道Actor/Controller的存在），
+// 由Forever层（UForeverStoryFrameworkComponent）在遇到这个类型时直接拦截处理，见story.md。
+class ChangeControlChange : public Change {
+public:
+	/*
+	* 默认构造切换控制变化
+	*/
+	ChangeControlChange();
+
+	/*
+	* 构造切换控制变化
+	* @name: 市民姓名表达式
+	*/
+	ChangeControlChange(Expression name);
+
+	/*
+	* 析构切换控制变化
+	*/
+	virtual ~ChangeControlChange();
+
+	/*
+	* 变化类型
+	*/
+	virtual const std::string& GetType() const override;
+
+	/*
+	* 设置市民姓名
+	* @name: 姓名表达式
+	*/
+	void SetName(Expression name);
+
+	/*
+	* 获取市民姓名
+	*/
+	const Expression& GetName() const;
+
+private:
+	// 市民姓名
+	Expression name;
+
+};

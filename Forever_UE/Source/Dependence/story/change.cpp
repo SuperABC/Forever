@@ -1470,3 +1470,30 @@ void ChangePolicyChange::SetPolicy(Expression policy) {
 const Expression& ChangePolicyChange::GetPolicy() const {
 	return policy;
 }
+
+ChangeControlChange::ChangeControlChange() :
+	name() {
+
+}
+
+ChangeControlChange::ChangeControlChange(Expression name) :
+	name(move(name)) {
+
+}
+
+ChangeControlChange::~ChangeControlChange() {
+
+}
+
+const string& ChangeControlChange::GetType() const {
+	static const string type = "change_control";
+	return type;
+}
+
+void ChangeControlChange::SetName(Expression name) {
+	this->name = move(name);
+}
+
+const Expression& ChangeControlChange::GetName() const {
+	return name;
+}

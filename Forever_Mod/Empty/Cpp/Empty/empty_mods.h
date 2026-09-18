@@ -3,6 +3,7 @@
 #include <string>
 #include <functional>
 
+#include "common/json.h"
 #include "map/terrain_mod.h"
 #include "map/roadnet_mod.h"
 #include "map/zone_mod.h"
@@ -226,6 +227,11 @@ private:
 	std::string name;
 };
 
+// WrapScript这次真正接入Post查询：game_start那个milestone的changes数组最后一项是
+// PlaceHolderChange{label:"control"}（见Resource/Story/test.json），命中后向Core查询
+// "random citizen"，把结果姓名塞进controlChange（长期持有、永不delete，见script_mod.md
+// "mod往actionStack里塞的指针必须是mod自己长期维护"的约定），原地替换掉actionStack顶层里
+// 那个PlaceHolderChange。
 class EmptyScript : public ScriptMod {
 public:
 	static const char* GetId() { return "empty"; }
@@ -233,8 +239,30 @@ public:
 	virtual const char* GetName() override { return name.data(); }
 	virtual void ApplyArgs(const std::string& args) override { name = "empty(" + args + ")"; }
 
+	virtual void WrapScript(const Event* event, const std::vector<ScriptAction>& actions,
+		const ScriptContext& context, PostHandle* post) override {
+		AutoCopy(actions);
+
+		int idx = FindLabel("control", context);
+		if (idx < 0 || !post) return;
+
+		JsonValue request(DATA_OBJECT);
+		request["post"] = "random citizen";
+		post->Post(request);
+
+		const JsonValue& result = post->GetResult();
+		if (result["result"].AsString() != "success") return;
+
+		Expression citizenName;
+		citizenName.Parse("\"" + result["name"].AsString() + "\"");
+		controlChange.SetName(citizenName);
+
+		actionStack.back()[idx] = static_cast<const Change*>(&controlChange);
+	}
+
 private:
 	std::string name;
+	ChangeControlChange controlChange;
 };
 
 class EmptyProduct : public ProductMod {
