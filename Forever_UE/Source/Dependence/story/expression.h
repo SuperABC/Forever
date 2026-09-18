@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "../common/utility.h"
 #include "../common/error.h"
@@ -8,6 +8,21 @@
 #include <functional>
 #include <unordered_map>
 
+
+class Event;
+
+// 表达式求值时的变量路由上下文：self./system./local. 三个关键字前缀分别路由到这三个槽位，
+// 找不到对应槽位或者变量名压根没有可识别的前缀时，一律按"变量不存在"处理（不额外报错）。
+struct ScriptContext {
+	// self. 前缀路由目标：拥有当前表达式的 Script 自己的变量池
+	Container* self = nullptr;
+
+	// system. 前缀路由目标：Story 挂载的全局变量池
+	Container* system = nullptr;
+
+	// local. 前缀路由目标：触发本次匹配/求值的运行时 Event（可为空，为空时 local. 一律查不到）
+	const Event* local = nullptr;
+};
 
 enum class BinaryOperator : int {
 	EQUAL,
@@ -34,31 +49,33 @@ enum class UnaryOperator : int {
 	LOGICAL_NOT
 };
 
-// 表达式基类
-class Expression {
+// 表达式树节点基类（老工程里这个名字叫Expression，这次让给了对外门面类，节点基类改名
+// ExpressionNode）
+class ExpressionNode {
 public:
 	/*
-	* 构造表达式基类
+	* 构造表达式树节点基类
 	*/
-	Expression();
+	ExpressionNode();
 
 	/*
-	* 析构表达式基类
+	* 析构表达式树节点基类
 	*/
-	virtual ~Expression();
+	virtual ~ExpressionNode();
 
 	/*
 	* 求值
-	* @getValues: 变量查询函数列表
+	* @context: 变量路由上下文
 	* @return: 表达式求值结果
 	*/
-	virtual ValueType Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const = 0;
+	virtual ValueType Evaluate(const ScriptContext& context) const = 0;
 };
 
-// 变量表达式
-class VariableExpression : public Expression {
+// 变量表达式：name是$$前缀之后的原始文本(可能形如"self.name"/"system_foo"/"local.message")，
+// 求值时按第一个'.'或'_'切出前缀关键字路由到ScriptContext对应槽位，见Evaluate实现。
+class VariableExpression : public ExpressionNode {
 private:
-	// 变量名
+	// 变量名（$$之后的原始文本，不做任何字符替换）
 	std::string name;
 
 public:
@@ -74,41 +91,15 @@ public:
 	virtual ~VariableExpression();
 
 	/*
-	* 求值：查找变量名对应的值
-	* @getValues: 变量查询函数列表
+	* 求值：按self./system./local.前缀路由到对应变量池查值，查不到或前缀未识别都返回默认值0
+	* @context: 变量路由上下文
 	* @return: 变量值
 	*/
-	ValueType Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const override;
-};
-
-// 间接寻址表达式（$$(expr) 语法，将内部表达式求值结果作为变量名查找）
-class IndirectExpression : public Expression {
-private:
-	// 内部表达式
-	std::shared_ptr<Expression> inner;
-
-public:
-	/*
-	* 按内部表达式构造间接寻址表达式
-	* @inner: 内部表达式
-	*/
-	IndirectExpression(std::shared_ptr<Expression> inner);
-
-	/*
-	* 析构间接寻址表达式
-	*/
-	virtual ~IndirectExpression();
-
-	/*
-	* 求值：将内部表达式结果作为变量名再次查询
-	* @getValues: 变量查询函数列表
-	* @return: 间接寻址结果值
-	*/
-	ValueType Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const override;
+	ValueType Evaluate(const ScriptContext& context) const override;
 };
 
 // 常量表达式
-class ConstantExpression : public Expression {
+class ConstantExpression : public ExpressionNode {
 private:
 	// 常量值
 	ValueType value;
@@ -127,24 +118,24 @@ public:
 
 	/*
 	* 求值：直接返回常量值
-	* @getValues: 变量查询函数列表
+	* @context: 变量路由上下文
 	* @return: 常量值
 	*/
-	ValueType Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const override;
+	ValueType Evaluate(const ScriptContext& context) const override;
 };
 
 // 数组表达式
-class ArrayExpression : public Expression {
+class ArrayExpression : public ExpressionNode {
 private:
 	// 元素表达式列表
-	std::vector<std::shared_ptr<Expression>> elements;
+	std::vector<std::shared_ptr<ExpressionNode>> elements;
 
 public:
 	/*
 	* 按元素表达式列表构造数组表达式
 	* @expression: 元素表达式列表
 	*/
-	ArrayExpression(std::vector<std::shared_ptr<Expression>> expression);
+	ArrayExpression(std::vector<std::shared_ptr<ExpressionNode>> expression);
 
 	/*
 	* 析构数组表达式
@@ -153,27 +144,27 @@ public:
 
 	/*
 	* 获取各元素求值结果列表
-	* @getValues: 变量查询函数列表
+	* @context: 变量路由上下文
 	* @return: 各元素值的列表
 	*/
-	std::vector<ValueType> GetElementValues(std::vector < std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const;
+	std::vector<ValueType> GetElementValues(const ScriptContext& context) const;
 
 	/*
 	* 求值：将所有元素打包为数组值
-	* @getValues: 变量查询函数列表
+	* @context: 变量路由上下文
 	* @return: 数组值
 	*/
-	ValueType Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const override;
+	ValueType Evaluate(const ScriptContext& context) const override;
 };
 
 // 单目表达式
-class UnaryExpression : public Expression {
+class UnaryExpression : public ExpressionNode {
 private:
 	// 单目运算符
 	UnaryOperator operand;
 
 	// 操作数表达式
-	std::shared_ptr<Expression> expression;
+	std::shared_ptr<ExpressionNode> expression;
 
 public:
 	/*
@@ -181,7 +172,7 @@ public:
 	* @op: 单目运算符
 	* @operand: 操作数表达式
 	*/
-	UnaryExpression(UnaryOperator op, std::shared_ptr<Expression> operand);
+	UnaryExpression(UnaryOperator op, std::shared_ptr<ExpressionNode> operand);
 
 	/*
 	* 析构单目表达式
@@ -190,10 +181,10 @@ public:
 
 	/*
 	* 求值：对操作数应用单目运算符
-	* @getValues: 变量查询函数列表
+	* @context: 变量路由上下文
 	* @return: 运算结果
 	*/
-	ValueType Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const override;
+	ValueType Evaluate(const ScriptContext& context) const override;
 
 private:
 	/*
@@ -219,13 +210,13 @@ private:
 };
 
 // 双目表达式
-class BinaryExpression : public Expression {
+class BinaryExpression : public ExpressionNode {
 private:
 	// 左操作数表达式
-	std::shared_ptr<Expression> left;
+	std::shared_ptr<ExpressionNode> left;
 
 	// 右操作数表达式
-	std::shared_ptr<Expression> right;
+	std::shared_ptr<ExpressionNode> right;
 
 	// 双目运算符
 	BinaryOperator operand;
@@ -236,7 +227,7 @@ public:
 	* @left, right: 左右操作数表达式
 	* @op: 双目运算符
 	*/
-	BinaryExpression(std::shared_ptr<Expression> left, std::shared_ptr<Expression> right, BinaryOperator op);
+	BinaryExpression(std::shared_ptr<ExpressionNode> left, std::shared_ptr<ExpressionNode> right, BinaryOperator op);
 
 	/*
 	* 析构双目表达式
@@ -245,10 +236,10 @@ public:
 
 	/*
 	* 求值：对左右操作数应用双目运算符
-	* @getValues: 变量查询函数列表
+	* @context: 变量路由上下文
 	* @return: 运算结果
 	*/
-	ValueType Evaluate(std::vector<std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const override;
+	ValueType Evaluate(const ScriptContext& context) const override;
 
 private:
 	/*
@@ -343,33 +334,37 @@ private:
 	}
 };
 
-// 表达式接口
-class Condition {
+// 表达式门面：剧情json里所有的值理论上都是字符串表达式，统一由这个类解析+求值。剧情json的
+// 表达式语法（运算符/字面量/隐式拼接等）继承自老工程的Condition，唯一的语义变化是变量寻址——
+// 老工程的$$(expr)间接寻址语法不再支持，$$name按self./system./local.前缀路由到
+// ScriptContext三个槽位（见ScriptContext注释），".":点号本身不参与分词，只是标识符里的普通
+// 字符，不需要特判。
+class Expression {
 public:
 	/*
-	* 解析条件字符串，构建表达式树
-	* @conditionStr: 条件字符串
+	* 解析表达式字符串，构建表达式树
+	* @expr: 表达式字符串
 	* @return: 解析是否成功
 	*/
-	bool ParseCondition(const std::string& conditionStr);
+	bool Parse(const std::string& expr);
 
 	/*
-	* 对条件求值并返回布尔结果
-	* @getValues: 变量查询函数列表
-	* @return: 条件布尔求值结果
+	* 对表达式求值并返回布尔结果
+	* @context: 变量路由上下文
+	* @return: 布尔求值结果
 	*/
-	bool EvaluateBool(std::vector < std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const;
+	bool EvaluateBool(const ScriptContext& context) const;
 
 	/*
-	* 对条件求值并返回通用类型结果
-	* @getValues: 变量查询函数列表
-	* @return: 条件求值结果
+	* 对表达式求值并返回通用类型结果
+	* @context: 变量路由上下文
+	* @return: 求值结果
 	*/
-	ValueType EvaluateValue(std::vector < std::function<std::pair<bool, ValueType>(const std::string&)>> getValues) const;
+	ValueType EvaluateValue(const ScriptContext& context) const;
 
 private:
 	// 表达式树根节点
-	std::shared_ptr<Expression> root;
+	std::shared_ptr<ExpressionNode> root;
 
 	/*
 	* 将表达式字符串分词
@@ -383,7 +378,7 @@ private:
 	* @tokens: 词元列表
 	* @return: 表达式树根节点
 	*/
-	std::shared_ptr<Expression> ParseExpression(const std::vector<std::string>& tokens);
+	std::shared_ptr<ExpressionNode> ParseExpression(const std::vector<std::string>& tokens);
 
 	/*
 	* 将中缀词元列表转换为后缀（逆波兰）形式
@@ -397,7 +392,7 @@ private:
 	* @postfix: 后缀词元列表
 	* @return: 表达式树根节点
 	*/
-	std::shared_ptr<Expression> ParsePostfix(const std::vector<std::string>& postfix);
+	std::shared_ptr<ExpressionNode> ParsePostfix(const std::vector<std::string>& postfix);
 
 	/*
 	* 判断词元是否为运算符
@@ -439,14 +434,14 @@ private:
 	* @token: 操作数词元
 	* @return: 操作数表达式
 	*/
-	std::shared_ptr<Expression> ParseOperand(const std::string& token);
+	std::shared_ptr<ExpressionNode> ParseOperand(const std::string& token);
 
 	/*
 	* 将词元解析为常量表达式
 	* @token: 常量词元
 	* @return: 常量表达式
 	*/
-	std::shared_ptr<Expression> ParseConstant(const std::string& token);
+	std::shared_ptr<ExpressionNode> ParseConstant(const std::string& token);
 
 	/*
 	* 判断字符是否为运算符字符

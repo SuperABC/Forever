@@ -1,9 +1,9 @@
-﻿#pragma once
+#pragma once
 
 #include "../common/utility.h"
 #include "../common/error.h"
 
-#include "condition.h"
+#include "expression.h"
 
 #include <string>
 
@@ -11,7 +11,10 @@
 #undef GetObject
 
 
-// 变化基类
+// 变化基类。老工程里Change本来就是纯数据类（不含执行逻辑，执行逻辑在调用方按GetType()/
+// dynamic_cast分派），这次42个子类原样保留这个设计——只有字段+getter/setter，没有Apply之类
+// 的虚方法。除了SetValueChange（已实现，见Core/story/story.cpp的ApplyChange分派），其余
+// 41个子类这次都还没有对应的执行分支，等被点名实现时再补。
 class Change {
 public:
 	/*
@@ -32,21 +35,21 @@ public:
 	/*
 	* 获取控制条件
 	*/
-	const Condition& GetCondition() const;
+	const Expression& GetCondition() const;
 
 	/*
 	* 设置控制条件
-	* @condition: 条件对象
+	* @condition: 条件表达式
 	*/
-	void SetCondition(const Condition& condition);
+	void SetCondition(const Expression& condition);
 
 private:
 	// 控制条件
-	Condition condition;
+	Expression condition;
 
 };
 
-// 范围循环（已实现）
+// 范围循环
 class ForRangeChange : public Change {
 public:
 	/*
@@ -55,8 +58,8 @@ public:
 	* @from, to, step: 起始、终止与步长表达式
 	* @changes: 循环体变化列表
 	*/
-	ForRangeChange(std::string var, std::string from, std::string to, std::string step,
-		std::vector<Change*> changes);
+	ForRangeChange(std::string var, Expression from, Expression to, Expression step,
+		std::vector<const Change*> changes);
 
 	/*
 	* 析构范围循环变化
@@ -66,7 +69,7 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 获取循环变量名
@@ -76,17 +79,17 @@ public:
 	/*
 	* 获取起始表达式
 	*/
-	std::string GetFrom() const;
+	const Expression& GetFrom() const;
 
 	/*
 	* 获取终止表达式
 	*/
-	std::string GetTo() const;
+	const Expression& GetTo() const;
 
 	/*
 	* 获取步长表达式
 	*/
-	std::string GetStep() const;
+	const Expression& GetStep() const;
 
 	/*
 	* 获取循环体变化列表
@@ -98,20 +101,20 @@ private:
 	std::string var;
 
 	// 起始表达式
-	std::string from;
+	Expression from;
 
 	// 终止表达式
-	std::string to;
+	Expression to;
 
 	// 步长表达式
-	std::string step;
+	Expression step;
 
-	// 循环体变化列表
+	// 循环体变化列表（不持有所有权，见Milestone::changes的OBJECT_HOLDER约定）
 	std::vector<const Change*> changes;
 
 };
 
-// 占位符（已实现）
+// 占位符
 class PlaceHolderChange : public Change {
 public:
 	/*
@@ -123,7 +126,7 @@ public:
 	* 构造占位符变化
 	* @label: 标签
 	*/
-	PlaceHolderChange(std::string label);
+	PlaceHolderChange(Expression label);
 
 	/*
 	* 析构占位符变化
@@ -133,26 +136,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置标签
 	* @label: 标签
 	*/
-	void SetLabel(std::string label);
+	void SetLabel(Expression label);
 
 	/*
 	* 获取标签
 	*/
-	std::string GetLabel() const;
+	const Expression& GetLabel() const;
 
 private:
 	// 标签
-	std::string label;
+	Expression label;
 
 };
 
-// 全局广播（已实现）
+// 全局广播
 class GlobalMessageChange : public Change {
 public:
 	/*
@@ -164,7 +167,7 @@ public:
 	* 构造全局广播变化
 	* @message: 广播消息内容
 	*/
-	GlobalMessageChange(std::string message);
+	GlobalMessageChange(Expression message);
 
 	/*
 	* 析构全局广播变化
@@ -174,26 +177,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置消息内容
-	* @variable: 消息内容
+	* @message: 消息内容
 	*/
-	void SetMessage(std::string variable);
+	void SetMessage(Expression message);
 
 	/*
 	* 获取消息内容
 	*/
-	std::string GetMessage() const;
+	const Expression& GetMessage() const;
 
 private:
 	// 消息内容
-	std::string message;
+	Expression message;
 
 };
 
-// 游戏结束（已实现）
+// 游戏结束
 class GameEndChange : public Change {
 public:
 	/*
@@ -209,12 +212,12 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 private:
 };
 
-// 变量赋值（已实现）
+// 变量赋值（已实现，见Core/story/story.cpp的ApplyChange分派）
 class SetValueChange : public Change {
 public:
 	/*
@@ -226,7 +229,7 @@ public:
 	* 构造变量赋值变化
 	* @variable, value: 变量名与值表达式
 	*/
-	SetValueChange(std::string variable, std::string value);
+	SetValueChange(std::string variable, Expression value);
 
 	/*
 	* 析构变量赋值变化
@@ -236,7 +239,7 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置变量名
@@ -253,23 +256,23 @@ public:
 	* 设置值表达式
 	* @value: 值表达式
 	*/
-	void SetValue(std::string value);
+	void SetValue(Expression value);
 
 	/*
 	* 获取值表达式
 	*/
-	std::string GetValue() const;
+	const Expression& GetValue() const;
 
 private:
 	// 变量名
 	std::string variable;
 
 	// 值表达式
-	std::string value;
+	Expression value;
 
 };
 
-// 全局设置修改（已实现）
+// 全局设置修改
 class GlobalSettingChange : public Change {
 public:
 	/*
@@ -281,7 +284,7 @@ public:
 	* 构造全局设置修改变化
 	* @setting, value: 设置名与值表达式
 	*/
-	GlobalSettingChange(std::string setting, std::string value);
+	GlobalSettingChange(std::string setting, Expression value);
 
 	/*
 	* 析构全局设置修改变化
@@ -291,7 +294,7 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置设置名
@@ -308,23 +311,23 @@ public:
 	* 设置值表达式
 	* @value: 值表达式
 	*/
-	void SetValue(std::string value);
+	void SetValue(Expression value);
 
 	/*
 	* 获取值表达式
 	*/
-	std::string GetValue() const;
+	const Expression& GetValue() const;
 
 private:
 	// 设置名
 	std::string setting;
 
 	// 值表达式
-	std::string value;
+	Expression value;
 
 };
 
-// 移除变量（已实现）
+// 移除变量
 class RemoveValueChange : public Change {
 public:
 	/*
@@ -346,7 +349,7 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置变量名
@@ -365,7 +368,7 @@ private:
 
 };
 
-// 停用里程碑（已实现）
+// 停用里程碑
 class DeactivateMilestoneChange : public Change {
 public:
 	/*
@@ -387,7 +390,7 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置里程碑名称
@@ -406,7 +409,7 @@ private:
 
 };
 
-// 添加选项（已实现）
+// 添加选项
 class AddOptionChange : public Change {
 public:
 	/*
@@ -418,7 +421,7 @@ public:
 	* 构造添加选项变化
 	* @name, option: 目标名称与选项文本
 	*/
-	AddOptionChange(std::string name, std::string option);
+	AddOptionChange(Expression name, Expression option);
 
 	/*
 	* 析构添加选项变化
@@ -428,40 +431,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置目标名称
 	* @name: 名称
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取目标名称
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置选项文本
 	* @option: 选项文本
 	*/
-	void SetOption(std::string option);
+	void SetOption(Expression option);
 
 	/*
 	* 获取选项文本
 	*/
-	std::string GetOption() const;
+	const Expression& GetOption() const;
 
 private:
 	// 目标名称
-	std::string name;
+	Expression name;
 
 	// 选项文本
-	std::string option;
+	Expression option;
 
 };
 
-// 移除选项（已实现）
+// 移除选项
 class RemoveOptionChange : public Change {
 public:
 	/*
@@ -473,7 +476,7 @@ public:
 	* 构造移除选项变化
 	* @name, option: 目标名称与选项文本
 	*/
-	RemoveOptionChange(std::string name, std::string option);
+	RemoveOptionChange(Expression name, Expression option);
 
 	/*
 	* 析构移除选项变化
@@ -483,40 +486,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置目标名称
 	* @name: 名称
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取目标名称
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置选项文本
 	* @option: 选项文本
 	*/
-	void SetOption(std::string option);
+	void SetOption(Expression option);
 
 	/*
 	* 获取选项文本
 	*/
-	std::string GetOption() const;
+	const Expression& GetOption() const;
 
 private:
 	// 目标名称
-	std::string name;
+	Expression name;
 
 	// 选项文本
-	std::string option;
+	Expression option;
 
 };
 
-// 添加全局选项（已实现）
+// 添加全局选项
 class AddGlobalChange : public Change {
 public:
 	/*
@@ -528,7 +531,7 @@ public:
 	* 构造添加全局选项变化
 	* @option: 选项文本
 	*/
-	AddGlobalChange(std::string option);
+	AddGlobalChange(Expression option);
 
 	/*
 	* 析构添加全局选项变化
@@ -538,26 +541,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置选项文本
 	* @option: 选项文本
 	*/
-	void SetOption(std::string option);
+	void SetOption(Expression option);
 
 	/*
 	* 获取选项文本
 	*/
-	std::string GetOption() const;
+	const Expression& GetOption() const;
 
 private:
 	// 选项文本
-	std::string option;
+	Expression option;
 
 };
 
-// 移除全局选项（已实现）
+// 移除全局选项
 class RemoveGlobalChange : public Change {
 public:
 	/*
@@ -569,7 +572,7 @@ public:
 	* 构造移除全局选项变化
 	* @option: 选项文本
 	*/
-	RemoveGlobalChange(std::string option);
+	RemoveGlobalChange(Expression option);
 
 	/*
 	* 析构移除全局选项变化
@@ -579,26 +582,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置选项文本
 	* @option: 选项文本
 	*/
-	void SetOption(std::string option);
+	void SetOption(Expression option);
 
 	/*
 	* 获取选项文本
 	*/
-	std::string GetOption() const;
+	const Expression& GetOption() const;
 
 private:
 	// 选项文本
-	std::string option;
+	Expression option;
 
 };
 
-// 生成NPC（已实现）
+// 生成NPC
 class SpawnNpcChange : public Change {
 public:
 	/*
@@ -613,8 +616,8 @@ public:
 	* @nick, deposit, phone, home: 昵称、存款、手机号与住所
 	* @jobs, scheduler: 职业列表与调度类型
 	*/
-	SpawnNpcChange(std::string avatar, std::string name, std::string gender, std::string birthday, float height, float weight,
-		std::string nick, int deposit, int phone, std::string home, std::vector<std::string> jobs, std::string scheduler);
+	SpawnNpcChange(Expression avatar, Expression name, Expression gender, Expression birthday, Expression height, Expression weight,
+		Expression nick, Expression deposit, Expression phone, Expression home, std::vector<Expression> jobs, Expression scheduler);
 
 	/*
 	* 析构生成NPC变化
@@ -624,180 +627,180 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置形象标识
 	* @avatar: 形象
 	*/
-	void SetAvatar(std::string avatar);
+	void SetAvatar(Expression avatar);
 
 	/*
 	* 获取形象标识
 	*/
-	std::string GetAvatar() const;
+	const Expression& GetAvatar() const;
 
 	/*
 	* 设置姓名
 	* @name: 姓名
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置性别
 	* @gender: 性别
 	*/
-	void SetGender(std::string gender);
+	void SetGender(Expression gender);
 
 	/*
 	* 获取性别
 	*/
-	std::string GetGender() const;
+	const Expression& GetGender() const;
 
 	/*
 	* 设置生日
 	* @birthday: 生日
 	*/
-	void SetBirthday(std::string birthday);
+	void SetBirthday(Expression birthday);
 
 	/*
 	* 获取生日
 	*/
-	std::string GetBirthday() const;
+	const Expression& GetBirthday() const;
 
 	/*
 	* 设置身高
 	* @height: 身高
 	*/
-	void SetHeight(float height);
+	void SetHeight(Expression height);
 
 	/*
 	* 获取身高
 	*/
-	float GetHeight() const;
+	const Expression& GetHeight() const;
 
 	/*
 	* 设置体重
 	* @weight: 体重
 	*/
-	void SetWeight(float weight);
+	void SetWeight(Expression weight);
 
 	/*
 	* 获取体重
 	*/
-	float GetWeight() const;
+	const Expression& GetWeight() const;
 
 	/*
 	* 设置昵称
 	* @nick: 昵称
 	*/
-	void SetNick(std::string nick);
+	void SetNick(Expression nick);
 
 	/*
 	* 获取昵称
 	*/
-	std::string GetNick() const;
+	const Expression& GetNick() const;
 
 	/*
 	* 设置存款金额
 	* @deposit: 存款
 	*/
-	void SetDeposit(int deposit);
+	void SetDeposit(Expression deposit);
 
 	/*
 	* 获取存款金额
 	*/
-	int GetDeposit() const;
+	const Expression& GetDeposit() const;
 
 	/*
 	* 设置手机号
 	* @phone: 手机号
 	*/
-	void SetPhone(int phone);
+	void SetPhone(Expression phone);
 
 	/*
 	* 获取手机号
 	*/
-	int GetPhone() const;
+	const Expression& GetPhone() const;
 
 	/*
 	* 设置住所
 	* @home: 住所名称
 	*/
-	void SetHome(std::string home);
+	void SetHome(Expression home);
 
 	/*
 	* 获取住所
 	*/
-	std::string GetHome() const;
+	const Expression& GetHome() const;
 
 	/*
 	* 设置职业列表
 	* @jobs: 职业类型标识列表
 	*/
-	void SetJobs(std::vector<std::string> jobs);
+	void SetJobs(std::vector<Expression> jobs);
 
 	/*
 	* 获取职业列表
 	*/
-	std::vector<std::string> GetJobs() const;
+	const std::vector<Expression>& GetJobs() const;
 
 	/*
 	* 设置调度类型
 	* @scheduler: 调度类型标识
 	*/
-	void SetScheduler(std::string scheduler);
+	void SetScheduler(Expression scheduler);
 
 	/*
 	* 获取调度类型
 	*/
-	std::string GetScheduler() const;
+	const Expression& GetScheduler() const;
 
 private:
 	// 形象标识
-	std::string avatar;
+	Expression avatar;
 
 	// 姓名
-	std::string name;
+	Expression name;
 
 	// 性别
-	std::string gender;
+	Expression gender;
 
 	// 生日
-	std::string birthday;
+	Expression birthday;
 
 	// 身高
-	float height;
+	Expression height;
 
 	// 体重
-	float weight;
+	Expression weight;
 
 	// 昵称
-	std::string nick;
+	Expression nick;
 
 	// 存款金额
-	int deposit;
+	Expression deposit;
 
 	// 手机号
-	int phone;
+	Expression phone;
 
 	// 住所
-	std::string home;
+	Expression home;
 
 	// 职业类型标识列表
-	std::vector<std::string> jobs;
+	std::vector<Expression> jobs;
 
 	// 调度类型标识
-	std::string scheduler;
+	Expression scheduler;
 
 };
 
-// 移除NPC（已实现）
+// 移除NPC
 class RemoveNpcChange : public Change {
 public:
 	/*
@@ -809,7 +812,7 @@ public:
 	* 构造移除NPC变化
 	* @name: NPC姓名
 	*/
-	RemoveNpcChange(std::string name);
+	RemoveNpcChange(Expression name);
 
 	/*
 	* 析构移除NPC变化
@@ -819,26 +822,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置NPC姓名
 	* @name: 姓名
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取NPC姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 private:
 	// NPC姓名
-	std::string name;
+	Expression name;
 
 };
 
-// 瞬移市民（已实现）
+// 瞬移市民
 class TeleportCitizenChange : public Change {
 public:
 	/*
@@ -850,7 +853,7 @@ public:
 	* 构造瞬移市民变化
 	* @name, destination: 市民姓名与目标房间名称
 	*/
-	TeleportCitizenChange(std::string name, std::string destination);
+	TeleportCitizenChange(Expression name, Expression destination);
 
 	/*
 	* 析构瞬移市民变化
@@ -860,40 +863,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置市民姓名
 	* @name: 姓名
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取市民姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置目标房间名称
 	* @destination: 名称
 	*/
-	void SetDestination(std::string destination);
+	void SetDestination(Expression destination);
 
 	/*
 	* 获取目标房间名称
 	*/
-	std::string GetDestination() const;
+	const Expression& GetDestination() const;
 
 private:
 	// 市民姓名
-	std::string name;
+	Expression name;
 
 	// 目标房间名称
-	std::string destination;
+	Expression destination;
 
 };
 
-// NPC自动导航（已实现）
+// NPC自动导航
 class NPCNavigateChange : public Change {
 public:
 	/*
@@ -905,7 +908,7 @@ public:
 	* 构造NPC自动导航变化
 	* @name, destination: NPC姓名与目标位置名称
 	*/
-	NPCNavigateChange(std::string name, std::string destination);
+	NPCNavigateChange(Expression name, Expression destination);
 
 	/*
 	* 析构NPC自动导航变化
@@ -915,40 +918,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置NPC姓名
 	* @name: 姓名
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取NPC姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置目标位置名称
 	* @destination: 名称
 	*/
-	void SetDestination(std::string destination);
+	void SetDestination(Expression destination);
 
 	/*
 	* 获取目标位置名称
 	*/
-	std::string GetDestination() const;
+	const Expression& GetDestination() const;
 
 private:
 	// NPC姓名
-	std::string name;
+	Expression name;
 
 	// 目标位置名称
-	std::string destination;
+	Expression destination;
 
 };
 
-// 瞬移角色（已实现）
+// 瞬移角色
 class TeleportPlayerChange : public Change {
 public:
 	/*
@@ -960,7 +963,7 @@ public:
 	* 构造瞬移角色变化
 	* @destination: 目标房间名称
 	*/
-	TeleportPlayerChange(std::string destination);
+	TeleportPlayerChange(Expression destination);
 
 	/*
 	* 析构瞬移角色变化
@@ -970,26 +973,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置目标房间名称
 	* @destination: 名称
 	*/
-	void SetDestination(std::string destination);
+	void SetDestination(Expression destination);
 
 	/*
 	* 获取目标房间名称
 	*/
-	std::string GetDestination() const;
+	const Expression& GetDestination() const;
 
 private:
 	// 目标房间名称
-	std::string destination;
+	Expression destination;
 
 };
 
-// 打开商店（已实现）
+// 打开商店
 class OpenShopChange : public Change {
 public:
 	/*
@@ -1001,7 +1004,7 @@ public:
 	* 构造打开商店变化
 	* @saler: 售货员姓名
 	*/
-	OpenShopChange(std::string saler);
+	OpenShopChange(Expression saler);
 
 	/*
 	* 析构打开商店变化
@@ -1011,26 +1014,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置售货员姓名
 	* @saler: 姓名
 	*/
-	void SetSaler(std::string saler);
+	void SetSaler(Expression saler);
 
 	/*
 	* 获取售货员姓名
 	*/
-	std::string GetSaler() const;
+	const Expression& GetSaler() const;
 
 private:
 	// 售货员姓名
-	std::string saler;
+	Expression saler;
 
 };
 
-// 启动小游戏（已实现）
+// 启动小游戏
 class StartPuzzleChange : public Change {
 public:
 	/*
@@ -1042,7 +1045,7 @@ public:
 	* 构造启动小游戏变化
 	* @puzzle: 小游戏类型标识
 	*/
-	StartPuzzleChange(std::string puzzle);
+	StartPuzzleChange(Expression puzzle);
 
 	/*
 	* 析构启动小游戏变化
@@ -1052,26 +1055,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置小游戏类型标识
 	* @puzzle: 标识
 	*/
-	void SetPuzzle(std::string puzzle);
+	void SetPuzzle(Expression puzzle);
 
 	/*
 	* 获取小游戏类型标识
 	*/
-	std::string GetPuzzle() const;
+	const Expression& GetPuzzle() const;
 
 private:
 	// 小游戏类型标识
-	std::string puzzle;
+	Expression puzzle;
 
 };
 
-// 进入载具（已实现）
+// 进入载具
 class EnterVehicleChange : public Change {
 public:
 	/*
@@ -1083,7 +1086,7 @@ public:
 	* 构造进入载具变化
 	* @vehicle: 载具名称
 	*/
-	EnterVehicleChange(std::string vehicle);
+	EnterVehicleChange(Expression vehicle);
 
 	/*
 	* 析构进入载具变化
@@ -1093,26 +1096,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置载具名称
 	* @vehicle: 名称
 	*/
-	void SetVehicle(std::string vehicle);
+	void SetVehicle(Expression vehicle);
 
 	/*
 	* 获取载具名称
 	*/
-	std::string GetVehicle() const;
+	const Expression& GetVehicle() const;
 
 private:
 	// 载具名称
-	std::string vehicle;
+	Expression vehicle;
 
 };
 
-// 离开载具（已实现）
+// 离开载具
 class LeaveVehicleChange : public Change {
 public:
 	/*
@@ -1124,7 +1127,7 @@ public:
 	* 构造离开载具变化
 	* @vehicle: 载具名称
 	*/
-	LeaveVehicleChange(std::string vehicle);
+	LeaveVehicleChange(Expression vehicle);
 
 	/*
 	* 析构离开载具变化
@@ -1134,26 +1137,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置载具名称
 	* @vehicle: 名称
 	*/
-	void SetVehicle(std::string vehicle);
+	void SetVehicle(Expression vehicle);
 
 	/*
 	* 获取载具名称
 	*/
-	std::string GetVehicle() const;
+	const Expression& GetVehicle() const;
 
 private:
 	// 载具名称
-	std::string vehicle;
+	Expression vehicle;
 
 };
 
-// 创建计时器（已实现）
+// 创建计时器
 class CreateTimerChange : public Change {
 public:
 	/*
@@ -1166,7 +1169,7 @@ public:
 	* @name, time: 计时器名称与目标时刻
 	* @category, label: 所属脚本类型与实体名称
 	*/
-	CreateTimerChange(std::string name, std::string time, std::string category, std::string label);
+	CreateTimerChange(Expression name, Expression time, Expression category, Expression label);
 
 	/*
 	* 析构创建计时器变化
@@ -1176,68 +1179,68 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置计时器名称
 	* @name: 名称
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取计时器名称
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置目标时刻
 	* @time: 时刻字符串
 	*/
-	void SetTime(std::string time);
+	void SetTime(Expression time);
 
 	/*
 	* 获取目标时刻
 	*/
-	std::string GetTime() const;
+	const Expression& GetTime() const;
 
 	/*
 	* 设置所属脚本类型
 	* @category: 类型标识
 	*/
-	void SetCategory(std::string category);
+	void SetCategory(Expression category);
 
 	/*
 	* 获取所属脚本类型
 	*/
-	std::string GetCategory() const;
+	const Expression& GetCategory() const;
 
 	/*
 	* 设置所属实体名称
 	* @label: 名称
 	*/
-	void SetLabel(std::string label);
+	void SetLabel(Expression label);
 
 	/*
 	* 获取所属实体名称
 	*/
-	std::string GetLabel() const;
+	const Expression& GetLabel() const;
 
 private:
 	// 计时器名称
-	std::string name;
+	Expression name;
 
 	// 目标时刻
-	std::string time;
+	Expression time;
 
 	// 所属脚本类型
-	std::string category;
+	Expression category;
 
 	// 所属实体名称
-	std::string label;
+	Expression label;
 
 };
 
-// 移除计时器（已实现）
+// 移除计时器
 class RemoveTimerChange : public Change {
 public:
 	/*
@@ -1249,7 +1252,7 @@ public:
 	* 构造移除计时器变化
 	* @name: 计时器名称
 	*/
-	RemoveTimerChange(std::string name);
+	RemoveTimerChange(Expression name);
 
 	/*
 	* 析构移除计时器变化
@@ -1259,26 +1262,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置计时器名称
 	* @name: 名称
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取计时器名称
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 private:
 	// 计时器名称
-	std::string name;
+	Expression name;
 
 };
 
-// 启动电梯（已实现）
+// 启动电梯
 class LaunchElevatorChange : public Change {
 public:
 	/*
@@ -1290,7 +1293,7 @@ public:
 	* 构造启动电梯变化
 	* @building, elevator, command: 建筑名称、电梯名称与指令
 	*/
-	LaunchElevatorChange(std::string building, std::string elevator, std::string command);
+	LaunchElevatorChange(Expression building, Expression elevator, Expression command);
 
 	/*
 	* 析构启动电梯变化
@@ -1300,54 +1303,54 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置建筑名称
 	* @building: 名称
 	*/
-	void SetBuilding(std::string building);
+	void SetBuilding(Expression building);
 
 	/*
 	* 获取建筑名称
 	*/
-	std::string GetBuilding() const;
+	const Expression& GetBuilding() const;
 
 	/*
 	* 设置电梯名称
 	* @elevator: 名称
 	*/
-	void SetElevator(std::string elevator);
+	void SetElevator(Expression elevator);
 
 	/*
 	* 获取电梯名称
 	*/
-	std::string GetElevator() const;
+	const Expression& GetElevator() const;
 
 	/*
 	* 设置指令
 	* @command: 指令字符串
 	*/
-	void SetCommand(std::string command);
+	void SetCommand(Expression command);
 
 	/*
 	* 获取指令
 	*/
-	std::string GetCommand() const;
+	const Expression& GetCommand() const;
 
 private:
 	// 建筑名称
-	std::string building;
+	Expression building;
 
 	// 电梯名称
-	std::string elevator;
+	Expression elevator;
 
 	// 指令
-	std::string command;
+	Expression command;
 
 };
 
-// 播放视频（已实现）
+// 播放视频
 class PlayVideoChange : public Change {
 public:
 	/*
@@ -1359,7 +1362,7 @@ public:
 	* 构造播放视频变化
 	* @path: 视频文件路径
 	*/
-	PlayVideoChange(std::string path);
+	PlayVideoChange(Expression path);
 
 	/*
 	* 析构播放视频变化
@@ -1369,26 +1372,26 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置视频文件路径
 	* @path: 路径
 	*/
-	void SetPath(std::string path);
+	void SetPath(Expression path);
 
 	/*
 	* 获取视频文件路径
 	*/
-	std::string GetPath() const;
+	const Expression& GetPath() const;
 
 private:
 	// 视频文件路径
-	std::string path;
+	Expression path;
 
 };
 
-// 播放背景音乐（已实现）
+// 播放背景音乐
 class PlayBgmChange : public Change {
 public:
 	/*
@@ -1400,7 +1403,7 @@ public:
 	* 构造播放背景音乐变化
 	* @bgm, loop: 背景音乐标识与是否循环播放
 	*/
-	PlayBgmChange(std::string bgm, bool loop = true);
+	PlayBgmChange(Expression bgm, Expression loop);
 
 	/*
 	* 析构播放背景音乐变化
@@ -1410,40 +1413,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置背景音乐标识
 	* @bgm: 标识
 	*/
-	void SetBgm(std::string bgm);
+	void SetBgm(Expression bgm);
 
 	/*
 	* 获取背景音乐标识
 	*/
-	std::string GetBgm() const;
+	const Expression& GetBgm() const;
 
 	/*
 	* 设置是否循环播放
 	* @loop: 是否循环
 	*/
-	void SetLoop(bool loop);
+	void SetLoop(Expression loop);
 
 	/*
 	* 获取是否循环播放
 	*/
-	bool GetLoop() const;
+	const Expression& GetLoop() const;
 
 private:
 	// 背景音乐标识
-	std::string bgm;
+	Expression bgm;
 
 	// 是否循环播放
-	bool loop;
+	Expression loop;
 
 };
 
-// 停止背景音乐（已实现）
+// 停止背景音乐
 class StopBgmChange : public Change {
 public:
 	/*
@@ -1459,12 +1462,12 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 private:
 };
 
-// 存款收支（已实现）
+// 存款收支
 class BankTransactionChange : public Change {
 public:
 	/*
@@ -1477,7 +1480,7 @@ public:
 	* @name: 收款人姓名（空字符串表示玩家）
 	* @amount: 金额（正数存入，负数取出）
 	*/
-	BankTransactionChange(std::string name, int amount);
+	BankTransactionChange(Expression name, Expression amount);
 
 	/*
 	* 析构存款收支变化
@@ -1487,40 +1490,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置收款人姓名
 	* @name: 姓名（空字符串表示玩家）
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取收款人姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置金额
 	* @amount: 金额
 	*/
-	void SetAmount(int amount);
+	void SetAmount(Expression amount);
 
 	/*
 	* 获取金额
 	*/
-	int GetAmount() const;
+	const Expression& GetAmount() const;
 
 private:
 	// 收款人姓名（空字符串表示玩家）
-	std::string name;
+	Expression name;
 
 	// 金额
-	int amount;
+	Expression amount;
 
 };
 
-// 给予房产（已实现）
+// 给予房产
 class GiveEstateChange : public Change {
 public:
 	/*
@@ -1534,7 +1537,7 @@ public:
 	* @name: 接收者姓名（空字符串表示玩家）
 	* @force: 是否强制覆盖已有归属
 	*/
-	GiveEstateChange(std::string estate, std::string name, bool force = true);
+	GiveEstateChange(Expression estate, Expression name, Expression force);
 
 	/*
 	* 析构给予房产变化
@@ -1544,54 +1547,54 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置房产名称
 	* @estate: 名称
 	*/
-	void SetEstate(std::string estate);
+	void SetEstate(Expression estate);
 
 	/*
 	* 获取房产名称
 	*/
-	std::string GetEstate() const;
+	const Expression& GetEstate() const;
 
 	/*
 	* 设置接收者姓名
 	* @name: 姓名（空字符串表示玩家）
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取接收者姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置是否强制转移
 	* @force: 是否强制
 	*/
-	void SetForce(bool force);
+	void SetForce(Expression force);
 
 	/*
 	* 获取是否强制转移
 	*/
-	bool GetForce() const;
+	const Expression& GetForce() const;
 
 private:
 	// 房产名称
-	std::string estate;
+	Expression estate;
 
 	// 接收者姓名（空字符串表示玩家）
-	std::string name;
+	Expression name;
 
 	// 是否强制覆盖已有归属
-	bool force;
+	Expression force;
 
 };
 
-// 移除房产（已实现）
+// 移除房产
 class RemoveEstateChange : public Change {
 public:
 	/*
@@ -1604,7 +1607,7 @@ public:
 	* @estate: 房产名称
 	* @name: 当前所有者姓名（空字符串表示玩家）
 	*/
-	RemoveEstateChange(std::string estate, std::string name);
+	RemoveEstateChange(Expression estate, Expression name);
 
 	/*
 	* 析构移除房产变化
@@ -1614,40 +1617,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置房产名称
 	* @estate: 名称
 	*/
-	void SetEstate(std::string estate);
+	void SetEstate(Expression estate);
 
 	/*
 	* 获取房产名称
 	*/
-	std::string GetEstate() const;
+	const Expression& GetEstate() const;
 
 	/*
 	* 设置当前所有者姓名
 	* @name: 姓名（空字符串表示玩家）
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取当前所有者姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 private:
 	// 房产名称
-	std::string estate;
+	Expression estate;
 
 	// 当前所有者姓名（空字符串表示玩家）
-	std::string name;
+	Expression name;
 
 };
 
-// 给予载具（已实现）
+// 给予载具
 class GiveVehicleChange : public Change {
 public:
 	/*
@@ -1661,7 +1664,7 @@ public:
 	* @name: 接收者姓名（空字符串表示玩家）
 	* @force: 是否强制覆盖已有归属
 	*/
-	GiveVehicleChange(std::string vehicle, std::string name, bool force = true);
+	GiveVehicleChange(Expression vehicle, Expression name, Expression force);
 
 	/*
 	* 析构给予载具变化
@@ -1671,54 +1674,54 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置载具名称
 	* @vehicle: 名称
 	*/
-	void SetVehicle(std::string vehicle);
+	void SetVehicle(Expression vehicle);
 
 	/*
 	* 获取载具名称
 	*/
-	std::string GetVehicle() const;
+	const Expression& GetVehicle() const;
 
 	/*
 	* 设置接收者姓名
 	* @name: 姓名（空字符串表示玩家）
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取接收者姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 	/*
 	* 设置是否强制转移
 	* @force: 是否强制
 	*/
-	void SetForce(bool force);
+	void SetForce(Expression force);
 
 	/*
 	* 获取是否强制转移
 	*/
-	bool GetForce() const;
+	const Expression& GetForce() const;
 
 private:
 	// 载具名称
-	std::string vehicle;
+	Expression vehicle;
 
 	// 接收者姓名（空字符串表示玩家）
-	std::string name;
+	Expression name;
 
 	// 是否强制覆盖已有归属
-	bool force;
+	Expression force;
 
 };
 
-// 移除载具（已实现）
+// 移除载具
 class RemoveVehicleChange : public Change {
 public:
 	/*
@@ -1731,7 +1734,7 @@ public:
 	* @vehicle: 载具名称
 	* @name: 当前所有者姓名（空字符串表示玩家）
 	*/
-	RemoveVehicleChange(std::string vehicle, std::string name);
+	RemoveVehicleChange(Expression vehicle, Expression name);
 
 	/*
 	* 析构移除载具变化
@@ -1741,40 +1744,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置载具名称
 	* @vehicle: 名称
 	*/
-	void SetVehicle(std::string vehicle);
+	void SetVehicle(Expression vehicle);
 
 	/*
 	* 获取载具名称
 	*/
-	std::string GetVehicle() const;
+	const Expression& GetVehicle() const;
 
 	/*
 	* 设置当前所有者姓名
 	* @name: 姓名（空字符串表示玩家）
 	*/
-	void SetName(std::string name);
+	void SetName(Expression name);
 
 	/*
 	* 获取当前所有者姓名
 	*/
-	std::string GetName() const;
+	const Expression& GetName() const;
 
 private:
 	// 载具名称
-	std::string vehicle;
+	Expression vehicle;
 
 	// 当前所有者姓名（空字符串表示玩家）
-	std::string name;
+	Expression name;
 
 };
 
-// 给予物品（已实现）
+// 给予物品
 class GiveObjectChange : public Change {
 public:
 	/*
@@ -1787,7 +1790,7 @@ public:
 	* @object: 资产类型标识
 	* @num: 数量
 	*/
-	GiveObjectChange(std::string object, int num);
+	GiveObjectChange(Expression object, Expression num);
 
 	/*
 	* 析构给予物品资产变化
@@ -1797,40 +1800,40 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置资产类型标识
 	* @object: 标识
 	*/
-	void SetObject(std::string object);
+	void SetObject(Expression object);
 
 	/*
 	* 获取资产类型标识
 	*/
-	std::string GetObject() const;
+	const Expression& GetObject() const;
 
 	/*
 	* 设置数量
 	* @num: 数量
 	*/
-	void SetNum(int num);
+	void SetNum(Expression num);
 
 	/*
 	* 获取数量
 	*/
-	int GetNum() const;
+	const Expression& GetNum() const;
 
 private:
 	// 资产类型标识
-	std::string object;
+	Expression object;
 
 	// 数量
-	int num;
+	Expression num;
 
 };
 
-// 移除物品（已实现）
+// 移除物品
 class RemoveObjectChange : public Change {
 public:
 	/*
@@ -1844,7 +1847,7 @@ public:
 	* @num: 数量
 	* @force: 数量不足时是否删除已有数量
 	*/
-	RemoveObjectChange(std::string object, int num, bool force = false);
+	RemoveObjectChange(Expression object, Expression num, Expression force);
 
 	/*
 	* 析构移除物品资产变化
@@ -1854,50 +1857,50 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置资产类型标识
 	* @object: 标识
 	*/
-	void SetObject(std::string object);
+	void SetObject(Expression object);
 
 	/*
 	* 获取资产类型标识
 	*/
-	std::string GetObject() const;
+	const Expression& GetObject() const;
 
 	/*
 	* 设置数量
 	* @num: 数量
 	*/
-	void SetNum(int num);
+	void SetNum(Expression num);
 
 	/*
 	* 获取数量
 	*/
-	int GetNum() const;
+	const Expression& GetNum() const;
 
 	/*
 	* 设置数量不足时是否强制删除
 	* @force: 是否强制
 	*/
-	void SetForce(bool force);
+	void SetForce(Expression force);
 
 	/*
 	* 获取数量不足时是否强制删除
 	*/
-	bool GetForce() const;
+	const Expression& GetForce() const;
 
 private:
 	// 资产类型标识
-	std::string object;
+	Expression object;
 
 	// 数量
-	int num;
+	Expression num;
 
 	// 数量不足时是否强制删除已有数量
-	bool force;
+	Expression force;
 
 };
 
@@ -1913,7 +1916,7 @@ public:
 	* 构造受伤变化
 	* @wound: 伤势描述
 	*/
-	PlayerInjuredChange(std::string wound);
+	PlayerInjuredChange(Expression wound);
 
 	/*
 	* 析构受伤变化
@@ -1923,22 +1926,22 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置伤势描述
 	* @wound: 伤势
 	*/
-	void SetWound(std::string wound);
+	void SetWound(Expression wound);
 
 	/*
 	* 获取伤势描述
 	*/
-	std::string GetWound() const;
+	const Expression& GetWound() const;
 
 private:
 	// 伤势描述
-	std::string wound;
+	Expression wound;
 
 };
 
@@ -1954,7 +1957,7 @@ public:
 	* 构造痊愈变化
 	* @wound: 痊愈的伤势
 	*/
-	PlayerCuredChange(std::string wound);
+	PlayerCuredChange(Expression wound);
 
 	/*
 	* 析构痊愈变化
@@ -1964,22 +1967,22 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置痊愈的伤势
 	* @wound: 伤势
 	*/
-	void SetWound(std::string wound);
+	void SetWound(Expression wound);
 
 	/*
 	* 获取痊愈的伤势
 	*/
-	std::string GetWound() const;
+	const Expression& GetWound() const;
 
 private:
 	// 痊愈的伤势
-	std::string wound;
+	Expression wound;
 
 };
 
@@ -1995,7 +1998,7 @@ public:
 	* 构造生病变化
 	* @illness: 病症描述
 	*/
-	PlayerIllChange(std::string illness);
+	PlayerIllChange(Expression illness);
 
 	/*
 	* 析构生病变化
@@ -2005,22 +2008,22 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置病症描述
 	* @illness: 病症
 	*/
-	void SetIllness(std::string illness);
+	void SetIllness(Expression illness);
 
 	/*
 	* 获取病症描述
 	*/
-	std::string GetIllness() const;
+	const Expression& GetIllness() const;
 
 private:
 	// 病症描述
-	std::string illness;
+	Expression illness;
 
 };
 
@@ -2036,7 +2039,7 @@ public:
 	* 构造康复变化
 	* @illness: 康复的病症
 	*/
-	PlayerRecoverChange(std::string illness);
+	PlayerRecoverChange(Expression illness);
 
 	/*
 	* 析构康复变化
@@ -2046,22 +2049,22 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置康复的病症
 	* @illness: 病症
 	*/
-	void SetIllness(std::string illness);
+	void SetIllness(Expression illness);
 
 	/*
 	* 获取康复的病症
 	*/
-	std::string GetIllness() const;
+	const Expression& GetIllness() const;
 
 private:
 	// 康复的病症
-	std::string illness;
+	Expression illness;
 
 };
 
@@ -2077,7 +2080,7 @@ public:
 	* 构造强制睡眠变化
 	* @hour: 睡眠时长（小时）
 	*/
-	PlayerSleepChange(int hour);
+	PlayerSleepChange(Expression hour);
 
 	/*
 	* 析构强制睡眠变化
@@ -2087,22 +2090,22 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置睡眠时长
 	* @hour: 小时数
 	*/
-	void SetHour(int hour);
+	void SetHour(Expression hour);
 
 	/*
 	* 获取睡眠时长
 	*/
-	int GetHour() const;
+	const Expression& GetHour() const;
 
 private:
 	// 睡眠时长（小时）
-	int hour;
+	Expression hour;
 
 };
 
@@ -2118,7 +2121,7 @@ public:
 	* 构造变化时间变化
 	* @delta: 时间偏移量表达式字符串
 	*/
-	ChangeTimeChange(std::string delta);
+	ChangeTimeChange(Expression delta);
 
 	/*
 	* 析构变化时间变化
@@ -2128,22 +2131,22 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置时间偏移量
 	* @delta: 偏移量表达式字符串
 	*/
-	void SetDelta(std::string delta);
+	void SetDelta(Expression delta);
 
 	/*
 	* 获取时间偏移量
 	*/
-	std::string GetDelta() const;
+	const Expression& GetDelta() const;
 
 private:
-	// 时间偏移量表达式字符串，求值后交给Time解析
-	std::string delta;
+	// 时间偏移量表达式，求值后交给Time解析
+	Expression delta;
 
 };
 
@@ -2159,7 +2162,7 @@ public:
 	* 构造变化修炼变化
 	* @method, level: 修炼方式与等级
 	*/
-	ChangeCultivationChange(std::string method, int level);
+	ChangeCultivationChange(Expression method, Expression level);
 
 	/*
 	* 析构变化修炼变化
@@ -2169,36 +2172,36 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置修炼方式
 	* @method: 方式
 	*/
-	void SetMethod(std::string method);
+	void SetMethod(Expression method);
 
 	/*
 	* 获取修炼方式
 	*/
-	std::string GetMethod() const;
+	const Expression& GetMethod() const;
 
 	/*
 	* 设置等级
 	* @level: 等级
 	*/
-	void SetLevel(int level);
+	void SetLevel(Expression level);
 
 	/*
 	* 获取等级
 	*/
-	int GetLevel() const;
+	const Expression& GetLevel() const;
 
 private:
 	// 修炼方式
-	std::string method;
+	Expression method;
 
 	// 等级
-	int level;
+	Expression level;
 
 };
 
@@ -2214,7 +2217,7 @@ public:
 	* 构造变化通缉变化
 	* @reason, level: 通缉原因与等级
 	*/
-	ChangeWantedChange(std::string reason, int level);
+	ChangeWantedChange(Expression reason, Expression level);
 
 	/*
 	* 析构变化通缉变化
@@ -2224,36 +2227,36 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置通缉原因
 	* @reason: 原因
 	*/
-	void SetReason(std::string reason);
+	void SetReason(Expression reason);
 
 	/*
 	* 获取通缉原因
 	*/
-	std::string GetReason() const;
+	const Expression& GetReason() const;
 
 	/*
 	* 设置通缉等级
 	* @level: 等级
 	*/
-	void SetLevel(int level);
+	void SetLevel(Expression level);
 
 	/*
 	* 获取通缉等级
 	*/
-	int GetLevel() const;
+	const Expression& GetLevel() const;
 
 private:
 	// 通缉原因
-	std::string reason;
+	Expression reason;
 
 	// 通缉等级
-	int level;
+	Expression level;
 
 };
 
@@ -2269,7 +2272,7 @@ public:
 	* 构造变化天气变化
 	* @weather: 天气类型
 	*/
-	ChangeWeatherChange(std::string weather);
+	ChangeWeatherChange(Expression weather);
 
 	/*
 	* 析构变化天气变化
@@ -2279,22 +2282,22 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置天气类型
 	* @weather: 天气
 	*/
-	void SetWeather(std::string weather);
+	void SetWeather(Expression weather);
 
 	/*
 	* 获取天气类型
 	*/
-	std::string GetWeather() const;
+	const Expression& GetWeather() const;
 
 private:
 	// 天气类型
-	std::string weather;
+	Expression weather;
 
 };
 
@@ -2310,7 +2313,7 @@ public:
 	* 构造变化政策变化
 	* @policy: 政策名称
 	*/
-	ChangePolicyChange(std::string policy);
+	ChangePolicyChange(Expression policy);
 
 	/*
 	* 析构变化政策变化
@@ -2320,64 +2323,21 @@ public:
 	/*
 	* 变化类型
 	*/
-	virtual const std::string& GetType() const;
+	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置政策名称
 	* @policy: 名称
 	*/
-	void SetPolicy(std::string policy);
+	void SetPolicy(Expression policy);
 
 	/*
 	* 获取政策名称
 	*/
-	std::string GetPolicy() const;
+	const Expression& GetPolicy() const;
 
 private:
 	// 政策名称
-	std::string policy;
+	Expression policy;
 
 };
-
-using ChangeValue = std::variant<
-	GlobalMessageChange,
-	GameEndChange,
-	SetValueChange,
-	RemoveValueChange,
-	DeactivateMilestoneChange,
-	AddOptionChange,
-	RemoveOptionChange,
-	AddGlobalChange,
-	RemoveGlobalChange,
-	SpawnNpcChange,
-	RemoveNpcChange,
-	TeleportCitizenChange,
-	NPCNavigateChange,
-	TeleportPlayerChange,
-	OpenShopChange,
-	StartPuzzleChange,
-	EnterVehicleChange,
-	LeaveVehicleChange,
-	CreateTimerChange,
-	LaunchElevatorChange,
-	PlayVideoChange,
-	PlayBgmChange,
-	StopBgmChange,
-	BankTransactionChange,
-	GiveEstateChange,
-	RemoveEstateChange,
-	GiveVehicleChange,
-	RemoveVehicleChange,
-	GiveObjectChange,
-	RemoveObjectChange,
-	PlayerInjuredChange,
-	PlayerCuredChange,
-	PlayerIllChange,
-	PlayerRecoverChange,
-	PlayerSleepChange,
-	ChangeTimeChange,
-	ChangeCultivationChange,
-	ChangeWantedChange,
-	ChangeWeatherChange,
-	ChangePolicyChange
->;

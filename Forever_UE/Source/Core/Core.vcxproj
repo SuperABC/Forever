@@ -91,6 +91,9 @@
     <ClCompile Include="map\map.cpp" />
     <ClCompile Include="populace\citizen.cpp" />
     <ClCompile Include="populace\populace.cpp" />
+    <ClCompile Include="story\milestone.cpp" />
+    <ClCompile Include="story\script.cpp" />
+    <ClCompile Include="story\story.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\config.h" />
@@ -104,6 +107,9 @@
     <ClInclude Include="map\map.h" />
     <ClInclude Include="populace\citizen.h" />
     <ClInclude Include="populace\populace.h" />
+    <ClInclude Include="story\milestone.h" />
+    <ClInclude Include="story\script.h" />
+    <ClInclude Include="story\story.h" />
 </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

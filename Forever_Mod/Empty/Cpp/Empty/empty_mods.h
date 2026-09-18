@@ -172,6 +172,12 @@ public:
 	virtual const char* GetName() override { return name.data(); }
 	virtual void ApplyArgs(const std::string& args) override { name = "empty(" + args + ")"; }
 
+	// 空占位，不持有任何姓名词库，按接口约定的"失败"语义统一返回空字符串。
+	virtual std::string GetSurname(const std::string& fullName) const override { return ""; }
+	virtual std::string GenerateName(bool allowMale, bool allowFemale, bool allowNeutral) const override { return ""; }
+	virtual std::string GenerateName(const std::string& surname,
+		bool allowMale, bool allowFemale, bool allowNeutral) const override { return ""; }
+
 private:
 	std::string name;
 };

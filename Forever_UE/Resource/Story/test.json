@@ -1,0 +1,18 @@
+{
+	// 阶段4 Script系统联调用主线剧情：游戏开始时打印"helloworld"，然后把变量test设为1。
+	"milestones": [
+		{
+			"milestone": "hello_world",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "set_value", "variable": "test", "value": "1" } ],
+			"dialogs": [
+				{ "list": [ { "speaker": "", "content": "helloworld", "label": "", "voice": "" } ] }
+			],
+			"subsequences": []
+		}
+	]
+}

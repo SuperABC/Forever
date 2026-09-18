@@ -6,6 +6,7 @@
 
 class Map;
 class Populace;
+class Story;
 
 class USceneComponent;
 class UForeverAssetFrameworkComponent;
@@ -71,6 +72,10 @@ protected:
 	// 通过Map::Checkin(*populace)单向读取，和老工程GlobalBase同时持有map/populace两个
 	// 顶层对象、由它做两者之间编排是同一个分工，详见Source/Core/populace/populace.md。
 	Populace* populace = nullptr;
+
+	// 阶段4 Story落地：和map/populace平级持有，生命周期管理方式完全一致(EnsureMapGenerated
+	// 尾部创建、EndPlay/析构函数里delete)，详见Source/Core/story/story.md。
+	Story* story = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<USceneComponent> sceneRoot;

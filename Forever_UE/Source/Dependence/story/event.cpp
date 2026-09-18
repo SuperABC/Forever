@@ -1,4 +1,4 @@
-﻿#include "event.h"
+#include "event.h"
 
 
 using namespace std;
@@ -12,12 +12,21 @@ Event::~Event() {
 
 }
 
-const Condition& Event::GetCondition() const {
+bool Event::Match(Event* e, const ScriptContext& context) {
+	if (!e) return false;
+	return GetType() == e->GetType();
+}
+
+const Expression& Event::GetCondition() const {
 	return condition;
 }
 
-void Event::SetCondition(const Condition& condition) {
+void Event::SetCondition(const Expression& condition) {
 	this->condition = condition;
+}
+
+pair<bool, ValueType> Event::GetLocalValue(const string& name) const {
+	return { false, ValueType() };
 }
 
 GameStartEvent::GameStartEvent() {
@@ -33,15 +42,8 @@ const string& GameStartEvent::GetType() const {
 	return type;
 }
 
-bool GameStartEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-	return true;
-}
-
-GlobalMessageEvent::GlobalMessageEvent(string message) :
-	message(message) {
+GlobalMessageEvent::GlobalMessageEvent(Expression message) :
+	message(move(message)) {
 
 }
 
@@ -54,39 +56,16 @@ const string& GlobalMessageEvent::GetType() const {
 	return type;
 }
 
-bool GlobalMessageEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<GlobalMessageEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (message.size() > 0 && other->message.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(message);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->message);
-	}
-
-	return result;
+void GlobalMessageEvent::SetMessage(Expression message) {
+	this->message = move(message);
 }
 
-void GlobalMessageEvent::SetMessage(string message) {
-	this->message = message;
-}
-
-string GlobalMessageEvent::GetMessage() const {
+const Expression& GlobalMessageEvent::GetMessage() const {
 	return message;
 }
 
-OptionDialogEvent::OptionDialogEvent(string name, string option) :
-	id(-1), name(name), option(option) {
-
-}
-
-OptionDialogEvent::OptionDialogEvent(int id, string option) :
-	id(id), name(""), option(option) {
+OptionDialogEvent::OptionDialogEvent(Expression name, Expression option) :
+	name(move(name)), option(move(option)) {
 
 }
 
@@ -99,60 +78,24 @@ const string& OptionDialogEvent::GetType() const {
 	return type;
 }
 
-bool OptionDialogEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<OptionDialogEvent*>(e);
-	if (!other) return false;
-
-	if (id == -1 && name == "" ||
-		other->id == -1 && other->name == "") {
-		return option == other->option;
-	}
-
-	bool result = true;
-	if (name.size() > 0 && other->name.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(name);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->name);
-	}
-	if (option.size() > 0 && other->option.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(option);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->option);
-	}
-
-	return result;
+void OptionDialogEvent::SetName(Expression name) {
+	this->name = move(name);
 }
 
-void OptionDialogEvent::SetId(int id) {
-	this->id = id;
-}
-
-int OptionDialogEvent::GetId() const {
-	return id;
-}
-
-void OptionDialogEvent::SetName(string name) {
-	this->name = name;
-}
-
-string OptionDialogEvent::GetName() const {
+const Expression& OptionDialogEvent::GetName() const {
 	return name;
 }
 
-void OptionDialogEvent::SetOption(string option) {
-	this->option = option;
+void OptionDialogEvent::SetOption(Expression option) {
+	this->option = move(option);
 }
 
-string OptionDialogEvent::GetOption() const {
+const Expression& OptionDialogEvent::GetOption() const {
 	return option;
 }
 
-GlobalDialogEvent::GlobalDialogEvent(string name, string option) :
-	name(name), option(option) {
+GlobalDialogEvent::GlobalDialogEvent(Expression name, Expression option) :
+	name(move(name)), option(move(option)) {
 
 }
 
@@ -165,47 +108,24 @@ const string& GlobalDialogEvent::GetType() const {
 	return type;
 }
 
-bool GlobalDialogEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<GlobalDialogEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (name.size() > 0 && other->name.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(name);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->name);
-	}
-	if (option.size() > 0 && other->option.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(option);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->option);
-	}
-
-	return result;
+void GlobalDialogEvent::SetName(Expression name) {
+	this->name = move(name);
 }
 
-void GlobalDialogEvent::SetName(string name) {
-	this->name = name;
-}
-
-string GlobalDialogEvent::GetName() const {
+const Expression& GlobalDialogEvent::GetName() const {
 	return name;
 }
 
-void GlobalDialogEvent::SetOption(string option) {
-	this->option = option;
+void GlobalDialogEvent::SetOption(Expression option) {
+	this->option = move(option);
 }
 
-string GlobalDialogEvent::GetOption() const {
+const Expression& GlobalDialogEvent::GetOption() const {
 	return option;
 }
 
-SpeakingFinishEvent::SpeakingFinishEvent(string label) :
-	label(label) {
+SpeakingFinishEvent::SpeakingFinishEvent(Expression label) :
+	label(move(label)) {
 
 }
 
@@ -218,34 +138,16 @@ const string& SpeakingFinishEvent::GetType() const {
 	return type;
 }
 
-bool SpeakingFinishEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-	auto other = dynamic_cast<SpeakingFinishEvent*>(e);
-	if (!other) return false;
-	bool result = true;
-	if (label.size() > 0 && other->label.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(label);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->label);
-	}
-	else {
-		result = false;
-	}
-	return result;
+void SpeakingFinishEvent::SetLabel(Expression label) {
+	this->label = move(label);
 }
 
-void SpeakingFinishEvent::SetLabel(string label) {
-	this->label = label;
-}
-
-string SpeakingFinishEvent::GetLabel() const {
+const Expression& SpeakingFinishEvent::GetLabel() const {
 	return label;
 }
 
-EnterZoneEvent::EnterZoneEvent(string zone) :
-	zone(zone) {
+EnterZoneEvent::EnterZoneEvent(Expression zone) :
+	zone(move(zone)) {
 
 }
 
@@ -258,34 +160,16 @@ const string& EnterZoneEvent::GetType() const {
 	return type;
 }
 
-bool EnterZoneEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<EnterZoneEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (zone.size() > 0 && other->zone.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(zone);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->zone);
-	}
-
-	return result;
+void EnterZoneEvent::SetZone(Expression zone) {
+	this->zone = move(zone);
 }
 
-void EnterZoneEvent::SetZone(string zone) {
-	this->zone = zone;
-}
-
-string EnterZoneEvent::GetZone() const {
+const Expression& EnterZoneEvent::GetZone() const {
 	return zone;
 }
 
-LeaveZoneEvent::LeaveZoneEvent(string zone) :
-	zone(zone) {
+LeaveZoneEvent::LeaveZoneEvent(Expression zone) :
+	zone(move(zone)) {
 
 }
 
@@ -298,33 +182,16 @@ const string& LeaveZoneEvent::GetType() const {
 	return type;
 }
 
-bool LeaveZoneEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<LeaveZoneEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (zone.size() > 0 && other->zone.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(zone);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->zone);
-	}
-	return result;
+void LeaveZoneEvent::SetZone(Expression zone) {
+	this->zone = move(zone);
 }
 
-void LeaveZoneEvent::SetZone(string zone) {
-	this->zone = zone;
-}
-
-string LeaveZoneEvent::GetZone() const {
+const Expression& LeaveZoneEvent::GetZone() const {
 	return zone;
 }
 
-EnterBuildingEvent::EnterBuildingEvent(string zone, string building)
-	: zone(zone), building(building) {
+EnterBuildingEvent::EnterBuildingEvent(Expression zone, Expression building) :
+	zone(move(zone)), building(move(building)) {
 
 }
 
@@ -337,46 +204,24 @@ const string& EnterBuildingEvent::GetType() const {
 	return type;
 }
 
-bool EnterBuildingEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<EnterBuildingEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (zone.size() > 0 && other->zone.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(zone);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->zone);
-	}
-	if (building.size() > 0 && other->building.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(building);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->building);
-	}
-	return result;
+void EnterBuildingEvent::SetZone(Expression zone) {
+	this->zone = move(zone);
 }
 
-void EnterBuildingEvent::SetZone(string zone) {
-	this->zone = zone;
-}
-
-string EnterBuildingEvent::GetZone() const {
+const Expression& EnterBuildingEvent::GetZone() const {
 	return zone;
 }
 
-void EnterBuildingEvent::SetBuilding(string building) {
-	this->building = building;
+void EnterBuildingEvent::SetBuilding(Expression building) {
+	this->building = move(building);
 }
 
-string EnterBuildingEvent::GetBuilding() const {
+const Expression& EnterBuildingEvent::GetBuilding() const {
 	return building;
 }
 
-LeaveBuildingEvent::LeaveBuildingEvent(string zone, string building)
-	: zone(zone), building(building) {
+LeaveBuildingEvent::LeaveBuildingEvent(Expression zone, Expression building) :
+	zone(move(zone)), building(move(building)) {
 
 }
 
@@ -389,46 +234,24 @@ const string& LeaveBuildingEvent::GetType() const {
 	return type;
 }
 
-bool LeaveBuildingEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<LeaveBuildingEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (zone.size() > 0 && other->zone.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(zone);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->zone);
-	}
-	if (building.size() > 0 && other->building.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(building);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->building);
-	}
-	return result;
+void LeaveBuildingEvent::SetZone(Expression zone) {
+	this->zone = move(zone);
 }
 
-void LeaveBuildingEvent::SetZone(string zone) {
-	this->zone = zone;
-}
-
-string LeaveBuildingEvent::GetZone() const {
+const Expression& LeaveBuildingEvent::GetZone() const {
 	return zone;
 }
 
-void LeaveBuildingEvent::SetBuilding(string building) {
-	this->building = building;
+void LeaveBuildingEvent::SetBuilding(Expression building) {
+	this->building = move(building);
 }
 
-string LeaveBuildingEvent::GetBuilding() const {
+const Expression& LeaveBuildingEvent::GetBuilding() const {
 	return building;
 }
 
-EnterRoomEvent::EnterRoomEvent(string zone, string building, string room)
-	: zone(zone), building(building), room(room) {
+EnterRoomEvent::EnterRoomEvent(Expression zone, Expression building, Expression room) :
+	zone(move(zone)), building(move(building)), room(move(room)) {
 
 }
 
@@ -441,59 +264,32 @@ const string& EnterRoomEvent::GetType() const {
 	return type;
 }
 
-bool EnterRoomEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<EnterRoomEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (zone.size() > 0 && other->zone.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(zone);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->zone);
-	}
-	if (building.size() > 0 && other->building.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(building);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->building);
-	}
-	if (room.size() > 0 && other->room.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(room);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->room);
-	}
-	return result;
+void EnterRoomEvent::SetZone(Expression zone) {
+	this->zone = move(zone);
 }
 
-void EnterRoomEvent::SetZone(string zone) {
-	this->zone = zone;
-}
-
-string EnterRoomEvent::GetZone() const {
+const Expression& EnterRoomEvent::GetZone() const {
 	return zone;
 }
 
-void EnterRoomEvent::SetBuilding(string building) {
-	this->building = building;
+void EnterRoomEvent::SetBuilding(Expression building) {
+	this->building = move(building);
 }
 
-string EnterRoomEvent::GetBuilding() const {
+const Expression& EnterRoomEvent::GetBuilding() const {
 	return building;
 }
 
-void EnterRoomEvent::SetRoom(string room) {
-	this->room = room;
+void EnterRoomEvent::SetRoom(Expression room) {
+	this->room = move(room);
 }
 
-string EnterRoomEvent::GetRoom() const {
+const Expression& EnterRoomEvent::GetRoom() const {
 	return room;
 }
 
-LeaveRoomEvent::LeaveRoomEvent(string zone, string building, string room)
-	: zone(zone), building(building), room(room) {
+LeaveRoomEvent::LeaveRoomEvent(Expression zone, Expression building, Expression room) :
+	zone(move(zone)), building(move(building)), room(move(room)) {
 
 }
 
@@ -506,62 +302,37 @@ const string& LeaveRoomEvent::GetType() const {
 	return type;
 }
 
-bool LeaveRoomEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<LeaveRoomEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (zone.size() > 0 && other->zone.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(zone);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->zone);
-	}
-	if (building.size() > 0 && other->building.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(building);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->building);
-	}
-	if (room.size() > 0 && other->room.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(room);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->room);
-	}
-	return result;
+void LeaveRoomEvent::SetZone(Expression zone) {
+	this->zone = move(zone);
 }
 
-void LeaveRoomEvent::SetZone(string zone) {
-	this->zone = zone;
-}
-
-string LeaveRoomEvent::GetZone() const {
+const Expression& LeaveRoomEvent::GetZone() const {
 	return zone;
 }
 
-void LeaveRoomEvent::SetBuilding(string building) {
-	this->building = building;
+void LeaveRoomEvent::SetBuilding(Expression building) {
+	this->building = move(building);
 }
 
-string LeaveRoomEvent::GetBuilding() const {
+const Expression& LeaveRoomEvent::GetBuilding() const {
 	return building;
 }
 
-void LeaveRoomEvent::SetRoom(string room) {
-	this->room = room;
+void LeaveRoomEvent::SetRoom(Expression room) {
+	this->room = move(room);
 }
 
-string LeaveRoomEvent::GetRoom() const {
+const Expression& LeaveRoomEvent::GetRoom() const {
 	return room;
 }
 
-PuzzleResultEvent::PuzzleResultEvent(int result)
-	: result(result) {
+PuzzleResultEvent::PuzzleResultEvent(Expression result) :
+	result(move(result)) {
+
 }
 
 PuzzleResultEvent::~PuzzleResultEvent() {
+
 }
 
 const string& PuzzleResultEvent::GetType() const {
@@ -569,27 +340,16 @@ const string& PuzzleResultEvent::GetType() const {
 	return type;
 }
 
-bool PuzzleResultEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PuzzleResultEvent*>(e);
-	if (!other) return false;
-
-	return result == 0 || result == other->result;
+void PuzzleResultEvent::SetResult(Expression result) {
+	this->result = move(result);
 }
 
-void PuzzleResultEvent::SetResult(int result) {
-	this->result = result;
-}
-
-int PuzzleResultEvent::GetResult() const {
+const Expression& PuzzleResultEvent::GetResult() const {
 	return result;
 }
 
-TransactionResultEvent::TransactionResultEvent(bool result, string name) :
-	result(result), name(name) {
+TransactionResultEvent::TransactionResultEvent(Expression result, Expression name) :
+	result(move(result)), name(move(name)) {
 
 }
 
@@ -602,44 +362,24 @@ const string& TransactionResultEvent::GetType() const {
 	return type;
 }
 
-bool TransactionResultEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<TransactionResultEvent*>(e);
-	if (!other) return false;
-
-	bool matched = result == other->result;
-	if (name.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(name);
-		matched = matched && (ToString(condition.EvaluateValue(getValues)) == other->name);
-	}
-	else {
-		matched = matched && other->name.empty();
-	}
-	return matched;
+void TransactionResultEvent::SetResult(Expression result) {
+	this->result = move(result);
 }
 
-void TransactionResultEvent::SetResult(bool result) {
-	this->result = result;
-}
-
-bool TransactionResultEvent::GetResult() const {
+const Expression& TransactionResultEvent::GetResult() const {
 	return result;
 }
 
-void TransactionResultEvent::SetName(string name) {
-	this->name = name;
+void TransactionResultEvent::SetName(Expression name) {
+	this->name = move(name);
 }
 
-string TransactionResultEvent::GetName() const {
+const Expression& TransactionResultEvent::GetName() const {
 	return name;
 }
 
-ObjectResultEvent::ObjectResultEvent(string action, string object, bool result, int num) :
-	action(action), object(object), result(result), num(num) {
+ObjectResultEvent::ObjectResultEvent(Expression action, Expression object, Expression result, Expression num) :
+	action(move(action)), object(move(object)), result(move(result)), num(move(num)) {
 
 }
 
@@ -652,59 +392,40 @@ const string& ObjectResultEvent::GetType() const {
 	return type;
 }
 
-bool ObjectResultEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<ObjectResultEvent*>(e);
-	if (!other) return false;
-
-	if (!action.empty() && action != other->action) return false;
-
-	if (!object.empty() && !other->object.empty()) {
-		Condition objectCondition;
-		objectCondition.ParseCondition(object);
-		if (ToString(objectCondition.EvaluateValue(getValues)) != other->object) return false;
-	}
-
-	return true;
+void ObjectResultEvent::SetAction(Expression action) {
+	this->action = move(action);
 }
 
-void ObjectResultEvent::SetAction(string action) {
-	this->action = action;
-}
-
-string ObjectResultEvent::GetAction() const {
+const Expression& ObjectResultEvent::GetAction() const {
 	return action;
 }
 
-void ObjectResultEvent::SetObject(string object) {
-	this->object = object;
+void ObjectResultEvent::SetObject(Expression object) {
+	this->object = move(object);
 }
 
-string ObjectResultEvent::GetObject() const {
+const Expression& ObjectResultEvent::GetObject() const {
 	return object;
 }
 
-void ObjectResultEvent::SetResult(bool result) {
-	this->result = result;
+void ObjectResultEvent::SetResult(Expression result) {
+	this->result = move(result);
 }
 
-bool ObjectResultEvent::GetResult() const {
+const Expression& ObjectResultEvent::GetResult() const {
 	return result;
 }
 
-void ObjectResultEvent::SetNum(int num) {
-	this->num = num;
+void ObjectResultEvent::SetNum(Expression num) {
+	this->num = move(num);
 }
 
-int ObjectResultEvent::GetNum() const {
+const Expression& ObjectResultEvent::GetNum() const {
 	return num;
 }
 
-TimeUpEvent::TimeUpEvent(string name) :
-	name(name) {
+TimeUpEvent::TimeUpEvent(Expression name) :
+	name(move(name)) {
 
 }
 
@@ -717,33 +438,16 @@ const string& TimeUpEvent::GetType() const {
 	return type;
 }
 
-bool TimeUpEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<TimeUpEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (name.size() > 0 && other->name.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(name);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->name);
-	}
-	return result;
+void TimeUpEvent::SetName(Expression name) {
+	this->name = move(name);
 }
 
-void TimeUpEvent::SetName(string name) {
-	this->name = name;
-}
-
-string TimeUpEvent::GetName() const {
+const Expression& TimeUpEvent::GetName() const {
 	return name;
 }
 
-NpcArriveEvent::NpcArriveEvent(string name, string address)
-	: name(name), address(address) {
+NpcArriveEvent::NpcArriveEvent(Expression name, Expression address) :
+	name(move(name)), address(move(address)) {
 
 }
 
@@ -756,46 +460,24 @@ const string& NpcArriveEvent::GetType() const {
 	return type;
 }
 
-bool NpcArriveEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<NpcArriveEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (name.size() > 0 && other->name.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(name);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->name);
-	}
-	if (address.size() > 0 && other->address.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(address);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->address);
-	}
-	return result;
+void NpcArriveEvent::SetName(Expression name) {
+	this->name = move(name);
 }
 
-void NpcArriveEvent::SetName(string name) {
-	this->name = name;
-}
-
-string NpcArriveEvent::GetName() const {
+const Expression& NpcArriveEvent::GetName() const {
 	return name;
 }
 
-void NpcArriveEvent::SetAddress(string address) {
-	this->address = address;
+void NpcArriveEvent::SetAddress(Expression address) {
+	this->address = move(address);
 }
 
-string NpcArriveEvent::GetAddress() const {
+const Expression& NpcArriveEvent::GetAddress() const {
 	return address;
 }
 
-NPCMeetEvent::NPCMeetEvent(string npc) :
-	npc(npc) {
+NPCMeetEvent::NPCMeetEvent(Expression npc) :
+	npc(move(npc)) {
 
 }
 
@@ -808,33 +490,16 @@ const string& NPCMeetEvent::GetType() const {
 	return type;
 }
 
-bool NPCMeetEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<NPCMeetEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (npc.size() > 0 && other->npc.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(npc);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->npc);
-	}
-	return result;
+void NPCMeetEvent::SetNPC(Expression npc) {
+	this->npc = move(npc);
 }
 
-void NPCMeetEvent::SetNPC(string npc) {
-	this->npc = npc;
-}
-
-string NPCMeetEvent::GetNPC() const {
+const Expression& NPCMeetEvent::GetNPC() const {
 	return npc;
 }
 
-CitizenBornEvent::CitizenBornEvent(string name)
-	: name(name) {
+CitizenBornEvent::CitizenBornEvent(Expression name) :
+	name(move(name)) {
 
 }
 
@@ -847,33 +512,16 @@ const string& CitizenBornEvent::GetType() const {
 	return type;
 }
 
-bool CitizenBornEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<CitizenBornEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (name.size() > 0 && other->name.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(name);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->name);
-	}
-	return result;
+void CitizenBornEvent::SetName(Expression name) {
+	this->name = move(name);
 }
 
-void CitizenBornEvent::SetName(string name) {
-	this->name = name;
-}
-
-string CitizenBornEvent::GetName() const {
+const Expression& CitizenBornEvent::GetName() const {
 	return name;
 }
 
-CitizenDeceaseEvent::CitizenDeceaseEvent(string name, string reason)
-	: name(name), reason(reason) {
+CitizenDeceaseEvent::CitizenDeceaseEvent(Expression name, Expression reason) :
+	name(move(name)), reason(move(reason)) {
 
 }
 
@@ -886,46 +534,24 @@ const string& CitizenDeceaseEvent::GetType() const {
 	return type;
 }
 
-bool CitizenDeceaseEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<CitizenDeceaseEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (name.size() > 0 && other->name.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(name);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->name);
-	}
-	if (reason.size() > 0 && other->reason.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(reason);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->reason);
-	}
-	return result;
+void CitizenDeceaseEvent::SetName(Expression name) {
+	this->name = move(name);
 }
 
-void CitizenDeceaseEvent::SetName(string name) {
-	this->name = name;
-}
-
-string CitizenDeceaseEvent::GetName() const {
+const Expression& CitizenDeceaseEvent::GetName() const {
 	return name;
 }
 
-void CitizenDeceaseEvent::SetReason(string reason) {
-	this->reason = reason;
+void CitizenDeceaseEvent::SetReason(Expression reason) {
+	this->reason = move(reason);
 }
 
-string CitizenDeceaseEvent::GetReason() const {
+const Expression& CitizenDeceaseEvent::GetReason() const {
 	return reason;
 }
 
-PlayerInjuredEvent::PlayerInjuredEvent(string wound) :
-	wound(wound) {
+PlayerInjuredEvent::PlayerInjuredEvent(Expression wound) :
+	wound(move(wound)) {
 
 }
 
@@ -938,33 +564,16 @@ const string& PlayerInjuredEvent::GetType() const {
 	return type;
 }
 
-bool PlayerInjuredEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PlayerInjuredEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (wound.size() > 0 && other->wound.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(wound);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->wound);
-	}
-	return result;
+void PlayerInjuredEvent::SetWound(Expression wound) {
+	this->wound = move(wound);
 }
 
-void PlayerInjuredEvent::SetWound(string wound) {
-	this->wound = wound;
-}
-
-string PlayerInjuredEvent::GetWound() const {
+const Expression& PlayerInjuredEvent::GetWound() const {
 	return wound;
 }
 
-PlayerCuredEvent::PlayerCuredEvent(string wound) :
-	wound(wound) {
+PlayerCuredEvent::PlayerCuredEvent(Expression wound) :
+	wound(move(wound)) {
 
 }
 
@@ -977,33 +586,16 @@ const string& PlayerCuredEvent::GetType() const {
 	return type;
 }
 
-bool PlayerCuredEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PlayerCuredEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (wound.size() > 0 && other->wound.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(wound);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->wound);
-	}
-	return result;
+void PlayerCuredEvent::SetWound(Expression wound) {
+	this->wound = move(wound);
 }
 
-void PlayerCuredEvent::SetWound(string wound) {
-	this->wound = wound;
-}
-
-string PlayerCuredEvent::GetWound() const {
+const Expression& PlayerCuredEvent::GetWound() const {
 	return wound;
 }
 
-PlayerIllEvent::PlayerIllEvent(string illness) :
-	illness(illness) {
+PlayerIllEvent::PlayerIllEvent(Expression illness) :
+	illness(move(illness)) {
 
 }
 
@@ -1016,33 +608,16 @@ const string& PlayerIllEvent::GetType() const {
 	return type;
 }
 
-bool PlayerIllEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PlayerIllEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (illness.size() > 0 && other->illness.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(illness);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->illness);
-	}
-	return result;
+void PlayerIllEvent::SetIllness(Expression illness) {
+	this->illness = move(illness);
 }
 
-void PlayerIllEvent::SetIllness(string illness) {
-	this->illness = illness;
-}
-
-string PlayerIllEvent::GetIllness() const {
+const Expression& PlayerIllEvent::GetIllness() const {
 	return illness;
 }
 
-PlayerRecoverEvent::PlayerRecoverEvent(string illness) :
-	illness(illness) {
+PlayerRecoverEvent::PlayerRecoverEvent(Expression illness) :
+	illness(move(illness)) {
 
 }
 
@@ -1055,33 +630,16 @@ const string& PlayerRecoverEvent::GetType() const {
 	return type;
 }
 
-bool PlayerRecoverEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PlayerRecoverEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (illness.size() > 0 && other->illness.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(illness);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->illness);
-	}
-	return result;
+void PlayerRecoverEvent::SetIllness(Expression illness) {
+	this->illness = move(illness);
 }
 
-void PlayerRecoverEvent::SetIllness(string illness) {
-	this->illness = illness;
-}
-
-string PlayerRecoverEvent::GetIllness() const {
+const Expression& PlayerRecoverEvent::GetIllness() const {
 	return illness;
 }
 
-PlayerRestEvent::PlayerRestEvent(int minute) :
-	minute(minute) {
+PlayerRestEvent::PlayerRestEvent(Expression minute) :
+	minute(move(minute)) {
 
 }
 
@@ -1094,27 +652,16 @@ const string& PlayerRestEvent::GetType() const {
 	return type;
 }
 
-bool PlayerRestEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PlayerRestEvent*>(e);
-	if (!other) return false;
-
-	return minute == other->minute;
+void PlayerRestEvent::SetMinute(Expression minute) {
+	this->minute = move(minute);
 }
 
-void PlayerRestEvent::SetMinute(int minute) {
-	this->minute = minute;
-}
-
-int PlayerRestEvent::GetMinute() const {
+const Expression& PlayerRestEvent::GetMinute() const {
 	return minute;
 }
 
-PlayerSleepEvent::PlayerSleepEvent(int hour) :
-	hour(hour) {
+PlayerSleepEvent::PlayerSleepEvent(Expression hour) :
+	hour(move(hour)) {
 
 }
 
@@ -1127,27 +674,16 @@ const string& PlayerSleepEvent::GetType() const {
 	return type;
 }
 
-bool PlayerSleepEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PlayerSleepEvent*>(e);
-	if (!other) return false;
-
-	return hour == other->hour;
+void PlayerSleepEvent::SetHour(Expression hour) {
+	this->hour = move(hour);
 }
 
-void PlayerSleepEvent::SetHour(int hour) {
-	this->hour = hour;
-}
-
-int PlayerSleepEvent::GetHour() const {
+const Expression& PlayerSleepEvent::GetHour() const {
 	return hour;
 }
 
-CultivationChangeEvent::CultivationChangeEvent(string method, int level)
-	: method(method), level(level) {
+CultivationChangeEvent::CultivationChangeEvent(Expression method, Expression level) :
+	method(move(method)), level(move(level)) {
 
 }
 
@@ -1160,42 +696,24 @@ const string& CultivationChangeEvent::GetType() const {
 	return type;
 }
 
-bool CultivationChangeEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<CultivationChangeEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (method.size() > 0 && other->method.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(method);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->method);
-	}
-	result = result && (level == other->level);
-	return result;
+void CultivationChangeEvent::SetMethod(Expression method) {
+	this->method = move(method);
 }
 
-void CultivationChangeEvent::SetMethod(string method) {
-	this->method = method;
-}
-
-string CultivationChangeEvent::GetMethod() const {
+const Expression& CultivationChangeEvent::GetMethod() const {
 	return method;
 }
 
-void CultivationChangeEvent::SetLevel(int level) {
-	this->level = level;
+void CultivationChangeEvent::SetLevel(Expression level) {
+	this->level = move(level);
 }
 
-int CultivationChangeEvent::GetLevel() const {
+const Expression& CultivationChangeEvent::GetLevel() const {
 	return level;
 }
 
-WantedChangeEvent::WantedChangeEvent(string reason, int level)
-	: reason(reason), level(level) {
+WantedChangeEvent::WantedChangeEvent(Expression reason, Expression level) :
+	reason(move(reason)), level(move(level)) {
 
 }
 
@@ -1208,42 +726,24 @@ const string& WantedChangeEvent::GetType() const {
 	return type;
 }
 
-bool WantedChangeEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<WantedChangeEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (reason.size() > 0 && other->reason.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(reason);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->reason);
-	}
-	result = result && (level == other->level);
-	return result;
+void WantedChangeEvent::SetReason(Expression reason) {
+	this->reason = move(reason);
 }
 
-void WantedChangeEvent::SetReason(string reason) {
-	this->reason = reason;
-}
-
-string WantedChangeEvent::GetReason() const {
+const Expression& WantedChangeEvent::GetReason() const {
 	return reason;
 }
 
-void WantedChangeEvent::SetLevel(int level) {
-	this->level = level;
+void WantedChangeEvent::SetLevel(Expression level) {
+	this->level = move(level);
 }
 
-int WantedChangeEvent::GetLevel() const {
+const Expression& WantedChangeEvent::GetLevel() const {
 	return level;
 }
 
-PlayerArrestedEvent::PlayerArrestedEvent(string reason) :
-	reason(reason) {
+PlayerArrestedEvent::PlayerArrestedEvent(Expression reason) :
+	reason(move(reason)) {
 
 }
 
@@ -1256,33 +756,16 @@ const string& PlayerArrestedEvent::GetType() const {
 	return type;
 }
 
-bool PlayerArrestedEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PlayerArrestedEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (reason.size() > 0 && other->reason.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(reason);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->reason);
-	}
-	return result;
+void PlayerArrestedEvent::SetReason(Expression reason) {
+	this->reason = move(reason);
 }
 
-void PlayerArrestedEvent::SetReason(string reason) {
-	this->reason = reason;
-}
-
-string PlayerArrestedEvent::GetReason() const {
+const Expression& PlayerArrestedEvent::GetReason() const {
 	return reason;
 }
 
-PlayerReleasedEvent::PlayerReleasedEvent(string reason) :
-	reason(reason) {
+PlayerReleasedEvent::PlayerReleasedEvent(Expression reason) :
+	reason(move(reason)) {
 
 }
 
@@ -1295,33 +778,16 @@ const string& PlayerReleasedEvent::GetType() const {
 	return type;
 }
 
-bool PlayerReleasedEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PlayerReleasedEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (reason.size() > 0 && other->reason.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(reason);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->reason);
-	}
-	return result;
+void PlayerReleasedEvent::SetReason(Expression reason) {
+	this->reason = move(reason);
 }
 
-void PlayerReleasedEvent::SetReason(string reason) {
-	this->reason = reason;
-}
-
-string PlayerReleasedEvent::GetReason() const {
+const Expression& PlayerReleasedEvent::GetReason() const {
 	return reason;
 }
 
-WeatherChangeEvent::WeatherChangeEvent(string weather) :
-	weather(weather) {
+WeatherChangeEvent::WeatherChangeEvent(Expression weather) :
+	weather(move(weather)) {
 
 }
 
@@ -1334,33 +800,16 @@ const string& WeatherChangeEvent::GetType() const {
 	return type;
 }
 
-bool WeatherChangeEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<WeatherChangeEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (weather.size() > 0 && other->weather.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(weather);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->weather);
-	}
-	return result;
+void WeatherChangeEvent::SetWeather(Expression weather) {
+	this->weather = move(weather);
 }
 
-void WeatherChangeEvent::SetWeather(string weather) {
-	this->weather = weather;
-}
-
-string WeatherChangeEvent::GetWeather() const {
+const Expression& WeatherChangeEvent::GetWeather() const {
 	return weather;
 }
 
-PolicyChangeEvent::PolicyChangeEvent(string policy, bool status)
-	: policy(policy), status(status) {
+PolicyChangeEvent::PolicyChangeEvent(Expression policy, Expression status) :
+	policy(move(policy)), status(move(status)) {
 
 }
 
@@ -1373,42 +822,24 @@ const string& PolicyChangeEvent::GetType() const {
 	return type;
 }
 
-bool PolicyChangeEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<PolicyChangeEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (policy.size() > 0 && other->policy.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(policy);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->policy);
-	}
-	result = result && (status == other->status);
-	return result;
+void PolicyChangeEvent::SetPolicy(Expression policy) {
+	this->policy = move(policy);
 }
 
-void PolicyChangeEvent::SetPolicy(string policy) {
-	this->policy = policy;
-}
-
-string PolicyChangeEvent::GetPolicy() const {
+const Expression& PolicyChangeEvent::GetPolicy() const {
 	return policy;
 }
 
-void PolicyChangeEvent::SetStatus(bool status) {
-	this->status = status;
+void PolicyChangeEvent::SetStatus(Expression status) {
+	this->status = move(status);
 }
 
-bool PolicyChangeEvent::GetStatus() const {
+const Expression& PolicyChangeEvent::GetStatus() const {
 	return status;
 }
 
-UseAssetEvent::UseAssetEvent(string asset) :
-	asset(asset) {
+UseAssetEvent::UseAssetEvent(Expression asset) :
+	asset(move(asset)) {
 
 }
 
@@ -1421,29 +852,10 @@ const string& UseAssetEvent::GetType() const {
 	return type;
 }
 
-bool UseAssetEvent::Match(Event* e,
-	const vector<function<pair<bool, ValueType>(const string&)>>& getValues) {
-	if (!e) return false;
-	if (GetType() != e->GetType()) return false;
-
-	auto other = dynamic_cast<UseAssetEvent*>(e);
-	if (!other) return false;
-
-	bool result = true;
-	if (asset.size() > 0 && other->asset.size() > 0) {
-		Condition condition;
-		condition.ParseCondition(asset);
-		result = result && (ToString(condition.EvaluateValue(getValues)) == other->asset);
-	}
-	return result;
+void UseAssetEvent::SetAsset(Expression asset) {
+	this->asset = move(asset);
 }
 
-void UseAssetEvent::SetAsset(string asset) {
-	this->asset = asset;
-}
-
-string UseAssetEvent::GetAsset() const {
+const Expression& UseAssetEvent::GetAsset() const {
 	return asset;
 }
-
-

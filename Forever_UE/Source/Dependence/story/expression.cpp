@@ -1,4 +1,6 @@
-﻿#include "condition.h"
+#include "expression.h"
+
+#include "event.h"
 
 #include <iostream>
 #include <vector>
@@ -13,11 +15,11 @@
 
 using namespace std;
 
-Expression::Expression() {
+ExpressionNode::ExpressionNode() {
 
 }
 
-Expression::~Expression() {
+ExpressionNode::~ExpressionNode() {
 
 }
 
@@ -30,27 +32,35 @@ VariableExpression::~VariableExpression() {
 
 }
 
-ValueType VariableExpression::Evaluate(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
-	for (auto it = getValues.rbegin(); it != getValues.rend(); ++it) {
-		auto value = (*it)(name);
-		if (value.first) {
-			return value.second;
+ValueType VariableExpression::Evaluate(const ScriptContext& context) const {
+	// 点号本身不参与分词、也不做任何字符替换，这里只找第一个'.'或'_'切出前缀关键字，
+	// 两种分隔符等价；subkey剩余部分原样保留（如"job.title"不会变成"job_title"）。
+	size_t split = name.find_first_of("._");
+	if (split == string::npos) {
+		return 0;
+	}
+	string prefix = name.substr(0, split);
+	string subkey = name.substr(split + 1);
+
+	if (prefix == "self") {
+		if (context.self) {
+			auto value = context.self->GetValue(subkey);
+			if (value.first) return value.second;
 		}
 	}
-	return 0;
-}
-
-IndirectExpression::IndirectExpression(shared_ptr<Expression> inner) : inner(move(inner)) {}
-
-IndirectExpression::~IndirectExpression() {}
-
-ValueType IndirectExpression::Evaluate(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
-	auto nameVal = inner->Evaluate(getValues);
-	string varName = ToString(nameVal);
-	for (auto& getValue : getValues) {
-		auto result = getValue(varName);
-		if (result.first) return result.second;
+	else if (prefix == "system") {
+		if (context.system) {
+			auto value = context.system->GetValue(subkey);
+			if (value.first) return value.second;
+		}
 	}
+	else if (prefix == "local") {
+		if (context.local) {
+			auto value = context.local->GetLocalValue(subkey);
+			if (value.first) return value.second;
+		}
+	}
+
 	return 0;
 }
 
@@ -59,26 +69,26 @@ ConstantExpression::ConstantExpression(ValueType expression) : value(expression)
 }
 
 ConstantExpression::~ConstantExpression() {
-	
+
 }
 
-ValueType ConstantExpression::Evaluate(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
+ValueType ConstantExpression::Evaluate(const ScriptContext& context) const {
 	return value;
 }
 
-ArrayExpression::ArrayExpression(vector<shared_ptr<Expression>> expression)
+ArrayExpression::ArrayExpression(vector<shared_ptr<ExpressionNode>> expression)
 	: elements(move(expression)) {
 
 }
 
 ArrayExpression::~ArrayExpression() {
-	
+
 }
 
-ValueType ArrayExpression::Evaluate(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
+ValueType ArrayExpression::Evaluate(const ScriptContext& context) const {
 	string result = "[";
 	for (size_t i = 0; i < elements.size(); i++) {
-		auto value = elements[i]->Evaluate(getValues);
+		auto value = elements[i]->Evaluate(context);
 		result += ToString(value);
 		if (i < elements.size() - 1) {
 			result += ", ";
@@ -88,25 +98,25 @@ ValueType ArrayExpression::Evaluate(vector<function<pair<bool, ValueType>(const 
 	return result;
 }
 
-vector<ValueType> ArrayExpression::GetElementValues(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
+vector<ValueType> ArrayExpression::GetElementValues(const ScriptContext& context) const {
 	vector<ValueType> values;
 	for (const auto& element : elements) {
-		values.push_back(element->Evaluate(getValues));
+		values.push_back(element->Evaluate(context));
 	}
 	return values;
 }
 
-UnaryExpression::UnaryExpression(UnaryOperator op, shared_ptr<Expression> operand)
+UnaryExpression::UnaryExpression(UnaryOperator op, shared_ptr<ExpressionNode> operand)
 	: operand(op), expression(move(operand)) {
 
 }
 
 UnaryExpression::~UnaryExpression() {
-	
+
 }
 
-ValueType UnaryExpression::Evaluate(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
-	auto value = expression->Evaluate(getValues);
+ValueType UnaryExpression::Evaluate(const ScriptContext& context) const {
+	auto value = expression->Evaluate(context);
 
 	switch (operand) {
 	case UnaryOperator::NEGATE:
@@ -156,27 +166,27 @@ bool UnaryExpression::ConvertToBool(const ValueType& value) const {
 		}, value);
 }
 
-BinaryExpression::BinaryExpression(shared_ptr<Expression> left,
-	shared_ptr<Expression> right,
+BinaryExpression::BinaryExpression(shared_ptr<ExpressionNode> left,
+	shared_ptr<ExpressionNode> right,
 	BinaryOperator op)
 	: left(move(left)), right(move(right)), operand(op) {
 }
 
 BinaryExpression::~BinaryExpression() {
-	
+
 }
 
-ValueType BinaryExpression::Evaluate(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
+ValueType BinaryExpression::Evaluate(const ScriptContext& context) const {
 	if (operand == BinaryOperator::INCLUDE) {
 		auto array_expr = dynamic_cast<ArrayExpression*>(right.get());
 		if (!array_expr) {
 			THROW_EXCEPTION(RuntimeException, "Right operand of 'in' must be an array.\n");
 		}
 
-		auto array_values = array_expr->GetElementValues(getValues);
+		auto array_values = array_expr->GetElementValues(context);
 		bool found = false;
 
-		auto left_val = left->Evaluate(getValues);
+		auto left_val = left->Evaluate(context);
 		for (const auto& array_val : array_values) {
 			if (GetComparisonResult(left_val, array_val, BinaryOperator::EQUAL)) {
 				found = true;
@@ -188,21 +198,21 @@ ValueType BinaryExpression::Evaluate(vector<function<pair<bool, ValueType>(const
 	}
 
 	if (operand == BinaryOperator::LOGICAL_AND) {
-		bool left_val = ConvertToBool(left->Evaluate(getValues));
+		bool left_val = ConvertToBool(left->Evaluate(context));
 		if (!left_val) return false;
-		bool right_val = ConvertToBool(right->Evaluate(getValues));
+		bool right_val = ConvertToBool(right->Evaluate(context));
 		return right_val;
 	}
 
 	if (operand == BinaryOperator::LOGICAL_OR) {
-		bool left_val = ConvertToBool(left->Evaluate(getValues));
+		bool left_val = ConvertToBool(left->Evaluate(context));
 		if (left_val) return true;
-		bool right_val = ConvertToBool(right->Evaluate(getValues));
+		bool right_val = ConvertToBool(right->Evaluate(context));
 		return right_val;
 	}
 
-	auto left_val = left->Evaluate(getValues);
-	auto right_val = right->Evaluate(getValues);
+	auto left_val = left->Evaluate(context);
+	auto right_val = right->Evaluate(context);
 
 	switch (operand) {
 	case BinaryOperator::EQUAL:
@@ -378,10 +388,10 @@ bool BinaryExpression::ConvertToBool(const ValueType& value) const {
 		}, value);
 }
 
-bool Condition::ParseCondition(const string& conditionStr) {
+bool Expression::Parse(const string& expr) {
 	try {
-		vector<string> tokens = Tokenize(conditionStr);
-		if (tokens.size() > 0)root = ParseExpression(tokens);
+		vector<string> tokens = Tokenize(expr);
+		if (tokens.size() > 0) root = ParseExpression(tokens);
 		else root = nullptr;
 		return true;
 	}
@@ -391,23 +401,23 @@ bool Condition::ParseCondition(const string& conditionStr) {
 	}
 }
 
-bool Condition::EvaluateBool(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
+bool Expression::EvaluateBool(const ScriptContext& context) const {
 	if (!root) {
 		return true;
 	}
 
-	auto result = root->Evaluate(getValues);
+	auto result = root->Evaluate(context);
 	if (auto bool_val = get_if<bool>(&result)) {
 		return *bool_val;
 	}
-	THROW_EXCEPTION(RuntimeException, "Condition must Evaluate to boolean.\n");
+	THROW_EXCEPTION(RuntimeException, "Expression must Evaluate to boolean.\n");
 }
 
-ValueType Condition::EvaluateValue(vector<function<pair<bool, ValueType>(const string&)>> getValues) const {
+ValueType Expression::EvaluateValue(const ScriptContext& context) const {
 	if (!root) {
 		return string("");
 	}
-	return root->Evaluate(getValues);
+	return root->Evaluate(context);
 }
 
 static size_t FindMatchingQuote(const string& expr, size_t start) {
@@ -425,7 +435,7 @@ static size_t FindMatchingQuote(const string& expr, size_t start) {
 	return string::npos;
 }
 
-vector<string> Condition::Tokenize(const string& expr) {
+vector<string> Expression::Tokenize(const string& expr) {
 	vector<string> tokens;
 	string current;
 	size_t i = 0;
@@ -454,20 +464,6 @@ vector<string> Condition::Tokenize(const string& expr) {
 		}
 		else if (IsOperatorChar(c) || c == '(' || c == ')' || c == '[' || c == ']' || c == ',') {
 			if (!current.empty()) {
-				if (c == '(' && current == "$$") {
-					current.clear();
-					++i;
-					size_t start = i;
-					size_t depth = 1;
-					while (i < expr.length() && depth > 0) {
-						if (expr[i] == '(') ++depth;
-						else if (expr[i] == ')') { --depth; if (depth == 0) break; }
-						++i;
-					}
-					tokens.push_back("$$(" + expr.substr(start, i - start) + ")");
-					++i;
-					continue;
-				}
 				tokens.push_back(current);
 				current.clear();
 			}
@@ -501,16 +497,16 @@ vector<string> Condition::Tokenize(const string& expr) {
 	return tokens;
 }
 
-bool Condition::OperatorChar(char c) {
+bool Expression::OperatorChar(char c) {
 	return IsOperatorChar(c);
 }
 
-shared_ptr<Expression> Condition::ParseExpression(const vector<string>& tokens) {
+shared_ptr<ExpressionNode> Expression::ParseExpression(const vector<string>& tokens) {
 	vector<string> postfix = InfixToPostfix(tokens);
 	return ParsePostfix(postfix);
 }
 
-vector<string> Condition::InfixToPostfix(const vector<string>& infix) {
+vector<string> Expression::InfixToPostfix(const vector<string>& infix) {
 	vector<string> postfix;
 	stack<string> opStack;
 	string prev;
@@ -579,14 +575,14 @@ vector<string> Condition::InfixToPostfix(const vector<string>& infix) {
 	return postfix;
 }
 
-shared_ptr<Expression> Condition::ParsePostfix(const vector<string>& postfix) {
-	stack<shared_ptr<Expression>> exprStack;
+shared_ptr<ExpressionNode> Expression::ParsePostfix(const vector<string>& postfix) {
+	stack<shared_ptr<ExpressionNode>> exprStack;
 
 	for (size_t i = 0; i < postfix.size(); i++) {
 		const auto& token = postfix[i];
 
 		if (token == "[") {
-			vector<shared_ptr<Expression>> elements;
+			vector<shared_ptr<ExpressionNode>> elements;
 			size_t j = i + 1;
 
 			while (j < postfix.size() && postfix[j] != "]") {
@@ -646,14 +642,14 @@ shared_ptr<Expression> Condition::ParsePostfix(const vector<string>& postfix) {
 	return move(exprStack.top());
 }
 
-bool Condition::IsOperator(const string& token) {
+bool Expression::IsOperator(const string& token) {
 	return token == "+" || token == "-" || token == "*" || token == "/" ||
 		token == "%" || token == "^" || token == "==" || token == "!=" ||
 		token == ">" || token == ">=" || token == "<" || token == "<=" ||
 		token == "in" || token == "&&" || token == "||" || token == "!";
 }
 
-bool Condition::HigherPrecedence(const string& op1, const string& op2) {
+bool Expression::HigherPrecedence(const string& op1, const string& op2) {
 	int prec1 = GetPrecedence(op1);
 	int prec2 = GetPrecedence(op2);
 
@@ -663,7 +659,7 @@ bool Condition::HigherPrecedence(const string& op1, const string& op2) {
 	return prec1 > prec2;
 }
 
-int Condition::GetPrecedence(const string& op) const {
+int Expression::GetPrecedence(const string& op) const {
 	if (op == "!" || op == "negate") return 8;
 	if (op == "^") return 7;
 	if (op == "*" || op == "/" || op == "%") return 6;
@@ -675,11 +671,11 @@ int Condition::GetPrecedence(const string& op) const {
 	return 0;
 }
 
-bool Condition::RightAssociative(const string& op) {
+bool Expression::RightAssociative(const string& op) {
 	return op == "^" || op == "!";
 }
 
-BinaryOperator Condition::GetOperator(const string& token) const {
+BinaryOperator Expression::GetOperator(const string& token) const {
 	if (token == "==") return BinaryOperator::EQUAL;
 	else if (token == "!=") return BinaryOperator::NOT_EQUAL;
 	else if (token == ">") return BinaryOperator::GREATER;
@@ -698,13 +694,7 @@ BinaryOperator Condition::GetOperator(const string& token) const {
 	else THROW_EXCEPTION(RuntimeException, "Unknown operator: " + token);
 }
 
-shared_ptr<Expression> Condition::ParseOperand(const string& token) {
-	if (token.length() >= 4 && token.substr(0, 3) == "$$(") {
-		string inner = token.substr(3, token.length() - 4);
-		auto innerTokens = Tokenize(inner);
-		return make_shared<IndirectExpression>(ParseExpression(innerTokens));
-	}
-
+shared_ptr<ExpressionNode> Expression::ParseOperand(const string& token) {
 	if (token.length() >= 2 && token.substr(0, 2) == "$$") {
 		string varName = token.substr(2);
 		if (!varName.empty() && (isalpha(static_cast<unsigned char>(varName[0])) ||
@@ -717,7 +707,7 @@ shared_ptr<Expression> Condition::ParseOperand(const string& token) {
 	return ParseConstant(token);
 }
 
-shared_ptr<Expression> Condition::ParseConstant(const string& token) {
+shared_ptr<ExpressionNode> Expression::ParseConstant(const string& token) {
 	if (token == "true") {
 		return make_unique<ConstantExpression>(true);
 	}
@@ -776,6 +766,3 @@ bool IsSpaceChar(char c) {
 bool IsIdentifierChar(char c) {
 	return isalnum(static_cast<unsigned char>(c)) || c == '_' || (c >= 0x80 && c <= 0xFF);
 }
-
-
-

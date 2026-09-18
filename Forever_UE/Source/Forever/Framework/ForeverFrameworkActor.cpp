@@ -2,6 +2,7 @@
 
 #include "map/map.h"
 #include "populace/populace.h"
+#include "story/story.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -42,16 +43,20 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 
 AForeverFrameworkActor::~AForeverFrameworkActor()
 {
+	delete story;
 	delete populace;
 	delete map;
 }
 
 void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// 同步释放map/populace(见头文件EndPlay声明处的注释)——不能只靠析构函数兜底，
-	// 那个时机取决于UObject垃圾回收，不保证在下一次PIE开始前跑完。populace/map删除顺序
-	// 互不影响内存安全(Citizen只持有Zone*/Building*/Room*裸指针、析构不解引用它们；Map
-	// 也不持有任何Citizen*)，这里先删populace只是保持和创建顺序相反的直觉。
+	// 同步释放map/populace/story(见头文件EndPlay声明处的注释)——不能只靠析构函数兜底，
+	// 那个时机取决于UObject垃圾回收，不保证在下一次PIE开始前跑完。populace/map/story删除
+	// 顺序互不影响内存安全(Citizen只持有Zone*/Building*/Room*裸指针、析构不解引用它们；Map
+	// 也不持有任何Citizen*；Story不持有Map/Populace)，这里先删story只是保持和创建顺序相反
+	// 的直觉。
+	delete story;
+	story = nullptr;
 	delete populace;
 	populace = nullptr;
 	delete map;
@@ -127,5 +132,14 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 		// populace->GetCitizens()列表，真正的生成/销毁全部按玩家距离在TickComponent里做，
 		// 见Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md。
 		populaceFramework->GenerateCitizens(map, populace);
+	}
+
+	// 阶段4 Story落地：和map/populace不互相依赖，放在最后创建即可。Init()读取
+	// Resource/Story/test.json，随后立刻广播一次GameStartEvent，见storyFramework.md。
+	story = new Story();
+	story->Init();
+	if (storyFramework) {
+		storyFramework->Init(story);
+		storyFramework->BroadcastGameStart();
 	}
 }

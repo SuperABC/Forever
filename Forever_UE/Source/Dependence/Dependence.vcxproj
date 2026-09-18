@@ -87,9 +87,10 @@
     <ClCompile Include="map\geometry.cpp" />
     <ClCompile Include="map\roadnet_mod.cpp" />
     <ClCompile Include="map\building_mod.cpp" />
-    <ClCompile Include="story\condition.cpp" />
+    <ClCompile Include="story\expression.cpp" />
     <ClCompile Include="story\change.cpp" />
     <ClCompile Include="story\event.cpp" />
+    <ClCompile Include="story\dialog.cpp" />
     <ClCompile Include="map\terrain_factory.cpp" />
     <ClCompile Include="map\roadnet_factory.cpp" />
     <ClCompile Include="map\zone_factory.cpp" />
@@ -118,9 +119,10 @@
     <ClInclude Include="common\utility.h" />
     <ClInclude Include="common\handle.h" />
     <ClInclude Include="map\geometry.h" />
-    <ClInclude Include="story\condition.h" />
+    <ClInclude Include="story\expression.h" />
     <ClInclude Include="story\change.h" />
     <ClInclude Include="story\event.h" />
+    <ClInclude Include="story\dialog.h" />
     <ClInclude Include="map\terrain_mod.h" />
     <ClInclude Include="map\roadnet_mod.h" />
     <ClInclude Include="map\zone_mod.h" />
