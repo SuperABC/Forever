@@ -96,12 +96,12 @@
   玩家0号，和项目现状（无分屏/多人支持）一致。
 - **材质参数名严格照抄老工程字符串**：`terrainMaterial`用`TerrainDiffuseArray`/
   `TerrainIndexMap`；`fineMaterial0/1/2`用`FineIndexMap`/`FinePowerMap`/
-  `TerrainDiffuseArray`。这些名字要和复制过来的`TerrainTemplate.uasset`/`FineTemplate.uasset`
+  `TerrainDiffuseArray`。这些名字要和复制过来的`TemplateTerrain.uasset`/`TemplateFine.uasset`
   材质图里的参数名对上才会生效——`SetTextureParameterValue`设错名字不报错只是静默不生效，
   PIE里看贴图是否正确显示是唯一的验证手段。
 - **固定的基础材质走`ConstructorHelpers::FObjectFinder`（构造函数里加载，`EditDefaultsOnly`
   可覆盖），data-driven的每个地形Mod实例的`diffusePath`走运行时`LoadObject<UTexture2D>`**——
-  前者是编译期已知的路径（`TerrainTemplate`/`FineTemplate`/Water插件材质），后者是运行时
+  前者是编译期已知的路径（`TemplateTerrain`/`TemplateFine`/Water插件材质），后者是运行时
   才知道具体是哪个Mod、路径是字符串（`TerrainMod::diffusePath`）。不迁移老工程的
   `UAssetLoader::LoadAssetFromPath`工具类，两种场景各自用引擎自带的对应机制就够。
 - **`FTerrainTri2D`/`FFineCell`/`FForeverLodBoundary`都是普通C++结构体，不是`USTRUCT`**——
@@ -114,7 +114,7 @@
 ## 依赖关系
 
 - 依赖：`Source/Core/map/map.h`（`Map`，非拥有指针）、UE的`ProceduralMeshComponent`/`Water`
-  插件模块（见`Forever.Build.cs`）、`Content/Asset/Materials/{TerrainTemplate,FineTemplate}
+  插件模块（见`Forever.Build.cs`）、`Content/Asset/Materials/{TemplateTerrain,TemplateFine}
   .uasset`、`Content/Asset/Textures/Terrain/*`（从老工程原样复制的美术资产）。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`
   （`CreateDefaultSubobject`创建、`EnsureTerrainGenerated()`里调用`GenerateTerrain`）、
@@ -127,6 +127,6 @@
   来源验证过（含单格/跨格两种情况），PIE看一下绕序/UV是否符合预期，如果Building场景下出现
   更复杂的hatch形状（比如非矩形）发现问题再回来微调——当前`LookupTerrain`假定每个hatch都是
   一个矩形(`Quad`+`rotation`)，不支持任意多边形。
-- 阶段4：`TerrainTemplate`/`FineTemplate`材质图内部除了这几个已知贴图参数外是否还引用了别的
+- 阶段4：`TemplateTerrain`/`TemplateFine`材质图内部除了这几个已知贴图参数外是否还引用了别的
   纹理资产（比如法线/粗糙度贴图），只能在编辑器里打开材质图确认，如果发现引用了没有复制过来
   的资产需要补充复制。

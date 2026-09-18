@@ -57,7 +57,7 @@ Node分裂车道，这些老工程完全没有对应实现，是本次会话跟�
   空间时，每次真正的切分都会自动生成一条1单位宽的小路`Road`（见`Source/Dependence/map/
   geometry.md`的`Lot::SplitWithPath`）。这条小路不走现有"按左右车道数选`default_x_x_x`资产"
   的道路mesh管线（0.3车行/0.2人行两侧这种非整车道宽度套不进那套命名约定），Forever层直接画
-  一个贴材质的扁cube，材质路径就是这个字段——留空表示mod没有指定，退化用`RoadPlain`。普通
+  一个贴材质的扁cube，材质路径就是这个字段——留空表示mod没有指定，退化用`DefaultRoad`。普通
   `public`字符串成员，和`externs`/`roads`等现有字段风格一致，`JingRoadnet`这次不设置也是
   合法状态。
 

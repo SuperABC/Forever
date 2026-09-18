@@ -25,7 +25,7 @@
 - **每条唯一的mesh资产路径对应一个共享的`UInstancedStaticMeshComponent`**（`GetOrCreateRoadISM`
   按路径查/建），不是每条Road各自一个ISM——这次默认所有Road都用同一个`default_1_1`，只会建
   一个ISM，但接口上支持未来mod给不同Road配不同mesh资产。
-- **开口（要求5）：整条路横断面宽度都被替换成一块贴`RoadPlain`材质的扁平cube**，不是精细地
+- **开口（要求5）：整条路横断面宽度都被替换成一块贴`DefaultRoad`材质的扁平cube**，不是精细地
   只挖开人行道/停车道那一部分——`BuildRoadInstances`在命中`Road::GetOpenings()`对应弧长区间
   时跳过该分段mesh实例的摆放，`BuildOpeningMeshes`在同一段范围画一块覆盖整条路总宽度
   （车行+停车+人行道两侧加总）的cube。这是要求5"不再指定道路mesh资产，换成贴路面材质的
@@ -33,7 +33,7 @@
   两处cube生成共用同一份几何逻辑（`AppendFlatRoadCube`：给定road上的中心弧长比例+沿路长度+
   横向宽度，画一块扁平quad），不是各自重复实现一遍。
 - **`BuildRoadInstances`按`unit`铺不出至少一节`default_x_x_x`实例的短缺口，同样退化成
-  `RoadPlain`扁平cube（第十二轮迁移）**：`tileRange`原来遇到"这段范围内连一个满足
+  `DefaultRoad`扁平cube（第十二轮迁移）**：`tileRange`原来遇到"这段范围内连一个满足
   `[0.8,1.2]×unit`约束的分段数都凑不出来"（`nLow>nHigh`或`nLow<=0`，比如两个相邻开口之间/
   端点和第一个开口之间只剩很短一截）就直接跳过、什么都不画，导致路面出现视觉空隙；现在改成
   调`AppendFlatRoadCube(road, centerT, rangeLen, road->GetTotalWidth(), ...)`，把这一小段
@@ -43,7 +43,7 @@
 - **路口mesh是直线简化版**（`BuildJunctionMeshes`）：每个`RoadJunction`的`approaches`已经按
   夹角排好序，把`curbRight[i]`/`curbLeft[i]`两两相邻连成边界点序列（`(right_i,left_i)`是
   road i自己的"开口宽度"边，`(left_i,right_{i+1})`是road i与road i+1之间的桥接边），从路口
-  中心（`Intersection`自身坐标）扇形三角剖分，贴`RoadPlain`材质。不做圆角/斜切。
+  中心（`Intersection`自身坐标）扇形三角剖分，贴`DefaultRoad`材质。不做圆角/斜切。
 - **开口cube和路口mesh都带碰撞**——`CreateMeshSection`的`bCreateCollision`参数从`false`改成
   `true`（两处都要改，PIE验证发现最初漏加，玩家会直接从开口/路口掉到地形挖出的洞里）。道路
   本身的ISM实例走`UInstancedStaticMeshComponent`默认碰撞（跟着`default_1_1`资产自带的
@@ -71,7 +71,7 @@
   被删除时还没有提交过commit，git历史里找不到旧版本**（`ForeverRoadnetFrameworkComponent.cpp`
   只有一个包含完整Roadnet实现的commit，删除发生在那次commit之前的工作区编辑里），这次是
   按照删除前记录在这份文档里的设计描述（node画小box、connection画双面ribbon、车行贴White
-  材质、行人贴RoadPlain材质、元素要有实际厚度否则PIE里看不见）重新实现的，不是原样恢复旧
+  材质、行人贴DefaultRoad材质、元素要有实际厚度否则PIE里看不见）重新实现的，不是原样恢复旧
   代码。`BuildNavigationDebugMesh()`（公开方法）+`BuildNavGraphDebugMesh()`（私有实现，
   给车行/行人各调一次）：
   - `AppendQuadDoubleSided`（匿名namespace自由函数）：四个角点无论以什么环绕顺序传入，两个
