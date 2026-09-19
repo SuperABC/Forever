@@ -64,5 +64,11 @@
   `map/building_residence.{h,cpp}`/`map/room_residence.{h,cpp}`/
   `map/component_residence.h`,详见`Source/Core/populace/populace.md`。
   Roadnet紧随其后,占位`RoadnetBasic`已经被真实的`JingRoadnet`替换,详见`map/roadnet_basic.md`。
+- Building/Room/Component这3个概念现在各自不止一个默认mod：除了`ResidenceXxx`，新增了
+  商店/工厂（照抄老工程`ShopBuilding`/`FactoryBuilding`及各自的Component/Room，详见
+  `map/building_shop.md`/`map/building_factory.md`）。工厂那一组的文件名是
+  `building_plant.h`/`component_plant.h`/`room_plant.h`而不是`"_factory"`，避免和
+  `Source/Dependence/map/xxx_factory.h`（各Xxx注册表类头文件）同名冲突，类名/`GetId()`
+  仍然是`Factory`开头，见`building_factory.md`"文件命名"一节。
 - 阶段4:确认Mod和Basic在同一个Factory里注册时id冲突如何处理(目前`building_mods`等配置
   数组和`Basic`各自用独立的id空间,还没出现真正的冲突场景)。

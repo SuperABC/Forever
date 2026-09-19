@@ -9,6 +9,22 @@
 
 ## 关键设计
 
+- **非中心lot的分区类型改成1:1:1随机（应用户要求的行为变更，不是照抄老工程）**：
+  井字中心lot固定`AREA_OFFICIAL_HIGH`（高密度办公区）不变；其余全部8处
+  `lots.back().SetArea(...)`调用点（4个紧邻中心的臂lot + 4条放射臂细分出来的外圈lot，
+  每条臂的细分循环体每次迭代都独立随机一次）改成调用文件内匿名namespace的
+  `RandomHighDensityArea()`，从`{AREA_RESIDENTIAL_HIGH, AREA_COMMERCIAL_HIGH,
+  AREA_INDUSTRIAL_HIGH}`里等权重（`GetRandom(3)`）随机选一个——每个lot独立掷骰子，不
+  保证整张地图恰好1:1:1均分。改动前（老工程和这个新工程之前都一样）是完全固定的分配：
+  西臂`AREA_RESIDENTIAL_HIGH`、东臂`AREA_RESIDENTIAL_LOW`、北臂`AREA_COMMERCIAL_HIGH`、
+  南臂`AREA_INDUSTRIAL_HIGH`，外圈lot统一`AREA_RESIDENTIAL_LOW`——核对老工程
+  `E:\Projects\Forever_UE\Source\Basic\map\roadnet_basic.cpp:258-326`确认过，不存在
+  "老工程本来就随机、这次只是恢复"这回事，是一次刻意的新行为，服务于`building_shop.md`/
+  `building_factory.md`新增的商店/工厂建筑——它们靠`GetPower(AREA_TYPE)`按分区类型
+  竞争lot（商业/工业分区），分区类型不再单一固定之后，地图上才会同时长出住宅/商店/
+  工厂三种建筑，而不是清一色住宅（一次PIE实测：`AREA_OFFICIAL_HIGH`1个，
+  `AREA_RESIDENTIAL_HIGH`/`AREA_COMMERCIAL_HIGH`/`AREA_INDUSTRIAL_HIGH`分别14/17/16个，
+  `building_shop`/`building_residence`/`building_factory`分别生成91/377/104栋）。
 - **隧道（第二轮迁移，恢复老工程逻辑）**：道路默认高度固定0（第一轮迁移的范围裁剪结论仍然
   成立——不恢复老工程"全程按真实地形/水面高度起伏"的地形高度跟随，`sampleHeight`这个老工程
   辅助lambda不迁移），但`extendChain`延伸链条时如果遇到`mountain`地形（或前后

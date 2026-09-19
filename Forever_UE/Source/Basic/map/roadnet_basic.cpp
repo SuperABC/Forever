@@ -21,6 +21,19 @@
 
 using namespace std;
 
+namespace {
+	// 井字中心lot固定AREA_OFFICIAL_HIGH，其余所有非中心lot(4个紧邻中心的臂lot+更外圈延伸出去
+	// 的lot)按1:1:1随机分配成高密度住宅/商业/工业区——应用户要求的行为变更，老工程和这个新
+	// 工程之前都是固定分配(中心办公，四臂分别固定residential-high/residential-low/
+	// commercial-high/industrial-high，外圈全部residential-low)，不是照抄老工程逻辑。
+	AREA_TYPE RandomHighDensityArea() {
+		static constexpr AREA_TYPE kAreas[3] = {
+			AREA_RESIDENTIAL_HIGH, AREA_COMMERCIAL_HIGH, AREA_INDUSTRIAL_HIGH
+		};
+		return kAreas[GetRandom(3)];
+	}
+}
+
 int JingRoadnet::count = 0;
 
 JingRoadnet::JingRoadnet() : id(count++) {
@@ -368,7 +381,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 					{ 2, boundary2 },
 					{ 3, boundary3 }
 				});
-			lots.back().SetArea(AREA_RESIDENTIAL_HIGH);
+			lots.back().SetArea(RandomHighDensityArea());
 		}
 	}
 	if (horizontalNode1e.size() >= 1 && horizontalNode2e.size() >= 1) {
@@ -382,7 +395,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 					{ 2, boundary2 },
 					{ 3, boundary3 }
 				});
-			lots.back().SetArea(AREA_RESIDENTIAL_LOW);
+			lots.back().SetArea(RandomHighDensityArea());
 		}
 	}
 	if (verticalNode1n.size() >= 1 && verticalNode2n.size() >= 1) {
@@ -396,7 +409,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 					{ 1, boundary1 },
 					{ 3, &roads[2] }
 				});
-			lots.back().SetArea(AREA_COMMERCIAL_HIGH);
+			lots.back().SetArea(RandomHighDensityArea());
 		}
 	}
 	if (verticalNode1s.size() >= 1 && verticalNode2s.size() >= 1) {
@@ -410,7 +423,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 					{ 1, boundary1 },
 					{ 2, &roads[3] }
 				});
-			lots.back().SetArea(AREA_INDUSTRIAL_HIGH);
+			lots.back().SetArea(RandomHighDensityArea());
 		}
 	}
 
@@ -438,7 +451,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 				{ 2, boundary2 },
 				{ 3, boundary3 }
 			});
-		lots.back().SetArea(AREA_RESIDENTIAL_LOW);
+		lots.back().SetArea(RandomHighDensityArea());
 	}
 
 	for (size_t i = 1; i < min(horizontalNode1e.size(), horizontalNode2e.size()); i++) {
@@ -461,7 +474,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 				{ 2, boundary2 },
 				{ 3, boundary3 }
 			});
-		lots.back().SetArea(AREA_RESIDENTIAL_LOW);
+		lots.back().SetArea(RandomHighDensityArea());
 	}
 
 	for (size_t i = 1; i < min(verticalNode1n.size(), verticalNode2n.size()); i++) {
@@ -484,7 +497,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 				{ 0, boundary0 },
 				{ 1, boundary1 }
 			});
-		lots.back().SetArea(AREA_RESIDENTIAL_LOW);
+		lots.back().SetArea(RandomHighDensityArea());
 	}
 
 	for (size_t i = 1; i < min(verticalNode1s.size(), verticalNode2s.size()); i++) {
@@ -507,6 +520,6 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 				{ 0, boundary0 },
 				{ 1, boundary1 }
 			});
-		lots.back().SetArea(AREA_RESIDENTIAL_LOW);
+		lots.back().SetArea(RandomHighDensityArea());
 	}
 }

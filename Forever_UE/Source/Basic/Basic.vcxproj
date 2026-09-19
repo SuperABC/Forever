@@ -94,6 +94,10 @@
     <ClCompile Include="map\zone_residence.cpp" />
     <ClCompile Include="map\building_residence.cpp" />
     <ClCompile Include="map\room_residence.cpp" />
+    <ClCompile Include="map\building_shop.cpp" />
+    <ClCompile Include="map\room_shop.cpp" />
+    <ClCompile Include="map\building_plant.cpp" />
+    <ClCompile Include="map\room_plant.cpp" />
     <ClCompile Include="populace\name_chinese.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -103,6 +107,12 @@
     <ClInclude Include="map\building_residence.h" />
     <ClInclude Include="map\component_residence.h" />
     <ClInclude Include="map\room_residence.h" />
+    <ClInclude Include="map\building_shop.h" />
+    <ClInclude Include="map\component_shop.h" />
+    <ClInclude Include="map\room_shop.h" />
+    <ClInclude Include="map\building_plant.h" />
+    <ClInclude Include="map\component_plant.h" />
+    <ClInclude Include="map\room_plant.h" />
     <ClInclude Include="player\asset_basic.h" />
     <ClInclude Include="player\app_basic.h" />
     <ClInclude Include="player\puzzle_basic.h" />

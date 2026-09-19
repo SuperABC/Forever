@@ -214,8 +214,19 @@ float ResidenceBuilding::GetPower(AREA_TYPE area) {
 	// RoadnetMod(JingRoadnet::DistributeRoadnet)已经会给每个lot调用Lot::SetArea()标好实际的
 	// 分区类型，不是AREA_NONE——之前这里错误地假设所有lot都是默认值AREA_NONE，导致GetPower对
 	// 每个真实lot都返回0，FillRemainder链路上的候选权重从未被登记过，一个独立building都生成
-	// 不出来(PIE验证发现)。这个通用占位类型暂时不按分区类型区分权重，对所有分区一视同仁给
-	// 权重1(照抄老工程改造前candidateWeights.push_back({lot,1.f})的行为)，等以后设计具体
-	// 建筑类型时再按area细化。
-	return 1.f;
+	// 不出来(PIE验证发现)。当时"对所有分区一视同仁给权重1"是因为这个占位类型是唯一注册的
+	// building类型，怎么给权重都无所谓——引入ShopBuilding/FactoryBuilding(各自只在商业/工业
+	// 分区有权重，见building_shop.md/building_factory.md)之后，这个"一视同仁"就变成bug了：
+	// 商业/工业分区上ResidenceBuilding和Shop/Factory一起参与FillRemainder的权重CDF竞争，
+	// 导致商业区/工业区里混入了住宅建筑(PIE验证发现)。改成只在住宅分区(高/中/低密度)上有
+	// 权重，照抄老工程真正参与竞争的ResidentialLow/Middle/HighBuilding三个具体类型只在
+	// 住宅分区有非零权重的做法(老工程真正注册的是这三个，从未注册这个通用ResidentialBuilding
+	// 基类，见E:\Projects\Forever_UE\Source\Basic\basic.cpp:92-102)——这个通用占位类型这次
+	// 不细分三档密度权重，统一按1.f处理，等以后设计具体建筑类型时再细分。办公/商业/工业分区
+	// 上返回0，意味着没有对应类型建筑竞争的分区(目前只有办公区，还没有Office建筑类型)那块
+	// lot会暂时保持空地，不会被随便一种建筑顶上，属于预期行为。
+	if (area == AREA_RESIDENTIAL_HIGH || area == AREA_RESIDENTIAL_MIDDLE || area == AREA_RESIDENTIAL_LOW) {
+		return 1.f;
+	}
+	return 0.f;
 }

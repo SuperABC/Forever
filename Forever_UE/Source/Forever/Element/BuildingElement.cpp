@@ -20,9 +20,26 @@
 #include <algorithm>
 
 #define BUILDING_WORLD_SCALE 1000.f
-// 和ForeverZoneFrameworkComponent.cpp的ZONE_HEIGHT_EPSILON同一类问题：Building没有真实
-// 高度数据，楼层cube统一从这个高度起算(相当于室外地坪)，避开和地形网格共面z-fighting。
-#define BUILDING_HEIGHT_EPSILON 10.f
+// Building没有真实高度数据，楼层cube统一从这个高度起算(相当于室外地坪grade)，这个grade
+// 同时是地上1楼的地板/basements最上面一层(地下1楼)天花板共用的同一个Z——0楼层的
+// GetFloorBaseZ(0)恒等于0，这个值只是纯渲染层"避开z-fighting"的偏移，加不加、加多少和
+// Core侧楼层数据无关。
+//
+// 数值这次从10.f改成1.f：老数值10.f比地形网格自己的z-fighting偏移
+// (ForeverTerrainFrameworkComponent.cpp的HEIGHT_EPSILON=0.002地图单位，乘
+// BUILDING_WORLD_SCALE换算成世界单位=2.f)还大，导致地下室天花板(和地上1楼地板共用同一个
+// grade)整体比地形mesh表面高8个世界单位，从外面能看见地下室天花板从地面里冒出来一截
+// (用户报告的bug)。改成比地形的2.f更小的1.f，让这个共用grade稳定沉到地形表面以下——
+// 地下室天花板朝上的一面因此低于地形，满足"看不出地下室"的要求；地上1楼的地板(同一个Z)
+// 跟着一起沉了1个世界单位(约1cm)，用户已确认这个副作用可以接受("地上一层的地板下表面
+// 可以比地形mesh低，毕竟玩家在室外的时候一直都在地面上")。1.f仍然大于0，和地形的2.f之间
+// 留了1个世界单位的间隙，避免两个网格恰好共面出现z-fighting。
+//
+// 这不是彻底修复：Building这次仍然不采样所在位置的真实地形高度(TODO，见
+// BuildingElement.md)，只是把这个全局常量和地形自己的常量放在同一个参考系里对齐大小关系，
+// 对今天"可建造的lot地形高度恒为0"这个前提成立；将来lot允许出现在非0高度地形上时，这个
+// 全局常量会需要换成真正按building位置采样SampleHeight()的方案。
+#define BUILDING_HEIGHT_EPSILON 1.f
 // 墙体厚度(地图单位)，照抄老工程BuildingBase.cpp::ConstructQuad里写死的0.01f。
 #define BUILDING_WALL_THICKNESS 0.01f
 // UE标准立方体静态网格(/Game/Asset/Meshes/Cube.Cube)的原生边长(cm)——SpawnCube用

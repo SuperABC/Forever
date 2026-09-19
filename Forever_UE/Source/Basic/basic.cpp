@@ -29,8 +29,14 @@
 #include "map/roadnet_basic.h"
 #include "map/zone_residence.h"
 #include "map/building_residence.h"
+#include "map/building_shop.h"
+#include "map/building_plant.h"
 #include "map/component_residence.h"
+#include "map/component_shop.h"
+#include "map/component_plant.h"
 #include "map/room_residence.h"
+#include "map/room_shop.h"
+#include "map/room_plant.h"
 #include "player/asset_basic.h"
 #include "player/app_basic.h"
 #include "player/puzzle_basic.h"
@@ -54,6 +60,15 @@
 // ResidenceZone/ResidenceBuilding/ResidenceRoom/ResidenceComponent，其余概念暂时仍是
 // XxxBasic命名，等各自域真正迁移时再按需改名),完整对照表见
 // Source/Dependence/README.md 的21个concept对照表。
+//
+// Building/Component/Room这三个概念现在各自不止一个默认mod：Residence之外新增了商店/
+// 工厂（照抄老工程ShopBuilding/FactoryBuilding及各自的Component/Room，见
+// Source/Basic/map/building_shop.md、building_factory.md）——工厂类的文件名是
+// building_plant.h/component_plant.h/room_plant.h而不是"_factory"，避免和
+// Source/Dependence/map/xxx_factory.h(各Xxx注册表类头文件)在Basic/Dependence两个include
+// 目录下同名冲突，类名/GetId()仍然是Factory开头。Room额外多了个WarehouseRoom/
+// ParkingRoom(装在room_shop.h里，Factory的地下室也复用ParkingRoom)，这两个不是独立的
+// building类型，只是Shop/Factory布局内部用到的辅助room。
 
 using namespace std;
 
@@ -101,7 +116,7 @@ extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModBuildings() {
-	static vector<string> mods = { ResidenceBuilding::GetId() };
+	static vector<string> mods = { ResidenceBuilding::GetId(), ShopBuilding::GetId(), FactoryBuilding::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
@@ -110,18 +125,34 @@ extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* fact
 		[](BuildingMod* m) { delete m; },
 		&ResidenceBuilding::RandomAcreage, &ResidenceBuilding::GetAcreageMin, &ResidenceBuilding::GetAcreageMax,
 		&ResidenceBuilding::GetPower, &ResidenceBuilding::Assign);
+	factory->RegisterBuilding(ShopBuilding::GetId(),
+		[]() -> BuildingMod* { return new ShopBuilding(); },
+		[](BuildingMod* m) { delete m; },
+		&ShopBuilding::RandomAcreage, &ShopBuilding::GetAcreageMin, &ShopBuilding::GetAcreageMax,
+		&ShopBuilding::GetPower, &ShopBuilding::Assign);
+	factory->RegisterBuilding(FactoryBuilding::GetId(),
+		[]() -> BuildingMod* { return new FactoryBuilding(); },
+		[](BuildingMod* m) { delete m; },
+		&FactoryBuilding::RandomAcreage, &FactoryBuilding::GetAcreageMin, &FactoryBuilding::GetAcreageMax,
+		&FactoryBuilding::GetPower, &FactoryBuilding::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {
 	factory->CleanTemp();
 }
 
 extern "C" __declspec(dllexport) void* GetModComponents() {
-	static vector<string> mods = { ResidenceComponent::GetId() };
+	static vector<string> mods = { ResidenceComponent::GetId(), ShopComponent::GetId(), FactoryComponent::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* factory) {
 	factory->RegisterComponent(ResidenceComponent::GetId(),
 		[]() -> ComponentMod* { return new ResidenceComponent(); },
+		[](ComponentMod* m) { delete m; });
+	factory->RegisterComponent(ShopComponent::GetId(),
+		[]() -> ComponentMod* { return new ShopComponent(); },
+		[](ComponentMod* m) { delete m; });
+	factory->RegisterComponent(FactoryComponent::GetId(),
+		[]() -> ComponentMod* { return new FactoryComponent(); },
 		[](ComponentMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModComponents(ComponentFactory* factory) {
@@ -129,12 +160,26 @@ extern "C" __declspec(dllexport) void FinishModComponents(ComponentFactory* fact
 }
 
 extern "C" __declspec(dllexport) void* GetModRooms() {
-	static vector<string> mods = { ResidenceRoom::GetId() };
+	static vector<string> mods = {
+		ResidenceRoom::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), FactoryRoom::GetId()
+	};
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModRooms(RoomFactory* factory) {
 	factory->RegisterRoom(ResidenceRoom::GetId(),
 		[]() -> RoomMod* { return new ResidenceRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(ShopRoom::GetId(),
+		[]() -> RoomMod* { return new ShopRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(WarehouseRoom::GetId(),
+		[]() -> RoomMod* { return new WarehouseRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(ParkingRoom::GetId(),
+		[]() -> RoomMod* { return new ParkingRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(FactoryRoom::GetId(),
+		[]() -> RoomMod* { return new FactoryRoom(); },
 		[](RoomMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModRooms(RoomFactory* factory) {
