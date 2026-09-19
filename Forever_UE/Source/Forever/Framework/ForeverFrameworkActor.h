@@ -64,6 +64,10 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	// 阶段4-7(部分)：驱动Player的全局时钟(Player::Tick)——目前这个Actor唯一需要每帧更新
+	// 的东西，见ForeverFrameworkActor.md"Tick"一节。
+	virtual void Tick(float DeltaTime) override;
+
 	// 必须在这里(而不是只靠~AForeverFrameworkActor())同步delete map：PIE停止时Actor只是被
 	// 标记PendingKill，真正的UObject垃圾回收(进而触发C++析构函数)时机不确定，可能拖到下一次
 	// 按Play之后才发生。map持有的modLoader析构时会FreeLibrary卸载Basic.dll等mod dll——如果

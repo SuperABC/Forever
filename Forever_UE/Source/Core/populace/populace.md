@@ -75,7 +75,10 @@ map->Checkin(*populace);
   翻译成`Citizen*`互相关联——**只有配偶/子女双方都幸存物化才登记**，只有一方活下来的
   婚姻/亲子关系直接丢弃（本来也没有对应的`Citizen*`可指）。生日年份沿用老工程"2000+模拟
   内部年份"的换算习惯；模拟结束时的年份（`year+2000`）存进`currentYear`，通过
-  `GetCurrentYear()`供`Map::Checkin()`给`Citizen::GetAge()`用。
+  `GetCurrentYear()`供`Map::Checkin()`给`Citizen::GetAge()`用，也供
+  `AForeverFrameworkActor::EnsureMapGenerated()`把开局游戏时钟设成这一年的1月1日8点
+  （`player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8))`），见
+  `Core/player/player.md`"开局时间=人口模拟结束年份"一节。
 
 ### 姓名生成：真正的Name域（`NameMod`/`NameFactory`/`ChineseName`，第二版迁移）
 

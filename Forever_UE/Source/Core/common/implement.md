@@ -27,17 +27,26 @@ BroadcastGameStart`在UE层从`AForeverFrameworkActor`身上取到7个指针后�
 栈上构造）一个，只活这一次广播的生命周期，见`Forever/Framework/
 ForeverStoryFrameworkComponent.md`"PostImplement"一节。
 
-### 只实现一种post类型，其余6个domain指针先占位
+### 目前实现两种post类型，其余domain指针先占位
 
 构造函数接收全部7个指针（`Map*`/`Populace*`/`Society*`/`Story*`/`Industry*`/`Traffic*`/
-`Player*`）并存成成员，但`Post()`目前只识别一种请求：`request["post"] == "random citizen"`
-——从`populace->GetCitizens()`（`std::vector<Citizen*>`）里`GetRandom(size)`随机挑一个，
-成功返回`{"result":"success","name":"<姓名>"}`，`populace`为空或citizen列表为空返回
-`{"result":"fail","msg":"no citizen available."}`；请求不认识（`post`字段不是`"random
-citizen"`，或者请求本身不是一个JSON对象）统一返回`{"result":"fail","msg":"post not
-found."}`。`society`/`story`/`industry`/`traffic`/`player`这五个指针（`map`同样暂时用不到）
-这次构造出来传进去，但`Post()`里还完全用不上——等对应域真正迁移出业务逻辑、需要通过`Post`
-查询它们的数据时，再在这个`if/else if`链上加新分支，不需要改构造函数签名。
+`Player*`）并存成成员，`Post()`目前识别两种请求：
+
+- `request["post"] == "random citizen"`：从`populace->GetCitizens()`
+  （`std::vector<Citizen*>`）里`GetRandom(size)`随机挑一个，成功返回
+  `{"result":"success","name":"<姓名>"}`，`populace`为空或citizen列表为空返回
+  `{"result":"fail","msg":"no citizen available."}`。
+- `request["post"] == "game time"`：读`player->GetTime()`（`Player`全局时钟，见
+  `Core/player/player.md`），成功返回`{"result":"success","date":"YYYY-MM-DD",
+  "time":"HH:mm"}`，`player`为空或时钟还没`Init()`时返回`{"result":"fail","msg":"no
+  game time available."}`——字段命名照抄老工程`Core/common/implement.cpp`同一个post
+  类型。
+
+请求不认识（`post`字段不是上面两种，或者请求本身不是一个JSON对象）统一返回
+`{"result":"fail","msg":"post not found."}`。`society`/`industry`/`traffic`这三个指针
+（`map`同样暂时用不到）这次构造出来传进去，但`Post()`里还完全用不上——等对应域真正迁移出
+业务逻辑、需要通过`Post`查询它们的数据时，再在这个`if/else if`链上加新分支，不需要改构造
+函数签名。
 
 ### `GetResult()`返回成员的引用，不按值返回
 
@@ -54,9 +63,10 @@ virtual const JsonValue& GetResult() const override { return result; }
 ## 依赖关系
 
 - 依赖：`common/handle.h`（`PostHandle`基类）、`common/json.h`（`JsonValue`）、
-  `populace/populace.h`/`populace/citizen.h`（`Populace::GetCitizens()`/`Citizen`，
-  `Post()`里唯一真正用到的domain）、`common/utility.h`（`GetRandom`）、`Map`/`Society`/
-  `Story`/`Industry`/`Traffic`/`Player`（仅前置声明，构造函数存指针，`Post()`里暂未使用）。
+  `populace/populace.h`/`populace/citizen.h`（`Populace::GetCitizens()`/`Citizen`）、
+  `player/player.h`（`Player::GetTime()`）、`common/utility.h`（`GetRandom`、
+  `Time::Format`）、`Map`/`Society`/`Story`/`Industry`/`Traffic`（仅前置声明，构造函数
+  存指针，`Post()`里暂未使用）。
 - 被谁依赖：`Forever/Framework/ForeverStoryFrameworkComponent.cpp`
   （`BroadcastGameStart()`现场构造`PostImplement`，传给`Story::BroadcastGameStart`的
   `post`参数）、`Dependence/story/script_mod.h`/`Forever_Mod/Empty/Cpp/Empty/
@@ -65,9 +75,8 @@ virtual const JsonValue& GetResult() const override { return result; }
 
 ## 待办/后续阶段
 
-- `society`/`story`（`Post()`里目前不用，虽然构造函数收了）/`industry`/`traffic`/`player`
-  五个domain指针目前只存不用，等对应域真正迁移出业务逻辑、需要通过`Post`反向查询时再加
-  新的`else if`分支。
-- 目前只有"random citizen"一种查询类型，请求/响应的JSON字段命名（`post`/`result`/`name`/
-  `msg`）没有形成任何通用约定或校验，后续查询类型多起来后可能需要梳理一份统一的请求/响应
-  格式规范。
+- `society`/`industry`/`traffic`三个domain指针目前只存不用，等对应域真正迁移出业务逻辑、
+  需要通过`Post`反向查询时再加新的`else if`分支。
+- 目前只有"random citizen"/"game time"两种查询类型，请求/响应的JSON字段命名
+  （`post`/`result`/`name`/`date`/`time`/`msg`）没有形成任何通用约定或校验，后续查询
+  类型多起来后可能需要梳理一份统一的请求/响应格式规范。

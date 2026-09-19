@@ -26,15 +26,23 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
   先删`populace`只是保持和创建顺序相反的直觉。
 - **新增`society`/`industry`/`traffic`/`player`四个域指针（阶段4 Story落地新增）**：和
   `map`/`populace`/`story`同一套生命周期管理方式（`EnsureMapGenerated()`尾部`new`、
-  `EndPlay`/析构里`delete`+置空），但这四个域这次**没有真正migrate**，`Society`/
-  `Industry`/`Traffic`/`Player`目前都是只能默认构造的空壳类。加它们纯粹是为了让
-  `PostImplement`（`Core/common/implement.h`，`PostHandle`的第一个具体实现）能在构造时
-  拿到Core全部7个domain的真实指针，不是提前实现这几个域的业务逻辑——`PostImplement`目前
-  也只真正用到`populace`一个指针（"random citizen"查询），其余几个只是存着，等对应域真正
-  迁移出业务逻辑、需要通过`Post`查询时再用。四个新指针创建顺序在`story`之前（`EnsureMapGenerated`
-  里`society`/`industry`/`traffic`/`player`先`new`，`story`最后创建），删除顺序按和创建
-  相反的直觉从`player`往前delete，理由同上——这几个域彼此都不持有对方的裸指针，删除顺序
-  不影响内存安全。
+  `EndPlay`/析构里`delete`+置空）。`Society`/`Industry`/`Traffic`目前都是只能默认构造的
+  空壳类，加它们纯粹是为了让`PostImplement`（`Core/common/implement.h`，`PostHandle`的
+  第一个具体实现）能在构造时拿到Core全部7个domain的真实指针，不是提前实现这几个域的业务
+  逻辑——`PostImplement`目前也只真正用到`populace`/`player`两个指针（"random citizen"/
+  "game time"两种查询），其余几个只是存着，等对应域真正迁移出业务逻辑、需要通过`Post`
+  查询时再用。`Player`这次额外迁移了"全局时钟"这一小块（`Time*`+`Init/Tick/GetTime/
+  SetTime/CrossDay`，见`Core/player/player.md`），`new Player()`后紧接着调一次
+  `player->Init()`。四个新指针创建顺序在`story`之前（`EnsureMapGenerated`里`society`/
+  `industry`/`traffic`/`player`先`new`，`story`最后创建），删除顺序按和创建相反的直觉从
+  `player`往前delete，理由同上——这几个域彼此都不持有对方的裸指针，删除顺序不影响内存
+  安全。
+- **`PrimaryActorTick.bCanEverTick`这次从`false`改成`true`，新增`Tick(float DeltaTime)`
+  覆写**：这是这个Actor第一次真正需要每帧更新的逻辑——覆写里只做一件事，`player`存在时调用
+  `player->Tick(DeltaTime)`驱动全局时钟往前走（`player`在`EnsureMapGenerated()`跑完之前
+  是`nullptr`，但`BeginPlay`同步跑完`EnsureMapGenerated()`后引擎才会开始调用`Tick`，理论
+  上不会遇到空指针，判空只是防御性写法）。以后其它域需要每帧更新时也应该加进这同一个
+  `Tick`里，不要再新开一个"谁来负责每帧驱动"的入口。
 - **补上一个此前缺失的`GetStory()`**：`story`成员本身在阶段4 Story落地时就已经加入，但当时
   漏加了对应的getter（`GetMap()`/`GetPopulace()`都有，`GetStory()`没有）——这次和
   `GetSociety()`/`GetIndustry()`/`GetTraffic()`/`GetPlayer()`一起补齐，是`UForeverStoryFrameworkComponent::

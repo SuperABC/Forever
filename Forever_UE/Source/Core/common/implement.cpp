@@ -2,6 +2,7 @@
 
 #include "populace/populace.h"
 #include "populace/citizen.h"
+#include "player/player.h"
 #include "common/utility.h"
 
 using namespace std;
@@ -27,6 +28,19 @@ void PostImplement::Post(const JsonValue& request) {
 		Citizen* citizen = citizens[GetRandom(static_cast<int>(citizens.size()))];
 		result["result"] = "success";
 		result["name"] = citizen->GetName();
+		return;
+	}
+
+	if (request.IsObject() && request["post"].AsString() == "game time") {
+		if (!player || !player->GetTime()) {
+			result["result"] = "fail";
+			result["msg"] = "no game time available.";
+			return;
+		}
+
+		result["result"] = "success";
+		result["date"] = player->GetTime()->Format("YYYY-MM-DD");
+		result["time"] = player->GetTime()->Format("HH:mm");
 		return;
 	}
 

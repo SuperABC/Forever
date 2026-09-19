@@ -7,6 +7,7 @@
 #include "industry/industry.h"
 #include "traffic/traffic.h"
 #include "player/player.h"
+#include "common/utility.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -21,7 +22,7 @@
 
 AForeverFrameworkActor::AForeverFrameworkActor()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true; // 驱动Player::Tick(全局时钟)，见.h的Tick覆写注释
 
 	sceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = sceneRoot;
@@ -92,6 +93,18 @@ void AForeverFrameworkActor::BeginPlay()
 	EnsureMapGenerated();
 }
 
+void AForeverFrameworkActor::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// player在EnsureMapGenerated()跑完之前是nullptr——BeginPlay里EnsureMapGenerated()
+	// 在Super::BeginPlay()之后同步跑完，引擎只会在BeginPlay之后才调用Tick，理论上不会遇到
+	// 空指针，这里判空只是和其它地方一致的防御性写法。
+	if (player) {
+		player->Tick(DeltaTime);
+	}
+}
+
 namespace {
 	// 默认地图尺寸(地图元素,1元素=10m)。必须满足两个条件:
 	// 1) MountainTerrain的生成密度公式densityScale=width*height/(512*512)(整数除法)要
@@ -149,12 +162,19 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 		populaceFramework->GenerateCitizens(map, populace);
 	}
 
-	// Society/Industry/Traffic/Player这四个域这次都是空骨架，新增它们纯粹是为了让
-	// PostImplement（Core/common/implement.h）能拿到7个域的真实指针，见各自的.md。
+	// Society/Industry/Traffic这三个域这次还是空骨架，新增它们纯粹是为了让PostImplement
+	// （Core/common/implement.h）能拿到7个域的真实指针，见各自的.md。Player这次迁移了
+	// 全局时钟部分，Init()创建Time并交给AForeverFrameworkActor::Tick每帧推进，见player.md。
 	society = new Society();
 	industry = new Industry();
 	traffic = new Traffic();
 	player = new Player();
+	player->Init();
+	// 市民繁衍模拟从2000年起演化到populace自己认为的"当前年份"(Populace::GetCurrentYear()，
+	// 老工程population.cpp里time->SetYear(year+2000)的新工程对应物——那边直接改Player的
+	// 时钟，这边改成读populace算出来的年份再喂给Player::SetTime)，开局时间定为那一年的
+	// 1月1日8点，让Citizen的生日/年龄和这个初始时钟保持自洽，见populace.md"生日换算"一节。
+	player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 
 	// 阶段4 Story落地：和map/populace不互相依赖，放在最后创建即可。Init()读取
 	// Resource/Story/test.json，随后立刻广播一次GameStartEvent，见storyFramework.md。

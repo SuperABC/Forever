@@ -26,8 +26,10 @@ public:
 	const std::vector<Citizen*>& GetCitizens() const;
 
 	// 模拟结束时的"当前年份"(老工程time->SetYear(year+2000)那个值)——Map::Checkin()用它
-	// 给Citizen::GetAge()算成年/未成年，不需要真正的日历/游戏时钟系统。Init()跑完之前
-	// 返回默认值2000。
+	// 给Citizen::GetAge()算成年/未成年。Player的全局时钟落地后，
+	// AForeverFrameworkActor::EnsureMapGenerated()也用这个值把开局时间设成这一年的
+	// 1月1日8点(player->SetTime(Time(GetCurrentYear(), 1, 1, 8))，见player.md)。
+	// Init()跑完之前返回默认值2000。
 	int GetCurrentYear() const;
 
 private:
