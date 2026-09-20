@@ -16,7 +16,7 @@ void Player::Init() {
 }
 
 void Player::Tick(float delta) {
-	constexpr double kTimeFlowRatio = 1.0; // 见player.md"time_flow_ratio"一节
+	constexpr double kTimeFlowRatio = 2.0; // 见player.md"time_flow_ratio"一节
 	day = time->GetDay();
 	time->AddMilliseconds(static_cast<int>(delta * 60 * 1000 * kTimeFlowRatio));
 }

@@ -143,6 +143,40 @@ UBT判定要重算），adaptive排除名单变化，两个文件第一次被拼
 记录的位置出现"：不管这个citizen被销毁过多少次，只要`hasPosition`已经为true，重新生成
 时永远用最后一次的真实位置，不再触发随机抖动。
 
+### `WalkTo`（进入society域新增）：沿现成路径点走，不用AIController/NavMesh
+
+`UForeverPopulaceFrameworkComponent::RequestWalk`发现某个citizen当前有对应
+`ACitizenElement`时会调`WalkTo(waypoints, destination)`——路径点已经由`Map::
+FindPedestrianPath`（Dijkstra）算好，这里只负责"沿着这串世界坐标走过去"这一件事：
+`SetMovementMode(MOVE_Walking)`+`SetActorTickEnabled(true)`（构造函数里
+`PrimaryActorTick.bCanEverTick=true`但默认`SetActorTickEnabled(false)`——绝大多数
+citizen静止不动，只有真正在走路的这段时间才需要每帧开销），`Tick()`里每帧朝
+`pendingWaypoints[waypointIndex]`方向`AddMovementInput`（只判水平距离，阈值
+`kWaypointArrivalThresholdUU`=80 UE单位，到达即前进到下一个路径点），全部走完切回
+`MOVE_None`+关闭Tick+回调`framework->NotifyArrived(citizen, walkDestination)`更新
+`Citizen::SetCurrentRoom`。**不用`AIController`/`NavMesh`**——这次没有真正的寻路AI，
+路径已经是Core侧算好的现成数据，`WalkTo`纯粹是沿点插值前进+转向，复用
+`CharacterMovement`只是为了保留碰撞/坡度处理。和`PossessedBy`同样会切
+`CharacterMovementComponent`的模式，两者目前没有互相冲突检测（玩家在市民走路途中按T
+占有它这种边界场景没有特殊处理）。
+
+### `TeleportToRoom`/`ComputeRoomLandingSpot`（进入society域新增）：寻路失败时，可见的Actor也必须跟着挪，不能只改Core状态
+
+`RequestWalk`寻路失败（起点/终点没有导航节点，或图不连通）但这个citizen当前**有已生成的
+`ACitizenElement`**时，不能像"没有Actor"那种情况一样只改`Citizen::SetCurrentRoom`——那样
+Core状态已经"到家"了，但这个可见的Actor完全没人碰过，会一直冻结在原地不动（PIE验证复现
+过这个bug："市民到点该走了，但眼前这个人一直没动过"）。`TeleportToRoom(Room* destination)`
+把Actor本身也瞬移过去：`SetActorLocation`+同步`citizen->SetCurrentRoom(destination)`+
+`citizen->SetPosition(...)`（这次是真的有精确3D坐标可写，不是`ClearPosition()`）。
+
+落地位置的计算（房间中心+随机抖动+楼层高度换算，见上"3D坐标"一节的完整公式）和`Init()`
+"换房间后从未在场景里实例化过"分支原本是同一段逻辑，这次提炼成私有辅助
+`ComputeRoomLandingSpot(Room* room, float& outWorldX, float& outWorldY, float& outWorldZ)`
+给两处共用，`Init()`不再自己内联这段计算。`room`为空或反查不到`GetParentBuilding()`时
+返回`false`，调用方保留原有坐标不变——和`ComputeLogicalPosition`同一条"必须从
+`room->GetParentBuilding()`反查building，不能用`citizen->GetBuilding()`"的规则，见
+`ForeverPopulaceFrameworkComponent.md`"已修复的bug"一节。
+
 ### 靠近检测碰撞盒——和流式生成/销毁的距离判定是两回事
 
 `proximityBox`是纯UE层的装饰性判定，用固定的UE单位常量（不走地图单位换算），和
@@ -183,9 +217,9 @@ UBT判定要重算），adaptive排除名单变化，两个文件第一次被拼
 
 ## 待办/后续阶段
 
-- 真正的AI行为（未被占有时走动/工作/日程驱动的移动）——`PossessedBy`/`UnPossessed`只解决
-  了"被玩家占有时能走"，没有玩家占有的市民仍然是`MOVE_None`静止不动，移动逻辑本身、寻路
-  都是后续任务。
+- 进入society域后，未被占有的市民已经能按Job调度（上下班）走动（见上"`WalkTo`"一节），
+  但这仅限于"有明确调度触发"的场景——没有Job、或者Job没有产生调度的市民仍然是
+  `MOVE_None`静止不动，通用的"没事做的时候到处逛逛"这类自由游走AI还没有，是后续任务。
 - 真实资产替换`SKM_Manny_Simple`占位。
 - 靠近检测碰撞盒尺寸（`CITIZEN_PROXIMITY_HALF_XY`/`_Z`）是按经验给的初始值，可能需要按
   真实资产的实际比例微调。

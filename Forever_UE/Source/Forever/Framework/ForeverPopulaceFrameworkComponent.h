@@ -7,6 +7,7 @@
 class Map;
 class Populace;
 class Citizen;
+class Room;
 class ACitizenElement;
 
 // 对应旧Framework Actor `Populace`(C++ Base:PopulaceBase)。这次进入populace域时第一次
@@ -40,6 +41,17 @@ public:
 	// 或强制生成失败时返回nullptr。
 	// @name: 目标citizen姓名（UTF-8转FString比较）
 	ACitizenElement* FindOrSpawnCitizenByName(const FString& name);
+
+	// Job按调度产出NPCNavigateChange时，AForeverFrameworkActor::Tick的回调转发到这里：
+	// 用destination和市民当前所在room各自的GetNavigationNode()对map->FindPedestrianPath
+	// 寻路——citizen当前有已生成的ACitizenElement(查activeInstances)就调它的
+	// WalkTo播放真实走路动画；否则(不在流式加载范围内，没有Actor，或者寻路失败)直接瞬移
+	// 逻辑状态：SetCurrentRoom(destination)+ClearPosition()(不是SetPosition，见
+	// Citizen::ClearPosition()的说明)。
+	void RequestWalk(Citizen* citizen, Room* destination);
+
+	// ACitizenElement::WalkTo全部路径点走完后的回调：更新Citizen::SetCurrentRoom。
+	void NotifyArrived(Citizen* citizen, Room* destination);
 
 private:
 	// 生成一个citizen对应的ACitizenElement并登记进activeInstances——从TickComponent的

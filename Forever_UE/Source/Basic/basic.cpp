@@ -59,6 +59,10 @@
 // map/building_basic.md/room_basic.md/component_basic.md。Room额外多了个WarehouseRoom/
 // ParkingRoom(装在room_basic.h里，Factory的地下室也复用ParkingRoom)，这两个不是独立的
 // building类型，只是Shop/Factory布局内部用到的辅助room。
+//
+// society域这次迁移了Job/Organization（不要Calendar）：job_basic.h/.cpp里的JobBasic占位
+// 类换成了真正的ShopSalerJob，organization_basic.h/.cpp里的OrganizationBasic占位类换成了
+// 真正的ShopOrganization，见Source/Core/society/job.md/organization.md。
 
 using namespace std;
 
@@ -195,25 +199,26 @@ extern "C" __declspec(dllexport) void FinishModSchedulers(SchedulerFactory* fact
 }
 
 extern "C" __declspec(dllexport) void* GetModJobs() {
-	static vector<string> mods = { JobBasic::GetId() };
+	static vector<string> mods = { ShopSalerJob::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModJobs(JobFactory* factory) {
-	factory->RegisterJob(JobBasic::GetId(),
-		[](const std::string&) -> JobMod* { return new JobBasic(); },
+	factory->RegisterJob(ShopSalerJob::GetId(),
+		[](const std::string&) -> JobMod* { return new ShopSalerJob(); },
 		[](JobMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModJobs(JobFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModOrganizations() {
-	static vector<string> mods = { OrganizationBasic::GetId() };
+	static vector<string> mods = { ShopOrganization::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModOrganizations(OrganizationFactory* factory) {
-	factory->RegisterOrganization(OrganizationBasic::GetId(),
-		[](const std::string&) -> OrganizationMod* { return new OrganizationBasic(); },
-		[](OrganizationMod* m) { delete m; });
+	factory->RegisterOrganization(ShopOrganization::GetId(),
+		[](const std::string&) -> OrganizationMod* { return new ShopOrganization(); },
+		[](OrganizationMod* m) { delete m; },
+		&ShopOrganization::GetPower);
 }
 extern "C" __declspec(dllexport) void FinishModOrganizations(OrganizationFactory* factory) {
 }

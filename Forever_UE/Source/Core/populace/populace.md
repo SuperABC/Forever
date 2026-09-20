@@ -200,6 +200,27 @@ id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有�
   Framework/ForeverPopulaceFrameworkComponent.h/.cpp`（`GenerateCitizens(Map*,
   Populace*)`缓存`GetCitizens()`列表）。
 
+## Tick：驱动Job的调度（进入society域新增）
+
+`Populace::Tick(currentTime, crossedDay, onActions)`——`Job`的timer放在这里（不是老
+工程的`Society::timerSet`），因为`Job`由`Citizen`直接持有引用，`Populace`本来就要
+遍历所有citizen，比按`Organization`→`Component`→`Job`反查"这个job的occupant是谁"更
+直接。`crossedDay`为true时遍历所有持有job的citizen，转调`job->DailyPlan(currentTime)`
+生成今天的调度表，塞进`Populace`自己的`jobTimerSet`（`std::set<std::tuple<Time,
+Citizen*, std::string>>`，按时间排序）；不论是否跨天，每帧从`jobTimerSet`弹出最多
+`kMaxJobTimersPerTick`个到期节点执行——照抄老工程"一帧内允许处理的timer上限"这个
+设计，避免单帧处理过多到期节点卡顿。**这次调成`1`**（原来是`4`）——每个Job类型这次
+都用固定钟点（比如店员天天9点/12点），同一时刻到期的节点数很容易远超每帧上限，
+PIE验证发现`kTimeFlowRatio`调快之后9点/12点这类"大量市民同一时刻上下班"场景会卡顿
+好几帧，调到`1`让每帧的开销（尤其是`Map::FindPedestrianPath`这次Dijkstra寻路）更
+均摊，代价是把同一批到期节点摊得更久才能处理完。Organization自己的调度是另一套完全
+独立的timer，放在`Society::Tick`里，见`Source/Core/society/society.md`"Job的timer在
+Populace，Organization的timer在Society"一节。
+
+回调签名`(Citizen*, const vector<Change*>&)`——`Populace`自己不知道Actor层，调用方
+（`AForeverFrameworkActor::Tick`）按这个`Citizen*`决定`NPCNavigateChange`具体怎么
+生效，见`job.md`。
+
 ## 不在这次范围内
 
 - 老工程`Name`包装类的`reserve`/`roll`去重——见上"姓名生成"一节末尾。
@@ -208,8 +229,8 @@ id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有�
   `CreateName`的id即可。
 - `Citizen`的父母/兄弟姐妹等亲属关系（配偶/子女除外，见上）、性格/交情、资产、职业/
   日程——见`citizen.md`。
-- `Citizen`真正的AI行为（走动/工作/日程驱动的移动）——见`Source/Forever/Element/
-  CitizenElement.md`。
+- `Citizen`通用的自由游走AI（没有工作驱动之外的自主移动）——有Job的市民已经能按调度
+  走动，见上"Tick"一节、`Source/Forever/Element/CitizenElement.md`。
 - 老工程`Map::Checkin`房产归属分配时顺带创建`Asset`对象登记进`adults[index]->AddAsset(
   asset)`——这次不迁移，`Asset`/`Player::assetFactory`所在的Player/Asset域还没进这个
   项目，`Citizen`这次也没有资产列表字段（见`citizen.md`）。归属本身（`owner`/`stated`）

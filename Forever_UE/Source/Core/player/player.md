@@ -17,9 +17,13 @@ CrossDay`），照抄老工程`Source/Core/player/player.cpp`同名方法的实�
   市民繁衍模拟算出来的年份，见下"开局时间=人口模拟结束年份"一节——`Init()`本身不知道
   这件事，只负责先把时钟建好。
 - `Tick(float delta)`：每帧按`delta * 60 * 1000 * time_flow_ratio`毫秒推进时钟，即
-  `time_flow_ratio == 1.0`时"1真实秒 = 1游戏分钟"。
+  `time_flow_ratio == 1.0`时"1真实秒 = 1游戏分钟"。**这次调成`2.0`**（"1真实秒 =
+  2游戏分钟"）——之前调到过`10.0`验证调度，但流速太快时`Populace::Tick`/`Society::Tick`
+  的`jobTimerSet`/`organizationTimerSet`短时间内堆积大量同一时刻到期的节点，每帧固定
+  上限(`kMaxJobTimersPerTick`=4)吐不完积压、要连续好多帧才能追上，PIE验证发现这是9点/
+  12点这类"大量市民同一时刻下班/上班"场景卡顿的直接原因，调回`2.0`降低这种瞬时积压。
 
-  **`time_flow_ratio`这次写死常量`1.0`**，不接受`Story*`参数——老工程这个倍率来自
+  **`time_flow_ratio`这次写死常量，不接受`Story*`参数**——老工程这个倍率来自
   `Story`的全局设置字典（`Config`的`global_setting`，脚本可用`GlobalSettingChange`改），
   新工程的`Story`目前只有`systemScript`这一个`Script*`做`system.`前缀变量池，没有独立的
   settings字典（见`Story.md`"变量系统"一节），重建那一整套机制超出这次"先让时钟走起来"

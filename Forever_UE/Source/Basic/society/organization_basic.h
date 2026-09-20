@@ -3,13 +3,19 @@
 #include "society/organization_mod.h"
 
 
-// 阶段3占位:trivial默认实现,真正的默认society内容目录留到阶段4从旧工程
-// Basic/society/organization_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
-class OrganizationBasic : public OrganizationMod {
+// ShopOrganization：商店，这次用来测试"一个组织随机占1~2个component_shop"——
+// ComponentRequirements要求1~2个"component_shop"类型的Component，DesignJobsForRoom
+// 给每个"room_shop"类型的workspace room恰好配一个店员(不管这个房间WorkspaceCapacity()
+// 具体是多少，workspaceCapacity==0就不配)。
+class ShopOrganization : public OrganizationMod {
 public:
-	static const char* GetId() { return "organization_basic"; }
-	virtual const char* GetType() const override { return "organization_basic"; }
-	virtual const char* GetName() override { return "OrganizationBasic"; }
+	static const char* GetId() { return "organization_shop"; }
+	virtual const char* GetType() const override { return "organization_shop"; }
+	virtual const char* GetName() override { return "ShopOrganization"; }
+
+	static float GetPower() { return 1.f; }
+
+	virtual void ComponentRequirements() override;
+	virtual void DesignJobsForRoom(const std::string& componentType, const std::string& componentName,
+		const std::string& roomType, const std::string& roomName, int workspaceCapacity) override;
 };

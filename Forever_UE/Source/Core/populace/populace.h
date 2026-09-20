@@ -3,7 +3,12 @@
 #include "class.h"
 
 #include "populace/name_factory.h"
+#include "common/utility.h"
 
+#include <functional>
+#include <set>
+#include <string>
+#include <tuple>
 #include <vector>
 
 
@@ -23,6 +28,15 @@ public:
 	void Init(int accommodation);
 
 	const std::vector<Citizen*>& GetCitizens() const;
+
+	// 驱动Job的DailyPlan/ExecNode调度（Organization那一份调度在Society::Tick里，两套
+	// 独立的timer，见populace.md"两套独立timer"一节）：crossedDay时给每个持有job的
+	// citizen生成今天的调度、塞进jobTimerSet；不论是否crossedDay，每帧从jobTimerSet
+	// 弹出最多kMaxJobTimersPerTick个到期节点执行。回调带Citizen*——调用方
+	// (AForeverFrameworkActor::Tick)要按这个Citizen*决定NPCNavigateChange具体怎么
+	// 生效（找它当前是否有已生成的ACitizenElement），Populace自己不知道Actor层。
+	void Tick(const Time& currentTime, bool crossedDay,
+		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions);
 
 	// 模拟结束时的"当前年份"(老工程time->SetYear(year+2000)那个值)——Map::Checkin()用它
 	// 给Citizen::GetAge()算成年/未成年。Player的全局时钟落地后，
@@ -49,4 +63,7 @@ private:
 
 	std::vector<Citizen*> citizens;
 	int currentYear = 2000;
+
+	std::set<std::tuple<Time, Citizen*, std::string>> jobTimerSet;
+	static constexpr int kMaxJobTimersPerTick = 1;
 };

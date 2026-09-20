@@ -209,6 +209,9 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
+	// Society/Job域这次迁移新增的纯虚方法：这个占位mod不产生任何调度。
+	virtual void DailyPlan(const Time&) override {}
+
 private:
 	std::string name;
 };
@@ -220,6 +223,14 @@ public:
 	static const char* GetId() { return "empty"; }
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
+
+	// Society/Organization域这次迁移新增的两个纯虚方法：这个占位mod不参与地图上真实的
+	// Component竞争，requirements留空即可(Society::Init跳过没有任何requirements的候选
+	// 类型)，DesignJobsForRoom不需要配任何Job。
+	static float GetPower() { return 0.f; }
+	virtual void ComponentRequirements() override {}
+	virtual void DesignJobsForRoom(const std::string&, const std::string&,
+		const std::string&, const std::string&, int) override {}
 
 private:
 	std::string name;

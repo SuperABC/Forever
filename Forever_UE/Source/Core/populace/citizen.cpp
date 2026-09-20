@@ -49,3 +49,8 @@ void Citizen::SetPosition(float x, float y, float z) {
 	posZ = z;
 	hasPosition = true;
 }
+
+void Citizen::ClearPosition() { hasPosition = false; }
+
+Job* Citizen::GetJob() const { return job; }
+void Citizen::SetJob(Job* value) { job = value; }

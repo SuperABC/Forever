@@ -57,13 +57,29 @@ namespace {
 TArray<TWeakObjectPtr<ACitizenElement>> ACitizenElement::nearbyCitizens;
 
 ACitizenElement::ACitizenElement() {
-	PrimaryActorTick.bCanEverTick = false;
+	// bCanEverTick=true+默认关闭Tick(SetActorTickEnabled(false))：绝大多数citizen静止
+	// 不动，不需要每帧开销；只有WalkTo()正在带它走路的这段时间才打开Tick，走完立刻关掉，
+	// 见WalkTo/Tick。
+	PrimaryActorTick.bCanEverTick = true;
+	SetActorTickEnabled(false);
 
 	// mesh/anim/摄像机/移动参数/Enhanced Input绑定这些全部由基类AForeverCharacter的构造
 	// 函数负责（同一份占位mesh，见ForeverCharacter.cpp），这里不用重复设置。这次没有真正的
 	// AI移动逻辑——显式禁用移动模式，避免CharacterMovementComponent自己的重力/地面检测把
-	// citizen从Init()摆好的位置上挪走，只有被玩家占有时才切换成MOVE_Walking，见PossessedBy。
+	// citizen从Init()摆好的位置上挪走，只有被玩家占有、或者被WalkTo带着走路时才切换成
+	// MOVE_Walking，见PossessedBy/WalkTo。
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
+
+	// 关键：这个项目没有AIController，WalkTo带着走路期间这个citizen的Pawn::Controller
+	// 必然是nullptr(按定义——正被玩家占有的citizen不会触发调度自己上下班，见RequestWalk
+	// 的possessed跳过分支)。UCharacterMovementComponent::TickComponent默认只有
+	// Controller非空时才会调用PerformMovement()把AddMovementInput积累的输入转成真正的
+	// Velocity——Controller为空时PerformMovement()整个不会跑，AddMovementInput因此是纯
+	// 空操作，WalkTo每帧调用了也不会有任何效果(实测复现：MovementMode一直是MOVE_Walking，
+	// AddMovementInput每帧都在调用，但GetVelocity()和GetActorLocation()几十帧下来纹丝
+	// 不动，PIE日志确认过)。必须显式打开这个开关，让PerformMovement()在没有Controller时
+	// 也照常跑。
+	GetCharacterMovement()->bRunPhysicsWithNoController = true;
 }
 
 void ACitizenElement::PossessedBy(AController* NewController) {
@@ -87,6 +103,64 @@ void ACitizenElement::UnPossessed() {
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
 	if (proximityBox) proximityBox->SetCollisionProfileName(TEXT("Trigger")); // 恢复Trigger预设(QueryOnly+各通道Overlap)
 	Super::UnPossessed(); // AForeverCharacter::UnPossessed：增删Input Mapping Context
+}
+
+namespace {
+	// 到达路径点的判定阈值(UE单位)——只判水平距离，Z由CharacterMovement自己的地面
+	// 检测/重力处理，不需要精确匹配路径点的高度。
+	constexpr float kWaypointArrivalThresholdUU = 80.f;
+}
+
+void ACitizenElement::WalkTo(const TArray<FVector>& waypoints, Room* destination) {
+	if (waypoints.Num() == 0) return;
+	pendingWaypoints = waypoints;
+	waypointIndex = 0;
+	walkDestination = destination;
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	SetActorTickEnabled(true);
+	UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] WalkTo started citizen=%s points=%d startLoc=%s firstWaypoint=%s"),
+		citizen ? UTF8_TO_TCHAR(citizen->GetName().c_str()) : TEXT("?"), waypoints.Num(),
+		*GetActorLocation().ToString(), *waypoints[0].ToString());
+}
+
+void ACitizenElement::Tick(float DeltaTime) {
+	Super::Tick(DeltaTime);
+
+	if (waypointIndex >= pendingWaypoints.Num()) {
+		SetActorTickEnabled(false);
+		return;
+	}
+
+	FVector target = pendingWaypoints[waypointIndex];
+	FVector location = GetActorLocation();
+	FVector toTarget = target - location;
+	toTarget.Z = 0.f;
+
+	UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] WalkTo tick citizen=%s index=%d loc=%s dist=%f mode=%d vel=%s"),
+		citizen ? UTF8_TO_TCHAR(citizen->GetName().c_str()) : TEXT("?"), waypointIndex, *location.ToString(),
+		toTarget.Size(), (int32)GetCharacterMovement()->MovementMode, *GetVelocity().ToString());
+
+	if (toTarget.SizeSquared() <= kWaypointArrivalThresholdUU * kWaypointArrivalThresholdUU) {
+		waypointIndex++;
+		UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] WalkTo waypoint reached citizen=%s index=%d/%d loc=%s"),
+			citizen ? UTF8_TO_TCHAR(citizen->GetName().c_str()) : TEXT("?"), waypointIndex, pendingWaypoints.Num(),
+			*GetActorLocation().ToString());
+		if (waypointIndex >= pendingWaypoints.Num()) {
+			GetCharacterMovement()->SetMovementMode(MOVE_None);
+			SetActorTickEnabled(false);
+			Room* arrived = walkDestination;
+			walkDestination = nullptr;
+			pendingWaypoints.Reset();
+			UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] WalkTo arrived citizen=%s finalLoc=%s"),
+				citizen ? UTF8_TO_TCHAR(citizen->GetName().c_str()) : TEXT("?"), *GetActorLocation().ToString());
+			if (framework.IsValid() && citizen) {
+				framework->NotifyArrived(citizen, arrived);
+			}
+		}
+		return;
+	}
+
+	AddMovementInput(toTarget.GetSafeNormal(), 1.f);
 }
 
 ACitizenElement* ACitizenElement::GetFirstNearby() {
@@ -131,22 +205,10 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 		worldZ = mapZ * CITIZEN_WORLD_SCALE;
 	}
 	else {
-		// 换了新房间之后从未在场景里实例化过：房间中心+随机偏移(老工程原公式，抖动范围
-		// ±0.2地图单位)，Z用Building::GetFloorBaseZ(room->GetLayer())——比老工程
-		// "layer*楼层固定高度"的粗糙算法更准，这栋楼各层高度本来就不均匀。actor location
-		// (capsule中心)要比楼板高一个capsule半高，脚底才会正好落在楼板上。算出来立刻写回
-		// Citizen，这样"首次随机、此后复用"的记录在这一步就完成。
-		Room* room = citizen->GetCurrentRoom(); // 物理位置，不是家(GetRoom())——两者这次
-		// 初始状态重合，但语义上要用当前位置，见citizen.h/room.h的三概念说明
-		Building* building = citizen->GetBuilding();
-		if (room && building) {
-			ComputeCitizenWorldPosition(*building, room->GetPosX(), room->GetPosY(), worldX, worldY);
-			worldX += (GetRandom(11) / 10.f - 0.5f) * 0.4f * CITIZEN_WORLD_SCALE;
-			worldY += (GetRandom(11) / 10.f - 0.5f) * 0.4f * CITIZEN_WORLD_SCALE;
-			float floorZ = CITIZEN_HEIGHT_EPSILON + building->GetFloorBaseZ(room->GetLayer()) * CITIZEN_WORLD_SCALE
-				+ CITIZEN_GROUND_SLAB_THICKNESS;
-			worldZ = floorZ + GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-		}
+		// 换了新房间之后从未在场景里实例化过：房间中心+随机偏移+楼层高度换算落脚点，见
+		// ComputeRoomLandingSpot()。算出来立刻写回Citizen，这样"首次随机、此后复用"的
+		// 记录在这一步就完成。
+		ComputeRoomLandingSpot(citizen->GetCurrentRoom(), worldX, worldY, worldZ);
 		citizen->SetPosition(worldX / CITIZEN_WORLD_SCALE, worldY / CITIZEN_WORLD_SCALE,
 			worldZ / CITIZEN_WORLD_SCALE);
 	}
@@ -159,6 +221,37 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 void ACitizenElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 	citizen = nullptr;
 	Super::EndPlay(EndPlayReason);
+}
+
+bool ACitizenElement::ComputeRoomLandingSpot(Room* room, float& outWorldX, float& outWorldY, float& outWorldZ) {
+	// building必须从room->GetParentBuilding()反查，不能用citizen->GetBuilding()——后者是
+	// "家"所在的building，进入society域之后room可能是别的building(比如工作单位)的room，
+	// 见ForeverPopulaceFrameworkComponent.cpp里ComputeLogicalPosition同一处修复的说明。
+	Building* building = room ? room->GetParentBuilding() : nullptr;
+	if (!room || !building) return false;
+
+	// 房间中心+随机偏移(老工程原公式，抖动范围±0.2地图单位)，Z用
+	// Building::GetFloorBaseZ(room->GetLayer())——比老工程"layer*楼层固定高度"的粗糙
+	// 算法更准，这栋楼各层高度本来就不均匀。actor location(capsule中心)要比楼板高一个
+	// capsule半高，脚底才会正好落在楼板上。
+	ComputeCitizenWorldPosition(*building, room->GetPosX(), room->GetPosY(), outWorldX, outWorldY);
+	outWorldX += (GetRandom(11) / 10.f - 0.5f) * 0.4f * CITIZEN_WORLD_SCALE;
+	outWorldY += (GetRandom(11) / 10.f - 0.5f) * 0.4f * CITIZEN_WORLD_SCALE;
+	float floorZ = CITIZEN_HEIGHT_EPSILON + building->GetFloorBaseZ(room->GetLayer()) * CITIZEN_WORLD_SCALE
+		+ CITIZEN_GROUND_SLAB_THICKNESS;
+	outWorldZ = floorZ + GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	return true;
+}
+
+void ACitizenElement::TeleportToRoom(Room* destination) {
+	if (!citizen || !destination) return;
+
+	float worldX, worldY, worldZ;
+	if (!ComputeRoomLandingSpot(destination, worldX, worldY, worldZ)) return;
+
+	SetActorLocation(FVector(worldX, worldY, worldZ));
+	citizen->SetCurrentRoom(destination);
+	citizen->SetPosition(worldX / CITIZEN_WORLD_SCALE, worldY / CITIZEN_WORLD_SCALE, worldZ / CITIZEN_WORLD_SCALE);
 }
 
 void ACitizenElement::BuildProximityBox() {

@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <queue>
 #include <sstream>
 #include <unordered_set>
 
@@ -1773,4 +1774,83 @@ void Map::AddHatch(Quad q, float rotation) {
 
 const unordered_map<string, pair<int, string>>& Map::GetTerrainTextures() const {
 	return terrainTextures;
+}
+
+vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const {
+	if (fromNodeId == toNodeId) {
+		for (const Node* node : navAnchorNodes) {
+			if (node->GetId() == fromNodeId) return { node };
+		}
+		for (const Node* node : GetExterns()) {
+			if (node->GetId() == fromNodeId) return { node };
+		}
+		return {};
+	}
+
+	// id -> 拥有生命周期的Node*，供最后按id序列反查真正的指针（Dijkstra内部只按id
+	// 运算，Connection::GetStart()/GetEnd()返回的是Node副本，不能直接拿它们的地址）。
+	unordered_map<int, const Node*> nodesById;
+	for (const Node* node : navAnchorNodes) nodesById[node->GetId()] = node;
+	for (const Node* node : GetExterns()) nodesById[node->GetId()] = node;
+
+	unordered_map<int, float> dist;
+	unordered_map<int, int> prev;
+	unordered_set<int> visited;
+	using QueueEntry = pair<float, int>; // (distance, nodeId)，最小堆
+	priority_queue<QueueEntry, vector<QueueEntry>, greater<QueueEntry>> queue;
+
+	dist[fromNodeId] = 0.f;
+	queue.push({ 0.f, fromNodeId });
+
+	while (!queue.empty()) {
+		auto [d, id] = queue.top();
+		queue.pop();
+		if (visited.count(id)) continue;
+		visited.insert(id);
+		if (id == toNodeId) break;
+
+		auto it = pedestrianNavGraph.find(id);
+		if (it == pedestrianNavGraph.end()) continue;
+		for (const auto& [neighborId, connection] : it->second) {
+			if (!connection || visited.count(neighborId)) continue;
+			float weight = connection->CalcDistance();
+			float newDist = d + weight;
+			auto distIt = dist.find(neighborId);
+			if (distIt == dist.end() || newDist < distIt->second) {
+				dist[neighborId] = newDist;
+				prev[neighborId] = id;
+				queue.push({ newDist, neighborId });
+			}
+		}
+	}
+
+	if (!dist.count(toNodeId)) return {}; // 图不连通，找不到路径
+
+	vector<int> idPath;
+	for (int id = toNodeId; ; ) {
+		idPath.push_back(id);
+		if (id == fromNodeId) break;
+		auto it = prev.find(id);
+		if (it == prev.end()) return {}; // 理论不会发生(dist已确认可达)，防御性兜底
+		id = it->second;
+	}
+	reverse(idPath.begin(), idPath.end());
+
+	vector<const Node*> result;
+	for (int id : idPath) {
+		auto it = nodesById.find(id);
+		if (it != nodesById.end()) result.push_back(it->second);
+	}
+	return result;
+}
+
+vector<Component*> Map::GetAllComponents() const {
+	vector<Component*> result;
+	for (const auto& [name, building] : buildings) {
+		if (!building) continue;
+		for (Component* component : building->GetComponents()) {
+			result.push_back(component);
+		}
+	}
+	return result;
 }

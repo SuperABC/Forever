@@ -185,6 +185,17 @@ public:
 	const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& GetPedestrianNavGraph() const;
 	const std::vector<Node*>& GetNavAnchorNodes() const;
 
+	// 对pedestrianNavGraph跑Dijkstra，边权=每条Connection自己的CalcDistance()（弧长，比
+	// 端点欧式距离更准确）。返回从fromNodeId到toNodeId的路径点（含起点和终点），找不到
+	// 路径（图不连通/id不存在）返回空。供Forever层市民走路寻路用，见
+	// Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md"市民走路"一节。
+	std::vector<const Node*> FindPedestrianPath(int fromNodeId, int toNodeId) const;
+
+	// 拍平所有building的所有component，供AForeverFrameworkActor::EnsureSocietyGenerated()
+	// 喂给Society::Init——和ComputeAccommodationTarget()喂给Populace::Init同一个已有
+	// 套路，Society不知道Map/Building的存在，只接收这份拍平结果。
+	std::vector<Component*> GetAllComponents() const;
+
 private:
 	bool CheckXY(int x, int y) const;
 	Element& At(int x, int y);

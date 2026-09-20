@@ -3,8 +3,8 @@
 
 using namespace std;
 
-void OrganizationFactory::RegisterOrganization(const string& id, CreateFunc creator, DestroyFunc deleter) {
-	registries[id] = { creator, deleter };
+void OrganizationFactory::RegisterOrganization(const string& id, CreateFunc creator, DestroyFunc deleter, PowerFunc power) {
+	registries[id] = { creator, deleter, power };
 }
 
 OrganizationMod* OrganizationFactory::CreateOrganization(const string& id) {
@@ -49,4 +49,9 @@ vector<string> OrganizationFactory::GetRegisteredIds() const {
 
 void OrganizationFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
+}
+
+float OrganizationFactory::GetPower(const string& id) const {
+	auto it = registries.find(id);
+	return it != registries.end() ? it->second.power() : 0.f;
 }

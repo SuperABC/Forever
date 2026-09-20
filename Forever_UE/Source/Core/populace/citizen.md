@@ -43,6 +43,15 @@
   Forever层的`ACitizenElement::Init()`才是真正读/写这几个字段的地方（见
   `Source/Forever/Element/CitizenElement.md`），这样Core端保持零UE依赖，判断逻辑和"要不要
   转UE坐标系"这类表现层关切放在一起。
+- **`job`字段（进入society域新增）**：`Job*`，不持有所有权（`Job`由`Organization`持有，
+  见`Source/Core/society/job.md`）——`Society::RecruitCitizens`把成年市民随机匹配到
+  空缺Job时调`SetJob`。`GetJob()==nullptr`表示没有工作。
+- **`ClearPosition()`（进入society域新增）**：把`hasPosition`重置回`false`，不改
+  `posX/Y/Z`本身（`hasPosition==false`时反正不会被读取）。给`Job`调度触发市民"瞬移"到
+  新room（当前没有对应`ACitizenElement`、不需要算精确3D坐标）这个场景用，见
+  `Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md`"市民走路"一节——效果
+  和"换房间后从未在场景里实例化过"是同一个状态，比直接塞一个"猜"出来的坐标更准确（下次
+  真正生成时会按新房间重新算一次位置+随机偏移）。
 - **生命周期由`Populace`持有**：`Citizen`对象本身由`Populace::GenerateCitizens()`
   `new`出来，存进`Populace::citizens`，`~Populace()`统一`delete`——`Citizen`自己没有
   factory/工厂查表机制（和`Room`不需要独立"factory查表创建"入口是同一个理由：不参与任何
@@ -63,5 +72,6 @@
 
 - 亲属关系（配偶/父母/子女）、性格/交情、资产、职业/日程——依赖Society/Industry/Job域，
   等对应域迁移到了再回来加，见`populace.md`"不在这次范围内"一节。
-- 真正的AI行为（走动/工作/日程驱动的移动）——这次只有"站在分配到的房间里的固定点"，移动
-  逻辑、寻路都是后续任务。
+- 通用的自由游走AI——进入society域后，有Job的市民已经能按调度（上下班）走动/寻路（见
+  `job.md`/`Source/Forever/Element/CitizenElement.md`"WalkTo"一节），但没有Job、或者
+  Job没有产生调度的市民仍然是"站在分配到的房间里的固定点"，没有工作驱动之外的自主移动。

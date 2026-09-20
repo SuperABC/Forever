@@ -63,13 +63,20 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
     不知道`Map`的存在，只通过`Map::Checkin(*populace)`单向被`Map`读取——和老工程
     `GlobalBase`同时持有`map`/`populace`两个顶层对象、由它做两者之间编排是同一个分工，
     详见`Source/Core/populace/populace.md`。
-  - **`EnsureSocietyGenerated()`/`EnsureIndustryGenerated()`/`EnsureTrafficGenerated()`
-    （阶段4 Story落地新增）**：`Society`/`Industry`/`Traffic`目前都是只能默认构造的空壳
-    类，各自的`Ensure*Generated()`只是`new`一下，加它们纯粹是为了让`PostImplement`
-    （`Core/common/implement.h`，`PostHandle`的第一个具体实现）能在构造时拿到Core全部7个
-    domain的真实指针，不是提前实现这几个域的业务逻辑——`PostImplement`目前也只真正用到
-    `populace`/`player`两个指针（"random citizen"/"game time"两种查询），其余几个只是
-    存着，等对应域真正迁移出业务逻辑、需要通过`Post`查询时再用。
+  - **`EnsureSocietyGenerated()`（进入society域新增，不再是空壳）**：`society`已存在
+    直接返回，否则`new Society()`+`society->Init(map->GetAllComponents())`（按地图里
+    所有Component加权随机分配Organization，每个Organization自己遍历claimed
+    components设计Job）+`society->RecruitCitizens(populace->GetCitizens(),
+    populace->GetCurrentYear())`（把成年市民随机匹配到还空缺的Job上）。假定`map`/
+    `populace`都已经生成好，靠`BeginPlay()`里的调用顺序保证，自己不会去调
+    `EnsureMapGenerated()`/`EnsurePopulaceGenerated()`，见`Core/society/society.md`。
+  - **`EnsureIndustryGenerated()`/`EnsureTrafficGenerated()`（阶段4 Story落地新增）**：
+    `Industry`/`Traffic`目前都是只能默认构造的空壳类，各自的`Ensure*Generated()`只是
+    `new`一下，加它们纯粹是为了让`PostImplement`（`Core/common/implement.h`，
+    `PostHandle`的第一个具体实现）能在构造时拿到Core全部7个domain的真实指针，不是提前
+    实现这几个域的业务逻辑——`PostImplement`目前只真正用到`populace`/`player`两个指针
+    （"random citizen"/"game time"两种查询），其余几个只是存着，等对应域真正迁移出
+    业务逻辑、需要通过`Post`查询时再用。
   - **`EnsurePlayerGenerated()`（阶段4 Story落地新增）**：`player`已存在直接返回，否则
     `new Player()`+`player->Init()`（这次额外迁移了"全局时钟"这一小块，`Time*`+
     `Init/Tick/GetTime/SetTime/CrossDay`，见`Core/player/player.md`）+
@@ -81,11 +88,23 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
     `storyFramework->Init(story)`+`storyFramework->BroadcastGameStart()`。和`map`/
     `populace`不互相依赖。
 - **`PrimaryActorTick.bCanEverTick`这次从`false`改成`true`，新增`Tick(float DeltaTime)`
-  覆写**：这是这个Actor第一次真正需要每帧更新的逻辑——覆写里只做一件事，`player`存在时调用
-  `player->Tick(DeltaTime)`驱动全局时钟往前走（`player`在`EnsurePlayerGenerated()`跑完
-  之前是`nullptr`，但`BeginPlay`同步跑完全部7个`Ensure*Generated()`后引擎才会开始调用
-  `Tick`，理论上不会遇到空指针，判空只是防御性写法）。以后其它域需要每帧更新时也应该加进
-  这同一个`Tick`里，不要再新开一个"谁来负责每帧驱动"的入口。
+  覆写**：`player`存在时调用`player->Tick(DeltaTime)`驱动全局时钟往前走（`player`在
+  `EnsurePlayerGenerated()`跑完之前是`nullptr`，但`BeginPlay`同步跑完全部7个
+  `Ensure*Generated()`后引擎才会开始调用`Tick`，理论上不会遇到空指针，判空只是防御性
+  写法）。以后其它域需要每帧更新时也应该加进这同一个`Tick`里，不要再新开一个"谁来负责
+  每帧驱动"的入口。
+  - **进入society域新增：`player->Tick(DeltaTime)`之后接着驱动Job/Organization两套
+    独立的调度timer**——`bool crossedDay = bIsFirstTick || player->CrossDay();
+    bIsFirstTick = false;`（`bIsFirstTick`是新增成员，开局当天`Player::CrossDay()`
+    永远不会天然为true——时钟是`EnsurePlayerGenerated()`刚设好的，"day"缓存和当前日期
+    本来就相同，不强制第一帧当成跨天的话第一天的调度表永远生成不出来，等价于老工程
+    `Populace::Tick`里`currentTime.GetYear()==0 || player->CrossDay()`这个bootstrap
+    特判，PIE验证过：不加这一行时市民永远不会在第一天上下班）。`populace->Tick(
+    *player->GetTime(), crossedDay, 回调)`驱动Job的调度，`society->Tick(...)`驱动
+    Organization的调度，两个回调都会把`NPCNavigateChange`转发给
+    `populaceFramework->RequestWalk(citizen, dest)`，其余Change类型转发给
+    `story->ApplyChange(change, context)`，见`Core/society/job.md`"驱动方式"一节、
+    `Framework/ForeverPopulaceFrameworkComponent.md`"市民走路"一节。
 - **补上一个此前缺失的`GetStory()`**：`story`成员本身在阶段4 Story落地时就已经加入，但当时
   漏加了对应的getter（`GetMap()`/`GetPopulace()`都有，`GetStory()`没有）——这次和
   `GetSociety()`/`GetIndustry()`/`GetTraffic()`/`GetPlayer()`一起补齐，是`UForeverStoryFrameworkComponent::
@@ -97,8 +116,10 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
   `Source/Core/populace/populace.h`（进入populace域新增，持有`Populace*`）、
   `Source/Core/story/story.h`（持有`Story*`）、`Source/Core/society/society.h`/
   `Source/Core/industry/industry.h`/`Source/Core/traffic/traffic.h`/
-  `Source/Core/player/player.h`（持有`Society*`/`Industry*`/`Traffic*`/`Player*`，均为
-  空骨架，见上"7个`Ensure*Generated()`"一节）。
+  `Source/Core/player/player.h`（持有`Society*`/`Industry*`/`Traffic*`/`Player*`——
+  `Industry`/`Traffic`仍是空骨架，`Society`这次真的做了组织分配+招聘，见上
+  "7个`Ensure*Generated()`"一节）、`Source/Core/society/organization.h`/`job.h`、
+  `Source/Core/story/change.h`（`NPCNavigateChange`分发用）。
 - 被`AForeverGameMode`引用:`BeginPlay`和`FindPlayerStart_Implementation`都会调用
   `EnsureFrameworkActorExists()`(场景里没有找到已放置的实例时动态`SpawnActor`一个兜底,
   找到/生成后都会调用这个Actor的`EnsureMapGenerated()`),详见`ForeverGameMode.md`。

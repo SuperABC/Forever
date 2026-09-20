@@ -5,6 +5,7 @@
 #include "populace/citizen.h"
 #include "populace/name.h"
 #include "common/registry.h"
+#include "society/job.h"
 
 #include <cmath>
 #include <algorithm>
@@ -73,6 +74,34 @@ void Populace::InitNames() {
 
 const vector<Citizen*>& Populace::GetCitizens() const { return citizens; }
 int Populace::GetCurrentYear() const { return currentYear; }
+
+void Populace::Tick(const Time& currentTime, bool crossedDay,
+	const function<void(Citizen*, const vector<Change*>&)>& onActions) {
+	if (crossedDay) {
+		for (Citizen* citizen : citizens) {
+			Job* job = citizen->GetJob();
+			if (!job) continue;
+			job->DailyPlan(currentTime);
+			for (const auto& [node, time] : job->GetPlans()) {
+				jobTimerSet.insert({ time, citizen, node });
+			}
+		}
+	}
+
+	int count = 0;
+	while (count < kMaxJobTimersPerTick && !jobTimerSet.empty()) {
+		auto it = jobTimerSet.begin();
+		const auto& [target, citizen, node] = *it;
+		if (currentTime < target) break;
+		Job* job = citizen->GetJob();
+		if (job) {
+			vector<Change*> changes = job->ExecNode(node);
+			onActions(citizen, changes);
+		}
+		jobTimerSet.erase(it);
+		count++;
+	}
+}
 
 void Populace::GenerateCitizens(int target) {
 	// 临时男女数组及年表，完全照抄老工程Populace::GenerateCitizens的算法(E:\Projects\

@@ -85,6 +85,8 @@
     <ClCompile Include="common\implement.cpp" />
     <ClCompile Include="common\registry.cpp" />
     <ClCompile Include="society\society.cpp" />
+    <ClCompile Include="society\job.cpp" />
+    <ClCompile Include="society\organization.cpp" />
     <ClCompile Include="industry\industry.cpp" />
     <ClCompile Include="traffic\traffic.cpp" />
     <ClCompile Include="player\player.cpp" />
@@ -109,6 +111,8 @@
     <ClInclude Include="common\implement.h" />
     <ClInclude Include="common\registry.h" />
     <ClInclude Include="society\society.h" />
+    <ClInclude Include="society\job.h" />
+    <ClInclude Include="society\organization.h" />
     <ClInclude Include="industry\industry.h" />
     <ClInclude Include="traffic\traffic.h" />
     <ClInclude Include="player\player.h" />

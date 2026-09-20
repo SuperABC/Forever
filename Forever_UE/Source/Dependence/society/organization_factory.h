@@ -32,13 +32,18 @@ class OrganizationFactory {
 public:
 	using CreateFunc = OrganizationMod*(*)(const std::string&);
 	using DestroyFunc = void(*)(OrganizationMod*);
+	using PowerFunc = float(*)();
 
 	OrganizationFactory() = default;
 	virtual ~OrganizationFactory() = default;
 
-	virtual void RegisterOrganization(const std::string& id, CreateFunc creator, DestroyFunc deleter);
+	virtual void RegisterOrganization(const std::string& id, CreateFunc creator, DestroyFunc deleter, PowerFunc power);
 
 	virtual OrganizationMod* CreateOrganization(const std::string& id);
+
+	// 转发调用注册时提供的static函数，不需要任何OrganizationMod实例存在。id未注册时
+	// 返回0.f。
+	virtual float GetPower(const std::string& id) const;
 
 	// 必须走注册时mod提供的deleter释放,不能Factory直接delete——跨DLL new/delete安全,
 	// 通过liveInstances反查实例对应的注册id、再取出对应deleter调用。
@@ -56,6 +61,7 @@ private:
 	struct Entry {
 		CreateFunc creator;
 		DestroyFunc deleter;
+		PowerFunc power;
 	};
 
 	std::unordered_map<std::string, Entry> registries;

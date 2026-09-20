@@ -118,6 +118,19 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
   锚点方块+边长方体），未来Traffic域（阶段4-3）寻路时也会用同一套接口，不需要改`Map`。
   图里出现的id除了`GetNavAnchorNodes()`能查到坐标，还可能是地图边缘的extern残端（在
   `GetExterns()`里），调用方要两个列表都查。
+- **`FindPedestrianPath(fromNodeId, toNodeId)`（进入society域新增，`pedestrianNavGraph`
+  第一次真正被寻路消费）**：这份图之前一直只是可视化用的数据结构，没有任何代码真正走过
+  它来寻路——市民按Job调度上下班需要真的从家走到商店，这次补上一个标准Dijkstra：边权用
+  每条`Connection::CalcDistance()`（弧长，比两端点欧式距离更准确），最短路径用
+  `unordered_map<int,int> prev`回溯，再翻转成id序列，最后按`GetNavAnchorNodes()`/
+  `GetExterns()`两个列表反查真正的`Node*`返回。图不连通/起点终点id不存在时返回空——
+  调用方（`UForeverPopulaceFrameworkComponent::RequestWalk`）要处理这个兜底（直接瞬移，
+  不模拟中途过程），见该文件的`.md`"市民走路"一节。不用`AIController`/`NavMesh`，纯
+  Core层数据结构上的图搜索。
+- **`GetAllComponents()`（进入society域新增）**：拍平`buildings`里每个`Building::
+  GetComponents()`，供`AForeverFrameworkActor::EnsureSocietyGenerated()`喂给
+  `Society::Init`——和`ComputeAccommodationTarget()`喂给`Populace::Init()`同一个已有
+  套路，`Society`不知道`Map`/`Building`的存在，只接收这份拍平结果。
 - **`resolveAnchor`第三条兜底分支：既不是`RoadJunction`也不是`extern`的端点，按车道宽度
   现算+缓存各自的锚点（第六轮迁移新增，中间有一次返工）**：起因是`JingRoadnet`的隧道口把
   一条路自己拆成了三段独立`Road`（引道/下坡/隧道内平路，见`Source/Basic/map/roadnet_basic.md`

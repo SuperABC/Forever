@@ -1,9 +1,14 @@
 #include "Framework/ForeverFrameworkActor.h"
 
 #include "map/map.h"
+#include "map/room.h"
 #include "populace/populace.h"
+#include "populace/citizen.h"
 #include "society/society.h"
+#include "society/organization.h"
+#include "society/job.h"
 #include "story/story.h"
+#include "story/change.h"
 #include "industry/industry.h"
 #include "traffic/traffic.h"
 #include "player/player.h"
@@ -122,8 +127,67 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	// player在EnsurePlayerGenerated()跑完之前是nullptr——BeginPlay里7个Ensure*Generated()
 	// 在Super::BeginPlay()之后同步跑完，引擎只会在BeginPlay之后才调用Tick，理论上不会遇到
 	// 空指针，这里判空只是和其它地方一致的防御性写法。
-	if (player) {
-		player->Tick(DeltaTime);
+	if (!player) return;
+	player->Tick(DeltaTime);
+
+	// 持续在屏幕左上角显示当前游戏内时间——固定key(不是-1)保证每帧原地刷新同一行，不会
+	// 每帧都新增一条往下堆；TimeToDisplay给1秒(比一帧长)，哪怕某一帧意外跳过也不会闪烁。
+	if (GEngine) {
+		GEngine->AddOnScreenDebugMessage(/*Key=*/9000, /*TimeToDisplay=*/1.f, FColor::White,
+			FString::Printf(TEXT("游戏时间: %s"), UTF8_TO_TCHAR(player->GetTime()->ToString(true, true).c_str())));
+	}
+
+	// 驱动Job/Organization各自独立的DailyPlan/ExecNode调度（两套独立的timer，见
+	// populace.md/society.md"两套独立timer"一节）。ExecNode这次是纯C++通道，直接给
+	// Change*，Populace/Society自己不delete这些指针，所有权留在产出它们的
+	// JobMod/OrganizationMod实例身上，这里只读值使用。
+	// 开局当天永远不会天然触发一次CrossDay()(时钟是EnsurePlayerGenerated刚设好的，"day"
+	// 缓存和当前日期本来就相同)，第一帧强制当成"跨天"，让第一天的调度表也能生成，见.h里
+	// bIsFirstTick的说明。
+	bool crossedDay = bIsFirstTick || player->CrossDay();
+	bIsFirstTick = false;
+
+	if (populace) {
+		populace->Tick(*player->GetTime(), crossedDay,
+			[this](Citizen* citizen, const std::vector<Change*>& changes) {
+				for (Change* change : changes) {
+					if (auto* nav = dynamic_cast<const NPCNavigateChange*>(change)) {
+						ScriptContext context; // NPCNavigateChange的Expression字段这次都是
+						// 字面量常量，求值不需要真正有意义的context，但Evaluate接口要求传一份
+						std::string destinationText = ToString(nav->GetDestination().EvaluateValue(context));
+						Room* dest = destinationText == "home"
+							? citizen->GetRoom()
+							: (citizen->GetJob() ? citizen->GetJob()->GetPosition() : nullptr);
+						UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] dispatch citizen=%s dest=%s destRoomNull=%s populaceFrameworkNull=%s"),
+							UTF8_TO_TCHAR(citizen->GetName().c_str()), UTF8_TO_TCHAR(destinationText.c_str()),
+							dest ? TEXT("false") : TEXT("true"), populaceFramework ? TEXT("false") : TEXT("true"));
+						if (dest && populaceFramework) {
+							populaceFramework->RequestWalk(citizen, dest);
+						}
+					}
+					else if (story && citizen->GetJob()) {
+						ScriptContext context;
+						context.self = citizen->GetJob()->GetScript();
+						story->ApplyChange(change, context);
+					}
+				}
+			});
+	}
+
+	if (society) {
+		society->Tick(*player->GetTime(), crossedDay,
+			[this](Organization*, const std::vector<Change*>& changes) {
+				// ShopOrganization这次不产出changes，回调体基本用不到，但设施要落地——
+				// 真有Change产出时和上面Populace::Tick的回调同一个"context.self指向
+				// 产出它的Script"的处理方式（Organization目前没有自己的Script，等以后
+				// 真的有组织级Change时再补）。
+				for (Change* change : changes) {
+					if (story) {
+						ScriptContext context;
+						story->ApplyChange(change, context);
+					}
+				}
+			});
 	}
 }
 
@@ -196,9 +260,12 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 {
 	if (society) return;
 
-	// Society这次还是空骨架，新增它纯粹是为了让PostImplement（Core/common/implement.h）
-	// 能拿到7个域的真实指针，见society.md。
+	// Society这次真的做了组织分配+招聘（不是空骨架了）：按地图里所有Component加权随机
+	// 分配Organization（每个Organization自己遍历claimed components设计Job），再把成年
+	// 市民随机匹配到还空缺的Job上，见society.md。
 	society = new Society();
+	society->Init(map->GetAllComponents());
+	society->RecruitCitizens(populace->GetCitizens(), populace->GetCurrentYear());
 }
 
 void AForeverFrameworkActor::EnsurePlayerGenerated()

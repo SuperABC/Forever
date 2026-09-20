@@ -71,6 +71,16 @@ public:
 	void GetPosition(float& outX, float& outY, float& outZ) const;
 	void SetPosition(float x, float y, float z);
 
+	// 把hasPosition重置回false(和"换房间后从未在场景里实例化过"是同一个状态)，不改
+	// posX/Y/Z本身(反正hasPosition==false时不会被读取)。给"citizen当前没有对应
+	// ACitizenElement、瞬移到新room"这个场景用，见UForeverPopulaceFrameworkComponent::
+	// RequestWalk。
+	void ClearPosition();
+
+	// 当前持有的工作——Job由Organization持有所有权，这里只存一个不持有所有权的指针。
+	Job* GetJob() const;
+	void SetJob(Job* value);
+
 private:
 	std::string name;
 	GENDER_TYPE gender;
@@ -91,4 +101,6 @@ private:
 	float posX = 0.f;
 	float posY = 0.f;
 	float posZ = 0.f;
+
+	Job* job = nullptr;
 };

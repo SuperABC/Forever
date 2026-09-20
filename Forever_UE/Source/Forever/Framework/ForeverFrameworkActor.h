@@ -64,9 +64,13 @@ public:
 	// 自己不会调EnsureMapGenerated()。
 	void EnsurePopulaceGenerated();
 
-	// 幂等(society已存在直接返回):只保证Society这一个域。Society这次还是空骨架,new出来
-	// 纯粹是为了让PostImplement(Core/common/implement.h)能拿到7个域的真实指针,不是提前
-	// 实现"招聘"等业务逻辑——真正的业务留到PHASE4_PLAN.md阶段4-4再点名做,见society.md。
+	// 幂等(society已存在直接返回):只保证Society这一个域——new Society()、
+	// Society::Init(map->GetAllComponents())按Component加权随机分配Organization(每个
+	// Organization自己遍历claimed components设计Job)、
+	// Society::RecruitCitizens(populace->GetCitizens(), populace->GetCurrentYear())把
+	// 成年市民随机匹配到还空缺的Job上。假定map/populace都已经生成好,调用方负责保证调用
+	// 顺序,这个函数自己不会调EnsureMapGenerated()/EnsurePopulaceGenerated(),见
+	// society.md。
 	void EnsureSocietyGenerated();
 
 	// 幂等(player已存在直接返回):只保证Player这一个域——new Player()、Player::Init()创建
@@ -133,6 +137,14 @@ protected:
 	Industry* industry = nullptr;
 	Traffic* traffic = nullptr;
 	Player* player = nullptr;
+
+	// Player::CrossDay()只在"日期真的从一天跨到下一天"时才为true——开局当天(EnsurePlayerGenerated
+	// 刚把时钟设到当年1月1日8点)永远不会天然触发一次CrossDay，导致第一天的Job/Organization
+	// 调度(Populace::Tick/Society::Tick里"crossedDay时生成今天的调度表"那一步)永远排不上，
+	// 一个市民永远不会有第一天的日程。这里用一个"第一帧强制当作跨天"的标记补上这个缺口，
+	// 效果等价于老工程Populace::Tick里的`currentTime.GetYear() == 0 || player->CrossDay()`
+	// 这个bootstrap特判，见Tick()实现。
+	bool bIsFirstTick = true;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<USceneComponent> sceneRoot;

@@ -8,6 +8,7 @@
 class UBoxComponent;
 class UPrimitiveComponent;
 class Citizen;
+class Room;
 struct FHitResult;
 class UForeverPopulaceFrameworkComponent;
 
@@ -56,8 +57,33 @@ public:
 	// AForeverCharacter::SwitchControlledCitizen每次按T都调用一次。
 	static void DebugPrintNearby();
 
+	// 沿一串世界坐标路径点真正走过去（Job按调度产出NPCNavigateChange时，
+	// UForeverPopulaceFrameworkComponent::RequestWalk发现这个citizen当前有对应Actor就调
+	// 这个方法）：打开Tick+切MOVE_Walking，每帧朝下一个路径点AddMovementInput，到达即
+	// 前进到下一个，全部走完切回MOVE_None+关Tick+回调
+	// framework->NotifyArrived(citizen, destination)更新Citizen::SetCurrentRoom。不用
+	// AIController/NavMesh——路径点已经由Map::FindPedestrianPath算好，这里只是沿现成
+	// 路径点插值前进。
+	void WalkTo(const TArray<FVector>& waypoints, Room* destination);
+
+	// 直接把这个已经生成的Actor瞬移到destination房间（房间中心+和Init()同一套随机抖动/
+	// 落地高度计算），并同步更新Citizen::SetCurrentRoom+SetPosition——
+	// UForeverPopulaceFrameworkComponent::RequestWalk发现这个citizen当前有对应Actor、
+	// 但寻路失败（起点/终点没有导航节点，或图不连通）时调用这个方法。不这么做的话，Core
+	// 侧的Citizen::SetCurrentRoom已经改成新房间了，但这个可见的Actor会一直冻结在原地不动
+	// （PIE验证复现过这个bug："市民到点该走了，但眼前这个人一直没动过"）。
+	void TeleportToRoom(Room* destination);
+
+protected:
+	virtual void Tick(float DeltaTime) override;
+
 private:
 	void BuildProximityBox();
+
+	// Init()"换房间后从未在场景里实例化过"分支、TeleportToRoom()共用的落地位置计算：
+	// 房间中心+随机抖动+楼层高度换算成落脚点世界坐标，见Init()原本的注释。room为空
+	// 或反查不到parentBuilding时返回false，调用方保留原有worldX/Y/Z不变。
+	bool ComputeRoomLandingSpot(Room* room, float& outWorldX, float& outWorldY, float& outWorldZ);
 
 	UFUNCTION()
 	void OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -78,4 +104,12 @@ private:
 	// 附近的市民名单，OnOverlapBegin/OnOverlapEnd维护。用TWeakObjectPtr而不是裸指针——
 	// 市民会被UForeverPopulaceFrameworkComponent按距离动态Destroy。
 	static TArray<TWeakObjectPtr<ACitizenElement>> nearbyCitizens;
+
+	// WalkTo正在走的路径点队列+当前索引，Tick()里消费；走完清空。
+	TArray<FVector> pendingWaypoints;
+	int32 waypointIndex = 0;
+
+	// WalkTo的目标room，全部路径点走完后回调framework->NotifyArrived(citizen, destination)
+	// 时用——不持有生命周期。
+	Room* walkDestination = nullptr;
 };

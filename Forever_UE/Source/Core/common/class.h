@@ -25,6 +25,8 @@ class Populace;
 // Society
 
 class Society;
+class Job;
+class Organization;
 
 // Story
 

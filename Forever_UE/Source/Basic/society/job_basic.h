@@ -2,14 +2,18 @@
 
 #include "society/job_mod.h"
 
+#include "story/change.h"
 
-// 阶段3占位:trivial默认实现,真正的默认society内容目录留到阶段4从旧工程
-// Basic/society/job_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
-class JobBasic : public JobMod {
+
+// ShopSalerJob：店员，天天上班，早上9点从家出门去商店，中午12点从商店下班回家——这次不要
+// Calendar，"哪几天上班/几点上下班"直接写在这里的DailyPlan里。DailyPlan/ExecNode这次
+// 完全是C++直接构造Change*，和milestone/JSON无关，见job.md。
+class ShopSalerJob : public JobMod {
 public:
-	static const char* GetId() { return "job_basic"; }
-	virtual const char* GetType() const override { return "job_basic"; }
-	virtual const char* GetName() override { return "JobBasic"; }
+	static const char* GetId() { return "job_shop_saler"; }
+	virtual const char* GetType() const override { return "job_shop_saler"; }
+	virtual const char* GetName() override { return "ShopSalerJob"; }
+
+	virtual void DailyPlan(const Time& currentTime) override;
+	virtual void ExecNode(const std::string& node) override;
 };

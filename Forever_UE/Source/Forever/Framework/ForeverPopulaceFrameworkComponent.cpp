@@ -7,6 +7,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "map/geometry.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 
@@ -34,7 +35,13 @@ namespace {
 
 		Room* room = citizen->GetCurrentRoom(); // 物理位置，不是家(GetRoom())——两者这次
 		// 初始状态重合，但语义上要用当前位置，见citizen.h/room.h的三概念说明
-		Building* building = citizen->GetBuilding();
+		// building必须从room->GetParentBuilding()反查，不能用citizen->GetBuilding()——
+		// 后者是"家"所在的building，进入society域之后currentRoom可能已经通过
+		// RequestWalk换成了别的building(比如工作单位)的room，这两个字段不再保证同属一栋
+		// 楼，用citizen->GetBuilding()配这里的room会用错的building变换算出完全错误的
+		// 世界坐标(PIE验证：市民10点该在商店里，实际用家的building变换算出来的坐标落在
+		// 别处，商店里因此看不到任何人)。
+		Building* building = room ? room->GetParentBuilding() : nullptr;
 		if (!room || !building) return false;
 
 		float localX = room->GetPosX();
@@ -79,6 +86,60 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::SpawnCitizen(Citizen* citiz
 		activeInstances.Add(citizen, element);
 	}
 	return element;
+}
+
+void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* destination) {
+	if (!citizen || !destination || !map) return;
+
+	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
+	if (existing && *existing && (*existing)->GetController() != nullptr) {
+		// 正被玩家占有(这个项目没有AIController，非空Controller只可能是玩家占有)：
+		// Job调度这次先整个不生效，被占有的市民不会自己上下班——不管是走路动画还是瞬移
+		// 都不做，等玩家取消占有之后下一次调度再正常处理。
+		UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] RequestWalk citizen=%s SKIPPED(possessed)"),
+			UTF8_TO_TCHAR(citizen->GetName().c_str()));
+		return;
+	}
+
+	Room* current = citizen->GetCurrentRoom();
+	Node* fromNode = current ? current->GetNavigationNode() : nullptr;
+	Node* toNode = destination->GetNavigationNode();
+
+	TArray<FVector> waypoints;
+	if (fromNode && toNode) {
+		std::vector<const Node*> path = map->FindPedestrianPath(fromNode->GetId(), toNode->GetId());
+		for (const Node* node : path) {
+			waypoints.Add(FVector(node->GetX(), node->GetY(), node->GetZ()) * POPULACE_WORLD_SCALE);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] RequestWalk citizen=%s hasElement=%s fromNode=%d toNode=%d pathPoints=%d"),
+		UTF8_TO_TCHAR(citizen->GetName().c_str()), (existing && *existing) ? TEXT("true") : TEXT("false"),
+		fromNode ? fromNode->GetId() : -1, toNode ? toNode->GetId() : -1, waypoints.Num());
+
+	if (waypoints.Num() > 0 && existing && *existing) {
+		(*existing)->WalkTo(waypoints, destination);
+		return;
+	}
+
+	if (existing && *existing) {
+		// 有已生成的Actor，但寻路失败(起点/终点没有导航节点，或图不连通)：不能只改
+		// Core状态、放着这个可见的Actor不动——那样Citizen逻辑上已经"到家"了，但玩家
+		// 眼前的人会一直冻结在原地(PIE验证复现过："市民到点该走了，眼前这个人却一直
+		// 没动过")。直接把Actor也瞬移过去。
+		(*existing)->TeleportToRoom(destination);
+		return;
+	}
+
+	// 这个citizen当前没有生成的ACitizenElement(不在流式加载范围内)：直接瞬移逻辑状态，
+	// 不模拟中途过程。
+	citizen->SetCurrentRoom(destination);
+	citizen->ClearPosition();
+}
+
+void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* destination) {
+	if (!citizen || !destination) return;
+	citizen->SetCurrentRoom(destination);
 }
 
 ACitizenElement* UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(const FString& name) {
