@@ -144,12 +144,6 @@ private:
 	static std::vector<Dialog*> BuildDialogs(const JsonValue& root);
 
 	/*
-	* 从JSON节点解析表达式（节点本身是一个字符串）
-	* @root: JSON节点
-	*/
-	static Expression BuildExpression(const JsonValue& root);
-
-	/*
 	* 从JSON解析后续里程碑名列表
 	* @root: JSON节点
 	*/

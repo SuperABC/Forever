@@ -4,6 +4,7 @@
 
 #include "populace/name_factory.h"
 #include "common/utility.h"
+#include "common/handle.h"
 
 #include <functional>
 #include <set>
@@ -35,8 +36,10 @@ public:
 	// 弹出最多kMaxJobTimersPerTick个到期节点执行。回调带Citizen*——调用方
 	// (AForeverFrameworkActor::Tick)要按这个Citizen*决定NPCNavigateChange具体怎么
 	// 生效（找它当前是否有已生成的ACitizenElement），Populace自己不知道Actor层。
+	// @post：透传给Job::DailyPlan/ExecNode，再转发到JobMod，供mod按需查citizen家/工位
+	// 的具体地址（见Dependence/society/job_mod.h），Populace自己不解读这个句柄。
 	void Tick(const Time& currentTime, bool crossedDay,
-		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions);
+		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions, PostHandle* post);
 
 	// 模拟结束时的"当前年份"(老工程time->SetYear(year+2000)那个值)——Map::Checkin()用它
 	// 给Citizen::GetAge()算成年/未成年。Player的全局时钟落地后，

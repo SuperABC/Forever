@@ -15,12 +15,35 @@
   一次。`config.json`里`"script_mods"`已经配好`["wxdj", "empty --test true"]`
   （`Source/Core/common/loader.cpp`的`kModConceptDescriptors`早就有`Scripts`这一项，
   `Forever_Mod/Empty`提供id为`"empty"`的`EmptyScript`）。
-- `std::vector<Script*> mainScripts`：主线剧情Script数组。用户点2字面写的是"数组"，这次按数组
-  实现（为以后多个主线剧情脚本预留），但当前阶段`Init()`里只塞1个（从`test.json`读取）。
+- `Script* mainScript`：主线剧情Script——**这次从`std::vector<Script*> mainScripts`改成
+  单个`Script*`**（用户明确指出"一份剧本只能由一个Script表示"，数组没有意义），
+  `Init()`从`Resource/Story/test.script`读取。
 - `Script* systemScript`：`system.`前缀路由的目标（见`Dependence/story/expression.md`
-  "ScriptContext"一节）——一个不加载任何milestone、纯粹当`Container`变量池用的`Script`，同样
-  走`"empty"`id创建（`test.json`的内容和具体挂载哪个`ScriptMod`无关，只是需要"随便一个能创建
-  出来的`ScriptMod`"）。
+  "ScriptContext"一节）——一个不加载任何milestone、纯粹当`Container`变量池用的`Script`。
+
+## ScriptModName不再硬编码，从`config.json`的`"main_story"`字段读
+
+**这里曾经硬编码过`constexpr const char* kEmptyScriptId = "empty";`**，`systemScript`/
+`mainScript`（当时还是`mainScripts`数组）都固定用这个id创建——这替Mod/配置做了"用哪个
+ScriptMod"的决策，且和`Job::Job()`当时的同款硬编码是同一类问题（见`job.md`"Script配置"
+一节）。修复后，`Story::Init()`改成从`Config::GetMainStoryScriptModName()`（读
+`config.json`的`"main_story"`字段）拿到真正的`scriptModName`，字段缺失或对应
+ScriptMod没有注册时跳过初始化：
+
+```cpp
+void Story::Init() {
+	string scriptModName = Config::GetMainStoryScriptModName();
+	if (scriptModName.empty() || !scriptFactory.CheckRegistered(scriptModName)) {
+		debugf("Warning: main_story script mod not configured or not registered, Story::Init skipped.\n");
+		return;
+	}
+	systemScript = new Script(&scriptFactory, scriptModName);
+	mainScript = new Script(&scriptFactory, scriptModName);
+	mainScript->ReadMilestones(Config::GetScriptPath("test"));
+}
+```
+
+`config.json`当前配的是`"main_story": "empty"`。
 
 ## `BroadcastGameStart`用回调而不是直接返回`vector<ScriptAction>`
 
@@ -44,40 +67,45 @@ use-after-free。改成回调、在`GameStartEvent`还活着的这个函数调�
 出问题，但以后随便一个真的有字段的事件（比如`GlobalMessageEvent`）一旦被用同样的模式广播，不用
 回调就会踩到这个坑，所以从`GameStartEvent`这个最简单的例子开始就用对的模式。
 
-多个`mainScripts`场景下，`onActions`按脚本各调用一次（`context.self`绑定成对应脚本），不是
-先把所有脚本的actions拍平再统一调一次——这样`Story::ApplyChange`按`context.self`执行
-`SetValueChange`时，作用的`Container`天然就是产生这批actions的那个`Script`，不需要额外的
-"哪个action属于哪个脚本"的归属信息。
+`mainScript`为空（`Init()`没有成功创建，比如`main_story`没配对）时`BroadcastGameStart`
+直接返回，不调用`onActions`。
 
 ## `ApplyChange`
 
 `dynamic_cast`分派，目前只有`SetValueChange`分支真正执行：
-`context.self->SetValue(setValue->GetVariable(), setValue->GetValue().EvaluateValue(context))`。
+`context.self->SetValue(setValue->GetVariable(), EvaluateExpression(setValue->GetValue(),
+context))`——`GetValue()`返回的是`std::string`（DSL源码文本，不是预先解析好的`Expression`
+对象），`EvaluateExpression`现场`Parse`+求值一步到位，原因见`Dependence/story/change.md`
+"字段类型是`std::string`"一节。
 其余41种变化类型只打一条`debugf`"未实现"日志，不崩溃也不抛异常（这条路径每次匹配后都会被调用，
 容错风格比JSON解析阶段更宽松，见`Dependence/story/change.md`"JSON分发"一节）。这个分派函数是
 `Story`的方法而不是`Change`类自己的虚方法，延续老工程"`Change`是纯数据类"的设计。
 
-## test.json路径
+## test.script路径
 
-`Resource/Story/test.json`，相对`Config::GetConfigDir()`（`Resource/Config/`）的固定相对路径，
-`Story::Init()`直接用`std::filesystem::path`拼出来读取。这次没有复活老工程
-`Config::GetStories()`/`AddScript`/`RemoveScript`那一整套多剧情路径管理——`config.md`里明确
-写着这块"仍未迁移"，用户这次的12条需求也没有提到要恢复它，先用一个硬编码路径把主线剧情跑通。
+`Resource/Story/test.script`（原名`test.json`，这次连同"Script配置"一起改名——`Config::
+AddResourcePath`只按`.script`扩展名扫描，见`config.md`"resource_path"一节），实际存放
+位置由`config.json`的`"resource_path"`数组（`["../Story"]`）决定，`Story::Init()`用
+`Config::GetScriptPath("test")`按bare文件名反查实际路径，不再自己拼`filesystem::path`。
+这次没有复活老工程`Config::GetStories()`/`AddScript`/`RemoveScript`那一整套多剧情路径
+管理——`config.md`里明确写着这块"仍未迁移"，先用固定的"test"这一个bare名字把主线剧情
+跑通。
 
 ## 依赖关系
 
 - 依赖：`script.h`、`script_factory.h`、`common/registry.h`（`Story`构造函数绑定
-  `scriptFactory`，见`registry.md`）、`common/config.h`（`Config::GetConfigDir`）、
-  `event.h`（`GameStartEvent`）、
+  `scriptFactory`，见`registry.md`）、`common/config.h`（`Config::
+  GetMainStoryScriptModName()`/`GetScriptPath()`）、`event.h`（`GameStartEvent`）、
   `change.h`（`SetValueChange`）、`Dependence/common/handle.h`（`PostHandle`，
   `BroadcastGameStart`透传给`Script::MatchEvent`）。
 - 被谁依赖：`Forever/Framework/ForeverFrameworkActor.cpp`（持有`Story*`，生命周期管理方式和
   `Map*`/`Populace*`完全一致）、`Forever/Framework/ForeverStoryFrameworkComponent.cpp`
-  （展示`BroadcastGameStart`的结果，现场构造`PostImplement`作为`post`参数传入）。
+  （展示`BroadcastGameStart`的结果，现场构造`PostImplement`作为`post`参数传入；这个函数
+  这次还顺带遍历`Society`下所有`Organization`/`Job`各自的`Script`广播一次game_start，
+  见`ForeverStoryFrameworkComponent.md`）。
 
 ## 待办/后续阶段
 
 - 计时器（`CreateTimer`/`PopExpiredTimers`）、对话历史（`AddTalk`/`GetHistory`）、全局消息队列
   （`AddMessage`/`PopMessages`）——老工程`Story`有这些，这次全部没有迁，等对应功能被点名时再加。
 - 老工程`Config::GetStories`/`AddScript`/`RemoveScript`多剧情路径管理。
-- `mainScripts`目前只有1个，多个主线剧情脚本之间如何分工（比如按章节切换）还没有设计。

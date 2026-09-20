@@ -27,10 +27,10 @@ BroadcastGameStart`在UE层从`AForeverFrameworkActor`身上取到7个指针后�
 栈上构造）一个，只活这一次广播的生命周期，见`Forever/Framework/
 ForeverStoryFrameworkComponent.md`"PostImplement"一节。
 
-### 目前实现两种post类型，其余domain指针先占位
+### 目前实现四种post类型，其余domain指针先占位
 
 构造函数接收全部7个指针（`Map*`/`Populace*`/`Society*`/`Story*`/`Industry*`/`Traffic*`/
-`Player*`）并存成成员，`Post()`目前识别两种请求：
+`Player*`）并存成成员，`Post()`目前识别四种请求：
 
 - `request["post"] == "random citizen"`：从`populace->GetCitizens()`
   （`std::vector<Citizen*>`）里`GetRandom(size)`随机挑一个，成功返回
@@ -41,12 +41,29 @@ ForeverStoryFrameworkComponent.md`"PostImplement"一节。
   "time":"HH:mm"}`，`player`为空或时钟还没`Init()`时返回`{"result":"fail","msg":"no
   game time available."}`——字段命名照抄老工程`Core/common/implement.cpp`同一个post
   类型。
+- `request["post"] == "citizen home address"` / `"citizen workplace address"`
+  （`society`域第N轮迁移新增，供`JobMod::DailyPlan`/`ExecNode`用，见
+  `Core/society/job.md`"按需查地址：PostHandle参数"一节）：`request["name"]`按
+  `Citizen::GetName()`在`populace->GetCitizens()`里线性查到`Citizen*`，前者取
+  `citizen->GetRoom()->GetAddress()`（家），后者取
+  `citizen->GetJob()->GetPosition()->GetAddress()`（工位room的地址，
+  `Job::GetPosition()`就是这份工作的工位），成功返回
+  `{"result":"success","address":"<地址字符串>"}`；`populace`为空、查不到同名citizen、
+  citizen没有家/没有job（未成年、没分到住处、还没被`Society::RecruitCitizens`招聘）都
+  返回`{"result":"fail","msg":"..."}`——两个post类型共用同一段"按姓名查citizen"的
+  查找逻辑，只是最后取`GetRoom()`还是`GetJob()->GetPosition()`不同。这次新增的动机是
+  **`NPCNavigateChange::destination`不能再写`"home"`/`"workplace"`这种描述性文本**
+  （那本质上是在Dependence层编码Core概念，违反分层原则），改成必须是`Room::
+  GetAddress()`格式、能被`Map::LocateRoom(address)`直接解析回`Room*`的具体地址
+  字符串——`JobMod`所在的Dependence层看不到`Citizen`/`Room`这些Core类型，只能通过
+  这两个新post类型向Core要这个地址字符串。
 
-请求不认识（`post`字段不是上面两种，或者请求本身不是一个JSON对象）统一返回
+请求不认识（`post`字段不是上面四种，或者请求本身不是一个JSON对象）统一返回
 `{"result":"fail","msg":"post not found."}`。`society`/`industry`/`traffic`这三个指针
-（`map`同样暂时用不到）这次构造出来传进去，但`Post()`里还完全用不上——等对应域真正迁移出
-业务逻辑、需要通过`Post`查询它们的数据时，再在这个`if/else if`链上加新分支，不需要改构造
-函数签名。
+里，`industry`/`traffic`（`map`同样）这次仍然暂时用不到，`society`这次没有直接用到
+（"citizen workplace address"走的是`Citizen::GetJob()`，不经过`Society`）——等对应域
+真正迁移出业务逻辑、需要通过`Post`查询它们的数据时，再在这个`if/else if`链上加新分支，
+不需要改构造函数签名。
 
 ### `GetResult()`返回成员的引用，不按值返回
 
@@ -64,19 +81,25 @@ virtual const JsonValue& GetResult() const override { return result; }
 
 - 依赖：`common/handle.h`（`PostHandle`基类）、`common/json.h`（`JsonValue`）、
   `populace/populace.h`/`populace/citizen.h`（`Populace::GetCitizens()`/`Citizen`）、
-  `player/player.h`（`Player::GetTime()`）、`common/utility.h`（`GetRandom`、
-  `Time::Format`）、`Map`/`Society`/`Story`/`Industry`/`Traffic`（仅前置声明，构造函数
-  存指针，`Post()`里暂未使用）。
+  `player/player.h`（`Player::GetTime()`）、`society/job.h`（`Citizen::GetJob()->
+  GetPosition()`）、`map/room.h`（`Room::GetAddress()`）、`common/utility.h`
+  （`GetRandom`、`Time::Format`）、`Map`/`Society`/`Story`/`Industry`/`Traffic`（仅
+  前置声明或暂未使用，构造函数存指针）。
 - 被谁依赖：`Forever/Framework/ForeverStoryFrameworkComponent.cpp`
   （`BroadcastGameStart()`现场构造`PostImplement`，传给`Story::BroadcastGameStart`的
-  `post`参数）、`Dependence/story/script_mod.h`/`Forever_Mod/Empty/Cpp/Empty/
-  empty_mods.h`（间接：`ScriptMod::WrapScript`拿到的`PostHandle*`在运行时实际指向一个
-  `PostImplement`，但mod侧代码只认`PostHandle`接口，不直接引用`PostImplement`类型）。
+  `post`参数）、`Forever/Framework/ForeverFrameworkActor.cpp`（`Tick()`现场构造
+  `PostImplement`，传给`populace->Tick(...)`/`society->Tick(...)`的`post`参数，见
+  `job.md`"按需查地址：PostHandle参数"一节）、`Dependence/story/script_mod.h`/
+  `Dependence/society/job_mod.h`/`Forever_Mod/Empty/Cpp/Empty/empty_mods.h`（间接：
+  `ScriptMod::WrapScript`/`JobMod::DailyPlan`/`ExecNode`拿到的`PostHandle*`在运行时
+  实际指向一个`PostImplement`，但mod侧代码只认`PostHandle`接口，不直接引用
+  `PostImplement`类型）。
 
 ## 待办/后续阶段
 
-- `society`/`industry`/`traffic`三个domain指针目前只存不用，等对应域真正迁移出业务逻辑、
+- `industry`/`traffic`两个domain指针目前只存不用，等对应域真正迁移出业务逻辑、
   需要通过`Post`反向查询时再加新的`else if`分支。
-- 目前只有"random citizen"/"game time"两种查询类型，请求/响应的JSON字段命名
-  （`post`/`result`/`name`/`date`/`time`/`msg`）没有形成任何通用约定或校验，后续查询
-  类型多起来后可能需要梳理一份统一的请求/响应格式规范。
+- 目前只有"random citizen"/"game time"/"citizen home address"/"citizen workplace
+  address"四种查询类型，请求/响应的JSON字段命名（`post`/`result`/`name`/`date`/
+  `time`/`address`/`msg`）没有形成任何通用约定或校验，后续查询类型多起来后可能需要
+  梳理一份统一的请求/响应格式规范。

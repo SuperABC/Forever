@@ -7,8 +7,12 @@ using namespace std;
 
 int ResidenceZone::count = 0;
 
-ResidenceZone::ResidenceZone() {
-	lastName = string(GetType()) + std::to_string(count++);
+ResidenceZone::ResidenceZone() : id(count++) {
+}
+
+const char* ResidenceZone::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
 }
 
 // 老工程ResidentialZone::LayoutZone的常量，Quad::acreage换算系数两边工程完全一致，不需要

@@ -76,12 +76,12 @@ const vector<Citizen*>& Populace::GetCitizens() const { return citizens; }
 int Populace::GetCurrentYear() const { return currentYear; }
 
 void Populace::Tick(const Time& currentTime, bool crossedDay,
-	const function<void(Citizen*, const vector<Change*>&)>& onActions) {
+	const function<void(Citizen*, const vector<Change*>&)>& onActions, PostHandle* post) {
 	if (crossedDay) {
 		for (Citizen* citizen : citizens) {
 			Job* job = citizen->GetJob();
 			if (!job) continue;
-			job->DailyPlan(currentTime);
+			job->DailyPlan(currentTime, post);
 			for (const auto& [node, time] : job->GetPlans()) {
 				jobTimerSet.insert({ time, citizen, node });
 			}
@@ -95,7 +95,7 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 		if (currentTime < target) break;
 		Job* job = citizen->GetJob();
 		if (job) {
-			vector<Change*> changes = job->ExecNode(node);
+			vector<Change*> changes = job->ExecNode(node, post);
 			onActions(citizen, changes);
 		}
 		jobTimerSet.erase(it);

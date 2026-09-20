@@ -89,11 +89,17 @@ map->Checkin(*populace);
 
 `NameMod`接口照抄老工程`NameMod`（`E:\Projects\Forever_UE\Source\Dependence\populace\
 name_mod.h`）的三个纯虚方法：`GetSurname(fullName)`/`GenerateName(male,female,neutral)`/
-`GenerateName(surname,male,female,neutral)`，**但去掉了`std::function`回调+
-`PostHandle*`参数**——那一套是给老工程"可能异步的UI/脚本触发"场景用的，这次唯一的调用方
-`Populace::GenerateCitizens()`是纯同步调用，直接用返回值更简单，也不需要引入这个项目
-目前完全没有的`PostHandle`/异步基础设施；生成失败（候选词库为空等）用空字符串表示，和
-老工程`Name::GenerateName`回调传空字符串的失败信号语义一致。
+`GenerateName(surname,male,female,neutral)`。**这三个方法这次改回了老工程"传一个set
+结果的lambda进去"的callback写法**——一度改成直接按值返回`std::string`更简单，但这正是
+被明确指出禁止的跨DLL模式（mod侧构造的`std::string`临时对象按值返回穿过DLL边界）；
+`std::function<void(const std::string&)>`按`const&`传入mod侧重写的虚方法，回调只读
+`const string&`参数拷贝进调用方自己的`string`，不发生"一侧分配、另一侧释放"的情况，
+和`RoadnetMod::DistributeRoadnet`/`TerrainMod::DistributeTerrain`已经在用的
+`std::function`回调传参是同一类安全模式（这次不需要`PostHandle*`——那是给"向Core发起
+查询"场景用的，`GenerateName`/`GetSurname`不需要查Core状态，纯粹是"把结果传出来"，两者
+是不同的问题）。生成失败（候选词库为空等）时不调用`setResult`，`Name`（Core层包装类，
+`Name::GenerateName`/`GetSurname`仍然按值返回`std::string`——`Name`不是mod、不跨DLL
+边界，不受这条规则约束）读到的结果保持初始的空字符串，和老工程失败信号语义一致。
 
 `ChineseName`（`Source/Basic/populace/name_chinese.cpp`）逐字段/逐行照抄老工程
 `ChineseName`（`E:\Projects\Forever_UE\Source\Basic\populace\name_basic.cpp`）：
@@ -202,10 +208,12 @@ id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有�
 
 ## Tick：驱动Job的调度（进入society域新增）
 
-`Populace::Tick(currentTime, crossedDay, onActions)`——`Job`的timer放在这里（不是老
-工程的`Society::timerSet`），因为`Job`由`Citizen`直接持有引用，`Populace`本来就要
-遍历所有citizen，比按`Organization`→`Component`→`Job`反查"这个job的occupant是谁"更
-直接。`crossedDay`为true时遍历所有持有job的citizen，转调`job->DailyPlan(currentTime)`
+`Populace::Tick(currentTime, crossedDay, onActions, post)`——`Job`的timer放在这里
+（不是老工程的`Society::timerSet`），因为`Job`由`Citizen`直接持有引用，`Populace`本来
+就要遍历所有citizen，比按`Organization`→`Component`→`Job`反查"这个job的occupant是谁"
+更直接。`post`（`PostHandle*`）原样透传给`job->DailyPlan`/`job->ExecNode`，`Populace`
+自己不解读这个句柄，见`society/job.md`"按需查地址：PostHandle参数"一节。`crossedDay`
+为true时遍历所有持有job的citizen，转调`job->DailyPlan(currentTime, post)`
 生成今天的调度表，塞进`Populace`自己的`jobTimerSet`（`std::set<std::tuple<Time,
 Citizen*, std::string>>`，按时间排序）；不论是否跨天，每帧从`jobTimerSet`弹出最多
 `kMaxJobTimersPerTick`个到期节点执行——照抄老工程"一帧内允许处理的timer上限"这个

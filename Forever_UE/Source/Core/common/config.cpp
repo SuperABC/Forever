@@ -16,6 +16,8 @@ using namespace std;
 string Config::configDir = "";
 unordered_map<string, vector<string>> Config::dllPaths = {};
 unordered_map<string, vector<string>> Config::layoutPaths = {};
+unordered_map<string, vector<string>> Config::resourcePaths = {};
+string Config::mainStoryScriptModName = "";
 unordered_map<string, vector<pair<string, string>>> Config::conceptMods = {};
 
 bool Config::CheckFileFormat(const filesystem::path& filePath, const string& format) {
@@ -31,6 +33,8 @@ bool Config::CheckFileFormat(const filesystem::path& filePath, const string& for
 void Config::ReadConfig(const string& path) {
 	dllPaths.clear();
 	layoutPaths.clear();
+	resourcePaths.clear();
+	mainStoryScriptModName.clear();
 	conceptMods.clear();
 
 	ifstream fin(path);
@@ -70,6 +74,17 @@ void Config::ReadConfig(const string& path) {
 		}
 		AddLayoutPath(resolved.string());
 	}
+
+	for (const auto& resourcePath : root["resource_path"]) {
+		// 和dll_paths/layout_paths同一个相对路径解析规则，相对configDir。
+		filesystem::path resolved(resourcePath.AsString());
+		if (resolved.is_relative()) {
+			resolved = filesystem::path(configDir) / resolved;
+		}
+		AddResourcePath(resolved.string());
+	}
+
+	mainStoryScriptModName = root["main_story"].AsString();
 
 	// 任何以"_mods"结尾的顶层key都当作一个concept的mod列表解析(如"building_mods"),不
 	// 硬编码20个concept的名字——config.json本身决定内容,和旧工程的写法(每个concept一个
@@ -184,6 +199,43 @@ vector<string> Config::GetLayouts() {
 		}
 	}
 	return paths;
+}
+
+void Config::AddResourcePath(const string& path) {
+	filesystem::path dir(path);
+	if (!filesystem::exists(dir) || !filesystem::is_directory(dir)) {
+		cerr << "[Config] Warning: resource path does not exist: " << path << "\n";
+		return;
+	}
+
+	resourcePaths.erase(path);
+
+	vector<string> found;
+	for (const auto& entry : filesystem::recursive_directory_iterator(dir)) {
+		if (!CheckFileFormat(entry.path(), ".script"))
+			continue;
+		found.push_back(filesystem::absolute(entry.path()).string());
+	}
+	resourcePaths[path] = found;
+}
+
+bool Config::HasResourcePaths() {
+	return !resourcePaths.empty();
+}
+
+string Config::GetScriptPath(const string& name) {
+	for (const auto& [_, scripts] : resourcePaths) {
+		for (const auto& script : scripts) {
+			if (filesystem::path(script).stem().string() == name) {
+				return script;
+			}
+		}
+	}
+	return string();
+}
+
+string Config::GetMainStoryScriptModName() {
+	return mainStoryScriptModName;
 }
 
 vector<pair<string, string>> Config::GetConceptMods(const string& jsonKey) {

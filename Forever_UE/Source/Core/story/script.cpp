@@ -115,7 +115,7 @@ void Script::ReadScript(const string& path) {
 				milestone["milestone"].AsString(),
 				BuildEvent(milestone["triggers"]),
 				milestone["visible"].AsBool(),
-				BuildExpression(milestone["drop"]),
+				milestone["drop"].AsString(),
 				milestone["description"].AsString(),
 				milestone["goal"].AsString(),
 				BuildChanges(milestone["changes"]),
@@ -247,7 +247,7 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			THROW_EXCEPTION(RuntimeException, "Event type not implemented yet: " + type + ".\n");
 		}
 
-		event->SetCondition(BuildExpression(obj["condition"]));
+		event->SetCondition(obj["condition"].AsString());
 		events.push_back(event);
 	}
 
@@ -267,17 +267,20 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			if (variable.IsNull() || value.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing variable or value for set_value change.\n");
 			}
-			change = new SetValueChange(variable.AsString(), BuildExpression(value));
+			change = new SetValueChange(variable.AsString(), value.AsString());
 		}
 		else if (type == "place_holder") {
-			change = new PlaceHolderChange(BuildExpression(obj["label"]));
+			change = new PlaceHolderChange(obj["label"].AsString());
+		}
+		else if (type == "debug_print") {
+			change = new DebugPrintChange(obj["message"].AsString());
 		}
 		else {
 			// 阶段4占位：其余40种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Change type not implemented yet: " + type + ".\n");
 		}
 
-		change->SetCondition(BuildExpression(obj["condition"]));
+		change->SetCondition(obj["condition"].AsString());
 		changes.push_back(change);
 	}
 
@@ -290,12 +293,12 @@ vector<Dialog*> Script::BuildDialogs(const JsonValue& root) {
 	for (auto obj : root) {
 		Dialog* dialog = new Dialog();
 
-		dialog->SetCondition(BuildExpression(obj["condition"]));
+		dialog->SetCondition(obj["condition"].AsString());
 
 		for (auto section : obj["list"]) {
 			if (section.IsObject()) {
-				dialog->AddDialog(BuildExpression(section["speaker"]), BuildExpression(section["content"]),
-					BuildExpression(section["label"]), BuildExpression(section["voice"]));
+				dialog->AddDialog(section["speaker"].AsString(), section["content"].AsString(),
+					section["label"].AsString(), section["voice"].AsString());
 			}
 			else if (section.IsArray()) {
 				vector<Option> options;
@@ -306,7 +309,7 @@ vector<Dialog*> Script::BuildDialogs(const JsonValue& root) {
 					// 这条路径未被实际执行到，真正的嵌套本体归属方式留到分支选项被点名实现
 					// 时再确定，见Script.md。
 					auto nestedChanges = BuildChanges(item["changes"]);
-					options.emplace_back(BuildExpression(item["condition"]), BuildExpression(item["option"]),
+					options.emplace_back(item["condition"].AsString(), item["option"].AsString(),
 						BuildDialogs(item["dialogs"]), vector<const Change*>(nestedChanges.begin(), nestedChanges.end()));
 				}
 				dialog->AddDialog(options);
@@ -317,12 +320,6 @@ vector<Dialog*> Script::BuildDialogs(const JsonValue& root) {
 	}
 
 	return dialogs;
-}
-
-Expression Script::BuildExpression(const JsonValue& root) {
-	Expression expression;
-	expression.Parse(root.AsString());
-	return expression;
 }
 
 vector<string> Script::BuildSubsequences(const JsonValue& root) {

@@ -23,6 +23,23 @@
   后缀分流"那套`GetResourcePaths`/`AddResourcePath`设计——这次直接一个独立的
   `layout_paths`数组更清楚，也不需要`GetScripts`/`GetPlugins`/`GetPakFiles`这些还没有
   消费方的其它资源类型。
+- **`AddResourcePath`/`GetScriptPath`/`HasResourcePaths`(Society域Script配置修复时新增)**：
+  和`AddLayoutPath`同一个扫描手法，这次扫`.script`文件（`resourcePaths`结构和
+  `layoutPaths`一致，root目录->该目录下发现的`.script`绝对路径列表）。`config.json`新增
+  `"resource_path"`数组（当前配的是`["../Story"]`）。这次新增的动机：`JobMod`/
+  `OrganizationMod`（以及`Story`）之前决定"Script文件存放在哪"的方式是Core里硬编码
+  `configDir/"../Story"/(name+".json")`路径拼接——这既替Mod做了它不该做的选择，也没有
+  给Mod提供"我只写一个bare名字，不用管文件实际在哪"的能力（Mod不知道也不可能知道用户
+  实际把脚本文件放在哪）。修复后`JobMod::milestoneNames`/`OrganizationMod::
+  milestoneNames`只写不含路径/扩展名的bare文件名，`Config::GetScriptPath(name)`
+  （遍历`resourcePaths`所有条目，按`filesystem::path(p).stem()`匹配，找不到返回空
+  字符串）负责按bare名字反查实际路径，见`Core/society/job.md`"Script配置"一节。
+  `HasResourcePaths()`供`ForeverModSubsystem::Initialize`判断要不要回退扫描默认的
+  `Resource/Story/`目录，和`layout_paths`同一个容错风格。
+- **`GetMainStoryScriptModName`(同上一起新增)**：读`config.json`新增的`"main_story"`
+  字段（当前配的是`"empty"`），供`Story::Init()`决定主线剧情`Script`要挂载哪个
+  `ScriptMod`——之前这个决策也是Core里硬编码`kEmptyScriptId="empty"`，同上一并修复。
+  字段缺失时返回空字符串，`Config`自己不兜底默认值，由`Story::Init()`据此判定跳过初始化。
 - **用旧工程`Dependence/common/json.h`而不是UE自带Json模块解析`config.json`**——UE的
   `FJsonSerializer`是严格JSON,不支持注释;旧工程的解析器是JsonCpp衍生的宽松版本,支持
   `//`/`/* */`注释,更适合手写维护的配置文件。这是本次会话用户明确要求的决定。

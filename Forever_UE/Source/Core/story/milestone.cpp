@@ -7,7 +7,7 @@
 
 using namespace std;
 
-Milestone::Milestone(string name, vector<Event*> triggers, bool visible, Expression drop, string description,
+Milestone::Milestone(string name, vector<Event*> triggers, bool visible, std::string drop, string description,
 	string goal, vector<Change*> changes, vector<Dialog*> dialogs, vector<string> subsequences) :
 	name(move(name)), triggers(move(triggers)), visible(visible), drop(move(drop)), description(move(description)),
 	goal(move(goal)), changes(move(changes)), dialogs(move(dialogs)), subsequences(move(subsequences)) {
@@ -47,7 +47,7 @@ bool Milestone::MatchTrigger(Event* e, const ScriptContext& context) const {
 
 	for (auto trigger : triggers) {
 		if (!trigger) continue;
-		if (!trigger->GetCondition().EvaluateBool(context)) continue;
+		if (!EvaluateExpressionBool(trigger->GetCondition(), context)) continue;
 		if (trigger->GetType() != e->GetType()) continue;
 		if (trigger->Match(e, context)) {
 			return true;
@@ -65,12 +65,12 @@ bool Milestone::IsVisible() const {
 	return visible;
 }
 
-Expression Milestone::DropCondition() const {
+std::string Milestone::DropCondition() const {
 	return drop;
 }
 
 bool Milestone::DropSelf(const ScriptContext& context) const {
-	return drop.EvaluateBool(context);
+	return EvaluateExpressionBool(drop, context);
 }
 
 string Milestone::GetDescription() const {

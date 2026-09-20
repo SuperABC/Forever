@@ -23,18 +23,21 @@
 // 见Source/Basic/README.md。
 class ResidenceZone : public ZoneMod {
 public:
-	// 构造函数只定死lastName(用static计数器)，和老工程ResidentialZone::count同款。
+	// 构造函数只记下id(用static计数器)。
 	ResidenceZone();
 
 	static const char* GetId() { return "zone_residence"; }
 	virtual const char* GetType() const override { return "zone_residence"; }
-	virtual const char* GetName() override { return lastName.c_str(); }
+	// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id，和terrain_basic同一个
+	// 模式。
+	virtual const char* GetName() override;
 
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
 	virtual void Layout(int direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) override;
 
 private:
-	std::string lastName;
 	static int count;
+	int id;
+	std::string name;
 };

@@ -420,6 +420,18 @@ ValueType Expression::EvaluateValue(const ScriptContext& context) const {
 	return root->Evaluate(context);
 }
 
+ValueType EvaluateExpression(const string& source, const ScriptContext& context) {
+	Expression expression;
+	expression.Parse(source);
+	return expression.EvaluateValue(context);
+}
+
+bool EvaluateExpressionBool(const string& source, const ScriptContext& context) {
+	Expression expression;
+	expression.Parse(source);
+	return expression.EvaluateBool(context);
+}
+
 static size_t FindMatchingQuote(const string& expr, size_t start) {
 	char quote = expr[start];
 	if (quote != '"' && quote != '\'')

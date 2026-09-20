@@ -1,8 +1,8 @@
 # dialog.h / dialog.cpp
 
 阶段4新设计，取代阶段4-0未落地的老工程`dialog.h`（新工程首次迁移这个文件）。三个类
-（`Option`/`Section`/`Dialog`）的结构照抄老工程，`Condition`→`Expression`，
-`vector<function<...>> getValues`→`const ScriptContext&`。
+（`Option`/`Section`/`Dialog`）的结构照抄老工程，`Condition`→`std::string`（DSL源码文本，
+`EvaluateExpressionBool`现场求值），`vector<function<...>> getValues`→`const ScriptContext&`。
 
 ## 指针语义（延迟求值 + 引用约定）
 
@@ -12,8 +12,10 @@
 
 ## 延迟求值
 
-`Section`的四个台词字段（`speaker`/`content`/`label`/`voice`）存成未求值的`Expression`
-（`speakerExpr`等），只有调用`EvaluateText(context)`时才求值、写入内部缓存
+`Section`的四个台词字段（`speaker`/`content`/`label`/`voice`）存成未解析的DSL源码字符串
+（`speakerExpr`等，`std::string`类型——命名带`Expr`后缀是历史遗留，不代表类型是`Expression`，
+见`change.md`"字段类型是`std::string`"一节的崩溃教训），只有调用`EvaluateText(context)`时才
+用`EvaluateExpression`现场`Parse`+求值、写入内部缓存
 `speaking`（`GetSpeaking()`读这个缓存）。关键是`Dialog::GetDialogs() const`**每次返回的是
 `Section`的拷贝**（不是引用）——调用方在这份拷贝上调`EvaluateText`，不会污染`Dialog`本体持有的
 未求值版本。这样同一个`Dialog`被反复触发/播放时（比如可重复触发的milestone，或Option里的
@@ -39,7 +41,8 @@
 
 ## 依赖关系
 
-- 依赖：`common/utility.h`、`common/error.h`、`expression.h`、`change.h`（`Option::changes`）。
+- 依赖：`common/utility.h`、`common/error.h`、`expression.h`
+  （`EvaluateExpression`/`EvaluateExpressionBool`）、`change.h`（`Option::changes`）。
 - 被谁依赖：`Core/story/milestone.h`（`Milestone::dialogs`）、`Core/story/script.h`
   （`Script::BuildDialogs`/`MatchEvent`）、`Dependence/story/script_mod.h`（`ScriptAction`
   variant的`const Dialog*`分支）、`Forever/Framework/ForeverStoryFrameworkComponent.cpp`

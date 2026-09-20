@@ -27,15 +27,18 @@
   编译（否则调用点传参数量对不上）。
 - **新增非虚方法`FindLabel(label, context)`**：在`actionStack`当前层（`actionStack.back()`）
   里按标签字符串查找第一个匹配的`PlaceHolderChange`，返回它在这一层vector里的下标，找不到
-  返回`-1`。`label`参数已经是纯字符串（不是`Expression`），但`PlaceHolderChange::GetLabel()`
-  返回的是`Expression`（可能引用变量，不是纯字面量），所以要按传入的`context`先
-  `EvaluateValue`+`ToString`求值出实际标签字符串，再和`label`比较。非虚——理由和
+  返回`-1`。`label`参数已经是纯字符串，但`PlaceHolderChange::GetLabel()`返回的是DSL源码
+  字符串（`std::string`，可能引用变量，不是纯字面量），所以要按传入的`context`用
+  `EvaluateExpression`现场`Parse`+求值出实际标签字符串，再和`label`比较——`FindLabel`本身
+  内联在Dependence头文件里、被mod自己的`WrapScript`调用，Parse+Evaluate整个发生在调用方
+  （mod）自己编译的代码里，不会有`Expression`对象跨模块传递的问题（完整背景见
+  `Dependence/story/change.md`"字段类型是`std::string`"一节的崩溃教训）。非虚——理由和
   `AutoCopy`/`AutoPop`一样：只会被已经虚分派到mod侧的`WrapScript`重载从内部调用，天然已经
   跑在mod自己的模块里，不需要单独走vtable。
 - **典型用法**（`EmptyScript::WrapScript`）：`AutoCopy(actions)`之后，`FindLabel("control",
   context)`找`test.json`里`{"type":"place_holder","label":"control"}`这一项的下标，找到后
   `post->Post({"post":"random citizen"})`向`PostImplement`查询一个随机citizen姓名，把结果
-  解析成`Expression`塞进mod自己长期持有的`ChangeControlChange controlChange`成员，最后
+  字符串直接`SetName`塞进mod自己长期持有的`ChangeControlChange controlChange`成员，最后
   `actionStack.back()[idx] = &controlChange`原地替换掉那个`PlaceHolderChange`——`
   controlChange`必须是mod自己长期持有（这里是`EmptyScript`的成员变量，永不delete），不能
   是`WrapScript`这次调用里现场`new`出来的临时对象，替换后的指针要在这次广播处理完之前一直
@@ -92,7 +95,7 @@ Core对象的STL容器mutator"，而是"mod的编译产物里默认实现构造�
 
 ## 依赖关系
 
-- 依赖：`expression.h`（`Expression`/`ScriptContext`）、`change.h`（`FindLabel`里
+- 依赖：`expression.h`（`ScriptContext`、`EvaluateExpression`）、`change.h`（`FindLabel`里
   `dynamic_cast<const PlaceHolderChange*>`）、`../common/handle.h`（`PostHandle`）、
   `<deque>`。
 - 被谁依赖：`script_factory.h`（`ScriptFactory::CreateFunc`/`DestroyFunc`按`ScriptMod*`工作）、

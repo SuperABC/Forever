@@ -179,11 +179,14 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
-	// 空占位，不持有任何姓名词库，按接口约定的"失败"语义统一返回空字符串。
-	virtual std::string GetSurname(const std::string& fullName) const override { return ""; }
-	virtual std::string GenerateName(bool allowMale, bool allowFemale, bool allowNeutral) const override { return ""; }
-	virtual std::string GenerateName(const std::string& surname,
-		bool allowMale, bool allowFemale, bool allowNeutral) const override { return ""; }
+	// 空占位，不持有任何姓名词库，按接口约定的"失败"语义统一不调用setResult。
+	virtual void GetSurname(const std::string& fullName,
+		const std::function<void(const std::string&)>& setResult) const override {}
+	virtual void GenerateName(bool allowMale, bool allowFemale, bool allowNeutral,
+		const std::function<void(const std::string&)>& setResult) const override {}
+	virtual void GenerateName(const std::string& surname,
+		bool allowMale, bool allowFemale, bool allowNeutral,
+		const std::function<void(const std::string&)>& setResult) const override {}
 
 private:
 	std::string name;
@@ -210,7 +213,7 @@ public:
 	virtual const char* GetName() override { return name.data(); }
 
 	// Society/Job域这次迁移新增的纯虚方法：这个占位mod不产生任何调度。
-	virtual void DailyPlan(const Time&) override {}
+	virtual void DailyPlan(const Time&, PostHandle*) override {}
 
 private:
 	std::string name;
@@ -263,9 +266,7 @@ public:
 		const JsonValue& result = post->GetResult();
 		if (result["result"].AsString() != "success") return;
 
-		Expression citizenName;
-		citizenName.Parse("\"" + result["name"].AsString() + "\"");
-		controlChange.SetName(citizenName);
+		controlChange.SetName(result["name"].AsString());
 
 		actionStack.back()[idx] = static_cast<const Change*>(&controlChange);
 	}

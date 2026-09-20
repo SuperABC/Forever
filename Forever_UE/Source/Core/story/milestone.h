@@ -26,7 +26,7 @@ public:
 	* @dialogs: 关联对话列表（延迟求值，见Dialog.h整体注释）
 	* @subsequences: 后续里程碑名称列表
 	*/
-	Milestone(std::string name, std::vector<Event*> triggers, bool visible, Expression drop, std::string description,
+	Milestone(std::string name, std::vector<Event*> triggers, bool visible, std::string drop, std::string description,
 		std::string goal, std::vector<Change*> changes, std::vector<Dialog*> dialogs, std::vector<std::string> subsequences);
 
 	/*
@@ -76,7 +76,7 @@ public:
 	* 获取一次性失效条件表达式
 	* @return: 失效条件
 	*/
-	Expression DropCondition() const;
+	std::string DropCondition() const;
 
 	/*
 	* 根据当前变量值求值失效条件，判断这次匹配成功后是否应让本里程碑失效
@@ -115,7 +115,7 @@ private:
 	bool visible;
 
 	// 一次性失效条件：匹配成功后求值为true则本里程碑退出actives、不再参与后续匹配
-	Expression drop;
+	std::string drop;
 
 	// 里程碑描述文本
 	std::string description;

@@ -12,6 +12,10 @@
 #include "story/script.h"
 #include "story/dialog.h"
 #include "story/change.h"
+#include "story/event.h"
+#include "society/society.h"
+#include "society/organization.h"
+#include "society/job.h"
 #include "common/implement.h"
 
 using namespace std;
@@ -27,16 +31,17 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 	// "random citizen"，见Core/common/implement.md）。生命周期只需要覆盖这次广播，不用长期
 	// 持有。
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Society* society = framework ? framework->GetSociety() : nullptr;
 	PostImplement postImplement(
 		framework ? framework->GetMap() : nullptr,
 		framework ? framework->GetPopulace() : nullptr,
-		framework ? framework->GetSociety() : nullptr,
+		society,
 		story,
 		framework ? framework->GetIndustry() : nullptr,
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
 
-	story->BroadcastGameStart([this](const vector<ScriptAction>& actions, const ScriptContext& context) {
+	auto onActions = [this](const vector<ScriptAction>& actions, const ScriptContext& context) {
 		for (const auto& action : actions) {
 			if (auto dialogPtr = get_if<const Dialog*>(&action)) {
 				for (Section section : (*dialogPtr)->GetDialogs()) {
@@ -44,7 +49,7 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 						// 没有玩家交互，默认选中第一个选项，见ForeverStoryFrameworkComponent.md
 						auto options = section.GetOptions();
 						if (!options.empty()) {
-							FString text = UTF8_TO_TCHAR(ToString(options[0].GetOption().EvaluateValue(context)).data());
+							FString text = UTF8_TO_TCHAR(ToString(EvaluateExpression(options[0].GetOption(), context)).data());
 							GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[对话选项] %s"), *text));
 						}
 					}
@@ -62,6 +67,10 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 				if (auto controlChange = dynamic_cast<const ChangeControlChange*>(*changePtr)) {
 					ApplyControlChange(controlChange, context);
 				}
+				else if (auto debugPrint = dynamic_cast<const DebugPrintChange*>(*changePtr)) {
+					FString text = UTF8_TO_TCHAR(ToString(EvaluateExpression(debugPrint->GetMessage(), context)).data());
+					GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, text);
+				}
 				else {
 					story->ApplyChange(*changePtr, context);
 				}
@@ -69,11 +78,38 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[变化] %s"), *typeText));
 			}
 		}
-		}, &postImplement);
+		};
+
+	// broadcastOne不止这次society域用得上——以后industry/traffic等其它域各自的Script要
+	// 广播game_start时，同样调这个helper，不需要另起一套，所以放在if(society)之前、和
+	// onActions平级定义。
+	GameStartEvent event;
+	auto broadcastOne = [&](Script* script) {
+		if (!script) return;
+		ScriptContext context;
+		context.self = script;
+		context.system = story->GetSystemScript();
+		context.local = &event;
+		onActions(script->MatchEvent(&event, context, &postImplement), context);
+		};
+
+	story->BroadcastGameStart(onActions, &postImplement);
+
+	// 进入society域新增：Job/Organization各自持有的Script这次也要广播一次game_start，
+	// 否则job_shop_saler.script/organization_shop.script里的game_start milestone永远
+	// 不会被触发。
+	if (society) {
+		for (Organization* org : society->GetOrganizations()) {
+			broadcastOne(org->GetScript());
+			for (Job* job : org->GetJobs()) {
+				broadcastOne(job->GetScript());
+			}
+		}
+	}
 }
 
 void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context) {
-	FString name = UTF8_TO_TCHAR(ToString(change->GetName().EvaluateValue(context)).data());
+	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetName(), context)).data());
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	UForeverPopulaceFrameworkComponent* populaceFramework = framework ? framework->GetPopulaceFramework() : nullptr;

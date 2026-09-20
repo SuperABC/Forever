@@ -26,17 +26,19 @@ public:
 	~Story();
 
 	/*
-	* 初始化：创建systemScript，从test.json读取主线剧情Script
+	* 初始化：创建systemScript，从config.json的"main_story"字段读取ScriptModName，
+	* 用Config::GetScriptPath("test")解析实际路径读取主线剧情Script
 	*/
 	void Init();
 
 	/*
-	* 构造一个GameStartEvent，广播给mainScripts里每个Script，同步回调onActions交给调用方
+	* 构造一个GameStartEvent，广播给mainScript，同步回调onActions交给调用方
 	* （UForeverStoryFrameworkComponent）展示——用回调而不是直接返回vector<ScriptAction>，
 	* 是因为ScriptContext.local指向这个函数栈上的GameStartEvent，只在回调同步执行期间有效，
 	* 调用方不能把actions/context留到回调返回之后再用（local.前缀求值会变成悬垂指针）。
+	* mainScript为空(Init()没有成功创建)时直接返回，不调用onActions。
 	* @onActions: 收到匹配出的动作列表和对应变量路由上下文
-	* @post: 向Core发起查询的句柄，透传给每个Script::MatchEvent/WrapScript
+	* @post: 向Core发起查询的句柄，透传给Script::MatchEvent/WrapScript
 	*/
 	void BroadcastGameStart(const std::function<void(const std::vector<ScriptAction>&, const ScriptContext&)>& onActions,
 		PostHandle* post);
@@ -55,9 +57,10 @@ public:
 	Script* GetSystemScript() const;
 
 	/*
-	* 获取主线剧情Script数组
+	* 获取主线剧情Script——用户明确指出一份剧本只能由一个Script表示，这次从
+	* vector<Script*>改成单个Script*，不再是数组
 	*/
-	const std::vector<Script*>& GetMainScripts() const;
+	Script* GetMainScript() const;
 
 private:
 	// 引用`Registry::Get().GetScriptFactory()`，不再自己持有ModLoader/ScriptFactory——mod
@@ -65,8 +68,8 @@ private:
 	// 构造函数初始化列表里绑定。
 	ScriptFactory& scriptFactory;
 
-	// 主线剧情Script数组（持有所有权）
-	std::vector<Script*> mainScripts;
+	// 主线剧情Script（持有所有权）——一份剧本只能由一个Script表示，不是数组
+	Script* mainScript = nullptr;
 
 	// 全局变量池（持有所有权）
 	Script* systemScript = nullptr;

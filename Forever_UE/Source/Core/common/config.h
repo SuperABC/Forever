@@ -51,6 +51,28 @@ public:
 	// 不重复摆放同名模板)。
 	static std::vector<std::string> GetLayouts();
 
+	// 递归扫描path下所有.script文件，记下绝对路径——和AddLayoutPath同一个手法，不需要
+	// 探测/加载任何东西，找到就收，不做格式校验(交给Script::ReadScript解析时再报错)。
+	// 这次新增的动机：JobMod/OrganizationMod（以及Story）只应该写一个不含路径/扩展名的
+	// bare文件名（如"job_shop_saler"），不应该也不可能知道用户实际把脚本文件放在哪，
+	// 由这里的resource_path配置统一决定实际存放位置，见job.md"按需查地址"一节旁边新增的
+	// "Script配置"说明。
+	static void AddResourcePath(const std::string& path);
+
+	// 是否已经有任何resource_path被注册过——config.json没有配置resource_path(或者根本
+	// 没有config.json)时，调用方(ForeverModSubsystem)据此决定要不要回退扫描默认的
+	// Resource/Story目录，和dll_paths/layout_paths同一个回退容错风格。
+	static bool HasResourcePaths();
+
+	// 按不含路径/扩展名的bare文件名查找对应.script文件的绝对路径——遍历所有已发现的
+	// .script路径，返回第一个basename(不含扩展名)等于name的；找不到返回空字符串。不做
+	// 任何缓存/去重校验，理论上不会有同名冲突，调用方自己保证不重复摆放同名脚本。
+	static std::string GetScriptPath(const std::string& name);
+
+	// main_story字段：主线剧情Script要挂载的ScriptModName，不再由Story硬编码"empty"。
+	// 字段缺失时返回空字符串，调用方(Story::Init)据此判定跳过初始化，不在这里兜底默认值。
+	static std::string GetMainStoryScriptModName();
+
 	// jsonKey形如"building_mods"。返回该数组解析出的(id, 参数字符串)列表——每个数组元素
 	// 按第一个空格切成两段,如"pengzhan --density 1.0"切成("pengzhan", "--density 1.0"),
 	// 没有空格则参数为空串。参数字符串原样返回,格式/是否使用完全由mod自己的creator(收到
@@ -67,6 +89,12 @@ private:
 
 	// layout根目录path -> 该目录下发现的.layout绝对路径列表
 	static std::unordered_map<std::string, std::vector<std::string>> layoutPaths;
+
+	// resource根目录path -> 该目录下发现的.script绝对路径列表，结构和layoutPaths一致
+	static std::unordered_map<std::string, std::vector<std::string>> resourcePaths;
+
+	// main_story字段的原始值(ScriptModName)，ReadConfig时读取
+	static std::string mainStoryScriptModName;
 
 	// "<concept>_mods"这个json key -> 该数组解析出的(id, 参数字符串)列表
 	static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> conceptMods;

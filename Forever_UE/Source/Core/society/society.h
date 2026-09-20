@@ -5,6 +5,7 @@
 #include "story/script_factory.h"
 
 #include "common/utility.h"
+#include "common/handle.h"
 
 #include <functional>
 #include <set>
@@ -33,9 +34,10 @@ public:
 	void RecruitCitizens(const std::vector<Citizen*>& citizens, int currentYear);
 
 	// 每帧：Organization自己的DailyPlan/ExecNode调度(和Populace::Tick驱动Job那一份
-	// 完全独立的timer)。ExecNode是纯C++通道，直接给Change*。
+	// 完全独立的timer)。ExecNode是纯C++通道，直接给Change*。@post透传给
+	// Organization::DailyPlan/ExecNode，见populace.h同名参数的说明。
 	void Tick(const Time& currentTime, bool crossedDay,
-		const std::function<void(Organization*, const std::vector<Change*>&)>& onActions);
+		const std::function<void(Organization*, const std::vector<Change*>&)>& onActions, PostHandle* post);
 
 	const std::vector<Organization*>& GetOrganizations() const;
 

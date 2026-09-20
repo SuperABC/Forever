@@ -1,7 +1,10 @@
 # milestone.h / milestone.cpp
 
 阶段4新落地（新工程首次迁移这个文件），结构照抄老工程`Core/story/milestone.h/.cpp`，
-`Condition`→`Expression`，`vector<function<...>> getValues`→`const ScriptContext&`。
+`Condition`→`std::string`（DSL源码文本，`EvaluateExpressionBool`现场求值——`drop`字段最初
+写成`Expression`，后来因为跨模块崩溃改回`std::string`，完整原因见`Dependence/story/
+change.md`"字段类型是`std::string`"一节），`vector<function<...>> getValues`→
+`const ScriptContext&`。
 
 ## 职责
 
@@ -15,7 +18,7 @@
 
 ```cpp
 for (auto trigger : triggers) {
-    if (!trigger->GetCondition().EvaluateBool(context)) continue; // 触发事件自己的控制条件
+    if (!EvaluateExpressionBool(trigger->GetCondition(), context)) continue; // 触发事件自己的控制条件
     if (trigger->GetType() != e->GetType()) continue;
     if (trigger->Match(e, context)) return true;
 }
@@ -48,6 +51,6 @@ for (auto trigger : triggers) {
 
 ## 依赖关系
 
-- 依赖：`Dependence/story/expression.h`（`Expression`/`ScriptContext`）、`event.h`/`dialog.h`/
-  `change.h`（仅milestone.cpp需要完整定义，milestone.h只前置声明）。
+- 依赖：`Dependence/story/expression.h`（`ScriptContext`、`EvaluateExpressionBool`）、
+  `event.h`/`dialog.h`/`change.h`（仅milestone.cpp需要完整定义，milestone.h只前置声明）。
 - 被谁依赖：`Core/story/script.h`（`Script::milestones`/`actives`）。

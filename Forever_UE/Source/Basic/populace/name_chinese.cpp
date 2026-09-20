@@ -23,8 +23,9 @@ const char* ChineseName::GetName() {
 	return name.c_str();
 }
 
-string ChineseName::GetSurname(const string& fullName) const {
-	if (fullName.empty()) return "";
+void ChineseName::GetSurname(const string& fullName,
+	const function<void(const string&)>& setResult) const {
+	if (fullName.empty()) return;
 
 	const unsigned char* s = reinterpret_cast<const unsigned char*>(fullName.data());
 	size_t len = fullName.size();
@@ -36,18 +37,19 @@ string ChineseName::GetSurname(const string& fullName) const {
 	else if ((first & 0xE0) == 0xC0) charLen = 2;
 	else if ((first & 0xF0) == 0xE0) charLen = 3;
 	else if ((first & 0xF8) == 0xF0) charLen = 4;
-	else return "";
+	else return;
 
-	if (len < charLen) return "";
+	if (len < charLen) return;
 
 	for (size_t i = 1; i < charLen; ++i) {
-		if ((s[i] & 0xC0) != 0x80) return "";
+		if ((s[i] & 0xC0) != 0x80) return;
 	}
 
-	return fullName.substr(0, charLen);
+	setResult(fullName.substr(0, charLen));
 }
 
-string ChineseName::GenerateName(bool allowMale, bool allowFemale, bool allowNeutral) const {
+void ChineseName::GenerateName(bool allowMale, bool allowFemale, bool allowNeutral,
+	const function<void(const string&)>& setResult) const {
 	// 姓氏按"前面的姓更常见"做非均匀采样：N=surnames.size()，从[0,N²)里均匀取randVal，
 	// idx=floor(sqrt(randVal))本身就是非均匀的(idx越大概率越高)，surnameIdx=N-1-idx把
 	// 这个偏向反过来，让数组靠前(常见姓氏排在前面，见InitializeSurnames)的项被抽中的概率
@@ -55,11 +57,12 @@ string ChineseName::GenerateName(bool allowMale, bool allowFemale, bool allowNeu
 	int randVal = GetRandom(static_cast<int>(surnames.size() * surnames.size()));
 	int idx = static_cast<int>(sqrt(static_cast<float>(randVal)));
 	int surnameIdx = static_cast<int>(surnames.size()) - 1 - idx;
-	return GenerateName(surnames[surnameIdx], allowMale, allowFemale, allowNeutral);
+	GenerateName(surnames[surnameIdx], allowMale, allowFemale, allowNeutral, setResult);
 }
 
-string ChineseName::GenerateName(const string& surname,
-	bool allowMale, bool allowFemale, bool allowNeutral) const {
+void ChineseName::GenerateName(const string& surname,
+	bool allowMale, bool allowFemale, bool allowNeutral,
+	const function<void(const string&)>& setResult) const {
 	int nameList[3] = {
 		allowMale ? static_cast<int>(maleNames.size()) : 0,
 		allowFemale ? static_cast<int>(femaleNames.size()) : 0,
@@ -76,12 +79,12 @@ string ChineseName::GenerateName(const string& surname,
 		nameList[2] = static_cast<int>(neutralNames.size());
 		listLength = nameList[2];
 	}
-	if (listLength == 0) return ""; // 词库本身是空的(理论上不会发生)，生成失败
+	if (listLength == 0) return; // 词库本身是空的(理论上不会发生)，生成失败
 
 	string givenName;
 	int attempt = 0;
 	while (true) {
-		if (attempt++ > MAX_ALLOCATION_ATTEMPTS) return "";
+		if (attempt++ > MAX_ALLOCATION_ATTEMPTS) return;
 		givenName.clear();
 		for (int i = 0; i < nameLength; ++i) {
 			int pick = GetRandom(listLength);
@@ -99,7 +102,8 @@ string ChineseName::GenerateName(const string& surname,
 				}
 			}
 		}
-		return surname + givenName;
+		setResult(surname + givenName);
+		return;
 	}
 }
 

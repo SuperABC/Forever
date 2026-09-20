@@ -36,17 +36,23 @@
   当前阶段只有一份主线剧情），少了`caches`里的`vector<string>`那一半（占用名列表），只保留
   "路径->里程碑表"这一半。
 - **`BuildEvent`只识别`"game_start"`一种`type`，`BuildChanges`识别`"set_value"`/
-  `"place_holder"`两种`type`**，其余识别到的`type`字符串统一`THROW_EXCEPTION(
+  `"place_holder"`/`"debug_print"`三种`type`**，其余识别到的`type`字符串统一`THROW_EXCEPTION(
   RuntimeException, ...)`，等对应类型被点名实现时再插入分支，见`Dependence/story/
   event.md`/`change.md`"JSON分发"一节。`"place_holder"`分支`new PlaceHolderChange(
-  BuildExpression(obj["label"]))`——`PlaceHolderChange`是一个"占位符"结构性节点，本身不代表
+  obj["label"].AsString())`——`PlaceHolderChange`是一个"占位符"结构性节点，本身不代表
   任何真正的游戏效果，作用是在`test.json`里标记一个位置，供`ScriptMod::WrapScript`用
   `FindLabel`按标签找到并原地替换成mod自己持有的真实`Change`（这次的例子是`EmptyScript`把它
   换成`ChangeControlChange`，见`Dependence/story/script_mod.md`"典型用法"一节）——如果这个
   占位符没有被任何`WrapScript`重载替换掉，它会原样出现在`MatchEvent`的返回值里，
   `Story::ApplyChange`认不出`PlaceHolderChange`类型，只会打一条"未实现"日志，不会崩溃。
-- **`BuildCondition`改名`BuildExpression`**，语义不变（把json节点的字符串值解析成一个
-  `Expression`），呼应`Condition`→`Expression`的整体改名。
+- **`BuildExpression`这层一行包装函数已删除**：`Change`/`Event`/`Dialog`各字段最初设计成
+  `Expression`类型时，`BuildEvent`/`BuildChanges`/`BuildDialogs`需要一个`BuildExpression
+  (const JsonValue& root)`辅助函数把json节点的字符串值解析成`Expression`对象再传给构造函数。
+  后来因为"`Expression`树被一个模块构造、另一个模块求值"导致的跨模块堆损坏崩溃（完整原因见
+  `Dependence/story/change.md`"字段类型是`std::string`"一节），所有这些字段改回了
+  `std::string`（存原始DSL源码文本，求值前才现场`Parse`）——`BuildExpression`的函数体这时候
+  已经退化成`return root.AsString();`一行，纯粹的包装没有意义，直接删掉了这个函数，所有调用点
+  直接改成`obj["xxx"].AsString()`。
 - **`MatchEvent`的触发条件检查折进了`Milestone::MatchTrigger`内部**，不再是`Script`这一层单独
   维护的循环，见`Core/story/milestone.md`"MatchTrigger"一节。
 

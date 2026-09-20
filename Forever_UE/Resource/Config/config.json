@@ -17,6 +17,16 @@
       "../../../Forever_Mod/Empty/Cpp/x64/Release"
    ],
 
+   // resource_path: 递归扫描这些目录,找出所有.script文件,记下它们的绝对路径。
+   // JobMod/OrganizationMod/Story这几处只写一个不含路径/扩展名的bare文件名(比如
+   // "job_shop_saler"),不知道也不需要知道用户实际把脚本文件放在哪,由这里的配置统一
+   // 决定实际存放位置,通过Config::GetScriptPath(name)按文件名反查完整路径,见
+   // Source/Core/society/job.md"Script配置"一节。
+   "resource_path" : [ "../Story" ],
+
+   // main_story: 主线剧情Script要挂载的ScriptModName,不再由Story硬编码"empty"。
+   "main_story" : "empty",
+
    // "<concept>_mods": 和旧工程格式一致,每个concept一个数组,数组元素是"id"或"id 参数..."
    // (命令行式写法,和旧工程"test ---name value"的写法相同)——按第一个空格切开,前半段是
    // mod id,后半段(可以没有)原样传给该id对应实例的ApplyArgs(),格式由mod自己解析,Config

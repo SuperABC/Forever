@@ -12,15 +12,15 @@ Change::~Change() {
 
 }
 
-const Expression& Change::GetCondition() const {
+const std::string& Change::GetCondition() const {
 	return condition;
 }
 
-void Change::SetCondition(const Expression& condition) {
+void Change::SetCondition(const std::string& condition) {
 	this->condition = condition;
 }
 
-ForRangeChange::ForRangeChange(string var, Expression from, Expression to, Expression step,
+ForRangeChange::ForRangeChange(string var, std::string from, std::string to, std::string step,
 	vector<const Change*> changes) :
 	var(move(var)), from(move(from)), to(move(to)), step(move(step)), changes(move(changes)) {
 
@@ -39,15 +39,15 @@ string ForRangeChange::GetVar() const {
 	return var;
 }
 
-const Expression& ForRangeChange::GetFrom() const {
+const std::string& ForRangeChange::GetFrom() const {
 	return from;
 }
 
-const Expression& ForRangeChange::GetTo() const {
+const std::string& ForRangeChange::GetTo() const {
 	return to;
 }
 
-const Expression& ForRangeChange::GetStep() const {
+const std::string& ForRangeChange::GetStep() const {
 	return step;
 }
 
@@ -60,7 +60,7 @@ PlaceHolderChange::PlaceHolderChange() :
 
 }
 
-PlaceHolderChange::PlaceHolderChange(Expression label) :
+PlaceHolderChange::PlaceHolderChange(std::string label) :
 	label(move(label)) {
 
 }
@@ -74,11 +74,11 @@ const string& PlaceHolderChange::GetType() const {
 	return type;
 }
 
-void PlaceHolderChange::SetLabel(Expression label) {
+void PlaceHolderChange::SetLabel(std::string label) {
 	this->label = move(label);
 }
 
-const Expression& PlaceHolderChange::GetLabel() const {
+const std::string& PlaceHolderChange::GetLabel() const {
 	return label;
 }
 
@@ -87,7 +87,7 @@ GlobalMessageChange::GlobalMessageChange() :
 
 }
 
-GlobalMessageChange::GlobalMessageChange(Expression message) :
+GlobalMessageChange::GlobalMessageChange(std::string message) :
 	message(move(message)) {
 
 }
@@ -101,11 +101,38 @@ const string& GlobalMessageChange::GetType() const {
 	return type;
 }
 
-void GlobalMessageChange::SetMessage(Expression message) {
+void GlobalMessageChange::SetMessage(std::string message) {
 	this->message = move(message);
 }
 
-const Expression& GlobalMessageChange::GetMessage() const {
+const std::string& GlobalMessageChange::GetMessage() const {
+	return message;
+}
+
+DebugPrintChange::DebugPrintChange() :
+	message() {
+
+}
+
+DebugPrintChange::DebugPrintChange(std::string message) :
+	message(move(message)) {
+
+}
+
+DebugPrintChange::~DebugPrintChange() {
+
+}
+
+const string& DebugPrintChange::GetType() const {
+	static const string type = "debug_print";
+	return type;
+}
+
+void DebugPrintChange::SetMessage(std::string message) {
+	this->message = move(message);
+}
+
+const std::string& DebugPrintChange::GetMessage() const {
 	return message;
 }
 
@@ -127,7 +154,7 @@ SetValueChange::SetValueChange() :
 
 }
 
-SetValueChange::SetValueChange(string variable, Expression value) :
+SetValueChange::SetValueChange(string variable, std::string value) :
 	variable(move(variable)), value(move(value)) {
 
 }
@@ -149,11 +176,11 @@ string SetValueChange::GetVariable() const {
 	return variable;
 }
 
-void SetValueChange::SetValue(Expression value) {
+void SetValueChange::SetValue(std::string value) {
 	this->value = move(value);
 }
 
-const Expression& SetValueChange::GetValue() const {
+const std::string& SetValueChange::GetValue() const {
 	return value;
 }
 
@@ -162,7 +189,7 @@ GlobalSettingChange::GlobalSettingChange() :
 
 }
 
-GlobalSettingChange::GlobalSettingChange(string setting, Expression value) :
+GlobalSettingChange::GlobalSettingChange(string setting, std::string value) :
 	setting(move(setting)), value(move(value)) {
 
 }
@@ -184,11 +211,11 @@ string GlobalSettingChange::GetSetting() const {
 	return setting;
 }
 
-void GlobalSettingChange::SetValue(Expression value) {
+void GlobalSettingChange::SetValue(std::string value) {
 	this->value = move(value);
 }
 
-const Expression& GlobalSettingChange::GetValue() const {
+const std::string& GlobalSettingChange::GetValue() const {
 	return value;
 }
 
@@ -251,7 +278,7 @@ AddOptionChange::AddOptionChange() :
 
 }
 
-AddOptionChange::AddOptionChange(Expression name, Expression option) :
+AddOptionChange::AddOptionChange(std::string name, std::string option) :
 	name(move(name)), option(move(option)) {
 
 }
@@ -265,19 +292,19 @@ const string& AddOptionChange::GetType() const {
 	return type;
 }
 
-void AddOptionChange::SetName(Expression name) {
+void AddOptionChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& AddOptionChange::GetName() const {
+const std::string& AddOptionChange::GetName() const {
 	return name;
 }
 
-void AddOptionChange::SetOption(Expression option) {
+void AddOptionChange::SetOption(std::string option) {
 	this->option = move(option);
 }
 
-const Expression& AddOptionChange::GetOption() const {
+const std::string& AddOptionChange::GetOption() const {
 	return option;
 }
 
@@ -286,7 +313,7 @@ RemoveOptionChange::RemoveOptionChange() :
 
 }
 
-RemoveOptionChange::RemoveOptionChange(Expression name, Expression option) :
+RemoveOptionChange::RemoveOptionChange(std::string name, std::string option) :
 	name(move(name)), option(move(option)) {
 
 }
@@ -300,19 +327,19 @@ const string& RemoveOptionChange::GetType() const {
 	return type;
 }
 
-void RemoveOptionChange::SetName(Expression name) {
+void RemoveOptionChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& RemoveOptionChange::GetName() const {
+const std::string& RemoveOptionChange::GetName() const {
 	return name;
 }
 
-void RemoveOptionChange::SetOption(Expression option) {
+void RemoveOptionChange::SetOption(std::string option) {
 	this->option = move(option);
 }
 
-const Expression& RemoveOptionChange::GetOption() const {
+const std::string& RemoveOptionChange::GetOption() const {
 	return option;
 }
 
@@ -321,7 +348,7 @@ AddGlobalChange::AddGlobalChange() :
 
 }
 
-AddGlobalChange::AddGlobalChange(Expression option) :
+AddGlobalChange::AddGlobalChange(std::string option) :
 	option(move(option)) {
 
 }
@@ -335,11 +362,11 @@ const string& AddGlobalChange::GetType() const {
 	return type;
 }
 
-void AddGlobalChange::SetOption(Expression option) {
+void AddGlobalChange::SetOption(std::string option) {
 	this->option = move(option);
 }
 
-const Expression& AddGlobalChange::GetOption() const {
+const std::string& AddGlobalChange::GetOption() const {
 	return option;
 }
 
@@ -348,7 +375,7 @@ RemoveGlobalChange::RemoveGlobalChange() :
 
 }
 
-RemoveGlobalChange::RemoveGlobalChange(Expression option) :
+RemoveGlobalChange::RemoveGlobalChange(std::string option) :
 	option(move(option)) {
 
 }
@@ -362,11 +389,11 @@ const string& RemoveGlobalChange::GetType() const {
 	return type;
 }
 
-void RemoveGlobalChange::SetOption(Expression option) {
+void RemoveGlobalChange::SetOption(std::string option) {
 	this->option = move(option);
 }
 
-const Expression& RemoveGlobalChange::GetOption() const {
+const std::string& RemoveGlobalChange::GetOption() const {
 	return option;
 }
 
@@ -376,8 +403,8 @@ SpawnNpcChange::SpawnNpcChange() :
 
 }
 
-SpawnNpcChange::SpawnNpcChange(Expression avatar, Expression name, Expression gender, Expression birthday, Expression height, Expression weight,
-	Expression nick, Expression deposit, Expression phone, Expression home, vector<Expression> jobs, Expression scheduler) :
+SpawnNpcChange::SpawnNpcChange(std::string avatar, std::string name, std::string gender, std::string birthday, std::string height, std::string weight,
+	std::string nick, std::string deposit, std::string phone, std::string home, vector<std::string> jobs, std::string scheduler) :
 	avatar(move(avatar)), name(move(name)), gender(move(gender)), birthday(move(birthday)), height(move(height)), weight(move(weight)),
 	nick(move(nick)), deposit(move(deposit)), phone(move(phone)), home(move(home)), jobs(move(jobs)), scheduler(move(scheduler)) {
 
@@ -392,99 +419,99 @@ const string& SpawnNpcChange::GetType() const {
 	return type;
 }
 
-void SpawnNpcChange::SetAvatar(Expression avatar) {
+void SpawnNpcChange::SetAvatar(std::string avatar) {
 	this->avatar = move(avatar);
 }
 
-const Expression& SpawnNpcChange::GetAvatar() const {
+const std::string& SpawnNpcChange::GetAvatar() const {
 	return avatar;
 }
 
-void SpawnNpcChange::SetName(Expression name) {
+void SpawnNpcChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& SpawnNpcChange::GetName() const {
+const std::string& SpawnNpcChange::GetName() const {
 	return name;
 }
 
-void SpawnNpcChange::SetGender(Expression gender) {
+void SpawnNpcChange::SetGender(std::string gender) {
 	this->gender = move(gender);
 }
 
-const Expression& SpawnNpcChange::GetGender() const {
+const std::string& SpawnNpcChange::GetGender() const {
 	return gender;
 }
 
-void SpawnNpcChange::SetBirthday(Expression birthday) {
+void SpawnNpcChange::SetBirthday(std::string birthday) {
 	this->birthday = move(birthday);
 }
 
-const Expression& SpawnNpcChange::GetBirthday() const {
+const std::string& SpawnNpcChange::GetBirthday() const {
 	return birthday;
 }
 
-void SpawnNpcChange::SetHeight(Expression height) {
+void SpawnNpcChange::SetHeight(std::string height) {
 	this->height = move(height);
 }
 
-const Expression& SpawnNpcChange::GetHeight() const {
+const std::string& SpawnNpcChange::GetHeight() const {
 	return height;
 }
 
-void SpawnNpcChange::SetWeight(Expression weight) {
+void SpawnNpcChange::SetWeight(std::string weight) {
 	this->weight = move(weight);
 }
 
-const Expression& SpawnNpcChange::GetWeight() const {
+const std::string& SpawnNpcChange::GetWeight() const {
 	return weight;
 }
 
-void SpawnNpcChange::SetNick(Expression nick) {
+void SpawnNpcChange::SetNick(std::string nick) {
 	this->nick = move(nick);
 }
 
-const Expression& SpawnNpcChange::GetNick() const {
+const std::string& SpawnNpcChange::GetNick() const {
 	return nick;
 }
 
-void SpawnNpcChange::SetDeposit(Expression deposit) {
+void SpawnNpcChange::SetDeposit(std::string deposit) {
 	this->deposit = move(deposit);
 }
 
-const Expression& SpawnNpcChange::GetDeposit() const {
+const std::string& SpawnNpcChange::GetDeposit() const {
 	return deposit;
 }
 
-void SpawnNpcChange::SetPhone(Expression phone) {
+void SpawnNpcChange::SetPhone(std::string phone) {
 	this->phone = move(phone);
 }
 
-const Expression& SpawnNpcChange::GetPhone() const {
+const std::string& SpawnNpcChange::GetPhone() const {
 	return phone;
 }
 
-void SpawnNpcChange::SetHome(Expression home) {
+void SpawnNpcChange::SetHome(std::string home) {
 	this->home = move(home);
 }
 
-const Expression& SpawnNpcChange::GetHome() const {
+const std::string& SpawnNpcChange::GetHome() const {
 	return home;
 }
 
-void SpawnNpcChange::SetJobs(vector<Expression> jobs) {
+void SpawnNpcChange::SetJobs(vector<std::string> jobs) {
 	this->jobs = move(jobs);
 }
 
-const vector<Expression>& SpawnNpcChange::GetJobs() const {
+const vector<std::string>& SpawnNpcChange::GetJobs() const {
 	return jobs;
 }
 
-void SpawnNpcChange::SetScheduler(Expression scheduler) {
+void SpawnNpcChange::SetScheduler(std::string scheduler) {
 	this->scheduler = move(scheduler);
 }
 
-const Expression& SpawnNpcChange::GetScheduler() const {
+const std::string& SpawnNpcChange::GetScheduler() const {
 	return scheduler;
 }
 
@@ -493,7 +520,7 @@ RemoveNpcChange::RemoveNpcChange() :
 
 }
 
-RemoveNpcChange::RemoveNpcChange(Expression name) :
+RemoveNpcChange::RemoveNpcChange(std::string name) :
 	name(move(name)) {
 
 }
@@ -507,11 +534,11 @@ const string& RemoveNpcChange::GetType() const {
 	return type;
 }
 
-void RemoveNpcChange::SetName(Expression name) {
+void RemoveNpcChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& RemoveNpcChange::GetName() const {
+const std::string& RemoveNpcChange::GetName() const {
 	return name;
 }
 
@@ -520,7 +547,7 @@ TeleportCitizenChange::TeleportCitizenChange() :
 
 }
 
-TeleportCitizenChange::TeleportCitizenChange(Expression name, Expression destination) :
+TeleportCitizenChange::TeleportCitizenChange(std::string name, std::string destination) :
 	name(move(name)), destination(move(destination)) {
 
 }
@@ -534,19 +561,19 @@ const string& TeleportCitizenChange::GetType() const {
 	return type;
 }
 
-void TeleportCitizenChange::SetName(Expression name) {
+void TeleportCitizenChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& TeleportCitizenChange::GetName() const {
+const std::string& TeleportCitizenChange::GetName() const {
 	return name;
 }
 
-void TeleportCitizenChange::SetDestination(Expression destination) {
+void TeleportCitizenChange::SetDestination(std::string destination) {
 	this->destination = move(destination);
 }
 
-const Expression& TeleportCitizenChange::GetDestination() const {
+const std::string& TeleportCitizenChange::GetDestination() const {
 	return destination;
 }
 
@@ -555,7 +582,7 @@ NPCNavigateChange::NPCNavigateChange() :
 
 }
 
-NPCNavigateChange::NPCNavigateChange(Expression name, Expression destination) :
+NPCNavigateChange::NPCNavigateChange(string name, string destination) :
 	name(move(name)), destination(move(destination)) {
 
 }
@@ -569,19 +596,19 @@ const string& NPCNavigateChange::GetType() const {
 	return type;
 }
 
-void NPCNavigateChange::SetName(Expression name) {
+void NPCNavigateChange::SetName(string name) {
 	this->name = move(name);
 }
 
-const Expression& NPCNavigateChange::GetName() const {
+const string& NPCNavigateChange::GetName() const {
 	return name;
 }
 
-void NPCNavigateChange::SetDestination(Expression destination) {
+void NPCNavigateChange::SetDestination(string destination) {
 	this->destination = move(destination);
 }
 
-const Expression& NPCNavigateChange::GetDestination() const {
+const string& NPCNavigateChange::GetDestination() const {
 	return destination;
 }
 
@@ -590,7 +617,7 @@ TeleportPlayerChange::TeleportPlayerChange() :
 
 }
 
-TeleportPlayerChange::TeleportPlayerChange(Expression destination) :
+TeleportPlayerChange::TeleportPlayerChange(std::string destination) :
 	destination(move(destination)) {
 
 }
@@ -604,11 +631,11 @@ const string& TeleportPlayerChange::GetType() const {
 	return type;
 }
 
-void TeleportPlayerChange::SetDestination(Expression destination) {
+void TeleportPlayerChange::SetDestination(std::string destination) {
 	this->destination = move(destination);
 }
 
-const Expression& TeleportPlayerChange::GetDestination() const {
+const std::string& TeleportPlayerChange::GetDestination() const {
 	return destination;
 }
 
@@ -617,7 +644,7 @@ OpenShopChange::OpenShopChange() :
 
 }
 
-OpenShopChange::OpenShopChange(Expression saler) :
+OpenShopChange::OpenShopChange(std::string saler) :
 	saler(move(saler)) {
 
 }
@@ -631,11 +658,11 @@ const string& OpenShopChange::GetType() const {
 	return type;
 }
 
-void OpenShopChange::SetSaler(Expression saler) {
+void OpenShopChange::SetSaler(std::string saler) {
 	this->saler = move(saler);
 }
 
-const Expression& OpenShopChange::GetSaler() const {
+const std::string& OpenShopChange::GetSaler() const {
 	return saler;
 }
 
@@ -644,7 +671,7 @@ StartPuzzleChange::StartPuzzleChange() :
 
 }
 
-StartPuzzleChange::StartPuzzleChange(Expression puzzle) :
+StartPuzzleChange::StartPuzzleChange(std::string puzzle) :
 	puzzle(move(puzzle)) {
 
 }
@@ -658,11 +685,11 @@ const string& StartPuzzleChange::GetType() const {
 	return type;
 }
 
-void StartPuzzleChange::SetPuzzle(Expression puzzle) {
+void StartPuzzleChange::SetPuzzle(std::string puzzle) {
 	this->puzzle = move(puzzle);
 }
 
-const Expression& StartPuzzleChange::GetPuzzle() const {
+const std::string& StartPuzzleChange::GetPuzzle() const {
 	return puzzle;
 }
 
@@ -671,7 +698,7 @@ EnterVehicleChange::EnterVehicleChange() :
 
 }
 
-EnterVehicleChange::EnterVehicleChange(Expression vehicle) :
+EnterVehicleChange::EnterVehicleChange(std::string vehicle) :
 	vehicle(move(vehicle)) {
 
 }
@@ -685,11 +712,11 @@ const string& EnterVehicleChange::GetType() const {
 	return type;
 }
 
-void EnterVehicleChange::SetVehicle(Expression vehicle) {
+void EnterVehicleChange::SetVehicle(std::string vehicle) {
 	this->vehicle = move(vehicle);
 }
 
-const Expression& EnterVehicleChange::GetVehicle() const {
+const std::string& EnterVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
@@ -698,7 +725,7 @@ LeaveVehicleChange::LeaveVehicleChange() :
 
 }
 
-LeaveVehicleChange::LeaveVehicleChange(Expression vehicle) :
+LeaveVehicleChange::LeaveVehicleChange(std::string vehicle) :
 	vehicle(move(vehicle)) {
 
 }
@@ -712,11 +739,11 @@ const string& LeaveVehicleChange::GetType() const {
 	return type;
 }
 
-void LeaveVehicleChange::SetVehicle(Expression vehicle) {
+void LeaveVehicleChange::SetVehicle(std::string vehicle) {
 	this->vehicle = move(vehicle);
 }
 
-const Expression& LeaveVehicleChange::GetVehicle() const {
+const std::string& LeaveVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
@@ -725,7 +752,7 @@ CreateTimerChange::CreateTimerChange() :
 
 }
 
-CreateTimerChange::CreateTimerChange(Expression name, Expression time, Expression category, Expression label) :
+CreateTimerChange::CreateTimerChange(std::string name, std::string time, std::string category, std::string label) :
 	name(move(name)), time(move(time)), category(move(category)), label(move(label)) {
 
 }
@@ -739,35 +766,35 @@ const string& CreateTimerChange::GetType() const {
 	return type;
 }
 
-void CreateTimerChange::SetName(Expression name) {
+void CreateTimerChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& CreateTimerChange::GetName() const {
+const std::string& CreateTimerChange::GetName() const {
 	return name;
 }
 
-void CreateTimerChange::SetTime(Expression time) {
+void CreateTimerChange::SetTime(std::string time) {
 	this->time = move(time);
 }
 
-const Expression& CreateTimerChange::GetTime() const {
+const std::string& CreateTimerChange::GetTime() const {
 	return time;
 }
 
-void CreateTimerChange::SetCategory(Expression category) {
+void CreateTimerChange::SetCategory(std::string category) {
 	this->category = move(category);
 }
 
-const Expression& CreateTimerChange::GetCategory() const {
+const std::string& CreateTimerChange::GetCategory() const {
 	return category;
 }
 
-void CreateTimerChange::SetLabel(Expression label) {
+void CreateTimerChange::SetLabel(std::string label) {
 	this->label = move(label);
 }
 
-const Expression& CreateTimerChange::GetLabel() const {
+const std::string& CreateTimerChange::GetLabel() const {
 	return label;
 }
 
@@ -776,7 +803,7 @@ RemoveTimerChange::RemoveTimerChange() :
 
 }
 
-RemoveTimerChange::RemoveTimerChange(Expression name) :
+RemoveTimerChange::RemoveTimerChange(std::string name) :
 	name(move(name)) {
 
 }
@@ -790,11 +817,11 @@ const string& RemoveTimerChange::GetType() const {
 	return type;
 }
 
-void RemoveTimerChange::SetName(Expression name) {
+void RemoveTimerChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& RemoveTimerChange::GetName() const {
+const std::string& RemoveTimerChange::GetName() const {
 	return name;
 }
 
@@ -803,7 +830,7 @@ LaunchElevatorChange::LaunchElevatorChange() :
 
 }
 
-LaunchElevatorChange::LaunchElevatorChange(Expression building, Expression elevator, Expression command) :
+LaunchElevatorChange::LaunchElevatorChange(std::string building, std::string elevator, std::string command) :
 	building(move(building)), elevator(move(elevator)), command(move(command)) {
 
 }
@@ -817,27 +844,27 @@ const string& LaunchElevatorChange::GetType() const {
 	return type;
 }
 
-void LaunchElevatorChange::SetBuilding(Expression building) {
+void LaunchElevatorChange::SetBuilding(std::string building) {
 	this->building = move(building);
 }
 
-const Expression& LaunchElevatorChange::GetBuilding() const {
+const std::string& LaunchElevatorChange::GetBuilding() const {
 	return building;
 }
 
-void LaunchElevatorChange::SetElevator(Expression elevator) {
+void LaunchElevatorChange::SetElevator(std::string elevator) {
 	this->elevator = move(elevator);
 }
 
-const Expression& LaunchElevatorChange::GetElevator() const {
+const std::string& LaunchElevatorChange::GetElevator() const {
 	return elevator;
 }
 
-void LaunchElevatorChange::SetCommand(Expression command) {
+void LaunchElevatorChange::SetCommand(std::string command) {
 	this->command = move(command);
 }
 
-const Expression& LaunchElevatorChange::GetCommand() const {
+const std::string& LaunchElevatorChange::GetCommand() const {
 	return command;
 }
 
@@ -846,7 +873,7 @@ PlayVideoChange::PlayVideoChange() :
 
 }
 
-PlayVideoChange::PlayVideoChange(Expression path) :
+PlayVideoChange::PlayVideoChange(std::string path) :
 	path(move(path)) {
 
 }
@@ -860,11 +887,11 @@ const string& PlayVideoChange::GetType() const {
 	return type;
 }
 
-void PlayVideoChange::SetPath(Expression path) {
+void PlayVideoChange::SetPath(std::string path) {
 	this->path = move(path);
 }
 
-const Expression& PlayVideoChange::GetPath() const {
+const std::string& PlayVideoChange::GetPath() const {
 	return path;
 }
 
@@ -873,7 +900,7 @@ PlayBgmChange::PlayBgmChange() :
 
 }
 
-PlayBgmChange::PlayBgmChange(Expression bgm, Expression loop) :
+PlayBgmChange::PlayBgmChange(std::string bgm, std::string loop) :
 	bgm(move(bgm)), loop(move(loop)) {
 
 }
@@ -887,19 +914,19 @@ const string& PlayBgmChange::GetType() const {
 	return type;
 }
 
-void PlayBgmChange::SetBgm(Expression bgm) {
+void PlayBgmChange::SetBgm(std::string bgm) {
 	this->bgm = move(bgm);
 }
 
-const Expression& PlayBgmChange::GetBgm() const {
+const std::string& PlayBgmChange::GetBgm() const {
 	return bgm;
 }
 
-void PlayBgmChange::SetLoop(Expression loop) {
+void PlayBgmChange::SetLoop(std::string loop) {
 	this->loop = move(loop);
 }
 
-const Expression& PlayBgmChange::GetLoop() const {
+const std::string& PlayBgmChange::GetLoop() const {
 	return loop;
 }
 
@@ -921,7 +948,7 @@ BankTransactionChange::BankTransactionChange() :
 
 }
 
-BankTransactionChange::BankTransactionChange(Expression name, Expression amount) :
+BankTransactionChange::BankTransactionChange(std::string name, std::string amount) :
 	name(move(name)), amount(move(amount)) {
 
 }
@@ -935,19 +962,19 @@ const string& BankTransactionChange::GetType() const {
 	return type;
 }
 
-void BankTransactionChange::SetName(Expression name) {
+void BankTransactionChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& BankTransactionChange::GetName() const {
+const std::string& BankTransactionChange::GetName() const {
 	return name;
 }
 
-void BankTransactionChange::SetAmount(Expression amount) {
+void BankTransactionChange::SetAmount(std::string amount) {
 	this->amount = move(amount);
 }
 
-const Expression& BankTransactionChange::GetAmount() const {
+const std::string& BankTransactionChange::GetAmount() const {
 	return amount;
 }
 
@@ -956,7 +983,7 @@ GiveEstateChange::GiveEstateChange() :
 
 }
 
-GiveEstateChange::GiveEstateChange(Expression estate, Expression name, Expression force) :
+GiveEstateChange::GiveEstateChange(std::string estate, std::string name, std::string force) :
 	estate(move(estate)), name(move(name)), force(move(force)) {
 
 }
@@ -970,27 +997,27 @@ const string& GiveEstateChange::GetType() const {
 	return type;
 }
 
-void GiveEstateChange::SetEstate(Expression estate) {
+void GiveEstateChange::SetEstate(std::string estate) {
 	this->estate = move(estate);
 }
 
-const Expression& GiveEstateChange::GetEstate() const {
+const std::string& GiveEstateChange::GetEstate() const {
 	return estate;
 }
 
-void GiveEstateChange::SetName(Expression name) {
+void GiveEstateChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& GiveEstateChange::GetName() const {
+const std::string& GiveEstateChange::GetName() const {
 	return name;
 }
 
-void GiveEstateChange::SetForce(Expression force) {
+void GiveEstateChange::SetForce(std::string force) {
 	this->force = move(force);
 }
 
-const Expression& GiveEstateChange::GetForce() const {
+const std::string& GiveEstateChange::GetForce() const {
 	return force;
 }
 
@@ -999,7 +1026,7 @@ RemoveEstateChange::RemoveEstateChange() :
 
 }
 
-RemoveEstateChange::RemoveEstateChange(Expression estate, Expression name) :
+RemoveEstateChange::RemoveEstateChange(std::string estate, std::string name) :
 	estate(move(estate)), name(move(name)) {
 
 }
@@ -1013,19 +1040,19 @@ const string& RemoveEstateChange::GetType() const {
 	return type;
 }
 
-void RemoveEstateChange::SetEstate(Expression estate) {
+void RemoveEstateChange::SetEstate(std::string estate) {
 	this->estate = move(estate);
 }
 
-const Expression& RemoveEstateChange::GetEstate() const {
+const std::string& RemoveEstateChange::GetEstate() const {
 	return estate;
 }
 
-void RemoveEstateChange::SetName(Expression name) {
+void RemoveEstateChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& RemoveEstateChange::GetName() const {
+const std::string& RemoveEstateChange::GetName() const {
 	return name;
 }
 
@@ -1034,7 +1061,7 @@ GiveVehicleChange::GiveVehicleChange() :
 
 }
 
-GiveVehicleChange::GiveVehicleChange(Expression vehicle, Expression name, Expression force) :
+GiveVehicleChange::GiveVehicleChange(std::string vehicle, std::string name, std::string force) :
 	vehicle(move(vehicle)), name(move(name)), force(move(force)) {
 
 }
@@ -1048,27 +1075,27 @@ const string& GiveVehicleChange::GetType() const {
 	return type;
 }
 
-void GiveVehicleChange::SetVehicle(Expression vehicle) {
+void GiveVehicleChange::SetVehicle(std::string vehicle) {
 	this->vehicle = move(vehicle);
 }
 
-const Expression& GiveVehicleChange::GetVehicle() const {
+const std::string& GiveVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
-void GiveVehicleChange::SetName(Expression name) {
+void GiveVehicleChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& GiveVehicleChange::GetName() const {
+const std::string& GiveVehicleChange::GetName() const {
 	return name;
 }
 
-void GiveVehicleChange::SetForce(Expression force) {
+void GiveVehicleChange::SetForce(std::string force) {
 	this->force = move(force);
 }
 
-const Expression& GiveVehicleChange::GetForce() const {
+const std::string& GiveVehicleChange::GetForce() const {
 	return force;
 }
 
@@ -1077,7 +1104,7 @@ RemoveVehicleChange::RemoveVehicleChange() :
 
 }
 
-RemoveVehicleChange::RemoveVehicleChange(Expression vehicle, Expression name) :
+RemoveVehicleChange::RemoveVehicleChange(std::string vehicle, std::string name) :
 	vehicle(move(vehicle)), name(move(name)) {
 
 }
@@ -1091,19 +1118,19 @@ const string& RemoveVehicleChange::GetType() const {
 	return type;
 }
 
-void RemoveVehicleChange::SetVehicle(Expression vehicle) {
+void RemoveVehicleChange::SetVehicle(std::string vehicle) {
 	this->vehicle = move(vehicle);
 }
 
-const Expression& RemoveVehicleChange::GetVehicle() const {
+const std::string& RemoveVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
-void RemoveVehicleChange::SetName(Expression name) {
+void RemoveVehicleChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& RemoveVehicleChange::GetName() const {
+const std::string& RemoveVehicleChange::GetName() const {
 	return name;
 }
 
@@ -1112,7 +1139,7 @@ GiveObjectChange::GiveObjectChange() :
 
 }
 
-GiveObjectChange::GiveObjectChange(Expression object, Expression num) :
+GiveObjectChange::GiveObjectChange(std::string object, std::string num) :
 	object(move(object)), num(move(num)) {
 
 }
@@ -1126,19 +1153,19 @@ const string& GiveObjectChange::GetType() const {
 	return type;
 }
 
-void GiveObjectChange::SetObject(Expression object) {
+void GiveObjectChange::SetObject(std::string object) {
 	this->object = move(object);
 }
 
-const Expression& GiveObjectChange::GetObject() const {
+const std::string& GiveObjectChange::GetObject() const {
 	return object;
 }
 
-void GiveObjectChange::SetNum(Expression num) {
+void GiveObjectChange::SetNum(std::string num) {
 	this->num = move(num);
 }
 
-const Expression& GiveObjectChange::GetNum() const {
+const std::string& GiveObjectChange::GetNum() const {
 	return num;
 }
 
@@ -1147,7 +1174,7 @@ RemoveObjectChange::RemoveObjectChange() :
 
 }
 
-RemoveObjectChange::RemoveObjectChange(Expression object, Expression num, Expression force) :
+RemoveObjectChange::RemoveObjectChange(std::string object, std::string num, std::string force) :
 	object(move(object)), num(move(num)), force(move(force)) {
 
 }
@@ -1161,27 +1188,27 @@ const string& RemoveObjectChange::GetType() const {
 	return type;
 }
 
-void RemoveObjectChange::SetObject(Expression object) {
+void RemoveObjectChange::SetObject(std::string object) {
 	this->object = move(object);
 }
 
-const Expression& RemoveObjectChange::GetObject() const {
+const std::string& RemoveObjectChange::GetObject() const {
 	return object;
 }
 
-void RemoveObjectChange::SetNum(Expression num) {
+void RemoveObjectChange::SetNum(std::string num) {
 	this->num = move(num);
 }
 
-const Expression& RemoveObjectChange::GetNum() const {
+const std::string& RemoveObjectChange::GetNum() const {
 	return num;
 }
 
-void RemoveObjectChange::SetForce(Expression force) {
+void RemoveObjectChange::SetForce(std::string force) {
 	this->force = move(force);
 }
 
-const Expression& RemoveObjectChange::GetForce() const {
+const std::string& RemoveObjectChange::GetForce() const {
 	return force;
 }
 
@@ -1190,7 +1217,7 @@ PlayerInjuredChange::PlayerInjuredChange() :
 
 }
 
-PlayerInjuredChange::PlayerInjuredChange(Expression wound) :
+PlayerInjuredChange::PlayerInjuredChange(std::string wound) :
 	wound(move(wound)) {
 
 }
@@ -1204,11 +1231,11 @@ const string& PlayerInjuredChange::GetType() const {
 	return type;
 }
 
-void PlayerInjuredChange::SetWound(Expression wound) {
+void PlayerInjuredChange::SetWound(std::string wound) {
 	this->wound = move(wound);
 }
 
-const Expression& PlayerInjuredChange::GetWound() const {
+const std::string& PlayerInjuredChange::GetWound() const {
 	return wound;
 }
 
@@ -1217,7 +1244,7 @@ PlayerCuredChange::PlayerCuredChange() :
 
 }
 
-PlayerCuredChange::PlayerCuredChange(Expression wound) :
+PlayerCuredChange::PlayerCuredChange(std::string wound) :
 	wound(move(wound)) {
 
 }
@@ -1231,11 +1258,11 @@ const string& PlayerCuredChange::GetType() const {
 	return type;
 }
 
-void PlayerCuredChange::SetWound(Expression wound) {
+void PlayerCuredChange::SetWound(std::string wound) {
 	this->wound = move(wound);
 }
 
-const Expression& PlayerCuredChange::GetWound() const {
+const std::string& PlayerCuredChange::GetWound() const {
 	return wound;
 }
 
@@ -1244,7 +1271,7 @@ PlayerIllChange::PlayerIllChange() :
 
 }
 
-PlayerIllChange::PlayerIllChange(Expression illness) :
+PlayerIllChange::PlayerIllChange(std::string illness) :
 	illness(move(illness)) {
 
 }
@@ -1258,11 +1285,11 @@ const string& PlayerIllChange::GetType() const {
 	return type;
 }
 
-void PlayerIllChange::SetIllness(Expression illness) {
+void PlayerIllChange::SetIllness(std::string illness) {
 	this->illness = move(illness);
 }
 
-const Expression& PlayerIllChange::GetIllness() const {
+const std::string& PlayerIllChange::GetIllness() const {
 	return illness;
 }
 
@@ -1271,7 +1298,7 @@ PlayerRecoverChange::PlayerRecoverChange() :
 
 }
 
-PlayerRecoverChange::PlayerRecoverChange(Expression illness) :
+PlayerRecoverChange::PlayerRecoverChange(std::string illness) :
 	illness(move(illness)) {
 
 }
@@ -1285,11 +1312,11 @@ const string& PlayerRecoverChange::GetType() const {
 	return type;
 }
 
-void PlayerRecoverChange::SetIllness(Expression illness) {
+void PlayerRecoverChange::SetIllness(std::string illness) {
 	this->illness = move(illness);
 }
 
-const Expression& PlayerRecoverChange::GetIllness() const {
+const std::string& PlayerRecoverChange::GetIllness() const {
 	return illness;
 }
 
@@ -1298,7 +1325,7 @@ PlayerSleepChange::PlayerSleepChange() :
 
 }
 
-PlayerSleepChange::PlayerSleepChange(Expression hour) :
+PlayerSleepChange::PlayerSleepChange(std::string hour) :
 	hour(move(hour)) {
 
 }
@@ -1312,11 +1339,11 @@ const string& PlayerSleepChange::GetType() const {
 	return type;
 }
 
-void PlayerSleepChange::SetHour(Expression hour) {
+void PlayerSleepChange::SetHour(std::string hour) {
 	this->hour = move(hour);
 }
 
-const Expression& PlayerSleepChange::GetHour() const {
+const std::string& PlayerSleepChange::GetHour() const {
 	return hour;
 }
 
@@ -1325,7 +1352,7 @@ ChangeTimeChange::ChangeTimeChange() :
 
 }
 
-ChangeTimeChange::ChangeTimeChange(Expression delta) :
+ChangeTimeChange::ChangeTimeChange(std::string delta) :
 	delta(move(delta)) {
 
 }
@@ -1339,11 +1366,11 @@ const string& ChangeTimeChange::GetType() const {
 	return type;
 }
 
-void ChangeTimeChange::SetDelta(Expression delta) {
+void ChangeTimeChange::SetDelta(std::string delta) {
 	this->delta = move(delta);
 }
 
-const Expression& ChangeTimeChange::GetDelta() const {
+const std::string& ChangeTimeChange::GetDelta() const {
 	return delta;
 }
 
@@ -1352,7 +1379,7 @@ ChangeCultivationChange::ChangeCultivationChange() :
 
 }
 
-ChangeCultivationChange::ChangeCultivationChange(Expression method, Expression level) :
+ChangeCultivationChange::ChangeCultivationChange(std::string method, std::string level) :
 	method(move(method)), level(move(level)) {
 
 }
@@ -1366,19 +1393,19 @@ const string& ChangeCultivationChange::GetType() const {
 	return type;
 }
 
-void ChangeCultivationChange::SetMethod(Expression method) {
+void ChangeCultivationChange::SetMethod(std::string method) {
 	this->method = move(method);
 }
 
-const Expression& ChangeCultivationChange::GetMethod() const {
+const std::string& ChangeCultivationChange::GetMethod() const {
 	return method;
 }
 
-void ChangeCultivationChange::SetLevel(Expression level) {
+void ChangeCultivationChange::SetLevel(std::string level) {
 	this->level = move(level);
 }
 
-const Expression& ChangeCultivationChange::GetLevel() const {
+const std::string& ChangeCultivationChange::GetLevel() const {
 	return level;
 }
 
@@ -1387,7 +1414,7 @@ ChangeWantedChange::ChangeWantedChange() :
 
 }
 
-ChangeWantedChange::ChangeWantedChange(Expression reason, Expression level) :
+ChangeWantedChange::ChangeWantedChange(std::string reason, std::string level) :
 	reason(move(reason)), level(move(level)) {
 
 }
@@ -1401,19 +1428,19 @@ const string& ChangeWantedChange::GetType() const {
 	return type;
 }
 
-void ChangeWantedChange::SetReason(Expression reason) {
+void ChangeWantedChange::SetReason(std::string reason) {
 	this->reason = move(reason);
 }
 
-const Expression& ChangeWantedChange::GetReason() const {
+const std::string& ChangeWantedChange::GetReason() const {
 	return reason;
 }
 
-void ChangeWantedChange::SetLevel(Expression level) {
+void ChangeWantedChange::SetLevel(std::string level) {
 	this->level = move(level);
 }
 
-const Expression& ChangeWantedChange::GetLevel() const {
+const std::string& ChangeWantedChange::GetLevel() const {
 	return level;
 }
 
@@ -1422,7 +1449,7 @@ ChangeWeatherChange::ChangeWeatherChange() :
 
 }
 
-ChangeWeatherChange::ChangeWeatherChange(Expression weather) :
+ChangeWeatherChange::ChangeWeatherChange(std::string weather) :
 	weather(move(weather)) {
 
 }
@@ -1436,11 +1463,11 @@ const string& ChangeWeatherChange::GetType() const {
 	return type;
 }
 
-void ChangeWeatherChange::SetWeather(Expression weather) {
+void ChangeWeatherChange::SetWeather(std::string weather) {
 	this->weather = move(weather);
 }
 
-const Expression& ChangeWeatherChange::GetWeather() const {
+const std::string& ChangeWeatherChange::GetWeather() const {
 	return weather;
 }
 
@@ -1449,7 +1476,7 @@ ChangePolicyChange::ChangePolicyChange() :
 
 }
 
-ChangePolicyChange::ChangePolicyChange(Expression policy) :
+ChangePolicyChange::ChangePolicyChange(std::string policy) :
 	policy(move(policy)) {
 
 }
@@ -1463,11 +1490,11 @@ const string& ChangePolicyChange::GetType() const {
 	return type;
 }
 
-void ChangePolicyChange::SetPolicy(Expression policy) {
+void ChangePolicyChange::SetPolicy(std::string policy) {
 	this->policy = move(policy);
 }
 
-const Expression& ChangePolicyChange::GetPolicy() const {
+const std::string& ChangePolicyChange::GetPolicy() const {
 	return policy;
 }
 
@@ -1476,7 +1503,7 @@ ChangeControlChange::ChangeControlChange() :
 
 }
 
-ChangeControlChange::ChangeControlChange(Expression name) :
+ChangeControlChange::ChangeControlChange(std::string name) :
 	name(move(name)) {
 
 }
@@ -1490,10 +1517,10 @@ const string& ChangeControlChange::GetType() const {
 	return type;
 }
 
-void ChangeControlChange::SetName(Expression name) {
+void ChangeControlChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& ChangeControlChange::GetName() const {
+const std::string& ChangeControlChange::GetName() const {
 	return name;
 }

@@ -35,14 +35,20 @@ NameMod* Name::GetMod() const {
 }
 
 string Name::GetSurname(const string& fullName) const {
-	return mod->GetSurname(fullName);
+	string result;
+	mod->GetSurname(fullName, [&](const string& value) { result = value; });
+	return result;
 }
 
 string Name::GenerateName(bool allowMale, bool allowFemale, bool allowNeutral) const {
-	return mod->GenerateName(allowMale, allowFemale, allowNeutral);
+	string result;
+	mod->GenerateName(allowMale, allowFemale, allowNeutral, [&](const string& value) { result = value; });
+	return result;
 }
 
 string Name::GenerateName(const string& surname,
 	bool allowMale, bool allowFemale, bool allowNeutral) const {
-	return mod->GenerateName(surname, allowMale, allowFemale, allowNeutral);
+	string result;
+	mod->GenerateName(surname, allowMale, allowFemale, allowNeutral, [&](const string& value) { result = value; });
+	return result;
 }

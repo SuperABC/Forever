@@ -2,6 +2,8 @@
 
 #include "map/room_mod.h"
 
+#include <string>
+
 
 // ResidenceRoom：住宅Room——这次进入populace域时第一次给这个类填真内容(之前是阶段3占位
 // 骨架，见Source/Core/populace/populace.md"进入populace域"一节)：声明isResidential=true+
@@ -15,13 +17,22 @@
 // ResidenceRoom/ShopRoom/WarehouseRoom/ParkingRoom/FactoryRoom这五个具体类型合并进同一份
 // room_basic.h/.cpp(不再按residence/shop/plant各开一个文件)，和terrain_basic.h/.cpp里
 // OceanTerrain/MountainTerrain合并的方式一样，详见room_basic.md。
+//
+// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
+// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式(之前这里是固定字符串，
+// 没有任何唯一性)。
 class ResidenceRoom : public RoomMod {
 public:
 	ResidenceRoom();
 
 	static const char* GetId() { return "room_residence"; }
 	virtual const char* GetType() const override { return "room_residence"; }
-	virtual const char* GetName() override { return "ResidenceRoom"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
 };
 
 // ShopRoom：商店营业room，照抄老工程(E:\Projects\Forever_UE\Source\Basic\map\room_basic.h/.cpp
@@ -34,7 +45,12 @@ public:
 
 	static const char* GetId() { return "room_shop"; }
 	virtual const char* GetType() const override { return "room_shop"; }
-	virtual const char* GetName() override { return "ShopRoom"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
 };
 
 // WarehouseRoom：Shop布局里过道/地下室用的仓储room，照抄老工程WarehouseRoom::ConfigRoom
@@ -45,7 +61,12 @@ public:
 
 	static const char* GetId() { return "room_warehouse"; }
 	virtual const char* GetType() const override { return "room_warehouse"; }
-	virtual const char* GetName() override { return "WarehouseRoom"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
 };
 
 // ParkingRoom：Shop/Factory地下停车场room，纯占位——老工程isParking/parkingSpaces这套
@@ -55,9 +76,16 @@ public:
 // FactoryBuilding共用同一个ParkingRoom类。
 class ParkingRoom : public RoomMod {
 public:
+	ParkingRoom();
+
 	static const char* GetId() { return "room_parking"; }
 	virtual const char* GetType() const override { return "room_parking"; }
-	virtual const char* GetName() override { return "ParkingRoom"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
 };
 
 // FactoryRoom：照抄老工程(E:\Projects\Forever_UE\Source\Basic\map\room_basic.h/.cpp的
@@ -71,5 +99,10 @@ public:
 
 	static const char* GetId() { return "room_factory"; }
 	virtual const char* GetType() const override { return "room_factory"; }
-	virtual const char* GetName() override { return "FactoryRoom"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
 };

@@ -5,32 +5,23 @@
 #include "common/config.h"
 #include "populace/citizen.h"
 
-#include <filesystem>
-
 using namespace std;
-
-namespace {
-	// 和Story::Init同一个"empty"壳mod的用法——Job的Script这次只需要一个能创建出来的
-	// ScriptMod外壳，具体内容(如果有milestone)靠GetMilestoneFiles()指定的文件加载，
-	// 和挂载的具体ScriptMod类型无关，见story.cpp的kEmptyScriptId同款注释。
-	constexpr const char* kEmptyScriptId = "empty";
-
-	// Resource/Story/<name>.json：和Story::GetTestScriptPath()同一个相对路径约定，相对
-	// config.json所在目录(Resource/Config/)。
-	string GetMilestoneFilePath(const string& name) {
-		filesystem::path configDir = Config::GetConfigDir();
-		return (configDir / ".." / "Story" / (name + ".json")).string();
-	}
-}
 
 Job::Job(JobFactory* factory, ScriptFactory* scriptFactory, const string& id, Room* position) :
 	factory(factory), position(position) {
 	mod = factory->CreateJob(id);
-	script = new Script(scriptFactory, kEmptyScriptId);
+	// scriptModName/milestoneNames由mod自己的构造函数决定(见job_mod.h"Script配置"
+	// 一节)，这里不替mod做任何选择——mod为空是CreateJob本身失败的防御性兜底，不是
+	// "决定用哪个ScriptMod"这个设计选择，因此仍然硬编码"empty"作为最后一道保险。
+	script = new Script(scriptFactory, mod ? mod->scriptModName : "empty");
 	if (mod) {
-		for (const string& file : mod->GetMilestoneFiles()) {
-			script->ReadMilestones(GetMilestoneFilePath(file));
+		for (const string& name : mod->milestoneNames) {
+			script->ReadMilestones(Config::GetScriptPath(name));
 		}
+		// 供milestone脚本里$$self.name引用这个Job的唯一名字（不是Script自己的
+		// mod->GetName()，是JobMod自己的GetName()，见job_basic.cpp"八"的唯一性修复），
+		// 见job_mod.h"Script配置"一节。
+		script->SetValue("name", ValueType(string(mod->GetName())));
 	}
 }
 
@@ -49,8 +40,8 @@ Script* Job::GetScript() const { return script; }
 Citizen* Job::GetOccupant() const { return occupant; }
 void Job::SetOccupant(Citizen* citizen) { occupant = citizen; }
 
-void Job::DailyPlan(const Time& currentTime) {
-	if (mod) mod->DailyPlan(currentTime);
+void Job::DailyPlan(const Time& currentTime, PostHandle* post) {
+	if (mod) mod->DailyPlan(currentTime, post);
 }
 
 const unordered_map<string, Time>& Job::GetPlans() const {
@@ -58,9 +49,9 @@ const unordered_map<string, Time>& Job::GetPlans() const {
 	return mod ? mod->plans : empty;
 }
 
-vector<Change*> Job::ExecNode(const string& node) {
+vector<Change*> Job::ExecNode(const string& node, PostHandle* post) {
 	if (!mod) return {};
 	mod->occupantName = occupant ? occupant->GetName() : string();
-	mod->ExecNode(node);
+	mod->ExecNode(node, post);
 	return mod->changes; // 只复制指针值，所有权留在mod自己身上，见job.h的说明
 }

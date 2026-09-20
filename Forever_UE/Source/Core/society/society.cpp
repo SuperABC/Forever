@@ -137,10 +137,10 @@ void Society::RecruitCitizens(const vector<Citizen*>& citizens, int currentYear)
 }
 
 void Society::Tick(const Time& currentTime, bool crossedDay,
-	const function<void(Organization*, const vector<Change*>&)>& onActions) {
+	const function<void(Organization*, const vector<Change*>&)>& onActions, PostHandle* post) {
 	if (crossedDay) {
 		for (Organization* organization : organizations) {
-			organization->DailyPlan(currentTime);
+			organization->DailyPlan(currentTime, post);
 			for (const auto& [node, time] : organization->GetPlans()) {
 				organizationTimerSet.insert({ time, organization, node });
 			}
@@ -152,7 +152,7 @@ void Society::Tick(const Time& currentTime, bool crossedDay,
 		auto it = organizationTimerSet.begin();
 		const auto& [target, organization, node] = *it;
 		if (currentTime < target) break;
-		vector<Change*> changes = organization->ExecNode(node);
+		vector<Change*> changes = organization->ExecNode(node, post);
 		onActions(organization, changes);
 		organizationTimerSet.erase(it);
 		count++;

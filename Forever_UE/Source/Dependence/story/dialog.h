@@ -24,7 +24,7 @@ public:
 	* @dialogs: 选中后追加的对话列表
 	* @changes: 选中后触发的变化列表
 	*/
-	Option(Expression condition, Expression option,
+	Option(std::string condition, std::string option,
 		std::vector<Dialog*> dialogs, std::vector<const Change*> changes);
 
 	/*
@@ -35,12 +35,12 @@ public:
 	/*
 	* 获取显示条件
 	*/
-	const Expression& GetCondition() const;
+	const std::string& GetCondition() const;
 
 	/*
 	* 获取选项文本（未求值，剧情json里的表达式原文）
 	*/
-	const Expression& GetOption() const;
+	const std::string& GetOption() const;
 
 	/*
 	* 获取选中后追加的对话列表
@@ -54,10 +54,10 @@ public:
 
 private:
 	// 显示条件
-	Expression condition;
+	std::string condition;
 
 	// 选项文本
-	Expression option;
+	std::string option;
 
 	// 选中后追加的对话列表（引用，不持有所有权）
 	std::vector<Dialog*> dialogs;
@@ -77,7 +77,7 @@ public:
 	* 构造对话段（普通台词）
 	* @speaker, content, label, voice: 发言者、内容、标签与语音资产路径
 	*/
-	Section(Expression speaker, Expression content, Expression label, Expression voice);
+	Section(std::string speaker, std::string content, std::string label, std::string voice);
 
 	/*
 	* 构造对话段（分支选项）
@@ -128,10 +128,10 @@ private:
 	bool branch;
 
 	// 台词表达式（未求值）
-	Expression speakerExpr;
-	Expression contentExpr;
-	Expression labelExpr;
-	Expression voiceExpr;
+	std::string speakerExpr;
+	std::string contentExpr;
+	std::string labelExpr;
+	std::string voiceExpr;
 
 	// 上一次EvaluateText的求值缓存（发言者, 内容, 标签, 语音资产路径）
 	std::tuple<std::string, std::string, std::string, std::string> speaking;
@@ -162,7 +162,7 @@ public:
 	* 添加普通台词段
 	* @speaker, content, label, voice: 发言者、内容、标签与语音资产路径
 	*/
-	void AddDialog(Expression speaker, Expression content, Expression label, Expression voice);
+	void AddDialog(std::string speaker, std::string content, std::string label, std::string voice);
 
 	/*
 	* 添加分支选项段
@@ -179,18 +179,18 @@ public:
 	* 设置显示条件
 	* @condition: 条件表达式
 	*/
-	void SetCondition(Expression condition);
+	void SetCondition(std::string condition);
 
 	/*
 	* 获取显示条件
 	*/
-	const Expression& GetCondition() const;
+	const std::string& GetCondition() const;
 
 private:
 	// 对话段列表
 	std::vector<Section> list;
 
 	// 显示条件
-	Expression condition;
+	std::string condition;
 
 };

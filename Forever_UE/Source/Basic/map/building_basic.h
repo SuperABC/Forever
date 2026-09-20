@@ -22,13 +22,17 @@
 // Source/Basic/README.md。详见building_basic.md。
 class ResidenceBuilding : public BuildingMod {
 public:
-	// 构造函数只定死lastName(用static计数器)，和老工程ResidentialZone::count同款——不设
-	// footprint/楼层/lodMaterial，这些要等Layout()才知道落地上下文。
+	// 构造函数只记下id(用static计数器)，不设footprint/楼层/lodMaterial，这些要等Layout()
+	// 才知道落地上下文。
 	ResidenceBuilding();
 
 	static const char* GetId() { return "building_residence"; }
 	virtual const char* GetType() const override { return "building_residence"; }
-	virtual const char* GetName() override { return lastName.c_str(); }
+	// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id，和
+	// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式(之前这里是构造函数
+	// 里一次性拼好存lastName、GetName()只返回lastName.c_str()的风格，这次统一改成和
+	// terrain一致的"GetName()里现拼")。
+	virtual const char* GetName() override;
 
 	// 这里才设footprint/basements/layers/floorHeights，以及AssignFloor/AssignRoom/
 	// ArrangeRow声明楼层内部布局。direction==-1(FillRemainder落地)时从boundaryRoads里
@@ -45,8 +49,9 @@ public:
 	static float GetPower(AREA_TYPE area);
 
 private:
-	std::string lastName;
 	static int count;
+	int id;
+	std::string name;
 };
 
 // ShopBuilding：商店建筑，照抄老工程(E:\Projects\Forever_UE\Source\Basic\map\
@@ -60,7 +65,9 @@ public:
 
 	static const char* GetId() { return "building_shop"; }
 	virtual const char* GetType() const override { return "building_shop"; }
-	virtual const char* GetName() override { return lastName.c_str(); }
+	// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id，和terrain_basic同一个
+	// 模式。
+	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) override;
@@ -73,8 +80,9 @@ public:
 	static float GetPower(AREA_TYPE area);
 
 private:
-	std::string lastName;
 	static int count;
+	int id;
+	std::string name;
 };
 
 // FactoryBuilding：工厂建筑，照抄老工程(E:\Projects\Forever_UE\Source\Basic\map\
@@ -87,7 +95,9 @@ public:
 
 	static const char* GetId() { return "building_factory"; }
 	virtual const char* GetType() const override { return "building_factory"; }
-	virtual const char* GetName() override { return lastName.c_str(); }
+	// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id，和terrain_basic同一个
+	// 模式。
+	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) override;
@@ -99,6 +109,7 @@ public:
 	static float GetPower(AREA_TYPE area);
 
 private:
-	std::string lastName;
 	static int count;
+	int id;
+	std::string name;
 };

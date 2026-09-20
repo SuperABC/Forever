@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/utility.h"
+#include "common/handle.h"
 
 #include <string>
 #include <unordered_map>
@@ -43,11 +44,19 @@ public:
 
 	// 可选：这次大部分组织不需要自己的调度(比如发工资)，默认空实现——真要用的具体组织
 	// 类型重写，直接写自己的plans/changes成员字段，和JobMod同一个模式。
-	virtual void DailyPlan(const Time& currentTime) {}
-	virtual void ExecNode(const std::string& node) {}
+	// @post：和JobMod::DailyPlan/ExecNode同一个用途——按需查具体citizen家/工位的地址，
+	// 见job_mod.h的说明；这次和JobMod保持接口对称，即使目前没有具体组织类型用到。
+	virtual void DailyPlan(const Time& currentTime, PostHandle* post) {}
+	virtual void ExecNode(const std::string& node, PostHandle* post) {}
 
 	std::unordered_map<std::string, std::pair<int, int>> requirements;
 	std::vector<std::string> vacancies;
 	std::unordered_map<std::string, Time> plans;
 	std::vector<Change*> changes;
+
+	// Script配置——和JobMod同一组字段/同一套安全模式(见job_mod.h的说明)，这次一起补上：
+	// Organization之前完全没有自己的Script，这次让它也能挂一个。scriptModName默认
+	// "empty"，milestoneNames默认为空。
+	std::string scriptModName = "empty";
+	std::vector<std::string> milestoneNames;
 };

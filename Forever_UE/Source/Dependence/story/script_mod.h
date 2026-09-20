@@ -82,7 +82,7 @@ public:
 		for (size_t i = 0; i < top.size(); i++) {
 			if (auto changePtr = std::get_if<const Change*>(&top[i])) {
 				if (auto placeholder = dynamic_cast<const PlaceHolderChange*>(*changePtr)) {
-					if (ToString(placeholder->GetLabel().EvaluateValue(context)) == label) {
+					if (ToString(EvaluateExpression(placeholder->GetLabel(), context)) == label) {
 						return static_cast<int>(i);
 					}
 				}

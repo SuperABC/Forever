@@ -9,8 +9,12 @@ using namespace std;
 
 int ResidenceBuilding::count = 0;
 
-ResidenceBuilding::ResidenceBuilding() {
-	lastName = string(GetType()) + std::to_string(count++);
+ResidenceBuilding::ResidenceBuilding() : id(count++) {
+}
+
+const char* ResidenceBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
 }
 
 void ResidenceBuilding::Layout(int& direction, const Quad& quad,
@@ -233,8 +237,12 @@ float ResidenceBuilding::GetPower(AREA_TYPE area) {
 
 int ShopBuilding::count = 0;
 
-ShopBuilding::ShopBuilding() {
-	lastName = string(GetType()) + std::to_string(count++);
+ShopBuilding::ShopBuilding() : id(count++) {
+}
+
+const char* ShopBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
 }
 
 void ShopBuilding::Layout(int& direction, const Quad& quad,
@@ -381,8 +389,12 @@ float ShopBuilding::GetPower(AREA_TYPE area) {
 
 int FactoryBuilding::count = 0;
 
-FactoryBuilding::FactoryBuilding() {
-	lastName = string(GetType()) + std::to_string(count++);
+FactoryBuilding::FactoryBuilding() : id(count++) {
+}
+
+const char* FactoryBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
 }
 
 void FactoryBuilding::Layout(int& direction, const Quad& quad,

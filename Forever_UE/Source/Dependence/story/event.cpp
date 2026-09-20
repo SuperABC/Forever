@@ -17,11 +17,11 @@ bool Event::Match(Event* e, const ScriptContext& context) {
 	return GetType() == e->GetType();
 }
 
-const Expression& Event::GetCondition() const {
+const std::string& Event::GetCondition() const {
 	return condition;
 }
 
-void Event::SetCondition(const Expression& condition) {
+void Event::SetCondition(const std::string& condition) {
 	this->condition = condition;
 }
 
@@ -42,7 +42,7 @@ const string& GameStartEvent::GetType() const {
 	return type;
 }
 
-GlobalMessageEvent::GlobalMessageEvent(Expression message) :
+GlobalMessageEvent::GlobalMessageEvent(std::string message) :
 	message(move(message)) {
 
 }
@@ -56,15 +56,15 @@ const string& GlobalMessageEvent::GetType() const {
 	return type;
 }
 
-void GlobalMessageEvent::SetMessage(Expression message) {
+void GlobalMessageEvent::SetMessage(std::string message) {
 	this->message = move(message);
 }
 
-const Expression& GlobalMessageEvent::GetMessage() const {
+const std::string& GlobalMessageEvent::GetMessage() const {
 	return message;
 }
 
-OptionDialogEvent::OptionDialogEvent(Expression name, Expression option) :
+OptionDialogEvent::OptionDialogEvent(std::string name, std::string option) :
 	name(move(name)), option(move(option)) {
 
 }
@@ -78,23 +78,23 @@ const string& OptionDialogEvent::GetType() const {
 	return type;
 }
 
-void OptionDialogEvent::SetName(Expression name) {
+void OptionDialogEvent::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& OptionDialogEvent::GetName() const {
+const std::string& OptionDialogEvent::GetName() const {
 	return name;
 }
 
-void OptionDialogEvent::SetOption(Expression option) {
+void OptionDialogEvent::SetOption(std::string option) {
 	this->option = move(option);
 }
 
-const Expression& OptionDialogEvent::GetOption() const {
+const std::string& OptionDialogEvent::GetOption() const {
 	return option;
 }
 
-GlobalDialogEvent::GlobalDialogEvent(Expression name, Expression option) :
+GlobalDialogEvent::GlobalDialogEvent(std::string name, std::string option) :
 	name(move(name)), option(move(option)) {
 
 }
@@ -108,23 +108,23 @@ const string& GlobalDialogEvent::GetType() const {
 	return type;
 }
 
-void GlobalDialogEvent::SetName(Expression name) {
+void GlobalDialogEvent::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& GlobalDialogEvent::GetName() const {
+const std::string& GlobalDialogEvent::GetName() const {
 	return name;
 }
 
-void GlobalDialogEvent::SetOption(Expression option) {
+void GlobalDialogEvent::SetOption(std::string option) {
 	this->option = move(option);
 }
 
-const Expression& GlobalDialogEvent::GetOption() const {
+const std::string& GlobalDialogEvent::GetOption() const {
 	return option;
 }
 
-SpeakingFinishEvent::SpeakingFinishEvent(Expression label) :
+SpeakingFinishEvent::SpeakingFinishEvent(std::string label) :
 	label(move(label)) {
 
 }
@@ -138,15 +138,15 @@ const string& SpeakingFinishEvent::GetType() const {
 	return type;
 }
 
-void SpeakingFinishEvent::SetLabel(Expression label) {
+void SpeakingFinishEvent::SetLabel(std::string label) {
 	this->label = move(label);
 }
 
-const Expression& SpeakingFinishEvent::GetLabel() const {
+const std::string& SpeakingFinishEvent::GetLabel() const {
 	return label;
 }
 
-EnterZoneEvent::EnterZoneEvent(Expression zone) :
+EnterZoneEvent::EnterZoneEvent(std::string zone) :
 	zone(move(zone)) {
 
 }
@@ -160,15 +160,15 @@ const string& EnterZoneEvent::GetType() const {
 	return type;
 }
 
-void EnterZoneEvent::SetZone(Expression zone) {
+void EnterZoneEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
 
-const Expression& EnterZoneEvent::GetZone() const {
+const std::string& EnterZoneEvent::GetZone() const {
 	return zone;
 }
 
-LeaveZoneEvent::LeaveZoneEvent(Expression zone) :
+LeaveZoneEvent::LeaveZoneEvent(std::string zone) :
 	zone(move(zone)) {
 
 }
@@ -182,15 +182,15 @@ const string& LeaveZoneEvent::GetType() const {
 	return type;
 }
 
-void LeaveZoneEvent::SetZone(Expression zone) {
+void LeaveZoneEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
 
-const Expression& LeaveZoneEvent::GetZone() const {
+const std::string& LeaveZoneEvent::GetZone() const {
 	return zone;
 }
 
-EnterBuildingEvent::EnterBuildingEvent(Expression zone, Expression building) :
+EnterBuildingEvent::EnterBuildingEvent(std::string zone, std::string building) :
 	zone(move(zone)), building(move(building)) {
 
 }
@@ -204,23 +204,23 @@ const string& EnterBuildingEvent::GetType() const {
 	return type;
 }
 
-void EnterBuildingEvent::SetZone(Expression zone) {
+void EnterBuildingEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
 
-const Expression& EnterBuildingEvent::GetZone() const {
+const std::string& EnterBuildingEvent::GetZone() const {
 	return zone;
 }
 
-void EnterBuildingEvent::SetBuilding(Expression building) {
+void EnterBuildingEvent::SetBuilding(std::string building) {
 	this->building = move(building);
 }
 
-const Expression& EnterBuildingEvent::GetBuilding() const {
+const std::string& EnterBuildingEvent::GetBuilding() const {
 	return building;
 }
 
-LeaveBuildingEvent::LeaveBuildingEvent(Expression zone, Expression building) :
+LeaveBuildingEvent::LeaveBuildingEvent(std::string zone, std::string building) :
 	zone(move(zone)), building(move(building)) {
 
 }
@@ -234,23 +234,23 @@ const string& LeaveBuildingEvent::GetType() const {
 	return type;
 }
 
-void LeaveBuildingEvent::SetZone(Expression zone) {
+void LeaveBuildingEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
 
-const Expression& LeaveBuildingEvent::GetZone() const {
+const std::string& LeaveBuildingEvent::GetZone() const {
 	return zone;
 }
 
-void LeaveBuildingEvent::SetBuilding(Expression building) {
+void LeaveBuildingEvent::SetBuilding(std::string building) {
 	this->building = move(building);
 }
 
-const Expression& LeaveBuildingEvent::GetBuilding() const {
+const std::string& LeaveBuildingEvent::GetBuilding() const {
 	return building;
 }
 
-EnterRoomEvent::EnterRoomEvent(Expression zone, Expression building, Expression room) :
+EnterRoomEvent::EnterRoomEvent(std::string zone, std::string building, std::string room) :
 	zone(move(zone)), building(move(building)), room(move(room)) {
 
 }
@@ -264,31 +264,31 @@ const string& EnterRoomEvent::GetType() const {
 	return type;
 }
 
-void EnterRoomEvent::SetZone(Expression zone) {
+void EnterRoomEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
 
-const Expression& EnterRoomEvent::GetZone() const {
+const std::string& EnterRoomEvent::GetZone() const {
 	return zone;
 }
 
-void EnterRoomEvent::SetBuilding(Expression building) {
+void EnterRoomEvent::SetBuilding(std::string building) {
 	this->building = move(building);
 }
 
-const Expression& EnterRoomEvent::GetBuilding() const {
+const std::string& EnterRoomEvent::GetBuilding() const {
 	return building;
 }
 
-void EnterRoomEvent::SetRoom(Expression room) {
+void EnterRoomEvent::SetRoom(std::string room) {
 	this->room = move(room);
 }
 
-const Expression& EnterRoomEvent::GetRoom() const {
+const std::string& EnterRoomEvent::GetRoom() const {
 	return room;
 }
 
-LeaveRoomEvent::LeaveRoomEvent(Expression zone, Expression building, Expression room) :
+LeaveRoomEvent::LeaveRoomEvent(std::string zone, std::string building, std::string room) :
 	zone(move(zone)), building(move(building)), room(move(room)) {
 
 }
@@ -302,31 +302,31 @@ const string& LeaveRoomEvent::GetType() const {
 	return type;
 }
 
-void LeaveRoomEvent::SetZone(Expression zone) {
+void LeaveRoomEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
 
-const Expression& LeaveRoomEvent::GetZone() const {
+const std::string& LeaveRoomEvent::GetZone() const {
 	return zone;
 }
 
-void LeaveRoomEvent::SetBuilding(Expression building) {
+void LeaveRoomEvent::SetBuilding(std::string building) {
 	this->building = move(building);
 }
 
-const Expression& LeaveRoomEvent::GetBuilding() const {
+const std::string& LeaveRoomEvent::GetBuilding() const {
 	return building;
 }
 
-void LeaveRoomEvent::SetRoom(Expression room) {
+void LeaveRoomEvent::SetRoom(std::string room) {
 	this->room = move(room);
 }
 
-const Expression& LeaveRoomEvent::GetRoom() const {
+const std::string& LeaveRoomEvent::GetRoom() const {
 	return room;
 }
 
-PuzzleResultEvent::PuzzleResultEvent(Expression result) :
+PuzzleResultEvent::PuzzleResultEvent(std::string result) :
 	result(move(result)) {
 
 }
@@ -340,15 +340,15 @@ const string& PuzzleResultEvent::GetType() const {
 	return type;
 }
 
-void PuzzleResultEvent::SetResult(Expression result) {
+void PuzzleResultEvent::SetResult(std::string result) {
 	this->result = move(result);
 }
 
-const Expression& PuzzleResultEvent::GetResult() const {
+const std::string& PuzzleResultEvent::GetResult() const {
 	return result;
 }
 
-TransactionResultEvent::TransactionResultEvent(Expression result, Expression name) :
+TransactionResultEvent::TransactionResultEvent(std::string result, std::string name) :
 	result(move(result)), name(move(name)) {
 
 }
@@ -362,23 +362,23 @@ const string& TransactionResultEvent::GetType() const {
 	return type;
 }
 
-void TransactionResultEvent::SetResult(Expression result) {
+void TransactionResultEvent::SetResult(std::string result) {
 	this->result = move(result);
 }
 
-const Expression& TransactionResultEvent::GetResult() const {
+const std::string& TransactionResultEvent::GetResult() const {
 	return result;
 }
 
-void TransactionResultEvent::SetName(Expression name) {
+void TransactionResultEvent::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& TransactionResultEvent::GetName() const {
+const std::string& TransactionResultEvent::GetName() const {
 	return name;
 }
 
-ObjectResultEvent::ObjectResultEvent(Expression action, Expression object, Expression result, Expression num) :
+ObjectResultEvent::ObjectResultEvent(std::string action, std::string object, std::string result, std::string num) :
 	action(move(action)), object(move(object)), result(move(result)), num(move(num)) {
 
 }
@@ -392,39 +392,39 @@ const string& ObjectResultEvent::GetType() const {
 	return type;
 }
 
-void ObjectResultEvent::SetAction(Expression action) {
+void ObjectResultEvent::SetAction(std::string action) {
 	this->action = move(action);
 }
 
-const Expression& ObjectResultEvent::GetAction() const {
+const std::string& ObjectResultEvent::GetAction() const {
 	return action;
 }
 
-void ObjectResultEvent::SetObject(Expression object) {
+void ObjectResultEvent::SetObject(std::string object) {
 	this->object = move(object);
 }
 
-const Expression& ObjectResultEvent::GetObject() const {
+const std::string& ObjectResultEvent::GetObject() const {
 	return object;
 }
 
-void ObjectResultEvent::SetResult(Expression result) {
+void ObjectResultEvent::SetResult(std::string result) {
 	this->result = move(result);
 }
 
-const Expression& ObjectResultEvent::GetResult() const {
+const std::string& ObjectResultEvent::GetResult() const {
 	return result;
 }
 
-void ObjectResultEvent::SetNum(Expression num) {
+void ObjectResultEvent::SetNum(std::string num) {
 	this->num = move(num);
 }
 
-const Expression& ObjectResultEvent::GetNum() const {
+const std::string& ObjectResultEvent::GetNum() const {
 	return num;
 }
 
-TimeUpEvent::TimeUpEvent(Expression name) :
+TimeUpEvent::TimeUpEvent(std::string name) :
 	name(move(name)) {
 
 }
@@ -438,15 +438,15 @@ const string& TimeUpEvent::GetType() const {
 	return type;
 }
 
-void TimeUpEvent::SetName(Expression name) {
+void TimeUpEvent::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& TimeUpEvent::GetName() const {
+const std::string& TimeUpEvent::GetName() const {
 	return name;
 }
 
-NpcArriveEvent::NpcArriveEvent(Expression name, Expression address) :
+NpcArriveEvent::NpcArriveEvent(std::string name, std::string address) :
 	name(move(name)), address(move(address)) {
 
 }
@@ -460,23 +460,23 @@ const string& NpcArriveEvent::GetType() const {
 	return type;
 }
 
-void NpcArriveEvent::SetName(Expression name) {
+void NpcArriveEvent::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& NpcArriveEvent::GetName() const {
+const std::string& NpcArriveEvent::GetName() const {
 	return name;
 }
 
-void NpcArriveEvent::SetAddress(Expression address) {
+void NpcArriveEvent::SetAddress(std::string address) {
 	this->address = move(address);
 }
 
-const Expression& NpcArriveEvent::GetAddress() const {
+const std::string& NpcArriveEvent::GetAddress() const {
 	return address;
 }
 
-NPCMeetEvent::NPCMeetEvent(Expression npc) :
+NPCMeetEvent::NPCMeetEvent(std::string npc) :
 	npc(move(npc)) {
 
 }
@@ -490,15 +490,15 @@ const string& NPCMeetEvent::GetType() const {
 	return type;
 }
 
-void NPCMeetEvent::SetNPC(Expression npc) {
+void NPCMeetEvent::SetNPC(std::string npc) {
 	this->npc = move(npc);
 }
 
-const Expression& NPCMeetEvent::GetNPC() const {
+const std::string& NPCMeetEvent::GetNPC() const {
 	return npc;
 }
 
-CitizenBornEvent::CitizenBornEvent(Expression name) :
+CitizenBornEvent::CitizenBornEvent(std::string name) :
 	name(move(name)) {
 
 }
@@ -512,15 +512,15 @@ const string& CitizenBornEvent::GetType() const {
 	return type;
 }
 
-void CitizenBornEvent::SetName(Expression name) {
+void CitizenBornEvent::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& CitizenBornEvent::GetName() const {
+const std::string& CitizenBornEvent::GetName() const {
 	return name;
 }
 
-CitizenDeceaseEvent::CitizenDeceaseEvent(Expression name, Expression reason) :
+CitizenDeceaseEvent::CitizenDeceaseEvent(std::string name, std::string reason) :
 	name(move(name)), reason(move(reason)) {
 
 }
@@ -534,23 +534,23 @@ const string& CitizenDeceaseEvent::GetType() const {
 	return type;
 }
 
-void CitizenDeceaseEvent::SetName(Expression name) {
+void CitizenDeceaseEvent::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const Expression& CitizenDeceaseEvent::GetName() const {
+const std::string& CitizenDeceaseEvent::GetName() const {
 	return name;
 }
 
-void CitizenDeceaseEvent::SetReason(Expression reason) {
+void CitizenDeceaseEvent::SetReason(std::string reason) {
 	this->reason = move(reason);
 }
 
-const Expression& CitizenDeceaseEvent::GetReason() const {
+const std::string& CitizenDeceaseEvent::GetReason() const {
 	return reason;
 }
 
-PlayerInjuredEvent::PlayerInjuredEvent(Expression wound) :
+PlayerInjuredEvent::PlayerInjuredEvent(std::string wound) :
 	wound(move(wound)) {
 
 }
@@ -564,15 +564,15 @@ const string& PlayerInjuredEvent::GetType() const {
 	return type;
 }
 
-void PlayerInjuredEvent::SetWound(Expression wound) {
+void PlayerInjuredEvent::SetWound(std::string wound) {
 	this->wound = move(wound);
 }
 
-const Expression& PlayerInjuredEvent::GetWound() const {
+const std::string& PlayerInjuredEvent::GetWound() const {
 	return wound;
 }
 
-PlayerCuredEvent::PlayerCuredEvent(Expression wound) :
+PlayerCuredEvent::PlayerCuredEvent(std::string wound) :
 	wound(move(wound)) {
 
 }
@@ -586,15 +586,15 @@ const string& PlayerCuredEvent::GetType() const {
 	return type;
 }
 
-void PlayerCuredEvent::SetWound(Expression wound) {
+void PlayerCuredEvent::SetWound(std::string wound) {
 	this->wound = move(wound);
 }
 
-const Expression& PlayerCuredEvent::GetWound() const {
+const std::string& PlayerCuredEvent::GetWound() const {
 	return wound;
 }
 
-PlayerIllEvent::PlayerIllEvent(Expression illness) :
+PlayerIllEvent::PlayerIllEvent(std::string illness) :
 	illness(move(illness)) {
 
 }
@@ -608,15 +608,15 @@ const string& PlayerIllEvent::GetType() const {
 	return type;
 }
 
-void PlayerIllEvent::SetIllness(Expression illness) {
+void PlayerIllEvent::SetIllness(std::string illness) {
 	this->illness = move(illness);
 }
 
-const Expression& PlayerIllEvent::GetIllness() const {
+const std::string& PlayerIllEvent::GetIllness() const {
 	return illness;
 }
 
-PlayerRecoverEvent::PlayerRecoverEvent(Expression illness) :
+PlayerRecoverEvent::PlayerRecoverEvent(std::string illness) :
 	illness(move(illness)) {
 
 }
@@ -630,15 +630,15 @@ const string& PlayerRecoverEvent::GetType() const {
 	return type;
 }
 
-void PlayerRecoverEvent::SetIllness(Expression illness) {
+void PlayerRecoverEvent::SetIllness(std::string illness) {
 	this->illness = move(illness);
 }
 
-const Expression& PlayerRecoverEvent::GetIllness() const {
+const std::string& PlayerRecoverEvent::GetIllness() const {
 	return illness;
 }
 
-PlayerRestEvent::PlayerRestEvent(Expression minute) :
+PlayerRestEvent::PlayerRestEvent(std::string minute) :
 	minute(move(minute)) {
 
 }
@@ -652,15 +652,15 @@ const string& PlayerRestEvent::GetType() const {
 	return type;
 }
 
-void PlayerRestEvent::SetMinute(Expression minute) {
+void PlayerRestEvent::SetMinute(std::string minute) {
 	this->minute = move(minute);
 }
 
-const Expression& PlayerRestEvent::GetMinute() const {
+const std::string& PlayerRestEvent::GetMinute() const {
 	return minute;
 }
 
-PlayerSleepEvent::PlayerSleepEvent(Expression hour) :
+PlayerSleepEvent::PlayerSleepEvent(std::string hour) :
 	hour(move(hour)) {
 
 }
@@ -674,15 +674,15 @@ const string& PlayerSleepEvent::GetType() const {
 	return type;
 }
 
-void PlayerSleepEvent::SetHour(Expression hour) {
+void PlayerSleepEvent::SetHour(std::string hour) {
 	this->hour = move(hour);
 }
 
-const Expression& PlayerSleepEvent::GetHour() const {
+const std::string& PlayerSleepEvent::GetHour() const {
 	return hour;
 }
 
-CultivationChangeEvent::CultivationChangeEvent(Expression method, Expression level) :
+CultivationChangeEvent::CultivationChangeEvent(std::string method, std::string level) :
 	method(move(method)), level(move(level)) {
 
 }
@@ -696,23 +696,23 @@ const string& CultivationChangeEvent::GetType() const {
 	return type;
 }
 
-void CultivationChangeEvent::SetMethod(Expression method) {
+void CultivationChangeEvent::SetMethod(std::string method) {
 	this->method = move(method);
 }
 
-const Expression& CultivationChangeEvent::GetMethod() const {
+const std::string& CultivationChangeEvent::GetMethod() const {
 	return method;
 }
 
-void CultivationChangeEvent::SetLevel(Expression level) {
+void CultivationChangeEvent::SetLevel(std::string level) {
 	this->level = move(level);
 }
 
-const Expression& CultivationChangeEvent::GetLevel() const {
+const std::string& CultivationChangeEvent::GetLevel() const {
 	return level;
 }
 
-WantedChangeEvent::WantedChangeEvent(Expression reason, Expression level) :
+WantedChangeEvent::WantedChangeEvent(std::string reason, std::string level) :
 	reason(move(reason)), level(move(level)) {
 
 }
@@ -726,23 +726,23 @@ const string& WantedChangeEvent::GetType() const {
 	return type;
 }
 
-void WantedChangeEvent::SetReason(Expression reason) {
+void WantedChangeEvent::SetReason(std::string reason) {
 	this->reason = move(reason);
 }
 
-const Expression& WantedChangeEvent::GetReason() const {
+const std::string& WantedChangeEvent::GetReason() const {
 	return reason;
 }
 
-void WantedChangeEvent::SetLevel(Expression level) {
+void WantedChangeEvent::SetLevel(std::string level) {
 	this->level = move(level);
 }
 
-const Expression& WantedChangeEvent::GetLevel() const {
+const std::string& WantedChangeEvent::GetLevel() const {
 	return level;
 }
 
-PlayerArrestedEvent::PlayerArrestedEvent(Expression reason) :
+PlayerArrestedEvent::PlayerArrestedEvent(std::string reason) :
 	reason(move(reason)) {
 
 }
@@ -756,15 +756,15 @@ const string& PlayerArrestedEvent::GetType() const {
 	return type;
 }
 
-void PlayerArrestedEvent::SetReason(Expression reason) {
+void PlayerArrestedEvent::SetReason(std::string reason) {
 	this->reason = move(reason);
 }
 
-const Expression& PlayerArrestedEvent::GetReason() const {
+const std::string& PlayerArrestedEvent::GetReason() const {
 	return reason;
 }
 
-PlayerReleasedEvent::PlayerReleasedEvent(Expression reason) :
+PlayerReleasedEvent::PlayerReleasedEvent(std::string reason) :
 	reason(move(reason)) {
 
 }
@@ -778,15 +778,15 @@ const string& PlayerReleasedEvent::GetType() const {
 	return type;
 }
 
-void PlayerReleasedEvent::SetReason(Expression reason) {
+void PlayerReleasedEvent::SetReason(std::string reason) {
 	this->reason = move(reason);
 }
 
-const Expression& PlayerReleasedEvent::GetReason() const {
+const std::string& PlayerReleasedEvent::GetReason() const {
 	return reason;
 }
 
-WeatherChangeEvent::WeatherChangeEvent(Expression weather) :
+WeatherChangeEvent::WeatherChangeEvent(std::string weather) :
 	weather(move(weather)) {
 
 }
@@ -800,15 +800,15 @@ const string& WeatherChangeEvent::GetType() const {
 	return type;
 }
 
-void WeatherChangeEvent::SetWeather(Expression weather) {
+void WeatherChangeEvent::SetWeather(std::string weather) {
 	this->weather = move(weather);
 }
 
-const Expression& WeatherChangeEvent::GetWeather() const {
+const std::string& WeatherChangeEvent::GetWeather() const {
 	return weather;
 }
 
-PolicyChangeEvent::PolicyChangeEvent(Expression policy, Expression status) :
+PolicyChangeEvent::PolicyChangeEvent(std::string policy, std::string status) :
 	policy(move(policy)), status(move(status)) {
 
 }
@@ -822,23 +822,23 @@ const string& PolicyChangeEvent::GetType() const {
 	return type;
 }
 
-void PolicyChangeEvent::SetPolicy(Expression policy) {
+void PolicyChangeEvent::SetPolicy(std::string policy) {
 	this->policy = move(policy);
 }
 
-const Expression& PolicyChangeEvent::GetPolicy() const {
+const std::string& PolicyChangeEvent::GetPolicy() const {
 	return policy;
 }
 
-void PolicyChangeEvent::SetStatus(Expression status) {
+void PolicyChangeEvent::SetStatus(std::string status) {
 	this->status = move(status);
 }
 
-const Expression& PolicyChangeEvent::GetStatus() const {
+const std::string& PolicyChangeEvent::GetStatus() const {
 	return status;
 }
 
-UseAssetEvent::UseAssetEvent(Expression asset) :
+UseAssetEvent::UseAssetEvent(std::string asset) :
 	asset(move(asset)) {
 
 }
@@ -852,10 +852,10 @@ const string& UseAssetEvent::GetType() const {
 	return type;
 }
 
-void UseAssetEvent::SetAsset(Expression asset) {
+void UseAssetEvent::SetAsset(std::string asset) {
 	this->asset = move(asset);
 }
 
-const Expression& UseAssetEvent::GetAsset() const {
+const std::string& UseAssetEvent::GetAsset() const {
 	return asset;
 }

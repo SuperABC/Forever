@@ -1,0 +1,20 @@
+{
+	// 验证Job::Script的game_start广播链路+GetName()唯一性修复：开局时每个ShopSalerJob
+	// 实例各自debug_print自己(mod->GetName())的名字，应该看到形如"ShopSalerJob0"/
+	// "ShopSalerJob1"/...的多条不同消息。
+	"milestones": [
+		{
+			"milestone": "game_start",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "debug_print", "message": "$$self.name" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

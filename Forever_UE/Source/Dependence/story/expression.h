@@ -452,6 +452,30 @@ private:
 };
 
 /*
+* 便捷函数：把DSL源码字符串就地Parse成一次性的Expression对象再求值，Parse+Evaluate在
+* 同一次调用里发生、由调用方自己所在的模块编译执行——这是把所有Change/Event字段从
+* "预先解析好存成员"改成"存原始DSL源码字符串"之后的配套设施，取代原来到处都是的
+* `field.EvaluateValue(context)`/`field.EvaluateBool(context)`调用点。原来的写法里
+* Expression树可能在一个模块（比如某个Mod DLL）里构造、又在另一个模块（比如UE的
+* Forever模块）里对着树节点做虚函数求值——UE给自己的模块重载了全局operator new/delete
+* 走FMemory，普通Win32 DLL没有这层重载，两边一旦发生"构造Expression时分配堆内存的模块"
+* 和"求值时因为虚函数调用触发另一次堆分配、又在别的模块被释放"不一致，就是堆损坏
+* （PIE验证复现过一次真实崩溃：NPCNavigateChange::destination装了个真实房间地址，
+* 超出std::string的SSO阈值触发了堆分配，才第一次真正踩上）。现在字段只存字符串，
+* 求值这一步统一用这两个函数，Parse和Evaluate/EvaluateBool在同一次调用里完成，永远
+* 是调用方自己模块的代码在执行，不会有对象跨模块存活的情况。
+* @source: DSL源码字符串
+* @context: 变量路由上下文
+* @return: 求值结果
+*/
+ValueType EvaluateExpression(const std::string& source, const ScriptContext& context);
+
+/*
+* 同EvaluateExpression，返回布尔求值结果，对应Expression::EvaluateBool
+*/
+bool EvaluateExpressionBool(const std::string& source, const ScriptContext& context);
+
+/*
 * 判断字符是否为运算符字符（全局工具函数）
 * @c: 待判断的字符
 * @return: 是否为运算符字符

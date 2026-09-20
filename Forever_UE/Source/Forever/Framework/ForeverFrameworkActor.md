@@ -99,10 +99,19 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
     永远不会天然为true——时钟是`EnsurePlayerGenerated()`刚设好的，"day"缓存和当前日期
     本来就相同，不强制第一帧当成跨天的话第一天的调度表永远生成不出来，等价于老工程
     `Populace::Tick`里`currentTime.GetYear()==0 || player->CrossDay()`这个bootstrap
-    特判，PIE验证过：不加这一行时市民永远不会在第一天上下班）。`populace->Tick(
-    *player->GetTime(), crossedDay, 回调)`驱动Job的调度，`society->Tick(...)`驱动
-    Organization的调度，两个回调都会把`NPCNavigateChange`转发给
-    `populaceFramework->RequestWalk(citizen, dest)`，其余Change类型转发给
+    特判，PIE验证过：不加这一行时市民永远不会在第一天上下班）。现场构造一个
+    `PostImplement postImplement(map, populace, society, story, industry, traffic,
+    player);`（栈上对象，生命周期只覆盖这一帧），`populace->Tick(*player->GetTime(),
+    crossedDay, 回调, &postImplement)`驱动Job的调度，`society->Tick(..., &postImplement)`
+    驱动Organization的调度——`postImplement`供`JobMod::DailyPlan`/`ExecNode`通过
+    `Post()`按需查citizen家/工位的具体地址（"citizen home address"/"citizen
+    workplace address"两个post类型，见`Core/common/implement.md`），和
+    `UForeverStoryFrameworkComponent::BroadcastGameStart`构造`PostImplement`同一个
+    "现场构造、只覆盖这次调用"用法。两个回调都会把`NPCNavigateChange`转发给
+    `populaceFramework->RequestWalk(citizen, dest)`——`dest`这次改成用
+    `map->LocateRoom(destinationAddress)`解析`NPCNavigateChange::destination`（一个
+    具体房间地址字符串，不再是`"home"`/`"workplace"`这种描述性文本，见
+    `Core/society/job.md`"按需查地址：PostHandle参数"一节），其余Change类型转发给
     `story->ApplyChange(change, context)`，见`Core/society/job.md`"驱动方式"一节、
     `Framework/ForeverPopulaceFrameworkComponent.md`"市民走路"一节。
 - **补上一个此前缺失的`GetStory()`**：`story`成员本身在阶段4 Story落地时就已经加入，但当时

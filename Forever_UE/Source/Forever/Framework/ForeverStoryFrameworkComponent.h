@@ -23,10 +23,13 @@ public:
 
 	// 广播一次GameStartEvent，把匹配出的Dialog/Change打印到屏幕左上角（GEngine::
 	// AddOnScreenDebugMessage）。Change只有SetValueChange真正执行(Story::ApplyChange)，
-	// ChangeControlChange由这个组件自己拦截处理（见.cpp），其余类型只打印类型名。Dialog分支
+	// ChangeControlChange/DebugPrintChange由这个组件自己拦截处理（见.cpp——前者需要
+	// Actor/Controller，后者需要GEngine，Core层都不认识），其余类型只打印类型名。Dialog分支
 	// 选项没有玩家交互，默认打印第一个Option的文本。内部会现场构造一个PostImplement
 	// （见Core/common/implement.h）传给Story::BroadcastGameStart，供WrapScript查询Core状态
-	// （如随机挑一个citizen）。
+	// （如随机挑一个citizen）。**这次一起把Society下所有Organization/Job各自持有的Script
+	// 也广播一次game_start**（不新开函数，直接在这个函数体里遍历，复用同一份处理结果的
+	// onActions逻辑）——否则它们各自的game_start milestone永远不会被触发，见.cpp实现。
 	void BroadcastGameStart();
 
 private:

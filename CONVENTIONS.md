@@ -60,3 +60,32 @@
 ## 4. Player类的资产引用方式
 
 Player相关的C++类(`ForeverCharacter`/`ForeverPlayerController`/`ForeverGameMode`/`ForeverPlayerState`)不建Blueprint外壳,直接是可用类,用`ConstructorHelpers::FObjectFinder`/`FClassFinder`在构造函数里引用默认资产(骨骼网格、动画蓝图、Input Mapping Context/Action等)。这只是设置默认值,不影响后续换资产或走向运行时数据驱动换装——子类或运行时代码随时可以覆盖这些`EditDefaultsOnly`属性。
+
+## 5. 所有Mod子类的`GetName()`必须全局唯一
+
+任何`XxxMod`的具体子类(`Source/Basic`及所有Mod DLL里的实现)，`GetName()`的返回值必须
+在整个进程生命周期内全局唯一——不能是固定的类型名字符串，同一个类型创建多个实例时每个
+实例的名字都要不一样。统一用`static int count`+构造函数`id(count++)`+`GetName()`里
+现拼`name = <前缀> + std::to_string(id)`返回`name.data()`这个固定模式实现，照抄
+`Source/Basic/map/terrain_basic.h/.cpp`的`OceanTerrain`：
+
+```cpp
+// .h
+private:
+	static int count;
+	int id;
+	std::string name;
+// .cpp
+int OceanTerrain::count = 0;
+OceanTerrain::OceanTerrain() : id(count++) { }
+const char* OceanTerrain::GetName() {
+	name = "海洋地形" + to_string(id);
+	return name.data();
+}
+```
+
+不要用"构造函数里一次性拼好存进一个成员、`GetName()`只返回这个成员"的变体（`building_basic.h`
+当时就是这么写的，`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding`的`lastName`字段
+在构造函数里就拼好了，`GetName()`只是`return lastName.c_str();`）——这次已经统一改成
+和`terrain_basic`一致的"`GetName()`里现拼"风格，两种写法效果上都能保证唯一性，但风格
+必须统一，不要混用。

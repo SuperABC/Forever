@@ -47,7 +47,11 @@ DailyPlan/ExecNode"一节）。两者的每帧处理上限（`kMaxJobTimersPerTi
 `AForeverFrameworkActor::Tick`每帧分别调用`populace->Tick(...)`和`society->Tick(...)`，
 两个回调都是`(实体指针, const vector<Change*>&)`签名，产出的`Change*`所有权全部留在
 产出它们的`JobMod`/`OrganizationMod`实例身上，回调只读值使用、不`delete`，见
-`job.md`"跨DLL数据传递约束"一节。
+`job.md`"跨DLL数据传递约束"一节。两个`Tick`都多了一个`PostHandle* post`末位参数，
+由`AForeverFrameworkActor::Tick`现场构造一个`PostImplement`传入、原样透传到
+`Organization::DailyPlan/ExecNode`再到`OrganizationMod`，供mod按需查citizen家/工位
+地址，见`job.md`"按需查地址：PostHandle参数"一节（这次`ShopOrganization`不重写
+`DailyPlan`/`ExecNode`，用不上这个参数，但接口和`JobMod`保持对称）。
 
 ## 依赖关系
 

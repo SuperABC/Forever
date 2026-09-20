@@ -14,6 +14,7 @@
 #include "player/player.h"
 #include "common/registry.h"
 #include "common/utility.h"
+#include "common/implement.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -157,19 +158,33 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	bool crossedDay = bIsFirstTick || player->CrossDay();
 	bIsFirstTick = false;
 
+	// 现场构造一个PostImplement，供Job/OrganizationMod::DailyPlan/ExecNode通过Post()
+	// 按需查citizen家/工位的具体地址（"citizen home address"/"citizen workplace
+	// address"，见Core/common/implement.cpp）——和UForeverStoryFrameworkComponent::
+	// BroadcastGameStart同一个"现场构造、只覆盖这次调用"的用法，不需要长期持有。
+	PostImplement postImplement(map, populace, society, story, industry, traffic, player);
+
 	if (populace) {
 		populace->Tick(*player->GetTime(), crossedDay,
 			[this](Citizen* citizen, const std::vector<Change*>& changes) {
 				for (Change* change : changes) {
 					if (auto* nav = dynamic_cast<const NPCNavigateChange*>(change)) {
-						ScriptContext context; // NPCNavigateChange的Expression字段这次都是
-						// 字面量常量，求值不需要真正有意义的context，但Evaluate接口要求传一份
-						std::string destinationText = ToString(nav->GetDestination().EvaluateValue(context));
-						Room* dest = destinationText == "home"
-							? citizen->GetRoom()
-							: (citizen->GetJob() ? citizen->GetJob()->GetPosition() : nullptr);
+						// NPCNavigateChange::destination是纯std::string，不走Expression求值
+						// （JobMod通过PostHandle查回来的具体房间地址，不再是"home"/"workplace"
+						// 这种描述性文本，也不需要$$动态求值——见change.h里NPCNavigateChange
+						// 顶部的崩溃分析注释），直接交给Map::LocateRoom解析回Room*。
+						std::string destinationAddress = nav->GetDestination();
+						Room* dest = map ? map->LocateRoom(destinationAddress) : nullptr;
 						if (dest && populaceFramework) {
 							populaceFramework->RequestWalk(citizen, dest);
+						}
+					}
+					else if (auto* debugPrint = dynamic_cast<const DebugPrintChange*>(change)) {
+						ScriptContext context;
+						if (citizen->GetJob()) context.self = citizen->GetJob()->GetScript();
+						std::string text = ToString(EvaluateExpression(debugPrint->GetMessage(), context));
+						if (GEngine) {
+							GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, UTF8_TO_TCHAR(text.c_str()));
 						}
 					}
 					else if (story && citizen->GetJob()) {
@@ -178,23 +193,32 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 						story->ApplyChange(change, context);
 					}
 				}
-			});
+			}, &postImplement);
 	}
 
 	if (society) {
 		society->Tick(*player->GetTime(), crossedDay,
-			[this](Organization*, const std::vector<Change*>& changes) {
+			[this](Organization* organization, const std::vector<Change*>& changes) {
 				// ShopOrganization这次不产出changes，回调体基本用不到，但设施要落地——
-				// 真有Change产出时和上面Populace::Tick的回调同一个"context.self指向
-				// 产出它的Script"的处理方式（Organization目前没有自己的Script，等以后
-				// 真的有组织级Change时再补）。
+				// context.self指向Organization自己的Script（Organization这次一起补上了
+				// Script成员，见organization.md"Script配置"一节），和上面Populace::Tick
+				// 回调同一个处理方式。
 				for (Change* change : changes) {
-					if (story) {
+					if (auto* debugPrint = dynamic_cast<const DebugPrintChange*>(change)) {
 						ScriptContext context;
+						if (organization) context.self = organization->GetScript();
+						std::string text = ToString(EvaluateExpression(debugPrint->GetMessage(), context));
+						if (GEngine) {
+							GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, UTF8_TO_TCHAR(text.c_str()));
+						}
+					}
+					else if (story) {
+						ScriptContext context;
+						if (organization) context.self = organization->GetScript();
 						story->ApplyChange(change, context);
 					}
 				}
-			});
+			}, &postImplement);
 	}
 }
 

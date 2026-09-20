@@ -7,69 +7,55 @@
 #include "common/config.h"
 #include "common/registry.h"
 
-#include <filesystem>
-
 
 using namespace std;
-
-namespace {
-	// 主线剧情/系统变量池这两个Script当前阶段都不需要区分具体mod内容，统一走config.json
-	// "script_mods"里已经配好的"empty"id（Forever_Mod/Empty提供），test.json的内容和
-	// 具体挂载的ScriptMod无关，只是需要"随便一个能创建出来的ScriptMod"作为Script的壳。
-	constexpr const char* kEmptyScriptId = "empty";
-
-	// Resource/Story/test.json：相对config.json所在目录(Resource/Config/)的固定相对路径，
-	// 这次不复活老工程Config::GetStories()那一整套多剧情路径管理，见Story.md。
-	string GetTestScriptPath() {
-		filesystem::path configDir = Config::GetConfigDir();
-		return (configDir / ".." / "Story" / "test.json").string();
-	}
-}
 
 Story::Story() :
 	scriptFactory(Registry::Get().GetScriptFactory()) {
 }
 
 Story::~Story() {
-	for (auto script : mainScripts) {
-		delete script;
-	}
-	mainScripts.clear();
+	delete mainScript;
+	mainScript = nullptr;
 	delete systemScript;
 	systemScript = nullptr;
 }
 
 void Story::Init() {
-	if (!scriptFactory.CheckRegistered(kEmptyScriptId)) {
-		debugf("Warning: script mod '%s' not registered, Story::Init skipped.\n", kEmptyScriptId);
+	// ScriptModName不再由Core硬编码，从config.json的"main_story"字段读——不替Story做
+	// "用哪个ScriptMod"这个决策，和Job/Organization这次的Script配置是同一个原则。
+	string scriptModName = Config::GetMainStoryScriptModName();
+	if (scriptModName.empty() || !scriptFactory.CheckRegistered(scriptModName)) {
+		debugf("Warning: main_story script mod not configured or not registered, Story::Init skipped.\n");
 		return;
 	}
 
-	systemScript = new Script(&scriptFactory, kEmptyScriptId);
+	systemScript = new Script(&scriptFactory, scriptModName);
 
-	Script* mainScript = new Script(&scriptFactory, kEmptyScriptId);
-	mainScript->ReadMilestones(GetTestScriptPath());
-	mainScripts.push_back(mainScript);
+	mainScript = new Script(&scriptFactory, scriptModName);
+	// test.script的具体存放位置由config.json的resource_path决定，这里只写bare文件名，
+	// 见Config::GetScriptPath()的说明。
+	mainScript->ReadMilestones(Config::GetScriptPath("test"));
 }
 
 void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, const ScriptContext&)>& onActions,
 	PostHandle* post) {
-	GameStartEvent event;
-	for (auto script : mainScripts) {
-		ScriptContext context;
-		context.self = script;
-		context.system = systemScript;
-		context.local = &event;
+	if (!mainScript) return;
 
-		auto scriptActions = script->MatchEvent(&event, context, post);
-		onActions(scriptActions, context);
-	}
+	GameStartEvent event;
+	ScriptContext context;
+	context.self = mainScript;
+	context.system = systemScript;
+	context.local = &event;
+
+	auto scriptActions = mainScript->MatchEvent(&event, context, post);
+	onActions(scriptActions, context);
 }
 
 void Story::ApplyChange(const Change* change, const ScriptContext& context) {
 	if (auto setValue = dynamic_cast<const SetValueChange*>(change)) {
 		if (context.self) {
-			context.self->SetValue(setValue->GetVariable(), setValue->GetValue().EvaluateValue(context));
+			context.self->SetValue(setValue->GetVariable(), EvaluateExpression(setValue->GetValue(), context));
 		}
 		return;
 	}
@@ -82,6 +68,6 @@ Script* Story::GetSystemScript() const {
 	return systemScript;
 }
 
-const vector<Script*>& Story::GetMainScripts() const {
-	return mainScripts;
+Script* Story::GetMainScript() const {
+	return mainScript;
 }

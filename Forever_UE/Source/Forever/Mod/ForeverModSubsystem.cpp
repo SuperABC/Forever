@@ -79,6 +79,14 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		Config::AddLayoutPath(TCHAR_TO_UTF8(*defaultLayoutDir));
 	}
 
+	if (!Config::HasResourcePaths()) {
+		// config.json没有配置resource_path(或者根本没有config.json)时,回退扫描默认的
+		// Resource/Story/目录——和上面layout_paths的回退同一个容错风格。
+		const FString defaultResourceDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("Resource/Story"));
+		UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: config.json 未提供任何resource_path,回退扫描默认目录 %s。"), *defaultResourceDir);
+		Config::AddResourcePath(TCHAR_TO_UTF8(*defaultResourceDir));
+	}
+
 	ModLoader modLoader;
 
 	{

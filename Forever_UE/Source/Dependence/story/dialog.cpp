@@ -3,7 +3,7 @@
 
 using namespace std;
 
-Option::Option(Expression condition, Expression option,
+Option::Option(std::string condition, std::string option,
 	vector<Dialog*> dialogs, vector<const Change*> changes) :
 	condition(move(condition)), option(move(option)), dialogs(move(dialogs)), changes(move(changes)) {
 
@@ -13,11 +13,11 @@ Option::~Option() {
 
 }
 
-const Expression& Option::GetCondition() const {
+const std::string& Option::GetCondition() const {
 	return condition;
 }
 
-const Expression& Option::GetOption() const {
+const std::string& Option::GetOption() const {
 	return option;
 }
 
@@ -29,7 +29,7 @@ vector<const Change*> Option::GetChanges() const {
 	return changes;
 }
 
-Section::Section(Expression speaker, Expression content, Expression label, Expression voice) :
+Section::Section(std::string speaker, std::string content, std::string label, std::string voice) :
 	branch(false),
 	speakerExpr(move(speaker)), contentExpr(move(content)), labelExpr(move(label)), voiceExpr(move(voice)),
 	speaking(),
@@ -56,10 +56,10 @@ bool Section::IsBranch() const {
 
 void Section::EvaluateText(const ScriptContext& context) {
 	speaking = {
-		ToString(speakerExpr.EvaluateValue(context)),
-		ToString(contentExpr.EvaluateValue(context)),
-		ToString(labelExpr.EvaluateValue(context)),
-		ToString(voiceExpr.EvaluateValue(context))
+		ToString(EvaluateExpression(speakerExpr, context)),
+		ToString(EvaluateExpression(contentExpr, context)),
+		ToString(EvaluateExpression(labelExpr, context)),
+		ToString(EvaluateExpression(voiceExpr, context))
 	};
 }
 
@@ -88,7 +88,7 @@ Dialog::~Dialog() {
 
 }
 
-void Dialog::AddDialog(Expression speaker, Expression content, Expression label, Expression voice) {
+void Dialog::AddDialog(std::string speaker, std::string content, std::string label, std::string voice) {
 	list.emplace_back(move(speaker), move(content), move(label), move(voice));
 }
 
@@ -100,10 +100,10 @@ vector<Section> Dialog::GetDialogs() const {
 	return list;
 }
 
-void Dialog::SetCondition(Expression condition) {
+void Dialog::SetCondition(std::string condition) {
 	this->condition = move(condition);
 }
 
-const Expression& Dialog::GetCondition() const {
+const std::string& Dialog::GetCondition() const {
 	return condition;
 }
