@@ -96,8 +96,6 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 		// 正被玩家占有(这个项目没有AIController，非空Controller只可能是玩家占有)：
 		// Job调度这次先整个不生效，被占有的市民不会自己上下班——不管是走路动画还是瞬移
 		// 都不做，等玩家取消占有之后下一次调度再正常处理。
-		UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] RequestWalk citizen=%s SKIPPED(possessed)"),
-			UTF8_TO_TCHAR(citizen->GetName().c_str()));
 		return;
 	}
 
@@ -113,10 +111,6 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] RequestWalk citizen=%s hasElement=%s fromNode=%d toNode=%d pathPoints=%d"),
-		UTF8_TO_TCHAR(citizen->GetName().c_str()), (existing && *existing) ? TEXT("true") : TEXT("false"),
-		fromNode ? fromNode->GetId() : -1, toNode ? toNode->GetId() : -1, waypoints.Num());
-
 	if (waypoints.Num() > 0 && existing && *existing) {
 		(*existing)->WalkTo(waypoints, destination);
 		return;
@@ -125,8 +119,10 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 	if (existing && *existing) {
 		// 有已生成的Actor，但寻路失败(起点/终点没有导航节点，或图不连通)：不能只改
 		// Core状态、放着这个可见的Actor不动——那样Citizen逻辑上已经"到家"了，但玩家
-		// 眼前的人会一直冻结在原地(PIE验证复现过："市民到点该走了，眼前这个人却一直
-		// 没动过")。直接把Actor也瞬移过去。
+		// 眼前的人会一直冻结在原地。直接把Actor也瞬移过去。(用户曾报告过citizen冻结
+		// 不动的现象，排查后确认那次的真正原因是CharacterMovementComponent缺
+		// bRunPhysicsWithNoController、和这里的寻路失败无关，见CitizenElement.md
+		// "已修复的bug"一节——这个分支仍然保留，处理寻路真的失败这一更罕见的情况。)
 		(*existing)->TeleportToRoom(destination);
 		return;
 	}

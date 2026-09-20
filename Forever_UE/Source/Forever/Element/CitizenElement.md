@@ -160,6 +160,20 @@ citizen静止不动，只有真正在走路的这段时间才需要每帧开销�
 `CharacterMovementComponent`的模式，两者目前没有互相冲突检测（玩家在市民走路途中按T
 占有它这种边界场景没有特殊处理）。
 
+**已修复的bug：光切`MOVE_Walking`+每帧`AddMovementInput`不够，还必须显式打开
+`bRunPhysicsWithNoController`**——`UCharacterMovementComponent::TickComponent`默认
+只有`Pawn::Controller`非空时才会调用`PerformMovement()`(真正把`AddMovementInput`
+积累的输入转成`Velocity`的那一步)；这个项目没有`AIController`，`WalkTo`带着走路的
+citizen按定义不会同时被玩家占有(`RequestWalk`发现被占有会整个跳过调度，见
+`ForeverPopulaceFrameworkComponent.md`)，`Controller`因此永远是`nullptr`——
+`PerformMovement()`默认整个不会跑，`AddMovementInput`因此是纯空操作，`MovementMode`
+显示`MOVE_Walking`、`Tick`每帧都在调用，但`GetVelocity()`/`GetActorLocation()`纹丝
+不动，市民会永久冻结在走路起点（PIE验证复现：连续记录几十帧`vel=(0,0,0)`，用户报告的
+"郝智世"/"王柏贤"到点该走却一直没动"就是这个原因，不是寻路失败——寻路本身一直是成功
+的，`pathPoints`当时就有108个）。修复：构造函数里显式设
+`GetCharacterMovement()->bRunPhysicsWithNoController = true;`，让`PerformMovement()`
+在没有Controller时也照常执行。
+
 ### `TeleportToRoom`/`ComputeRoomLandingSpot`（进入society域新增）：寻路失败时，可见的Actor也必须跟着挪，不能只改Core状态
 
 `RequestWalk`寻路失败（起点/终点没有导航节点，或图不连通）但这个citizen当前**有已生成的

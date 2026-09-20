@@ -158,9 +158,6 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 						Room* dest = destinationText == "home"
 							? citizen->GetRoom()
 							: (citizen->GetJob() ? citizen->GetJob()->GetPosition() : nullptr);
-						UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] dispatch citizen=%s dest=%s destRoomNull=%s populaceFrameworkNull=%s"),
-							UTF8_TO_TCHAR(citizen->GetName().c_str()), UTF8_TO_TCHAR(destinationText.c_str()),
-							dest ? TEXT("false") : TEXT("true"), populaceFramework ? TEXT("false") : TEXT("true"));
 						if (dest && populaceFramework) {
 							populaceFramework->RequestWalk(citizen, dest);
 						}

@@ -118,9 +118,6 @@ void ACitizenElement::WalkTo(const TArray<FVector>& waypoints, Room* destination
 	walkDestination = destination;
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	SetActorTickEnabled(true);
-	UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] WalkTo started citizen=%s points=%d startLoc=%s firstWaypoint=%s"),
-		citizen ? UTF8_TO_TCHAR(citizen->GetName().c_str()) : TEXT("?"), waypoints.Num(),
-		*GetActorLocation().ToString(), *waypoints[0].ToString());
 }
 
 void ACitizenElement::Tick(float DeltaTime) {
@@ -136,23 +133,14 @@ void ACitizenElement::Tick(float DeltaTime) {
 	FVector toTarget = target - location;
 	toTarget.Z = 0.f;
 
-	UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] WalkTo tick citizen=%s index=%d loc=%s dist=%f mode=%d vel=%s"),
-		citizen ? UTF8_TO_TCHAR(citizen->GetName().c_str()) : TEXT("?"), waypointIndex, *location.ToString(),
-		toTarget.Size(), (int32)GetCharacterMovement()->MovementMode, *GetVelocity().ToString());
-
 	if (toTarget.SizeSquared() <= kWaypointArrivalThresholdUU * kWaypointArrivalThresholdUU) {
 		waypointIndex++;
-		UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] WalkTo waypoint reached citizen=%s index=%d/%d loc=%s"),
-			citizen ? UTF8_TO_TCHAR(citizen->GetName().c_str()) : TEXT("?"), waypointIndex, pendingWaypoints.Num(),
-			*GetActorLocation().ToString());
 		if (waypointIndex >= pendingWaypoints.Num()) {
 			GetCharacterMovement()->SetMovementMode(MOVE_None);
 			SetActorTickEnabled(false);
 			Room* arrived = walkDestination;
 			walkDestination = nullptr;
 			pendingWaypoints.Reset();
-			UE_LOG(LogTemp, Log, TEXT("[DEBUG-FREEZE] WalkTo arrived citizen=%s finalLoc=%s"),
-				citizen ? UTF8_TO_TCHAR(citizen->GetName().c_str()) : TEXT("?"), *GetActorLocation().ToString());
 			if (framework.IsValid() && citizen) {
 				framework->NotifyArrived(citizen, arrived);
 			}

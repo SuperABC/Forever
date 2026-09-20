@@ -343,14 +343,43 @@ basement，取`building->GetFloor(-1)->GetHatches()`（离地表最近的那层b
 
 `Map::ConnectPathRoad(const PathRoadLink& link)`把`Lot::SplitWithPath`产出的一条小路正式接入
 `vehicleNavGraph`/`pedestrianNavGraph`，由`InitZones()`/`InitBuildings()`对每条新产生的
-`PathRoadLink`调用一次——调用点在`request.lot->RequestPlacement(...)`/`lot->FillRemainder(...)`
+`PathRoadLink`各自记一次——调用点在`request.lot->RequestPlacement(...)`/`lot->FillRemainder(...)`
 调用前后各记一次`lot->GetPathRoadLinks().size()`，处理`[之前的size, 现在的size)`这一段新增的
 link，不改`RequestPlacement`/`FillRemainder`的函数签名（小路数据只存在`Lot`自己身上这条原则
 不变）。**不管`RequestPlacement`最终返回`success`还是`false`都要处理新增的link**——`SplitWithPath`
 产生的小路即使整体placement请求失败，也已经是真实持久化的几何（被某个freeLot的边界引用着）。
-处理顺序天然=创建顺序（同一顶层`Lot`内部cascading cut时，后一刀如果连到前一刀新建的小路，前一刀
-的link一定排在`pathRoadLinks`里更靠前的位置，先于后一刀被处理），这一点很重要——"小路接小路"
-这条规则要求被连的小路必须已经建好自己的贯通线。
+
+**这次不再立即调用`ConnectPathRoad`，改成先记进`pendingPathRoadLinks`，`InitZones()`+
+`InitBuildings()`全部跑完之后统一调用`FlushPendingPathRoadLinks()`按物理顺序处理**（第N+1轮
+迁移，用户报告bug后排查修复）——早期实现确实是发现一条link就立即调用`ConnectPathRoad`，
+理由写的是"处理顺序天然=创建顺序（同一顶层`Lot`内部cascading cut时，后一刀如果连到前一刀
+新建的小路，前一刀的link一定排在`pathRoadLinks`里更靠前的位置，先于后一刀被处理）"——这句话
+只对**同一个顶层`Lot`自己内部**的cascading cut成立，但完全没考虑**不同顶层`Lot`**各自的
+小路共享同一条host道路的情况：`InitZones()`/`InitBuildings()`三段落地循环遍历lot的顺序（按
+`GetLots()`原始顺序、按free acreage降序、按`zones`这个`unordered_map`遍历顺序）和这些lot的
+小路在共享host道路上的实际物理位置（弧长比例`t`）完全无关——如果物理上更靠后的lot先被遍历到、
+它的小路先调`ConnectPathRoad`断开，会把物理上更靠前的lot还没轮到的那段"剩余尾巴"抢先切掉，
+和`FlushPendingBuildingRoadAccess()`要解决的是完全同一类bug（`Map::BreakThroughLine`"每次都
+断当前剩余尾巴、`fromAnchor`跟着往通行方向前进"这个假设被打破），但这次是`ConnectPathRoad`
+自己没有同款的延后排序保护。**症状比building access那次更隐蔽**：导航图仍然全联通（Dijkstra
+总能找到一条路），不会报错也不会崩溃，只是路径会在断点附近出现"先跳到更远的断点、再折返回近的
+断点"这种局部绕路——用户实测复现：一个T字路口市民该往右拐，却先往左跑到下一个路口再掉头往右走，
+一度怀疑是路口本身少连了一条边，实际是这条更隐蔽的跨Lot断点顺序错位。
+
+修复：仿照`FlushPendingBuildingRoadAccess()`的思路，但`PathRoadLink`比`PendingRoadAccess`多一层
+复杂度——一条link同时占两个"触点"（`endRoad1`/`endT1`、`endRoad2`/`endT2`，可能落在两条不同的
+host道路上），不能像building access那样把每个触点当独立工作项直接按`(road,side,laneIndex)`
+分组排序完事，因为一条link的两端必须在同一次`ConnectPathRoad`调用里处理（要在这次调用里一起
+建好小路自己的4条贯通线）。`FlushPendingPathRoadLinks()`先用`ResolveNearSide()`（`ResolvePathEndAnchors`
+开头那段点积判近侧逻辑的纯查询版本，不产生任何副作用）预判每个触点会落在哪条host道路的哪一侧，
+按`(road,side)`分组、组内按该侧实际通行方向排序（side0沿Start→End即`t`升序，side1沿End→Start
+即`t`降序，和`FlushPendingBuildingRoadAccess`同一个规则），再用组内相邻两个触点的先后关系
+构造"link A必须先于link B处理"的依赖边，跑一次Kahn拓扑排序算出link之间的全局处理顺序，最后
+按这个顺序依次调用`ConnectPathRoad`。理论上只有很反常的路网几何才会在多条host道路之间形成
+排序环，出现环时剩余部分退化成按原始发现顺序处理（不阻塞整个流程，不会崩溃，只是环内那几条
+link之间仍可能有本节描述的局部绕路，是已知的兜底简化）。`FlushPendingPathRoadLinks()`调用点
+在`InitBuildings()`末尾、`FlushPendingBuildingRoadAccess()`之前（语义上更接近早期"小路在同一次
+循环体内先于building导航合并发生"的相对顺序，两者谁先谁后目前没有更强的正确性要求）。
 
 三条规则（用户逐条确认，含两轮澄清）：
 

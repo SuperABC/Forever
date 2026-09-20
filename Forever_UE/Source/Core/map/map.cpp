@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <queue>
 #include <sstream>
 #include <unordered_set>
@@ -362,6 +363,29 @@ namespace {
 			});
 		return sorted;
 	}
+
+	// ResolvePathEndAnchors()开头那段"小路自己方向 vs host的perp0做点积判断近侧"的纯查询版本
+	// (不产生任何副作用)——FlushPendingPathRoadLinks()排序前用它预判一条link的某一端最终会
+	// 落在host road哪一侧，不需要真的执行断开。和ResolveAccessLane同一个"拆出纯查询版本给排序
+	// 阶段预判"的做法。
+	int ResolveNearSide(Road* path, bool isStartEnd, Road* hostRoad, float hostT) {
+		Node baseNode = isStartEnd ? path->GetStart() : path->GetEnd();
+		Node otherNode = isStartEnd ? path->GetEnd() : path->GetStart();
+		float dirX = otherNode.GetX() - baseNode.GetX();
+		float dirY = otherNode.GetY() - baseNode.GetY();
+		float dirLen = sqrt(dirX * dirX + dirY * dirY);
+		if (dirLen < 1e-6f) dirLen = 1.f;
+		dirX /= dirLen; dirY /= dirLen;
+
+		float hdx, hdy, hdz;
+		hostRoad->GetTangent(hostT, hdx, hdy, hdz);
+		float hlen = sqrt(hdx * hdx + hdy * hdy);
+		if (hlen < 1e-6f) hlen = 1.f;
+		float hostPerp0X = hdy / hlen, hostPerp0Y = -hdx / hlen;
+
+		float dot = dirX * hostPerp0X + dirY * hostPerp0Y;
+		return (dot >= 0.f) ? 0 : 1;
+	}
 }
 
 void Map::InitZones() {
@@ -391,7 +415,7 @@ void Map::InitZones() {
 			// 前一刀的link一定排在更靠前的位置，先被处理)。
 			const auto& allLinks = lot->GetPathRoadLinks();
 			for (size_t i = linksBefore; i < allLinks.size(); i++) {
-				ConnectPathRoad(allLinks[i]);
+				pendingPathRoadLinks.push_back(allLinks[i]);
 			}
 			if (!success) continue;
 
@@ -466,7 +490,7 @@ void Map::InitBuildings() {
 				request.marginEnd, request.depth, pathSpec, &placedQuad, &boundaryRoads);
 			const auto& allLinks = lot->GetPathRoadLinks();
 			for (size_t i = linksBefore; i < allLinks.size(); i++) {
-				ConnectPathRoad(allLinks[i]);
+				pendingPathRoadLinks.push_back(allLinks[i]);
 			}
 			if (!success) continue;
 
@@ -536,7 +560,7 @@ void Map::InitBuildings() {
 		auto results = lot->FillRemainder(pathSpec, randomAcreage, acreageMinMax);
 		const auto& allLinks = lot->GetPathRoadLinks();
 		for (size_t i = linksBefore; i < allLinks.size(); i++) {
-			ConnectPathRoad(allLinks[i]);
+			pendingPathRoadLinks.push_back(allLinks[i]);
 		}
 
 		for (auto& result : results) {
@@ -561,6 +585,14 @@ void Map::InitBuildings() {
 
 		lot->ClearCandidates();
 	}
+
+	// 三段落地循环全部跑完、这次InitZones()+InitBuildings()涉及到的所有PathRoadLink都已经
+	// 收进pendingPathRoadLinks之后，才统一按物理顺序真正接入道路网——同样不能在循环内部
+	// 就地调用ConnectPathRoad，见FlushPendingPathRoadLinks()注释。必须先于
+	// FlushPendingBuildingRoadAccess()：后者依赖的BreakThroughLine一样会读/改
+	// throughLines当前的"剩余尾巴"状态，小路先把自己那部分接好，语义上更接近原本内联调用
+	// ConnectPathRoad时的相对顺序(小路在同一次循环体内先于building的导航合并发生)。
+	FlushPendingPathRoadLinks();
 
 	// 三段落地循环全部跑完、这次InitBuildings()涉及到的所有building的outside端点都已经
 	// 收进pendingBuildingRoadAccess之后，才统一按物理顺序真正断开道路网——不能在上面任何
@@ -764,6 +796,76 @@ void Map::FlushPendingBuildingRoadAccess() {
 			vehicleNavGraph[conn->GetStart().GetId()].emplace_back(conn->GetEnd().GetId(), conn);
 		}
 	}
+}
+
+void Map::FlushPendingPathRoadLinks() {
+	struct Touch {
+		Road* road;
+		int side;
+		float t;
+		size_t linkIndex;
+	};
+	vector<Touch> touches;
+	for (size_t i = 0; i < pendingPathRoadLinks.size(); i++) {
+		const PathRoadLink& link = pendingPathRoadLinks[i];
+		if (link.endRoad1) {
+			touches.push_back({ link.endRoad1, ResolveNearSide(link.road, true, link.endRoad1, link.endT1), link.endT1, i });
+		}
+		if (link.endRoad2) {
+			touches.push_back({ link.endRoad2, ResolveNearSide(link.road, false, link.endRoad2, link.endT2), link.endT2, i });
+		}
+	}
+
+	// 按(road,side)分组，组内按这条贯通线自己的通行方向排序：side0沿Start->End(t升序)，
+	// side1沿End->Start(t降序)——和FlushPendingBuildingRoadAccess同一个规则。
+	map<pair<Road*, int>, vector<Touch>> groups;
+	for (const Touch& touch : touches) groups[{touch.road, touch.side}].push_back(touch);
+	for (auto& [key, group] : groups) {
+		int side = key.second;
+		sort(group.begin(), group.end(), [side](const Touch& a, const Touch& b) {
+			return side == 0 ? a.t < b.t : a.t > b.t;
+			});
+	}
+
+	// 一条link同时占两个touch(可能落在两条不同的host road上)，两端必须在同一次
+	// ConnectPathRoad调用里处理，不能像building access那样把每个touch当独立工作项直接
+	// 排序——改用Kahn拓扑排序：每个分组内相邻两个touch形成一条"前者所属link必须先处理"的
+	// 依赖边，综合所有分组算出link之间的全局处理顺序。理论上只有很反常的路网几何才会在
+	// 多条host道路之间形成排序环，出现环时剩余部分退化成按原始发现顺序处理，不阻塞整个
+	// 流程(不会崩溃，只是环内那几条link之间仍可能有本文件描述的局部绕路，属已知兜底简化)。
+	size_t n = pendingPathRoadLinks.size();
+	vector<vector<size_t>> adj(n);
+	vector<int> indegree(n, 0);
+	for (auto& [key, group] : groups) {
+		for (size_t i = 1; i < group.size(); i++) {
+			size_t from = group[i - 1].linkIndex;
+			size_t to = group[i].linkIndex;
+			if (from == to) continue;
+			adj[from].push_back(to);
+			indegree[to]++;
+		}
+	}
+
+	vector<bool> done(n, false);
+	queue<size_t> ready;
+	for (size_t i = 0; i < n; i++) if (indegree[i] == 0) ready.push(i);
+	vector<size_t> order;
+	while (!ready.empty()) {
+		size_t cur = ready.front();
+		ready.pop();
+		if (done[cur]) continue;
+		done[cur] = true;
+		order.push_back(cur);
+		for (size_t next : adj[cur]) {
+			if (--indegree[next] == 0) ready.push(next);
+		}
+	}
+	for (size_t i = 0; i < n; i++) if (!done[i]) order.push_back(i); // 环兜底：按原始下标追加
+
+	for (size_t idx : order) {
+		ConnectPathRoad(pendingPathRoadLinks[idx]);
+	}
+	pendingPathRoadLinks.clear();
 }
 
 const unordered_map<string, Zone*>& Map::GetZones() const {

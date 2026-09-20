@@ -405,6 +405,31 @@ private:
 	// road两侧都没有对应类别车道时返回false。
 	static bool ResolveAccessLane(Road* road, bool isVehicle, bool useForwardSide, int& outSide, int& outLaneIndex);
 
+	// 待处理的Lot::SplitWithPath产出的小路"接入host道路"请求——和pendingBuildingRoadAccess
+	// 要解决的是同一类bug，触发源不同：InitZones()/InitBuildings()三段落地循环各自发现新的
+	// PathRoadLink时不立即调用ConnectPathRoad，而是先记下来，全部结束后统一调用
+	// FlushPendingPathRoadLinks()按每条被共享host道路上的实际物理顺序处理。不这样做的后果：
+	// 处理顺序=三段循环各自的Lot遍历顺序(按free acreage排序/Lot哈希顺序)，和小路在host道路
+	// 上的物理位置完全无关——如果物理上靠后的小路先断，会把物理上靠前的小路还没轮到的那段
+	// "剩余尾巴"抢先切掉，断点顺序和物理顺序错位；结果是行人这条贯通线仍然全联通(能找到路)，
+	// 但路径会在断点附近出现"先跳到更远的断点、再折返回近的断点"这种局部绕路——PIE验证复现：
+	// 一个T字路口该往右拐，市民却先往左跑到下一个路口再掉头往右走，和BreakThroughLine
+	// "每次都断当前剩余尾巴"这个假设被打破时的症状完全一致。
+	std::vector<PathRoadLink> pendingPathRoadLinks;
+
+	// 按pendingPathRoadLinks每条link两端(endRoad1/endRoad2)各自预判的(road,side)分组，组内
+	// 按t实际通行方向排序(和FlushPendingBuildingRoadAccess同一个side0升序/side1降序规则，
+	// side由ResolveNearSide()——即ResolvePathEndAnchors()里dot product判定近侧那段逻辑的
+	// 纯查询版本——预判，不需要真的执行断开)。**和building access不同的是一条link要占两个
+	// "touch"(可能落在两条不同的host road上)，不能像building access那样把每个touch当成
+	// 独立工作项直接排序——一条link的两端必须在同一次ConnectPathRoad调用里处理(要在其中
+	// 一起建小路自己的4条贯通线)**，因此这里改用Kahn拓扑排序：每个(road,side)分组内相邻两个
+	// touch形成一条"前者所属link必须先处理"的依赖边，综合所有分组的依赖边算出link之间的
+	// 全局处理顺序，再依次调用ConnectPathRoad。理论上只有很反常的路网几何才会在多条host道路
+	// 之间形成排序环，出现环时剩余部分退化成按原始发现顺序处理，不阻塞整个流程(不会崩溃，
+	// 只是环内这几条link之间可能仍然有本文件描述的这种局部绕路，属于已知的兜底简化)。
+	void FlushPendingPathRoadLinks();
+
 	// 把一个点投影到road的中心线上，返回对应弧长比例t(裁剪到[0,1])——没有中间控制点(直线，
 	// 井字路网里绝大多数路段)时直接解析算垂足，O(1)精确；有控制点(曲线，比如隧道引道的S形
 	// 下坡)才退化成数值采样+局部细化找最近点这套更贵但通用的算法。

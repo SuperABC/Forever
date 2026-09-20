@@ -71,7 +71,10 @@ public:
 	// UForeverPopulaceFrameworkComponent::RequestWalk发现这个citizen当前有对应Actor、
 	// 但寻路失败（起点/终点没有导航节点，或图不连通）时调用这个方法。不这么做的话，Core
 	// 侧的Citizen::SetCurrentRoom已经改成新房间了，但这个可见的Actor会一直冻结在原地不动
-	// （PIE验证复现过这个bug："市民到点该走了，但眼前这个人一直没动过"）。
+	// （用户报告过"市民到点该走了，但眼前这个人一直没动过"，但排查后确认那次的真正
+	// 原因是ACitizenElement构造函数缺一个`bRunPhysicsWithNoController`开关，不是这里
+	// 说的寻路失败——见CitizenElement.md"已修复的bug"一节。这个分支仍然保留，处理
+	// 寻路真的失败(起点/终点没有导航节点，或图不连通)这一确实存在但更罕见的情况）。
 	void TeleportToRoom(Room* destination);
 
 protected:

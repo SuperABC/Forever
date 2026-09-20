@@ -88,10 +88,13 @@ Dijkstra，见`Source/Core/map/map.md`），路径点（Core绝对地图坐标�
 - **路径为空，但这个citizen当前有已生成的`ACitizenElement`**（起点/终点没有导航节点，
   或图不连通——Actor已经在场景里，是玩家看得见的）：调
   `(*existing)->TeleportToRoom(destination)`——**不能**退化成只改`Citizen`的逻辑状态、
-  不管这个可见Actor。PIE验证复现过这个bug：市民到点该走了，`RequestWalk`寻路失败落到
-  只改`SetCurrentRoom`的分支，`Citizen`逻辑上已经"到家"了，但眼前这个人一直冻结在原地
+  不管这个可见Actor，那样`Citizen`逻辑上已经"到家"了，但眼前这个人会一直冻结在原地
   不动，因为压根没人碰过它的Actor。`TeleportToRoom`直接把Actor也瞬移到目标房间（复用
   `ACitizenElement::Init()`同一套落地位置计算），同时同步`SetCurrentRoom`+`SetPosition`。
+  （这个分支是防御性设计，处理"寻路真的失败"这个理论上会发生的情况——用户曾报告过
+  citizen到点该走却一直冻结不动，排查后确认那次的真正原因其实是
+  `CharacterMovementComponent`缺`bRunPhysicsWithNoController`开关、寻路本身一直是
+  成功的，见`CitizenElement.md`"已修复的bug"一节，和这里的寻路失败分支无关。）
 - **否则**（这个citizen当前没有生成的`ACitizenElement`，不在流式加载范围内）：直接
   `citizen->SetCurrentRoom(destination)`+`citizen->ClearPosition()`（不是
   `SetPosition`——这个citizen当前没有对应Actor，不需要算一个精确3D坐标，
