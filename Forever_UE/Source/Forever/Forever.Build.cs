@@ -30,6 +30,7 @@ public class Forever : ModuleRules
 		PublicIncludePaths.AddRange(new string[] {
 			Path.Combine(ModuleDirectory, "..", "Dependence"),
 			Path.Combine(ModuleDirectory, "..", "Core"),
+			Path.Combine(ModuleDirectory, "..", "Core", "common"),
 		});
 
 		// Uncomment if you are using Slate UI

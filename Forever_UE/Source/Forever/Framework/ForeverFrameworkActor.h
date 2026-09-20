@@ -45,13 +45,49 @@ public:
 	// 边界——Core.lib静态链接进本模块,不是REFACTOR_PLAN.md说的那种跨DLL new/delete场景)。
 	virtual ~AForeverFrameworkActor();
 
-	// 幂等:Map已存在则直接返回,否则新建Map、依次跑InitTerrains/InitRoadnet/InitZones/
-	// InitBuildings、交给对应Framework组件生成地形/路网/Zone/Building网格(顺序不能反,
-	// Roadnet要采样地形/水面,Zone/Building要用到Roadnet产出的Lot)。BeginPlay和
+	// 幂等(map已存在直接返回):只保证Map这一个域——新建Map、依次跑InitTerrains/InitRoadnet/
+	// InitZones/InitBuildings、交给Terrain/Roadnet/Zone/Building四个Framework组件生成对应
+	// 网格(顺序不能反,Roadnet要采样地形/水面,Zone/Building要用到Roadnet产出的Lot)。**不会
+	// 调用其它Ensure*Generated()**——BeginPlay()里已经按依赖顺序把全部7个显式列出来顺序
+	// 调用了,函数体内部重复调上游没有意义(见BeginPlay定义处的说明)。BeginPlay和
 	// ForeverGameMode::FindPlayerStart_Implementation都会调用它,保证不论两者实际调用顺序
 	// 如何,出生点计算时地形都已经生成好,详见ForeverFrameworkActor.md。
-	// 阶段4-1(Roadnet落地)从EnsureTerrainGenerated改名——现在编排的不只是地形。
+	// 阶段4-1(Roadnet落地)从EnsureTerrainGenerated改名——现在编排的不只是地形。原来这一个
+	// 函数还顺带创建了Populace/Society/Player/Industry/Traffic/Story共7个域的对象,现在
+	// 按域拆成7个独立的Ensure*Generated(),这个函数收窄回只保证Map,语义详见下面6个同名方法。
 	void EnsureMapGenerated();
+
+	// 幂等(populace已存在直接返回):只保证Populace这一个域——new Populace()、
+	// Populace::Init(map->ComputeAccommodationTarget())、map->Checkin(*populace)、交给
+	// populaceFramework缓存citizen列表。假定map已经生成好(EnsureMapGenerated()已经跑过,
+	// 要用到Map::ComputeAccommodationTarget()/Checkin()),调用方负责保证调用顺序,这个函数
+	// 自己不会调EnsureMapGenerated()。
+	void EnsurePopulaceGenerated();
+
+	// 幂等(society已存在直接返回):只保证Society这一个域。Society这次还是空骨架,new出来
+	// 纯粹是为了让PostImplement(Core/common/implement.h)能拿到7个域的真实指针,不是提前
+	// 实现"招聘"等业务逻辑——真正的业务留到PHASE4_PLAN.md阶段4-4再点名做,见society.md。
+	void EnsureSocietyGenerated();
+
+	// 幂等(player已存在直接返回):只保证Player这一个域——new Player()、Player::Init()创建
+	// 全局时钟、按populace->GetCurrentYear()把开局时间设成那一年1月1日8点(让Citizen的生日/
+	// 年龄和这个初始时钟保持自洽,见populace.md"生日换算"一节)。假定populace已经生成好
+	// (EnsurePopulaceGenerated()已经跑过,要用到Populace::GetCurrentYear()),调用方负责
+	// 保证调用顺序,这个函数自己不会调EnsurePopulaceGenerated()。
+	void EnsurePlayerGenerated();
+
+	// 幂等(industry已存在直接返回):只保证Industry这一个域。这次还是空骨架,new出来纯粹是
+	// 为了让PostImplement能拿到7个域的真实指针,不是提前实现业务逻辑。
+	void EnsureIndustryGenerated();
+
+	// 幂等(traffic已存在直接返回):只保证Traffic这一个域。这次还是空骨架,new出来纯粹是为了
+	// 让PostImplement能拿到7个域的真实指针,不是提前实现业务逻辑。
+	void EnsureTrafficGenerated();
+
+	// 幂等(story已存在直接返回):只保证Story这一个域——new Story()、Story::Init()读取
+	// Resource/Story/test.json,交给storyFramework后立刻广播一次GameStartEvent。和map/
+	// populace不互相依赖,见storyFramework.md。
+	void EnsureStoryGenerated();
 
 	Map* GetMap() const { return map; }
 	Populace* GetPopulace() const { return populace; }
@@ -86,8 +122,8 @@ protected:
 	// 顶层对象、由它做两者之间编排是同一个分工，详见Source/Core/populace/populace.md。
 	Populace* populace = nullptr;
 
-	// 阶段4 Story落地：和map/populace平级持有，生命周期管理方式完全一致(EnsureMapGenerated
-	// 尾部创建、EndPlay/析构函数里delete)，详见Source/Core/story/story.md。
+	// 阶段4 Story落地：和map/populace平级持有，生命周期管理方式完全一致(EnsureStoryGenerated
+	// 里创建、EndPlay/析构函数里delete)，详见Source/Core/story/story.md。
 	Story* story = nullptr;
 
 	// Society/Industry/Traffic/Player这四个域这次还没有真正migrate，只是空骨架——新增它们

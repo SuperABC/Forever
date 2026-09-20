@@ -1,14 +1,15 @@
 #include "config.h"
 
-#include "loader.h"
 #include "json.h"
+
+#include "loader.h"
 
 #include <fstream>
 #include <iostream>
 #include <unordered_set>
 #include <cctype>
-
 #include <windows.h>
+
 
 using namespace std;
 
@@ -71,7 +72,7 @@ void Config::ReadConfig(const string& path) {
 	}
 
 	// 任何以"_mods"结尾的顶层key都当作一个concept的mod列表解析(如"building_mods"),不
-	// 硬编码21个concept的名字——config.json本身决定内容,和旧工程的写法(每个concept一个
+	// 硬编码20个concept的名字——config.json本身决定内容,和旧工程的写法(每个concept一个
 	// "<concept>_mods"数组)保持一致。每个数组元素是形如"id"或"id 参数..."的字符串,按第一个
 	// 空格切成(id, 参数字符串)。
 	const string suffix = "_mods";

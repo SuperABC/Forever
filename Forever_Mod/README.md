@@ -8,9 +8,9 @@
   (id `yizhong`),均继承`BuildingMod`。
 - `Test/Cpp/Yuanshen/`——`YuanshenBuilding`(id `yuanshen`),继承`BuildingMod`。
 - `Wxdj/Cpp/Wxdj/`——`WxdjScript`(id `wxdj`),继承`ScriptMod`。
-- `Empty/Cpp/Empty/`——21个concept各一个`Empty<Concept>`(id统一为`empty`),纯粹用来验证
-  `config.json`按mod id配置的命令行式参数能一路传到mod:重写`ApplyArgs`把收到的参数字符串
-  拼进`GetName()`,详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。
+- `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id统一为`empty`),纯粹用来验证
+  `config.json`按mod id配置的命令行式参数能一路传到mod:构造函数直接接收参数字符串,拼进
+  `GetName()`,详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。
 
 ## 目录结构约定
 
@@ -38,28 +38,34 @@
 ## 每个mod DLL必须导出的三个函数
 
 以`Building`概念为例(其余概念符号名把`Buildings`换成对应复数,参见
-`Forever_UE/Source/Core/common/loader.md`的21符号表):
+`Forever_UE/Source/Core/common/loader.md`的20符号表):
 
 ```cpp
 extern "C" __declspec(dllexport) void* GetModBuildings();                    // 返回该dll提供的static id列表
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory*); // 把自己注册进传入的Factory
-extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory*);   // 注册收尾(目前只调用CleanTemp)
+extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory*);   // 注册收尾(目前空实现,留作Hook)
 ```
 
 `RegisterModBuildings`里注册的creator/deleter必须成对来自同一个mod DLL(如
-`[]() -> BuildingMod* { return new PengzhanBuilding(); }`配
+`[](const std::string&) -> BuildingMod* { return new PengzhanBuilding(); }`配
 `[](BuildingMod* b) { delete b; }`)——宿主的`Factory::Destroy<Concept>`会通过这对函数指针
 释放对象,保证分配和释放发生在同一模块,不能宿主直接`delete`一个mod `new`出来的对象。
 
-**mod不需要自己接收参数**——`config.json`里`"building_mods"`数组按id配置的命令行式参数
-(如`"pengzhan --density 1.0"`)由`BuildingFactory`在创建实例时自动调用
-`instance->ApplyArgs(...)`,`RegisterModBuildings`导出函数签名不需要、也不会带参数;
-mod只需要在自己的`<Concept>Mod`子类里重写`virtual void ApplyArgs(const std::string&)`即可
-接收,不重写就是默认空实现(忽略参数),详见`Forever_UE/Source/Dependence/README.md`。
+**参数直接交给creator,不经过任何"创建后"钩子**——`config.json`里`"building_mods"`数组
+按id配置的命令行式参数(如`"pengzhan --density 1.0"`)由`BuildingFactory::CreateBuilding(id)`
+在创建实例那一刻,作为参数直接传给注册的creator函数;`RegisterModBuildings`导出函数签名
+不需要、也不会带参数——参数只在creator被调用时才出现。mod的creator决定怎么用这个参数
+(最常见的做法是转发给具体子类的构造函数,如`[](const std::string& args) -> BuildingMod* {
+return new PengzhanBuilding(args); }`),不用就直接忽略这个参数,详见
+`Forever_UE/Source/Dependence/README.md`。**这条机制之前有一版是创建完实例之后再调用一次
+`instance->ApplyArgs(args)`**——被指出"创建完之后再传参数"没有意义(构造函数用不上,
+`const`成员也没法在构造之后再赋值),已经改成现在这版,不要照着抄。
 
 **creator lambda必须显式标注`-> BuildingMod*`返回类型**(不能让编译器推导成
 `PengzhanBuilding*`)——`<Concept>Factory::CreateFunc`是裸函数指针类型
-(`BuildingMod*(*)()`,不是`std::function`,原因见`Forever_UE/Source/Core/README.md`
-"实现期修正"),裸函数指针要求签名**完全一致**,没有协变:一个返回`PengzhanBuilding*`的
-无捕获lambda只能转换成`PengzhanBuilding*(*)()`,不能直接转换成`BuildingMod*(*)()`,必须在
-lambda里显式写`-> BuildingMod*`让返回值在lambda内部完成到基类指针的隐式转换。
+(`BuildingMod*(*)(const std::string&)`,不是`std::function`,原因见
+`Forever_UE/Source/Core/README.md`"实现期修正"),裸函数指针要求签名**完全一致**,没有
+协变:一个返回`PengzhanBuilding*`的无捕获lambda只能转换成
+`PengzhanBuilding*(*)(const std::string&)`,不能直接转换成
+`BuildingMod*(*)(const std::string&)`,必须在lambda里显式写`-> BuildingMod*`让返回值在
+lambda内部完成到基类指针的隐式转换。

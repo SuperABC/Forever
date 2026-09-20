@@ -1,15 +1,10 @@
 #pragma once
 
+#include "class.h"
+
 #include "common/handle.h"
 #include "common/json.h"
 
-class Map;
-class Populace;
-class Society;
-class Story;
-class Industry;
-class Traffic;
-class Player;
 
 // PostHandle第一个具体实现，复刻老工程Core/common/implement.h"顶层门面"的形状——聚合全部
 // 7个domain，供Mod（这次是ScriptMod::WrapScript）通过Post()反向查询Core状态。不复刻老工程

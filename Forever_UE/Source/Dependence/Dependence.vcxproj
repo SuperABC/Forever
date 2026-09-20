@@ -103,7 +103,6 @@
     <ClCompile Include="populace\name_factory.cpp" />
     <ClCompile Include="populace\scheduler_factory.cpp" />
     <ClCompile Include="society\job_factory.cpp" />
-    <ClCompile Include="society\calendar_factory.cpp" />
     <ClCompile Include="society\organization_factory.cpp" />
     <ClCompile Include="story\script_factory.cpp" />
     <ClCompile Include="industry\product_factory.cpp" />
@@ -112,6 +111,24 @@
     <ClCompile Include="traffic\route_factory.cpp" />
     <ClCompile Include="traffic\station_factory.cpp" />
     <ClCompile Include="traffic\vehicle_factory.cpp" />
+    <ClCompile Include="map\terrain_mod.cpp" />
+    <ClCompile Include="map\zone_mod.cpp" />
+    <ClCompile Include="map\component_mod.cpp" />
+    <ClCompile Include="map\room_mod.cpp" />
+    <ClCompile Include="player\asset_mod.cpp" />
+    <ClCompile Include="player\app_mod.cpp" />
+    <ClCompile Include="player\puzzle_mod.cpp" />
+    <ClCompile Include="populace\name_mod.cpp" />
+    <ClCompile Include="populace\scheduler_mod.cpp" />
+    <ClCompile Include="society\job_mod.cpp" />
+    <ClCompile Include="society\organization_mod.cpp" />
+    <ClCompile Include="story\script_mod.cpp" />
+    <ClCompile Include="industry\product_mod.cpp" />
+    <ClCompile Include="industry\storage_mod.cpp" />
+    <ClCompile Include="industry\manufacture_mod.cpp" />
+    <ClCompile Include="traffic\route_mod.cpp" />
+    <ClCompile Include="traffic\station_mod.cpp" />
+    <ClCompile Include="traffic\vehicle_mod.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\error.h" />
@@ -135,7 +152,6 @@
     <ClInclude Include="populace\name_mod.h" />
     <ClInclude Include="populace\scheduler_mod.h" />
     <ClInclude Include="society\job_mod.h" />
-    <ClInclude Include="society\calendar_mod.h" />
     <ClInclude Include="society\organization_mod.h" />
     <ClInclude Include="story\script_mod.h" />
     <ClInclude Include="industry\product_mod.h" />
@@ -156,7 +172,6 @@
     <ClInclude Include="populace\name_factory.h" />
     <ClInclude Include="populace\scheduler_factory.h" />
     <ClInclude Include="society\job_factory.h" />
-    <ClInclude Include="society\calendar_factory.h" />
     <ClInclude Include="society\organization_factory.h" />
     <ClInclude Include="story\script_factory.h" />
     <ClInclude Include="industry\product_factory.h" />

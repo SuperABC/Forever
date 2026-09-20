@@ -13,10 +13,12 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   某个具体系统的Factory"(常驻句柄,按需调用注册/收尾)。这是两件不同频率的事:探测在
   `ReadConfig`时做一次,注册要按每个系统(Building/Script/……)各自的Factory分别做——阶段4
   加入新系统时只需要多调一次`RegisterConcept`,不用碰`Config`。
-- **`GetModConceptDescriptors()`是21个concept的DLL导出符号名唯一权威列表**——`conceptKey`
-  只是内部使用的可读标签(`"Buildings"`/`"Scripts"`等),真正决定探测/注册行为的是
+- **`GetModConceptDescriptors()`是20个concept的DLL导出符号名唯一权威列表**（原来是21个，
+  society域的Calendar这个concept已经不再需要，整体删掉了）——`conceptKey`只是内部使用的
+  可读标签(`"Buildings"`/`"Scripts"`等),真正决定探测/注册行为的是
   `getModSymbol`/`registerModSymbol`/`finishModSymbol`三个字符串,和旧工程
-  `Config::AddDllPath`里探测的21个固定`GetMod<Concept>`符号名一一对应。`Config::AddDllPath`
+  `Config::AddDllPath`里探测的`GetMod<Concept>`符号名对应(旧工程仍然是21个，包含
+  `Calendar`，这个项目现在少一个)。`Config::AddDllPath`
   复用这份列表的`getModSymbol`做探测,避免两处维护同一份符号表。
 - **头文件不`#include <windows.h>`**——`HMODULE`/`FARPROC`只在`loader.cpp`里出现,句柄
   对外一律是`void*`。这是因为`loader.h`会被`Source/Forever/Mod/ForeverModSubsystem.cpp`
@@ -31,7 +33,8 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   参数的格式对不上——`ModLoader`按dll路径工作,根本不知道一次`RegisterMod<Concept>`调用会
   注册哪些id,没法把"哪个id对应哪份参数"这件事做对。现在改成:参数完全在`Config`
   (`GetConceptMods`解析`<concept>_mods`)和`<Concept>Factory`
-  (`SetModArgs`/`ApplyArgs`,见`Source/Dependence/README.md`)之间流转,`RegisterMod<Concept>`
+  (`SetModArgs`把参数表交给Factory,`Create<Concept>(id)`创建实例时直接传给creator函数,
+  见`Source/Dependence/README.md`)之间流转,`RegisterMod<Concept>`
   导出函数签名维持`(factory)`单参数不变,`ModLoader`对参数机制完全无感知。
 - **跨DLL new/delete安全体现在这里**:`RegisterModBuildings`等导出函数把
   `[]() { return new PengzhanBuilding(); }`和`[](BuildingMod* b) { delete b; }`成对注册进
@@ -48,8 +51,10 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
 
 - 依赖:无引擎依赖,纯C++(`<windows.h>`只在`.cpp`里)。
 - 被谁依赖:`Source/Core/common/config.cpp`(用`GetModConceptDescriptors()`做探测)、
-  `Source/Forever/Mod/ForeverModSubsystem.cpp`(构造`ModLoader`实例并调用
-  `RegisterConcept<BuildingFactory>`/`RegisterConcept<ScriptFactory>`)。
+  `Source/Core/common/registry.cpp`(持有全部20个concept唯一的`ModLoader`实例，构造函数里
+  对每个concept各调一次`RegisterConcept`，见`registry.md`)、
+  `Source/Forever/Mod/ForeverModSubsystem.cpp`(阶段3验证用途,构造独立的临时`ModLoader`
+  实例,和`Registry`那份互不相关)。
 
 ## 待办/后续阶段
 

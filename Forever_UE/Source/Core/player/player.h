@@ -1,5 +1,8 @@
 #pragma once
 
+#include "class.h"
+
+
 // 注意：这是老工程的"物件/道具/手机"domain（Asset/App/Puzzle三个Mod扩展点），不是UE的
 // AForeverPlayerController，两者是完全不同的东西，见PHASE4_PLAN.md"关于player domain改名
 // 的说明"一节。
@@ -7,8 +10,6 @@
 // 这次只迁移了老工程Player里的"全局时钟"这一小块（Time*+Init/Tick/GetTime/SetTime/
 // CrossDay），手机(Phone)、资产(Asset)、存款等其余字段/方法还没有迁移，留到
 // PHASE4_PLAN.md阶段4-7再点名做，见player.md。
-
-class Time;
 
 class Player {
 public:

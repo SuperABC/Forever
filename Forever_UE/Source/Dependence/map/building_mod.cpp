@@ -1,5 +1,6 @@
 #include "building_mod.h"
 
+
 using namespace std;
 
 void BuildingMod::AssignFloor(int level, const string& templateName, int face, FloorAssetSpec assets) {

@@ -1,12 +1,10 @@
 #include "vehicle_factory.h"
 
+
 using namespace std;
 
 void VehicleFactory::RegisterVehicle(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void VehicleFactory::CleanTemp() {
 }
 
 VehicleMod* VehicleFactory::CreateVehicle(const string& id) {
@@ -14,12 +12,10 @@ VehicleMod* VehicleFactory::CreateVehicle(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	VehicleMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	VehicleMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

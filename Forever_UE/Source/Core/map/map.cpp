@@ -1,10 +1,12 @@
 #include "map.h"
 
+#include "common/utility.h"
+
+#include "common/config.h"
+#include "common/registry.h"
 #include "map/room.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
-#include "common/config.h"
-#include "common/utility.h"
 
 #include <algorithm>
 #include <cmath>
@@ -13,17 +15,10 @@
 #include <sstream>
 #include <unordered_set>
 
+
 using namespace std;
 
 namespace {
-	unordered_map<string, string> ToArgsMap(const vector<pair<string, string>>& entries) {
-		unordered_map<string, string> map;
-		for (const auto& [id, args] : entries) {
-			map[id] = args;
-		}
-		return map;
-	}
-
 	// 从道路中轴线到lanes[index]车道中心的偏移距离(lanes按从内到外排列，index0=最内侧)，
 	// 和roadnet.cpp里的同名私有helper逻辑一致(两处都是很小的独立算法，没有共享的必要)。
 	float LaneCenterOffset(const vector<float>& lanes, int index) {
@@ -64,7 +59,12 @@ Map::Map(int width, int height) :
 	width(width),
 	height(height),
 	elements(static_cast<size_t>(width)* height),
-	terrainFactory(),
+	terrainFactory(Registry::Get().GetTerrainFactory()),
+	roadnetFactory(Registry::Get().GetRoadnetFactory()),
+	zoneFactory(Registry::Get().GetZoneFactory()),
+	buildingFactory(Registry::Get().GetBuildingFactory()),
+	roomFactory(Registry::Get().GetRoomFactory()),
+	componentFactory(Registry::Get().GetComponentFactory()),
 	terrainTextures() {
 	terrainTextures = {
 		{ "plain", { 0, "/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse" } },
@@ -91,13 +91,6 @@ Map::~Map() {
 }
 
 void Map::InitTerrains() {
-	vector<string> mods = Config::GetMods();
-	terrainFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("terrain_mods")));
-
-	// modLoader是Map的成员(不是局部变量)——它持有的dll句柄必须活到Map析构为止,
-	// terrainFactory.CreateTerrain以后随时可能被调用,详见map.h的注释。
-	modLoader.RegisterConcept<TerrainFactory>(mods, "RegisterModTerrains", "FinishModTerrains", &terrainFactory);
-
 	pair<bool, float> water{ false, 0.f };
 	auto getTerrain = [this](int x, int y) -> string {
 		return this->GetTerrain(x, y);
@@ -159,10 +152,6 @@ void Map::InitTerrains() {
 }
 
 void Map::InitRoadnet() {
-	vector<string> mods = Config::GetMods();
-	roadnetFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("roadnet_mods")));
-	modLoader.RegisterConcept<RoadnetFactory>(mods, "RegisterModRoadnets", "FinishModRoadnets", &roadnetFactory);
-
 	for (auto& [id, args] : Config::GetConceptMods("roadnet_mods")) {
 		roadnetFactory.SetConfig(id, true);
 	}
@@ -375,10 +364,6 @@ namespace {
 }
 
 void Map::InitZones() {
-	vector<string> mods = Config::GetMods();
-	zoneFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("zone_mods")));
-	modLoader.RegisterConcept<ZoneFactory>(mods, "RegisterModZones", "FinishModZones", &zoneFactory);
-
 	// 一个本体独占一个mod实例：Distribute()/explicitPlacements改成static Assign()，一次调用
 	// 扫完全地图的lot拿到这个类型想要的所有显式占位请求(不存在任何实例)，逐条尝试
 	// RequestPlacement，只有真的成功了才CreateZone一次——不会再出现"构造了一个mod实例结果这块
@@ -459,14 +444,6 @@ void Map::InitZones() {
 }
 
 void Map::InitBuildings() {
-	vector<string> mods = Config::GetMods();
-	buildingFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("building_mods")));
-	modLoader.RegisterConcept<BuildingFactory>(mods, "RegisterModBuildings", "FinishModBuildings", &buildingFactory);
-	roomFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("room_mods")));
-	modLoader.RegisterConcept<RoomFactory>(mods, "RegisterModRooms", "FinishModRooms", &roomFactory);
-	componentFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("component_mods")));
-	modLoader.RegisterConcept<ComponentFactory>(mods, "RegisterModComponents", "FinishModComponents", &componentFactory);
-
 	buildingLayoutLibrary.ReadTemplates(Config::GetLayouts());
 
 	PathLaneSpec pathSpec;
@@ -503,8 +480,8 @@ void Map::InitBuildings() {
 			}
 			BuildingNavResult navResult;
 			building->Layout(request.direction, buildingLayoutLibrary, roomFactory, componentFactory, navResult);
-				// 显式占位有真实direction；内部自己调mod->Layout(...)+解析footprint/楼层/
-				// lodMaterial+实例化楼层/房间/组合+构建行人内部导航图
+			// 显式占位有真实direction；内部自己调mod->Layout(...)+解析footprint/楼层/
+			// lodMaterial+实例化楼层/房间/组合+构建行人内部导航图
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			if (!AddBuilding(building)) delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
@@ -531,13 +508,14 @@ void Map::InitBuildings() {
 			Building* building = PlaceZoneInternalBuilding(zone, spec, zoneInternalRoads, mod);
 			BuildingNavResult navResult;
 			building->Layout(spec.direction, buildingLayoutLibrary, roomFactory, componentFactory, navResult);
-				// 用spec自己声明的朝向；PlaceZoneInternalBuilding内部已经SetPosition/
-				// SetBoundaryRoad完
+			// 用spec自己声明的朝向；PlaceZoneInternalBuilding内部已经SetPosition/
+			// SetBoundaryRoad完
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			if (AddBuilding(building)) {
 				zone->AddInternalBuilding(building);
-			} else {
+			}
+			else {
 				delete building; // ~Building()里factory->DestroyBuilding(mod)会跟着跑
 			}
 		}
@@ -573,8 +551,8 @@ void Map::InitBuildings() {
 			}
 			BuildingNavResult navResult;
 			building->Layout(-1, buildingLayoutLibrary, roomFactory, componentFactory, navResult);
-				// 权重CDF/FillRemainder落地，没有direction概念，传-1(mod自己可能兜底选一个
-				// 真实方向，见building_mod.h)
+			// 权重CDF/FillRemainder落地，没有direction概念，传-1(mod自己可能兜底选一个
+			// 真实方向，见building_mod.h)
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			if (!AddBuilding(building)) delete building;

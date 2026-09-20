@@ -1,9 +1,11 @@
 #include "common/implement.h"
 
+#include "common/utility.h"
+
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "player/player.h"
-#include "common/utility.h"
+
 
 using namespace std;
 

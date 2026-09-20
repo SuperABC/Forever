@@ -3,7 +3,6 @@
 #include "story/event.h"
 #include "story/dialog.h"
 #include "story/change.h"
-
 #include "common/error.h"
 #include "common/json.h"
 
@@ -40,6 +39,10 @@ string Script::GetType() const {
 
 string Script::GetName() const {
 	return name;
+}
+
+ScriptMod* Script::GetMod() const {
+	return mod;
 }
 
 pair<bool, ValueType> Script::GetValue(const string& name) const {

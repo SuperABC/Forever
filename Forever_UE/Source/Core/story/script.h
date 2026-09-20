@@ -1,15 +1,16 @@
 #pragma once
 
+#include "class.h"
+
 #include "story/script_mod.h"
 #include "story/script_factory.h"
-#include "story/milestone.h"
-
 #include "common/utility.h"
+
+#include "story/milestone.h"
 
 #include <string>
 #include <unordered_map>
 
-class JsonValue;
 
 // 剧情脚本：Script->Milestone->Event/Dialog/Change架构的顶层持有者，自己就是一份Container
 // 变量池（self.前缀路由的目标）。可以在任意地方单独new出来（不假设自己是全局唯一实例）——
@@ -43,6 +44,11 @@ public:
 	* 获取名称
 	*/
 	std::string GetName() const;
+
+	/*
+	* 持有的mod实例——以后需要读mod内部数据的调用方直接用，不需要另外拷贝。
+	*/
+	ScriptMod* GetMod() const;
 
 	/*
 	* 获取变量值，返回 {是否存在, 值}（Container接口，self.前缀路由的实现）

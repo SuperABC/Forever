@@ -45,11 +45,11 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(ProjectDir)..\..\x64\Debug\</OutDir>
-    <IncludePath>$(ProjectDir);$(ProjectDir)..\Dependence;$(ProjectDir)..\Dependence\common;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(ProjectDir)common;$(ProjectDir)..\Dependence;$(ProjectDir)..\Dependence\common;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(ProjectDir)..\..\x64\Release\</OutDir>
-    <IncludePath>$(ProjectDir);$(ProjectDir)..\Dependence;$(ProjectDir)..\Dependence\common;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir);$(ProjectDir)common;$(ProjectDir)..\Dependence;$(ProjectDir)..\Dependence\common;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -83,6 +83,7 @@
     <ClCompile Include="common\config.cpp" />
     <ClCompile Include="common\loader.cpp" />
     <ClCompile Include="common\implement.cpp" />
+    <ClCompile Include="common\registry.cpp" />
     <ClCompile Include="society\society.cpp" />
     <ClCompile Include="industry\industry.cpp" />
     <ClCompile Include="traffic\traffic.cpp" />
@@ -102,9 +103,11 @@
     <ClCompile Include="story\story.cpp" />
 </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="common\class.h" />
     <ClInclude Include="common\config.h" />
     <ClInclude Include="common\loader.h" />
     <ClInclude Include="common\implement.h" />
+    <ClInclude Include="common\registry.h" />
     <ClInclude Include="society\society.h" />
     <ClInclude Include="industry\industry.h" />
     <ClInclude Include="traffic\traffic.h" />

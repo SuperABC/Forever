@@ -3,11 +3,12 @@
 ## 职责
 
 阶段3(`REFACTOR_PLAN.md`)把旧工程"每个domain按concept各一套`<Concept>Mod`+`<Concept>Factory`"的
-Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档统一说明这21×2份近乎相同的
+Mod可扩展骨架,一次性铺到全部8个domain、20个concept(society域的Calendar已经不再需要,整体
+删掉,原来的21个concept少了一个)。这份文档统一说明这20×2份近乎相同的
 空实现文件,不逐份配`.md`——按`Forever_UE/Source/Forever/Framework/ForeverFrameworkComponent.md`
-已经立下的先例:一批没有独特逻辑的空实现共用一份文档,避免42份重复样板文字。
+已经立下的先例:一批没有独特逻辑的空实现共用一份文档,避免40份重复样板文字。
 
-## 21个concept对照表
+## 20个concept对照表
 
 | Domain | Concept | Mod接口 | Factory(创建/销毁/枚举) | 加载器探测符号 |
 |---|---|---|---|---|
@@ -23,7 +24,6 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
 | populace | Name | `populace/name_mod.h` → `NameMod` | `populace/name_factory.h/.cpp` → `NameFactory` | `GetModNames` |
 | populace | Scheduler | `populace/scheduler_mod.h` → `SchedulerMod` | `populace/scheduler_factory.h/.cpp` → `SchedulerFactory` | `GetModSchedulers` |
 | society | Job | `society/job_mod.h` → `JobMod` | `society/job_factory.h/.cpp` → `JobFactory` | `GetModJobs` |
-| society | Calendar | `society/calendar_mod.h` → `CalendarMod` | `society/calendar_factory.h/.cpp` → `CalendarFactory` | `GetModCalendars` |
 | society | Organization | `society/organization_mod.h` → `OrganizationMod` | `society/organization_factory.h/.cpp` → `OrganizationFactory` | `GetModOrganizations` |
 | story | Script | `story/script_mod.h` → `ScriptMod` | `story/script_factory.h/.cpp` → `ScriptFactory` | `GetModScripts` |
 | industry | Product | `industry/product_mod.h` → `ProductMod` | `industry/product_factory.h/.cpp` → `ProductFactory` | `GetModProducts` |
@@ -38,10 +38,11 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
 
 ## 关键设计
 
-- **每个`<Concept>Mod`只声明`GetType()`/`GetName()`两个纯虚接口,外加一个非纯虚的
-  `ApplyArgs(const std::string&)`(默认空实现)**——业务接口(如`BuildingMod`的
-  `RandomAcreage`/`LayoutBuilding`等)要等阶段4迁移对应系统、读到旧工程实际代码后才补,提前
-  设计容易和真实需求对不上;`ApplyArgs`是阶段3新增的参数传递钩子,见下面单独一条说明。
+- **每个`<Concept>Mod`只声明`GetType()`/`GetName()`两个纯虚接口**——业务接口(如
+  `BuildingMod`的`RandomAcreage`/`LayoutBuilding`等)要等阶段4迁移对应系统、读到旧工程实际
+  代码后才补,提前设计容易和真实需求对不上。参数不经过Mod基类的任何钩子方法——`Create
+  <Concept>(id)`创建实例那一刻直接把参数字符串传给注册的creator函数,mod自己决定怎么用
+  (传给具体子类的构造函数最常见),见下面单独一条说明。
 - **`GetId()`不放进`<Concept>Mod`基类**——旧代码`building_mod.h`里有个从未实现的
   `static const char* GetId();`声明(static不能是虚函数,写在基类没有意义,是旧代码的死代码)。
   新工程里`GetId()`只是具体mod子类自己的静态方法约定(如`PengzhanBuilding::GetId()`),不通过
@@ -82,28 +83,33 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
   容器所有权问题）。`Factory::RandomAcreage(id)`/`GetAcreageMin(id)`/`GetAcreageMax(id)`/
   `GetPower(id,area)`/`Assign(id,lots,emit,context)`是对应的转发方法，`id`未注册时分别返回
   `0.f`/直接不调用`emit`，详见`Source/Dependence/map/zone_mod.md`。
-- **给mod传参数走`Factory::SetModArgs`+`Mod::ApplyArgs`,不经过DLL导出函数的参数**——这是
-  按用户明确要求、仿照旧工程`config.json`格式实现的:`config.json`里每个concept一个
+- **给mod传参数走`Factory::SetModArgs`,`Create<Concept>(id)`创建实例那一刻直接把参数
+  字符串传给注册的creator函数,不经过DLL导出函数的参数,也不经过创建后再调用的钩子方法**——
+  这是按用户明确要求、仿照旧工程`config.json`格式实现的:`config.json`里每个concept一个
   `"<concept>_mods"`数组,元素是`"id"`或`"id 参数..."`(命令行式写法,和旧工程
   `"test ---name value"`一致)。流程是:`ForeverModSubsystem`调用
   `Config::GetConceptMods("<concept>_mods")`解析出`(id, 参数)`列表,转成map后调用
   `factory.SetModArgs(...)`,原样存进`Factory::configuredArgs`(整个Factory生命周期内不
-  再变化);之后不管mod什么时候调用`factory->Register<Concept>(id, creator, deleter)`,
-  `RegisterX`都只登记creator/deleter,**不**把参数复制进`Entry`——`Entry`没有`args`字段,
-  避免同一份参数在`configuredArgs`和`registries`里存两份。真正用到参数是在
-  `Factory::Create<Concept>(id)`创建出实例**之后**,直接按`id`查`configuredArgs`、调用
-  `instance->ApplyArgs(...)`。这几步都发生在Factory内部(宿主编译的代码,前提是
-  `RegisterX`/`CreateX`都是`virtual`,见上一条),mod自己完全不需要关心参数从哪来、什么
-  时候被谁调用,只需要重写`ApplyArgs`接收即可,示例见`Forever_Mod/Empty/`。
-  **这条机制曾经有一版是按`dll_paths`根目录配一份共用参数、经`RegisterMod<Concept>(factory,
-  args)`导出函数的参数传给mod**——后来发现这和"每个mod id有自己的参数"这个真实需求对不上
-  (`ModLoader`按dll路径工作,不知道一次调用会注册哪些id),已废弃,不要照着抄。
+  再变化);`CreateFunc`的函数指针类型是`<Concept>Mod*(*)(const std::string&)`——不管mod
+  什么时候调用`factory->Register<Concept>(id, creator, deleter)`,`RegisterX`都只登记
+  creator/deleter,**不**把参数复制进`Entry`——`Entry`没有`args`字段,避免同一份参数在
+  `configuredArgs`和`registries`里存两份。`Factory::Create<Concept>(id)`创建实例时按`id`
+  查`configuredArgs`,把参数字符串作为参数直接调用`it->second.creator(args)`,mod自己的
+  creator决定怎么用(传给具体子类构造函数最常见,示例见`Forever_Mod/Empty/`——
+  `Empty<Concept>`的构造函数把收到的参数字符串直接拼进`GetName()`)。
+  **这条机制最初有两个更早的版本,都被否掉了**:一是按`dll_paths`根目录配一份共用参数、经
+  `RegisterMod<Concept>(factory, args)`导出函数传给mod——和"每个mod id有自己的参数"这个
+  真实需求对不上(`ModLoader`按dll路径工作,不知道一次调用会注册哪些id);二是`Create
+  <Concept>(id)`创建实例**之后**再调用一次`instance->ApplyArgs(args)`这个虚函数钩子——
+  被指出"创建完之后再传参数"没有意义(mod的构造函数没法用到这个参数,`const`成员也没法在
+  构造之后再赋值),改成现在这版直接把参数交给creator,由creator自己决定要不要传进构造
+  函数。两版都已废弃,不要照着抄。
 
 ## 依赖关系
 
 - 依赖:无(纯C++,不依赖UE、不依赖Core内容)。
 - 被谁依赖:`Source/Basic/<domain>/<concept>_basic.h`(继承`<Concept>Mod`提供占位默认实现)、
-  `Source/Forever/Mod/ForeverModSubsystem.cpp`(`#include`全部21个`<domain>/<concept>_factory.h`,
+  `Source/Forever/Mod/ForeverModSubsystem.cpp`(`#include`其中大部分`<domain>/<concept>_factory.h`,
   为每个concept构造一个局部Factory、验证注册结果)、`Forever_Mod/`下的各示例Mod(继承
   `<Concept>Mod`、调用`<Concept>Factory::Register<Concept>`)。
 - Mod可扩展点:任何未来的Mod DLL,只要`#include`对应`<domain>/<concept>_mod.h`+
@@ -118,9 +124,9 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
 `Core/common/config.cpp`用`json.h`解析`config.json`;`json.cpp`的`AsString`/`AsInt`等
 类型转换方法用`error.h`的`THROW_EXCEPTION(JsonFormatException, ...)`在类型不匹配时抛异常。
 
-## 阶段4-0共享基础设施(不属于21个concept)
+## 阶段4-0共享基础设施(不属于20个concept)
 
-`common/`、`map/`、`story/`三个目录下,除了以上21个concept的Mod/Factory文件,还各自多了几份
+`common/`、`map/`、`story/`三个目录下,除了以上20个concept的Mod/Factory文件,还各自多了几份
 "跨domain共享的原语",在`PHASE4_PLAN.md`里称为"阶段4-0",比Map域还早迁移,因为它们不感知任何
 具体domain数据、却被多个domain的Core层代码依赖:
 
@@ -130,7 +136,7 @@ Mod可扩展骨架,一次性铺到全部8个domain、21个concept。这份文档
 - `map/geometry.h/.cpp`:`Node`/`Connection`/`Quad`/`Lot`等几何与导航图原语,详见
   `map/geometry.md`。
 - `story/condition.h/.cpp`、`story/change.h/.cpp`、`story/event.h/.cpp`:通用脚本表达式引擎
-  +"动作"/"事件"词汇表,详见各自同名`.md`。这三个文件不是`story`域21个concept之一(`Script`
+  +"动作"/"事件"词汇表,详见各自同名`.md`。这三个文件不是20个concept之一(`Script`
   才是),是`Script`将来会用到的底层机制,提前迁移。
 
 这几份文件均**原样移植**,唯一的例外是`utility.h`把`debugf`的`LPCSTR`参数改成了`const char*`

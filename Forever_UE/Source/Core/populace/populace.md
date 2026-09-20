@@ -76,7 +76,7 @@ map->Checkin(*populace);
   婚姻/亲子关系直接丢弃（本来也没有对应的`Citizen*`可指）。生日年份沿用老工程"2000+模拟
   内部年份"的换算习惯；模拟结束时的年份（`year+2000`）存进`currentYear`，通过
   `GetCurrentYear()`供`Map::Checkin()`给`Citizen::GetAge()`用，也供
-  `AForeverFrameworkActor::EnsureMapGenerated()`把开局游戏时钟设成这一年的1月1日8点
+  `AForeverFrameworkActor::EnsurePlayerGenerated()`把开局游戏时钟设成这一年的1月1日8点
   （`player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8))`），见
   `Core/player/player.md`"开局时间=人口模拟结束年份"一节。
 
@@ -109,15 +109,18 @@ name_mod.h`）的三个纯虚方法：`GetSurname(fullName)`/`GenerateName(male,
 - `GetSurname(fullName)`：手动解析UTF-8前导字节，截取姓名的第一个UTF-8字符作为姓——
   这个方案假定姓氏永远是单字（这份姓氏表里成立），不做姓氏表查找匹配。
 
-`Populace`新增`InitNames()`（`Init()`一开始调用一次）：和`Map::InitZones/InitBuildings()`
-同一个"用`ModLoader`发现/注册config.json配置的mod dll"写法，但**`Populace`自己独立持有
-一份`ModLoader modLoader;`+`NameFactory nameFactory;`**（不和`Map`共用，两者互不知道
-对方存在）：
+`Populace`新增`InitNames()`（`Init()`一开始调用一次）：**之前`Populace`自己独立持有一份
+`ModLoader modLoader;`+`NameFactory nameFactory;`**（不和`Map`共用，两者互不知道对方
+存在），每次`new Populace()`(每次开局)都会重新扫描/注册一遍name mod dll，和`Map`当初的
+问题一样，被要求统一挪走：现在`nameFactory`是构造函数初始化列表里绑定的引用成员
+（`Registry::Get().GetNameFactory()`），mod dll的发现/注册全部集中到`Registry`
+（`Source/Core/common/registry.md`）里，只在整个UE进程生命周期里跑一次：
 ```cpp
-vector<string> mods = Config::GetMods();
-nameFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("name_mods")));
-modLoader.RegisterConcept<NameFactory>(mods, "RegisterModNames", "FinishModNames", &nameFactory);
-name = new Name(&nameFactory, "chinese"); // 固定用这个具体实现，见下
+Populace::Populace() : nameFactory(Registry::Get().GetNameFactory()) {}
+// ...
+void Populace::InitNames() {
+	name = new Name(&nameFactory, "chinese"); // 固定用这个具体实现，见下
+}
 ```
 **固定用`"chinese"`这个id，不做通用的enable/disable选择**——这个项目的Factory模式本来
 就没有老工程"config必须恰好enable一个name mod，否则`THROW_EXCEPTION`"这套机制（阶段3
@@ -188,12 +191,12 @@ id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有�
 - 依赖：`Source/Core/populace/citizen.h`（`GENDER_TYPE`/`Citizen`）、
   `Source/Core/populace/name.h`（`Name`——`Populace`只通过这层转发访问取名算法，不直接持有
   `NameMod*`，见`name.md`）、`Source/Dependence/populace/name_factory.h`（`NameFactory`，
-  `Populace`自己持有一份、传给`Name`的构造函数）、`Source/Core/common/loader.h`
-  （`ModLoader::RegisterConcept`）、`Source/Core/common/config.h`（`Config::GetMods`/
-  `GetConceptMods`）、`Source/Dependence/common/utility.h`（`GetRandom`/`Time::DaysInMonth`）。
+  引用成员`nameFactory`的类型，传给`Name`的构造函数）、`Source/Core/common/registry.h`
+  （`Populace`构造函数绑定`nameFactory`，见`registry.md`）、`Source/Dependence/common/
+  utility.h`（`GetRandom`/`Time::DaysInMonth`）。
 - 被谁依赖：`Source/Core/map/map.h/.cpp`（`Map::Checkin(const Populace&)`读
   `GetCitizens()`）、`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有
-  `Populace*`，`EnsureMapGenerated()`里`new`+`Init`+`Checkin`）、`Source/Forever/
+  `Populace*`，`EnsurePopulaceGenerated()`里`new`+`Init`+`Checkin`）、`Source/Forever/
   Framework/ForeverPopulaceFrameworkComponent.h/.cpp`（`GenerateCitizens(Map*,
   Populace*)`缓存`GetCitizens()`列表）。
 

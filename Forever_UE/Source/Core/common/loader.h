@@ -4,7 +4,8 @@
 #include <vector>
 #include <unordered_map>
 
-// 21个concept对应的DLL导出符号名,和8个domain/概念的完整对照表见同目录loader.md。
+
+// 20个concept对应的DLL导出符号名,和8个domain/概念的完整对照表见同目录loader.md。
 // Config::AddDllPath用getModSymbol探测某个dll是否是合法mod;ModLoader::RegisterConcept
 // 用registerSymbol/finishSymbol把探测通过的dll真正接入某个具体Factory。
 struct ModConceptDescriptor {
@@ -22,8 +23,8 @@ const std::vector<ModConceptDescriptor>& GetModConceptDescriptors();
 // 参数(config.json里"<concept>_mods"数组每项"id 参数..."中的参数部分)不经过ModLoader——
 // 那是按mod id配置的,而ModLoader只按dll路径工作、不知道一个dll会注册哪些id。参数改由
 // 调用方在RegisterConcept之前调用Factory::SetModArgs(id->参数表)预先设置好,mod调用
-// Factory::Register<Concept>(id, ...)时Factory自己按id查表、存进注册项,创建实例时再调用
-// instance->ApplyArgs(...)。详见 Source/Dependence/README.md。
+// Factory::Register<Concept>(id, ...)时Factory自己按id查表、存进注册项,Create<Concept>(id)
+// 创建实例时把参数字符串直接传给注册的creator函数。详见 Source/Dependence/README.md。
 class ModLoader {
 public:
 	ModLoader();

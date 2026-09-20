@@ -13,36 +13,79 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
 ## 关键设计
 - 构造函数里手动创建一个`USceneComponent`当`RootComponent`,让这个Actor在编辑器里可以被放置、有transform(旧Framework Actor作为场景里放置的对象,新Actor延续这个可放置的定位)。
 - 9个域组件全部用`CreateDefaultSubobject`在构造函数里创建并作为`AForeverFrameworkActor`的固定组成部分——不做成运行时按需添加,因为这个Actor本身就是"场景里唯一一份、职责固定"的单例式入口,不需要动态增删域。
-- `BeginPlay`里打一条临时日志列出9个已初始化的域组件名字,随后调用`EnsureMapGenerated()`。这条日志是阶段2专属的验证手段,其余7个域组件填入真实逻辑前会一直保留。
-- **`map`是原生指针（`Map*`），不是`std::unique_ptr<Map>`**——试过`unique_ptr`，但`Map`在这个头文件里只有前置声明，UHT给每个UCLASS生成的VTableHelper构造函数（定义在`.gen.cpp`，看不到`map/map.h`）会在异常展开路径里引用`~unique_ptr<Map>`导致编译失败（`static_assert failed: 'can't delete an incomplete type'`）。改用原生指针+析构函数里手动`delete map`绕开这个问题——`Map`不跨DLL边界（`Core.lib`静态链接进本模块），不属于`REFACTOR_PLAN.md`说的那种需要走deleter的跨模块new/delete场景，普通`delete`是安全的。为此这个类现在有一个显式声明+定义的析构函数（声明在头文件、定义在`.cpp`里`map/map.h`已完整include之后），不再用编译器隐式生成的析构函数。
-- **`EnsureMapGenerated()`**（阶段4-1 Roadnet落地时从`EnsureTerrainGenerated`改名——现在编排的不只是地形）**是幂等的**:`map`已存在直接返回,否则`new Map(1024, 1024)`(默认地图尺寸,必须是2的整数次幂——原因和选1024而不是512的经过见`ForeverFrameworkActor.cpp`里`kDefaultMapWidth`/`kDefaultMapHeight`旁的注释、`Source/Basic/map/terrain_basic.md`的`MountainTerrain`密度公式说明)→`InitTerrains()`（注册地形mod+跑`DistributeTerrain`+3x3晋升规则一次性做完，原来拆成`InitTerrains`+`InitContents`两个函数，应用户要求合并回一个，见`Source/Core/map/map.md`）→`InitRoadnet()`（这个顺序不能反,`RoadnetMod::DistributeRoadnet`要采样已经生成好的地形/水面）→`InitZones()`→`InitBuildings()`→`new Populace()`+`populace->Init(map->ComputeAccommodationTarget())`+`map->Checkin(*populace)`（进入populace域新增，见下）→`terrainFramework->GenerateTerrain(map)`→`roadnetFramework->GenerateRoadnet(map)`→`zoneFramework->GenerateZones(map)`→`buildingFramework->GenerateBuildings(map)`→`populaceFramework->GenerateCitizens(map, populace)`。`AForeverGameMode::BeginPlay`和`FindPlayerStart_Implementation`都会调用它(见`ForeverGameMode.md`),保证不论两者实际调用顺序如何,出生点计算时地形都已经生成好。
-- **`populace`和`map`平级持有，不是`map`的成员（进入populace域新增）**：`Populace`是和
-  `Map`同一层级的顶层Core类，不知道`Map`的存在，只通过`Map::Checkin(*populace)`单向被
-  `Map`读取——和老工程`GlobalBase`同时持有`map`/`populace`两个顶层对象、由它做两者之间
-  编排是同一个分工，详见`Source/Core/populace/populace.md`。`populace`同样是原生指针，
-  和`map`同一个"UHT VTableHelper看不到完整类型定义"的理由，`EndPlay`/析构里的释放顺序
-  （先`populace`后`map`）互不影响内存安全——`Citizen`只持有`Zone*`/`Building*`/`Room*`
-  裸指针、析构不解引用它们；`Map`也不持有任何`Citizen*`，先删哪个都一样安全，这里选择
-  先删`populace`只是保持和创建顺序相反的直觉。
-- **新增`society`/`industry`/`traffic`/`player`四个域指针（阶段4 Story落地新增）**：和
-  `map`/`populace`/`story`同一套生命周期管理方式（`EnsureMapGenerated()`尾部`new`、
-  `EndPlay`/析构里`delete`+置空）。`Society`/`Industry`/`Traffic`目前都是只能默认构造的
-  空壳类，加它们纯粹是为了让`PostImplement`（`Core/common/implement.h`，`PostHandle`的
-  第一个具体实现）能在构造时拿到Core全部7个domain的真实指针，不是提前实现这几个域的业务
-  逻辑——`PostImplement`目前也只真正用到`populace`/`player`两个指针（"random citizen"/
-  "game time"两种查询），其余几个只是存着，等对应域真正迁移出业务逻辑、需要通过`Post`
-  查询时再用。`Player`这次额外迁移了"全局时钟"这一小块（`Time*`+`Init/Tick/GetTime/
-  SetTime/CrossDay`，见`Core/player/player.md`），`new Player()`后紧接着调一次
-  `player->Init()`。四个新指针创建顺序在`story`之前（`EnsureMapGenerated`里`society`/
-  `industry`/`traffic`/`player`先`new`，`story`最后创建），删除顺序按和创建相反的直觉从
-  `player`往前delete，理由同上——这几个域彼此都不持有对方的裸指针，删除顺序不影响内存
-  安全。
+- `BeginPlay`里打一条临时日志列出9个已初始化的域组件名字,随后先调一次`Registry::Get().ReloadModArgs()`(见下"7个`Ensure*Generated()`"一节),再按依赖顺序显式依次调用全部7个`Ensure*Generated()`。这条日志是阶段2专属的验证手段,其余7个域组件填入真实逻辑前会一直保留。
+- **7个域指针（`map`/`populace`/`society`/`player`/`industry`/`traffic`/`story`）全部是
+  原生指针，不是`std::unique_ptr<T>`**——试过`unique_ptr`，但这些类型在这个头文件里只有
+  前置声明，UHT给每个UCLASS生成的VTableHelper构造函数（定义在`.gen.cpp`，看不到对应`.h`）
+  会在异常展开路径里引用`~unique_ptr<T>`导致编译失败（`static_assert failed: 'can't
+  delete an incomplete type'`）。改用原生指针+`EndPlay`/析构函数里手动`delete`绕开这个
+  问题——它们都不跨DLL边界（`Core.lib`静态链接进本模块），不属于`REFACTOR_PLAN.md`说的那种
+  需要走deleter的跨模块new/delete场景，普通`delete`是安全的。为此这个类现在有一个显式
+  声明+定义的析构函数（声明在头文件、定义在`.cpp`里所有对应`.h`已完整include之后），不再
+  用编译器隐式生成的析构函数。彼此都不持有对方的裸指针（`Citizen`只持有`Zone*`/
+  `Building*`/`Room*`裸指针、析构不解引用它们；`Map`也不持有任何`Citizen*`），删除顺序
+  不影响内存安全，`EndPlay`/析构里按和`BeginPlay()`创建顺序相反的直觉从`story`往前
+  `delete`只是保持直觉。
+- **7个`Ensure*Generated()`，每个只保证自己那一个域（这次拆分之前，全部7个域都挤在
+  `EnsureMapGenerated()`一个函数里，见下）**：`EnsureMapGenerated()`/`EnsurePopulaceGenerated()`/
+  `EnsureSocietyGenerated()`/`EnsurePlayerGenerated()`/`EnsureIndustryGenerated()`/
+  `EnsureTrafficGenerated()`/`EnsureStoryGenerated()`各自都是幂等的（自己的指针已存在就
+  直接返回），函数体内只做自己那部分初始化，**不会调用别的`Ensure*Generated()`**——
+  `BeginPlay()`里已经按依赖顺序把全部7个显式列出来顺序调用了，一个函数体内写出来的调用
+  顺序就是实际执行顺序，不存在"调用方可能不按顺序调"这回事，函数体里再调一遍上游没有意义。
+  拆分前的隐藏依赖现在变成显式的调用顺序：`EnsurePopulaceGenerated()`要用到`map`
+  （`Map::ComputeAccommodationTarget()`/`Checkin()`），必须排在`EnsureMapGenerated()`
+  之后；`EnsurePlayerGenerated()`要用到`populace->GetCurrentYear()`，必须排在
+  `EnsurePopulaceGenerated()`之后；`Society`/`Industry`/`Traffic`/`Story`这次互相独立，
+  顺序上没有别的硬性要求。`Registry::Get().ReloadModArgs()`（按这一局当前已经读进内存的
+  config内容刷新全部20个Factory的mod参数表——不同局可能用不同的config.json，参数因此也
+  可能不同，这一步必须每局重来，跟只做一次的`RegisterConcept`不是同一件事，见
+  `Source/Core/common/registry.md`"SetModArgs的调用频率"一节）不属于任何单个域，放在
+  `BeginPlay()`里、7个`Ensure*Generated()`之前统一调一次，不属于哪一个`Ensure*Generated()`
+  自己的职责。
+  - **`EnsureMapGenerated()`**（阶段4-1 Roadnet落地时从`EnsureTerrainGenerated`改名——现在
+    编排的不只是地形）：`map`已存在直接返回，否则`new Map(1024, 1024)`(默认地图尺寸,必须
+    是2的整数次幂——原因和选1024而不是512的经过见`ForeverFrameworkActor.cpp`里
+    `kDefaultMapWidth`/`kDefaultMapHeight`旁的注释、`Source/Basic/map/terrain_basic.md`的
+    `MountainTerrain`密度公式说明)→`InitTerrains()`（跑`DistributeTerrain`+3x3晋升规则；
+    20个concept的mod dll发现/注册全部归`Registry::Get()`全局管，只在整个UE进程生命周期里
+    跑一次，见`Source/Core/common/registry.md`）→`InitRoadnet()`（这个顺序不能反,
+    `RoadnetMod::DistributeRoadnet`要采样已经生成好的地形/水面）→`InitZones()`→
+    `InitBuildings()`→`terrainFramework->GenerateTerrain(map)`→
+    `roadnetFramework->GenerateRoadnet(map)`→`zoneFramework->GenerateZones(map)`→
+    `buildingFramework->GenerateBuildings(map)`。`AForeverGameMode::BeginPlay`和
+    `FindPlayerStart_Implementation`都会调用它(见`ForeverGameMode.md`)，语义不变——只保证
+    Map这一个域，保证不论两者实际调用顺序如何,出生点计算时地形都已经生成好。
+  - **`EnsurePopulaceGenerated()`（进入populace域新增）**：`populace`已存在直接返回，否则
+    `new Populace()`+`populace->Init(map->ComputeAccommodationTarget())`+
+    `map->Checkin(*populace)`+`populaceFramework->GenerateCitizens(map, populace)`。
+    `populace`和`map`平级持有，不是`map`的成员——`Populace`是和`Map`同一层级的顶层Core类，
+    不知道`Map`的存在，只通过`Map::Checkin(*populace)`单向被`Map`读取——和老工程
+    `GlobalBase`同时持有`map`/`populace`两个顶层对象、由它做两者之间编排是同一个分工，
+    详见`Source/Core/populace/populace.md`。
+  - **`EnsureSocietyGenerated()`/`EnsureIndustryGenerated()`/`EnsureTrafficGenerated()`
+    （阶段4 Story落地新增）**：`Society`/`Industry`/`Traffic`目前都是只能默认构造的空壳
+    类，各自的`Ensure*Generated()`只是`new`一下，加它们纯粹是为了让`PostImplement`
+    （`Core/common/implement.h`，`PostHandle`的第一个具体实现）能在构造时拿到Core全部7个
+    domain的真实指针，不是提前实现这几个域的业务逻辑——`PostImplement`目前也只真正用到
+    `populace`/`player`两个指针（"random citizen"/"game time"两种查询），其余几个只是
+    存着，等对应域真正迁移出业务逻辑、需要通过`Post`查询时再用。
+  - **`EnsurePlayerGenerated()`（阶段4 Story落地新增）**：`player`已存在直接返回，否则
+    `new Player()`+`player->Init()`（这次额外迁移了"全局时钟"这一小块，`Time*`+
+    `Init/Tick/GetTime/SetTime/CrossDay`，见`Core/player/player.md`）+
+    `player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8))`——假定`populace`已经
+    生成好，靠`BeginPlay()`里`EnsurePopulaceGenerated()`排在它前面保证，自己不会去调
+    `EnsurePopulaceGenerated()`。
+  - **`EnsureStoryGenerated()`（阶段4 Story落地新增）**：`story`已存在直接返回，否则
+    `new Story()`+`story->Init()`（读取`Resource/Story/test.json`）+
+    `storyFramework->Init(story)`+`storyFramework->BroadcastGameStart()`。和`map`/
+    `populace`不互相依赖。
 - **`PrimaryActorTick.bCanEverTick`这次从`false`改成`true`，新增`Tick(float DeltaTime)`
   覆写**：这是这个Actor第一次真正需要每帧更新的逻辑——覆写里只做一件事，`player`存在时调用
-  `player->Tick(DeltaTime)`驱动全局时钟往前走（`player`在`EnsureMapGenerated()`跑完之前
-  是`nullptr`，但`BeginPlay`同步跑完`EnsureMapGenerated()`后引擎才会开始调用`Tick`，理论
-  上不会遇到空指针，判空只是防御性写法）。以后其它域需要每帧更新时也应该加进这同一个
-  `Tick`里，不要再新开一个"谁来负责每帧驱动"的入口。
+  `player->Tick(DeltaTime)`驱动全局时钟往前走（`player`在`EnsurePlayerGenerated()`跑完
+  之前是`nullptr`，但`BeginPlay`同步跑完全部7个`Ensure*Generated()`后引擎才会开始调用
+  `Tick`，理论上不会遇到空指针，判空只是防御性写法）。以后其它域需要每帧更新时也应该加进
+  这同一个`Tick`里，不要再新开一个"谁来负责每帧驱动"的入口。
 - **补上一个此前缺失的`GetStory()`**：`story`成员本身在阶段4 Story落地时就已经加入，但当时
   漏加了对应的getter（`GetMap()`/`GetPopulace()`都有，`GetStory()`没有）——这次和
   `GetSociety()`/`GetIndustry()`/`GetTraffic()`/`GetPlayer()`一起补齐，是`UForeverStoryFrameworkComponent::
@@ -55,7 +98,7 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
   `Source/Core/story/story.h`（持有`Story*`）、`Source/Core/society/society.h`/
   `Source/Core/industry/industry.h`/`Source/Core/traffic/traffic.h`/
   `Source/Core/player/player.h`（持有`Society*`/`Industry*`/`Traffic*`/`Player*`，均为
-  空骨架，见上"新增`society`/`industry`/`traffic`/`player`四个域指针"一节）。
+  空骨架，见上"7个`Ensure*Generated()`"一节）。
 - 被`AForeverGameMode`引用:`BeginPlay`和`FindPlayerStart_Implementation`都会调用
   `EnsureFrameworkActorExists()`(场景里没有找到已放置的实例时动态`SpawnActor`一个兜底,
   找到/生成后都会调用这个Actor的`EnsureMapGenerated()`),详见`ForeverGameMode.md`。

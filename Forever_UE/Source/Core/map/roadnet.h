@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <functional>
 
+
 // 路口一条"进路"的车行/行人锚点+路缘角点数据，由RoadJunction::Build构造。
 struct RoadJunctionApproach {
 	Road* road = nullptr;

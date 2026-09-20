@@ -1,12 +1,10 @@
 #include "terrain_factory.h"
 
+
 using namespace std;
 
 void TerrainFactory::RegisterTerrain(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void TerrainFactory::CleanTemp() {
 }
 
 TerrainMod* TerrainFactory::CreateTerrain(const string& id) {
@@ -14,12 +12,10 @@ TerrainMod* TerrainFactory::CreateTerrain(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	TerrainMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	TerrainMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

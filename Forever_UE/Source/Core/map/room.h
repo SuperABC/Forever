@@ -1,5 +1,7 @@
 #pragma once
 
+#include "class.h"
+
 #include "map/room_mod.h"
 #include "map/room_factory.h"
 #include "map/geometry.h"
@@ -8,10 +10,6 @@
 #include <unordered_map>
 #include <vector>
 
-class Building;
-class Component;
-class Node;
-class Citizen;
 
 // WallHole(一面墙上的门/窗开口列表)定义在geometry.h——Room和building.h的Corridor/Single/
 // Row都要用，geometry.h是两边都已经包含的公共底层头。

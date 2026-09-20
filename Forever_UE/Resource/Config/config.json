@@ -4,12 +4,17 @@
    // 路径,避免机器相关。"../../x64/Release"是Basic.dll(Source/Basic,内置默认Mod,和其余
    // 三个一样通过Config/ModLoader在运行时加载,不静态链进Forever.Build.cs,见
    // Source/Basic/README.md)的构建输出目录,同目录下的Dependence.lib/Core.lib不是.dll,
-   // 会被Config::AddDllPath按扩展名跳过。
+   // 会被Config::AddDllPath按扩展名跳过。每一项都必须精确指向Release输出目录,不能指向
+   // 会连Debug子目录一起递归进去的上级目录——Debug的DLL用/MDd调试CRT编译,std::string布局
+   // (_ITERATOR_DEBUG_LEVEL带的额外调试字段)和Development/Release运行时的CRT不兼容,
+   // Debug/Release两份DLL都被扫描到时后加载的一份会把前一份的注册覆盖掉,一旦覆盖成Debug
+   // 那份,creator跨dll接的const std::string&参数在Debug CRT里一读就是野指针,直接崩
+   // (PIE验证发现,崩溃点在EmptyComponent构造函数拼接args字符串)。
    "dll_paths" : [
       "../../x64/Release",
-      "../../../Forever_Mod/Test",
-      "../../../Forever_Mod/Wxdj",
-      "../../../Forever_Mod/Empty"
+      "../../../Forever_Mod/Test/Cpp/x64/Release",
+      "../../../Forever_Mod/Wxdj/Cpp/x64/Release",
+      "../../../Forever_Mod/Empty/Cpp/x64/Release"
    ],
 
    // "<concept>_mods": 和旧工程格式一致,每个concept一个数组,数组元素是"id"或"id 参数..."
@@ -33,7 +38,6 @@
    "name_mods" : [ "empty --test true" ],
    "scheduler_mods" : [ "empty --test true" ],
    "job_mods" : [ "empty --test true" ],
-   "calendar_mods" : [ "empty --test true" ],
    "organization_mods" : [ "empty --test true" ],
    "script_mods" : [ "wxdj", "empty --test true" ],
    "product_mods" : [ "empty --test true" ],

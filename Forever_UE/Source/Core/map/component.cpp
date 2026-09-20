@@ -2,6 +2,7 @@
 
 #include "common/error.h"
 
+
 using namespace std;
 
 Component::Component(ComponentFactory* factory, ComponentMod* mod, Building* parentBuilding) :

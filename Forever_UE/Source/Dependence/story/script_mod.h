@@ -1,13 +1,14 @@
 #pragma once
 
+#include "expression.h"
+#include "change.h"
+#include "../common/handle.h"
+
 #include <deque>
 #include <string>
 #include <variant>
 #include <vector>
 
-#include "expression.h"
-#include "change.h"
-#include "../common/handle.h"
 
 class Event;
 class Dialog;
@@ -26,12 +27,6 @@ public:
 
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
-
-	// config.json里"script_mods"数组中该mod id后面的命令行式参数字符串(如
-	// "pengzhan --density 1.0"里的"--density 1.0"),由<Concept>Factory::Create<Concept>
-	// 创建实例后立刻调用一次。默认空实现,不需要参数的mod不用重写,格式解析完全由重写者
-	// 自己决定。
-	virtual void ApplyArgs(const std::string& args) {}
 
 	// 脚本逻辑重载入口，Script::MatchEvent匹配出一批actions之后、返回给调用方之前会调用一次，
 	// 让mod有机会用自己长期持有的Dialog*/Change*改写/插入内容（json表达不了的复杂剧情逻辑走

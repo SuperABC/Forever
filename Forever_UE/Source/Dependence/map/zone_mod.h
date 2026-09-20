@@ -1,10 +1,11 @@
 #pragma once
 
+#include "map/geometry.h"
+
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "map/geometry.h"
 
 // 围墙：沿direction这条参考边铺设，marginStart/marginEnd是距参考边两端的距离，depth是进深，
 // depthInward控制进深往矩形内(true)还是外(false)量——具体哪个是"正确"朝向由围墙资产的实际
@@ -84,12 +85,6 @@ public:
 	// 每个mod实例独占服务一个Zone，这个名字在构造函数里定死即可（老工程"mod自己维护static
 	// 计数器保证实例名字唯一"的模式）——GetName()是普通的、无副作用的只读getter。
 	virtual const char* GetName() = 0;
-
-	// config.json里"zone_mods"数组中该mod id后面的命令行式参数字符串(如
-	// "pengzhan --density 1.0"里的"--density 1.0"),由<Concept>Factory::Create<Concept>
-	// 创建实例后立刻调用一次。默认空实现,不需要参数的mod不用重写,格式解析完全由重写者
-	// 自己决定。
-	virtual void ApplyArgs(const std::string& args) {}
 
 	// 真正创建出Zone实例、SetPosition/SetBoundaryRoad都设好之后，Map::InitZones()会通过
 	// Zone::Layout()调用这一个虚方法一次，用来在这个真实例上填好walls/gates/vehicleEntries/

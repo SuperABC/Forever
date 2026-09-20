@@ -1,12 +1,10 @@
 #include "product_factory.h"
 
+
 using namespace std;
 
 void ProductFactory::RegisterProduct(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void ProductFactory::CleanTemp() {
 }
 
 ProductMod* ProductFactory::CreateProduct(const string& id) {
@@ -14,12 +12,10 @@ ProductMod* ProductFactory::CreateProduct(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	ProductMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	ProductMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

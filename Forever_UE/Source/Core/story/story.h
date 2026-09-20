@@ -1,12 +1,12 @@
 #pragma once
 
-#include "story/script.h"
 #include "story/script_factory.h"
 
-#include "common/loader.h"
+#include "story/script.h"
 
 #include <vector>
 #include <functional>
+
 
 // 剧情聚合：持有主线剧情Script*数组（当前阶段只有1个，为以后多个主线剧情脚本预留数组容量）
 // + 一份全局变量池systemScript（Story.md"变量系统"一节的system.前缀路由目标，纯Container用途，
@@ -15,7 +15,8 @@
 class Story {
 public:
 	/*
-	* 构造剧情聚合：完成ScriptFactory的mod注册流程
+	* 构造剧情聚合：绑定scriptFactory引用成员(Registry::Get().GetScriptFactory())——mod
+	* 注册不在这里做，属于Registry全局一次性注册的范围，见Source/Core/common/registry.md
 	*/
 	Story();
 
@@ -59,11 +60,10 @@ public:
 	const std::vector<Script*>& GetMainScripts() const;
 
 private:
-	// 脚本工厂
-	ScriptFactory scriptFactory;
-
-	// mod加载器：持有dll句柄，必须活到Story析构为止（和Map::modLoader同款手法）
-	ModLoader modLoader;
+	// 引用`Registry::Get().GetScriptFactory()`，不再自己持有ModLoader/ScriptFactory——mod
+	// dll的发现/注册只在整个UE进程生命周期里跑一次，见Source/Core/common/registry.md。
+	// 构造函数初始化列表里绑定。
+	ScriptFactory& scriptFactory;
 
 	// 主线剧情Script数组（持有所有权）
 	std::vector<Script*> mainScripts;

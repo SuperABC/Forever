@@ -1,5 +1,7 @@
 #pragma once
 
+#include "class.h"
+
 #include "map/building_mod.h"
 #include "map/building_factory.h"
 #include "map/room_factory.h"
@@ -10,10 +12,6 @@
 #include <unordered_map>
 #include <array>
 
-class Zone;
-class Component;
-class Room;
-class Citizen;
 
 // 楼梯/电梯/坡道：都是"矩形+朝向+四面是否有墙"，照抄老工程Stair/Elevator/Ramp(字段/方法
 // 完全一样，只是分成三个类型名以后如果需要各自加字段更清楚)。params是从.layout模板解析出的

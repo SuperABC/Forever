@@ -1,12 +1,10 @@
 #include "room_factory.h"
 
+
 using namespace std;
 
 void RoomFactory::RegisterRoom(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void RoomFactory::CleanTemp() {
 }
 
 RoomMod* RoomFactory::CreateRoom(const string& id) {
@@ -14,12 +12,10 @@ RoomMod* RoomFactory::CreateRoom(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	RoomMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	RoomMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

@@ -1,13 +1,12 @@
 #pragma once
 
+#include "class.h"
+
 #include "story/expression.h"
 
 #include <string>
 #include <vector>
 
-class Event;
-class Dialog;
-class Change;
 
 // 里程碑：Script的最小调度单元。触发/对话/变化三个列表的指针语义见Dialog.h/Change.h整体
 // 注释——triggers/dialogs/changes都是Milestone自己new出来、自己在析构时delete的本体

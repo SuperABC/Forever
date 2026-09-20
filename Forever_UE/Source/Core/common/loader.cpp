@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+
 using namespace std;
 
 namespace {
@@ -18,7 +19,6 @@ namespace {
 		{ "Names",         "GetModNames",         "RegisterModNames",         "FinishModNames" },
 		{ "Schedulers",    "GetModSchedulers",    "RegisterModSchedulers",    "FinishModSchedulers" },
 		{ "Jobs",          "GetModJobs",          "RegisterModJobs",          "FinishModJobs" },
-		{ "Calendars",     "GetModCalendars",     "RegisterModCalendars",     "FinishModCalendars" },
 		{ "Organizations", "GetModOrganizations", "RegisterModOrganizations", "FinishModOrganizations" },
 		{ "Scripts",       "GetModScripts",       "RegisterModScripts",       "FinishModScripts" },
 		{ "Products",      "GetModProducts",      "RegisterModProducts",      "FinishModProducts" },

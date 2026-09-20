@@ -13,7 +13,7 @@ CrossDay`），照抄老工程`Source/Core/player/player.cpp`同名方法的实�
 ## 时钟行为
 
 - `Init()`：创建`Time`，默认设为8点（年份等其余字段是`Time()`默认构造的"无效时间"）。
-  紧接着`AForeverFrameworkActor::EnsureMapGenerated()`会调用一次`SetTime`把年份改成
+  紧接着`AForeverFrameworkActor::EnsurePlayerGenerated()`会调用一次`SetTime`把年份改成
   市民繁衍模拟算出来的年份，见下"开局时间=人口模拟结束年份"一节——`Init()`本身不知道
   这件事，只负责先把时钟建好。
 - `Tick(float delta)`：每帧按`delta * 60 * 1000 * time_flow_ratio`毫秒推进时钟，即
@@ -36,7 +36,7 @@ CrossDay`），照抄老工程`Source/Core/player/player.cpp`同名方法的实�
 `2000+那个年份`——这样市民的出生年/结婚年才和开局时钟自洽。新工程的`Populace::
 GenerateCitizens`（`Core/populace/populace.cpp`）同样做了这个演化，结果存进
 `Populace::currentYear`成员（`GetCurrentYear()`读取，`Init()`跑完之前默认`2000`），但
-一直没有喂回`Player`的时钟——这次在`AForeverFrameworkActor::EnsureMapGenerated()`里
+一直没有喂回`Player`的时钟——这次在`AForeverFrameworkActor::EnsurePlayerGenerated()`里
 `player->Init()`之后补上：
 
 ```cpp
@@ -51,7 +51,7 @@ player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 ## 持有方式
 
 和`Map`/`Populace`/`Story`一样，直接挂在`AForeverFrameworkActor`身上（`Player* player`
-成员，生命周期管理方式相同）：`EnsureMapGenerated()`里`new Player()`后紧接着调用
+成员，生命周期管理方式相同）：`EnsurePlayerGenerated()`里`new Player()`后紧接着调用
 `player->Init()`（和`story = new Story(); story->Init();`同一个写法），不是被
 `UForeverAssetFrameworkComponent`持有。
 

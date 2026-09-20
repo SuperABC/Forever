@@ -1,12 +1,10 @@
 #include "job_factory.h"
 
+
 using namespace std;
 
 void JobFactory::RegisterJob(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void JobFactory::CleanTemp() {
 }
 
 JobMod* JobFactory::CreateJob(const string& id) {
@@ -14,12 +12,10 @@ JobMod* JobFactory::CreateJob(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	JobMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	JobMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

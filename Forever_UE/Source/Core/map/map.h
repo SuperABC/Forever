@@ -1,15 +1,17 @@
 #pragma once
 
-#include "terrain.h"
-#include "roadnet.h"
-#include "zone.h"
-#include "building.h"
+#include "class.h"
+
+#include "map/geometry.h"
 #include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
 #include "map/building_factory.h"
-#include "map/geometry.h"
-#include "common/loader.h"
+
+#include "map/terrain.h"
+#include "map/roadnet.h"
+#include "map/zone.h"
+#include "map/building.h"
 
 #include <string>
 #include <vector>
@@ -18,7 +20,6 @@
 #include <array>
 #include <tuple>
 
-class Populace;
 
 // 10m*10m地图元素。当前只有Terrain域需要的字段;zone/building字段等Zone/Building阶段
 // 迁移时再补。hatches现在就接好(挖洞用),但在Roadnet/Building迁移前始终为空,详见map.md。
@@ -37,14 +38,11 @@ public:
 	Map(int width, int height);
 	~Map();
 
-	// 用ModLoader发现/注册config.json配置的terrain mod dll(假定调用方已经完成过一次
-	// Config::ReadConfig)，再按GetPriority()降序对所有已注册地形执行DistributeTerrain，
-	// 最后执行plain/construction的3x3晋升规则、重建terrainTextures索引表。原来拆成
-	// InitTerrains(只注册)+InitContents(只生成)两个函数，是因为Terrain是第一个迁移的
-	// domain、直接照抄了老工程Map::InitTerrains/InitBlocks本来就分开的结构；后面
-	// InitRoadnet/InitZones/InitBuildings都是这次全新设计、没有对应的老工程两段式可抄，
-	// 一直是注册+生成合并成一个函数，风格不统一，应用户要求合并回一个函数，看齐后面几个
-	// domain的写法。
+	// 按GetPriority()降序对所有已注册地形执行DistributeTerrain，再执行plain/construction的
+	// 3x3晋升规则、重建terrainTextures索引表——纯粹是"用已经注册好的terrainFactory生成这次
+	// 地图内容"，不包含mod dll的发现/注册：那一步现在归`Registry`全局管，只在整个UE进程
+	// 生命周期里跑一次，和这里"每次开局都要重新生成一遍地图内容"的调用频率完全不同，详见
+	// Source/Core/common/registry.md。
 	void InitTerrains();
 
 	std::pair<int, int> GetSize() const;
@@ -62,8 +60,9 @@ public:
 	// 地形类型 -> {纹理数组槽位索引, diffuse资产路径}
 	const std::unordered_map<std::string, std::pair<int, std::string>>& GetTerrainTextures() const;
 
-	// 用ModLoader发现/注册config.json配置的roadnet mod dll并构建路网,假定InitTerrains
-	// 已经跑完(DistributeRoadnet要采样已生成好的地形/水面)。构建顺序见map.md:深拷贝路网数据->
+	// 用已经注册好的roadnetFactory构建路网(mod dll的发现/注册归`Registry`全局管,不在这里
+	// 做),假定InitTerrains已经跑完(DistributeRoadnet要采样已生成好的地形/水面)。构建顺序见
+	// map.md:深拷贝路网数据->
 	// 地址编号->每个Intersection建RoadJunction(车行/行人锚点+路缘角点)->车行/行人双导航图
 	// (每条Road的"最内侧车道贯通线"+每个RoadJunction的路口内部连接)。
 	void InitRoadnet();
@@ -108,26 +107,29 @@ public:
 	// 规则见map.md"ConnectPathRoad"一节。
 	void ConnectPathRoad(const PathRoadLink& link);
 
-	// 用ModLoader发现/注册config.json配置的zone mod dll。Zone这次只有"显式指定矩形"一种
-	// 生成方式：按注册顺序对每个类型调一次static ZoneMod::Assign(排好序的GetLots(), emit,
+	// 用已经注册好的zoneFactory生成zone(mod dll的发现/注册归`Registry`全局管,不在这里
+	// 做)。Zone这次只有"显式指定矩形"一种生成方式：按注册顺序对每个类型调一次
+	// static ZoneMod::Assign(排好序的GetLots(), emit,
 	// context)，一次性扫完全部lot拿到这个类型想要的全部LotPlacementRequest(不存在任何
 	// ZoneMod实例)，逐条调用lot->RequestPlacement(...)，真正成功了才CreateZone一次、
 	// Layout(direction)、存进zones。假定InitRoadnet()已经跑完(要用到GetLots())。
 	void InitZones();
 
-	// 用ModLoader发现/注册config.json配置的building mod dll。结构和InitZones类似：先对每个
-	// building mod类型调一次static Assign扫描全部lot的显式占位请求，再用static GetPower(area)
-	// 给每个lot登记权重，供lot->FillRemainder(...)做权重CDF随机填充；真正落地(显式占位/
-	// FillRemainder结果/园区内部建筑)才CreateBuilding一次。假定InitZones()已经跑完，此时
-	// 每个lot的freeLots已经不包含被Zone占用的区域。三段落地循环各自调用Layout+
+	// 结构和InitZones类似：先对每个building mod类型调一次static Assign扫描全部lot的显式占位
+	// 请求，再用static GetPower(area)给每个lot登记权重，供lot->FillRemainder(...)做权重CDF
+	// 随机填充；真正落地(显式占位/FillRemainder结果/园区内部建筑)才CreateBuilding一次。假定
+	// InitZones()已经跑完(要用GetLots()裁剪完的freeLots)。三段落地循环各自调用Layout+
 	// MergeBuildingNavigation之后，最后统一调一次FlushPendingBuildingRoadAccess()，把这次
 	// 收集到的所有building outside端点按物理顺序接上道路网(不能在每个building落地时立即接，
-	// 见FlushPendingBuildingRoadAccess()注释)。
+	// 见FlushPendingBuildingRoadAccess()注释)。building/room/component三个mod的注册(mod dll
+	// 发现+RegisterConcept)不在这里做，属于`Registry`全局一次性注册的范围，详见
+	// Source/Core/common/registry.md——Layout()内部创建Room/Component时直接用的是
+	// `roomFactory`/`componentFactory`这两个引用成员，不需要这里再另外确认注册没跑。
 	void InitBuildings();
 
 	// 遍历所有building的所有room，IsResidential()的加ResidentialCapacity()，除以2——
 	// 老工程Map::InitContents()对"accomodation"的统计口径(先求和再减半)。供调用方
-	// (AForeverFrameworkActor::EnsureMapGenerated())传给Populace::Init()。假定
+	// (AForeverFrameworkActor::EnsurePopulaceGenerated())传给Populace::Init()。假定
 	// InitBuildings()已经跑完。
 	int ComputeAccommodationTarget() const;
 
@@ -192,24 +194,27 @@ private:
 	int height;
 	std::vector<Element> elements; // 行主序扁平数组(y*width+x),取代旧工程Chunk分块
 
-	TerrainFactory terrainFactory;
-	RoadnetFactory roadnetFactory;
-
-	// ModLoader持有mod dll句柄,必须活得至少和terrainFactory/roadnetFactory一样长——它们存的
-	// creator/deleter函数指针指向这些dll的代码段,一旦ModLoader析构FreeLibrary掉dll,
-	// 这些指针就悬空了(实测复现:CreateTerrain调用creator()时access violation)。所以这里
-	// 是Map的成员,不是InitTerrains()/InitRoadnet()内的局部变量。
-	ModLoader modLoader;
+	// 6个map域concept(terrain/roadnet/zone/building/component/room)的Factory不再是Map自己
+	// 持有的成员，而是引用`Registry::Get()`那份全局只注册一次的实例(所有20个concept集中
+	// 注册的地方，不只是map域，见Source/Core/common/registry.md)——mod dll的发现/注册
+	// (LoadLibrary+RegisterConcept)和"实际生成/销毁地图对象"完全分开：注册只在整个UE进程
+	// 生命周期里发生一次(第一次有人调用Registry::Get()时)，Map每次开局构造/结束析构都
+	// 不会重新扫描dll，也不会丢失已经注册好的mod类型。引用成员没有默认值，只能在构造函数
+	// 初始化列表里绑定，所以Map(int,int)的实现文件(map.cpp)必须include common/registry.h；
+	// 这几个成员在类里的声明顺序必须跟构造函数初始化列表里的顺序一致(C++按声明顺序初始化，
+	// 不是按初始化列表书写顺序)。
+	TerrainFactory& terrainFactory;
+	RoadnetFactory& roadnetFactory;
+	ZoneFactory& zoneFactory;
+	BuildingFactory& buildingFactory;
+	RoomFactory& roomFactory;
+	ComponentFactory& componentFactory;
 
 	std::unordered_map<std::string, std::pair<int, std::string>> terrainTextures;
 
 	Roadnet* roadnet = nullptr;
 	std::vector<RoadJunction*> junctions;
 
-	ZoneFactory zoneFactory;
-	BuildingFactory buildingFactory;
-	RoomFactory roomFactory;
-	ComponentFactory componentFactory;
 	// 从磁盘.layout文件解析出来的建筑内部布局模板仓库，InitBuildings()加载一次，
 	// 传给每个Building::Layout()查询，详见building.md。
 	BuildingLayoutLibrary buildingLayoutLibrary;

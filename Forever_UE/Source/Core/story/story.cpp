@@ -2,9 +2,10 @@
 
 #include "story/event.h"
 #include "story/change.h"
+#include "common/utility.h"
 
 #include "common/config.h"
-#include "common/utility.h"
+#include "common/registry.h"
 
 #include <filesystem>
 
@@ -12,14 +13,6 @@
 using namespace std;
 
 namespace {
-	unordered_map<string, string> ToArgsMap(const vector<pair<string, string>>& entries) {
-		unordered_map<string, string> args;
-		for (auto& [id, arg] : entries) {
-			args[id] = arg;
-		}
-		return args;
-	}
-
 	// 主线剧情/系统变量池这两个Script当前阶段都不需要区分具体mod内容，统一走config.json
 	// "script_mods"里已经配好的"empty"id（Forever_Mod/Empty提供），test.json的内容和
 	// 具体挂载的ScriptMod无关，只是需要"随便一个能创建出来的ScriptMod"作为Script的壳。
@@ -33,9 +26,8 @@ namespace {
 	}
 }
 
-Story::Story() {
-	modLoader.RegisterConcept<ScriptFactory>(Config::GetMods(), "RegisterModScripts", "FinishModScripts", &scriptFactory);
-	scriptFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("script_mods")));
+Story::Story() :
+	scriptFactory(Registry::Get().GetScriptFactory()) {
 }
 
 Story::~Story() {

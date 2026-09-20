@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="map">
+      <UniqueIdentifier>{91F363EA-EB0E-475D-AE75-4D6A88161505}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="populace">
+      <UniqueIdentifier>{CA923EFC-DDFA-43C4-9787-FFDB5589ACA5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="society">
+      <UniqueIdentifier>{9420CB25-EE81-45FD-9D5A-C73361DF077E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="story">
+      <UniqueIdentifier>{AE1E463F-39FD-4A6C-B6F9-182B6F4DA6AD}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="industry">
+      <UniqueIdentifier>{E7E3F184-3FF2-4915-BDB2-6097FCAB07D5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="traffic">
+      <UniqueIdentifier>{31FB5B01-01E6-4EEA-84C8-98CF3003C1D2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="player">
+      <UniqueIdentifier>{6C60759F-9BA0-4865-ACA2-0416D122AA87}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="basic.cpp" />
+    <ClCompile Include="map\terrain_basic.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\roadnet_basic.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\zone_basic.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_basic.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_basic.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_basic.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\name_chinese.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_basic.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\app_basic.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_basic.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\scheduler_basic.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="society\job_basic.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\organization_basic.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="story\script_basic.cpp">
+      <Filter>story</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\product_basic.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\storage_basic.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\manufacture_basic.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\route_basic.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\station_basic.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\vehicle_basic.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="map\terrain_basic.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\roadnet_basic.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\zone_basic.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_basic.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_basic.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\room_basic.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_basic.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\app_basic.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_basic.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\name_chinese.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\scheduler_basic.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="society\job_basic.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\organization_basic.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="story\script_basic.h">
+      <Filter>story</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\product_basic.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\storage_basic.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\manufacture_basic.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\route_basic.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\station_basic.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\vehicle_basic.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

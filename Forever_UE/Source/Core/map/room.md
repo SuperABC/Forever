@@ -22,7 +22,7 @@
   （床位数）/`IsWorkspace()`/`WorkspaceCapacity()`（工位数）/`IsStorage()`/
   `StorageConfig()`（仓库属性）/`IsManufacture()`/`ManufactureTypes()`（产线描述），全部
   纯转发`RoomMod`同名字段（见`Source/Dependence/map/room_mod.h`）——照抄老工程`RoomMod`
-  的字段设计。这次只有`ResidenceRoom`（`Source/Basic/map/room_residence.cpp`，改名自
+  的字段设计。这次只有`ResidenceRoom`（`Source/Basic/map/room_basic.cpp`，改名自
   `RoomBasic`）真正设了`isResidential=true`+`residentialCapacity=1`，另外3类保持
   `RoomMod`基类默认值（false/空），等Job/Industry域迁移时再由各自的具体`RoomMod`子类真正
   启用，详见`Source/Core/populace/populace.md`。

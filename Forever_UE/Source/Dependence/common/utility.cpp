@@ -1,4 +1,5 @@
 #include "utility.h"
+
 #include "error.h"
 
 #include <ctime>
@@ -12,7 +13,6 @@
 #include <cstdarg>
 #include <cstdio>
 #include <vector>
-
 #include <windows.h>
 
 

@@ -2,6 +2,7 @@
 
 #include "common/error.h"
 
+
 using namespace std;
 
 Terrain::Terrain(TerrainFactory* factory, const string& terrainId) :

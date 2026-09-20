@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="common">
+      <UniqueIdentifier>{A6D7336B-0B9E-498B-8574-F756D7D1DCDE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="map">
+      <UniqueIdentifier>{A36765A3-6D3F-4906-9AA7-B34053844B31}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="populace">
+      <UniqueIdentifier>{6227C096-B9FB-496F-9975-3631378B09BC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="society">
+      <UniqueIdentifier>{2A338AD9-53B5-4533-9984-006B06D54789}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="story">
+      <UniqueIdentifier>{AC5187C4-FADA-452A-9CF6-B7DC9ADEC273}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="industry">
+      <UniqueIdentifier>{410E5A17-5BC5-4183-B1B7-171DD257AA36}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="traffic">
+      <UniqueIdentifier>{0523EDD7-4945-4D8F-8630-8E18E625D1EF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="player">
+      <UniqueIdentifier>{F8FD286C-7D43-48EF-AA32-7EE34C3BBC00}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="common\config.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\loader.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\implement.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="common\registry.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="society\society.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\industry.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\traffic.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="player\player.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="map\terrain.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\roadnet.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\zone.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\map.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\citizen.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\name.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\populace.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="story\milestone.cpp">
+      <Filter>story</Filter>
+    </ClCompile>
+    <ClCompile Include="story\script.cpp">
+      <Filter>story</Filter>
+    </ClCompile>
+    <ClCompile Include="story\story.cpp">
+      <Filter>story</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="common\class.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\config.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\loader.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\implement.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\registry.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="society\society.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\industry.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\traffic.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="player\player.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="map\terrain.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\roadnet.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\zone.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\room.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\map.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\citizen.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\name.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\populace.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="story\milestone.h">
+      <Filter>story</Filter>
+    </ClInclude>
+    <ClInclude Include="story\script.h">
+      <Filter>story</Filter>
+    </ClInclude>
+    <ClInclude Include="story\story.h">
+      <Filter>story</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

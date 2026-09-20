@@ -1,12 +1,10 @@
 #include "name_factory.h"
 
+
 using namespace std;
 
 void NameFactory::RegisterName(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void NameFactory::CleanTemp() {
 }
 
 NameMod* NameFactory::CreateName(const string& id) {
@@ -14,12 +12,10 @@ NameMod* NameFactory::CreateName(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	NameMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	NameMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

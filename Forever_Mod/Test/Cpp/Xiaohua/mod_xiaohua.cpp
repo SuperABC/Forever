@@ -14,17 +14,16 @@ extern "C" __declspec(dllexport) void* GetModBuildings() {
 
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
 	factory->RegisterBuilding(PengzhanBuilding::GetId(),
-		[]() -> BuildingMod* { return new PengzhanBuilding(); },
+		[](const std::string&) -> BuildingMod* { return new PengzhanBuilding(); },
 		[](BuildingMod* building) { delete building; },
 		&PengzhanBuilding::RandomAcreage, &PengzhanBuilding::GetAcreageMin,
 		&PengzhanBuilding::GetAcreageMax, &PengzhanBuilding::GetPower, &PengzhanBuilding::Assign);
 	factory->RegisterBuilding(YizhongBuilding::GetId(),
-		[]() -> BuildingMod* { return new YizhongBuilding(); },
+		[](const std::string&) -> BuildingMod* { return new YizhongBuilding(); },
 		[](BuildingMod* building) { delete building; },
 		&YizhongBuilding::RandomAcreage, &YizhongBuilding::GetAcreageMin,
 		&YizhongBuilding::GetAcreageMax, &YizhongBuilding::GetPower, &YizhongBuilding::Assign);
 }
 
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {
-	factory->CleanTemp();
 }

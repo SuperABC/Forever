@@ -19,8 +19,9 @@
   西臂`AREA_RESIDENTIAL_HIGH`、东臂`AREA_RESIDENTIAL_LOW`、北臂`AREA_COMMERCIAL_HIGH`、
   南臂`AREA_INDUSTRIAL_HIGH`，外圈lot统一`AREA_RESIDENTIAL_LOW`——核对老工程
   `E:\Projects\Forever_UE\Source\Basic\map\roadnet_basic.cpp:258-326`确认过，不存在
-  "老工程本来就随机、这次只是恢复"这回事，是一次刻意的新行为，服务于`building_shop.md`/
-  `building_factory.md`新增的商店/工厂建筑——它们靠`GetPower(AREA_TYPE)`按分区类型
+  "老工程本来就随机、这次只是恢复"这回事，是一次刻意的新行为，服务于`building_basic.md`
+  （`ShopBuilding`/`FactoryBuilding`）新增的商店/工厂建筑——它们靠`GetPower(AREA_TYPE)`
+  按分区类型
   竞争lot（商业/工业分区），分区类型不再单一固定之后，地图上才会同时长出住宅/商店/
   工厂三种建筑，而不是清一色住宅（一次PIE实测：`AREA_OFFICIAL_HIGH`1个，
   `AREA_RESIDENTIAL_HIGH`/`AREA_COMMERCIAL_HIGH`/`AREA_INDUSTRIAL_HIGH`分别14/17/16个，

@@ -1,4 +1,5 @@
 #include "json.h"
+
 #include "error.h"
 
 #include <cmath>

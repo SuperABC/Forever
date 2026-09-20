@@ -2,6 +2,7 @@
 
 #include "common/error.h"
 
+
 using namespace std;
 
 Name::Name(NameFactory* factory, const string& nameId) :
@@ -27,6 +28,10 @@ string Name::GetType() const {
 
 string Name::GetName() const {
 	return name;
+}
+
+NameMod* Name::GetMod() const {
+	return mod;
 }
 
 string Name::GetSurname(const string& fullName) const {

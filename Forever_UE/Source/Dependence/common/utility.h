@@ -7,7 +7,6 @@
 #include <codecvt>
 #include <locale>
 #include <exception>
-
 #include <variant>
 #include <functional>
 
@@ -15,9 +14,6 @@
 #define COSTOM_RUNTIME
 
 #define OBJECT_HOLDER
-
-// Factory 暂存区预留桶容量，避免单批注册触发跨模块的桶数组扩容
-#define TEMP_RESERVE_CAPACITY 64
 
 #ifdef _DEBUG
 #define MOD_TEST

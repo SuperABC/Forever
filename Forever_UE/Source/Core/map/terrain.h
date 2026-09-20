@@ -7,6 +7,7 @@
 #include <utility>
 #include <functional>
 
+
 // Terrain实体:持有一个具体TerrainMod实例(由TerrainFactory创建/销毁),把它的业务方法
 // 转发出来。自身不持有任何地图格子数据——格子数据(地形类型/高度/水面/hatch)在Map/Element
 // 里,详见 Source/Core/map/terrain.md、map.md。

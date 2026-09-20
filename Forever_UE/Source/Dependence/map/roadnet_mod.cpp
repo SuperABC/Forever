@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+
 using namespace std;
 
 void RoadnetMod::AddHatch(const Connection* connection, float t1, float t2, float width) {

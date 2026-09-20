@@ -4,6 +4,7 @@
 #include <utility>
 #include <functional>
 
+
 // 阶段4-1:Terrain是Map域第一个补齐真正业务接口的concept,详见 Source/Dependence/map/terrain_mod.md。
 class TerrainMod {
 public:
@@ -12,12 +13,6 @@ public:
 
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
-
-	// config.json里"terrain_mods"数组中该mod id后面的命令行式参数字符串(如
-	// "pengzhan --density 1.0"里的"--density 1.0"),由<Concept>Factory::Create<Concept>
-	// 创建实例后立刻调用一次。默认空实现,不需要参数的mod不用重写,格式解析完全由重写者
-	// 自己决定。
-	virtual void ApplyArgs(const std::string& args) {}
 
 	// 构建优先级,越高越先执行DistributeTerrain(后执行的可以覆盖先执行的地形类型/高度)。
 	virtual float GetPriority() const = 0;

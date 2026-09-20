@@ -8,6 +8,7 @@
 // 重试(见GenerateName两参数重载注释)，保留只是为了逐行对照方便。
 #define MAX_ALLOCATION_ATTEMPTS 16
 
+
 using namespace std;
 
 int ChineseName::count = 0;

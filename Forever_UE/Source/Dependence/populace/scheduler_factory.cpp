@@ -1,12 +1,10 @@
 #include "scheduler_factory.h"
 
+
 using namespace std;
 
 void SchedulerFactory::RegisterScheduler(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void SchedulerFactory::CleanTemp() {
 }
 
 SchedulerMod* SchedulerFactory::CreateScheduler(const string& id) {
@@ -14,12 +12,10 @@ SchedulerMod* SchedulerFactory::CreateScheduler(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	SchedulerMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	SchedulerMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

@@ -1,5 +1,6 @@
 #include "populace/citizen.h"
 
+
 using namespace std;
 
 Citizen::Citizen(const string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay) :

@@ -1,6 +1,6 @@
 # script_mod.h
 
-阶段3骨架（`GetType`/`GetName`/`ApplyArgs`）之上，阶段4新增：
+阶段3骨架（`GetType`/`GetName`）之上，阶段4新增：
 
 - `ScriptAction`类型别名：`using ScriptAction = std::variant<const Dialog*, const Change*>;`——
   `Script::MatchEvent`匹配命中后要执行的一个动作，`Dialog*`/`Change*`都是引用（本体挂在某个

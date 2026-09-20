@@ -7,6 +7,7 @@
 #include "industry/industry.h"
 #include "traffic/traffic.h"
 #include "player/player.h"
+#include "common/registry.h"
 #include "common/utility.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
@@ -90,14 +91,35 @@ void AForeverFrameworkActor::BeginPlay()
 	// 阶段4逐个域落地后可以删除或改成更有用的调试信息。
 	UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor initialized with 9 framework components: Asset/Building/Populace/Roadnet/Room/Story/Terrain/Traffic/Zone"));
 
+	// 每次真正开局都要重新按当前已经读进内存的config内容刷新一遍参数表——不同局可能用不同
+	// 的config.json(参数因此也可能不同),但mod dll的发现/注册(Registry构造函数)只应该跑
+	// 一次,两者调用频率不同,不能合并,见Source/Core/common/registry.md。放在这里(而不是
+	// 某一个具体域的Ensure*Generated()里)是因为它不属于任何单个域,下面7个Ensure*Generated()
+	// 都会用到某个Factory,理应在它们之前统一刷新一次。
+
+	Registry::Get().ReloadModArgs();
+
+	// 按依赖顺序显式列出全部7个域的Ensure*Generated()——一个函数体内写出来的调用顺序就是
+	// 实际执行顺序,不存在"调用方可能不按顺序调"这回事,所以每个Ensure*Generated()自己只保证
+	// 自己那个域,不会再调用别的Ensure*Generated()。顺序本身由真实依赖决定:EnsurePopulaceGenerated
+	// 要用到map(Map::ComputeAccommodationTarget/Checkin),必须排在EnsureMapGenerated之后;
+	// EnsurePlayerGenerated要用到populace->GetCurrentYear(),必须排在EnsurePopulaceGenerated
+	// 之后;Society/Industry/Traffic/Story这次都是互相独立的空骨架或独立数据源,顺序上没有
+	// 别的硬性要求。
 	EnsureMapGenerated();
+	EnsurePopulaceGenerated();
+	EnsureSocietyGenerated();
+	EnsurePlayerGenerated();
+	EnsureIndustryGenerated();
+	EnsureTrafficGenerated();
+	EnsureStoryGenerated();
 }
 
 void AForeverFrameworkActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// player在EnsureMapGenerated()跑完之前是nullptr——BeginPlay里EnsureMapGenerated()
+	// player在EnsurePlayerGenerated()跑完之前是nullptr——BeginPlay里7个Ensure*Generated()
 	// 在Super::BeginPlay()之后同步跑完，引擎只会在BeginPlay之后才调用Tick，理论上不会遇到
 	// 空指针，这里判空只是和其它地方一致的防御性写法。
 	if (player) {
@@ -127,15 +149,6 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 	map->InitZones();
 	map->InitBuildings();
 
-	// Populace和Map平级，不是Map的成员——这里编排两者之间唯一的交互(Map::
-	// ComputeAccommodationTarget()喂给Populace::Init()，Populace::Init()跑完的结果再喂给
-	// Map::Checkin())，和老工程GlobalBase里"int accomodation = map->InitContents();
-	// populace->Init(accomodation, ...); map->Checkin(populace, ...);"同一个编排顺序，
-	// 详见Source/Core/populace/populace.md。
-	populace = new Populace();
-	populace->Init(map->ComputeAccommodationTarget());
-	map->Checkin(*populace);
-
 	if (terrainFramework) {
 		terrainFramework->GenerateTerrain(map);
 	}
@@ -155,29 +168,77 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 	if (buildingFramework) {
 		buildingFramework->GenerateBuildings(map);
 	}
+}
+
+void AForeverFrameworkActor::EnsurePopulaceGenerated()
+{
+	if (populace) return;
+
+	// Populace和Map平级，不是Map的成员——这里编排两者之间唯一的交互(Map::
+	// ComputeAccommodationTarget()喂给Populace::Init()，Populace::Init()跑完的结果再喂给
+	// Map::Checkin())，和老工程GlobalBase里"int accomodation = map->InitContents();
+	// populace->Init(accomodation, ...); map->Checkin(populace, ...);"同一个编排顺序，
+	// 详见Source/Core/populace/populace.md。假定map已经生成好，调用方(BeginPlay)负责保证
+	// EnsureMapGenerated()已经先跑过。
+	populace = new Populace();
+	populace->Init(map->ComputeAccommodationTarget());
+	map->Checkin(*populace);
+
 	if (populaceFramework) {
 		// 这里不SpawnActor任何ACitizenElement——populaceFramework只是缓存
 		// populace->GetCitizens()列表，真正的生成/销毁全部按玩家距离在TickComponent里做，
 		// 见Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md。
 		populaceFramework->GenerateCitizens(map, populace);
 	}
+}
 
-	// Society/Industry/Traffic这三个域这次还是空骨架，新增它们纯粹是为了让PostImplement
-	// （Core/common/implement.h）能拿到7个域的真实指针，见各自的.md。Player这次迁移了
-	// 全局时钟部分，Init()创建Time并交给AForeverFrameworkActor::Tick每帧推进，见player.md。
+void AForeverFrameworkActor::EnsureSocietyGenerated()
+{
+	if (society) return;
+
+	// Society这次还是空骨架，新增它纯粹是为了让PostImplement（Core/common/implement.h）
+	// 能拿到7个域的真实指针，见society.md。
 	society = new Society();
-	industry = new Industry();
-	traffic = new Traffic();
+}
+
+void AForeverFrameworkActor::EnsurePlayerGenerated()
+{
+	if (player) return;
+
+	// Player这次迁移了全局时钟部分，Init()创建Time并交给AForeverFrameworkActor::Tick每帧
+	// 推进，见player.md。
 	player = new Player();
 	player->Init();
 	// 市民繁衍模拟从2000年起演化到populace自己认为的"当前年份"(Populace::GetCurrentYear()，
 	// 老工程population.cpp里time->SetYear(year+2000)的新工程对应物——那边直接改Player的
 	// 时钟，这边改成读populace算出来的年份再喂给Player::SetTime)，开局时间定为那一年的
 	// 1月1日8点，让Citizen的生日/年龄和这个初始时钟保持自洽，见populace.md"生日换算"一节。
+	// 假定populace已经生成好，调用方(BeginPlay)负责保证EnsurePopulaceGenerated()已经先跑过。
 	player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
+}
 
-	// 阶段4 Story落地：和map/populace不互相依赖，放在最后创建即可。Init()读取
-	// Resource/Story/test.json，随后立刻广播一次GameStartEvent，见storyFramework.md。
+void AForeverFrameworkActor::EnsureIndustryGenerated()
+{
+	if (industry) return;
+
+	// Industry这次还是空骨架，新增它纯粹是为了让PostImplement能拿到7个域的真实指针。
+	industry = new Industry();
+}
+
+void AForeverFrameworkActor::EnsureTrafficGenerated()
+{
+	if (traffic) return;
+
+	// Traffic这次还是空骨架，新增它纯粹是为了让PostImplement能拿到7个域的真实指针。
+	traffic = new Traffic();
+}
+
+void AForeverFrameworkActor::EnsureStoryGenerated()
+{
+	if (story) return;
+
+	// 阶段4 Story落地：和map/populace不互相依赖。Init()读取Resource/Story/test.json，
+	// 随后立刻广播一次GameStartEvent，见storyFramework.md。
 	story = new Story();
 	story->Init();
 	if (storyFramework) {

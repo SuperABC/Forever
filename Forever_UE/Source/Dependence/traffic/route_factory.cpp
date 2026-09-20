@@ -1,12 +1,10 @@
 #include "route_factory.h"
 
+
 using namespace std;
 
 void RouteFactory::RegisterRoute(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void RouteFactory::CleanTemp() {
 }
 
 RouteMod* RouteFactory::CreateRoute(const string& id) {
@@ -14,12 +12,10 @@ RouteMod* RouteFactory::CreateRoute(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	RouteMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	RouteMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

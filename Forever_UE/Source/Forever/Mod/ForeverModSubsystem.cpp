@@ -11,7 +11,6 @@
 #include "populace/name_factory.h"
 #include "populace/scheduler_factory.h"
 #include "society/job_factory.h"
-#include "society/calendar_factory.h"
 #include "society/organization_factory.h"
 #include "story/script_factory.h"
 #include "industry/product_factory.h"
@@ -34,10 +33,10 @@ namespace {
 		return map;
 	}
 
-	// 21个concept共用的校验逻辑:遍历factory里已注册的id,创建一个临时实例(Create<Concept>
-	// 内部会自动调用instance->ApplyArgs(),用的是SetModArgs预先设置好的参数表),把
+	// 20个concept共用的校验逻辑:遍历factory里已注册的id,创建一个临时实例(Create<Concept>
+	// 内部会查SetModArgs预先设置好的参数表,把参数字符串直接传给creator创建实例),把
 	// id/GetType()/GetName()打进日志(GetName()对Empty<Concept>会把参数字符串带回来,用于
-	// 验证参数传递链路),再销毁。create/destroy用lambda传入,因为21个<Concept>Factory的
+	// 验证参数传递链路),再销毁。create/destroy用lambda传入,因为20个<Concept>Factory的
 	// Create/Destroy方法名各不相同,没有共同基类可以多态调用。
 	template <typename FactoryT, typename CreateFn, typename DestroyFn>
 	void ValidateFactory(FactoryT& factory, const TCHAR* label, CreateFn create, DestroyFn destroy) {
@@ -152,15 +151,6 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		ValidateFactory(factory, TEXT("Job"),
 			[](JobFactory& f, const std::string& id) { return f.CreateJob(id); },
 			[](JobFactory& f, JobMod* m) { f.DestroyJob(m); });
-	}
-
-	{
-		CalendarFactory factory;
-		factory.SetModArgs(ToArgsMap(Config::GetConceptMods("calendar_mods")));
-		modLoader.RegisterConcept<CalendarFactory>(mods, "RegisterModCalendars", "FinishModCalendars", &factory);
-		ValidateFactory(factory, TEXT("Calendar"),
-			[](CalendarFactory& f, const std::string& id) { return f.CreateCalendar(id); },
-			[](CalendarFactory& f, CalendarMod* m) { f.DestroyCalendar(m); });
 	}
 
 	{

@@ -2,6 +2,7 @@
 
 #include "common/utility.h"
 
+
 Player::Player() {
 }
 

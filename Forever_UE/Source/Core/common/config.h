@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <filesystem>
 
+
 // 阶段3裁剪版Config:只保留"读取config.json + 扫描dll_paths/layout_paths目录 + 每个concept
 // 的mod参数列表"相关的接口(第N轮迁移——Building内部布局落地时补回了layout_paths/
 // AddLayoutPath/GetLayouts，不再是纯占位)。旧工程Config类里的启用禁用状态
@@ -18,7 +19,7 @@ public:
 	// 读取path指向的config.json,清空并重建dllPaths/layoutPaths/conceptMods。内部对
 	// dll_paths/layout_paths两个数组逐项分别调用AddDllPath/AddLayoutPath(相对路径都相对
 	// config.json自己所在目录configDir解析);并把所有以"_mods"结尾的顶层key当作一个concept
-	// 的mod列表解析(不需要硬编码21个concept的名字,配置文件本身决定内容)。找不到文件或json
+	// 的mod列表解析(不需要硬编码20个concept的名字,配置文件本身决定内容)。找不到文件或json
 	// 语法错误时静默留空,不抛异常(阶段3约定,调用方据此决定要不要回退到硬编码默认目录)。
 	static void ReadConfig(const std::string& path);
 
@@ -52,8 +53,8 @@ public:
 
 	// jsonKey形如"building_mods"。返回该数组解析出的(id, 参数字符串)列表——每个数组元素
 	// 按第一个空格切成两段,如"pengzhan --density 1.0"切成("pengzhan", "--density 1.0"),
-	// 没有空格则参数为空串。参数字符串原样返回,格式/是否使用完全由mod自己的
-	// <Concept>Mod::ApplyArgs决定,Config不做任何解析。jsonKey不存在时返回空列表。
+	// 没有空格则参数为空串。参数字符串原样返回,格式/是否使用完全由mod自己的creator(收到
+	// 这个字符串后决定怎么用)决定,Config不做任何解析。jsonKey不存在时返回空列表。
 	static std::vector<std::pair<std::string, std::string>> GetConceptMods(const std::string& jsonKey);
 
 private:

@@ -12,18 +12,21 @@ domain 内部怎么再拆，原文写明"本阶段开始时另开session确定"�
 
 ## 一、复核：阶段0~3已经搭好的地基
 
-- **8个domain的21个可扩展concept骨架已铺满**（阶段3）：`Source/Dependence/README.md` 有完整
-  的"domain × concept × Mod接口 × Factory × 探测符号"对照表，21个 `<Concept>Mod`/
-  `<Concept>Factory` 现在都只有 `GetType()`/`GetName()`/`ApplyArgs()`，业务接口留白。
-  `Source/Basic/<domain>/<concept>_basic.h` 对应21个占位默认实现。
+- **8个domain的20个可扩展concept骨架已铺满**（阶段3；society域的Calendar这个concept后来
+  被判定不再需要，整体删掉，原来是21个）：`Source/Dependence/README.md` 有完整的"domain ×
+  concept × Mod接口 × Factory × 探测符号"对照表，20个 `<Concept>Mod`/`<Concept>Factory`
+  现在都只有 `GetType()`/`GetName()`，业务接口留白；参数不经过Mod基类的任何钩子方法，
+  由`Create<Concept>(id)`创建实例那一刻直接传给注册的creator函数。
+  `Source/Basic/<domain>/<concept>_basic.h` 对应20个占位默认实现。
 - **Framework Actor 收敛骨架已搭好**（阶段2）：`AForeverFrameworkActor` + 9个
   `UForeverFrameworkComponent` 子类（Asset/Building/Populace/Roadnet/Room/Story/
   Terrain/Traffic/Zone），等阶段4填逻辑（`Terrain`已在阶段4-1完成）。**没有Global域组件**——
   阶段4-1确认这个角色已经由`AForeverFrameworkActor`自己承担，不需要单独的子组件，详见
   `ForeverFrameworkActor.md`。
 - **Mod加载/参数化链路已跑通**（阶段3）：`Config` + `ModLoader` + `ForeverModSubsystem` 验证过
-  "config.json → 扫描dll → 加载注册 → 创建实例(自动ApplyArgs) → 读身份信息"整条链路，21个
-  concept全覆盖，但目前是`ForeverModSubsystem`临时代管，`Core/common/loader.md`已经写明
+  "config.json → 扫描dll → 加载注册 → 创建实例(参数字符串直接传给creator) → 读身份信息"
+  整条链路，20个concept全覆盖，但目前是`ForeverModSubsystem`临时代管，
+  `Core/common/loader.md`已经写明
   阶段4要把这份职责转移给"真正的领域系统类"（如`Map`/`Story`）。
 - **视角/输入/PlayerController骨架已就绪**（阶段1）：`ForeverCharacter`/
   `ForeverPlayerController`/`ForeverGameMode`/`ForeverPlayerState`。`MainController`旧蓝图里
@@ -104,7 +107,7 @@ domain的业务代码"，而是一套**通用、不感知任何具体domain**的
 | map | Terrain、Roadnet、Zone、Building、Component、Room | `Block`、`Map`（聚合）、`geometry.h`原语 | Terrain/Roadnet/Zone/Building/Room（5个） | BuildingElement、RoomElement、ZoneElement、ElevatorElement | Building→`Xiaohua`、`Yuanshen`（`Forever_Mod/Test`） |
 | populace | Name、Scheduler | `Person`、`Commute`、`Experience`、`Populace`（聚合） | Populace | CharacterElement | 无 |
 | traffic | Route、Station、Vehicle | `Traffic`（聚合） | Traffic | VehicleElement | 无 |
-| society | Job、Calendar、Organization | `Society`（聚合） | 无独立Framework组件（是否新增第9个域组件，还是直接落在`AForeverFrameworkActor`自己身上，待细化时确认——**不再考虑"并入Global"，因为Global域组件本身已经在阶段4-1移除**） | 无 | 无 |
+| society | Job、Organization | `Society`（聚合） | 无独立Framework组件（是否新增第9个域组件，还是直接落在`AForeverFrameworkActor`自己身上，待细化时确认——**不再考虑"并入Global"，因为Global域组件本身已经在阶段4-1移除**） | 无 | 无 |
 | industry | Product、Storage、Manufacture | `Industry`（聚合） | 同上，待确认 | 无 | 无 |
 | story | Script | `Milestone`、`Story`（聚合）、脚本引擎原语（`condition`/`change`/`event`，见上节） | Story | 无 | Script→`Wxdj`（`Forever_Mod/Wxdj`） |
 | player（**注意**：这是旧内核的domain名，和阶段1已经做完的`Source/Forever/Player`模块**不是一回事**，见下方专门说明） | Asset、App、Puzzle | `Phone`、`Player`（聚合，游戏内"玩家存档态"，不是`AForeverPlayerController`） | Asset | AssetElement | 无 |
@@ -200,7 +203,7 @@ Society（组织成员）、阶段6（玩家/NPC数据统一）打基础。
 `Traffic_C::QuitVehicle`）。是阶段7"车辆导航系统"的直接地基，车辆本身仍按"现状勘察结论"用可
 操控立方体占位，不引入`CitySampleVehicles`。
 
-### 4-4　Society域（Job / Calendar / Organization / Society聚合）
+### 4-4　Society域（Job / Organization / Society聚合）
 
 依赖4-1的`Component`/`Room`、4-2的`Person`/`Scheduler`。无对应Framework组件（Framework
 组件列表里没有"Society"，Global域组件本身也已经在阶段4-1移除，不再是"并入Global"的候选），

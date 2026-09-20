@@ -1,12 +1,13 @@
 #pragma once
 
+#include "map/geometry.h"
+
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <tuple>
 #include <utility>
 
-#include "map/geometry.h"
 
 // (component名字, id)分组key的hash函数对象——AssignRoom/ArrangeRow用这个组合key把散落在
 // 不同楼层/槽位的Room归到同一个Component下，见下面singles/rows两个容器的注释。
@@ -78,12 +79,6 @@ public:
 	// 计数器保证实例名字唯一"的模式，见Map::AddBuilding的寻址唯一性说明）——GetName()是普通的、
 	// 无副作用的只读getter，不需要在调用时才计算。
 	virtual const char* GetName() = 0;
-
-	// config.json里"building_mods"数组中该mod id后面的命令行式参数字符串(如
-	// "pengzhan --density 1.0"里的"--density 1.0"),由<Concept>Factory::Create<Concept>
-	// 创建实例后立刻调用一次。默认空实现,不需要参数的mod不用重写,格式解析完全由重写者
-	// 自己决定。
-	virtual void ApplyArgs(const std::string& args) {}
 
 	// 真正创建出Building实例、SetPosition/SetBoundaryRoad都设好之后，Map::InitZones()/
 	// InitBuildings()会通过Building::Layout()调用这一个虚方法一次，用来在这个真实例上填好

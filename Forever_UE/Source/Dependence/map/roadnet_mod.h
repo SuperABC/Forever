@@ -1,11 +1,12 @@
 #pragma once
 
+#include "map/geometry.h"
+
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <functional>
 
-#include "map/geometry.h"
 
 // RoadnetMod:路网布局方案的Mod扩展点。和Terrain(可以多个mod叠加分发)不同,一次只应该有
 // 一个路网布局方案生效,由RoadnetFactory::SetConfig/GetRoadnet做单选,详见roadnet_factory.h。
@@ -16,7 +17,6 @@ public:
 
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
-	virtual void ApplyArgs(const std::string& args) {}
 
 	// 构建路网:根据地图宽高及地形/水域采样回调,把结果填进下面externs/intersections/roads/lots
 	// 四个成员。nodeStaticCount是宿主传入的当前Node::count计数器值,实现开头必须先

@@ -1,12 +1,10 @@
 #include "station_factory.h"
 
+
 using namespace std;
 
 void StationFactory::RegisterStation(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void StationFactory::CleanTemp() {
 }
 
 StationMod* StationFactory::CreateStation(const string& id) {
@@ -14,12 +12,10 @@ StationMod* StationFactory::CreateStation(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	StationMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	StationMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

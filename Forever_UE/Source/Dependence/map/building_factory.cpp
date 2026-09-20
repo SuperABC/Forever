@@ -1,5 +1,6 @@
 #include "building_factory.h"
 
+
 using namespace std;
 
 void BuildingFactory::RegisterBuilding(const string& id, CreateFunc creator, DestroyFunc deleter,
@@ -8,20 +9,15 @@ void BuildingFactory::RegisterBuilding(const string& id, CreateFunc creator, Des
 	registries[id] = { creator, deleter, randomAcreage, acreageMin, acreageMax, power, assign };
 }
 
-void BuildingFactory::CleanTemp() {
-}
-
 BuildingMod* BuildingFactory::CreateBuilding(const string& id) {
 	auto it = registries.find(id);
 	if (it == registries.end())
 		return nullptr;
 
-	BuildingMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	BuildingMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

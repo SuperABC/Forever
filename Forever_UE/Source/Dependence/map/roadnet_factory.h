@@ -1,10 +1,11 @@
 #pragma once
 
+#include "map/roadnet_mod.h"
+
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "map/roadnet_mod.h"
 
 // 最小注册表(创建/销毁/枚举)+单选(SetConfig/GetRoadnet)——不恢复旧工程的Temp暂存/合并
 // 两段式注册,和terrain_factory.h的简化决定一致,详见 Source/Dependence/README.md。
@@ -21,20 +22,18 @@
 //
 // 参数传递:调用方在RegisterConcept之前调用SetModArgs,把从config.json
 // "roadnet_mods"数组解析出的(id, 参数字符串)表交给Factory,一直保留在
-// configuredArgs里(不并入registries,避免同一份参数存两份);CreateRoadnet创建实例后
-// 直接按id查configuredArgs、调用instance->ApplyArgs(),不需要mod自己关心参数从哪来。
+// configuredArgs里(不并入registries,避免同一份参数存两份);CreateRoadnet创建实例时
+// 直接按id查configuredArgs、把参数字符串传给creator,mod自己的creator决定怎么用
+// (传给构造函数/自己存着都行)——Factory不再替mod调用任何"创建后初始化"钩子。
 class RoadnetFactory {
 public:
-	using CreateFunc = RoadnetMod*(*)();
+	using CreateFunc = RoadnetMod*(*)(const std::string&);
 	using DestroyFunc = void(*)(RoadnetMod*);
 
 	RoadnetFactory() = default;
 	virtual ~RoadnetFactory() = default;
 
 	virtual void RegisterRoadnet(const std::string& id, CreateFunc creator, DestroyFunc deleter);
-
-	// 阶段3占位:Mod导出的FinishModRoadnets(factory)按老约定会调用它,先留空实现。
-	virtual void CleanTemp();
 
 	virtual RoadnetMod* CreateRoadnet(const std::string& id);
 

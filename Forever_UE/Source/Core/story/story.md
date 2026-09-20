@@ -7,12 +7,14 @@
 
 ## 持有的内容
 
-- `ScriptFactory scriptFactory` + `ModLoader modLoader`：和`Map::InitTerrains()`同款的mod注册
-  手法——`modLoader.RegisterConcept<ScriptFactory>(Config::GetMods(), "RegisterModScripts",
-  "FinishModScripts", &scriptFactory)`，`config.json`里`"script_mods"`已经配好
-  `["wxdj", "empty --test true"]`（`Source/Core/common/loader.cpp`的`kModConceptDescriptors`
-  早就有`Scripts`这一项，`Forever_Mod/Empty`提供id为`"empty"`的`EmptyScript`），不需要新增
-  任何mod发现/注册的基础设施。
+- `ScriptFactory& scriptFactory`：引用成员，构造函数初始化列表里绑定
+  `Registry::Get().GetScriptFactory()`——最初这里和`Map::InitTerrains()`一样自己持有一份
+  `ScriptFactory scriptFactory;`+`ModLoader modLoader;`，每次`new Story()`（每次开局）都会
+  重新扫描/注册一遍script mod dll，被要求和`Map`/`Populace`一起统一挪进`Registry`
+  （`Source/Core/common/registry.md`），mod dll的发现/注册现在只在整个UE进程生命周期里跑
+  一次。`config.json`里`"script_mods"`已经配好`["wxdj", "empty --test true"]`
+  （`Source/Core/common/loader.cpp`的`kModConceptDescriptors`早就有`Scripts`这一项，
+  `Forever_Mod/Empty`提供id为`"empty"`的`EmptyScript`）。
 - `std::vector<Script*> mainScripts`：主线剧情Script数组。用户点2字面写的是"数组"，这次按数组
   实现（为以后多个主线剧情脚本预留），但当前阶段`Init()`里只塞1个（从`test.json`读取）。
 - `Script* systemScript`：`system.`前缀路由的目标（见`Dependence/story/expression.md`
@@ -64,8 +66,9 @@ use-after-free。改成回调、在`GameStartEvent`还活着的这个函数调�
 
 ## 依赖关系
 
-- 依赖：`script.h`、`script_factory.h`、`common/loader.h`（`ModLoader`）、`common/config.h`
-  （`Config::GetMods`/`GetConceptMods`/`GetConfigDir`）、`event.h`（`GameStartEvent`）、
+- 依赖：`script.h`、`script_factory.h`、`common/registry.h`（`Story`构造函数绑定
+  `scriptFactory`，见`registry.md`）、`common/config.h`（`Config::GetConfigDir`）、
+  `event.h`（`GameStartEvent`）、
   `change.h`（`SetValueChange`）、`Dependence/common/handle.h`（`PostHandle`，
   `BroadcastGameStart`透传给`Script::MatchEvent`）。
 - 被谁依赖：`Forever/Framework/ForeverFrameworkActor.cpp`（持有`Story*`，生命周期管理方式和

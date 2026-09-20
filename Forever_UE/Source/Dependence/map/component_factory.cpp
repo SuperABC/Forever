@@ -1,12 +1,10 @@
 #include "component_factory.h"
 
+
 using namespace std;
 
 void ComponentFactory::RegisterComponent(const string& id, CreateFunc creator, DestroyFunc deleter) {
 	registries[id] = { creator, deleter };
-}
-
-void ComponentFactory::CleanTemp() {
 }
 
 ComponentMod* ComponentFactory::CreateComponent(const string& id) {
@@ -14,12 +12,10 @@ ComponentMod* ComponentFactory::CreateComponent(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
-	ComponentMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	ComponentMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

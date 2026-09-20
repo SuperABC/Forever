@@ -6,12 +6,13 @@ Dialog/Change用`GEngine::AddOnScreenDebugMessage`打印在屏幕左上角"这�
 
 ## 生命周期
 
-`Init(Story*)`由`AForeverFrameworkActor::EnsureMapGenerated()`在创建完`Story`并调用完
+`Init(Story*)`由`AForeverFrameworkActor::EnsureStoryGenerated()`在创建完`Story`并调用完
 `story->Init()`之后调用一次（只存指针，不持有所有权，和其它Framework组件持有`Map*`的方式一致）。
 `BroadcastGameStart()`紧接着被同一处代码调用一次——**不是**放在这个组件自己的`BeginPlay()`里，
 因为`AForeverFrameworkActor::BeginPlay()`是先调`Super::BeginPlay()`（级联触发所有子组件自己的
-`BeginPlay`）、再调`EnsureMapGenerated()`（这里面才会创建`Story`并调`storyFramework->Init(story)`)
-——如果广播逻辑放在这个组件自己的`BeginPlay`里，届时`story`指针还是空的。
+`BeginPlay`）、再依次调用7个`Ensure*Generated()`（`EnsureStoryGenerated()`排在最后，这里面
+才会创建`Story`并调`storyFramework->Init(story)`)——如果广播逻辑放在这个组件自己的
+`BeginPlay`里，届时`story`指针还是空的。
 
 ## 展示逻辑
 

@@ -237,11 +237,17 @@ Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等
 
 ## Building内部布局（组合/房间/楼层几何/行人导航，第N轮迁移）
 
-`InitBuildings()`开头新增：注册`roomFactory`/`componentFactory`（和`buildingFactory`同一套
-`modLoader.RegisterConcept<...>`模式，`config.json`对应`"room_mods"`/`"component_mods"`
-数组）+`buildingLayoutLibrary.ReadTemplates(Config::GetLayouts())`加载一次全局共享的
-`.layout`模板仓库（`Config::GetLayouts()`见`common/config.md`，`BuildingLayoutLibrary`见
-`Source/Core/map/building.md`）。
+`roomFactory`/`componentFactory`(以及`terrainFactory`/`roadnetFactory`/`zoneFactory`/
+`buildingFactory`)的mod注册不再是`Map`自己的职责，全部移到`Registry::Get()`(见
+`Source/Core/common/registry.md`——不只是map域，`Populace`/`Story`各自的Factory也搬进了
+这个单例，同一个问题不能只修map这一处)——这个单例只在整个UE进程生命周期里注册一次，`Map`每次
+`EnsureMapGenerated()`构造/析构都不会重新扫描dll。这也让上一轮拆出来的`Map::
+InitComponents()`/`InitRooms()`失去了存在理由：那两个函数当初只做mod注册、不生成任何
+实例(Room/Component始终是`Building::AssignRoom()`/`ArrangeRow()`里现场创建的)，注册这一步
+挪走之后`Map`层再没有任何属于它们的工作，直接删掉了，不再保留成空函数。`InitBuildings()`
+开头保留的是`buildingLayoutLibrary.ReadTemplates(Config::GetLayouts())`——这是从磁盘解析
+`.layout`模板，不是mod dll注册，仍然每次生成时按需读一遍(`Config::GetLayouts()`见
+`common/config.md`，`BuildingLayoutLibrary`见`Source/Core/map/building.md`)。
 
 原来3处`building->Layout(direction)`调用点都改成
 `building->Layout(direction, buildingLayoutLibrary, roomFactory, componentFactory,
@@ -486,7 +492,7 @@ t排序）；小路自己两侧人行道之间不建"穿过小路本身"的横�
 - `int Map::ComputeAccommodationTarget() const`：遍历所有building的所有room，
   `IsResidential()`的加`ResidentialCapacity()`，除以2——老工程`Map::InitContents()`对
   "accomodation"的统计口径（先求和再减半）。供调用方（`AForeverFrameworkActor::
-  EnsureMapGenerated()`）算好之后传给`Populace::Init()`。
+  EnsurePopulaceGenerated()`）算好之后传给`Populace::Init()`。
 - `void Map::Checkin(const Populace& populace)`：**两个完全独立的步骤**，"房产归属"决定
   每个zone/building/room的`owner`/`stated`是什么，"住处分配"决定谁实际住在(`tenants`/
   `occupants`)哪个room——一个room的owner可以从来没在这里住过（相当于"房东"），见
@@ -520,9 +526,11 @@ t排序）；小路自己两侧人行道之间不建"穿过小路本身"的横�
      独立概念、且归属要迁移老工程的zone/building/room级联算法，才有了现在这版，见
      `Source/Core/populace/populace.md`。
 
-调用顺序：`AForeverFrameworkActor::EnsureMapGenerated()`里`map->InitBuildings()`（residential
-room数据必须先落地）之后、任何Forever层`Generate*`渲染调用之前，依次
-`populace->Init(map->ComputeAccommodationTarget())`→`map->Checkin(*populace)`。
+调用顺序：`AForeverFrameworkActor::EnsureMapGenerated()`（`map->InitBuildings()`，residential
+room数据必须先落地）之后，`EnsurePopulaceGenerated()`里依次
+`populace->Init(map->ComputeAccommodationTarget())`→`map->Checkin(*populace)`——两个
+`Ensure*Generated()`各自只保证自己的域，靠`BeginPlay()`里显式的调用顺序保证前者先跑完，
+详见`Source/Forever/Framework/ForeverFrameworkActor.md`。
 
 ## 依赖关系
 
@@ -532,11 +540,13 @@ room数据必须先落地）之后、任何Forever层`Generate*`渲染调用之�
   `populace/populace.h`/`populace/citizen.h`（`ComputeAccommodationTarget`/`Checkin`的
   `Populace`/`Citizen`参数类型——单向依赖，`Populace`/`Citizen`不反过来include任何map域
   头文件）、`map/geometry.h`（`Quad`/`Node`/`Road`/`Lot`等，`hatches`字段类型）、
-  `common/config.h`、`common/loader.h`（`InitTerrains`/`InitRoadnet`/`InitZones`/
-  `InitBuildings`用）、`common/utility.h`（`debugf`/`GetRandom`）。
+  `common/config.h`（`InitTerrains`/`InitRoadnet`/`InitZones`/`InitBuildings`读config用）、
+  `common/registry.h`（`Map`构造函数绑定6个Factory引用成员，见`registry.md`）、
+  `common/utility.h`（`debugf`/`GetRandom`）。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有`Map*`，
-  `EnsureMapGenerated`时依次调用`InitTerrains`+`InitRoadnet`+`InitZones`+
-  `InitBuildings`+`ComputeAccommodationTarget`+`Checkin`）、`Source/Forever/Framework/
+  `EnsureMapGenerated`时依次调用`InitTerrains`+`InitRoadnet`+`InitZones`+`InitBuildings`；
+  `ComputeAccommodationTarget`+`Checkin`挪到了`EnsurePopulaceGenerated`里，见
+  `ForeverFrameworkActor.md`）、`Source/Forever/Framework/
   ForeverTerrainFrameworkComponent.h/.cpp`
   （`GenerateTerrain(Map*)`读取生成好的格子数据建mesh）、`Source/Forever/Framework/
   ForeverRoadnetFrameworkComponent.h/.cpp`（`GenerateRoadnet(Map*)`读取`GetRoads()`/

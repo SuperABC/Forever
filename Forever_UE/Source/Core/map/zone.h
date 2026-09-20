@@ -1,5 +1,7 @@
 #pragma once
 
+#include "class.h"
+
 #include "map/zone_mod.h"
 #include "map/zone_factory.h"
 #include "map/geometry.h"
@@ -8,8 +10,6 @@
 #include <unordered_map>
 #include <vector>
 
-class Building;
-class Citizen;
 
 // Zone：持有一个具体ZoneMod实例，代表一块已经落地的Zone占位（继承Quad表示自己占据的矩形，
 // 和Lot本身"继承Quad表示自己的矩形"是同一种写法）。这次不实现Zone内部再摆Building的递归

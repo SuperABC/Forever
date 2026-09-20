@@ -6,14 +6,15 @@
 和每个concept的`"<concept>_mods"`参数列表,对全部21个concept分别构造一个临时Factory、
 设置参数表、发现/加载/注册该concept下的所有mod,并把每个已注册id创建出来的临时实例的
 `GetType()`/`GetName()`打进Output Log,验证"config.json→Config解析(dll+参数)→
-Factory.SetModArgs→ModLoader加载并注册进Factory→创建实例(自动ApplyArgs)→读身份信息"
+Factory.SetModArgs→ModLoader加载并注册进Factory→创建实例(参数字符串直接传给creator)→
+读身份信息"
 整条链路可用。**这是阶段3的验证手段,不是最终产品UX**——真正的mod启用/禁用UI、按系统接入
 等能力留到阶段4及以后。
 
 **阶段4-1起,Terrain这一个concept已经不在这份代码里了**——它的`TerrainFactory`现在由
 `Source/Core/map/map.h`的`Map`类长期持有(`Map::InitTerrains()`自己调用
 `ModLoader::RegisterConcept<TerrainFactory>`),不再需要`ForeverModSubsystem`临时代管+
-验证。目前还剩20个concept的验证块。
+验证，Calendar这个concept被整体移除之后又少了一个。目前还剩19个concept的验证块。
 
 ## 关键设计
 
@@ -37,17 +38,17 @@ Factory.SetModArgs→ModLoader加载并注册进Factory→创建实例(自动App
   `Config::GetConceptMods("<concept_lower>_mods")`(解析`config.json`同名数组,每项是
   `"id"`或`"id 参数..."`,和旧工程`"test ---name value"`写法一致),经本文件里的
   `ToArgsMap`辅助函数转成`id->参数`表后传给Factory。之后mod调用`RegisterX(id, ...)`时
-  Factory会按id查这张表、把参数存进注册项,`CreateX(id)`创建实例后自动调用
-  `instance->ApplyArgs(...)`——`ForeverModSubsystem`自己不直接接触参数字符串,只负责把
-  配置读出来、按concept分发给对应Factory。详见`Source/Dependence/README.md`和
-  `Source/Core/common/config.md`。示例见`Forever_Mod/Empty/`(`Empty<Concept>`把收到的参数
-  字符串直接拼进`GetName()`,方便在这里的日志里确认参数到达且按id区分正确)。
+  Factory会按id查这张表、把参数存进注册项,`CreateX(id)`创建实例时直接把参数字符串传给
+  注册的creator函数——`ForeverModSubsystem`自己不直接接触参数字符串,只负责把配置读出来、
+  按concept分发给对应Factory。详见`Source/Dependence/README.md`和
+  `Source/Core/common/config.md`。示例见`Forever_Mod/Empty/`(`Empty<Concept>`的构造函数
+  把收到的参数字符串直接拼进`GetName()`,方便在这里的日志里确认参数到达且按id区分正确)。
 
 ## 依赖关系
 
 - 依赖:`Source/Core/common/config.h`(`Config::ReadConfig`/`GetMods`/`AddDllPath`)、
   `Source/Core/common/loader.h`(`ModLoader::RegisterConcept`/`UnloadAll`)、
-  `Source/Dependence`下全部21个`<domain>/<concept>_factory.h`。
+  `Source/Dependence`下全部20个`<domain>/<concept>_factory.h`。
 - 被谁依赖:无(UE会在game instance启动时自动实例化所有`UGameInstanceSubsystem`,不需要
   手动获取)。
 

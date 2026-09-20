@@ -1,13 +1,17 @@
 #pragma once
 
+#include "player/app_mod.h"
+
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "player/app_mod.h"
 
-// 阶段3骨架:最小注册表(创建/销毁/枚举),真正的Temp暂存/合并逻辑(旧工程的
-// MergeTemp/CleanTemp两段式注册)留到阶段4按需恢复,详见 Source/Core/README.md。
+// 最小注册表(创建/销毁/枚举)。旧工程的Temp暂存区+MergeTemp()两段式注册(用来隔离
+// "探测阶段"和"正式生效阶段")这次没有搬过来——那套机制是为了绕开非virtual方法
+// 跨DLL调用时,mod编译的那份代码去扩容/释放host分配的容器这个问题;现在改成全部公开
+// 方法都是virtual(见下),调用永远落在构造这个Factory实例的那一侧,分配器天然一致,
+// 不再需要暂存区这层隔离,详见Source/Dependence/README.md"关键设计"一节。
 //
 // creator/deleter用裸函数指针,不用std::function——mod侧注册的都是无捕获
 // (capture-less)lambda,天然能隐式转换成函数指针;裸指针是POD类型,跨DLL传递没有
@@ -21,20 +25,18 @@
 //
 // 参数传递:调用方在RegisterConcept之前调用SetModArgs,把从config.json
 // "app_mods"数组解析出的(id, 参数字符串)表交给Factory,一直保留在
-// configuredArgs里(不并入registries,避免同一份参数存两份);CreateApp创建实例后
-// 直接按id查configuredArgs、调用instance->ApplyArgs(),不需要mod自己关心参数从哪来。
+// configuredArgs里(不并入registries,避免同一份参数存两份);CreateApp创建实例时
+// 直接按id查configuredArgs、把参数字符串传给creator,mod自己的creator决定怎么用
+// (传给构造函数/自己存着都行)——Factory不再替mod调用任何"创建后初始化"钩子。
 class AppFactory {
 public:
-	using CreateFunc = AppMod*(*)();
+	using CreateFunc = AppMod*(*)(const std::string&);
 	using DestroyFunc = void(*)(AppMod*);
 
 	AppFactory() = default;
 	virtual ~AppFactory() = default;
 
 	virtual void RegisterApp(const std::string& id, CreateFunc creator, DestroyFunc deleter);
-
-	// 阶段3占位:Mod导出的FinishModApps(factory)按老约定会调用它,先留空实现。
-	virtual void CleanTemp();
 
 	virtual AppMod* CreateApp(const std::string& id);
 

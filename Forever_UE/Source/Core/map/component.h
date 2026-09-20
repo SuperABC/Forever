@@ -1,13 +1,13 @@
 #pragma once
 
+#include "class.h"
+
 #include "map/component_mod.h"
 #include "map/component_factory.h"
 
 #include <string>
 #include <vector>
 
-class Building;
-class Room;
 
 // Component(组合)：若干Room的集合，用来表达"一个公司/组织在一栋building里占据的一片
 // 连续或不连续的房间"（比如某公司租了写字楼的半层，这半层楼的所有房间就是一个Component）。

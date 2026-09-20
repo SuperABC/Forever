@@ -42,4 +42,4 @@
 ## 待办/后续阶段
 
 - 阶段4：`Time`/`Counter`/`ValueType`目前没有被任何domain实际使用（只是可编译的基础设施），
-  等Populace的`Scheduler`、Society的`Calendar`等系统迁移时会成为第一批真正的调用方。
+  等Populace的`Scheduler`、Society的`Job`/`Organization`等系统迁移时会成为第一批真正的调用方。

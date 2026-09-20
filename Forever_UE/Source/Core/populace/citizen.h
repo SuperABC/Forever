@@ -1,12 +1,10 @@
 #pragma once
 
+#include "class.h"
+
 #include <string>
 #include <vector>
 
-class Lot;
-class Zone;
-class Building;
-class Room;
 
 // 照抄老工程Person(E:\Projects\Forever_UE\Source\Core\populace\person.h)的GENDER_TYPE，
 // 名字保持不变。

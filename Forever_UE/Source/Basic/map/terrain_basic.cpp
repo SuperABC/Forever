@@ -6,9 +6,6 @@
 #include <cmath>
 #include <algorithm>
 
-
-using namespace std;
-
 // 海洋深度衰减参数(沿离开地图中心方向,离海岸线越远越深)
 #define OCEAN_DEPTH_RATE 0.05f
 #define OCEAN_SLOPE_JITTER 0.01f
@@ -27,6 +24,9 @@ using namespace std;
 #define RIDGE_STEP_LEN 1.0f
 #define RIDGE_TURN_JITTER 0.15f
 #define RIDGE_SUB_STEPS 4
+
+
+using namespace std;
 
 // 八方向邻居偏移量
 static const int neighborOffsets[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1} };

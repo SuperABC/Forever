@@ -39,10 +39,10 @@
   一个合法mod dll"(是否存在任意一个`GetMod<Concept>`符号),不需要长期持有;真正常驻加载
   是`ModLoader`(`loader.h`)的职责,`Config`和`ModLoader`各自独立`LoadLibraryA`同一个
   dll两次(一次探测、一次注册)在Windows上是安全的(`LoadLibraryA`内部按路径做引用计数)。
-- **`AddDllPath`探测用的21个`GetMod<Concept>`符号名来自`loader.h`的
+- **`AddDllPath`探测用的20个`GetMod<Concept>`符号名来自`loader.h`的
   `GetModConceptDescriptors()`**,不在`config.cpp`里重复维护一份列表,避免两处列表不同步。
 - **`<concept>_mods`数组按mod id配置参数,格式和旧工程一致**——`ReadConfig`扫描所有以
-  `_mods`结尾的顶层key(不硬编码21个concept名字,配置文件本身决定内容有哪些),每个数组
+  `_mods`结尾的顶层key(不硬编码20个concept名字,配置文件本身决定内容有哪些),每个数组
   元素是`"id"`或`"id 参数..."`(如`"pengzhan --density 1.0"`,和旧工程
   `"test ---name value"`的写法一致),按**第一个空格**切成`(id, 参数字符串)`存进
   `conceptMods[jsonKey]`。这条路径最初的设计是按`dll_paths`根目录配一份共用参数(通过
@@ -50,8 +50,8 @@
   `dll_args`概念已经废弃,不要再往`config.json`里加这个key。
 - **`GetConceptMods`只做字符串切分,不做任何格式校验/解析**——参数部分(`"pengzhan
   --density 1.0"`里`"pengzhan"`之后的部分)原样返回,是`--key value`风格还是别的格式,
-  完全由消费方(`<Concept>Mod::ApplyArgs`的具体重写)决定。`Config`/`ModLoader`全程不关心
-  参数内容,只负责"从配置文件读出来、按id传给对的Factory"这件事,详见
+  完全由消费方(mod自己注册的creator函数,创建实例时直接收到这个字符串)决定。`Config`/
+  `ModLoader`全程不关心参数内容,只负责"从配置文件读出来、按id传给对的Factory"这件事,详见
   `Source/Dependence/README.md`里`<Concept>Factory::SetModArgs`的说明。
 
 ## 依赖关系

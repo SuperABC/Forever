@@ -1,16 +1,18 @@
 #include "building.h"
 
+#include "common/error.h"
+#include "common/json.h"
+
 #include "map/room.h"
 #include "map/component.h"
 #include "map/zone.h"
-#include "common/error.h"
-#include "common/json.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+
 
 using namespace std;
 

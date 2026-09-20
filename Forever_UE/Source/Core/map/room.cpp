@@ -1,11 +1,13 @@
 #include "room.h"
 
-#include "map/building.h"
 #include "common/error.h"
+
+#include "map/building.h"
 
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+
 
 using namespace std;
 

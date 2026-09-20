@@ -11,10 +11,9 @@ extern "C" __declspec(dllexport) void* GetModScripts() {
 
 extern "C" __declspec(dllexport) void RegisterModScripts(ScriptFactory* factory) {
 	factory->RegisterScript(WxdjScript::GetId(),
-		[]() -> ScriptMod* { return new WxdjScript(); },
+		[](const std::string&) -> ScriptMod* { return new WxdjScript(); },
 		[](ScriptMod* script) { delete script; });
 }
 
 extern "C" __declspec(dllexport) void FinishModScripts(ScriptFactory* factory) {
-	factory->CleanTemp();
 }

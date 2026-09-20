@@ -7,10 +7,10 @@ populace域时第一次真正填内容：**按玩家距离流式生成/销毁`AC
 确认过的架构决定（老工程`APopulaceBase`同款做法），不是像`ABuildingElement`那样"开局全
 建好、常驻到关卡结束"——人口规模通常比建筑数量大得多，流式管理是更保险的默认选择。
 
-`AForeverFrameworkActor::EnsureMapGenerated()`在`map->Checkin(*populace)`（Core侧人口
-分配完成）之后、其它Forever层`Generate*`渲染调用之后调用一次`GenerateCitizens(map,
-populace)`——这一步**不`SpawnActor`任何东西**，只是把`populace->GetCitizens()`缓存成
-一份`TArray<Citizen*>`，真正的生成/销毁全部在`TickComponent`里按距离做。
+`AForeverFrameworkActor::EnsurePopulaceGenerated()`在`map->Checkin(*populace)`（Core侧
+人口分配完成）之后调用一次`GenerateCitizens(map, populace)`——这一步**不`SpawnActor`
+任何东西**，只是把`populace->GetCitizens()`缓存成一份`TArray<Citizen*>`，真正的生成/
+销毁全部在`TickComponent`里按距离做。
 
 ## 关键设计
 
@@ -72,7 +72,7 @@ building的LOD双阈值同一个防抖动理由：避免玩家在临界距离附
   `Init()`）、`Source/Core/populace/populace.h`/`citizen.h`（`Populace::GetCitizens()`/
   `Citizen`）、`map/map.h`/`map/building.h`/`map/room.h`（估算逻辑位置要用）、
   `Kismet/GameplayStatics.h`（`GetPlayerPawn`）。
-- 被谁依赖：`AForeverFrameworkActor::EnsureMapGenerated()`（`GenerateCitizens(map,
+- 被谁依赖：`AForeverFrameworkActor::EnsurePopulaceGenerated()`（`GenerateCitizens(map,
   populace)`）、`UForeverStoryFrameworkComponent::ApplyControlChange`
   （`FindOrSpawnCitizenByName`，剧情`ChangeControlChange`指定切换控制的市民不一定在附近，
   需要强制生成，见`ForeverStoryFrameworkComponent.md`）。

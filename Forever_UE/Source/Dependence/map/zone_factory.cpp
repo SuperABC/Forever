@@ -1,5 +1,6 @@
 #include "zone_factory.h"
 
+
 using namespace std;
 
 void ZoneFactory::RegisterZone(const string& id, CreateFunc creator, DestroyFunc deleter,
@@ -7,20 +8,15 @@ void ZoneFactory::RegisterZone(const string& id, CreateFunc creator, DestroyFunc
 	registries[id] = { creator, deleter, assign };
 }
 
-void ZoneFactory::CleanTemp() {
-}
-
 ZoneMod* ZoneFactory::CreateZone(const string& id) {
 	auto it = registries.find(id);
 	if (it == registries.end())
 		return nullptr;
 
-	ZoneMod* instance = it->second.creator();
+	auto argsIt = configuredArgs.find(id);
+	ZoneMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
-
-		auto argsIt = configuredArgs.find(id);
-		instance->ApplyArgs(argsIt != configuredArgs.end() ? argsIt->second : string());
 	}
 	return instance;
 }

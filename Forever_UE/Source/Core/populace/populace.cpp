@@ -1,25 +1,19 @@
 #include "populace/populace.h"
 
+#include "common/utility.h"
+
 #include "populace/citizen.h"
 #include "populace/name.h"
-#include "common/utility.h"
-#include "common/config.h"
+#include "common/registry.h"
 
 #include <cmath>
 #include <algorithm>
 #include <iterator>
 
+
 using namespace std;
 
 namespace {
-
-	unordered_map<string, string> ToArgsMap(const vector<pair<string, string>>& entries) {
-		unordered_map<string, string> args;
-		for (const auto& [id, value] : entries) {
-			args[id] = value;
-		}
-		return args;
-	}
 
 // 复刻老工程Populace::GenerateCitizens内部的LIFE_TYPE/Human——只在模拟期间用来推进人口
 // 数量，模拟结束后不对外暴露，也不保留进Citizen(这次Citizen字段范围只有姓名/性别/生日，
@@ -46,6 +40,10 @@ struct Human {
 
 } // namespace
 
+Populace::Populace() :
+	nameFactory(Registry::Get().GetNameFactory()) {
+}
+
 Populace::~Populace() {
 	for (Citizen* citizen : citizens) {
 		delete citizen;
@@ -61,11 +59,8 @@ void Populace::Init(int accommodation) {
 }
 
 void Populace::InitNames() {
-	// 和Map::InitBuildings()等发现/注册mod dll的写法同一个模式——Populace自己独立持有一份
-	// ModLoader/NameFactory，不和Map共用(两者互不知道对方存在，见populace.md)。
-	vector<string> mods = Config::GetMods();
-	nameFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("name_mods")));
-	modLoader.RegisterConcept<NameFactory>(mods, "RegisterModNames", "FinishModNames", &nameFactory);
+	// name mod dll的发现/注册不在这里做，属于`Registry`全局一次性注册的范围(见
+	// Source/Core/common/registry.md)，nameFactory已经是绑定好的引用成员。
 
 	// 这次固定用"chinese"(Source/Basic/populace/name_chinese.h的ChineseName)这个具体
 	// 实现，不像Map::InitZones()那样把所有已注册id一视同仁——Name这个concept只需要唯一
