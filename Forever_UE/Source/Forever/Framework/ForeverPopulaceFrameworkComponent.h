@@ -2,6 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Framework/ForeverFrameworkComponent.h"
+#include "Containers/Queue.h"
+
+#include <atomic>
+
 #include "ForeverPopulaceFrameworkComponent.generated.h"
 
 class Map;
@@ -43,17 +47,60 @@ public:
 	ACitizenElement* FindOrSpawnCitizenByName(const FString& name);
 
 	// Job按调度产出NPCNavigateChange时，AForeverFrameworkActor::Tick的回调转发到这里：
-	// 用destination和市民当前所在room各自的GetNavigationNode()对map->FindPedestrianPath
-	// 寻路——citizen当前有已生成的ACitizenElement(查activeInstances)就调它的
-	// WalkTo播放真实走路动画；否则(不在流式加载范围内，没有Actor，或者寻路失败)直接瞬移
-	// 逻辑状态：SetCurrentRoom(destination)+ClearPosition()(不是SetPosition，见
-	// Citizen::ClearPosition()的说明)。
+	// 用destination和市民当前所在room各自的GetNavigationNode()把实际的Dijkstra寻路
+	// (map->FindPedestrianPath)派发到线程池异步执行，不在这里(游戏线程)同步算——每天
+	// 9点/12点这类所有有工作的市民同一时刻集中触发调度，即使Populace::Tick每帧只处理
+	// 一个job timer，Dijkstra本身在这张车道级导航图上单次调用也不便宜，堆在游戏线程上
+	// 依然会造成持续的卡顿(PIE验证反馈：从9点持续卡到9点半)。异步结果通过pathResultQueue
+	// 传回，TickComponent每帧drain一次，落地逻辑(WalkTo播放真实走路动画/
+	// TeleportToRoom瞬移可见Actor/纯瞬移逻辑状态)统一走ApplyWalkResult，和原来同步版本
+	// 完全一样，只是触发时机从"RequestWalk调用当下"改成"结果算出来之后的某一帧"。
+	// 没有可用导航节点(起点/终点没有对应Node)时没有Dijkstra可算，直接同步走
+	// ApplyWalkResult，不需要派发到线程池。
 	void RequestWalk(Citizen* citizen, Room* destination);
 
 	// ACitizenElement::WalkTo全部路径点走完后的回调：更新Citizen::SetCurrentRoom。
 	void NotifyArrived(Citizen* citizen, Room* destination);
 
+	// 供AForeverFrameworkActor::EndPlay/析构函数在真正delete map/populace之前调用一次：
+	// 忙等(短sleep轮询)直到所有已经通过RequestWalk派发到线程池的寻路任务全部执行完(包括
+	// 把结果推进pathResultQueue这一步)。必须真的等，不能指望"组件/Actor销毁后台线程自然
+	// 停"——后台线程持有的map裸指针在这段等待窗口结束前必须始终有效，用一个和UObject生命
+	// 周期无关的static计数器保证，不依赖任何"派发一个GameThread任务、等它跑完"的方案——
+	// 后者会在EndPlay这个本身跑在GameThread上的调用栈里死锁(GameThread被卡住等待的
+	// 恰好是需要GameThread自己继续跑主循环才能被处理的任务)。pathResultQueue里drain不到
+	// 的残留结果(等待期间没有更多TickComponent会跑)随组件一起销毁即可，不需要额外处理——
+	// 它们只引用Citizen*/Room*/TArray<FVector>这些纯数据，没有需要手动释放的所有权。
+	static void WaitForPendingPathfinding();
+
 private:
+	// RequestWalk异步派发到线程池的寻路结果，由TickComponent()每帧drain。只在游戏线程上
+	// 被读取(Dequeue)，只在后台线程上被写入(Enqueue)，EQueueMode::Mpsc允许多个后台线程
+	// 并发入队，天然匹配"任意时刻可能有好几个citizen的路径同时算完"这个场景。
+	struct FPendingWalkResult {
+		Citizen* citizen = nullptr;
+		Room* destination = nullptr;
+		TArray<FVector> waypoints;
+	};
+	TQueue<FPendingWalkResult, EQueueMode::Mpsc> pathResultQueue;
+
+	// RequestWalk发起异步寻路时+1，对应的后台线程任务把结果推进pathResultQueue之后-1——
+	// 全程只用来回答"现在是不是还有后台线程可能在读map"这一个问题，见
+	// WaitForPendingPathfinding()。static而不是实例成员：这个组件本身的C++内存在
+	// EndPlay/析构期间随时可能被回收，实例成员活不过等待窗口；static存储期从进程启动到
+	// 退出全程有效，递减操作发生在纯粹的Core数据(map/citizen/destination指针值)上，不touch
+	// 这个UObject实例本身，不存在"递减时对象已经不在了"的问题。
+	static std::atomic<int32> pendingPathfindingTasks;
+
+	// RequestWalk/TickComponent共用的路径落地逻辑：existing查一遍activeInstances(可能和
+	// RequestWalk发起寻路那一刻已经不是同一个状态——citizen可能被流式销毁/重新生成过，也
+	// 可能刚被玩家占有)，路径非空+有Actor就WalkTo；路径为空但有Actor就TeleportToRoom；
+	// 否则纯瞬移逻辑状态。和原来同步版本RequestWalk内联的三分支完全一样，这次拆出来给
+	// "没有可用导航节点、不需要走线程池"的同步分支和"线程池算完、TickComponent drain"的
+	// 异步分支共用。
+	void ApplyWalkResult(Citizen* citizen, Room* destination, const TArray<FVector>& waypoints);
+
+
 	// 生成一个citizen对应的ACitizenElement并登记进activeInstances——从TickComponent的
 	// 按距离生成逻辑里提炼出来的公共部分，TickComponent和FindOrSpawnCitizenByName共用。
 	// 调用方负责保证citizen不为空、不在activeInstances里。

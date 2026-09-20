@@ -3,6 +3,8 @@
 #include "Element/CitizenElement.h"
 
 #include "Kismet/GameplayStatics.h"
+#include "Async/Async.h"
+#include "HAL/PlatformProcess.h"
 
 #include "map/map.h"
 #include "map/building.h"
@@ -10,6 +12,8 @@
 #include "map/geometry.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
+
+std::atomic<int32> UForeverPopulaceFrameworkComponent::pendingPathfindingTasks{ 0 };
 
 // 和CitizenElement.cpp的CITIZEN_WORLD_SCALE同一个值，这次按本文件既有约定各自维护一份，
 // 不额外抽公共头(这个约定详见BuildingElement.cpp顶部注释)。
@@ -103,12 +107,52 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 	Node* fromNode = current ? current->GetNavigationNode() : nullptr;
 	Node* toNode = destination->GetNavigationNode();
 
-	TArray<FVector> waypoints;
-	if (fromNode && toNode) {
-		std::vector<const Node*> path = map->FindPedestrianPath(fromNode->GetId(), toNode->GetId());
+	if (!fromNode || !toNode) {
+		// 没有可用导航节点，没有Dijkstra可算，直接同步走落地逻辑(ApplyWalkResult内部按
+		// 空路径处理，效果和以前一致)，不需要派发到线程池。
+		ApplyWalkResult(citizen, destination, TArray<FVector>());
+		return;
+	}
+
+	Map* mapPtr = map;
+	int32 fromId = fromNode->GetId();
+	int32 toId = toNode->GetId();
+
+	// 真正的Dijkstra派发到线程池异步算——每天9点/12点这类所有有工作的市民同一时刻集中
+	// 触发调度，单次调用在这张车道级导航图上也不便宜，堆在游戏线程上会造成持续的卡顿
+	// (PIE验证反馈：从9点持续卡到9点半，即使Populace::Tick每帧已经只处理一个job
+	// timer)。map->FindPedestrianPath是纯读操作(见map.h/map.md)，地图生成完成后
+	// pedestrianNavGraph/navAnchorNodes不会再被修改，多个后台线程并发只读安全。
+	pendingPathfindingTasks.fetch_add(1, std::memory_order_relaxed);
+	TWeakObjectPtr<UForeverPopulaceFrameworkComponent> weakThis(this);
+	Async(EAsyncExecution::ThreadPool, [weakThis, mapPtr, fromId, toId, citizen, destination]() {
+		std::vector<const Node*> path = mapPtr->FindPedestrianPath(fromId, toId);
+		TArray<FVector> waypoints;
+		waypoints.Reserve(static_cast<int32>(path.size()));
 		for (const Node* node : path) {
 			waypoints.Add(FVector(node->GetX(), node->GetY(), node->GetZ()) * POPULACE_WORLD_SCALE);
 		}
+		// weakThis.Get()在后台线程上解析是UE支持的用法(内部靠序列号判定，不需要跑在
+		// 游戏线程上)——只用来判断这个组件是不是已经被销毁，判断结果之后立刻只做入队
+		// 这一个动作，不做任何其它UObject操作。就算组件已经销毁、这里什么也不做，也不会
+		// 影响下面的计数器递减(计数器是static的，不依赖这个组件实例，见.h的注释)。
+		if (UForeverPopulaceFrameworkComponent* component = weakThis.Get()) {
+			component->pathResultQueue.Enqueue({ citizen, destination, MoveTemp(waypoints) });
+		}
+		pendingPathfindingTasks.fetch_sub(1, std::memory_order_release);
+		});
+}
+
+void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room* destination,
+	const TArray<FVector>& waypoints) {
+	if (!citizen || !destination) return;
+
+	// 重新查一次activeInstances——从RequestWalk发起(可能异步经过若干帧)到这里落地之间，
+	// citizen完全可能被流式销毁/重新生成过，也可能刚被玩家占有，不能沿用发起那一刻的
+	// existing指针/占有状态。
+	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
+	if (existing && *existing && (*existing)->GetController() != nullptr) {
+		return;
 	}
 
 	if (waypoints.Num() > 0 && existing && *existing) {
@@ -133,6 +177,12 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 	citizen->ClearPosition();
 }
 
+void UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding() {
+	while (pendingPathfindingTasks.load(std::memory_order_acquire) > 0) {
+		FPlatformProcess::Sleep(0.001f);
+	}
+}
+
 void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* destination) {
 	if (!citizen || !destination) return;
 	citizen->SetCurrentRoom(destination);
@@ -155,6 +205,14 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(co
 void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	// 把RequestWalk异步派发到线程池、已经算完的寻路结果落地——这一步必须在游戏线程上做
+	// (ApplyWalkResult会碰activeInstances/ACitizenElement这些UObject相关状态)，
+	// pathResultQueue本身的Dequeue是线程安全的，但落地逻辑不能搬到后台线程去做。
+	FPendingWalkResult result;
+	while (pathResultQueue.Dequeue(result)) {
+		ApplyWalkResult(result.citizen, result.destination, result.waypoints);
+	}
 
 	int32 total = allCitizens.Num();
 	if (!map || total == 0) return;

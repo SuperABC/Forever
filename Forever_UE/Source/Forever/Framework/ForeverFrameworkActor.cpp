@@ -54,6 +54,11 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 
 AForeverFrameworkActor::~AForeverFrameworkActor()
 {
+	// 必须先等所有已经派发到线程池的异步寻路任务彻底跑完，才能delete map/populace——
+	// 那些后台线程手上还攥着map裸指针(算Dijkstra)、算完还要touch citizen/destination
+	// (推进pathResultQueue)，谁先跑完不确定，见
+	// UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding()的注释。
+	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
 	delete player;
 	delete traffic;
 	delete industry;
@@ -69,6 +74,11 @@ void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// 声明处的注释)——不能只靠析构函数兜底，那个时机取决于UObject垃圾回收，不保证在下一次
 	// PIE开始前跑完。这几个对象删除顺序互不影响内存安全(彼此都不持有对方的裸指针)，这里
 	// 按和创建相反的顺序删只是保持直觉。
+
+	// 同上，必须先等所有异步寻路任务跑完——不能用"派发一个GameThread任务、等它跑完"的
+	// 方案在这里等，会在EndPlay这个本身跑在GameThread上的调用栈里死锁。
+	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
+
 	delete player;
 	player = nullptr;
 	delete traffic;

@@ -71,10 +71,56 @@ building的LOD双阈值同一个防抖动理由：避免玩家在临界距离附
 `RequestWalk(Citizen* citizen, Room* destination)`：`Job`按调度产出`NPCNavigateChange`
 时，`AForeverFrameworkActor::Tick`的回调解析出目标`Room*`后转发到这里。用
 `destination`和市民当前所在room（`Citizen::GetCurrentRoom()`）各自
-`GetNavigationNode()`的id调`map->FindPedestrianPath(...)`（对`pedestrianNavGraph`跑
-Dijkstra，见`Source/Core/map/map.md`），路径点（Core绝对地图坐标，float）转成
-`TArray<FVector>`（直接乘`POPULACE_WORLD_SCALE`——`Node`坐标已经是绝对地图坐标，不需要
-像Room坐标那样再做building局部变换）：
+`GetNavigationNode()`的id对`map->FindPedestrianPath(...)`（对`pedestrianNavGraph`跑
+Dijkstra，见`Source/Core/map/map.md`）——**这一步派发到线程池异步执行，不在游戏线程上
+同步算**，路径点（Core绝对地图坐标，float）转成`TArray<FVector>`（直接乘
+`POPULACE_WORLD_SCALE`——`Node`坐标已经是绝对地图坐标，不需要像Room坐标那样再做building
+局部变换）之后，异步结果落地时按下面这几种情况分流：
+
+#### 异步寻路：为什么、怎么做、怎么保证安全
+
+用户反馈"每天9点/12点所有有工作的市民同一时刻集中触发调度，即使`Populace::Tick`每帧
+只处理一个job timer，依然会从9点持续卡到9点半"——根因是单次`FindPedestrianPath`在这张
+车道级导航图（见`map.md`"车道级导航锚点"一节，节点数比按路口算的粗粒度图大得多）上的
+Dijkstra调用本身就不便宜，堆在游戏线程上不管每帧处理几个citizen都会拖慢整帧。
+
+`RequestWalk`因此拆成两段：
+1. **没有可用导航节点**（起点/终点没有对应`Node`）：没有Dijkstra可算，直接同步调
+   `ApplyWalkResult(citizen, destination, {})`落地（效果和以前的"路径为空"分支一致）。
+2. **有可用导航节点**：`pendingPathfindingTasks`（`std::atomic<int32>`，见下）先`+1`，
+   用`Async(EAsyncExecution::ThreadPool, ...)`把`map->FindPedestrianPath`那次调用
+   连同结果转`TArray<FVector>`的过程整个丢给线程池；`map->FindPedestrianPath`是纯读
+   操作（局部变量+只读`pedestrianNavGraph`/`navAnchorNodes`，见`map.h`/`map.md`），
+   地图生成完成后这些容器不会再被写，多个后台线程并发只读安全。算完把
+   `{citizen, destination, waypoints}`塞进`pathResultQueue`（`TQueue<...,
+   EQueueMode::Mpsc>`，多个后台线程可以同时入队），`pendingPathfindingTasks`再`-1`。
+3. `TickComponent`每帧开头`Dequeue`光`pathResultQueue`，对每一条调
+   `ApplyWalkResult`——真正的落地逻辑（`WalkTo`/`TeleportToRoom`/纯瞬移三分支，和以前
+   `RequestWalk`内联的判断完全一样）挪进了这个新方法，因为它要碰
+   `activeInstances`/`ACitizenElement`这些只能在游戏线程上安全操作的状态。**落地前会
+   重新查一次`activeInstances`/占有状态**，不沿用`RequestWalk`发起那一刻的快照——从
+   发起异步寻路到结果落地之间隔了若干帧，这段时间citizen完全可能被流式销毁/重新生成，
+   或者刚被玩家占有，必须按落地那一刻的真实状态判断。
+
+**跨线程安全性怎么保证**：`Async`的lambda捕获了`Map*`裸指针、`Citizen*`/`Room*`裸指针，
+以及一个`TWeakObjectPtr<UForeverPopulaceFrameworkComponent>`（判断组件是否已销毁，
+决定要不要真的入队——`TWeakObjectPtr::Get()`按UE惯例支持在非游戏线程上解析，靠序列号
+判定，不需要跑在游戏线程上）。`map`/`citizen`/`destination`这几个Core裸指针的生命周期
+不归UObject那套GC管，真正的风险是：`AForeverFrameworkActor::EndPlay`/析构函数会
+`delete map`/`delete populace`（连带删光所有`Citizen`），如果这时候还有后台线程在读
+`map`或者即将把`citizen`塞进队列，就是use-after-free。用一个**`static`**（不是实例
+成员）的`std::atomic<int32> pendingPathfindingTasks`挡住这个窗口：
+`RequestWalk`发起时`+1`，后台线程把结果推进队列之后`-1`；`static`是因为组件/Actor
+本身在`EndPlay`期间随时可能被回收，实例成员活不过等待窗口，`static`存储期贯穿整个
+进程生命周期，递减操作本身也完全不touch这个UObject实例。`AForeverFrameworkActor::
+EndPlay`和析构函数都在真正`delete map`/`delete populace`**之前**先调用
+`UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding()`——忙等（`
+FPlatformProcess::Sleep(0.001f)`轮询）直到计数器归零。**故意不用"派发一个
+`AsyncTask(ENamedThreads::GameThread, ...)`、等它跑完"这种方案**：那样会在`EndPlay`
+这个本身跑在游戏线程上的调用栈里死锁——游戏线程被卡住等待的，恰好是需要游戏线程自己
+继续跑主循环才能被处理的任务。等待期间`pathResultQueue`里没drain到的残留结果（等待期间
+不会再有`TickComponent`跑）随组件一起销毁即可，它们只是纯数据（`Citizen*`/`Room*`
+指针值+`TArray<FVector>`），没有需要手动释放的所有权，不会造成任何泄漏或悬空访问。
 
 - **这个citizen当前正被玩家占有（`GetController()!=nullptr`，这个项目没有
   `AIController`，非空Controller只可能是玩家占有）**：整次调度直接不生效——不走路、
@@ -122,10 +168,14 @@ FindPedestrianPath`算好的现成路径点，用`CharacterMovement`逐点插值
   `Init()`+`WalkTo()`）、`Source/Core/populace/populace.h`/`citizen.h`
   （`Populace::GetCitizens()`/`Citizen`）、`map/map.h`（`FindPedestrianPath`）、
   `map/building.h`/`map/room.h`/`map/geometry.h`（估算逻辑位置+`Node`坐标要用）、
-  `Kismet/GameplayStatics.h`（`GetPlayerPawn`）。
+  `Kismet/GameplayStatics.h`（`GetPlayerPawn`）、`Async/Async.h`（`RequestWalk`把
+  Dijkstra派发到线程池）、`Containers/Queue.h`（`pathResultQueue`）、
+  `HAL/PlatformProcess.h`（`WaitForPendingPathfinding`忙等用的`Sleep`）。
 - 被谁依赖：`AForeverFrameworkActor::EnsurePopulaceGenerated()`（`GenerateCitizens(map,
   populace)`）、`AForeverFrameworkActor::Tick`（`RequestWalk`，Job调度产出
-  `NPCNavigateChange`时转发）、`UForeverStoryFrameworkComponent::ApplyControlChange`
+  `NPCNavigateChange`时转发）、`AForeverFrameworkActor::EndPlay`/析构函数
+  （`WaitForPendingPathfinding()`，真正`delete map`/`delete populace`之前必须先调用，
+  见上"异步寻路"一节）、`UForeverStoryFrameworkComponent::ApplyControlChange`
   （`FindOrSpawnCitizenByName`，剧情`ChangeControlChange`指定切换控制的市民不一定在附近，
   需要强制生成，见`ForeverStoryFrameworkComponent.md`）。
 
