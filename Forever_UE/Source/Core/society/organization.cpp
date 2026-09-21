@@ -33,7 +33,17 @@ Organization::Organization(OrganizationFactory* factory, JobFactory* jobFactory,
 			mod->DesignJobsForRoom(component->GetType(), component->GetName(),
 				room->GetType(), room->GetName(), room->WorkspaceCapacity());
 			for (const string& jobType : mod->vacancies) {
-				jobs.push_back(new Job(jobFactory, scriptFactory, jobType, room));
+				// jobType对应的JobMod如果未启用（没在config.json"job_mods"数组里列出，
+				// 见job_factory.md"启用"一节），Job::GetType()内部mod为空会返回空字符串
+				// ——这种Job永远不会产出任何Change，但仍然会被Society::RecruitCitizens
+				// 正常招进去占用一个citizen名额，直接丢弃不留，不占位。
+				Job* job = new Job(jobFactory, scriptFactory, jobType, room);
+				if (!job->GetType().empty()) {
+					jobs.push_back(job);
+				}
+				else {
+					delete job;
+				}
 			}
 		}
 	}

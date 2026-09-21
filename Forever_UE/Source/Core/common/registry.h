@@ -69,6 +69,13 @@ public:
 	// Source/Core/common/registry.md"SetModArgs的调用频率"一节。
 	void ReloadModArgs();
 
+	// 对全部20个Factory各查一次CheckRegistered(id)，只要有任意一个认得这个id就返回
+	// true——mod id不带concept前缀，不能靠字符串猜它属于哪个concept("building_clean"
+	// 完全可能是个Job mod)，所以这里不按concept分流，直接全局匹配，供
+	// AForeverFrameworkActor::ValidateMainStoryDependencies()校验mod_dependences用，
+	// 见script.md"mod_dependences"一节的设计决策。
+	bool CheckModRegistered(const std::string& id) const;
+
 	TerrainFactory& GetTerrainFactory() { return terrainFactory; }
 	RoadnetFactory& GetRoadnetFactory() { return roadnetFactory; }
 	ZoneFactory& GetZoneFactory() { return zoneFactory; }

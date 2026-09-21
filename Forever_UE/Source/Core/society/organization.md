@@ -31,7 +31,15 @@ virtual void DesignJobsForRoom(const std::string& componentType, const std::stri
 `mod->vacancies.clear()`，调`mod->DesignJobsForRoom(component->GetType(),
 component->GetName(), room->GetType(), room->GetName(),
 room->WorkspaceCapacity())`，再读`mod->vacancies`里的每一条字符串，各
-`new Job(jobFactory, scriptFactory, 那个字符串, room)`，push进自己的`jobs`。
+`new Job(jobFactory, scriptFactory, 那个字符串, room)`。**这次（config.json的
+`"<concept>_mods"`数组改成真正的启用开关之后）新增一处判空**：`vacancies`里的
+jobType对应的`JobMod`如果未启用（没在`config.json`的`"job_mods"`数组里列出，见
+`Source/Core/common/registry.md`"`CheckModRegistered`"一节），`Job`内部的`mod`会是
+空指针——`Job`本身不会因此崩溃（都是`mod ? ... : "empty"`式判空），但如果不管就push
+进`jobs`，会得到一个永远不产出任何`Change`、却仍然会被`Society::RecruitCitizens`
+正常招进去占用一个citizen名额的"哑"`Job`。所以每个新`Job`先用`job->GetType().empty()`
+（`Job::GetType()`内部mod为空时返回空字符串）判断，为空就`delete`掉不留，只有真的建出
+有效mod的`Job`才push进`jobs`。
 
 ## 跨DLL数据传递约束
 

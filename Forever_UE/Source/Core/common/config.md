@@ -40,6 +40,13 @@
   字段（当前配的是`"empty"`），供`Story::Init()`决定主线剧情`Script`要挂载哪个
   `ScriptMod`——之前这个决策也是Core里硬编码`kEmptyScriptId="empty"`，同上一并修复。
   字段缺失时返回空字符串，`Config`自己不兜底默认值，由`Story::Init()`据此判定跳过初始化。
+- **`GetMainStoryScriptPath`（主线剧情`.script`新增三个顶层字段时新增）**：
+  `return GetScriptPath("test");`的薄包装——`name_reserve`/`global_settings`/
+  `mod_dependences`这三个新字段的校验（`AForeverFrameworkActor::
+  ValidateMainStoryDependencies()`/`Populace::InitNames()`/`EnsurePlayerGenerated()`）
+  需要在`Story`对象创建之前就拿到主线剧情`.script`的路径，包一层避免`"test"`这个bare
+  名字散落在多个文件里，见`Core/story/script.md`"主线剧情.script新增三个顶层字段"
+  一节。等以后支持多主线剧情时改这个方法内部实现即可，调用方不用跟着改。
 - **用旧工程`Dependence/common/json.h`而不是UE自带Json模块解析`config.json`**——UE的
   `FJsonSerializer`是严格JSON,不支持注释;旧工程的解析器是JsonCpp衍生的宽松版本,支持
   `//`/`/* */`注释,更适合手写维护的配置文件。这是本次会话用户明确要求的决定。

@@ -50,3 +50,14 @@ vector<string> NameFactory::GetRegisteredIds() const {
 void NameFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
 }
+
+void NameFactory::SetConfig(const string& id, bool enabled) {
+	enabledConfig[id] = enabled;
+}
+
+string NameFactory::GetName() const {
+	for (const auto& [id, enabled] : enabledConfig) {
+		if (enabled) return id;
+	}
+	return string();
+}

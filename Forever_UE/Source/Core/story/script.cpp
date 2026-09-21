@@ -12,7 +12,7 @@
 
 using namespace std;
 
-unordered_map<string, unordered_map<string, Milestone*>> Script::caches = {};
+unordered_map<string, Script::FileCache> Script::caches = {};
 
 Script::Script(ScriptFactory* factory, const string& id) :
 	mod(factory->CreateScript(id)),
@@ -109,7 +109,7 @@ void Script::ReadScript(const string& path) {
 	}
 
 	if (reader.Parse(fin, root)) {
-		unordered_map<string, Milestone*> parsed;
+		FileCache fileCache;
 		for (auto milestone : root["milestones"]) {
 			Milestone* content = new Milestone(
 				milestone["milestone"].AsString(),
@@ -122,9 +122,21 @@ void Script::ReadScript(const string& path) {
 				BuildDialogs(milestone["dialogs"]),
 				BuildSubsequences(milestone["subsequences"])
 			);
-			parsed.insert(make_pair(content->GetName(), content));
+			fileCache.milestones.insert(make_pair(content->GetName(), content));
 		}
-		caches.insert(make_pair(path, move(parsed)));
+		// name_reserve/global_settings/mod_dependences三个新增顶层字段——都是纯JSON
+		// 数据，字段不存在就保持空，和BuildChanges里各处xxx.IsNull()判断可选字段是同一个
+		// 既有约定，见script.md"主线剧情.script新增字段"一节。
+		for (auto n : root["name_reserve"]) {
+			fileCache.nameReserve.push_back(n.AsString());
+		}
+		if (!root["global_settings"]["time_flow_ratio"].IsNull()) {
+			fileCache.globalSettings["time_flow_ratio"] = ValueType(root["global_settings"]["time_flow_ratio"].AsDouble());
+		}
+		for (auto dep : root["mod_dependences"]) {
+			fileCache.modDependences.push_back(dep.AsString());
+		}
+		caches.insert(make_pair(path, move(fileCache)));
 	}
 	else {
 		fin.close();
@@ -150,7 +162,7 @@ void Script::ReadMilestones(const string& path) {
 		node.premise = 0;
 	}
 
-	for (auto& [msName, content] : caches[path]) {
+	for (auto& [msName, content] : caches[path].milestones) {
 		milestones[msName] = MilestoneNode(content);
 	}
 	for (auto& [name, node] : milestones) {
@@ -165,6 +177,27 @@ void Script::ReadMilestones(const string& path) {
 			actives.push_back(&node);
 		}
 	}
+}
+
+const vector<string>& Script::GetNameReserve(const string& path) {
+	static const vector<string> empty;
+	ReadScript(path);
+	auto it = caches.find(path);
+	return it != caches.end() ? it->second.nameReserve : empty;
+}
+
+const unordered_map<string, ValueType>& Script::GetGlobalSettings(const string& path) {
+	static const unordered_map<string, ValueType> empty;
+	ReadScript(path);
+	auto it = caches.find(path);
+	return it != caches.end() ? it->second.globalSettings : empty;
+}
+
+const vector<string>& Script::GetModDependences(const string& path) {
+	static const vector<string> empty;
+	ReadScript(path);
+	auto it = caches.find(path);
+	return it != caches.end() ? it->second.modDependences : empty;
 }
 
 vector<ScriptAction> Script::MatchEvent(Event* event, ScriptContext context, PostHandle* post) {

@@ -12,8 +12,10 @@ AppMod* AppFactory::CreateApp(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
+	if (!IsEnabled(id)) return nullptr;
+
 	auto argsIt = configuredArgs.find(id);
-	AppMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
+	AppMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
 	}
@@ -36,12 +38,13 @@ void AppFactory::DestroyApp(AppMod* instance) {
 }
 
 bool AppFactory::CheckRegistered(const string& id) const {
-	return registries.find(id) != registries.end();
+	return IsEnabled(id);
 }
 
 vector<string> AppFactory::GetRegisteredIds() const {
 	vector<string> ids;
 	for (const auto& [id, entry] : registries) {
+		if (configuredArgs.find(id) == configuredArgs.end()) continue;
 		ids.push_back(id);
 	}
 	return ids;
@@ -49,4 +52,8 @@ vector<string> AppFactory::GetRegisteredIds() const {
 
 void AppFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
+}
+
+bool AppFactory::IsEnabled(const string& id) const {
+	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }

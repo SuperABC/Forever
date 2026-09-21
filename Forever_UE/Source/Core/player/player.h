@@ -20,10 +20,15 @@ public:
 	// 决定），照抄老工程Player::Init()里时钟相关的这一小段。
 	void Init();
 
-	// 时钟周期更新：按真实帧时长推进游戏时钟。time_flow_ratio这次写死1.0（1真实秒=1游戏
-	// 分钟），不依赖Story，见player.md"time_flow_ratio"一节。
+	// 时钟周期更新：按真实帧时长推进游戏时钟。time_flow_ratio默认2.0，可以被主线剧情
+	// .script的global_settings.time_flow_ratio字段覆盖（见SetTimeFlowRatio），见
+	// player.md"time_flow_ratio"一节。
 	// @delta: 本帧时长（秒）
 	void Tick(float delta);
+
+	// 覆盖time_flow_ratio——由AForeverFrameworkActor::EnsurePlayerGenerated()读取主线
+	// 剧情.script的global_settings.time_flow_ratio字段后调用，没有声明则保持默认值2.0。
+	void SetTimeFlowRatio(double ratio);
 
 	// 获取游戏时钟
 	Time* GetTime() const;
@@ -42,4 +47,7 @@ private:
 
 	// 上一次Tick/SetTime时的游戏天数，用于跨天检测
 	int day = -1;
+
+	// 默认值和原来硬编码的kTimeFlowRatio一致，未被脚本覆盖时行为不变。
+	double timeFlowRatio = 2.0;
 };

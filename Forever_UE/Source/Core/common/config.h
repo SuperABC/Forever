@@ -73,6 +73,12 @@ public:
 	// 字段缺失时返回空字符串，调用方(Story::Init)据此判定跳过初始化，不在这里兜底默认值。
 	static std::string GetMainStoryScriptModName();
 
+	// 主线剧情.script文件的实际路径——目前固定是bare名字"test"（Story::Init()一直这么
+	// 写），这次新增是因为name_reserve/global_settings/mod_dependences校验需要在Story
+	// 对象创建之前就拿到同一份路径，包一层避免"test"这个字面量到处重复。等以后支持多
+	// 主线剧情时再改这个方法内部的实现，调用方不用跟着改。
+	static std::string GetMainStoryScriptPath();
+
 	// jsonKey形如"building_mods"。返回该数组解析出的(id, 参数字符串)列表——每个数组元素
 	// 按第一个空格切成两段,如"pengzhan --density 1.0"切成("pengzhan", "--density 1.0"),
 	// 没有空格则参数为空串。参数字符串原样返回,格式/是否使用完全由mod自己的creator(收到

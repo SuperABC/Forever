@@ -30,26 +30,31 @@
    // "<concept>_mods": 和旧工程格式一致,每个concept一个数组,数组元素是"id"或"id 参数..."
    // (命令行式写法,和旧工程"test ---name value"的写法相同)——按第一个空格切开,前半段是
    // mod id,后半段(可以没有)原样传给该id对应实例的ApplyArgs(),格式由mod自己解析,Config
-   // 只负责切分。没在这里列出的id依然会被正常创建(阶段3不做启用/禁用过滤,只做参数配置),
-   // 只是拿不到参数(ApplyArgs收到空串)。
-   "terrain_mods" : [ "empty --test true" ],
+   // 只负责切分。**没在这里列出的id视为未启用**——CreateXxx会拒绝创建,CheckRegistered/
+   // GetRegisteredIds也认不到这个id(RoadnetFactory是唯一的例外,见下roadnet_mods的注释,
+   // 它一直就是这个语义)。这条约定阶段3曾经是"不做启用/禁用过滤,未列出的id依然会被正常
+   // 创建",后来发现"注册"和"启用"混成一件事没有办法表达mod依赖关系,改成现在这样。
+   "terrain_mods" : [ "empty --test true", "ocean", "mountain" ],
 
    // roadnet_mods和其余concept语义不同:Roadnet一次只应该有一个路网布局方案生效(不是Terrain
    // 那种按GetPriority()多mod叠加),这个数组列出的id会被Map::InitRoadnet()标记为"启用",
    // RoadnetFactory::GetRoadnet()据此选出唯一生效的那个,详见Source/Core/map/roadnet_factory.md。
    "roadnet_mods" : [ "jing" ],
-   "zone_mods" : [ "empty --test true" ],
-   "building_mods" : [ "pengzhan", "yizhong", "yuanshen", "empty --test true" ],
-   "component_mods" : [ "empty --test true" ],
-   "room_mods" : [ "empty --test true" ],
+   "zone_mods" : [ "empty --test true", "zone_residence" ],
+   "building_mods" : [ "pengzhan", "yizhong", "yuanshen", "empty --test true",
+      "building_residence", "building_shop", "building_factory" ],
+   "component_mods" : [ "empty --test true", "component_residence", "component_shop",
+      "component_factory" ],
+   "room_mods" : [ "empty --test true", "room_residence", "room_shop", "room_warehouse",
+      "room_parking", "room_factory" ],
    "asset_mods" : [ "empty --test true" ],
    "app_mods" : [ "empty --test true" ],
    "puzzle_mods" : [ "empty --test true" ],
-   "name_mods" : [ "empty --test true" ],
-   "scheduler_mods" : [ "empty --test true" ],
-   "job_mods" : [ "empty --test true" ],
-   "organization_mods" : [ "empty --test true" ],
-   "script_mods" : [ "wxdj", "empty --test true" ],
+   "name_mods" : [ "chinese" ],
+   "scheduler_mods" : [ "empty --test true", "scheduler_basic" ],
+   "job_mods" : [ "empty --test true", "job_shop_saler" ],
+   "organization_mods" : [ "empty --test true", "organization_shop" ],
+   "script_mods" : [ "wxdj", "empty --test true", "script_basic" ],
    "product_mods" : [ "empty --test true" ],
    "storage_mods" : [ "empty --test true" ],
    "manufacture_mods" : [ "empty --test true" ],

@@ -58,6 +58,11 @@ public:
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
 
 private:
+	// 已注册且已在config.json对应\"<concept>_mods\"数组里列出（即configuredArgs里
+	// 有这个id）才算启用——CreateXxx/CheckRegistered/GetRegisteredIds都据此判断，
+	// 见Source/Core/story/script.md\"mod_dependences\"一节的设计决策。
+	bool IsEnabled(const std::string& id) const;
+
 	struct Entry {
 		CreateFunc creator;
 		DestroyFunc deleter;

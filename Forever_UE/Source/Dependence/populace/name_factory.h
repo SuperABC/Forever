@@ -7,11 +7,9 @@
 #include <vector>
 
 
-// 最小注册表(创建/销毁/枚举)。旧工程的Temp暂存区+MergeTemp()两段式注册(用来隔离
-// "探测阶段"和"正式生效阶段")这次没有搬过来——那套机制是为了绕开非virtual方法
-// 跨DLL调用时,mod编译的那份代码去扩容/释放host分配的容器这个问题;现在改成全部公开
-// 方法都是virtual(见下),调用永远落在构造这个Factory实例的那一侧,分配器天然一致,
-// 不再需要暂存区这层隔离,详见Source/Dependence/README.md"关键设计"一节。
+// 最小注册表(创建/销毁/枚举)+单选(SetConfig/GetName)——和roadnet_factory.h同一个模式：
+// 一次只应该有一个取名算法生效(不是Terrain那种按GetPriority()多mod叠加)，不恢复旧工程
+// 的Temp暂存/合并两段式注册，详见Source/Dependence/README.md。
 //
 // creator/deleter用裸函数指针,不用std::function——mod侧注册的都是无捕获
 // (capture-less)lambda,天然能隐式转换成函数指针;裸指针是POD类型,跨DLL传递没有
@@ -52,6 +50,13 @@ public:
 	// 拿实例创建时查不到对应参数。
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
 
+	// 一次只应该有一个取名算法生效——SetConfig标记某个已注册id是否启用(config.json里
+	// "name_mods"数组的条目)，GetName返回第一个被标记启用的id(找不到返回空字符串)。
+	// 调用方(Populace::InitNames)按这个id唯一决定用哪个mod的取名算法，和
+	// Map::InitRoadnet()/RoadnetFactory::GetRoadnet同一个模式。
+	virtual void SetConfig(const std::string& id, bool enabled);
+	virtual std::string GetName() const;
+
 private:
 	struct Entry {
 		CreateFunc creator;
@@ -61,4 +66,5 @@ private:
 	std::unordered_map<std::string, Entry> registries;
 	std::unordered_map<NameMod*, std::string> liveInstances;
 	std::unordered_map<std::string, std::string> configuredArgs;
+	std::unordered_map<std::string, bool> enabledConfig;
 };

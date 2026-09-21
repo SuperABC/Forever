@@ -16,18 +16,25 @@ CrossDay`），照抄老工程`Source/Core/player/player.cpp`同名方法的实�
   紧接着`AForeverFrameworkActor::EnsurePlayerGenerated()`会调用一次`SetTime`把年份改成
   市民繁衍模拟算出来的年份，见下"开局时间=人口模拟结束年份"一节——`Init()`本身不知道
   这件事，只负责先把时钟建好。
-- `Tick(float delta)`：每帧按`delta * 60 * 1000 * time_flow_ratio`毫秒推进时钟，即
-  `time_flow_ratio == 1.0`时"1真实秒 = 1游戏分钟"。**这次调成`2.0`**（"1真实秒 =
-  2游戏分钟"）——之前调到过`10.0`验证调度，但流速太快时`Populace::Tick`/`Society::Tick`
-  的`jobTimerSet`/`organizationTimerSet`短时间内堆积大量同一时刻到期的节点，每帧固定
+- `Tick(float delta)`：每帧按`delta * 60 * 1000 * timeFlowRatio`毫秒推进时钟，即
+  `timeFlowRatio == 1.0`时"1真实秒 = 1游戏分钟"。默认值`2.0`（"1真实秒 = 2游戏分钟"）
+  ——之前调到过`10.0`验证调度，但流速太快时`Populace::Tick`/`Society::Tick`的
+  `jobTimerSet`/`organizationTimerSet`短时间内堆积大量同一时刻到期的节点，每帧固定
   上限(`kMaxJobTimersPerTick`=4)吐不完积压、要连续好多帧才能追上，PIE验证发现这是9点/
   12点这类"大量市民同一时刻下班/上班"场景卡顿的直接原因，调回`2.0`降低这种瞬时积压。
 
-  **`time_flow_ratio`这次写死常量，不接受`Story*`参数**——老工程这个倍率来自
-  `Story`的全局设置字典（`Config`的`global_setting`，脚本可用`GlobalSettingChange`改），
-  新工程的`Story`目前只有`systemScript`这一个`Script*`做`system.`前缀变量池，没有独立的
-  settings字典（见`Story.md`"变量系统"一节），重建那一整套机制超出这次"先让时钟走起来"
-  的范围，以后真要支持脚本调速再加。
+  **`timeFlowRatio`这次从局部`constexpr`改成可写成员+`SetTimeFlowRatio(ratio)`**（主线
+  剧情`.script`新增`global_settings`字段时改的）——`AForeverFrameworkActor::
+  EnsurePlayerGenerated()`在`player->Init()`之后读一次主线剧情`.script`的
+  `global_settings.time_flow_ratio`字段（`Script::GetGlobalSettings(
+  Config::GetMainStoryScriptPath())`），有声明就调`SetTimeFlowRatio`覆盖默认值，没有
+  就保持`2.0`不变。这次**不是**照抄老工程"倍率来自`Story`全局设置字典（`Config`的
+  `global_setting`，脚本用`GlobalSettingChange`改）"那一整套机制——新工程的`Story`
+  仍然只有`systemScript`一个`Script*`做`system.`前缀变量池，没有独立的settings字典
+  （见`Story.md`"变量系统"一节）；这次是把设置搬到了`.script`文件级别（`global_settings`
+  是主线剧情`.script`的顶层字段，不是`config.json`级别，也不是运行时`Change`可改的），
+  在`Story`对象创建之前、`Player`生成的时候就一次性读完，见`Core/story/script.md`
+  "主线剧情.script新增三个顶层字段"一节。
 - `SetTime(const Time&)`/`CrossDay()`：直接照抄老工程实现，供以后`change_time`一类
   Change或Society/Populace/Industry的"跨天触发日程"逻辑使用——这次`CrossDay()`还没有
   任何调用方接入，只是把接口先落地；`SetTime`这次唯一的调用方是下面这条"开局时间=
@@ -83,7 +90,8 @@ Actor第一次真正需要每帧更新的逻辑，见`ForeverFrameworkActor.md`"
 - 不迁移手机(`Phone`)、资产(`Asset`/`GiveObjectChange`等)、存款相关字段/方法——留到
   `PHASE4_PLAN.md`阶段4-7。
 - 不重建`Story::GetSetting`/`Config::GetGlobalSettings`那一套全局设置字典——
-  `time_flow_ratio`这次写死常量。
+  `time_flow_ratio`这次改成主线剧情`.script`的`global_settings`顶层字段（见上"时钟
+  行为"一节），不是`Story`运行时变量池，也不支持`GlobalSettingChange`这类运行时改写。
 - 不把`system.time.year/month/...`写进`Story`的`systemScript`变量池（老工程
   `Story::Tick`里做的事）——这次没有新增`Story::Tick`。
 - 不接入`CrossDay()`的任何消费方（老工程`Society::Tick`/`Populace::Tick`/

@@ -30,11 +30,45 @@
   单纯透传，不在`Script`这一层解读`post`的内容——真正使用`post`的是mod侧
   （`ScriptMod::WrapScript`重载），见`Dependence/story/script_mod.md`。`Story::
   BroadcastGameStart`是这条链路最外层的调用方，构造`post`并往下传，见`Core/story/story.md`。
-- **JSON解析只认`"milestones"`这一种数组结构**——老工程`ReadScript`同时支持"根节点是数组"和
-  "根节点是`{names, milestones}`对象"两种格式、外加一套"占用名"(`ReadNames`)机制，这次简化成
-  只支持`{"milestones": [...]}`这一种（`Story::GetMainScripts`不需要"占用名"去重这类高级功能，
-  当前阶段只有一份主线剧情），少了`caches`里的`vector<string>`那一半（占用名列表），只保留
-  "路径->里程碑表"这一半。
+- **JSON根节点这次固定是`{"milestones": [...]}`这一种对象格式**——老工程`ReadScript`同时
+  支持"根节点是数组"和"根节点是`{names, milestones}`对象"两种格式、外加一套"占用名"
+  (`ReadNames`)机制，这次简化成只认对象格式，`caches`的value类型这次是一个`FileCache`
+  结构体（见下"主线剧情.script新增三个顶层字段"一节），不是老工程那种
+  `pair<vector<string>, unordered_map<string,Milestone*>>`。
+
+## 主线剧情.script新增三个顶层字段（这次新增，只对主线剧情这一份.script文件生效）
+
+`Config::GetMainStoryScriptPath()`（`Config::GetScriptPath("test")`）解析出的那一份
+`.script`文件——不是Job/Organization/Scheduler各自读取的那些——这次额外支持三个和
+`"milestones"`平级的顶层字段，均为可选（不写就是空/默认值，不影响老`.script`文件）：
+
+- **`name_reserve`**：字符串数组，剧情作者显式列出脚本里会用到的姓名，
+  `Populace::InitNames()`在生成市民之前把这些名字喂给`Name::ReserveName`占位，姓名生成器
+  之后不会再生成同名结果，避免"脚本里写死的角色名"和"随机生成的市民名"撞名。老工程叫
+  `"names"`，机制照抄（`E:\Projects\Forever_UE`的`Script::ReadNames`+`Name::
+  ReserveName`/`RegisterName`），字段名按这次要求改成`name_reserve`。
+- **`global_settings`**：目前只识别一个子字段`time_flow_ratio`（游戏时钟相对真实时间的
+  倍率，默认`2.0`）——`AForeverFrameworkActor::EnsurePlayerGenerated()`读到就调用
+  `Player::SetTimeFlowRatio()`覆盖默认值。老工程的`global_setting`（单数）是
+  **config.json级别**的字段，这次按要求挪到`.script`文件里，是新设计，不是照抄。
+- **`mod_dependences`**：字符串数组，元素是mod id（**不带concept前缀**——id的命名不保证
+  能反映它属于哪个concept，比如`"building_clean"`名字像Building mod，实际可能是个Job
+  mod，不能靠字符串猜），声明主线剧情脚本依赖哪些mod。
+  `AForeverFrameworkActor::ValidateMainStoryDependencies()`在`BeginPlay()`最前面
+  （生成任何东西之前）对`Registry::CheckModRegistered(id)`做全局OR匹配（20个Factory各查
+  一次`CheckRegistered`），只要有一个id没被任何concept注册就`THROW_EXCEPTION`，交给
+  `BeginPlay()`统一的`try/catch`处理（打日志+退出游戏，见`ForeverFrameworkActor.md`）。
+  已知边界情况：`"empty"`这种几乎每个concept都会注册的占位id，全局匹配下必然"通过"，
+  这是"id不带concept信息"这个前提本身带来的局限，不是bug。
+
+**读取时机**：`name_reserve`必须在生成市民之前读到，但milestone的正式加载时机
+（`EnsureStoryGenerated()`）在`EnsurePopulaceGenerated()`之后——这三个新字段都是纯JSON
+数据，不需要等`ScriptMod`/`Story`对象就绪，`ReadScript`一次性把milestones+这三个新字段
+一起解析进`FileCache`（存进`caches`这份静态缓存），`GetNameReserve`/`GetGlobalSettings`/
+`GetModDependences`三个静态方法各自"先`ReadScript`（命中缓存直接返回，不重复读盘/解析）
+再取对应字段"，供`BeginPlay()`/`Populace::InitNames()`/`EnsurePlayerGenerated()`在
+`Story`对象/milestone真正加载之前就能查询，和老工程"分两次读取"（`ReadNames`早、
+`ReadMilestones`晚）是同一个思路。
 - **`BuildEvent`只识别`"game_start"`一种`type`，`BuildChanges`识别`"set_value"`/
   `"place_holder"`/`"debug_print"`三种`type`**，其余识别到的`type`字符串统一`THROW_EXCEPTION(
   RuntimeException, ...)`，等对应类型被点名实现时再插入分支，见`Dependence/story/
@@ -63,7 +97,10 @@
   `common/{utility,error,json}.h`、`Core/story/milestone.h`。
 - 被谁依赖：`Core/story/story.h`（`Story::mainScripts`/`systemScript`，
   `Story::BroadcastGameStart`构造`post`传进`MatchEvent`）、
-  `Forever/Framework/ForeverStoryFrameworkComponent.cpp`（间接通过`Story`）。
+  `Forever/Framework/ForeverStoryFrameworkComponent.cpp`（间接通过`Story`）、
+  `Core/populace/populace.cpp`（`InitNames()`调`GetNameReserve`）、
+  `Forever/Framework/ForeverFrameworkActor.cpp`（`ValidateMainStoryDependencies`调
+  `GetModDependences`，`EnsurePlayerGenerated`调`GetGlobalSettings`）。
 
 ## 待办/后续阶段
 

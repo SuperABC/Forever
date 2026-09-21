@@ -82,11 +82,43 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
     `Init/Tick/GetTime/SetTime/CrossDay`，见`Core/player/player.md`）+
     `player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8))`——假定`populace`已经
     生成好，靠`BeginPlay()`里`EnsurePopulaceGenerated()`排在它前面保证，自己不会去调
-    `EnsurePopulaceGenerated()`。
+    `EnsurePopulaceGenerated()`。**主线剧情.script新增`global_settings`字段时补上**：
+    紧接着读一次`Script::GetGlobalSettings(Config::GetMainStoryScriptPath())`，有
+    `time_flow_ratio`就调`player->SetTimeFlowRatio(...)`覆盖默认值`2.0`，见
+    `Core/player/player.md`"时钟行为"一节。
   - **`EnsureStoryGenerated()`（阶段4 Story落地新增）**：`story`已存在直接返回，否则
     `new Story()`+`story->Init()`（读取`Resource/Story/test.json`）+
     `storyFramework->Init(story)`+`storyFramework->BroadcastGameStart()`。和`map`/
     `populace`不互相依赖。
+
+### `ValidateMainStoryDependencies()`+`BeginPlay()`统一`try/catch`（主线剧情.script
+新增`mod_dependences`字段时新增）
+
+`BeginPlay()`把`Registry::Get().ReloadModArgs()`之后、7个`Ensure*Generated()`那一段
+包进一个`try { ValidateMainStoryDependencies(); EnsureMapGenerated(); ... } catch
+(const ExceptionBase& e) { ... }`：
+
+- `ValidateMainStoryDependencies()`遍历主线剧情`.script`的`mod_dependences`字段
+  （`Script::GetModDependences(Config::GetMainStoryScriptPath())`），对每个mod id调
+  `Registry::Get().CheckModRegistered(id)`，有任何一个没注册就`THROW_EXCEPTION(
+  RuntimeException, ...)`——放在`try`块最前面，先于任何`EnsureXxxGenerated()`，校验
+  失败直接跳过全部世界生成（`map`/`populace`等全部保持`nullptr`），见
+  `Core/common/registry.md`"`CheckModRegistered`"一节。
+- `catch`分支：`UE_LOG(LogTemp, Error, ...)`把`e.GetDetailedInfo()`（`common/error.h`
+  的`ExceptionBase`已有方法，含消息+文件+行号+函数名）打进日志，再调
+  `UKismetSystemLibrary::QuitGame(this, UGameplayStatics::GetPlayerController(
+  GetWorld(), 0), EQuitPreference::Quit, false)`退出——用`QuitGame`不用
+  `FPlatformMisc::RequestExit`，因为后者在PIE里可能把整个Editor进程一起关掉，
+  `QuitGame`能干净结束这次PIE会话/游戏进程，不影响Editor本体；不用弹窗，这些都是
+  内容/配置错误，不是玩家运行时该看到的提示，这个工程也没有`FMessageDialog`一类的
+  弹窗先例。
+- 这个`try/catch`不是只为`mod_dependences`一个场景设计——`Populace::InitNames()`的
+  `chinese`取名器未启用、`Name::GenerateName`重试耗尽仍撞上`name_reserve`占位名（见
+  `populace.md`/`name.md`）等所有"生成世界过程中出现的致命错误"都统一
+  `THROW_EXCEPTION`，从各自所在的层（可能是`Core`层，不能碰UE）一路不需要任何中间层
+  感知，直接穿到这一处`catch`。顺带也兜住了`Script::ReadScript`本来就有的
+  `JsonFormatException`/`IOException`（之前没有捕获，逃出`BeginPlay()`就是未处理
+  异常/硬崩溃，现在统一变成"打日志+退出"）。
 - **`PrimaryActorTick.bCanEverTick`这次从`false`改成`true`，新增`Tick(float DeltaTime)`
   覆写**：`player`存在时调用`player->Tick(DeltaTime)`驱动全局时钟往前走（`player`在
   `EnsurePlayerGenerated()`跑完之前是`nullptr`，但`BeginPlay`同步跑完全部7个
@@ -162,7 +194,11 @@ context)`收口成唯一入口，今后任何地方产出的`Change`都应该调
   `Source/Core/player/player.h`（持有`Society*`/`Industry*`/`Traffic*`/`Player*`——
   `Industry`/`Traffic`仍是空骨架，`Society`这次真的做了组织分配+招聘，见上
   "7个`Ensure*Generated()`"一节）、`Source/Core/society/organization.h`/`job.h`、
-  `Source/Core/story/change.h`（`NPCNavigateChange`分发用）。
+  `Source/Core/story/change.h`（`NPCNavigateChange`分发用）、
+  `Source/Core/story/script.h`（`GetModDependences`/`GetGlobalSettings`）、
+  `Source/Core/common/config.h`（`GetMainStoryScriptPath`）、
+  `Source/Core/common/error.h`（`ExceptionBase`/`RuntimeException`，`BeginPlay()`的
+  `try/catch`）、`Kismet/KismetSystemLibrary.h`（`QuitGame`）。
 - 被`AForeverGameMode`引用:`BeginPlay`和`FindPlayerStart_Implementation`都会调用
   `EnsureFrameworkActorExists()`(场景里没有找到已放置的实例时动态`SpawnActor`一个兜底,
   找到/生成后都会调用这个Actor的`EnsureMapGenerated()`),详见`ForeverGameMode.md`。

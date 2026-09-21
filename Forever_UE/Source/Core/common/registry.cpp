@@ -71,3 +71,26 @@ void Registry::ReloadModArgs() {
 	stationFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("station_mods")));
 	vehicleFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("vehicle_mods")));
 }
+
+bool Registry::CheckModRegistered(const string& id) const {
+	return terrainFactory.CheckRegistered(id)
+		|| roadnetFactory.CheckRegistered(id)
+		|| zoneFactory.CheckRegistered(id)
+		|| buildingFactory.CheckRegistered(id)
+		|| componentFactory.CheckRegistered(id)
+		|| roomFactory.CheckRegistered(id)
+		|| nameFactory.CheckRegistered(id)
+		|| schedulerFactory.CheckRegistered(id)
+		|| jobFactory.CheckRegistered(id)
+		|| organizationFactory.CheckRegistered(id)
+		|| scriptFactory.CheckRegistered(id)
+		|| productFactory.CheckRegistered(id)
+		|| storageFactory.CheckRegistered(id)
+		|| manufactureFactory.CheckRegistered(id)
+		|| routeFactory.CheckRegistered(id)
+		|| stationFactory.CheckRegistered(id)
+		|| vehicleFactory.CheckRegistered(id)
+		|| assetFactory.CheckRegistered(id)
+		|| appFactory.CheckRegistered(id)
+		|| puzzleFactory.CheckRegistered(id);
+}

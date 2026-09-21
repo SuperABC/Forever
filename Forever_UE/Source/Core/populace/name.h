@@ -4,6 +4,7 @@
 #include "populace/name_factory.h"
 
 #include <string>
+#include <unordered_set>
 
 
 // Name实体：持有一个具体NameMod实例(由NameFactory创建/销毁)，把它的取名业务方法转发出来。
@@ -33,9 +34,15 @@ public:
 	std::string GenerateName(const std::string& surname,
 		bool allowMale, bool allowFemale, bool allowNeutral) const;
 
+	// 占位一个姓名——GenerateName不会返回这个名字（内部撞上就重试，见.cpp）。给主线剧情
+	// 脚本里出现的角色名占位用（name_reserve字段），见populace.md"InitNames"一节。
+	void ReserveName(const std::string& name);
+
 private:
 	NameMod* mod;
 	NameFactory* factory;
 	std::string type;
 	std::string name;
+
+	std::unordered_set<std::string> reserve;
 };

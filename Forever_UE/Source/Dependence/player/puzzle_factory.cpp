@@ -12,8 +12,10 @@ PuzzleMod* PuzzleFactory::CreatePuzzle(const string& id) {
 	if (it == registries.end())
 		return nullptr;
 
+	if (!IsEnabled(id)) return nullptr;
+
 	auto argsIt = configuredArgs.find(id);
-	PuzzleMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
+	PuzzleMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
 	}
@@ -36,12 +38,13 @@ void PuzzleFactory::DestroyPuzzle(PuzzleMod* instance) {
 }
 
 bool PuzzleFactory::CheckRegistered(const string& id) const {
-	return registries.find(id) != registries.end();
+	return IsEnabled(id);
 }
 
 vector<string> PuzzleFactory::GetRegisteredIds() const {
 	vector<string> ids;
 	for (const auto& [id, entry] : registries) {
+		if (configuredArgs.find(id) == configuredArgs.end()) continue;
 		ids.push_back(id);
 	}
 	return ids;
@@ -49,4 +52,8 @@ vector<string> PuzzleFactory::GetRegisteredIds() const {
 
 void PuzzleFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
+}
+
+bool PuzzleFactory::IsEnabled(const string& id) const {
+	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }

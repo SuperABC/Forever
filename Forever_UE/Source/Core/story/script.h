@@ -104,6 +104,27 @@ public:
 	void ReadMilestones(const std::string& path);
 
 	/*
+	* 读取一份.script文件的name_reserve字段（懒解析：内部先调一次ReadScript，命中缓存
+	* 直接返回，不重复读盘）。path为空/文件不存在/解析失败时返回空数组。这三个新增的
+	* 静态查询方法都不需要任何Script实例存在，供AForeverFrameworkActor在生成市民/校验
+	* mod依赖之前提前查询主线剧情.script文件，见ForeverFrameworkActor.md。
+	* @path: 剧本文件路径
+	*/
+	static const std::vector<std::string>& GetNameReserve(const std::string& path);
+
+	/*
+	* 读取一份.script文件的global_settings字段，目前只识别time_flow_ratio这一个子字段。
+	* @path: 剧本文件路径
+	*/
+	static const std::unordered_map<std::string, ValueType>& GetGlobalSettings(const std::string& path);
+
+	/*
+	* 读取一份.script文件的mod_dependences字段（mod id列表，不带concept前缀）。
+	* @path: 剧本文件路径
+	*/
+	static const std::vector<std::string>& GetModDependences(const std::string& path);
+
+	/*
 	* 匹配事件，返回触发的动作列表（已经过WrapScript改写）
 	* @event: 触发事件
 	* @context: 变量路由上下文（context.self会被强制设为this，忽略调用方传入的self）
@@ -161,8 +182,18 @@ private:
 	// 脚本名称
 	std::string name;
 
-	// 脚本缓存：文件路径 -> 该文件解析出的里程碑表（名称->Milestone*，本体持有者）
-	static std::unordered_map<std::string, std::unordered_map<std::string, Milestone*>> caches;
+	// 一份.script文件解析出的全部内容——milestones是原来就有的，name_reserve/
+	// global_settings/mod_dependences是这次新增的三个顶层字段，都是纯JSON数据，不依赖
+	// ScriptMod/Script实例，可以在任何Script对象存在之前就被上面三个静态方法单独读取。
+	struct FileCache {
+		std::vector<std::string> nameReserve;
+		std::unordered_map<std::string, ValueType> globalSettings;
+		std::vector<std::string> modDependences; // mod id，不带concept前缀
+		std::unordered_map<std::string, Milestone*> milestones;
+	};
+
+	// 脚本缓存：文件路径 -> 该文件解析出的全部内容（本体持有者）
+	static std::unordered_map<std::string, FileCache> caches;
 
 	// 里程碑列表（引用缓存里的Milestone*，不持有所有权）
 	std::unordered_map<std::string, MilestoneNode> milestones;

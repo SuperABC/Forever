@@ -125,18 +125,42 @@ name_mod.h`）的三个纯虚方法：`GetSurname(fullName)`/`GenerateName(male,
 Populace::Populace() : nameFactory(Registry::Get().GetNameFactory()) {}
 // ...
 void Populace::InitNames() {
-	name = new Name(&nameFactory, "chinese"); // 固定用这个具体实现，见下
+	for (const auto& [id, args] : Config::GetConceptMods("name_mods")) {
+		nameFactory.SetConfig(id, true);
+	}
+	string activeId = nameFactory.GetName();
+	if (activeId.empty()) {
+		auto ids = nameFactory.GetRegisteredIds();
+		if (!ids.empty()) {
+			nameFactory.SetConfig(ids[0], true);
+			activeId = ids[0];
+		}
+	}
+	if (activeId.empty()) {
+		THROW_EXCEPTION(RuntimeException, "No name mod available.\n");
+	}
+	name = new Name(&nameFactory, activeId);
+	// ...ReserveName，见下"主线剧情.script的name_reserve"一节
 }
 ```
-**固定用`"chinese"`这个id，不做通用的enable/disable选择**——这个项目的Factory模式本来
-就没有老工程"config必须恰好enable一个name mod，否则`THROW_EXCEPTION`"这套机制（阶段3
-约定是"config.json的`<concept>_mods`数组只提供按id的参数字符串，不做启用过滤，未列出的
-id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有已注册id一视同仁处理，
-不存在"多个候选选一个"的问题。但Name这个concept**需要**唯一一个"当前生效"的取名算法给
-`Populace`用，所以直接硬编码引用`ChineseName::GetId()`（`"chinese"`）——和
-`Building::Layout()`直接用`ResidenceRoom::GetId()`而不是通用查找是同一种"直接耦合到
-当前默认内容"的做法。`Populace`的析构函数`delete name`（`Name`析构里调用
-`nameFactory.DestroyName(mod)`释放真正的`NameMod*`）。
+**`NameFactory`这次改成和`RoadnetFactory`同一个"单选"模式，不在C++里硬编码具体mod
+名字**——Name这个concept只需要唯一一个"当前生效"的取名算法给`Populace`用（不是
+Terrain/Zone/Building那种按`GetPriority()`/权重多mod叠加），最初的实现直接硬编码
+`ChineseName::GetId()`（`"chinese"`）字面量，被要求改掉：`NameFactory`新增
+`SetConfig(id, enabled)`/`GetName()`（分别对应`RoadnetFactory::SetConfig`/
+`GetRoadnet()`），`CreateName`/`CheckRegistered`/`GetRegisteredIds`改回不看
+`configuredArgs`的纯`registries`查询（和`RoadnetFactory`一致——"单选"这件事完全在
+调用方这一层做，Factory自己不做启用过滤）。`InitNames()`现在和`Map::InitRoadnet()`
+逐字同构：遍历`Config::GetConceptMods("name_mods")`挨个`SetConfig(id, true)`，
+`GetName()`拿到胜出的id；`config.json`没配`name_mods`时退化选第一个注册到的id
+（`GetRegisteredIds()[0]`），和`Map::InitRoadnet()`同一个容错风格；两条路径都拿不到
+id才是真正的致命配置错误（没有取名算法整个游戏就没法生成任何市民），`THROW_EXCEPTION`
+交给`AForeverFrameworkActor::BeginPlay()`的`try/catch`统一处理（打日志+退出游戏）。
+`config.json`现在的`"name_mods"`数组只需要写`["chinese"]`，不会再有`"empty --test
+true"`这种占位条目跟着凑数——`EmptyName`依然正常注册在`registries`里（`GetModNames`
+返回的id列表不受影响），只是永远不会被`SetConfig`标记启用，`GetName()`不会选中它。
+`Populace`的析构函数`delete name`（`Name`析构里调用`nameFactory.DestroyName(mod)`
+释放真正的`NameMod*`）。
 
 **架构修正：新增`Core/populace/name.h/.cpp`的`Name`类，`Populace`不再直接持有/调用
 `NameMod*`**——最初这一版迁移图省事，让`Populace`直接持有`NameMod* nameMod`并调
@@ -153,12 +177,19 @@ id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有�
 "按性别选对应词库+中性词库永远允许"，不逐字复刻这个疑似bug，`populace.cpp`里有对应
 注释说明。
 
-**没有迁移老工程的`Name`包装类（`reserve`/`roll`去重）**：老工程`Name`（不是
-`NameMod`）在具体算法之上加了一层"避免和预先脚本化的Story角色姓名撞名"（`reserve`）+
-"避免同一轮生成内部撞名"（`roll`）的`unordered_set`去重。这次不迁移——Story/Script域
-还没进这个项目，`reserve`完全用不上；`roll`的价值也因为姓名生成算法从10x10的占位小词表
-换成了~200姓氏x最多590个给定名字符的真实词库而大幅降低（组合数量级足够大，几百个citizen
-之间实际撞名的概率本来就很低），如果以后确实需要严格去重可以再补。
+**`reserve`（避免和脚本占位姓名撞名）后来在Scheduler/主线剧情`.script`新增字段这轮
+迁移时补上了，`roll`（同一轮生成内部去重）仍然没有迁移**：老工程`Name`（不是`NameMod`）
+在具体算法之上加了`reserve`+`roll`两层`unordered_set`去重，这次最初以"Story/Script域
+还没进这个项目，`reserve`完全用不上"为由都没迁移。后来Story/Script域进来了，用户要求
+比照老工程给主线剧情`.script`加一个`name_reserve`顶层字段（见`Core/story/script.md`
+"主线剧情.script新增三个顶层字段"一节），`Name::ReserveName`/`reserve`集合因此照抄
+老工程补上——`GenerateName`两个重载内部改成"生成一个候选，撞上`reserve`就重试，最多
+`kMaxReserveRetryAttempts`（1000）次，仍然撞上直接`THROW_EXCEPTION(DeadLoopException,
+...)`"（不能静默返回一个撞名的结果，交给`AForeverFrameworkActor::BeginPlay()`的
+`try/catch`统一处理），见`name.md`"`ReserveName`"一节。`roll`（同一轮生成内部互不
+撞名）依然没有迁移——姓名生成算法从10x10的占位小词表换成了~200姓氏x最多590个给定名
+字符的真实词库，组合数量级足够大，几百个citizen之间实际撞名的概率本来就很低，如果以后
+确实需要严格去重可以再补。
 
 ## 房产归属（`Map::Checkin`，进入populace域第四轮迁移）
 

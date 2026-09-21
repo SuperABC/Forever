@@ -9,12 +9,18 @@
 #include "society/job.h"
 #include "story/story.h"
 #include "story/change.h"
+#include "story/script.h"
 #include "industry/industry.h"
 #include "traffic/traffic.h"
 #include "player/player.h"
 #include "common/registry.h"
 #include "common/utility.h"
 #include "common/implement.h"
+#include "common/config.h"
+#include "common/error.h"
+
+#include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/GameplayStatics.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -121,14 +127,38 @@ void AForeverFrameworkActor::BeginPlay()
 	// 要用到map(Map::ComputeAccommodationTarget/Checkin),必须排在EnsureMapGenerated之后;
 	// EnsurePlayerGenerated要用到populace->GetCurrentYear(),必须排在EnsurePopulaceGenerated
 	// 之后;Society/Industry/Traffic/Story这次都是互相独立的空骨架或独立数据源,顺序上没有
-	// 别的硬性要求。
-	EnsureMapGenerated();
-	EnsurePopulaceGenerated();
-	EnsureSocietyGenerated();
-	EnsurePlayerGenerated();
-	EnsureIndustryGenerated();
-	EnsureTrafficGenerated();
-	EnsureStoryGenerated();
+	// 别的硬性要求。ValidateMainStoryDependencies()放在最前面——校验主线剧情.script声明的
+	// mod_dependences，不满足就直接拒绝生成世界，不浪费时间跑完地图/市民生成再失败。
+	//
+	// 这一整段包一层try/catch：Core层遇到"生成世界过程中出现的致命错误"（mod_dependences
+	// 缺失依赖、Name::GenerateName重试耗尽仍撞上name_reserve占位名、chinese取名器未启用等，
+	// 见populace.md/name.md/script.md相关章节）统一THROW_EXCEPTION，不需要每一层调用方
+	// 各自判断/传递失败信号——这里是唯一需要真正处理这类异常的地方（打日志+退出游戏），
+	// 中间的Populace::Init()/EnsurePopulaceGenerated()等每一层都不需要感知这个异常。
+	try {
+		ValidateMainStoryDependencies();
+		EnsureMapGenerated();
+		EnsurePopulaceGenerated();
+		EnsureSocietyGenerated();
+		EnsurePlayerGenerated();
+		EnsureIndustryGenerated();
+		EnsureTrafficGenerated();
+		EnsureStoryGenerated();
+	}
+	catch (const ExceptionBase& e) {
+		UE_LOG(LogTemp, Error, TEXT("生成世界时发生致命错误，拒绝继续，退出游戏：%s"),
+			UTF8_TO_TCHAR(e.GetDetailedInfo().data()));
+		UKismetSystemLibrary::QuitGame(this, UGameplayStatics::GetPlayerController(GetWorld(), 0),
+			EQuitPreference::Quit, false);
+	}
+}
+
+void AForeverFrameworkActor::ValidateMainStoryDependencies() {
+	for (const std::string& id : Script::GetModDependences(Config::GetMainStoryScriptPath())) {
+		if (!Registry::Get().CheckModRegistered(id)) {
+			THROW_EXCEPTION(RuntimeException, "Main story script depends on mod '" + id + "' which is not registered.\n");
+		}
+	}
 }
 
 void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptContext& context) {
@@ -332,6 +362,13 @@ void AForeverFrameworkActor::EnsurePlayerGenerated()
 	// 1月1日8点，让Citizen的生日/年龄和这个初始时钟保持自洽，见populace.md"生日换算"一节。
 	// 假定populace已经生成好，调用方(BeginPlay)负责保证EnsurePopulaceGenerated()已经先跑过。
 	player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
+
+	// 主线剧情.script的global_settings.time_flow_ratio字段——没有声明就保持
+	// Player::timeFlowRatio的默认值（2.0），见player.md"time_flow_ratio"一节。
+	const auto& settings = Script::GetGlobalSettings(Config::GetMainStoryScriptPath());
+	if (auto it = settings.find("time_flow_ratio"); it != settings.end()) {
+		player->SetTimeFlowRatio(ToDouble(it->second));
+	}
 }
 
 void AForeverFrameworkActor::EnsureIndustryGenerated()

@@ -118,6 +118,12 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	// 校验主线剧情.script的mod_dependences字段声明的每个mod id有没有被任何一个Factory
+	// 注册过（见Registry::CheckModRegistered）。有任何一个没注册就THROW_EXCEPTION(
+	// RuntimeException, ...)——不在这里自己打日志/退出，统一交给BeginPlay()的try/catch
+	// 处理。没有声明mod_dependences（字段不存在/为空）视为直接通过，什么都不做。
+	void ValidateMainStoryDependencies();
+
 	// 阶段4-7(部分)：驱动Player的全局时钟(Player::Tick)——目前这个Actor唯一需要每帧更新
 	// 的东西，见ForeverFrameworkActor.md"Tick"一节。
 	virtual void Tick(float DeltaTime) override;

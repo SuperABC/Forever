@@ -46,6 +46,47 @@ product/storage/manufacture；traffic域3个：route/station/vehicle)的`ModLoad
   concept的注册入口从一开始就集中在一个地方——等对应domain落地时，直接从`Registry::Get()`
   拿引用即可，不需要再回来改这个类或重新养成"自己持有ModLoader"的习惯。
 
+## `CheckModRegistered(id)`：主线剧情`.script`的`mod_dependences`校验用（新增）
+
+对全部20个Factory各查一次`CheckRegistered(id)`，只要有任意一个认得这个id就返回
+`true`——mod id不带concept前缀，不能靠字符串猜它属于哪个concept
+（`"building_clean"`完全可能是个Job mod），所以不按concept分流，直接全局OR匹配，供
+`AForeverFrameworkActor::ValidateMainStoryDependencies()`校验用，见
+`Core/story/script.md`"主线剧情.script新增三个顶层字段"一节。
+
+**这次同时把"注册"和"启用"变成了两件真正不同的事**：`configuredArgs`（`SetModArgs`
+存的"id->参数字符串"表，来自`config.json`每个`"<concept>_mods"`数组）以前只提供参数
+字符串，不管一个id列不列在数组里，只要DLL声明了这个id，`CreateXxx(id)`就会成功创建
+它——这条阶段3早期约定被发现没法表达"mod依赖关系"（想校验"某个mod是不是真的在用"，
+但"已注册"和"已启用"混成一件事，永远是true），这次改成18个Factory（除`RoadnetFactory`
+/`NameFactory`——这两个走的是"单选"模式，见下）的`CreateXxx`/`CheckRegistered`/
+`GetRegisteredIds`都同时认`registries`（DLL有没有声明这个id）和`configuredArgs`
+（`config.json`对应数组里有没有列出这个id）两张表——**没在`config.json`列出的id现在
+视为未启用**，`CreateXxx`拒绝创建，`GetRegisteredIds()`也不会再枚举到它。每个Factory
+新增一个私有`IsEnabled(id)`helper统一判断逻辑，`OrganizationFactory`/
+`SchedulerFactory`/`ZoneFactory`/`BuildingFactory`额外的`GetPower`/`Assign`/
+`RandomAcreage`/`GetAcreageMin`/`GetAcreageMax`这类"不需要实例的静态查询"方法一并
+接入这个判断。
+
+**`RoadnetFactory`/`NameFactory`是两个例外，走的是"单选"模式，不是"启用即认领"**：
+一次只应该有一个路网布局/取名算法生效（不是Terrain那种按`GetPriority()`多mod叠加），
+`CreateXxx`/`CheckRegistered`/`GetRegisteredIds`保持不看`configuredArgs`的纯
+`registries`查询，"选哪一个生效"完全由调用方（`Map::InitRoadnet()`/`Populace::
+InitNames()`）通过`SetConfig(id, true)`+`GetRoadnet()`/`GetName()`决定——`config.json`
+数组列出哪个id就选哪个，两者都没有额外的`enabledConfig`之外的启用判断。`NameFactory`
+最初也按上面18个Factory那样接入过`IsEnabled`，后来发现Name这个concept的语义（"唯一
+一个当前生效"）和`RoadnetFactory`完全一样，改成照抄`RoadnetFactory`的模式，不是照抄
+另外18个Factory的"启用即认领、可以有多个同时生效"模式，见`populace.md`"InitNames"
+一节。
+
+这条改动牵扯到`config.json`里已经在用、但之前从未被列出的一大批`Basic.dll`默认实现
+（`chinese`/`ocean`/`mountain`/`zone_residence`/`building_residence`/`shop`/
+`factory`/`component_residence`/`shop`/`factory`/`room_residence`/`shop`/
+`warehouse`/`parking`/`factory`/`scheduler_basic`/`job_shop_saler`/
+`organization_shop`/`script_basic`），改完必须同步把这些id补进`config.json`对应
+数组，否则这些默认内容会全部"消失"（`Populace::InitNames()`用到的`"chinese"`最严重，
+不补的话直接`THROW_EXCEPTION`导致整个游戏进不去，见`populace.md`"InitNames"一节）。
+
 ## 依赖关系
 
 - 依赖：`common/loader.h`(`ModLoader`)、`common/config.h`(`Config::GetMods`/

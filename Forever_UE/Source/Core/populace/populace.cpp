@@ -6,7 +6,10 @@
 #include "populace/name.h"
 #include "populace/scheduler.h"
 #include "common/registry.h"
+#include "common/config.h"
+#include "common/error.h"
 #include "society/job.h"
+#include "story/script.h"
 
 #include <cmath>
 #include <algorithm>
@@ -67,13 +70,35 @@ void Populace::InitNames() {
 	// name mod dll的发现/注册不在这里做，属于`Registry`全局一次性注册的范围(见
 	// Source/Core/common/registry.md)，nameFactory已经是绑定好的引用成员。
 
-	// 这次固定用"chinese"(Source/Basic/populace/name_chinese.h的ChineseName)这个具体
-	// 实现，不像Map::InitZones()那样把所有已注册id一视同仁——Name这个concept只需要唯一
-	// 一个"当前生效"的取名算法，和ResidenceRoom/ResidenceBuilding在Building::Layout()里
-	// 直接按id引用具体类型是同一个"直接耦合到当前默认内容"的做法，不是通用的enable/
-	// disable机制(这个项目目前没有这套机制，config.json的"name_mods"数组只提供按id的
-	// 参数字符串，不做启用过滤)。
-	name = new Name(&nameFactory, "chinese");
+	// Name这个concept只需要唯一一个"当前生效"的取名算法，和Roadnet同一个"单选"语义
+	// （不是Terrain/Zone/Building那种按GetPriority()/权重多mod叠加），这次改成和
+	// Map::InitRoadnet()同一套写法——不在C++里硬编码具体mod名字，config.json的
+	// "name_mods"数组列出哪个id就用哪个：
+	for (const auto& [id, args] : Config::GetConceptMods("name_mods")) {
+		nameFactory.SetConfig(id, true);
+	}
+	string activeId = nameFactory.GetName();
+	if (activeId.empty()) {
+		// config.json没有显式配置name_mods时，退化选第一个被发现注册的mod，避免完全没有
+		// 取名算法可用，和Map::InitRoadnet()同一个容错风格。
+		auto ids = nameFactory.GetRegisteredIds();
+		if (!ids.empty()) {
+			nameFactory.SetConfig(ids[0], true);
+			activeId = ids[0];
+		}
+	}
+	if (activeId.empty()) {
+		// 没有取名算法整个游戏就没法生成任何市民，属于致命配置错误，直接抛异常，交给
+		// AForeverFrameworkActor::BeginPlay()的try/catch统一处理（打日志+退出游戏）。
+		THROW_EXCEPTION(RuntimeException, "No name mod available.\n");
+	}
+	name = new Name(&nameFactory, activeId);
+
+	// 主线剧情.script的name_reserve字段——剧情作者显式列出脚本里会用到的姓名，在生成
+	// 市民之前占位，姓名生成器之后不会再生成同名结果，见name.md"ReserveName"一节。
+	for (const string& reserved : Script::GetNameReserve(Config::GetMainStoryScriptPath())) {
+		name->ReserveName(reserved);
+	}
 }
 
 void Populace::AssignSchedulers() {

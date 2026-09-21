@@ -238,6 +238,10 @@ string Config::GetMainStoryScriptModName() {
 	return mainStoryScriptModName;
 }
 
+string Config::GetMainStoryScriptPath() {
+	return GetScriptPath("test");
+}
+
 vector<pair<string, string>> Config::GetConceptMods(const string& jsonKey) {
 	auto it = conceptMods.find(jsonKey);
 	if (it == conceptMods.end()) {
