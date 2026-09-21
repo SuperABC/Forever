@@ -264,34 +264,51 @@ private:
 	// 析构时统一释放；导航图本身的Connection*从vehicleNavGraph/pedestrianNavGraph遍历去重释放。
 	std::vector<Node*> navAnchorNodes;
 
-	// 每条Road当前的"贯通线"记录(建图时创建，AddRoadAccessNode拆分某条车道时会清空对应
-	// entry的edge)，下标0=车行side0，1=车行side1，2=行人side0，3=行人side1，每个下标
-	// 对应一个vector，元素数量等于该side该类别的车道数——**每条物理车道都有自己独立的
-	// entry**（第九轮迁移，起因是PIE导航图可视化验证时发现多车道路段只画出一条线：早期
-	// 版本只保存"最内侧车道"或"单行道两端车道"，其余车道完全没有贯通线，车道数据和
-	// 导航图对不上）。fromAnchor/toAnchor按该方向实际通行方向排列(side0:沿Road
-	// Start->End；side1:沿End->Start)，车行取该车道在`RoadJunctionApproach::
+	// 每条Road当前的"贯通线"记录(建图时创建，BreakThroughLine拆分某条车道时会替换掉对应的
+	// entry)，下标0=车行side0，1=车行side1，2=行人side0，3=行人side1，每个下标对应一个
+	// vector——**每条物理车道都有自己独立的entry**（第九轮迁移，起因是PIE导航图可视化验证时
+	// 发现多车道路段只画出一条线：早期版本只保存"最内侧车道"或"单行道两端车道"，其余车道
+	// 完全没有贯通线，车道数据和导航图对不上）。fromAnchor/toAnchor按该方向实际通行方向排列
+	// (side0:沿Road Start->End；side1:沿End->Start)，车行取该车道在`RoadJunctionApproach::
 	// vehicleInbound`/`vehicleOutbound`(现在也是逐车道的vector)里的专属锚点，不再是
 	// 整个side共用一个锚点——否则哪怕每条车道各有一条Connection，几何上仍然会因为共用
 	// 端点而重叠成一条看不出区别的线。laneIndex是这条贯通线对应该side车道数组
-	// (vehicleLanes[side]/pedestrianLanes[side])里的下标，供AddRoadAccessNode按目标
-	// 车道直接找到并断开对应entry，不再需要"内侧线不动、外侧新增分支"那套workaround
-	// （每条车道现在都已经有自己专属的贯通线可以断），见roadnet.md"车道级导航锚点"一节。
+	// (vehicleLanes[side]/pedestrianLanes[side])里的下标。
+	//
+	// **同一个laneIndex现在可以对应多条entry，共同构成一条从road的t=0到t=1连续无缝的链**
+	// （第N+2轮迁移，修复"BreakThroughLine按调用顺序回写、顺序不对就断错地方"的bug，见下）——
+	// 每个entry新增的tLo/tHi记录这一段在road弧长参数[0,1]上的物理范围(和side无关，side只
+	// 决定fromAnchor/toAnchor哪个在tLo哪个在tHi：side==0时fromAnchor在tLo、toAnchor在tHi，
+	// side==1相反)。初始建图/ConnectPathRoad/ConnectZoneInternalRoad时整条车道只有一段，
+	// tLo=0/tHi=1；BreakThroughLine每次真正拆出一个新node，就把命中的那一段换成两段更短的、
+	// tLo/tHi也跟着变窄。
 	struct ThroughLine {
 		Connection* edge = nullptr;
 		Node* fromAnchor = nullptr;
 		Node* toAnchor = nullptr;
 		int laneIndex = 0;
+		float tLo = 0.f;
+		float tHi = 1.f;
 	};
 	std::unordered_map<Road*, std::array<std::vector<ThroughLine>, 4>> throughLines;
 
-	// 在throughLines[road][idx]里找到laneIndex对应的贯通线，把它当前的fromAnchor->toAnchor
-	// 一条边断成fromAnchor->N->toAnchor两段(车行只插入该车道自己的实际通行方向；人行两段都
-	// 双向插入)，在(worldX,worldY,worldZ)新建node N，返回N。**并把这条ThroughLine的fromAnchor
-	// 更新成N、edge更新成新的N->toAnchor那条**——这样如果同一条车道之后还要被再断一次(小路的
-	// 场景里同一条临街大路很可能被沿线好几条小路连续断开)，下次断的是"剩下还没断过的那一截
-	// 尾巴"，不会因为找到的还是最初那条整段edge而和已有node脱节。找不到对应贯通线(laneIndex
-	// 越界/road不在throughLines里)返回nullptr。是AddRoadAccessNode和ConnectPathRoad共用的
+	// 把worldX/worldY投影回road自己的弧长参数t（`ProjectPointOntoRoad`），在throughLines
+	// [road][idx]里找到laneIndex匹配、且[tLo,tHi]跨过这个t的那一段——不管它是最初的整段还是
+	// 之前已经被断过若干次剩下的某一小段，也不管这次调用和其它调用的先后顺序——删掉这一段的
+	// 旧edge（连图上的边一起删），在(worldX,worldY,worldZ)新建node N，换成两段新的
+	// fromAnchor(或toAnchor)->N、N->toAnchor(或fromAnchor)，返回N。断点几乎正好落在这一段
+	// 某个既有端点上时直接复用那个端点，不新建重合的node。
+	//
+	// **这是第N+2轮迁移的重写**：旧实现假设每条车道只有一条"当前剩下还没断过的尾巴"
+	// (`fromAnchor`/`toAnchor`/`edge`单条记录)，每次断完就地把`fromAnchor`回写成新node、
+	// 寄望"下次再断同一条车道时，断的正好是这次剩下的尾巴"——这要求同一条车道上所有break
+	// 调用严格按物理顺序(沿通行方向从头到尾)发生，但真实调用方(`AddRoadAccessNode`处理的
+	// building/zone出入口，`ResolvePathEndAnchors`处理的小路接大路)彼此独立，谁先调用完全
+	// 由building/zone/小路各自的遍历顺序决定，和它们在路上的物理位置(弧长比例t)没有关系。
+	// PIE导航图可视化实测发现：顺序一旦不对，某次break操作到的`fromAnchor`已经不是这次
+	// 断点物理上应该连接的端点，产生"有的node只连一端、原有旧edge没被真正删除、旧连线从
+	// 抬高的新node下方直接穿过"这类问题。新实现每次调用都是自包含的"投影t定位→删段→拆两段"，
+	// 不依赖任何跨调用的隐藏状态假设，和调用顺序无关。是AddRoadAccessNode和ConnectPathRoad共用的
 	// 底层原语——AddRoadAccessNode原来自己内联做这件事，但没有这份"回写"逻辑，因为它目前还没有
 	// 真正的调用方，从没暴露过"同一车道断第二次"这个问题；这次给小路接图必然会撞上，顺手把
 	// AddRoadAccessNode也改成调用这个统一实现，不留两份逻辑。

@@ -327,7 +327,7 @@ void Map::InitRoadnet() {
 					if (!isVehicle) {
 						graph[toAnchor->GetId()].emplace_back(fromAnchor->GetId(), edge);
 					}
-					throughLines[road][idx].push_back({ edge, fromAnchor, toAnchor, laneIndex });
+					throughLines[road][idx].push_back({ edge, fromAnchor, toAnchor, laneIndex, 0.f, 1.f });
 				}
 			}
 		}
@@ -1251,41 +1251,71 @@ Node* Map::AddRoadAccessNode(Road* road, float t, bool isVehicle, bool useForwar
 Node* Map::BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex, float worldX, float worldY, float worldZ) {
 	if (!road || laneIndex < 0) return nullptr;
 
+	// t容差：两次投影出的t理论上应该完全相等的场景（比如同一个断点被不同调用方各自算了一次）
+	// 允许有极小的浮点误差；复用距离容差：断点几乎正好落在某个既有端点上时，直接复用那个
+	// node，不新建一个和它几乎重合的node（世界坐标单位下约10厘米量级，比车道宽度小得多，
+	// 不会误判成两个不同的断点）。
+	constexpr float kThroughLineEps = 1e-4f;
+	constexpr float kThroughLineReuseDistSq = 0.0001f;
+
+	float breakT = ProjectPointOntoRoad(road, worldX, worldY);
 	int idx = (isVehicle ? 0 : 2) + side;
 	vector<ThroughLine>& lines = throughLines[road][idx];
-	ThroughLine* line = nullptr;
-	for (ThroughLine& l : lines) {
-		if (l.laneIndex == laneIndex) { line = &l; break; }
+
+	// 找到laneIndex匹配、且[tLo,tHi]跨过breakT的那一段——不管它是最初覆盖整条车道的那一段，
+	// 还是之前已经被断过若干次剩下的某个片段，也不管这次调用和其它调用的先后顺序，只认
+	// t范围，见map.h声明处注释。
+	int foundIdx = -1;
+	for (int i = 0; i < static_cast<int>(lines.size()); i++) {
+		if (lines[i].laneIndex != laneIndex) continue;
+		if (breakT >= lines[i].tLo - kThroughLineEps && breakT <= lines[i].tHi + kThroughLineEps) {
+			foundIdx = i;
+			break;
+		}
 	}
-	if (!line || !line->fromAnchor || !line->toAnchor) return nullptr;
+	if (foundIdx < 0) return nullptr; // laneIndex存在的话理论上应该总有一段覆盖[0,1]
+
+	ThroughLine seg = lines[foundIdx];
+	Node* nodeAtLo = (side == 0) ? seg.fromAnchor : seg.toAnchor;
+	Node* nodeAtHi = (side == 0) ? seg.toAnchor : seg.fromAnchor;
+
+	auto closeEnough = [&](Node* n) {
+		float dx = n->GetX() - worldX, dy = n->GetY() - worldY;
+		return dx * dx + dy * dy < kThroughLineReuseDistSq;
+		};
+	if (closeEnough(nodeAtLo)) return nodeAtLo;
+	if (closeEnough(nodeAtHi)) return nodeAtHi;
+
+	// 真正拆分：删掉这一段的旧edge（连图上的边一起删），从vector里移除这一段。
+	lines.erase(lines.begin() + foundIdx);
+	auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;
+	if (seg.edge) {
+		RemoveGraphEdgeOneWay(graph, seg.fromAnchor->GetId(), seg.toAnchor->GetId());
+		if (!isVehicle) {
+			RemoveGraphEdgeOneWay(graph, seg.toAnchor->GetId(), seg.fromAnchor->GetId());
+		}
+		delete seg.edge;
+	}
 
 	Node* newNode = new Node(isVehicle ? "vehicle" : "pedestrian", worldX, worldY, worldZ);
 	navAnchorNodes.push_back(newNode);
 
-	auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;
-
-	if (line->edge) {
-		RemoveGraphEdgeOneWay(graph, line->fromAnchor->GetId(), line->toAnchor->GetId());
-		if (!isVehicle) {
-			RemoveGraphEdgeOneWay(graph, line->toAnchor->GetId(), line->fromAnchor->GetId());
-		}
-		delete line->edge;
-		line->edge = nullptr;
+	// 按tLo->tHi方向建两条新Connection（side==0方向沿t递增，fromAnchor在tLo端；side==1
+	// 反过来，fromAnchor在tHi端），同时登记进lines，构成这条车道链上更细的两段。
+	auto makeSeg = [&](Node* from, Node* to, float tA, float tB) {
+		Connection* c = new Connection(*from, *to);
+		graph[from->GetId()].emplace_back(to->GetId(), c);
+		if (!isVehicle) graph[to->GetId()].emplace_back(from->GetId(), c);
+		lines.push_back({ c, from, to, laneIndex, tA, tB });
+		};
+	if (side == 0) {
+		makeSeg(nodeAtLo, newNode, seg.tLo, breakT);
+		makeSeg(newNode, nodeAtHi, breakT, seg.tHi);
 	}
-
-	Connection* seg1 = new Connection(*line->fromAnchor, *newNode);
-	Connection* seg2 = new Connection(*newNode, *line->toAnchor);
-	graph[line->fromAnchor->GetId()].emplace_back(newNode->GetId(), seg1);
-	graph[newNode->GetId()].emplace_back(line->toAnchor->GetId(), seg2);
-	if (!isVehicle) {
-		graph[newNode->GetId()].emplace_back(line->fromAnchor->GetId(), seg1);
-		graph[line->toAnchor->GetId()].emplace_back(newNode->GetId(), seg2);
+	else {
+		makeSeg(nodeAtHi, newNode, breakT, seg.tHi);
+		makeSeg(newNode, nodeAtLo, seg.tLo, breakT);
 	}
-
-	// 回写成"剩下还没断过的尾巴"：下次再断同一条车道(比如同一条临街大路被沿线好几条小路
-	// 连续断开)，断的是N->原toAnchor这一截，不会和这次新插入的node脱节。
-	line->fromAnchor = newNode;
-	line->edge = seg2;
 
 	return newNode;
 }
@@ -1378,14 +1408,16 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 	float enterSign = (enteringSide == 0) ? 1.f : -1.f;
 
 	if (!hostRoad) {
-		outVeh[0] = MakeIsolatedAnchor(baseNode.GetX() + pathPerp0X * vehOffset, baseNode.GetY() + pathPerp0Y * vehOffset, baseNode.GetZ(), "vehicle");
-		outVeh[1] = MakeIsolatedAnchor(baseNode.GetX() - pathPerp0X * vehOffset, baseNode.GetY() - pathPerp0Y * vehOffset, baseNode.GetZ(), "vehicle");
-		outPed[0] = MakeIsolatedAnchor(baseNode.GetX() + pathPerp0X * pedOffset, baseNode.GetY() + pathPerp0Y * pedOffset, baseNode.GetZ(), "pedestrian");
-		outPed[1] = MakeIsolatedAnchor(baseNode.GetX() - pathPerp0X * pedOffset, baseNode.GetY() - pathPerp0Y * pedOffset, baseNode.GetZ(), "pedestrian");
+		float isolatedZ = baseNode.GetZ();
+		outVeh[0] = MakeIsolatedAnchor(baseNode.GetX() + pathPerp0X * vehOffset, baseNode.GetY() + pathPerp0Y * vehOffset, isolatedZ, "vehicle");
+		outVeh[1] = MakeIsolatedAnchor(baseNode.GetX() - pathPerp0X * vehOffset, baseNode.GetY() - pathPerp0Y * vehOffset, isolatedZ, "vehicle");
+		outPed[0] = MakeIsolatedAnchor(baseNode.GetX() + pathPerp0X * pedOffset, baseNode.GetY() + pathPerp0Y * pedOffset, isolatedZ, "pedestrian");
+		outPed[1] = MakeIsolatedAnchor(baseNode.GetX() - pathPerp0X * pedOffset, baseNode.GetY() - pathPerp0Y * pedOffset, isolatedZ, "pedestrian");
 		return;
 	}
 
 	Node hostPoint = hostRoad->GetPoint(hostT);
+	float hostZ = hostPoint.GetZ();
 	float hdx, hdy, hdz;
 	hostRoad->GetTangent(hostT, hdx, hdy, hdz);
 	float hlen = sqrtf(hdx * hdx + hdy * hdy);
@@ -1428,17 +1460,17 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 		if (vehLaneIndex >= 0) {
 			auto [vx, vy] = ComputeLaneAnchorPosition(hostRoad, hostT, true, vehSide, vehLaneIndex);
 			Nin = BreakThroughLine(hostRoad, true, vehSide, vehLaneIndex,
-				vx + pathPerp0X * vehOffset * enterSign, vy + pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+				vx + pathPerp0X * vehOffset * enterSign, vy + pathPerp0Y * vehOffset * enterSign, hostZ);
 			Nout = BreakThroughLine(hostRoad, true, vehSide, vehLaneIndex,
-				vx - pathPerp0X * vehOffset * enterSign, vy - pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+				vx - pathPerp0X * vehOffset * enterSign, vy - pathPerp0Y * vehOffset * enterSign, hostZ);
 		}
 		if (Nin && Nout) {
 			outVeh[enteringSide] = Nin;
 			outVeh[exitingSide] = Nout;
 		}
 		else {
-			outVeh[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * vehOffset, hostPoint.GetY() + pathPerp0Y * vehOffset, hostPoint.GetZ(), "vehicle");
-			outVeh[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * vehOffset, hostPoint.GetY() - pathPerp0Y * vehOffset, hostPoint.GetZ(), "vehicle");
+			outVeh[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * vehOffset, hostPoint.GetY() + pathPerp0Y * vehOffset, hostZ, "vehicle");
+			outVeh[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * vehOffset, hostPoint.GetY() - pathPerp0Y * vehOffset, hostZ, "vehicle");
 		}
 
 		int pedSide = nearSide;
@@ -1452,17 +1484,17 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 		if (pedLaneIndex >= 0) {
 			auto [px, py] = ComputeLaneAnchorPosition(hostRoad, hostT, false, pedSide, pedLaneIndex);
 			Pa = BreakThroughLine(hostRoad, false, pedSide, pedLaneIndex,
-				px + pathPerp0X * pedOffset, py + pathPerp0Y * pedOffset, hostPoint.GetZ());
+				px + pathPerp0X * pedOffset, py + pathPerp0Y * pedOffset, hostZ);
 			Pb = BreakThroughLine(hostRoad, false, pedSide, pedLaneIndex,
-				px - pathPerp0X * pedOffset, py - pathPerp0Y * pedOffset, hostPoint.GetZ());
+				px - pathPerp0X * pedOffset, py - pathPerp0Y * pedOffset, hostZ);
 		}
 		if (Pa && Pb) {
 			outPed[0] = Pa;
 			outPed[1] = Pb;
 		}
 		else {
-			outPed[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * pedOffset, hostPoint.GetY() + pathPerp0Y * pedOffset, hostPoint.GetZ(), "pedestrian");
-			outPed[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * pedOffset, hostPoint.GetY() - pathPerp0Y * pedOffset, hostPoint.GetZ(), "pedestrian");
+			outPed[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * pedOffset, hostPoint.GetY() + pathPerp0Y * pedOffset, hostZ, "pedestrian");
+			outPed[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * pedOffset, hostPoint.GetY() - pathPerp0Y * pedOffset, hostZ, "pedestrian");
 		}
 	}
 	else {
@@ -1477,16 +1509,16 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 		if (nearVehLaneIndex >= 0) {
 			auto [nvx, nvy] = ComputeLaneAnchorPosition(hostRoad, hostT, true, nearSide, nearVehLaneIndex);
 			NnIn = BreakThroughLine(hostRoad, true, nearSide, nearVehLaneIndex,
-				nvx + pathPerp0X * vehOffset * enterSign, nvy + pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+				nvx + pathPerp0X * vehOffset * enterSign, nvy + pathPerp0Y * vehOffset * enterSign, hostZ);
 			NnOut = BreakThroughLine(hostRoad, true, nearSide, nearVehLaneIndex,
-				nvx - pathPerp0X * vehOffset * enterSign, nvy - pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+				nvx - pathPerp0X * vehOffset * enterSign, nvy - pathPerp0Y * vehOffset * enterSign, hostZ);
 		}
 		if (farVehLaneIndex >= 0) {
 			auto [fvx, fvy] = ComputeLaneAnchorPosition(hostRoad, hostT, true, farSide, farVehLaneIndex);
 			Node* NfIn = BreakThroughLine(hostRoad, true, farSide, farVehLaneIndex,
-				fvx + pathPerp0X * vehOffset * enterSign, fvy + pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+				fvx + pathPerp0X * vehOffset * enterSign, fvy + pathPerp0Y * vehOffset * enterSign, hostZ);
 			Node* NfOut = BreakThroughLine(hostRoad, true, farSide, farVehLaneIndex,
-				fvx - pathPerp0X * vehOffset * enterSign, fvy - pathPerp0Y * vehOffset * enterSign, hostPoint.GetZ());
+				fvx - pathPerp0X * vehOffset * enterSign, fvy - pathPerp0Y * vehOffset * enterSign, hostZ);
 			if (NfIn && NnIn) {
 				Connection* bridgeIn = new Connection(*NfIn, *NnIn);
 				vehicleNavGraph[NfIn->GetId()].emplace_back(NnIn->GetId(), bridgeIn);
@@ -1501,8 +1533,8 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 			outVeh[exitingSide] = NnOut;
 		}
 		else {
-			outVeh[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * vehOffset, hostPoint.GetY() + pathPerp0Y * vehOffset, hostPoint.GetZ(), "vehicle");
-			outVeh[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * vehOffset, hostPoint.GetY() - pathPerp0Y * vehOffset, hostPoint.GetZ(), "vehicle");
+			outVeh[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * vehOffset, hostPoint.GetY() + pathPerp0Y * vehOffset, hostZ, "vehicle");
+			outVeh[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * vehOffset, hostPoint.GetY() - pathPerp0Y * vehOffset, hostZ, "vehicle");
 		}
 
 		int nearPedLaneIndex = pickLaneIndex(hostRoad->GetPedestrianLanes(nearSide));
@@ -1513,16 +1545,16 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 		if (nearPedLaneIndex >= 0) {
 			auto [npx, npy] = ComputeLaneAnchorPosition(hostRoad, hostT, false, nearSide, nearPedLaneIndex);
 			PnA = BreakThroughLine(hostRoad, false, nearSide, nearPedLaneIndex,
-				npx + pathPerp0X * pedOffset, npy + pathPerp0Y * pedOffset, hostPoint.GetZ());
+				npx + pathPerp0X * pedOffset, npy + pathPerp0Y * pedOffset, hostZ);
 			PnB = BreakThroughLine(hostRoad, false, nearSide, nearPedLaneIndex,
-				npx - pathPerp0X * pedOffset, npy - pathPerp0Y * pedOffset, hostPoint.GetZ());
+				npx - pathPerp0X * pedOffset, npy - pathPerp0Y * pedOffset, hostZ);
 		}
 		if (farPedLaneIndex >= 0 && PnA && PnB) {
 			auto [fpx, fpy] = ComputeLaneAnchorPosition(hostRoad, hostT, false, farSide, farPedLaneIndex);
 			Node* PfA = BreakThroughLine(hostRoad, false, farSide, farPedLaneIndex,
-				fpx + pathPerp0X * pedOffset, fpy + pathPerp0Y * pedOffset, hostPoint.GetZ());
+				fpx + pathPerp0X * pedOffset, fpy + pathPerp0Y * pedOffset, hostZ);
 			Node* PfB = BreakThroughLine(hostRoad, false, farSide, farPedLaneIndex,
-				fpx - pathPerp0X * pedOffset, fpy - pathPerp0Y * pedOffset, hostPoint.GetZ());
+				fpx - pathPerp0X * pedOffset, fpy - pathPerp0Y * pedOffset, hostZ);
 			if (PfA) {
 				Connection* c = new Connection(*PfA, *PnA);
 				pedestrianNavGraph[PfA->GetId()].emplace_back(PnA->GetId(), c);
@@ -1539,8 +1571,8 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 			outPed[1] = PnB;
 		}
 		else {
-			outPed[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * pedOffset, hostPoint.GetY() + pathPerp0Y * pedOffset, hostPoint.GetZ(), "pedestrian");
-			outPed[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * pedOffset, hostPoint.GetY() - pathPerp0Y * pedOffset, hostPoint.GetZ(), "pedestrian");
+			outPed[0] = MakeIsolatedAnchor(hostPoint.GetX() + pathPerp0X * pedOffset, hostPoint.GetY() + pathPerp0Y * pedOffset, hostZ, "pedestrian");
+			outPed[1] = MakeIsolatedAnchor(hostPoint.GetX() - pathPerp0X * pedOffset, hostPoint.GetY() - pathPerp0Y * pedOffset, hostZ, "pedestrian");
 		}
 	}
 }
@@ -1562,21 +1594,21 @@ void Map::ConnectPathRoad(const PathRoadLink& link) {
 	// 普通Road一样的基础设施(万一以后小路自己也要被AddRoadAccessNode打开口)。
 	Connection* veh0 = new Connection(*startVeh[0], *endVeh[0]);
 	vehicleNavGraph[startVeh[0]->GetId()].emplace_back(endVeh[0]->GetId(), veh0);
-	throughLines[path][0].push_back({ veh0, startVeh[0], endVeh[0], 0 });
+	throughLines[path][0].push_back({ veh0, startVeh[0], endVeh[0], 0, 0.f, 1.f });
 
 	Connection* veh1 = new Connection(*endVeh[1], *startVeh[1]);
 	vehicleNavGraph[endVeh[1]->GetId()].emplace_back(startVeh[1]->GetId(), veh1);
-	throughLines[path][1].push_back({ veh1, endVeh[1], startVeh[1], 0 });
+	throughLines[path][1].push_back({ veh1, endVeh[1], startVeh[1], 0, 0.f, 1.f });
 
 	Connection* ped0 = new Connection(*startPed[0], *endPed[0]);
 	pedestrianNavGraph[startPed[0]->GetId()].emplace_back(endPed[0]->GetId(), ped0);
 	pedestrianNavGraph[endPed[0]->GetId()].emplace_back(startPed[0]->GetId(), ped0);
-	throughLines[path][2].push_back({ ped0, startPed[0], endPed[0], 0 });
+	throughLines[path][2].push_back({ ped0, startPed[0], endPed[0], 0, 0.f, 1.f });
 
 	Connection* ped1 = new Connection(*startPed[1], *endPed[1]);
 	pedestrianNavGraph[startPed[1]->GetId()].emplace_back(endPed[1]->GetId(), ped1);
 	pedestrianNavGraph[endPed[1]->GetId()].emplace_back(startPed[1]->GetId(), ped1);
-	throughLines[path][3].push_back({ ped1, startPed[1], endPed[1], 0 });
+	throughLines[path][3].push_back({ ped1, startPed[1], endPed[1], 0, 0.f, 1.f });
 }
 
 pair<float, float> Map::ZoneLocalToWorld(const Zone* zone, float x, float y) const {
@@ -1709,7 +1741,7 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 		Node* toAnchor = findOrCreate(tx, ty, true);
 		Connection* edge = new Connection(*fromAnchor, *toAnchor);
 		vehicleNavGraph[fromAnchor->GetId()].emplace_back(toAnchor->GetId(), edge);
-		throughLines[road][0].push_back({ edge, fromAnchor, toAnchor, 0 });
+		throughLines[road][0].push_back({ edge, fromAnchor, toAnchor, 0, 0.f, 1.f });
 	}
 	else {
 		auto [sx, sy] = ComputeLaneAnchorPosition(road, 0.f, false, 0, 0);
@@ -1719,7 +1751,7 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 		Connection* edge = new Connection(*startAnchor, *endAnchor);
 		pedestrianNavGraph[startAnchor->GetId()].emplace_back(endAnchor->GetId(), edge);
 		pedestrianNavGraph[endAnchor->GetId()].emplace_back(startAnchor->GetId(), edge);
-		throughLines[road][2].push_back({ edge, startAnchor, endAnchor, 0 });
+		throughLines[road][2].push_back({ edge, startAnchor, endAnchor, 0, 0.f, 1.f });
 	}
 
 	return road;

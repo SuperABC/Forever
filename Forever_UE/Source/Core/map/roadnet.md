@@ -154,7 +154,13 @@
 - **`Map::AddRoadAccessNode`用到的"贯通线"记录（`Map::ThroughLine`）是`Map`自己的私有实现
   细节，不在`Roadnet`/`RoadJunction`里**——因为它要跨越`InitRoadnet`一次性建图和之后任意时刻
   调用`AddRoadAccessNode`两个阶段，需要`Map`长期持有可变状态（哪条边被拆分过），放在`Roadnet`
-  （只在`DistributeRoadnet`时写一次、之后只读）里不合适。
+  （只在`DistributeRoadnet`时写一次、之后只读）里不合适。**`Map::BreakThroughLine`这次重写
+  过一次**：每条车道现在存的是一组按`road`弧长参数`t`首尾相接的分段（`ThroughLine::tLo`/
+  `tHi`），每次断开都把传入的世界坐标投影回`t`（`Map::ProjectPointOntoRoad`），在这组分段
+  里精确定位哪一段被跨过、干净地删掉换成两段更短的——和"谁先调用`BreakThroughLine`"这个
+  顺序完全无关。旧实现假设每条车道只有一条"当前剩下的尾巴"、靠调用顺序回写，PIE导航图
+  可视化实测过顺序不对时会断错地方（node只连一端、旧edge没删干净），详见`map.h`里
+  `ThroughLine`/`BreakThroughLine`声明处的注释。
 
 ## 和老工程的关系
 
