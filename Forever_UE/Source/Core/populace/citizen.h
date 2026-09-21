@@ -10,6 +10,130 @@
 // 名字保持不变。
 enum GENDER_TYPE : int { GENDER_FEMALE, GENDER_MALE };
 
+enum PERSONALITY_TYPE : int {
+	PERSONALITY_APPEARANCE, // 颜值
+	PERSONALITY_FITNESS, // 身材
+	PERSONALITY_ENERGY, // 体能
+	PERSONALITY_INTELLIGENCE, // 智商
+	PERSONALITY_ELOQUENCE, // 口才
+	PERSONALITY_CONFIDENCE, // 自信心
+	PERSONALITY_MORALITY, // 德行
+	PERSONALITY_MENTALITY, // 心态
+	PERSONALITY_IMAGINATION, // 想象力
+	PERSONALITY_KNOWLEDGE, // 学识
+	PERSONALITY_ART, // 艺术
+	PERSONALITY_REASONING, // 理性
+	PERSONALITY_PERCEPTION // 感性
+};
+
+enum RELATION_TYPE : int {
+	RELATION_FAMILIARITY, // 熟悉程度
+	RELATION_RESPECT, // 尊敬程度
+	RELATION_FAVOUR, // 好感程度
+	RELATION_TRUST, // 信任程度
+	RELATION_COMPETING, // 竞争程度
+	RELATION_RELIABILITY // 依赖程度
+};
+
+// 个人属性
+struct Personality {
+	// 构造个人属性，各项属性随机初始化为[0, 1)区间内的值
+	Personality();
+
+	// 按类型访问属性字段（可写）
+	float& operator[](PERSONALITY_TYPE type);
+
+	// 按类型访问属性字段（只读）
+	float operator[](PERSONALITY_TYPE type) const;
+
+	// 按脚本变量名访问属性字段（可写）
+	float& operator()(const std::string& name);
+
+	// 脚本变量名访问属性字段（只读）
+	float operator()(const std::string& name) const;
+
+	// 获取属性类型对应的脚本变量名
+	static std::string GetFieldName(PERSONALITY_TYPE type);
+
+	// 颜值
+	float appearance;
+
+	// 身材
+	float fitness;
+
+	// 体能
+	float energy;
+
+	// 智商
+	float intelligence;
+
+	// 口才
+	float eloquence;
+
+	// 自信心
+	float confidence;
+
+	// 德行
+	float morality;
+
+	// 心态
+	float mentality;
+
+	// 想象力
+	float imagination;
+
+	// 学识
+	float knowledge;
+
+	// 艺术
+	float art;
+
+	// 理性
+	float reasoning;
+
+	// 感性
+	float perception;
+};
+
+// 人际关系
+struct Relation {
+	// 构造人际关系，各项属性初始化为0
+	Relation();
+
+	// 按类型访问关系字段（可写）
+	float& operator[](RELATION_TYPE type);
+
+	// 按类型访问关系字段（只读）
+	float operator[](RELATION_TYPE type) const;
+
+	// 按脚本变量名访问关系字段（可写）
+	float& operator()(const std::string& name);
+
+	// 按脚本变量名访问关系字段（只读）
+	float operator()(const std::string& name) const;
+
+	// 获取关系类型对应的脚本变量名
+	static std::string GetFieldName(RELATION_TYPE type);
+
+	// 熟悉程度
+	float familiarity;
+
+	// 尊敬程度
+	float respect;
+
+	// 好感程度
+	float favour;
+
+	// 信任程度
+	float trust;
+
+	// 竞争程度
+	float competing;
+
+	// 依赖程度
+	float reliability;
+};
+
 // Citizen：老工程里叫Person，这次进入populace域第一次迁移，只搬"姓名/性别/生日"这三项+
 // 这次要求的"所在lot/园区/建筑/房间"位置字段+"3D坐标"——老工程Person身上的
 // relatives/personality/acquaintances/assets/jobs/scheduler/educationExperiences等全部
@@ -45,6 +169,15 @@ public:
 	void SetSpouse(Citizen* value);
 	const std::vector<Citizen*>& GetChildren() const;
 	void AddChild(Citizen* child);
+
+	// 个人属性与熟人列表接口
+	const Personality& GetPersonality() const;
+	void SetPersonalityValue(PERSONALITY_TYPE type, float value);
+	void AdjustPersonalityValue(PERSONALITY_TYPE type, float delta);
+	void AddAcquaintance(const std::string& name);
+	const Relation& GetAcquaintance(const std::string& name) const;
+	void SetAcquaintanceValue(const std::string& name, RELATION_TYPE type, float value);
+	void AdjustAcquaintanceValue(const std::string& name, RELATION_TYPE type, float delta);
 
 	// 所在lot/园区/建筑/房间——这是"家"(tenancy)，Map::Checkin()分配住处时一次性设好，
 	// 这次没有"搬家"逻辑，不需要单独的SetStatus级联清空(老工程那套是给"人可能在
@@ -100,6 +233,9 @@ private:
 
 	Citizen* spouse = nullptr;
 	std::vector<Citizen*> children;
+
+	Personality personality;
+	std::unordered_map<std::string, Relation> acquaintances;
 
 	Lot* lot = nullptr;
 	Zone* zone = nullptr;

@@ -1,6 +1,11 @@
 #include "populace/citizen.h"
 
+#include "common/utility.h"
+#include "common/error.h"
+
 #include "populace/scheduler.h"
+
+#include <algorithm>
 
 
 using namespace std;
@@ -29,6 +34,45 @@ Citizen* Citizen::GetSpouse() const { return spouse; }
 void Citizen::SetSpouse(Citizen* value) { spouse = value; }
 const vector<Citizen*>& Citizen::GetChildren() const { return children; }
 void Citizen::AddChild(Citizen* child) { if (child) children.push_back(child); }
+
+const Personality& Citizen::GetPersonality() const { return personality; }
+void Citizen::SetPersonalityValue(PERSONALITY_TYPE type, float value) { personality[type] = value; }
+void Citizen::AdjustPersonalityValue(PERSONALITY_TYPE type, float delta) { personality[type] = clamp(personality[type] + delta, 0.0f, 1.0f); }
+
+void Citizen::AddAcquaintance(const string& name) {
+	acquaintances[name] = Relation();
+	SetAcquaintanceValue(name, RELATION_FAMILIARITY, acquaintances[name][RELATION_FAMILIARITY]);
+	SetAcquaintanceValue(name, RELATION_RESPECT, acquaintances[name][RELATION_RESPECT]);
+	SetAcquaintanceValue(name, RELATION_FAVOUR, acquaintances[name][RELATION_FAVOUR]);
+	SetAcquaintanceValue(name, RELATION_TRUST, acquaintances[name][RELATION_TRUST]);
+	SetAcquaintanceValue(name, RELATION_COMPETING, acquaintances[name][RELATION_COMPETING]);
+	SetAcquaintanceValue(name, RELATION_RELIABILITY, acquaintances[name][RELATION_RELIABILITY]);
+}
+
+const Relation& Citizen::GetAcquaintance(const string& name) const {
+	auto it = acquaintances.find(name);
+	if (it == acquaintances.end()) {
+		THROW_EXCEPTION(InvalidArgumentException, "Acquaintance " + name + " not found.\n");
+	}
+	return it->second;
+}
+
+void Citizen::SetAcquaintanceValue(const string& name, RELATION_TYPE type, float value) {
+	auto it = acquaintances.find(name);
+	if (it == acquaintances.end()) {
+		THROW_EXCEPTION(InvalidArgumentException, "Acquaintance " + name + " not found.\n");
+	}
+	it->second[type] = value;
+}
+
+void Citizen::AdjustAcquaintanceValue(const string& name, RELATION_TYPE type, float delta) {
+	auto it = acquaintances.find(name);
+	if (it == acquaintances.end()) {
+		THROW_EXCEPTION(InvalidArgumentException, "Acquaintance " + name + " not found.\n");
+	}
+	float value = clamp(it->second[type] + delta, 0.0f, 1.0f);
+	it->second[type] = value;
+}
 
 Lot* Citizen::GetLot() const { return lot; }
 void Citizen::SetLot(Lot* value) { lot = value; }
