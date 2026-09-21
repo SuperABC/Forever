@@ -20,6 +20,7 @@ class Map;
 
 class Citizen;
 class Name;
+class Scheduler;
 class Populace;
 
 // Society

@@ -193,7 +193,8 @@ extern "C" __declspec(dllexport) void* GetModSchedulers() {
 extern "C" __declspec(dllexport) void RegisterModSchedulers(SchedulerFactory* factory) {
 	factory->RegisterScheduler(SchedulerBasic::GetId(),
 		[](const std::string&) -> SchedulerMod* { return new SchedulerBasic(); },
-		[](SchedulerMod* m) { delete m; });
+		[](SchedulerMod* m) { delete m; },
+		&SchedulerBasic::GetPower);
 }
 extern "C" __declspec(dllexport) void FinishModSchedulers(SchedulerFactory* factory) {
 }

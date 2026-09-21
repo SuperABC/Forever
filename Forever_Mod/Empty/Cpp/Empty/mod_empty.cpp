@@ -156,7 +156,8 @@ extern "C" __declspec(dllexport) void* GetModSchedulers() {
 extern "C" __declspec(dllexport) void RegisterModSchedulers(SchedulerFactory* factory) {
 	factory->RegisterScheduler(EmptyScheduler::GetId(),
 		[](const std::string& args) -> SchedulerMod* { return new EmptyScheduler(args); },
-		[](SchedulerMod* m) { delete m; });
+		[](SchedulerMod* m) { delete m; },
+		&EmptyScheduler::GetPower);
 }
 extern "C" __declspec(dllexport) void FinishModSchedulers(SchedulerFactory* factory) {
 }

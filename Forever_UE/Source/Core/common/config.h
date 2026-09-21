@@ -55,11 +55,11 @@ public:
 	// 探测/加载任何东西，找到就收，不做格式校验(交给Script::ReadScript解析时再报错)。
 	// 这次新增的动机：JobMod/OrganizationMod（以及Story）只应该写一个不含路径/扩展名的
 	// bare文件名（如"job_shop_saler"），不应该也不可能知道用户实际把脚本文件放在哪，
-	// 由这里的resource_path配置统一决定实际存放位置，见job.md"按需查地址"一节旁边新增的
+	// 由这里的resource_paths配置统一决定实际存放位置，见job.md"按需查地址"一节旁边新增的
 	// "Script配置"说明。
 	static void AddResourcePath(const std::string& path);
 
-	// 是否已经有任何resource_path被注册过——config.json没有配置resource_path(或者根本
+	// 是否已经有任何resource_paths被注册过——config.json没有配置resource_paths(或者根本
 	// 没有config.json)时，调用方(ForeverModSubsystem)据此决定要不要回退扫描默认的
 	// Resource/Story目录，和dll_paths/layout_paths同一个回退容错风格。
 	static bool HasResourcePaths();

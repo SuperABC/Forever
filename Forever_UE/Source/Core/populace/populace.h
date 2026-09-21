@@ -3,6 +3,8 @@
 #include "class.h"
 
 #include "populace/name_factory.h"
+#include "populace/scheduler_factory.h"
+#include "story/script_factory.h"
 #include "common/utility.h"
 #include "common/handle.h"
 
@@ -72,15 +74,34 @@ private:
 	// 复刻老工程Populace::GenerateCitizens的年表模拟算法，见populace.cpp/populace.md。
 	void GenerateCitizens(int target);
 
+	// 给每个citizen加权随机分配一个Scheduler——参考老工程同名算法(累加所有已注册Scheduler
+	// 类型的权重建CDF，对每个citizen roll一个随机数选中一个类型)，权重来源改成当前工程
+	// 已经确立的SchedulerFactory::GetPower(id)单个查询写法(和Society::Init选Organization
+	// 类型同一套CDF算法)，不照抄老工程SchedulerFactory::GetPowers()一次性返回全部map的
+	// 写法。GenerateCitizens()跑完、citizens列表已经就绪之后调用一次，见populace.md。
+	void AssignSchedulers();
+
 	// 引用`Registry::Get().GetNameFactory()`，不再自己持有ModLoader/NameFactory——mod dll
 	// 的发现/注册只在整个UE进程生命周期里跑一次，见Source/Core/common/registry.md。构造函数
 	// 初始化列表里绑定。
 	NameFactory& nameFactory;
 	Name* name = nullptr; // InitNames()创建，~Populace()里delete(Name析构会调用nameFactory.DestroyName())
 
+	// 引用`Registry::Get().GetSchedulerFactory()`/`GetScriptFactory()`，和nameFactory
+	// 同一个模式——scriptFactory是每个Scheduler独占的Script（见scheduler.h）需要的构造
+	// 参数，Populace这次第一次需要依赖Story域的ScriptFactory，和Society持有
+	// ScriptFactory引用成员（给Job/Organization各自的Script用）是同一个先例。
+	SchedulerFactory& schedulerFactory;
+	ScriptFactory& scriptFactory;
+
 	std::vector<Citizen*> citizens;
 	int currentYear = 2000;
 
 	std::set<std::tuple<Time, Citizen*, std::string>> jobTimerSet;
 	static constexpr int kMaxJobTimersPerTick = 1;
+
+	// Scheduler自己独立的一套timer，和jobTimerSet完全平行（见Tick()实现），负责citizen
+	// 下班之后的行为。
+	std::set<std::tuple<Time, Citizen*, std::string>> schedulerTimerSet;
+	static constexpr int kMaxSchedulerTimersPerTick = 1;
 };

@@ -3,8 +3,8 @@
 
 using namespace std;
 
-void SchedulerFactory::RegisterScheduler(const string& id, CreateFunc creator, DestroyFunc deleter) {
-	registries[id] = { creator, deleter };
+void SchedulerFactory::RegisterScheduler(const string& id, CreateFunc creator, DestroyFunc deleter, PowerFunc power) {
+	registries[id] = { creator, deleter, power };
 }
 
 SchedulerMod* SchedulerFactory::CreateScheduler(const string& id) {
@@ -49,4 +49,9 @@ vector<string> SchedulerFactory::GetRegisteredIds() const {
 
 void SchedulerFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 	configuredArgs = argsById;
+}
+
+float SchedulerFactory::GetPower(const string& id) const {
+	auto it = registries.find(id);
+	return it != registries.end() ? it->second.power() : 0.f;
 }

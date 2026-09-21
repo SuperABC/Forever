@@ -23,6 +23,11 @@ class Citizen {
 public:
 	Citizen(const std::string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay);
 
+	// Scheduler由Citizen自己独占持有(和Job由Organization持有不同——Scheduler没有类似
+	// "组织"这样的自然归属者，见scheduler.md)，因此需要一个真正的析构函数delete它，
+	// 不再是纯POD式默认析构。
+	~Citizen();
+
 	const std::string& GetName() const;
 	GENDER_TYPE GetGender() const;
 	int GetBirthYear() const;
@@ -81,6 +86,11 @@ public:
 	Job* GetJob() const;
 	void SetJob(Job* value);
 
+	// 负责citizen下班之后行为的调度器——由Populace::AssignSchedulers()在生成citizen之后
+	// 加权随机分配一个，Citizen自己独占持有所有权(和Job不同，见~Citizen()注释)。
+	Scheduler* GetScheduler() const;
+	void SetScheduler(Scheduler* value);
+
 private:
 	std::string name;
 	GENDER_TYPE gender;
@@ -103,4 +113,5 @@ private:
 	float posZ = 0.f;
 
 	Job* job = nullptr;
+	Scheduler* scheduler = nullptr;
 };

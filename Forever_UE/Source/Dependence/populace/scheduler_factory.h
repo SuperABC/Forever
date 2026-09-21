@@ -32,13 +32,19 @@ class SchedulerFactory {
 public:
 	using CreateFunc = SchedulerMod*(*)(const std::string&);
 	using DestroyFunc = void(*)(SchedulerMod*);
+	using PowerFunc = float(*)();
 
 	SchedulerFactory() = default;
 	virtual ~SchedulerFactory() = default;
 
-	virtual void RegisterScheduler(const std::string& id, CreateFunc creator, DestroyFunc deleter);
+	virtual void RegisterScheduler(const std::string& id, CreateFunc creator, DestroyFunc deleter, PowerFunc power);
 
 	virtual SchedulerMod* CreateScheduler(const std::string& id);
+
+	// 转发调用注册时提供的static函数，不需要任何SchedulerMod实例存在。id未注册时返回0.f。
+	// 供Populace::AssignSchedulers()建CDF做加权随机分配用，和OrganizationFactory::
+	// GetPower同一个模式。
+	virtual float GetPower(const std::string& id) const;
 
 	// 必须走注册时mod提供的deleter释放,不能Factory直接delete——跨DLL new/delete安全,
 	// 通过liveInstances反查实例对应的注册id、再取出对应deleter调用。
@@ -56,6 +62,7 @@ private:
 	struct Entry {
 		CreateFunc creator;
 		DestroyFunc deleter;
+		PowerFunc power;
 	};
 
 	std::unordered_map<std::string, Entry> registries;

@@ -4,6 +4,7 @@
 
 #include "populace/citizen.h"
 #include "populace/name.h"
+#include "populace/scheduler.h"
 #include "common/registry.h"
 #include "society/job.h"
 
@@ -42,7 +43,9 @@ struct Human {
 } // namespace
 
 Populace::Populace() :
-	nameFactory(Registry::Get().GetNameFactory()) {
+	nameFactory(Registry::Get().GetNameFactory()),
+	schedulerFactory(Registry::Get().GetSchedulerFactory()),
+	scriptFactory(Registry::Get().GetScriptFactory()) {
 }
 
 Populace::~Populace() {
@@ -57,6 +60,7 @@ void Populace::Init(int accommodation) {
 	// 老工程Populace::Init原公式：target = accommodation * exp(GetRandom(1000)/1000.0f - 0.5f)。
 	int target = static_cast<int>(accommodation * expf(GetRandom(1000) / 1000.0f - 0.5f));
 	GenerateCitizens(target);
+	AssignSchedulers();
 }
 
 void Populace::InitNames() {
@@ -70,6 +74,40 @@ void Populace::InitNames() {
 	// disable机制(这个项目目前没有这套机制，config.json的"name_mods"数组只提供按id的
 	// 参数字符串，不做启用过滤)。
 	name = new Name(&nameFactory, "chinese");
+}
+
+void Populace::AssignSchedulers() {
+	// 累加所有已注册Scheduler类型的权重建CDF，和Society::Init选Organization类型同一套
+	// 算法（society.cpp），不照抄老工程SchedulerFactory::GetPowers()一次性返回全部map的
+	// 写法——这个工程已经确立的是SchedulerFactory::GetPower(id)单个查询。
+	vector<string> ids = schedulerFactory.GetRegisteredIds();
+	if (ids.empty()) return; // 理论上不会发生：至少有scheduler_basic会被注册
+
+	vector<float> weights;
+	float total = 0.f;
+	for (const string& id : ids) {
+		float w = schedulerFactory.GetPower(id);
+		weights.push_back(w);
+		total += w;
+	}
+
+	for (Citizen* citizen : citizens) {
+		if (!citizen) continue;
+		string selected;
+		if (total > 0.f) {
+			float roll = (GetRandom(10000) / 10000.f) * total;
+			float acc = 0.f;
+			for (size_t i = 0; i < ids.size(); i++) {
+				acc += weights[i];
+				if (roll <= acc) { selected = ids[i]; break; }
+			}
+		}
+		if (selected.empty()) {
+			// 所有已注册类型权重都是0时的兜底：退化成均匀随机，保证人人都有Scheduler。
+			selected = ids[GetRandom(static_cast<int>(ids.size()))];
+		}
+		citizen->SetScheduler(new Scheduler(&schedulerFactory, &scriptFactory, selected, citizen));
+	}
 }
 
 const vector<Citizen*>& Populace::GetCitizens() const { return citizens; }
@@ -88,8 +126,8 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 		}
 	}
 
-	int count = 0;
-	while (count < kMaxJobTimersPerTick && !jobTimerSet.empty()) {
+	int jobCount = 0;
+	while (jobCount < kMaxJobTimersPerTick && !jobTimerSet.empty()) {
 		auto it = jobTimerSet.begin();
 		const auto& [target, citizen, node] = *it;
 		if (currentTime < target) break;
@@ -99,7 +137,36 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 			onActions(citizen, changes);
 		}
 		jobTimerSet.erase(it);
-		count++;
+		jobCount++;
+	}
+
+	// Scheduler自己独立的一套timer，负责citizen下班之后的行为，和上面Job的timer完全平行——
+	// 结构、上限、驱动方式都照抄，只是换成citizen->GetScheduler()，共用同一个onActions
+	// 回调（回调签名本来就是通用的(Citizen*, const vector<Change*>&)，不关心Change是
+	// Job产的还是Scheduler产的）。
+	if (crossedDay) {
+		for (Citizen* citizen : citizens) {
+			Scheduler* scheduler = citizen->GetScheduler();
+			if (!scheduler) continue;
+			scheduler->DailyPlan(currentTime, post);
+			for (const auto& [node, time] : scheduler->GetPlans()) {
+				schedulerTimerSet.insert({ time, citizen, node });
+			}
+		}
+	}
+
+	int schedulerCount = 0;
+	while (schedulerCount < kMaxSchedulerTimersPerTick && !schedulerTimerSet.empty()) {
+		auto it = schedulerTimerSet.begin();
+		const auto& [target, citizen, node] = *it;
+		if (currentTime < target) break;
+		Scheduler* scheduler = citizen->GetScheduler();
+		if (scheduler) {
+			vector<Change*> changes = scheduler->ExecNode(node, post);
+			onActions(citizen, changes);
+		}
+		schedulerTimerSet.erase(it);
+		schedulerCount++;
 	}
 }
 

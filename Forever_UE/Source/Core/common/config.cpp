@@ -75,7 +75,7 @@ void Config::ReadConfig(const string& path) {
 		AddLayoutPath(resolved.string());
 	}
 
-	for (const auto& resourcePath : root["resource_path"]) {
+	for (const auto& resourcePath : root["resource_paths"]) {
 		// 和dll_paths/layout_paths同一个相对路径解析规则，相对configDir。
 		filesystem::path resolved(resourcePath.AsString());
 		if (resolved.is_relative()) {

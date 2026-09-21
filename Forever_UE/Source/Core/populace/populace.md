@@ -197,9 +197,15 @@ id依然会被正常创建"），`Map::InitZones/InitBuildings`也是把所有�
 - 依赖：`Source/Core/populace/citizen.h`（`GENDER_TYPE`/`Citizen`）、
   `Source/Core/populace/name.h`（`Name`——`Populace`只通过这层转发访问取名算法，不直接持有
   `NameMod*`，见`name.md`）、`Source/Dependence/populace/name_factory.h`（`NameFactory`，
-  引用成员`nameFactory`的类型，传给`Name`的构造函数）、`Source/Core/common/registry.h`
-  （`Populace`构造函数绑定`nameFactory`，见`registry.md`）、`Source/Dependence/common/
-  utility.h`（`GetRandom`/`Time::DaysInMonth`）。
+  引用成员`nameFactory`的类型，传给`Name`的构造函数）、`Source/Core/populace/scheduler.h`
+  （`Scheduler`，`AssignSchedulers()`里`new`）、`Source/Dependence/populace/
+  scheduler_factory.h`（`SchedulerFactory`，引用成员`schedulerFactory`的类型）、
+  `Source/Core/story/script_factory.h`（`ScriptFactory`，引用成员`scriptFactory`的
+  类型，传给每个`Scheduler`独占的`Script`——`Populace`这次第一次依赖Story域，和
+  `Society`持有`ScriptFactory`引用成员是同一个先例）、`Source/Core/common/registry.h`
+  （`Populace`构造函数绑定`nameFactory`/`schedulerFactory`/`scriptFactory`，见
+  `registry.md`）、`Source/Dependence/common/utility.h`（`GetRandom`/
+  `Time::DaysInMonth`）。
 - 被谁依赖：`Source/Core/map/map.h/.cpp`（`Map::Checkin(const Populace&)`读
   `GetCitizens()`）、`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有
   `Populace*`，`EnsurePopulaceGenerated()`里`new`+`Init`+`Checkin`）、`Source/Forever/
@@ -231,6 +237,29 @@ Populace，Organization的timer在Society"一节。
 自己手写`dynamic_cast` dispatch），见`Source/Forever/Framework/ForeverFrameworkActor.md`
 "统一的Change消费入口：`ApplyChange`"一节。
 
+**Scheduler concept迁移新增第三套独立timer**：`schedulerTimerSet`+
+`kMaxSchedulerTimersPerTick`，和`jobTimerSet`那一段结构完全平行（同一个`crossedDay`
+判断、同一个每帧上限式的弹出循环、同一个`onActions`回调），只是换成
+`citizen->GetScheduler()`——`Scheduler`负责citizen下班之后的行为，见`scheduler.md`
+"职责边界"一节。两套timer共用同一个回调是因为回调签名本来就是通用的`(Citizen*,
+const vector<Change*>&)`，不关心Change是`Job`产的还是`Scheduler`产的。
+
+## `AssignSchedulers`：加权随机给每个citizen分配一个Scheduler（Scheduler concept迁移新增）
+
+`Populace::Init()`结尾（`GenerateCitizens(target)`跑完、`citizens`列表已经就绪之后）
+调用一次。参考老工程`Populace::GenerateCitizens`结尾的算法（`E:\Projects\Forever_UE\
+Source\Core\populace\populace.cpp:963-997`）：对所有已注册的Scheduler类型
+（`schedulerFactory.GetRegisteredIds()`）累加权重（`schedulerFactory.GetPower(id)`）
+建CDF，对每个citizen roll一个随机数（`GetRandom(10000)/10000.f * total`）选中一个
+类型、`new Scheduler(&schedulerFactory, &scriptFactory, selected, citizen)`。**不照抄**
+老工程`SchedulerFactory::RegisterScheduler`把`power`塞进注册表、`GetPowers()`一次性
+返回全部`unordered_map<string,float>`这套形状——这个工程已经确立的是
+`SchedulerFactory::GetPower(id)`单个查询（照抄`OrganizationFactory`，`Society::Init`
+选Organization类型已经在用同一套CDF算法，见`society.md`），`SchedulerFactory`这次
+补齐了`PowerFunc`/`GetPower`，详见`scheduler.md`"加权随机分配"一节。所有已注册类型
+权重都是`0.f`（`total <= 0.f`）时退化成均匀随机，保证人人都有一个Scheduler，不整体
+失败。
+
 ## `ApplyChange`/`FindCitizenByName`（这次重构`AForeverFrameworkActor::Tick`新增）
 
 `Populace::ApplyChange(const Change*, const ScriptContext&)`——目前没有任何Change子类是
@@ -252,8 +281,9 @@ FindOrSpawnCitizenByName`是同一个思路，一个在Core层纯查数据，一
 - 除中文（`ChineseName`）外的其它取名算法（比如英文名）——`NameMod`接口已经是通用的，
   以后要加别的语言/风格直接新增一个具体实现+在`Populace::InitNames()`里按需切换
   `CreateName`的id即可。
-- `Citizen`的父母/兄弟姐妹等亲属关系（配偶/子女除外，见上）、性格/交情、资产、职业/
-  日程——见`citizen.md`。
+- `Citizen`的父母/兄弟姐妹等亲属关系（配偶/子女除外，见上）、性格/交情、资产——见
+  `citizen.md`（职业`job`/调度`scheduler`这两项已经分别在society域、Scheduler concept
+  迁移时补上）。
 - `Citizen`通用的自由游走AI（没有工作驱动之外的自主移动）——有Job的市民已经能按调度
   走动，见上"Tick"一节、`Source/Forever/Element/CitizenElement.md`。
 - 老工程`Map::Checkin`房产归属分配时顺带创建`Asset`对象登记进`adults[index]->AddAsset(

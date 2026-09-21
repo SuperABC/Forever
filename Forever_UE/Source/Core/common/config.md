@@ -26,7 +26,7 @@
 - **`AddResourcePath`/`GetScriptPath`/`HasResourcePaths`(Society域Script配置修复时新增)**：
   和`AddLayoutPath`同一个扫描手法，这次扫`.script`文件（`resourcePaths`结构和
   `layoutPaths`一致，root目录->该目录下发现的`.script`绝对路径列表）。`config.json`新增
-  `"resource_path"`数组（当前配的是`["../Story"]`）。这次新增的动机：`JobMod`/
+  `"resource_paths"`数组（当前配的是`["../Story"]`）。这次新增的动机：`JobMod`/
   `OrganizationMod`（以及`Story`）之前决定"Script文件存放在哪"的方式是Core里硬编码
   `configDir/"../Story"/(name+".json")`路径拼接——这既替Mod做了它不该做的选择，也没有
   给Mod提供"我只写一个bare名字，不用管文件实际在哪"的能力（Mod不知道也不可能知道用户

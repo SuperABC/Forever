@@ -1,5 +1,7 @@
 #include "populace/citizen.h"
 
+#include "populace/scheduler.h"
+
 
 using namespace std;
 
@@ -9,6 +11,10 @@ Citizen::Citizen(const string& name, GENDER_TYPE gender, int birthYear, int birt
 	birthYear(birthYear),
 	birthMonth(birthMonth),
 	birthDay(birthDay) {
+}
+
+Citizen::~Citizen() {
+	delete scheduler;
 }
 
 const string& Citizen::GetName() const { return name; }
@@ -54,3 +60,6 @@ void Citizen::ClearPosition() { hasPosition = false; }
 
 Job* Citizen::GetJob() const { return job; }
 void Citizen::SetJob(Job* value) { job = value; }
+
+Scheduler* Citizen::GetScheduler() const { return scheduler; }
+void Citizen::SetScheduler(Scheduler* value) { scheduler = value; }

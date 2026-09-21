@@ -57,7 +57,7 @@ script = new Script(scriptFactory, mod ? mod->scriptModName : "empty"); // mod�
 if (mod) {
 	for (const string& name : mod->milestoneNames) {
 		script->ReadMilestones(Config::GetScriptPath(name)); // 按bare文件名反查实际
-			// 路径——Config::resource_path/.script扫描机制，见Config.md
+			// 路径——Config::resource_paths/.script扫描机制，见Config.md
 	}
 	script->SetValue("name", ValueType(string(mod->GetName()))); // 供milestone脚本里
 		// $$self.name引用这个Job的唯一名字（是JobMod自己的GetName()，不是Script的
@@ -67,7 +67,7 @@ if (mod) {
 
 `Config::GetScriptPath(name)`（`Source/Core/common/config.h/.cpp`）按不含路径/扩展名的
 bare文件名反查`.script`文件的实际绝对路径——文件实际存放在哪由`config.json`的
-`resource_path`数组决定（`["../Story"]`），`JobMod`不知道也不需要知道用户把脚本文件
+`resource_paths`数组决定（`["../Story"]`），`JobMod`不知道也不需要知道用户把脚本文件
 放在哪，只管声明"我要哪个bare名字"。
 
 ## 跨DLL数据传递约束——谁分配的对象谁负责释放

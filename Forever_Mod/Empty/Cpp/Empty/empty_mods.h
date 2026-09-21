@@ -200,6 +200,9 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
+	static float GetPower() { return 0.f; }
+	virtual void DailyPlan(const Time&, PostHandle*) override {}
+
 private:
 	std::string name;
 };

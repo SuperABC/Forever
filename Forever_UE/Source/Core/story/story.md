@@ -97,8 +97,8 @@ context))`——`GetValue()`返回的是`std::string`（DSL源码文本，不是
 ## test.script路径
 
 `Resource/Story/test.script`（原名`test.json`，这次连同"Script配置"一起改名——`Config::
-AddResourcePath`只按`.script`扩展名扫描，见`config.md`"resource_path"一节），实际存放
-位置由`config.json`的`"resource_path"`数组（`["../Story"]`）决定，`Story::Init()`用
+AddResourcePath`只按`.script`扩展名扫描，见`config.md`"resource_paths"一节），实际存放
+位置由`config.json`的`"resource_paths"`数组（`["../Story"]`）决定，`Story::Init()`用
 `Config::GetScriptPath("test")`按bare文件名反查实际路径，不再自己拼`filesystem::path`。
 这次没有复活老工程`Config::GetStories()`/`AddScript`/`RemoveScript`那一整套多剧情路径
 管理——`config.md`里明确写着这块"仍未迁移"，先用固定的"test"这一个bare名字把主线剧情

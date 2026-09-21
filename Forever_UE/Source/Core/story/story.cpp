@@ -33,7 +33,7 @@ void Story::Init() {
 	systemScript = new Script(&scriptFactory, scriptModName);
 
 	mainScript = new Script(&scriptFactory, scriptModName);
-	// test.script的具体存放位置由config.json的resource_path决定，这里只写bare文件名，
+	// test.script的具体存放位置由config.json的resource_paths决定，这里只写bare文件名，
 	// 见Config::GetScriptPath()的说明。
 	mainScript->ReadMilestones(Config::GetScriptPath("test"));
 }
