@@ -6,6 +6,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Kismet/GameplayStatics.h"
 
 #include "map/map.h"
 #include "map/building.h"
@@ -126,4 +127,25 @@ void UForeverBuildingFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 	// 每帧重置一次全地图共享的LOD操作预算，供所有ABuildingElement在自己的Tick里申请
 	// (TryConsumeLodOpBudget)——具体队列/执行现在都在Element自己身上，这里只保留节流总闸。
 	frameOpBudgetRemaining = maxLodOpsPerTick;
+
+	// 世界因为RequestFreezeUntilLodSettled被冻结、且所有building都已经排空LOD切换队列——
+	// 恢复正常时间倍率。这个检查本身不受时间倍率影响（TickComponent仍然按正常帧率被调用，
+	// 只是DeltaTime被缩放），所以冻结期间也能正常侦测到"排空"这一刻。
+	if (bFrozenForLod && pendingLodTransitionCount <= 0) {
+		bFrozenForLod = false;
+		UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.f);
+	}
+}
+
+void UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled() {
+	bFrozenForLod = true;
+	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.f);
+}
+
+void UForeverBuildingFrameworkComponent::NotifyLodTransitionStarted() {
+	pendingLodTransitionCount++;
+}
+
+void UForeverBuildingFrameworkComponent::NotifyLodTransitionFinished() {
+	pendingLodTransitionCount = FMath::Max(0, pendingLodTransitionCount - 1);
 }

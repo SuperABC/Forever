@@ -2,6 +2,7 @@
 
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
+#include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Element/CitizenElement.h"
 
 #include "Engine/Engine.h"
@@ -117,5 +118,13 @@ void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChan
 
 	if (APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0)) {
 		playerController->Possess(target);
+	}
+
+	// 每次切换玩家控制权都可能是"游戏刚开始"这种建筑近处LOD(楼层/房间)还没来得及排队建完
+	// 的时刻——玩家/市民会先掉到还没生成细节的地面上，等建筑加载完才落地，观感很差。这里
+	// 请求冻结世界(UE时间倍率归0，物理/移动全部停摆)直到所有building的LOD切换队列清空，
+	// 见UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled。
+	if (framework && framework->GetBuildingFramework()) {
+		framework->GetBuildingFramework()->RequestFreezeUntilLodSettled();
 	}
 }

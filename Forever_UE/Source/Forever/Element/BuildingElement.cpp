@@ -752,6 +752,7 @@ void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
 		ClearNearSections();
 		currentLod = ELod::Far;
 		transitionPending = false;
+		if (framework.IsValid()) framework->NotifyLodTransitionFinished();
 		break;
 	case ELodOpType::BuildFloorMesh:
 		BuildFloorSection(op.floorIndex);
@@ -763,6 +764,7 @@ void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
 		ClearFarSection();
 		currentLod = ELod::Near;
 		transitionPending = false;
+		if (framework.IsValid()) framework->NotifyLodTransitionFinished();
 		break;
 	}
 }
@@ -791,11 +793,13 @@ void ABuildingElement::Tick(float DeltaTime) {
 			lodOpQueue.Enqueue({ ELodOpType::BuildElevatorCabins, -1 });
 			lodOpQueue.Enqueue({ ELodOpType::DeleteFarMesh, -1 });
 			transitionPending = true;
+			framework->NotifyLodTransitionStarted();
 		}
 		else if (currentLod == ELod::Near && dist > framework->GetLodFarExitDistance()) {
 			lodOpQueue.Enqueue({ ELodOpType::BuildFarMesh, -1 });
 			lodOpQueue.Enqueue({ ELodOpType::DeleteAllNearMeshes, -1 });
 			transitionPending = true;
+			framework->NotifyLodTransitionStarted();
 		}
 	}
 

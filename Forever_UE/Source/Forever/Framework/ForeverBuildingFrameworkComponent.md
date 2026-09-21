@@ -174,6 +174,25 @@ ConstructBuilding`里`GetRotation(stair.GetDirection())`那段：`NORTH=0°`、`
 building同时穿越距离阈值时（比如玩家瞬移/沿着阈值边界走）依然会在同一帧集中爆发，回到
 "每次LOD切换都巨卡"的老问题。
 
+## 冻结世界直到LOD切换队列清空（`RequestFreezeUntilLodSettled`）
+
+游戏刚开始/`ChangeControlChange`切换玩家控制权的那一刻，附近building的近处LOD（楼层/
+房间细节）可能还没排队建完——玩家/市民会先掉到还没生成细节的地面上（物理碰撞体缺失），
+等建筑加载完才落地，观感很差。`UForeverStoryFrameworkComponent::ApplyControlChange`
+每次成功`Possess`之后都会调用一次`RequestFreezeUntilLodSettled()`：直接
+`UGameplayStatics::SetGlobalTimeDilation(world, 0.f)`把整个世界的时间倍率归零（物理/
+移动全部停摆，市民不会掉空），`TickComponent`每帧检查`pendingLodTransitionCount`是否
+清零，清零后自动恢复成`1.f`。
+
+这个机制之所以能生效，关键在于**时间倍率只缩放`Tick`函数收到的`DeltaTime`参数，不会
+阻止`Tick`函数本身按正常帧率被调用**——`frameOpBudgetRemaining`的重置、
+`ABuildingElement::Tick`里drain`lodOpQueue`的那段循环都不读`DeltaTime`（见上"LOD状态机
+下放到每个`ABuildingElement`自己身上"一节），所以"世界静止"期间LOD队列依然能照常按
+每帧预算排空，不会因为倍率归零而卡死。`pendingLodTransitionCount`是一个全局计数器，由
+`ABuildingElement`自己在`transitionPending`置`true`/`false`时同步调用
+`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`维护——框架组件不需要反过来
+遍历全地图所有`ABuildingElement`逐个查询各自的`transitionPending`，O(1)。
+
 ## 依赖关系
 
 - 依赖：`Source/Forever/Element/BuildingElement.h`（`GenerateBuildings()`
@@ -189,7 +208,9 @@ building同时穿越距离阈值时（比如玩家瞬移/沿着阈值边界走�
   `Source/Forever/Element/BuildingElement.cpp`通过`TWeakObjectPtr<
   UForeverBuildingFrameworkComponent>`反向调用`ResolveMaterial`/`ResolveMesh`/
   `Get*默认资产`/`GetLodSwitchDistance`/`GetCabinCruiseSpeed`/`GetCabinEaseSeconds`/
-  `TryConsumeLodOpBudget`。
+  `TryConsumeLodOpBudget`/`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`；
+  `Source/Forever/Framework/ForeverStoryFrameworkComponent.cpp`（`ApplyControlChange`
+  切换玩家控制权后调`RequestFreezeUntilLodSettled`）。
 
 ## EndPlay：退出游戏/PIE停止时崩溃的修复
 

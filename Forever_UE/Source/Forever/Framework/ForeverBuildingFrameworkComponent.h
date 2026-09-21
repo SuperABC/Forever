@@ -91,6 +91,23 @@ public:
 		return true;
 	}
 
+	// 请求"冻结世界直到所有building的LOD切换队列清空"——由切换玩家控制权
+	// （ChangeControlChange，见ForeverStoryFrameworkComponent::ApplyControlChange）触发：
+	// 游戏刚开始/新占有一个citizen时，附近building的近处LOD（楼层/房间细节）可能还没排队
+	// 建完，玩家/市民会先掉到还没生成细节的地面上再等建筑加载完，观感很差。这里直接把
+	// UGameplayStatics::SetGlobalTimeDilation设成0（整个世界完全静止：物理/移动全部
+	// 停摆），TickComponent每帧检查pendingLodTransitionCount是否清零，清零后自动恢复成
+	// 1.f——Tick函数本身不受时间倍率影响，仍然按正常帧率被调用，只是DeltaTime被缩放到0，
+	// 所以LOD队列（消耗预算的处理不依赖DeltaTime，见TryConsumeLodOpBudget/
+	// ABuildingElement::Tick）在"世界静止"期间依然能照常排空。
+	void RequestFreezeUntilLodSettled();
+
+	// 供ABuildingElement在自己的Tick里transitionPending置true/false时同步调用，维护一个
+	// 全局"还有多少栋building正在切换LOD"的计数——不需要框架组件反过来遍历所有Element逐个
+	// 查询transitionPending，O(1)。
+	void NotifyLodTransitionStarted();
+	void NotifyLodTransitionFinished();
+
 private:
 	Map* map = nullptr;
 
@@ -142,6 +159,10 @@ private:
 	int32 maxLodOpsPerTick = 1;
 
 	int32 frameOpBudgetRemaining = 0;
+
+	// 见RequestFreezeUntilLodSettled/NotifyLodTransitionStarted/Finished注释。
+	int32 pendingLodTransitionCount = 0;
+	bool bFrozenForLod = false;
 
 	// 电梯轿厢匀速巡航速度(UE单位/秒，默认300≈3m/s)。用户要求"速度和加速度都变成2倍"——
 	// ComputeCabinZ里缓入/缓出用的speedup(u)=cruiseSpeed*smoothstep(u)这条曲线，峰值加速度

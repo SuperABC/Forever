@@ -71,6 +71,14 @@ BroadcastGameStart`的回调是同步执行的，见`Core/story/story.md`"用回
    操控权切给这个市民对应的`ACitizenElement`，真正的移动模式切换/Input Mapping增删由
    `ACitizenElement::PossessedBy`（继承自`AForeverCharacter::PossessedBy`）自动完成，
    这个函数本身只负责"找到目标+发起Possess"。
+4. `framework->GetBuildingFramework()->RequestFreezeUntilLodSettled()`——游戏刚开始
+   （`test.script`的`game_start`milestone配合`EmptyScript::WrapScript`第一次切换控制权
+   就发生在这时候）附近building的近处LOD（楼层/房间细节）可能还没排队建完，玩家/市民会
+   先掉到还没生成细节的地面上，等建筑加载完才落地。每次切换控制权之后请求冻结世界（UE
+   时间倍率归零，物理/移动全部停摆）直到所有building的LOD切换队列清空再自动恢复，见
+   `ForeverBuildingFrameworkComponent.md`"冻结世界直到LOD切换队列清空"一节——只在这条
+   `ChangeControlChange`触发的路径上做，`AForeverCharacter::SwitchControlledCitizen`
+   （T键手动切换）不受影响。
 
 这条路径和`AForeverCharacter::SwitchControlledCitizen`（T键）最终都是调用某个
 `AController::Possess(ACitizenElement*)`，但触发方式不同：T键由玩家主动触发、目标是"附近
@@ -83,10 +91,12 @@ BroadcastGameStart`的回调是同步执行的，见`Core/story/story.md`"用回
 - 依赖：`Core/story/story.h`/`script.h`、`Dependence/story/dialog.h`/`change.h`
   （`ChangeControlChange`）、`Core/common/implement.h`（`PostImplement`）、
   `Framework/ForeverFrameworkActor.h`（`GetMap`/`GetPopulace`/`GetSociety`/`GetIndustry`/
-  `GetTraffic`/`GetPlayer`/`GetPopulaceFramework`/`ApplyChange`——`onActions`回调的
-  `Change`分支转发给它）、`Framework/ForeverPopulaceFrameworkComponent.h`
-  （`FindOrSpawnCitizenByName`）、`Element/CitizenElement.h`、`Engine/Engine.h`
-  （`GEngine`）、`Kismet/GameplayStatics.h`（`GetPlayerController`）。
+  `GetTraffic`/`GetPlayer`/`GetPopulaceFramework`/`GetBuildingFramework`/
+  `ApplyChange`——`onActions`回调的`Change`分支转发给它）、`Framework/
+  ForeverPopulaceFrameworkComponent.h`（`FindOrSpawnCitizenByName`）、`Framework/
+  ForeverBuildingFrameworkComponent.h`（`RequestFreezeUntilLodSettled`）、
+  `Element/CitizenElement.h`、`Engine/Engine.h`（`GEngine`）、`Kismet/GameplayStatics.h`
+  （`GetPlayerController`）。
 - 被谁依赖：`Framework/ForeverFrameworkActor.cpp`（`AForeverFrameworkActor::ApplyChange`
   处理`ChangeControlChange`时转发调用这个组件的`ApplyControlChange`，这次从`private`
   改成`public`）。
