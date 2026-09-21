@@ -106,7 +106,7 @@ private:
 	// 导航图debug可视化开关——默认关闭(不影响正常运行时的常驻开销)，需要检查导航图连接/
 	// 锚点是否正确时在编辑器里勾选，或以后Building域接完导航相关逻辑后临时打开核对。
 	UPROPERTY(EditAnywhere, Category = "Roadnet|Debug")
-	bool bShowNavigationDebug = true;
+	bool bShowNavigationDebug = false;
 
 	// 车行/行人导航debug共用的基础材质(原名White，现在带了个Color参数，默认白色)，和
 	// roadPlainBaseMaterial一样走ConstructorHelpers固定加载。车行导航保持材质默认的白色不用改，
