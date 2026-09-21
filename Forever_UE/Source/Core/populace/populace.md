@@ -226,8 +226,25 @@ PIE验证发现`kTimeFlowRatio`调快之后9点/12点这类"大量市民同一�
 Populace，Organization的timer在Society"一节。
 
 回调签名`(Citizen*, const vector<Change*>&)`——`Populace`自己不知道Actor层，调用方
-（`AForeverFrameworkActor::Tick`）按这个`Citizen*`决定`NPCNavigateChange`具体怎么
-生效，见`job.md`。
+（`AForeverFrameworkActor::Tick`）拿到这个`Citizen*`构造`ScriptContext`后，对每个
+`Change*`统一转发给`AForeverFrameworkActor::ApplyChange`消费（不再像最初那样在回调里
+自己手写`dynamic_cast` dispatch），见`Source/Forever/Framework/ForeverFrameworkActor.md`
+"统一的Change消费入口：`ApplyChange`"一节。
+
+## `ApplyChange`/`FindCitizenByName`（这次重构`AForeverFrameworkActor::Tick`新增）
+
+`Populace::ApplyChange(const Change*, const ScriptContext&)`——目前没有任何Change子类是
+Populace域自己认识、需要处理的，空实现，也不打"未实现"警告（同一个Change会被转发给全部
+六个Core域，只有`Story::ApplyChange`保留兜底警告）。
+
+`Populace::FindCitizenByName(const std::string& name) const`——对`citizens`线性扫描比较
+`GetName()`，找不到返回`nullptr`，不强制生成/持有任何Actor，纯Core层数据查询。存在的
+原因：`AForeverFrameworkActor::ApplyChange`处理`NPCNavigateChange`时，不再像原来的
+`Populace::Tick`回调那样直接拿到`Citizen*`形参（统一签名后只有`Change*`+`ScriptContext`），
+只能反过来用change自带的occupant姓名（`NPCNavigateChange::GetName()`，构造时就是
+occupantName）反查`Citizen*`——和`UForeverPopulaceFrameworkComponent::
+FindOrSpawnCitizenByName`是同一个思路，一个在Core层纯查数据，一个在UE层顺带生成/复用
+`ACitizenElement`。
 
 ## 不在这次范围内
 

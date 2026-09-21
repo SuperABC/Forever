@@ -52,6 +52,14 @@ public:
 	void ApplyChange(const Change* change, const ScriptContext& context);
 
 	/*
+	* 阶段占位：Story域这次还没有需要每帧处理的逻辑（GameStart广播走的是BroadcastGameStart，
+	* 只在开局调用一次，不是每帧），空实现——和Map/Populace/Society/Industry/Traffic一起被
+	* AForeverFrameworkActor::Tick统一调用一遍，保持"每个域都有Tick"这个形状一致，等Story域
+	* 真的有每帧要处理的东西（比如milestone超时之类）时再补内容。
+	*/
+	void Tick(const Time& currentTime, bool crossedDay, PostHandle* post);
+
+	/*
 	* 获取全局变量池（system.前缀路由目标）
 	*/
 	Script* GetSystemScript() const;

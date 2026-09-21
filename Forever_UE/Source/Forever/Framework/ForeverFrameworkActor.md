@@ -101,19 +101,53 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
     `Populace::Tick`里`currentTime.GetYear()==0 || player->CrossDay()`这个bootstrap
     特判，PIE验证过：不加这一行时市民永远不会在第一天上下班）。现场构造一个
     `PostImplement postImplement(map, populace, society, story, industry, traffic,
-    player);`（栈上对象，生命周期只覆盖这一帧），`populace->Tick(*player->GetTime(),
-    crossedDay, 回调, &postImplement)`驱动Job的调度，`society->Tick(..., &postImplement)`
-    驱动Organization的调度——`postImplement`供`JobMod::DailyPlan`/`ExecNode`通过
-    `Post()`按需查citizen家/工位的具体地址（"citizen home address"/"citizen
+    player);`（栈上对象，生命周期只覆盖这一帧）——`postImplement`供`JobMod::DailyPlan`/
+    `ExecNode`通过`Post()`按需查citizen家/工位的具体地址（"citizen home address"/"citizen
     workplace address"两个post类型，见`Core/common/implement.md`），和
     `UForeverStoryFrameworkComponent::BroadcastGameStart`构造`PostImplement`同一个
-    "现场构造、只覆盖这次调用"用法。两个回调都会把`NPCNavigateChange`转发给
-    `populaceFramework->RequestWalk(citizen, dest)`——`dest`这次改成用
-    `map->LocateRoom(destinationAddress)`解析`NPCNavigateChange::destination`（一个
-    具体房间地址字符串，不再是`"home"`/`"workplace"`这种描述性文本，见
-    `Core/society/job.md`"按需查地址：PostHandle参数"一节），其余Change类型转发给
-    `story->ApplyChange(change, context)`，见`Core/society/job.md`"驱动方式"一节、
-    `Framework/ForeverPopulaceFrameworkComponent.md`"市民走路"一节。
+    "现场构造、只覆盖这次调用"用法。之后按`Ensure*Generated()`的依赖顺序，`map`/
+    `populace`/`society`/`industry`/`traffic`/`story`六个Core域挨个调用一遍`Tick`
+    （`Player`已经在最前面单独`Tick`过，推进了全局时钟；`Story`/`Map`/`Industry`/
+    `Traffic`目前的`Tick`都是空实现，纯粹是为了保持"每个域都有Tick"这个形状一致，见下
+    "统一的Change消费入口：`ApplyChange`"一节）。`populace`/`society`的`Tick`回调这次
+    简化成只构造一份per-entity的`ScriptContext`（`context.self`分别指向`citizen->
+    GetJob()->GetScript()`/`organization->GetScript()`），然后对每个`Change*`调用
+    `this->ApplyChange(change, context)`，不再各自手写`dynamic_cast` dispatch。
+
+### 统一的Change消费入口：`ApplyChange`
+
+这次重构之前，"怎么消费一个`Change*`"这段逻辑在三个地方各写了一份几乎相同的代码——
+`populace->Tick`的回调、`society->Tick`的回调、`UForeverStoryFrameworkComponent::
+BroadcastGameStart`的`onActions`回调，都手写了`dynamic_cast<const DebugPrintChange*>`
++"否则转给`story->ApplyChange`"这套逻辑，新增一种Change类型的处理要同时改三个地方。这次
+新增`AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptContext&
+context)`收口成唯一入口，今后任何地方产出的`Change`都应该调这一个函数消费，不要再各自
+手写dispatch。
+
+内部顺序是两阶段：
+1. 先`dynamic_cast`检查这个Actor自己能直接处理的三种类型，命中就处理完直接`return`——
+   这三种都需要Core域看不到的UE层能力，只能在这一层做：
+   - `NPCNavigateChange`：`Populace::FindCitizenByName(nav->GetName())`按change自带的
+     occupant姓名反查`Citizen*`（`nav->GetName()`本来就是occupantName，和
+     `Citizen::GetName()`一致——之前`populace->Tick`的回调是直接从lambda形参拿到
+     `Citizen*`，改成统一签名后不再有实体指针，只能反过来按名字查），
+     `map->LocateRoom(nav->GetDestination())`解析出`Room*`，两者都有效才调
+     `populaceFramework->RequestWalk(citizen, dest)`。
+   - `DebugPrintChange`：`EvaluateExpression(debugPrint->GetMessage(), context)`求值后
+     `GEngine->AddOnScreenDebugMessage`打印。
+   - `ChangeControlChange`：转发给`storyFramework->ApplyControlChange(controlChange,
+     context)`——真正的操控权切换逻辑留在`UForeverStoryFrameworkComponent`里不动（它
+     本来就知道怎么找/生成citizen Actor、怎么`Possess`），这里只是转发调用。
+2. 都不是这三种时，转发给`map`/`populace`/`society`/`industry`/`traffic`/`story`六个
+   Core域各自的`ApplyChange`，谁认识就处理——目前只有`Story::ApplyChange`真正执行
+   `SetValueChange`并在没人认识时打一条"未实现"警告（见`Core/story/story.md`），其余
+   五个域这次都只是空占位，**故意不打警告**：如果每个域都各自打一条，一次未识别的
+   Change会连续刷六条重复日志，保留`Story::ApplyChange`已有的那一条作为唯一兜底就够了。
+
+`UForeverStoryFrameworkComponent::BroadcastGameStart`的`onActions`回调这次也改成调
+`framework->ApplyChange(*changePtr, context)`（`ApplyControlChange`从`private`改成
+`public`，供这里跨类调用），是这次唯一被"收口进统一入口"改到的第三处，详见
+`ForeverStoryFrameworkComponent.md`。
 - **补上一个此前缺失的`GetStory()`**：`story`成员本身在阶段4 Story落地时就已经加入，但当时
   漏加了对应的getter（`GetMap()`/`GetPopulace()`都有，`GetStory()`没有）——这次和
   `GetSociety()`/`GetIndustry()`/`GetTraffic()`/`GetPlayer()`一起补齐，是`UForeverStoryFrameworkComponent::

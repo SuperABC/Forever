@@ -159,4 +159,8 @@ void Society::Tick(const Time& currentTime, bool crossedDay,
 	}
 }
 
+void Society::ApplyChange(const Change* change, const ScriptContext& context) {
+	// 占位，等Society域真的有需要处理的Change子类时再补，见society.h声明处注释。
+}
+
 const vector<Organization*>& Society::GetOrganizations() const { return organizations; }

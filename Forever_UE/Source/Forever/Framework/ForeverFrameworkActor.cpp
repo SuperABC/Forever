@@ -131,6 +131,47 @@ void AForeverFrameworkActor::BeginPlay()
 	EnsureStoryGenerated();
 }
 
+void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptContext& context) {
+	if (auto* nav = dynamic_cast<const NPCNavigateChange*>(change)) {
+		// NPCNavigateChange::destination是纯std::string（原因见change.h顶部崩溃分析注释）。
+		// 这里不再能像原来lambda那样直接拿到Citizen*（这个函数的调用方只给Change本身+
+		// context），改成用change自带的occupant姓名反查Populace（Populace::
+		// FindCitizenByName）——NPCNavigateChange构造时的name本来就是occupantName，和
+		// Citizen::GetName()一致。
+		Citizen* citizen = populace ? populace->FindCitizenByName(nav->GetName()) : nullptr;
+		Room* dest = map ? map->LocateRoom(nav->GetDestination()) : nullptr;
+		if (citizen && dest && populaceFramework) {
+			populaceFramework->RequestWalk(citizen, dest);
+		}
+		return;
+	}
+
+	if (auto* debugPrint = dynamic_cast<const DebugPrintChange*>(change)) {
+		std::string text = ToString(EvaluateExpression(debugPrint->GetMessage(), context));
+		if (GEngine) {
+			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, UTF8_TO_TCHAR(text.c_str()));
+		}
+		return;
+	}
+
+	if (auto* controlChange = dynamic_cast<const ChangeControlChange*>(change)) {
+		// 真正的操控权切换逻辑留在UForeverStoryFrameworkComponent::ApplyControlChange里不动
+		// （它本来就知道怎么找/生成citizen Actor、怎么Possess），这里只是转发调用。
+		if (storyFramework) storyFramework->ApplyControlChange(controlChange, context);
+		return;
+	}
+
+	// 都不是这个Actor自己能处理的类型，转发给六个域各自的ApplyChange，谁认识就处理——目前
+	// 只有Story::ApplyChange真正执行SetValueChange并在没人认识时打"未实现"警告，其余五个域
+	// 都是空占位，不会重复打印警告。
+	if (map) map->ApplyChange(change, context);
+	if (populace) populace->ApplyChange(change, context);
+	if (society) society->ApplyChange(change, context);
+	if (industry) industry->ApplyChange(change, context);
+	if (traffic) traffic->ApplyChange(change, context);
+	if (story) story->ApplyChange(change, context);
+}
+
 void AForeverFrameworkActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -164,34 +205,18 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	// BroadcastGameStart同一个"现场构造、只覆盖这次调用"的用法，不需要长期持有。
 	PostImplement postImplement(map, populace, society, story, industry, traffic, player);
 
+	// 按EnsureXxxGenerated()的依赖顺序，六个Core域（Player已经在上面单独Tick过，推进了
+	// 全局时钟）挨个调用一遍Tick，哪怕对应域现在什么都不做——保持"每个域都有Tick"这个形状
+	// 一致，见各自Tick声明处的占位注释。
+	if (map) map->Tick(*player->GetTime(), crossedDay, &postImplement);
+
 	if (populace) {
 		populace->Tick(*player->GetTime(), crossedDay,
 			[this](Citizen* citizen, const std::vector<Change*>& changes) {
+				ScriptContext context;
+				if (citizen->GetJob()) context.self = citizen->GetJob()->GetScript();
 				for (Change* change : changes) {
-					if (auto* nav = dynamic_cast<const NPCNavigateChange*>(change)) {
-						// NPCNavigateChange::destination是纯std::string，不走Expression求值
-						// （JobMod通过PostHandle查回来的具体房间地址，不再是"home"/"workplace"
-						// 这种描述性文本，也不需要$$动态求值——见change.h里NPCNavigateChange
-						// 顶部的崩溃分析注释），直接交给Map::LocateRoom解析回Room*。
-						std::string destinationAddress = nav->GetDestination();
-						Room* dest = map ? map->LocateRoom(destinationAddress) : nullptr;
-						if (dest && populaceFramework) {
-							populaceFramework->RequestWalk(citizen, dest);
-						}
-					}
-					else if (auto* debugPrint = dynamic_cast<const DebugPrintChange*>(change)) {
-						ScriptContext context;
-						if (citizen->GetJob()) context.self = citizen->GetJob()->GetScript();
-						std::string text = ToString(EvaluateExpression(debugPrint->GetMessage(), context));
-						if (GEngine) {
-							GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, UTF8_TO_TCHAR(text.c_str()));
-						}
-					}
-					else if (story && citizen->GetJob()) {
-						ScriptContext context;
-						context.self = citizen->GetJob()->GetScript();
-						story->ApplyChange(change, context);
-					}
+					ApplyChange(change, context);
 				}
 			}, &postImplement);
 	}
@@ -203,23 +228,17 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 				// context.self指向Organization自己的Script（Organization这次一起补上了
 				// Script成员，见organization.md"Script配置"一节），和上面Populace::Tick
 				// 回调同一个处理方式。
+				ScriptContext context;
+				if (organization) context.self = organization->GetScript();
 				for (Change* change : changes) {
-					if (auto* debugPrint = dynamic_cast<const DebugPrintChange*>(change)) {
-						ScriptContext context;
-						if (organization) context.self = organization->GetScript();
-						std::string text = ToString(EvaluateExpression(debugPrint->GetMessage(), context));
-						if (GEngine) {
-							GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, UTF8_TO_TCHAR(text.c_str()));
-						}
-					}
-					else if (story) {
-						ScriptContext context;
-						if (organization) context.self = organization->GetScript();
-						story->ApplyChange(change, context);
-					}
+					ApplyChange(change, context);
 				}
 			}, &postImplement);
 	}
+
+	if (industry) industry->Tick(*player->GetTime(), crossedDay, &postImplement);
+	if (traffic) traffic->Tick(*player->GetTime(), crossedDay, &postImplement);
+	if (story) story->Tick(*player->GetTime(), crossedDay, &postImplement);
 }
 
 namespace {

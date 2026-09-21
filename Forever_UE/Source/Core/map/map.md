@@ -9,6 +9,18 @@
 Roadnet指针等）和方法（各自的Factory、`InitZones`/`InitBuildings`等），不是到最后单独另建
 一个"真正的"`Map`类替换掉这个。
 
+## `Tick`/`ApplyChange`：占位，保持"每个Core域都有这两个方法"的形状一致
+
+这次重构`AForeverFrameworkActor::Tick`时新增的两个空实现方法，不是Map域真正需要的功能。
+`AForeverFrameworkActor::Tick`每帧会挨个调用`map`/`populace`/`society`/`industry`/
+`traffic`/`story`六个域各自的`Tick`，`AForeverFrameworkActor::ApplyChange`（统一的Change
+消费入口）也会把没被它自己处理掉的Change转发给这六个域各自的`ApplyChange`——目前没有任何
+Change子类是Map域自己认识、需要处理的，`ApplyChange`因此是空实现，也**不打"未实现"警告**
+（同一个Change会被转发给全部六个域，只有`Story::ApplyChange`保留那条兜底警告，避免六个域
+各打一遍重复日志）。等Map域真的长出需要每帧处理/响应Change的逻辑时再补内容，详见
+`Source/Forever/Framework/ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"
+一节。
+
 ## 关键设计
 
 - **用扁平`std::vector<Element>`（行主序，`y*width+x`）取代老工程的`Chunk`分块存储**——老

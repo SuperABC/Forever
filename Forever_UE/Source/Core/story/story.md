@@ -79,7 +79,20 @@ context))`——`GetValue()`返回的是`std::string`（DSL源码文本，不是
 "字段类型是`std::string`"一节。
 其余41种变化类型只打一条`debugf`"未实现"日志，不崩溃也不抛异常（这条路径每次匹配后都会被调用，
 容错风格比JSON解析阶段更宽松，见`Dependence/story/change.md`"JSON分发"一节）。这个分派函数是
-`Story`的方法而不是`Change`类自己的虚方法，延续老工程"`Change`是纯数据类"的设计。
+`Story`的方法而不是`Change`类自己的虚方法，延续老工程"`Change`是纯数据类"的设计。**这次重构
+`AForeverFrameworkActor::Tick`后，`Story::ApplyChange`不再被直接调用**——统一由
+`AForeverFrameworkActor::ApplyChange`（新增的Change消费入口）转发给`map`/`populace`/
+`society`/`industry`/`traffic`/`story`六个域各自的`ApplyChange`，`Story`是其中唯一
+保留"未实现"警告的一个（其余五个域都是空占位，故意不打警告，避免同一个Change被六个域
+各打一遍重复日志），详见`Source/Forever/Framework/ForeverFrameworkActor.md`"统一的Change
+消费入口：`ApplyChange`"一节。
+
+## `Tick`：占位，保持"每个Core域都有Tick"的形状一致
+
+这次重构新增的空实现方法——`AForeverFrameworkActor::Tick`每帧会挨个调用`map`/`populace`/
+`society`/`industry`/`traffic`/`story`六个域各自的`Tick`，`Story`域目前没有需要每帧处理
+的逻辑（GameStart广播走的是`BroadcastGameStart`，只在开局调用一次，不是每帧），空实现，
+等Story域真的有每帧要处理的东西（比如milestone超时之类）时再补内容。
 
 ## test.script路径
 

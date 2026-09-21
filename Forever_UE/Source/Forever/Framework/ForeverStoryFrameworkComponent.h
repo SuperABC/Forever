@@ -32,12 +32,14 @@ public:
 	// onActions逻辑）——否则它们各自的game_start milestone永远不会被触发，见.cpp实现。
 	void BroadcastGameStart();
 
-private:
 	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。不在
-	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。
+	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。这次改成
+	// public——AForeverFrameworkActor::ApplyChange统一收口所有Change的消费入口后，
+	// ChangeControlChange分支需要从那里转发调用到这里，见ForeverFrameworkActor.md。
 	// @change: 待执行的切换控制变化
 	// @context: 变量路由上下文，用于求值change->GetName()
 	void ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context);
 
+private:
 	Story* story = nullptr;
 };

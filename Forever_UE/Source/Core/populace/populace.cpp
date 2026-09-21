@@ -103,6 +103,17 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 	}
 }
 
+void Populace::ApplyChange(const Change* change, const ScriptContext& context) {
+	// 占位，等Populace域真的有需要处理的Change子类时再补，见populace.h声明处注释。
+}
+
+Citizen* Populace::FindCitizenByName(const std::string& name) const {
+	for (Citizen* citizen : citizens) {
+		if (citizen && citizen->GetName() == name) return citizen;
+	}
+	return nullptr;
+}
+
 void Populace::GenerateCitizens(int target) {
 	// 临时男女数组及年表，完全照抄老工程Populace::GenerateCitizens的算法(E:\Projects\
 	// Forever_UE\Source\Core\populace\populace.cpp:659-859)。

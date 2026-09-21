@@ -17,6 +17,7 @@ class Component;
 class Citizen;
 class Organization;
 class Change;
+struct ScriptContext;
 
 // Society：Job+Organization域的聚合入口（这次不迁移Calendar——"哪几天上班/几点上下班"
 // 直接写进具体JobMod子类的DailyPlan里）。见society.md。
@@ -38,6 +39,11 @@ public:
 	// Organization::DailyPlan/ExecNode，见populace.h同名参数的说明。
 	void Tick(const Time& currentTime, bool crossedDay,
 		const std::function<void(Organization*, const std::vector<Change*>&)>& onActions, PostHandle* post);
+
+	// 阶段占位：目前没有任何Change子类是Society域自己认识、需要处理的，空实现——
+	// AForeverFrameworkActor::ApplyChange会把同一个Change转发给全部六个域，这里不打"未实现"
+	// 警告（避免同一个Change被六个域各打一遍重复警告），唯一的兜底警告在Story::ApplyChange。
+	void ApplyChange(const Change* change, const ScriptContext& context);
 
 	const std::vector<Organization*>& GetOrganizations() const;
 

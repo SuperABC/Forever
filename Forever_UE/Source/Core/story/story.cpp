@@ -64,6 +64,10 @@ void Story::ApplyChange(const Change* change, const ScriptContext& context) {
 	debugf("Warning: change type %s not implemented yet.\n", change->GetType().data());
 }
 
+void Story::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
+	// 占位，等Story域真的有需要每帧处理的逻辑时再补，见story.h声明处注释。
+}
+
 Script* Story::GetSystemScript() const {
 	return systemScript;
 }

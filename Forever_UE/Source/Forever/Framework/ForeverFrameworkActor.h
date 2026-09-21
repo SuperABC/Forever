@@ -11,6 +11,8 @@ class Story;
 class Industry;
 class Traffic;
 class Player;
+class Change;
+struct ScriptContext;
 
 class USceneComponent;
 class UForeverAssetFrameworkComponent;
@@ -100,6 +102,18 @@ public:
 	Industry* GetIndustry() const { return industry; }
 	Traffic* GetTraffic() const { return traffic; }
 	Player* GetPlayer() const { return player; }
+
+	// 统一的Change消费入口——populace/society两个Tick回调、
+	// UForeverStoryFrameworkComponent::BroadcastGameStart的onActions回调，今后任何地方产出的
+	// Change都通过这一个函数消费，不再各自手写dynamic_cast dispatch。顺序：先处理这个Actor
+	// 自己能直接搞定的类型（NPCNavigateChange/DebugPrintChange/ChangeControlChange——都需要
+	// UE层才能拿到的东西，Core域看不到`Room*`/`ACitizenElement`/`GEngine`/
+	// `APlayerController`），命中就直接return；余下的类型才转发给
+	// map/populace/society/story/industry/traffic六个域各自的ApplyChange，谁认识就处理，
+	// 见.cpp实现和ForeverFrameworkActor.md。
+	// @change: 待执行的变化
+	// @context: 变量路由上下文
+	void ApplyChange(const Change* change, const ScriptContext& context);
 
 protected:
 	virtual void BeginPlay() override;

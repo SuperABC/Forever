@@ -12,6 +12,7 @@
 #include <tuple>
 #include <vector>
 
+struct ScriptContext;
 
 // Populace：和Map平级的顶层Core类，不是挂在Map底下的工具函数集合——自己管理Citizen*的
 // 生命周期，不知道Map的存在(和老工程Populace/Map::Checkin(populace, player)同一个解耦
@@ -40,6 +41,19 @@ public:
 	// 的具体地址（见Dependence/society/job_mod.h），Populace自己不解读这个句柄。
 	void Tick(const Time& currentTime, bool crossedDay,
 		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions, PostHandle* post);
+
+	// 阶段占位：目前没有任何Change子类是Populace域自己认识、需要处理的，空实现——
+	// AForeverFrameworkActor::ApplyChange会把同一个Change转发给全部六个域，这里不打"未实现"
+	// 警告（避免同一个Change被六个域各打一遍重复警告），唯一的兜底警告在Story::ApplyChange。
+	void ApplyChange(const Change* change, const ScriptContext& context);
+
+	// 按姓名线性查找Citizen*——不强制生成/持有任何Actor，纯Core层数据查询。供
+	// AForeverFrameworkActor::ApplyChange处理NPCNavigateChange时，用change自带的occupant
+	// 姓名反查Citizen*（原来的Tick回调直接拿到Citizen*形参，改成统一的
+	// ApplyChange(const Change*, const ScriptContext&)签名后不再有实体指针，只能反过来按名字
+	// 查，和UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName是同一个思路，一个在
+	// Core层查数据，一个在UE层顺带生成Actor）。找不到返回nullptr。
+	Citizen* FindCitizenByName(const std::string& name) const;
 
 	// 模拟结束时的"当前年份"(老工程time->SetYear(year+2000)那个值)——Map::Checkin()用它
 	// 给Citizen::GetAge()算成年/未成年。Player的全局时钟落地后，

@@ -41,7 +41,7 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
 
-	auto onActions = [this](const vector<ScriptAction>& actions, const ScriptContext& context) {
+	auto onActions = [this, framework](const vector<ScriptAction>& actions, const ScriptContext& context) {
 		for (const auto& action : actions) {
 			if (auto dialogPtr = get_if<const Dialog*>(&action)) {
 				for (Section section : (*dialogPtr)->GetDialogs()) {
@@ -64,16 +64,10 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 				}
 			}
 			else if (auto changePtr = get_if<const Change*>(&action)) {
-				if (auto controlChange = dynamic_cast<const ChangeControlChange*>(*changePtr)) {
-					ApplyControlChange(controlChange, context);
-				}
-				else if (auto debugPrint = dynamic_cast<const DebugPrintChange*>(*changePtr)) {
-					FString text = UTF8_TO_TCHAR(ToString(EvaluateExpression(debugPrint->GetMessage(), context)).data());
-					GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, text);
-				}
-				else {
-					story->ApplyChange(*changePtr, context);
-				}
+				// 统一交给AForeverFrameworkActor::ApplyChange消费——不再在这里各自手写
+				// dynamic_cast dispatch，见ForeverFrameworkActor.md"统一的Change消费入口"
+				// 一节。
+				if (framework) framework->ApplyChange(*changePtr, context);
 				FString typeText = UTF8_TO_TCHAR((*changePtr)->GetType().data());
 				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[变化] %s"), *typeText));
 			}

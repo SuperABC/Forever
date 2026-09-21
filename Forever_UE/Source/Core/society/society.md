@@ -51,7 +51,20 @@ DailyPlan/ExecNode"一节）。两者的每帧处理上限（`kMaxJobTimersPerTi
 由`AForeverFrameworkActor::Tick`现场构造一个`PostImplement`传入、原样透传到
 `Organization::DailyPlan/ExecNode`再到`OrganizationMod`，供mod按需查citizen家/工位
 地址，见`job.md`"按需查地址：PostHandle参数"一节（这次`ShopOrganization`不重写
-`DailyPlan`/`ExecNode`，用不上这个参数，但接口和`JobMod`保持对称）。
+`DailyPlan`/`ExecNode`，用不上这个参数，但接口和`JobMod`保持对称）。**这次重构
+`AForeverFrameworkActor::Tick`后，回调体本身简化成只构造per-entity的`ScriptContext`
+（`context.self = organization->GetScript()`），然后对每个`Change*`转发给
+`AForeverFrameworkActor::ApplyChange`统一消费**，不再自己手写`dynamic_cast` dispatch，
+见`Source/Forever/Framework/ForeverFrameworkActor.md`"统一的Change消费入口：
+`ApplyChange`"一节。
+
+## `ApplyChange`（这次重构`AForeverFrameworkActor::Tick`新增）
+
+`Society::ApplyChange(const Change*, const ScriptContext&)`——目前没有任何Change子类是
+Society域自己认识、需要处理的，空实现，也不打"未实现"警告（同一个Change会被
+`AForeverFrameworkActor::ApplyChange`转发给全部六个Core域，只有`Story::ApplyChange`
+保留兜底警告，避免六个域各打一遍重复日志）。等Society域真的长出需要处理的Change子类
+时再补内容。
 
 ## 依赖关系
 
@@ -60,4 +73,5 @@ DailyPlan/ExecNode"一节）。两者的每帧处理上限（`kMaxJobTimersPerTi
   `Core/society/organization.h`/`job.h`、`Core/map/component.h`、
   `Core/populace/citizen.h`、`Core/common/registry.h`。
 - 被谁依赖：`Core/common/implement.h`（`PostImplement`构造函数）、
-  `Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有+`Tick`驱动）。
+  `Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有+`Tick`驱动，
+  `ApplyChange`转发）。

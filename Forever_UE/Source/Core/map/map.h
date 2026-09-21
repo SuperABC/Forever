@@ -13,12 +13,16 @@
 #include "map/zone.h"
 #include "map/building.h"
 
+#include "common/handle.h"
+
 #include <string>
 #include <vector>
 #include <utility>
 #include <unordered_map>
 #include <array>
 #include <tuple>
+
+struct ScriptContext;
 
 
 // 10m*10m地图元素。当前只有Terrain域需要的字段;zone/building字段等Zone/Building阶段
@@ -195,6 +199,17 @@ public:
 	// 喂给Society::Init——和ComputeAccommodationTarget()喂给Populace::Init同一个已有
 	// 套路，Society不知道Map/Building的存在，只接收这份拍平结果。
 	std::vector<Component*> GetAllComponents() const;
+
+	// 阶段占位：Map域这次还没有真正需要每帧处理的逻辑，空实现——和Populace/Society/Industry/
+	// Traffic/Story一起被AForeverFrameworkActor::Tick统一调用一遍，保持"每个域都有Tick"这个
+	// 形状一致，等Map域真的长出需要每帧跑的东西时再补内容，见map.md。
+	void Tick(const Time& currentTime, bool crossedDay, PostHandle* post);
+
+	// 阶段占位：目前没有任何Change子类是Map域自己认识、需要处理的，空实现——
+	// AForeverFrameworkActor::ApplyChange会把同一个Change转发给全部六个域，这里不打"未实现"
+	// 警告（避免同一个Change被六个域各打一遍重复警告），唯一的兜底警告在Story::ApplyChange，
+	// 见Story.md。
+	void ApplyChange(const Change* change, const ScriptContext& context);
 
 private:
 	bool CheckXY(int x, int y) const;

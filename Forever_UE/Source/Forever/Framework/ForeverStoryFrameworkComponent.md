@@ -24,13 +24,15 @@ Dialog/Change用`GEngine::AddOnScreenDebugMessage`打印在屏幕左上角"这�
   `GetOptions()[0]`的文本打印（对应用户"没有交互方式，默认选第一个选项"的要求）；普通台词段
   调用`EvaluateText(context)`后取`GetSpeaking()`，有发言者就拼"发言者：内容"，没有就只打内容
   （`test.json`的`speaker`是空字符串，走后一种）。
-- `const Change*`：先`dynamic_cast<const ChangeControlChange*>`判断是不是"切换控制"这个
-  特殊类型——是的话转调这个组件自己的`ApplyControlChange`（见下一节），不经过
-  `Story::ApplyChange`；不是的话才走`story->ApplyChange(change, context)`（当前只有
-  `SetValueChange`真正生效，`PlaceHolderChange`如果没被`ScriptMod::WrapScript`替换掉，也会
-  落到这个分支，只打一条"未实现"日志）。不管走哪条路径，最后都打印一行`[变化] <类型名>`
-  ——这次不展示变化的具体字段内容，只标注类型，字段级的展示留到该类型需要更丰富调试信息时
-  再加。
+- `const Change*`：这次重构后统一转发给`AForeverFrameworkActor::ApplyChange(*changePtr,
+  context)`（`framework`是`onActions`回调顶部已经`Cast`出来的`AForeverFrameworkActor*`），
+  不再在这个组件里自己写`dynamic_cast<const ChangeControlChange*>`/`DebugPrintChange`
+  这些分支——`ApplyChange`是这次新增的统一Change消费入口，`populace`/`society`两个Tick
+  回调也在同一个入口消费Change，三处重复的dispatch逻辑收口成一份，详见
+  `ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。`ChangeControlChange`
+  在`ApplyChange`内部还是会转发回这个组件自己的`ApplyControlChange`（见下一节，这次改成
+  `public`），行为不变。不管走哪条路径，最后都打印一行`[变化] <类型名>`——这次不展示变化的
+  具体字段内容，只标注类型，字段级的展示留到该类型需要更丰富调试信息时再加。
 
 所有文本走`GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, ...)`，和
 `ForeverZoneFrameworkComponent.cpp`已有的写法保持一致（黄色、5秒、`-1`表示不指定固定key、
@@ -53,10 +55,14 @@ BroadcastGameStart`的回调是同步执行的，见`Core/story/story.md`"用回
 一节）**故意不**放进`Story::ApplyChange`的`dynamic_cast`分派链——`Core/story`是纯C++层，
 不知道`AActor`/`APlayerController`的存在，没法执行"把玩家操控权切给某个Actor"这件事。这次
 在`UForeverStoryFrameworkComponent`（UE层，天然能拿到`AActor`/`APlayerController`）拦截
-处理：
+处理。这个函数这次从`private`改成`public`——`AForeverFrameworkActor::ApplyChange`统一收口
+所有Change的消费入口后，`ChangeControlChange`分支需要从那里转发调用到这里（见
+`ForeverFrameworkActor.md`），不再只被这个组件自己的`onActions`回调调用：
 
-1. `change->GetName().EvaluateValue(context)`求出目标市民姓名（`ToString`+`UTF8_TO_TCHAR`
-   转`FString`）。
+1. `EvaluateExpression(change->GetName(), context)`求出目标市民姓名（`GetName()`现在是
+   `std::string`类型的DSL源码文本，不是预先解析好的`Expression`对象，`EvaluateExpression`
+   现场`Parse`+求值一步到位，原因见`Dependence/story/change.md`"字段类型是`std::string`"
+   一节；求值结果`ToString`+`UTF8_TO_TCHAR`转`FString`）。
 2. 通过`GetOwner()`转成`AForeverFrameworkActor`，取`GetPopulaceFramework()`，调用
    `UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(name)`——按姓名查找已经
    在场景里的`ACitizenElement`，找不到则强制生成一个（不看玩家距离，见
@@ -77,11 +83,13 @@ BroadcastGameStart`的回调是同步执行的，见`Core/story/story.md`"用回
 - 依赖：`Core/story/story.h`/`script.h`、`Dependence/story/dialog.h`/`change.h`
   （`ChangeControlChange`）、`Core/common/implement.h`（`PostImplement`）、
   `Framework/ForeverFrameworkActor.h`（`GetMap`/`GetPopulace`/`GetSociety`/`GetIndustry`/
-  `GetTraffic`/`GetPlayer`/`GetPopulaceFramework`）、`Framework/
-  ForeverPopulaceFrameworkComponent.h`（`FindOrSpawnCitizenByName`）、
-  `Element/CitizenElement.h`、`Engine/Engine.h`（`GEngine`）、
-  `Kismet/GameplayStatics.h`（`GetPlayerController`）。
-- 被谁依赖：`Framework/ForeverFrameworkActor.cpp`。
+  `GetTraffic`/`GetPlayer`/`GetPopulaceFramework`/`ApplyChange`——`onActions`回调的
+  `Change`分支转发给它）、`Framework/ForeverPopulaceFrameworkComponent.h`
+  （`FindOrSpawnCitizenByName`）、`Element/CitizenElement.h`、`Engine/Engine.h`
+  （`GEngine`）、`Kismet/GameplayStatics.h`（`GetPlayerController`）。
+- 被谁依赖：`Framework/ForeverFrameworkActor.cpp`（`AForeverFrameworkActor::ApplyChange`
+  处理`ChangeControlChange`时转发调用这个组件的`ApplyControlChange`，这次从`private`
+  改成`public`）。
 
 ## 待办/后续阶段
 
