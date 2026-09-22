@@ -5,8 +5,8 @@
 阶段4-0共享基础设施之一：提供跨全部domain复用的原语——`ValueType`（脚本引擎的值类型，
 `std::variant<int, double, bool, std::string>`）及其与字符串的相互转换（`ToInt`/`ToDouble`/
 `ToBool`/`ToString`/`FromString`）、`Container`键值查询接口、`Time`日期时间类、`Counter`倒计时
-计数器、`debugf`调试输出、`GetRandom`随机数。`story/condition.h`（脚本表达式引擎）、
-`map/geometry.h`（几何原语）都直接依赖这里的`ValueType`/`OBJECT_HOLDER`宏。
+计数器、`debugf`调试输出、`GetRandom`/`GetRandomNormal`随机数。`story/condition.h`（脚本
+表达式引擎）、`map/geometry.h`（几何原语）都直接依赖这里的`ValueType`/`OBJECT_HOLDER`宏。
 
 ## 关键设计
 
@@ -27,6 +27,10 @@
 - **`OBJECT_HOLDER`/`COSTOM_INIT`/`COSTOM_RUNTIME`是纯标记宏**（定义为空），旧工程用它们在
   声明处标注"这个指针成员持有对象所有权"之类的语义，不影响编译，纯粹给读代码的人看，新工程
   保留这个约定，阶段4读到用了这些宏的旧代码时不要误以为要额外处理。
+- **`GetRandomNormal(mean, stddev)`（新增，四类人际关系生成用）**：正态分布随机浮点数，
+  和`GetRandom(int)`同样的风格——每次调用现场构造`mt19937`+`normal_distribution`，不做
+  静态/线程局部引擎优化。给`Populace`生成市民`Personality`（-1到1正态分布）+四类人际关系
+  的`Relation`数值用，见`Source/Core/populace/populace.md`"四类人际关系生成"一节。
 - **`Time`不依赖`<chrono>`做内部存储**，全部用年/月/日/时/分/秒/毫秒整数字段+手写的进位/借位
   归一化逻辑（`NormalizeTime`），构造函数支持解析ISO 8601、中文（`YYYY年MM月DD日`）、美式
   （`MM/DD/YYYY`）及纯时间等多种字符串格式，供story脚本里写时间字面量时随意选一种熟悉的格式。

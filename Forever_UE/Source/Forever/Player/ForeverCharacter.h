@@ -65,11 +65,12 @@ protected:
 	void StartSprint();
 	void StopSprint();
 
-	// T键：切到当前"附近市民名单"（ACitizenElement::nearbyCitizens，由子类ACitizenElement的
-	// 碰撞盒维护）下标0那个。定义在基类上，不管当前被占有的是最初的ADefaultPawn（没有绑这个
-	// 方法，T键不响应）还是某个ACitizenElement，只要是AForeverCharacter的子类都自动获得同一个
-	// T键行为。名单为空、或者名单里恰好是自己时不做任何事。
-	void SwitchControlledCitizen();
+	// T键：把当前"附近市民名单"（ACitizenElement::nearbyCitizens，由子类ACitizenElement的
+	// 碰撞盒维护）里每一个人的acquaintances/experiences输出到log——不再切换玩家控制的
+	// 市民（原来是Possess切换，见CitizenElement.md"T键：输出附近市民的人际关系数据"一节）。
+	// 定义在基类上，不管当前被占有的是最初的ADefaultPawn（没有绑这个方法，T键不响应）还是
+	// 某个ACitizenElement，只要是AForeverCharacter的子类都自动获得同一个T键行为。
+	void LogNearbyCitizenRelationships();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	float walkSpeed = 500.f;

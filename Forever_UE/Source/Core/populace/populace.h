@@ -72,7 +72,18 @@ private:
 	void InitNames();
 
 	// 复刻老工程Populace::GenerateCitizens的年表模拟算法，见populace.cpp/populace.md。
+	// 函数体末尾顺带生成亲属关系(GenerateKinshipRelations，含配偶/子女/兄弟姐妹)——需要
+	// 用到模拟阶段的Human数据(结婚年份/父母索引)，这些数据物化成Citizen后就丢弃了，只能
+	// 在这个函数体内、Human数组还在作用域内时处理，见populace.md"四类人际关系生成"一节。
 	void GenerateCitizens(int target);
+
+	// 情感关系(恋爱/婚姻/情人)历史生成——GenerateCitizens()之后调用，读取
+	// GenerateCitizens()已经生成好的KinshipExperience(RELATIVE_SPOUSE)::GetBeginYear()
+	// 当结婚年份用，不重新计算，见populace.md同一节。
+	void GenerateRomanticRelations();
+
+	// 虚拟学校/班级 + 同学关系生成——按年份正序推进的编年模拟，见populace.md同一节。
+	void GenerateEducations();
 
 	// 给每个citizen加权随机分配一个Scheduler——参考老工程同名算法(累加所有已注册Scheduler
 	// 类型的权重建CDF，对每个citizen roll一个随机数选中一个类型)，权重来源改成当前工程
@@ -96,6 +107,10 @@ private:
 
 	std::vector<Citizen*> citizens;
 	int currentYear = 2000;
+
+	// 虚拟学校/班级——没有Mod/Factory背书的纯Core实体，GenerateEducations()生成，
+	// ~Populace()统一delete，见school.h。
+	std::vector<SchoolClass*> schoolClasses;
 
 	std::set<std::tuple<Time, Citizen*, std::string>> jobTimerSet;
 	static constexpr int kMaxJobTimersPerTick = 1;

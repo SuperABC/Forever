@@ -5,6 +5,8 @@
 #include "populace/citizen.h"
 #include "populace/name.h"
 #include "populace/scheduler.h"
+#include "populace/experience.h"
+#include "populace/school.h"
 #include "common/registry.h"
 #include "common/config.h"
 #include "common/error.h"
@@ -14,6 +16,8 @@
 #include <cmath>
 #include <algorithm>
 #include <iterator>
+#include <map>
+#include <unordered_map>
 
 
 using namespace std;
@@ -43,6 +47,229 @@ struct Human {
 	vector<pair<GENDER_TYPE, int>> childs;
 };
 
+constexpr int kDatingMinAge = 14;
+constexpr int kMarriageMinAge = 18;
+
+// 四类人际关系Relation随机初始化——数值量级参考，均值/方差实现后可再调。人际关系强度
+// 约定俗成非负，clamp到[0,1]，这次不引入负值关系。
+void RandomizeKinshipRelation(Citizen* citizen, const string& otherName) {
+	citizen->SetAcquaintanceValue(otherName, RELATION_FAMILIARITY, clamp(GetRandomNormal(0.8f, 0.15f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_RESPECT, clamp(GetRandomNormal(0.6f, 0.2f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_FAVOUR, clamp(GetRandomNormal(0.7f, 0.2f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_TRUST, clamp(GetRandomNormal(0.7f, 0.2f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_COMPETING, clamp(GetRandomNormal(0.2f, 0.15f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_RELIABILITY, clamp(GetRandomNormal(0.7f, 0.2f), 0.0f, 1.0f));
+}
+
+void RandomizeRomanticRelation(Citizen* citizen, const string& otherName) {
+	citizen->SetAcquaintanceValue(otherName, RELATION_FAMILIARITY, clamp(GetRandomNormal(0.85f, 0.1f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_RESPECT, clamp(GetRandomNormal(0.6f, 0.2f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_FAVOUR, clamp(GetRandomNormal(0.9f, 0.1f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_TRUST, clamp(GetRandomNormal(0.75f, 0.15f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_COMPETING, clamp(GetRandomNormal(0.1f, 0.1f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_RELIABILITY, clamp(GetRandomNormal(0.75f, 0.15f), 0.0f, 1.0f));
+}
+
+void RandomizeClassmateRelation(Citizen* citizen, const string& otherName) {
+	citizen->SetAcquaintanceValue(otherName, RELATION_FAMILIARITY, clamp(GetRandomNormal(0.5f, 0.3f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_RESPECT, clamp(GetRandomNormal(0.5f, 0.25f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_FAVOUR, clamp(GetRandomNormal(0.5f, 0.3f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_TRUST, clamp(GetRandomNormal(0.4f, 0.25f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_COMPETING, clamp(GetRandomNormal(0.3f, 0.2f), 0.0f, 1.0f));
+	citizen->SetAcquaintanceValue(otherName, RELATION_RELIABILITY, clamp(GetRandomNormal(0.4f, 0.25f), 0.0f, 1.0f));
+}
+
+// 按年龄递减的"这一年开始一段新恋情"基础年概率——年轻人恋爱更频繁，年龄越大频率越低，
+// 参考现实约会频率随年龄下降的趋势，不是一个和年龄无关的常数(审阅时反馈：老版本"按总
+// 跨度套公式算总数"会让单身时间越长——往往就是年纪越大的人——分配到越多段恋爱史，
+// 完全反了；且已婚情人概率是常数，没有随年龄自然衰减，导致老年人和年轻人一样容易有
+// 婚外情)。
+float DatingHazardForAge(int age) {
+	if (age < 20) return 0.10f;
+	if (age < 30) return 0.14f;
+	if (age < 40) return 0.07f;
+	if (age < 50) return 0.03f;
+	if (age < 60) return 0.012f;
+	return 0.005f;
+}
+
+// 两个citizen是否已经是亲属(用来避免恋爱/情人对象选中近亲)——扫描一方的experiences找
+// 是否有一条KinshipExperience指向另一方，见populace.md"四类人际关系生成"一节。
+bool IsCloseRelative(Citizen* a, Citizen* b) {
+	for (Experience* experience : a->GetExperiences()) {
+		if (experience->GetCategory() != RELATIONSHIP_KINSHIP) continue;
+		if (static_cast<KinshipExperience*>(experience)->GetOther() == b) return true;
+	}
+	return false;
+}
+
+// 是否已经是citizen当前的情人(避免重复选中同一个人)。
+bool IsCurrentLoverOf(Citizen* citizen, Citizen* candidate) {
+	for (Citizen* lover : citizen->GetCurrentLovers()) {
+		if (lover == candidate) return true;
+	}
+	return false;
+}
+
+// 随机找一个满足条件的恋爱/情人对象：异性、atYear时年满kDatingMinAge岁、不是近亲、不是
+// citizen自己、不是citizen当前已有的情人。照抄老工程"最多尝试若干次随机候选"的容错写法，
+// 找不到就返回nullptr。
+Citizen* FindRomanticCandidate(vector<Citizen*>& citizens, Citizen* citizen, int atYear) {
+	if (citizens.empty()) return nullptr;
+	for (int attempt = 0; attempt < 10; attempt++) {
+		Citizen* candidate = citizens[GetRandom(static_cast<int>(citizens.size()))];
+		if (candidate == citizen) continue;
+		if (candidate->GetGender() == citizen->GetGender()) continue;
+		if (candidate->GetAge(atYear) < kDatingMinAge) continue;
+		if (IsCloseRelative(citizen, candidate)) continue;
+		if (IsCurrentLoverOf(citizen, candidate)) continue;
+		return candidate;
+	}
+	return nullptr;
+}
+
+// 兄弟姐妹/配偶反推需要的模拟阶段数据(父母索引/结婚年份)，物化成Citizen后就丢弃，只能
+// 在GenerateCitizens函数体内、females/males数组还在作用域内时处理，见populace.md
+// "四类人际关系生成"一节。
+void GenerateKinshipRelations(vector<Citizen*>& citizens, const vector<Human>& females, const vector<Human>& males) {
+	// 配偶的结婚年份——human.marry在模拟阶段已经算好，这里只是转成真实年份原样带出来，
+	// 不是重新计算一个结婚时间(一个人只有一个结婚年份，这次不模拟离婚/再婚)。
+	unordered_map<Citizen*, int> marriageYearOf;
+	for (const Human& human : females) {
+		if (human.idx >= 0 && human.spouse >= 0 && static_cast<size_t>(human.spouse) < males.size() &&
+			males[human.spouse].idx >= 0) {
+			marriageYearOf[citizens[human.idx]] = 2000 + human.marry;
+		}
+	}
+	for (const Human& human : males) {
+		if (human.idx >= 0 && human.spouse >= 0 && static_cast<size_t>(human.spouse) < females.size() &&
+			females[human.spouse].idx >= 0) {
+			marriageYearOf[citizens[human.idx]] = 2000 + human.marry;
+		}
+	}
+
+	for (Citizen* citizen : citizens) {
+		if (Citizen* spouse = citizen->GetSpouse()) {
+			if (citizen->GetName() < spouse->GetName()) { // 避免同一对处理两次
+				int marriageYear = marriageYearOf[citizen];
+				citizen->AddAcquaintance(spouse->GetName(), RELATIONSHIP_KINSHIP);
+				RandomizeKinshipRelation(citizen, spouse->GetName());
+				citizen->AddExperience(new KinshipExperience(spouse, RELATIVE_SPOUSE, marriageYear));
+				spouse->AddAcquaintance(citizen->GetName(), RELATIONSHIP_KINSHIP);
+				RandomizeKinshipRelation(spouse, citizen->GetName());
+				spouse->AddExperience(new KinshipExperience(citizen, RELATIVE_SPOUSE, marriageYear));
+			}
+		}
+		for (Citizen* child : citizen->GetChildren()) {
+			citizen->AddAcquaintance(child->GetName(), RELATIONSHIP_KINSHIP);
+			RandomizeKinshipRelation(citizen, child->GetName());
+			citizen->AddExperience(new KinshipExperience(child, RELATIVE_CHILD, child->GetBirthYear()));
+			child->AddAcquaintance(citizen->GetName(), RELATIONSHIP_KINSHIP);
+			RandomizeKinshipRelation(child, citizen->GetName());
+			child->AddExperience(new KinshipExperience(citizen, RELATIVE_PARENT, child->GetBirthYear()));
+		}
+	}
+
+	// 兄弟姐妹——按(father index, mother index)对females/males临时分组，组内两两互相
+	// 标记。不持久化"父母是谁"这份数据本身，这个函数结束(GenerateCitizens返回)后
+	// females/males就丢弃了。
+	map<pair<int, int>, vector<Citizen*>> siblingGroups;
+	for (const Human& human : females) {
+		if (human.idx >= 0 && human.father >= 0 && human.mother >= 0) {
+			siblingGroups[{human.father, human.mother}].push_back(citizens[human.idx]);
+		}
+	}
+	for (const Human& human : males) {
+		if (human.idx >= 0 && human.father >= 0 && human.mother >= 0) {
+			siblingGroups[{human.father, human.mother}].push_back(citizens[human.idx]);
+		}
+	}
+	for (auto& [key, siblings] : siblingGroups) {
+		for (size_t i = 0; i < siblings.size(); i++) {
+			for (size_t j = i + 1; j < siblings.size(); j++) {
+				Citizen* a = siblings[i];
+				Citizen* b = siblings[j];
+				int beginYear = max(a->GetBirthYear(), b->GetBirthYear());
+				a->AddAcquaintance(b->GetName(), RELATIONSHIP_KINSHIP);
+				RandomizeKinshipRelation(a, b->GetName());
+				a->AddExperience(new KinshipExperience(b, RELATIVE_SIBLING, beginYear));
+				b->AddAcquaintance(a->GetName(), RELATIONSHIP_KINSHIP);
+				RandomizeKinshipRelation(b, a->GetName());
+				b->AddExperience(new KinshipExperience(a, RELATIVE_SIBLING, beginYear));
+			}
+		}
+	}
+}
+
+// 按年份逐年推进的编年模拟生成过去恋爱史，不是"按总跨度套公式一次性算出总段数再切分"——
+// 每年是否开始一段新恋情按DatingHazardForAge(当时的年龄)独立判定，年纪越大频率越低。
+// 时长用pow(r,4)让持续时间偏短(照抄老工程GenerateEmotions的取法)。前任也保留在
+// acquaintances里——"曾经谈过恋爱"本身就是一种认识关系，不因为关系结束就删除。
+void GeneratePastRelationships(vector<Citizen*>& citizens, Citizen* citizen, int boundEndYear) {
+	int startYear = citizen->GetBirthYear() + kDatingMinAge;
+
+	for (int year = startYear; year < boundEndYear; year++) {
+		float hazard = DatingHazardForAge(citizen->GetAge(year));
+		if (GetRandom(10000) / 10000.0f >= hazard) continue; // 这一年没有开始新恋情
+
+		int remaining = boundEndYear - year;
+		float r = GetRandom(1000) / 1000.0f;
+		int duration = 1 + static_cast<int>(powf(r, 4.0f) * remaining);
+		duration = min(duration, remaining);
+		int begin = year;
+		int end = min(begin + duration, boundEndYear);
+
+		Citizen* partner = FindRomanticCandidate(citizens, citizen, begin);
+		if (partner) {
+			citizen->AddAcquaintance(partner->GetName(), RELATIONSHIP_ROMANTIC);
+			RandomizeRomanticRelation(citizen, partner->GetName());
+			citizen->AddExperience(new EmotionExperience(partner, begin, end));
+			partner->AddAcquaintance(citizen->GetName(), RELATIONSHIP_ROMANTIC);
+			RandomizeRomanticRelation(partner, citizen->GetName());
+			partner->AddExperience(new EmotionExperience(citizen, begin, end));
+		}
+		year = end + GetRandom(2); // 恋情(或本次失败的尝试)结束后间隔一段时间，循环末尾还会+1
+	}
+}
+
+// 生成一个或多个当前情人——同一个人可以同时有多个情人；已婚概率明显低于未婚，且基础
+// 概率按DatingHazardForAge随年龄递减(不是常数)——年纪越大，不管已婚未婚，新恋情/婚外情
+// 都应该更少见。已婚只尝试一次(不连续叠加多个婚外情人)，未婚最多连续尝试几次。
+void TryAddCurrentLovers(vector<Citizen*>& citizens, Citizen* citizen, bool married, int currentYear) {
+	constexpr float kMarriedMultiplier = 0.15f; // 已婚情人概率相对同龄未婚大幅降低
+	constexpr int kMaxAttemptsMarried = 1;
+	constexpr int kMaxAttemptsUnmarried = 3;
+
+	float baseChance = DatingHazardForAge(citizen->GetAge(currentYear));
+	float chance = married ? baseChance * kMarriedMultiplier : baseChance;
+	int maxAttempts = married ? kMaxAttemptsMarried : kMaxAttemptsUnmarried;
+
+	for (int attempt = 0; attempt < maxAttempts; attempt++) {
+		if (GetRandom(10000) / 10000.0f >= chance) break; // 未命中，不再继续尝试
+
+		int minStartYear = citizen->GetBirthYear() + kDatingMinAge;
+		for (Experience* experience : citizen->GetExperiences()) {
+			if (experience->GetCategory() == RELATIONSHIP_ROMANTIC && !experience->IsOngoing()) {
+				minStartYear = max(minStartYear, experience->GetEndYear());
+			}
+		}
+		if (minStartYear >= currentYear) break;
+		int startYear = minStartYear + GetRandom(currentYear - minStartYear + 1);
+
+		Citizen* partner = FindRomanticCandidate(citizens, citizen, startYear);
+		if (partner) {
+			citizen->AddAcquaintance(partner->GetName(), RELATIONSHIP_ROMANTIC);
+			RandomizeRomanticRelation(citizen, partner->GetName());
+			citizen->AddExperience(new EmotionExperience(partner, startYear));
+			partner->AddAcquaintance(citizen->GetName(), RELATIONSHIP_ROMANTIC);
+			RandomizeRomanticRelation(partner, citizen->GetName());
+			partner->AddExperience(new EmotionExperience(citizen, startYear));
+		}
+
+		chance *= 0.5f; // 后续尝试概率递减
+	}
+}
+
 } // namespace
 
 Populace::Populace() :
@@ -55,6 +282,9 @@ Populace::~Populace() {
 	for (Citizen* citizen : citizens) {
 		delete citizen;
 	}
+	for (SchoolClass* schoolClass : schoolClasses) {
+		delete schoolClass;
+	}
 	delete name;
 }
 
@@ -64,6 +294,8 @@ void Populace::Init(int accommodation) {
 	int target = static_cast<int>(accommodation * expf(GetRandom(1000) / 1000.0f - 0.5f));
 	GenerateCitizens(target);
 	AssignSchedulers();
+	GenerateRomanticRelations();
+	GenerateEducations();
 }
 
 void Populace::InitNames() {
@@ -441,6 +673,165 @@ void Populace::GenerateCitizens(int target) {
 			else {
 				if (static_cast<size_t>(childIdx) < males.size() && males[childIdx].idx >= 0)
 					person->AddChild(citizens[males[childIdx].idx]);
+			}
+		}
+	}
+
+	// 亲属关系(配偶/子女/兄弟姐妹)——需要用到上面females/males数组里的结婚年份/父母索引，
+	// 这些数据物化成Citizen后就丢弃，只能在这两个数组还在作用域内、也就是这个函数体结束
+	// 之前处理，见populace.md"四类人际关系生成"一节。
+	GenerateKinshipRelations(citizens, females, males);
+}
+
+void Populace::GenerateRomanticRelations() {
+	// 已婚：恋爱开始年份 + 更早的恋爱史 + 婚外情人
+	for (Citizen* citizen : citizens) {
+		Citizen* spouse = citizen->GetSpouse();
+		if (!spouse || citizen->GetName() >= spouse->GetName()) continue; // 避免同一对处理两次
+
+		// 结婚年份直接读GenerateKinshipRelations()已经写好的KinshipExperience(RELATIVE_
+		// SPOUSE)，不重新计算——一个人只有一个结婚年份。
+		int marriageYear = currentYear;
+		for (Experience* experience : citizen->GetExperiences()) {
+			if (experience->GetCategory() != RELATIONSHIP_KINSHIP) continue;
+			KinshipExperience* kinship = static_cast<KinshipExperience*>(experience);
+			if (kinship->GetRelativeType() == RELATIVE_SPOUSE && kinship->GetOther() == spouse) {
+				marriageYear = kinship->GetBeginYear();
+				break;
+			}
+		}
+		// 防御性下限——模拟阶段的结婚年龄公式(20-34岁)本来就满足18岁以上，这里只是兜底
+		// 极端情况，确保"结婚要在双方18岁之后"这条硬约束不会被打破。
+		marriageYear = max(marriageYear, max(citizen->GetBirthYear(), spouse->GetBirthYear()) + kMarriageMinAge);
+
+		int datingLowerBound = max(citizen->GetBirthYear(), spouse->GetBirthYear()) + kDatingMinAge;
+		int datingStartYear = marriageYear;
+		if (marriageYear > datingLowerBound) {
+			datingStartYear = datingLowerBound + GetRandom(marriageYear - datingLowerBound);
+		}
+
+		citizen->AddExperience(new EmotionExperience(spouse, datingStartYear));
+		spouse->AddExperience(new EmotionExperience(citizen, datingStartYear));
+		RandomizeRomanticRelation(citizen, spouse->GetName());
+		RandomizeRomanticRelation(spouse, citizen->GetName());
+
+		GeneratePastRelationships(citizens, citizen, datingStartYear);
+		GeneratePastRelationships(citizens, spouse, datingStartYear);
+
+		// 婚外情人——概率明显低于未婚情形，走同一套TryAddCurrentLovers。
+		TryAddCurrentLovers(citizens, citizen, /*married=*/true, currentYear);
+		TryAddCurrentLovers(citizens, spouse, /*married=*/true, currentYear);
+	}
+
+	// 未婚：当前情人(可以有多个)
+	for (Citizen* citizen : citizens) {
+		if (citizen->GetSpouse()) continue; // 已婚在上面处理过
+		TryAddCurrentLovers(citizens, citizen, /*married=*/false, currentYear);
+	}
+
+	// 未婚：更早的恋爱史，跨度截止到最早一个当前情人的开始年份(如果有)或currentYear
+	for (Citizen* citizen : citizens) {
+		if (citizen->GetSpouse()) continue;
+		int boundEndYear = currentYear;
+		for (Citizen* lover : citizen->GetCurrentLovers()) {
+			for (Experience* experience : citizen->GetExperiences()) {
+				if (experience->GetCategory() != RELATIONSHIP_ROMANTIC) continue;
+				EmotionExperience* emotion = static_cast<EmotionExperience*>(experience);
+				if (emotion->GetOther() == lover) boundEndYear = min(boundEndYear, emotion->GetBeginYear());
+			}
+		}
+		GeneratePastRelationships(citizens, citizen, boundEndYear);
+	}
+}
+
+void Populace::GenerateEducations() {
+	constexpr int kElementaryStartAge = 6;
+	constexpr int kMiddleStartAge = 12;
+	constexpr int kUniversityStartAge = 18;
+	constexpr int kElementaryDuration = kMiddleStartAge - kElementaryStartAge; // 6年
+	constexpr int kMiddleDuration = kUniversityStartAge - kMiddleStartAge; // 6年
+	constexpr int kUniversityDuration = 4;
+	constexpr float kUniversityAttendanceRate = 0.5f;
+	constexpr int kMaxClassSize = 35;
+
+	// 每个citizen最多3个学历阶段各一条记录：{level, class}
+	unordered_map<Citizen*, unordered_map<int, SchoolClass*>> enrollment;
+	unordered_map<Citizen*, bool> universityRolled;
+
+	int earliestYear = currentYear;
+	for (Citizen* citizen : citizens) {
+		earliestYear = min(earliestYear, citizen->GetBirthYear() + kElementaryStartAge);
+	}
+
+	auto EnrollInto = [&](Citizen* citizen, EDUCATION_LEVEL level, int year, const char* namePrefix) -> SchoolClass* {
+		SchoolClass* target = nullptr;
+		for (SchoolClass* schoolClass : schoolClasses) {
+			if (schoolClass->GetLevel() == level && schoolClass->GetStartYear() == year &&
+				static_cast<int>(schoolClass->GetStudents().size()) < kMaxClassSize) {
+				target = schoolClass;
+				break;
+			}
+		}
+		if (!target) {
+			int sameLevelCount = 0;
+			for (SchoolClass* schoolClass : schoolClasses) {
+				if (schoolClass->GetLevel() == level) sameLevelCount++;
+			}
+			target = new SchoolClass(namePrefix + to_string(sameLevelCount + 1), level, year);
+			schoolClasses.push_back(target);
+		}
+		target->AddStudent(citizen);
+		enrollment[citizen][static_cast<int>(level)] = target;
+		return target;
+	};
+
+	// 按年份正序推进，逐年判断谁该入学/升学/是否摇号上大学——已经毕业的人自然是模拟推进
+	// 到他们毕业那年就不再变化，正在上学的人自然是推进到currentYear时还卡在某个阶段中间，
+	// 一套年份循环天然同时覆盖两种情况，见populace.md"四类人际关系生成"一节。
+	for (int year = earliestYear; year <= currentYear; year++) {
+		for (Citizen* citizen : citizens) {
+			int age = citizen->GetAge(year);
+			if (age == kElementaryStartAge) {
+				EnrollInto(citizen, EDUCATION_ELEMENTARY, year, "第");
+			}
+			else if (age == kMiddleStartAge && enrollment[citizen].count(EDUCATION_ELEMENTARY)) {
+				EnrollInto(citizen, EDUCATION_MIDDLE, year, "第");
+			}
+			else if (age == kUniversityStartAge && enrollment[citizen].count(EDUCATION_MIDDLE) &&
+				!universityRolled[citizen]) {
+				universityRolled[citizen] = true;
+				if (GetRandom(1000) / 1000.0f < kUniversityAttendanceRate) {
+					EnrollInto(citizen, EDUCATION_UNIVERSITY, year, "第");
+				}
+			}
+		}
+	}
+
+	// 每个citizen自己的EducationExperience(一对多里"一"的那一份) + 最后一次毕业年份
+	for (Citizen* citizen : citizens) {
+		int lastGraduationYear = -1;
+		for (const auto& [levelInt, schoolClass] : enrollment[citizen]) {
+			int duration = kElementaryDuration;
+			if (levelInt == EDUCATION_MIDDLE) duration = kMiddleDuration;
+			else if (levelInt == EDUCATION_UNIVERSITY) duration = kUniversityDuration;
+			int graduationYear = schoolClass->GetStartYear() + duration;
+			citizen->AddExperience(new EducationExperience(schoolClass, schoolClass->GetStartYear(), graduationYear));
+			if (graduationYear <= currentYear) {
+				lastGraduationYear = max(lastGraduationYear, graduationYear);
+			}
+		}
+		citizen->SetLastGraduationYear(lastGraduationYear);
+	}
+
+	// 同学关系——从EducationExperience派生出的一对多数据，全班互相认识。
+	for (SchoolClass* schoolClass : schoolClasses) {
+		const vector<Citizen*>& students = schoolClass->GetStudents();
+		for (size_t i = 0; i < students.size(); i++) {
+			for (size_t j = i + 1; j < students.size(); j++) {
+				students[i]->AddAcquaintance(students[j]->GetName(), RELATIONSHIP_CLASSMATE);
+				RandomizeClassmateRelation(students[i], students[j]->GetName());
+				students[j]->AddAcquaintance(students[i]->GetName(), RELATIONSHIP_CLASSMATE);
+				RandomizeClassmateRelation(students[j], students[i]->GetName());
 			}
 		}
 	}

@@ -39,6 +39,12 @@ int GetRandom(int range) {
 	return ret;
 }
 
+float GetRandomNormal(float mean, float stddev) {
+	mt19937 rng(random_device{}());
+	normal_distribution<float> dist(mean, stddev);
+	return dist(rng);
+}
+
 Time::Time() :
 	year(0),
 	month(1),

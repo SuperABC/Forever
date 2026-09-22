@@ -157,7 +157,7 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleView")), ETriggerEvent::Started, this, &AForeverCharacter::ToggleCameraView);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Started, this, &AForeverCharacter::StartSprint);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Completed, this, &AForeverCharacter::StopSprint);
-				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Test")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchControlledCitizen);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Test")), ETriggerEvent::Started, this, &AForeverCharacter::LogNearbyCitizenRelationships);
 			}
 		}
 	}
@@ -188,15 +188,9 @@ void AForeverCharacter::StopSprint()
 	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
 }
 
-void AForeverCharacter::SwitchControlledCitizen()
+void AForeverCharacter::LogNearbyCitizenRelationships()
 {
-	ACitizenElement::DebugPrintNearby(); // 调试：每次按T都把当前名单打印到屏幕，排查切换失败
-	ACitizenElement* target = ACitizenElement::GetFirstNearby();
-	if (!target || target == this) return;
-
-	if (AController* controller = GetController()) {
-		controller->Possess(target);
-	}
+	ACitizenElement::LogNearbyRelationships();
 }
 
 void AForeverCharacter::Move(const FInputActionValue& value)

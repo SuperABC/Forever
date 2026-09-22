@@ -17,26 +17,28 @@
   - 已知限制:`firstPersonCamera`没有挂到`head`socket时的兜底位置(眼高近似值)是构造函数里算一次的固定`RelativeLocation`,不会随角色姿态动态调整,先记录。
 - **Shift冲刺**(`StartSprint`/`StopSprint`,按住触发,不是切换):把`CharacterMovementComponent->MaxWalkSpeed`在`walkSpeed`(默认500)和`walkSpeed * sprintSpeedMultiplier`(倍数默认10,阶段4-1把默认3调到10——地图从10x10个Element的占位地板变成1024x1024个Element、10.24km见方的真实地形后,3倍走路速度跑到山区太慢,调大纯粹是为了实机验证效率,不是这套移动手感设计的最终数值)之间切换——冲刺速度是走路速度的倍数而不是独立的固定值,改`walkSpeed`时冲刺速度会跟着联动。
   - **没有专属冲刺动画**:`Anims/Unarmed/`目录下没有区别于Jog的Sprint动画集,所以冲刺目前只是数值变化——角色跑得更快,但`BS_Idle_Walk_Run`这个BlendSpace是按速度采样的,超出它原本给"Run"档位设定的速度上限后画面上会有一点脚下打滑感,是这套动画资产本身的限制,不是bug。10倍速度下这个打滑感会比3倍时更明显。
-- **T键切换控制的市民**(`SwitchControlledCitizen`)：定义在这个基类上，不是`ACitizenElement`
-  自己的方法——不管当前被占有的是最初的`ADefaultPawn`/`AForeverCharacter`还是某个
-  `ACitizenElement`，只要是`AForeverCharacter`的子类都自动获得同一份T键行为，不需要
-  各自重复实现。逻辑很薄：`ACitizenElement::GetFirstNearby()`取"当前被占有对象附近的市民
-  名单"（`ACitizenElement::nearbyCitizens`，由市民自己的碰撞盒`OnOverlapBegin`/
-  `OnOverlapEnd`维护，详见`Element/CitizenElement.md`）里第一个仍然有效的市民，名单为空
-  或者恰好就是自己（`target == this`，防止贴着自己的碰撞盒重复触发）时什么都不做，否则
-  `GetController()->Possess(target)`——真正的移动模式切换（`MOVE_None`→`MOVE_Walking`）
-  和Input Mapping Context的增删都在`ACitizenElement::PossessedBy`/`AForeverCharacter::
-  PossessedBy`里跟着`Possess`自动发生，这个函数本身只负责"找到目标+发起换人"。绑定在
-  `UForeverKeyBindingSubsystem`的`"Test"`动作（默认键`T`，见`Input/
-  ForeverKeyBindingSubsystem.md`）上，`ETriggerEvent::Started`触发一次。
+- **T键输出附近市民的人际关系数据**(`LogNearbyCitizenRelationships`，这次改动前叫
+  `SwitchControlledCitizen`，原来是"切换控制的市民")：定义在这个基类上，不是
+  `ACitizenElement`自己的方法——不管当前被占有的是最初的`ADefaultPawn`/
+  `AForeverCharacter`还是某个`ACitizenElement`，只要是`AForeverCharacter`的子类都自动
+  获得同一份T键行为，不需要各自重复实现。**这次不再切换玩家控制的市民**（不再调
+  `Possess`）——函数体只剩一行`ACitizenElement::LogNearbyRelationships()`，把"当前被
+  占有对象附近的市民名单"（`ACitizenElement::nearbyCitizens`，由市民自己的碰撞盒
+  `OnOverlapBegin`/`OnOverlapEnd`维护）里每一个仍然有效的市民，各自的`acquaintances`/
+  `experiences`打到log，详见`Element/CitizenElement.md`"T键：输出附近市民的人际关系
+  数据"一节。绑定在`UForeverKeyBindingSubsystem`的`"Test"`动作（默认键`T`，见`Input/
+  ForeverKeyBindingSubsystem.md`）上，`ETriggerEvent::Started`触发一次——键位/触发方式
+  不变，只是按下之后做的事完全不同了。玩家控制市民的切换现在只能由剧情脚本的
+  `ChangeControlChange`触发（见`Framework/ForeverStoryFrameworkComponent.md`）。
 - **蹲下(C键)和挥拳(左键)最终没有做**:两者都试过——挥拳方案(运行时`PlaySlotAnimationAsDynamicMontage`接现有`DefaultSlot`)本身没问题,但蹲姿要做出平滑过渡得改AnimGraph加`Blend Poses by bool`节点,操作繁琐、效果也不理想,用户决定放弃,两部分代码和阶段1额外导入的`Anims/Unarmed/Crouch/*`动画资产、`UForeverAnimInstance`类都已经移除,`ABP_Unarmed`也恢复成了原始的`AnimInstance`父类。
 
 ## 依赖关系
 - 依赖资产:`Content/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple`、`Anims/Unarmed/ABP_Unarmed`、`Content/Blueprint/Player/Input/Actions/{IA_Move,IA_Look,IA_MouseLook}`、`Content/Blueprint/Player/Input/{IMC_Default,IMC_MouseLook}`(均从旧工程拷贝而来;后两个是阶段1从`ForeverPlayerController`移过来的引用,详见`ForeverPlayerController.md`)。
 - 依赖`Input/ForeverKeyBindingSubsystem`提供的`Jump`/`ToggleView`/`Sprint`/`Test`动态`UInputAction`及其Mapping Context。
-- 依赖`Source/Forever/Element/CitizenElement.h`（`SwitchControlledCitizen`调
-  `ACitizenElement::GetFirstNearby()`）——这是`AForeverCharacter`唯一反向依赖自己子类
-  的地方，`ACitizenElement`本身继承`AForeverCharacter`，见`Element/CitizenElement.md`。
+- 依赖`Source/Forever/Element/CitizenElement.h`（`LogNearbyCitizenRelationships`调
+  `ACitizenElement::LogNearbyRelationships()`）——这是`AForeverCharacter`唯一反向依赖
+  自己子类的地方，`ACitizenElement`本身继承`AForeverCharacter`，见
+  `Element/CitizenElement.md`。
 - 被`AForeverGameMode`的`DefaultPawnClass`引用。
 
 ## 待办/后续阶段

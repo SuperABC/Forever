@@ -21,6 +21,8 @@ class Map;
 class Citizen;
 class Name;
 class Scheduler;
+class Experience;
+class SchoolClass;
 class Populace;
 
 // Society

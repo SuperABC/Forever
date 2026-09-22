@@ -235,8 +235,10 @@ true"`这种占位条目跟着凑数——`EmptyName`依然正常注册在`regis
   类型，传给每个`Scheduler`独占的`Script`——`Populace`这次第一次依赖Story域，和
   `Society`持有`ScriptFactory`引用成员是同一个先例）、`Source/Core/common/registry.h`
   （`Populace`构造函数绑定`nameFactory`/`schedulerFactory`/`scriptFactory`，见
-  `registry.md`）、`Source/Dependence/common/utility.h`（`GetRandom`/
-  `Time::DaysInMonth`）。
+  `registry.md`）、`Source/Dependence/common/utility.h`（`GetRandom`/`GetRandomNormal`/
+  `Time::DaysInMonth`）、`Source/Core/populace/experience.h`（`KinshipExperience`/
+  `EmotionExperience`/`EducationExperience`，见`experience.md`）、
+  `Source/Core/populace/school.h`（`SchoolClass`，见`school.md`）。
 - 被谁依赖：`Source/Core/map/map.h/.cpp`（`Map::Checkin(const Populace&)`读
   `GetCitizens()`）、`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有
   `Populace*`，`EnsurePopulaceGenerated()`里`new`+`Init`+`Checkin`）、`Source/Forever/
@@ -291,6 +293,88 @@ Source\Core\populace\populace.cpp:963-997`）：对所有已注册的Scheduler�
 权重都是`0.f`（`total <= 0.f`）时退化成均匀随机，保证人人都有一个Scheduler，不整体
 失败。
 
+## 四类人际关系生成（个人属性 + 亲属/同学/情感三类，同事关系见society.md）
+
+`Populace::Init()`结尾依次调用`GenerateRomanticRelations()`+`GenerateEducations()`
+（`GenerateCitizens(target)`→`AssignSchedulers()`之后）。**亲属关系
+（`GenerateKinshipRelations`，含配偶/子女/兄弟姐妹）不是独立的第三个`Init()`步骤**——
+它折在`GenerateCitizens`函数体末尾直接调用，因为它需要读模拟阶段`Human`结构里的结婚
+年份（`Human::marry`）/父母索引（`Human::father`/`mother`），这些数据物化成`Citizen`
+后就丢弃了（见"年表模拟算法"一节），只能在`females`/`males`两个数组还在作用域内、也就
+是`GenerateCitizens`函数体结束之前处理。
+
+个人属性（`Personality`）不需要额外的生成pass——`Personality`是`Citizen`的成员，构造
+`Citizen`时自动跑默认构造，`Personality::Personality()`已经在13个字段各自
+`clamp(GetRandomNormal(0, 1/3), -1, 1)`，见`citizen.md`。
+
+### 亲属关系（`GenerateKinshipRelations`，`populace.cpp`匿名namespace自由函数）
+
+配偶/子女的信息`Populace::GenerateCitizens`早就有了（`Citizen::GetSpouse()`/
+`GetChildren()`），亲属关系生成只是把这些已有链接记进`acquaintances`（随机赋
+`Relation`数值）+`KinshipExperience`：
+- **配偶**：`RELATIVE_SPOUSE`，`beginYear`是结婚年份——直接读`Human::marry`转成真实
+  年份（`2000 + marry`）带出来，**不是重新计算**（一个人一生只有一个结婚年份，这次不
+  模拟离婚/再婚）。
+- **子女**：父母一侧`RELATIVE_CHILD`，子女一侧`RELATIVE_PARENT`，`beginYear`是子女的
+  出生年份。
+- **兄弟姐妹（这次新增，老工程没有对应的`RELATIVE_TYPE`）**：按`(father index, mother
+  index)`对`females`/`males`两个模拟数组临时分组，组内两两互相标记
+  `RELATIVE_SIBLING`，`beginYear`取两人中较晚的出生年份。这份"父母是谁"的分组数据
+  只在`GenerateKinshipRelations`这一次调用里用一次，不持久化成`Citizen`的字段——和
+  "不保留父母/兄弟姐妹等其它血缘关系"这条既有决策并不矛盾：**保留的是反推出来的
+  兄弟姐妹`acquaintances`/`Experience`结果，不是"父母是谁"这条原始数据本身**。
+
+### 情感关系（`GenerateRomanticRelations`）
+
+参考老工程`GenerateEmotions`的年龄门槛/避雷思路，但方向反过来——老工程正向模拟一生，
+这次从"当前状态"反推历史：
+
+- **已婚**：结婚年份直接读`GenerateKinshipRelations()`已经写好的
+  `KinshipExperience(RELATIVE_SPOUSE)::GetBeginYear()`，不重新计算。恋爱开始年份在
+  `[max(双方满14岁年份), 结婚年份]`之间随机取，写一条`EmotionExperience`（`beginYear`
+  是恋爱开始年份，`endYear=-1`表示至今仍在一起，这次不模拟离婚——恋爱到婚姻是同一段
+  感情的连续记录，不会在结婚那年断开重写一条）。
+- **更早的恋爱史（可以有多段）**：**按年份逐年推进的编年模拟**，不是"按总跨度套公式
+  一次性算出总段数"——最初的实现用老工程`GenerateEmotions`的公式
+  `maxRelationships = min(10, 跨度/3 + 1)`一次性决定总段数，审阅时被指出这样"单身时间
+  越长（往往就是年纪越大的人）反而分配到越多段恋爱史"完全反了，改成`GeneratePastRelationships`
+  逐年遍历`[满14岁年份, boundEnd)`，每一年是否开始一段新恋情按
+  `DatingHazardForAge(当时年龄)`（见下）独立判定，年纪越大命中概率越低。时长仍然用
+  `pow(r,4)`让持续时间偏短（照抄老工程取法）。前任保留在`acquaintances`里，不因为
+  关系结束就删除。
+- **`DatingHazardForAge(age)`——按年龄递减的年度恋爱概率**：14-19岁10%、20-29岁14%、
+  30-39岁7%、40-49岁3%、50-59岁1.2%、60岁以上0.5%（具体数值实现时可调，"随年龄递减"
+  是硬要求）——不管是"更早的恋爱史"还是下面的"当前情人/婚外情"，基础概率都来自这一个
+  函数，不是各自维护互相独立的常数。
+- **当前情人（可以同时有多个，`GetCurrentLovers()`返回`vector`）**：基础概率同样是
+  `DatingHazardForAge(当前年龄)`，已婚在此基础上再乘一个大幅降低的系数
+  （`kMarriedMultiplier`，0.15）——已婚只尝试一次，不连续叠加多个婚外情人；未婚最多
+  连续尝试3次、每次不命中就停止（审阅时反馈"婚外情概率太高"，最初版本已婚固定5%、
+  未婚固定35%，和年龄无关，一起改成了这个随年龄衰减的模型）。候选对象：异性、满14岁、
+  不是近亲（查已经建好的`KinshipExperience`排除父母/子女/配偶/兄弟姐妹）、不是自己
+  已有的情人。
+- **候选查找**（`FindRomanticCandidate`）：最多尝试10次随机候选，找不到就放弃这一段/
+  这次尝试，不强行凑数。
+
+### 同学关系 + 虚拟学校/班级（`GenerateEducations`）
+
+新建的虚拟`SchoolClass`实体（见`school.md`），`Populace::schoolClasses`持有。**按年份
+正序推进的编年模拟**，不是一次性套公式分组——从每个citizen满6岁那年起、逐年判断谁该
+入学/升学/是否摇号上大学：
+- 小学(6-12岁)、中学(12-18岁)：义务教育，到年龄就100%入学。
+- 大学(18-22岁)：到18岁时摇一次硬币（50%），只摇一次，不是每年摇。
+- 分班：按`(EDUCATION_LEVEL, 入学年份)`分组，人数超过`kMaxClassSize`(35)就新开一个班。
+
+由于是正序推进，"已经毕业的人"和"正在上学的人"不需要区分成两条路径——模拟推进到某人
+毕业那年之后就不再变化（已毕业），推进到`currentYear`时人还卡在某个阶段中间就是"正在
+上学"，一套年份循环天然同时覆盖两种情况。每个citizen自己的`EducationExperience`
+（一对多里"一"的那一份）写完后，同步算出`GetLastGraduationYear()`（最后一次已完成
+阶段的毕业年份，从未上过学/仍在读为-1，供`society.md`的入职历史反推用下限）。
+
+**同学关系是全班互相认识**（班级人数几十人量级，全连接不算多）：对每个`SchoolClass`
+遍历`GetStudents()`两两互相`AddAcquaintance`，不像同事关系那样只随机抽一部分（见
+`society.md`）。
+
 ## `ApplyChange`/`FindCitizenByName`（这次重构`AForeverFrameworkActor::Tick`新增）
 
 `Populace::ApplyChange(const Change*, const ScriptContext&)`——目前没有任何Change子类是
@@ -312,9 +396,9 @@ FindOrSpawnCitizenByName`是同一个思路，一个在Core层纯查数据，一
 - 除中文（`ChineseName`）外的其它取名算法（比如英文名）——`NameMod`接口已经是通用的，
   以后要加别的语言/风格直接新增一个具体实现+在`Populace::InitNames()`里按需切换
   `CreateName`的id即可。
-- `Citizen`的父母/兄弟姐妹等亲属关系（配偶/子女除外，见上）、性格/交情、资产——见
-  `citizen.md`（职业`job`/调度`scheduler`这两项已经分别在society域、Scheduler concept
-  迁移时补上）。
+- `Citizen`的父母/兄弟姐妹"是谁"这份原始数据本身不持久化（反推出来的兄弟姐妹关系
+  结果已经保留，见上"四类人际关系生成"一节）、资产——见`citizen.md`（职业`job`/调度
+  `scheduler`/性格`Personality`/人际关系`Relation`+`Experience`这几项均已落地）。
 - `Citizen`通用的自由游走AI（没有工作驱动之外的自主移动）——有Job的市民已经能按调度
   走动，见上"Tick"一节、`Source/Forever/Element/CitizenElement.md`。
 - 老工程`Map::Checkin`房产归属分配时顺带创建`Asset`对象登记进`adults[index]->AddAsset(

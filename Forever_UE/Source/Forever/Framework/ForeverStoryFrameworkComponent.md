@@ -76,14 +76,14 @@ BroadcastGameStart`的回调是同步执行的，见`Core/story/story.md`"用回
    就发生在这时候）附近building的近处LOD（楼层/房间细节）可能还没排队建完，玩家/市民会
    先掉到还没生成细节的地面上，等建筑加载完才落地。每次切换控制权之后请求冻结世界（UE
    时间倍率归零，物理/移动全部停摆）直到所有building的LOD切换队列清空再自动恢复，见
-   `ForeverBuildingFrameworkComponent.md`"冻结世界直到LOD切换队列清空"一节——只在这条
-   `ChangeControlChange`触发的路径上做，`AForeverCharacter::SwitchControlledCitizen`
-   （T键手动切换）不受影响。
+   `ForeverBuildingFrameworkComponent.md`"冻结世界直到LOD切换队列清空"一节。
 
-这条路径和`AForeverCharacter::SwitchControlledCitizen`（T键）最终都是调用某个
-`AController::Possess(ACitizenElement*)`，但触发方式不同：T键由玩家主动触发、目标是"附近
-随便一个市民"；`ChangeControlChange`由剧情脚本触发、目标是"剧情指定姓名的市民"（这次的
-`test.json`配合`EmptyScript::WrapScript`，用的是"随机挑一个citizen"，见
+**T键这次改成不再切换控制权**（原来`AForeverCharacter::SwitchControlledCitizen`会
+`Possess`附近随便一个市民，现在改名`LogNearbyCitizenRelationships`，只把附近市民的
+`acquaintances`/`experiences`打到log，见`Player/ForeverCharacter.md`/
+`Element/CitizenElement.md`"T键：输出附近市民的人际关系数据"一节）——玩家控制市民的
+切换目前**只有这一条`ChangeControlChange`路径**，由剧情脚本触发、目标是"剧情指定姓名
+的市民"（这次的`test.json`配合`EmptyScript::WrapScript`，用的是"随机挑一个citizen"，见
 `Dependence/story/script_mod.md`"典型用法"一节）。
 
 ## 依赖关系

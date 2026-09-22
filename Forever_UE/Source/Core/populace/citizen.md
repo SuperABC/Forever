@@ -65,6 +65,48 @@
   `new`出来，存进`Populace::citizens`，`~Populace()`统一`delete`——`Citizen`自己没有
   factory/工厂查表机制（和`Room`不需要独立"factory查表创建"入口是同一个理由：不参与任何
   "地块竞争"式的顶层concept注册）。
+- **`Personality`/`Relation`的具体实现（补齐历史遗留的空实现）**：`citizen.h`早先某次
+  提交只添加了`Personality`/`Relation`两个struct+`RELATION_TYPE`枚举的声明和
+  `Citizen::acquaintances`/`AddAcquaintance`等方法，但没有任何`.cpp`补上
+  `Personality::Personality()`/`Relation::Relation()`/两者的`operator[]`/`operator()`/
+  `GetFieldName()`——这次连同四类人际关系生成一起补齐：`Personality`13个字段各自
+  `clamp(GetRandomNormal(0, 1/3), -1, 1)`（正态分布，标准差1/3让±1边界大致对应3σ）；
+  `Relation`6个字段仍然全部初始化为0（原文档注释就是这么写的）。`GetRandomNormal`是这次
+  新增在`Source/Dependence/common/utility.h/.cpp`的正态分布随机数helper，和已有的
+  `GetRandom(int)`同一个"每次调用现场构造引擎"风格。
+- **`Relation`新增`category`字段（`RELATIONSHIP_CATEGORY`，标记这两个人是四类关系里的
+  哪一种，审阅时追加的需求）**：不再有无参默认构造，`Relation(RELATIONSHIP_CATEGORY)`
+  必须在创建时就指定类别；`Citizen::AddAcquaintance`签名相应改成
+  `AddAcquaintance(name, category)`，内部用`acquaintances.insert_or_assign(name,
+  Relation(category))`而不是`operator[]`（`Relation`不再可默认构造，`operator[]`
+  在key不存在时的"先默认构造再赋值"语义编译不过）。**配偶标记`RELATIONSHIP_KINSHIP`
+  （亲属），不是`RELATIONSHIP_ROMANTIC`**——情感类别专指恋人/情人，婚姻关系本身归亲属
+  （对应的恋爱阶段仍然在`experiences`里有一条`EmotionExperience`，但那是历史记录，不
+  影响`acquaintances`这条的`category`），`Populace::GenerateRomanticRelations()`给
+  配偶调`RandomizeRomanticRelation`时只改6个float值、不重新`AddAcquaintance`，
+  `category`因此保持`GenerateKinshipRelations()`最初设的`RELATIONSHIP_KINSHIP`不变。
+  `category`没有做"多类别取交集/优先级"处理——如果两个citizen同时符合多种关系（比如
+  正好是兄弟姐妹又是同班同学），谁的生成pass后调用`AddAcquaintance`就以谁的类别为准
+  （`insert_or_assign`直接覆盖），这是当前的已知简化，不是bug。
+- **四类人际关系（亲属/同学/同事/情感）+ `Experience`体系（新增）**：`Citizen`新增
+  `experiences`（`vector<Experience*>`，取得所有权，`~Citizen()`统一delete）+
+  `GetExperiences`/`AddExperience`，和`acquaintances`（关系强度dial）建立对应关系——
+  但不是"一对一"：亲属(`KinshipExperience`)/情感(`EmotionExperience`)各自指向一个具体
+  `other`，一条对应一条`acquaintances`；同学(`EducationExperience`)/同事
+  (`JobExperience`)是"一对多"，一条`Experience`表达"我自己"参与的一段经历（在某个班/
+  组织待过），不指向具体某个人，班上/组织里其他人的`acquaintances`由
+  `Populace::GenerateEducations()`/`Society::GenerateEmploymentHistory()`另外派生。
+  详见新增的`experience.md`。另新增`GetAcquaintances()`（返回整张
+  `unordered_map<string, Relation>`，此前只有按姓名查询/写入的几个方法，没有整表遍历
+  接口）——供`Source/Forever/Element/CitizenElement.md`"T键：输出附近市民的人际关系
+  数据"一节的调试日志用，正常游戏逻辑不需要整表遍历，按姓名查询即可。新增两个查询：
+  `GetCurrentLovers()`（当前情人，可以同时有
+  多个——对`experiences`的派生查询，不是独立字段：找所有`RELATIONSHIP_ROMANTIC`类别、
+  `IsOngoing()`为true、且`GetOther()`不是当前配偶的`EmotionExperience`）；
+  `GetLastGraduationYear()`/`SetLastGraduationYear()`（独立存储字段，不是派生查询——
+  这是citizen自己的求学阶段事实，不是和某个具体他人的关系；`Society::
+  GenerateEmploymentHistory()`用它给入职年份定下限）。四类关系的具体生成算法见
+  `populace.md`"四类人际关系生成"一节和`Source/Core/society/society.md`。
 
 ## 依赖关系
 
@@ -82,10 +124,12 @@
 
 ## 待办/后续阶段
 
-- 父母/兄弟姐妹等其它血缘关系（配偶/子女已迁移）、性格/交情、资产——依赖还没迁移的
-  Industry域（资产）或者本来就没有消费方（父母/兄弟姐妹/性格/交情），等对应域迁移到了
-  再回来加，见`populace.md`"不在这次范围内"一节。职业（`job`）/调度（`scheduler`）
-  这两项已经分别在society域、Scheduler concept迁移时补上。
+- 父母/兄弟姐妹链接本身仍然不持久化在`Citizen`上（`GenerateKinshipRelations`只在
+  `Populace::GenerateCitizens`函数体内、`Human`数组还在作用域内时用来反推兄弟姐妹
+  `acquaintances`/`KinshipExperience`，之后即丢弃）——需要查"某人父母是谁"仍然没有
+  消费方，见`populace.md`。资产——依赖还没迁移的Industry域，等对应域迁移到了再回来加。
+  职业（`job`）/调度（`scheduler`）/性格与人际关系（`Personality`/`Relation`/
+  `experiences`）均已落地。
 - 通用的自由游走AI——进入society域后，有Job的市民已经能按调度（上下班）走动/寻路（见
   `job.md`/`Source/Forever/Element/CitizenElement.md`"WalkTo"一节），但没有Job、或者
   Job没有产生调度的市民仍然是"站在分配到的房间里的固定点"，没有工作驱动之外的自主移动。

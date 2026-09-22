@@ -4,6 +4,7 @@
 #include "society/job.h"
 #include "map/component.h"
 #include "populace/citizen.h"
+#include "populace/experience.h"
 #include "common/registry.h"
 
 #include <algorithm>
@@ -13,6 +14,17 @@ using namespace std;
 
 namespace {
 	constexpr int kMinAdultAge = 18;
+
+	// 同事关系Relation随机初始化——familiarity/trust中等，competing比同学/亲属更高一些，
+	// 体现职场竞争，数值量级参考，实现后可再调。
+	void RandomizeColleagueRelation(Citizen* citizen, const string& otherName) {
+		citizen->SetAcquaintanceValue(otherName, RELATION_FAMILIARITY, clamp(GetRandomNormal(0.5f, 0.2f), 0.0f, 1.0f));
+		citizen->SetAcquaintanceValue(otherName, RELATION_RESPECT, clamp(GetRandomNormal(0.5f, 0.2f), 0.0f, 1.0f));
+		citizen->SetAcquaintanceValue(otherName, RELATION_FAVOUR, clamp(GetRandomNormal(0.45f, 0.2f), 0.0f, 1.0f));
+		citizen->SetAcquaintanceValue(otherName, RELATION_TRUST, clamp(GetRandomNormal(0.5f, 0.2f), 0.0f, 1.0f));
+		citizen->SetAcquaintanceValue(otherName, RELATION_COMPETING, clamp(GetRandomNormal(0.5f, 0.2f), 0.0f, 1.0f));
+		citizen->SetAcquaintanceValue(otherName, RELATION_RELIABILITY, clamp(GetRandomNormal(0.5f, 0.2f), 0.0f, 1.0f));
+	}
 }
 
 Society::Society() :
@@ -164,3 +176,103 @@ void Society::ApplyChange(const Change* change, const ScriptContext& context) {
 }
 
 const vector<Organization*>& Society::GetOrganizations() const { return organizations; }
+
+void Society::GenerateEmploymentHistory(const vector<Citizen*>& citizens, int currentYear) {
+	constexpr int kHireEventChancePercent = 15; // 对应平均约6-7年一任
+	constexpr int kColleagueChancePercent = 40;
+
+	// 空闲成年人池：没有当前工作、年满18岁的citizen，随着链条往回推逐步摘取。
+	vector<Citizen*> idlePool;
+	for (Citizen* citizen : citizens) {
+		if (citizen && !citizen->GetJob() && citizen->GetAge(currentYear) >= kMinAdultAge) {
+			idlePool.push_back(citizen);
+		}
+	}
+
+	auto EarliestHire = [](Citizen* citizen) {
+		int graduation = citizen->GetLastGraduationYear();
+		int adultYear = citizen->GetBirthYear() + kMinAdultAge;
+		return graduation >= 0 ? max(adultYear, graduation) : adultYear;
+	};
+
+	// 每个当前有人在职的Job维护一条"待定链条"：链条头是目前认为占着这个职位的citizen，
+	// knownSinceYear是"这个人干到哪一年"（-1表示至今仍在干，即当前在职者本人）。
+	struct PendingChain {
+		Organization* org;
+		Citizen* occupant;
+		int knownSinceYear;
+	};
+	vector<PendingChain> pending;
+	int floorYear = currentYear;
+	for (Organization* organization : organizations) {
+		for (Job* job : organization->GetJobs()) {
+			if (!job || !job->GetOccupant()) continue;
+			Citizen* occupant = job->GetOccupant();
+			pending.push_back({ organization, occupant, -1 });
+			floorYear = min(floorYear, EarliestHire(occupant));
+		}
+	}
+
+	// 逐年往回推，每年对每条链条做一次概率判定："这位是不是恰好这一年入职的"——命中就
+	// 写一条JobExperience、从空闲成年人池里挑一个前任接上链条继续往回推；没命中就把年份
+	// 继续往前推一年、下次再判定同一个人。链条终止于"推到硬下限"或"空闲成年人池耗尽"。
+	for (int year = currentYear; !pending.empty() && year >= floorYear; year--) {
+		for (size_t i = 0; i < pending.size(); ) {
+			PendingChain& chain = pending[i];
+			int earliestHire = EarliestHire(chain.occupant);
+			bool finalize = (year <= earliestHire) || (GetRandom(100) < kHireEventChancePercent);
+
+			if (!finalize) { i++; continue; }
+
+			int hireYear = max(year, earliestHire);
+			chain.occupant->AddExperience(new JobExperience(chain.org, hireYear, chain.knownSinceYear));
+
+			if (hireYear <= earliestHire) {
+				pending.erase(pending.begin() + i);
+				continue;
+			}
+
+			// 从idlePool挑一个前任：要求在接任前一年就已年满18岁。
+			int candidateIdx = -1;
+			for (int attempt = 0; attempt < 10 && !idlePool.empty(); attempt++) {
+				int idx = GetRandom(static_cast<int>(idlePool.size()));
+				if (idlePool[idx]->GetAge(hireYear - 1) >= kMinAdultAge) { candidateIdx = idx; break; }
+			}
+
+			if (candidateIdx >= 0) {
+				Citizen* predecessor = idlePool[candidateIdx];
+				idlePool.erase(idlePool.begin() + candidateIdx);
+				chain.occupant = predecessor;
+				chain.knownSinceYear = hireYear;
+				i++;
+			}
+			else {
+				pending.erase(pending.begin() + i);
+			}
+		}
+	}
+	// 循环结束后pending里剩下的（因为floorYear下限，理论上不会剩太多）：兜底按各自当前
+	// occupant的earliestHire收尾。
+	for (PendingChain& chain : pending) {
+		int earliestHire = EarliestHire(chain.occupant);
+		chain.occupant->AddExperience(new JobExperience(chain.org, earliestHire, chain.knownSinceYear));
+	}
+
+	// 同事关系——从上面"一"的JobExperience派生出"多"：当前在职者两两随机互认，不是全组织
+	// 都互相认识。
+	for (Organization* organization : organizations) {
+		vector<Citizen*> occupants;
+		for (Job* job : organization->GetJobs()) {
+			if (job && job->GetOccupant()) occupants.push_back(job->GetOccupant());
+		}
+		for (size_t i = 0; i < occupants.size(); i++) {
+			for (size_t j = i + 1; j < occupants.size(); j++) {
+				if (GetRandom(100) >= kColleagueChancePercent) continue;
+				occupants[i]->AddAcquaintance(occupants[j]->GetName(), RELATIONSHIP_COLLEAGUE);
+				RandomizeColleagueRelation(occupants[i], occupants[j]->GetName());
+				occupants[j]->AddAcquaintance(occupants[i]->GetName(), RELATIONSHIP_COLLEAGUE);
+				RandomizeColleagueRelation(occupants[j], occupants[i]->GetName());
+			}
+		}
+	}
+}

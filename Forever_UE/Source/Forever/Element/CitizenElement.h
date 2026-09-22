@@ -18,8 +18,10 @@ class UForeverPopulaceFrameworkComponent;
 // ACitizenElement按玩家距离由UForeverPopulaceFrameworkComponent::TickComponent流式
 // SpawnActor/Destroy，不常驻，详见Source/Forever/Element/CitizenElement.md。
 //
-// 基类是AForeverCharacter，不是纯ACharacter——市民要能被玩家真正占有操控（走近后按T切换，
-// 见GetFirstNearby），AForeverCharacter已经有摄像机/移动/Enhanced
+// 基类是AForeverCharacter，不是纯ACharacter——市民要能被玩家真正占有操控（由剧情脚本
+// 触发的ChangeControlChange切换，见ForeverStoryFrameworkComponent.md；T键这次改成只
+// 输出附近市民关系数据到log，不再做Possess切换，见LogNearbyRelationships），
+// AForeverCharacter已经有摄像机/移动/Enhanced
 // Input绑定+PossessedBy/UnPossessed这一整套东西，直接继承复用，不需要另起一套。这次仍然
 // 默认不能移动（CharacterMovementComponent这次显式设成MOVE_None，见.cpp构造函数），只有
 // 被占有时才切换成MOVE_Walking（见PossessedBy覆写）。
@@ -48,14 +50,12 @@ public:
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void UnPossessed() override;
 
-	// 返回"当前被占有对象附近的市民名单"里第一个仍然有效的市民（顺带清理已失效的弱引用），
-	// 名单为空则返回nullptr——供AForeverCharacter::SwitchControlledCitizen（T键）使用。
-	static ACitizenElement* GetFirstNearby();
-
-	// 调试用：把nearbyCitizens当前的完整内容（含下标、每个人的姓名，失效弱引用标"已失效"，
-	// 不做清理）打印到屏幕左上角——排查"按T有时候切换失败"具体每次名单里是什么状况。
-	// AForeverCharacter::SwitchControlledCitizen每次按T都调用一次。
-	static void DebugPrintNearby();
+	// T键(Test动作)：把"当前被占有对象附近的市民名单"(nearbyCitizens)里每一个仍然有效的
+	// 市民，各自的acquaintances(熟人关系强度)+experiences(四类人际关系历史记录)完整输出到
+	// log(UE_LOG，不是屏幕调试消息)——T键这次不再切换玩家控制的市民，见CitizenElement.md
+	// "T键：输出附近市民的人际关系数据"一节。AForeverCharacter::LogNearbyCitizenRelationships
+	// 每次按T都调用一次。
+	static void LogNearbyRelationships();
 
 	// 沿一串世界坐标路径点真正走过去（Job按调度产出NPCNavigateChange时，
 	// UForeverPopulaceFrameworkComponent::RequestWalk发现这个citizen当前有对应Actor就调

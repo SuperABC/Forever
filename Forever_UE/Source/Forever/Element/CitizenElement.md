@@ -67,21 +67,35 @@ virtual void UnPossessed() override;                            // 先切回MOVE
 `ADefaultPawn`/`AForeverCharacter`还是某个`ACitizenElement`，输入映射的增删逻辑只有一份，
 见`[[memory:possession_driven_input_context]]`。
 
-### `nearbyCitizens`/`GetFirstNearby`：T键要切给谁，由碰撞盒名单决定
+### `nearbyCitizens`：T键要打印谁的关系数据，由碰撞盒名单决定
 
 `ACitizenElement`维护一个**静态**列表`nearbyCitizens`（`TArray<TWeakObjectPtr<
 ACitizenElement>>`），记录"当前被占有对象（玩家的`ADefaultPawn`/`AForeverCharacter`，也
 可能是另一个citizen）附近的市民"——`OnOverlapBegin`/`OnOverlapEnd`在原有"打印接近/离开
 提示"逻辑之外，分别`AddUnique`/`RemoveSingle`维护这份名单。之所以是**静态**成员而不是每个
-`ACitizenElement`各自的实例状态：T键处理逻辑（`AForeverCharacter::SwitchControlledCitizen`
-）定义在基类上，不知道当前被占有的具体是哪个子类实例，只能通过一个全局可查的静态入口去
-问"附近有没有市民"；用`TWeakObjectPtr`而不是裸指针是因为市民会被
-`UForeverPopulaceFrameworkComponent`按距离动态`Destroy()`，名单里的引用必须能安全感知这种
-失效。
+`ACitizenElement`各自的实例状态：T键处理逻辑（`AForeverCharacter::
+LogNearbyCitizenRelationships`）定义在基类上，不知道当前被占有的具体是哪个子类实例，
+只能通过一个全局可查的静态入口去问"附近有没有市民"；用`TWeakObjectPtr`而不是裸指针是
+因为市民会被`UForeverPopulaceFrameworkComponent`按距离动态`Destroy()`，名单里的引用
+必须能安全感知这种失效。
 
-`GetFirstNearby()`返回名单里第一个仍然有效的市民（顺带清理已失效的弱引用），名单为空则
-返回`nullptr`；不做"离玩家最近"这类排序，取的就是名单下标0——这是当前阶段的简化实现，
-够用（一次只会有少量市民同时触发这个碰撞盒），排序留到后续真的需要"选最近的那个"时再加。
+### T键：输出附近市民的人际关系数据
+
+`ACitizenElement::LogNearbyRelationships()`——**这次改成不再切换玩家控制的市民**（原来
+是`GetFirstNearby()`取名单下标0那个、`Possess`过去，见下"已废弃"一节），改成遍历
+`nearbyCitizens`**全部**仍然有效的条目，对每个人调`Citizen::GetAcquaintances()`/
+`GetExperiences()`，把熟人关系强度（6个`RELATION_TYPE`字段）+四类人际关系历史记录
+（按`Experience::GetCategory()`分派到对应派生类，拼出"[亲属]/[情感]/[同学]/[同事] ...
+起止年份"这样的一行描述，见`experience.md`"一对一"/"一对多"两种派生类的区别）通过
+`UE_LOG(LogTemp, Log, ...)`打进log（不是屏幕调试消息——这批数据量可能比较大，一次T键
+按下可能要打印好几个人、每人几十条acquaintances/experiences，屏幕消息装不下，也不需要
+实时可见，事后翻`Saved/Logs/Forever.log`查即可）。`Citizen`新增了
+`GetAcquaintances()`（返回整张`unordered_map<string, Relation>`，此前只有按姓名查询的
+接口）供这里整表遍历用，见`citizen.md`。
+
+**已废弃**：`GetFirstNearby()`（返回名单下标0那个有效市民）、`DebugPrintNearby()`
+（把名单摘要打到屏幕左上角，排查"按T切换失败"用）——两者都只服务于"T键切换控制"这个
+已经不存在的行为，随这次改动一起删除，不保留死代码。
 
 ### 占位资产：`SKM_Manny_Simple`
 
@@ -222,12 +236,17 @@ Core状态已经"到家"了，但这个可见的Actor完全没人碰过，会一
   `Source/Core/populace/citizen.h`（`Citizen`）、`map/building.h`/`map/room.h`
   （Core侧数据）、`Components/SkeletalMeshComponent.h`（占位mesh）、
   `Components/BoxComponent.h`（碰撞盒）、`Kismet/GameplayStatics.h`
-  （`GetPlayerPawn`）、`Engine/Engine.h`（`GEngine->AddOnScreenDebugMessage`）。
+  （`GetPlayerPawn`）、`Engine/Engine.h`（`GEngine->AddOnScreenDebugMessage`，接近/
+  离开提示用）、`Source/Core/populace/experience.h`/`school.h`、
+  `Source/Core/society/organization.h`（`LogNearbyRelationships`按`Experience`
+  类别分派打印用，见上"T键：输出附近市民的人际关系数据"一节）。
 - 被谁依赖：`UForeverPopulaceFrameworkComponent::TickComponent`/
   `FindOrSpawnCitizenByName`（`SpawnActor<ACitizenElement>()`+`Init()`+`Destroy()`）、
-  `AForeverCharacter::SwitchControlledCitizen`（T键，读`GetFirstNearby()`）、
+  `AForeverCharacter::LogNearbyCitizenRelationships`（T键，调
+  `ACitizenElement::LogNearbyRelationships()`）、
   `UForeverStoryFrameworkComponent::ApplyControlChange`（剧情`change_control`指定切换
-  控制权，间接通过`FindOrSpawnCitizenByName`拿到`ACitizenElement*`后`Possess`）。
+  控制权，间接通过`FindOrSpawnCitizenByName`拿到`ACitizenElement*`后`Possess`——T键这次
+  不再走这条路径，`Possess`目前只由剧情脚本触发）。
 
 ## 待办/后续阶段
 
@@ -237,5 +256,5 @@ Core状态已经"到家"了，但这个可见的Actor完全没人碰过，会一
 - 真实资产替换`SKM_Manny_Simple`占位。
 - 靠近检测碰撞盒尺寸（`CITIZEN_PROXIMITY_HALF_XY`/`_Z`）是按经验给的初始值，可能需要按
   真实资产的实际比例微调。
-- `GetFirstNearby()`目前不做排序，直接取名单下标0；`nearbyCitizens`名单里出现多个市民时
-  T键永远切给最早进入范围的那个，不是离玩家最近的那个，后续如有需要可以按距离排序。
+- `LogNearbyRelationships()`按`nearbyCitizens`原有顺序（进入范围的先后）遍历打印，不做
+  "离玩家最近排前面"这类排序，后续如有需要可以加。

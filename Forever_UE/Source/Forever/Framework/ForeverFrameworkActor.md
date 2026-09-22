@@ -67,7 +67,10 @@ domain组件——它是Terrain/Zone/Building/Roadnet等多个域组件将来会
     直接返回，否则`new Society()`+`society->Init(map->GetAllComponents())`（按地图里
     所有Component加权随机分配Organization，每个Organization自己遍历claimed
     components设计Job）+`society->RecruitCitizens(populace->GetCitizens(),
-    populace->GetCurrentYear())`（把成年市民随机匹配到还空缺的Job上）。假定`map`/
+    populace->GetCurrentYear())`（把成年市民随机匹配到还空缺的Job上）+
+    `society->GenerateEmploymentHistory(populace->GetCitizens(),
+    populace->GetCurrentYear())`（四类人际关系生成之一：入职历史反推+同事关系，见
+    `Core/society/society.md`"四类人际关系生成：同事关系"一节）。假定`map`/
     `populace`都已经生成好，靠`BeginPlay()`里的调用顺序保证，自己不会去调
     `EnsureMapGenerated()`/`EnsurePopulaceGenerated()`，见`Core/society/society.md`。
   - **`EnsureIndustryGenerated()`/`EnsureTrafficGenerated()`（阶段4 Story落地新增）**：

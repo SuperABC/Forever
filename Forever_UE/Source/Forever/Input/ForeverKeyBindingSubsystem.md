@@ -13,7 +13,7 @@
 ## 依赖关系
 - 依赖:`Forever_UE/Resource/Config/KeyBindings.ini`(找不到该文件时全部用硬编码默认值,不报错)。
 - 被谁依赖:`AForeverCharacter::PossessedBy`(取`GetBindingContext()`加入Enhanced Input子系统——阶段1后期核对`MainCharacter`蓝图dump后,输入映射的增删从Controller挪到了被占有的Character上,详见`Player/ForeverCharacter.md`,`AForeverPlayerController`现在不碰这个子系统)、`AForeverCharacter::SetupPlayerInputComponent`(取`GetAction(TEXT("Jump"))`/`GetAction(TEXT("ToggleView"))`/`GetAction(TEXT("Sprint"))`/`GetAction(TEXT("Test"))`绑定具体处理函数)。
-- Mod可扩展点:当前"可绑定动作"注册表(`GetBindingDefinitions()`)是硬编码在本类里的静态列表(目前有`Jump`/`ToggleView`/`Sprint`/`Test`四项,`Test`默认键`T`,阶段4接入`AForeverCharacter::SwitchControlledCitizen`——"切换附近市民"这个功能本身和"数字键测试"无关,借用这个命名单纯是因为当前阶段还没有一个更贴切的分类,后续若正式定型建议改名为更能反映语义的动作名,如`SwitchCitizen`),后续阶段若有新的数字按键动作,在这里加一条`{名字, 默认键}`即可,不需要改配置文件解析逻辑。
+- Mod可扩展点:当前"可绑定动作"注册表(`GetBindingDefinitions()`)是硬编码在本类里的静态列表(目前有`Jump`/`ToggleView`/`Sprint`/`Test`四项,`Test`默认键`T`,阶段4接入`AForeverCharacter::SwitchControlledCitizen`(切换附近市民),这次改成`AForeverCharacter::LogNearbyCitizenRelationships`(输出附近市民的人际关系数据到log,不再切换控制,见`Player/ForeverCharacter.md`)——两版功能都和"数字键测试"无关,借用`Test`这个命名单纯是因为当前阶段还没有一个更贴切的分类,后续若正式定型建议改名为更能反映语义的动作名,如`InspectNearbyCitizen`),后续阶段若有新的数字按键动作,在这里加一条`{名字, 默认键}`即可,不需要改配置文件解析逻辑。
 
 ## 待办/后续阶段
 - 若后续阶段(交互式设置UI)需要让玩家在游戏内改键并持久化,需要在这个类基础上加"运行时改键+写回配置文件"的能力,当前只有"启动时读取一次"。

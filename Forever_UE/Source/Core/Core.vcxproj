@@ -100,6 +100,8 @@
     <ClCompile Include="populace\citizen.cpp" />
     <ClCompile Include="populace\name.cpp" />
     <ClCompile Include="populace\scheduler.cpp" />
+    <ClCompile Include="populace\experience.cpp" />
+    <ClCompile Include="populace\school.cpp" />
     <ClCompile Include="populace\populace.cpp" />
     <ClCompile Include="story\milestone.cpp" />
     <ClCompile Include="story\script.cpp" />
@@ -127,6 +129,8 @@
     <ClInclude Include="populace\citizen.h" />
     <ClInclude Include="populace\name.h" />
     <ClInclude Include="populace\scheduler.h" />
+    <ClInclude Include="populace\experience.h" />
+    <ClInclude Include="populace\school.h" />
     <ClInclude Include="populace\populace.h" />
     <ClInclude Include="story\milestone.h" />
     <ClInclude Include="story\script.h" />

@@ -346,6 +346,10 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 	society = new Society();
 	society->Init(map->GetAllComponents());
 	society->RecruitCitizens(populace->GetCitizens(), populace->GetCurrentYear());
+	// 入职历史反推 + 同事关系——依赖RecruitCitizens()已经把当前在职citizen分配进Job，
+	// 也依赖Citizen::GetLastGraduationYear()（Populace::Init()里GenerateEducations()
+	// 已经算好），见society.md"四类人际关系生成"一节。
+	society->GenerateEmploymentHistory(populace->GetCitizens(), populace->GetCurrentYear());
 }
 
 void AForeverFrameworkActor::EnsurePlayerGenerated()

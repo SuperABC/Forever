@@ -1,9 +1,11 @@
 #pragma once
 
 #include "class.h"
+#include "populace/experience.h" // RELATIONSHIP_CATEGORY——Relation::category字段用
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 
 // 照抄老工程Person(E:\Projects\Forever_UE\Source\Core\populace\person.h)的GENDER_TYPE，
@@ -97,8 +99,14 @@ struct Personality {
 
 // 人际关系
 struct Relation {
-	// 构造人际关系，各项属性初始化为0
-	Relation();
+	// 构造人际关系，各项属性初始化为0。category标记这两个人是四类关系（亲属/同学/同事/
+	// 情感）里的哪一种——同一个RELATIONSHIP_CATEGORY枚举，见experience.h。配偶标记成
+	// RELATIONSHIP_KINSHIP（亲属），不是RELATIONSHIP_ROMANTIC——情感类别专指恋人/情人，
+	// 婚姻关系本身归亲属（对应的恋爱阶段仍然会生成一条EmotionExperience，但那是
+	// experiences列表里的历史记录，不影响这里的category），见populace.md"四类人际关系
+	// 生成"一节。没有无参默认构造——category必须在创建时就明确指定，不存在"还不知道
+	// 这是什么关系"的中间状态。
+	Relation(RELATIONSHIP_CATEGORY category);
 
 	// 按类型访问关系字段（可写）
 	float& operator[](RELATION_TYPE type);
@@ -114,6 +122,9 @@ struct Relation {
 
 	// 获取关系类型对应的脚本变量名
 	static std::string GetFieldName(RELATION_TYPE type);
+
+	// 这两个人是四类关系里的哪一种——创建后不再改变。
+	RELATIONSHIP_CATEGORY category;
 
 	// 熟悉程度
 	float familiarity;
@@ -174,10 +185,32 @@ public:
 	const Personality& GetPersonality() const;
 	void SetPersonalityValue(PERSONALITY_TYPE type, float value);
 	void AdjustPersonalityValue(PERSONALITY_TYPE type, float delta);
-	void AddAcquaintance(const std::string& name);
+	void AddAcquaintance(const std::string& name, RELATIONSHIP_CATEGORY category);
 	const Relation& GetAcquaintance(const std::string& name) const;
 	void SetAcquaintanceValue(const std::string& name, RELATION_TYPE type, float value);
 	void AdjustAcquaintanceValue(const std::string& name, RELATION_TYPE type, float delta);
+
+	// 熟人列表整表——供调试/日志用途遍历全部acquaintances（比如T键打印附近市民关系数据，
+	// 见CitizenElement.md），正常游戏逻辑按姓名查询用上面几个方法即可，不需要整表遍历。
+	const std::unordered_map<std::string, Relation>& GetAcquaintances() const;
+
+	// 四类人际关系(亲属/同学/同事/情感)的可追溯历史记录，和acquaintances对应——见
+	// experience.h、populace.md"四类人际关系生成"一节。取得Experience的所有权，
+	// ~Citizen()统一delete。
+	const std::vector<Experience*>& GetExperiences() const;
+	void AddExperience(Experience* experience);
+
+	// 当前情人(可以同时有多个)——对experiences的派生查询，不是独立存储字段：找所有
+	// category是RELATIONSHIP_ROMANTIC、IsOngoing()为true、且GetOther()不是当前配偶的
+	// EmotionExperience，收集其GetOther()。
+	std::vector<Citizen*> GetCurrentLovers() const;
+
+	// 这个人自己的求学阶段——最后一次毕业的年份，从未上过学/仍在读时返回-1。独立存储
+	// 字段(不是experiences的派生查询)：这是citizen自己的事实性数据，不是和某个具体他人
+	// 的关系，见populace.md同一节"关键设计决策"。Society::GenerateEmploymentHistory()
+	// 用它给入职年份定下限。
+	int GetLastGraduationYear() const;
+	void SetLastGraduationYear(int year);
 
 	// 所在lot/园区/建筑/房间——这是"家"(tenancy)，Map::Checkin()分配住处时一次性设好，
 	// 这次没有"搬家"逻辑，不需要单独的SetStatus级联清空(老工程那套是给"人可能在
@@ -236,6 +269,8 @@ private:
 
 	Personality personality;
 	std::unordered_map<std::string, Relation> acquaintances;
+	std::vector<Experience*> experiences;
+	int lastGraduationYear = -1;
 
 	Lot* lot = nullptr;
 	Zone* zone = nullptr;

@@ -34,6 +34,13 @@ public:
 	// 阶段2：把成年(GetAge(currentYear)>=18)且还没有job的市民随机匹配到还空缺的Job上。
 	void RecruitCitizens(const std::vector<Citizen*>& citizens, int currentYear);
 
+	// 阶段3：RecruitCitizens()之后调用——(1)给每个当前在职者逐年往回推、递归到底地反推
+	// 入职历史(JobExperience，一对多里"一"的那一份，见experience.h)，从空闲成年人池里
+	// 动态摘取前任，直到推到"满18岁/最后一次毕业年份"这个硬下限或空闲成年人池耗尽为止；
+	// (2)从这份"一"派生出同事acquaintances(同组织在职者随机抽一部分互相认识)，见
+	// society.md"四类人际关系生成"一节。
+	void GenerateEmploymentHistory(const std::vector<Citizen*>& citizens, int currentYear);
+
 	// 每帧：Organization自己的DailyPlan/ExecNode调度(和Populace::Tick驱动Job那一份
 	// 完全独立的timer)。ExecNode是纯C++通道，直接给Change*。@post透传给
 	// Organization::DailyPlan/ExecNode，见populace.h同名参数的说明。

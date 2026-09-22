@@ -90,6 +90,15 @@ void debugf(const char* format, ...);
 */
 int GetRandom(int range);
 
+/*
+* 获取正态分布随机浮点数——和GetRandom(int)同样风格，每次调用现场构造引擎，不做
+* 静态/线程局部优化
+* @mean: 均值
+* @stddev: 标准差
+* @return: 正态分布随机数
+*/
+float GetRandomNormal(float mean, float stddev);
+
 class Time {
 public:
 
