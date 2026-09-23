@@ -35,8 +35,9 @@ public class Forever : ModuleRules
 			Path.Combine(ModuleDirectory, "..", "Core", "common"),
 		});
 
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
+		// SectionSpeakingWidget::NativeOnKeyDown直接用到FReply/FKeyEvent（Slate类型，UMG只是
+		// 转发/包了一层，不导出符号本身），不链SlateCore会在链接期报FReply构造函数缺符号。
+		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");

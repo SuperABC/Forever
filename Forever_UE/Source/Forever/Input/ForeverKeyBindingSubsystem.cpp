@@ -23,6 +23,10 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("MeetOptionUp"), EKeys::MouseScrollUp },
 		{ TEXT("MeetOptionDown"), EKeys::MouseScrollDown },
 		{ TEXT("MeetOptionSelect"), EKeys::F },
+		// 剧情对话SectionSpeaking的空格键推进不走这里——UForeverStoryFrameworkComponent::
+		// ShowCurrentItem在对话展示期间把输入模式切成UIOnly，Pawn的Enhanced Input完全收不到
+		// 输入，空格键改成SectionSpeaking自己的NativeOnKeyDown原生响应，见
+		// USectionSpeakingWidget.h类注释。
 	};
 	return definitions;
 }

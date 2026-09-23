@@ -79,6 +79,7 @@ protected:
 	void MeetOptionFocusDown();
 	void MeetOptionSelect();
 
+
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	float walkSpeed = 500.f;
 

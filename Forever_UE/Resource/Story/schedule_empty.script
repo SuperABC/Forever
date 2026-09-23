@@ -19,7 +19,27 @@
             "description": "",
             "goal": "",
             "changes": [],
-            "dialogs": [ { "list": [ { "speaker": "", "content": "成功", "label": "", "voice": "" } ] } ],
+            "dialogs": [
+                {
+                    "list": [
+                        { "speaker": "$$self.name", "content": "你确定要测试吗？", "label": "", "voice": "" },
+                        [
+                            {
+                                "condition": "",
+                                "option": "确定",
+                                "dialogs": [ { "list": [ { "speaker": "$$self.name", "content": "成功", "label": "", "voice": "" } ] } ],
+                                "changes": []
+                            },
+                            {
+                                "condition": "",
+                                "option": "取消",
+                                "dialogs": [ { "list": [ { "speaker": "$$self.name", "content": "已取消", "label": "", "voice": "" } ] } ],
+                                "changes": []
+                            }
+                        ]
+                    ]
+                }
+            ],
             "subsequences": []
         }
     ]
