@@ -60,5 +60,5 @@
    "manufacture_mods" : [ "empty --test true" ],
    "route_mods" : [ "empty --test true" ],
    "station_mods" : [ "empty --test true" ],
-   "vehicle_mods" : [ "empty --test true" ]
+   "vehicle_mods" : [ "empty --test true", "vehicle_basic" ]
 }

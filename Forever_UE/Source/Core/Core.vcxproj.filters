@@ -48,6 +48,9 @@
     <ClCompile Include="traffic\traffic.cpp">
       <Filter>traffic</Filter>
     </ClCompile>
+    <ClCompile Include="traffic\vehicle.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
     <ClCompile Include="player\player.cpp">
       <Filter>player</Filter>
     </ClCompile>
@@ -114,6 +117,9 @@
       <Filter>industry</Filter>
     </ClInclude>
     <ClInclude Include="traffic\traffic.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\vehicle.h">
       <Filter>traffic</Filter>
     </ClInclude>
     <ClInclude Include="player\player.h">

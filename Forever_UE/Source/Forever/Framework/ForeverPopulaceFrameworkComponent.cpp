@@ -244,7 +244,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 				activeInstances.Remove(citizen);
 				continue;
 			}
-			if (FVector::Dist(playerLoc, element->GetActorLocation()) > despawnDistUE) {
+			if (!element->IsDespawnExempt() && FVector::Dist(playerLoc, element->GetActorLocation()) > despawnDistUE) {
 				// 走远到销毁距离之外：先把当前位置转回地图单位写回Citizen(这样下次重新进入
 				// 范围直接用这份记录，不再随机抖动一次)，再销毁Actor。
 				FVector loc = element->GetActorLocation();

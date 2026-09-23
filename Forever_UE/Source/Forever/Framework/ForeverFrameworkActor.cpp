@@ -387,7 +387,9 @@ void AForeverFrameworkActor::EnsureTrafficGenerated()
 {
 	if (traffic) return;
 
-	// Traffic这次还是空骨架，新增它纯粹是为了让PostImplement能拿到7个域的真实指针。
+	// Traffic的Route/Station两个域仍然是空骨架，Vehicle这一份阶段4-3已经落地(见traffic.md)——
+	// 这里仍然只是new出来，真正的上下车操作由UForeverTrafficFrameworkComponent::ToggleVehicle
+	// 在玩家按T时才调用。
 	traffic = new Traffic();
 }
 

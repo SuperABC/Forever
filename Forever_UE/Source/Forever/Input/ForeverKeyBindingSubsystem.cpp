@@ -13,6 +13,10 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("ToggleView"), EKeys::V },
 		{ TEXT("Sprint"), EKeys::LeftShift },
 		{ TEXT("Test"), EKeys::T },
+		// 和"Jump"共用空格键——两者是不同的UInputAction，分别只在各自的Pawn
+		// (ACitizenElement/AVehicleElement)上绑定消费，同一个键同时映射到多个动作在
+		// Enhanced Input里不冲突，见AVehicleElement::SetupPlayerInputComponent。
+		{ TEXT("Handbrake"), EKeys::SpaceBar },
 	};
 	return definitions;
 }

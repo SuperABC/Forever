@@ -73,17 +73,19 @@ virtual void UnPossessed() override;                            // 先切回MOVE
 ACitizenElement>>`），记录"当前被占有对象（玩家的`ADefaultPawn`/`AForeverCharacter`，也
 可能是另一个citizen）附近的市民"——`OnOverlapBegin`/`OnOverlapEnd`在原有"打印接近/离开
 提示"逻辑之外，分别`AddUnique`/`RemoveSingle`维护这份名单。之所以是**静态**成员而不是每个
-`ACitizenElement`各自的实例状态：T键处理逻辑（`AForeverCharacter::
-LogNearbyCitizenRelationships`）定义在基类上，不知道当前被占有的具体是哪个子类实例，
-只能通过一个全局可查的静态入口去问"附近有没有市民"；用`TWeakObjectPtr`而不是裸指针是
+`ACitizenElement`各自的实例状态：`LogNearbyRelationships()`是静态方法（上一版T键绑定过
+它，现在没有按键绑定，见下），不知道当前被占有的具体是哪个子类实例，只能通过一个全局
+可查的静态入口去问"附近有没有市民"；用`TWeakObjectPtr`而不是裸指针是
 因为市民会被`UForeverPopulaceFrameworkComponent`按距离动态`Destroy()`，名单里的引用
 必须能安全感知这种失效。
 
-### T键：输出附近市民的人际关系数据
+### 附近市民的人际关系数据（`LogNearbyRelationships`，不再绑定按键）
 
-`ACitizenElement::LogNearbyRelationships()`——**这次改成不再切换玩家控制的市民**（原来
-是`GetFirstNearby()`取名单下标0那个、`Possess`过去，见下"已废弃"一节），改成遍历
-`nearbyCitizens`**全部**仍然有效的条目，对每个人调`Citizen::GetAcquaintances()`/
+`ACitizenElement::LogNearbyRelationships()`——上一版T键绑定过这个方法，这次T键改指向
+"上下车切换"（见`Player/ForeverCharacter.md`"T键上下车切换"一节、
+`Framework/ForeverTrafficFrameworkComponent.h`），没有任何按键绑定它，方法本身保留供以后
+调试用。行为不变：遍历`nearbyCitizens`**全部**仍然有效的条目，对每个人调
+`Citizen::GetAcquaintances()`/
 `GetExperiences()`，把熟人关系强度（6个`RELATION_TYPE`字段）+四类人际关系历史记录
 （按`Experience::GetCategory()`分派到对应派生类，拼出"[亲属]/[情感]/[同学]/[同事] ...
 起止年份"这样的一行描述，见`experience.md`"一对一"/"一对多"两种派生类的区别）通过
@@ -239,14 +241,14 @@ Core状态已经"到家"了，但这个可见的Actor完全没人碰过，会一
   （`GetPlayerPawn`）、`Engine/Engine.h`（`GEngine->AddOnScreenDebugMessage`，接近/
   离开提示用）、`Source/Core/populace/experience.h`/`school.h`、
   `Source/Core/society/organization.h`（`LogNearbyRelationships`按`Experience`
-  类别分派打印用，见上"T键：输出附近市民的人际关系数据"一节）。
+  类别分派打印用，见上"附近市民的人际关系数据"一节）。
 - 被谁依赖：`UForeverPopulaceFrameworkComponent::TickComponent`/
   `FindOrSpawnCitizenByName`（`SpawnActor<ACitizenElement>()`+`Init()`+`Destroy()`）、
-  `AForeverCharacter::LogNearbyCitizenRelationships`（T键，调
-  `ACitizenElement::LogNearbyRelationships()`）、
   `UForeverStoryFrameworkComponent::ApplyControlChange`（剧情`change_control`指定切换
-  控制权，间接通过`FindOrSpawnCitizenByName`拿到`ACitizenElement*`后`Possess`——T键这次
-  不再走这条路径，`Possess`目前只由剧情脚本触发）。
+  控制权，间接通过`FindOrSpawnCitizenByName`拿到`ACitizenElement*`后`Possess`——T键现在
+  指向上下车，不走这条路径，`Possess`目前只由剧情脚本触发）。
+  `LogNearbyRelationships()`目前没有任何按键绑定它，见
+  `Player/ForeverCharacter.md`"T键上下车切换"一节。
 
 ## 待办/后续阶段
 

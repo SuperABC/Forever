@@ -19,12 +19,14 @@ class UForeverPopulaceFrameworkComponent;
 // SpawnActor/Destroy，不常驻，详见Source/Forever/Element/CitizenElement.md。
 //
 // 基类是AForeverCharacter，不是纯ACharacter——市民要能被玩家真正占有操控（由剧情脚本
-// 触发的ChangeControlChange切换，见ForeverStoryFrameworkComponent.md；T键这次改成只
-// 输出附近市民关系数据到log，不再做Possess切换，见LogNearbyRelationships），
-// AForeverCharacter已经有摄像机/移动/Enhanced
-// Input绑定+PossessedBy/UnPossessed这一整套东西，直接继承复用，不需要另起一套。这次仍然
-// 默认不能移动（CharacterMovementComponent这次显式设成MOVE_None，见.cpp构造函数），只有
-// 被占有时才切换成MOVE_Walking（见PossessedBy覆写）。
+// 触发的ChangeControlChange切换，见ForeverStoryFrameworkComponent.md），AForeverCharacter
+// 已经有摄像机/移动/Enhanced Input绑定+PossessedBy/UnPossessed这一整套东西，直接继承复用，
+// 不需要另起一套。这次仍然默认不能移动（CharacterMovementComponent这次显式设成MOVE_None，
+// 见.cpp构造函数），只有被占有时才切换成MOVE_Walking（见PossessedBy覆写）。
+//
+// T键（Test动作）目前指向"上下车切换"（见ForeverTrafficFrameworkComponent.h），不再调用
+// 下面的LogNearbyRelationships()——这个静态方法本身没有删除（还是一个能用的调试工具），
+// 只是暂时没有任何按键绑定它。
 UCLASS()
 class FOREVER_API ACitizenElement : public AForeverCharacter
 {
@@ -50,11 +52,10 @@ public:
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void UnPossessed() override;
 
-	// T键(Test动作)：把"当前被占有对象附近的市民名单"(nearbyCitizens)里每一个仍然有效的
-	// 市民，各自的acquaintances(熟人关系强度)+experiences(四类人际关系历史记录)完整输出到
-	// log(UE_LOG，不是屏幕调试消息)——T键这次不再切换玩家控制的市民，见CitizenElement.md
-	// "T键：输出附近市民的人际关系数据"一节。AForeverCharacter::LogNearbyCitizenRelationships
-	// 每次按T都调用一次。
+	// 把"当前被占有对象附近的市民名单"(nearbyCitizens)里每一个仍然有效的市民，各自的
+	// acquaintances(熟人关系强度)+experiences(四类人际关系历史记录)完整输出到log(UE_LOG，
+	// 不是屏幕调试消息)。上一版T键(Test动作)绑定过这个方法，这次T键改指向"上下车切换"（见
+	// ForeverTrafficFrameworkComponent.h），没有任何按键绑定这个方法，仍然保留供以后调试用。
 	static void LogNearbyRelationships();
 
 	// 沿一串世界坐标路径点真正走过去（Job按调度产出NPCNavigateChange时，
@@ -77,6 +78,15 @@ public:
 	// 寻路真的失败(起点/终点没有导航节点，或图不连通)这一确实存在但更罕见的情况）。
 	void TeleportToRoom(Room* destination);
 
+	// 上车时(UForeverTrafficFrameworkComponent::ToggleVehicle)标记这个市民暂时不参与
+	// UForeverPopulaceFrameworkComponent::TickComponent的距离销毁判定——上车后这个Actor
+	// 会被隐藏在原地，玩家开车远离之后按正常距离判定会被当成"走远的市民"直接Destroy掉，
+	// 等玩家下车时previousPawn就成了悬空指针，表现为"车消失了但人没出来、操控彻底失灵"
+	// （用户实测反馈的bug，见ForeverTrafficFrameworkComponent.md）。下车时
+	// ToggleVehicle再调一次传false解除标记，恢复正常的距离流式管理。
+	void SetDespawnExempt(bool exempt) { bDespawnExempt = exempt; }
+	bool IsDespawnExempt() const { return bDespawnExempt; }
+
 protected:
 	virtual void Tick(float DeltaTime) override;
 
@@ -97,6 +107,8 @@ private:
 
 	Citizen* citizen = nullptr;
 	TWeakObjectPtr<UForeverPopulaceFrameworkComponent> framework;
+
+	bool bDespawnExempt = false;
 
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> proximityBox; // 玩家靠近检测——和流式生成/销毁的距离判定是两回事

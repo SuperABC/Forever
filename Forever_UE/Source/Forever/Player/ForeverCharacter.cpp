@@ -4,7 +4,6 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Element/CitizenElement.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/GameInstance.h"
@@ -12,6 +11,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
@@ -157,7 +157,7 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleView")), ETriggerEvent::Started, this, &AForeverCharacter::ToggleCameraView);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Started, this, &AForeverCharacter::StartSprint);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Completed, this, &AForeverCharacter::StopSprint);
-				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Test")), ETriggerEvent::Started, this, &AForeverCharacter::LogNearbyCitizenRelationships);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Test")), ETriggerEvent::Started, this, &AForeverCharacter::ToggleVehicle);
 			}
 		}
 	}
@@ -188,9 +188,9 @@ void AForeverCharacter::StopSprint()
 	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
 }
 
-void AForeverCharacter::LogNearbyCitizenRelationships()
+void AForeverCharacter::ToggleVehicle()
 {
-	ACitizenElement::LogNearbyRelationships();
+	UForeverTrafficFrameworkComponent::RequestToggleVehicle(GetWorld(), Cast<APlayerController>(GetController()));
 }
 
 void AForeverCharacter::Move(const FInputActionValue& value)
