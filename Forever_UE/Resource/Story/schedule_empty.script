@@ -1,3 +1,26 @@
 {
-	"milestones": []
+    "milestones": [
+        {
+            "milestone": "test_add_option",
+            "triggers": [ { "type": "game_start" } ],
+            "visible": false,
+            "drop": "true",
+            "description": "",
+            "goal": "",
+            "changes": [ { "type": "add_option", "name": "$$self.name", "option": "测试" } ],
+            "dialogs": [],
+            "subsequences": []
+        },
+        {
+            "milestone": "test_option_clicked",
+            "triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "测试" } ],
+            "visible": false,
+            "drop": "false",
+            "description": "",
+            "goal": "",
+            "changes": [],
+            "dialogs": [ { "list": [ { "speaker": "", "content": "成功", "label": "", "voice": "" } ] } ],
+            "subsequences": []
+        }
+    ]
 }

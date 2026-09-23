@@ -275,6 +275,9 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 		if (type == "game_start") {
 			event = new GameStartEvent();
 		}
+		else if (type == "option_dialog") {
+			event = new OptionDialogEvent(obj["name"].AsString(), obj["option"].AsString());
+		}
 		else {
 			// 阶段4占位：其余30种事件类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Event type not implemented yet: " + type + ".\n");
@@ -307,6 +310,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 		}
 		else if (type == "debug_print") {
 			change = new DebugPrintChange(obj["message"].AsString());
+		}
+		else if (type == "add_option") {
+			auto name = obj["name"];
+			auto option = obj["option"];
+			if (name.IsNull() || option.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name or option for add_option change.\n");
+			}
+			change = new AddOptionChange(name.AsString(), option.AsString());
 		}
 		else {
 			// 阶段4占位：其余40种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。

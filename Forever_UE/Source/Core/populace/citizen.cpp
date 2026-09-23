@@ -244,3 +244,6 @@ void Citizen::SetJob(Job* value) { job = value; }
 
 Scheduler* Citizen::GetScheduler() const { return scheduler; }
 void Citizen::SetScheduler(Scheduler* value) { scheduler = value; }
+
+const vector<string>& Citizen::GetOptions() const { return options; }
+void Citizen::AddOption(const string& option) { options.push_back(option); }

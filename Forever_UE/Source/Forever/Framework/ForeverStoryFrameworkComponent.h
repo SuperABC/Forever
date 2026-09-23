@@ -32,6 +32,14 @@ public:
 	// onActions逻辑）——否则它们各自的game_start milestone永远不会被触发，见.cpp实现。
 	void BroadcastGameStart();
 
+	// 玩家点击MeetOption选项时调用：构造一个OptionDialogEvent，依次匹配主线剧情Script
+	// （如果配置了）和目标市民的Scheduler Script，复用BroadcastGameStart同一套Dialog打印/
+	// Change转发逻辑（见.cpp里的ProcessScriptActions）。不实现GlobalDialog（只匹配主线
+	// 剧情的全局选项分支）——这次MeetOption UI落地范围明确不做。
+	// @name: 对话目标（市民）姓名字面量
+	// @option: 被点击的选项文本字面量
+	void OptionDialog(const FString& name, const FString& option);
+
 	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。不在
 	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。这次改成
 	// public——AForeverFrameworkActor::ApplyChange统一收口所有Change的消费入口后，

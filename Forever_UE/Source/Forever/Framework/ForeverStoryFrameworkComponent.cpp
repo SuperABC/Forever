@@ -17,32 +17,20 @@
 #include "society/society.h"
 #include "society/organization.h"
 #include "society/job.h"
+#include "populace/populace.h"
+#include "populace/citizen.h"
+#include "populace/scheduler.h"
 #include "common/implement.h"
 
 using namespace std;
 
-void UForeverStoryFrameworkComponent::Init(Story* inStory) {
-	story = inStory;
-}
-
-void UForeverStoryFrameworkComponent::BroadcastGameStart() {
-	if (!story || !GEngine) return;
-
-	// 现场构造一个PostImplement，供WrapScript通过Post()查询Core状态（这次唯一用到的查询是
-	// "random citizen"，见Core/common/implement.md）。生命周期只需要覆盖这次广播，不用长期
-	// 持有。
-	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
-	Society* society = framework ? framework->GetSociety() : nullptr;
-	PostImplement postImplement(
-		framework ? framework->GetMap() : nullptr,
-		framework ? framework->GetPopulace() : nullptr,
-		society,
-		story,
-		framework ? framework->GetIndustry() : nullptr,
-		framework ? framework->GetTraffic() : nullptr,
-		framework ? framework->GetPlayer() : nullptr);
-
-	auto onActions = [this, framework](const vector<ScriptAction>& actions, const ScriptContext& context) {
+namespace {
+	// 从BroadcastGameStart原来的onActions lambda体搬出来的自由函数——OptionDialog()这次
+	// 需要复用同一套"Dialog打印到屏幕左上角/Change转发给ApplyChange"的展示逻辑，不再只是
+	// BroadcastGameStart内部的一次性lambda。不进头文件：ScriptAction是std::variant，没法
+	// 前置声明，进头文件要多#include一个story/script_mod.h，没必要。
+	void ProcessScriptActions(AForeverFrameworkActor* framework, const vector<ScriptAction>& actions,
+		const ScriptContext& context) {
 		for (const auto& action : actions) {
 			if (auto dialogPtr = get_if<const Dialog*>(&action)) {
 				for (Section section : (*dialogPtr)->GetDialogs()) {
@@ -73,6 +61,32 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[变化] %s"), *typeText));
 			}
 		}
+	}
+}
+
+void UForeverStoryFrameworkComponent::Init(Story* inStory) {
+	story = inStory;
+}
+
+void UForeverStoryFrameworkComponent::BroadcastGameStart() {
+	if (!story || !GEngine) return;
+
+	// 现场构造一个PostImplement，供WrapScript通过Post()查询Core状态（这次唯一用到的查询是
+	// "random citizen"，见Core/common/implement.md）。生命周期只需要覆盖这次广播，不用长期
+	// 持有。
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Society* society = framework ? framework->GetSociety() : nullptr;
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		society,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	auto onActions = [framework](const vector<ScriptAction>& actions, const ScriptContext& context) {
+		ProcessScriptActions(framework, actions, context);
 		};
 
 	// broadcastOne不止这次society域用得上——以后industry/traffic等其它域各自的Script要
@@ -100,6 +114,54 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 				broadcastOne(job->GetScript());
 			}
 		}
+	}
+
+	// 阶段5 MeetOption UI落地新增：每个市民独占持有一份Scheduler，Scheduler自己的Script
+	// （schedule_empty.script）也要广播一次game_start，否则里面的add_option milestone永远
+	// 不会被触发（citizen的对话选项永远加不上），见ForeverStoryFrameworkComponent.md。
+	Populace* populace = framework ? framework->GetPopulace() : nullptr;
+	if (populace) {
+		for (Citizen* citizen : populace->GetCitizens()) {
+			if (citizen && citizen->GetScheduler()) {
+				broadcastOne(citizen->GetScheduler()->GetScript());
+			}
+		}
+	}
+}
+
+void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FString& option) {
+	if (!story || !GEngine) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Populace* populace = framework ? framework->GetPopulace() : nullptr;
+
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		populace,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	string nameUtf8 = TCHAR_TO_UTF8(*name);
+	string optionUtf8 = TCHAR_TO_UTF8(*option);
+	OptionDialogEvent event(nameUtf8, optionUtf8);
+
+	auto matchOne = [&](Script* script) {
+		if (!script) return;
+		ScriptContext context;
+		context.self = script;
+		context.system = story->GetSystemScript();
+		context.local = &event;
+		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
+		};
+
+	matchOne(story->GetMainScript());
+
+	Citizen* target = populace ? populace->FindCitizenByName(nameUtf8) : nullptr;
+	if (target && target->GetScheduler()) {
+		matchOne(target->GetScheduler()->GetScript());
 	}
 }
 

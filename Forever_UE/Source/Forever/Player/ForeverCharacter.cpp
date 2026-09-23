@@ -13,6 +13,8 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Input/ForeverKeyBindingSubsystem.h"
+#include "Player/ForeverPlayerController.h"
+#include "UI/MeetOptionWidget.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
 #include "UObject/ConstructorHelpers.h"
@@ -158,6 +160,9 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Started, this, &AForeverCharacter::StartSprint);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Completed, this, &AForeverCharacter::StopSprint);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Test")), ETriggerEvent::Started, this, &AForeverCharacter::ToggleVehicle);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionUp")), ETriggerEvent::Started, this, &AForeverCharacter::MeetOptionFocusUp);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionDown")), ETriggerEvent::Started, this, &AForeverCharacter::MeetOptionFocusDown);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionSelect")), ETriggerEvent::Started, this, &AForeverCharacter::MeetOptionSelect);
 			}
 		}
 	}
@@ -191,6 +196,33 @@ void AForeverCharacter::StopSprint()
 void AForeverCharacter::ToggleVehicle()
 {
 	UForeverTrafficFrameworkComponent::RequestToggleVehicle(GetWorld(), Cast<APlayerController>(GetController()));
+}
+
+void AForeverCharacter::MeetOptionFocusUp()
+{
+	if (AForeverPlayerController* pc = Cast<AForeverPlayerController>(GetController())) {
+		if (UMeetOptionWidget* meetOption = pc->GetMeetOptionWidget()) {
+			meetOption->FocusUp();
+		}
+	}
+}
+
+void AForeverCharacter::MeetOptionFocusDown()
+{
+	if (AForeverPlayerController* pc = Cast<AForeverPlayerController>(GetController())) {
+		if (UMeetOptionWidget* meetOption = pc->GetMeetOptionWidget()) {
+			meetOption->FocusDown();
+		}
+	}
+}
+
+void AForeverCharacter::MeetOptionSelect()
+{
+	if (AForeverPlayerController* pc = Cast<AForeverPlayerController>(GetController())) {
+		if (UMeetOptionWidget* meetOption = pc->GetMeetOptionWidget()) {
+			meetOption->ClickFocus();
+		}
+	}
 }
 
 void AForeverCharacter::Move(const FInputActionValue& value)

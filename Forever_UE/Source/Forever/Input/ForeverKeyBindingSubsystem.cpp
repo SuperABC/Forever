@@ -17,6 +17,12 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// (ACitizenElement/AVehicleElement)上绑定消费，同一个键同时映射到多个动作在
 		// Enhanced Input里不冲突，见AVehicleElement::SetupPlayerInputComponent。
 		{ TEXT("Handbrake"), EKeys::SpaceBar },
+		// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，见MAINCONTROLLER_TODO.md
+		// "MouseScrollUp/Down + F"这一行热键，AForeverCharacter::SetupPlayerInputComponent
+		// 转发到AForeverPlayerController持有的MeetOptionWidget。
+		{ TEXT("MeetOptionUp"), EKeys::MouseScrollUp },
+		{ TEXT("MeetOptionDown"), EKeys::MouseScrollDown },
+		{ TEXT("MeetOptionSelect"), EKeys::F },
 	};
 	return definitions;
 }

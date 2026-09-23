@@ -72,6 +72,13 @@ protected:
 	// 的用法（ACitizenElement::LogNearbyRelationships()本身没有删除，只是不再绑定按键）。
 	void ToggleVehicle();
 
+	// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，转发给
+	// AForeverPlayerController::GetMeetOptionWidget()，见MAINCONTROLLER_TODO.md
+	// "MouseScrollUp/Down + F"这一行热键。
+	void MeetOptionFocusUp();
+	void MeetOptionFocusDown();
+	void MeetOptionSelect();
+
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	float walkSpeed = 500.f;
 

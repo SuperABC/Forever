@@ -115,6 +115,17 @@ private:
 
 	FString collisionLabel; // Overlap回调只读这份烘焙好的字符串，绝不解引用citizen
 
+	// 纯姓名（不带"Citizen: "前缀），供MeetOption UI用——AddOption/RemoveName需要的是姓名
+	// 本身，不是collisionLabel那份带前缀的调试显示文本。跟collisionLabel一起在
+	// BuildProximityBox()烘焙好，Overlap回调同样只读，不解引用citizen。
+	FString citizenNameOnly;
+
+	// citizen->GetOptions()的一份快照，同样在BuildProximityBox()里烘焙好（这个时间点
+	// game_start广播早已跑完，见ForeverStoryFrameworkComponent::BroadcastGameStart对
+	// 每个市民Scheduler Script的广播），OnOverlapBegin靠这份快照喂给MeetOption UI，
+	// 不需要在Overlap回调里解引用citizen。
+	TArray<FString> cachedOptions;
+
 	// 当前被占有对象（可能是最初的ADefaultPawn/AForeverCharacter，也可能是另一个citizen）
 	// 附近的市民名单，OnOverlapBegin/OnOverlapEnd维护。用TWeakObjectPtr而不是裸指针——
 	// 市民会被UForeverPopulaceFrameworkComponent按距离动态Destroy。

@@ -16,8 +16,8 @@
 | `Q` | 退出载具 + 刷新导航调试贴图 | `Traffic_C::QuitVehicle`(Framework Traffic Actor)、自身`VisualizeNavigation`函数、`CanvasBuffer::GetTexture`/`ApplyImage` | `Traffic` Framework Actor(阶段2骨架+阶段4 Traffic系统)、下面的`VisualizeNavigation` |
 | `B` | 背包(Bag)面板开关 | `GlobalBase::GlobalPause`、`BagPanel::InitPanel`(UMG) | `GlobalBase`(阶段4)、`BagPanel` UI(阶段5) |
 | `N` | 切换导航可视化调试 | 自身`VisualizeNavigation`函数(见下) | 同`VisualizeNavigation` |
-| `MouseScrollUp`/`MouseScrollDown` | 对话选项(`MeetOption`)焦点上/下移 | `MeetOption::FocusUp`/`FocusDown`(UMG) | `MeetOption` UI(阶段5,大概率是Story/Populace系统相关对话面板) |
-| `F` | 对话选项确认选中 | `MeetOption::ClickFocus`(UMG) | 同上 |
+| `MouseScrollUp`/`MouseScrollDown` | 对话选项(`MeetOption`)焦点上/下移 | **已实现**：`UMeetOptionWidget::FocusUp`/`FocusDown`，`AForeverCharacter::MeetOptionFocusUp`/`MeetOptionFocusDown`转发 | 无 |
+| `F` | 对话选项确认选中 | **已实现**：`UMeetOptionWidget::ClickFocus`，`AForeverCharacter::MeetOptionSelect`转发 | 无 |
 
 ## 其余函数(非按键直接触发,是Function/事件)
 

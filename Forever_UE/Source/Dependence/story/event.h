@@ -138,6 +138,15 @@ public:
 	virtual const std::string& GetType() const override;
 
 	/*
+	* 判断是否与给定事件匹配：name/option都是DSL字符串（milestone里trigger自己的字段，
+	* 用EvaluateExpression(context)求值），传入的e是运行时事件（点击时用字面量姓名/选项
+	* 文本直接构造，不需要再求值），逐个比较；name/option留空表示通配该字段，不参与比较。
+	* @e: 待匹配事件
+	* @context: 变量路由上下文
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+
+	/*
 	* 设置目标名称
 	* @name: 名称
 	*/

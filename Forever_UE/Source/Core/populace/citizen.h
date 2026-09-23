@@ -257,6 +257,12 @@ public:
 	Scheduler* GetScheduler() const;
 	void SetScheduler(Scheduler* value);
 
+	// 当前可供玩家点击的对话选项文本列表——由AddOptionChange（AddOptionChange:阶段5新增，
+	// 见Populace::ApplyChange）追加，供MeetOption UI在玩家靠近时读取展示，见
+	// Element/CitizenElement.cpp。
+	const std::vector<std::string>& GetOptions() const;
+	void AddOption(const std::string& option);
+
 private:
 	std::string name;
 	GENDER_TYPE gender;
@@ -285,4 +291,6 @@ private:
 
 	Job* job = nullptr;
 	Scheduler* scheduler = nullptr;
+
+	std::vector<std::string> options;
 };

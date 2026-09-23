@@ -78,6 +78,15 @@ const string& OptionDialogEvent::GetType() const {
 	return type;
 }
 
+bool OptionDialogEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<OptionDialogEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	if (!option.empty() && ToString(EvaluateExpression(option, context)) != other->option) return false;
+	return true;
+}
+
 void OptionDialogEvent::SetName(std::string name) {
 	this->name = move(name);
 }

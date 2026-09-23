@@ -1,6 +1,9 @@
 #include "Element/CitizenElement.h"
 
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
+#include "Framework/ForeverFrameworkActor.h"
+#include "Player/ForeverPlayerController.h"
+#include "UI/MeetOptionWidget.h"
 
 #include "Components/CapsuleComponent.h"
 #include "Components/BoxComponent.h"
@@ -29,9 +32,10 @@
 // 深度正好是这个厚度量级)。
 #define CITIZEN_GROUND_SLAB_THICKNESS 20.f
 // 靠近检测碰撞盒尺寸(UE单位，不走地图单位换算——这个盒子纯粹是UE层的装饰性判定，和
-// Core侧map数据无关)：水平半宽~2.5m，垂直半高~1m。
-#define CITIZEN_PROXIMITY_HALF_XY 250.f
-#define CITIZEN_PROXIMITY_HALF_Z 100.f
+// Core侧map数据无关)：水平半宽~1.2m，垂直半高~0.9m——原先250/100(半宽~2.5m)明显过大，
+// 玩家离市民还有段距离MeetOption就弹出来了，缩小到贴近"对话交互"的实际范围。
+#define CITIZEN_PROXIMITY_HALF_XY 120.f
+#define CITIZEN_PROXIMITY_HALF_Z 90.f
 
 using namespace std;
 
@@ -342,8 +346,17 @@ void ACitizenElement::BuildProximityBox() {
 	box->RegisterComponent();
 
 	// 只烘焙一份显示用的姓名字符串，Overlap回调绝不解引用citizen——和ABuildingElement同一套
-	// 安全原则。
-	collisionLabel = FString::Printf(TEXT("Citizen: %s"), UTF8_TO_TCHAR(citizen->GetName().c_str()));
+	// 安全原则。citizenNameOnly/cachedOptions同一个理由一起在这里烘焙好：这个时间点
+	// game_start广播早已跑完（见ForeverStoryFrameworkComponent::BroadcastGameStart对每个
+	// 市民Scheduler Script的广播），citizen->GetOptions()已经是稳定内容。
+	citizenNameOnly = UTF8_TO_TCHAR(citizen->GetName().c_str());
+	collisionLabel = FString::Printf(TEXT("Citizen: %s"), *citizenNameOnly);
+
+	cachedOptions.Reset();
+	for (const std::string& option : citizen->GetOptions()) {
+		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+	}
+
 	proximityBox = box;
 }
 
@@ -357,6 +370,17 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 
 	nearbyCitizens.AddUnique(TWeakObjectPtr<ACitizenElement>(this));
 
+	// 把这个市民当前的对话选项(cachedOptions快照)推给MeetOption UI——不解引用citizen，
+	// 见collisionLabel/citizenNameOnly/cachedOptions字段声明处的安全原则说明。
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			AForeverFrameworkActor* frameworkActor = framework.IsValid() ? Cast<AForeverFrameworkActor>(framework->GetOwner()) : nullptr;
+			for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
+				meetOption->AddOption(frameworkActor, cachedOptions[idx], citizenNameOnly, idx, false);
+			}
+		}
+	}
+
 	if (!GEngine) return;
 	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("接近 %s"), *collisionLabel));
 }
@@ -367,6 +391,12 @@ void ACitizenElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AAc
 	if (!pawn || OtherActor != pawn || OtherActor == this) return;
 
 	nearbyCitizens.RemoveSingle(TWeakObjectPtr<ACitizenElement>(this));
+
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			meetOption->RemoveName(citizenNameOnly);
+		}
+	}
 
 	if (!GEngine) return;
 	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("离开 %s"), *collisionLabel));
