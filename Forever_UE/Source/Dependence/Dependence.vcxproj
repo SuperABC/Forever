@@ -100,6 +100,7 @@
     <ClCompile Include="player\asset_factory.cpp" />
     <ClCompile Include="player\app_factory.cpp" />
     <ClCompile Include="player\puzzle_factory.cpp" />
+    <ClCompile Include="player\canvas.cpp" />
     <ClCompile Include="populace\name_factory.cpp" />
     <ClCompile Include="populace\scheduler_factory.cpp" />
     <ClCompile Include="society\job_factory.cpp" />
@@ -149,6 +150,7 @@
     <ClInclude Include="player\asset_mod.h" />
     <ClInclude Include="player\app_mod.h" />
     <ClInclude Include="player\puzzle_mod.h" />
+    <ClInclude Include="player\canvas.h" />
     <ClInclude Include="populace\name_mod.h" />
     <ClInclude Include="populace\scheduler_mod.h" />
     <ClInclude Include="society\job_mod.h" />

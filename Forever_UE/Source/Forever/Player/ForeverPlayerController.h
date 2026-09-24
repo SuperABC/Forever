@@ -7,6 +7,7 @@
 class UMeetOptionWidget;
 class USectionSpeakingWidget;
 class USectionOptionWidget;
+class UPuzzleWidget;
 
 // 阶段5 MeetOption UI落地：MAINCONTROLLER_TODO.md点名的"MouseScrollUp/Down + F对话选项"
 // 三个热键归属这个Controller——照抄AForeverMenuController::BeginPlay的CreateWidget+
@@ -44,8 +45,18 @@ protected:
 	UPROPERTY()
 	TObjectPtr<USectionOptionWidget> sectionOptionWidget;
 
+	// 阶段5 Puzzle落地：跟前面三个Widget同一套模式，由StartPuzzleChange触发（见
+	// UForeverStoryFrameworkComponent::ApplyStartPuzzle）——不需要像sectionSpeakingWidget
+	// 那样在BeginPlay里手动Collapse，UPuzzleWidget自己在没有StartPuzzle之前默认不显示。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UPuzzleWidget> puzzleWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UPuzzleWidget> puzzleWidget;
+
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
 	FORCEINLINE USectionOptionWidget* GetSectionOptionWidget() const { return sectionOptionWidget; }
+	FORCEINLINE UPuzzleWidget* GetPuzzleWidget() const { return puzzleWidget; }
 };

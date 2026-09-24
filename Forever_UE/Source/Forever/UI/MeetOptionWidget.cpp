@@ -6,9 +6,12 @@
 #include "Components/PanelWidget.h"
 
 // 选项行之间的竖直间距(UE单位)——AddOption时施加在每个新增MeetButton的ScrollBoxSlot上，
-// 老蓝图MeetOption::AddOption同样给每个新按钮的Padding设了Top/Bottom各10。
+// 老蓝图MeetOption::AddOption同样给每个新按钮的Padding设了Top/Bottom各10。名字加
+// MeetOption前缀避免和SectionOptionWidget.cpp里同名的匿名namespace常量在unity build下撞名
+// （UBT会把这个模块一批.cpp拼进同一个Module.Forever.cpp，各自匿名namespace的隔离性在这种
+// 情况下失效，见Element/CitizenElement.cpp顶部同一个坑的说明）。
 namespace {
-	constexpr float kOptionRowVerticalPadding = 10.f;
+	constexpr float kMeetOptionRowVerticalPadding = 10.f;
 }
 
 FString UMeetOptionWidget::MakeKey(const FString& name, int32 idx) {
@@ -24,7 +27,7 @@ void UMeetOptionWidget::AddOption(AForeverFrameworkActor* framework, const FStri
 
 	button->Setup(framework, name, option, bGlobal);
 	if (UScrollBoxSlot* slot = Cast<UScrollBoxSlot>(OptionContainer->AddChild(button))) {
-		slot->SetPadding(FMargin(0.f, kOptionRowVerticalPadding, 0.f, kOptionRowVerticalPadding));
+		slot->SetPadding(FMargin(0.f, kMeetOptionRowVerticalPadding, 0.f, kMeetOptionRowVerticalPadding));
 	}
 	OptionMap.Add(MakeKey(name, idx), button);
 

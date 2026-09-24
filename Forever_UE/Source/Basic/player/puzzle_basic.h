@@ -21,6 +21,11 @@ public:
 	virtual const char* GetType() const override { return "puzzle_basic"; }
 	virtual const char* GetName() override;
 
+	// 占位实现：不产生任何画面/逻辑，Loop固定返回0(一直"继续"，靠外部关闭)。真正的默认
+	// 小游戏内容留到被点名实现时再补。
+	virtual void Init(Canvas* canvas, PostHandle* post) override {}
+	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override { return 0; }
+
 private:
 	static int count;
 	int id;

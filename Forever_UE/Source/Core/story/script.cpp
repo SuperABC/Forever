@@ -319,8 +319,15 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new AddOptionChange(name.AsString(), option.AsString());
 		}
+		else if (type == "start_puzzle") {
+			auto puzzle = obj["puzzle"];
+			if (puzzle.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing puzzle for start_puzzle change.\n");
+			}
+			change = new StartPuzzleChange(puzzle.AsString());
+		}
 		else {
-			// 阶段4占位：其余40种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
+			// 阶段4占位：其余39种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Change type not implemented yet: " + type + ".\n");
 		}
 

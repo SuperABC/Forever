@@ -99,6 +99,7 @@
     <ClCompile Include="player\asset_basic.cpp" />
     <ClCompile Include="player\app_basic.cpp" />
     <ClCompile Include="player\puzzle_basic.cpp" />
+    <ClCompile Include="player\puzzle_tetris.cpp" />
     <ClCompile Include="populace\scheduler_basic.cpp" />
     <ClCompile Include="society\job_basic.cpp" />
     <ClCompile Include="society\organization_basic.cpp" />
@@ -120,6 +121,7 @@
     <ClInclude Include="player\asset_basic.h" />
     <ClInclude Include="player\app_basic.h" />
     <ClInclude Include="player\puzzle_basic.h" />
+    <ClInclude Include="player\puzzle_tetris.h" />
     <ClInclude Include="populace\name_chinese.h" />
     <ClInclude Include="populace\scheduler_basic.h" />
     <ClInclude Include="society\job_basic.h" />

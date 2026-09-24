@@ -167,6 +167,10 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
+	// 空占位：不产生任何画面/逻辑，Loop固定返回0。
+	virtual void Init(Canvas* canvas, PostHandle* post) override {}
+	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override { return 0; }
+
 private:
 	std::string name;
 };

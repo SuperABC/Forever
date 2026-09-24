@@ -91,6 +91,7 @@
     <ClCompile Include="traffic\traffic.cpp" />
     <ClCompile Include="traffic\vehicle.cpp" />
     <ClCompile Include="player\player.cpp" />
+    <ClCompile Include="player\puzzle.cpp" />
     <ClCompile Include="map\terrain.cpp" />
     <ClCompile Include="map\roadnet.cpp" />
     <ClCompile Include="map\zone.cpp" />
@@ -121,6 +122,7 @@
     <ClInclude Include="traffic\traffic.h" />
     <ClInclude Include="traffic\vehicle.h" />
     <ClInclude Include="player\player.h" />
+    <ClInclude Include="player\puzzle.h" />
     <ClInclude Include="map\terrain.h" />
     <ClInclude Include="map\roadnet.h" />
     <ClInclude Include="map\zone.h" />

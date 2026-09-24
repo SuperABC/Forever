@@ -3,6 +3,7 @@
 #include "UI/MeetOptionWidget.h"
 #include "UI/SectionSpeakingWidget.h"
 #include "UI/SectionOptionWidget.h"
+#include "UI/PuzzleWidget.h"
 
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
@@ -28,5 +29,12 @@ void AForeverPlayerController::BeginPlay() {
 	else if ((sectionOptionWidget = CreateWidget<USectionOptionWidget>(this, sectionOptionWidgetClass)) != nullptr) {
 		sectionOptionWidget->AddToViewport();
 		sectionOptionWidget->HideOptions();
+	}
+
+	if (puzzleWidgetClass == nullptr) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: puzzleWidgetClass未设置,跳过PuzzleWidget创建。"));
+	}
+	else if ((puzzleWidget = CreateWidget<UPuzzleWidget>(this, puzzleWidgetClass)) != nullptr) {
+		puzzleWidget->AddToViewport();
 	}
 }

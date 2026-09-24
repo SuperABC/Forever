@@ -8,6 +8,7 @@
 #include "UI/SectionSpeakingWidget.h"
 #include "UI/SectionOptionWidget.h"
 #include "UI/MeetOptionWidget.h"
+#include "UI/PuzzleWidget.h"
 
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
@@ -182,6 +183,15 @@ void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChan
 	if (framework && framework->GetBuildingFramework()) {
 		framework->GetBuildingFramework()->RequestFreezeUntilLodSettled();
 	}
+}
+
+void UForeverStoryFrameworkComponent::ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context) {
+	FString puzzleId = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetPuzzle(), context)).data());
+
+	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	if (!playerController || !playerController->GetPuzzleWidget()) return;
+
+	playerController->GetPuzzleWidget()->StartPuzzle(puzzleId);
 }
 
 void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const ScriptContext& context, int32 insertIndex) {

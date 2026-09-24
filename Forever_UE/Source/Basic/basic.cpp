@@ -39,6 +39,7 @@
 #include "player/asset_basic.h"
 #include "player/app_basic.h"
 #include "player/puzzle_basic.h"
+#include "player/puzzle_tetris.h"
 
 #pragma comment(lib, "Dependence.lib")
 
@@ -333,12 +334,15 @@ extern "C" __declspec(dllexport) void FinishModApps(AppFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModPuzzles() {
-	static vector<string> mods = { PuzzleBasic::GetId() };
+	static vector<string> mods = { PuzzleBasic::GetId(), TetrisPuzzle::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModPuzzles(PuzzleFactory* factory) {
 	factory->RegisterPuzzle(PuzzleBasic::GetId(),
 		[](const std::string&) -> PuzzleMod* { return new PuzzleBasic(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(TetrisPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new TetrisPuzzle(); },
 		[](PuzzleMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModPuzzles(PuzzleFactory* factory) {

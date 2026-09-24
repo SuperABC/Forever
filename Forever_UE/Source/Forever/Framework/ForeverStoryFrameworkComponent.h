@@ -10,6 +10,7 @@
 class Story;
 class Change;
 class ChangeControlChange;
+class StartPuzzleChange;
 struct ScriptContext;
 
 // 阶段4 Story落地：这次把Script->Milestone->Event/Dialog/Change架构跑通到"游戏开始广播
@@ -47,6 +48,13 @@ public:
 	// @change: 待执行的切换控制变化
 	// @context: 变量路由上下文，用于求值change->GetName()
 	void ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context);
+
+	// StartPuzzleChange的实际执行：找到AForeverPlayerController持有的PuzzleWidget，让它
+	// 开始一局指定类型的小游戏。不在Core::Story::ApplyChange里处理（Core层不知道UMG Widget
+	// 的存在），只能在这一层做，跟ApplyControlChange同一个理由。
+	// @change: 待执行的开始小游戏变化
+	// @context: 变量路由上下文，用于求值change->GetPuzzle()
+	void ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context);
 
 	// 阶段5 SectionSpeaking/SectionOption UI落地：把ProcessScriptActions匹配出的一个Dialog
 	// 交给这个函数展示，取代原来"直接打印到屏幕左上角"的占位做法（Dialog分支选项原来"没有

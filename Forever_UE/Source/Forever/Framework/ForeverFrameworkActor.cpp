@@ -191,6 +191,13 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* startPuzzle = dynamic_cast<const StartPuzzleChange*>(change)) {
+		// 跟ChangeControlChange同一个理由：Core层不知道UMG Widget的存在，"弹出一个小游戏
+		// 界面"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyStartPuzzle。
+		if (storyFramework) storyFramework->ApplyStartPuzzle(startPuzzle, context);
+		return;
+	}
+
 	// 都不是这个Actor自己能处理的类型，转发给六个域各自的ApplyChange，谁认识就处理——目前
 	// 只有Story::ApplyChange真正执行SetValueChange并在没人认识时打"未实现"警告，其余五个域
 	// 都是空占位，不会重复打印警告。
