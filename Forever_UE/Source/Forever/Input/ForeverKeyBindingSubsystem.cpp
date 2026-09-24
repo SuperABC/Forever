@@ -27,6 +27,10 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// ShowCurrentItem在对话展示期间把输入模式切成UIOnly，Pawn的Enhanced Input完全收不到
 		// 输入，空格键改成SectionSpeaking自己的NativeOnKeyDown原生响应，见
 		// USectionSpeakingWidget.h类注释。
+		// 手机(Phone)系统：这个热键绑在AForeverPlayerController上,不是Pawn上——玩家会通过
+		// ChangeControlChange换着操控不同市民/载具,Controller是唯一在换人时不变的对象,见
+		// AForeverPlayerController::SetupInputComponent。
+		{ TEXT("TogglePhone"), EKeys::P },
 	};
 	return definitions;
 }

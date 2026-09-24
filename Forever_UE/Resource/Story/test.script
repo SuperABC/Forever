@@ -1,7 +1,8 @@
 {
 	// 阶段4 Script系统联调用主线剧情：游戏开始时把变量test设为1、随机挑一个citizen交给
-	// 玩家操控，并启动一局俄罗斯方块小游戏（测试StartPuzzleChange/Puzzle概念+新的Canvas
-	// 图形库）。
+	// 玩家操控。开局俄罗斯方块小游戏(start_puzzle)已经去掉——StartPuzzleChange/Puzzle
+	// concept/Canvas图形库本身还在，只是不在game_start里触发了，仍然可以通过其它脚本按需
+	// 调用。
 	"milestones": [
 		{
 			"milestone": "hello_world",
@@ -12,8 +13,7 @@
 			"goal": "",
 			"changes": [
 				{ "type": "set_value", "variable": "test", "value": "1" },
-				{ "type": "place_holder", "label": "control" },
-				{ "type": "start_puzzle", "puzzle": "tetris" }
+				{ "type": "place_holder", "label": "control" }
 			],
 			"dialogs": [],
 			"subsequences": []

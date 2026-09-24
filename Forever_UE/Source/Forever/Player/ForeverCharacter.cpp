@@ -111,16 +111,13 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
+	// keyBindings->GetBindingContext()这份动态Context不在这里加了——现在由
+	// AForeverPlayerController::BeginPlay常驻加一份，理由是它换Pawn/换乘载具时不会跟着变，
+	// 见那边的注释。这里只保留跟这个Pawn自己绑定的移动/视角Context。
 	if (APlayerController* playerController = Cast<APlayerController>(NewController)) {
 		if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(playerController->GetLocalPlayer())) {
 			subsystem->AddMappingContext(inputMapping, 0);
 			subsystem->AddMappingContext(inputLookMapping, 0);
-
-			if (UGameInstance* gameInstance = GetGameInstance()) {
-				if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
-					subsystem->AddMappingContext(keyBindings->GetBindingContext(), 0);
-				}
-			}
 		}
 	}
 }
@@ -131,12 +128,6 @@ void AForeverCharacter::UnPossessed()
 		if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(playerController->GetLocalPlayer())) {
 			subsystem->RemoveMappingContext(inputMapping);
 			subsystem->RemoveMappingContext(inputLookMapping);
-
-			if (UGameInstance* gameInstance = GetGameInstance()) {
-				if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
-					subsystem->RemoveMappingContext(keyBindings->GetBindingContext());
-				}
-			}
 		}
 	}
 

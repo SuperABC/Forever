@@ -48,7 +48,7 @@
    "room_mods" : [ "empty --test true", "room_residence", "room_shop", "room_warehouse",
       "room_parking", "room_factory" ],
    "asset_mods" : [ "empty --test true" ],
-   "app_mods" : [ "empty --test true" ],
+   "app_mods" : [ "empty --test true", "bounce", "notes" ],
    "puzzle_mods" : [ "empty --test true", "tetris" ],
    "name_mods" : [ "chinese" ],
    "scheduler_mods" : [ "empty --test true", "scheduler_basic" ],

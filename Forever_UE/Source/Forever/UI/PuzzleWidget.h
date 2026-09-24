@@ -53,13 +53,6 @@ private:
 	// （bShowMouseCursor=false+SetInputMode_GameOnly+SetFocusToGameViewport找回视口焦点）。
 	void EndPuzzle();
 
-	// FKey转成Canvas的键码——精确对应KEY_LEFT/KEY_UP等常量和字母/数字的ASCII直通，不是老工程
-	// CanvasBuffer::FKeyCode那种任意哈希值。查不到的键返回0（PushKey会忽略0）。
-	static int32 TranslateKey(const FKey& key);
-
-	// FKey鼠标按键转成MOUSE_LEFT/RIGHT/MIDDLE，查不到返回-1。
-	static int32 TranslateMouseButton(const FKey& key);
-
 	// 查真实视口像素分辨率，查不到时返回(fallbackWidth, fallbackHeight)——StartPuzzle()首次
 	// 建画布、NativeTick()每帧比对是否发生了resize，共用这一份查询逻辑。
 	static FIntPoint GetViewportSize(int32 fallbackWidth, int32 fallbackHeight);

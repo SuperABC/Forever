@@ -8,6 +8,8 @@ class UMeetOptionWidget;
 class USectionSpeakingWidget;
 class USectionOptionWidget;
 class UPuzzleWidget;
+class UPhoneWidget;
+class UInputComponent;
 
 // 阶段5 MeetOption UI落地：MAINCONTROLLER_TODO.md点名的"MouseScrollUp/Down + F对话选项"
 // 三个热键归属这个Controller——照抄AForeverMenuController::BeginPlay的CreateWidget+
@@ -26,6 +28,11 @@ class FOREVER_API AForeverPlayerController : public APlayerController
 
 protected:
 	virtual void BeginPlay() override;
+
+	// P键(TogglePhone)绑在这里而不是Pawn的SetupPlayerInputComponent——Controller在
+	// ChangeControlChange换人操控/换乘载具时不会变，是唯一能保证"任何时候按P都生效"的宿主，
+	// 见.cpp里的说明和MAINCONTROLLER_TODO.md。
+	virtual void SetupInputComponent() override;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UMeetOptionWidget> meetOptionWidgetClass;
@@ -54,9 +61,21 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UPuzzleWidget> puzzleWidget;
 
+	// 阶段6 手机(Phone)系统落地：跟前面几个Widget同一套模式，由P键(TogglePhone)控制开关，
+	// 不需要手动Collapse——UPhoneWidget自己在NativeConstruct里默认不显示。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UPhoneWidget> phoneWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UPhoneWidget> phoneWidget;
+
+	// P键(TogglePhone)的处理函数，转发给phoneWidget->TogglePhone()。
+	void TogglePhone();
+
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
 	FORCEINLINE USectionOptionWidget* GetSectionOptionWidget() const { return sectionOptionWidget; }
 	FORCEINLINE UPuzzleWidget* GetPuzzleWidget() const { return puzzleWidget; }
+	FORCEINLINE UPhoneWidget* GetPhoneWidget() const { return phoneWidget; }
 };

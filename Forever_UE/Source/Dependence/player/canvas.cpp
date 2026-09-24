@@ -1,76 +1,149 @@
 #include "canvas.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <cstring>
+
+#define NOMINMAX
+#include <windows.h>
+
+#pragma comment(lib, "gdi32.lib")
 
 
 using namespace std;
 
 namespace {
-	// 内置5x7点阵ASCII字体——只覆盖数字/大写字母/几个常用标点，用ASCII艺术("."=不画,"#"=画)
-	// 直接描字形，避免手工换算十六进制位掩码带来的转录错误。小写字母在PutChar里转大写渲染，
-	// 表里没有的字符留空(相当于空格)，不是漏做——这次的目标只是"画布上能显示可读的分数/
-	// 提示文字"，不追求覆盖完整ASCII表。
-	struct GlyphArt {
-		char ch;
-		const char* rows[7];
-	};
+	// GDI字体渲染——逐参数照抄老工程E:\Projects\Forever_UE\Source\Dependence\player\canvas.cpp
+	// 的PutString实现(建内存DC+HFONT，黑底白字TextOutW，GetDIBits读回灰度当覆盖率混合进
+	// 画布)。第一版这里自己换了几个参数(负数高度/FW_NORMAL/OUT_DEFAULT_PRECIS/
+	// ANTIALIASED_QUALITY/FF_DONTCARE)，结果实际渲染出来每个字母粗细/字形都不一致，明显不对；
+	// 老工程这一套参数组合是经过验证的，这次原样照抄，不再自己"改进"。
+	//
+	// 这些辅助函数不做成Canvas的成员方法——HDC/HFONT这些Windows类型不能出现在canvas.h的
+	// 声明里(会把<windows.h>连带min/max/TEXT等宏定义带进每一个#include了canvas.h的文件，
+	// 这个头文件被Forever模块的PuzzleWidget.h/PhoneWidget.h广泛引用，跟UE自己的头文件混在
+	// 一起容易冲突)，所以GDI相关的实现细节整个封在这个.cpp的匿名namespace里。
+	const wchar_t* kDefaultFontName = L"Microsoft YaHei"; // 中英文都覆盖，跟老工程默认字体一致
 
-	constexpr int kGlyphWidth = 5;
-	constexpr int kGlyphHeight = 7;
+	HFONT CreateCanvasFont(int pixelHeight) {
+		return CreateFontW(max(1, pixelHeight), 0, 0, 0, FW_THIN, FALSE, FALSE, FALSE,
+			DEFAULT_CHARSET, OUT_CHARACTER_PRECIS, CLIP_CHARACTER_PRECIS,
+			DEFAULT_QUALITY, FF_MODERN, kDefaultFontName);
+	}
 
-	const GlyphArt kGlyphs[] = {
-		{' ', {"     ","     ","     ","     ","     ","     ","     "}},
-		{'0', {".###.","#...#","#..##","#.#.#","##..#","#...#",".###."}},
-		{'1', {"..#..",".##..","..#..","..#..","..#..","..#..",".###."}},
-		{'2', {".###.","#...#","....#","...#.","..#..",".#...","#####"}},
-		{'3', {".###.","#...#","....#","..##.","....#","#...#",".###."}},
-		{'4', {"...#.","..##.",".#.#.","#..#.","#####","...#.","...#."}},
-		{'5', {"#####","#....","####.","....#","....#","#...#",".###."}},
-		{'6', {"..##.",".#...","#....","####.","#...#","#...#",".###."}},
-		{'7', {"#####","....#","...#.","..#..",".#...",".#...",".#..."}},
-		{'8', {".###.","#...#","#...#",".###.","#...#","#...#",".###."}},
-		{'9', {".###.","#...#","#...#",".####","....#","...#.","..##."}},
-		{'A', {"..#..",".#.#.","#...#","#...#","#####","#...#","#...#"}},
-		{'B', {"####.","#...#","#...#","####.","#...#","#...#","####."}},
-		{'C', {".###.","#...#","#....","#....","#....","#...#",".###."}},
-		{'D', {"####.","#...#","#...#","#...#","#...#","#...#","####."}},
-		{'E', {"#####","#....","#....","####.","#....","#....","#####"}},
-		{'F', {"#####","#....","#....","####.","#....","#....","#...."}},
-		{'G', {".###.","#...#","#....","#.###","#...#","#...#",".###."}},
-		{'H', {"#...#","#...#","#...#","#####","#...#","#...#","#...#"}},
-		{'I', {".###.","..#..","..#..","..#..","..#..","..#..",".###."}},
-		{'J', {"....#","....#","....#","....#","....#","#...#",".###."}},
-		{'K', {"#...#","#..#.","#.#..","##...","#.#..","#..#.","#...#"}},
-		{'L', {"#....","#....","#....","#....","#....","#....","#####"}},
-		{'M', {"#...#","##.##","#.#.#","#...#","#...#","#...#","#...#"}},
-		{'N', {"#...#","##..#","#.#.#","#..##","#...#","#...#","#...#"}},
-		{'O', {".###.","#...#","#...#","#...#","#...#","#...#",".###."}},
-		{'P', {"####.","#...#","#...#","####.","#....","#....","#...."}},
-		{'Q', {".###.","#...#","#...#","#...#","#.#.#","#..#.",".##.#"}},
-		{'R', {"####.","#...#","#...#","####.","#.#..","#..#.","#...#"}},
-		{'S', {".###.","#...#","#....",".###.","....#","#...#",".###."}},
-		{'T', {"#####","..#..","..#..","..#..","..#..","..#..","..#.."}},
-		{'U', {"#...#","#...#","#...#","#...#","#...#","#...#",".###."}},
-		{'V', {"#...#","#...#","#...#","#...#","#...#",".#.#.","..#.."}},
-		{'W', {"#...#","#...#","#...#","#.#.#","#.#.#","##.##","#...#"}},
-		{'X', {"#...#","#...#",".#.#.","..#..",".#.#.","#...#","#...#"}},
-		{'Y', {"#...#","#...#",".#.#.","..#..","..#..","..#..","..#.."}},
-		{'Z', {"#####","....#","...#.","..#..",".#...","#....","#####"}},
-		{':', {".....","..#..",".....",".....",".....","..#..","....."}},
-		{'-', {".....",".....",".....","#####",".....",".....","....."}},
-		{'!', {"..#..","..#..","..#..","..#..","..#..",".....","..#.."}},
-		{'.', {".....",".....",".....",".....",".....",".....","..#.."}},
-		{'?', {".###.","#...#","....#","...#.","..#..",".....","..#.."}},
-	};
+	wstring Utf8ToWide(const string& text) {
+		if (text.empty()) return wstring();
+		int wlen = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
+		if (wlen <= 1) return wstring();
+		wstring result(static_cast<size_t>(wlen) - 1, L'\0');
+		MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, result.data(), wlen);
+		return result;
+	}
 
-	const GlyphArt* FindGlyph(char ch) {
-		for (const GlyphArt& glyph : kGlyphs) {
-			if (glyph.ch == ch) return &glyph;
+	int MeasureLineHeight(int pixelHeight) {
+		HDC screenDC = GetDC(nullptr);
+		HDC memDC = CreateCompatibleDC(screenDC);
+		HFONT font = CreateCanvasFont(pixelHeight);
+		HFONT oldFont = static_cast<HFONT>(SelectObject(memDC, font));
+
+		TEXTMETRICW metrics;
+		GetTextMetricsW(memDC, &metrics);
+		int lineHeight = metrics.tmHeight + metrics.tmExternalLeading;
+
+		SelectObject(memDC, oldFont);
+		DeleteObject(font);
+		DeleteDC(memDC);
+		ReleaseDC(nullptr, screenDC);
+		return lineHeight > 0 ? lineHeight : pixelHeight;
+	}
+
+	int MeasureLineWidth(const wstring& wline, int pixelHeight) {
+		if (wline.empty()) return 0;
+
+		HDC screenDC = GetDC(nullptr);
+		HDC memDC = CreateCompatibleDC(screenDC);
+		HFONT font = CreateCanvasFont(pixelHeight);
+		HFONT oldFont = static_cast<HFONT>(SelectObject(memDC, font));
+
+		SIZE sz;
+		GetTextExtentPoint32W(memDC, wline.c_str(), static_cast<int>(wline.size()), &sz);
+
+		SelectObject(memDC, oldFont);
+		DeleteObject(font);
+		DeleteDC(memDC);
+		ReleaseDC(nullptr, screenDC);
+		return sz.cx;
+	}
+
+	// 画一行文字(不含'\n')到(x,y)：黑底白字渲染到一张内存位图上，读回灰度值当覆盖率，按
+	// 当前画笔颜色/alpha跟buffer已有像素混合——和Canvas::BlendPixel同样的"按alpha插值"算法，
+	// 这里内联展开(BlendPixel是Canvas的私有成员方法，这里是.cpp里的自由函数，直接操作
+	// buffer/canvasWidth/canvasHeight这几个传进来的引用/值)。
+	void DrawLine(vector<uint8_t>& buffer, int canvasWidth, int canvasHeight,
+		const wstring& wline, int x, int y, int pixelHeight,
+		uint8_t brushR, uint8_t brushG, uint8_t brushB, float brushAlpha) {
+		if (wline.empty()) return;
+
+		HDC screenDC = GetDC(nullptr);
+		HDC memDC = CreateCompatibleDC(screenDC);
+		HFONT font = CreateCanvasFont(pixelHeight);
+		HFONT oldFont = static_cast<HFONT>(SelectObject(memDC, font));
+
+		SIZE sz;
+		GetTextExtentPoint32W(memDC, wline.c_str(), static_cast<int>(wline.size()), &sz);
+		if (sz.cx <= 0 || sz.cy <= 0) {
+			SelectObject(memDC, oldFont);
+			DeleteObject(font);
+			DeleteDC(memDC);
+			ReleaseDC(nullptr, screenDC);
+			return;
 		}
-		return nullptr;
+
+		BITMAPINFOHEADER bi = {};
+		bi.biSize = sizeof(BITMAPINFOHEADER);
+		bi.biWidth = sz.cx;
+		bi.biHeight = sz.cy; // 正数=自底向上存储(GDI默认)，下面读回时按这个顺序翻转
+		bi.biPlanes = 1;
+		bi.biBitCount = 24;
+		bi.biCompression = BI_RGB;
+
+		HBITMAP bitmap = CreateCompatibleBitmap(screenDC, sz.cx, sz.cy);
+		HBITMAP oldBitmap = static_cast<HBITMAP>(SelectObject(memDC, bitmap));
+
+		RECT rc = { 0, 0, sz.cx, sz.cy };
+		FillRect(memDC, &rc, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+		SetTextColor(memDC, RGB(255, 255, 255));
+		SetBkMode(memDC, TRANSPARENT);
+		TextOutW(memDC, 0, 0, wline.c_str(), static_cast<int>(wline.size()));
+
+		int rowStride = (sz.cx * 3 + 3) & ~3; // DIB每行按4字节对齐
+		vector<uint8_t> bits(static_cast<size_t>(rowStride) * sz.cy);
+		GetDIBits(memDC, bitmap, 0, sz.cy, bits.data(), reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS);
+
+		for (int row = 0; row < sz.cy; row++) {
+			int srcRow = sz.cy - 1 - row; // DIB自底向上存储，第0行对应位图最下面一行
+			for (int col = 0; col < sz.cx; col++) {
+				uint8_t gray = bits[static_cast<size_t>(srcRow) * rowStride + col * 3];
+				if (!gray) continue;
+
+				int px = x + col, py = y + row;
+				if (px < 0 || px >= canvasWidth || py < 0 || py >= canvasHeight) continue;
+
+				float alpha = (gray / 255.f) * brushAlpha;
+				size_t idx = (static_cast<size_t>(py) * canvasWidth + px) * 4;
+				buffer[idx + 0] = static_cast<uint8_t>(buffer[idx + 0] * (1.f - alpha) + brushB * alpha);
+				buffer[idx + 1] = static_cast<uint8_t>(buffer[idx + 1] * (1.f - alpha) + brushG * alpha);
+				buffer[idx + 2] = static_cast<uint8_t>(buffer[idx + 2] * (1.f - alpha) + brushR * alpha);
+				buffer[idx + 3] = 255;
+			}
+		}
+
+		SelectObject(memDC, oldBitmap);
+		SelectObject(memDC, oldFont);
+		DeleteObject(bitmap);
+		DeleteObject(font);
+		DeleteDC(memDC);
+		ReleaseDC(nullptr, screenDC);
 	}
 }
 
@@ -319,56 +392,44 @@ void Canvas::SetFontSize(int size) {
 }
 
 void Canvas::PutChar(char ch, int x, int y) {
-	char upper = static_cast<char>(toupper(static_cast<unsigned char>(ch)));
-	const GlyphArt* glyph = FindGlyph(upper);
-	if (!glyph) return;
-
-	int scale = max(1, fontSize / kGlyphHeight);
-	for (int row = 0; row < kGlyphHeight; row++) {
-		for (int col = 0; col < kGlyphWidth; col++) {
-			if (glyph->rows[row][col] != '#') continue;
-			for (int sy = 0; sy < scale; sy++) {
-				for (int sx = 0; sx < scale; sx++) {
-					PutPixel(x + col * scale + sx, y + row * scale + sy);
-				}
-			}
-		}
-	}
+	PutString(string(1, ch), x, y);
 }
 
 int Canvas::PutString(const string& text, int x, int y) {
-	int scale = max(1, fontSize / kGlyphHeight);
-	int advanceX = (kGlyphWidth + 1) * scale;
-	int advanceY = (kGlyphHeight + 1) * scale;
+	if (text.empty() || width <= 0 || height <= 0) return 0;
 
-	int curX = x, curY = y;
-	for (char ch : text) {
-		if (ch == '\n') {
-			curX = x;
-			curY += advanceY;
-			continue;
+	int lineHeight = MeasureLineHeight(fontSize);
+	int curY = y;
+	size_t start = 0;
+	for (size_t i = 0; i <= text.size(); i++) {
+		if (i != text.size() && text[i] != '\n') continue;
+
+		string line = text.substr(start, i - start);
+		if (!line.empty()) {
+			wstring wline = Utf8ToWide(line);
+			DrawLine(buffer, width, height, wline, x, curY, fontSize, brushR, brushG, brushB, brushAlpha);
 		}
-		PutChar(ch, curX, curY);
-		curX += advanceX;
+		curY += lineHeight;
+		start = i + 1;
 	}
-	return curY + advanceY - y;
+	return curY - y;
 }
 
 int Canvas::StringWidth(const string& text) const {
-	int scale = max(1, fontSize / kGlyphHeight);
-	int advanceX = (kGlyphWidth + 1) * scale;
+	int maxWidth = 0;
+	size_t start = 0;
+	for (size_t i = 0; i <= text.size(); i++) {
+		if (i != text.size() && text[i] != '\n') continue;
 
-	int maxLineLength = 0, currentLineLength = 0;
-	for (char ch : text) {
-		if (ch == '\n') {
-			maxLineLength = max(maxLineLength, currentLineLength);
-			currentLineLength = 0;
-			continue;
-		}
-		currentLineLength++;
+		wstring wline = Utf8ToWide(text.substr(start, i - start));
+		maxWidth = max(maxWidth, MeasureLineWidth(wline, fontSize));
+		start = i + 1;
 	}
-	maxLineLength = max(maxLineLength, currentLineLength);
-	return maxLineLength * advanceX;
+	return maxWidth;
+}
+
+int Canvas::GetFontHeight() const {
+	return MeasureLineHeight(fontSize);
 }
 
 void Canvas::PushKey(int code) {

@@ -21,6 +21,11 @@ public:
 	virtual const char* GetType() const override { return "app_basic"; }
 	virtual const char* GetName() override;
 
+	virtual void Init(Canvas* canvas, PostHandle* post) override {}
+	virtual void Loop(Canvas* canvas, int ms, PostHandle* post) override {}
+	virtual void Back(Canvas* canvas, PostHandle* post) override {}
+	virtual void Refresh(Canvas* canvas, PostHandle* post) override {}
+
 private:
 	static int count;
 	int id;

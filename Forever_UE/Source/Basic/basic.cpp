@@ -38,6 +38,8 @@
 #include "traffic/vehicle_basic.h"
 #include "player/asset_basic.h"
 #include "player/app_basic.h"
+#include "player/app_bounce.h"
+#include "player/app_notes.h"
 #include "player/puzzle_basic.h"
 #include "player/puzzle_tetris.h"
 
@@ -322,12 +324,18 @@ extern "C" __declspec(dllexport) void FinishModAssets(AssetFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModApps() {
-	static vector<string> mods = { AppBasic::GetId() };
+	static vector<string> mods = { AppBasic::GetId(), BounceApp::GetId(), NotesApp::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModApps(AppFactory* factory) {
 	factory->RegisterApp(AppBasic::GetId(),
 		[](const std::string&) -> AppMod* { return new AppBasic(); },
+		[](AppMod* m) { delete m; });
+	factory->RegisterApp(BounceApp::GetId(),
+		[](const std::string&) -> AppMod* { return new BounceApp(); },
+		[](AppMod* m) { delete m; });
+	factory->RegisterApp(NotesApp::GetId(),
+		[](const std::string&) -> AppMod* { return new NotesApp(); },
 		[](AppMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModApps(AppFactory* factory) {

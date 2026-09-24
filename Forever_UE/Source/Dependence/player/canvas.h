@@ -94,13 +94,16 @@ enum KEY_CODE : int {
 constexpr int KEY_RELEASED_FLAG = 0x8000;
 
 // 通用2D图形/输入画布——参考SGL(github.com/SuperABC/SGL)的接口覆盖范围重新设计实现，不是
-// 照抄，命名和这个项目其它类保持一致的PascalCase风格。纯C++、不#include任何UE头，供
-// Basic.dll这类运行时加载的Mod使用（见[[memory:basic_is_runtime_dll]]）。
-//
-// 文字渲染：靠内置的5x7点阵ASCII字体（只覆盖数字/大写字母/常用标点，小写字母按大写渲染，
-// 未覆盖的字符留空——见canvas.cpp里的字体表），不支持真正的字体切换/斜体/下划线（SGL的
-// setFontName/setFontStyle这两个这次不做）。SGL自己独立的TEXT_MAP字符网格模式（
-// setBfc/writeChar/writeString等一整套）也不做，这次只有BIT_MAP画布这一种。
+// 照抄，命名和这个项目其它类保持一致的PascalCase风格。不#include任何UE头，供Basic.dll这类
+// 运行时加载的Mod使用（见[[memory:basic_is_runtime_dll]]），但会用到Windows GDI(canvas.cpp
+// 内部#include <windows.h>，只在.cpp里出现，不污染这个头文件/它的调用方)——这个项目本来就
+// 只面向Windows(UE_5.7 Win64 + VS2022工具链)，Dependence层"engine-agnostic"这条约定指的是
+// "不依赖UE"，不等于"不能用Win32 API"，所以用GDI换掉最初的内置点阵字体是合理的：字体渲染
+// 交给Windows自带的字体库(默认微软雅黑，支持中英文+抗锯齿)，比手画的5x7点阵美观得多，见
+// PutString/StringWidth的.cpp实现。不支持SGL的setFontName/setFontStyle这种切换字体/斜体
+// /下划线的完整API(这次只用一个固定默认字体，按SetFontSize指定像素高度)。SGL自己独立的
+// TEXT_MAP字符网格模式（setBfc/writeChar/writeString等一整套）也不做，这次只有BIT_MAP
+// 画布这一种。
 class Canvas {
 public:
 	Canvas();
@@ -142,11 +145,15 @@ public:
 	void PutImage(int left, int top, const Bitmap& bitmap);
 	void PutRawImage(const uint8_t* srcBGRA, int srcWidth, int srcHeight, int x, int y, int dstWidth, int dstHeight);
 
-	// 文字：见类注释里"文字渲染"一节。SetFontSize按内置字体基准高度(7像素)的整数倍缩放。
+	// 文字：见类注释——底层是Windows GDI，SetFontSize直接设置字体的像素高度(不是内置点阵
+	// 字体那种整数倍缩放)。PutString/StringWidth支持UTF-8多字节字符(中文等)和'\n'换行
+	// (GDI的TextOut本身不认换行符，内部按行拆开分别画/量)。
 	void SetFontSize(int size);
-	void PutChar(char ch, int x, int y);
+	void PutChar(char ch, int x, int y); // 单字符，内部转发给PutString(std::string(1,ch), x, y)
 	int PutString(const std::string& text, int x, int y); // 支持'\n'换行，返回渲染总高度(像素)
 	int StringWidth(const std::string& text) const; // 多行时返回最长一行的宽度
+	int GetFontHeight() const; // 当前字号对应的单行实际高度(像素，含字体自身行距)，不产生
+							   // 绘制副作用，调用方用来算垂直居中之类的布局(比如列表行内文字)
 
 	// 键盘：宿主(UE桥接层)收到真实按键事件后调PushKey注入，小游戏逻辑调剩下三个消费。
 	void PushKey(int code);
@@ -168,7 +175,7 @@ private:
 
 	uint8_t brushR = 255, brushG = 255, brushB = 255;
 	float brushAlpha = 1.f;
-	int fontSize = 7; // 内置点阵字体基准高度是7像素，SetFontSize按比例整数倍缩放
+	int fontSize = 16; // GDI字体像素高度，默认给个正常能看清的初始值
 
 	// 用RingBuffer而不是std::deque——见RingBuffer类注释里跨模块堆分配的说明。
 	RingBuffer<int, 128> keyQueue;
