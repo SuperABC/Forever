@@ -31,6 +31,13 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// ChangeControlChange换着操控不同市民/载具,Controller是唯一在换人时不变的对象,见
 		// AForeverPlayerController::SetupInputComponent。
 		{ TEXT("TogglePhone"), EKeys::P },
+		// 武器系统：鼠标左键开火(按住连发交给全自动武器自己的fireRate冷却判断，见
+		// UForeverWeaponComponent::TickComponent)/R键换弹/数字键1、2切枪，见
+		// AForeverCharacter::SetupPlayerInputComponent。
+		{ TEXT("FireWeapon"), EKeys::LeftMouseButton },
+		{ TEXT("ReloadWeapon"), EKeys::R },
+		{ TEXT("SwitchWeapon1"), EKeys::One },
+		{ TEXT("SwitchWeapon2"), EKeys::Two },
 	};
 	return definitions;
 }

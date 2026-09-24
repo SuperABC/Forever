@@ -9,6 +9,7 @@ class UCameraComponent;
 class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
+class UForeverWeaponComponent;
 
 UCLASS()
 class FOREVER_API AForeverCharacter : public ACharacter
@@ -79,6 +80,20 @@ protected:
 	void MeetOptionFocusDown();
 	void MeetOptionSelect();
 
+	// 武器系统：鼠标左键开火(按住/松开转发给UForeverWeaponComponent::StartFire/StopFire，
+	// 全自动武器由组件自己的TickComponent按fireRate间隔连发)/R键换弹/数字键1、2切枪
+	// （切两把测试武器weapon_pistol/weapon_rifle，见Source/Basic/player/weapon_basic.h）。
+	// 和ToggleVehicle同一个"转发给专门组件"的模式，这次直接调自己身上的weaponComponent
+	// （不需要像ToggleVehicle那样经过静态Request*辅助函数反查AForeverFrameworkActor——
+	// 武器是这个Character自己的私有状态，不是map/world级别的全局单例）。
+	void StartFireWeapon();
+	void StopFireWeapon();
+	void ReloadWeapon();
+	void SwitchToWeapon1();
+	void SwitchToWeapon2();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UForeverWeaponComponent> weaponComponent;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	float walkSpeed = 500.f;
@@ -92,4 +107,7 @@ public:
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return cameraBoom; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return followCamera; }
 	FORCEINLINE UCameraComponent* GetFirstPersonCamera() const { return firstPersonCamera; }
+	// 供UForeverWeaponComponent::Fire()判断该用哪个摄像机做开火射线的起点/方向。
+	FORCEINLINE bool IsFirstPerson() const { return bIsFirstPerson; }
+	FORCEINLINE UForeverWeaponComponent* GetWeaponComponent() const { return weaponComponent; }
 };

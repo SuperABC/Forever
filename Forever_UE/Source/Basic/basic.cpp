@@ -18,6 +18,7 @@
 #include "player/asset_factory.h"
 #include "player/app_factory.h"
 #include "player/puzzle_factory.h"
+#include "player/weapon_factory.h"
 
 #include "map/terrain_basic.h"
 #include "map/roadnet_basic.h"
@@ -42,6 +43,7 @@
 #include "player/app_notes.h"
 #include "player/puzzle_basic.h"
 #include "player/puzzle_tetris.h"
+#include "player/weapon_basic.h"
 
 #pragma comment(lib, "Dependence.lib")
 
@@ -354,4 +356,19 @@ extern "C" __declspec(dllexport) void RegisterModPuzzles(PuzzleFactory* factory)
 		[](PuzzleMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModPuzzles(PuzzleFactory* factory) {
+}
+
+extern "C" __declspec(dllexport) void* GetModWeapons() {
+	static vector<string> mods = { PistolWeapon::GetId(), RifleWeapon::GetId() };
+	return (void*)&mods;
+}
+extern "C" __declspec(dllexport) void RegisterModWeapons(WeaponFactory* factory) {
+	factory->RegisterWeapon(PistolWeapon::GetId(),
+		[](const std::string&) -> WeaponMod* { return new PistolWeapon(); },
+		[](WeaponMod* m) { delete m; });
+	factory->RegisterWeapon(RifleWeapon::GetId(),
+		[](const std::string&) -> WeaponMod* { return new RifleWeapon(); },
+		[](WeaponMod* m) { delete m; });
+}
+extern "C" __declspec(dllexport) void FinishModWeapons(WeaponFactory* factory) {
 }

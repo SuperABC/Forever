@@ -62,6 +62,13 @@ public:
 	// ACitizenElement::WalkTo全部路径点走完后的回调：更新Citizen::SetCurrentRoom。
 	void NotifyArrived(Citizen* citizen, Room* destination);
 
+	// 武器系统命中citizen致死时调用（Citizen::TakeDamage()让IsDead()变成true之后）：
+	// Destroy()掉对应的ACitizenElement（如果当前有）、从activeInstances摘除。之后
+	// TickComponent的流式生成循环、FindOrSpawnCitizenByName都会跳过IsDead()的citizen，
+	// 不会再帮它生成/重新生成——一次性状态，这次没有复活逻辑。
+	// @citizen: 已经确认IsDead()的citizen；调用方负责先调TakeDamage()判定死亡。
+	void HandleCitizenDeath(Citizen* citizen);
+
 	// 供AForeverFrameworkActor::EndPlay/析构函数在真正delete map/populace之前调用一次：
 	// 忙等(短sleep轮询)直到所有已经通过RequestWalk派发到线程池的寻路任务全部执行完(包括
 	// 把结果推进pathResultQueue这一步)。必须真的等，不能指望"组件/Actor销毁后台线程自然

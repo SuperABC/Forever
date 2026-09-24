@@ -247,3 +247,18 @@ void Citizen::SetScheduler(Scheduler* value) { scheduler = value; }
 
 const vector<string>& Citizen::GetOptions() const { return options; }
 void Citizen::AddOption(const string& option) { options.push_back(option); }
+
+float Citizen::GetHealth() const { return health; }
+float Citizen::GetMaxHealth() const { return maxHealth; }
+
+float Citizen::TakeDamage(float amount) {
+	health = max(0.f, health - amount);
+	return health;
+}
+
+float Citizen::Heal(float amount) {
+	health = min(maxHealth, health + amount);
+	return health;
+}
+
+bool Citizen::IsDead() const { return health <= 0.f; }

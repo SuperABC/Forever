@@ -14,6 +14,7 @@
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "Player/ForeverPlayerController.h"
+#include "Player/ForeverWeaponComponent.h"
 #include "UI/MeetOptionWidget.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
@@ -76,6 +77,8 @@ AForeverCharacter::AForeverCharacter()
 	firstPersonCamera->bUsePawnControlRotation = true;
 	firstPersonCamera->Deactivate();
 
+	weaponComponent = CreateDefaultSubobject<UForeverWeaponComponent>(TEXT("WeaponComponent"));
+
 	static ConstructorHelpers::FObjectFinder<UInputAction> moveFinder(
 		TEXT("/Game/Blueprint/Player/Input/Actions/IA_Move.IA_Move"));
 	if (moveFinder.Succeeded()) {
@@ -120,6 +123,15 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 			subsystem->AddMappingContext(inputLookMapping, 0);
 		}
 	}
+
+	// 武器系统：被真正的玩家占有时默认配一把手枪，这样切到任何一个可操控角色(玩家自己的
+	// 初始角色，或者ChangeControlChange换过去的citizen)手上都能立刻测开火/换弹/切枪，
+	// 不需要额外的UI/背包流程。每次PossessedBy都会重新配一把满弹匣的手枪(不会保留上次
+	// 这个角色被占有时剩下的弹药/切换到的武器)，这是MVP阶段的已知简化，见
+	// ForeverWeaponComponent.md。
+	if (weaponComponent) {
+		weaponComponent->EquipWeapon(TEXT("weapon_pistol"));
+	}
 }
 
 void AForeverCharacter::UnPossessed()
@@ -154,6 +166,11 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionUp")), ETriggerEvent::Started, this, &AForeverCharacter::MeetOptionFocusUp);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionDown")), ETriggerEvent::Started, this, &AForeverCharacter::MeetOptionFocusDown);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionSelect")), ETriggerEvent::Started, this, &AForeverCharacter::MeetOptionSelect);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("FireWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::StartFireWeapon);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("FireWeapon")), ETriggerEvent::Completed, this, &AForeverCharacter::StopFireWeapon);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ReloadWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::ReloadWeapon);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("SwitchWeapon1")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchToWeapon1);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("SwitchWeapon2")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchToWeapon2);
 			}
 		}
 	}
@@ -214,6 +231,31 @@ void AForeverCharacter::MeetOptionSelect()
 			meetOption->ClickFocus();
 		}
 	}
+}
+
+void AForeverCharacter::StartFireWeapon()
+{
+	if (weaponComponent) weaponComponent->StartFire();
+}
+
+void AForeverCharacter::StopFireWeapon()
+{
+	if (weaponComponent) weaponComponent->StopFire();
+}
+
+void AForeverCharacter::ReloadWeapon()
+{
+	if (weaponComponent) weaponComponent->Reload();
+}
+
+void AForeverCharacter::SwitchToWeapon1()
+{
+	if (weaponComponent) weaponComponent->EquipWeapon(TEXT("weapon_pistol"));
+}
+
+void AForeverCharacter::SwitchToWeapon2()
+{
+	if (weaponComponent) weaponComponent->EquipWeapon(TEXT("weapon_rifle"));
 }
 
 void AForeverCharacter::Move(const FInputActionValue& value)

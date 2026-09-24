@@ -159,6 +159,30 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	}
 }
 
+void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& name, const FString& reason) {
+	if (!story || !GEngine) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	CitizenDeceaseEvent event(string(TCHAR_TO_UTF8(*name)), string(TCHAR_TO_UTF8(*reason)));
+
+	ScriptContext context;
+	context.self = story->GetMainScript();
+	context.system = story->GetSystemScript();
+	context.local = &event;
+	ProcessScriptActions(framework, story->GetMainScript() ? story->GetMainScript()->MatchEvent(&event, context, &postImplement)
+		: vector<ScriptAction>(), context);
+}
+
 void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context) {
 	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetName(), context)).data());
 

@@ -32,6 +32,7 @@ Registry::Registry() {
 	modLoader.RegisterConcept<AssetFactory>(mods, "RegisterModAssets", "FinishModAssets", &assetFactory);
 	modLoader.RegisterConcept<AppFactory>(mods, "RegisterModApps", "FinishModApps", &appFactory);
 	modLoader.RegisterConcept<PuzzleFactory>(mods, "RegisterModPuzzles", "FinishModPuzzles", &puzzleFactory);
+	modLoader.RegisterConcept<WeaponFactory>(mods, "RegisterModWeapons", "FinishModWeapons", &weaponFactory);
 	modLoader.RegisterConcept<NameFactory>(mods, "RegisterModNames", "FinishModNames", &nameFactory);
 	modLoader.RegisterConcept<SchedulerFactory>(mods, "RegisterModSchedulers", "FinishModSchedulers", &schedulerFactory);
 	modLoader.RegisterConcept<JobFactory>(mods, "RegisterModJobs", "FinishModJobs", &jobFactory);
@@ -59,6 +60,7 @@ void Registry::ReloadModArgs() {
 	assetFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("asset_mods")));
 	appFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("app_mods")));
 	puzzleFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("puzzle_mods")));
+	weaponFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("weapon_mods")));
 	nameFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("name_mods")));
 	schedulerFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("scheduler_mods")));
 	jobFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("job_mods")));
@@ -92,5 +94,6 @@ bool Registry::CheckModRegistered(const string& id) const {
 		|| vehicleFactory.CheckRegistered(id)
 		|| assetFactory.CheckRegistered(id)
 		|| appFactory.CheckRegistered(id)
-		|| puzzleFactory.CheckRegistered(id);
+		|| puzzleFactory.CheckRegistered(id)
+		|| weaponFactory.CheckRegistered(id);
 }

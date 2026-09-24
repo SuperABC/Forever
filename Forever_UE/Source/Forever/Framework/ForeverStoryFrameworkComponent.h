@@ -41,6 +41,15 @@ public:
 	// @option: 被点击的选项文本字面量
 	void OptionDialog(const FString& name, const FString& option);
 
+	// 武器系统命中Citizen致死时调用：构造一个CitizenDeceaseEvent，只匹配主线剧情Script
+	// （不像OptionDialog那样额外匹配目标citizen自己的Scheduler Script——citizen已经死了，
+	// 它自己的日程脚本不再有意义），复用同一套Dialog展示/Change转发逻辑。这次不做成通用的
+	// "任意Event广播给任意Script"机制——就是照抄OptionDialog的写法单独写一次，见
+	// Source/Forever/Player/ForeverWeaponComponent.md"为什么不做通用广播机制"一节。
+	// @name: 死者姓名字面量
+	// @reason: 死亡原因字面量（这次固定传"gunshot"）
+	void BroadcastCitizenDecease(const FString& name, const FString& reason);
+
 	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。不在
 	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。这次改成
 	// public——AForeverFrameworkActor::ApplyChange统一收口所有Change的消费入口后，

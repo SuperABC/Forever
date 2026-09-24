@@ -263,6 +263,16 @@ public:
 	const std::vector<std::string>& GetOptions() const;
 	void AddOption(const std::string& option);
 
+	// 生命值——进入武器系统时新增，和Player同一套最小闭环(扣血/回血/是否死亡，不做死亡后果，
+	// 见Source/Forever/Player/ForeverWeaponComponent.md)。IsDead()一旦为true就不会再变回
+	// false——这次没有复活/救治逻辑，纯粹是个单向状态；Forever层UForeverPopulaceFrameworkComponent
+	// 的流式生成会跳过IsDead()的citizen，不会再帮它生成/重新生成ACitizenElement。
+	float GetHealth() const;
+	float GetMaxHealth() const;
+	float TakeDamage(float amount);
+	float Heal(float amount);
+	bool IsDead() const;
+
 private:
 	std::string name;
 	GENDER_TYPE gender;
@@ -293,4 +303,8 @@ private:
 	Scheduler* scheduler = nullptr;
 
 	std::vector<std::string> options;
+
+	// 进入武器系统新增。100点是随手给的默认值，具体数值等PIE里试手感再调。
+	float health = 100.f;
+	float maxHealth = 100.f;
 };

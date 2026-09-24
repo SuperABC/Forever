@@ -20,6 +20,7 @@
 #include "player/asset_factory.h"
 #include "player/app_factory.h"
 #include "player/puzzle_factory.h"
+#include "player/weapon_factory.h"
 
 #include "common/loader.h"
 
@@ -102,6 +103,7 @@ public:
 	AssetFactory& GetAssetFactory() { return assetFactory; }
 	AppFactory& GetAppFactory() { return appFactory; }
 	PuzzleFactory& GetPuzzleFactory() { return puzzleFactory; }
+	WeaponFactory& GetWeaponFactory() { return weaponFactory; }
 
 private:
 	Registry();
@@ -138,5 +140,6 @@ private:
 	AssetFactory assetFactory;
 	AppFactory appFactory;
 	PuzzleFactory puzzleFactory;
+	WeaponFactory weaponFactory;
 
 };

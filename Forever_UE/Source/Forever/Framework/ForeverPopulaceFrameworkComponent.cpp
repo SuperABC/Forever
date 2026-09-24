@@ -188,9 +188,20 @@ void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* d
 	citizen->SetCurrentRoom(destination);
 }
 
+void UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen* citizen) {
+	if (!citizen) return;
+
+	if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen)) {
+		if (*existing) {
+			(*existing)->Destroy();
+		}
+		activeInstances.Remove(citizen);
+	}
+}
+
 ACitizenElement* UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(const FString& name) {
 	for (Citizen* citizen : allCitizens) {
-		if (!citizen) continue;
+		if (!citizen || citizen->IsDead()) continue;
 		if (name != UTF8_TO_TCHAR(citizen->GetName().c_str())) continue;
 
 		if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen)) {
@@ -228,7 +239,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 	for (int32 i = 0; i < batchCount; i++) {
 		int32 idx = (pollCursor + i) % total;
 		Citizen* citizen = allCitizens[idx];
-		if (!citizen) continue;
+		if (!citizen || citizen->IsDead()) continue;
 
 		TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 		if (!existing) {

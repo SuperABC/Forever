@@ -41,6 +41,17 @@ public:
 	// 是否发生跨天（相对上一次Tick/SetTime时的天数）
 	bool CrossDay();
 
+	// 生命值——进入武器系统时新增。这次只做"扣血/回血/是否死亡"这个最小闭环，不做死亡后果
+	// (复活/game over等)，见Source/Forever/Player/ForeverWeaponComponent.md。伤害/治疗量
+	// 传负数没有意义，调用方保证传正数，这里不做防御性纠正。
+	float GetHealth() const;
+	float GetMaxHealth() const;
+	// @amount: 扣除的生命值(正数)，返回值是扣除后的剩余生命值(已clamp到[0, maxHealth])
+	float TakeDamage(float amount);
+	// @amount: 恢复的生命值(正数)，返回值是恢复后的生命值(已clamp到[0, maxHealth])
+	float Heal(float amount);
+	bool IsDead() const;
+
 private:
 	// 游戏时钟（持有所有权）
 	Time* time = nullptr;
@@ -50,4 +61,8 @@ private:
 
 	// 默认值和原来硬编码的kTimeFlowRatio一致，未被脚本覆盖时行为不变。
 	double timeFlowRatio = 2.0;
+
+	// 进入武器系统新增。100点是随手给的默认值，具体数值等PIE里试手感再调。
+	float health = 100.f;
+	float maxHealth = 100.f;
 };

@@ -87,6 +87,12 @@ public:
 	void SetDespawnExempt(bool exempt) { bDespawnExempt = exempt; }
 	bool IsDespawnExempt() const { return bDespawnExempt; }
 
+	// 供UForeverWeaponComponent命中判定用：武器组件用LineTraceSingleByChannel打到这个
+	// Actor之后，要拿到对应的Citizen*才能调TakeDamage()——武器组件本身不认识
+	// UForeverPopulaceFrameworkComponent的私有activeInstances，只能从命中的Actor自己
+	// 反查。不持有所有权，citizen本身的生命周期由Populace管理。
+	Citizen* GetCitizen() const { return citizen; }
+
 protected:
 	virtual void Tick(float DeltaTime) override;
 

@@ -50,6 +50,7 @@
    "asset_mods" : [ "empty --test true" ],
    "app_mods" : [ "empty --test true", "bounce", "notes" ],
    "puzzle_mods" : [ "empty --test true", "tetris" ],
+   "weapon_mods" : [ "weapon_pistol", "weapon_rifle" ],
    "name_mods" : [ "chinese" ],
    "scheduler_mods" : [ "empty --test true", "scheduler_basic" ],
    "job_mods" : [ "empty --test true", "job_shop_saler" ],
