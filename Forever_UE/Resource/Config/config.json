@@ -56,9 +56,10 @@
    "job_mods" : [ "empty --test true", "job_shop_saler" ],
    "organization_mods" : [ "empty --test true", "organization_shop" ],
    "script_mods" : [ "wxdj", "empty --test true", "script_basic" ],
-   "product_mods" : [ "empty --test true" ],
-   "storage_mods" : [ "empty --test true" ],
-   "manufacture_mods" : [ "empty --test true" ],
+   "product_mods" : [ "empty --test true", "product_wheat", "product_beef", "product_burger" ],
+   "storage_mods" : [ "empty --test true", "storage_wheat", "storage_beef", "storage_burger" ],
+   "manufacture_mods" : [ "empty --test true", "manufacture_farm", "manufacture_ranch",
+      "manufacture_food_factory" ],
    "route_mods" : [ "empty --test true" ],
    "station_mods" : [ "empty --test true" ],
    "vehicle_mods" : [ "empty --test true", "vehicle_basic" ]

@@ -1,11 +1,14 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 
-// 阶段3骨架:StorageMod只声明GetType()/GetName()两个纯虚接口,用于验证Mod发现/加载/
-// 注册机制本身。真正的industry域业务接口留到阶段4迁移industry系统时才补上,完整21个
-// concept x 8个domain对照表见 Source/Dependence/README.md。
+// Storage：一个仓库的类型定义——只声明"能装什么(categories)"+"能装多少(capacity)"，
+// 不知道自己的上下游/位置，这些由Industry的全城统一调配逻辑在运行时读写，见
+// Core/industry/storage.h/storage.md。categories和ProductMod::categories同一套
+// 字符串标签，任一交集即可存放。capacity是共享容量池(不同产品类型共用总容量)，不是
+// 每种产品类型各自独立配额，照抄老工程的设计。
 class StorageMod {
 public:
 	StorageMod() = default;
@@ -13,4 +16,10 @@ public:
 
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
+
+	// 具体子类构造函数/SetProperty()里填这两个字段，和ProductMod同一个"两段式"约定。
+	virtual void SetProperty() = 0;
+
+	std::vector<std::string> categories;
+	float capacity = 0.f;
 };

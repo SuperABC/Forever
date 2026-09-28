@@ -5,21 +5,50 @@
 #include <string>
 
 
-// 阶段3占位:trivial默认实现,真正的默认industry内容目录留到阶段4从旧工程
-// Basic/industry/storage_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
+// 阶段4-5工业系统测试案例——三个仓库：小麦仓库/牛肉仓库/汉堡仓库，categories分别对应
+// product_basic.h里三个产品的categories，见Source/Core/industry/industry.md。
+// capacity是占位测试值，跑通之后按实际观察到的存量变化速度调整。
 //
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式(之前这里是固定字符串，
-// 没有任何唯一性)。
-class StorageBasic : public StorageMod {
-public:
-	StorageBasic();
+// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼。
 
-	static const char* GetId() { return "storage_basic"; }
-	virtual const char* GetType() const override { return "storage_basic"; }
+class WheatStorage : public StorageMod {
+public:
+	WheatStorage();
+
+	static const char* GetId() { return "storage_wheat"; }
+	virtual const char* GetType() const override { return "storage_wheat"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override {}
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class BeefStorage : public StorageMod {
+public:
+	BeefStorage();
+
+	static const char* GetId() { return "storage_beef"; }
+	virtual const char* GetType() const override { return "storage_beef"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override {}
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class BurgerStorage : public StorageMod {
+public:
+	BurgerStorage();
+
+	static const char* GetId() { return "storage_burger"; }
+	virtual const char* GetType() const override { return "storage_burger"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override {}
 
 private:
 	static int count;

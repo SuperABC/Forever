@@ -88,6 +88,9 @@
     <ClCompile Include="society\job.cpp" />
     <ClCompile Include="society\organization.cpp" />
     <ClCompile Include="industry\industry.cpp" />
+    <ClCompile Include="industry\product.cpp" />
+    <ClCompile Include="industry\storage.cpp" />
+    <ClCompile Include="industry\manufacture.cpp" />
     <ClCompile Include="traffic\traffic.cpp" />
     <ClCompile Include="traffic\vehicle.cpp" />
     <ClCompile Include="player\player.cpp" />
@@ -121,6 +124,9 @@
     <ClInclude Include="society\job.h" />
     <ClInclude Include="society\organization.h" />
     <ClInclude Include="industry\industry.h" />
+    <ClInclude Include="industry\product.h" />
+    <ClInclude Include="industry\storage.h" />
+    <ClInclude Include="industry\manufacture.h" />
     <ClInclude Include="traffic\traffic.h" />
     <ClInclude Include="traffic\vehicle.h" />
     <ClInclude Include="player\player.h" />

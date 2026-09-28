@@ -242,36 +242,54 @@ extern "C" __declspec(dllexport) void FinishModScripts(ScriptFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModProducts() {
-	static vector<string> mods = { ProductBasic::GetId() };
+	static vector<string> mods = { WheatProduct::GetId(), BeefProduct::GetId(), BurgerProduct::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModProducts(ProductFactory* factory) {
-	factory->RegisterProduct(ProductBasic::GetId(),
-		[](const std::string&) -> ProductMod* { return new ProductBasic(); },
+	factory->RegisterProduct(WheatProduct::GetId(),
+		[](const std::string&) -> ProductMod* { return new WheatProduct(); },
+		[](ProductMod* m) { delete m; });
+	factory->RegisterProduct(BeefProduct::GetId(),
+		[](const std::string&) -> ProductMod* { return new BeefProduct(); },
+		[](ProductMod* m) { delete m; });
+	factory->RegisterProduct(BurgerProduct::GetId(),
+		[](const std::string&) -> ProductMod* { return new BurgerProduct(); },
 		[](ProductMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModProducts(ProductFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModStorages() {
-	static vector<string> mods = { StorageBasic::GetId() };
+	static vector<string> mods = { WheatStorage::GetId(), BeefStorage::GetId(), BurgerStorage::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModStorages(StorageFactory* factory) {
-	factory->RegisterStorage(StorageBasic::GetId(),
-		[](const std::string&) -> StorageMod* { return new StorageBasic(); },
+	factory->RegisterStorage(WheatStorage::GetId(),
+		[](const std::string&) -> StorageMod* { return new WheatStorage(); },
+		[](StorageMod* m) { delete m; });
+	factory->RegisterStorage(BeefStorage::GetId(),
+		[](const std::string&) -> StorageMod* { return new BeefStorage(); },
+		[](StorageMod* m) { delete m; });
+	factory->RegisterStorage(BurgerStorage::GetId(),
+		[](const std::string&) -> StorageMod* { return new BurgerStorage(); },
 		[](StorageMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModStorages(StorageFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModManufactures() {
-	static vector<string> mods = { ManufactureBasic::GetId() };
+	static vector<string> mods = { FarmManufacture::GetId(), RanchManufacture::GetId(), FoodFactoryManufacture::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModManufactures(ManufactureFactory* factory) {
-	factory->RegisterManufacture(ManufactureBasic::GetId(),
-		[](const std::string&) -> ManufactureMod* { return new ManufactureBasic(); },
+	factory->RegisterManufacture(FarmManufacture::GetId(),
+		[](const std::string&) -> ManufactureMod* { return new FarmManufacture(); },
+		[](ManufactureMod* m) { delete m; });
+	factory->RegisterManufacture(RanchManufacture::GetId(),
+		[](const std::string&) -> ManufactureMod* { return new RanchManufacture(); },
+		[](ManufactureMod* m) { delete m; });
+	factory->RegisterManufacture(FoodFactoryManufacture::GetId(),
+		[](const std::string&) -> ManufactureMod* { return new FoodFactoryManufacture(); },
 		[](ManufactureMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModManufactures(ManufactureFactory* factory) {

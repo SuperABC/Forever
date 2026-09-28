@@ -45,6 +45,15 @@
     <ClCompile Include="industry\industry.cpp">
       <Filter>industry</Filter>
     </ClCompile>
+    <ClCompile Include="industry\product.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\storage.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\manufacture.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
     <ClCompile Include="traffic\traffic.cpp">
       <Filter>traffic</Filter>
     </ClCompile>
@@ -114,6 +123,15 @@
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="industry\industry.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\product.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\storage.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\manufacture.h">
       <Filter>industry</Filter>
     </ClInclude>
     <ClInclude Include="traffic\traffic.h">

@@ -5,21 +5,51 @@
 #include <string>
 
 
-// 阶段3占位:trivial默认实现,真正的默认industry内容目录留到阶段4从旧工程
-// Basic/industry/manufacture_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
+// 阶段4-5工业系统测试案例——三个工坊：农场(无原料产小麦)/牧场(无原料产牛肉)/
+// 食品加工厂(小麦+牛肉→汉堡，配方写在BurgerProduct身上，见product_basic.h)，
+// 用来验证Industry::Tick()每日三阶段(WorkAccount→GlobalAllocate→StartProduce)，
+// 见Source/Core/industry/industry.md。targets的value(每天产几批)是占位测试值。
 //
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式(之前这里是固定字符串，
-// 没有任何唯一性)。
-class ManufactureBasic : public ManufactureMod {
-public:
-	ManufactureBasic();
+// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼。
 
-	static const char* GetId() { return "manufacture_basic"; }
-	virtual const char* GetType() const override { return "manufacture_basic"; }
+class FarmManufacture : public ManufactureMod {
+public:
+	FarmManufacture();
+
+	static const char* GetId() { return "manufacture_farm"; }
+	virtual const char* GetType() const override { return "manufacture_farm"; }
 	virtual const char* GetName() override;
+	virtual void SetTargets() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class RanchManufacture : public ManufactureMod {
+public:
+	RanchManufacture();
+
+	static const char* GetId() { return "manufacture_ranch"; }
+	virtual const char* GetType() const override { return "manufacture_ranch"; }
+	virtual const char* GetName() override;
+	virtual void SetTargets() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class FoodFactoryManufacture : public ManufactureMod {
+public:
+	FoodFactoryManufacture();
+
+	static const char* GetId() { return "manufacture_food_factory"; }
+	virtual const char* GetType() const override { return "manufacture_food_factory"; }
+	virtual const char* GetName() override;
+	virtual void SetTargets() override;
 
 private:
 	static int count;
