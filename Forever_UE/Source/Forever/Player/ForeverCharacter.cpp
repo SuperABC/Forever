@@ -22,6 +22,8 @@
 
 AForeverCharacter::AForeverCharacter()
 {
+	PrimaryActorTick.bCanEverTick = true; // 瞄准摄像机插值需要每帧跑，见Tick()
+
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
 	// Mesh的碰撞预设"CharacterMesh"的ObjectType同样是Pawn，对着任何Trigger(比如
@@ -46,7 +48,8 @@ AForeverCharacter::AForeverCharacter()
 
 	cameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	cameraBoom->SetupAttachment(RootComponent);
-	cameraBoom->TargetArmLength = 400.0f;
+	cameraBoom->TargetArmLength = defaultArmLength;
+	cameraBoom->SocketOffset = defaultSocketOffset;
 	cameraBoom->bUsePawnControlRotation = true;
 
 	followCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
@@ -146,6 +149,21 @@ void AForeverCharacter::UnPossessed()
 	Super::UnPossessed();
 }
 
+void AForeverCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// 瞄准摄像机平滑过渡——每帧把cameraBoom的SocketOffset/TargetArmLength朝目标值(瞄准中
+	// 用aimSocketOffset/aimArmLength，否则用defaultSocketOffset/defaultArmLength)插值一步，
+	// 不是StartAim/StopAim里直接赋值瞬间跳变，见头文件aimTransitionSpeed注释。这个Tick()
+	// 要正常跑，前提是这个实例的Actor Tick没被关掉——ACitizenElement默认对静止citizen关闭
+	// Tick(省性能)，被玩家占有时会重新打开，见ACitizenElement::PossessedBy/UnPossessed。
+	FVector targetSocketOffset = bIsAiming ? aimSocketOffset : defaultSocketOffset;
+	float targetArmLength = bIsAiming ? aimArmLength : defaultArmLength;
+	cameraBoom->SocketOffset = FMath::VInterpTo(cameraBoom->SocketOffset, targetSocketOffset, DeltaTime, aimTransitionSpeed);
+	cameraBoom->TargetArmLength = FMath::FInterpTo(cameraBoom->TargetArmLength, targetArmLength, DeltaTime, aimTransitionSpeed);
+}
+
 void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -171,6 +189,8 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ReloadWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::ReloadWeapon);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("SwitchWeapon1")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchToWeapon1);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("SwitchWeapon2")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchToWeapon2);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("AimWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::StartAim);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("AimWeapon")), ETriggerEvent::Completed, this, &AForeverCharacter::StopAim);
 			}
 		}
 	}
@@ -185,8 +205,16 @@ void AForeverCharacter::ToggleCameraView()
 
 	GetMesh()->SetOwnerNoSee(bIsFirstPerson);
 
-	bUseControllerRotationYaw = bIsFirstPerson;
-	GetCharacterMovement()->bOrientRotationToMovement = !bIsFirstPerson;
+	UpdateRotationMode();
+}
+
+void AForeverCharacter::UpdateRotationMode()
+{
+	// 第一人称、或者瞄准中(不管第几人称)，角色朝向都要跟摄像机走，不是跟移动方向走——
+	// 瞄准时人应该正对着准星指向的地方，不能因为往侧面/后面移动就转向移动方向。
+	bool bFaceCamera = bIsFirstPerson || bIsAiming;
+	bUseControllerRotationYaw = bFaceCamera;
+	GetCharacterMovement()->bOrientRotationToMovement = !bFaceCamera;
 }
 
 void AForeverCharacter::StartSprint()
@@ -251,6 +279,18 @@ void AForeverCharacter::ReloadWeapon()
 void AForeverCharacter::SwitchToWeapon1()
 {
 	if (weaponComponent) weaponComponent->EquipWeapon(TEXT("weapon_pistol"));
+}
+
+void AForeverCharacter::StartAim()
+{
+	bIsAiming = true;
+	UpdateRotationMode();
+}
+
+void AForeverCharacter::StopAim()
+{
+	bIsAiming = false;
+	UpdateRotationMode();
 }
 
 void AForeverCharacter::SwitchToWeapon2()

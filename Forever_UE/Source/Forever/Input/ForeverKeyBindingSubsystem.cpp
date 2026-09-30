@@ -38,6 +38,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("ReloadWeapon"), EKeys::R },
 		{ TEXT("SwitchWeapon1"), EKeys::One },
 		{ TEXT("SwitchWeapon2"), EKeys::Two },
+		{ TEXT("AimWeapon"), EKeys::RightMouseButton },
 	};
 	return definitions;
 }

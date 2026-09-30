@@ -23,6 +23,7 @@ public:
 	virtual void UnPossessed() override;
 
 protected:
+	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 	void Move(const FInputActionValue& value);
@@ -95,6 +96,50 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UForeverWeaponComponent> weaponComponent;
 
+	// 瞄准（默认鼠标右键，按住生效/松开取消）：第三人称下把cameraBoom的SocketOffset/
+	// TargetArmLength平滑插值到肩膀附近的取景位置，让角色自己的身体不挡住准星指向的东西——
+	// 仿照大部分第三人称射击游戏的"越肩瞄准"做法。只改cameraBoom/followCamera这一份现有
+	// 组件的参数，不新增第三个摄像机——UForeverWeaponComponent::Fire()本来就读
+	// GetFollowCamera()的实时位置做开火起点，瞄准时摄像机移过去了，开火起点自动跟着变，
+	// 不需要改武器组件一行代码，见ForeverWeaponComponent.md"瞄准"一节。
+	void StartAim();
+	void StopAim();
+
+	// 瞄准时角色朝向要跟着摄像机(鼠标)转，不能只跟着移动方向转——人不能"边跑边朝身后瞄准"。
+	// 复用第一人称视角本来就有的"朝向跟摄像机走"这套开关(bUseControllerRotationYaw+
+	// CharacterMovement::bOrientRotationToMovement)，瞄准时临时借用同一套开关，取消瞄准后
+	// 按bIsFirstPerson恢复原状——不是瞄准专属的新变量，是同一套朝向模式的另一个触发条件。
+	// ToggleCameraView/StartAim/StopAim三处都会调这个，统一算一遍当前该用哪种朝向模式。
+	void UpdateRotationMode();
+
+	bool bIsAiming = false;
+
+	// 非瞄准状态下cameraBoom的SocketOffset/TargetArmLength目标值——构造函数里
+	// TargetArmLength=400.f，SocketOffset默认FVector::ZeroVector，这里各自存一份供Tick()
+	// 插值时做"取消瞄准该回到哪"的目标，不依赖读取cameraBoom当前值(那是插值过程中的中间态，
+	// 不是目标值)。
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Aim")
+	FVector defaultSocketOffset = FVector::ZeroVector;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Aim")
+	float defaultArmLength = 400.f;
+
+	// 瞄准时cameraBoom的目标SocketOffset/TargetArmLength——Y轴正值=向右肩偏移，
+	// Z轴正值=略微升高，配合缩短的ArmLength(离角色更近)做出"越肩瞄准"的效果。具体数值是
+	// 按经验给的初始值，实际手感需要在PIE里试，见ForeverWeaponComponent.md。
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Aim")
+	FVector aimSocketOffset = FVector(0.f, 60.f, 40.f);
+
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Aim")
+	float aimArmLength = 150.f;
+
+	// 瞄准/取消瞄准过渡的插值速度(FMath::VInterpTo/FInterpTo的InterpSpeed参数)——越大过渡
+	// 越快，用户明确要求"瞄准和取消瞄准的过程相机是平滑移动"，不能瞬间跳变，所以这里必须是
+	// 一个有限值，不能直接在StartAim/StopAim里一次性把SocketOffset/TargetArmLength设成
+	// 目标值。
+	UPROPERTY(EditDefaultsOnly, Category = "Camera|Aim")
+	float aimTransitionSpeed = 10.f;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
 	float walkSpeed = 500.f;
 
@@ -110,4 +155,6 @@ public:
 	// 供UForeverWeaponComponent::Fire()判断该用哪个摄像机做开火射线的起点/方向。
 	FORCEINLINE bool IsFirstPerson() const { return bIsFirstPerson; }
 	FORCEINLINE UForeverWeaponComponent* GetWeaponComponent() const { return weaponComponent; }
+	// 供AForeverHUD判断要不要画屏幕中心的准星。
+	FORCEINLINE bool IsAiming() const { return bIsAiming; }
 };

@@ -1027,10 +1027,17 @@ void Map::Checkin(const Populace& populace) {
 		Citizen* spouse = citizen->GetSpouse();
 		if (spouse && !spouse->GetRoom() && GetRandom(10) > 0) {
 			moveIn(spouse, room);
-			for (Citizen* child : citizen->GetChildren()) {
-				if (child && !child->GetRoom() && child->GetAge(currentYear) < kAdultAge) {
-					moveIn(child, room);
-				}
+		}
+
+		// 子女搬进同一间不依赖配偶是否一起搬进来——单亲家庭(GetSpouse()本身为空，或配偶没
+		// 通过上面90%的判定跟着搬进来)的孩子也应该有地方住，不能因为"没配偶/配偶没搬进来"
+		// 就连孩子一起漏掉。之前这段逻辑写在上面的if(spouse...)块里面，跟这里的注释("未成年
+		// 子女无条件一起搬进同一间")自相矛盾——单亲家庭的孩子会被永远漏分房间，跟住宅room
+		// 是否够用无关(哪怕全地图房子都空着也一样分不到)，见Room/Citizen::GetRoom()的
+		// "房子空着但有市民没房子"这个bug报告。
+		for (Citizen* child : citizen->GetChildren()) {
+			if (child && !child->GetRoom() && child->GetAge(currentYear) < kAdultAge) {
+				moveIn(child, room);
 			}
 		}
 

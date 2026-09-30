@@ -15,8 +15,8 @@
 // "签名留白等以后再定"的半成品。
 //
 // 这次范围明确不做：assetId(资产/背包关联)、ammoObjectId/maxReserveAmmo(备弹真实扣减)、
-// 瞄准倍率/后坐力恢复这类需要专门调优的手感参数——见weapon_basic.md/CitizenElement.md
-// 同类"先占位/先不做"的取舍记录。
+// 瞄准倍率——见weapon_basic.md/CitizenElement.md同类"先占位/先不做"的取舍记录。后坐力
+// 这次已经做了，见下面"后坐力"字段组。
 class WeaponMod {
 public:
 	WeaponMod() = default;
@@ -40,6 +40,17 @@ public:
 	// 换挂载点不需要碰开火逻辑。
 	std::string gripSocketName;
 
+	// 挂载点(gripSocketName对应的骨骼socket，或者留空时的角色Root)基础上的本地偏移——
+	// 没有真实持枪socket之前，直接挂Root会让枪的可视网格出现在角色身体正中心(实测卡在了
+	// 胯部)，这三个字段就是用来把它挪到看起来合理的位置(比如右肩膀靠前一点)。单位和UE一致
+	// (cm)，X前/Y右/Z上，是角色本地坐标系下的相对偏移，不是世界坐标。这次没有做旋转偏移——
+	// 用户只要求挪位置，没有要求调朝向。这个偏移同时决定了子弹轨迹debugLine的视觉起点，见
+	// UForeverWeaponComponent::Fire()："gunLocation"直接读挂了这个偏移之后的
+	// weaponMesh->GetComponentLocation()。
+	float attachOffsetX = 0.f;
+	float attachOffsetY = 0.f;
+	float attachOffsetZ = 0.f;
+
 	// ---- 射击参数 ----
 	float damage = 25.f;
 	float fireRate = 0.15f;        // 两次开火最小间隔，秒
@@ -50,6 +61,22 @@ public:
 	// ---- 弹药（MVP阶段：备弹视为无限，见weapon_basic.md）----
 	int magazineCapacity = 12;
 	float reloadDuration = 1.5f;   // 秒
+
+	// ---- 后坐力（手感仿PUBG：每次开火瞬间踢一下视角，不会自动回正，全靠玩家自己压枪/
+	// 甩枪抵消——PUBG本身也没有"松开鼠标后视角自动回到开火前"这种机制，持续连发时准心会
+	// 一直往上/往两边走，直到玩家主动把鼠标往反方向拉。单发/连发都会踢，因为两者最终都走
+	// 同一个Fire()调用，见UForeverWeaponComponent::Fire()"后坐力"一节）----
+	float recoilPitchMin = 0.3f;   // 每次开火向上踢的角度范围下限，度。UE的FRotator约定
+	float recoilPitchMax = 0.5f;   // Pitch是"+Up，-Down"，所以这两个是正数，不是负数——
+	                                // 每次开火在[recoilPitchMin, recoilPitchMax]里随机取一个
+	                                // 值，不是固定踢同样的角度，模拟每发后坐力不完全一致的
+	                                // 手感。两个值都给正数、且都>0，保证垂直方向始终是往上踢，
+	                                // 不会随机踢成往下（真实后坐力也不会把枪口往下压）。
+	float recoilYawMin = -0.25f;   // 每次开火左右方向踢动范围下限，度(负=向左)。
+	float recoilYawMax = 0.25f;    // 每次开火左右方向踢动范围上限，度(正=向右)——和Pitch
+	                                // 同样每次开火随机取一个值，不是固定往一个方向偏，模拟
+	                                // PUBG"左右小幅度随机漂移+整体向上"的手感，不是精确复刻
+	                                // 某支枪的真实后坐力轨迹。
 
 	// 单发伤害怎么算——默认对maxRange做线性衰减，特殊武器可以override成不衰减/更复杂的曲线。
 	virtual float ComputeDamage(float distance) const {

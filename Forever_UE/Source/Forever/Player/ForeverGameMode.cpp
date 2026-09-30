@@ -1,5 +1,6 @@
 #include "ForeverGameMode.h"
 
+#include "ForeverHUD.h"
 #include "ForeverPlayerController.h"
 #include "ForeverPlayerState.h"
 #include "Framework/ForeverFrameworkActor.h"
@@ -18,6 +19,7 @@ AForeverGameMode::AForeverGameMode()
 	DefaultPawnClass = ADefaultPawn::StaticClass();
 	PlayerControllerClass = AForeverPlayerController::StaticClass();
 	PlayerStateClass = AForeverPlayerState::StaticClass();
+	HUDClass = AForeverHUD::StaticClass(); // 瞄准准心，见ForeverHUD.h
 }
 
 void AForeverGameMode::BeginPlay()

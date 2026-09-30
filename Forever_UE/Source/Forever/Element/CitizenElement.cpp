@@ -189,6 +189,13 @@ void ACitizenElement::PossessedBy(AController* NewController) {
 	Super::PossessedBy(NewController); // AForeverCharacter::PossessedBy：增删Input Mapping Context
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 
+	// 构造函数里默认关掉了Tick(见上，绝大多数citizen静止不需要每帧开销)，但被玩家占有
+	// 之后，AForeverCharacter::Tick()要靠每帧跑才能做瞄准摄像机的平滑插值(cameraBoom
+	// SocketOffset/TargetArmLength)——必须显式重新打开，否则右键瞄准的输入事件正常触发
+	// (StartAim/StopAim能执行、bIsAiming能翻转)，但摄像机纹丝不动，因为Tick()整个没被
+	// 引擎调用。见UnPossessed里对应的关闭。
+	SetActorTickEnabled(true);
+
 	// 被占有期间直接禁掉自己的proximityBox——这个box本来就是"检测玩家有没有靠近我"，
 	// 自己正好就是玩家的时候，box和自己的capsule必然贴在一起常驻重叠，会不停产生自己的
 	// Overlap事件。但disable只能防止"以后"的自我Overlap——如果在被占有之前，自己就已经
@@ -205,6 +212,14 @@ void ACitizenElement::PossessedBy(AController* NewController) {
 void ACitizenElement::UnPossessed() {
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
 	if (proximityBox) proximityBox->SetCollisionProfileName(TEXT("Trigger")); // 恢复Trigger预设(QueryOnly+各通道Overlap)
+
+	// 玩家换到别的角色后，恢复"静止citizen默认不跑Tick"的省性能状态——但如果这个citizen
+	// 正好还在WalkTo()带的路径中间(pendingWaypoints非空)，不能关，Tick()自己走完路径后
+	// 会在Tick()内部自行SetActorTickEnabled(false)，这里关了反而会打断走路逻辑。
+	if (pendingWaypoints.Num() == 0) {
+		SetActorTickEnabled(false);
+	}
+
 	Super::UnPossessed(); // AForeverCharacter::UnPossessed：增删Input Mapping Context
 }
 
@@ -224,10 +239,17 @@ void ACitizenElement::WalkTo(const TArray<FVector>& waypoints, Room* destination
 }
 
 void ACitizenElement::Tick(float DeltaTime) {
-	Super::Tick(DeltaTime);
+	Super::Tick(DeltaTime); // AForeverCharacter::Tick：瞄准摄像机插值，被玩家占有期间必须持续跑
 
 	if (waypointIndex >= pendingWaypoints.Num()) {
-		SetActorTickEnabled(false);
+		// 被玩家占有期间不能自己把Tick关掉——PossessedBy打开Tick是为了让上面Super::Tick()的
+		// 瞄准插值每帧都能跑，但player-driven的移动不会经过WalkTo()/pendingWaypoints，所以
+		// 一旦没有待走的路径点就会立刻满足这个条件，如果不加IsPlayerControlled()这个例外，
+		// 会在被占有后的下一帧就把刚打开的Tick又关掉(实测踩过的坑，见ForeverWeaponComponent.md
+		// "瞄准"一节)。UnPossessed里会在还给AI之前把Tick关掉，不需要这里补。
+		if (!IsPlayerControlled()) {
+			SetActorTickEnabled(false);
+		}
 		return;
 	}
 
@@ -240,7 +262,9 @@ void ACitizenElement::Tick(float DeltaTime) {
 		waypointIndex++;
 		if (waypointIndex >= pendingWaypoints.Num()) {
 			GetCharacterMovement()->SetMovementMode(MOVE_None);
-			SetActorTickEnabled(false);
+			if (!IsPlayerControlled()) {
+				SetActorTickEnabled(false);
+			}
 			Room* arrived = walkDestination;
 			walkDestination = nullptr;
 			pendingWaypoints.Reset();
