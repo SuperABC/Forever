@@ -94,6 +94,7 @@
     <ClCompile Include="traffic\traffic.cpp" />
     <ClCompile Include="traffic\vehicle.cpp" />
     <ClCompile Include="player\player.cpp" />
+    <ClCompile Include="player\asset.cpp" />
     <ClCompile Include="player\app.cpp" />
     <ClCompile Include="player\phone.cpp" />
     <ClCompile Include="player\puzzle.cpp" />
@@ -130,6 +131,7 @@
     <ClInclude Include="traffic\traffic.h" />
     <ClInclude Include="traffic\vehicle.h" />
     <ClInclude Include="player\player.h" />
+    <ClInclude Include="player\asset.h" />
     <ClInclude Include="player\app.h" />
     <ClInclude Include="player\phone.h" />
     <ClInclude Include="player\puzzle.h" />

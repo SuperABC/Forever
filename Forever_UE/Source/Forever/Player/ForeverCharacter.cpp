@@ -11,6 +11,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "Player/ForeverPlayerController.h"
@@ -18,7 +19,11 @@
 #include "UI/MeetOptionWidget.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
+#include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
+
+#include "player/player.h"
+#include "player/asset.h"
 
 AForeverCharacter::AForeverCharacter()
 {
@@ -127,13 +132,42 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 		}
 	}
 
-	// 武器系统：被真正的玩家占有时默认配一把手枪，这样切到任何一个可操控角色(玩家自己的
-	// 初始角色，或者ChangeControlChange换过去的citizen)手上都能立刻测开火/换弹/切枪，
-	// 不需要额外的UI/背包流程。每次PossessedBy都会重新配一把满弹匣的手枪(不会保留上次
-	// 这个角色被占有时剩下的弹药/切换到的武器)，这是MVP阶段的已知简化，见
-	// ForeverWeaponComponent.md。
-	if (weaponComponent) {
-		weaponComponent->EquipWeapon(TEXT("weapon_pistol"));
+	// 武器/背包系统初始化：被真正的玩家占有时，左肩挂手枪+右肩挂步枪+激活左肩(出生自带
+	// 一把可开火的手枪)，背上背一个容器，容器里放手枪/步枪子弹各120发——这样切到任何一个
+	// 可操控角色(玩家自己的初始角色，或者ChangeControlChange换过去的citizen)手上都能立刻
+	// 测装备/换弹/切枪/背包，不需要额外的UI流程。每次PossessedBy都会重新生成(不会保留
+	// 上次这个角色被占有时剩下的状态)，这是MVP阶段的已知简化，照抄现有"每次重配满弹手枪"
+	// 的既定惯例，见ForeverWeaponComponent.md。
+	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+		if (Player* player = framework->GetPlayer()) {
+			// 先清理上一次占有(如果有)留下的状态，避免槽位已被占用导致这次装备失败——不需要
+			// 额外清理weaponComponent，下面ActivateShoulderWeapon(1)里的EquipWeapon()会自动
+			// 顶掉它可能残留的任何旧武器。
+			if (Asset* old = player->RemoveByPath("leftShoulder")) player->DestroyAsset(old);
+			if (Asset* old = player->RemoveByPath("rightShoulder")) player->DestroyAsset(old);
+			if (Asset* old = player->RemoveByPath("back")) player->DestroyAsset(old);
+
+			if (Asset* pistolAsset = player->CreateAsset("weapon_pistol", "ShoulderPistol")) {
+				player->AddByPath("leftShoulder", pistolAsset);
+			}
+			if (Asset* rifleAsset = player->CreateAsset("weapon_rifle", "ShoulderRifle")) {
+				player->AddByPath("rightShoulder", rifleAsset);
+			}
+			ActivateShoulderWeapon(1);
+
+			if (Asset* bag = player->CreateAsset("asset_container", "PlayerBag")) {
+				player->AddByPath("back", bag);
+				if (Asset* pistolAmmo = player->CreateAsset("ammo_pistol", "PistolAmmo")) {
+					pistolAmmo->SetCount(120);
+					bag->AddContent(pistolAmmo);
+				}
+				if (Asset* rifleAmmo = player->CreateAsset("ammo_rifle", "RifleAmmo")) {
+					rifleAmmo->SetCount(120);
+					bag->AddContent(rifleAmmo);
+				}
+			}
+		}
 	}
 }
 
@@ -278,11 +312,63 @@ void AForeverCharacter::ReloadWeapon()
 
 void AForeverCharacter::SwitchToWeapon1()
 {
-	if (weaponComponent) weaponComponent->EquipWeapon(TEXT("weapon_pistol"));
+	ActivateShoulderWeapon(1);
+}
+
+void AForeverCharacter::SwitchToWeapon2()
+{
+	ActivateShoulderWeapon(2);
+}
+
+void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
+{
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	if (!player || !weaponComponent) return;
+
+	Asset* toActivate = (slot == 1) ? player->GetLeftShoulder() : player->GetRightShoulder();
+	if (!toActivate) {
+		// 这个肩膀是空的——手上也应该跟着空下来，不能继续保留切换前那把武器(比如之前拿着
+		// 右肩的枪，按1切到空的左肩，手上不该还握着右肩那把)，用户明确要求这个行为。手上
+		// 空了之后StartAim()会因为HasWeapon()==false而拒绝瞄准。
+		weaponComponent->ClearWeapon();
+		if (GEngine) {
+			GEngine->AddOnScreenDebugMessage(201, 3.f, FColor::Cyan, TEXT("当前武器: 无"));
+		}
+		return;
+	}
+
+	// 武器Asset本身留在肩膀槽位上不动，不删除/不挪走——用户明确要求"激活成手上能开火的武器
+	// 不要把武器asset本身给删了，要还放在左右肩膀上"。EquipWeapon()只是让
+	// ForeverWeaponComponent额外持有一份"活的"WeaponMod副本用于开火/换弹模拟，肩膀上的
+	// Asset和这份"活的"副本是同一把枪的两种表示，彼此独立维护，互不删除/创建对方——
+	// EquipWeapon内部自己会先销毁上一把"活的"武器(如果有)，不需要这里手动处理。
+	FString activatedType = UTF8_TO_TCHAR(toActivate->GetType().c_str());
+	weaponComponent->EquipWeapon(activatedType);
+
+	// 屏幕左上角提示当前切到了哪把枪——用固定Key(不是-1)，切枪会刷新同一行，不往下堆叠。
+	if (GEngine) {
+		GEngine->AddOnScreenDebugMessage(201, 3.f, FColor::Cyan,
+			FString::Printf(TEXT("当前武器: %s"), *activatedType));
+	}
 }
 
 void AForeverCharacter::StartAim()
 {
+	// 手上没有激活任何武器就没法瞄准——用户明确要求："左右肩为空的时候切过去，因为没有
+	// 武器，这个时候无法瞄准"。
+	if (!weaponComponent || !weaponComponent->HasWeapon()) return;
+
+	// 手里攥着背包物品(不管是不是武器，因为武器根本不会出现在这里，见"武器只挂肩膀"设计)
+	// 就没法空手瞄准——和武器挂载机制彼此独立的常识性限制，逼玩家先Drop手里的东西。
+	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+		if (Player* player = framework->GetPlayer()) {
+			if (player->GetRightHand() != nullptr) return;
+		}
+	}
+
 	bIsAiming = true;
 	UpdateRotationMode();
 }
@@ -291,11 +377,6 @@ void AForeverCharacter::StopAim()
 {
 	bIsAiming = false;
 	UpdateRotationMode();
-}
-
-void AForeverCharacter::SwitchToWeapon2()
-{
-	if (weaponComponent) weaponComponent->EquipWeapon(TEXT("weapon_rifle"));
 }
 
 void AForeverCharacter::Move(const FInputActionValue& value)

@@ -17,6 +17,7 @@
 
 #include "common/registry.h"
 #include "player/weapon_mod.h"
+#include "player/player.h"
 #include "populace/citizen.h"
 
 using namespace std;
@@ -49,6 +50,17 @@ void UForeverWeaponComponent::EquipWeapon(const FString& weaponId) {
 	bReloading = false;
 	bWantsToFire = false;
 	SpawnWeaponMesh();
+}
+
+void UForeverWeaponComponent::ClearWeapon() {
+	if (!currentWeapon) return;
+
+	DestroyWeaponMesh();
+	Registry::Get().GetWeaponFactory().DestroyWeapon(currentWeapon);
+	currentWeapon = nullptr;
+	currentAmmo = 0;
+	bReloading = false;
+	bWantsToFire = false;
 }
 
 int32 UForeverWeaponComponent::GetMagazineCapacity() const {
@@ -108,10 +120,8 @@ void UForeverWeaponComponent::Reload() {
 	bReloading = true;
 	bWantsToFire = false;
 	reloadEndTime = GetWorld()->GetTimeSeconds() + currentWeapon->reloadDuration;
-	// MVP：备弹视为无限，这里不检查/不消耗任何备弹对象，见weapon_mod.h/weapon_basic.h
-	// 顶部注释——等以后背包/Asset域真正做出来，把下面TickComponent里"弹匣填满"那一步
-	// 换成"检查+扣减备弹，不够就不填满"即可，WeaponMod的其余字段和这个类的其它逻辑
-	// 完全不用动。
+	// 真正的备弹检查/扣减放在换弹计时结束时(TickComponent)，这里只负责启动计时——和开火
+	// 判定的时序一致，不在按下R的瞬间就扣备弹。
 }
 
 void UForeverWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType,
@@ -121,7 +131,16 @@ void UForeverWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	if (bReloading && GetWorld()->GetTimeSeconds() >= reloadEndTime) {
 		bReloading = false;
 		if (currentWeapon) {
-			currentAmmo = currentWeapon->magazineCapacity;
+			// 无论弹匣里剩多少发，一次换弹都扣除整个弹匣容量的备弹——不是"补齐差额"。备弹
+			// 不够就不扣减、不填满，currentAmmo保持原值(用户没要求"部分填充"这个edge case)。
+			if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+				if (Player* player = framework->GetPlayer()) {
+					if (player->ConsumeByType(currentWeapon->ammoType, currentWeapon->magazineCapacity)) {
+						currentAmmo = currentWeapon->magazineCapacity;
+					}
+				}
+			}
 			if (GEngine) {
 				GEngine->AddOnScreenDebugMessage(200, 3.f, FColor::White,
 					FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->magazineCapacity));

@@ -1,6 +1,7 @@
 #include "Element/BuildingElement.h"
 
 #include "Framework/ForeverBuildingFrameworkComponent.h"
+#include "Framework/ForeverFrameworkActor.h"
 
 #include "ProceduralMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -16,6 +17,7 @@
 #include "map/building.h"
 #include "map/room.h"
 #include "map/geometry.h"
+#include "player/player.h"
 
 #include <algorithm>
 
@@ -365,7 +367,7 @@ void ABuildingElement::BuildRoomCollisionBoxes() {
 		box->OnComponentEndOverlap.AddDynamic(this, &ABuildingElement::OnRoomOverlapEnd);
 		box->RegisterComponent();
 
-		roomBoxLabels.Add(box, FString::Printf(TEXT("Room: %s"), UTF8_TO_TCHAR(room->GetAddress().c_str())));
+		roomBoxLabels.Add(box, room);
 	}
 }
 
@@ -373,18 +375,45 @@ void ABuildingElement::OnRoomOverlapBegin(UPrimitiveComponent* OverlappedCompone
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
-	FString* label = roomBoxLabels.Find(OverlappedComponent);
-	if (!label || !GEngine) return;
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("进入 %s"), **label));
+	Room** roomPtr = roomBoxLabels.Find(OverlappedComponent);
+	if (!roomPtr || !*roomPtr) return;
+	Room* room = *roomPtr;
+
+	if (GEngine) {
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green,
+			FString::Printf(TEXT("进入 Room: %s"), UTF8_TO_TCHAR(room->GetAddress().c_str())));
+	}
+
+	// 真实物理位置——不是老工程的剧情/场景语义，见Source/Core/player/asset.md、
+	// player.h"武器只挂肩膀"一节旁边的说明。假设房间之间不重叠(和BuildCollisionBox的
+	// 两侧+/-0.01防抖动设计目的一致)，不做"离开A但还在B里"的重叠区域判断。
+	if (AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+		if (Player* player = frameworkActor->GetPlayer()) {
+			player->SetCurrentRoom(room);
+		}
+	}
 }
 
 void ABuildingElement::OnRoomOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
-	FString* label = roomBoxLabels.Find(OverlappedComponent);
-	if (!label || !GEngine) return;
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, FString::Printf(TEXT("离开 %s"), **label));
+	Room** roomPtr = roomBoxLabels.Find(OverlappedComponent);
+	if (!roomPtr || !*roomPtr) return;
+	Room* room = *roomPtr;
+
+	if (GEngine) {
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green,
+			FString::Printf(TEXT("离开 Room: %s"), UTF8_TO_TCHAR(room->GetAddress().c_str())));
+	}
+
+	if (AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+		if (Player* player = frameworkActor->GetPlayer()) {
+			player->SetCurrentRoom(nullptr);
+		}
+	}
 }
 
 UStaticMeshComponent* ABuildingElement::SpawnCube(float centerX, float centerY, float centerZ,

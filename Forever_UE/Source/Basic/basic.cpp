@@ -332,12 +332,35 @@ extern "C" __declspec(dllexport) void FinishModVehicles(VehicleFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModAssets() {
-	static vector<string> mods = { AssetBasic::GetId() };
+	static vector<string> mods = { ContainerAsset::GetId(), WheatAsset::GetId(), BeefAsset::GetId(),
+		BurgerAsset::GetId(), PistolAmmoAsset::GetId(), RifleAmmoAsset::GetId(),
+		PistolWeaponAsset::GetId(), RifleWeaponAsset::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModAssets(AssetFactory* factory) {
-	factory->RegisterAsset(AssetBasic::GetId(),
-		[](const std::string&) -> AssetMod* { return new AssetBasic(); },
+	factory->RegisterAsset(ContainerAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new ContainerAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(WheatAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new WheatAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(BeefAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new BeefAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(BurgerAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new BurgerAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(PistolAmmoAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new PistolAmmoAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(RifleAmmoAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new RifleAmmoAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(PistolWeaponAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new PistolWeaponAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(RifleWeaponAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new RifleWeaponAsset(); },
 		[](AssetMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModAssets(AssetFactory* factory) {

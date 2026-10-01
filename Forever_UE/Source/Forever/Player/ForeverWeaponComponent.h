@@ -40,12 +40,22 @@ public:
 	void StartFire();
 	void StopFire();
 
-	// 手动换弹——MVP阶段无条件把弹匣填满，不检查/不消耗任何备弹，见weapon_mod.h顶部注释。
+	// 手动换弹——换弹完成时从Player背包按WeaponMod::ammoType扣减整个弹匣容量的备弹，见.cpp
+	// TickComponent换弹完成分支。
 	void Reload();
 
 	bool IsReloading() const { return bReloading; }
 	int32 GetCurrentAmmo() const { return currentAmmo; }
 	int32 GetMagazineCapacity() const;
+
+	// 当前手上是不是空的(没有激活任何武器)——供AForeverCharacter::StartAim()判断能不能
+	// 瞄准(手上没武器没法瞄准)，也供ActivateShoulderWeapon()判断要不要先清空。
+	bool HasWeapon() const { return currentWeapon != nullptr; }
+
+	// 清空当前武器(销毁mesh+WeaponMod实例)，不装备新的——供
+	// AForeverCharacter::ActivateShoulderWeapon()在"切到的那个肩膀是空的"时调用：这时
+	// 手上应该跟着空下来，不能继续保留切换前的那把武器。
+	void ClearWeapon();
 
 private:
 	// 真正的一次开火：冷却/弹药检查通过后，从当前摄像机（第一/第三人称由

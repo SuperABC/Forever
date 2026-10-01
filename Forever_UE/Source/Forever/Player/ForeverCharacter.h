@@ -93,6 +93,12 @@ protected:
 	void SwitchToWeapon1();
 	void SwitchToWeapon2();
 
+	// 数字键1/2的真正实现：激活左肩(slot=1)/右肩(slot=2)当前挂着的武器(若有)——不是按
+	// 硬编码id切枪。同一时刻最多一把武器"激活"(ForeverWeaponComponent::currentWeapon)，
+	// 槽位里的Asset和激活的活武器是互斥的两种表示，见Source/Core/player/player.h
+	// "武器只挂肩膀"一节。
+	void ActivateShoulderWeapon(int32 slot);
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UForeverWeaponComponent> weaponComponent;
 

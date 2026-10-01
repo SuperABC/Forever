@@ -63,6 +63,9 @@
     <ClCompile Include="player\player.cpp">
       <Filter>player</Filter>
     </ClCompile>
+    <ClCompile Include="player\asset.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
     <ClCompile Include="map\terrain.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -141,6 +144,9 @@
       <Filter>traffic</Filter>
     </ClInclude>
     <ClInclude Include="player\player.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset.h">
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="map\terrain.h">

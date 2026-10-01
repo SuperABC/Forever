@@ -9,6 +9,7 @@ class USectionSpeakingWidget;
 class USectionOptionWidget;
 class UPuzzleWidget;
 class UPhoneWidget;
+class UForeverInventoryWidget;
 class UInputComponent;
 
 // 阶段5 MeetOption UI落地：MAINCONTROLLER_TODO.md点名的"MouseScrollUp/Down + F对话选项"
@@ -72,10 +73,22 @@ protected:
 	// P键(TogglePhone)的处理函数，转发给phoneWidget->TogglePhone()。
 	void TogglePhone();
 
+	// 阶段5-6背包(Inventory)UI落地：跟前面几个Widget同一套模式(常驻创建，B键(ToggleInventory)
+	// 控制开关)，见Source/Forever/UI/InventoryWidget.h、MAINCONTROLLER_TODO.md"B开背包"
+	// 这一行热键。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UForeverInventoryWidget> inventoryWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UForeverInventoryWidget> inventoryWidget;
+
+	void ToggleInventory();
+
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
 	FORCEINLINE USectionOptionWidget* GetSectionOptionWidget() const { return sectionOptionWidget; }
 	FORCEINLINE UPuzzleWidget* GetPuzzleWidget() const { return puzzleWidget; }
 	FORCEINLINE UPhoneWidget* GetPhoneWidget() const { return phoneWidget; }
+	FORCEINLINE UForeverInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
 };

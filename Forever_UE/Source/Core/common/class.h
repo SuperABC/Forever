@@ -49,3 +49,4 @@ class Traffic;
 // Player
 
 class Player;
+class Asset;

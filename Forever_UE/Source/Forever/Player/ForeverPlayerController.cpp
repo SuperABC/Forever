@@ -11,6 +11,7 @@
 #include "UI/SectionOptionWidget.h"
 #include "UI/PuzzleWidget.h"
 #include "UI/PhoneWidget.h"
+#include "UI/InventoryWidget.h"
 
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
@@ -65,6 +66,13 @@ void AForeverPlayerController::BeginPlay() {
 	else if ((phoneWidget = CreateWidget<UPhoneWidget>(this, phoneWidgetClass)) != nullptr) {
 		phoneWidget->AddToViewport();
 	}
+
+	if (inventoryWidgetClass == nullptr) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: inventoryWidgetClass未设置,跳过InventoryWidget创建。"));
+	}
+	else if ((inventoryWidget = CreateWidget<UForeverInventoryWidget>(this, inventoryWidgetClass)) != nullptr) {
+		inventoryWidget->AddToViewport();
+	}
 }
 
 void AForeverPlayerController::SetupInputComponent() {
@@ -74,6 +82,7 @@ void AForeverPlayerController::SetupInputComponent() {
 		if (UGameInstance* gameInstance = GetGameInstance()) {
 			if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("TogglePhone")), ETriggerEvent::Started, this, &AForeverPlayerController::TogglePhone);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleInventory")), ETriggerEvent::Started, this, &AForeverPlayerController::ToggleInventory);
 			}
 		}
 	}
@@ -81,4 +90,8 @@ void AForeverPlayerController::SetupInputComponent() {
 
 void AForeverPlayerController::TogglePhone() {
 	if (phoneWidget) phoneWidget->TogglePhone();
+}
+
+void AForeverPlayerController::ToggleInventory() {
+	if (inventoryWidget) inventoryWidget->TogglePanel();
 }

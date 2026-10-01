@@ -26,6 +26,8 @@ PistolWeapon::PistolWeapon() : id(count++) {
 	recoilPitchMax = 1.2f;
 	recoilYawMin = -0.6f;
 	recoilYawMax = 0.6f;
+
+	ammoType = "ammo_pistol";
 }
 
 const char* PistolWeapon::GetName() {
@@ -54,6 +56,8 @@ RifleWeapon::RifleWeapon() : id(count++) {
 	recoilPitchMax = 0.75f;
 	recoilYawMin = -0.4f;
 	recoilYawMax = 0.4f;
+
+	ammoType = "ammo_rifle";
 }
 
 const char* RifleWeapon::GetName() {

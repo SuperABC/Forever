@@ -165,8 +165,11 @@ private:
 	TObjectPtr<UBoxComponent> collisionBox;
 	FString collisionLabel; // Overlap回调只读这份烘焙好的字符串，绝不解引用building
 
-	// Room碰撞盒对应组件指针 -> 调试日志用的显示名(按room->GetAddress()烘焙)——一栋楼有多个
-	// Room，不能像building自己的碰撞盒那样只用一个FString，需要按组件查表。
-	UPROPERTY()
-	TMap<TObjectPtr<UPrimitiveComponent>, FString> roomBoxLabels;
+	// Room碰撞盒对应组件指针 -> 这个盒子对应哪个Room*——一栋楼有多个Room，不能像building
+	// 自己的碰撞盒那样只用一个FString，需要按组件查表。回调里同时用它反查Room*(更新
+	// Player::SetCurrentRoom，见Source/Core/player/player.h"武器只挂肩膀"一节旁边的房间
+	// 物理绑定)和现场用room->GetAddress()生成调试文本(不预先烘焙字符串)。不能标
+	// UPROPERTY——Room*是Core层类型，不是UObject/USTRUCT，UHT反射不认；GC安全性不受影响，
+	// 这些UPrimitiveComponent由Actor自己的组件树持有，见类注释同类说明。
+	TMap<UPrimitiveComponent*, Room*> roomBoxLabels;
 };

@@ -31,6 +31,11 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// ChangeControlChange换着操控不同市民/载具,Controller是唯一在换人时不变的对象,见
 		// AForeverPlayerController::SetupInputComponent。
 		{ TEXT("TogglePhone"), EKeys::P },
+		// 背包(Inventory)系统：这个热键和TogglePhone绑在同一个Controller上，理由同上——
+		// 玩家会通过ChangeControlChange换着操控不同市民/载具，见
+		// AForeverPlayerController::SetupInputComponent、MAINCONTROLLER_TODO.md"B开背包"
+		// 这一行热键。
+		{ TEXT("ToggleInventory"), EKeys::B },
 		// 武器系统：鼠标左键开火(按住连发交给全自动武器自己的fireRate冷却判断，见
 		// UForeverWeaponComponent::TickComponent)/R键换弹/数字键1、2切枪，见
 		// AForeverCharacter::SetupPlayerInputComponent。

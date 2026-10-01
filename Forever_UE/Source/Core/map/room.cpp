@@ -3,6 +3,7 @@
 #include "common/error.h"
 
 #include "map/building.h"
+#include "player/asset.h"
 
 #include <sstream>
 #include <iomanip>
@@ -30,6 +31,7 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 
 Room::~Room() {
 	factory->DestroyRoom(mod);
+	for (auto& [name, asset] : assets) delete asset; // 没人捡走的地上物品，房间销毁时清理
 }
 
 string Room::GetType() const { return type; }
@@ -97,4 +99,18 @@ void Room::AddOccupant(Citizen* citizen) {
 
 void Room::RemoveOccupant(Citizen* citizen) {
 	occupants.erase(remove(occupants.begin(), occupants.end(), citizen), occupants.end());
+}
+
+const unordered_map<string, Asset*>& Room::GetAssets() const { return assets; }
+
+void Room::AddAsset(Asset* asset) {
+	if (asset) assets.insert_or_assign(asset->GetName(), asset);
+}
+
+Asset* Room::RemoveAsset(const string& name) {
+	auto it = assets.find(name);
+	if (it == assets.end()) return nullptr;
+	Asset* removed = it->second;
+	assets.erase(it);
+	return removed;
 }

@@ -5,20 +5,123 @@
 #include <string>
 
 
-// 阶段3占位:trivial默认实现,真正的默认player内容目录留到阶段4从旧工程
-// Basic/player/asset_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
+// 阶段5-6物品/背包系统测试案例——8个具体资产：
+// - ContainerAsset：背包容器(cube占位)，能背在后背。
+// - WheatAsset/BeefAsset/BurgerAsset：id和Industry的WheatProduct/BeefProduct/
+//   BurgerProduct共用(见Source/Basic/industry/product_basic.h)，Asset只存这个type字符串，
+//   不持有Product实例，见Source/Core/player/asset.md"武器/背包系统的桥接"一节。汉堡可使用
+//   (usable=true)，用完count-1到0即销毁，不做饱食度效果。
+// - PistolAmmoAsset/RifleAmmoAsset：子弹，新id，没有对应Product。
+// - PistolWeaponAsset/RifleWeaponAsset：id和WeaponMod的PistolWeapon/RifleWeapon共用，
+//   weapon=true——只能挂左肩/右肩，不能拿在手上，见Source/Core/player/player.h的
+//   ActivateShoulderWeapon桥接机制。
 //
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式(之前这里是固定字符串，
-// 没有任何唯一性)。
-class AssetBasic : public AssetMod {
-public:
-	AssetBasic();
+// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼。
 
-	static const char* GetId() { return "asset_basic"; }
-	virtual const char* GetType() const override { return "asset_basic"; }
+class ContainerAsset : public AssetMod {
+public:
+	ContainerAsset();
+
+	static const char* GetId() { return "asset_container"; }
+	virtual const char* GetType() const override { return "asset_container"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class WheatAsset : public AssetMod {
+public:
+	WheatAsset();
+
+	static const char* GetId() { return "product_wheat"; }
+	virtual const char* GetType() const override { return "product_wheat"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class BeefAsset : public AssetMod {
+public:
+	BeefAsset();
+
+	static const char* GetId() { return "product_beef"; }
+	virtual const char* GetType() const override { return "product_beef"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class BurgerAsset : public AssetMod {
+public:
+	BurgerAsset();
+
+	static const char* GetId() { return "product_burger"; }
+	virtual const char* GetType() const override { return "product_burger"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class PistolAmmoAsset : public AssetMod {
+public:
+	PistolAmmoAsset();
+
+	static const char* GetId() { return "ammo_pistol"; }
+	virtual const char* GetType() const override { return "ammo_pistol"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class RifleAmmoAsset : public AssetMod {
+public:
+	RifleAmmoAsset();
+
+	static const char* GetId() { return "ammo_rifle"; }
+	virtual const char* GetType() const override { return "ammo_rifle"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class PistolWeaponAsset : public AssetMod {
+public:
+	PistolWeaponAsset();
+
+	static const char* GetId() { return "weapon_pistol"; }
+	virtual const char* GetType() const override { return "weapon_pistol"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class RifleWeaponAsset : public AssetMod {
+public:
+	RifleWeaponAsset();
+
+	static const char* GetId() { return "weapon_rifle"; }
+	virtual const char* GetType() const override { return "weapon_rifle"; }
 	virtual const char* GetName() override;
 
 private:

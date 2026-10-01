@@ -14,9 +14,10 @@
 // 反过来调用UE接口。这样WeaponMod和BuildingMod::Layout()一样，只用Core类型，没有任何
 // "签名留白等以后再定"的半成品。
 //
-// 这次范围明确不做：assetId(资产/背包关联)、ammoObjectId/maxReserveAmmo(备弹真实扣减)、
-// 瞄准倍率——见weapon_basic.md/CitizenElement.md同类"先占位/先不做"的取舍记录。后坐力
-// 这次已经做了，见下面"后坐力"字段组。
+// 武器↔Asset背包系统靠"同一个id字符串"桥接，不靠字段关联——WeaponMod自己不持有assetId，
+// 见Source/Core/player/player.h的ActivateShoulderWeapon()/Source/Core/player/asset.md。
+// ammoType(备弹关联)见下方"弹药"一节。这次范围明确不做：瞄准倍率——见weapon_basic.md/
+// CitizenElement.md同类"先占位/先不做"的取舍记录。后坐力这次已经做了，见下面"后坐力"字段组。
 class WeaponMod {
 public:
 	WeaponMod() = default;
@@ -58,9 +59,14 @@ public:
 	float maxRange = 5000.f;       // UE单位(cm)
 	float baseSpread = 1.5f;       // 散射半角，度——命中方向在瞄准方向为轴的这个半角圆锥内随机
 
-	// ---- 弹药（MVP阶段：备弹视为无限，见weapon_basic.md）----
+	// ---- 弹药 ----
 	int magazineCapacity = 12;
 	float reloadDuration = 1.5f;   // 秒
+
+	// 换弹时从Player背包按这个type扣减备弹(Player::ConsumeByType)，比如"ammo_pistol"——
+	// 这正是本文件之前"这次不做的ammoObjectId"，现在Asset背包系统落地后补上，见
+	// UForeverWeaponComponent::TickComponent换弹完成分支。
+	std::string ammoType;
 
 	// ---- 后坐力（手感仿PUBG：每次开火瞬间踢一下视角，不会自动回正，全靠玩家自己压枪/
 	// 甩枪抵消——PUBG本身也没有"松开鼠标后视角自动回到开火前"这种机制，持续连发时准心会

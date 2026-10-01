@@ -99,6 +99,15 @@ public:
 	void AddOccupant(Citizen* citizen);
 	void RemoveOccupant(Citizen* citizen);
 
+	// 房间地上摆放的资产——独占持有(和tenants/occupants不同，那两个是非owning指针，指向
+	// Populace持有的Citizen；这里房间真的拥有这些Asset的生命周期)。key=Asset::GetName()。
+	// 这次的"当前房间"是玩家真实物理位置(见Player::currentRoom)，不是老工程的剧情/场景
+	// 语义，见Source/Core/player/asset.md、Source/Forever/Element/BuildingElement.cpp的
+	// OnRoomOverlapBegin/End。
+	const std::unordered_map<std::string, Asset*>& GetAssets() const;
+	void AddAsset(Asset* asset);
+	Asset* RemoveAsset(const std::string& name); // 摘除不delete，调用方接手所有权
+
 private:
 	RoomMod* mod;
 	RoomFactory* factory;
@@ -117,4 +126,6 @@ private:
 	bool stated = false;
 	std::vector<Citizen*> tenants;
 	std::vector<Citizen*> occupants;
+
+	std::unordered_map<std::string, Asset*> assets;
 };
