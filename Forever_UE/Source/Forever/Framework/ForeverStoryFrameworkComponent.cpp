@@ -3,6 +3,7 @@
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
+#include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Element/CitizenElement.h"
 #include "Player/ForeverPlayerController.h"
 #include "UI/SectionSpeakingWidget.h"
@@ -26,6 +27,7 @@
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "populace/scheduler.h"
+#include "traffic/traffic.h"
 #include "common/implement.h"
 
 using namespace std;
@@ -121,6 +123,15 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 			}
 		}
 	}
+
+	// 载具系统落地新增：每辆预置车辆独占持有一份Script(vehicle_basic.script)，也要广播
+	// 一次game_start，否则"靠近车辆弹出'上车'选项"这条add_option milestone永远不会被触发。
+	Traffic* traffic = framework ? framework->GetTraffic() : nullptr;
+	if (traffic) {
+		for (auto& [name, vehicle] : traffic->GetVehicles()) {
+			if (vehicle) broadcastOne(vehicle->GetScript());
+		}
+	}
 }
 
 void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FString& option) {
@@ -156,6 +167,14 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	Citizen* target = populace ? populace->FindCitizenByName(nameUtf8) : nullptr;
 	if (target && target->GetScheduler()) {
 		matchOne(target->GetScheduler()->GetScript());
+	}
+
+	// 载具系统落地新增：name也可能是一辆车(见vehicle_basic.script的"上车"选项)，同样额外
+	// 匹配它自己的Script，和市民分支并列，互不影响(一个name不会同时是市民又是车辆)。
+	Traffic* traffic = framework ? framework->GetTraffic() : nullptr;
+	Vehicle* targetVehicle = traffic ? traffic->FindVehicleByName(nameUtf8) : nullptr;
+	if (targetVehicle && targetVehicle->GetScript()) {
+		matchOne(targetVehicle->GetScript());
 	}
 }
 
@@ -216,6 +235,19 @@ void UForeverStoryFrameworkComponent::ApplyStartPuzzle(const StartPuzzleChange* 
 	if (!playerController || !playerController->GetPuzzleWidget()) return;
 
 	playerController->GetPuzzleWidget()->StartPuzzle(puzzleId);
+}
+
+void UForeverStoryFrameworkComponent::ApplyEnterVehicle(const EnterVehicleChange* change, const ScriptContext& context) {
+	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetVehicle(), context)).data());
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
+	if (!trafficFramework) return;
+
+	APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (!playerController) return;
+
+	trafficFramework->ApplyEnterVehicle(name, playerController);
 }
 
 void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const ScriptContext& context, int32 insertIndex) {

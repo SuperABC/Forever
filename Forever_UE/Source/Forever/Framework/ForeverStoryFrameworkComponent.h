@@ -11,6 +11,7 @@ class Story;
 class Change;
 class ChangeControlChange;
 class StartPuzzleChange;
+class EnterVehicleChange;
 struct ScriptContext;
 
 // 阶段4 Story落地：这次把Script->Milestone->Event/Dialog/Change架构跑通到"游戏开始广播
@@ -64,6 +65,15 @@ public:
 	// @change: 待执行的开始小游戏变化
 	// @context: 变量路由上下文，用于求值change->GetPuzzle()
 	void ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context);
+
+	// EnterVehicleChange的实际执行：找到指定名字的载具对应的AVehicleElement、把玩家操控权
+	// 切换过去。不在Core::Traffic::ApplyChange里处理（Core层不认识Actor/Controller），只能
+	// 在这一层做，跟ApplyControlChange/ApplyStartPuzzle同一个理由。真正的查找/隐藏原pawn/
+	// Possess逻辑在UForeverTrafficFrameworkComponent::ApplyEnterVehicle里（和
+	// ApplyControlChange转发给PopulaceFramework同一个分工）。
+	// @change: 待执行的进入载具变化
+	// @context: 变量路由上下文，用于求值change->GetVehicle()
+	void ApplyEnterVehicle(const EnterVehicleChange* change, const ScriptContext& context);
 
 	// 阶段5 SectionSpeaking/SectionOption UI落地：把ProcessScriptActions匹配出的一个Dialog
 	// 交给这个函数展示，取代原来"直接打印到屏幕左上角"的占位做法（Dialog分支选项原来"没有

@@ -70,6 +70,8 @@ public:
 	std::unordered_map<std::string, float> StorageConfig() const;
 	bool IsManufacture() const;
 	std::vector<std::string> ManufactureTypes() const;
+	bool IsParking() const;
+	const std::vector<ParkingSpot>& GetParkingSpots() const;
 
 	// 人/归属和房间的关系——4个独立的概念，不能互相替代，分开存：
 	// - owner/stated：房间的归属，有且只有一种结果——要么私有(owner指向具体某个

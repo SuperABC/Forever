@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 // VehicleMod：一种具体车型的行为定义(比如VehicleBasic这个测试车型)。GetType()/GetName()
 // 两个纯虚接口是Mod发现/加载/注册机制，完整21个concept x 8个domain对照表见
@@ -33,4 +34,20 @@ public:
 	// 在这里(或将来别的mod dll)注册一个新的VehicleMod子类指向这个蓝图路径，不需要碰
 	// Forever这个UE模块的代码，见VehicleElement.md。
 	std::string blueprintPath;
+
+	// Script配置——和JobMod/SchedulerMod同一个"mod自己声明意图，Core只读"模式：两个普通
+	// 成员字段，不通过返回值传递，具体子类应该在自己的构造函数里直接赋值。scriptModName
+	// 默认"empty"，milestoneNames默认为空，每项是不含路径/扩展名的bare文件名，Core通过
+	// Config::GetScriptPath()解析实际路径，见job_mod.h"Script配置"一节。这次用来驱动
+	// "靠近车辆弹出'上车'选项"这个效果——车辆自己的milestone脚本在game_start时调
+	// add_option，选中后调enter_vehicle，见Resource/Story/vehicle_basic.script。
+	std::string scriptModName = "empty";
+	std::vector<std::string> milestoneNames;
+
+	// 下车点——车身局部坐标系下的偏移(UE单位，X前进方向/Y右侧方向)，默认车身左侧(Y负方向)。
+	// 下车前会用这个算出世界坐标、检测站不站得下人，站不下就拒绝下车，见
+	// ForeverTrafficFrameworkComponent::ExitVehicle。
+	float exitOffsetX = 0.f;
+	float exitOffsetY = -200.f;
+	float exitOffsetZ = 0.f;
 };

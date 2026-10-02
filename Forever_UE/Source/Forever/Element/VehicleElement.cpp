@@ -2,7 +2,10 @@
 
 #include "traffic/vehicle.h"
 
+#include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
+#include "Player/ForeverPlayerController.h"
+#include "UI/MeetOptionWidget.h"
 
 #include "Element/VehicleWheelFront.h"
 #include "Element/VehicleWheelRear.h"
@@ -10,6 +13,7 @@
 
 #include "Camera/CameraComponent.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
+#include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/CollisionProfile.h"
 #include "EnhancedInputComponent.h"
@@ -21,6 +25,7 @@
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
+#include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 
 AVehicleElement::AVehicleElement()
@@ -130,6 +135,61 @@ void AVehicleElement::Init(Vehicle* inVehicle, APawn* inPreviousPawn)
 	// 这个具体实例参与——这里只是记住上下车要用到的两个引用，见头文件Init()的说明。
 	vehicle = inVehicle;
 	previousPawn = inPreviousPawn;
+	BuildProximityBox();
+}
+
+void AVehicleElement::BuildProximityBox()
+{
+	if (!vehicle) return;
+
+	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
+	box->SetBoxExtent(FVector(250.f, 250.f, 120.f));
+	box->SetCollisionProfileName(TEXT("Trigger"));
+	box->SetupAttachment(RootComponent);
+	box->OnComponentBeginOverlap.AddDynamic(this, &AVehicleElement::OnOverlapBegin);
+	box->OnComponentEndOverlap.AddDynamic(this, &AVehicleElement::OnOverlapEnd);
+	box->RegisterComponent();
+
+	// 只烘焙一份快照，Overlap回调绝不解引用vehicle——和ACitizenElement同一套安全原则。这个
+	// 时间点game_start广播早已跑完(见ForeverStoryFrameworkComponent::BroadcastGameStart对
+	// 每辆车Script的广播)，vehicle->GetOptions()已经是稳定内容。
+	vehicleNameOnly = UTF8_TO_TCHAR(vehicle->GetName().c_str());
+	cachedOptions.Reset();
+	for (const std::string& option : vehicle->GetOptions()) {
+		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+	}
+
+	proximityBox = box;
+}
+
+void AVehicleElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn || OtherActor != pawn || OtherActor == this) return;
+
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+			for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
+				meetOption->AddOption(frameworkActor, cachedOptions[idx], vehicleNameOnly, idx, false);
+			}
+		}
+	}
+}
+
+void AVehicleElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn || OtherActor != pawn || OtherActor == this) return;
+
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			meetOption->RemoveName(vehicleNameOnly);
+		}
+	}
 }
 
 void AVehicleElement::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -178,7 +238,7 @@ void AVehicleElement::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 		if (UGameInstance* gameInstance = GetGameInstance()) {
 			if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
-				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Test")), ETriggerEvent::Started, this, &AVehicleElement::ToggleVehicle);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ExitVehicle")), ETriggerEvent::Started, this, &AVehicleElement::ExitVehicle);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Started, this, &AVehicleElement::Handbrake);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Completed, this, &AVehicleElement::StopHandbrake);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Canceled, this, &AVehicleElement::StopHandbrake);
@@ -218,9 +278,13 @@ void AVehicleElement::Look(const FInputActionValue& value)
 	}
 }
 
-void AVehicleElement::ToggleVehicle()
+void AVehicleElement::ExitVehicle()
 {
-	UForeverTrafficFrameworkComponent::RequestToggleVehicle(GetWorld(), Cast<APlayerController>(GetController()));
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	if (framework && framework->GetTrafficFramework()) {
+		framework->GetTrafficFramework()->ExitVehicle(Cast<APlayerController>(GetController()));
+	}
 }
 
 void AVehicleElement::Handbrake(const FInputActionValue& value)

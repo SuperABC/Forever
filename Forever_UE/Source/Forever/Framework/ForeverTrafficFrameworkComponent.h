@@ -5,32 +5,44 @@
 #include "ForeverTrafficFrameworkComponent.generated.h"
 
 class APlayerController;
+class AVehicleElement;
+class Map;
+class Traffic;
 
-// 阶段4-3:对应旧Framework Actor `Traffic`(C++ Base:TrafficBase)。Route/Station两个域
-// 仍然是空实现，这次先落地"上下车"这一件事——玩家按T键（Test动作，
-// AForeverCharacter::ToggleVehicle/AVehicleElement::ToggleVehicle都会转调
-// RequestToggleVehicle）时，在当前pawn位置生成一辆Vehicle+对应的AVehicleElement并占有它，
-// 或者反过来删掉当前占有的车辆、恢复到上车前的pawn，详见ForeverTrafficFrameworkComponent.md。
+// 载具系统落地：车辆不再按T临时生成/销毁，改成开局时按停车位预置生成(GenerateVehicles)，
+// 玩家走近车辆用MeetOption选"上车"（见UForeverStoryFrameworkComponent::ApplyEnterVehicle→
+// ApplyEnterVehicle），驾驶时按Q下车（AVehicleElement::ExitVehicle→ExitVehicle，带下车点
+// 碰撞检测）。详见ForeverTrafficFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverTrafficFrameworkComponent : public UForeverFrameworkComponent
 {
 	GENERATED_BODY()
 
 public:
-	// T键共用入口——AForeverCharacter和AVehicleElement都不方便直接互相知道对方，也不是
-	// AForeverFrameworkActor的子组件（拿不到GetOwner()那条近路），所以各自的T键处理函数都
-	// 调用这个静态方法：按world找场景里唯一的AForeverFrameworkActor，转发给它的
-	// TrafficFramework实例调用真正的ToggleVehicle。找不到framework/trafficFramework/
-	// controller时什么都不做。
-	static void RequestToggleVehicle(UWorld* world, APlayerController* controller);
+	// 由AForeverFrameworkActor::EnsureTrafficGenerated()在traffic->Init(map)之后立刻调用一次：
+	// 遍历traffic->GetVehicles()里每个已经由Traffic::Init()设好停车位(GetRoom()非空)的
+	// Vehicle，换算世界坐标(照抄BuildingElement.cpp::ComputeWorldPosition公式)、
+	// LoadClass<AVehicleElement>(vehicle->GetBlueprintPath())、SpawnActor、Init(vehicle, nullptr)
+	// （这时候还没人上车，previousPawn先留空）、建好proximity box，存进activeVehicles供
+	// ApplyEnterVehicle按名字反查。
+	void GenerateVehicles(Map* map, Traffic* traffic);
 
-	// 真正的上下车切换：当前controller->GetPawn()是AVehicleElement就下车（删Vehicle+
-	// Actor，把上车前的pawn摆到车辆当前位置再Possess回去）；否则在当前pawn位置生成一辆车
-	// 并占有它（隐藏原pawn但不销毁，下车时用得上）。详见.cpp实现。
-	void ToggleVehicle(APlayerController* controller);
+	// EnterVehicleChange的真正执行：按名字在activeVehicles里找到AVehicleElement，隐藏+
+	// despawn-exempt当前pawn、记进vehicleElement的previousPawn，Possess过去。找不到车辆/
+	// 当前没有pawn时打一条Warning，不崩溃。
+	void ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller);
+
+	// AVehicleElement::ExitVehicle按Q调用：算出候选下车世界坐标(车辆当前transform+
+	// VehicleMod的exitOffsetX/Y/Z，按车身当前旋转变换)，用ECC_Pawn通道做胶囊体重叠检测
+	// (见[[memory:pawn_preset_ignores_visibility]]，不能用ECC_Visibility)，被挡住就在左上角
+	// 打印拒绝提示、不下车；没被挡住就恢复previousPawn（位置/显示/碰撞/Possess），车辆本身
+	// 不销毁(这次是预置的真实物件，不是一次性测试对象)。
+	void ExitVehicle(APlayerController* controller);
 
 private:
-	// 生成不重复的测试车辆名，如"TestVehicle0"——这一阶段车辆纯粹是临时测试对象，不需要
-	// 更有意义的命名规则。
-	int32 vehicleCounter = 0;
+	// Vehicle::GetName()→对应的AVehicleElement，照抄
+	// UForeverPopulaceFrameworkComponent::activeInstances的思路，ApplyEnterVehicle按名字
+	// 反查用。
+	UPROPERTY()
+	TMap<FString, TObjectPtr<AVehicleElement>> activeVehicles;
 };

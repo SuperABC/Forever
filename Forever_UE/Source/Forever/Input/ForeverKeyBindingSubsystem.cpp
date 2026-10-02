@@ -12,11 +12,14 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("Jump"), EKeys::SpaceBar },
 		{ TEXT("ToggleView"), EKeys::V },
 		{ TEXT("Sprint"), EKeys::LeftShift },
-		{ TEXT("Test"), EKeys::T },
 		// 和"Jump"共用空格键——两者是不同的UInputAction，分别只在各自的Pawn
 		// (ACitizenElement/AVehicleElement)上绑定消费，同一个键同时映射到多个动作在
 		// Enhanced Input里不冲突，见AVehicleElement::SetupPlayerInputComponent。
 		{ TEXT("Handbrake"), EKeys::SpaceBar },
+		// 载具系统：驾驶中按Q下车，只绑在AVehicleElement::SetupPlayerInputComponent上
+		// （车辆专属，不是全局/不在Controller上）——上车改成MeetOption选"上车"选项，不再
+		// 用热键，见ForeverTrafficFrameworkComponent::ApplyEnterVehicle/ExitVehicle。
+		{ TEXT("ExitVehicle"), EKeys::Q },
 		// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，见MAINCONTROLLER_TODO.md
 		// "MouseScrollUp/Down + F"这一行热键，AForeverCharacter::SetupPlayerInputComponent
 		// 转发到AForeverPlayerController持有的MeetOptionWidget。

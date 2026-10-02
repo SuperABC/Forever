@@ -1,5 +1,7 @@
 #pragma once
 
+#include "map/geometry.h"
+
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -34,4 +36,10 @@ public:
 
 	bool isManufacture = false;
 	std::vector<std::string> manufactureTypes;             // 产线描述(类型列表)
+
+	// 停车位——老工程isParking/parkingSpaces这次补上，并且比老工程多了旋转(见geometry.h
+	// ParkingSpot的说明，老工程只有位置，旋转从来没被真正用过)。Traffic::Init()遍历所有
+	// isParking的Room，对每个ParkingSpot生成一辆预置车辆，见Source/Core/traffic/traffic.md。
+	bool isParking = false;
+	std::vector<ParkingSpot> parkingSpots;
 };
