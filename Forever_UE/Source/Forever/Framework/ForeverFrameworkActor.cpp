@@ -144,6 +144,14 @@ void AForeverFrameworkActor::BeginPlay()
 		EnsureIndustryGenerated();
 		EnsureTrafficGenerated();
 		EnsureStoryGenerated();
+
+		// 必须排在EnsureStoryGenerated()(进而BroadcastGameStart())之后——车辆自己的Script
+		// (vehicle_basic.script)的game_start milestone要先广播完、把"上车"选项加进
+		// vehicle->GetOptions()，GenerateVehicles()生成AVehicleElement时BuildProximityBox()
+		// 烘焙的选项快照才不会是空的，见EnsureTrafficGenerated()声明处的说明。
+		if (trafficFramework) {
+			trafficFramework->GenerateVehicles(map, traffic);
+		}
 	}
 	catch (const ExceptionBase& e) {
 		UE_LOG(LogTemp, Error, TEXT("生成世界时发生致命错误，拒绝继续，退出游戏：%s"),
@@ -195,6 +203,13 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		// 跟ChangeControlChange同一个理由：Core层不知道UMG Widget的存在，"弹出一个小游戏
 		// 界面"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyStartPuzzle。
 		if (storyFramework) storyFramework->ApplyStartPuzzle(startPuzzle, context);
+		return;
+	}
+
+	if (auto* enterVehicle = dynamic_cast<const EnterVehicleChange*>(change)) {
+		// 跟ChangeControlChange同一个理由：Core层不认识Actor/Controller，"把操控权切换到
+		// 载具上"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyEnterVehicle。
+		if (storyFramework) storyFramework->ApplyEnterVehicle(enterVehicle, context);
 		return;
 	}
 
@@ -394,10 +409,18 @@ void AForeverFrameworkActor::EnsureTrafficGenerated()
 {
 	if (traffic) return;
 
-	// Traffic的Route/Station两个域仍然是空骨架，Vehicle这一份阶段4-3已经落地(见traffic.md)——
-	// 这里仍然只是new出来，真正的上下车操作由UForeverTrafficFrameworkComponent::ToggleVehicle
-	// 在玩家按T时才调用。
+	// Traffic的Route/Station两个域仍然是空骨架，Vehicle这一份已经落地(见traffic.md)——
+	// Init(map)遍历所有停车位房间预置生成车辆(Core层，只是new Vehicle对象，这时候每辆车的
+	// options还是空的)。真正的AVehicleElement Actor生成**不能**在这里就做——
+	// AVehicleElement::Init()会立刻BuildProximityBox()烘焙一份vehicle->GetOptions()快照，
+	// 而"上车"这个选项要等下面EnsureStoryGenerated()里的BroadcastGameStart()广播完车辆自己
+	// 的Script(vehicle_basic.script的game_start milestone)之后才会被加进去——如果在这里就
+	// SpawnActor，烘焙到的会是一份空选项快照，"靠近车辆弹上车选项"永远不会出现(和
+	// ACitizenElement故意等到game_start广播跑完之后才会被距离流式生成是同一个道理，见
+	// ACitizenElement::BuildProximityBox的注释)。GenerateVehicles()真正的调用点挪到
+	// BeginPlay()里EnsureStoryGenerated()之后，见那边的调用。
 	traffic = new Traffic();
+	traffic->Init(map);
 }
 
 void AForeverFrameworkActor::EnsureStoryGenerated()

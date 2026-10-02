@@ -41,6 +41,8 @@ const char* WarehouseRoom::GetName() {
 int ParkingRoom::count = 0;
 
 ParkingRoom::ParkingRoom() : id(count++) {
+	isParking = true;
+	parkingSpots = { { {0.5f, 0.f, 0.5f, 0.f}, 0.f } }; // 房间正中心一个车位，朝向跟房间一致
 }
 
 const char* ParkingRoom::GetName() {

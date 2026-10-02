@@ -3,6 +3,7 @@
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Player/ForeverPlayerController.h"
+#include "Player/ForeverCharacter.h"
 #include "UI/MeetOptionWidget.h"
 
 #include "Components/CapsuleComponent.h"
@@ -390,7 +391,13 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 	// OtherActor == this：这个citizen自己正好就是当前被占有的pawn，proximityBox和自己的
 	// capsule天然重叠(半径250 vs capsule半径42，box完全包住capsule)，这次一定会触发一次
 	// "自己进自己的box"——必须排除，否则"附近市民"名单里会常驻一个其实是自己的条目。
-	if (!pawn || OtherActor != pawn || OtherActor == this) return;
+	//
+	// 还必须要求OtherActor是AForeverCharacter(人物)——不加这条，开车靠近市民也会触发(玩家
+	// 当前pawn是AVehicleElement，依然满足OtherActor==pawn)，实测反馈"开车靠近另一辆车/靠近
+	// 市民都弹出了不该出现的选项"。ACitizenElement本身也继承自AForeverCharacter，只要是
+	// 玩家当前实际操控的那个人形pawn(可能是玩家自己的角色，也可能是被ChangeControlChange
+	// 换过去的某个市民)，这条Cast都会成立，不影响正常的人物靠近市民场景。
+	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
 
 	nearbyCitizens.AddUnique(TWeakObjectPtr<ACitizenElement>(this));
 
@@ -412,7 +419,8 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 void ACitizenElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	if (!pawn || OtherActor != pawn || OtherActor == this) return;
+	// 和OnOverlapBegin同一条过滤，见那边的注释。
+	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
 
 	nearbyCitizens.RemoveSingle(TWeakObjectPtr<ACitizenElement>(this));
 

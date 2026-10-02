@@ -67,13 +67,6 @@ protected:
 	void StartSprint();
 	void StopSprint();
 
-	// T键：上下车切换——转发给UForeverTrafficFrameworkComponent::RequestToggleVehicle。
-	// AVehicleElement（车辆Actor，不继承AForeverCharacter，见VehicleElement.h）自己也绑了
-	// 一份同名调用，因为占有对象换成车之后这个类的SetupPlayerInputComponent就不会再生效了，
-	// 详见ForeverTrafficFrameworkComponent.h的说明。这次覆盖掉上一版"T键输出附近市民关系"
-	// 的用法（ACitizenElement::LogNearbyRelationships()本身没有删除，只是不再绑定按键）。
-	void ToggleVehicle();
-
 	// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，转发给
 	// AForeverPlayerController::GetMeetOptionWidget()，见MAINCONTROLLER_TODO.md
 	// "MouseScrollUp/Down + F"这一行热键。
@@ -84,9 +77,8 @@ protected:
 	// 武器系统：鼠标左键开火(按住/松开转发给UForeverWeaponComponent::StartFire/StopFire，
 	// 全自动武器由组件自己的TickComponent按fireRate间隔连发)/R键换弹/数字键1、2切枪
 	// （切两把测试武器weapon_pistol/weapon_rifle，见Source/Basic/player/weapon_basic.h）。
-	// 和ToggleVehicle同一个"转发给专门组件"的模式，这次直接调自己身上的weaponComponent
-	// （不需要像ToggleVehicle那样经过静态Request*辅助函数反查AForeverFrameworkActor——
-	// 武器是这个Character自己的私有状态，不是map/world级别的全局单例）。
+	// 这次直接调自己身上的weaponComponent——武器是这个Character自己的私有状态，不是
+	// map/world级别的全局单例，不需要反查AForeverFrameworkActor。
 	void StartFireWeapon();
 	void StopFireWeapon();
 	void ReloadWeapon();

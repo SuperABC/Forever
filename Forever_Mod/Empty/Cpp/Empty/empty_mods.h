@@ -297,6 +297,10 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
+	// 空占位：categories/batchSize/ingredients/byproducts保持基类默认值不填，见
+	// product_mod.h"两段式"约定的说明(SetProperty留空也可以)。
+	virtual void SetProperty() override {}
+
 private:
 	std::string name;
 };
@@ -309,6 +313,9 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
+	// 空占位：categories/capacity保持基类默认值不填。
+	virtual void SetProperty() override {}
+
 private:
 	std::string name;
 };
@@ -320,6 +327,9 @@ public:
 	static const char* GetId() { return "empty"; }
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
+
+	// 空占位：targets保持基类默认值(空map)不填。
+	virtual void SetTargets() override {}
 
 private:
 	std::string name;

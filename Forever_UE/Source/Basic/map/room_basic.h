@@ -69,11 +69,9 @@ private:
 	std::string name;
 };
 
-// ParkingRoom：Shop/Factory地下停车场room，纯占位——老工程isParking/parkingSpaces这套
-// 车位数据这次不迁移(应用户要求，不处理车辆/车位概念)，保持RoomMod基类默认值全false/空，
-// 只提供"room_parking"类型id给AssignRoom用，单纯让这块地下空间在几何上有个房间类型标签，
-// 不参与isResidential/isWorkspace/isStorage/isManufacture任何一种容量占位。ShopBuilding和
-// FactoryBuilding共用同一个ParkingRoom类。
+// ParkingRoom：Shop/Factory地下停车场room——之前是纯占位(不处理车辆/车位概念)，这次补上
+// isParking=true+一个房间正中心的停车位，供Traffic::Init()在这里生成预置车辆，见
+// Source/Core/traffic/traffic.md。ShopBuilding和FactoryBuilding共用同一个ParkingRoom类。
 class ParkingRoom : public RoomMod {
 public:
 	ParkingRoom();

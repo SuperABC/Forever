@@ -10,9 +10,11 @@ class USkeletalMeshComponent;
 class UChaosWheeledVehicleMovementComponent;
 class USpringArmComponent;
 class UCameraComponent;
+class UBoxComponent;
 class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
+struct FHitResult;
 
 // 一辆车在场景里对应的Actor——只提供驾驶(Chaos真实悬挂/轮胎/引擎物理)/相机/输入这些
 // 所有车型公用的逻辑，不写死任何具体车型的外观。不直接继承AWheeledVehiclePawn(它固定
@@ -38,11 +40,15 @@ class FOREVER_API AVehicleElement : public APawn
 public:
 	AVehicleElement();
 
-	// 由UForeverTrafficFrameworkComponent::ToggleVehicle在玩家按T上车时调用一次：绑定这个
-	// Element对应哪个Vehicle，记住previousPawn(上车前被占有的pawn，下车时要恢复谁)。外观
+	// 由UForeverTrafficFrameworkComponent::GenerateVehicles在生成这辆预置车辆时调用一次：
+	// 绑定这个Element对应哪个Vehicle，这时候还没人上车，inPreviousPawn传nullptr。外观
 	// (骨骼网格/轮子骨骼名)由生成这个Actor时选用的具体蓝图子类决定，和这里的Vehicle实例
-	// 无关，这个函数不需要做任何外观相关的事。
+	// 无关，这个函数不需要做任何外观相关的事。调用后会建好proximity box(靠近弹"上车"选项)。
 	void Init(Vehicle* inVehicle, APawn* inPreviousPawn);
+
+	// 由UForeverTrafficFrameworkComponent::ApplyEnterVehicle在真正上车那一刻调用：记住
+	// 上车前被占有的pawn，下车时(ExitVehicle)要恢复谁。
+	void SetPreviousPawn(APawn* inPreviousPawn) { previousPawn = inPreviousPawn; }
 
 	// PIE停止/退出游戏时置空vehicle指针——Vehicle所有权在Traffic身上，这里不delete，和
 	// ACitizenElement::EndPlay同一套安全原则。
@@ -73,9 +79,9 @@ protected:
 	// AForeverCharacter::Look同一个处理方式，只是这里没有共同基类，各自维护一份。
 	void Look(const FInputActionValue& value);
 
-	// T键：调用同一个"上下车切换"入口，见ForeverTrafficFrameworkComponent.h的
-	// RequestToggleVehicle说明。
-	void ToggleVehicle();
+	// Q键：转发给UForeverTrafficFrameworkComponent::ExitVehicle，带下车点碰撞检测，见
+	// ForeverTrafficFrameworkComponent.h的说明。
+	void ExitVehicle();
 
 	// 空格手刹：按住/松开分别转发给vehicleMovement->SetHandbrakeInput(true/false)，
 	// 绑在Started/Completed而不是Move()那种Triggered——手刹是纯粹的按下/松开两态开关，
@@ -111,6 +117,26 @@ protected:
 	TObjectPtr<UInputMappingContext> inputLookMapping;
 
 private:
+	// 玩家靠近检测——照抄ACitizenElement::BuildProximityBox/OnOverlapBegin/OnOverlapEnd
+	// 同一套写法，数据源从citizen->GetName()/GetOptions()换成vehicle->GetName()/GetOptions()，
+	// 弹出的"上车"选项和市民对话选项走同一个MeetOption UI/F键。
+	void BuildProximityBox();
+
+	UFUNCTION()
+	void OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	UFUNCTION()
+	void OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
 	Vehicle* vehicle = nullptr;
 	TWeakObjectPtr<APawn> previousPawn;
+
+	UPROPERTY()
+	TObjectPtr<UBoxComponent> proximityBox;
+
+	// vehicle->GetName()/GetOptions()的快照，BuildProximityBox()里烘焙好，Overlap回调只读
+	// 这份快照，不解引用vehicle，和ACitizenElement同一套安全原则。
+	FString vehicleNameOnly;
+	TArray<FString> cachedOptions;
 };

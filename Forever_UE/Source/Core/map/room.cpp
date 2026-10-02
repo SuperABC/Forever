@@ -70,6 +70,8 @@ bool Room::IsStorage() const { return mod->isStorage; }
 unordered_map<string, float> Room::StorageConfig() const { return mod->storageConfig; }
 bool Room::IsManufacture() const { return mod->isManufacture; }
 vector<string> Room::ManufactureTypes() const { return mod->manufactureTypes; }
+bool Room::IsParking() const { return mod->isParking; }
+const vector<ParkingSpot>& Room::GetParkingSpots() const { return mod->parkingSpots; }
 
 string Room::GetAddress() const {
 	if (!parentBuilding) return number;

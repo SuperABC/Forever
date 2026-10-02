@@ -2,7 +2,11 @@
 
 #include "traffic/vehicle.h"
 
+#include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
+#include "Player/ForeverPlayerController.h"
+#include "Player/ForeverCharacter.h"
+#include "UI/MeetOptionWidget.h"
 
 #include "Element/VehicleWheelFront.h"
 #include "Element/VehicleWheelRear.h"
@@ -10,6 +14,7 @@
 
 #include "Camera/CameraComponent.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
+#include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/CollisionProfile.h"
 #include "EnhancedInputComponent.h"
@@ -21,6 +26,7 @@
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
+#include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 
 AVehicleElement::AVehicleElement()
@@ -130,6 +136,74 @@ void AVehicleElement::Init(Vehicle* inVehicle, APawn* inPreviousPawn)
 	// 这个具体实例参与——这里只是记住上下车要用到的两个引用，见头文件Init()的说明。
 	vehicle = inVehicle;
 	previousPawn = inPreviousPawn;
+	BuildProximityBox();
+
+	// 预置车辆生成时没有任何人操控/输入，物理刚体创建出来之后处于睡眠状态，不受重力影响——
+	// 车停在半空也不会掉下来，直到玩家上车按下第一次油门/刹车(SetThrottleInput等内部会唤醒
+	// 刚体)才会突然开始受重力下落，实测反馈"上车前悬空，踩油门才落地"。生成完立刻主动唤醒
+	// 一次，让车一开局就正常落到地面上，不用等玩家来踩第一脚油门。
+	if (carMesh) {
+		carMesh->WakeAllRigidBodies();
+	}
+}
+
+void AVehicleElement::BuildProximityBox()
+{
+	if (!vehicle) return;
+
+	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
+	box->SetBoxExtent(FVector(250.f, 250.f, 120.f));
+	box->SetCollisionProfileName(TEXT("Trigger"));
+	box->SetupAttachment(RootComponent);
+	box->OnComponentBeginOverlap.AddDynamic(this, &AVehicleElement::OnOverlapBegin);
+	box->OnComponentEndOverlap.AddDynamic(this, &AVehicleElement::OnOverlapEnd);
+	box->RegisterComponent();
+
+	// 只烘焙一份快照，Overlap回调绝不解引用vehicle——和ACitizenElement同一套安全原则。这个
+	// 时间点game_start广播早已跑完(见ForeverStoryFrameworkComponent::BroadcastGameStart对
+	// 每辆车Script的广播)，vehicle->GetOptions()已经是稳定内容。
+	vehicleNameOnly = UTF8_TO_TCHAR(vehicle->GetName().c_str());
+	cachedOptions.Reset();
+	for (const std::string& option : vehicle->GetOptions()) {
+		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+	}
+
+	proximityBox = box;
+}
+
+void AVehicleElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	// 还必须要求OtherActor是AForeverCharacter(人物)，不能是别的载具——不加这条，开着车靠近
+	// 另一辆停着的车也会触发(这时候玩家当前pawn就是AVehicleElement自己，依然满足
+	// OtherActor==pawn)，实测反馈"开车靠近另一辆车弹出了'上车'选项"。只有人下车状态(或者
+	// 被ChangeControlChange换去控制的某个市民，同样是AForeverCharacter子类)走近才该弹选项。
+	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
+
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+			for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
+				meetOption->AddOption(frameworkActor, cachedOptions[idx], vehicleNameOnly, idx, false);
+			}
+		}
+	}
+}
+
+void AVehicleElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	// 和OnOverlapBegin同一条过滤，见那边的注释。
+	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
+
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			meetOption->RemoveName(vehicleNameOnly);
+		}
+	}
 }
 
 void AVehicleElement::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -155,6 +229,17 @@ void AVehicleElement::PossessedBy(AController* NewController)
 
 void AVehicleElement::UnPossessed()
 {
+	// 油门/刹车/转向是持久状态(Move()里直接SetThrottleInput/SetBrakeInput，不是每帧由输入
+	// 系统重新置0)——控制权一旦转走(不管是正常按Q下车，还是其它原因被UnPossess)，没人再调
+	// Move()，上一次的油门值会一直保持，车就按原来的油门持续向前冲(实测反馈"踩着油门下车，
+	// 车还在继续加速")。这里统一在失去控制的时候清零油门/转向、拉满刹车，不管因为什么原因
+	// 下车，车都应该自己刹停，不依赖玩家下车前松开W。
+	if (vehicleMovement) {
+		vehicleMovement->SetThrottleInput(0.f);
+		vehicleMovement->SetSteeringInput(0.f);
+		vehicleMovement->SetBrakeInput(1.f);
+	}
+
 	if (APlayerController* playerController = Cast<APlayerController>(GetController())) {
 		if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(playerController->GetLocalPlayer())) {
 			subsystem->RemoveMappingContext(inputMapping);
@@ -178,7 +263,7 @@ void AVehicleElement::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 		if (UGameInstance* gameInstance = GetGameInstance()) {
 			if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
-				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Test")), ETriggerEvent::Started, this, &AVehicleElement::ToggleVehicle);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ExitVehicle")), ETriggerEvent::Started, this, &AVehicleElement::ExitVehicle);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Started, this, &AVehicleElement::Handbrake);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Completed, this, &AVehicleElement::StopHandbrake);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Canceled, this, &AVehicleElement::StopHandbrake);
@@ -218,9 +303,13 @@ void AVehicleElement::Look(const FInputActionValue& value)
 	}
 }
 
-void AVehicleElement::ToggleVehicle()
+void AVehicleElement::ExitVehicle()
 {
-	UForeverTrafficFrameworkComponent::RequestToggleVehicle(GetWorld(), Cast<APlayerController>(GetController()));
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	if (framework && framework->GetTrafficFramework()) {
+		framework->GetTrafficFramework()->ExitVehicle(Cast<APlayerController>(GetController()));
+	}
 }
 
 void AVehicleElement::Handbrake(const FInputActionValue& value)

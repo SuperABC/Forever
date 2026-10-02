@@ -326,6 +326,13 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new StartPuzzleChange(puzzle.AsString());
 		}
+		else if (type == "enter_vehicle") {
+			auto vehicle = obj["vehicle"];
+			if (vehicle.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing vehicle for enter_vehicle change.\n");
+			}
+			change = new EnterVehicleChange(vehicle.AsString());
+		}
 		else {
 			// 阶段4占位：其余39种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Change type not implemented yet: " + type + ".\n");

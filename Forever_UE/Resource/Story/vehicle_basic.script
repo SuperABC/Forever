@@ -1,0 +1,33 @@
+{
+	// 车辆自己的milestone脚本(VehicleBasic::scriptModName="empty"+milestoneNames=
+	// {"vehicle_basic"}加载)：开局给自己加一条"上车"选项(靠近车辆时弹出，和市民对话选项
+	// 走同一个MeetOption UI)，选中后触发enter_vehicle真正切换操控。
+	"milestones": [
+		{
+			"milestone": "ready",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "add_option", "name": "$$self.name", "option": "上车" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "enter",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "上车" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "enter_vehicle", "vehicle": "$$self.name" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}
