@@ -9,6 +9,7 @@
 class Room;
 class Script;
 class ScriptFactory;
+class Route;
 
 // Vehicle：一辆车的实体，独占持有一个VehicleMod实例——照抄Job持有JobMod的模式(见
 // Source/Core/society/job.h)。阶段4-3只做到"能上下车、能开动"：只存名字、mod、当前世界
@@ -38,6 +39,19 @@ public:
 	float GetExitOffsetY() const;
 	float GetExitOffsetZ() const;
 
+	const std::string& GetCategory() const; // mod->category("car"/"bus"/"train"/"plane")，mod为空返回"car"
+	bool IsDrivable() const;
+	bool IsBoardable() const;
+	int GetCapacity() const;
+	void GetSize(float& outX, float& outY, float& outZ) const; // 立方体占位尺寸(UE单位)
+
+	// 这辆车是哪条线路的第几条line上的车——公共交通车辆(category!=car)由Traffic::InitRoutes()
+	// 创建后设置一次，供UE层GenerateVehicles()判断该生成AVehicleElement还是
+	// ATransitVehicleElement用；普通小汽车不调这个，route恒为nullptr。
+	void SetRouteBinding(Route* route, int line);
+	Route* GetRoute() const;
+	int GetRouteLine() const;
+
 	Script* GetScript() const;
 	const std::vector<std::string>& GetOptions() const;
 	void AddOption(const std::string& option);
@@ -64,6 +78,9 @@ private:
 	float parkingLocalX = 0.f;
 	float parkingLocalY = 0.f;
 	float parkingRotationDegrees = 0.f;
+
+	Route* route = nullptr;
+	int routeLine = -1;
 
 	float x = 0.0f;
 	float y = 0.0f;

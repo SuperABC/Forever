@@ -398,7 +398,9 @@ link之间仍可能有本节描述的局部绕路，是已知的兜底简化）�
 1. 小路横断面固定是中轴线两侧0.3单位车道、再往外0.2单位人行道（`PathLaneSpec`，`geometry.h`）。
 2. **小路接"大路"（`link.endRoad`非空且`!IsPathRoad()`）**：用小路自身连接方向和大路在
    `endT`处`perp0`的点积判断"最靠近小路的那一侧"（`dot>=0`是大路的side0，否则side1，和
-   `roadnet.cpp`/`Lot::SplitWithPath`一直沿用的`perp0=(fwd.Y,-fwd.X)`同一个约定）——只处理
+   `roadnet.cpp`一直沿用的`perp0`同一个约定，公式见`Map::ComputeLaneAnchorPosition`声明处的
+   说明——2026-10-04修正为`perp0=(-fwd.Y,fwd.X)`，之前写成`(fwd.Y,-fwd.X)`在这个项目
+   `+Y=南`的世界坐标下其实是左手边，公交车路线第一次让人能直接看出来，详见那边的排查记录）——只处理
    这一侧：车行道断出2个node（`fromAnchor->Nin->Nout->toAnchor`，保留大路直行不中断），`Nin`
    （进入点）接小路"驶入"方向的车道、`Nout`（合并点）接小路"驶出"方向的车道（小路side0沿
    Start->End走、side1沿End->Start走，所以Start端side0驶入/side1驶出，End端相反）；人行道

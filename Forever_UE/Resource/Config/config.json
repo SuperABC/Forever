@@ -42,11 +42,12 @@
    "roadnet_mods" : [ "jing" ],
    "zone_mods" : [ "empty --test true", "zone_residence" ],
    "building_mods" : [ "pengzhan", "yizhong", "yuanshen", "empty --test true",
-      "building_residence", "building_shop", "building_factory" ],
+      "building_residence", "building_shop", "building_factory",
+      "building_train_station", "building_airport" ],
    "component_mods" : [ "empty --test true", "component_residence", "component_shop",
-      "component_factory" ],
+      "component_factory", "component_train_station", "component_airport" ],
    "room_mods" : [ "empty --test true", "room_residence", "room_shop", "room_warehouse",
-      "room_parking", "room_factory" ],
+      "room_parking", "room_factory", "room_train_station", "room_airport" ],
    "asset_mods" : [ "empty --test true", "asset_container", "product_wheat", "product_beef",
       "product_burger", "ammo_pistol", "ammo_rifle", "weapon_pistol", "weapon_rifle" ],
    "app_mods" : [ "empty --test true", "bounce", "notes" ],
@@ -61,7 +62,7 @@
    "storage_mods" : [ "empty --test true", "storage_wheat", "storage_beef", "storage_burger" ],
    "manufacture_mods" : [ "empty --test true", "manufacture_farm", "manufacture_ranch",
       "manufacture_food_factory" ],
-   "route_mods" : [ "empty --test true" ],
-   "station_mods" : [ "empty --test true" ],
-   "vehicle_mods" : [ "empty --test true", "vehicle_basic" ]
+   "route_mods" : [ "empty --test true", "route_bus", "route_train", "route_air" ],
+   "station_mods" : [ "empty --test true", "station_bus", "station_train", "station_air" ],
+   "vehicle_mods" : [ "empty --test true", "vehicle_basic", "vehicle_bus", "vehicle_train", "vehicle_plane" ]
 }

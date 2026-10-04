@@ -104,3 +104,34 @@ private:
 	int id;
 	std::string name;
 };
+
+// TrainStationRoom/AirportRoom：公共交通站点建筑的候车厅/候机厅，不设任何
+// isResidential/isWorkspace/isStorage/isManufacture/isParking标志——纯粹一个普通房间
+// (公交站不挂建筑，不需要这个，见station_basic.h的BusStation)。
+class TrainStationRoom : public RoomMod {
+public:
+	TrainStationRoom();
+
+	static const char* GetId() { return "room_train_station"; }
+	virtual const char* GetType() const override { return "room_train_station"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class AirportRoom : public RoomMod {
+public:
+	AirportRoom();
+
+	static const char* GetId() { return "room_airport"; }
+	virtual const char* GetType() const override { return "room_airport"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};

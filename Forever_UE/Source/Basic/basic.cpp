@@ -112,7 +112,8 @@ extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModBuildings() {
-	static vector<string> mods = { ResidenceBuilding::GetId(), ShopBuilding::GetId(), FactoryBuilding::GetId() };
+	static vector<string> mods = { ResidenceBuilding::GetId(), ShopBuilding::GetId(), FactoryBuilding::GetId(),
+		TrainStationBuilding::GetId(), AirportBuilding::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
@@ -131,12 +132,23 @@ extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* fact
 		[](BuildingMod* m) { delete m; },
 		&FactoryBuilding::RandomAcreage, &FactoryBuilding::GetAcreageMin, &FactoryBuilding::GetAcreageMax,
 		&FactoryBuilding::GetPower, &FactoryBuilding::Assign);
+	factory->RegisterBuilding(TrainStationBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new TrainStationBuilding(); },
+		[](BuildingMod* m) { delete m; },
+		&TrainStationBuilding::RandomAcreage, &TrainStationBuilding::GetAcreageMin, &TrainStationBuilding::GetAcreageMax,
+		&TrainStationBuilding::GetPower, &TrainStationBuilding::Assign);
+	factory->RegisterBuilding(AirportBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new AirportBuilding(); },
+		[](BuildingMod* m) { delete m; },
+		&AirportBuilding::RandomAcreage, &AirportBuilding::GetAcreageMin, &AirportBuilding::GetAcreageMax,
+		&AirportBuilding::GetPower, &AirportBuilding::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModComponents() {
-	static vector<string> mods = { ResidenceComponent::GetId(), ShopComponent::GetId(), FactoryComponent::GetId() };
+	static vector<string> mods = { ResidenceComponent::GetId(), ShopComponent::GetId(), FactoryComponent::GetId(),
+		TrainStationComponent::GetId(), AirportComponent::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* factory) {
@@ -149,13 +161,20 @@ extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* fa
 	factory->RegisterComponent(FactoryComponent::GetId(),
 		[](const std::string&) -> ComponentMod* { return new FactoryComponent(); },
 		[](ComponentMod* m) { delete m; });
+	factory->RegisterComponent(TrainStationComponent::GetId(),
+		[](const std::string&) -> ComponentMod* { return new TrainStationComponent(); },
+		[](ComponentMod* m) { delete m; });
+	factory->RegisterComponent(AirportComponent::GetId(),
+		[](const std::string&) -> ComponentMod* { return new AirportComponent(); },
+		[](ComponentMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModComponents(ComponentFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModRooms() {
 	static vector<string> mods = {
-		ResidenceRoom::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), FactoryRoom::GetId()
+		ResidenceRoom::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), FactoryRoom::GetId(),
+		TrainStationRoom::GetId(), AirportRoom::GetId()
 	};
 	return (void*)&mods;
 }
@@ -174,6 +193,12 @@ extern "C" __declspec(dllexport) void RegisterModRooms(RoomFactory* factory) {
 		[](RoomMod* m) { delete m; });
 	factory->RegisterRoom(FactoryRoom::GetId(),
 		[](const std::string&) -> RoomMod* { return new FactoryRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(TrainStationRoom::GetId(),
+		[](const std::string&) -> RoomMod* { return new TrainStationRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(AirportRoom::GetId(),
+		[](const std::string&) -> RoomMod* { return new AirportRoom(); },
 		[](RoomMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModRooms(RoomFactory* factory) {
@@ -296,36 +321,57 @@ extern "C" __declspec(dllexport) void FinishModManufactures(ManufactureFactory* 
 }
 
 extern "C" __declspec(dllexport) void* GetModRoutes() {
-	static vector<string> mods = { RouteBasic::GetId() };
+	static vector<string> mods = { BusRoute::GetId(), TrainRoute::GetId(), AirRoute::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModRoutes(RouteFactory* factory) {
-	factory->RegisterRoute(RouteBasic::GetId(),
-		[](const std::string&) -> RouteMod* { return new RouteBasic(); },
+	factory->RegisterRoute(BusRoute::GetId(),
+		[](const std::string&) -> RouteMod* { return new BusRoute(); },
+		[](RouteMod* m) { delete m; });
+	factory->RegisterRoute(TrainRoute::GetId(),
+		[](const std::string&) -> RouteMod* { return new TrainRoute(); },
+		[](RouteMod* m) { delete m; });
+	factory->RegisterRoute(AirRoute::GetId(),
+		[](const std::string&) -> RouteMod* { return new AirRoute(); },
 		[](RouteMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModRoutes(RouteFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModStations() {
-	static vector<string> mods = { StationBasic::GetId() };
+	static vector<string> mods = { BusStation::GetId(), TrainStation::GetId(), AirStation::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModStations(StationFactory* factory) {
-	factory->RegisterStation(StationBasic::GetId(),
-		[](const std::string&) -> StationMod* { return new StationBasic(); },
+	factory->RegisterStation(BusStation::GetId(),
+		[](const std::string&) -> StationMod* { return new BusStation(); },
+		[](StationMod* m) { delete m; });
+	factory->RegisterStation(TrainStation::GetId(),
+		[](const std::string&) -> StationMod* { return new TrainStation(); },
+		[](StationMod* m) { delete m; });
+	factory->RegisterStation(AirStation::GetId(),
+		[](const std::string&) -> StationMod* { return new AirStation(); },
 		[](StationMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModStations(StationFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModVehicles() {
-	static vector<string> mods = { VehicleBasic::GetId() };
+	static vector<string> mods = { VehicleBasic::GetId(), BusVehicle::GetId(), TrainVehicle::GetId(), PlaneVehicle::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factory) {
 	factory->RegisterVehicle(VehicleBasic::GetId(),
 		[](const std::string&) -> VehicleMod* { return new VehicleBasic(); },
+		[](VehicleMod* m) { delete m; });
+	factory->RegisterVehicle(BusVehicle::GetId(),
+		[](const std::string&) -> VehicleMod* { return new BusVehicle(); },
+		[](VehicleMod* m) { delete m; });
+	factory->RegisterVehicle(TrainVehicle::GetId(),
+		[](const std::string&) -> VehicleMod* { return new TrainVehicle(); },
+		[](VehicleMod* m) { delete m; });
+	factory->RegisterVehicle(PlaneVehicle::GetId(),
+		[](const std::string&) -> VehicleMod* { return new PlaneVehicle(); },
 		[](VehicleMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModVehicles(VehicleFactory* factory) {

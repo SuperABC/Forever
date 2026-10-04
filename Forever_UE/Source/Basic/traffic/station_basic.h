@@ -3,23 +3,61 @@
 #include "traffic/station_mod.h"
 
 #include <string>
+#include <vector>
 
 
-// 阶段3占位:trivial默认实现,真正的默认traffic内容目录留到阶段4从旧工程
-// Basic/traffic/station_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式(之前这里是固定字符串，
-// 没有任何唯一性)。
-class StationBasic : public StationMod {
+// BusStation：公交站，不挂建筑、不占用任何Lot面积，直接贴着道路摆(见StationMod::AssignRoads
+// 的说明)。测试布局：只贴井字路网中心正方形lot的四条边道路(中山西/东/北/南路)，每条路两侧
+// 各摆一个(4条路x2侧=8个)，验证BusRoute::LayoutRoute的环线分组。
+class BusStation : public StationMod {
 public:
-	StationBasic();
+	BusStation();
 
-	static const char* GetId() { return "station_basic"; }
-	virtual const char* GetType() const override { return "station_basic"; }
+	static const char* GetId() { return "station_bus"; }
+	virtual const char* GetType() const override { return "station_bus"; }
 	virtual const char* GetName() override;
+
+	virtual void AssignRoads(const std::vector<Road*>& roads, RoadStationEmitFunc emit, void* context) override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// TrainStation：火车站，4个接口(两条轨道)，放在远离道路一侧(楼体贴道路，见
+// TrainStationBuilding::Layout的NearRoadFootprint)。[leftIn,rightOut]同向构成轨道1，
+// [rightIn,leftOut]反向构成轨道2，详见Layout()实现和route_basic.cpp
+// LayoutDualTrackStationLoop的拓扑说明。挂在TrainStationBuilding(building_train_station)上。
+class TrainStation : public StationMod {
+public:
+	TrainStation();
+
+	static const char* GetId() { return "station_train"; }
+	virtual const char* GetType() const override { return "station_train"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int direction, float sizeX, float sizeY) override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// AirStation：机场，4个接口(两条跑道)，放在远离道路一侧(楼体贴道路，见
+// AirportBuilding::Layout的NearRoadFootprint)。[leftIn,rightOut]同向构成跑道1，
+// [rightIn,leftOut]反向构成跑道2，详见Layout()实现和route_basic.cpp
+// LayoutDualTrackStationLoop的拓扑说明。挂在AirportBuilding(building_airport)上。
+class AirStation : public StationMod {
+public:
+	AirStation();
+
+	static const char* GetId() { return "station_air"; }
+	virtual const char* GetType() const override { return "station_air"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int direction, float sizeX, float sizeY) override;
 
 private:
 	static int count;

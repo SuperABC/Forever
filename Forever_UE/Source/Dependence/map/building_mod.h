@@ -108,6 +108,12 @@ public:
 	// 远处LOD单个cube用的材质软路径；留空时渲染层用默认灰色材质。
 	std::string lodMaterial;
 
+	// 这栋building承载哪个StationMod(填mod id，比如"station_bus")——公共交通站点建筑用，
+	// 空字符串表示这不是一个站点建筑。building和station是两个独立的mod实例，这里只是单向
+	// 声明"这栋楼要配一个站点"，Traffic::InitStations()据此创建对应的Station并调用
+	// StationMod::Layout()，见traffic/station_mod.h。
+	std::string stationMod;
+
 	// 声明第level层用哪个模板+朝向+资产。level：0-based，0=1楼，负数=地下室(-1=地下一层，
 	// 离地表最近的那层)——和floorHeights下标同一套人类直觉编号(不是老工程"basements偏移后
 	// 的数组下标"，Building::Layout()内部自己做偏移换算)。同一个level重复调用会覆盖之前

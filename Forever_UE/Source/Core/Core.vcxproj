@@ -93,6 +93,8 @@
     <ClCompile Include="industry\manufacture.cpp" />
     <ClCompile Include="traffic\traffic.cpp" />
     <ClCompile Include="traffic\vehicle.cpp" />
+    <ClCompile Include="traffic\station.cpp" />
+    <ClCompile Include="traffic\route.cpp" />
     <ClCompile Include="player\player.cpp" />
     <ClCompile Include="player\asset.cpp" />
     <ClCompile Include="player\app.cpp" />
@@ -130,6 +132,8 @@
     <ClInclude Include="industry\manufacture.h" />
     <ClInclude Include="traffic\traffic.h" />
     <ClInclude Include="traffic\vehicle.h" />
+    <ClInclude Include="traffic\station.h" />
+    <ClInclude Include="traffic\route.h" />
     <ClInclude Include="player\player.h" />
     <ClInclude Include="player\asset.h" />
     <ClInclude Include="player\app.h" />

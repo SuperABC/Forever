@@ -2,16 +2,26 @@
 
 #include "Framework/ForeverFrameworkActor.h"
 #include "Element/VehicleElement.h"
+#include "Element/TransitVehicleElement.h"
 #include "Element/CitizenElement.h"
 #include "traffic/traffic.h"
 #include "traffic/vehicle.h"
+#include "traffic/route.h"
+#include "traffic/station.h"
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "common/utility.h"
 
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "ProceduralMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
+
+using namespace std;
 
 // 和BuildingElement.cpp同名常量/同一个公式——这个项目的既有约定是每个需要room-local→世界
 // 坐标换算的.cpp文件各自抄一份(ForeverPopulaceFrameworkComponent.cpp也是这么做的)，不额外
@@ -24,6 +34,17 @@
 // 弹开，实测反馈"一开局就有些车被弹飞到天上"。生成点要离地板明显有余量，让车自己靠重力自然
 // 落地，而不是生成时就蹭着地板，50个单位(0.5米)是比车轮半径大的一个保守值。
 #define TRAFFIC_HEIGHT_EPSILON 50.f
+
+// 公交/火车/飞机线路调试画线用的尺寸(UE单位)，纯debug标记，照抄
+// ForeverRoadnetFrameworkComponent.cpp导航图debug可视化的经验值(NAV_DEBUG_*)。
+#define ROUTE_DEBUG_EDGE_HALF_WIDTH 8.f
+#define ROUTE_DEBUG_NODE_HALF_SIZE 40.f
+#define ROUTE_DEBUG_HEIGHT 50.f
+#define ROUTE_DEBUG_ARROW_LENGTH 120.f
+#define ROUTE_DEBUG_ARROW_HALF_WIDTH 40.f
+// 每隔多少地图单位采一个样，至少16段——照抄public_transport_plan.md"调试画线"一节的数值。
+#define ROUTE_DEBUG_SAMPLE_STEP 0.25f
+#define ROUTE_DEBUG_MIN_STEPS 16
 
 namespace {
 	void ComputeWorldPosition(const Building& building, float localX, float localY,
@@ -53,6 +74,103 @@ namespace {
 		return world->SweepTestByChannel(
 			from, to, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(42.f, 96.f), queryParams);
 	}
+
+	// 双面四边形——和ForeverRoadnetFrameworkComponent.cpp的RoadnetAppendQuadDoubleSided同一个
+	// 技巧，这个项目的既有约定是每个需要它的.cpp文件各自抄一份，不额外抽公共函数。
+	void RouteAppendQuadDoubleSided(TArray<FVector>& vertices, TArray<int32>& triangles,
+		const FVector& v00, const FVector& v10, const FVector& v11, const FVector& v01) {
+		int32 base = vertices.Num();
+		vertices.Add(v00); vertices.Add(v10); vertices.Add(v11); vertices.Add(v01);
+		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 1);
+		triangles.Add(base); triangles.Add(base + 3); triangles.Add(base + 2);
+		triangles.Add(base); triangles.Add(base + 1); triangles.Add(base + 2);
+		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 3);
+	}
+
+	// 站点接口用的小box，照抄AppendNavBox。
+	void AppendRouteStationBox(TArray<FVector>& vertices, TArray<int32>& triangles,
+		const FVector2D& center, float halfSize, float zBottom, float zTop) {
+		FVector v000(center.X - halfSize, center.Y - halfSize, zBottom);
+		FVector v100(center.X + halfSize, center.Y - halfSize, zBottom);
+		FVector v110(center.X + halfSize, center.Y + halfSize, zBottom);
+		FVector v010(center.X - halfSize, center.Y + halfSize, zBottom);
+		FVector v001(center.X - halfSize, center.Y - halfSize, zTop);
+		FVector v101(center.X + halfSize, center.Y - halfSize, zTop);
+		FVector v111(center.X + halfSize, center.Y + halfSize, zTop);
+		FVector v011(center.X - halfSize, center.Y + halfSize, zTop);
+
+		RouteAppendQuadDoubleSided(vertices, triangles, v001, v101, v111, v011);
+		RouteAppendQuadDoubleSided(vertices, triangles, v010, v110, v100, v000);
+		RouteAppendQuadDoubleSided(vertices, triangles, v000, v100, v101, v001);
+		RouteAppendQuadDoubleSided(vertices, triangles, v100, v110, v111, v101);
+		RouteAppendQuadDoubleSided(vertices, triangles, v110, v010, v011, v111);
+		RouteAppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011);
+	}
+
+	// 两点间的细ribbon，照抄AppendNavEdgeRibbon。
+	void AppendRouteEdgeRibbon(TArray<FVector>& vertices, TArray<int32>& triangles,
+		const FVector& from, const FVector& to, float halfWidth) {
+		FVector2D dir2D(to.X - from.X, to.Y - from.Y);
+		float len = dir2D.Size();
+		if (len < 1e-3f) return;
+		dir2D /= len;
+		FVector offset(-dir2D.Y * halfWidth, dir2D.X * halfWidth, 0.f);
+
+		RouteAppendQuadDoubleSided(vertices, triangles, from - offset, to - offset, to + offset, from + offset);
+	}
+
+	// 一条edge(可能是多段segments拼起来的)按弧长采样成世界坐标(UE单位)折线——不管edge->reversed
+	// (那个标志只影响Route::Update()驱动载具时的遍历方向/切线符号，画出来的曲线形状本身和
+	// 方向无关，正向反向用的是同一组segments)。相邻两段共享的端点只采一次，避免重复顶点。
+	void SampleRouteEdge(const Route::RouteEdge& edge, TArray<FVector>& outPoints) {
+		for (Connection* seg : edge.segments) {
+			if (!seg) continue;
+			float segLength = seg->CalcDistance(); // 地图单位
+			int steps = FMath::Max(ROUTE_DEBUG_MIN_STEPS, FMath::CeilToInt(segLength / ROUTE_DEBUG_SAMPLE_STEP));
+			for (int i = 0; i <= steps; i++) {
+				if (!outPoints.IsEmpty() && i == 0) continue; // 和上一段的末尾重复，跳过
+				float f = static_cast<float>(i) / static_cast<float>(steps);
+				Node point = seg->GetPoint(f);
+				outPoints.Add(FVector(point.GetX() * TRAFFIC_WORLD_SCALE, point.GetY() * TRAFFIC_WORLD_SCALE,
+					point.GetZ() * TRAFFIC_WORLD_SCALE));
+			}
+		}
+	}
+
+	// 在折线中点画一个小箭头指示行驶方向(edge->reversed时指向相反)——两个三角形拼成箭头形状，
+	// 双面绘制，从任意角度看都不会因为背面剔除而消失。
+	void AppendRouteArrow(TArray<FVector>& vertices, TArray<int32>& triangles,
+		const TArray<FVector>& points, bool reversed) {
+		if (points.Num() < 2) return;
+
+		int midIndex = points.Num() / 2;
+		FVector a = points[FMath::Max(0, midIndex - 1)];
+		FVector b = points[FMath::Min(points.Num() - 1, midIndex)];
+		FVector dir = (b - a);
+		if (dir.SizeSquared2D() < 1e-3f) return;
+		dir = dir.GetSafeNormal2D();
+		if (reversed) dir = -dir;
+
+		FVector mid = points[midIndex];
+		FVector perp(-dir.Y, dir.X, 0.f);
+
+		FVector tip = mid + dir * (ROUTE_DEBUG_ARROW_LENGTH * 0.5f);
+		FVector backLeft = mid - dir * (ROUTE_DEBUG_ARROW_LENGTH * 0.5f) + perp * ROUTE_DEBUG_ARROW_HALF_WIDTH;
+		FVector backRight = mid - dir * (ROUTE_DEBUG_ARROW_LENGTH * 0.5f) - perp * ROUTE_DEBUG_ARROW_HALF_WIDTH;
+
+		int32 base = vertices.Num();
+		vertices.Add(tip); vertices.Add(backLeft); vertices.Add(backRight);
+		triangles.Add(base); triangles.Add(base + 1); triangles.Add(base + 2);
+		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 1);
+	}
+}
+
+UForeverTrafficFrameworkComponent::UForeverTrafficFrameworkComponent() {
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> pureFinder(
+		TEXT("/Game/Asset/Materials/Pure.Pure"));
+	if (pureFinder.Succeeded()) {
+		pureBaseMaterial = pureFinder.Object;
+	}
 }
 
 void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traffic) {
@@ -60,6 +178,28 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 
 	for (auto& [name, vehicle] : traffic->GetVehicles()) {
 		if (!vehicle) continue;
+
+		if (vehicle->GetRoute()) {
+			// 公共交通车辆(category!=car)：不停车位，不需要换算世界坐标——Tick里直接读
+			// vehicle->GetTransform()驱动，第一帧Tick就会跳到Route算出来的真实位置，生成时
+			// 给个原点占位无所谓。
+			UClass* transitClass = ATransitVehicleElement::StaticClass();
+			const string& blueprintPath = vehicle->GetBlueprintPath();
+			if (!blueprintPath.empty()) {
+				FString path = UTF8_TO_TCHAR(blueprintPath.data());
+				if (UClass* loaded = LoadClass<ATransitVehicleElement>(nullptr, *path)) {
+					transitClass = loaded;
+				}
+			}
+
+			ATransitVehicleElement* transitElement = GetWorld()->SpawnActor<ATransitVehicleElement>(
+				transitClass, FVector::ZeroVector, FRotator::ZeroRotator);
+			if (!transitElement) continue;
+
+			transitElement->Init(vehicle);
+			activeTransitVehicles.Add(UTF8_TO_TCHAR(vehicle->GetName().c_str()), transitElement);
+			continue;
+		}
 
 		Room* room = vehicle->GetRoom();
 		Building* building = room ? room->GetParentBuilding() : nullptr;
@@ -203,4 +343,146 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 
 	// 车辆本身不销毁——这次是预置在停车位的真实物件，不是一次性测试对象，下车后原地留着
 	// 供下次再上车。
+}
+
+void UForeverTrafficFrameworkComponent::GetRouteDebugTarget(const FString& stationType,
+	UProceduralMeshComponent*& outMesh, UMaterialInstanceDynamic*& outMaterial) {
+	if (stationType == TEXT("bus")) {
+		outMesh = busRouteMesh;
+		outMaterial = busRouteMaterial;
+	} else if (stationType == TEXT("train")) {
+		outMesh = trainRouteMesh;
+		outMaterial = trainRouteMaterial;
+	} else if (stationType == TEXT("plane")) {
+		outMesh = planeRouteMesh;
+		outMaterial = planeRouteMaterial;
+	} else {
+		outMesh = otherRouteMesh;
+		outMaterial = otherRouteMaterial;
+	}
+}
+
+void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
+	if (!traffic) return;
+
+	AActor* owner = GetOwner();
+	if (!owner) return;
+
+	// 四个类别各一个UProceduralMeshComponent，照抄
+	// ForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh的组件创建方式。
+	auto ensureMesh = [&](TObjectPtr<UProceduralMeshComponent>& mesh, const TCHAR* debugName) {
+		if (!mesh) {
+			mesh = NewObject<UProceduralMeshComponent>(owner, debugName);
+			mesh->SetupAttachment(owner->GetRootComponent());
+			mesh->RegisterComponent();
+			owner->AddInstanceComponent(mesh);
+		}
+	};
+	ensureMesh(busRouteMesh, TEXT("BusRouteDebug"));
+	ensureMesh(trainRouteMesh, TEXT("TrainRouteDebug"));
+	ensureMesh(planeRouteMesh, TEXT("PlaneRouteDebug"));
+	ensureMesh(otherRouteMesh, TEXT("OtherRouteDebug"));
+
+	if (!bShowRouteDebug) {
+		busRouteMesh->ClearMeshSection(0);
+		trainRouteMesh->ClearMeshSection(0);
+		planeRouteMesh->ClearMeshSection(0);
+		otherRouteMesh->ClearMeshSection(0);
+		return;
+	}
+
+	if (pureBaseMaterial) {
+		if (!busRouteMaterial) {
+			busRouteMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
+			busRouteMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor::Green);
+		}
+		if (!trainRouteMaterial) {
+			trainRouteMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
+			trainRouteMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor::Blue);
+		}
+		if (!planeRouteMaterial) {
+			planeRouteMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
+			planeRouteMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor::Red);
+		}
+		if (!otherRouteMaterial) {
+			otherRouteMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
+		}
+	}
+
+	TArray<FVector> busVertices, trainVertices, planeVertices, otherVertices;
+	TArray<int32> busTriangles, trainTriangles, planeTriangles, otherTriangles;
+
+	auto targetArrays = [&](const FString& stationType, TArray<FVector>*& outVertices, TArray<int32>*& outTriangles) {
+		if (stationType == TEXT("bus")) { outVertices = &busVertices; outTriangles = &busTriangles; }
+		else if (stationType == TEXT("train")) { outVertices = &trainVertices; outTriangles = &trainTriangles; }
+		else if (stationType == TEXT("plane")) { outVertices = &planeVertices; outTriangles = &planeTriangles; }
+		else { outVertices = &otherVertices; outTriangles = &otherTriangles; }
+	};
+
+	for (auto& [routeName, route] : traffic->GetRoutes()) {
+		if (!route) continue;
+		FString stationType = UTF8_TO_TCHAR(route->GetStationType().c_str());
+
+		TArray<FVector>* vertices;
+		TArray<int32>* triangles;
+		targetArrays(stationType, vertices, triangles);
+
+		for (const vector<Route::RouteLeg>& legs : route->GetLines()) {
+			for (const Route::RouteLeg& leg : legs) {
+				if (!leg.edge) continue;
+
+				TArray<FVector> points;
+				SampleRouteEdge(*leg.edge, points);
+				for (int32 i = 0; i + 1 < points.Num(); i++) {
+					AppendRouteEdgeRibbon(*vertices, *triangles, points[i], points[i + 1], ROUTE_DEBUG_EDGE_HALF_WIDTH);
+				}
+				AppendRouteArrow(*vertices, *triangles, points, leg.edge->reversed);
+			}
+		}
+	}
+
+	for (auto& [stationName, station] : traffic->GetStations()) {
+		if (!station) continue;
+		FString stationType = UTF8_TO_TCHAR(station->GetStationType().c_str());
+
+		TArray<FVector>* vertices;
+		TArray<int32>* triangles;
+		targetArrays(stationType, vertices, triangles);
+
+		for (const StationInterface& iface : station->GetInterfaces()) {
+			FVector world(iface.x * TRAFFIC_WORLD_SCALE, iface.y * TRAFFIC_WORLD_SCALE, iface.z * TRAFFIC_WORLD_SCALE);
+			AppendRouteStationBox(*vertices, *triangles, FVector2D(world.X, world.Y),
+				ROUTE_DEBUG_NODE_HALF_SIZE, world.Z, world.Z + ROUTE_DEBUG_HEIGHT);
+		}
+	}
+
+	auto applySection = [](UProceduralMeshComponent* mesh, UMaterialInstanceDynamic* material,
+		const TArray<FVector>& vertices, const TArray<int32>& triangles) {
+		mesh->ClearMeshSection(0);
+		if (triangles.Num() == 0) return;
+		mesh->CreateMeshSection(0, vertices, triangles,
+			TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
+		if (material) mesh->SetMaterial(0, material);
+	};
+	applySection(busRouteMesh, busRouteMaterial, busVertices, busTriangles);
+	applySection(trainRouteMesh, trainRouteMaterial, trainVertices, trainTriangles);
+	applySection(planeRouteMesh, planeRouteMaterial, planeVertices, planeTriangles);
+	applySection(otherRouteMesh, otherRouteMaterial, otherVertices, otherTriangles);
+}
+
+void UForeverTrafficFrameworkComponent::BuildTracks(Traffic* traffic) {
+	if (!traffic) return;
+
+	for (auto& [routeName, route] : traffic->GetRoutes()) {
+		if (!route || !route->ShouldDrawPath()) continue;
+
+		if (route->GetTrackMesh().empty()) {
+			// 这次三种内置线路里唯一drawPath=true的是TrainRoute，trackMesh留空——只打一条Log，
+			// 真正沿弧长铺InstancedStaticMeshComponent的逻辑(思路同
+			// ForeverRoadnetFrameworkComponent::BuildRoadInstances)留给以后有真实轨道资产的
+			// 内容类型实现，见public_transport_plan.md"铺轨"一节。
+			debugf("UForeverTrafficFrameworkComponent::BuildTracks: route %s has empty trackMesh, skip laying tracks.\n",
+				route->GetName().c_str());
+		}
+	}
 }

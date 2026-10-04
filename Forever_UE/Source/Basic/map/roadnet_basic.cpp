@@ -282,14 +282,13 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	externs.emplace_back(verticalNode2s.back().first);
 	verticalNode2s.pop_back();
 
-	// 井字最中间的四条路故意配成不对称/单行，验证车道居中、路口收缩、单行道开口这些新逻辑
-	// (对称默认配置从来没暴露过这些问题，必须有真正不对称的数据才能在PIE里看出来)：
-	// 中山西路/中山东路是左右车道数不同的双向路(互为镜像)，中山北路/中山南路是单行道
-	// (整条路车行道全部在一侧，另一侧只有人行道，也互为镜像)。
-	addRoad("中山西路", intersections[0], intersections[3], 1, 0, 1, 2, 0, 1);
-	addRoad("中山东路", intersections[1], intersections[2], 2, 0, 1, 1, 0, 1);
-	addRoad("中山北路", intersections[0], intersections[1], 0, 0, 1, 2, 0, 1);
-	addRoad("中山南路", intersections[3], intersections[2], 2, 0, 1, 0, 0, 1);
+	// 井字最中间的四条路——之前故意配成不对称/单行用来验证车道居中/路口收缩/单行道开口这些
+	// 逻辑，现在改回和其余道路一样的对称默认配置(双向各1条车行道)，应用户要求给公共交通
+	// 测试腾出一个规整的中心方形地块，不再需要这几条路本身验证车道不对称。
+	addRoad("中山西路", intersections[0], intersections[3]);
+	addRoad("中山东路", intersections[1], intersections[2]);
+	addRoad("中山北路", intersections[0], intersections[1]);
+	addRoad("中山南路", intersections[3], intersections[2]);
 
 	if (horizontalNode1w.size() > 0) {
 		addRoad("城西北路", intersections[0], intersections[horizontalNode1w[0].second]);

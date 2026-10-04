@@ -369,6 +369,14 @@ struct LotPlacementRequest {
 	float marginStart = 0.f;
 	float marginEnd = 0.f;
 	float depth = 0.f;
+
+	// 非空时说明lot不是调用方传进Assign()的那个顶层Lot本身，而是Lot::FindAdaptivePlacement在
+	// 它的freeLots里点中的一个子块——RequestPlacement成功之后，调用方(Map::InitZones()/
+	// InitBuildings())要把lot自己剩下的freeLots/pathRoadLinks搬回adaptiveParent、并把lot从
+	// adaptiveParent->GetFreeLots()里摘掉再delete，这样下一个mod类型的FindAdaptivePlacement才能
+	// 看到真正还剩多少空间（否则lot会继续以"看起来完整未使用"的样子留在adaptiveParent里）。这个
+	// 搬运步骤必须在Core编译的代码里做，不能让mod自己做，见FindAdaptivePlacement声明处的说明。
+	Lot* adaptiveParent = nullptr;
 };
 
 // Zone/BuildingMod的Assign()一次性扫描全地图的lot列表、决定要显式占位哪些lot时，通过这个回调把
@@ -549,8 +557,27 @@ public:
 	// 自由子地块池：只读枚举，惰性初始化——第一次通过RequestPlacement/FillRemainder访问时，
 	// 如果freeLots还是空的，先塞入一个和this自身范围重合、边界Road直接继承this->boundaryRoads
 	// 的初始元素。子地块不会再有自己的子地块，只有顶层Lot会真正用到这个池。
+	//
+	// 注意：这个惰性初始化本身会new一个Lot、push_back进this->freeLots——这个分配/容器增长动作
+	// 必须只在Core编译的代码(Map::InitZones()/InitBuildings()，运行时属于UnrealEditor-Forever.dll
+	// 这个真正的UE模块，operator new/delete被PerModuleInline.inl接到FMemory)里发生，绝对不能从
+	// mod DLL(Basic.dll等，用的是普通CRT分配器)的调用栈里触发——哪怕调用的是完全同一份Lot::
+	// GetFreeLots()源码，Dependence.lib被两个模块各自静态链接一份，这次调用实际执行哪一份取决于
+	// 调用指令本身编译进了哪个最终binary，不是看代码写在哪个.cpp里。一旦this->freeLots的buffer
+	// 由一个模块的分配器分配、又被另一个模块的分配器reallocate/free，就会堆损坏(exit时或者下一次
+	// 任意堆操作时crash，现象是STATUS_HEAP_CORRUPTION，参见geometry.md"跨DLL分配器"一节/
+	// cross-dll-allocator-crash笔记——这正是FindAdaptivePlacement v3那次踩到的坑：直接从
+	// TrainStationBuilding::Assign(Basic.dll)里调了RequestPlacement，表现为PIE一进场景就
+	// 整个UnrealEditor.exe直接退出)。mod DLL只能调下面的PeekFreeLots()这个纯读版本。
 	std::vector<Lot*>& GetFreeLots();
 	float GetFreeAcreage();
+
+	// GetFreeLots()的纯只读版本，专供mod DLL在Assign()探测阶段调用：freeLots还没真正初始化过
+	// (freeLotsInitialized==false)时直接返回空vector，绝不触发那个会new的lazy-init；已经初始化
+	// 过(说明之前已经有某次Core侧的RequestPlacement调用安全地做过lazy-init了)时按值拷贝一份
+	// 返回——拷贝本身分配在调用方自己的模块里，不和this->freeLots共享buffer，不会把两个模块的
+	// 分配器搅到一起。
+	std::vector<Lot*> PeekFreeLots() const;
 
 	// 在freeLots中找一块贴着direction方向道路、放得下[marginStart,marginEnd]x[0,depth]矩形的
 	// 自由子块，精确裁剪出来。direction在this(顶层Lot)自己的边界Road表里没有对应Road时直接
@@ -563,6 +590,33 @@ public:
 	bool RequestPlacement(int direction, float marginStart, float marginEnd, float depth,
 		const PathLaneSpec& spec, Quad* outPlaced,
 		std::unordered_map<int, Road*>* outBoundaryRoads = nullptr);
+
+	// 自适应版本：不要求调用方自己猜一组marginStart/marginEnd/depth去刚好避开别的mod已经占掉
+	// 的区域——用PeekFreeLots()(纯读)在当前freeLots里找一块贴着direction方向道路、frontage
+	// (沿道路方向)至少minFrontage、depth(垂直道路方向)至少minDepth的自由子块(挑面积最大的
+	// 一个)，margin取居中(多余的frontage两侧平分)。
+	//
+	// 这条路贴的可能是原始lot自己的四条边界路，也可能是之前某次切割(SplitWithPath)在切割线上
+	// 插入的内部"path"小路——后者同样是真实的、会接入导航图的Road，贴着它盖房子完全合理(比如
+	// 临街小巷两侧盖房子)，不要求必须贴着最外层那四条原始边。
+	//
+	// 这是一个纯查询——const成员函数，不碰任何会导致分配/释放的路径(用PeekFreeLots()而不是
+	// GetFreeLots()，freeLots一个指针都不会动，更不会调RequestPlacement)，可以安全地从mod
+	// DLL(Basic.dll等)的Assign()探测阶段直接调用，见GetFreeLots()/PeekFreeLots()声明处的说明。
+	// *outLot*就是PeekFreeLots()返回列表里命中的那个指针本身(如果freeLots还没初始化过，退化为
+	// this自己)，margin/depth相对outLot自己的尺寸(不是this的)——调用方(mod的Assign())要把
+	// outLot原样设进LotPlacementRequest::lot，并在outLot!=this(即命中的是一个真正的嵌套子块，
+	// 不是this自身)时把LotPlacementRequest::adaptiveParent设成this，供Core编译的处理阶段
+	// (Map::InitZones()/InitBuildings())在RequestPlacement成功之后把outLot自己的残余freeLots/
+	// pathRoadLinks搬回this、把outLot从this->GetFreeLots()里摘掉再delete——这个搬运步骤同样
+	// 必须在Core侧做，不能在这个函数里提前做掉(FindAdaptivePlacement v3那版的错误：直接在这里
+	// 调outLot->RequestPlacement()，结果是从Basic.dll的调用栈触发了this->freeLots的分配器
+	// 操作，PIE一进场景整个UnrealEditor.exe直接退出，STATUS_HEAP_CORRUPTION，见geometry.md
+	// "跨DLL分配器"一节/cross-dll-allocator-crash笔记)。
+	//
+	// 找不到满足条件的自由子块返回false，out参数不修改。
+	bool FindAdaptivePlacement(int direction, float minFrontage, float minDepth,
+		Lot*& outLot, float& outMarginStart, float& outMarginEnd, float& outDepth) const;
 
 	// 对freeLots和候选权重表做CDF随机填充，每确定一个候选的目标面积后用SplitWithPath递归二分
 	// 定位到某个freeLot里。分割轴优先选择能让两侧都保住可达性的那个，只有在按这个轴切会导致
@@ -584,6 +638,18 @@ public:
 	// 产生的副产品，归属关系上本来就该跟着这个顶层Lot走，不需要另外找个地方(比如Map)单独维护
 	// 一份"这些小路是谁的"记录。析构时一并delete每条link.road。
 	const std::vector<PathRoadLink>& GetPathRoadLinks() const;
+
+	// 把pathRoadLinks整体搬出去并清空自己这边：只给Map(Core编译的代码)在"adaptive placement"
+	// 流程里把一个已经被消耗过的嵌套子块(FindAdaptivePlacement命中的那个outLot)的新增小路转交
+	// 给它的上级顶层Lot用——转交之后这个子块对象很快就会被delete，如果不先清空，~Lot()会把这些
+	// 小路的Road*也删掉，而这些Road*可能正被刚创建的Building/Zone自己的boundaryRoads引用着，
+	// 变成悬空指针。不对mod DLL公开调用约定(虽然签名是public，但只有Map会用)。
+	std::vector<PathRoadLink> TakePathRoadLinks();
+
+	// TakePathRoadLinks()的反向操作：把一批(通常是从某个嵌套子块身上Take出来的)PathRoadLink
+	// 追加进pathRoadLinks——同样只给Map用，让"adaptive placement"流程里真正切出来的小路能被
+	// 记到正确的顶层Lot身上，供GetPathRoadLinks()/GetPathRoads()查到。
+	void AdoptPathRoadLinks(std::vector<PathRoadLink>&& links);
 
 	// 从GetPathRoadLinks()按值筛出.road，纯供Forever层遍历渲染用；Map::GetPathRoads()汇总所有
 	// 顶层Lot的这个列表。按值返回(不是引用)——底层存储是PathRoadLink，这里每次现筛一份。

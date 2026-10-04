@@ -27,3 +27,49 @@ private:
 	int id;
 	std::string name;
 };
+
+// BusVehicle/TrainVehicle/PlaneVehicle：公共交通线路车辆——blueprintPath留空，UE层
+// ATransitVehicleElement按sizeX/Y/Z缩放/Engine/BasicShapes/Cube占位；drivable=boardable=
+// false(这次不做操控/搭乘，只预留字段，见public_transport_plan.md"5."一节)。三个类型合并进
+// 同一份vehicle_basic.h/.cpp，和VehicleBasic同一个文件组织约定(见上VehicleBasic注释)。
+class BusVehicle : public VehicleMod {
+public:
+	BusVehicle();
+
+	static const char* GetId() { return "vehicle_bus"; }
+	virtual const char* GetType() const override { return "vehicle_bus"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class TrainVehicle : public VehicleMod {
+public:
+	TrainVehicle();
+
+	static const char* GetId() { return "vehicle_train"; }
+	virtual const char* GetType() const override { return "vehicle_train"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class PlaneVehicle : public VehicleMod {
+public:
+	PlaneVehicle();
+
+	static const char* GetId() { return "vehicle_plane"; }
+	virtual const char* GetType() const override { return "vehicle_plane"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};

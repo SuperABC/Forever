@@ -56,3 +56,34 @@ private:
 	int id;
 	std::string name;
 };
+
+// TrainStationComponent/AirportComponent：公共交通站点建筑用的trivial占位component，和上面
+// 三个一样InitComponent逻辑本来就是空的(公交站不挂建筑，不需要这个，见
+// station_basic.h的BusStation)。
+class TrainStationComponent : public ComponentMod {
+public:
+	TrainStationComponent();
+
+	static const char* GetId() { return "component_train_station"; }
+	virtual const char* GetType() const override { return "component_train_station"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class AirportComponent : public ComponentMod {
+public:
+	AirportComponent();
+
+	static const char* GetId() { return "component_airport"; }
+	virtual const char* GetType() const override { return "component_airport"; }
+	virtual const char* GetName() override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};

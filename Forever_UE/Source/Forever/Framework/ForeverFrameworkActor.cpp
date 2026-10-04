@@ -151,7 +151,10 @@ void AForeverFrameworkActor::BeginPlay()
 		// 烘焙的选项快照才不会是空的，见EnsureTrafficGenerated()声明处的说明。
 		if (trafficFramework) {
 			trafficFramework->GenerateVehicles(map, traffic);
+			trafficFramework->BuildRouteDebugMesh(traffic);
+			trafficFramework->BuildTracks(traffic);
 		}
+
 	}
 	catch (const ExceptionBase& e) {
 		UE_LOG(LogTemp, Error, TEXT("生成世界时发生致命错误，拒绝继续，退出游戏：%s"),

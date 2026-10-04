@@ -61,3 +61,23 @@ const char* FactoryRoom::GetName() {
 	name = "FactoryRoom" + to_string(id);
 	return name.data();
 }
+
+int TrainStationRoom::count = 0;
+
+TrainStationRoom::TrainStationRoom() : id(count++) {
+}
+
+const char* TrainStationRoom::GetName() {
+	name = "TrainStationRoom" + to_string(id);
+	return name.data();
+}
+
+int AirportRoom::count = 0;
+
+AirportRoom::AirportRoom() : id(count++) {
+}
+
+const char* AirportRoom::GetName() {
+	name = "AirportRoom" + to_string(id);
+	return name.data();
+}

@@ -5,21 +5,55 @@
 #include <string>
 
 
-// 阶段3占位:trivial默认实现,真正的默认traffic内容目录留到阶段4从旧工程
-// Basic/traffic/route_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式(之前这里是固定字符串，
-// 没有任何唯一性)。
-class RouteBasic : public RouteMod {
+// BusRoute：公交线路——stationType="bus"、useRoadnet=true(接入现有车道路网)、
+// drawPath=false。LayoutRoute按就近顺序把所有bus站点分成若干条环线，每条N站(kStationsPerLine)。
+class BusRoute : public RouteMod {
 public:
-	RouteBasic();
+	BusRoute();
 
-	static const char* GetId() { return "route_basic"; }
-	virtual const char* GetType() const override { return "route_basic"; }
+	static const char* GetId() { return "route_bus"; }
+	virtual const char* GetType() const override { return "route_bus"; }
 	virtual const char* GetName() override;
+
+	virtual void LayoutRoute(const std::vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// TrainRoute：火车线路——stationType="train"、useRoadnet=false(走2.3节贝塞尔曲线)、
+// drawPath=true、trackMesh留空(这次不画铁轨)。假定全图只有一个train站点(2个接口/两条站台)，
+// 两个接口各自沿departDir射线求交地图边界，各生成一个边缘站点，线路是
+// "边缘1->接口0->边缘2->接口1->边缘1"的环。
+class TrainRoute : public RouteMod {
+public:
+	TrainRoute();
+
+	static const char* GetId() { return "route_train"; }
+	virtual const char* GetType() const override { return "route_train"; }
+	virtual const char* GetName() override;
+
+	virtual void LayoutRoute(const std::vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// AirRoute：航线——拓扑和TrainRoute完全相同(假定全图只有一个plane站点/两个跑道接口)，区别是
+// stationType="plane"、drawPath=false、边缘站点z取cruiseHeight(飞行高度，老工程用100)。
+class AirRoute : public RouteMod {
+public:
+	AirRoute();
+
+	static const char* GetId() { return "route_air"; }
+	virtual const char* GetType() const override { return "route_air"; }
+	virtual const char* GetName() override;
+
+	virtual void LayoutRoute(const std::vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) override;
 
 private:
 	static int count;

@@ -31,3 +31,23 @@ const char* FactoryComponent::GetName() {
 	name = "FactoryComponent" + to_string(id);
 	return name.data();
 }
+
+int TrainStationComponent::count = 0;
+
+TrainStationComponent::TrainStationComponent() : id(count++) {
+}
+
+const char* TrainStationComponent::GetName() {
+	name = "TrainStationComponent" + to_string(id);
+	return name.data();
+}
+
+int AirportComponent::count = 0;
+
+AirportComponent::AirportComponent() : id(count++) {
+}
+
+const char* AirportComponent::GetName() {
+	name = "AirportComponent" + to_string(id);
+	return name.data();
+}

@@ -7,6 +7,35 @@
 
 using namespace std;
 
+namespace {
+	// 把楼体压到靠近道路的一侧，深度方向只占bodyDepthSizeRatio这么大一块、贴着道路那条边
+	// (bodyDepthCenterRatio是这块body在深度方向上的中心、相对"贴道路=0、远离道路=1"这同一套
+	// 0~1比例，和station_basic.cpp的NearRoadPoint用的是完全一致的direction->深度轴映射约定，
+	// 这里单独写一份是因为BuildingFootprintSpec用(centerRatio,sizeRatio)描述一个区间而不是
+	// NearRoadPoint的(alongRatio,depthRatio)单点坐标，换算方式不同，没法直接调用它)——剩下的
+	// 深处空间留给StationMod的站台/跑道接口用，避免公共交通连线穿过楼体实体(用户实测反馈
+	// "建筑楼体没有偏移，还位于建筑矩形的中心，导致公共交通路线穿过楼体"就是因为之前
+	// centerRatio固定0.5、bodyOffsetX/Y恒为0，见Building::Layout()里
+	// bodyOffsetX=(fp.centerRatioX-0.5)*GetSizeX()这个换算)。bodyFrontageSizeRatio是沿
+	// 道路方向(frontage轴)的占比，不需要跟着direction做任何换算。
+	BuildingFootprintSpec NearRoadFootprint(int direction, float bodyDepthCenterRatio,
+		float bodyDepthSizeRatio, float bodyFrontageSizeRatio) {
+		bool depthAlongX = (direction == FACE_WEST || direction == FACE_EAST);
+		bool flip = (direction == FACE_EAST || direction == FACE_NORTH);
+		float depthCenter = flip ? 1.f - bodyDepthCenterRatio : bodyDepthCenterRatio;
+
+		BuildingFootprintSpec spec;
+		if (depthAlongX) {
+			spec.centerRatioX = depthCenter; spec.sizeRatioX = bodyDepthSizeRatio;
+			spec.centerRatioY = 0.5f; spec.sizeRatioY = bodyFrontageSizeRatio;
+		} else {
+			spec.centerRatioY = depthCenter; spec.sizeRatioY = bodyDepthSizeRatio;
+			spec.centerRatioX = 0.5f; spec.sizeRatioX = bodyFrontageSizeRatio;
+		}
+		return spec;
+	}
+}
+
 int ResidenceBuilding::count = 0;
 
 ResidenceBuilding::ResidenceBuilding() : id(count++) {
@@ -476,3 +505,135 @@ float FactoryBuilding::GetPower(AREA_TYPE area) {
 	}
 	return 0.f;
 }
+
+int TrainStationBuilding::count = 0;
+
+TrainStationBuilding::TrainStationBuilding() : id(count++) {
+	stationMod = "station_train";
+}
+
+const char* TrainStationBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void TrainStationBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 楼体贴着道路那一侧，深度方向只占35%，剩下65%的深处空间留给两条轨道/四个接口
+	// (TrainStation::Layout，depthRatio 0.65/0.85)用，不会被楼体实体挡住——PIE实测反馈
+	// "建筑楼体没有偏移，还位于建筑矩形的中心，导致公共交通路线穿过楼体"之后改的，用
+	// NearRoadFootprint按direction换算，见该函数注释。
+	footprint = NearRoadFootprint(direction, 0.18f, 0.35f, 0.6f);
+	basements = 0;
+	layers = 1;
+	floorHeights.assign(1, 0.6f);
+
+	constexpr const char* kComponent = "component_train_station";
+	constexpr int kComponentId = 0;
+	AssignFloor(0, "preset_single_room_fg", direction);
+	AssignRoom(0, 0, "room_train_station", kComponent, kComponentId);
+}
+
+void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 测试布局：固定在井字中心正方形lot(AREA_OFFICIAL_HIGH)上找一块地方，和机场
+	// (AirportBuilding::Assign)、围墙测试场景(ResidenceZone)共存——不再手动猜哪个方向/
+	// margin刚好能避开别人已经占掉的区域，而是用Lot::FindAdaptivePlacement按"现在实际还剩
+	// 多少自由空间"自适应选：依次尝试4个方向，每个方向用当前freeLots真实算出一组保证命中
+	// 的margin/depth，哪个方向先找到可用空间就用哪个，不挑剔具体是哪一侧。
+	constexpr float kMinFrontage = 7.f;
+	constexpr float kMinDepth = 4.f;
+
+	for (Lot* lot : lots) {
+		if (!lot || lot->GetArea() != AREA_OFFICIAL_HIGH) continue;
+
+		for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {
+			Lot* targetLot;
+			float marginStart, marginEnd, depth;
+			if (!lot->FindAdaptivePlacement(dir, kMinFrontage, kMinDepth, targetLot, marginStart, marginEnd, depth)) continue;
+
+			// request.lot是targetLot(FindAdaptivePlacement命中的那个自由子块)，不是lot本身——
+			// 子块贴的道路可能是切割产生的内部小路，margin/depth是相对子块自己的尺寸算的，必须
+			// 让RequestPlacement在子块自己的坐标系里裁剪，见FindAdaptivePlacement的说明。
+			// adaptiveParent只在targetLot真的是lot freeLots里的一个嵌套子块时才设(targetLot!=lot
+			// 说明命中的不是lot自己，而是PeekFreeLots()返回的某个子块)——Core侧处理这条request
+			// 成功之后要靠这个字段把targetLot自己的残余空间/新增小路搬回lot，不能在这里(Basic.dll)
+			// 自己搬，见FindAdaptivePlacement声明处的说明。
+			LotPlacementRequest request;
+			request.lot = targetLot;
+			request.adaptiveParent = (targetLot != lot) ? lot : nullptr;
+			request.direction = dir;
+			request.marginStart = marginStart;
+			request.marginEnd = marginEnd;
+			request.depth = depth;
+			emit(context, request);
+			return;
+		}
+		return; // 中心lot只有一个，4个方向都试过就不用再看其它lot
+	}
+}
+
+float TrainStationBuilding::RandomAcreage() { return 2000.f; }
+float TrainStationBuilding::GetAcreageMin() { return 2000.f; }
+float TrainStationBuilding::GetAcreageMax() { return 2000.f; }
+float TrainStationBuilding::GetPower(AREA_TYPE area) { return 0.f; }
+
+int AirportBuilding::count = 0;
+
+AirportBuilding::AirportBuilding() : id(count++) {
+	stationMod = "station_air";
+}
+
+const char* AirportBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void AirportBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 和TrainStationBuilding同样贴路一侧的footprint，理由见那边的注释——AirStation::Layout的
+	// 两条跑道depthRatio是0.65/0.85，同一组数值。
+	footprint = NearRoadFootprint(direction, 0.18f, 0.35f, 0.6f);
+	basements = 0;
+	layers = 1;
+	floorHeights.assign(1, 0.6f);
+
+	constexpr const char* kComponent = "component_airport";
+	constexpr int kComponentId = 0;
+	AssignFloor(0, "preset_single_room_fg", direction);
+	AssignRoom(0, 0, "room_airport", kComponent, kComponentId);
+}
+
+void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 和TrainStationBuilding::Assign同一个自适应思路——这个Assign在Building阶段的处理顺序
+	// 排在TrainStationBuilding之后(谁先谁后由BuildingFactory::GetRegisteredIds()的枚举顺序
+	// 决定，这里不关心)，FindAdaptivePlacement会自动看到火车站(如果已经成功)留下的最新
+	// freeLots状态，自己找一块不冲突的空间，不需要硬编码"对面那一侧"。
+	constexpr float kMinFrontage = 7.f;
+	constexpr float kMinDepth = 4.f;
+
+	for (Lot* lot : lots) {
+		if (!lot || lot->GetArea() != AREA_OFFICIAL_HIGH) continue;
+
+		for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {
+			Lot* targetLot;
+			float marginStart, marginEnd, depth;
+			if (!lot->FindAdaptivePlacement(dir, kMinFrontage, kMinDepth, targetLot, marginStart, marginEnd, depth)) continue;
+
+			LotPlacementRequest request;
+			request.lot = targetLot;
+			request.adaptiveParent = (targetLot != lot) ? lot : nullptr;
+			request.direction = dir;
+			request.marginStart = marginStart;
+			request.marginEnd = marginEnd;
+			request.depth = depth;
+			emit(context, request);
+			return;
+		}
+		return;
+	}
+}
+
+float AirportBuilding::RandomAcreage() { return 2000.f; }
+float AirportBuilding::GetAcreageMin() { return 2000.f; }
+float AirportBuilding::GetAcreageMax() { return 2000.f; }
+float AirportBuilding::GetPower(AREA_TYPE area) { return 0.f; }

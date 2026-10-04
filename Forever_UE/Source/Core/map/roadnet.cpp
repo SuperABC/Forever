@@ -103,8 +103,12 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 		approach.isStart = isStart;
 		approach.angle = atan2(p.outY, p.outX);
 
-		// side0方向 = 前进方向顺时针旋转90度(右手边)
-		float perp0X = p.fwdY, perp0Y = -p.fwdX;
+		// side0方向=前进方向的右手边。右手边修正(2026-10-04，完整说明见
+		// Map::ComputeLaneAnchorPosition声明处)：这个项目+Y=南，真正的右手边公式是
+		// (-fwdY,fwdX)，不是标准数学"逆时针90度镜像"公式(fwdY,-fwdX)(那个只在+Y=北时才对)。
+		// 这两个变量实际没被下面的side0X/side1X用到(那边用的是148行重新采样出来的
+		// sperp0X/Y)，属于历史遗留，顺手一起修正保持说法一致，不影响行为。
+		float perp0X = -p.fwdY, perp0Y = p.fwdX;
 
 		// 车道横断面重新居中(见下面side0X/side1X的注释)后，这条路自己的中心偏移量：
 		// side0比side1宽多少，连线就要比side0Width少这么多、比side1Width多这么多，才能让
@@ -146,7 +150,8 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 		float slen = sqrt(sdx * sdx + sdy * sdy);
 		if (slen < 1e-6f) slen = 1.f;
 		float sfwdX = sdx / slen, sfwdY = sdy / slen;
-		float sperp0X = sfwdY, sperp0Y = -sfwdX;
+		// 右手边修正，见上面perp0X/Y处的说明：+Y=南，公式是(-sfwdY,sfwdX)。
+		float sperp0X = -sfwdY, sperp0Y = sfwdX;
 
 		// 车道横断面以Connection连线为几何中心居中：side0这一侧最外缘不再是"离连线side0Width
 		// 远"，而是"离连线(side0Width-shift)远"(side1同理，方向相反、减去(side1Width+shift))——
@@ -157,14 +162,24 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 		float side0X = baseX + sperp0X * (side0Width - shift), side0Y = baseY + sperp0Y * (side0Width - shift);
 		float side1X = baseX - sperp0X * (side1Width + shift), side1Y = baseY - sperp0Y * (side1Width + shift);
 
-		// 面朝outward方向站立时：isStart端side0在右手边，isEnd端side0在左手边(因为outward反向了)
+		// curbRight/curbLeft只在ForeverRoadnetFrameworkComponent::BuildJunctionMeshes()里按
+		// [curbRight_0,curbLeft_0,curbRight_1,curbLeft_1,...]的固定顺序铺路口扇形网格用，整个
+		// 项目没有任何其它地方读这两个字段，所以它们的"right/left"只是两个内部占位名字，唯一
+		// 真正的约束是"每次调用必须返回和之前验证过的网格算法一致的那两个物理点的顺序"，不需要
+		// 对应真实世界的左右手。perp0公式2026-10-04订正为真正的右手边(side0=(-sfwd.Y,sfwd.X)，
+		// 见Map::ComputeLaneAnchorPosition声明处)之后，side0物理位置整体挪到了原来side1那一侧
+		// ——如果还按"isStart端side0给curbRight"这套写法，curbRight/curbLeft这次会拿到和
+		// BuildJunctionMeshes()原先验证过的网格算法相反的两个物理点，扇形三角化因此在每个
+		// 路口的单条道路"开口"内部局部拧了一下，PIE实测反馈"路口处的mesh出问题了"。这里改成
+		// isStart端side1给curbRight，把两个物理点的顺序换回perp0订正之前的样子，网格算法本身
+		// 不用动。
 		if (isStart) {
-			approach.curbRight = { side0X, side0Y };
-			approach.curbLeft = { side1X, side1Y };
+			approach.curbRight = { side1X, side1Y };
+			approach.curbLeft = { side0X, side0Y };
 		}
 		else {
-			approach.curbLeft = { side0X, side0Y };
-			approach.curbRight = { side1X, side1Y };
+			approach.curbLeft = { side1X, side1Y };
+			approach.curbRight = { side0X, side0Y };
 		}
 
 		// offsetDist*sideSign是"以老的side0/side1分界线为原点"算出来的有符号偏移(side0方向为正)，

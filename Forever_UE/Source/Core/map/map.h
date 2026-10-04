@@ -111,6 +111,20 @@ public:
 	// 规则见map.md"ConnectPathRoad"一节。
 	void ConnectPathRoad(const PathRoadLink& link);
 
+	// InitBuildings()处理一条LotPlacementRequest::adaptiveParent非空的请求、且RequestPlacement
+	// (对request.lot，即Lot::FindAdaptivePlacement探测阶段命中的那个嵌套子块usedChild)成功之后
+	// 调用：把usedChild自己的残余freeLots搬回parent->GetFreeLots()、把usedChild这个现在已经
+	// "用过一次"的旧记录从parent->GetFreeLots()里摘掉(否则它还留着当初完整未使用的尺寸，下一个
+	// mod类型的FindAdaptivePlacement会把它当成仍然整块可用，重复分配同一块地)，再把usedChild
+	// 自己新产生的小路(TakePathRoadLinks())记到parent身上，让parent->GetPathRoadLinks()/
+	// GetPathRoads()能看到(否则Forever层的小路渲染扫的是GetLots()里的顶层Lot，看不到挂在
+	// usedChild这个嵌套子块身上的记录)。usedChild对象本身不delete——它后面还要被
+	// building->SetParentLot(usedChild)引用着，生命周期和parent一样长到地图结束，这和非自适应
+	// 路径里parentLot直接指向一个永不删除的顶层Lot是同一个模型。这个函数只能从这里(Core编译的
+	// map.cpp)调用，不能让mod DLL调用GetFreeLots()/TakePathRoadLinks()这类会真正分配/移动
+	// 容器内容的方法，原因见geometry.h里GetFreeLots()/FindAdaptivePlacement声明处的说明。
+	void PromoteAdaptiveRemainder(Lot* parent, Lot* usedChild);
+
 	// 用已经注册好的zoneFactory生成zone(mod dll的发现/注册归`Registry`全局管,不在这里
 	// 做)。Zone这次只有"显式指定矩形"一种生成方式：按注册顺序对每个类型调一次
 	// static ZoneMod::Assign(排好序的GetLots(), emit,
@@ -194,6 +208,28 @@ public:
 	// 路径（图不连通/id不存在）返回空。供Forever层市民走路寻路用，见
 	// Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md"市民走路"一节。
 	std::vector<const Node*> FindPedestrianPath(int fromNodeId, int toNodeId) const;
+
+	// 对vehicleNavGraph跑同一套Dijkstra（核心算法和FindPedestrianPath共享私有的FindPath()），
+	// 返回从fromNodeId到toNodeId依次经过的Connection*序列（不是节点序列）——公交线路要拼接
+	// 这些真实车道Connection的几何(GetPoint/GetTangent)画出和实际道路重合的路径，不只是知道
+	// 经过哪些锚点，见Core/traffic/route.md"公交接入路网"一节。找不到路径返回空。
+	std::vector<Connection*> FindVehiclePath(int fromNodeId, int toNodeId) const;
+
+	// 公交站旁路专用的只读查询：不新建/断开任何东西，纯粹回答"(x,y)这个点、沿dirX/dirY方向
+	// 看过去，当前落在road的哪一条车行贯通线段上，这一段的两端锚点是谁"。用ProjectPointOntoRoad
+	// 求t，用dirX/dirY和road在t处的切线点积判断同向side，再用ResolveAccessLane/throughLines
+	// 这套既有的、BreakThroughLine也在用的私有机制查段——站点自己后续会在fromAnchor/toAnchor
+	// 之间另外接一个不登记进throughLines/vehicleNavGraph的stationNode，不经过这个函数修改
+	// 任何共享状态。road为空、两侧都没有车行道、或者t落在任何已知段范围之外(理论不会发生，
+	// 每条车道全长应该被throughLines的若干段完整覆盖)时返回false。
+	struct LaneSegment {
+		Connection* edge = nullptr;
+		Node* fromAnchor = nullptr;
+		Node* toAnchor = nullptr;
+		float t = 0.f;
+		float worldX = 0.f, worldY = 0.f, worldZ = 0.f;
+	};
+	bool GetLaneSegmentAt(Road* road, float x, float y, float dirX, float dirY, LaneSegment& out) const;
 
 	// 拍平所有building的所有component，供AForeverFrameworkActor::EnsureSocietyGenerated()
 	// 喂给Society::Init——和ComputeAccommodationTarget()喂给Populace::Init同一个已有
@@ -466,4 +502,10 @@ private:
 	// 井字路网里绝大多数路段)时直接解析算垂足，O(1)精确；有控制点(曲线，比如隧道引道的S形
 	// 下坡)才退化成数值采样+局部细化找最近点这套更贵但通用的算法。
 	static float ProjectPointOntoRoad(Road* road, float px, float py);
+
+	// FindPedestrianPath/FindVehiclePath共享的Dijkstra核心——只按节点id运算，不关心调用方
+	// 要哪张图，边权统一用Connection::CalcDistance()。返回从fromNodeId到toNodeId依次经过的
+	// 节点id序列(含起点终点)，图不连通/id不存在时返回空。
+	std::vector<int> FindPath(const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph,
+		int fromNodeId, int toNodeId) const;
 };

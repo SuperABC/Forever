@@ -109,6 +109,44 @@
   同样拷一份。这是`Zone`/`Building`记录"自己四周靠着哪些道路"（`boundaryRoads`字段，见
   `zone.md`/`building.md`）的唯一数据来源。
 
+- **`FindAdaptivePlacement`必须是纯查询，真正的裁剪/搬运必须在Core侧做**（公共交通车站功能，
+  第十七轮迁移，踩过一次`STATUS_HEAP_CORRUPTION`才定下这个边界）：`Lot`的非虚成员函数（包括
+  `RequestPlacement`/`SplitWithPath`/`GetFreeLots()`的lazy-init分支）都定义在`Dependence.lib`
+  里，这个静态库被`Basic.dll`（以及将来的`Forever_Mod/*`mod DLL）和`UnrealEditor-Forever.dll`
+  （经由`Core.lib`）分别独立静态链接各一份——同一份源码，两份编译产物。`UnrealEditor-Forever.dll`
+  是真正的UE模块，`operator new`/`operator delete`被`HAL/PerModuleInline.inl`接到`FMemory`；
+  `Basic.dll`不是UE模块，走普通CRT分配器。`freeLots`/`pathRoadLinks`这类`std::vector`的buffer
+  一旦在其中一个模块的分配器下诞生，后续任何会导致它增长/收缩的操作（`push_back`触发的
+  reallocate、`erase`、析构）如果恰好执行的是另一个模块的那份拷贝，就会用错误的分配器
+  free/realloc这块内存——heap损坏，`STATUS_HEAP_CORRUPTION`（`0xc0000374`），现象是PIE一进
+  场景（`BuildingMod::Assign`真正触发第一次分配的那一刻）`UnrealEditor.exe`直接整体退出，不走
+  UE自己的崩溃报告流程（这类corruption由`ntdll`的`__fastfail`路径上报，绕过SEH，不会生成
+  `Saved/Crashes/*`，只能从Windows事件日志的`Application`日志、错误模块`ntdll.dll`、异常码
+  `0xc0000374`反查）。`Lot::FindAdaptivePlacement`最初的实现直接在命中的子块上调
+  `RequestPlacement`、搬运`freeLots`/`pathRoadLinks`——而它是被`TrainStationBuilding::Assign`
+  这类跑在`Basic.dll`里的mod代码直接调用的，正好踩中这个坑。修正后的`FindAdaptivePlacement`
+  改成`const`成员函数，只用新增的`PeekFreeLots()`（`freeLotsInitialized`为`false`时直接返回
+  空vector，不触发lazy-init；已初始化时按值拷贝一份，拷贝本身的buffer分配在调用方自己的模块
+  里，不和`this->freeLots`共享）去读，命中的候选`Lot*`原样通过`outLot`返回，margin/depth相对
+  它自己的尺寸算好——不在这个函数里做任何实际裁剪。真正的`RequestPlacement`调用和"把嵌套子块
+  自己的残余`freeLots`/新增`pathRoadLinks`搬回真正的顶层Lot"这两步，挪到了
+  `Map::InitBuildings()`（`Source/Core/map/map.cpp`，编译进`Core.lib`→`UnrealEditor-Forever.dll`，
+  执行时用的是FMemory路由的那份拷贝）里新增的`Map::PromoteAdaptiveRemainder`，通过
+  `LotPlacementRequest::adaptiveParent`字段（非空=`request.lot`是`adaptiveParent`
+  `freeLots`里的一个嵌套子块，需要在`RequestPlacement`成功后做这次搬运；为空=`request.lot`
+  就是调用方传进`Assign()`的顶层Lot本身，和非自适应路径完全一样，不需要搬运）触发。嵌套子块
+  对象本身不`delete`——它会被`Building::SetParentLot`长期引用，生命周期和顶层Lot一样长到地图
+  结束，这和非自适应路径里`parentLot`直接指向一个永不删除的顶层Lot是同一个模型。`TakePathRoadLinks()`
+  /`AdoptPathRoadLinks()`这对新增方法只给`Map`用，把嵌套子块的`pathRoadLinks`转移到顶层Lot身上
+  （否则`Map::GetPathRoads()`只遍历`GetLots()`里的顶层Lot，看不到挂在嵌套子块身上的记录，渲染
+  缺一段小路；而且嵌套子块的析构函数会把这些`Road*`一并删掉，这些指针可能正被刚创建的
+  `Building::boundaryRoads`引用着，变成悬空指针）。**教训**：任何会增长/收缩/析构某个
+  `Core`层对象的`std::vector`（或任何容器）的调用，必须确保调用方最终编译进的是
+  `UnrealEditor-Forever.dll`（直接在`Source/Core`的.cpp里调），不能是mod DLL——哪怕调用的函数
+  本身写在`Dependence`这个"纯数据"层、对两边看起来完全一样。给mod暴露的接口只能是读
+  （返回值传出、或者按值拷贝进调用方自己的容器），决不能是会直接触达某个Core对象自己持有的
+  容器的非`const`方法。
+
 ## 依赖关系
 
 - 依赖：`common/utility.h`（`OBJECT_HOLDER`标记宏、`GetRandom`——`Lot::FillRemainder`的CDF

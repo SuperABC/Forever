@@ -244,7 +244,9 @@ void Map::InitRoadnet() {
 		road->GetTangent(atStart ? 0.f : 1.f, tdx, tdy, tdz);
 		float tlen = sqrt(tdx * tdx + tdy * tdy);
 		if (tlen < 1e-6f) tlen = 1.f;
-		float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
+		// 右手边修正(2026-10-04，见Map::ComputeLaneAnchorPosition声明处的完整说明)：
+		// 这个项目+Y=南，真正的右手边公式是(-tdy,tdx)，不是(tdy,-tdx)。
+		float perp0X = -tdy / tlen, perp0Y = tdx / tlen;
 
 		float side0Width = road->GetSideWidth(0), side1Width = road->GetSideWidth(1);
 		float shift = (side0Width - side1Width) * 0.5f;
@@ -381,7 +383,8 @@ namespace {
 		hostRoad->GetTangent(hostT, hdx, hdy, hdz);
 		float hlen = sqrt(hdx * hdx + hdy * hdy);
 		if (hlen < 1e-6f) hlen = 1.f;
-		float hostPerp0X = hdy / hlen, hostPerp0Y = -hdx / hlen;
+		// 右手边修正，见Map::ComputeLaneAnchorPosition声明处的说明：+Y=南，公式是(-hdy,hdx)。
+		float hostPerp0X = -hdy / hlen, hostPerp0Y = hdx / hlen;
 
 		float dot = dirX * hostPerp0X + dirY * hostPerp0Y;
 		return (dot >= 0.f) ? 0 : 1;
@@ -468,6 +471,28 @@ void Map::InitZones() {
 	}
 }
 
+void Map::PromoteAdaptiveRemainder(Lot* parent, Lot* usedChild) {
+	if (!parent || !usedChild || parent == usedChild) return;
+
+	auto& parentPool = parent->GetFreeLots();
+	for (size_t i = 0; i < parentPool.size(); i++) {
+		if (parentPool[i] == usedChild) {
+			parentPool.erase(parentPool.begin() + i);
+			break;
+		}
+	}
+
+	// usedChild自己已经被RequestPlacement用过一次，这次GetFreeLots()只是读它内部真实的survivor
+	// 列表(freeLotsInitialized早已是true，不会再触发lazy-init分配)。
+	auto& childPool = usedChild->GetFreeLots();
+	for (Lot* survivor : childPool) {
+		parentPool.push_back(survivor);
+	}
+	childPool.clear();
+
+	parent->AdoptPathRoadLinks(usedChild->TakePathRoadLinks());
+}
+
 void Map::InitBuildings() {
 	buildingLayoutLibrary.ReadTemplates(Config::GetLayouts());
 
@@ -493,6 +518,14 @@ void Map::InitBuildings() {
 				pendingPathRoadLinks.push_back(allLinks[i]);
 			}
 			if (!success) continue;
+
+			// request.lot是Lot::FindAdaptivePlacement探测阶段(在mod DLL里，纯读)命中的一个
+			// 嵌套子块时，adaptiveParent非空——真正的顶层Lot是adaptiveParent，这里要把lot自己
+			// 用剩的残余空间/新增小路搬回adaptiveParent，否则下一个building类型看不到真正还剩
+			// 多少空间，见PromoteAdaptiveRemainder注释。
+			if (request.adaptiveParent) {
+				PromoteAdaptiveRemainder(request.adaptiveParent, lot);
+			}
 
 			BuildingMod* mod = buildingFactory.CreateBuilding(id); // 到这里才真正创建，唯一一次
 			if (!mod) continue;
@@ -674,7 +707,9 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		road->GetTangent(outT, tdx, tdy, tdz);
 		float tlen = sqrtf(tdx * tdx + tdy * tdy);
 		if (tlen < 1e-6f) tlen = 1.f;
-		float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
+		// 右手边修正(2026-10-04，见Map::ComputeLaneAnchorPosition声明处的完整说明)：
+		// 这个项目+Y=南，真正的右手边公式是(-tdy,tdx)，不是(tdy,-tdx)。
+		float perp0X = -tdy / tlen, perp0Y = tdx / tlen;
 		float dx = outsideNode->GetX() - basePoint.GetX(), dy = outsideNode->GetY() - basePoint.GetY();
 		// building在Road哪一侧：比较building中心相对Road中心线在t处的法向偏移符号
 		// (和RoadJunction::Build/resolveAnchor同一套perp0=右手垂线约定，见roadnet.md
@@ -1339,7 +1374,14 @@ pair<float, float> Map::ComputeLaneAnchorPosition(Road* road, float t, bool isVe
 	road->GetTangent(t, tdx, tdy, tdz);
 	float tlen = sqrtf(tdx * tdx + tdy * tdy);
 	if (tlen < 1e-6f) tlen = 1.f;
-	float perp0X = tdy / tlen, perp0Y = -tdx / tlen;
+	// 右手边修正(2026-10-04)：这个项目世界坐标+Y=南(roadnet_basic.cpp intersections的实际
+	// 取值证实，不是常见地图"北=+Y"的假设)，真正的右手边公式是(-tdy,tdx)，不是标准数学
+	// "逆时针90度的镜像(顺时针)"公式(tdy,-tdx)——那个公式只在+Y=北时才是右手边。手推验证：
+	// 朝南(0,1)时真正的右手边是西(-1,0)，而(tdy,-tdx)=(1,0)=东，是左手边。公交车路线功能
+	// 第一次真正让人能直接看着一辆车"是否靠右行驶"，PIE实测反馈"全程靠左行驶"才揪出这个
+	// 全局性的符号错误——这个公式在map.cpp/roadnet.cpp里一共复制了9处，全部同步修正，
+	// 否则路口/zone出入口/小路旁路和这里的车道锚点会互相对不上。
+	float perp0X = -tdy / tlen, perp0Y = tdx / tlen;
 
 	float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
 	float sideSign = (side == 0) ? 1.f : -1.f;
@@ -1396,7 +1438,8 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 	float gdy = pathEnd.GetY() - pathStart.GetY();
 	float glen = sqrtf(gdx * gdx + gdy * gdy);
 	if (glen < 1e-6f) glen = 1.f;
-	float pathPerp0X = gdy / glen, pathPerp0Y = -gdx / glen;
+	// 右手边修正，见Map::ComputeLaneAnchorPosition声明处的说明：+Y=南，公式是(-gdy,gdx)。
+	float pathPerp0X = -gdy / glen, pathPerp0Y = gdx / glen;
 
 	// 小路side0沿Start->End走，side1沿End->Start走：Start端离开(entering)的是side0、
 	// 到达(exiting)的是side1；End端相反。
@@ -1430,7 +1473,8 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 	float hlen = sqrtf(hdx * hdx + hdy * hdy);
 	if (hlen < 1e-6f) hlen = 1.f;
 	float hostFwdX = hdx / hlen, hostFwdY = hdy / hlen;
-	float hostPerp0X = hostFwdY, hostPerp0Y = -hostFwdX;
+	// 右手边修正，见Map::ComputeLaneAnchorPosition声明处的说明：+Y=南，公式是(-hostFwdY,hostFwdX)。
+	float hostPerp0X = -hostFwdY, hostPerp0Y = hostFwdX;
 
 	// 近侧判定：小路离开连接点、伸向自己另一端的方向，和host的perp0点积>=0就是host的side0，
 	// 否则side1——小路总是往它所属Lot的空闲空间那一侧延伸，这个方向天然指向近侧所在的半边。
@@ -1662,7 +1706,8 @@ Node* Map::ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, boo
 	hostRoad->GetTangent(t, tdx, tdy, tdz);
 	float tLen = sqrtf(tdx * tdx + tdy * tdy);
 	if (tLen < 1e-6f) tLen = 1.f;
-	float hostPerp0X = tdy / tLen, hostPerp0Y = -tdx / tLen;
+	// 右手边修正，见Map::ComputeLaneAnchorPosition声明处的说明：+Y=南，公式是(-tdy,tdx)。
+	float hostPerp0X = -tdy / tLen, hostPerp0Y = tdx / tLen;
 
 	// zone中心相对hostPoint在perp0方向的点积>=0就是host的side0，否则side1——和
 	// ResolvePathEndAnchors里"小路伸向哪一端"的判断同一个方法，这里换成"zone中心在哪一侧"。
@@ -1917,22 +1962,9 @@ const unordered_map<string, pair<int, string>>& Map::GetTerrainTextures() const 
 	return terrainTextures;
 }
 
-vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const {
-	if (fromNodeId == toNodeId) {
-		for (const Node* node : navAnchorNodes) {
-			if (node->GetId() == fromNodeId) return { node };
-		}
-		for (const Node* node : GetExterns()) {
-			if (node->GetId() == fromNodeId) return { node };
-		}
-		return {};
-	}
-
-	// id -> 拥有生命周期的Node*，供最后按id序列反查真正的指针（Dijkstra内部只按id
-	// 运算，Connection::GetStart()/GetEnd()返回的是Node副本，不能直接拿它们的地址）。
-	unordered_map<int, const Node*> nodesById;
-	for (const Node* node : navAnchorNodes) nodesById[node->GetId()] = node;
-	for (const Node* node : GetExterns()) nodesById[node->GetId()] = node;
+vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>>>& graph,
+	int fromNodeId, int toNodeId) const {
+	if (fromNodeId == toNodeId) return { fromNodeId };
 
 	unordered_map<int, float> dist;
 	unordered_map<int, int> prev;
@@ -1950,8 +1982,8 @@ vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const 
 		visited.insert(id);
 		if (id == toNodeId) break;
 
-		auto it = pedestrianNavGraph.find(id);
-		if (it == pedestrianNavGraph.end()) continue;
+		auto it = graph.find(id);
+		if (it == graph.end()) continue;
 		for (const auto& [neighborId, connection] : it->second) {
 			if (!connection || visited.count(neighborId)) continue;
 			float weight = connection->CalcDistance();
@@ -1976,6 +2008,18 @@ vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const 
 		id = it->second;
 	}
 	reverse(idPath.begin(), idPath.end());
+	return idPath;
+}
+
+vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const {
+	vector<int> idPath = FindPath(pedestrianNavGraph, fromNodeId, toNodeId);
+	if (idPath.empty()) return {};
+
+	// id -> 拥有生命周期的Node*，供按id序列反查真正的指针（Connection::GetStart()/GetEnd()
+	// 返回的是Node副本，不能直接拿它们的地址）。
+	unordered_map<int, const Node*> nodesById;
+	for (const Node* node : navAnchorNodes) nodesById[node->GetId()] = node;
+	for (const Node* node : GetExterns()) nodesById[node->GetId()] = node;
 
 	vector<const Node*> result;
 	for (int id : idPath) {
@@ -1983,6 +2027,57 @@ vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const 
 		if (it != nodesById.end()) result.push_back(it->second);
 	}
 	return result;
+}
+
+vector<Connection*> Map::FindVehiclePath(int fromNodeId, int toNodeId) const {
+	vector<int> idPath = FindPath(vehicleNavGraph, fromNodeId, toNodeId);
+	if (idPath.size() < 2) return {}; // 起点终点相同(idPath=={fromNodeId})没有edge可拼，视为无路径
+
+	vector<Connection*> result;
+	for (size_t i = 0; i + 1 < idPath.size(); i++) {
+		auto it = vehicleNavGraph.find(idPath[i]);
+		if (it == vehicleNavGraph.end()) return {}; // 理论不会发生，防御性兜底
+		Connection* edge = nullptr;
+		for (const auto& [neighborId, connection] : it->second) {
+			if (neighborId == idPath[i + 1]) { edge = connection; break; }
+		}
+		if (!edge) return {};
+		result.push_back(edge);
+	}
+	return result;
+}
+
+bool Map::GetLaneSegmentAt(Road* road, float x, float y, float dirX, float dirY, LaneSegment& out) const {
+	if (!road) return false;
+
+	float t = ProjectPointOntoRoad(road, x, y);
+
+	// 用dir和道路在t处的切线点积判断"同向"的那一侧——和ConnectPathRoad/
+	// ConnectZoneAccessPoint判断近侧用的dot product是同一个思路，见map.h相关注释。
+	float tdx, tdy, tdz;
+	road->GetTangent(t, tdx, tdy, tdz);
+	bool useForwardSide = (dirX * tdx + dirY * tdy) >= 0.f;
+
+	int side, laneIndex;
+	if (!ResolveAccessLane(road, /*isVehicle=*/true, useForwardSide, side, laneIndex)) return false;
+
+	auto it = throughLines.find(road);
+	if (it == throughLines.end()) return false;
+	for (const ThroughLine& line : it->second[side]) {
+		if (line.laneIndex != laneIndex) continue;
+		if (t < line.tLo || t > line.tHi) continue;
+
+		out.edge = line.edge;
+		out.fromAnchor = line.fromAnchor;
+		out.toAnchor = line.toAnchor;
+		out.t = t;
+		auto [wx, wy] = ComputeLaneAnchorPosition(road, t, true, side, laneIndex);
+		out.worldX = wx;
+		out.worldY = wy;
+		out.worldZ = road->GetPoint(t).GetZ();
+		return true;
+	}
+	return false; // 理论不会发生：每条车道全长应该被throughLines的若干段完整覆盖
 }
 
 vector<Component*> Map::GetAllComponents() const {

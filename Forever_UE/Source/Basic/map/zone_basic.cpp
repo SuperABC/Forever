@@ -28,6 +28,13 @@ void ResidenceZone::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, voi
 	for (Lot* lot : lots) {
 		if (!lot) continue;
 
+		// 应用户要求，井字中心lot(固定AREA_OFFICIAL_HIGH)这次也允许摆围墙测试场景，和
+		// 火车站(占北侧)/机场(占南侧)共存——不再排除这个area，只靠下面dir从WEST开始找
+		// 第一个有边界路、frontage够用的方向这件事本身，自然避开NORTH/SOUTH：这个lot
+		// WEST边(中山西路)肯定有边界路，dir==0(WEST)会第一个命中，不会往后扫到
+		// NORTH/SOUTH。真正是否会和火车站/机场在几何上打架，取决于三边各自占的depth是否
+		// 真的互不相交，见TrainStationBuilding/AirportBuilding::Assign(这次已经把它们的
+		// depth/margin调小，给WEST边的围墙场景让出空间)。
 		for (int dir = 0; dir < 4; dir++) {
 			if (!lot->GetBoundaryRoad(dir)) continue;
 			bool alongY = (dir == FACE_WEST || dir == FACE_EAST);

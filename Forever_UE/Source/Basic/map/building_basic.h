@@ -113,3 +113,54 @@ private:
 	int id;
 	std::string name;
 };
+
+// 火车站——全图唯一一个，用Lot::FindAdaptivePlacement自适应找一块空间，不挑剔具体是哪个
+// 方向，和机场/围墙测试场景共存。承载StationMod"station_train"。公交站不走这条Building/Lot
+// 路径了，直接贴着道路摆，见station_basic.h的BusStation::AssignRoads。
+class TrainStationBuilding : public BuildingMod {
+public:
+	TrainStationBuilding();
+
+	static const char* GetId() { return "building_train_station"; }
+	virtual const char* GetType() const override { return "building_train_station"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area); // 恒0，不参与CDF
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 机场——全图唯一一个，和TrainStationBuilding同样的"显式占第一块贴路lot、楼体偏向道路一侧"
+// 做法。承载StationMod"station_air"。
+class AirportBuilding : public BuildingMod {
+public:
+	AirportBuilding();
+
+	static const char* GetId() { return "building_airport"; }
+	virtual const char* GetType() const override { return "building_airport"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area); // 恒0，不参与CDF
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};

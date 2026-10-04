@@ -45,6 +45,8 @@ class Industry;
 // Traffic
 
 class Traffic;
+class Station;
+class Route;
 
 // Player
 

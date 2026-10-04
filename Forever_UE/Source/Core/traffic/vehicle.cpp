@@ -47,6 +47,29 @@ float Vehicle::GetExitOffsetX() const { return mod ? mod->exitOffsetX : 0.f; }
 float Vehicle::GetExitOffsetY() const { return mod ? mod->exitOffsetY : 0.f; }
 float Vehicle::GetExitOffsetZ() const { return mod ? mod->exitOffsetZ : 0.f; }
 
+const string& Vehicle::GetCategory() const {
+	static const string car = "car";
+	return mod ? mod->category : car;
+}
+
+bool Vehicle::IsDrivable() const { return mod ? mod->drivable : false; }
+bool Vehicle::IsBoardable() const { return mod ? mod->boardable : false; }
+int Vehicle::GetCapacity() const { return mod ? mod->capacity : 0; }
+
+void Vehicle::GetSize(float& outX, float& outY, float& outZ) const {
+	outX = mod ? mod->sizeX : 100.f;
+	outY = mod ? mod->sizeY : 100.f;
+	outZ = mod ? mod->sizeZ : 100.f;
+}
+
+void Vehicle::SetRouteBinding(Route* inRoute, int line) {
+	route = inRoute;
+	routeLine = line;
+}
+
+Route* Vehicle::GetRoute() const { return route; }
+int Vehicle::GetRouteLine() const { return routeLine; }
+
 Script* Vehicle::GetScript() const { return script; }
 
 const vector<string>& Vehicle::GetOptions() const { return options; }

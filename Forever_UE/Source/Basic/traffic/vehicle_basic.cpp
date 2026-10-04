@@ -16,9 +16,48 @@ VehicleBasic::VehicleBasic() : id(count++) {
 	// Resource/Story/vehicle_basic.script。
 	scriptModName = "empty";
 	milestoneNames = { "vehicle_basic" };
+
+	category = "car";
+	drivable = true;
 }
 
 const char* VehicleBasic::GetName() {
 	name = "VehicleBasic" + to_string(id);
+	return name.data();
+}
+
+int BusVehicle::count = 0;
+
+BusVehicle::BusVehicle() : id(count++) {
+	category = "bus";
+	sizeX = 1000.f; sizeY = 300.f; sizeZ = 300.f; // UE单位，一辆公交车大致的长宽高占位比例
+}
+
+const char* BusVehicle::GetName() {
+	name = "BusVehicle" + to_string(id);
+	return name.data();
+}
+
+int TrainVehicle::count = 0;
+
+TrainVehicle::TrainVehicle() : id(count++) {
+	category = "train";
+	sizeX = 2000.f; sizeY = 300.f; sizeZ = 350.f;
+}
+
+const char* TrainVehicle::GetName() {
+	name = "TrainVehicle" + to_string(id);
+	return name.data();
+}
+
+int PlaneVehicle::count = 0;
+
+PlaneVehicle::PlaneVehicle() : id(count++) {
+	category = "plane";
+	sizeX = 3000.f; sizeY = 2500.f; sizeZ = 800.f;
+}
+
+const char* PlaneVehicle::GetName() {
+	name = "PlaneVehicle" + to_string(id);
 	return name.data();
 }

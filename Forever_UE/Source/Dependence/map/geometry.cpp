@@ -1055,6 +1055,11 @@ float Lot::GetFreeAcreage() {
 	return sum;
 }
 
+vector<Lot*> Lot::PeekFreeLots() const {
+	if (!freeLotsInitialized) return {};
+	return freeLots;
+}
+
 bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, float depth,
 	const PathLaneSpec& spec, Quad* outPlaced, unordered_map<int, Road*>* outBoundaryRoads) {
 
@@ -1194,6 +1199,55 @@ bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, fl
 	}
 
 	return false;
+}
+
+bool Lot::FindAdaptivePlacement(int direction, float minFrontage, float minDepth,
+	Lot*& outLot, float& outMarginStart, float& outMarginEnd, float& outDepth) const {
+	bool depthAlongX = (direction == FACE_WEST || direction == FACE_EAST);
+
+	// 纯查询：只用PeekFreeLots()(不会lazy-init、不会分配)。还没真正初始化过时，拿this自己当
+	// 唯一候选——语义上等价于GetFreeLots()第一次调用时会塞进去的那个初始元素，但这里不触发那次
+	// 分配，调用方(mod的Assign())后面会把outLot设进LotPlacementRequest::lot，真正的
+	// GetFreeLots()首次初始化留给Core侧的RequestPlacement调用去触发。
+	//
+	// 不要求命中的自由子块贴着*this*最外层的那条原始边——子块自己的direction方向挂的可能是
+	// 原始边界路，也可能是之前某次切割在切割线上插入的内部"path"小路，两者对这个函数来说
+	// 同等有效(内部小路同样是真实、会接入导航图的Road，贴着它盖房子完全合理)。
+	vector<Lot*> candidates = PeekFreeLots();
+	if (candidates.empty()) {
+		candidates.push_back(const_cast<Lot*>(this));
+	}
+
+	Lot* best = nullptr;
+	float bestArea = -1.f;
+	for (Lot* candidate : candidates) {
+		if (!candidate || !candidate->GetBoundaryRoad(direction)) continue;
+
+		float frontageSize = depthAlongX ? candidate->GetSizeY() : candidate->GetSizeX();
+		float depthSize = depthAlongX ? candidate->GetSizeX() : candidate->GetSizeY();
+		if (frontageSize < minFrontage || depthSize < minDepth) continue;
+
+		float area = frontageSize * depthSize;
+		if (area > bestArea) {
+			bestArea = area;
+			best = candidate;
+		}
+	}
+	if (!best) {
+		return false;
+	}
+
+	// margin/depth相对best自己的尺寸反推(不是this的)——调用方要把RequestPlacement对准best
+	// (不是this)去调，让裁剪在best自己的坐标系里进行，这样无论best贴的是原始边还是内部小路都
+	// 天然正确，不需要先换算到this的坐标系再反推(换算版本的bug：子块贴的若是内部小路，换算
+	// 出来的margin会落在this坐标系下早被别的mod占用的区域，RequestPlacement用this自己的坐标系
+	// 找不到任何匹配，见geometry.md排查记录)。
+	float frontageSize = depthAlongX ? best->GetSizeY() : best->GetSizeX();
+	outLot = best;
+	outMarginStart = (frontageSize - minFrontage) * 0.5f;
+	outMarginEnd = frontageSize - minFrontage - outMarginStart;
+	outDepth = minDepth;
+	return true;
 }
 
 namespace {
@@ -1404,6 +1458,18 @@ vector<Lot::FillResult> Lot::FillRemainder(const PathLaneSpec& spec,
 
 const vector<PathRoadLink>& Lot::GetPathRoadLinks() const {
 	return pathRoadLinks;
+}
+
+vector<PathRoadLink> Lot::TakePathRoadLinks() {
+	vector<PathRoadLink> result = std::move(pathRoadLinks);
+	pathRoadLinks.clear();
+	return result;
+}
+
+void Lot::AdoptPathRoadLinks(vector<PathRoadLink>&& links) {
+	for (PathRoadLink& link : links) {
+		pathRoadLinks.push_back(std::move(link));
+	}
 }
 
 vector<Road*> Lot::GetPathRoads() const {
