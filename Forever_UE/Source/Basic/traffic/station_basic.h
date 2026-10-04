@@ -16,8 +16,9 @@ public:
 	static const char* GetId() { return "station_bus"; }
 	virtual const char* GetType() const override { return "station_bus"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
-	virtual void AssignRoads(const std::vector<Road*>& roads, RoadStationEmitFunc emit, void* context) override;
+	static void AssignRoads(const std::vector<Road*>& roads, RoadStationEmitFunc emit, void* context);
 
 private:
 	static int count;
@@ -36,8 +37,12 @@ public:
 	static const char* GetId() { return "station_train"; }
 	virtual const char* GetType() const override { return "station_train"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 	virtual void Layout(int direction, float sizeX, float sizeY) override;
+
+	// 挂建筑的站点类型，不贴路——空实现，见station_mod.h StationMod::AssignRoads的约定。
+	static void AssignRoads(const std::vector<Road*>& roads, RoadStationEmitFunc emit, void* context) {}
 
 private:
 	static int count;
@@ -56,8 +61,12 @@ public:
 	static const char* GetId() { return "station_air"; }
 	virtual const char* GetType() const override { return "station_air"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 	virtual void Layout(int direction, float sizeX, float sizeY) override;
+
+	// 挂建筑的站点类型，不贴路——空实现，见station_mod.h StationMod::AssignRoads的约定。
+	static void AssignRoads(const std::vector<Road*>& roads, RoadStationEmitFunc emit, void* context) {}
 
 private:
 	static int count;

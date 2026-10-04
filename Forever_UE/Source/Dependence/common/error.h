@@ -7,14 +7,6 @@
 
 class ExceptionBase : public std::exception {
 public:
-
-	/*
-	* 构造异常，记录消息、文件、行号、函数名
-	* @message: 异常消息
-	* @file: 发生异常的文件名
-	* @line: 发生异常的行号
-	* @function: 发生异常的函数名
-	*/
 	ExceptionBase(const std::string& message,
 		const std::string& file,
 		int line,
@@ -22,63 +14,22 @@ public:
 
 	virtual ~ExceptionBase() noexcept = default;
 
-	/*
-	* 返回格式化后的异常描述（含文件/行号/函数名）
-	* @return: C字符串形式的异常描述
-	*/
 	const char* what() const noexcept override;
-
-	/*
-	* 获取详细异常信息（多行文本）
-	* @return: 包含消息、文件、行号、函数名的详细描述字符串
-	*/
 	virtual std::string GetDetailedInfo() const;
 
-	/*
-	* 获取异常消息文本
-	* @return: 异常消息字符串
-	*/
 	const std::string& GetMessage() const noexcept { return message; }
-
-	/*
-	* 获取发生异常的文件名
-	* @return: 文件名字符串
-	*/
 	const std::string& GetFile() const noexcept { return file; }
-
-	/*
-	* 获取发生异常的行号
-	* @return: 行号整数
-	*/
 	int GetLine() const noexcept { return line; }
-
-	/*
-	* 获取发生异常的函数名
-	* @return: 函数名字符串
-	*/
 	const std::string& GetFunction() const noexcept { return function; }
 
 protected:
-
-	/*
-	* 格式化 what 缓存字符串
-	*/
 	virtual void FormatWhat();
 
-	// 异常消息文本
 	std::string message;
-
-	// 发生异常的文件名
 	std::string file;
-
-	// 发生异常的行号
 	int line;
-
-	// 发生异常的函数名
 	std::string function;
-
-	// what() 返回的缓存字符串
-	std::string whatCache;
+	std::string whatCache; // what()直接返回这个缓存，FormatWhat()负责拼好
 };
 
 // 访问空指针

@@ -18,6 +18,7 @@ namespace {
 Route::Route(RouteFactory* factory, const string& modId, const string& name) :
 	factory(factory), name(name) {
 	mod = factory->CreateRoute(modId);
+	if (mod) mod->SetProperty();
 }
 
 Route::~Route() {

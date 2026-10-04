@@ -254,7 +254,8 @@ extern "C" __declspec(dllexport) void* GetModStations() {
 extern "C" __declspec(dllexport) void RegisterModStations(StationFactory* factory) {
 	factory->RegisterStation(EmptyStation::GetId(),
 		[](const std::string& args) -> StationMod* { return new EmptyStation(args); },
-		[](StationMod* m) { delete m; });
+		[](StationMod* m) { delete m; },
+		&EmptyStation::AssignRoads);
 }
 extern "C" __declspec(dllexport) void FinishModStations(StationFactory* factory) {
 }

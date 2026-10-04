@@ -42,6 +42,12 @@
     <ClCompile Include="society\society.cpp">
       <Filter>society</Filter>
     </ClCompile>
+    <ClCompile Include="society\job.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\organization.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
     <ClCompile Include="industry\industry.cpp">
       <Filter>industry</Filter>
     </ClCompile>
@@ -70,6 +76,18 @@
       <Filter>player</Filter>
     </ClCompile>
     <ClCompile Include="player\asset.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\app.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\phone.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle.cpp">
       <Filter>player</Filter>
     </ClCompile>
     <ClCompile Include="map\terrain.cpp">
@@ -102,6 +120,15 @@
     <ClCompile Include="populace\populace.cpp">
       <Filter>populace</Filter>
     </ClCompile>
+    <ClCompile Include="populace\experience.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\scheduler.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="populace\school.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
     <ClCompile Include="story\milestone.cpp">
       <Filter>story</Filter>
     </ClCompile>
@@ -129,6 +156,12 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="society\society.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\job.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\organization.h">
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="industry\industry.h">
@@ -161,6 +194,18 @@
     <ClInclude Include="player\asset.h">
       <Filter>player</Filter>
     </ClInclude>
+    <ClInclude Include="player\weapon.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\app.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\phone.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle.h">
+      <Filter>player</Filter>
+    </ClInclude>
     <ClInclude Include="map\terrain.h">
       <Filter>map</Filter>
     </ClInclude>
@@ -189,6 +234,15 @@
       <Filter>populace</Filter>
     </ClInclude>
     <ClInclude Include="populace\populace.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\experience.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\scheduler.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="populace\school.h">
       <Filter>populace</Filter>
     </ClInclude>
     <ClInclude Include="story\milestone.h">

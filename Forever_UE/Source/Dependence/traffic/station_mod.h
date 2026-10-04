@@ -53,23 +53,33 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 具体子类必须在这里填stationType，不要在构造函数里赋值——构造函数只负责id/count
+	// 这类登记，和StorageMod::SetProperty()同一套"两段式"约定。注意不能指望在AssignRoads()
+	// 里设stationType：AssignRoads()是static方法(见下)，根本没有实例可以赋值，必须在这个
+	// SetProperty()里设好。Core在创建完mod实例后会立刻调一次这个方法，再读stationType/调
+	// Layout()。
+	virtual void SetProperty() {}
+
 	std::string stationType;
 	std::vector<StationInterfaceSpec> interfaces;
 
 	// 建筑Layout()之后Core调用一次，用来按这栋楼的实际朝向/占地尺寸(地图单位)填好
 	// interfaces——direction是Building::GetDirection()缓存下来的值(落地时已经解析过，不是
 	// -1)，sizeX/sizeY是这栋楼占地矩形(Quad)的实际尺寸，不是楼体footprint尺寸。不关心朝向/
-	// 尺寸、固定几个接口的站点类型可以不实现这个方法，直接在构造函数里填好interfaces。挂
-	// 道路的站点类型(实现AssignRoads的那些)不需要override这个，留空即可。
+	// 尺寸、固定几个接口的站点类型可以不实现这个方法，直接在SetProperty()里填好interfaces。
+	// 挂道路的站点类型(实现AssignRoads的那些)不需要override这个，留空即可。
 	virtual void Layout(int direction, float sizeX, float sizeY) {}
 
 	// 不挂建筑、贴着道路摆的站点类型实现这个：扫一遍全图所有Road，想贴哪条路、哪一侧就调一次
-	// emit(context, request)。Traffic::InitRoadsideStations()会先建一个"探测用"的临时实例调
-	// 这个方法收集请求、立刻销毁，再对每条请求单独CreateStation一个真正的实例、直接摆在算好
-	// 的世界坐标上(不经过Layout())——和BuildingMod::Assign同一个"先探测收集请求、再逐条落地"
-	// 两段式模式，只是探测对象是一个临时mod实例而不是无实例的static方法(StationFactory目前
-	// 没有额外的static函数指针注册机制，复用已有的CreateStation/DestroyStation就够，不需要
-	// 新增Factory接口，见Traffic::InitRoadsideStations实现)。挂建筑的站点类型不需要override
-	// 这个，默认空实现(什么都不emit)。
-	virtual void AssignRoads(const std::vector<Road*>& roads, RoadStationEmitFunc emit, void* context) {}
+	// emit(context, request)。这个方法只用来跑一次性的"全图探测"，不需要读/写任何实例状态，
+	// 所以不是虚方法——和BuildingMod::Assign/ZoneMod::Layout里RandomAcreage/GetAcreageMin/
+	// GetAcreageMax/GetPower/Assign同一个"按类型固定、不需要任何实例"的static方法约定：基类
+	// 不声明，每个具体子类必须实现同名static方法，通过StationFactory::RegisterStation的额外
+	// 函数指针参数注册，详见station_factory.h。Traffic::InitRoadsideStations()直接调
+	// StationFactory::AssignRoads(id, ...)转发到这个注册的函数指针，不需要创建/销毁任何
+	// StationMod实例做"探测"(这是2026-10-04从"创建临时实例调虚方法、用完销毁"改过来的，当时
+	// 没有现成的static函数指针注册机制，图省事复用了CreateStation/DestroyStation；后来发现
+	// BuildingMod/ZoneMod已经有现成的机制，照抄即可，不需要为了"图省事"留着多余的实例创建/
+	// 销毁)。挂建筑的站点类型(实现Layout()的那些)不需要这个，给个空实现即可：
+	//   static void AssignRoads(const std::vector<Road*>&, RoadStationEmitFunc, void*) {}
 };

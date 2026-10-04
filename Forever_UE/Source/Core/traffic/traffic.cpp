@@ -74,15 +74,11 @@ void Traffic::InitRoadsideStations(Map* map) {
 	for (const string& modId : ids) {
 		if (modId == "empty") continue;
 
-		// 先探测这个mod类型想贴哪些路——临时实例探测完立刻销毁，不留在stations里，和
-		// InitParkedVehicles探测category=="car"同一个"先探测、再决定要不要真正创建"的模式，
-		// 见station_mod.h StationMod::AssignRoads的说明。
-		StationMod* probe = stationFactory.CreateStation(modId);
-		if (!probe) continue;
-
+		// 先探测这个mod类型想贴哪些路——AssignRoads()是static方法(见station_mod.h
+		// StationMod::AssignRoads的说明)，不需要创建/销毁任何StationMod实例，直接转发
+		// 到注册时提供的函数指针，和BuildingFactory::Assign同一个模式。
 		RoadStationCollector collector;
-		probe->AssignRoads(map->GetRoads(), &CollectRoadStationRequest, &collector);
-		stationFactory.DestroyStation(probe);
+		stationFactory.AssignRoads(modId, map->GetRoads(), &CollectRoadStationRequest, &collector);
 
 		for (const RoadStationRequest& request : collector.requests) {
 			if (!request.road) continue;

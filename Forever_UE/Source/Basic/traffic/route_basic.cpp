@@ -117,6 +117,14 @@ namespace {
 int BusRoute::count = 0;
 
 BusRoute::BusRoute() : id(count++) {
+}
+
+const char* BusRoute::GetName() {
+	name = "BusRoute" + to_string(id);
+	return name.data();
+}
+
+void BusRoute::SetProperty() {
 	stationType = "bus";
 	vehicleType = "vehicle_bus";
 	useRoadnet = true;
@@ -132,11 +140,6 @@ BusRoute::BusRoute() : id(count++) {
 	// 被剧情脚本改了，这几个值的真实秒观感会跟着等比例变化，到时候要一起重新校准。
 	speed = 0.05f;
 	dwellSeconds = 360.f;
-}
-
-const char* BusRoute::GetName() {
-	name = "BusRoute" + to_string(id);
-	return name.data();
 }
 
 void BusRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) {
@@ -208,23 +211,26 @@ void BusRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX
 int TrainRoute::count = 0;
 
 TrainRoute::TrainRoute() : id(count++) {
+}
+
+const char* TrainRoute::GetName() {
+	name = "TrainRoute" + to_string(id);
+	return name.data();
+}
+
+void TrainRoute::SetProperty() {
 	stationType = "train";
 	vehicleType = "vehicle_train";
 	useRoadnet = false;
 	drawPath = true;
 	trackMesh = ""; // 这次不画铁轨
 
-	// 单位换算见BusRoute构造函数的注释——同样的timeFlowRatio=2.0默认值下1真实秒=120游戏内秒。
-	// 火车的环线大部分长度是两段"车站到地图边缘"的长途(LayoutDualTrackStationLoop，实测约
-	// 2000地图单位)，按"跑一圈大约85真实秒、进站停约5真实秒"校准：speed=0.2(=24地图单位/
-	// 真实秒)，dwellSeconds=600(=5真实秒)。
+	// 单位换算见BusRoute::SetProperty()的注释——同样的timeFlowRatio=2.0默认值下1真实秒=
+	// 120游戏内秒。火车的环线大部分长度是两段"车站到地图边缘"的长途
+	// (LayoutDualTrackStationLoop，实测约2000地图单位)，按"跑一圈大约85真实秒、进站停约
+	// 5真实秒"校准：speed=0.2(=24地图单位/真实秒)，dwellSeconds=600(=5真实秒)。
 	speed = 0.2f;
 	dwellSeconds = 600.f;
-}
-
-const char* TrainRoute::GetName() {
-	name = "TrainRoute" + to_string(id);
-	return name.data();
 }
 
 void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) {
@@ -234,21 +240,24 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int siz
 int AirRoute::count = 0;
 
 AirRoute::AirRoute() : id(count++) {
-	stationType = "plane";
-	vehicleType = "vehicle_plane";
-	useRoadnet = false;
-	drawPath = false;
-
-	// 单位换算见BusRoute构造函数的注释。飞机比火车快，环线也略长(实测约2050地图单位)，按
-	// "跑一圈大约50真实秒、停约6真实秒(登机/下客)"校准：speed=0.35(=42地图单位/真实秒)，
-	// dwellSeconds=720(=6真实秒)。
-	speed = 0.35f;
-	dwellSeconds = 720.f;
 }
 
 const char* AirRoute::GetName() {
 	name = "AirRoute" + to_string(id);
 	return name.data();
+}
+
+void AirRoute::SetProperty() {
+	stationType = "plane";
+	vehicleType = "vehicle_plane";
+	useRoadnet = false;
+	drawPath = false;
+
+	// 单位换算见BusRoute::SetProperty()的注释。飞机比火车快，环线也略长(实测约2050地图
+	// 单位)，按"跑一圈大约50真实秒、停约6真实秒(登机/下客)"校准：speed=0.35(=42地图单位/
+	// 真实秒)，dwellSeconds=720(=6真实秒)。
+	speed = 0.35f;
+	dwellSeconds = 720.f;
 }
 
 void AirRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) {

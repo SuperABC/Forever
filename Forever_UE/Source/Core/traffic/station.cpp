@@ -12,6 +12,7 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 	mod = factory->CreateStation(modId);
 	if (!mod || !building) return;
 
+	mod->SetProperty();
 	int direction = building->GetDirection();
 	mod->Layout(direction, building->GetSizeX(), building->GetSizeY());
 
@@ -58,6 +59,8 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 	factory(factory), name(name), attachedRoad(attachedRoad) {
 	mod = factory->CreateStation(modId);
 	if (!mod) return;
+
+	mod->SetProperty();
 
 	// 没有building，不走mod->Layout()/mod->interfaces那套相对建筑占地矩形的换算——世界坐标/
 	// 朝向都是调用方(Traffic::InitRoadsideStations)已经按道路几何算好的，直接用，"普通站点的

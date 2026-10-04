@@ -5,6 +5,14 @@ using namespace std;
 int PistolWeapon::count = 0;
 
 PistolWeapon::PistolWeapon() : id(count++) {
+}
+
+const char* PistolWeapon::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void PistolWeapon::SetProperty() {
 	damage = 25.f;
 	fireRate = 0.08f;     // 每秒最多12.5发，用户反馈之前0.2s(5发/秒)的射速太慢
 	fullAuto = true;      // 按住左键连续开火——用户明确要求，弹匣也一并放大到30发
@@ -30,14 +38,17 @@ PistolWeapon::PistolWeapon() : id(count++) {
 	ammoType = "ammo_pistol";
 }
 
-const char* PistolWeapon::GetName() {
+int RifleWeapon::count = 0;
+
+RifleWeapon::RifleWeapon() : id(count++) {
+}
+
+const char* RifleWeapon::GetName() {
 	name = string(GetType()) + std::to_string(id);
 	return name.data();
 }
 
-int RifleWeapon::count = 0;
-
-RifleWeapon::RifleWeapon() : id(count++) {
+void RifleWeapon::SetProperty() {
 	damage = 18.f;
 	fireRate = 0.1f;      // 每秒最多10发，全自动
 	fullAuto = true;
@@ -58,9 +69,4 @@ RifleWeapon::RifleWeapon() : id(count++) {
 	recoilYawMax = 0.4f;
 
 	ammoType = "ammo_rifle";
-}
-
-const char* RifleWeapon::GetName() {
-	name = string(GetType()) + std::to_string(id);
-	return name.data();
 }

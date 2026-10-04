@@ -77,3 +77,7 @@
   避让`_factory`后缀。
 - 阶段4:确认Mod和Basic在同一个Factory里注册时id冲突如何处理(目前`building_mods`等配置
   数组和`Basic`各自用独立的id空间,还没出现真正的冲突场景)。
+- 公共交通阶段:占位`StationBasic`/`RouteBasic`已经被真实的`BusStation`/`TrainStation`/
+  `AirStation`(一份`traffic/station_basic.h/.cpp`)和`BusRoute`/`TrainRoute`/`AirRoute`
+  (一份`traffic/route_basic.h/.cpp`)替换,详见`traffic/station_basic.md`/
+  `traffic/route_basic.md`,不再受这份共用文档覆盖。

@@ -87,6 +87,12 @@
     <ClCompile Include="player\puzzle_factory.cpp">
       <Filter>player</Filter>
     </ClCompile>
+    <ClCompile Include="player\canvas.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon_factory.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
     <ClCompile Include="populace\name_factory.cpp">
       <Filter>populace</Filter>
     </ClCompile>
@@ -288,6 +294,15 @@
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="player\puzzle_factory.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\canvas.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\weapon_factory.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\weapon_mod.h">
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="populace\name_factory.h">

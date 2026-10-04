@@ -343,6 +343,12 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
+	// 空占位：stationType/vehicleType等选项字段保持基类默认值不填。
+	virtual void SetProperty() override {}
+
+	// 空占位：不连任何图，edgeStations/links/lines保持基类默认值(全空)。
+	virtual void LayoutRoute(const std::vector<RouteStationInfo>&, int, int) override {}
+
 private:
 	std::string name;
 };
@@ -355,6 +361,12 @@ public:
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
+	// 空占位：stationType保持基类默认值不填。
+	virtual void SetProperty() override {}
+
+	// 空占位：不贴任何路，见station_mod.h StationMod::AssignRoads的约定(static方法)。
+	static void AssignRoads(const std::vector<Road*>&, RoadStationEmitFunc, void*) {}
+
 private:
 	std::string name;
 };
@@ -366,6 +378,9 @@ public:
 	static const char* GetId() { return "empty"; }
 	virtual const char* GetType() const override { return "empty"; }
 	virtual const char* GetName() override { return name.data(); }
+
+	// 空占位：blueprintPath/scriptModName等字段保持基类默认值不填。
+	virtual void SetProperty() override {}
 
 private:
 	std::string name;

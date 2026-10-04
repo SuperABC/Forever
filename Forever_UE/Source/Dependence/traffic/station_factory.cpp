@@ -3,8 +3,9 @@
 
 using namespace std;
 
-void StationFactory::RegisterStation(const string& id, CreateFunc creator, DestroyFunc deleter) {
-	registries[id] = { creator, deleter };
+void StationFactory::RegisterStation(const string& id, CreateFunc creator, DestroyFunc deleter,
+	RoadAssignFunc assign) {
+	registries[id] = { creator, deleter, assign };
 }
 
 StationMod* StationFactory::CreateStation(const string& id) {
@@ -56,4 +57,12 @@ void StationFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 
 bool StationFactory::IsEnabled(const string& id) const {
 	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
+}
+
+void StationFactory::AssignRoads(const string& id, const vector<Road*>& roads,
+	RoadStationEmitFunc emit, void* context) const {
+	auto it = registries.find(id);
+	if (it != registries.end() && IsEnabled(id)) {
+		it->second.assign(roads, emit, context);
+	}
 }

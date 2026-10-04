@@ -27,16 +27,21 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 具体子类必须在这里填scriptModName/milestoneNames，不要在构造函数里赋值——构造
+	// 函数只负责id/count这类登记，和StorageMod::SetProperty()同一套"两段式"约定。Core
+	// 创建完mod实例后会立刻调一次这个方法，再读这两个字段。
+	virtual void SetProperty() {}
+
 	// Script配置——老工程用pair<ScriptModName, vector<MilestoneName>>方式在Mod侧声明
 	// 意图，这次照抄：两个普通成员字段，和plans/changes同一个"mod自己的字段，Core只读"
 	// 安全模式，不通过返回值传递(之前这里是一个返回vector<string>的方法，按值把mod
 	// 分配的容器交给Core遍历，是被明确禁止的跨DLL模式，这次改掉)。scriptModName默认
 	// "empty"(纯粹要个能创建出来的ScriptMod壳，具体内容和milestoneNames无关)，
-	// milestoneNames默认为空(不需要milestone的job类型不用改)。具体子类应该在自己的
-	// 构造函数里直接赋值。milestoneNames每一项是不含路径/扩展名的bare文件名，Core通过
-	// Config::GetScriptPath()解析实际路径，mod不知道也不需要知道文件实际存放位置——这两
-	// 个字段和下面的DailyPlan/ExecNode完全无关，纯粹是给这个Job独占的Script提供milestone
-	// 内容，将来由外部广播一个Event、走Script::MatchEvent的正常触发器匹配流程触发。
+	// milestoneNames默认为空(不需要milestone的job类型不用改)。milestoneNames每一项是
+	// 不含路径/扩展名的bare文件名，Core通过Config::GetScriptPath()解析实际路径，mod不
+	// 知道也不需要知道文件实际存放位置——这两个字段和下面的DailyPlan/ExecNode完全无关，
+	// 纯粹是给这个Job独占的Script提供milestone内容，将来由外部广播一个Event、走
+	// Script::MatchEvent的正常触发器匹配流程触发。
 	std::string scriptModName = "empty";
 	std::vector<std::string> milestoneNames;
 

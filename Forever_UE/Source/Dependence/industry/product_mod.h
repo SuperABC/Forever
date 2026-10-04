@@ -19,11 +19,10 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 具体子类构造函数/SetProperty()里填这几个字段——和VehicleMod::blueprintPath
-	// 同一个"mod自己的字段，Core只读转发"模式。SetProperty()是纯虚方法而不是构造函数
-	// 直接赋值，只是为了和Storage/ManufactureMod保持同一套"构造+SetProperty两段式"
-	// 的约定(照抄老工程的写法)，这次没有依赖它去做"运行时才能确定的初始化"，具体子类
-	// 可以直接在构造函数里赋好这几个字段、SetProperty()留空也可以。
+	// 具体子类必须在SetProperty()里填这几个字段，不要在构造函数里赋值——和
+	// StorageMod::SetProperty()/ManufactureMod::SetTargets()/TerrainMod::SetupTexture()
+	// 同一套"两段式"约定：构造函数只负责id/count这类登记，Core创建完mod实例后会立刻调
+	// 一次这个方法，再读这几个字段。
 	virtual void SetProperty() = 0;
 
 	std::vector<std::string> categories;                        // 分类标签，任一交集即可入库

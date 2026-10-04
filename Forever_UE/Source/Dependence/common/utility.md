@@ -34,6 +34,17 @@
 - **`Time`不依赖`<chrono>`做内部存储**，全部用年/月/日/时/分/秒/毫秒整数字段+手写的进位/借位
   归一化逻辑（`NormalizeTime`），构造函数支持解析ISO 8601、中文（`YYYY年MM月DD日`）、美式
   （`MM/DD/YYYY`）及纯时间等多种字符串格式，供story脚本里写时间字面量时随意选一种熟悉的格式。
+- **`debugf`用`OutputDebugStringA`实现，只有附加调试器时才能看到，不会写进
+  `Saved/Logs/Forever.log`**——这个事实在排查公共交通车辆相关bug时反复踩到：Dependence/
+  Core/Basic层的`debugf`输出对着PIE日志文件读是看不到的，只有Forever UE模块层的`UE_LOG`
+  才会写进日志文件。诊断需要玩家可见、或者免调试器确认的信息时要在Forever层用`UE_LOG`，
+  不能指望`debugf`，见`Source/Core/traffic/route.md`"`Time::DifferenceInSeconds`"一节的
+  排查过程。
+- **`Time::DifferenceInSeconds`2026-10-04修过一次符号反了的bug**——`this`比`other`早时
+  应该返回正数，原来的实现返回的是负数，导致唯一调用方`Traffic::Tick`里的
+  `if (delta > 0.0) elapsedSeconds += delta;`每一帧都被跳过，`elapsedSeconds`永远停在
+  初始值不动，表现为"公交车/火车/飞机生成之后位置再也不变"。完整排查记录见
+  `utility.cpp`里这个函数声明处的注释。
 
 ## 依赖关系
 
@@ -45,5 +56,6 @@
 
 ## 待办/后续阶段
 
-- 阶段4：`Time`/`Counter`/`ValueType`目前没有被任何domain实际使用（只是可编译的基础设施），
-  等Populace的`Scheduler`、Society的`Job`/`Organization`等系统迁移时会成为第一批真正的调用方。
+- `Counter`目前仍然没有被任何domain实际使用——`Time`已经被`Player`(游戏时钟)、
+  `Traffic`(`Route::Update`的时刻表)等系统广泛使用，`ValueType`被`story/condition.h`
+  的脚本表达式引擎使用，只有`Counter`还停留在"可编译但没有调用方"的状态。

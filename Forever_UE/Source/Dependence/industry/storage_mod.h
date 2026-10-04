@@ -17,7 +17,9 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 具体子类构造函数/SetProperty()里填这两个字段，和ProductMod同一个"两段式"约定。
+	// 具体子类必须在SetProperty()里填这两个字段，不要在构造函数里赋值——构造函数只负责
+	// id/count这类登记，和ManufactureMod::SetTargets()/TerrainMod::SetupTexture()同一套
+	// "两段式"约定，Core创建完mod实例后会立刻调一次这个方法，再读这两个字段。
 	virtual void SetProperty() = 0;
 
 	std::vector<std::string> categories;

@@ -25,6 +25,7 @@ public:
 	static const char* GetId() { return "asset_container"; }
 	virtual const char* GetType() const override { return "asset_container"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -39,6 +40,7 @@ public:
 	static const char* GetId() { return "product_wheat"; }
 	virtual const char* GetType() const override { return "product_wheat"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -53,6 +55,7 @@ public:
 	static const char* GetId() { return "product_beef"; }
 	virtual const char* GetType() const override { return "product_beef"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -67,6 +70,7 @@ public:
 	static const char* GetId() { return "product_burger"; }
 	virtual const char* GetType() const override { return "product_burger"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -81,6 +85,7 @@ public:
 	static const char* GetId() { return "ammo_pistol"; }
 	virtual const char* GetType() const override { return "ammo_pistol"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -95,6 +100,7 @@ public:
 	static const char* GetId() { return "ammo_rifle"; }
 	virtual const char* GetType() const override { return "ammo_rifle"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -109,6 +115,7 @@ public:
 	static const char* GetId() { return "weapon_pistol"; }
 	virtual const char* GetType() const override { return "weapon_pistol"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -123,6 +130,7 @@ public:
 	static const char* GetId() { return "weapon_rifle"; }
 	virtual const char* GetType() const override { return "weapon_rifle"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;

@@ -18,6 +18,7 @@ public:
 	static const char* GetId() { return "scheduler_basic"; }
 	virtual const char* GetType() const override { return "scheduler_basic"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 	// 供RegisterModSchedulers注册时传给SchedulerFactory::RegisterScheduler当权重——
 	// Populace::AssignSchedulers()据此建CDF做加权随机分配，见populace.md。

@@ -9,8 +9,9 @@ using namespace std;
 Vehicle::Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const string& id, const string& name) :
 	factory(factory), name(name) {
 	mod = factory->CreateVehicle(id);
+	if (mod) mod->SetProperty();
 
-	// scriptModName/milestoneNames由mod自己的构造函数决定(见vehicle_mod.h"Script配置"
+	// scriptModName/milestoneNames由mod自己的SetProperty()决定(见vehicle_mod.h"Script配置"
 	// 一节)，这里不替mod做任何选择——mod为空是CreateVehicle本身失败的防御性兜底，仍然
 	// 硬编码"empty"作为最后一道保险，照抄Job::Job同一套写法。
 	script = new Script(scriptFactory, mod ? mod->scriptModName : "empty");

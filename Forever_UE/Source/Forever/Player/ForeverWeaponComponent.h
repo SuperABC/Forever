@@ -4,7 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "ForeverWeaponComponent.generated.h"
 
-class WeaponMod;
+class Weapon;
 class UStaticMeshComponent;
 
 // 挂在AForeverCharacter上的武器组件——开火/换弹/切枪这些"每帧/每次交互都要做"的高频路径
@@ -67,10 +67,11 @@ private:
 	void SpawnWeaponMesh();
 	void DestroyWeaponMesh();
 
-	// 独占持有，来自Registry::Get().GetWeaponFactory().CreateWeapon(id)——EndPlay/切枪时
-	// 必须调DestroyWeapon()释放，不能直接delete（跨DLL new/delete安全，和其余XxxFactory
-	// 同一个约定）。
-	WeaponMod* currentWeapon = nullptr;
+	// 独占持有——Weapon(Core层wrapper，见Source/Core/player/weapon.h)构造时自己调
+	// Registry::Get().GetWeaponFactory().CreateWeapon(id)，析构时自己调DestroyWeapon()
+	// 释放(跨DLL new/delete安全，和其余XxxFactory同一个约定)，EndPlay/切枪时这一层只需要
+	// 普通delete。
+	Weapon* currentWeapon = nullptr;
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> weaponMesh;

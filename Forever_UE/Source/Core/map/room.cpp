@@ -25,6 +25,7 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 		THROW_EXCEPTION(NullPointerException, "Room mod is null.\n");
 	}
 
+	mod->SetProperty();
 	type = mod->GetType();
 	name = mod->GetName();
 }

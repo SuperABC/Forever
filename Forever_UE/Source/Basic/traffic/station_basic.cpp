@@ -34,12 +34,15 @@ namespace {
 int BusStation::count = 0;
 
 BusStation::BusStation() : id(count++) {
-	stationType = "bus";
 }
 
 const char* BusStation::GetName() {
 	name = "BusStation" + to_string(id);
 	return name.data();
+}
+
+void BusStation::SetProperty() {
+	stationType = "bus";
 }
 
 void BusStation::AssignRoads(const vector<Road*>& roads, RoadStationEmitFunc emit, void* context) {
@@ -66,12 +69,15 @@ void BusStation::AssignRoads(const vector<Road*>& roads, RoadStationEmitFunc emi
 int TrainStation::count = 0;
 
 TrainStation::TrainStation() : id(count++) {
-	stationType = "train";
 }
 
 const char* TrainStation::GetName() {
 	name = "TrainStation" + to_string(id);
 	return name.data();
+}
+
+void TrainStation::SetProperty() {
+	stationType = "train";
 }
 
 void TrainStation::Layout(int direction, float sizeX, float sizeY) {
@@ -116,12 +122,15 @@ void TrainStation::Layout(int direction, float sizeX, float sizeY) {
 int AirStation::count = 0;
 
 AirStation::AirStation() : id(count++) {
-	stationType = "plane";
 }
 
 const char* AirStation::GetName() {
 	name = "AirStation" + to_string(id);
 	return name.data();
+}
+
+void AirStation::SetProperty() {
+	stationType = "plane";
 }
 
 void AirStation::Layout(int direction, float sizeX, float sizeY) {

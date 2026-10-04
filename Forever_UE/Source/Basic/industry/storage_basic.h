@@ -18,7 +18,7 @@ public:
 	static const char* GetId() { return "storage_wheat"; }
 	virtual const char* GetType() const override { return "storage_wheat"; }
 	virtual const char* GetName() override;
-	virtual void SetProperty() override {}
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -33,7 +33,7 @@ public:
 	static const char* GetId() { return "storage_beef"; }
 	virtual const char* GetType() const override { return "storage_beef"; }
 	virtual const char* GetName() override;
-	virtual void SetProperty() override {}
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -48,7 +48,7 @@ public:
 	static const char* GetId() { return "storage_burger"; }
 	virtual const char* GetType() const override { return "storage_burger"; }
 	virtual const char* GetName() override;
-	virtual void SetProperty() override {}
+	virtual void SetProperty() override;
 
 private:
 	static int count;

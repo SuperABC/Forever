@@ -22,10 +22,9 @@ struct ScriptContext;
 // (见traffic.md"Init"一节)：
 // 1. InitStations——遍历map所有building，对BuildingMod::stationMod非空的，创建对应Station
 //    (调一次StationMod::Layout())。
-// 2. InitRoadsideStations——对每个已注册的StationMod类型，建一个临时实例探测
-//    AssignRoads(map->GetRoads())要贴哪些路/哪一侧，立刻销毁这个临时实例，再对每条请求
-//    单独创建一个真正的Station——不挂building，不占用任何Lot面积，直接摆在道路旁边
-//    (目前只有公交站用这条路径)。
+// 2. InitRoadsideStations——对每个已注册的StationMod类型，调StationFactory::AssignRoads
+//    (static方法，不需要创建任何实例)探测要贴哪些路/哪一侧，再对每条请求单独创建一个真正的
+//    Station——不挂building，不占用任何Lot面积，直接摆在道路旁边(目前只有公交站用这条路径)。
 // 3. InitRoutes——对每个已注册且启用的RouteMod类型，收集stationType匹配的Station接口交给
 //    Route::Build()，Build()内部按需创建的边缘Station交回这里持有。
 // 4. 停车位车辆——只挑VehicleMod::category=="car"的车型(公交/火车/飞机不停车位，由Route

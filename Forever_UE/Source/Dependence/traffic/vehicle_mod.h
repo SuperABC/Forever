@@ -14,10 +14,15 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 指向一个继承AVehicleElement的蓝图(Blueprint)类的资源路径，具体子类构造函数里
-	// 赋值——和JobMod::scriptModName同一个"mod自己的字段，Core只读转发"模式(见
-	// job_mod.h)。Dependence/Basic层是纯C++、不依赖UE头文件，不能直接持有UClass指针，
-	// 只能存一份路径字符串。
+	// 具体子类必须在这里填下面这一整组字段，不要在构造函数里赋值——构造函数只负责
+	// id/count这类登记，和StorageMod::SetProperty()同一套"两段式"约定。Core创建完mod
+	// 实例后会立刻调一次这个方法，再读这些字段。
+	virtual void SetProperty() {}
+
+	// 指向一个继承AVehicleElement的蓝图(Blueprint)类的资源路径——和JobMod::
+	// scriptModName同一个"mod自己的字段，Core只读转发"模式(见job_mod.h)。
+	// Dependence/Basic层是纯C++、不依赖UE头文件，不能直接持有UClass指针，只能存一份
+	// 路径字符串。
 	//
 	// 为什么是"蓝图类路径"而不是"骨骼网格资源路径"：UChaosWheeledVehicleMovementComponent
 	// 要求骨骼网格必须在Actor构造函数阶段就绑定好(见VehicleElement.md"骨骼网格必须在
@@ -36,8 +41,8 @@ public:
 	std::string blueprintPath;
 
 	// Script配置——和JobMod/SchedulerMod同一个"mod自己声明意图，Core只读"模式：两个普通
-	// 成员字段，不通过返回值传递，具体子类应该在自己的构造函数里直接赋值。scriptModName
-	// 默认"empty"，milestoneNames默认为空，每项是不含路径/扩展名的bare文件名，Core通过
+	// 成员字段，不通过返回值传递。scriptModName默认"empty"，milestoneNames默认为空，
+	// 每项是不含路径/扩展名的bare文件名，Core通过
 	// Config::GetScriptPath()解析实际路径，见job_mod.h"Script配置"一节。这次用来驱动
 	// "靠近车辆弹出'上车'选项"这个效果——车辆自己的milestone脚本在game_start时调
 	// add_option，选中后调enter_vehicle，见Resource/Story/vehicle_basic.script。

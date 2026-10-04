@@ -20,9 +20,14 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 具体子类必须在SetProperty()里填下面这几组字段，不要在构造函数里赋值——构造函数只
+	// 负责id/count这类登记，和BuildingMod/ZoneMod::Layout()、StorageMod::SetProperty()
+	// 同一套"两段式"约定。Core创建完mod实例后会立刻调一次这个方法，再读这些字段。
+	virtual void SetProperty() {}
+
 	// 4类占位能力声明，照抄老工程RoomMod同名字段(E:\Projects\Forever_UE\Source\Dependence\
 	// map\room_mod.h)——这次进入populace域时第一次真正加进来。只有"住宅"这次有真实数据
-	// (ResidenceRoom在自己构造函数里设isResidential=true+residentialCapacity=1，见
+	// (ResidenceRoom的SetProperty()里设isResidential=true+residentialCapacity=1，见
 	// Source/Basic/map/room_basic.cpp)，另外3类先占位成false/空值，等对应域
 	// (Job/Industry)迁移时再由各自的具体RoomMod子类真正启用，这次不接任何生成/消费逻辑。
 	bool isResidential = false;

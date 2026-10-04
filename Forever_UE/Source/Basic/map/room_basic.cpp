@@ -5,8 +5,6 @@ using namespace std;
 int ResidenceRoom::count = 0;
 
 ResidenceRoom::ResidenceRoom() : id(count++) {
-	isResidential = true;
-	residentialCapacity = 1;
 }
 
 const char* ResidenceRoom::GetName() {
@@ -14,11 +12,14 @@ const char* ResidenceRoom::GetName() {
 	return name.data();
 }
 
+void ResidenceRoom::SetProperty() {
+	isResidential = true;
+	residentialCapacity = 1;
+}
+
 int ShopRoom::count = 0;
 
 ShopRoom::ShopRoom() : id(count++) {
-	isWorkspace = true;
-	workspaceCapacity = 100;
 }
 
 const char* ShopRoom::GetName() {
@@ -26,11 +27,14 @@ const char* ShopRoom::GetName() {
 	return name.data();
 }
 
+void ShopRoom::SetProperty() {
+	isWorkspace = true;
+	workspaceCapacity = 100;
+}
+
 int WarehouseRoom::count = 0;
 
 WarehouseRoom::WarehouseRoom() : id(count++) {
-	isStorage = true;
-	storageConfig = { {"shop", 100.f} };
 }
 
 const char* WarehouseRoom::GetName() {
@@ -38,11 +42,14 @@ const char* WarehouseRoom::GetName() {
 	return name.data();
 }
 
+void WarehouseRoom::SetProperty() {
+	isStorage = true;
+	storageConfig = { {"shop", 100.f} };
+}
+
 int ParkingRoom::count = 0;
 
 ParkingRoom::ParkingRoom() : id(count++) {
-	isParking = true;
-	parkingSpots = { { {0.5f, 0.f, 0.5f, 0.f}, 0.f } }; // 房间正中心一个车位，朝向跟房间一致
 }
 
 const char* ParkingRoom::GetName() {
@@ -50,16 +57,24 @@ const char* ParkingRoom::GetName() {
 	return name.data();
 }
 
+void ParkingRoom::SetProperty() {
+	isParking = true;
+	parkingSpots = { { {0.5f, 0.f, 0.5f, 0.f}, 0.f } }; // 房间正中心一个车位，朝向跟房间一致
+}
+
 int FactoryRoom::count = 0;
 
 FactoryRoom::FactoryRoom() : id(count++) {
-	isManufacture = true;
-	manufactureTypes = { "experience" };
 }
 
 const char* FactoryRoom::GetName() {
 	name = "FactoryRoom" + to_string(id);
 	return name.data();
+}
+
+void FactoryRoom::SetProperty() {
+	isManufacture = true;
+	manufactureTypes = { "experience" };
 }
 
 int TrainStationRoom::count = 0;

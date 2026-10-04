@@ -22,10 +22,15 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 具体子类必须在这里填scriptModName/milestoneNames，不要在构造函数里赋值——构造
+	// 函数只负责id/count这类登记，和StorageMod::SetProperty()同一套"两段式"约定。Core
+	// 创建完mod实例后会立刻调一次这个方法，再读这两个字段。
+	virtual void SetProperty() {}
+
 	// Script配置——和JobMod/OrganizationMod同一个"mod自己声明意图，Core只读"安全模式：
-	// 两个普通成员字段，不通过返回值传递，具体子类应该在自己的构造函数里直接赋值。
-	// scriptModName默认"empty"，milestoneNames默认为空，每项是不含路径/扩展名的bare
-	// 文件名，Core通过Config::GetScriptPath()解析实际路径，见job_mod.h"Script配置"一节。
+	// 两个普通成员字段，不通过返回值传递。scriptModName默认"empty"，milestoneNames默认
+	// 为空，每项是不含路径/扩展名的bare文件名，Core通过Config::GetScriptPath()解析实际
+	// 路径，见job_mod.h"Script配置"一节。
 	std::string scriptModName = "empty";
 	std::vector<std::string> milestoneNames;
 

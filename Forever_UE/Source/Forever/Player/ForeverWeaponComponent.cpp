@@ -16,7 +16,7 @@
 #include "DrawDebugHelpers.h"
 
 #include "common/registry.h"
-#include "player/weapon_mod.h"
+#include "player/weapon.h"
 #include "player/player.h"
 #include "populace/citizen.h"
 
@@ -28,25 +28,24 @@ UForeverWeaponComponent::UForeverWeaponComponent() {
 
 void UForeverWeaponComponent::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 	DestroyWeaponMesh();
-	if (currentWeapon) {
-		Registry::Get().GetWeaponFactory().DestroyWeapon(currentWeapon);
-		currentWeapon = nullptr;
-	}
+	delete currentWeapon;
+	currentWeapon = nullptr;
 	Super::EndPlay(EndPlayReason);
 }
 
 void UForeverWeaponComponent::EquipWeapon(const FString& weaponId) {
 	string idUtf8 = TCHAR_TO_UTF8(*weaponId);
-	WeaponMod* newWeapon = Registry::Get().GetWeaponFactory().CreateWeapon(idUtf8);
-	if (!newWeapon) return; // id未注册/未在config.json"weapon_mods"数组里启用，静默保留原武器
-
-	DestroyWeaponMesh();
-	if (currentWeapon) {
-		Registry::Get().GetWeaponFactory().DestroyWeapon(currentWeapon);
+	Weapon* newWeapon = new Weapon(&Registry::Get().GetWeaponFactory(), idUtf8);
+	if (!newWeapon->IsValid()) { // id未注册/未在config.json"weapon_mods"数组里启用，静默保留原武器
+		delete newWeapon;
+		return;
 	}
 
+	DestroyWeaponMesh();
+	delete currentWeapon;
+
 	currentWeapon = newWeapon;
-	currentAmmo = currentWeapon->magazineCapacity;
+	currentAmmo = currentWeapon->GetMagazineCapacity();
 	bReloading = false;
 	bWantsToFire = false;
 	SpawnWeaponMesh();
@@ -56,7 +55,7 @@ void UForeverWeaponComponent::ClearWeapon() {
 	if (!currentWeapon) return;
 
 	DestroyWeaponMesh();
-	Registry::Get().GetWeaponFactory().DestroyWeapon(currentWeapon);
+	delete currentWeapon;
 	currentWeapon = nullptr;
 	currentAmmo = 0;
 	bReloading = false;
@@ -64,16 +63,16 @@ void UForeverWeaponComponent::ClearWeapon() {
 }
 
 int32 UForeverWeaponComponent::GetMagazineCapacity() const {
-	return currentWeapon ? currentWeapon->magazineCapacity : 0;
+	return currentWeapon ? currentWeapon->GetMagazineCapacity() : 0;
 }
 
 void UForeverWeaponComponent::SpawnWeaponMesh() {
-	if (!currentWeapon || currentWeapon->firstPersonMeshPath.empty()) return; // 见weapon_mod.h：MVP阶段mesh路径留空是正常状态
+	if (!currentWeapon || currentWeapon->GetFirstPersonMeshPath().empty()) return; // 见weapon_mod.h：MVP阶段mesh路径留空是正常状态
 
 	AActor* owner = GetOwner();
 	if (!owner || !owner->GetRootComponent()) return;
 
-	UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, UTF8_TO_TCHAR(currentWeapon->firstPersonMeshPath.c_str()));
+	UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, UTF8_TO_TCHAR(currentWeapon->GetFirstPersonMeshPath().c_str()));
 	if (!mesh) return;
 
 	weaponMesh = NewObject<UStaticMeshComponent>(owner, NAME_None, RF_Transient);
@@ -81,7 +80,7 @@ void UForeverWeaponComponent::SpawnWeaponMesh() {
 	weaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	weaponMesh->SetGenerateOverlapEvents(false);
 
-	FName socket = currentWeapon->gripSocketName.empty() ? NAME_None : FName(UTF8_TO_TCHAR(currentWeapon->gripSocketName.c_str()));
+	FName socket = currentWeapon->GetGripSocketName().empty() ? NAME_None : FName(UTF8_TO_TCHAR(currentWeapon->GetGripSocketName().c_str()));
 	ACharacter* character = Cast<ACharacter>(owner);
 	if (character && !socket.IsNone() && character->GetMesh() && character->GetMesh()->DoesSocketExist(socket)) {
 		weaponMesh->SetupAttachment(character->GetMesh(), socket);
@@ -92,7 +91,7 @@ void UForeverWeaponComponent::SpawnWeaponMesh() {
 
 	// 挂载点在WeaponMod里定义的本地偏移——没有真实持枪socket时直接挂Root会让枪出现在
 	// 身体正中心，用这个偏移挪到看起来合理的位置(比如右肩膀靠前一点)，见weapon_mod.h。
-	weaponMesh->SetRelativeLocation(FVector(currentWeapon->attachOffsetX, currentWeapon->attachOffsetY, currentWeapon->attachOffsetZ));
+	weaponMesh->SetRelativeLocation(FVector(currentWeapon->GetAttachOffsetX(), currentWeapon->GetAttachOffsetY(), currentWeapon->GetAttachOffsetZ()));
 
 	weaponMesh->RegisterComponent();
 }
@@ -115,11 +114,11 @@ void UForeverWeaponComponent::StopFire() {
 
 void UForeverWeaponComponent::Reload() {
 	if (!currentWeapon || bReloading) return;
-	if (currentAmmo >= currentWeapon->magazineCapacity) return;
+	if (currentAmmo >= currentWeapon->GetMagazineCapacity()) return;
 
 	bReloading = true;
 	bWantsToFire = false;
-	reloadEndTime = GetWorld()->GetTimeSeconds() + currentWeapon->reloadDuration;
+	reloadEndTime = GetWorld()->GetTimeSeconds() + currentWeapon->GetReloadDuration();
 	// 真正的备弹检查/扣减放在换弹计时结束时(TickComponent)，这里只负责启动计时——和开火
 	// 判定的时序一致，不在按下R的瞬间就扣备弹。
 }
@@ -136,19 +135,19 @@ void UForeverWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType
 			if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 				if (Player* player = framework->GetPlayer()) {
-					if (player->ConsumeByType(currentWeapon->ammoType, currentWeapon->magazineCapacity)) {
-						currentAmmo = currentWeapon->magazineCapacity;
+					if (player->ConsumeByType(currentWeapon->GetAmmoType(), currentWeapon->GetMagazineCapacity())) {
+						currentAmmo = currentWeapon->GetMagazineCapacity();
 					}
 				}
 			}
 			if (GEngine) {
 				GEngine->AddOnScreenDebugMessage(200, 3.f, FColor::White,
-					FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->magazineCapacity));
+					FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->GetMagazineCapacity()));
 			}
 		}
 	}
 
-	if (bWantsToFire && currentWeapon && currentWeapon->fullAuto) {
+	if (bWantsToFire && currentWeapon && currentWeapon->IsFullAuto()) {
 		Fire();
 	}
 }
@@ -164,7 +163,7 @@ void UForeverWeaponComponent::Fire() {
 	if (!character || !character->IsAiming()) return;
 
 	float now = GetWorld()->GetTimeSeconds();
-	if (now - lastFireTime < currentWeapon->fireRate) return;
+	if (now - lastFireTime < currentWeapon->GetFireRate()) return;
 
 	if (currentAmmo <= 0) {
 		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Silver, TEXT("弹匣已空，按R换弹"));
@@ -178,7 +177,7 @@ void UForeverWeaponComponent::Fire() {
 	// 堆叠新的一行消息，用户要求"每次开火后"显示，不是只在换弹/切枪时显示一次。
 	if (GEngine) {
 		GEngine->AddOnScreenDebugMessage(200, 3.f, FColor::White,
-			FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->magazineCapacity));
+			FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->GetMagazineCapacity()));
 	}
 
 	UCameraComponent* camera = character->IsFirstPerson() ? character->GetFirstPersonCamera() : character->GetFollowCamera();
@@ -188,9 +187,9 @@ void UForeverWeaponComponent::Fire() {
 	// 一节的修订记录。
 	FVector start = camera->GetComponentLocation();
 
-	float spreadRad = FMath::DegreesToRadians(currentWeapon->baseSpread);
+	float spreadRad = FMath::DegreesToRadians(currentWeapon->GetBaseSpread());
 	FVector direction = FMath::VRandCone(camera->GetForwardVector(), spreadRad);
-	FVector end = start + direction * currentWeapon->maxRange;
+	FVector end = start + direction * currentWeapon->GetMaxRange();
 
 	// ECC_Pawn，不是ECC_Visibility——实测发现的bug：这个项目的DefaultEngine.ini用的是UE5
 	// 原版内置的"Pawn"碰撞预设(Source/Forever自己没有改过这份配置)，这个预设对Visibility
@@ -223,7 +222,7 @@ void UForeverWeaponComponent::Fire() {
 	// 忽略偏移的退化分支，不是weaponMesh分支。这里补上：用角色当前朝向把本地偏移转到
 	// 世界坐标再加到角色位置上，和"挂到Root上再加SetRelativeLocation"这条路径算出来的
 	// 效果一致。
-	FVector localOffset(currentWeapon->attachOffsetX, currentWeapon->attachOffsetY, currentWeapon->attachOffsetZ);
+	FVector localOffset(currentWeapon->GetAttachOffsetX(), currentWeapon->GetAttachOffsetY(), currentWeapon->GetAttachOffsetZ());
 	FVector gunLocation = weaponMesh ? weaponMesh->GetComponentLocation() :
 		character->GetActorLocation() + character->GetActorRotation().RotateVector(localOffset);
 	DrawDebugLine(GetWorld(), gunLocation, trailEnd, FColor::Yellow, false, 5.f, 0, 1.f);
@@ -236,8 +235,8 @@ void UForeverWeaponComponent::Fire() {
 	// 任何"过一会儿自动回正"的衰减，单发/连发都会踢(单发/连发最终都走这同一个Fire()调用)，
 	// 玩家要自己拉鼠标压枪，见WeaponMod.h"后坐力"一节。
 	if (AController* controller = character->GetController()) {
-		float pitchKick = FMath::FRandRange(currentWeapon->recoilPitchMin, currentWeapon->recoilPitchMax);
-		float yawKick = FMath::FRandRange(currentWeapon->recoilYawMin, currentWeapon->recoilYawMax);
+		float pitchKick = FMath::FRandRange(currentWeapon->GetRecoilPitchMin(), currentWeapon->GetRecoilPitchMax());
+		float yawKick = FMath::FRandRange(currentWeapon->GetRecoilYawMin(), currentWeapon->GetRecoilYawMax());
 		FRotator recoiledRotation = controller->GetControlRotation();
 		recoiledRotation.Pitch += pitchKick;
 		recoiledRotation.Yaw += yawKick;

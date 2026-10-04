@@ -10,6 +10,7 @@ Asset::Asset(AssetFactory* factory, const string& id, const string& name) :
 	mod = factory->CreateAsset(id);
 	if (!mod) return;
 
+	mod->SetProperty();
 	type = mod->GetType();
 	mobility = mod->mobility;
 	weight = mod->weight;

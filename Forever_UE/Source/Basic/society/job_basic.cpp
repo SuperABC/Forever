@@ -26,13 +26,16 @@ namespace {
 int ShopSalerJob::count = 0;
 
 ShopSalerJob::ShopSalerJob() : id(count++) {
-	scriptModName = "empty";
-	milestoneNames = { "job_shop_saler" };
 }
 
 const char* ShopSalerJob::GetName() {
 	name = "ShopSalerJob" + to_string(id);
 	return name.data();
+}
+
+void ShopSalerJob::SetProperty() {
+	scriptModName = "empty";
+	milestoneNames = { "job_shop_saler" };
 }
 
 void ShopSalerJob::DailyPlan(const Time& currentTime, PostHandle*) {

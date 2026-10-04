@@ -26,9 +26,11 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// config.json里"weapon_mods"数组中该mod id后面的命令行式参数字符串，和其余concept
-	// 同一个入口，这次没有武器需要参数化的字段，默认空实现即可。
-	virtual void ApplyArgs(const std::string& args) {}
+	// 具体子类必须在这里填下面这些字段，不要在构造函数里赋值——构造函数只负责id/count
+	// 这类登记，和StorageMod::SetProperty()/AssetMod::SetProperty()同一套"两段式"约定。
+	// 调用点在Core层的Weapon::Weapon()构造函数(Source/Core/player/weapon.h/.cpp，和
+	// Asset::Asset()同一个"创建完mod实例后立刻调一次、再读字段"时机)，不是Forever层。
+	virtual void SetProperty() {}
 
 	// ---- 资产引用（纯数据，UE层按路径LoadObject）----
 	// 一阶段占位：用户还没有下载导入武器模型，这里留空——Forever层SpawnWeaponMesh()发现

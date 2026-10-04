@@ -29,8 +29,8 @@ Mod可扩展骨架,一次性铺到全部8个domain、20个concept(society域的C
 | industry | Product | `industry/product_mod.h` → `ProductMod` | `industry/product_factory.h/.cpp` → `ProductFactory` | `GetModProducts` |
 | industry | Storage | `industry/storage_mod.h` → `StorageMod` | `industry/storage_factory.h/.cpp` → `StorageFactory` | `GetModStorages` |
 | industry | Manufacture | `industry/manufacture_mod.h` → `ManufactureMod` | `industry/manufacture_factory.h/.cpp` → `ManufactureFactory` | `GetModManufactures` |
-| traffic | Route | `traffic/route_mod.h` → `RouteMod` | `traffic/route_factory.h/.cpp` → `RouteFactory` | `GetModRoutes` |
-| traffic | Station | `traffic/station_mod.h` → `StationMod` | `traffic/station_factory.h/.cpp` → `StationFactory` | `GetModStations` |
+| traffic | Route（公共交通阶段已毕业，见`traffic/route_mod.md`） | `traffic/route_mod.h` → `RouteMod` | `traffic/route_factory.h/.cpp` → `RouteFactory` | `GetModRoutes` |
+| traffic | Station（公共交通阶段已毕业，见`traffic/station_mod.md`） | `traffic/station_mod.h` → `StationMod` | `traffic/station_factory.h/.cpp` → `StationFactory` | `GetModStations` |
 | traffic | Vehicle | `traffic/vehicle_mod.h` → `VehicleMod` | `traffic/vehicle_factory.h/.cpp` → `VehicleFactory` | `GetModVehicles` |
 
 `common/`不属于以上任何concept,只放`error.h/.cpp`(异常类)、`json.h/.cpp`(JSON解析器,均为

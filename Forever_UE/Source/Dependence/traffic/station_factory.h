@@ -32,11 +32,13 @@ class StationFactory {
 public:
 	using CreateFunc = StationMod*(*)(const std::string&);
 	using DestroyFunc = void(*)(StationMod*);
+	using RoadAssignFunc = void(*)(const std::vector<Road*>&, RoadStationEmitFunc, void*);
 
 	StationFactory() = default;
 	virtual ~StationFactory() = default;
 
-	virtual void RegisterStation(const std::string& id, CreateFunc creator, DestroyFunc deleter);
+	virtual void RegisterStation(const std::string& id, CreateFunc creator, DestroyFunc deleter,
+		RoadAssignFunc assign);
 
 	virtual StationMod* CreateStation(const std::string& id);
 
@@ -52,6 +54,11 @@ public:
 	// 拿实例创建时查不到对应参数。
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
 
+	// 转发调用注册时提供的static函数，不需要任何StationMod实例存在——和BuildingFactory::Assign
+	// 同一个模式(见building_factory.h)。id未注册/未启用时直接不调用emit。
+	virtual void AssignRoads(const std::string& id, const std::vector<Road*>& roads,
+		RoadStationEmitFunc emit, void* context) const;
+
 private:
 	// 已注册且已在config.json对应\"<concept>_mods\"数组里列出（即configuredArgs里
 	// 有这个id）才算启用——CreateXxx/CheckRegistered/GetRegisteredIds都据此判断，
@@ -61,6 +68,7 @@ private:
 	struct Entry {
 		CreateFunc creator;
 		DestroyFunc deleter;
+		RoadAssignFunc assign;
 	};
 
 	std::unordered_map<std::string, Entry> registries;

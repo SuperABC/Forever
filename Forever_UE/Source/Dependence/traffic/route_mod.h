@@ -49,7 +49,12 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 选项——子类构造函数里填好，Core只读。
+	// 具体子类必须在这里填下面这组选项字段，不要在构造函数里赋值——构造函数只负责
+	// id/count这类登记，和StorageMod::SetProperty()同一套"两段式"约定。Core创建完mod
+	// 实例后会立刻调一次这个方法，再读这些字段。
+	virtual void SetProperty() {}
+
+	// 选项——子类SetProperty()里填好，Core只读。
 	std::string stationType;    // 接哪类站点，见station_mod.h
 	std::string vehicleType;    // 这条线路生成的VehicleMod id
 	bool useRoadnet = false;    // 是否接入现有车辆路网(旁路，不破坏原图，见route.md)

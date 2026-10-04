@@ -299,14 +299,16 @@ mesh位置，没mesh退化成角色位置"的分支，都要确认退化分支�
 `firstPersonMeshPath`这次留空——用户还没有下载导入武器模型（`weapon_system_plan.md`
 推荐过两个免费资源：itch.io的Low Poly FPS Weapons Pack Lite、Epic官方Fab Free
 Content）。`SpawnWeaponMesh()`发现路径为空会直接跳过挂mesh这一步，不影响开火/伤害/
-换弹逻辑本身——可以先在PIE里测手感，等资产导入后把实际路径填进这两个类的构造函数
-即可，不需要改其它任何代码。
+换弹逻辑本身——可以先在PIE里测手感，等资产导入后把实际路径填进这两个类的`SetProperty()`
+即可（两段式构造约定，见`weapon_mod.h`），不需要改其它任何代码。
 
 ## 依赖关系
 
-- 依赖：`Source/Dependence/player/weapon_mod.h`/`weapon_factory.h`（`WeaponMod`纯数据+
-  `ComputeDamage`）、`Source/Core/common/registry.h`（`Registry::Get().GetWeaponFactory()`）、
-  `Source/Core/populace/citizen.h`（`TakeDamage`/`IsDead`）、
+- 依赖：`Source/Core/player/weapon.h`（`Weapon`，Core层wrapper，封装了
+  `Source/Dependence/player/weapon_mod.h`/`weapon_factory.h`的`WeaponMod`/
+  `WeaponFactory`——这个组件自己不再直接拿`WeaponMod*`，见`weapon.md`"补的是一个历史
+  遗留空档"一节）、`Source/Core/common/registry.h`（`Registry::Get().GetWeaponFactory()`，
+  构造`Weapon`时要传）、`Source/Core/populace/citizen.h`（`TakeDamage`/`IsDead`）、
   `Source/Forever/Player/ForeverCharacter.h`（摄像机取值/`IsFirstPerson()`）、
   `Source/Forever/Element/CitizenElement.h`（`GetCitizen()`反查命中目标）、
   `Source/Forever/Framework/ForeverFrameworkActor.h`/

@@ -21,6 +21,7 @@ public:
 	static const char* GetId() { return "vehicle_basic"; }
 	virtual const char* GetType() const override { return "vehicle_basic"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -39,6 +40,7 @@ public:
 	static const char* GetId() { return "vehicle_bus"; }
 	virtual const char* GetType() const override { return "vehicle_bus"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -53,6 +55,7 @@ public:
 	static const char* GetId() { return "vehicle_train"; }
 	virtual const char* GetType() const override { return "vehicle_train"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -67,6 +70,7 @@ public:
 	static const char* GetId() { return "vehicle_plane"; }
 	virtual const char* GetType() const override { return "vehicle_plane"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;

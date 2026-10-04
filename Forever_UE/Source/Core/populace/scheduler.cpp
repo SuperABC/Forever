@@ -10,9 +10,10 @@ using namespace std;
 Scheduler::Scheduler(SchedulerFactory* factory, ScriptFactory* scriptFactory, const string& id, Citizen* citizen) :
 	factory(factory), citizen(citizen) {
 	mod = factory->CreateScheduler(id);
-	// scriptModName/milestoneNames由mod自己的构造函数决定(见scheduler_mod.h"Script配置"
-	// 一节)，mod为空是CreateScheduler本身失败的防御性兜底，仍然硬编码"empty"作为最后一道
-	// 保险，和Job::Job同一个写法。
+	// scriptModName/milestoneNames由mod自己的SetProperty()填好(见scheduler_mod.h"Script
+	// 配置"一节)，mod为空是CreateScheduler本身失败的防御性兜底，仍然硬编码"empty"作为最后
+	// 一道保险，和Job::Job同一个写法。
+	if (mod) mod->SetProperty();
 	script = new Script(scriptFactory, mod ? mod->scriptModName : "empty");
 	if (mod) {
 		for (const string& name : mod->milestoneNames) {

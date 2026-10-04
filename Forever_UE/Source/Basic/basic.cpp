@@ -345,13 +345,16 @@ extern "C" __declspec(dllexport) void* GetModStations() {
 extern "C" __declspec(dllexport) void RegisterModStations(StationFactory* factory) {
 	factory->RegisterStation(BusStation::GetId(),
 		[](const std::string&) -> StationMod* { return new BusStation(); },
-		[](StationMod* m) { delete m; });
+		[](StationMod* m) { delete m; },
+		&BusStation::AssignRoads);
 	factory->RegisterStation(TrainStation::GetId(),
 		[](const std::string&) -> StationMod* { return new TrainStation(); },
-		[](StationMod* m) { delete m; });
+		[](StationMod* m) { delete m; },
+		&TrainStation::AssignRoads);
 	factory->RegisterStation(AirStation::GetId(),
 		[](const std::string&) -> StationMod* { return new AirStation(); },
-		[](StationMod* m) { delete m; });
+		[](StationMod* m) { delete m; },
+		&AirStation::AssignRoads);
 }
 extern "C" __declspec(dllexport) void FinishModStations(StationFactory* factory) {
 }

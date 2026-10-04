@@ -509,7 +509,6 @@ float FactoryBuilding::GetPower(AREA_TYPE area) {
 int TrainStationBuilding::count = 0;
 
 TrainStationBuilding::TrainStationBuilding() : id(count++) {
-	stationMod = "station_train";
 }
 
 const char* TrainStationBuilding::GetName() {
@@ -523,6 +522,7 @@ void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 	// (TrainStation::Layout，depthRatio 0.65/0.85)用，不会被楼体实体挡住——PIE实测反馈
 	// "建筑楼体没有偏移，还位于建筑矩形的中心，导致公共交通路线穿过楼体"之后改的，用
 	// NearRoadFootprint按direction换算，见该函数注释。
+	stationMod = "station_train";
 	footprint = NearRoadFootprint(direction, 0.18f, 0.35f, 0.6f);
 	basements = 0;
 	layers = 1;
@@ -580,7 +580,6 @@ float TrainStationBuilding::GetPower(AREA_TYPE area) { return 0.f; }
 int AirportBuilding::count = 0;
 
 AirportBuilding::AirportBuilding() : id(count++) {
-	stationMod = "station_air";
 }
 
 const char* AirportBuilding::GetName() {
@@ -592,6 +591,7 @@ void AirportBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
 	// 和TrainStationBuilding同样贴路一侧的footprint，理由见那边的注释——AirStation::Layout的
 	// 两条跑道depthRatio是0.65/0.85，同一组数值。
+	stationMod = "station_air";
 	footprint = NearRoadFootprint(direction, 0.18f, 0.35f, 0.6f);
 	basements = 0;
 	layers = 1;

@@ -28,6 +28,7 @@ public:
 	static const char* GetId() { return "room_residence"; }
 	virtual const char* GetType() const override { return "room_residence"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -46,6 +47,7 @@ public:
 	static const char* GetId() { return "room_shop"; }
 	virtual const char* GetType() const override { return "room_shop"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -62,6 +64,7 @@ public:
 	static const char* GetId() { return "room_warehouse"; }
 	virtual const char* GetType() const override { return "room_warehouse"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -79,6 +82,7 @@ public:
 	static const char* GetId() { return "room_parking"; }
 	virtual const char* GetType() const override { return "room_parking"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
@@ -98,6 +102,7 @@ public:
 	static const char* GetId() { return "room_factory"; }
 	virtual const char* GetType() const override { return "room_factory"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 private:
 	static int count;
