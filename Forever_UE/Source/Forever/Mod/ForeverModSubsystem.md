@@ -18,6 +18,29 @@ Factory.SetModArgs→ModLoader加载并注册进Factory→创建实例(参数字
 
 ## 关键设计
 
+- **挂载mod自己的UE资产Plugin(打包功能迁移时新增)**——`Config::GetPlugins()`/
+  `GetPakFiles()`(`resource_paths`扫描顺带收集的`.uplugin`/`.pak`)在三个回退分支之后、
+  21个concept验证循环之前挂载，照抄老工程`GlobalBase::BeginPlay()`按`WITH_EDITOR`分两条
+  路径的写法：
+  - Editor/PIE：对每个`.uplugin`算出它的`Content`目录，`FPackageName::
+    RegisterMountPoint(TEXT("/")+pluginName+TEXT("/"), contentDir)`+
+    `IAssetRegistry::ScanPathsSynchronous`——不需要cook/pak，不需要在主`.uproject`的
+    `Plugins`列表里启用这个Plugin，纯粹告诉引擎"这个包名前缀去这个磁盘目录找"。
+  - 打包/Shipping：对每个`.pak`(mod自己的迷你UE工程cook+`UnrealPak`出来的产物)
+    `FCoreDelegates::MountPaksEx`挂载，再`RegisterMountPoint`到固定写死的
+    `"../../../"+pluginName+"/Content/"`(这个相对路径写法是`UnrealPak`打包内部路径的
+    约定，mod自己的`pak.bat`生成filelist时就是这么写的，两边必须对得上)，外加
+    `FShaderCodeLibrary::OpenLibrary`(Plugin里的Material要用到自己的shader library)。
+    **`RegisterMountPoint`不能靠`MountPaksEx.Execute()`的返回值gate**——实测在UE5.7下，
+    pak文件本身已经挂载成功(`LogPakFile`能看到"Mounted Pak file...")时这个返回值仍然是
+    `false`，照抄老工程那样用`if (Execute(...))`包住后面的`RegisterMountPoint`会导致包名
+    命名空间永远连不上磁盘内容，一直停在引擎自己打的那条警告("Mount point ... is not
+    mounted to a valid Root Path yet")描述的半挂载状态——`RegisterMountPoint`本身是幂等
+    的纯注册操作，调完`Execute`就应该紧接着做，不依赖它的返回值。
+  - 为什么必须是Plugin而不是普通文件夹：UE资产只能通过已注册的挂载点访问
+    (`LoadObject`等用的`/Xxx/...`包路径背后必须有挂载点)，原始文件夹不是合法的挂载对象，
+    这是"UE资产独立存放+被主项目打包后正确连接"这个要求在技术上唯一可行的落地形态。
+    详见`Source/Core/common/config.md`"GetPlugins/GetPakFiles"一节。
 - **用`UGameInstanceSubsystem`而不是塞进`AForeverGameMode::BeginPlay`**——参照
   `UForeverKeyBindingSubsystem`(`Source/Forever/Input/ForeverKeyBindingSubsystem.h`)已经
   立下的模式:`Initialize()`在关卡加载前、每个game instance生命周期内只跑一次,不受

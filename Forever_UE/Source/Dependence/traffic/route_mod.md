@@ -35,6 +35,11 @@
   重新校准过，新增线路类型时同样要留意这个换算，不能直接抄字面上看起来"合理"的数值。
 - `useRoadnet`/`drawPath`/`trackMesh`/`trackUnit`/`controlLength`几个选项字段的具体用法
   见`route.md`"非路网边：三次贝塞尔"/"路网边：同车道特例"两节。
+- **`easeSeconds`的单位是真实秒，不是游戏内秒**——和`speed`/`dwellSeconds`刚好相反，因为
+  这个字段只是`Route::DriveVehicle()`内部用来算梯形速度曲线的一个"缓动窗口"参数，不直接
+  参与`Update()`按`length/speed`算的时刻表/`period`(那套仍然是游戏内秒)，用真实秒更直观
+  (策划/调参时想的是"进站前N秒开始减速"而不是"进站前N个游戏内秒")。默认3秒(公交尺度)，
+  火车/飞机在各自`SetProperty()`里调大，见`route.md`"DriveVehicle的缓动"一节。
 
 ## 依赖关系
 

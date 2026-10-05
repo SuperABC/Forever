@@ -64,6 +64,15 @@ public:
 	// Resource/Story目录，和dll_paths/layout_paths同一个回退容错风格。
 	static bool HasResourcePaths();
 
+	// 所有已发现的.uplugin绝对路径——和GetLayouts()同一个手法，resource_paths扫描时按
+	// 后缀顺带收集，不需要单独的plugin_paths数组。供ForeverModSubsystem在WITH_EDITOR下
+	// 直接RegisterMountPoint到这个plugin的Content目录(不需要cook/pak)，见config.md。
+	static std::vector<std::string> GetPlugins();
+
+	// 所有已发现的.pak绝对路径——和GetPlugins()同一个来源，供ForeverModSubsystem在非编辑器
+	// (打包)下MountPaksEx挂载，见config.md。
+	static std::vector<std::string> GetPakFiles();
+
 	// 按不含路径/扩展名的bare文件名查找对应.script文件的绝对路径——遍历所有已发现的
 	// .script路径，返回第一个basename(不含扩展名)等于name的；找不到返回空字符串。不做
 	// 任何缓存/去重校验，理论上不会有同名冲突，调用方自己保证不重复摆放同名脚本。
@@ -98,6 +107,13 @@ private:
 
 	// resource根目录path -> 该目录下发现的.script绝对路径列表，结构和layoutPaths一致
 	static std::unordered_map<std::string, std::vector<std::string>> resourcePaths;
+
+	// resource根目录path -> 该目录下发现的.uplugin绝对路径列表，AddResourcePath同一次扫描
+	// 顺带收集，结构和resourcePaths一致。
+	static std::unordered_map<std::string, std::vector<std::string>> pluginPaths;
+
+	// resource根目录path -> 该目录下发现的.pak绝对路径列表，同上。
+	static std::unordered_map<std::string, std::vector<std::string>> pakPaths;
 
 	// main_story字段的原始值(ScriptModName)，ReadConfig时读取
 	static std::string mainStoryScriptModName;

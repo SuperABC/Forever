@@ -17,12 +17,14 @@
       "../../../Forever_Mod/Empty/Cpp/x64/Release"
    ],
 
-   // resource_paths: 递归扫描这些目录,找出所有.script文件,记下它们的绝对路径。
+   // resource_paths: 递归扫描这些目录,找出所有.script文件,记下它们的绝对路径;同一次扫描
+   // 顺带收集.uplugin/.pak(独立mod自己的迷你UE工程里的Plugin产物,供ForeverModSubsystem
+   // 挂载UE资产,见Source/Core/common/config.md"GetPlugins/GetPakFiles"一节)。
    // JobMod/OrganizationMod/Story这几处只写一个不含路径/扩展名的bare文件名(比如
    // "job_shop_saler"),不知道也不需要知道用户实际把脚本文件放在哪,由这里的配置统一
    // 决定实际存放位置,通过Config::GetScriptPath(name)按文件名反查完整路径,见
    // Source/Core/society/job.md"Script配置"一节。
-   "resource_paths" : [ "../Story" ],
+   "resource_paths" : [ "../Story", "../../../Forever_Mod/Test/UE/Test" ],
 
    // main_story: 主线剧情Script要挂载的ScriptModName,不再由Story硬编码"empty"。
    "main_story" : "empty",

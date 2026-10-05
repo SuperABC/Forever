@@ -9,11 +9,10 @@
 ## 关键设计
 
 - **移植但大幅裁剪**——旧工程`Config`类还管理启用禁用状态(`GetChecks`/`CheckMod`/
-  `GetEnables`/`modEnables`)、老式"一个资源目录桶四种后缀分流"的资源目录扫描
-  (`GetResourcePaths`/`GetScripts`/`GetPlugins`/`GetPakFiles`/`AddResourcePath`/
-  `RemoveResourcePath`)、全局设置(`GetGlobalSettings`)、主剧情路径(`GetStories`/
-  `AddScript`/`RemoveScript`)、运行时写回(`WriteConfig`)。这些仍未迁移，等对应机制/系统
-  在阶段4落地时再按需加回。
+  `GetEnables`/`modEnables`)、全局设置(`GetGlobalSettings`)、主剧情路径(`GetStories`/
+  `AddScript`/`RemoveScript`)、运行时写回(`WriteConfig`)。这些仍未迁移，和这次"打包连接"的
+  需求无关，等对应机制/系统落地时再按需加回。`GetPlugins`/`GetPakFiles`(见下)这次已经
+  按需加回了。
 - **`AddLayoutPath`/`GetLayouts`(Building内部布局落地时补回)**：和`AddDllPath`同一个
   `std::filesystem::recursive_directory_iterator`扫描手法，但不探测/加载任何东西
   (`.layout`是纯文本模板文件，不是dll)，扫到就收。`config.json`新增`"layout_paths"`数组，
@@ -26,7 +25,8 @@
 - **`AddResourcePath`/`GetScriptPath`/`HasResourcePaths`(Society域Script配置修复时新增)**：
   和`AddLayoutPath`同一个扫描手法，这次扫`.script`文件（`resourcePaths`结构和
   `layoutPaths`一致，root目录->该目录下发现的`.script`绝对路径列表）。`config.json`新增
-  `"resource_paths"`数组（当前配的是`["../Story"]`）。这次新增的动机：`JobMod`/
+  `"resource_paths"`数组（当前配的是`["../Story", "../../../Forever_Mod/Test/UE/Test"]`）。
+  这次新增的动机：`JobMod`/
   `OrganizationMod`（以及`Story`）之前决定"Script文件存放在哪"的方式是Core里硬编码
   `configDir/"../Story"/(name+".json")`路径拼接——这既替Mod做了它不该做的选择，也没有
   给Mod提供"我只写一个bare名字，不用管文件实际在哪"的能力（Mod不知道也不可能知道用户
@@ -47,6 +47,18 @@
   需要在`Story`对象创建之前就拿到主线剧情`.script`的路径，包一层避免`"test"`这个bare
   名字散落在多个文件里，见`Core/story/script.md`"主线剧情.script新增三个顶层字段"
   一节。等以后支持多主线剧情时改这个方法内部实现即可，调用方不用跟着改。
+- **`GetPlugins`/`GetPakFiles`(打包功能迁移时按需加回)**：`AddResourcePath`原来只收
+  `.script`，这次照抄旧工程`AddResourcePath`同一次`recursive_directory_iterator`扫描里
+  按后缀分流的写法，加上`.uplugin`/`.pak`两路(新增`pluginPaths`/`pakPaths`，结构和
+  `resourcePaths`一致)。动机：UE资产只能通过"挂载点"访问(`LoadObject`等用的`/Xxx/...`
+  包路径背后必须有已注册的挂载点)，独立编辑的UE资产因此必须放在一个Plugin里——
+  `resource_paths`配置的目录下如果是一个`<ModName>/UE/<ModName>/`这样的独立迷你UE工程，
+  里面`Plugins/<ModName>/<ModName>.uplugin`(编辑器/PIE直接挂载用)和
+  `Plugins/<ModName>_Pak/<ModName>.pak`(该Plugin自己cook+`UnrealPak`出来，打包/Shipping
+  用)就会被这次新增的扫描一起发现。真正的挂载逻辑(`FPackageName::RegisterMountPoint`+
+  `FCoreDelegates::MountPaksEx`)在UE层`ForeverModSubsystem::Initialize()`里，照抄旧工程
+  `GlobalBase::BeginPlay()`按`WITH_EDITOR`分两条路径的写法，见
+  `Source/Forever/Mod/ForeverModSubsystem.md`。
 - **用旧工程`Dependence/common/json.h`而不是UE自带Json模块解析`config.json`**——UE的
   `FJsonSerializer`是严格JSON,不支持注释;旧工程的解析器是JsonCpp衍生的宽松版本,支持
   `//`/`/* */`注释,更适合手写维护的配置文件。这是本次会话用户明确要求的决定。
@@ -55,6 +67,21 @@
   Config/config.json`里的`dll_paths`因此写成`"../../../Forever_Mod/Test"`这种相对本文件
   路径的写法,而不是相对仓库根目录或相对可执行文件当前工作目录——后两者在`Config`这层根本
   拿不到。
+- **`configDir`必须用`filesystem::canonical()`而不是直接`parent_path()`(打包功能迁移时
+  修的一个坑)**——打包产物里`Resource/`是用`mklink /J`目录连接指向开发树真实位置的(见
+  `Forever_UE/pak.bat`)，但Windows对一条路径字符串里嵌入的`".."`是纯文本/词法化解析
+  (`GetFullPathNameW`那一套)，不会真的打开每一级目录确认是不是reparse point，也就不会
+  "看穿"目录连接——如果只取`parent_path()`，`configDir`会是一条还停留在"连接点那一侧"的
+  路径，后面`dll_paths`/`resource_paths`里`"../../../Forever_Mod/..."`这种相对写法对着它
+  词法化展开，文本上只会在连接点所在的归档目录树内部兜圈子，永远走不到连接指向的真实开发树
+  (实测现象：`[Config] Warning: mod path does not exist`，报出来的路径里能看到没被消掉的
+  `".."`片段)。用`canonical()`强制做一次真正打开目录、跟随reparse point的OS级解析，把
+  `configDir`换成连接目标那一侧的真实绝对路径，后续所有相对路径的`".."`才会从正确的起点
+  往上退——这一步只需要做一次，PIE/未打包的开发环境下`Resource`本来就是真目录，
+  `canonical()`是无副作用的空操作。这也是为什么`Forever_UE/pak.bat`不需要给
+  `Forever_Mod`单独建一个连接：只要`configDir`本身被`canonical()`成真实路径，`dll_paths`/
+  `resource_paths`里随便写什么相对路径都会自然解析到真实位置，不需要为每个mod的位置在
+  打包脚本里硬编码特殊处理。
 - **`ReadConfig`找不到文件或JSON语法错误时静默留空,不抛异常**——旧工程`Config::ReadConfig`
   在这两种情况下都会`THROW_EXCEPTION`,但阶段3的约定是"缺配置就用硬编码默认值,不报错"
   (和`UForeverKeyBindingSubsystem`读`KeyBindings.ini`的容错风格一致),由调用方
@@ -87,9 +114,9 @@
 
 ## 待办/后续阶段
 
-- 阶段4:按需加回启用禁用状态、`GetScripts`/`GetPlugins`/`GetPakFiles`、全局设置、剧情
-  路径、运行时写回,恢复`config.json`里对应的key(`layout_paths`已经在Building内部布局
-  落地时补回，见上)。
+- 阶段4:按需加回启用禁用状态、全局设置、剧情路径、运行时写回,恢复`config.json`里对应的
+  key(`layout_paths`已经在Building内部布局落地时补回，`GetPlugins`/`GetPakFiles`已经在
+  打包功能迁移时补回，见上)。
 - 阶段4:如果发现同一个dll在多次`AddDllPath`调用(如`Debug`/`Release`两个目录都被扫描到)
   下被重复记录,需要处理去重——目前`GetMods()`已经按dll绝对路径去重,但如果同一个mod id
   被两个不同dll路径各自注册一次,`ModLoader::RegisterConcept`会调用两次

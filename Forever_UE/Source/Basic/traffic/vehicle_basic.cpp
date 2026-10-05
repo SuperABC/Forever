@@ -72,4 +72,15 @@ const char* PlaneVehicle::GetName() {
 void PlaneVehicle::SetProperty() {
 	category = "plane";
 	sizeX = 3000.f; sizeY = 2500.f; sizeZ = 800.f;
+
+	// 来自Forever_Mod/Test/UE/Test这个独立mod的Plugin(Test)里迁移进去、重命名过的测试
+	// 飞机模型(老工程Content/3rdParty/Low-poly_Airplane同一份资产)，ForeverModSubsystem
+	// 运行时挂载成"/Test/..."包路径，见vehicle_mod.h::transitMeshPath/PACKAGING_PLAN
+	// "阶段E"。
+	transitMeshPath = "/Test/Airplane/StaticMeshes/airplane.airplane";
+
+	// 模型原始尺寸偏大——0.5/0.25实测都还是太大，调到0.15。模型本身是横着建的(正前方不是
+	// UE约定的+X)，需要一个yaw修正。+90实测机头朝向反了(PIE/打包exe都验证过)，改成-90。
+	meshTransform.scale = 0.15f;
+	meshTransform.yawOffsetDegrees = -90.f;
 }

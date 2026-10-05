@@ -21,6 +21,10 @@
 #include "traffic/vehicle_factory.h"
 
 #include "Misc/Paths.h"
+#include "Misc/PackageName.h"
+#include "Misc/CoreDelegates.h"
+#include "AssetRegistry/IAssetRegistry.h"
+#include "ShaderCodeLibrary.h"
 
 namespace {
 
@@ -86,6 +90,61 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: config.json 未提供任何resource_paths,回退扫描默认目录 %s。"), *defaultResourceDir);
 		Config::AddResourcePath(TCHAR_TO_UTF8(*defaultResourceDir));
 	}
+
+	// 挂载mod自己的UE资产Plugin——照抄老工程GlobalBase::BeginPlay()按WITH_EDITOR分两条路径
+	// 的写法(见PACKAGING_PLAN/config.md"GetPlugins/GetPakFiles"一节)。独立mod的UE资产只能
+	// 以Plugin形态存在(UE资产只能通过已注册的挂载点访问，原始文件夹不是合法挂载对象)，
+	// resource_paths扫描到的.uplugin/.pak就是这些mod自己的迷你UE工程里Plugin的产物。
+#if WITH_EDITOR
+	// Editor/PIE：直接挂载Plugin的Content目录，不需要cook/pak——纯粹告诉引擎"这个包名
+	// 前缀去这个磁盘目录找"，不需要在主.uproject的Plugins列表里启用这个Plugin。
+	for (const std::string& pluginPath : Config::GetPlugins()) {
+		FString pluginFile(UTF8_TO_TCHAR(pluginPath.c_str()));
+		FString pluginDir = FPaths::GetPath(pluginFile);
+		FString pluginName = FPaths::GetBaseFilename(pluginFile);
+		FString contentDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(pluginDir, TEXT("Content")));
+		FString mountPoint = TEXT("/") + pluginName + TEXT("/");
+		if (FPaths::DirectoryExists(contentDir)) {
+			FPackageName::RegisterMountPoint(mountPoint, contentDir);
+			if (IAssetRegistry* assetRegistry = IAssetRegistry::Get()) {
+				assetRegistry->ScanPathsSynchronous({ mountPoint }, true);
+			}
+			UE_LOG(LogTemp, Log, TEXT("ForeverModSubsystem: mounted plugin %s -> %s"), *pluginName, *contentDir);
+		}
+	}
+#else
+	// 打包/Shipping：挂载mod自己的迷你UE工程cook+UnrealPak出来的.pak，内部路径固定写死成
+	// "../../../<PluginName>/Content/"(UnrealPak打包时的约定，mod自己的pak.bat生成filelist
+	// 时就是这么写的，两边必须对得上，不能按这个主工程自己的目录结构现算)。
+	for (const std::string& pakPath : Config::GetPakFiles()) {
+		FString pakFile(UTF8_TO_TCHAR(pakPath.c_str()));
+		FString pluginName = FPaths::GetBaseFilename(pakFile);
+		FString mountPoint = TEXT("/") + pluginName + TEXT("/");
+		if (FCoreDelegates::MountPaksEx.IsBound()) {
+			TArray<UE::FMountPaksExArgs> mountArgsArr;
+			UE::FMountPaksExArgs& mountArgs = mountArgsArr.AddDefaulted_GetRef();
+			mountArgs.PakFilePath = *pakFile;
+			mountArgs.Order = 4;
+			mountArgs.MountOptions.MountFlags = FPakMountOptions::EMountFlags::SkipContainerFile;
+			// 不能靠这个调用的返回值判断要不要继续——实测在这个引擎版本下，pak文件本身已经
+			// 挂载成功(LogPakFile能看到"Mounted Pak file...")，但这个返回值仍然是false，
+			// 如果靠它gate下面RegisterMountPoint，会一直停在引擎自己打的那条警告("Mount
+			// point ... is not mounted to a valid Root Path yet")描述的半挂载状态，包名
+			// 永远连不上磁盘内容。RegisterMountPoint本身是幂等的纯注册操作，不需要靠这个
+			// 返回值做条件判断，挂了就应该紧接着注册。
+			FCoreDelegates::MountPaksEx.Execute(mountArgsArr);
+			{
+				FString virtualContentDir = TEXT("../../../") + pluginName + TEXT("/Content/");
+				FPackageName::RegisterMountPoint(mountPoint, virtualContentDir);
+				FShaderCodeLibrary::OpenLibrary(pluginName, virtualContentDir);
+				if (IAssetRegistry* assetRegistry = IAssetRegistry::Get()) {
+					assetRegistry->ScanPathsSynchronous({ mountPoint }, true);
+				}
+				UE_LOG(LogTemp, Log, TEXT("ForeverModSubsystem: mounted pak %s"), *pluginName);
+			}
+		}
+	}
+#endif
 
 	ModLoader modLoader;
 

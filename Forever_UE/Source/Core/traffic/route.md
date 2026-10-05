@@ -48,6 +48,54 @@
     `elapsedSeconds`从头到尾停在初始值不动，表现为"所有公共交通车辆生成之后位置再也不变"。
     排查过程见`Dependence/common/utility.cpp`里`Time::DifferenceInSeconds`声明处的完整
     记录；这个符号bug全局只有`Traffic::Tick`这一处调用方，修好之后不需要再额外处理。
+- **`DriveVehicle`的缓动按"行驶区段"(两次真正停靠之间的若干条leg合起来)整体套梯形速度
+  曲线，不是按单条leg自己的`[0,1]`区间**——这是改了两版才定下来的：
+  - 第一版不分青红皂白给每一条`leg`都按`smoothstep`(两端速度钳死为0)缓动，结果火车/飞机
+    经过`leftIn`/`rightOut`这类纯过路接口(见`station_basic.cpp` `Layout()`的"顺序必须是
+    `[leftIn, rightOut, rightIn, leftOut]`"一节)时也诡异地"减速再加速"——**载具运行时
+    完全不感知接口本身的存在，只认"是不是一次真正的停靠"**(`RouteLeg::dwellAtDestination`)。
+  - 第二版改成按`dwellAtDestination`在单条leg两端各自判断要不要缓动(三次Hermite插值)，
+    结果PIE/打包exe实测反馈"又变成瞬间全速移动了"——接口到站内停靠点那一小段(跑道/轨道
+    半截)比相邻的长途巡航段短得多，缓动压缩在这么短一条leg的`travelTime`里，表现上还是
+    跟突变没区别。
+  - 第三版：往回/往前找到当前leg所在的"行驶区段"(上一次真正停靠到下一次真正停靠之间首尾
+    相接的所有leg，`DriveVehicle`开头往回扫`dwellAtDestination`找区段起点`segStart`)，
+    累计这整段的总时长`segTotalTime`/总长度`segTotalLength`，套梯形速度曲线(匀加速
+    `ta`->匀速->匀减速`td`，`ta`/`td`钳在`mod->easeSeconds`和区段总时长一半之间取小)
+    算出区段内的累计弧长`segArcLength`。这版PIE/打包exe实测又反馈一个新问题："飞机到了
+    接口处明显卡顿一下，然后瞬移到中间的站点"——**根因是这一版拿"累计时间"顺出来的
+    `segLengthBeforeCurrentLeg`去减`segArcLength`，而`segLengthBeforeCurrentLeg`是按
+    "各leg自己名义匀速`travelTime=length/speed`"累计出来的，`segArcLength`却是按缓动
+    曲线(加减速阶段速度比`mod->speed`时快时慢)算出来的——两者只在区段的最开头(都是0)和
+    最末尾(都是`segTotalLength`)才保证相等，在区段内部任意一条leg的边界(正好是接口！)
+    上并不相等，用名义时间累计出来的"属于哪条leg"去切缓动后的真实弧长，自然会在接口处
+    对不上(卡顿)、再跳到按缓动曲线算出来的真实位置(瞬移)**。
+  - 现在的版本：`segElapsed`(定位在缓动曲线上的哪一点)依然用"累计名义时间"算，这部分没
+    问题(时间本身是连续的，不受速度曲线影响)；但算出`segArcLength`之后，**改成按累计
+    长度(不是累计时间)重新从`segStart`走一遍**找`segArcLength`真正落在区段内哪条leg
+    上——和`EvaluateEdge`内部按弧长在多段`segments`里定位同一个道理，只是这里定位的是
+    "哪条leg"。这样缓动曲线和"用哪条leg的几何算世界坐标"用的是同一套长度基准，接口处
+    不会再对不上。缓动因此天然跨越leg边界、从相邻的长途巡航段"借"时间，不受某一条leg
+    多短的限制。匀速段速度`cruiseSpeed`比配置的`mod->speed`略高一点(补偿两头比匀速慢的
+    那部分距离)，确保`segTotalTime`(=`Σlength/speed`，和原来完全一样)内还是正好走完
+    `segTotalLength`，`Update()`按这个值算的时刻表/`period`完全不用动。`easeSeconds`是
+    `RouteMod`的字段(默认3秒，照抄公交的尺度)，不是硬编码常量——火车/飞机体型大、巡航
+    距离长，PIE实测反馈默认的3秒"加速度还是太大"，`TrainRoute`/`AirRoute`/`BusRoute`
+    各自在`SetProperty()`里按手感逐步调大，见`route_basic.cpp`里各自的注释(当前值不是
+    一次定的，PIE反馈觉得还大就继续往上调，没有"标准答案"，纯粹手感校准)。公交这类"每一站
+    都要停"(`dwell`恒为`true`)的线路，区段退化成单条leg，效果等价于那条leg自己两端各
+    缓动`ta`/`td`。
+    - **漏了一个单位换算，调了好几轮`easeSeconds`都没用，才发现**：`mod->easeSeconds`
+      是真实秒(`route_mod.h`/`route_mod.md`"easeSeconds的单位"一节有写)，但
+      `segTotalTime`/`segElapsed`这些全是游戏内秒(和`speed`/`dwellSeconds`同一套单位)，
+      `DriveVehicle`里一开始直接拿`kEaseSeconds = mod->easeSeconds`去跟这些游戏内秒的量
+      比大小/做减法，少乘了"1真实秒=120游戏内秒"(默认`timeFlowRatio=2.0`)这个换算系数——
+      相当于把"40真实秒"的缓动窗口当成"40游戏内秒"(≈1/3真实秒)在用，PIE/打包exe实测
+      "调大了`easeSeconds`数值，加速度看起来还是很猛"，反复调大数值(`3→15→30→40`)其实
+      都被这个漏乘的120系数吞掉了，不是真的需要更夸张的名义值。修复：
+      `kEaseSeconds = mod->easeSeconds * 120.f`，换算系数和既有的"默认`timeFlowRatio=2.0`"
+      假设一致，如果以后`timeFlowRatio`被剧情脚本改了要跟着重新校准(和`speed`/
+      `dwellSeconds`的既有校准方式一样，不是这次新引入的限制)。
 
 ## 依赖关系
 

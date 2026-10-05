@@ -35,6 +35,23 @@ void ATransitVehicleElement::Init(Vehicle* inVehicle)
 	vehicle = inVehicle;
 	if (!vehicle || !bodyMesh) return;
 
+	// transitMeshPath非空时优先加载真实静态网格——模型自己的尺寸就是对的，不再按
+	// sizeX/Y/Z缩放立方体。加载失败(mod的Plugin没挂载上/路径打错)时退化回立方体占位，
+	// 和留空时的默认行为一致，见vehicle_mod.h::transitMeshPath的说明。
+	const std::string& meshPath = vehicle->GetTransitMeshPath();
+	if (!meshPath.empty()) {
+		if (UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, UTF8_TO_TCHAR(meshPath.c_str()))) {
+			bodyMesh->SetStaticMesh(mesh);
+			float meshScale = vehicle->GetMeshScale();
+			bodyMesh->SetWorldScale3D(FVector(meshScale, meshScale, meshScale));
+			// 不能在这里直接SetRelativeRotation——bodyMesh是RootComponent，Tick()里
+			// SetActorLocationAndRotation直接设的就是RootComponent的世界旋转，这里设的
+			// 任何值都会被下一次Tick覆盖掉。缓存这个偏移，叠进Tick()每帧算的朝向里。
+			meshYawOffsetDegrees = vehicle->GetMeshYawOffsetDegrees();
+			return;
+		}
+	}
+
 	float sizeX, sizeY, sizeZ;
 	vehicle->GetSize(sizeX, sizeY, sizeZ);
 	bodyMesh->SetWorldScale3D(FVector(
@@ -61,8 +78,9 @@ void ATransitVehicleElement::Tick(float DeltaTime)
 	vehicle->GetTransform(x, y, z, yaw);
 	// Route::Update()直接用地图单位写transform(不像AVehicleElement::Tick那样反过来从UE坐标
 	// 换算回去)，这里要乘WORLD_SCALE换成UE单位，和ForeverTrafficFrameworkComponent.cpp里
-	// ComputeWorldPosition同一套换算约定。
+	// ComputeWorldPosition同一套换算约定。叠加meshYawOffsetDegrees修正模型自己的正前方
+	// 和行驶方向没对齐的问题，见Init()里的说明。
 	SetActorLocationAndRotation(
 		FVector(x * TRANSIT_WORLD_SCALE, y * TRANSIT_WORLD_SCALE, z * TRANSIT_WORLD_SCALE),
-		FRotator(0.f, yaw, 0.f));
+		FRotator(0.f, yaw + meshYawOffsetDegrees, 0.f));
 }

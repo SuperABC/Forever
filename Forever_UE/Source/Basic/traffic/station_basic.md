@@ -29,11 +29,13 @@
   `Basic/traffic/route_basic.cpp`的`LayoutDualTrackStationLoop`硬编码依赖(按下标
   `0/1/2/3`直接取，不是按名字查)，两边必须保持一致——改这边的顺序要连带检查那边。
   深度分两档(`0.65`/`0.85`)是为了让两条轨道/跑道在空间上分开，不会重叠在同一条线上。
-- **接口`z`抬高到`0.1`而不是贴地的`0`**——PIE实测反馈接口太低时调试连线和地面/楼体网格
-  糊在一起看不清楚；`AirStation`的跑道本身仍然贴地(`0.1`只是让调试线可见，不代表真实海拔)，
-  真正的"巡航高度"是`AirRoute::LayoutRoute`在生成地图边缘站点时额外叠加的
-  (`LayoutDualTrackStationLoop`的`overrideEdgeZ`/`edgeHeight`参数，只覆盖边缘点，不影响
-  跑道本身的接口)。
+- **接口`z`抬高到一个小量(`0.001`，1cm)而不是贴地的`0`**——PIE实测反馈接口太低时调试连线
+  和地面/楼体网格糊在一起看不清楚，只需要比地面高即可；`AirStation`的跑道本身仍然贴地
+  (这个小量只是让调试线可见，不代表真实海拔)，真正的"巡航高度"是`AirRoute::LayoutRoute`
+  在生成地图边缘站点时额外叠加的(`LayoutDualTrackStationLoop`的`overrideEdgeZ`/
+  `edgeHeight`参数，只覆盖边缘点，不影响跑道本身的接口)。这个`z`同时是车辆真正停靠在这个
+  接口时的实际高度——最初给的`0.1`(=1米)太大，PIE/打包exe实测飞机/火车停下来时明显飘在
+  半空中，改成`0.001`(1cm)解决。
 - **楼体footprint贴路、接口留在远离道路一侧**——`TrainStationBuilding`/`AirportBuilding`的
   `Layout()`(`Basic/map/building_basic.cpp`)用`NearRoadFootprint`把楼体压到靠近道路的一侧
   (深度0~0.37左右)，这两个`Layout()`的`depthRatio`(`0.65`/`0.85`)都在楼体深度范围之外，

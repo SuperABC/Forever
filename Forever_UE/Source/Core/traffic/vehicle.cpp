@@ -44,6 +44,14 @@ const string& Vehicle::GetBlueprintPath() const {
 	return mod ? mod->blueprintPath : empty;
 }
 
+const string& Vehicle::GetTransitMeshPath() const {
+	static const string empty;
+	return mod ? mod->transitMeshPath : empty;
+}
+
+float Vehicle::GetMeshScale() const { return mod ? mod->meshTransform.scale : 1.f; }
+float Vehicle::GetMeshYawOffsetDegrees() const { return mod ? mod->meshTransform.yawOffsetDegrees : 0.f; }
+
 float Vehicle::GetExitOffsetX() const { return mod ? mod->exitOffsetX : 0.f; }
 float Vehicle::GetExitOffsetY() const { return mod ? mod->exitOffsetY : 0.f; }
 float Vehicle::GetExitOffsetZ() const { return mod ? mod->exitOffsetZ : 0.f; }

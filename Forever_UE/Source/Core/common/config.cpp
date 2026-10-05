@@ -17,6 +17,8 @@ string Config::configDir = "";
 unordered_map<string, vector<string>> Config::dllPaths = {};
 unordered_map<string, vector<string>> Config::layoutPaths = {};
 unordered_map<string, vector<string>> Config::resourcePaths = {};
+unordered_map<string, vector<string>> Config::pluginPaths = {};
+unordered_map<string, vector<string>> Config::pakPaths = {};
 string Config::mainStoryScriptModName = "";
 unordered_map<string, vector<pair<string, string>>> Config::conceptMods = {};
 
@@ -34,6 +36,8 @@ void Config::ReadConfig(const string& path) {
 	dllPaths.clear();
 	layoutPaths.clear();
 	resourcePaths.clear();
+	pluginPaths.clear();
+	pakPaths.clear();
 	mainStoryScriptModName.clear();
 	conceptMods.clear();
 
@@ -43,7 +47,20 @@ void Config::ReadConfig(const string& path) {
 		// 决定要不要回退到硬编码默认目录,和UForeverKeyBindingSubsystem的容错风格一致。
 		return;
 	}
-	configDir = filesystem::path(path).parent_path().string();
+
+	// 必须用canonical()而不是直接取parent_path()——Windows对一条路径字符串里嵌入的".."是
+	// 纯文本/词法化解析(GetFullPathNameW那一套，不会真的打开每一级目录去看是不是reparse
+	// point)，不会"看穿"目录连接(junction)。打包产物里Resource/是用mklink /J连接指向开发树
+	// 真实位置的(见Forever_UE/pak.bat)，如果这里只取parent_path()，configDir会是一条还停留
+	// 在"连接点那一侧"的路径，后面dll_paths/resource_paths里"../../../Forever_Mod/..."这种
+	// 相对写法对着这条路径词法化展开，文本上只会在连接点所在的归档目录树内部兜圈子，永远
+	// 走不到连接指向的真实开发树里的Forever_Mod——用canonical()强制走一次真正打开目录、
+	// 跟随reparse point的OS级解析，把configDir变成连接目标那一侧的真实绝对路径，后续所有
+	// 相对路径的".."才会从正确的起点往上退。这一步只需要做一次，PIE/未打包的开发环境下
+	// Resource本来就是真目录，canonical()是无副作用的空操作。
+	error_code canonicalError;
+	filesystem::path canonicalPath = filesystem::canonical(filesystem::path(path), canonicalError);
+	configDir = (canonicalError ? filesystem::path(path) : canonicalPath).parent_path().string();
 
 	JsonReader reader;
 	JsonValue root;
@@ -209,18 +226,52 @@ void Config::AddResourcePath(const string& path) {
 	}
 
 	resourcePaths.erase(path);
+	pluginPaths.erase(path);
+	pakPaths.erase(path);
 
-	vector<string> found;
+	vector<string> scripts;
+	vector<string> plugins;
+	vector<string> paks;
 	for (const auto& entry : filesystem::recursive_directory_iterator(dir)) {
-		if (!CheckFileFormat(entry.path(), ".script"))
-			continue;
-		found.push_back(filesystem::absolute(entry.path()).string());
+		string full = filesystem::absolute(entry.path()).string();
+		if (CheckFileFormat(entry.path(), ".script")) {
+			scripts.push_back(full);
+		} else if (CheckFileFormat(entry.path(), ".uplugin")) {
+			// 独立迷你UE工程里的Plugin——WITH_EDITOR下直接挂载这个Plugin的Content目录，
+			// 不需要cook/pak，见config.md"打包功能迁移"一节。
+			plugins.push_back(full);
+		} else if (CheckFileFormat(entry.path(), ".pak")) {
+			// 同一个Plugin cook+UnrealPak出来的产物，非编辑器(打包)下MountPaksEx挂载。
+			paks.push_back(full);
+		}
 	}
-	resourcePaths[path] = found;
+	resourcePaths[path] = scripts;
+	pluginPaths[path] = plugins;
+	pakPaths[path] = paks;
 }
 
 bool Config::HasResourcePaths() {
 	return !resourcePaths.empty();
+}
+
+vector<string> Config::GetPlugins() {
+	vector<string> paths;
+	for (const auto& [_, plugins] : pluginPaths) {
+		for (const auto& plugin : plugins) {
+			paths.push_back(plugin);
+		}
+	}
+	return paths;
+}
+
+vector<string> Config::GetPakFiles() {
+	vector<string> paths;
+	for (const auto& [_, paks] : pakPaths) {
+		for (const auto& pak : paks) {
+			paths.push_back(pak);
+		}
+	}
+	return paths;
 }
 
 string Config::GetScriptPath(const string& name) {

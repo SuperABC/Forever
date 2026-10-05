@@ -137,9 +137,21 @@ void BusRoute::SetProperty() {
 	// 0.25真实秒——PIE实测反馈"所有载具的移动速度都太快了，停站的时间也太短了"就是这个换算
 	// 没做。这里按"车环一圈(公交站环线实测约120~180地图单位)大约跑20~30真实秒、停站约3真实秒"
 	// 校准：speed=0.05(=6地图单位/真实秒)，dwellSeconds=360(=3真实秒)。如果以后time_flow_ratio
-	// 被剧情脚本改了，这几个值的真实秒观感会跟着等比例变化，到时候要一起重新校准。
-	speed = 0.05f;
+	// 被剧情脚本改了，这几个值的真实秒观感会跟着等比例变化，到时候要一起重新校准。用户要求
+	// 所有公共交通速度减半，这里改成speed=0.025(=3地图单位/真实秒，跑一圈大约40~60真实秒)，
+	// dwellSeconds不受影响。
+	speed = 0.025f;
 	dwellSeconds = 360.f;
+
+	// easeSeconds默认3秒(RouteMod基类默认值)还是太突兀，PIE实测反馈三种公共交通的加速度
+	// 都要大幅减小——公交每一站都停(dwellAtDestination恒为true)，"行驶区段"退化成单条leg，
+	// 调大这个值时DriveVehicle()会自动把ta/td钳在"这条leg行驶时长的一半"，站间距短的leg
+	// 会自然变成全程加速+全程减速、没有真正匀速的中段，这正是"尽量缓"这个要求在站间距有限
+	// 时能做到的最大效果，不需要额外处理，直接给一个足够大的值即可。15秒PIE实测反馈还要
+	// 继续减小，调到20(注意DriveVehicle()里这个字段真实秒->游戏内秒的换算系数之前漏乘了，
+	// 之前几轮调大基本没生效，见route.md"DriveVehicle的缓动"一节，这次换算修好之后20秒
+	// 的效果会比之前任何数值都明显更缓)。
+	easeSeconds = 20.f;
 }
 
 void BusRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) {
@@ -228,9 +240,17 @@ void TrainRoute::SetProperty() {
 	// 单位换算见BusRoute::SetProperty()的注释——同样的timeFlowRatio=2.0默认值下1真实秒=
 	// 120游戏内秒。火车的环线大部分长度是两段"车站到地图边缘"的长途
 	// (LayoutDualTrackStationLoop，实测约2000地图单位)，按"跑一圈大约85真实秒、进站停约
-	// 5真实秒"校准：speed=0.2(=24地图单位/真实秒)，dwellSeconds=600(=5真实秒)。
-	speed = 0.2f;
+	// 5真实秒"校准：speed=0.2(=24地图单位/真实秒)，dwellSeconds=600(=5真实秒)。用户要求
+	// 所有公共交通速度减半，这里改成speed=0.1(=12地图单位/真实秒，跑一圈大约170真实秒)，
+	// dwellSeconds不受影响。
+	speed = 0.1f;
 	dwellSeconds = 600.f;
+
+	// 火车体型大，启动/刹车要更缓一点才符合实际手感——10秒/30秒PIE实测反馈"加速度还是
+	// 太大"，调到40(DriveVehicle()里这个字段真实秒->游戏内秒的换算系数之前漏乘了，之前
+	// 几轮调大基本没生效，见route.md"DriveVehicle的缓动"一节，这次换算修好之后效果会比
+	// 之前任何数值都明显更缓)。
+	easeSeconds = 40.f;
 }
 
 void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) {
@@ -255,9 +275,17 @@ void AirRoute::SetProperty() {
 
 	// 单位换算见BusRoute::SetProperty()的注释。飞机比火车快，环线也略长(实测约2050地图
 	// 单位)，按"跑一圈大约50真实秒、停约6真实秒(登机/下客)"校准：speed=0.35(=42地图单位/
-	// 真实秒)，dwellSeconds=720(=6真实秒)。
-	speed = 0.35f;
+	// 真实秒)，dwellSeconds=720(=6真实秒)。用户要求所有公共交通速度减半，这里改成
+	// speed=0.175(=21地图单位/真实秒，跑一圈大约100真实秒)，dwellSeconds不受影响。
+	speed = 0.175f;
 	dwellSeconds = 720.f;
+
+	// 飞机比火车更大更重，启动/刹车要比火车还缓一点——15秒/40秒PIE实测反馈还是太突兀，
+	// 调到50(DriveVehicle()里这个字段真实秒->游戏内秒的换算系数之前漏乘了，之前几轮调大
+	// 基本没生效，见route.md"DriveVehicle的缓动"一节，这次换算修好之后效果会比之前任何
+	// 数值都明显更缓；区段总时长大约是半圈减去停靠，DriveVehicle()会自动把ta/td钳在区段
+	// 总时长一半以内，不会出现负的匀速段)。
+	easeSeconds = 50.f;
 }
 
 void AirRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) {

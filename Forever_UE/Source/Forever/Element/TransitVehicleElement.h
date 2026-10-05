@@ -36,4 +36,10 @@ protected:
 
 private:
 	Vehicle* vehicle = nullptr;
+
+	// 缓存vehicle->GetMeshYawOffsetDegrees()——bodyMesh是这个Actor的RootComponent，
+	// Tick()里SetActorLocationAndRotation直接设的是RootComponent的世界旋转，Init()
+	// 时单独对bodyMesh调SetRelativeRotation不会有任何效果(马上被下一次Tick覆盖)，这个
+	// 偏移必须叠进Tick()每帧算的朝向里，见.cpp Tick()的说明。
+	float meshYawOffsetDegrees = 0.f;
 };

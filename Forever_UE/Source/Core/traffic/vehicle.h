@@ -35,6 +35,9 @@ public:
 	const std::string& GetName() const;
 	std::string GetType() const; // mod->GetType()，mod为空返回空字符串
 	const std::string& GetBlueprintPath() const; // mod->blueprintPath，mod为空返回空字符串
+	const std::string& GetTransitMeshPath() const; // mod->transitMeshPath，mod为空返回空字符串
+	float GetMeshScale() const; // mod->meshTransform.scale，mod为空返回1.f
+	float GetMeshYawOffsetDegrees() const; // mod->meshTransform.yawOffsetDegrees，mod为空返回0.f
 	float GetExitOffsetX() const;
 	float GetExitOffsetY() const;
 	float GetExitOffsetZ() const;

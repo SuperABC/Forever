@@ -74,9 +74,32 @@ public:
 	bool boardable = false;
 	int capacity = 0;
 
-	// 立方体占位尺寸(UE单位)——blueprintPath为空时，ATransitVehicleElement按这个缩放
+	// 立方体占位尺寸(UE单位)——transitMeshPath为空时，ATransitVehicleElement按这个缩放
 	// /Engine/BasicShapes/Cube做外观，见Element/TransitVehicleElement.md。
 	float sizeX = 100.f;
 	float sizeY = 100.f;
 	float sizeZ = 100.f;
+
+	// ATransitVehicleElement(公交/火车/飞机这类"立方体占位"载具)专用的真实静态网格包路径，
+	// 不是给VehicleBasic(小汽车，走blueprintPath+完整骨骼网格那条路)用的——两个字段服务两种
+	// 完全不同的外观机制，不要混用。非空时ATransitVehicleElement::Init()直接LoadObject这个
+	// 路径当外观，不再按sizeX/Y/Z缩放立方体(模型自己的尺寸就是对的)；留空(Bus/Train目前都是
+	// 空)继续走立方体占位，见public_transport_plan.md"载具外观：立方体"一节和
+	// PACKAGING_PLAN"阶段E"。资产来自一个独立mod(Forever_Mod/<ModName>/UE/<ModName>/
+	// Plugins/<ModName>/Content/...)的Plugin，运行时由ForeverModSubsystem挂载成
+	// "/<ModName>/..."包路径，见config.md"GetPlugins/GetPakFiles"一节。
+	std::string transitMeshPath;
+
+	// transitMeshPath指向的真实静态网格资产未必按UE"X轴朝前"的约定制作，也未必正好是
+	// sizeX/Y/Z这个占位尺寸——这组字段专门修正transitMeshPath这条路径加载出来的mesh本身
+	// 的显示效果(缩放+朝向修正)，只在transitMeshPath非空时使用，不影响立方体占位那条路径
+	// (sizeX/Y/Z只在立方体占位时使用)。ATransitVehicleElement::Tick()每帧仍然按行驶方向
+	// 设Actor自身的朝向(来自Route::Update()算好的yaw)，yawOffsetDegrees是叠加在模型本身
+	// (bodyMesh的局部旋转)上的一次性修正，解决"模型自己的正前方"和"Actor正前方(行驶方向)"
+	// 没对齐的问题——两者各管一段，不会互相覆盖。
+	struct VehicleMeshTransform {
+		float scale = 1.f;            // 统一缩放系数(相对模型原始大小，1=不缩放)
+		float yawOffsetDegrees = 0.f; // 模型正前方相对行驶方向的夹角修正，角度制
+	};
+	VehicleMeshTransform meshTransform;
 };
