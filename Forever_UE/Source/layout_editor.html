@@ -1732,6 +1732,20 @@ function makeOpeningList(item, fieldName, label) {
       hdr.appendChild(makeSelect(DIR_LABELS.map((l, i) => [i, l]), entry.direction, v => {
         entry.direction = parseInt(v);
       }));
+      // 标签(tag)只对门(doors)有意义——没有标签的门洞不可选中放门，永远只是个洞，见
+      // door_system_plan.md。窗(windows)没有这个概念，不显示这个输入框。留空时不要写
+      // entry.tag字段(保持和旧格式兼容)，serializeOpenings那边只在entry.tag非空时才输出。
+      if (fieldName === 'doors') {
+        hdr.appendChild(lbl('标签'));
+        const tagInput = Object.assign(document.createElement('input'), {
+          type: 'text', value: entry.tag || '', placeholder: '留空=纯门洞'
+        });
+        tagInput.addEventListener('change', () => {
+          const v = tagInput.value.trim();
+          if (v) entry.tag = v; else delete entry.tag;
+        });
+        hdr.appendChild(tagInput);
+      }
       hdr.appendChild(btn('x', 'sm danger', () => { snapshot(); openingList.splice(entryIdx, 1); rebuild(); }));
       entrySub.appendChild(hdr);
 
@@ -2176,6 +2190,9 @@ function serializeOpenings(openingList, fieldName, indent) {
   openingList.forEach(entry => {
     s += `${indent}\t{\n`;
     s += `${indent}\t\t"direction": ${entry.direction},\n`;
+    // entry.tag只对门(doors)有意义，且只在非空时才写出——没有这个字段=没有标签=纯门洞，
+    // 和旧格式(没有tag字段)保持兼容。见上面makeOpeningList的编辑UI。
+    if (entry.tag) s += `${indent}\t\t"tag": ${JSON.stringify(entry.tag)},\n`;
     if (entry.positions && entry.positions.length > 0) {
       s += `${indent}\t\t"positions": [\n`;
       entry.positions.forEach(pos => { s += `${indent}\t\t\t${fmt8(pos)},\n`; });

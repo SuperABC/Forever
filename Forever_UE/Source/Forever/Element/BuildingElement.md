@@ -99,10 +99,23 @@ owner，被物理引擎的碰撞体焊接开销拖累）。这次直接把这部
 只用一个`FString`）的字符串——两组回调都绝不在回调里解引用`building`/`Room*`，关卡卸载
 顺序不保证Core对象还活着，回调最坏情况只是打印一条字符串，不会有悬垂指针风险。
 
+### 门
+
+`nearDoorsByFloor`和`nearComponentsByFloor`同样按`floorIndex`分组，`BuildFloorSection`
+在画完这一层所有room的墙体之后，按`building->GetDoorEntities()`(建筑门，筛
+`GetLevel()==level`)+这一层每个room的`GetDoorEntities()`(房间门)各生成一个
+`UForeverDoorComponent`(`NewObject`+`SetupAttachment(elementRoot)`+`RegisterComponent`+
+`Init(door)`+`AddInstanceComponent`，和`SpawnCube`/`SpawnMesh`同一套"动态创建近景组件"
+模式)。`ClearNearSections()`对称清理(`ClearDoor()`+`RemoveInstanceComponent`+
+`DestroyComponent`)。门洞本身不受影响——`BuildWallsForElement`挖洞逻辑不知道、也不需要
+知道这个洞有没有真正的门扇，见`Source/Core/map/door.md`/`Source/Forever/Element/
+DoorComponent.md`。
+
 ## 依赖关系
 
 - 依赖：`Source/Forever/Framework/ForeverBuildingFrameworkComponent.h`（`framework`弱引用
-  回调）、`map/map.h`/`map/building.h`/`map/room.h`/`map/geometry.h`（Core侧数据）、
+  回调）、`map/map.h`/`map/building.h`/`map/room.h`/`map/door.h`/`map/geometry.h`
+  （Core侧数据）、`Source/Forever/Element/DoorComponent.h`（门）、
   `ProceduralMeshComponent`（远处LOD）、`Components/StaticMeshComponent.h`（近处每段一个
   组件）、`Components/BoxComponent.h`（碰撞盒）、`UMaterialInstanceDynamic`、
   `Kismet/GameplayStatics.h`、`Engine/Engine.h`（`GEngine->AddOnScreenDebugMessage`）、

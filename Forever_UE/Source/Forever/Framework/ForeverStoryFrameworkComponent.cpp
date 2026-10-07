@@ -28,6 +28,8 @@
 #include "populace/citizen.h"
 #include "populace/scheduler.h"
 #include "traffic/traffic.h"
+#include "map/door.h"
+#include "map/map.h"
 #include "common/implement.h"
 
 using namespace std;
@@ -132,6 +134,15 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 			if (vehicle) broadcastOne(vehicle->GetScript());
 		}
 	}
+
+	// 门系统落地新增：只有spec.name非空的门才会有Script(见Core/map/door.md)，和Vehicle
+	// 同一个模式——遍历map->GetAllDoors()，过滤掉GetScript()==nullptr的纯自动门。
+	Map* map = framework ? framework->GetMap() : nullptr;
+	if (map) {
+		for (Door* door : map->GetAllDoors()) {
+			if (door && door->GetScript()) broadcastOne(door->GetScript());
+		}
+	}
 }
 
 void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FString& option) {
@@ -175,6 +186,14 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	Vehicle* targetVehicle = traffic ? traffic->FindVehicleByName(nameUtf8) : nullptr;
 	if (targetVehicle && targetVehicle->GetScript()) {
 		matchOne(targetVehicle->GetScript());
+	}
+
+	// 门系统落地新增：name也可能是一扇门的交互名(见door_shop_entrance.script的"敲门"选项)，
+	// 同样额外匹配，和市民/车辆分支并列。
+	Map* map = framework ? framework->GetMap() : nullptr;
+	Door* targetDoor = map ? map->FindDoorByName(nameUtf8) : nullptr;
+	if (targetDoor && targetDoor->GetScript()) {
+		matchOne(targetDoor->GetScript());
 	}
 }
 

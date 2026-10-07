@@ -21,8 +21,10 @@ class UMaterialInstanceDynamic;
 class Building;
 class Floor;
 class Room;
+class Door;
 struct FHitResult;
 class UForeverBuildingFrameworkComponent;
+class UForeverDoorComponent;
 
 // 每栋building一个独立Actor，替代之前"全地图所有building共用UForeverBuildingFrameworkComponent
 // 单例owner"的做法——后者会让物理引擎对同一个Actor根组件下的大量Static简单碰撞子组件做焊接，
@@ -157,6 +159,11 @@ private:
 	// 近处这栋building当前占用的所有独立组件(墙体分段/地板/天花板slab/楼梯/坡道/窗户网格)，
 	// 按floorIndex分组，方便ClearNearSections只清空单层或整栋。
 	TArray<TArray<TObjectPtr<UStaticMeshComponent>>> nearComponentsByFloor;
+	// 门(建筑门+这一层所有room的房间门)，近处LOD专属，和nearComponentsByFloor同样按
+	// floorIndex分组、ClearNearSections一并清理。门洞本身由上面的墙体生成逻辑照常挖出，
+	// 跟有没有门扇无关；这里只负责"查到了DoorSpec、真的要放门扇"的那些Door，见
+	// BuildFloorSection()/door_system_plan.md。
+	TArray<TArray<TObjectPtr<UForeverDoorComponent>>> nearDoorsByFloor;
 	// 电梯轿厢，近处LOD专属，DeleteAllNearMeshes时一并清空。
 	TArray<FCabin> cabins;
 	TQueue<FLodOp> lodOpQueue;

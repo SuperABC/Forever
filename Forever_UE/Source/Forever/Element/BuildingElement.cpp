@@ -1,5 +1,6 @@
 #include "Element/BuildingElement.h"
 
+#include "Element/DoorComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
 
@@ -15,6 +16,7 @@
 
 #include "map/map.h"
 #include "map/building.h"
+#include "map/door.h"
 #include "map/room.h"
 #include "map/geometry.h"
 #include "player/player.h"
@@ -231,6 +233,7 @@ void ABuildingElement::Init(Building* inBuilding, UForeverBuildingFrameworkCompo
 
 	nearFloorCount = building->GetBasementCount() + building->GetLayerCount();
 	nearComponentsByFloor.SetNum(nearFloorCount);
+	nearDoorsByFloor.SetNum(nearFloorCount);
 
 	farMesh = NewObject<UProceduralMeshComponent>(this, TEXT("FarMesh"));
 	farMesh->SetupAttachment(elementRoot);
@@ -672,6 +675,29 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 			room->GetDoors(), room->GetWindows(), wallMaterial, floorIndex);
 	}
 
+	// 门：建筑门(corridor，挂在Building自己身上)+这一层每个room的房间门——门洞本身已经由
+	// 上面的BuildWallsForElement挖出，这里只管"查到了DoorSpec、真的要放门扇"的那些Door，
+	// 按GetLevel()==level筛选出这一层的，见door_system_plan.md。
+	auto& doorSlot = nearDoorsByFloor[floorIndex];
+	auto spawnDoorComponent = [&](Door* door) {
+		if (!door) return;
+		UForeverDoorComponent* comp = NewObject<UForeverDoorComponent>(this, NAME_None, RF_Transient);
+		comp->SetupAttachment(elementRoot);
+		comp->RegisterComponent();
+		comp->Init(door);
+		AddInstanceComponent(comp);
+		doorSlot.Add(comp);
+		};
+	for (Door* door : building->GetDoorEntities()) {
+		if (door && door->GetLevel() == level) spawnDoorComponent(door);
+	}
+	for (Room* room : building->GetRooms()) {
+		if (!room || room->GetLayer() != level) continue;
+		for (Door* door : room->GetDoorEntities()) {
+			spawnDoorComponent(door);
+		}
+	}
+
 	// 地板/天花板：老工程两层独立薄slab的做法——地板贴地坪往上一点点，天花板贴楼层顶往下
 	// 一点点，中间留一条很窄的缝，避免和上/下相邻楼层的对应slab共面z-fighting。
 	constexpr float kSlabThickness = 0.02f; // 地图单位，照抄老工程Ceiling/Ground的0.02f厚度
@@ -763,6 +789,15 @@ void ABuildingElement::ClearNearSections() {
 			comp->DestroyComponent();
 		}
 		floorComponents.Empty();
+	}
+	for (TArray<TObjectPtr<UForeverDoorComponent>>& floorDoors : nearDoorsByFloor) {
+		for (UForeverDoorComponent* doorComp : floorDoors) {
+			if (!doorComp) continue;
+			doorComp->ClearDoor();
+			RemoveInstanceComponent(doorComp);
+			doorComp->DestroyComponent();
+		}
+		floorDoors.Empty();
 	}
 	for (FCabin& cabin : cabins) {
 		if (!cabin.comp) continue;

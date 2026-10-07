@@ -87,9 +87,21 @@
   园区属于某人或公有，那么这个园区里的所有房间/建筑都属于这个人或公有"，详见
   `Source/Core/populace/populace.md`"房产归属"一节。
 
+### 园区大门
+
+`ZoneGateSpec`新增`DoorSpec door`字段（见`Dependence/map/zone_mod.h`），`mesh`为空=只是
+围墙让出的空当，不放门。`Zone`新增`doorEntities`+`BuildDoors(Map&)`：遍历`mod->gates`，
+`gate.door.mesh`非空就按和`ForeverZoneFrameworkComponent::BuildWallSegment`同一套
+"参考边+margin+depth+depthInward"公式算出世界坐标(Core端复刻，算地图单位不是UE单位)，
+调`map.CreateDoor(DOOR_KIND_ZONE, ...)`。`IsVehicleGate`按这段范围是否和
+`mod->vehicleEntries`/`vehicleExits`里任意一个出入口点重叠判定(按局部坐标离哪条边最近
+归属，和`Map::ConnectZoneAccessPoint`同一个思路)。由`Map::InitZones()`在
+`zone->Layout(direction)`之后调用一次，详见`door.md`。
+
 ## 依赖关系
 
 - 依赖：`map/zone_mod.h`、`map/zone_factory.h`、`map/geometry.h`（`Quad`/`Lot`）、
+  `map/door.h`（`BuildDoors`调`Map::CreateDoor`）、
   `building.h`（`vector<Building*> internalBuildings`需要完整类型，只存指针可以只前向声明，
   但`.cpp`里`Building*`没有调用任何方法所以`zone.cpp`本身不需要include `building.h`，
   头文件里`class Building;`前向声明即可）。

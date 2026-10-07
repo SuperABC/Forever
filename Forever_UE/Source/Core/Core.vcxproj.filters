@@ -111,6 +111,9 @@
     <ClCompile Include="map\map.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\door.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="populace\citizen.cpp">
       <Filter>populace</Filter>
     </ClCompile>
@@ -225,6 +228,9 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\map.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\door.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="populace\citizen.h">

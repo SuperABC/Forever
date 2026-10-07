@@ -103,7 +103,7 @@
 			"direction": 1,
 			"doors": [
 				{
-					"direction": 1,
+					"direction": 1, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -133,7 +133,7 @@
 			"direction": 0,
 			"doors": [
 				{
-					"direction": 0,
+					"direction": 0, "tag": "room",
 					"positions": [
 						[
 							0.5,

@@ -97,6 +97,14 @@ public:
 	bool GetStated() const;
 	void SetStated(bool value);
 
+	// 园区大门：遍历mod->gates，gate.door.mesh非空才创建——和建筑门/房间门同一个"mesh为空
+	// 就是空当"约定(见door_spec.h)，但园区门没有layout标签，不用ResolveDoorSpec。几何
+	// 换算用和ForeverZoneFrameworkComponent::BuildWallSegment同一套"参考边+margin+
+	// depth+depthInward"公式，只是这次是Core端复刻(算地图单位的世界坐标，不是UE单位)，
+	// 见zone.cpp。由Map::InitZones()在zone->Layout(direction)之后调用一次。
+	void BuildDoors(Map& map);
+	const std::vector<Door*>& GetDoorEntities() const;
+
 private:
 	ZoneMod* mod;
 	ZoneFactory* factory;
@@ -109,4 +117,7 @@ private:
 
 	Citizen* owner = nullptr;
 	bool stated = false;
+
+	// 真正放了门扇的园区大门——只在BuildDoors()非空填入，析构时释放。
+	std::vector<Door*> doorEntities;
 };

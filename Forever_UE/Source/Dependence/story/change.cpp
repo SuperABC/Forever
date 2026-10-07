@@ -747,6 +747,76 @@ const std::string& LeaveVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
+SetDoorAccessChange::SetDoorAccessChange() :
+	name(), access() {
+
+}
+
+SetDoorAccessChange::SetDoorAccessChange(std::string name, std::string access) :
+	name(move(name)), access(move(access)) {
+
+}
+
+SetDoorAccessChange::~SetDoorAccessChange() {
+
+}
+
+const string& SetDoorAccessChange::GetType() const {
+	static const string type = "set_door_access";
+	return type;
+}
+
+void SetDoorAccessChange::SetName(std::string name) {
+	this->name = move(name);
+}
+
+const std::string& SetDoorAccessChange::GetName() const {
+	return name;
+}
+
+void SetDoorAccessChange::SetAccess(std::string access) {
+	this->access = move(access);
+}
+
+const std::string& SetDoorAccessChange::GetAccess() const {
+	return access;
+}
+
+AllowDoorChange::AllowDoorChange() :
+	name(), citizen() {
+
+}
+
+AllowDoorChange::AllowDoorChange(std::string name, std::string citizen) :
+	name(move(name)), citizen(move(citizen)) {
+
+}
+
+AllowDoorChange::~AllowDoorChange() {
+
+}
+
+const string& AllowDoorChange::GetType() const {
+	static const string type = "allow_door";
+	return type;
+}
+
+void AllowDoorChange::SetName(std::string name) {
+	this->name = move(name);
+}
+
+const std::string& AllowDoorChange::GetName() const {
+	return name;
+}
+
+void AllowDoorChange::SetCitizen(std::string citizen) {
+	this->citizen = move(citizen);
+}
+
+const std::string& AllowDoorChange::GetCitizen() const {
+	return citizen;
+}
+
 CreateTimerChange::CreateTimerChange() :
 	name(), time(), category(), label() {
 

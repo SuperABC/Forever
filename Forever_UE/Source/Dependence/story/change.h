@@ -1216,6 +1216,116 @@ private:
 
 };
 
+// 设置门禁
+class SetDoorAccessChange : public Change {
+public:
+	/*
+	* 默认构造设置门禁变化
+	*/
+	SetDoorAccessChange();
+
+	/*
+	* 构造设置门禁变化
+	* @name, access: 门的交互名与目标门禁("open"/"owner"/"locked")
+	*/
+	SetDoorAccessChange(std::string name, std::string access);
+
+	/*
+	* 析构设置门禁变化
+	*/
+	virtual ~SetDoorAccessChange();
+
+	/*
+	* 变化类型
+	*/
+	virtual const std::string& GetType() const override;
+
+	/*
+	* 设置目标名称
+	* @name: 名称
+	*/
+	void SetName(std::string name);
+
+	/*
+	* 获取目标名称
+	*/
+	const std::string& GetName() const;
+
+	/*
+	* 设置目标门禁
+	* @access: 门禁("open"/"owner"/"locked")
+	*/
+	void SetAccess(std::string access);
+
+	/*
+	* 获取目标门禁
+	*/
+	const std::string& GetAccess() const;
+
+private:
+	// 目标名称
+	std::string name;
+
+	// 目标门禁
+	std::string access;
+
+};
+
+// 允许市民通过门禁
+class AllowDoorChange : public Change {
+public:
+	/*
+	* 默认构造允许通过门禁变化
+	*/
+	AllowDoorChange();
+
+	/*
+	* 构造允许通过门禁变化
+	* @name, citizen: 门的交互名与被允许通过的市民名称
+	*/
+	AllowDoorChange(std::string name, std::string citizen);
+
+	/*
+	* 析构允许通过门禁变化
+	*/
+	virtual ~AllowDoorChange();
+
+	/*
+	* 变化类型
+	*/
+	virtual const std::string& GetType() const override;
+
+	/*
+	* 设置目标名称
+	* @name: 名称
+	*/
+	void SetName(std::string name);
+
+	/*
+	* 获取目标名称
+	*/
+	const std::string& GetName() const;
+
+	/*
+	* 设置市民名称
+	* @citizen: 名称
+	*/
+	void SetCitizen(std::string citizen);
+
+	/*
+	* 获取市民名称
+	*/
+	const std::string& GetCitizen() const;
+
+private:
+	// 目标名称
+	std::string name;
+
+	// 市民名称
+	std::string citizen;
+
+};
+
 // 创建计时器
 class CreateTimerChange : public Change {
 public:

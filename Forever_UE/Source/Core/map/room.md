@@ -75,6 +75,16 @@
     分配，没有"搬家"/"离开房间"的逻辑），照抄老工程`Room::AddTenant/RemoveTenant`同款
     的add/remove配对先加上，等真正的移动/搬家逻辑接入时就有地方用了。
 
+### 房间门
+
+`SetDoors`从单参数改成两参数(`WallHole doors, DoorTags tags = {}`)——`DoorTags`和门洞的
+layout标签一一对应，从`Single`/`Row`的`GetDoors()`/`GetDoorTags()`原样转发过来，见
+`building.md`"建筑门"一节`Building::AssignRoom`/`ArrangeRow`的调用处。新增`doorEntities`+
+`AddDoorEntity`/`GetDoorEntities`——真正放了门扇的房间门由`Building::BuildDoors()`遍历
+这个room的门洞、用`mod->doorSpecs`做`ResolveDoorSpec`、调`map.CreateDoor(DOOR_KIND_ROOM,
+...)`创建后登记进这里，`Room`持有生命周期(析构时释放)，不是`Building`持有(尽管是
+`Building::BuildDoors`在调用`AddDoorEntity`，所有权仍然转交给了room)。
+
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/room_mod.h`（`RoomMod`）、`room_factory.h`、

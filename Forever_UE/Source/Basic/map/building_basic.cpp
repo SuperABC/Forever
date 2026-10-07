@@ -81,6 +81,14 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
+	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
+	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// spec，见Core/map/door.h的ResolveDoorSpec。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
+
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
 
@@ -306,6 +314,16 @@ void ShopBuilding::Layout(int& direction, const Quad& quad,
 	if (roadIt != boundaryRoads.end() && roadIt->second) {
 		direction = preferredDirection;
 	}
+
+	// 商店大门：随机左右滑动的单开门，有名字可以交互("敲门")，照抄vehicle_basic.script的
+	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].name = "商店大门";
+	doorSpecs["entrance"].scriptModName = "empty";
+	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
 
 	constexpr const char* kComponent = "component_shop";
 	constexpr int kComponentId = 0;

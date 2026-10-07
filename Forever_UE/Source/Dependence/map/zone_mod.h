@@ -1,5 +1,6 @@
 #pragma once
 
+#include "map/door_spec.h"
 #include "map/geometry.h"
 
 #include <string>
@@ -22,14 +23,16 @@ struct ZoneWallSpec {
 	float unit = 0.f;
 };
 
-// 大门：只记录位置/朝向数据(围墙据此让出这段空当)，目前没有大门资产，不带mesh字段，也不
-// 生成任何渲染——字段和ZoneWallSpec的位置部分同构，以后有资产了直接加mesh字段即可。
+// 大门：位置/朝向数据(围墙据此让出这段空当)+这次新增的door字段——门扇外观/开关方式，
+// door.mesh为空=只是空当，不放门，和建筑门/房间门同一个"mesh为空就是洞"的约定，见
+// door_spec.h。
 struct ZoneGateSpec {
 	int direction = FACE_WEST;
 	float marginStart = 0.f;
 	float marginEnd = 0.f;
 	float depth = 0.f;
 	bool depthInward = true;
+	DoorSpec door;
 };
 
 // 出入口：局部坐标，原点在Zone矩形中心(和Lot局部坐标系原点在WEST-NORTH角不同，这是专属于

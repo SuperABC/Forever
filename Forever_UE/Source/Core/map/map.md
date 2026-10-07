@@ -613,6 +613,22 @@ room数据必须先落地）之后，`EnsurePopulaceGenerated()`里依次
   ForeverPopulaceFrameworkComponent.h/.cpp`（`GenerateCitizens(Map*, Populace*)`缓存
   `populace->GetCitizens()`列表）。
 
+## 门系统（园区大门/建筑门/房间门，第N+3轮迁移）
+
+`Map`新增`CreateDoor`/`FindDoorByName`/`GetAllDoors`+三份索引
+（`doorsById`/`doorsByInteractName`/`allDoors`，都是非owning——门的生命周期归创建它的
+`Zone`/`Building`/`Room`各自的`doorEntities`管）+两个计数器
+（`doorCount`全局id计数、`doorNameSequence`按"所属对象名+门类别标签"分组的交互名编号
+计数）。新增`ScriptFactory& scriptFactory`引用成员（`CreateDoor`创建门的Script要用，和
+`terrainFactory`等其余Factory同一个"构造函数初始化列表绑定、声明顺序必须跟初始化列表
+顺序一致"的约定）。`InitZones()`在`zone->Layout(direction)`之后、`InitBuildings()`三段
+落地循环各自在`building->Layout(...)`之后都补了一行`BuildDoors(*this)`调用。
+`ApplyChange()`从空占位变成这次真正的第一批内容——处理`SetDoorAccessChange`/
+`AllowDoorChange`（新增）+`AddOptionChange`/`RemoveOptionChange`（本来就存在，但此前
+没有任何域处理门，这次照`Traffic::ApplyChange`处理`Vehicle`的同一个模式接上），全部按
+交互名在`doorsByInteractName`里找门。完整设计（`DoorSpec`/`Door`/`ResolveDoorSpec`/
+三类门各自的几何换算）见`Source/Core/map/door.md`。
+
 ## 待办/后续阶段
 
 - 阶段4：Block/Component/Room迁移时在这个类上继续扩展，具体怎么扩展（加字段还是拆分成多个

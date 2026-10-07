@@ -85,6 +85,7 @@
     <ClCompile Include="common\utility.cpp" />
     <ClCompile Include="common\handle.cpp" />
     <ClCompile Include="map\geometry.cpp" />
+    <ClCompile Include="map\door_spec.cpp" />
     <ClCompile Include="map\roadnet_mod.cpp" />
     <ClCompile Include="map\building_mod.cpp" />
     <ClCompile Include="story\expression.cpp" />
@@ -138,6 +139,7 @@
     <ClInclude Include="common\utility.h" />
     <ClInclude Include="common\handle.h" />
     <ClInclude Include="map\geometry.h" />
+    <ClInclude Include="map\door_spec.h" />
     <ClInclude Include="story\expression.h" />
     <ClInclude Include="story\change.h" />
     <ClInclude Include="story\event.h" />

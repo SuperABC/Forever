@@ -1,5 +1,6 @@
 #pragma once
 
+#include "map/door_spec.h"
 #include "map/geometry.h"
 
 #include <string>
@@ -163,4 +164,9 @@ public:
 		BuildingComponentKeyHash> rows;
 	// AssignElevatorCabin记录的电梯轿厢列表。
 	std::vector<ElevatorCabinSpec> cabins;
+
+	// 建筑门——负责所有非single/row元素(目前只有corridor)上的门，tag->DoorSpec，在
+	// Layout()里填写。只有layout里对应方向的门洞带了这个tag才会查到这份spec，没有标签的
+	// 门洞永远不可选中，查不到tag或者查到了mesh为空同样只是个洞，见door_spec.h/door.h。
+	std::unordered_map<std::string, DoorSpec> doorSpecs;
 };

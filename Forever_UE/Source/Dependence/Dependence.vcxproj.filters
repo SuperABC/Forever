@@ -42,6 +42,9 @@
     <ClCompile Include="map\geometry.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\door_spec.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\roadnet_mod.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -195,6 +198,9 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="map\geometry.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\door_spec.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="story\expression.h">

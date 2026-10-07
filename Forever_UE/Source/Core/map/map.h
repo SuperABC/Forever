@@ -12,6 +12,7 @@
 #include "map/roadnet.h"
 #include "map/zone.h"
 #include "map/building.h"
+#include "map/door.h"
 
 #include "common/handle.h"
 
@@ -162,6 +163,27 @@ public:
 	// "一人一间随机分配"，见Source/Core/populace/populace.md。
 	void Checkin(const Populace& populace);
 
+	// 创建一扇真正放了门扇的门(DoorSpec.mesh非空才会被调用方调用，见door.h的
+	// ResolveDoorSpec)——分配全局唯一id、按"所属对象+spec.name"分组计数生成交互名、
+	// 按spec.randomSide掷一次硬币决定单扇门的朝向、创建Script(spec.name非空时)、登记进
+	// doorsById/doorsByInteractName/allDoors三份索引。zone/building/room三者按kind只
+	// 传一个非空(另外两个传nullptr)。x/y/z/width/height/yaw/level/isVehicleGate由调用方
+	// (Zone::BuildDoors/Building::BuildDoors)按各自的几何公式算好传入，这里不做任何
+	// 几何计算。tag为空(园区门没有layout标签)时不影响交互名生成，只是记在Door自己身上
+	// 供查询用。
+	Door* CreateDoor(DOOR_KIND_TYPE kind, Zone* zone, Building* building, Room* room,
+		const std::string& tag, const DoorSpec& spec,
+		float x, float y, float z, float width, float height, float yaw, int level, bool isVehicleGate);
+
+	// 按交互名查门——只有spec.name非空的门才有交互名，找不到返回nullptr。供
+	// Map::ApplyChange/UForeverStoryFrameworkComponent::BroadcastGameStart/OptionDialog
+	// 使用，和FindVehicleByName同一个用法。
+	Door* FindDoorByName(const std::string& interactName) const;
+
+	// 所有真正放了门扇的门——不分三类，供UForeverStoryFrameworkComponent::
+	// BroadcastGameStart遍历+过滤GetScript()!=nullptr。
+	const std::vector<Door*>& GetAllDoors() const;
+
 	const std::unordered_map<std::string, Zone*>& GetZones() const;
 	const std::unordered_map<std::string, Building*>& GetBuildings() const;
 
@@ -241,10 +263,14 @@ public:
 	// 形状一致，等Map域真的长出需要每帧跑的东西时再补内容，见map.md。
 	void Tick(const Time& currentTime, bool crossedDay, PostHandle* post);
 
-	// 阶段占位：目前没有任何Change子类是Map域自己认识、需要处理的，空实现——
-	// AForeverFrameworkActor::ApplyChange会把同一个Change转发给全部六个域，这里不打"未实现"
-	// 警告（避免同一个Change被六个域各打一遍重复警告），唯一的兜底警告在Story::ApplyChange，
-	// 见Story.md。
+	// 处理门相关的四种Change：SetDoorAccessChange/AllowDoorChange(这次新增)+
+	// AddOptionChange/RemoveOptionChange(这两种本来就存在，但此前没有任何域处理门——
+	// Traffic::ApplyChange/Populace::ApplyChange分别处理Vehicle/Citizen的
+	// AddOptionChange，这次照同一个模式给Door也接上，RemoveOptionChange此前完全没有
+	// 任何域处理，这次一并补上)。全部按交互名在doorsByInteractName里找门，找不到静默
+	// 忽略(和Traffic::ApplyChange同一个"找不到target就不做任何事"的宽松处理)。其余
+	// Change类型不是Map域认识的，不打"未实现"警告（避免同一个Change被六个域各打一遍
+	// 重复警告），唯一的兜底警告在Story::ApplyChange，见Story.md。
 	void ApplyChange(const Change* change, const ScriptContext& context);
 
 private:
@@ -271,6 +297,9 @@ private:
 	BuildingFactory& buildingFactory;
 	RoomFactory& roomFactory;
 	ComponentFactory& componentFactory;
+	// 门的Script创建要用——和上面几个Factory同一个"引用成员只能在构造函数初始化列表绑定"
+	// 的约定，声明顺序必须跟构造函数初始化列表顺序一致。
+	ScriptFactory& scriptFactory;
 
 	std::unordered_map<std::string, std::pair<int, std::string>> terrainTextures;
 
@@ -284,6 +313,16 @@ private:
 	// GetZone(name)/GetBuilding(name)直接find即可，不需要另外挂一张单独的"名字->指针"表。
 	std::unordered_map<std::string, Zone*> zones;
 	std::unordered_map<std::string, Building*> buildings;
+
+	// 门索引——不持有所有权(Door*的生命周期归Zone/Building/Room各自的doorEntities管)，
+	// 这几个容器只是方便按id/交互名查找+遍历全部。doorCount是全局门计数器("Door"+n)；
+	// doorNameSequence按"所属对象名+spec.name"分组计数交互名的编号(从1开始)，见
+	// door.md"tag是一类门，不是身份"一节。
+	int doorCount = 0;
+	std::unordered_map<std::string, int> doorNameSequence;
+	std::unordered_map<std::string, Door*> doorsById;
+	std::unordered_map<std::string, Door*> doorsByInteractName;
+	std::vector<Door*> allDoors;
 
 	// 按name插入，重名返回false并debugf警告、不插入(不生成消歧名字——唯一性是mod自己的
 	// GetName()/构造函数计数器的责任，这里只是兜底)；成功插入返回true。

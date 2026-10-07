@@ -412,6 +412,13 @@ using PointParams = std::array<float, 4>;
 // 底层头，不需要互相include对方。
 using WallHole = std::unordered_map<int, std::vector<RectParams>>;
 
+// 一面墙上每个门洞的layout标签——下标和WallHole的下标(FACE_DIRECTION)一一对应，每个
+// direction下的vector和对应WallHole[direction]逐个元素对齐(同一次AddDoor调用追加的
+// position/tag一一配对)。没有标签的门洞对应空字符串，ResolveDoorSpec按这个空字符串
+// 判定"不可选中，永远只是个洞"，见Core/map/door.h。和WallHole同样放在这个公共底层头，
+// Building(Corridor/Single/Row)和Room都要用，不需要互相include对方。
+using DoorTags = std::unordered_map<int, std::vector<std::string>>;
+
 // Room内部一个停车位——位置是ratio+offset(相对房间自身宽高，和PointParams同一套约定)，
 // 但这里的ratio是**相对房间中心**的偏移比例：0.5表示偏移0(正中心)，0/1分别是房间沿这个轴
 // 两侧的边缘(-/+半边长)，不是相对房间角点的0~1——因为Room::GetPosX()/GetPosY()(Quad的约定)

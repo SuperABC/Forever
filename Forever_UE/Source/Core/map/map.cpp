@@ -7,6 +7,7 @@
 #include "map/room.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
+#include "story/change.h"
 
 #include <algorithm>
 #include <cmath>
@@ -67,6 +68,7 @@ Map::Map(int width, int height) :
 	buildingFactory(Registry::Get().GetBuildingFactory()),
 	roomFactory(Registry::Get().GetRoomFactory()),
 	componentFactory(Registry::Get().GetComponentFactory()),
+	scriptFactory(Registry::Get().GetScriptFactory()),
 	terrainTextures() {
 	terrainTextures = {
 		{ "plain", { 0, "/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse" } },
@@ -433,6 +435,7 @@ void Map::InitZones() {
 			}
 			zone->Layout(request.direction); // 内部自己调mod->Layout(...)，填好walls/gates/
 				// 内部道路/内部建筑——放在SetPosition/SetBoundaryRoad之后调用
+			zone->BuildDoors(*this); // 园区大门——Layout()填好mod->gates之后才能读到数据
 
 			// 出入口接图 + 内部道路：同一个zone在这次调用期间共用一份anchorCache，
 			// 让内部道路端点能复用出入口已经建好的zone侧锚点(坐标+类别重合就是同一个点)。
@@ -542,6 +545,7 @@ void Map::InitBuildings() {
 			// lodMaterial+实例化楼层/房间/组合+构建行人内部导航图
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
+			building->BuildDoors(*this);
 			if (!AddBuilding(building)) delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
 		}
 	}
@@ -570,6 +574,7 @@ void Map::InitBuildings() {
 			// SetBoundaryRoad完
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
+			building->BuildDoors(*this);
 			if (AddBuilding(building)) {
 				zone->AddInternalBuilding(building);
 			}
@@ -613,6 +618,7 @@ void Map::InitBuildings() {
 			// 真实方向，见building_mod.h)
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
+			building->BuildDoors(*this);
 			if (!AddBuilding(building)) delete building;
 		}
 
@@ -2091,10 +2097,81 @@ vector<Component*> Map::GetAllComponents() const {
 	return result;
 }
 
+Door* Map::CreateDoor(DOOR_KIND_TYPE kind, Zone* zone, Building* building, Room* room,
+	const string& tag, const DoorSpec& spec,
+	float x, float y, float z, float width, float height, float yaw, int level, bool isVehicleGate) {
+
+	string id = "Door" + to_string(doorCount++);
+
+	// 所属对象名：Building/Zone的GetName()本身就全局唯一(mod自己的计数器保证)；Room的
+	// GetName()是RoomMod类型标签("residential"这种，不是实例唯一的)，必须用GetAddress()
+	// (含parentBuilding地址+房间号，全局唯一)，见door.md"tag是一类门，不是身份"一节。
+	string ownerName;
+	if (building) ownerName = building->GetName();
+	else if (room) ownerName = room->GetAddress();
+	else if (zone) ownerName = zone->GetName();
+
+	string interactName;
+	if (!spec.name.empty()) {
+		string seqKey = ownerName + "\x01" + spec.name;
+		int seq = ++doorNameSequence[seqKey];
+		interactName = ownerName + " " + spec.name + to_string(seq);
+	}
+
+	bool flippedSide = (spec.leaves == 1 && spec.randomSide) ? (GetRandom(2) == 0) : false;
+
+	Door* door = new Door(id, kind, tag, spec, zone, building, room, interactName, flippedSide,
+		x, y, z, width, height, yaw, level, isVehicleGate, &scriptFactory);
+
+	doorsById[id] = door;
+	if (!interactName.empty()) doorsByInteractName[interactName] = door;
+	allDoors.push_back(door);
+
+	return door;
+}
+
+Door* Map::FindDoorByName(const string& interactName) const {
+	auto it = doorsByInteractName.find(interactName);
+	return it != doorsByInteractName.end() ? it->second : nullptr;
+}
+
+const vector<Door*>& Map::GetAllDoors() const { return allDoors; }
+
 void Map::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
 	// 占位，等Map域真的有需要每帧处理的逻辑时再补，见map.h声明处注释。
 }
 
+namespace {
+	DOOR_ACCESS_TYPE ParseDoorAccess(const string& value) {
+		if (value == "owner") return DOOR_ACCESS_OWNER;
+		if (value == "locked") return DOOR_ACCESS_LOCKED;
+		return DOOR_ACCESS_OPEN;
+	}
+}
+
 void Map::ApplyChange(const Change* change, const ScriptContext& context) {
-	// 占位，等Map域真的有需要处理的Change子类时再补，见map.h声明处注释。
+	// 四种门相关的Change，全部按交互名在doorsByInteractName里找门，找不到静默忽略——
+	// 和Traffic::ApplyChange处理AddOptionChange找不到Vehicle时同一个宽松处理，见
+	// map.h声明处注释。AddOptionChange/RemoveOptionChange这两种本来就存在(给
+	// Vehicle/Citizen用)，这次是给Door也接上，不是新增Change类型。
+	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+		Door* target = FindDoorByName(ToString(EvaluateExpression(addOption->GetName(), context)));
+		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
+		return;
+	}
+	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		Door* target = FindDoorByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
+		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
+		return;
+	}
+	if (auto* setAccess = dynamic_cast<const SetDoorAccessChange*>(change)) {
+		Door* target = FindDoorByName(ToString(EvaluateExpression(setAccess->GetName(), context)));
+		if (target) target->SetAccess(ParseDoorAccess(ToString(EvaluateExpression(setAccess->GetAccess(), context))));
+		return;
+	}
+	if (auto* allow = dynamic_cast<const AllowDoorChange*>(change)) {
+		Door* target = FindDoorByName(ToString(EvaluateExpression(allow->GetName(), context)));
+		if (target) target->Allow(ToString(EvaluateExpression(allow->GetCitizen(), context)));
+		return;
+	}
 }

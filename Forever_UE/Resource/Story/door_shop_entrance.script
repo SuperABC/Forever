@@ -1,0 +1,35 @@
+{
+	// 商店大门自己的milestone脚本(ShopBuilding::doorSpecs["entrance"].scriptModName="empty"+
+	// milestoneNames={"door_shop_entrance"}加载)：开局给自己加一条"敲门"选项(靠近门时弹出，
+	// 和车辆"上车"选项走同一个MeetOption UI)，选中后只是debug_print一条消息，验证门的交互
+	// 链路跑通(Script创建+add_option+option_dialog+Map::FindDoorByName)，不做任何真正的
+	// 游戏效果——照抄vehicle_basic.script的结构。
+	"milestones": [
+		{
+			"milestone": "ready",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "add_option", "name": "$$self.name", "option": "敲门" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "knock",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "敲门" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "debug_print", "message": "有人敲了$$self.label的门" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

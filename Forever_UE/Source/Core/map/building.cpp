@@ -2,16 +2,21 @@
 
 #include "common/error.h"
 #include "common/json.h"
+#include "common/utility.h"
 
 #include "map/room.h"
 #include "map/component.h"
+#include "map/door.h"
+#include "map/map.h"
 #include "map/zone.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <cstdint>
 #include <fstream>
+#include <sstream>
 
 
 using namespace std;
@@ -33,6 +38,77 @@ namespace {
 		outPosY = (y1 + y2) / 2.f;
 		outSizeX = fabsf(x2 - x1);
 		outSizeY = fabsf(y2 - y1);
+	}
+
+	constexpr float kPi = 3.14159265358979323846f;
+
+	// 墙面信息——完全照抄Forever/Element/BuildingElement.cpp::BuildWallsForElement的
+	// FFaceInfo表(horizBase/horizSpan/alongY/acrossFixed公式必须和渲染层挖墙洞用的完全
+	// 一致，否则门扇和门洞对不齐，见door.md风险清单)，这次额外加一个normalYaw——墙的
+	// 外法线方向(弧度，这栋building自身旋转=0时的局部朝向，Building::BuildDoors()会再
+	// 加上building->GetRotation()得到世界朝向)：EAST(+X)=0，SOUTH(+Y)=π/2，WEST(-X)=π，
+	// NORTH(-Y)=-π/2，和LocalToWorld()用的标准cos/sin旋转约定(yaw=0即局部X轴直接映射
+	// 到世界X轴)保持一致。
+	struct DoorFaceInfo { bool alongY; float horizBase; float horizSpan; float acrossFixed; float normalYaw; };
+
+	array<DoorFaceInfo, 4> ComputeDoorFaces(float centerX, float centerY, float sizeX, float sizeY) {
+		float halfX = sizeX * 0.5f, halfY = sizeY * 0.5f;
+		array<DoorFaceInfo, 4> faces{};
+		faces[FACE_WEST] = { true, centerY - halfY, sizeY, centerX - halfX, kPi };
+		faces[FACE_EAST] = { true, centerY - halfY, sizeY, centerX + halfX, 0.f };
+		faces[FACE_NORTH] = { false, centerX - halfX, sizeX, centerY - halfY, -kPi * 0.5f };
+		faces[FACE_SOUTH] = { false, centerX - halfX, sizeX, centerY + halfY, kPi * 0.5f };
+		return faces;
+	}
+
+	// 把一个WallHole+DoorTags里的每个门洞resolve+CreateDoor，kind/zone/building/room由
+	// 调用方(Building::BuildDoors)按corridor还是room传不同组合。centerX/Y/sizeX/Y是这个
+	// 元素(corridor或room)在building楼体局部坐标系里的中心+尺寸(都是Quad，GetPosX()等
+	// 直接取)，floorHeight是这一层楼的高度(map单位)，floorBaseZ是Building::GetFloorBaseZ
+	// (level)。
+	void BuildDoorsForElement(Map& map, const WallHole& holes, const DoorTags& tags,
+		const unordered_map<string, DoorSpec>& doorSpecs, float centerX, float centerY,
+		float sizeX, float sizeY, float floorHeight, float floorBaseZ, int level,
+		DOOR_KIND_TYPE kind, Zone* zone, Building* building, Room* room, vector<Door*>& out) {
+		array<DoorFaceInfo, 4> faces = ComputeDoorFaces(centerX, centerY, sizeX, sizeY);
+
+		for (const auto& [dir, positions] : holes) {
+			if (dir < 0 || dir >= 4) continue;
+			const DoorFaceInfo& face = faces[dir];
+			auto tagIt = tags.find(dir);
+
+			for (size_t i = 0; i < positions.size(); i++) {
+				bool hasTag = (tagIt != tags.end() && i < tagIt->second.size());
+				string tag = hasTag ? tagIt->second[i] : string();
+				const DoorSpec* spec = ResolveDoorSpec(doorSpecs, tag);
+				if (!spec) continue;
+
+				const RectParams& p = positions[i];
+				float x1 = p[0] * face.horizSpan + p[1];
+				float x2 = p[4] * face.horizSpan + p[5];
+				float y1 = p[2] * floorHeight + p[3];
+				float y2 = p[6] * floorHeight + p[7];
+
+				float alongWallCenter = face.horizBase + (x1 + x2) * 0.5f;
+				float localX = face.alongY ? face.acrossFixed : alongWallCenter;
+				float localY = face.alongY ? alongWallCenter : face.acrossFixed;
+
+				pair<float, float> worldPos = building->LocalToWorld(localX, localY);
+				float width = fabsf(x2 - x1);
+				float height = fabsf(y2 - y1);
+				// y1/y2是"从天花板往下量"的距离，不是"从地板往上量"(照抄Forever/Element/
+				// BuildingElement.cpp::BuildWallsForElement的约定，和挖墙洞的代码保持一致，
+				// 否则门洞和挖出来的墙洞对不上)——door底边离地板的距离=floorHeight-max(y1,y2)，
+				// 不是min(y1,y2)。最初写成floorBaseZ+min(y1,y2)，把门摆到了离地板足足一个
+				// "门楣厚度"那么高的地方，实测复现(门离地很远)。
+				float z = floorBaseZ + (floorHeight - max(y1, y2));
+				float yaw = face.normalYaw + building->GetRotation();
+
+				Door* door = map.CreateDoor(kind, zone, building, room, tag, *spec,
+					worldPos.first, worldPos.second, z, width, height, yaw, level, false);
+				if (door) out.push_back(door);
+			}
+		}
 	}
 }
 
@@ -124,8 +200,12 @@ void Corridor::AddWall(int dir) {
 	walls[dir] = true;
 }
 const WallHole& Corridor::GetDoors() const { return doors; }
-void Corridor::AddDoor(int dir, vector<RectParams> positions) {
-	for (auto& p : positions) doors[dir].push_back(p);
+const DoorTags& Corridor::GetDoorTags() const { return doorTags; }
+void Corridor::AddDoor(int dir, vector<RectParams> positions, string tag) {
+	for (auto& p : positions) {
+		doors[dir].push_back(p);
+		doorTags[dir].push_back(tag);
+	}
 }
 const WallHole& Corridor::GetWindows() const { return windows; }
 void Corridor::AddWindow(int dir, vector<RectParams> positions) {
@@ -141,8 +221,12 @@ Single::Single(RectParams params) : params(params) {}
 int Single::GetDirection() const { return direction; }
 void Single::SetDirection(int dir) { direction = dir; }
 const WallHole& Single::GetDoors() const { return doors; }
-void Single::AddDoor(int dir, vector<RectParams> positions) {
-	for (auto& p : positions) doors[dir].push_back(p);
+const DoorTags& Single::GetDoorTags() const { return doorTags; }
+void Single::AddDoor(int dir, vector<RectParams> positions, string tag) {
+	for (auto& p : positions) {
+		doors[dir].push_back(p);
+		doorTags[dir].push_back(tag);
+	}
 }
 const WallHole& Single::GetWindows() const { return windows; }
 void Single::AddWindow(int dir, vector<RectParams> positions) {
@@ -158,8 +242,12 @@ Row::Row(RectParams params) : params(params) {}
 int Row::GetDirection() const { return direction; }
 void Row::SetDirection(int dir) { direction = dir; }
 const WallHole& Row::GetDoors() const { return doors; }
-void Row::AddDoor(int dir, vector<RectParams> positions) {
-	for (auto& p : positions) doors[dir].push_back(p);
+const DoorTags& Row::GetDoorTags() const { return doorTags; }
+void Row::AddDoor(int dir, vector<RectParams> positions, string tag) {
+	for (auto& p : positions) {
+		doors[dir].push_back(p);
+		doorTags[dir].push_back(tag);
+	}
 }
 const WallHole& Row::GetWindows() const { return windows; }
 void Row::AddWindow(int dir, vector<RectParams> positions) {
@@ -456,9 +544,10 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 				for (auto& wall : c["walls"]) corridor.AddWall(InverseDirection(wall.AsInt(), i));
 				for (auto& door : c["doors"]) {
 					int origDir = door["direction"].AsInt();
+					string tag = door["tag"].IsNull() ? "" : door["tag"].AsString();
 					vector<RectParams> positions;
 					for (auto& p : door["positions"]) positions.push_back(InverseWall(ReadRectParams(p), origDir, i));
-					corridor.AddDoor(InverseDirection(origDir, i), positions);
+					corridor.AddDoor(InverseDirection(origDir, i), positions, tag);
 				}
 				for (auto& window : c["windows"]) {
 					int origDir = window["direction"].AsInt();
@@ -480,9 +569,10 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 				single.SetDirection(InverseDirection(origDir, i));
 				for (auto& door : s["doors"]) {
 					int doorDir = door["direction"].AsInt();
+					string tag = door["tag"].IsNull() ? "" : door["tag"].AsString();
 					vector<RectParams> positions;
 					for (auto& p : door["positions"]) positions.push_back(InverseWall(ReadRectParams(p), doorDir, i));
-					single.AddDoor(InverseDirection(doorDir, i), positions);
+					single.AddDoor(InverseDirection(doorDir, i), positions, tag);
 				}
 				for (auto& window : s["windows"]) {
 					int winDir = window["direction"].AsInt();
@@ -504,9 +594,10 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 				row.SetDirection(InverseDirection(origDir, i));
 				for (auto& door : r["doors"]) {
 					int doorDir = door["direction"].AsInt();
+					string tag = door["tag"].IsNull() ? "" : door["tag"].AsString();
 					vector<RectParams> positions;
 					for (auto& p : door["positions"]) positions.push_back(InverseWall(ReadRectParams(p), doorDir, i));
-					row.AddDoor(InverseDirection(doorDir, i), positions);
+					row.AddDoor(InverseDirection(doorDir, i), positions, tag);
 				}
 				for (auto& window : r["windows"]) {
 					int winDir = window["direction"].AsInt();
@@ -610,6 +701,7 @@ Building::Building(BuildingFactory* factory, BuildingMod* mod) :
 Building::~Building() {
 	for (Room* room : rooms) delete room;
 	for (Component* component : components) delete component;
+	for (Door* door : doorEntities) delete door;
 	factory->DestroyBuilding(mod);
 }
 
@@ -761,7 +853,7 @@ void Building::AssignRoom(int level, int slot, const string& roomType, Component
 	const Single& single = singles[slot];
 	room->SetPosition(single.GetPosX(), single.GetPosY(), single.GetSizeX(), single.GetSizeY());
 	room->SetDirection(single.GetDirection());
-	room->SetDoors(single.GetDoors());
+	room->SetDoors(single.GetDoors(), single.GetDoorTags());
 	room->SetWindows(single.GetWindows());
 	room->SetNumber(level, floors[idx].AssignNumber());
 	component->AddRoom(room);
@@ -797,7 +889,7 @@ void Building::ArrangeRow(int level, int slot, const string& roomType, float acr
 			room->SetVertices(row.GetLeft() + div * i, row.GetBottom(), row.GetLeft() + div * (i + 1), row.GetTop());
 		}
 		room->SetDirection(row.GetDirection());
-		room->SetDoors(row.GetDoors());
+		room->SetDoors(row.GetDoors(), row.GetDoorTags());
 		room->SetWindows(row.GetWindows());
 		room->SetNumber(level, floors[idx].AssignNumber());
 		component->AddRoom(room);
@@ -806,6 +898,38 @@ void Building::ArrangeRow(int level, int slot, const string& roomType, float acr
 		rowRoomBySlot[level][slot].push_back(room);
 	}
 }
+
+void Building::BuildDoors(Map& map) {
+	for (Floor& floor : floors) {
+		int level = floor.GetLevel();
+		int idx = basements + level;
+		if (idx < 0 || idx >= static_cast<int>(floorHeights.size())) continue;
+		float floorHeight = floorHeights[idx];
+		float floorBaseZ = GetFloorBaseZ(level);
+
+		for (const Corridor& corridor : floor.GetCorridors()) {
+			BuildDoorsForElement(map, corridor.GetDoors(), corridor.GetDoorTags(), mod->doorSpecs,
+				corridor.GetPosX(), corridor.GetPosY(), corridor.GetSizeX(), corridor.GetSizeY(),
+				floorHeight, floorBaseZ, level, DOOR_KIND_BUILDING, nullptr, this, nullptr, doorEntities);
+		}
+	}
+
+	for (Room* room : rooms) {
+		int level = room->GetLayer();
+		int idx = basements + level;
+		if (idx < 0 || idx >= static_cast<int>(floorHeights.size())) continue;
+		float floorHeight = floorHeights[idx];
+		float floorBaseZ = GetFloorBaseZ(level);
+
+		vector<Door*> roomDoors;
+		BuildDoorsForElement(map, room->GetDoors(), room->GetDoorTags(), room->GetMod()->doorSpecs,
+			room->GetPosX(), room->GetPosY(), room->GetSizeX(), room->GetSizeY(),
+			floorHeight, floorBaseZ, level, DOOR_KIND_ROOM, nullptr, this, room, roomDoors);
+		for (Door* door : roomDoors) room->AddDoorEntity(door);
+	}
+}
+
+const vector<Door*>& Building::GetDoorEntities() const { return doorEntities; }
 
 float Building::GetBodyOffsetX() const { return bodyOffsetX; }
 float Building::GetBodyOffsetY() const { return bodyOffsetY; }

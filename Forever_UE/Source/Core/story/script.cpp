@@ -333,6 +333,22 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new EnterVehicleChange(vehicle.AsString());
 		}
+		else if (type == "set_door_access") {
+			auto name = obj["name"];
+			auto access = obj["access"];
+			if (name.IsNull() || access.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name or access for set_door_access change.\n");
+			}
+			change = new SetDoorAccessChange(name.AsString(), access.AsString());
+		}
+		else if (type == "allow_door") {
+			auto name = obj["name"];
+			auto citizen = obj["citizen"];
+			if (name.IsNull() || citizen.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name or citizen for allow_door change.\n");
+			}
+			change = new AllowDoorChange(name.AsString(), citizen.AsString());
+		}
 		else {
 			// 阶段4占位：其余39种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Change type not implemented yet: " + type + ".\n");

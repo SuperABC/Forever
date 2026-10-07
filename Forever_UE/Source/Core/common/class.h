@@ -14,6 +14,7 @@ class Zone;
 class Building;
 class Component;
 class Room;
+class Door;
 class Map;
 
 // Populace
@@ -37,6 +38,8 @@ class Event;
 class Dialog;
 class Change;
 class Story;
+class Script;
+class ScriptFactory;
 
 // Industry
 

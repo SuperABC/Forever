@@ -18,7 +18,7 @@
 		"walls": [2, 3],
 		"doors": [
 			{
-				"direction": 2,
+				"direction": 2, "tag": "entrance",
 				"positions": [
 					[0.5, -0.2, 0, 0.1, 0.5, 0.2, 1, 0],
 				],
@@ -38,7 +38,7 @@
 		"direction": 1,
 		"doors": [
 			{
-				"direction": 1,
+				"direction": 1, "tag": "room",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -58,7 +58,7 @@
 		"direction": 0,
 		"doors": [
 			{
-				"direction": 0,
+				"direction": 0, "tag": "room",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],

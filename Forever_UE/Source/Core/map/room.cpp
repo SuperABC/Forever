@@ -3,6 +3,7 @@
 #include "common/error.h"
 
 #include "map/building.h"
+#include "map/door.h"
 #include "player/asset.h"
 
 #include <sstream>
@@ -33,6 +34,7 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 Room::~Room() {
 	factory->DestroyRoom(mod);
 	for (auto& [name, asset] : assets) delete asset; // 没人捡走的地上物品，房间销毁时清理
+	for (Door* door : doorEntities) delete door;
 }
 
 string Room::GetType() const { return type; }
@@ -44,9 +46,16 @@ void Room::SetDirection(int dir) { direction = dir; }
 Building* Room::GetParentBuilding() const { return parentBuilding; }
 Component* Room::GetParentComponent() const { return parentComponent; }
 const WallHole& Room::GetDoors() const { return doors; }
+const DoorTags& Room::GetDoorTags() const { return doorTags; }
 const WallHole& Room::GetWindows() const { return windows; }
-void Room::SetDoors(WallHole d) { doors = std::move(d); }
+void Room::SetDoors(WallHole d, DoorTags tags) { doors = std::move(d); doorTags = std::move(tags); }
 void Room::SetWindows(WallHole w) { windows = std::move(w); }
+
+void Room::AddDoorEntity(Door* door) {
+	if (door) doorEntities.push_back(door);
+}
+
+const vector<Door*>& Room::GetDoorEntities() const { return doorEntities; }
 const string& Room::GetNumber() const { return number; }
 
 void Room::SetNumber(int level, int seq) {

@@ -44,9 +44,16 @@ public:
 	Component* GetParentComponent() const;
 
 	const WallHole& GetDoors() const;
+	const DoorTags& GetDoorTags() const;
 	const WallHole& GetWindows() const;
-	void SetDoors(WallHole doors);
+	void SetDoors(WallHole doors, DoorTags tags = {});
 	void SetWindows(WallHole windows);
+
+	// 房间门：Building::BuildDoors()遍历这个room的每个门洞时，用mod->doorSpecs做
+	// ResolveDoorSpec，需要放门就调map.CreateDoor(DOOR_KIND_ROOM, ...)创建，再
+	// AddDoorEntity登记进这里——由这个Room持有生命周期(析构时释放)，不是Building。
+	void AddDoorEntity(Door* door);
+	const std::vector<Door*>& GetDoorEntities() const;
 
 	// 门牌号，"b3-0001"这种格式(basement前缀+4位序号)，照抄老工程Room::SetNumber。
 	const std::string& GetNumber() const;
@@ -120,9 +127,12 @@ private:
 	int layer;
 	int direction = FACE_WEST;
 	WallHole doors;
+	DoorTags doorTags;
 	WallHole windows;
 	std::string number;
 	Node* navigationNode = nullptr;
+
+	std::vector<Door*> doorEntities;
 
 	Citizen* owner = nullptr;
 	bool stated = false;

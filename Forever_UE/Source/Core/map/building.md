@@ -144,6 +144,21 @@
   `ComponentMod*`原始mod实例才需要走`factory->DestroyRoom/DestroyComponent(mod)`这条
   跨DLL安全的路径(委托给注册时mod自己提供的deleter函数指针，和`Building`/`Zone`同一个模式)。
 
+### 建筑门
+
+`Corridor`/`Single`/`Row`新增`DoorTags`(和`WallHole`同形状的平行数据，下标按
+`FACE_DIRECTION`、每个方向的vector和对应`WallHole[dir]`逐元素对齐)，`AddDoor`多了一个
+可选的`tag`参数——这是layout里的门洞标签，没有标签的洞恒为空字符串，不可选中成真正的门，
+见`Core/map/door.h`"`ResolveDoorSpec`"一节。`Building`新增`doorEntities`+`BuildDoors(Map&)`:
+遍历每层`Floor::GetCorridors()`的每个门洞和每个`room`的每个门洞，分别用
+`mod->doorSpecs`/`room->GetMod()->doorSpecs`做`ResolveDoorSpec`，需要放门就调
+`map.CreateDoor(...)`——corridor的门登记进`Building`自己的`doorEntities`，room的门登记
+进对应`Room`自己的`doorEntities`(`Room::AddDoorEntity`)，不是都归`Building`持有。几何
+换算完全照抄`Forever/Element/BuildingElement.cpp::BuildWallsForElement`的`collect`公式
+(`x1=p[0]*horizSpan+p[1]`等)，只是这次是Core端复刻(算地图单位，不是UE单位)，详见
+`door.md`。由`Map::InitBuildings()`在`building->Layout(...)`的**三个**调用点(显式占位/
+园区内部建筑/`FillRemainder`)之后各调一次`building->BuildDoors(*this)`。
+
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/building_mod.h`(`BuildingMod`/`FloorAssetSpec`/
@@ -152,9 +167,10 @@
   `Road`)、`Source/Core/map/room.h`/`component.h`、`Source/Dependence/common/json.h`
   (`BuildingLayoutLibrary::ReadTemplates`解析`.layout`文件)。
 - 被谁依赖：`Source/Core/map/map.h`/`.cpp`(`Map::InitBuildings()`加载`buildingLayoutLibrary`+
-  调用`building->Layout(...)`+合并行人导航+转发地下室`Hatch`)、
+  调用`building->Layout(...)`+合并行人导航+转发地下室`Hatch`+`BuildDoors`)、
+  `Source/Core/map/door.h`(`BuildDoors`调`Map::CreateDoor`)、
   `Source/Forever/Framework/ForeverBuildingFrameworkComponent.h`/`.cpp`(近处LOD楼层几何渲染，
-  见该文件md)。
+  见该文件md)、`Source/Forever/Element/DoorComponent.h`(读`Door`几何/外观生成门组件)。
 
 ## 待办/后续阶段
 

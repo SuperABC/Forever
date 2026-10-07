@@ -209,7 +209,7 @@
 			],
 			"doors": [
 				{
-					"direction": 2,
+					"direction": 2, "tag": "entrance",
 					"positions": [
 						[
 							0,
@@ -244,7 +244,7 @@
 			],
 			"doors": [
 				{
-					"direction": 1,
+					"direction": 1, "tag": "entrance",
 					"positions": [
 						[
 							1,
@@ -279,7 +279,7 @@
 			],
 			"doors": [
 				{
-					"direction": 0,
+					"direction": 0, "tag": "entrance",
 					"positions": [
 						[
 							1,
@@ -311,7 +311,7 @@
 			"direction": 2,
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "room",
 					"positions": [
 						[
 							0,

@@ -108,7 +108,8 @@ public:
 	bool GetWall(int direction) const;
 	void AddWall(int direction);
 	const WallHole& GetDoors() const;
-	void AddDoor(int direction, std::vector<RectParams> positions);
+	const DoorTags& GetDoorTags() const;
+	void AddDoor(int direction, std::vector<RectParams> positions, std::string tag = "");
 	const WallHole& GetWindows() const;
 	void AddWindow(int direction, std::vector<RectParams> positions);
 	void InstanciateQuad(float width, float height);
@@ -116,6 +117,7 @@ public:
 private:
 	bool walls[4] = { false, false, false, false };
 	WallHole doors;
+	DoorTags doorTags;
 	WallHole windows;
 	RectParams params;
 };
@@ -129,7 +131,8 @@ public:
 	int GetDirection() const;
 	void SetDirection(int direction);
 	const WallHole& GetDoors() const;
-	void AddDoor(int direction, std::vector<RectParams> positions);
+	const DoorTags& GetDoorTags() const;
+	void AddDoor(int direction, std::vector<RectParams> positions, std::string tag = "");
 	const WallHole& GetWindows() const;
 	void AddWindow(int direction, std::vector<RectParams> positions);
 	void InstanciateQuad(float width, float height);
@@ -137,6 +140,7 @@ public:
 private:
 	int direction = FACE_WEST;
 	WallHole doors;
+	DoorTags doorTags;
 	WallHole windows;
 	RectParams params;
 };
@@ -149,7 +153,8 @@ public:
 	int GetDirection() const;
 	void SetDirection(int direction);
 	const WallHole& GetDoors() const;
-	void AddDoor(int direction, std::vector<RectParams> positions);
+	const DoorTags& GetDoorTags() const;
+	void AddDoor(int direction, std::vector<RectParams> positions, std::string tag = "");
 	const WallHole& GetWindows() const;
 	void AddWindow(int direction, std::vector<RectParams> positions);
 	void InstanciateQuad(float width, float height);
@@ -157,6 +162,7 @@ public:
 private:
 	int direction = FACE_WEST;
 	WallHole doors;
+	DoorTags doorTags;
 	WallHole windows;
 	RectParams params;
 };
@@ -402,6 +408,18 @@ public:
 	bool GetStated() const;
 	void SetStated(bool value);
 
+	// 建筑门+房间门：①遍历每层Floor::GetCorridors()(以后其他非single/row元素同理)的每个
+	// 门洞，用mod->doorSpecs做ResolveDoorSpec，需要放门就调map.CreateDoor(
+	// DOOR_KIND_BUILDING, ...)，登记进这个Building自己的doorEntities(析构时释放)；
+	// ②遍历GetRooms()的每个room的每个门洞，用room->GetMod()->doorSpecs做
+	// ResolveDoorSpec，需要放门就调map.CreateDoor(DOOR_KIND_ROOM, ...)，登记进对应
+	// room自己的doorEntities(room->AddDoorEntity，room持有生命周期，不是Building)。
+	// 两件事放在同一个方法里是因为Building本来就持有rooms的指针、遍历一次就够，不是说
+	// 房间门归Building持有。由Map::InitBuildings()在building->Layout(...)的三个调用点
+	// 之后各调一次，见map.cpp。
+	void BuildDoors(Map& map);
+	const std::vector<Door*>& GetDoorEntities() const;
+
 private:
 	// 按mod->floors实例化每一层的Floor，塞进floors数组。
 	void ReadFloor(int level, int face, const std::string& templateName, const BuildingLayoutLibrary& library);
@@ -464,4 +482,8 @@ private:
 
 	Citizen* owner = nullptr;
 	bool stated = false;
+
+	// corridor等非single/row元素上真正放了门扇的门——只在BuildDoors()非空填入(查到的门洞
+	// 带了没在doorSpecs表里对应mesh为空的tag时不会有对应的Door)，析构时释放。
+	std::vector<Door*> doorEntities;
 };

@@ -1,10 +1,13 @@
 #include "Framework/ForeverZoneFrameworkComponent.h"
 
+#include "Element/DoorComponent.h"
+
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/BoxComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 
+#include "map/door.h"
 #include "map/map.h"
 #include "map/zone.h"
 #include "map/building.h"
@@ -56,6 +59,17 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 		// 不像Building/Room那样拆到per-building的Actor——排查已经证实真凶是"owner身上组件
 		// 总数"，Zone数量级不大，没必要为了这么少的数量单独动这个结构。
 		BuildCollisionBox(zone);
+
+		// 园区大门：常驻，不随LOD(围墙本身就是常驻的)。数量级和Zone本身一样小，同样直接挂
+		// 在这个组件的单例owner上，不需要per-zone的Actor。
+		for (Door* door : zone->GetDoorEntities()) {
+			if (!door) continue;
+			UForeverDoorComponent* comp = NewObject<UForeverDoorComponent>(owner, NAME_None, RF_Transient);
+			comp->SetupAttachment(owner->GetRootComponent());
+			comp->RegisterComponent();
+			comp->Init(door);
+			owner->AddInstanceComponent(comp);
+		}
 	}
 }
 

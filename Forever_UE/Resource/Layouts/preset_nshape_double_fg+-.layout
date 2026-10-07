@@ -186,7 +186,7 @@
 			],
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "entrance",
 					"positions": [
 						[
 							0.5,
@@ -218,7 +218,7 @@
 			],
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "entrance",
 					"positions": [
 						[
 							0.5,
@@ -250,7 +250,7 @@
 			],
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "entrance",
 					"positions": [
 						[
 							0.5,
@@ -282,7 +282,7 @@
 			],
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "entrance",
 					"positions": [
 						[
 							0.5,
@@ -314,7 +314,7 @@
 			"direction": 2,
 			"doors": [
 				{
-					"direction": 2,
+					"direction": 2, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -329,7 +329,7 @@
 					]
 				},
 				{
-					"direction": 3,
+					"direction": 3, "tag": "room",
 					"positions": [
 						[
 							0,
@@ -359,7 +359,7 @@
 			"direction": 3,
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "room",
 					"positions": [
 						[
 							1,
@@ -421,7 +421,7 @@
 			"direction": 3,
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "room",
 					"positions": [
 						[
 							0,
@@ -485,7 +485,7 @@
 			"direction": 3,
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -532,7 +532,7 @@
 			"direction": 3,
 			"doors": [
 				{
-					"direction": 3,
+					"direction": 3, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -579,7 +579,7 @@
 			"direction": 2,
 			"doors": [
 				{
-					"direction": 2,
+					"direction": 2, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -609,7 +609,7 @@
 			"direction": 2,
 			"doors": [
 				{
-					"direction": 2,
+					"direction": 2, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -639,7 +639,7 @@
 			"direction": 1,
 			"doors": [
 				{
-					"direction": 1,
+					"direction": 1, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -686,7 +686,7 @@
 			"direction": 0,
 			"doors": [
 				{
-					"direction": 0,
+					"direction": 0, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -733,7 +733,7 @@
 			"direction": 0,
 			"doors": [
 				{
-					"direction": 0,
+					"direction": 0, "tag": "room",
 					"positions": [
 						[
 							0.5,
@@ -780,7 +780,7 @@
 			"direction": 1,
 			"doors": [
 				{
-					"direction": 1,
+					"direction": 1, "tag": "room",
 					"positions": [
 						[
 							0.5,
