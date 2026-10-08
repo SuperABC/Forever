@@ -55,22 +55,27 @@ UE的物理引擎对同一个Actor根组件下的大量Static简单碰撞子组�
   （`UGameplayStatics::GetPlayerPawn(GetWorld(),0)->GetActorLocation()/
   BUILDING_WORLD_SCALE`）到`building`世界中心的**水平（`FVector2D`）距离**判定，忽略高度差。
 
-## 近处楼层几何：不用PMC section也不用ISM，每段一个独立`UStaticMeshComponent`
+## 近处楼层几何：墙体/地板/天花板用ISM批量实例，楼梯/坡道/电梯轿厢仍是独立组件
 
 **楼体要频繁整层增删（LOD切换/以后建筑增删），PMC虽然可以`ClearMeshSection`单独清空一个
 section，但所有building共享同一个PMC对象、共享同一份vertex/index buffer，一整层几十个墙体
 分段全部要挤进"这栋building自己的一段连续section区间"这个设计已经不匹配"一层楼有几十个独立
-墙体+地板+天花板+楼梯/电梯井墙"这个复杂度；ISM更不合适（同一个mesh资产的批量实例，索引数组
-增删会牵连其它实例）。改成老工程本来的路数**：每个墙体分段/地板slab/天花板slab都是一个独立的
-`UStaticMeshComponent`（`SpawnCube`：复用一个通用的`/Game/Asset/Meshes/Cube.Cube`单位立方体
-网格，从老工程`Content/Asset/Meshes/Cube.uasset`直接拷贝过来(和`Stair.uasset`/`Ramp.uasset`
-一起，纯文件复制——两边引擎版本同为5.7，不需要重新导出；`Window.uasset`当时也一起拷贝过来，
-但窗户资产本身有问题，后来直接删掉了窗户网格显示逻辑，这个文件现在没有任何代码引用它，留在
-`Content/Asset/Meshes/`下不影响什么，没有顺手清理)，`SetWorldScale3D`缩放到目标尺寸），
-楼梯/坡道这类有真实3D资产的元素用`SpawnMesh`
-（不缩放，按网格自身大小摆放）。`FBuildingRenderState::nearComponentsByFloor`（按floorIndex
-分组的`TArray<UStaticMeshComponent*>`）记录这栋building当前占用的所有独立组件，近处LOD
-整层增删就是创建/销毁一批组件，不涉及任何共享索引结构。
+墙体+地板+天花板+楼梯/电梯井墙"这个复杂度**，改成老工程本来的路数：每个墙体分段/地板slab/
+天花板slab都是一个独立的`UStaticMeshComponent`（`SpawnCube`：复用一个通用的
+`/Game/Asset/Meshes/Cube.Cube`单位立方体网格，从老工程`Content/Asset/Meshes/Cube.uasset`
+直接拷贝过来(和`Stair.uasset`/`Ramp.uasset`一起，纯文件复制——两边引擎版本同为5.7，不需要
+重新导出；`Window.uasset`当时也一起拷贝过来，但窗户资产本身有问题，后来直接删掉了窗户网格
+显示逻辑，这个文件现在没有任何代码引用它，留在`Content/Asset/Meshes/`下不影响什么，没有
+顺手清理)，`SetWorldScale3D`缩放到目标尺寸），楼梯/坡道这类有真实3D资产的元素用`SpawnMesh`
+（不缩放，按网格自身大小摆放）。
+
+**这一版决定一直是"ISM更不合适（同一个mesh资产的批量实例，索引数组增删会牵连其它实例）"**，
+直到后面"墙体/地板/天花板cube改成ISM"一节改了结论——见该节，这条顾虑针对的是"单独删除/
+替换某一个cube"的场景，这次的实际用法(整层/整栋同时批量`ClearInstances()`清空，不是逐个
+`RemoveInstance`)不触发这个问题。楼梯/坡道/电梯轿厢(`SpawnMesh`产出，网格/材质/移动性各不
+相同、数量少)不纳入ISM改造，仍然是独立组件，`nearComponentsByFloor`（按floorIndex分组的
+`TArray<UStaticMeshComponent*>`）现在只记录这部分，近处LOD整层增删对它们还是创建/销毁一批
+组件，不涉及任何共享索引结构。
 
 ### 墙体开洞分段算法（`BuildWallsForElement`，照抄老工程`ConstructQuad`::`processFace`）
 
@@ -373,6 +378,38 @@ Zone一级数量级不大（远小于Room），直接留在`ForeverZoneFramework
 明显，可以考虑把挂载粒度从"每栋building一个Actor"再细化成"每栋building的每一层楼一个
 Actor"，彻底把焊接爆炸范围锁定在单层楼的量级，但目前(建筑规模)没有验证这一步是否真的
 必要。
+
+## 墙体/地板/天花板cube改成ISM（解决"性能第2轮"的残留问题）
+
+上一节"残留问题"指出：即使按owner Actor隔开了跨building的焊接爆炸，单栋building内部
+"组件数随楼层累积、注册耗时跟着涨"这条曲线本身还没解决——用户反馈"每个cube都是一个组件，
+导致组件注册和删除的过程浪费了很多性能"，对应的正是这条残留曲线。
+
+**改法**：墙体分段/地板slab/天花板slab不再各自`SpawnCube`生成一个独立
+`UStaticMeshComponent`，改成按实际材质指针分组，每组一个常驻的
+`UInstancedStaticMeshComponent`（`ABuildingElement::cubeInstancePools`，key是材质指针，
+通常整栋楼只有墙/地/顶3个key，mod覆盖出不同材质时会多几个）。近处LOD建层
+(`AddCubeInstance`)只是对已存在的ISM调`AddInstance(worldTransform, bWorldSpace=true)`，
+离开近处(`ClearNearSections`)只是对每个ISM调`ClearInstances()`——ISM组件本身从Init()之后
+首次用到某个材质时创建一次，常驻到这个`ABuildingElement`被销毁，近/远LOD反复切换不会
+重复`RegisterComponent`/`DestroyComponent`，这正是消除残留性能问题的关键。
+
+**为什么这次的结论和"近处楼层几何"一节"ISM更不合适（索引数组增删会牵连其它实例）"不
+冲突**：那条顾虑针对的是"单独删除/替换批量实例里的某一个"——`RemoveInstance`移除中间项
+会导致实例数组重排，牵连到其它实例的索引。这次的实际用法是"整层/整栋同时批量增删"：
+建层只会`AddInstance`（纯追加，不影响已有实例），清空用`ClearInstances()`（整体清空，不是
+逐个`RemoveInstance`），从未出现过"只删除中间某一个instance，其它instance还要继续存在"
+的场景，不会触发那条顾虑描述的问题。
+
+**范围只覆盖`SpawnCube`产出的部分**：楼梯/坡道(`SpawnMesh`，每种floor可能指定不同网格
+软路径，数量少)、电梯轿厢(`SpawnMesh`，`isMovable=true`每帧播动画)、门
+(`UForeverDoorComponent`，独立开合动画)都不纳入——网格/材质/移动性各不相同、数量级也小，
+收益有限，继续走原来的独立组件路径(`nearComponentsByFloor`现在只记录这部分)。
+
+**碰撞**：原来`SpawnCube`的`UStaticMeshComponent`从未显式设置碰撞Profile，依赖引擎默认值；
+ISM改造时显式设成`"BlockAll"`，不依赖"ISM默认碰撞和原来默认值一致"这个未经验证的假设——
+墙体/地板/天花板只需要纯阻挡碰撞（挡住玩家走动、挡住`ECC_Pawn`通道的开火线检测），和原来
+的效果一致。
 
 ## 待办/后续阶段
 

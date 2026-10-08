@@ -13,6 +13,7 @@
 
 class UProceduralMeshComponent;
 class UStaticMeshComponent;
+class UInstancedStaticMeshComponent;
 class UBoxComponent;
 class UPrimitiveComponent;
 class UStaticMesh;
@@ -122,11 +123,17 @@ private:
 	void OnRoomOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
-	// 复用一个通用的单位立方体网格，缩放到目标尺寸摆一个墙体/地板/天花板slab；始终attach到
-	// 这个Element自己(不再需要像实验阶段那样传一个外部owner)。返回值已经
-	// RegisterComponent+AddInstanceComponent，调用方负责收集进nearComponentsByFloor。
-	UStaticMeshComponent* SpawnCube(float centerX, float centerY, float centerZ,
+	// 墙体/地板/天花板slab改成ISM批量实例(替代原来"每段cube一个独立UStaticMeshComponent"
+	// 的SpawnCube)——按实际材质指针分组，每组一个常驻的UInstancedStaticMeshComponent，
+	// 近处LOD建层只是AddInstance，离开近处只是ClearInstances，组件本身不随LOD切换
+	// 销毁/重建，消除了Register/Destroy开销随楼层数累积的性能问题，见
+	// ForeverBuildingFrameworkComponent.md"ISM改造"一节。
+	void AddCubeInstance(float centerX, float centerY, float centerZ,
 		float sizeX, float sizeY, float sizeZ, float rotation, UMaterialInterface* material);
+
+	// 按材质指针查/建对应的ISM池条目——找不到就创建一个(复用framework->GetCubeMesh()，
+	// 和原SpawnCube同一份网格资源)。
+	UInstancedStaticMeshComponent* GetOrCreateCubeInstancePool(UMaterialInterface* material);
 
 	// 按目标尺寸缩放摆放一个网格实体，供楼梯/坡道/电梯轿厢这类有真实3D资产的元素用。isMovable
 	// 只有电梯轿厢会传true。
@@ -142,7 +149,7 @@ private:
 		bool wallWest, bool wallEast, bool wallNorth, bool wallSouth,
 		const std::unordered_map<int, std::vector<std::array<float, 8>>>& doors,
 		const std::unordered_map<int, std::vector<std::array<float, 8>>>& windows,
-		UMaterialInterface* wallMaterial, int32 floorIndex);
+		UMaterialInterface* wallMaterial);
 
 	Building* building = nullptr;
 	TWeakObjectPtr<UForeverBuildingFrameworkComponent> framework;
@@ -156,8 +163,17 @@ private:
 	ELod currentLod = ELod::Far;
 	bool transitionPending = false;
 	int32 nearFloorCount = 0; // basements+layers，BuildFloorMesh按floorIndex 0..nearFloorCount-1处理
-	// 近处这栋building当前占用的所有独立组件(墙体分段/地板/天花板slab/楼梯/坡道/窗户网格)，
-	// 按floorIndex分组，方便ClearNearSections只清空单层或整栋。
+
+	// 墙体/地板/天花板cube的ISM池——key是实际材质指针(同一层楼的墙/地/顶各自共享一份
+	// UMaterialInstanceDynamic，通常整栋楼只有3个key，mod覆盖出不同材质时会多几个)。
+	// 近处LOD建层时AddInstance，离开近处时ClearInstances——组件本身常驻不随LOD切换
+	// 销毁/重建，这是消除Register/Destroy开销的关键，见AddCubeInstance声明处注释。
+	// Init()之后按需懒创建，不需要预先知道有几种材质。
+	TMap<UMaterialInterface*, TObjectPtr<UInstancedStaticMeshComponent>> cubeInstancePools;
+
+	// 近处这栋building当前占用的楼梯/坡道3D网格组件(SpawnMesh产出，网格/材质各不相同、
+	// 数量少，不纳入ISM改造)，按floorIndex分组，方便ClearNearSections整栋清空。墙体/
+	// 地板/天花板cube已经改走上面的cubeInstancePools，不再经过这个数组。
 	TArray<TArray<TObjectPtr<UStaticMeshComponent>>> nearComponentsByFloor;
 	// 门(建筑门+这一层所有room的房间门)，近处LOD专属，和nearComponentsByFloor同样按
 	// floorIndex分组、ClearNearSections一并清理。门洞本身由上面的墙体生成逻辑照常挖出，
