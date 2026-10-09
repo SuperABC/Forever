@@ -17,6 +17,12 @@ struct ModConceptDescriptor {
 
 const std::vector<ModConceptDescriptor>& GetModConceptDescriptors();
 
+// 不是per-concept的，整个DLL只有一份——由Config::AddDllPath在探测20个concept符号的同一次
+// LoadLibrary/FreeLibrary里顺带探测，和上面GetModConceptDescriptors()的20行表无关，所以不
+// 塞进那张表(表的行形状是3个per-concept符号，容不下这种"整个DLL一份"的第4列)。声明这个DLL
+// 依赖哪些mod id(不带concept前缀)，给游戏启动配置界面的依赖校验用，见config.md。
+inline constexpr const char* kModDllDependenciesSymbol = "GetModDllDependencies";
+
 // 不在头文件里include windows.h,避免和UE头文件的宏产生冲突——句柄一律存成void*,
 // LoadLibrary/GetProcAddress/FreeLibrary只在loader.cpp里出现。
 //

@@ -16,6 +16,17 @@
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
 
+	// 显式把输入模式设回Game Only+隐藏鼠标指针——不能假设这是空白状态:游戏启动配置界面
+	// (Menu关卡的AForeverMenuController::BeginPlay())会把输入模式设成UI Only+显示鼠标
+	// 指针，这个状态挂在ViewportClient/LocalPlayer身上，不是挂在PlayerController实例上，
+	// 不会因为旧的MenuController被OpenLevel销毁就自动还原——没有这一步，从配置界面点"开始
+	// 游戏"进场之后，输入会一直停留在UI Only模式，鼠标键盘操作不到任何Pawn，表现上就是
+	// "角色完全操控不了"。这里显式重置，不管上一个关卡/Controller留下什么状态都能保证
+	// 这一局是正常的Game Only输入，PIE直接在World.umap上跑(不经过Menu)同样安全——本来
+	// 就应该是这个状态。
+	SetInputMode(FInputModeGameOnly());
+	bShowMouseCursor = false;
+
 	// 手机(Phone)系统：P键要求任何时候都生效(包括开局还没占有任何真正Pawn、操控着
 	// ADefaultPawn的那几帧，以及ChangeControlChange换人操控/换乘载具的瞬间)——这个动态
 	// Context原来只在Pawn的PossessedBy里加(见AForeverCharacter::PossessedBy)，Controller

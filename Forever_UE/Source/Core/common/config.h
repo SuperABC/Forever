@@ -94,8 +94,96 @@ public:
 	// 这个字符串后决定怎么用)决定,Config不做任何解析。jsonKey不存在时返回空列表。
 	static std::vector<std::pair<std::string, std::string>> GetConceptMods(const std::string& jsonKey);
 
+	// ---- 游戏启动配置界面(Story/Mod/Resource三screen)新增 ----
+
+	// 一行mod enable记录：某个dll提供的某一个(concept,modId)，供UI按行展示。
+	struct ModEntry {
+		std::string dllPath;
+		std::string conceptKey;
+		std::string modId;
+		bool enabled;
+	};
+
+	// 按(concept,modId)粒度展开当前所有已发现mod的启用状态，一个dll可能贡献多行(它导出的
+	// 每个concept每个id各一行)。enabled直接等于"这个id当前在不在对应的`<concept>_mods`
+	// 数组里"——不是独立维护的一份状态，见IsModEnabled。
+	static std::vector<ModEntry> GetModEnables();
+
+	// 设置某个(concept,modId)的启用/禁用——粒度到id,不是到dll(同一个dll导出的多个id可以
+	// 分别独立启用/禁用)。实现上就是把这个id加进/从对应的`<concept>_mods`数组里删掉(保留/
+	// 丢弃它原有的参数字符串)，这张数组本来就是这个工程"谁启用谁没启用"的唯一真相来源
+	// (Registry::ReloadModArgs→Factory::SetModArgs/IsEnabled直接读它)，不需要再维护一份
+	// 平行的勾选状态。
+	static void SetModEnabled(const std::string& conceptKey, const std::string& modId, bool enabled);
+
+	// 某个(concept,modId)当前是否启用——就是"这个id在不在`<concept>_mods`数组里"，缺省
+	// (数组里没有/jsonKey整个没出现过)视为false,和这个工程一直以来"没列出的id视为未启用"
+	// 的约定一致。新发现的mod(刚AddDllPath扫出来的)默认是禁用的,需要在Mod screen里手动
+	// 勾选一次才会真正生效。
+	static bool IsModEnabled(const std::string& conceptKey, const std::string& modId);
+
+	// 这个mod id(不带concept前缀,和Registry::CheckModRegistered同样的"只认id字符串,不看
+	// concept"匹配规则)是否存在至少一个已启用的(concept,modId==id)——给依赖校验用。
+	static bool IsModIdEnabled(const std::string& id);
+
+	// dllPath这个DLL是否"被加载"——它导出的(concept,modId)里只要有任意一个启用就算数,DLL
+	// 本身只能整体加载/不加载,见config.md"DLL级依赖声明"一节。
+	static bool IsDllActive(const std::string& dllPath);
+
+	// 当前"被加载"(IsDllActive==true)的dll绝对路径列表。
+	static std::vector<std::string> GetActiveDllPaths();
+
+	// dllPath这个DLL探测时读到的(conceptKey,modId)列表——AddDllPath探测阶段顺带读取、
+	// 缓存下来，不需要重新LoadLibrary。
+	static std::vector<std::pair<std::string, std::string>> GetModIdsForDll(const std::string& dllPath);
+
+	// dllPath这个DLL声明自己依赖的mod id列表(新增的GetModDllDependencies()导出,整个DLL
+	// 一份,不按concept区分)——AddDllPath探测阶段顺带读取、缓存下来。
+	static std::vector<std::string> GetDllDependences(const std::string& dllPath);
+
+	// 已注册的resource根目录列表(即调用过AddResourcePath的path)，供Resource screen展示/
+	// 删除用，和GetDllPaths()同样的"根目录列表"语义。
+	static std::vector<std::string> GetResourceRootPaths();
+
+	// 移除path对应的已注册resource根目录记录(resourcePaths/pluginPaths/pakPaths/
+	// layoutPaths四个map里这个key全部清掉——layoutPaths也要清是因为AddResourcePath这次
+	// 顺带收集.layout，见下面AddResourcePath的注释)。
+	static void RemoveResourcePath(const std::string& path);
+
+	// 校验path是.script文件且存在后加入storyScriptPaths(按绝对路径去重)——Story screen
+	// 的"添加.script文件"操作，这个列表里的脚本全部一起加载，不是"多选一激活"。
+	static void AddStoryScript(const std::string& path);
+
+	// 从storyScriptPaths移除path(按绝对路径匹配)。
+	static void RemoveStoryScript(const std::string& path);
+
+	// 当前Story screen列表里的全部.script绝对路径。
+	static std::vector<std::string> GetStoryScripts();
+
+	// 把当前内存状态(dllPaths/layoutPaths/resourcePaths的根目录、main_story、
+	// storyScriptPaths、conceptMods)序列化写回path指向的config.json——只在Start Game
+	// 校验通过的那一刻调用一次,不是每次编辑都自动保存。路径按ReadConfig同样的"相对
+	// configDir"约定写成相对路径。"<concept>_mods"这几个数组就是conceptMods原样写回——
+	// SetModEnabled已经直接维护这份状态了，不需要在这里另外重建。
+	static void WriteConfig(const std::string& path);
+
 private:
 	static bool CheckFileFormat(const std::filesystem::path& filePath, const std::string& format);
+
+	// conceptKey(如"Weapons")到config.json里"<concept>_mods"数组key(如"weapon_mods")的
+	// 转换——去掉末尾的"s"、转小写、拼上"_mods"，20个concept目前都符合这个规则。
+	static std::string ConceptKeyToJsonKey(const std::string& conceptKey);
+
+	// Roadnets/Names这两个concept一次只应该有一个生效(RoadnetFactory::GetRoadnet()/
+	// NameFactory::GetName()的"单选"语义，见对应_factory.h)——但那两个函数本身并不校验
+	// "只有一个enabled"，`SetConfig`调几次都行，`GetRoadnet`/`GetName`只是从
+	// `unordered_map`里捞出第一个碰到的`enabled==true`，其余被标记启用但没被选中的id
+	// 直接静默忽略，不报错。这次新UI要求"看起来"也必须唯一(不只是生效结果唯一)，所以在
+	// `Config`层面显式规范化：对应的`<concept>_mods`数组里如果同时有多个条目，只保留
+	// 数组里排在最前面的那一个，其余直接从数组删掉——在`ReadConfig`读完文件后、
+	// `WriteConfig`写文件前、`GetModEnables()`每次给UI返回数据前都调用一次，保证UI勾选框
+	// 显示的状态、保存到文件的状态永远跟这条约束一致。
+	static void NormalizeUniqueConcepts();
 
 	static std::string configDir;
 
@@ -118,6 +206,17 @@ private:
 	// main_story字段的原始值(ScriptModName)，ReadConfig时读取
 	static std::string mainStoryScriptModName;
 
-	// "<concept>_mods"这个json key -> 该数组解析出的(id, 参数字符串)列表
+	// "<concept>_mods"这个json key -> 该数组解析出的(id, 参数字符串)列表——这既是
+	// Factory::SetModArgs的参数来源，也是"谁启用谁没启用"的唯一真相来源(IsModEnabled/
+	// SetModEnabled直接读写这张表，不再有平行的一份启用状态)。
 	static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> conceptMods;
+
+	// dll绝对路径 -> AddDllPath探测时读到的(conceptKey,modId)列表。
+	static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> dllConceptIds;
+
+	// dll绝对路径 -> 该DLL新增的GetModDllDependencies()导出声明的依赖mod id列表。
+	static std::unordered_map<std::string, std::vector<std::string>> dllDependences;
+
+	// Story screen里玩家显式添加的.script绝对路径列表，全部一起加载。
+	static std::vector<std::string> storyScriptPaths;
 };

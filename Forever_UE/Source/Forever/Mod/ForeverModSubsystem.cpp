@@ -62,7 +62,16 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	const FString configPath = FPaths::Combine(FPaths::ProjectDir(), TEXT("Resource/Config/config.json"));
+
+	// 诊断用：Config内部用std::cerr打印警告，这个进程(尤其是-game Standalone)不一定有
+	// 对应的控制台/重定向把它接进Forever.log——之前几次"回退扫描"排查时完全没看到任何
+	// [Config]开头的warning，但又确实触发了回退，说明那些cerr警告大概率没有被这次log文件
+	// 捕获到。这里改用UE_LOG打印同等信息，确保不管运行模式如何都能在log文件里看到。
+	UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: configPath=%s, exists=%d"),
+		*configPath, FPaths::FileExists(configPath) ? 1 : 0);
 	Config::ReadConfig(TCHAR_TO_UTF8(*configPath));
+	UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: ReadConfig后GetDllPaths().size()=%d, GetMods().size()=%d"),
+		static_cast<int>(Config::GetDllPaths().size()), static_cast<int>(Config::GetMods().size()));
 
 	std::vector<std::string> mods = Config::GetMods();
 	if (mods.empty()) {
@@ -90,6 +99,19 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: config.json 未提供任何resource_paths,回退扫描默认目录 %s。"), *defaultResourceDir);
 		Config::AddResourcePath(TCHAR_TO_UTF8(*defaultResourceDir));
 	}
+
+	// 到这里为止只是纯发现，写进Config静态状态供配置界面UI立刻有数据可展示——真正的Plugin/
+	// Pak挂载和Factory注册/校验挪进EnsureModsRegistered()，由配置界面"开始游戏"按钮校验
+	// 通过后显式调用，不在这里(关卡加载之前)无条件跑。
+}
+
+void UForeverModSubsystem::EnsureModsRegistered() {
+	if (bModsRegistered) {
+		return;
+	}
+	bModsRegistered = true;
+
+	std::vector<std::string> mods = Config::GetActiveDllPaths();
 
 	// 挂载mod自己的UE资产Plugin——照抄老工程GlobalBase::BeginPlay()按WITH_EDITOR分两条路径
 	// 的写法(见PACKAGING_PLAN/config.md"GetPlugins/GetPakFiles"一节)。独立mod的UE资产只能

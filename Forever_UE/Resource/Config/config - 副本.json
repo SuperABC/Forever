@@ -1,0 +1,77 @@
+{
+   // dll_paths: 递归扫描这些目录,识别其中实现了任意Mod接口(GetMod<Concept>符号)的dll。
+   // 路径相对本文件所在目录(Forever_UE/Resource/Config/)解析,不用旧工程那种写死的绝对
+   // 路径,避免机器相关。"../../x64/Release"是Basic.dll(Source/Basic,内置默认Mod,和其余
+   // 三个一样通过Config/ModLoader在运行时加载,不静态链进Forever.Build.cs,见
+   // Source/Basic/README.md)的构建输出目录,同目录下的Dependence.lib/Core.lib不是.dll,
+   // 会被Config::AddDllPath按扩展名跳过。每一项都必须精确指向Release输出目录,不能指向
+   // 会连Debug子目录一起递归进去的上级目录——Debug的DLL用/MDd调试CRT编译,std::string布局
+   // (_ITERATOR_DEBUG_LEVEL带的额外调试字段)和Development/Release运行时的CRT不兼容,
+   // Debug/Release两份DLL都被扫描到时后加载的一份会把前一份的注册覆盖掉,一旦覆盖成Debug
+   // 那份,creator跨dll接的const std::string&参数在Debug CRT里一读就是野指针,直接崩
+   // (PIE验证发现,崩溃点在EmptyComponent构造函数拼接args字符串)。
+   "dll_paths" : [
+      "../../x64/Release",
+      "../../../Forever_Mod/Test/Cpp/x64/Release",
+      "../../../Forever_Mod/Wxdj/Cpp/x64/Release",
+      "../../../Forever_Mod/Empty/Cpp/x64/Release"
+   ],
+
+   // resource_paths: 递归扫描这些目录,找出所有.script文件,记下它们的绝对路径;同一次扫描
+   // 顺带收集.uplugin/.pak(独立mod自己的迷你UE工程里的Plugin产物,供ForeverModSubsystem
+   // 挂载UE资产,见Source/Core/common/config.md"GetPlugins/GetPakFiles"一节)。
+   // JobMod/OrganizationMod/Story这几处只写一个不含路径/扩展名的bare文件名(比如
+   // "job_shop_saler"),不知道也不需要知道用户实际把脚本文件放在哪,由这里的配置统一
+   // 决定实际存放位置,通过Config::GetScriptPath(name)按文件名反查完整路径,见
+   // Source/Core/society/job.md"Script配置"一节。
+   "resource_paths" : [ "../Story", "../../../Forever_Mod/Test/UE/Test" ],
+
+   // main_story: 主线剧情Script要挂载的ScriptModName,不再由Story硬编码"empty"。
+   "main_story" : "empty",
+
+   // story_scripts: 游戏启动配置界面Story screen的脚本列表(Config::GetStoryScripts()),
+   // 全部一起加载,不是"多选一激活"。路径相对本文件所在目录解析,和dll_paths/resource_paths
+   // 同一套约定。之前这个字段一直没写,Story screen一直是空的,ValidateMainStoryDependencies
+   // 退回GetMainStoryScriptPath()(即GetScriptPath("test"))的兜底路径,补上这一条让Story
+   // screen有默认内容可以展示/编辑。
+   "story_scripts" : [ "../Story/test.script" ],
+
+   // "<concept>_mods": 和旧工程格式一致,每个concept一个数组,数组元素是"id"或"id 参数..."
+   // (命令行式写法,和旧工程"test ---name value"的写法相同)——按第一个空格切开,前半段是
+   // mod id,后半段(可以没有)原样传给该id对应实例的ApplyArgs(),格式由mod自己解析,Config
+   // 只负责切分。**没在这里列出的id视为未启用**——CreateXxx会拒绝创建,CheckRegistered/
+   // GetRegisteredIds也认不到这个id(RoadnetFactory是唯一的例外,见下roadnet_mods的注释,
+   // 它一直就是这个语义)。这条约定阶段3曾经是"不做启用/禁用过滤,未列出的id依然会被正常
+   // 创建",后来发现"注册"和"启用"混成一件事没有办法表达mod依赖关系,改成现在这样。
+   "terrain_mods" : [ "empty --test true", "ocean", "mountain" ],
+
+   // roadnet_mods和其余concept语义不同:Roadnet一次只应该有一个路网布局方案生效(不是Terrain
+   // 那种按GetPriority()多mod叠加),这个数组列出的id会被Map::InitRoadnet()标记为"启用",
+   // RoadnetFactory::GetRoadnet()据此选出唯一生效的那个,详见Source/Core/map/roadnet_factory.md。
+   "roadnet_mods" : [ "jing" ],
+   "zone_mods" : [ "empty --test true", "zone_residence" ],
+   "building_mods" : [ "pengzhan", "yizhong", "yuanshen", "empty --test true",
+      "building_residence", "building_shop", "building_factory",
+      "building_train_station", "building_airport" ],
+   "component_mods" : [ "empty --test true", "component_residence", "component_shop",
+      "component_factory", "component_train_station", "component_airport" ],
+   "room_mods" : [ "empty --test true", "room_residence", "room_shop", "room_warehouse",
+      "room_parking", "room_factory", "room_train_station", "room_airport" ],
+   "asset_mods" : [ "empty --test true", "asset_container", "product_wheat", "product_beef",
+      "product_burger", "ammo_pistol", "ammo_rifle", "weapon_pistol", "weapon_rifle" ],
+   "app_mods" : [ "empty --test true", "bounce", "notes" ],
+   "puzzle_mods" : [ "empty --test true", "tetris" ],
+   "weapon_mods" : [ "weapon_pistol", "weapon_rifle" ],
+   "name_mods" : [ "chinese" ],
+   "scheduler_mods" : [ "empty --test true", "scheduler_basic" ],
+   "job_mods" : [ "empty --test true", "job_shop_saler" ],
+   "organization_mods" : [ "empty --test true", "organization_shop" ],
+   "script_mods" : [ "wxdj", "empty --test true", "script_basic" ],
+   "product_mods" : [ "empty --test true", "product_wheat", "product_beef", "product_burger" ],
+   "storage_mods" : [ "empty --test true", "storage_wheat", "storage_beef", "storage_burger" ],
+   "manufacture_mods" : [ "empty --test true", "manufacture_farm", "manufacture_ranch",
+      "manufacture_food_factory" ],
+   "route_mods" : [ "empty --test true", "route_bus", "route_train", "route_air" ],
+   "station_mods" : [ "empty --test true", "station_bus", "station_train", "station_air" ],
+   "vehicle_mods" : [ "empty --test true", "vehicle_basic", "vehicle_bus", "vehicle_train", "vehicle_plane" ]
+}

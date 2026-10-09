@@ -4,6 +4,12 @@
 
 #pragma comment(lib, "Dependence.lib")
 
+// 这个DLL不依赖任何其它mod。
+extern "C" __declspec(dllexport) void* GetModDllDependencies() {
+	static std::vector<std::string> dependencies = {};
+	return (void*)&dependencies;
+}
+
 extern "C" __declspec(dllexport) void* GetModScripts() {
 	static std::vector<std::string> mods = { "wxdj" };
 	return (void*)&mods;

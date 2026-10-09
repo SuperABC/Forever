@@ -37,7 +37,9 @@ public class Forever : ModuleRules
 
 		// SectionSpeakingWidget::NativeOnKeyDown直接用到FReply/FKeyEvent（Slate类型，UMG只是
 		// 转发/包了一层，不导出符号本身），不链SlateCore会在链接期报FReply构造函数缺符号。
-		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
+		// DesktopPlatform：ForeverConfigBridgeSubsystem::SelectFolder/SelectFile调
+		// IDesktopPlatform原生文件夹/文件选择器，照抄老工程AStartBase的写法。
+		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore", "DesktopPlatform" });
 
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");

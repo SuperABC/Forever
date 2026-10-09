@@ -165,9 +165,23 @@ void AForeverFrameworkActor::BeginPlay()
 }
 
 void AForeverFrameworkActor::ValidateMainStoryDependencies() {
-	for (const std::string& id : Script::GetModDependences(Config::GetMainStoryScriptPath())) {
-		if (!Registry::Get().CheckModRegistered(id)) {
-			THROW_EXCEPTION(RuntimeException, "Main story script depends on mod '" + id + "' which is not registered.\n");
+	// 优先遍历Story screen里玩家显式添加的脚本列表(Config::GetStoryScripts())——这个列表
+	// 为空时才退回旧的单路径查找，保证编辑器里不经过菜单、直接PIE在World.umap上的既有工作流
+	// 不受影响。这里只是个兜底二次校验：真正阻止玩家进入游戏的校验发生在配置界面点击"开始
+	// 游戏"的时候(更早)，见ForeverConfigBridgeSubsystem::ValidateAndStartGame。
+	std::vector<std::string> scripts = Config::GetStoryScripts();
+	if (scripts.empty()) {
+		std::string fallback = Config::GetMainStoryScriptPath();
+		if (!fallback.empty()) {
+			scripts.push_back(fallback);
+		}
+	}
+
+	for (const std::string& scriptPath : scripts) {
+		for (const std::string& id : Script::GetModDependences(scriptPath)) {
+			if (!Registry::Get().CheckModRegistered(id)) {
+				THROW_EXCEPTION(RuntimeException, "Main story script depends on mod '" + id + "' which is not registered.\n");
+			}
 		}
 	}
 }

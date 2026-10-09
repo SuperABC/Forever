@@ -7,6 +7,12 @@
 int PengzhanBuilding::count = 0;
 int YizhongBuilding::count = 0;
 
+// 这个DLL不依赖任何其它mod。
+extern "C" __declspec(dllexport) void* GetModDllDependencies() {
+	static std::vector<std::string> dependencies = {};
+	return (void*)&dependencies;
+}
+
 extern "C" __declspec(dllexport) void* GetModBuildings() {
 	static std::vector<std::string> mods = { "pengzhan", "yizhong" };
 	return (void*)&mods;
