@@ -113,8 +113,10 @@ private:
 	// 上一次Tick/SetTime时的游戏天数，用于跨天检测
 	int day = -1;
 
-	// 默认值和原来硬编码的kTimeFlowRatio一致，未被脚本覆盖时行为不变。
-	double timeFlowRatio = 2.0;
+	// 原本默认值是2.0(和老的kTimeFlowRatio一致)；这次调成10.0——1现实秒=10游戏分钟，
+	// 一天(1440分钟)需要144现实秒(2.4分钟)。未被脚本(global_settings.time_flow_ratio)
+	// 覆盖时就是这个值生效。
+	double timeFlowRatio = 10.0;
 
 	// 进入武器系统新增。100点是随手给的默认值，具体数值等PIE里试手感再调。
 	float health = 100.f;

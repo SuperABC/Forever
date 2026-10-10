@@ -20,6 +20,7 @@ class UForeverBuildingFrameworkComponent;
 class UForeverPopulaceFrameworkComponent;
 class UForeverRoadnetFrameworkComponent;
 class UForeverRoomFrameworkComponent;
+class UForeverSkyFrameworkComponent;
 class UForeverStoryFrameworkComponent;
 class UForeverTerrainFrameworkComponent;
 class UForeverTrafficFrameworkComponent;
@@ -184,6 +185,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverRoomFrameworkComponent> roomFramework;
 
+	// 昼夜循环，见Source/Forever/Framework/ForeverSkyFrameworkComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
+	TObjectPtr<UForeverSkyFrameworkComponent> skyFramework;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverStoryFrameworkComponent> storyFramework;
 
@@ -202,6 +207,7 @@ public:
 	FORCEINLINE UForeverPopulaceFrameworkComponent* GetPopulaceFramework() const { return populaceFramework; }
 	FORCEINLINE UForeverRoadnetFrameworkComponent* GetRoadnetFramework() const { return roadnetFramework; }
 	FORCEINLINE UForeverRoomFrameworkComponent* GetRoomFramework() const { return roomFramework; }
+	FORCEINLINE UForeverSkyFrameworkComponent* GetSkyFramework() const { return skyFramework; }
 	FORCEINLINE UForeverStoryFrameworkComponent* GetStoryFramework() const { return storyFramework; }
 	FORCEINLINE UForeverTerrainFrameworkComponent* GetTerrainFramework() const { return terrainFramework; }
 	FORCEINLINE UForeverTrafficFrameworkComponent* GetTrafficFramework() const { return trafficFramework; }

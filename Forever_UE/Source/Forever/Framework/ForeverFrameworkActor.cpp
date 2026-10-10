@@ -27,6 +27,7 @@
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverRoadnetFrameworkComponent.h"
 #include "Framework/ForeverRoomFrameworkComponent.h"
+#include "Framework/ForeverSkyFrameworkComponent.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Framework/ForeverTerrainFrameworkComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
@@ -53,6 +54,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	populaceFramework = CreateDefaultSubobject<UForeverPopulaceFrameworkComponent>(TEXT("PopulaceFramework"));
 	roadnetFramework = CreateDefaultSubobject<UForeverRoadnetFrameworkComponent>(TEXT("RoadnetFramework"));
 	roomFramework = CreateDefaultSubobject<UForeverRoomFrameworkComponent>(TEXT("RoomFramework"));
+	skyFramework = CreateDefaultSubobject<UForeverSkyFrameworkComponent>(TEXT("SkyFramework"));
 	storyFramework = CreateDefaultSubobject<UForeverStoryFrameworkComponent>(TEXT("StoryFramework"));
 	terrainFramework = CreateDefaultSubobject<UForeverTerrainFrameworkComponent>(TEXT("TerrainFramework"));
 	trafficFramework = CreateDefaultSubobject<UForeverTrafficFrameworkComponent>(TEXT("TrafficFramework"));
@@ -257,6 +259,10 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 		GEngine->AddOnScreenDebugMessage(/*Key=*/9000, /*TimeToDisplay=*/1.f, FColor::White,
 			FString::Printf(TEXT("游戏时间: %s"), UTF8_TO_TCHAR(player->GetTime()->ToString(true, true).c_str())));
 	}
+
+	// 昼夜循环：根据刚推进过的游戏时钟驱动太阳/天空/雾/后处理，见
+	// ForeverSkyFrameworkComponent.md。
+	if (skyFramework) skyFramework->UpdateSky(*player->GetTime());
 
 	// 驱动Job/Organization各自独立的DailyPlan/ExecNode调度（两套独立的timer，见
 	// populace.md/society.md"两套独立timer"一节）。ExecNode这次是纯C++通道，直接给
