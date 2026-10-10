@@ -1,5 +1,5 @@
 {
-   "app_mods" : [ "app_basic", "bounce", "notes", "empty --test true" ],
+   "app_mods" : [ "bounce", "notes", "empty --test true" ],
    "asset_mods" : [
       "asset_container",
       "product_wheat",
@@ -57,7 +57,7 @@
       "product_burger",
       "empty --test true"
    ],
-   "puzzle_mods" : [ "puzzle_basic", "tetris", "empty --test true" ],
+   "puzzle_mods" : [ "tetris", "empty --test true" ],
    "resource_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test"

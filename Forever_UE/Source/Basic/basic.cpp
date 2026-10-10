@@ -39,10 +39,7 @@
 #include "traffic/vehicle_basic.h"
 #include "player/asset_basic.h"
 #include "player/app_basic.h"
-#include "player/app_bounce.h"
-#include "player/app_notes.h"
 #include "player/puzzle_basic.h"
-#include "player/puzzle_tetris.h"
 #include "player/weapon_basic.h"
 
 #pragma comment(lib, "Dependence.lib")
@@ -416,13 +413,10 @@ extern "C" __declspec(dllexport) void FinishModAssets(AssetFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModApps() {
-	static vector<string> mods = { AppBasic::GetId(), BounceApp::GetId(), NotesApp::GetId() };
+	static vector<string> mods = { BounceApp::GetId(), NotesApp::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModApps(AppFactory* factory) {
-	factory->RegisterApp(AppBasic::GetId(),
-		[](const std::string&) -> AppMod* { return new AppBasic(); },
-		[](AppMod* m) { delete m; });
 	factory->RegisterApp(BounceApp::GetId(),
 		[](const std::string&) -> AppMod* { return new BounceApp(); },
 		[](AppMod* m) { delete m; });
@@ -434,13 +428,10 @@ extern "C" __declspec(dllexport) void FinishModApps(AppFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModPuzzles() {
-	static vector<string> mods = { PuzzleBasic::GetId(), TetrisPuzzle::GetId() };
+	static vector<string> mods = { TetrisPuzzle::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModPuzzles(PuzzleFactory* factory) {
-	factory->RegisterPuzzle(PuzzleBasic::GetId(),
-		[](const std::string&) -> PuzzleMod* { return new PuzzleBasic(); },
-		[](PuzzleMod* m) { delete m; });
 	factory->RegisterPuzzle(TetrisPuzzle::GetId(),
 		[](const std::string&) -> PuzzleMod* { return new TetrisPuzzle(); },
 		[](PuzzleMod* m) { delete m; });

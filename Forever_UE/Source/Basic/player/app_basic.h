@@ -3,30 +3,79 @@
 #include "player/app_mod.h"
 
 #include <string>
+#include <vector>
 
 
-// 阶段3占位:trivial默认实现,真正的默认player内容目录留到阶段4从旧工程
-// Basic/player/app_basic.h迁移,完整对照表见 Source/Basic/README.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
+// Bounce——手机系统的第一个测试App：一个在画布里反弹的方块，纯Loop驱动位置积分。
+// 用来验证AppMod最基础的Init(随机初始位置/方向)和Refresh(从后台切回来后继续弹，
+// 不能被Phone重置)，不涉及Back(单页App，留空实现)。
 //
 // GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式(之前这里是固定字符串，
-// 没有任何唯一性)。
-class AppBasic : public AppMod {
+// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式。
+class BounceApp : public AppMod {
 public:
-	AppBasic();
+	BounceApp();
 
-	static const char* GetId() { return "app_basic"; }
-	virtual const char* GetType() const override { return "app_basic"; }
+	static const char* GetId() { return "bounce"; }
+	virtual const char* GetType() const override { return "bounce"; }
 	virtual const char* GetName() override;
 
-	virtual void Init(Canvas* canvas, PostHandle* post) override {}
-	virtual void Loop(Canvas* canvas, int ms, PostHandle* post) override {}
-	virtual void Back(Canvas* canvas, PostHandle* post) override {}
-	virtual void Refresh(Canvas* canvas, PostHandle* post) override {}
+	virtual void Init(Canvas* canvas, PostHandle* post) override;
+	virtual void Loop(Canvas* canvas, int ms, PostHandle* post) override;
+	virtual void Back(Canvas* canvas, PostHandle* post) override {} // 单页App，没有导航栈可退
+
+	// 从后台恢复：不重新Init，只按当前位置重画一次(不推进物理)，跟老工程TestApp::Refresh
+	// 同一个语义。
+	virtual void Refresh(Canvas* canvas, PostHandle* post) override;
 
 private:
+	void Render(Canvas* canvas) const;
+
+	float posX = 0.f, posY = 0.f;
+	float velX = 0.f, velY = 0.f;
+	int boxSize = 0;
+
+	static int count;
+	int id;
+	std::string name;
+};
+
+// Notes——手机系统的第二个测试App：硬编码几条便签的两级页面(列表->详情)。用来验证
+// Back(从详情返回列表)、鼠标点击列表项，以及Refresh(从后台切回来时停在离开前的页面/
+// 选中项，不会跳回列表)。不做老工程ZheyeApp那种JSON数据文件+配置路径查询的复杂度——
+// 数据直接硬编码在.cpp里，够验证Phone整个状态机就行。
+//
+// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼。
+class NotesApp : public AppMod {
+public:
+	NotesApp();
+
+	static const char* GetId() { return "notes"; }
+	virtual const char* GetType() const override { return "notes"; }
+	virtual const char* GetName() override;
+
+	virtual void Init(Canvas* canvas, PostHandle* post) override;
+	virtual void Loop(Canvas* canvas, int ms, PostHandle* post) override;
+	virtual void Back(Canvas* canvas, PostHandle* post) override; // 详情->列表；已经在列表则不做任何事
+	virtual void Refresh(Canvas* canvas, PostHandle* post) override; // 停在离开前的页面，不重置selection
+
+private:
+	enum class Screen { List, Detail };
+
+	struct Note {
+		std::string title;
+		std::string body;
+	};
+
+	void RenderList(Canvas* canvas) const;
+	void RenderDetail(Canvas* canvas) const;
+	int HitRow(int x, int y) const;
+
+	std::vector<Note> notes;
+	Screen screen = Screen::List;
+	int selection = 0;
+	int rowHeight = 0;
+
 	static int count;
 	int id;
 	std::string name;

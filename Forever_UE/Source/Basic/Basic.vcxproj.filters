@@ -55,15 +55,6 @@
     <ClCompile Include="player\puzzle_basic.cpp">
       <Filter>player</Filter>
     </ClCompile>
-    <ClCompile Include="player\puzzle_tetris.cpp">
-      <Filter>player</Filter>
-    </ClCompile>
-    <ClCompile Include="player\app_bounce.cpp">
-      <Filter>player</Filter>
-    </ClCompile>
-    <ClCompile Include="player\app_notes.cpp">
-      <Filter>player</Filter>
-    </ClCompile>
     <ClCompile Include="player\weapon_basic.cpp">
       <Filter>player</Filter>
     </ClCompile>
@@ -124,15 +115,6 @@
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="player\puzzle_basic.h">
-      <Filter>player</Filter>
-    </ClInclude>
-    <ClInclude Include="player\puzzle_tetris.h">
-      <Filter>player</Filter>
-    </ClInclude>
-    <ClInclude Include="player\app_bounce.h">
-      <Filter>player</Filter>
-    </ClInclude>
-    <ClInclude Include="player\app_notes.h">
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="player\weapon_basic.h">
