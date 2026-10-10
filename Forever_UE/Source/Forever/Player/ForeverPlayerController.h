@@ -10,6 +10,7 @@ class USectionOptionWidget;
 class UPuzzleWidget;
 class UPhoneWidget;
 class UForeverInventoryWidget;
+class UMapWidget;
 class UInputComponent;
 
 // 阶段5 MeetOption UI落地：MAINCONTROLLER_TODO.md点名的"MouseScrollUp/Down + F对话选项"
@@ -84,6 +85,17 @@ protected:
 
 	void ToggleInventory();
 
+	// 游戏内地图：跟前面几个Widget同一套模式(常驻创建)，M键(ToggleMap)开关、Esc键
+	// (CloseMap)只关不开，见Source/Forever/UI/MapWidget.h。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UMapWidget> mapWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UMapWidget> mapWidget;
+
+	void ToggleMap();
+	void HandleCloseMap();
+
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
@@ -91,4 +103,5 @@ public:
 	FORCEINLINE UPuzzleWidget* GetPuzzleWidget() const { return puzzleWidget; }
 	FORCEINLINE UPhoneWidget* GetPhoneWidget() const { return phoneWidget; }
 	FORCEINLINE UForeverInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
+	FORCEINLINE UMapWidget* GetMapWidget() const { return mapWidget; }
 };

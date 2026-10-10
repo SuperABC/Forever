@@ -135,6 +135,12 @@ public:
 	void PutPixel(int x, int y);
 	Color GetPixel(int x, int y) const;
 	void PutLine(int x1, int y1, int x2, int y2);
+
+	// 有宽度的直线——不是多次调用上面那个1像素Bresenham直线做偏移近似(斜线方向上会因为
+	// 相邻线各自独立取整产生缝隙，真实复现过)，是按线宽算出一个矩形(两个填充三角形)、复用
+	// PutTriangle已有的扫描线填充算法，保证是一整块实心区域，不会有缝隙。width<=1时退化成
+	// 调用上面那个1像素版本。
+	void PutLine(int x1, int y1, int x2, int y2, int width);
 	void PutRect(int x1, int y1, int x2, int y2, bool fill);
 	void PutTriangle(int x1, int y1, int x2, int y2, int x3, int y3, bool fill);
 	void PutCircle(int x, int y, int radius, bool fill);

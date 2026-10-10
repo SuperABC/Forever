@@ -12,6 +12,7 @@
 #include "UI/PuzzleWidget.h"
 #include "UI/PhoneWidget.h"
 #include "UI/InventoryWidget.h"
+#include "UI/MapWidget.h"
 
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
@@ -84,6 +85,13 @@ void AForeverPlayerController::BeginPlay() {
 	else if ((inventoryWidget = CreateWidget<UForeverInventoryWidget>(this, inventoryWidgetClass)) != nullptr) {
 		inventoryWidget->AddToViewport();
 	}
+
+	if (mapWidgetClass == nullptr) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: mapWidgetClass未设置,跳过MapWidget创建。"));
+	}
+	else if ((mapWidget = CreateWidget<UMapWidget>(this, mapWidgetClass)) != nullptr) {
+		mapWidget->AddToViewport();
+	}
 }
 
 void AForeverPlayerController::SetupInputComponent() {
@@ -94,6 +102,8 @@ void AForeverPlayerController::SetupInputComponent() {
 			if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("TogglePhone")), ETriggerEvent::Started, this, &AForeverPlayerController::TogglePhone);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleInventory")), ETriggerEvent::Started, this, &AForeverPlayerController::ToggleInventory);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleMap")), ETriggerEvent::Started, this, &AForeverPlayerController::ToggleMap);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("CloseMap")), ETriggerEvent::Started, this, &AForeverPlayerController::HandleCloseMap);
 			}
 		}
 	}
@@ -105,4 +115,12 @@ void AForeverPlayerController::TogglePhone() {
 
 void AForeverPlayerController::ToggleInventory() {
 	if (inventoryWidget) inventoryWidget->TogglePanel();
+}
+
+void AForeverPlayerController::ToggleMap() {
+	if (mapWidget) mapWidget->ToggleMap();
+}
+
+void AForeverPlayerController::HandleCloseMap() {
+	if (mapWidget) mapWidget->CloseMap();
 }

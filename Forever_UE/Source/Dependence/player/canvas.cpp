@@ -242,6 +242,37 @@ void Canvas::PutLine(int x1, int y1, int x2, int y2) {
 	}
 }
 
+void Canvas::PutLine(int x1, int y1, int x2, int y2, int width) {
+	if (width <= 1) {
+		PutLine(x1, y1, x2, y2);
+		return;
+	}
+
+	// 沿线段方向算出垂直单位向量，往两侧各偏移半个线宽得到4个角点，拆成2个填充三角形
+	// (复用PutTriangle的扫描线填充)——这是一整块实心矩形区域，逐像素判定在不在矩形内，
+	// 不是"画几条独立的线再堆在一起"，不会有缝隙。
+	float dx = static_cast<float>(x2 - x1), dy = static_cast<float>(y2 - y1);
+	float len = sqrtf(dx * dx + dy * dy);
+	float px = 0.f, py = 0.f;
+	if (len > 0.0001f) {
+		px = -dy / len;
+		py = dx / len;
+	}
+	float halfWidth = width * 0.5f;
+
+	int ax = static_cast<int>(lroundf(x1 + px * halfWidth));
+	int ay = static_cast<int>(lroundf(y1 + py * halfWidth));
+	int bx = static_cast<int>(lroundf(x2 + px * halfWidth));
+	int by = static_cast<int>(lroundf(y2 + py * halfWidth));
+	int cx = static_cast<int>(lroundf(x2 - px * halfWidth));
+	int cy = static_cast<int>(lroundf(y2 - py * halfWidth));
+	int ex = static_cast<int>(lroundf(x1 - px * halfWidth));
+	int ey = static_cast<int>(lroundf(y1 - py * halfWidth));
+
+	PutTriangle(ax, ay, bx, by, cx, cy, true);
+	PutTriangle(ax, ay, cx, cy, ex, ey, true);
+}
+
 void Canvas::FastLine(int x1, int x2, int y) {
 	if (x1 > x2) swap(x1, x2);
 	for (int x = x1; x <= x2; x++) PutPixel(x, y);
