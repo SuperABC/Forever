@@ -5,7 +5,7 @@
 #include <unordered_map>
 
 
-// 20个concept对应的DLL导出符号名,和8个domain/概念的完整对照表见同目录loader.md。
+// 21个concept对应的DLL导出符号名,和7个domain的完整对照表见同目录loader.md。
 // Config::AddDllPath用getModSymbol探测某个dll是否是合法mod;ModLoader::RegisterConcept
 // 用registerSymbol/finishSymbol把探测通过的dll真正接入某个具体Factory。
 struct ModConceptDescriptor {
@@ -17,7 +17,7 @@ struct ModConceptDescriptor {
 
 const std::vector<ModConceptDescriptor>& GetModConceptDescriptors();
 
-// 不是per-concept的，整个DLL只有一份——由Config::AddDllPath在探测20个concept符号的同一次
+// 不是per-concept的，整个DLL只有一份——由Config::AddDllPath在探测21个concept符号的同一次
 // LoadLibrary/FreeLibrary里顺带探测，和上面GetModConceptDescriptors()的20行表无关，所以不
 // 塞进那张表(表的行形状是3个per-concept符号，容不下这种"整个DLL一份"的第4列)。声明这个DLL
 // 依赖哪些mod id(不带concept前缀)，给游戏启动配置界面的依赖校验用，见config.md。

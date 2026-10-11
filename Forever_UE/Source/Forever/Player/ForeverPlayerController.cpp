@@ -30,10 +30,9 @@ void AForeverPlayerController::BeginPlay() {
 
 	// 手机(Phone)系统：P键要求任何时候都生效(包括开局还没占有任何真正Pawn、操控着
 	// ADefaultPawn的那几帧，以及ChangeControlChange换人操控/换乘载具的瞬间)——这个动态
-	// Context原来只在Pawn的PossessedBy里加(见AForeverCharacter::PossessedBy)，Controller
-	// 自己在这里常驻加一份，就不用依赖"当前是不是正占有着一个真正的Pawn"，见
-	// MAINCONTROLLER_TODO.md"P开手机"这一行热键的既定设计。Pawn那边同样这两行现在删掉了
-	// (不需要重复加)，见AForeverCharacter.cpp/VehicleElement.cpp。
+	// Context常驻加在Controller上而不是Pawn的PossessedBy里，就不用依赖"当前是不是正占有着
+	// 一个真正的Pawn"，见MAINCONTROLLER_TODO.md"P开手机"这一行热键的既定设计。Pawn侧
+	// (AForeverCharacter.cpp/VehicleElement.cpp)不重复加这份Context。
 	if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer())) {
 		if (UGameInstance* gameInstance = GetGameInstance()) {
 			if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {

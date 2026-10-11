@@ -19,8 +19,7 @@
 #define DOOR_CLOSE_DELAY_SECONDS 1.f // 触发盒空了之后延迟这么久才真正关门
 // 门扇/门框的厚度(UE单位，即厘米)——必须比墙薄，否则门扇会凸出墙面两侧。墙厚是
 // BuildingElement.cpp::BUILDING_WALL_THICKNESS(0.01地图单位=10UE单位=10厘米)，这里固定
-// 6厘米，不用资产自己的原始厚度(最初直接传0.f让AlignMeshToBounds保留Cube资产原厚度，
-// 结果比墙还厚，实测复现)。
+// 6厘米，不用资产自己的原始厚度——传0.f让AlignMeshToBounds保留Cube资产原厚度会比墙还厚。
 #define DOOR_THICKNESS 6.f
 
 namespace {
@@ -54,8 +53,7 @@ void UForeverDoorComponent::AlignMeshToBounds(UStaticMeshComponent* meshComp, US
 	FVector extent = bounds.BoxExtent;
 	// desiredLocalSize某个轴给0.f表示"这个轴不缩放，保留资产原样"(比如厚度轴，见
 	// BuildLeaves/BuildFrame的调用)——必须同时判desiredLocalSize>0，否则0/(2*extent)算出
-	// 缩放系数0，把这个轴整个压扁成0厚度，门扇/门框整体不可见(实测复现：所有门在场景里
-	// 完全看不见，见DoorComponent.md"已知简化"一节)。
+	// 缩放系数0，把这个轴整个压扁成0厚度，导致门扇/门框整体不可见。
 	FVector scale(
 		(extent.X > KINDA_SMALL_NUMBER && desiredLocalSize.X > KINDA_SMALL_NUMBER) ? desiredLocalSize.X / (2.f * extent.X) : 1.f,
 		(extent.Y > KINDA_SMALL_NUMBER && desiredLocalSize.Y > KINDA_SMALL_NUMBER) ? desiredLocalSize.Y / (2.f * extent.Y) : 1.f,
@@ -194,9 +192,9 @@ void UForeverDoorComponent::BuildTriggerBox(float doorWidth, float doorHeight) {
 	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
 	// 门两侧各伸出1.5米；车行门伸出4米，宽度也相应放大，见door_system_plan.md"UE：自动门
 	// 组件"一节。注意单位：DOOR_WORLD_SCALE是"地图单位->UE单位"的换算系数(1地图单位=
-	// 1000UE单位=10米)，这里要的是"米"，不是"地图单位"——最初直接写成1.5/4.0地图单位，
-	// 换算出15米/40米的触发范围，导致离门老远就自动开门(实测复现)，这里改成先换算成地图
-	// 单位(米数/10)再乘DOOR_WORLD_SCALE。
+	// 1000UE单位=10米)，这里要的是"米"，不是"地图单位"——不能直接把1.5/4.0当地图单位传进
+	// 去（会算出15米/40米的触发范围，离门老远就自动开门），必须先换算成地图单位(米数/10)
+	// 再乘DOOR_WORLD_SCALE。
 	float paddingMeters = door->IsVehicleGate() ? 4.f : 1.5f;
 	float padding = (paddingMeters / 10.f) * DOOR_WORLD_SCALE;
 	box->SetBoxExtent(FVector(doorWidth * 0.5f + padding * (door->IsVehicleGate() ? 1.5f : 1.f),

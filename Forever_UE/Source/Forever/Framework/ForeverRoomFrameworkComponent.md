@@ -2,26 +2,22 @@
 
 ## 职责
 
-对应旧Framework Actor `Room`(C++ Base:RoomBase)。当前为空实现，职责说明见
-`ForeverFrameworkComponent.md`域对照表。
+对应旧Framework Actor `Room`(C++ Base:`RoomBase`)。当前为空实现（`UCLASS()`无成员/方法），
+`Room`这个域槽位留给以后的阶段（比如Populace/Industry给Room关联住户/库存这类逻辑）。
 
-## 历史：Room进入/离开检测碰撞盒一度在这里实现，后来挪走了
+## 关键设计
 
-这个组件曾经短暂地填过内容——给全地图每个`Room`生成一个`UBoxComponent`+
-`OnComponentBeginOverlap`/`OnComponentEndOverlap`检测碰撞盒。后来在排查"建筑近处LOD每次
-整层增删都巨卡"时发现：全地图所有Room的碰撞盒全部`NewObject`在这个组件所在的单例
-`AForeverFrameworkActor`上，会被物理引擎对同一个Actor根组件下大量Static简单碰撞子组件做的
-"焊接"（weld）开销拖累——这和"building近处LOD组件全地图共用一个owner"是同一个根因（完整
-排查过程见`Source/Forever/Framework/ForeverBuildingFrameworkComponent.md`"性能第2轮"
-一节）。修复方式是把Room碰撞盒的生成挪进`ABuildingElement`（见
-`Source/Forever/Element/BuildingElement.h/.md`）——每栋building自己的所有Room碰撞盒，
-跟着这栋楼自己的近/远LOD组件、building自己的碰撞盒一起attach到这栋楼专属的Actor，不再
-共用一个全地图规模的owner。
+### Room进入/离开检测碰撞盒不在这里，在`ABuildingElement`里
 
-这个组件恢复回空骨架，`Room`这个域槽位保留给以后的阶段（比如Populace/Industry给Room关联
-住户/库存这类和"Room进入/离开检测"完全不相关的逻辑）。
+Room的进入/离开检测碰撞盒实际生成在每栋building专属的`ABuildingElement`里（见
+`Source/Forever/Element/BuildingElement.h/.md`），跟着那栋楼自己的其它碰撞盒/近处LOD组件
+一起attach到同一个Actor——**不能**给全地图每个Room各生成一个`UBoxComponent`挂在这个组件
+所在的单例`AForeverFrameworkActor`上：Room数量级可能是成千上万，全部挂在同一个owner会被
+物理引擎对"同一个Actor根组件下大量Static简单碰撞子组件"做的焊接（weld）开销拖累——和
+building近处LOD组件共用一个owner是同一个根因，完整说明见
+`ForeverBuildingFrameworkComponent.md`"性能排查"一节。
 
 ## 待办/后续阶段
 
-- 阶段4逐个域落地后，把这个域真正需要的逻辑（和"Room进入/离开检测"无关的部分，那部分已经
-  在`ABuildingElement`里）收进来。
+- 这个域真正需要的逻辑（和"Room进入/离开检测"无关的部分，那部分已经在`ABuildingElement`
+  里）后续按需求落地时收进来。

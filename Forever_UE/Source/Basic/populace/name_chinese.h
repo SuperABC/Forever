@@ -5,12 +5,10 @@
 #include <vector>
 
 
-// ChineseName：populace域第二轮迁移，从阶段3占位骨架(NameBasic，只有GetType()/GetName())
-// 换成老工程真正的中文取名算法(E:\Projects\Forever_UE\Source\Basic\populace\
-// name_basic.h/.cpp)——姓氏/名字词库+取名算法逐字段/逐行照抄。接口这次改回老工程"传一个
-// set结果的lambda进去"的callback写法，见Source/Dependence/populace/name_mod.h的说明，
+// ChineseName：中文取名算法的具体实现——姓氏/名字词库+取名算法。接口是"传一个set
+// 结果的lambda进去"的callback写法，见Source/Dependence/populace/name_mod.h的说明，
 // 详见Source/Core/populace/populace.md。
-// Basic现在编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
+// Basic编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
 // 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
 class ChineseName : public NameMod {
 public:
@@ -39,5 +37,5 @@ private:
 
 	static int count;
 	int id;
-	std::string name; // GetName()缓存用，和老工程同样的"实例编号"debug名，非生成出的人名
+	std::string name; // GetName()缓存用，是"实例编号"debug名，非生成出的人名
 };

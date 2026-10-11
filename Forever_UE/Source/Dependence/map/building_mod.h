@@ -50,7 +50,7 @@ struct FloorLayoutSpec {
 };
 
 // 一台电梯轿厢——照抄老工程Cabin(name/temp/idx/minFloor/maxFloor/script)的模式，去掉
-// temp(未用到)和script(Script域还没迁移)，加上这次要求的可配置mesh路径。shaftIndex对应
+// temp(未用到)和script(Script域还没迁移)，加上可配置的mesh路径。shaftIndex对应
 // 每层.layout模板"elevators"数组里的第几个(0-based)——同一个shaftIndex假定跨楼层指向同一口
 // 井道(要求mod保证模板里elevator条目顺序跨楼层一致，这次没有更强的位置匹配机制，照抄老工程
 // AddElevator用一个裸idx区分电梯、不做任何几何反推的做法)。
@@ -61,14 +61,14 @@ struct ElevatorCabinSpec {
 	std::string cabinMeshPath; // 留空用组件默认Elevator mesh
 };
 
-// BuildingMod：Building这次有两种生成方式（显式占位 + 权重CDF随机填充，照抄老工程
-// Map::InitContents对Building的处理，见Source/Core/map/map.md"InitBuildings"一节）。
+// BuildingMod：Building有两种生成方式（显式占位 + 权重CDF随机填充，见
+// Source/Core/map/map.md"InitBuildings"一节）。
 //
-// 这次会话改回和Zone一样的"一个本体独占一个mod实例"模型（撤销早前的"按类型共享"设计）：
-// RandomAcreage/GetAcreageMin/GetAcreageMax/GetPower/Assign全部不再是需要实例的虚方法，改成
-// 每个具体子类必须实现的static方法，通过BuildingFactory::RegisterBuilding的额外函数指针参数
-// 注册（和creator/deleter同样的裸函数指针机制，见building_factory.h）——这样查询这些"按类型
-// 固定"的信息完全不需要构造任何BuildingMod实例，只有真正落地成功时才会CreateBuilding一次。
+// 和Zone一样是"一个本体独占一个mod实例"模型：RandomAcreage/GetAcreageMin/GetAcreageMax/
+// GetPower/Assign全部是不需要实例的static方法，每个具体子类必须实现，通过
+// BuildingFactory::RegisterBuilding的额外函数指针参数注册（和creator/deleter同样的裸函数
+// 指针机制，见building_factory.h）——这样查询这些"按类型固定"的信息完全不需要构造任何
+// BuildingMod实例，只有真正落地成功时才会CreateBuilding一次。
 class BuildingMod {
 public:
 	BuildingMod() = default;

@@ -43,7 +43,7 @@ namespace {
 		const ScriptContext& context) {
 		for (const auto& action : actions) {
 			if (auto dialogPtr = get_if<const Dialog*>(&action)) {
-				// 阶段5 SectionSpeaking/SectionOption UI落地：不再在这里直接打印，交给
+				// 不在这里直接打印，交给
 				// UForeverStoryFrameworkComponent::ShowDialog统一展示/排队，见该函数声明处
 				// 注释。
 				if (framework && framework->GetStoryFramework()) {
@@ -114,7 +114,7 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 		}
 	}
 
-	// 阶段5 MeetOption UI落地新增：每个市民独占持有一份Scheduler，Scheduler自己的Script
+	// 每个市民独占持有一份Scheduler，Scheduler自己的Script
 	// （schedule_empty.script）也要广播一次game_start，否则里面的add_option milestone永远
 	// 不会被触发（citizen的对话选项永远加不上），见ForeverStoryFrameworkComponent.md。
 	Populace* populace = framework ? framework->GetPopulace() : nullptr;
@@ -368,8 +368,8 @@ void UForeverStoryFrameworkComponent::ShowCurrentItem() {
 		// 对话播完，恢复正常的游戏内输入。光把bShowMouseCursor/SetInputMode改回去还不够——
 		// UIOnly期间点SectionButton/ClickCatcher这次鼠标点击本身会把Slate的键盘/鼠标焦点
 		// 转移到那个Button上，SetInputMode(GameOnly)并不会主动抢回来，停留在UI焦点上的话
-		// 即使鼠标已经隐藏，Look这个Enhanced Input Action也收不到鼠标移动事件（实测复现：
-		// 对话关闭后鼠标不消失、也没法转视角）。必须再调用一次SetFocusToGameViewport()把
+		// 即使鼠标已经隐藏，Look这个Enhanced Input Action也收不到鼠标移动事件（对话关闭后
+		// 鼠标不消失、也没法转视角）。必须再调用一次SetFocusToGameViewport()把
 		// 焦点抢回游戏视口。
 		playerController->bShowMouseCursor = false;
 		UWidgetBlueprintLibrary::SetInputMode_GameOnly(playerController);

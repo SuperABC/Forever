@@ -13,9 +13,8 @@ enum RELATIONSHIP_CATEGORY : int {
 	RELATIONSHIP_ROMANTIC
 };
 
-// relativeType描述"对方"相对本人的身份（照抄老工程Person::AddRelative(type, person)的
-// 语义：type说的是other的身份，不是self的），不区分父/母、儿子/女儿——Citizen::GetGender()
-// 已经能查性别，没必要在枚举里再拆一份。
+// relativeType描述"对方"相对本人的身份（type说的是other的身份，不是self的），不区分
+// 父/母、儿子/女儿——Citizen::GetGender()已经能查性别，没必要在枚举里再拆一份。
 enum RELATIVE_TYPE : int {
 	RELATIVE_SPOUSE,
 	RELATIVE_PARENT,

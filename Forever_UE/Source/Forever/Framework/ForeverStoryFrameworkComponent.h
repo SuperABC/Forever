@@ -14,7 +14,7 @@ class StartPuzzleChange;
 class EnterVehicleChange;
 struct ScriptContext;
 
-// 阶段4 Story落地：这次把Script->Milestone->Event/Dialog/Change架构跑通到"游戏开始广播
+// Script->Milestone->Event/Dialog/Change架构跑通到"游戏开始广播
 // GameStartEvent，匹配出的Dialog交给SectionSpeaking/SectionOption两个UI展示、Change转发给
 // ApplyChange"这一步。详见ForeverStoryFrameworkComponent.md。
 UCLASS()
@@ -75,9 +75,9 @@ public:
 	// @context: 变量路由上下文，用于求值change->GetVehicle()
 	void ApplyEnterVehicle(const EnterVehicleChange* change, const ScriptContext& context);
 
-	// 阶段5 SectionSpeaking/SectionOption UI落地：把ProcessScriptActions匹配出的一个Dialog
-	// 交给这个函数展示，取代原来"直接打印到屏幕左上角"的占位做法（Dialog分支选项原来"没有
-	// 玩家交互，默认打印第一个Option"的限制这次一并解除，见ForeverStoryFrameworkComponent.md）。
+	// 把ProcessScriptActions匹配出的一个Dialog
+	// 交给这个函数展示，不直接打印到屏幕左上角（Dialog分支选项"没有
+	// 玩家交互，默认打印第一个Option"的限制已解除，见ForeverStoryFrameworkComponent.md）。
 	// Dialog::GetDialogs()拿到的Section拷贝在这里被逐个求值/展平进pendingQueue：普通台词
 	// 求值成speaker/content字符串；分支选项求值每个Option::GetOption()的显示文本，原始
 	// Option（连同它引用的嵌套dialogs/changes）整个存一份供选中后使用。求值动作必须在这次

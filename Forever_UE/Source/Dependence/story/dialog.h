@@ -67,9 +67,9 @@ private:
 
 };
 
-// 对话段：普通台词或分支选项二选一。保持老工程的延迟求值约定——Dialog::GetDialogs()每次
-// 返回的是Section的拷贝，EvaluateText在这份拷贝上求值、把结果写进speaking缓存，不会回写
-// Dialog本体持有的原始未求值版本，所以同一个Dialog反复播放时，表达式（尤其是引用了self./
+// 对话段：普通台词或分支选项二选一。延迟求值约定——Dialog::GetDialogs()每次返回的是
+// Section的拷贝，EvaluateText在这份拷贝上求值、把结果写进speaking缓存，不会回写Dialog
+// 本体持有的原始未求值版本，所以同一个Dialog反复播放时，表达式（尤其是引用了self./
 // system.等易变变量的部分）每次都会用当时最新的变量值重新求值。
 class Section {
 public:

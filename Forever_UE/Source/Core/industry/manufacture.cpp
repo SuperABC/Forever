@@ -201,7 +201,7 @@ void Manufacture::StartProduce() {
 	}
 
 	// 按overallRatio预扣inputCache里对应原料——为下一轮StartProduce()腾出准确的
-	// "当前存量"基准，同老工程的"预扣"设计。
+	// "当前存量"基准，不是等WorkAccount()结算时才扣。
 	for (const auto& [ingredient, standard] : ingredients) {
 		float consume = standard * overallRatio;
 		if (consume > 0.f) inputCache->Output(ingredient, consume);

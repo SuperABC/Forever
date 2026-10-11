@@ -4,8 +4,7 @@
 
 `Terrain`是某个具体`TerrainMod`实例的薄包装——构造时向`TerrainFactory`要一个实例（按id，如
 `"ocean"`/`"mountain"`），把`GetType`/`GetName`/`GetPriority`/`SetupTexture`/`GetTexture`/
-`GetWater`/`DistributeTerrain`原样转发出去，析构时交还给Factory销毁。对照老工程
-`E:\Projects\Forever_UE\Source\Core\map\terrain.h/.cpp`迁移。
+`GetWater`/`DistributeTerrain`原样转发出去，析构时交还给Factory销毁。
 
 ## 关键设计
 
@@ -26,5 +25,4 @@
 
 - 依赖：`terrain_mod.h`、`terrain_factory.h`、`common/error.h`（`NullPointerException`）。
 - 被谁依赖：`Source/Core/map/map.h`（`Map::InitTerrains()`临时构造`Terrain*`跑
-  `DistributeTerrain`——原来这部分在单独的`InitContents()`里，应用户要求合并进`InitTerrains()`
-  一个函数，见`map.md`）。
+  `DistributeTerrain`，见`map.md`）。

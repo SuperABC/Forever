@@ -13,7 +13,7 @@ class UStaticMeshComponent;
 // 这条核心原则）。只有命中导致Citizen死亡这一个"低频/叙事阈值"时刻会跨到Story
 // （UForeverStoryFrameworkComponent::BroadcastCitizenDecease）。
 //
-// MVP范围（这次会话选定，见ForeverWeaponComponent.md）：hitscan开火+伤害+换弹+数字键切枪，
+// 已实现范围（见ForeverWeaponComponent.md）：hitscan开火+伤害+换弹+数字键切枪+瞄准+后坐力，
 // 不做：通缉值、警察JobMod、反抗小游戏、ArrestPlayerChange。
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class FOREVER_API UForeverWeaponComponent : public UActorComponent

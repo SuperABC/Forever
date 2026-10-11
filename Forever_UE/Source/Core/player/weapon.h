@@ -6,15 +6,13 @@
 #include <string>
 
 
-// Weapon：一把武器的实例——照抄Asset的"factory+mod，构造时把字段原样拷一份到自己身上"
-// 模式(Pattern B，见asset.h/asset.md)，不把WeaponMod*直接暴露给Forever层，所有字段都
-// 通过Getter读。构造时调一次mod->SetProperty()(两段式约定，和Asset::Asset()同一个
-// 调用时机)，不依赖调用方(原来是Forever层的EquipWeapon())记得调，见weapon_mod.h。
+// Weapon：一把武器的实例——和Asset一致的"factory+mod，构造时把字段原样拷一份到自己身上"
+// 模式(见asset.h/asset.md)，不把WeaponMod*直接暴露给Forever层，所有字段都通过Getter读。
+// 构造时调一次mod->SetProperty()(两段式约定，和Asset::Asset()同一个调用时机)，不依赖
+// 调用方记得调，见weapon_mod.h。
 //
-// 这个类补的是一个纯粹的历史遗留空档——WeaponMod/WeaponFactory落地时(weapon_system_plan.md)
-// 的文件清单压根没规划Core层wrapper，此后一直是Forever层的UForeverWeaponComponent直接
-// 拿裸WeaponMod*用，和其余所有concept(Asset/Room/Storage/...)都有Core wrapper的既定
-// 结构不一致，这次补上，不是改行为。
+// 和其余所有concept(Asset/Room/Storage/...)一致：Dependence mod -> Core wrapper ->
+// Basic默认内容三层结构，Weapon是这里的Core层wrapper。
 class Weapon {
 public:
 	// id需要在config.json的"weapon_mods"里启用，否则mod为空、IsValid()返回false。

@@ -11,10 +11,10 @@
 #undef GetObject
 
 
-// 变化基类。老工程里Change本来就是纯数据类（不含执行逻辑，执行逻辑在调用方按GetType()/
-// dynamic_cast分派），这次42个子类原样保留这个设计——只有字段+getter/setter，没有Apply之类
-// 的虚方法。除了SetValueChange（已实现，见Core/story/story.cpp的ApplyChange分派），其余
-// 41个子类这次都还没有对应的执行分支，等被点名实现时再补。
+// 变化基类。Change是纯数据类（不含执行逻辑，执行逻辑在调用方按GetType()/dynamic_cast分派），
+// 42个子类只有字段+getter/setter，没有Apply之类的虚方法。除了SetValueChange（已实现，见
+// Core/story/story.cpp的ApplyChange分派），其余41个子类都还没有对应的执行分支，等被点名
+// 实现时再补。
 class Change {
 public:
 	/*
@@ -199,9 +199,9 @@ private:
 // 调试打印（已实现，见Forever层的Change分发——Core/story/story.cpp的Story::ApplyChange
 // 不处理这个类型，因为打印要调用GEngine::AddOnScreenDebugMessage，是UE调用，Core不能
 // 依赖UE，见ForeverFrameworkActor.cpp/ForeverStoryFrameworkComponent.cpp里的
-// dynamic_cast<const DebugPrintChange*>分支）。和GlobalMessageChange同一个形状，这次
-// 单独新增一个类型而不是复用GlobalMessageChange，是因为两者语义不同：这个类型只用于
-// 开发期调试输出，不是游戏内广播消息。
+// dynamic_cast<const DebugPrintChange*>分支）。和GlobalMessageChange同一个形状，但单独
+// 成一个类型而不是复用GlobalMessageChange，是因为两者语义不同：这个类型只用于开发期调试
+// 输出，不是游戏内广播消息。
 class DebugPrintChange : public Change {
 public:
 	/*
@@ -942,21 +942,15 @@ private:
 
 };
 
-// NPC自动导航——name/destination这次故意用纯std::string，不是Expression（和
+// NPC自动导航——name/destination故意用纯std::string，不是Expression（和
 // SetValueChange::variable"这是要被赋值的变量名本身，不是内容"同一个理由：这个Change
 // 唯一的构造方只有Source/Basic/society/job_basic.cpp的ShopSalerJob::ExecNode，值永远是
-// 已经算好的具体字符串，不需要$$动态求值能力；没有任何JSON分支消费这个类型）。**这不只是
-// 风格选择，是一个真实崩溃的修复**：std::string::EvaluateValue()内部对着mod（Basic.dll）
-// 构造的ConstantExpression节点做虚函数调用，这个调用实际执行的是Basic.dll编译的代码，
-// 返回值（含堆分配的字符串缓冲区）由Basic.dll的标准CRT operator new分配；但UE给每个UE
-// 模块（如UnrealEditor-Forever.dll）单独重载了全局operator new/delete、经由FMemory分配
-// （见PerModuleInline.inl），Basic.dll是普通Win32 DLL没有这层重载——当这个返回值在
-// Forever.dll侧被销毁时，触发的是Forever.dll重载过的operator delete（转发进FMemory），
-// 但这块内存根本不是FMemory分配的，直接堆损坏崩溃（PIE验证复现：9点市民上班、地址字符串
-// 一旦长到超过std::string的SSO阈值就必现，"home"/"workplace"这类短字面量因为完全不触发
-// 堆分配才一直没暴露这个问题）。纯std::string字段则完全不涉及虚函数求值——
-// GetDestination()这类non-virtual getter直接返回引用，调用方拷贝时用的是调用方自己模块
-// 编译的std::string拷贝构造函数，从头到尾都在同一个模块的分配器里，不会跨这条边界。
+// 已经算好的具体字符串，不需要$$动态求值能力；没有任何JSON分支消费这个类型）。不要改回
+// Expression：Expression树的求值是虚函数调用，若树由一个模块（mod DLL）构造、求值发生在
+// 另一个模块（Forever.dll），两边CRT堆不一致会导致堆损坏崩溃，完整原理见
+// Dependence/story/change.md"字段类型是std::string"一节。纯std::string字段完全不涉及
+// 虚函数求值——GetDestination()这类non-virtual getter直接返回引用，调用方拷贝时用的是
+// 调用方自己模块编译的std::string拷贝构造函数，从头到尾都在同一个模块的分配器里。
 class NPCNavigateChange : public Change {
 public:
 	/*
@@ -2512,7 +2506,7 @@ private:
 
 };
 
-// 切换控制（阶段4新增，老工程没有对应类型）：把玩家的操控权切换到指定姓名的市民身上。
+// 切换控制：把玩家的操控权切换到指定姓名的市民身上。
 // 执行逻辑不在Core层（Story::ApplyChange认不出这个类型，Core不知道Actor/Controller的存在），
 // 由Forever层（UForeverStoryFrameworkComponent）在遇到这个类型时直接拦截处理，见story.md。
 class ChangeControlChange : public Change {

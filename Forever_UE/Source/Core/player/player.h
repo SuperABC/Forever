@@ -10,14 +10,13 @@
 #include <vector>
 
 
-// 注意：这是老工程的"物件/道具/手机"domain（Asset/App/Puzzle三个Mod扩展点），不是UE的
-// AForeverPlayerController，两者是完全不同的东西，见PHASE4_PLAN.md"关于player domain改名
-// 的说明"一节。
+// 注意：这是"物件/道具/手机"domain（Asset/App/Puzzle/Weapon四个Mod扩展点）的Player类，
+// 不是UE的AForeverPlayerController，两者是完全不同的东西。
 //
-// 这次迁移了老工程Player里的"全局时钟"（Time*+Init/Tick/GetTime/SetTime/CrossDay）和
-// "资产系统"（leftHand/rightHand/backPack三槽位扩到五槽位+估产载具表+路径寻址，见下方
-// "资产系统"一节和player.md）。手机(Phone)、存款等其余字段/方法还没有迁移，留到
-// PHASE4_PLAN.md阶段4-7再点名做，见player.md。
+// 目前承载全局时钟（Time*+Init/Tick/GetTime/SetTime/CrossDay）、生命值、资产系统
+// （leftHand/rightHand/backPack/leftShoulder/rightShoulder五槽位+不动产/载具表+路径
+// 寻址，见下方"资产系统"一节和player.md）。手机(Phone)、存款等字段/方法尚未迁移，见
+// player.md。
 
 class Player {
 public:
@@ -25,7 +24,7 @@ public:
 	~Player();
 
 	// 初始化玩家时钟：创建Time，默认设为8点（真正的起始日期由脚本后续SetTime/change_time
-	// 决定），照抄老工程Player::Init()里时钟相关的这一小段。
+	// 决定）。
 	void Init();
 
 	// 时钟周期更新：按真实帧时长推进游戏时钟。time_flow_ratio默认2.0，可以被主线剧情
@@ -49,9 +48,9 @@ public:
 	// 是否发生跨天（相对上一次Tick/SetTime时的天数）
 	bool CrossDay();
 
-	// 生命值——进入武器系统时新增。这次只做"扣血/回血/是否死亡"这个最小闭环，不做死亡后果
-	// (复活/game over等)，见Source/Forever/Player/ForeverWeaponComponent.md。伤害/治疗量
-	// 传负数没有意义，调用方保证传正数，这里不做防御性纠正。
+	// 生命值——"扣血/回血/是否死亡"最小闭环，不做死亡后果(复活/game over等)，见
+	// Source/Forever/Player/ForeverWeaponComponent.md。伤害/治疗量传负数没有意义，调用方
+	// 保证传正数，这里不做防御性纠正。
 	float GetHealth() const;
 	float GetMaxHealth() const;
 	// @amount: 扣除的生命值(正数)，返回值是扣除后的剩余生命值(已clamp到[0, maxHealth])
@@ -113,12 +112,11 @@ private:
 	// 上一次Tick/SetTime时的游戏天数，用于跨天检测
 	int day = -1;
 
-	// 原本默认值是2.0(和老的kTimeFlowRatio一致)；这次调成10.0——1现实秒=10游戏分钟，
-	// 一天(1440分钟)需要144现实秒(2.4分钟)。未被脚本(global_settings.time_flow_ratio)
-	// 覆盖时就是这个值生效。
+	// 默认1现实秒=10游戏分钟，一天(1440分钟)需要144现实秒(2.4分钟)。未被脚本
+	// (global_settings.time_flow_ratio)覆盖时就是这个值生效。
 	double timeFlowRatio = 10.0;
 
-	// 进入武器系统新增。100点是随手给的默认值，具体数值等PIE里试手感再调。
+	// 100点是随手给的默认值，具体数值等PIE里试手感再调。
 	float health = 100.f;
 	float maxHealth = 100.f;
 

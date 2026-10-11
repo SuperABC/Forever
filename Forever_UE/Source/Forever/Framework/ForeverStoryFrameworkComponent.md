@@ -1,107 +1,115 @@
-# ForeverStoryFrameworkComponent.h / .cpp
+# ForeverStoryFrameworkComponent
 
-阶段2骨架（空实现）升级为阶段4 Story域的UE层接线点。职责边界：`Core/story`的`Script`/
-`Story`只做纯C++的匹配/求值，不感知UE；这个组件负责"游戏开始时广播一次GameStart"+"把匹配出的
-Dialog/Change用`GEngine::AddOnScreenDebugMessage`打印在屏幕左上角"这两件跟UE强相关的事。
+## 职责
+
+Story域的UE层接线点。`Core/story`的`Script`/`Story`只做纯C++的匹配/求值，不感知UE；这个
+组件负责把匹配出的`ScriptAction`接到真正的UE表现上——`Dialog`交给`SectionSpeakingWidget`/
+`SectionOptionWidget`展示（带排队），`Change`统一转发给`AForeverFrameworkActor::ApplyChange`。
+同时承担三类UE相关、Core层做不到的Change执行（切换玩家操控、开小游戏、上车）和三个事件
+广播入口（开局/选项点击/市民死亡）。
 
 ## 生命周期
 
 `Init(Story*)`由`AForeverFrameworkActor::EnsureStoryGenerated()`在创建完`Story`并调用完
-`story->Init()`之后调用一次（只存指针，不持有所有权，和其它Framework组件持有`Map*`的方式一致）。
-`BroadcastGameStart()`紧接着被同一处代码调用一次——**不是**放在这个组件自己的`BeginPlay()`里，
-因为`AForeverFrameworkActor::BeginPlay()`是先调`Super::BeginPlay()`（级联触发所有子组件自己的
-`BeginPlay`）、再依次调用7个`Ensure*Generated()`（`EnsureStoryGenerated()`排在最后，这里面
-才会创建`Story`并调`storyFramework->Init(story)`)——如果广播逻辑放在这个组件自己的
-`BeginPlay`里，届时`story`指针还是空的。
+`story->Init()`之后调用一次（只存指针，不持有所有权）。`BroadcastGameStart()`紧接着被同一
+处代码调用一次——不放在这个组件自己的`BeginPlay()`里，因为`AForeverFrameworkActor::
+BeginPlay()`先级联触发所有子组件的`BeginPlay`、再依次调用7个`Ensure*Generated()`，届时
+`story`指针还是空的。
 
-## 展示逻辑
+## 三个事件广播入口
 
-`Story::BroadcastGameStart`的回调（同步执行，见`Core/story/story.md`"BroadcastGameStart用回调"
-一节）里区分`ScriptAction`的两个分支：
+- **`BroadcastGameStart()`**：游戏开始时调用一次。除了`story->BroadcastGameStart`本身，还
+  要遍历广播给所有"独立持有一份Script、但自己不是Story主线"的对象，否则它们各自的
+  `game_start` milestone永远不会被触发：`Society`下每个`Organization`/`Job`各自的Script；
+  每个`Citizen`独占持有的`Scheduler`的Script（市民的对话选项如"敲门"全靠这条广播才会被
+  加上）；每辆预置车辆的Script（"上车"选项）；`map->GetAllDoors()`里`GetScript()!=nullptr`
+  的门（纯自动门没有Script，跳过）。这些广播共用`broadcastOne`辅助lambda和统一的
+  `onActions`回调（`ProcessScriptActions`）。
+- **`OptionDialog(name, option)`**：玩家点击`MeetOption`选项时调用，构造一个
+  `OptionDialogEvent`。依次匹配主线剧情Script，再按`name`分别尝试查找市民（匹配其
+  `Scheduler`的Script）、车辆（`Traffic::FindVehicleByName`）、门（`Map::FindDoorByName`）
+  三类目标，命中哪个就额外匹配哪个的Script——一个`name`不会同时是其中两类，三个分支互不
+  影响。不实现GlobalDialog（不匹配主线剧情的全局选项分支，只匹配上面几类目标自己的
+  Script）。
+- **`BroadcastCitizenDecease(name, reason)`**：武器系统命中Citizen致死时调用，构造一个
+  `CitizenDeceaseEvent`。只匹配主线剧情Script，不像`OptionDialog`那样额外匹配死者自己的
+  Scheduler Script——人已经死了，它自己的日程脚本不再有意义。
 
-- `const Dialog*`：`GetDialogs()`拿到`Section`拷贝列表（延迟求值约定见
-  `Dependence/story/dialog.md`），分支选项段（`IsBranch()`为true）没有玩家交互，默认取
-  `GetOptions()[0]`的文本打印（对应用户"没有交互方式，默认选第一个选项"的要求）；普通台词段
-  调用`EvaluateText(context)`后取`GetSpeaking()`，有发言者就拼"发言者：内容"，没有就只打内容
-  （`test.json`的`speaker`是空字符串，走后一种）。
-- `const Change*`：这次重构后统一转发给`AForeverFrameworkActor::ApplyChange(*changePtr,
-  context)`（`framework`是`onActions`回调顶部已经`Cast`出来的`AForeverFrameworkActor*`），
-  不再在这个组件里自己写`dynamic_cast<const ChangeControlChange*>`/`DebugPrintChange`
-  这些分支——`ApplyChange`是这次新增的统一Change消费入口，`populace`/`society`两个Tick
-  回调也在同一个入口消费Change，三处重复的dispatch逻辑收口成一份，详见
-  `ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。`ChangeControlChange`
-  在`ApplyChange`内部还是会转发回这个组件自己的`ApplyControlChange`（见下一节，这次改成
-  `public`），行为不变。不管走哪条路径，最后都打印一行`[变化] <类型名>`——这次不展示变化的
-  具体字段内容，只标注类型，字段级的展示留到该类型需要更丰富调试信息时再加。
+三者都复用`ProcessScriptActions`（匹配结果里的`Dialog`转发给`ShowDialog`排队展示，
+`Change`转发给`AForeverFrameworkActor::ApplyChange`，同时打一行`[变化] <类型名>`的屏幕
+调试消息，只标类型不展示字段内容），以及现场构造的`PostImplement`（供`WrapScript`反查
+Core状态，如"随机挑一个citizen"，生命周期只覆盖这次同步广播，不长期持有）。
 
-所有文本走`GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, ...)`，和
-`ForeverZoneFrameworkComponent.cpp`已有的写法保持一致（黄色、5秒、`-1`表示不指定固定key、
-每条消息独立）。
+## 三个UE相关的Change执行
 
-## `PostImplement`：`BroadcastGameStart`现场构造，只活这一次广播
+Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，以下三类Change
+故意不放进它的`dynamic_cast`分派链，由`AForeverFrameworkActor::ApplyChange`统一收口后
+转发到这个组件的对应`public`方法：
 
-`Story::BroadcastGameStart`这次多了一个`PostHandle* post`参数（供`ScriptMod::WrapScript`
-反向查询Core状态，见`Core/story/story.md`），这个组件的`BroadcastGameStart()`负责现场构造
-一个`PostImplement`（`Core/common/implement.h`）传进去：从`GetOwner()`（就是
-`AForeverFrameworkActor`）取`GetMap()`/`GetPopulace()`/`GetSociety()`/`GetIndustry()`/
-`GetTraffic()`/`GetPlayer()`这六个指针，加上自己已经持有的`story`，一共聚合Core的全部
-7个domain指针。`PostImplement`是一个栈上局部对象，生命周期只需要覆盖这次同步广播（`Story::
-BroadcastGameStart`的回调是同步执行的，见`Core/story/story.md`"用回调而不是直接返回"一节），
-不用像`story`那样长期持有。
+- **`ApplyControlChange`**：求值`change->GetName()`拿到目标市民姓名，调用
+  `UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName`（按姓名查找已在场景里的
+  `ACitizenElement`，找不到则强制生成，不看玩家距离），再用`APlayerController::Possess`
+  切换操控权。真正的移动模式切换/Input Mapping增删由`ACitizenElement::PossessedBy`
+  （继承自`AForeverCharacter::PossessedBy`）自动完成。切换之后额外调用
+  `UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled()`——切换操控权这一刻
+  附近building的近处LOD可能还没排队建完，玩家会先掉到还没生成细节的地面上，冻结世界直到
+  LOD切换队列清空再自动恢复能避免这个观感问题。
+- **`ApplyStartPuzzle`**：求值`change->GetPuzzle()`拿到小游戏id，转发给
+  `AForeverPlayerController::GetPuzzleWidget()->StartPuzzle(id)`。
+- **`ApplyEnterVehicle`**：求值`change->GetVehicle()`拿到载具名字，转发给
+  `UForeverTrafficFrameworkComponent::ApplyEnterVehicle`（真正的查找/隐藏原pawn/Possess
+  逻辑在那个组件里，和`ApplyControlChange`转发给PopulaceFramework同一个分工）。
 
-## `ApplyControlChange`：`ChangeControlChange`不走`Story::ApplyChange`，在这一层直接处理
+玩家操控权切换**只有`ApplyControlChange`这一条路径**，由剧情脚本触发——没有独立于Story
+系统之外的按键能直接切换操控的市民。
 
-`change_control`类型的变化（切换玩家操控的市民，见`Dependence/story/change.md`"切换控制"
-一节）**故意不**放进`Story::ApplyChange`的`dynamic_cast`分派链——`Core/story`是纯C++层，
-不知道`AActor`/`APlayerController`的存在，没法执行"把玩家操控权切给某个Actor"这件事。这次
-在`UForeverStoryFrameworkComponent`（UE层，天然能拿到`AActor`/`APlayerController`）拦截
-处理。这个函数这次从`private`改成`public`——`AForeverFrameworkActor::ApplyChange`统一收口
-所有Change的消费入口后，`ChangeControlChange`分支需要从那里转发调用到这里（见
-`ForeverFrameworkActor.md`），不再只被这个组件自己的`onActions`回调调用：
+## Dialog展示：排队 + 分支选项
 
-1. `EvaluateExpression(change->GetName(), context)`求出目标市民姓名（`GetName()`现在是
-   `std::string`类型的DSL源码文本，不是预先解析好的`Expression`对象，`EvaluateExpression`
-   现场`Parse`+求值一步到位，原因见`Dependence/story/change.md`"字段类型是`std::string`"
-   一节；求值结果`ToString`+`UTF8_TO_TCHAR`转`FString`）。
-2. 通过`GetOwner()`转成`AForeverFrameworkActor`，取`GetPopulaceFramework()`，调用
-   `UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(name)`——按姓名查找已经
-   在场景里的`ACitizenElement`，找不到则强制生成一个（不看玩家距离，见
-   `ForeverPopulaceFrameworkComponent.md`），拿不到就打一条`Warning`日志放弃。
-3. `UGameplayStatics::GetPlayerController(GetWorld(), 0)->Possess(target)`——把玩家的
-   操控权切给这个市民对应的`ACitizenElement`，真正的移动模式切换/Input Mapping增删由
-   `ACitizenElement::PossessedBy`（继承自`AForeverCharacter::PossessedBy`）自动完成，
-   这个函数本身只负责"找到目标+发起Possess"。
-4. `framework->GetBuildingFramework()->RequestFreezeUntilLodSettled()`——游戏刚开始
-   （`test.script`的`game_start`milestone配合`EmptyScript::WrapScript`第一次切换控制权
-   就发生在这时候）附近building的近处LOD（楼层/房间细节）可能还没排队建完，玩家/市民会
-   先掉到还没生成细节的地面上，等建筑加载完才落地。每次切换控制权之后请求冻结世界（UE
-   时间倍率归零，物理/移动全部停摆）直到所有building的LOD切换队列清空再自动恢复，见
-   `ForeverBuildingFrameworkComponent.md`"冻结世界直到LOD切换队列清空"一节。
+`ShowDialog(dialog, context)`不直接打印，而是把`dialog->GetDialogs()`展平成
+`FPendingItem`队列（`pendingQueue`）：
 
-**T键这次改成不再切换控制权**（原来`AForeverCharacter::SwitchControlledCitizen`会
-`Possess`附近随便一个市民，现在改名`LogNearbyCitizenRelationships`，只把附近市民的
-`acquaintances`/`experiences`打到log，见`Player/ForeverCharacter.md`/
-`Element/CitizenElement.md`"T键：输出附近市民的人际关系数据"一节）——玩家控制市民的
-切换目前**只有这一条`ChangeControlChange`路径**，由剧情脚本触发、目标是"剧情指定姓名
-的市民"（这次的`test.json`配合`EmptyScript::WrapScript`，用的是"随机挑一个citizen"，见
-`Dependence/story/script_mod.md`"典型用法"一节）。
+- **求值必须在`EnqueueDialog`里同步完成，不能延迟到显示的那一刻**——传入的`context.local`
+  指向调用方栈上的运行时`Event`（`GameStartEvent`/`OptionDialogEvent`等），函数返回后就是
+  悬垂指针。普通台词当场`EvaluateText`存成`speaker`/`content`字符串；分支选项当场求值每个
+  `Option::GetOption()`的显示文本，原始`Option`本身（连同它引用的嵌套`dialogs`/`changes`）
+  整份拷贝存进`FPendingItem`供选中后使用，存入队列的`context`强制清空`local`（`self`/
+  `system`不变，它们指向长期存活的`Script*`）——代价是分支选项自己的嵌套内容没法再引用
+  `local.`前缀变量，这次范围内没有用到这个能力。
+- 队列为空时入队立刻显示；非空则排到队尾——多个Script同时广播`game_start`都命中对话
+  milestone时，会排队一条条弹出，不互相覆盖。
+- `AdvanceDialog()`（`SectionSpeaking`的`ClickCatcher`点击触发）关闭当前台词、推进到下一项。
+- `SelectDialogOption(index)`（`SectionButton`点击触发）执行被选中`Option`的`GetChanges()`
+  （转发给`ApplyChange`），把它的`GetDialogs()`插到队头紧接着播放（不是排到队尾），多个
+  嵌套Dialog之间保持相对插入顺序。
+- `ShowCurrentItem()`按队首是台词还是分支分别调用`SectionSpeakingWidget::ShowLine`/
+  `SectionOptionWidget::ShowOptions`，并把输入模式切成`UIOnly`（避免Pawn的Enhanced Input
+  同时响应游玩动作，例如空格键如果同时绑了Jump和"推进对话"会导致按键同时触发两件事）；
+  队列清空时隐藏两个Widget、把输入模式切回`GameOnly`并显式调用一次
+  `SetFocusToGameViewport()`（UI点击会把Slate焦点转移到按钮上，光改`SetInputMode`不会
+  自动把焦点抢回游戏视口，否则鼠标隐藏后Look这个Enhanced Input Action仍然收不到鼠标移动
+  事件）。对话展示期间会把`MeetOptionWidget`临时隐藏，播完恢复可见——避免"靠近市民能问
+  什么"的列表和剧情对话同屏抢注意力/抢点击。
 
 ## 依赖关系
 
-- 依赖：`Core/story/story.h`/`script.h`、`Dependence/story/dialog.h`/`change.h`
-  （`ChangeControlChange`）、`Core/common/implement.h`（`PostImplement`）、
-  `Framework/ForeverFrameworkActor.h`（`GetMap`/`GetPopulace`/`GetSociety`/`GetIndustry`/
-  `GetTraffic`/`GetPlayer`/`GetPopulaceFramework`/`GetBuildingFramework`/
-  `ApplyChange`——`onActions`回调的`Change`分支转发给它）、`Framework/
+- 依赖：`Core/story/story.h`/`script.h`/`dialog.h`/`change.h`/`event.h`、
+  `Core/society/society.h`/`organization.h`/`job.h`、`Core/populace/populace.h`/
+  `citizen.h`/`scheduler.h`、`Core/traffic/traffic.h`、`Core/map/door.h`/`map.h`、
+  `Core/common/implement.h`（`PostImplement`）、`Framework/ForeverFrameworkActor.h`
+  （聚合7个domain指针+`ApplyChange`统一入口）、`Framework/
   ForeverPopulaceFrameworkComponent.h`（`FindOrSpawnCitizenByName`）、`Framework/
-  ForeverBuildingFrameworkComponent.h`（`RequestFreezeUntilLodSettled`）、
-  `Element/CitizenElement.h`、`Engine/Engine.h`（`GEngine`）、`Kismet/GameplayStatics.h`
-  （`GetPlayerController`）。
-- 被谁依赖：`Framework/ForeverFrameworkActor.cpp`（`AForeverFrameworkActor::ApplyChange`
-  处理`ChangeControlChange`时转发调用这个组件的`ApplyControlChange`，这次从`private`
-  改成`public`）。
+  ForeverBuildingFrameworkComponent.h`（`RequestFreezeUntilLodSettled`）、`Framework/
+  ForeverTrafficFrameworkComponent.h`（`ApplyEnterVehicle`）、`UI/SectionSpeakingWidget.h`/
+  `SectionOptionWidget.h`/`MeetOptionWidget.h`/`PuzzleWidget.h`、
+  `Player/ForeverPlayerController.h`（持有上述Widget）。
+- 被谁依赖：`Framework/ForeverFrameworkActor.cpp`（`ApplyChange`把
+  `ChangeControlChange`/`StartPuzzleChange`/`EnterVehicleChange`三类Change转发到这个
+  组件对应的`public`方法）、`UI/MeetOptionWidget.h`（选项点击转发给`OptionDialog`）、
+  `Player/ForeverWeaponComponent.h`（击杀市民转发给`BroadcastCitizenDecease`）、
+  `UI/SectionSpeakingWidget.h`/`SectionOptionWidget.h`（点击分别转发给`AdvanceDialog`/
+  `SelectDialogOption`）。
 
 ## 待办/后续阶段
 
-- Dialog分支选项的真正玩家交互UI（阶段5 UMG接入时再做，这次的"默认选第一个"只是占位）。
-- Change的字段级展示（目前只打印类型名）。
+- `OptionDialog`不实现GlobalDialog（全局选项分支），目前只匹配目标自身的Script。
+- Change的展示目前只打印类型名（`[变化] <类型名>`），不展示字段级内容。

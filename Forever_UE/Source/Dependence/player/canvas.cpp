@@ -13,17 +13,17 @@
 using namespace std;
 
 namespace {
-	// GDI字体渲染——逐参数照抄老工程E:\Projects\Forever_UE\Source\Dependence\player\canvas.cpp
-	// 的PutString实现(建内存DC+HFONT，黑底白字TextOutW，GetDIBits读回灰度当覆盖率混合进
-	// 画布)。第一版这里自己换了几个参数(负数高度/FW_NORMAL/OUT_DEFAULT_PRECIS/
-	// ANTIALIASED_QUALITY/FF_DONTCARE)，结果实际渲染出来每个字母粗细/字形都不一致，明显不对；
-	// 老工程这一套参数组合是经过验证的，这次原样照抄，不再自己"改进"。
+	// GDI字体渲染：建内存DC+HFONT，黑底白字TextOutW，GetDIBits读回灰度当覆盖率混合进画布。
+	// CreateCanvasFont里的参数组合（FW_THIN/OUT_CHARACTER_PRECIS/CLIP_CHARACTER_PRECIS等）
+	// 是经过验证能渲染出正常粗细/字形的组合——换成看起来更"标准"的FW_NORMAL/
+	// OUT_DEFAULT_PRECIS/ANTIALIASED_QUALITY/FF_DONTCARE会导致字母粗细/字形不一致，不要
+	// 改动这组参数。
 	//
 	// 这些辅助函数不做成Canvas的成员方法——HDC/HFONT这些Windows类型不能出现在canvas.h的
 	// 声明里(会把<windows.h>连带min/max/TEXT等宏定义带进每一个#include了canvas.h的文件，
 	// 这个头文件被Forever模块的PuzzleWidget.h/PhoneWidget.h广泛引用，跟UE自己的头文件混在
 	// 一起容易冲突)，所以GDI相关的实现细节整个封在这个.cpp的匿名namespace里。
-	const wchar_t* kDefaultFontName = L"Microsoft YaHei"; // 中英文都覆盖，跟老工程默认字体一致
+	const wchar_t* kDefaultFontName = L"Microsoft YaHei"; // 中英文都覆盖
 
 	HFONT CreateCanvasFont(int pixelHeight) {
 		return CreateFontW(max(1, pixelHeight), 0, 0, 0, FW_THIN, FALSE, FALSE, FALSE,

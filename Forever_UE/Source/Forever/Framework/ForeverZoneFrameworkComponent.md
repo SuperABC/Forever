@@ -5,14 +5,11 @@
 `GenerateZones(Map* inMap)`遍历`map->GetZones()`（`unordered_map<string,Zone*>`，寻址用，见
 `Source/Core/map/map.md`"寻址"一节，遍历用结构化绑定`for (auto& [name, zone] : ...)`），对
 每个`Zone`的`GetWalls()`（`vector<ZoneWallSpec>`，字段语义见
-`Source/Dependence/map/zone_mod.md`）逐条调用`BuildWallSegment`铺围墙ISM实例。**这次会话
-不再画园区内部建筑**——原来这个组件单独用`DefaultRoad`材质画一份园区内部建筑的扁box
-（`internalBuildingMesh`/`internalBuildingMaterial`/`internalBuildingBaseMaterial`成员+
-`ZoneAppendFlatBox`/`ZoneAppendQuadDoubleSided`两个helper），现在改由
-`ForeverBuildingFrameworkComponent`统一渲染`map->GetBuildings()`里的所有building（天然
-包含园区内部建筑，不再按`GetParentZone()`是否为空分流成两个组件各画一份），这几个成员/
-helper函数已经整体删除。围墙渲染不受影响。大门（`ZoneGateSpec`）这次没有资产，只在`Zone`上
-存数据，这个组件不消费它、不生成任何几何。
+`Source/Dependence/map/zone_mod.md`）逐条调用`BuildWallSegment`铺围墙ISM实例。**这个组件
+不画园区内部建筑**——`map->GetBuildings()`里的所有building（天然包含园区内部建筑）统一由
+`ForeverBuildingFrameworkComponent`渲染，不按`GetParentZone()`是否为空分流成两个组件各画
+一份。大门（`ZoneGateSpec`）没有资产，只在`Zone`上存数据，这个组件不消费它、不生成任何
+几何。
 
 ## 关键设计
 
@@ -37,7 +34,7 @@ helper函数已经整体删除。围墙渲染不受影响。大门（`ZoneGateSp
   两个轴都用完整的`depth`才能让两条墙的中心线端点精确重合）。
 - **`GenerateZones`必须在`Map::InitZones()`跑完之后调用**，和其余Framework组件的
   `GenerateXxx(Map*)`模式一致，`AForeverFrameworkActor::EnsureMapGenerated()`负责保证顺序。
-- **进入/离开检测碰撞盒（第N轮迁移新增）**：`GenerateZones`遍历完`GetWalls()`之后额外调一次
+- **进入/离开检测碰撞盒**：`GenerateZones`遍历完`GetWalls()`之后额外调一次
   `BuildCollisionBox(zone)`——真正的`UBoxComponent`+`OnComponentBeginOverlap`/
   `OnComponentEndOverlap`（用户已确认的方案，不是手动Tick轮询），碰撞Profile用UE自带的
   `"Trigger"`预设。水平=Zone自己的Quad（不做尺寸调整，只有Room碰撞盒缩小0.01/Building

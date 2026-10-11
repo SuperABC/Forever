@@ -14,8 +14,8 @@ class Zone;
 struct ZoneWallSpec;
 struct FHitResult;
 
-// 阶段4-1 Zone落地：这次Zone只是一个footprint+类型的占位对象(Zone内部再摆Building的递归
-// 布局明确推迟，见map.md"InitZones"一节)。可视化手段是围墙——Zone自身不再画扁box占位
+// Zone只是一个footprint+类型的占位对象(Zone内部再摆Building的递归
+// 布局明确推迟，见map.md"InitZones"一节)。可视化手段是围墙——Zone自身不画扁box占位
 // (围墙本身已经足够表达zone范围)，只按ZoneMod声明的ZoneWallSpec沿边铺设围墙mesh实例；
 // 大门这次没有资产，只在Zone上存数据，不生成任何几何。园区内部建筑(Zone::GetInternalBuildings)
 // 改由ForeverBuildingFrameworkComponent统一渲染(和顶层Building走同一套楼体footprint/楼层/

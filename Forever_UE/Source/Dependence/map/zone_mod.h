@@ -10,7 +10,7 @@
 
 // 围墙：沿direction这条参考边铺设，marginStart/marginEnd是距参考边两端的距离，depth是进深，
 // depthInward控制进深往矩形内(true)还是外(false)量——具体哪个是"正确"朝向由围墙资产的实际
-// 朝向决定，先默认true，效果不对由PIE验证后再翻转。mesh/unit和Road::GetMesh()/GetUnit()
+// 朝向决定，默认true。mesh/unit和Road::GetMesh()/GetUnit()
 // 同一套语义，沿边重复铺设(算法见ForeverRoadnetFrameworkComponent::BuildRoadInstances的
 // tileRange)。
 struct ZoneWallSpec {
@@ -23,9 +23,8 @@ struct ZoneWallSpec {
 	float unit = 0.f;
 };
 
-// 大门：位置/朝向数据(围墙据此让出这段空当)+这次新增的door字段——门扇外观/开关方式，
-// door.mesh为空=只是空当，不放门，和建筑门/房间门同一个"mesh为空就是洞"的约定，见
-// door_spec.h。
+// 大门：位置/朝向数据(围墙据此让出这段空当)+door字段——门扇外观/开关方式，door.mesh为空=
+// 只是空当，不放门，和建筑门/房间门同一个"mesh为空就是洞"的约定，见door_spec.h。
 struct ZoneGateSpec {
 	int direction = FACE_WEST;
 	float marginStart = 0.f;

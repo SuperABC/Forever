@@ -1,10 +1,5 @@
 # ForeverTrafficFrameworkComponent
 
-> 本文件2026-10-04全文重写——旧版本记录的是更早一轮"T键上下车"的实现(`RequestToggleVehicle`/
-> `ToggleVehicle`)，那套API已经被"停车位预置生成+MeetOption上下车"取代，当时忘了同步更新
-> 这份文档。现在的职责分两部分：小汽车的停车位生成/上下车，公共交通(公交/火车/飞机)的生成+
-> 调试画线。
-
 ## 职责
 
 - **小汽车**：开局时按停车位预置生成(`GenerateVehicles`)，玩家走近用MeetOption选"上车"

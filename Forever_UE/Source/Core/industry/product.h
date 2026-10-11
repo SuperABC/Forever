@@ -8,10 +8,9 @@
 #include <vector>
 
 
-// Product：一种产品的类型目录条目——只是配方/分类定义，不是"某个仓库里的一份库存"
-// (这是和老工程的关键区别：老工程的Product身兼"类型定义"和"库存数量"两个角色，这次
-// 拆开，库存数量全部放进Storage自己的存量表，见storage.h)。Industry按产品type各创建
-// 一份，存进自己的目录，供Storage/Manufacture查配方/分类用，见product.md。
+// Product：一种产品的类型目录条目——只是配方/分类定义，不是"某个仓库里的一份库存"，
+// 库存数量全部放进Storage自己的存量表，见storage.h。Industry按产品type各创建一份，
+// 存进自己的目录，供Storage/Manufacture查配方/分类用，见product.md。
 class Product {
 public:
 	Product(ProductFactory* factory, const std::string& id);

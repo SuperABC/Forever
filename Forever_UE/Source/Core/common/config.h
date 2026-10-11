@@ -7,20 +7,16 @@
 #include <filesystem>
 
 
-// 阶段3裁剪版Config:只保留"读取config.json + 扫描dll_paths/layout_paths目录 + 每个concept
-// 的mod参数列表"相关的接口(第N轮迁移——Building内部布局落地时补回了layout_paths/
-// AddLayoutPath/GetLayouts，不再是纯占位)。旧工程Config类里的启用禁用状态
-// (GetChecks/CheckMod/GetEnables)、老式"一个资源目录桶四种后缀分流"的资源目录扫描
-// (GetResourcePaths/GetScripts/GetPlugins/GetPakFiles/AddResourcePath/RemoveResourcePath)、
-// 全局设置(GetGlobalSettings)、主剧情路径(GetStories/AddScript/RemoveScript)、运行时
-// 写回(WriteConfig)仍未迁移,等对应机制/系统在阶段4落地时按需加回,详见同目录config.md。
+// 读取/维护config.json的静态类:dll_paths/layout_paths/resource_paths三类根目录扫描、
+// 每个concept的mod参数与启用状态、主线剧情脚本路径,并能把当前内存状态写回文件
+// (WriteConfig)。详见同目录config.md。
 class Config {
 public:
 	// 读取path指向的config.json,清空并重建dllPaths/layoutPaths/conceptMods。内部对
 	// dll_paths/layout_paths两个数组逐项分别调用AddDllPath/AddLayoutPath(相对路径都相对
 	// config.json自己所在目录configDir解析);并把所有以"_mods"结尾的顶层key当作一个concept
-	// 的mod列表解析(不需要硬编码20个concept的名字,配置文件本身决定内容)。找不到文件或json
-	// 语法错误时静默留空,不抛异常(阶段3约定,调用方据此决定要不要回退到硬编码默认目录)。
+	// 的mod列表解析(不需要硬编码21个concept的名字,配置文件本身决定内容)。找不到文件或json
+	// 语法错误时静默留空,不抛异常,调用方据此决定要不要回退到硬编码默认目录。
 	static void ReadConfig(const std::string& path);
 
 	// 当前生效的config.json所在目录。
@@ -53,10 +49,9 @@ public:
 
 	// 递归扫描path下所有.script文件，记下绝对路径——和AddLayoutPath同一个手法，不需要
 	// 探测/加载任何东西，找到就收，不做格式校验(交给Script::ReadScript解析时再报错)。
-	// 这次新增的动机：JobMod/OrganizationMod（以及Story）只应该写一个不含路径/扩展名的
-	// bare文件名（如"job_shop_saler"），不应该也不可能知道用户实际把脚本文件放在哪，
-	// 由这里的resource_paths配置统一决定实际存放位置，见job.md"按需查地址"一节旁边新增的
-	// "Script配置"说明。
+	// JobMod/OrganizationMod（以及Story）只写一个不含路径/扩展名的bare文件名（如
+	// "job_shop_saler"），不知道也不需要知道用户实际把脚本文件放在哪，由这里的
+	// resource_paths配置统一决定实际存放位置，见job.md"按需查地址"一节的"Script配置"说明。
 	static void AddResourcePath(const std::string& path);
 
 	// 是否已经有任何resource_paths被注册过——config.json没有配置resource_paths(或者根本
@@ -83,9 +78,9 @@ public:
 	static std::string GetMainStoryScriptModName();
 
 	// 主线剧情.script文件的实际路径——目前固定是bare名字"test"（Story::Init()一直这么
-	// 写），这次新增是因为name_reserve/global_settings/mod_dependences校验需要在Story
-	// 对象创建之前就拿到同一份路径，包一层避免"test"这个字面量到处重复。等以后支持多
-	// 主线剧情时再改这个方法内部的实现，调用方不用跟着改。
+	// 写），包一层是因为name_reserve/global_settings/mod_dependences校验需要在Story
+	// 对象创建之前就拿到同一份路径，避免"test"这个字面量到处重复。等以后支持多主线剧情时
+	// 再改这个方法内部的实现，调用方不用跟着改。
 	static std::string GetMainStoryScriptPath();
 
 	// jsonKey形如"building_mods"。返回该数组解析出的(id, 参数字符串)列表——每个数组元素
@@ -146,8 +141,8 @@ public:
 	static std::vector<std::string> GetResourceRootPaths();
 
 	// 移除path对应的已注册resource根目录记录(resourcePaths/pluginPaths/pakPaths/
-	// layoutPaths四个map里这个key全部清掉——layoutPaths也要清是因为AddResourcePath这次
-	// 顺带收集.layout，见下面AddResourcePath的注释)。
+	// layoutPaths四个map里这个key全部清掉——layoutPaths也要清是因为AddResourcePath同一次
+	// 扫描顺带收集.layout，见下面AddResourcePath的注释)。
 	static void RemoveResourcePath(const std::string& path);
 
 	// 校验path是.script文件且存在后加入storyScriptPaths(按绝对路径去重)——Story screen
@@ -171,18 +166,18 @@ private:
 	static bool CheckFileFormat(const std::filesystem::path& filePath, const std::string& format);
 
 	// conceptKey(如"Weapons")到config.json里"<concept>_mods"数组key(如"weapon_mods")的
-	// 转换——去掉末尾的"s"、转小写、拼上"_mods"，20个concept目前都符合这个规则。
+	// 转换——去掉末尾的"s"、转小写、拼上"_mods"，21个concept目前都符合这个规则。
 	static std::string ConceptKeyToJsonKey(const std::string& conceptKey);
 
 	// Roadnets/Names这两个concept一次只应该有一个生效(RoadnetFactory::GetRoadnet()/
 	// NameFactory::GetName()的"单选"语义，见对应_factory.h)——但那两个函数本身并不校验
 	// "只有一个enabled"，`SetConfig`调几次都行，`GetRoadnet`/`GetName`只是从
 	// `unordered_map`里捞出第一个碰到的`enabled==true`，其余被标记启用但没被选中的id
-	// 直接静默忽略，不报错。这次新UI要求"看起来"也必须唯一(不只是生效结果唯一)，所以在
-	// `Config`层面显式规范化：对应的`<concept>_mods`数组里如果同时有多个条目，只保留
+	// 直接静默忽略，不报错。游戏启动配置界面要求"看起来"也必须唯一(不只是生效结果唯一)，
+	// 所以在`Config`层面显式规范化：对应的`<concept>_mods`数组里如果同时有多个条目，只保留
 	// 数组里排在最前面的那一个，其余直接从数组删掉——在`ReadConfig`读完文件后、
 	// `WriteConfig`写文件前、`GetModEnables()`每次给UI返回数据前都调用一次，保证UI勾选框
-	// 显示的状态、保存到文件的状态永远跟这条约束一致。
+	// 显示的状态、保存到文件的状态永远和这条约束一致。
 	static void NormalizeUniqueConcepts();
 
 	static std::string configDir;

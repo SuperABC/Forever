@@ -8,8 +8,6 @@
 #include <unordered_map>
 
 
-// 照抄老工程Person(E:\Projects\Forever_UE\Source\Core\populace\person.h)的GENDER_TYPE，
-// 名字保持不变。
 enum GENDER_TYPE : int { GENDER_FEMALE, GENDER_MALE };
 
 enum PERSONALITY_TYPE : int {
@@ -145,11 +143,8 @@ struct Relation {
 	float reliability;
 };
 
-// Citizen：老工程里叫Person，这次进入populace域第一次迁移，只搬"姓名/性别/生日"这三项+
-// 这次要求的"所在lot/园区/建筑/房间"位置字段+"3D坐标"——老工程Person身上的
-// relatives/personality/acquaintances/assets/jobs/scheduler/educationExperiences等全部
-// 不搬，依赖还没迁移的Society/Industry/Job域，等对应域迁移到了再回来加，详见
-// Source/Core/populace/populace.md。
+// Citizen存姓名/性别/生日、所在lot/园区/建筑/房间、3D坐标——不存资产(assets)，依赖还
+// 没迁移的Industry域，等对应域迁移到了再回来加，详见Source/Core/populace/populace.md。
 //
 // 纯Core类型，不#include任何UE头文件(和Building/Room同一个约定)——Lot/Zone/Building/Room
 // 这里只做前向声明，3D坐标用裸float三元组而不是FVector，转UE坐标的工作留给Forever层的
@@ -213,10 +208,8 @@ public:
 	void SetLastGraduationYear(int year);
 
 	// 所在lot/园区/建筑/房间——这是"家"(tenancy)，Map::Checkin()分配住处时一次性设好，
-	// 这次没有"搬家"逻辑，不需要单独的SetStatus级联清空(老工程那套是给"人可能在
-	// zone/building/room间移动"场景用的，这次citizen分配后不会再变，保留最简单的setter
-	// 就够)。**这不代表citizen当前人在这里**——人在家还是在别处是另一个概念，见
-	// GetCurrentRoom()。
+	// 没有"搬家"逻辑，不需要级联清空，保留最简单的setter就够。**这不代表citizen当前人
+	// 在这里**——人在家还是在别处是另一个概念，见GetCurrentRoom()。
 	Lot* GetLot() const;
 	void SetLot(Lot* value);
 	Zone* GetZone() const;
@@ -257,9 +250,8 @@ public:
 	Scheduler* GetScheduler() const;
 	void SetScheduler(Scheduler* value);
 
-	// 当前可供玩家点击的对话选项文本列表——由AddOptionChange（AddOptionChange:阶段5新增，
-	// 见Populace::ApplyChange）追加，供MeetOption UI在玩家靠近时读取展示，见
-	// Element/CitizenElement.cpp。
+	// 当前可供玩家点击的对话选项文本列表——由AddOptionChange（见Populace::ApplyChange）
+	// 追加，供MeetOption UI在玩家靠近时读取展示，见Element/CitizenElement.cpp。
 	const std::vector<std::string>& GetOptions() const;
 	void AddOption(const std::string& option);
 

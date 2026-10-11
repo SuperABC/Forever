@@ -38,8 +38,8 @@ struct FForeverLodBoundary {
 	TArray<FVector> right;  // vx=32, vy=0..32
 };
 
-// 阶段4-1 Terrain落地:动态LOD(clipmap式)地形网格 + 海面网格。挖洞(construction格子的
-// 洞)直接在网格生成时用LookupTerrain的矩形减矩形分解算法完成,不再用ISM摆放小立方体。
+// 动态LOD(clipmap式)地形网格 + 海面网格。挖洞(construction格子的
+// 洞)直接在网格生成时用LookupTerrain的凸多边形裁剪算法完成,不用ISM摆放小立方体。
 // 详见ForeverTerrainFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverTerrainFrameworkComponent : public UForeverFrameworkComponent
@@ -77,9 +77,9 @@ private:
 
 	// construction/挖洞格子的实心地形几何:只有该格子是"construction"或者命中了hatch时才有
 	// 输出。用精确的凸多边形裁剪(格子[0,1]x[0,1]依次按每个hatch矩形的4条边分割成"确定在矩形外
-	// (实心)"/"还需要继续判断"两部分,详见.cpp实现)算出真正的实心地形区域(可能不止一块,也可能
-	// 是这次会话之前"轴对齐外接矩形+角落补丁三角形"近似算法算不对的跨格hatch)，扇形三角化后
-	// 输出，不再是BlueprintCallable(没有Blueprint/ISM消费方了)。
+	// (实心)"/"还需要继续判断"两部分,详见.cpp实现)算出真正的实心地形区域(可能不止一块,比如
+	// 一条跨格的hatch可能把格子劈成两侧独立的两块)，扇形三角化后
+	// 输出，不是BlueprintCallable(没有Blueprint/ISM消费方)。
 	void LookupTerrain(int elemX, int elemY, FString& type, float& height,
 		TArray<FTerrainTri2D>& tris) const;
 

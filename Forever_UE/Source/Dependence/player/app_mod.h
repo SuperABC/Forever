@@ -6,11 +6,9 @@
 #include <string>
 
 
-// 手机(Phone)系统落地：AppMod是"手机里的一个App"的Mod扩展接口，四个生命周期方法参考
-// 老工程Core/player/phone.h的Init/Loop/Back/Refresh设计，但这次是真正的虚函数实例方法——
-// 不用老工程"App全部状态存static字段、Phone只记类型字符串"那种写法，这个项目已经确立
-// "Factory创建一个真实Mod*实例，虚函数调用"的模式(参考PuzzleMod)，Phone::AppEntry会直接
-// 持有一个真正的App(Core包装类)实例，多个App互不干扰。
+// AppMod："手机里的一个App"的Mod扩展接口，Init/Loop/Back/Refresh四个生命周期方法都是
+// 真正的虚函数实例方法——Factory创建一个真实Mod*实例，虚函数调用(和PuzzleMod同一个模式)，
+// Phone::AppEntry直接持有一个真正的App(Core包装类)实例，多个App互不干扰。
 class AppMod {
 public:
 	AppMod() = default;

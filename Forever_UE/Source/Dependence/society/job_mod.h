@@ -32,10 +32,10 @@ public:
 	// 创建完mod实例后会立刻调一次这个方法，再读这两个字段。
 	virtual void SetProperty() {}
 
-	// Script配置——老工程用pair<ScriptModName, vector<MilestoneName>>方式在Mod侧声明
-	// 意图，这次照抄：两个普通成员字段，和plans/changes同一个"mod自己的字段，Core只读"
-	// 安全模式，不通过返回值传递(之前这里是一个返回vector<string>的方法，按值把mod
-	// 分配的容器交给Core遍历，是被明确禁止的跨DLL模式，这次改掉)。scriptModName默认
+	// Script配置——用pair<ScriptModName, vector<MilestoneName>>方式在Mod侧声明意图：
+	// 两个普通成员字段，和plans/changes同一个"mod自己的字段，Core只读"安全模式，不通过
+	// 返回值传递(不能用一个返回vector<string>的方法按值把mod分配的容器交给Core遍历，
+	// 这是被明确禁止的跨DLL模式)。scriptModName默认
 	// "empty"(纯粹要个能创建出来的ScriptMod壳，具体内容和milestoneNames无关)，
 	// milestoneNames默认为空(不需要milestone的job类型不用改)。milestoneNames每一项是
 	// 不含路径/扩展名的bare文件名，Core通过Config::GetScriptPath()解析实际路径，mod不
@@ -46,7 +46,7 @@ public:
 	std::vector<std::string> milestoneNames;
 
 	// 生成今天的调度表，直接写进this->plans(node名->今天触发的具体时间)。
-	// @post：向Core发起查询的句柄(见Dependence/common/handle.h)，这次新增的用途是查
+	// @post：向Core发起查询的句柄(见Dependence/common/handle.h)，用途是查
 	// occupant家/工位的具体房间地址(Room::GetAddress()格式，"post"分别是"citizen home
 	// address"/"citizen workplace address"，Core端实现见Core/common/implement.cpp)——
 	// NPCNavigateChange::destination不能再写"home"/"workplace"这种描述性文本，必须是

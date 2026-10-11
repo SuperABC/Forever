@@ -17,18 +17,16 @@
 struct ScriptContext;
 
 // Populace：和Map平级的顶层Core类，不是挂在Map底下的工具函数集合——自己管理Citizen*的
-// 生命周期，不知道Map的存在(和老工程Populace/Map::Checkin(populace, player)同一个解耦
-// 方向)，详见Source/Core/populace/populace.md。
+// 生命周期，不知道Map的存在，详见Source/Core/populace/populace.md。
 class Populace {
 public:
 	Populace();
 	~Populace();
 
-	// 复刻老工程Populace::Init：accommodation由调用方从Map::ComputeAccommodationTarget()
-	// 算好传进来(Populace不知道Map的存在)。先发现/注册Name mod dll(InitNames)，再对
-	// accommodation做一次老工程同款的扰动(target = accommodation *
-	// exp(GetRandom(1000)/1000.0f - 0.5f))得到真正的模拟目标，最后跑一次年表模拟，把存活
-	// 个体物化成Citizen存进citizens。
+	// accommodation由调用方从Map::ComputeAccommodationTarget()算好传进来(Populace不知道
+	// Map的存在)。先发现/注册Name mod dll(InitNames)，再对accommodation做一次扰动
+	// (target = accommodation * exp(GetRandom(1000)/1000.0f - 0.5f))得到真正的模拟
+	// 目标，最后跑一次年表模拟，把存活个体物化成Citizen存进citizens。
 	void Init(int accommodation);
 
 	const std::vector<Citizen*>& GetCitizens() const;
@@ -57,7 +55,7 @@ public:
 	// Core层查数据，一个在UE层顺带生成Actor）。找不到返回nullptr。
 	Citizen* FindCitizenByName(const std::string& name) const;
 
-	// 模拟结束时的"当前年份"(老工程time->SetYear(year+2000)那个值)——Map::Checkin()用它
+	// 模拟结束时的"当前年份"——Map::Checkin()用它
 	// 给Citizen::GetAge()算成年/未成年。Player的全局时钟落地后，
 	// AForeverFrameworkActor::EnsurePlayerGenerated()也用这个值把开局时间设成这一年的
 	// 1月1日8点(player->SetTime(Time(GetCurrentYear(), 1, 1, 8))，见player.md)。
@@ -71,7 +69,7 @@ private:
 	// 持有/调用NameMod*，见Source/Core/populace/populace.md、Source/Core/populace/name.md。
 	void InitNames();
 
-	// 复刻老工程Populace::GenerateCitizens的年表模拟算法，见populace.cpp/populace.md。
+	// 年表模拟算法，见populace.cpp/populace.md。
 	// 函数体末尾顺带生成亲属关系(GenerateKinshipRelations，含配偶/子女/兄弟姐妹)——需要
 	// 用到模拟阶段的Human数据(结婚年份/父母索引)，这些数据物化成Citizen后就丢弃了，只能
 	// 在这个函数体内、Human数组还在作用域内时处理，见populace.md"四类人际关系生成"一节。
@@ -85,11 +83,10 @@ private:
 	// 虚拟学校/班级 + 同学关系生成——按年份正序推进的编年模拟，见populace.md同一节。
 	void GenerateEducations();
 
-	// 给每个citizen加权随机分配一个Scheduler——参考老工程同名算法(累加所有已注册Scheduler
-	// 类型的权重建CDF，对每个citizen roll一个随机数选中一个类型)，权重来源改成当前工程
-	// 已经确立的SchedulerFactory::GetPower(id)单个查询写法(和Society::Init选Organization
-	// 类型同一套CDF算法)，不照抄老工程SchedulerFactory::GetPowers()一次性返回全部map的
-	// 写法。GenerateCitizens()跑完、citizens列表已经就绪之后调用一次，见populace.md。
+	// 给每个citizen加权随机分配一个Scheduler——累加所有已注册Scheduler类型的权重建CDF
+	// (用SchedulerFactory::GetPower(id)单个查询，和Society::Init选Organization类型
+	// 同一套CDF算法)，对每个citizen roll一个随机数选中一个类型。GenerateCitizens()跑完、
+	// citizens列表已经就绪之后调用一次，见populace.md。
 	void AssignSchedulers();
 
 	// 引用`Registry::Get().GetNameFactory()`，不再自己持有ModLoader/NameFactory——mod dll

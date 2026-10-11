@@ -8,14 +8,11 @@
 #include <vector>
 
 
-// Phone：手机UI/多任务外壳，PHASE4_PLAN.md点名的"无Mod扩展点骨干类"(不是<Concept>Factory
-// 家族成员，本身不可被Mod替换，是这个项目自己的固定逻辑)。参考老工程Core/player/phone.h的
-// 三态设计(Home桌面网格/InApp当前App全屏/TaskList最近任务缩略图切换器)，但有两处关键调整：
-// 1) AppEntry直接持有一个真正的App*实例(不是老工程"App状态全存static字段、这里只记类型
-//    字符串"的写法)，因为这个项目的AppMod已经是Factory创建真实实例的模式(见app_mod.h)。
-// 2) 所有布局(网格列宽/图标大小/底部工具栏高度等)按画布宽高的比例算，不是老工程那种硬编码
-//    480x640下的像素常量——这个Phone的画布分辨率会随宿主(UPhoneWidget)的显示尺寸变化，
-//    见RecomputeLayout/Resize。
+// Phone：手机UI/多任务外壳，不是<Concept>Factory家族成员，本身不可被Mod替换，是这个项目
+// 自己的固定逻辑。三态设计(Home桌面网格/InApp当前App全屏/TaskList最近任务缩略图切换器)。
+// AppEntry直接持有一个真正的App*实例(这个项目的AppMod是Factory创建真实实例的模式，见
+// app_mod.h)。所有布局(网格列宽/图标大小/底部工具栏高度等)按画布宽高的比例算——这个
+// Phone的画布分辨率会随宿主(UPhoneWidget)的显示尺寸变化，见RecomputeLayout/Resize。
 //
 // 生命周期：跟Puzzle不同，Phone需要跨越"开手机->关手机->再开手机"保持状态(多任务/最近
 // 任务要留着)，所以只在第一次打开手机时创建一次，此后由宿主Widget只切换可见性，不
@@ -89,7 +86,7 @@ private:
 	void LaunchApp(Canvas* canvas, const std::string& type, PostHandle* post);
 
 	// 打开entries[entryIndex]：第一次(initialized==false)调App::Init，否则调App::Refresh
-	// (对应老工程"从后台恢复不重新Init"的设计)。
+	// (从后台恢复不重新Init)。
 	void OpenApp(Canvas* canvas, int entryIndex, PostHandle* post);
 
 	void SaveSnapshot(Canvas* canvas, int entryIndex);
@@ -102,8 +99,8 @@ private:
 	void HandleHomeInput(Canvas* canvas, PostHandle* post);
 
 	// InApp状态下，只拦截Phone自己关心的几个键(ESC/Tab/Space/Backspace)，其余按键/鼠标
-	// 事件原样PushKey/PushMouseButton还给队列，留给当前App的Loop()自己消费——跟老工程
-	// "未命中的输入事件重新入队交给下一层处理"是同一个idiom。
+	// 事件原样PushKey/PushMouseButton还给队列，留给当前App的Loop()自己消费(未命中的输入
+	// 事件重新入队交给下一层处理)。
 	void HandleInAppInput(Canvas* canvas, PostHandle* post);
 
 	void HandleTaskListInput(Canvas* canvas, PostHandle* post);

@@ -43,7 +43,7 @@ public:
 	// Script配置——和JobMod/SchedulerMod同一个"mod自己声明意图，Core只读"模式：两个普通
 	// 成员字段，不通过返回值传递。scriptModName默认"empty"，milestoneNames默认为空，
 	// 每项是不含路径/扩展名的bare文件名，Core通过
-	// Config::GetScriptPath()解析实际路径，见job_mod.h"Script配置"一节。这次用来驱动
+	// Config::GetScriptPath()解析实际路径，见job_mod.h"Script配置"一节。用来驱动
 	// "靠近车辆弹出'上车'选项"这个效果——车辆自己的milestone脚本在game_start时调
 	// add_option，选中后调enter_vehicle，见Resource/Story/vehicle_basic.script。
 	std::string scriptModName = "empty";
@@ -56,20 +56,18 @@ public:
 	// exitOffsetZ默认100而不是0：车身的Actor原点在车轮接地点附近(贴地)，但碰撞检测用的
 	// 胶囊体是"以给定点为中心"(FCollisionShape::MakeCapsule(42,96)，半高96)，如果直接
 	// 用车身原点(贴地高度)当胶囊体中心，胶囊体下半截(96个单位)会整个扎进地板里，重叠检测
-	// 不管旁边空不空都会报"被挡住"——照抄老工程下车逻辑"Z轴抬高100"的同一个理由(见
-	// 原ToggleVehicle DISMOUNT分支的注释：胶囊体中心在脚底往上，不是贴地)。
+	// 不管旁边空不空都会报"被挡住"——胶囊体中心要在脚底往上，不是贴地。
 	float exitOffsetX = 0.f;
 	float exitOffsetY = -200.f;
 	float exitOffsetZ = 100.f;
 
-	// 车型分类——"car"是现在唯一可以上下车/驾驶的类型(VehicleBasic)，"bus"/"train"/"plane"
-	// 是这次新增的公共交通线路车辆。Traffic::Init()的停车位分支只挑category=="car"的车型
+	// 车型分类——"car"是唯一可以上下车/驾驶的类型(VehicleBasic)，"bus"/"train"/"plane"
+	// 是公共交通线路车辆。Traffic::Init()的停车位分支只挑category=="car"的车型
 	// (公交/火车/飞机不停在停车位里，由Route生成、沿线路运行)，见Core/traffic/traffic.md。
 	std::string category = "car";
 
-	// 操控/搭乘——这次公共交通车辆都是运动学地沿线路移动的纯展示物，不接受操控也不能上去，
-	// 先声明这两个标志、capacity留着给字段，真正的搭乘/多人座位交互以后再实现(见
-	// public_transport_plan.md"5. 新载具这次不做操控/搭乘，但预留接口")。
+	// 操控/搭乘——公共交通车辆都是运动学地沿线路移动的纯展示物，不接受操控也不能上去，
+	// 先声明这两个标志、capacity留着给字段，真正的搭乘/多人座位交互以后再实现。
 	bool drivable = false;
 	bool boardable = false;
 	int capacity = 0;

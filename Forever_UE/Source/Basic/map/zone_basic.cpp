@@ -15,9 +15,9 @@ const char* ResidenceZone::GetName() {
 	return name.data();
 }
 
-// 老工程ResidentialZone::LayoutZone的常量，Quad::acreage换算系数两边工程完全一致，不需要
-// 单位换算；换算成一个近似正方形的边长，贴着lot任意一条有路的边居中摆放。这个常量Assign()/
-// Layout()都要用到，各自独立算一遍(side本身是纯类型级常量，不需要共享状态)。
+// 目标面积常量，不需要单位换算；换算成一个近似正方形的边长，贴着lot任意一条有路的边居中
+// 摆放。这个常量Assign()/Layout()都要用到，各自独立算一遍(side本身是纯类型级常量，不需要
+// 共享状态)。
 namespace {
 	constexpr float TARGET_ACREAGE = 20000.f;
 }
@@ -28,13 +28,13 @@ void ResidenceZone::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, voi
 	for (Lot* lot : lots) {
 		if (!lot) continue;
 
-		// 应用户要求，井字中心lot(固定AREA_OFFICIAL_HIGH)这次也允许摆围墙测试场景，和
-		// 火车站(占北侧)/机场(占南侧)共存——不再排除这个area，只靠下面dir从WEST开始找
-		// 第一个有边界路、frontage够用的方向这件事本身，自然避开NORTH/SOUTH：这个lot
-		// WEST边(中山西路)肯定有边界路，dir==0(WEST)会第一个命中，不会往后扫到
-		// NORTH/SOUTH。真正是否会和火车站/机场在几何上打架，取决于三边各自占的depth是否
-		// 真的互不相交，见TrainStationBuilding/AirportBuilding::Assign(这次已经把它们的
-		// depth/margin调小，给WEST边的围墙场景让出空间)。
+		// 井字中心lot(固定AREA_OFFICIAL_HIGH)也允许摆围墙测试场景，和火车站(占北侧)/
+		// 机场(占南侧)共存——不排除这个area，只靠下面dir从WEST开始找第一个有边界路、
+		// frontage够用的方向这件事本身，自然避开NORTH/SOUTH：这个lot WEST边(中山西路)
+		// 肯定有边界路，dir==0(WEST)会第一个命中，不会往后扫到NORTH/SOUTH。真正是否会和
+		// 火车站/机场在几何上打架，取决于三边各自占的depth是否真的互不相交，见
+		// TrainStationBuilding/AirportBuilding::Assign(depth/margin已经调小，给WEST边的
+		// 围墙场景让出空间)。
 		for (int dir = 0; dir < 4; dir++) {
 			if (!lot->GetBoundaryRoad(dir)) continue;
 			bool alongY = (dir == FACE_WEST || dir == FACE_EAST);
@@ -68,9 +68,8 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	constexpr float WALL_DEPTH = 0.2f;
 	constexpr float GATE_WIDTH_RATIO = 0.2f;
 	const string wallMesh = "/Game/Asset/Meshes/Fence.Fence";
-	// 0.2f照抄老工程Source/Basic/map/zone_basic.cpp里ResidentialZone::LayoutZone对同一个
-	// Fence资产设的unit值——之前随手猜了1.f，比栅栏实际长度大5倍，铺出来的实例之间就会留出
-	// 一大段空当(BuildWallSegment按这个值换算每段实例的缩放倍数，unit估大了，缩放就跟着偏小)。
+	// wallUnit必须匹配Fence资产的实际长度——BuildWallSegment按这个值换算每段实例的缩放
+	// 倍数，估大了铺出来的实例之间会留出明显空当。
 	constexpr float wallUnit = 0.2f;
 
 	float gateWidth = side * GATE_WIDTH_RATIO;
@@ -157,15 +156,14 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	road.width = access.width;
 	internalRoads.push_back(road);
 
-	// 内部道路把zone从中间分成两半，每一半各放一个建筑(验证需求8"两个矩形"确实各自
-	// 可用)——用和独立建筑同一个类型("building_residence"，Basic层文件间不允许互相
-	// include，这里直接写字符串明文而不是引用ResidenceBuilding::GetId())，这样园区内部建筑天然复用
-	// ResidenceBuilding::Layout()里的楼体footprint/地下室/楼层数据，和独立建筑在
-	// ForeverBuildingFrameworkComponent里走同一套近/远LOD渲染时外观也一致，不需要
-	// 给"empty"这个纯占位类型另外补一份长得像的数据。尺寸留出一点余量，不贴着围墙/
-	// 内部道路。roadIndices记这个建筑贴着internalRoads[0]的哪一个面——两个半区分别是
-	// 内部道路的两侧，各自朝向道路的那个面对应关系相反。direction直接复用各自roadIndices
-	// 里已经声明的那个方向(朝向内部道路那一面)。
+	// 内部道路把zone从中间分成两半，每一半各放一个建筑——用和独立建筑同一个类型
+	// ("building_residence"，Basic层文件间不允许互相include，这里直接写字符串明文而不是
+	// 引用ResidenceBuilding::GetId())，这样园区内部建筑天然复用ResidenceBuilding::Layout()
+	// 里的楼体footprint/地下室/楼层数据，和独立建筑在ForeverBuildingFrameworkComponent里
+	// 走同一套近/远LOD渲染时外观也一致。尺寸留出一点余量，不贴着围墙/内部道路。roadIndices
+	// 记这个建筑贴着internalRoads[0]的哪一个面——两个半区分别是内部道路的两侧，各自朝向
+	// 道路的那个面对应关系相反。direction直接复用各自roadIndices里已经声明的那个方向
+	// (朝向内部道路那一面)。
 	float buildingAlong = side * 0.6f;
 	float buildingAcross = half * 0.6f;
 	ZoneInternalBuildingSpec buildingA, buildingB;

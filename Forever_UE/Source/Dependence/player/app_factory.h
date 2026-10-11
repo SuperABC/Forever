@@ -7,16 +7,13 @@
 #include <vector>
 
 
-// 最小注册表(创建/销毁/枚举)。旧工程的Temp暂存区+MergeTemp()两段式注册(用来隔离
-// "探测阶段"和"正式生效阶段")这次没有搬过来——那套机制是为了绕开非virtual方法
-// 跨DLL调用时,mod编译的那份代码去扩容/释放host分配的容器这个问题;现在改成全部公开
-// 方法都是virtual(见下),调用永远落在构造这个Factory实例的那一侧,分配器天然一致,
-// 不再需要暂存区这层隔离,详见Source/Dependence/README.md"关键设计"一节。
+// 最小注册表(创建/销毁/枚举)。全部公开方法都是virtual(见下)，调用永远落在构造这个
+// Factory实例的那一侧，分配器天然一致，详见Source/Dependence/README.md"关键设计"一节。
 //
 // creator/deleter用裸函数指针,不用std::function——mod侧注册的都是无捕获
 // (capture-less)lambda,天然能隐式转换成函数指针;裸指针是POD类型,跨DLL传递没有
-// "std::function内部堆缓冲由一侧分配、由另一侧释放"的风险(实测std::function版本会在
-// Factory析构时崩溃,详见Source/Dependence/README.md)。
+// "std::function内部堆缓冲由一侧分配、由另一侧释放"的风险。**不要改用std::function**——
+// 已验证会在Factory析构时崩溃,详见Source/Dependence/README.md。
 //
 // 所有公开方法(含析构函数)都标记virtual,即使目前没有任何派生类——原因见
 // Source/Dependence/README.md"关键设计"一节:Mod DLL里调用这些方法时,只有virtual

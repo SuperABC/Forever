@@ -2,9 +2,9 @@
 
 ## 职责
 
-`RoadnetFactory`是`RoadnetMod`的注册表/工厂，阶段3骨架的`registries`/`liveInstances`/
-`configuredArgs`原样保留（和`terrain_factory.h`一样没有恢复老工程的`Temp`+`MergeTemp()`两段式
-注册），新增`SetConfig`/`GetRoadnet`支撑"单选"语义。
+`RoadnetFactory`是`RoadnetMod`的注册表/工厂，`registries`/`liveInstances`/`configuredArgs`
+和`terrain_factory.h`同一套骨架（没有老工程的`Temp`+`MergeTemp()`两段式注册），新增
+`SetConfig`/`GetRoadnet`支撑"单选"语义。
 
 ## 关键设计
 
@@ -23,7 +23,3 @@
 - 依赖：`roadnet_mod.h`。
 - 被谁依赖：`Source/Core/map/map.h`（`Map::roadnetFactory`成员）。
 
-## 待办/后续阶段
-
-- 阶段4：Zone/Building等其余Map域concept迁移时重复"Factory从`ForeverModSubsystem`临时验证代码
-  移出、转由`Map`长期持有"这个模式。

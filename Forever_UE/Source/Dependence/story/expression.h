@@ -49,8 +49,7 @@ enum class UnaryOperator : int {
 	LOGICAL_NOT
 };
 
-// 表达式树节点基类（老工程里这个名字叫Expression，这次让给了对外门面类，节点基类改名
-// ExpressionNode）
+// 表达式树节点基类（名字叫ExpressionNode，Expression这个名字留给对外门面类用）
 class ExpressionNode {
 public:
 	/*
@@ -334,11 +333,9 @@ private:
 	}
 };
 
-// 表达式门面：剧情json里所有的值理论上都是字符串表达式，统一由这个类解析+求值。剧情json的
-// 表达式语法（运算符/字面量/隐式拼接等）继承自老工程的Condition，唯一的语义变化是变量寻址——
-// 老工程的$$(expr)间接寻址语法不再支持，$$name按self./system./local.前缀路由到
-// ScriptContext三个槽位（见ScriptContext注释），".":点号本身不参与分词，只是标识符里的普通
-// 字符，不需要特判。
+// 表达式门面：剧情json里所有的值理论上都是字符串表达式，统一由这个类解析+求值。不支持
+// $$(expr)间接寻址语法，$$name按self./system./local.前缀路由到ScriptContext三个槽位
+// （见ScriptContext注释），".":点号本身不参与分词，只是标识符里的普通字符，不需要特判。
 class Expression {
 public:
 	/*

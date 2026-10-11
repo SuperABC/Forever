@@ -18,8 +18,8 @@ class Map;
 class Road;
 class Connection;
 
-// 阶段4-1 Roadnet落地：沿每条Road按其mesh/unit用ISM重复摆放(要求9"沿路线分隔mesh元素"+
-// "曲线道路"的落地方式)，路口mesh(直线简化版扇形三角剖分)，开口cube(要求5)，
+// 沿每条Road按其mesh/unit用ISM重复摆放(同时满足"沿路线分隔mesh元素"+
+// "曲线道路"两点)，路口mesh(直线简化版扇形三角剖分)，开口cube，
 // 车道分裂/开口demo(临时验证手段)。详见ForeverRoadnetFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverRoadnetFrameworkComponent : public UForeverFrameworkComponent

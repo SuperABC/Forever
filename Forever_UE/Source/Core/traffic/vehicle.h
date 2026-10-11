@@ -12,15 +12,15 @@ class ScriptFactory;
 class Route;
 
 // Vehicle：一辆车的实体，独占持有一个VehicleMod实例——照抄Job持有JobMod的模式(见
-// Source/Core/society/job.h)。阶段4-3只做到"能上下车、能开动"：只存名字、mod、当前世界
-// transform(由UE侧AVehicleElement::Tick每帧写回，供将来Traffic/Room等系统查询用)，不考虑
-// 车辆和房间/停车位的关系，不存driver。这次补上：
+// Source/Core/society/job.h)。字段刻意保持最少，只做到"能上下车、能开动"：只存名字、mod、
+// 当前世界transform(由UE侧AVehicleElement::Tick每帧写回，供将来Traffic/Room等系统查询用)，
+// 不考虑车辆和房间/停车位的关系，不存driver；
 // - 一份自己的Script（和Job/Scheduler同一套机制，构造时按mod->scriptModName创建、按
 //   mod->milestoneNames加载milestone），驱动"靠近车辆弹出'上车'选项"这个效果；
 // - options列表（照抄Citizen::GetOptions/AddOption），供AddOptionChange/MeetOption UI使用；
 // - 停车位信息(Room*+房间局部坐标+旋转)，由Traffic::Init()在生成时填入，供UE层
 //   GenerateVehicles()换算世界坐标时读取。车辆本身的世界transform继续用现有的
-//   SetTransform/GetTransform，不受这几个新字段影响。
+//   SetTransform/GetTransform，不受这几个字段影响。
 // "谁在开这辆车"这份信息由UE侧AVehicleElement::previousPawn自己保留(上车前的pawn，下车时
 // 要恢复谁)，不需要Core重复记一份，见vehicle.md。
 class Vehicle {
@@ -29,7 +29,7 @@ public:
 	~Vehicle(); // factory->DestroyVehicle(mod)；delete script
 
 	// mod为空(CreateVehicle传入的id没有被注册/没有在config.json"vehicle_mods"里启用)
-	// 说明这次构造失败，调用方应当整个丢弃这个Vehicle，见Traffic::CreateVehicle。
+	// 说明构造失败，调用方应当整个丢弃这个Vehicle，见Traffic::CreateVehicle。
 	bool IsValid() const;
 
 	const std::string& GetName() const;

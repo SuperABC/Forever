@@ -1,46 +1,32 @@
 # ForeverCharacter
 
 ## 职责
-玩家可控的角色,支持第三人称(肩后SpringArm+Camera)和第一人称(挂在头部或眼高的Camera)切换。用Enhanced Input绑定移动/视角/跳跃/视角切换。
+玩家可控角色基类,被玩家自己的初始角色和`ChangeControlChange`切换过去操控的任意`ACitizenElement`共用。支持第三人称(肩后SpringArm+Camera)/第一人称(头部或眼高Camera)切换、移动/跳跃/冲刺、瞄准开火(转发给`UForeverWeaponComponent`,见`ForeverWeaponComponent.md`)、MeetOption对话选项操作。
 
 ## 关键设计
-- 不建Blueprint外壳:构造函数里用`ConstructorHelpers::FObjectFinder`/`FClassFinder`硬编码引用`SKM_Manny_Simple`骨骼网格、`ABP_Unarmed`动画蓝图和`IA_Move`/`IA_Look`/`IA_MouseLook`三个Input Action作为默认值。这些都是`EditDefaultsOnly`,子类或运行时代码随时可以覆盖,不影响后续换资产。
-- `lookAction`(IA_Look)和`mouseLookAction`(IA_MouseLook)都绑定到同一个`Look()`处理函数,但分属`IMC_Default`和`IMC_MouseLook`两个不同的Input Mapping Context——手柄摇杆(模拟量)和鼠标位移(增量)需要不同的Input Modifier配置,拆成两个IMC/IA是旧工程既有的做法,沿用之。**这不是可选项**:少绑`mouseLookAction`会导致WASD和跳跃正常但鼠标转视角完全没反应(阶段0实测踩过这个坑)。
-- 网格体相对Root的`(-96, 0, -90°)`偏移是标准UE Mannequin的挂接惯例(胶囊体中心到脚底、朝向对齐)。
-- **Jump不再直接引用`IA_Jump`资源**:阶段1把Jump和新增的ToggleView都改成从`UForeverKeyBindingSubsystem`(见`Input/ForeverKeyBindingSubsystem.md`)按名字取运行时动态创建的`UInputAction`,按键从外部配置文件读取。`IA_Jump`资源本身还留在`Content/`里但已无代码引用,先不删除,待后续清理。
-- **输入映射Context跟着"被占有"状态走,不固定挂在Controller上**:`PossessedBy`/`UnPossessed`里增删`inputMapping`/`inputLookMapping`(对应`IMC_Default`/`IMC_MouseLook`)以及`UForeverKeyBindingSubsystem`的动态Context,是照旧蓝图`MainCharacter`的`ReceivePossessed`/`ReceiveUnpossessed`原样迁移的(对应资源在dump里叫"Input Mapping"/"Input Look Mapping"变量)。**这不是可选的架构偏好**:用户确认旧项目这么做是为了支持"玩家上/下车时从控制Character切到控制Vehicle Pawn再切回来"——每次切换被控制的Pawn,当前Pawn的输入映射要能干净地卸载,下一个被控制的Pawn要能带上自己的映射,固定在Controller上就做不到这点。同样的道理也覆盖阶段6"任意NPC可被玩家操控"的换人需求。阶段7做车辆时,车辆Pawn类要照这个模式实现自己的`PossessedBy`/`UnPossessed`,而不是假设Controller会处理。
-  - `AddMappingContext`/`RemoveMappingContext`没有显式传`FModifyContextOptions`——旧蓝图传的`(bIgnoreAllPressedKeysUntilRelease=True,bForceImmediately=False,bNotifyUserSettings=False)`和UE5.7里`FModifyContextOptions`的默认构造值完全一致,所以直接用默认参数,不用手工拼一份一样的值。
+- 不建Blueprint外壳:构造函数用`ConstructorHelpers::FObjectFinder`/`FClassFinder`引用`SKM_Manny_Simple`骨骼网格、`ABP_Unarmed`动画蓝图和`IA_Move`/`IA_Look`/`IA_MouseLook`三个Input Action、`IMC_Default`/`IMC_MouseLook`两个Mapping Context作为默认值,均为`EditDefaultsOnly`,可被覆盖。
+- `lookAction`(IA_Look)和`mouseLookAction`(IA_MouseLook)都绑到同一个`Look()`处理函数,但分属`IMC_Default`/`IMC_MouseLook`两个Context——手柄摇杆(模拟量)和鼠标位移(增量)需要不同的Input Modifier配置。两者都必须绑定,缺`mouseLookAction`会导致鼠标转视角没反应。
+- 网格体相对Root的`(-96, 0, -90°)`偏移是标准UE Mannequin挂接惯例。
+- `Jump`/`ToggleView`/`Sprint`/`MeetOptionUp/Down/Select`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1/2`/`AimWeapon`不直接引用`UInputAction`资源,改从`UForeverKeyBindingSubsystem`(见`Input/ForeverKeyBindingSubsystem.md`)按名字取运行时动态创建的Action,按键从外部配置文件读取。
+- `PossessedBy`/`UnPossessed`只增删这个Pawn自己的`inputMapping`/`inputLookMapping`(`IMC_Default`/`IMC_MouseLook`)——`UForeverKeyBindingSubsystem`那份动态Context改由`AForeverPlayerController::BeginPlay`常驻添加一次(见`ForeverPlayerController.md`),因为`TogglePhone`等热键要求任何时候都生效,不依赖"当前是否正占有一个真正的Pawn"。移动/视角这类Pawn专属映射仍然跟着"被占有"状态走,保证玩家上/下车、切换被操控角色时映射能跟着当前Pawn切换(见`CONVENTIONS.md`第7节)。
+- `PossessedBy`里会给被占有的角色重新配出一套初始装备:左肩挂`weapon_pistol`、右肩挂`weapon_rifle`并激活左肩(`ActivateShoulderWeapon(1)`),背上挂一个`asset_container`,内放手枪/步枪备弹各120发——每次占有前先清空`leftShoulder`/`rightShoulder`/`back`三个槽位上一次占有可能留下的旧Asset,这样切到任意可操控角色都能立刻测装备/换弹/切枪,但同一角色被取消占有又重新占有时装备不会保留,这是已知简化。
 - **V键第一/三人称切换**(`ToggleCameraView`):
-  - `firstPersonCamera`构造时优先挂到骨骼网格的`head`socket(`GetMesh()->DoesSocketExist(TEXT("head"))`);没有该socket则退化为挂在Root上、用胶囊体半高的0.9倍作为眼高的近似值——这是为了避免对具体骨骼网格的socket命名做强假设,后续换装/换骨骼资产时也能有一个不崩溃的兜底效果,实际观感需要在PIE里核实。
-  - 两个摄像机同一时刻只有一个`Active`(`UCameraComponent::SetActive`),不是靠`SetViewTarget`——因为两个摄像机都挂在同一个Pawn上,引擎会自动选取"活跃"的那个作为视图目标。
-  - 切第一人称时`GetMesh()->SetOwnerNoSee(true)`,避免本地玩家在第一人称视角下看到自己身体穿模;`bUseControllerRotationYaw`和`CharacterMovement.bOrientRotationToMovement`两组标志位在第一/三人称间对调,让第一人称下角色朝向跟随视角、第三人称下角色朝向跟随移动方向(和大多数第三人称射击/动作游戏的惯例一致)。
-  - 已知限制:`firstPersonCamera`没有挂到`head`socket时的兜底位置(眼高近似值)是构造函数里算一次的固定`RelativeLocation`,不会随角色姿态动态调整,先记录。
-- **Shift冲刺**(`StartSprint`/`StopSprint`,按住触发,不是切换):把`CharacterMovementComponent->MaxWalkSpeed`在`walkSpeed`(默认500)和`walkSpeed * sprintSpeedMultiplier`(倍数默认10,阶段4-1把默认3调到10——地图从10x10个Element的占位地板变成1024x1024个Element、10.24km见方的真实地形后,3倍走路速度跑到山区太慢,调大纯粹是为了实机验证效率,不是这套移动手感设计的最终数值)之间切换——冲刺速度是走路速度的倍数而不是独立的固定值,改`walkSpeed`时冲刺速度会跟着联动。
-  - **没有专属冲刺动画**:`Anims/Unarmed/`目录下没有区别于Jog的Sprint动画集,所以冲刺目前只是数值变化——角色跑得更快,但`BS_Idle_Walk_Run`这个BlendSpace是按速度采样的,超出它原本给"Run"档位设定的速度上限后画面上会有一点脚下打滑感,是这套动画资产本身的限制,不是bug。10倍速度下这个打滑感会比3倍时更明显。
-- **T键上下车切换**(`ToggleVehicle`，这次改动前叫`LogNearbyCitizenRelationships`，
-  再往前叫`SwitchControlledCitizen`——"Test"动作历来就是"当前正在测试的功能"，每次验证
-  点变了就换掉上一次的行为)：定义在这个基类上，不管当前被占有的是最初的`ADefaultPawn`
-  还是某个`ACitizenElement`，只要是`AForeverCharacter`的子类都自动获得同一份T键行为。
-  函数体只有一行，转发给`UForeverTrafficFrameworkComponent::RequestToggleVehicle`（静态
-  方法，按`GetWorld()`找场景里唯一的`AForeverFrameworkActor`，转调它的`TrafficFramework`
-  组件实例方法`ToggleVehicle`）：当前占有的不是车就在原地生成一辆`AVehicleElement`并
-  占有它，是车就删掉这辆车、恢复到上车前的pawn，详见
-  `Source/Forever/Framework/ForeverTrafficFrameworkComponent.h`。**`AVehicleElement`
-  不继承`AForeverCharacter`**（见`Element/VehicleElement.h`"为什么不继承
-  AForeverCharacter"一节），所以上车之后这里绑的T键不会再生效——`AVehicleElement`自己
-  又单独绑了一份同名调用，两边各自调用同一个静态入口，不是互相知道对方。
-  `ACitizenElement::LogNearbyRelationships()`（上一版T键指向的功能，输出附近市民的
-  acquaintances/experiences到log）本身没有删除，只是暂时没有任何按键绑定它，见
-  `Element/CitizenElement.md`。玩家控制市民的切换（区别于上下车）仍然只能由剧情脚本的
-  `ChangeControlChange`触发（见`Framework/ForeverStoryFrameworkComponent.md`）。
-- **蹲下(C键)和挥拳(左键)最终没有做**:两者都试过——挥拳方案(运行时`PlaySlotAnimationAsDynamicMontage`接现有`DefaultSlot`)本身没问题,但蹲姿要做出平滑过渡得改AnimGraph加`Blend Poses by bool`节点,操作繁琐、效果也不理想,用户决定放弃,两部分代码和阶段1额外导入的`Anims/Unarmed/Crouch/*`动画资产、`UForeverAnimInstance`类都已经移除,`ABP_Unarmed`也恢复成了原始的`AnimInstance`父类。
+  - `firstPersonCamera`优先挂到骨骼网格`head`socket;不存在则退化为挂在Root上、用胶囊体半高0.9倍作为眼高近似值。
+  - 两个摄像机同一时刻只有一个`Active`(`UCameraComponent::SetActive`),不是靠`SetViewTarget`,因为两者都挂在同一Pawn上。
+  - 切第一人称时`GetMesh()->SetOwnerNoSee(true)`避免本地玩家看到自己身体穿模;`bUseControllerRotationYaw`/`CharacterMovement.bOrientRotationToMovement`由`UpdateRotationMode()`统一切换。
+- **Shift冲刺**(`StartSprint`/`StopSprint`,按住触发):`MaxWalkSpeed`在`walkSpeed`(默认500)和`walkSpeed * sprintSpeedMultiplier`(默认10)之间切换,冲刺速度是走路速度的倍数,改`walkSpeed`会联动。无专属冲刺动画,`BS_Idle_Walk_Run`按速度采样,超出原本"Run"档位设定的速度上限后画面会有轻微脚下打滑感,是动画资产本身的限制。
+- **瞄准**(`StartAim`/`StopAim`,默认右键):手上没有激活武器(`weaponComponent->HasWeapon()`为false)或Player的右手(`GetRightHand()`)正攥着背包物品时拒绝瞄准。复用`cameraBoom`(`USpringArmComponent`)现有插值,不新增第三个摄像机:瞄准目标`aimSocketOffset`/`aimArmLength`,取消瞄准回到`defaultSocketOffset`/`defaultArmLength`,`Tick()`里用`FMath::VInterpTo`/`FInterpTo`每帧推进(插值速度`aimTransitionSpeed`)保证过渡平滑。只对第三人称生效。瞄准时角色朝向跟随摄像机而非移动方向:`UpdateRotationMode()`统一计算`bFaceCamera = bIsFirstPerson || bIsAiming`,`ToggleCameraView`/`StartAim`/`StopAim`都调用这个函数而非各自维护判断。
+- **数字键切枪**(`ActivateShoulderWeapon(slot)`):激活左肩(1)/右肩(2)当前挂着的武器Asset(若有),武器Asset本身留在肩膀槽位不动,`weaponComponent->EquipWeapon()`只是让组件额外持有一份"活的"`WeaponMod`副本用于开火/换弹模拟,两者互不删除/创建对方。切到的肩膀是空的则`weaponComponent->ClearWeapon()`清空手上武器,不会继续保留切换前那把。
+- `ACitizenElement`默认关闭Actor Tick,若被玩家占有且需要用到`AForeverCharacter::Tick()`(如瞄准插值),必须在`PossessedBy`里重新打开,且其自身`Tick()`不能在判定"无待处理路径点"时把Tick又关掉——已在`ACitizenElement::PossessedBy`/`Tick()`里用`IsPlayerControlled()`判断规避,见`CONVENTIONS.md`第11节、memory"Citizen Tick disabled by default"。此后任何打算在`AForeverCharacter`子类上使用原生`Tick()`的功能都要确认子类有没有类似的自我关闭逻辑。
+- 蹲下(C键)和挥拳(左键)未实现:蹲姿需要在AnimGraph加`Blend Poses by bool`才能平滑过渡,效果不理想,已放弃。
 
 ## 依赖关系
-- 依赖资产:`Content/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple`、`Anims/Unarmed/ABP_Unarmed`、`Content/Blueprint/Player/Input/Actions/{IA_Move,IA_Look,IA_MouseLook}`、`Content/Blueprint/Player/Input/{IMC_Default,IMC_MouseLook}`(均从旧工程拷贝而来;后两个是阶段1从`ForeverPlayerController`移过来的引用,详见`ForeverPlayerController.md`)。
-- 依赖`Input/ForeverKeyBindingSubsystem`提供的`Jump`/`ToggleView`/`Sprint`/`Test`动态`UInputAction`及其Mapping Context。
-- 依赖`Source/Forever/Framework/ForeverTrafficFrameworkComponent.h`
-  （`ToggleVehicle`调`RequestToggleVehicle`静态方法）。
-- 被`AForeverGameMode`的`DefaultPawnClass`引用。
+- 依赖资产:`Content/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple`、`Anims/Unarmed/ABP_Unarmed`、`Content/Blueprint/Player/Input/Actions/{IA_Move,IA_Look,IA_MouseLook}`、`Content/Blueprint/Player/Input/{IMC_Default,IMC_MouseLook}`。
+- 依赖`Input/ForeverKeyBindingSubsystem`提供的动态`UInputAction`(`Jump`/`ToggleView`/`Sprint`/`MeetOptionUp`/`MeetOptionDown`/`MeetOptionSelect`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1`/`SwitchWeapon2`/`AimWeapon`)。
+- 依赖`Source/Core/player/player.h`(`Player::CreateAsset`/`AddByPath`/`RemoveByPath`/`GetLeftShoulder`/`GetRightShoulder`/`GetRightHand`)、`Framework/ForeverFrameworkActor.h`(反查`Player`实例)。
+- 依赖`AForeverPlayerController::GetMeetOptionWidget()`(MeetOption三个处理函数转发)。
+- 持有`UForeverWeaponComponent`子对象(见`ForeverWeaponComponent.md`)。
+- 被`ACitizenElement`继承(玩家可操控的市民走同一套输入/武器/瞄准逻辑)。
 
 ## 待办/后续阶段
-- 阶段6:角色外观(骨骼网格/动画蓝图)改为运行时按所控制的NPC数据动态设置,不再依赖构造函数里的默认值。
+- 角色外观(骨骼网格/动画蓝图)改为运行时按所控制的NPC数据动态设置,目前仍是构造函数默认值。

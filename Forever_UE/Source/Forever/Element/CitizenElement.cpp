@@ -179,10 +179,9 @@ ACitizenElement::ACitizenElement() {
 	// 的possessed跳过分支)。UCharacterMovementComponent::TickComponent默认只有
 	// Controller非空时才会调用PerformMovement()把AddMovementInput积累的输入转成真正的
 	// Velocity——Controller为空时PerformMovement()整个不会跑，AddMovementInput因此是纯
-	// 空操作，WalkTo每帧调用了也不会有任何效果(实测复现：MovementMode一直是MOVE_Walking，
-	// AddMovementInput每帧都在调用，但GetVelocity()和GetActorLocation()几十帧下来纹丝
-	// 不动，PIE日志确认过)。必须显式打开这个开关，让PerformMovement()在没有Controller时
-	// 也照常跑。
+	// 空操作：MovementMode显示MOVE_Walking、每帧都在调用AddMovementInput，但
+	// GetVelocity()/GetActorLocation()纹丝不动。必须显式打开这个开关，让PerformMovement()
+	// 在没有Controller时也照常跑。
 	GetCharacterMovement()->bRunPhysicsWithNoController = true;
 }
 
@@ -201,11 +200,9 @@ void ACitizenElement::PossessedBy(AController* NewController) {
 	// 自己正好就是玩家的时候，box和自己的capsule必然贴在一起常驻重叠，会不停产生自己的
 	// Overlap事件。但disable只能防止"以后"的自我Overlap——如果在被占有之前，自己就已经
 	// 作为"别人身边的市民"被加进过nearbyCitizens(比如市民A靠近市民B时，B的proximityBox把
-	// B自己加进了名单；A随后按T切换到B，B变成新的pawn，但名单里"B"这一条早就在disable
-	// 生效之前就已经存在了，disable不会回头清掉它)，这一条陈旧的"自己"记录就会一直卡在
-	// 名单里，永远排在最前面，导致下一次按T又切回"自己"、名单卡死——这正是实测复现的
-	// "切到第二个市民后再也切不出去"的bug。所以这里必须显式地把自己从名单里摘出去，
-	// disable只是防止之后再把自己加回来。
+	// B自己加进了名单，随后操控权切到B身上，但名单里这一条早在disable生效之前就已经存在，
+	// disable不会回头清掉它)，必须在这里显式把自己从名单里摘出去，否则这条陈旧的"自己"
+	// 记录会一直卡在名单最前面，干扰下一次按名单顺序遍历的逻辑。
 	if (proximityBox) proximityBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	nearbyCitizens.RemoveSingle(TWeakObjectPtr<ACitizenElement>(this));
 }

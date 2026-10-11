@@ -11,10 +11,9 @@
 // 是普通(非virtual)成员函数——canvas.cpp会被两侧各自的编译流程独立编译进各自的二进制，
 // 各自链接各自的CRT/allocator。如果这里用std::deque这类会做堆分配的容器，UE模块这一侧
 // push分配出来的内部块，被Basic.dll这一侧pop/clear时用它自己的operator delete去释放，
-// 就是[[memory:cross_dll_allocator_crash]]那种跨模块堆损坏——这次是真实踩过的坑：加了
-// 键鼠输入之后，PIE/打包运行时按一次键就直接静默退出、连崩溃报告都不弹（堆损坏往往来不及
-// 走正常的异常处理）。定长数组+首尾游标完全不涉及堆，两侧谁调用都只是读写栈上/成员内的
-// 固定内存，天然规避这个问题——原理上和SGL自己老工程Canvas实现里的IntRingBuf是同一个考虑。
+// 就是[[memory:cross_dll_allocator_crash]]那种跨模块堆损坏（表现为按一次键就直接静默
+// 退出、连崩溃报告都不弹，堆损坏往往来不及走正常的异常处理）。定长数组+首尾游标完全不
+// 涉及堆，两侧谁调用都只是读写栈上/成员内的固定内存，天然规避这个问题。
 template<typename T, int Capacity>
 class RingBuffer {
 public:
@@ -93,17 +92,15 @@ enum KEY_CODE : int {
 // 本身。
 constexpr int KEY_RELEASED_FLAG = 0x8000;
 
-// 通用2D图形/输入画布——参考SGL(github.com/SuperABC/SGL)的接口覆盖范围重新设计实现，不是
-// 照抄，命名和这个项目其它类保持一致的PascalCase风格。不#include任何UE头，供Basic.dll这类
-// 运行时加载的Mod使用（见[[memory:basic_is_runtime_dll]]），但会用到Windows GDI(canvas.cpp
-// 内部#include <windows.h>，只在.cpp里出现，不污染这个头文件/它的调用方)——这个项目本来就
-// 只面向Windows(UE_5.7 Win64 + VS2022工具链)，Dependence层"engine-agnostic"这条约定指的是
-// "不依赖UE"，不等于"不能用Win32 API"，所以用GDI换掉最初的内置点阵字体是合理的：字体渲染
-// 交给Windows自带的字体库(默认微软雅黑，支持中英文+抗锯齿)，比手画的5x7点阵美观得多，见
-// PutString/StringWidth的.cpp实现。不支持SGL的setFontName/setFontStyle这种切换字体/斜体
-// /下划线的完整API(这次只用一个固定默认字体，按SetFontSize指定像素高度)。SGL自己独立的
-// TEXT_MAP字符网格模式（setBfc/writeChar/writeString等一整套）也不做，这次只有BIT_MAP
-// 画布这一种。
+// 通用2D图形/输入画布——接口覆盖范围参考SGL(github.com/SuperABC/SGL)，命名和这个项目其它
+// 类保持一致的PascalCase风格。不#include任何UE头，供Basic.dll这类运行时加载的Mod使用（见
+// [[memory:basic_is_runtime_dll]]），但会用到Windows GDI(canvas.cpp内部#include
+// <windows.h>，只在.cpp里出现，不污染这个头文件/它的调用方)——这个项目本来就只面向
+// Windows(UE_5.7 Win64 + VS2022工具链)，Dependence层"engine-agnostic"这条约定指的是
+// "不依赖UE"，不等于"不能用Win32 API"：字体渲染交给Windows自带的字体库(默认微软雅黑，
+// 支持中英文+抗锯齿)，见PutString/StringWidth的.cpp实现。不支持SGL的setFontName/
+// setFontStyle这种切换字体/斜体/下划线的完整API，只用一个固定默认字体，按SetFontSize
+// 指定像素高度；也不做SGL的TEXT_MAP字符网格模式，只有BIT_MAP画布这一种。
 class Canvas {
 public:
 	Canvas();

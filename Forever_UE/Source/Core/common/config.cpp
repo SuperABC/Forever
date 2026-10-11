@@ -55,10 +55,8 @@ namespace {
 	// 规范化成反斜杠，即使原始输入是正斜杠——这个字符串一旦原样塞进JSON字符串值(反斜杠
 	// 后面跟的如果不是合法JSON转义字符,比如"\W"/"\P"/"\F")就是非法JSON,这份自定义
 	// JsonReader遇到一处非法转义会导致整个文件解析失败(不只是这一个字段读不到,
-	// dll_paths等其它字段也会被一起扔掉)——真实复现过一次：AddStoryScript存进
-	// storyScriptPaths的路径带着反斜杠，写回config.json后下次启动读不进来，
-	// Config::GetMods()因此是空的,触发"回退扫描整个Forever_Mod"，表现成
-	// "dll路径只剩一个"。统一在这里收口成正斜杠，不是只修story_scripts这一处。
+	// dll_paths等其它字段也会被一起扔掉)。统一在这里收口成正斜杠，覆盖所有写回
+	// config.json的路径，不是只修某一处。
 	string ToForwardSlashes(const string& path) {
 		string result = path;
 		for (char& c : result) {
@@ -172,9 +170,8 @@ void Config::ReadConfig(const string& path) {
 	}
 
 	// 任何以"_mods"结尾的顶层key都当作一个concept的mod列表解析(如"building_mods"),不
-	// 硬编码20个concept的名字——config.json本身决定内容,和旧工程的写法(每个concept一个
-	// "<concept>_mods"数组)保持一致。每个数组元素是形如"id"或"id 参数..."的字符串,按第一个
-	// 空格切成(id, 参数字符串)。
+	// 硬编码21个concept的名字——config.json本身决定内容有哪些。每个数组元素是形如"id"或
+	// "id 参数..."的字符串,按第一个空格切成(id, 参数字符串)。
 	const string suffix = "_mods";
 	for (const string& key : root.GetMembers()) {
 		if (key.size() <= suffix.size())
@@ -195,8 +192,8 @@ void Config::ReadConfig(const string& path) {
 		conceptMods[key] = entries;
 	}
 
-	// 文件里Roadnets/Names可能同时列着好几个条目(老版本手写的config.json本来就不限制
-	// 数量)，读完立刻收口成最多一个，不等到UI查询或者下次保存才发现。
+	// 文件里Roadnets/Names可能同时列着好几个条目(手写config.json不限制数量)，读完立刻
+	// 收口成最多一个，不等到UI查询或者下次保存才发现。
 	NormalizeUniqueConcepts();
 }
 
@@ -247,12 +244,10 @@ void Config::AddDllPath(const string& path) {
 
 		// 跳过路径里带"Debug"目录段的dll——Debug配置用/MDd调试CRT编译,std::string内存
 		// 布局和这个模块(Development/Release)不兼容,跨DLL读它返回的vector<string>内容
-		// 会读到按调试CRT布局解释的垂悬/错位数据,直接崩(真实复现过一次:回退扫描整个
-		// Forever_Mod时扫到x64/Debug/下的旧dll,在下面读取GetMod<Concept>s()返回的
-		// vector<string>时EXCEPTION_ACCESS_VIOLATION，见config.md)。手工配置的dll_paths
-		// 一直靠人工只填Release目录规避这个坑,但回退扫描(ForeverModSubsystem::Initialize()
-		// 的默认目录分支)会无差别递归整个目录树,必须在这里挡掉,不能指望每条路径都是人工
-		// 精确配置的。
+		// 会读到按调试CRT布局解释的垂悬/错位数据,直接崩(EXCEPTION_ACCESS_VIOLATION，见
+		// config.md)。手工配置的dll_paths一直靠人工只填Release目录规避这个坑,但回退扫描
+		// (ForeverModSubsystem::Initialize()的默认目录分支)会无差别递归整个目录树,必须在
+		// 这里挡掉,不能指望每条路径都是人工精确配置的。
 		bool underDebugDir = false;
 		for (const auto& part : entry.path()) {
 			string partLower = part.string();
@@ -274,11 +269,10 @@ void Config::AddDllPath(const string& path) {
 
 		HMODULE modHandle = LoadLibraryA(full.data());
 		if (modHandle) {
-			// 这次不再只探测符号是否存在——符号存在就真的调用一次，读取返回的
-			// vector<string>*内容(mod内static vector，调用方只读不释放，和
-			// mod_empty.cpp::GetMod<Concept>s()的既有形状一致，在本工程统一动态CRT
-			// (MultiThreadedDLL/MultiThreadedDebugDLL)下安全)，拿到这个dll实际提供
-			// 哪些(concept,modId)，FreeLibrary之前完成，不长期持有句柄。
+			// 符号存在就真的调用一次，读取返回的vector<string>*内容(mod内static
+			// vector，调用方只读不释放，和mod_empty.cpp::GetMod<Concept>s()的既有形状
+			// 一致，在本工程统一动态CRT(MultiThreadedDLL/MultiThreadedDebugDLL)下安全)，
+			// 拿到这个dll实际提供哪些(concept,modId)，FreeLibrary之前完成，不长期持有句柄。
 			for (const auto& descriptor : GetModConceptDescriptors()) {
 				auto getModFunc = reinterpret_cast<GetModFunc>(GetProcAddress(modHandle, descriptor.getModSymbol));
 				if (!getModFunc)
@@ -292,7 +286,7 @@ void Config::AddDllPath(const string& path) {
 				}
 			}
 
-			// 新增的DLL级依赖声明探测——整个DLL一份，不按concept重复，见loader.h
+			// DLL级依赖声明探测——整个DLL一份，不按concept重复，见loader.h
 			// kModDllDependenciesSymbol注释。
 			auto getDepsFunc = reinterpret_cast<GetModFunc>(GetProcAddress(modHandle, kModDllDependenciesSymbol));
 			if (getDepsFunc) {

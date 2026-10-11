@@ -1,14 +1,19 @@
 # ForeverPlayerController
 
 ## 职责
-第三人称玩家的PlayerController。目前是空壳——不做Enhanced Input映射管理,也没有其他逻辑。
+第三人称玩家的PlayerController。承载一批常驻UI Widget(MeetOption对话选项/剧情对话SectionSpeaking/SectionOption/Puzzle/Phone/Inventory/Map)和不跟随被占有Pawn变化的全局热键(`P`开手机、`B`开背包、`M`开地图、`Esc`关地图)。
 
 ## 关键设计
-- 阶段0曾经在这里加`IMC_Default`/`IMC_MouseLook`的Mapping Context,阶段1核对`Blueprint/Player/MainCharacter`的dump后发现旧项目并不是这么做的:输入映射的增删挂在**被占有的Pawn**(`AForeverCharacter::PossessedBy`/`UnPossessed`)上,不是固定挂在Controller上。原因是旧项目要支持"玩家上/下车时从控制Character切到控制Vehicle Pawn"——每次换Pawn,映射要跟着走。详见`ForeverCharacter.md`。所以这里改回空壳,不再持有`defaultMappingContexts`。
-- 保留这个类(而不是直接用引擎默认`APlayerController`)是因为dump显示旧项目的`MainController`蓝图EventGraph里有一大块热键逻辑(Tab开暂停菜单、M开地图、B开背包等),这些是阶段4/5系统就绪后才能迁移的内容,届时会加回这个类里。当前这些热键**没有实现**,详见仓库根目录`MAINCONTROLLER_TODO.md`。
+- `BeginPlay`里显式`SetInputMode(FInputModeGameOnly())`+`bShowMouseCursor = false`——不能假设这是空白状态:主菜单关卡的`AForeverMenuController::BeginPlay`会把输入模式设成UI Only+显示鼠标,这个状态挂在ViewportClient/LocalPlayer身上,不会因为旧Controller被`OpenLevel`销毁就自动还原,必须显式重置。
+- `UForeverKeyBindingSubsystem`的动态Mapping Context在这里(`BeginPlay`)常驻添加一次,不放在Pawn的`PossessedBy`里——`TogglePhone`等热键要求任何时候都生效(包括开局还操控着`ADefaultPawn`、以及`ChangeControlChange`换人/换乘载具的瞬间),Controller是整局游戏唯一不随换Pawn而变的宿主。Pawn侧(`AForeverCharacter`/`AVehicleElement`)只保留各自专属的移动/视角Context增删。
+- 7个Widget(MeetOption/SectionSpeaking/SectionOption/Puzzle/Phone/Inventory/Map)在`BeginPlay`里统一用`CreateWidget`+`AddToViewport`常驻创建,`xxxWidgetClass`未配置时跳过该Widget的创建并打警告日志,不影响其余Widget,也不会崩溃。创建后的显示/隐藏由各自的业务逻辑驱动(SectionSpeaking/SectionOption初始手动Collapse;其余几个自己在构造/`NativeConstruct`里默认不显示)。
+- `TogglePhone`/`ToggleInventory`/`ToggleMap`/`HandleCloseMap`只是到对应Widget方法的一行转发。
 
 ## 依赖关系
 - 被`AForeverGameMode`的`PlayerControllerClass`引用。
+- 依赖`Input/ForeverKeyBindingSubsystem`(`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`动态Action)。
+- 依赖`UI/{MeetOptionWidget,SectionSpeakingWidget,SectionOptionWidget,PuzzleWidget,PhoneWidget,InventoryWidget,MapWidget}`。
+- 被`AForeverCharacter::MeetOptionFocusUp/Down/Select`(取`GetMeetOptionWidget()`)、`UForeverStoryFrameworkComponent::ShowCurrentItem`(取`GetSectionSpeakingWidget()`/`GetSectionOptionWidget()`)等依赖。
 
 ## 待办/后续阶段
-- 阶段4/5:按`MAINCONTROLLER_TODO.md`里列的清单,把旧`MainController`蓝图里各个热键对应的功能迁移进来(每项都要等它依赖的系统/UI先就绪)。
+- `Tab`(暂停菜单开关)尚未接回,阻塞点是对应的`PausePanel`UMG Widget还没迁移,详见`MAINCONTROLLER_TODO.md`。

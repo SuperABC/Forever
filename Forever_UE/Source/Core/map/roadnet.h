@@ -24,7 +24,7 @@ struct RoadJunctionApproach {
 	// road->GetVehicleLanes(side)的车道下标，vector为空表示该端这个方向没有车道。isStart时
 	// side0(正向)是outbound、side1(反向)是inbound；GetEnd()端相反——车道级锚点让每条车道在
 	// 导航图/可视化上都有自己独立的一条线，不会因为共用一个锚点而和同侧别的车道重叠成一条线
-	// (第九轮迁移，起因见roadnet.md"车道级导航锚点"一节)。
+	// (见roadnet.md"车道级导航锚点"一节)。
 	std::vector<Node*> vehicleInbound;
 	std::vector<Node*> vehicleOutbound;
 
@@ -36,9 +36,8 @@ struct RoadJunctionApproach {
 	// 世界坐标(地图元素单位)，路口mesh多边形用：curbLeft=面向路口外侧时的左手边路缘角点，
 	// curbRight=右手边，具体朝向判定见roadnet.cpp Build()实现。这两个点不只是贴着
 	// Intersection原坐标横向偏移——还沿这条路离开路口的方向额外外移了setback距离，让路口
-	// 多边形对每条路都有一段真实的"喇叭口"进深，不是零深度的点状扇形（早期版本没有这个纵向
-	// 偏移，导致路口mesh几乎没有实际面积，和按同样距离收缩的道路tiling对不上，见
-	// ForeverRoadnetFrameworkComponent.md）。
+	// 多边形对每条路都有一段真实的"喇叭口"进深，不是零深度的点状扇形——这个纵向偏移量必须
+	// 和按同样距离收缩的道路tiling保持一致，见ForeverRoadnetFrameworkComponent.md。
 	std::pair<float, float> curbLeft;
 	std::pair<float, float> curbRight;
 

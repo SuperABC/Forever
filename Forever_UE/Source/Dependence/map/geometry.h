@@ -230,8 +230,7 @@ public:
 	// 是否是Zone/Building裁剪Lot自由空间时自动生成的小路（Lot::SplitWithPath创建），
 	// 不是RoadnetMod铺设的正式路。分类信息记在Road自己身上——持有Road*的调用方（比如以后
 	// 要重新给小路接导航图时）直接问这条Road自己就够了，不需要额外拿着Map的某个列表去做
-	// 成员检查（之前ConnectPathRoad那版就是反面教材：查Map::pathRoads.find()才知道
-	// 一条Road是不是小路，被撤销的同时也带出了这个设计问题）。
+	// 成员检查。
 	void SetPathRoad(bool isPath = true);
 	bool IsPathRoad() const;
 

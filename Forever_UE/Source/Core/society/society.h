@@ -19,7 +19,7 @@ class Organization;
 class Change;
 struct ScriptContext;
 
-// Society：Job+Organization域的聚合入口（这次不迁移Calendar——"哪几天上班/几点上下班"
+// Society：Job+Organization域的聚合入口（不引入Calendar——"哪几天上班/几点上下班"
 // 直接写进具体JobMod子类的DailyPlan里）。见society.md。
 class Society {
 public:

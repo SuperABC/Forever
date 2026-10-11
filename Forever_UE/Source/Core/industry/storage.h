@@ -9,9 +9,9 @@
 
 
 // Storage：一个仓库(或者工坊自带的输入/输出cache，见manufacture.h)的实体——只暴露
-// "能装什么"+"当前装了多少"，不知道自己的上下游/位置。老工程的仓库还按产品类型固定
-// 一对upstreams/downstreams指针，这次不要——运输改成Industry统一做的"全城统一调配"
-// (见industry.md)，Storage只是被动地被Input()/Output()读写，见storage.md。
+// "能装什么"+"当前装了多少"，不知道自己的上下游/位置。运输由Industry统一做的
+// "全城统一调配"负责(见industry.md)，Storage只是被动地被Input()/Output()读写，见
+// storage.md。
 class Storage {
 public:
 	// 走mod系统创建的普通仓库——id需要在config.json的"storage_mods"里启用。
@@ -19,9 +19,8 @@ public:
 
 	// 直接构造，不经过mod系统——专供Manufacture创建自己的内部输入/输出cache用
 	// (见manufacture.md)。这两个cache是"生产逻辑的暂存中转"，不是玩家能配置的内容，
-	// 老工程用一个内置的"empty"mod id来创建，但那要求这个id同时被注册且在config.json
-	// 里启用，属于给纯内部实现细节强加一层没必要的mod配置；这次直接给categories/
-	// capacity构造，跳过mod系统。
+	// 给一个纯内部实现细节强加一层mod配置没有必要(Factory::IsEnabled()要求registries
+	// 和configuredArgs两边都有)；直接给categories/capacity构造，跳过mod系统。
 	Storage(const std::string& name, const std::vector<std::string>& categories, float capacity);
 
 	~Storage(); // 只有mod驱动的构造才需要factory->DestroyStorage(mod)

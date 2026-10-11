@@ -9,10 +9,9 @@
 
 class Change;
 
-// SchedulerMod：每个市民挂一个的行为调度器定义。上班的行为已经完全由Citizen::GetJob()
-// 负责（Populace::Tick驱动Job::DailyPlan/ExecNode），Scheduler这次负责的是下班之后的
-// 行为——阶段3骨架只验证了Mod发现/加载机制本身（只有GetType/GetName两个纯虚接口），这次
-// 补齐真正的业务接口，结构完全照抄JobMod（Source/Dependence/society/job_mod.h），DailyPlan/
+// SchedulerMod：每个市民挂一个的行为调度器定义。上班的行为完全由Citizen::GetJob()
+// 负责（Populace::Tick驱动Job::DailyPlan/ExecNode），Scheduler负责的是下班之后的
+// 行为——结构和JobMod（Source/Dependence/society/job_mod.h）一致，DailyPlan/
 // ExecNode这套调度机制同样和milestone/JSON完全独立，见job.md"DailyPlan/ExecNode"一节。
 class SchedulerMod {
 public:

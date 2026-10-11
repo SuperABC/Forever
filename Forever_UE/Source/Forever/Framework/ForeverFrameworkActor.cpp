@@ -110,9 +110,7 @@ void AForeverFrameworkActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 阶段2临时日志:骨架里其余8个域组件还是空实现,没有任何可见效果,
-	// 靠这条日志在PIE的Output Log里确认Actor+组件都正常构造/初始化。
-	// 阶段4逐个域落地后可以删除或改成更有用的调试信息。
+	// 在PIE的Output Log里确认Actor+全部9个域组件都正常构造/初始化。
 	UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor initialized with 9 framework components: Asset/Building/Populace/Roadnet/Room/Story/Terrain/Traffic/Zone"));
 
 	// 每次真正开局都要重新按当前已经读进内存的config内容刷新一遍参数表——不同局可能用不同
@@ -450,7 +448,7 @@ void AForeverFrameworkActor::EnsureStoryGenerated()
 {
 	if (story) return;
 
-	// 阶段4 Story落地：和map/populace不互相依赖。Init()读取Resource/Story/test.json，
+	// 和map/populace不互相依赖。Init()读取Resource/Story/test.json，
 	// 随后立刻广播一次GameStartEvent，见storyFramework.md。
 	story = new Story();
 	story->Init();

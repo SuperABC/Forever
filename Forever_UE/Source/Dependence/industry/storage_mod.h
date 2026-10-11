@@ -8,7 +8,7 @@
 // 不知道自己的上下游/位置，这些由Industry的全城统一调配逻辑在运行时读写，见
 // Core/industry/storage.h/storage.md。categories和ProductMod::categories同一套
 // 字符串标签，任一交集即可存放。capacity是共享容量池(不同产品类型共用总容量)，不是
-// 每种产品类型各自独立配额，照抄老工程的设计。
+// 每种产品类型各自独立配额。
 class StorageMod {
 public:
 	StorageMod() = default;

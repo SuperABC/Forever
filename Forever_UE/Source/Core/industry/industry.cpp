@@ -104,7 +104,7 @@ void Industry::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) 
 		manufacture->WorkAccount();
 	}
 
-	// 阶段B：全城统一调配，替代老工程按距离就近建的静态运输图。
+	// 阶段B：全城统一调配。
 	GlobalAllocate();
 
 	// 阶段C：全体工坊用调配完之后的inputCache存量+outputCache剩余空间，算今天能产

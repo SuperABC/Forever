@@ -8,9 +8,7 @@ void AForeverHUD::DrawHUD()
 	Super::DrawHUD();
 
 	// 只有当前被这个HUD所属PlayerController占有的Pawn是AForeverCharacter且在瞄准中才画——
-	// 用户要求"临时"画一个准心，先用DrawLine这类原生Canvas调用验证位置/尺寸，不引入正式的
-	// 准心贴图资产，和这次武器系统其余"先用DrawDebugLine/AddOnScreenDebugMessage验证手感"
-	// 的一贯做法一致。
+	// 临时效果，先用DrawLine这类原生Canvas调用验证位置/尺寸，不引入正式的准心贴图资产。
 	AForeverCharacter* character = Cast<AForeverCharacter>(GetOwningPawn());
 	if (!character || !character->IsAiming() || !Canvas) return;
 

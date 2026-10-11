@@ -26,13 +26,12 @@ class UForeverTerrainFrameworkComponent;
 class UForeverTrafficFrameworkComponent;
 class UForeverZoneFrameworkComponent;
 
-// 阶段2:场景里唯一的Framework入口Actor,取代旧工程里分散的9个Framework Actor
+// 场景里唯一的Framework入口Actor,取代旧工程里分散的9个Framework Actor
 // (Asset/Building/Global/Populace/Roadnet/Room/Story/Terrain/Traffic/Zone)。
 // 内部按域组件划分职责,详见ForeverFrameworkActor.md。**不含Global域组件**——旧工程里
 // `GlobalBase`本身就是那个唯一放在关卡里、串联其它Framework Actor的入口,而这个角色现在由
 // `AForeverFrameworkActor`自己承担了,不需要再嵌一个"Global"子组件重复这件事;`GlobalBase`
-// 剩下的编排逻辑(GlobalPause/DrawMap/InitPhone等)将来直接落在这个Actor自己身上,详见
-// PHASE4_PLAN.md。
+// 剩下的编排逻辑(GlobalPause/DrawMap/InitPhone等)将来直接落在这个Actor自己身上。
 UCLASS()
 class FOREVER_API AForeverFrameworkActor : public AActor
 {
@@ -44,8 +43,8 @@ public:
 	// 显式声明+在.cpp里定义(那里map/map.h已完整include)——map是原生指针手动管理,
 	// Map在这个头文件里只有前置声明。用unique_ptr<Map>试过,UHT为每个UCLASS生成的
 	// VTableHelper构造函数(定义在.gen.cpp,看不到map/map.h)会在异常展开路径里引用
-	// ~unique_ptr<Map>而编译失败,所以这里改回原生指针+显式delete(纯C++类型,不跨模块
-	// 边界——Core.lib静态链接进本模块,不是REFACTOR_PLAN.md说的那种跨DLL new/delete场景)。
+	// ~unique_ptr<Map>而编译失败,所以这里用原生指针+显式delete(纯C++类型,不跨模块
+	// 边界——Core.lib静态链接进本模块,不是跨DLL new/delete场景)。
 	virtual ~AForeverFrameworkActor();
 
 	// 幂等(map已存在直接返回):只保证Map这一个域——新建Map、依次跑InitTerrains/InitRoadnet/
@@ -55,9 +54,6 @@ public:
 	// 调用了,函数体内部重复调上游没有意义(见BeginPlay定义处的说明)。BeginPlay和
 	// ForeverGameMode::FindPlayerStart_Implementation都会调用它,保证不论两者实际调用顺序
 	// 如何,出生点计算时地形都已经生成好,详见ForeverFrameworkActor.md。
-	// 阶段4-1(Roadnet落地)从EnsureTerrainGenerated改名——现在编排的不只是地形。原来这一个
-	// 函数还顺带创建了Populace/Society/Player/Industry/Traffic/Story共7个域的对象,现在
-	// 按域拆成7个独立的Ensure*Generated(),这个函数收窄回只保证Map,语义详见下面6个同名方法。
 	void EnsureMapGenerated();
 
 	// 幂等(populace已存在直接返回):只保证Populace这一个域——new Populace()、
@@ -125,7 +121,7 @@ protected:
 	// 处理。没有声明mod_dependences（字段不存在/为空）视为直接通过，什么都不做。
 	void ValidateMainStoryDependencies();
 
-	// 阶段4-7(部分)：驱动Player的全局时钟(Player::Tick)——目前这个Actor唯一需要每帧更新
+	// 驱动Player的全局时钟(Player::Tick)——目前这个Actor唯一需要每帧更新
 	// 的东西，见ForeverFrameworkActor.md"Tick"一节。
 	virtual void Tick(float DeltaTime) override;
 
@@ -138,8 +134,8 @@ protected:
 	// EndPlay由引擎在PIE停止时同步调用，在这里delete能保证下一次Play之前dll已经被卸载干净。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	// 阶段4-1:Terrain域落地,Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
-	// Zone/Building/Roadnet等后续系统迁移时会继续扩展同一个Map实例,不是各自另建一个。
+	// Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
+	// Zone/Building/Roadnet等系统共用同一个Map实例,不是各自另建一个。
 	Map* map = nullptr;
 
 	// 进入populace域新增：和map平级持有，不是map的成员——Populace不知道Map的存在，
@@ -147,7 +143,7 @@ protected:
 	// 顶层对象、由它做两者之间编排是同一个分工，详见Source/Core/populace/populace.md。
 	Populace* populace = nullptr;
 
-	// 阶段4 Story落地：和map/populace平级持有，生命周期管理方式完全一致(EnsureStoryGenerated
+	// 和map/populace平级持有，生命周期管理方式完全一致(EnsureStoryGenerated
 	// 里创建、EndPlay/析构函数里delete)，详见Source/Core/story/story.md。
 	Story* story = nullptr;
 

@@ -5,7 +5,7 @@
 #include <string>
 
 
-// 阶段5-6物品/背包系统测试案例——8个具体资产：
+// 物品/背包系统测试案例——8个具体资产：
 // - ContainerAsset：背包容器(cube占位)，能背在后背。
 // - WheatAsset/BeefAsset/BurgerAsset：id和Industry的WheatProduct/BeefProduct/
 //   BurgerProduct共用(见Source/Basic/industry/product_basic.h)，Asset只存这个type字符串，

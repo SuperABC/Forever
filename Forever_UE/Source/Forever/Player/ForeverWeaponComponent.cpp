@@ -183,8 +183,8 @@ void UForeverWeaponComponent::Fire() {
 	UCameraComponent* camera = character->IsFirstPerson() ? character->GetFirstPersonCamera() : character->GetFollowCamera();
 	if (!camera) return;
 
-	// 改回从摄像机(眼睛)位置发射——用户明确要求撤回"从枪口发射"那版改动，见.md"开火起点"
-	// 一节的修订记录。
+	// 开火起点用摄像机(眼睛)位置，不是枪口位置——保证"看哪打哪"的精确命中判定；画出来的
+	// debugLine视觉起点另外改成枪的位置，见下文。
 	FVector start = camera->GetComponentLocation();
 
 	float spreadRad = FMath::DegreesToRadians(currentWeapon->GetBaseSpread());

@@ -780,9 +780,7 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	}
 
 	// 每个Room自己中心点的导航锚点，供BuildPedestrianNavigation()里"single"/"row"类型的
-	// 导航端点引用——照抄老工程LayoutBuilding()里"for (auto room : rooms) room->
-	// SetNavigationNode(...)"这一步，这次没有ConfigRoom/PlacePivots(那些依赖furniture/
-	// pivots，这次没有迁移)。
+	// 导航端点引用。不做ConfigRoom/PlacePivots——那些依赖furniture/pivots，还没有迁移。
 	for (Room* room : rooms) {
 		auto [wx, wy] = LocalToWorld(room->GetPosX(), room->GetPosY());
 		float z = GetFloorBaseZ(room->GetLayer());

@@ -8,11 +8,10 @@
 
 ## 关键设计
 
-- **这次只做`Component`本身（绑定在单个`Building`内部），不做`Organization`**（公司/组织，
-  持有跨building的多个`Component`）——`Organization`依赖的`Populace`/`Job`这次还没迁移，
-  留到以后Society阶段；届时`Organization`按类型撮合`Component`的逻辑（老工程
-  `Society::Init`全局收集所有`Component`按类型匹配）会在`Component`之上再加一层，不需要
-  改动`Component`自己的字段。
+- **只做`Component`本身（绑定在单个`Building`内部），不做`Organization`**（公司/组织，
+  持有跨building的多个`Component`）——`Organization`依赖的`Populace`/`Job`还没迁移，留到
+  以后Society阶段；届时`Organization`按类型撮合`Component`的逻辑会在`Component`之上再加
+  一层，不需要改动`Component`自己的字段。
 - **创建时机**：`Building::Layout()`里`AssignRoom`/`ArrangeRow`记录的`(component名字,id)`
   是一个分组key，真正实例化`Room`之前先按这个key去重创建`Component`（同一个
   `(component,id)`只创建一次，后续`Room`都挂到同一个`Component`上），`Component`归属
@@ -25,12 +24,9 @@
   `factory->DestroyComponent(mod)`；`Component`对象本身由`Building`统一`new`/`delete`。
 - **`rooms`不持有生命周期**：`Room`由`Building`自己的`rooms`数组统一持有/销毁，
   `Component::rooms`只是一份引用列表（`AddRoom`时`push_back`，不`delete`）。
-- **map域没有更多东西要补全（第N轮迁移核实）**：核对过老工程`Component`全部字段/方法
-  （`type`/`name`/`parentBuilding`/`rooms`/`script`/`InitComponent`），`script`/
-  `InitComponent`（`InitComponent`实际是`new Script(...)`+读milestones+`SetValue`，纯
-  Story域逻辑）之外全部已经port完了，且老工程`Component`本来就没有`GetAddress`（不像
-  `Room`/`Building`/`Zone`那样参与寻址体系，只能通过`Room`/`Building`间接找到）——这次
-  "补全map域"对`Component`没有新增任何字段/方法。
+- **map域范围内没有更多字段需要补全**：老工程`Component`的`script`/`InitComponent`
+  （纯Story域逻辑）之外全部已经port完，且老工程`Component`本来就没有`GetAddress`（不像
+  `Room`/`Building`/`Zone`那样参与寻址体系，只能通过`Room`/`Building`间接找到）。
 
 ## 依赖关系
 

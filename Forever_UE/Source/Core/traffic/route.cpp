@@ -248,22 +248,18 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 
 	// 缓动时长(真实秒，mod->easeSeconds，各线路类型自己校准，见route_mod.h的说明)——
 	// 进站前这么久开始减速到0，出站后这么久之内从0加速到巡航速度。不能按单条leg自己的
-	// [0,1]区间缓动(第一版这么写过)：leg的边界对应接口(leftIn/rightOut这类，见
-	// station_basic.cpp Layout()的说明)，载具运行时完全不感知接口本身的存在，只认
-	// "是不是一次真正的停靠(dwellAtDestination)"；而接口到站内停靠点那一小段(比如跑道/
-	// 轨道半截)往往比相邻的长途巡航段短得多，缓动压缩在这么短的一条leg里，travelTime
-	// 本身很短，表现上还是看起来像"瞬间"加减速。改成按"行驶区段"(两次真正停靠之间、首尾
-	// 相接的若干条leg合起来算一段)整体套梯形速度曲线(匀加速->匀速->匀减速)，缓动自然"借"
-	// 相邻长途leg的时间，不受单条leg长度限制，见route.md。
+	// [0,1]区间缓动：leg的边界对应接口(leftIn/rightOut这类，见station_basic.cpp Layout()
+	// 的说明)，载具运行时完全不感知接口本身的存在，只认"是不是一次真正的停靠
+	// (dwellAtDestination)"；接口到站内停靠点那一小段(比如跑道/轨道半截)往往比相邻的长途
+	// 巡航段短得多，按单leg缓动会被压缩在很短的travelTime里，表现上看起来像"瞬间"加减速。
+	// 因此按"行驶区段"(两次真正停靠之间、首尾相接的若干条leg合起来算一段)整体套梯形速度
+	// 曲线(匀加速->匀速->匀减速)，缓动自然"借"相邻长途leg的时间，不受单条leg长度限制，
+	// 见route.md。
 	//
 	// 单位换算：mod->easeSeconds是真实秒，但下面segTotalTime/segElapsed全是游戏内秒
-	// (和speed/dwellSeconds同一套单位，见BusRoute::SetProperty()的注释)——这里原来直接
-	// 拿真实秒的easeSeconds去跟游戏内秒的segTotalTime比大小/做减法，少了×120这个换算，
-	// 相当于把"40真实秒"的缓动当成了"40游戏内秒"(=1/3真实秒)来用，PIE/打包exe实测反馈
-	// "调大了easeSeconds，加速度还是很猛"——数值调了好几轮都没用，根因就是这个漏乘的换算
-	// 系数，不是真的需要更大的名义值。换算系数和既有的"默认timeFlowRatio=2.0,1真实秒=
-	// 120游戏内秒"假设一致，如果以后timeFlowRatio被剧情脚本改了要跟着重新校准(和speed/
-	// dwellSeconds的既有校准方式一样，不是这次新引入的限制)。
+	// (和speed/dwellSeconds同一套单位，见BusRoute::SetProperty()的注释)，换算系数120
+	// 对应"默认timeFlowRatio=2.0,1真实秒=120游戏内秒"这个假设——如果以后timeFlowRatio
+	// 被剧情脚本改了要跟着重新校准(和speed/dwellSeconds的既有校准方式一样)。
 	constexpr float kGameSecondsPerRealSecond = 120.f;
 	float kEaseSeconds = mod->easeSeconds * kGameSecondsPerRealSecond;
 
@@ -309,10 +305,8 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 	// 名义匀速travelTime=length/speed算)。这个"时长"累计只用来算segElapsed(定位在缓动
 	// 曲线上的哪一点)，不能顺便拿同一遍累计的"长度"去反查arcLength落在哪条leg上——缓动
 	// 曲线的实际速度在加减速阶段和mod->speed不一样，"名义travelTime"和"缓动后真实走过的
-	// 弧长"在leg边界处对不上(这是改了两版之后才抓到的教训：早期版本直接拿这遍的
-	// segLengthBeforeCurrentLeg减，结果PIE实测反馈"到了接口处卡顿一下，然后瞬移到中间的
-	// 站点"——接口正好是leg边界，缓动让走到这个边界的真实弧长和"按名义匀速应该走到哪"不一致，
-	// 下面必须按累计长度(不是累计时间/legIndex)重新定位真正落在哪条leg)。
+	// 弧长"在leg边界(正好是接口)处对不上，用名义时间累计的长度去切缓动后的真实弧长会在
+	// 接口处卡顿/瞬移。下面必须按累计长度(不是累计时间/legIndex)重新定位真正落在哪条leg。
 	float segTotalTime = 0.f, segTotalLength = 0.f;
 	float segTimeBeforeCurrentLeg = 0.f;
 	{

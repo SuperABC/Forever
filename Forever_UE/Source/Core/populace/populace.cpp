@@ -25,9 +25,8 @@ using namespace std;
 
 namespace {
 
-// 复刻老工程Populace::GenerateCitizens内部的LIFE_TYPE/Human——只在模拟期间用来推进人口
-// 数量，模拟结束后不对外暴露，也不保留进Citizen(这次Citizen字段范围只有姓名/性别/生日，
-// 见citizen.h)。
+// LIFE_TYPE/Human——只在模拟期间用来推进人口数量，模拟结束后不对外暴露，也不保留进
+// Citizen，见citizen.h。
 enum LIFE_TYPE : int {
 	LIFE_SINGLE,
 	LIFE_MARRY,
@@ -81,10 +80,9 @@ void RandomizeClassmateRelation(Citizen* citizen, const string& otherName) {
 }
 
 // 按年龄递减的"这一年开始一段新恋情"基础年概率——年轻人恋爱更频繁，年龄越大频率越低，
-// 参考现实约会频率随年龄下降的趋势，不是一个和年龄无关的常数(审阅时反馈：老版本"按总
-// 跨度套公式算总数"会让单身时间越长——往往就是年纪越大的人——分配到越多段恋爱史，
-// 完全反了；且已婚情人概率是常数，没有随年龄自然衰减，导致老年人和年轻人一样容易有
-// 婚外情)。
+// 参考现实约会频率随年龄下降的趋势。恋爱史生成、当前情人/婚外情判定都基于这同一个
+// 函数，不能用和年龄无关的常数（否则会让单身时间越长的人反而分配到越多段恋爱史，或者
+// 老年人和年轻人一样容易有婚外情）。
 float DatingHazardForAge(int age) {
 	if (age < 20) return 0.10f;
 	if (age < 30) return 0.14f;
@@ -113,8 +111,8 @@ bool IsCurrentLoverOf(Citizen* citizen, Citizen* candidate) {
 }
 
 // 随机找一个满足条件的恋爱/情人对象：异性、atYear时年满kDatingMinAge岁、不是近亲、不是
-// citizen自己、不是citizen当前已有的情人。照抄老工程"最多尝试若干次随机候选"的容错写法，
-// 找不到就返回nullptr。
+// citizen自己、不是citizen当前已有的情人。最多尝试若干次随机候选，找不到就返回nullptr，
+// 不强行凑数。
 Citizen* FindRomanticCandidate(vector<Citizen*>& citizens, Citizen* citizen, int atYear) {
 	if (citizens.empty()) return nullptr;
 	for (int attempt = 0; attempt < 10; attempt++) {
@@ -204,8 +202,8 @@ void GenerateKinshipRelations(vector<Citizen*>& citizens, const vector<Human>& f
 
 // 按年份逐年推进的编年模拟生成过去恋爱史，不是"按总跨度套公式一次性算出总段数再切分"——
 // 每年是否开始一段新恋情按DatingHazardForAge(当时的年龄)独立判定，年纪越大频率越低。
-// 时长用pow(r,4)让持续时间偏短(照抄老工程GenerateEmotions的取法)。前任也保留在
-// acquaintances里——"曾经谈过恋爱"本身就是一种认识关系，不因为关系结束就删除。
+// 时长用pow(r,4)让持续时间偏短。前任也保留在acquaintances里——"曾经谈过恋爱"本身就是
+// 一种认识关系，不因为关系结束就删除。
 void GeneratePastRelationships(vector<Citizen*>& citizens, Citizen* citizen, int boundEndYear) {
 	int startYear = citizen->GetBirthYear() + kDatingMinAge;
 
@@ -291,7 +289,6 @@ Populace::~Populace() {
 
 void Populace::Init(int accommodation) {
 	InitNames();
-	// 老工程Populace::Init原公式：target = accommodation * exp(GetRandom(1000)/1000.0f - 0.5f)。
 	int target = static_cast<int>(accommodation * expf(GetRandom(1000) / 1000.0f - 0.5f));
 	GenerateCitizens(target);
 	AssignSchedulers();
@@ -304,7 +301,7 @@ void Populace::InitNames() {
 	// Source/Core/common/registry.md)，nameFactory已经是绑定好的引用成员。
 
 	// Name这个concept只需要唯一一个"当前生效"的取名算法，和Roadnet同一个"单选"语义
-	// （不是Terrain/Zone/Building那种按GetPriority()/权重多mod叠加），这次改成和
+	// （不是Terrain/Zone/Building那种按GetPriority()/权重多mod叠加），和
 	// Map::InitRoadnet()同一套写法——不在C++里硬编码具体mod名字，config.json的
 	// "name_mods"数组列出哪个id就用哪个：
 	for (const auto& [id, args] : Config::GetConceptMods("name_mods")) {
@@ -336,8 +333,7 @@ void Populace::InitNames() {
 
 void Populace::AssignSchedulers() {
 	// 累加所有已注册Scheduler类型的权重建CDF，和Society::Init选Organization类型同一套
-	// 算法（society.cpp），不照抄老工程SchedulerFactory::GetPowers()一次性返回全部map的
-	// 写法——这个工程已经确立的是SchedulerFactory::GetPower(id)单个查询。
+	// 算法（society.cpp），用SchedulerFactory::GetPower(id)单个查询建CDF。
 	vector<string> ids = schedulerFactory.GetRegisteredIds();
 	if (ids.empty()) return; // 理论上不会发生：至少有scheduler_basic会被注册
 
@@ -446,19 +442,15 @@ Citizen* Populace::FindCitizenByName(const std::string& name) const {
 }
 
 void Populace::GenerateCitizens(int target) {
-	// 临时男女数组及年表，完全照抄老工程Populace::GenerateCitizens的算法(E:\Projects\
-	// Forever_UE\Source\Core\populace\populace.cpp:659-859)。
+	// 临时男女数组及年表，见populace.md"年表模拟算法"一节。
 	vector<Human> females(1, { -1, "", 0, 0, LIFE_DEAD, GENDER_FEMALE, -1, -1, -1, {} });
 	vector<Human> males(1, { -1, "", 0, 0, LIFE_DEAD, GENDER_MALE, -1, -1, -1, {} });
 	vector<int> maleBirths(4096, -1);
 	int currentBirth = 0;
 	vector<vector<pair<int, LIFE_TYPE>>> chronology(4096);
 
-	// 初始添加100男100女。老工程这里两个性别都传固定的(false,true,true)——只允许
-	// 女性+中性词库，男性种子也不例外，读起来像是老工程自己的一个疏漏(和几十行之后
-	// LIFE_BIRTH事件里"按孩子实际性别选对应词库、中性词库永远允许"的写法不一致)。这次
-	// 迁移时顺手改成和LIFE_BIRTH一致的"按性别选对应词库+中性词库永远允许"，不逐字复刻
-	// 这个疑似bug。
+	// 初始添加100男100女——按性别选对应词库+中性词库永远允许，和下面LIFE_BIRTH事件里
+	// "按孩子实际性别选对应词库、中性词库永远允许"的写法一致。
 	for (int i = 1; i <= 100; i++) {
 		string n = name->GenerateName(false, true, true);
 		if (n.empty()) continue;
@@ -497,7 +489,7 @@ void Populace::GenerateCitizens(int target) {
 	}
 
 	// 自动迭代繁殖最多4096年，至少跑满100年，之后年份<4096且(存活+死亡)总人数达到target
-	// 前继续，和老工程完全一致。
+	// 前继续——这里是累计出生过的人数，不是当前活人数。
 	int year = 1;
 	while (year < 100 || (year < 4096 &&
 		static_cast<int>(females.size()) + static_cast<int>(males.size()) < target)) {
@@ -547,8 +539,8 @@ void Populace::GenerateCitizens(int target) {
 				}
 				case LIFE_BIRTH: {
 					int gender = GetRandom(2);
-					// 孩子继承父亲的姓——GetSurname()按老工程约定"取姓名的第一个UTF-8
-					// 字符"，父亲是females[eventIdx].spouse这个男性。
+					// 孩子继承父亲的姓——GetSurname()取姓名的第一个UTF-8字符，父亲是
+					// females[eventIdx].spouse这个男性。
 					string surname = name->GetSurname(males[females[eventIdx].spouse].name);
 					string n = name->GenerateName(surname,
 						gender == GENDER_MALE, gender == GENDER_FEMALE, true);
@@ -621,10 +613,10 @@ void Populace::GenerateCitizens(int target) {
 	// 只把姓名/性别/生日+配偶/子女链接物化进Citizen——父母/兄弟姐妹等其它血缘关系只在上面
 	// 的Human临时结构里用来推进人口数量，这次不保留(Citizen这次的字段范围只到配偶/子女，
 	// 见citizen.h；Map::Checkin()要靠配偶/子女判断"一家人要不要搬进同一间"，见
-	// populace.md)。只有模拟结束时活着(life != LIFE_DEAD)且额外通过老工程同款95%存活
-	// 过滤(GetRandom(20) > 0)的个体才会真正物化成Citizen。生日年份沿用老工程"2000+模拟
-	// 内部年份"的换算习惯。Human.idx记录物化后在citizens里的下标(照抄老工程Person::idx的
-	// 用法)，-1表示没有幸存/物化，下面第二遍关系登记要用它把Human下标翻译成Citizen*。
+	// populace.md)。只有模拟结束时活着(life != LIFE_DEAD)且额外通过95%存活过滤
+	// (GetRandom(20) > 0)的个体才会真正物化成Citizen。生日年份用"2000+模拟内部年份"
+	// 的换算。Human.idx记录物化后在citizens里的下标，-1表示没有幸存/物化，下面第二遍
+	// 关系登记要用它把Human下标翻译成Citizen*。
 	for (size_t i = 1; i < females.size(); i++) {
 		if (females[i].life != LIFE_DEAD && GetRandom(20) > 0) {
 			int month = 1 + GetRandom(12);
@@ -645,8 +637,7 @@ void Populace::GenerateCitizens(int target) {
 	}
 
 	// 记录配偶/子女关系——只有配偶/子女双方都幸存物化(idx>=0)才登记，只有一方活下来的
-	// 婚姻/亲子关系这次直接丢弃(和老工程"idx>=0"这一路判断的效果一致：没物化的一方本来
-	// 就没有Citizen*可以指)。
+	// 婚姻/亲子关系直接丢弃(没物化的一方本来就没有Citizen*可以指)。
 	for (size_t i = 1; i < females.size(); i++) {
 		if (females[i].idx < 0) continue;
 		Citizen* person = citizens[females[i].idx];

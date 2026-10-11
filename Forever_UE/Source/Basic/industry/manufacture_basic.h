@@ -5,7 +5,7 @@
 #include <string>
 
 
-// 阶段4-5工业系统测试案例——三个工坊：农场(无原料产小麦)/牧场(无原料产牛肉)/
+// 工业系统测试案例——三个工坊：农场(无原料产小麦)/牧场(无原料产牛肉)/
 // 食品加工厂(小麦+牛肉→汉堡，配方写在BurgerProduct身上，见product_basic.h)，
 // 用来验证Industry::Tick()每日三阶段(WorkAccount→GlobalAllocate→StartProduce)，
 // 见Source/Core/industry/industry.md。targets的value(每天产几批)是占位测试值。

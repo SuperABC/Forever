@@ -45,7 +45,7 @@ public:
 	// Road对象，lot的边界只是记一下"我贴着哪条路"，不是另起一份自己的拷贝。这是因为
 	// Zone/Building裁剪Lot空间时(Lot::SplitWithPath)会真的在这条边界Road上加RoadOpening
 	// 标记开口，如果边界指向的是独立拷贝，改动就传不到roads里真正会被渲染的那个对象上
-	// (PIE验证发现过这个问题：开口加了但画不出来)。实现里给某个方向登记指针之前，必须确保
+	// (开口加了但画不出来)。实现里给某个方向登记指针之前，必须确保
 	// this->roads不会再增长(vector扩容会让之前取的地址失效)，也就是说构建lots之前要先把所有
 	// addRoad-类的调用做完，再取&roads[i]这种地址。
 	// 这里直接是vector<Lot>而不是额外拿一个pair/map和Lot并排存边界信息——Lot本来就有

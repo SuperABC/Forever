@@ -4,8 +4,8 @@
 
 #include <cmath>
 
-// 生成给定名时的最大重试次数——照抄老工程同名宏，这次的实现和老工程一样其实从不会真正
-// 重试(见GenerateName两参数重载注释)，保留只是为了逐行对照方便。
+// 生成给定名时的最大重试次数——当前实现其实从不会真正重试(见GenerateName两参数重载
+// 注释)。
 #define MAX_ALLOCATION_ATTEMPTS 16
 
 
@@ -69,13 +69,12 @@ void ChineseName::GenerateName(const string& surname,
 		allowNeutral ? static_cast<int>(neutralNames.size()) : 0,
 	};
 
-	// 1个字8/9的样本落在GetRandom(9)==0，2个字的样本占其余8/9——两字名远比单字名常见，
-	// 照抄老工程的比例。
+	// 1个字8/9的样本落在GetRandom(9)==0，2个字的样本占其余8/9——两字名远比单字名常见。
 	int nameLength = 1 + static_cast<int>(static_cast<bool>(GetRandom(9)));
 	int listLength = nameList[0] + nameList[1] + nameList[2];
 
 	if (listLength == 0) {
-		// 三个词库都不允许时兜底成只用中性词库——和老工程同样的兜底规则。
+		// 三个词库都不允许时兜底成只用中性词库。
 		nameList[2] = static_cast<int>(neutralNames.size());
 		listLength = nameList[2];
 	}

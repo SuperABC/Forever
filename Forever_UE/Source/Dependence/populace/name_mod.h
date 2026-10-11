@@ -4,13 +4,11 @@
 #include <functional>
 
 
-// NameMod：一个姓名生成算法的具体实现(比如"chinese")。这次populace域第二轮迁移时从
-// 阶段3占位骨架(只有GetType()/GetName())补上真正的取名接口——照抄老工程NameMod
-// (E:\Projects\Forever_UE\Source\Dependence\populace\name_mod.h)的三个纯虚方法。
+// NameMod：一个姓名生成算法的具体实现(比如"chinese")，三个纯虚方法构成取名接口。
 //
-// **这次改回老工程"传一个set结果的lambda进去"的callback写法**（之前一度改成直接按值
-// 返回std::string，被指出是同一类被禁止的跨DLL模式——mod侧构造的std::string临时对象
-// 按值返回穿过DLL边界，Core侧接住后可能触发跨CRT堆的析构/重新分配）：
+// **必须是"传一个set结果的lambda进去"的callback写法，不能直接按值返回std::string**
+// ——mod侧构造的std::string临时对象按值返回穿过DLL边界，是被禁止的跨DLL模式（Core侧
+// 接住后可能触发跨CRT堆的析构/重新分配）：
 // `std::function<void(const std::string&)>`按const&传入mod侧重写的虚方法，mod内部
 // 构造好的临时std::string全程在mod自己编译的代码里构造/使用/析构，跨边界的只有回调对
 // `const string&`参数的读（拷贝进调用方自己的string变量），不发生"一侧分配、另一侧
@@ -24,8 +22,8 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 从一个完整姓名里截取"姓"（用于新生儿继承父亲的姓）——老工程`ChineseName::GetSurname`
-	// 假定姓氏总是姓名的第一个UTF-8字符，这次同样假定；不同取名算法（将来的英文名等）可以
+	// 从一个完整姓名里截取"姓"（用于新生儿继承父亲的姓）——假定姓氏总是姓名的第一个
+	// UTF-8字符；不同取名算法（将来的英文名等）可以
 	// 按自己的规则重写。截取失败（比如传入空字符串）时不调用setResult（调用方读到的结果
 	// 保持初始空字符串）。
 	// @setResult: 算好结果后调用一次，把结果姓字符串传进去

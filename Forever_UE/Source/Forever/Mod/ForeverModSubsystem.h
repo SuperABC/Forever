@@ -4,18 +4,14 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ForeverModSubsystem.generated.h"
 
-// 阶段3验证用途:启动时一次性扫描config.json配置的mod目录和每个concept的
-// "<concept>_mods"参数列表,对19个concept分别构造一个临时Factory、设置参数表、注册发现的
-// mod、创建+校验+销毁每个已注册id,验证完就地卸载,不长期持有任何Core/Dependence对象或dll
-// 句柄。真正的Factory归属会在阶段4随各领域系统落地转移给对应Core系统类,详见
-// ForeverModSubsystem.md。
-//
-// 游戏启动配置界面(Story/Mod/Resource三screen)落地后新增拆分:Initialize()只保留纯发现
-// (ReadConfig+缺省回退扫描)，写进Config静态状态供菜单UI立刻有数据展示，不做任何真正的
-// Plugin/Pak挂载或Factory注册/校验——那部分挪进新增的EnsureModsRegistered()，由
-// UForeverConfigBridgeSubsystem::ValidateAndStartGame在Start Game校验通过后、OpenLevel
-// 之前显式调用，bModsRegistered门闩保证每个GameInstance生命周期只真正跑一次，见
-// ForeverModSubsystem.md。
+// Initialize()只做纯发现(ReadConfig+缺省回退扫描)，把结果写进Config静态状态供配置界面
+// (Story/Mod/Resource三screen)立刻有数据展示，不做任何真正的Plugin/Pak挂载或Factory
+// 注册/校验——那部分在EnsureModsRegistered()里，由UForeverConfigBridgeSubsystem::
+// ValidateAndStartGame在Start Game依赖校验通过后、OpenLevel之前显式调用，对16个concept
+// 分别构造一个临时Factory、设置参数表、注册发现的mod、创建+校验+销毁每个已注册id，验证完
+// 就地卸载，不长期持有任何Core/Dependence对象或dll句柄。bModsRegistered门闩保证每个
+// GameInstance生命周期只真正跑一次。真正需要长期存在的Factory归属转移给对应Core领域系统类
+// (如Terrain已经转移给Map持有)，详见ForeverModSubsystem.md。
 UCLASS()
 class FOREVER_API UForeverModSubsystem : public UGameInstanceSubsystem
 {

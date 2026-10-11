@@ -87,7 +87,7 @@ public:
 		const ScriptContext& context, PostHandle* post);
 
 	/*
-	* 转调mod->AutoPop()，弹出WrapScript这次压入的那一层，见ScriptMod.h。
+	* 转调mod->AutoPop()，弹出WrapScript压入的那一层，见ScriptMod.h。
 	*/
 	void AutoPop();
 
@@ -182,9 +182,9 @@ private:
 	// 脚本名称
 	std::string name;
 
-	// 一份.script文件解析出的全部内容——milestones是原来就有的，name_reserve/
-	// global_settings/mod_dependences是这次新增的三个顶层字段，都是纯JSON数据，不依赖
-	// ScriptMod/Script实例，可以在任何Script对象存在之前就被上面三个静态方法单独读取。
+	// 一份.script文件解析出的全部内容：milestones，以及name_reserve/global_settings/
+	// mod_dependences三个顶层字段，都是纯JSON数据，不依赖ScriptMod/Script实例，可以在任何
+	// Script对象存在之前就被上面三个静态方法单独读取。
 	struct FileCache {
 		std::vector<std::string> nameReserve;
 		std::unordered_map<std::string, ValueType> globalSettings;

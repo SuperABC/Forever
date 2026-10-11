@@ -13,14 +13,12 @@
 struct ScriptContext;
 
 // Industry：工业系统域类，持有Product类型目录+Storage/Manufacture两张表，驱动每天的
-// "结算→全城统一调配→算今天产量"三阶段。照抄Traffic持有Vehicle的模式(见
+// "结算→全城统一调配→算今天产量"三阶段。和Traffic持有Vehicle同一个模式(见
 // traffic/traffic.h/.md)，不知道UE Actor的存在。
 //
-// 这次迁移自老工程(E:/Projects/Forever_UE)的工业系统，但用户明确要求几处关键改动：
-// "工厂"改叫"工坊"(避免和XxxFactory这个mod管理器术语混淆)；老工程按距离就近静态
-// 建图的仓库运输改成这次的"全城统一调配"(GlobalAllocate，每天重新算一遍谁收谁发，
-// 完全不考虑物理距离)；老工程的"单位配方+连续效率"改成"批次配方+整数批次"。测试
-// 阶段不绑定房间，见industry.md。
+// "工厂"改叫"工坊"(避免和XxxFactory这个mod管理器术语混淆)；仓库运输是"全城统一
+// 调配"(GlobalAllocate，每天重新算一遍谁收谁发，完全不考虑物理距离)；配方是"批次
+// 配方+整数批次"。不绑定房间，见industry.md。
 class Industry {
 public:
 	Industry();

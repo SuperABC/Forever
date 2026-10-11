@@ -110,8 +110,8 @@ public:
 	Time& operator+=(const Time& other);
 	Time& operator-=(const Time& other);
 
-	// other比this晚返回正数，见utility.cpp声明处2026-10-04的符号排查记录——唯一调用方
-	// Traffic::Tick曾经因为这里符号写反，每帧elapsedSeconds都没能正确累加。
+	// other比this晚返回正数；唯一调用方Traffic::Tick依赖这个方向累加elapsedSeconds，
+	// 符号反了会导致它永远不前进，排查记录见utility.cpp声明处。
 	double DifferenceInSeconds(const Time& other) const;
 
 	bool IsLeapYear() const;

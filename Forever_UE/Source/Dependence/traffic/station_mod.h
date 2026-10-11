@@ -77,9 +77,6 @@ public:
 	// 不声明，每个具体子类必须实现同名static方法，通过StationFactory::RegisterStation的额外
 	// 函数指针参数注册，详见station_factory.h。Traffic::InitRoadsideStations()直接调
 	// StationFactory::AssignRoads(id, ...)转发到这个注册的函数指针，不需要创建/销毁任何
-	// StationMod实例做"探测"(这是2026-10-04从"创建临时实例调虚方法、用完销毁"改过来的，当时
-	// 没有现成的static函数指针注册机制，图省事复用了CreateStation/DestroyStation；后来发现
-	// BuildingMod/ZoneMod已经有现成的机制，照抄即可，不需要为了"图省事"留着多余的实例创建/
-	// 销毁)。挂建筑的站点类型(实现Layout()的那些)不需要这个，给个空实现即可：
+	// StationMod实例做"探测"。挂建筑的站点类型(实现Layout()的那些)不需要这个，给个空实现即可：
 	//   static void AssignRoads(const std::vector<Road*>&, RoadStationEmitFunc, void*) {}
 };

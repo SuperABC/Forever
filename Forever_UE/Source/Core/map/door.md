@@ -6,7 +6,7 @@
 `Map::CreateDoor`创建，纯门洞（没标签/查不到spec/mesh为空）永远不会有对应的`Door`
 实例。外观/开关方式全部来自创建时传入的`DoorSpec`快照，门本身没有需要多态的行为，
 所以不做`DoorMod`/`DoorFactory`这套mod机制（和`BuildingMod::Layout()`/
-`UForeverWeaponComponent`当年的取舍同一个理由）。
+`UForeverWeaponComponent`同一个取舍理由）。
 
 `ResolveDoorSpec`：建筑门/房间门的放置判定——按tag查`doorSpecs`表，查不到/tag为空/
 mesh为空都返回nullptr（只是门洞）。园区门不走这个函数，直接在`Zone::BuildDoors`里判断
@@ -18,12 +18,11 @@ mesh为空都返回nullptr（只是门洞）。园区门不走这个函数，直
   ——这三者都依赖`Map`自己维护的状态（全局门计数器、按"所属对象+spec.name"分组的序号
   计数器、随机数生成），`Door`构造函数只是单纯持有这些已经算好的值，职责边界清楚：
   `Map`管"这是第几扇门/叫什么/随不随机"，`Door`管"这扇门的状态和行为"。
-- **Script创建照抄`Vehicle::Vehicle`的模式，但多设一个`"label"`**：`interactName`非空
+- **Script创建和`Vehicle::Vehicle`同一个模式，但多设一个`"label"`**：`interactName`非空
   才会创建Script（`spec.name`为空的纯自动门恒为`nullptr`），创建后`SetValue("name",
-  interactName)`+`SetValue("label", spec.name)`——`Vehicle`当年只设了`"name"`，这次
-  多加`"label"`是因为门需要区分"交互名"（完整的、带编号的唯一标识，剧情脚本点名/
-  MeetOption显示用）和"门类别标签"（`spec.name`本身，比如"商店大门"，不带编号），这是
-  Door专属的新增需求，不是Vehicle当年漏做。
+  interactName)`+`SetValue("label", spec.name)`——门需要区分"交互名"（完整的、带编号的
+  唯一标识，剧情脚本点名/MeetOption显示用）和"门类别标签"（`spec.name`本身，比如"商店
+  大门"，不带编号），`Vehicle`没有这个区分需求，只设了`"name"`。
 - **`Allow()`按名字字符串存，不按`Citizen*`指针存**——`Map::ApplyChange`处理
   `AllowDoorChange`时手上只有一个`citizen`名字字符串，`Map`不持有`Populace`的引用/
   指针（`Populace::Init`只是`Map::Checkin(const Populace&)`的一次性参数，不长期持有），

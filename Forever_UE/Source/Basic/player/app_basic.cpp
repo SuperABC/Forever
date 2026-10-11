@@ -148,8 +148,8 @@ void NotesApp::RenderList(Canvas* canvas) const {
 	canvas->ClearScreen();
 
 	// 标题字号(App名字这一档)跟BounceApp的"BOUNCE"/Phone的"HOME"/"TASKS"统一用height/17，
-	// 这一档要比App内其它文字都大——这次只是测试用的观感约定，不是硬性规定，具体某个App
-	// 顶部名字该多大、跟内容比例如何，以后由实现这个App的作者自己决定。Y留一点顶部边距
+	// 这一档要比App内其它文字都大——只是测试用的观感约定，不是硬性规定，具体某个App
+	// 顶部名字该多大、跟内容比例如何，由实现这个App的作者自己决定。Y留一点顶部边距
 	// (不贴着手机屏幕上边缘)。
 	canvas->SetFontSize(max(26, canvas->GetHeight() / 17));
 	canvas->SetColor(255, 255, 255);

@@ -95,8 +95,8 @@ public:
 	// 名字`"path"`(不像大路每条名字唯一)，早先按`roadName`在`roadnet->GetRoads()`里线性
 	// 查找的实现——①对小路完全找不到(`roadnet->GetRoads()`只装大路，小路挂在各自`Lot::
 	// GetPathRoads()`下，从不在这个列表里)，②即使把小路也塞进查找范围，按名字查也无法在
-	// 多条同名small road之间区分——building落地在小路边时"outside"端点接路网直接静默失败，
-	// PIE验证发现。调用方(`Map::FlushPendingBuildingRoadAccess`)本来就已经手上有确定的
+	// 多条同名small road之间区分——按名字查会导致building落地在小路边时"outside"端点接路网
+	// 静默失败。调用方(`Map::FlushPendingBuildingRoadAccess`)本来就已经手上有确定的
 	// `Road*`(`Building::GetBoundaryRoad`/`ThroughLine`本身也是按指针不是按名字索引)，
 	// 直接传指针既修好小路场景又省掉一次线性查找。
 	Node* AddRoadAccessNode(Road* road, float t, bool isVehicle, bool useForwardSide, float openingWidth);
@@ -152,15 +152,14 @@ public:
 	// InitBuildings()已经跑完。
 	int ComputeAccommodationTarget() const;
 
+	// 两个独立步骤："房产归属"(owner/stated)和"住处分配"(tenants/occupants)。住处分配
 	// 遍历所有building的所有room，IsResidential()的每个room贡献1个名额(不按
-	// ResidentialCapacity()重复贡献——老工程Checkin本来就是"一个room一个名额"的口径，
-	// capacity只用来算ComputeAccommodationTarget()的城市级目标，不在这一步重复消费)，
-	// 名额池随机打乱后按populace.GetCitizens()顺序依次消费；citizens比名额多时多出的人
-	// 分不到住处(GetRoom()==nullptr)，这次也没有"一并塞进空room"的例外处理——正常情况下
-	// target本来就≈capacity/2，名额池大小=room数量本身(明显大于target)，不会出现名额
-	// 不够。成功分配的citizen同时设置Lot/Zone/Building/Room。**不做老工程"配偶/未成年
-	// 子女一起搬进同一间"的逻辑**——这次Citizen没有配偶/亲子字段，这一步简化成纯粹的
-	// "一人一间随机分配"，见Source/Core/populace/populace.md。
+	// ResidentialCapacity()重复贡献——那个capacity只用来算ComputeAccommodationTarget()的
+	// 城市级目标，不在这一步重复消费)。按"一个家庭消费一个room名额"分配：只有成年citizen
+	// 各自随机抽一个名额(GetRandom(pool.size())+swap-remove)，配偶(GetSpouse()非空且还没
+	// 房间)以90%概率跟着搬进同一间，未成年子女无条件一起搬进同一间——未成年citizen不会
+	// 独立抽房间，只能通过父母被带进去。成功分配的citizen同时设置Lot/Zone/Building/Room+
+	// CurrentRoom，详见Source/Core/populace/populace.md。
 	void Checkin(const Populace& populace);
 
 	// 创建一扇真正放了门扇的门(DoorSpec.mesh非空才会被调用方调用，见door.h的
@@ -263,12 +262,11 @@ public:
 	// 形状一致，等Map域真的长出需要每帧跑的东西时再补内容，见map.md。
 	void Tick(const Time& currentTime, bool crossedDay, PostHandle* post);
 
-	// 处理门相关的四种Change：SetDoorAccessChange/AllowDoorChange(这次新增)+
-	// AddOptionChange/RemoveOptionChange(这两种本来就存在，但此前没有任何域处理门——
-	// Traffic::ApplyChange/Populace::ApplyChange分别处理Vehicle/Citizen的
-	// AddOptionChange，这次照同一个模式给Door也接上，RemoveOptionChange此前完全没有
-	// 任何域处理，这次一并补上)。全部按交互名在doorsByInteractName里找门，找不到静默
-	// 忽略(和Traffic::ApplyChange同一个"找不到target就不做任何事"的宽松处理)。其余
+	// 处理门相关的四种Change：SetDoorAccessChange/AllowDoorChange+
+	// AddOptionChange/RemoveOptionChange——Traffic::ApplyChange/Populace::ApplyChange
+	// 分别处理Vehicle/Citizen的AddOptionChange，Door照同一个模式接上。全部按交互名在
+	// doorsByInteractName里找门，找不到静默忽略(和Traffic::ApplyChange同一个"找不到
+	// target就不做任何事"的宽松处理)。其余
 	// Change类型不是Map域认识的，不打"未实现"警告（避免同一个Change被六个域各打一遍
 	// 重复警告），唯一的兜底警告在Story::ApplyChange，见Story.md。
 	void ApplyChange(const Change* change, const ScriptContext& context);
@@ -341,9 +339,8 @@ private:
 
 	// 每条Road当前的"贯通线"记录(建图时创建，BreakThroughLine拆分某条车道时会替换掉对应的
 	// entry)，下标0=车行side0，1=车行side1，2=行人side0，3=行人side1，每个下标对应一个
-	// vector——**每条物理车道都有自己独立的entry**（第九轮迁移，起因是PIE导航图可视化验证时
-	// 发现多车道路段只画出一条线：早期版本只保存"最内侧车道"或"单行道两端车道"，其余车道
-	// 完全没有贯通线，车道数据和导航图对不上）。fromAnchor/toAnchor按该方向实际通行方向排列
+	// vector——**每条物理车道都有自己独立的entry**，不止"最内侧车道"或"单行道两端车道"，
+	// 否则其余车道没有贯通线，车道数据和导航图对不上。fromAnchor/toAnchor按该方向实际通行方向排列
 	// (side0:沿Road Start->End；side1:沿End->Start)，车行取该车道在`RoadJunctionApproach::
 	// vehicleInbound`/`vehicleOutbound`(现在也是逐车道的vector)里的专属锚点，不再是
 	// 整个side共用一个锚点——否则哪怕每条车道各有一条Connection，几何上仍然会因为共用
@@ -395,7 +392,7 @@ private:
 	// (人行道在车行道外侧，不是从中轴线直接量，和RoadJunction::Build的pedestrianSide锚点算法
 	// 一致)。ConnectPathRoad在大路/小路上breakout新node时必须用这个算出实际车道位置，不能直接
 	// 用road->GetPoint(t)这个纯中轴线坐标——否则新node会紧贴中轴线，和原来车道自己真实的
-	// fromAnchor/toAnchor连起来变成从车道位置抖到中轴线又抖回去的锯齿，PIE验证发现过这个问题。
+	// fromAnchor/toAnchor连起来会变成从车道位置抖到中轴线又抖回去的锯齿。
 	// 返回值只有x/y，z直接取road->GetPoint(t)的高度(车道横向偏移不影响高度)。
 	std::pair<float, float> ComputeLaneAnchorPosition(Road* road, float t, bool isVehicle, int side, int laneIndex) const;
 
@@ -501,7 +498,7 @@ private:
 	// 按Lot哈希/园区内部按zones这个unordered_map)和building在路上的实际物理位置完全无关，
 	// 如果直接按building处理到的顺序断，物理上靠后的building可能先断、把物理上靠前的
 	// building还没轮到的那一段"剩余尾巴"抢先切掉，导致断点次序和物理顺序错位——行人贯通线在
-	// 可视化上出现连线交叉/跳跃，看起来像整条路的导航图被搞乱了(PIE验证发现)。清空
+	// 可视化上出现连线交叉/跳跃，看起来像整条路的导航图被搞乱了。清空
 	// pendingBuildingRoadAccess。
 	void FlushPendingBuildingRoadAccess();
 
@@ -519,9 +516,9 @@ private:
 	// 处理顺序=三段循环各自的Lot遍历顺序(按free acreage排序/Lot哈希顺序)，和小路在host道路
 	// 上的物理位置完全无关——如果物理上靠后的小路先断，会把物理上靠前的小路还没轮到的那段
 	// "剩余尾巴"抢先切掉，断点顺序和物理顺序错位；结果是行人这条贯通线仍然全联通(能找到路)，
-	// 但路径会在断点附近出现"先跳到更远的断点、再折返回近的断点"这种局部绕路——PIE验证复现：
-	// 一个T字路口该往右拐，市民却先往左跑到下一个路口再掉头往右走，和BreakThroughLine
-	// "每次都断当前剩余尾巴"这个假设被打破时的症状完全一致。
+	// 但路径会在断点附近出现"先跳到更远的断点、再折返回近的断点"这种局部绕路(比如一个T字
+	// 路口该往右拐，市民却先往左跑到下一个路口再掉头往右走)，和BreakThroughLine"每次都断
+	// 当前剩余尾巴"这个假设被打破时的症状完全一致。
 	std::vector<PathRoadLink> pendingPathRoadLinks;
 
 	// 按pendingPathRoadLinks每条link两端(endRoad1/endRoad2)各自预判的(road,side)分组，组内

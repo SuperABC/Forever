@@ -50,9 +50,8 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> mouseLookAction;
 
-	// 对应旧蓝图MainCharacter的"Input Mapping"/"Input Look Mapping"变量,
 	// 在PossessedBy/UnPossessed里跟随占有状态增删,而不是固定挂在PlayerController上——
-	// 这样阶段6"任意NPC可被玩家操控"换人时,输入映射会跟着当前被控制的角色走。
+	// 这样任意NPC被玩家操控时,输入映射会跟着当前被控制的角色走。
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> inputMapping;
 
@@ -77,7 +76,7 @@ protected:
 	// 武器系统：鼠标左键开火(按住/松开转发给UForeverWeaponComponent::StartFire/StopFire，
 	// 全自动武器由组件自己的TickComponent按fireRate间隔连发)/R键换弹/数字键1、2切枪
 	// （切两把测试武器weapon_pistol/weapon_rifle，见Source/Basic/player/weapon_basic.h）。
-	// 这次直接调自己身上的weaponComponent——武器是这个Character自己的私有状态，不是
+	// 直接调自己身上的weaponComponent——武器是这个Character自己的私有状态，不是
 	// map/world级别的全局单例，不需要反查AForeverFrameworkActor。
 	void StartFireWeapon();
 	void StopFireWeapon();

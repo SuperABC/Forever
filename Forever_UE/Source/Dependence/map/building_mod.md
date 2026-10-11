@@ -2,9 +2,9 @@
 
 ## 职责
 
-`BuildingMod`：具体建筑类型的mod基类。Building这次有两种生成方式（显式占位+权重CDF随机
-填充，见`Source/Core/map/map.md`"InitBuildings"一节），落地之后通过`Layout(...)`一次性
-声明楼体footprint/楼层高度/LOD材质，以及每层楼内部的布局（`AssignFloor`/`AssignRoom`/
+`BuildingMod`：具体建筑类型的mod基类。Building有两种生成方式（显式占位+权重CDF随机填充，
+见`Source/Core/map/map.md`"InitBuildings"一节），落地之后通过`Layout(...)`一次性声明楼体
+footprint/楼层高度/LOD材质，以及每层楼内部的布局（`AssignFloor`/`AssignRoom`/
 `ArrangeRow`），由`Source/Core/map/building.h`的`Building::Layout()`解析成真正的
 `Floor`/`Room`/`Component`数据。
 
@@ -22,11 +22,11 @@
 - **`BuildingFootprintSpec`**：楼体在Building自身`Quad`里的位置——两个比例float表示楼体
   中心在Quad里的位置(0.5,0.5=居中)，两个比例float表示楼体长宽相对Quad长宽的比例。不复用
   `Quad`类型本身（那样会把`Quad`正常的"中心点+尺寸"语义挪用成"比例袋子"，容易搞混）。
-- **`FloorAssetSpec`/`FloorLayoutSpec`**：一层楼可配置的资产——墙体材质（这次不分内外墙，
-  统一一份）、地板材质、天花板材质、楼梯3D网格、坡道3D网格，留空用
+- **`FloorAssetSpec`/`FloorLayoutSpec`**：一层楼可配置的资产——墙体材质（不分内外墙，统一
+  一份）、地板材质、天花板材质、楼梯3D网格、坡道3D网格，留空用
   `ForeverBuildingFrameworkComponent`的组件级默认值（墙/地/顶默认White，楼梯/坡道默认
-  老工程同款的`Stair.Stair`/`Ramp.Ramp`）。`.layout`模板本身完全不携带材质/网格信息（和
-  老工程一致），这几项必须由`AssignFloor`显式指定。
+  `Stair.Stair`/`Ramp.Ramp`）。`.layout`模板本身完全不携带材质/网格信息，这几项必须由
+  `AssignFloor`显式指定。
 - **`AssignFloor`/`AssignFloors`(x2)/`AssignRoom`/`ArrangeRow`四个方法**，把调用记录进
   `floors`(`unordered_map<int,FloorLayoutSpec>`，key是人类直觉的层号：0=1楼，负数=地下室)、
   `singles`/`rows`(都是`unordered_map<pair<string,int>,vector<tuple<...>>,
@@ -35,12 +35,9 @@
   的模式。`Building::Layout()`只读这几个容器，不会往里写。
 - **`BuildingComponentKeyHash`**：`(component名字,id)`分组key的hash函数对象，
   `unordered_map`要用。
-- **`ElevatorCabinSpec`/`AssignElevatorCabin`（第N轮迁移补上）**：照抄老工程`Cabin`
-  （`name`/`temp`/`idx`/`minFloor`/`maxFloor`/`script`）的模式，去掉`temp`（未用到）和
-  `script`（Story域还没迁移），加上用户要求的可配置mesh路径——
-  `{shaftIndex, minFloor, maxFloor, cabinMeshPath}`。`shaftIndex`对应每层`.layout`模板
-  `elevators`数组里的第几个(0-based)，**不是从几何位置反推出来的**，和老工程`AddElevator`
-  用一个裸`idx`区分电梯同一个思路——要求mod自己保证模板里elevator条目顺序跨楼层一致，这次
+- **`ElevatorCabinSpec`/`AssignElevatorCabin`**：`{shaftIndex, minFloor, maxFloor,
+  cabinMeshPath}`。`shaftIndex`对应每层`.layout`模板`elevators`数组里的第几个(0-based)，
+  **不是从几何位置反推出来的**——要求mod自己保证模板里elevator条目顺序跨楼层一致，这次
   没有更强的位置匹配机制。`AssignElevatorCabin`把调用记录进`std::vector<ElevatorCabinSpec>
   cabins`（同一栋building可以调用多次声明多台电梯），和`floors`/`singles`/`rows`同一个
   "mod自己声明、`Building::Layout()`不处理、Forever层直接读`GetMod()->cabins`"模式——
@@ -56,5 +53,4 @@
   `singles`/`rows`，不读`cabins`）、`Source/Forever/Framework/
   ForeverBuildingFrameworkComponent.cpp`（按`Building::GetMod()->floors[level].assets`
   解析这一层的材质/网格，按`GetMod()->cabins`生成电梯轿厢）、各具体`XxxBuilding`子类
-  （`Source/Basic/map/building_basic.h`/`.cpp`等，`BuildingBasic`进入populace域时
-  已改名`ResidenceBuilding`，见`Source/Core/populace/populace.md`）。
+  （`Source/Basic/map/building_basic.h`/`.cpp`的`ResidenceBuilding`等）。

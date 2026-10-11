@@ -286,7 +286,7 @@ struct BuildingNavResult {
 	// 接道路网"的清单，不是一份独立于`nodes`之外的新节点集合——Map合并时只应该把这份清单
 	// 当成"nodes的子集,用来找该连哪条路"来读，不能再把它们重新push进navAnchorNodes一次，
 	// 否则同一个Node*登记两次，~Map()清理时按navAnchorNodes遍历delete会对它double free
-	// (PIE验证发现的退出崩溃，见map.md"InitBuildings"一节)。
+	// (见map.md"InitBuildings"一节)。
 	std::vector<Node*> outsideNodes;
 
 	// 车行导航图的平行三件套——语义和上面nodes/connections/outsideNodes完全一样(vehicleNodes
@@ -438,7 +438,7 @@ private:
 	// (isVehicle=true, registerRoomNodes=false)——registerRoomNodes必须是false：
 	// Room::GetNavigationNode()只能登记进navOut.nodes一次，已经在BuildPedestrianNavigation
 	// 里做过，这里重复登记会导致同一个Node*出现在navAnchorNodes两次，~Map()清理时对它
-	// double free(和这次会话之前修过的崩溃是同一类问题，见map.md)。
+	// double free(和building内部导航图double free是同一类问题，见map.md)。
 	void BuildVehicleNavigation(const BuildingLayoutLibrary& library, int direction, BuildingNavResult& navOut);
 
 	// BuildPedestrianNavigation/BuildVehicleNavigation共享的算法实现——node/line/connection

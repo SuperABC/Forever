@@ -19,8 +19,8 @@ void VehicleBasic::SetProperty() {
 	// 只存蓝图类的资源路径——见vehicle_mod.h/VehicleElement.md的说明。
 	blueprintPath = "/Game/Blueprint/Vehicle/BP_VehicleBasic.BP_VehicleBasic_C";
 
-	// "empty"这个ScriptMod id纯粹是透传(AutoCopy(actions)，不做任何占位替换)，这次的
-	// "靠近弹出上车选项"完全靠milestone触发就够了，不需要WrapScript介入，见
+	// "empty"这个ScriptMod id纯粹是透传(AutoCopy(actions)，不做任何占位替换)，"靠近弹出
+	// 上车选项"完全靠milestone触发就够了，不需要WrapScript介入，见
 	// Resource/Story/vehicle_basic.script。
 	scriptModName = "empty";
 	milestoneNames = { "vehicle_basic" };
@@ -73,14 +73,12 @@ void PlaneVehicle::SetProperty() {
 	category = "plane";
 	sizeX = 3000.f; sizeY = 2500.f; sizeZ = 800.f;
 
-	// 来自Forever_Mod/Test/UE/Test这个独立mod的Plugin(Test)里迁移进去、重命名过的测试
-	// 飞机模型(老工程Content/3rdParty/Low-poly_Airplane同一份资产)，ForeverModSubsystem
-	// 运行时挂载成"/Test/..."包路径，见vehicle_mod.h::transitMeshPath/PACKAGING_PLAN
-	// "阶段E"。
+	// 测试飞机模型资产，来自Forever_Mod/Test/UE/Test这个独立mod的Plugin(Test)，
+	// ForeverModSubsystem运行时挂载成"/Test/..."包路径，见vehicle_mod.h::transitMeshPath。
 	transitMeshPath = "/Test/Airplane/StaticMeshes/airplane.airplane";
 
-	// 模型原始尺寸偏大——0.5/0.25实测都还是太大，调到0.15。模型本身是横着建的(正前方不是
-	// UE约定的+X)，需要一个yaw修正。+90实测机头朝向反了(PIE/打包exe都验证过)，改成-90。
+	// 模型原始尺寸偏大，缩放到0.15才合适。模型本身是横着建的(正前方不是UE约定的+X)，
+	// 需要一个yaw修正，-90度机头朝向才对。
 	meshTransform.scale = 0.15f;
 	meshTransform.yawOffsetDegrees = -90.f;
 }

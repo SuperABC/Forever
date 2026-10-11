@@ -90,20 +90,14 @@ void Traffic::InitRoadsideStations(Map* map) {
 			if (len < 1e-6f) len = 1.f;
 			dx /= len; dy /= len;
 
-			// rightSide对应side0(沿Road Start->End方向的右手边)——之前这里自己手搓了一个
-			// "perp=(-dy,dx)+半路宽偏移"的公式，且headingDegrees一直用正向切线没有按rightSide
-			// 翻转，两个bug叠加导致车辆被指挥着往错误的方向开，PIE实测反馈"公交车的行驶方向
-			// 有点问题"。排查过程中还顺带发现Map::ComputeLaneAnchorPosition等9处"perp0=
-			// (tdy,-tdx)"公式本身也标反了(这个项目+Y=南，真正右手边是(-tdy,tdx))，已经在
-			// map.cpp/roadnet.cpp统一修正，见那边的说明——这里不用再操心具体用哪个符号，直接
-			// 问GetLaneSegmentAt要car真实走的那条车道的世界坐标就行(见下)。
+			// rightSide对应side0(沿Road Start->End方向的右手边，这个项目+Y=南，真正右手边
+			// 是(-tdy,tdx)，和直觉上的左右相反，见Map::ComputeLaneAnchorPosition的perp0公式)。
 			//
-			// 这次改成直接问GetLaneSegmentAt要这条车道的真实世界坐标(和Station::EnsureRoadLink
-			// 后续给这同一个站点接旁路时用的是完全同一次查询逻辑)，而不是自己算一个大概的偏移——
-			// 车站因此精确落在车道中线上，不再是停靠时瞬移到车站独立坐标、起步后又瞬移回车道
-			// 坐标(实测反馈"公交车到站了直接移动到车站的位置...车辆会从车道瞬移到旁边")。
-			// travelDirX/Y是这条车道实际的车流方向(side0=正向，side1=反向)，查不到对应车道
-			// (比如单行道只有一侧)时放弃这个请求。
+			// 站点坐标直接问GetLaneSegmentAt要这条车道的真实世界坐标(和Station::EnsureRoadLink
+			// 后续给这同一个站点接旁路时用的是完全同一次查询逻辑)，不要自己算一个大概的偏移——
+			// 车站必须精确落在车道中线上，否则会出现"停靠时瞬移到车站独立坐标、起步后又瞬移回
+			// 车道坐标"的问题。travelDirX/Y是这条车道实际的车流方向(side0=正向，side1=反向)，
+			// 查不到对应车道(比如单行道只有一侧)时放弃这个请求。
 			float travelDirX = request.rightSide ? dx : -dx;
 			float travelDirY = request.rightSide ? dy : -dy;
 

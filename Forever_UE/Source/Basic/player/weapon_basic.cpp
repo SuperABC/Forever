@@ -14,22 +14,21 @@ const char* PistolWeapon::GetName() {
 
 void PistolWeapon::SetProperty() {
 	damage = 25.f;
-	fireRate = 0.08f;     // 每秒最多12.5发，用户反馈之前0.2s(5发/秒)的射速太慢
-	fullAuto = true;      // 按住左键连续开火——用户明确要求，弹匣也一并放大到30发
+	fireRate = 0.08f;     // 每秒最多12.5发
+	fullAuto = true;      // 按住左键连续开火
 	maxRange = 4000.f;    // 40米
 	baseSpread = 1.f;
 	magazineCapacity = 30;
 	reloadDuration = 1.5f;
 
 	// 没有真实持枪socket，挂在角色Root上再做这个本地偏移——挪到右肩膀靠前一点的位置，
-	// 不是身体正中心(实测卡在了胯部)。具体数值是目测给的，手感/位置需要在PIE里再调，
-	// 见weapon_mod.h/ForeverWeaponComponent.md。
+	// 不是身体正中心。具体数值是目测给的，手感/位置需要在PIE里再调，见
+	// weapon_mod.h/ForeverWeaponComponent.md。
 	attachOffsetX = 20.f;
 	attachOffsetY = 20.f;
 	attachOffsetZ = 40.f;
 
-	// 后坐力比步枪轻——手枪单手持握，仿PUBG手枪的后坐力手感。垂直方向也改成范围随机
-	// (之前是固定值1.0)，两个方向手感一致。
+	// 后坐力比步枪轻——手枪单手持握，仿PUBG手枪的后坐力手感，垂直方向按范围随机取值。
 	recoilPitchMin = 0.8f;
 	recoilPitchMax = 1.2f;
 	recoilYawMin = -0.6f;

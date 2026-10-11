@@ -63,8 +63,8 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 	mod->SetProperty();
 
 	// 没有building，不走mod->Layout()/mod->interfaces那套相对建筑占地矩形的换算——世界坐标/
-	// 朝向都是调用方(Traffic::InitRoadsideStations)已经按道路几何算好的，直接用，"普通站点的
-	// 两个方向相同"(见station_mod.h StationInterfaceSpec注释)这次也一样，arrive==depart。
+	// 朝向都是调用方(Traffic::InitRoadsideStations)已经按道路几何算好的，直接用，到达/出发
+	// 方向相同(见station_mod.h StationInterfaceSpec注释)，arrive==depart。
 	float heading = headingDegrees * (3.14159265358979323846f / 180.f);
 	float dirX = cosf(heading);
 	float dirY = sinf(heading);

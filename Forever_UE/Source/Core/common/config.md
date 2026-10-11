@@ -2,122 +2,114 @@
 
 ## 职责
 
-读取`Forever_UE/Resource/Config/config.json`,并递归扫描其中`dll_paths`列出的目录,找出
-实现了任意一个已知Mod接口(`GetMod<Concept>`符号)的`.dll`文件,供`ModLoader`真正加载/注册
-使用。是旧工程`Core/common/config.h`的`Config`类的阶段3裁剪版。
+读取/维护`Forever_UE/Resource/Config/config.json`的静态类：`dll_paths`/`layout_paths`/
+`resource_paths`三类根目录扫描、每个concept的mod参数与启用状态、主线剧情脚本路径与
+Story screen的`.script`列表，并能把当前内存状态写回文件（`WriteConfig`），供游戏启动
+配置界面（Story/Mod/Resource三个screen）使用。
 
 ## 关键设计
 
-- **移植但大幅裁剪**——旧工程`Config`类还管理启用禁用状态(`GetChecks`/`CheckMod`/
-  `GetEnables`/`modEnables`)、全局设置(`GetGlobalSettings`)、主剧情路径(`GetStories`/
-  `AddScript`/`RemoveScript`)、运行时写回(`WriteConfig`)。这些仍未迁移，和这次"打包连接"的
-  需求无关，等对应机制/系统落地时再按需加回。`GetPlugins`/`GetPakFiles`(见下)这次已经
-  按需加回了。
-- **`AddLayoutPath`/`GetLayouts`(Building内部布局落地时补回)**：和`AddDllPath`同一个
-  `std::filesystem::recursive_directory_iterator`扫描手法，但不探测/加载任何东西
-  (`.layout`是纯文本模板文件，不是dll)，扫到就收。`config.json`新增`"layout_paths"`数组，
-  相对路径解析规则和`dll_paths`完全一样(相对`configDir`)。`ForeverModSubsystem::
-  Initialize`里`Config::GetLayouts()`为空时回退扫描默认的`Resource/Layouts/`目录，和
-  `dll_paths`回退扫描`../Forever_Mod`同一个容错风格。不是恢复旧工程"一个资源目录桶四种
-  后缀分流"那套`GetResourcePaths`/`AddResourcePath`设计——这次直接一个独立的
-  `layout_paths`数组更清楚，也不需要`GetScripts`/`GetPlugins`/`GetPakFiles`这些还没有
-  消费方的其它资源类型。
-- **`AddResourcePath`/`GetScriptPath`/`HasResourcePaths`(Society域Script配置修复时新增)**：
-  和`AddLayoutPath`同一个扫描手法，这次扫`.script`文件（`resourcePaths`结构和
-  `layoutPaths`一致，root目录->该目录下发现的`.script`绝对路径列表）。`config.json`新增
-  `"resource_paths"`数组（当前配的是`["../Story", "../../../Forever_Mod/Test/UE/Test"]`）。
-  这次新增的动机：`JobMod`/
-  `OrganizationMod`（以及`Story`）之前决定"Script文件存放在哪"的方式是Core里硬编码
-  `configDir/"../Story"/(name+".json")`路径拼接——这既替Mod做了它不该做的选择，也没有
-  给Mod提供"我只写一个bare名字，不用管文件实际在哪"的能力（Mod不知道也不可能知道用户
-  实际把脚本文件放在哪）。修复后`JobMod::milestoneNames`/`OrganizationMod::
-  milestoneNames`只写不含路径/扩展名的bare文件名，`Config::GetScriptPath(name)`
-  （遍历`resourcePaths`所有条目，按`filesystem::path(p).stem()`匹配，找不到返回空
-  字符串）负责按bare名字反查实际路径，见`Core/society/job.md`"Script配置"一节。
+- **用`Dependence/common/json.h`而不是UE自带Json模块解析`config.json`**——UE的
+  `FJsonSerializer`是严格JSON,不支持注释;`json.h`是JsonCpp衍生的宽松解析器,支持
+  `//`/`/* */`注释,更适合手写维护的配置文件。
+- **`dll_paths`/`layout_paths`/`resource_paths`/`story_scripts`里的相对路径都相对
+  `config.json`自己所在目录(`configDir`)解析**——纯文件系统概念,不依赖UE的
+  `FPaths::ProjectDir`,保持`Config`engine-agnostic。
+- **`configDir`必须用`filesystem::canonical()`而不是直接`parent_path()`**——打包产物里
+  `Resource/`是用目录连接(`mklink /J`)指向开发树真实位置的(见`Forever_UE/pak.bat`)，
+  Windows路径解析对嵌入的`".."`是纯文本词法化处理，不会跟随reparse point——如果只取
+  `parent_path()`，后续`"../.."`这类相对写法会在连接点所在的归档目录树内部兜圈子，走不到
+  真实开发树。`canonical()`强制做一次真正的OS级解析，把`configDir`换成连接目标那一侧的
+  真实路径；PIE/未打包环境下`Resource`本来就是真目录，这一步是无副作用的空操作。
+- **`WriteConfig`写回绝对路径，不转成相对`configDir`的路径**——`config.json`不是跨设备
+  使用的文件（每台开发机上mod/资源的实际存放位置经常不一样），配置界面的Add按钮拿到的
+  本来就是绝对路径；`ReadConfig`仍然兼容解析相对路径写法，只是不会再有代码主动生成它。
+- **`ReadConfig`找不到文件或JSON语法错误时留空，不抛异常**，但会打一条警告日志区分"文件
+  打不开"（可能路径错了，也可能另一个进程正独占持有，比如正在`WriteConfig`）和"JSON语法
+  错误"这两种根因不同的情况——否则排查"为什么回退扫描了默认目录"时无法区分。调用方
+  （`ForeverModSubsystem`）据此决定要不要回退扫描默认目录(和`UForeverKeyBindingSubsystem`
+  读`KeyBindings.ini`的容错风格一致)。
+- **`AddDllPath`探测完立即`FreeLibrary`,不长期持有句柄**——探测阶段只需要确认"这是不是
+  一个合法mod dll"，真正常驻加载是`ModLoader`的职责；`Config`和`ModLoader`各自独立
+  `LoadLibraryA`同一个dll两次在Windows上是安全的(按路径做引用计数)。探测时会真正调用一次
+  `GetMod<Concept>`读取返回的`vector<string>*`内容（不只是探测符号是否存在），拿到这个dll
+  实际提供哪些`(concept, modId)`，供`GetModEnables()`等按id粒度展示用；本工程统一动态CRT
+  (MultiThreadedDLL/MultiThreadedDebugDLL)，调用方只读不释放这份mod内static数据是安全的。
+- **`AddDllPath`跳过路径里带`Debug`目录段的dll**——Debug配置用`/MDd`调试CRT编译，
+  `std::string`内存布局和Release/Development不兼容，跨DLL读取它返回的`vector<string>`会
+  按错误的布局解释内存直接崩溃（`EXCEPTION_ACCESS_VIOLATION`）。手工配置的`dll_paths`一直
+  靠人工只填Release目录规避，但回退扫描(`ForeverModSubsystem::Initialize()`的默认目录
+  分支)会无差别递归整个目录树，必须在这里显式挡掉。
+- **路径统一规范化成正斜杠（`ToForwardSlashes`）**——`filesystem::absolute()`/
+  `canonical()`在Windows下会把分隔符规范化成反斜杠，一旦原样塞进JSON字符串值（反斜杠后面
+  跟的如果不是合法JSON转义字符，比如`\W`/`\P`/`\F`）就是非法JSON，这份自定义`JsonReader`
+  遇到一处非法转义会导致整个文件解析失败（不只是这一个字段读不到，其它字段也会被一起
+  扔掉）。所有写进`dllPaths`/`layoutPaths`/`resourcePaths`/`storyScriptPaths`的路径在落盘
+  前都统一走这个转换。
+- **`AddDllPath`探测用的`GetMod<Concept>`符号名来自`loader.h`的
+  `GetModConceptDescriptors()`**,不在`config.cpp`里重复维护一份列表,避免两处列表不同步；
+  DLL级依赖声明（`kModDllDependenciesSymbol`，整个DLL一份，不按concept区分）在同一次
+  `LoadLibrary`里顺带探测，见`loader.h`。
+- **`<concept>_mods`数组既是mod参数来源，也是"谁启用谁没启用"的唯一真相来源**：
+  `ReadConfig`扫描所有以`_mods`结尾的顶层key（不硬编码concept名字），每个数组元素是
+  `"id"`或`"id 参数..."`（如`"pengzhan --density 1.0"`），按第一个空格切成
+  `(id, 参数字符串)`存进`conceptMods[jsonKey]`。`IsModEnabled`/`SetModEnabled`直接读写
+  这张表，不维护平行的一份启用状态：`SetModEnabled(true)`把id加进数组（没有参数给空串），
+  `SetModEnabled(false)`直接从数组删掉。**不要**改成"按`dll_paths`根目录配一份共用参数"
+  的方案（`dll_args`）——这和"每个mod id有自己的参数"的真实需求对不上，已验证过走不通。
+- **`RoadnetFactory`/`NameFactory`对应的`"Roadnets"`/`"Names"`两个concept只应该同时
+  启用一个**（单选语义，不是Terrain那种多mod叠加）——`SetModEnabled(true)`会把同一
+  concept下其它已发现id全部从数组里移除；`NormalizeUniqueConcepts()`在`ReadConfig`读完、
+  `WriteConfig`写之前、`GetModEnables()`每次返回数据前都收口一次（只保留数组里排在最前面
+  的条目），防止手写config.json时一次性塞了多个条目。
+- **`RemoveDllPath`连带清理孤儿启用状态**——一个dll被移除时，它贡献的`(concept, modId)`
+  会从对应`<concept>_mods`数组里一并删掉，不留下"启用着一个已经不存在的dll提供的id"。
+- **`GetConceptMods`只做字符串切分,不做任何格式校验/解析**——参数部分原样返回,具体格式
+  完全由消费方（mod自己注册的creator函数）决定；`Config`/`ModLoader`全程不关心参数内容。
+- **`layout_paths`/`resource_paths`用和`dll_paths`同一套
+  `recursive_directory_iterator`扫描手法，但不探测/加载任何东西**(`.layout`/`.script`
+  是纯文本文件)，扫到就收。`AddResourcePath`在同一次扫描里按后缀分流收集`.script`
+  （`resourcePaths`）、`.uplugin`（`pluginPaths`）、`.pak`（`pakPaths`）、`.layout`
+  （并入`layoutPaths`，Resource screen要求一个文件夹能同时覆盖`.layout`和`.script`，
+  不强制在两处各添加一次）。`GetScriptPath(name)`遍历`resourcePaths`按文件名（不含路径/
+  扩展名）反查实际路径，供`JobMod`/`OrganizationMod`/`Story`这类只知道bare文件名、不应该
+  替Mod决定"脚本实际存放在哪"的调用方使用，见`Core/society/job.md`"Script配置"一节。
   `HasResourcePaths()`供`ForeverModSubsystem::Initialize`判断要不要回退扫描默认的
-  `Resource/Story/`目录，和`layout_paths`同一个容错风格。
-- **`GetMainStoryScriptModName`(同上一起新增)**：读`config.json`新增的`"main_story"`
-  字段（当前配的是`"empty"`），供`Story::Init()`决定主线剧情`Script`要挂载哪个
-  `ScriptMod`——之前这个决策也是Core里硬编码`kEmptyScriptId="empty"`，同上一并修复。
-  字段缺失时返回空字符串，`Config`自己不兜底默认值，由`Story::Init()`据此判定跳过初始化。
-- **`GetMainStoryScriptPath`（主线剧情`.script`新增三个顶层字段时新增）**：
-  `return GetScriptPath("test");`的薄包装——`name_reserve`/`global_settings`/
-  `mod_dependences`这三个新字段的校验（`AForeverFrameworkActor::
-  ValidateMainStoryDependencies()`/`Populace::InitNames()`/`EnsurePlayerGenerated()`）
-  需要在`Story`对象创建之前就拿到主线剧情`.script`的路径，包一层避免`"test"`这个bare
-  名字散落在多个文件里，见`Core/story/script.md`"主线剧情.script新增三个顶层字段"
-  一节。等以后支持多主线剧情时改这个方法内部实现即可，调用方不用跟着改。
-- **`GetPlugins`/`GetPakFiles`(打包功能迁移时按需加回)**：`AddResourcePath`原来只收
-  `.script`，这次照抄旧工程`AddResourcePath`同一次`recursive_directory_iterator`扫描里
-  按后缀分流的写法，加上`.uplugin`/`.pak`两路(新增`pluginPaths`/`pakPaths`，结构和
-  `resourcePaths`一致)。动机：UE资产只能通过"挂载点"访问(`LoadObject`等用的`/Xxx/...`
-  包路径背后必须有已注册的挂载点)，独立编辑的UE资产因此必须放在一个Plugin里——
-  `resource_paths`配置的目录下如果是一个`<ModName>/UE/<ModName>/`这样的独立迷你UE工程，
-  里面`Plugins/<ModName>/<ModName>.uplugin`(编辑器/PIE直接挂载用)和
-  `Plugins/<ModName>_Pak/<ModName>.pak`(该Plugin自己cook+`UnrealPak`出来，打包/Shipping
-  用)就会被这次新增的扫描一起发现。真正的挂载逻辑(`FPackageName::RegisterMountPoint`+
-  `FCoreDelegates::MountPaksEx`)在UE层`ForeverModSubsystem::Initialize()`里，照抄旧工程
-  `GlobalBase::BeginPlay()`按`WITH_EDITOR`分两条路径的写法，见
-  `Source/Forever/Mod/ForeverModSubsystem.md`。
-- **用旧工程`Dependence/common/json.h`而不是UE自带Json模块解析`config.json`**——UE的
-  `FJsonSerializer`是严格JSON,不支持注释;旧工程的解析器是JsonCpp衍生的宽松版本,支持
-  `//`/`/* */`注释,更适合手写维护的配置文件。这是本次会话用户明确要求的决定。
-- **`dll_paths`里的相对路径,相对config.json自己所在目录(`configDir`)解析**——纯文件系统
-  概念,不依赖UE的`FPaths::ProjectDir`,保持`Config`engine-agnostic。`Forever_UE/Resource/
-  Config/config.json`里的`dll_paths`因此写成`"../../../Forever_Mod/Test"`这种相对本文件
-  路径的写法,而不是相对仓库根目录或相对可执行文件当前工作目录——后两者在`Config`这层根本
-  拿不到。
-- **`configDir`必须用`filesystem::canonical()`而不是直接`parent_path()`(打包功能迁移时
-  修的一个坑)**——打包产物里`Resource/`是用`mklink /J`目录连接指向开发树真实位置的(见
-  `Forever_UE/pak.bat`)，但Windows对一条路径字符串里嵌入的`".."`是纯文本/词法化解析
-  (`GetFullPathNameW`那一套)，不会真的打开每一级目录确认是不是reparse point，也就不会
-  "看穿"目录连接——如果只取`parent_path()`，`configDir`会是一条还停留在"连接点那一侧"的
-  路径，后面`dll_paths`/`resource_paths`里`"../../../Forever_Mod/..."`这种相对写法对着它
-  词法化展开，文本上只会在连接点所在的归档目录树内部兜圈子，永远走不到连接指向的真实开发树
-  (实测现象：`[Config] Warning: mod path does not exist`，报出来的路径里能看到没被消掉的
-  `".."`片段)。用`canonical()`强制做一次真正打开目录、跟随reparse point的OS级解析，把
-  `configDir`换成连接目标那一侧的真实绝对路径，后续所有相对路径的`".."`才会从正确的起点
-  往上退——这一步只需要做一次，PIE/未打包的开发环境下`Resource`本来就是真目录，
-  `canonical()`是无副作用的空操作。这也是为什么`Forever_UE/pak.bat`不需要给
-  `Forever_Mod`单独建一个连接：只要`configDir`本身被`canonical()`成真实路径，`dll_paths`/
-  `resource_paths`里随便写什么相对路径都会自然解析到真实位置，不需要为每个mod的位置在
-  打包脚本里硬编码特殊处理。
-- **`ReadConfig`找不到文件或JSON语法错误时静默留空,不抛异常**——旧工程`Config::ReadConfig`
-  在这两种情况下都会`THROW_EXCEPTION`,但阶段3的约定是"缺配置就用硬编码默认值,不报错"
-  (和`UForeverKeyBindingSubsystem`读`KeyBindings.ini`的容错风格一致),由调用方
-  (`ForeverModSubsystem`)决定要不要回退到扫描默认目录。
-- **`AddDllPath`探测完立即`FreeLibrary`,不长期持有句柄**——探测阶段只是为了确认"这是不是
-  一个合法mod dll"(是否存在任意一个`GetMod<Concept>`符号),不需要长期持有;真正常驻加载
-  是`ModLoader`(`loader.h`)的职责,`Config`和`ModLoader`各自独立`LoadLibraryA`同一个
-  dll两次(一次探测、一次注册)在Windows上是安全的(`LoadLibraryA`内部按路径做引用计数)。
-- **`AddDllPath`探测用的20个`GetMod<Concept>`符号名来自`loader.h`的
-  `GetModConceptDescriptors()`**,不在`config.cpp`里重复维护一份列表,避免两处列表不同步。
-- **`<concept>_mods`数组按mod id配置参数,格式和旧工程一致**——`ReadConfig`扫描所有以
-  `_mods`结尾的顶层key(不硬编码20个concept名字,配置文件本身决定内容有哪些),每个数组
-  元素是`"id"`或`"id 参数..."`(如`"pengzhan --density 1.0"`,和旧工程
-  `"test ---name value"`的写法一致),按**第一个空格**切成`(id, 参数字符串)`存进
-  `conceptMods[jsonKey]`。这条路径最初的设计是按`dll_paths`根目录配一份共用参数(通过
-  `dll_args`),后来发现和"每个mod id有自己的参数"这个真实需求对不上而改成现在这样——
-  `dll_args`概念已经废弃,不要再往`config.json`里加这个key。
-- **`GetConceptMods`只做字符串切分,不做任何格式校验/解析**——参数部分(`"pengzhan
-  --density 1.0"`里`"pengzhan"`之后的部分)原样返回,是`--key value`风格还是别的格式,
-  完全由消费方(mod自己注册的creator函数,创建实例时直接收到这个字符串)决定。`Config`/
-  `ModLoader`全程不关心参数内容,只负责"从配置文件读出来、按id传给对的Factory"这件事,详见
-  `Source/Dependence/README.md`里`<Concept>Factory::SetModArgs`的说明。
+  `Resource/Story/`目录。
+- **`GetPlugins`/`GetPakFiles`**：UE资产只能通过已注册挂载点访问，独立编辑的UE资产因此
+  必须放在一个Plugin里——`resource_paths`配置目录下`Plugins/<ModName>/<ModName>.uplugin`
+  （编辑器/PIE挂载用）和`Plugins/<ModName>_Pak/<ModName>.pak`（打包/Shipping用）会被
+  `AddResourcePath`的扫描发现；真正的挂载逻辑在UE层`ForeverModSubsystem::Initialize()`，
+  见`Source/Forever/Mod/ForeverModSubsystem.md`。
+- **`GetMainStoryScriptModName`/`GetMainStoryScriptPath`**：分别读`config.json`的
+  `"main_story"`字段、包一层`GetScriptPath("test")`，供`Story::Init()`/
+  `AForeverFrameworkActor::ValidateMainStoryDependencies()`等决定主线剧情`Script`挂载
+  哪个`ScriptMod`、主线剧情`.script`文件路径在哪。字段缺失时返回空字符串，`Config`自己
+  不兜底默认值。
+- **`story_scripts`（`AddStoryScript`/`RemoveStoryScript`/`GetStoryScripts`）**：Story
+  screen的"添加`.script`文件"操作维护的一份列表，列表里的脚本全部一起加载，不是
+  "多选一激活"（和`main_story`单独一个字段、决定主线挂载哪个`ScriptMod`是两件事）。
+- **`IsModIdEnabled`/`IsDllActive`/`GetActiveDllPaths`/`GetDllDependences`**：给游戏启动
+  配置界面的依赖校验用。`IsModIdEnabled(id)`不看concept，只要id在任意一个已启用的
+  `(concept, modId)`里出现过就算数（mod id不带concept前缀，不能靠字符串猜它属于哪个
+  concept）；`IsDllActive`判断一个DLL导出的id里有没有任意一个被启用（DLL本身只能整体
+  加载/不加载）；`GetDllDependences`读取`AddDllPath`探测阶段缓存的
+  `GetModDllDependencies()`声明内容。
 
 ## 依赖关系
 
 - 依赖:`Dependence/common/json.h`(解析JSON)、`Core/common/loader.h`
-  (`GetModConceptDescriptors()`探测符号表)、`<windows.h>`(`LoadLibraryA`/`GetProcAddress`/
-  `FreeLibrary`,只在`.cpp`里出现,头文件不引入)。
-- 被谁依赖:`Source/Forever/Mod/ForeverModSubsystem.cpp`。
+  (`GetModConceptDescriptors()`探测符号表、`kModDllDependenciesSymbol`)、`<windows.h>`
+  (`LoadLibraryA`/`GetProcAddress`/`FreeLibrary`,只在`.cpp`里出现,头文件不引入)。
+- 被谁依赖:`Source/Forever/Mod/ForeverModSubsystem.cpp`；游戏启动配置界面
+  （Story/Mod/Resource三screen）读取`GetModEnables()`/`GetDllDependences()`等展示，
+  写入`SetModEnabled()`/`AddStoryScript()`等，最终调`WriteConfig()`落盘。
 
 ## 待办/后续阶段
 
-- 阶段4:按需加回启用禁用状态、全局设置、剧情路径、运行时写回,恢复`config.json`里对应的
-  key(`layout_paths`已经在Building内部布局落地时补回，`GetPlugins`/`GetPakFiles`已经在
-  打包功能迁移时补回，见上)。
-- 阶段4:如果发现同一个dll在多次`AddDllPath`调用(如`Debug`/`Release`两个目录都被扫描到)
-  下被重复记录,需要处理去重——目前`GetMods()`已经按dll绝对路径去重,但如果同一个mod id
-  被两个不同dll路径各自注册一次,`ModLoader::RegisterConcept`会调用两次
-  `RegisterMod<Concept>`,后一次覆盖前一次,这是已知的、可接受的阶段3简化行为。
+- 全局设置字典（`GetGlobalSettings`一类，不同于`global_settings`脚本顶层字段，见
+  `Core/player/player.md`"时钟行为"一节）尚未实现。
+- 同一个dll在多次`AddDllPath`调用下被扫描到(如`Debug`/`Release`两个目录都存在)时，如果
+  其中声明了同一个mod id，`ModLoader::RegisterConcept`会重复调用
+  `RegisterMod<Concept>`，后一次覆盖前一次——目前未去重，开发时建议只保留一份构建产物在
+  `Forever_Mod/`下。

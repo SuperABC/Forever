@@ -279,7 +279,7 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			event = new OptionDialogEvent(obj["name"].AsString(), obj["option"].AsString());
 		}
 		else {
-			// 阶段4占位：其余30种事件类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
+			// 其余事件类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Event type not implemented yet: " + type + ".\n");
 		}
 
@@ -350,7 +350,7 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			change = new AllowDoorChange(name.AsString(), citizen.AsString());
 		}
 		else {
-			// 阶段4占位：其余39种变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
+			// 其余变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Change type not implemented yet: " + type + ".\n");
 		}
 
@@ -377,11 +377,10 @@ vector<Dialog*> Script::BuildDialogs(const JsonValue& root) {
 			else if (section.IsArray()) {
 				vector<Option> options;
 				for (auto item : section) {
-					// 分支选项嵌套的dialogs/changes这里沿用老工程写法直接new出本体交给Option
-					// 引用——和老工程一样，这些嵌套本体不在Milestone的顶层dialogs/changes列表
-					// 里，所以也不会被Milestone析构时delete；本阶段test.json不含分支选项，
-					// 这条路径未被实际执行到，真正的嵌套本体归属方式留到分支选项被点名实现
-					// 时再确定，见Script.md。
+					// 分支选项嵌套的dialogs/changes直接new出本体交给Option引用——这些嵌套本体
+					// 不在Milestone的顶层dialogs/changes列表里，所以也不会被Milestone析构时
+					// delete；目前test.json不含分支选项，这条路径未被实际执行到，真正的嵌套
+					// 本体归属方式留到分支选项被点名实现时再确定，见dialog.md。
 					auto nestedChanges = BuildChanges(item["changes"]);
 					options.emplace_back(item["condition"].AsString(), item["option"].AsString(),
 						BuildDialogs(item["dialogs"]), vector<const Change*>(nestedChanges.begin(), nestedChanges.end()));

@@ -59,7 +59,7 @@ public:
 	std::string vehicleType;    // 这条线路生成的VehicleMod id
 	bool useRoadnet = false;    // 是否接入现有车辆路网(旁路，不破坏原图，见route.md)
 	bool drawPath = false;      // 是否铺真实轨道mesh(trackMesh非空时才有意义)
-	std::string trackMesh;      // 轨道/跑道资产软路径，可留空(这次不画)
+	std::string trackMesh;      // 轨道/跑道资产软路径，可留空(留空则不画)
 	float trackUnit = 0.f;      // 轨道mesh沿弧长重复的单位长度(地图单位)
 	int vehiclesPerLine = 1;    // 每条线路生成几辆车，均匀分布相位
 	float speed = 1.f;          // 地图单位/秒

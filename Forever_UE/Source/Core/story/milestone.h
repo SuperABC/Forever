@@ -79,7 +79,7 @@ public:
 	std::string DropCondition() const;
 
 	/*
-	* 根据当前变量值求值失效条件，判断这次匹配成功后是否应让本里程碑失效
+	* 根据当前变量值求值失效条件，判断本次匹配成功后是否应让本里程碑失效
 	* @context: 变量路由上下文
 	* @return: 应失效返回 true，否则返回 false
 	*/

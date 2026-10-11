@@ -478,12 +478,9 @@ double Time::DifferenceInSeconds(const Time& other) const {
 	// totalSeconds此时是"later-earlier"的正数时长。inverted==false说明this自己就是
 	// earlier(this<=other)，this.DifferenceInSeconds(other)应该是"other-this"这个正数——
 	// 直接返回totalSeconds；inverted==true说明this是later(this>other)，"other-this"应该是
-	// 负数，要取反。之前这里两个分支写反了：this比other早(最常见的"推进时钟"场景，比如
-	// Traffic::Tick里lastTickTime.DifferenceInSeconds(currentTime))时返回的是负数，导致
-	// 唯一调用方Traffic::Tick里"if (delta > 0.0) elapsedSeconds += delta;"每一帧都因为
-	// delta<0被跳过，elapsedSeconds永远停在初始值——公交车/火车/飞机的Route::Update每次算出
-	// 来的都是同一个t，表现为"车辆生成之后位置再也不变"，PIE实测用UE_LOG逐帧打印出的坐标
-	// 90秒内分毫不差才揪出这个符号反了的bug。
+	// 负数，要取反。符号方向写反会导致Traffic::Tick里
+	// "if (delta > 0.0) elapsedSeconds += delta;"每帧都被跳过，elapsedSeconds永远停在
+	// 初始值，表现为"车辆生成之后位置再也不变"——改这个函数时务必保持这个方向。
 	return inverted ? -totalSeconds : totalSeconds;
 }
 

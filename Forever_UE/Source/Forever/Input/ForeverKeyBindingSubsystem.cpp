@@ -49,8 +49,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("AimWeapon"), EKeys::RightMouseButton },
 		// 游戏内地图：M开/关(ToggleMap)，Esc只关不开(CloseMap)——跟TogglePhone/
 		// ToggleInventory同样的理由绑在Controller上，见AForeverPlayerController::
-		// SetupInputComponent、UMapWidget::ToggleMap/CloseMap。Esc在这个工程里之前完全
-		// 没被占用，这次是第一次使用。
+		// SetupInputComponent、UMapWidget::ToggleMap/CloseMap。
 		{ TEXT("ToggleMap"), EKeys::M },
 		{ TEXT("CloseMap"), EKeys::Escape },
 	};

@@ -27,8 +27,8 @@
 // 不自己存一份rotation——落地的Zone来自某个Lot的freeLots切出来的一块，freeLots全部继承同一个
 // 顶层Lot的rotation(SplitWithPath产出的每一段都传了同一个rotation，见geometry.cpp)，所以
 // GetRotation()直接转发parentLot->GetRotation()就是正确值，没必要在Zone自己身上再存一份
-// 冗余拷贝（早前"照抄Lot自己加一个旋转角度"的做法多此一举，parentLot本来就有）。这意味着
-// GetRotation()必须在SetParentLot(lot)之后调用才有意义，构造完/SetParentLot之前调用返回0。
+// 冗余拷贝。这意味着GetRotation()必须在SetParentLot(lot)之后调用才有意义，构造完/
+// SetParentLot之前调用返回0。
 class Zone : public Quad {
 public:
 	Zone() = delete;

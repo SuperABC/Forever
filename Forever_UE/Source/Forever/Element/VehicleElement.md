@@ -9,10 +9,9 @@
 组合`USkeletalMeshComponent`+`UChaosWheeledVehicleMovementComponent`+相机/输入，效果
 等价。
 
-历史：这套Chaos插件方案是最初的实现；本项目中途一度整体重写成自研简化物理
-（`UStaticMeshComponent`+手写`AddForce`），目的是摆脱插件依赖，但实测驾驶手感（尤其
-转弯/摩擦力）明显不如真实悬挂/轮胎模拟，最终决定改回直接使用插件本身，接受"车身必须是
-带骨骼的资产"这个前提，把工作量放在教用户怎么给自己的车模型绑骨骼上（见本文档最后一节）。
+**不要改成自研简化物理（`UStaticMeshComponent`+手写`AddForce`）来摆脱Chaos插件依赖**——
+试过这条路，驾驶手感（尤其转弯/摩擦力）明显不如真实悬挂/轮胎模拟。代价是车身必须是带骨骼
+的资产，工作量放在教用户怎么给自己的车模型绑骨骼上（见本文档最后一节）。
 
 ## 骨骼网格：为什么车身不能是普通静态网格
 
@@ -23,27 +22,20 @@
 
 要换成自己的车模型，需要给它做骨骼绑定——见本文档最后一节的教程。
 
-## 骨骼网格必须在组件注册之前就绑好——踩过的坑
+## 骨骼网格必须在构造函数里就绑好，不能在`Init()`里动态`LoadObject`
 
-最初想法是运行时动态`LoadObject`（和这个项目其他资源一样"mod自己的字段、Core只读
-转发"的模式），在`Init()`里赋值。实测这条路走不通：
+**这是Chaos WheeledVehicle这套机制本身的限制，不是这个类自己的设计选择**：
+`SpawnActor()`在`Init()`跑之前就已经完成了组件注册（`AActor::PostSpawnInitialize()`
+无条件调用`RegisterAllComponents()`，不受`bDeferConstruction`影响），`carMesh`如果这时
+还没有骨骼网格，`UChaosWheeledVehicleMovementComponent`第一次（也是唯一一次）尝试创建
+物理车辆时`LocateBoneOffset()`会发现`Mesh->GetSkinnedAsset()`是空，四个轮子的弹簧位置
+全部退化成同一个原点，触发引擎ensure（"Expected skinned asset when locating bone
+offset"）+"Spring configuration is invalid"警告，车辆物理相当于没建成功；事后在`Init()`
+里补`SetSkeletalMesh(mesh)`+`RecreatePhysicsState()`重建也没用，还是同样的ensure/警告。
 
-1. **`SpawnActor()`在`Init()`跑之前就已经完成了组件注册**——`AActor::
-   PostSpawnInitialize()`会无条件调用`RegisterAllComponents()`（不受`bDeferConstruction`
-   影响，`SpawnActorDeferred`也只是推迟`ExecuteConstruction`/`PostActorConstruction`
-   这两步，`RegisterAllComponents()`在这两步之前就已经跑完，见`Actor.cpp::
-   PostSpawnInitialize()`）。`carMesh`这时还没有骨骼网格，
-   `UChaosWheeledVehicleMovementComponent`第一次（也是唯一一次）尝试创建物理车辆时，
-   `LocateBoneOffset()`发现`Mesh->GetSkinnedAsset()`是空，四个轮子的弹簧位置全部退化
-   成同一个原点——触发引擎自己的ensure（"Expected skinned asset when locating bone
-   offset"）+`LogVehicleUtility`的"Spring configuration is invalid"警告，车辆物理
-   相当于没建成功。
-2. 事后在`Init()`里补`SetSkeletalMesh(mesh)`+`vehicleMovement->RecreatePhysicsState()`，
-   试图"重来一次"——没用，还是同样的ensure/警告。
-3. **最终结论：骨骼网格必须在构造函数里就绑好**——**这是Chaos WheeledVehicle这套
-   机制本身的限制，不是这个类自己的设计选择**。而`SpawnActor<T>()`不支持给构造函数
-   传自定义参数，所以"用哪个具体外观"这件事没法在生成之后（`Init()`）或构造函数内部
-   读某个运行时参数来决定，只能靠"生成之前就选好用哪个`UClass`"——见下一节。
+而`SpawnActor<T>()`不支持给构造函数传自定义参数，所以"用哪个具体外观"这件事没法在生成
+之后（`Init()`）或构造函数内部读某个运行时参数来决定，只能靠"生成之前就选好用哪个
+`UClass`"——见下一节。
 
 ## 多车型共存：`AVehicleElement`是C++基类，具体车型是蓝图子类
 
@@ -65,11 +57,8 @@ UE官方推荐的"一个C++基类+多个蓝图子类"车辆配置模式（很多
 注意蓝图生成类的对象名固定加`_C`后缀）。`UForeverTrafficFrameworkComponent::
 ToggleVehicle`的上车分支在调用`SpawnActor`**之前**，先用
 `vehicle->GetBlueprintPath()`+`LoadClass<AVehicleElement>()`拿到具体该用哪个蓝图
-类，再拿这个类去`SpawnActor`（原来传的是`AVehicleElement::StaticClass()`）——这时
-已经通过`traffic->CreateVehicle(...)`拿到了具体的`Vehicle`实例，不需要像早前那版
-"构造函数里现读现造一个临时mod"那样绕弯子。`LoadClass`失败（蓝图资产还没创建、路径
-写错）会打警告+销毁这个`Vehicle`+直接返回，不会崩溃，见
-`ForeverTrafficFrameworkComponent.cpp`。
+类，再拿这个类去`SpawnActor`。`LoadClass`失败（蓝图资产还没创建、路径写错）会打警告+
+销毁这个`Vehicle`+直接返回，不会崩溃，见`ForeverTrafficFrameworkComponent.cpp`。
 
 **新增一种车型完全不需要碰`Forever`这个UE模块的代码**：做一个继承`AVehicleElement`
 的新蓝图（换骨骼网格资产、改轮子骨骼名，具体步骤见本文档最后一节）+ 在`Basic.dll`
@@ -124,10 +113,10 @@ void AVehicleElement::Move(const FInputActionValue& value) {
 }
 ```
 
-**最初的版本把`movement.Y`直接原样传给`SetThrottleInput`（S键=负油门），结果车完全没法
-倒车**——`UChaosVehicleMovementComponent`默认`bReverseAsBrake=true`，油门/刹车被设计成
-像真车的两个独立踏板，不是一个正负号共用的单轴：换挡逻辑只看`RawBrakeInput`是否大于0来
-判断"该挂倒挡了"。现在按`movement.Y`的正负分别转发到`SetThrottleInput`/`SetBrakeInput`：
+**不要把`movement.Y`直接原样传给`SetThrottleInput`（S键=负油门）——那样车完全没法倒车**：
+`UChaosVehicleMovementComponent`默认`bReverseAsBrake=true`，油门/刹车被设计成像真车的
+两个独立踏板，不是一个正负号共用的单轴，换挡逻辑只看`RawBrakeInput`是否大于0来判断"该挂
+倒挡了"。必须按`movement.Y`的正负分别转发到`SetThrottleInput`/`SetBrakeInput`：
 车速较高时按S是正常刹车，刹停之后继续按住S才会挂倒挡、真正往后开——这是
 `CalcThrottleBrakeInput()`里`bReverseAsBrake`分支自己的设计，不是这个类额外发明的规则。
 
@@ -194,12 +183,11 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
     不需要蓝图节点图"场景的正式扩展点）**，`ResetToRefPose()`之后，对每个缓存的轮子
     姿态用`FBoneReference`查骨骼在当前`FBoneContainer`里的`FCompactPoseBoneIndex`，
     把`FRotator(rotationAngle, steerAngle, 0)`转成的`FQuat`**后乘**到该骨骼原有的
-    本地旋转上（`BoneTransform.GetRotation() * RollSteerQuat`）。**踩过的坑**：
-    最初写成预乘（`RollSteerQuat * BoneTransform.GetRotation()`），实测轮子转起来
-    七扭八歪——预乘是把这个旋转当成"父骨骼坐标系下的旋转"叠加，而"绕轮子自己的轴滚动/
-    转向"这个概念应该表达在轮子骨骼自己的本地(bind pose)坐标系里，必须后乘：先用骨骼
-    原有的旋转把"轮子自己的坐标系"变换到父骨骼坐标系，再在轮子自己的坐标系里叠加滚动/
-    转向，顺序不能反。`FAnimNode_WheelController::EvaluateSkeletalControl_AnyThread`
+    本地旋转上（`BoneTransform.GetRotation() * RollSteerQuat`）——**不能预乘**
+    （`RollSteerQuat * BoneTransform.GetRotation()`会让轮子转起来七扭八歪）：预乘是把
+    这个旋转当成"父骨骼坐标系下的旋转"叠加，而"绕轮子自己的轴滚动/转向"这个概念应该表达
+    在轮子骨骼自己的本地(bind pose)坐标系里，必须后乘：先用骨骼原有的旋转把"轮子自己的
+    坐标系"变换到父骨骼坐标系，再在轮子自己的坐标系里叠加滚动/转向，顺序不能反。`FAnimNode_WheelController::EvaluateSkeletalControl_AnyThread`
     （`AnimNode_WheelController.cpp`）效果上做的是同一件事，只是它工作在组件空间，
     需要先`ConvertCSTransformToBoneSpace`把变换重新表达到骨骼自己的坐标系里才能这样
     叠加，再`ConvertBoneSpaceTransformToCS`转回去；这里的`Evaluate()`本来就是本地
@@ -223,19 +211,18 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 `UChaosVehicleWheel`，前轮`bAffectedBySteering=true`、后轮`bAffectedByHandbrake=true`，
 照抄引擎Vehicle模板`TP_VehicleAdvWheelFront`/`Rear`的最小配置。
 
-**踩过的坑：`bAffectedByEngine`不显式设的话默认是`false`，油门完全没反应**——
+**`bAffectedByEngine`必须显式设置，不设默认是`false`，油门完全没反应**——
 `UChaosVehicleWheel`基类构造函数没有给这个字段赋初值（bool零初始化=false），
 `AxleType`也默认是`EAxleType::Undefined`。`SetupVehicle()`里只有
 `AxleType != Undefined`时才会按`DifferentialSetup.DifferentialType`重新计算
-`EngineEnabled`；`Undefined`时直接用`bAffectedByEngine`原值（也就是`false`）。
-结果是：车辆创建完全正常（`GetNumWheels()`==4、没有任何ensure/警告），转向、手刹这些
-也都正常，但不管给多大油门`GetForwardSpeed()`都纹丝不动——因为压根没有一个轮子的
-`EngineEnabled`是true，油门的扭矩传不到任何轮子上。修法：在`VehicleWheelRear.cpp`
-里显式`bAffectedByEngine = true;`（配合`DifferentialSetup`默认的`RearWheelDrive`），
-`VehicleWheelFront.cpp`里显式写`bAffectedByEngine = false;`只是为了不留疑问。这是
-这次自己拼装`WheelSetups`时才会踩的坑——如果是在编辑器里用UE自带的Vehicle模板蓝图，
-`TP_VehicleAdvWheelFront/Rear`这两个蓝图资产里已经在细节面板上点好了这个勾选框，
-不会有人踩到这个坑。
+`EngineEnabled`；`Undefined`时直接用`bAffectedByEngine`原值。不设的话车辆创建完全正常
+（`GetNumWheels()`==4、没有ensure/警告），转向、手刹也都正常，但不管给多大油门
+`GetForwardSpeed()`都纹丝不动——因为没有一个轮子的`EngineEnabled`是true，油门的扭矩传不
+到任何轮子上。`VehicleWheelRear.cpp`里显式`bAffectedByEngine = true;`（配合
+`DifferentialSetup`默认的`RearWheelDrive`），`VehicleWheelFront.cpp`里显式写
+`bAffectedByEngine = false;`只是为了不留疑问（用UE自带Vehicle模板蓝图时
+`TP_VehicleAdvWheelFront/Rear`已经在细节面板上点好了这个勾选框，自己拼装`WheelSetups`
+才需要注意这一步）。
 
 ## 依赖关系
 

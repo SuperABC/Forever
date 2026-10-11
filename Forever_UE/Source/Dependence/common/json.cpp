@@ -483,9 +483,7 @@ bool JsonReader::ReadArray(Token& tokenStart) {
 		if (next == ']') {
 			// 同ReadObject"}"探测的理由：PeekNextChar探到的"]"前面可能还夹着注释，这里
 			// 必须循环跳过注释直到真正读到"]"，否则"]"会漏消费，被外层当成下一个token
-			// 误读(实测复现：changes数组最后一项换成"//"注释、只留一个逗号时，"]"没被这里
-			// 消费掉，外层milestone对象把它当成了缺失的逗号，报"Missing ',' or '}' in
-			// object declaration"，见script.md/json.md的教训记录)。
+			// 误读，错误地报出"Missing ',' or '}' in object declaration"。
 			Token endArray;
 			ReadToken(endArray);
 			while (endArray.type == TOKEN_COMMENT) {

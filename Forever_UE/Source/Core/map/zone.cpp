@@ -12,10 +12,10 @@ using namespace std;
 
 namespace {
 	constexpr float kPi = 3.14159265358979323846f;
-	// 这次没有在ZoneGateSpec里加高度字段，先给一个固定值，见door_system_plan.md门资产规格
-	// 一节"园区大门约3m*2m"的建议尺寸。单位是地图单位，1地图单位=10米(DOOR_WORLD_SCALE/
-	// BUILDING_WORLD_SCALE=1000)——最初直接写成2.5(当成"2.5米"理解)，实际是25米高的园区
-	// 大门，实测复现(门离地/离人体尺度老远)，这里改成0.25地图单位=2.5米。
+	// ZoneGateSpec没有高度字段，这里给一个固定值，见door_system_plan.md门资产规格一节
+	// "园区大门约3m*2m"的建议尺寸。单位是地图单位，1地图单位=10米(DOOR_WORLD_SCALE/
+	// BUILDING_WORLD_SCALE=1000)，0.25地图单位=2.5米——不要直接写成2.5(会被当成"2.5米"
+	// 理解，实际变成25米高的园区大门)。
 	constexpr float kZoneGateHeight = 0.25f;
 
 	// 和Building::BuildDoors()用的normalYaw表同一套约定(EAST=0/SOUTH=π/2/WEST=π/

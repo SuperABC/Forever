@@ -22,11 +22,9 @@
   `UForeverRoomFrameworkComponent`里，同一套"全地图共用owner"问题挪过来的历史见下面
   "关键设计"一节，以及`ForeverRoomFrameworkComponent.md`）。
 
-具体的墙体开洞分段算法/坐标转换/材质网格解析/电梯轿厢动画公式，和这个类从
-`UForeverBuildingFrameworkComponent`搬过来之前完全一样，详细说明见
-`ForeverBuildingFrameworkComponent.md`（那份文档描述的是算法本身，这次会话没有改动算法，
-只是把承载这些算法的代码从框架组件搬到了这里，函数签名从"传入`Building*`/
-`FBuildingRenderState&`两个参数"简化成"直接用Element自己的成员"）。这份文档只记录
+具体的墙体开洞分段算法/坐标转换/材质网格解析/电梯轿厢动画公式详见
+`ForeverBuildingFrameworkComponent.md`（算法本身的说明放在那份文档，函数直接用Element
+自己的成员，不传`Building*`/`FBuildingRenderState&`）。这份文档只记录
 `ABuildingElement`这个类本身的设计取舍。
 
 ## 关键设计
@@ -125,10 +123,7 @@ DoorComponent.md`。
 
 ## 待办/后续阶段
 
-- `[BuildFloorSection耗时排查]`诊断日志（打印`elapsed`/`components`/`elementComponents`）
-  和框架组件`TickComponent`里的`[强制GC排查]`诊断代码，在排查结论定型、每栋building独立
-  Actor这个架构跑稳之后已经整段删除。
 - 单栋building内部楼层特别多/特别大时，一次近LOD转场里"这栋楼自己的组件数"仍然会从0涨到
   全部楼层的总和，耗时跟着涨（只是不再波及其它building）——如果这点残留卡顿仍然明显，可以
   考虑把挂载粒度从"每栋building一个Actor"细化成"每层楼一个Actor"，见
-  `ForeverBuildingFrameworkComponent.md`"性能第2轮"一节末尾。
+  `ForeverBuildingFrameworkComponent.md`"性能排查"一节末尾。

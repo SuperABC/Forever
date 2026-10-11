@@ -13,7 +13,7 @@ class UMaterialInstanceDynamic;
 class Map;
 class Building;
 
-// 阶段4-1 Building落地 + 楼体footprint/楼层/两级LOD + 楼层内部布局：Building的可视化cube
+// 楼体footprint/楼层/两级LOD + 楼层内部布局：Building的可视化cube
 // 收缩到BuildingMod声明的楼体子矩形，按basements/layers/floorHeights逐层堆叠(地下室往
 // Z=0以下堆)。两级LOD：远处整栋一个box(材质由BuildingMod::lodMaterial指定，留空用默认
 // 灰色)；近处是真正的楼层内部结构(走廊/房间隔墙/门洞/窗户/楼梯/电梯井/坡道)，每面墙体分段/
@@ -76,7 +76,7 @@ public:
 	// 近->远(退化成单box)的触发距离——比远->近的阈值大。两个阈值之间(这次是20~40)是"迟滞区"：
 	// 已经是Near的building要离得比刚进入时更远才会退回Far，避免玩家在临界距离附近小范围
 	// 来回走动时，building反复Near/Far抖动式切换(每次切换都要建/删一整层楼的组件，抖动等于
-	// 反复触发这次会话花大力气排查的那个卡顿)。
+	// 反复触发ForeverBuildingFrameworkComponent.md"性能排查"一节那个卡顿)。
 	float GetLodFarExitDistance() const { return lodFarExitDistance; }
 	float GetCabinCruiseSpeed() const { return cabinCruiseSpeed; }
 	float GetCabinEaseSeconds() const { return cabinEaseSeconds; }
@@ -164,7 +164,7 @@ private:
 	int32 pendingLodTransitionCount = 0;
 	bool bFrozenForLod = false;
 
-	// 电梯轿厢匀速巡航速度(UE单位/秒，默认300≈3m/s)。用户要求"速度和加速度都变成2倍"——
+	// 电梯轿厢匀速巡航速度(UE单位/秒，默认300≈3m/s)——
 	// ComputeCabinZ里缓入/缓出用的speedup(u)=cruiseSpeed*smoothstep(u)这条曲线，峰值加速度
 	// =1.5*cruiseSpeed/cabinEaseSeconds，只要cabinEaseSeconds不变，cruiseSpeed翻倍就会让
 	// 峰值加速度也自动翻倍(两者都正比于cruiseSpeed)，不需要额外再调cabinEaseSeconds——原来

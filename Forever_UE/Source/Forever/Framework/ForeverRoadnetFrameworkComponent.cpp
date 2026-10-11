@@ -16,8 +16,7 @@
 #define ROAD_WORLD_SCALE 1000.f
 // 开口cube/路口mesh都铺在Z=0(地图单位)，和这一片"plain"地形的高度基本重合，会跟地形网格
 // 发生共面z-fighting(和ForeverTerrainFrameworkComponent.cpp的HEIGHT_EPSILON是同一个问题)。
-// 2mm(世界单位)第一次PIE验证时实测不够(仍然被地形盖住/看不见)，改成5cm验证有效后，
-// 按用户要求收到1cm——地形本身按element为单位起伏，1cm相对10m一个格子的尺度依然可以
+// 1cm(世界单位)——地形本身按element为单位起伏，1cm相对10m一个格子的尺度依然可以
 // 忽略不计，足够压过地形高度采样的误差范围又不会太明显地"浮空"。
 #define ROADNET_HEIGHT_EPSILON 10.f
 
@@ -121,7 +120,7 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 	// 每条road在连着真实路口的那一端要收缩tiling范围，把面积让给路口mesh，避免路口处两条路
 	// 的mesh互相重叠z-fighting——收缩距离必须用RoadJunction::Build里同一个approach.setback，
 	// 不能自己另算一套，否则路面收缩量和路口mesh路缘角点的外移量对不上，要么留空隙要么重叠
-	// (这正是第一版实现踩过的坑，见ForeverRoadnetFrameworkComponent.md)。
+	// (见ForeverRoadnetFrameworkComponent.md)。
 	TMap<Road*, float> trimAtStart, trimAtEnd;
 	for (RoadJunction* junction : map->GetJunctions()) {
 		for (const RoadJunctionApproach& ap : junction->GetApproaches()) {
@@ -346,8 +345,8 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 
 	// 按每个开口把[tLow,tHigh]切成若干互不重叠的"保留区间"，每段各自独立铺tiling——这样铺出来
 	// 的缺口精确等于开口自身的[t-halfFrac,t+halfFrac]范围(和BuildOpeningMeshes算cube长度用的
-	// 是同一个halfFrac公式)，不会像第一版那样"按固定unit分段、只按段中点判断是否命中开口"，
-	// 导致缺口宽度只能凑整到unit的倍数、和cube宽度对不上，见ForeverRoadnetFrameworkComponent.md。
+	// 是同一个halfFrac公式)，不按固定unit分段、按段中点判断是否命中开口——那样缺口宽度只能
+	// 凑整到unit的倍数、和cube宽度对不上，见ForeverRoadnetFrameworkComponent.md。
 	TArray<TPair<float, float>> keepRanges;
 	keepRanges.Add(TPair<float, float>(tLow, tHigh));
 	for (const RoadOpening& op : road->GetOpenings()) {

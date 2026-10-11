@@ -6,11 +6,10 @@
 #include <string>
 
 
-// PuzzleMod：小游戏Mod基类。GetType()/GetName()是阶段3就有的骨架接口；Init/Loop这次
-// 补上，对应"小游戏进入时初始化一次"/"每帧更新一次"这两件事——形状参考老工程
-// Core/player/puzzle.h的Puzzle::Init/Loop，但这次画布(Canvas)的创建和定尺寸交给UE侧
-// 宿主(UPuzzleWidget)来做，Init只接收一个已经Init()好尺寸的Canvas*，不用再单独传
-// width/height（canvas->GetWidth()/GetHeight()已经够用），见Core/player/puzzle.md。
+// PuzzleMod：小游戏Mod基类。Init对应"小游戏进入时初始化一次"，Loop对应"每帧更新一次"。
+// 画布(Canvas)的创建和定尺寸交给UE侧宿主(UPuzzleWidget)来做，Init只接收一个已经Init()
+// 好尺寸的Canvas*，不用再单独传width/height（canvas->GetWidth()/GetHeight()已经够用），
+// 见Core/player/puzzle.md。
 class PuzzleMod {
 public:
 	PuzzleMod() = default;

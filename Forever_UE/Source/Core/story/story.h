@@ -45,15 +45,15 @@ public:
 
 	/*
 	* 执行一个变化：dynamic_cast分派，目前只有SetValueChange分支真正执行，其余分支
-	* 只打一条"未实现"日志。阶段4占位，等对应变化类型被点名实现时再补分支，见Story.md。
+	* 只打一条"未实现"日志，等对应变化类型被点名实现时再补分支，见Story.md。
 	* @change: 待执行的变化
 	* @context: 变量路由上下文（context.self决定SetValueChange作用在哪个Script的变量池上）
 	*/
 	void ApplyChange(const Change* change, const ScriptContext& context);
 
 	/*
-	* 阶段占位：Story域这次还没有需要每帧处理的逻辑（GameStart广播走的是BroadcastGameStart，
-	* 只在开局调用一次，不是每帧），空实现——和Map/Populace/Society/Industry/Traffic一起被
+	* 空实现：Story域目前没有需要每帧处理的逻辑（GameStart广播走的是BroadcastGameStart，
+	* 只在开局调用一次，不是每帧）——和Map/Populace/Society/Industry/Traffic一起被
 	* AForeverFrameworkActor::Tick统一调用一遍，保持"每个域都有Tick"这个形状一致，等Story域
 	* 真的有每帧要处理的东西（比如milestone超时之类）时再补内容。
 	*/
@@ -65,8 +65,7 @@ public:
 	Script* GetSystemScript() const;
 
 	/*
-	* 获取主线剧情Script——用户明确指出一份剧本只能由一个Script表示，这次从
-	* vector<Script*>改成单个Script*，不再是数组
+	* 获取主线剧情Script——一份剧本只能由一个Script表示，不是数组
 	*/
 	Script* GetMainScript() const;
 

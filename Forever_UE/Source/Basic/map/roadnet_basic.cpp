@@ -3,10 +3,9 @@
 #include <cmath>
 #include <algorithm>
 
-// 隧道：道路延伸时如果遇到mountain地形，改成"钻进去"而不是贴着地形起伏铺过去，并且在隧道口
-// 用RoadnetMod::AddHatch给地形挖一个洞，避免隧道段完全埋没在山体实心地形里看不见——三个
-// 常量照抄老工程语义(挖洞宽度不再用固定常量，改成按每条路实际配好的车道宽度算，见addRoad
-// 里AddHatch调用处的说明)。
+// 隧道：道路延伸时如果遇到mountain地形，"钻进去"而不是贴着地形起伏铺过去，并且在隧道口用
+// RoadnetMod::AddHatch给地形挖一个洞，避免隧道段完全埋没在山体实心地形里看不见。挖洞宽度
+// 按每条路实际配好的车道宽度算，不用固定常量，见addRoad里AddHatch调用处的说明。
 #define TUNNEL_HEIGHT -1.f
 #define TUNNEL_HATCH_LENGTH 4.f
 #define TUNNEL_LOOKAHEAD_DISTANCE 5.f
@@ -24,9 +23,8 @@ using namespace std;
 
 namespace {
 	// 井字中心lot固定AREA_OFFICIAL_HIGH，其余所有非中心lot(4个紧邻中心的臂lot+更外圈延伸出去
-	// 的lot)按1:1:1随机分配成高密度住宅/商业/工业区——应用户要求的行为变更，老工程和这个新
-	// 工程之前都是固定分配(中心办公，四臂分别固定residential-high/residential-low/
-	// commercial-high/industrial-high，外圈全部residential-low)，不是照抄老工程逻辑。
+	// 的lot)按1:1:1随机分配成高密度住宅/商业/工业区——这是ShopBuilding/FactoryBuilding按
+	// GetPower(AREA_TYPE)竞争lot的前提，分区类型如果单一固定，地图上只会长出一种建筑。
 	AREA_TYPE RandomHighDensityArea() {
 		static constexpr AREA_TYPE kAreas[3] = {
 			AREA_RESIDENTIAL_HIGH, AREA_COMMERCIAL_HIGH, AREA_INDUSTRIAL_HIGH
@@ -90,9 +88,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		};
 
 	// 沿给定方向延伸链条直到地图边界；山体节点、以及前后TUNNEL_LOOKAHEAD_DISTANCE个单位内能
-	// 探测到山体的节点都按隧道高度处理，其余节点仍然固定0（这次只恢复隧道这一部分，不恢复
-	// 老工程"全程按真实地形/水面高度起伏"的地形高度跟随，范围说明见roadnet_basic.md"隧道"
-	// 一节）。getTerrain同时也用来判断是否还在地图内。
+	// 探测到山体的节点都按隧道高度处理，其余节点仍然固定0(不支持"全程按真实地形/水面高度
+	// 起伏"的地形高度跟随，见roadnet_basic.md"待办"一节)。getTerrain同时也用来判断是否还在
+	// 地图内。
 	auto extendChain = [&](float startX, float startY, float stepX, float stepY, vector<pair<Node, int>>& chain) {
 		for (float x = startX, y = startY; ; x += stepX, y += stepY) {
 			string t = getTerrain(static_cast<int>(x), static_cast<int>(y));
@@ -104,14 +102,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		}
 		};
 
-	// 车道配置改成按左右两侧各自的(车行,停车,人行)数量参数化——默认(1,0,1,1,0,1)是两侧对称的
-	// 老配置(车行道每个方向1条宽0.5，不设停车道，人行道每侧1条宽0.5紧贴车行道外侧)，绝大多数
-	// Road仍然用这一套；井字最中间的四条"中山X路"改用不对称/单行配置，用来验证车道居中、
-	// 单行道开口这些新逻辑，见下方addRoad调用处和roadnet_basic.md"车道资产命名"一节。
-	// left=side0，right=side1——PIE实测发现之前反了(原来写的是left=side1/right=side0)，
-	// 和perp0定义下"side0=右手边"这个既有约定对不上，导致不对称资产的车道数左右和贴图左右
-	// 对调。车道宽度统一用LANE_WIDTH，不按数量再细分，这次验证的重点是数量不对称/单行本身，
-	// 不是宽度精细调整。
+	// 车道配置按左右两侧各自的(车行,停车,人行)数量参数化——默认(1,0,1,1,0,1)是两侧对称配置
+	// (车行道每个方向1条宽0.5，不设停车道，人行道每侧1条宽0.5紧贴车行道外侧)，绝大多数Road
+	// 用这一套；井字最中间的四条"中山X路"改用不对称/单行配置，用来验证车道居中、单行道开口
+	// 这些逻辑，见下方addRoad调用处和roadnet_basic.md"车道资产命名"一节。
+	// left=side0，right=side1，和perp0定义下"side0=右手边"这个既有约定一致。车道宽度统一用
+	// LANE_WIDTH，不按数量再细分。
 	auto configureLanesEx = [&](Road& road, int leftV, int leftP, int leftPd, int rightV, int rightP, int rightPd) {
 		for (int i = 0; i < leftV; i++) road.AddVehicleLane(0, LANE_WIDTH);
 		for (int i = 0; i < leftP; i++) road.AddParkingLane(0, LANE_WIDTH);
@@ -167,14 +163,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			Node splitNode("roadnet", groundNode.GetX() + ux * TUNNEL_HATCH_LENGTH, groundNode.GetY() + uy * TUNNEL_HATCH_LENGTH, tunnelNode.GetZ());
 
 			// 水平引道本身也可能已经压在mountain地形上(hasMountainNearby的探测半径比这段
-			// 引道长)，所以也要单独开一个hatch，两段hatch首尾相接，合起来正好覆盖老版本
-			// "整段(groundNode到splitNode)一次性开洞"的范围，不会因为拆分出引道而漏挖。
+			// 引道长)，所以也要单独开一个hatch，两段hatch首尾相接，合起来覆盖
+			// (groundNode到splitNode)整段范围，不会因为拆分出引道而漏挖。
 			// 挖洞宽度必须用这条路配好车道之后的GetTotalWidth()(和roadMargin同一个取值)，
-			// 不能用固定的TUNNEL_HATCH_WIDTH——老工程那会儿道路统一走单一meshPath、实际宽度
-			// 正好等于这个常量，这次configureLanesEx按车道数把默认宽度改成2.0(甚至不对称
-			// 配置能到2.5)之后，固定1.0的洞就只有路面中间一半宽，两侧车道/人行道底下还留着
-			// 没挖穿的实心山体——PIE验证发现玩家沿路走近隧道口时会在这块没对齐的实心地形边缘
-			// 附近穿模掉下去(地形和路面mesh的碰撞在这条边界上互相咬合不上)。
+			// 不能用固定宽度常量——车道配置不对称/加宽时固定宽度的洞只能挖穿路面中间一部分，
+			// 两侧车道/人行道底下会留着没挖穿的实心山体，导致走近隧道口时在地形和路面mesh
+			// 碰撞咬合不上的边界处穿模掉下去。
 			roads.emplace_back(name, groundNode, flatNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), groundNode, flatNode);
 			configureThis(roads.back());
@@ -198,9 +192,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	// 找到roads里名字为name、两端Node id正好是{n1,n2}(不分方向)的那一条，返回它自己的地址——
 	// 不另外new/构造一份独立的Road。lot的边界必须和roads里真正会被渲染/以后可能被
 	// Lot::SplitWithPath加开口的那个对象是同一个，不能是看起来配置一样但其实是另一个对象的
-	// 拷贝(否则改动传不到roads里，PIE验证发现过这个问题：小路接到大路上时给大路加的开口画不
-	// 出来)。调用这个lambda时roads必须已经不会再增长(所有addRoad调用都已经跑完)，取到的地址
-	// 才是稳定的——本文件里所有makeBoundaryRoad调用都在addRoad调用序列结束之后，满足这个前提。
+	// 拷贝(否则改动传不到roads里，小路接到大路上时给大路加的开口会画不出来)。调用这个lambda
+	// 时roads必须已经不会再增长(所有addRoad调用都已经跑完)，取到的地址才是稳定的——本文件
+	// 里所有makeBoundaryRoad调用都在addRoad调用序列结束之后，满足这个前提。
 	// 找不到精确匹配就返回nullptr——常见原因是这一整段正好跨越隧道过渡点(n1/n2一个在地面一个
 	// 在隧道里，或者addRoad按TUNNEL_HEIGHT相关逻辑把这段拆成了引道/下坡/平路三小段，见addRoad
 	// 实现)，roads里不会再有任何一条正好首尾等于(n1,n2)的entry。这种情况下调用方(见下方几处
@@ -427,8 +421,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		}
 	}
 
-	// 沿每条放射臂继续按isBuildable(plain/construction)细分lot——老工程这段代码被一个
-	// 无条件return挡住、从未真正跑过，这次去掉那个return，让它真正生效(详见roadnet_basic.md)。
+	// 沿每条放射臂继续按isBuildable(plain/construction)细分lot。
 	for (size_t i = 1; i < min(horizontalNode1w.size(), horizontalNode2w.size()); i++) {
 		if (!isBuildable(horizontalNode1w[i].first.GetX(), horizontalNode1w[i].first.GetY())) break;
 		if (!isBuildable(horizontalNode1w[i - 1].first.GetX(), horizontalNode1w[i - 1].first.GetY())) break;

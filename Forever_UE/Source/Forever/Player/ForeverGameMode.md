@@ -1,18 +1,17 @@
 # ForeverGameMode
 
 ## 职责
-默认GameMode,指定`AForeverCharacter`/`AForeverPlayerController`/`AForeverPlayerState`为默认Pawn/Controller/PlayerState类。同时兜底解决"空场景无法测试"的问题:没有出生点。
-
-对应旧蓝图`Blueprint/Player/MainGameMode`——用户确认该蓝图是纯数据(只设置Class Defaults,没有图表逻辑,因此没有dump文件)。这三个类默认值本身就是这份"纯数据"的等价物,阶段1核对blueprint内容时未发现需要补充的地方。
+默认GameMode。指定`AForeverPlayerController`/`AForeverPlayerState`为默认Controller/PlayerState类,`HUDClass`为`AForeverHUD`。开局`DefaultPawnClass`是引擎自带的`ADefaultPawn`,真正的玩家角色由Story系统在`game_start`时通过`ChangeControlChange`把控制权切换到一个随机市民(`ACitizenElement`,见`ForeverStoryFrameworkComponent.cpp`)。没有`APlayerStart`时提供出生点兜底。
 
 ## 关键设计
-- `FindPlayerStart_Implementation`:**先自己检查关卡里是不是真的有`APlayerStart`**（`TActorIterator<APlayerStart>`），有才交给引擎默认的`Super::FindPlayerStart_Implementation`处理；找不到才动态`SpawnActor<APlayerStart>`。**不能直接用`Super::FindPlayerStart_Implementation`的返回值是否为空来判断"有没有真正的出生点"**——这是阶段4-1实现时踩过的一个坑：引擎自己的`ChoosePlayerStart_Implementation`在`PlayerStarts`数组为空时会退化返回`AWorldSettings`（每个关卡都有、永远在原点）兜底，不会返回`nullptr`；一开始按"`if (Super::FindPlayerStart_Implementation(...))`为真就直接用"来写，结果哪怕关卡里一个`PlayerStart`都没有，这个分支也一直命中，地图正中心的计算代码从来没机会跑到，PIE验证时才发现出生点还在(0,0)。阶段4-1(Terrain落地,要求#5)之前这个兜底位置写死在原点上方(0,0,100),现在改成**地图正中心**:调用`EnsureFrameworkActorExists()`(幂等)确保地形已经生成,再从返回的`AForeverFrameworkActor::GetTerrainFramework()->GetMapCenterWorldLocation()`拿到含地形高度采样的世界坐标。如果因为某种原因拿不到`AForeverFrameworkActor`或地形还没生成,退回原来的`(0,0,100)`兜底(理论上不会走到,`EnsureFrameworkActorExists`保证地形已生成)。这样阶段0不需要打开编辑器往`World.umap`里放出生点,后续美术/关卡搭建时手动放置的`APlayerStart`会自动优先生效。
-- **占位地板已经删除(阶段4-1,要求#5)**:阶段0在`BeginPlay`里检测场景中是否已有`AStaticMeshActor`、没有就用`/Engine/BasicShapes/Plane`铺一块占位地板的逻辑,连同`placeholderFloorMesh`属性,已经随Terrain落地整个移除——现在有真正的地形网格(`UForeverTerrainFrameworkComponent`),不再需要这个占位。
-- `EnsureFrameworkActorExists()`(阶段2新增,阶段4-1改为返回`AForeverFrameworkActor*`而不是`void`):用`TActorIterator<AForeverFrameworkActor>`检测场景里是否已有实例,没有就在原点动态`SpawnActor`一个;找到/生成后都会调用该Actor的`EnsureMapGenerated()`(幂等,阶段4-1 Roadnet落地时从`EnsureTerrainGenerated`改名——现在编排的不只是地形)。`BeginPlay`和`FindPlayerStart_Implementation`都会调用这个函数——因为UE的玩家生成时机（`FindPlayerStart_Implementation`）相对`GameMode::BeginPlay`的实际先后顺序不是这份文档能确定死的事情，两处都调用、靠`EnsureFrameworkActorExists`/`EnsureMapGenerated`双重幂等，保证不管谁先跑，出生点计算时地形一定已经就绪。详见`Framework/ForeverFrameworkActor.md`。
+- `DefaultPawnClass = ADefaultPawn::StaticClass()`:不在开局生成一个独立于Populace之外的"玩家角色"——"玩家是谁"完全交给Story系统决定,`ADefaultPawn`只是过渡用的默认键鼠飞相机(legacy input,见`Config/DefaultInput.ini`)。
+- `FindPlayerStart_Implementation`:先用`TActorIterator<APlayerStart>`检查关卡里是否存在真正的`APlayerStart`,有才交给`Super::FindPlayerStart_Implementation`;没有才动态`SpawnActor<APlayerStart>`。**不能只看`Super::FindPlayerStart_Implementation`的返回值是否为空来判断"有没有真正的出生点"**——`PlayerStarts`数组为空时引擎会退化返回`AWorldSettings`(永远存在、永远在原点)兜底,不会返回`nullptr`。
+- 找不到`PlayerStart`时的兜底位置是地图正中心:调用`EnsureFrameworkActorExists()`(幂等)确保地形已生成,再用`AForeverFrameworkActor::GetTerrainFramework()->GetMapCenterWorldLocation()`(需`IsTerrainGenerated()`为true)取世界坐标;拿不到则退回`(0,0,100)`。
+- `EnsureFrameworkActorExists()`:用`TActorIterator<AForeverFrameworkActor>`检测场景中是否已有实例,没有就在原点动态`SpawnActor`一个;找到/生成后都调用该Actor的`EnsureMapGenerated()`(幂等)。`BeginPlay`和`FindPlayerStart_Implementation`都会调用此函数——两者相对先后顺序不确定,靠双重幂等保证出生点计算时地形一定已就绪。详见`Framework/ForeverFrameworkActor.md`。
 
 ## 依赖关系
-- 依赖`AForeverCharacter`/`AForeverPlayerController`/`AForeverPlayerState`/`AForeverFrameworkActor`/`UForeverTerrainFrameworkComponent`。
+- 依赖`AForeverPlayerController`/`AForeverPlayerState`/`AForeverHUD`/`AForeverFrameworkActor`/`UForeverTerrainFrameworkComponent`、引擎`ADefaultPawn`。
 - 被`Config/DefaultEngine.ini`的`GlobalDefaultGameMode=/Script/Forever.ForeverGameMode`引用。
 
 ## 待办/后续阶段
-- 阶段4/关卡搭建阶段:一旦`World.umap`里手动放置了真实的`AForeverFrameworkActor`,删除`EnsureFrameworkActorExists`的动态兜底生成逻辑。
+- 一旦`World.umap`里手动放置了真实的`AForeverFrameworkActor`,删除`EnsureFrameworkActorExists`的动态兜底生成逻辑。

@@ -87,9 +87,8 @@ void TrainStation::Layout(int direction, float sizeX, float sizeY) {
 	// LayoutDualTrackStationLoop)按这个固定顺序把它们连成"左边界-leftIn-rightOut-右边界-
 	// rightIn-leftOut-左边界"的环，同一条轨道的两个接口必须朝向相同(沿frontage轴同一方向)，
 	// 这样Route::Build()算出来的贝塞尔控制点才会贴着两点连线、看起来是一条直的"轨道"而不是
-	// 弯的。z比原来(0，贴地)抬高一点点——PIE实测反馈接口太低、调试连线和地面/楼体糊在一起看
-	// 不清楚，只需要比地面高就行，不代表真实离地高度；这个z同时是车辆真正停靠在这个接口时的
-	// 实际高度，之前给的0.1(=1米)太大，停车时明显看出来飘在半空中，改成一个小量(1cm)。
+	// 弯的。z只抬高一个小量(1cm，不代表真实离地高度)，让调试连线不和地面/楼体网格糊在一起；
+	// 这个z同时是车辆真正停靠在这个接口时的实际高度，不能设太大，否则停车时会明显飘在半空中。
 	constexpr float kTrackDepth1 = 0.65f;
 	constexpr float kTrackDepth2 = 0.85f;
 	constexpr float kInterfaceZ = 0.001f;
@@ -137,9 +136,9 @@ void AirStation::SetProperty() {
 void AirStation::Layout(int direction, float sizeX, float sizeY) {
 	// 两条跑道、四个接口，和TrainStation::Layout同一套[leftIn, rightOut, rightIn, leftOut]
 	// 顺序/同一套depthRatio分组，见那边的注释——跑道贴地只抬高一个小量(和TrainStation同一个
-	// 值)方便看清调试连线，不代表真实海拔，也是飞机真正停在这个接口时的实际高度(之前给0.1
-	// 即1米，PIE实测飞机停下来飘在半空中很明显，改成1cm)；AirRoute::LayoutRoute生成的
-	// 两段边缘段另外会抬到巡航高度，不受这个常量影响，见route_basic.cpp。
+	// 值，1cm)方便看清调试连线，不代表真实海拔，也是飞机真正停在这个接口时的实际高度，不能
+	// 设太大，否则飞机停下来会明显飘在半空中；AirRoute::LayoutRoute生成的两段边缘段另外会
+	// 抬到巡航高度，不受这个常量影响，见route_basic.cpp。
 	constexpr float kRunwayDepth1 = 0.65f;
 	constexpr float kRunwayDepth2 = 0.85f;
 	constexpr float kInterfaceZ = 0.001f;

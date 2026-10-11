@@ -13,16 +13,15 @@ class UForeverInventoryWidget;
 class UMapWidget;
 class UInputComponent;
 
-// 阶段5 MeetOption UI落地：MAINCONTROLLER_TODO.md点名的"MouseScrollUp/Down + F对话选项"
-// 三个热键归属这个Controller——照抄AForeverMenuController::BeginPlay的CreateWidget+
-// AddToViewport模式，常驻创建一份MeetOptionWidget（不像StartMenu那样只在特定时机才创建），
-// 靠列表是否为空来决定视觉上"有没有弹出"，具体Add/Remove由ACitizenElement在玩家靠近/离开
-// 市民时驱动。
+// MAINCONTROLLER_TODO.md点名的"MouseScrollUp/Down + F对话选项"三个热键归属这个Controller
+// ——照抄AForeverMenuController::BeginPlay的CreateWidget+AddToViewport模式，常驻创建一份
+// MeetOptionWidget（不像StartMenu那样只在特定时机才创建），靠列表是否为空来决定视觉上
+// "有没有弹出"，具体Add/Remove由ACitizenElement在玩家靠近/离开市民时驱动。
 //
-// 这次一起常驻创建SectionSpeaking/SectionOption两个剧情对话展示控件（同样的CreateWidget+
-// AddToViewport模式），初始折叠隐藏，由UForeverStoryFrameworkComponent::ShowCurrentItem在
-// 匹配出Dialog时按需切换显示——三个Widget的创建与生命周期完全独立，任何一个的
-// xxxWidgetClass没配置只跳过那一个的创建，不影响另外两个。
+// 同一套模式再常驻创建SectionSpeaking/SectionOption两个剧情对话展示控件，初始折叠隐藏，
+// 由UForeverStoryFrameworkComponent::ShowCurrentItem在匹配出Dialog时按需切换显示——三个
+// Widget的创建与生命周期完全独立，任何一个的xxxWidgetClass没配置只跳过那一个的创建，不
+// 影响另外两个。
 UCLASS()
 class FOREVER_API AForeverPlayerController : public APlayerController
 {
@@ -54,7 +53,7 @@ protected:
 	UPROPERTY()
 	TObjectPtr<USectionOptionWidget> sectionOptionWidget;
 
-	// 阶段5 Puzzle落地：跟前面三个Widget同一套模式，由StartPuzzleChange触发（见
+	// 跟前面三个Widget同一套模式，由StartPuzzleChange触发（见
 	// UForeverStoryFrameworkComponent::ApplyStartPuzzle）——不需要像sectionSpeakingWidget
 	// 那样在BeginPlay里手动Collapse，UPuzzleWidget自己在没有StartPuzzle之前默认不显示。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -63,8 +62,8 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UPuzzleWidget> puzzleWidget;
 
-	// 阶段6 手机(Phone)系统落地：跟前面几个Widget同一套模式，由P键(TogglePhone)控制开关，
-	// 不需要手动Collapse——UPhoneWidget自己在NativeConstruct里默认不显示。
+	// 跟前面几个Widget同一套模式，由P键(TogglePhone)控制开关，不需要手动Collapse——
+	// UPhoneWidget自己在NativeConstruct里默认不显示。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UPhoneWidget> phoneWidgetClass;
 
@@ -74,9 +73,8 @@ protected:
 	// P键(TogglePhone)的处理函数，转发给phoneWidget->TogglePhone()。
 	void TogglePhone();
 
-	// 阶段5-6背包(Inventory)UI落地：跟前面几个Widget同一套模式(常驻创建，B键(ToggleInventory)
-	// 控制开关)，见Source/Forever/UI/InventoryWidget.h、MAINCONTROLLER_TODO.md"B开背包"
-	// 这一行热键。
+	// 跟前面几个Widget同一套模式(常驻创建，B键(ToggleInventory)控制开关)，见
+	// Source/Forever/UI/InventoryWidget.h、MAINCONTROLLER_TODO.md"B开背包"这一行热键。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UForeverInventoryWidget> inventoryWidgetClass;
 

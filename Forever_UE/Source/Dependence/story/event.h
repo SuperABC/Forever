@@ -10,9 +10,9 @@
 #undef GetMessage
 
 
-// 事件基类。老工程里31个具体事件子类的字段级Match逻辑这次没有照抄——除了GameStartEvent
-// （已实现，见下），其余30个子类只搬运了字段定义（构造函数/getter/setter），继承这里的默认
-// Match实现（按类型比较），等某个具体事件类型被点名实现字段级匹配时再单独override。
+// 事件基类。31个具体事件子类中，除了GameStartEvent（已实现，见下），其余30个子类只搬运了
+// 字段定义（构造函数/getter/setter），继承这里的默认Match实现（按类型比较），等某个具体
+// 事件类型被点名实现字段级匹配时再单独override。
 class Event {
 public:
 	/*
@@ -31,7 +31,7 @@ public:
 	virtual const std::string& GetType() const = 0;
 
 	/*
-	* 判断是否与给定事件匹配。默认实现只比较类型，不看字段——多数子类这次还没有字段级匹配
+	* 判断是否与给定事件匹配。默认实现只比较类型，不看字段——多数子类还没有字段级匹配
 	* 逻辑，继承这份默认实现即可；GameStartEvent本来语义就是纯类型匹配，也直接用默认实现。
 	* @e: 待匹配事件
 	* @context: 变量路由上下文

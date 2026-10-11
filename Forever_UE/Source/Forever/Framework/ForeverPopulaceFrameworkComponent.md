@@ -2,10 +2,9 @@
 
 ## 职责
 
-对应旧Framework Actor `Populace`（C++ Base:`PopulaceBase`）。阶段2-3是空骨架，这次进入
-populace域时第一次真正填内容：**按玩家距离流式生成/销毁`ACitizenElement`**——和用户明确
-确认过的架构决定（老工程`APopulaceBase`同款做法），不是像`ABuildingElement`那样"开局全
-建好、常驻到关卡结束"——人口规模通常比建筑数量大得多，流式管理是更保险的默认选择。
+对应旧Framework Actor `Populace`（C++ Base:`PopulaceBase`）。**按玩家距离流式生成/销毁
+`ACitizenElement`**（老工程`APopulaceBase`同款做法），不是像`ABuildingElement`那样"开局
+全建好、常驻到关卡结束"——人口规模通常比建筑数量大得多，流式管理是更保险的默认选择。
 
 `AForeverFrameworkActor::EnsurePopulaceGenerated()`在`map->Checkin(*populace)`（Core侧
 人口分配完成）之后调用一次`GenerateCitizens(map, populace)`——这一步**不`SpawnActor`
@@ -39,9 +38,9 @@ building的LOD双阈值同一个防抖动理由：避免玩家在临界距离附
 
 ### `FindOrSpawnCitizenByName`/`SpawnCitizen`：按姓名强制生成，不看玩家距离
 
-阶段4 Story域接入`ChangeControlChange`（剧情/T键之外，第三种"切换玩家操控权"的触发源，见
-`ForeverStoryFrameworkComponent.md`"ApplyControlChange"一节）之后新增：剧情指定的目标市民
-不一定在玩家附近，不能像`TickComponent`那样等距离小于`citizenSpawnDistance`才生成——
+剧情接入的`ChangeControlChange`（见`ForeverStoryFrameworkComponent.md`
+"ApplyControlChange"一节）是"切换玩家操控权"的第三种触发源（剧情/T键之外），指定的目标
+市民不一定在玩家附近，不能像`TickComponent`那样等距离小于`citizenSpawnDistance`才生成——
 `FindOrSpawnCitizenByName(name)`按`Citizen::GetName()`（UTF-8转`FString`比较）在
 `allCitizens`里线性查找同名citizen，找到后：已经在`activeInstances`里就直接返回那个
 `ACitizenElement*`（弱指针失效则先从map里移除，走强制生成分支）；否则调用`SpawnCitizen`
@@ -66,7 +65,7 @@ building的LOD双阈值同一个防抖动理由：避免玩家在临界距离附
 会自动清理所有Actor，`activeInstances`这个`TMap`本身也会在组件销毁时一起被回收，不需要
 手动清空。
 
-### 市民走路（进入society域新增）：Dijkstra寻路 + 生成/未生成分流
+### 市民走路：Dijkstra寻路 + 生成/未生成分流
 
 `RequestWalk(Citizen* citizen, Room* destination)`：`Job`按调度产出`NPCNavigateChange`
 时，`AForeverFrameworkActor::Tick`的回调解析出目标`Room*`后转发到这里。用
@@ -79,10 +78,10 @@ Dijkstra，见`Source/Core/map/map.md`）——**这一步派发到线程池异�
 
 #### 异步寻路：为什么、怎么做、怎么保证安全
 
-用户反馈"每天9点/12点所有有工作的市民同一时刻集中触发调度，即使`Populace::Tick`每帧
-只处理一个job timer，依然会从9点持续卡到9点半"——根因是单次`FindPedestrianPath`在这张
-车道级导航图（见`map.md`"车道级导航锚点"一节，节点数比按路口算的粗粒度图大得多）上的
-Dijkstra调用本身就不便宜，堆在游戏线程上不管每帧处理几个citizen都会拖慢整帧。
+每天9点/12点所有有工作的市民同一时刻集中触发调度，单次`FindPedestrianPath`在这张车道级
+导航图（见`map.md`"车道级导航锚点"一节，节点数比按路口算的粗粒度图大得多）上的Dijkstra
+调用本身就不便宜，堆在游戏线程上不管每帧处理几个citizen都会拖慢整帧（不拆到后台的话会从
+调度触发点持续卡顿一段时间）。
 
 `RequestWalk`因此拆成两段：
 1. **没有可用导航节点**（起点/终点没有对应`Node`）：没有Dijkstra可算，直接同步调
@@ -124,9 +123,8 @@ FPlatformProcess::Sleep(0.001f)`轮询）直到计数器归零。**故意不用"
 
 - **这个citizen当前正被玩家占有（`GetController()!=nullptr`，这个项目没有
   `AIController`，非空Controller只可能是玩家占有）**：整次调度直接不生效——不走路、
-  也不瞬移，应用户要求"正在被操控的人不应该自己上下班"。等玩家取消占有之后，下一次
-  `Job`调度会正常处理（这次不补一次"错过的"调度，被占有期间产生的上下班节点就当没
-  发生过）。
+  也不瞬移，正在被操控的人不应该自己上下班。等玩家取消占有之后，下一次`Job`调度会正常
+  处理（不补一次"错过的"调度，被占有期间产生的上下班节点就当没发生过）。
 - 路径非空 且 这个citizen当前**有已生成的`ACitizenElement`**（查`activeInstances`）：调
   `WalkTo(waypoints, destination)`播放真实走路动画，全部路径点走完后
   `ACitizenElement`会回调`NotifyArrived(citizen, destination)`更新
@@ -137,10 +135,10 @@ FPlatformProcess::Sleep(0.001f)`轮询）直到计数器归零。**故意不用"
   不管这个可见Actor，那样`Citizen`逻辑上已经"到家"了，但眼前这个人会一直冻结在原地
   不动，因为压根没人碰过它的Actor。`TeleportToRoom`直接把Actor也瞬移到目标房间（复用
   `ACitizenElement::Init()`同一套落地位置计算），同时同步`SetCurrentRoom`+`SetPosition`。
-  （这个分支是防御性设计，处理"寻路真的失败"这个理论上会发生的情况——用户曾报告过
-  citizen到点该走却一直冻结不动，排查后确认那次的真正原因其实是
-  `CharacterMovementComponent`缺`bRunPhysicsWithNoController`开关、寻路本身一直是
-  成功的，见`CitizenElement.md`"已修复的bug"一节，和这里的寻路失败分支无关。）
+  （这个分支是防御性设计，处理"寻路真的失败"这个理论上会发生的情况；"citizen到点该走却
+  一直冻结不动"这个症状更常见的原因其实是`CharacterMovementComponent`缺
+  `bRunPhysicsWithNoController`开关，见`CitizenElement.md`"`WalkTo`"一节，和这里的
+  寻路失败分支是两个独立的原因。）
 - **否则**（这个citizen当前没有生成的`ACitizenElement`，不在流式加载范围内）：直接
   `citizen->SetCurrentRoom(destination)`+`citizen->ClearPosition()`（不是
   `SetPosition`——这个citizen当前没有对应Actor，不需要算一个精确3D坐标，
@@ -151,16 +149,14 @@ FPlatformProcess::Sleep(0.001f)`轮询）直到计数器归零。**故意不用"
 FindPedestrianPath`算好的现成路径点，用`CharacterMovement`逐点插值前进，见
 `Source/Forever/Element/CitizenElement.md`。
 
-**已修复的bug：`ComputeLogicalPosition`算currentRoom的世界坐标时不能用
-`citizen->GetBuilding()`**——那是"家"所在的building（`Map::Checkin()`一次性设好，
-`RequestWalk`不会改它），`RequestWalk`把`currentRoom`换成工作单位的room之后，两者
-不再保证同一栋楼；`GetBuilding()`+新`room`这个组合会用错误的building变换（错误的
-`GetPosX/Y`/`GetRotation`/`GetBodySizeX/Y`）算世界坐标，结果是citizen的逻辑位置落在
-"家building的坐标系里解释商店room的局部坐标"这种没有意义的地方——PIE验证的直接症状是
-"上班时间去商店里找不到任何店员"（因为店员实际计算出的位置压根不在那家商店附近）。
-修复：改成从`room->GetParentBuilding()`反查building（`ACitizenElement::Init()`里
-估算首次生成位置的同一段逻辑也有这个bug，一起修了），不再依赖`Citizen`自己存的那份
-"家"building字段。
+**`ComputeLogicalPosition`算currentRoom的世界坐标不能用`citizen->GetBuilding()`**——
+那是"家"所在的building（`Map::Checkin()`一次性设好，`RequestWalk`不会改它），
+`RequestWalk`把`currentRoom`换成工作单位的room之后，两者不再保证同一栋楼；
+`GetBuilding()`+新`room`这个组合会用错误的building变换（错误的`GetPosX/Y`/
+`GetRotation`/`GetBodySizeX/Y`）算世界坐标，等价于"用家building的坐标系解释商店room的
+局部坐标"，没有意义（典型症状：上班时间去商店里找不到任何店员）。必须从`room->
+GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生成位置的同一段
+逻辑是同一个规则），不依赖`Citizen`自己存的那份"家"building字段。
 
 ## 依赖关系
 
@@ -183,11 +179,11 @@ FindPedestrianPath`算好的现成路径点，用`CharacterMovement`逐点插值
 
 - `streamingBatchStride`/`citizenSpawnDistance`/`citizenDespawnDistance`是按经验给的
   初始值（后两个直接照抄老工程字面值2.0/4.0），实际人口规模/地图尺寸确定后可能需要
-  按PIE验证结果调整，和这次会话早前building LOD阈值的调优是同一类后续工作。
-- 目前每次判定只处理"生成/销毁"，不处理"citizen在两次判定之间发生了变化"——`RequestWalk`
-  接入之后这一点已经不完全成立了：一个正在`WalkTo`途中的citizen如果被判定超出
-  `citizenDespawnDistance`会被直接`Destroy()`，不会等它走完剩余路径点，也不会中断
-  `WalkTo`本身的状态（`pendingWaypoints`等字段随Actor一起销毁）——这次没有特殊处理这个
+  按PIE验证结果调整，和building LOD阈值的调优是同一类后续工作。
+- 目前每次判定只处理"生成/销毁"，不处理"citizen在两次判定之间发生了变化"：一个正在
+  `WalkTo`途中的citizen如果被判定超出`citizenDespawnDistance`会被直接`Destroy()`，
+  不会等它走完剩余路径点，也不会中断`WalkTo`本身的状态（`pendingWaypoints`等字段随
+  Actor一起销毁）——没有特殊处理这个
   交叉场景，走路中途被销毁的citizen会瞬间"消失"，下次生成时用`Citizen`当时记录的位置
   （销毁前`GetActorLocation()`读回写的那份），不是`WalkTo`原本要走到的终点，属于已知的
   简化，真要处理可以在销毁前先检查`pendingWaypoints`是否非空、直接调用

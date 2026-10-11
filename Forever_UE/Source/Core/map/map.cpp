@@ -223,7 +223,7 @@ void Map::InitRoadnet() {
 	// (比如JingRoadnet的隧道引道/下坡/隧道内平路三段式，见roadnet_basic.md"隧道"一节)，中间
 	// 的分段点(flatNode/splitNode)只是几何过渡、并不是真正的路口——不能把它们登记成
 	// Intersection去走RoadJunction::Build那一套(会按setback裁剪+摆一个强制水平的路口平面，
-	// PIE验证发现斜坡中间生出一个路口平面，渲染完全不对：路口本来就不该出现在斜坡上)。但每条
+	// 分段点可能卡在斜坡曲线中间，会生出一个不该出现在斜坡上的路口平面)。但每条
 	// 车道/人行道仍然要按真实宽度摆开自己的锚点——不能像"没有真正分叉"的extern端点那样退化成
 	// 所有车道共用一个点：这类分段点两端车道数/宽度配置完全一致(前后两段Road用同一套
 	// configureLanesEx参数)，只是几何上直接续接，没有理由让车道在这里挤到一起。
@@ -304,11 +304,9 @@ void Map::InitRoadnet() {
 
 	// 每条Road的贯通线：车行边单向插入(按该side实际通行方向)，行人边双向插入。每条物理车道
 	// (不只是最内侧/最靠左最靠右)都各自有一条贯通线、各自的锚点(车行；行人仍然每侧共用一个
-	// 锚点，见resolveAnchor注释)——这次(第九轮迁移)从"只保存最内侧/单行道两端车道"改成每条
-	// 车道都有自己的贯通线和锚点，起因是PIE导航图可视化验证时发现多车道路段只画出一条线、
-	// 和实际车道数对不上；如果只加贯通线条目但仍然共用同一个锚点，可视化上多条线会重叠成
-	// 一条看不出区别，所以锚点本身也要逐车道化(RoadJunction::Build，见roadnet.md"车道级
-	// 导航锚点"一节)。
+	// 锚点，见resolveAnchor注释)——锚点本身也必须逐车道化(RoadJunction::Build，见
+	// roadnet.md"车道级导航锚点"一节)，否则只加贯通线条目但仍共用同一个锚点时，多条线会
+	// 重叠成一条看不出区别。
 	for (Road* road : roadnet->GetRoads()) {
 		for (int cat = 0; cat < 2; cat++) { // 0=vehicle, 1=pedestrian
 			bool isVehicle = (cat == 0);
@@ -463,9 +461,9 @@ void Map::InitZones() {
 			// Building(&buildingFactory, spec.type)，但buildingFactory的mod注册在
 			// InitBuildings()里才做(InitBuildings()必须在InitZones()之后跑，要用到这里
 			// 裁剪完的剩余空闲面积)，这时候buildingFactory还是空的，CreateBuilding会
-			// 返回nullptr导致Building构造函数抛异常崩溃(PIE验证发现)。这次改成
-			// InitBuildings()里遍历zones、直接读zone->GetMod()->internalBuildings，
-			// 不需要Zone另外存一份"待实例化"的副本。
+			// 返回nullptr导致Building构造函数抛异常崩溃。改由InitBuildings()里遍历
+			// zones、直接读zone->GetMod()->internalBuildings，不需要Zone另外存一份
+			// "待实例化"的副本。
 
 			if (!AddZone(zone)) {
 				delete zone; // ~Zone()里factory->DestroyZone(mod)会跟着跑，重名时不留悬空引用
@@ -728,7 +726,7 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		// "node"/"line"锚点或Room自己的导航节点，这几种节点在Building::BuildPedestrianNavigation()
 		// 里创建/收集时已经无条件push进了navOut.nodes(newNodes)，上面的result.nodes循环
 		// 已经登记过一次；这里如果再push一次，同一个Node*就会在navAnchorNodes里出现两次，
-		// ~Map()清理时对它delete两次——退出游戏崩溃的根因(PIE验证发现，double free)。
+		// ~Map()清理时对它delete两次(double free)，退出游戏必现崩溃。
 		if (!road) continue; // building没有可用的边界Road(mod没能兜底选出方向)，这个"outside"
 			// 端点只留在navOut.nodes里(已经在上面登记过)，不连道路网，见building.md"行人导航"一节。
 
@@ -745,7 +743,7 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 	}
 
 	// 车辆outside端点：方向(入口/出口)按这个node在result.vehicleConnections里的入度/出度
-	// 判定(用户明确要求的规则)——入度为0(只有出边)是出口，车辆从building开到路上，最终连接
+	// 判定——入度为0(只有出边)是出口，车辆从building开到路上，最终连接
 	// 方向"outsideNode->access node"；出度为0(只有入边)是入口，车辆从路开进building，方向
 	// "access node->outsideNode"；入度出度都不为0(这个node在building内部图里本来就双向都
 	// 在用)或都为0(孤立点)则拒绝接路网，不产生pending项(仍然通过上面result.vehicleNodes
@@ -828,7 +826,7 @@ void Map::FlushPendingBuildingRoadAccess() {
 				continue;
 			}
 
-			// 车行单向：isExit(入度为0，用户确认的判定规则)方向"outsideNode->accessNode"
+			// 车行单向：isExit(入度为0)方向"outsideNode->accessNode"
 			// (车辆从building开到路上)；否则(出度为0，入口)方向"accessNode->outsideNode"
 			// (车辆从路开进building)。
 			Connection* conn = entry.isExit
@@ -935,12 +933,9 @@ void Map::Checkin(const Populace& populace) {
 	constexpr int kProbabilityScale = 100; // 照抄老工程PROBABILITY_SCALE
 	constexpr int kZoneOwnershipChance = 2; // 照抄老工程ZONE_OWNERSHIP_CHANCE
 	constexpr int kBuildingOwnershipChance = 5; // 照抄老工程BUILDING_OWNERSHIP_CHANCE
-	// 老工程"公有(stated)"这条分支只在某个zone/building已经被别的机制预先标记时才会
-	// 触发(GetStated()是纯查询，老工程Map::Checkin本身从没有随机骰出过stated——搜了
-	// 整个老工程也没有任何mod会在初始化时SetStated(true))，等于老工程自带的内容里这条
-	// 分支从来不会被撞上。这次要求"保留公有资产的逻辑"，所以自己加两个小概率，让公有
-	// 真的能在随机分配里出现——具体数值是这次新定的，不是老工程的值，量级上比照
-	// ownership chance给，可以按需调。
+	// "公有(stated)"需要能在随机分配里真的出现(不只是GetStated()这个纯查询接口存在，
+	// 没有任何概率会真正触发它)，所以这里单独给公有定义两个小概率，量级上比照
+	// ownership chance，可以按需调。
 	constexpr int kZoneStatedChance = 2;
 	constexpr int kBuildingStatedChance = 3;
 
@@ -1273,13 +1268,12 @@ Node* Map::AddRoadAccessNode(Road* road, float t, bool isVehicle, bool useForwar
 	int side, laneIndex;
 	if (!ResolveAccessLane(road, isVehicle, useForwardSide, side, laneIndex)) return nullptr;
 
-	// 车道横断面世界坐标必须用ComputeLaneAnchorPosition算——之前这里自己内联了一份只适用于
-	// 车行道的公式(offsetDist=LaneCenterOffset(lanes,laneIndex)，直接从道路中心线量)，对
-	// 行人道(isVehicle=false)漏加了同侧车行道+停车道的总宽度，导致算出来的新访问点世界坐标
-	// 落在车行道范围内而不是真正的人行道位置——building的outside端点接路网时第一次真正
-	// 触发这条行人分支(之前从没有真实调用方)，PIE验证发现新断出的行人访问点被画在了车道上。
-	// ComputeLaneAnchorPosition对isVehicle=false会先加上SumWidths(车行道)+SumWidths(停车道)
-	// 再叠加人行道自己的居中偏移，和RoadJunction::Build里pedestrianSide锚点用的是同一套算法。
+	// 车道横断面世界坐标必须用ComputeLaneAnchorPosition算，不能只按车行道公式
+	// (offsetDist=LaneCenterOffset(lanes,laneIndex)，直接从道路中心线量)——行人道
+	// (isVehicle=false)物理上在同侧车行道+停车道外侧，必须先加上同侧车行道+停车道的
+	// 总宽度才是真正的人行道基准。ComputeLaneAnchorPosition对isVehicle=false会先加上
+	// SumWidths(车行道)+SumWidths(停车道)再叠加人行道自己的居中偏移，和RoadJunction::Build
+	// 里pedestrianSide锚点用的是同一套算法。
 	auto [nx, ny] = ComputeLaneAnchorPosition(road, t, isVehicle, side, laneIndex);
 	Node basePoint = road->GetPoint(t);
 
@@ -1380,13 +1374,11 @@ pair<float, float> Map::ComputeLaneAnchorPosition(Road* road, float t, bool isVe
 	road->GetTangent(t, tdx, tdy, tdz);
 	float tlen = sqrtf(tdx * tdx + tdy * tdy);
 	if (tlen < 1e-6f) tlen = 1.f;
-	// 右手边修正(2026-10-04)：这个项目世界坐标+Y=南(roadnet_basic.cpp intersections的实际
-	// 取值证实，不是常见地图"北=+Y"的假设)，真正的右手边公式是(-tdy,tdx)，不是标准数学
-	// "逆时针90度的镜像(顺时针)"公式(tdy,-tdx)——那个公式只在+Y=北时才是右手边。手推验证：
-	// 朝南(0,1)时真正的右手边是西(-1,0)，而(tdy,-tdx)=(1,0)=东，是左手边。公交车路线功能
-	// 第一次真正让人能直接看着一辆车"是否靠右行驶"，PIE实测反馈"全程靠左行驶"才揪出这个
-	// 全局性的符号错误——这个公式在map.cpp/roadnet.cpp里一共复制了9处，全部同步修正，
-	// 否则路口/zone出入口/小路旁路和这里的车道锚点会互相对不上。
+	// 这个项目世界坐标+Y=南(roadnet_basic.cpp intersections的实际取值证实，不是常见地图
+	// "北=+Y"的假设)，真正的右手边公式是(-tdy,tdx)，不是标准数学"逆时针90度的镜像(顺时针)"
+	// 公式(tdy,-tdx)——那个公式只在+Y=北时才是右手边。手推验证：朝南(0,1)时真正的右手边是
+	// 西(-1,0)，而(tdy,-tdx)=(1,0)=东，是左手边。这个公式在map.cpp/roadnet.cpp里一共出现
+	// 9处，必须全部保持一致，否则路口/zone出入口/小路旁路和这里的车道锚点会互相对不上。
 	float perp0X = -tdy / tlen, perp0Y = tdx / tlen;
 
 	float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
@@ -1435,7 +1427,7 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 	// dirX/dirY是"离开当前这一端、伸向小路另一端"的方向，在Start端和End端正好相反，如果拿它
 	// 算perp0，side0/side1在两端会对应到物理上相反的两侧(西端的"+"是南侧，东端的"+"却是北侧)，
 	// 连线时(ConnectPathRoad拿两端同一个下标拼成一条line)就会拧成交叉——西端南侧车道接到了
-	// 东端北侧车道，PIE验证发现的bug。side0/side1的物理含义必须在小路全长上保持一致，
+	// 东端北侧车道。side0/side1的物理含义必须在小路全长上保持一致，
 	// 和Road自己车道数据(GetVehicleLanes(0)/(1)，SplitWithPath建小路时就是用Start->End
 	// 方向的perp0铺的)对齐，因此这里固定用path->GetStart()->GetEnd()方向，不随isStartEnd翻转。
 	Node pathStart = path->GetStart();

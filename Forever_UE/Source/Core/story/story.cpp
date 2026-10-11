@@ -22,8 +22,8 @@ Story::~Story() {
 }
 
 void Story::Init() {
-	// ScriptModName不再由Core硬编码，从config.json的"main_story"字段读——不替Story做
-	// "用哪个ScriptMod"这个决策，和Job/Organization这次的Script配置是同一个原则。
+	// ScriptModName从config.json的"main_story"字段读，不由Core硬编码——"用哪个ScriptMod"
+	// 这个决策交给配置，和Job/Organization的Script配置是同一个原则。
 	string scriptModName = Config::GetMainStoryScriptModName();
 	if (scriptModName.empty() || !scriptFactory.CheckRegistered(scriptModName)) {
 		debugf("Warning: main_story script mod not configured or not registered, Story::Init skipped.\n");
@@ -60,7 +60,7 @@ void Story::ApplyChange(const Change* change, const ScriptContext& context) {
 		return;
 	}
 
-	// 阶段4占位：其余41种变化类型的执行分支等该类型被点名实现时再补，见Story.md。
+	// 其余41种变化类型的执行分支等该类型被点名实现时再补，见Story.md。
 	debugf("Warning: change type %s not implemented yet.\n", change->GetType().data());
 }
 
