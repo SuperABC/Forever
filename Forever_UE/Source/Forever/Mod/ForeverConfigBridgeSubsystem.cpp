@@ -44,10 +44,11 @@ TSet<FString> UForeverConfigBridgeSubsystem::ComputeRequiredModIds() const {
 		}
 	}
 
-	// 每个"至少一个id已启用"(IsDllActive)的DLL自己声明的依赖——DLL本身只能整体加载/不
-	// 加载，粒度不到id级别，见config.h GetActiveDllPaths()注释。
-	for (const std::string& dllPath : Config::GetActiveDllPaths()) {
-		for (const std::string& id : Config::GetDllDependences(dllPath)) {
+	// 每个真正被启用的mod id自己声明的依赖——按modId粒度，不会因为同一个DLL里另一个不
+	// 相关的mod被启用而被迫多算一堆依赖，见config.h GetModDependences()注释。
+	for (const Config::ModEntry& entry : Config::GetModEnables()) {
+		if (!entry.enabled) continue;
+		for (const std::string& id : Config::GetModDependences(entry.modId)) {
 			required.Add(UTF8_TO_TCHAR(id.c_str()));
 		}
 	}
@@ -144,11 +145,12 @@ bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMess
 		}
 	}
 
-	for (const std::string& dllPath : Config::GetActiveDllPaths()) {
-		for (const std::string& id : Config::GetDllDependences(dllPath)) {
+	for (const Config::ModEntry& entry : Config::GetModEnables()) {
+		if (!entry.enabled) continue;
+		for (const std::string& id : Config::GetModDependences(entry.modId)) {
 			if (!Config::IsModIdEnabled(id)) {
-				failures.Add(FString::Printf(TEXT("Mod %s 依赖的mod \"%s\" 未启用"),
-					UTF8_TO_TCHAR(dllPath.c_str()), UTF8_TO_TCHAR(id.c_str())));
+				failures.Add(FString::Printf(TEXT("Mod \"%s\" 依赖的mod \"%s\" 未启用"),
+					UTF8_TO_TCHAR(entry.modId.c_str()), UTF8_TO_TCHAR(id.c_str())));
 			}
 		}
 	}

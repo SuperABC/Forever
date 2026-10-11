@@ -26,9 +26,12 @@
 int EmptyZone::count = 0;
 int EmptyBuilding::count = 0;
 
-// 这个DLL不依赖任何其它mod。
-extern "C" __declspec(dllexport) void* GetModDllDependencies() {
-	static std::vector<std::string> dependencies = {};
+// 这个DLL里所有concept都共用同一个id"empty"(见下面20个GetMod<Concept>()，每个数组都只
+// 有"empty"这一项)，所以只需要给这一个id声明一次依赖——它不依赖任何其它mod。
+extern "C" __declspec(dllexport) void* GetModDependencies() {
+	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
+		{ "empty", {} },
+	};
 	return (void*)&dependencies;
 }
 

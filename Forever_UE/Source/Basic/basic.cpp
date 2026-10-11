@@ -68,6 +68,48 @@
 
 using namespace std;
 
+// 每个mod id自己声明依赖的mod id列表，见Source/Core/common/loader.h
+// kModDependenciesSymbol注释。依赖id按字符串匹配、不区分concept(和IsModIdEnabled/
+// Registry::CheckModRegistered同一套既有规则)——如果某个字符串同时是多个concept下的id
+// (比如"product_wheat"同时是WheatProduct和WheatAsset各自的GetId())，作为被依赖目标时，
+// 任意一个用这个字符串的mod被启用就算满足；这里没有哪个depender本身用到这类重复字符串，
+// 不需要特殊处理。
+extern "C" __declspec(dllexport) void* GetModDependencies() {
+	static vector<pair<string, vector<string>>> dependencies = {
+		{ ResidenceZone::GetId(), { ResidenceBuilding::GetId() } },
+
+		{ ResidenceBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
+		{ ShopBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId() } },
+		{ FactoryBuilding::GetId(), { FactoryComponent::GetId(), FactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId() } },
+		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId() } },
+
+		{ ResidenceComponent::GetId(), { ResidenceRoom::GetId() } },
+		{ ShopComponent::GetId(), { ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId() } },
+		{ FactoryComponent::GetId(), { FactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ TrainStationComponent::GetId(), { TrainStationRoom::GetId() } },
+		{ AirportComponent::GetId(), { AirportRoom::GetId() } },
+
+		{ ShopSalerJob::GetId(), { ShopRoom::GetId() } },
+		{ ShopOrganization::GetId(), { ShopSalerJob::GetId() } },
+
+		{ FarmManufacture::GetId(), { WheatStorage::GetId(), WheatProduct::GetId() } },
+		{ RanchManufacture::GetId(), { BeefStorage::GetId(), BeefProduct::GetId() } },
+		{ FoodFactoryManufacture::GetId(), { BurgerStorage::GetId(), BurgerProduct::GetId() } },
+		{ WheatStorage::GetId(), { WheatProduct::GetId() } },
+		{ BeefStorage::GetId(), { BeefProduct::GetId() } },
+		{ BurgerStorage::GetId(), { BurgerProduct::GetId() } },
+
+		{ BusRoute::GetId(), { BusStation::GetId(), BusVehicle::GetId() } },
+		{ TrainRoute::GetId(), { TrainStation::GetId(), TrainVehicle::GetId() } },
+		{ AirRoute::GetId(), { AirStation::GetId(), PlaneVehicle::GetId() } },
+		{ BusStation::GetId(), { BusVehicle::GetId() } },
+		{ TrainStation::GetId(), { TrainVehicle::GetId() } },
+		{ AirStation::GetId(), { PlaneVehicle::GetId() } },
+	};
+	return (void*)&dependencies;
+}
+
 extern "C" __declspec(dllexport) void* GetModTerrains() {
 	static vector<string> mods = { OceanTerrain::GetId(), MountainTerrain::GetId() };
 	return (void*)&mods;

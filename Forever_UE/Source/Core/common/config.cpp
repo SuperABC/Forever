@@ -23,7 +23,7 @@ unordered_map<string, vector<string>> Config::pakPaths = {};
 string Config::mainStoryScriptModName = "";
 unordered_map<string, vector<pair<string, string>>> Config::conceptMods = {};
 unordered_map<string, vector<pair<string, string>>> Config::dllConceptIds = {};
-unordered_map<string, vector<string>> Config::dllDependences = {};
+unordered_map<string, vector<string>> Config::modDependences = {};
 vector<string> Config::storyScriptPaths = {};
 
 void Config::NormalizeUniqueConcepts() {
@@ -89,7 +89,7 @@ void Config::ReadConfig(const string& path) {
 	mainStoryScriptModName.clear();
 	conceptMods.clear();
 	dllConceptIds.clear();
-	dllDependences.clear();
+	modDependences.clear();
 	storyScriptPaths.clear();
 
 	ifstream fin(path);
@@ -265,7 +265,7 @@ void Config::AddDllPath(const string& path) {
 		string full = ToForwardSlashes(filesystem::absolute(entry.path()).string());
 		bool valid = false;
 		vector<pair<string, string>> ids;
-		vector<string> dependences;
+		vector<pair<string, vector<string>>> perModDependences;
 
 		HMODULE modHandle = LoadLibraryA(full.data());
 		if (modHandle) {
@@ -286,12 +286,13 @@ void Config::AddDllPath(const string& path) {
 				}
 			}
 
-			// DLL级依赖声明探测——整个DLL一份，不按concept重复，见loader.h
-			// kModDllDependenciesSymbol注释。
-			auto getDepsFunc = reinterpret_cast<GetModFunc>(GetProcAddress(modHandle, kModDllDependenciesSymbol));
+			// per-mod依赖声明探测——一个DLL一份导出符号，但内容是这个DLL里每个mod id各自
+			// 的依赖列表配对表，不是整个DLL共用一份，见loader.h kModDependenciesSymbol
+			// 注释。
+			auto getDepsFunc = reinterpret_cast<GetModFunc>(GetProcAddress(modHandle, kModDependenciesSymbol));
 			if (getDepsFunc) {
 				if (void* raw = getDepsFunc()) {
-					dependences = *static_cast<vector<string>*>(raw);
+					perModDependences = *static_cast<vector<pair<string, vector<string>>>*>(raw);
 				}
 			}
 
@@ -301,7 +302,10 @@ void Config::AddDllPath(const string& path) {
 		if (valid) {
 			dllPaths[path].push_back(full);
 			dllConceptIds[full] = ids;
-			dllDependences[full] = dependences;
+			// 按modId拆开存进扁平map——modId本身全局唯一，不需要再按dllPath分组。
+			for (const auto& [modId, depIds] : perModDependences) {
+				modDependences[modId] = depIds;
+			}
 		}
 	}
 }
@@ -324,10 +328,12 @@ void Config::RemoveDllPath(const string& path) {
 								[&modId](const pair<string, string>& e) { return e.first == modId; }),
 							entries.end());
 					}
+					// 这个dll提供的modId被移除了，它自己声明的依赖也跟着一起清掉——
+					// modDependences按modId存，不是按dllPath存，见config.h注释。
+					modDependences.erase(modId);
 				}
 			}
 			dllConceptIds.erase(dll);
-			dllDependences.erase(dll);
 		}
 	}
 	dllPaths.erase(path);
@@ -562,9 +568,9 @@ vector<pair<string, string>> Config::GetModIdsForDll(const string& dllPath) {
 	return it != dllConceptIds.end() ? it->second : vector<pair<string, string>>();
 }
 
-vector<string> Config::GetDllDependences(const string& dllPath) {
-	auto it = dllDependences.find(dllPath);
-	return it != dllDependences.end() ? it->second : vector<string>();
+vector<string> Config::GetModDependences(const string& modId) {
+	auto it = modDependences.find(modId);
+	return it != modDependences.end() ? it->second : vector<string>();
 }
 
 vector<string> Config::GetResourceRootPaths() {

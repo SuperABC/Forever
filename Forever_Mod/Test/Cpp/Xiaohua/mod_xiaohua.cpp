@@ -7,9 +7,13 @@
 int PengzhanBuilding::count = 0;
 int YizhongBuilding::count = 0;
 
-// 这个DLL不依赖任何其它mod。
-extern "C" __declspec(dllexport) void* GetModDllDependencies() {
-	static std::vector<std::string> dependencies = {};
+// 这个DLL注册了两个互不相关的building mod，各自声明自己的依赖——这里两个都不依赖任何
+// 其它mod，但形状已经证明了per-mod粒度(不是整个DLL共用一份)。
+extern "C" __declspec(dllexport) void* GetModDependencies() {
+	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
+		{ PengzhanBuilding::GetId(), {} },
+		{ YizhongBuilding::GetId(), {} },
+	};
 	return (void*)&dependencies;
 }
 

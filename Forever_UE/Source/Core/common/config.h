@@ -122,7 +122,9 @@ public:
 	static bool IsModIdEnabled(const std::string& id);
 
 	// dllPath这个DLL是否"被加载"——它导出的(concept,modId)里只要有任意一个启用就算数,DLL
-	// 本身只能整体加载/不加载,见config.md"DLL级依赖声明"一节。
+	// 本身只能整体加载/不加载。注意这和依赖声明无关——依赖声明现在是per-modId的，见
+	// GetModDependences注释；这个函数只给ForeverModSubsystem判断"要不要把这个DLL交给
+	// ModLoader"用。
 	static bool IsDllActive(const std::string& dllPath);
 
 	// 当前"被加载"(IsDllActive==true)的dll绝对路径列表。
@@ -132,9 +134,10 @@ public:
 	// 缓存下来，不需要重新LoadLibrary。
 	static std::vector<std::pair<std::string, std::string>> GetModIdsForDll(const std::string& dllPath);
 
-	// dllPath这个DLL声明自己依赖的mod id列表(新增的GetModDllDependencies()导出,整个DLL
-	// 一份,不按concept区分)——AddDllPath探测阶段顺带读取、缓存下来。
-	static std::vector<std::string> GetDllDependences(const std::string& dllPath);
+	// modId这个mod id自己声明依赖的mod id列表(来自它所在DLL导出的GetModDependences()配对
+	// 表里属于这个modId的那一项)——AddDllPath探测阶段顺带读取、按modId拆开缓存下来，不是
+	// 按DLL分组，见loader.h kModDependenciesSymbol注释。
+	static std::vector<std::string> GetModDependences(const std::string& modId);
 
 	// 已注册的resource根目录列表(即调用过AddResourcePath的path)，供Resource screen展示/
 	// 删除用，和GetDllPaths()同样的"根目录列表"语义。
@@ -209,8 +212,9 @@ private:
 	// dll绝对路径 -> AddDllPath探测时读到的(conceptKey,modId)列表。
 	static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> dllConceptIds;
 
-	// dll绝对路径 -> 该DLL新增的GetModDllDependencies()导出声明的依赖mod id列表。
-	static std::unordered_map<std::string, std::vector<std::string>> dllDependences;
+	// modId -> 它自己声明依赖的mod id列表(来自所在DLL的GetModDependences()配对表)，按
+	// modId拆开存，不是按dllPath分组——modId本身全局唯一，不需要再绕一层DLL路径。
+	static std::unordered_map<std::string, std::vector<std::string>> modDependences;
 
 	// Story screen里玩家显式添加的.script绝对路径列表，全部一起加载。
 	static std::vector<std::string> storyScriptPaths;

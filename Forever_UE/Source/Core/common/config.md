@@ -48,8 +48,9 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   前都统一走这个转换。
 - **`AddDllPath`探测用的`GetMod<Concept>`符号名来自`loader.h`的
   `GetModConceptDescriptors()`**,不在`config.cpp`里重复维护一份列表,避免两处列表不同步；
-  DLL级依赖声明（`kModDllDependenciesSymbol`，整个DLL一份，不按concept区分）在同一次
-  `LoadLibrary`里顺带探测，见`loader.h`。
+  per-mod依赖声明（`kModDependenciesSymbol`，整个DLL一份导出符号，但内容是这个DLL里
+  每个mod id各自的依赖列表配对表，不是整个DLL共用一份）在同一次`LoadLibrary`里顺带
+  探测，按modId拆开灌进`modDependences`，见`loader.h`。
 - **`<concept>_mods`数组既是mod参数来源，也是"谁启用谁没启用"的唯一真相来源**：
   `ReadConfig`扫描所有以`_mods`结尾的顶层key（不硬编码concept名字），每个数组元素是
   `"id"`或`"id 参数..."`（如`"pengzhan --density 1.0"`），按第一个空格切成
@@ -89,20 +90,22 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 - **`story_scripts`（`AddStoryScript`/`RemoveStoryScript`/`GetStoryScripts`）**：Story
   screen的"添加`.script`文件"操作维护的一份列表，列表里的脚本全部一起加载，不是
   "多选一激活"（和`main_story`单独一个字段、决定主线挂载哪个`ScriptMod`是两件事）。
-- **`IsModIdEnabled`/`IsDllActive`/`GetActiveDllPaths`/`GetDllDependences`**：给游戏启动
+- **`IsModIdEnabled`/`IsDllActive`/`GetActiveDllPaths`/`GetModDependences`**：给游戏启动
   配置界面的依赖校验用。`IsModIdEnabled(id)`不看concept，只要id在任意一个已启用的
   `(concept, modId)`里出现过就算数（mod id不带concept前缀，不能靠字符串猜它属于哪个
   concept）；`IsDllActive`判断一个DLL导出的id里有没有任意一个被启用（DLL本身只能整体
-  加载/不加载）；`GetDllDependences`读取`AddDllPath`探测阶段缓存的
-  `GetModDllDependencies()`声明内容。
+  加载/不加载，这个函数只管"要不要加载这个DLL"，和下面的依赖声明粒度无关）；
+  `GetModDependences(modId)`按modId查`AddDllPath`探测阶段缓存的、来自
+  `GetModDependences()`导出符号的依赖声明——粒度是单个mod id，不是DLL：同一个DLL
+  注册的多个mod可以各自声明不同的依赖，不需要共用一份。
 
 ## 依赖关系
 
 - 依赖:`Dependence/common/json.h`(解析JSON)、`Core/common/loader.h`
-  (`GetModConceptDescriptors()`探测符号表、`kModDllDependenciesSymbol`)、`<windows.h>`
+  (`GetModConceptDescriptors()`探测符号表、`kModDependenciesSymbol`)、`<windows.h>`
   (`LoadLibraryA`/`GetProcAddress`/`FreeLibrary`,只在`.cpp`里出现,头文件不引入)。
 - 被谁依赖:`Source/Forever/Mod/ForeverModSubsystem.cpp`；游戏启动配置界面
-  （Story/Mod/Resource三screen）读取`GetModEnables()`/`GetDllDependences()`等展示，
+  （Story/Mod/Resource三screen）读取`GetModEnables()`/`GetModDependences()`等展示，
   写入`SetModEnabled()`/`AddStoryScript()`等，最终调`WriteConfig()`落盘。
 
 ## 待办/后续阶段

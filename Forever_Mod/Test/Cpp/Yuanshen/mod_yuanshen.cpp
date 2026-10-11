@@ -6,9 +6,11 @@
 
 int YuanshenBuilding::count = 0;
 
-// 这个DLL不依赖任何其它mod。
-extern "C" __declspec(dllexport) void* GetModDllDependencies() {
-	static std::vector<std::string> dependencies = {};
+// 这个DLL只有一个mod，不依赖任何其它mod。
+extern "C" __declspec(dllexport) void* GetModDependencies() {
+	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
+		{ YuanshenBuilding::GetId(), {} },
+	};
 	return (void*)&dependencies;
 }
 
