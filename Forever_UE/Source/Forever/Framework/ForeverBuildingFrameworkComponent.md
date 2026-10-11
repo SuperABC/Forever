@@ -57,16 +57,25 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 
 墙体分段/地板slab/天花板slab按实际材质指针分组，每组一个常驻的
 `UInstancedStaticMeshComponent`（`ABuildingElement::cubeInstancePools`，key是材质指针，
-通常整栋楼只有墙/地/顶3个key，mod覆盖出不同材质时会多几个）。近处LOD建层
-(`AddCubeInstance`)只是对已存在的ISM调`AddInstance(worldTransform, bWorldSpace=true)`，
-离开近处(`ClearNearSections`)只是对每个ISM调`ClearInstances()`——ISM组件本身从`Init()`
-之后首次用到某个材质时创建一次，常驻到这个`ABuildingElement`被销毁，近/远LOD反复切换不会
-重复`RegisterComponent`/`DestroyComponent`。这个用法只对"整层/整栋同时批量增删"成立：建层
-只`AddInstance`（纯追加，不影响已有实例），清空用`ClearInstances()`（整体清空，不是逐个
+通常整栋楼只有墙/地/顶3个key，mod覆盖出不同材质时会多几个）。离开近处
+(`ClearNearSections`)只是对每个ISM调`ClearInstances()`——ISM组件本身从`Init()`之后首次
+用到某个材质时创建一次，常驻到这个`ABuildingElement`被销毁，近/远LOD反复切换不会重复
+`RegisterComponent`/`DestroyComponent`。这个用法只对"整层/整栋同时批量增删"成立：建层
+只追加实例（纯追加，不影响已有实例），清空用`ClearInstances()`（整体清空，不是逐个
 `RemoveInstance`）——如果需要"单独删除/替换批量实例里的某一个"，`RemoveInstance`会导致
 实例数组重排、牵连其它实例的索引，ISM在那种场景下不合适，但这里从不出现那种场景。碰撞显式
 设成`"BlockAll"`（不依赖ISM默认碰撞值），墙体/地板/天花板只需要纯阻挡碰撞（挡住玩家走动、
 挡住`ECC_Pawn`通道的开火线检测）。
+
+**建层时`AddCubeInstance`不逐个调`AddInstance()`，攒够一层再批量提交**：计时诊断发现
+单层墙体多的楼层（300+段）原来逐段调`UInstancedStaticMeshComponent::AddInstance()`要堆
+到单帧90~120ms——有`BlockAll`碰撞的ISM每次单实例`AddInstance`都要同步建一次该实例的
+碰撞体+更新渲染状态，这部分开销几乎线性于实例数（约0.14ms/实例）。现在`AddCubeInstance`
+只是把world transform按材质分组暂存进`ABuildingElement::pendingCubeTransforms`
+（`TMap<UMaterialInterface*, TArray<FTransform>>`），`BuildFloorSection`画完一层全部
+墙体+地板天花板之后统一调`FlushCubeInstances()`，对每个材质各调一次批量API
+`AddInstances(transforms, false, true)`，把实例缓冲区扩容/渲染状态更新/碰撞体创建合并
+成一次，而不是逐个调用各付一次固定开销。
 
 楼梯/坡道这类有真实3D资产的元素，和电梯轿厢(`isMovable=true`每帧播动画)、门
 (`UForeverDoorComponent`，独立开合动画)不纳入ISM，用`SpawnMesh`各自生成独立
@@ -146,17 +155,22 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 
 1. **入队自己的队列**：跳过`transitionPending`为true的情况，按水平距离和`currentLod`比较
    决定要不要切换：
-   - 近→远（`wantNear=false`且`currentLod==Near`）：入队`BuildFarMesh`+
-     `DeleteAllNearMeshes`两条。
-   - 远→近（`wantNear=true`且`currentLod==Far`）：入队`nearFloorCount`条`BuildFloorMesh`
-     （每层一条）+`BuildElevatorCabins`+最后一条`DeleteFarMesh`。
+   - 近→远（`wantNear=false`且`currentLod==Near`）：往`floorTierOpQueue`入队`BuildFarMesh`+
+     `DeleteAllNearMeshes`两条，`framework->NotifyFloorTierOpEnqueued(2)`。
+   - 远→近（`wantNear=true`且`currentLod==Far`）：往`floorTierOpQueue`入队
+     `nearFloorCount`条`BuildFloorMesh`（每层一条）+`BuildElevatorCabins`+最后一条
+     `DeleteFarMesh`，`NotifyFloorTierOpEnqueued(nearFloorCount+2)`；紧接着调用
+     `GatherPendingDoors()`收集这栋楼全部待建门，往`doorTierOpQueue`入队对应批数的
+     `BuildDoorBatch`（门单独走低优先级队列，详见`BuildingElement.md`"门加载优先级"
+     一节，以及下面"门和楼层分队列、分优先级"一节）。
    - 入队后立刻把`transitionPending`置`true`。
-2. **drain自己的`TQueue<FLodOp>`**：每次执行一条之前，先向框架组件的
-   `TryConsumeLodOpBudget()`申请一份全局共享预算（框架组件的`TickComponent`每帧把这份预算
-   重置成`maxLodOpsPerTick`，默认4——建筑密集处更高的值仍然会卡顿）——申请失败（这一帧
-   全地图的预算已经被其它building的Element用完）就先停手，下一帧再继续。**必须先判断自己
-   的队列是否为空，再申请预算**，不能反过来：如果反过来，每一栋"这一帧其实无事可做"的
-   building也会白白申请（并消耗）一份全局预算，挤占真正需要建楼层的building的份额。
+2. **drain自己的两个队列，楼层级永远先尝试**：每次执行一条之前，先向框架组件的
+   `TryConsumeLodOpBudget(bool isDoorTierOp)`申请一份全局共享预算（框架组件的
+   `TickComponent`每帧把这份预算重置成`maxLodOpsPerTick`，默认1——建筑密集处更高的值
+   仍然会卡顿）——申请失败（这一帧全地图的预算已经被其它building的Element用完，或者
+   申请的是门级操作但全地图还有楼层级操作未完成）就先停手，下一帧再继续。**必须先判断
+   自己的队列是否为空，再申请预算**，不能反过来：如果反过来，每一栋"这一帧其实无事可做"
+   的building也会白白申请（并消耗）一份全局预算，挤占真正需要建楼层的building的份额。
    **只有序列的最后一条**（`DeleteAllNearMeshes`/`DeleteFarMesh`）执行时才更新`currentLod`+
    清`transitionPending`，中间的`BuildFarMesh`/`BuildFloorMesh`只是建几何，不改状态。
 
@@ -165,6 +179,44 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 如果完全不设共享预算、让每个Element各自决定自己的每帧处理量，大量building同时穿越距离
 阈值时（比如玩家瞬移/沿着阈值边界走）依然会在同一帧集中爆发，回到"每次LOD切换都巨卡"的
 老问题。
+
+## 门和楼层分队列、分优先级
+
+门系统上线后发现：每扇门的`UForeverDoorComponent::Init`要花4~6次`RegisterComponent()`，
+如果跟墙体/楼梯/地板一起塞进同一个`BuildFloorMesh`操作单位，这部分开销会被悄悄摊进"建
+一层楼"的预算里，加门之后楼层加载明显变卡。解法是把门拆成独立的`BuildDoorBatch`操作类型
+（见`BuildingElement.h`的`ELodOpType`），并给它一套**全局优先级门槛**：
+
+```cpp
+bool TryConsumeLodOpBudget(bool isDoorTierOp) {
+    if (isDoorTierOp && pendingFloorTierOps > 0) return false;
+    if (frameOpBudgetRemaining <= 0) return false;
+    frameOpBudgetRemaining--;
+    return true;
+}
+```
+
+`pendingFloorTierOps`是跨所有building共享的全局计数（不是per-building），由
+`ABuildingElement`在排队/执行楼层级操作（`BuildFarMesh`/`DeleteAllNearMeshes`/
+`BuildFloorMesh`/`BuildElevatorCabins`/`DeleteFarMesh`，不含`BuildDoorBatch`）时成对
+调用`NotifyFloorTierOpEnqueued`/`NotifyFloorTierOpExecuted`维护。只要这个计数大于0
+（即全地图任意一栋building还有楼层级操作排队未执行），所有building的门级请求都会被
+拒绝——这正是"任意建筑的楼层加载插队到任意建筑的门加载前面"的实现关键：不需要
+building互相感知彼此是谁、在干什么，只需要都查询这同一份全局计数就天然实现了跨建筑
+优先级。
+
+这套计数和`pendingLodTransitionCount`（见下面"冻结世界"一节）是两件不同的事，不要
+混用：`pendingLodTransitionCount`按"转场"计数（一栋楼一次转场=1，不管排了几条操作），
+给冻结世界用；`pendingFloorTierOps`按"操作条数"计数，只给门级操作的优先级门槛用。
+`maxDoorsPerOp`（默认4，`EditDefaultsOnly`可调）控制每条`BuildDoorBatch`处理几扇门，
+对应用户"先试一帧4扇"的原始诉求。
+
+每个Element自己也要把`floorTierOpQueue`/`doorTierOpQueue`拆成两个独立的`TQueue`，不能
+用一个混合队列靠`Peek()`队首类型判断——否则一栋楼自己排在队尾的楼层级操作会被排在队头、
+永远等不到执行机会的自己的门操作挡住（队头的门操作被全局门槛拒绝出队，而解除这个门槛
+恰恰需要先执行到排在它后面的那些楼层级操作），变成自己造成的死锁，而且因为门槛是全局的
+会连带卡死全地图所有建筑的门加载。两个独立队列彼此不互相阻塞，不会有这个问题，详见
+`BuildingElement.md`"门加载优先级"一节。
 
 ## 冻结世界直到LOD切换队列清空（`RequestFreezeUntilLodSettled`）
 
@@ -178,8 +230,11 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 
 这个机制之所以能生效，关键在于**时间倍率只缩放`Tick`函数收到的`DeltaTime`参数，不会
 阻止`Tick`函数本身按正常帧率被调用**——`frameOpBudgetRemaining`的重置、
-`ABuildingElement::Tick`里drain`lodOpQueue`的那段循环都不读`DeltaTime`，所以"世界静止"
-期间LOD队列依然能照常按每帧预算排空，不会因为倍率归零而卡死。`pendingLodTransitionCount`
+`ABuildingElement::Tick`里drain`floorTierOpQueue`/`doorTierOpQueue`的那两段循环都不读
+`DeltaTime`，所以"世界静止"期间LOD队列依然能照常按每帧预算排空，不会因为倍率归零而
+卡死。门级操作此时仍然受全局优先级门槛约束——如果恰好有building在冻结期间还有楼层级
+操作排队，门会继续等，但这不影响冻结判定本身（判定只看楼层是否就位，见下面
+`pendingLodTransitionCount`）。`pendingLodTransitionCount`
 是一个全局计数器，由`ABuildingElement`自己在`transitionPending`置`true`/`false`时同步
 调用`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`维护——框架组件不需要反过来
 遍历全地图所有`ABuildingElement`逐个查询各自的`transitionPending`，O(1)。
@@ -309,7 +364,8 @@ Story事件分发。
   `Source/Forever/Element/BuildingElement.cpp`通过`TWeakObjectPtr<
   UForeverBuildingFrameworkComponent>`反向调用`ResolveMaterial`/`ResolveMesh`/
   `Get*默认资产`/`GetLodSwitchDistance`/`GetCabinCruiseSpeed`/`GetCabinEaseSeconds`/
-  `TryConsumeLodOpBudget`/`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`；
+  `TryConsumeLodOpBudget`/`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`/
+  `NotifyFloorTierOpEnqueued`/`NotifyFloorTierOpExecuted`/`GetMaxDoorsPerOp`；
   `Source/Forever/Framework/ForeverStoryFrameworkComponent.cpp`（`ApplyControlChange`
   切换玩家控制权后调`RequestFreezeUntilLodSettled`）。
 

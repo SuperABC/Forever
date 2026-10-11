@@ -74,6 +74,7 @@ private:
 		BuildFloorMesh,      // 远->近，每层一条
 		BuildElevatorCabins, // 远->近，所有BuildFloorMesh之后、DeleteFarMesh之前
 		DeleteFarMesh,       // 远->近，最后一步(执行完才更新currentLod)
+		BuildDoorBatch,      // 远->近，DeleteFarMesh之后，每条最多处理GetMaxDoorsPerOp()扇门
 	};
 
 	struct FLodOp {
@@ -97,6 +98,13 @@ private:
 	void ClearNearSections();
 	void ClearFarSection();
 	void ExecuteLodOp(const FLodOp& op);
+
+	// 门从楼层构造里拆出来、单独按批次处理，见BuildingElement.md"门加载优先级"一节。
+	// GatherPendingDoors在排队Far->Near转场的那一刻一次性收集全部待建门(Door*生成时就
+	// 和LOD状态无关，不需要等楼层先建完)；BuildDoorBatch每次从pendingDoors弹出最多
+	// framework->GetMaxDoorsPerOp()个执行Init()。
+	void GatherPendingDoors();
+	void BuildDoorBatch();
 
 	// building进入/离开检测用的碰撞盒。水平=body矩形，垂直=整栋楼Z范围，三个方向各+0.01
 	// (地图单位)，和Room碰撞盒的各-0.01配对，两者贴合的边界不会因为完全重合而在Overlap判定
@@ -135,6 +143,11 @@ private:
 	// 和原SpawnCube同一份网格资源)。
 	UInstancedStaticMeshComponent* GetOrCreateCubeInstancePool(UMaterialInterface* material);
 
+	// 把pendingCubeTransforms里按材质分组暂存的全部transform批量提交给对应ISM池——每个
+	// 材质只调一次UInstancedStaticMeshComponent::AddInstances()，而不是AddCubeInstance每次
+	// 都调一次单实例AddInstance()。见AddCubeInstance/pendingCubeTransforms声明处注释。
+	void FlushCubeInstances();
+
 	// 按目标尺寸缩放摆放一个网格实体，供楼梯/坡道/电梯轿厢这类有真实3D资产的元素用。isMovable
 	// 只有电梯轿厢会传true。
 	UStaticMeshComponent* SpawnMesh(float centerX, float centerY, float centerZ,
@@ -171,6 +184,14 @@ private:
 	// Init()之后按需懒创建，不需要预先知道有几种材质。
 	TMap<UMaterialInterface*, TObjectPtr<UInstancedStaticMeshComponent>> cubeInstancePools;
 
+	// AddCubeInstance本身不再直接调ism->AddInstance()——改成按材质分组暂存world transform，
+	// 一层楼画完之后由FlushCubeInstances()对每个材质各调一次批量AddInstances()。单独调用
+	// AddInstance()在有碰撞(BlockAll)的ISM上实测每次约0.1~0.4ms(单独建一次物理体+更新渲染
+	// 状态)，一层墙体分段多的楼层(300+段)逐个调用能堆到90~120ms的单帧卡顿，批量提交能把这些
+	// 开销合并成一次。只在BuildFloorSection内部的"收集-一次性提交"两阶段之间临时持有，提交后
+	// 清空，不跨帧保留。
+	TMap<UMaterialInterface*, TArray<FTransform>> pendingCubeTransforms;
+
 	// 近处这栋building当前占用的楼梯/坡道3D网格组件(SpawnMesh产出，网格/材质各不相同、
 	// 数量少，不纳入ISM改造)，按floorIndex分组，方便ClearNearSections整栋清空。墙体/
 	// 地板/天花板cube已经改走上面的cubeInstancePools，不再经过这个数组。
@@ -182,7 +203,20 @@ private:
 	TArray<TArray<TObjectPtr<UForeverDoorComponent>>> nearDoorsByFloor;
 	// 电梯轿厢，近处LOD专属，DeleteAllNearMeshes时一并清空。
 	TArray<FCabin> cabins;
-	TQueue<FLodOp> lodOpQueue;
+
+	// 两个队列按优先级分桶，不是一个混合队列——分别对应"楼层级"(墙体/楼梯/电梯井/地板
+	// 天花板/远近切换)和"门级"操作。必须分开：如果混在一个FIFO队列里，一栋楼门操作还没
+	// 处理完时自己又排进了后续的楼层级操作(比如中途Near->Far)，会被"全地图还有楼层级
+	// 操作在等"这个全局门槛挡住队头的门操作而无法出队——而挡住它的楼层级操作恰恰排在它
+	// 后面，永远等不到被执行的机会，变成这栋楼自己造成的死锁，且因为门槛是全局的会连带
+	// 卡死全地图所有建筑的门加载。分成两个队列后，一栋楼自己的楼层级操作永远不会被自己的
+	// 门操作挡住。见Tick()/ForeverBuildingFrameworkComponent::TryConsumeLodOpBudget。
+	TQueue<FLodOp> floorTierOpQueue;
+	TQueue<FLodOp> doorTierOpQueue;
+	// 尚未建出UForeverDoorComponent的门，GatherPendingDoors在排队Far->Near转场时一次性
+	// 填入，BuildDoorBatch逐批弹出清空。ClearNearSections里也会清空，避免同一个Actor
+	// 反复Far<->Near时残留污染下一次收集结果。
+	TArray<Door*> pendingDoors;
 
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> collisionBox;

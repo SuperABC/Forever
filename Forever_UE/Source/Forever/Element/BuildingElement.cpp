@@ -448,15 +448,25 @@ UInstancedStaticMeshComponent* ABuildingElement::GetOrCreateCubeInstancePool(UMa
 
 void ABuildingElement::AddCubeInstance(float centerX, float centerY, float centerZ,
 	float sizeX, float sizeY, float sizeZ, float rotation, UMaterialInterface* material) {
-	UInstancedStaticMeshComponent* ism = GetOrCreateCubeInstancePool(material);
-	if (!ism) return;
-
+	// 不在这里直接调ism->AddInstance()——按材质暂存，攒够一层楼的全部实例之后由
+	// FlushCubeInstances()一次性批量提交，见pendingCubeTransforms声明处注释(逐个单实例提交
+	// 实测每次约0.1~0.4ms，300+段的楼层能堆到单帧100ms+的卡顿)。
 	FTransform worldTransform(
 		FRotator(0.f, FMath::RadiansToDegrees(rotation), 0.f),
 		FVector(centerX, centerY, centerZ),
 		FVector(sizeX / BUILDING_CUBE_MESH_SIZE, sizeY / BUILDING_CUBE_MESH_SIZE,
 			sizeZ / BUILDING_CUBE_MESH_SIZE));
-	ism->AddInstance(worldTransform, /*bWorldSpace=*/true);
+	pendingCubeTransforms.FindOrAdd(material).Add(worldTransform);
+}
+
+void ABuildingElement::FlushCubeInstances() {
+	for (auto& [material, transforms] : pendingCubeTransforms) {
+		if (transforms.IsEmpty()) continue;
+		UInstancedStaticMeshComponent* ism = GetOrCreateCubeInstancePool(material);
+		if (!ism) continue;
+		ism->AddInstances(transforms, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
+	}
+	pendingCubeTransforms.Empty();
 }
 
 UStaticMeshComponent* ABuildingElement::SpawnMesh(float centerX, float centerY, float centerZ,
@@ -685,28 +695,9 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 			room->GetDoors(), room->GetWindows(), wallMaterial);
 	}
 
-	// 门：建筑门(corridor，挂在Building自己身上)+这一层每个room的房间门——门洞本身已经由
-	// 上面的BuildWallsForElement挖出，这里只管"查到了DoorSpec、真的要放门扇"的那些Door，
-	// 按GetLevel()==level筛选出这一层的，见door_system_plan.md。
-	auto& doorSlot = nearDoorsByFloor[floorIndex];
-	auto spawnDoorComponent = [&](Door* door) {
-		if (!door) return;
-		UForeverDoorComponent* comp = NewObject<UForeverDoorComponent>(this, NAME_None, RF_Transient);
-		comp->SetupAttachment(elementRoot);
-		comp->RegisterComponent();
-		comp->Init(door);
-		AddInstanceComponent(comp);
-		doorSlot.Add(comp);
-		};
-	for (Door* door : building->GetDoorEntities()) {
-		if (door && door->GetLevel() == level) spawnDoorComponent(door);
-	}
-	for (Room* room : building->GetRooms()) {
-		if (!room || room->GetLayer() != level) continue;
-		for (Door* door : room->GetDoorEntities()) {
-			spawnDoorComponent(door);
-		}
-	}
+	// 门不在这里建——拆到GatherPendingDoors/BuildDoorBatch里单独按批次处理，见
+	// BuildingElement.md"门加载优先级"一节。门洞本身仍然由上面的BuildWallsForElement
+	// 照常挖出，和是否建门视觉组件无关。
 
 	// 地板/天花板：老工程两层独立薄slab的做法——地板贴地坪往上一点点，天花板贴楼层顶往下
 	// 一点点，中间留一条很窄的缝，避免和上/下相邻楼层的对应slab共面z-fighting。
@@ -729,6 +720,8 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		float sizeZ = kSlabThickness * BUILDING_WORLD_SCALE;
 		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, ceilingMaterial);
 	}
+
+	FlushCubeInstances();
 }
 
 void ABuildingElement::BuildElevatorCabinsForBuilding() {
@@ -787,7 +780,46 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 	}
 }
 
+void ABuildingElement::GatherPendingDoors() {
+	if (!building) return;
+	// Door*(Core对象)在建筑生成时就创建好，和LOD状态无关，随时可读——不需要等楼层先建完
+	// 再去发现门，Far->Near转场排队的这一刻就能把全部待建门一次性收集好。
+	for (Door* door : building->GetDoorEntities()) {
+		if (door) pendingDoors.Add(door);
+	}
+	for (Room* room : building->GetRooms()) {
+		if (!room) continue;
+		for (Door* door : room->GetDoorEntities()) {
+			if (door) pendingDoors.Add(door);
+		}
+	}
+}
+
+void ABuildingElement::BuildDoorBatch() {
+	if (pendingDoors.IsEmpty() || !building || !framework.IsValid()) return;
+
+	int32 budget = framework->GetMaxDoorsPerOp();
+	while (budget-- > 0 && !pendingDoors.IsEmpty()) {
+		Door* door = pendingDoors.Pop();
+		if (!door) continue;
+
+		int32 floorIndex = door->GetLevel() + building->GetBasementCount();
+		if (!nearDoorsByFloor.IsValidIndex(floorIndex)) continue;
+
+		UForeverDoorComponent* comp = NewObject<UForeverDoorComponent>(this, NAME_None, RF_Transient);
+		comp->SetupAttachment(elementRoot);
+		comp->RegisterComponent();
+		comp->Init(door);
+		AddInstanceComponent(comp);
+		nearDoorsByFloor[floorIndex].Add(comp);
+	}
+}
+
 void ABuildingElement::ClearNearSections() {
+	// 清空尚未建出视觉组件的待建门——避免这个Actor被反复Far<->Near循环使用时，上一轮
+	// 没排完的门残留污染下一轮GatherPendingDoors的收集结果。
+	pendingDoors.Empty();
+
 	// 墙体/地板/天花板cube：ISM组件本身常驻，只清空instance数组，不Register/Destroy——这是
 	// 这次ISM改造消除注册开销的关键，见cubeInstancePools/AddCubeInstance声明处注释。
 	for (auto& [material, ism] : cubeInstancePools) {
@@ -842,6 +874,9 @@ void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
 		transitionPending = false;
 		if (framework.IsValid()) framework->NotifyLodTransitionFinished();
 		break;
+	case ELodOpType::BuildDoorBatch:
+		BuildDoorBatch();
+		break;
 	}
 }
 
@@ -864,16 +899,28 @@ void ABuildingElement::Tick(float DeltaTime) {
 		// 反复触发卡顿)。
 		if (currentLod == ELod::Far && dist <= framework->GetLodNearEnterDistance()) {
 			for (int32 i = 0; i < nearFloorCount; i++) {
-				lodOpQueue.Enqueue({ ELodOpType::BuildFloorMesh, i });
+				floorTierOpQueue.Enqueue({ ELodOpType::BuildFloorMesh, i });
 			}
-			lodOpQueue.Enqueue({ ELodOpType::BuildElevatorCabins, -1 });
-			lodOpQueue.Enqueue({ ELodOpType::DeleteFarMesh, -1 });
+			floorTierOpQueue.Enqueue({ ELodOpType::BuildElevatorCabins, -1 });
+			floorTierOpQueue.Enqueue({ ELodOpType::DeleteFarMesh, -1 });
+			framework->NotifyFloorTierOpEnqueued(nearFloorCount + 2);
+
+			// 门和楼层分开排队：Door*生成时就和LOD状态无关，不需要等楼层先建完再发现门，
+			// 这里一次性收集好、按批次排进低优先级的doorTierOpQueue，见
+			// GatherPendingDoors/BuildDoorBatch声明处注释。
+			GatherPendingDoors();
+			int32 doorBatches = FMath::DivideAndRoundUp(pendingDoors.Num(), FMath::Max(1, framework->GetMaxDoorsPerOp()));
+			for (int32 i = 0; i < doorBatches; i++) {
+				doorTierOpQueue.Enqueue({ ELodOpType::BuildDoorBatch, -1 });
+			}
+
 			transitionPending = true;
 			framework->NotifyLodTransitionStarted();
 		}
 		else if (currentLod == ELod::Near && dist > framework->GetLodFarExitDistance()) {
-			lodOpQueue.Enqueue({ ELodOpType::BuildFarMesh, -1 });
-			lodOpQueue.Enqueue({ ELodOpType::DeleteAllNearMeshes, -1 });
+			floorTierOpQueue.Enqueue({ ELodOpType::BuildFarMesh, -1 });
+			floorTierOpQueue.Enqueue({ ELodOpType::DeleteAllNearMeshes, -1 });
+			framework->NotifyFloorTierOpEnqueued(2);
 			transitionPending = true;
 			framework->NotifyLodTransitionStarted();
 		}
@@ -883,9 +930,19 @@ void ABuildingElement::Tick(float DeltaTime) {
 	// ——避免大量building同时穿越距离阈值时，所有Element在同一帧一起疯狂建组件卡成一张ppt。
 	// 必须先判断队列是否为空再消耗预算(不能反过来)，否则每一栋"这一帧其实无事可做"的building
 	// 也会白白吃掉一份全局预算，挤占真正需要建楼层的building的份额。
-	while (!lodOpQueue.IsEmpty() && framework->TryConsumeLodOpBudget()) {
+	//
+	// 楼层级操作永远先尝试：只要全地图任意一栋楼还有楼层级操作排队，framework->
+	// TryConsumeLodOpBudget(true)对所有building的门操作都会拒绝发预算，门操作停滞直到
+	// 楼层级工作全部清空，见ForeverBuildingFrameworkComponent::TryConsumeLodOpBudget。
+	while (!floorTierOpQueue.IsEmpty() && framework->TryConsumeLodOpBudget(/*isDoorTierOp=*/false)) {
 		FLodOp op;
-		lodOpQueue.Dequeue(op);
+		floorTierOpQueue.Dequeue(op);
+		ExecuteLodOp(op);
+		framework->NotifyFloorTierOpExecuted();
+	}
+	while (!doorTierOpQueue.IsEmpty() && framework->TryConsumeLodOpBudget(/*isDoorTierOp=*/true)) {
+		FLodOp op;
+		doorTierOpQueue.Dequeue(op);
 		ExecuteLodOp(op);
 	}
 

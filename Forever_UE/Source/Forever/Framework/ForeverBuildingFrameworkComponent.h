@@ -81,15 +81,37 @@ public:
 	float GetCabinCruiseSpeed() const { return cabinCruiseSpeed; }
 	float GetCabinEaseSeconds() const { return cabinEaseSeconds; }
 
+	// 每条"门批次"操作最多处理几扇门——ABuildingElement::BuildDoorBatch()读取。门的构造
+	// (UForeverDoorComponent::Init)比墙体/地板的ISM AddInstance贵不少(4~6次
+	// RegisterComponent)，拆成小批次、和楼层级操作分开节流，见下面TryConsumeLodOpBudget。
+	UPROPERTY(EditDefaultsOnly, Category = "Building")
+	int32 maxDoorsPerOp = 4;
+	int32 GetMaxDoorsPerOp() const { return maxDoorsPerOp; }
+
 	// 全地图共享的每帧LOD操作预算——每个ABuildingElement在自己的Tick里执行任何一条LOD操作
-	// (建/删一层楼、建电梯轿厢等)之前都要先来这里申请一份，申请失败就等下一帧再试。预算本身
-	// 每帧由这个组件的TickComponent重置一次，替代之前"框架组件自己维护一个全局队列、自己
-	// 挨个执行"的做法——现在队列下放到每个Element自己维护，这里只保留节流的"总闸"。
-	bool TryConsumeLodOpBudget() {
+	// (建/删一层楼、建电梯轿厢、建一批门等)之前都要先来这里申请一份，申请失败就等下一帧再试。
+	// 预算本身每帧由这个组件的TickComponent重置一次，替代之前"框架组件自己维护一个全局
+	// 队列、自己挨个执行"的做法——现在队列下放到每个Element自己维护(拆成楼层级/门级两条，
+	// 见ABuildingElement::floorTierOpQueue/doorTierOpQueue声明处注释)，这里只保留节流的
+	// "总闸"，并额外给门级操作加一道全局优先级门槛：只要全地图任意一栋building还有楼层级
+	// 操作排队未执行(pendingFloorTierOps>0)，所有building的门级操作都申请不到预算——这是
+	// "任意建筑的楼层加载插队到任意建筑的门加载前面"的实现关键，不需要building互相感知
+	// 彼此，只需要都查询这同一份全局计数。
+	bool TryConsumeLodOpBudget(bool isDoorTierOp) {
+		if (isDoorTierOp && pendingFloorTierOps > 0) return false;
 		if (frameOpBudgetRemaining <= 0) return false;
 		frameOpBudgetRemaining--;
 		return true;
 	}
+
+	// 供ABuildingElement在Tick()里排队/执行楼层级操作(BuildFarMesh/DeleteAllNearMeshes/
+	// BuildFloorMesh/BuildElevatorCabins/DeleteFarMesh——不含BuildDoorBatch)时成对调用，
+	// 维护一个全局"还有多少条楼层级操作排队未执行"的计数，供TryConsumeLodOpBudget查询。
+	// 和下面的NotifyLodTransitionStarted/Finished是两件不同的事：那一对按"转场"计数(一栋
+	// 楼一次转场=1，不管它排了几条操作)，用于冻结世界；这一对按"操作条数"计数，用于门级
+	// 操作的全局优先级门槛，不要混用。
+	void NotifyFloorTierOpEnqueued(int32 count) { pendingFloorTierOps += count; }
+	void NotifyFloorTierOpExecuted() { pendingFloorTierOps = FMath::Max(0, pendingFloorTierOps - 1); }
 
 	// 请求"冻结世界直到所有building的LOD切换队列清空"——由切换玩家控制权
 	// （ChangeControlChange，见ForeverStoryFrameworkComponent::ApplyControlChange）触发：
@@ -159,6 +181,10 @@ private:
 	int32 maxLodOpsPerTick = 1;
 
 	int32 frameOpBudgetRemaining = 0;
+
+	// 全地图范围内还有多少条楼层级操作排队未执行——见TryConsumeLodOpBudget/
+	// NotifyFloorTierOpEnqueued/Executed注释。
+	int32 pendingFloorTierOps = 0;
 
 	// 见RequestFreezeUntilLodSettled/NotifyLodTransitionStarted/Finished注释。
 	int32 pendingLodTransitionCount = 0;
