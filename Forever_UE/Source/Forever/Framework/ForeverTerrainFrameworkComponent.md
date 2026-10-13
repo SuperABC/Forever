@@ -69,25 +69,72 @@
 - **玩家位置改用`UGameplayStatics::GetPlayerPawn(GetWorld(), 0)`**，不是老工程的
   `global->GetLocation()`——Terrain不依赖其它concept，不能反过来依赖一个可能还没初始化的
   域。取的是本地玩家0号，和项目现状（无分屏/多人支持）一致。
-- **材质参数名严格照抄老工程字符串**：`terrainMaterial`用`TerrainDiffuseArray`/
-  `TerrainIndexMap`；`fineMaterial0/1/2`用`FineIndexMap`/`FinePowerMap`/
-  `TerrainDiffuseArray`。这些名字要和复制过来的`TemplateTerrain.uasset`/`TemplateFine.uasset`
-  材质图里的参数名对上才会生效——`SetTextureParameterValue`设错名字不报错只是静默不生效，
+- **材质参数名**：`terrainMaterial`（远处，`TemplateFar`）用`TerrainDiffuseArray`/
+  `TerrainNormalRoughArray`/`TerrainIndexMap`/`TerrainMapSize`；`nearMaterial`（近处，
+  `TemplateNear`）用`TerrainDiffuseArray`/`TerrainNormalRoughArray`/`NearIndexMap`/
+  `NearWeightMap`/`NearRegion`。这些名字要和材质图里的参数名对上才会生效——
+  `SetTextureParameterValue`/`SetVectorParameterValue`设错名字不报错只是静默不生效，
   PIE里看贴图是否正确显示是唯一的验证手段。
 - **固定的基础材质走`ConstructorHelpers::FObjectFinder`（构造函数里加载，`EditDefaultsOnly`
-  可覆盖），data-driven的每个地形Mod实例的`diffusePath`走运行时`LoadObject<UTexture2D>`**——
-  前者是编译期已知的路径（`TemplateTerrain`/`TemplateFine`/Water插件材质），后者是运行时
-  才知道具体是哪个Mod、路径是字符串（`TerrainMod::diffusePath`）。不迁移老工程的
-  `UAssetLoader::LoadAssetFromPath`工具类，两种场景各自用引擎自带的对应机制就够。
-- **`FTerrainTri2D`/`FFineCell`/`FForeverLodBoundary`都是普通C++结构体，不是`USTRUCT`**——
-  没有Blueprint消费方，不需要UHT反射。`FForeverLodBoundary`加`Forever`前缀是为了和老工程
+  可覆盖），data-driven的每个地形Mod实例的`diffusePath`/`normalPath`/`roughnessPath`走
+  运行时`LoadObject<UTexture2D>`**——前者是编译期已知的路径（`TemplateFar`/`TemplateNear`/
+  Water插件材质），后者是运行时才知道具体是哪个Mod、路径是字符串
+  （`TerrainMod::diffusePath`等）。不迁移老工程的`UAssetLoader::LoadAssetFromPath`工具类，
+  两种场景各自用引擎自带的对应机制就够。
+- **`FTerrainTri2D`/`FForeverLodBoundary`都是普通C++结构体，不是`USTRUCT`**——没有
+  Blueprint消费方，不需要UHT反射。`FForeverLodBoundary`加`Forever`前缀是为了和老工程
   同名的`LodBoundary`区分（纯风格考虑，两边不会同时编译，不存在真实冲突）。
+
+## 近处地形混合
+
+近处（细LOD）材质重做，替换掉老工程照抄过来的"ISM cube矩阵、每个cube固定UV"那一套——
+新工程近处地形早就改成了和远处一样的程序化网格，UV含义变了，材质没跟着改，之前L0~L2
+主网格用归一化`[vx/32,vy/32]`UV、L3+用地图坐标UV，而construction/挖洞三角形（只在
+`levelIdx<=1`时生成）始终用地图坐标UV，和L0/L1同一层主网格的归一化UV混在同一个mesh
+section、同一个材质里——这些三角形会用几百上千的UV值去采样32×32的控制图，采到回绕后的
+随机内容，是一个确定性bug。
+
+- **材质不读网格UV，全部用世界坐标**：`AbsoluteWorldPosition/1000`就是地图element坐标
+  `P`。`BuildLevel`不再给顶点算UV（`CreateMeshSection`的UV参数直接传空数组），彻底消除
+  上面那个bug，而不是修补它——没有UV数据，就不存在"两种UV混用"的可能。
+- **控制纹理区域=`nearControlLevel`那一级LOD的覆盖区域**（`EditDefaultsOnly`，默认2，即
+  16个element=160米）：`NearIndexMap`/`NearWeightMap`两张持久纹理（`GenerateTerrain`里
+  创建一次，`RebuildNearControl`原地更新，不是每次`CreateTransient`），分辨率
+  `size×nearTexelsPerElement`（默认16个texel/element）。内容只取决于地图数据和texel的
+  世界位置，和区域怎么划分无关，区域平移/重建时同一个世界点的颜色不会跳变——算法细节见
+  `Source/Core/map/terrain_blend.md`，UE侧只是把`NearTerrainBlend::BuildRegion`的输出
+  字节数组拷进纹理。
+- **只在`nearControlLevel`自己的pivot变化时重建纹理**：`TickComponent`的从粗到细重建
+  循环里，`i==nearControlLevel`那一次迭代会在调用`BuildLevel`之前先调
+  `RebuildNearControl`——粗一级pivot变化时所有更细级必然也要重建（`boundaryChanged`的
+  传播已经保证），所以纹理和网格总是同一帧一起更新，不会有"网格已经移动但控制纹理还没
+  跟上"的一帧。`RebuildNearControl`内部还有一道`nearRegionPivot`比较，真正没变化时
+  直接跳过，不会被外层循环"这一帧要重建"的粗粒度判断误触发。
+- **`levelIdx<=nearControlLevel`的所有LOD共用同一个`nearMaterial`**——不再是L0/L1/L2各自
+  一份`fineMaterial0/1/2`+各自一对32×32控制图。`nearSliceIds`/`nearIsConstruction`（整张
+  地图，`GenerateTerrain`里和`terrainIndexMap`同一次扫描顺手填好）是`NearTerrainBlend::
+  BuildRegion`的输入，不用每次重建纹理时重新扫全图。
+- **法线+粗糙度**：新增`TerrainNormalRoughArray`（BGRA8，sRGB关，和`TerrainDiffuseArray`
+  槡位对齐），每个槡位把法线源贴图的R/G（法线xy）和粗糙度源贴图的R（灰度）打包进
+  B/G/R三个输出通道，A固定255。近/远两个材质都只采样"权重最高的那个地形"的法线粗糙度
+  （近处是槡位0，远处是四个角里总权重最高的那个id），省采样次数，代价是交界处细节会
+  借助一个基于主导权重的淡入系数自然淡成平的，不会出现硬线。源贴图路径为空/加载失败/
+  分辨率不是2048×2048时，该槡位整层填平的法线`(128,128)`+中性粗糙度`204`（约0.8），同时
+  打一条Warning——`TerrainDiffuseArray`原来检查不过就直接留黑不报错，这次顺手给diffuse
+  也加上同样的检查+失败时填中性灰的后备行为。
+- **远处的2×2双线性**：远处材质`TemplateFar`不新增CPU端数据，继续用现成的一张全图
+  `terrainIndexMap`，在着色器里对相邻4个element的id做双线性混合，边界不再是10米一格的
+  硬边；`TerrainMapSize`材质参数（`GenerateTerrain`里设成真实地图宽高）供着色器算越界
+  时夹到边缘element。
 
 ## 依赖关系
 
-- 依赖：`Source/Core/map/map.h`（`Map`，非拥有指针）、UE的`ProceduralMeshComponent`/`Water`
-  插件模块（见`Forever.Build.cs`）、`Content/Asset/Materials/{TemplateTerrain,TemplateFine}
-  .uasset`、`Content/Asset/Textures/Terrain/*`（从老工程原样复制的美术资产）。
+- 依赖：`Source/Core/map/map.h`（`Map`，非拥有指针）、
+  `Source/Core/map/terrain_blend.h`（`NearTerrainBlend`，近处混合权重算法，纯标准库，
+  见`terrain_blend.md`）、UE的`ProceduralMeshComponent`/`Water`插件模块（见
+  `Forever.Build.cs`）、`Content/Asset/Materials/{TemplateFar,TemplateNear}.uasset`
+  （编辑器里手工搭建的材质图，节点表见仓库根目录的河流/地形相关计划文档）、
+  `Content/Asset/Textures/Terrain/*`（diffuse+normal+roughness三套贴图资产）。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`
   （`CreateDefaultSubobject`创建、`EnsureTerrainGenerated()`里调用`GenerateTerrain`）、
   `Source/Forever/Player/ForeverGameMode.cpp`（`GetMapCenterWorldLocation()`算出生点）。
@@ -98,6 +145,11 @@
   这个组件的代码。精确凸多边形裁剪算法目前只有Roadnet隧道口这一个真实数据来源验证过（含
   单格/跨格两种情况），当前`LookupTerrain`假定每个hatch都是一个矩形(`Quad`+`rotation`)，
   不支持任意多边形——如果Building场景下出现更复杂的hatch形状（比如非矩形）再回来微调。
-- `TemplateTerrain`/`TemplateFine`材质图内部除了这几个已知贴图参数外是否还引用了别的纹理
-  资产（比如法线/粗糙度贴图），只能在编辑器里打开材质图确认，如果发现引用了没有复制过来的
-  资产需要补充复制。
+- **贴图数组构建依赖源贴图未压缩**：`LoadRawBGRA8`要求源贴图分辨率恰好是
+  `DIFFUSE_TEX_SIZE`（2048）且是未压缩BGRA8格式才会被接受，PIE和编辑器里没问题；正式
+  打包前源贴图如果被压缩会导致对应槡位整层填成后备色，需要在打包前把这几张贴图的压缩
+  设置改成未压缩，或者换成别的构建方式（不在这次范围）。
+- **近远接缝的软边差异**：`nearControlLevel`内是近处核的距离加权软过渡（约1.4个element
+  宽），`nearControlLevel`外沿往外是远处2×2双线性的硬一些的过渡（1个element宽），只在
+  这条边界线附近、地形交界恰好经过那里时能看出差异——不在这次范围内彻底解决，`terrain_
+  blend.md`"风险"一节（如果有）或原始计划文档里有更详细的讨论。

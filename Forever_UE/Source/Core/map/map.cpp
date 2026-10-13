@@ -70,9 +70,13 @@ Map::Map(int width, int height) :
 	componentFactory(Registry::Get().GetComponentFactory()),
 	scriptFactory(Registry::Get().GetScriptFactory()),
 	terrainTextures() {
+	TerrainTextureInfo plainTexture{ 0,
+		"/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse",
+		"/Game/Asset/Textures/Terrain/PlainNormal.PlainNormal",
+		"/Game/Asset/Textures/Terrain/PlainRoughness.PlainRoughness" };
 	terrainTextures = {
-		{ "plain", { 0, "/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse" } },
-		{ "construction", { 0, "/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse" } }
+		{ "plain", plainTexture },
+		{ "construction", plainTexture }
 	};
 }
 
@@ -121,7 +125,9 @@ void Map::InitTerrains() {
 
 	int preset = static_cast<int>(terrainTextures.size());
 	for (size_t i = 0; i < terrains.size(); i++) {
-		terrainTextures[terrains[i]->GetType()] = { static_cast<int>(i) + preset, terrains[i]->GetTexture() };
+		TerrainTexturePaths texturePaths = terrains[i]->GetTextures();
+		terrainTextures[terrains[i]->GetType()] = { static_cast<int>(i) + preset,
+			texturePaths.diffuse, texturePaths.normal, texturePaths.roughness };
 		water = terrains[i]->GetWater();
 		terrains[i]->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight);
 	}
@@ -1956,7 +1962,7 @@ void Map::AddHatch(Quad q, float rotation) {
 	}
 }
 
-const unordered_map<string, pair<int, string>>& Map::GetTerrainTextures() const {
+const unordered_map<string, Map::TerrainTextureInfo>& Map::GetTerrainTextures() const {
 	return terrainTextures;
 }
 

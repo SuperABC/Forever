@@ -60,6 +60,8 @@ float OceanTerrain::GetPriority() const {
 
 void OceanTerrain::SetupTexture() {
 	diffusePath = "/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse";
+	normalPath = "/Game/Asset/Textures/Terrain/PlainNormal.PlainNormal";
+	roughnessPath = "/Game/Asset/Textures/Terrain/PlainRoughness.PlainRoughness";
 	waterHeight = { true, -0.1f };
 }
 
@@ -320,6 +322,8 @@ float MountainTerrain::GetPriority() const {
 
 void MountainTerrain::SetupTexture() {
 	diffusePath = "/Game/Asset/Textures/Terrain/RockDiffuse.RockDiffuse";
+	normalPath = "/Game/Asset/Textures/Terrain/RockNormal.RockNormal";
+	roughnessPath = "/Game/Asset/Textures/Terrain/RockRoughness.RockRoughness";
 }
 
 void MountainTerrain::DistributeTerrain(int width, int height,

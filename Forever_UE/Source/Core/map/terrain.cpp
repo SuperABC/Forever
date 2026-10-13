@@ -42,8 +42,8 @@ void Terrain::SetupTexture() const {
 	mod->SetupTexture();
 }
 
-string Terrain::GetTexture() const {
-	return mod->diffusePath;
+TerrainTexturePaths Terrain::GetTextures() const {
+	return { mod->diffusePath, mod->normalPath, mod->roughnessPath };
 }
 
 pair<bool, float> Terrain::GetWater() const {

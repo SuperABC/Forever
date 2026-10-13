@@ -62,8 +62,14 @@ public:
 	// 自动分发到所有与q重叠的element(按q的旋转AABB计算重叠范围),和旧工程Map::AddHatch同语义。
 	void AddHatch(Quad q, float rotation);
 
-	// 地形类型 -> {纹理数组槽位索引, diffuse资产路径}
-	const std::unordered_map<std::string, std::pair<int, std::string>>& GetTerrainTextures() const;
+	// 地形类型 -> {纹理数组槽位索引, diffuse/normal/roughness三套资产路径}
+	struct TerrainTextureInfo {
+		int slice = 0;
+		std::string diffuse;
+		std::string normal;
+		std::string roughness;
+	};
+	const std::unordered_map<std::string, TerrainTextureInfo>& GetTerrainTextures() const;
 
 	// 用已经注册好的roadnetFactory构建路网(mod dll的发现/注册归`Registry`全局管,不在这里
 	// 做),假定InitTerrains已经跑完(DistributeRoadnet要采样已生成好的地形/水面)。构建顺序见
@@ -299,7 +305,7 @@ private:
 	// 的约定，声明顺序必须跟构造函数初始化列表顺序一致。
 	ScriptFactory& scriptFactory;
 
-	std::unordered_map<std::string, std::pair<int, std::string>> terrainTextures;
+	std::unordered_map<std::string, TerrainTextureInfo> terrainTextures;
 
 	Roadnet* roadnet = nullptr;
 	std::vector<RoadJunction*> junctions;

@@ -20,15 +20,15 @@ UForeverTerrainFrameworkComponent::UForeverTerrainFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> terrainMatFinder(
-		TEXT("/Game/Asset/Materials/TemplateTerrain.TemplateTerrain"));
+		TEXT("/Game/Asset/Materials/TemplateFar.TemplateFar"));
 	if (terrainMatFinder.Succeeded()) {
 		terrainBaseMaterial = terrainMatFinder.Object;
 	}
 
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> fineMatFinder(
-		TEXT("/Game/Asset/Materials/TemplateFine.TemplateFine"));
-	if (fineMatFinder.Succeeded()) {
-		fineBaseMaterial = fineMatFinder.Object;
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> nearMatFinder(
+		TEXT("/Game/Asset/Materials/TemplateNear.TemplateNear"));
+	if (nearMatFinder.Succeeded()) {
+		nearBaseMaterial = nearMatFinder.Object;
 	}
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> oceanMatFinder(
@@ -116,10 +116,49 @@ void UForeverTerrainFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 			parentOffsetY = idxY * 8;
 		}
 
+		// 只在nearControlLevel自己的pivot变化时重建近处混合控制纹理——粗级pivot变化时所有
+		// 更细的级必然也要重建(上面boundaryChanged的传播已经保证needsRebuild[i]对更细级为真)，
+		// 所以纹理和网格总是同一帧一起更新，不会出现"网格已经移动但控制纹理还没跟上"的一帧。
+		if (i == nearControlLevel) {
+			float regionSize = currentPivots[i].second;
+			float originX = newPivots[i].first * (regionSize / 2.f) - regionSize / 2.f;
+			float originY = newPivots[i].second * (regionSize / 2.f) - regionSize / 2.f;
+			RebuildNearControl(originX, originY, FMath::RoundToInt(regionSize));
+		}
+
 		const FForeverLodBoundary* parentBoundary = (i < numLevels - 1) ? &lodBoundaries[i + 1] : nullptr;
 		BuildLevel(i, newPivots[i], currentPivots[i].second, childPos,
 			parentBoundary, parentOffsetX, parentOffsetY, edgeFlags);
 		currentPivots[i].first = newPivots[i];
+	}
+}
+
+namespace {
+	// 读取srcTexture的原始像素数据，只有分辨率恰好是expectedSize×expectedSize时才成功——
+	// 这是贴图数组构建代码本来就有的校验逻辑(以前只检查字节数够不够，现在统一成"分辨率必须
+	// 正好符合"，TerrainDiffuseArray/TerrainNormalRoughArray两个数组共用这一份)。
+	bool LoadRawBGRA8(UTexture2D* srcTexture, int32 expectedSize, TArray64<uint8>& outBytes) {
+		if (!srcTexture) return false;
+		int64 expectedBytes = (int64)expectedSize * expectedSize * 4;
+#if WITH_EDITOR
+		if (srcTexture->Source.GetMipData(outBytes, 0) && outBytes.Num() >= expectedBytes) {
+			outBytes.SetNum(expectedBytes, EAllowShrinking::No);
+			return true;
+		}
+		return false;
+#else
+		FTexturePlatformData* srcPlatformData = srcTexture->GetPlatformData();
+		if (!srcPlatformData || srcPlatformData->Mips.Num() == 0) return false;
+		FByteBulkData& bulkData = srcPlatformData->Mips[0].BulkData;
+		const void* srcData = bulkData.Lock(LOCK_READ_ONLY);
+		bool ok = srcData && bulkData.GetBulkDataSize() >= expectedBytes;
+		if (ok) {
+			outBytes.SetNumUninitialized(expectedBytes);
+			FMemory::Memcpy(outBytes.GetData(), srcData, expectedBytes);
+		}
+		bulkData.Unlock();
+		return ok;
+#endif
 	}
 }
 
@@ -138,18 +177,32 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 	for (int i = 0; i < num; i++) {
 		currentPivots[i] = { { INT_MIN, INT_MIN }, 4.f * powf(2.f, static_cast<float>(i)) };
 	}
+	nearControlLevel = FMath::Clamp(nearControlLevel, 0, num - 1);
+	nearTexelsPerElement = FMath::Max(nearTexelsPerElement, 1);
+	nearBlendRadius = FMath::Clamp(nearBlendRadius, 1.f, 3.f);
 
 	const auto& terrainTextures = map->GetTerrainTextures();
 	if (!terrainTextures.empty()) {
 		int32 numSlices = static_cast<int32>(terrainTextures.size());
+		int32 sliceBytes = DIFFUSE_TEX_SIZE * DIFFUSE_TEX_SIZE * 4;
 
-		TArray<UTexture2D*> sourceTextures;
-		sourceTextures.SetNum(numSlices);
-		for (auto& [textureName, textureInfo] : terrainTextures)
-			if (sourceTextures.IsValidIndex(textureInfo.first) && !textureInfo.second.empty())
-				sourceTextures[textureInfo.first] = LoadObject<UTexture2D>(nullptr, *FString(textureInfo.second.c_str()));
+		TArray<UTexture2D*> diffuseTextures, normalTextures, roughnessTextures;
+		diffuseTextures.SetNum(numSlices);
+		normalTextures.SetNum(numSlices);
+		roughnessTextures.SetNum(numSlices);
+		for (auto& [textureName, textureInfo] : terrainTextures) {
+			if (!diffuseTextures.IsValidIndex(textureInfo.slice)) continue;
+			if (!textureInfo.diffuse.empty())
+				diffuseTextures[textureInfo.slice] = LoadObject<UTexture2D>(nullptr, *FString(textureInfo.diffuse.c_str()));
+			if (!textureInfo.normal.empty())
+				normalTextures[textureInfo.slice] = LoadObject<UTexture2D>(nullptr, *FString(textureInfo.normal.c_str()));
+			if (!textureInfo.roughness.empty())
+				roughnessTextures[textureInfo.slice] = LoadObject<UTexture2D>(nullptr, *FString(textureInfo.roughness.c_str()));
+		}
 
-		// 构建Texture2DArray
+		// 构建TerrainDiffuseArray:逐槡位直接拷贝源贴图的BGRA8字节,分辨率不对/加载失败时
+		// 整层填中性灰(128,128,128,255),同时打一条Warning——以前这里检查不过就直接留黑,
+		// 不会报错也看不出哪里错了。
 		terrainDiffuseArray = NewObject<UTexture2DArray>(this, NAME_None, RF_Transient);
 		terrainDiffuseArray->Filter = TF_Bilinear;
 		terrainDiffuseArray->SRGB = true;
@@ -157,52 +210,112 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 		terrainDiffuseArray->MipGenSettings = TMGS_NoMipmaps;
 #endif
 		terrainDiffuseArray->NeverStream = true;
+		{
+			FTexturePlatformData* platformData = new FTexturePlatformData();
+			platformData->SizeX = DIFFUSE_TEX_SIZE;
+			platformData->SizeY = DIFFUSE_TEX_SIZE;
+			platformData->SetNumSlices(numSlices);
+			platformData->PixelFormat = PF_B8G8R8A8;
 
-		FTexturePlatformData* platformData = new FTexturePlatformData();
-		platformData->SizeX = DIFFUSE_TEX_SIZE;
-		platformData->SizeY = DIFFUSE_TEX_SIZE;
-		platformData->SetNumSlices(numSlices);
-		platformData->PixelFormat = PF_B8G8R8A8;
+			FTexture2DMipMap* mip = new FTexture2DMipMap();
+			mip->SizeX = DIFFUSE_TEX_SIZE;
+			mip->SizeY = DIFFUSE_TEX_SIZE;
+			mip->SizeZ = numSlices;
 
-		FTexture2DMipMap* mip = new FTexture2DMipMap();
-		mip->SizeX = DIFFUSE_TEX_SIZE;
-		mip->SizeY = DIFFUSE_TEX_SIZE;
-		mip->SizeZ = numSlices;
-		int32 sliceBytes = DIFFUSE_TEX_SIZE * DIFFUSE_TEX_SIZE * 4;
+			mip->BulkData.Lock(LOCK_READ_WRITE);
+			uint8* destPixels = (uint8*)mip->BulkData.Realloc((int64)sliceBytes * numSlices);
+			FMemory::Memzero(destPixels, (int64)sliceBytes * numSlices);
 
-		mip->BulkData.Lock(LOCK_READ_WRITE);
-		uint8* destPixels = (uint8*)mip->BulkData.Realloc((int64)sliceBytes * numSlices);
-		FMemory::Memzero(destPixels, (int64)sliceBytes * numSlices);
-
-		for (int32 sliceIndex = 0; sliceIndex < sourceTextures.Num(); sliceIndex++) {
-			UTexture2D* srcTexture = sourceTextures[sliceIndex];
-			if (!srcTexture) continue;
-#if WITH_EDITOR
-			TArray64<uint8> srcBytes;
-			if (srcTexture->Source.GetMipData(srcBytes, 0) && srcBytes.Num() >= sliceBytes)
-				FMemory::Memcpy(destPixels + (int64)sliceIndex * sliceBytes, srcBytes.GetData(), sliceBytes);
-#else
-			FTexturePlatformData* srcPlatformData = srcTexture->GetPlatformData();
-			if (srcPlatformData && srcPlatformData->Mips.Num() > 0) {
-				FByteBulkData& bulkData = srcPlatformData->Mips[0].BulkData;
-				const void* srcData = bulkData.Lock(LOCK_READ_ONLY);
-				if (srcData && bulkData.GetBulkDataSize() >= sliceBytes)
-					FMemory::Memcpy(destPixels + (int64)sliceIndex * sliceBytes, srcData, sliceBytes);
-				bulkData.Unlock();
+			for (int32 sliceIndex = 0; sliceIndex < numSlices; sliceIndex++) {
+				uint8* slicePixels = destPixels + (int64)sliceIndex * sliceBytes;
+				TArray64<uint8> srcBytes;
+				if (LoadRawBGRA8(diffuseTextures[sliceIndex], DIFFUSE_TEX_SIZE, srcBytes)) {
+					FMemory::Memcpy(slicePixels, srcBytes.GetData(), sliceBytes);
+				}
+				else {
+					if (diffuseTextures[sliceIndex]) {
+						UE_LOG(LogTemp, Warning, TEXT("UForeverTerrainFrameworkComponent: diffuse texture at slot %d failed to load or is not %dx%d, filling fallback gray."),
+							sliceIndex, DIFFUSE_TEX_SIZE, DIFFUSE_TEX_SIZE);
+					}
+					for (int64 p = 0; p < (int64)DIFFUSE_TEX_SIZE * DIFFUSE_TEX_SIZE; p++) {
+						slicePixels[p * 4 + 0] = 128; slicePixels[p * 4 + 1] = 128;
+						slicePixels[p * 4 + 2] = 128; slicePixels[p * 4 + 3] = 255;
+					}
+				}
 			}
-#endif
+
+			mip->BulkData.Unlock();
+			platformData->Mips.Add(mip);
+			terrainDiffuseArray->SetPlatformData(platformData);
+			terrainDiffuseArray->UpdateResource();
 		}
 
-		mip->BulkData.Unlock();
-		platformData->Mips.Add(mip);
-		terrainDiffuseArray->SetPlatformData(platformData);
-		terrainDiffuseArray->UpdateResource();
+		// 构建TerrainNormalRoughArray:每个槡位把法线源的R/G(法线xy)和粗糙度源的R(灰度)
+		// 打包进同一层,sRGB关(存的是打包数据不是颜色)。两个源都缺/都不合规格时整层填平的
+		// 法线(128,128)+中性粗糙度(204≈0.8)。
+		terrainNormalRoughArray = NewObject<UTexture2DArray>(this, NAME_None, RF_Transient);
+		terrainNormalRoughArray->Filter = TF_Bilinear;
+		terrainNormalRoughArray->SRGB = false;
+#if WITH_EDITOR
+		terrainNormalRoughArray->MipGenSettings = TMGS_NoMipmaps;
+#endif
+		terrainNormalRoughArray->NeverStream = true;
+		{
+			FTexturePlatformData* platformData = new FTexturePlatformData();
+			platformData->SizeX = DIFFUSE_TEX_SIZE;
+			platformData->SizeY = DIFFUSE_TEX_SIZE;
+			platformData->SetNumSlices(numSlices);
+			platformData->PixelFormat = PF_B8G8R8A8;
 
-		// 构建地形索引图:每像素存储该元素的地形类型槽位索引(PF_G8)
+			FTexture2DMipMap* mip = new FTexture2DMipMap();
+			mip->SizeX = DIFFUSE_TEX_SIZE;
+			mip->SizeY = DIFFUSE_TEX_SIZE;
+			mip->SizeZ = numSlices;
+
+			mip->BulkData.Lock(LOCK_READ_WRITE);
+			uint8* destPixels = (uint8*)mip->BulkData.Realloc((int64)sliceBytes * numSlices);
+			FMemory::Memzero(destPixels, (int64)sliceBytes * numSlices);
+
+			for (int32 sliceIndex = 0; sliceIndex < numSlices; sliceIndex++) {
+				uint8* slicePixels = destPixels + (int64)sliceIndex * sliceBytes;
+				TArray64<uint8> normalBytes, roughBytes;
+				bool normalOk = LoadRawBGRA8(normalTextures[sliceIndex], DIFFUSE_TEX_SIZE, normalBytes);
+				bool roughOk = LoadRawBGRA8(roughnessTextures[sliceIndex], DIFFUSE_TEX_SIZE, roughBytes);
+				if (normalTextures[sliceIndex] && !normalOk) {
+					UE_LOG(LogTemp, Warning, TEXT("UForeverTerrainFrameworkComponent: normal texture at slot %d failed to load or is not %dx%d, filling flat normal."),
+						sliceIndex, DIFFUSE_TEX_SIZE, DIFFUSE_TEX_SIZE);
+				}
+				if (roughnessTextures[sliceIndex] && !roughOk) {
+					UE_LOG(LogTemp, Warning, TEXT("UForeverTerrainFrameworkComponent: roughness texture at slot %d failed to load or is not %dx%d, filling neutral roughness."),
+						sliceIndex, DIFFUSE_TEX_SIZE, DIFFUSE_TEX_SIZE);
+				}
+				for (int64 p = 0; p < (int64)DIFFUSE_TEX_SIZE * DIFFUSE_TEX_SIZE; p++) {
+					// 源贴图也是BGRA8,R通道在字节下标2,G通道在字节下标1。
+					uint8 normalSrcR = normalOk ? normalBytes[p * 4 + 2] : 128;
+					uint8 normalSrcG = normalOk ? normalBytes[p * 4 + 1] : 128;
+					uint8 roughSrcR = roughOk ? roughBytes[p * 4 + 2] : 204;
+					slicePixels[p * 4 + 0] = roughSrcR;  // 输出B=粗糙度
+					slicePixels[p * 4 + 1] = normalSrcG; // 输出G=法线y
+					slicePixels[p * 4 + 2] = normalSrcR; // 输出R=法线x
+					slicePixels[p * 4 + 3] = 255;
+				}
+			}
+
+			mip->BulkData.Unlock();
+			platformData->Mips.Add(mip);
+			terrainNormalRoughArray->SetPlatformData(platformData);
+			terrainNormalRoughArray->UpdateResource();
+		}
+
+		// 构建地形索引图(远处用):每像素存储该元素的地形类型槡位索引(PF_G8);同时顺手填好
+		// nearSliceIds/nearIsConstruction(近处混合用),两份数据来自同一次扫描,不重复遍历。
 		auto [mapWidth, mapHeight] = map->GetSize();
 		terrainIndexMap = UTexture2D::CreateTransient(mapWidth, mapHeight, PF_G8, TEXT("TerrainIndexMap"));
 		terrainIndexMap->NeverStream = true;
 		terrainIndexMap->Filter = TF_Nearest;
+
+		nearSliceIds.assign((size_t)mapWidth * mapHeight, 0);
+		nearIsConstruction.assign((size_t)mapWidth * mapHeight, 0);
 
 		FTexture2DMipMap& indexMip = terrainIndexMap->GetPlatformData()->Mips[0];
 		uint8* indexPixels = (uint8*)indexMip.BulkData.Lock(LOCK_READ_WRITE);
@@ -212,8 +325,10 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 				uint8 terrainIndex = 0;
 				auto terrainIter = terrainTextures.find(terrainName);
 				if (terrainIter != terrainTextures.end())
-					terrainIndex = (uint8)FMath::Min(terrainIter->second.first, 255);
+					terrainIndex = (uint8)FMath::Min(terrainIter->second.slice, 255);
 				indexPixels[y * mapWidth + x] = terrainIndex;
+				nearSliceIds[(size_t)y * mapWidth + x] = terrainIndex;
+				nearIsConstruction[(size_t)y * mapWidth + x] = (terrainName == "construction") ? 1 : 0;
 			}
 		indexMip.BulkData.Unlock();
 		terrainIndexMap->UpdateResource();
@@ -221,13 +336,34 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 		if (terrainBaseMaterial) {
 			terrainMaterial = UMaterialInstanceDynamic::Create(terrainBaseMaterial, this);
 			terrainMaterial->SetTextureParameterValue(TEXT("TerrainDiffuseArray"), terrainDiffuseArray);
+			terrainMaterial->SetTextureParameterValue(TEXT("TerrainNormalRoughArray"), terrainNormalRoughArray);
 			terrainMaterial->SetTextureParameterValue(TEXT("TerrainIndexMap"), terrainIndexMap);
+			terrainMaterial->SetVectorParameterValue(TEXT("TerrainMapSize"), FLinearColor((float)mapWidth, (float)mapHeight, 0.f, 0.f));
 		}
 
-		if (fineBaseMaterial) {
-			fineMaterial0 = UMaterialInstanceDynamic::Create(fineBaseMaterial, this);
-			fineMaterial1 = UMaterialInstanceDynamic::Create(fineBaseMaterial, this);
-			fineMaterial2 = UMaterialInstanceDynamic::Create(fineBaseMaterial, this);
+		// 近处材质+它的两张控制纹理(持久化,原地更新,不是每次CreateTransient)。
+		nearBlend = std::make_unique<NearTerrainBlend>(NearBlendParams{ nearTexelsPerElement, nearBlendRadius });
+		if (nearBaseMaterial) {
+			nearMaterial = UMaterialInstanceDynamic::Create(nearBaseMaterial, this);
+			nearMaterial->SetTextureParameterValue(TEXT("TerrainDiffuseArray"), terrainDiffuseArray);
+			nearMaterial->SetTextureParameterValue(TEXT("TerrainNormalRoughArray"), terrainNormalRoughArray);
+		}
+
+		int32 nearRegionSize = FMath::RoundToInt(currentPivots[nearControlLevel].second);
+		int32 nearRes = nearRegionSize * nearTexelsPerElement;
+		nearIndexMap = UTexture2D::CreateTransient(nearRes, nearRes, PF_B8G8R8A8, TEXT("NearIndexMap"));
+		nearWeightMap = UTexture2D::CreateTransient(nearRes, nearRes, PF_B8G8R8A8, TEXT("NearWeightMap"));
+		for (UTexture2D* tex : { nearIndexMap, nearWeightMap }) {
+			if (!tex) continue;
+			tex->Filter = TF_Nearest;
+			tex->AddressX = TA_Clamp;
+			tex->AddressY = TA_Clamp;
+			tex->SRGB = false;
+			tex->NeverStream = true;
+		}
+		if (nearMaterial) {
+			nearMaterial->SetTextureParameterValue(TEXT("NearIndexMap"), nearIndexMap);
+			nearMaterial->SetTextureParameterValue(TEXT("NearWeightMap"), nearWeightMap);
 		}
 	}
 
@@ -417,12 +553,14 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 	const float startY = pos.second * (size / 2.f) - size / 2.f;
 	const float worldScale = 1000.f;
 
+	// 材质不读网格UV,全部用世界坐标(AbsoluteWorldPosition/1000=地图element坐标)采样,
+	// 不需要再给顶点算UV——这样L0~L2的主网格和construction/挖洞三角形(以前UV约定不一样,
+	// 混在同一个section/材质里会读出回绕后的随机内容,是一个确定性bug)天然统一,见
+	// ForeverTerrainFrameworkComponent.md"近处地形混合"一节。
 	TArray<FVector> vertices;
 	TArray<int32> triangles;
-	TArray<FVector2D> uvs;
 
 	vertices.Reserve(33 * 33);
-	uvs.Reserve(33 * 33);
 
 	for (int vy = 0; vy <= 32; vy++) {
 		for (int vx = 0; vx <= 32; vx++) {
@@ -431,10 +569,6 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			float h = SampleHeight(mapX, mapY) + HEIGHT_EPSILON;
 
 			vertices.Add(FVector(mapX * worldScale, mapY * worldScale, h * worldScale));
-			if (levelIdx <= 2)
-				uvs.Add(FVector2D(vx / 32.f, vy / 32.f));
-			else
-				uvs.Add(FVector2D(mapX, mapY));
 		}
 	}
 
@@ -528,15 +662,41 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 					float mapY = ey + corner.Y;
 					float h = SampleHeight(mapX, mapY) + HEIGHT_EPSILON;
 					vertices.Add(FVector(mapX * worldScale, mapY * worldScale, h * worldScale));
-					uvs.Add(FVector2D(mapX, mapY));
 				}
 				triangles.Add(baseIdx); triangles.Add(baseIdx + 1); triangles.Add(baseIdx + 2);
 			}
 		}
 	}
 
+	// 顶点法线/切线之前一直传空数组,ProceduralMeshComponent不会帮你算,相当于整张地形
+	// (尤其是山体陡坡)一直在用未定义的法线参与光照——这里按面法线面积加权累加到顶点、
+	// 再归一化得到平滑法线;切线不follow网格UV(已经不读UV了),而是把世界X轴投影到切平面上
+	// 做Gram-Schmidt正交化,和材质里"U方向=世界X"(TileUV=P*TilesPerElement,P=世界XY/1000)
+	// 的纹理方向约定对上,否则法线贴图的凹凸方向会跟纹理贴图对不齐。
+	TArray<FVector> normals;
+	normals.SetNumZeroed(vertices.Num());
+	for (int32 t = 0; t < triangles.Num(); t += 3) {
+		const FVector& a = vertices[triangles[t]];
+		const FVector& b = vertices[triangles[t + 1]];
+		const FVector& c = vertices[triangles[t + 2]];
+		FVector faceNormal = FVector::CrossProduct(c - a, b - a);
+		normals[triangles[t]] += faceNormal;
+		normals[triangles[t + 1]] += faceNormal;
+		normals[triangles[t + 2]] += faceNormal;
+	}
+	TArray<FProcMeshTangent> tangents;
+	tangents.SetNumUninitialized(vertices.Num());
+	for (int32 i = 0; i < normals.Num(); i++) {
+		FVector n = normals[i].GetSafeNormal();
+		if (n.IsNearlyZero()) n = FVector::UpVector;
+		normals[i] = n;
+		FVector t = (FVector::ForwardVector - n * FVector::DotProduct(FVector::ForwardVector, n)).GetSafeNormal();
+		if (t.IsNearlyZero()) t = FVector::RightVector;
+		tangents[i] = FProcMeshTangent(t, false);
+	}
+
 	mesh->CreateMeshSection(0, vertices, triangles,
-		TArray<FVector>(), uvs, TArray<FColor>(), TArray<FProcMeshTangent>(), true);
+		normals, TArray<FVector2D>(), TArray<FColor>(), tangents, true);
 
 	// 保存修正后的四条边界顶点,供更细一级LOD进行接缝修正时使用
 	if (levelIdx < (int)lodBoundaries.size()) {
@@ -549,144 +709,65 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		}
 	}
 
-	if (levelIdx <= 2) {
-		// lod0/1/2的cell比element还小,需要细分地形混合数据
-		int32 baseRes = FMath::RoundToInt(size);
-		TArray<FFineCell> cells;
-		cells.SetNum(baseRes * baseRes);
-
-		int baseX = FMath::FloorToInt(startX);
-		int baseY = FMath::FloorToInt(startY);
-		const auto& texInfo = map->GetTerrainTextures();
-		for (int y = 0; y < baseRes; y++) {
-			for (int x = 0; x < baseRes; x++) {
-				int ex = FMath::Clamp(baseX + x, 0, mapSize.first - 1);
-				int ey = FMath::Clamp(baseY + y, 0, mapSize.second - 1);
-				auto it = texInfo.find(map->GetTerrain(ex, ey));
-				FFineCell& cell = cells[y * baseRes + x];
-				cell.Ids[0] = (it != texInfo.end()) ? (uint8)it->second.first : 0;
-				cell.Weights[0] = 1.f;
-			}
-		}
-
-		int32 curRes = baseRes;
-		int32 steps = 3 - levelIdx;
-		for (int32 s = 0; s < steps; s++) {
-			TArray<FFineCell> next;
-			DownsampleFine(cells, curRes, next);
-			cells = MoveTemp(next);
-			curRes *= 2;
-		}
-
-		UTexture2D* fineIdx = UTexture2D::CreateTransient(32, 32, PF_B8G8R8A8);
-		UTexture2D* finePow = UTexture2D::CreateTransient(32, 32, PF_B8G8R8A8);
-		if (fineIdx && finePow) {
-			fineIdx->Filter = TF_Nearest;
-			fineIdx->SRGB = false;
-			finePow->Filter = TF_Bilinear;
-			finePow->SRGB = false;
-
-			FTexturePlatformData* idxPd = fineIdx->GetPlatformData();
-			FTexturePlatformData* powPd = finePow->GetPlatformData();
-			if (idxPd && idxPd->Mips.Num() > 0 && powPd && powPd->Mips.Num() > 0) {
-				TArray<FColor> idxPixels, powPixels;
-				idxPixels.SetNum(32 * 32);
-				powPixels.SetNum(32 * 32);
-				for (int i = 0; i < 32 * 32; i++) {
-					const FFineCell& cell = cells[i];
-					idxPixels[i] = FColor(cell.Ids[0], cell.Ids[1], cell.Ids[2], cell.Ids[3]);
-					powPixels[i] = FColor(
-						(uint8)FMath::Clamp(FMath::RoundToInt(cell.Weights[0] * 255.f), 0, 255),
-						(uint8)FMath::Clamp(FMath::RoundToInt(cell.Weights[1] * 255.f), 0, 255),
-						(uint8)FMath::Clamp(FMath::RoundToInt(cell.Weights[2] * 255.f), 0, 255),
-						(uint8)FMath::Clamp(FMath::RoundToInt(cell.Weights[3] * 255.f), 0, 255));
-				}
-
-				const int32 bytes = 32 * 32 * 4;
-				void* idxData = idxPd->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
-				FMemory::Memcpy(idxData, idxPixels.GetData(), bytes);
-				idxPd->Mips[0].BulkData.Unlock();
-
-				void* powData = powPd->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
-				FMemory::Memcpy(powData, powPixels.GetData(), bytes);
-				powPd->Mips[0].BulkData.Unlock();
-			}
-			fineIdx->UpdateResource();
-			finePow->UpdateResource();
-		}
-
-		switch (levelIdx) {
-		case 0: fineIndexMap0 = fineIdx; finePowerMap0 = finePow; break;
-		case 1: fineIndexMap1 = fineIdx; finePowerMap1 = finePow; break;
-		case 2: fineIndexMap2 = fineIdx; finePowerMap2 = finePow; break;
-		default: break;
-		}
-
-		UMaterialInstanceDynamic* levelMat = nullptr;
-		switch (levelIdx) {
-		case 0: levelMat = fineMaterial0; break;
-		case 1: levelMat = fineMaterial1; break;
-		case 2: levelMat = fineMaterial2; break;
-		default: break;
-		}
-		if (levelMat) {
-			levelMat->SetTextureParameterValue(TEXT("FineIndexMap"), fineIdx);
-			levelMat->SetTextureParameterValue(TEXT("FinePowerMap"), finePow);
-			levelMat->SetTextureParameterValue(TEXT("TerrainDiffuseArray"), terrainDiffuseArray);
-			mesh->SetMaterial(0, levelMat);
-		}
+	// levelIdx<=nearControlLevel的LOD都在近处控制纹理覆盖的区域内,用同一个nearMaterial
+	// (纹理内容由RebuildNearControl按nearControlLevel那一级的pivot更新,不是每级各自建一份)。
+	if (levelIdx <= nearControlLevel && nearMaterial) {
+		mesh->SetMaterial(0, nearMaterial);
 	}
 	else if (terrainMaterial) {
 		mesh->SetMaterial(0, terrainMaterial);
 	}
 }
 
-void UForeverTerrainFrameworkComponent::DownsampleFine(const TArray<FFineCell>& in, int32 inRes, TArray<FFineCell>& out) const {
-	int32 outRes = inRes * 2;
-	out.SetNum(outRes * outRes);
+void UForeverTerrainFrameworkComponent::RebuildNearControl(float originX, float originY, int32 sizeElements) {
+	if (!map || !nearBlend || !nearIndexMap || !nearWeightMap) return;
 
-	for (int oy = 0; oy < outRes; oy++) {
-		for (int ox = 0; ox < outRes; ox++) {
-			float fx = (ox + 0.5f) * 0.5f - 0.5f;
-			float fy = (oy + 0.5f) * 0.5f - 0.5f;
-			int ix0 = FMath::FloorToInt(fx);
-			int iy0 = FMath::FloorToInt(fy);
-			float tx = fx - ix0;
-			float ty = fy - iy0;
-			int ix1 = ix0 + 1;
-			int iy1 = iy0 + 1;
-			ix0 = FMath::Clamp(ix0, 0, inRes - 1);
-			ix1 = FMath::Clamp(ix1, 0, inRes - 1);
-			iy0 = FMath::Clamp(iy0, 0, inRes - 1);
-			iy1 = FMath::Clamp(iy1, 0, inRes - 1);
+	int32 clampedOriginX = FMath::FloorToInt(originX);
+	int32 clampedOriginY = FMath::FloorToInt(originY);
+	if (nearRegionPivot.first == clampedOriginX && nearRegionPivot.second == clampedOriginY) return;
 
-			const FFineCell* corners[4] = {
-				&in[iy0 * inRes + ix0], &in[iy0 * inRes + ix1],
-				&in[iy1 * inRes + ix0], &in[iy1 * inRes + ix1]
-			};
-			float cornerW[4] = { (1 - tx) * (1 - ty), tx * (1 - ty), (1 - tx) * ty, tx * ty };
+	double startTime = FPlatformTime::Seconds();
+	auto [mapWidth, mapHeight] = map->GetSize();
 
-			TMap<uint8, float> accum;
-			for (int c = 0; c < 4; c++) {
-				if (cornerW[c] <= 0.f) continue;
-				for (int k = 0; k < 4; k++) {
-					float w = corners[c]->Weights[k] * cornerW[c];
-					if (w <= 0.f) continue;
-					accum.FindOrAdd(corners[c]->Ids[k]) += w;
-				}
-			}
+	NearBlendRegion region;
+	region.originX = clampedOriginX;
+	region.originY = clampedOriginY;
+	region.size = sizeElements;
+	region.mapWidth = mapWidth;
+	region.mapHeight = mapHeight;
+	region.sliceIds = nearSliceIds.data();
+	region.isConstruction = nearIsConstruction.data();
 
-			TArray<TPair<uint8, float>> sorted;
-			for (auto& pair : accum) sorted.Add(TPair<uint8, float>(pair.Key, pair.Value));
-			sorted.Sort([](const TPair<uint8, float>& a, const TPair<uint8, float>& b) { return a.Value > b.Value; });
+	std::vector<uint8_t> outIds, outWeights;
+	nearBlend->BuildRegion(region, outIds, outWeights);
 
-			FFineCell cell;
-			for (int k = 0; k < 4; k++) {
-				if (k < sorted.Num()) { cell.Ids[k] = sorted[k].Key; cell.Weights[k] = sorted[k].Value; }
-			}
-			out[oy * outRes + ox] = cell;
-		}
+	// res和GenerateTerrain里创建这两张纹理时用的res恒定一致(sizeElements/
+	// nearTexelsPerElement都不会在运行时变)，Lock后直接Realloc到同样的字节数，和diffuse
+	// 数组构建时的写法同一个约定——原地更新，不是每次CreateTransient新纹理。
+	int32 res = sizeElements * nearTexelsPerElement;
+	int64 expectedBytes = (int64)res * res * 4;
+	auto writeTexture = [expectedBytes](UTexture2D* tex, const std::vector<uint8_t>& bytes) {
+		FTexturePlatformData* pd = tex->GetPlatformData();
+		if (!pd || pd->Mips.Num() == 0) return;
+		FTexture2DMipMap& mip = pd->Mips[0];
+		mip.BulkData.Lock(LOCK_READ_WRITE);
+		void* dest = mip.BulkData.Realloc(expectedBytes);
+		FMemory::Memcpy(dest, bytes.data(), expectedBytes);
+		mip.BulkData.Unlock();
+		tex->UpdateResource();
+		};
+	writeTexture(nearIndexMap, outIds);
+	writeTexture(nearWeightMap, outWeights);
+
+	if (nearMaterial) {
+		nearMaterial->SetVectorParameterValue(TEXT("NearRegion"),
+			FLinearColor((float)clampedOriginX, (float)clampedOriginY, (float)sizeElements, 0.f));
 	}
+
+	nearRegionPivot = { clampedOriginX, clampedOriginY };
+	double elapsedMs = (FPlatformTime::Seconds() - startTime) * 1000.0;
+	UE_LOG(LogTemp, Log, TEXT("UForeverTerrainFrameworkComponent::RebuildNearControl origin=(%d,%d) size=%d res=%d elapsed=%.2fms"),
+		clampedOriginX, clampedOriginY, sizeElements, res, elapsedMs);
 }
 
 void UForeverTerrainFrameworkComponent::BuildOceanMesh() {

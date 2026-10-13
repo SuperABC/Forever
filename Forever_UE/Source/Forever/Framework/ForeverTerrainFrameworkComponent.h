@@ -4,9 +4,12 @@
 
 #include <vector>
 #include <utility>
+#include <memory>
+#include <cstdint>
 
 #include "CoreMinimal.h"
 #include "Framework/ForeverFrameworkComponent.h"
+#include "map/terrain_blend.h"
 #include "ForeverTerrainFrameworkComponent.generated.h"
 
 class UProceduralMeshComponent;
@@ -22,12 +25,6 @@ class Map;
 // 不需要再分rects/tris两种特化形状。
 struct FTerrainTri2D {
 	FVector2D A, B, C;
-};
-
-// 精细地形混合单元:权重最高的4个地形id及其权重
-struct FFineCell {
-	uint8 Ids[4] = { 0, 0, 0, 0 };
-	float Weights[4] = { 0.f, 0.f, 0.f, 0.f };
 };
 
 // 某一级LOD mesh经过接缝修正后的四条边界顶点
@@ -69,8 +66,10 @@ private:
 	// 构建覆盖所有"ocean"地形格的海面网格
 	void BuildOceanMesh();
 
-	// 将输入网格的地形混合数据下采样(分辨率翻倍)到输出网格
-	void DownsampleFine(const TArray<FFineCell>& in, int32 inRes, TArray<FFineCell>& out) const;
+	// 重建近处混合控制纹理(NearIndexMap/NearWeightMap)，覆盖范围是以(originX,originY)为
+	// 左下角、边长sizeElements(地图元素单位)的正方形区域——只在nearControlLevel那一级LOD
+	// 自己的pivot变化时调用，见ForeverTerrainFrameworkComponent.md"近处地形混合"一节。
+	void RebuildNearControl(float originX, float originY, int32 sizeElements);
 
 	// 双线性采样地图高度(mapX/mapY为地图元素单位坐标),BuildLevel与出生点计算共用
 	float SampleHeight(float mapX, float mapY) const;
@@ -100,32 +99,10 @@ private:
 	UPROPERTY()
 	TObjectPtr<UTexture2D> terrainIndexMap;
 
+	// 法线+粗糙度打包数组(BGRA8,sRGB关,R/G=法线xy,B=粗糙度,A=255)，和terrainDiffuseArray
+	// 槡位对齐，近/远两个材质共用一份。
 	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> fineMaterial0;
-
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> fineMaterial1;
-
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> fineMaterial2;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> fineIndexMap0;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> finePowerMap0;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> fineIndexMap1;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> finePowerMap1;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> fineIndexMap2;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> finePowerMap2;
+	TObjectPtr<UTexture2DArray> terrainNormalRoughArray;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> oceanMaterial;
@@ -135,10 +112,38 @@ private:
 	TObjectPtr<UMaterialInterface> terrainBaseMaterial;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
-	TObjectPtr<UMaterialInterface> fineBaseMaterial;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
 	TObjectPtr<UMaterialInterface> oceanBaseMaterial;
+
+	// 近处(细LOD)材质和它的控制纹理——见terrain_blend.md/ForeverTerrainFrameworkComponent.md
+	// "近处地形混合"一节。
+	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
+	int32 nearControlLevel = 3; // 控制纹理对应哪一级LOD的覆盖区域，夹到[0,num-1]；从2调到3是为了把near/far缝合线挪远，缓解K在两种材质里算法不一致导致的法线接缝（见ForeverTerrainFrameworkComponent.md）
+
+	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
+	int32 nearTexelsPerElement = 16;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
+	float nearBlendRadius = 2.f; // 夹到[1,3]，见NearBlendParams；从1.5调到2加宽近处混合过渡带
+
+	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
+	TObjectPtr<UMaterialInterface> nearBaseMaterial;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> nearMaterial;
+
+	UPROPERTY()
+	TObjectPtr<UTexture2D> nearIndexMap;
+
+	UPROPERTY()
+	TObjectPtr<UTexture2D> nearWeightMap;
+
+	std::unique_ptr<NearTerrainBlend> nearBlend;
+	// 整张地图的槡位id/construction标记，GenerateTerrain里填一次，RebuildNearControl每次
+	// 调用NearTerrainBlend::BuildRegion时复用，不用每次重新扫全图。
+	std::vector<uint8_t> nearSliceIds, nearIsConstruction;
+	// 当前控制纹理覆盖区域的左下角(地图元素坐标，取整)，RebuildNearControl只在这个值真的
+	// 变化时才重建纹理。
+	std::pair<int, int> nearRegionPivot{ INT_MIN, INT_MIN };
 
 	// {{pivotX,pivotY}, size(地图元素单位)},下标即LOD等级(0最细)
 	std::vector<std::pair<std::pair<int, int>, float>> currentPivots;

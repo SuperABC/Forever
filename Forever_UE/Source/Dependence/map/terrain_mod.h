@@ -31,6 +31,11 @@ public:
 	// 地形贴图资产路径,SetupTexture()里填充。
 	std::string diffusePath;
 
+	// 法线/粗糙度贴图资产路径,SetupTexture()里填充,留空则UE侧用平的法线+中性粗糙度
+	// 填充对应贴图数组槡位,见ForeverTerrainFrameworkComponent.md"近处地形混合"一节。
+	std::string normalPath;
+	std::string roughnessPath;
+
 	// {是否有水面, 水面高度(地图元素单位)},SetupTexture()里填充,默认无水面。
 	std::pair<bool, float> waterHeight;
 };
