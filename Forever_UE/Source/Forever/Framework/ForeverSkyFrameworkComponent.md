@@ -37,6 +37,35 @@
 - 没有用`UCurveFloat`——全部硬编码if-else/三角函数。
 - `SkyLight`只生成、不随时间更新。
 
+## 微弱全局环境光(`ambientLight`)：解决封闭室内一片漆黑
+
+没有窗户/没有光源的室内空间(比如地下室)用`sunLight`/`skyLight`都照不到——两者的光照
+贡献本质上都是"这个点能看到多少天空"，封闭空间天然是0，和白天/夜晚无关。新增一个**不
+投射阴影**的`ADirectionalLight`专门解决这个问题：`SetCastShadows(false)`之后这个光源
+会直接穿透所有几何体，均匀照到场景里每一个表面(不管有没有被墙/天花板挡住)，效果上就是
+"全图生效、不被遮挡的环境光"。
+
+- 为什么不用`SkyLight`做这件事：`SkyLight`的光照模型本来就是按"能看到的天空"算贡献，
+  物理上就是为了不穿透几何体设计的，没法用来填补完全封闭空间的黑暗。
+- 强度给了一个较小的占位值(远低于`sunLight`正午十万lux的量级)，只负责让纯黑的室内能
+  看出形状，不会让室外白天的亮度感觉有明显变化。
+- 不随时间变化，`EnsureSkyGenerated()`里一次性设置完(`Mobility=Movable`+关闭阴影+
+  固定强度/颜色/角度)，不在`UpdateSky()`的每帧更新里出现。
+- 和`sunLight`同一个坑：程序`SpawnActor`出来的默认`Mobility=Static`，这个场景的建筑/
+  地形全是运行时程序化生成、没走"Build Lighting"烘焙流程，Static灯光在未烘焙几何体上
+  可能根本不生效，必须显式设成`Movable`。
+
+### 坑：两个DirectionalLight抢forward shading
+
+加完`ambientLight`之后引擎报`MultipleDirLightsConflictForForwardShading`警告——
+`sunLight`和`ambientLight`都是`ADirectionalLight`，`ForwardShadingPriority`默认都是0，
+谁该决定体积雾/半透明/水面这类前向渲染效果变成"按亮度二选一"的不确定fallback(查了
+`LightGridInjection.cpp`源码确认比较逻辑是`>`，数值更高的赢)。修法：`EnsureSkyGenerated()`
+里显式给`sunComponent->SetForwardShadingPriority(1)`(比`ambientLight`默认的0高，确定性
+地让真太阳赢)，再给`ambientComponent->SetAtmosphereSunLight(false)`(这个光源也不该参与
+"谁是SkyAtmosphere/云层的太阳"这件事，和forward shading优先级是两个独立的"谁是太阳"判定，
+都要显式关掉)。
+
 ## API差异踩坑提醒
 
 - `ADirectionalLight::GetLightComponent()`返回基类`ULightComponent*`，要

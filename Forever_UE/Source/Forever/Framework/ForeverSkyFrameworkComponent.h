@@ -45,6 +45,13 @@ private:
 	UPROPERTY()
 	TObjectPtr<ADirectionalLight> sunLight;
 
+	// 微弱的全局环境光——没有窗户/光源的室内空间(比如地下室)完全照不到sunLight或
+	// skyLight(两者的光照贡献都和"这个点能不能看到天空"绑定，封闭空间天然是0)，这个
+	// 光源专门解决"完全没有光照来源的室内一片漆黑"这个问题。固定设置一次(不随时间变化、
+	// 不随UpdateSky()每帧重算)，见.cpp里EnsureSkyGenerated()。
+	UPROPERTY()
+	TObjectPtr<ADirectionalLight> ambientLight;
+
 	UPROPERTY()
 	TObjectPtr<ASkyAtmosphere> skyAtmosphere;
 

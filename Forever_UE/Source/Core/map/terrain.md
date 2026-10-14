@@ -4,7 +4,9 @@
 
 `Terrain`是某个具体`TerrainMod`实例的薄包装——构造时向`TerrainFactory`要一个实例（按id，如
 `"ocean"`/`"mountain"`），把`GetType`/`GetName`/`GetPriority`/`SetupTexture`/`GetTextures`/
-`GetWater`/`DistributeTerrain`原样转发出去，析构时交还给Factory销毁。`GetTextures()`返回
+`DistributeTerrain`原样转发出去，析构时交还给Factory销毁（水面现在per-cell设置，不再经过
+`Terrain`/`TerrainMod`任何getter，见`terrain_mod.md`"水面"一节，这个类也相应没有`GetWater`
+了）。`GetTextures()`返回
 `TerrainTexturePaths{diffuse, normal, roughness}`三个路径打包的小结构体（不是单独一个
 `GetTexture()`返回diffuse字符串——近处/远处材质重做之后normal/roughness也要走这条通路，
 见`ForeverTerrainFrameworkComponent.md`"近处地形混合"一节）。

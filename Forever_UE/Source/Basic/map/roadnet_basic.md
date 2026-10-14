@@ -75,6 +75,19 @@
   的约定)。
 - **`lots`的`emplace_back`里margin的`{...}`必须显式写成`vector<float>{...}`**，不能用裸
   花括号列表——`emplace_back`是模板参数转发，裸花括号在这种上下文推导不出类型，编译不过。
+- **放lot之前必须整块扫描地形，不能只抽样四个角**：`isLotFullyConstruction(nw,ne,se,sw)`
+  先按四个角算出lot的坐标范围(可能是旋转过的，因为整套井字路网带一个随机`theta`旋转角)，
+  对范围内每个element用`isPointInQuad`(凸四边形叉积法，四条边同号即在内部)判断是不是真的
+  落在这个lot内部，是的话就要求`getTerrain(x,y)=="construction"`，只要有一个不是就整块
+  lot放弃(`break`/跳过，不`emplace_back`)。严格只认`"construction"`，不认`"plain"`——
+  `"construction"`是`Map::InitTerrains`"周围3x3全是plain/construction才晋升"规则筛出来的
+  (见`Source/Core/map/map.md`)，plain但没被晋升的那一圈格子，本质就是贴着mountain/river/
+  ocean这类不规则地形的边缘地带；之前的做法(`isBuildable`)只抽样四个角、而且plain和
+  construction都放过，会漏判——四个角都在晋升区内，lot中间却可能横穿一条贴着山体边缘的
+  窄长plain地带，那种地方实际地形不规则，不适合铺建筑用地。所有9处`lots.emplace_back`
+  调用都经过这个检查：井字中心+4个象限lot是直接`if`包住(原来没有任何地形检查)，4条放射臂
+  的细分循环是检查不通过就`break`(停止沿这条臂继续往外细分，和原来`isBuildable`的失败
+  语义一致)。
 
 ## 依赖关系
 

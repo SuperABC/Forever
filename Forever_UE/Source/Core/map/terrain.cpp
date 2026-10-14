@@ -46,12 +46,9 @@ TerrainTexturePaths Terrain::GetTextures() const {
 	return { mod->diffusePath, mod->normalPath, mod->roughnessPath };
 }
 
-pair<bool, float> Terrain::GetWater() const {
-	return mod->waterHeight;
-}
-
 void Terrain::DistributeTerrain(int width, int height,
 	const function<string(int, int)>& getTerrain, const function<bool(int, int, string)>& setTerrain,
-	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight) const {
-	mod->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight);
+	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight,
+	const function<bool(int, int, bool, float)>& setWater) const {
+	mod->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater);
 }

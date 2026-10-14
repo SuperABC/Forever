@@ -13,6 +13,10 @@
 
 #define DIFFUSE_TEX_SIZE 2048
 #define HEIGHT_EPSILON 0.002f
+// 每级LOD mesh的网格细分数(每级都是这个数,级与级之间只有size不一样)——原来是32
+// (33x33个顶点)。试过提到4倍(128)太卡，先退到2倍(64,65x65个顶点)看效果。所有跟这个数
+// 绑定的魔法数字(33、32、8)都已经改成由这个常量推导，调这一个数就行，不用逐个改。
+#define TERRAIN_LOD_GRID_SUBDIV 64
 
 using namespace std;
 
@@ -112,8 +116,8 @@ void UForeverTerrainFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 			if (idxX == 2) edgeFlags |= 0x2;
 			if (idxY == 0) edgeFlags |= 0x4;
 			if (idxY == 2) edgeFlags |= 0x8;
-			parentOffsetX = idxX * 8;
-			parentOffsetY = idxY * 8;
+			parentOffsetX = idxX * (TERRAIN_LOD_GRID_SUBDIV / 4);
+			parentOffsetY = idxY * (TERRAIN_LOD_GRID_SUBDIV / 4);
 		}
 
 		// 只在nearControlLevel自己的pivot变化时重建近处混合控制纹理——粗级pivot变化时所有
@@ -137,28 +141,56 @@ namespace {
 	// 读取srcTexture的原始像素数据，只有分辨率恰好是expectedSize×expectedSize时才成功——
 	// 这是贴图数组构建代码本来就有的校验逻辑(以前只检查字节数够不够，现在统一成"分辨率必须
 	// 正好符合"，TerrainDiffuseArray/TerrainNormalRoughArray两个数组共用这一份)。
+	// 按源贴图实际分辨率重采样到expectedSize x expectedSize(最近邻,BGRA8逐像素拷贝)——不
+	// 要求美术资产必须精确准备成expectedSize,源贴图比目标小/大/不是正方形都能处理,只有真正
+	// 读不到源数据(纹理空/没有mip)才失败。对所有地形diffuse/normal/roughness贴图通用,不是
+	// 只为某一种地形特判。
 	bool LoadRawBGRA8(UTexture2D* srcTexture, int32 expectedSize, TArray64<uint8>& outBytes) {
 		if (!srcTexture) return false;
 		int64 expectedBytes = (int64)expectedSize * expectedSize * 4;
+
+		TArray64<uint8> rawBytes;
+		int32 srcW = 0, srcH = 0;
 #if WITH_EDITOR
-		if (srcTexture->Source.GetMipData(outBytes, 0) && outBytes.Num() >= expectedBytes) {
-			outBytes.SetNum(expectedBytes, EAllowShrinking::No);
-			return true;
-		}
-		return false;
+		srcW = srcTexture->Source.GetSizeX();
+		srcH = srcTexture->Source.GetSizeY();
+		if (srcW <= 0 || srcH <= 0 || !srcTexture->Source.GetMipData(rawBytes, 0)) return false;
+		int64 rawExpected = (int64)srcW * srcH * 4;
+		if (rawBytes.Num() < rawExpected) return false;
 #else
 		FTexturePlatformData* srcPlatformData = srcTexture->GetPlatformData();
 		if (!srcPlatformData || srcPlatformData->Mips.Num() == 0) return false;
+		srcW = srcPlatformData->Mips[0].SizeX;
+		srcH = srcPlatformData->Mips[0].SizeY;
 		FByteBulkData& bulkData = srcPlatformData->Mips[0].BulkData;
 		const void* srcData = bulkData.Lock(LOCK_READ_ONLY);
-		bool ok = srcData && bulkData.GetBulkDataSize() >= expectedBytes;
+		int64 rawExpected = (int64)srcW * srcH * 4;
+		bool ok = srcData && srcW > 0 && srcH > 0 && bulkData.GetBulkDataSize() >= rawExpected;
 		if (ok) {
-			outBytes.SetNumUninitialized(expectedBytes);
-			FMemory::Memcpy(outBytes.GetData(), srcData, expectedBytes);
+			rawBytes.SetNumUninitialized(rawExpected);
+			FMemory::Memcpy(rawBytes.GetData(), srcData, rawExpected);
 		}
 		bulkData.Unlock();
-		return ok;
+		if (!ok) return false;
 #endif
+
+		if (srcW == expectedSize && srcH == expectedSize) {
+			outBytes = MoveTemp(rawBytes);
+			outBytes.SetNum(expectedBytes, EAllowShrinking::No);
+			return true;
+		}
+
+		outBytes.SetNumUninitialized(expectedBytes);
+		for (int32 dy = 0; dy < expectedSize; dy++) {
+			int32 sy = FMath::Clamp((dy * srcH) / expectedSize, 0, srcH - 1);
+			for (int32 dx = 0; dx < expectedSize; dx++) {
+				int32 sx = FMath::Clamp((dx * srcW) / expectedSize, 0, srcW - 1);
+				const uint8* srcPixel = rawBytes.GetData() + ((int64)sy * srcW + sx) * 4;
+				uint8* dstPixel = outBytes.GetData() + ((int64)dy * expectedSize + dx) * 4;
+				dstPixel[0] = srcPixel[0]; dstPixel[1] = srcPixel[1]; dstPixel[2] = srcPixel[2]; dstPixel[3] = srcPixel[3];
+			}
+		}
+		return true;
 	}
 }
 
@@ -379,10 +411,10 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 
 	lodBoundaries.resize(num);
 	for (auto& boundary : lodBoundaries) {
-		boundary.bottom.SetNum(33);
-		boundary.top.SetNum(33);
-		boundary.left.SetNum(33);
-		boundary.right.SetNum(33);
+		boundary.bottom.SetNum(TERRAIN_LOD_GRID_SUBDIV + 1);
+		boundary.top.SetNum(TERRAIN_LOD_GRID_SUBDIV + 1);
+		boundary.left.SetNum(TERRAIN_LOD_GRID_SUBDIV + 1);
+		boundary.right.SetNum(TERRAIN_LOD_GRID_SUBDIV + 1);
 	}
 
 	BuildOceanMesh();
@@ -548,7 +580,7 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 	auto mapSize = map->GetSize();
 	UProceduralMeshComponent* mesh = gridMeshes[levelIdx];
 
-	const float cellSize = size / 32.f;
+	const float cellSize = size / (float)TERRAIN_LOD_GRID_SUBDIV;
 	const float startX = pos.first * (size / 2.f) - size / 2.f;
 	const float startY = pos.second * (size / 2.f) - size / 2.f;
 	const float worldScale = 1000.f;
@@ -560,10 +592,10 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 	TArray<FVector> vertices;
 	TArray<int32> triangles;
 
-	vertices.Reserve(33 * 33);
+	vertices.Reserve((TERRAIN_LOD_GRID_SUBDIV + 1) * (TERRAIN_LOD_GRID_SUBDIV + 1));
 
-	for (int vy = 0; vy <= 32; vy++) {
-		for (int vx = 0; vx <= 32; vx++) {
+	for (int vy = 0; vy <= TERRAIN_LOD_GRID_SUBDIV; vy++) {
+		for (int vx = 0; vx <= TERRAIN_LOD_GRID_SUBDIV; vx++) {
 			float mapX = startX + vx * cellSize;
 			float mapY = startY + vy * cellSize;
 			float h = SampleHeight(mapX, mapY) + HEIGHT_EPSILON;
@@ -572,31 +604,31 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		}
 	}
 
-	auto vertIdx = [](int vx, int vy) { return vy * 33 + vx; };
+	auto vertIdx = [](int vx, int vy) { return vy * (TERRAIN_LOD_GRID_SUBDIV + 1) + vx; };
 
 	// 若与父级(粗一级)LOD存在共享边,先将偶数顶点对齐到父级已修正的边界值,
 	// 再统一做奇数插值,确保多级边界完全一致
 	if (parentBoundary && edgeFlags) {
 		if (edgeFlags & 0x1) // 左边(vx=0)与父级左边重合
-			for (int k = 0; k <= 32; k += 2)
+			for (int k = 0; k <= TERRAIN_LOD_GRID_SUBDIV; k += 2)
 				vertices[vertIdx(0, k)] = parentBoundary->left[parentOffsetY + k / 2];
-		if (edgeFlags & 0x2) // 右边(vx=32)与父级右边重合
-			for (int k = 0; k <= 32; k += 2)
-				vertices[vertIdx(32, k)] = parentBoundary->right[parentOffsetY + k / 2];
+		if (edgeFlags & 0x2) // 右边(vx=TERRAIN_LOD_GRID_SUBDIV)与父级右边重合
+			for (int k = 0; k <= TERRAIN_LOD_GRID_SUBDIV; k += 2)
+				vertices[vertIdx(TERRAIN_LOD_GRID_SUBDIV, k)] = parentBoundary->right[parentOffsetY + k / 2];
 		if (edgeFlags & 0x4) // 下边(vy=0)与父级下边重合
-			for (int k = 0; k <= 32; k += 2)
+			for (int k = 0; k <= TERRAIN_LOD_GRID_SUBDIV; k += 2)
 				vertices[vertIdx(k, 0)] = parentBoundary->bottom[parentOffsetX + k / 2];
-		if (edgeFlags & 0x8) // 上边(vy=32)与父级上边重合
-			for (int k = 0; k <= 32; k += 2)
-				vertices[vertIdx(k, 32)] = parentBoundary->top[parentOffsetX + k / 2];
+		if (edgeFlags & 0x8) // 上边(vy=TERRAIN_LOD_GRID_SUBDIV)与父级上边重合
+			for (int k = 0; k <= TERRAIN_LOD_GRID_SUBDIV; k += 2)
+				vertices[vertIdx(k, TERRAIN_LOD_GRID_SUBDIV)] = parentBoundary->top[parentOffsetX + k / 2];
 	}
 
 	// 让边缘在粗一级LOD的格点间距上保持分段线性,消除接缝裂缝
-	for (int edgeVy : { 0, 32 })
-		for (int vx = 1; vx < 32; vx += 2)
+	for (int edgeVy : { 0, TERRAIN_LOD_GRID_SUBDIV })
+		for (int vx = 1; vx < TERRAIN_LOD_GRID_SUBDIV; vx += 2)
 			vertices[vertIdx(vx, edgeVy)] = (vertices[vertIdx(vx - 1, edgeVy)] + vertices[vertIdx(vx + 1, edgeVy)]) * 0.5f;
-	for (int edgeVx : { 0, 32 })
-		for (int vy = 1; vy < 32; vy += 2)
+	for (int edgeVx : { 0, TERRAIN_LOD_GRID_SUBDIV })
+		for (int vy = 1; vy < TERRAIN_LOD_GRID_SUBDIV; vy += 2)
 			vertices[vertIdx(edgeVx, vy)] = (vertices[vertIdx(edgeVx, vy - 1)] + vertices[vertIdx(edgeVx, vy + 1)]) * 0.5f;
 
 	// construction/挖洞格子(取代旧工程的ISM立方体):只在levelIdx<=1(近处精细LOD)生效,和旧工程
@@ -616,9 +648,10 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		return constructionCache.Add(key, MoveTemp(tris));
 		};
 
-	for (int cy = 0; cy < 32; cy++) {
-		for (int cx = 0; cx < 32; cx++) {
-			int s = (cy / 8) * 4 + (cx / 8);
+	const int quadrantSize = TERRAIN_LOD_GRID_SUBDIV / 4; // childPos是4x4(16格)的子级覆盖位掩码,跟细分数无关,一直是4x4
+	for (int cy = 0; cy < TERRAIN_LOD_GRID_SUBDIV; cy++) {
+		for (int cx = 0; cx < TERRAIN_LOD_GRID_SUBDIV; cx++) {
+			int s = (cy / quadrantSize) * 4 + (cx / quadrantSize);
 			if ((childPos >> (15 - s)) & 1) continue;
 
 			bool drawQuad = true;
@@ -637,10 +670,10 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			}
 			if (!drawQuad) continue;
 
-			int32 v00 = cy * 33 + cx;
-			int32 v10 = cy * 33 + cx + 1;
-			int32 v01 = (cy + 1) * 33 + cx;
-			int32 v11 = (cy + 1) * 33 + cx + 1;
+			int32 v00 = cy * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx;
+			int32 v10 = cy * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx + 1;
+			int32 v01 = (cy + 1) * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx;
+			int32 v11 = (cy + 1) * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx + 1;
 			triangles.Add(v00); triangles.Add(v11); triangles.Add(v10);
 			triangles.Add(v00); triangles.Add(v01); triangles.Add(v11);
 		}
@@ -701,11 +734,11 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 	// 保存修正后的四条边界顶点,供更细一级LOD进行接缝修正时使用
 	if (levelIdx < (int)lodBoundaries.size()) {
 		FForeverLodBoundary& boundary = lodBoundaries[levelIdx];
-		for (int k = 0; k <= 32; k++) {
+		for (int k = 0; k <= TERRAIN_LOD_GRID_SUBDIV; k++) {
 			boundary.bottom[k] = vertices[vertIdx(k, 0)];
-			boundary.top[k] = vertices[vertIdx(k, 32)];
+			boundary.top[k] = vertices[vertIdx(k, TERRAIN_LOD_GRID_SUBDIV)];
 			boundary.left[k] = vertices[vertIdx(0, k)];
-			boundary.right[k] = vertices[vertIdx(32, k)];
+			boundary.right[k] = vertices[vertIdx(TERRAIN_LOD_GRID_SUBDIV, k)];
 		}
 	}
 
@@ -810,6 +843,31 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 	}
 	if (triangles.Num() == 0) return;
 
+	// 水面现在会倾斜(海洋本身还是平的,但河流水面每个格子高度不一样)，之前传空法线数组
+	// 靠材质/引擎兜底在平面上还看不出问题，倾斜之后没有法线光照会不正常——按面法线面积
+	// 加权累加到顶点、归一化，和BuildLevel地形主网格那次修法线同一套手法。
+	TArray<FVector> normals;
+	normals.SetNumZeroed(vertices.Num());
+	for (int32 t = 0; t < triangles.Num(); t += 3) {
+		const FVector& a = vertices[triangles[t]];
+		const FVector& b = vertices[triangles[t + 1]];
+		const FVector& c = vertices[triangles[t + 2]];
+		FVector faceNormal = FVector::CrossProduct(c - a, b - a);
+		normals[triangles[t]] += faceNormal;
+		normals[triangles[t + 1]] += faceNormal;
+		normals[triangles[t + 2]] += faceNormal;
+	}
+	TArray<FProcMeshTangent> tangents;
+	tangents.SetNumUninitialized(vertices.Num());
+	for (int32 i = 0; i < normals.Num(); i++) {
+		FVector n = normals[i].GetSafeNormal();
+		if (n.IsNearlyZero()) n = FVector::UpVector;
+		normals[i] = n;
+		FVector t = (FVector::ForwardVector - n * FVector::DotProduct(FVector::ForwardVector, n)).GetSafeNormal();
+		if (t.IsNearlyZero()) t = FVector::RightVector;
+		tangents[i] = FProcMeshTangent(t, false);
+	}
+
 	if (!oceanMesh) {
 		oceanMesh = NewObject<UProceduralMeshComponent>(owner, TEXT("OceanMesh"));
 		oceanMesh->SetupAttachment(owner->GetRootComponent());
@@ -818,7 +876,7 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 	}
 
 	oceanMesh->CreateMeshSection(0, vertices, triangles,
-		TArray<FVector>(), uvs, TArray<FColor>(), TArray<FProcMeshTangent>(), false);
+		normals, uvs, TArray<FColor>(), tangents, false);
 
 	if (!oceanMaterial && oceanBaseMaterial) {
 		oceanMaterial = UMaterialInstanceDynamic::Create(oceanBaseMaterial, this);

@@ -35,13 +35,13 @@ public:
 	float GetPriority() const;
 	void SetupTexture() const;
 	TerrainTexturePaths GetTextures() const;
-	std::pair<bool, float> GetWater() const;
 
 	void DistributeTerrain(int width, int height,
 		const std::function<std::string(int, int)>& getTerrain,
 		const std::function<bool(int, int, std::string)>& setTerrain,
 		const std::function<float(int, int)>& getHeight,
-		const std::function<bool(int, int, float)>& setHeight) const;
+		const std::function<bool(int, int, float)>& setHeight,
+		const std::function<bool(int, int, bool, float)>& setWater) const;
 
 private:
 	TerrainMod* mod;

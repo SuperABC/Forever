@@ -72,3 +72,6 @@ Thumbs.db
 
 # ---- Blueprint text dumps (local scratch input for migration work, not repo content) ----
 .dump/
+
+# ---- Personal/local test scripts (not repo content) ----
+Forever_UE/Resource/Story/ys.script

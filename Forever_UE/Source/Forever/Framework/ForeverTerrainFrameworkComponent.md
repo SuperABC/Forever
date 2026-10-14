@@ -8,6 +8,15 @@
 
 ## 关键设计
 
+- **每级LOD mesh的网格细分数`TERRAIN_LOD_GRID_SUBDIV`（.cpp顶部宏，当前64，即65x65个
+  顶点）对所有级别统一，级与级之间只有物理尺寸`size`不一样**——原来是32（33x33顶点）。
+  为了提升地形网格精细度试过改成128（密度4倍），实测太卡，退到64（密度2倍）。
+  `BuildLevel`内部跟这个数绑定的魔法数字
+  （顶点数组大小、`vertIdx`的行跨度、父子边界拼接的偏移量`idxX/idxY * (SUBDIV/4)`、
+  construction/挖洞sub-quad循环的边界）全部改成由这个常量推导，不再是分散的字面量32/33/8；
+  `childPos`那个16位掩码表示的始终是固定4x4(16格)子级覆盖关系，跟细分数本身无关，所以
+  `quadrantSize = SUBDIV/4`这个除法对任何细分数都成立，不需要跟着改分母"4"。调整这个常量
+  只改.cpp顶部这一处定义即可，不用逐个找魔法数字。
 - **`UActorComponent`不是Actor，运行时创建的子组件要挂在`GetOwner()`上，不是`this`**——老
   工程`ATerrainBase`自己就是Actor，`NewObject<UProceduralMeshComponent>(this, ...)`+
   `SetupAttachment(RootComponent)`+`AddInstanceComponent(comp)`里的`this`/`RootComponent`
@@ -127,6 +136,18 @@ section、同一个材质里——这些三角形会用几百上千的UV值去�
   硬边；`TerrainMapSize`材质参数（`GenerateTerrain`里设成真实地图宽高）供着色器算越界
   时夹到边缘element。
 
+## 水面(`BuildOceanMesh`)
+
+名字还叫`BuildOceanMesh`（没改名，改名涉及面更广这次没做），但筛选条件从一开始就是
+`map->GetWater(x,y).first`（有没有水），不检查地形类型是不是`"ocean"`——`RiverTerrain`
+通过`Core`新增的per-cell`setWater`机制给河流格子也设了水面之后，这些格子自动被这个
+既有函数纳入同一张水面mesh，不需要新增/改动渲染代码，见`terrain_mod.md`"水面"一节、
+`terrain_basic.md`"第三阶段"一节。用的是共享顶点网格（`(width+1)*(height+1)`个格点），
+每个格子的4个角直接写各自的`GetWater(x,y).second`，相邻格子水位不同时共享顶点被其中
+一个覆盖（不是平均），有轻微的接缝简化，暂时不处理。法线/切线按面法线面积加权累加到
+顶点、归一化（之前传空数组，水面基本是平的看不出问题，倾斜之后没有法线光照会不正常，
+和之前修地形主网格法线缺失同一套手法）。
+
 ## 依赖关系
 
 - 依赖：`Source/Core/map/map.h`（`Map`，非拥有指针）、
@@ -145,10 +166,14 @@ section、同一个材质里——这些三角形会用几百上千的UV值去�
   这个组件的代码。精确凸多边形裁剪算法目前只有Roadnet隧道口这一个真实数据来源验证过（含
   单格/跨格两种情况），当前`LookupTerrain`假定每个hatch都是一个矩形(`Quad`+`rotation`)，
   不支持任意多边形——如果Building场景下出现更复杂的hatch形状（比如非矩形）再回来微调。
-- **贴图数组构建依赖源贴图未压缩**：`LoadRawBGRA8`要求源贴图分辨率恰好是
-  `DIFFUSE_TEX_SIZE`（2048）且是未压缩BGRA8格式才会被接受，PIE和编辑器里没问题；正式
-  打包前源贴图如果被压缩会导致对应槡位整层填成后备色，需要在打包前把这几张贴图的压缩
-  设置改成未压缩，或者换成别的构建方式（不在这次范围）。
+- **贴图数组构建依赖源贴图未压缩**：`LoadRawBGRA8`要求源贴图是未压缩BGRA8格式才会被接受
+  （压缩格式下`Source`/mip原始字节不是预期布局），PIE和编辑器里没问题；正式打包前源贴图
+  如果被压缩会导致对应槡位整层填成后备色，需要在打包前把这几张贴图的压缩设置改成未压缩，
+  或者换成别的构建方式（不在这次范围）。**分辨率本身不再是硬性要求**——`LoadRawBGRA8`
+  现在会按源贴图实际尺寸（不管是不是`DIFFUSE_TEX_SIZE`=2048的整数倍/正方形）最近邻重
+  采样到`DIFFUSE_TEX_SIZE×DIFFUSE_TEX_SIZE`，只有源贴图完全读不到数据才会落到填灰后备
+  （这是为`RiverTerrain`的调试贴图`Blue`（1024×1024）加的通用改进，见
+  `Source/Basic/map/terrain_basic.md`"RiverTerrain"一节，不是只对这一张贴图特判）。
 - **近远接缝的软边差异**：`nearControlLevel`内是近处核的距离加权软过渡（约1.4个element
   宽），`nearControlLevel`外沿往外是远处2×2双线性的硬一些的过渡（1个element宽），只在
   这条边界线附近、地形交界恰好经过那里时能看出差异——不在这次范围内彻底解决，`terrain_

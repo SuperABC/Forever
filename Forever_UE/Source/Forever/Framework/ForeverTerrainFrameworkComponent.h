@@ -27,12 +27,13 @@ struct FTerrainTri2D {
 	FVector2D A, B, C;
 };
 
-// 某一级LOD mesh经过接缝修正后的四条边界顶点
+// 某一级LOD mesh经过接缝修正后的四条边界顶点(每条边TERRAIN_LOD_GRID_SUBDIV+1个点,
+// 见ForeverTerrainFrameworkComponent.cpp里这个常量)
 struct FForeverLodBoundary {
-	TArray<FVector> bottom; // vy=0,  vx=0..32
-	TArray<FVector> top;    // vy=32, vx=0..32
-	TArray<FVector> left;   // vx=0,  vy=0..32
-	TArray<FVector> right;  // vx=32, vy=0..32
+	TArray<FVector> bottom; // vy=0
+	TArray<FVector> top;    // vy=TERRAIN_LOD_GRID_SUBDIV
+	TArray<FVector> left;   // vx=0
+	TArray<FVector> right;  // vx=TERRAIN_LOD_GRID_SUBDIV
 };
 
 // 动态LOD(clipmap式)地形网格 + 海面网格。挖洞(construction格子的

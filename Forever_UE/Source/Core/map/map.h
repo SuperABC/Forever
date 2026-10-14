@@ -53,10 +53,14 @@ public:
 	std::pair<int, int> GetSize() const;
 
 	std::string GetTerrain(int x, int y) const;
-	bool SetTerrain(int x, int y, const std::string& terrain, std::pair<bool, float> water = { false, 0.f });
+	bool SetTerrain(int x, int y, const std::string& terrain);
 	float GetHeight(int x, int y) const;
 	bool SetHeight(int x, int y, float height);
 	std::pair<bool, float> GetWater(int x, int y) const;
+	// 每个element的水面属性独立设置,不再跟SetTerrain绑在一起——任何mod都可以给任意格子
+	// 单独设水位,这样同一次DistributeTerrain调用里不同格子可以有不同水位(倾斜水面),见
+	// terrain_mod.md"水面"一节。
+	bool SetWater(int x, int y, bool hasWater, float height);
 	const std::vector<std::pair<Quad, float>>& GetHatches(int x, int y) const;
 
 	// 自动分发到所有与q重叠的element(按q的旋转AABB计算重叠范围),和旧工程Map::AddHatch同语义。

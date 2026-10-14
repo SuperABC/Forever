@@ -20,7 +20,8 @@ public:
 		const std::function<std::string(int, int)>& getTerrain,
 		const std::function<bool(int, int, std::string)>& setTerrain,
 		const std::function<float(int, int)>& getHeight,
-		const std::function<bool(int, int, float)>& setHeight) const override;
+		const std::function<bool(int, int, float)>& setHeight,
+		const std::function<bool(int, int, bool, float)>& setWater) const override;
 
 private:
 	static int count;
@@ -43,7 +44,33 @@ public:
 		const std::function<std::string(int, int)>& getTerrain,
 		const std::function<bool(int, int, std::string)>& setTerrain,
 		const std::function<float(int, int)>& getHeight,
-		const std::function<bool(int, int, float)>& setHeight) const override;
+		const std::function<bool(int, int, float)>& setHeight,
+		const std::function<bool(int, int, bool, float)>& setWater) const override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 河流地形(第一阶段):D8单流向算法只在山体内部结算累积流量,超过阈值的山体格子标记成
+// "river",流量流到非山体格子就停止(不继续算,也不标记)。详见terrain_basic.md。
+class RiverTerrain : public TerrainMod {
+public:
+	RiverTerrain();
+	virtual ~RiverTerrain();
+
+	static const char* GetId();
+	virtual const char* GetType() const override;
+	virtual const char* GetName() override;
+	virtual float GetPriority() const override;
+	virtual void SetupTexture() override;
+	virtual void DistributeTerrain(int width, int height,
+		const std::function<std::string(int, int)>& getTerrain,
+		const std::function<bool(int, int, std::string)>& setTerrain,
+		const std::function<float(int, int)>& getHeight,
+		const std::function<bool(int, int, float)>& setHeight,
+		const std::function<bool(int, int, bool, float)>& setWater) const override;
 
 private:
 	static int count;

@@ -99,18 +99,22 @@ Map::~Map() {
 }
 
 void Map::InitTerrains() {
-	pair<bool, float> water{ false, 0.f };
 	auto getTerrain = [this](int x, int y) -> string {
 		return this->GetTerrain(x, y);
 		};
-	auto setTerrain = [this, &water](int x, int y, string terrain) -> bool {
-		return this->SetTerrain(x, y, terrain, water);
+	auto setTerrain = [this](int x, int y, string terrain) -> bool {
+		return this->SetTerrain(x, y, terrain);
 		};
 	auto getHeight = [this](int x, int y) -> float {
 		return this->GetHeight(x, y);
 		};
 	auto setHeight = [this](int x, int y, float height) -> bool {
 		return this->SetHeight(x, y, height);
+		};
+	// 水面per-cell独立设置,不再跟着SetTerrain走一个全局共用值——每个mod自己决定哪些格子
+	// 要水、水位多少，同一次DistributeTerrain调用里不同格子可以给不同水位(倾斜水面)。
+	auto setWater = [this](int x, int y, bool hasWater, float h) -> bool {
+		return this->SetWater(x, y, hasWater, h);
 		};
 
 	auto terrainIds = terrainFactory.GetRegisteredIds();
@@ -128,8 +132,7 @@ void Map::InitTerrains() {
 		TerrainTexturePaths texturePaths = terrains[i]->GetTextures();
 		terrainTextures[terrains[i]->GetType()] = { static_cast<int>(i) + preset,
 			texturePaths.diffuse, texturePaths.normal, texturePaths.roughness };
-		water = terrains[i]->GetWater();
-		terrains[i]->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight);
+		terrains[i]->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater);
 	}
 	for (auto* terrain : terrains) {
 		delete terrain;
@@ -1895,14 +1898,12 @@ string Map::GetTerrain(int x, int y) const {
 	return At(x, y).terrain;
 }
 
-bool Map::SetTerrain(int x, int y, const string& terrain, pair<bool, float> water) {
+bool Map::SetTerrain(int x, int y, const string& terrain) {
 	if (!CheckXY(x, y)) {
 		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
 		return false;
 	}
-	Element& e = At(x, y);
-	e.terrain = terrain;
-	e.water = water;
+	At(x, y).terrain = terrain;
 	return true;
 }
 
@@ -1929,6 +1930,15 @@ pair<bool, float> Map::GetWater(int x, int y) const {
 		return { false, 0.f };
 	}
 	return At(x, y).water;
+}
+
+bool Map::SetWater(int x, int y, bool hasWater, float height) {
+	if (!CheckXY(x, y)) {
+		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		return false;
+	}
+	At(x, y).water = { hasWater, height };
+	return true;
 }
 
 const vector<pair<Quad, float>>& Map::GetHatches(int x, int y) const {

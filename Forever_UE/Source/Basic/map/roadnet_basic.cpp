@@ -219,10 +219,46 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		return road.GetTotalWidth() * 0.5f;
 		};
 
-	// 判断某坐标地形是否可以铺设block(plain或construction)
-	auto isBuildable = [&](float x, float y) -> bool {
-		string t = getTerrain(static_cast<int>(x), static_cast<int>(y));
-		return t == "plain" || t == "construction";
+	// 判断一个点是不是落在凸四边形(nw,ne,se,sw按环绕顺序)内部——用叉积法：四条边各自算一次
+	// (边起点->边终点)叉乘(边起点->测试点)，四边形是凸的且四个角按一致的环绕顺序给出时，
+	// 点在内部等价于四个叉积同号(全部>=0或全部<=0)；只要出现一正一负就在外部。
+	auto isPointInQuad = [](float px, float py, const Node& a, const Node& b, const Node& c, const Node& d) -> bool {
+		auto cross = [](float ax, float ay, float bx, float by, float testX, float testY) -> float {
+			return (bx - ax) * (testY - ay) - (by - ay) * (testX - ax);
+			};
+		float c1 = cross(a.GetX(), a.GetY(), b.GetX(), b.GetY(), px, py);
+		float c2 = cross(b.GetX(), b.GetY(), c.GetX(), c.GetY(), px, py);
+		float c3 = cross(c.GetX(), c.GetY(), d.GetX(), d.GetY(), px, py);
+		float c4 = cross(d.GetX(), d.GetY(), a.GetX(), a.GetY(), px, py);
+		bool hasNeg = (c1 < 0.0f) || (c2 < 0.0f) || (c3 < 0.0f) || (c4 < 0.0f);
+		bool hasPos = (c1 > 0.0f) || (c2 > 0.0f) || (c3 > 0.0f) || (c4 > 0.0f);
+		return !(hasNeg && hasPos);
+		};
+
+	// 放置一个lot之前，要检查这个lot(四个角围出来的四边形，不只是四个角本身)覆盖的每一个
+	// element，只要有一个不是"construction"就不放这个lot——原来只抽样检查四个角够不够
+	// buildable(plain或construction都算)，这次改成扫描lot内部全部element、而且只认
+	// "construction"严格一种：construction是Map::InitTerrains那边"周围3x3全是plain/
+	// construction才晋升"的产物，边缘上混杂着真正plain的那一圈格子贴着mountain/river/
+	// ocean这类不规则地形，只抽样四个角可能漏判，lot实际铺出来的那块地里混进了贴着不规则
+	// 地形的格子；要求整块lot严格落在已经晋升的construction区域内部，天然避开所有这种
+	// 边缘地带。
+	auto isLotFullyConstruction = [&](const Node& nw, const Node& ne, const Node& se, const Node& sw) -> bool {
+		float minX = min({ nw.GetX(), ne.GetX(), se.GetX(), sw.GetX() });
+		float maxX = max({ nw.GetX(), ne.GetX(), se.GetX(), sw.GetX() });
+		float minY = min({ nw.GetY(), ne.GetY(), se.GetY(), sw.GetY() });
+		float maxY = max({ nw.GetY(), ne.GetY(), se.GetY(), sw.GetY() });
+		int x0 = static_cast<int>(floorf(minX)), x1 = static_cast<int>(ceilf(maxX));
+		int y0 = static_cast<int>(floorf(minY)), y1 = static_cast<int>(ceilf(maxY));
+		for (int y = y0; y <= y1; y++) {
+			for (int x = x0; x <= x1; x++) {
+				// 用格子中心点做点在四边形内测试，比测试格子角点更准确地反映"这个element
+				// 算不算在lot范围内"。
+				if (!isPointInQuad(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f, nw, ne, se, sw)) continue;
+				if (getTerrain(x, y) != "construction") return false;
+			}
+		}
+		return true;
 		};
 
 	float theta = GetRandom(1000) / 1000.f * 0.4f - 0.2f;
@@ -357,17 +393,20 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	}
 	addRoad("城南东路", intersections[verticalNode2s.back().second], externs[7]);
 
-	lots.emplace_back(northWest, northEast, southEast, southWest,
-		vector<float>{ roadMargin(roads[0]), roadMargin(roads[1]), roadMargin(roads[2]), roadMargin(roads[3]) },
-		unordered_map<int, Road*>{ {0, &roads[0]}, {1, &roads[1]}, {2, &roads[2]}, {3, &roads[3]} });
-	lots.back().SetArea(AREA_OFFICIAL_HIGH);
+	if (isLotFullyConstruction(northWest, northEast, southEast, southWest)) {
+		lots.emplace_back(northWest, northEast, southEast, southWest,
+			vector<float>{ roadMargin(roads[0]), roadMargin(roads[1]), roadMargin(roads[2]), roadMargin(roads[3]) },
+			unordered_map<int, Road*>{ {0, &roads[0]}, {1, &roads[1]}, {2, &roads[2]}, {3, &roads[3]} });
+		lots.back().SetArea(AREA_OFFICIAL_HIGH);
+	}
 
 	if (horizontalNode1w.size() >= 1 && horizontalNode2w.size() >= 1) {
 		Road* boundary2 = makeBoundaryRoad("城西北路", intersections[horizontalNode1w[0].second], intersections[0]);
 		Road* boundary3 = makeBoundaryRoad("城西南路", intersections[horizontalNode2w[0].second], intersections[3]);
 		// 找不到边界Road(这一段跨了隧道过渡点，被addRoad拆成了好几小段，见makeBoundaryRoad
 		// 注释)就直接不铺这块lot——不给隧道旁边硬凑一个假边界勉强留住它。
-		if (boundary2 && boundary3) {
+		if (boundary2 && boundary3 &&
+			isLotFullyConstruction(horizontalNode1w[0].first, intersections[0], intersections[3], horizontalNode2w[0].first)) {
 			lots.emplace_back(horizontalNode1w[0].first, intersections[0], intersections[3], horizontalNode2w[0].first,
 				vector<float>{ 0.0f, roadMargin(roads[0]), roadMargin(*boundary2), roadMargin(*boundary3) },
 				unordered_map<int, Road*>{
@@ -381,7 +420,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	if (horizontalNode1e.size() >= 1 && horizontalNode2e.size() >= 1) {
 		Road* boundary2 = makeBoundaryRoad("城东北路", intersections[horizontalNode1e[0].second], intersections[1]);
 		Road* boundary3 = makeBoundaryRoad("城东南路", intersections[horizontalNode2e[0].second], intersections[2]);
-		if (boundary2 && boundary3) {
+		if (boundary2 && boundary3 &&
+			isLotFullyConstruction(intersections[1], horizontalNode1e[0].first, horizontalNode2e[0].first, intersections[2])) {
 			lots.emplace_back(intersections[1], horizontalNode1e[0].first, horizontalNode2e[0].first, intersections[2],
 				vector<float>{ roadMargin(roads[1]), 0.0f, roadMargin(*boundary2), roadMargin(*boundary3) },
 				unordered_map<int, Road*>{
@@ -395,7 +435,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	if (verticalNode1n.size() >= 1 && verticalNode2n.size() >= 1) {
 		Road* boundary0 = makeBoundaryRoad("城北西路", intersections[verticalNode1n[0].second], intersections[0]);
 		Road* boundary1 = makeBoundaryRoad("城北东路", intersections[verticalNode2n[0].second], intersections[1]);
-		if (boundary0 && boundary1) {
+		if (boundary0 && boundary1 &&
+			isLotFullyConstruction(verticalNode1n[0].first, verticalNode2n[0].first, intersections[1], intersections[0])) {
 			lots.emplace_back(verticalNode1n[0].first, verticalNode2n[0].first, intersections[1], intersections[0],
 				vector<float>{ roadMargin(*boundary0), roadMargin(*boundary1), 0.0f, roadMargin(roads[2]) },
 				unordered_map<int, Road*>{
@@ -409,7 +450,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	if (verticalNode1s.size() >= 1 && verticalNode2s.size() >= 1) {
 		Road* boundary0 = makeBoundaryRoad("城南西路", intersections[verticalNode1s[0].second], intersections[3]);
 		Road* boundary1 = makeBoundaryRoad("城南东路", intersections[verticalNode2s[0].second], intersections[2]);
-		if (boundary0 && boundary1) {
+		if (boundary0 && boundary1 &&
+			isLotFullyConstruction(intersections[3], intersections[2], verticalNode2s[0].first, verticalNode1s[0].first)) {
 			lots.emplace_back(intersections[3], intersections[2], verticalNode2s[0].first, verticalNode1s[0].first,
 				vector<float>{ roadMargin(*boundary0), roadMargin(*boundary1), roadMargin(roads[3]), 0.0f },
 				unordered_map<int, Road*>{
@@ -421,17 +463,15 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		}
 	}
 
-	// 沿每条放射臂继续按isBuildable(plain/construction)细分lot。
+	// 沿每条放射臂继续按isLotFullyConstruction细分lot——整块lot覆盖的所有element都必须是
+	// construction才放，不是只抽样四个角。
 	for (size_t i = 1; i < min(horizontalNode1w.size(), horizontalNode2w.size()); i++) {
-		if (!isBuildable(horizontalNode1w[i].first.GetX(), horizontalNode1w[i].first.GetY())) break;
-		if (!isBuildable(horizontalNode1w[i - 1].first.GetX(), horizontalNode1w[i - 1].first.GetY())) break;
-		if (!isBuildable(horizontalNode2w[i].first.GetX(), horizontalNode2w[i].first.GetY())) break;
-		if (!isBuildable(horizontalNode2w[i - 1].first.GetX(), horizontalNode2w[i - 1].first.GetY())) break;
-
 		const auto& [nwNode, nwIdx] = horizontalNode1w[i];
 		const auto& [neNode, neIdx] = horizontalNode1w[i - 1];
 		const auto& [seNode, seIdx] = horizontalNode2w[i - 1];
 		const auto& [swNode, swIdx] = horizontalNode2w[i];
+
+		if (!isLotFullyConstruction(nwNode, neNode, seNode, swNode)) break;
 
 		Road* boundary2 = makeBoundaryRoad("城西北路", intersections[nwIdx], intersections[neIdx]);
 		Road* boundary3 = makeBoundaryRoad("城西南路", intersections[swIdx], intersections[seIdx]);
@@ -448,15 +488,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	}
 
 	for (size_t i = 1; i < min(horizontalNode1e.size(), horizontalNode2e.size()); i++) {
-		if (!isBuildable(horizontalNode1e[i].first.GetX(), horizontalNode1e[i].first.GetY())) break;
-		if (!isBuildable(horizontalNode1e[i - 1].first.GetX(), horizontalNode1e[i - 1].first.GetY())) break;
-		if (!isBuildable(horizontalNode2e[i].first.GetX(), horizontalNode2e[i].first.GetY())) break;
-		if (!isBuildable(horizontalNode2e[i - 1].first.GetX(), horizontalNode2e[i - 1].first.GetY())) break;
-
 		const auto& [nwNode, nwIdx] = horizontalNode1e[i - 1];
 		const auto& [neNode, neIdx] = horizontalNode1e[i];
 		const auto& [seNode, seIdx] = horizontalNode2e[i];
 		const auto& [swNode, swIdx] = horizontalNode2e[i - 1];
+
+		if (!isLotFullyConstruction(nwNode, neNode, seNode, swNode)) break;
 
 		Road* boundary2 = makeBoundaryRoad("城东北路", intersections[nwIdx], intersections[neIdx]);
 		Road* boundary3 = makeBoundaryRoad("城东南路", intersections[swIdx], intersections[seIdx]);
@@ -471,15 +508,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	}
 
 	for (size_t i = 1; i < min(verticalNode1n.size(), verticalNode2n.size()); i++) {
-		if (!isBuildable(verticalNode1n[i].first.GetX(), verticalNode1n[i].first.GetY())) break;
-		if (!isBuildable(verticalNode1n[i - 1].first.GetX(), verticalNode1n[i - 1].first.GetY())) break;
-		if (!isBuildable(verticalNode2n[i].first.GetX(), verticalNode2n[i].first.GetY())) break;
-		if (!isBuildable(verticalNode2n[i - 1].first.GetX(), verticalNode2n[i - 1].first.GetY())) break;
-
 		const auto& [nwNode, nwIdx] = verticalNode1n[i];
 		const auto& [neNode, neIdx] = verticalNode2n[i];
 		const auto& [seNode, seIdx] = verticalNode2n[i - 1];
 		const auto& [swNode, swIdx] = verticalNode1n[i - 1];
+
+		if (!isLotFullyConstruction(nwNode, neNode, seNode, swNode)) break;
 
 		Road* boundary0 = makeBoundaryRoad("城北西路", intersections[nwIdx], intersections[swIdx]);
 		Road* boundary1 = makeBoundaryRoad("城北东路", intersections[neIdx], intersections[seIdx]);
@@ -494,15 +528,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	}
 
 	for (size_t i = 1; i < min(verticalNode1s.size(), verticalNode2s.size()); i++) {
-		if (!isBuildable(verticalNode1s[i].first.GetX(), verticalNode1s[i].first.GetY())) break;
-		if (!isBuildable(verticalNode1s[i - 1].first.GetX(), verticalNode1s[i - 1].first.GetY())) break;
-		if (!isBuildable(verticalNode2s[i].first.GetX(), verticalNode2s[i].first.GetY())) break;
-		if (!isBuildable(verticalNode2s[i - 1].first.GetX(), verticalNode2s[i - 1].first.GetY())) break;
-
 		const auto& [nwNode, nwIdx] = verticalNode1s[i - 1];
 		const auto& [neNode, neIdx] = verticalNode2s[i - 1];
 		const auto& [seNode, seIdx] = verticalNode2s[i];
 		const auto& [swNode, swIdx] = verticalNode1s[i];
+
+		if (!isLotFullyConstruction(nwNode, neNode, seNode, swNode)) break;
 
 		Road* boundary0 = makeBoundaryRoad("城南西路", intersections[nwIdx], intersections[swIdx]);
 		Road* boundary1 = makeBoundaryRoad("城南东路", intersections[neIdx], intersections[seIdx]);

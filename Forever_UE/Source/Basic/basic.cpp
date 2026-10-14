@@ -111,7 +111,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 }
 
 extern "C" __declspec(dllexport) void* GetModTerrains() {
-	static vector<string> mods = { OceanTerrain::GetId(), MountainTerrain::GetId() };
+	static vector<string> mods = { OceanTerrain::GetId(), MountainTerrain::GetId(), RiverTerrain::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModTerrains(TerrainFactory* factory) {
@@ -120,6 +120,9 @@ extern "C" __declspec(dllexport) void RegisterModTerrains(TerrainFactory* factor
 		[](TerrainMod* m) { delete m; });
 	factory->RegisterTerrain(MountainTerrain::GetId(),
 		[](const std::string&) -> TerrainMod* { return new MountainTerrain(); },
+		[](TerrainMod* m) { delete m; });
+	factory->RegisterTerrain(RiverTerrain::GetId(),
+		[](const std::string&) -> TerrainMod* { return new RiverTerrain(); },
 		[](TerrainMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModTerrains(TerrainFactory* factory) {
