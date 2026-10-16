@@ -17,6 +17,8 @@
 // (33x33个顶点)。试过提到4倍(128)太卡，先退到2倍(64,65x65个顶点)看效果。所有跟这个数
 // 绑定的魔法数字(33、32、8)都已经改成由这个常量推导，调这一个数就行，不用逐个改。
 #define TERRAIN_LOD_GRID_SUBDIV 64
+// L0覆盖4个element、64段，每个element正好16段=TERRAIN_FINE_SUBDIV，各级LOD顶点都落在细化高度
+// 网格点上，Map::SampleHeight直接查表；改了这个数也不会出错，只是L0顶点落到网格点之间，改为插值。
 
 using namespace std;
 
@@ -421,20 +423,8 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 }
 
 float UForeverTerrainFrameworkComponent::SampleHeight(float mapX, float mapY) const {
-	if (!map) return 0.f;
-	auto mapSize = map->GetSize();
-
-	int ex0 = FMath::Clamp(FMath::FloorToInt(mapX), 0, mapSize.first - 1);
-	int ey0 = FMath::Clamp(FMath::FloorToInt(mapY), 0, mapSize.second - 1);
-	int ex1 = FMath::Clamp(ex0 + 1, 0, mapSize.first - 1);
-	int ey1 = FMath::Clamp(ey0 + 1, 0, mapSize.second - 1);
-	float tx = mapX - FMath::FloorToInt(mapX);
-	float ty = mapY - FMath::FloorToInt(mapY);
-
-	return map->GetHeight(ex0, ey0) * (1 - tx) * (1 - ty) +
-		map->GetHeight(ex1, ey0) * tx * (1 - ty) +
-		map->GetHeight(ex0, ey1) * (1 - tx) * ty +
-		map->GetHeight(ex1, ey1) * tx * ty;
+	// 粗高度双线性+细化高度数组查表都在Core的Map::SampleHeight里，见map.md"细化高度"一节。
+	return map ? map->SampleHeight(mapX, mapY) : 0.f;
 }
 
 FVector UForeverTerrainFrameworkComponent::GetMapCenterWorldLocation() const {

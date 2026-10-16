@@ -72,7 +72,7 @@ private:
 	// 自己的pivot变化时调用，见ForeverTerrainFrameworkComponent.md"近处地形混合"一节。
 	void RebuildNearControl(float originX, float originY, int32 sizeElements);
 
-	// 双线性采样地图高度(mapX/mapY为地图元素单位坐标),BuildLevel与出生点计算共用
+	// 采样地图高度(mapX/mapY为地图元素单位坐标),转发Map::SampleHeight(含细化高度),BuildLevel与出生点计算共用
 	float SampleHeight(float mapX, float mapY) const;
 
 	// construction/挖洞格子的实心地形几何:只有该格子是"construction"或者命中了hatch时才有

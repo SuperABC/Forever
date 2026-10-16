@@ -17,6 +17,12 @@
   `childPos`那个16位掩码表示的始终是固定4x4(16格)子级覆盖关系，跟细分数本身无关，所以
   `quadrantSize = SUBDIV/4`这个除法对任何细分数都成立，不需要跟着改分母"4"。调整这个常量
   只改.cpp顶部这一处定义即可，不用逐个找魔法数字。
+- **顶点高度走`Map::SampleHeight`，自动用上细化高度数组**——`SampleHeight`只是转发到Core，
+  主网格顶点、construction/挖洞三角形顶点、出生点都走它。第i级LOD每段长`4·2^i/64`个
+  element(L0=1/16、L1=1/8、L2=1/4、L3=1/2、L4起≥1)，起点都是整数element坐标，所以每级
+  顶点正好落在17×17细化网格的某个下标上——第i级只点采样自己顶点对应的那几个细化值，不做
+  平均，L4及以上只读到角点(=粗高度)。接缝修正(奇数边界顶点取相邻偶数顶点平均)不受影响。
+  细化数组的约定和由来见`Source/Core/map/map.md`"细化高度"一节、`terrain_mod.md`。
 - **`UActorComponent`不是Actor，运行时创建的子组件要挂在`GetOwner()`上，不是`this`**——老
   工程`ATerrainBase`自己就是Actor，`NewObject<UProceduralMeshComponent>(this, ...)`+
   `SetupAttachment(RootComponent)`+`AddInstanceComponent(comp)`里的`this`/`RootComponent`

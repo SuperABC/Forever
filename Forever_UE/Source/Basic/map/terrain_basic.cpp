@@ -71,7 +71,8 @@ void OceanTerrain::SetupTexture() {
 void OceanTerrain::DistributeTerrain(int width, int height,
 	const function<string(int, int)>& getTerrain, const function<bool(int, int, string)>& setTerrain,
 	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight,
-	const function<bool(int, int, bool, float)>& setWater) const {
+	const function<bool(int, int, bool, float)>& setWater,
+	const function<bool(int, int, const float*)>& setFineHeights) const {
 
 	auto randf = [](float lo, float hi) -> float {
 		return lo + static_cast<float>(GetRandom(100000)) / 99999.0f * (hi - lo);
@@ -365,7 +366,8 @@ void MountainTerrain::SetupTexture() {
 void MountainTerrain::DistributeTerrain(int width, int height,
 	const function<string(int, int)>& getTerrain, const function<bool(int, int, string)>& setTerrain,
 	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight,
-	const function<bool(int, int, bool, float)>& setWater) const {
+	const function<bool(int, int, bool, float)>& setWater,
+	const function<bool(int, int, const float*)>& setFineHeights) const {
 
 	auto randf = [](float lo, float hi) -> float {
 		return lo + static_cast<float>(GetRandom(100000)) / 99999.0f * (hi - lo);
@@ -673,6 +675,9 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 // 河岸平滑范围(格数)——非河流格子距河流越近，高度下降得越多(线性过渡)，超过这个距离
 // 完全不下降，先给个起始值。
 #define RIVER_BLUR_RADIUS 2
+// 到河道距离的搜索半径(格数)——比RIVER_BLUR_RADIUS+1再多1格，河岸细化高度对距离场做4x4
+// Catmull-Rom插值时，模板最外一圈也要拿到真实距离；更远的格子统一记成这个值(早已降为0)。
+#define RIVER_BANK_SEARCH_RADIUS (RIVER_BLUR_RADIUS + 2)
 // 河道加宽起始半径——1.5刚好能把3x3内的8个邻居(对角距离sqrt(2)≈1.414)全部纳入，
 // 对应原来固定宽度3的效果，作为"流程=0"时的基准半径。
 #define RIVER_BASE_WIDEN_RADIUS 1.5f
@@ -688,6 +693,9 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 // (两段一起)直接作废，不让河流占掉地图中心那块地。
 #define RIVER_CENTER_MIN_FRAC (3.0f / 8.0f)
 #define RIVER_CENTER_MAX_FRAC (5.0f / 8.0f)
+// 一条链路(从起点到并入别的河/入海/出地图)自己标记的中心线格子数少于这个值，就整条撤销——
+// 在加宽之前按中心线判断，避免地图上到处是很短的小河段。
+#define RIVER_MIN_LENGTH 100
 
 int RiverTerrain::count = 0;
 
@@ -729,7 +737,8 @@ void RiverTerrain::SetupTexture() {
 void RiverTerrain::DistributeTerrain(int width, int height,
 	const function<string(int, int)>& getTerrain, const function<bool(int, int, string)>& setTerrain,
 	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight,
-	const function<bool(int, int, bool, float)>& setWater) const {
+	const function<bool(int, int, bool, float)>& setWater,
+	const function<bool(int, int, const float*)>& setFineHeights) const {
 
 	int cellCount = width * height;
 	vector<float> heights(cellCount);
@@ -1020,7 +1029,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		return make_pair(RiverEnd::StepLimit, touched); // 步数耗尽也没到边界/海,按失败处理
 		};
 
-	int originCount = 0, keptCount = 0;
+	int originCount = 0, keptCount = 0, shortCount = 0;
 	vector<vector<int>> oceanMouthChains; // 诊断用，见下面origin循环里的记录点
 	for (int idx : mountainIndices) { // 同一个降序顺序，"先到达阈值的"就是先遍历到的
 		if (isRiver[idx] || accum[idx] < RIVER_FLOW_THRESHOLD) continue;
@@ -1048,7 +1057,16 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			continue;
 		}
 		int exit = exitTarget[finalIdx];
-		if (flowTarget[finalIdx] >= 0) continue; // 终点flowTarget仍然有效,说明是并入了既有河流,不是独立链路的终点,不用往下判定
+		// 终点flowTarget仍然有效,说明是并入了既有河流,不是独立链路的终点,不用往下判定——
+		// 但长度要求同样适用：这条支流自己在山体内走的格子数不够就整条撤销。
+		if (flowTarget[finalIdx] >= 0) {
+			if ((int)mountainPath.size() < RIVER_MIN_LENGTH) {
+				for (int t : mountainTouched) isRiver[t] = false;
+				riverOrigins.pop_back();
+				shortCount++;
+			}
+			continue;
+		}
 		if (exit < 0) {
 			// 山体内部的局部坑(exitTarget也是-1,连非山体邻居都没有)——规则：流到洼地中止,
 			// 整条河作废，把这条链路刚标记的山体部分撤销。
@@ -1088,6 +1106,12 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		int mountainKeptLen = (int)mountainPath.size() - cutoffPos;
 		auto [reason, plainTouched] = continueRiverOutsideMountain(ex, ey, initDirX, initDirY, mountainTouched, mountainKeptLen);
 		bool kept = (reason == RiverEnd::MapEdge || reason == RiverEnd::Ocean || reason == RiverEnd::OtherRiver);
+		// 长度=过陡截断之后保留的山体段+流出山体之后新标记的格子(含入海口接驳/延伸的格子)，
+		// 不够RIVER_MIN_LENGTH就和其他失败原因一样整条撤销。
+		if (kept && mountainKeptLen + (int)plainTouched.size() < RIVER_MIN_LENGTH) {
+			kept = false;
+			shortCount++;
+		}
 		if (!kept) {
 			for (int t : mountainTouched) isRiver[t] = false;
 			for (int t : plainTouched) isRiver[t] = false;
@@ -1141,32 +1165,48 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 	// 直线距离，不是走了几步)，等距离线才会是真正的圆弧。只在每个河流格子周围
 	// (2*RIVER_BLUR_RADIUS+1)见方的局部范围内比较，不是整张地图两两比较距离，河流格子
 	// 数量通常远小于全图格子数，复杂度仍然可控。
+	// 线性衰减基础上再过一次smoothstep缓动(3t^2-2t^3)，让下降速度本身也在半径边界顺滑地
+	// 起止，不是一进圈就突然开始按固定速率下降。到d=RIVER_BLUR_RADIUS+1才降到0。
+	auto bankFalloff = [](float d) {
+		float t = clamp(1.0f - d / float(RIVER_BLUR_RADIUS + 1), 0.0f, 1.0f);
+		return t * t * (3.0f - 2.0f * t);
+		};
 	vector<float> dropFalloff(cellCount, 1.0f); // 核心河道(加宽后)默认按满额下降
+	// 到核心河道(加宽后、并入平滑范围之前)的欧几里得距离，搜到RIVER_BANK_SEARCH_RADIUS为止，
+	// 更远的统一记成这个值——commit之后生成细化高度数组时还要对它做插值，所以留在块外面。
+	vector<float> distToRiver(cellCount, float(RIVER_BANK_SEARCH_RADIUS));
+	// 只降高度、不并入河流的那一圈(RIVER_BLUR_RADIUS<d<RIVER_BLUR_RADIUS+1)。
+	vector<bool> isBankOnly(cellCount, false);
 	{
-		vector<float> distToRiver(cellCount, 1e30f);
 		vector<int> riverCells;
 		riverCells.reserve(cellCount / 8);
 		for (int idx = 0; idx < cellCount; idx++) if (isRiver[idx]) riverCells.push_back(idx);
 		for (int idx : riverCells) {
 			int rx = idx % width, ry = idx / width;
-			for (int dy = -RIVER_BLUR_RADIUS; dy <= RIVER_BLUR_RADIUS; dy++) {
-				for (int dx = -RIVER_BLUR_RADIUS; dx <= RIVER_BLUR_RADIUS; dx++) {
+			for (int dy = -RIVER_BANK_SEARCH_RADIUS; dy <= RIVER_BANK_SEARCH_RADIUS; dy++) {
+				for (int dx = -RIVER_BANK_SEARCH_RADIUS; dx <= RIVER_BANK_SEARCH_RADIUS; dx++) {
 					int nx = rx + dx, ny = ry + dy;
 					if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
 					float d = sqrtf(float(dx * dx + dy * dy));
-					if (d > float(RIVER_BLUR_RADIUS)) continue;
 					int nIdx = ny * width + nx;
 					if (d < distToRiver[nIdx]) distToRiver[nIdx] = d;
 				}
 			}
 		}
 		for (int idx = 0; idx < cellCount; idx++) {
-			if (isRiver[idx] || distToRiver[idx] > float(RIVER_BLUR_RADIUS)) continue;
-			isRiver[idx] = true; // 平滑范围内的格子并入河流
-			// 线性衰减基础上再过一次smoothstep缓动(3t^2-2t^3)，让下降速度本身也在半径
-			// 边界顺滑地起止，不是一进圈就突然开始按固定速率下降。
-			float t = 1.0f - distToRiver[idx] / float(RIVER_BLUR_RADIUS + 1);
-			dropFalloff[idx] = t * t * (3.0f - 2.0f * t);
+			if (isRiver[idx]) continue;
+			float d = distToRiver[idx];
+			if (d <= float(RIVER_BLUR_RADIUS)) {
+				isRiver[idx] = true; // 平滑范围内的格子并入河流
+				dropFalloff[idx] = bankFalloff(d);
+			}
+			else if (d < float(RIVER_BLUR_RADIUS + 1)) {
+				// 以前这一圈直接不降(d=2还降0.26×RIVER_HEIGHT_DROP，下一格d=√5就是0)，粗高度
+				// 本身就有一个台阶，细化高度没法光滑地接上。这一圈只按同一条smoothstep把高度
+				// 降一点(降完仍高于水位，是干地)，地形类型/水面都不动，不影响路网/zone。
+				isBankOnly[idx] = true;
+				dropFalloff[idx] = bankFalloff(d);
+			}
 		}
 	}
 
@@ -1226,8 +1266,84 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		}
 	}
 
-	debugf("Log: River mountain cells=%d, max accum=%.2f, threshold=%.2f, origins=%d, kept=%d, marked river=%d.\n",
-		(int)mountainIndices.size(), maxAccum, RIVER_FLOW_THRESHOLD, originCount, keptCount, riverCount);
+	for (int idx = 0; idx < cellCount; idx++) {
+		if (!isBankOnly[idx]) continue;
+		setHeight(idx % width, idx / width, heights[idx] - RIVER_HEIGHT_DROP * dropFalloff[idx]);
+	}
+
+	// 河岸细化高度：粗高度10m一格、双线性插值在格子边界只有C0，水岸线(河床和水面的交线)
+	// 会是一段段折线。给河岸附近的格子生成17x17细化数组：
+	//   fine(p) = 原高度双线性(p) - RIVER_HEIGHT_DROP * bankFalloff(d(p))
+	// d(p)是对distToRiver做Catmull-Rom双三次插值——距离场近似线性，Catmull-Rom精确还原
+	// 线性/常数，等值线(水岸线)是光滑曲线，核心河道内d恒为0、河床保持平；整数格点上插值
+	// 权重退化成(0,1,0,0)，fine正好等于上面commit写进去的粗高度。原高度用双线性而不是
+	// 双三次，是为了和没有细化数组的邻格在共享边上算法一致(那里下降量为0)。相邻两块细化
+	// 数组的共享边只依赖同一列/行的数据，两边结果完全一致。必须在所有setHeight之后调用
+	// (setHeight会清掉共用格点的细化数组)，见terrain_mod.md。
+	int fineCount = 0;
+	float maxFineCornerError = 0.0f; // 诊断：细化数组四角和粗高度的最大偏差，应该≈0
+	{
+		// Catmull-Rom权重只和细化网格下标有关，所有格子共用一份。
+		float crWeights[TERRAIN_FINE_SIZE][4];
+		for (int i = 0; i < TERRAIN_FINE_SIZE; i++) {
+			float t = float(i) / TERRAIN_FINE_SUBDIV, t2 = t * t, t3 = t2 * t;
+			crWeights[i][0] = 0.5f * (-t3 + 2.0f * t2 - t);
+			crWeights[i][1] = 0.5f * (3.0f * t3 - 5.0f * t2 + 2.0f);
+			crWeights[i][2] = 0.5f * (-3.0f * t3 + 4.0f * t2 + t);
+			crWeights[i][3] = 0.5f * (t3 - t2);
+		}
+		auto clampX = [width](int x) { return max(0, min(width - 1, x)); };
+		auto clampY = [height](int y) { return max(0, min(height - 1, y)); };
+
+		vector<float> fine(TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE);
+		float stencil[4][4];
+		float rowInterp[4][TERRAIN_FINE_SIZE];
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				// 4x4模板(x-1..x+2, y-1..y+2，越界夹到边上)里有格子离河道够近、又不全是核心
+				// 河道(全是核心时细化结果和粗双线性一样平)，才需要细化数组。
+				float minDist = 1e30f, maxDist = 0.0f;
+				for (int b = 0; b < 4; b++) {
+					for (int a = 0; a < 4; a++) {
+						float d = distToRiver[clampY(y - 1 + b) * width + clampX(x - 1 + a)];
+						stencil[b][a] = d;
+						minDist = min(minDist, d);
+						maxDist = max(maxDist, d);
+					}
+				}
+				if (minDist >= float(RIVER_BLUR_RADIUS) + 1.5f || maxDist <= 0.0f) continue;
+
+				for (int b = 0; b < 4; b++)
+					for (int i = 0; i < TERRAIN_FINE_SIZE; i++)
+						rowInterp[b][i] = crWeights[i][0] * stencil[b][0] + crWeights[i][1] * stencil[b][1] +
+							crWeights[i][2] * stencil[b][2] + crWeights[i][3] * stencil[b][3];
+
+				int x1 = clampX(x + 1), y1 = clampY(y + 1);
+				float h00 = heights[y * width + x], h10 = heights[y * width + x1];
+				float h01 = heights[y1 * width + x], h11 = heights[y1 * width + x1];
+				for (int j = 0; j < TERRAIN_FINE_SIZE; j++) {
+					float ty = float(j) / TERRAIN_FINE_SUBDIV;
+					for (int i = 0; i < TERRAIN_FINE_SIZE; i++) {
+						float tx = float(i) / TERRAIN_FINE_SUBDIV;
+						float d = crWeights[j][0] * rowInterp[0][i] + crWeights[j][1] * rowInterp[1][i] +
+							crWeights[j][2] * rowInterp[2][i] + crWeights[j][3] * rowInterp[3][i];
+						float base = h00 * (1 - tx) * (1 - ty) + h10 * tx * (1 - ty) + h01 * (1 - tx) * ty + h11 * tx * ty;
+						fine[j * TERRAIN_FINE_SIZE + i] = base - RIVER_HEIGHT_DROP * bankFalloff(max(0.0f, d));
+					}
+				}
+				const int last = TERRAIN_FINE_SIZE - 1;
+				maxFineCornerError = max({ maxFineCornerError,
+					fabsf(fine[0] - getHeight(x, y)), fabsf(fine[last] - getHeight(x1, y)),
+					fabsf(fine[last * TERRAIN_FINE_SIZE] - getHeight(x, y1)),
+					fabsf(fine[last * TERRAIN_FINE_SIZE + last] - getHeight(x1, y1)) });
+				setFineHeights(x, y, fine.data());
+				fineCount++;
+			}
+		}
+	}
+
+	debugf("Log: River mountain cells=%d, max accum=%.2f, threshold=%.2f, origins=%d, kept=%d, too short=%d, marked river=%d, fine cells=%d, max fine corner error=%.6f.\n",
+		(int)mountainIndices.size(), maxAccum, RIVER_FLOW_THRESHOLD, originCount, keptCount, shortCount, riverCount, fineCount, maxFineCornerError);
 
 	// debugf走OutputDebugStringA,不进UE的Forever.log,调试阶段临时再写一份到文件方便直接读——
 	// 验证完效果之后会删掉这段。
@@ -1239,7 +1355,10 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 				<< " threshold=" << RIVER_FLOW_THRESHOLD
 				<< " origins=" << originCount
 				<< " kept=" << keptCount
-				<< " marked river=" << riverCount << "\n";
+				<< " too short=" << shortCount
+				<< " marked river=" << riverCount
+				<< " fine cells=" << fineCount
+				<< " max fine corner error=" << maxFineCornerError << "\n";
 			// 排查"河流入海口和海洋之间断开"问题的专用诊断：第一版诊断按"neighbor
 			// terrain==ocean"筛选，结果一个都没打出来——因为convertTouchingOceanToRiver
 			// 已经把触发判定的那个/那些海洋格子本身也改成了"river"，提交完之后它自然不再

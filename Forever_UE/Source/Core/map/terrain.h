@@ -41,7 +41,8 @@ public:
 		const std::function<bool(int, int, std::string)>& setTerrain,
 		const std::function<float(int, int)>& getHeight,
 		const std::function<bool(int, int, float)>& setHeight,
-		const std::function<bool(int, int, bool, float)>& setWater) const;
+		const std::function<bool(int, int, bool, float)>& setWater,
+		const std::function<bool(int, int, const float*)>& setFineHeights) const;
 
 private:
 	TerrainMod* mod;

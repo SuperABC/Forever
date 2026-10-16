@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <array>
 #include <tuple>
+#include <memory>
 
 struct ScriptContext;
 
@@ -33,6 +34,9 @@ struct Element {
 	float height = 0.f;
 	std::pair<bool, float> water{ false, 0.f };
 	std::vector<std::pair<Quad, float>> hatches;
+	// 细化高度数组(17x17,覆盖[x,x+1]x[y,y+1],约定见terrain_mod.h的TERRAIN_FINE_SUBDIV),
+	// 默认为空——只有起伏大的格子(目前是河岸)才分配,用unique_ptr让没有数组的格子只多8字节。
+	std::unique_ptr<std::array<float, TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE>> fineHeights;
 };
 
 // 阶段4-1 Map域的Map(聚合)雏形:只承担Terrain域需要的职责(尺寸、Element存储、
@@ -55,7 +59,17 @@ public:
 	std::string GetTerrain(int x, int y) const;
 	bool SetTerrain(int x, int y, const std::string& terrain);
 	float GetHeight(int x, int y) const;
+	// 除了改粗高度，还会清掉共用格点(x,y)的4块细化数组((x,y)/(x-1,y)/(x,y-1)/(x-1,y-1))，
+	// 防止细化数据角点和新的粗高度对不上——所以mod必须先SetHeight再SetFineHeights。
 	bool SetHeight(int x, int y, float height);
+	// 没有细化数组时返回nullptr；否则指向TERRAIN_FINE_SIZE^2个float(行主序)。
+	const float* GetFineHeights(int x, int y) const;
+	// 拷贝data(TERRAIN_FINE_SIZE^2个float)进Core自己分配的数组；data为nullptr时清除。
+	bool SetFineHeights(int x, int y, const float* data);
+	// 连续坐标(地图element单位)高度采样：落在有细化数组的格子里，就在1/16细化网格上双线性
+	// (坐标正好在细化网格点上时等于直接查表——UE各级LOD顶点都是这种情况)；否则退回4个格点
+	// 粗高度的双线性。UE地形网格/出生点都走这个函数，见map.md"细化高度"一节。
+	float SampleHeight(float x, float y) const;
 	std::pair<bool, float> GetWater(int x, int y) const;
 	// 每个element的水面属性独立设置,不再跟SetTerrain绑在一起——任何mod都可以给任意格子
 	// 单独设水位,这样同一次DistributeTerrain调用里不同格子可以有不同水位(倾斜水面),见

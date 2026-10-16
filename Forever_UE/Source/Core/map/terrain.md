@@ -13,7 +13,7 @@
 
 ## 关键设计
 
-- **自身不持有任何地图格子数据**——地形类型/高度/水面/hatch这些格子数据活在`Map`/`Element`
+- **自身不持有任何地图格子数据**——地形类型/高度/细化高度/水面/hatch这些格子数据活在`Map`/`Element`
   （见`map.md`），`Terrain`只是"某个地形类型的行为句柄"，`Map::InitTerrains()`按优先级顺序
   临时创建一批`Terrain*`跑完`DistributeTerrain`就地析构，不长期持有。
 - **没有迁移老工程的`EmptyTerrain`**——老工程`terrain.h`里声明了一个`EmptyTerrain`

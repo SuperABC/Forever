@@ -3,7 +3,7 @@
 ## 职责
 
 `JingRoadnet`("井字路网")是Roadnet域内置的默认路网生成器：4个角`Intersection`(NW/NE/SE/SW)
-+8条链向外延伸到地图边界的`extern`+环路("中山×路")/放射路("城××路")命名规则+5个默认lot
++8条放射臂向外延伸到地图边界的`extern`(地图上**只有这4个角点是Intersection**)+环路("中山×路")/放射路("城××路")命名规则+5个默认lot
 (4角+1中心)+沿每条放射臂继续细分lot。
 
 ## 关键设计
@@ -15,21 +15,33 @@
   整张地图恰好1:1:1均分)。这是支撑`building_basic.md`里`ShopBuilding`/`FactoryBuilding`
   (靠`GetPower(AREA_TYPE)`按分区类型竞争lot)的必要前提——分区类型如果单一固定，地图上只会
   长出一种建筑。
-- **隧道**：道路默认高度固定0，但`extendChain`延伸链条时如果遇到`mountain`地形(或前后
-  `TUNNEL_LOOKAHEAD_DISTANCE=5`个单位内探测到`mountain`，提前/延后过渡避免隧道口卡在山体
-  正中间)，对应`Node`的`z`改成`TUNNEL_HEIGHT=-1.f`(相对平坦Z=0基准往下10m)，其余节点仍是
-  `0.f`。隧道口斜坡段额外调`AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`
-  挖开地形，否则隧道段会被山体实心地形完全挡住看不见；消费方
-  `ForeverTerrainFrameworkComponent::LookupTerrain`的判断条件要放宽到"`construction`或者
-  这个格子有hatch"，见该文件`.md`。挖洞宽度直接取`roads.back().GetTotalWidth()`，跟着这条
-  路实际配好的车道宽度走，不用固定常量——车道配置不对称/加宽时固定宽度的洞挖不穿全部车道。
+- **放射臂上没有Intersection，Road在"格点"处用普通Node断开**：`buildArm`沿臂每
+  `ARM_SAMPLE_STEP=4`单位(40m)采样一次地形，每`ARM_SAMPLES_PER_CELL=8`个采样点(32单位=320m)
+  是一个lot格子边长，这些"格点"(lot角点)、隧道出入口P/Q都只是普通`Node`，不进`intersections`。
+  `RoadJunction::Build`的setback裁剪只对`Intersection`生效，所以相邻两段Road在这些点首尾直接
+  相接，没有路口造成的mesh空缺；lot的边界Road仍然靠两端Node id精确匹配(`makeBoundaryRoad`)。
+  **extern是臂所在直线与地图边界矩形的交点**(从角点沿臂方向的射线求出射点)，不是最后一个
+  采样点；最后一个采样点至少离extern 1个采样步(4单位)，免得最后一段Road退化。
+- **隧道**：道路默认高度固定0，隧道由`buildArm`里的采样状态机决定：地面状态下如果**下一个**
+  采样点是`mountain`就入隧道，入口P必须落在`plain`/`construction`采样点(当前点是河/海等不合格
+  地形就向回退到最近的合格采样点，中间那段按平地铺过去；回退到角点还不行就从角点起就入隧道)；
+  隧道里一直走到第一个`plain`/`construction`采样点才出隧道，出口Q同样保证落在合格地形上(山体
+  之后如果是河/海就继续隧道穿过去；一直到extern都没有合格点则隧道延伸到extern)。隧道内的格点
+  `z=TUNNEL_HEIGHT=-1.f`(相对平坦Z=0基准往下10m)，P/Q和其余格点`z=0`。P与Q之间一个隧道格点都
+  没有时在中点补一个隧道节点，保证两端的地面↔隧道过渡各有自己的坡。隧道口斜坡段额外调
+  `AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`挖开地形，否则隧道段会被山体
+  实心地形完全挡住看不见；消费方`ForeverTerrainFrameworkComponent::LookupTerrain`的判断条件要
+  放宽到"`construction`或者这个格子有hatch"，见该文件`.md`。挖洞宽度直接取
+  `roads.back().GetTotalWidth()`，跟着这条路实际配好的车道宽度走，不用固定常量。
 - **`addRoad`的地面↔隧道过渡拆成三段Connection**：①`groundNode→flatNode`(长
   `TUNNEL_FLAT_APPROACH_LENGTH=1.5`，两端Z相同，`addControls`在两端Z相同时产出的曲线严格
   保持水平)；②`flatNode→splitNode`(真正的S形下坡)；③`splitNode→隧道`(两端同高，不需要
   控制点)。水平引道①的作用是保证`RoadJunction::Build`按`setback`裁掉的那一截必然落在水平
   段以内，不会裁到下坡曲线已经降高的位置，否则路口mesh和裁剪边界处曲线高度会不一致。
   `TUNNEL_FLAT_APPROACH_LENGTH`只需大于`setback`即可，不需要精确相等。两段hatch(引道段+
-  下坡段)首尾相接，合起来覆盖范围和未拆分前一致。
+  下坡段)首尾相接，合起来覆盖范围和未拆分前一致。隧道节点离地面端不超过
+  `TUNNEL_HATCH_LENGTH`(4单位)时没有"下坡后再接平路"的空间，下坡直接以隧道节点收尾，不产生
+  splitNode和第三段(避免零长Road)。
   - **`flatNode`/`splitNode`不登记进`intersections`**——它们是几何过渡点，不是真正的路口，
     `RoadJunction::Build`按`setback`裁剪+摆水平路口平面的逻辑不适用于这两个点(尤其
     `splitNode`正好卡在下坡曲线中间)。为了不让导航贯通线在这两个点断开，
@@ -66,7 +78,9 @@
   会被之后的`vector`扩容废掉。
   - **找不到匹配时返回`nullptr`，调用方必须直接放弃这块lot**(不铺Zone/Building)——不要为
     了保住一小块贴着隧道口的地皮而构造一个假边界，隧道里也不应该摆建筑。象限lot用
-    `if (boundary&&boundary)`包住`lots.emplace_back`；细分循环里用`continue`跳过。
+    `if (boundary&&boundary)`包住`lots.emplace_back`；细分循环里用`break`：这块lot被取消后这条
+    放射臂方向后面也不再放任何lot(路本身仍继续铺到extern)，和`isLotFullyConstruction`不通过
+    时的语义一致。
 - **道路3D资产命名规则按车道数编码**：`meshPathFor`拼出
   `default_左车行_左停车_左人行_右车行_右停车_右人行`(六个数字，和`configureLanesEx`的
   六个参数一一对应)，比如默认对称配置对应`default_1_0_1_1_0_1`，"中山北路"(左0右2单行)

@@ -22,6 +22,15 @@ Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初�
 - **"3x3邻域全plain才晋升construction"的规则**：3x3包含自身，任一邻居越界（地图边缘）则
   永远不晋升，`plain`和已经是`construction`的格子都算合格。这条规则在`InitTerrains()`里、
   所有`DistributeTerrain`跑完之后统一执行一次。
+- **细化高度：`Element::fineHeights`默认为空，`SampleHeight`统一采样**——粗`height`是格点
+  `(x,y)`上的一个采样；起伏大的格子可以由mod通过`setFineHeights`回调(`Map::SetFineHeights`)
+  附带一个17×17数组(约定见`terrain_mod.md`)。存成`unique_ptr<array>`，没有数组的格子只多
+  8字节，1024×1024地图约8MB，比`vector`(24字节)省。`Map::SampleHeight(x,y)`取
+  `floor`落到的格子：有细化数组就在1/16网格上双线性(UE各级LOD顶点都正好落在网格点上，等于
+  直接查表)，否则用4个格点粗高度双线性——UE侧`UForeverTerrainFrameworkComponent::
+  SampleHeight`直接转发到这里，不再自己实现一份。`SetHeight(x,y)`会清掉共用格点`(x,y)`的
+  4块细化数组，保证"细化数组角点=粗高度"不会因为后跑的mod改高度而失效。`GetHeight`仍然只
+  返回粗高度，其他系统(路网等)不受影响。
 - **`AddHatch(Quad q, float rotation)`自动分发到所有与`q`重叠的element**——按`q`的旋转AABB
   算出重叠的格子范围，逐个格子调用`Element::hatches.emplace_back`。
 - **`InitRoadnet()`必须在`InitTerrains()`之后调用**——`RoadnetMod::DistributeRoadnet`要采样

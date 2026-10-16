@@ -116,6 +116,9 @@ void Map::InitTerrains() {
 	auto setWater = [this](int x, int y, bool hasWater, float h) -> bool {
 		return this->SetWater(x, y, hasWater, h);
 		};
+	auto setFineHeights = [this](int x, int y, const float* data) -> bool {
+		return this->SetFineHeights(x, y, data);
+		};
 
 	auto terrainIds = terrainFactory.GetRegisteredIds();
 	vector<Terrain*> terrains;
@@ -132,7 +135,7 @@ void Map::InitTerrains() {
 		TerrainTexturePaths texturePaths = terrains[i]->GetTextures();
 		terrainTextures[terrains[i]->GetType()] = { static_cast<int>(i) + preset,
 			texturePaths.diffuse, texturePaths.normal, texturePaths.roughness };
-		terrains[i]->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater);
+		terrains[i]->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater, setFineHeights);
 	}
 	for (auto* terrain : terrains) {
 		delete terrain;
@@ -1921,7 +1924,63 @@ bool Map::SetHeight(int x, int y, float height) {
 		return false;
 	}
 	At(x, y).height = height;
+	// 格点(x,y)是这4块细化patch共用的角点，粗高度变了它们的角点就过期了。
+	for (int dy = -1; dy <= 0; dy++)
+		for (int dx = -1; dx <= 0; dx++)
+			if (CheckXY(x + dx, y + dy)) At(x + dx, y + dy).fineHeights.reset();
 	return true;
+}
+
+const float* Map::GetFineHeights(int x, int y) const {
+	if (!CheckXY(x, y)) {
+		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		return nullptr;
+	}
+	const auto& fine = At(x, y).fineHeights;
+	return fine ? fine->data() : nullptr;
+}
+
+bool Map::SetFineHeights(int x, int y, const float* data) {
+	if (!CheckXY(x, y)) {
+		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
+		return false;
+	}
+	auto& fine = At(x, y).fineHeights;
+	if (!data) {
+		fine.reset();
+		return true;
+	}
+	if (!fine) fine = make_unique<array<float, TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE>>();
+	copy(data, data + TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE, fine->begin());
+	return true;
+}
+
+float Map::SampleHeight(float x, float y) const {
+	if (width <= 0 || height <= 0) return 0.f;
+	int ex0 = max(0, min(width - 1, (int)floorf(x)));
+	int ey0 = max(0, min(height - 1, (int)floorf(y)));
+	float tx = max(0.f, min(1.f, x - ex0));
+	float ty = max(0.f, min(1.f, y - ey0));
+
+	const auto& fine = At(ex0, ey0).fineHeights;
+	if (fine) {
+		// LOD顶点的坐标是2的幂分数，fx/fy正好是整数，下面的权重退化成0/1，等于直接查表。
+		float fx = tx * TERRAIN_FINE_SUBDIV, fy = ty * TERRAIN_FINE_SUBDIV;
+		int ix = min(TERRAIN_FINE_SUBDIV - 1, (int)fx);
+		int iy = min(TERRAIN_FINE_SUBDIV - 1, (int)fy);
+		float sx = fx - ix, sy = fy - iy;
+		const float* row0 = fine->data() + iy * TERRAIN_FINE_SIZE;
+		const float* row1 = row0 + TERRAIN_FINE_SIZE;
+		return row0[ix] * (1 - sx) * (1 - sy) + row0[ix + 1] * sx * (1 - sy) +
+			row1[ix] * (1 - sx) * sy + row1[ix + 1] * sx * sy;
+	}
+
+	int ex1 = min(ex0 + 1, width - 1);
+	int ey1 = min(ey0 + 1, height - 1);
+	return At(ex0, ey0).height * (1 - tx) * (1 - ty) +
+		At(ex1, ey0).height * tx * (1 - ty) +
+		At(ex0, ey1).height * (1 - tx) * ty +
+		At(ex1, ey1).height * tx * ty;
 }
 
 pair<bool, float> Map::GetWater(int x, int y) const {
