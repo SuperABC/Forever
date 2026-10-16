@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <map>
 #include <cfloat>
+#include <unordered_set>
 
 // 隧道：道路延伸时如果遇到mountain地形，"钻进去"而不是贴着地形起伏铺过去，并且在隧道口用
 // RoadnetMod::AddHatch给地形挖一个洞，避免隧道段完全埋没在山体实心地形里看不见。挖洞宽度
@@ -23,6 +24,13 @@
 // 引道两端Z相同，addControls在这种情况下产出的Connection整条严格保持水平，不管路口实际裁掉
 // 多长，裁掉的部分必然还在引道以内，因此不需要精确对齐setback——只要比它大留出余量即可。
 #define TUNNEL_FLAT_APPROACH_LENGTH 1.5f
+// 行道树(JingRoadnet::LayoutTrees，先粗估，后面再细调)：种在人行道正中间(TREE_SIDEWALK_
+// RATIO=从人行道内侧量起的比例)，沿路每TREE_SPACING一棵。路口/开口让出的距离都按实际几何
+// 算(路口收缩距离、开口宽度)，见JingRoadnet::LayoutTrees和roadnet_basic.md。
+#define TREE_MESH_PATH "/Game/3rdParty/Mossy_Tree/StaticMeshes/mossy-tree.mossy-tree"
+#define TREE_SCALE 0.6f
+#define TREE_SPACING 1.f
+#define TREE_SIDEWALK_RATIO 0.f
 
 
 using namespace std;
@@ -534,5 +542,86 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 				{ 1, boundary1 }
 			});
 		lots.back().SetArea(RandomHighDensityArea());
+	}
+}
+
+void JingRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {
+	// hostRoads是Core那份路网(开口已经齐全)，只读。每条地面上的大路两侧各种一排：横向偏移和
+	// Map::ComputeLaneAnchorPosition同一套约定——perp0=(-dy,dx)是side0方向，车道整体按
+	// shift=(side0宽-side1宽)/2居中。
+	// 纵向统一规则："缺口"边缘之外再留半个TREE_SPACING才种第一棵——
+	//   ①端点是Intersection(真正的路口)：缺口=路口收缩距离，和RoadJunction::Build同一个定义
+	//     (这个路口所有连接路里GetTotalWidth()最大值的一半)，也就是这条路可见路面开始的位置；
+	//   ②端点是普通Node(lot角格点/地图边缘残端)：道路本身连续，缺口=0，相邻两段在node两侧各留
+	//     半格，拼起来正好一个完整间距，树连续不断也不会在node上重复种两棵；
+	//   ③开口(Road::GetOpenings，只有小路接口和建筑/园区出入口两种来源，普通node不会产生开口)：
+	//     缺口=开口自己的width，以开口中心为准两侧各width/2，再各留半格。
+	// 剩下连续的几棵合成一条AddTreeLine。开口两侧人行道都避开(SplitWithPath产的开口没有可靠的
+	// side信息)。隧道口附近的引道两端Z也是0，靠Core的CanPlaceTree跳过挖洞格子。
+	// Core的Intersection是从this->intersections深拷贝的，拷贝保留id，按id判断即可。
+	unordered_set<int> intersectionIds;
+	for (const Intersection& intersection : intersections) intersectionIds.insert(intersection.GetId());
+	// 路口收缩距离：hostRoads就是Core建RoadJunction时用的那批大路，含隧道段，全部参与。
+	unordered_map<int, float> junctionSetback;
+	for (const Road* road : hostRoads) {
+		if (!road || road->IsPathRoad()) continue;
+		for (int endId : { road->GetStart().GetId(), road->GetEnd().GetId() }) {
+			if (!intersectionIds.count(endId)) continue;
+			float& setback = junctionSetback[endId];
+			setback = max(setback, road->GetTotalWidth() * 0.5f);
+		}
+	}
+	auto endGap = [&](int nodeId) {
+		auto found = junctionSetback.find(nodeId);
+		return found != junctionSetback.end() ? found->second : 0.f;
+		};
+
+	for (const Road* road : hostRoads) {
+		if (!road || road->IsPathRoad()) continue;
+		Node start = road->GetStart(), end = road->GetEnd();
+		if (start.GetZ() < 0.f || end.GetZ() < 0.f) continue;
+		float dx = end.GetX() - start.GetX(), dy = end.GetY() - start.GetY();
+		float len = sqrt(dx * dx + dy * dy);
+		float startInset = endGap(start.GetId()) + TREE_SPACING * 0.5f;
+		float endInset = endGap(end.GetId()) + TREE_SPACING * 0.5f;
+		float usable = len - startInset - endInset;
+		if (usable <= 0.f) continue;
+		float ux = dx / len, uy = dy / len;
+		float perpX = -uy, perpY = ux;
+		float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
+
+		// 沿路距离s(从start量起)上哪些树位要去掉。
+		int num = static_cast<int>(usable / TREE_SPACING) + 1;
+		float step = num > 1 ? usable / (num - 1) : 0.f;
+		// 第i棵树沿路的距离；只有一棵时种在可用范围正中间。
+		auto treeS = [&](int i) { return num > 1 ? startInset + i * step : startInset + usable * 0.5f; };
+		vector<bool> keep(num, true);
+		for (const RoadOpening& opening : road->GetOpenings()) {
+			float center = opening.t * len;
+			float half = opening.width * 0.5f + TREE_SPACING * 0.5f;
+			for (int i = 0; i < num; i++) {
+				if (fabs(treeS(i) - center) < half) keep[i] = false;
+			}
+		}
+
+		for (int side = 0; side < 2; side++) {
+			const vector<float>& pedLanes = road->GetPedestrianLanes(side);
+			if (pedLanes.empty()) continue;
+			float inner = 0.f;
+			for (float w : road->GetVehicleLanes(side)) inner += w;
+			for (float w : road->GetParkingLanes(side)) inner += w;
+			float offset = inner + pedLanes[0] * TREE_SIDEWALK_RATIO;
+			float signedOffset = offset * (side == 0 ? 1.f : -1.f) - shift;
+			float ox = start.GetX() + perpX * signedOffset, oy = start.GetY() + perpY * signedOffset;
+
+			for (int i = 0; i < num;) {
+				if (!keep[i]) { i++; continue; }
+				int j = i;
+				while (j + 1 < num && keep[j + 1]) j++;
+				float s0 = treeS(i), s1 = treeS(j);
+				AddTreeLine({ ox + ux * s0, oy + uy * s0 }, { ox + ux * s1, oy + uy * s1 }, j - i + 1, TREE_SCALE, TREE_MESH_PATH);
+				i = j + 1;
+			}
+		}
 	}
 }

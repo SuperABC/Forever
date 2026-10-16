@@ -381,6 +381,15 @@ const vector<pair<Quad, float>>& Roadnet::GetHatches() const {
 	return hatches;
 }
 
+const vector<TreeLineRequest>& Roadnet::GetTreeLines() const {
+	return treeLines;
+}
+
+void Roadnet::LayoutTrees() {
+	mod->LayoutTrees(roads);
+	treeLines = mod->treeLines;
+}
+
 const string& Roadnet::GetPathRoadMaterial() const {
 	return pathRoadMaterial;
 }

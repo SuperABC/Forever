@@ -165,6 +165,10 @@ context)`是消费任意`Change*`的唯一入口——`populace->Tick`的回调�
 `GetStory()`七个getter齐全，是`UForeverStoryFrameworkComponent::BroadcastGameStart`
 构造`PostImplement`时能拿到全部7个指针的前提（该函数通过
 `Cast<AForeverFrameworkActor>(GetOwner())`拿到这个Actor后依次调用这7个getter）。
+- **植被**——`vegetationFramework`(`UForeverVegetationFrameworkComponent`)在
+  `EnsureMapGenerated`最后、`GenerateBuildings`之后调用`GenerateVegetation(map)`：Core里的树在
+  `InitRoadnet`/`InitBuildings`时已经展开好，这里一次性加载mesh+批量实例化，见
+  `ForeverVegetationFrameworkComponent.md`。
 
 ## 依赖关系
 - 依赖`Framework/ForeverFrameworkComponent.h`及其9个具体子类头文件、`Source/Core/map/map.h`、

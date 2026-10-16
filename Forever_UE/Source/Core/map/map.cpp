@@ -793,6 +793,43 @@ void Map::ForwardBuildingHatches(Building* building) {
 	}
 }
 
+void Map::InitVegetation() {
+	auto canPlace = [this](float x, float y) { return CanPlaceTree(x, y); };
+
+	int roadTrees = 0;
+	if (roadnet) {
+		roadnet->LayoutTrees();
+		for (const TreeLineRequest& request : roadnet->GetTreeLines()) {
+			roadTrees += vegetation.ExpandLine(request, canPlace);
+		}
+	}
+
+	int buildingTrees = 0;
+	for (auto& [name, building] : buildings) {
+		BuildingMod* mod = building ? building->GetMod() : nullptr;
+		if (!mod) continue;
+		mod->LayoutTrees(*building, building->GetBoundaryRoads());
+		float rotation = building->GetRotation();
+		for (const TreeAreaRequest& request : mod->treeAreas) {
+			buildingTrees += vegetation.ExpandArea(request, rotation, canPlace);
+		}
+	}
+
+	debugf("Log: Vegetation road trees=%d, building trees=%d, total=%d, meshes=%d.\n", roadTrees, buildingTrees,
+		(int)vegetation.GetTrees().size(), (int)vegetation.GetMeshPaths().size());
+}
+
+const Vegetation& Map::GetVegetation() const {
+	return vegetation;
+}
+
+bool Map::CanPlaceTree(float x, float y) const {
+	int ex = (int)floorf(x), ey = (int)floorf(y);
+	if (!CheckXY(ex, ey)) return false;
+	const Element& element = At(ex, ey);
+	return !element.water.first && element.hatches.empty();
+}
+
 void Map::FlushPendingBuildingRoadAccess() {
 	struct Entry {
 		bool isVehicle;

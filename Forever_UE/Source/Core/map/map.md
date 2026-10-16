@@ -31,6 +31,11 @@ Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初�
   SampleHeight`直接转发到这里，不再自己实现一份。`SetHeight(x,y)`会清掉共用格点`(x,y)`的
   4块细化数组，保证"细化数组角点=粗高度"不会因为后跑的mod改高度而失效。`GetHeight`仍然只
   返回粗高度，其他系统(路网等)不受影响。
+- **植被`Vegetation vegetation`，最后一个阶段`InitVegetation()`**——必须在`InitBuildings()`之后
+  调用(开口/园区/建筑/房间都齐了)：`roadnet->LayoutTrees()`展开行道树，再对每栋building调
+  `BuildingMod::LayoutTrees`并以building旋转展开`treeAreas`。
+  过滤规则`CanPlaceTree`：越界、有水面、有hatch的格子不种。UE层通过`GetVegetation()`一次性
+  读取渲染，见`vegetation.md`。
 - **`AddHatch(Quad q, float rotation)`自动分发到所有与`q`重叠的element**——按`q`的旋转AABB
   算出重叠的格子范围，逐个格子调用`Element::hatches.emplace_back`。
 - **`InitRoadnet()`必须在`InitTerrains()`之后调用**——`RoadnetMod::DistributeRoadnet`要采样

@@ -3,6 +3,7 @@
 #include "common/utility.h"
 
 #include <cmath>
+#include <algorithm>
 
 
 using namespace std;
@@ -631,3 +632,57 @@ float AirportBuilding::RandomAcreage() { return 2000.f; }
 float AirportBuilding::GetAcreageMin() { return 2000.f; }
 float AirportBuilding::GetAcreageMax() { return 2000.f; }
 float AirportBuilding::GetPower(AREA_TYPE area) { return 0.f; }
+
+// 公园种树用的mesh(和行道树同一棵测试树)和密度：每PARK_ELEMENTS_PER_TREE个element²一棵
+// (约每200m²一棵)，先粗估。
+#define PARK_TREE_MESH_PATH "/Game/3rdParty/Mossy_Tree/StaticMeshes/mossy-tree.mossy-tree"
+#define PARK_TREE_SCALE 1.f
+#define PARK_ELEMENTS_PER_TREE 2.f
+
+int ParkBuilding::count = 0;
+
+ParkBuilding::ParkBuilding() : id(count++) {
+}
+
+const char* ParkBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void ParkBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 0层：Core不会为它建任何Floor，UE层也不会生成楼体(见building.md"允许0层建筑")。
+	basements = 0;
+	layers = 0;
+	floorHeights.clear();
+}
+
+void ParkBuilding::LayoutTrees(const Quad& quad, const std::unordered_map<int, Road*>& boundaryRoads) {
+	int num = max(1, static_cast<int>(quad.GetSizeX() * quad.GetSizeY() / PARK_ELEMENTS_PER_TREE));
+	AddTreeArea(quad, num, PARK_TREE_SCALE, PARK_TREE_MESH_PATH);
+}
+
+void ParkBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+}
+
+float ParkBuilding::RandomAcreage() {
+	return 3000.f + GetRandom(1000) / 1000.f * 5000.f;
+}
+
+float ParkBuilding::GetAcreageMin() {
+	return 3000.f;
+}
+
+float ParkBuilding::GetAcreageMax() {
+	return 8000.f;
+}
+
+float ParkBuilding::GetPower(AREA_TYPE area) {
+	// 绿地分区本来就该是公园；住宅分区给一个较小的权重，让测试时住宅区里也能刷出几块公园
+	// (现在的井字路网不产出AREA_GREEN的lot)。
+	if (area == AREA_GREEN) return 1.f;
+	if (area == AREA_RESIDENTIAL_HIGH || area == AREA_RESIDENTIAL_MIDDLE || area == AREA_RESIDENTIAL_LOW) {
+		return 0.25f;
+	}
+	return 0.f;
+}

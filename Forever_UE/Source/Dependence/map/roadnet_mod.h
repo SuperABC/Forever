@@ -1,6 +1,7 @@
 #pragma once
 
 #include "map/geometry.h"
+#include "map/vegetation_spec.h"
 
 #include <string>
 #include <vector>
@@ -28,6 +29,12 @@ public:
 		const std::function<std::string(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		int nodeStaticCount) = 0;
+
+	// 布局行道树:在整张地图(路网+园区+建筑+房间)全部生成完之后由Map::InitVegetation调用一次,
+	// 这时roads上已经有Zone/Building/小路加上的全部开口(Road::GetOpenings),可以避开出入口。
+	// hostRoads是宿主(Core)持有的路网深拷贝(不是this->roads那份mod自己的旧拷贝),只读访问,不要
+	// 调用任何会修改它们的方法。在这里用AddTreeLine提交请求。默认不种树。
+	virtual void LayoutTrees(const std::vector<Road*>& hostRoads) {}
 
 	// 工具方法(非虚,不需要重写):把connection上[t1,t2]这一段包成一个Quad追加进hatches——
 	// 隧道口挖地形洞用,照抄老工程RoadnetMod::AddHatch语义。width是Quad垂直于connection方向
@@ -61,4 +68,13 @@ public:
 	// Zone/Building裁剪Lot自由空间时自动生成的小路材质路径。留空表示不指定，Forever层渲染
 	// 小路时退化用RoadPlain，见roadnet.md。
 	std::string pathRoadMaterial;
+
+	// 工具方法(非虚,不需要重写):沿from->to(地图element单位,世界坐标)均匀种num棵树(含两端,
+	// num==1时种在中点)——只记一条请求进treeLines,每棵树的随机旋转/缩放、跳过水面和挖洞
+	// 格子都由Core统一展开,见vegetation_spec.md。meshPath是StaticMesh资产软路径。
+	void AddTreeLine(std::pair<float, float> from, std::pair<float, float> to, int num, float scale,
+		const std::string& meshPath);
+
+	// AddTreeLine记录的行道树请求,宿主(Roadnet::LayoutTrees)在调完LayoutTrees之后按值拷贝走。
+	std::vector<TreeLineRequest> treeLines;
 };

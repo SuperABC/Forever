@@ -35,6 +35,9 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 算法本身；承载这些算法的代码在`ABuildingElement`里（原来的`Building*`/
 `FBuildingRenderState&`两个参数，现在是Element自己的成员）。
 
+- **0层建筑不生成Element**——`GenerateBuildings`跳过`GetBasementCount()+GetLayerCount()==0`
+  的building(例如只有植被的`ParkBuilding`)，不画远处LOD方块，也不建进出触发盒。
+
 ## 两级LOD
 
 - **近处（`EBuildingLod::Near`）**：完整楼层内部结构，见"近处楼层几何"一节。

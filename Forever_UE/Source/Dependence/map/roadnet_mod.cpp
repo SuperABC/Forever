@@ -23,3 +23,9 @@ void RoadnetMod::AddHatch(const Connection* connection, float t1, float t2, floa
 	Quad quad(cx, cy, length, width);
 	hatches.emplace_back(quad, rotation);
 }
+
+void RoadnetMod::AddTreeLine(pair<float, float> from, pair<float, float> to, int num, float scale,
+	const string& meshPath) {
+	if (num <= 0 || meshPath.empty()) return;
+	treeLines.push_back(TreeLineRequest{ from.first, from.second, to.first, to.second, num, scale, meshPath });
+}

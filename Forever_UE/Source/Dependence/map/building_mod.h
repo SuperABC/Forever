@@ -2,6 +2,7 @@
 
 #include "map/door_spec.h"
 #include "map/geometry.h"
+#include "map/vegetation_spec.h"
 
 #include <string>
 #include <vector>
@@ -99,6 +100,11 @@ public:
 	virtual void Layout(int& direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) {}
 
+	// 布局这栋building范围内的树:在整张地图(路网+园区+建筑+房间)全部生成完之后由
+	// Map::InitVegetation对每栋building调用一次,参数和Layout()一样(纯只读输入)。在这里用
+	// AddTreeArea提交请求。默认不种树。
+	virtual void LayoutTrees(const Quad& quad, const std::unordered_map<int, Road*>& boundaryRoads) {}
+
 	// 楼体位置/楼层/LOD材质——按类型固定的配置，在Layout(...)里设置。
 	BuildingFootprintSpec footprint;
 	int basements = 0;
@@ -169,4 +175,12 @@ public:
 	// Layout()里填写。只有layout里对应方向的门洞带了这个tag才会查到这份spec，没有标签的
 	// 门洞永远不可选中，查不到tag或者查到了mesh为空同样只是个洞，见door_spec.h/door.h。
 	std::unordered_map<std::string, DoorSpec> doorSpecs;
+
+	// 在quad范围内均匀随机种num棵树——quad传Layout()拿到的那个building quad即可(或者它的
+	// 一部分，同一套"中心世界坐标+楼体局部轴向尺寸"约定)，Core展开时会叠加building的旋转。
+	// 只记一条请求进treeAreas，随机旋转/缩放由Core统一处理，见vegetation_spec.md。
+	void AddTreeArea(const Quad& quad, int num, float scale, const std::string& meshPath);
+
+	// AddTreeArea记录的请求，Map::InitVegetation在LayoutTrees()之后读取展开。
+	std::vector<TreeAreaRequest> treeAreas;
 };

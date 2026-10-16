@@ -227,6 +227,9 @@
     <ClInclude Include="map\building_mod.h">
       <Filter>map</Filter>
     </ClInclude>
+    <ClInclude Include="map\vegetation_spec.h">
+      <Filter>map</Filter>
+    </ClInclude>
     <ClInclude Include="map\component_mod.h">
       <Filter>map</Filter>
     </ClInclude>

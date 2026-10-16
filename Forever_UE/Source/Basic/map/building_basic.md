@@ -61,6 +61,14 @@
   - `footprint`固定0.6x0.6，`layers`显式固定为1(地上1层)，`floorHeights`统一`0.6f`，
     `FloorAssetSpec.wallMaterial="/Game/Asset/Materials/White.White"`。`basements`是否有
     地下室由`quad`尺寸判定，和地上层数无关。
+## ParkBuilding
+
+公园(`building_park`)：`Layout()`里`basements=0`/`layers=0`(不放楼体)；`LayoutTrees()`里调用
+`AddTreeArea(quad, max(1, sizeX*sizeY/PARK_ELEMENTS_PER_TREE), ...)`在整块quad里随机种树，
+密度暂定每2个element²(约200m²)一棵。不做显式占位，走权重CDF随机填充：`AREA_GREEN`权重1、
+住宅三档0.25(现在的井字路网不产出`AREA_GREEN`的lot，给住宅区一点权重方便测试)，
+`RandomAcreage`在3000~8000之间。没有room/component，`basic.cpp`里不需要依赖表条目；
+`config.json`的`building_mods`里要有`"building_park"`才会启用。UE层跳过0层建筑不渲染楼体。
 
 ## 依赖关系
 

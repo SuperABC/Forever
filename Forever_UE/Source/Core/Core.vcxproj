@@ -103,6 +103,7 @@
     <ClCompile Include="player\puzzle.cpp" />
     <ClCompile Include="map\terrain.cpp" />
     <ClCompile Include="map\terrain_blend.cpp" />
+    <ClCompile Include="map\vegetation.cpp" />
     <ClCompile Include="map\roadnet.cpp" />
     <ClCompile Include="map\zone.cpp" />
     <ClCompile Include="map\building.cpp" />
@@ -145,6 +146,7 @@
     <ClInclude Include="player\puzzle.h" />
     <ClInclude Include="map\terrain.h" />
     <ClInclude Include="map\terrain_blend.h" />
+    <ClInclude Include="map\vegetation.h" />
     <ClInclude Include="map\roadnet.h" />
     <ClInclude Include="map\zone.h" />
     <ClInclude Include="map\building.h" />

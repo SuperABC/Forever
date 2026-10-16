@@ -24,6 +24,7 @@ class UForeverSkyFrameworkComponent;
 class UForeverStoryFrameworkComponent;
 class UForeverTerrainFrameworkComponent;
 class UForeverTrafficFrameworkComponent;
+class UForeverVegetationFrameworkComponent;
 class UForeverZoneFrameworkComponent;
 
 // 场景里唯一的Framework入口Actor,取代旧工程里分散的9个Framework Actor
@@ -193,6 +194,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverTrafficFrameworkComponent> trafficFramework;
+
+	// 全图植被(行道树/公园树)统一渲染，见Source/Forever/Framework/ForeverVegetationFrameworkComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
+	TObjectPtr<UForeverVegetationFrameworkComponent> vegetationFramework;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverZoneFrameworkComponent> zoneFramework;

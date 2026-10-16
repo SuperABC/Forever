@@ -15,6 +15,11 @@
 
 ## 关键设计
 
+- **允许0层建筑**——`Layout()`里`layers = max(0, mod->layers)`（以前强制至少1层）。
+  `basements`和`layers`都为0时整栋没有任何`Floor`，`GetFloor(level)`恒返回nullptr，导航/门/
+  hatch转发这些按`floors`或`mod->floors`遍历的循环自然什么都不做。给`ParkBuilding`这类只有植被、
+  不放楼体的"建筑"用(植被走`BuildingMod::AddTreeArea`，见`vegetation.md`)；UE层
+  `ForeverBuildingFrameworkComponent`直接跳过这种building，不生成`ABuildingElement`。
 - **模板数据模型（`RectParams`/`PointParams`/`WallHole`，定义在`geometry.h`）**：`.layout`
   模板文件里的矩形/点位置都是"ratio+offset相对某个尺寸"的描述——`worldCoord = ratio*W_or_H +
   offset`，同一份模板换到不同实际楼层尺寸时套用同一个公式即可复用。`RectParams`(8个float，

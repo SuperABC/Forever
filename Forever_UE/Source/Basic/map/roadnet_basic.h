@@ -17,6 +17,8 @@ public:
 		const std::function<std::string(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		int nodeStaticCount) override;
+	// 道路两侧人行道上的行道树，避开开口，见roadnet_basic.md"行道树"。
+	virtual void LayoutTrees(const std::vector<Road*>& hostRoads) override;
 
 private:
 	static int count;

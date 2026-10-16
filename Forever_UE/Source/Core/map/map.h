@@ -13,6 +13,7 @@
 #include "map/zone.h"
 #include "map/building.h"
 #include "map/door.h"
+#include "map/vegetation.h"
 
 #include "common/handle.h"
 
@@ -88,6 +89,12 @@ public:
 		std::string roughness;
 	};
 	const std::unordered_map<std::string, TerrainTextureInfo>& GetTerrainTextures() const;
+
+	// 全图植被(InitVegetation里展开)，UE层UForeverVegetationFrameworkComponent一次性读取
+	// 渲染，见vegetation.md。
+	const Vegetation& GetVegetation() const;
+	// 这个点(地图element单位)能不能种树：越界、有水面、有挖洞(隧道口等)的格子不种。
+	bool CanPlaceTree(float x, float y) const;
 
 	// 用已经注册好的roadnetFactory构建路网(mod dll的发现/注册归`Registry`全局管,不在这里
 	// 做),假定InitTerrains已经跑完(DistributeRoadnet要采样已生成好的地形/水面)。构建顺序见
@@ -169,6 +176,13 @@ public:
 	// Source/Core/common/registry.md——Layout()内部创建Room/Component时直接用的是
 	// `roomFactory`/`componentFactory`这两个引用成员，不需要这里再另外确认注册没跑。
 	void InitBuildings();
+
+	// 植被是整张地图最后一个阶段，必须在InitBuildings()之后调用——这时路网上Zone/Building/
+	// 小路加的开口(Road::GetOpenings)都已经齐全，行道树才能避开出入口：先调
+	// roadnet->LayoutTrees()(内部调RoadnetMod::LayoutTrees)展开行道树，再对每栋building调
+	// BuildingMod::LayoutTrees(quad, boundaryRoads)，按building->GetRotation()展开它的treeAreas。
+	// 过滤规则见CanPlaceTree，见vegetation.md。
+	void InitVegetation();
 
 	// 遍历所有building的所有room，IsResidential()的加ResidentialCapacity()，除以2——
 	// 老工程Map::InitContents()对"accomodation"的统计口径(先求和再减半)。供调用方
@@ -324,6 +338,8 @@ private:
 	ScriptFactory& scriptFactory;
 
 	std::unordered_map<std::string, TerrainTextureInfo> terrainTextures;
+
+	Vegetation vegetation;
 
 	Roadnet* roadnet = nullptr;
 	std::vector<RoadJunction*> junctions;

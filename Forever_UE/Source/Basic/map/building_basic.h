@@ -154,3 +154,31 @@ private:
 	int id;
 	std::string name;
 };
+
+// 公园：0层(不放楼体)，只在自己的quad范围内用BuildingMod::AddTreeArea种一片树，测试植被
+// 系统的面状接口。走权重CDF随机填充(绿地分区权重1，住宅分区0.25)，不做显式占位。详见
+// building_basic.md。
+class ParkBuilding : public BuildingMod {
+public:
+	ParkBuilding();
+
+	static const char* GetId() { return "building_park"; }
+	virtual const char* GetType() const override { return "building_park"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+	// 在整块quad里随机种树(地图全部生成完之后由Map::InitVegetation调用)。
+	virtual void LayoutTrees(const Quad& quad, const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};

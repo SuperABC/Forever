@@ -32,3 +32,8 @@ void BuildingMod::ArrangeRow(int level, int slot, const string& room, float acre
 void BuildingMod::AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, string cabinMeshPath) {
 	cabins.push_back(ElevatorCabinSpec{ shaftIndex, minFloor, maxFloor, std::move(cabinMeshPath) });
 }
+
+void BuildingMod::AddTreeArea(const Quad& quad, int num, float scale, const string& meshPath) {
+	if (num <= 0 || meshPath.empty()) return;
+	treeAreas.push_back(TreeAreaRequest{ quad, num, scale, meshPath });
+}

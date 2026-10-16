@@ -31,6 +31,7 @@
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Framework/ForeverTerrainFrameworkComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
+#include "Framework/ForeverVegetationFrameworkComponent.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
 #include "Components/SceneComponent.h"
 
@@ -58,6 +59,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	storyFramework = CreateDefaultSubobject<UForeverStoryFrameworkComponent>(TEXT("StoryFramework"));
 	terrainFramework = CreateDefaultSubobject<UForeverTerrainFrameworkComponent>(TEXT("TerrainFramework"));
 	trafficFramework = CreateDefaultSubobject<UForeverTrafficFrameworkComponent>(TEXT("TrafficFramework"));
+	vegetationFramework = CreateDefaultSubobject<UForeverVegetationFrameworkComponent>(TEXT("VegetationFramework"));
 	zoneFramework = CreateDefaultSubobject<UForeverZoneFrameworkComponent>(TEXT("ZoneFramework"));
 }
 
@@ -335,6 +337,8 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 	map->InitRoadnet();
 	map->InitZones();
 	map->InitBuildings();
+	// 植被放在最后：要等路网开口/园区/建筑/房间全部生成完，行道树才能避开出入口。
+	map->InitVegetation();
 
 	if (terrainFramework) {
 		terrainFramework->GenerateTerrain(map);
@@ -354,6 +358,11 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 	// 再单独调用roomFramework——见Source/Forever/Element/BuildingElement.md。
 	if (buildingFramework) {
 		buildingFramework->GenerateBuildings(map);
+	}
+	// 植被：Core里的树在InitVegetation时已经全部展开好，这里一次性
+	// 加载mesh+批量实例化；Z取地形高度，必须在GenerateTerrain之后(用的是同一个Map::SampleHeight)。
+	if (vegetationFramework) {
+		vegetationFramework->GenerateVegetation(map);
 	}
 }
 

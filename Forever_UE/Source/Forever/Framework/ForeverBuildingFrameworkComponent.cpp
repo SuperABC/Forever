@@ -77,6 +77,9 @@ void UForeverBuildingFrameworkComponent::GenerateBuildings(Map* inMap) {
 	// 顶部注释。
 	for (auto& [name, building] : map->GetBuildings()) {
 		if (!building) continue;
+		// 0层建筑(ParkBuilding这类只有植被的)没有楼体，不生成Element——既不画远处LOD方块，
+		// 也不建进出触发盒，见Source/Core/map/building.md"允许0层建筑"。
+		if (building->GetBasementCount() + building->GetLayerCount() == 0) continue;
 
 		ABuildingElement* element = GetWorld()->SpawnActor<ABuildingElement>();
 		if (!element) continue;

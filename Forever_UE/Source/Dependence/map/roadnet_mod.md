@@ -53,6 +53,12 @@ Dependence\map\roadnet_mod.h`相比是全新设计——老工程的`Road`只是
   非整车道宽度套不进那套命名约定），Forever层直接画一个贴材质的扁cube，材质路径就是这个
   字段——留空表示mod没有指定，退化用`DefaultRoad`。普通`public`字符串成员，和
   `externs`/`roads`等现有字段风格一致，`JingRoadnet`不设置也是合法状态。
+- **行道树：虚函数`LayoutTrees(hostRoads)`+非虚工具方法`AddTreeLine`+`treeLines`**——树放在
+  整张地图最后一个阶段布局：`Map::InitVegetation`在路网/园区/建筑/房间全部生成完之后调用
+  `LayoutTrees`一次(默认空实现)，传入的`hostRoads`是Core持有的那份路网(已经带上全部开口
+  `Road::GetOpenings`，可以避开出入口)，不是mod自己`roads`那份旧拷贝，只读访问。mod在里面调
+  `AddTreeLine`只记一条`TreeLineRequest`(见`vegetation_spec.md`)，宿主`Roadnet::LayoutTrees`
+  按值拷贝走，再交给Core的`Vegetation`展开(随机旋转/缩放、跳过水面和挖洞格子)。
 
 ## 依赖关系
 

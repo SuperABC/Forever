@@ -96,6 +96,9 @@
     <ClCompile Include="map\terrain_blend.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\vegetation.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\roadnet.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -216,6 +219,9 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\terrain_blend.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\vegetation.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\roadnet.h">

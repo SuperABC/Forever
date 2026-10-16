@@ -19,6 +19,7 @@
       "building_factory",
       "building_train_station",
       "building_airport",
+      "building_park",
       "yuanshen",
       "empty --test true"
    ],
