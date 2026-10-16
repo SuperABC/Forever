@@ -1,8 +1,16 @@
 #pragma once
 
+#include "map/general_geometry.h"
+
 #include <string>
 #include <vector>
 
+
+// Dependence/map里各种"feature"(门、植被……)的纯数据描述统一放在这一个文件里——mod填写、Core
+// 读取，不含任何UE类型，资产都只是待LoadObject的软路径字符串。以后map域再有新的spec也往这里
+// 加，不再一个spec一个文件。详见feature_spec.md。
+
+// ---------------------------------------------------------------- 门
 
 // DoorSpec：一扇门"长什么样、怎么开"的纯数据描述——供BuildingMod/RoomMod/ZoneMod共用，
 // 填在各自的doorSpecs表/gate.door里，Core按tag查出对应的DoorSpec决定要不要真正放一扇门
@@ -37,4 +45,31 @@ struct DoorSpec {
 	// 具体随机结果存在Core的Door实例上(Door::IsFlippedSide())，这个字段只是"要不要随机"
 	// 的开关，不存结果本身。
 	bool randomSide = false;
+};
+
+// ---------------------------------------------------------------- 植被
+
+// 植被请求——mod只描述"在哪里种几棵、用什么mesh、基础缩放多少"，每棵树具体的位置/随机
+// 旋转/随机缩放统一由Core的Vegetation展开(见Source/Core/map/vegetation.md)，规则只有一份。
+// 坐标单位都是地图element(1=10m)。详见feature_spec.md"植被"一节。
+
+// 沿from->to线段均匀种num棵(含两端，num==1时种在中点)。由RoadnetMod::AddTreeLine(在
+// RoadnetMod::LayoutTrees里)记录，
+// 坐标是世界坐标。
+struct TreeLineRequest {
+	float fromX = 0.f, fromY = 0.f;
+	float toX = 0.f, toY = 0.f;
+	int num = 0;
+	float scale = 1.f;
+	std::string meshPath;
+};
+
+// 在quad范围内均匀随机种num棵。由BuildingMod::AddTreeArea(在BuildingMod::LayoutTrees里)记录，
+// quad就是LayoutTrees()拿到的那个
+// building quad(中心是世界坐标，尺寸沿楼体局部轴向)，Core展开时再叠加building的旋转。
+struct TreeAreaRequest {
+	Quad quad;
+	int num = 0;
+	float scale = 1.f;
+	std::string meshPath;
 };

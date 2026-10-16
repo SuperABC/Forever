@@ -110,7 +110,7 @@ Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初�
 - **`InitZones()`/`InitBuildings()`必须在`InitRoadnet()`之后调用**（要用到`GetLots()`），
   `InitBuildings()`还必须在`InitZones()`之后（假定`InitZones()`已经把`Lot::GetFreeLots()`
   该占的地方占掉）。相比老工程`Map::InitContents`的三处设计差异（详见`Source/Dependence/
-  map/zone_mod.md`、`geometry.md`）：①Zone/Building不再嵌套在一个单独的`Block`类里，直接向
+  map/zone_mod.md`、`general_geometry.md`）：①Zone/Building不再嵌套在一个单独的`Block`类里，直接向
   `Lot`要地（但Zone/Building本身概念上仍保留嵌套关系，这次只是不实现Zone内部再摆Building的
   递归布局）；②新增"mod直接指定一块贴着某条路的矩形区域"这种显式占位方式
   （`LotPlacementRequest`+`Lot::RequestPlacement`），每次真正的切分都会自动生成一条1单位宽
@@ -169,7 +169,7 @@ Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初�
     building)`——重名返回`false`就`delete building`（`~Building()`里`DestroyBuilding(mod)`
     会跟着跑）。最后对所有lot调`ClearCandidates()`。显式占位和`FillRemainder`两条路径落地
     成功后都要设置`boundaryRoads`——前者从`RequestPlacement`的`outBoundaryRoads`输出参数
-    拷贝，后者从`FillResult::boundaryRoads`拷贝（见`geometry.md`）。
+    拷贝，后者从`FillResult::boundaryRoads`拷贝（见`general_geometry.md`）。
   - **`Building`独占持有一个mod实例，和`Zone`完全一样**：`Building(BuildingFactory*
     factory, BuildingMod* mod)`构造，`~Building()`里`factory->DestroyBuilding(mod)`，每个
     mod实例的生命周期完全绑定它独占的`Building`——因为`RandomAcreage`/`GetPower`等"按类型"
@@ -305,7 +305,7 @@ link之间的全局处理顺序，最后按这个顺序依次调用`ConnectPathR
 
 三条规则：
 
-1. 小路横断面固定是中轴线两侧0.3单位车道、再往外0.2单位人行道（`PathLaneSpec`，`geometry.h`）。
+1. 小路横断面固定是中轴线两侧0.3单位车道、再往外0.2单位人行道（`PathLaneSpec`，`general_geometry.h`）。
 2. **小路接"大路"（`link.endRoad`非空且`!IsPathRoad()`）**：用小路自身连接方向和大路在
    `endT`处`perp0`的点积判断"最靠近小路的那一侧"（`dot>=0`是大路的side0，否则side1，和
    `roadnet.cpp`一直沿用的`perp0`同一个约定，公式见`Map::ComputeLaneAnchorPosition`声明处的
@@ -489,7 +489,7 @@ room数据必须先落地）之后，`EnsurePopulaceGenerated()`里依次
   `Room::IsResidential()`/`ResidentialCapacity()`/`GetParentBuilding()`）、
   `populace/populace.h`/`populace/citizen.h`（`ComputeAccommodationTarget`/`Checkin`的
   `Populace`/`Citizen`参数类型——单向依赖，`Populace`/`Citizen`不反过来include任何map域
-  头文件）、`map/geometry.h`（`Quad`/`Node`/`Road`/`Lot`等，`hatches`字段类型）、
+  头文件）、`map/general_geometry.h`（`Quad`/`Node`/`Road`/`Lot`等，`hatches`字段类型）、
   `common/config.h`（`InitTerrains`/`InitRoadnet`/`InitZones`/`InitBuildings`读config用）、
   `common/registry.h`（`Map`构造函数绑定6个Factory引用成员，见`registry.md`）、
   `common/utility.h`（`debugf`/`GetRandom`）。

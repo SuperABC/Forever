@@ -93,9 +93,6 @@
     <ClCompile Include="map\terrain.cpp">
       <Filter>map</Filter>
     </ClCompile>
-    <ClCompile Include="map\terrain_blend.cpp">
-      <Filter>map</Filter>
-    </ClCompile>
     <ClCompile Include="map\vegetation.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -216,9 +213,6 @@
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="map\terrain.h">
-      <Filter>map</Filter>
-    </ClInclude>
-    <ClInclude Include="map\terrain_blend.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\vegetation.h">

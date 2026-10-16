@@ -26,7 +26,7 @@
   （不是`DistributeRoadnet()`一返回就销毁），所以`mod->roads`在整个`DistributeRoadnet`执行
   期间地址都是稳定的，取地址、建映射都是安全的。这样设计是因为Zone/Building裁剪Lot自由
   空间时(`Lot::SplitWithPath`)，如果小路的一端接到一条"大路"（非小路的边界）上，会给那条
-  大路调`Road::AddOpening`标一个开口（见`Source/Dependence/map/geometry.md`）——这个操作
+  大路调`Road::AddOpening`标一个开口（见`Source/Dependence/map/general_geometry.md`）——这个操作
   改的是`GetBoundaryRoad()`返回的那个`Road*`，必须和`GetRoads()`真正遍历、Forever层真正
   拿去建mesh的对象是同一份，否则"事后修改某条边界路"的操作不会正确反映到渲染/导航图上。
   - **`Roadnet::~Roadnet()`按`unordered_set<Road*>`去重后统一`delete`一次**，不分两次遍历
@@ -34,7 +34,7 @@
     被`delete`两次（double free）。没有匹配上真实路、走了兜底独立拷贝分支的边界`Road*`
     （理论上不应该出现，见`roadnet_basic.md`"`makeBoundaryRoad`"一节）也会被这个去重集合
     正确收纳，不会漏删。
-- **边界`Road`指针直接存在`Lot`自己身上**（`Dependence/map/geometry.h`的`Lot`新增
+- **边界`Road`指针直接存在`Lot`自己身上**（`Dependence/map/general_geometry.h`的`Lot`新增
   `SetBoundaryRoad(dir, Road*)`/`GetBoundaryRoad(dir)`/`GetBoundaryRoads()`（`Lot`不持有
   这些指针的生命周期，仍然由`Roadnet`统一去重`delete`）），不是`Roadnet::lots`旁边单独挂一份
   `unordered_map`——`Roadnet::lots`/`Map::GetLots()`是`vector<Lot*>`。这样拿到一个`Lot*`
@@ -65,7 +65,7 @@
   中间，两侧各有1.5车道宽的路面。如果连线只是"side0从连线堆到side0Width、side1从连线堆到
   side1Width"的双向分界线，单行道（某一侧完全没有车道）会导致整条路的车道全部堆在连线一侧，
   连线本身反而贴在道路的物理边缘上，路口mesh的形状也会因此变得很怪。
-  - `Dependence/map/geometry.h`的`Road`提供`GetSideWidth(int side)`（该side车行+停车+人行
+  - `Dependence/map/general_geometry.h`的`Road`提供`GetSideWidth(int side)`（该side车行+停车+人行
     道宽度总和）和`GetTotalWidth()`（两侧相加）——判断"连线该往哪个方向偏、偏多少"唯一
     需要的两个数，`Dependence`层各模块统一调用这两个方法，不各自重复发明`SumWidths`类
     helper。

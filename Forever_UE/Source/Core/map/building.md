@@ -20,7 +20,7 @@
   hatch转发这些按`floors`或`mod->floors`遍历的循环自然什么都不做。给`ParkBuilding`这类只有植被、
   不放楼体的"建筑"用(植被走`BuildingMod::AddTreeArea`，见`vegetation.md`)；UE层
   `ForeverBuildingFrameworkComponent`直接跳过这种building，不生成`ABuildingElement`。
-- **模板数据模型（`RectParams`/`PointParams`/`WallHole`，定义在`geometry.h`）**：`.layout`
+- **模板数据模型（`RectParams`/`PointParams`/`WallHole`，定义在`general_geometry.h`）**：`.layout`
   模板文件里的矩形/点位置都是"ratio+offset相对某个尺寸"的描述——`worldCoord = ratio*W_or_H +
   offset`，同一份模板换到不同实际楼层尺寸时套用同一个公式即可复用。`RectParams`(8个float，
   两个对角点各自的x/y两套ratio+offset)描述一个矩形，`PointParams`(4个float)描述一个点，
@@ -154,7 +154,7 @@
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/building_mod.h`(`BuildingMod`/`FloorAssetSpec`/
-  `FloorLayoutSpec`)、`building_factory.h`、`Source/Dependence/map/geometry.h`
+  `FloorLayoutSpec`)、`building_factory.h`、`Source/Dependence/map/general_geometry.h`
   (`RectParams`/`PointParams`/`WallHole`/`NavigationXxxTemplate`/`Quad`/`Node`/`Connection`/
   `Road`)、`Source/Core/map/room.h`/`component.h`、`Source/Dependence/common/json.h`
   (`BuildingLayoutLibrary::ReadTemplates`解析`.layout`文件)。

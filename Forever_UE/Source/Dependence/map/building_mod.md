@@ -46,14 +46,14 @@ footprint/楼层高度/LOD材质，以及每层楼内部的布局（`AssignFloor
 - **树：虚函数`LayoutTrees(quad, boundaryRoads)`+非虚工具方法`AddTreeArea`+`treeAreas`**——
   `Map::InitVegetation`在整张地图全部生成完之后对每栋building调用一次`LayoutTrees`(默认空实现，
   参数和`Layout()`一样)，mod在里面调`AddTreeArea`只记一条`TreeAreaRequest`(见
-  `vegetation_spec.md`)。quad直接传拿到的那个building quad，Core按`building->GetRotation()`绕
+  `feature_spec.md`)。quad直接传拿到的那个building quad，Core按`building->GetRotation()`绕
   quad中心展开。
   `layers`现在允许设成0(见`Source/Core/map/building.md`"允许0层建筑")，配合`AddTreeArea`
   可以做只有植被的"建筑"，例如`ParkBuilding`。
 
 ## 依赖关系
 
-- 依赖：`Source/Dependence/map/geometry.h`（`Quad`/`Road`/`FACE_DIRECTION`/
+- 依赖：`Source/Dependence/map/general_geometry.h`（`Quad`/`Road`/`FACE_DIRECTION`/
   `PlacementEmitFunc`）。
 - 被谁依赖：`Source/Dependence/map/building_factory.h`（`RegisterBuilding`的函数指针
   参数）、`Source/Core/map/building.h`/`.cpp`（`Building::Layout()`读取`floors`/

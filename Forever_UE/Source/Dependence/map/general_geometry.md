@@ -1,4 +1,4 @@
-# geometry.h / geometry.cpp
+# general_geometry.h / general_geometry.cpp
 
 纯数学，无windows/UE类型依赖。
 
@@ -59,9 +59,9 @@
   一一对应），是Core层`Map::ConnectPathRoad`把小路接入`vehicleNavGraph`/`pedestrianNavGraph`
   唯一需要的定位信息**。`endT`按Start->End直线投影近似算（`ProjectT`），和`RoadOpening.t`
   用的是同一次计算结果，不重复算两遍。`ConnectPathRoad`具体怎么用这两组信息断线/建锚点，见
-  `Source/Core/map/map.md`"ConnectPathRoad"一节——这部分逻辑完全在Core层，`geometry.cpp`
+  `Source/Core/map/map.md`"ConnectPathRoad"一节——这部分逻辑完全在Core层，`general_geometry.cpp`
   自己不触碰`vehicleNavGraph`/`throughLines`等Map内部结构，只负责把定位信息透传出去。
-- **`FillRemainder`分三步，只在`geometry.cpp`内部用（不进头文件）**：
+- **`FillRemainder`分三步，只在`general_geometry.cpp`内部用（不进头文件）**：
   1. **采样填满**（`SampleFillElements`）：按`candidates`权重CDF反复抽类型、取
      `randomAcreage`目标面积，累加直到达到当前这个freeLots条目的总面积；只有"抽到但剩余
      空间连这个类型的下限都放不下"才计入尝试次数(上限16，`MAX_ALLOCATION_ATTEMPTS`)，抽到

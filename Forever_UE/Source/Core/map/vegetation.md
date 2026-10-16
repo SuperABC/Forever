@@ -3,7 +3,7 @@
 ## 职责
 
 `Vegetation`是全图植被的统一存储：把mod提交的`TreeLineRequest`/`TreeAreaRequest`（定义在
-`Source/Dependence/map/vegetation_spec.h`）展开成一棵棵`TreeInstance`（位置、绕Z轴旋转、最终缩放、
+`Source/Dependence/map/feature_spec.h`）展开成一棵棵`TreeInstance`（位置、绕Z轴旋转、最终缩放、
 mesh下标）。由`Map`持有（`Map::GetVegetation()`），UE层`UForeverVegetationFrameworkComponent`一次性
 读出来按mesh分组实例化渲染。
 
@@ -31,5 +31,5 @@ mesh下标）。由`Map`持有（`Map::GetVegetation()`），UE层`UForeverVeget
 
 ## 依赖关系
 
-- 依赖：`map/vegetation_spec.h`(Dependence)、`common/utility.h`(`GetRandom`/`GetRandomNormal`)。
+- 依赖：`map/feature_spec.h`(Dependence)、`common/utility.h`(`GetRandom`/`GetRandomNormal`)。
 - 被谁依赖：`map.h`(`Map::vegetation`)、`Source/Forever/Framework/ForeverVegetationFrameworkComponent`。

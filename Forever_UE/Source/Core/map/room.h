@@ -4,15 +4,15 @@
 
 #include "map/room_mod.h"
 #include "map/room_factory.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 
-// WallHole(一面墙上的门/窗开口列表)定义在geometry.h——Room和building.h的Corridor/Single/
-// Row都要用，geometry.h是两边都已经包含的公共底层头。
+// WallHole(一面墙上的门/窗开口列表)定义在general_geometry.h——Room和building.h的Corridor/Single/
+// Row都要用，general_geometry.h是两边都已经包含的公共底层头。
 
 // Room(房间)：Building内部布局实例化出来的一个具体房间，继承Quad表示自己在Building楼体
 // 局部坐标系(以Building::GetBodySizeX/Y()为宽高，原点在楼体左下角，未旋转)里占据的矩形。

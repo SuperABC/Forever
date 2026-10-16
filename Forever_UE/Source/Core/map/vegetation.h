@@ -1,6 +1,6 @@
 #pragma once
 
-#include "map/vegetation_spec.h"
+#include "map/feature_spec.h"
 
 #include <string>
 #include <vector>
@@ -20,7 +20,7 @@ struct TreeInstance {
 
 // 全图植被的统一存储：把mod提交的TreeLineRequest/TreeAreaRequest展开成一棵棵TreeInstance，
 // 随机旋转/随机缩放的规则只在这里实现一份。由Map持有，UE层的
-// UForeverVegetationFrameworkComponent一次性读出来按mesh分组实例化渲染。请求结构体在Dependence的map/vegetation_spec.h。详见vegetation.md。
+// UForeverVegetationFrameworkComponent一次性读出来按mesh分组实例化渲染。请求结构体在Dependence的map/feature_spec.h。详见vegetation.md。
 class Vegetation {
 public:
 	// 返回false表示这个位置不能种树(水面/挖洞等)，由Map提供。

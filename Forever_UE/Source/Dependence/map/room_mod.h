@@ -1,7 +1,7 @@
 #pragma once
 
-#include "map/door_spec.h"
-#include "map/geometry.h"
+#include "map/feature_spec.h"
+#include "map/general_geometry.h"
 
 #include <string>
 #include <unordered_map>
@@ -43,7 +43,7 @@ public:
 	bool isManufacture = false;
 	std::vector<std::string> manufactureTypes;             // 产线描述(类型列表)
 
-	// 停车位——老工程isParking/parkingSpaces这次补上，并且比老工程多了旋转(见geometry.h
+	// 停车位——老工程isParking/parkingSpaces这次补上，并且比老工程多了旋转(见general_geometry.h
 	// ParkingSpot的说明，老工程只有位置，旋转从来没被真正用过)。Traffic::Init()遍历所有
 	// isParking的Room，对每个ParkingSpot生成一辆预置车辆，见Source/Core/traffic/traffic.md。
 	bool isParking = false;
@@ -51,6 +51,6 @@ public:
 
 	// 房间门——负责single/row实例化出的Room的门，tag->DoorSpec，在SetProperty()里填写
 	// (和这个class其余字段同一个"两段式"约定，不在构造函数里填)。同一个RoomMod类型的所有
-	// 房间共用这张表。查找规则和建筑门一致，见door_spec.h/door.h。
+	// 房间共用这张表。查找规则和建筑门一致，见feature_spec.h/door.h。
 	std::unordered_map<std::string, DoorSpec> doorSpecs;
 };

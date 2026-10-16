@@ -39,10 +39,10 @@
     <ClCompile Include="common\handle.cpp">
       <Filter>common</Filter>
     </ClCompile>
-    <ClCompile Include="map\geometry.cpp">
+    <ClCompile Include="map\general_geometry.cpp">
       <Filter>map</Filter>
     </ClCompile>
-    <ClCompile Include="map\door_spec.cpp">
+    <ClCompile Include="map\feature_spec.cpp">
       <Filter>map</Filter>
     </ClCompile>
     <ClCompile Include="map\roadnet_mod.cpp">
@@ -197,10 +197,10 @@
     <ClInclude Include="common\handle.h">
       <Filter>common</Filter>
     </ClInclude>
-    <ClInclude Include="map\geometry.h">
+    <ClInclude Include="map\general_geometry.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\door_spec.h">
+    <ClInclude Include="map\feature_spec.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="story\expression.h">
@@ -225,9 +225,6 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\building_mod.h">
-      <Filter>map</Filter>
-    </ClInclude>
-    <ClInclude Include="map\vegetation_spec.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\component_mod.h">

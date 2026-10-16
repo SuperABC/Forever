@@ -78,7 +78,7 @@
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/room_mod.h`（`RoomMod`）、`room_factory.h`、
-  `Source/Dependence/map/geometry.h`（`Quad`/`WallHole`/`Node`/`FACE_DIRECTION`）、
+  `Source/Dependence/map/general_geometry.h`（`Quad`/`WallHole`/`Node`/`FACE_DIRECTION`）、
   `Source/Core/populace/citizen.h`（`Citizen`，`owner`/`tenants`/`occupants`只存指针，
   前向声明即可，见room.h顶部）。
 - 被谁依赖：`Source/Core/map/building.h`/`.cpp`（`Building::AssignRoom`/`ArrangeRow`创建，

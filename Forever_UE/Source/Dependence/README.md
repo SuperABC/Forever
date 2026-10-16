@@ -109,8 +109,8 @@
 - `common/utility.h/.cpp`：`ValueType`(脚本引擎值类型)、`Time`、`Counter`、`debugf`等，
   详见`common/utility.md`。
 - `common/handle.h/.cpp`：`PostHandle`跨模块查询接口，详见`common/handle.md`。
-- `map/geometry.h/.cpp`：`Node`/`Connection`/`Quad`/`Lot`等几何与导航图原语，详见
-  `map/geometry.md`。
+- `map/general_geometry.h/.cpp`：`Node`/`Connection`/`Quad`/`Lot`等几何与导航图原语，详见
+  `map/general_geometry.md`。
 - `story/condition.h/.cpp`、`story/change.h/.cpp`、`story/event.h/.cpp`：通用脚本表达式
   引擎+"动作"/"事件"词汇表，详见各自同名`.md`。这三个文件不是某个具体concept本身
   (`Script`才是)，是`Script`会用到的底层机制。

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "map/zone_mod.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #include <string>
 #include <unordered_map>

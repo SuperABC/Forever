@@ -1,6 +1,6 @@
 #pragma once
 
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #include <string>
 #include <vector>

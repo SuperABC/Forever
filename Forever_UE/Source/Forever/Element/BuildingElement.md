@@ -162,7 +162,7 @@ owner，被物理引擎的碰撞体焊接开销拖累）。这次直接把这部
 ## 依赖关系
 
 - 依赖：`Source/Forever/Framework/ForeverBuildingFrameworkComponent.h`（`framework`弱引用
-  回调）、`map/map.h`/`map/building.h`/`map/room.h`/`map/door.h`/`map/geometry.h`
+  回调）、`map/map.h`/`map/building.h`/`map/room.h`/`map/door.h`/`map/general_geometry.h`
   （Core侧数据）、`Source/Forever/Element/DoorComponent.h`（门）、
   `ProceduralMeshComponent`（远处LOD）、`Components/StaticMeshComponent.h`（近处每段一个
   组件）、`Components/BoxComponent.h`（碰撞盒）、`UMaterialInstanceDynamic`、

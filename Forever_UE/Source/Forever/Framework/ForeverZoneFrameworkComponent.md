@@ -51,7 +51,7 @@
 
 - 依赖：`map/map.h`（`Map::GetZones()`）、`map/zone.h`（`Zone`，`GetWalls()`/
   `GetInternalBuildings()`/`GetAddress()`）、`map/building.h`（`Building`，算碰撞盒Z范围
-  用）、`map/geometry.h`（`FACE_DIRECTION`）、`Components/InstancedStaticMeshComponent.h`、
+  用）、`map/general_geometry.h`（`FACE_DIRECTION`）、`Components/InstancedStaticMeshComponent.h`、
   `Components/BoxComponent.h`、`Kismet/GameplayStatics.h`、`Engine/Engine.h`。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`
   （`EnsureMapGenerated()`在`GenerateRoadnet`之后调用一次`GenerateZones`）。

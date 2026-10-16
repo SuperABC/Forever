@@ -1739,7 +1739,7 @@ Node* Map::ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, boo
 
 	auto [worldX, worldY] = ZoneLocalToWorld(zone, x, y);
 
-	// 直线投影近似算hostRoad上的弧长比例t，和geometry.cpp里ProjectT同样的做法。
+	// 直线投影近似算hostRoad上的弧长比例t，和general_geometry.cpp里ProjectT同样的做法。
 	Node hostStart = hostRoad->GetStart();
 	Node hostEnd = hostRoad->GetEnd();
 	float hdx = hostEnd.GetX() - hostStart.GetX();

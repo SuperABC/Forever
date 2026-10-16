@@ -39,7 +39,7 @@
   和`Lot::boundaryRoads`语义完全一致——非持有指针，不管理生命周期。`Map::InitZones()`落地
   成功后从`Lot::RequestPlacement`的`outBoundaryRoads`输出参数里拷贝过来（这个参数是为了
   解决"`RequestPlacement`内部真正裁剪出来的`Lot`在返回前就被`delete`了，边界Road信息本来
-  会跟着丢失"这个问题而加的，见`geometry.md`）。
+  会跟着丢失"这个问题而加的，见`general_geometry.md`）。
 - **围墙/大门/内部道路/内部建筑（Zone内部布局）**：`GetWalls()`/`GetGates()`直接返回
   `mod->walls`/`mod->gates`——`mod`是这个`Zone`独占持有的实例，数据不会失效，不需要再在
   `Zone`自己身上拷贝一份`walls`/`gates`字段。`internalRoads`(`vector<Road*>`，真正实例化
@@ -90,7 +90,7 @@
 
 ## 依赖关系
 
-- 依赖：`map/zone_mod.h`、`map/zone_factory.h`、`map/geometry.h`（`Quad`/`Lot`）、
+- 依赖：`map/zone_mod.h`、`map/zone_factory.h`、`map/general_geometry.h`（`Quad`/`Lot`）、
   `map/door.h`（`BuildDoors`调`Map::CreateDoor`）、
   `building.h`（`vector<Building*> internalBuildings`需要完整类型，只存指针可以只前向声明，
   但`.cpp`里`Building*`没有调用任何方法所以`zone.cpp`本身不需要include `building.h`，
@@ -146,7 +146,7 @@
 
 `boundaryRoads`（四周边界Road）和`Zone`同样的字段/语义，`Map::InitBuildings()`在显式占位
 和`FillRemainder`两条路径上都会填（`FillRemainder`产出的`Lot::FillResult`也有
-`boundaryRoads`字段，见`geometry.md`）。
+`boundaryRoads`字段，见`general_geometry.md`）。
 
 **寻址唯一性**：和`Zone`同样，`GetName()`直接转发`mod->GetName()`，唯一性由mod自己在构造
 函数里维护static计数器保证，`Map::AddBuilding`发现重名只是拒绝加入+`debugf`警告兜底。

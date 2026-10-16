@@ -9,7 +9,7 @@
 
 #include "CoreMinimal.h"
 #include "Framework/ForeverFrameworkComponent.h"
-#include "map/terrain_blend.h"
+#include "map/terrain.h"
 #include "ForeverTerrainFrameworkComponent.generated.h"
 
 class UProceduralMeshComponent;
@@ -115,7 +115,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
 	TObjectPtr<UMaterialInterface> oceanBaseMaterial;
 
-	// 近处(细LOD)材质和它的控制纹理——见terrain_blend.md/ForeverTerrainFrameworkComponent.md
+	// 近处(细LOD)材质和它的控制纹理——见terrain.md"近处地形混合"一节/ForeverTerrainFrameworkComponent.md
 	// "近处地形混合"一节。
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
 	int32 nearControlLevel = 3; // 控制纹理对应哪一级LOD的覆盖区域，夹到[0,num-1]；从2调到3是为了把near/far缝合线挪远，缓解K在两种材质里算法不一致导致的法线接缝（见ForeverTerrainFrameworkComponent.md）

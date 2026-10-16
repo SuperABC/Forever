@@ -9,7 +9,7 @@
 #include "UObject/UObjectGlobals.h"
 
 #include "map/map.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #include <unordered_set>
 

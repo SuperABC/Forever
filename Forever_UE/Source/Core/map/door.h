@@ -2,7 +2,7 @@
 
 #include "class.h"
 
-#include "map/door_spec.h"
+#include "map/feature_spec.h"
 
 #include <string>
 #include <unordered_map>
@@ -46,7 +46,7 @@ public:
 
 	const std::string& GetMesh() const;           // 一定非空(为空的根本不会创建Door)
 	const std::string& GetFrameMesh() const;
-	int GetStyle() const;                         // 0=Slide 1=Swing，见door_spec.h
+	int GetStyle() const;                         // 0=Slide 1=Swing，见feature_spec.h
 	int GetLeaves() const;                        // 1或2
 	float GetOpenAmount() const;                  // 0表示"用默认值"，由Forever层解释具体数值
 	float GetOpenSeconds() const;

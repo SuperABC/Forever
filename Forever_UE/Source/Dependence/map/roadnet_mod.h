@@ -1,7 +1,7 @@
 #pragma once
 
-#include "map/geometry.h"
-#include "map/vegetation_spec.h"
+#include "map/general_geometry.h"
+#include "map/feature_spec.h"
 
 #include <string>
 #include <vector>
@@ -57,7 +57,7 @@ public:
 	// addRoad-类的调用做完，再取&roads[i]这种地址。
 	// 这里直接是vector<Lot>而不是额外拿一个pair/map和Lot并排存边界信息——Lot本来就有
 	// SetBoundaryRoad/GetBoundaryRoads这套API，边界信息应该就记在Lot自己身上；构造时可以
-	// 直接把boundary map传给Lot的构造函数（等价于构造完再逐个调SetBoundaryRoad，见geometry.h
+	// 直接把boundary map传给Lot的构造函数（等价于构造完再逐个调SetBoundaryRoad，见general_geometry.h
 	// 的Lot构造函数注释），不需要在旁边另开一份等价的数据结构。
 	std::vector<Lot> lots;
 
@@ -71,7 +71,7 @@ public:
 
 	// 工具方法(非虚,不需要重写):沿from->to(地图element单位,世界坐标)均匀种num棵树(含两端,
 	// num==1时种在中点)——只记一条请求进treeLines,每棵树的随机旋转/缩放、跳过水面和挖洞
-	// 格子都由Core统一展开,见vegetation_spec.md。meshPath是StaticMesh资产软路径。
+	// 格子都由Core统一展开,见feature_spec.md。meshPath是StaticMesh资产软路径。
 	void AddTreeLine(std::pair<float, float> from, std::pair<float, float> to, int num, float scale,
 		const std::string& meshPath);
 

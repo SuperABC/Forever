@@ -20,7 +20,7 @@
 #include "map/building.h"
 #include "map/door.h"
 #include "map/room.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 #include "player/player.h"
 
 #include <algorithm>

@@ -41,7 +41,7 @@
 
 ## 依赖关系
 
-- 依赖：`Dependence/traffic/station_mod.h`、`Dependence/map/geometry.h`
+- 依赖：`Dependence/traffic/station_mod.h`、`Dependence/map/general_geometry.h`
   (`FACE_DIRECTION`/`PointParams`/`Road`)。
 - 被谁依赖：`Basic/map/building_basic.cpp`的`TrainStationBuilding`/`AirportBuilding`
   (`stationMod`字段分别指向`"station_train"`/`"station_air"`)；

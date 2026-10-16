@@ -1,8 +1,7 @@
 #pragma once
 
-#include "map/door_spec.h"
-#include "map/geometry.h"
-#include "map/vegetation_spec.h"
+#include "map/feature_spec.h"
+#include "map/general_geometry.h"
 
 #include <string>
 #include <vector>
@@ -173,12 +172,12 @@ public:
 
 	// 建筑门——负责所有非single/row元素(目前只有corridor)上的门，tag->DoorSpec，在
 	// Layout()里填写。只有layout里对应方向的门洞带了这个tag才会查到这份spec，没有标签的
-	// 门洞永远不可选中，查不到tag或者查到了mesh为空同样只是个洞，见door_spec.h/door.h。
+	// 门洞永远不可选中，查不到tag或者查到了mesh为空同样只是个洞，见feature_spec.h/door.h。
 	std::unordered_map<std::string, DoorSpec> doorSpecs;
 
 	// 在quad范围内均匀随机种num棵树——quad传Layout()拿到的那个building quad即可(或者它的
 	// 一部分，同一套"中心世界坐标+楼体局部轴向尺寸"约定)，Core展开时会叠加building的旋转。
-	// 只记一条请求进treeAreas，随机旋转/缩放由Core统一处理，见vegetation_spec.md。
+	// 只记一条请求进treeAreas，随机旋转/缩放由Core统一处理，见feature_spec.md。
 	void AddTreeArea(const Quad& quad, int num, float scale, const std::string& meshPath);
 
 	// AddTreeArea记录的请求，Map::InitVegetation在LayoutTrees()之后读取展开。

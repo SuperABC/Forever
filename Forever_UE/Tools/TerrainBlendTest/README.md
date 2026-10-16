@@ -1,15 +1,20 @@
 # TerrainBlendTest
 
-脱离 UE 的独立验证程序，验证 `Source/Core/map/terrain_blend.*` 的近处地形混合算法。只依赖标准库，
-自带最小 PNG 写出器，不需要任何图像库。
+脱离 UE 的独立验证程序，验证 `NearTerrainBlend` 近处地形混合算法（原 `terrain_blend.*`，现在合并在
+`Source/Core/map/terrain.h/.cpp` 里）。算法本身只依赖标准库，自带最小 PNG 写出器，不需要任何图像库；
+但 `terrain.cpp` 里同时有 `Terrain` 类，所以编译时要带上 Dependence 的头文件和它用到的三个源文件
+（`terrain_factory.cpp`、`terrain_mod.cpp`、`error.cpp`）。
 
 ## 编译运行
 
 ```
-g++ -std=c++17 -O2 -Wall -Wextra -I ../../Source/Core/map main.cpp ../../Source/Core/map/terrain_blend.cpp -o terrain_blend_test
+g++ -std=c++17 -O2 -Wall -Wextra -I ../../Source/Core -I ../../Source/Dependence -I ../../Source/Dependence/common main.cpp ../../Source/Core/map/terrain.cpp ../../Source/Dependence/map/terrain_factory.cpp ../../Source/Dependence/map/terrain_mod.cpp ../../Source/Dependence/common/error.cpp -o terrain_blend_test
 ./terrain_blend_test <输出目录> [--radius 1.5] [--tpe 16] [--seed 1] [--chunks 64] [--bound 20]
 ```
 
+- MSVC（x64 Native Tools 命令行）：`main.cpp` 用了 `__builtin_popcount`，需要加
+  `/FIintrin.h /D__builtin_popcount=__popcnt`，并且用 `/MD` 和 Dependence 保持一致：
+  `cl /std:c++17 /O2 /MD /EHsc /utf-8 /FIintrin.h /D__builtin_popcount=__popcnt /I ../../Source/Core /I ../../Source/Dependence /I ../../Source/Dependence/common main.cpp ../../Source/Core/map/terrain.cpp ../../Source/Dependence/map/terrain_factory.cpp ../../Source/Dependence/map/terrain_mod.cpp ../../Source/Dependence/common/error.cpp`
 - 不给 `--radius` 时依次跑 `1.5` 和 `2.0` 两组。
 - `--chunks` 必须是 8 的倍数；`--chunks 8` 只跑 128×128 个 element，几秒就能出结果，适合改代码时快速试。
 - 默认的完整实验（64×64 个 chunk，每个 16×16 个 element）每组半径几分钟。

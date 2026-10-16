@@ -117,7 +117,7 @@ section、同一个材质里——这些三角形会用几百上千的UV值去�
   创建一次，`RebuildNearControl`原地更新，不是每次`CreateTransient`），分辨率
   `size×nearTexelsPerElement`（默认16个texel/element）。内容只取决于地图数据和texel的
   世界位置，和区域怎么划分无关，区域平移/重建时同一个世界点的颜色不会跳变——算法细节见
-  `Source/Core/map/terrain_blend.md`，UE侧只是把`NearTerrainBlend::BuildRegion`的输出
+  `Source/Core/map/terrain.md`"近处地形混合"一节，UE侧只是把`NearTerrainBlend::BuildRegion`的输出
   字节数组拷进纹理。
 - **只在`nearControlLevel`自己的pivot变化时重建纹理**：`TickComponent`的从粗到细重建
   循环里，`i==nearControlLevel`那一次迭代会在调用`BuildLevel`之前先调
@@ -157,8 +157,8 @@ section、同一个材质里——这些三角形会用几百上千的UV值去�
 ## 依赖关系
 
 - 依赖：`Source/Core/map/map.h`（`Map`，非拥有指针）、
-  `Source/Core/map/terrain_blend.h`（`NearTerrainBlend`，近处混合权重算法，纯标准库，
-  见`terrain_blend.md`）、UE的`ProceduralMeshComponent`/`Water`插件模块（见
+  `Source/Core/map/terrain.h`（`NearTerrainBlend`，近处混合权重算法，纯标准库，
+  见`terrain.md`"近处地形混合"一节）、UE的`ProceduralMeshComponent`/`Water`插件模块（见
   `Forever.Build.cs`）、`Content/Asset/Materials/{TemplateFar,TemplateNear}.uasset`
   （编辑器里手工搭建的材质图，节点表见仓库根目录的河流/地形相关计划文档）、
   `Content/Asset/Textures/Terrain/*`（diffuse+normal+roughness三套贴图资产）。

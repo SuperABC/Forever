@@ -48,7 +48,7 @@ mesh为空都返回nullptr（只是门洞）。园区门不走这个函数，直
 
 ## 依赖关系
 
-- 依赖：`Source/Dependence/map/door_spec.h`（`DoorSpec`纯数据）、
+- 依赖：`Source/Dependence/map/feature_spec.h`（`DoorSpec`纯数据）、
   `Source/Core/map/zone.h`/`building.h`/`room.h`（`GetOwner`/`GetStated`）、
   `Source/Core/populace/citizen.h`（`CanPass`里的`Citizen::GetName()`）、
   `Source/Core/story/script.h`/`script_factory.h`（Script创建）、

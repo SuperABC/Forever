@@ -9,7 +9,7 @@
 #include "UObject/ConstructorHelpers.h"
 
 #include "map/map.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #define DIFFUSE_TEX_SIZE 2048
 #define HEIGHT_EPSILON 0.002f

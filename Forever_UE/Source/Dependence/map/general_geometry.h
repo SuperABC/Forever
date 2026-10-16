@@ -407,7 +407,7 @@ using PointParams = std::array<float, 4>;
 // (RectParams，沿墙方向+垂直方向各一对ratio+offset)，照抄老工程Corridor/Single/Row的
 // doors/windows字段；老工程原本每个开口还搭配一个Quad(供以后扩展用)，但从未被任何消费方
 // 读取过(BuildingBase.cpp::ConstructQuad解构时直接把Quad那一半丢掉)，这次不带这个用不到
-// 的字段。Building(Corridor/Single/Row)和Room都要用这个类型，放在geometry.h这个公共
+// 的字段。Building(Corridor/Single/Row)和Room都要用这个类型，放在general_geometry.h这个公共
 // 底层头，不需要互相include对方。
 using WallHole = std::unordered_map<int, std::vector<RectParams>>;
 
@@ -571,7 +571,7 @@ public:
 	// GetFreeLots()源码，Dependence.lib被两个模块各自静态链接一份，这次调用实际执行哪一份取决于
 	// 调用指令本身编译进了哪个最终binary，不是看代码写在哪个.cpp里。一旦this->freeLots的buffer
 	// 由一个模块的分配器分配、又被另一个模块的分配器reallocate/free，就会堆损坏(exit时或者下一次
-	// 任意堆操作时crash，现象是STATUS_HEAP_CORRUPTION，参见geometry.md"跨DLL分配器"一节/
+	// 任意堆操作时crash，现象是STATUS_HEAP_CORRUPTION，参见general_geometry.md"跨DLL分配器"一节/
 	// cross-dll-allocator-crash笔记——这正是FindAdaptivePlacement v3那次踩到的坑：直接从
 	// TrainStationBuilding::Assign(Basic.dll)里调了RequestPlacement，表现为PIE一进场景就
 	// 整个UnrealEditor.exe直接退出)。mod DLL只能调下面的PeekFreeLots()这个纯读版本。
@@ -617,7 +617,7 @@ public:
 	// pathRoadLinks搬回this、把outLot从this->GetFreeLots()里摘掉再delete——这个搬运步骤同样
 	// 必须在Core侧做，不能在这个函数里提前做掉(FindAdaptivePlacement v3那版的错误：直接在这里
 	// 调outLot->RequestPlacement()，结果是从Basic.dll的调用栈触发了this->freeLots的分配器
-	// 操作，PIE一进场景整个UnrealEditor.exe直接退出，STATUS_HEAP_CORRUPTION，见geometry.md
+	// 操作，PIE一进场景整个UnrealEditor.exe直接退出，STATUS_HEAP_CORRUPTION，见general_geometry.md
 	// "跨DLL分配器"一节/cross-dll-allocator-crash笔记)。
 	//
 	// 找不到满足条件的自由子块返回false，out参数不修改。

@@ -13,7 +13,7 @@
   `stationType`匹配的真实接口后，连同"本次调用之前其它`Route`已经请求创建的边缘站点"
   （`isEdge=true`）一起喂给`LayoutRoute()`；mod只能读，不持有所有权，也不能直接碰Core的
   任何对象——`RouteMod`本身是运行在mod DLL里的代码，不能像Core对象的非虚成员函数那样直接
-  调用（跨DLL分配器安全约束，见`Dependence/map/geometry.md`"跨DLL分配器"一节）。`RouteMod`
+  调用（跨DLL分配器安全约束，见`Dependence/map/general_geometry.md`"跨DLL分配器"一节）。`RouteMod`
   的输出渠道全部是"往`edgeStations`/`links`/`lines`这三个自己持有的`vector`里追加数据"，
   和`BuildingMod::floors`同一个安全模式。
 - **`RouteStop.dwell`**：`false`表示这一站是纯过路点，到达后不停留、直接接着跑下一腿；
@@ -40,7 +40,7 @@
 
 ## 依赖关系
 
-- 依赖：无（纯`std::string`/`std::vector`，不依赖`geometry.h`等其它Dependence头）。
+- 依赖：无（纯`std::string`/`std::vector`，不依赖`general_geometry.h`等其它Dependence头）。
 - 被谁依赖：`Core/traffic/route.h`的`Route::Build()`读取这些结构、调`LayoutRoute()`；
   `Basic/traffic/route_basic.h`的`BusRoute`/`TrainRoute`/`AirRoute`三个具体实现扩展这个
   基类。

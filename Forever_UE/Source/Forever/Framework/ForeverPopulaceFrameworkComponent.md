@@ -163,7 +163,7 @@ GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生
 - 依赖：`Source/Forever/Element/CitizenElement.h`（`SpawnActor<ACitizenElement>()`+
   `Init()`+`WalkTo()`）、`Source/Core/populace/populace.h`/`citizen.h`
   （`Populace::GetCitizens()`/`Citizen`）、`map/map.h`（`FindPedestrianPath`）、
-  `map/building.h`/`map/room.h`/`map/geometry.h`（估算逻辑位置+`Node`坐标要用）、
+  `map/building.h`/`map/room.h`/`map/general_geometry.h`（估算逻辑位置+`Node`坐标要用）、
   `Kismet/GameplayStatics.h`（`GetPlayerPawn`）、`Async/Async.h`（`RequestWalk`把
   Dijkstra派发到线程池）、`Containers/Queue.h`（`pathResultQueue`）、
   `HAL/PlatformProcess.h`（`WaitForPendingPathfinding`忙等用的`Sleep`）。

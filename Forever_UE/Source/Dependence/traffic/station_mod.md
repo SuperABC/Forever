@@ -44,7 +44,7 @@
 
 ## 依赖关系
 
-- 依赖：`Dependence/map/geometry.h`（`PointParams`/`Road`）。
+- 依赖：`Dependence/map/general_geometry.h`（`PointParams`/`Road`）。
 - 被谁依赖：`Core/traffic/traffic.cpp`（`Traffic::InitRoadsideStations()`调
   `StationFactory::AssignRoads(id, ...)`）；`Core/traffic/station.h`（`Station`三个构造函数
   分别对应"挂建筑"/"边缘站点"/"贴路站点"三种场景）；`Dependence/map/building_mod.h`

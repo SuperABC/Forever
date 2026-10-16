@@ -1,7 +1,7 @@
-// 近处地形混合算法的独立验证程序：脱离UE，只依赖标准库和Core/map/terrain_blend.cpp。
+// 近处地形混合算法的独立验证程序：脱离UE，算法只依赖标准库；NearTerrainBlend现在在Core/map/terrain.h/.cpp里，和Terrain类同一个文件，编译时要带上Dependence的头文件和Dependence.lib(或对应源文件)。
 // 说明见同目录README.md。
 
-#include "terrain_blend.h"
+#include "map/terrain.h"
 
 #include <algorithm>
 #include <array>

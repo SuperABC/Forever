@@ -15,7 +15,7 @@
 #include "map/map.h"
 #include "map/zone.h"
 #include "map/building.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #include <cmath>
 #include <unordered_map>

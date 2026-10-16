@@ -1,4 +1,4 @@
-#include "geometry.h"
+#include "general_geometry.h"
 
 #include <cmath>
 #include <string>
@@ -1241,7 +1241,7 @@ bool Lot::FindAdaptivePlacement(int direction, float minFrontage, float minDepth
 	// (不是this)去调，让裁剪在best自己的坐标系里进行，这样无论best贴的是原始边还是内部小路都
 	// 天然正确，不需要先换算到this的坐标系再反推(换算版本的bug：子块贴的若是内部小路，换算
 	// 出来的margin会落在this坐标系下早被别的mod占用的区域，RequestPlacement用this自己的坐标系
-	// 找不到任何匹配，见geometry.md排查记录)。
+	// 找不到任何匹配，见general_geometry.md排查记录)。
 	float frontageSize = depthAlongX ? best->GetSizeY() : best->GetSizeX();
 	outLot = best;
 	outMarginStart = (frontageSize - minFrontage) * 0.5f;
@@ -1255,7 +1255,7 @@ namespace {
 	// freeLots条目的总面积（对应老工程Map::GenerateBuildings的采样循环，
 	// E:\Projects\Forever_UE\Source\Core\map\map.cpp第687-734行），再两两合并成一棵二叉树
 	// （对应老工程Quad::DivideSpace的合并阶段，E:\Projects\Forever_UE\Source\Dependence\map\
-	// geometry.cpp第706-730行），最后递归二分真实的Lot几何、把每个叶子安置到自己最终的矩形里
+	// general_geometry.cpp第706-730行），最后递归二分真实的Lot几何、把每个叶子安置到自己最终的矩形里
 	// （对应老工程Quad::SplitInto+DivideSpace第732-751行）。只在这个文件内部使用，不进头文件。
 	struct FillMergeNode {
 		float acreage = 0.f;

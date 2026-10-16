@@ -35,7 +35,7 @@
   这个`Station`，`inEdge`/`outEdge`是`laneFrom->stationNode->laneTo`两段直线`Connection`，
   都不登记进`Map`的`throughLines`/`vehicleNavGraph`，不影响原车道、不产生新的路口开口——
   和`Map::BreakThroughLine`给既有车道新增访问点时的精度一致（这个项目目前所有"车道中间插入
-  节点"都是直线近似，不是真的切曲线，见`Dependence/map/geometry.md`"公交接入路网"一节），
+  节点"都是直线近似，不是真的切曲线，见`Dependence/map/general_geometry.md`"公交接入路网"一节），
   公交站的旁路照抄同一套精度，不需要发明贝塞尔细分算法。`t`记这个站点在`sourceEdge`上的
   弧长比例，供`Route::BuildEdgeGeometry`判断"两个站点是否在同一段原车道上且顺序对不对"这个
   特例（同车道直接走直线弦，不绕一圈`FindVehiclePath`）。

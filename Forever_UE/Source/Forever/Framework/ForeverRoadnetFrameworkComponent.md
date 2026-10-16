@@ -16,7 +16,7 @@
   条带或材质。`BuildRoadInstances`的分段数量算法（"缩放后的mesh长度落在[0.8,1.2]×原始长度
   区间内，取最接近total/unit的整数段数"）照抄老工程`UMeshArray::RepeatMesh1D`/
   `RepeatMeshAlongCurve`，但不需要重新实现老工程那套自建弧长采样表——`Connection::GetPoint(f)`
-  本身就是弧长参数化的（`Source/Dependence/map/geometry.cpp`的`ResolveArcLengthParam`，
+  本身就是弧长参数化的（`Source/Dependence/map/general_geometry.cpp`的`ResolveArcLengthParam`，
   128点惰性缓存），直接按`f=k/n`取点就已经是等弧长分段。用`UInstancedStaticMeshComponent`
   按分段结果摆放`mesh`资产实例，同时满足"沿路线分隔mesh元素"+"曲线道路"两点。
 - **每条唯一的mesh资产路径对应一个共享的`UInstancedStaticMeshComponent`**（`GetOrCreateRoadISM`
@@ -39,7 +39,7 @@
 - **`Road::AddOpening`接小路开口**：Zone/Building裁剪Lot自由空间时接到"大路"的小路，调用
   `Road::AddOpening`产出开口，渲染这里按`openings`列表（经弧长`t`去重，同一个物理位置只
   画一次cube，`t`在1e-4误差范围内视为同一个）画缺口，见`Source/Dependence/map/
-  geometry.md`"关键设计"一节`Lot::SplitWithPath`。小路开口这条路径**不**调用
+  general_geometry.md`"关键设计"一节`Lot::SplitWithPath`。小路开口这条路径**不**调用
   `Map::AddRoadAccessNode`标记导航图，只直接`endRoad->AddOpening(...)`标记路面缺口——纯
   几何/渲染标记和"小路接导航图"是两回事，后者由`Map::ConnectPathRoad`单独实现，见
   `Source/Core/map/map.md`"ConnectPathRoad"一节。`Map::AddRoadAccessNode`本身（同时
@@ -108,7 +108,7 @@
 ## 依赖关系
 
 - 依赖：`Source/Core/map/map.h`（`Map::GetRoads()`/`GetJunctions()`/`GetLots()`/
-  `GetPathRoads()`/`GetPathRoadMaterial()`/`AddRoadAccessNode`）、`Source/Core/map/geometry.h`
+  `GetPathRoads()`/`GetPathRoadMaterial()`/`AddRoadAccessNode`）、`Source/Core/map/general_geometry.h`
   （`Road`/`RoadJunction`/`Lot`/`Node`）、`ProceduralMeshComponent`模块、
   `Components/InstancedStaticMeshComponent.h`（Engine模块自带，不需要额外启用）。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（`EnsureMapGenerated()`

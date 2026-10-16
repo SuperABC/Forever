@@ -4,7 +4,7 @@
 
 #include "map/zone_mod.h"
 #include "map/zone_factory.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #include <string>
 #include <unordered_map>
@@ -25,7 +25,7 @@
 // 直接转发`mod->walls`/`mod->gates`，不再单独拷贝一份到Zone自己身上。
 //
 // 不自己存一份rotation——落地的Zone来自某个Lot的freeLots切出来的一块，freeLots全部继承同一个
-// 顶层Lot的rotation(SplitWithPath产出的每一段都传了同一个rotation，见geometry.cpp)，所以
+// 顶层Lot的rotation(SplitWithPath产出的每一段都传了同一个rotation，见general_geometry.cpp)，所以
 // GetRotation()直接转发parentLot->GetRotation()就是正确值，没必要在Zone自己身上再存一份
 // 冗余拷贝。这意味着GetRotation()必须在SetParentLot(lot)之后调用才有意义，构造完/
 // SetParentLot之前调用返回0。
@@ -98,7 +98,7 @@ public:
 	void SetStated(bool value);
 
 	// 园区大门：遍历mod->gates，gate.door.mesh非空才创建——和建筑门/房间门同一个"mesh为空
-	// 就是空当"约定(见door_spec.h)，但园区门没有layout标签，不用ResolveDoorSpec。几何
+	// 就是空当"约定(见feature_spec.h)，但园区门没有layout标签，不用ResolveDoorSpec。几何
 	// 换算用和ForeverZoneFrameworkComponent::BuildWallSegment同一套"参考边+margin+
 	// depth+depthInward"公式，只是这次是Core端复刻(算地图单位的世界坐标，不是UE单位)，
 	// 见zone.cpp。由Map::InitZones()在zone->Layout(direction)之后调用一次。

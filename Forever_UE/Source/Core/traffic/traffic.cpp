@@ -5,7 +5,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 #include "story/change.h"
 
 #include <algorithm>

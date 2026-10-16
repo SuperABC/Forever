@@ -6,7 +6,7 @@
 #include "map/building_factory.h"
 #include "map/room_factory.h"
 #include "map/component_factory.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #include <string>
 #include <unordered_map>
@@ -213,7 +213,7 @@ private:
 	std::vector<Hatch> hatches;
 };
 
-// 一个方向(0-3)的行人/车辆导航模板，结构相同——见geometry.h的NavigationXxxTemplate。
+// 一个方向(0-3)的行人/车辆导航模板，结构相同——见general_geometry.h的NavigationXxxTemplate。
 struct NavigationTemplate {
 	std::vector<NavigationNodeTemplate> nodes;
 	std::vector<NavigationLineTemplate> lines;

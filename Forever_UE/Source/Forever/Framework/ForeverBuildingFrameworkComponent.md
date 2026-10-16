@@ -358,7 +358,7 @@ Story事件分发。
   `SpawnActor<ABuildingElement>()`）、`map/map.h`（`Map::GetBuildings()`）、
   `map/building.h`（`Building`，只用来取`GetLodMaterialPath()`）、
   `UObject/ConstructorHelpers.h`（默认资产加载）、`UMaterialInstanceDynamic`、
-  `Engine/Engine.h`。真正的楼体几何生成依赖（`map/room.h`/`map/geometry.h`/
+  `Engine/Engine.h`。真正的楼体几何生成依赖（`map/room.h`/`map/general_geometry.h`/
   `ProceduralMeshComponent`/`Components/StaticMeshComponent.h`/`Components/
   BoxComponent.h`/`Kismet/GameplayStatics.h`/`Containers/Queue.h`）现在都在
   `BuildingElement.cpp`里，这个组件自己不再需要。

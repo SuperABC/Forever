@@ -8,10 +8,10 @@
 
 ## 职责
 
-- **`LotPlacementRequest`**（定义在`geometry.h`，两个mod头文件共用）：`{Lot* lot, int
+- **`LotPlacementRequest`**（定义在`general_geometry.h`，两个mod头文件共用）：`{Lot* lot, int
   direction, float marginStart, float marginEnd, float depth}`，描述"贴着lot某条边界路、
   沿路方向留出marginStart/marginEnd、往里伸depth"的一块矩形。
-- **`PlacementEmitFunc`**（定义在`geometry.h`，和`LotPlacementRequest`放一起）：
+- **`PlacementEmitFunc`**（定义在`general_geometry.h`，和`LotPlacementRequest`放一起）：
   `void(*)(void* context, const LotPlacementRequest& request)`，裸函数指针，和
   `creator`/`deleter`同一个"调用哪个模块编译的代码就用哪个模块的内存管理"机制。
 - **`ZoneMod::Assign(lots, emit, context)`/`BuildingMod::Assign(lots, emit, context)`**
@@ -52,7 +52,7 @@
   没有动态容器，`unordered_map<int,Road*>`只是读指针值）。
 - **`Assign(lots,...)`这次暂时不按`lot->GetArea()`筛选/区分权重，`ResidenceZone`/
   `ResidenceBuilding`对所有lot一视同仁**——地块类型本身`RoadnetMod`已经在构造lot时用
-  `Lot::SetArea(AREA_TYPE)`标好了（`AREA_TYPE`定义在`geometry.h`），但这两个mod目前都只是
+  `Lot::SetArea(AREA_TYPE)`标好了（`AREA_TYPE`定义在`general_geometry.h`），但这两个mod目前都只是
   验证链路用的通用占位类型（一个验证显式占位，一个验证权重CDF），先不区分，等以后设计具体
   建筑/园区类型（对照老工程`ResidentialZone::ZoneAssigner`/各`XxxBuilding::GetPowers()`
   按地块类型区分权重那套）时再按`lot->GetArea()`细化。
@@ -140,7 +140,7 @@
 
 ## 依赖关系
 
-- 依赖：`map/geometry.h`（`Lot`、`LotPlacementRequest`、`PlacementEmitFunc`、
+- 依赖：`map/general_geometry.h`（`Lot`、`LotPlacementRequest`、`PlacementEmitFunc`、
   `FACE_DIRECTION`、`AREA_TYPE`）。
 - 被谁依赖：`Source/Core/map/zone.h`/`building.h`（`Zone`/`Building`包装类持有一个mod实例，
   `Zone`新增字段存放`ZoneWallSpec`/`ZoneGateSpec`/内部道路/内部建筑）、

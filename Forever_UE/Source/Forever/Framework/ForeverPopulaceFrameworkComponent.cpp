@@ -9,7 +9,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 

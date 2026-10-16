@@ -2,7 +2,7 @@
 
 #include "class.h"
 
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 #include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
@@ -116,7 +116,7 @@ public:
 	// 空侧(对侧才有车道)时，重新解释成"要连最靠右(true)还是最靠左(false)的车道"，从对侧的
 	// 车道里按实际横向位置挑——单行道不存在"正向/反向"这个参照了，只能按左右分。openingWidth
 	// 是开口沿道路方向的长度，供Forever层mesh生成时挖空对应长度、放置开口cube(记在road自己的
-	// openings里，见geometry.h的Road::AddOpening)。
+	// openings里，见general_geometry.h的Road::AddOpening)。
 	// 分裂规则：每条车道现在都有自己专属的贯通线（见ThroughLine注释），所以不管双向/单行，
 	// 都是先选出目标车道再直接把它自己的贯通线在t处切两段——双向路车道数>=2时固定选最外侧
 	// 车道（和原始设计"新访问点代表外侧车道"一致，不影响其余车道各自的贯通线）；单行路按
@@ -154,7 +154,7 @@ public:
 	// building->SetParentLot(usedChild)引用着，生命周期和parent一样长到地图结束，这和非自适应
 	// 路径里parentLot直接指向一个永不删除的顶层Lot是同一个模型。这个函数只能从这里(Core编译的
 	// map.cpp)调用，不能让mod DLL调用GetFreeLots()/TakePathRoadLinks()这类会真正分配/移动
-	// 容器内容的方法，原因见geometry.h里GetFreeLots()/FindAdaptivePlacement声明处的说明。
+	// 容器内容的方法，原因见general_geometry.h里GetFreeLots()/FindAdaptivePlacement声明处的说明。
 	void PromoteAdaptiveRemainder(Lot* parent, Lot* usedChild);
 
 	// 用已经注册好的zoneFactory生成zone(mod dll的发现/注册归`Registry`全局管,不在这里

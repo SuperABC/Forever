@@ -1,7 +1,7 @@
 #pragma once
 
-#include "map/door_spec.h"
-#include "map/geometry.h"
+#include "map/feature_spec.h"
+#include "map/general_geometry.h"
 
 #include <string>
 #include <unordered_map>
@@ -24,7 +24,7 @@ struct ZoneWallSpec {
 };
 
 // 大门：位置/朝向数据(围墙据此让出这段空当)+door字段——门扇外观/开关方式，door.mesh为空=
-// 只是空当，不放门，和建筑门/房间门同一个"mesh为空就是洞"的约定，见door_spec.h。
+// 只是空当，不放门，和建筑门/房间门同一个"mesh为空就是洞"的约定，见feature_spec.h。
 struct ZoneGateSpec {
 	int direction = FACE_WEST;
 	float marginStart = 0.f;

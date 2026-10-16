@@ -11,7 +11,7 @@
 #include "map/map.h"
 #include "map/zone.h"
 #include "map/building.h"
-#include "map/geometry.h"
+#include "map/general_geometry.h"
 
 #define ZONE_WORLD_SCALE 1000.f
 // 和ForeverRoadnetFrameworkComponent.cpp的ROADNET_HEIGHT_EPSILON同一类问题：Zone没有真实

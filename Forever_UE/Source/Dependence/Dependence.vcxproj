@@ -84,8 +84,8 @@
     <ClCompile Include="common\json.cpp" />
     <ClCompile Include="common\utility.cpp" />
     <ClCompile Include="common\handle.cpp" />
-    <ClCompile Include="map\geometry.cpp" />
-    <ClCompile Include="map\door_spec.cpp" />
+    <ClCompile Include="map\general_geometry.cpp" />
+    <ClCompile Include="map\feature_spec.cpp" />
     <ClCompile Include="map\roadnet_mod.cpp" />
     <ClCompile Include="map\building_mod.cpp" />
     <ClCompile Include="story\expression.cpp" />
@@ -138,8 +138,8 @@
     <ClInclude Include="common\json.h" />
     <ClInclude Include="common\utility.h" />
     <ClInclude Include="common\handle.h" />
-    <ClInclude Include="map\geometry.h" />
-    <ClInclude Include="map\door_spec.h" />
+    <ClInclude Include="map\general_geometry.h" />
+    <ClInclude Include="map\feature_spec.h" />
     <ClInclude Include="story\expression.h" />
     <ClInclude Include="story\change.h" />
     <ClInclude Include="story\event.h" />
@@ -148,7 +148,6 @@
     <ClInclude Include="map\roadnet_mod.h" />
     <ClInclude Include="map\zone_mod.h" />
     <ClInclude Include="map\building_mod.h" />
-    <ClInclude Include="map\vegetation_spec.h" />
     <ClInclude Include="map\component_mod.h" />
     <ClInclude Include="map\room_mod.h" />
     <ClInclude Include="player\asset_mod.h" />
