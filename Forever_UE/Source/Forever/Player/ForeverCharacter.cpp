@@ -1,9 +1,15 @@
 #include "ForeverCharacter.h"
 
 #include "Animation/AnimInstance.h"
+#include "AnimationRuntime.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/Texture2D.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/GameInstance.h"
@@ -83,6 +89,35 @@ AForeverCharacter::AForeverCharacter()
 	}
 	firstPersonCamera->bUsePawnControlRotation = true;
 	firstPersonCamera->Deactivate();
+
+	// 头像方块：挂在head骨骼socket上，和firstPersonCamera同一个判断；没有head时退化成挂在胶囊体顶部。
+	// 纯装饰，不参与碰撞/overlap。项目Cube原生边长100，缩放=avatarSize/100。
+	avatarMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("AvatarMesh"));
+	if (GetMesh()->DoesSocketExist(TEXT("head"))) {
+		avatarMesh->SetupAttachment(GetMesh(), TEXT("head"));
+		avatarMesh->SetRelativeLocation(avatarOffset);
+	} else {
+		avatarMesh->SetupAttachment(RootComponent);
+		avatarMesh->SetRelativeLocation(FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) + avatarOffset);
+	}
+	avatarMesh->SetRelativeRotation(avatarRotation);
+	avatarMesh->SetRelativeScale3D(FVector(avatarSize / 100.f));
+	avatarMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	avatarMesh->SetGenerateOverlapEvents(false);
+	avatarMesh->SetCanEverAffectNavigation(false);
+
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> avatarCubeFinder(TEXT("/Game/Asset/Meshes/Cube.Cube"));
+	if (avatarCubeFinder.Succeeded()) {
+		avatarMesh->SetStaticMesh(avatarCubeFinder.Object);
+	}
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> avatarMaterialFinder(TEXT("/Game/Asset/Materials/Avatar.Avatar"));
+	if (avatarMaterialFinder.Succeeded()) {
+		avatarBaseMaterial = avatarMaterialFinder.Object;
+	}
+	static ConstructorHelpers::FObjectFinder<UTexture2D> avatarTextureFinder(TEXT("/Game/Asset/Textures/Avatars/default.default"));
+	if (avatarTextureFinder.Succeeded()) {
+		avatarTexture = avatarTextureFinder.Object;
+	}
 
 	weaponComponent = CreateDefaultSubobject<UForeverWeaponComponent>(TEXT("WeaponComponent"));
 
@@ -180,6 +215,45 @@ void AForeverCharacter::UnPossessed()
 	}
 
 	Super::UnPossessed();
+}
+
+void AForeverCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (avatarMesh) {
+		// 构造函数里已经按默认值摆过一次；这里按(可能被子类/蓝图默认值改过的)属性再摆一遍。
+		// 旋转：head骨骼在参考姿势下相对角色的朝向是骨骼自己定的(不直观)，这里把它抵消掉，让
+		// avatarRotation变成相对角色本身的旋转(0=方块+X面朝角色正前方、+Z朝上)。relative满足
+		// 骨骼朝向*relative=期望朝向，所以relative=骨骼朝向^-1*期望朝向。没挂在骨骼上时直接用。
+		FQuat relativeRotation = avatarRotation.Quaternion();
+		// 位置：avatarOffset是骨骼局部坐标；avatarOffsetInCharacter是角色方向下的微调，要按骨骼朝向转回
+		// 骨骼局部坐标再加上去。
+		FVector relativeLocation = avatarMesh->GetAttachSocketName().IsNone()
+			? FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) + avatarOffset + avatarOffsetInCharacter
+			: avatarOffset;
+		USkeletalMesh* skeletalMesh = GetMesh()->GetSkeletalMeshAsset();
+		FName socket = avatarMesh->GetAttachSocketName();
+		if (skeletalMesh && !socket.IsNone()) {
+			const FReferenceSkeleton& refSkeleton = skeletalMesh->GetRefSkeleton();
+			int32 boneIndex = refSkeleton.FindBoneIndex(socket);
+			if (boneIndex != INDEX_NONE) {
+				FQuat boneInComponent = FAnimationRuntime::GetComponentSpaceTransformRefPose(refSkeleton, boneIndex).GetRotation();
+				FQuat boneInActor = GetMesh()->GetRelativeRotation().Quaternion() * boneInComponent;
+				relativeRotation = boneInActor.Inverse() * relativeRotation;
+				relativeLocation += boneInActor.Inverse().RotateVector(avatarOffsetInCharacter);
+			}
+		}
+		avatarMesh->SetRelativeLocation(relativeLocation);
+		avatarMesh->SetRelativeRotation(relativeRotation);
+		avatarMesh->SetRelativeScale3D(FVector(avatarSize / 100.f));
+		// 头像贴图：Avatar材质还没建(avatarBaseMaterial为空)时保留Cube自带材质，不报错。
+		if (avatarBaseMaterial) {
+			UMaterialInstanceDynamic* material = UMaterialInstanceDynamic::Create(avatarBaseMaterial, this);
+			if (avatarTexture) material->SetTextureParameterValue(TEXT("AvatarTexture"), avatarTexture);
+			avatarMesh->SetMaterial(0, material);
+		}
+	}
 }
 
 void AForeverCharacter::Tick(float DeltaTime)

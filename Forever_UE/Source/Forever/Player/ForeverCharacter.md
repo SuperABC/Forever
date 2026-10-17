@@ -20,6 +20,21 @@
 - `ACitizenElement`默认关闭Actor Tick,若被玩家占有且需要用到`AForeverCharacter::Tick()`(如瞄准插值),必须在`PossessedBy`里重新打开,且其自身`Tick()`不能在判定"无待处理路径点"时把Tick又关掉——已在`ACitizenElement::PossessedBy`/`Tick()`里用`IsPlayerControlled()`判断规避,见`CONVENTIONS.md`第11节、memory"Citizen Tick disabled by default"。此后任何打算在`AForeverCharacter`子类上使用原生`Tick()`的功能都要确认子类有没有类似的自我关闭逻辑。
 - 蹲下(C键)和挥拳(左键)未实现:蹲姿需要在AnimGraph加`Blend Poses by bool`才能平滑过渡,效果不理想,已放弃。
 
+### 头像方块
+
+没有角色资产，所有角色(玩家和全部NPC，`ACitizenElement`也继承这个类)都是同一个小白人，所以每个角色头上
+放一个贴头像的方块来区分：`avatarMesh`(UStaticMeshComponent)挂在`head`骨骼socket上，和
+`firstPersonCamera`同一种挂法(没有head时退化成挂在胶囊体顶部)，跟着走路姿势一起动。方块用项目的
+`/Game/Asset/Meshes/Cube.Cube`(原生边长100，缩放=`avatarSize`/100)，不参与碰撞/overlap/导航。
+`BeginPlay`里重新摆一次：`avatarOffset`是相对head骨骼的偏移(骨骼局部坐标)，`avatarOffsetInCharacter`是在它基础上按角色方向
+(+X前+Y右+Z上)的微调(当前往下5cm盖住下巴，按骨骼参考姿势转回骨骼坐标再叠加)，`avatarSize`默认30cm；
+旋转按head骨骼的参考姿势(`FAnimationRuntime::GetComponentSpaceTransformRefPose`+mesh相对旋转)把骨骼
+自己的朝向抵消掉，`avatarRotation`就变成相对角色本身的旋转——0时方块+X面朝角色正前方(正面)、+Z朝上，
+之后仍跟着head骨骼的动画一起动。然后再用`/Game/Asset/Materials/Avatar`建动态材质实例，把`avatarTexture`(现在所有人
+都是硬编码的`/Game/Asset/Textures/Avatars/default`)设进`AvatarTexture`参数。Avatar材质需要在编辑器里
+手动建(一个TextureSampleParameter2D `AvatarTexture`连Base Color)；还没建时保留Cube自带材质。已知效果：
+Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块内部，Cube单面渲染、从里面看不到，不挡视线。
+
 ## 依赖关系
 - 依赖资产:`Content/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple`、`Anims/Unarmed/ABP_Unarmed`、`Content/Blueprint/Player/Input/Actions/{IA_Move,IA_Look,IA_MouseLook}`、`Content/Blueprint/Player/Input/{IMC_Default,IMC_MouseLook}`。
 - 依赖`Input/ForeverKeyBindingSubsystem`提供的动态`UInputAction`(`Jump`/`ToggleView`/`Sprint`/`MeetOptionUp`/`MeetOptionDown`/`MeetOptionSelect`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1`/`SwitchWeapon2`/`AimWeapon`)。

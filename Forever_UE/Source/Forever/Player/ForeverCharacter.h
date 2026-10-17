@@ -10,6 +10,9 @@ class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
 class UForeverWeaponComponent;
+class UStaticMeshComponent;
+class UMaterialInterface;
+class UTexture2D;
 
 UCLASS()
 class FOREVER_API AForeverCharacter : public ACharacter
@@ -23,6 +26,7 @@ public:
 	virtual void UnPossessed() override;
 
 protected:
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
@@ -37,6 +41,38 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UCameraComponent> firstPersonCamera;
+
+	// 头像方块：没有角色资产时用来区分不同角色(所有人都是同一个小白人)。挂在head骨骼socket上，跟着
+	// 走路姿势一起动(和firstPersonCamera同一种挂法)；方块用项目的Cube，表面贴头像贴图(Avatar材质的
+	// AvatarTexture参数，BeginPlay里建动态材质实例设进去)。见ForeverCharacter.md"头像方块"一节。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UStaticMeshComponent> avatarMesh;
+
+	// 方块边长(厘米)；avatarOffset是相对head骨骼的偏移(骨骼局部坐标)；avatarRotation是相对**角色本身**
+	// 的旋转——BeginPlay按head骨骼的参考姿势把骨骼自己的朝向抵消掉，avatarRotation为0时方块和角色对齐：
+	// 方块+X面朝角色正前方(正面)、+Z朝上，之后再跟着head骨骼的动画一起动。
+	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
+	float avatarSize = 30.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
+	FVector avatarOffset = FVector(10.f, 0.f, 0.f);
+
+	// 在avatarOffset基础上再按**角色本身**的方向微调(厘米，+X前、+Y右、+Z上)——骨骼局部轴不直观，
+	// 上下前后的调整都写在这里。当前往下5cm，盖住露出来的下巴。
+	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
+	FVector avatarOffsetInCharacter = FVector(0.f, 0.f, -5.f);
+
+	// 绕Z轴顺时针(俯视)转90度，让头顶那一面的头像摆正——UE里正yaw俯视是顺时针。
+	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
+	FRotator avatarRotation = FRotator(0.f, 90.f, 0.f);
+
+	// 头像材质(需要一个名为AvatarTexture的贴图参数)和头像贴图。现在所有角色都用同一张default，
+	// 以后按角色分配时只需要在BeginPlay之前/之后换这张贴图。
+	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
+	TObjectPtr<UMaterialInterface> avatarBaseMaterial;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
+	TObjectPtr<UTexture2D> avatarTexture;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> moveAction;
