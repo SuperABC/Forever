@@ -173,6 +173,15 @@ mod用`BuildingMod::AddDecoration`指定的StaticMesh(`Building::GetDecorations(
 0层建筑(`nearFloorCount==0`，比如`MoharBuilding`)：`Init`不建远处方块和进出触发盒(高度都是0)，
 `BuildFarSection`也直接跳过，远处LOD什么都不显示。
 
+### `buildShell`(按层)：成品模型提供外观时不构造近处的墙壁/地板/天花板
+
+每层`FloorAssetSpec::buildShell`(mod在`AssignFloor`的assets里设置，默认true)为false时，`BuildFloorSection`对这一层跳过所有
+`BuildWallsForElement`(房间/走廊墙，以及楼梯/坡道/电梯井道墙)和地板/天花板slab；楼梯/坡道网格、门、
+电梯轿厢、Room碰撞盒照常生成。**远处灰色方块不受影响，照常画**——成品模型只在近处显示，走远之后
+靠远处方块表示这栋楼。给外观已经由`AddDecoration`成品模型提供的建筑用(比如Mohar)。注意地板slab
+同时也是可以站立的碰撞，关掉之后站在楼里靠的是成品模型自己的碰撞。
+
+## 依赖关系
 
 - 依赖：`Source/Forever/Framework/ForeverBuildingFrameworkComponent.h`（`framework`弱引用
   回调）、`map/map.h`/`map/building.h`/`map/room.h`/`map/door.h`/`map/general_geometry.h`

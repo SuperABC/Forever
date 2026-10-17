@@ -261,6 +261,7 @@ void ABuildingElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 }
 
 void ABuildingElement::BuildFarSection() {
+	// buildShell只管近处的墙壁/地板/天花板，远处灰色方块照常画(成品模型只在近处显示，远处靠它)。
 	if (!farMesh || !building || !framework.IsValid() || nearFloorCount == 0) return;
 
 	float cx, cy;
@@ -617,6 +618,10 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	UMaterialInstanceDynamic* ceilingMaterial = framework->GetDefaultCeilingMaterial();
 	UStaticMesh* stairMesh = framework->GetDefaultStairMesh();
 	UStaticMesh* rampMesh = framework->GetDefaultRampMesh();
+	// 这一层的FloorAssetSpec::buildShell==false(外观由AddDecoration的成品模型提供，比如Mohar)：
+	// 不构造墙壁(含楼梯/坡道/电梯井道墙)、地板、天花板，楼梯/坡道网格照常摆，见
+	// BuildingElement.md"buildShell"一节。
+	bool buildShell = true;
 	if (BuildingMod* mod = building->GetMod()) {
 		auto specIt = mod->floors.find(level);
 		if (specIt != mod->floors.end()) {
@@ -626,6 +631,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 			ceilingMaterial = framework->ResolveMaterial(assets.ceilingMaterial, ceilingMaterial);
 			stairMesh = framework->ResolveMesh(assets.stairMeshPath, stairMesh);
 			rampMesh = framework->ResolveMesh(assets.rampMeshPath, rampMesh);
+			buildShell = assets.buildShell;
 		}
 	}
 
@@ -636,7 +642,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	// 3D网格摆一个实体；电梯只有井道墙体，不摆网格(轿厢单独由BuildElevatorCabinsForBuilding
 	// 处理)。
 	for (const Stair& stair : floor->GetStairs()) {
-		BuildWallsForElement(floorBaseZ, floorHeight, stair.GetPosX(), stair.GetPosY(),
+		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, stair.GetPosX(), stair.GetPosY(),
 			stair.GetSizeX(), stair.GetSizeY(),
 			stair.GetWall(FACE_WEST), stair.GetWall(FACE_EAST), stair.GetWall(FACE_NORTH), stair.GetWall(FACE_SOUTH),
 			{}, {}, wallMaterial);
@@ -656,7 +662,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		}
 	}
 	for (const Ramp& ramp : floor->GetRamps()) {
-		BuildWallsForElement(floorBaseZ, floorHeight, ramp.GetPosX(), ramp.GetPosY(),
+		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, ramp.GetPosX(), ramp.GetPosY(),
 			ramp.GetSizeX(), ramp.GetSizeY(),
 			ramp.GetWall(FACE_WEST), ramp.GetWall(FACE_EAST), ramp.GetWall(FACE_NORTH), ramp.GetWall(FACE_SOUTH),
 			{}, {}, wallMaterial);
@@ -675,13 +681,13 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		}
 	}
 	for (const Elevator& elevator : floor->GetElevators()) {
-		BuildWallsForElement(floorBaseZ, floorHeight, elevator.GetPosX(), elevator.GetPosY(),
+		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, elevator.GetPosX(), elevator.GetPosY(),
 			elevator.GetSizeX(), elevator.GetSizeY(),
 			elevator.GetWall(FACE_WEST), elevator.GetWall(FACE_EAST), elevator.GetWall(FACE_NORTH), elevator.GetWall(FACE_SOUTH),
 			{}, {}, wallMaterial);
 	}
 	for (const Corridor& corridor : floor->GetCorridors()) {
-		BuildWallsForElement(floorBaseZ, floorHeight, corridor.GetPosX(), corridor.GetPosY(),
+		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, corridor.GetPosX(), corridor.GetPosY(),
 			corridor.GetSizeX(), corridor.GetSizeY(),
 			corridor.GetWall(FACE_WEST), corridor.GetWall(FACE_EAST), corridor.GetWall(FACE_NORTH), corridor.GetWall(FACE_SOUTH),
 			corridor.GetDoors(), corridor.GetWindows(), wallMaterial);
@@ -693,7 +699,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	// 生成的Room数量不是一一对应——ArrangeRow会把一个row槽位切成好几个Room）。
 	for (Room* room : building->GetRooms()) {
 		if (!room || room->GetLayer() != level) continue;
-		BuildWallsForElement(floorBaseZ, floorHeight, room->GetPosX(), room->GetPosY(),
+		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, room->GetPosX(), room->GetPosY(),
 			room->GetSizeX(), room->GetSizeY(),
 			true, true, true, true, // Single/Row隐含四面都有墙
 			room->GetDoors(), room->GetWindows(), wallMaterial);
@@ -708,7 +714,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	constexpr float kSlabThickness = 0.02f; // 地图单位，照抄老工程Ceiling/Ground的0.02f厚度
 	float floorBottomWorld = BUILDING_HEIGHT_EPSILON + floorBaseZ * BUILDING_WORLD_SCALE;
 	float floorTopWorld = BUILDING_HEIGHT_EPSILON + (floorBaseZ + floorHeight) * BUILDING_WORLD_SCALE;
-	for (const Ground& ground : floor->GetGrounds()) {
+	if (buildShell) for (const Ground& ground : floor->GetGrounds()) {
 		float wx, wy;
 		ComputeWorldPosition(*building, ground.GetPosX(), ground.GetPosY(), wx, wy);
 		float wz = floorBottomWorld + kSlabThickness * 0.5f * BUILDING_WORLD_SCALE;
@@ -716,7 +722,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		float sizeZ = kSlabThickness * BUILDING_WORLD_SCALE;
 		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, floorMaterial);
 	}
-	for (const Ceiling& ceiling : floor->GetCeilings()) {
+	if (buildShell) for (const Ceiling& ceiling : floor->GetCeilings()) {
 		float wx, wy;
 		ComputeWorldPosition(*building, ceiling.GetPosX(), ceiling.GetPosY(), wx, wy);
 		float wz = floorTopWorld - kSlabThickness * 0.5f * BUILDING_WORLD_SCALE;

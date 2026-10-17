@@ -72,10 +72,14 @@
 
 ## MoharBuilding
 
-`building_mohar`：0层(不放楼体)，`Layout()`里用`AddDecoration`在楼体中心放`3rdParty/Mohar`的成品
-建筑模型，测试"建筑mod指定放置mesh、随朝向旋转"(见`feature_spec.md`"建筑自定义模型"一节)。
+`building_mohar`：`Layout()`里用`AddDecoration`在楼体中心放`3rdParty/Mohar`的成品建筑模型，测试
+"建筑mod指定放置mesh、随朝向旋转"(见`feature_spec.md`"建筑自定义模型"一节)。现在和框架自带的楼层/
+房间系统融合：1层，楼体footprint用朝北时(大门在北墙，+X东、+Y南)相对模型中心的四条边`MOHAR_BODY_WEST/EAST/NORTH/SOUTH`定义(地图单位；从目测30m×30m起步、往南挪5m，再按实测收放各边)，其余朝向按`InversePoint`同一套旋转换算，模型位置反向补偿、留在地块中心不动，3层(层高`MOHAR_FLOOR1/2/3_HEIGHT`：5.5m/4m/4m)，一楼用`3rdparty_mohar_fu1.layout`拟合模型里的房间范围，二楼暂时复用同一个
+模板(`MOHAR_FLOOR2_TEMPLATE`，对不上再换fu2)，三楼用单独的`3rdparty_mohar_fu3.layout`，每层的single槽位实例化成`room_residence`，各层挂在同一个
+`component_residence`下。每层的`FloorAssetSpec::buildShell`由`MOHAR_FLOOR1/2/3_BUILD_SHELL`控制，三层都是false(外观由模型提供，框架
+不画墙壁/地板/天花板，房间和Room碰撞盒照常生成)；核对某一层范围时把那一层临时改成true。
 direction为-1时和Residence一样从有路的边界里随机挑一个方向回写——模型朝向靠它决定。默认摆位
-(楼体中心、离地0、缩放xy 0.06、z 0.04、yaw 0，按朝北定义)写成文件里的`MOHAR_*`宏，方便按实际效果调。走权重
+(楼体中心、初始yaw -90(逆时针90度，让模型大门和模板朝向一致)、离地0、缩放xy 0.06、z 0.04、yaw -90，按朝北定义)写成文件里的`MOHAR_*`宏，方便按实际效果调。走权重
 CDF随机填充：住宅三档权重1，`RandomAcreage`在3000~8000之间；没有room/component；`config.json`
 的`building_mods`里要有`"building_mohar"`。
 

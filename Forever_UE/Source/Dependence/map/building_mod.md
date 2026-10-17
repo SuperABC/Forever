@@ -50,6 +50,10 @@ footprint/楼层高度/LOD材质，以及每层楼内部的布局（`AssignFloor
   quad中心展开。
   `layers`现在允许设成0(见`Source/Core/map/building.md`"允许0层建筑")，配合`AddTreeArea`
   可以做只有植被的"建筑"，例如`ParkBuilding`。
+- **每层的`FloorAssetSpec::buildShell`(默认true)**——这一层要不要由框架构造近处外观(墙壁/地板/
+  天花板；远处灰色方块照常画)。外观已经由`AddDecoration`的成品模型提供时，在`AssignFloor`传入的
+  assets里手动写成false；只影响渲染，房间/导航/门/楼梯网格/Room碰撞盒照常生成，见
+  `Source/Forever/Element/BuildingElement.md`"buildShell"一节。
 
 ## 依赖关系
 

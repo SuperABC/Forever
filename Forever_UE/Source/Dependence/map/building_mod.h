@@ -38,6 +38,10 @@ struct FloorAssetSpec {
 	std::string floorMaterial;
 	std::string ceilingMaterial;
 	std::string stairMeshPath;
+	// 这一层要不要由框架构造近处的外观(墙壁/地板/天花板)——外观已经由AddDecoration的成品模型
+	// 提供时(比如Mohar)在AssignFloor传入的assets里手动写成false。只影响渲染：房间/导航/门/
+	// 楼梯网格/Room碰撞盒照常生成，远处LOD的灰色方块也不受影响。默认true。
+	bool buildShell = true;
 	std::string rampMeshPath;
 };
 

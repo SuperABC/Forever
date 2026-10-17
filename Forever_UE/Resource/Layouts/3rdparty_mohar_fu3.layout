@@ -1,0 +1,22 @@
+{
+	"ceilings": [
+		[0, 0, 0, 0, 1, -0.3, 1, 0],
+	],
+	"grounds": [
+		[0, 0, 0, 0, 1, -0.3, 1, 0],
+	],
+	"singles": [{
+		"rect": [0, 0, 0, 0, 1, -0.3, 1, 0],
+		"direction": 2,
+	}],
+	"pedestrianNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": [],
+	},
+	"vehicleNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": [],
+	}
+}

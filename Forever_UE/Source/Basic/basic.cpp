@@ -83,6 +83,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ FactoryBuilding::GetId(), { FactoryComponent::GetId(), FactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId() } },
 		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId() } },
+		{ MoharBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
 
 		{ ResidenceComponent::GetId(), { ResidenceRoom::GetId() } },
 		{ ShopComponent::GetId(), { ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId() } },
