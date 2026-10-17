@@ -25,7 +25,8 @@ struct FHitResult;
 // 约定(资产原点在哪)完全解耦，哪怕用没有调整过pivot的占位Cube也能正确摆位(自动按包围盒
 // 算offset，见door.md"实际摆位")。
 // ②`style`（Slide/Swing）和`leaves`（1/2）决定枢轴的初始布局，`Door::IsFlippedSide()`只在
-// `leaves==1`时影响"滑动方向/铰链朝哪边"，双扇恒不读这个值。
+// `leaves==1`时影响"滑动方向/铰链朝哪边"，双扇恒不读这个值。Swing门往墙哪一侧开不是固定的：
+// 每次从全关开始打开时，按触发者在门哪一侧决定往另一侧开(ChooseSwingSide)。
 // ③开门的触发判定是"触发盒里有没有CanPass()通过的passer"，不是"有没有任何Actor"——门禁
 // 拒绝时门不开，但如果这扇门有Script(可交互)，MeetOption选项照常弹出(拒绝通行和拒绝对话
 // 是两件独立的事)。
@@ -62,7 +63,15 @@ private:
 		TObjectPtr<UStaticMeshComponent> mesh;
 		FTransform closedTransform;
 		FTransform openTransform;
+		// 仅Swing：这扇门扇"往本地+Y一侧(墙法线一侧)开"时的Yaw角(度，已经带上铰链在哪一边的
+		// 符号)。往-Y一侧开就取反。ChooseSwingSide按触发者在门哪一侧改写openTransform。
+		float swingYaw = 0.f;
 	};
+
+	// 仅Swing：门从全关开始打开时调用一次，按approacher在门平面哪一侧(组件本地Y的正负)，把
+	// 所有门扇的openTransform改成朝另一侧打开——从房间外靠近就往房间内开，从房间内靠近就往
+	// 外开。门已经开着(或正在关、还没关严)时不调用，避免门扇在半空中反向翻转。
+	void ChooseSwingSide(AActor* approacher);
 
 	// 把一个mesh按desiredLocalSize(X=沿墙宽/Y=厚度/Z=高，UE单位)缩放，并按它自己的实际
 	// 包围盒(有些资产pivot不在几何中心，占位Cube是中心pivot)算出本地offset，使包围盒中心

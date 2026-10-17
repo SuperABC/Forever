@@ -122,6 +122,7 @@ void UForeverDoorComponent::BuildLeaves(UStaticMesh* mesh, float doorWidth, floa
 		meshComp->RegisterComponent();
 
 		FTransform closed, open;
+		float swingYaw = 0.f;
 
 		if (!isSwing) {
 			// Slide：leaves==1整扇覆盖[-doorWidth/2, doorWidth/2]，居中(pivot本地X=0)；
@@ -141,8 +142,8 @@ void UForeverDoorComponent::BuildLeaves(UStaticMesh* mesh, float doorWidth, floa
 			// 延伸到洞口另一端(整个doorWidth)；leaves==2两扇各自铰链在洞口两端外侧边缘，
 			// 各覆盖半个doorWidth，对称打开。门扇mesh的包围盒中心要落在"离铰链半个扇宽"处
 			// (pivot本地+X方向，因为mesh局部X轴就是"沿墙"方向)，开门时pivot绕本地Z轴转
-			// amount度——这次固定往本地+Y方向转(简化掉"动态判断朝哪边开避免扫到人"这个
-			// 细节，见door.md"已知简化"一节)，不按door这一次具体是谁触发来决定方向。
+			// amount度。往墙哪一侧开由ChooseSwingSide在每次开门时按触发者位置决定，这里先
+			// 按"往本地+Y一侧开"算好默认值。
 			float leafWidth = leafCount == 2 ? doorWidth * 0.5f : doorWidth;
 			float hingeX;
 			if (leafCount == 2) {
@@ -157,9 +158,12 @@ void UForeverDoorComponent::BuildLeaves(UStaticMesh* mesh, float doorWidth, floa
 			AlignMeshToBounds(meshComp, mesh, FVector(leafWidth, thickness, doorHeight),
 				FVector(extendSign * leafWidth * 0.5f, 0.f, doorHeight * 0.5f));
 
-			float openSign = (leafCount == 2 && leafIndex == 1) ? -1.f : 1.f;
+			// 门扇方向是extendSign*X，绕Z转θ后它的Y分量=extendSign*sinθ，要让门扇落到本地+Y
+			// 一侧，θ就得和extendSign同号——以前固定θ=+amount(双扇第二扇取反)，铰链在+X侧的
+			// 单扇门(extendSign=-1)就会往-Y开，于是开门方向跟着随机的铰链侧一起随机。
+			swingYaw = extendSign * amount;
 			closed = FTransform(FRotator::ZeroRotator, FVector(hingeX, 0.f, 0.f));
-			open = FTransform(FRotator(0.f, openSign * amount, 0.f), FVector(hingeX, 0.f, 0.f));
+			open = FTransform(FRotator(0.f, swingYaw, 0.f), FVector(hingeX, 0.f, 0.f));
 		}
 
 		pivot->SetRelativeTransform(closed);
@@ -169,6 +173,7 @@ void UForeverDoorComponent::BuildLeaves(UStaticMesh* mesh, float doorWidth, floa
 		leaf.mesh = meshComp;
 		leaf.closedTransform = closed;
 		leaf.openTransform = open;
+		leaf.swingYaw = swingYaw;
 		leaves.Add(leaf);
 	}
 }
@@ -249,6 +254,9 @@ void UForeverDoorComponent::OnOverlapBegin(UPrimitiveComponent* OverlappedCompon
 	ResolvePasserIdentity(OtherActor, citizen, isPlayer);
 
 	if (door->CanPass(citizen, isPlayer)) {
+		// 门是从全关状态被这个人推开的——按他在哪一侧决定往另一侧开。门已经开着/没关严时
+		// 不改方向，避免门扇半空中反向翻转(后来的人从另一侧过来就顺着已经开的方向走)。
+		if (!bWantsOpen && openProgress <= KINDA_SMALL_NUMBER) ChooseSwingSide(OtherActor);
 		passers.Add(OtherActor);
 		UpdateOpenState();
 	}
@@ -283,6 +291,17 @@ void UForeverDoorComponent::OnOverlapEnd(UPrimitiveComponent* OverlappedComponen
 		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
 			meetOption->RemoveName(interactNameOnly);
 		}
+	}
+}
+
+void UForeverDoorComponent::ChooseSwingSide(AActor* approacher) {
+	if (!door || door->GetStyle() != 1 || !approacher) return;
+	// 组件本地+Y就是墙法线方向(local X=沿墙，见Init里componentYaw=法线yaw-90)。触发者在
+	// +Y一侧就往-Y开，反之往+Y开——永远往远离触发者的一侧推开。
+	float approacherLocalY = GetComponentTransform().InverseTransformPosition(approacher->GetActorLocation()).Y;
+	float side = approacherLocalY >= 0.f ? -1.f : 1.f;
+	for (FLeaf& leaf : leaves) {
+		leaf.openTransform.SetRotation(FRotator(0.f, side * leaf.swingYaw, 0.f).Quaternion());
 	}
 }
 
