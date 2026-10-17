@@ -796,12 +796,18 @@ void Map::ForwardBuildingHatches(Building* building) {
 void Map::InitVegetation() {
 	auto canPlace = [this](float x, float y) { return CanPlaceTree(x, y); };
 
+	// 三个宿主都支持单棵/一排/一片三种请求(TreeRequests，见feature_spec.h)，各自只提供参考系的换算
+	// (TreeFrame)，展开逻辑统一在Vegetation::ExpandRequests。
 	int roadTrees = 0;
 	if (roadnet) {
 		roadnet->LayoutTrees();
-		for (const TreeLineRequest& request : roadnet->GetTreeLines()) {
-			roadTrees += vegetation.ExpandLine(request, canPlace);
-		}
+		// 路网的参考系是整张地图：ratio相对地图宽高，不旋转，局部坐标就是世界坐标。
+		TreeFrame frame;
+		frame.toLocal = [this](const PointParams& p) {
+			return std::make_pair(p[0] * width + p[1], p[2] * height + p[3]);
+			};
+		frame.localToWorld = [](float x, float y) { return std::make_pair(x, y); };
+		roadTrees = vegetation.ExpandRequests(roadnet->GetTrees(), frame, canPlace);
 	}
 
 	int buildingTrees = 0;
@@ -809,13 +815,28 @@ void Map::InitVegetation() {
 		BuildingMod* mod = building ? building->GetMod() : nullptr;
 		if (!mod) continue;
 		mod->LayoutTrees(*building, building->GetBoundaryRoads());
-		float rotation = building->GetRotation();
-		for (const TreeAreaRequest& request : mod->treeAreas) {
-			buildingTrees += vegetation.ExpandArea(request, rotation, canPlace);
-		}
+		Building* host = building;
+		TreeFrame frame;
+		frame.toLocal = [host](const PointParams& p) { return host->QuadNorthPointToLocal(p); };
+		frame.localToWorld = [host](float x, float y) { return host->QuadLocalToWorld(x, y); };
+		frame.rotation = building->GetRotation();
+		buildingTrees += vegetation.ExpandRequests(mod->trees, frame, canPlace);
 	}
 
-	debugf("Log: Vegetation road trees=%d, building trees=%d, total=%d, meshes=%d.\n", roadTrees, buildingTrees,
+	int zoneTrees = 0;
+	for (auto& [name, zone] : zones) {
+		ZoneMod* mod = zone ? zone->GetMod() : nullptr;
+		if (!mod) continue;
+		mod->LayoutTrees(zone->GetDirection(), *zone, zone->GetBoundaryRoads());
+		Zone* host = zone;
+		TreeFrame frame;
+		frame.toLocal = [host](const PointParams& p) { return host->NorthPointToLocal(p); };
+		frame.localToWorld = [host](float x, float y) { return host->LocalToWorld(x, y); };
+		frame.rotation = zone->GetRotation();
+		zoneTrees += vegetation.ExpandRequests(mod->trees, frame, canPlace);
+	}
+
+	debugf("Log: Vegetation road trees=%d, building trees=%d, zone trees=%d, total=%d, meshes=%d.\n", roadTrees, buildingTrees, zoneTrees,
 		(int)vegetation.GetTrees().size(), (int)vegetation.GetMeshPaths().size());
 }
 

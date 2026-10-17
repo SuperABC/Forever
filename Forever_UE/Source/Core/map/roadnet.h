@@ -111,11 +111,11 @@ public:
 	// mod->hatches，不需要像Node/Road那样深拷贝。
 	const std::vector<std::pair<Quad, float>>& GetHatches() const;
 
-	// mod在LayoutTrees里通过RoadnetMod::AddTreeLine提交的行道树请求，拷贝自mod->treeLines，
-	// 由Map::InitVegetation交给Vegetation展开，见vegetation.md。
-	const std::vector<TreeLineRequest>& GetTreeLines() const;
+	// mod在LayoutTrees里通过RoadnetMod::AddTreeSingle/AddTreeLine/AddTreeArea提交的树请求(参考系是
+	// 整张地图)，拷贝自mod->trees，由Map::InitVegetation交给Vegetation展开，见vegetation.md。
+	const TreeRequests& GetTrees() const;
 
-	// 调mod->LayoutTrees(this->roads)，再把mod->treeLines按值拷贝进treeLines。由
+	// 调mod->LayoutTrees(this->roads)，再把mod->trees按值拷贝进trees。由
 	// Map::InitVegetation在整张地图生成完之后调用一次(这时roads上的开口已经齐全)。
 	void LayoutTrees();
 
@@ -138,7 +138,7 @@ private:
 	std::vector<Road*> roads;
 	std::vector<Lot*> lots;
 	std::vector<std::pair<Quad, float>> hatches;
-	std::vector<TreeLineRequest> treeLines;
+	TreeRequests trees;
 	std::string pathRoadMaterial;
 
 	std::unordered_map<std::string, std::vector<Lot*>> addressesByRoad;

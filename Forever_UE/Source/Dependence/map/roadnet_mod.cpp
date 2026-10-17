@@ -24,8 +24,16 @@ void RoadnetMod::AddHatch(const Connection* connection, float t1, float t2, floa
 	hatches.emplace_back(quad, rotation);
 }
 
-void RoadnetMod::AddTreeLine(pair<float, float> from, pair<float, float> to, int num, float scale,
+void RoadnetMod::AddTreeSingle(const PointParams& position, float scale, const string& meshPath) {
+	trees.AddSingle(position, scale, meshPath);
+}
+
+void RoadnetMod::AddTreeLine(const PointParams& from, const PointParams& to, int num, float scale,
 	const string& meshPath) {
-	if (num <= 0 || meshPath.empty()) return;
-	treeLines.push_back(TreeLineRequest{ from.first, from.second, to.first, to.second, num, scale, meshPath });
+	trees.AddLine(from, to, num, scale, meshPath);
+}
+
+void RoadnetMod::AddTreeArea(const PointParams& from, const PointParams& to, int num, float scale,
+	const string& meshPath) {
+	trees.AddArea(from, to, num, scale, meshPath);
 }

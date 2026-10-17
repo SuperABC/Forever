@@ -253,6 +253,10 @@ public:
 	static RectParams InverseParams(const RectParams& params, int face);
 	static int InverseDirection(int direction, int face);
 	static PointParams InversePoint(const PointParams& point, int face);
+	// 按朝北(face=2)定义的yaw在face朝向下要叠加的偏移(度)——和InversePoint的点映射是同一个旋转：
+	// face0把(1,0)转到(0,-1)即-90°(=270°)，face1转到(0,1)即+90°，face3是180°。建筑/园区的
+	// 自定义模型共用。face不在[0,3]时按0处理(原样)。
+	static float FaceYawDegrees(int face);
 	static RectParams InverseWall(const RectParams& pos, int direction, int face);
 
 private:
@@ -298,18 +302,6 @@ struct BuildingNavResult {
 	std::vector<Node*> vehicleNodes;
 	std::vector<Connection*> vehicleConnections;
 	std::vector<Node*> vehicleOutsideNodes;
-};
-
-// 建筑mod用BuildingMod::AddDecoration指定放置的一个StaticMesh，Building::Layout()按建筑最终
-// 朝向换算好的世界摆位：x/y是世界地图坐标(地图单位)，z是离地高度(地图单位)，yaw是世界朝向
-// (弧度，已叠加朝向和建筑旋转)，pitch/roll是度(不随朝向变)，scale是资产原尺寸的倍数。
-// UE层只在近处LOD按这份数据生成组件，见building.md"自定义模型"一节。
-struct BuildingDecoration {
-	std::string meshPath;
-	float x = 0.f, y = 0.f, z = 0.f;
-	float yaw = 0.f;
-	float pitch = 0.f, roll = 0.f;
-	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f;
 };
 
 // Building：持有一个具体BuildingMod实例，代表一栋已经落地的Building（继承Quad表示自己
@@ -369,8 +361,9 @@ public:
 	int GetLayerCount() const;
 	const std::vector<float>& GetFloorHeights() const; // 长度basements+layers，从下到上
 	const std::string& GetLodMaterialPath() const;
-	// mod->decorations按最终朝向换算后的世界摆位，见BuildingDecoration。
-	const std::vector<BuildingDecoration>& GetDecorations() const;
+	// mod->decorations按最终朝向换算后的世界摆位(DecorationInstance见feature_spec.h)，UE层只在
+	// 近处LOD按这份数据生成组件，见building.md"自定义模型"一节。
+	const std::vector<DecorationInstance>& GetDecorations() const;
 
 	// 按level(0=1楼，-1=地下一层……)查一层的实例化数据，查不到返回nullptr。
 	const Floor* GetFloor(int level) const;
@@ -386,6 +379,12 @@ public:
 	// 转换成世界坐标(地图单位)——按bodyOffset+自身旋转换算，和渲染层
 	// ComputeBodyWorldCenter同一套公式，只是这里额外支持任意局部点(不止楼体中心)。
 	std::pair<float, float> LocalToWorld(float localX, float localY) const;
+
+	// 建筑植被用的参考系是整块建筑quad(不是楼体footprint)：QuadNorthPointToLocal把按朝北定义的
+	// quad上PointParams(原点quad西北角)按GetDirection()用InversePoint旋转，换成quad局部坐标(中心
+	// 原点、沿建筑自身轴向)；QuadLocalToWorld按GetRotation()旋转加上quad中心。direction为-1时按朝北。
+	std::pair<float, float> QuadNorthPointToLocal(const PointParams& p) const;
+	std::pair<float, float> QuadLocalToWorld(float localX, float localY) const;
 
 	// 转发parentLot->GetRotation()+relativeRotation；parentLot为空时按0.f+relativeRotation算。
 	float GetRotation() const;
@@ -483,7 +482,7 @@ private:
 	int layers = 1;
 	std::vector<float> floorHeights;
 	std::string lodMaterialPath;
-	std::vector<BuildingDecoration> decorations;
+	std::vector<DecorationInstance> decorations;
 
 	std::vector<Floor> floors;
 	std::vector<Component*> components;

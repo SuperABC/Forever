@@ -345,6 +345,15 @@ int BuildingLayoutLibrary::InverseDirection(int direction, int face) {
 	}
 }
 
+float BuildingLayoutLibrary::FaceYawDegrees(int face) {
+	switch (face) {
+	case FACE_WEST: return 270.f;
+	case FACE_EAST: return 90.f;
+	case FACE_SOUTH: return 180.f;
+	default: return 0.f;
+	}
+}
+
 PointParams BuildingLayoutLibrary::InversePoint(const PointParams& point, int face) {
 	if (face < 0 || face >= 4) THROW_EXCEPTION(InvalidArgumentException, "Facing direction out of range [0,3].\n");
 	switch (face) {
@@ -741,17 +750,11 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	{
 		const float degToRad = 3.14159265358979323846f / 180.f;
 		int face = (direction >= 0 && direction < 4) ? direction : FACE_NORTH;
-		float faceYawDegrees = 0.f;
-		switch (face) {
-		case FACE_WEST: faceYawDegrees = 270.f; break;
-		case FACE_EAST: faceYawDegrees = 90.f; break;
-		case FACE_SOUTH: faceYawDegrees = 180.f; break;
-		default: break;
-		}
+		float faceYawDegrees = BuildingLayoutLibrary::FaceYawDegrees(face);
 		for (const DecorationSpec& spec : mod->decorations) {
 			PointParams p = BuildingLayoutLibrary::InversePoint(spec.position, face);
 			auto [worldX, worldY] = LocalToWorld(p[0] * bodySizeX + p[1], p[2] * bodySizeY + p[3]);
-			BuildingDecoration decoration;
+			DecorationInstance decoration;
 			decoration.meshPath = spec.meshPath;
 			decoration.x = worldX;
 			decoration.y = worldY;
@@ -972,7 +975,7 @@ int Building::GetBasementCount() const { return basements; }
 int Building::GetLayerCount() const { return layers; }
 const vector<float>& Building::GetFloorHeights() const { return floorHeights; }
 const string& Building::GetLodMaterialPath() const { return lodMaterialPath; }
-const vector<BuildingDecoration>& Building::GetDecorations() const { return decorations; }
+const vector<DecorationInstance>& Building::GetDecorations() const { return decorations; }
 
 const Floor* Building::GetFloor(int level) const {
 	int idx = basements + level;
@@ -1002,6 +1005,19 @@ pair<float, float> Building::LocalToWorld(float localX, float localY) const {
 	float worldX = GetPosX() + relX * c - relY * s;
 	float worldY = GetPosY() + relX * s + relY * c;
 	return { worldX, worldY };
+}
+
+pair<float, float> Building::QuadNorthPointToLocal(const PointParams& p) const {
+	int face = (direction >= 0 && direction < 4) ? direction : FACE_NORTH;
+	PointParams rotated = BuildingLayoutLibrary::InversePoint(p, face);
+	return { rotated[0] * GetSizeX() + rotated[1] - GetSizeX() * 0.5f,
+		rotated[2] * GetSizeY() + rotated[3] - GetSizeY() * 0.5f };
+}
+
+pair<float, float> Building::QuadLocalToWorld(float localX, float localY) const {
+	float rot = GetRotation();
+	float c = cosf(rot), s = sinf(rot);
+	return { GetPosX() + localX * c - localY * s, GetPosY() + localX * s + localY * c };
 }
 
 float Building::GetRotation() const {

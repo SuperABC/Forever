@@ -56,7 +56,26 @@ public:
 	// GetBoundaryRoads())——Zone这一层没有需要额外解析缓存的数据(GetWalls()/GetGates()本来就
 	// 直接转发mod->walls/mod->gates)，这个方法纯粹是为了和Building::Layout()同样的调用形态，
 	// 不需要Map::InitZones()自己摸mod指针。
+	// 另外记下direction(大门方向)，并把mod->decorations按朝向换算成GetDecorations()。
 	void Layout(int direction);
+
+	// Layout()收到的方向(Assign选中的大门方向)，Layout之前是-1。
+	int GetDirection() const;
+
+	// 园区自定义模型/树线的坐标换算：p是园区quad上的PointParams(ratio+offset，原点在quad西北角，
+	// +X东+Y南)，按"朝北"(大门在北)定义——按GetDirection()用InversePoint旋转到实际朝向，再转成中心
+	// 原点、按GetRotation()旋转加上中心，得到世界地图坐标(和Map::ZoneLocalToWorld同一套旋转写法)。
+	// direction为-1时按朝北原样处理。
+	std::pair<float, float> NorthPointToWorld(const PointParams& p) const;
+	// NorthPointToWorld拆成两步：朝北PointParams->园区局部坐标(中心原点、沿园区自身轴向，已按
+	// direction旋转)，局部坐标->世界坐标(按GetRotation()旋转加上中心)。种一片树要在局部坐标里取矩形。
+	std::pair<float, float> NorthPointToLocal(const PointParams& p) const;
+	std::pair<float, float> LocalToWorld(float localX, float localY) const;
+	// 朝北定义的yaw(度)换算成世界朝向(弧度)：叠加FaceYawDegrees(direction)和GetRotation()。
+	float NorthYawToWorld(float yawDegrees) const;
+
+	// mod->decorations换算后的世界摆位(DecorationInstance见feature_spec.h)，常驻显示。
+	const std::vector<DecorationInstance>& GetDecorations() const;
 
 	Lot* GetParentLot() const;
 	void SetParentLot(Lot* lot);
@@ -111,6 +130,8 @@ private:
 	std::string type;
 	std::string name;
 	Lot* parentLot = nullptr;
+	int direction = -1;
+	std::vector<DecorationInstance> decorations;
 	std::unordered_map<int, Road*> boundaryRoads;
 	std::vector<Road*> internalRoads;
 	std::vector<Building*> internalBuildings;

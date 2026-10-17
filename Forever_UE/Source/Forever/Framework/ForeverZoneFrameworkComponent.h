@@ -48,6 +48,10 @@ private:
 	// building的zone没有意义的"内部"体验，跳过、不创建碰撞盒。
 	void BuildCollisionBox(Zone* zone);
 
+	// 园区自定义模型(Zone::GetDecorations()，世界摆位Core已经按大门方向换算好)：每个一个Static的
+	// UStaticMeshComponent，和围墙/大门一样常驻(园区没有LOD)。
+	void BuildDecorations(const Zone& zone);
+
 	UFUNCTION()
 	void OnZoneOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);

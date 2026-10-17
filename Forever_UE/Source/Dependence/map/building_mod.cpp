@@ -33,9 +33,18 @@ void BuildingMod::AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor
 	cabins.push_back(ElevatorCabinSpec{ shaftIndex, minFloor, maxFloor, std::move(cabinMeshPath) });
 }
 
-void BuildingMod::AddTreeArea(const Quad& quad, int num, float scale, const string& meshPath) {
-	if (num <= 0 || meshPath.empty()) return;
-	treeAreas.push_back(TreeAreaRequest{ quad, num, scale, meshPath });
+void BuildingMod::AddTreeSingle(const PointParams& position, float scale, const string& meshPath) {
+	trees.AddSingle(position, scale, meshPath);
+}
+
+void BuildingMod::AddTreeLine(const PointParams& from, const PointParams& to, int num, float scale,
+	const string& meshPath) {
+	trees.AddLine(from, to, num, scale, meshPath);
+}
+
+void BuildingMod::AddTreeArea(const PointParams& from, const PointParams& to, int num, float scale,
+	const string& meshPath) {
+	trees.AddArea(from, to, num, scale, meshPath);
 }
 
 void BuildingMod::AddDecoration(const DecorationSpec& spec) {

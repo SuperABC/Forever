@@ -29,6 +29,40 @@ int Vegetation::RegisterMesh(const string& meshPath) {
 	return index;
 }
 
+int Vegetation::ExpandRequests(const TreeRequests& requests, const TreeFrame& frame, const PlaceFilter& filter) {
+	auto toWorld = [&frame](const PointParams& p) {
+		auto [lx, ly] = frame.toLocal(p);
+		return frame.localToWorld(lx, ly);
+		};
+	int planted = 0;
+	for (const TreeSingleSpec& spec : requests.singles) {
+		auto [x, y] = toWorld(spec.position);
+		planted += ExpandSingle(x, y, spec.scale, spec.meshPath, filter);
+	}
+	for (const TreeLineSpec& spec : requests.lines) {
+		auto [fromX, fromY] = toWorld(spec.from);
+		auto [toX, toY] = toWorld(spec.to);
+		planted += ExpandLine(TreeLineRequest{ fromX, fromY, toX, toY, spec.num, spec.scale, spec.meshPath }, filter);
+	}
+	for (const TreeAreaSpec& spec : requests.areas) {
+		// 两个对角先换到宿主局部坐标(轴向沿宿主，按朝向旋转过之后矩形仍然沿局部轴)，取局部中心/尺寸，
+		// 中心再换世界坐标，ExpandArea按宿主旋转在矩形内采样。
+		auto [ax, ay] = frame.toLocal(spec.from);
+		auto [bx, by] = frame.toLocal(spec.to);
+		auto [cx, cy] = frame.localToWorld((ax + bx) * 0.5f, (ay + by) * 0.5f);
+		Quad quad(cx, cy, fabsf(bx - ax), fabsf(by - ay));
+		planted += ExpandArea(TreeAreaRequest{ quad, spec.num, spec.scale, spec.meshPath }, frame.rotation, filter);
+	}
+	return planted;
+}
+
+int Vegetation::ExpandSingle(float x, float y, float scale, const string& meshPath, const PlaceFilter& filter) {
+	if (meshPath.empty()) return 0;
+	if (filter && !filter(x, y)) return 0;
+	AddTree(x, y, scale, RegisterMesh(meshPath));
+	return 1;
+}
+
 int Vegetation::ExpandLine(const TreeLineRequest& request, const PlaceFilter& filter) {
 	if (request.num <= 0 || request.meshPath.empty()) return 0;
 	int meshIndex = RegisterMesh(request.meshPath);

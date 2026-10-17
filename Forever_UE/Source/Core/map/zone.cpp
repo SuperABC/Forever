@@ -76,8 +76,58 @@ string Zone::GetAddress() const {
 	return parentLot->GetAddress() + " " + GetName();
 }
 
-void Zone::Layout(int direction) {
+void Zone::Layout(int inDirection) {
+	direction = inDirection;
 	mod->Layout(direction, *this, GetBoundaryRoads());
+
+	decorations.clear();
+	for (const DecorationSpec& spec : mod->decorations) {
+		auto [worldX, worldY] = NorthPointToWorld(spec.position);
+		DecorationInstance decoration;
+		decoration.meshPath = spec.meshPath;
+		decoration.x = worldX;
+		decoration.y = worldY;
+		decoration.z = spec.z;
+		decoration.yaw = NorthYawToWorld(spec.yaw);
+		decoration.pitch = spec.pitch;
+		decoration.roll = spec.roll;
+		decoration.scaleX = spec.scaleX;
+		decoration.scaleY = spec.scaleY;
+		decoration.scaleZ = spec.scaleZ;
+		decorations.push_back(decoration);
+	}
+}
+
+int Zone::GetDirection() const {
+	return direction;
+}
+
+pair<float, float> Zone::NorthPointToWorld(const PointParams& p) const {
+	auto [localX, localY] = NorthPointToLocal(p);
+	return LocalToWorld(localX, localY);
+}
+
+pair<float, float> Zone::NorthPointToLocal(const PointParams& p) const {
+	int face = (direction >= 0 && direction < 4) ? direction : FACE_NORTH;
+	PointParams rotated = BuildingLayoutLibrary::InversePoint(p, face);
+	return { rotated[0] * GetSizeX() + rotated[1] - GetSizeX() * 0.5f,
+		rotated[2] * GetSizeY() + rotated[3] - GetSizeY() * 0.5f };
+}
+
+pair<float, float> Zone::LocalToWorld(float localX, float localY) const {
+	float rot = GetRotation();
+	float c = cosf(rot), s = sinf(rot);
+	return { GetPosX() + localX * c - localY * s, GetPosY() + localX * s + localY * c };
+}
+
+float Zone::NorthYawToWorld(float yawDegrees) const {
+	int face = (direction >= 0 && direction < 4) ? direction : FACE_NORTH;
+	const float degToRad = 3.14159265358979323846f / 180.f;
+	return GetRotation() + (BuildingLayoutLibrary::FaceYawDegrees(face) + yawDegrees) * degToRad;
+}
+
+const vector<DecorationInstance>& Zone::GetDecorations() const {
+	return decorations;
 }
 
 Lot* Zone::GetParentLot() const {

@@ -47,6 +47,11 @@
   `ForeverBuildingFrameworkComponent`的`EndPlay`野指针教训同一套安全原则），测试阶段用
   `GEngine->AddOnScreenDebugMessage`（`FColor::Yellow`）代替真实的Story事件分发。
 
+- **园区自定义模型常驻**——`BuildDecorations(zone)`对`Zone::GetDecorations()`每个摆位建一个Static的
+  `UStaticMeshComponent`(`LoadObject`，失败打Warning跳过)，摆法和`ABuildingElement::BuildDecorations`
+  一致(缩放=资产原尺寸倍数，Z贴`ZONE_HEIGHT_EPSILON`地坪)。园区没有LOD，和围墙/大门一样常驻。
+  园区的树不在这里画，走全图统一的`UForeverVegetationFrameworkComponent`。
+
 ## 依赖关系
 
 - 依赖：`map/map.h`（`Map::GetZones()`）、`map/zone.h`（`Zone`，`GetWalls()`/

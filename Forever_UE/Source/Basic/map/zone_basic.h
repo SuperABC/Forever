@@ -31,6 +31,9 @@ public:
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
 	virtual void Layout(int direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) override;
+	// 沿四面栅栏内侧每隔一段种一棵树，大门那一段让出来(按朝北坐标写，Core按大门方向旋转)。
+	virtual void LayoutTrees(int direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
 
 private:
 	static int count;

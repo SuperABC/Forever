@@ -33,7 +33,8 @@ Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初�
   返回粗高度，其他系统(路网等)不受影响。
 - **植被`Vegetation vegetation`，最后一个阶段`InitVegetation()`**——必须在`InitBuildings()`之后
   调用(开口/园区/建筑/房间都齐了)：`roadnet->LayoutTrees()`展开行道树，再对每栋building调
-  `BuildingMod::LayoutTrees`并以building旋转展开`treeAreas`。
+  `BuildingMod::LayoutTrees`、对每个园区调`ZoneMod::LayoutTrees`，三者的`trees`(单棵/一排/一片)按各自参考系
+  由`Vegetation::ExpandRequests`展开。
   过滤规则`CanPlaceTree`：越界、有水面、有hatch的格子不种。UE层通过`GetVegetation()`一次性
   读取渲染，见`vegetation.md`。
 - **`AddHatch(Quad q, float rotation)`自动分发到所有与`q`重叠的element**——按`q`的旋转AABB

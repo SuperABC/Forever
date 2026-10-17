@@ -1,7 +1,7 @@
 # feature_spec.h / .cpp
 
 Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文件里：门(`DoorSpec`)、
-植被(`TreeLineRequest`/`TreeAreaRequest`)。都是mod填写、Core读取的纯值类型，不含任何UE类型，
+植被(`TreeSingleSpec`/`TreeLineSpec`/`TreeAreaSpec`/`TreeRequests`)。都是mod填写、Core读取的纯值类型，不含任何UE类型，
 资产只是待`LoadObject`的软路径字符串。以后map域再有新的spec也加在这里，按下面的格式各占一节，
 不再一个spec一个文件。
 
@@ -45,35 +45,37 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
 - `scriptModName`/`milestoneNames`只有`name`非空时才会被`Map::CreateDoor`读取，`name`
   为空的纯自动门这两个字段即使填了也不会生效，不是bug。
 
-## 植被(`TreeLineRequest`/`TreeAreaRequest`)
+## 植被(`TreeSingleSpec`/`TreeLineSpec`/`TreeAreaSpec`/`TreeRequests`)
 
 ### 职责
 
-植被请求的数据结构：`TreeLineRequest`（沿线段均匀种树）和`TreeAreaRequest`（在一个Quad里随机种树）。
-mod只负责"提请求"，Core把请求展开成一棵棵树，UE层统一渲染，见`Source/Core/map/vegetation.md`。
+植被请求的数据结构：单棵(`TreeSingleSpec`)、一排(`TreeLineSpec`，沿线段均匀种`num`棵，含两端)、
+一片(`TreeAreaSpec`，两个对角围成的矩形内均匀随机种`num`棵)，统一存在`TreeRequests`里。mod只负责
+"提请求"，Core把请求展开成一棵棵树，UE层统一渲染，见`Source/Core/map/vegetation.md`。
 
 ### 关键设计
 
-- **mod-facing的接口挂在已有Mod类里，不新增基类**——`RoadnetMod::AddTreeLine`、
-  `BuildingMod::AddTreeArea`都是非虚工具方法，和`RoadnetMod::AddHatch`/
-  `BuildingMod::AssignFloor`同一个写法：往mod对象自己的`treeLines`/`treeAreas`里追加，
-  Mod类的继承关系和虚函数签名都不变。
+- **三个宿主一视同仁**——`RoadnetMod`/`ZoneMod`/`BuildingMod`都有同样签名的
+  `AddTreeSingle`/`AddTreeLine`/`AddTreeArea`(非虚工具方法，转发到各自的成员`TreeRequests trees`)，
+  在各自的虚函数`LayoutTrees`里调用(整张地图生成完之后的最后阶段，见`Map::InitVegetation`)。
+  Mod类的继承关系不变，`LayoutTrees`有默认空实现，不种树的mod不用管。
+- **坐标统一用`PointParams`，参考系由宿主决定**：
+  - 路网：整张地图(原点地图西北角，ratio相对地图宽高，不旋转)——写世界坐标就用`{0,x,0,y}`；
+  - 园区：园区quad(原点西北角，+X东+Y南)，按"朝北"(大门在北)写，Core按大门方向+园区旋转换算；
+  - 建筑：建筑quad(整块地，不是楼体footprint)，按"朝北"写，Core按建筑朝向+建筑旋转换算。
+  园区/建筑按朝北写的好处是mod只写一份就适配四个朝向；矩形在旋转90°之后仍然沿宿主局部轴，
+  Core在局部坐标里取矩形再整体旋转。
 - **只记请求，不在mod里展开随机**——每棵树的随机旋转(绕Z轴0~2π均匀)、随机缩放(在请求的
   `scale`基础上乘一个均值1、σ=0.1、夹到[0.8,1.2]的高斯随机数)、"不种在水面/挖洞格子上"的
-  过滤全部由Core统一处理，规则只有一份，以后调整不用改任何mod。
-- **跨DLL安全**——mod只往自己对象的vector里写，Core只按值拷贝/只读遍历，不跨DLL释放内存，
-  符合CONVENTIONS.md §4。
-- **`meshPath`是StaticMesh资产软路径**（如`/Game/3rdParty/Mossy_Tree/StaticMeshes/
-  mossy-tree.mossy-tree`）——UE层每个mesh一个HISM实例化渲染，蓝图Actor不能这样实例化，
-  所以不支持蓝图路径。
-- **坐标约定**：都是地图element单位。`TreeLineRequest`是世界坐标；`TreeAreaRequest::quad`沿用
-  发出者自己的坐标系——BuildingMod传的是`LayoutTrees()`拿到的building quad(中心是世界坐标、尺寸沿
-  楼体局部轴向)，Core展开时绕quad中心旋转`building->GetRotation()`。
+  过滤全部由Core统一处理，规则只有一份。
+- **跨DLL安全**——mod只往自己对象的`trees`里写(`TreeRequests`的Add方法编译在Dependence里、
+  链进各自DLL)，Core只按值拷贝/只读遍历，符合CONVENTIONS.md §4。num<=0或meshPath为空的请求直接忽略。
+- **`meshPath`是StaticMesh资产软路径**——UE层每个mesh一个HISM实例化渲染，不支持蓝图。
 
 ### 依赖关系
 
-- 依赖：`map/general_geometry.h`（`Quad`）。
-- 被谁依赖：`roadnet_mod.h`、`building_mod.h`、`Source/Core/map/vegetation.h`。
+- 依赖：`map/general_geometry.h`（`PointParams`）。
+- 被谁依赖：`roadnet_mod.h`、`zone_mod.h`、`building_mod.h`、`Source/Core/map/vegetation.h`。
 
 ## 建筑自定义模型(`DecorationSpec`)
 
@@ -96,4 +98,9 @@ mod只负责"提请求"，Core把请求展开成一棵棵树，UE层统一渲染
 ### 依赖关系
 
 - 依赖：`map/general_geometry.h`(`PointParams`)。
-- 被谁依赖：`building_mod.h`(`decorations`)、`Source/Core/map/building.h`(换算成`BuildingDecoration`)。
+- 被谁依赖：`building_mod.h`(`decorations`)、`Source/Core/map/building.h`、`zone.h`(换算成`DecorationInstance`)。
+
+## 摆位实例(`DecorationInstance`)
+
+- `DecorationInstance`：`DecorationSpec`按宿主(建筑/园区)最终朝向换算好的世界摆位，Core算好、UE层只读，
+  建筑和园区共用(原来是Core的`BuildingDecoration`)。

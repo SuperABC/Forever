@@ -15,7 +15,7 @@
 
 ## 关键设计
 
-- **自定义模型(`BuildingDecoration`/`GetDecorations()`)**——mod在`Layout()`里用
+- **自定义模型(`DecorationInstance`/`GetDecorations()`，结构体定义在feature_spec.h，和园区共用)**——mod在`Layout()`里用
   `BuildingMod::AddDecoration(DecorationSpec)`指定放置的StaticMesh，`Building::Layout()`在
   `mod->Layout()`、算完body尺寸之后按**最终**`direction`换算成世界摆位：
   `BuildingLayoutLibrary::InversePoint(spec.position, face)`(和.layout模板同一个函数，face=-1按

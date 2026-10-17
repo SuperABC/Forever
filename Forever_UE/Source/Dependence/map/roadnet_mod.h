@@ -69,12 +69,14 @@ public:
 	// 小路时退化用RoadPlain，见roadnet.md。
 	std::string pathRoadMaterial;
 
-	// 工具方法(非虚,不需要重写):沿from->to(地图element单位,世界坐标)均匀种num棵树(含两端,
-	// num==1时种在中点)——只记一条请求进treeLines,每棵树的随机旋转/缩放、跳过水面和挖洞
-	// 格子都由Core统一展开,见feature_spec.md。meshPath是StaticMesh资产软路径。
-	void AddTreeLine(std::pair<float, float> from, std::pair<float, float> to, int num, float scale,
+	// 工具方法(非虚,不需要重写):在LayoutTrees里提交单棵/一排/一片树的请求,只记进trees,每棵树的
+	// 随机旋转/缩放、跳过水面和挖洞格子都由Core统一展开,见feature_spec.h的TreeRequests。路网的参考
+	// 系是整张地图(不旋转),写世界坐标就用PointParams{0,x,0,y}。宿主(Roadnet::LayoutTrees)在调完
+	// LayoutTrees之后按值拷贝走trees。
+	void AddTreeSingle(const PointParams& position, float scale, const std::string& meshPath);
+	void AddTreeLine(const PointParams& from, const PointParams& to, int num, float scale,
 		const std::string& meshPath);
-
-	// AddTreeLine记录的行道树请求,宿主(Roadnet::LayoutTrees)在调完LayoutTrees之后按值拷贝走。
-	std::vector<TreeLineRequest> treeLines;
+	void AddTreeArea(const PointParams& from, const PointParams& to, int num, float scale,
+		const std::string& meshPath);
+	TreeRequests trees;
 };

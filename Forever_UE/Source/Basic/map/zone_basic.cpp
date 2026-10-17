@@ -20,7 +20,23 @@ const char* ResidenceZone::GetName() {
 // 共享状态)。
 namespace {
 	constexpr float TARGET_ACREAGE = 20000.f;
+	// 围墙进深、大门宽度占边长的比例——Layout()铺围墙/大门、LayoutTrees()让出大门都用这两个值。
+	constexpr float WALL_DEPTH = 0.2f;
+	constexpr float GATE_WIDTH_RATIO = 0.2f;
 }
+
+// 园区自定义模型/树的测试配置(先给默认值，看过效果再调)。坐标都按"朝北"(大门在北边、quad
+// 局部y=0那条边)写，Core按园区实际大门方向旋转，见feature_spec.h的DecorationSpec/TreeRequests。
+// 急救包：大门开口两端各一个，离北边ZONE_KIT_INSET(在0.2厚的栅栏内侧)。
+#define ZONE_KIT_MESH_PATH "/Game/3rdParty/Individual_First_Aid_Kit__IFAK_Black_color_/StaticMeshes/individual_first_aid_kit_ifakblack_color.individual_first_aid_kit_ifakblack_color"
+#define ZONE_KIT_INSET 0.3f
+#define ZONE_KIT_SCALE 1.f
+#define ZONE_KIT_YAW 0.f
+// 树：沿四面栅栏内侧ZONE_TREE_INSET处每ZONE_TREE_SPACING一棵，大门开口两侧各再让出半个间距。
+#define ZONE_TREE_MESH_PATH "/Game/3rdParty/Mossy_Tree/StaticMeshes/mossy-tree.mossy-tree"
+#define ZONE_TREE_SCALE 0.6f
+#define ZONE_TREE_SPACING 1.f
+#define ZONE_TREE_INSET 0.5f
 
 void ResidenceZone::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
 	float side = sqrtf(TARGET_ACREAGE / ACREAGE_SCALE_FACTOR);
@@ -65,8 +81,6 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	// 边整段铺围墙；垂直于大门所在边的一条内部道路，从大门位置贯穿到正对面的边，把zone分成
 	// 两半——四周都是墙(大门除外)，两个半区应该只通过这条内部路互通。这些字段是ZoneMod级别的
 	// (见zone_mod.h)，对这个mod产出的所有zone一视同仁。
-	constexpr float WALL_DEPTH = 0.2f;
-	constexpr float GATE_WIDTH_RATIO = 0.2f;
 	const string wallMesh = "/Game/Asset/Meshes/Fence.Fence";
 	// wallUnit必须匹配Fence资产的实际长度——BuildWallSegment按这个值换算每段实例的缩放
 	// 倍数，估大了铺出来的实例之间会留出明显空当。
@@ -193,4 +207,44 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	}
 	internalBuildings.push_back(buildingA);
 	internalBuildings.push_back(buildingB);
+
+	// 急救包(测试园区放置mesh)：按朝北坐标写，大门在北边正中间、开口宽GATE_WIDTH_RATIO倍边长，
+	// 两个急救包放在开口两端(x=0.5∓开口半宽)、离北边ZONE_KIT_INSET的园区内侧。
+	decorations.clear();
+	for (float sign : { -1.f, 1.f }) {
+		DecorationSpec kit;
+		kit.meshPath = ZONE_KIT_MESH_PATH;
+		kit.position = { 0.5f + sign * GATE_WIDTH_RATIO * 0.5f, 0.f, 0.f, ZONE_KIT_INSET };
+		kit.scaleX = kit.scaleY = kit.scaleZ = ZONE_KIT_SCALE;
+		kit.yaw = ZONE_KIT_YAW;
+		AddDecoration(kit);
+	}
+}
+
+void ResidenceZone::LayoutTrees(int direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 按朝北坐标(大门在北边y=0，原点在quad西北角，+X东+Y南)沿四面栅栏内侧种树，Core按大门方向
+	// 旋转。位置用PointParams的ratio+offset：ratio=0/1对应西(北)/东(南)边，offset是离边的距离。
+	trees = TreeRequests();
+	const float side = quad.GetSizeX(); // 园区是正方形(Assign按TARGET_ACREAGE开方取边长)
+	const float inset = ZONE_TREE_INSET;
+	const float spacing = ZONE_TREE_SPACING;
+	auto count = [spacing](float length) { return length > 0.f ? static_cast<int>(length / spacing) + 1 : 0; };
+	auto addLine = [&](PointParams from, PointParams to, float length) {
+		int num = count(length);
+		if (num > 0) AddTreeLine(from, to, num, ZONE_TREE_SCALE, ZONE_TREE_MESH_PATH);
+		};
+
+	// 西边、东边：从北角到南角，包含两个角。
+	float sideLength = side - 2.f * inset;
+	addLine({ 0.f, inset, 0.f, inset }, { 0.f, inset, 1.f, -inset }, sideLength);
+	addLine({ 1.f, -inset, 0.f, inset }, { 1.f, -inset, 1.f, -inset }, sideLength);
+	// 南边：两个角已经被西/东边种过了，各往里收一个间距。
+	addLine({ 0.f, inset + spacing, 1.f, -inset }, { 1.f, -inset - spacing, 1.f, -inset }, sideLength - 2.f * spacing);
+	// 北边(大门边)：分成大门两侧两段，大门开口两侧各再让出半个间距(和行道树避让开口同一个规则)，
+	// 靠角的一端同样收一个间距避开西/东边已经种过的角。
+	float gateClear = GATE_WIDTH_RATIO * 0.5f * side + spacing * 0.5f;
+	float northSegment = side * 0.5f - gateClear - inset - spacing;
+	addLine({ 0.f, inset + spacing, 0.f, inset }, { 0.5f, -gateClear, 0.f, inset }, northSegment);
+	addLine({ 0.5f, gateClear, 0.f, inset }, { 1.f, -inset - spacing, 0.f, inset }, northSegment);
 }

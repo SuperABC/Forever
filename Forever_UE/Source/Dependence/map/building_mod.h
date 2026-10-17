@@ -105,7 +105,7 @@ public:
 
 	// 布局这栋building范围内的树:在整张地图(路网+园区+建筑+房间)全部生成完之后由
 	// Map::InitVegetation对每栋building调用一次,参数和Layout()一样(纯只读输入)。在这里用
-	// AddTreeArea提交请求。默认不种树。
+	// AddTreeSingle/AddTreeLine/AddTreeArea提交请求。默认不种树。
 	virtual void LayoutTrees(const Quad& quad, const std::unordered_map<int, Road*>& boundaryRoads) {}
 
 	// 楼体位置/楼层/LOD材质——按类型固定的配置，在Layout(...)里设置。
@@ -179,13 +179,15 @@ public:
 	// 门洞永远不可选中，查不到tag或者查到了mesh为空同样只是个洞，见feature_spec.h/door.h。
 	std::unordered_map<std::string, DoorSpec> doorSpecs;
 
-	// 在quad范围内均匀随机种num棵树——quad传Layout()拿到的那个building quad即可(或者它的
-	// 一部分，同一套"中心世界坐标+楼体局部轴向尺寸"约定)，Core展开时会叠加building的旋转。
-	// 只记一条请求进treeAreas，随机旋转/缩放由Core统一处理，见feature_spec.md。
-	void AddTreeArea(const Quad& quad, int num, float scale, const std::string& meshPath);
-
-	// AddTreeArea记录的请求，Map::InitVegetation在LayoutTrees()之后读取展开。
-	std::vector<TreeAreaRequest> treeAreas;
+	// 在LayoutTrees里提交单棵/一排/一片树的请求，只记进trees，随机旋转/缩放由Core统一处理，见
+	// feature_spec.h的TreeRequests。参考系是建筑quad(整块地，不是楼体footprint)，按朝北写，Core按
+	// 建筑朝向和建筑旋转换算；Map::InitVegetation在LayoutTrees()之后读取展开。
+	void AddTreeSingle(const PointParams& position, float scale, const std::string& meshPath);
+	void AddTreeLine(const PointParams& from, const PointParams& to, int num, float scale,
+		const std::string& meshPath);
+	void AddTreeArea(const PointParams& from, const PointParams& to, int num, float scale,
+		const std::string& meshPath);
+	TreeRequests trees;
 
 	// 在场景里放一个自定义StaticMesh(比如成品建筑模型)——在Layout()里调用，位置/yaw按face=2
 	// 定义，Core按建筑最终朝向自动旋转，见feature_spec.h的DecorationSpec。只在近处LOD显示。

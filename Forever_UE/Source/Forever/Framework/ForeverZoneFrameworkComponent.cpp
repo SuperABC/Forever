@@ -59,6 +59,7 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 		// 不像Building/Room那样拆到per-building的Actor——排查已经证实真凶是"owner身上组件
 		// 总数"，Zone数量级不大，没必要为了这么少的数量单独动这个结构。
 		BuildCollisionBox(zone);
+		BuildDecorations(*zone);
 
 		// 园区大门：常驻，不随LOD(围墙本身就是常驻的)。数量级和Zone本身一样小，同样直接挂
 		// 在这个组件的单例owner上，不需要per-zone的Actor。
@@ -70,6 +71,31 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 			comp->Init(door);
 			owner->AddInstanceComponent(comp);
 		}
+	}
+}
+
+void UForeverZoneFrameworkComponent::BuildDecorations(const Zone& zone) {
+	AActor* owner = GetOwner();
+	if (!owner) return;
+	for (const DecorationInstance& decoration : zone.GetDecorations()) {
+		UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, UTF8_TO_TCHAR(decoration.meshPath.c_str()));
+		if (!mesh) {
+			UE_LOG(LogTemp, Warning, TEXT("UForeverZoneFrameworkComponent::BuildDecorations: failed to load mesh %s"),
+				UTF8_TO_TCHAR(decoration.meshPath.c_str()));
+			continue;
+		}
+		// 和ABuildingElement::BuildDecorations同一套摆法：缩放是资产原尺寸的倍数，Z贴园区地坪。
+		UStaticMeshComponent* comp = NewObject<UStaticMeshComponent>(owner, NAME_None, RF_Transient);
+		comp->SetStaticMesh(mesh);
+		comp->SetupAttachment(owner->GetRootComponent());
+		comp->SetMobility(EComponentMobility::Static);
+		comp->SetGenerateOverlapEvents(false);
+		comp->SetWorldLocation(FVector(decoration.x * ZONE_WORLD_SCALE, decoration.y * ZONE_WORLD_SCALE,
+			ZONE_HEIGHT_EPSILON + decoration.z * ZONE_WORLD_SCALE));
+		comp->SetWorldRotation(FRotator(decoration.pitch, FMath::RadiansToDegrees(decoration.yaw), decoration.roll));
+		comp->SetWorldScale3D(FVector(decoration.scaleX, decoration.scaleY, decoration.scaleZ));
+		comp->RegisterComponent();
+		owner->AddInstanceComponent(comp);
 	}
 }
 

@@ -619,7 +619,9 @@ void JingRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {
 				int j = i;
 				while (j + 1 < num && keep[j + 1]) j++;
 				float s0 = treeS(i), s1 = treeS(j);
-				AddTreeLine({ ox + ux * s0, oy + uy * s0 }, { ox + ux * s1, oy + uy * s1 }, j - i + 1, TREE_SCALE, TREE_MESH_PATH);
+				// 路网的植被参考系是整张地图(不旋转)，世界坐标直接写成PointParams{0,x,0,y}。
+				AddTreeLine({ 0.f, ox + ux * s0, 0.f, oy + uy * s0 }, { 0.f, ox + ux * s1, 0.f, oy + uy * s1 },
+					j - i + 1, TREE_SCALE, TREE_MESH_PATH);
 				i = j + 1;
 			}
 		}

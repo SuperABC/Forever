@@ -659,7 +659,8 @@ void ParkBuilding::Layout(int& direction, const Quad& quad,
 
 void ParkBuilding::LayoutTrees(const Quad& quad, const std::unordered_map<int, Road*>& boundaryRoads) {
 	int num = max(1, static_cast<int>(quad.GetSizeX() * quad.GetSizeY() / PARK_ELEMENTS_PER_TREE));
-	AddTreeArea(quad, num, PARK_TREE_SCALE, PARK_TREE_MESH_PATH);
+	// 建筑植被参考系是整块quad：两个对角(0,0)-(1,1)就是整块地。
+	AddTreeArea({ 0.f, 0.f, 0.f, 0.f }, { 1.f, 0.f, 1.f, 0.f }, num, PARK_TREE_SCALE, PARK_TREE_MESH_PATH);
 }
 
 void ParkBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

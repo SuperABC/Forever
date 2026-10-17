@@ -869,7 +869,7 @@ void ABuildingElement::ClearNearSections() {
 
 void ABuildingElement::BuildDecorations() {
 	if (!building || !framework.IsValid()) return;
-	for (const BuildingDecoration& decoration : building->GetDecorations()) {
+	for (const DecorationInstance& decoration : building->GetDecorations()) {
 		UStaticMesh* mesh = framework->ResolveMesh(decoration.meshPath, nullptr);
 		if (!mesh) {
 			UE_LOG(LogTemp, Warning, TEXT("ABuildingElement::BuildDecorations: failed to load mesh %s"),

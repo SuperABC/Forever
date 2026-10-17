@@ -49,29 +49,52 @@ struct DoorSpec {
 
 // ---------------------------------------------------------------- 植被
 
-// 植被请求——mod只描述"在哪里种几棵、用什么mesh、基础缩放多少"，每棵树具体的位置/随机
+// 植被请求——mod只描述"在哪里种、种几棵、用什么mesh、基础缩放多少"，每棵树具体的位置/随机
 // 旋转/随机缩放统一由Core的Vegetation展开(见Source/Core/map/vegetation.md)，规则只有一份。
-// 坐标单位都是地图element(1=10m)。详见feature_spec.md"植被"一节。
+// 路网/园区/建筑三个宿主都支持同样的三种请求(单棵/线/面)，坐标统一用PointParams
+// (xRatio,xOffset,yRatio,yOffset，单位地图element，1=10m)，参考系由宿主决定：
+//   路网：整张地图(原点地图西北角，ratio相对地图宽高，不旋转)——直接写世界坐标就用{0,x,0,y}；
+//   园区：园区quad(原点西北角，+X东+Y南)，按"朝北"(大门在北)写，Core按大门方向+园区旋转换算；
+//   建筑：建筑quad(整块地，不是楼体footprint)，按"朝北"写，Core按建筑朝向+建筑旋转换算。
+// 详见feature_spec.md"植被"一节。
 
-// 沿from->to线段均匀种num棵(含两端，num==1时种在中点)。由RoadnetMod::AddTreeLine(在
-// RoadnetMod::LayoutTrees里)记录，
-// 坐标是世界坐标。
-struct TreeLineRequest {
-	float fromX = 0.f, fromY = 0.f;
-	float toX = 0.f, toY = 0.f;
+// 单棵树：种在position处。
+struct TreeSingleSpec {
+	PointParams position{};
+	float scale = 1.f;
+	std::string meshPath;
+};
+
+// 一排树：沿from->to均匀种num棵(含两端，num==1时种在中点)。
+struct TreeLineSpec {
+	PointParams from{};
+	PointParams to{};
 	int num = 0;
 	float scale = 1.f;
 	std::string meshPath;
 };
 
-// 在quad范围内均匀随机种num棵。由BuildingMod::AddTreeArea(在BuildingMod::LayoutTrees里)记录，
-// quad就是LayoutTrees()拿到的那个
-// building quad(中心是世界坐标，尺寸沿楼体局部轴向)，Core展开时再叠加building的旋转。
-struct TreeAreaRequest {
-	Quad quad;
+// 一片树：from/to是一个矩形的两个对角，在矩形内均匀随机种num棵。矩形沿宿主参考系的轴向，
+// 宿主旋转时跟着一起转。
+struct TreeAreaSpec {
+	PointParams from{};
+	PointParams to{};
 	int num = 0;
 	float scale = 1.f;
 	std::string meshPath;
+};
+
+// 三种请求的统一存储——RoadnetMod/ZoneMod/BuildingMod各持有一份(成员trees)，它们的
+// AddTreeSingle/AddTreeLine/AddTreeArea都转发到这里。mod只往自己对象的这份容器里写，Core只读，
+// 不跨DLL释放内存。num<=0或meshPath为空的请求直接忽略。
+struct TreeRequests {
+	std::vector<TreeSingleSpec> singles;
+	std::vector<TreeLineSpec> lines;
+	std::vector<TreeAreaSpec> areas;
+
+	void AddSingle(const PointParams& position, float scale, const std::string& meshPath);
+	void AddLine(const PointParams& from, const PointParams& to, int num, float scale, const std::string& meshPath);
+	void AddArea(const PointParams& from, const PointParams& to, int num, float scale, const std::string& meshPath);
 };
 
 // ---------------------------------------------------------------- 建筑自定义模型
@@ -86,4 +109,16 @@ struct DecorationSpec {
 	float z = 0.f;                               // 离地高度(地图单位)
 	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f; // 资产原尺寸的倍数(不做包围盒拟合)
 	float yaw = 0.f, pitch = 0.f, roll = 0.f;    // 度；yaw按face=2定义，会叠加朝向和建筑旋转
+};
+
+// DecorationSpec按宿主(建筑/园区)的最终朝向换算好的世界摆位——Core算好、UE层只读：x/y是世界地图
+// 坐标(地图单位)，z是离地高度(地图单位)，yaw是世界朝向(弧度，已叠加朝向和宿主旋转)，pitch/roll是度
+// (不随朝向变)，scale是资产原尺寸的倍数。建筑(Building::GetDecorations)和园区(Zone::GetDecorations)
+// 共用这一个结构。
+struct DecorationInstance {
+	std::string meshPath;
+	float x = 0.f, y = 0.f, z = 0.f;
+	float yaw = 0.f;
+	float pitch = 0.f, roll = 0.f;
+	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f;
 };

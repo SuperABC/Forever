@@ -88,6 +88,15 @@
 归属，和`Map::ConnectZoneAccessPoint`同一个思路)。由`Map::InitZones()`在
 `zone->Layout(direction)`之后调用一次，详见`door.md`。
 
+### 朝向、自定义模型和树的坐标换算
+
+`Layout(direction)`另外记下`direction`(大门方向，`GetDirection()`)。`NorthPointToWorld(PointParams)`
+把"朝北"定义的园区quad坐标(原点西北角)按`direction`用`BuildingLayoutLibrary::InversePoint`旋转，
+转成中心原点后按`GetRotation()`旋转加上中心——和`Map::ZoneLocalToWorld`同一套旋转写法；
+`NorthYawToWorld`叠加`FaceYawDegrees(direction)`和`GetRotation()`。`Layout()`之后把`mod->decorations`
+换算成`GetDecorations()`(`DecorationInstance`，和建筑共用)；`Map::InitVegetation`用同一个函数把
+`mod->trees`里的树请求换成世界坐标(拆成`NorthPointToLocal`+`LocalToWorld`两步，种一片树要在局部坐标里取矩形)。direction为-1时按朝北原样处理。
+
 ## 依赖关系
 
 - 依赖：`map/zone_mod.h`、`map/zone_factory.h`、`map/general_geometry.h`（`Quad`/`Lot`）、

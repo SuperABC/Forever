@@ -138,6 +138,21 @@
   （Forever层拿`Pure`材质+`SetVectorParameterValue("Color", ...)`染灰，不强制要求mod提供
   专门的灰色资产）。渲染细节见`Source/Forever/Framework/ForeverBuildingFrameworkComponent.md`。
 
+### 园区自定义模型和树(`AddDecoration`/`LayoutTrees`/`AddTreeLine`)
+
+和建筑同一套接口(都是末尾新增的非虚成员，外加一个有默认空实现的虚函数`LayoutTrees`)：
+- `AddDecoration(DecorationSpec)`在`Layout()`里调用。园区没有footprint，`position`是相对园区quad
+  (原点在西北角，+X东+Y南)的`PointParams`，按"朝北"(大门在北边y=0)定义；Core按Assign选中的大门
+  方向用`InversePoint`旋转、yaw叠加`FaceYawDegrees`和园区自身旋转(`Zone::NorthPointToWorld`/
+  `NorthYawToWorld`)。园区没有LOD，UE层常驻显示。
+- `LayoutTrees(direction, quad, boundaryRoads)`在整张地图生成完之后由`Map::InitVegetation`调用一次，
+  里面用`AddTreeSingle/AddTreeLine/AddTreeArea`提交单棵/一排/一片树(和路网、建筑同样的三种请求，见`feature_spec.md`)——坐标同样按朝北定义
+  (这一点和建筑的`AddTreeArea`不同：建筑的quad不做朝向旋转；园区统一按朝北写，mod只写一份就适配
+  四个朝向)。随机旋转/缩放、跳过水面和挖洞格子都走Core的`Vegetation`。
+- `ResidenceZone`的测试：大门开口两端内侧各放一个急救包(`ZONE_KIT_*`)；沿四面栅栏内侧
+  `ZONE_TREE_INSET`处每`ZONE_TREE_SPACING`种一棵Mossy_Tree，西/东边含两个角，南/北边各收一个间距避开
+  角，北边(大门边)分两段、大门开口两侧各让出半个间距(和行道树避让开口同一个规则)。
+
 ## 依赖关系
 
 - 依赖：`map/general_geometry.h`（`Lot`、`LotPlacementRequest`、`PlacementEmitFunc`、

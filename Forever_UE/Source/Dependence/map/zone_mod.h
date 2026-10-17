@@ -112,6 +112,27 @@ public:
 	std::vector<ZoneInternalRoadSpec> internalRoads;
 	std::vector<ZoneInternalBuildingSpec> internalBuildings;
 
+	// 在园区里放一个自定义StaticMesh——在Layout()里调用。和建筑的AddDecoration同一套约定，只是
+	// 园区没有footprint：DecorationSpec::position是相对园区quad(原点在西北角)的PointParams，按
+	// "朝北"(大门在北)定义，Core按园区实际朝向(direction)和自身旋转换算。常驻显示(园区没有LOD)。
+	void AddDecoration(const DecorationSpec& spec);
+	std::vector<DecorationSpec> decorations;
+
+	// 布局园区里的树：在整张地图(路网+园区+建筑+房间)全部生成完之后由Map::InitVegetation调用一次，
+	// 参数和Layout()一样(纯只读输入)。在这里用AddTreeSingle/AddTreeLine/AddTreeArea提交请求。默认不种树。
+	virtual void LayoutTrees(int direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) {}
+
+	// 在LayoutTrees里提交单棵/一排/一片树的请求，只记进trees，随机旋转/缩放、跳过水面和挖洞格子
+	// 都由Core统一处理，见feature_spec.h的TreeRequests。参考系是园区quad，按朝北(大门在北)写，Core
+	// 按大门方向和园区旋转换算。
+	void AddTreeSingle(const PointParams& position, float scale, const std::string& meshPath);
+	void AddTreeLine(const PointParams& from, const PointParams& to, int num, float scale,
+		const std::string& meshPath);
+	void AddTreeArea(const PointParams& from, const PointParams& to, int num, float scale,
+		const std::string& meshPath);
+	TreeRequests trees;
+
 	// 不再是虚方法——不需要任何实例状态，改成子类必须实现的static方法，通过
 	// ZoneFactory::RegisterZone的额外参数注册，详见zone_factory.h：
 	//   static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
