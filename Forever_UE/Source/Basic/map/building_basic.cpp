@@ -686,3 +686,77 @@ float ParkBuilding::GetPower(AREA_TYPE area) {
 	}
 	return 0.f;
 }
+
+// Mohar模型和它的默认摆位(先给默认值，看过效果再调)：位置是楼体局部的PointParams
+// (xRatio,xOffset,yRatio,yOffset)，按face=2(朝北)定义；Z是离地高度(地图单位)；缩放是资产原尺寸
+// 的倍数；YAW是度，同样按朝北定义——实际朝向不同时Core会自动旋转，见feature_spec.h的DecorationSpec。
+#define MOHAR_MESH_PATH "/Game/3rdParty/Mohar/StaticMeshes/mohar.mohar"
+#define MOHAR_POS_X_RATIO 0.5f
+#define MOHAR_POS_X_OFFSET 0.f
+#define MOHAR_POS_Y_RATIO 0.5f
+#define MOHAR_POS_Y_OFFSET 0.f
+#define MOHAR_Z 0.f
+#define MOHAR_SCALE_XY 0.06f
+#define MOHAR_SCALE_Z 0.04f
+#define MOHAR_YAW 0.f
+
+int MoharBuilding::count = 0;
+
+MoharBuilding::MoharBuilding() : id(count++) {
+}
+
+const char* MoharBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void MoharBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 和ResidenceBuilding一样：FillRemainder落地传进来的是-1，模型朝向要靠direction决定，
+	// 所以从有真实边界路的方向里随机挑一个回写。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	// 0层：不放楼体，只有自定义模型。
+	basements = 0;
+	layers = 0;
+	floorHeights.clear();
+
+	DecorationSpec spec;
+	spec.meshPath = MOHAR_MESH_PATH;
+	spec.position = { MOHAR_POS_X_RATIO, MOHAR_POS_X_OFFSET, MOHAR_POS_Y_RATIO, MOHAR_POS_Y_OFFSET };
+	spec.z = MOHAR_Z;
+	spec.scaleX = spec.scaleY = MOHAR_SCALE_XY;
+	spec.scaleZ = MOHAR_SCALE_Z;
+	spec.yaw = MOHAR_YAW;
+	AddDecoration(spec);
+}
+
+void MoharBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+}
+
+float MoharBuilding::RandomAcreage() {
+	return 3000.f + GetRandom(1000) / 1000.f * 5000.f;
+}
+
+float MoharBuilding::GetAcreageMin() {
+	return 3000.f;
+}
+
+float MoharBuilding::GetAcreageMax() {
+	return 8000.f;
+}
+
+float MoharBuilding::GetPower(AREA_TYPE area) {
+	if (area == AREA_RESIDENTIAL_HIGH || area == AREA_RESIDENTIAL_MIDDLE || area == AREA_RESIDENTIAL_LOW) {
+		return 1.f;
+	}
+	return 0.f;
+}

@@ -733,6 +733,39 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	}
 	lodMaterialPath = mod->lodMaterial;
 
+	// 自定义模型：位置/yaw按face=2(模板原样)定义，按最终朝向用和楼层模板同一个InversePoint
+	// 换算(direction==-1没有朝向，按原样处理)，再经LocalToWorld叠加建筑自身的世界旋转。yaw的
+	// 朝向偏移和InversePoint的点映射是同一个旋转：face0把(1,0)转到(0,-1)即-90°(=270°)，face1
+	// 转到(0,1)即+90°，face3是180°——和老工程BuildingMod::AddDecoration的偏移一致。
+	decorations.clear();
+	{
+		const float degToRad = 3.14159265358979323846f / 180.f;
+		int face = (direction >= 0 && direction < 4) ? direction : FACE_NORTH;
+		float faceYawDegrees = 0.f;
+		switch (face) {
+		case FACE_WEST: faceYawDegrees = 270.f; break;
+		case FACE_EAST: faceYawDegrees = 90.f; break;
+		case FACE_SOUTH: faceYawDegrees = 180.f; break;
+		default: break;
+		}
+		for (const DecorationSpec& spec : mod->decorations) {
+			PointParams p = BuildingLayoutLibrary::InversePoint(spec.position, face);
+			auto [worldX, worldY] = LocalToWorld(p[0] * bodySizeX + p[1], p[2] * bodySizeY + p[3]);
+			BuildingDecoration decoration;
+			decoration.meshPath = spec.meshPath;
+			decoration.x = worldX;
+			decoration.y = worldY;
+			decoration.z = spec.z;
+			decoration.yaw = GetRotation() + (faceYawDegrees + spec.yaw) * degToRad;
+			decoration.pitch = spec.pitch;
+			decoration.roll = spec.roll;
+			decoration.scaleX = spec.scaleX;
+			decoration.scaleY = spec.scaleY;
+			decoration.scaleZ = spec.scaleZ;
+			decorations.push_back(decoration);
+		}
+	}
+
 	// 楼层：先按human-friendly层号(-basements..layers-1)全部占位建出空Floor，
 	// 再用mod->floors记录的模板一个个填充——这样即使mod漏配了某一层，GetFloor(level)也
 	// 返回一个"没有任何元素"的空Floor而不是nullptr，渲染层不用特殊处理这种情况。
@@ -939,6 +972,7 @@ int Building::GetBasementCount() const { return basements; }
 int Building::GetLayerCount() const { return layers; }
 const vector<float>& Building::GetFloorHeights() const { return floorHeights; }
 const string& Building::GetLodMaterialPath() const { return lodMaterialPath; }
+const vector<BuildingDecoration>& Building::GetDecorations() const { return decorations; }
 
 const Floor* Building::GetFloor(int level) const {
 	int idx = basements + level;

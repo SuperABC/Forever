@@ -155,7 +155,8 @@ extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 
 extern "C" __declspec(dllexport) void* GetModBuildings() {
 	static vector<string> mods = { ResidenceBuilding::GetId(), ShopBuilding::GetId(), FactoryBuilding::GetId(),
-		TrainStationBuilding::GetId(), AirportBuilding::GetId(), ParkBuilding::GetId() };
+		TrainStationBuilding::GetId(), AirportBuilding::GetId(), ParkBuilding::GetId(),
+		MoharBuilding::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
@@ -189,6 +190,11 @@ extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* fact
 		[](BuildingMod* m) { delete m; },
 		&ParkBuilding::RandomAcreage, &ParkBuilding::GetAcreageMin, &ParkBuilding::GetAcreageMax,
 		&ParkBuilding::GetPower, &ParkBuilding::Assign);
+	factory->RegisterBuilding(MoharBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new MoharBuilding(); },
+		[](BuildingMod* m) { delete m; },
+		&MoharBuilding::RandomAcreage, &MoharBuilding::GetAcreageMin, &MoharBuilding::GetAcreageMax,
+		&MoharBuilding::GetPower, &MoharBuilding::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {
 }

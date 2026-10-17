@@ -182,4 +182,11 @@ public:
 
 	// AddTreeArea记录的请求，Map::InitVegetation在LayoutTrees()之后读取展开。
 	std::vector<TreeAreaRequest> treeAreas;
+
+	// 在场景里放一个自定义StaticMesh(比如成品建筑模型)——在Layout()里调用，位置/yaw按face=2
+	// 定义，Core按建筑最终朝向自动旋转，见feature_spec.h的DecorationSpec。只在近处LOD显示。
+	void AddDecoration(const DecorationSpec& spec);
+
+	// AddDecoration记录的模型，Building::Layout()在mod->Layout()之后读取换算。
+	std::vector<DecorationSpec> decorations;
 };

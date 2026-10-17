@@ -74,3 +74,26 @@ mod只负责"提请求"，Core把请求展开成一棵棵树，UE层统一渲染
 
 - 依赖：`map/general_geometry.h`（`Quad`）。
 - 被谁依赖：`roadnet_mod.h`、`building_mod.h`、`Source/Core/map/vegetation.h`。
+
+## 建筑自定义模型(`DecorationSpec`)
+
+### 职责
+
+建筑mod在`Layout()`里用`BuildingMod::AddDecoration(spec)`指定在场景里放一个StaticMesh(比如一整栋
+建筑的成品模型)，给出位置/离地高度/缩放/旋转。照搬老工程(`E:\Projects\Forever_UE`)
+`BuildingMod::AddDecoration`的特性：位置和yaw按一个固定朝向定义，实际朝向不同时自动旋转。
+
+### 关键设计
+
+- **朝向约定和楼层模板一致**：`position`是楼体局部的`PointParams`(xRatio,xOffset,yRatio,yOffset，原点
+  在楼体左下角，ratio相对楼体宽高)，按face=2(`FACE_NORTH`，模板"原样"那个朝向)定义；Core在
+  `Building::Layout()`里按建筑最终`direction`调`BuildingLayoutLibrary::InversePoint`换算——和
+  .layout模板里的楼梯/房间用的是同一个函数，所以模型和楼层布局永远一起转。yaw按同一个旋转叠加
+  (face0=+270°、face1=+90°、face2=0、face3=+180°，和老工程一致)，再叠加建筑自身的世界旋转。
+- `z`/`scale*`/`pitch`/`roll`不随朝向变化；缩放是资产原尺寸的倍数，不像楼梯那样按包围盒拟合。
+- 只在建筑近处LOD显示，见`Source/Forever/Element/BuildingElement.md`。
+
+### 依赖关系
+
+- 依赖：`map/general_geometry.h`(`PointParams`)。
+- 被谁依赖：`building_mod.h`(`decorations`)、`Source/Core/map/building.h`(换算成`BuildingDecoration`)。

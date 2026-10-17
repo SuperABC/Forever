@@ -300,6 +300,18 @@ struct BuildingNavResult {
 	std::vector<Node*> vehicleOutsideNodes;
 };
 
+// 建筑mod用BuildingMod::AddDecoration指定放置的一个StaticMesh，Building::Layout()按建筑最终
+// 朝向换算好的世界摆位：x/y是世界地图坐标(地图单位)，z是离地高度(地图单位)，yaw是世界朝向
+// (弧度，已叠加朝向和建筑旋转)，pitch/roll是度(不随朝向变)，scale是资产原尺寸的倍数。
+// UE层只在近处LOD按这份数据生成组件，见building.md"自定义模型"一节。
+struct BuildingDecoration {
+	std::string meshPath;
+	float x = 0.f, y = 0.f, z = 0.f;
+	float yaw = 0.f;
+	float pitch = 0.f, roll = 0.f;
+	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f;
+};
+
 // Building：持有一个具体BuildingMod实例，代表一栋已经落地的Building（继承Quad表示自己
 // 占据的矩形）。楼体footprint(基本形状)+楼层高度是Building自己的字段；每层楼内部具体
 // 长什么样(墙/走廊/房间/楼梯/电梯/坡道/导航)由mod在Layout()里通过AssignFloor/AssignRoom/
@@ -357,6 +369,8 @@ public:
 	int GetLayerCount() const;
 	const std::vector<float>& GetFloorHeights() const; // 长度basements+layers，从下到上
 	const std::string& GetLodMaterialPath() const;
+	// mod->decorations按最终朝向换算后的世界摆位，见BuildingDecoration。
+	const std::vector<BuildingDecoration>& GetDecorations() const;
 
 	// 按level(0=1楼，-1=地下一层……)查一层的实例化数据，查不到返回nullptr。
 	const Floor* GetFloor(int level) const;
@@ -469,6 +483,7 @@ private:
 	int layers = 1;
 	std::vector<float> floorHeights;
 	std::string lodMaterialPath;
+	std::vector<BuildingDecoration> decorations;
 
 	std::vector<Floor> floors;
 	std::vector<Component*> components;

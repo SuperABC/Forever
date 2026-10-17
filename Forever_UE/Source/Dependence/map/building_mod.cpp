@@ -37,3 +37,8 @@ void BuildingMod::AddTreeArea(const Quad& quad, int num, float scale, const stri
 	if (num <= 0 || meshPath.empty()) return;
 	treeAreas.push_back(TreeAreaRequest{ quad, num, scale, meshPath });
 }
+
+void BuildingMod::AddDecoration(const DecorationSpec& spec) {
+	if (spec.meshPath.empty()) return;
+	decorations.push_back(spec);
+}

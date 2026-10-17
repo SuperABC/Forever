@@ -15,6 +15,13 @@
 
 ## 关键设计
 
+- **自定义模型(`BuildingDecoration`/`GetDecorations()`)**——mod在`Layout()`里用
+  `BuildingMod::AddDecoration(DecorationSpec)`指定放置的StaticMesh，`Building::Layout()`在
+  `mod->Layout()`、算完body尺寸之后按**最终**`direction`换算成世界摆位：
+  `BuildingLayoutLibrary::InversePoint(spec.position, face)`(和.layout模板同一个函数，face=-1按
+  `FACE_NORTH`原样处理)得到楼体局部点，`LocalToWorld`转世界坐标；yaw=`GetRotation()`+朝向偏移
+  (face0=270°/face1=90°/face2=0/face3=180°，和InversePoint的点映射是同一个旋转)+`spec.yaw`。
+  所以模型和楼层布局一样跟着建筑朝向转。UE层只在近处LOD生成，见`BuildingElement.md`。
 - **允许0层建筑**——`Layout()`里`layers = max(0, mod->layers)`（以前强制至少1层）。
   `basements`和`layers`都为0时整栋没有任何`Floor`，`GetFloor(level)`恒返回nullptr，导航/门/
   hatch转发这些按`floors`或`mod->floors`遍历的循环自然什么都不做。给`ParkBuilding`这类只有植被、

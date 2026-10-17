@@ -73,3 +73,17 @@ struct TreeAreaRequest {
 	float scale = 1.f;
 	std::string meshPath;
 };
+
+// ---------------------------------------------------------------- 建筑自定义模型
+
+// DecorationSpec：建筑mod在场景里指定放置的一个StaticMesh(BuildingMod::AddDecoration记录)。
+// 位置/yaw都按face=2(楼层模板"原样"那个朝向)定义，Core在Building::Layout()里按建筑最终朝向
+// 用和楼层模板同一套InversePoint换算旋转，再叠加建筑自身的世界旋转——所以模型会跟着建筑
+// 朝向一起转。z/缩放/pitch/roll不随朝向变化。详见feature_spec.md"建筑自定义模型"一节。
+struct DecorationSpec {
+	std::string meshPath;                        // StaticMesh资产软路径
+	PointParams position{ 0.5f, 0.f, 0.5f, 0.f }; // 楼体局部(xRatio,xOffset,yRatio,yOffset)，和.layout模板PointParams同一套约定，默认楼体中心
+	float z = 0.f;                               // 离地高度(地图单位)
+	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f; // 资产原尺寸的倍数(不做包围盒拟合)
+	float yaw = 0.f, pitch = 0.f, roll = 0.f;    // 度；yaw按face=2定义，会叠加朝向和建筑旋转
+};

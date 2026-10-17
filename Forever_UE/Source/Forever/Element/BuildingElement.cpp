@@ -242,6 +242,10 @@ void ABuildingElement::Init(Building* inBuilding, UForeverBuildingFrameworkCompo
 	farMesh->SetMobility(EComponentMobility::Static); // 整个组件自己不会移动(section增删不算"移动")
 	farMesh->RegisterComponent();
 
+	// 0层建筑(只有自定义模型/植被，没有楼体)：远处方块和进出触发盒高度都是0，没有意义，不建——
+	// 远处LOD什么都不显示，自定义模型只在近处出现，见BuildingElement.md"自定义模型"一节。
+	if (nearFloorCount == 0) return;
+
 	BuildFarSection();
 	// building自己的进入/离开碰撞盒 + 这栋楼所有Room各自的碰撞盒——都常驻到这个Element被
 	// 销毁，不随近/远LOD切换增删。之前排查"碰撞盒常驻数量拖慢注册"时临时禁用过，结论已经
@@ -257,7 +261,7 @@ void ABuildingElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 }
 
 void ABuildingElement::BuildFarSection() {
-	if (!farMesh || !building || !framework.IsValid()) return;
+	if (!farMesh || !building || !framework.IsValid() || nearFloorCount == 0) return;
 
 	float cx, cy;
 	ComputeBodyWorldCenter(*building, cx, cy);
@@ -849,6 +853,38 @@ void ABuildingElement::ClearNearSections() {
 		cabin.comp->DestroyComponent();
 	}
 	cabins.Empty();
+	for (UStaticMeshComponent* comp : nearDecorations) {
+		if (!comp) continue;
+		RemoveInstanceComponent(comp);
+		comp->DestroyComponent();
+	}
+	nearDecorations.Empty();
+}
+
+void ABuildingElement::BuildDecorations() {
+	if (!building || !framework.IsValid()) return;
+	for (const BuildingDecoration& decoration : building->GetDecorations()) {
+		UStaticMesh* mesh = framework->ResolveMesh(decoration.meshPath, nullptr);
+		if (!mesh) {
+			UE_LOG(LogTemp, Warning, TEXT("ABuildingElement::BuildDecorations: failed to load mesh %s"),
+				UTF8_TO_TCHAR(decoration.meshPath.c_str()));
+			continue;
+		}
+		// 世界摆位Core已经按建筑朝向换算好；Z和楼层同一个地面基准(BUILDING_HEIGHT_EPSILON)。
+		// 缩放是资产原尺寸的倍数，不像楼梯那样按单位立方体拟合(SpawnMesh的约定不适用)。
+		UStaticMeshComponent* comp = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
+		comp->SetStaticMesh(mesh);
+		comp->SetupAttachment(elementRoot);
+		comp->SetMobility(EComponentMobility::Static);
+		comp->SetGenerateOverlapEvents(false);
+		comp->SetWorldLocation(FVector(decoration.x * BUILDING_WORLD_SCALE, decoration.y * BUILDING_WORLD_SCALE,
+			BUILDING_HEIGHT_EPSILON + decoration.z * BUILDING_WORLD_SCALE));
+		comp->SetWorldRotation(FRotator(decoration.pitch, FMath::RadiansToDegrees(decoration.yaw), decoration.roll));
+		comp->SetWorldScale3D(FVector(decoration.scaleX, decoration.scaleY, decoration.scaleZ));
+		comp->RegisterComponent();
+		AddInstanceComponent(comp);
+		nearDecorations.Add(comp);
+	}
 }
 
 void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
@@ -877,6 +913,9 @@ void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
 	case ELodOpType::BuildDoorBatch:
 		BuildDoorBatch();
 		break;
+	case ELodOpType::BuildDecorations:
+		BuildDecorations();
+		break;
 	}
 }
 
@@ -901,9 +940,12 @@ void ABuildingElement::Tick(float DeltaTime) {
 			for (int32 i = 0; i < nearFloorCount; i++) {
 				floorTierOpQueue.Enqueue({ ELodOpType::BuildFloorMesh, i });
 			}
+			// 自定义模型单独一条操作，不跟楼层/门一起建，但和楼层同一个优先级(楼层级队列)。
+			int32 decorationOps = building->GetDecorations().empty() ? 0 : 1;
+			if (decorationOps > 0) floorTierOpQueue.Enqueue({ ELodOpType::BuildDecorations, -1 });
 			floorTierOpQueue.Enqueue({ ELodOpType::BuildElevatorCabins, -1 });
 			floorTierOpQueue.Enqueue({ ELodOpType::DeleteFarMesh, -1 });
-			framework->NotifyFloorTierOpEnqueued(nearFloorCount + 2);
+			framework->NotifyFloorTierOpEnqueued(nearFloorCount + decorationOps + 2);
 
 			// 门和楼层分开排队：Door*生成时就和LOD状态无关，不需要等楼层先建完再发现门，
 			// 这里一次性收集好、按批次排进低优先级的doorTierOpQueue，见

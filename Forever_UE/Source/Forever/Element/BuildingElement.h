@@ -75,6 +75,7 @@ private:
 		BuildElevatorCabins, // 远->近，所有BuildFloorMesh之后、DeleteFarMesh之前
 		DeleteFarMesh,       // 远->近，最后一步(执行完才更新currentLod)
 		BuildDoorBatch,      // 远->近，DeleteFarMesh之后，每条最多处理GetMaxDoorsPerOp()扇门
+		BuildDecorations,    // 远->近，所有BuildFloorMesh之后、BuildElevatorCabins之前(楼层级队列，优先级高于门)
 	};
 
 	struct FLodOp {
@@ -95,6 +96,9 @@ private:
 	void BuildFarSection();
 	void BuildFloorSection(int32 floorIndex);
 	void BuildElevatorCabinsForBuilding();
+	// mod用AddDecoration指定的自定义模型(Building::GetDecorations()，世界摆位Core已经按朝向
+	// 换算好)，近处LOD专属，ClearNearSections一并清理。
+	void BuildDecorations();
 	void ClearNearSections();
 	void ClearFarSection();
 	void ExecuteLodOp(const FLodOp& op);
@@ -203,6 +207,8 @@ private:
 	TArray<TArray<TObjectPtr<UForeverDoorComponent>>> nearDoorsByFloor;
 	// 电梯轿厢，近处LOD专属，DeleteAllNearMeshes时一并清空。
 	TArray<FCabin> cabins;
+	// 自定义模型(BuildDecorations产出)，近处LOD专属，DeleteAllNearMeshes时一并清空。
+	TArray<TObjectPtr<UStaticMeshComponent>> nearDecorations;
 
 	// 两个队列按优先级分桶，不是一个混合队列——分别对应"楼层级"(墙体/楼梯/电梯井/地板
 	// 天花板/远近切换)和"门级"操作。必须分开：如果混在一个FIFO队列里，一栋楼门操作还没

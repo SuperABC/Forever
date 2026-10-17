@@ -70,6 +70,15 @@
 `RandomAcreage`在3000~8000之间。没有room/component，`basic.cpp`里不需要依赖表条目；
 `config.json`的`building_mods`里要有`"building_park"`才会启用。UE层跳过0层建筑不渲染楼体。
 
+## MoharBuilding
+
+`building_mohar`：0层(不放楼体)，`Layout()`里用`AddDecoration`在楼体中心放`3rdParty/Mohar`的成品
+建筑模型，测试"建筑mod指定放置mesh、随朝向旋转"(见`feature_spec.md`"建筑自定义模型"一节)。
+direction为-1时和Residence一样从有路的边界里随机挑一个方向回写——模型朝向靠它决定。默认摆位
+(楼体中心、离地0、缩放xy 0.06、z 0.04、yaw 0，按朝北定义)写成文件里的`MOHAR_*`宏，方便按实际效果调。走权重
+CDF随机填充：住宅三档权重1，`RandomAcreage`在3000~8000之间；没有room/component；`config.json`
+的`building_mods`里要有`"building_mohar"`。
+
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/building_mod.h`(`BuildingMod`基类)、`room_basic.h`

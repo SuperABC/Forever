@@ -159,7 +159,20 @@ owner，被物理引擎的碰撞体焊接开销拖累）。这次直接把这部
 `BuildWallsForElement`挖洞逻辑不知道、也不需要知道这个洞有没有真正的门扇，见
 `Source/Core/map/door.md`/`Source/Forever/Element/DoorComponent.md`。
 
-## 依赖关系
+### 自定义模型：楼层级队列里单独一条`BuildDecorations`操作，只在近处显示
+
+mod用`BuildingMod::AddDecoration`指定的StaticMesh(`Building::GetDecorations()`，世界摆位Core已经按
+建筑朝向换算好，见`Source/Core/map/building.md`)不跟楼层/门一起建：远->近时排一条单独的
+`ELodOpType::BuildDecorations`，放在所有`BuildFloorMesh`之后、`BuildElevatorCabins`之前，进
+`floorTierOpQueue`——和楼层同一个优先级，高于门(`NotifyFloorTierOpEnqueued`的计数相应+1)，
+没有自定义模型的建筑不排这一条。每个模型一个Static的`UStaticMeshComponent`
+(`framework->ResolveMesh`全局按软路径缓存)，Z和楼层同一个地面基准`BUILDING_HEIGHT_EPSILON`，缩放
+是资产原尺寸的倍数(不按单位立方体拟合，`SpawnMesh`的约定不适用)，碰撞用资产自带的。存在
+`nearDecorations`里，`ClearNearSections`(近->远)一并销毁——只在近处显示。
+
+0层建筑(`nearFloorCount==0`，比如`MoharBuilding`)：`Init`不建远处方块和进出触发盒(高度都是0)，
+`BuildFarSection`也直接跳过，远处LOD什么都不显示。
+
 
 - 依赖：`Source/Forever/Framework/ForeverBuildingFrameworkComponent.h`（`framework`弱引用
   回调）、`map/map.h`/`map/building.h`/`map/room.h`/`map/door.h`/`map/general_geometry.h`

@@ -182,3 +182,30 @@ private:
 	int id;
 	std::string name;
 };
+
+// Mohar：0层(不放楼体)，在楼体中心用BuildingMod::AddDecoration放一个成品建筑模型
+// (3rdParty/Mohar)，测试"建筑mod指定放置mesh、随建筑朝向旋转"这个特性。走权重CDF随机填充
+// (住宅分区权重1)，不做显式占位。详见building_basic.md。
+class MoharBuilding : public BuildingMod {
+public:
+	MoharBuilding();
+
+	static const char* GetId() { return "building_mohar"; }
+	virtual const char* GetType() const override { return "building_mohar"; }
+	virtual const char* GetName() override;
+
+	// direction==-1时从boundaryRoads里随机挑一个有路的方向回写(模型要靠它决定朝向)。
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+private:
+	static int count;
+	int id;
+	std::string name;
+};
