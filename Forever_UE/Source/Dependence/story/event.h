@@ -145,6 +145,10 @@ public:
 	* @context: 变量路由上下文
 	*/
 	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.<字段>读这个事件的字段(local.name/local.option)，没有这个字段返回{false, ...}
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置目标名称
@@ -891,6 +895,15 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，name/reason是表达式，留空表示不限(任何市民/任何死因)，
+	* 和OptionDialogEvent::Match同一个写法
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.<字段>读这个事件的字段(local.name/local.reason)，没有这个字段返回{false, ...}
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置市民姓名

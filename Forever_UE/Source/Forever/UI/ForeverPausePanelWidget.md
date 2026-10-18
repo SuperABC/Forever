@@ -1,7 +1,7 @@
 # ForeverPausePanelWidget
 
 ## 职责
-游戏内暂停界面：`Tab`(按键绑定`TogglePause`，可在`KeyBindings.ini`里改)打开/关闭，打开时把全局时间缩放设成0暂停世界，提供"保存""加载"两个按钮，各自弹出文件对话框，实际读写交给`UForeverSaveSubsystem`。存档整体方案见仓库根目录`SAVE_PLAN.md`。
+游戏内暂停界面：`Tab`(按键绑定`TogglePause`，可在`KeyBindings.ini`里改)打开/关闭，打开时把全局时间缩放设成0暂停世界，提供"保存""加载"两个按钮，各自弹出文件对话框，实际读写交给`UForeverSaveSubsystem`。存档系统总说明见`Source/Core/common/save.md`。
 
 ## 关键设计
 - 由`AForeverPlayerController::BeginPlay`常驻创建(`pauseWidgetClass`，`AddToViewport(10)`盖在其它常驻Widget上面)，`NativeConstruct`里默认`Collapsed`。
@@ -22,4 +22,4 @@
 - 被谁依赖：`Player/ForeverPlayerController`。
 
 ## 待办/后续阶段
-- 保存前的UE侧状态同步、对话/谜题进行中拒绝保存放在存档P6，见`SAVE_PLAN.md`。
+- 无。保存前的UE侧状态同步、对话/谜题进行中拒绝保存已经在`UForeverSaveSubsystem::SaveToFile`里做了，见`ForeverSaveSubsystem.md`。

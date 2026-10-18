@@ -211,14 +211,27 @@ void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& nam
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
 
-	CitizenDeceaseEvent event(string(TCHAR_TO_UTF8(*name)), string(TCHAR_TO_UTF8(*reason)));
+	string nameUtf8 = TCHAR_TO_UTF8(*name);
+	CitizenDeceaseEvent event(nameUtf8, string(TCHAR_TO_UTF8(*reason)));
 
-	ScriptContext context;
-	context.self = story->GetMainScript();
-	context.system = story->GetSystemScript();
-	context.local = &event;
-	ProcessScriptActions(framework, story->GetMainScript() ? story->GetMainScript()->MatchEvent(&event, context, &postImplement)
-		: vector<ScriptAction>(), context);
+	auto matchOne = [&](Script* script) {
+		if (!script) return;
+		ScriptContext context;
+		context.self = script;
+		context.system = story->GetSystemScript();
+		context.local = &event;
+		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
+		};
+
+	// 和OptionDialog同一个模式：主线脚本 + 死者自己的Scheduler脚本(按name找)。死亡时只销毁了
+	// UE侧的Actor，Core里的Citizen还在(标记为死亡)，这时它的Scheduler脚本仍然有效。
+	matchOne(story->GetMainScript());
+
+	Populace* populace = framework ? framework->GetPopulace() : nullptr;
+	Citizen* target = populace ? populace->FindCitizenByName(nameUtf8) : nullptr;
+	if (target && target->GetScheduler()) {
+		matchOne(target->GetScheduler()->GetScript());
+	}
 }
 
 void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context) {

@@ -66,9 +66,25 @@ void UForeverDoorComponent::AlignMeshToBounds(UStaticMeshComponent* meshComp, US
 	meshComp->SetRelativeLocation(relLoc);
 }
 
+TMap<const Door*, TWeakObjectPtr<UForeverDoorComponent>> UForeverDoorComponent::componentsByDoor;
+
+UForeverDoorComponent* UForeverDoorComponent::FindForDoor(const Door* door) {
+	const TWeakObjectPtr<UForeverDoorComponent>* found = componentsByDoor.Find(door);
+	return found ? found->Get() : nullptr;
+}
+
+void UForeverDoorComponent::OnComponentDestroyed(bool bDestroyingHierarchy) {
+	if (door) {
+		const TWeakObjectPtr<UForeverDoorComponent>* found = componentsByDoor.Find(door);
+		if (found && found->Get() == this) componentsByDoor.Remove(door);
+	}
+	Super::OnComponentDestroyed(bDestroyingHierarchy);
+}
+
 void UForeverDoorComponent::Init(Door* inDoor) {
 	door = inDoor;
 	if (!door) return;
+	componentsByDoor.Add(door, this);
 
 	// Door::GetYaw()是墙体外法线方向(弧度)——这个组件自己的local X要对齐"沿墙"方向(资产
 	// 约定"X轴=沿墙方向")，和法线正好相差90度，见door.md"坐标约定"一节。
@@ -345,5 +361,20 @@ void UForeverDoorComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	if (FMath::IsNearlyEqual(openProgress, target) && FMath::IsNearlyEqual(openProgress, 0.f, 0.001f)) {
 		SetComponentTickEnabled(false); // 全关且没有待处理的开门请求时停Tick，见door.md"性能"一节
+	}
+}
+
+void UForeverDoorComponent::RefreshOptions() {
+	if (!door) return;
+	cachedOptions.Reset();
+	for (const std::string& option : door->GetOptions()) {
+		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+	}
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+			meetOption->ReplaceOptions(frameworkActor, interactNameOnly, cachedOptions);
+		}
 	}
 }

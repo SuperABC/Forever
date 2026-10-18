@@ -10,6 +10,14 @@
 - `TogglePhone`/`ToggleInventory`/`ToggleMap`/`HandleCloseMap`只是到对应Widget方法的一行转发。
 - `TogglePause`:地图/手机/背包/谜题/剧情对话任何一个可见时不打开暂停界面(它们各自占着UI Only输入和键盘焦点);暂停界面打开后的关闭由`UForeverPausePanelWidget`自己的`NativeOnKeyDown`处理,见`UI/ForeverPausePanelWidget.md`。
 
+## 旧MainController热键
+
+旧蓝图`Blueprint/Player/MainController`(dump文件`.dump/MainController.txt`)的热键已经全部迁移。按键都走`UForeverKeyBindingSubsystem`的配置(`Resource/Config/KeyBindings.ini`)，不写死：
+- `P`开手机、`B`开背包、`M`开地图、`Esc`关地图、`Tab`开暂停界面：绑在这个Controller上(`SetupInputComponent`)。玩家会通过`ChangeControlChange`换人操控、换乘载具，Controller是整局游戏里唯一不随换Pawn而变的宿主，所以这些"任何时候都要生效"的热键放在这里，动态Context也在`BeginPlay`里常驻添加。
+- 滚轮上下(`MeetOptionUp/Down`)+`F`(`MeetOptionSelect`)：对话选项，由`AForeverCharacter::SetupPlayerInputComponent`转发给这个Controller持有的`MeetOptionWidget`。
+- `Q`下车：`AVehicleElement`自己的`ExitVehicle`。
+- `N`(导航调试可视化)：旧蓝图里是手动开关，新实现改成`UForeverRoadnetFrameworkComponent`常驻生成的调试网格，不再需要按键。
+
 ## 依赖关系
 - 被`AForeverGameMode`的`PlayerControllerClass`引用。
 - 依赖`Input/ForeverKeyBindingSubsystem`(`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`动态Action)。
@@ -17,4 +25,4 @@
 - 被`AForeverCharacter::MeetOptionFocusUp/Down/Select`(取`GetMeetOptionWidget()`)、`UForeverStoryFrameworkComponent::ShowCurrentItem`(取`GetSectionSpeakingWidget()`/`GetSectionOptionWidget()`)等依赖。
 
 ## 待办/后续阶段
-- 无(旧`MainController`热键已全部迁移,见`MAINCONTROLLER_TODO.md`)。
+- 无(旧`MainController`热键已全部迁移,见上面"旧MainController热键"一节)。

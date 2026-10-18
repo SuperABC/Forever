@@ -2267,16 +2267,8 @@ void Map::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
 	// 占位，等Map域真的有需要每帧处理的逻辑时再补，见map.h声明处注释。
 }
 
-namespace {
-	DOOR_ACCESS_TYPE ParseDoorAccess(const string& value) {
-		if (value == "owner") return DOOR_ACCESS_OWNER;
-		if (value == "locked") return DOOR_ACCESS_LOCKED;
-		return DOOR_ACCESS_OPEN;
-	}
-}
-
 void Map::ApplyChange(const Change* change, const ScriptContext& context) {
-	// 四种门相关的Change，全部按交互名在doorsByInteractName里找门，找不到静默忽略——
+	// 四种门相关的Change(AddOption/RemoveOption/SetDoor/RegisterDoor)，全部按交互名在doorsByInteractName里找门，找不到静默忽略——
 	// 和Traffic::ApplyChange处理AddOptionChange找不到Vehicle时同一个宽松处理，见
 	// map.h声明处注释。AddOptionChange/RemoveOptionChange这两种本来就存在(给
 	// Vehicle/Citizen用)，这次是给Door也接上，不是新增Change类型。
@@ -2290,14 +2282,19 @@ void Map::ApplyChange(const Change* change, const ScriptContext& context) {
 		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
 		return;
 	}
-	if (auto* setAccess = dynamic_cast<const SetDoorAccessChange*>(change)) {
-		Door* target = FindDoorByName(ToString(EvaluateExpression(setAccess->GetName(), context)));
-		if (target) target->SetAccess(ParseDoorAccess(ToString(EvaluateExpression(setAccess->GetAccess(), context))));
+	if (auto* setDoor = dynamic_cast<const SetDoorChange*>(change)) {
+		// access是布尔表达式：true=常开，false=常锁。
+		Door* target = FindDoorByName(ToString(EvaluateExpression(setDoor->GetName(), context)));
+		if (target) target->SetAccess(EvaluateExpressionBool(setDoor->GetAccess(), context) ? DOOR_ACCESS_OPEN : DOOR_ACCESS_LOCKED);
 		return;
 	}
-	if (auto* allow = dynamic_cast<const AllowDoorChange*>(change)) {
-		Door* target = FindDoorByName(ToString(EvaluateExpression(allow->GetName(), context)));
-		if (target) target->Allow(ToString(EvaluateExpression(allow->GetCitizen(), context)));
+	if (auto* registerDoor = dynamic_cast<const RegisterDoorChange*>(change)) {
+		// pass是布尔表达式，留空时EvaluateExpressionBool按true处理(允许通过)。
+		Door* target = FindDoorByName(ToString(EvaluateExpression(registerDoor->GetName(), context)));
+		if (target) {
+			target->Register(ToString(EvaluateExpression(registerDoor->GetCitizen(), context)),
+				EvaluateExpressionBool(registerDoor->GetPass(), context));
+		}
 		return;
 	}
 }

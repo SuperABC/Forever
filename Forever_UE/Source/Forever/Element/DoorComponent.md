@@ -72,6 +72,10 @@ MeetOption交互选项。
 **不会**被加进`passers`(门不会为它开)，但如果这扇门有`Script`，MeetOption选项照常弹出
 给靠近的玩家——拒绝通行和拒绝对话是两件独立的事。
 
+- **交互选项运行中变化**：`add_option`/`remove_option`执行后，`AForeverFrameworkActor::RefreshInteractOptions`按名字找到场景里的这个对象调`RefreshOptions()`：重新烘焙`cachedOptions`快照；玩家正站在旁边时用`UMeetOptionWidget::ReplaceOptions`把屏幕上的选项整组换掉。Overlap回调仍然只读快照、不解引用Core对象。
+
+- **`FindForDoor`**：静态登记表`componentsByDoor`(Door* -> 组件)，`Init`时登记、`OnComponentDestroyed`时移除；门组件跟着建筑近景LOD创建/销毁，没生成时查不到。
+
 ## 依赖关系
 
 - 依赖：`Source/Core/map/door.h`（`Door`几何/外观/门禁/交互）、

@@ -302,7 +302,7 @@ public:
 	// 形状一致，等Map域真的长出需要每帧跑的东西时再补内容，见map.md。
 	void Tick(const Time& currentTime, bool crossedDay, PostHandle* post);
 
-	// 处理门相关的四种Change：SetDoorAccessChange/AllowDoorChange+
+	// 处理门相关的四种Change：SetDoorChange/RegisterDoorChange+
 	// AddOptionChange/RemoveOptionChange——Traffic::ApplyChange/Populace::ApplyChange
 	// 分别处理Vehicle/Citizen的AddOptionChange，Door照同一个模式接上。全部按交互名在
 	// doorsByInteractName里找门，找不到静默忽略(和Traffic::ApplyChange同一个"找不到

@@ -331,3 +331,18 @@ void AVehicleElement::Tick(float DeltaTime)
 	FVector location = GetActorLocation();
 	vehicle->SetTransform(location.X, location.Y, location.Z, GetActorRotation().Yaw);
 }
+
+void AVehicleElement::RefreshOptions() {
+	if (!vehicle) return;
+	cachedOptions.Reset();
+	for (const std::string& option : vehicle->GetOptions()) {
+		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+	}
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+			meetOption->ReplaceOptions(frameworkActor, vehicleNameOnly, cachedOptions);
+		}
+	}
+}

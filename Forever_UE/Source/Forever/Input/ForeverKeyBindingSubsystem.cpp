@@ -20,8 +20,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// （车辆专属，不是全局/不在Controller上）——上车改成MeetOption选"上车"选项，不再
 		// 用热键，见ForeverTrafficFrameworkComponent::ApplyEnterVehicle/ExitVehicle。
 		{ TEXT("ExitVehicle"), EKeys::Q },
-		// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，见MAINCONTROLLER_TODO.md
-		// "MouseScrollUp/Down + F"这一行热键，AForeverCharacter::SetupPlayerInputComponent
+		// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，见ForeverPlayerController.md"旧MainController热键"一节，AForeverCharacter::SetupPlayerInputComponent
 		// 转发到AForeverPlayerController持有的MeetOptionWidget。
 		{ TEXT("MeetOptionUp"), EKeys::MouseScrollUp },
 		{ TEXT("MeetOptionDown"), EKeys::MouseScrollDown },
@@ -36,8 +35,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("TogglePhone"), EKeys::P },
 		// 背包(Inventory)系统：这个热键和TogglePhone绑在同一个Controller上，理由同上——
 		// 玩家会通过ChangeControlChange换着操控不同市民/载具，见
-		// AForeverPlayerController::SetupInputComponent、MAINCONTROLLER_TODO.md"B开背包"
-		// 这一行热键。
+		// AForeverPlayerController::SetupInputComponent、ForeverPlayerController.md"旧MainController热键"一节。
 		{ TEXT("ToggleInventory"), EKeys::B },
 		// 武器系统：鼠标左键开火(按住连发交给全自动武器自己的fireRate冷却判断，见
 		// UForeverWeaponComponent::TickComponent)/R键换弹/数字键1、2切枪，见

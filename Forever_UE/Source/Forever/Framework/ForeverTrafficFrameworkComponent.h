@@ -43,6 +43,9 @@ public:
 	// 当前没有pawn时打一条Warning，不崩溃。
 	void ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller);
 
+	// 这辆车当前在场景里的Actor(停着/私家车；公交车没有交互选项，不在这张表里)，找不到返回nullptr。
+	AVehicleElement* FindVehicleElement(const FString& vehicleName) const;
+
 	// AVehicleElement::ExitVehicle按Q调用：算出候选下车世界坐标(车辆当前transform+
 	// VehicleMod的exitOffsetX/Y/Z，按车身当前旋转变换)，用ECC_Pawn通道做胶囊体sweep检测
 	// (见[[memory:pawn_preset_ignores_visibility]]，不能用ECC_Visibility；也不能用

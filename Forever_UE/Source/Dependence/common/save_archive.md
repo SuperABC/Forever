@@ -4,7 +4,7 @@
 
 存档"压缩体"内部的分段容器 `SaveArchive`，以及二进制段的读写小工具 `ByteWriter` / `ByteReader`。纯 C++，
 不依赖压缩库；只在宿主侧（Core/UE）使用，mod 不直接接触（mod 只通过 `mod_state.h` 的接口读写自己的数据）。
-整体方案见仓库根目录 `SAVE_PLAN.md`。
+存档系统总说明见 `Source/Core/common/save.md`。
 
 ## 文件结构
 
@@ -15,7 +15,7 @@
 
 ## 关键设计
 
-- **版本号分层**（见 `SAVE_PLAN.md` 1.5 节）：这里定义外层的 `SAVE_FILE_VERSION` / `SAVE_FILE_MIN_VERSION`，
+- **版本号分层**（见 `Source/Core/common/save.md`"版本号"一节）：这里定义外层的 `SAVE_FILE_VERSION` / `SAVE_FILE_MIN_VERSION`，
   管外壳布局；每个段自带段版本，段版本表在 `Source/Core/common/save.h`。改哪部分格式就只升哪部分的号。
 - **小结构用 JSON 段，大数组用二进制段**：manifest、各类记录、mod 快照写 JSON 文本；地图格子、导航图、关系这类
   大数组用 `ByteWriter` 写紧凑二进制，避免 JSON 文本膨胀。

@@ -747,74 +747,82 @@ const std::string& LeaveVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
-SetDoorAccessChange::SetDoorAccessChange() :
+SetDoorChange::SetDoorChange() :
 	name(), access() {
 
 }
 
-SetDoorAccessChange::SetDoorAccessChange(std::string name, std::string access) :
+SetDoorChange::SetDoorChange(std::string name, std::string access) :
 	name(move(name)), access(move(access)) {
 
 }
 
-SetDoorAccessChange::~SetDoorAccessChange() {
+SetDoorChange::~SetDoorChange() {
 
 }
 
-const string& SetDoorAccessChange::GetType() const {
-	static const string type = "set_door_access";
+const string& SetDoorChange::GetType() const {
+	static const string type = "set_door";
 	return type;
 }
 
-void SetDoorAccessChange::SetName(std::string name) {
+void SetDoorChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const std::string& SetDoorAccessChange::GetName() const {
+const std::string& SetDoorChange::GetName() const {
 	return name;
 }
 
-void SetDoorAccessChange::SetAccess(std::string access) {
+void SetDoorChange::SetAccess(std::string access) {
 	this->access = move(access);
 }
 
-const std::string& SetDoorAccessChange::GetAccess() const {
+const std::string& SetDoorChange::GetAccess() const {
 	return access;
 }
 
-AllowDoorChange::AllowDoorChange() :
-	name(), citizen() {
+RegisterDoorChange::RegisterDoorChange() :
+	name(), citizen(), pass() {
 
 }
 
-AllowDoorChange::AllowDoorChange(std::string name, std::string citizen) :
-	name(move(name)), citizen(move(citizen)) {
+RegisterDoorChange::RegisterDoorChange(std::string name, std::string citizen, std::string pass) :
+	name(move(name)), citizen(move(citizen)), pass(move(pass)) {
 
 }
 
-AllowDoorChange::~AllowDoorChange() {
+RegisterDoorChange::~RegisterDoorChange() {
 
 }
 
-const string& AllowDoorChange::GetType() const {
-	static const string type = "allow_door";
+const string& RegisterDoorChange::GetType() const {
+	static const string type = "register_door";
 	return type;
 }
 
-void AllowDoorChange::SetName(std::string name) {
+void RegisterDoorChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const std::string& AllowDoorChange::GetName() const {
+const std::string& RegisterDoorChange::GetName() const {
 	return name;
 }
 
-void AllowDoorChange::SetCitizen(std::string citizen) {
+void RegisterDoorChange::SetCitizen(std::string citizen) {
 	this->citizen = move(citizen);
 }
 
-const std::string& AllowDoorChange::GetCitizen() const {
+const std::string& RegisterDoorChange::GetCitizen() const {
 	return citizen;
+}
+
+void RegisterDoorChange::SetPass(std::string pass) {
+	this->pass = move(pass);
+}
+
+const std::string& RegisterDoorChange::GetPass() const {
+	return pass;
 }
 
 CreateTimerChange::CreateTimerChange() :

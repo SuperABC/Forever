@@ -32,7 +32,7 @@ void AForeverPlayerController::BeginPlay() {
 	// 手机(Phone)系统：P键要求任何时候都生效(包括开局还没占有任何真正Pawn、操控着
 	// ADefaultPawn的那几帧，以及ChangeControlChange换人操控/换乘载具的瞬间)——这个动态
 	// Context常驻加在Controller上而不是Pawn的PossessedBy里，就不用依赖"当前是不是正占有着
-	// 一个真正的Pawn"，见MAINCONTROLLER_TODO.md"P开手机"这一行热键的既定设计。Pawn侧
+	// 一个真正的Pawn"，见ForeverPlayerController.md"旧MainController热键"一节。Pawn侧
 	// (AForeverCharacter.cpp/VehicleElement.cpp)不重复加这份Context。
 	if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer())) {
 		if (UGameInstance* gameInstance = GetGameInstance()) {

@@ -138,8 +138,9 @@ public:
 	// 存活实例)、脚本名、布局模板名(按map里各建筑的楼层模板快照)。
 	static SaveManifest BuildManifest(const SaveWorld& world);
 
-	// 生成存档"压缩体"里的分段容器：manifest + 地图4段(map_save.h) + 人口段(populace_save.h) +
-	// 社会段(society_save.h)。交通/剧情/玩家在后续阶段加入，见SAVE_PLAN.md。
+	// 生成存档"压缩体"里的分段容器：manifest + 地图4段(map_save.h) + 人口(populace_save.h) +
+	// 社会(society_save.h) + 交通(traffic_save.h) + 脚本状态(script_save.h) + 玩家(player_save.h)，
+	// 段列表见save.md。
 	static SaveArchive BuildArchive(const SaveWorld& world);
 
 	// 加载前校验(不改任何状态)：段版本、manifest解析、mod是否都被已发现的DLL提供、依赖、

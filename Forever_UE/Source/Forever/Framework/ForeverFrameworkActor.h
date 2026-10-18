@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -156,6 +157,9 @@ protected:
 	// 也不由game_start决定，改由RestoreControlledPawn按存档的UE段恢复。
 	bool bScriptsRestored = false;
 	void RestoreControlledPawn(const FForeverPendingLoad& load);
+
+	// add_option/remove_option执行完之后，让场景里叫这个名字的市民/车辆/门刷新交互选项快照。
+	void RefreshInteractOptions(const std::string& name);
 
 	// Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
 	// Zone/Building/Roadnet等系统共用同一个Map实例,不是各自另建一个。

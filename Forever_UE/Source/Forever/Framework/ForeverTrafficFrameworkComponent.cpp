@@ -494,3 +494,8 @@ void UForeverTrafficFrameworkComponent::BuildTracks(Traffic* traffic) {
 		}
 	}
 }
+
+AVehicleElement* UForeverTrafficFrameworkComponent::FindVehicleElement(const FString& vehicleName) const {
+	const TObjectPtr<AVehicleElement>* found = activeVehicles.Find(vehicleName);
+	return found ? found->Get() : nullptr;
+}

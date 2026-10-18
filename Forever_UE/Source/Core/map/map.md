@@ -522,8 +522,8 @@ room数据必须先落地）之后，`EnsurePopulaceGenerated()`里依次
 scriptFactory`引用成员（`CreateDoor`创建门的Script要用，和`terrainFactory`等其余Factory
 同一个"构造函数初始化列表绑定、声明顺序必须跟初始化列表顺序一致"的约定）。`InitZones()`在
 `zone->Layout(direction)`之后、`InitBuildings()`三段落地循环各自在`building->Layout(...)`
-之后都补了一行`BuildDoors(*this)`调用。`ApplyChange()`处理`SetDoorAccessChange`/
-`AllowDoorChange`+`AddOptionChange`/`RemoveOptionChange`（和`Traffic::ApplyChange`处理
+之后都补了一行`BuildDoors(*this)`调用。`ApplyChange()`处理`SetDoorChange`/
+`RegisterDoorChange`+`AddOptionChange`/`RemoveOptionChange`（和`Traffic::ApplyChange`处理
 `Vehicle`同一个模式），全部按交互名在`doorsByInteractName`里找门。完整设计（`DoorSpec`/
 `Door`/`ResolveDoorSpec`/三类门各自的几何换算）见`Source/Core/map/door.md`。
 

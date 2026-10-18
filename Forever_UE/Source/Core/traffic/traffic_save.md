@@ -9,7 +9,7 @@
 - 公交计时 `elapsedSeconds`；
 - 车辆和站点的命名计数器。
 
-整体方案见 `SAVE_PLAN.md`。
+存档系统总说明见 `Source/Core/common/save.md`。
 
 ## 内容
 

@@ -1210,24 +1210,26 @@ private:
 
 };
 
-// 设置门禁
-class SetDoorAccessChange : public Change {
+// 设置门禁(常开/常锁)
+class SetDoorChange : public Change {
 public:
 	/*
 	* 默认构造设置门禁变化
 	*/
-	SetDoorAccessChange();
+	SetDoorChange();
 
 	/*
 	* 构造设置门禁变化
-	* @name, access: 门的交互名与目标门禁("open"/"owner"/"locked")
+	* @name: 门的交互名(表达式)
+	* @access: 布尔表达式，true=常开(任何人都能过)，false=常锁(任何人都不能过)；按人登记的
+	*          例外(RegisterDoorChange)优先于这里
 	*/
-	SetDoorAccessChange(std::string name, std::string access);
+	SetDoorChange(std::string name, std::string access);
 
 	/*
 	* 析构设置门禁变化
 	*/
-	virtual ~SetDoorAccessChange();
+	virtual ~SetDoorChange();
 
 	/*
 	* 变化类型
@@ -1246,13 +1248,13 @@ public:
 	const std::string& GetName() const;
 
 	/*
-	* 设置目标门禁
-	* @access: 门禁("open"/"owner"/"locked")
+	* 设置门禁表达式
+	* @access: 布尔表达式，true=常开，false=常锁
 	*/
 	void SetAccess(std::string access);
 
 	/*
-	* 获取目标门禁
+	* 获取门禁表达式
 	*/
 	const std::string& GetAccess() const;
 
@@ -1260,29 +1262,31 @@ private:
 	// 目标名称
 	std::string name;
 
-	// 目标门禁
+	// 门禁(布尔表达式)
 	std::string access;
 
 };
 
-// 允许市民通过门禁
-class AllowDoorChange : public Change {
+// 按人登记门禁例外：允许或不允许某个市民通过，优先于门本身的常开/常锁/仅主人
+class RegisterDoorChange : public Change {
 public:
 	/*
-	* 默认构造允许通过门禁变化
+	* 默认构造登记门禁变化
 	*/
-	AllowDoorChange();
+	RegisterDoorChange();
 
 	/*
-	* 构造允许通过门禁变化
-	* @name, citizen: 门的交互名与被允许通过的市民名称
+	* 构造登记门禁变化
+	* @name: 门的交互名(表达式)
+	* @citizen: 市民名称(表达式)
+	* @pass: 布尔表达式，true=允许这个人通过，false=不允许；留空按true处理
 	*/
-	AllowDoorChange(std::string name, std::string citizen);
+	RegisterDoorChange(std::string name, std::string citizen, std::string pass);
 
 	/*
-	* 析构允许通过门禁变化
+	* 析构登记门禁变化
 	*/
-	virtual ~AllowDoorChange();
+	virtual ~RegisterDoorChange();
 
 	/*
 	* 变化类型
@@ -1311,12 +1315,26 @@ public:
 	*/
 	const std::string& GetCitizen() const;
 
+	/*
+	* 设置是否允许通过
+	* @pass: 布尔表达式
+	*/
+	void SetPass(std::string pass);
+
+	/*
+	* 获取是否允许通过(布尔表达式，空=true)
+	*/
+	const std::string& GetPass() const;
+
 private:
 	// 目标名称
 	std::string name;
 
 	// 市民名称
 	std::string citizen;
+
+	// 是否允许通过(布尔表达式)
+	std::string pass;
 
 };
 

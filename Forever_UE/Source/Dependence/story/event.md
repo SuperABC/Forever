@@ -41,3 +41,10 @@
 
 - 其余30个事件类型的`Match`字段级逻辑、`GetLocalValue`字段暴露、`BuildEvent`的JSON分发分支，
   都等该类型被点名实现时再补，三者通常需要一起补齐。
+
+## 已经能在.script里写的触发条件
+
+- `game_start`
+- `option_dialog`(name/option)
+- `citizen_decease`(name/reason，留空=不限)：`CitizenDeceaseEvent::Match`按name/reason过滤(都是表达式)，和`OptionDialogEvent::Match`同一个写法。市民死亡时由`UForeverStoryFrameworkComponent::BroadcastCitizenDecease`广播给主线脚本和死者自己的Scheduler脚本(按name找，和`option_dialog`同一个模式)。
+- 事件字段：`option_dialog`在脚本里可以用`local.name`/`local.option`读到被点的对象名和选项文字，`citizen_decease`可以用`local.name`/`local.reason`读到死者姓名和死因(`GetLocalValue`)。

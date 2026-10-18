@@ -1187,9 +1187,13 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 		w.U8(door->vehicleGate ? 1 : 0);
 		w.U8(door->flippedSide ? 1 : 0);
 		w.I32(static_cast<int>(door->access));
-		vector<string> allowed(door->allowedCitizenNames.begin(), door->allowedCitizenNames.end());
-		sort(allowed.begin(), allowed.end());
-		WriteStrings(allowed, w);
+		// 按人登记的门禁例外(名字 + 是否允许)。
+		vector<string> registered = SortedKeys(door->registrations);
+		w.U32(static_cast<uint32_t>(registered.size()));
+		for (const string& citizen : registered) {
+			w.Str(citizen);
+			w.U8(door->registrations.at(citizen) ? 1 : 0);
+		}
 		WriteStrings(door->options, w);
 	}
 
@@ -1454,7 +1458,8 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 		bool vehicleGate = r.U8() != 0;
 		bool flippedSide = r.U8() != 0;
 		DOOR_ACCESS_TYPE access = static_cast<DOOR_ACCESS_TYPE>(r.I32());
-		vector<string> allowed = ReadStrings(r);
+		vector<pair<string, bool>> registrations(r.U32());
+		for (auto& [citizen, pass] : registrations) { citizen = r.Str(); pass = r.U8() != 0; }
 		vector<string> options = ReadStrings(r);
 		if (r.Failed()) break;
 
@@ -1462,7 +1467,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 		Door* door = new Door(id, kind, tag, spec, zone, building, room, interactName, flippedSide,
 			x, y, z, width, height, yaw, level, vehicleGate, &map.scriptFactory);
 		door->access = access;
-		door->allowedCitizenNames.insert(allowed.begin(), allowed.end());
+		for (auto& [citizen, pass] : registrations) door->registrations[citizen] = pass;
 		// options(剧情脚本加的交互选项)：存档带脚本状态段时读档会跳过game_start广播，选项按存档
 		// 恢复；没有脚本状态段(P4及更早的存档)时game_start会重新加一遍，这里不恢复，避免重复。
 		if (restoreOptions) door->options = options;

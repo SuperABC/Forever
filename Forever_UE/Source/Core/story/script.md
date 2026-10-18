@@ -25,8 +25,14 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   BroadcastGameStart`是这条链路最外层的调用方，构造`post`并往下传，见`Core/story/story.md`。
 - **JSON根节点固定是`{"milestones": [...]}`这一种对象格式**，`caches`的value类型是一个
   `FileCache`结构体（见下"主线剧情.script新增三个顶层字段"一节）。
-- **`BuildEvent`只识别`"game_start"`一种`type`，`BuildChanges`识别`"set_value"`/
-  `"place_holder"`/`"debug_print"`三种`type`**，其余识别到的`type`字符串统一
+- **`BuildEvent`识别`"game_start"`/`"option_dialog"`(name/option)/`"citizen_decease"`(name/reason，留空=不限)，
+  `BuildChanges`识别`"set_value"`/`"place_holder"`/`"debug_print"`/`"add_option"`/`"remove_option"`(name/option)/
+  `"start_puzzle"`/`"enter_vehicle"`/`"set_door"`(name/access)/`"register_door"`(name/citizen/pass)/`"npc_navigate"`(name/destination=房间地址)/
+  `"change_control"`(name)**——`set_door`的`access`、`register_door`的`pass`是布尔表达式，JSON里写`true`/`false`
+  或者`"true"`/`"false"`都行(`AsString()`把JSON布尔转成字符串，执行时`EvaluateExpressionBool`求值，也可以写
+  `$$self.xxx`这类表达式)：`access`为true=常开、false=常锁；`pass`为true=允许这个人通过、false=不允许，省略按true，
+  按人登记优先于门的常开/常锁，见`Source/Core/map/door.md`；`remove_option`对门/市民/车辆都生效；`npc_navigate`的name/destination先按原样查，
+  查不到再当表达式求值(mod在C++里生成的是现成的姓名/地址，脚本里可以写`$$self.name`这类表达式)。其余`type`字符串统一
   `THROW_EXCEPTION(RuntimeException, ...)`，等对应类型被点名实现时再插入分支，见
   `Dependence/story/event.md`/`change.md`"JSON分发"一节。`"place_holder"`分支
   `new PlaceHolderChange(obj["label"].AsString())`——`PlaceHolderChange`是一个"占位符"结构性

@@ -306,3 +306,8 @@ void UForeverPopulaceFrameworkComponent::RestoreAfterSave(const TArray<FWalkingS
 		else snapshot.citizen->ClearPosition();
 	}
 }
+
+ACitizenElement* UForeverPopulaceFrameworkComponent::FindActiveCitizen(Citizen* citizen) const {
+	const TObjectPtr<ACitizenElement>* found = activeInstances.Find(citizen);
+	return found ? found->Get() : nullptr;
+}

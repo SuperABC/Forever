@@ -21,7 +21,7 @@ class Room;
 #define SAVE_SECTION_MAP_VEGETATION "world.map.vegetation"
 
 // 地图域(地形格子/路网/导航图/Zone/Building/Room/Component/Door/植被)的存档读写。世界生成不可
-// 复现(见SAVE_PLAN.md)，所以这里存的是生成结果本身：各类对象的字段原样写出，对象之间的指针
+// 复现(见save.md"为什么存结果、不存种子")，所以这里存的是生成结果本身：各类对象的字段原样写出，对象之间的指针
 // 换成编号(Road/Lot/导航边按表下标，导航锚点按Node id，Zone/Building/Door按顺序下标)，读档
 // 时按编号重建对象再连回指针，不调用任何mod的Layout/Distribute。需要直接读写私有字段，
 // 所以相关类都把这个类声明成friend。详见map_save.md。

@@ -156,6 +156,8 @@ BuildCollisionBox()`同一套写法：`"Trigger"`碰撞profile，`OnComponentBeg
 路径里由`UForeverPopulaceFrameworkComponent`主动做，关卡卸载时`Citizen`/`Populace`可能
 已经先被析构了，见`ForeverFrameworkActor.md`）。
 
+- **交互选项运行中变化**：`add_option`/`remove_option`执行后，`AForeverFrameworkActor::RefreshInteractOptions`按名字找到场景里的这个对象调`RefreshOptions()`：重新烘焙`cachedOptions`快照；玩家正站在旁边时用`UMeetOptionWidget::ReplaceOptions`把屏幕上的选项整组换掉。Overlap回调仍然只读快照、不解引用Core对象。
+
 ## 依赖关系
 
 - 依赖：`Player/ForeverCharacter.h`（基类）、`Components/CapsuleComponent.h`/

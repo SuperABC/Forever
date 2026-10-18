@@ -65,11 +65,17 @@ bool Door::IsFlippedSide() const { return flippedSide; }
 DOOR_ACCESS_TYPE Door::GetAccess() const { return access; }
 void Door::SetAccess(DOOR_ACCESS_TYPE value) { access = value; }
 
-void Door::Allow(const string& citizenName) {
-	if (!citizenName.empty()) allowedCitizenNames.insert(citizenName);
+void Door::Register(const string& citizenName, bool pass) {
+	if (!citizenName.empty()) registrations[citizenName] = pass;
 }
 
 bool Door::CanPass(const Citizen* who, bool isPlayer) const {
+	// 按人登记的例外优先于门禁模式(常开时也能单独拦住某人，常锁时也能单独放行某人)。
+	if (who) {
+		auto registered = registrations.find(who->GetName());
+		if (registered != registrations.end()) return registered->second;
+	}
+
 	if (access == DOOR_ACCESS_LOCKED) return false;
 	if (access == DOOR_ACCESS_OPEN) return true;
 
@@ -85,8 +91,7 @@ bool Door::CanPass(const Citizen* who, bool isPlayer) const {
 	if (stated) return true;
 	if (isPlayer) return true;
 	if (!who) return false;
-	if (owner == who) return true;
-	return allowedCitizenNames.find(who->GetName()) != allowedCitizenNames.end();
+	return owner == who;
 }
 
 Script* Door::GetScript() const { return script; }

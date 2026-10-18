@@ -45,9 +45,9 @@ public:
 	// @option: 被点击的选项文本字面量
 	void OptionDialog(const FString& name, const FString& option);
 
-	// 武器系统命中Citizen致死时调用：构造一个CitizenDeceaseEvent，只匹配主线剧情Script
-	// （不像OptionDialog那样额外匹配目标citizen自己的Scheduler Script——citizen已经死了，
-	// 它自己的日程脚本不再有意义），复用同一套Dialog展示/Change转发逻辑。这次不做成通用的
+	// 武器系统命中Citizen致死时调用：构造一个CitizenDeceaseEvent，和OptionDialog同一个模式
+	// 匹配主线剧情Script + 死者自己的Scheduler Script(按name找；死亡只销毁UE侧Actor，Core里
+	// 的Citizen和它的Scheduler还在)，复用同一套Dialog展示/Change转发逻辑。这次不做成通用的
 	// "任意Event广播给任意Script"机制——就是照抄OptionDialog的写法单独写一次，见
 	// Source/Forever/Player/ForeverWeaponComponent.md"为什么不做通用广播机制"一节。
 	// @name: 死者姓名字面量

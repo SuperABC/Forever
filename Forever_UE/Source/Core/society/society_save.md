@@ -7,7 +7,7 @@
 - 每个组织的 Job：类型、工位房间、在职市民、mod 状态、mod 名字；
 - 组织定时器。
 
-整体方案见 `SAVE_PLAN.md`，人口部分见 `Source/Core/populace/populace_save.md`。
+存档系统总说明见 `Source/Core/common/save.md`，人口部分见 `Source/Core/populace/populace_save.md`。
 
 ## 关键设计
 

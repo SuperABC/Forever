@@ -4,7 +4,7 @@
 
 存档/读档的 UE 侧入口（`UGameInstanceSubsystem`）：文件读写、外层头、zlib 压缩、文件对话框、加载前校验和报错，
 以及把通过校验的读档请求交给 World 关卡。Core 侧的 manifest、校验、版本表见 `Source/Core/common/save.md`，
-整体方案见仓库根目录 `SAVE_PLAN.md`。
+存档系统总说明见 `Source/Core/common/save.md`。
 
 ## 关键设计
 

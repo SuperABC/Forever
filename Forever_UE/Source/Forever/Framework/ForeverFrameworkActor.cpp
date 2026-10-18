@@ -29,6 +29,8 @@
 #include "common/json.h"
 #include "Element/CitizenElement.h"
 #include "Element/VehicleElement.h"
+#include "Element/DoorComponent.h"
+#include "map/door.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 
 #include "Kismet/KismetSystemLibrary.h"
@@ -136,9 +138,8 @@ void AForeverFrameworkActor::BeginPlay()
 
 	Registry::Get().ReloadModArgs();
 
-	// 读档：地图/人口/社会在各自的Ensure*Generated里按存档恢复；交通/剧情/玩家还没有序列化，
-	// 暂时仍按新开局在恢复出来的世界上重新生成(开发期临时回退，P5~P6逐个改成按存档恢复，见
-	// SAVE_PLAN.md)。mod集合已经在RequestLoad里按存档设好了。
+	// 读档：各个域在各自的Ensure*Generated里按存档恢复；较早的存档缺哪一段，那个域就照新开局
+	// 生成(见Core/common/save.md"版本号"一节的required)。mod集合已经在RequestLoad里按存档设好了。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
 		UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor: loading %s - the world is restored from the save (sections missing from older saves are regenerated)."),
 			*load->path);
@@ -222,8 +223,12 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		// context），改成用change自带的occupant姓名反查Populace（Populace::
 		// FindCitizenByName）——NPCNavigateChange构造时的name本来就是occupantName，和
 		// Citizen::GetName()一致。
+		// mod生成的NPCNavigateChange里是现成的姓名/房间地址；脚本(npc_navigate)里写的可能是
+		// 表达式(比如$$self.name)——先按原样查，查不到再当表达式求值后查。
 		Citizen* citizen = populace ? populace->FindCitizenByName(nav->GetName()) : nullptr;
+		if (!citizen && populace) citizen = populace->FindCitizenByName(ToString(EvaluateExpression(nav->GetName(), context)));
 		Room* dest = map ? map->LocateRoom(nav->GetDestination()) : nullptr;
+		if (!dest && map) dest = map->LocateRoom(ToString(EvaluateExpression(nav->GetDestination(), context)));
 		if (citizen && dest && populaceFramework) {
 			populaceFramework->RequestWalk(citizen, dest);
 		}
@@ -268,6 +273,32 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	if (industry) industry->ApplyChange(change, context);
 	if (traffic) traffic->ApplyChange(change, context);
 	if (story) story->ApplyChange(change, context);
+
+	// 交互选项变了：场景里对应的市民/车辆/门Actor刷新自己的选项快照(玩家站在旁边时连同屏幕上的
+	// 选项列表一起换)，否则要等它下次被重新生成才看得到变化。
+	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+		RefreshInteractOptions(ToString(EvaluateExpression(addOption->GetName(), context)));
+	}
+	else if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		RefreshInteractOptions(ToString(EvaluateExpression(removeOption->GetName(), context)));
+	}
+}
+
+void AForeverFrameworkActor::RefreshInteractOptions(const std::string& name) {
+	if (name.empty()) return;
+	if (populace && populaceFramework) {
+		if (Citizen* citizen = populace->FindCitizenByName(name)) {
+			if (ACitizenElement* element = populaceFramework->FindActiveCitizen(citizen)) element->RefreshOptions();
+		}
+	}
+	if (trafficFramework) {
+		if (AVehicleElement* element = trafficFramework->FindVehicleElement(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
+	}
+	if (map) {
+		if (Door* door = map->FindDoorByName(name)) {
+			if (UForeverDoorComponent* component = UForeverDoorComponent::FindForDoor(door)) component->RefreshOptions();
+		}
+	}
 }
 
 void AForeverFrameworkActor::Tick(float DeltaTime)

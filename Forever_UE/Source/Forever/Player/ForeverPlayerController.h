@@ -14,7 +14,7 @@ class UMapWidget;
 class UForeverPausePanelWidget;
 class UInputComponent;
 
-// MAINCONTROLLER_TODO.md点名的"MouseScrollUp/Down + F对话选项"三个热键归属这个Controller
+// 旧蓝图MainController的"MouseScrollUp/Down + F对话选项"三个热键归属这个Controller(见ForeverPlayerController.md)
 // ——照抄AForeverMenuController::BeginPlay的CreateWidget+AddToViewport模式，常驻创建一份
 // MeetOptionWidget（不像StartMenu那样只在特定时机才创建），靠列表是否为空来决定视觉上
 // "有没有弹出"，具体Add/Remove由ACitizenElement在玩家靠近/离开市民时驱动。
@@ -33,7 +33,7 @@ protected:
 
 	// P键(TogglePhone)绑在这里而不是Pawn的SetupPlayerInputComponent——Controller在
 	// ChangeControlChange换人操控/换乘载具时不会变，是唯一能保证"任何时候按P都生效"的宿主，
-	// 见.cpp里的说明和MAINCONTROLLER_TODO.md。
+	// 见.cpp里的说明和ForeverPlayerController.md"旧MainController热键"一节。
 	virtual void SetupInputComponent() override;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -75,7 +75,7 @@ protected:
 	void TogglePhone();
 
 	// 跟前面几个Widget同一套模式(常驻创建，B键(ToggleInventory)控制开关)，见
-	// Source/Forever/UI/InventoryWidget.h、MAINCONTROLLER_TODO.md"B开背包"这一行热键。
+	// Source/Forever/UI/InventoryWidget.h、ForeverPlayerController.md"旧MainController热键"一节。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UForeverInventoryWidget> inventoryWidgetClass;
 

@@ -224,6 +224,8 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 `TP_VehicleAdvWheelFront/Rear`已经在细节面板上点好了这个勾选框，自己拼装`WheelSetups`
 才需要注意这一步）。
 
+- **交互选项运行中变化**：`add_option`/`remove_option`执行后，`AForeverFrameworkActor::RefreshInteractOptions`按名字找到场景里的这个对象调`RefreshOptions()`：重新烘焙`cachedOptions`快照；玩家正站在旁边时用`UMeetOptionWidget::ReplaceOptions`把屏幕上的选项整组换掉。Overlap回调仍然只读快照、不解引用Core对象。
+
 ## 依赖关系
 
 - 依赖：`Source/Core/traffic/vehicle.h`（`Vehicle`，不持有所有权，只用于挂载期间的

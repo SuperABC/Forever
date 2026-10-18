@@ -4,7 +4,7 @@
 
 mod 把自己的私有数据写进存档、读档时读回来的接口：`StateWriter` / `StateReader`。宿主（Core 的
 `JsonStateWriter` / `JsonStateReader`，见 `Source/Core/common/save.h`）实现，mod 在 `SaveState` / `LoadState`
-里调用。整体方案见仓库根目录 `SAVE_PLAN.md`。
+里调用。存档系统总说明见 `Source/Core/common/save.md`。
 
 ## 21 个 mod 基类末尾追加的存档虚函数
 

@@ -247,6 +247,7 @@ void Citizen::SetScheduler(Scheduler* value) { scheduler = value; }
 
 const vector<string>& Citizen::GetOptions() const { return options; }
 void Citizen::AddOption(const string& option) { options.push_back(option); }
+void Citizen::RemoveOption(const string& option) { options.erase(remove(options.begin(), options.end(), option), options.end()); }
 
 float Citizen::GetHealth() const { return health; }
 float Citizen::GetMaxHealth() const { return maxHealth; }

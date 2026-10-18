@@ -4,6 +4,8 @@
 #include "story/script_factory.h"
 #include "common/config.h"
 
+#include <algorithm>
+
 using namespace std;
 
 Vehicle::Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const string& id, const string& name) :
@@ -85,6 +87,10 @@ const vector<string>& Vehicle::GetOptions() const { return options; }
 
 void Vehicle::AddOption(const string& option) {
 	options.push_back(option);
+}
+
+void Vehicle::RemoveOption(const string& option) {
+	options.erase(remove(options.begin(), options.end(), option), options.end());
 }
 
 void Vehicle::SetParking(Room* inRoom, float localX, float localY, float localRotationDegrees) {

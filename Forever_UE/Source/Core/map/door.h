@@ -67,16 +67,17 @@ public:
 	// 不变；leaves==2或spec.randomSide为false时恒为false，Forever层按false=默认朝向处理。
 	bool IsFlippedSide() const;
 
-	// 门禁：Open→任何人都能过；Locked→任何人都不能过；Owner→所属对象(Zone/Building/Room)
-	// GetStated()==true时视同Open，否则isPlayer为true按Open处理(占位，这次没有真正的玩家
-	// 门禁判定)，否则who是所属对象的GetOwner()或者在Allow()登记过名字的citizen才能过。
-	// who为空(调用方无法判定身份，比如空车/公交)时Owner门禁下按false处理(不能过)。
+	// 门禁：先看按人登记的例外(Register)——who登记过就按登记的结果(允许/不允许)，优先于下面的
+	// 门禁模式；没登记过再按模式：Open→任何人都能过；Locked→任何人都不能过；Owner→所属对象
+	// (Zone/Building/Room)GetStated()==true时视同Open，否则isPlayer为true按Open处理(占位，这次
+	// 没有真正的玩家门禁判定)，否则who是所属对象的GetOwner()才能过。who为空(调用方无法判定
+	// 身份，比如空车/公交)时不看登记，Owner门禁下按false处理(不能过)。
 	DOOR_ACCESS_TYPE GetAccess() const;
 	void SetAccess(DOOR_ACCESS_TYPE access);
-	// 按名字登记允许通过——Map::ApplyChange处理AllowDoorChange时只有一个citizen名字字符串，
-	// 没有办法从Map反查到真正的Citizen*(Map不持有Populace引用)，所以用名字比对，不是指针
-	// 比对，见CanPass的实现。
-	void Allow(const std::string& citizenName);
+	// 按名字登记例外(pass=true允许通过/false不允许)，再次登记同一个人覆盖之前的结果——
+	// Map::ApplyChange处理RegisterDoorChange时只有一个citizen名字字符串，没有办法从Map反查到
+	// 真正的Citizen*(Map不持有Populace引用)，所以用名字比对，不是指针比对，见CanPass的实现。
+	void Register(const std::string& citizenName, bool pass);
 	bool CanPass(const Citizen* who, bool isPlayer) const;
 
 	// 交互——只有GetScript()!=nullptr(即spec.name非空)的门才有意义。
@@ -105,7 +106,7 @@ private:
 	bool flippedSide = false;
 
 	DOOR_ACCESS_TYPE access = DOOR_ACCESS_OPEN;
-	std::unordered_set<std::string> allowedCitizenNames;
+	std::unordered_map<std::string, bool> registrations; // 市民名 -> 是否允许通过，见Register
 
 	Script* script = nullptr;
 	std::vector<std::string> options;

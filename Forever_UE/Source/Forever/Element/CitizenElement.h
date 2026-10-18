@@ -92,6 +92,9 @@ public:
 	// UForeverPopulaceFrameworkComponent的私有activeInstances，只能从命中的Actor自己
 	// 反查。不持有所有权，citizen本身的生命周期由Populace管理。
 	Citizen* GetCitizen() const { return citizen; }
+	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
+	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
+	void RefreshOptions();
 	// 正在WalkTo的目标房间，没在走路时为nullptr。存档时用来把走路中的市民记成"已经到了"。
 	Room* GetWalkDestination() const { return walkDestination; }
 

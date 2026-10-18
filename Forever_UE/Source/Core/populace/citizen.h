@@ -256,6 +256,7 @@ public:
 	// 追加，供MeetOption UI在玩家靠近时读取展示，见Element/CitizenElement.cpp。
 	const std::vector<std::string>& GetOptions() const;
 	void AddOption(const std::string& option);
+	void RemoveOption(const std::string& option);
 
 	// 生命值——进入武器系统时新增，和Player同一套最小闭环(扣血/回血/是否死亡，不做死亡后果，
 	// 见Source/Forever/Player/ForeverWeaponComponent.md)。IsDead()一旦为true就不会再变回

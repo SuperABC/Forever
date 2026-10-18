@@ -9,7 +9,7 @@
 - 取名器的占位名；
 - 市民和地图之间的归属关系：Zone/Building/Room 的 owner，Room 的 tenants/occupants。
 
-整体方案见仓库根目录的 `SAVE_PLAN.md`，地图部分见 `Source/Core/map/map_save.md`。
+存档系统总说明见 `Source/Core/common/save.md`，地图部分见 `Source/Core/map/map_save.md`。
 
 ## 段格式（v1）
 

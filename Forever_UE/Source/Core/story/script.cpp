@@ -278,6 +278,10 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 		else if (type == "option_dialog") {
 			event = new OptionDialogEvent(obj["name"].AsString(), obj["option"].AsString());
 		}
+		else if (type == "citizen_decease") {
+			// name/reason都可以省略(留空=不限)，见CitizenDeceaseEvent::Match。
+			event = new CitizenDeceaseEvent(obj["name"].AsString(), obj["reason"].AsString());
+		}
 		else {
 			// 其余事件类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
 			THROW_EXCEPTION(RuntimeException, "Event type not implemented yet: " + type + ".\n");
@@ -333,21 +337,47 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new EnterVehicleChange(vehicle.AsString());
 		}
-		else if (type == "set_door_access") {
+		else if (type == "set_door") {
+			// access可以写JSON布尔(true/false)，也可以写字符串表达式——AsString()把JSON布尔转成
+			// "true"/"false"，执行时统一按布尔表达式求值。
 			auto name = obj["name"];
 			auto access = obj["access"];
 			if (name.IsNull() || access.IsNull()) {
-				THROW_EXCEPTION(RuntimeException, "Missing name or access for set_door_access change.\n");
+				THROW_EXCEPTION(RuntimeException, "Missing name or access for set_door change.\n");
 			}
-			change = new SetDoorAccessChange(name.AsString(), access.AsString());
+			change = new SetDoorChange(name.AsString(), access.AsString());
 		}
-		else if (type == "allow_door") {
+		else if (type == "remove_option") {
+			auto name = obj["name"];
+			auto option = obj["option"];
+			if (name.IsNull() || option.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name or option for remove_option change.\n");
+			}
+			change = new RemoveOptionChange(name.AsString(), option.AsString());
+		}
+		else if (type == "npc_navigate") {
+			auto name = obj["name"];
+			auto destination = obj["destination"];
+			if (name.IsNull() || destination.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name or destination for npc_navigate change.\n");
+			}
+			change = new NPCNavigateChange(name.AsString(), destination.AsString());
+		}
+		else if (type == "change_control") {
+			auto name = obj["name"];
+			if (name.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name for change_control change.\n");
+			}
+			change = new ChangeControlChange(name.AsString());
+		}
+		else if (type == "register_door") {
 			auto name = obj["name"];
 			auto citizen = obj["citizen"];
 			if (name.IsNull() || citizen.IsNull()) {
-				THROW_EXCEPTION(RuntimeException, "Missing name or citizen for allow_door change.\n");
+				THROW_EXCEPTION(RuntimeException, "Missing name or citizen for register_door change.\n");
 			}
-			change = new AllowDoorChange(name.AsString(), citizen.AsString());
+			// pass省略时按true(允许通过)。
+			change = new RegisterDoorChange(name.AsString(), citizen.AsString(), obj["pass"].AsString());
 		}
 		else {
 			// 其余变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。

@@ -27,8 +27,9 @@
 
 - `chronode`(当天进度，`[0,1)`)：`(hour*3600+minute*60+second+millisecond/1000)/86400`，
   在`UpdateSky()`里自己算。
-- 太阳：俯仰角`Lerp(90°, -270°, chronode)`(跨360°一圈)；强度`Clamp(Sin(chronode·π),0,1)
-  ×100000`；颜色5段硬编码if-else(橙红→橙黄→暖白→橙红→蓝紫)。
+- 太阳：俯仰角`Lerp(90°, -270°, chronode)`(跨360°一圈)；强度`SunIntensityFactor(chronode)×100000`，
+  `SunIntensityFactor = relu(−cos(2π·chronode))`，即太阳仰角的正弦：6~18点亮、正午最亮，18点~6点太阳在地平线以下时为0。原来用`Clamp(Sin(chronode·π),0,1)`，
+  它在(0,1)里恒为正，夜里太阳转到地平线以下仍有几万lux，光从地下照上来。颜色按关键帧分段插值。
 - 大气：复用同一个"sunIntensity"公式，缩放进`[0.1,1]`做`MultiScatteringFactor`。
 - 雾：以正午(`chronode=0.5`)为中心的抛物线，正午最浓(0.0002)两端(午夜)最淡(0.0001)。
 - 后处理：`-Cos(chronode·2π)×10`驱动`AutoExposureMinBrightness`。

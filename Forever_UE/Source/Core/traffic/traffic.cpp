@@ -272,4 +272,9 @@ void Traffic::ApplyChange(const Change* change, const ScriptContext& context) {
 		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
 		return;
 	}
+	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		Vehicle* target = FindVehicleByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
+		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
+		return;
+	}
 }

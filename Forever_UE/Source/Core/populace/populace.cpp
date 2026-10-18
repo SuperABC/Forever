@@ -430,6 +430,11 @@ void Populace::ApplyChange(const Change* change, const ScriptContext& context) {
 		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
 		return;
 	}
+	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		Citizen* target = FindCitizenByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
+		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
+		return;
+	}
 
 	// 占位，等Populace域真的有需要处理的其它Change子类时再补，见populace.h声明处注释。
 }

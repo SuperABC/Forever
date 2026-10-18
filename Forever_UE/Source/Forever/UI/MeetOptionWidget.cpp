@@ -100,3 +100,18 @@ void UMeetOptionWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime)
 		}
 	}
 }
+
+bool UMeetOptionWidget::HasName(const FString& name) const {
+	for (const auto& [key, button] : OptionMap) {
+		if (button && button->GetTargetName() == name) return true;
+	}
+	return false;
+}
+
+void UMeetOptionWidget::ReplaceOptions(AForeverFrameworkActor* framework, const FString& name, const TArray<FString>& options) {
+	if (!HasName(name)) return;
+	RemoveName(name);
+	for (int32 idx = 0; idx < options.Num(); idx++) {
+		AddOption(framework, options[idx], name, idx, false);
+	}
+}

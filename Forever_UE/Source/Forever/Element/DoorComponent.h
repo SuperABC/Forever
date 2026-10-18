@@ -42,6 +42,15 @@ public:
 	// 对应哪个Core端Door*，按Door的世界坐标/朝向/外观生成门扇/门框/触发盒。inOwnerName只用
 	// 于诊断日志(不参与任何判定逻辑)。
 	void Init(Door* inDoor);
+	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
+	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
+	void RefreshOptions();
+
+	// 当前存在的门组件(按Door*查)，供RefreshInteractOptions找到要刷新的那一扇门。门组件跟着
+	// 建筑近景LOD创建/销毁，没生成时返回nullptr。
+	static UForeverDoorComponent* FindForDoor(const Door* door);
+
+	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
@@ -107,6 +116,8 @@ private:
 	void UpdateOpenState();
 
 	Door* door = nullptr;
+
+	static TMap<const Door*, TWeakObjectPtr<UForeverDoorComponent>> componentsByDoor;
 
 	// 不是UPROPERTY——FLeaf不是USTRUCT，UHT不认；GC安全性见FLeaf注释。
 	TArray<FLeaf> leaves;

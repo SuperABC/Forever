@@ -128,6 +128,18 @@ void UForeverSkyFrameworkComponent::UpdateSky(const Time& currentTime) {
 	UpdatePostProcess(chronode);
 }
 
+namespace {
+	// 太阳光强度系数(0~1) = relu(-cos(2π·chronode))，也就是太阳仰角的正弦：太阳的俯仰是
+	// Lerp(90°, -270°, chronode)，6点/18点正好在地平线上，6~18点亮、正午最亮，18点~6点太阳在
+	// 地平线以下时恰好为0，光不会从地下照上来，全程连续。原来用sin(chronode·π)，它在(0,1)里
+	// 恒为正，只有午夜那一刻是0，夜里太阳转到地平线以下仍然有几万lux。
+	float SunIntensityFactor(float chronode) {
+		return FMath::Max(0.0f, -FMath::Cos(2.0f * PI * chronode));
+	}
+
+	constexpr float kSunMaxIntensity = 100000.0f; // 正午直射光，lux
+}
+
 void UForeverSkyFrameworkComponent::UpdateSunLight(float chronode) {
 	if (!sunLight) return;
 
@@ -135,7 +147,7 @@ void UForeverSkyFrameworkComponent::UpdateSunLight(float chronode) {
 	if (!sunComponent) return;
 
 	sunLight->SetActorRotation(FRotator(FMath::Lerp(90.0f, -270.0f, chronode), 0.0f, 0.0f));
-	sunComponent->SetIntensity(FMath::Clamp(FMath::Sin(chronode * PI), 0.0f, 1.0f) * 100000.0f);
+	sunComponent->SetIntensity(SunIntensityFactor(chronode) * kSunMaxIntensity);
 
 	// 原来是5段硬切(if/else if边界处颜色直接跳一截)，改成关键帧+分段线性插值，边界处
 	// 颜色连续过渡。关键帧的颜色和大致时间点原样保留原来5段各自的颜色，只是把"整段恒定"
@@ -172,7 +184,7 @@ void UForeverSkyFrameworkComponent::UpdateSkyAtmosphere(float chronode) {
 
 	USkyAtmosphereComponent* atmosphereComponent = skyAtmosphere->GetComponent();
 	if (atmosphereComponent) {
-		float sunIntensity = FMath::Clamp(FMath::Sin(chronode * PI), 0.0f, 1.0f) * 100000.0f;
+		float sunIntensity = SunIntensityFactor(chronode) * kSunMaxIntensity;
 		atmosphereComponent->SetMultiScatteringFactor(FMath::Clamp(sunIntensity / 50000.0f, 0.1f, 1.0f));
 	}
 }

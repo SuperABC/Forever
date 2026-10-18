@@ -80,6 +80,9 @@ public:
 	// 它们只引用Citizen*/Room*/TArray<FVector>这些纯数据，没有需要手动释放的所有权。
 	static void WaitForPendingPathfinding();
 
+	// 这个市民当前在场景里的Actor(没生成时返回nullptr，不会触发生成)。
+	ACitizenElement* FindActiveCitizen(Citizen* citizen) const;
+
 	// 存档前调用：把场景里每个市民Actor当前的位置写回Core的Citizen(SetPosition)。平时只有市民
 	// 走远被销毁时才写回，不同步的话读档后市民会回到上一次写回的位置。
 	// 正在走路的市民按"已经走到了"记：Core里的当前房间设成目的地、清掉位置(读档后在目的地

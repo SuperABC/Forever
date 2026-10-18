@@ -103,8 +103,7 @@ protected:
 	void StopSprint();
 
 	// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，转发给
-	// AForeverPlayerController::GetMeetOptionWidget()，见MAINCONTROLLER_TODO.md
-	// "MouseScrollUp/Down + F"这一行热键。
+	// AForeverPlayerController::GetMeetOptionWidget()，见ForeverPlayerController.md"旧MainController热键"一节。
 	void MeetOptionFocusUp();
 	void MeetOptionFocusDown();
 	void MeetOptionSelect();

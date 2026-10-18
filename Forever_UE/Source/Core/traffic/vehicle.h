@@ -60,6 +60,7 @@ public:
 	Script* GetScript() const;
 	const std::vector<std::string>& GetOptions() const;
 	void AddOption(const std::string& option);
+	void RemoveOption(const std::string& option);
 
 	// 停车位信息：由Traffic::Init()在创建这辆预置车辆时设置一次，之后不会再变——车辆被
 	// 开走之后"停在哪"这件事不再有意义，这几个字段只服务于"生成时应该摆在世界哪个位置"

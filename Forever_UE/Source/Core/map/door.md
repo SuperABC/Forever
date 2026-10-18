@@ -23,24 +23,26 @@ mesh为空都返回nullptr（只是门洞）。园区门不走这个函数，直
   interactName)`+`SetValue("label", spec.name)`——门需要区分"交互名"（完整的、带编号的
   唯一标识，剧情脚本点名/MeetOption显示用）和"门类别标签"（`spec.name`本身，比如"商店
   大门"，不带编号），`Vehicle`没有这个区分需求，只设了`"name"`。
-- **`Allow()`按名字字符串存，不按`Citizen*`指针存**——`Map::ApplyChange`处理
-  `AllowDoorChange`时手上只有一个`citizen`名字字符串，`Map`不持有`Populace`的引用/
+- **`Register()`按名字字符串存，不按`Citizen*`指针存**——`Map::ApplyChange`处理
+  `RegisterDoorChange`时手上只有一个`citizen`名字字符串，`Map`不持有`Populace`的引用/
   指针（`Populace::Init`只是`Map::Checkin(const Populace&)`的一次性参数，不长期持有），
-  没有办法把名字反查成真正的`Citizen*`。所以`Door::Allow(const std::string&
-  citizenName)`存名字，`CanPass(const Citizen* who, ...)`里用`who->GetName()`和存的
+  没有办法把名字反查成真正的`Citizen*`。所以`Door::Register(const std::string&
+  citizenName, bool pass)`存名字，`CanPass(const Citizen* who, ...)`里用`who->GetName()`和存的
   名字比对，不是指针比对——`who`本身是调用方（Forever层`UForeverDoorComponent`，手上有
-  `ACitizenElement::GetCitizen()`拿到的真实指针）传进来的真指针，只是"允许名单"这一份
+  `ACitizenElement::GetCitizen()`拿到的真实指针）传进来的真指针，只是"登记表"这一份
   数据存的是字符串。
-- **`CanPass`的Owner分支判定顺序**：`stated==true`（所属对象公有）→ true；
-  `isPlayer==true`→ true（这次没有真正的玩家门禁判定，占位按Open处理）；
-  `who==nullptr`（调用方判断不出身份，比如空车/公交）→ false；
-  `owner==who`（指针相等，真正的房主/楼主/园区主）→ true；否则查`Allow()`登记过的
-  名单。`Locked`/`Open`两种状态在最前面直接短路，不走这一整套判定。
+- **`CanPass`判定顺序**：
+  1. 按人登记的例外最优先：`who`非空且登记过(`Register`)，直接返回登记的结果(允许/不允许)。所以常开的门可以
+     单独拦住某人，常锁的门可以单独放行某人。同一个人再次登记会覆盖之前的结果。
+  2. 门禁模式：`Locked`→ false；`Open`→ true。
+  3. `Owner`模式：`stated==true`（所属对象公有）→ true；`isPlayer==true`→ true（这次没有真正的玩家门禁判定，
+     占位按Open处理）；`who==nullptr`（调用方判断不出身份，比如空车/公交）→ false；否则只有`owner==who`
+     （指针相等，真正的房主/楼主/园区主）能过。
 - **`DOOR_ACCESS_TYPE`数值顺序和`DoorSpec::access`的int字面值(0/1/2)保持一致**——
   `Door`构造函数直接`static_cast<DOOR_ACCESS_TYPE>(spec.access)`，不需要额外的
-  字符串/枚举转换表；`Map::ApplyChange`处理`SetDoorAccessChange`时才需要把脚本里的
-  字符串("open"/"owner"/"locked")转成这个枚举，转换逻辑放在`map.cpp`里（就近原则，
-  这是唯一需要字符串转枚举的地方）。
+  字符串/枚举转换表；脚本里的`set_door`只能设常开/常锁两种：`access`是布尔表达式，`true`→`Open`，
+  `false`→`Locked`(`Map::ApplyChange`里`EvaluateExpressionBool`)。`Owner`模式只来自mod的`DoorSpec::access`
+  初始值。
 - **`IsFlippedSide()`只在`leaves==1 && spec.randomSide`为true时才有意义**——双扇门
   两扇对称镜像，没有"选哪一边"的歧义，恒为`false`；`spec.randomSide`为`false`的单扇门
   也恒为`false`（没开随机化开关），Forever层`UForeverDoorComponent`按这个值决定具体

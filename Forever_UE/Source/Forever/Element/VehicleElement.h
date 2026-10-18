@@ -58,6 +58,9 @@ public:
 	virtual void UnPossessed() override;
 
 	Vehicle* GetVehicle() const { return vehicle; }
+	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
+	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
+	void RefreshOptions();
 	TWeakObjectPtr<APawn> GetPreviousPawn() const { return previousPawn; }
 
 protected:

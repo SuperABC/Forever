@@ -430,3 +430,17 @@ void ACitizenElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AAc
 	if (!GEngine) return;
 	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("离开 %s"), *collisionLabel));
 }
+
+void ACitizenElement::RefreshOptions() {
+	if (!citizen) return;
+	cachedOptions.Reset();
+	for (const std::string& option : citizen->GetOptions()) {
+		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+	}
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			AForeverFrameworkActor* frameworkActor = framework.IsValid() ? Cast<AForeverFrameworkActor>(framework->GetOwner()) : nullptr;
+			meetOption->ReplaceOptions(frameworkActor, citizenNameOnly, cachedOptions);
+		}
+	}
+}

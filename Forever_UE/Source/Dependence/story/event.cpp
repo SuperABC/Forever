@@ -87,6 +87,12 @@ bool OptionDialogEvent::Match(Event* e, const ScriptContext& context) {
 	return true;
 }
 
+pair<bool, ValueType> OptionDialogEvent::GetLocalValue(const string& key) const {
+	if (key == "name") return { true, ValueType(name) };
+	if (key == "option") return { true, ValueType(option) };
+	return { false, ValueType() };
+}
+
 void OptionDialogEvent::SetName(std::string name) {
 	this->name = move(name);
 }
@@ -541,6 +547,21 @@ CitizenDeceaseEvent::~CitizenDeceaseEvent() {
 const string& CitizenDeceaseEvent::GetType() const {
 	static const string type = "citizen_decease";
 	return type;
+}
+
+bool CitizenDeceaseEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<CitizenDeceaseEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	if (!reason.empty() && ToString(EvaluateExpression(reason, context)) != other->reason) return false;
+	return true;
+}
+
+pair<bool, ValueType> CitizenDeceaseEvent::GetLocalValue(const string& key) const {
+	if (key == "name") return { true, ValueType(name) };
+	if (key == "reason") return { true, ValueType(reason) };
+	return { false, ValueType() };
 }
 
 void CitizenDeceaseEvent::SetName(std::string name) {

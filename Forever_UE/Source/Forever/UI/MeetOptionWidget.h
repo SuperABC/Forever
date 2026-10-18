@@ -32,6 +32,13 @@ public:
 	// 检测范围时调用。
 	void RemoveName(const FString& name);
 
+	// 这个名字(市民/车辆/门的交互名)当前在列表里有没有选项行——有说明玩家正站在它旁边。
+	bool HasName(const FString& name) const;
+
+	// 交互选项在运行中变了(add_option/remove_option)：如果这个名字当前在列表里，整组换成新的
+	// options；不在列表里(玩家没站在旁边)什么都不做，下次靠近时Actor会用自己刷新过的快照。
+	void ReplaceOptions(AForeverFrameworkActor* framework, const FString& name, const TArray<FString>& options);
+
 	// 键盘/滚轮上下移动高亮行，空列表或已在边界时no-op。
 	void FocusUp();
 	void FocusDown();
