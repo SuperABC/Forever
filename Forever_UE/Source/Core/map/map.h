@@ -44,6 +44,8 @@ struct Element {
 // TerrainFactory归属、地形分发、plain->construction晋升规则)。Zone/Block/Component/
 // Room/Building/Roadnet迁移时会在这个类基础上继续扩展,不是最终形态,详见map.md。
 class Map {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	Map(int width, int height);
 	~Map();
@@ -351,6 +353,11 @@ private:
 	// GetZone(name)/GetBuilding(name)直接find即可，不需要另外挂一张单独的"名字->指针"表。
 	std::unordered_map<std::string, Zone*> zones;
 	std::unordered_map<std::string, Building*> buildings;
+
+	// 读档时重建出来的"游离"Lot：自适应占位(PromoteAdaptiveRemainder)用过的嵌套子块，生成时
+	// 已经从父块的freeLots里摘掉、不归任何Lot持有，但还被building->GetParentLot()引用着。新开局
+	// 时这类子块没有任何持有者(一直存活到进程结束)；读档时由Map持有、析构时释放，见map_save.md。
+	std::vector<Lot*> orphanLots;
 
 	// 门索引——不持有所有权(Door*的生命周期归Zone/Building/Room各自的doorEntities管)，
 	// 这几个容器只是方便按id/交互名查找+遍历全部。doorCount是全局门计数器("Door"+n)；

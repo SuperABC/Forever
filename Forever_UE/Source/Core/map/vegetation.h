@@ -50,6 +50,8 @@ struct TreeFrame {
 // 展开成一棵棵TreeInstance，随机旋转/随机缩放的规则只在这里实现一份。由Map持有，UE层的
 // UForeverVegetationFrameworkComponent一次性读出来按mesh分组实例化渲染。详见vegetation.md。
 class Vegetation {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	// 返回false表示这个位置不能种树(水面/挖洞等)，由Map提供。
 	using PlaceFilter = std::function<bool(float, float)>;

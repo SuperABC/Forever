@@ -99,6 +99,15 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   `GetModDependences()`导出符号的依赖声明——粒度是单个mod id，不是DLL：同一个DLL
   注册的多个mod可以各自声明不同的依赖，不需要共用一份。
 
+## 存档相关接口
+
+- `ConceptKeyToJsonKey` 改成 public：存档按 `"<concept>_mods"` key 记 mod，和 `GetModEnables()` 的 conceptKey 对照要用。
+- `GetConceptJsonKeys` / `SetConceptMods` / `SetStoryScripts` / `SetMainStoryScriptModName`：读档时把存档的 mod 集合和
+  剧情脚本设成当前状态，**只改内存，不写回 config.json**（校验失败时由 `SaveGame::RestoreConfig` 恢复）。
+- `FindMissingScripts` / `FindMissingLayouts`：存档的资源检查，按名字在配置的资源/布局目录里找，返回缺失的名字。调用方（`SaveGame::ValidateArchive`）会先 `RescanFiles`，保证查的是磁盘上的当前内容。
+- `RescanFiles`：重新扫描所有已配置的 layout/resource 根目录，刷新缓存的文件列表。根目录添加时只扫一次，之后运行中增删文件不会自动反映，所以 `SaveGame::ValidateArchive`（读档校验）和 `ValidateAndStartGame`（开始新游戏）开头各调一次。
+  见 `save.md`。
+
 ## 依赖关系
 
 - 依赖:`Dependence/common/json.h`(解析JSON)、`Core/common/loader.h`

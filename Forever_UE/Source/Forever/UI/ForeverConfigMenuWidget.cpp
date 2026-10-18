@@ -4,6 +4,7 @@
 #include "ForeverModPanelWidget.h"
 #include "ForeverResourcePanelWidget.h"
 #include "Mod/ForeverConfigBridgeSubsystem.h"
+#include "Mod/ForeverSaveSubsystem.h"
 
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
@@ -22,6 +23,9 @@ void UForeverConfigMenuWidget::NativeConstruct() {
 	}
 	if (StartButton) {
 		StartButton->OnClicked.AddDynamic(this, &UForeverConfigMenuWidget::HandleStartClicked);
+	}
+	if (LoadGameButton) {
+		LoadGameButton->OnClicked.AddDynamic(this, &UForeverConfigMenuWidget::HandleLoadGameClicked);
 	}
 	if (FailureMessage) {
 		FailureMessage->SetVisibility(ESlateVisibility::Collapsed);
@@ -74,6 +78,23 @@ void UForeverConfigMenuWidget::HandleStartClicked() {
 	if (!bridge->ValidateAndStartGame(failureMessage)) {
 		if (FailureMessage) {
 			FailureMessage->SetText(FText::FromString(failureMessage));
+			FailureMessage->SetVisibility(ESlateVisibility::Visible);
+		}
+	}
+}
+
+void UForeverConfigMenuWidget::HandleLoadGameClicked() {
+	UGameInstance* gameInstance = GetGameInstance();
+	UForeverSaveSubsystem* saveSubsystem = gameInstance ? gameInstance->GetSubsystem<UForeverSaveSubsystem>() : nullptr;
+	if (!saveSubsystem) {
+		return;
+	}
+
+	// 成功时LoadWithDialog已经发起OpenLevel(World)；取消对话框时error为空，什么都不提示。
+	FString error;
+	if (!saveSubsystem->LoadWithDialog(error) && !error.IsEmpty()) {
+		if (FailureMessage) {
+			FailureMessage->SetText(FText::FromString(error));
 			FailureMessage->SetVisibility(ESlateVisibility::Visible);
 		}
 	}

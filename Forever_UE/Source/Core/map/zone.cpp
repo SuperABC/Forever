@@ -79,6 +79,8 @@ string Zone::GetAddress() const {
 void Zone::Layout(int inDirection) {
 	direction = inDirection;
 	mod->Layout(direction, *this, GetBoundaryRoads());
+	walls = mod->walls;
+	gates = mod->gates;
 
 	decorations.clear();
 	for (const DecorationSpec& spec : mod->decorations) {
@@ -152,11 +154,11 @@ const unordered_map<int, Road*>& Zone::GetBoundaryRoads() const {
 }
 
 const vector<ZoneWallSpec>& Zone::GetWalls() const {
-	return mod->walls;
+	return walls;
 }
 
 const vector<ZoneGateSpec>& Zone::GetGates() const {
-	return mod->gates;
+	return gates;
 }
 
 void Zone::SetInternalRoads(const vector<Road*>& roads) {

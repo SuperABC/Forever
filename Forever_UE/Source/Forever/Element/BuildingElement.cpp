@@ -622,17 +622,14 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	// 不构造墙壁(含楼梯/坡道/电梯井道墙)、地板、天花板，楼梯/坡道网格照常摆，见
 	// BuildingElement.md"buildShell"一节。
 	bool buildShell = true;
-	if (BuildingMod* mod = building->GetMod()) {
-		auto specIt = mod->floors.find(level);
-		if (specIt != mod->floors.end()) {
-			const FloorAssetSpec& assets = specIt->second.assets;
-			wallMaterial = framework->ResolveMaterial(assets.wallMaterial, wallMaterial);
-			floorMaterial = framework->ResolveMaterial(assets.floorMaterial, floorMaterial);
-			ceilingMaterial = framework->ResolveMaterial(assets.ceilingMaterial, ceilingMaterial);
-			stairMesh = framework->ResolveMesh(assets.stairMeshPath, stairMesh);
-			rampMesh = framework->ResolveMesh(assets.rampMeshPath, rampMesh);
-			buildShell = assets.buildShell;
-		}
+	if (const FloorLayoutSpec* spec = building->GetFloorSpec(level)) {
+		const FloorAssetSpec& assets = spec->assets;
+		wallMaterial = framework->ResolveMaterial(assets.wallMaterial, wallMaterial);
+		floorMaterial = framework->ResolveMaterial(assets.floorMaterial, floorMaterial);
+		ceilingMaterial = framework->ResolveMaterial(assets.ceilingMaterial, ceilingMaterial);
+		stairMesh = framework->ResolveMesh(assets.stairMeshPath, stairMesh);
+		rampMesh = framework->ResolveMesh(assets.rampMeshPath, rampMesh);
+		buildShell = assets.buildShell;
 	}
 
 	float rotation = building->GetRotation();
@@ -736,14 +733,11 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 
 void ABuildingElement::BuildElevatorCabinsForBuilding() {
 	if (!building || !framework.IsValid()) return;
-	BuildingMod* mod = building->GetMod();
-	if (!mod) return;
-
 	float rotation = building->GetRotation();
 	const vector<float>& floorHeights = building->GetFloorHeights();
 	int32 basements = building->GetBasementCount();
 
-	for (const ElevatorCabinSpec& spec : mod->cabins) {
+	for (const ElevatorCabinSpec& spec : building->GetCabins()) {
 		int32 minIdx = basements + spec.minFloor, maxIdx = basements + spec.maxFloor;
 		int32 floorCount = static_cast<int32>(floorHeights.size());
 		if (minIdx < 0 || minIdx >= floorCount || maxIdx < 0 || maxIdx >= floorCount) continue;

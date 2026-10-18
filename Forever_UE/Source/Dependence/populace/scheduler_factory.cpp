@@ -62,3 +62,10 @@ float SchedulerFactory::GetPower(const string& id) const {
 	auto it = registries.find(id);
 	return IsEnabled(id) ? it->second.power() : 0.f;
 }
+
+vector<pair<string, SchedulerMod*>> SchedulerFactory::GetLiveInstances() const {
+	vector<pair<string, SchedulerMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

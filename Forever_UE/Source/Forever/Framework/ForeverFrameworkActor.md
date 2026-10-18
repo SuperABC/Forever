@@ -169,6 +169,19 @@ context)`是消费任意`Change*`的唯一入口——`populace->Tick`的回调�
   `EnsureMapGenerated`最后、`GenerateBuildings`之后调用`GenerateVegetation(map)`：Core里的树在
   `InitRoadnet`/`InitBuildings`时已经展开好，这里一次性加载mesh+批量实例化，见
   `ForeverVegetationFrameworkComponent.md`。
+- **读档请求**——`FetchActiveLoad()`第一次调用时从`UForeverSaveSubsystem::ConsumePendingLoad()`取走读档请求，之后
+  一直返回同一份。GameMode找出生点(`FindPlayerStart`→`EnsureFrameworkActorExists`→`EnsureMapGenerated`)比`BeginPlay`
+  还早，所以`EnsureMapGenerated`和`BeginPlay`都通过它取，谁先调用谁触发。有读档请求时`EnsureMapGenerated`用
+  `MapSaveCodec::Load`按存档恢复地图(不跑任何`Init*`生成)，再`SaveGame::RestoreInstanceCounters`恢复各mod类的命名
+  计数器；恢复失败时打错误+屏幕提示，退回重新生成。`EnsurePopulaceGenerated`/`EnsureSocietyGenerated`同样按存档
+  恢复人口(连同房产归属/住处)和社会(组织/岗位/在职市民)；存档里没有这两段时重新生成。社会段按市民下标引用市民，
+  只有人口也是按存档恢复的才读(`bPopulaceRestored`)；人口按存档恢复、社会重新生成时不再跑
+  `GenerateEmploymentHistory`(经历里已经有了)。`EnsureTrafficGenerated`按存档恢复交通；`EnsureStoryGenerated`在
+  `Story::Init`之后按存档恢复全部Script状态(`ScriptSaveCodec`)，成功时**不广播game_start**(`bScriptsRestored`)，并在
+  `GenerateVehicles`之后由`RestoreControlledPawn`按存档的UE段让玩家重新操控存档时的市民(开车时再上车)。存档里没有
+  脚本状态段时照常广播game_start。`EnsurePlayerGenerated`按存档恢复玩家(时钟/生命/物品/房间里的物品)。
+  `RestoreControlledPawn`同时按UE段恢复操控对象的位置朝向、视角、激活的肩膀武器和弹匣余量。
+
 
 ## 依赖关系
 - 依赖`Framework/ForeverFrameworkComponent.h`及其9个具体子类头文件、`Source/Core/map/map.h`、

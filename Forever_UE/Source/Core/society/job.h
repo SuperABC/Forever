@@ -22,6 +22,8 @@ class Change;
 // 广播、走Script::MatchEvent的正常触发器匹配流程，见job.md）。**Job由Organization持有
 // 所有权**，Citizen只存一个不持有所有权的Job*指针（Citizen::GetJob()/SetJob()）。
 class Job {
+	// 存档：SocietySaveCodec直接读写私有字段(society_save.md)。
+	friend class SocietySaveCodec;
 public:
 	Job(JobFactory* factory, ScriptFactory* scriptFactory, const std::string& id, Room* position);
 	~Job(); // factory->DestroyJob(mod)；delete script

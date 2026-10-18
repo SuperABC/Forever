@@ -25,6 +25,8 @@ class ScriptFactory;
 // 分配/释放全程在Core侧（OrganizationMod所在的Dependence层看不到Job这个Core类型），
 // 见organization.md"分层约束"一节。
 class Organization {
+	// 存档：SocietySaveCodec直接读写私有字段(society_save.md)。
+	friend class SocietySaveCodec;
 public:
 	Organization(OrganizationFactory* factory, JobFactory* jobFactory, ScriptFactory* scriptFactory,
 		const std::string& id, std::vector<Component*> components);

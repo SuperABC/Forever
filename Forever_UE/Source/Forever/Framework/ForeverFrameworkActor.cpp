@@ -18,6 +18,18 @@
 #include "common/implement.h"
 #include "common/config.h"
 #include "common/error.h"
+#include "common/save.h"
+#include "map/map_save.h"
+#include "populace/populace_save.h"
+#include "society/society_save.h"
+#include "traffic/traffic_save.h"
+#include "story/script_save.h"
+#include "player/player_save.h"
+#include "Player/ForeverCharacter.h"
+#include "common/json.h"
+#include "Element/CitizenElement.h"
+#include "Element/VehicleElement.h"
+#include "Framework/ForeverTrafficFrameworkComponent.h"
 
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
@@ -32,6 +44,7 @@
 #include "Framework/ForeverTerrainFrameworkComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Framework/ForeverVegetationFrameworkComponent.h"
+#include "Mod/ForeverSaveSubsystem.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
 #include "Components/SceneComponent.h"
 
@@ -123,6 +136,14 @@ void AForeverFrameworkActor::BeginPlay()
 
 	Registry::Get().ReloadModArgs();
 
+	// 读档：地图/人口/社会在各自的Ensure*Generated里按存档恢复；交通/剧情/玩家还没有序列化，
+	// 暂时仍按新开局在恢复出来的世界上重新生成(开发期临时回退，P5~P6逐个改成按存档恢复，见
+	// SAVE_PLAN.md)。mod集合已经在RequestLoad里按存档设好了。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor: loading %s - the world is restored from the save (sections missing from older saves are regenerated)."),
+			*load->path);
+	}
+
 	// 按依赖顺序显式列出全部7个域的Ensure*Generated()——一个函数体内写出来的调用顺序就是
 	// 实际执行顺序,不存在"调用方可能不按顺序调"这回事,所以每个Ensure*Generated()自己只保证
 	// 自己那个域,不会再调用别的Ensure*Generated()。顺序本身由真实依赖决定:EnsurePopulaceGenerated
@@ -155,6 +176,12 @@ void AForeverFrameworkActor::BeginPlay()
 			trafficFramework->GenerateVehicles(map, traffic);
 			trafficFramework->BuildRouteDebugMesh(traffic);
 			trafficFramework->BuildTracks(traffic);
+		}
+
+		// 读档跳过了game_start(它本来会随机交给玩家一个市民)：按存档恢复玩家操控的市民/车辆。
+		// 必须在GenerateVehicles之后——上车要用到车辆Actor。
+		if (bScriptsRestored) {
+			if (FForeverPendingLoad* load = FetchActiveLoad()) RestoreControlledPawn(*load);
 		}
 
 	}
@@ -328,17 +355,51 @@ namespace {
 	constexpr int kDefaultMapHeight = 1024;
 }
 
+FForeverPendingLoad* AForeverFrameworkActor::FetchActiveLoad()
+{
+	if (!bActiveLoadFetched) {
+		bActiveLoadFetched = true;
+		if (UGameInstance* gameInstance = GetGameInstance()) {
+			if (UForeverSaveSubsystem* saveSubsystem = gameInstance->GetSubsystem<UForeverSaveSubsystem>()) {
+				activeLoad = saveSubsystem->ConsumePendingLoad();
+			}
+		}
+	}
+	return activeLoad.Get();
+}
+
 void AForeverFrameworkActor::EnsureMapGenerated()
 {
 	if (map) return;
 
-	map = new Map(kDefaultMapWidth, kDefaultMapHeight);
-	map->InitTerrains();
-	map->InitRoadnet();
-	map->InitZones();
-	map->InitBuildings();
-	// 植被放在最后：要等路网开口/园区/建筑/房间全部生成完，行道树才能避开出入口。
-	map->InitVegetation();
+	// 读档：按存档恢复地图(不跑任何生成)，再把各mod类的命名计数器恢复成存档值——必须在其余域
+	// 重新生成之前恢复，它们新建的mod实例才会从存档时的编号接着往下编，不和恢复出来的名字撞。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		std::string error;
+		map = MapSaveCodec::Load(load->archive, error);
+		if (map) {
+			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: %s"), UTF8_TO_TCHAR(MapSaveCodec::GetLastReport().c_str()));
+			SaveGame::RestoreInstanceCounters(load->manifest);
+		}
+		else {
+			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: failed to restore the map from %s (%s); generating a new world instead."),
+				*load->path, UTF8_TO_TCHAR(error.c_str()));
+			if (GEngine) {
+				GEngine->AddOnScreenDebugMessage(-1, 15.f, FColor::Red,
+					FString::Printf(TEXT("读档失败，已重新生成世界：%s"), UTF8_TO_TCHAR(error.c_str())));
+			}
+		}
+	}
+
+	if (!map) {
+		map = new Map(kDefaultMapWidth, kDefaultMapHeight);
+		map->InitTerrains();
+		map->InitRoadnet();
+		map->InitZones();
+		map->InitBuildings();
+		// 植被放在最后：要等路网开口/园区/建筑/房间全部生成完，行道树才能避开出入口。
+		map->InitVegetation();
+	}
 
 	if (terrainFramework) {
 		terrainFramework->GenerateTerrain(map);
@@ -376,9 +437,26 @@ void AForeverFrameworkActor::EnsurePopulaceGenerated()
 	// populace->Init(accomodation, ...); map->Checkin(populace, ...);"同一个编排顺序，
 	// 详见Source/Core/populace/populace.md。假定map已经生成好，调用方(BeginPlay)负责保证
 	// EnsureMapGenerated()已经先跑过。
-	populace = new Populace();
-	populace->Init(map->ComputeAccommodationTarget());
-	map->Checkin(*populace);
+	// 读档：按存档恢复市民(连同住处/房产归属)，不跑Init/Checkin。存档里没有人口段(P2阶段的存档)
+	// 或者恢复失败时退回新开局生成。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		std::string error;
+		populace = PopulaceSaveCodec::Load(load->archive, *map, pendingJobExperienceOrganizations, error);
+		bPopulaceRestored = populace != nullptr;
+		if (populace) {
+			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: populace restored from the save (%d citizens)."),
+				static_cast<int32>(populace->GetCitizens().size()));
+		}
+		else if (!error.empty()) {
+			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: failed to restore populace (%s); generating it instead."), UTF8_TO_TCHAR(error.c_str()));
+		}
+	}
+
+	if (!populace) {
+		populace = new Populace();
+		populace->Init(map->ComputeAccommodationTarget());
+		map->Checkin(*populace);
+	}
 
 	if (populaceFramework) {
 		// 这里不SpawnActor任何ACitizenElement——populaceFramework只是缓存
@@ -392,6 +470,23 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 {
 	if (society) return;
 
+	// 读档：社会段按人口段的市民下标引用市民，只有人口也是按存档恢复的才能读。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		if (bPopulaceRestored) {
+			std::string error;
+			society = SocietySaveCodec::Load(load->archive, *map, *populace, pendingJobExperienceOrganizations, error);
+			if (society) {
+				UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: society restored from the save (%d organizations)."),
+					static_cast<int32>(society->GetOrganizations().size()));
+			}
+			else if (!error.empty()) {
+				UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: failed to restore society (%s); generating it instead."), UTF8_TO_TCHAR(error.c_str()));
+			}
+		}
+		pendingJobExperienceOrganizations.clear();
+	}
+	if (society) return;
+
 	// Society这次真的做了组织分配+招聘（不是空骨架了）：按地图里所有Component加权随机
 	// 分配Organization（每个Organization自己遍历claimed components设计Job），再把成年
 	// 市民随机匹配到还空缺的Job上，见society.md。
@@ -400,13 +495,29 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 	society->RecruitCitizens(populace->GetCitizens(), populace->GetCurrentYear());
 	// 入职历史反推 + 同事关系——依赖RecruitCitizens()已经把当前在职citizen分配进Job，
 	// 也依赖Citizen::GetLastGraduationYear()（Populace::Init()里GenerateEducations()
-	// 已经算好），见society.md"四类人际关系生成"一节。
-	society->GenerateEmploymentHistory(populace->GetCitizens(), populace->GetCurrentYear());
+	// 已经算好），见society.md"四类人际关系生成"一节。人口按存档恢复时经历和同事关系里
+	// 已经有这些了，不再补一遍。
+	if (!bPopulaceRestored) {
+		society->GenerateEmploymentHistory(populace->GetCitizens(), populace->GetCurrentYear());
+	}
 }
 
 void AForeverFrameworkActor::EnsurePlayerGenerated()
 {
 	if (player) return;
+
+	// 读档：按存档恢复时钟/生命值/身上和房产里的物品/所在房间，并把散落在房间里的物品放回地图。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		std::string error;
+		player = PlayerSaveCodec::Load(load->archive, *map, error);
+		if (player) {
+			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: player restored from the save."));
+			return;
+		}
+		if (!error.empty()) {
+			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: failed to restore player (%s); generating it instead."), UTF8_TO_TCHAR(error.c_str()));
+		}
+	}
 
 	// Player这次迁移了全局时钟部分，Init()创建Time并交给AForeverFrameworkActor::Tick每帧
 	// 推进，见player.md。
@@ -449,6 +560,23 @@ void AForeverFrameworkActor::EnsureTrafficGenerated()
 	// ACitizenElement故意等到game_start广播跑完之后才会被距离流式生成是同一个道理，见
 	// ACitizenElement::BuildProximityBox的注释)。GenerateVehicles()真正的调用点挪到
 	// BeginPlay()里EnsureStoryGenerated()之后，见那边的调用。
+	// 读档：按存档恢复站点/线路/车辆；存档带脚本状态段时(会跳过game_start广播)连车辆的交互选项
+	// 一起恢复。存档里没有交通段时重新生成。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		std::string error;
+		bool restoreOptions = load->archive.Find(SAVE_SECTION_SCRIPTS) != nullptr;
+		traffic = TrafficSaveCodec::Load(load->archive, *map, restoreOptions, error);
+		if (traffic) {
+			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: traffic restored from the save (%d vehicles, %d stations, %d routes)."),
+				static_cast<int32>(traffic->GetVehicles().size()), static_cast<int32>(traffic->GetStations().size()),
+				static_cast<int32>(traffic->GetRoutes().size()));
+			return;
+		}
+		if (!error.empty()) {
+			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: failed to restore traffic (%s); generating it instead."), UTF8_TO_TCHAR(error.c_str()));
+		}
+	}
+
 	traffic = new Traffic();
 	traffic->Init(map);
 }
@@ -461,8 +589,74 @@ void AForeverFrameworkActor::EnsureStoryGenerated()
 	// 随后立刻广播一次GameStartEvent，见storyFramework.md。
 	story = new Story();
 	story->Init();
-	if (storyFramework) {
-		storyFramework->Init(story);
-		storyFramework->BroadcastGameStart();
+	if (storyFramework) storyFramework->Init(story);
+
+	// 读档：存档带脚本状态段时，按存档恢复全部Script(门/组织/岗位/Scheduler/车辆/主线)的状态，
+	// 不再广播game_start——那些game_start里做过的事(加交互选项、随机交给玩家一个市民……)在存档
+	// 里已经是结果了，再广播一次会重复。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		std::string error;
+		bScriptsRestored = ScriptSaveCodec::Load(load->archive, map, populace, society, traffic, story, error);
+		if (bScriptsRestored) {
+			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: script states restored from the save, game_start not broadcast."));
+			return;
+		}
+		if (!error.empty()) {
+			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: failed to restore script states (%s); broadcasting game_start instead."), UTF8_TO_TCHAR(error.c_str()));
+		}
+	}
+
+	if (storyFramework) storyFramework->BroadcastGameStart();
+}
+
+void AForeverFrameworkActor::RestoreControlledPawn(const FForeverPendingLoad& load)
+{
+	const SaveSection* section = load.archive.Find(SAVE_SECTION_UE);
+	if (!section) return;
+	JsonValue root;
+	JsonReader reader;
+	std::string text(section->data.begin(), section->data.end());
+	if (!reader.Parse(text, root, false)) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor: the save's ue section is corrupted, player control not restored."));
+		return;
+	}
+
+	APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (!playerController) return;
+
+	// 先占有市民(开车时是下车后要回到的那个市民)，再上车——和游戏里上车的顺序一样。
+	FString citizenName = UTF8_TO_TCHAR(root["controlledCitizen"].AsString().c_str());
+	FString vehicleName = UTF8_TO_TCHAR(root["controlledVehicle"].AsString().c_str());
+	bool hasPose = !root["pawnX"].IsNull();
+	FVector pawnLocation(root["pawnX"].AsDouble(), root["pawnY"].AsDouble(), root["pawnZ"].AsDouble());
+	FRotator pawnRotation(0.f, root["pawnYaw"].AsDouble(), 0.f);
+
+	if (!citizenName.IsEmpty() && populaceFramework) {
+		if (ACitizenElement* citizen = populaceFramework->FindOrSpawnCitizenByName(citizenName)) {
+			// 步行时把市民放回存档时的位置朝向；开车时市民藏在车里，位置以车为准。
+			if (hasPose && vehicleName.IsEmpty()) {
+				citizen->SetActorLocationAndRotation(pawnLocation, pawnRotation, false, nullptr, ETeleportType::TeleportPhysics);
+			}
+			playerController->Possess(citizen);
+			// PossessedBy会默认激活左肩、换满弹匣，这里改回存档时的武器和弹匣余量。
+			if (!root["weaponSlot"].IsNull()) {
+				citizen->RestoreWeaponState(root["weaponSlot"].AsInt(), root["magazineAmmo"].IsNull() ? -1 : root["magazineAmmo"].AsInt());
+			}
+			if (buildingFramework) buildingFramework->RequestFreezeUntilLodSettled();
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor: saved controlled citizen %s not found."), *citizenName);
+		}
+	}
+	if (!vehicleName.IsEmpty() && trafficFramework) {
+		trafficFramework->ApplyEnterVehicle(vehicleName, playerController);
+		if (hasPose) {
+			if (APawn* vehicle = playerController->GetPawn()) {
+				vehicle->SetActorLocationAndRotation(pawnLocation, pawnRotation, false, nullptr, ETeleportType::TeleportPhysics);
+			}
+		}
+	}
+	if (hasPose && !root["controlYaw"].IsNull()) {
+		playerController->SetControlRotation(FRotator(root["controlPitch"].AsDouble(), root["controlYaw"].AsDouble(), 0.f));
 	}
 }

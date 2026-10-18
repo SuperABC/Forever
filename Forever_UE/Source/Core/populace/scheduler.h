@@ -19,6 +19,8 @@ class Change;
 // Scheduler没有类似"组织"这样的自然归属者，从new出来那一刻就唯一绑定一个Citizen，构造
 // 函数直接收Citizen*，不需要事后SetOccupant，详见scheduler.md。
 class Scheduler {
+	// 存档：PopulaceSaveCodec直接读写私有字段(populace_save.md)。
+	friend class PopulaceSaveCodec;
 public:
 	Scheduler() = delete;
 	Scheduler(SchedulerFactory* factory, ScriptFactory* scriptFactory, const std::string& id, Citizen* citizen);

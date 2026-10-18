@@ -1,6 +1,7 @@
 #include "ForeverConfigBridgeSubsystem.h"
 
 #include "ForeverModSubsystem.h"
+#include "ForeverDialogUtils.h"
 
 #include "common/config.h"
 #include "story/script.h"
@@ -17,18 +18,6 @@ namespace {
 	// 读config.json用的是同一个路径，Start Game校验通过时写回这里。
 	FString GetConfigPath() {
 		return FPaths::Combine(FPaths::ProjectDir(), TEXT("Resource/Config/config.json"));
-	}
-
-	// 对话框的父窗口句柄——没有活跃的顶层窗口(比如纯命令行/自动化测试环境)时传nullptr，
-	// IDesktopPlatform自己能处理这个情况。
-	const void* GetDialogParentWindowHandle() {
-		if (FSlateApplication::IsInitialized()) {
-			TSharedPtr<SWindow> activeWindow = FSlateApplication::Get().GetActiveTopLevelWindow();
-			if (activeWindow.IsValid() && activeWindow->GetNativeWindow().IsValid()) {
-				return activeWindow->GetNativeWindow()->GetOSWindowHandle();
-			}
-		}
-		return nullptr;
 	}
 
 } // namespace
@@ -136,6 +125,9 @@ void UForeverConfigBridgeSubsystem::RemoveStoryScript(const FString& Path) {
 bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMessage) {
 	TArray<FString> failures;
 
+	// 刷新缓存的.layout/.script文件列表，让运行中往资源目录里增删的文件在这次开局生效。
+	Config::RescanFiles();
+
 	for (const std::string& scriptPath : Config::GetStoryScripts()) {
 		for (const std::string& id : Script::GetModDependences(scriptPath)) {
 			if (!Config::IsModIdEnabled(id)) {
@@ -182,7 +174,7 @@ bool UForeverConfigBridgeSubsystem::SelectFolder(FString& OutPath) const {
 
 	FString selected;
 	bool success = desktopPlatform->OpenDirectoryDialog(
-		GetDialogParentWindowHandle(), TEXT("选择文件夹"), TEXT(""), selected);
+		ForeverDialog::GetParentWindowHandle(), TEXT("选择文件夹"), TEXT(""), selected);
 	if (success) {
 		OutPath = selected;
 	}
@@ -190,16 +182,5 @@ bool UForeverConfigBridgeSubsystem::SelectFolder(FString& OutPath) const {
 }
 
 bool UForeverConfigBridgeSubsystem::SelectFile(const FString& FileFilter, FString& OutPath) const {
-	IDesktopPlatform* desktopPlatform = FDesktopPlatformModule::Get();
-	if (!desktopPlatform) {
-		return false;
-	}
-
-	TArray<FString> selected;
-	bool success = desktopPlatform->OpenFileDialog(
-		GetDialogParentWindowHandle(), TEXT("选择文件"), TEXT(""), TEXT(""), FileFilter, 0, selected);
-	if (success && selected.Num() > 0) {
-		OutPath = selected[0];
-	}
-	return success && selected.Num() > 0;
+	return ForeverDialog::OpenFile(TEXT("选择文件"), FileFilter, OutPath);
 }

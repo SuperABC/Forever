@@ -20,6 +20,10 @@ public:
 	// 道路两侧人行道上的行道树，避开开口，见roadnet_basic.md"行道树"。
 	virtual void LayoutTrees(const std::vector<Road*>& hostRoads) override;
 
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
 private:
 	static int count;
 	int id;

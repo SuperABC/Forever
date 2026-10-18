@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 
 
 // 最小注册表(创建/销毁/枚举)。不用"Temp暂存区+MergeTemp()"两段式注册去隔离"探测阶段"和
@@ -44,6 +45,9 @@ public:
 
 	virtual bool CheckRegistered(const std::string& id) const;
 	virtual std::vector<std::string> GetRegisteredIds() const;
+
+	// 当前存活的实例和它们的注册id——存档收集各mod的命名计数器/状态版本用。
+	virtual std::vector<std::pair<std::string, ScriptMod*>> GetLiveInstances() const;
 
 	// 设置这个concept从config.json"script_mods"数组解析出的(id, 参数字符串)表,
 	// 必须在调用方触发mod的RegisterModScripts导出函数之前调用,否则CreateScript

@@ -96,6 +96,7 @@ Map::~Map() {
 
 	for (auto& [name, z] : zones) delete z;
 	for (auto& [name, b] : buildings) delete b;
+	for (Lot* lot : orphanLots) delete lot;
 }
 
 void Map::InitTerrains() {

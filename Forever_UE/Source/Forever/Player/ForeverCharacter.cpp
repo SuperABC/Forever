@@ -166,41 +166,37 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 		}
 	}
 
-	// 武器/背包系统初始化：被真正的玩家占有时，左肩挂手枪+右肩挂步枪+激活左肩(出生自带
-	// 一把可开火的手枪)，背上背一个容器，容器里放手枪/步枪子弹各120发——这样切到任何一个
-	// 可操控角色(玩家自己的初始角色，或者ChangeControlChange换过去的citizen)手上都能立刻
-	// 测装备/换弹/切枪/背包，不需要额外的UI流程。每次PossessedBy都会重新生成(不会保留
-	// 上次这个角色被占有时剩下的状态)，这是MVP阶段的已知简化，照抄现有"每次重配满弹手枪"
-	// 的既定惯例，见ForeverWeaponComponent.md。
+	// 武器/背包系统初始化：左肩手枪+右肩步枪，背上一个容器装手枪/步枪子弹各120发——只在
+	// Player的这三个槽位全空时(开局第一次占有)才发这套初始装备。肩膀/背包挂在Player身上，
+	// 换人操控(ChangeControlChange)时跟着玩家走，不再每次PossessedBy都删掉重建：否则用掉的
+	// 子弹每换一次人就回满，读档恢复出来的背包也会被这里覆盖掉。每次占有都激活左肩，让新
+	// 角色手上握着枪，见ForeverWeaponComponent.md。
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		if (Player* player = framework->GetPlayer()) {
-			// 先清理上一次占有(如果有)留下的状态，避免槽位已被占用导致这次装备失败——不需要
-			// 额外清理weaponComponent，下面ActivateShoulderWeapon(1)里的EquipWeapon()会自动
-			// 顶掉它可能残留的任何旧武器。
-			if (Asset* old = player->RemoveByPath("leftShoulder")) player->DestroyAsset(old);
-			if (Asset* old = player->RemoveByPath("rightShoulder")) player->DestroyAsset(old);
-			if (Asset* old = player->RemoveByPath("back")) player->DestroyAsset(old);
+			bool bHasLoadout = player->GetByPath("leftShoulder") || player->GetByPath("rightShoulder") || player->GetByPath("back");
+			if (!bHasLoadout) {
+				if (Asset* pistolAsset = player->CreateAsset("weapon_pistol", "ShoulderPistol")) {
+					player->AddByPath("leftShoulder", pistolAsset);
+				}
+				if (Asset* rifleAsset = player->CreateAsset("weapon_rifle", "ShoulderRifle")) {
+					player->AddByPath("rightShoulder", rifleAsset);
+				}
 
-			if (Asset* pistolAsset = player->CreateAsset("weapon_pistol", "ShoulderPistol")) {
-				player->AddByPath("leftShoulder", pistolAsset);
+				if (Asset* bag = player->CreateAsset("asset_container", "PlayerBag")) {
+					player->AddByPath("back", bag);
+					if (Asset* pistolAmmo = player->CreateAsset("ammo_pistol", "PistolAmmo")) {
+						pistolAmmo->SetCount(120);
+						bag->AddContent(pistolAmmo);
+					}
+					if (Asset* rifleAmmo = player->CreateAsset("ammo_rifle", "RifleAmmo")) {
+						rifleAmmo->SetCount(120);
+						bag->AddContent(rifleAmmo);
+					}
+				}
 			}
-			if (Asset* rifleAsset = player->CreateAsset("weapon_rifle", "ShoulderRifle")) {
-				player->AddByPath("rightShoulder", rifleAsset);
-			}
+			// EquipWeapon()会自动顶掉weaponComponent里可能残留的旧武器，不用先清理。
 			ActivateShoulderWeapon(1);
-
-			if (Asset* bag = player->CreateAsset("asset_container", "PlayerBag")) {
-				player->AddByPath("back", bag);
-				if (Asset* pistolAmmo = player->CreateAsset("ammo_pistol", "PistolAmmo")) {
-					pistolAmmo->SetCount(120);
-					bag->AddContent(pistolAmmo);
-				}
-				if (Asset* rifleAmmo = player->CreateAsset("ammo_rifle", "RifleAmmo")) {
-					rifleAmmo->SetCount(120);
-					bag->AddContent(rifleAmmo);
-				}
-			}
 		}
 	}
 }
@@ -394,6 +390,7 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 	Player* player = framework ? framework->GetPlayer() : nullptr;
 	if (!player || !weaponComponent) return;
 
+	activeShoulderSlot = slot;
 	Asset* toActivate = (slot == 1) ? player->GetLeftShoulder() : player->GetRightShoulder();
 	if (!toActivate) {
 		// 这个肩膀是空的——手上也应该跟着空下来，不能继续保留切换前那把武器(比如之前拿着
@@ -465,5 +462,14 @@ void AForeverCharacter::Look(const FInputActionValue& value)
 	if (Controller != nullptr) {
 		AddControllerYawInput(look.X);
 		AddControllerPitchInput(look.Y);
+	}
+}
+
+void AForeverCharacter::RestoreWeaponState(int32 slot, int32 magazineAmmo)
+{
+	if (slot != 1 && slot != 2) return;
+	ActivateShoulderWeapon(slot);
+	if (weaponComponent && weaponComponent->HasWeapon() && magazineAmmo >= 0) {
+		weaponComponent->SetCurrentAmmo(magazineAmmo);
 	}
 }

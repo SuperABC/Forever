@@ -27,6 +27,7 @@ protected:
 	UFUNCTION() void HandleModTabClicked();
 	UFUNCTION() void HandleResourceTabClicked();
 	UFUNCTION() void HandleStartClicked();
+	UFUNCTION() void HandleLoadGameClicked();
 
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UForeverStoryPanelWidget> StoryPanel;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UForeverModPanelWidget> ModPanel;
@@ -36,6 +37,10 @@ protected:
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> ModTabButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> ResourceTabButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> StartButton;
+
+	// 加载存档：弹打开对话框交给UForeverSaveSubsystem::LoadWithDialog，失败原因同样显示在
+	// FailureMessage。BindWidgetOptional：WBP_ConfigMenu里还没放这个按钮时不影响蓝图编译。
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> LoadGameButton;
 
 	// 左上角失败提示，初始Collapsed，ValidateAndStartGame失败时显示拒绝原因。
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> FailureMessage;

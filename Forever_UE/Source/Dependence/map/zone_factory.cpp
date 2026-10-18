@@ -66,3 +66,10 @@ void ZoneFactory::Assign(const string& id, const vector<Lot*>& lots,
 		it->second.assign(lots, emit, context);
 	}
 }
+
+vector<pair<string, ZoneMod*>> ZoneFactory::GetLiveInstances() const {
+	vector<pair<string, ZoneMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

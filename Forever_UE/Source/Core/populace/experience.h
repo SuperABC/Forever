@@ -87,6 +87,8 @@ private:
 // acquaintances由Society::GenerateEmploymentHistory()另外派生，不靠这条Experience
 // 一一列出，见"关键设计决策"。
 class JobExperience : public Experience {
+	// 存档：SocietySaveCodec直接读写私有字段(society_save.md)。
+	friend class SocietySaveCodec;
 public:
 	JobExperience(Organization* organization, int beginYear, int endYear = -1);
 

@@ -24,6 +24,8 @@
 // 的，不参与地块竞争，不需要Assign/RandomAcreage这套static注册机制——独占持有一个RoomMod
 // 实例，构造时创建、析构时factory->DestroyRoom(mod)。
 class Room : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	Room() = delete;
 
@@ -68,7 +70,8 @@ public:
 	Node* GetNavigationNode() const;
 	void SetNavigationNode(Node* node);
 
-	// 4类占位能力——纯转发mod同名字段，和GetType()/GetName()同一个写法。见room_mod.h。
+	// 4类占位能力：构造时mod->SetProperty()之后从mod同名字段拷贝的快照(读档时直接按存档恢复，
+	// 不依赖重新创建的mod再算一遍)。见room_mod.h、map_save.md。
 	bool IsResidential() const;
 	int ResidentialCapacity() const;
 	bool IsWorkspace() const;
@@ -119,6 +122,21 @@ public:
 
 private:
 	RoomMod* mod;
+
+	// mod->SetProperty()产出的属性快照，见IsResidential()注释。
+	struct Properties {
+		bool isResidential = false;
+		int residentialCapacity = 0;
+		bool isWorkspace = false;
+		int workspaceCapacity = 0;
+		bool isStorage = false;
+		std::unordered_map<std::string, float> storageConfig;
+		bool isManufacture = false;
+		std::vector<std::string> manufactureTypes;
+		bool isParking = false;
+		std::vector<ParkingSpot> parkingSpots;
+	};
+	Properties properties;
 	RoomFactory* factory;
 	std::string type;
 	std::string name;

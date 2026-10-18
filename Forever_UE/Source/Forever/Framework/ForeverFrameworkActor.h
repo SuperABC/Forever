@@ -2,7 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+
+#include <utility>
+#include <vector>
+
 #include "ForeverFrameworkActor.generated.h"
+
+struct FForeverPendingLoad;
+class JobExperience;
 
 class Map;
 class Populace;
@@ -134,6 +141,21 @@ protected:
 	// 编译也成功了，但PIE里跑的还是改之前的旧逻辑(排查一次围墙缩进量对不上代码的bug才发现)。
 	// EndPlay由引擎在PIE停止时同步调用，在这里delete能保证下一次Play之前dll已经被卸载干净。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	// 读档：第一次调用时从UForeverSaveSubsystem取走等待中的读档请求(之后一直返回同一份，没有
+	// 读档时返回nullptr)。GameMode找出生点时就会触发EnsureMapGenerated，比BeginPlay还早，所以
+	// 两边都通过这个函数取，谁先调用谁触发，见ForeverFrameworkActor.md"读档"一节。
+	FForeverPendingLoad* FetchActiveLoad();
+	TSharedPtr<FForeverPendingLoad> activeLoad;
+	bool bActiveLoadFetched = false;
+	// 读档时人口是否按存档恢复了(社会段要用人口段的市民下标，人口重新生成时社会也只能重新生成)，
+	// 以及人口段留给社会段去连的(JobExperience, 组织下标)，见PopulaceSaveCodec::Load。
+	bool bPopulaceRestored = false;
+	std::vector<std::pair<JobExperience*, int>> pendingJobExperienceOrganizations;
+	// 读档时脚本状态按存档恢复了：这时不广播game_start(脚本已经在存档时的进度上)，玩家操控谁
+	// 也不由game_start决定，改由RestoreControlledPawn按存档的UE段恢复。
+	bool bScriptsRestored = false;
+	void RestoreControlledPawn(const FForeverPendingLoad& load);
 
 	// Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
 	// Zone/Building/Roadnet等系统共用同一个Map实例,不是各自另建一个。

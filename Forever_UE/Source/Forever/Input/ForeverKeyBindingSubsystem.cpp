@@ -52,6 +52,9 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// SetupInputComponent、UMapWidget::ToggleMap/CloseMap。
 		{ TEXT("ToggleMap"), EKeys::M },
 		{ TEXT("CloseMap"), EKeys::Escape },
+		// 暂停界面(保存/加载)：Tab开关，理由同上绑在Controller上，见AForeverPlayerController::
+		// TogglePause、UForeverPausePanelWidget(界面打开期间关闭键由它自己的NativeOnKeyDown拦)。
+		{ TEXT("TogglePause"), EKeys::Tab },
 	};
 	return definitions;
 }
@@ -96,7 +99,9 @@ void UForeverKeyBindingSubsystem::BuildDynamicContext(const FConfigFile& configF
 		action->ValueType = EInputActionValueType::Boolean;
 
 		actions.Add(definition.name, action);
-		bindingContext->MapKey(action, ResolveKey(configFile, definition));
+		FKey key = ResolveKey(configFile, definition);
+		keys.Add(definition.name, key);
+		bindingContext->MapKey(action, key);
 	}
 }
 
@@ -107,4 +112,13 @@ UInputAction* UForeverKeyBindingSubsystem::GetAction(FName bindingName) const
 	}
 
 	return nullptr;
+}
+
+FKey UForeverKeyBindingSubsystem::GetKey(FName bindingName) const
+{
+	if (const FKey* found = keys.Find(bindingName)) {
+		return *found;
+	}
+
+	return EKeys::Invalid;
 }

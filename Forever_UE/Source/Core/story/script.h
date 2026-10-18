@@ -17,6 +17,8 @@
 // Story域会持有主线剧情的Script*数组，以后Citizen/Elevator等也会各自持有自己的Script*，
 // 详见Script.md"顶层原则"。
 class Script : public Container {
+	// 存档：ScriptSaveCodec直接读写私有字段(script_save.md)。
+	friend class ScriptSaveCodec;
 public:
 	/*
 	* 禁止默认构造

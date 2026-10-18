@@ -46,6 +46,8 @@ struct StationRoadLink {
 // Layout()/导航图合并都早已跑完，这里只读Building已经缓存好的数据(GetDirection()/
 // GetSizeX()/GetSizeY()/LocalToWorld())，不会触发building自己的二次布局。
 class Station {
+	// 存档：TrafficSaveCodec直接读写私有字段(traffic_save.md)。
+	friend class TrafficSaveCodec;
 public:
 	// 真实站点：factory创建modId对应的StationMod实例，调一次
 	// mod->Layout(building->GetDirection(), building->GetSizeX(), building->GetSizeY())，

@@ -13,6 +13,7 @@
 #include "UI/PhoneWidget.h"
 #include "UI/InventoryWidget.h"
 #include "UI/MapWidget.h"
+#include "UI/ForeverPausePanelWidget.h"
 
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
@@ -91,6 +92,14 @@ void AForeverPlayerController::BeginPlay() {
 	else if ((mapWidget = CreateWidget<UMapWidget>(this, mapWidgetClass)) != nullptr) {
 		mapWidget->AddToViewport();
 	}
+
+	if (pauseWidgetClass == nullptr) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: pauseWidgetClass未设置,跳过PausePanel创建。"));
+	}
+	else if ((pauseWidget = CreateWidget<UForeverPausePanelWidget>(this, pauseWidgetClass)) != nullptr) {
+		// ZOrder比其它常驻Widget高，暂停界面盖在最上面。
+		pauseWidget->AddToViewport(10);
+	}
 }
 
 void AForeverPlayerController::SetupInputComponent() {
@@ -103,6 +112,7 @@ void AForeverPlayerController::SetupInputComponent() {
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleInventory")), ETriggerEvent::Started, this, &AForeverPlayerController::ToggleInventory);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleMap")), ETriggerEvent::Started, this, &AForeverPlayerController::ToggleMap);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("CloseMap")), ETriggerEvent::Started, this, &AForeverPlayerController::HandleCloseMap);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("TogglePause")), ETriggerEvent::Started, this, &AForeverPlayerController::TogglePause);
 			}
 		}
 	}
@@ -122,4 +132,19 @@ void AForeverPlayerController::ToggleMap() {
 
 void AForeverPlayerController::HandleCloseMap() {
 	if (mapWidget) mapWidget->CloseMap();
+}
+
+void AForeverPlayerController::TogglePause() {
+	if (!pauseWidget) return;
+	if (pauseWidget->IsOpen()) {
+		pauseWidget->ClosePanel();
+		return;
+	}
+
+	auto isShown = [](UUserWidget* widget) { return widget && widget->IsVisible(); };
+	if (isShown(mapWidget) || isShown(phoneWidget) || isShown(inventoryWidget) || isShown(puzzleWidget)
+		|| isShown(sectionSpeakingWidget) || isShown(sectionOptionWidget)) {
+		return;
+	}
+	pauseWidget->OpenPanel();
 }

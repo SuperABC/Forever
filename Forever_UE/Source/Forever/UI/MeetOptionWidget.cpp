@@ -21,6 +21,11 @@ FString UMeetOptionWidget::MakeKey(const FString& name, int32 idx) {
 void UMeetOptionWidget::AddOption(AForeverFrameworkActor* framework, const FString& option, const FString& name,
 	int32 idx, bool bGlobal) {
 	if (!OptionContainer || !MeetButtonClass) return;
+	// 关卡正在销毁时(比如读档OpenLevel)不再建按钮：被占有的市民UnPossessed时会重新打开
+	// proximityBox、立刻和自己重叠触发OnOverlapBegin走到这里，而UE不允许在World销毁过程中
+	// CreateWidget(会报ensure "Attempting to be created while tearing down the world")。
+	UWorld* world = GetWorld();
+	if (!world || world->bIsTearingDown) return;
 
 	UMeetButtonWidget* button = CreateWidget<UMeetButtonWidget>(this, MeetButtonClass);
 	if (!button) return;

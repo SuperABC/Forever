@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/mod_state.h"
 #include "map/feature_spec.h"
 #include "map/general_geometry.h"
 
@@ -195,4 +196,17 @@ public:
 
 	// AddDecoration记录的模型，Building::Layout()在mod->Layout()之后读取换算。
 	std::vector<DecorationSpec> decorations;
+
+	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
+	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
+	// 这里只放mod自己的私有数据。
+	virtual void SaveState(StateWriter&) const {}
+	virtual void LoadState(StateReader&) {}
+	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
+	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
+	virtual int GetStateVersion() const { return 0; }
+	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
+	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	virtual int GetInstanceCounter() const { return -1; }
+	virtual void SetInstanceCounter(int) {}
 };

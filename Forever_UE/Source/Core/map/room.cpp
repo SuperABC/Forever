@@ -29,6 +29,16 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 	mod->SetProperty();
 	type = mod->GetType();
 	name = mod->GetName();
+	properties.isResidential = mod->isResidential;
+	properties.residentialCapacity = mod->residentialCapacity;
+	properties.isWorkspace = mod->isWorkspace;
+	properties.workspaceCapacity = mod->workspaceCapacity;
+	properties.isStorage = mod->isStorage;
+	properties.storageConfig = mod->storageConfig;
+	properties.isManufacture = mod->isManufacture;
+	properties.manufactureTypes = mod->manufactureTypes;
+	properties.isParking = mod->isParking;
+	properties.parkingSpots = mod->parkingSpots;
 }
 
 Room::~Room() {
@@ -72,16 +82,16 @@ void Room::SetNumber(int level, int seq) {
 Node* Room::GetNavigationNode() const { return navigationNode; }
 void Room::SetNavigationNode(Node* node) { navigationNode = node; }
 
-bool Room::IsResidential() const { return mod->isResidential; }
-int Room::ResidentialCapacity() const { return mod->residentialCapacity; }
-bool Room::IsWorkspace() const { return mod->isWorkspace; }
-int Room::WorkspaceCapacity() const { return mod->workspaceCapacity; }
-bool Room::IsStorage() const { return mod->isStorage; }
-unordered_map<string, float> Room::StorageConfig() const { return mod->storageConfig; }
-bool Room::IsManufacture() const { return mod->isManufacture; }
-vector<string> Room::ManufactureTypes() const { return mod->manufactureTypes; }
-bool Room::IsParking() const { return mod->isParking; }
-const vector<ParkingSpot>& Room::GetParkingSpots() const { return mod->parkingSpots; }
+bool Room::IsResidential() const { return properties.isResidential; }
+int Room::ResidentialCapacity() const { return properties.residentialCapacity; }
+bool Room::IsWorkspace() const { return properties.isWorkspace; }
+int Room::WorkspaceCapacity() const { return properties.workspaceCapacity; }
+bool Room::IsStorage() const { return properties.isStorage; }
+unordered_map<string, float> Room::StorageConfig() const { return properties.storageConfig; }
+bool Room::IsManufacture() const { return properties.isManufacture; }
+vector<string> Room::ManufactureTypes() const { return properties.manufactureTypes; }
+bool Room::IsParking() const { return properties.isParking; }
+const vector<ParkingSpot>& Room::GetParkingSpots() const { return properties.parkingSpots; }
 
 string Room::GetAddress() const {
 	if (!parentBuilding) return number;

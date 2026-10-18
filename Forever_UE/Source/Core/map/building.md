@@ -158,6 +158,11 @@
 `door.md`。由`Map::InitBuildings()`在`building->Layout(...)`的**三个**调用点(显式占位/
 园区内部建筑/`FillRemainder`)之后各调一次`building->BuildDoors(*this)`。
 
+- **mod声明式字段快照**：`Layout()`时把`mod->floors`/`cabins`/`stationMod`拷进`floorSpecs`/`cabins`/`stationMod`，
+  UE层(`BuildingElement`读楼层材质/buildShell、电梯轿厢)、Traffic(`InitStations`)、存档manifest(布局模板名)都读
+  `GetFloorSpec`/`GetFloorSpecs`/`GetCabins`/`GetStationMod`，不直接读mod——读档时mod是重新创建的空实例、`Layout`
+  不会再跑，见`map_save.md`。以后新增"运行时要读的mod公共字段"也照这个做法加快照。
+
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/building_mod.h`(`BuildingMod`/`FloorAssetSpec`/

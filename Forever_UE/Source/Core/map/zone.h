@@ -30,6 +30,8 @@
 // 冗余拷贝。这意味着GetRotation()必须在SetParentLot(lot)之后调用才有意义，构造完/
 // SetParentLot之前调用返回0。
 class Zone : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	Zone() = delete;
 
@@ -87,9 +89,9 @@ public:
 	const std::unordered_map<int, Road*>& GetBoundaryRoads() const;
 
 	// 围墙/大门：局部坐标语义(参考边+margin+depth)见ZoneWallSpec/ZoneGateSpec注释
-	// (zone_mod.h)。直接转发mod自己的walls/gates(mod是这个Zone独占持有的，数据不会失效)，
-	// 不需要Core另外拷贝一份；Forever层渲染时直接拿这份数据+自己的
-	// GetPosX/PosY/SizeX/SizeY/GetRotation()现算世界坐标。
+	// (zone_mod.h)。Layout()时从mod->walls/gates拷贝的快照——读档时mod是重新创建的空实例
+	// (Layout不会再跑)，所以不能直接转发mod的字段，见map_save.md。Forever层渲染时拿这份数据+
+	// 自己的GetPosX/PosY/SizeX/SizeY/GetRotation()现算世界坐标。
 	const std::vector<ZoneWallSpec>& GetWalls() const;
 	const std::vector<ZoneGateSpec>& GetGates() const;
 
@@ -132,6 +134,8 @@ private:
 	Lot* parentLot = nullptr;
 	int direction = -1;
 	std::vector<DecorationInstance> decorations;
+	std::vector<ZoneWallSpec> walls;
+	std::vector<ZoneGateSpec> gates;
 	std::unordered_map<int, Road*> boundaryRoads;
 	std::vector<Road*> internalRoads;
 	std::vector<Building*> internalBuildings;

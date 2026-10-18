@@ -40,9 +40,9 @@
   成功后从`Lot::RequestPlacement`的`outBoundaryRoads`输出参数里拷贝过来（这个参数是为了
   解决"`RequestPlacement`内部真正裁剪出来的`Lot`在返回前就被`delete`了，边界Road信息本来
   会跟着丢失"这个问题而加的，见`general_geometry.md`）。
-- **围墙/大门/内部道路/内部建筑（Zone内部布局）**：`GetWalls()`/`GetGates()`直接返回
-  `mod->walls`/`mod->gates`——`mod`是这个`Zone`独占持有的实例，数据不会失效，不需要再在
-  `Zone`自己身上拷贝一份`walls`/`gates`字段。`internalRoads`(`vector<Road*>`，真正实例化
+- **围墙/大门/内部道路/内部建筑（Zone内部布局）**：`GetWalls()`/`GetGates()`返回`Layout()`时从
+  `mod->walls`/`mod->gates`拷贝的快照，不直接转发mod字段——读档时mod是重新创建的空实例、`Layout`不会
+  再跑（见`map_save.md`）。`internalRoads`(`vector<Road*>`，真正实例化
   出来的`Road`)/`internalBuildings`(`vector<Building*>`，真正实例化出来的`Building`)这两个
   **是**`Zone`自己的字段——它们和`mod->internalRoads`(`vector<ZoneInternalRoadSpec>`)/
   `mod->internalBuildings`(`vector<ZoneInternalBuildingSpec>`)类型完全不同（前者是Core

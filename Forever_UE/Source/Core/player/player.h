@@ -19,6 +19,8 @@
 // player.md。
 
 class Player {
+	// 存档：PlayerSaveCodec直接读写私有字段(player_save.md)。
+	friend class PlayerSaveCodec;
 public:
 	Player();
 	~Player();

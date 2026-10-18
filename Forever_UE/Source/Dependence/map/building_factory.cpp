@@ -87,3 +87,10 @@ void BuildingFactory::Assign(const string& id, const vector<Lot*>& lots,
 		it->second.assign(lots, emit, context);
 	}
 }
+
+vector<pair<string, BuildingMod*>> BuildingFactory::GetLiveInstances() const {
+	vector<pair<string, BuildingMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

@@ -483,6 +483,11 @@ room数据必须先落地）之后，`EnsurePopulaceGenerated()`里依次
 `Ensure*Generated()`各自只保证自己的域，靠`BeginPlay()`里显式的调用顺序保证前者先跑完，
 详见`Source/Forever/Framework/ForeverFrameworkActor.md`。
 
+## 存档
+
+地图域整体由`map_save.h`的`MapSaveCodec`写进存档/按存档重建(读档时不跑`Init*`里的任何生成)，详见`map_save.md`。
+`orphanLots`只在读档时有内容：自适应占位用过的嵌套子块(生成时已经从父块摘掉、新开局时没有持有者)，读档后由Map持有。
+
 ## 依赖关系
 
 - 依赖：`terrain.h`、`terrain_factory.h`、`roadnet.h`、`roadnet_factory.h`、`zone.h`、

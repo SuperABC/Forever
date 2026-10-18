@@ -1,19 +1,20 @@
 # ForeverPlayerController
 
 ## 职责
-第三人称玩家的PlayerController。承载一批常驻UI Widget(MeetOption对话选项/剧情对话SectionSpeaking/SectionOption/Puzzle/Phone/Inventory/Map)和不跟随被占有Pawn变化的全局热键(`P`开手机、`B`开背包、`M`开地图、`Esc`关地图)。
+第三人称玩家的PlayerController。承载一批常驻UI Widget(MeetOption对话选项/剧情对话SectionSpeaking/SectionOption/Puzzle/Phone/Inventory/Map/PausePanel)和不跟随被占有Pawn变化的全局热键(`P`开手机、`B`开背包、`M`开地图、`Esc`关地图、`Tab`开暂停界面)。
 
 ## 关键设计
 - `BeginPlay`里显式`SetInputMode(FInputModeGameOnly())`+`bShowMouseCursor = false`——不能假设这是空白状态:主菜单关卡的`AForeverMenuController::BeginPlay`会把输入模式设成UI Only+显示鼠标,这个状态挂在ViewportClient/LocalPlayer身上,不会因为旧Controller被`OpenLevel`销毁就自动还原,必须显式重置。
 - `UForeverKeyBindingSubsystem`的动态Mapping Context在这里(`BeginPlay`)常驻添加一次,不放在Pawn的`PossessedBy`里——`TogglePhone`等热键要求任何时候都生效(包括开局还操控着`ADefaultPawn`、以及`ChangeControlChange`换人/换乘载具的瞬间),Controller是整局游戏唯一不随换Pawn而变的宿主。Pawn侧(`AForeverCharacter`/`AVehicleElement`)只保留各自专属的移动/视角Context增删。
-- 7个Widget(MeetOption/SectionSpeaking/SectionOption/Puzzle/Phone/Inventory/Map)在`BeginPlay`里统一用`CreateWidget`+`AddToViewport`常驻创建,`xxxWidgetClass`未配置时跳过该Widget的创建并打警告日志,不影响其余Widget,也不会崩溃。创建后的显示/隐藏由各自的业务逻辑驱动(SectionSpeaking/SectionOption初始手动Collapse;其余几个自己在构造/`NativeConstruct`里默认不显示)。
+- 8个Widget(MeetOption/SectionSpeaking/SectionOption/Puzzle/Phone/Inventory/Map/PausePanel)在`BeginPlay`里统一用`CreateWidget`+`AddToViewport`常驻创建,`xxxWidgetClass`未配置时跳过该Widget的创建并打警告日志,不影响其余Widget,也不会崩溃。创建后的显示/隐藏由各自的业务逻辑驱动(SectionSpeaking/SectionOption初始手动Collapse;其余几个自己在构造/`NativeConstruct`里默认不显示)。
 - `TogglePhone`/`ToggleInventory`/`ToggleMap`/`HandleCloseMap`只是到对应Widget方法的一行转发。
+- `TogglePause`:地图/手机/背包/谜题/剧情对话任何一个可见时不打开暂停界面(它们各自占着UI Only输入和键盘焦点);暂停界面打开后的关闭由`UForeverPausePanelWidget`自己的`NativeOnKeyDown`处理,见`UI/ForeverPausePanelWidget.md`。
 
 ## 依赖关系
 - 被`AForeverGameMode`的`PlayerControllerClass`引用。
 - 依赖`Input/ForeverKeyBindingSubsystem`(`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`动态Action)。
-- 依赖`UI/{MeetOptionWidget,SectionSpeakingWidget,SectionOptionWidget,PuzzleWidget,PhoneWidget,InventoryWidget,MapWidget}`。
+- 依赖`UI/{MeetOptionWidget,SectionSpeakingWidget,SectionOptionWidget,PuzzleWidget,PhoneWidget,InventoryWidget,MapWidget,ForeverPausePanelWidget}`。
 - 被`AForeverCharacter::MeetOptionFocusUp/Down/Select`(取`GetMeetOptionWidget()`)、`UForeverStoryFrameworkComponent::ShowCurrentItem`(取`GetSectionSpeakingWidget()`/`GetSectionOptionWidget()`)等依赖。
 
 ## 待办/后续阶段
-- `Tab`(暂停菜单开关)尚未接回,阻塞点是对应的`PausePanel`UMG Widget还没迁移,详见`MAINCONTROLLER_TODO.md`。
+- 无(旧`MainController`热键已全部迁移,见`MAINCONTROLLER_TODO.md`)。

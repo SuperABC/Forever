@@ -165,12 +165,36 @@ public:
 	// SetModEnabled已经直接维护这份状态了，不需要在这里另外重建。
 	static void WriteConfig(const std::string& path);
 
+	// ---- 存档(见Source/Core/common/save.md) ----
+
+	// conceptKey(如"Buildings")到config.json里"<concept>_mods"数组key(如"building_mods")的转换，
+	// 存档按jsonKey记mod，和GetModEnables()返回的conceptKey对得上就靠它。
+	static std::string ConceptKeyToJsonKey(const std::string& conceptKey);
+
+	// 当前内存里出现过的全部"<concept>_mods" jsonKey。
+	static std::vector<std::string> GetConceptJsonKeys();
+
+	// 整个替换某个concept的(id, 参数字符串)列表——读档时把存档用到的mod集合设成当前启用集合，
+	// 只改内存，不写回config.json。
+	static void SetConceptMods(const std::string& jsonKey, const std::vector<std::pair<std::string, std::string>>& mods);
+
+	// 整个替换Story screen的脚本列表(绝对路径)，读档时按存档里的脚本名重新解析出来的路径。
+	static void SetStoryScripts(const std::vector<std::string>& paths);
+	static void SetMainStoryScriptModName(const std::string& name);
+
+	// 存档的资源检查：scripts是不含路径/扩展名的脚本名(按GetScriptPath查)，layouts是.layout
+	// 模板名(按GetLayouts()的文件名去扩展名查)。返回找不到的条目(脚本名/模板名原样)，全找到返回空。
+	static std::vector<std::string> FindMissingScripts(const std::vector<std::string>& scripts);
+	static std::vector<std::string> FindMissingLayouts(const std::vector<std::string>& layouts);
+
+	// 重新扫描所有已配置的layout/resource根目录，刷新缓存的.layout/.script/.uplugin/.pak文件列表。
+	// 文件列表只在添加根目录时扫一次，游戏运行中往目录里增删文件不会自动反映——开始新游戏和
+	// 读档校验前调用一次，保证用的是磁盘上的当前内容(根目录本身不增不减)。
+	static void RescanFiles();
+
 private:
 	static bool CheckFileFormat(const std::filesystem::path& filePath, const std::string& format);
 
-	// conceptKey(如"Weapons")到config.json里"<concept>_mods"数组key(如"weapon_mods")的
-	// 转换——去掉末尾的"s"、转小写、拼上"_mods"，21个concept目前都符合这个规则。
-	static std::string ConceptKeyToJsonKey(const std::string& conceptKey);
 
 	// Roadnets/Names这两个concept一次只应该有一个生效(RoadnetFactory::GetRoadnet()/
 	// NameFactory::GetName()的"单选"语义，见对应_factory.h)——但那两个函数本身并不校验

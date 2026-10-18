@@ -57,3 +57,10 @@ void VehicleFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 bool VehicleFactory::IsEnabled(const string& id) const {
 	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }
+
+vector<pair<string, VehicleMod*>> VehicleFactory::GetLiveInstances() const {
+	vector<pair<string, VehicleMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

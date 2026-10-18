@@ -65,6 +65,8 @@
     公交尺度），不是硬编码常量，`TrainRoute`/`AirRoute`在`SetProperty()`里按手感调大，见
     `route_basic.cpp`。
 
+- **`stopStations`**：`Build()` 末尾记下交给 mod 的站点表(graph key里的站点下标就是它的下标)，存档要靠它把key换成站点名，见`traffic_save.md`。读档时`TrafficSaveCodec`直接按存档填graph/lines，不再调用`Build()`。
+
 ## 依赖关系
 
 - 依赖：`Core/map/map.h`（`FindVehiclePath`）、`Core/traffic/station.h`（`EnsureRoadLink`/

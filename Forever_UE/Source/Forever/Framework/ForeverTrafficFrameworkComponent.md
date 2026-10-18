@@ -46,6 +46,8 @@
   BuildRoadInstances`)留给以后有真实轨道资产的内容类型消费，见
   `Dependence/traffic/route_mod.md`"待办"一节。
 
+- **读档后的车辆位置**：`AVehicleElement::Tick`每帧把位置写回`Vehicle::SetTransform`(进存档)。`GenerateVehicles`发现这份记录非零时按记录的位置生成，不放回车位(新开局时记录全为0，照常放车位)。
+
 ## 依赖关系
 
 - 依赖：`Source/Forever/Framework/ForeverFrameworkActor.h`(`GetOwner()`拿`Traffic*`/

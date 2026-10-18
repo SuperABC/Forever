@@ -82,6 +82,7 @@
   <ItemGroup>
     <ClCompile Include="common\error.cpp" />
     <ClCompile Include="common\json.cpp" />
+    <ClCompile Include="common\save_archive.cpp" />
     <ClCompile Include="common\utility.cpp" />
     <ClCompile Include="common\handle.cpp" />
     <ClCompile Include="map\general_geometry.cpp" />
@@ -136,6 +137,8 @@
   <ItemGroup>
     <ClInclude Include="common\error.h" />
     <ClInclude Include="common\json.h" />
+    <ClInclude Include="common\save_archive.h" />
+    <ClInclude Include="common\mod_state.h" />
     <ClInclude Include="common\utility.h" />
     <ClInclude Include="common\handle.h" />
     <ClInclude Include="map\general_geometry.h" />

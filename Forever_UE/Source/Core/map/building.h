@@ -19,6 +19,8 @@
 // height就是这栋Building的楼体尺寸(GetBodySizeX/Y())，换算结果是"以楼体左下角为原点、未旋转"
 // 的局部坐标，不是世界坐标(世界坐标转换见Building::LocalToWorld)。
 class Stair : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Stair(RectParams params);
 
@@ -35,6 +37,8 @@ private:
 };
 
 class Elevator : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Elevator(RectParams params);
 
@@ -51,6 +55,8 @@ private:
 };
 
 class Ramp : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Ramp(RectParams params);
 
@@ -69,6 +75,8 @@ private:
 // 天花板/地板：纯矩形，没有方向/墙的概念——照抄老工程Ceiling/Ground，渲染层统一用一份
 // 薄slab表示(见ForeverBuildingFrameworkComponent.md)。
 class Ceiling : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Ceiling(RectParams params);
 	void InstanciateQuad(float width, float height);
@@ -78,6 +86,8 @@ private:
 };
 
 class Ground : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Ground(RectParams params);
 	void InstanciateQuad(float width, float height);
@@ -91,6 +101,8 @@ private:
 // Hatch会被Map::InitBuildings()取出来转发进Map::AddHatch去挖世界地形，见building.md
 // "地下室与地表hatch"一节。
 class Hatch : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Hatch(RectParams params);
 	void InstanciateQuad(float width, float height);
@@ -102,6 +114,8 @@ private:
 // 走廊：矩形+四面是否有墙+门/窗开口，没有朝向概念(老工程Corridor没有direction字段，
 // 门/窗方向各自独立指定)。
 class Corridor : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Corridor(RectParams params);
 
@@ -125,6 +139,8 @@ private:
 // 独立房间槽位：矩形+朝向+门/窗开口，隐含四面都有墙(不需要walls数组)——照抄老工程Single，
 // AssignRoom按这个槽位实例化出一个真正的Room。
 class Single : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Single(RectParams params);
 
@@ -147,6 +163,8 @@ private:
 
 // 联排房间槽位：和Single同结构，ArrangeRow按目标面积把它切成若干个真正的Room。
 class Row : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	explicit Row(RectParams params);
 
@@ -171,6 +189,8 @@ private:
 // 未做building自身旋转/世界偏移——渲染层/Map::InitBuildings()按需转换成世界坐标
 // (Building::LocalToWorld)。
 class Floor : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	Floor(int level, float width, float height);
 
@@ -319,6 +339,8 @@ struct BuildingNavResult {
 // 设置，parentLot直接复用zone自己的parentLot(所以转发基准天然和zone一致)，relativeRotation
 // 是相对zone自身旋转的附加偏移。
 class Building : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	Building() = delete;
 
@@ -364,6 +386,14 @@ public:
 	// mod->decorations按最终朝向换算后的世界摆位(DecorationInstance见feature_spec.h)，UE层只在
 	// 近处LOD按这份数据生成组件，见building.md"自定义模型"一节。
 	const std::vector<DecorationInstance>& GetDecorations() const;
+
+	// mod声明式字段在Layout()时拷贝下来的快照——UE层/Traffic读这几份，不直接读mod：读档时mod是
+	// 重新创建的空实例(Layout不会再跑，见map_save.md)，mod->floors/cabins/stationMod都是空的。
+	// 查不到这一层的模板记录时GetFloorSpec返回nullptr。
+	const FloorLayoutSpec* GetFloorSpec(int level) const;
+	const std::unordered_map<int, FloorLayoutSpec>& GetFloorSpecs() const;
+	const std::vector<ElevatorCabinSpec>& GetCabins() const;
+	const std::string& GetStationMod() const;
 
 	// 按level(0=1楼，-1=地下一层……)查一层的实例化数据，查不到返回nullptr。
 	const Floor* GetFloor(int level) const;
@@ -483,6 +513,10 @@ private:
 	std::vector<float> floorHeights;
 	std::string lodMaterialPath;
 	std::vector<DecorationInstance> decorations;
+	// mod->floors/cabins/stationMod的快照，见GetFloorSpec注释。
+	std::unordered_map<int, FloorLayoutSpec> floorSpecs;
+	std::vector<ElevatorCabinSpec> cabins;
+	std::string stationMod;
 
 	std::vector<Floor> floors;
 	std::vector<Component*> components;

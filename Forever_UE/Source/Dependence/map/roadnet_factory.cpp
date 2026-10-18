@@ -61,3 +61,10 @@ string RoadnetFactory::GetRoadnet() const {
 	}
 	return string();
 }
+
+vector<pair<string, RoadnetMod*>> RoadnetFactory::GetLiveInstances() const {
+	vector<pair<string, RoadnetMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

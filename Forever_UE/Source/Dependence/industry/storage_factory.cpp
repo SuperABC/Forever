@@ -57,3 +57,10 @@ void StorageFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 bool StorageFactory::IsEnabled(const string& id) const {
 	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }
+
+vector<pair<string, StorageMod*>> StorageFactory::GetLiveInstances() const {
+	vector<pair<string, StorageMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

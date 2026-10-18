@@ -741,6 +741,10 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 		floorHeights.assign(expected, kDefaultFloorHeight);
 	}
 	lodMaterialPath = mod->lodMaterial;
+	floorSpecs.clear();
+	for (auto& [level, spec] : mod->floors) floorSpecs[level] = spec;
+	cabins = mod->cabins;
+	stationMod = mod->stationMod;
 
 	// 自定义模型：位置/yaw按face=2(模板原样)定义，按最终朝向用和楼层模板同一个InversePoint
 	// 换算(direction==-1没有朝向，按原样处理)，再经LocalToWorld叠加建筑自身的世界旋转。yaw的
@@ -977,6 +981,14 @@ const vector<float>& Building::GetFloorHeights() const { return floorHeights; }
 const string& Building::GetLodMaterialPath() const { return lodMaterialPath; }
 const vector<DecorationInstance>& Building::GetDecorations() const { return decorations; }
 
+const FloorLayoutSpec* Building::GetFloorSpec(int level) const {
+	auto it = floorSpecs.find(level);
+	return it != floorSpecs.end() ? &it->second : nullptr;
+}
+const unordered_map<int, FloorLayoutSpec>& Building::GetFloorSpecs() const { return floorSpecs; }
+const vector<ElevatorCabinSpec>& Building::GetCabins() const { return cabins; }
+const string& Building::GetStationMod() const { return stationMod; }
+
 const Floor* Building::GetFloor(int level) const {
 	int idx = basements + level;
 	if (idx < 0 || idx >= static_cast<int>(floors.size())) return nullptr;
@@ -1096,8 +1108,8 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 		int level = idx - basements;
 		const Floor& floor = floors[idx];
 
-		auto specIt = mod->floors.find(level);
-		if (specIt == mod->floors.end()) continue;
+		auto specIt = floorSpecs.find(level);
+		if (specIt == floorSpecs.end()) continue;
 		const string& templateName = specIt->second.templateName;
 		int face = specIt->second.face;
 

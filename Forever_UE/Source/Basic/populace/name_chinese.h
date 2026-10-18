@@ -35,6 +35,11 @@ private:
 	std::vector<std::string> femaleNames;
 	std::vector<std::string> neutralNames;
 
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
 	static int count;
 	int id;
 	std::string name; // GetName()缓存用，是"实例编号"debug名，非生成出的人名

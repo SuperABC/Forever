@@ -11,6 +11,8 @@
 // 架构上和Terrain(Core/map/terrain.h)同一个模式——Populace只允许操作这个Core层concept，
 // 不允许直接持有/调用NameMod*，详见populace.md。
 class Name {
+	// 存档：PopulaceSaveCodec直接读写私有字段(populace_save.md)。
+	friend class PopulaceSaveCodec;
 public:
 	Name() = delete;
 

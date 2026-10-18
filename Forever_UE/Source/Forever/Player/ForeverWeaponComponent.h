@@ -46,6 +46,8 @@ public:
 
 	bool IsReloading() const { return bReloading; }
 	int32 GetCurrentAmmo() const { return currentAmmo; }
+	// 读档恢复弹匣余量(夹到[0, 弹匣容量])。
+	void SetCurrentAmmo(int32 value) { currentAmmo = FMath::Clamp(value, 0, GetMagazineCapacity()); }
 	int32 GetMagazineCapacity() const;
 
 	// 当前手上是不是空的(没有激活任何武器)——供AForeverCharacter::StartAim()判断能不能

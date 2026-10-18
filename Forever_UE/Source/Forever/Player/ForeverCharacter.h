@@ -126,6 +126,9 @@ protected:
 	// "武器只挂肩膀"一节。
 	void ActivateShoulderWeapon(int32 slot);
 
+	// 最近一次ActivateShoulderWeapon的slot(1=左肩/2=右肩，0=还没激活过)，存档用。
+	int32 activeShoulderSlot = 0;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UForeverWeaponComponent> weaponComponent;
 
@@ -188,6 +191,10 @@ public:
 	// 供UForeverWeaponComponent::Fire()判断该用哪个摄像机做开火射线的起点/方向。
 	FORCEINLINE bool IsFirstPerson() const { return bIsFirstPerson; }
 	FORCEINLINE UForeverWeaponComponent* GetWeaponComponent() const { return weaponComponent; }
+
+	// 存档/读档：当前激活的肩膀槽位；读档时RestoreWeaponState按存档重新激活并恢复弹匣余量。
+	int32 GetActiveShoulderSlot() const { return activeShoulderSlot; }
+	void RestoreWeaponState(int32 slot, int32 magazineAmmo);
 	// 供AForeverHUD判断要不要画屏幕中心的准星。
 	FORCEINLINE bool IsAiming() const { return bIsAiming; }
 };

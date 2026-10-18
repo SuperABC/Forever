@@ -86,6 +86,8 @@ private:
 // Roadnet：持有一个具体RoadnetMod实例产出的路网数据，深拷贝成自己持有的Node/Intersection/Road/Lot，
 // 供Map长期使用(mod实例本身在DistributeRoadnet跑完后由调用方销毁，其值语义容器随之析构)。
 class Roadnet {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	Roadnet() = delete;
 	Roadnet(RoadnetFactory* factory, const std::string& roadnetId);

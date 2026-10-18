@@ -269,3 +269,40 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 
 	pollCursor = (pollCursor + batchCount) % total;
 }
+
+TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> UForeverPopulaceFrameworkComponent::SyncPositionsToCore() {
+	// 先把已经算完的寻路结果落地(和TickComponent里同一套)，这些市民也开始走路了。
+	FPendingWalkResult result;
+	while (pathResultQueue.Dequeue(result)) {
+		ApplyWalkResult(result.citizen, result.destination, result.waypoints);
+	}
+
+	TArray<FWalkingSnapshot> walking;
+	for (auto& [citizen, element] : activeInstances) {
+		if (!citizen || !element) continue;
+		FVector loc = element->GetActorLocation();
+		citizen->SetPosition(loc.X / POPULACE_WORLD_SCALE, loc.Y / POPULACE_WORLD_SCALE, loc.Z / POPULACE_WORLD_SCALE);
+
+		Room* destination = element->GetWalkDestination();
+		if (!destination) continue;
+		FWalkingSnapshot snapshot;
+		snapshot.citizen = citizen;
+		snapshot.currentRoom = citizen->GetCurrentRoom();
+		snapshot.hasPosition = citizen->HasPosition();
+		citizen->GetPosition(snapshot.x, snapshot.y, snapshot.z);
+		walking.Add(snapshot);
+
+		citizen->SetCurrentRoom(destination);
+		citizen->ClearPosition();
+	}
+	return walking;
+}
+
+void UForeverPopulaceFrameworkComponent::RestoreAfterSave(const TArray<FWalkingSnapshot>& walking) {
+	for (const FWalkingSnapshot& snapshot : walking) {
+		if (!snapshot.citizen) continue;
+		snapshot.citizen->SetCurrentRoom(snapshot.currentRoom);
+		if (snapshot.hasPosition) snapshot.citizen->SetPosition(snapshot.x, snapshot.y, snapshot.z);
+		else snapshot.citizen->ClearPosition();
+	}
+}

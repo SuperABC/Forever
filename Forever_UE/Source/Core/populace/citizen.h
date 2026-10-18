@@ -150,6 +150,8 @@ struct Relation {
 // 这里只做前向声明，3D坐标用裸float三元组而不是FVector，转UE坐标的工作留给Forever层的
 // ACitizenElement，和ComputeWorldPosition一类函数把map单位转UE单位的既有分工一致。
 class Citizen {
+	// 存档：PopulaceSaveCodec直接读写私有字段(populace_save.md)。
+	friend class PopulaceSaveCodec;
 public:
 	Citizen(const std::string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay);
 

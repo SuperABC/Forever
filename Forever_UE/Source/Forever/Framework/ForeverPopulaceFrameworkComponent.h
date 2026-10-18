@@ -80,6 +80,21 @@ public:
 	// 它们只引用Citizen*/Room*/TArray<FVector>这些纯数据，没有需要手动释放的所有权。
 	static void WaitForPendingPathfinding();
 
+	// 存档前调用：把场景里每个市民Actor当前的位置写回Core的Citizen(SetPosition)。平时只有市民
+	// 走远被销毁时才写回，不同步的话读档后市民会回到上一次写回的位置。
+	// 正在走路的市民按"已经走到了"记：Core里的当前房间设成目的地、清掉位置(读档后在目的地
+	// 房间里落脚，和不在场景里的市民瞬移到目的地是同一个约定)。这只是为了存档：场景里的市民
+	// 还在路上，存完档要调RestoreAfterSave把这些市民的Core状态还原，不影响正在进行的游戏。
+	// 已经算完、还没落地的寻路结果先按正常流程落地(开始走)，一起算作"在走路"。
+	struct FWalkingSnapshot {
+		Citizen* citizen = nullptr;
+		Room* currentRoom = nullptr;
+		bool hasPosition = false;
+		float x = 0.f, y = 0.f, z = 0.f;
+	};
+	TArray<FWalkingSnapshot> SyncPositionsToCore();
+	static void RestoreAfterSave(const TArray<FWalkingSnapshot>& walking);
+
 private:
 	// RequestWalk异步派发到线程池的寻路结果，由TickComponent()每帧drain。只在游戏线程上
 	// 被读取(Dequeue)，只在后台线程上被写入(Enqueue)，EQueueMode::Mpsc允许多个后台线程

@@ -23,6 +23,9 @@ class FOREVER_API UForeverStoryFrameworkComponent : public UForeverFrameworkComp
 	GENERATED_BODY()
 
 public:
+	// 剧情对话是否正在展示(队列非空)——对话进行中不允许存档：对话队列里的中间状态不进存档。
+	bool IsDialogActive() const { return pendingQueue.Num() > 0; }
+
 	// 由AForeverFrameworkActor在Story::Init()跑完后调用一次。story生命周期由调用方持有。
 	void Init(Story* inStory);
 

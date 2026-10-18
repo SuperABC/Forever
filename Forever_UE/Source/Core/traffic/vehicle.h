@@ -24,6 +24,8 @@ class Route;
 // "谁在开这辆车"这份信息由UE侧AVehicleElement::previousPawn自己保留(上车前的pawn，下车时
 // 要恢复谁)，不需要Core重复记一份，见vehicle.md。
 class Vehicle {
+	// 存档：TrafficSaveCodec直接读写私有字段(traffic_save.md)。
+	friend class TrafficSaveCodec;
 public:
 	Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const std::string& id, const std::string& name);
 	~Vehicle(); // factory->DestroyVehicle(mod)；delete script

@@ -5,7 +5,7 @@
 
 ## 关键设计
 - 只覆盖**数字单键动作**,不覆盖Move/Look这类模拟量+多按键组合映射(WASD四向、鼠标XY)——这类映射的Modifier/Trigger设置复杂,继续放在`IMC_Default`/`IMC_MouseLook`资源里由编辑器authored。没有做交互式设置UI。
-- 动作(`UInputAction`)和映射(`UInputMappingContext`)都是`NewObject`出来的**运行时对象**,不对应内容浏览器里的任何`.uasset`。好处是新增/修改按键不需要碰编辑器资源,坏处是这些动作在编辑器里不可见、不能被蓝图或Details面板直接引用,只能通过`GetAction(FName)`按名字取。
+- 动作(`UInputAction`)和映射(`UInputMappingContext`)都是`NewObject`出来的**运行时对象**,不对应内容浏览器里的任何`.uasset`。好处是新增/修改按键不需要碰编辑器资源,坏处是这些动作在编辑器里不可见、不能被蓝图或Details面板直接引用,只能通过`GetAction(FName)`按名字取。`GetKey(FName)`返回某个绑定读配置后实际生效的按键,给UI Only模式下自己处理按键的Widget用。
 - 配置文件路径是`Forever_UE/Resource/Config/KeyBindings.ini`,不在UE标准`Project/Config`目录下,用`FConfigFile::Read`直接读文件内容,不走`GConfig`全局单例注册。
 - 键名解析用`FKey(FName(keyNameString))` + `IsValid()`校验;缺配置项或键名无效都静默回退到硬编码默认键并打`Warning`日志。
 - `UInputMappingContext::MapKey`每次调用都是"新增一条映射"而不是"查找并更新已有映射",所以在全新构造的`bindingContext`上直接为每个动作调用一次即可。
@@ -15,7 +15,8 @@
 - 依赖:`Forever_UE/Resource/Config/KeyBindings.ini`(找不到该文件时全部用硬编码默认值,不报错)。
 - 被谁依赖:
   - `AForeverCharacter::SetupPlayerInputComponent`(`Jump`/`ToggleView`/`Sprint`/`MeetOptionUp`/`MeetOptionDown`/`MeetOptionSelect`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1`/`SwitchWeapon2`/`AimWeapon`)。
-  - `AForeverPlayerController::BeginPlay`/`SetupInputComponent`(整份`GetBindingContext()`常驻加入Enhanced Input子系统;`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`绑定,见`Player/ForeverPlayerController.md`)。
+  - `AForeverPlayerController::BeginPlay`/`SetupInputComponent`(整份`GetBindingContext()`常驻加入Enhanced Input子系统;`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`/`TogglePause`绑定,见`Player/ForeverPlayerController.md`)。
+  - `UForeverPausePanelWidget::NativeOnKeyDown`(用`GetKey("TogglePause")`取配置后的实际按键——UI Only模式下Enhanced Input不触发,只能自己比对按键)。
   - `AVehicleElement::SetupPlayerInputComponent`(`Handbrake`/`ExitVehicle`)。
 - Mod可扩展点:"可绑定动作"注册表(`GetBindingDefinitions()`)是硬编码在本类里的静态列表,新增数字按键动作时在这里加一条`{名字, 默认键}`即可,不需要改配置文件解析逻辑。
 

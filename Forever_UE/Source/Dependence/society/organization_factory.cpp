@@ -62,3 +62,10 @@ float OrganizationFactory::GetPower(const string& id) const {
 	auto it = registries.find(id);
 	return IsEnabled(id) ? it->second.power() : 0.f;
 }
+
+vector<pair<string, OrganizationMod*>> OrganizationFactory::GetLiveInstances() const {
+	vector<pair<string, OrganizationMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

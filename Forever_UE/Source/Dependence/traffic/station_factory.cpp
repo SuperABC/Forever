@@ -66,3 +66,10 @@ void StationFactory::AssignRoads(const string& id, const vector<Road*>& roads,
 		it->second.assign(roads, emit, context);
 	}
 }
+
+vector<pair<string, StationMod*>> StationFactory::GetLiveInstances() const {
+	vector<pair<string, StationMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

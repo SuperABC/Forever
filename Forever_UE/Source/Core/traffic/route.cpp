@@ -207,6 +207,8 @@ void Route::Build(Map* map, const vector<Station*>& stations, vector<Station*>& 
 
 		if (!legs.empty()) lines.push_back(legs);
 	}
+
+	stopStations = resolvedStations;
 }
 
 const vector<vector<Route::RouteLeg>>& Route::GetLines() const { return lines; }

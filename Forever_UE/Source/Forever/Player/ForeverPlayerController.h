@@ -11,6 +11,7 @@ class UPuzzleWidget;
 class UPhoneWidget;
 class UForeverInventoryWidget;
 class UMapWidget;
+class UForeverPausePanelWidget;
 class UInputComponent;
 
 // MAINCONTROLLER_TODO.md点名的"MouseScrollUp/Down + F对话选项"三个热键归属这个Controller
@@ -94,6 +95,18 @@ protected:
 	void ToggleMap();
 	void HandleCloseMap();
 
+	// 暂停界面(保存/加载)：跟前面几个Widget同一套模式(常驻创建)，Tab键(TogglePause)打开；
+	// 界面打开期间是UI Only输入，关闭由UForeverPausePanelWidget自己的NativeOnKeyDown处理。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UForeverPausePanelWidget> pauseWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UForeverPausePanelWidget> pauseWidget;
+
+	// 地图/手机/背包/谜题/剧情对话任何一个开着时不打开暂停界面(它们各自占着UI Only输入和
+	// 键盘焦点，叠上去会互相抢)。
+	void TogglePause();
+
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
@@ -102,4 +115,5 @@ public:
 	FORCEINLINE UPhoneWidget* GetPhoneWidget() const { return phoneWidget; }
 	FORCEINLINE UForeverInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
 	FORCEINLINE UMapWidget* GetMapWidget() const { return mapWidget; }
+	FORCEINLINE UForeverPausePanelWidget* GetPauseWidget() const { return pauseWidget; }
 };

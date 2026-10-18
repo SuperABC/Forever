@@ -22,6 +22,8 @@ enum FACE_DIRECTION : int {
 };
 
 class Node {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	// 禁止默认构造
 	Node() = delete;
@@ -79,6 +81,8 @@ private:
 };
 
 class Connection {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	// 禁止默认构造
 	Connection() = delete;
@@ -181,6 +185,8 @@ struct RoadOpening {
 };
 
 class Road : public Connection {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	// 禁止默认构造
 	Road() = delete;
@@ -464,6 +470,8 @@ struct NavigationConnectionTemplate {
 };
 
 class Lot : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	// 构造空地块
 	Lot();

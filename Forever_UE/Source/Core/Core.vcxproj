@@ -81,10 +81,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="common\config.cpp" />
+    <ClCompile Include="common\save.cpp" />
     <ClCompile Include="common\loader.cpp" />
     <ClCompile Include="common\implement.cpp" />
     <ClCompile Include="common\registry.cpp" />
     <ClCompile Include="society\society.cpp" />
+    <ClCompile Include="society\society_save.cpp" />
     <ClCompile Include="society\job.cpp" />
     <ClCompile Include="society\organization.cpp" />
     <ClCompile Include="industry\industry.cpp" />
@@ -92,10 +94,12 @@
     <ClCompile Include="industry\storage.cpp" />
     <ClCompile Include="industry\manufacture.cpp" />
     <ClCompile Include="traffic\traffic.cpp" />
+    <ClCompile Include="traffic\traffic_save.cpp" />
     <ClCompile Include="traffic\vehicle.cpp" />
     <ClCompile Include="traffic\station.cpp" />
     <ClCompile Include="traffic\route.cpp" />
     <ClCompile Include="player\player.cpp" />
+    <ClCompile Include="player\player_save.cpp" />
     <ClCompile Include="player\asset.cpp" />
     <ClCompile Include="player\weapon.cpp" />
     <ClCompile Include="player\app.cpp" />
@@ -103,6 +107,7 @@
     <ClCompile Include="player\puzzle.cpp" />
     <ClCompile Include="map\terrain.cpp" />
     <ClCompile Include="map\vegetation.cpp" />
+    <ClCompile Include="map\map_save.cpp" />
     <ClCompile Include="map\roadnet.cpp" />
     <ClCompile Include="map\zone.cpp" />
     <ClCompile Include="map\building.cpp" />
@@ -116,17 +121,22 @@
     <ClCompile Include="populace\experience.cpp" />
     <ClCompile Include="populace\school.cpp" />
     <ClCompile Include="populace\populace.cpp" />
+    <ClCompile Include="populace\populace_save.cpp" />
     <ClCompile Include="story\milestone.cpp" />
     <ClCompile Include="story\script.cpp" />
+    <ClCompile Include="story\script_save.cpp" />
     <ClCompile Include="story\story.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\class.h" />
     <ClInclude Include="common\config.h" />
+    <ClInclude Include="common\save.h" />
+    <ClInclude Include="common\save_refs.h" />
     <ClInclude Include="common\loader.h" />
     <ClInclude Include="common\implement.h" />
     <ClInclude Include="common\registry.h" />
     <ClInclude Include="society\society.h" />
+    <ClInclude Include="society\society_save.h" />
     <ClInclude Include="society\job.h" />
     <ClInclude Include="society\organization.h" />
     <ClInclude Include="industry\industry.h" />
@@ -134,10 +144,12 @@
     <ClInclude Include="industry\storage.h" />
     <ClInclude Include="industry\manufacture.h" />
     <ClInclude Include="traffic\traffic.h" />
+    <ClInclude Include="traffic\traffic_save.h" />
     <ClInclude Include="traffic\vehicle.h" />
     <ClInclude Include="traffic\station.h" />
     <ClInclude Include="traffic\route.h" />
     <ClInclude Include="player\player.h" />
+    <ClInclude Include="player\player_save.h" />
     <ClInclude Include="player\asset.h" />
     <ClInclude Include="player\weapon.h" />
     <ClInclude Include="player\app.h" />
@@ -145,6 +157,7 @@
     <ClInclude Include="player\puzzle.h" />
     <ClInclude Include="map\terrain.h" />
     <ClInclude Include="map\vegetation.h" />
+    <ClInclude Include="map\map_save.h" />
     <ClInclude Include="map\roadnet.h" />
     <ClInclude Include="map\zone.h" />
     <ClInclude Include="map\building.h" />
@@ -158,8 +171,10 @@
     <ClInclude Include="populace\experience.h" />
     <ClInclude Include="populace\school.h" />
     <ClInclude Include="populace\populace.h" />
+    <ClInclude Include="populace\populace_save.h" />
     <ClInclude Include="story\milestone.h" />
     <ClInclude Include="story\script.h" />
+    <ClInclude Include="story\script_save.h" />
     <ClInclude Include="story\story.h" />
 </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

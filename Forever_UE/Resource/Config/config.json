@@ -40,8 +40,8 @@
    ],
    "job_mods" : [ "job_shop_saler", "empty --test true" ],
    "layout_paths" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"
    ],
    "main_story" : "empty",
@@ -61,8 +61,8 @@
    ],
    "puzzle_mods" : [ "tetris", "empty --test true" ],
    "resource_paths" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
-      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story"
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test"
    ],
    "roadnet_mods" : [ "jing" ],
    "room_mods" : [

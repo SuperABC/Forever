@@ -16,6 +16,8 @@ class Vehicle;
 // 收集stationType匹配的Station接口、调mod->LayoutRoute()组织成有向图+若干条环线；Update()
 // 按时刻表驱动绑定在这条线路上的载具，见Core/traffic/route.md。
 class Route {
+	// 存档：TrafficSaveCodec直接读写私有字段(traffic_save.md)。
+	friend class TrafficSaveCodec;
 public:
 	Route(RouteFactory* factory, const std::string& modId, const std::string& name);
 	~Route(); // factory->DestroyRoute(mod)；delete graph里owned==true的边自己new出来的Connection
@@ -103,4 +105,7 @@ private:
 	std::unordered_map<int, std::unordered_map<int, RouteEdge>> graph;
 	std::vector<std::vector<RouteLeg>> lines;
 	std::vector<std::vector<Vehicle*>> lineVehicles; // 下标和lines一一对应
+	// Build()里mod->LayoutRoute用的站点表(真实站点+这条线路创建的边缘站点)，graph的key
+	// (PackStop)里的站点下标就是这张表的下标。存档要靠它把key换成站点名，见traffic_save.md。
+	std::vector<Station*> stopStations;
 };

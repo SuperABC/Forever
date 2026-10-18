@@ -16,6 +16,8 @@
 //
 // 容器：volume>0即为容器，可以AddContent，一个容器本身还能被装进另一个容器(没有限制)。
 class Asset {
+	// 存档：PlayerSaveCodec直接读写私有字段(player_save.md)。
+	friend class PlayerSaveCodec;
 public:
 	// id需要在config.json的"asset_mods"里启用，否则mod为空、IsValid()返回false。
 	Asset(AssetFactory* factory, const std::string& id, const std::string& name);

@@ -449,6 +449,56 @@ string Config::GetMainStoryScriptPath() {
 	return GetScriptPath("test");
 }
 
+vector<string> Config::GetConceptJsonKeys() {
+	vector<string> keys;
+	keys.reserve(conceptMods.size());
+	for (auto& [key, mods] : conceptMods) keys.push_back(key);
+	return keys;
+}
+
+void Config::SetConceptMods(const string& jsonKey, const vector<pair<string, string>>& mods) {
+	conceptMods[jsonKey] = mods;
+}
+
+void Config::SetStoryScripts(const vector<string>& paths) {
+	storyScriptPaths = paths;
+}
+
+void Config::SetMainStoryScriptModName(const string& name) {
+	mainStoryScriptModName = name;
+}
+
+void Config::RescanFiles() {
+	// 先拷出根目录列表——AddResourcePath/AddLayoutPath会erase再重新插入同一个key。
+	// 资源根目录同时登记在layoutPaths里，由AddResourcePath一并刷新，不再单独按layout根扫一遍。
+	vector<string> resourceRoots;
+	for (const auto& [root, _] : resourcePaths) resourceRoots.push_back(root);
+	vector<string> layoutRoots;
+	for (const auto& [root, _] : layoutPaths) {
+		if (!resourcePaths.count(root)) layoutRoots.push_back(root);
+	}
+	for (const string& root : resourceRoots) AddResourcePath(root);
+	for (const string& root : layoutRoots) AddLayoutPath(root);
+}
+
+vector<string> Config::FindMissingScripts(const vector<string>& scripts) {
+	vector<string> missing;
+	for (const string& name : scripts) {
+		if (GetScriptPath(name).empty()) missing.push_back(name);
+	}
+	return missing;
+}
+
+vector<string> Config::FindMissingLayouts(const vector<string>& layouts) {
+	unordered_set<string> available;
+	for (const string& path : GetLayouts()) available.insert(filesystem::path(path).stem().string());
+	vector<string> missing;
+	for (const string& name : layouts) {
+		if (!available.count(name)) missing.push_back(name);
+	}
+	return missing;
+}
+
 vector<pair<string, string>> Config::GetConceptMods(const string& jsonKey) {
 	auto it = conceptMods.find(jsonKey);
 	if (it == conceptMods.end()) {

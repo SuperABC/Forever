@@ -92,6 +92,8 @@ public:
 	// UForeverPopulaceFrameworkComponent的私有activeInstances，只能从命中的Actor自己
 	// 反查。不持有所有权，citizen本身的生命周期由Populace管理。
 	Citizen* GetCitizen() const { return citizen; }
+	// 正在WalkTo的目标房间，没在走路时为nullptr。存档时用来把走路中的市民记成"已经到了"。
+	Room* GetWalkDestination() const { return walkDestination; }
 
 protected:
 	virtual void Tick(float DeltaTime) override;

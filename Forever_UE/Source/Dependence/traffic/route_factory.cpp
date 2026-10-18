@@ -57,3 +57,10 @@ void RouteFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 bool RouteFactory::IsEnabled(const string& id) const {
 	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }
+
+vector<pair<string, RouteMod*>> RouteFactory::GetLiveInstances() const {
+	vector<pair<string, RouteMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

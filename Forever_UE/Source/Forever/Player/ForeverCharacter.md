@@ -9,7 +9,7 @@
 - 网格体相对Root的`(-96, 0, -90°)`偏移是标准UE Mannequin挂接惯例。
 - `Jump`/`ToggleView`/`Sprint`/`MeetOptionUp/Down/Select`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1/2`/`AimWeapon`不直接引用`UInputAction`资源,改从`UForeverKeyBindingSubsystem`(见`Input/ForeverKeyBindingSubsystem.md`)按名字取运行时动态创建的Action,按键从外部配置文件读取。
 - `PossessedBy`/`UnPossessed`只增删这个Pawn自己的`inputMapping`/`inputLookMapping`(`IMC_Default`/`IMC_MouseLook`)——`UForeverKeyBindingSubsystem`那份动态Context改由`AForeverPlayerController::BeginPlay`常驻添加一次(见`ForeverPlayerController.md`),因为`TogglePhone`等热键要求任何时候都生效,不依赖"当前是否正占有一个真正的Pawn"。移动/视角这类Pawn专属映射仍然跟着"被占有"状态走,保证玩家上/下车、切换被操控角色时映射能跟着当前Pawn切换(见`CONVENTIONS.md`第7节)。
-- `PossessedBy`里会给被占有的角色重新配出一套初始装备:左肩挂`weapon_pistol`、右肩挂`weapon_rifle`并激活左肩(`ActivateShoulderWeapon(1)`),背上挂一个`asset_container`,内放手枪/步枪备弹各120发——每次占有前先清空`leftShoulder`/`rightShoulder`/`back`三个槽位上一次占有可能留下的旧Asset,这样切到任意可操控角色都能立刻测装备/换弹/切枪,但同一角色被取消占有又重新占有时装备不会保留,这是已知简化。
+- `PossessedBy`只在Player的`leftShoulder`/`rightShoulder`/`back`三个槽位全空时(开局第一次占有)发初始装备:左肩`weapon_pistol`、右肩`weapon_rifle`,背上一个`asset_container`内放手枪/步枪备弹各120发。这些槽位挂在Player身上,换人操控时跟着玩家走,不再每次占有都删掉重建(否则子弹每换一次人就回满,读档恢复出来的背包也会被覆盖)。每次占有都`ActivateShoulderWeapon(1)`激活左肩,让新角色手上握着枪。
 - **V键第一/三人称切换**(`ToggleCameraView`):
   - `firstPersonCamera`优先挂到骨骼网格`head`socket;不存在则退化为挂在Root上、用胶囊体半高0.9倍作为眼高近似值。
   - 两个摄像机同一时刻只有一个`Active`(`UCameraComponent::SetActive`),不是靠`SetViewTarget`,因为两者都挂在同一Pawn上。
@@ -34,6 +34,8 @@
 都是硬编码的`/Game/Asset/Textures/Avatars/default`)设进`AvatarTexture`参数。Avatar材质需要在编辑器里
 手动建(一个TextureSampleParameter2D `AvatarTexture`连Base Color)；还没建时保留Cube自带材质。已知效果：
 Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块内部，Cube单面渲染、从里面看不到，不挡视线。
+
+- **存档**：`activeShoulderSlot`记录最近一次`ActivateShoulderWeapon`的槽位；读档时`AForeverFrameworkActor::RestoreControlledPawn`调用`RestoreWeaponState(slot, ammo)`改回存档时激活的武器和弹匣余量(`PossessedBy`默认激活左肩、换满弹匣)。
 
 ## 依赖关系
 - 依赖资产:`Content/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple`、`Anims/Unarmed/ABP_Unarmed`、`Content/Blueprint/Player/Input/Actions/{IA_Move,IA_Look,IA_MouseLook}`、`Content/Blueprint/Player/Input/{IMC_Default,IMC_MouseLook}`。

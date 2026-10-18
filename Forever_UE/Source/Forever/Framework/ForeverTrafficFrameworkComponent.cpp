@@ -214,6 +214,14 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 		float worldZ = TRAFFIC_HEIGHT_EPSILON + building->GetFloorBaseZ(room->GetLayer()) * TRAFFIC_WORLD_SCALE;
 		float worldYaw = FMath::RadiansToDegrees(building->GetRotation()) + vehicle->GetParkingRotationDegrees();
 
+		// 车辆Actor每帧把自己的位置写回Vehicle::SetTransform(UE单位)。读档时这份记录非零就说明
+		// 车被开动过(或至少生成过一次)，按记录的位置生成，不再放回车位。
+		float savedX, savedY, savedZ, savedYaw;
+		vehicle->GetTransform(savedX, savedY, savedZ, savedYaw);
+		if (savedX != 0.f || savedY != 0.f || savedZ != 0.f || savedYaw != 0.f) {
+			worldX = savedX; worldY = savedY; worldZ = savedZ; worldYaw = savedYaw;
+		}
+
 		FString blueprintPath = UTF8_TO_TCHAR(vehicle->GetBlueprintPath().data());
 		UClass* vehicleClass = LoadClass<AVehicleElement>(nullptr, *blueprintPath);
 		if (!vehicleClass) {

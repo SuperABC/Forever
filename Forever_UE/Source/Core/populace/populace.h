@@ -19,6 +19,8 @@ struct ScriptContext;
 // Populace：和Map平级的顶层Core类，不是挂在Map底下的工具函数集合——自己管理Citizen*的
 // 生命周期，不知道Map的存在，详见Source/Core/populace/populace.md。
 class Populace {
+	// 存档：PopulaceSaveCodec直接读写私有字段(populace_save.md)。
+	friend class PopulaceSaveCodec;
 public:
 	Populace();
 	~Populace();

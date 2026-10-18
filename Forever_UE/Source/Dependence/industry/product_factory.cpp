@@ -57,3 +57,10 @@ void ProductFactory::SetModArgs(const unordered_map<string, string>& argsById) {
 bool ProductFactory::IsEnabled(const string& id) const {
 	return registries.find(id) != registries.end() && configuredArgs.find(id) != configuredArgs.end();
 }
+
+vector<pair<string, ProductMod*>> ProductFactory::GetLiveInstances() const {
+	vector<pair<string, ProductMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

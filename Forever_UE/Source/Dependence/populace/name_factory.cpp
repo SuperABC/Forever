@@ -61,3 +61,10 @@ string NameFactory::GetName() const {
 	}
 	return string();
 }
+
+vector<pair<string, NameMod*>> NameFactory::GetLiveInstances() const {
+	vector<pair<string, NameMod*>> result;
+	result.reserve(liveInstances.size());
+	for (auto& [instance, id] : liveInstances) result.emplace_back(id, instance);
+	return result;
+}

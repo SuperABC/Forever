@@ -20,8 +20,9 @@
   对应领域迁移到了再回来加。
 - **4类占位能力**：`IsResidential()`/`ResidentialCapacity()`（床位数）/`IsWorkspace()`/
   `WorkspaceCapacity()`（工位数）/`IsStorage()`/`StorageConfig()`（仓库属性）/
-  `IsManufacture()`/`ManufactureTypes()`（产线描述），全部纯转发`RoomMod`同名字段（见
-  `Source/Dependence/map/room_mod.h`）。目前只有`ResidenceRoom`
+  `IsManufacture()`/`ManufactureTypes()`（产线描述），读构造时`mod->SetProperty()`之后从`RoomMod`同名字段
+  拷贝的快照`properties`（见`Source/Dependence/map/room_mod.h`）——读档时直接按存档恢复这份快照，不依赖重新
+  创建的mod再算一遍（见`map_save.md`）。目前只有`ResidenceRoom`
   （`Source/Basic/map/room_basic.cpp`）真正设了`isResidential=true`+
   `residentialCapacity=1`，另外3类保持`RoomMod`基类默认值（false/空），等Job/Industry域
   迁移时再由各自的具体`RoomMod`子类真正启用，详见`Source/Core/populace/populace.md`。

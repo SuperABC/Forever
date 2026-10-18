@@ -21,6 +21,8 @@
 // 注册机制——照Zone/Building的独占持有模式：Component独占一个ComponentMod实例，构造时
 // 创建、析构时factory->DestroyComponent(mod)。
 class Component {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	Component() = delete;
 

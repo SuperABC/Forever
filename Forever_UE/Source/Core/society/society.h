@@ -22,6 +22,8 @@ struct ScriptContext;
 // Society：Job+Organization域的聚合入口（不引入Calendar——"哪几天上班/几点上下班"
 // 直接写进具体JobMod子类的DailyPlan里）。见society.md。
 class Society {
+	// 存档：SocietySaveCodec直接读写私有字段(society_save.md)。
+	friend class SocietySaveCodec;
 public:
 	Society(); // 绑定Registry::Get()对应的三个Factory引用成员，mod注册不在这里做
 	~Society(); // delete organizations

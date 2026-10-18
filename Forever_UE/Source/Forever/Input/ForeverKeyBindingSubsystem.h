@@ -18,6 +18,9 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	UInputAction* GetAction(FName bindingName) const;
+	// 某个绑定实际生效的按键(读配置后的结果)——UI Only模式下的widget(比如暂停界面)收不到
+	// Enhanced Input，要在NativeOnKeyDown里自己比对按键时用。未知名字返回EKeys::Invalid。
+	FKey GetKey(FName bindingName) const;
 	UInputMappingContext* GetBindingContext() const { return bindingContext; }
 
 private:
@@ -37,4 +40,6 @@ private:
 
 	UPROPERTY()
 	TMap<FName, TObjectPtr<UInputAction>> actions;
+
+	TMap<FName, FKey> keys;
 };

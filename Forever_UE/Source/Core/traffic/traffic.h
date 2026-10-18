@@ -36,6 +36,8 @@ struct ScriptContext;
 // 切换逻辑在那边，见ForeverTrafficFrameworkComponent.md）不是一回事，Traffic不知道UE
 // Actor/Controller的存在，两者没有互相持有关系。
 class Traffic {
+	// 存档：TrafficSaveCodec直接读写私有字段(traffic_save.md)。
+	friend class TrafficSaveCodec;
 public:
 	Traffic(); // 绑定Registry::Get().GetVehicleFactory()/GetStationFactory()/GetRouteFactory()/GetScriptFactory()
 	~Traffic(); // delete全部routes/stations/vehicles

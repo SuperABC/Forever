@@ -33,6 +33,9 @@
     <ClCompile Include="common\json.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="common\save_archive.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="common\utility.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -189,6 +192,12 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="common\json.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\save_archive.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\mod_state.h">
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="common\utility.h">

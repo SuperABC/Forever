@@ -22,6 +22,8 @@ enum DOOR_ACCESS_TYPE : int { DOOR_ACCESS_OPEN, DOOR_ACCESS_OWNER, DOOR_ACCESS_L
 // 创建时传入的DoorSpec快照(不持有spec来源mod的指针，几何/mesh/style等创建后不会再变)，
 // 门本身没有需要多态的行为，所以不做DoorMod/DoorFactory这套mod机制。
 class Door {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
 public:
 	Door() = delete;
 

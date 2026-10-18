@@ -49,8 +49,8 @@ void Traffic::Init(Map* map) {
 void Traffic::InitStations(Map* map) {
 	int createdCount = 0;
 	for (auto& [buildingName, building] : map->GetBuildings()) {
-		if (!building || !building->GetMod()) continue;
-		const string& stationModId = building->GetMod()->stationMod;
+		if (!building) continue;
+		const string& stationModId = building->GetStationMod();
 		if (stationModId.empty()) continue;
 
 		string name = "Station" + to_string(stationCounter++);
