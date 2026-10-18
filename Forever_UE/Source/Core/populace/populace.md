@@ -289,9 +289,8 @@ Organization类型已经在用同一套CDF算法，见`society.md`），详见`s
 
 ## `ApplyChange`/`FindCitizenByName`
 
-`Populace::ApplyChange(const Change*, const ScriptContext&)`——目前没有任何
-Change子类是Populace域自己认识、需要处理的，空实现，也不打"未实现"警告（同一个
-Change会被转发给全部六个Core域，只有`Story::ApplyChange`保留兜底警告）。
+`Populace::ApplyChange(const Change*, const ScriptContext&)`——处理市民的`add_option`/`remove_option`，
+返回是否认识这个类型(七个域都不认识时由`AForeverFrameworkActor::ApplyChange`统一打"未实现"警告)。
 
 `Populace::FindCitizenByName(const std::string& name) const`——对`citizens`
 线性扫描比较`GetName()`，找不到返回`nullptr`，不强制生成/持有任何Actor，纯Core层

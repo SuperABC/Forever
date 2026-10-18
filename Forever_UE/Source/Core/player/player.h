@@ -18,6 +18,9 @@
 // 寻址，见下方"资产系统"一节和player.md）。手机(Phone)、存款等字段/方法尚未迁移，见
 // player.md。
 
+class Change;
+struct ScriptContext;
+
 class Player {
 	// 存档：PlayerSaveCodec直接读写私有字段(player_save.md)。
 	friend class PlayerSaveCodec;
@@ -34,6 +37,10 @@ public:
 	// player.md"time_flow_ratio"一节。
 	// @delta: 本帧时长（秒）
 	void Tick(float delta);
+
+	// 和其余六个域同一个约定：返回这个Change是不是本域认识的类型，由AForeverFrameworkActor::ApplyChange
+	// 汇总。目前还不认识任何Change——玩家相关的(给物品/受伤/改时间/银行收支……)补的时候放在这里。
+	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 	// 覆盖time_flow_ratio——由AForeverFrameworkActor::EnsurePlayerGenerated()读取主线
 	// 剧情.script的global_settings.time_flow_ratio字段后调用，没有声明则保持默认值2.0。

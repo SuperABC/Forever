@@ -49,10 +49,11 @@ public:
 	void Tick(const Time& currentTime, bool crossedDay,
 		const std::function<void(Organization*, const std::vector<Change*>&)>& onActions, PostHandle* post);
 
-	// 阶段占位：目前没有任何Change子类是Society域自己认识、需要处理的，空实现——
-	// AForeverFrameworkActor::ApplyChange会把同一个Change转发给全部六个域，这里不打"未实现"
-	// 警告（避免同一个Change被六个域各打一遍重复警告），唯一的兜底警告在Story::ApplyChange。
-	void ApplyChange(const Change* change, const ScriptContext& context);
+	// 阶段占位：目前没有任何Change子类是Society域自己认识、需要处理的，恒返回false。
+	// 返回这个Change是不是本域认识的类型(认识就返回true，不管目标对象找没找到——找不到目标静默
+	// 忽略是既有的宽松约定)。AForeverFrameworkActor::ApplyChange汇总七个域的结果，全都不认识时
+	// 才打"未实现"警告。
+	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 	const std::vector<Organization*>& GetOrganizations() const;
 

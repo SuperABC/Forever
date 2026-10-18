@@ -5,9 +5,7 @@
 `Map`是Map域的聚合类：地图尺寸、`Element`格子存储、Terrain/Roadnet/Zone/Building各自的
 Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初始化对接、格子数据的读写accessor。
 `Tick`/`ApplyChange`是六个Core域（map/populace/society/industry/traffic/story）统一要实现的
-两个方法，目前Map域没有需要每帧处理或响应的Change，都是空实现（`ApplyChange`不打"未实现"
-警告——同一个Change会被转发给全部六个域，只有`Story::ApplyChange`保留兜底警告，避免重复
-日志）。
+两个方法，目前Map域没有需要每帧处理或响应的Change，都是空实现(域自己不打"未实现"警告：`ApplyChange`返回是否认识，七个域都不认识时由`AForeverFrameworkActor::ApplyChange`统一打一条)。
 
 ## 关键设计
 

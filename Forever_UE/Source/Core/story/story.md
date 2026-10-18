@@ -68,12 +68,10 @@ BroadcastGameStart`现场构造一个`PostImplement`传进来，见`Core/common/
 context))`——`GetValue()`返回的是`std::string`（DSL源码文本，不是预先解析好的`Expression`
 对象），`EvaluateExpression`现场`Parse`+求值一步到位，原因见`Dependence/story/change.md`
 "字段类型是`std::string`"一节。
-其余41种变化类型只打一条`debugf`"未实现"日志，不崩溃也不抛异常（这条路径每次匹配后都会被调用，
-容错风格比JSON解析阶段更宽松，见`Dependence/story/change.md`"JSON分发"一节）。这个分派函数是
-`Story`的方法而不是`Change`类自己的虚方法——`Change`是纯数据类。`AForeverFrameworkActor::
-ApplyChange`是统一的Change消费入口，转发给`map`/`populace`/`society`/`industry`/`traffic`/
-`story`六个域各自的`ApplyChange`，`Story`是其中唯一保留"未实现"警告的一个（其余五个域都是
-空占位，故意不打警告，避免同一个Change被六个域各打一遍重复日志），详见
+其余类型返回`false`(不认识)。这个分派函数是`Story`的方法而不是`Change`类自己的虚方法——`Change`是
+纯数据类。`AForeverFrameworkActor::ApplyChange`是统一的Change消费入口，转发给`map`/`populace`/`society`/
+`industry`/`traffic`/`story`/`player`七个域各自的`ApplyChange`，每个域返回自己认不认识这个类型，七个域都不
+认识时由FrameworkActor打一条"未实现"警告(`UE_LOG`)，详见
 `Source/Forever/Framework/ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。
 
 ## `Tick`：占位，保持"每个Core域都有Tick"的形状一致

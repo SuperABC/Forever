@@ -49,7 +49,10 @@ public:
 	* @change: 待执行的变化
 	* @context: 变量路由上下文（context.self决定SetValueChange作用在哪个Script的变量池上）
 	*/
-	void ApplyChange(const Change* change, const ScriptContext& context);
+	// 返回这个Change是不是本域认识的类型(认识就返回true，不管目标对象找没找到——找不到目标静默
+	// 忽略是既有的宽松约定)。AForeverFrameworkActor::ApplyChange汇总七个域的结果，全都不认识时
+	// 才打"未实现"警告。
+	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 	/*
 	* 空实现：Story域目前没有需要每帧处理的逻辑（GameStart广播走的是BroadcastGameStart，

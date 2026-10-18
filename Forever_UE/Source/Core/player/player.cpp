@@ -217,3 +217,8 @@ int Player::CountByType(const string& type) const {
 bool Player::ConsumeByType(const string& type, int amount) {
 	return backPack ? backPack->ConsumeByType(type, amount) : false;
 }
+
+bool Player::ApplyChange(const Change* change, const ScriptContext& context) {
+	// 占位，等玩家相关的Change子类被点名实现时再补。
+	return false;
+}

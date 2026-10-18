@@ -264,15 +264,21 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	// 都不是这个Actor自己能处理的类型，转发给六个域各自的ApplyChange，谁认识就处理——目前
-	// 只有Story::ApplyChange真正执行SetValueChange并在没人认识时打"未实现"警告，其余五个域
-	// 都是空占位，不会重复打印警告。
-	if (map) map->ApplyChange(change, context);
-	if (populace) populace->ApplyChange(change, context);
-	if (society) society->ApplyChange(change, context);
-	if (industry) industry->ApplyChange(change, context);
-	if (traffic) traffic->ApplyChange(change, context);
-	if (story) story->ApplyChange(change, context);
+	// 都不是这个Actor自己能处理的类型，转发给七个域各自的ApplyChange，谁认识就处理(同一种
+	// Change可以有好几个域都认识，比如add_option门/市民/车辆各管各的)。七个域都不认识时才打一条
+	// "未实现"警告——用UE_LOG，进Output Log/Forever.log(Core的debugf只走OutputDebugString)。
+	bool handled = false;
+	if (map) handled |= map->ApplyChange(change, context);
+	if (populace) handled |= populace->ApplyChange(change, context);
+	if (society) handled |= society->ApplyChange(change, context);
+	if (industry) handled |= industry->ApplyChange(change, context);
+	if (traffic) handled |= traffic->ApplyChange(change, context);
+	if (story) handled |= story->ApplyChange(change, context);
+	if (player) handled |= player->ApplyChange(change, context);
+	if (!handled) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor::ApplyChange: change type %s is not implemented yet."),
+			UTF8_TO_TCHAR(change->GetType().c_str()));
+	}
 
 	// 交互选项变了：场景里对应的市民/车辆/门Actor刷新自己的选项快照(玩家站在旁边时连同屏幕上的
 	// 选项列表一起换)，否则要等它下次被重新生成才看得到变化。

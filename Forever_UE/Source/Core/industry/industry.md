@@ -86,8 +86,8 @@ Tick`已经算好透传进来的，`Industry`只需要判断这一个参数。
 
 ### 阶段占位：`ApplyChange()`
 
-目前没有任何`Change`子类是`Industry`域自己认识、需要处理的，空实现——和其余
-五个域一样不打"未实现"警告，唯一的兜底警告在`Story::ApplyChange`。
+目前没有任何`Change`子类是`Industry`域自己认识、需要处理的，恒返回false(七个域都不认识时由
+`AForeverFrameworkActor::ApplyChange`统一打"未实现"警告)。
 
 ### 不绑定房间/位置
 

@@ -114,8 +114,9 @@ void Industry::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) 
 	}
 }
 
-void Industry::ApplyChange(const Change* change, const ScriptContext& context) {
+bool Industry::ApplyChange(const Change* change, const ScriptContext& context) {
 	// 占位，等Industry域真的有需要处理的Change子类时再补，见industry.h声明处注释。
+	return false;
 }
 
 void Industry::GlobalAllocate() {

@@ -306,10 +306,11 @@ public:
 	// AddOptionChange/RemoveOptionChange——Traffic::ApplyChange/Populace::ApplyChange
 	// 分别处理Vehicle/Citizen的AddOptionChange，Door照同一个模式接上。全部按交互名在
 	// doorsByInteractName里找门，找不到静默忽略(和Traffic::ApplyChange同一个"找不到
-	// target就不做任何事"的宽松处理)。其余
-	// Change类型不是Map域认识的，不打"未实现"警告（避免同一个Change被六个域各打一遍
-	// 重复警告），唯一的兜底警告在Story::ApplyChange，见Story.md。
-	void ApplyChange(const Change* change, const ScriptContext& context);
+	// target就不做任何事"的宽松处理)。
+	// 返回这个Change是不是本域认识的类型(认识就返回true，不管目标对象找没找到——找不到目标静默
+	// 忽略是既有的宽松约定)。AForeverFrameworkActor::ApplyChange汇总七个域的结果，全都不认识时
+	// 才打"未实现"警告。
+	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 private:
 	bool CheckXY(int x, int y) const;

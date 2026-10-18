@@ -45,9 +45,11 @@ public:
 	// "每帧都要处理"的逻辑，不像Populace那样还有个按秒触发的timer集合。
 	void Tick(const Time& currentTime, bool crossedDay, PostHandle* post);
 
-	// 阶段占位：目前没有任何Change子类是Industry域自己认识、需要处理的，空实现——
-	// 和其余五个域一样不打"未实现"警告，唯一的兜底警告在Story::ApplyChange。
-	void ApplyChange(const Change* change, const ScriptContext& context);
+	// 阶段占位：目前没有任何Change子类是Industry域自己认识、需要处理的，恒返回false。
+	// 返回这个Change是不是本域认识的类型(认识就返回true，不管目标对象找没找到——找不到目标静默
+	// 忽略是既有的宽松约定)。AForeverFrameworkActor::ApplyChange汇总七个域的结果，全都不认识时
+	// 才打"未实现"警告。
+	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 private:
 	// 全城统一调配核心算法：对系统里出现过的每一种产品type分别做一轮分配，见

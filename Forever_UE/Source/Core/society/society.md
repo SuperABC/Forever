@@ -102,9 +102,7 @@ ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。
 ### `ApplyChange`
 
 `Society::ApplyChange(const Change*, const ScriptContext&)`——目前没有任何
-Change子类是Society域自己认识、需要处理的，空实现，也不打"未实现"警告（同一个
-Change会被`AForeverFrameworkActor::ApplyChange`转发给全部六个Core域，只有
-`Story::ApplyChange`保留兜底警告，避免六个域各打一遍重复日志）。等Society域
+Change子类是Society域自己认识、需要处理的，空实现，返回false(域自己不打"未实现"警告：`ApplyChange`返回是否认识，七个域都不认识时由`AForeverFrameworkActor::ApplyChange`统一打一条)。等Society域
 真的长出需要处理的Change子类时再补内容。
 
 ## 依赖关系

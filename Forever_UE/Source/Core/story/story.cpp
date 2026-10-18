@@ -52,16 +52,15 @@ void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, 
 	onActions(scriptActions, context);
 }
 
-void Story::ApplyChange(const Change* change, const ScriptContext& context) {
+bool Story::ApplyChange(const Change* change, const ScriptContext& context) {
 	if (auto setValue = dynamic_cast<const SetValueChange*>(change)) {
 		if (context.self) {
 			context.self->SetValue(setValue->GetVariable(), EvaluateExpression(setValue->GetValue(), context));
 		}
-		return;
+		return true;
 	}
 
-	// 其余41种变化类型的执行分支等该类型被点名实现时再补，见Story.md。
-	debugf("Warning: change type %s not implemented yet.\n", change->GetType().data());
+	return false;
 }
 
 void Story::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {

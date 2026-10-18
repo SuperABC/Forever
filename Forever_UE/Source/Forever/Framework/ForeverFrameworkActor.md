@@ -151,11 +151,12 @@ context)`是消费任意`Change*`的唯一入口——`populace->Tick`的回调�
    - `ChangeControlChange`：转发给`storyFramework->ApplyControlChange(controlChange,
      context)`——真正的操控权切换逻辑留在`UForeverStoryFrameworkComponent`里不动（它
      本来就知道怎么找/生成citizen Actor、怎么`Possess`），这里只是转发调用。
-2. 都不是这三种时，转发给`map`/`populace`/`society`/`industry`/`traffic`/`story`六个
-   Core域各自的`ApplyChange`，谁认识就处理——目前只有`Story::ApplyChange`真正执行
-   `SetValueChange`并在没人认识时打一条"未实现"警告（见`Core/story/story.md`），其余
-   五个域都只是空占位，**故意不打警告**：如果每个域都各自打一条，一次未识别的Change会
-   连续刷六条重复日志，保留`Story::ApplyChange`已有的那一条作为唯一兜底就够了。
+2. 都不是UE层自己处理的类型时，转发给`map`/`populace`/`society`/`industry`/`traffic`/`story`/`player`
+   七个Core域各自的`ApplyChange`，谁认识就处理。每个域返回`bool`：认识这个类型就返回true(不管目标对象
+   找没找到，找不到目标静默忽略是既有的宽松约定)；同一种Change可以有好几个域都认识(比如`add_option`
+   门/市民/车辆各管各的)。七个域都返回false时，才由这里打一条"未实现"警告(`UE_LOG`，进Output Log/
+   Forever.log)——域自己不打，避免一次未识别的Change被各个域重复刷屏，也避免已经被别的域处理过的
+   Change被误报。
 
 `UForeverStoryFrameworkComponent::BroadcastGameStart`的`onActions`回调调
 `framework->ApplyChange(*changePtr, context)`（`ApplyControlChange`是`public`，供这里

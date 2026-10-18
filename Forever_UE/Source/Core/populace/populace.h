@@ -44,10 +44,11 @@ public:
 	void Tick(const Time& currentTime, bool crossedDay,
 		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions, PostHandle* post);
 
-	// 阶段占位：目前没有任何Change子类是Populace域自己认识、需要处理的，空实现——
-	// AForeverFrameworkActor::ApplyChange会把同一个Change转发给全部六个域，这里不打"未实现"
-	// 警告（避免同一个Change被六个域各打一遍重复警告），唯一的兜底警告在Story::ApplyChange。
-	void ApplyChange(const Change* change, const ScriptContext& context);
+	// 处理市民的add_option/remove_option(按姓名找市民)。
+	// 返回这个Change是不是本域认识的类型(认识就返回true，不管目标对象找没找到——找不到目标静默
+	// 忽略是既有的宽松约定)。AForeverFrameworkActor::ApplyChange汇总七个域的结果，全都不认识时
+	// 才打"未实现"警告。
+	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 	// 按姓名线性查找Citizen*——不强制生成/持有任何Actor，纯Core层数据查询。供
 	// AForeverFrameworkActor::ApplyChange处理NPCNavigateChange时，用change自带的occupant

@@ -266,15 +266,16 @@ void Traffic::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
 	}
 }
 
-void Traffic::ApplyChange(const Change* change, const ScriptContext& context) {
+bool Traffic::ApplyChange(const Change* change, const ScriptContext& context) {
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
 		Vehicle* target = FindVehicleByName(ToString(EvaluateExpression(addOption->GetName(), context)));
 		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
-		return;
+		return true;
 	}
 	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
 		Vehicle* target = FindVehicleByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
 		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
-		return;
+		return true;
 	}
+	return false;
 }

@@ -65,7 +65,10 @@ public:
 	// Populace::ApplyChange对应分支。EnterVehicleChange是UE-only效果(找AVehicleElement、
 	// Possess)，不在这里处理，和ChangeControlChange一样直接在
 	// AForeverFrameworkActor::ApplyChange里dynamic_cast转发给UE层。
-	void ApplyChange(const Change* change, const ScriptContext& context);
+	// 返回这个Change是不是本域认识的类型(认识就返回true，不管目标对象找没找到——找不到目标静默
+	// 忽略是既有的宽松约定)。AForeverFrameworkActor::ApplyChange汇总七个域的结果，全都不认识时
+	// 才打"未实现"警告。
+	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 private:
 	void InitStations(Map* map);

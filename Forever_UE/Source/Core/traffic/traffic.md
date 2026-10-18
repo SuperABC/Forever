@@ -35,9 +35,8 @@ Possess切换逻辑在那边，见其自身注释）不是一回事——`Traffi
 - **`Tick`/`ApplyChange`：占位，保持"每个Core域都有这两个方法"的形状一致**：目前仍是空实现。
   `AForeverFrameworkActor::Tick`每帧会挨个调用`map`/`populace`/`society`/`industry`/
   `traffic`/`story`六个域各自的`Tick`，`AForeverFrameworkActor::ApplyChange`（统一的Change
-  消费入口）也会把没被它自己处理掉的Change转发给这六个域各自的`ApplyChange`——目前没有任何
-  Change子类是Traffic域自己认识、需要处理的，`ApplyChange`因此是空实现，也**不打"未实现"
-  警告**（只有`Story::ApplyChange`保留那条兜底警告，避免六个域各打一遍重复日志）。等
+  消费入口）也会把没被它自己处理掉的Change转发给七个域各自的`ApplyChange`——Traffic认识`add_option`/
+  `remove_option`(车辆的交互选项)，其余返回false(域自己不打"未实现"警告：`ApplyChange`返回是否认识，七个域都不认识时由`AForeverFrameworkActor::ApplyChange`统一打一条)。等
   Route/Station真正落地、或者Vehicle需要每帧自己做点什么（比如AI车流）时再补内容，详见
   `Source/Forever/Framework/ForeverFrameworkActor.md`"统一的Change消费入口：
   `ApplyChange`"一节。

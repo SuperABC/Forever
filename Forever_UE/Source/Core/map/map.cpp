@@ -2267,7 +2267,7 @@ void Map::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
 	// 占位，等Map域真的有需要每帧处理的逻辑时再补，见map.h声明处注释。
 }
 
-void Map::ApplyChange(const Change* change, const ScriptContext& context) {
+bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 	// 四种门相关的Change(AddOption/RemoveOption/SetDoor/RegisterDoor)，全部按交互名在doorsByInteractName里找门，找不到静默忽略——
 	// 和Traffic::ApplyChange处理AddOptionChange找不到Vehicle时同一个宽松处理，见
 	// map.h声明处注释。AddOptionChange/RemoveOptionChange这两种本来就存在(给
@@ -2275,18 +2275,18 @@ void Map::ApplyChange(const Change* change, const ScriptContext& context) {
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
 		Door* target = FindDoorByName(ToString(EvaluateExpression(addOption->GetName(), context)));
 		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
-		return;
+		return true;
 	}
 	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
 		Door* target = FindDoorByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
 		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
-		return;
+		return true;
 	}
 	if (auto* setDoor = dynamic_cast<const SetDoorChange*>(change)) {
 		// access是布尔表达式：true=常开，false=常锁。
 		Door* target = FindDoorByName(ToString(EvaluateExpression(setDoor->GetName(), context)));
 		if (target) target->SetAccess(EvaluateExpressionBool(setDoor->GetAccess(), context) ? DOOR_ACCESS_OPEN : DOOR_ACCESS_LOCKED);
-		return;
+		return true;
 	}
 	if (auto* registerDoor = dynamic_cast<const RegisterDoorChange*>(change)) {
 		// pass是布尔表达式，留空时EvaluateExpressionBool按true处理(允许通过)。
@@ -2295,6 +2295,7 @@ void Map::ApplyChange(const Change* change, const ScriptContext& context) {
 			target->Register(ToString(EvaluateExpression(registerDoor->GetCitizen(), context)),
 				EvaluateExpressionBool(registerDoor->GetPass(), context));
 		}
-		return;
+		return true;
 	}
+	return false;
 }
