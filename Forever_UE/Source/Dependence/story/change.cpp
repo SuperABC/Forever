@@ -343,60 +343,6 @@ const std::string& RemoveOptionChange::GetOption() const {
 	return option;
 }
 
-AddGlobalChange::AddGlobalChange() :
-	option() {
-
-}
-
-AddGlobalChange::AddGlobalChange(std::string option) :
-	option(move(option)) {
-
-}
-
-AddGlobalChange::~AddGlobalChange() {
-
-}
-
-const string& AddGlobalChange::GetType() const {
-	static const string type = "add_global";
-	return type;
-}
-
-void AddGlobalChange::SetOption(std::string option) {
-	this->option = move(option);
-}
-
-const std::string& AddGlobalChange::GetOption() const {
-	return option;
-}
-
-RemoveGlobalChange::RemoveGlobalChange() :
-	option() {
-
-}
-
-RemoveGlobalChange::RemoveGlobalChange(std::string option) :
-	option(move(option)) {
-
-}
-
-RemoveGlobalChange::~RemoveGlobalChange() {
-
-}
-
-const string& RemoveGlobalChange::GetType() const {
-	static const string type = "remove_global";
-	return type;
-}
-
-void RemoveGlobalChange::SetOption(std::string option) {
-	this->option = move(option);
-}
-
-const std::string& RemoveGlobalChange::GetOption() const {
-	return option;
-}
-
 SpawnNpcChange::SpawnNpcChange() :
 	avatar(), name(), gender(), birthday(), height(), weight(),
 	nick(), deposit(), phone(), home(), jobs(), scheduler() {

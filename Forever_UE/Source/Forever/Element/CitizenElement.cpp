@@ -404,7 +404,7 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
 			AForeverFrameworkActor* frameworkActor = framework.IsValid() ? Cast<AForeverFrameworkActor>(framework->GetOwner()) : nullptr;
 			for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
-				meetOption->AddOption(frameworkActor, cachedOptions[idx], citizenNameOnly, idx, false);
+				meetOption->AddOption(frameworkActor, cachedOptions[idx], citizenNameOnly, idx);
 			}
 		}
 	}

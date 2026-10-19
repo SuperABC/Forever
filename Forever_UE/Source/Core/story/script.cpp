@@ -278,6 +278,10 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 		else if (type == "option_dialog") {
 			event = new OptionDialogEvent(obj["name"].AsString(), obj["option"].AsString());
 		}
+		else if (type == "global_message") {
+			// message可以省略(留空=收到任何全局消息都触发)，见GlobalMessageEvent::Match。
+			event = new GlobalMessageEvent(obj["message"].AsString());
+		}
 		else if (type == "citizen_decease") {
 			// name/reason都可以省略(留空=不限)，见CitizenDeceaseEvent::Match。
 			event = new CitizenDeceaseEvent(obj["name"].AsString(), obj["reason"].AsString());
@@ -346,6 +350,13 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or access for set_door change.\n");
 			}
 			change = new SetDoorChange(name.AsString(), access.AsString());
+		}
+		else if (type == "global_message") {
+			auto message = obj["message"];
+			if (message.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing message for global_message change.\n");
+			}
+			change = new GlobalMessageChange(message.AsString());
 		}
 		else if (type == "remove_option") {
 			auto name = obj["name"];

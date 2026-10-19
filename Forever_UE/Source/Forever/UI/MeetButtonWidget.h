@@ -23,8 +23,7 @@ public:
 	// @framework: 用于点击时转发到UForeverStoryFrameworkComponent::OptionDialog
 	// @targetName: 对话目标（市民）姓名
 	// @option: 选项文本
-	// @bGlobal: 是否全局选项——这次只存字段，不实现对应的GlobalDialog匹配分支
-	void Setup(AForeverFrameworkActor* inFramework, const FString& inTargetName, const FString& inOption, bool inGlobal);
+	void Setup(AForeverFrameworkActor* inFramework, const FString& inTargetName, const FString& inOption);
 
 	const FString& GetTargetName() const { return targetName; }
 	const FString& GetOption() const { return option; }
@@ -56,5 +55,4 @@ private:
 	TWeakObjectPtr<AForeverFrameworkActor> framework;
 	FString targetName;
 	FString option;
-	bool bGlobal = false;
 };

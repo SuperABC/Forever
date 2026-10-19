@@ -48,3 +48,4 @@
 - `option_dialog`(name/option)
 - `citizen_decease`(name/reason，留空=不限)：`CitizenDeceaseEvent::Match`按name/reason过滤(都是表达式)，和`OptionDialogEvent::Match`同一个写法。市民死亡时由`UForeverStoryFrameworkComponent::BroadcastCitizenDecease`广播给主线脚本和死者自己的Scheduler脚本(按name找，和`option_dialog`同一个模式)。
 - 事件字段：`option_dialog`在脚本里可以用`local.name`/`local.option`读到被点的对象名和选项文字，`citizen_decease`可以用`local.name`/`local.reason`读到死者姓名和死因(`GetLocalValue`)。
+- `global_message`(message，留空=收到任何全局消息都触发)：只由`global_message`这个Change发出——执行时求出消息文本，`UForeverStoryFrameworkComponent::BroadcastGlobalMessage`广播给所有挂了Script的东西(主线/组织/岗位/市民Scheduler/车辆/门，和`game_start`同一个范围)。脚本里用`local.message`读消息内容。收到消息的里程碑可以再发全局消息，嵌套深度超过8层时丢弃并打警告，防止互相触发无限递归。

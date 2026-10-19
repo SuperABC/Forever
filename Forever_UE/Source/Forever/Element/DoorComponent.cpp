@@ -287,7 +287,7 @@ void UForeverDoorComponent::OnOverlapBegin(UPrimitiveComponent* OverlappedCompon
 			AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
 				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
 			for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
-				meetOption->AddOption(frameworkActor, cachedOptions[idx], interactNameOnly, idx, false);
+				meetOption->AddOption(frameworkActor, cachedOptions[idx], interactNameOnly, idx);
 			}
 		}
 	}

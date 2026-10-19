@@ -101,6 +101,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，message是表达式，留空表示收到任何全局消息都触发
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.message读到收到的消息内容
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置消息内容
@@ -149,55 +157,6 @@ public:
 	* 脚本里用local.<字段>读这个事件的字段(local.name/local.option)，没有这个字段返回{false, ...}
 	*/
 	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
-
-	/*
-	* 设置目标名称
-	* @name: 名称
-	*/
-	void SetName(std::string name);
-
-	/*
-	* 获取目标名称
-	*/
-	const std::string& GetName() const;
-
-	/*
-	* 设置选项文本
-	* @option: 选项文本
-	*/
-	void SetOption(std::string option);
-
-	/*
-	* 获取选项文本
-	*/
-	const std::string& GetOption() const;
-
-private:
-	// 选项名称
-	std::string name;
-
-	// 选项文本
-	std::string option;
-};
-
-// 全局对话
-class GlobalDialogEvent : public Event {
-public:
-	/*
-	* 构造全局对话事件
-	* @name, option: 对话目标名称与选项文本
-	*/
-	GlobalDialogEvent(std::string name, std::string option);
-
-	/*
-	* 析构全局对话事件
-	*/
-	virtual ~GlobalDialogEvent();
-
-	/*
-	* 事件类型
-	*/
-	virtual const std::string& GetType() const override;
 
 	/*
 	* 设置目标名称

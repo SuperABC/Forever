@@ -29,8 +29,7 @@ BeginPlay()`先级联触发所有子组件的`BeginPlay`、再依次调用7个`E
   `OptionDialogEvent`。依次匹配主线剧情Script，再按`name`分别尝试查找市民（匹配其
   `Scheduler`的Script）、车辆（`Traffic::FindVehicleByName`）、门（`Map::FindDoorByName`）
   三类目标，命中哪个就额外匹配哪个的Script——一个`name`不会同时是其中两类，三个分支互不
-  影响。不实现GlobalDialog（不匹配主线剧情的全局选项分支，只匹配上面几类目标自己的
-  Script）。
+  影响。
 - **`BroadcastCitizenDecease(name, reason)`**：武器系统命中Citizen致死时调用，构造一个
   `CitizenDeceaseEvent`。只匹配主线剧情Script，不像`OptionDialog`那样额外匹配死者自己的
   Scheduler Script——人已经死了，它自己的日程脚本不再有意义。
@@ -90,6 +89,15 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
   事件）。对话展示期间会把`MeetOptionWidget`临时隐藏，播完恢复可见——避免"靠近市民能问
   什么"的列表和剧情对话同屏抢注意力/抢点击。
 
+## 广播给所有Script
+
+`BroadcastToAllScripts(event, postImplement, includeMain)`把一个Event广播给组织/岗位/市民Scheduler/车辆/门的全部
+Script(`includeMain`为true时连主线也算)，匹配结果交给`ProcessScriptActions`。两处在用：
+- `BroadcastGameStart`：主线走`Story::BroadcastGameStart`，其余用这个helper(`includeMain=false`)。
+- `BroadcastGlobalMessage`：执行`global_message`这个Change时由`AForeverFrameworkActor::ApplyChange`调用，
+  构造`GlobalMessageEvent`广播给全部Script(含主线)。嵌套深度(`globalMessageDepth`)超过`kMaxGlobalMessageDepth`(8)
+  时丢弃并`UE_LOG`警告，防止两个里程碑互相发消息无限递归。
+
 ## 依赖关系
 
 - 依赖：`Core/story/story.h`/`script.h`/`dialog.h`/`change.h`/`event.h`、
@@ -111,4 +119,3 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
 
 ## 待办/后续阶段
 
-- `OptionDialog`不实现GlobalDialog（全局选项分支），目前只匹配目标自身的Script。

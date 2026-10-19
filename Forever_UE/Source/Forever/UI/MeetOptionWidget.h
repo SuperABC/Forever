@@ -25,8 +25,7 @@ public:
 	// @option: 选项文本
 	// @name: 对话目标（市民）姓名
 	// @idx: 这条选项在目标options列表里的下标，和name一起构成OptionMap的复合key
-	// @bGlobal: 是否全局选项，透传给MeetButton
-	void AddOption(AForeverFrameworkActor* framework, const FString& option, const FString& name, int32 idx, bool bGlobal);
+	void AddOption(AForeverFrameworkActor* framework, const FString& option, const FString& name, int32 idx);
 
 	// 移除属于某个目标（市民）的全部选项——由ACitizenElement::OnOverlapEnd在玩家离开市民
 	// 检测范围时调用。

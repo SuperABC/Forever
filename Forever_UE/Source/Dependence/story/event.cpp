@@ -56,6 +56,19 @@ const string& GlobalMessageEvent::GetType() const {
 	return type;
 }
 
+bool GlobalMessageEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<GlobalMessageEvent*>(e);
+	if (!message.empty() && ToString(EvaluateExpression(message, context)) != other->message) return false;
+	return true;
+}
+
+pair<bool, ValueType> GlobalMessageEvent::GetLocalValue(const string& key) const {
+	if (key == "message") return { true, ValueType(message) };
+	return { false, ValueType() };
+}
+
 void GlobalMessageEvent::SetMessage(std::string message) {
 	this->message = move(message);
 }
@@ -106,36 +119,6 @@ void OptionDialogEvent::SetOption(std::string option) {
 }
 
 const std::string& OptionDialogEvent::GetOption() const {
-	return option;
-}
-
-GlobalDialogEvent::GlobalDialogEvent(std::string name, std::string option) :
-	name(move(name)), option(move(option)) {
-
-}
-
-GlobalDialogEvent::~GlobalDialogEvent() {
-
-}
-
-const string& GlobalDialogEvent::GetType() const {
-	static const string type = "global_dialog";
-	return type;
-}
-
-void GlobalDialogEvent::SetName(std::string name) {
-	this->name = move(name);
-}
-
-const std::string& GlobalDialogEvent::GetName() const {
-	return name;
-}
-
-void GlobalDialogEvent::SetOption(std::string option) {
-	this->option = move(option);
-}
-
-const std::string& GlobalDialogEvent::GetOption() const {
 	return option;
 }
 

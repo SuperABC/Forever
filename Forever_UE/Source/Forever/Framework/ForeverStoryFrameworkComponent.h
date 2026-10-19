@@ -17,6 +17,9 @@ struct ScriptContext;
 // Script->Milestone->Event/Dialog/Change架构跑通到"游戏开始广播
 // GameStartEvent，匹配出的Dialog交给SectionSpeaking/SectionOption两个UI展示、Change转发给
 // ApplyChange"这一步。详见ForeverStoryFrameworkComponent.md。
+class PostImplement;
+class Event;
+
 UCLASS()
 class FOREVER_API UForeverStoryFrameworkComponent : public UForeverFrameworkComponent
 {
@@ -39,8 +42,7 @@ public:
 
 	// 玩家点击MeetOption选项时调用：构造一个OptionDialogEvent，依次匹配主线剧情Script
 	// （如果配置了）和目标市民的Scheduler Script，复用BroadcastGameStart同一套Dialog展示/
-	// Change转发逻辑（见.cpp里的ProcessScriptActions）。不实现GlobalDialog（只匹配主线
-	// 剧情的全局选项分支）——这次MeetOption UI落地范围明确不做。
+	// Change转发逻辑（见.cpp里的ProcessScriptActions）。
 	// @name: 对话目标（市民）姓名字面量
 	// @option: 被点击的选项文本字面量
 	void OptionDialog(const FString& name, const FString& option);
@@ -53,6 +55,14 @@ public:
 	// @name: 死者姓名字面量
 	// @reason: 死亡原因字面量（这次固定传"gunshot"）
 	void BroadcastCitizenDecease(const FString& name, const FString& reason);
+
+	// 执行global_message这个Change时调用(AForeverFrameworkActor::ApplyChange)：构造一个
+	// GlobalMessageEvent，广播给所有挂了Script的东西——主线、每个组织、每个岗位、每个市民的
+	// Scheduler、每辆车、每扇有Script的门(和game_start同一个范围)。global_message这个Event只由
+	// 这里发出。收到消息的里程碑可能再发一条全局消息，嵌套深度超过kMaxGlobalMessageDepth时丢弃
+	// 并警告，防止两个里程碑互相触发无限递归。
+	// @message: 已经求值好的消息文本
+	void BroadcastGlobalMessage(const std::string& message);
 
 	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。不在
 	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。这次改成
@@ -113,6 +123,14 @@ public:
 	void SelectDialogOption(int32 index);
 
 private:
+	// 把event广播给组织/岗位/市民Scheduler/车辆/门的全部Script(includeMain为true时连主线也算)，
+	// 匹配出的Dialog/Change交给ProcessScriptActions。BroadcastGameStart和BroadcastGlobalMessage共用。
+	void BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain);
+
+	// BroadcastGlobalMessage当前的嵌套深度，见那边的注释。
+	int32 globalMessageDepth = 0;
+	static constexpr int32 kMaxGlobalMessageDepth = 8;
+
 	// 队列里的一项：要么是一条已求值好的台词，要么是一个分支（已求值好的选项文本+原始Option
 	// 拷贝，供SelectDialogOption执行）。不用TVariant——这个结构体只在这个.cpp内部私有使用，
 	// 没有反射/蓝图暴露需求，一个bool+两组字段够用，不需要额外引入TVariant的复杂度。

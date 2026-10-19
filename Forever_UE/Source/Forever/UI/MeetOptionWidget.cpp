@@ -19,7 +19,7 @@ FString UMeetOptionWidget::MakeKey(const FString& name, int32 idx) {
 }
 
 void UMeetOptionWidget::AddOption(AForeverFrameworkActor* framework, const FString& option, const FString& name,
-	int32 idx, bool bGlobal) {
+	int32 idx) {
 	if (!OptionContainer || !MeetButtonClass) return;
 	// 关卡正在销毁时(比如读档OpenLevel)不再建按钮：被占有的市民UnPossessed时会重新打开
 	// proximityBox、立刻和自己重叠触发OnOverlapBegin走到这里，而UE不允许在World销毁过程中
@@ -30,7 +30,7 @@ void UMeetOptionWidget::AddOption(AForeverFrameworkActor* framework, const FStri
 	UMeetButtonWidget* button = CreateWidget<UMeetButtonWidget>(this, MeetButtonClass);
 	if (!button) return;
 
-	button->Setup(framework, name, option, bGlobal);
+	button->Setup(framework, name, option);
 	if (UScrollBoxSlot* slot = Cast<UScrollBoxSlot>(OptionContainer->AddChild(button))) {
 		slot->SetPadding(FMargin(0.f, kMeetOptionRowVerticalPadding, 0.f, kMeetOptionRowVerticalPadding));
 	}
@@ -112,6 +112,6 @@ void UMeetOptionWidget::ReplaceOptions(AForeverFrameworkActor* framework, const 
 	if (!HasName(name)) return;
 	RemoveName(name);
 	for (int32 idx = 0; idx < options.Num(); idx++) {
-		AddOption(framework, options[idx], name, idx, false);
+		AddOption(framework, options[idx], name, idx);
 	}
 }

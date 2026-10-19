@@ -85,10 +85,18 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 		ProcessScriptActions(framework, actions, context);
 		};
 
-	// broadcastOne不止这次society域用得上——以后industry/traffic等其它域各自的Script要
-	// 广播game_start时，同样调这个helper，不需要另起一套，所以放在if(society)之前、和
-	// onActions平级定义。
+	story->BroadcastGameStart(onActions, &postImplement);
+
+	// 主线以外的全部Script(组织/岗位/市民Scheduler/车辆/门)也要各广播一次game_start，否则它们
+	// 各自脚本里的game_start milestone(加交互选项等)永远不会被触发。
 	GameStartEvent event;
+	BroadcastToAllScripts(event, postImplement, /*includeMain=*/false);
+}
+
+void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain) {
+	if (!story) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+
 	auto broadcastOne = [&](Script* script) {
 		if (!script) return;
 		ScriptContext context;
@@ -96,15 +104,12 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 		context.system = story->GetSystemScript();
 		context.global = story->GetGlobalScript();
 		context.local = &event;
-		onActions(script->MatchEvent(&event, context, &postImplement), context);
+		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
 		};
 
-	story->BroadcastGameStart(onActions, &postImplement);
+	if (includeMain) broadcastOne(story->GetMainScript());
 
-	// 进入society域新增：Job/Organization各自持有的Script这次也要广播一次game_start，
-	// 否则job_shop_saler.script/organization_shop.script里的game_start milestone永远
-	// 不会被触发。
-	if (society) {
+	if (Society* society = framework ? framework->GetSociety() : nullptr) {
 		for (Organization* org : society->GetOrganizations()) {
 			broadcastOne(org->GetScript());
 			for (Job* job : org->GetJobs()) {
@@ -113,11 +118,8 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 		}
 	}
 
-	// 每个市民独占持有一份Scheduler，Scheduler自己的Script
-	// （schedule_empty.script）也要广播一次game_start，否则里面的add_option milestone永远
-	// 不会被触发（citizen的对话选项永远加不上），见ForeverStoryFrameworkComponent.md。
-	Populace* populace = framework ? framework->GetPopulace() : nullptr;
-	if (populace) {
+	// 每个市民独占持有一份Scheduler，Scheduler自己的Script(schedule_empty.script)。
+	if (Populace* populace = framework ? framework->GetPopulace() : nullptr) {
 		for (Citizen* citizen : populace->GetCitizens()) {
 			if (citizen && citizen->GetScheduler()) {
 				broadcastOne(citizen->GetScheduler()->GetScript());
@@ -125,23 +127,43 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 		}
 	}
 
-	// 载具系统落地新增：每辆预置车辆独占持有一份Script(vehicle_basic.script)，也要广播
-	// 一次game_start，否则"靠近车辆弹出'上车'选项"这条add_option milestone永远不会被触发。
-	Traffic* traffic = framework ? framework->GetTraffic() : nullptr;
-	if (traffic) {
+	// 每辆车独占持有一份Script(vehicle_basic.script)。
+	if (Traffic* traffic = framework ? framework->GetTraffic() : nullptr) {
 		for (auto& [name, vehicle] : traffic->GetVehicles()) {
 			if (vehicle) broadcastOne(vehicle->GetScript());
 		}
 	}
 
-	// 门系统落地新增：只有spec.name非空的门才会有Script(见Core/map/door.md)，和Vehicle
-	// 同一个模式——遍历map->GetAllDoors()，过滤掉GetScript()==nullptr的纯自动门。
-	Map* map = framework ? framework->GetMap() : nullptr;
-	if (map) {
+	// 只有spec.name非空的门才会有Script(见Core/map/door.md)，过滤掉纯自动门。
+	if (Map* map = framework ? framework->GetMap() : nullptr) {
 		for (Door* door : map->GetAllDoors()) {
 			if (door && door->GetScript()) broadcastOne(door->GetScript());
 		}
 	}
+}
+
+void UForeverStoryFrameworkComponent::BroadcastGlobalMessage(const string& message) {
+	if (!story) return;
+	if (globalMessageDepth >= kMaxGlobalMessageDepth) {
+		UE_LOG(LogTemp, Warning, TEXT("UForeverStoryFrameworkComponent::BroadcastGlobalMessage: nested global_message depth exceeded %d, dropped \"%s\" (do two milestones keep triggering each other?)"),
+			kMaxGlobalMessageDepth, UTF8_TO_TCHAR(message.c_str()));
+		return;
+	}
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	GlobalMessageEvent event(message);
+	globalMessageDepth++;
+	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
+	globalMessageDepth--;
 }
 
 void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FString& option) {

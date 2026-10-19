@@ -25,8 +25,8 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   BroadcastGameStart`是这条链路最外层的调用方，构造`post`并往下传，见`Core/story/story.md`。
 - **JSON根节点固定是`{"milestones": [...]}`这一种对象格式**，`caches`的value类型是一个
   `FileCache`结构体（见下"主线剧情.script新增三个顶层字段"一节）。
-- **`BuildEvent`识别`"game_start"`/`"option_dialog"`(name/option)/`"citizen_decease"`(name/reason，留空=不限)，
-  `BuildChanges`识别`"set_value"`/`"place_holder"`/`"debug_print"`/`"add_option"`/`"remove_option"`(name/option)/
+- **`BuildEvent`识别`"game_start"`/`"option_dialog"`(name/option)/`"citizen_decease"`(name/reason，留空=不限)/`"global_message"`(message，留空=不限)，
+  `BuildChanges`识别`"set_value"`/`"place_holder"`/`"debug_print"`/`"global_message"`(message)/`"add_option"`/`"remove_option"`(name/option)/
   `"start_puzzle"`/`"enter_vehicle"`/`"set_door"`(name/access)/`"register_door"`(name/citizen/pass)/`"npc_navigate"`(name/destination=房间地址)/
   `"change_control"`(name)**——`set_door`的`access`、`register_door`的`pass`是布尔表达式，JSON里写`true`/`false`
   或者`"true"`/`"false"`都行(`AsString()`把JSON布尔转成字符串，执行时`EvaluateExpressionBool`求值，也可以写

@@ -7,11 +7,10 @@
 #include "Framework/ForeverStoryFrameworkComponent.h"
 
 void UMeetButtonWidget::Setup(AForeverFrameworkActor* inFramework, const FString& inTargetName,
-	const FString& inOption, bool inGlobal) {
+	const FString& inOption) {
 	framework = inFramework;
 	targetName = inTargetName;
 	option = inOption;
-	bGlobal = inGlobal;
 
 	if (Text) {
 		Text->SetText(FText::FromString(option));
@@ -36,7 +35,5 @@ void UMeetButtonWidget::HandleClicked() {
 	AForeverFrameworkActor* frameworkActor = framework.Get();
 	if (!frameworkActor || !frameworkActor->GetStoryFramework()) return;
 
-	// bGlobal这次只存字段，不实现对应的GlobalDialog（只匹配主线剧情的全局选项分支）——
-	// 见UForeverStoryFrameworkComponent::OptionDialog声明处注释，范围明确不做。
 	frameworkActor->GetStoryFramework()->OptionDialog(targetName, option);
 }

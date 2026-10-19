@@ -186,7 +186,7 @@ void AVehicleElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 			AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
 				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
 			for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
-				meetOption->AddOption(frameworkActor, cachedOptions[idx], vehicleNameOnly, idx, false);
+				meetOption->AddOption(frameworkActor, cachedOptions[idx], vehicleNameOnly, idx);
 			}
 		}
 	}

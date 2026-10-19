@@ -257,6 +257,15 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* globalMessage = dynamic_cast<const GlobalMessageChange*>(change)) {
+		// 求出消息文本，广播一个GlobalMessageEvent给所有挂了Script的东西，见
+		// UForeverStoryFrameworkComponent::BroadcastGlobalMessage。
+		if (storyFramework) {
+			storyFramework->BroadcastGlobalMessage(ToString(EvaluateExpression(globalMessage->GetMessage(), context)));
+		}
+		return;
+	}
+
 	if (auto* enterVehicle = dynamic_cast<const EnterVehicleChange*>(change)) {
 		// 跟ChangeControlChange同一个理由：Core层不认识Actor/Controller，"把操控权切换到
 		// 载具上"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyEnterVehicle。
