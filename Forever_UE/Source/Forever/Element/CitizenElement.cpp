@@ -351,6 +351,11 @@ void ACitizenElement::TeleportToRoom(Room* destination) {
 	float worldX, worldY, worldZ;
 	if (!ComputeRoomLandingSpot(destination, worldX, worldY, worldZ)) return;
 
+	// 瞬移会打断正在走的路(否则走完会回调NotifyArrived把currentRoom改回原来的目标)。
+	pendingWaypoints.Reset();
+	waypointIndex = 0;
+	walkDestination = nullptr;
+
 	SetActorLocation(FVector(worldX, worldY, worldZ));
 	citizen->SetCurrentRoom(destination);
 	citizen->SetPosition(worldX / CITIZEN_WORLD_SCALE, worldY / CITIZEN_WORLD_SCALE, worldZ / CITIZEN_WORLD_SCALE);

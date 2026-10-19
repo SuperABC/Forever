@@ -1002,6 +1002,20 @@ int Map::ComputeAccommodationTarget() const {
 	return capacity / 2;
 }
 
+void Map::SettleCitizen(Citizen* citizen, Room* room) {
+	if (!citizen || !room) return;
+	Building* building = room->GetParentBuilding();
+	citizen->SetRoom(room);
+	citizen->SetCurrentRoom(room);
+	citizen->SetBuilding(building);
+	if (building) {
+		citizen->SetZone(building->GetParentZone());
+		citizen->SetLot(building->GetParentLot());
+	}
+	room->AddTenant(citizen);
+	room->AddOccupant(citizen);
+}
+
 void Map::Checkin(const Populace& populace) {
 	constexpr int kAdultAge = 18; // 照抄老工程ADULT_AGE
 	constexpr int kProbabilityScale = 100; // 照抄老工程PROBABILITY_SCALE
@@ -1108,18 +1122,7 @@ void Map::Checkin(const Populace& populace) {
 	// 人和房间的关系是3个独立概念(见room.h)：这里的"家"(GetRoom()/tenants)和"当前物理
 	// 位置"(GetCurrentRoom()/occupants)对citizen来说初始状态天然重合(刚分配住处，人也
 	// 就在那)，但存储上必须分开写，为将来"人在家但当前不在自己房间里"这类场景预留。
-	auto moveIn = [](Citizen* citizen, Room* room) {
-		Building* building = room->GetParentBuilding();
-		citizen->SetRoom(room);
-		citizen->SetCurrentRoom(room);
-		citizen->SetBuilding(building);
-		if (building) {
-			citizen->SetZone(building->GetParentZone());
-			citizen->SetLot(building->GetParentLot());
-		}
-		room->AddTenant(citizen);
-		room->AddOccupant(citizen);
-	};
+	auto moveIn = [this](Citizen* citizen, Room* room) { SettleCitizen(citizen, room); };
 
 	// 只有成年citizen各自去随机抽一个room名额（GetRandom(pool.size())+swap-remove，照抄
 	// 老工程Map::Checkin同一套"一个家庭消费一个room名额"逻辑，不是"一人一间"）；配偶

@@ -54,7 +54,7 @@ public:
 	// 组件、构建材质/纹理数组、构建海面网格。map生命周期由调用方(AForeverFrameworkActor)持有。
 	void GenerateTerrain(Map* inMap);
 
-	// 地图正中心的世界坐标(含地形高度采样,向上留出安全余量),供ForeverGameMode计算出生点用。
+	// 地图正中心的世界坐标(含地形高度采样,向上留出安全余量),供ForeverPlayerGameMode计算出生点用。
 	FVector GetMapCenterWorldLocation() const;
 
 	bool IsTerrainGenerated() const { return map != nullptr; }

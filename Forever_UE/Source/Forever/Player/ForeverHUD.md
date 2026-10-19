@@ -9,7 +9,7 @@
 - 用`Canvas->SizeX/SizeY`算屏幕中心,中心留`gap`(6px)半径空当避免交叉点糊成一团,四条短线向外延伸`armLength`(8px),参数为目测值,可直接改这两个数字/`FLinearColor`调整。
 
 ## 依赖关系
-- `AForeverGameMode`的`HUDClass = AForeverHUD::StaticClass()`。
+- `AForeverPlayerGameMode`的`HUDClass = AForeverHUD::StaticClass()`。
 - 依赖`AForeverCharacter::IsAiming()`。
 
 ## 待办/后续阶段

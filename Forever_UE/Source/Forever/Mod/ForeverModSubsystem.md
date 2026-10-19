@@ -9,7 +9,7 @@
   - 打包/Shipping:对每个`.pak`用`FCoreDelegates::MountPaksEx`挂载,再`RegisterMountPoint`到固定写死的`"../../../"+pluginName+"/Content/"`(`UnrealPak`打包内部路径约定,mod自己的`pak.bat`生成filelist时必须对得上),外加`FShaderCodeLibrary::OpenLibrary`。**`RegisterMountPoint`不能靠`MountPaksEx.Execute()`的返回值gate**——pak挂载成功时这个返回值仍可能是`false`,`RegisterMountPoint`本身是幂等的纯注册操作,挂完就应该紧接着做。
   - 为什么必须是Plugin而不是普通文件夹:UE资产只能通过已注册的挂载点访问,原始文件夹不是合法的挂载对象。详见`Source/Core/common/config.md`"GetPlugins/GetPakFiles"一节。
 - **`Initialize()`和`EnsureModsRegistered()`拆成两阶段**:前者只读取/回退扫描,给配置界面(Story/Mod/Resource三screen)立刻有数据可展示;后者才是真正有副作用的挂载/注册,推迟到用户在配置界面点"开始游戏"、`UForeverConfigBridgeSubsystem::ValidateAndStartGame`的依赖校验全部通过之后才执行,校验失败不会触碰任何真实状态。
-- **用`UGameInstanceSubsystem`而不是塞进`AForeverGameMode::BeginPlay`**:参照`UForeverKeyBindingSubsystem`的既定模式,生命周期覆盖菜单关卡→`OpenLevel`切到`World.World`的整个过程,不受关卡切换影响。
+- **用`UGameInstanceSubsystem`而不是塞进`AForeverPlayerGameMode::BeginPlay`**:参照`UForeverKeyBindingSubsystem`的既定模式,生命周期覆盖菜单关卡→`OpenLevel`切到`World.World`的整个过程,不受关卡切换影响。
 - **`EnsureModsRegistered()`不持有任何成员对象**:`ModLoader`和16个`<Concept>Factory`全部是函数内的局部变量,注册+校验完就在同一次调用里`modLoader.UnloadAll()`卸载所有dll句柄。真正持久的Factory归属属于对应的Core领域系统类(如Terrain已经转移给`Source/Core/map/map.h`的`Map`类持有,不在这16个之内)。
 - **`ValidateFactory`是模板辅助函数,用lambda传入create/destroy**:16个`<Concept>Factory`的`Create<Concept>`/`Destroy<Concept>`方法名各不相同,没有共同基类可以多态调用,用lambda参数化"怎么创建/怎么销毁"避免写16份几乎相同的校验循环。
 - **每个concept块在`RegisterConcept`之前先调用`factory.SetModArgs(...)`**:参数来自`Config::GetConceptMods("<concept>_mods")`,经`ToArgsMap`转成`id->参数`表后传给Factory;mod调用`RegisterX(id, ...)`时Factory按id查表、把参数存进注册项,`CreateX(id)`创建实例时把参数字符串传给注册的creator函数。详见`Source/Dependence/README.md`和`Source/Core/common/config.md`。

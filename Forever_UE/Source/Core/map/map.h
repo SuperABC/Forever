@@ -201,6 +201,9 @@ public:
 	// 独立抽房间，只能通过父母被带进去。成功分配的citizen同时设置Lot/Zone/Building/Room+
 	// CurrentRoom，详见Source/Core/populace/populace.md。
 	void Checkin(const Populace& populace);
+	// 让citizen住进room：家(Lot/Zone/Building/Room+tenant)和当前位置(CurrentRoom+occupant)都设成这里。
+	// Checkin和spawn_npc的home字段共用。
+	void SettleCitizen(Citizen* citizen, Room* room);
 
 	// 创建一扇真正放了门扇的门(DoorSpec.mesh非空才会被调用方调用，见door.h的
 	// ResolveDoorSpec)——分配全局唯一id、按"所属对象+spec.name"分组计数生成交互名、

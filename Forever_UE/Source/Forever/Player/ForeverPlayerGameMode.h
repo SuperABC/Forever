@@ -2,17 +2,17 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "ForeverGameMode.generated.h"
+#include "ForeverPlayerGameMode.generated.h"
 
 class AForeverFrameworkActor;
 
 UCLASS()
-class FOREVER_API AForeverGameMode : public AGameModeBase
+class FOREVER_API AForeverPlayerGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 
 public:
-	AForeverGameMode();
+	AForeverPlayerGameMode();
 
 	virtual void BeginPlay() override;
 	virtual AActor* FindPlayerStart_Implementation(AController* player, const FString& incomingName) override;

@@ -331,11 +331,11 @@ void Populace::InitNames() {
 	}
 }
 
-void Populace::AssignSchedulers() {
+string Populace::PickSchedulerId() const {
 	// 累加所有已注册Scheduler类型的权重建CDF，和Society::Init选Organization类型同一套
 	// 算法（society.cpp），用SchedulerFactory::GetPower(id)单个查询建CDF。
 	vector<string> ids = schedulerFactory.GetRegisteredIds();
-	if (ids.empty()) return; // 理论上不会发生：至少有scheduler_basic会被注册
+	if (ids.empty()) return string(); // 理论上不会发生：至少有scheduler_basic会被注册
 
 	vector<float> weights;
 	float total = 0.f;
@@ -345,23 +345,35 @@ void Populace::AssignSchedulers() {
 		total += w;
 	}
 
+	if (total > 0.f) {
+		float roll = (GetRandom(10000) / 10000.f) * total;
+		float acc = 0.f;
+		for (size_t i = 0; i < ids.size(); i++) {
+			acc += weights[i];
+			if (roll <= acc) return ids[i];
+		}
+	}
+	// 所有已注册类型权重都是0时的兜底：退化成均匀随机，保证人人都有Scheduler。
+	return ids[GetRandom(static_cast<int>(ids.size()))];
+}
+
+void Populace::AssignSchedulers() {
 	for (Citizen* citizen : citizens) {
 		if (!citizen) continue;
-		string selected;
-		if (total > 0.f) {
-			float roll = (GetRandom(10000) / 10000.f) * total;
-			float acc = 0.f;
-			for (size_t i = 0; i < ids.size(); i++) {
-				acc += weights[i];
-				if (roll <= acc) { selected = ids[i]; break; }
-			}
-		}
-		if (selected.empty()) {
-			// 所有已注册类型权重都是0时的兜底：退化成均匀随机，保证人人都有Scheduler。
-			selected = ids[GetRandom(static_cast<int>(ids.size()))];
-		}
+		string selected = PickSchedulerId();
+		if (selected.empty()) return;
 		citizen->SetScheduler(new Scheduler(&schedulerFactory, &scriptFactory, selected, citizen));
 	}
+}
+
+Citizen* Populace::SpawnCitizen(const string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay,
+	const string& schedulerId) {
+	if (name.empty() || FindCitizenByName(name)) return nullptr;
+	Citizen* citizen = new Citizen(name, gender, birthYear, birthMonth, birthDay);
+	string selected = schedulerId.empty() ? PickSchedulerId() : schedulerId;
+	citizen->SetScheduler(new Scheduler(&schedulerFactory, &scriptFactory, selected, citizen));
+	citizens.push_back(citizen);
+	return citizen;
 }
 
 const vector<Citizen*>& Populace::GetCitizens() const { return citizens; }

@@ -688,6 +688,13 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 // 河流——海洋贴着陆地那一圈其实是"沙滩"(高度固定0，只比固定水位高一点)，只接触到的
 // 这一两格可能还没真正越过沙滩，往深一点的海里多推几格，确保河床高度公式切过沙滩。
 #define RIVER_MOUTH_EXTEND_CELLS 4.0f
+// 河流中心线离海岸线(横竖四个方向任一方向上)不到这么多格(element单位，10=100m)就开始往海的
+// 方向拐，不让河擦着海岸线走；每一步转"当前流向与海方向夹角×RIVER_COAST_STEER_COEF"。
+#define RIVER_COAST_AVOID_DISTANCE 10.0f
+// 别的河(不属于自己这条链路)同理，但检测距离只有4格(40m)——往那条河拐，最终靠近到8邻居范围内
+// 走原来的"并入别的河"收尾。拐的比例沿用RIVER_COAST_STEER_COEF。
+#define RIVER_NEIGHBOR_AVOID_DISTANCE 4.0f
+#define RIVER_COAST_STEER_COEF 0.0625f
 // 地图正中心留给井字路网中心lot(AREA_OFFICIAL_HIGH，见roadnet_basic.cpp)用——河流只要
 // 流经地图中心这片区域(宽高方向各3/8~5/8那一块)，不管是山体内还是流出山体之后，整条河
 // (两段一起)直接作废，不让河流占掉地图中心那块地。
@@ -975,6 +982,44 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			// 角速度积分更新——只有这一层积分，没有"加速度"。
 			angularVel = clamp(angularVel + randf(-RIVER_ANGULAR_VEL_JITTER, RIVER_ANGULAR_VEL_JITTER), -RIVER_ANGULAR_VEL_MAX, RIVER_ANGULAR_VEL_MAX);
 			theta += angularVel;
+
+			// 规则：离海岸线/别的河太近就按比例往它的方向拐，别擦着走。横竖(东南西北)四个方向各
+			// 往外探测：海洋看RIVER_COAST_AVOID_DISTANCE以内、别的河(isRiver里不属于自己这条链路的
+			// 格子)看RIVER_NEIGHBOR_AVOID_DISTANCE以内，取所有命中里最近的一处；当前流向和那个方向的
+			// 夹角(带符号，归一化到(-π,π])乘RIVER_COAST_STEER_COEF就是这一步要转的角度——下一步夹角
+			// 已经缩小，转的量自然跟着缩小(比如夹角80°、系数1/16，这步转5°，下步转75°×1/16…)。
+			// 背离目标流的时候(夹角超过90°)同样照常拐。
+			{
+				int cx = max(0, min(width - 1, (int)roundf(posX)));
+				int cy = max(0, min(height - 1, (int)roundf(posY)));
+				static const int axes[4][2] = { {1, 0}, {0, 1}, {-1, 0}, {0, -1} };
+				float nearest = max(RIVER_COAST_AVOID_DISTANCE, RIVER_NEIGHBOR_AVOID_DISTANCE), target = 0.f;
+				bool attractorNear = false;
+				for (auto& axis : axes) {
+					for (int d = 1; float(d) < nearest; d++) {
+						int nx = cx + axis[0] * d, ny = cy + axis[1] * d;
+						if (nx < 0 || nx >= width || ny < 0 || ny >= height) break;
+						bool hit = (float(d) < RIVER_COAST_AVOID_DISTANCE && getTerrain(nx, ny) == "ocean");
+						if (!hit && float(d) < RIVER_NEIGHBOR_AVOID_DISTANCE) {
+							int nIdx = ny * width + nx;
+							hit = isRiver[nIdx] && !ownChainSet.count(nIdx);
+						}
+						if (hit) {
+							nearest = float(d);
+							target = atan2f(float(axis[1]), float(axis[0]));
+							attractorNear = true;
+							break;
+						}
+					}
+				}
+				if (attractorNear) {
+					float diff = target - theta;
+					while (diff > 3.14159265f) diff -= 6.28318531f;
+					while (diff <= -3.14159265f) diff += 6.28318531f;
+					theta += diff * RIVER_COAST_STEER_COEF;
+				}
+			}
+
 			float dirX = cosf(theta), dirY = sinf(theta);
 
 			posX += dirX * RIVER_SAMPLE_STEP;

@@ -31,6 +31,9 @@ public:
 	// TickComponent里按距离做。map生命周期由调用方持有。
 	void GenerateCitizens(Map* inMap, Populace* inPopulace);
 
+	// 运行中新增的市民(spawn_npc)加进流式生成列表，之后和其他市民一样按距离生成/销毁Actor。
+	void AddCitizen(Citizen* citizen);
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -58,6 +61,10 @@ public:
 	// 没有可用导航节点(起点/终点没有对应Node)时没有Dijkstra可算，直接同步走
 	// ApplyWalkResult，不需要派发到线程池。
 	void RequestWalk(Citizen* citizen, Room* destination);
+
+	// npc_teleport：立刻把市民放到destination。有Actor就把Actor瞬移过去(取消正在走的路)，没有就只改
+	// 逻辑位置，等进入流式范围时在那里生成。被玩家占有的市民不动，和RequestWalk一样。
+	void TeleportCitizen(Citizen* citizen, Room* destination);
 
 	// ACitizenElement::WalkTo全部路径点走完后的回调：更新Citizen::SetCurrentRoom。
 	void NotifyArrived(Citizen* citizen, Room* destination);

@@ -7,6 +7,7 @@
 #include "story/script_factory.h"
 #include "common/utility.h"
 #include "common/handle.h"
+#include "populace/citizen.h"
 
 #include <functional>
 #include <set>
@@ -58,6 +59,11 @@ public:
 	// Core层查数据，一个在UE层顺带生成Actor）。找不到返回nullptr。
 	Citizen* FindCitizenByName(const std::string& name) const;
 
+	// 运行中新增一个市民(spawn_npc)：建Citizen+Scheduler，追加到citizens末尾。schedulerId为空时
+	// 按权重随机选，和开局AssignSchedulers一样。不分配住处、不登记人际关系；重名返回nullptr。
+	Citizen* SpawnCitizen(const std::string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay,
+		const std::string& schedulerId);
+
 	// 模拟结束时的"当前年份"——Map::Checkin()用它
 	// 给Citizen::GetAge()算成年/未成年。Player的全局时钟落地后，
 	// AForeverFrameworkActor::EnsurePlayerGenerated()也用这个值把开局时间设成这一年的
@@ -91,6 +97,8 @@ private:
 	// 同一套CDF算法)，对每个citizen roll一个随机数选中一个类型。GenerateCitizens()跑完、
 	// citizens列表已经就绪之后调用一次，见populace.md。
 	void AssignSchedulers();
+	// 按SchedulerFactory::GetPower加权随机选一个Scheduler类型，没有注册任何类型时返回空串。
+	std::string PickSchedulerId() const;
 
 	// 引用`Registry::Get().GetNameFactory()`，不再自己持有ModLoader/NameFactory——mod dll
 	// 的发现/注册只在整个UE进程生命周期里跑一次，见Source/Core/common/registry.md。构造函数

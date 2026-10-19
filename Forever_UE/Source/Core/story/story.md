@@ -100,6 +100,16 @@ milestone超时之类）时再补内容。
 - `AForeverFrameworkActor::Tick`在`Story::Tick`之后调`FireExpiredTimers`，按到时先后发`time_up`。
 - 存档写在scripts段末尾(`script_save`)。
 
+## spawn_npc
+
+运行中新增一个市民，`AForeverFrameworkActor::ApplySpawnNpc`处理(要用到Populace/Map/PopulaceFramework三方，放在UE层分支)：
+
+- 必填`name`/`gender`/`birthday`，都是表达式。gender写`male`/`男`或`female`/`女`(其它值按女性处理并警告)；birthday要带日期，`Time`能识别的写法都行(如`"2000-08-31"`、`"2000年8月31日"`)。重名或生日解析不了就跳过并警告。
+- 可选`scheduler`(Scheduler类型id，省略时按权重随机，和开局一样)、`home`(房间地址，住进去，家和当前位置都设成这里，见`Map::SettleCitizen`)。
+- 省略home的市民没有位置，场景里不会出现，要用`npc_teleport`把他放到某个房间。
+- `avatar`/`height`/`weight`/`nick`/`deposit`/`phone`/`jobs`能解析但目前不生效——Citizen还没有这些字段。
+- 新市民追加在`Populace::citizens`末尾，随存档保存；他的Scheduler脚本不会补发game_start；不登记任何人际关系。脚本里要用的名字最好写进主线脚本的`names`(name_reserve)，避免和随机生成的市民重名。
+
 ## test.script路径
 
 `Resource/Story/test.script`，实际存放位置由`config.json`的`"resource_paths"`数组

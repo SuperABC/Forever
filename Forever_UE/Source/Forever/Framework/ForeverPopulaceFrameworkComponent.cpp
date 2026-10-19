@@ -75,6 +75,10 @@ void UForeverPopulaceFrameworkComponent::GenerateCitizens(Map* inMap, Populace* 
 	}
 }
 
+void UForeverPopulaceFrameworkComponent::AddCitizen(Citizen* citizen) {
+	if (citizen) allCitizens.AddUnique(citizen);
+}
+
 void UForeverPopulaceFrameworkComponent::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 	map = nullptr;
 	Super::EndPlay(EndPlayReason);
@@ -173,6 +177,24 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 
 	// 这个citizen当前没有生成的ACitizenElement(不在流式加载范围内)：直接瞬移逻辑状态，
 	// 不模拟中途过程。
+	citizen->SetCurrentRoom(destination);
+	citizen->ClearPosition();
+}
+
+void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room* destination) {
+	if (!citizen || !destination) return;
+
+	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
+	if (existing && *existing) {
+		if ((*existing)->GetController() != nullptr) {
+			UE_LOG(LogTemp, Warning, TEXT("npc_teleport: %s is controlled by the player, skipped."),
+				UTF8_TO_TCHAR(citizen->GetName().c_str()));
+			return;
+		}
+		(*existing)->TeleportToRoom(destination);
+		return;
+	}
+
 	citizen->SetCurrentRoom(destination);
 	citizen->ClearPosition();
 }

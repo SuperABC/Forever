@@ -806,23 +806,23 @@ private:
 };
 
 // 瞬移市民
-class TeleportCitizenChange : public Change {
+class NPCTeleportChange : public Change {
 public:
 	/*
 	* 默认构造瞬移市民变化
 	*/
-	TeleportCitizenChange();
+	NPCTeleportChange();
 
 	/*
 	* 构造瞬移市民变化
 	* @name, destination: 市民姓名与目标房间名称
 	*/
-	TeleportCitizenChange(std::string name, std::string destination);
+	NPCTeleportChange(std::string name, std::string destination);
 
 	/*
 	* 析构瞬移市民变化
 	*/
-	virtual ~TeleportCitizenChange();
+	virtual ~NPCTeleportChange();
 
 	/*
 	* 变化类型

@@ -1,4 +1,4 @@
-#include "ForeverGameMode.h"
+#include "ForeverPlayerGameMode.h"
 
 #include "ForeverHUD.h"
 #include "ForeverPlayerController.h"
@@ -10,7 +10,7 @@
 #include "GameFramework/DefaultPawn.h"
 #include "GameFramework/PlayerStart.h"
 
-AForeverGameMode::AForeverGameMode()
+AForeverPlayerGameMode::AForeverPlayerGameMode()
 {
 	// 开局不再生成一个独立于Populace之外的"玩家角色"——先用引擎自带的ADefaultPawn
 	// (纯UE默认键鼠飞相机，legacy input，见Config/DefaultInput.ini补的AxisMappings)过渡，
@@ -22,14 +22,14 @@ AForeverGameMode::AForeverGameMode()
 	HUDClass = AForeverHUD::StaticClass(); // 瞄准准心，见ForeverHUD.h
 }
 
-void AForeverGameMode::BeginPlay()
+void AForeverPlayerGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
 	EnsureFrameworkActorExists();
 }
 
-AForeverFrameworkActor* AForeverGameMode::EnsureFrameworkActorExists()
+AForeverFrameworkActor* AForeverPlayerGameMode::EnsureFrameworkActorExists()
 {
 	for (TActorIterator<AForeverFrameworkActor> it(GetWorld()); it; ++it) {
 		it->EnsureMapGenerated();
@@ -43,7 +43,7 @@ AForeverFrameworkActor* AForeverGameMode::EnsureFrameworkActorExists()
 	return spawned;
 }
 
-AActor* AForeverGameMode::FindPlayerStart_Implementation(AController* player, const FString& incomingName)
+AActor* AForeverPlayerGameMode::FindPlayerStart_Implementation(AController* player, const FString& incomingName)
 {
 	// 只有关卡里真的有手动放置的APlayerStart才交给引擎默认逻辑处理——不能用
 	// "Super::FindPlayerStart_Implementation的返回值是否为空"来判断"有没有真正的出生点",
@@ -59,7 +59,7 @@ AActor* AForeverGameMode::FindPlayerStart_Implementation(AController* player, co
 
 	if (hasPlayerStart) {
 		if (AActor* found = Super::FindPlayerStart_Implementation(player, incomingName)) {
-			UE_LOG(LogTemp, Log, TEXT("AForeverGameMode::FindPlayerStart_Implementation: found existing PlayerStart '%s' at %s, using it instead of map-center fallback."),
+			UE_LOG(LogTemp, Log, TEXT("AForeverPlayerGameMode::FindPlayerStart_Implementation: found existing PlayerStart '%s' at %s, using it instead of map-center fallback."),
 				*found->GetName(), *found->GetActorLocation().ToString());
 			return found;
 		}
@@ -76,7 +76,7 @@ AActor* AForeverGameMode::FindPlayerStart_Implementation(AController* player, co
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("AForeverGameMode::FindPlayerStart_Implementation: no PlayerStart in level, spawning at map center %s."),
+	UE_LOG(LogTemp, Log, TEXT("AForeverPlayerGameMode::FindPlayerStart_Implementation: no PlayerStart in level, spawning at map center %s."),
 		*spawnLocation.ToString());
 	return GetWorld()->SpawnActor<APlayerStart>(spawnLocation, FRotator::ZeroRotator);
 }

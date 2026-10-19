@@ -1,4 +1,4 @@
-# ForeverGameMode
+# ForeverPlayerGameMode
 
 ## 职责
 默认GameMode。指定`AForeverPlayerController`/`AForeverPlayerState`为默认Controller/PlayerState类,`HUDClass`为`AForeverHUD`。开局`DefaultPawnClass`是引擎自带的`ADefaultPawn`,真正的玩家角色由Story系统在`game_start`时通过`ChangeControlChange`把控制权切换到一个随机市民(`ACitizenElement`,见`ForeverStoryFrameworkComponent.cpp`)。没有`APlayerStart`时提供出生点兜底。
@@ -11,7 +11,7 @@
 
 ## 依赖关系
 - 依赖`AForeverPlayerController`/`AForeverPlayerState`/`AForeverHUD`/`AForeverFrameworkActor`/`UForeverTerrainFrameworkComponent`、引擎`ADefaultPawn`。
-- 被`Config/DefaultEngine.ini`的`GlobalDefaultGameMode=/Script/Forever.ForeverGameMode`引用。
+- 是`Content/Blueprint/Player/BP_ForeverPlayerGameMode`的父类，`World.umap`的World Settings用这个蓝图作GameMode(菜单关卡用`BP_ForeverMenuGameMode`，即`DefaultEngine.ini`的`GlobalDefaultGameMode`)。
 
 ## 待办/后续阶段
 - 一旦`World.umap`里手动放置了真实的`AForeverFrameworkActor`,删除`EnsureFrameworkActorExists`的动态兜底生成逻辑。

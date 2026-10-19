@@ -392,6 +392,28 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			for (Change* child : BuildChanges(obj["do"])) nested.push_back(child);
 			change = new ForRangeChange(var.AsString(), from.AsString(), to.AsString(), obj["step"].AsString(), move(nested));
 		}
+		else if (type == "npc_teleport") {
+			auto name = obj["name"];
+			auto destination = obj["destination"];
+			if (name.IsNull() || destination.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name or destination for npc_teleport change.\n");
+			}
+			change = new NPCTeleportChange(name.AsString(), destination.AsString());
+		}
+		else if (type == "spawn_npc") {
+			auto name = obj["name"];
+			auto gender = obj["gender"];
+			auto birthday = obj["birthday"];
+			if (name.IsNull() || gender.IsNull() || birthday.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name, gender or birthday for spawn_npc change.\n");
+			}
+			vector<string> jobs;
+			for (auto job : obj["jobs"]) jobs.push_back(job.AsString());
+			// 其余字段都可选；目前真正生效的只有name/gender/birthday/home/scheduler，见story.md"spawn_npc"。
+			change = new SpawnNpcChange(obj["avatar"].AsString(), name.AsString(), gender.AsString(), birthday.AsString(),
+				obj["height"].AsString(), obj["weight"].AsString(), obj["nick"].AsString(), obj["deposit"].AsString(),
+				obj["phone"].AsString(), obj["home"].AsString(), jobs, obj["scheduler"].AsString());
+		}
 		else if (type == "create_timer") {
 			auto name = obj["name"];
 			auto time = obj["time"];

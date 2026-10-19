@@ -20,6 +20,7 @@ class Industry;
 class Traffic;
 class Player;
 class Change;
+class SpawnNpcChange;
 struct ScriptContext;
 
 class USceneComponent;
@@ -61,7 +62,7 @@ public:
 	// 网格(顺序不能反,Roadnet要采样地形/水面,Zone/Building要用到Roadnet产出的Lot)。**不会
 	// 调用其它Ensure*Generated()**——BeginPlay()里已经按依赖顺序把全部7个显式列出来顺序
 	// 调用了,函数体内部重复调上游没有意义(见BeginPlay定义处的说明)。BeginPlay和
-	// ForeverGameMode::FindPlayerStart_Implementation都会调用它,保证不论两者实际调用顺序
+	// ForeverPlayerGameMode::FindPlayerStart_Implementation都会调用它,保证不论两者实际调用顺序
 	// 如何,出生点计算时地形都已经生成好,详见ForeverFrameworkActor.md。
 	void EnsureMapGenerated();
 
@@ -160,6 +161,10 @@ protected:
 
 	// add_option/remove_option执行完之后，让场景里叫这个名字的市民/车辆/门刷新交互选项快照。
 	void RefreshInteractOptions(const std::string& name);
+
+	// spawn_npc：Core里建市民(Populace::SpawnCitizen)、按home住进房间(Map::SettleCitizen)，再登记进
+	// UE的流式生成列表——要用到Populace/Map/PopulaceFramework三方，所以放在UE层分支。
+	void ApplySpawnNpc(const SpawnNpcChange* change, const ScriptContext& context);
 
 	// Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
 	// Zone/Building/Roadnet等系统共用同一个Map实例,不是各自另建一个。

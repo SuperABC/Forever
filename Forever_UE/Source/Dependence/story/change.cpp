@@ -489,38 +489,38 @@ const std::string& RemoveNpcChange::GetName() const {
 	return name;
 }
 
-TeleportCitizenChange::TeleportCitizenChange() :
+NPCTeleportChange::NPCTeleportChange() :
 	name(), destination() {
 
 }
 
-TeleportCitizenChange::TeleportCitizenChange(std::string name, std::string destination) :
+NPCTeleportChange::NPCTeleportChange(std::string name, std::string destination) :
 	name(move(name)), destination(move(destination)) {
 
 }
 
-TeleportCitizenChange::~TeleportCitizenChange() {
+NPCTeleportChange::~NPCTeleportChange() {
 
 }
 
-const string& TeleportCitizenChange::GetType() const {
-	static const string type = "teleport_citizen";
+const string& NPCTeleportChange::GetType() const {
+	static const string type = "npc_teleport";
 	return type;
 }
 
-void TeleportCitizenChange::SetName(std::string name) {
+void NPCTeleportChange::SetName(std::string name) {
 	this->name = move(name);
 }
 
-const std::string& TeleportCitizenChange::GetName() const {
+const std::string& NPCTeleportChange::GetName() const {
 	return name;
 }
 
-void TeleportCitizenChange::SetDestination(std::string destination) {
+void NPCTeleportChange::SetDestination(std::string destination) {
 	this->destination = move(destination);
 }
 
-const std::string& TeleportCitizenChange::GetDestination() const {
+const std::string& NPCTeleportChange::GetDestination() const {
 	return destination;
 }
 

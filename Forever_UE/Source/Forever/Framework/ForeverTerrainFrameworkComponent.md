@@ -164,7 +164,7 @@ section、同一个材质里——这些三角形会用几百上千的UV值去�
   `Content/Asset/Textures/Terrain/*`（diffuse+normal+roughness三套贴图资产）。
 - 被谁依赖：`Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`
   （`CreateDefaultSubobject`创建、`EnsureTerrainGenerated()`里调用`GenerateTerrain`）、
-  `Source/Forever/Player/ForeverGameMode.cpp`（`GetMapCenterWorldLocation()`算出生点）。
+  `Source/Forever/Player/ForeverPlayerGameMode.cpp`（`GetMapCenterWorldLocation()`算出生点）。
 
 ## 待办/后续阶段
 

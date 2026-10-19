@@ -27,7 +27,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   `FileCache`结构体（见下"主线剧情.script新增三个顶层字段"一节）。
 - **`BuildEvent`识别`"game_start"`/`"option_dialog"`(name/option)/`"citizen_decease"`(name/reason，留空=不限)/`"speaking_finish"`(label，留空=不限)/`"time_up"`(name，留空=不限)/`"enter_zone"`/`"leave_zone"`(zone)/`"enter_building"`/`"leave_building"`(zone/building)/`"enter_room"`/`"leave_room"`(zone/building/room，都留空=不限)/`"global_message"`(message，留空=不限)，
   `BuildChanges`识别`"set_value"`/`"place_holder"`/`"debug_print"`/`"global_message"`(message)/`"for_range"`(var/from/to/step/do，
-  含两端，循环变量写进`$$self.<var>`，由`AForeverFrameworkActor::ApplyChange`递归执行)/`"create_timer"`(name/time，可选category/label)/`"remove_timer"`(name，计时器见`story.md`"计时器")/`"launch_elevator"`(building/elevator/command，
+  含两端，循环变量写进`$$self.<var>`，由`AForeverFrameworkActor::ApplyChange`递归执行)/`"npc_teleport"`(name/destination，destination是房间地址；有Actor就瞬移并打断正在走的路，没有就只改逻辑位置，被玩家占有的不动)/`"spawn_npc"`(name/gender/birthday，可选scheduler/home，见`story.md`"spawn_npc")/`"create_timer"`(name/time，可选category/label)/`"remove_timer"`(name，计时器见`story.md`"计时器")/`"launch_elevator"`(building/elevator/command，
   由Map执行，见`Source/Core/map/cabin.md`)/`"add_option"`/`"remove_option"`(name/option)/
   `"start_puzzle"`/`"enter_vehicle"`/`"set_door"`(name/access)/`"register_door"`(name/citizen/pass)/`"npc_navigate"`(name/destination=房间地址)/
   `"change_control"`(name)**——`set_door`的`access`、`register_door`的`pass`是布尔表达式，JSON里写`true`/`false`

@@ -19,7 +19,7 @@
 - `N`(导航调试可视化)：旧蓝图里是手动开关，新实现改成`UForeverRoadnetFrameworkComponent`常驻生成的调试网格，不再需要按键。
 
 ## 依赖关系
-- 被`AForeverGameMode`的`PlayerControllerClass`引用。
+- 被`AForeverPlayerGameMode`的`PlayerControllerClass`引用。
 - 依赖`Input/ForeverKeyBindingSubsystem`(`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`动态Action)。
 - 依赖`UI/{MeetOptionWidget,SectionSpeakingWidget,SectionOptionWidget,PuzzleWidget,PhoneWidget,InventoryWidget,MapWidget,ForeverPausePanelWidget}`。
 - 被`AForeverCharacter::MeetOptionFocusUp/Down/Select`(取`GetMeetOptionWidget()`)、`UForeverStoryFrameworkComponent::ShowCurrentItem`(取`GetSectionSpeakingWidget()`/`GetSectionOptionWidget()`)等依赖。

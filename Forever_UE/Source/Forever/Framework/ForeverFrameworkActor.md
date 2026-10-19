@@ -48,8 +48,8 @@
     `RoadnetMod::DistributeRoadnet`要采样已经生成好的地形/水面）→`InitZones()`→
     `InitBuildings()`→`terrainFramework->GenerateTerrain(map)`→
     `roadnetFramework->GenerateRoadnet(map)`→`zoneFramework->GenerateZones(map)`→
-    `buildingFramework->GenerateBuildings(map)`。`AForeverGameMode::BeginPlay`和
-    `FindPlayerStart_Implementation`都会调用它(见`ForeverGameMode.md`)，只保证Map这一个
+    `buildingFramework->GenerateBuildings(map)`。`AForeverPlayerGameMode::BeginPlay`和
+    `FindPlayerStart_Implementation`都会调用它(见`ForeverPlayerGameMode.md`)，只保证Map这一个
     域，不论两者实际调用顺序如何，出生点计算时地形都已经生成好。
   - **`EnsurePopulaceGenerated()`**：`populace`已存在直接返回，否则`new Populace()`+
     `populace->Init(map->ComputeAccommodationTarget())`+`map->Checkin(*populace)`+
@@ -196,10 +196,10 @@ context)`是消费任意`Change*`的唯一入口——`populace->Tick`的回调�
   `Source/Core/common/config.h`（`GetMainStoryScriptPath`）、`Source/Core/common/
   error.h`（`ExceptionBase`/`RuntimeException`，`BeginPlay()`的`try/catch`）、
   `Kismet/KismetSystemLibrary.h`（`QuitGame`）。
-- 被`AForeverGameMode`引用：`BeginPlay`和`FindPlayerStart_Implementation`都会调用
+- 被`AForeverPlayerGameMode`引用：`BeginPlay`和`FindPlayerStart_Implementation`都会调用
   `EnsureFrameworkActorExists()`（场景里没有找到已放置的实例时动态`SpawnActor`一个兜底，
-  找到/生成后都会调用这个Actor的`EnsureMapGenerated()`），详见`ForeverGameMode.md`。
+  找到/生成后都会调用这个Actor的`EnsureMapGenerated()`），详见`ForeverPlayerGameMode.md`。
 
 ## 待办/后续阶段
 - 一旦有人在`World.umap`里手动放置了真实的`AForeverFrameworkActor`，应该移除
-  `ForeverGameMode`里的动态兜底生成逻辑，不要误以为是正式生成方案。
+  `ForeverPlayerGameMode`里的动态兜底生成逻辑，不要误以为是正式生成方案。

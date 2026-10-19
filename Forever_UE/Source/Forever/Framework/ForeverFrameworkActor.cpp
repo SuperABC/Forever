@@ -301,6 +301,26 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* teleport = dynamic_cast<const NPCTeleportChange*>(change)) {
+		// name/destination都是表达式；destination是房间地址，和npc_navigate同一种写法。
+		std::string name = ToString(EvaluateExpression(teleport->GetName(), context));
+		std::string destination = ToString(EvaluateExpression(teleport->GetDestination(), context));
+		Citizen* citizen = populace ? populace->FindCitizenByName(name) : nullptr;
+		Room* dest = map ? map->LocateRoom(destination) : nullptr;
+		if (!citizen || !dest) {
+			UE_LOG(LogTemp, Warning, TEXT("npc_teleport: %s not found (name=\"%s\", destination=\"%s\")."),
+				citizen ? TEXT("destination room") : TEXT("citizen"), UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(destination.c_str()));
+			return;
+		}
+		if (populaceFramework) populaceFramework->TeleportCitizen(citizen, dest);
+		return;
+	}
+
+	if (auto* spawnNpc = dynamic_cast<const SpawnNpcChange*>(change)) {
+		ApplySpawnNpc(spawnNpc, context);
+		return;
+	}
+
 	if (auto* createTimer = dynamic_cast<const CreateTimerChange*>(change)) {
 		// 计时器的归属要按脚本的稳定键记录(可能指向别的域的对象，见story.md"计时器")，需要全部域，
 		// 交给StoryFramework处理。
@@ -344,6 +364,57 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	else if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
 		RefreshInteractOptions(ToString(EvaluateExpression(removeOption->GetName(), context)));
 	}
+}
+
+void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const ScriptContext& context) {
+	if (!populace || !change) return;
+	std::string name = ToString(EvaluateExpression(change->GetName(), context));
+	std::string genderText = ToString(EvaluateExpression(change->GetGender(), context));
+	std::string birthdayText = ToString(EvaluateExpression(change->GetBirthday(), context));
+
+	if (populace->FindCitizenByName(name)) {
+		UE_LOG(LogTemp, Warning, TEXT("spawn_npc: citizen \"%s\" already exists, skipped."), UTF8_TO_TCHAR(name.c_str()));
+		return;
+	}
+
+	// 性别：male/男是男性，female/女是女性，其它值按女性处理并警告(老工程是"不是male就是女性")。
+	GENDER_TYPE gender = GENDER_FEMALE;
+	if (genderText == "male" || genderText == "男") gender = GENDER_MALE;
+	else if (genderText != "female" && genderText != "女") {
+		UE_LOG(LogTemp, Warning, TEXT("spawn_npc \"%s\": unknown gender \"%s\", treated as female."),
+			UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(genderText.c_str()));
+	}
+
+	// 生日：Time能识别的带日期写法(如"2000-08-31"、"2000年8月31日")。
+	Time birthday;
+	try {
+		birthday = Time(birthdayText);
+	}
+	catch (const ExceptionBase&) {}
+	if (!birthday.IsValid()) {
+		UE_LOG(LogTemp, Warning, TEXT("spawn_npc \"%s\": cannot parse birthday \"%s\", skipped."),
+			UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(birthdayText.c_str()));
+		return;
+	}
+
+	std::string schedulerId = ToString(EvaluateExpression(change->GetScheduler(), context));
+	Citizen* citizen = populace->SpawnCitizen(name, gender, birthday.GetYear(), birthday.GetMonth(), birthday.GetDay(), schedulerId);
+	if (!citizen) return;
+
+	// home是房间地址(和npc_navigate的destination同一种写法)，省略时没有住处也没有位置，要等
+	// npc_teleport之类把他放到某个房间才会在场景里出现。
+	std::string homeText = ToString(EvaluateExpression(change->GetHome(), context));
+	if (!homeText.empty() && map) {
+		if (Room* home = map->LocateRoom(homeText)) {
+			map->SettleCitizen(citizen, home);
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("spawn_npc \"%s\": home room \"%s\" not found."),
+				UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(homeText.c_str()));
+		}
+	}
+
+	if (populaceFramework) populaceFramework->AddCitizen(citizen);
 }
 
 void AForeverFrameworkActor::RefreshInteractOptions(const std::string& name) {
