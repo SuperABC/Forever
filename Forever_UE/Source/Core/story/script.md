@@ -25,7 +25,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   BroadcastGameStart`是这条链路最外层的调用方，构造`post`并往下传，见`Core/story/story.md`。
 - **JSON根节点固定是`{"milestones": [...]}`这一种对象格式**，`caches`的value类型是一个
   `FileCache`结构体（见下"主线剧情.script新增三个顶层字段"一节）。
-- **`BuildEvent`识别`"game_start"`/`"option_dialog"`(name/option)/`"citizen_decease"`(name/reason，留空=不限)/`"global_message"`(message，留空=不限)，
+- **`BuildEvent`识别`"game_start"`/`"option_dialog"`(name/option)/`"citizen_decease"`(name/reason，留空=不限)/`"speaking_finish"`(label，留空=不限)/`"global_message"`(message，留空=不限)，
   `BuildChanges`识别`"set_value"`/`"place_holder"`/`"debug_print"`/`"global_message"`(message)/`"for_range"`(var/from/to/step/do，
   含两端，循环变量写进`$$self.<var>`，由`AForeverFrameworkActor::ApplyChange`递归执行)/`"launch_elevator"`(building/elevator/command，
   由Map执行，见`Source/Core/map/cabin.md`)/`"add_option"`/`"remove_option"`(name/option)/
@@ -41,8 +41,8 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   节点，本身不代表任何真正的游戏效果，作用是在`test.json`里标记一个位置，供`ScriptMod::
   WrapScript`用`FindLabel`按标签找到并原地替换成mod自己持有的真实`Change`（见
   `Dependence/story/script_mod.md`"典型用法"一节）——如果这个占位符没有被任何`WrapScript`
-  重载替换掉，它会原样出现在`MatchEvent`的返回值里，`Story::ApplyChange`认不出
-  `PlaceHolderChange`类型，只会打一条"未实现"日志，不会崩溃。
+  重载替换掉，它会原样出现在`MatchEvent`的返回值里，
+  `AForeverFrameworkActor::ApplyChange`遇到`PlaceHolderChange`直接跳过(不转给各域，也不打"未实现"日志)。
 - **`Change`/`Event`/`Dialog`各字段统一是`std::string`（DSL源码文本），不预先`Parse`成
   `Expression`对象再存成员**——`Expression`树若被一个模块构造、另一个模块求值会导致跨模块
   堆损坏崩溃，完整原因见`Dependence/story/change.md`"字段类型是`std::string`"一节；所有

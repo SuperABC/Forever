@@ -282,6 +282,10 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			// message可以省略(留空=收到任何全局消息都触发)，见GlobalMessageEvent::Match。
 			event = new GlobalMessageEvent(obj["message"].AsString());
 		}
+		else if (type == "speaking_finish") {
+			// label可以省略(留空=任何带label的台词播完都触发)，见SpeakingFinishEvent::Match。
+			event = new SpeakingFinishEvent(obj["label"].AsString());
+		}
 		else if (type == "citizen_decease") {
 			// name/reason都可以省略(留空=不限)，见CitizenDeceaseEvent::Match。
 			event = new CitizenDeceaseEvent(obj["name"].AsString(), obj["reason"].AsString());

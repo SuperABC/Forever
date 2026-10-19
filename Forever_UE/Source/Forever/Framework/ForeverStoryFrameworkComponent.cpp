@@ -345,6 +345,7 @@ void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const 
 			auto [speaker, content, label, voice] = section.GetSpeaking();
 			item.speaker = UTF8_TO_TCHAR(speaker.data());
 			item.content = UTF8_TO_TCHAR(content.data());
+			item.label = label;
 		}
 
 		items.Add(MoveTemp(item));
@@ -365,8 +366,29 @@ void UForeverStoryFrameworkComponent::ShowDialog(const Dialog* dialog, const Scr
 void UForeverStoryFrameworkComponent::AdvanceDialog() {
 	if (pendingQueue.Num() == 0) return;
 
+	std::string finishedLabel = pendingQueue[0].bBranch ? std::string() : pendingQueue[0].label;
 	pendingQueue.RemoveAt(0);
+	// 先广播再显示下一项：命中的milestone如果又弹出对话，会通过ShowDialog排到队尾(队列空时
+	// ShowDialog自己就显示)；下面的ShowCurrentItem重复显示同一项没有副作用。
+	if (!finishedLabel.empty()) BroadcastSpeakingFinish(finishedLabel);
 	ShowCurrentItem();
+}
+
+void UForeverStoryFrameworkComponent::BroadcastSpeakingFinish(const string& label) {
+	if (!story) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	SpeakingFinishEvent event(label);
+	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
 }
 
 void UForeverStoryFrameworkComponent::SelectDialogOption(int32 index) {

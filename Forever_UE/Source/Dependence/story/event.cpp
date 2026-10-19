@@ -136,6 +136,19 @@ const string& SpeakingFinishEvent::GetType() const {
 	return type;
 }
 
+bool SpeakingFinishEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<SpeakingFinishEvent*>(e);
+	if (!label.empty() && ToString(EvaluateExpression(label, context)) != other->label) return false;
+	return true;
+}
+
+pair<bool, ValueType> SpeakingFinishEvent::GetLocalValue(const string& key) const {
+	if (key == "label") return { true, ValueType(label) };
+	return { false, ValueType() };
+}
+
 void SpeakingFinishEvent::SetLabel(std::string label) {
 	this->label = move(label);
 }

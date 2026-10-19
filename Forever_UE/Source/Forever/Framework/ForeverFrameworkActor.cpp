@@ -237,6 +237,12 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (dynamic_cast<const PlaceHolderChange*>(change)) {
+		// 只是ScriptMod::FindLabel用来定位插入位置的锚点，执行时什么都不做——不能落到下面七个域，
+		// 否则每次都会打"未实现"警告。
+		return;
+	}
+
 	if (auto* debugPrint = dynamic_cast<const DebugPrintChange*>(change)) {
 		std::string text = ToString(EvaluateExpression(debugPrint->GetMessage(), context));
 		if (GEngine) {

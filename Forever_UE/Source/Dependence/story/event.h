@@ -206,6 +206,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，label是表达式，留空表示任何带label的台词播完都触发
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.label读到刚播完那句台词的label
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置对话标签

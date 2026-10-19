@@ -64,6 +64,10 @@ public:
 	// @message: 已经求值好的消息文本
 	void BroadcastGlobalMessage(const std::string& message);
 
+	// 一句带label的台词播完(玩家点击/空格推进离开这一句)时由AdvanceDialog调用：广播
+	// SpeakingFinishEvent给所有脚本(含主线)，范围和global_message一样。
+	void BroadcastSpeakingFinish(const std::string& label);
+
 	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。不在
 	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。这次改成
 	// public——AForeverFrameworkActor::ApplyChange统一收口所有Change的消费入口后，
@@ -140,6 +144,8 @@ private:
 		// bBranch为false时有效
 		FString speaker;
 		FString content;
+		// 台词的label(已求值)，非空时这一句播完广播speaking_finish
+		std::string label;
 
 		// bBranch为true时有效，两个数组下标一一对应
 		TArray<FString> optionTexts;

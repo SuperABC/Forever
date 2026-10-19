@@ -39,8 +39,7 @@
 为近处地形的材质生成"混合权重"：给定一块方形区域（若干个地形 element），输出两块字节数组，
 每个 texel 记录这个位置最大的 4 个地形槽位 id（`outIds`）和它们的权重（`outWeights`，4 个字节的
 和恒为 255）。UE 侧把这两块数组拷进两张纹理，近处材质固定采样 4 个漫反射并加权混合，从而在不同
-地形的交界处平滑过渡。纯 C++17，只依赖标准库，不碰 `Map` 和任何 UE 类型，可以脱离 UE 单独编译验证(要带上Dependence头文件和`Terrain`类用到的几个源文件)，
-见 `Forever_UE/Tools/TerrainBlendTest/`。
+地形的交界处平滑过渡。纯 C++17，只依赖标准库，不碰 `Map` 和任何 UE 类型。
 
 ### 关键设计
 
@@ -77,7 +76,7 @@
 ### 依赖关系
 
 - 依赖：算法本身只用标准库(和文件里`Terrain`类的Dependence依赖无关)。
-- 被谁依赖：`Source/Forever/Framework/ForeverTerrainFrameworkComponent`（`RebuildNearControl`）、`Forever_UE/Tools/TerrainBlendTest/main.cpp`。
+- 被谁依赖：`Source/Forever/Framework/ForeverTerrainFrameworkComponent`（`RebuildNearControl`）。
 
 ### 待办/后续阶段
 
