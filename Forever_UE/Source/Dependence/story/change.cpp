@@ -27,7 +27,8 @@ ForRangeChange::ForRangeChange(string var, std::string from, std::string to, std
 }
 
 ForRangeChange::~ForRangeChange() {
-
+	// 子Change归for_range自己持有(Script::BuildChanges解析"do"时new出来的)。
+	for (const Change* change : changes) delete change;
 }
 
 const string& ForRangeChange::GetType() const {

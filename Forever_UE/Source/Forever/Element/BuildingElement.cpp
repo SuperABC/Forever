@@ -3,6 +3,8 @@
 #include "Element/DoorComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
+#include "Player/ForeverPlayerController.h"
+#include "UI/MeetOptionWidget.h"
 
 #include "ProceduralMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -19,6 +21,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/door.h"
+#include "map/cabin.h"
 #include "map/room.h"
 #include "map/general_geometry.h"
 #include "player/player.h"
@@ -174,48 +177,53 @@ namespace {
 		outRotation = buildingRotation + FMath::DegreesToRadians(localAngleDeg);
 	}
 
-	// 电梯轿厢"匀速+两端缓入缓出"往返运动。用平滑Hermite曲线smoothstep(u)=3u²-2u³做速度曲线：
-	// 一段缓入时间te内速度从0平滑升到cruiseSpeed，这段位移是smoothstep速度对时间的积分，精确
-	// 解析式=cruiseSpeed*te*(u³-u⁴/2)(u=s/te)，u=1时正好是cruiseSpeed*te*0.5(smoothstep在
-	// [0,1]上的积分均值精确等于0.5)。缓出段由缓入段的公式按"距终点还有多久"对称复用(减速曲线
-	// 是加速曲线的时间倒放)。te按min(te, distance/speed)夹到不超过半程对应时间，矮建筑会退化
-	// 成"没有匀速段、纯缓入接缓出"，不会算出负的匀速时间。
-	float ComputeCabinZ(float zBottom, float zTop, float cruiseSpeed, float easeSecondsRaw, float elapsedSeconds) {
-		float distance = zTop - zBottom;
-		if (distance <= 0.f || cruiseSpeed <= 0.f) return zBottom;
+	// 电梯轿厢单程行程：从fromZ到toZ"匀速+两端缓入缓出"。用平滑Hermite曲线smoothstep(u)=3u²-2u³做
+	// 速度曲线：一段缓入时间te内速度从0平滑升到cruiseSpeed，这段位移是smoothstep速度对时间的积分，
+	// 精确解析式=cruiseSpeed*te*(u³-u⁴/2)(u=s/te)。缓出段由缓入段按"距终点还有多久"对称复用。te按
+	// min(te, distance/speed)夹到不超过半程对应时间，短距离退化成纯缓入接缓出。返回是否已经到站。
+	bool ComputeTripZ(float fromZ, float toZ, float cruiseSpeed, float easeSecondsRaw, float elapsedSeconds, float& outZ) {
+		float distance = FMath::Abs(toZ - fromZ);
+		if (distance <= KINDA_SMALL_NUMBER || cruiseSpeed <= 0.f) {
+			outZ = toZ;
+			return true;
+		}
 
 		float te = FMath::Min(easeSecondsRaw, distance / cruiseSpeed);
-		auto easeInDistance = [&](float s) {
-			float u = (te > 0.f) ? FMath::Clamp(s / te, 0.f, 1.f) : 1.f;
+		auto easeInDistance = [&](float t) {
+			float u = (te > 0.f) ? FMath::Clamp(t / te, 0.f, 1.f) : 1.f;
 			return cruiseSpeed * te * (u * u * u - u * u * u * u * 0.5f);
 			};
 
 		float easeDistance = easeInDistance(te);
 		float cruiseDistance = FMath::Max(0.f, distance - easeDistance * 2.f);
 		float cruiseTime = cruiseDistance / cruiseSpeed;
-		float oneWayTime = te * 2.f + cruiseTime;
-		float period = oneWayTime * 2.f;
-		if (period <= 0.f) return zBottom;
-
-		float t = FMath::Fmod(elapsedSeconds, period);
-		if (t < 0.f) t += period;
-
-		bool goingUp = t < oneWayTime;
-		float legT = goingUp ? t : (t - oneWayTime);
+		float tripTime = te * 2.f + cruiseTime;
+		if (elapsedSeconds >= tripTime) {
+			outZ = toZ;
+			return true;
+		}
 
 		float travelled;
-		if (legT < te) {
-			travelled = easeInDistance(legT);
-		} else if (legT < te + cruiseTime) {
-			travelled = easeDistance + cruiseSpeed * (legT - te);
+		if (elapsedSeconds < te) {
+			travelled = easeInDistance(elapsedSeconds);
+		} else if (elapsedSeconds < te + cruiseTime) {
+			travelled = easeDistance + cruiseSpeed * (elapsedSeconds - te);
 		} else {
-			float remaining = oneWayTime - legT; // 距这一程结束还有多久，落在[0,te]
-			travelled = distance - easeInDistance(remaining);
+			travelled = distance - easeInDistance(tripTime - elapsedSeconds);
 		}
 		travelled = FMath::Clamp(travelled, 0.f, distance);
-
-		return goingUp ? (zBottom + travelled) : (zTop - travelled);
+		outZ = fromZ + (toZ > fromZ ? travelled : -travelled);
+		return false;
 	}
+
+	// 电梯正面触发盒的深度(地图单位)：从井道开口平面往外1米。
+	constexpr float kElevatorFrontDepth = 0.1f;
+	// 电梯正面触发盒的宽(相对开口宽)/高(相对层高)比例，居中缩。
+	constexpr float kElevatorMarkerScale = 0.8f;
+	// 轿厢内触发盒的宽(相对轿厢宽)/高(相对层高)比例，底贴轿厢地板。
+	constexpr float kElevatorInnerScale = 0.8f;
+	// 轿厢内触发盒沿开口方向的深度(相对轿厢进深)，从轿厢门平面往里。
+	constexpr float kElevatorInnerDepthScale = 0.5f;
 }
 
 ABuildingElement::ABuildingElement() {
@@ -232,6 +240,7 @@ void ABuildingElement::Init(Building* inBuilding, UForeverBuildingFrameworkCompo
 	building = inBuilding;
 	framework = inFramework;
 	if (!building) return;
+	elementsByBuilding.Add(building, this);
 
 	nearFloorCount = building->GetBasementCount() + building->GetLayerCount();
 	nearComponentsByFloor.SetNum(nearFloorCount);
@@ -255,8 +264,21 @@ void ABuildingElement::Init(Building* inBuilding, UForeverBuildingFrameworkCompo
 	BuildRoomCollisionBoxes();
 }
 
+TMap<const Building*, TWeakObjectPtr<ABuildingElement>> ABuildingElement::elementsByBuilding;
+
+ABuildingElement* ABuildingElement::FindForBuilding(const Building* inBuilding) {
+	const TWeakObjectPtr<ABuildingElement>* found = elementsByBuilding.Find(inBuilding);
+	return found ? found->Get() : nullptr;
+}
+
 void ABuildingElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
+	if (building) {
+		const TWeakObjectPtr<ABuildingElement>* found = elementsByBuilding.Find(building);
+		if (found && found->Get() == this) elementsByBuilding.Remove(building);
+	}
 	building = nullptr;
+	// Cabin*随Map一起失效——Overlap/Refresh回调都先判building。
+	for (FCabin& cabin : cabins) cabin.cabin = nullptr;
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -737,10 +759,13 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 	const vector<float>& floorHeights = building->GetFloorHeights();
 	int32 basements = building->GetBasementCount();
 
-	for (const ElevatorCabinSpec& spec : building->GetCabins()) {
-		int32 minIdx = basements + spec.minFloor, maxIdx = basements + spec.maxFloor;
+	for (Cabin* coreCabin : building->GetCabinEntities()) {
+		if (!coreCabin) continue;
+		if (coreCabin->GetSpecIndex() < 0 || coreCabin->GetSpecIndex() >= static_cast<int32>(building->GetCabins().size())) continue;
+		const ElevatorCabinSpec& spec = building->GetCabins()[coreCabin->GetSpecIndex()];
+		int32 minIdx = basements + spec.minFloor;
 		int32 floorCount = static_cast<int32>(floorHeights.size());
-		if (minIdx < 0 || minIdx >= floorCount || maxIdx < 0 || maxIdx >= floorCount) continue;
+		if (minIdx < 0 || minIdx >= floorCount) continue;
 
 		const Floor* floor = building->GetFloor(spec.minFloor);
 		if (!floor) continue;
@@ -749,8 +774,7 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 		const Elevator& elevator = elevators[spec.shaftIndex];
 
 		// 轿厢mesh和楼梯/坡道同一个约定([0,1]单位包围盒，按实际尺寸缩放+按方向旋转)，
-		// 直接复用ComputeDirectionalMeshTransform；Z缩放用轿厢"家"所在楼层(minFloor)的层高，
-		// 不是min~max的整个垂直跨度——那个跨度是轿厢的移动范围，不是它自身的缩放尺寸。
+		// 直接复用ComputeDirectionalMeshTransform；Z缩放用轿厢最低楼层(minFloor)的层高。
 		float meshSizeX, meshSizeY, meshRotation;
 		ComputeDirectionalMeshTransform(elevator.GetDirection(), elevator.GetSizeX(), elevator.GetSizeY(),
 			rotation, meshSizeX, meshSizeY, meshRotation);
@@ -759,28 +783,161 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 		ComputeWorldPosition(*building, elevator.GetPosX(), elevator.GetPosY(), wx, wy);
 
 		float minFloorHeight = floorHeights[minIdx];
-		float maxFloorHeight = floorHeights[maxIdx];
-		float zBottom = building->GetFloorBaseZ(spec.minFloor) * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
-		float zTop = (building->GetFloorBaseZ(spec.maxFloor) + maxFloorHeight) * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
+		// 轿厢从Core记录的当前高度生成(LOD重建/运行中都不会跳回最低层)。
+		float cabinZ = coreCabin->GetCurrentZ() * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
 
 		UStaticMesh* cabinMesh = framework->ResolveMesh(spec.cabinMeshPath, framework->GetDefaultCabinMesh());
-		// isMovable=true——轿厢每帧要SetWorldLocation播往返动画，必须是Movable，和楼梯/坡道
-		// (Static)不一样。
-		UStaticMeshComponent* comp = SpawnMesh(wx, wy, zBottom,
+		// isMovable=true——轿厢要随行程SetWorldLocation，必须是Movable。
+		UStaticMeshComponent* comp = SpawnMesh(wx, wy, cabinZ,
 			meshSizeX * BUILDING_WORLD_SCALE, meshSizeY * BUILDING_WORLD_SCALE, minFloorHeight * BUILDING_WORLD_SCALE,
 			meshRotation, cabinMesh, nullptr, /*isMovable=*/true);
 		if (!comp) continue;
 
 		FCabin cabin;
+		cabin.cabin = coreCabin;
 		cabin.comp = comp;
 		cabin.worldX = wx;
 		cabin.worldY = wy;
 		cabin.rotation = meshRotation;
-		cabin.zBottom = zBottom;
-		cabin.zTop = zTop;
-		// 用世界坐标错开相位，避免同一栋楼/相邻楼的轿厢看起来同步摆动。
-		cabin.phaseOffset = FMath::Fmod(FMath::Abs(wx) * 0.017f + FMath::Abs(wy) * 0.013f, 30.f);
+
+		// 交互快照(Overlap回调只读这份)。
+		cabin.interactNameOnly = UTF8_TO_TCHAR(coreCabin->GetInteractName().c_str());
+		cabin.hasScript = coreCabin->GetScript() != nullptr;
+		for (const std::string& option : coreCabin->GetOptions()) cabin.cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+
+		// 轿厢内触发盒：宽和高取轿厢的kElevatorInnerScale，沿开口方向的深度取轿厢进深的
+		// kElevatorInnerDepthScale并贴着轿厢门平面(和正面触发盒之间不留缝)——玩家走到轿厢最里面时不弹楼层选项，免得挡视线。在building局部坐标里按开口方向算，
+		// 和正面触发盒同一套。跟着轿厢移动。
+		float innerHeight = minFloorHeight * kElevatorInnerScale * BUILDING_WORLD_SCALE;
+		cabin.innerHalfZ = innerHeight * 0.5f;
+		{
+			float innerLocalX = elevator.GetPosX(), innerLocalY = elevator.GetPosY();
+			float innerSizeX = elevator.GetSizeX() * kElevatorInnerScale, innerSizeY = elevator.GetSizeY() * kElevatorInnerScale;
+			switch (elevator.GetDirection()) {
+			case FACE_WEST:  innerSizeX = elevator.GetSizeX() * kElevatorInnerDepthScale; innerLocalX -= (elevator.GetSizeX() - innerSizeX) * 0.5f; break;
+			case FACE_EAST:  innerSizeX = elevator.GetSizeX() * kElevatorInnerDepthScale; innerLocalX += (elevator.GetSizeX() - innerSizeX) * 0.5f; break;
+			case FACE_NORTH: innerSizeY = elevator.GetSizeY() * kElevatorInnerDepthScale; innerLocalY -= (elevator.GetSizeY() - innerSizeY) * 0.5f; break;
+			default:         innerSizeY = elevator.GetSizeY() * kElevatorInnerDepthScale; innerLocalY += (elevator.GetSizeY() - innerSizeY) * 0.5f; break; // FACE_SOUTH
+			}
+			ComputeWorldPosition(*building, innerLocalX, innerLocalY, cabin.innerX, cabin.innerY);
+			cabin.innerTrigger = SpawnCabinTrigger(cabin.innerX, cabin.innerY, cabinZ + cabin.innerHalfZ,
+				innerSizeX * BUILDING_WORLD_SCALE, innerSizeY * BUILDING_WORLD_SCALE, innerHeight,
+				rotation, /*isMovable=*/true);
+		}
+
+		// 各层电梯正面触发盒：这台电梯负责的每一层，用那一层模板自己的这口井定位，在开口
+		// (Elevator::GetDirection()那一侧，模板里没有墙的一面)外放一块宽=开口宽×kElevatorMarkerScale、
+		// 高=层高×kElevatorMarkerScale、深kElevatorFrontDepth(1米，贴着开口平面)的盒子。某层模板没有这口井就跳过。
+		for (int32 level = spec.minFloor; level <= spec.maxFloor; level++) {
+			int32 idx = basements + level;
+			if (idx < 0 || idx >= floorCount) continue;
+			const Floor* levelFloor = building->GetFloor(level);
+			if (!levelFloor) continue;
+			const vector<Elevator>& levelElevators = levelFloor->GetElevators();
+			if (spec.shaftIndex < 0 || spec.shaftIndex >= static_cast<int32>(levelElevators.size())) continue;
+			const Elevator& shaft = levelElevators[spec.shaftIndex];
+
+			float halfX = shaft.GetSizeX() * 0.5f, halfY = shaft.GetSizeY() * 0.5f;
+			float localX = shaft.GetPosX(), localY = shaft.GetPosY();
+			float boxSizeX = shaft.GetSizeX() * kElevatorMarkerScale, boxSizeY = shaft.GetSizeY() * kElevatorMarkerScale;
+			switch (shaft.GetDirection()) {
+			case FACE_WEST:  localX -= halfX + kElevatorFrontDepth * 0.5f; boxSizeX = kElevatorFrontDepth; break;
+			case FACE_EAST:  localX += halfX + kElevatorFrontDepth * 0.5f; boxSizeX = kElevatorFrontDepth; break;
+			case FACE_NORTH: localY -= halfY + kElevatorFrontDepth * 0.5f; boxSizeY = kElevatorFrontDepth; break;
+			default:         localY += halfY + kElevatorFrontDepth * 0.5f; boxSizeY = kElevatorFrontDepth; break; // FACE_SOUTH
+			}
+			float fx, fy;
+			ComputeWorldPosition(*building, localX, localY, fx, fy);
+			float levelHeight = floorHeights[idx];
+			float fz = (building->GetFloorBaseZ(level) + levelHeight * 0.5f) * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
+			if (UBoxComponent* trigger = SpawnCabinTrigger(fx, fy, fz,
+				boxSizeX * BUILDING_WORLD_SCALE, boxSizeY * BUILDING_WORLD_SCALE,
+				levelHeight * kElevatorMarkerScale * BUILDING_WORLD_SCALE, rotation, /*isMovable=*/false)) {
+				cabin.frontTriggers.Add(trigger);
+			}
+		}
+
 		cabins.Add(cabin);
+	}
+}
+
+UBoxComponent* ABuildingElement::SpawnCabinTrigger(float centerX, float centerY, float centerZ,
+	float sizeX, float sizeY, float sizeZ, float rotation, bool isMovable) {
+	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
+	box->SetBoxExtent(FVector(sizeX * 0.5f, sizeY * 0.5f, sizeZ * 0.5f));
+	box->SetCollisionProfileName(TEXT("Trigger"));
+	box->SetupAttachment(elementRoot);
+	// 轿厢内的触发盒跟着轿厢SetWorldLocation，必须是Movable(移动时UE会自动更新Overlap)。
+	box->SetMobility(isMovable ? EComponentMobility::Movable : EComponentMobility::Static);
+	box->SetWorldLocation(FVector(centerX, centerY, centerZ));
+	box->SetWorldRotation(FRotator(0.f, FMath::RadiansToDegrees(rotation), 0.f));
+	box->OnComponentBeginOverlap.AddDynamic(this, &ABuildingElement::OnCabinOverlapBegin);
+	box->OnComponentEndOverlap.AddDynamic(this, &ABuildingElement::OnCabinOverlapEnd);
+	box->RegisterComponent();
+	AddInstanceComponent(box);
+	return box;
+}
+
+ABuildingElement::FCabin* ABuildingElement::FindCabinByTrigger(const UPrimitiveComponent* trigger) {
+	if (!trigger) return nullptr;
+	for (FCabin& cabin : cabins) {
+		if (cabin.innerTrigger == trigger) return &cabin;
+		for (const UBoxComponent* front : cabin.frontTriggers) {
+			if (front == trigger) return &cabin;
+		}
+	}
+	return nullptr;
+}
+
+void ABuildingElement::ShowCabinOptions(const FCabin& cabin) {
+	if (!cabin.hasScript || cabin.cachedOptions.Num() == 0) return;
+	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	UMeetOptionWidget* meetOption = playerController ? playerController->GetMeetOptionWidget() : nullptr;
+	if (!meetOption) return;
+	AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	for (int32 idx = 0; idx < cabin.cachedOptions.Num(); idx++) {
+		meetOption->AddOption(frameworkActor, cabin.cachedOptions[idx], cabin.interactNameOnly, idx);
+	}
+}
+
+void ABuildingElement::HideCabinOptions(const FCabin& cabin) {
+	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	if (UMeetOptionWidget* meetOption = playerController ? playerController->GetMeetOptionWidget() : nullptr) {
+		meetOption->RemoveName(cabin.interactNameOnly);
+	}
+}
+
+void ABuildingElement::OnCabinOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
+	if (!building || !OtherActor || OtherActor != UGameplayStatics::GetPlayerPawn(GetWorld(), 0)) return;
+	FCabin* cabin = FindCabinByTrigger(OverlappedComponent);
+	if (!cabin) return;
+	// 门口和轿厢内的触发盒可能同时压到，只在第一个进入时弹出选项，避免同一组选项出现两遍。
+	if (cabin->playerOverlaps++ == 0) ShowCabinOptions(*cabin);
+}
+
+void ABuildingElement::OnCabinOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
+	if (!OtherActor || OtherActor != UGameplayStatics::GetPlayerPawn(GetWorld(), 0)) return;
+	FCabin* cabin = FindCabinByTrigger(OverlappedComponent);
+	if (!cabin || cabin->playerOverlaps <= 0) return;
+	if (--cabin->playerOverlaps == 0) HideCabinOptions(*cabin);
+}
+
+void ABuildingElement::RefreshCabinOptions(const Cabin* coreCabin) {
+	if (!building || !coreCabin) return;
+	for (FCabin& cabin : cabins) {
+		if (cabin.cabin != coreCabin) continue;
+		cabin.hasScript = coreCabin->GetScript() != nullptr;
+		cabin.cachedOptions.Reset();
+		for (const std::string& option : coreCabin->GetOptions()) cabin.cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+		// 玩家正压着触发盒：整组换掉(原来没有选项时屏幕上没有这个名字，ReplaceOptions会直接跳过，
+		// 所以这里先收起再重新弹出)。
+		if (cabin.playerOverlaps > 0) {
+			HideCabinOptions(cabin);
+			ShowCabinOptions(cabin);
+		}
 	}
 }
 
@@ -848,9 +1005,19 @@ void ABuildingElement::ClearNearSections() {
 		floorDoors.Empty();
 	}
 	for (FCabin& cabin : cabins) {
-		if (!cabin.comp) continue;
-		RemoveInstanceComponent(cabin.comp);
-		cabin.comp->DestroyComponent();
+		// 先解绑Overlap回调再销毁(销毁时UE会补发EndOverlap，那时cabins正在清空)；玩家还压着
+		// 触发盒的话在这里显式收起选项。
+		if (cabin.playerOverlaps > 0) HideCabinOptions(cabin);
+		auto destroy = [this](UPrimitiveComponent* comp) {
+			if (!comp) return;
+			comp->OnComponentBeginOverlap.RemoveAll(this);
+			comp->OnComponentEndOverlap.RemoveAll(this);
+			RemoveInstanceComponent(comp);
+			comp->DestroyComponent();
+			};
+		destroy(cabin.comp);
+		destroy(cabin.innerTrigger);
+		for (UBoxComponent* trigger : cabin.frontTriggers) destroy(trigger);
 	}
 	cabins.Empty();
 	for (UStaticMeshComponent* comp : nearDecorations) {
@@ -924,6 +1091,9 @@ void ABuildingElement::Tick(float DeltaTime) {
 
 	if (!building || !framework.IsValid()) return;
 
+	// 电梯行程放在最前面：不依赖玩家Pawn，也不管LOD(远景下电梯照样到站)。
+	UpdateCabins(DeltaTime);
+
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn) return;
 
@@ -987,17 +1157,29 @@ void ABuildingElement::Tick(float DeltaTime) {
 		doorTierOpQueue.Dequeue(op);
 		ExecuteLodOp(op);
 	}
+}
 
-	// 电梯轿厢往返动画——只在currentLod==Near时做，和上面的LOD切换队列无关(不受
-	// transitionPending影响，转场期间已经建好的轿厢照常继续动)。只用FCabin里缓存的浮点数，
-	// 不解引用building。
-	if (currentLod == ELod::Near) {
-		float worldTime = GetWorld()->GetTimeSeconds();
-		for (FCabin& cabin : cabins) {
-			if (!cabin.comp) continue;
-			float z = ComputeCabinZ(cabin.zBottom, cabin.zTop, framework->GetCabinCruiseSpeed(),
-				framework->GetCabinEaseSeconds(), worldTime + cabin.phaseOffset);
-			cabin.comp->SetWorldLocation(FVector(cabin.worldX, cabin.worldY, z));
-		}
+void ABuildingElement::UpdateCabins(float deltaSeconds) {
+	// Core的Cabin记录行程(出发高度/目标楼层/已走时间)，这里每帧推进并写回当前高度，到站时把
+	// currentLevel更新成目标楼层。高度在Core里是地图单位，这里换算成UE单位算曲线再换回去。
+	for (Cabin* cabin : building->GetCabinEntities()) {
+		if (!cabin || !cabin->IsMoving()) continue;
+		cabin->Advance(deltaSeconds);
+		float targetZ = building->GetFloorBaseZ(cabin->GetTargetLevel());
+		float worldZ;
+		bool arrived = ComputeTripZ(cabin->GetFromZ() * BUILDING_WORLD_SCALE, targetZ * BUILDING_WORLD_SCALE,
+			framework->GetCabinCruiseSpeed(), framework->GetCabinEaseSeconds(), cabin->GetElapsed(), worldZ);
+		if (arrived) cabin->Arrive(targetZ);
+		else cabin->SetCurrentZ(worldZ / BUILDING_WORLD_SCALE);
 	}
+
+	if (currentLod != ELod::Near) return;
+	for (FCabin& cabin : cabins) {
+		if (!cabin.cabin || !cabin.comp) continue;
+		float z = cabin.cabin->GetCurrentZ() * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
+		cabin.comp->SetWorldLocation(FVector(cabin.worldX, cabin.worldY, z));
+		FVector innerLocation(cabin.innerX, cabin.innerY, z + cabin.innerHalfZ);
+		if (cabin.innerTrigger) cabin.innerTrigger->SetWorldLocation(innerLocation);
+	}
+
 }

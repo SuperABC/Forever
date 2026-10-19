@@ -1,0 +1,42 @@
+{
+	// 电梯自己的Script(BuildingMod::AssignElevatorCabin指定scriptModName="empty"+milestoneNames=
+	// {"elevator_basic"}加载)。C++在创建时写好了$$self.name(交互名)/$$self.building/$$self.min/$$self.max
+	// (层号：0=1楼，负数=地下)。
+	// 开局给自己每层加一个"前往x层"选项：地下用B(level -1 -> B1)，地上从1楼起编(level 0 -> 1)；
+	// 点击任意选项都把选项文字交给launch_elevator，由它解析出目标楼层。
+	"milestones": [
+		{
+			"milestone": "ready",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{
+					"type": "for_range", "var": "floor", "from": "$$self.min", "to": "-1",
+					"do": [ { "type": "add_option", "name": "$$self.name", "option": "\"前往B\" + (0 - $$self.floor) + \"层\"" } ]
+				},
+				{
+					"type": "for_range", "var": "floor", "from": "0", "to": "$$self.max",
+					"do": [ { "type": "add_option", "name": "$$self.name", "option": "\"前往\" + ($$self.floor + 1) + \"层\"" } ]
+				}
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "go",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "launch_elevator", "building": "$$self.building", "elevator": "$$self.name", "command": "$$local.option" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

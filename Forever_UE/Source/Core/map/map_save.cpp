@@ -1082,6 +1082,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 		w.U32(static_cast<uint32_t>(building->cabins.size()));
 		for (const ElevatorCabinSpec& s : building->cabins) {
 			w.I32(s.shaftIndex); w.I32(s.minFloor); w.I32(s.maxFloor); w.Str(s.cabinMeshPath);
+			w.Str(s.scriptModName); WriteStrings(s.milestoneNames, w);
 		}
 		w.Str(building->stationMod);
 
@@ -1166,6 +1167,20 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			}
 		}
 		w.U8(building->stated ? 1 : 0);
+
+		// 电梯：所在楼层和行程状态、交互选项。Script的状态由script_save存(键cabin:<交互名>)。
+		w.U32(static_cast<uint32_t>(building->cabinEntities.size()));
+		for (const Cabin* cabin : building->cabinEntities) {
+			w.I32(cabin->specIndex);
+			w.Str(cabin->interactName);
+			w.I32(cabin->currentLevel);
+			w.F32(cabin->currentZ);
+			w.U8(cabin->moving ? 1 : 0);
+			w.F32(cabin->fromZ);
+			w.I32(cabin->targetLevel);
+			w.F32(cabin->elapsed);
+			WriteStrings(cabin->options, w);
+		}
 	}
 
 	// 门：按Map::allDoors顺序；所属对象按下标引用。
@@ -1306,6 +1321,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 		building->cabins.resize(r.U32());
 		for (ElevatorCabinSpec& s : building->cabins) {
 			s.shaftIndex = r.I32(); s.minFloor = r.I32(); s.maxFloor = r.I32(); s.cabinMeshPath = r.Str();
+			s.scriptModName = r.Str(); s.milestoneNames = ReadStrings(r);
 		}
 		building->stationMod = r.Str();
 
@@ -1430,6 +1446,32 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 			}
 		}
 		building->stated = r.U8() != 0;
+
+		uint32_t cabinCount = r.U32();
+		for (uint32_t k = 0; k < cabinCount && !r.Failed(); k++) {
+			int specIndex = r.I32();
+			string interactName = r.Str();
+			int currentLevel = r.I32();
+			float currentZ = r.F32();
+			bool moving = r.U8() != 0;
+			float fromZ = r.F32();
+			int targetLevel = r.I32();
+			float elapsed = r.F32();
+			vector<string> options = ReadStrings(r);
+			if (specIndex < 0 || specIndex >= static_cast<int>(building->cabins.size())) continue;
+			// 构造函数会按spec创建电梯的Script(和新开局一样，脚本状态由script_save恢复)。
+			const ElevatorCabinSpec& spec = building->cabins[specIndex];
+			Cabin* cabin = new Cabin(building, specIndex, interactName, spec.shaftIndex, spec.minFloor, spec.maxFloor,
+				currentLevel, currentZ, spec.scriptModName, spec.milestoneNames, &map.scriptFactory);
+			cabin->moving = moving;
+			cabin->fromZ = fromZ;
+			cabin->targetLevel = targetLevel;
+			cabin->elapsed = elapsed;
+			// options和门一样：存档带脚本状态段时(读档跳过game_start)才恢复，否则game_start会再加一遍。
+			if (restoreOptions) cabin->options = options;
+			building->cabinEntities.push_back(cabin);
+			map.cabinsByInteractName[interactName] = cabin;
+		}
 		map.buildings[building->name] = building;
 	}
 

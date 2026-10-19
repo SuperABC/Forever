@@ -12,6 +12,7 @@ class Node;
 class Lot;
 class Zone;
 class Building;
+class Cabin;
 class Component;
 class Room;
 class Door;

@@ -557,6 +557,7 @@ void Map::InitBuildings() {
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
+			building->BuildCabins(*this);
 			if (!AddBuilding(building)) delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
 		}
 	}
@@ -586,6 +587,7 @@ void Map::InitBuildings() {
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
+			building->BuildCabins(*this);
 			if (AddBuilding(building)) {
 				zone->AddInternalBuilding(building);
 			}
@@ -630,6 +632,7 @@ void Map::InitBuildings() {
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
+			building->BuildCabins(*this);
 			if (!AddBuilding(building)) delete building;
 		}
 
@@ -2256,6 +2259,40 @@ Door* Map::CreateDoor(DOOR_KIND_TYPE kind, Zone* zone, Building* building, Room*
 	return door;
 }
 
+Cabin* Map::CreateCabin(Building* building, int specIndex, const ElevatorCabinSpec& spec) {
+	if (!building) return nullptr;
+	string interactName = building->GetName() + " 电梯" + to_string(building->GetCabinEntities().size() + 1);
+	int initialLevel = std::clamp(0, spec.minFloor, spec.maxFloor);
+	Cabin* cabin = new Cabin(building, specIndex, interactName, spec.shaftIndex, spec.minFloor, spec.maxFloor,
+		initialLevel, building->GetFloorBaseZ(initialLevel), spec.scriptModName, spec.milestoneNames, &scriptFactory);
+	cabinsByInteractName[interactName] = cabin;
+	return cabin;
+}
+
+Cabin* Map::FindCabinByName(const string& interactName) const {
+	auto it = cabinsByInteractName.find(interactName);
+	return it != cabinsByInteractName.end() ? it->second : nullptr;
+}
+
+namespace {
+	// launch_elevator的command(通常是被点的选项文字，比如"前往3层"/"前往B1层")解析成层号：
+	// B/b后面跟数字n -> -n(地下n层)；否则取第一个数字n -> n-1(n楼)。找不到数字返回false。
+	bool ParseElevatorCommand(const string& command, int& outLevel) {
+		for (size_t i = 0; i < command.size(); i++) {
+			unsigned char c = static_cast<unsigned char>(command[i]);
+			if ((c == 'B' || c == 'b') && i + 1 < command.size() && isdigit(static_cast<unsigned char>(command[i + 1]))) {
+				outLevel = -atoi(command.c_str() + i + 1);
+				return true;
+			}
+			if (isdigit(c)) {
+				outLevel = atoi(command.c_str() + i) - 1;
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
 Door* Map::FindDoorByName(const string& interactName) const {
 	auto it = doorsByInteractName.find(interactName);
 	return it != doorsByInteractName.end() ? it->second : nullptr;
@@ -2273,13 +2310,35 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 	// map.h声明处注释。AddOptionChange/RemoveOptionChange这两种本来就存在(给
 	// Vehicle/Citizen用)，这次是给Door也接上，不是新增Change类型。
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
-		Door* target = FindDoorByName(ToString(EvaluateExpression(addOption->GetName(), context)));
-		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
+		string name = ToString(EvaluateExpression(addOption->GetName(), context));
+		string option = ToString(EvaluateExpression(addOption->GetOption(), context));
+		if (Door* door = FindDoorByName(name)) door->AddOption(option);
+		if (Cabin* cabin = FindCabinByName(name)) cabin->AddOption(option);
 		return true;
 	}
 	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
-		Door* target = FindDoorByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
-		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
+		string name = ToString(EvaluateExpression(removeOption->GetName(), context));
+		string option = ToString(EvaluateExpression(removeOption->GetOption(), context));
+		if (Door* door = FindDoorByName(name)) door->RemoveOption(option);
+		if (Cabin* cabin = FindCabinByName(name)) cabin->RemoveOption(option);
+		return true;
+	}
+	if (auto* launch = dynamic_cast<const LaunchElevatorChange*>(change)) {
+		// elevator是电梯的交互名(脚本里的$$self.name)；building只用于日志。command解析成层号，见
+		// ParseElevatorCommand。真正的移动由UE层ABuildingElement::Tick按Cabin的行程状态推进。
+		string elevator = ToString(EvaluateExpression(launch->GetElevator(), context));
+		string command = ToString(EvaluateExpression(launch->GetCommand(), context));
+		Cabin* cabin = FindCabinByName(elevator);
+		int level = 0;
+		if (!cabin) {
+			debugf("Warning: launch_elevator: elevator %s not found.\n", elevator.c_str());
+		}
+		else if (!ParseElevatorCommand(command, level)) {
+			debugf("Warning: launch_elevator: cannot parse floor from command \"%s\".\n", command.c_str());
+		}
+		else {
+			cabin->Launch(level);
+		}
 		return true;
 	}
 	if (auto* setDoor = dynamic_cast<const SetDoorChange*>(change)) {

@@ -16,7 +16,7 @@
 - 近处所有独立组件（墙体分段/地板天花板slab/楼梯坡道网格）+远处LOD的`farMesh`（自己专属
   的`UProceduralMeshComponent`，只有1个section）+电梯轿厢mesh，全部attach到这个Actor
   自己的`elementRoot`，不再attach到框架组件的owner。
-- 电梯轿厢往返动画。
+- 电梯：按Core的`Cabin`状态推进行程、摆放轿厢，以及电梯正面/轿厢内的交互触发盒，见`ForeverBuildingFrameworkComponent.md`"电梯轿厢"一节。
 - building自己的进入/离开检测碰撞盒（`BuildCollisionBox`）。
 - 这栋楼所有Room各自的进入/离开检测碰撞盒（`BuildRoomCollisionBoxes`，原来在
   `UForeverRoomFrameworkComponent`里，同一套"全地图共用owner"问题挪过来的历史见下面

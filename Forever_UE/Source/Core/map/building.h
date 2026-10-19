@@ -7,6 +7,7 @@
 #include "map/room_factory.h"
 #include "map/component_factory.h"
 #include "map/general_geometry.h"
+#include "map/cabin.h"
 
 #include <string>
 #include <unordered_map>
@@ -463,6 +464,12 @@ public:
 	void BuildDoors(Map& map);
 	const std::vector<Door*>& GetDoorEntities() const;
 
+	// 电梯：按GetCabins()(ElevatorCabinSpec)逐条调map.CreateCabin创建Cabin，登记进cabinEntities(析构时
+	// 释放)。同一口井楼层范围和已建的电梯重叠的跳过并警告；初始楼层是1楼(夹到这台电梯的范围内)。
+	// 由Map::InitBuildings()在BuildDoors之后各调一次。
+	void BuildCabins(Map& map);
+	const std::vector<Cabin*>& GetCabinEntities() const;
+
 private:
 	// 按mod->floors实例化每一层的Floor，塞进floors数组。
 	void ReadFloor(int level, int face, const std::string& templateName, const BuildingLayoutLibrary& library);
@@ -534,4 +541,7 @@ private:
 	// corridor等非single/row元素上真正放了门扇的门——只在BuildDoors()非空填入(查到的门洞
 	// 带了没在doorSpecs表里对应mesh为空的tag时不会有对应的Door)，析构时释放。
 	std::vector<Door*> doorEntities;
+
+	// 电梯实体，见BuildCabins。
+	std::vector<Cabin*> cabinEntities;
 };

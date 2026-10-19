@@ -114,6 +114,7 @@
     <ClCompile Include="map\room.cpp" />
     <ClCompile Include="map\component.cpp" />
     <ClCompile Include="map\door.cpp" />
+    <ClCompile Include="map\cabin.cpp" />
     <ClCompile Include="map\map.cpp" />
     <ClCompile Include="populace\citizen.cpp" />
     <ClCompile Include="populace\name.cpp" />
@@ -164,6 +165,7 @@
     <ClInclude Include="map\room.h" />
     <ClInclude Include="map\component.h" />
     <ClInclude Include="map\door.h" />
+    <ClInclude Include="map\cabin.h" />
     <ClInclude Include="map\map.h" />
     <ClInclude Include="populace\citizen.h" />
     <ClInclude Include="populace\name.h" />

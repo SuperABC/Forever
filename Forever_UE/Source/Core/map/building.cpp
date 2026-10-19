@@ -711,6 +711,7 @@ Building::~Building() {
 	for (Room* room : rooms) delete room;
 	for (Component* component : components) delete component;
 	for (Door* door : doorEntities) delete door;
+	for (Cabin* cabin : cabinEntities) delete cabin;
 	factory->DestroyBuilding(mod);
 }
 
@@ -970,6 +971,37 @@ void Building::BuildDoors(Map& map) {
 }
 
 const vector<Door*>& Building::GetDoorEntities() const { return doorEntities; }
+
+void Building::BuildCabins(Map& map) {
+	int floorCount = static_cast<int>(floorHeights.size());
+	for (size_t i = 0; i < cabins.size(); i++) {
+		const ElevatorCabinSpec& spec = cabins[i];
+		int minIdx = basements + spec.minFloor, maxIdx = basements + spec.maxFloor;
+		if (spec.minFloor > spec.maxFloor || minIdx < 0 || maxIdx >= floorCount) {
+			debugf("Warning: elevator spec %d of building %s has invalid floor range [%d,%d], skipped.\n",
+				static_cast<int>(i), name.c_str(), spec.minFloor, spec.maxFloor);
+			continue;
+		}
+		// 同一口井里楼层范围重叠的两台电梯会撞在一起，后一条跳过。
+		bool overlapped = false;
+		for (const Cabin* other : cabinEntities) {
+			if (other->GetShaftIndex() == spec.shaftIndex &&
+				spec.minFloor <= other->GetMaxLevel() && other->GetMinLevel() <= spec.maxFloor) {
+				overlapped = true;
+				break;
+			}
+		}
+		if (overlapped) {
+			debugf("Warning: elevator spec %d of building %s overlaps another elevator in shaft %d, skipped.\n",
+				static_cast<int>(i), name.c_str(), spec.shaftIndex);
+			continue;
+		}
+		Cabin* cabin = map.CreateCabin(this, static_cast<int>(i), spec);
+		if (cabin) cabinEntities.push_back(cabin);
+	}
+}
+
+const vector<Cabin*>& Building::GetCabinEntities() const { return cabinEntities; }
 
 float Building::GetBodyOffsetX() const { return bodyOffsetX; }
 float Building::GetBodyOffsetY() const { return bodyOffsetY; }

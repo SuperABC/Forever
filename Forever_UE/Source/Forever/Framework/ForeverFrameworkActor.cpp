@@ -30,6 +30,8 @@
 #include "Element/CitizenElement.h"
 #include "Element/VehicleElement.h"
 #include "Element/DoorComponent.h"
+#include "Element/BuildingElement.h"
+#include "map/cabin.h"
 #include "map/door.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 
@@ -257,6 +259,33 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* forRange = dynamic_cast<const ForRangeChange*>(change)) {
+		// 子Change可能是任何类型(包括UE层的)，所以循环放在这个统一入口里递归。循环变量写进当前脚本
+		// 自己的变量池：var写"floor"或"self.floor"都是$$self.floor。含两端，step省略为1；循环次数
+		// 超过kMaxForRangeIterations截断并警告。子Change的condition每轮都按当前循环变量求值。
+		constexpr int kMaxForRangeIterations = 1000;
+		std::string key = forRange->GetVar();
+		if (key.rfind("self.", 0) == 0) key = key.substr(5);
+		int from = ToInt(EvaluateExpression(forRange->GetFrom(), context));
+		int to = ToInt(EvaluateExpression(forRange->GetTo(), context));
+		int step = forRange->GetStep().empty() ? 1 : ToInt(EvaluateExpression(forRange->GetStep(), context));
+		if (step == 0) step = 1;
+		int iterations = 0;
+		for (int value = from; step > 0 ? value <= to : value >= to; value += step) {
+			if (++iterations > kMaxForRangeIterations) {
+				UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor::ApplyChange: for_range exceeded %d iterations, truncated."), kMaxForRangeIterations);
+				break;
+			}
+			if (context.self) context.self->SetValue(key, ValueType(value));
+			for (const Change* child : forRange->GetChanges()) {
+				if (!child) continue;
+				if (!child->GetCondition().empty() && !EvaluateExpressionBool(child->GetCondition(), context)) continue;
+				ApplyChange(child, context);
+			}
+		}
+		return;
+	}
+
 	if (auto* globalMessage = dynamic_cast<const GlobalMessageChange*>(change)) {
 		// 求出消息文本，广播一个GlobalMessageEvent给所有挂了Script的东西，见
 		// UForeverStoryFrameworkComponent::BroadcastGlobalMessage。
@@ -312,6 +341,9 @@ void AForeverFrameworkActor::RefreshInteractOptions(const std::string& name) {
 	if (map) {
 		if (Door* door = map->FindDoorByName(name)) {
 			if (UForeverDoorComponent* component = UForeverDoorComponent::FindForDoor(door)) component->RefreshOptions();
+		}
+		if (Cabin* cabin = map->FindCabinByName(name)) {
+			if (ABuildingElement* element = ABuildingElement::FindForBuilding(cabin->GetBuilding())) element->RefreshCabinOptions(cabin);
 		}
 	}
 }

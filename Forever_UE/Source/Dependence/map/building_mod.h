@@ -64,6 +64,9 @@ struct ElevatorCabinSpec {
 	int minFloor = 0;  // 人类直觉层号(0=1楼，负数=地下)，含
 	int maxFloor = 0;  // 含
 	std::string cabinMeshPath; // 留空用组件默认Elevator mesh
+	// 这台电梯的Script：milestoneNames非空才创建(和DoorSpec同一个约定)，见Core/map/cabin.md。
+	std::string scriptModName = "empty";
+	std::vector<std::string> milestoneNames;
 };
 
 // BuildingMod：Building有两种生成方式（显式占位 + 权重CDF随机填充，见
@@ -149,7 +152,10 @@ public:
 	// 声明这栋building有一台电梯轿厢，对应shaftIndex号井道，在minFloor~maxFloor之间往返
 	// (这次没有真正的调度逻辑，Forever层只做一个占位性质的往返动画，见
 	// ForeverBuildingFrameworkComponent.md)。同一栋building可以调用多次声明多台电梯。
-	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "");
+	// 同一口井可以声明多台电梯(楼层范围不能重叠，重叠的后一条会被跳过)。scriptModName/milestoneNames
+	// 指定这台电梯的Script(game_start里给自己加"前往x层"选项，见Resource/Story/elevator_basic.script)。
+	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "",
+		std::string scriptModName = "empty", std::vector<std::string> milestoneNames = {});
 
 	// 以下四个不再是虚方法——它们不需要任何实例状态，改成每个具体子类的static方法，通过
 	// BuildingFactory::RegisterBuilding的额外参数注册，详见building_factory.h。子类必须实现

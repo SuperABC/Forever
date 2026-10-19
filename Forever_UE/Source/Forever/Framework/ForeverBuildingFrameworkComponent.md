@@ -281,37 +281,25 @@ Story事件分发。
 
 ## 电梯轿厢
 
-`BuildingMod::cabins`（`ElevatorCabinSpec`列表，`shaftIndex`/`minFloor`/`maxFloor`/
-`cabinMeshPath`，见`Source/Dependence/map/building_mod.md`）由mod显式声明，`Building`
-（Core侧）不处理这份数据，完全是`ABuildingElement`自己读`building->GetMod()->cabins`。
+电梯的状态(所在楼层、行程、Script、交互选项)在Core的`Cabin`里(`building->GetCabinEntities()`)，见
+`Source/Core/map/cabin.md`。`ABuildingElement`只负责两件事：
 
-- **和近处LOD楼层几何同一套增删节奏，但单独一个op**：远→近切换时，在所有`BuildFloorMesh`
-  之后、`DeleteFarMesh`之前新增一条`BuildElevatorCabins`（`BuildElevatorCabinsForBuilding`），
-  近→远切换的`DeleteAllNearMeshes`（即`ClearNearSections`）一并清空
-  `ABuildingElement::cabins`——轿厢是纯视觉+动画，没必要像Building/Room碰撞盒那样常驻，
-  跟着近处LOD一起增删更省资源(看不见的轿厢没必要一直播动画)。
-- **`BuildElevatorCabinsForBuilding`**：对每个`ElevatorCabinSpec`，用
-  `building->GetFloor(spec.minFloor)->GetElevators()[spec.shaftIndex]`取井道的
-  `Elevator`几何（越界就跳过，不报错）。轿厢mesh和楼梯/坡道同一个`[0,1]`单位包围盒约定，
-  需要按实际尺寸缩放+按方向旋转——复用`ComputeDirectionalMeshTransform(elevator.
-  GetDirection(), ...)`，资产默认路径`/Game/Asset/Meshes/Elevator.Elevator`。**Z缩放用
-  轿厢"家"所在楼层(`minFloor`)的层高，不是`minFloor`~`maxFloor`的整个垂直跨度**——那个
-  跨度是轿厢的移动范围（`FBuildingCabin::zBottom/zTop`），不是它自身的缩放尺寸。
-- **动画：匀速+两端缓入缓出，一直在`minFloor`到`maxFloor`之间往返**：
-  `ABuildingElement::Tick`里对`currentLod==Near`遍历自己的`cabins`，用匿名namespace的
-  `ComputeCabinZ(zBottom, zTop, cabinCruiseSpeed, cabinEaseSeconds, elapsedSeconds)`
-  算当前Z（`cabinCruiseSpeed`/`cabinEaseSeconds`通过`framework->GetCabinCruiseSpeed()`/
-  `GetCabinEaseSeconds()`拿框架组件的全地图共享配置）——用平滑Hermite曲线
-  `smoothstep(u)=3u²-2u³`做速度曲线：一段缓入时间`te`内速度从0平滑升到`cabinCruiseSpeed`，
-  这段位移的精确解析式是`cabinCruiseSpeed*te*(u³-u⁴/2)`（`u=s/te`，`u=1`时正好是
-  `cabinCruiseSpeed*te*0.5`——smoothstep在`[0,1]`上的积分均值精确等于`0.5`，不是近似），
-  缓出段由缓入段的公式按"距终点还有多久"对称复用（减速曲线是加速曲线的时间倒放）。`te`按
-  `min(cabinEaseSeconds, distance/cabinCruiseSpeed)`夹到不超过半程距离对应的时间，矮建筑/
-  短距离会退化成"没有匀速段、纯缓入接缓出"，不会算出负的匀速时间。`cabinCruiseSpeed`
-  (默认300 UE单位/秒≈3m/s)/`cabinEaseSeconds`(默认1.5秒)是框架组件的`UPROPERTY`，
-  每个`FCabin`有独立的`phaseOffset`（按世界坐标错开），避免同一栋楼/相邻楼的轿厢看起来
-  同步摆动。全程只用`FCabin`里缓存的浮点数（`worldX/worldY/zBottom/zTop/phaseOffset`），
-  不解引用`building`——`Tick`本身仍然在`if (!building) return;`保护之下，不需要额外处理。
+- **推进行程(不管LOD)**：`Tick`最前面(玩家Pawn检查之前)调`UpdateCabins`，对每台`IsMoving()`的电梯
+  `Advance(dt)`，用`ComputeTripZ(fromZ, toZ, cabinCruiseSpeed, cabinEaseSeconds, elapsed)`算当前高度写回
+  `SetCurrentZ`，到站调`Arrive`。远景下电梯照样会到站。曲线是"匀速+两端缓入缓出"：smoothstep速度曲线，
+  缓入段位移`cabinCruiseSpeed*te*(u³-u⁴/2)`，缓出段对称复用；`te`夹到不超过半程对应时间。
+  `cabinCruiseSpeed`(默认300 UE单位/秒)/`cabinEaseSeconds`(默认1.5秒)是本组件的`UPROPERTY`。
+- **近处LOD的表现**：远→近切换时在所有`BuildFloorMesh`之后跑`BuildElevatorCabins`
+  (`BuildElevatorCabinsForBuilding`)，近→远的`ClearNearSections`一并清空。对每台Core电梯：
+  - 轿厢网格：用`minFloor`那一层模板的这口井定位/定尺寸(`ComputeDirectionalMeshTransform`，资产默认
+    `/Game/Asset/Meshes/Elevator.Elevator`，Z缩放用`minFloor`的层高)，**从Core记录的当前高度生成**；
+    `UpdateCabins`在近处每帧按Core高度摆放。
+  - 交互触发盒(`SpawnCabinTrigger`，Trigger碰撞预设)：轿厢内一个(宽/高为轿厢的`kElevatorInnerScale`=0.8，沿开口方向
+    深度为轿厢进深的`kElevatorInnerDepthScale`=0.5、贴着轿厢门平面，Movable，跟着轿厢移动)；这台电梯负责的每一层电梯
+    正面一个——用那一层模板自己的这口井定位，在开口(`Elevator::GetDirection()`那一侧)外放宽=开口宽×0.8、高=层高×0.8
+    (`kElevatorMarkerScale`)、深`kElevatorFrontDepth`=1米且贴着开口平面的盒子，两个盒子之间不留缝，
+    某层模板没有这口井就跳过。玩家进入任意一个弹出电梯选项(按计数防重复)，全部离开收起；
+    `ClearNearSections`销毁前先解绑回调，玩家还在里面就显式收起。
 
 ## 性能排查：组件挂载粒度决定物理引擎碰撞焊接开销
 

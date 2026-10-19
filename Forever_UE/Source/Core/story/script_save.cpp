@@ -62,6 +62,12 @@ vector<pair<string, Script*>> ScriptSaveCodec::CollectScripts(Map* map, Populace
 		for (Door* door : map->GetAllDoors()) {
 			if (door && door->GetScript()) scripts.emplace_back("door:" + door->GetId(), door->GetScript());
 		}
+		for (auto& [name, building] : map->GetBuildings()) {
+			if (!building) continue;
+			for (Cabin* cabin : building->GetCabinEntities()) {
+				if (cabin && cabin->GetScript()) scripts.emplace_back("cabin:" + cabin->GetInteractName(), cabin->GetScript());
+			}
+		}
 	}
 	if (society) {
 		const vector<Organization*>& organizations = society->GetOrganizations();

@@ -358,6 +358,28 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new GlobalMessageChange(message.AsString());
 		}
+		else if (type == "for_range") {
+			// {"var","from","to","step"(可选，默认1),"do":[changes]}，含两端；循环变量写进当前脚本自己的
+			// 变量池($$self.<var>)，见AForeverFrameworkActor::ApplyChange的for_range分支。
+			auto var = obj["var"];
+			auto from = obj["from"];
+			auto to = obj["to"];
+			if (var.IsNull() || from.IsNull() || to.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing var, from or to for for_range change.\n");
+			}
+			vector<const Change*> nested;
+			for (Change* child : BuildChanges(obj["do"])) nested.push_back(child);
+			change = new ForRangeChange(var.AsString(), from.AsString(), to.AsString(), obj["step"].AsString(), move(nested));
+		}
+		else if (type == "launch_elevator") {
+			auto building = obj["building"];
+			auto elevator = obj["elevator"];
+			auto command = obj["command"];
+			if (elevator.IsNull() || command.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing elevator or command for launch_elevator change.\n");
+			}
+			change = new LaunchElevatorChange(building.AsString(), elevator.AsString(), command.AsString());
+		}
 		else if (type == "remove_option") {
 			auto name = obj["name"];
 			auto option = obj["option"];

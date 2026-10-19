@@ -74,14 +74,12 @@
   的显式参数指定，模板名字只决定楼梯/坡道摆在楼体的哪个位置、多大、朝哪，不决定拿什么3D
   资产去画它。
 - **电梯轿厢（`ElevatorCabinSpec`/`BuildingMod::AssignElevatorCabin`）**：
-  `ElevatorCabinSpec{shaftIndex, minFloor, maxFloor, cabinMeshPath}`，mod显式声明"第
+  `ElevatorCabinSpec{shaftIndex, minFloor, maxFloor, cabinMeshPath, scriptModName, milestoneNames}`，mod显式声明"第
   `shaftIndex`口井道(对应每层模板`elevators`数组里第几个，0-based)有一台轿厢，在
-  `minFloor`~`maxFloor`之间"，是mod显式配置，不是从`Elevator`几何反推出来的。`Building`
-  自己不实例化任何Cabin对象——`Core`侧只有这份声明性`spec`数据（存在`BuildingMod::cabins`，
-  `Building::Layout()`不读取，是`ForeverBuildingFrameworkComponent`直接读
-  `building->GetMod()->cabins`），因为轿厢的3D网格生成+"最低层到最高层匀速往返、两端缓入
-  缓出"的占位动画完全是Forever层渲染关注的事，没有真正的电梯调度/Script逻辑，详见
-  `ForeverBuildingFrameworkComponent.md`。
+  `minFloor`~`maxFloor`之间，用这个Script"，是mod显式配置，不是从`Elevator`几何反推出来的。同一口井可以声明多台
+  (楼层范围不能重叠)。`Layout()`把spec拷进快照`cabins`(`GetCabins()`)，`BuildCabins(Map&)`按它逐条创建Core的
+  `Cabin`(电梯实体：Script、交互选项、所在楼层、行程状态)，登记进`cabinEntities`(`GetCabinEntities()`，析构时释放)，
+  详见`cabin.md`。
 - **`Hatch`不是用来挖building自己楼层的`Ground`/`Ceiling`的**——`Ceiling`/`Ground`都是照
   模板原样绘制，不做任何运行时裁剪；`Hatch`真正的用途是喂给`Map::AddHatch`去挖**世界地形**
   的洞，而且只有地下一层(离地表最近的那层basement)的`Hatch`才有意义——只有basement会真正
@@ -179,9 +177,7 @@
 ## 待办/后续阶段
 
 - `Organization`(公司/组织)、Society领域的跨building组合撮合——依赖还没迁移的Populace/Job。
-- 电梯轿厢的真实调度逻辑（呼叫按钮、开关门、载客、`Script`挂钩）——这次只做`ElevatorCabinSpec`
-  声明+3D网格渲染+占位性质的"最低层到最高层匀速往返、两端缓入缓出"动画，见上面
-  "电梯轿厢"一节+`ForeverBuildingFrameworkComponent.md`。
+- 电梯：开关门动画、载客的NPC调度还没做；呼叫/选层/行程/Script已经做了，见`cabin.md`。
 - 车辆导航(`vehicleNavigation`)的寻路消费方——`BuildVehicleNavigation`已经把车行图接进
   `Map::vehicleNavGraph`，但Traffic域还没迁移，这次只负责把图接好，不含任何寻路逻辑。
 - `Room`的furniture/pivots/storages/manufactures/parkings/vehicles/ownership/tenancy等

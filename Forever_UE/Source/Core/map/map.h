@@ -219,6 +219,12 @@ public:
 	// 使用，和FindVehicleByName同一个用法。
 	Door* FindDoorByName(const std::string& interactName) const;
 
+	// 创建一台电梯(Building::BuildCabins调用)：交互名"<building名> 电梯<n>"(n按这栋楼已建的电梯数+1)，
+	// 初始停在1楼(夹到范围内)，登记进cabinsByInteractName。电梯归building的cabinEntities持有。
+	Cabin* CreateCabin(Building* building, int specIndex, const ElevatorCabinSpec& spec);
+	// 按交互名查电梯，找不到返回nullptr。
+	Cabin* FindCabinByName(const std::string& interactName) const;
+
 	// 所有真正放了门扇的门——不分三类，供UForeverStoryFrameworkComponent::
 	// BroadcastGameStart遍历+过滤GetScript()!=nullptr。
 	const std::vector<Door*>& GetAllDoors() const;
@@ -369,6 +375,9 @@ private:
 	std::unordered_map<std::string, Door*> doorsById;
 	std::unordered_map<std::string, Door*> doorsByInteractName;
 	std::vector<Door*> allDoors;
+
+	// 电梯索引，不持有(电梯归Building::cabinEntities)。
+	std::unordered_map<std::string, Cabin*> cabinsByInteractName;
 
 	// 按name插入，重名返回false并debugf警告、不插入(不生成消歧名字——唯一性是mod自己的
 	// GetName()/构造函数计数器的责任，这里只是兜底)；成功插入返回true。

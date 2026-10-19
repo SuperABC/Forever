@@ -18,6 +18,7 @@ class UBoxComponent;
 class UPrimitiveComponent;
 class UStaticMesh;
 class UMaterialInterface;
+class Cabin;
 class UMaterialInstanceDynamic;
 class Building;
 class Floor;
@@ -65,6 +66,11 @@ public:
 	// 谁先谁后，见ForeverBuildingFrameworkComponent.h同一套安全原则。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	// 电梯的交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::
+	// RefreshInteractOptions调用)：重新烘焙快照；玩家正压着它的触发盒时同步换掉屏幕上的选项。
+	void RefreshCabinOptions(const Cabin* cabin);
+	static ABuildingElement* FindForBuilding(const Building* building);
+
 private:
 	enum class ELod : uint8 { Near, Far };
 
@@ -83,15 +89,44 @@ private:
 		int32 floorIndex = -1; // 仅BuildFloorMesh使用
 	};
 
-	// 一台电梯轿厢的近处LOD状态——只在currentLod==Near时存在，随DeleteAllNearMeshes一起清空。
-	// zBottom/zTop/worldX/worldY/rotation都是生成时缓存好的世界坐标数值，Tick动画只读这些
-	// 缓存值，不解引用building。
+	// 一台电梯轿厢的近处LOD表现——只在currentLod==Near时存在，随DeleteAllNearMeshes一起清空。
+	// 电梯的状态(所在楼层/行程)在Core的Cabin里，这里只按它摆放轿厢网格。
+	// innerTrigger/frontTriggers：轿厢内(跟着轿厢移动)、各层电梯正面的交互触发盒——玩家进入
+	// 任意一个就弹出这台电梯的选项，全部离开才收起，见Core/map/cabin.md。
+	// interactNameOnly/cachedOptions是烘焙好的快照，Overlap回调只读它们，不解引用cabin——和
+	// UForeverDoorComponent同一套安全原则。
 	struct FCabin {
+		Cabin* cabin = nullptr;
 		TObjectPtr<UStaticMeshComponent> comp;
+		TObjectPtr<UBoxComponent> innerTrigger;
+		float innerX = 0.f, innerY = 0.f; // 轿厢内触发盒的世界XY(靠门那一半的中心，不是轿厢中心)
+		TArray<TObjectPtr<UBoxComponent>> frontTriggers;
 		float worldX = 0.f, worldY = 0.f, rotation = 0.f;
-		float zBottom = 0.f, zTop = 0.f;
-		float phaseOffset = 0.f; // 往返周期里的起始相位(秒)，避免所有轿厢同步摆动
+		float innerHalfZ = 0.f; // 轿厢内触发盒半高，中心=轿厢底+这个值
+		FString interactNameOnly;
+		TArray<FString> cachedOptions;
+		bool hasScript = false;
+		int32 playerOverlaps = 0; // 玩家当前同时压着这台电梯几个触发盒(门口和轿厢内可能同时压到)
 	};
+
+	UBoxComponent* SpawnCabinTrigger(float centerX, float centerY, float centerZ,
+		float sizeX, float sizeY, float sizeZ, float rotation, bool isMovable);
+	FCabin* FindCabinByTrigger(const UPrimitiveComponent* trigger);
+	void ShowCabinOptions(const FCabin& cabin);
+	void HideCabinOptions(const FCabin& cabin);
+
+	UFUNCTION()
+	void OnCabinOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	UFUNCTION()
+	void OnCabinOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
+	// 当前存在的Element(按Building*查)，供RefreshCabinOptions的调用方找到电梯所在的那栋楼。
+	static TMap<const Building*, TWeakObjectPtr<ABuildingElement>> elementsByBuilding;
+
+	// 推进这栋楼所有电梯的行程(不管LOD，远景下电梯也会到站)，到站写回Core；近处时同步轿厢位置。
+	void UpdateCabins(float deltaSeconds);
 
 	void BuildFarSection();
 	void BuildFloorSection(int32 floorIndex);

@@ -30,6 +30,7 @@
 #include "traffic/traffic.h"
 #include "map/door.h"
 #include "map/map.h"
+#include "map/cabin.h"
 #include "common/implement.h"
 
 using namespace std;
@@ -134,10 +135,17 @@ void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostIm
 		}
 	}
 
-	// 只有spec.name非空的门才会有Script(见Core/map/door.md)，过滤掉纯自动门。
+	// 只有spec.name非空的门才会有Script(见Core/map/door.md)，过滤掉纯自动门；电梯同理(spec指定了
+	// 里程碑文件才有Script)。
 	if (Map* map = framework ? framework->GetMap() : nullptr) {
 		for (Door* door : map->GetAllDoors()) {
 			if (door && door->GetScript()) broadcastOne(door->GetScript());
+		}
+		for (auto& [name, building] : map->GetBuildings()) {
+			if (!building) continue;
+			for (Cabin* cabin : building->GetCabinEntities()) {
+				if (cabin && cabin->GetScript()) broadcastOne(cabin->GetScript());
+			}
 		}
 	}
 }
@@ -216,6 +224,12 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	Door* targetDoor = map ? map->FindDoorByName(nameUtf8) : nullptr;
 	if (targetDoor && targetDoor->GetScript()) {
 		matchOne(targetDoor->GetScript());
+	}
+
+	// 电梯：name是电梯的交互名("<building名> 电梯<n>")。
+	Cabin* targetCabin = map ? map->FindCabinByName(nameUtf8) : nullptr;
+	if (targetCabin && targetCabin->GetScript()) {
+		matchOne(targetCabin->GetScript());
 	}
 }
 

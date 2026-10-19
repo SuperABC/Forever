@@ -29,8 +29,10 @@ void BuildingMod::ArrangeRow(int level, int slot, const string& room, float acre
 	rows[{component, id}].push_back({ level, slot, room, acreage });
 }
 
-void BuildingMod::AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, string cabinMeshPath) {
-	cabins.push_back(ElevatorCabinSpec{ shaftIndex, minFloor, maxFloor, std::move(cabinMeshPath) });
+void BuildingMod::AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, string cabinMeshPath,
+	string scriptModName, vector<string> milestoneNames) {
+	cabins.push_back(ElevatorCabinSpec{ shaftIndex, minFloor, maxFloor, std::move(cabinMeshPath),
+		std::move(scriptModName), std::move(milestoneNames) });
 }
 
 void BuildingMod::AddTreeSingle(const PointParams& position, float scale, const string& meshPath) {
