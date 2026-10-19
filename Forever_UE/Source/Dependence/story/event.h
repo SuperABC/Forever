@@ -249,6 +249,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，zone都是表达式，留空的字段不限
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.zone读到实际的名字(不在园区里/不在建筑里时为空)
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置园区名称
@@ -284,6 +292,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，zone都是表达式，留空的字段不限
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.zone读到实际的名字(不在园区里/不在建筑里时为空)
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置园区名称
@@ -319,6 +335,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，zone/building都是表达式，留空的字段不限
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.zone/local.building读到实际的名字(不在园区里/不在建筑里时为空)
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置园区名称
@@ -368,6 +392,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，zone/building都是表达式，留空的字段不限
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.zone/local.building读到实际的名字(不在园区里/不在建筑里时为空)
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置园区名称
@@ -417,6 +449,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，zone/building/room都是表达式，留空的字段不限
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.zone/local.building/local.room读到实际的名字(不在园区里/不在建筑里时为空)
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置园区名称
@@ -480,6 +520,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，zone/building/room都是表达式，留空的字段不限
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.zone/local.building/local.room读到实际的名字(不在园区里/不在建筑里时为空)
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置园区名称
@@ -708,6 +756,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，name是表达式，留空表示这个脚本的任何计时器到时都触发
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.name读到到时的计时器名称
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置计时器名称

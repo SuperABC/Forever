@@ -3,6 +3,7 @@
 #include "Element/DoorComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
+#include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Player/ForeverPlayerController.h"
 #include "UI/MeetOptionWidget.h"
 
@@ -23,8 +24,10 @@
 #include "map/door.h"
 #include "map/cabin.h"
 #include "map/room.h"
+#include "map/zone.h"
 #include "map/general_geometry.h"
 #include "player/player.h"
+#include "story/event.h"
 
 #include <algorithm>
 
@@ -339,21 +342,39 @@ void ABuildingElement::BuildCollisionBox() {
 	// 只烘焙一份显示用的地址字符串，Overlap回调绝不解引用building——和EndPlay处理同一套
 	// 安全原则。
 	collisionLabel = FString::Printf(TEXT("Building: %s"), UTF8_TO_TCHAR(building->GetAddress().c_str()));
+	buildingNameOnly = building->GetName();
+	zoneNameOnly = building->GetParentZone() ? building->GetParentZone()->GetName() : std::string();
 	collisionBox = box;
+}
+
+namespace {
+	UForeverStoryFrameworkComponent* FindBuildingStoryFramework(UWorld* world) {
+		AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+			UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
+		return framework ? framework->GetStoryFramework() : nullptr;
+	}
 }
 
 void ABuildingElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	if (!pawn || OtherActor != pawn || !GEngine) return;
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("进入 %s"), *collisionLabel));
+	if (!pawn || OtherActor != pawn) return;
+	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("进入 %s"), *collisionLabel));
+	if (UForeverStoryFrameworkComponent* storyFramework = FindBuildingStoryFramework(GetWorld())) {
+		EnterBuildingEvent event(zoneNameOnly, buildingNameOnly);
+		storyFramework->BroadcastPlayerLocation(event, "building", buildingNameOnly, /*entering=*/true);
+	}
 }
 
 void ABuildingElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	if (!pawn || OtherActor != pawn || !GEngine) return;
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("离开 %s"), *collisionLabel));
+	if (!pawn || OtherActor != pawn) return;
+	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("离开 %s"), *collisionLabel));
+	if (UForeverStoryFrameworkComponent* storyFramework = FindBuildingStoryFramework(GetWorld())) {
+		LeaveBuildingEvent event(zoneNameOnly, buildingNameOnly);
+		storyFramework->BroadcastPlayerLocation(event, "building", buildingNameOnly, /*entering=*/false);
+	}
 }
 
 void ABuildingElement::BuildRoomCollisionBoxes() {
@@ -424,6 +445,10 @@ void ABuildingElement::OnRoomOverlapBegin(UPrimitiveComponent* OverlappedCompone
 		if (Player* player = frameworkActor->GetPlayer()) {
 			player->SetCurrentRoom(room);
 		}
+		if (UForeverStoryFrameworkComponent* storyFramework = frameworkActor->GetStoryFramework()) {
+			EnterRoomEvent event(zoneNameOnly, buildingNameOnly, room->GetName());
+			storyFramework->BroadcastPlayerLocation(event, "room", room->GetName(), /*entering=*/true);
+		}
 	}
 }
 
@@ -444,6 +469,10 @@ void ABuildingElement::OnRoomOverlapEnd(UPrimitiveComponent* OverlappedComponent
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		if (Player* player = frameworkActor->GetPlayer()) {
 			player->SetCurrentRoom(nullptr);
+		}
+		if (UForeverStoryFrameworkComponent* storyFramework = frameworkActor->GetStoryFramework()) {
+			LeaveRoomEvent event(zoneNameOnly, buildingNameOnly, room->GetName());
+			storyFramework->BroadcastPlayerLocation(event, "room", room->GetName(), /*entering=*/false);
 		}
 	}
 }

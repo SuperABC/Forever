@@ -262,6 +262,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> collisionBox;
 	FString collisionLabel; // Overlap回调只读这份烘焙好的字符串，绝不解引用building
+	// 进出建筑事件用的名字快照(building->GetName()/所在园区的GetName()，不在园区里为空)。
+	std::string buildingNameOnly;
+	std::string zoneNameOnly;
 
 	// Room碰撞盒对应组件指针 -> 这个盒子对应哪个Room*——一栋楼有多个Room，不能像building
 	// 自己的碰撞盒那样只用一个FString，需要按组件查表。回调里同时用它反查Room*(更新

@@ -27,9 +27,9 @@ public:
 	static bool Load(const SaveArchive& archive, Map* map, Populace* populace, Society* society,
 		Traffic* traffic, Story* story, std::string& error);
 
-private:
 	// 持有者稳定键 -> Script：story.main/story.system、door:<门id>、org:<组织下标>、
 	// job:<组织下标>:<岗位下标>、scheduler:<市民下标>、vehicle:<车名>。
+	// 也供计时器用(Story的计时器按这个键记录归属，见story.h StoryTimer)。
 	static std::vector<std::pair<std::string, Script*>> CollectScripts(Map* map, Populace* populace,
 		Society* society, Traffic* traffic, Story* story);
 };

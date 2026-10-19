@@ -11,6 +11,10 @@ class Story;
 class Change;
 class ChangeControlChange;
 class StartPuzzleChange;
+class CreateTimerChange;
+class RemoveTimerChange;
+class Script;
+class Container;
 class EnterVehicleChange;
 struct ScriptContext;
 
@@ -67,6 +71,18 @@ public:
 	// 一句带label的台词播完(玩家点击/空格推进离开这一句)时由AdvanceDialog调用：广播
 	// SpeakingFinishEvent给所有脚本(含主线)，范围和global_message一样。
 	void BroadcastSpeakingFinish(const std::string& label);
+
+	// 玩家进出园区/建筑/房间(各自的Trigger碰撞盒Overlap回调里调用)：先更新系统变量
+	// system.player.zone/building/room(进入时写名字；离开时只有当前值还是这个名字才清空，
+	// 避免"先进B后离开A"的回调顺序把刚写进去的B清掉)，再把事件广播给所有脚本(含主线，和
+	// global_message同一个范围)。kind是"zone"/"building"/"room"。
+	void BroadcastPlayerLocation(Event& event, const std::string& kind, const std::string& name, bool entering);
+
+	// 计时器(见Core/story/story.md"计时器")：create_timer/remove_timer由AForeverFrameworkActor::
+	// ApplyChange转发到这里，FireExpiredTimers每帧在Story::Tick之后调用。
+	void ApplyCreateTimer(const CreateTimerChange* change, const ScriptContext& context);
+	void ApplyRemoveTimer(const RemoveTimerChange* change, const ScriptContext& context);
+	void FireExpiredTimers();
 
 	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。不在
 	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。这次改成
@@ -130,6 +146,12 @@ private:
 	// 把event广播给组织/岗位/市民Scheduler/车辆/门的全部Script(includeMain为true时连主线也算)，
 	// 匹配出的Dialog/Change交给ProcessScriptActions。BroadcastGameStart和BroadcastGlobalMessage共用。
 	void BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain);
+
+	// 计时器归属：Script* <-> ScriptSaveCodec::CollectScripts的稳定键。找不到返回空串/nullptr。
+	std::string FindScriptKey(const Container* script) const;
+	Script* FindScriptByKey(const std::string& key) const;
+	// create_timer的category/label指定的目标脚本(category为空时就是self)。
+	const Container* ResolveTimerOwner(const std::string& category, const std::string& label, const Container* self) const;
 
 	// BroadcastGlobalMessage当前的嵌套深度，见那边的注释。
 	int32 globalMessageDepth = 0;

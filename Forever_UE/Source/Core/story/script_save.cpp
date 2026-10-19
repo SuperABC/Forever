@@ -137,6 +137,19 @@ void ScriptSaveCodec::Save(const SaveWorld& world, SaveArchive& archive) {
 		}
 	}
 
+	// 计时器(Story::timers)：名称、归属脚本键、到时时刻。
+	const Story* story = world.story;
+	w.U32(story ? static_cast<uint32_t>(story->timers.size()) : 0u);
+	if (story) {
+		for (const StoryTimer& timer : story->timers) {
+			w.Str(timer.name);
+			w.Str(timer.ownerKey);
+			const Time& t = timer.target;
+			w.I32(t.GetYear()); w.I32(t.GetMonth()); w.I32(t.GetDay());
+			w.I32(t.GetHour()); w.I32(t.GetMinute()); w.I32(t.GetSecond()); w.I32(t.GetMillisecond());
+		}
+	}
+
 	archive.SetBinary(SAVE_SECTION_SCRIPTS, VersionOf(SAVE_SECTION_SCRIPTS), w.Take());
 }
 
@@ -195,6 +208,22 @@ bool ScriptSaveCodec::Load(const SaveArchive& archive, Map* map, Populace* popul
 		}
 		script->variables.clear();
 		for (auto& [name, value] : variables) script->variables[name] = value;
+	}
+
+	// 计时器。读档时归属脚本可能已经不在了，留着也无妨：到时按键查不到就丢弃。
+	if (!r.Failed() && story) {
+		story->timers.clear();
+		uint32_t timerCount = r.U32();
+		for (uint32_t k = 0; k < timerCount && !r.Failed(); k++) {
+			StoryTimer timer;
+			timer.name = r.Str();
+			timer.ownerKey = r.Str();
+			int year = r.I32(), month = r.I32(), day = r.I32();
+			int hour = r.I32(), minute = r.I32(), second = r.I32(), millisecond = r.I32();
+			if (r.Failed()) break;
+			timer.target = Time(year, month, day, hour, minute, second, millisecond);
+			story->timers.push_back(timer);
+		}
 	}
 
 	if (r.Failed()) {

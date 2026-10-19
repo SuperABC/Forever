@@ -12,7 +12,17 @@
 // + 一份全局变量池systemScript（Story.md"变量系统"一节的system.前缀路由目标，纯Container用途，
 // 不加载任何milestone）。当前阶段运行时只有这一份Story（AForeverFrameworkActor持有），但
 // Script类本身不假设自己是全局唯一实例，见Script.md。
+// 一个计时器：到target时刻(游戏时间)给ownerKey指向的那个Script发一次time_up，然后删除。
+// ownerKey是ScriptSaveCodec::CollectScripts的稳定键(story.main/scheduler:<i>/vehicle:<名>/...)，
+// 不存Script*：持有者可能被销毁/读档重建，到时再按键查，查不到就丢弃。
+struct StoryTimer {
+	Time target;
+	std::string name;
+	std::string ownerKey;
+};
+
 class Story {
+	friend class ScriptSaveCodec;
 public:
 	/*
 	* 构造剧情聚合：绑定scriptFactory引用成员(Registry::Get().GetScriptFactory())——mod
@@ -76,7 +86,19 @@ public:
 	*/
 	Script* GetMainScript() const;
 
+	/*
+	* 计时器(create_timer/remove_timer/time_up，见story.md"计时器"一节)。同一个owner下同名的
+	* 计时器只保留一个，再次创建就是改到时时刻。
+	*/
+	void CreateTimer(const std::string& name, const Time& target, const std::string& ownerKey);
+	void RemoveTimer(const std::string& name, const std::string& ownerKey);
+	// 取出所有target<=now的计时器(按到时先后)并从列表里删除。
+	std::vector<StoryTimer> PopExpiredTimers(const Time& now);
+
 private:
+	// 计时器列表，数量很少(脚本显式创建)，直接线性扫。
+	std::vector<StoryTimer> timers;
+
 	// 引用`Registry::Get().GetScriptFactory()`，不再自己持有ModLoader/ScriptFactory——mod
 	// dll的发现/注册只在整个UE进程生命周期里跑一次，见Source/Core/common/registry.md。
 	// 构造函数初始化列表里绑定。

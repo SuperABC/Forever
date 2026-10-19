@@ -83,6 +83,23 @@ context)`——`GetValue()`返回的是`std::string`（DSL源码文本，不是�
 `BroadcastGameStart`，只在开局调用一次，不是每帧），等Story域真的有每帧要处理的东西（比如
 milestone超时之类）时再补内容。
 
+## 计时器
+
+`Story::timers`(`StoryTimer{target, name, ownerKey}`)。脚本里这样用：
+
+- `create_timer`(name、time必填，category/label可选，都是表达式)：
+  - **time**：带日期(如`"2024-05-01 08:00:00"`)是绝对时刻；只写时间(`"08:00:00"`，必须是时:分:秒)是下一次到这个钟点——今天还没过就是今天，已经过了(含正好等于现在)就是明天。和老工程一致，到时只触发一次，要每天重复就在`time_up`里再建一次。
+  - **归属**：省略category时计时器归执行这个change的脚本自己。category可以指定别的脚本：`global`/`main`=主线，`citizen`=名叫label的市民的Scheduler，`vehicle`/`door`/`elevator`=名叫label(交互名)的车辆/门/电梯。
+  - 同一个归属脚本下同名的计时器只保留一个，再建一次就是改到时时刻。
+- `remove_timer`(name)：只删执行这个change的脚本自己名下的同名计时器。
+- `time_up`(name可选，留空=这个脚本的任何计时器)：到时**只发给归属脚本**，不广播。脚本里用`local.name`读计时器名。
+
+实现分工：
+- 归属用`ScriptSaveCodec::CollectScripts`的稳定键记录(`story.main`/`scheduler:<i>`/`vehicle:<名>`/...)，不存`Script*`，持有者被销毁或读档重建都不会悬垂，到时按键查不到就丢弃。
+- 解析归属要用到全部域，所以`create_timer`/`remove_timer`在`AForeverFrameworkActor::ApplyChange`的UE层分支里转给`UForeverStoryFrameworkComponent::ApplyCreateTimer/ApplyRemoveTimer`。
+- `AForeverFrameworkActor::Tick`在`Story::Tick`之后调`FireExpiredTimers`，按到时先后发`time_up`。
+- 存档写在scripts段末尾(`script_save`)。
+
 ## test.script路径
 
 `Resource/Story/test.script`，实际存放位置由`config.json`的`"resource_paths"`数组

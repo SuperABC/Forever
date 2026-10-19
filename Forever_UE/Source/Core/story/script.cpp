@@ -286,6 +286,23 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			// label可以省略(留空=任何带label的台词播完都触发)，见SpeakingFinishEvent::Match。
 			event = new SpeakingFinishEvent(obj["label"].AsString());
 		}
+		else if (type == "enter_zone" || type == "leave_zone") {
+			// 位置类事件的字段都可以省略(留空=不限)，见Dependence/story/event.cpp MatchLocationField。
+			if (type == "enter_zone") event = new EnterZoneEvent(obj["zone"].AsString());
+			else event = new LeaveZoneEvent(obj["zone"].AsString());
+		}
+		else if (type == "enter_building" || type == "leave_building") {
+			if (type == "enter_building") event = new EnterBuildingEvent(obj["zone"].AsString(), obj["building"].AsString());
+			else event = new LeaveBuildingEvent(obj["zone"].AsString(), obj["building"].AsString());
+		}
+		else if (type == "enter_room" || type == "leave_room") {
+			if (type == "enter_room") event = new EnterRoomEvent(obj["zone"].AsString(), obj["building"].AsString(), obj["room"].AsString());
+			else event = new LeaveRoomEvent(obj["zone"].AsString(), obj["building"].AsString(), obj["room"].AsString());
+		}
+		else if (type == "time_up") {
+			// name可以省略(留空=这个脚本的任何计时器到时都触发)，见TimeUpEvent::Match。
+			event = new TimeUpEvent(obj["name"].AsString());
+		}
 		else if (type == "citizen_decease") {
 			// name/reason都可以省略(留空=不限)，见CitizenDeceaseEvent::Match。
 			event = new CitizenDeceaseEvent(obj["name"].AsString(), obj["reason"].AsString());
@@ -374,6 +391,22 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			vector<const Change*> nested;
 			for (Change* child : BuildChanges(obj["do"])) nested.push_back(child);
 			change = new ForRangeChange(var.AsString(), from.AsString(), to.AsString(), obj["step"].AsString(), move(nested));
+		}
+		else if (type == "create_timer") {
+			auto name = obj["name"];
+			auto time = obj["time"];
+			if (name.IsNull() || time.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name or time for create_timer change.\n");
+			}
+			// category/label可以省略：省略时计时器归创建它的脚本自己，见story.md"计时器"一节。
+			change = new CreateTimerChange(name.AsString(), time.AsString(), obj["category"].AsString(), obj["label"].AsString());
+		}
+		else if (type == "remove_timer") {
+			auto name = obj["name"];
+			if (name.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name for remove_timer change.\n");
+			}
+			change = new RemoveTimerChange(name.AsString());
 		}
 		else if (type == "launch_elevator") {
 			auto building = obj["building"];

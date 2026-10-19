@@ -301,6 +301,18 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* createTimer = dynamic_cast<const CreateTimerChange*>(change)) {
+		// 计时器的归属要按脚本的稳定键记录(可能指向别的域的对象，见story.md"计时器")，需要全部域，
+		// 交给StoryFramework处理。
+		if (storyFramework) storyFramework->ApplyCreateTimer(createTimer, context);
+		return;
+	}
+
+	if (auto* removeTimer = dynamic_cast<const RemoveTimerChange*>(change)) {
+		if (storyFramework) storyFramework->ApplyRemoveTimer(removeTimer, context);
+		return;
+	}
+
 	if (auto* enterVehicle = dynamic_cast<const EnterVehicleChange*>(change)) {
 		// 跟ChangeControlChange同一个理由：Core层不认识Actor/Controller，"把操控权切换到
 		// 载具上"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyEnterVehicle。
@@ -429,6 +441,9 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	if (industry) industry->Tick(*player->GetTime(), crossedDay, &postImplement);
 	if (traffic) traffic->Tick(*player->GetTime(), crossedDay, &postImplement);
 	if (story) story->Tick(*player->GetTime(), crossedDay, &postImplement);
+
+	// 到时的计时器给各自的归属脚本发time_up。
+	if (storyFramework) storyFramework->FireExpiredTimers();
 }
 
 namespace {

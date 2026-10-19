@@ -1,5 +1,7 @@
 #include "story/story.h"
 
+#include <algorithm>
+
 #include "story/event.h"
 #include "story/change.h"
 #include "common/utility.h"
@@ -85,6 +87,37 @@ Script* Story::GetSystemScript() const {
 
 Script* Story::GetGlobalScript() const {
 	return globalScript;
+}
+
+void Story::CreateTimer(const string& name, const Time& target, const string& ownerKey) {
+	for (StoryTimer& timer : timers) {
+		if (timer.name == name && timer.ownerKey == ownerKey) {
+			timer.target = target;
+			return;
+		}
+	}
+	timers.push_back({ target, name, ownerKey });
+}
+
+void Story::RemoveTimer(const string& name, const string& ownerKey) {
+	timers.erase(remove_if(timers.begin(), timers.end(), [&](const StoryTimer& timer) {
+		return timer.name == name && timer.ownerKey == ownerKey;
+		}), timers.end());
+}
+
+vector<StoryTimer> Story::PopExpiredTimers(const Time& now) {
+	vector<StoryTimer> expired;
+	for (auto it = timers.begin(); it != timers.end();) {
+		if (it->target <= now) {
+			expired.push_back(*it);
+			it = timers.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+	sort(expired.begin(), expired.end(), [](const StoryTimer& a, const StoryTimer& b) { return a.target < b.target; });
+	return expired;
 }
 
 Script* Story::GetMainScript() const {

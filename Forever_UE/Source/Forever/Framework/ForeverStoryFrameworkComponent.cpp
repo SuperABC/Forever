@@ -31,6 +31,8 @@
 #include "map/door.h"
 #include "map/map.h"
 #include "map/cabin.h"
+#include "story/script_save.h"
+#include "player/player.h"
 #include "common/implement.h"
 
 using namespace std;
@@ -372,6 +374,154 @@ void UForeverStoryFrameworkComponent::AdvanceDialog() {
 	// ShowDialog自己就显示)；下面的ShowCurrentItem重复显示同一项没有副作用。
 	if (!finishedLabel.empty()) BroadcastSpeakingFinish(finishedLabel);
 	ShowCurrentItem();
+}
+
+void UForeverStoryFrameworkComponent::BroadcastPlayerLocation(Event& event, const string& kind, const string& name, bool entering) {
+	if (!story) return;
+
+	if (Script* systemScript = story->GetSystemScript()) {
+		string key = "player." + kind;
+		if (entering) {
+			systemScript->SetValue(key, ValueType(name));
+		}
+		else {
+			auto [found, current] = systemScript->GetValue(key);
+			if (found && ToString(current) == name) systemScript->SetValue(key, ValueType(string()));
+		}
+	}
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
+}
+
+string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) const {
+	if (!script) return string();
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (!framework) return string();
+	for (auto& [key, candidate] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
+		framework->GetSociety(), framework->GetTraffic(), story)) {
+		if (candidate == script) return key;
+	}
+	return string();
+}
+
+Script* UForeverStoryFrameworkComponent::FindScriptByKey(const string& key) const {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (!framework || key.empty()) return nullptr;
+	for (auto& [candidateKey, script] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
+		framework->GetSociety(), framework->GetTraffic(), story)) {
+		if (candidateKey == key) return script;
+	}
+	return nullptr;
+}
+
+const Container* UForeverStoryFrameworkComponent::ResolveTimerOwner(const string& category, const string& label, const Container* self) const {
+	if (category.empty()) return self;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (category == "global" || category == "main") return story ? story->GetMainScript() : nullptr;
+	if (category == "citizen") {
+		Populace* populace = framework ? framework->GetPopulace() : nullptr;
+		Citizen* citizen = populace ? populace->FindCitizenByName(label) : nullptr;
+		return citizen && citizen->GetScheduler() ? citizen->GetScheduler()->GetScript() : nullptr;
+	}
+	if (category == "vehicle") {
+		Traffic* traffic = framework ? framework->GetTraffic() : nullptr;
+		Vehicle* vehicle = traffic ? traffic->FindVehicleByName(label) : nullptr;
+		return vehicle ? vehicle->GetScript() : nullptr;
+	}
+	if (category == "door") {
+		Map* map = framework ? framework->GetMap() : nullptr;
+		Door* door = map ? map->FindDoorByName(label) : nullptr;
+		return door ? door->GetScript() : nullptr;
+	}
+	if (category == "elevator") {
+		Map* map = framework ? framework->GetMap() : nullptr;
+		Cabin* cabin = map ? map->FindCabinByName(label) : nullptr;
+		return cabin ? cabin->GetScript() : nullptr;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("create_timer: unknown category \"%s\" (global/citizen/vehicle/door/elevator, or omit for the script itself)."),
+		UTF8_TO_TCHAR(category.c_str()));
+	return nullptr;
+}
+
+void UForeverStoryFrameworkComponent::ApplyCreateTimer(const CreateTimerChange* change, const ScriptContext& context) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	if (!story || !player || !player->GetTime()) return;
+
+	string name = ToString(EvaluateExpression(change->GetName(), context));
+	string timeText = ToString(EvaluateExpression(change->GetTime(), context));
+	string label = ToString(EvaluateExpression(change->GetLabel(), context));
+
+	string ownerKey = FindScriptKey(ResolveTimerOwner(change->GetCategory(), label, context.self));
+	if (ownerKey.empty()) {
+		UE_LOG(LogTemp, Warning, TEXT("create_timer \"%s\": target script not found (category=\"%s\", label=\"%s\")."),
+			UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(change->GetCategory().c_str()), UTF8_TO_TCHAR(label.c_str()));
+		return;
+	}
+
+	// time两种写法：带日期(如"2024-05-01 08:00:00")是绝对时刻；只有时间("08:00:00")是下一次到这个
+	// 钟点——今天还没过就是今天，已经过了(含正好等于现在)就是明天，和老工程一致。
+	Time parsed;
+	try {
+		parsed = Time(timeText);
+	}
+	catch (const ExceptionBase&) {
+		UE_LOG(LogTemp, Warning, TEXT("create_timer \"%s\": cannot parse time \"%s\"."),
+			UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(timeText.c_str()));
+		return;
+	}
+	const Time& now = *player->GetTime();
+	Time target = parsed;
+	if (!parsed.IsValid()) {
+		target = now;
+		target.SetTime(parsed.GetHour(), parsed.GetMinute(), parsed.GetSecond(), parsed.GetMillisecond());
+		if (target <= now) target.AddDays(1);
+	}
+	story->CreateTimer(name, target, ownerKey);
+}
+
+void UForeverStoryFrameworkComponent::ApplyRemoveTimer(const RemoveTimerChange* change, const ScriptContext& context) {
+	if (!story) return;
+	// 只删执行这个change的脚本自己名下的计时器(不同脚本可以有同名计时器)。
+	string ownerKey = FindScriptKey(context.self);
+	if (ownerKey.empty()) return;
+	story->RemoveTimer(ToString(EvaluateExpression(change->GetName(), context)), ownerKey);
+}
+
+void UForeverStoryFrameworkComponent::FireExpiredTimers() {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	if (!story || !player || !player->GetTime()) return;
+
+	vector<StoryTimer> expired = story->PopExpiredTimers(*player->GetTime());
+	if (expired.empty()) return;
+
+	PostImplement postImplement(
+		framework->GetMap(), framework->GetPopulace(), framework->GetSociety(), story,
+		framework->GetIndustry(), framework->GetTraffic(), player);
+
+	for (const StoryTimer& timer : expired) {
+		// 只发给计时器的归属脚本，不广播。归属对象已经不在了就丢弃。
+		Script* script = FindScriptByKey(timer.ownerKey);
+		if (!script) continue;
+		TimeUpEvent event(timer.name);
+		ScriptContext context;
+		context.self = script;
+		context.system = story->GetSystemScript();
+		context.global = story->GetGlobalScript();
+		context.local = &event;
+		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
+	}
 }
 
 void UForeverStoryFrameworkComponent::BroadcastSpeakingFinish(const string& label) {

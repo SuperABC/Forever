@@ -3,6 +3,13 @@
 
 using namespace std;
 
+namespace {
+	// 位置类事件(进出园区/建筑/房间)的字段匹配：触发条件里的字段是表达式，留空表示不限。
+	bool MatchLocationField(const string& expr, const string& actual, const ScriptContext& context) {
+		return expr.empty() || ToString(EvaluateExpression(expr, context)) == actual;
+	}
+}
+
 Event::Event() :
 	condition() {
 
@@ -171,6 +178,19 @@ const string& EnterZoneEvent::GetType() const {
 	return type;
 }
 
+bool EnterZoneEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<EnterZoneEvent*>(e);
+	if (!MatchLocationField(zone, other->zone, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> EnterZoneEvent::GetLocalValue(const string& key) const {
+	if (key == "zone") return { true, ValueType(zone) };
+	return { false, ValueType() };
+}
+
 void EnterZoneEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
@@ -193,6 +213,19 @@ const string& LeaveZoneEvent::GetType() const {
 	return type;
 }
 
+bool LeaveZoneEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<LeaveZoneEvent*>(e);
+	if (!MatchLocationField(zone, other->zone, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> LeaveZoneEvent::GetLocalValue(const string& key) const {
+	if (key == "zone") return { true, ValueType(zone) };
+	return { false, ValueType() };
+}
+
 void LeaveZoneEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
@@ -213,6 +246,21 @@ EnterBuildingEvent::~EnterBuildingEvent() {
 const string& EnterBuildingEvent::GetType() const {
 	static const string type = "enter_building";
 	return type;
+}
+
+bool EnterBuildingEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<EnterBuildingEvent*>(e);
+	if (!MatchLocationField(zone, other->zone, context)) return false;
+	if (!MatchLocationField(building, other->building, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> EnterBuildingEvent::GetLocalValue(const string& key) const {
+	if (key == "zone") return { true, ValueType(zone) };
+	if (key == "building") return { true, ValueType(building) };
+	return { false, ValueType() };
 }
 
 void EnterBuildingEvent::SetZone(std::string zone) {
@@ -245,6 +293,21 @@ const string& LeaveBuildingEvent::GetType() const {
 	return type;
 }
 
+bool LeaveBuildingEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<LeaveBuildingEvent*>(e);
+	if (!MatchLocationField(zone, other->zone, context)) return false;
+	if (!MatchLocationField(building, other->building, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> LeaveBuildingEvent::GetLocalValue(const string& key) const {
+	if (key == "zone") return { true, ValueType(zone) };
+	if (key == "building") return { true, ValueType(building) };
+	return { false, ValueType() };
+}
+
 void LeaveBuildingEvent::SetZone(std::string zone) {
 	this->zone = move(zone);
 }
@@ -273,6 +336,23 @@ EnterRoomEvent::~EnterRoomEvent() {
 const string& EnterRoomEvent::GetType() const {
 	static const string type = "enter_room";
 	return type;
+}
+
+bool EnterRoomEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<EnterRoomEvent*>(e);
+	if (!MatchLocationField(zone, other->zone, context)) return false;
+	if (!MatchLocationField(building, other->building, context)) return false;
+	if (!MatchLocationField(room, other->room, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> EnterRoomEvent::GetLocalValue(const string& key) const {
+	if (key == "zone") return { true, ValueType(zone) };
+	if (key == "building") return { true, ValueType(building) };
+	if (key == "room") return { true, ValueType(room) };
+	return { false, ValueType() };
 }
 
 void EnterRoomEvent::SetZone(std::string zone) {
@@ -311,6 +391,23 @@ LeaveRoomEvent::~LeaveRoomEvent() {
 const string& LeaveRoomEvent::GetType() const {
 	static const string type = "leave_room";
 	return type;
+}
+
+bool LeaveRoomEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<LeaveRoomEvent*>(e);
+	if (!MatchLocationField(zone, other->zone, context)) return false;
+	if (!MatchLocationField(building, other->building, context)) return false;
+	if (!MatchLocationField(room, other->room, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> LeaveRoomEvent::GetLocalValue(const string& key) const {
+	if (key == "zone") return { true, ValueType(zone) };
+	if (key == "building") return { true, ValueType(building) };
+	if (key == "room") return { true, ValueType(room) };
+	return { false, ValueType() };
 }
 
 void LeaveRoomEvent::SetZone(std::string zone) {
@@ -447,6 +544,19 @@ TimeUpEvent::~TimeUpEvent() {
 const string& TimeUpEvent::GetType() const {
 	static const string type = "time_up";
 	return type;
+}
+
+bool TimeUpEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<TimeUpEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	return true;
+}
+
+pair<bool, ValueType> TimeUpEvent::GetLocalValue(const string& key) const {
+	if (key == "name") return { true, ValueType(name) };
+	return { false, ValueType() };
 }
 
 void TimeUpEvent::SetName(std::string name) {
