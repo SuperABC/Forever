@@ -16,6 +16,9 @@
 
 - `ShopRoom`：`isWorkspace=true; workspaceCapacity=100;`。`workspaceCapacity`这个"工位数"
   占位字段带真实数值，真正被Job系统消费留到Society域接入时再做，目前没有任何调用方读取它。
+  门(`doorSpecs["room"]`)有名字"商店大门"、挂`door_shop_entrance`脚本(开局加"敲门"选项)，靠近会弹交互
+  选项。挂在房间门上而不是`ShopBuilding::doorSpecs["entrance"]`，是因为商店用的一楼模板
+  (`preset_lobby_linear_fg+`/`preset_circle_double_fg+-`)里门标签全是`room`，没有`entrance`。
 - `WarehouseRoom`：`isStorage=true; storageConfig={{"shop",100.f}};`。只有`ShopBuilding`
   用到(地下室+每层过道铺unused acreage)。
 

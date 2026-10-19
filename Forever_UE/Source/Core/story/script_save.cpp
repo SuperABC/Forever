@@ -56,6 +56,7 @@ vector<pair<string, Script*>> ScriptSaveCodec::CollectScripts(Map* map, Populace
 	if (story) {
 		if (story->GetMainScript()) scripts.emplace_back("story.main", story->GetMainScript());
 		if (story->GetSystemScript()) scripts.emplace_back("story.system", story->GetSystemScript());
+		if (story->GetGlobalScript()) scripts.emplace_back("story.global", story->GetGlobalScript());
 	}
 	if (map) {
 		for (Door* door : map->GetAllDoors()) {

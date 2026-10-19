@@ -20,7 +20,7 @@
 
   | 持有者 | 键 |
   |---|---|
-  | 主线、全局变量池 | `story.main`、`story.system` |
+  | 主线、系统变量池、全局变量池 | `story.main`、`story.system`、`story.global` |
   | 门 | `door:<门id>` |
   | 组织 | `org:<组织下标>` |
   | 岗位 | `job:<组织下标>:<岗位下标>` |

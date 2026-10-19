@@ -12,14 +12,23 @@
 ## 关键设计
 
 - **不支持`$$(expr)`间接寻址语法**——不支持"用一个子表达式的求值结果去动态拼变量名"。
-- **变量寻址用`self.`/`system.`/`local.`三个固定关键字前缀**，直接路由到`ScriptContext`
-  结构体的三个槽位（`Container* self`/`Container* system`/`const Event* local`），不需要
-  调用方逐个变量显式注册。
+- **变量寻址**（`ResolveVariableName`，读`$$x`和写`set_value`共用），四个变量池对应`ScriptContext`的四个槽位：
+
+  | 写法 | 变量池 | 槽位 | 脚本能不能写 |
+  |---|---|---|---|
+  | `self.x` | 当前脚本自己的变量 | `Container* self` | 能 |
+  | `system.x` | 系统变量(Story的`systemScript`) | `Container* system` | 不能，只由C++写 |
+  | `local.x` | 当前事件的字段(`GetLocalValue`) | `const Event* local` | 不能 |
+  | **没有这三个前缀** | 全局变量(Story的`globalScript`) | `Container* global` | 能 |
+
+  只有点号是分隔符，去掉前缀剩下的是变量名；没有前缀时整个名字(含下划线)就是变量名：`$$test`、
+  `$$fuck_mona`、`$$self_x`读的都是全局变量。
+  不需要调用方逐个变量显式注册。
 - **`.`点号本身不参与分词**——`.`落在"既不是空白/引号/运算符/括号"的默认分支，和字母数字
   下划线一样被当成标识符的一部分，`$$self.name`会被分词成一个完整token`"self.name"`，不需要
-  为点号写任何特判逻辑。`VariableExpression::Evaluate`路由时**找的是token文本里第一个出现
-  的`.`或`_`**，两者等价，切出的前缀关键字之后的剩余部分（subkey）原样保留、不做任何字符
-  替换（`self.job.title`切出的subkey是`"job.title"`，不是`"job_title"`）。
+  为点号写任何特判逻辑。`VariableExpression::Evaluate`按`ResolveVariableName`
+  只认`self`/`system`/`local`后面紧跟的那一个`.`，切出的剩余部分原样保留、不做任何字符
+  替换（`self.job.title`切出的变量名是`"job.title"`，不是`"job_title"`）。
 - **表达式树节点抽象基类叫`ExpressionNode`**，`Expression`这个名字留给对外门面类用。树节点层
   的实现（`VariableExpression`/`ConstantExpression`/`ArrayExpression`/`UnaryExpression`/
   `BinaryExpression`）、分词器、中缀转后缀、运算符优先级、隐式字符串拼接，属于纯粹的表达式
@@ -30,7 +39,8 @@
 ```cpp
 struct ScriptContext {
     Container* self = nullptr;   // self.前缀路由目标：拥有当前表达式的Script自己的变量池
-    Container* system = nullptr; // system.前缀路由目标：Story挂载的全局变量池
+    Container* system = nullptr; // system.前缀路由目标：Story挂载的系统变量池(脚本只读)
+    Container* global = nullptr; // 没有前缀的变量的路由目标：Story挂载的全局变量池(脚本可读可写)
     const Event* local = nullptr; // local.前缀路由目标：触发本次匹配/求值的运行时Event
 };
 ```

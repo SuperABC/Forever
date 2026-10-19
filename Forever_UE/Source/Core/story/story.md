@@ -16,6 +16,7 @@
 - `Script* mainScript`：主线剧情Script——一份剧本只能由一个Script表示，`Init()`从
   `Resource/Story/test.script`读取。
 - `Script* systemScript`：`system.`前缀路由的目标（见`Dependence/story/expression.md`
+- `Script* globalScript`：全局变量池，没有前缀的变量(`$$x`、`set_value`的`variable`)路由到这里，脚本可读可写；`systemScript`是系统变量，脚本只读、只由C++写。
   "ScriptContext"一节）——一个不加载任何milestone、纯粹当`Container`变量池用的`Script`。
 
 ## `ScriptModName`从`config.json`的`"main_story"`字段读
@@ -63,9 +64,10 @@ BroadcastGameStart`现场构造一个`PostImplement`传进来，见`Core/common/
 
 ## `ApplyChange`
 
-`dynamic_cast`分派，目前只有`SetValueChange`分支真正执行：
-`context.self->SetValue(setValue->GetVariable(), EvaluateExpression(setValue->GetValue(),
-context))`——`GetValue()`返回的是`std::string`（DSL源码文本，不是预先解析好的`Expression`
+`dynamic_cast`分派，目前只有`SetValueChange`分支真正执行：变量名按`ResolveVariableName`
+(和读`$$x`同一条规则)决定写到哪——`self.`前缀写`context.self`(当前脚本自己的变量)，没有前缀写
+`context.global`(全局变量)；`system.`(系统变量，只由C++写)和`local.`(事件字段)脚本不能写，忽略并打警告；值是`EvaluateExpression(setValue->GetValue(),
+context)`——`GetValue()`返回的是`std::string`（DSL源码文本，不是预先解析好的`Expression`
 对象），`EvaluateExpression`现场`Parse`+求值一步到位，原因见`Dependence/story/change.md`
 "字段类型是`std::string`"一节。
 其余类型返回`false`(不认识)。这个分派函数是`Story`的方法而不是`Change`类自己的虚方法——`Change`是

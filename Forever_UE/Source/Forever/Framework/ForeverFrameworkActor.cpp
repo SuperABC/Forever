@@ -354,6 +354,8 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 			[this](Citizen* citizen, const std::vector<Change*>& changes) {
 				ScriptContext context;
 				if (citizen->GetJob()) context.self = citizen->GetJob()->GetScript();
+				context.system = story ? story->GetSystemScript() : nullptr;
+				context.global = story ? story->GetGlobalScript() : nullptr;
 				for (Change* change : changes) {
 					ApplyChange(change, context);
 				}
@@ -369,6 +371,8 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 				// 回调同一个处理方式。
 				ScriptContext context;
 				if (organization) context.self = organization->GetScript();
+				context.system = story ? story->GetSystemScript() : nullptr;
+				context.global = story ? story->GetGlobalScript() : nullptr;
 				for (Change* change : changes) {
 					ApplyChange(change, context);
 				}

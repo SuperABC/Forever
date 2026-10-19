@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <locale>
+#include <cstring>
 
 
 using namespace std;
@@ -32,33 +33,51 @@ VariableExpression::~VariableExpression() {
 
 }
 
-ValueType VariableExpression::Evaluate(const ScriptContext& context) const {
-	// 点号本身不参与分词、也不做任何字符替换，这里只找第一个'.'或'_'切出前缀关键字，
-	// 两种分隔符等价；subkey剩余部分原样保留（如"job.title"不会变成"job_title"）。
-	size_t split = name.find_first_of("._");
-	if (split == string::npos) {
-		return 0;
+VARIABLE_SCOPE ResolveVariableName(const string& name, string& outKey) {
+	static const pair<const char*, VARIABLE_SCOPE> prefixes[] = {
+		{ "self", VARIABLE_SCOPE_SELF }, { "system", VARIABLE_SCOPE_SYSTEM }, { "local", VARIABLE_SCOPE_LOCAL },
+	};
+	for (const auto& [prefix, scope] : prefixes) {
+		size_t length = strlen(prefix);
+		if (name.size() > length && name.compare(0, length, prefix) == 0 && name[length] == '.') {
+			outKey = name.substr(length + 1);
+			return scope;
+		}
 	}
-	string prefix = name.substr(0, split);
-	string subkey = name.substr(split + 1);
+	// 没有(认识的)前缀：全局变量，整个名字就是变量名——"fuck_mona"不会被拆成前缀"fuck"。
+	outKey = name;
+	return VARIABLE_SCOPE_GLOBAL;
+}
 
-	if (prefix == "self") {
+ValueType VariableExpression::Evaluate(const ScriptContext& context) const {
+	// 前缀规则见ResolveVariableName：self./system./local.路由到对应变量池，没有前缀的是全局变量。
+	// 变量不存在时返回0。
+	string key;
+	switch (ResolveVariableName(name, key)) {
+	case VARIABLE_SCOPE_SELF:
 		if (context.self) {
-			auto value = context.self->GetValue(subkey);
+			auto value = context.self->GetValue(key);
 			if (value.first) return value.second;
 		}
-	}
-	else if (prefix == "system") {
+		break;
+	case VARIABLE_SCOPE_SYSTEM:
 		if (context.system) {
-			auto value = context.system->GetValue(subkey);
+			auto value = context.system->GetValue(key);
 			if (value.first) return value.second;
 		}
-	}
-	else if (prefix == "local") {
+		break;
+	case VARIABLE_SCOPE_LOCAL:
 		if (context.local) {
-			auto value = context.local->GetLocalValue(subkey);
+			auto value = context.local->GetLocalValue(key);
 			if (value.first) return value.second;
 		}
+		break;
+	case VARIABLE_SCOPE_GLOBAL:
+		if (context.global) {
+			auto value = context.global->GetValue(key);
+			if (value.first) return value.second;
+		}
+		break;
 	}
 
 	return 0;

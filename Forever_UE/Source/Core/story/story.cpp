@@ -19,6 +19,8 @@ Story::~Story() {
 	mainScript = nullptr;
 	delete systemScript;
 	systemScript = nullptr;
+	delete globalScript;
+	globalScript = nullptr;
 }
 
 void Story::Init() {
@@ -31,6 +33,7 @@ void Story::Init() {
 	}
 
 	systemScript = new Script(&scriptFactory, scriptModName);
+	globalScript = new Script(&scriptFactory, scriptModName);
 
 	mainScript = new Script(&scriptFactory, scriptModName);
 	// test.script的具体存放位置由config.json的resource_paths决定，这里只写bare文件名，
@@ -46,6 +49,7 @@ void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, 
 	ScriptContext context;
 	context.self = mainScript;
 	context.system = systemScript;
+	context.global = globalScript;
 	context.local = &event;
 
 	auto scriptActions = mainScript->MatchEvent(&event, context, post);
@@ -54,8 +58,16 @@ void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, 
 
 bool Story::ApplyChange(const Change* change, const ScriptContext& context) {
 	if (auto setValue = dynamic_cast<const SetValueChange*>(change)) {
-		if (context.self) {
-			context.self->SetValue(setValue->GetVariable(), EvaluateExpression(setValue->GetValue(), context));
+		// 变量名的前缀规则和读取($$x)同一条(ResolveVariableName)：self.前缀写当前脚本自己的变量，
+		// 没有前缀写全局变量；system.(系统变量，只由C++写)和local.(事件字段)脚本不能写，忽略并警告。
+		string key;
+		VARIABLE_SCOPE scope = ResolveVariableName(setValue->GetVariable(), key);
+		Container* target = scope == VARIABLE_SCOPE_SELF ? context.self
+			: scope == VARIABLE_SCOPE_GLOBAL ? context.global : nullptr;
+		if (target) target->SetValue(key, EvaluateExpression(setValue->GetValue(), context));
+		else if (scope == VARIABLE_SCOPE_SYSTEM || scope == VARIABLE_SCOPE_LOCAL) {
+			debugf("Warning: set_value cannot write read-only variable %s (system./local. are read-only in scripts).\n",
+				setValue->GetVariable().c_str());
 		}
 		return true;
 	}
@@ -69,6 +81,10 @@ void Story::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
 
 Script* Story::GetSystemScript() const {
 	return systemScript;
+}
+
+Script* Story::GetGlobalScript() const {
+	return globalScript;
 }
 
 Script* Story::GetMainScript() const {

@@ -36,8 +36,8 @@ BeginPlay()`先级联触发所有子组件的`BeginPlay`、再依次调用7个`E
   Scheduler Script——人已经死了，它自己的日程脚本不再有意义。
 
 三者都复用`ProcessScriptActions`（匹配结果里的`Dialog`转发给`ShowDialog`排队展示，
-`Change`转发给`AForeverFrameworkActor::ApplyChange`，同时打一行`[变化] <类型名>`的屏幕
-调试消息，只标类型不展示字段内容），以及现场构造的`PostImplement`（供`WrapScript`反查
+`Change`转发给`AForeverFrameworkActor::ApplyChange`，不在屏幕上打任何调试消息——早期每个Change打一行
+`[变化] <类型名>`，会挤掉其它调试信息，已删除；要看执行了什么可以在脚本里加`debug_print`），以及现场构造的`PostImplement`（供`WrapScript`反查
 Core状态，如"随机挑一个citizen"，生命周期只覆盖这次同步广播，不长期持有）。
 
 ## 三个UE相关的Change执行
@@ -112,4 +112,3 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
 ## 待办/后续阶段
 
 - `OptionDialog`不实现GlobalDialog（全局选项分支），目前只匹配目标自身的Script。
-- Change的展示目前只打印类型名（`[变化] <类型名>`），不展示字段级内容。

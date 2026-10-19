@@ -66,6 +66,10 @@ public:
 	* 获取全局变量池（system.前缀路由目标）
 	*/
 	Script* GetSystemScript() const;
+	/*
+	* 获取全局变量池(没有前缀的变量路由目标，脚本可读可写)
+	*/
+	Script* GetGlobalScript() const;
 
 	/*
 	* 获取主线剧情Script——一份剧本只能由一个Script表示，不是数组
@@ -82,6 +86,7 @@ private:
 	Script* mainScript = nullptr;
 
 	// 全局变量池（持有所有权）
-	Script* systemScript = nullptr;
+	Script* systemScript = nullptr; // 系统变量(system.)：脚本只读，只由C++写
+	Script* globalScript = nullptr; // 全局变量(没有前缀)：脚本可读可写
 
 };

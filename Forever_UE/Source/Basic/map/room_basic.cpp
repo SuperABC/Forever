@@ -43,6 +43,12 @@ void ShopRoom::SetProperty() {
 	doorSpecs["room"].style = 1; // Swing
 	doorSpecs["room"].leaves = 1;
 	doorSpecs["room"].randomSide = true;
+	// 商店房间的门有名字、挂脚本，可以交互("敲门")。商店用的一楼模板(preset_lobby_linear_fg+/
+	// preset_circle_double_fg+-)里门标签全是"room"、没有"entrance"，ShopBuilding的
+	// doorSpecs["entrance"]对不上任何门，所以挂在这里，见Resource/Story/door_shop_entrance.script。
+	doorSpecs["room"].name = "商店大门";
+	doorSpecs["room"].scriptModName = "empty";
+	doorSpecs["room"].milestoneNames = { "door_shop_entrance" };
 }
 
 int WarehouseRoom::count = 0;

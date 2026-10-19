@@ -41,6 +41,23 @@
                 }
             ],
             "subsequences": []
+        },
+        {
+            "milestone": "self_decease",
+            "triggers": [ { "type": "citizen_decease", "name": "$$self.name" } ],
+            "visible": false,
+            "drop": "true",
+            "description": "",
+            "goal": "",
+            "changes": [],
+            "dialogs": [
+                {
+                    "list": [
+                        { "speaker": "$$self.name", "content": "\"我\" + $$self.name + \"不会放过你的！\"", "label": "", "voice": "" }
+                    ]
+                }
+            ],
+            "subsequences": []
         }
     ]
 }

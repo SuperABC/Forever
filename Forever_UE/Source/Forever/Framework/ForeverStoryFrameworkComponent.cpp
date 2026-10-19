@@ -55,8 +55,6 @@ namespace {
 				// dynamic_cast dispatch，见ForeverFrameworkActor.md"统一的Change消费入口"
 				// 一节。
 				if (framework) framework->ApplyChange(*changePtr, context);
-				FString typeText = UTF8_TO_TCHAR((*changePtr)->GetType().data());
-				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[变化] %s"), *typeText));
 			}
 		}
 	}
@@ -96,6 +94,7 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 		ScriptContext context;
 		context.self = script;
 		context.system = story->GetSystemScript();
+		context.global = story->GetGlobalScript();
 		context.local = &event;
 		onActions(script->MatchEvent(&event, context, &postImplement), context);
 		};
@@ -169,6 +168,7 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 		ScriptContext context;
 		context.self = script;
 		context.system = story->GetSystemScript();
+		context.global = story->GetGlobalScript();
 		context.local = &event;
 		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
 		};
@@ -219,6 +219,7 @@ void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& nam
 		ScriptContext context;
 		context.self = script;
 		context.system = story->GetSystemScript();
+		context.global = story->GetGlobalScript();
 		context.local = &event;
 		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
 		};

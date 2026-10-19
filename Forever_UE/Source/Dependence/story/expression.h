@@ -17,8 +17,11 @@ struct ScriptContext {
 	// self. 前缀路由目标：拥有当前表达式的 Script 自己的变量池
 	Container* self = nullptr;
 
-	// system. 前缀路由目标：Story 挂载的全局变量池
+	// system. 前缀路由目标：Story 挂载的系统变量池——脚本全局可读、不可写，只由C++写
 	Container* system = nullptr;
+
+	// 没有前缀的变量的路由目标：Story 挂载的全局变量池——脚本全局可读可写(set_value)
+	Container* global = nullptr;
 
 	// local. 前缀路由目标：触发本次匹配/求值的运行时 Event（可为空，为空时 local. 一律查不到）
 	const Event* local = nullptr;
@@ -471,6 +474,23 @@ ValueType EvaluateExpression(const std::string& source, const ScriptContext& con
 * 同EvaluateExpression，返回布尔求值结果，对应Expression::EvaluateBool
 */
 bool EvaluateExpressionBool(const std::string& source, const ScriptContext& context);
+
+// 变量所在的变量池。
+enum VARIABLE_SCOPE : int {
+	VARIABLE_SCOPE_SELF,   // 当前脚本自己的变量(self.前缀)，脚本可读可写
+	VARIABLE_SCOPE_SYSTEM, // 系统变量(system.前缀)，脚本只读，只由C++写
+	VARIABLE_SCOPE_LOCAL,  // 当前事件的字段(local.前缀)，只读
+	VARIABLE_SCOPE_GLOBAL, // 全局变量(没有前缀)，脚本可读可写
+};
+
+/*
+* 解析变量名：以self./system./local.开头的按前缀路由到对应变量池，去掉前缀剩下的是变量名(只有点号
+* 是分隔符)；其余名字一律是全局变量，整个名字(含下划线，比如self_x)就是变量名。读($$x)和写
+* (set_value的variable)共用这一条规则，写的时候只有self和全局变量能写。
+* @name: 变量名(读的时候是$$后面那部分)
+* @outKey: 去掉前缀之后的变量名
+*/
+VARIABLE_SCOPE ResolveVariableName(const std::string& name, std::string& outKey);
 
 /*
 * 判断字符是否为运算符字符（全局工具函数）
