@@ -4,8 +4,10 @@
 实现`GetId`/`GetType`/`GetName`三个身份接口,不含真正玩法逻辑(留给阶段4对应系统迁移时
 补上):
 
-- `Test/Cpp/Xiaohua/`——`PengzhanBuilding`(id `pengzhan`)、`YizhongBuilding`
-  (id `yizhong`),均继承`BuildingMod`。
+- `Test/Cpp/Test/`——`PengzhanBuilding`(id `pengzhan`)、`YizhongBuilding`
+  (id `yizhong`),均继承`BuildingMod`；另有`SuperGPBuilding`(id `supergp`)，是真正实现了玩法的
+  测试建筑：只在井字中心lot里自适应放一块6x6，12层，用`Test/Resource/supergp_fg+.layout`/
+  `supergp_fu+-.layout`。
 - `Test/Cpp/Yuanshen/`——`YuanshenBuilding`(id `yuanshen`),继承`BuildingMod`。
 - `Wxdj/Cpp/Wxdj/`——`WxdjScript`(id `wxdj`),继承`ScriptMod`。
 - `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id统一为`empty`),纯粹用来验证

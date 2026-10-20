@@ -546,6 +546,11 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 			float marginStart, marginEnd, depth;
 			if (!lot->FindAdaptivePlacement(dir, kMinFrontage, kMinDepth, targetLot, marginStart, marginEnd, depth)) continue;
 
+			// 贴到命中子块这条边"起点"那个角：FindAdaptivePlacement给的是居中的margin，两边余量
+			// 合并全部挪到marginEnd，让火车站挤在角落，把完整的大块空地留给后面的建筑。
+			marginEnd += marginStart;
+			marginStart = 0.f;
+
 			// request.lot是targetLot(FindAdaptivePlacement命中的那个自由子块)，不是lot本身——
 			// 子块贴的道路可能是切割产生的内部小路，margin/depth是相对子块自己的尺寸算的，必须
 			// 让RequestPlacement在子块自己的坐标系里裁剪，见FindAdaptivePlacement的说明。
@@ -613,6 +618,11 @@ void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, v
 			Lot* targetLot;
 			float marginStart, marginEnd, depth;
 			if (!lot->FindAdaptivePlacement(dir, kMinFrontage, kMinDepth, targetLot, marginStart, marginEnd, depth)) continue;
+
+			// 贴到另一端的角(和火车站相反)：余量全部挪到marginStart，marginEnd=0，这样两者即使
+			// 同在一条边上也占据这条边的两个对角，中间留下整块连续空地。
+			marginStart += marginEnd;
+			marginEnd = 0.f;
 
 			LotPlacementRequest request;
 			request.lot = targetLot;

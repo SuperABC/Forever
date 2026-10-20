@@ -7,6 +7,9 @@
 #include "player/player.h"
 #include "society/job.h"
 #include "map/room.h"
+#include "map/map.h"
+#include "map/zone.h"
+#include "map/building.h"
 
 
 using namespace std;
@@ -103,6 +106,44 @@ void PostImplement::Post(const JsonValue& request) {
 
 		result["result"] = "success";
 		result["address"] = room->GetAddress();
+		return;
+	}
+
+	// "list zones"/"list buildings"/"list rooms"：request["type"]是要找的mod type(Zone/Building/
+	// Room::GetType()，比如"supergp")，返回地图上所有该type的实例的地址(GetAddress())数组，成功
+	// 返回{"result":"success","addresses":[...]}，没有匹配也是success+空数组；map为空返回fail。
+	// 类型全图唯一的mod(比如只会放一栋的测试建筑)取addresses[0]即可。Map的zones/buildings是
+	// 无序容器，返回顺序不保证稳定；rooms遍历每个building->GetRooms()。
+	if (request.IsObject() && (request["post"].AsString() == "list zones" ||
+		request["post"].AsString() == "list buildings" || request["post"].AsString() == "list rooms")) {
+		string kind = request["post"].AsString();
+		string type = request["type"].AsString();
+
+		if (!map) {
+			result["result"] = "fail";
+			result["msg"] = "no map available.";
+			return;
+		}
+
+		JsonValue addresses(DATA_ARRAY);
+		if (kind == "list zones") {
+			for (const auto& [name, zone] : map->GetZones()) {
+				if (zone && zone->GetType() == type) addresses.append(JsonValue(zone->GetAddress()));
+			}
+		} else if (kind == "list buildings") {
+			for (const auto& [name, building] : map->GetBuildings()) {
+				if (building && building->GetType() == type) addresses.append(JsonValue(building->GetAddress()));
+			}
+		} else {
+			for (const auto& [name, building] : map->GetBuildings()) {
+				if (!building) continue;
+				for (Room* room : building->GetRooms()) {
+					if (room && room->GetType() == type) addresses.append(JsonValue(room->GetAddress()));
+				}
+			}
+		}
+		result["result"] = "success";
+		result["addresses"] = addresses;
 		return;
 	}
 

@@ -60,8 +60,9 @@ void ResidenceZone::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, voi
 			LotPlacementRequest request;
 			request.lot = lot;
 			request.direction = dir;
-			request.marginStart = (frontage - side) / 2.f;
-			request.marginEnd = (frontage - side) / 2.f;
+			// 贴到这条边起点那个角，不居中：把完整的大块空地留给后面的火车站/机场/SuperGP。
+			request.marginStart = 0.f;
+			request.marginEnd = frontage - side;
 			request.depth = side;
 			emit(context, request);
 

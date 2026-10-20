@@ -23,9 +23,9 @@ BroadcastGameStart`/`AForeverFrameworkActor::Tick`在UE层从`AForeverFrameworkA
 取到7个指针后现场构造一个，只活这一次调用的生命周期，见`Forever/Framework/
 ForeverStoryFrameworkComponent.md`"PostImplement"一节。
 
-### 目前实现四种post类型，其余domain指针先占位
+### 目前实现七种post类型，其余domain指针先占位
 
-构造函数接收全部7个指针并存成成员，`Post()`识别以下四种请求：
+构造函数接收全部7个指针并存成成员，`Post()`识别以下请求：
 
 - `request["post"] == "random citizen"`：只从`populace->GetCitizens()`里"已经有家"
   （`GetRoom()`非空）的citizen中`GetRandom(size)`随机挑一个，成功返回
@@ -54,7 +54,15 @@ ForeverStoryFrameworkComponent.md`"PostImplement"一节。
   解析回`Room*`的具体地址字符串——`JobMod`所在的Dependence层看不到`Citizen`/`Room`
   这些Core类型，只能通过这两个post类型向Core要地址字符串。
 
-请求不认识（`post`字段不是上面四种，或请求本身不是JSON对象）统一返回
+- `request["post"] == "list zones"` / `"list buildings"` / `"list rooms"`（供mod在C++里
+  按type找到地图上具体的实例，比如全图只有一栋的`supergp`建筑）：`request["type"]`是要找的
+  mod type（`Zone`/`Building`/`Room::GetType()`），遍历`map->GetZones()`/`GetBuildings()`
+  （rooms则遍历每个building的`GetRooms()`），把type匹配的实例的`GetAddress()`收进数组，成功
+  返回`{"result":"success","addresses":["<地址>",...]}`，没有匹配也是success+空数组；`map`
+  为空返回`{"result":"fail","msg":"no map available."}`。返回顺序不保证稳定（底层是无序容器）。
+  地址可以直接给`Map::LocateRoom`/`LocateBuilding`、`npc_navigate`的`destination`用。
+
+请求不认识（`post`字段不是上面几种，或请求本身不是JSON对象）统一返回
 `{"result":"fail","msg":"post not found."}`。`industry`/`traffic`（`map`同理）目前没有
 分支用到，`society`也没有直接用到（"citizen workplace address"走的是
 `Citizen::GetJob()`，不经过`Society`）——等对应域迁移出需要被查询的数据时在
@@ -77,7 +85,7 @@ virtual const JsonValue& GetResult() const override { return result; }
 - 依赖：`common/handle.h`（`PostHandle`基类）、`common/json.h`（`JsonValue`）、
   `populace/populace.h`/`populace/citizen.h`（`Populace::GetCitizens()`/`Citizen`）、
   `player/player.h`（`Player::GetTime()`）、`society/job.h`（`Citizen::GetJob()->
-  GetPosition()`）、`map/room.h`（`Room::GetAddress()`）、`common/utility.h`
+  GetPosition()`）、`map/room.h`（`Room::GetAddress()`）、`map/map.h`/`map/zone.h`/`map/building.h`（`list *`三种查询）、`common/utility.h`
   （`GetRandom`、`Time::Format`）、`Map`/`Society`/`Story`/`Industry`/`Traffic`（仅
   前置声明或暂未使用，构造函数存指针）。
 - 被谁依赖：`Forever/Framework/ForeverStoryFrameworkComponent.cpp`
