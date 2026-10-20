@@ -36,8 +36,8 @@ public:
 	// float,Core拷贝一份,不持有mod的内存;data传nullptr清除)。四个角必须等于对应4个格点的
 	// 粗高度;setHeight会清掉共用那个格点的4块细化数组,所以必须先setHeight再setFineHeights。
 	virtual void DistributeTerrain(int width, int height,
-		const std::function<std::string(int, int)>& getTerrain,
-		const std::function<bool(int, int, std::string)>& setTerrain,
+		const std::function<const std::string&(int, int)>& getTerrain,
+		const std::function<bool(int, int, const std::string&)>& setTerrain,
 		const std::function<float(int, int)>& getHeight,
 		const std::function<bool(int, int, float)>& setHeight,
 		const std::function<bool(int, int, bool, float)>& setWater,

@@ -27,7 +27,7 @@ public:
 	// 道路高度默认固定为0,不采样地形高度起伏(这次范围裁剪,详见roadnet.md)；隧道段是唯一的
 	// 例外,靠固定TUNNEL_HEIGHT常量下探,不是采样出来的真实深度,见Basic层JingRoadnet实现。
 	virtual void DistributeRoadnet(int width, int height,
-		const std::function<std::string(int, int)>& getTerrain,
+		const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		int nodeStaticCount) = 0;
 

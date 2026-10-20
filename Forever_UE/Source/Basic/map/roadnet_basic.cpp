@@ -71,7 +71,7 @@ const char* JingRoadnet::GetName() {
 }
 
 void JingRoadnet::DistributeRoadnet(int width, int height,
-	const function<string(int, int)>& getTerrain,
+	const function<const string&(int, int)>& getTerrain,
 	const function<pair<bool, float>(int, int)>& getWater,
 	int nodeStaticCount) {
 	Node::SetCount(nodeStaticCount);

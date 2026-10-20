@@ -102,10 +102,11 @@ Map::~Map() {
 }
 
 void Map::InitTerrains() {
-	auto getTerrain = [this](int x, int y) -> string {
-		return this->GetTerrain(x, y);
-		};
-	auto setTerrain = [this](int x, int y, string terrain) -> bool {
+	// 这两个回调会传进Basic等mod DLL：std::string一律按引用传，由各自模块自己拷贝——按值返回/传参时
+	// 一边分配一边释放，mod的CRT堆和Forever模块(UE的FMemory)不是同一个，超过短字符串长度(15字符，
+	// 比如"terrain_mountain")就会在释放时崩溃。
+	auto getTerrain = [this](int x, int y) -> const string& { return this->GetTerrainRef(x, y); };
+	auto setTerrain = [this](int x, int y, const string& terrain) -> bool {
 		return this->SetTerrain(x, y, terrain);
 		};
 	auto getHeight = [this](int x, int y) -> float {
@@ -191,7 +192,7 @@ void Map::InitRoadnet() {
 
 	roadnet = new Roadnet(&roadnetFactory, activeId);
 
-	auto getTerrain = [this](int x, int y) -> string { return this->GetTerrain(x, y); };
+	auto getTerrain = [this](int x, int y) -> const string& { return this->GetTerrainRef(x, y); };
 	auto getWater = [this](int x, int y) -> pair<bool, float> { return this->GetWater(x, y); };
 	roadnet->DistributeRoadnet(width, height, getTerrain, getWater, Node::GetCount());
 	roadnet->AllocateAddress();
@@ -1983,6 +1984,12 @@ Element& Map::At(int x, int y) {
 
 const Element& Map::At(int x, int y) const {
 	return elements[static_cast<size_t>(y) * width + x];
+}
+
+const string& Map::GetTerrainRef(int x, int y) const {
+	static const string kEmpty;
+	if (!CheckXY(x, y)) return kEmpty;
+	return At(x, y).terrain;
 }
 
 string Map::GetTerrain(int x, int y) const {

@@ -89,6 +89,15 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
   事件）。对话展示期间会把`MeetOptionWidget`临时隐藏，播完恢复可见——避免"靠近市民能问
   什么"的列表和剧情对话同屏抢注意力/抢点击。
 
+## 后台对话
+
+对话list里普通台词可以写`"background": 秒数`(大于0)：屏幕上方的`UBackgroundSpeakingWidget`显示，不抢操控(不切输入模式、不显示鼠标、不藏MeetOption)，只靠计时结束。和前台对话是两个独立的显示槽，可以同时显示。
+
+- **等待规则**：后台等前台，前台不等后台。比如f1 f2 b3 f3：f2结束后b3和f3同时出现，f3不等b3结束。
+- **实现**：后台条目照常按原顺序排在`pendingQueue`里；`ShowCurrentItem`开头把队首连续的后台条目转进`backgroundQueue`(能排到队首说明前面的前台条目都播完了)，再显示下一条前台条目。整个list都是后台条目时不会弹出前台界面。
+- **计时**：`ShowCurrentBackground`用世界计时器(`backgroundTimer`)，跟随时间缩放，暂停时冻结。到时`AdvanceBackground`弹出队首、显示下一条，带label的再广播`speaking_finish`(和前台一样)。
+- 后台对话不算`IsDialogActive()`(不阻止存档)，存档时丢弃；`TogglePause`也不因为它拒绝暂停。
+
 ## 广播给所有Script
 
 `BroadcastToAllScripts(event, postImplement, includeMain)`把一个Event广播给组织/岗位/市民Scheduler/车辆/门的全部

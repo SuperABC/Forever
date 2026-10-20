@@ -29,10 +29,11 @@ vector<const Change*> Option::GetChanges() const {
 	return changes;
 }
 
-Section::Section(std::string speaker, std::string content, std::string label, std::string voice) :
+Section::Section(std::string speaker, std::string content, std::string label, std::string voice, float background) :
 	branch(false),
 	speakerExpr(move(speaker)), contentExpr(move(content)), labelExpr(move(label)), voiceExpr(move(voice)),
 	speaking(),
+	background(background),
 	ownerScript(nullptr) {
 
 }
@@ -71,6 +72,10 @@ vector<Option> Section::GetOptions() const {
 	return options;
 }
 
+float Section::GetBackground() const {
+	return background;
+}
+
 void Section::SetOwnerScript(Script* script) {
 	ownerScript = script;
 }
@@ -88,8 +93,8 @@ Dialog::~Dialog() {
 
 }
 
-void Dialog::AddDialog(std::string speaker, std::string content, std::string label, std::string voice) {
-	list.emplace_back(move(speaker), move(content), move(label), move(voice));
+void Dialog::AddDialog(std::string speaker, std::string content, std::string label, std::string voice, float background) {
+	list.emplace_back(move(speaker), move(content), move(label), move(voice), background);
 }
 
 void Dialog::AddDialog(vector<Option> options) {

@@ -7,12 +7,14 @@
 #include "Element/CitizenElement.h"
 #include "Player/ForeverPlayerController.h"
 #include "UI/SectionSpeakingWidget.h"
+#include "UI/BackgroundSpeakingWidget.h"
 #include "UI/SectionOptionWidget.h"
 #include "UI/MeetOptionWidget.h"
 #include "UI/PuzzleWidget.h"
 
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 
@@ -387,6 +389,7 @@ void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const 
 			item.speaker = UTF8_TO_TCHAR(speaker.data());
 			item.content = UTF8_TO_TCHAR(content.data());
 			item.label = label;
+			item.background = section.GetBackground();
 		}
 
 		// 分支的选项全被condition过滤掉了：没有可点的选项，整个分支跳过，免得界面卡在空选项上。
@@ -567,6 +570,42 @@ void UForeverStoryFrameworkComponent::FireExpiredTimers() {
 	}
 }
 
+void UForeverStoryFrameworkComponent::ShowCurrentBackground() {
+	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	UBackgroundSpeakingWidget* widget = playerController ? playerController->GetBackgroundSpeakingWidget() : nullptr;
+
+	if (backgroundQueue.Num() == 0) {
+		if (widget) widget->HideLine();
+		return;
+	}
+
+	// 不碰输入模式/鼠标/MeetOption——后台对话不抢操控。控件没配置时照样计时推进队列。
+	const FPendingItem& item = backgroundQueue[0];
+	if (widget) widget->ShowLine(item.speaker, item.content);
+	// 世界计时器跟随时间缩放：暂停(时间缩放为0)期间计时冻结。
+	if (UWorld* world = GetWorld()) {
+		world->GetTimerManager().SetTimer(backgroundTimer, this, &UForeverStoryFrameworkComponent::AdvanceBackground,
+			item.background, false);
+	}
+}
+
+void UForeverStoryFrameworkComponent::AdvanceBackground() {
+	if (backgroundQueue.Num() == 0) return;
+
+	std::string finishedLabel = backgroundQueue[0].label;
+	backgroundQueue.RemoveAt(0);
+	// 先显示下一条再广播：广播命中的milestone弹出的新对话会走ShowDialog->ShowCurrentItem，可能
+	// 往backgroundQueue里追加后台台词，这时后台已经在播(或确实空闲)，不会重复启动计时。
+	ShowCurrentBackground();
+	if (!finishedLabel.empty()) BroadcastSpeakingFinish(finishedLabel);
+}
+
+void UForeverStoryFrameworkComponent::EndPlay(const EEndPlayReason::Type EndPlayReason) {
+	if (UWorld* world = GetWorld()) world->GetTimerManager().ClearTimer(backgroundTimer);
+	backgroundQueue.Reset();
+	Super::EndPlay(EndPlayReason);
+}
+
 void UForeverStoryFrameworkComponent::BroadcastSpeakingFinish(const string& label) {
 	if (!story) return;
 
@@ -616,6 +655,15 @@ void UForeverStoryFrameworkComponent::SelectDialogOption(int32 index) {
 }
 
 void UForeverStoryFrameworkComponent::ShowCurrentItem() {
+	// 队首的后台台词放行：它能排到队首，说明它前面的前台条目都播完了(后台等前台)；转走后马上
+	// 显示下一条前台条目(前台不等后台)。
+	bool backgroundWasIdle = backgroundQueue.Num() == 0;
+	while (pendingQueue.Num() > 0 && !pendingQueue[0].bBranch && pendingQueue[0].background > 0.f) {
+		backgroundQueue.Add(pendingQueue[0]);
+		pendingQueue.RemoveAt(0);
+	}
+	if (backgroundWasIdle && backgroundQueue.Num() > 0) ShowCurrentBackground();
+
 	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
 	if (!playerController) return;
 

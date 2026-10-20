@@ -51,7 +51,7 @@ TerrainTexturePaths Terrain::GetTextures() const {
 }
 
 void Terrain::DistributeTerrain(int width, int height,
-	const function<string(int, int)>& getTerrain, const function<bool(int, int, string)>& setTerrain,
+	const function<const string&(int, int)>& getTerrain, const function<bool(int, int, const string&)>& setTerrain,
 	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight,
 	const function<bool(int, int, bool, float)>& setWater,
 	const function<bool(int, int, const float*)>& setFineHeights) const {

@@ -30,8 +30,11 @@ class FOREVER_API UForeverStoryFrameworkComponent : public UForeverFrameworkComp
 	GENERATED_BODY()
 
 public:
-	// 剧情对话是否正在展示(队列非空)——对话进行中不允许存档：对话队列里的中间状态不进存档。
+	// 前台剧情对话是否正在展示(队列非空)——对话进行中不允许存档：对话队列里的中间状态不进存档。
+	// 后台对话不算(它不抢操控，存档时直接丢弃)。
 	bool IsDialogActive() const { return pendingQueue.Num() > 0; }
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// 由AForeverFrameworkActor在Story::Init()跑完后调用一次。story生命周期由调用方持有。
 	void Init(Story* inStory);
@@ -176,6 +179,9 @@ private:
 		// bBranch为false时有效
 		FString speaker;
 		FString content;
+		// 大于0时是后台对话(显示秒数)：排在pendingQueue里等前面的前台条目播完，轮到队首时由
+		// ShowCurrentItem转进backgroundQueue，见ForeverStoryFrameworkComponent.md"后台对话"。
+		float background = 0.f;
 		// 台词的label(已求值)，非空时这一句播完广播speaking_finish
 		std::string label;
 
@@ -200,7 +206,16 @@ private:
 	// AForeverPlayerController/对应Widget时静默no-op（和其它UI调用点一致的防御写法）。
 	void ShowCurrentItem();
 
+	// 后台对话：显示backgroundQueue队首并开始计时；队列为空就隐藏后台对话控件。
+	void ShowCurrentBackground();
+	// 计时到：弹出队首(带label就广播speaking_finish)，显示下一条。
+	void AdvanceBackground();
+
 	Story* story = nullptr;
 
 	TArray<FPendingItem> pendingQueue;
+
+	// 已经放行的后台台词，按顺序一条条计时播放，和pendingQueue互不阻塞。
+	TArray<FPendingItem> backgroundQueue;
+	FTimerHandle backgroundTimer;
 };

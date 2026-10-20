@@ -76,8 +76,9 @@ public:
 	/*
 	* 构造对话段（普通台词）
 	* @speaker, content, label, voice: 发言者、内容、标签与语音资产路径
+	* @background: 大于0时是后台对话(屏幕上方显示、不抢操控、到时自动结束)，数值是显示秒数
 	*/
-	Section(std::string speaker, std::string content, std::string label, std::string voice);
+	Section(std::string speaker, std::string content, std::string label, std::string voice, float background = 0.f);
 
 	/*
 	* 构造对话段（分支选项）
@@ -113,6 +114,11 @@ public:
 	std::vector<Option> GetOptions() const;
 
 	/*
+	* 后台对话的显示秒数，0表示前台对话(分支选项段恒为0)
+	*/
+	float GetBackground() const;
+
+	/*
 	* 设置所属脚本
 	* @script: 脚本对象
 	*/
@@ -139,6 +145,9 @@ private:
 	// 选项列表
 	std::vector<Option> options;
 
+	// 后台对话的显示秒数，0表示前台对话
+	float background = 0.f;
+
 	// 所属脚本（引用，不持有所有权）
 	Script* ownerScript;
 
@@ -161,8 +170,9 @@ public:
 	/*
 	* 添加普通台词段
 	* @speaker, content, label, voice: 发言者、内容、标签与语音资产路径
+	* @background: 大于0时是后台对话，数值是显示秒数，见Section
 	*/
-	void AddDialog(std::string speaker, std::string content, std::string label, std::string voice);
+	void AddDialog(std::string speaker, std::string content, std::string label, std::string voice, float background = 0.f);
 
 	/*
 	* 添加分支选项段

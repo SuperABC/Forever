@@ -319,7 +319,7 @@ RoadnetMod* Roadnet::GetMod() const {
 }
 
 void Roadnet::DistributeRoadnet(int width, int height,
-	const function<string(int, int)>& getTerrain,
+	const function<const string&(int, int)>& getTerrain,
 	const function<pair<bool, float>(int, int)>& getWater,
 	int nodeStaticCount) {
 	mod->DistributeRoadnet(width, height, getTerrain, getWater, nodeStaticCount);

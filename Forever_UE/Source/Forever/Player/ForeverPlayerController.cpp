@@ -8,6 +8,7 @@
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "UI/MeetOptionWidget.h"
 #include "UI/SectionSpeakingWidget.h"
+#include "UI/BackgroundSpeakingWidget.h"
 #include "UI/SectionOptionWidget.h"
 #include "UI/PuzzleWidget.h"
 #include "UI/PhoneWidget.h"
@@ -55,6 +56,14 @@ void AForeverPlayerController::BeginPlay() {
 	else if ((sectionSpeakingWidget = CreateWidget<USectionSpeakingWidget>(this, sectionSpeakingWidgetClass)) != nullptr) {
 		sectionSpeakingWidget->AddToViewport();
 		sectionSpeakingWidget->HideLine();
+	}
+
+	if (backgroundSpeakingWidgetClass == nullptr) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: backgroundSpeakingWidgetClass未设置,跳过BackgroundSpeaking创建。"));
+	}
+	else if ((backgroundSpeakingWidget = CreateWidget<UBackgroundSpeakingWidget>(this, backgroundSpeakingWidgetClass)) != nullptr) {
+		backgroundSpeakingWidget->AddToViewport();
+		backgroundSpeakingWidget->HideLine();
 	}
 
 	if (sectionOptionWidgetClass == nullptr) {

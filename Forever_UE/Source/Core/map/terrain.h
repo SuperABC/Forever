@@ -39,8 +39,8 @@ public:
 	TerrainTexturePaths GetTextures() const;
 
 	void DistributeTerrain(int width, int height,
-		const std::function<std::string(int, int)>& getTerrain,
-		const std::function<bool(int, int, std::string)>& setTerrain,
+		const std::function<const std::string&(int, int)>& getTerrain,
+		const std::function<bool(int, int, const std::string&)>& setTerrain,
 		const std::function<float(int, int)>& getHeight,
 		const std::function<bool(int, int, float)>& setHeight,
 		const std::function<bool(int, int, bool, float)>& setWater,

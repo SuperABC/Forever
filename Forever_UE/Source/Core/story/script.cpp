@@ -497,8 +497,10 @@ vector<Dialog*> Script::BuildDialogs(const JsonValue& root) {
 
 		for (auto section : obj["list"]) {
 			if (section.IsObject()) {
+				// background(秒，可选)：大于0时是后台对话，见Dependence/story/dialog.h Section。
+				float background = section["background"].IsNull() ? 0.f : section["background"].AsFloat();
 				dialog->AddDialog(section["speaker"].AsString(), section["content"].AsString(),
-					section["label"].AsString(), section["voice"].AsString());
+					section["label"].AsString(), section["voice"].AsString(), background);
 			}
 			else if (section.IsArray()) {
 				vector<Option> options;

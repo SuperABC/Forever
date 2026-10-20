@@ -23,6 +23,10 @@
 最新的变量值重新求值，而不是复用第一次求值的结果——这是"延迟求值"的核心：不是"晚一点求值"，
 而是"每次用的时候才求值，且用当次最新状态"。
 
+## 后台对话
+
+普通台词`Section`有一个`background`(秒，默认0)：大于0时是后台对话，由`Script::BuildDialogs`从JSON的`"background"`读入，展示规则见`Source/Forever/Framework/ForeverStoryFrameworkComponent.md`"后台对话"。分支选项段恒为0。
+
 ## 分支选项
 
 `Section::IsBranch()`区分普通台词段/分支选项段。当前没有玩家交互，`Option`的选中逻辑不在

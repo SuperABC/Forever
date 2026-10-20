@@ -60,6 +60,9 @@ public:
 	std::pair<int, int> GetSize() const;
 
 	std::string GetTerrain(int x, int y) const;
+	// 同GetTerrain，但返回地图自己存的那份(越界返回空串)——给跨DLL的回调用，见Map::InitTerrains。
+	const std::string& GetTerrainRef(int x, int y) const;
+
 	bool SetTerrain(int x, int y, const std::string& terrain);
 	float GetHeight(int x, int y) const;
 	// 除了改粗高度，还会清掉共用格点(x,y)的4块细化数组((x,y)/(x-1,y)/(x,y-1)/(x-1,y-1))，

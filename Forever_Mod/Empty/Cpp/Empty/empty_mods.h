@@ -44,8 +44,8 @@ public:
 	virtual float GetPriority() const override { return 0.0f; }
 	virtual void SetupTexture() override {}
 	virtual void DistributeTerrain(int width, int height,
-		const std::function<std::string(int, int)>& getTerrain,
-		const std::function<bool(int, int, std::string)>& setTerrain,
+		const std::function<const std::string&(int, int)>& getTerrain,
+		const std::function<bool(int, int, const std::string&)>& setTerrain,
 		const std::function<float(int, int)>& getHeight,
 		const std::function<bool(int, int, float)>& setHeight,
 		const std::function<bool(int, int, bool, float)>& setWater,
@@ -64,7 +64,7 @@ public:
 	virtual const char* GetName() override { return name.data(); }
 
 	virtual void DistributeRoadnet(int width, int height,
-		const std::function<std::string(int, int)>& getTerrain,
+		const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		int nodeStaticCount) override {}
 

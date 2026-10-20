@@ -6,6 +6,7 @@
 
 class UMeetOptionWidget;
 class USectionSpeakingWidget;
+class UBackgroundSpeakingWidget;
 class USectionOptionWidget;
 class UPuzzleWidget;
 class UPhoneWidget;
@@ -47,6 +48,13 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<USectionSpeakingWidget> sectionSpeakingWidget;
+
+	// 后台对话(屏幕上方、不抢操控、计时结束)，见UForeverStoryFrameworkComponent::ShowCurrentBackground。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UBackgroundSpeakingWidget> backgroundSpeakingWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UBackgroundSpeakingWidget> backgroundSpeakingWidget;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<USectionOptionWidget> sectionOptionWidgetClass;
@@ -110,6 +118,7 @@ protected:
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
+	FORCEINLINE UBackgroundSpeakingWidget* GetBackgroundSpeakingWidget() const { return backgroundSpeakingWidget; }
 	FORCEINLINE USectionOptionWidget* GetSectionOptionWidget() const { return sectionOptionWidget; }
 	FORCEINLINE UPuzzleWidget* GetPuzzleWidget() const { return puzzleWidget; }
 	FORCEINLINE UPhoneWidget* GetPhoneWidget() const { return phoneWidget; }
