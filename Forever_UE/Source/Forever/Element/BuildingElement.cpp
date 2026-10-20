@@ -180,42 +180,49 @@ namespace {
 		outRotation = buildingRotation + FMath::DegreesToRadians(localAngleDeg);
 	}
 
-	// 电梯轿厢单程行程：从fromZ到toZ"匀速+两端缓入缓出"。用平滑Hermite曲线smoothstep(u)=3u²-2u³做
-	// 速度曲线：一段缓入时间te内速度从0平滑升到cruiseSpeed，这段位移是smoothstep速度对时间的积分，
-	// 精确解析式=cruiseSpeed*te*(u³-u⁴/2)(u=s/te)。缓出段由缓入段按"距终点还有多久"对称复用。te按
-	// min(te, distance/speed)夹到不超过半程对应时间，短距离退化成纯缓入接缓出。返回是否已经到站。
-	bool ComputeTripZ(float fromZ, float toZ, float cruiseSpeed, float easeSecondsRaw, float elapsedSeconds, float& outZ) {
-		float distance = FMath::Abs(toZ - fromZ);
-		if (distance <= KINDA_SMALL_NUMBER || cruiseSpeed <= 0.f) {
-			outZ = toZ;
-			return true;
-		}
+	// 电梯轿厢单步推进：状态是(z, v)，v带符号(向上为正)，目标可以随时改。每个子步先判断：
+	// 1) 速度背离目标(含刚反向改目标)：以加速度a减速，过零后自然反向加速；
+	// 2) 速度朝向目标且剩余距离不够以a刹停：按v²/(2*剩余)精确减速刚好停在目标(需要的减速度超过1.5a说明
+	//    已经来不及，就按a刹车冲过目标再折返)；
+	// 3) 否则以a加速到不超过cruiseSpeed(同向改目标时速度不变，继续巡航)。
+	// 速度只在这里累积，所以中途改目标速度始终连续。返回是否已到站(此时z=targetZ、v=0)。
+	bool StepCabin(float& z, float& v, float targetZ, float cruiseSpeed, float accel, float deltaSeconds) {
+		constexpr float kArriveDistance = 0.5f;
+		int32 steps = FMath::Max(1, FMath::CeilToInt(deltaSeconds * 60.f));
+		float h = deltaSeconds / steps;
+		for (int32 i = 0; i < steps; i++) {
+			float rem = targetZ - z;
+			float d = rem >= 0.f ? 1.f : -1.f;
+			float remAbs = FMath::Abs(rem);
+			if (remAbs <= kArriveDistance && FMath::Abs(v) <= accel * h * 3.f) {
+				z = targetZ;
+				v = 0.f;
+				return true;
+			}
 
-		float te = FMath::Min(easeSecondsRaw, distance / cruiseSpeed);
-		auto easeInDistance = [&](float t) {
-			float u = (te > 0.f) ? FMath::Clamp(t / te, 0.f, 1.f) : 1.f;
-			return cruiseSpeed * te * (u * u * u - u * u * u * u * 0.5f);
-			};
+			float toward = v * d;
+			if (toward < 0.f) {
+				v += d * accel * h;
+			}
+			else if (remAbs <= toward * toward / (2.f * accel)) {
+				float need = toward * toward / (2.f * FMath::Max(remAbs, KINDA_SMALL_NUMBER));
+				float decel = need <= accel * 1.5f ? need : accel;
+				float newToward = toward - decel * h;
+				v = d * FMath::Max(newToward, 0.f);
+			}
+			else {
+				v = d * FMath::Min(toward + accel * h, cruiseSpeed);
+			}
 
-		float easeDistance = easeInDistance(te);
-		float cruiseDistance = FMath::Max(0.f, distance - easeDistance * 2.f);
-		float cruiseTime = cruiseDistance / cruiseSpeed;
-		float tripTime = te * 2.f + cruiseTime;
-		if (elapsedSeconds >= tripTime) {
-			outZ = toZ;
-			return true;
+			float prevRem = rem;
+			z += v * h;
+			// 一步里正好穿过目标且速度已经很小：直接吸附到站，避免在目标两侧抖。
+			if ((targetZ - z) * prevRem <= 0.f && FMath::Abs(v) <= accel * h * 3.f) {
+				z = targetZ;
+				v = 0.f;
+				return true;
+			}
 		}
-
-		float travelled;
-		if (elapsedSeconds < te) {
-			travelled = easeInDistance(elapsedSeconds);
-		} else if (elapsedSeconds < te + cruiseTime) {
-			travelled = easeDistance + cruiseSpeed * (elapsedSeconds - te);
-		} else {
-			travelled = distance - easeInDistance(tripTime - elapsedSeconds);
-		}
-		travelled = FMath::Clamp(travelled, 0.f, distance);
-		outZ = fromZ + (toZ > fromZ ? travelled : -travelled);
 		return false;
 	}
 
@@ -1200,17 +1207,22 @@ void ABuildingElement::Tick(float DeltaTime) {
 }
 
 void ABuildingElement::UpdateCabins(float deltaSeconds) {
-	// Core的Cabin记录行程(出发高度/目标楼层/已走时间)，这里每帧推进并写回当前高度，到站时把
-	// currentLevel更新成目标楼层。高度在Core里是地图单位，这里换算成UE单位算曲线再换回去。
+	// Core的Cabin记录当前高度/速度/目标楼层，这里每帧用StepCabin积分并写回，到站时把currentLevel
+	// 更新成目标楼层。高度在Core里是地图单位，这里换算成UE单位积分再换回去。
 	for (Cabin* cabin : building->GetCabinEntities()) {
 		if (!cabin || !cabin->IsMoving()) continue;
 		cabin->Advance(deltaSeconds);
 		float targetZ = building->GetFloorBaseZ(cabin->GetTargetLevel());
-		float worldZ;
-		bool arrived = ComputeTripZ(cabin->GetFromZ() * BUILDING_WORLD_SCALE, targetZ * BUILDING_WORLD_SCALE,
-			framework->GetCabinCruiseSpeed(), framework->GetCabinEaseSeconds(), cabin->GetElapsed(), worldZ);
+		float cruise = framework->GetCabinCruiseSpeed();
+		float accel = cruise / FMath::Max(framework->GetCabinEaseSeconds(), 0.01f);
+		float worldZ = cabin->GetCurrentZ() * BUILDING_WORLD_SCALE;
+		float worldV = cabin->GetVelocity() * BUILDING_WORLD_SCALE;
+		bool arrived = cruise <= 0.f || StepCabin(worldZ, worldV, targetZ * BUILDING_WORLD_SCALE, cruise, accel, deltaSeconds);
 		if (arrived) cabin->Arrive(targetZ);
-		else cabin->SetCurrentZ(worldZ / BUILDING_WORLD_SCALE);
+		else {
+			cabin->SetCurrentZ(worldZ / BUILDING_WORLD_SCALE);
+			cabin->SetVelocity(worldV / BUILDING_WORLD_SCALE);
+		}
 	}
 
 	if (currentLod != ELod::Near) return;

@@ -44,6 +44,7 @@ void Cabin::Launch(int level) {
 void Cabin::Arrive(float targetZ) {
 	currentLevel = targetLevel;
 	currentZ = targetZ;
+	velocity = 0.f;
 	moving = false;
 	elapsed = 0.f;
 }

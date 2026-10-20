@@ -50,8 +50,8 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
   `ABuildingElement`有自己专属的`farMesh`（`UProceduralMeshComponent`，只有1个section，
   固定index 0）——每栋building已经是独立Actor，远处box也是"这栋楼自己的组件"，不需要跨
   building的section索引分配。
-- **切换距离，两个阈值形成迟滞区间**：`lodNearEnterDistance`（默认20，远→近的触发距离）/
-  `lodFarExitDistance`（默认40，近→远的触发距离），都是`UPROPERTY(EditDefaultsOnly)`，
+- **切换距离，两个阈值形成迟滞区间**：`lodNearEnterDistance`（默认40，远→近的触发距离）/
+  `lodFarExitDistance`（默认80，近→远的触发距离），都是`UPROPERTY(EditDefaultsOnly)`，
   地图单位。近→远的阈值故意比远→近的大——已经精细化的building要离得更远才会退化成单box，
   防止玩家在临界距离附近小范围来回走动时反复Near/Far抖动式切换（每次切换都要建/删一整层楼
   的组件，抖动会反复触发下面"性能排查"一节的那类卡顿）。按viewer
@@ -285,8 +285,8 @@ Story事件分发。
 `Source/Core/map/cabin.md`。`ABuildingElement`只负责两件事：
 
 - **推进行程(不管LOD)**：`Tick`最前面(玩家Pawn检查之前)调`UpdateCabins`，对每台`IsMoving()`的电梯
-  `Advance(dt)`，用`ComputeTripZ(fromZ, toZ, cabinCruiseSpeed, cabinEaseSeconds, elapsed)`算当前高度写回
-  `SetCurrentZ`，到站调`Arrive`。远景下电梯照样会到站。曲线是"匀速+两端缓入缓出"：smoothstep速度曲线，
+  `Advance(dt)`，用`StepCabin`按(高度, 速度)状态积分(加速度=`cabinCruiseSpeed/cabinEaseSeconds`，中途改目标速度连续)写回
+  `SetCurrentZ`/`SetVelocity`，到站调`Arrive`。远景下电梯照样会到站。曲线是"匀速+两端缓入缓出"：smoothstep速度曲线，
   缓入段位移`cabinCruiseSpeed*te*(u³-u⁴/2)`，缓出段对称复用；`te`夹到不超过半程对应时间。
   `cabinCruiseSpeed`(默认300 UE单位/秒)/`cabinEaseSeconds`(默认1.5秒)是本组件的`UPROPERTY`。
 - **近处LOD的表现**：远→近切换时在所有`BuildFloorMesh`之后跑`BuildElevatorCabins`
@@ -366,7 +366,7 @@ Story事件分发。
 
 - 电梯轿厢的真实调度逻辑（呼叫按钮、开关门、载客、`Script`挂钩）——这次只有mod声明+3D网格+
   占位性质的往返动画。
-- 按mod自定义LOD切换距离/每帧队列上限——这次先用组件级`UPROPERTY`固定值(20/40/4)，不做到
+- 按mod自定义LOD切换距离/每帧队列上限——这次先用组件级`UPROPERTY`固定值(40/80/4)，不做到
   per-mod可配置。
 - 3D(含高度)距离判定——这次用水平距离。
 - 外墙/内墙材质区分——这次统一用一份`wallMaterial`。

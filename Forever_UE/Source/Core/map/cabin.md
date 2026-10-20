@@ -25,7 +25,7 @@
   - 同一个 `shaftIndex` 可以声明多台电梯，各管一段楼层，比如 1~2 楼一台、3~5 楼一台。
   - 楼层范围和已建电梯重叠的，后一条在 `Building::BuildCabins` 里跳过并警告。
 - **行程**：
-  - `Launch(level)`：记下出发高度 `fromZ`（当前高度）、目标楼层，从 0 开始计时。运行中再次 Launch 就是改目标，从当前高度重新出发；已经停在这一层时什么都不做。
+  - `Launch(level)`：记下目标楼层。运行中再次 Launch 就是改目标，当前高度和速度（`velocity`，不存档）都保留：同向速度不变，反向先逐渐减速再反向加速；已经停在这一层时什么都不做。
   - UE 推进行程：`ABuildingElement::UpdateCabins` 每帧调用 `Advance` 累加时间，用"匀速 + 两端缓入缓出"的曲线（`ComputeTripZ`）算出当前高度并写回 `SetCurrentZ`，到站时调 `Arrive` 更新 `currentLevel`。
   - 这一步不管 LOD 都会执行，所以远景下电梯照样会到站。
   - 速度和缓动时长用 `UForeverBuildingFrameworkComponent` 的 `cabinCruiseSpeed`/`cabinEaseSeconds`。

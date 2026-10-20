@@ -170,10 +170,10 @@ private:
 	// LOD切换距离(地图单位，1地图单位=1000 UE单位=10米)，两个阈值不同形成迟滞区间，见
 	// GetLodNearEnterDistance/GetLodFarExitDistance注释。
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
-	float lodNearEnterDistance = 20.f;
+	float lodNearEnterDistance = 40.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
-	float lodFarExitDistance = 40.f;
+	float lodFarExitDistance = 80.f;
 
 	// 全地图共享的每帧最多处理LOD操作条数，避免大量建筑同时穿越阈值时卡顿——具体消耗见
 	// TryConsumeLodOpBudget()。

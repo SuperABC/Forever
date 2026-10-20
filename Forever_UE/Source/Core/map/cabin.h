@@ -43,13 +43,17 @@ public:
 	// 轿厢当前高度——停着时是currentLevel的楼层基准高度，运行中由UE层每帧写回(SetCurrentZ)。
 	float GetCurrentZ() const { return currentZ; }
 
-	// 让电梯前往level(夹到[min,max])。从当前高度重新出发(运行中再次Launch=改目标)；已经停在这一层
+	// 让电梯前往level(夹到[min,max])。运行中再次Launch=改目标，当前高度和速度都保留(同向继续、反向先减速再反转)；已经停在这一层
 	// 时什么都不做。
 	void Launch(int level);
 
 	// UE层推进行程用：累加本次行程时间、写回当前高度、到站。
 	void Advance(float deltaSeconds) { elapsed += deltaSeconds; }
 	void SetCurrentZ(float z) { currentZ = z; }
+	// 当前竖直速度(地图单位/秒，向上为正)，运行中由UE层每帧写回；中途改目标(Launch)时保留，保证速度连续。
+	// 不存档：读档后从静止重新起步。
+	float GetVelocity() const { return velocity; }
+	void SetVelocity(float v) { velocity = v; }
 	void Arrive(float targetZ);
 
 	Script* GetScript() const { return script; }
@@ -71,6 +75,7 @@ private:
 	float fromZ = 0.f;
 	int targetLevel = 0;
 	float elapsed = 0.f;
+	float velocity = 0.f;
 
 	Script* script = nullptr;
 	std::vector<std::string> options;
