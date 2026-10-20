@@ -219,6 +219,10 @@ void AForeverFrameworkActor::ValidateMainStoryDependencies() {
 }
 
 void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptContext& context) {
+	// 所有Change自己的condition：非空且求值为假就不执行。for_range的子change、分支选项的changes、
+	// 里程碑的changes都走这个入口，所以这里统一判断一次。
+	if (change && !change->GetCondition().empty() && !EvaluateExpressionBool(change->GetCondition(), context)) return;
+
 	if (auto* nav = dynamic_cast<const NPCNavigateChange*>(change)) {
 		// NPCNavigateChange::destination是纯std::string（原因见change.h顶部崩溃分析注释）。
 		// 这里不再能像原来lambda那样直接拿到Citizen*（这个函数的调用方只给Change本身+
@@ -285,7 +289,6 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 			if (context.self) context.self->SetValue(key, ValueType(value));
 			for (const Change* child : forRange->GetChanges()) {
 				if (!child) continue;
-				if (!child->GetCondition().empty() && !EvaluateExpressionBool(child->GetCondition(), context)) continue;
 				ApplyChange(child, context);
 			}
 		}
@@ -446,6 +449,8 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	// 空指针，这里判空只是和其它地方一致的防御性写法。
 	if (!player) return;
 	player->Tick(DeltaTime);
+	// 时钟刚推进过：同步写进系统变量system.time.*，见UpdateSystemTime。
+	if (storyFramework) storyFramework->UpdateSystemTime();
 
 	// 持续在屏幕左上角显示当前游戏内时间——固定key(不是-1)保证每帧原地刷新同一行，不会
 	// 每帧都新增一条往下堆；TimeToDisplay给1秒(比一帧长)，哪怕某一帧意外跳过也不会闪烁。
@@ -706,9 +711,12 @@ void AForeverFrameworkActor::EnsurePlayerGenerated()
 
 	// 主线剧情.script的global_settings.time_flow_ratio字段——没有声明就保持
 	// Player::timeFlowRatio的默认值（2.0），见player.md"time_flow_ratio"一节。
-	const auto& settings = Script::GetGlobalSettings(Config::GetMainStoryScriptPath());
-	if (auto it = settings.find("time_flow_ratio"); it != settings.end()) {
-		player->SetTimeFlowRatio(ToDouble(it->second));
+	// 主线读取多个文件时按顺序遍历，后面的文件覆盖前面的同名设置。
+	for (const std::string& path : Config::GetMainStoryScriptPaths()) {
+		const auto& settings = Script::GetGlobalSettings(path);
+		if (auto it = settings.find("time_flow_ratio"); it != settings.end()) {
+			player->SetTimeFlowRatio(ToDouble(it->second));
+		}
 	}
 }
 

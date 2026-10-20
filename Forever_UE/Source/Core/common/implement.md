@@ -55,7 +55,7 @@ ForeverStoryFrameworkComponent.md`"PostImplement"一节。
   这些Core类型，只能通过这两个post类型向Core要地址字符串。
 
 - `request["post"] == "list zones"` / `"list buildings"` / `"list rooms"`（供mod在C++里
-  按type找到地图上具体的实例，比如全图只有一栋的`supergp`建筑）：`request["type"]`是要找的
+  按type找到地图上具体的实例，比如全图只有一栋的`yuanshen`建筑）：`request["type"]`是要找的
   mod type（`Zone`/`Building`/`Room::GetType()`），遍历`map->GetZones()`/`GetBuildings()`
   （rooms则遍历每个building的`GetRooms()`），把type匹配的实例的`GetAddress()`收进数组，成功
   返回`{"result":"success","addresses":["<地址>",...]}`，没有匹配也是success+空数组；`map`

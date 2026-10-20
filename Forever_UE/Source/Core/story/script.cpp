@@ -130,6 +130,10 @@ void Script::ReadScript(const string& path) {
 		for (auto n : root["name_reserve"]) {
 			fileCache.nameReserve.push_back(n.AsString());
 		}
+		// "names"是name_reserve的别名(老工程剧情脚本的写法)，两个字段都写则合并。
+		for (auto n : root["names"]) {
+			fileCache.nameReserve.push_back(n.AsString());
+		}
 		if (!root["global_settings"]["time_flow_ratio"].IsNull()) {
 			fileCache.globalSettings["time_flow_ratio"] = ValueType(root["global_settings"]["time_flow_ratio"].AsDouble());
 		}

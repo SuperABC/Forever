@@ -542,6 +542,15 @@ void Map::InitBuildings() {
 			// 多少空间，见PromoteAdaptiveRemainder注释。
 			if (request.adaptiveParent) {
 				PromoteAdaptiveRemainder(request.adaptiveParent, lot);
+				// 自适应命中的子块是Lot::FindAdaptivePlacement点中的freeLots嵌套子块，不是路网分配过地址
+				// 的顶层Lot，GetAddresses()为空，building->GetAddress()会退化成空路名(" <楼名>")，
+				// Map::LocateBuilding/LocateRoom、npc_teleport这类按地址找房间的都找不到它。子块属于
+				// adaptiveParent这块地，直接沿用它的地址(LocateBuilding按地址比较所属地块，见SameBlock)。
+				if (lot->GetAddresses().empty()) {
+					for (const auto& [road, index] : request.adaptiveParent->GetAddresses()) {
+						lot->AddAddress(road, index);
+					}
+				}
 			}
 
 			BuildingMod* mod = buildingFactory.CreateBuilding(id); // 到这里才真正创建，唯一一次
@@ -1209,6 +1218,18 @@ Zone* Map::LocateZone(const string& address) const {
 	return nullptr;
 }
 
+namespace {
+	// 两个Lot是不是同一块地：指针相同，或者地址相同——自适应占位的子块沿用了顶层Lot的地址
+	// (见InitBuildings)，building的parentLot是子块，LocateLot(road,index)返回的是顶层Lot。
+	bool SameBlock(const Lot* a, const Lot* b) {
+		if (a == b) return true;
+		if (!a || !b) return false;
+		const auto& x = a->GetAddresses();
+		const auto& y = b->GetAddresses();
+		return !x.empty() && !y.empty() && x.front() == y.front();
+	}
+}
+
 Building* Map::LocateBuilding(const string& address) const {
 	istringstream iss(address);
 	string road;
@@ -1225,7 +1246,7 @@ Building* Map::LocateBuilding(const string& address) const {
 		// "<road> <index> <buildingName>"：直接落在这个lot上、没有parentZone的building
 		const string& buildingName = rest[0];
 		for (auto& [name, building] : buildings) {
-			if (building && building->GetParentLot() == lot && !building->GetParentZone()
+			if (building && SameBlock(building->GetParentLot(), lot) && !building->GetParentZone()
 				&& name == buildingName) {
 				return building;
 			}

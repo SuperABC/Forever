@@ -44,6 +44,11 @@ public:
 	// 逻辑）——否则它们各自的game_start milestone永远不会被触发，见.cpp实现。
 	void BroadcastGameStart();
 
+	// 把游戏时钟写进系统变量system.time.year/month/day/hour/minute/second，剧情脚本的表达式里用
+	// (比如spawn_npc的birthday "$$system.time.year-17+年8月31日")。AForeverFrameworkActor::Tick
+	// 每帧在Player::Tick推进时钟之后调用一次；开局广播game_start之前也调用，保证第一个事件就能读到。
+	void UpdateSystemTime();
+
 	// 玩家点击MeetOption选项时调用：构造一个OptionDialogEvent，依次匹配主线剧情Script
 	// （如果配置了）和目标市民的Scheduler Script，复用BroadcastGameStart同一套Dialog展示/
 	// Change转发逻辑（见.cpp里的ProcessScriptActions）。

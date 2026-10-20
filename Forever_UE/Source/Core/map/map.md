@@ -553,5 +553,5 @@ scriptFactory`引用成员（`CreateDoor`创建门的Script要用，和`terrainF
 （没挂脚本就不发给任何人）；`system.player.zone/building/room` 系统变量照常更新。实体脚本仍然收到
 `game_start`、计时器等普通广播（`BroadcastToAllScripts` 把它们也算进去）。示例：
 `Forever_UE/Resource/Story/entity_event.script`（zone/building/room 六种进出事件写在同一个脚本里，
-三种实体都能挂；residence 的 zone/building/room 和 SuperGP 都挂了它）。
+三种实体都能挂；residence 的 zone/building/room 和 Yuanshen 都挂了它）。
 

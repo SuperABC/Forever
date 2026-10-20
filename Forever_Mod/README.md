@@ -4,11 +4,10 @@
 实现`GetId`/`GetType`/`GetName`三个身份接口,不含真正玩法逻辑(留给阶段4对应系统迁移时
 补上):
 
-- `Test/Cpp/Test/`——`PengzhanBuilding`(id `pengzhan`)、`YizhongBuilding`
-  (id `yizhong`),均继承`BuildingMod`；另有`SuperGPBuilding`(id `supergp`)，是真正实现了玩法的
-  测试建筑：只在井字中心lot里自适应放一块6x6，12层，用`Test/Resource/supergp_fg+.layout`/
-  `supergp_fu+-.layout`。
-- `Test/Cpp/Yuanshen/`——`YuanshenBuilding`(id `yuanshen`),继承`BuildingMod`。
+- `Test/Cpp/Yuanshen/`——`YuanshenBuilding`(id `yuanshen`)，继承`BuildingMod`，是真正实现了玩法的测试建筑：
+  只在井字中心lot里自适应贴角放一块6x6，14层，用`Test/Resource/yuanshen_fg+.layout`/
+  `yuanshen_fu+-.layout`，挂示例脚本`entity_event`。同一个DLL还有`YuanshenScript`(script mod，id `yuanshen`)：
+  把剧情脚本里label为`teleport_mona`的占位符换成"把莫娜瞬移到yuanshen建筑00001房间"的`npc_teleport`。
 - `Wxdj/Cpp/Wxdj/`——`WxdjScript`(id `wxdj`),继承`ScriptMod`。
 - `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id统一为`empty`),纯粹用来验证
   `config.json`按mod id配置的命令行式参数能一路传到mod:构造函数直接接收参数字符串,拼进

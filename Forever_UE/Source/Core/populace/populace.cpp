@@ -326,8 +326,10 @@ void Populace::InitNames() {
 
 	// 主线剧情.script的name_reserve字段——剧情作者显式列出脚本里会用到的姓名，在生成
 	// 市民之前占位，姓名生成器之后不会再生成同名结果，见name.md"ReserveName"一节。
-	for (const string& reserved : Script::GetNameReserve(Config::GetMainStoryScriptPath())) {
-		name->ReserveName(reserved);
+	for (const string& path : Config::GetMainStoryScriptPaths()) {
+		for (const string& reserved : Script::GetNameReserve(path)) {
+			name->ReserveName(reserved);
+		}
 	}
 }
 

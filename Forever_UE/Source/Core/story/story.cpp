@@ -38,9 +38,11 @@ void Story::Init() {
 	globalScript = new Script(&scriptFactory, scriptModName);
 
 	mainScript = new Script(&scriptFactory, scriptModName);
-	// test.script的具体存放位置由config.json的resource_paths决定，这里只写bare文件名，
-	// 见Config::GetMainStoryScriptPath()的说明。
-	mainScript->ReadMilestones(Config::GetMainStoryScriptPath());
+	// 主线读取config.json的story_scripts里的全部文件(没有配置时退回test.script)，每个文件的
+	// milestones合并进同一个主线Script，见Config::GetMainStoryScriptPaths()。
+	for (const string& path : Config::GetMainStoryScriptPaths()) {
+		mainScript->ReadMilestones(path);
+	}
 }
 
 void Story::BroadcastGameStart(const function<void(const vector<ScriptAction>&, const ScriptContext&)>& onActions,

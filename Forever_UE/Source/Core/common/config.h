@@ -83,6 +83,11 @@ public:
 	// 再改这个方法内部的实现，调用方不用跟着改。
 	static std::string GetMainStoryScriptPath();
 
+	// 主线剧情要读取的全部.script文件：Story screen里玩家添加的story_scripts列表非空时就是这份
+	// 列表(按顺序，每个文件的milestones合并进同一个主线Script，names/name_reserve、
+	// global_settings也合并)；列表为空时退回只有GetMainStoryScriptPath()这一个文件。
+	static std::vector<std::string> GetMainStoryScriptPaths();
+
 	// jsonKey形如"building_mods"。返回该数组解析出的(id, 参数字符串)列表——每个数组元素
 	// 按第一个空格切成两段,如"pengzhan --density 1.0"切成("pengzhan", "--density 1.0"),
 	// 没有空格则参数为空串。参数字符串原样返回,格式/是否使用完全由mod自己的creator(收到

@@ -12,16 +12,13 @@
       "empty --test true"
    ],
    "building_mods" : [
-      "pengzhan",
-      "supergp",
-      "yizhong",
+      "yuanshen",
       "building_residence",
       "building_factory",
       "building_train_station",
       "building_airport",
       "building_park",
       "building_mohar",
-      "yuanshen",
       "empty --test true",
       "building_shop"
    ],
@@ -46,7 +43,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"
    ],
-   "main_story" : "empty",
+   "main_story" : "yuanshen",
    "manufacture_mods" : [
       "manufacture_farm",
       "manufacture_ranch",
@@ -79,7 +76,7 @@
    ],
    "route_mods" : [ "route_bus", "route_train", "route_air", "empty --test true" ],
    "scheduler_mods" : [ "scheduler_basic", "empty --test true" ],
-   "script_mods" : [ "wxdj", "script_basic", "empty --test true" ],
+   "script_mods" : [ "wxdj", "yuanshen", "script_basic", "empty --test true" ],
    "station_mods" : [ "station_bus", "station_train", "station_air", "empty --test true" ],
    "storage_mods" : [
       "storage_wheat",
@@ -88,6 +85,7 @@
       "empty --test true"
    ],
    "story_scripts" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story/ys.script",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story/test.script"
    ],
    "terrain_mods" : [ "river", "empty --test true", "ocean", "mountain" ],

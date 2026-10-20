@@ -70,6 +70,21 @@ void UForeverStoryFrameworkComponent::Init(Story* inStory) {
 	story = inStory;
 }
 
+void UForeverStoryFrameworkComponent::UpdateSystemTime() {
+	if (!story) return;
+	Script* systemScript = story->GetSystemScript();
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	Time* time = player ? player->GetTime() : nullptr;
+	if (!systemScript || !time) return;
+	systemScript->SetValue("time.year", ValueType(time->GetYear()));
+	systemScript->SetValue("time.month", ValueType(time->GetMonth()));
+	systemScript->SetValue("time.day", ValueType(time->GetDay()));
+	systemScript->SetValue("time.hour", ValueType(time->GetHour()));
+	systemScript->SetValue("time.minute", ValueType(time->GetMinute()));
+	systemScript->SetValue("time.second", ValueType(time->GetSecond()));
+}
+
 void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 	if (!story || !GEngine) return;
 
@@ -91,6 +106,7 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 		ProcessScriptActions(framework, actions, context);
 		};
 
+	UpdateSystemTime();
 	story->BroadcastGameStart(onActions, &postImplement);
 
 	// 主线以外的全部Script(组织/岗位/市民Scheduler/车辆/门)也要各广播一次game_start，否则它们
@@ -341,6 +357,10 @@ void UForeverStoryFrameworkComponent::ApplyEnterVehicle(const EnterVehicleChange
 void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const ScriptContext& context, int32 insertIndex) {
 	if (!dialog) return;
 
+	// Dialog自己的condition：非空且求值为假就整段不展示(求值时机是入队的这一刻，所以同一个里程碑里
+	// 排在前面的changes已经生效，见Script::MatchEvent先放changes再放dialogs)。
+	if (!dialog->GetCondition().empty() && !EvaluateExpressionBool(dialog->GetCondition(), context)) return;
+
 	// self/system指向长期存活的Script*/systemScript，照抄传入的context；local指向调用方
 	// 栈上的运行时Event，这次调用一结束就悬垂，强制清空，见ShowDialog声明处注释。
 	ScriptContext deferredContext = context;
@@ -354,6 +374,8 @@ void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const 
 		if (section.IsBranch()) {
 			item.bBranch = true;
 			for (const Option& option : section.GetOptions()) {
+				// 分支选项的condition：求值为假的选项不出现。
+				if (!option.GetCondition().empty() && !EvaluateExpressionBool(option.GetCondition(), context)) continue;
 				FString text = UTF8_TO_TCHAR(ToString(EvaluateExpression(option.GetOption(), context)).data());
 				item.optionTexts.Add(text);
 				item.options.Add(option);
@@ -366,6 +388,9 @@ void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const 
 			item.content = UTF8_TO_TCHAR(content.data());
 			item.label = label;
 		}
+
+		// 分支的选项全被condition过滤掉了：没有可点的选项，整个分支跳过，免得界面卡在空选项上。
+		if (item.bBranch && item.options.Num() == 0) continue;
 
 		items.Add(MoveTemp(item));
 	}

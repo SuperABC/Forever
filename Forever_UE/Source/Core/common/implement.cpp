@@ -110,7 +110,7 @@ void PostImplement::Post(const JsonValue& request) {
 	}
 
 	// "list zones"/"list buildings"/"list rooms"：request["type"]是要找的mod type(Zone/Building/
-	// Room::GetType()，比如"supergp")，返回地图上所有该type的实例的地址(GetAddress())数组，成功
+	// Room::GetType()，比如"yuanshen")，返回地图上所有该type的实例的地址(GetAddress())数组，成功
 	// 返回{"result":"success","addresses":[...]}，没有匹配也是success+空数组；map为空返回fail。
 	// 类型全图唯一的mod(比如只会放一栋的测试建筑)取addresses[0]即可。Map的zones/buildings是
 	// 无序容器，返回顺序不保证稳定；rooms遍历每个building->GetRooms()。
