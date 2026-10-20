@@ -41,8 +41,8 @@ class WheatAsset : public AssetMod {
 public:
 	WheatAsset();
 
-	static const char* GetId() { return "product_wheat"; }
-	virtual const char* GetType() const override { return "product_wheat"; }
+	static const char* GetId() { return "asset_wheat"; }
+	virtual const char* GetType() const override { return "asset_wheat"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
@@ -60,8 +60,8 @@ class BeefAsset : public AssetMod {
 public:
 	BeefAsset();
 
-	static const char* GetId() { return "product_beef"; }
-	virtual const char* GetType() const override { return "product_beef"; }
+	static const char* GetId() { return "asset_beef"; }
+	virtual const char* GetType() const override { return "asset_beef"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
@@ -79,8 +79,8 @@ class BurgerAsset : public AssetMod {
 public:
 	BurgerAsset();
 
-	static const char* GetId() { return "product_burger"; }
-	virtual const char* GetType() const override { return "product_burger"; }
+	static const char* GetId() { return "asset_burger"; }
+	virtual const char* GetType() const override { return "asset_burger"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
@@ -98,8 +98,8 @@ class PistolAmmoAsset : public AssetMod {
 public:
 	PistolAmmoAsset();
 
-	static const char* GetId() { return "ammo_pistol"; }
-	virtual const char* GetType() const override { return "ammo_pistol"; }
+	static const char* GetId() { return "asset_ammo_pistol"; }
+	virtual const char* GetType() const override { return "asset_ammo_pistol"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
@@ -117,8 +117,8 @@ class RifleAmmoAsset : public AssetMod {
 public:
 	RifleAmmoAsset();
 
-	static const char* GetId() { return "ammo_rifle"; }
-	virtual const char* GetType() const override { return "ammo_rifle"; }
+	static const char* GetId() { return "asset_ammo_rifle"; }
+	virtual const char* GetType() const override { return "asset_ammo_rifle"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
@@ -136,8 +136,8 @@ class PistolWeaponAsset : public AssetMod {
 public:
 	PistolWeaponAsset();
 
-	static const char* GetId() { return "weapon_pistol"; }
-	virtual const char* GetType() const override { return "weapon_pistol"; }
+	static const char* GetId() { return "asset_pistol"; }
+	virtual const char* GetType() const override { return "asset_pistol"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
@@ -155,8 +155,8 @@ class RifleWeaponAsset : public AssetMod {
 public:
 	RifleWeaponAsset();
 
-	static const char* GetId() { return "weapon_rifle"; }
-	virtual const char* GetType() const override { return "weapon_rifle"; }
+	static const char* GetId() { return "asset_rifle"; }
+	virtual const char* GetType() const override { return "asset_rifle"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 

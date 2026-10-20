@@ -27,6 +27,10 @@ struct FForeverModRow
 	// 锁定时Blueprint侧对应行要勾选框强制勾中+整行变灰，见ModCheckRowWidget。
 	UPROPERTY(BlueprintReadOnly)
 	bool bLocked = false;
+
+	// bLocked时是谁在依赖它：已启用的mod id，或"剧情脚本 <文件名>"。不锁定时为空。
+	UPROPERTY(BlueprintReadOnly)
+	TArray<FString> Dependents;
 };
 
 // 游戏启动配置界面(Story/Mod/Resource三screen)的Blueprint桥接层，替代老工程的AStartBase——
@@ -109,8 +113,9 @@ public:
 	bool SelectFile(const FString& FileFilter, FString& OutPath) const;
 
 private:
-	// ValidateAndStartGame/IsModLocked共用的闭包计算：当前"必需启用"的mod id集合=全部Story
+	// GetModRows/IsModLocked共用的闭包计算：当前"必需启用"的mod id集合=全部Story
 	// screen脚本的mod_dependences(无条件计入)∪每个已启用的mod id自己声明的
-	// GetModDependences(按modId粒度条件计入)。
-	TSet<FString> ComputeRequiredModIds() const;
+	// GetModDependences(按modId粒度条件计入)。key=被依赖的mod id，value=依赖它的一方
+	// (mod id或"剧情脚本 <文件名>"，去重)。
+	TMap<FString, TArray<FString>> ComputeRequiredModIds() const;
 };

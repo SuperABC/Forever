@@ -2305,7 +2305,7 @@ namespace {
 	Script* MakeEntityScript(ScriptFactory& factory, const string& modName, const vector<string>& milestoneNames,
 		const string& name, const string& address) {
 		if (milestoneNames.empty()) return nullptr;
-		Script* script = new Script(&factory, modName.empty() ? string("empty") : modName);
+		Script* script = new Script(&factory, modName.empty() ? string("script_empty") : modName);
 		for (const string& milestoneName : milestoneNames) {
 			script->ReadMilestones(Config::GetScriptPath(milestoneName));
 		}

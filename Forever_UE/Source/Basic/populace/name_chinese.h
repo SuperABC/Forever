@@ -14,8 +14,8 @@ class ChineseName : public NameMod {
 public:
 	ChineseName();
 
-	static const char* GetId() { return "chinese"; }
-	virtual const char* GetType() const override { return "chinese"; }
+	static const char* GetId() { return "name_chinese"; }
+	virtual const char* GetType() const override { return "name_chinese"; }
 	virtual const char* GetName() override;
 
 	virtual void GetSurname(const std::string& fullName,

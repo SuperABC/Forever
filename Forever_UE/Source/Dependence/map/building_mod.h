@@ -65,7 +65,7 @@ struct ElevatorCabinSpec {
 	int maxFloor = 0;  // 含
 	std::string cabinMeshPath; // 留空用组件默认Elevator mesh
 	// 这台电梯的Script：milestoneNames非空才创建(和DoorSpec同一个约定)，见Core/map/cabin.md。
-	std::string scriptModName = "empty";
+	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
 };
 
@@ -132,7 +132,7 @@ public:
 	// 数组(Config::GetScriptPath解析)，和DoorSpec/ElevatorCabinSpec同一个约定——milestoneNames
 	// 非空才创建Script，空=没有脚本(默认)。玩家进出这个建筑(Building)的enter/leave事件只发给它自己的
 	// Script，不再广播给全部脚本，见Core/map/map.md"实体脚本"一节。在Layout(...)里设置。
-	std::string scriptModName = "empty";
+	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
 
 	// 声明第level层用哪个模板+朝向+资产。level：0-based，0=1楼，负数=地下室(-1=地下一层，
@@ -162,7 +162,7 @@ public:
 	// 同一口井可以声明多台电梯(楼层范围不能重叠，重叠的后一条会被跳过)。scriptModName/milestoneNames
 	// 指定这台电梯的Script(game_start里给自己加"前往x层"选项，见Resource/Story/elevator_basic.script)。
 	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "",
-		std::string scriptModName = "empty", std::vector<std::string> milestoneNames = {});
+		std::string scriptModName = "script_empty", std::vector<std::string> milestoneNames = {});
 
 	// 以下四个不再是虚方法——它们不需要任何实例状态，改成每个具体子类的static方法，通过
 	// BuildingFactory::RegisterBuilding的额外参数注册，详见building_factory.h。子类必须实现

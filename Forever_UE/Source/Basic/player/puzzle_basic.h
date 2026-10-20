@@ -15,8 +15,8 @@ class TetrisPuzzle : public PuzzleMod {
 public:
 	TetrisPuzzle();
 
-	static const char* GetId() { return "tetris"; }
-	virtual const char* GetType() const override { return "tetris"; }
+	static const char* GetId() { return "puzzle_tetris"; }
+	virtual const char* GetType() const override { return "puzzle_tetris"; }
 	virtual const char* GetName() override;
 
 	virtual void Init(Canvas* canvas, PostHandle* post) override;

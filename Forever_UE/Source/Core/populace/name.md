@@ -3,7 +3,7 @@
 ## 职责
 
 `Name`是某个具体`NameMod`实例的薄包装——构造时向`NameFactory`要一个实例（按id，如
-`"chinese"`），把`GetType`/`GetName`/`GetSurname`/`GenerateName`（两个重载）原样
+`"name_chinese"`），把`GetType`/`GetName`/`GetSurname`/`GenerateName`（两个重载）原样
 转发出去，析构时交还给Factory销毁。写法照抄`Core/map/terrain.h/.cpp`的`Terrain`类
 ——`Populace`只通过这层转发访问取名算法，不直接持有`NameMod*`，和`Terrain`/
 `Roadnet`/`Zone`/`Building`/`Script`等聚合类"上层只操作Core层包装类"的既有架构一致。

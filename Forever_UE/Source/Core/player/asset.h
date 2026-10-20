@@ -34,6 +34,7 @@ public:
 	float GetVolume() const;
 	bool GetBackpack() const;
 	bool IsWeapon() const;
+	const std::string& GetWeaponType() const; // IsWeapon()时激活它要装备的WeaponMod id
 	bool IsUsable() const;
 	bool IsContainer() const; // volume > 0
 
@@ -72,6 +73,7 @@ private:
 	float volume = 0.f;
 	bool backpack = false;
 	bool weaponFlag = false;
+	std::string weaponType;
 	bool usableFlag = false;
 
 	int count = 1;

@@ -3,7 +3,7 @@
 ## 职责
 
 `Terrain`是某个具体`TerrainMod`实例的薄包装——构造时向`TerrainFactory`要一个实例（按id，如
-`"ocean"`/`"mountain"`），把`GetType`/`GetName`/`GetPriority`/`SetupTexture`/`GetTextures`/
+`"terrain_ocean"`/`"terrain_mountain"`），把`GetType`/`GetName`/`GetPriority`/`SetupTexture`/`GetTextures`/
 `DistributeTerrain`原样转发出去，析构时交还给Factory销毁（水面现在per-cell设置，不再经过
 `Terrain`/`TerrainMod`任何getter，见`terrain_mod.md`"水面"一节，这个类也相应没有`GetWater`
 了）。`GetTextures()`返回
@@ -18,8 +18,8 @@
   临时创建一批`Terrain*`跑完`DistributeTerrain`就地析构，不长期持有。
 - **没有迁移老工程的`EmptyTerrain`**——老工程`terrain.h`里声明了一个`EmptyTerrain`
   （priority=0、`DistributeTerrain`空实现），本来是`Map::InitTerrains`里硬编码注册的兜底
-  地形。`Forever_Mod/Empty`这个demo mod已经有一个同名同用途的`EmptyTerrain`（id`"empty"`），
-  会通过`ModLoader`正常发现注册，没必要在Core层再重复实现一份、还要操心两边id`"empty"`
+  地形。`Forever_Mod/Empty`这个demo mod已经有一个同名同用途的`EmptyTerrain`（id`"terrain_empty"`），
+  会通过`ModLoader`正常发现注册，没必要在Core层再重复实现一份、还要操心两边id`"terrain_empty"`
   撞在同一个`TerrainFactory::registries`里谁覆盖谁的问题。这是有意的范围裁剪。
 - **析构必须走`TerrainFactory::DestroyTerrain`，不能直接`delete mod`**——`mod`可能是
   Basic.dll或某个Forever_Mod DLL里`new`出来的实例，析构要走它自己注册时提供的deleter，这是

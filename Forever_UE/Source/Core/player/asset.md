@@ -35,16 +35,15 @@
 `contents`的遍历顺序(`unordered_map`，顺序不重要，只要同一次调用内确定即可)逐个扣，扣到
 0的条目整条移除并`delete`，不够再递归进子容器。
 
-## 武器/背包系统的桥接：靠`GetType()`同一个id字符串，不是字段引用
+## 武器/背包系统的桥接：`AssetMod::weaponType`字段
 
-`WeaponMod`和`AssetMod`各自独立注册，但用**同一个id字符串**（比如`"weapon_pistol"`）。
+`WeaponMod`和`AssetMod`各自独立注册，id各带自己concept的前缀(资产`"asset_pistol"`、武器`"weapon_pistol"`)。
 武器"激活"时是`ForeverWeaponComponent`的`WeaponMod*`实例，不激活时是槽位/容器里的一个
-`Asset*`实例——`Asset`自己不持有到`WeaponMod`的任何指针/引用，两套系统靠这个共享id字符串
-桥接，转换逻辑在`Source/Forever/Player/ForeverCharacter.cpp::ActivateShoulderWeapon()`里
-（UE层），`Asset`/`Player`这两个Core类完全不知道`WeaponMod`/`ForeverWeaponComponent`的
-存在。工业系统的`Product`(小麦/牛肉/汉堡)同理：`Asset`只存`GetType()`这个字符串
-(比如`"product_burger"`)，不持有`Product*`——需要展示分类信息时由UI层另外查
-`Industry::FindProduct(asset->GetType())`。
+`Asset*`实例。武器资产在`SetProperty()`里填`weaponType`(要装备的WeaponMod id)，`Asset::GetWeaponType()`
+读它；转换逻辑在`Source/Forever/Player/ForeverCharacter.cpp::ActivateShoulderWeapon()`里（UE层），
+`Asset`/`Player`这两个Core类不持有`WeaponMod`/`ForeverWeaponComponent`的任何指针。
+工业系统的`Product`(小麦/牛肉/汉堡)和对应的资产(`asset_wheat`/`asset_beef`/`asset_burger`)目前没有
+代码上的关联，id也不同(`product_wheat`/`asset_wheat`)；以后要互相换算时同样加一个显式字段，不要靠id相等。
 
 ## 依赖关系
 

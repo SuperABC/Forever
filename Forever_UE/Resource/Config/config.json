@@ -1,25 +1,25 @@
 {
-   "app_mods" : [ "bounce", "notes", "empty --test true" ],
+   "app_mods" : [ "app_bounce", "app_notes", "app_empty --test true" ],
    "asset_mods" : [
       "asset_container",
-      "product_wheat",
-      "product_beef",
-      "product_burger",
-      "ammo_pistol",
-      "ammo_rifle",
-      "weapon_pistol",
-      "weapon_rifle",
-      "empty --test true"
+      "asset_wheat",
+      "asset_beef",
+      "asset_burger",
+      "asset_ammo_pistol",
+      "asset_ammo_rifle",
+      "asset_pistol",
+      "asset_rifle",
+      "asset_empty --test true"
    ],
    "building_mods" : [
-      "yuanshen",
+      "building_yuanshen",
       "building_residence",
       "building_factory",
       "building_train_station",
       "building_airport",
       "building_park",
       "building_mohar",
-      "empty --test true",
+      "building_empty --test true",
       "building_shop"
    ],
    "component_mods" : [
@@ -28,7 +28,7 @@
       "component_factory",
       "component_train_station",
       "component_airport",
-      "empty --test true"
+      "component_empty --test true"
    ],
    "dll_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Cpp/x64/Release",
@@ -36,34 +36,34 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
    ],
-   "job_mods" : [ "job_shop_saler", "empty --test true" ],
+   "job_mods" : [ "job_shop_saler", "job_empty --test true" ],
    "layout_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"
    ],
-   "main_story" : "yuanshen",
+   "main_story" : "script_yuanshen",
    "manufacture_mods" : [
       "manufacture_farm",
       "manufacture_ranch",
       "manufacture_food_factory",
-      "empty --test true"
+      "manufacture_empty --test true"
    ],
-   "name_mods" : [ "chinese" ],
-   "organization_mods" : [ "organization_shop", "empty --test true" ],
+   "name_mods" : [ "name_chinese" ],
+   "organization_mods" : [ "organization_shop", "organization_empty --test true" ],
    "product_mods" : [
       "product_wheat",
       "product_beef",
       "product_burger",
-      "empty --test true"
+      "product_empty --test true"
    ],
-   "puzzle_mods" : [ "tetris", "empty --test true" ],
+   "puzzle_mods" : [ "puzzle_tetris", "puzzle_empty --test true" ],
    "resource_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test"
    ],
-   "roadnet_mods" : [ "jing" ],
+   "roadnet_mods" : [ "roadnet_jing" ],
    "room_mods" : [
       "room_residence",
       "room_shop",
@@ -72,30 +72,30 @@
       "room_factory",
       "room_train_station",
       "room_airport",
-      "empty --test true"
+      "room_empty --test true"
    ],
-   "route_mods" : [ "route_bus", "route_train", "route_air", "empty --test true" ],
-   "scheduler_mods" : [ "scheduler_basic", "empty --test true" ],
-   "script_mods" : [ "wxdj", "yuanshen", "script_basic", "empty --test true" ],
-   "station_mods" : [ "station_bus", "station_train", "station_air", "empty --test true" ],
+   "route_mods" : [ "route_bus", "route_train", "route_air", "route_empty --test true" ],
+   "scheduler_mods" : [ "scheduler_basic", "scheduler_empty --test true" ],
+   "script_mods" : [ "script_wxdj", "script_yuanshen", "script_basic", "script_empty --test true" ],
+   "station_mods" : [ "station_bus", "station_train", "station_air", "station_empty --test true" ],
    "storage_mods" : [
       "storage_wheat",
       "storage_beef",
       "storage_burger",
-      "empty --test true"
+      "storage_empty --test true"
    ],
    "story_scripts" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story/ys.script",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story/test.script"
    ],
-   "terrain_mods" : [ "river", "empty --test true", "ocean", "mountain" ],
+   "terrain_mods" : [ "terrain_river", "terrain_empty --test true", "terrain_ocean", "terrain_mountain" ],
    "vehicle_mods" : [
       "vehicle_basic",
       "vehicle_bus",
       "vehicle_train",
       "vehicle_plane",
-      "empty --test true"
+      "vehicle_empty --test true"
    ],
    "weapon_mods" : [ "weapon_pistol", "weapon_rifle" ],
-   "zone_mods" : [ "zone_residence", "empty --test true" ]
+   "zone_mods" : [ "zone_residence", "zone_empty --test true" ]
 }

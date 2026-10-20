@@ -1,5 +1,5 @@
 {
-	// 商店大门自己的milestone脚本(ShopBuilding::doorSpecs["entrance"].scriptModName="empty"+
+	// 商店大门自己的milestone脚本(ShopBuilding::doorSpecs["entrance"].scriptModName="script_empty"+
 	// milestoneNames={"door_shop_entrance"}加载)：开局给自己加一条"敲门"选项(靠近门时弹出，
 	// 和车辆"上车"选项走同一个MeetOption UI)，选中后只是debug_print一条消息，验证门的交互
 	// 链路跑通(Script创建+add_option+option_dialog+Map::FindDoorByName)，不做任何真正的

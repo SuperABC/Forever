@@ -72,7 +72,7 @@ void Traffic::InitRoadsideStations(Map* map) {
 	int createdCount = 0;
 
 	for (const string& modId : ids) {
-		if (modId == "empty") continue;
+		if (modId == "station_empty") continue;
 
 		// 先探测这个mod类型想贴哪些路——AssignRoads()是static方法(见station_mod.h
 		// StationMod::AssignRoads的说明)，不需要创建/销毁任何StationMod实例，直接转发
@@ -129,7 +129,7 @@ void Traffic::InitRoutes(Map* map) {
 	for (auto& [name, station] : stations) allStations.push_back(station);
 
 	vector<string> routeIds = routeFactory.GetRegisteredIds();
-	routeIds.erase(remove(routeIds.begin(), routeIds.end(), "empty"), routeIds.end());
+	routeIds.erase(remove(routeIds.begin(), routeIds.end(), "route_empty"), routeIds.end());
 
 	for (const string& modId : routeIds) {
 		string name = "Route_" + modId;
@@ -158,7 +158,7 @@ void Traffic::InitParkedVehicles(Map* map) {
 	vector<string> allIds = vehicleFactory.GetRegisteredIds();
 	vector<string> carIds;
 	for (const string& id : allIds) {
-		if (id == "empty") continue;
+		if (id == "vehicle_empty") continue;
 		VehicleMod* probe = vehicleFactory.CreateVehicle(id);
 		if (!probe) continue;
 		if (probe->category == "car") carIds.push_back(id);

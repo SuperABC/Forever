@@ -69,7 +69,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   （生成任何东西之前）对`Registry::CheckModRegistered(id)`做全局OR匹配（20个Factory各查
   一次`CheckRegistered`），只要有一个id没被任何concept注册就`THROW_EXCEPTION`，交给
   `BeginPlay()`统一的`try/catch`处理（打日志+退出游戏，见`ForeverFrameworkActor.md`）。
-  已知边界情况：`"empty"`这种几乎每个concept都会注册的占位id，全局匹配下必然"通过"，
+  已知边界情况(mod id带concept前缀之前)：`"empty"`这种几乎每个concept都会注册的占位id，全局匹配下必然"通过"——现在各concept的占位id是`<concept>_empty`，不再撞名，
   这是"id不带concept信息"这个前提本身带来的局限，不是bug。
 
 **读取时机**：`name_reserve`必须在生成市民之前读到，但milestone的正式加载时机

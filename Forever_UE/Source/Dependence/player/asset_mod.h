@@ -1,6 +1,8 @@
 #pragma once
 
 #include "common/mod_state.h"
+
+#include <string>
 // AssetMod：物品/资产的类型定义(目录性质，比照ProductMod/WeaponMod，不迁移老工程
 // DefineEstate()/DefineVehicle()/DefineObject()/DefineContainer()/DefineContainee()那套
 // 工具方法)——具体子类必须在SetProperty()里赋值公开字段，不要在构造函数里赋值，见
@@ -29,6 +31,7 @@ public:
 	float volume = 0.f;    // >0 即为容器，可以AddContent
 	bool backpack = false; // 能否放进"后背"槽(容器类通常为true)
 	bool weapon = false;   // IsWeapon()——能否放进左肩/右肩，也是"左右手拒绝"的判据
+	std::string weaponType; // weapon为true时：在肩膀上激活这件资产时装备的WeaponMod id(比如"weapon_pistol")
 	bool usable = false;   // IsUsable()——能否被"使用"(比如汉堡)
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----

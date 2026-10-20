@@ -71,7 +71,7 @@
       存好的`(A,B,C)`顺序直接建三角形，不用再另外对调。
   **挖洞判断条件是"`construction`或者这个格子有hatch"**（`LookupTerrain`开头的提前返回、
   `BuildLevel`里调用`lookupCached`前的判断，两处必须保持一致）——隧道口所在的格子地形类型
-  是`"mountain"`（或紧邻的`"plain"`），从来不会被判定成`"construction"`（3x3邻域全plain/
+  是`"terrain_mountain"`（或紧邻的`"plain"`），从来不会被判定成`"construction"`（3x3邻域全plain/
   construction才晋升，隧道口紧邻`mountain`格子，邻域条件必然不满足），如果挖洞逻辑锁死在
   只认`"construction"`，隧道口的hatch会被忽略、隧道段被山体实心地形完全挡住看不见。
   `RoadnetMod::AddHatch`给隧道口对应的格子记一个hatch，`Map::InitRoadnet()`把这些hatch
@@ -145,7 +145,7 @@ section、同一个材质里——这些三角形会用几百上千的UV值去�
 ## 水面(`BuildOceanMesh`)
 
 名字还叫`BuildOceanMesh`（没改名，改名涉及面更广这次没做），但筛选条件从一开始就是
-`map->GetWater(x,y).first`（有没有水），不检查地形类型是不是`"ocean"`——`RiverTerrain`
+`map->GetWater(x,y).first`（有没有水），不检查地形类型是不是`"terrain_ocean"`——`RiverTerrain`
 通过`Core`新增的per-cell`setWater`机制给河流格子也设了水面之后，这些格子自动被这个
 既有函数纳入同一张水面mesh，不需要新增/改动渲染代码，见`terrain_mod.md`"水面"一节、
 `terrain_basic.md`"第三阶段"一节。用的是共享顶点网格（`(width+1)*(height+1)`个格点），

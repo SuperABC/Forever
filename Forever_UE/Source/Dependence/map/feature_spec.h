@@ -26,7 +26,7 @@ struct DoorSpec {
 
 	// ---- 交互 ----
 	std::string name;                         // 门名；非空才创建Script，见door.h"Script"一节
-	std::string scriptModName = "empty";      // 仅name非空时使用
+	std::string scriptModName = "script_empty";      // 仅name非空时使用
 	std::vector<std::string> milestoneNames;  // 仅name非空时使用
 
 	// ---- 门禁 ----

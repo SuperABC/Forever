@@ -47,9 +47,9 @@ DailyPlan`留空，不产出任何调度节点，和`EmptyJob::DailyPlan`同一�
 ### Script配置：和`JobMod`/`OrganizationMod`同一个模式
 
 `SchedulerMod`新增`scriptModName`/`milestoneNames`两个普通成员字段（默认
-`"empty"`/空），具体子类在自己的构造函数里直接赋值，`Scheduler`的构造函数据此建
+`"script_empty"`/空），具体子类在自己的构造函数里直接赋值，`Scheduler`的构造函数据此建
 `Script`+`ReadMilestones`，和`Job::Job`/`Organization::Organization`逐字照抄，
-见`job.md`"Script配置"一节。`SchedulerBasic`配的是`scriptModName = "empty";
+见`job.md`"Script配置"一节。`SchedulerBasic`配的是`scriptModName = "script_empty";
 milestoneNames = { "schedule_empty" };`——`Resource/Story/schedule_empty.script`
 是一个空的`{"milestones": []}`，纯粹是为了让"Mod指定Script类和script脚本文件"
 这条约定在Scheduler这个concept上也有一个可以指向的真实文件，不代表要跑通任何

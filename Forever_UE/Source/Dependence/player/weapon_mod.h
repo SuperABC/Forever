@@ -62,7 +62,7 @@ public:
 	int magazineCapacity = 12;
 	float reloadDuration = 1.5f;   // 秒
 
-	// 换弹时从Player背包按这个type扣减备弹(Player::ConsumeByType)，比如"ammo_pistol"，见
+	// 换弹时从Player背包按这个type扣减备弹(Player::ConsumeByType)，比如"asset_ammo_pistol"，见
 	// UForeverWeaponComponent::TickComponent换弹完成分支。
 	std::string ammoType;
 

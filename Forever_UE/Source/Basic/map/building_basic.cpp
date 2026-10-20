@@ -161,8 +161,8 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 			ArrangeRow(i, 2, "room_residence", size, kComponent, kComponentId);
 			ArrangeRow(i, 3, "room_residence", size, kComponent, kComponentId);
 		}
-		AssignElevatorCabin(0, -basements, layers - 1, "", "empty", { "elevator_basic" });
-		AssignElevatorCabin(1, -basements, layers - 1, "", "empty", { "elevator_basic" });
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
 	} else if (layout == 2) {
 		AssignFloor(-1, "preset_lshape_double_bg+", direction);
 		AssignRoom(-1, 0, "room_residence", kComponent, kComponentId);
@@ -192,7 +192,7 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 		}
 	} else { // layout == 3
 		AssignFloor(-1, "preset_nshape_double_bg+", direction);
-		AssignRoom(-1, 0, "empty", kComponent, kComponentId); // 占位槽位，不铺真实房间
+		AssignRoom(-1, 0, "room_empty", kComponent, kComponentId); // 占位槽位，不铺真实房间
 		AssignRoom(-1, 1, "room_residence", kComponent, kComponentId);
 		AssignRoom(-1, 2, "room_residence", kComponent, kComponentId);
 		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
@@ -204,7 +204,7 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 		ArrangeRow(-1, 6, "room_residence", size, kComponent, kComponentId);
 		ArrangeRow(-1, 7, "room_residence", size, kComponent, kComponentId);
 		AssignFloor(0, "preset_nshape_double_fg+-", direction);
-		AssignRoom(0, 0, "empty", kComponent, kComponentId);
+		AssignRoom(0, 0, "room_empty", kComponent, kComponentId);
 		AssignRoom(0, 1, "room_residence", kComponent, kComponentId);
 		AssignRoom(0, 2, "room_residence", kComponent, kComponentId);
 		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
@@ -217,7 +217,7 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 		ArrangeRow(0, 7, "room_residence", size, kComponent, kComponentId);
 		for (int i = 1; i < layers; i++) {
 			AssignFloor(i, "preset_nshape_double_fu+-", direction);
-			AssignRoom(i, 0, "empty", kComponent, kComponentId);
+			AssignRoom(i, 0, "room_empty", kComponent, kComponentId);
 			AssignRoom(i, 1, "room_residence", kComponent, kComponentId);
 			AssignRoom(i, 2, "room_residence", kComponent, kComponentId);
 			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
@@ -229,8 +229,8 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 			ArrangeRow(i, 6, "room_residence", size, kComponent, kComponentId);
 			ArrangeRow(i, 7, "room_residence", size, kComponent, kComponentId);
 		}
-		AssignElevatorCabin(0, -basements, layers - 1, "", "empty", { "elevator_basic" });
-		AssignElevatorCabin(1, -basements, layers - 1, "", "empty", { "elevator_basic" });
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
 	}
 }
 
@@ -307,7 +307,7 @@ void ShopBuilding::Layout(int& direction, const Quad& quad,
 	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
 	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
 	doorSpecs["entrance"].name = "商店大门";
-	doorSpecs["entrance"].scriptModName = "empty";
+	doorSpecs["entrance"].scriptModName = "script_empty";
 	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
 	doorSpecs["entrance"].style = 0; // Slide
 	doorSpecs["entrance"].leaves = 1;

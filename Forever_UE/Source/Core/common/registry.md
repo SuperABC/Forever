@@ -59,7 +59,7 @@ Factory，把"mod dll的发现/注册"和
 `GetAcreageMin`/`GetAcreageMax`这类"不需要实例的静态查询"方法同样接入这个判断。
 
 **`config.json`里所有在用的`Basic.dll`默认实现id必须列在对应的`"<concept>_mods"`数组
-里**，否则会被视为未启用而"消失"——`Populace::InitNames()`用到的`"chinese"`最严重，
+里**，否则会被视为未启用而"消失"——`Populace::InitNames()`用到的`"name_chinese"`最严重，
 不列的话会直接`THROW_EXCEPTION`导致游戏进不去，见`populace.md`"InitNames"一节。
 
 **`RoadnetFactory`/`NameFactory`是两个例外，走的是"单选"模式，不是"启用即认领"**：

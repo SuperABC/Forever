@@ -10,8 +10,8 @@
 // 系统时,对照旧工程 E:\Projects\Forever_Mods\Wxdj\Cpp\Wxdj\script_wxdj.h 补上。
 class WxdjScript : public ScriptMod {
 public:
-	static const char* GetId() { return "wxdj"; }
-	virtual const char* GetType() const override { return "wxdj"; }
+	static const char* GetId() { return "script_wxdj"; }
+	virtual const char* GetType() const override { return "script_wxdj"; }
 	virtual const char* GetName() override {
 		name = "剧情对话" + std::to_string(id);
 		return name.data();

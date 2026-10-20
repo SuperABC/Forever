@@ -26,17 +26,35 @@
 int EmptyZone::count = 0;
 int EmptyBuilding::count = 0;
 
-// 这个DLL里所有concept都共用同一个id"empty"(见下面20个GetMod<Concept>()，每个数组都只
-// 有"empty"这一项)，所以只需要给这一个id声明一次依赖——它不依赖任何其它mod。
+// 这个DLL里每个concept各有一个占位id"<concept>_empty"，都不依赖任何其它mod。
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
-		{ "empty", {} },
+		{ "terrain_empty", {} },
+		{ "roadnet_empty", {} },
+		{ "zone_empty", {} },
+		{ "building_empty", {} },
+		{ "component_empty", {} },
+		{ "room_empty", {} },
+		{ "asset_empty", {} },
+		{ "app_empty", {} },
+		{ "puzzle_empty", {} },
+		{ "name_empty", {} },
+		{ "scheduler_empty", {} },
+		{ "job_empty", {} },
+		{ "organization_empty", {} },
+		{ "script_empty", {} },
+		{ "product_empty", {} },
+		{ "storage_empty", {} },
+		{ "manufacture_empty", {} },
+		{ "route_empty", {} },
+		{ "station_empty", {} },
+		{ "vehicle_empty", {} },
 	};
 	return (void*)&dependencies;
 }
 
 extern "C" __declspec(dllexport) void* GetModTerrains() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "terrain_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModTerrains(TerrainFactory* factory) {
@@ -48,7 +66,7 @@ extern "C" __declspec(dllexport) void FinishModTerrains(TerrainFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModRoadnets() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "roadnet_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModRoadnets(RoadnetFactory* factory) {
@@ -60,7 +78,7 @@ extern "C" __declspec(dllexport) void FinishModRoadnets(RoadnetFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModZones() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "zone_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModZones(ZoneFactory* factory) {
@@ -73,7 +91,7 @@ extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModBuildings() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "building_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* factory) {
@@ -87,7 +105,7 @@ extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factor
 }
 
 extern "C" __declspec(dllexport) void* GetModComponents() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "component_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* factory) {
@@ -99,7 +117,7 @@ extern "C" __declspec(dllexport) void FinishModComponents(ComponentFactory* fact
 }
 
 extern "C" __declspec(dllexport) void* GetModRooms() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "room_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModRooms(RoomFactory* factory) {
@@ -111,7 +129,7 @@ extern "C" __declspec(dllexport) void FinishModRooms(RoomFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModAssets() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "asset_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModAssets(AssetFactory* factory) {
@@ -123,7 +141,7 @@ extern "C" __declspec(dllexport) void FinishModAssets(AssetFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModApps() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "app_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModApps(AppFactory* factory) {
@@ -135,7 +153,7 @@ extern "C" __declspec(dllexport) void FinishModApps(AppFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModPuzzles() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "puzzle_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModPuzzles(PuzzleFactory* factory) {
@@ -147,7 +165,7 @@ extern "C" __declspec(dllexport) void FinishModPuzzles(PuzzleFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModNames() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "name_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModNames(NameFactory* factory) {
@@ -159,7 +177,7 @@ extern "C" __declspec(dllexport) void FinishModNames(NameFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModSchedulers() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "scheduler_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModSchedulers(SchedulerFactory* factory) {
@@ -172,7 +190,7 @@ extern "C" __declspec(dllexport) void FinishModSchedulers(SchedulerFactory* fact
 }
 
 extern "C" __declspec(dllexport) void* GetModJobs() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "job_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModJobs(JobFactory* factory) {
@@ -184,7 +202,7 @@ extern "C" __declspec(dllexport) void FinishModJobs(JobFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModOrganizations() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "organization_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModOrganizations(OrganizationFactory* factory) {
@@ -197,7 +215,7 @@ extern "C" __declspec(dllexport) void FinishModOrganizations(OrganizationFactory
 }
 
 extern "C" __declspec(dllexport) void* GetModScripts() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "script_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModScripts(ScriptFactory* factory) {
@@ -209,7 +227,7 @@ extern "C" __declspec(dllexport) void FinishModScripts(ScriptFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModProducts() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "product_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModProducts(ProductFactory* factory) {
@@ -221,7 +239,7 @@ extern "C" __declspec(dllexport) void FinishModProducts(ProductFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModStorages() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "storage_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModStorages(StorageFactory* factory) {
@@ -233,7 +251,7 @@ extern "C" __declspec(dllexport) void FinishModStorages(StorageFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModManufactures() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "manufacture_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModManufactures(ManufactureFactory* factory) {
@@ -245,7 +263,7 @@ extern "C" __declspec(dllexport) void FinishModManufactures(ManufactureFactory* 
 }
 
 extern "C" __declspec(dllexport) void* GetModRoutes() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "route_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModRoutes(RouteFactory* factory) {
@@ -257,7 +275,7 @@ extern "C" __declspec(dllexport) void FinishModRoutes(RouteFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModStations() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "station_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModStations(StationFactory* factory) {
@@ -270,7 +288,7 @@ extern "C" __declspec(dllexport) void FinishModStations(StationFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModVehicles() {
-	static std::vector<std::string> mods = { "empty" };
+	static std::vector<std::string> mods = { "vehicle_empty" };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factory) {

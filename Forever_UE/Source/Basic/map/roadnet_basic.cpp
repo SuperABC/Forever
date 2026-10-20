@@ -58,11 +58,11 @@ JingRoadnet::~JingRoadnet() {
 }
 
 const char* JingRoadnet::GetId() {
-	return "jing";
+	return "roadnet_jing";
 }
 
 const char* JingRoadnet::GetType() const {
-	return "jing";
+	return "roadnet_jing";
 }
 
 const char* JingRoadnet::GetName() {
@@ -324,7 +324,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		vector<TunnelSpan> tunnels;
 		int lastQ = 0;
 		for (int k = 0; k < sampleCount; ) {
-			if (terr[k + 1] != "mountain") { k++; continue; }
+			if (terr[k + 1] != "terrain_mountain") { k++; continue; }
 			int p = k;
 			while (p > lastQ && !isGood(p)) p--;
 			int q = k + 1;

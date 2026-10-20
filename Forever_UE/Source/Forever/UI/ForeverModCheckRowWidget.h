@@ -19,14 +19,18 @@ class FOREVER_API UForeverModCheckRowWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	// InDependents：锁定时是谁在依赖它，鼠标悬停在这一行(含勾选框)上时用提示框列出来；不锁定时为空，不显示提示。
 	void SetRowData(const FString& InDllPath, const FString& InConceptKey, const FString& InModId,
-		bool bEnabled, bool bLocked, TFunction<void()> InOnChanged);
+		bool bEnabled, bool bLocked, const TArray<FString>& InDependents, TFunction<void()> InOnChanged);
 
 protected:
 	virtual void NativeConstruct() override;
 
 	UFUNCTION()
 	void HandleCheckChanged(bool bIsChecked);
+
+	// 依赖列表的悬停提示控件：深色背景+放大字号的文本。
+	UWidget* BuildDependentsToolTip(const FString& Text);
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ModIdLabel;

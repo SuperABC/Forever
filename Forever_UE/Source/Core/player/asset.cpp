@@ -18,6 +18,7 @@ Asset::Asset(AssetFactory* factory, const string& id, const string& name) :
 	volume = mod->volume;
 	backpack = mod->backpack;
 	weaponFlag = mod->weapon;
+	weaponType = mod->weaponType;
 	usableFlag = mod->usable;
 }
 
@@ -37,6 +38,7 @@ float Asset::GetSize() const { return size; }
 float Asset::GetVolume() const { return volume; }
 bool Asset::GetBackpack() const { return backpack; }
 bool Asset::IsWeapon() const { return weaponFlag; }
+const string& Asset::GetWeaponType() const { return weaponType; }
 bool Asset::IsUsable() const { return usableFlag; }
 bool Asset::IsContainer() const { return volume > 0.f; }
 

@@ -70,16 +70,22 @@ using namespace std;
 
 // 每个mod id自己声明依赖的mod id列表，见Source/Core/common/loader.h
 // kModDependenciesSymbol注释。依赖id按字符串匹配、不区分concept(和IsModIdEnabled/
-// Registry::CheckModRegistered同一套既有规则)——如果某个字符串同时是多个concept下的id
-// (比如"product_wheat"同时是WheatProduct和WheatAsset各自的GetId())，作为被依赖目标时，
-// 任意一个用这个字符串的mod被启用就算满足；这里没有哪个depender本身用到这类重复字符串，
-// 不需要特殊处理。
+// Registry::CheckModRegistered同一套既有规则)。所有mod id都带自己concept的前缀(比如
+// product_wheat和asset_wheat)，不同concept之间不会出现同一个字符串。不要声明成环(A依赖B、
+// B又依赖A)：两个都启用后会互相锁定，配置界面里哪个都关不掉。
 extern "C" __declspec(dllexport) void* GetModDependencies() {
+	// Forever_Mod/Empty里的占位mod：会创建Script的mod(门/电梯/Scheduler/Job/Organization/Vehicle)
+	// 默认用script_empty这个ScriptMod，住宅楼的占位房间槽用room_empty。
+	static const string kScriptEmpty = "script_empty";
+	static const string kRoomEmpty = "room_empty";
+
 	static vector<pair<string, vector<string>>> dependencies = {
+		{ RiverTerrain::GetId(), { MountainTerrain::GetId() } }, // 河从山体里流出来
+
 		{ ResidenceZone::GetId(), { ResidenceBuilding::GetId() } },
 
-		{ ResidenceBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
-		{ ShopBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId() } },
+		{ ResidenceBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
+		{ ShopBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
 		{ FactoryBuilding::GetId(), { FactoryComponent::GetId(), FactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId() } },
 		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId() } },
@@ -91,12 +97,15 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ TrainStationComponent::GetId(), { TrainStationRoom::GetId() } },
 		{ AirportComponent::GetId(), { AirportRoom::GetId() } },
 
-		{ ShopSalerJob::GetId(), { ShopRoom::GetId() } },
-		{ ShopOrganization::GetId(), { ShopSalerJob::GetId() } },
+		{ ShopRoom::GetId(), { kScriptEmpty } }, // 房间门脚本
+
+		{ SchedulerBasic::GetId(), { kScriptEmpty } },
+		{ ShopSalerJob::GetId(), { ShopRoom::GetId(), kScriptEmpty } },
+		{ ShopOrganization::GetId(), { ShopSalerJob::GetId(), kScriptEmpty } },
 
 		{ FarmManufacture::GetId(), { WheatStorage::GetId(), WheatProduct::GetId() } },
 		{ RanchManufacture::GetId(), { BeefStorage::GetId(), BeefProduct::GetId() } },
-		{ FoodFactoryManufacture::GetId(), { BurgerStorage::GetId(), BurgerProduct::GetId() } },
+		{ FoodFactoryManufacture::GetId(), { BurgerStorage::GetId(), BurgerProduct::GetId(), WheatProduct::GetId(), BeefProduct::GetId() } }, // 小麦+牛肉做汉堡
 		{ WheatStorage::GetId(), { WheatProduct::GetId() } },
 		{ BeefStorage::GetId(), { BeefProduct::GetId() } },
 		{ BurgerStorage::GetId(), { BurgerProduct::GetId() } },
@@ -105,8 +114,18 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ TrainRoute::GetId(), { TrainStation::GetId(), TrainVehicle::GetId() } },
 		{ AirRoute::GetId(), { AirStation::GetId(), PlaneVehicle::GetId() } },
 		{ BusStation::GetId(), { BusVehicle::GetId() } },
-		{ TrainStation::GetId(), { TrainVehicle::GetId() } },
-		{ AirStation::GetId(), { PlaneVehicle::GetId() } },
+		{ TrainStation::GetId(), { TrainVehicle::GetId(), TrainStationBuilding::GetId() } }, // 火车站建在火车站楼里
+		{ AirStation::GetId(), { PlaneVehicle::GetId(), AirportBuilding::GetId() } }, // 机场站建在机场楼里
+		// 每辆车都会创建自己的Script。
+		{ VehicleBasic::GetId(), { kScriptEmpty } },
+		{ BusVehicle::GetId(), { kScriptEmpty } },
+		{ TrainVehicle::GetId(), { kScriptEmpty } },
+		{ PlaneVehicle::GetId(), { kScriptEmpty } },
+
+		{ PistolWeapon::GetId(), { PistolAmmoAsset::GetId() } }, // 换弹消耗的备弹
+		{ RifleWeapon::GetId(), { RifleAmmoAsset::GetId() } },
+		{ PistolWeaponAsset::GetId(), { PistolWeapon::GetId() } }, // 在肩膀上激活时装备的武器(AssetMod::weaponType)
+		{ RifleWeaponAsset::GetId(), { RifleWeapon::GetId() } },
 	};
 	return (void*)&dependencies;
 }

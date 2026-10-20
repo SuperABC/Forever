@@ -535,7 +535,7 @@ scriptFactory`引用成员（`CreateDoor`创建门的Script要用，和`terrainF
 
 ## 实体脚本（Zone/Building/Room）
 
-`ZoneMod`/`BuildingMod`/`RoomMod` 各有两个非虚字段 `scriptModName`（默认 `"empty"`）和
+`ZoneMod`/`BuildingMod`/`RoomMod` 各有两个非虚字段 `scriptModName`（默认 `"script_empty"`）和
 `milestoneNames`（要读取的里程碑脚本名数组，默认空），约定和 `DoorSpec`/`ElevatorCabinSpec` 一致：
 **`milestoneNames` 非空才创建 Script**。Zone/Building 在 `Layout()` 里把这两个字段快照到自己身上
 （Room 在构造函数里 `SetProperty()` 之后快照），然后：

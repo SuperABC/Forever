@@ -160,7 +160,7 @@ private:
 	std::vector<Door*> doorEntities;
 
 	// RoomMod::scriptModName/milestoneNames的快照(构造函数里SetProperty()之后拷贝，读档重建时同样会跑)。
-	std::string scriptModName = "empty";
+	std::string scriptModName = "script_empty";
 	std::vector<std::string> scriptMilestones;
 	Script* script = nullptr;
 

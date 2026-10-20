@@ -22,14 +22,15 @@ namespace {
 
 } // namespace
 
-TSet<FString> UForeverConfigBridgeSubsystem::ComputeRequiredModIds() const {
-	TSet<FString> required;
+TMap<FString, TArray<FString>> UForeverConfigBridgeSubsystem::ComputeRequiredModIds() const {
+	TMap<FString, TArray<FString>> required;
 
 	// 全部Story screen脚本的mod_dependences——无条件计入，不看这份脚本自己有没有被启用
 	// (Story screen里的脚本本来就是"要加载"的，没有单独的启用/禁用开关)。
 	for (const std::string& scriptPath : Config::GetStoryScripts()) {
+		FString dependent = FString::Printf(TEXT("剧情脚本 %s"), *FPaths::GetCleanFilename(UTF8_TO_TCHAR(scriptPath.c_str())));
 		for (const std::string& id : Script::GetModDependences(scriptPath)) {
-			required.Add(UTF8_TO_TCHAR(id.c_str()));
+			required.FindOrAdd(UTF8_TO_TCHAR(id.c_str())).AddUnique(dependent);
 		}
 	}
 
@@ -37,8 +38,9 @@ TSet<FString> UForeverConfigBridgeSubsystem::ComputeRequiredModIds() const {
 	// 相关的mod被启用而被迫多算一堆依赖，见config.h GetModDependences()注释。
 	for (const Config::ModEntry& entry : Config::GetModEnables()) {
 		if (!entry.enabled) continue;
+		FString dependent = UTF8_TO_TCHAR(entry.modId.c_str());
 		for (const std::string& id : Config::GetModDependences(entry.modId)) {
-			required.Add(UTF8_TO_TCHAR(id.c_str()));
+			required.FindOrAdd(UTF8_TO_TCHAR(id.c_str())).AddUnique(dependent);
 		}
 	}
 
@@ -55,7 +57,7 @@ TArray<FString> UForeverConfigBridgeSubsystem::GetDllPaths() const {
 
 TArray<FForeverModRow> UForeverConfigBridgeSubsystem::GetModRows() const {
 	TArray<FForeverModRow> rows;
-	TSet<FString> required = ComputeRequiredModIds();
+	TMap<FString, TArray<FString>> required = ComputeRequiredModIds();
 
 	for (const Config::ModEntry& entry : Config::GetModEnables()) {
 		FForeverModRow row;
@@ -63,7 +65,10 @@ TArray<FForeverModRow> UForeverConfigBridgeSubsystem::GetModRows() const {
 		row.ConceptKey = UTF8_TO_TCHAR(entry.conceptKey.c_str());
 		row.ModId = UTF8_TO_TCHAR(entry.modId.c_str());
 		row.bEnabled = entry.enabled;
-		row.bLocked = required.Contains(row.ModId);
+		if (const TArray<FString>* dependents = required.Find(row.ModId)) {
+			row.bLocked = true;
+			row.Dependents = *dependents;
+		}
 		rows.Add(row);
 	}
 

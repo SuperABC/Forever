@@ -34,7 +34,7 @@ void PistolWeapon::SetProperty() {
 	recoilYawMin = -0.6f;
 	recoilYawMax = 0.6f;
 
-	ammoType = "ammo_pistol";
+	ammoType = "asset_ammo_pistol";
 }
 
 int RifleWeapon::count = 0;
@@ -67,5 +67,5 @@ void RifleWeapon::SetProperty() {
 	recoilYawMin = -0.4f;
 	recoilYawMax = 0.4f;
 
-	ammoType = "ammo_rifle";
+	ammoType = "asset_ammo_rifle";
 }

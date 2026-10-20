@@ -36,7 +36,7 @@ room->GetType(), room->GetName(), room->WorkspaceCapacity())`，再读
 字符串, room)`。**需要判空**：`vacancies`里的jobType对应的`JobMod`如果未启用
 （没在`config.json`的`"job_mods"`数组里列出，见`Source/Core/common/
 registry.md`"`CheckModRegistered`"一节），`Job`内部的`mod`会是空指针——`Job`
-本身不会因此崩溃（都是`mod ? ... : "empty"`式判空），但如果不管就push进
+本身不会因此崩溃（都是`mod ? ... : "script_empty"`式判空），但如果不管就push进
 `jobs`，会得到一个永远不产出任何`Change`、却仍然会被`Society::
 RecruitCitizens`正常招进去占用一个citizen名额的"哑"`Job`。所以每个新`Job`先用
 `job->GetType().empty()`（`Job::GetType()`内部mod为空时返回空字符串）判断，为空
@@ -106,13 +106,13 @@ void ShopOrganization::DesignJobsForRoom(const std::string& componentType, const
 
 ### Script配置：和Job同一套`scriptModName`/`milestoneNames`机制
 
-`OrganizationMod`有`scriptModName`/`milestoneNames`两个字段（默认`"empty"`+
+`OrganizationMod`有`scriptModName`/`milestoneNames`两个字段（默认`"script_empty"`+
 空，和`JobMod`完全一样的安全模式，见`job.md`"Script配置"一节）。
-`ShopOrganization`构造函数设`scriptModName = "empty"; milestoneNames =
+`ShopOrganization`构造函数设`scriptModName = "script_empty"; milestoneNames =
 {"organization_shop"};`，用来验证Organization的game_start广播链路。
 `Organization`构造函数在`mod = factory->CreateOrganization(id);`成功之后
 （`mod`为空直接`return`，`script`保持`nullptr`——不像`Job`那样即使mod为空也
-兜底建一个"empty"壳，因为`Organization`构造函数本来就在mod为空时整个提前
+兜底建一个"script_empty"壳，因为`Organization`构造函数本来就在mod为空时整个提前
 返回，不需要额外处理）：
 
 ```cpp

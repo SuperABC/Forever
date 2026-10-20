@@ -14,7 +14,7 @@ Scheduler::Scheduler(SchedulerFactory* factory, ScriptFactory* scriptFactory, co
 	// 配置"一节)，mod为空是CreateScheduler本身失败的防御性兜底，仍然硬编码"empty"作为最后
 	// 一道保险，和Job::Job同一个写法。
 	if (mod) mod->SetProperty();
-	script = new Script(scriptFactory, mod ? mod->scriptModName : "empty");
+	script = new Script(scriptFactory, mod ? mod->scriptModName : "script_empty");
 	if (mod) {
 		for (const string& name : mod->milestoneNames) {
 			script->ReadMilestones(Config::GetScriptPath(name));

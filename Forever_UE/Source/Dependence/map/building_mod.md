@@ -40,7 +40,7 @@ footprint/楼层高度/LOD材质，以及每层楼内部的布局（`AssignFloor
   **不是从几何位置反推出来的**——要求mod自己保证模板里elevator条目顺序跨楼层一致，这次
   没有更强的位置匹配机制。`AssignElevatorCabin`把调用记录进`std::vector<ElevatorCabinSpec>
   cabins`（同一栋building可以调用多次声明多台电梯，同一口井也可以按楼层分段放多台，范围不能重叠）。
-  末尾两个可选参数`scriptModName`/`milestoneNames`指定这台电梯的Script(比如`"empty"`+`{"elevator_basic"}`，
+  末尾两个可选参数`scriptModName`/`milestoneNames`指定这台电梯的Script(比如`"script_empty"`+`{"elevator_basic"}`，
   game_start里给自己加"前往x层"选项)。Core的`Building`按这份声明创建电梯实体`Cabin`，见
   `Source/Core/map/cabin.md`。
 - **树：虚函数`LayoutTrees(quad, boundaryRoads)`+非虚工具方法`AddTreeSingle/AddTreeLine/AddTreeArea`+`trees`**——

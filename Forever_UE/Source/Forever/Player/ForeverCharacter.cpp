@@ -176,20 +176,20 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 		if (Player* player = framework->GetPlayer()) {
 			bool bHasLoadout = player->GetByPath("leftShoulder") || player->GetByPath("rightShoulder") || player->GetByPath("back");
 			if (!bHasLoadout) {
-				if (Asset* pistolAsset = player->CreateAsset("weapon_pistol", "ShoulderPistol")) {
+				if (Asset* pistolAsset = player->CreateAsset("asset_pistol", "ShoulderPistol")) {
 					player->AddByPath("leftShoulder", pistolAsset);
 				}
-				if (Asset* rifleAsset = player->CreateAsset("weapon_rifle", "ShoulderRifle")) {
+				if (Asset* rifleAsset = player->CreateAsset("asset_rifle", "ShoulderRifle")) {
 					player->AddByPath("rightShoulder", rifleAsset);
 				}
 
 				if (Asset* bag = player->CreateAsset("asset_container", "PlayerBag")) {
 					player->AddByPath("back", bag);
-					if (Asset* pistolAmmo = player->CreateAsset("ammo_pistol", "PistolAmmo")) {
+					if (Asset* pistolAmmo = player->CreateAsset("asset_ammo_pistol", "PistolAmmo")) {
 						pistolAmmo->SetCount(120);
 						bag->AddContent(pistolAmmo);
 					}
-					if (Asset* rifleAmmo = player->CreateAsset("ammo_rifle", "RifleAmmo")) {
+					if (Asset* rifleAmmo = player->CreateAsset("asset_ammo_rifle", "RifleAmmo")) {
 						rifleAmmo->SetCount(120);
 						bag->AddContent(rifleAmmo);
 					}
@@ -408,7 +408,8 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 	// ForeverWeaponComponent额外持有一份"活的"WeaponMod副本用于开火/换弹模拟，肩膀上的
 	// Asset和这份"活的"副本是同一把枪的两种表示，彼此独立维护，互不删除/创建对方——
 	// EquipWeapon内部自己会先销毁上一把"活的"武器(如果有)，不需要这里手动处理。
-	FString activatedType = UTF8_TO_TCHAR(toActivate->GetType().c_str());
+	// 资产id(asset_pistol)和武器id(weapon_pistol)分属两个concept，由资产自己声明对应哪把武器。
+	FString activatedType = UTF8_TO_TCHAR(toActivate->GetWeaponType().c_str());
 	weaponComponent->EquipWeapon(activatedType);
 
 	// 屏幕左上角提示当前切到了哪把枪——用固定Key(不是-1)，切枪会刷新同一行，不往下堆叠。

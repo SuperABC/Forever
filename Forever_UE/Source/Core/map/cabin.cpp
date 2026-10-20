@@ -17,7 +17,7 @@ Cabin::Cabin(Building* building, int specIndex, const string& interactName, int 
 
 	// 和Door同一个模式：指定了里程碑文件才创建Script，脚本变量供$$self.xxx引用。
 	if (!milestoneNames.empty() && scriptFactory) {
-		script = new Script(scriptFactory, scriptModName.empty() ? string("empty") : scriptModName);
+		script = new Script(scriptFactory, scriptModName.empty() ? string("script_empty") : scriptModName);
 		for (const string& milestoneName : milestoneNames) {
 			script->ReadMilestones(Config::GetScriptPath(milestoneName));
 		}

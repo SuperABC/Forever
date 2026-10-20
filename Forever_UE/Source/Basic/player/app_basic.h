@@ -16,8 +16,8 @@ class BounceApp : public AppMod {
 public:
 	BounceApp();
 
-	static const char* GetId() { return "bounce"; }
-	virtual const char* GetType() const override { return "bounce"; }
+	static const char* GetId() { return "app_bounce"; }
+	virtual const char* GetType() const override { return "app_bounce"; }
 	virtual const char* GetName() override;
 
 	virtual void Init(Canvas* canvas, PostHandle* post) override;
@@ -55,8 +55,8 @@ class NotesApp : public AppMod {
 public:
 	NotesApp();
 
-	static const char* GetId() { return "notes"; }
-	virtual const char* GetType() const override { return "notes"; }
+	static const char* GetId() { return "app_notes"; }
+	virtual const char* GetType() const override { return "app_notes"; }
 	virtual const char* GetName() override;
 
 	virtual void Init(Canvas* canvas, PostHandle* post) override;

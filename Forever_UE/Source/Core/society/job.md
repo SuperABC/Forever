@@ -41,15 +41,15 @@ milestone"的合并逻辑（milestone和C++调度刻意保持互不相干）。`
 字段，Core只读"安全模式）：
 
 ```cpp
-std::string scriptModName = "empty"; // 默认"empty"，纯粹要个能创建出来的ScriptMod壳
+std::string scriptModName = "script_empty"; // 默认"script_empty"，纯粹要个能创建出来的ScriptMod壳
 std::vector<std::string> milestoneNames; // 默认为空，每项是不含路径/扩展名的bare文件名
 ```
 
-`ShopSalerJob`构造函数里设`scriptModName = "empty"; milestoneNames =
+`ShopSalerJob`构造函数里设`scriptModName = "script_empty"; milestoneNames =
 {"job_shop_saler"};`。`Job::Job()`：
 
 ```cpp
-script = new Script(scriptFactory, mod ? mod->scriptModName : "empty"); // mod为空是
+script = new Script(scriptFactory, mod ? mod->scriptModName : "script_empty"); // mod为空是
 	// CreateJob本身失败的防御性兜底，不是"决定用哪个ScriptMod"这个设计选择
 if (mod) {
 	for (const string& name : mod->milestoneNames) {

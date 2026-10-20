@@ -14,7 +14,7 @@ Job::Job(JobFactory* factory, ScriptFactory* scriptFactory, const string& id, Ro
 	// 一节)，这里不替mod做任何选择——mod为空是CreateJob本身失败的防御性兜底，不是
 	// "决定用哪个ScriptMod"这个设计选择，因此仍然硬编码"empty"作为最后一道保险。
 	if (mod) mod->SetProperty();
-	script = new Script(scriptFactory, mod ? mod->scriptModName : "empty");
+	script = new Script(scriptFactory, mod ? mod->scriptModName : "script_empty");
 	if (mod) {
 		for (const string& name : mod->milestoneNames) {
 			script->ReadMilestones(Config::GetScriptPath(name));

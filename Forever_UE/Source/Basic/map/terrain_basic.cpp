@@ -42,11 +42,11 @@ OceanTerrain::~OceanTerrain() {
 }
 
 const char* OceanTerrain::GetId() {
-	return "ocean";
+	return "terrain_ocean";
 }
 
 const char* OceanTerrain::GetType() const {
-	return "ocean";
+	return "terrain_ocean";
 }
 
 const char* OceanTerrain::GetName() {
@@ -107,7 +107,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 				// 原有的侧向衰减坡度(平滑降到0)留在海岸边，不会出现海直接切掉半座山的
 				// 硬悬崖。isOcean不标记为true，这个格子对后面"是不是海岸线"的BFS种子
 				// 判定来说，跟普通平地邻居没有任何区别——不需要额外特判。
-				if (getTerrain(x, y) == "mountain") continue;
+				if (getTerrain(x, y) == "terrain_mountain") continue;
 				setTerrain(x, y, GetType());
 				isOcean[x][y] = true;
 			}
@@ -134,7 +134,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 			if (coastStart < 0)
 				coastStart = 0;
 			for (int x = width - 1; x >= coastStart; x--) {
-				if (getTerrain(x, y) == "mountain") continue; // 绕开已有山体,见西面海岸那段注释
+				if (getTerrain(x, y) == "terrain_mountain") continue; // 绕开已有山体,见西面海岸那段注释
 				setTerrain(x, y, GetType());
 				isOcean[x][y] = true;
 			}
@@ -161,7 +161,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 			if (coastLimit > height)
 				coastLimit = height;
 			for (int y = 0; y < coastLimit; y++) {
-				if (getTerrain(x, y) == "mountain") continue; // 绕开已有山体,见西面海岸那段注释
+				if (getTerrain(x, y) == "terrain_mountain") continue; // 绕开已有山体,见西面海岸那段注释
 				setTerrain(x, y, GetType());
 				isOcean[x][y] = true;
 			}
@@ -188,7 +188,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 			if (coastStart < 0)
 				coastStart = 0;
 			for (int y = height - 1; y >= coastStart; y--) {
-				if (getTerrain(x, y) == "mountain") continue; // 绕开已有山体,见西面海岸那段注释
+				if (getTerrain(x, y) == "terrain_mountain") continue; // 绕开已有山体,见西面海岸那段注释
 				setTerrain(x, y, GetType());
 				isOcean[x][y] = true;
 			}
@@ -339,11 +339,11 @@ MountainTerrain::~MountainTerrain() {
 }
 
 const char* MountainTerrain::GetId() {
-	return "mountain";
+	return "terrain_mountain";
 }
 
 const char* MountainTerrain::GetType() const {
-	return "mountain";
+	return "terrain_mountain";
 }
 
 const char* MountainTerrain::GetName() {
@@ -715,11 +715,11 @@ RiverTerrain::~RiverTerrain() {
 }
 
 const char* RiverTerrain::GetId() {
-	return "river";
+	return "terrain_river";
 }
 
 const char* RiverTerrain::GetType() const {
-	return "river";
+	return "terrain_river";
 }
 
 const char* RiverTerrain::GetName() {
@@ -757,7 +757,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		for (int x = 0; x < width; x++) {
 			int idx = y * width + x;
 			heights[idx] = getHeight(x, y);
-			isMountain[idx] = (getTerrain(x, y) == "mountain");
+			isMountain[idx] = (getTerrain(x, y) == "terrain_mountain");
 			if (isMountain[idx]) mountainIndices.push_back(idx);
 		}
 	}
@@ -911,11 +911,11 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		// 海洋也按8邻居判定——挨着海(哪怕采样点本身还没真的落在海洋格子上)就算到了,不用
 		// 非得真的踩进海里一格才算成功,和"碰到别的河"同一个道理。
 		auto hasNearbyOcean = [&](int cx, int cy) {
-			if (getTerrain(cx, cy) == "ocean") return true;
+			if (getTerrain(cx, cy) == "terrain_ocean") return true;
 			for (auto& off : neighborOffsets) {
 				int nx = cx + off[0], ny = cy + off[1];
 				if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-				if (getTerrain(nx, ny) == "ocean") return true;
+				if (getTerrain(nx, ny) == "terrain_ocean") return true;
 			}
 			return false;
 			};
@@ -924,11 +924,11 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		// 看起来像河流在岸边几米外凭空断掉。把检测到的那个/那些挨着的海洋格子直接标记成
 		// 河流，接上这段缺口。
 		auto convertTouchingOceanToRiver = [&](int cx, int cy) {
-			if (getTerrain(cx, cy) == "ocean") markRiver(cx, cy);
+			if (getTerrain(cx, cy) == "terrain_ocean") markRiver(cx, cy);
 			for (auto& off : neighborOffsets) {
 				int nx = cx + off[0], ny = cy + off[1];
 				if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-				if (getTerrain(nx, ny) == "ocean") markRiver(nx, ny);
+				if (getTerrain(nx, ny) == "terrain_ocean") markRiver(nx, ny);
 			}
 			};
 		// 海洋最外面一圈其实是"沙滩"(贴着陆地那圈海洋格子,高度固定是0，只比固定水位
@@ -964,7 +964,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			extendIntoOcean(float(startX), float(startY), initDirX, initDirY);
 			return make_pair(RiverEnd::Ocean, touched);
 		}
-		if (startTerrain == "mountain") return make_pair(RiverEnd::Mountain, touched);
+		if (startTerrain == "terrain_mountain") return make_pair(RiverEnd::Mountain, touched);
 		if (hasNearbyRiver(startX, startY)) return make_pair(RiverEnd::OtherRiver, touched);
 		markRiver(startX, startY);
 
@@ -999,7 +999,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 					for (int d = 1; float(d) < nearest; d++) {
 						int nx = cx + axis[0] * d, ny = cy + axis[1] * d;
 						if (nx < 0 || nx >= width || ny < 0 || ny >= height) break;
-						bool hit = (float(d) < RIVER_COAST_AVOID_DISTANCE && getTerrain(nx, ny) == "ocean");
+						bool hit = (float(d) < RIVER_COAST_AVOID_DISTANCE && getTerrain(nx, ny) == "terrain_ocean");
 						if (!hit && float(d) < RIVER_NEIGHBOR_AVOID_DISTANCE) {
 							int nIdx = ny * width + nx;
 							hit = isRiver[nIdx] && !ownChainSet.count(nIdx);
@@ -1047,7 +1047,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 				return make_pair(RiverEnd::Ocean, touched);
 			}
 			string t = getTerrain(ex, ey);
-			if (t == "mountain") return make_pair(RiverEnd::Mountain, touched); // 规则：碰到山体,整条河作废
+			if (t == "terrain_mountain") return make_pair(RiverEnd::Mountain, touched); // 规则：碰到山体,整条河作废
 
 			float h = getHeight(ex, ey);
 			if (h > prevHeight + 1e-4f) {
@@ -1263,7 +1263,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 	for (int idx = 0; idx < cellCount; idx++) {
 		if (isRiver[idx]) {
 			int x = idx % width, y = idx / width;
-			// 必须在setTerrain覆盖之前读一下这个格子原来是不是"ocean"——根因就在这里：
+			// 必须在setTerrain覆盖之前读一下这个格子原来是不是"terrain_ocean"——根因就在这里：
 			// 加宽/blur是纯几何扩散，不看原来是什么地形，会把边缘一圈真正的海洋格子也
 			// 并进isRiver。这些格子的"原高度"是OceanTerrain自己算的海底深度(不是0)，如果
 			// 水位也套河流那套"原高度+SEA_LEVEL"，算出来的水位会比海洋自己固定的-0.1更低
@@ -1271,7 +1271,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			// 水位还是固定的-0.1，相对之下，海洋自己那圈贴着海岸、本来就只比水面高一点点
 			// 的海岸线格子(高度0)，相对这片凹陷的水面就显得"从水里凸出来了一截"——水面凹陷
 			// +海岸线凸起这两个一叠加，看起来就是河流和海洋从中间断开了。
-			bool wasOcean = (getTerrain(x, y) == "ocean");
+			bool wasOcean = (getTerrain(x, y) == "terrain_ocean");
 			setTerrain(x, y, GetType());
 			// 第三阶段：河床比原来的地形低一截，水面盖在河床上方一点，水位跟着(已经降过的)
 			// 河床高度走——相邻河流格子高度本来就不一样(沿下坡方向递减)，水位自然跟着不同，
@@ -1303,7 +1303,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 				int nx = x + off[0], ny = y + off[1];
 				if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
 				string nt = getTerrain(nx, ny);
-				if (nt == "river" || nt == "ocean") continue;
+				if (nt == "terrain_river" || nt == "terrain_ocean") continue;
 				setWater(nx, ny, true, waterHeight);
 				debugWaterHeight[ny * width + nx] = waterHeight;
 			}
@@ -1406,8 +1406,8 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 				<< " max fine corner error=" << maxFineCornerError << "\n";
 			// 排查"河流入海口和海洋之间断开"问题的专用诊断：第一版诊断按"neighbor
 			// terrain==ocean"筛选，结果一个都没打出来——因为convertTouchingOceanToRiver
-			// 已经把触发判定的那个/那些海洋格子本身也改成了"river"，提交完之后它自然不再
-			// 显示"ocean"，不代表没有邻居。改成不筛选，直接把链路最后一个touched格子周围
+			// 已经把触发判定的那个/那些海洋格子本身也改成了"terrain_river"，提交完之后它自然不再
+			// 显示"terrain_ocean"，不代表没有邻居。改成不筛选，直接把链路最后一个touched格子周围
 			// 一块9x9的方格(terrain+height+water)整块打出来，不管是river/ocean/plain，
 			// 这样才能看到真正未被转换的海洋从哪里开始、中间到底有没有真的留着原高度的
 			// 陆地、以及水位是不是在边界处突然跳了一截（接口没有getWater回调读不回已经
@@ -1430,7 +1430,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 						float h = getHeight(gx, gy);
 						int gIdx = gy * width + gx;
 						string waterStr;
-						if (t == "ocean") waterStr = "w=" + std::to_string(SEA_LEVEL) + "(fixed)";
+						if (t == "terrain_ocean") waterStr = "w=" + std::to_string(SEA_LEVEL) + "(fixed)";
 						else if (debugWaterHeight[gIdx] > -9000.0f) waterStr = "w=" + std::to_string(debugWaterHeight[gIdx]);
 						else waterStr = "no water";
 						f << "[" << t << " h=" << h << " " << waterStr << "] ";

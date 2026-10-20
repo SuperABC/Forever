@@ -67,7 +67,7 @@ void UForeverModPanelWidget::RefreshModList() {
 			continue;
 		}
 
-		rowWidget->SetRowData(row.DllPath, row.ConceptKey, row.ModId, row.bEnabled, row.bLocked,
+		rowWidget->SetRowData(row.DllPath, row.ConceptKey, row.ModId, row.bEnabled, row.bLocked, row.Dependents,
 			[this]() { RefreshModList(); });
 		AddChildWithGap(ModList, rowWidget);
 	}

@@ -26,8 +26,7 @@
 #include "traffic/vehicle_mod.h"
 
 // 阶段3示例mod:验证"config.json按mod id配置的命令行式参数"能透传到mod。20个concept各
-// 一个EmptyXxx,id统一为"empty"(不同concept的Factory registries互相独立,id不冲突,和
-// 旧工程"empty"这个占位mod id的用法一致)。参数不在ApplyArgs这个创建后钩子里传给mod,而是
+// 一个EmptyXxx,id是"<concept>_empty"(比如room_empty/script_empty),和其它mod一样带concept前缀。参数不在ApplyArgs这个创建后钩子里传给mod,而是
 // 直接由Create<Concept>喂给creator——config.json"<concept>_mods"数组里"empty --test true"
 // 这种写法解析出的参数字符串,创建实例那一刻就作为构造函数参数交给EmptyXxx,mod自己决定怎么用
 // (这里全部选择存进name成员)。GetName()把构造时收到的参数字符串拼进返回值,方便在
@@ -38,8 +37,8 @@ class EmptyTerrain : public TerrainMod {
 public:
 	EmptyTerrain(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "terrain_empty"; }
+	virtual const char* GetType() const override { return "terrain_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	virtual float GetPriority() const override { return 0.0f; }
@@ -60,8 +59,8 @@ class EmptyRoadnet : public RoadnetMod {
 public:
 	EmptyRoadnet(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "roadnet_empty"; }
+	virtual const char* GetType() const override { return "roadnet_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	virtual void DistributeRoadnet(int width, int height,
@@ -81,8 +80,8 @@ class EmptyZone : public ZoneMod {
 public:
 	EmptyZone() { lastName = std::string("empty") + std::to_string(count++); }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "zone_empty"; }
+	virtual const char* GetType() const override { return "zone_empty"; }
 	virtual const char* GetName() override { return lastName.c_str(); }
 
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {}
@@ -103,8 +102,8 @@ class EmptyBuilding : public BuildingMod {
 public:
 	EmptyBuilding() { lastName = std::string("empty") + std::to_string(count++); }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "building_empty"; }
+	virtual const char* GetType() const override { return "building_empty"; }
 	virtual const char* GetName() override { return lastName.c_str(); }
 
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {}
@@ -127,8 +126,8 @@ class EmptyComponent : public ComponentMod {
 public:
 	EmptyComponent(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "component_empty"; }
+	virtual const char* GetType() const override { return "component_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 private:
@@ -139,8 +138,8 @@ class EmptyRoom : public RoomMod {
 public:
 	EmptyRoom(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "room_empty"; }
+	virtual const char* GetType() const override { return "room_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 private:
@@ -151,8 +150,8 @@ class EmptyAsset : public AssetMod {
 public:
 	EmptyAsset(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "asset_empty"; }
+	virtual const char* GetType() const override { return "asset_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 private:
@@ -163,8 +162,8 @@ class EmptyApp : public AppMod {
 public:
 	EmptyApp(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "app_empty"; }
+	virtual const char* GetType() const override { return "app_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位：不产生任何画面/逻辑。
@@ -181,8 +180,8 @@ class EmptyPuzzle : public PuzzleMod {
 public:
 	EmptyPuzzle(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "puzzle_empty"; }
+	virtual const char* GetType() const override { return "puzzle_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位：不产生任何画面/逻辑，Loop固定返回0。
@@ -197,8 +196,8 @@ class EmptyName : public NameMod {
 public:
 	EmptyName(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "name_empty"; }
+	virtual const char* GetType() const override { return "name_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位，不持有任何姓名词库，按接口约定的"失败"语义统一不调用setResult。
@@ -218,8 +217,8 @@ class EmptyScheduler : public SchedulerMod {
 public:
 	EmptyScheduler(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "scheduler_empty"; }
+	virtual const char* GetType() const override { return "scheduler_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	static float GetPower() { return 0.f; }
@@ -233,8 +232,8 @@ class EmptyJob : public JobMod {
 public:
 	EmptyJob(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "job_empty"; }
+	virtual const char* GetType() const override { return "job_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// Society/Job域这次迁移新增的纯虚方法：这个占位mod不产生任何调度。
@@ -248,8 +247,8 @@ class EmptyOrganization : public OrganizationMod {
 public:
 	EmptyOrganization(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "organization_empty"; }
+	virtual const char* GetType() const override { return "organization_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// Society/Organization域这次迁移新增的两个纯虚方法：这个占位mod不参与地图上真实的
@@ -273,8 +272,8 @@ class EmptyScript : public ScriptMod {
 public:
 	EmptyScript(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "script_empty"; }
+	virtual const char* GetType() const override { return "script_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	virtual void WrapScript(const Event* event, const std::vector<ScriptAction>& actions,
@@ -305,8 +304,8 @@ class EmptyProduct : public ProductMod {
 public:
 	EmptyProduct(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "product_empty"; }
+	virtual const char* GetType() const override { return "product_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位：categories/batchSize/ingredients/byproducts保持基类默认值不填，见
@@ -321,8 +320,8 @@ class EmptyStorage : public StorageMod {
 public:
 	EmptyStorage(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "storage_empty"; }
+	virtual const char* GetType() const override { return "storage_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位：categories/capacity保持基类默认值不填。
@@ -336,8 +335,8 @@ class EmptyManufacture : public ManufactureMod {
 public:
 	EmptyManufacture(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "manufacture_empty"; }
+	virtual const char* GetType() const override { return "manufacture_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位：targets保持基类默认值(空map)不填。
@@ -351,8 +350,8 @@ class EmptyRoute : public RouteMod {
 public:
 	EmptyRoute(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "route_empty"; }
+	virtual const char* GetType() const override { return "route_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位：stationType/vehicleType等选项字段保持基类默认值不填。
@@ -369,8 +368,8 @@ class EmptyStation : public StationMod {
 public:
 	EmptyStation(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "station_empty"; }
+	virtual const char* GetType() const override { return "station_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位：stationType保持基类默认值不填。
@@ -387,8 +386,8 @@ class EmptyVehicle : public VehicleMod {
 public:
 	EmptyVehicle(const std::string& args) { name = "empty(" + args + ")"; }
 
-	static const char* GetId() { return "empty"; }
-	virtual const char* GetType() const override { return "empty"; }
+	static const char* GetId() { return "vehicle_empty"; }
+	virtual const char* GetType() const override { return "vehicle_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
 	// 空占位：blueprintPath/scriptModName等字段保持基类默认值不填。

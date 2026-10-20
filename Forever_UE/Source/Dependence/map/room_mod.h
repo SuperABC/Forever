@@ -54,7 +54,7 @@ public:
 	// 数组(Config::GetScriptPath解析)，和DoorSpec/ElevatorCabinSpec同一个约定——milestoneNames
 	// 非空才创建Script，空=没有脚本(默认)。玩家进出这个房间(Room)的enter/leave事件只发给它自己的
 	// Script，不再广播给全部脚本，见Core/map/map.md"实体脚本"一节。在SetProperty()里设置。
-	std::string scriptModName = "empty";
+	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
 
 	// 房间门——负责single/row实例化出的Room的门，tag->DoorSpec，在SetProperty()里填写

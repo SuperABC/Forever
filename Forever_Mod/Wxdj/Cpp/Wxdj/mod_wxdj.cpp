@@ -13,7 +13,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 }
 
 extern "C" __declspec(dllexport) void* GetModScripts() {
-	static std::vector<std::string> mods = { "wxdj" };
+	static std::vector<std::string> mods = { WxdjScript::GetId() };
 	return (void*)&mods;
 }
 

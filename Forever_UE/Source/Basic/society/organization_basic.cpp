@@ -5,7 +5,7 @@ using namespace std;
 int ShopOrganization::count = 0;
 
 ShopOrganization::ShopOrganization() : id(count++) {
-	scriptModName = "empty";
+	scriptModName = "script_empty";
 	milestoneNames = { "organization_shop" };
 }
 

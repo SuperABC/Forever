@@ -13,8 +13,8 @@ class YuanshenBuilding : public BuildingMod {
 public:
 	YuanshenBuilding() { lastName = std::string("yuanshen") + std::to_string(count++); }
 
-	static const char* GetId() { return "yuanshen"; }
-	virtual const char* GetType() const override { return "yuanshen"; }
+	static const char* GetId() { return "building_yuanshen"; }
+	virtual const char* GetType() const override { return "building_yuanshen"; }
 	virtual const char* GetName() override { return lastName.c_str(); }
 
 	virtual void Layout(int& direction, const Quad& quad,
@@ -41,18 +41,18 @@ public:
 		milestoneNames = { "entity_event" };
 		floorHeights.assign(layers, 0.4f);
 
-		const std::string component = "empty";
+		const std::string component = "component_empty";
 		AssignFloor(0, "yuanshen_fg+", face);
-		for (int slot = 0; slot < 5; ++slot) AssignRoom(0, slot, "empty", component, 0);
-		for (int slot = 0; slot < 2; ++slot) ArrangeRow(0, slot, "empty", 200.f, component, 0);
+		for (int slot = 0; slot < 5; ++slot) AssignRoom(0, slot, "room_empty", component, 0);
+		for (int slot = 0; slot < 2; ++slot) ArrangeRow(0, slot, "room_empty", 200.f, component, 0);
 		for (int level = 1; level < layers; ++level) {
 			AssignFloor(level, "yuanshen_fu+-", face);
-			for (int slot = 0; slot < 2; ++slot) AssignRoom(level, slot, "empty", component, 0);
-			for (int slot = 0; slot < 2; ++slot) ArrangeRow(level, slot, "empty", 200.f, component, 0);
+			for (int slot = 0; slot < 2; ++slot) AssignRoom(level, slot, "room_empty", component, 0);
+			for (int slot = 0; slot < 2; ++slot) ArrangeRow(level, slot, "room_empty", 200.f, component, 0);
 		}
 
 		// 两个模板各自在elevators数组里只有一口井(下标0)，一部电梯从1楼跑到顶层。
-		AssignElevatorCabin(0, 0, layers - 1, "", "empty", { "elevator_basic" });
+		AssignElevatorCabin(0, 0, layers - 1, "", "script_empty", { "elevator_basic" });
 	}
 
 	// 和TrainStationBuilding::Assign同一个思路：在中心lot里用Lot::FindAdaptivePlacement按当前

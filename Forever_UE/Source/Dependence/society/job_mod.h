@@ -43,7 +43,7 @@ public:
 	// 知道也不需要知道文件实际存放位置——这两个字段和下面的DailyPlan/ExecNode完全无关，
 	// 纯粹是给这个Job独占的Script提供milestone内容，将来由外部广播一个Event、走
 	// Script::MatchEvent的正常触发器匹配流程触发。
-	std::string scriptModName = "empty";
+	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
 
 	// 生成今天的调度表，直接写进this->plans(node名->今天触发的具体时间)。

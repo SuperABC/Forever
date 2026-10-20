@@ -50,7 +50,7 @@ void Phone::RecomputeLayout(int w, int h) {
 void Phone::BuildAppList() {
 	appTypes.clear();
 	for (const string& id : Registry::Get().GetAppFactory().GetRegisteredIds()) {
-		if (id == "empty") continue; // 每个concept都有的占位id，不当真实App显示在桌面上
+		if (id == "app_empty") continue; // 每个concept都有的占位id，不当真实App显示在桌面上
 		appTypes.push_back(id);
 	}
 }

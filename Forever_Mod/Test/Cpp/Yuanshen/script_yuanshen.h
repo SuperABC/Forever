@@ -24,8 +24,8 @@ class YuanshenScript : public ScriptMod {
 public:
 	YuanshenScript() { name = std::string("yuanshen") + std::to_string(count++); }
 
-	static const char* GetId() { return "yuanshen"; }
-	virtual const char* GetType() const override { return "yuanshen"; }
+	static const char* GetId() { return "script_yuanshen"; }
+	virtual const char* GetType() const override { return "script_yuanshen"; }
 	virtual const char* GetName() override { return name.c_str(); }
 
 	virtual void WrapScript(const Event* event, const std::vector<ScriptAction>& actions,
@@ -50,7 +50,7 @@ public:
 		// 先找建筑：全图只有一栋yuanshen，找不到(这张地图没放它)就什么都不替换。
 		JsonValue request(DATA_OBJECT);
 		request["post"] = "list buildings";
-		request["type"] = "yuanshen";
+		request["type"] = "building_yuanshen";
 		post->Post(request);
 
 		const JsonValue& result = post->GetResult();

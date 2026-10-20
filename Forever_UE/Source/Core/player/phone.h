@@ -67,7 +67,7 @@ private:
 	// 底部工具栏(返回/主页/任务)，三态都常驻渲染。
 	int barHeight = 0, barY = 0;
 
-	std::vector<std::string> appTypes; // 已启用的App类型(桌面图标顺序)，来自AppFactory::GetRegisteredIds()，跳过"empty"占位id
+	std::vector<std::string> appTypes; // 已启用的App类型(桌面图标顺序)，来自AppFactory::GetRegisteredIds()，跳过"app_empty"占位id
 	std::vector<AppEntry> entries;     // 打开过的App("最近任务")
 	State state = State::Home;
 	int homeSelection = 0;

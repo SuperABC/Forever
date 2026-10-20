@@ -10,9 +10,9 @@
 - `ScriptFactory& scriptFactory`：引用成员，构造函数初始化列表里绑定
   `Registry::Get().GetScriptFactory()`——mod dll的发现/注册只在整个UE进程生命周期里跑一次，
   统一挂在`Registry`（见`Source/Core/common/registry.md`），不是每个`Story`实例各自持有一份。
-  `config.json`里`"script_mods"`已经配好`["wxdj", "empty --test true"]`
+  `config.json`里`"script_mods"`已经配好`["script_wxdj", "script_empty --test true"]`
   （`Source/Core/common/loader.cpp`的`kModConceptDescriptors`有`Scripts`这一项，
-  `Forever_Mod/Empty`提供id为`"empty"`的`EmptyScript`）。
+  `Forever_Mod/Empty`提供id为`"script_empty"`的`EmptyScript`）。
 - `Script* mainScript`：主线剧情Script——一份剧本只能由一个Script表示，`Init()`从
   `Resource/Story/test.script`读取。
 - `Script* systemScript`：`system.`前缀路由的目标（见`Dependence/story/expression.md`
@@ -37,7 +37,7 @@ void Story::Init() {
 }
 ```
 
-`config.json`当前配的是`"main_story": "empty"`。
+`config.json`当前配的是`"main_story": "script_yuanshen"`。
 
 ## `BroadcastGameStart`用回调而不是直接返回`vector<ScriptAction>`
 

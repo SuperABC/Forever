@@ -116,6 +116,7 @@ void PistolWeaponAsset::SetProperty() {
 	weight = 3.0f;
 	size = 8.0f;
 	weapon = true; // 只能挂左肩/右肩，不能拿在手上
+	weaponType = "weapon_pistol";
 }
 
 int RifleWeaponAsset::count = 0;
@@ -133,4 +134,5 @@ void RifleWeaponAsset::SetProperty() {
 	weight = 3.0f;
 	size = 8.0f;
 	weapon = true;
+	weaponType = "weapon_rifle";
 }

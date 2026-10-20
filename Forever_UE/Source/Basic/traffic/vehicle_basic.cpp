@@ -22,7 +22,7 @@ void VehicleBasic::SetProperty() {
 	// "empty"这个ScriptMod id纯粹是透传(AutoCopy(actions)，不做任何占位替换)，"靠近弹出
 	// 上车选项"完全靠milestone触发就够了，不需要WrapScript介入，见
 	// Resource/Story/vehicle_basic.script。
-	scriptModName = "empty";
+	scriptModName = "script_empty";
 	milestoneNames = { "vehicle_basic" };
 
 	category = "car";

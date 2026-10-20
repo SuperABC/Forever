@@ -31,7 +31,7 @@ public:
 	// 两个普通成员字段，不通过返回值传递。scriptModName默认"empty"，milestoneNames默认
 	// 为空，每项是不含路径/扩展名的bare文件名，Core通过Config::GetScriptPath()解析实际
 	// 路径，见job_mod.h"Script配置"一节。
-	std::string scriptModName = "empty";
+	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
 
 	// 生成今天的调度表，直接写进this->plans(node名->今天触发的具体时间)。这次负责的是

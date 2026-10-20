@@ -8,18 +8,18 @@
 
 int YuanshenBuilding::count = 0;
 
-// 这个DLL注册一个building mod和一个script mod，id都是"yuanshen"(分属不同factory)。建筑用到
-// room/component "empty"，所以依赖empty；YuanshenScript要找yuanshen建筑，所以依赖building yuanshen。
+// 这个DLL注册一个building mod(building_yuanshen)和一个script mod(script_yuanshen)。建筑用到
+// room_empty/component_empty和电梯的script_empty；YuanshenScript要找这栋建筑，所以依赖building_yuanshen。
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
-		{ YuanshenBuilding::GetId(), { "empty" } },
+		{ YuanshenBuilding::GetId(), { "room_empty", "component_empty", "script_empty" } },
 		{ YuanshenScript::GetId(), { YuanshenBuilding::GetId() } },
 	};
 	return (void*)&dependencies;
 }
 
 extern "C" __declspec(dllexport) void* GetModBuildings() {
-	static std::vector<std::string> mods = { "yuanshen" };
+	static std::vector<std::string> mods = { YuanshenBuilding::GetId() };
 	return (void*)&mods;
 }
 
@@ -35,7 +35,7 @@ extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factor
 }
 
 extern "C" __declspec(dllexport) void* GetModScripts() {
-	static std::vector<std::string> mods = { "yuanshen" };
+	static std::vector<std::string> mods = { YuanshenScript::GetId() };
 	return (void*)&mods;
 }
 

@@ -34,7 +34,7 @@ const char* ShopSalerJob::GetName() {
 }
 
 void ShopSalerJob::SetProperty() {
-	scriptModName = "empty";
+	scriptModName = "script_empty";
 	milestoneNames = { "job_shop_saler" };
 }
 
