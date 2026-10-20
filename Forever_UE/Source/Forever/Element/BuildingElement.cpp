@@ -353,6 +353,15 @@ namespace {
 			UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
 		return framework ? framework->GetStoryFramework() : nullptr;
 	}
+
+	// 进出事件只发给这栋建筑自己的Script：按名字现查(碰撞盒回调里只烘焙了名字，不持有Building*)。
+	Script* FindBuildingScript(UWorld* world, const std::string& buildingName) {
+		AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+			UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
+		Map* map = framework ? framework->GetMap() : nullptr;
+		Building* building = map ? map->GetBuilding(buildingName) : nullptr;
+		return building ? building->GetScript() : nullptr;
+	}
 }
 
 void ABuildingElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -362,7 +371,8 @@ void ABuildingElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, 
 	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("进入 %s"), *collisionLabel));
 	if (UForeverStoryFrameworkComponent* storyFramework = FindBuildingStoryFramework(GetWorld())) {
 		EnterBuildingEvent event(zoneNameOnly, buildingNameOnly);
-		storyFramework->BroadcastPlayerLocation(event, "building", buildingNameOnly, /*entering=*/true);
+		storyFramework->BroadcastPlayerLocation(event, "building", buildingNameOnly, /*entering=*/true,
+			FindBuildingScript(GetWorld(), buildingNameOnly));
 	}
 }
 
@@ -373,7 +383,8 @@ void ABuildingElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AA
 	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("离开 %s"), *collisionLabel));
 	if (UForeverStoryFrameworkComponent* storyFramework = FindBuildingStoryFramework(GetWorld())) {
 		LeaveBuildingEvent event(zoneNameOnly, buildingNameOnly);
-		storyFramework->BroadcastPlayerLocation(event, "building", buildingNameOnly, /*entering=*/false);
+		storyFramework->BroadcastPlayerLocation(event, "building", buildingNameOnly, /*entering=*/false,
+			FindBuildingScript(GetWorld(), buildingNameOnly));
 	}
 }
 
@@ -447,7 +458,7 @@ void ABuildingElement::OnRoomOverlapBegin(UPrimitiveComponent* OverlappedCompone
 		}
 		if (UForeverStoryFrameworkComponent* storyFramework = frameworkActor->GetStoryFramework()) {
 			EnterRoomEvent event(zoneNameOnly, buildingNameOnly, room->GetName());
-			storyFramework->BroadcastPlayerLocation(event, "room", room->GetName(), /*entering=*/true);
+			storyFramework->BroadcastPlayerLocation(event, "room", room->GetName(), /*entering=*/true, room->GetScript());
 		}
 	}
 }
@@ -472,7 +483,7 @@ void ABuildingElement::OnRoomOverlapEnd(UPrimitiveComponent* OverlappedComponent
 		}
 		if (UForeverStoryFrameworkComponent* storyFramework = frameworkActor->GetStoryFramework()) {
 			LeaveRoomEvent event(zoneNameOnly, buildingNameOnly, room->GetName());
-			storyFramework->BroadcastPlayerLocation(event, "room", room->GetName(), /*entering=*/false);
+			storyFramework->BroadcastPlayerLocation(event, "room", room->GetName(), /*entering=*/false, room->GetScript());
 		}
 	}
 }

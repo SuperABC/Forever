@@ -92,6 +92,8 @@ public:
 		footprint = { 0.5f, 0.5f, 1.f, 1.f };
 		basements = 0;
 		layers = 12;
+		// 挂示例脚本entity_event：进出这栋楼的事件只发给它，见Forever_UE/Resource/Story/entity_event.script。
+		milestoneNames = { "entity_event" };
 		floorHeights.assign(layers, 0.4f);
 
 		const std::string component = "empty";
@@ -120,6 +122,11 @@ public:
 				Lot* targetLot;
 				float marginStart, marginEnd, depth;
 				if (!lot->FindAdaptivePlacement(dir, kSize, kSize, targetLot, marginStart, marginEnd, depth)) continue;
+
+				// 贴到命中子块这条边"终点"那个角(余量全部挪到marginStart)，和园区/火车站的起点角
+				// 错开，别居中占掉整块连续空地。
+				marginStart += marginEnd;
+				marginEnd = 0.f;
 
 				// request.lot是命中的自由子块，不是lot本身；targetLot!=lot时要让Core侧把子块的残余
 				// 空间搬回lot，所以设adaptiveParent，见TrainStationBuilding::Assign的说明。

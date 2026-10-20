@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include <array>
 
+class Script;
+
 
 // 楼梯/电梯/坡道：都是"矩形+朝向+四面是否有墙"，照抄老工程Stair/Elevator/Ramp(字段/方法
 // 完全一样，只是分成三个类型名以后如果需要各自加字段更清楚)。params是从.layout模板解析出的
@@ -342,6 +344,8 @@ struct BuildingNavResult {
 class Building : public Quad {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;
+	// 实体脚本：Map::BuildZoneScript/BuildBuildingScripts直接读写快照字段并挂Script。
+	friend class Map;
 public:
 	Building() = delete;
 
@@ -395,6 +399,9 @@ public:
 	const std::unordered_map<int, FloorLayoutSpec>& GetFloorSpecs() const;
 	const std::vector<ElevatorCabinSpec>& GetCabins() const;
 	const std::string& GetStationMod() const;
+
+	// 这栋建筑自己的Script(BuildingMod::milestoneNames非空才有，否则nullptr)，Map::BuildBuildingScripts创建，析构时释放。
+	Script* GetScript() const;
 
 	// 按level(0=1楼，-1=地下一层……)查一层的实例化数据，查不到返回nullptr。
 	const Floor* GetFloor(int level) const;
@@ -524,6 +531,10 @@ private:
 	std::unordered_map<int, FloorLayoutSpec> floorSpecs;
 	std::vector<ElevatorCabinSpec> cabins;
 	std::string stationMod;
+	// BuildingMod::scriptModName/milestoneNames的快照(读档时Layout不会再跑，存档里直接存这两个)。
+	std::string scriptModName = "empty";
+	std::vector<std::string> scriptMilestones;
+	Script* script = nullptr;
 
 	std::vector<Floor> floors;
 	std::vector<Component*> components;

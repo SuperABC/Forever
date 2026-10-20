@@ -1032,6 +1032,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 		WriteQuad(*zone, w);
 		w.I32(t.LotRef(zone->parentLot));
 		w.I32(zone->direction);
+		w.Str(zone->scriptModName); WriteStrings(zone->scriptMilestones, w);
 		WriteDecorations(zone->decorations, w);
 		WriteBoundary(zone->boundaryRoads, w, roadRef);
 		w.U32(static_cast<uint32_t>(zone->internalRoads.size()));
@@ -1085,6 +1086,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			w.Str(s.scriptModName); WriteStrings(s.milestoneNames, w);
 		}
 		w.Str(building->stationMod);
+		w.Str(building->scriptModName); WriteStrings(building->scriptMilestones, w);
 
 		w.U32(static_cast<uint32_t>(building->floors.size()));
 		for (const Floor& floor : building->floors) WriteFloor(floor, w);
@@ -1260,6 +1262,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 		ReadQuad(*zone, r);
 		zone->parentLot = t.LotAt(r.I32());
 		zone->direction = r.I32();
+		zone->scriptModName = r.Str(); zone->scriptMilestones = ReadStrings(r);
 		zone->decorations = ReadDecorations(r);
 		readBoundary(zone->boundaryRoads);
 		uint32_t internalRoads = r.U32();
@@ -1324,6 +1327,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 			s.scriptModName = r.Str(); s.milestoneNames = ReadStrings(r);
 		}
 		building->stationMod = r.Str();
+		building->scriptModName = r.Str(); building->scriptMilestones = ReadStrings(r);
 
 		uint32_t floorCount = r.U32();
 		for (uint32_t j = 0; j < floorCount && !r.Failed(); j++) {
@@ -1537,6 +1541,8 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 		error = "structures section is truncated";
 		return false;
 	}
+	// 实体脚本(Zone/Building/Room)：快照字段已读回，补建Script，脚本状态由script_save恢复。
+	map.BuildAllEntityScripts();
 	return true;
 }
 

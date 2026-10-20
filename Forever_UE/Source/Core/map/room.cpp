@@ -5,6 +5,7 @@
 #include "map/building.h"
 #include "map/door.h"
 #include "player/asset.h"
+#include "story/script.h"
 
 #include <sstream>
 #include <iomanip>
@@ -39,12 +40,15 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 	properties.manufactureTypes = mod->manufactureTypes;
 	properties.isParking = mod->isParking;
 	properties.parkingSpots = mod->parkingSpots;
+	scriptModName = mod->scriptModName;
+	scriptMilestones = mod->milestoneNames;
 }
 
 Room::~Room() {
 	factory->DestroyRoom(mod);
 	for (auto& [name, asset] : assets) delete asset; // 没人捡走的地上物品，房间销毁时清理
 	for (Door* door : doorEntities) delete door;
+	delete script;
 }
 
 string Room::GetType() const { return type; }
@@ -78,6 +82,8 @@ void Room::SetNumber(int level, int seq) {
 	oss << setw(4) << setfill('0') << seq;
 	number = oss.str();
 }
+
+Script* Room::GetScript() const { return script; }
 
 Node* Room::GetNavigationNode() const { return navigationNode; }
 void Room::SetNavigationNode(Node* node) { navigationNode = node; }

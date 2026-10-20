@@ -128,6 +128,13 @@ public:
 	// StationMod::Layout()，见traffic/station_mod.h。
 	std::string stationMod;
 
+	// 这个建筑(Building)挂的Script：scriptModName是ScriptMod的id，milestoneNames是要读取的里程碑脚本名
+	// 数组(Config::GetScriptPath解析)，和DoorSpec/ElevatorCabinSpec同一个约定——milestoneNames
+	// 非空才创建Script，空=没有脚本(默认)。玩家进出这个建筑(Building)的enter/leave事件只发给它自己的
+	// Script，不再广播给全部脚本，见Core/map/map.md"实体脚本"一节。在Layout(...)里设置。
+	std::string scriptModName = "empty";
+	std::vector<std::string> milestoneNames;
+
 	// 声明第level层用哪个模板+朝向+资产。level：0-based，0=1楼，负数=地下室(-1=地下一层，
 	// 离地表最近的那层)——和floorHeights下标同一套人类直觉编号(不是老工程"basements偏移后
 	// 的数组下标"，Building::Layout()内部自己做偏移换算)。同一个level重复调用会覆盖之前

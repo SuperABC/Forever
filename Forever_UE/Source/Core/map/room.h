@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+class Script;
+
 
 // WallHole(一面墙上的门/窗开口列表)定义在general_geometry.h——Room和building.h的Corridor/Single/
 // Row都要用，general_geometry.h是两边都已经包含的公共底层头。
@@ -26,6 +28,8 @@
 class Room : public Quad {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;
+	// 实体脚本：Map::BuildZoneScript/BuildBuildingScripts直接读写快照字段并挂Script。
+	friend class Map;
 public:
 	Room() = delete;
 
@@ -40,6 +44,9 @@ public:
 
 	int GetLayer() const;
 	int GetDirection() const;
+
+	// 这个房间自己的Script(RoomMod::milestoneNames非空才有，否则nullptr)，Map::BuildBuildingScripts创建，析构时释放。
+	Script* GetScript() const;
 	void SetDirection(int direction);
 
 	Building* GetParentBuilding() const;
@@ -151,6 +158,11 @@ private:
 	Node* navigationNode = nullptr;
 
 	std::vector<Door*> doorEntities;
+
+	// RoomMod::scriptModName/milestoneNames的快照(构造函数里SetProperty()之后拷贝，读档重建时同样会跑)。
+	std::string scriptModName = "empty";
+	std::vector<std::string> scriptMilestones;
+	Script* script = nullptr;
 
 	Citizen* owner = nullptr;
 	bool stated = false;

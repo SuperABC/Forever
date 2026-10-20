@@ -113,6 +113,13 @@ public:
 	std::vector<ZoneInternalRoadSpec> internalRoads;
 	std::vector<ZoneInternalBuildingSpec> internalBuildings;
 
+	// 这个园区(Zone)挂的Script：scriptModName是ScriptMod的id，milestoneNames是要读取的里程碑脚本名
+	// 数组(Config::GetScriptPath解析)，和DoorSpec/ElevatorCabinSpec同一个约定——milestoneNames
+	// 非空才创建Script，空=没有脚本(默认)。玩家进出这个园区(Zone)的enter/leave事件只发给它自己的
+	// Script，不再广播给全部脚本，见Core/map/map.md"实体脚本"一节。在Layout(...)里设置。
+	std::string scriptModName = "empty";
+	std::vector<std::string> milestoneNames;
+
 	// 在园区里放一个自定义StaticMesh——在Layout()里调用。和建筑的AddDecoration同一套约定，只是
 	// 园区没有footprint：DecorationSpec::position是相对园区quad(原点在西北角)的PointParams，按
 	// "朝北"(大门在北)定义，Core按园区实际朝向(direction)和自身旋转换算。常驻显示(园区没有LOD)。

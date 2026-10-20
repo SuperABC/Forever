@@ -12,6 +12,7 @@
 #include "map/door.h"
 #include "map/map.h"
 #include "map/zone.h"
+#include "map/zone.h"
 #include "map/building.h"
 #include "map/general_geometry.h"
 #include "story/event.h"
@@ -259,6 +260,15 @@ namespace {
 			UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
 		return framework ? framework->GetStoryFramework() : nullptr;
 	}
+
+	// 进出事件只发给这个园区自己的Script：按名字现查(碰撞盒回调里只烘焙了名字，不持有Zone*)。
+	Script* FindZoneScript(UWorld* world, const std::string& zoneName) {
+		AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+			UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
+		Map* map = framework ? framework->GetMap() : nullptr;
+		Zone* zone = map ? map->GetZone(zoneName) : nullptr;
+		return zone ? zone->GetScript() : nullptr;
+	}
 }
 
 void UForeverZoneFrameworkComponent::OnZoneOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -272,7 +282,7 @@ void UForeverZoneFrameworkComponent::OnZoneOverlapBegin(UPrimitiveComponent* Ove
 	UForeverStoryFrameworkComponent* storyFramework = FindZoneStoryFramework(GetWorld());
 	if (!name || !storyFramework) return;
 	EnterZoneEvent event(*name);
-	storyFramework->BroadcastPlayerLocation(event, "zone", *name, /*entering=*/true);
+	storyFramework->BroadcastPlayerLocation(event, "zone", *name, /*entering=*/true, FindZoneScript(GetWorld(), *name));
 }
 
 void UForeverZoneFrameworkComponent::OnZoneOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -286,5 +296,5 @@ void UForeverZoneFrameworkComponent::OnZoneOverlapEnd(UPrimitiveComponent* Overl
 	UForeverStoryFrameworkComponent* storyFramework = FindZoneStoryFramework(GetWorld());
 	if (!name || !storyFramework) return;
 	LeaveZoneEvent event(*name);
-	storyFramework->BroadcastPlayerLocation(event, "zone", *name, /*entering=*/false);
+	storyFramework->BroadcastPlayerLocation(event, "zone", *name, /*entering=*/false, FindZoneScript(GetWorld(), *name));
 }

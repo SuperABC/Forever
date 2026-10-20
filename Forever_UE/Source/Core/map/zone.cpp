@@ -4,6 +4,7 @@
 
 #include "map/door.h"
 #include "map/map.h"
+#include "story/script.h"
 
 #include <cmath>
 
@@ -52,6 +53,7 @@ Zone::~Zone() {
 	for (Door* door : doorEntities) {
 		delete door;
 	}
+	delete script;
 	factory->DestroyZone(mod);
 }
 
@@ -79,6 +81,8 @@ string Zone::GetAddress() const {
 void Zone::Layout(int inDirection) {
 	direction = inDirection;
 	mod->Layout(direction, *this, GetBoundaryRoads());
+	scriptModName = mod->scriptModName;
+	scriptMilestones = mod->milestoneNames;
 	walls = mod->walls;
 	gates = mod->gates;
 
@@ -102,6 +106,10 @@ void Zone::Layout(int inDirection) {
 
 int Zone::GetDirection() const {
 	return direction;
+}
+
+Script* Zone::GetScript() const {
+	return script;
 }
 
 pair<float, float> Zone::NorthPointToWorld(const PointParams& p) const {

@@ -1,0 +1,50 @@
+{
+	// 示例脚本：挂在zone/building/room任意一种实体上都行(ZoneMod/BuildingMod/RoomMod的
+	// milestoneNames = { "entity_event" })。玩家进出这个实体的enter/leave事件只发给它自己的Script，
+	// 所以触发条件不用写zone/building/room名字(留空=不限)。C++在创建时写好了$$self.name(实体名)
+	// 和$$self.address(地址)。六个里程碑分别对应三种kind的进入/离开，这里只debug_print，验证事件路由。
+	"milestones": [
+		{
+			"milestone": "enter_zone",
+			"triggers": [ { "type": "enter_zone" } ],
+			"visible": false, "drop": "false", "description": "", "goal": "",
+			"changes": [ { "type": "debug_print", "message": "进入园区$$self.name" } ],
+			"dialogs": [], "subsequences": []
+		},
+		{
+			"milestone": "leave_zone",
+			"triggers": [ { "type": "leave_zone" } ],
+			"visible": false, "drop": "false", "description": "", "goal": "",
+			"changes": [ { "type": "debug_print", "message": "离开园区$$self.name" } ],
+			"dialogs": [], "subsequences": []
+		},
+		{
+			"milestone": "enter_building",
+			"triggers": [ { "type": "enter_building" } ],
+			"visible": false, "drop": "false", "description": "", "goal": "",
+			"changes": [ { "type": "debug_print", "message": "进入建筑$$self.name" } ],
+			"dialogs": [], "subsequences": []
+		},
+		{
+			"milestone": "leave_building",
+			"triggers": [ { "type": "leave_building" } ],
+			"visible": false, "drop": "false", "description": "", "goal": "",
+			"changes": [ { "type": "debug_print", "message": "离开建筑$$self.name" } ],
+			"dialogs": [], "subsequences": []
+		},
+		{
+			"milestone": "enter_room",
+			"triggers": [ { "type": "enter_room" } ],
+			"visible": false, "drop": "false", "description": "", "goal": "",
+			"changes": [ { "type": "debug_print", "message": "进入房间$$self.name" } ],
+			"dialogs": [], "subsequences": []
+		},
+		{
+			"milestone": "leave_room",
+			"triggers": [ { "type": "leave_room" } ],
+			"visible": false, "drop": "false", "description": "", "goal": "",
+			"changes": [ { "type": "debug_print", "message": "离开房间$$self.name" } ],
+			"dialogs": [], "subsequences": []
+		}
+	]
+}

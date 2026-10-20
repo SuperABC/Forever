@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+class Script;
+
 
 // Zone：持有一个具体ZoneMod实例，代表一块已经落地的Zone占位（继承Quad表示自己占据的矩形，
 // 和Lot本身"继承Quad表示自己的矩形"是同一种写法）。这次不实现Zone内部再摆Building的递归
@@ -32,6 +34,8 @@
 class Zone : public Quad {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;
+	// 实体脚本：Map::BuildZoneScript/BuildBuildingScripts直接读写快照字段并挂Script。
+	friend class Map;
 public:
 	Zone() = delete;
 
@@ -63,6 +67,9 @@ public:
 
 	// Layout()收到的方向(Assign选中的大门方向)，Layout之前是-1。
 	int GetDirection() const;
+
+	// 这个园区自己的Script(milestoneNames非空才有，否则nullptr)，Map::BuildZoneScript创建，析构时释放。
+	Script* GetScript() const;
 
 	// 园区自定义模型/树线的坐标换算：p是园区quad上的PointParams(ratio+offset，原点在quad西北角，
 	// +X东+Y南)，按"朝北"(大门在北)定义——按GetDirection()用InversePoint旋转到实际朝向，再转成中心
@@ -145,4 +152,9 @@ private:
 
 	// 真正放了门扇的园区大门——只在BuildDoors()非空填入，析构时释放。
 	std::vector<Door*> doorEntities;
+
+	// ZoneMod::scriptModName/milestoneNames的快照(读档时Layout不会再跑，存档里直接存这两个)。
+	std::string scriptModName = "empty";
+	std::vector<std::string> scriptMilestones;
+	Script* script = nullptr;
 };

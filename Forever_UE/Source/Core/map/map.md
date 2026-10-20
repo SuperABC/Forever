@@ -532,3 +532,26 @@ scriptFactory`引用成员（`CreateDoor`创建门的Script要用，和`terrainF
   instance启动时做的，早于任何关卡的`BeginPlay`）——这个顺序依赖目前只是约定，没有代码层面
   强制，如果以后出现`Config::ReadConfig`没跑就调用`InitTerrains`的场景，需要补上显式检查
   或调整调用时机。
+
+## 实体脚本（Zone/Building/Room）
+
+`ZoneMod`/`BuildingMod`/`RoomMod` 各有两个非虚字段 `scriptModName`（默认 `"empty"`）和
+`milestoneNames`（要读取的里程碑脚本名数组，默认空），约定和 `DoorSpec`/`ElevatorCabinSpec` 一致：
+**`milestoneNames` 非空才创建 Script**。Zone/Building 在 `Layout()` 里把这两个字段快照到自己身上
+（Room 在构造函数里 `SetProperty()` 之后快照），然后：
+
+- `Map::BuildZoneScript(zone)`（`InitZones` 里 `BuildDoors` 之后）、`Map::BuildBuildingScripts(building)`
+  （`InitBuildings` 三处落地循环里 `BuildCabins` 之后，同时给这栋楼的每个 Room 建）创建 Script，
+  写入脚本变量 `name`、`address`，Room 另有 `building`。
+- 读档不跑 `Layout`，所以 Zone/Building 的快照字段进存档（`world.map.structures`），Room 的由重建时的
+  `SetProperty()` 重新得到；`MapSaveCodec::ReadStructures` 末尾调 `Map::BuildAllEntityScripts()` 补建，
+  脚本状态仍由 `script_save` 恢复，键是 `zone:<名>`、`building:<名>`、`room:<地址>`。
+- Script 归实体持有，实体析构时释放。
+
+**进出事件只发给对应实体的脚本**：玩家进出 zone/building/room 时，UE 层
+（`BroadcastPlayerLocation`）不再广播给全部脚本，而是只发给被进出的那个实体自己的 Script
+（没挂脚本就不发给任何人）；`system.player.zone/building/room` 系统变量照常更新。实体脚本仍然收到
+`game_start`、计时器等普通广播（`BroadcastToAllScripts` 把它们也算进去）。示例：
+`Forever_UE/Resource/Story/entity_event.script`（zone/building/room 六种进出事件写在同一个脚本里，
+三种实体都能挂；residence 的 zone/building/room 和 SuperGP 都挂了它）。
+

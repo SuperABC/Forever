@@ -9,6 +9,7 @@
 #include "map/door.h"
 #include "map/map.h"
 #include "map/zone.h"
+#include "story/script.h"
 
 #include <algorithm>
 #include <array>
@@ -712,6 +713,7 @@ Building::~Building() {
 	for (Component* component : components) delete component;
 	for (Door* door : doorEntities) delete door;
 	for (Cabin* cabin : cabinEntities) delete cabin;
+	delete script;
 	factory->DestroyBuilding(mod);
 }
 
@@ -746,6 +748,8 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	for (auto& [level, spec] : mod->floors) floorSpecs[level] = spec;
 	cabins = mod->cabins;
 	stationMod = mod->stationMod;
+	scriptModName = mod->scriptModName;
+	scriptMilestones = mod->milestoneNames;
 
 	// 自定义模型：位置/yaw按face=2(模板原样)定义，按最终朝向用和楼层模板同一个InversePoint
 	// 换算(direction==-1没有朝向，按原样处理)，再经LocalToWorld叠加建筑自身的世界旋转。yaw的
@@ -1020,6 +1024,7 @@ const FloorLayoutSpec* Building::GetFloorSpec(int level) const {
 const unordered_map<int, FloorLayoutSpec>& Building::GetFloorSpecs() const { return floorSpecs; }
 const vector<ElevatorCabinSpec>& Building::GetCabins() const { return cabins; }
 const string& Building::GetStationMod() const { return stationMod; }
+Script* Building::GetScript() const { return script; }
 
 const Floor* Building::GetFloor(int level) const {
 	int idx = basements + level;

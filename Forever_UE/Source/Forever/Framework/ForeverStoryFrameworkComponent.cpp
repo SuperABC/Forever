@@ -31,6 +31,9 @@
 #include "map/door.h"
 #include "map/map.h"
 #include "map/cabin.h"
+#include "map/zone.h"
+#include "map/building.h"
+#include "map/room.h"
 #include "story/script_save.h"
 #include "player/player.h"
 #include "common/implement.h"
@@ -96,18 +99,23 @@ void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 	BroadcastToAllScripts(event, postImplement, /*includeMain=*/false);
 }
 
+void UForeverStoryFrameworkComponent::BroadcastToScript(Event& event, Script* script, PostImplement& postImplement) {
+	if (!story || !script) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	ScriptContext context;
+	context.self = script;
+	context.system = story->GetSystemScript();
+	context.global = story->GetGlobalScript();
+	context.local = &event;
+	ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
+}
+
 void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain) {
 	if (!story) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 
 	auto broadcastOne = [&](Script* script) {
-		if (!script) return;
-		ScriptContext context;
-		context.self = script;
-		context.system = story->GetSystemScript();
-		context.global = story->GetGlobalScript();
-		context.local = &event;
-		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
+		BroadcastToScript(event, script, postImplement);
 		};
 
 	if (includeMain) broadcastOne(story->GetMainScript());
@@ -148,6 +156,15 @@ void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostIm
 			for (Cabin* cabin : building->GetCabinEntities()) {
 				if (cabin && cabin->GetScript()) broadcastOne(cabin->GetScript());
 			}
+			// 实体脚本(建筑/房间/园区)：收game_start、计时器等普通广播；它们的进出事件不走这里，
+			// 只由BroadcastPlayerLocation发给被进出的那一个。
+			broadcastOne(building->GetScript());
+			for (Room* room : building->GetRooms()) {
+				if (room) broadcastOne(room->GetScript());
+			}
+		}
+		for (auto& [name, zone] : map->GetZones()) {
+			if (zone) broadcastOne(zone->GetScript());
 		}
 	}
 }
@@ -376,7 +393,8 @@ void UForeverStoryFrameworkComponent::AdvanceDialog() {
 	ShowCurrentItem();
 }
 
-void UForeverStoryFrameworkComponent::BroadcastPlayerLocation(Event& event, const string& kind, const string& name, bool entering) {
+void UForeverStoryFrameworkComponent::BroadcastPlayerLocation(Event& event, const string& kind, const string& name, bool entering,
+	Script* target) {
 	if (!story) return;
 
 	if (Script* systemScript = story->GetSystemScript()) {
@@ -400,7 +418,7 @@ void UForeverStoryFrameworkComponent::BroadcastPlayerLocation(Event& event, cons
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
 
-	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
+	BroadcastToScript(event, target, postImplement);
 }
 
 string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) const {

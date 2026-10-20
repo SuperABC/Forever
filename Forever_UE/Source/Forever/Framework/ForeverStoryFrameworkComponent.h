@@ -74,9 +74,11 @@ public:
 
 	// 玩家进出园区/建筑/房间(各自的Trigger碰撞盒Overlap回调里调用)：先更新系统变量
 	// system.player.zone/building/room(进入时写名字；离开时只有当前值还是这个名字才清空，
-	// 避免"先进B后离开A"的回调顺序把刚写进去的B清掉)，再把事件广播给所有脚本(含主线，和
-	// global_message同一个范围)。kind是"zone"/"building"/"room"。
-	void BroadcastPlayerLocation(Event& event, const std::string& kind, const std::string& name, bool entering);
+	// 避免"先进B后离开A"的回调顺序把刚写进去的B清掉)，再把事件**只发给target**(被进出的那个
+	// zone/building/room自己的Script，target为空=它没挂脚本，不发给任何人)，不再广播给其它脚本。
+	// kind是"zone"/"building"/"room"。
+	void BroadcastPlayerLocation(Event& event, const std::string& kind, const std::string& name, bool entering,
+		Script* target);
 
 	// 计时器(见Core/story/story.md"计时器")：create_timer/remove_timer由AForeverFrameworkActor::
 	// ApplyChange转发到这里，FireExpiredTimers每帧在Story::Tick之后调用。
@@ -146,6 +148,9 @@ private:
 	// 把event广播给组织/岗位/市民Scheduler/车辆/门的全部Script(includeMain为true时连主线也算)，
 	// 匹配出的Dialog/Change交给ProcessScriptActions。BroadcastGameStart和BroadcastGlobalMessage共用。
 	void BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain);
+
+	// 只把event发给一个Script(进出事件用)，匹配出的Dialog/Change交给ProcessScriptActions。
+	void BroadcastToScript(Event& event, Script* script, PostImplement& postImplement);
 
 	// 计时器归属：Script* <-> ScriptSaveCodec::CollectScripts的稳定键。找不到返回空串/nullptr。
 	std::string FindScriptKey(const Container* script) const;

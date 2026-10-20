@@ -49,6 +49,8 @@ const char* ResidenceBuilding::GetName() {
 
 void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
+	milestoneNames = { "entity_event" };
 	// direction对显式占位是真实方向，对权重CDF/FillRemainder落地传进来是-1——这个类型的
 	// 楼层内部布局(AssignFloor选的模板)按direction摆朝向，所以-1时要从boundaryRoads里随机
 	// 挑一个有真实边界路的方向回写，保证这栋building最终有确定方向可用(行人/车辆导航的

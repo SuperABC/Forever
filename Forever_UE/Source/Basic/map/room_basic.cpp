@@ -15,6 +15,8 @@ const char* ResidenceRoom::GetName() {
 void ResidenceRoom::SetProperty() {
 	isResidential = true;
 	residentialCapacity = 1;
+	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
+	milestoneNames = { "entity_event" };
 
 	// 房间门：随机左右转动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
 	// "用户追加的具体门型要求"一节。只有single/row的门洞带了"room"这个tag才会用到这份

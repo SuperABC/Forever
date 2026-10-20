@@ -225,6 +225,16 @@ public:
 	// 创建一台电梯(Building::BuildCabins调用)：交互名"<building名> 电梯<n>"(n按这栋楼已建的电梯数+1)，
 	// 初始停在1楼(夹到范围内)，登记进cabinsByInteractName。电梯归building的cabinEntities持有。
 	Cabin* CreateCabin(Building* building, int specIndex, const ElevatorCabinSpec& spec);
+
+	// 实体脚本：Zone/Building/Room各自可以挂一个Script(mod的scriptModName+milestoneNames，快照在
+	// Zone/Building/Room自己身上，milestoneNames为空=没有)，玩家进出它们的enter/leave事件只发给
+	// 它自己的Script。BuildZoneScript在Zone::Layout()之后调用；BuildBuildingScripts在
+	// Building::Layout()之后调用，同时给这栋建筑和它的每个Room建脚本；读档重建完整张地图后
+	// 用BuildAllEntityScripts统一补建。已经有Script的实体跳过，所以重复调用安全。
+	// 脚本变量：name(实体名)、address(GetAddress())，Room另有building(所属建筑名)。
+	void BuildZoneScript(Zone* zone);
+	void BuildBuildingScripts(Building* building);
+	void BuildAllEntityScripts();
 	// 按交互名查电梯，找不到返回nullptr。
 	Cabin* FindCabinByName(const std::string& interactName) const;
 

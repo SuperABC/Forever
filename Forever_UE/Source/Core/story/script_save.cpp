@@ -4,6 +4,9 @@
 #include "story/story.h"
 #include "map/map.h"
 #include "map/door.h"
+#include "map/zone.h"
+#include "map/building.h"
+#include "map/room.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "populace/scheduler.h"
@@ -67,6 +70,13 @@ vector<pair<string, Script*>> ScriptSaveCodec::CollectScripts(Map* map, Populace
 			for (Cabin* cabin : building->GetCabinEntities()) {
 				if (cabin && cabin->GetScript()) scripts.emplace_back("cabin:" + cabin->GetInteractName(), cabin->GetScript());
 			}
+			if (building->GetScript()) scripts.emplace_back("building:" + name, building->GetScript());
+			for (Room* room : building->GetRooms()) {
+				if (room && room->GetScript()) scripts.emplace_back("room:" + room->GetAddress(), room->GetScript());
+			}
+		}
+		for (auto& [name, zone] : map->GetZones()) {
+			if (zone && zone->GetScript()) scripts.emplace_back("zone:" + name, zone->GetScript());
 		}
 	}
 	if (society) {

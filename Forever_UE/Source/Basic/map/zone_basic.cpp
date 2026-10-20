@@ -73,6 +73,8 @@ void ResidenceZone::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, voi
 
 void ResidenceZone::Layout(int direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
+	milestoneNames = { "entity_event" };
 	float side = sqrtf(TARGET_ACREAGE / ACREAGE_SCALE_FACTOR);
 	float half = side / 2.f;
 	int dir = direction;

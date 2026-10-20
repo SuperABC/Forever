@@ -8,6 +8,8 @@
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "story/change.h"
+#include "story/script.h"
+#include "story/script_factory.h"
 
 #include <algorithm>
 #include <cmath>
@@ -447,6 +449,7 @@ void Map::InitZones() {
 			zone->Layout(request.direction); // 内部自己调mod->Layout(...)，填好walls/gates/
 				// 内部道路/内部建筑——放在SetPosition/SetBoundaryRoad之后调用
 			zone->BuildDoors(*this); // 园区大门——Layout()填好mod->gates之后才能读到数据
+			BuildZoneScript(zone);
 
 			// 出入口接图 + 内部道路：同一个zone在这次调用期间共用一份anchorCache，
 			// 让内部道路端点能复用出入口已经建好的zone侧锚点(坐标+类别重合就是同一个点)。
@@ -558,6 +561,7 @@ void Map::InitBuildings() {
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
 			building->BuildCabins(*this);
+			BuildBuildingScripts(building);
 			if (!AddBuilding(building)) delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
 		}
 	}
@@ -588,6 +592,7 @@ void Map::InitBuildings() {
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
 			building->BuildCabins(*this);
+			BuildBuildingScripts(building);
 			if (AddBuilding(building)) {
 				zone->AddInternalBuilding(building);
 			}
@@ -633,6 +638,7 @@ void Map::InitBuildings() {
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
 			building->BuildCabins(*this);
+			BuildBuildingScripts(building);
 			if (!AddBuilding(building)) delete building;
 		}
 
@@ -2270,6 +2276,47 @@ Cabin* Map::CreateCabin(Building* building, int specIndex, const ElevatorCabinSp
 		initialLevel, building->GetFloorBaseZ(initialLevel), spec.scriptModName, spec.milestoneNames, &scriptFactory);
 	cabinsByInteractName[interactName] = cabin;
 	return cabin;
+}
+
+namespace {
+	// 按实体快照的scriptModName/milestoneNames建一个Script，写入name/address变量。milestoneNames为空
+	// 返回nullptr(没有脚本)，和Door/Cabin同一个约定。
+	Script* MakeEntityScript(ScriptFactory& factory, const string& modName, const vector<string>& milestoneNames,
+		const string& name, const string& address) {
+		if (milestoneNames.empty()) return nullptr;
+		Script* script = new Script(&factory, modName.empty() ? string("empty") : modName);
+		for (const string& milestoneName : milestoneNames) {
+			script->ReadMilestones(Config::GetScriptPath(milestoneName));
+		}
+		script->SetValue("name", ValueType(name));
+		script->SetValue("address", ValueType(address));
+		return script;
+	}
+}
+
+void Map::BuildZoneScript(Zone* zone) {
+	if (!zone || zone->script) return;
+	zone->script = MakeEntityScript(scriptFactory, zone->scriptModName, zone->scriptMilestones,
+		zone->GetName(), zone->GetAddress());
+}
+
+void Map::BuildBuildingScripts(Building* building) {
+	if (!building) return;
+	if (!building->script) {
+		building->script = MakeEntityScript(scriptFactory, building->scriptModName, building->scriptMilestones,
+			building->GetName(), building->GetAddress());
+	}
+	for (Room* room : building->GetRooms()) {
+		if (!room || room->script) continue;
+		room->script = MakeEntityScript(scriptFactory, room->scriptModName, room->scriptMilestones,
+			room->GetName(), room->GetAddress());
+		if (room->script) room->script->SetValue("building", ValueType(building->GetName()));
+	}
+}
+
+void Map::BuildAllEntityScripts() {
+	for (auto& [name, zone] : zones) BuildZoneScript(zone);
+	for (auto& [name, building] : buildings) BuildBuildingScripts(building);
 }
 
 Cabin* Map::FindCabinByName(const string& interactName) const {
