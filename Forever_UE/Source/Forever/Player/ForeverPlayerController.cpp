@@ -15,6 +15,7 @@
 #include "UI/InventoryWidget.h"
 #include "UI/MapWidget.h"
 #include "UI/ForeverPausePanelWidget.h"
+#include "UI/ForeverThrowListWidget.h"
 
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
@@ -109,6 +110,13 @@ void AForeverPlayerController::BeginPlay() {
 		// ZOrder比其它常驻Widget高，暂停界面盖在最上面。
 		pauseWidget->AddToViewport(10);
 	}
+
+	if (throwListWidgetClass == nullptr) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: throwListWidgetClass未设置,跳过ThrowList创建(长按3不会弹出列表)。"));
+	}
+	else if ((throwListWidget = CreateWidget<UForeverThrowListWidget>(this, throwListWidgetClass)) != nullptr) {
+		throwListWidget->AddToViewport(5);
+	}
 }
 
 void AForeverPlayerController::SetupInputComponent() {
@@ -152,7 +160,7 @@ void AForeverPlayerController::TogglePause() {
 
 	auto isShown = [](UUserWidget* widget) { return widget && widget->IsVisible(); };
 	if (isShown(mapWidget) || isShown(phoneWidget) || isShown(inventoryWidget) || isShown(puzzleWidget)
-		|| isShown(sectionSpeakingWidget) || isShown(sectionOptionWidget)) {
+		|| isShown(sectionSpeakingWidget) || isShown(sectionOptionWidget) || isShown(throwListWidget)) {
 		return;
 	}
 	pauseWidget->OpenPanel();

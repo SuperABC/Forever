@@ -22,6 +22,7 @@
 #include "Player/ForeverPlayerController.h"
 #include "Player/ForeverThrowableComponent.h"
 #include "Player/ForeverWeaponComponent.h"
+#include "UI/ForeverThrowListWidget.h"
 #include "UI/MeetOptionWidget.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
@@ -221,6 +222,12 @@ void AForeverCharacter::UnPossessed()
 		}
 	}
 
+	// 换人操控时不能把列表和慢放留在世界里。
+	if (AForeverPlayerController* controller = Cast<AForeverPlayerController>(GetController())) {
+		if (UForeverThrowListWidget* list = controller->GetThrowListWidget()) list->Close();
+	}
+	bThrowKeyHeld = false;
+
 	Super::UnPossessed();
 }
 
@@ -272,6 +279,11 @@ void AForeverCharacter::Tick(float DeltaTime)
 	// 不是StartAim/StopAim里直接赋值瞬间跳变，见头文件aimTransitionSpeed注释。这个Tick()
 	// 要正常跑，前提是这个实例的Actor Tick没被关掉——ACitizenElement默认对静止citizen关闭
 	// Tick(省性能)，被玩家占有时会重新打开，见ACitizenElement::PossessedBy/UnPossessed。
+	// 长按3：按住的真实时间到阈值就弹出投掷物选择列表。
+	if (bThrowKeyHeld && GetWorld()->GetRealTimeSeconds() - throwKeyPressTime >= longPressThreshold) {
+		OpenThrowList();
+	}
+
 	FVector targetSocketOffset = bIsAiming ? aimSocketOffset : defaultSocketOffset;
 	float targetArmLength = bIsAiming ? aimArmLength : defaultArmLength;
 	cameraBoom->SocketOffset = FMath::VInterpTo(cameraBoom->SocketOffset, targetSocketOffset, DeltaTime, aimTransitionSpeed);
@@ -383,14 +395,49 @@ void AForeverCharacter::StartFireWeapon()
 
 void AForeverCharacter::ThrowKeyPressed()
 {
-	throwKeyPressTime = GetWorld()->GetTimeSeconds();
+	// 列表开着时的"按下"不是新的一次按键(打开列表切换输入模式会清空按键状态，键还按着时系统的
+	// 按键重复会让Pawn收到假的"按下")，忽略，否则会反复触发长按，列表一闪一闪。
+	if (AForeverPlayerController* controller = Cast<AForeverPlayerController>(GetController())) {
+		if (UForeverThrowListWidget* list = controller->GetThrowListWidget()) {
+			if (list->IsOpen()) return;
+		}
+	}
+
+	throwKeyPressTime = GetWorld()->GetRealTimeSeconds();
+	bThrowKeyHeld = true;
+	bSwallowThrowRelease = false;
 }
 
 void AForeverCharacter::ThrowKeyReleased()
 {
-	// 短按切换投掷物；长按(弹出选择列表)本期未做，什么都不触发。
-	if (GetWorld()->GetTimeSeconds() - throwKeyPressTime >= longPressThreshold) return;
+	bThrowKeyHeld = false;
+
+	// 列表开着时收到的"松开"是打开列表切换输入模式时按键状态被清空造成的假事件，不是真的松开，
+	// 不能据此关闭列表；真正的松开由列表控件自己的NativeOnKeyUp处理(UI Only下它才收得到按键)。
+	if (AForeverPlayerController* controller = Cast<AForeverPlayerController>(GetController())) {
+		if (UForeverThrowListWidget* list = controller->GetThrowListWidget()) {
+			if (list->IsOpen()) return;
+		}
+	}
+
+	// 这次按键已经弹出过列表(长按)：松开不是短按。
+	if (bSwallowThrowRelease) {
+		bSwallowThrowRelease = false;
+		return;
+	}
 	if (throwableComponent) throwableComponent->CycleThrowable();
+}
+
+void AForeverCharacter::OpenThrowList()
+{
+	// 不管列表有没有成功打开(世界被别的系统冻结时会打不开)，这次按键都算长按，松开时不切换。
+	bThrowKeyHeld = false;
+	bSwallowThrowRelease = true;
+
+	AForeverPlayerController* controller = Cast<AForeverPlayerController>(GetController());
+	UForeverThrowListWidget* list = controller ? controller->GetThrowListWidget() : nullptr;
+	if (!list || !throwableComponent) return;
+	list->Open(throwableComponent->GetThrowableList(), throwableComponent->GetActiveType());
 }
 
 bool AForeverCharacter::IsAimingThrow() const

@@ -11,7 +11,7 @@
 - `UInputMappingContext::MapKey`每次调用都是"新增一条映射"而不是"查找并更新已有映射",所以在全新构造的`bindingContext`上直接为每个动作调用一次即可。
 - 同一个物理键可以映射到多个不同的`UInputAction`而不冲突(如`Jump`和`Handbrake`都默认绑空格键,分别只在`AForeverCharacter`/`AVehicleElement`各自的`SetupPlayerInputComponent`里绑定消费)。
 
-- `ThrowItem`(默认数字键3)：投掷物。动态Boolean Action没有Hold触发器，短按/长按由`AForeverCharacter`自己
+- `ThrowItem`(默认数字键3)：投掷物。动态Boolean Action没有Hold触发器，短按/长按由`AForeverCharacter`自己判断：`Started`记真实时间，`Tick`里按住超过`longPressThreshold`就弹出选择列表(长按)，没到就松开算短按切换(松开才触发，有一点延迟)。
   在`Started`记时间、`Completed`比较`longPressThreshold`区分(短按松开时才触发，有一点延迟)。
 
 ## 依赖关系

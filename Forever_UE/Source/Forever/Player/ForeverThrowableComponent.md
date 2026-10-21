@@ -14,12 +14,14 @@
 - **预览曲线画成世界里的`DrawDebugLine`线段**(每帧重画)：和场景一起深度测试，被墙/地形挡住的部分看不见。不用HUD的屏幕空间线条(没有遮挡关系)。代价：DrawDebug在Shipping/Test构建里被编译掉，和武器子弹轨迹同样的限制；以后要发布构建可换成沿路径的一串小球网格。瞄准投掷时`AForeverHUD`不画准星。
 - **什么都可以标记成可投掷**：只看`Asset::IsThrowable()`，和是不是武器无关，比如汉堡把`throwable`设为true就能被扔(Containee机动性的物品只能放容器里，不能拿在手上)。
 
+- **选择列表接口**：`GetThrowableList()`(先`Refresh`，返回`FThrowListItem{type,count}`)、`GetActiveType()`、`ActivateByType(type)`(先`Refresh`，type不存在返回false)，供`UForeverThrowListWidget`使用(长按3)。
+
 ## 依赖关系
 - 依赖：`Core/player/player.h`(`CollectThrowables`/`TakeOneThrowable`/`HasThrowableInHand`)、`AForeverCharacter`(瞄准状态、`GetWeaponComponent`，是它的friend)、`UForeverAssetFrameworkComponent::SpawnThrownAsset`、`AAssetElement::LoadAssetMesh`。
 - 被谁依赖：`AForeverCharacter`(按键转发、`StartAim`/`StartFireWeapon`/`ActivateShoulderWeapon`)、`AForeverHUD`、`UForeverInventoryWidget`(刷新缓存)。
 
 ## 待办/后续
-- 长按3弹出选择列表。
+- 列表目前只能鼠标点击选，没有键盘/手柄选择。
 - 投掷物落地后的效果(手雷爆炸/烟雾弹冒烟/消失)，目前扔出去的物品会一直留在世界里。
 - 房间外的物品由投掷和背包界面的室外丢弃产生；室外拾取没做(只认房间)。
 - 投掷物的HUD显示还是资产id，没有中文显示名。

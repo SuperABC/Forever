@@ -11,6 +11,19 @@
 
 class AForeverCharacter;
 class Player;
+
+// 长按3列表里的一项：一组可投掷物(同一个type合并)。
+USTRUCT()
+struct FThrowListItem
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString type; // 资产id
+
+	UPROPERTY()
+	int32 count = 0;
+};
 class UStaticMeshComponent;
 
 // 投掷物(手雷/烟雾弹)：按3在身上的投掷物之间切换，激活后右键瞄准显示预览曲线，左键把一个单位
@@ -30,6 +43,12 @@ public:
 
 	// 短按3：没有激活投掷物时激活缓存里最靠前的一个，已经激活则切到下一个(末尾循环)。
 	void CycleThrowable();
+
+	// 当前身上所有投掷物(先Refresh，按稳定顺序)，供长按3的选择列表使用。
+	TArray<FThrowListItem> GetThrowableList();
+	FString GetActiveType() const;
+	// 按type激活(先Refresh，type不存在返回false)——选择列表点击按钮时调用。
+	bool ActivateByType(const FString& type);
 
 	// 退出投掷状态(不处理瞄准标志，由AForeverCharacter负责)——切回肩上武器时调用。
 	void Deactivate();

@@ -142,10 +142,16 @@ protected:
 
 	void ThrowKeyPressed();
 	void ThrowKeyReleased();
-	// 按下3的时间(秒)，松开时据此区分短按/长按。
+	// 按下3的**真实**时间(秒)——世界时间会被长按列表的慢放影响，不能用。
 	double throwKeyPressTime = 0.0;
+	// 3键正按着、还没判断出是长按。Tick里到阈值就弹出选择列表。
+	bool bThrowKeyHeld = false;
+	// 这次按键已经用来弹出列表(或尝试弹出)：随后的松开不再当作短按切换。下一次按下重置，所以
+	// 即使松开事件在UI Only输入模式下丢了，也不会吞掉下一次短按。
+	bool bSwallowThrowRelease = false;
+	void OpenThrowList();
 
-	// 按住超过这个时间算长按(长按功能本期未做，只是区分开不触发短按切换)。
+	// 按住超过这个真实时间(秒)算长按，弹出选择列表；没到就松开算短按，切换到下一个投掷物。
 	UPROPERTY(EditDefaultsOnly, Category = "Throw")
 	float longPressThreshold = 0.3f;
 

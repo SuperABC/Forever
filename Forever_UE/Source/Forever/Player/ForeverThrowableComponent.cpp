@@ -90,6 +90,33 @@ void UForeverThrowableComponent::Refresh()
 	ActivateType(entries[next].type);
 }
 
+TArray<FThrowListItem> UForeverThrowableComponent::GetThrowableList()
+{
+	Refresh();
+	TArray<FThrowListItem> list;
+	for (const FThrowableEntry& entry : entries) {
+		FThrowListItem item;
+		item.type = UTF8_TO_TCHAR(entry.type.c_str());
+		item.count = entry.count;
+		list.Add(item);
+	}
+	return list;
+}
+
+FString UForeverThrowableComponent::GetActiveType() const
+{
+	return UTF8_TO_TCHAR(activeType.c_str());
+}
+
+bool UForeverThrowableComponent::ActivateByType(const FString& type)
+{
+	Refresh();
+	std::string typeUtf8 = TCHAR_TO_UTF8(*type);
+	if (IndexOfType(typeUtf8) < 0) return false;
+	ActivateType(typeUtf8);
+	return true;
+}
+
 void UForeverThrowableComponent::CycleThrowable()
 {
 	Refresh();

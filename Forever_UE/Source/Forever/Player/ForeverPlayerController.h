@@ -13,6 +13,7 @@ class UPhoneWidget;
 class UForeverInventoryWidget;
 class UMapWidget;
 class UForeverPausePanelWidget;
+class UForeverThrowListWidget;
 class UInputComponent;
 
 // 旧蓝图MainController的"MouseScrollUp/Down + F对话选项"三个热键归属这个Controller(见ForeverPlayerController.md)
@@ -115,6 +116,14 @@ protected:
 	// 键盘焦点，叠上去会互相抢)。
 	void TogglePause();
 
+	// 长按3的投掷物选择列表：跟前面几个Widget同一套模式(常驻创建、初始折叠)，由AForeverCharacter
+	// 在长按时Open。WBP_ThrowList在BP_ForeverPlayerController的类默认值里指定。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UForeverThrowListWidget> throwListWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UForeverThrowListWidget> throwListWidget;
+
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
@@ -125,4 +134,5 @@ public:
 	FORCEINLINE UForeverInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
 	FORCEINLINE UMapWidget* GetMapWidget() const { return mapWidget; }
 	FORCEINLINE UForeverPausePanelWidget* GetPauseWidget() const { return pauseWidget; }
+	FORCEINLINE UForeverThrowListWidget* GetThrowListWidget() const { return throwListWidget; }
 };

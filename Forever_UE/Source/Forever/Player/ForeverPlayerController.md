@@ -18,6 +18,8 @@
 - `Q`下车：`AVehicleElement`自己的`ExitVehicle`。
 - `N`(导航调试可视化)：旧蓝图里是手动开关，新实现改成`UForeverRoadnetFrameworkComponent`常驻生成的调试网格，不再需要按键。
 
+- **投掷物选择列表**(`throwListWidget`，长按3)：跟其它常驻Widget同一套创建模式(ZOrder 5)，`throwListWidgetClass`在`BP_ForeverPlayerController`里指定为`WBP_ThrowList`，没指定会警告并跳过(长按3不弹列表)。`TogglePause`在列表打开时拒绝(和地图/手机/背包等同样的理由)。见`UI/ForeverThrowListWidget.md`。
+
 ## 依赖关系
 - 被`AForeverPlayerGameMode`的`PlayerControllerClass`引用。
 - 依赖`Input/ForeverKeyBindingSubsystem`(`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`动态Action)。
