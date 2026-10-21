@@ -54,6 +54,9 @@
 ### 后坐力:仿PUBG手感,无自动回正
 `WeaponMod`的`recoilPitchMin/Max`/`recoilYawMin/Max`(度)每次开火各自在自己的区间内独立取随机值(不是固定角度),`recoilPitchMin/Max`都是正数保证垂直方向只会往上踢。`Fire()`开火后直接改`Controller->GetControlRotation()`的Pitch/Yaw再`SetControlRotation`回去,不用`AddControllerPitchInput`/`AddControllerYawInput`(会被`InputPitchScale`/`InputYawScale`缩放,符号不直观)。故意不做自动回正/衰减——连发时准心会持续走偏,直到玩家自己拉回,这是预期行为。单发/连发走同一个`Fire()`,后坐力逻辑无需区分。`PistolWeapon`后坐力比`RifleWeapon`轻,具体数值为目测值。
 
+### 与投掷物互斥
+同一时刻手上要么是肩上的武器、要么是投掷物(见`ForeverThrowableComponent.md`)：激活投掷物会`ClearWeapon()`，按1/2切回武器会让投掷物退出激活。投掷物激活期间`StartFireWeapon`不会走本组件的`StartFire`。
+
 ## 已知坑(避免重踩)
 - 碰撞检测必须用`ECC_Pawn`,不能用`ECC_Visibility`,见上"命中判定"一节及`CONVENTIONS.md`第11节。
 - 任何"有mesh用mesh位置,没mesh退化成角色位置"的分支,要确认两条分支应用了同一套偏移/变换。

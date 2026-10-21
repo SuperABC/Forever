@@ -20,6 +20,7 @@ Player::~Player() {
 	delete leftShoulder;
 	delete rightShoulder;
 	for (auto& [name, asset] : estateAssets) delete asset;
+	for (auto& [name, entry] : worldAssets) delete entry.asset;
 }
 
 void Player::Init() {
@@ -216,6 +217,101 @@ int Player::CountByType(const string& type) const {
 
 bool Player::ConsumeByType(const string& type, int amount) {
 	return backPack ? backPack->ConsumeByType(type, amount) : false;
+}
+
+namespace {
+	// 子项按name排序，unordered_map的遍历顺序不确定，投掷物的扫描顺序必须稳定。
+	vector<Asset*> SortedContents(const Asset* asset) {
+		vector<Asset*> children;
+		for (const auto& [name, content] : asset->GetContents()) children.push_back(content);
+		sort(children.begin(), children.end(),
+			[](const Asset* a, const Asset* b) { return a->GetName() < b->GetName(); });
+		return children;
+	}
+
+	void CollectThrowablesFrom(const Asset* asset, vector<Player::ThrowableEntry>& out) {
+		if (asset->IsThrowable() && asset->GetCount() > 0) {
+			auto it = find_if(out.begin(), out.end(),
+				[&](const Player::ThrowableEntry& e) { return e.type == asset->GetType(); });
+			if (it == out.end()) out.push_back({ asset->GetType(), asset->GetCount(), asset->GetMeshPath(), asset->GetMeshScale() });
+			else it->count += asset->GetCount();
+		}
+		for (const Asset* child : SortedContents(asset)) CollectThrowablesFrom(child, out);
+	}
+
+	// 深度优先找第一个该type的投掷物堆叠，outParent=它所在的容器(直接在手槽/背包槽上为nullptr)。
+	Asset* FindThrowable(Asset* asset, Asset* parent, const string& type, Asset*& outParent) {
+		if (asset->IsThrowable() && asset->GetType() == type && asset->GetCount() > 0) {
+			outParent = parent;
+			return asset;
+		}
+		for (Asset* child : SortedContents(asset)) {
+			if (Asset* found = FindThrowable(child, asset, type, outParent)) return found;
+		}
+		return nullptr;
+	}
+}
+
+vector<Player::ThrowableEntry> Player::CollectThrowables() const {
+	vector<ThrowableEntry> entries;
+	for (const Asset* root : { leftHand, rightHand, backPack }) {
+		if (root) CollectThrowablesFrom(root, entries);
+	}
+	return entries;
+}
+
+Asset* Player::TakeOneThrowable(const string& type) {
+	for (Asset** root : { &leftHand, &rightHand, &backPack }) {
+		if (!*root) continue;
+
+		Asset* parent = nullptr;
+		Asset* found = FindThrowable(*root, nullptr, type, parent);
+		if (!found) continue;
+
+		if (found->GetCount() > 1) {
+			// 读档后splitCounter从0重新数，会和存档里已经落在室外的同名物品撞车，跳过已有的名字。
+			string oneName;
+			do {
+				oneName = type + "_thrown" + to_string(splitCounter++);
+			} while (worldAssets.count(oneName));
+			Asset* one = CreateAsset(type, oneName);
+			if (!one) return nullptr;
+			found->SetCount(found->GetCount() - 1);
+			return one;
+		}
+
+		// 整个堆叠只剩一个：直接摘出来交给调用方。
+		if (parent) parent->RemoveContent(found->GetName());
+		else *root = nullptr;
+		return found;
+	}
+	return nullptr;
+}
+
+bool Player::AddWorldAsset(Asset* asset, const WorldAssetTransform& transform) {
+	if (!asset || worldAssets.count(asset->GetName())) return false;
+	worldAssets[asset->GetName()] = { asset, transform };
+	return true;
+}
+
+Asset* Player::RemoveWorldAsset(const string& name) {
+	auto it = worldAssets.find(name);
+	if (it == worldAssets.end()) return nullptr;
+	Asset* removed = it->second.asset;
+	worldAssets.erase(it);
+	return removed;
+}
+
+void Player::SetWorldAssetTransform(const string& name, const WorldAssetTransform& transform) {
+	auto it = worldAssets.find(name);
+	if (it != worldAssets.end()) it->second.transform = transform;
+}
+
+bool Player::HasThrowableInHand(const string& type) const {
+	for (const Asset* hand : { leftHand, rightHand }) {
+		if (hand && hand->IsThrowable() && hand->GetType() == type) return true;
+	}
+	return false;
 }
 
 bool Player::ApplyChange(const Change* change, const ScriptContext& context) {

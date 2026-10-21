@@ -456,7 +456,8 @@ extern "C" __declspec(dllexport) void FinishModVehicles(VehicleFactory* factory)
 extern "C" __declspec(dllexport) void* GetModAssets() {
 	static vector<string> mods = { ContainerAsset::GetId(), WheatAsset::GetId(), BeefAsset::GetId(),
 		BurgerAsset::GetId(), PistolAmmoAsset::GetId(), RifleAmmoAsset::GetId(),
-		PistolWeaponAsset::GetId(), RifleWeaponAsset::GetId() };
+		PistolWeaponAsset::GetId(), RifleWeaponAsset::GetId(),
+		GrenadeAsset::GetId(), SmokeGrenadeAsset::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModAssets(AssetFactory* factory) {
@@ -483,6 +484,12 @@ extern "C" __declspec(dllexport) void RegisterModAssets(AssetFactory* factory) {
 		[](AssetMod* m) { delete m; });
 	factory->RegisterAsset(RifleWeaponAsset::GetId(),
 		[](const std::string&) -> AssetMod* { return new RifleWeaponAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(GrenadeAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new GrenadeAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(SmokeGrenadeAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new SmokeGrenadeAsset(); },
 		[](AssetMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModAssets(AssetFactory* factory) {

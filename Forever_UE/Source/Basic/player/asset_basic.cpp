@@ -136,3 +136,41 @@ void RifleWeaponAsset::SetProperty() {
 	weapon = true;
 	weaponType = "weapon_rifle";
 }
+
+int GrenadeAsset::count = 0;
+
+GrenadeAsset::GrenadeAsset() : id(count++) {
+}
+
+const char* GrenadeAsset::GetName() {
+	name = string(GetType()) + to_string(id);
+	return name.data();
+}
+
+void GrenadeAsset::SetProperty() {
+	mobility = AssetMobility::Object;
+	weight = 0.4f;
+	size = 0.3f;
+	throwable = true;
+	meshPath = "/Game/Asset/Meshes/Sphere.Sphere";
+	meshScale = 0.1f; // 100cm直径的球体缩到10cm
+}
+
+int SmokeGrenadeAsset::count = 0;
+
+SmokeGrenadeAsset::SmokeGrenadeAsset() : id(count++) {
+}
+
+const char* SmokeGrenadeAsset::GetName() {
+	name = string(GetType()) + to_string(id);
+	return name.data();
+}
+
+void SmokeGrenadeAsset::SetProperty() {
+	mobility = AssetMobility::Object;
+	weight = 0.4f;
+	size = 0.3f;
+	throwable = true;
+	meshPath = "/Game/Asset/Meshes/Sphere.Sphere";
+	meshScale = 0.1f;
+}

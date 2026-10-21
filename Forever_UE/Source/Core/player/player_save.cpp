@@ -105,6 +105,22 @@ void PlayerSaveCodec::Save(const Player& player, const Map& map, SaveArchive& ar
 		for (const Asset* asset : assets) WriteAsset(asset, w);
 	}
 
+	// 房间外的物品(被扔出去的投掷物等)：位置朝向+整棵Asset树，不存速度，读档后从静止开始模拟。
+	vector<string> worldNames;
+	for (auto& [name, entry] : player.worldAssets) worldNames.push_back(name);
+	sort(worldNames.begin(), worldNames.end());
+	w.U32(static_cast<uint32_t>(worldNames.size()));
+	for (const string& name : worldNames) {
+		const Player::WorldAsset& entry = player.worldAssets.at(name);
+		w.F32(entry.transform.x);
+		w.F32(entry.transform.y);
+		w.F32(entry.transform.z);
+		w.F32(entry.transform.pitch);
+		w.F32(entry.transform.yaw);
+		w.F32(entry.transform.roll);
+		WriteAsset(entry.asset, w);
+	}
+
 	archive.SetBinary(SAVE_SECTION_PLAYER, VersionOf(SAVE_SECTION_PLAYER), w.Take());
 }
 
@@ -140,6 +156,22 @@ Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& erro
 				Asset* asset = ReadAsset(player->assetFactory, r);
 				if (asset && room) room->AddAsset(asset);
 				else delete asset;
+			}
+		}
+
+		// 房间外的物品。这一块是后加的，更早的存档没有它，读到末尾就当没有。
+		if (!r.AtEnd()) {
+			uint32_t worldCount = r.U32();
+			for (uint32_t i = 0; i < worldCount && !r.Failed(); i++) {
+				Player::WorldAssetTransform transform;
+				transform.x = r.F32();
+				transform.y = r.F32();
+				transform.z = r.F32();
+				transform.pitch = r.F32();
+				transform.yaw = r.F32();
+				transform.roll = r.F32();
+				Asset* asset = ReadAsset(player->assetFactory, r);
+				if (asset && !player->AddWorldAsset(asset, transform)) delete asset;
 			}
 		}
 

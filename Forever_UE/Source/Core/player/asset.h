@@ -36,6 +36,9 @@ public:
 	bool IsWeapon() const;
 	const std::string& GetWeaponType() const; // IsWeapon()时激活它要装备的WeaponMod id
 	bool IsUsable() const;
+	bool IsThrowable() const;
+	const std::string& GetMeshPath() const; // 空=沿用Cube占位
+	float GetMeshScale() const;
 	bool IsContainer() const; // volume > 0
 
 	int GetCount() const;
@@ -75,6 +78,9 @@ private:
 	bool weaponFlag = false;
 	std::string weaponType;
 	bool usableFlag = false;
+	bool throwableFlag = false;
+	std::string meshPath;
+	float meshScale = 1.f;
 
 	int count = 1;
 	std::unordered_map<std::string, Asset*> contents; // 独占持有

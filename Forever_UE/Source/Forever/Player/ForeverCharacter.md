@@ -18,6 +18,13 @@
 - **瞄准**(`StartAim`/`StopAim`,默认右键):手上没有激活武器(`weaponComponent->HasWeapon()`为false)或Player的右手(`GetRightHand()`)正攥着背包物品时拒绝瞄准。复用`cameraBoom`(`USpringArmComponent`)现有插值,不新增第三个摄像机:瞄准目标`aimSocketOffset`/`aimArmLength`,取消瞄准回到`defaultSocketOffset`/`defaultArmLength`,`Tick()`里用`FMath::VInterpTo`/`FInterpTo`每帧推进(插值速度`aimTransitionSpeed`)保证过渡平滑。只对第三人称生效。瞄准时角色朝向跟随摄像机而非移动方向:`UpdateRotationMode()`统一计算`bFaceCamera = bIsFirstPerson || bIsAiming`,`ToggleCameraView`/`StartAim`/`StopAim`都调用这个函数而非各自维护判断。
 - **数字键切枪**(`ActivateShoulderWeapon(slot)`):激活左肩(1)/右肩(2)当前挂着的武器Asset(若有),武器Asset本身留在肩膀槽位不动,`weaponComponent->EquipWeapon()`只是让组件额外持有一份"活的"`WeaponMod`副本用于开火/换弹模拟,两者互不删除/创建对方。切到的肩膀是空的则`weaponComponent->ClearWeapon()`清空手上武器,不会继续保留切换前那把。
 - `ACitizenElement`默认关闭Actor Tick,若被玩家占有且需要用到`AForeverCharacter::Tick()`(如瞄准插值),必须在`PossessedBy`里重新打开,且其自身`Tick()`不能在判定"无待处理路径点"时把Tick又关掉——已在`ACitizenElement::PossessedBy`/`Tick()`里用`IsPlayerControlled()`判断规避,见`CONVENTIONS.md`第11节、memory"Citizen Tick disabled by default"。此后任何打算在`AForeverCharacter`子类上使用原生`Tick()`的功能都要确认子类有没有类似的自我关闭逻辑。
+- **投掷物**(数字键3，`throwableComponent`)：短按3`CycleThrowable()`切换，长按本期未做。激活的投掷物与肩上的
+  武器互斥：激活时`weaponComponent->ClearWeapon()`，`ActivateShoulderWeapon`开头若投掷物在激活则`Deactivate()`并`StopAim()`。
+  `StartAim`在投掷物激活时走自己的分支：不要求`HasWeapon()`，也没有武器的"右手必须空"限制，改用`CanThrow()`
+  (拿着它的手就是投掷手，或至少一只手空)；两只手都被别的东西占着时仍保持激活但不能瞄准。左键`StartFireWeapon`
+  在投掷物激活时转`Throw()`(一次一个)，不走武器连发。`bIsAiming`与武器共用，`IsAimingThrow()`供HUD区分。初始
+  发放在`PossessedBy`的开局装备块里：背包里手雷、烟雾弹各一个`count=10`的堆叠(旧存档不补发，需新游戏)。
+  投掷出去的物品记进`Player::worldAssets`，不会自动消失。`UForeverThrowableComponent`是friend，需要直接开关`StartAim`/`StopAim`。
 - 蹲下(C键)和挥拳(左键)未实现:蹲姿需要在AnimGraph加`Blend Poses by bool`才能平滑过渡,效果不理想,已放弃。
 
 ### 头像方块

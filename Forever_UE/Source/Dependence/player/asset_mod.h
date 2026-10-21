@@ -33,6 +33,14 @@ public:
 	bool weapon = false;   // IsWeapon()——能否放进左肩/右肩，也是"左右手拒绝"的判据
 	std::string weaponType; // weapon为true时：在肩膀上激活这件资产时装备的WeaponMod id(比如"weapon_pistol")
 	bool usable = false;   // IsUsable()——能否被"使用"(比如汉堡)
+	// IsThrowable()——投掷物(手雷/烟雾弹)：按3键激活、瞄准后扔出去，和weapon正交(投掷物可以拿在
+	// 手上/放进容器，不能挂肩膀)。
+	bool throwable = false;
+	// 这件资产在世界里(掉落物/投掷预览)显示的静态网格路径(UE软路径，比如
+	// "/Game/Asset/Meshes/Sphere.Sphere")，空=沿用Forever层默认的Cube占位。meshScale是整体
+	// 缩放系数(网格自身尺寸不一定合适，比如100cm直径的球体当手雷要缩到0.1)。
+	std::string meshPath;
+	float meshScale = 1.f;
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
 	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，

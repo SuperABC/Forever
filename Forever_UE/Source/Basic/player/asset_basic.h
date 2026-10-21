@@ -169,3 +169,44 @@ private:
 	int id;
 	std::string name;
 };
+
+// 投掷物：手雷/烟雾弹。throwable=true，Object机动性(能拿在手上、放进容器，不能挂肩膀)。
+// 网格用项目自己路径下的球体(Content/Asset/Meshes/Sphere)，直径100cm，meshScale缩到10cm。
+// 落地后的效果(爆炸/烟雾)本期没做，只是被扔出去、5秒后消失。
+class GrenadeAsset : public AssetMod {
+public:
+	GrenadeAsset();
+
+	static const char* GetId() { return "asset_grenade"; }
+	virtual const char* GetType() const override { return "asset_grenade"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class SmokeGrenadeAsset : public AssetMod {
+public:
+	SmokeGrenadeAsset();
+
+	static const char* GetId() { return "asset_smoke_grenade"; }
+	virtual const char* GetType() const override { return "asset_smoke_grenade"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};

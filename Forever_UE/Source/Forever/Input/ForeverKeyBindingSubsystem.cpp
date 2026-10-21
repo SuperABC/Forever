@@ -45,6 +45,9 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("SwitchWeapon1"), EKeys::One },
 		{ TEXT("SwitchWeapon2"), EKeys::Two },
 		{ TEXT("AimWeapon"), EKeys::RightMouseButton },
+		// 投掷物：短按3在身上的投掷物之间切换，长按3(弹出选择列表)本期未做，见
+		// UForeverThrowableComponent。
+		{ TEXT("ThrowItem"), EKeys::Three },
 		// 游戏内地图：M开/关(ToggleMap)，Esc只关不开(CloseMap)——跟TogglePhone/
 		// ToggleInventory同样的理由绑在Controller上，见AForeverPlayerController::
 		// SetupInputComponent、UMapWidget::ToggleMap/CloseMap。

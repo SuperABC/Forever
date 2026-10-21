@@ -114,6 +114,45 @@ public:
 	int CountByType(const std::string& type) const;
 	bool ConsumeByType(const std::string& type, int amount);
 
+	// ---- 投掷物 ----
+	struct ThrowableEntry {
+		std::string type;
+		int count = 0;
+		// 取自该type第一个堆叠，供UE侧显示投掷预览模型(同type的资产网格相同)。
+		std::string meshPath;
+		float meshScale = 1.f;
+	};
+	// 汇总身上所有投掷物，按type合并。扫描顺序固定：左手 -> 右手 -> 背包，每个位置先看资产
+	// 本身是不是投掷物，再递归进它的contents(子项按name排序，保证顺序确定)——所以手里拿着
+	// 的容器、背包里嵌套容器里的投掷物都能找到。返回顺序=各type第一次出现的顺序。
+	std::vector<ThrowableEntry> CollectThrowables() const;
+	// 按同样的扫描顺序找到第一个该type的堆叠，取出一个单位：count>1时count-1并新建一个
+	// count=1的Asset返回；count==1时把整个Asset从手槽/父容器摘出返回。取不到返回nullptr。
+	// 返回的Asset所有权交给调用方(用完走DestroyAsset)。
+	Asset* TakeOneThrowable(const std::string& type);
+	// 仅判断手槽里"直接拿着"该type的资产；在手持容器里面的不算(那只手仍被容器占用)。
+	bool HasThrowableInHand(const std::string& type) const;
+
+	// ---- 房间外的物品(室外) ----
+	// 不在任何房间、也不在身上/容器里的物品(比如被扔出去的投掷物)归Player直接持有，key=
+	// Asset::GetName()。transform是UE世界坐标(厘米)+旋转(度)，Core只存数不解释：UE侧存档前
+	// 把场景里对应Actor的实际位置写回来，读档后按它重新生成Actor(速度不存，从静止开始模拟)。
+	// 物品落点即使最终在室内也照样记在这里，不转进Room::assets。
+	struct WorldAssetTransform {
+		float x = 0.f, y = 0.f, z = 0.f;
+		float pitch = 0.f, yaw = 0.f, roll = 0.f;
+	};
+	struct WorldAsset {
+		Asset* asset = nullptr;
+		WorldAssetTransform transform;
+	};
+	// 成功后Player独占持有asset；同名已存在返回false(调用方仍持有asset)。
+	bool AddWorldAsset(Asset* asset, const WorldAssetTransform& transform);
+	// 摘除不delete，调用方接手所有权。
+	Asset* RemoveWorldAsset(const std::string& name);
+	void SetWorldAssetTransform(const std::string& name, const WorldAssetTransform& transform);
+	const std::unordered_map<std::string, WorldAsset>& GetWorldAssets() const { return worldAssets; }
+
 private:
 	// 游戏时钟（持有所有权）
 	Time* time = nullptr;
@@ -142,4 +181,11 @@ private:
 	std::unordered_map<std::string, Asset*> estateAssets;
 
 	Room* currentRoom = nullptr;
+
+	// 房间外的物品，Player独占持有，见上面"房间外的物品"一节。
+	std::unordered_map<std::string, WorldAsset> worldAssets;
+
+	// TakeOneThrowable拆出来的单个Asset用它拼唯一名(按name索引)；不存档，所以起名时还要
+	// 跳过worldAssets里已有的名字。
+	int splitCounter = 0;
 };

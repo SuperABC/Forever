@@ -83,6 +83,20 @@ player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 - `CountByType`/`ConsumeByType`只转发到`backPack`（不存在返回0/false），供
   `ForeverWeaponComponent`换弹时查/扣备弹用。
 
+## 投掷物查询：`CollectThrowables`/`TakeOneThrowable`/`HasThrowableInHand`
+
+投掷物(`Asset::IsThrowable()`)可能在手上、手持容器里、背包及嵌套容器里。三个方法用同一套固定扫描顺序：
+**左手 -> 右手 -> 背包**，每个位置先看资产本身再递归进`contents`(子项按name排序，`unordered_map`遍历顺序
+不确定，不排序会让"按3切换"的顺序飘)。`CollectThrowables`按type合并数量并带上第一个堆叠的
+`meshPath`/`meshScale`(供UE侧显示预览模型)；`TakeOneThrowable`取出一个单位——堆叠`count>1`时`count-1`并
+新建一个`count=1`的Asset(名字`type_thrown<n>`，容器按name索引需要唯一)，`count==1`时整个摘出，所有权交给
+调用方；`HasThrowableInHand`只认手槽里**直接**拿着的，在手持容器里面的不算(那只手仍被容器占用)。
+UE侧缓存/激活逻辑见`Source/Forever/Player/ForeverThrowableComponent.md`。
+
+## 房间外的物品：`worldAssets`
+
+不在任何房间、也不在身上/容器里的物品（目前就是被扔出去的投掷物）归 Player 直接持有，key=物品名，带一份位置朝向（UE 世界坐标，厘米/度；Core 只存数不解释）。物品最终落在室内也照样记在这里，不转进 `Room::assets`。位置由 UE 侧在存档前从场景里的 Actor 同步回来（见 `ForeverAssetFrameworkComponent.md`），Core 平时不更新。`TakeOneThrowable` 拆出新物品时的起名会跳过这里已有的名字（计数器不存档，读档后会从 0 重数）。
+
 ## 持有方式
 
 和`Map`/`Populace`/`Story`一样，直接挂在`AForeverFrameworkActor`身上（`Player* player`

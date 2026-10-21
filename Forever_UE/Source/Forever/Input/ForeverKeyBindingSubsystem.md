@@ -11,6 +11,9 @@
 - `UInputMappingContext::MapKey`每次调用都是"新增一条映射"而不是"查找并更新已有映射",所以在全新构造的`bindingContext`上直接为每个动作调用一次即可。
 - 同一个物理键可以映射到多个不同的`UInputAction`而不冲突(如`Jump`和`Handbrake`都默认绑空格键,分别只在`AForeverCharacter`/`AVehicleElement`各自的`SetupPlayerInputComponent`里绑定消费)。
 
+- `ThrowItem`(默认数字键3)：投掷物。动态Boolean Action没有Hold触发器，短按/长按由`AForeverCharacter`自己
+  在`Started`记时间、`Completed`比较`longPressThreshold`区分(短按松开时才触发，有一点延迟)。
+
 ## 依赖关系
 - 依赖:`Forever_UE/Resource/Config/KeyBindings.ini`(找不到该文件时全部用硬编码默认值,不报错)。
 - 被谁依赖:

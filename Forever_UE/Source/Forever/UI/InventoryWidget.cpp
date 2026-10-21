@@ -11,6 +11,8 @@
 
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverAssetFrameworkComponent.h"
+#include "Player/ForeverCharacter.h"
+#include "Player/ForeverThrowableComponent.h"
 
 #include "player/player.h"
 #include "player/asset.h"
@@ -134,6 +136,12 @@ void UForeverInventoryWidget::SelectRow(UAssetButtonWidget* row) {
 }
 
 void UForeverInventoryWidget::RefreshBody() {
+	// 背包没有变化事件，所有放入/取出/使用/丢弃之后都会走到这里——顺便刷新投掷物缓存，
+	// 激活的投掷物被拿走/用完时也能及时切换。
+	if (AForeverCharacter* character = Cast<AForeverCharacter>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0))) {
+		if (UForeverThrowableComponent* throwable = character->GetThrowableComponent()) throwable->Refresh();
+	}
+
 	if (!BodyList || !AssetButtonClass) return;
 
 	BodyList->ClearChildren();
@@ -254,8 +262,10 @@ void UForeverInventoryWidget::HandleDrop() {
 	Player* player = GetPlayer();
 	if (!asset || !player) return;
 
+	// 在房间里丢进Room::assets；不在任何房间(室外)丢进Player::worldAssets，和被扔出去的投掷物
+	// 同一种归属。室外同名物品已存在时拒绝(还没从身上摘，背包不变)。
 	Room* room = player->GetCurrentRoom();
-	if (!room) return; // 不在任何房间里，没法丢到地上
+	if (!room && player->GetWorldAssets().count(asset->GetName())) return;
 
 	if (Asset* container = ResolveBodyContainer()) {
 		container->RemoveContent(asset->GetName());
@@ -263,13 +273,21 @@ void UForeverInventoryWidget::HandleDrop() {
 		player->RemoveByPath(TCHAR_TO_UTF8(*BodyPartToPath(currentBodyPart)));
 	}
 
-	player->AddByPath("room", asset);
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	FVector location = pawn ? pawn->GetActorLocation() : FVector::ZeroVector;
+	if (room) {
+		player->AddByPath("room", asset);
+	} else {
+		Player::WorldAssetTransform transform;
+		transform.x = location.X;
+		transform.y = location.Y;
+		transform.z = location.Z;
+		player->AddWorldAsset(asset, transform);
+	}
 
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		if (UForeverAssetFrameworkComponent* assetFramework = framework->GetAssetFramework()) {
-			APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-			FVector location = pawn ? pawn->GetActorLocation() : FVector::ZeroVector;
 			assetFramework->SpawnWorldAsset(asset, location);
 		}
 	}

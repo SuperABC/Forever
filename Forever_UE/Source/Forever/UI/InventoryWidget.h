@@ -32,8 +32,8 @@ class Room;
 // 上一级"单击即触发，不需要凑双击。
 //
 // Use/Drop/Pick三个按钮对"当前选中项"生效，和老工程语义完全一致(只是身体子视图从3个扩到
-// 5个)：Use=消耗selectedBody；Drop=selectedBody从当前身体侧解析出的容器/槽位移到房间
-// 地上(cube)；Pick=selectedRoom从房间移入当前身体侧解析出的容器/槽位。武器的"激活/卸下"
+// 5个)：Use=消耗selectedBody；Drop=selectedBody从当前身体侧解析出的容器/槽位移到地上(cube)：在房间里进Room::assets，
+// 室外进Player::worldAssets(拾取仍然只认房间，室外的物品目前捡不起来)；Pick=selectedRoom从房间移入当前身体侧解析出的容器/槽位。武器的"激活/卸下"
 // 完全由数字键1/2驱动(AForeverCharacter::ActivateShoulderWeapon)，这个Widget不需要知道
 // 武器系统的任何状态，见Source/Core/player/player.h"武器只挂肩膀"一节。
 UCLASS()

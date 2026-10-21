@@ -20,6 +20,7 @@
 #include "Framework/ForeverFrameworkActor.h"
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "Player/ForeverPlayerController.h"
+#include "Player/ForeverThrowableComponent.h"
 #include "Player/ForeverWeaponComponent.h"
 #include "UI/MeetOptionWidget.h"
 #include "InputActionValue.h"
@@ -120,6 +121,7 @@ AForeverCharacter::AForeverCharacter()
 	}
 
 	weaponComponent = CreateDefaultSubobject<UForeverWeaponComponent>(TEXT("WeaponComponent"));
+	throwableComponent = CreateDefaultSubobject<UForeverThrowableComponent>(TEXT("ThrowableComponent"));
 
 	static ConstructorHelpers::FObjectFinder<UInputAction> moveFinder(
 		TEXT("/Game/Blueprint/Player/Input/Actions/IA_Move.IA_Move"));
@@ -192,6 +194,15 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 					if (Asset* rifleAmmo = player->CreateAsset("asset_ammo_rifle", "RifleAmmo")) {
 						rifleAmmo->SetCount(120);
 						bag->AddContent(rifleAmmo);
+					}
+					// 投掷物：手雷、烟雾弹各10个(各一个count=10的堆叠)，按3切换，见ForeverThrowableComponent.md。
+					if (Asset* grenade = player->CreateAsset("asset_grenade", "Grenade")) {
+						grenade->SetCount(10);
+						bag->AddContent(grenade);
+					}
+					if (Asset* smokeGrenade = player->CreateAsset("asset_smoke_grenade", "SmokeGrenade")) {
+						smokeGrenade->SetCount(10);
+						bag->AddContent(smokeGrenade);
 					}
 				}
 			}
@@ -291,7 +302,9 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ReloadWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::ReloadWeapon);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("SwitchWeapon1")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchToWeapon1);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("SwitchWeapon2")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchToWeapon2);
-				enhancedInput->BindAction(keyBindings->GetAction(TEXT("AimWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::StartAim);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrowItem")), ETriggerEvent::Started, this, &AForeverCharacter::ThrowKeyPressed);
+					enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrowItem")), ETriggerEvent::Completed, this, &AForeverCharacter::ThrowKeyReleased);
+					enhancedInput->BindAction(keyBindings->GetAction(TEXT("AimWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::StartAim);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("AimWeapon")), ETriggerEvent::Completed, this, &AForeverCharacter::StopAim);
 			}
 		}
@@ -360,7 +373,29 @@ void AForeverCharacter::MeetOptionSelect()
 
 void AForeverCharacter::StartFireWeapon()
 {
+	// 激活的是投掷物：左键是扔出去(瞄准中才生效，一次一个，不连发)，不走武器开火。
+	if (throwableComponent && throwableComponent->IsActive()) {
+		throwableComponent->Throw();
+		return;
+	}
 	if (weaponComponent) weaponComponent->StartFire();
+}
+
+void AForeverCharacter::ThrowKeyPressed()
+{
+	throwKeyPressTime = GetWorld()->GetTimeSeconds();
+}
+
+void AForeverCharacter::ThrowKeyReleased()
+{
+	// 短按切换投掷物；长按(弹出选择列表)本期未做，什么都不触发。
+	if (GetWorld()->GetTimeSeconds() - throwKeyPressTime >= longPressThreshold) return;
+	if (throwableComponent) throwableComponent->CycleThrowable();
+}
+
+bool AForeverCharacter::IsAimingThrow() const
+{
+	return bIsAiming && throwableComponent && throwableComponent->IsActive();
 }
 
 void AForeverCharacter::StopFireWeapon()
@@ -389,6 +424,12 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
 	Player* player = framework ? framework->GetPlayer() : nullptr;
 	if (!player || !weaponComponent) return;
+
+	// 切回肩上的武器：退出投掷状态；原来是投掷瞄准的话一并结束瞄准。
+	if (throwableComponent && throwableComponent->IsActive()) {
+		throwableComponent->Deactivate();
+		StopAim();
+	}
 
 	activeShoulderSlot = slot;
 	Asset* toActivate = (slot == 1) ? player->GetLeftShoulder() : player->GetRightShoulder();
@@ -421,6 +462,16 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 
 void AForeverCharacter::StartAim()
 {
+	// 激活的是投掷物：只要拿着它的手就是投掷手，或者至少一只手是空的就能瞄准；两只手都被
+	// 别的东西占着时仍保持激活，但不能瞄准。不要求HasWeapon()，也没有武器的右手限制。
+	if (throwableComponent && throwableComponent->IsActive()) {
+		throwableComponent->Refresh(); // 背包没有变化事件，开始瞄准前重新核对
+		if (!throwableComponent->IsActive() || !throwableComponent->CanThrow()) return;
+		bIsAiming = true;
+		UpdateRotationMode();
+		return;
+	}
+
 	// 手上没有激活任何武器就没法瞄准——用户明确要求："左右肩为空的时候切过去，因为没有
 	// 武器，这个时候无法瞄准"。
 	if (!weaponComponent || !weaponComponent->HasWeapon()) return;

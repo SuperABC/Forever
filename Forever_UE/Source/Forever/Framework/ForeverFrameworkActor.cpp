@@ -185,6 +185,8 @@ void AForeverFrameworkActor::BeginPlay()
 		// 必须在GenerateVehicles之后——上车要用到车辆Actor。
 		if (bScriptsRestored) {
 			if (FForeverPendingLoad* load = FetchActiveLoad()) RestoreControlledPawn(*load);
+			// 房间外的物品(被扔出去的投掷物等)：按存档里的位置朝向重新生成，从静止开始模拟。
+			if (assetFramework) assetFramework->RestoreWorldAssets();
 		}
 
 	}

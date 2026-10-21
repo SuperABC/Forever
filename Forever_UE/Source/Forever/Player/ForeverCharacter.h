@@ -10,6 +10,7 @@ class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
 class UForeverWeaponComponent;
+class UForeverThrowableComponent;
 class UStaticMeshComponent;
 class UMaterialInterface;
 class UTexture2D;
@@ -18,6 +19,9 @@ UCLASS()
 class FOREVER_API AForeverCharacter : public ACharacter
 {
 	GENERATED_BODY()
+
+	// 投掷物激活/用完/手不够时要直接开关瞄准状态(StartAim/StopAim是protected)。
+	friend class UForeverThrowableComponent;
 
 public:
 	AForeverCharacter();
@@ -131,6 +135,20 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UForeverWeaponComponent> weaponComponent;
 
+	// 投掷物：数字键3。短按切换身上的投掷物(长按弹出选择列表本期未做)；激活后右键瞄准显示
+	// 预览曲线、左键扔出。和肩上的武器互斥，见ForeverThrowableComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UForeverThrowableComponent> throwableComponent;
+
+	void ThrowKeyPressed();
+	void ThrowKeyReleased();
+	// 按下3的时间(秒)，松开时据此区分短按/长按。
+	double throwKeyPressTime = 0.0;
+
+	// 按住超过这个时间算长按(长按功能本期未做，只是区分开不触发短按切换)。
+	UPROPERTY(EditDefaultsOnly, Category = "Throw")
+	float longPressThreshold = 0.3f;
+
 	// 瞄准（默认鼠标右键，按住生效/松开取消）：第三人称下把cameraBoom的SocketOffset/
 	// TargetArmLength平滑插值到肩膀附近的取景位置，让角色自己的身体不挡住准星指向的东西——
 	// 仿照大部分第三人称射击游戏的"越肩瞄准"做法。只改cameraBoom/followCamera这一份现有
@@ -190,6 +208,9 @@ public:
 	// 供UForeverWeaponComponent::Fire()判断该用哪个摄像机做开火射线的起点/方向。
 	FORCEINLINE bool IsFirstPerson() const { return bIsFirstPerson; }
 	FORCEINLINE UForeverWeaponComponent* GetWeaponComponent() const { return weaponComponent; }
+	FORCEINLINE UForeverThrowableComponent* GetThrowableComponent() const { return throwableComponent; }
+	// 瞄准中且手上激活的是投掷物——供AForeverHUD决定画投掷曲线还是准星。
+	bool IsAimingThrow() const;
 
 	// 存档/读档：当前激活的肩膀槽位；读档时RestoreWeaponState按存档重新激活并恢复弹匣余量。
 	int32 GetActiveShoulderSlot() const { return activeShoulderSlot; }

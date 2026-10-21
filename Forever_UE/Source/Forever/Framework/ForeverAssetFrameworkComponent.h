@@ -19,7 +19,19 @@ class FOREVER_API UForeverAssetFrameworkComponent : public UForeverFrameworkComp
 
 public:
 	// SpawnActor+Init+登记进worldAssetActors。location是Drop那一刻玩家的世界位置。
-	AAssetElement* SpawnWorldAsset(Asset* asset, FVector location);
+	AAssetElement* SpawnWorldAsset(Asset* asset, FVector location, FRotator rotation = FRotator::ZeroRotator);
+
+	// 投掷：把一个已经从背包取出的Asset(count=1)当作物理掉落物扔出去——和SpawnWorldAsset
+	// 同一个Actor，额外给初速度。thrower是投掷者，忽略与它的碰撞。Asset记进
+	// Player::worldAssets(房间外的物品，不进Room::assets，落点在室内也一样)，所有权归Player，
+	// 会随存档保存；扔出去之后不会自动消失。失败(同名物品已存在)返回nullptr，Asset仍归调用方。
+	AAssetElement* SpawnThrownAsset(Asset* asset, FVector location, FVector velocity, AActor* thrower);
+
+	// 存档前调用：把场景里房间外物品Actor的实际位置朝向写回Player::worldAssets。
+	void SyncWorldAssetsToCore();
+
+	// 读档后调用：按Player::worldAssets里记的位置朝向重新生成Actor，速度为0，从静止开始模拟。
+	void RestoreWorldAssets();
 
 	// 查表Destroy()+从表里移除——不delete Asset本身，调用方/Room负责Asset的生命周期。
 	void DestroyWorldAsset(Asset* asset);

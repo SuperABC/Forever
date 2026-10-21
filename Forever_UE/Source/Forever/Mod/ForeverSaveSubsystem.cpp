@@ -24,6 +24,7 @@
 #include "Player/ForeverCharacter.h"
 #include "Player/ForeverPlayerController.h"
 #include "Player/ForeverWeaponComponent.h"
+#include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "UI/PuzzleWidget.h"
@@ -130,6 +131,11 @@ bool UForeverSaveSubsystem::SaveToFile(const FString& Path, FString& OutError) {
 	TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> walking;
 	if (UForeverPopulaceFrameworkComponent* populaceFramework = framework->GetPopulaceFramework()) {
 		walking = populaceFramework->SyncPositionsToCore();
+	}
+
+	// 房间外的物品(被扔出去的投掷物等)：把Actor当前的位置朝向写回Player。
+	if (UForeverAssetFrameworkComponent* assetFramework = framework->GetAssetFramework()) {
+		assetFramework->SyncWorldAssetsToCore();
 	}
 
 	SaveArchive archive = SaveGame::BuildArchive(MakeSaveWorld(framework));

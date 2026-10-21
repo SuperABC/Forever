@@ -47,7 +47,9 @@ using namespace std;
 #define ROUTE_DEBUG_MIN_STEPS 16
 
 namespace {
-	void ComputeWorldPosition(const Building& building, float localX, float localY,
+	// 带Traffic前缀：BuildingElement.cpp也有一个同签名的匿名命名空间函数，Unity构建把两个文件
+	// 合进同一个编译单元时重名会冲突。
+	void TrafficComputeWorldPosition(const Building& building, float localX, float localY,
 		float& outWorldX, float& outWorldY) {
 		float relX = localX - building.GetBodySizeX() * 0.5f + building.GetBodyOffsetX();
 		float relY = localY - building.GetBodySizeY() * 0.5f + building.GetBodyOffsetY();
@@ -210,7 +212,7 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 		vehicle->GetParkingLocalPosition(localX, localY);
 
 		float worldX, worldY;
-		ComputeWorldPosition(*building, room->GetPosX() + localX, room->GetPosY() + localY, worldX, worldY);
+		TrafficComputeWorldPosition(*building, room->GetPosX() + localX, room->GetPosY() + localY, worldX, worldY);
 		float worldZ = TRAFFIC_HEIGHT_EPSILON + building->GetFloorBaseZ(room->GetLayer()) * TRAFFIC_WORLD_SCALE;
 		float worldYaw = FMath::RadiansToDegrees(building->GetRotation()) + vehicle->GetParkingRotationDegrees();
 

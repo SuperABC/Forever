@@ -45,6 +45,13 @@
 工业系统的`Product`(小麦/牛肉/汉堡)和对应的资产(`asset_wheat`/`asset_beef`/`asset_burger`)目前没有
 代码上的关联，id也不同(`product_wheat`/`asset_wheat`)；以后要互相换算时同样加一个显式字段，不要靠id相等。
 
+## 投掷物与世界网格：`throwable`/`meshPath`/`meshScale`
+
+`AssetMod`上三个字段原样拷贝到`Asset`：`throwable`(`IsThrowable()`)标记投掷物(手雷/烟雾弹)，和`weapon`正交——
+投掷物mobility为Object，能拿在手上、放进容器，不能挂肩膀；`meshPath`是资产在世界里(掉落物/投掷预览)显示的UE
+静态网格软路径，空=沿用Forever层默认的Cube占位；`meshScale`是整体缩放(100cm直径的球体当手雷要缩到0.1)。这些
+字段由`SetProperty()`填，不存档(读档时从mod重新派生)。**改`AssetMod`基类字段必须重编`Forever_Mod`下的外部Mod DLL。**
+
 ## 依赖关系
 
 - 依赖：`Dependence/player/asset_mod.h`/`asset_factory.h`（`AssetMod`/`AssetFactory`）。
