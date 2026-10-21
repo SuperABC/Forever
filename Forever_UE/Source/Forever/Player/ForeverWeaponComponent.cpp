@@ -14,7 +14,6 @@
 #include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
-#include "DrawDebugHelpers.h"
 
 #include "common/registry.h"
 #include "player/weapon.h"
@@ -141,15 +140,20 @@ void UForeverWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType
 					}
 				}
 			}
-			if (GEngine) {
-				GEngine->AddOnScreenDebugMessage(200, 3.f, FColor::White,
-					FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->GetMagazineCapacity()));
-			}
 		}
 	}
 
 	if (bWantsToFire && currentWeapon && currentWeapon->IsFullAuto()) {
 		Fire();
+	}
+
+	// 玩家手上有武器时一直在左上角显示弹匣余量：固定Key每帧刷新同一行，显示时长很短，武器被
+	// ClearWeapon或者换人操控后这一行自己很快消失。只认玩家正在操控的Pawn，没被操控的市民就算
+	// 手上还挂着武器也不输出。
+	APawn* ownerPawn = Cast<APawn>(GetOwner());
+	if (GEngine && currentWeapon && ownerPawn && ownerPawn->IsPlayerControlled()) {
+		GEngine->AddOnScreenDebugMessage(200, 0.1f, FColor::White,
+			FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->GetMagazineCapacity()));
 	}
 }
 
@@ -166,26 +170,15 @@ void UForeverWeaponComponent::Fire() {
 	float now = GetWorld()->GetTimeSeconds();
 	if (now - lastFireTime < currentWeapon->GetFireRate()) return;
 
-	if (currentAmmo <= 0) {
-		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 1.f, FColor::Silver, TEXT("弹匣已空，按R换弹"));
-		return;
-	}
+	if (currentAmmo <= 0) return;
 
 	lastFireTime = now;
 	currentAmmo--;
 
-	// 左上角显示当前弹匣余量——用固定Key(不是-1)，这样每次开火都是"刷新同一行"而不是往下
-	// 堆叠新的一行消息，用户要求"每次开火后"显示，不是只在换弹/切枪时显示一次。
-	if (GEngine) {
-		GEngine->AddOnScreenDebugMessage(200, 3.f, FColor::White,
-			FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->GetMagazineCapacity()));
-	}
-
 	UCameraComponent* camera = character->IsFirstPerson() ? character->GetFirstPersonCamera() : character->GetFollowCamera();
 	if (!camera) return;
 
-	// 开火起点用摄像机(眼睛)位置，不是枪口位置——保证"看哪打哪"的精确命中判定；画出来的
-	// debugLine视觉起点另外改成枪的位置，见下文。
+	// 开火起点用摄像机(眼睛)位置，不是枪口位置——保证"看哪打哪"的精确命中判定。
 	FVector start = camera->GetComponentLocation();
 
 	float spreadRad = FMath::DegreesToRadians(currentWeapon->GetBaseSpread());
@@ -206,27 +199,6 @@ void UForeverWeaponComponent::Fire() {
 	params.AddIgnoredActor(GetOwner());
 	bool bHit = GetWorld()->LineTraceSingleByChannel(hit, start, end, ECC_Pawn, params);
 
-	// 轨迹线段：不管打中什么(墙/citizen/什么都没打中)都画——bHit为true时画到实际碰撞点
-	// (hit.ImpactPoint)，没打中任何东西时画到maxRange处的射线终点(end)，视觉上子弹应该
-	// 飞到障碍物为止，不是只有"算作命中"才画。用DrawDebugLine而不是真正的粒子特效——这次
-	// 没有muzzleFlashEffectPath/impactEffectPath对应的VFX资产，纯debug线段先验证弹道
-	// 方向/散射手感，见ForeverWeaponComponent.md"子弹轨迹"一节。
-	FVector trailEnd = bHit ? hit.ImpactPoint : end;
-
-	// 碰撞检测(上面的LineTraceSingleByChannel)仍然用摄像机位置和方向做——这是命中判定的
-	// 依据，不能改；但画出来的debugLine视觉起点改成枪的位置(weaponMesh的世界坐标)，不是
-	// 摄像机位置——枪和摄像机不在同一个点，子弹轨迹从眼睛位置画出来看着不像从枪口飞出去的。
-	// weaponMesh还没有真正的mesh资产(firstPersonMeshPath留空)时退化成角色位置+attachOffset
-	// 本身转到世界坐标的偏移——实测踩过的坑：一开始退化写的是纯character->GetActorLocation()，
-	// 完全没管attachOffsetX/Y/Z，导致没有mesh资产的情况下(目前就是这样)那三个偏移字段
-	// 形同虚设，调了WeaponMod里的数值画出来的线段起点却纹丝不动——因为一直走的是这条完全
-	// 忽略偏移的退化分支，不是weaponMesh分支。这里补上：用角色当前朝向把本地偏移转到
-	// 世界坐标再加到角色位置上，和"挂到Root上再加SetRelativeLocation"这条路径算出来的
-	// 效果一致。
-	FVector localOffset(currentWeapon->GetAttachOffsetX(), currentWeapon->GetAttachOffsetY(), currentWeapon->GetAttachOffsetZ());
-	FVector gunLocation = weaponMesh ? weaponMesh->GetComponentLocation() :
-		character->GetActorLocation() + character->GetActorRotation().RotateVector(localOffset);
-	DrawDebugLine(GetWorld(), gunLocation, trailEnd, FColor::Yellow, false, 5.f, 0, 1.f);
 
 	// 后坐力：这一发子弹的碰撞检测/轨迹已经用踢之前的摄像机朝向算完了，这里踢的是"下一发"
 	// 会用到的朝向，不会影响这一发自己的命中判定。直接改Controller的ControlRotation
@@ -260,10 +232,6 @@ void UForeverWeaponComponent::Fire() {
 	// 命中位置的爆炸特效(纯视觉)。世界坐标生成，不依赖citizen存活，所以放在死亡处理之前也安全。
 	AForeverExplosionEffect::Spawn(GetWorld(), hit.ImpactPoint, hit.ImpactNormal);
 
-	if (GEngine) {
-		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red,
-			FString::Printf(TEXT("命中 %s，伤害 %.1f"), *hit.GetActor()->GetName(), damage));
-	}
 
 	if (target->IsDead()) {
 		FString deadName = UTF8_TO_TCHAR(target->GetName().c_str());

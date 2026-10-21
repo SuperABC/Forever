@@ -17,7 +17,7 @@ namespace {
 	// 打开列表期间的世界时间缩放。
 	constexpr float kSlowDilation = 0.1f;
 	// 低于这个时间缩放就视为世界已经被别的系统停住，不打开(同ForeverPausePanelWidget)。
-	constexpr float kPausedDilationThreshold = 0.01f;
+	constexpr float kThrowListPausedDilationThreshold = 0.01f;
 	// 点击按钮后最多等多久3键的松开(真实秒)，见NativeTick。
 	constexpr double kMaxAwaitReleaseSeconds = 10.0;
 }
@@ -31,7 +31,7 @@ void UForeverThrowListWidget::NativeConstruct() {
 bool UForeverThrowListWidget::Open(const TArray<FThrowListItem>& items, const FString& activeType) {
 	if (IsOpen()) return true;
 	// 世界已经被别的系统停住时不打开：否则关闭时会把它们的冻结意外解除。
-	if (UGameplayStatics::GetGlobalTimeDilation(this) < kPausedDilationThreshold) return false;
+	if (UGameplayStatics::GetGlobalTimeDilation(this) < kThrowListPausedDilationThreshold) return false;
 	if (!ListContainer || !buttonClass) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverThrowListWidget: ListContainer或buttonClass未设置，无法打开列表。"));
 		return false;

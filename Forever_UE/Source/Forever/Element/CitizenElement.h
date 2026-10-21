@@ -124,11 +124,8 @@ private:
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> proximityBox; // 玩家靠近检测——和流式生成/销毁的距离判定是两回事
 
-	FString collisionLabel; // Overlap回调只读这份烘焙好的字符串，绝不解引用citizen
-
-	// 纯姓名（不带"Citizen: "前缀），供MeetOption UI用——AddOption/RemoveName需要的是姓名
-	// 本身，不是collisionLabel那份带前缀的调试显示文本。跟collisionLabel一起在
-	// BuildProximityBox()烘焙好，Overlap回调同样只读，不解引用citizen。
+	// 姓名，供MeetOption UI用(AddOption/RemoveName)。在BuildProximityBox()烘焙好，Overlap回调
+	// 只读这份快照，不解引用citizen。
 	FString citizenNameOnly;
 
 	// citizen->GetOptions()的一份快照，同样在BuildProximityBox()里烘焙好（这个时间点

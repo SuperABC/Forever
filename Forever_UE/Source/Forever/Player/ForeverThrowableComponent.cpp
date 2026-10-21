@@ -216,7 +216,7 @@ void UForeverThrowableComponent::UpdatePreview()
 
 	// 曲线画成世界里的调试线段：和场景一起做深度测试，被墙/地形挡住的部分自然看不见(屏幕
 	// 空间的HUD线条没有遮挡关系)。每帧重画一次(LifeTime<0=只显示这一帧)。注意DrawDebug
-	// 在Shipping/Test构建里会被编译掉，和武器子弹轨迹的DrawDebugLine同样的限制。
+	// 在Shipping/Test构建里会被编译掉。
 	TArray<FVector> points;
 	for (const FPredictProjectilePathPointData& point : result.PathData) points.Add(point.Location);
 	if (result.HitResult.bBlockingHit) points.Add(result.HitResult.Location);

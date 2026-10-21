@@ -140,10 +140,10 @@ Core状态已经"到家"了，但这个可见的Actor完全没人碰过，会一
 `proximityBox`是纯UE层的装饰性判定，用固定的UE单位常量（不走地图单位换算），和
 `UForeverPopulaceFrameworkComponent`的`citizenSpawnDistance`/`citizenDespawnDistance`
 （决定"这个citizen该不该存在于场景里"）完全独立——一个citizen存在于场景里之后，玩家还要
-再靠得更近才会触发这个盒子的Overlap（"接近/离开"屏幕日志）。`BuildProximityBox()`挂在
+再靠得更近才会触发这个盒子的Overlap（推送/收起MeetOption选项）。`BuildProximityBox()`挂在
 `RootComponent`（`ACharacter`自带的`CapsuleComponent`）上，和`ABuildingElement::
 BuildCollisionBox()`同一套写法：`"Trigger"`碰撞profile，`OnComponentBeginOverlap`/`End`
-只使用`Init()`时预先烘焙好的`collisionLabel`（`FString`，从`citizen->GetName()`产出），
+只使用预先烘焙好的`citizenNameOnly`/`cachedOptions`，
 绝不在回调里解引用`citizen`；`OtherActor`按惯例过滤成只认
 `UGameplayStatics::GetPlayerPawn(GetWorld(),0)`。
 
@@ -168,8 +168,7 @@ BuildCollisionBox()`同一套写法：`"Trigger"`碰撞profile，`OnComponentBeg
   `Source/Core/populace/citizen.h`（`Citizen`）、`map/building.h`/`map/room.h`
   （Core侧数据）、`Components/SkeletalMeshComponent.h`（占位mesh）、
   `Components/BoxComponent.h`（碰撞盒）、`Kismet/GameplayStatics.h`
-  （`GetPlayerPawn`）、`Engine/Engine.h`（`GEngine->AddOnScreenDebugMessage`，接近/
-  离开提示用）、`Source/Core/populace/experience.h`/`school.h`、
+  （`GetPlayerPawn`）、`Source/Core/populace/experience.h`/`school.h`、
   `Source/Core/society/organization.h`（`LogNearbyRelationships`按`Experience`
   类别分派打印用）。
 - 被谁依赖：`UForeverPopulaceFrameworkComponent::TickComponent`/

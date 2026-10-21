@@ -272,12 +272,11 @@ building互相感知彼此是谁、在干什么，只需要都查询这同一份
 不会因为完全重合而在Overlap判定上抖动。这个碰撞盒**常驻，不随近/远LOD切换增删**
 （`ABuildingElement::collisionBox`），`Init()`时创建一次，一直存在到这个Element被销毁。
 
-Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的`FString`显示名
-（`building->GetAddress()`，存进`ABuildingElement::collisionLabel`，一个Element只对应
-一个碰撞盒），绝不解引用`Building*`/`Map*`——和上面`EndPlay`那条安全原则完全一致。
-`OtherActor`过滤成只认`UGameplayStatics::GetPlayerPawn(GetWorld(),0)`，和LOD距离判定
-同一个约定。测试阶段用`GEngine->AddOnScreenDebugMessage`（`FColor::Cyan`）代替真实的
-Story事件分发。
+Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的名字
+（`ABuildingElement::buildingNameOnly`/`zoneNameOnly`，一个Element只对应一个碰撞盒），绝不解引用
+`Building*`/`Map*`——和上面`EndPlay`那条安全原则完全一致。`OtherActor`过滤成只认
+`UGameplayStatics::GetPlayerPawn(GetWorld(),0)`，和LOD距离判定同一个约定。只发进出建筑事件
+(`enter_building`/`leave_building`)，不再往屏幕上打印。
 
 ## 电梯轿厢
 

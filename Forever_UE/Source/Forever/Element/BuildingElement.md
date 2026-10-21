@@ -112,7 +112,7 @@ owner，被物理引擎的碰撞体焊接开销拖累）。这次直接把这部
 ### Overlap回调只用烘焙好的字符串
 
 和`ForeverZoneFrameworkComponent`同一套安全原则：`OnOverlapBegin/End`只使用`Init()`/
-`BuildCollisionBox()`时预先烘焙好的`collisionLabel`（`FString`），`OnRoomOverlapBegin/End`
+`BuildCollisionBox()`时预先烘焙好的`buildingNameOnly`/`zoneNameOnly`，`OnRoomOverlapBegin/End`
 只使用`BuildRoomCollisionBoxes()`时按`room->GetAddress()`烘焙好、存进`roomBoxLabels`
 （`TMap<UPrimitiveComponent*, FString>`，一栋楼有多个Room碰撞盒，不能像building自己那样
 只用一个`FString`）的字符串——两组回调都绝不在回调里解引用`building`/`Room*`，关卡卸载
@@ -188,7 +188,7 @@ mod用`BuildingMod::AddDecoration`指定的StaticMesh(`Building::GetDecorations(
   （Core侧数据）、`Source/Forever/Element/DoorComponent.h`（门）、
   `ProceduralMeshComponent`（远处LOD）、`Components/StaticMeshComponent.h`（近处每段一个
   组件）、`Components/BoxComponent.h`（碰撞盒）、`UMaterialInstanceDynamic`、
-  `Kismet/GameplayStatics.h`、`Engine/Engine.h`（`GEngine->AddOnScreenDebugMessage`）、
+  `Kismet/GameplayStatics.h`、
   `Containers/Queue.h`（`TQueue`）。
 - 被谁依赖：`UForeverBuildingFrameworkComponent::GenerateBuildings()`
   （`SpawnActor<ABuildingElement>()`+`Init()`）。

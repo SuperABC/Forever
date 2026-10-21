@@ -43,9 +43,9 @@
   的`ComputeFullZRange`同一个公式（不同翻译单元不能共用匿名namespace函数，这里用本文件
   专属的`ComputeBuildingFullZRange`重算一遍）算出Z范围，取全局min/max。**没有内部building
   的zone跳过、不创建碰撞盒**——没有意义的"内部"体验。Overlap回调只使用生成时预先烘焙好的
-  `FString`显示名（`zone->GetAddress()`），绝不解引用`Zone*`/`Building*`/`Map*`（和
-  `ForeverBuildingFrameworkComponent`的`EndPlay`野指针教训同一套安全原则），测试阶段用
-  `GEngine->AddOnScreenDebugMessage`（`FColor::Yellow`）代替真实的Story事件分发。
+  园区名(`zoneBoxNames`，`zone->GetName()`)，绝不解引用`Zone*`/`Building*`/`Map*`（和
+  `ForeverBuildingFrameworkComponent`的`EndPlay`野指针教训同一套安全原则），只发进出园区事件
+  (`enter_zone`/`leave_zone`)，不再往屏幕上打印。
 
 - **园区自定义模型常驻**——`BuildDecorations(zone)`对`Zone::GetDecorations()`每个摆位建一个Static的
   `UStaticMeshComponent`(`LoadObject`，失败打Warning跳过)，摆法和`ABuildingElement::BuildDecorations`

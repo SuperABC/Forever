@@ -11,7 +11,7 @@
 - **手的规则**(`CanThrow()`)：激活的type直接拿在某只手里(拿着它的手就是投掷手)，或至少一只手是空的。投掷物在手持容器**里面**不算拿在手里。两只手都被别的东西占着时仍可激活，只是`AForeverCharacter::StartAim`拒绝瞄准。
 - **预览模型**：瞄准时在投掷起点显示一个`UStaticMeshComponent`，网格/缩放取自资产的`meshPath`/`meshScale`(和掉落物同一个`AAssetElement::LoadAssetMesh`)；`meshPath`空时用Cube缩到0.1。路径加载失败回退引擎球体(项目球体`/Game/Asset/Meshes/Sphere`需要用户在编辑器里从`Engine/Content/BasicShapes/Sphere`复制一份)。
 - **HUD文字**复用武器名的`AddOnScreenDebugMessage` Key 201，切换武器/投掷物时同一行互相覆盖。
-- **预览曲线画成世界里的`DrawDebugLine`线段**(每帧重画)：和场景一起深度测试，被墙/地形挡住的部分看不见。不用HUD的屏幕空间线条(没有遮挡关系)。代价：DrawDebug在Shipping/Test构建里被编译掉，和武器子弹轨迹同样的限制；以后要发布构建可换成沿路径的一串小球网格。瞄准投掷时`AForeverHUD`不画准星。
+- **预览曲线画成世界里的`DrawDebugLine`线段**(每帧重画)：和场景一起深度测试，被墙/地形挡住的部分看不见。不用HUD的屏幕空间线条(没有遮挡关系)。代价：DrawDebug在Shipping/Test构建里被编译掉；以后要发布构建可换成沿路径的一串小球网格。瞄准投掷时`AForeverHUD`不画准星。
 - **什么都可以标记成可投掷**：只看`Asset::IsThrowable()`，和是不是武器无关，比如汉堡把`throwable`设为true就能被扔(Containee机动性的物品只能放容器里，不能拿在手上)。
 
 - **选择列表接口**：`GetThrowableList()`(先`Refresh`，返回`FThrowListItem{type,count}`)、`GetActiveType()`、`ActivateByType(type)`(先`Refresh`，type不存在返回false)，供`UForeverThrowListWidget`使用(长按3)。

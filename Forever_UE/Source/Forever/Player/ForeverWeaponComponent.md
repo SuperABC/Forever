@@ -24,10 +24,10 @@
 
 ### 命中判定用`ECC_Pawn`,不是`ECC_Visibility`
 这个项目的`Pawn`碰撞预设对`Visibility`通道是`Ignore`(见`CONVENTIONS.md`第11节),用`ECC_Visibility`做射线检测会打墙正常、打citizen直接穿过去。`Fire()`用`ECC_Pawn`通道,`BlockAll`/`BlockAllDynamic`对未覆盖通道默认Block(挡墙),`Pawn`预设对`Pawn`通道也是默认Block(挡citizen),两者都正常命中。
-只有打中`ACitizenElement`才算"命中":`Cast<ACitizenElement>(hit.GetActor())`失败(打墙/打别的/未命中)在伤害判定上完全等价,直接返回,不打印消息、不计算`ComputeDamage()`。
+只有打中`ACitizenElement`才算"命中":`Cast<ACitizenElement>(hit.GetActor())`失败(打墙/打别的/未命中)在伤害判定上完全等价,直接返回,不计算`ComputeDamage()`。命中也不往屏幕上打印。
 
-### 子弹轨迹:碰撞检测用摄像机射线,视觉线段起点是枪的位置
-`LineTraceSingleByChannel`的`start`始终是摄像机位置(命中判定依据,保证"看哪打哪"),但`DrawDebugLine`画的视觉线段起点是`weaponMesh->GetComponentLocation()`(枪的位置,为空时退化为`character->GetActorLocation()`并按角色朝向把`attachOffsetX/Y/Z`转成世界坐标叠加),终点是碰撞检测算出的`trailEnd`——两者共用同一次`LineTraceSingleByChannel`结果,不需要跑第二次射线检测。不管是否命中citizen都会画线:真正碰到东西画到`hit.ImpactPoint`,全程未碰到任何东西画到`maxRange`处的终点。用`DrawDebugLine`(黄色,5秒后消失),没有`muzzleFlashEffectPath`/`impactEffectPath`对应的真实VFX资产。
+### 命中判定用摄像机射线
+`LineTraceSingleByChannel`的`start`始终是摄像机位置(保证"看哪打哪")。不画子弹轨迹线(原来的`DrawDebugLine`调试线已删除)，目前没有`muzzleFlashEffectPath`/`impactEffectPath`对应的真实VFX资产。
 命中citizen时在`hit.ImpactPoint`额外生成一个`AForeverExplosionEffect`(程序化爆炸,纯视觉,见`ForeverExplosionEffect.md`);打墙不触发。
 
 ### 挂载点本地偏移在`WeaponMod`里定义
@@ -46,7 +46,7 @@
 `Fire()`最前面(比`fireRate`冷却/弹药检查更早)判断`if (!character || !character->IsAiming()) return;`——不瞄准时按开火键完全是空操作,不消耗弹药、不触发冷却、不打印任何消息。这个检查必须放在最前面,否则"没瞄准时按开火键"仍会消耗弹药/占用冷却。全自动武器持续按住开火键但未瞄准时,`TickComponent()`每帧调`Fire()`都会在这里直接返回,一旦开始瞄准会立刻恢复开火,不需要重新按键。
 
 ### 按住左键连续开火+弹药显示
-`PistolWeapon`/`RifleWeapon`均为`fullAuto = true`,连发逻辑(`StartFire()`/`TickComponent()`/`fireRate`冷却)对两者通用。`Fire()`每次成功开火都用`AddOnScreenDebugMessage`(固定Key`200`,刷新同一行)打印`"弹药: X/Y"`,换弹完成时也打印同一行。目前没有正式UMG弹药UI。
+`PistolWeapon`/`RifleWeapon`均为`fullAuto = true`,连发逻辑(`StartFire()`/`TickComponent()`/`fireRate`冷却)对两者通用。玩家手上有武器时,`TickComponent()`每帧用`AddOnScreenDebugMessage`(固定Key`200`,显示0.1秒)刷新`"弹药: X/Y"`,所以一直显示;武器被清掉或换人操控后这一行很快自己消失。只认`IsPlayerControlled()`的拥有者。空弹匣扣扳机时什么都不打印。目前没有正式UMG弹药UI。
 
 ### 换弹:按`ammoType`从Player背包扣减整个弹匣容量的备弹
 `Reload()`检查未在换弹中且弹匣未满后启动计时(`reloadDuration`),真正的备弹检查/扣减放在计时结束时(`TickComponent`),不在按下R的瞬间就扣。无论弹匣里剩多少发,一次换弹都按`WeaponMod::GetAmmoType()`扣除整个弹匣容量的备弹(`Player::ConsumeByType`),不是"补齐差额";备弹不够就不扣减、不填满,`currentAmmo`保持原值(没有做"部分填充"这个edge case)。

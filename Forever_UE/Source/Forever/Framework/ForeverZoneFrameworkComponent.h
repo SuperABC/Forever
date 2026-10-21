@@ -65,10 +65,7 @@ private:
 	UPROPERTY()
 	TMap<FString, TObjectPtr<UInstancedStaticMeshComponent>> wallMeshInstances;
 
-	// 碰撞盒对应组件指针 -> 调试日志用的显示名，按zone->GetAddress()烘焙——和Building同一套
-	// 安全原则，Overlap回调绝不解引用Zone*/Map*。
-	UPROPERTY()
-	TMap<TObjectPtr<UPrimitiveComponent>, FString> zoneBoxLabels;
-	// 碰撞盒 -> zone->GetName()(UTF-8)，进出园区事件用，同样是烘焙好的快照。
+	// 碰撞盒 -> zone->GetName()(UTF-8)，进出园区事件用。烘焙好的快照，Overlap回调绝不解引用
+	// Zone*/Map*，和Building同一套安全原则。
 	TMap<UPrimitiveComponent*, std::string> zoneBoxNames;
 };

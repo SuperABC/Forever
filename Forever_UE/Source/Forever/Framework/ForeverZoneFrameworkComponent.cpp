@@ -250,7 +250,6 @@ void UForeverZoneFrameworkComponent::BuildCollisionBox(Zone* zone) {
 	box->RegisterComponent();
 	owner->AddInstanceComponent(box);
 
-	zoneBoxLabels.Add(box, FString::Printf(TEXT("Zone: %s"), UTF8_TO_TCHAR(zone->GetAddress().c_str())));
 	zoneBoxNames.Add(box, zone->GetName());
 }
 
@@ -275,9 +274,6 @@ void UForeverZoneFrameworkComponent::OnZoneOverlapBegin(UPrimitiveComponent* Ove
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
-	if (FString* label = zoneBoxLabels.Find(OverlappedComponent)) {
-		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("进入 %s"), **label));
-	}
 	const std::string* name = zoneBoxNames.Find(OverlappedComponent);
 	UForeverStoryFrameworkComponent* storyFramework = FindZoneStoryFramework(GetWorld());
 	if (!name || !storyFramework) return;
@@ -289,9 +285,6 @@ void UForeverZoneFrameworkComponent::OnZoneOverlapEnd(UPrimitiveComponent* Overl
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
-	if (FString* label = zoneBoxLabels.Find(OverlappedComponent)) {
-		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("离开 %s"), **label));
-	}
 	const std::string* name = zoneBoxNames.Find(OverlappedComponent);
 	UForeverStoryFrameworkComponent* storyFramework = FindZoneStoryFramework(GetWorld());
 	if (!name || !storyFramework) return;

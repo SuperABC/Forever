@@ -372,12 +372,11 @@ void ACitizenElement::BuildProximityBox() {
 	box->OnComponentEndOverlap.AddDynamic(this, &ACitizenElement::OnOverlapEnd);
 	box->RegisterComponent();
 
-	// 只烘焙一份显示用的姓名字符串，Overlap回调绝不解引用citizen——和ABuildingElement同一套
-	// 安全原则。citizenNameOnly/cachedOptions同一个理由一起在这里烘焙好：这个时间点
+	// 姓名和选项快照在这里烘焙好，Overlap回调绝不解引用citizen——和ABuildingElement同一套
+	// 安全原则。这个时间点
 	// game_start广播早已跑完（见ForeverStoryFrameworkComponent::BroadcastGameStart对每个
 	// 市民Scheduler Script的广播），citizen->GetOptions()已经是稳定内容。
 	citizenNameOnly = UTF8_TO_TCHAR(citizen->GetName().c_str());
-	collisionLabel = FString::Printf(TEXT("Citizen: %s"), *citizenNameOnly);
 
 	cachedOptions.Reset();
 	for (const std::string& option : citizen->GetOptions()) {
@@ -404,7 +403,7 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 	nearbyCitizens.AddUnique(TWeakObjectPtr<ACitizenElement>(this));
 
 	// 把这个市民当前的对话选项(cachedOptions快照)推给MeetOption UI——不解引用citizen，
-	// 见collisionLabel/citizenNameOnly/cachedOptions字段声明处的安全原则说明。
+	// 见citizenNameOnly/cachedOptions字段声明处的安全原则说明。
 	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
 		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
 			AForeverFrameworkActor* frameworkActor = framework.IsValid() ? Cast<AForeverFrameworkActor>(framework->GetOwner()) : nullptr;
@@ -413,9 +412,6 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 			}
 		}
 	}
-
-	if (!GEngine) return;
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("接近 %s"), *collisionLabel));
 }
 
 void ACitizenElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -431,9 +427,6 @@ void ACitizenElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AAc
 			meetOption->RemoveName(citizenNameOnly);
 		}
 	}
-
-	if (!GEngine) return;
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("离开 %s"), *collisionLabel));
 }
 
 void ACitizenElement::RefreshOptions() {

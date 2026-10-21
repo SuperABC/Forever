@@ -346,9 +346,7 @@ void ABuildingElement::BuildCollisionBox() {
 	box->OnComponentEndOverlap.AddDynamic(this, &ABuildingElement::OnOverlapEnd);
 	box->RegisterComponent();
 
-	// 只烘焙一份显示用的地址字符串，Overlap回调绝不解引用building——和EndPlay处理同一套
-	// 安全原则。
-	collisionLabel = FString::Printf(TEXT("Building: %s"), UTF8_TO_TCHAR(building->GetAddress().c_str()));
+	// 名字快照在这里烘焙好，Overlap回调绝不解引用building——和EndPlay处理同一套安全原则。
 	buildingNameOnly = building->GetName();
 	zoneNameOnly = building->GetParentZone() ? building->GetParentZone()->GetName() : std::string();
 	collisionBox = box;
@@ -375,7 +373,6 @@ void ABuildingElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, 
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("进入 %s"), *collisionLabel));
 	if (UForeverStoryFrameworkComponent* storyFramework = FindBuildingStoryFramework(GetWorld())) {
 		EnterBuildingEvent event(zoneNameOnly, buildingNameOnly);
 		storyFramework->BroadcastPlayerLocation(event, "building", buildingNameOnly, /*entering=*/true,
@@ -387,7 +384,6 @@ void ABuildingElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AA
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, FString::Printf(TEXT("离开 %s"), *collisionLabel));
 	if (UForeverStoryFrameworkComponent* storyFramework = FindBuildingStoryFramework(GetWorld())) {
 		LeaveBuildingEvent event(zoneNameOnly, buildingNameOnly);
 		storyFramework->BroadcastPlayerLocation(event, "building", buildingNameOnly, /*entering=*/false,
@@ -450,11 +446,6 @@ void ABuildingElement::OnRoomOverlapBegin(UPrimitiveComponent* OverlappedCompone
 	if (!roomPtr || !*roomPtr) return;
 	Room* room = *roomPtr;
 
-	if (GEngine) {
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green,
-			FString::Printf(TEXT("进入 Room: %s"), UTF8_TO_TCHAR(room->GetAddress().c_str())));
-	}
-
 	// 真实物理位置——不是老工程的剧情/场景语义，见Source/Core/player/asset.md、
 	// player.h"武器只挂肩膀"一节旁边的说明。假设房间之间不重叠(和BuildCollisionBox的
 	// 两侧+/-0.01防抖动设计目的一致)，不做"离开A但还在B里"的重叠区域判断。
@@ -477,11 +468,6 @@ void ABuildingElement::OnRoomOverlapEnd(UPrimitiveComponent* OverlappedComponent
 	Room** roomPtr = roomBoxLabels.Find(OverlappedComponent);
 	if (!roomPtr || !*roomPtr) return;
 	Room* room = *roomPtr;
-
-	if (GEngine) {
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green,
-			FString::Printf(TEXT("离开 Room: %s"), UTF8_TO_TCHAR(room->GetAddress().c_str())));
-	}
 
 	if (AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
