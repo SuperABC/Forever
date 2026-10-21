@@ -171,6 +171,33 @@ bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMess
 	return true;
 }
 
+bool UForeverConfigBridgeSubsystem::SaveConfigWithDialog(FString& OutError) {
+	FString path;
+	if (!ForeverDialog::SaveFile(TEXT("保存配置"), TEXT("JSON (*.json)|*.json"), TEXT("config.json"), path)) {
+		return false;
+	}
+	Config::WriteConfig(TCHAR_TO_UTF8(*path));
+	return true;
+}
+
+bool UForeverConfigBridgeSubsystem::LoadConfigWithDialog(FString& OutError) {
+	FString path;
+	if (!ForeverDialog::OpenFile(TEXT("读取配置"), TEXT("JSON (*.json)|*.json"), path)) {
+		return false;
+	}
+
+	UGameInstance* gameInstance = GetGameInstance();
+	UForeverModSubsystem* modSubsystem = gameInstance ? gameInstance->GetSubsystem<UForeverModSubsystem>() : nullptr;
+	if (!modSubsystem || !modSubsystem->ReloadConfigFrom(path)) {
+		OutError = TEXT("配置文件无效或为空");
+		return false;
+	}
+
+	// 写绝对路径，所选文件里的相对路径已按它自己所在目录解析。
+	Config::WriteConfig(TCHAR_TO_UTF8(*GetConfigPath()));
+	return true;
+}
+
 bool UForeverConfigBridgeSubsystem::SelectFolder(FString& OutPath) const {
 	IDesktopPlatform* desktopPlatform = FDesktopPlatformModule::Get();
 	if (!desktopPlatform) {

@@ -34,8 +34,8 @@
       "component_empty --test true"
    ],
    "dll_paths" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Cpp/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
    ],
@@ -76,12 +76,7 @@
    ],
    "route_mods" : [ "route_bus", "route_train", "route_air", "route_empty --test true" ],
    "scheduler_mods" : [ "scheduler_basic", "scheduler_empty --test true" ],
-   "script_mods" : [
-      "script_yuanshen",
-      "script_test",
-      "script_basic",
-      "script_empty --test true"
-   ],
+   "script_mods" : [ "script_test", "script_basic", "script_empty --test true" ],
    "station_mods" : [
       "station_bus",
       "station_train",
@@ -95,7 +90,7 @@
       "storage_empty --test true"
    ],
    "story_scripts" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/ys.script"
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
    ],
    "terrain_mods" : [
       "terrain_river",

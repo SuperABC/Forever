@@ -22,3 +22,7 @@
 - 随着更多领域系统在Core里落地,仍留在本类里长期验证的Factory实例可以继续转移给对应领域系统类持有(参照Terrain已转移给`Map`的先例)。
 - 不支持中途回菜单重新注册mod(`bModsRegistered`门闩只允许每个GameInstance生命周期注册一次)。
 - 目前"参数"只是Core透传的原始字符串,mod自己决定怎么解析;如果要支持结构化的命令行式参数(如`--density 1.0 --max 1000`),可以在Dependence层加一个共享的小型参数解析工具函数,避免每个mod自己重复写tokenize逻辑。
+
+## ReloadConfigFrom(path)
+
+菜单"读取配置"用：`Config::ReadConfig(path)` 后若 dll_paths、resource_paths、story_scripts 全空，视为文件无效(ReadConfig 对打不开/语法错误只留空状态不报错)，恢复读回 config.json 并返回 false；否则套用与 `Initialize()` 相同的缺省目录回退(`ReadConfigWithFallbacks`)。只更新内存发现状态，不挂载不注册。

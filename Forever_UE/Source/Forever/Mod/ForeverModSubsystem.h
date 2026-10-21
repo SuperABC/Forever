@@ -25,6 +25,14 @@ public:
 	// "待办"一节)。
 	void EnsureModsRegistered();
 
+	// 用任意路径的配置文件替换内存里的Config状态(菜单"读取配置")。文件打不开/无效(解析后
+	// dll_paths、resource_paths、story_scripts全空)时恢复成config.json的内容并返回false。
+	// 只更新内存发现状态，不挂载不注册。
+	bool ReloadConfigFrom(const FString& Path);
+
 private:
+	// ReadConfig + dll_paths/resource_paths缺省时回退扫描默认目录，Initialize和ReloadConfigFrom共用。
+	void ReadConfigWithFallbacks(const FString& configPath);
+
 	bool bModsRegistered = false;
 };

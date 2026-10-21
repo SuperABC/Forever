@@ -103,6 +103,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Config")
 	bool ValidateAndStartGame(FString& OutFailureMessage);
 
+	// 弹保存对话框，把当前内存配置存成所选json(不校验、不动config.json)。取消时返回false
+	// 且OutError为空。
+	UFUNCTION(BlueprintCallable, Category = "Config")
+	bool SaveConfigWithDialog(FString& OutError);
+
+	// 弹打开对话框，用所选json替换当前配置并立即覆盖config.json。取消时返回false且OutError
+	// 为空；文件无效时返回false，配置保持原状。成功后调用方需刷新三个面板。
+	UFUNCTION(BlueprintCallable, Category = "Config")
+	bool LoadConfigWithDialog(FString& OutError);
+
 	// 原生文件夹选择器(IDesktopPlatform)，照抄老工程AStartBase::SelectFolder()。返回false
 	// 表示用户取消了选择，OutPath不变。
 	UFUNCTION(BlueprintCallable, Category = "Config")

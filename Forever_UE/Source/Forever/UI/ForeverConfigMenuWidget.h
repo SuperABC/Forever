@@ -28,6 +28,8 @@ protected:
 	UFUNCTION() void HandleResourceTabClicked();
 	UFUNCTION() void HandleStartClicked();
 	UFUNCTION() void HandleLoadGameClicked();
+	UFUNCTION() void HandleSaveConfigClicked();
+	UFUNCTION() void HandleLoadConfigClicked();
 
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UForeverStoryPanelWidget> StoryPanel;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UForeverModPanelWidget> ModPanel;
@@ -41,6 +43,11 @@ protected:
 	// 加载存档：弹打开对话框交给UForeverSaveSubsystem::LoadWithDialog，失败原因同样显示在
 	// FailureMessage。BindWidgetOptional：WBP_ConfigMenu里还没放这个按钮时不影响蓝图编译。
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> LoadGameButton;
+
+	// 保存/读取配置：弹json文件对话框，见UForeverConfigBridgeSubsystem::Save/LoadConfigWithDialog。
+	// BindWidgetOptional：WBP_ConfigMenu里还没放按钮时不影响蓝图编译。
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> SaveConfigButton;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> LoadConfigButton;
 
 	// 左上角失败提示，初始Collapsed，ValidateAndStartGame失败时显示拒绝原因。
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> FailureMessage;

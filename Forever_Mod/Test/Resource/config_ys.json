@@ -1,0 +1,115 @@
+{
+   "app_mods" : [ "app_bounce", "app_notes", "app_empty --test true" ],
+   "asset_mods" : [
+      "asset_container",
+      "asset_wheat",
+      "asset_beef",
+      "asset_burger",
+      "asset_ammo_pistol",
+      "asset_ammo_rifle",
+      "asset_pistol",
+      "asset_rifle",
+      "asset_grenade",
+      "asset_smoke_grenade",
+      "asset_empty --test true"
+   ],
+   "building_mods" : [
+      "building_wxdj",
+      "building_residence",
+      "building_factory",
+      "building_train_station",
+      "building_airport",
+      "building_park",
+      "building_mohar",
+      "building_empty --test true",
+      "building_shop",
+      "building_yuanshen"
+   ],
+   "component_mods" : [
+      "component_residence",
+      "component_shop",
+      "component_factory",
+      "component_train_station",
+      "component_airport",
+      "component_empty --test true"
+   ],
+   "dll_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Cpp/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
+   ],
+   "job_mods" : [ "job_shop_saler", "job_empty --test true" ],
+   "main_story" : "script_empty",
+   "manufacture_mods" : [
+      "manufacture_farm",
+      "manufacture_ranch",
+      "manufacture_food_factory",
+      "manufacture_empty --test true"
+   ],
+   "name_mods" : [ "name_chinese" ],
+   "organization_mods" : [ "organization_shop", "organization_empty --test true" ],
+   "product_mods" : [
+      "product_wheat",
+      "product_beef",
+      "product_burger",
+      "product_empty --test true"
+   ],
+   "puzzle_mods" : [ "puzzle_tetris", "puzzle_empty --test true" ],
+   "resource_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Resource",
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"
+   ],
+   "roadnet_mods" : [ "roadnet_jing" ],
+   "room_mods" : [
+      "room_residence",
+      "room_shop",
+      "room_warehouse",
+      "room_parking",
+      "room_factory",
+      "room_train_station",
+      "room_airport",
+      "room_empty --test true"
+   ],
+   "route_mods" : [ "route_bus", "route_train", "route_air", "route_empty --test true" ],
+   "scheduler_mods" : [ "scheduler_basic", "scheduler_empty --test true" ],
+   "script_mods" : [
+      "script_yuanshen",
+      "script_test",
+      "script_basic",
+      "script_empty --test true"
+   ],
+   "station_mods" : [
+      "station_bus",
+      "station_train",
+      "station_air",
+      "station_empty --test true"
+   ],
+   "storage_mods" : [
+      "storage_wheat",
+      "storage_beef",
+      "storage_burger",
+      "storage_empty --test true"
+   ],
+   "story_scripts" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/ys.script"
+   ],
+   "terrain_mods" : [
+      "terrain_river",
+      "terrain_empty --test true",
+      "terrain_ocean",
+      "terrain_mountain"
+   ],
+   "vehicle_mods" : [
+      "vehicle_basic",
+      "vehicle_bus",
+      "vehicle_train",
+      "vehicle_plane",
+      "vehicle_empty --test true"
+   ],
+   "weapon_mods" : [ "weapon_pistol", "weapon_rifle" ],
+   "zone_mods" : [ "zone_residence", "zone_empty --test true" ]
+}

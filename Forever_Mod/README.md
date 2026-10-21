@@ -6,8 +6,9 @@
 
 - `Test/Cpp/Yuanshen/`——`YuanshenBuilding`(id `yuanshen`)，继承`BuildingMod`，是真正实现了玩法的测试建筑：
   只在井字中心lot里自适应贴角放一块6x6，14层，用`Test/Resource/yuanshen_fg+.layout`/
-  `yuanshen_fu+-.layout`，挂示例脚本`entity_event`。同一个DLL还有`YuanshenScript`(script mod，id `script_yuanshen`)：空壳，ys.script的逻辑全在脚本里；`TestScript`(id `script_test`)把test.script的`control`占位符换成控制随机市民；
+  `yuanshen_fu+-.layout`，挂示例脚本`entity_event`。同一个DLL还有`YuanshenScript`(script mod，id `script_yuanshen`)：空壳，ys.script的逻辑全在脚本里；
   ys.script里的角色传送全在脚本里用`record_object`+`npc_teleport`写。
+- `Test/Cpp/Test/`——`TestScript`(id `script_test`)，独立DLL(Test.dll)：把`Test/Resource/test.script`的`control`占位符换成控制随机市民。
 - `Wxdj/Cpp/Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)，没有ScriptMod(main_story用`script_empty`)，剧情全在`Wxdj/Resource/Wxdj.script`。
 - `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id统一为`empty`),纯粹用来验证
   `config.json`按mod id配置的命令行式参数能一路传到mod:构造函数直接接收参数字符串,拼进

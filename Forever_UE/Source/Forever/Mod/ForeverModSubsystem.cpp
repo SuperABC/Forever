@@ -62,7 +62,23 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	const FString configPath = FPaths::Combine(FPaths::ProjectDir(), TEXT("Resource/Config/config.json"));
+	ReadConfigWithFallbacks(configPath);
+}
 
+bool UForeverModSubsystem::ReloadConfigFrom(const FString& Path) {
+	Config::ReadConfig(TCHAR_TO_UTF8(*Path));
+
+	// ReadConfig对打不开/语法错误的文件只会留空状态、不报错，这里据此判定无效，恢复成config.json。
+	if (Config::GetDllPaths().empty() && !Config::HasResourcePaths() && Config::GetStoryScripts().empty()) {
+		ReadConfigWithFallbacks(FPaths::Combine(FPaths::ProjectDir(), TEXT("Resource/Config/config.json")));
+		return false;
+	}
+
+	ReadConfigWithFallbacks(Path);
+	return true;
+}
+
+void UForeverModSubsystem::ReadConfigWithFallbacks(const FString& configPath) {
 	// 诊断用：Config内部用std::cerr打印警告，这个进程(尤其是-game Standalone)不一定有
 	// 对应的控制台/重定向把它接进Forever.log——之前几次"回退扫描"排查时完全没看到任何
 	// [Config]开头的warning，但又确实触发了回退，说明那些cerr警告大概率没有被这次log文件

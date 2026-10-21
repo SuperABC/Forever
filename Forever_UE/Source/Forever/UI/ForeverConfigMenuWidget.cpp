@@ -27,6 +27,12 @@ void UForeverConfigMenuWidget::NativeConstruct() {
 	if (LoadGameButton) {
 		LoadGameButton->OnClicked.AddDynamic(this, &UForeverConfigMenuWidget::HandleLoadGameClicked);
 	}
+	if (SaveConfigButton) {
+		SaveConfigButton->OnClicked.AddDynamic(this, &UForeverConfigMenuWidget::HandleSaveConfigClicked);
+	}
+	if (LoadConfigButton) {
+		LoadConfigButton->OnClicked.AddDynamic(this, &UForeverConfigMenuWidget::HandleLoadConfigClicked);
+	}
 	if (FailureMessage) {
 		FailureMessage->SetVisibility(ESlateVisibility::Collapsed);
 	}
@@ -80,6 +86,50 @@ void UForeverConfigMenuWidget::HandleStartClicked() {
 			FailureMessage->SetText(FText::FromString(failureMessage));
 			FailureMessage->SetVisibility(ESlateVisibility::Visible);
 		}
+	}
+}
+
+void UForeverConfigMenuWidget::HandleSaveConfigClicked() {
+	UGameInstance* gameInstance = GetGameInstance();
+	UForeverConfigBridgeSubsystem* bridge = gameInstance ? gameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>() : nullptr;
+	if (!bridge) {
+		return;
+	}
+
+	FString error;
+	if (!bridge->SaveConfigWithDialog(error) && !error.IsEmpty() && FailureMessage) {
+		FailureMessage->SetText(FText::FromString(error));
+		FailureMessage->SetVisibility(ESlateVisibility::Visible);
+	}
+}
+
+void UForeverConfigMenuWidget::HandleLoadConfigClicked() {
+	UGameInstance* gameInstance = GetGameInstance();
+	UForeverConfigBridgeSubsystem* bridge = gameInstance ? gameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>() : nullptr;
+	if (!bridge) {
+		return;
+	}
+
+	FString error;
+	if (bridge->LoadConfigWithDialog(error)) {
+		if (FailureMessage) {
+			FailureMessage->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+	else if (!error.IsEmpty() && FailureMessage) {
+		FailureMessage->SetText(FText::FromString(error));
+		FailureMessage->SetVisibility(ESlateVisibility::Visible);
+	}
+
+	// 成功时配置已换，失败时已恢复为config.json——两种情况都刷新，让界面与内存一致。
+	if (StoryPanel) {
+		StoryPanel->RefreshRows();
+	}
+	if (ModPanel) {
+		ModPanel->RefreshDllList();
+	}
+	if (ResourcePanel) {
+		ResourcePanel->RefreshRows();
 	}
 }
 
