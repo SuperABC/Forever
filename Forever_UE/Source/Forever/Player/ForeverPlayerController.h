@@ -14,6 +14,7 @@ class UForeverInventoryWidget;
 class UMapWidget;
 class UForeverPausePanelWidget;
 class UForeverThrowListWidget;
+class UForeverIdentifyComponent;
 class UInputComponent;
 
 // 旧蓝图MainController的"MouseScrollUp/Down + F对话选项"三个热键归属这个Controller(见ForeverPlayerController.md)
@@ -29,6 +30,9 @@ UCLASS()
 class FOREVER_API AForeverPlayerController : public APlayerController
 {
 	GENERATED_BODY()
+
+public:
+	AForeverPlayerController();
 
 protected:
 	virtual void BeginPlay() override;
@@ -115,6 +119,14 @@ protected:
 	// 地图/手机/背包/谜题/剧情对话任何一个开着时不打开暂停界面(它们各自占着UI Only输入和
 	// 键盘焦点，叠上去会互相抢)。
 	void TogglePause();
+
+	// 识别模式(按住鼠标中键)：热键绑在Controller上(换人/上下载具时Controller不变)，实际逻辑在
+	// UForeverIdentifyComponent里。
+	UPROPERTY(VisibleAnywhere, Category = "Identify")
+	TObjectPtr<UForeverIdentifyComponent> identifyComponent;
+
+	void EnterIdentify();
+	void ExitIdentify();
 
 	// 长按3的投掷物选择列表：跟前面几个Widget同一套模式(常驻创建、初始折叠)，由AForeverCharacter
 	// 在长按时Open。WBP_ThrowList在BP_ForeverPlayerController的类默认值里指定。

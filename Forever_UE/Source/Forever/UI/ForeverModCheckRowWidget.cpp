@@ -26,16 +26,26 @@ void UForeverModCheckRowWidget::SetRowData(const FString& InDllPath, const FStri
 	modId = InModId;
 	onChanged = MoveTemp(InOnChanged);
 
+	// 被依赖(bLocked)有两种状态：已勾选=整行变灰、勾选框锁死不能取消；还没勾选=整行文字标红提醒必须勾上，
+	// 勾选框保持未勾选且可点，勾上之后刷新成前一种状态。
+	const bool bRequiredMissing = bLocked && !bEnabled;
+	const bool bLockedOn = bLocked && bEnabled;
+
 	if (ModIdLabel) {
 		ModIdLabel->SetText(FText::FromString(modId));
+		if (!bDefaultLabelColorCaptured) {
+			defaultLabelColor = ModIdLabel->GetColorAndOpacity();
+			bDefaultLabelColorCaptured = true;
+		}
+		ModIdLabel->SetColorAndOpacity(bRequiredMissing ? FSlateColor(FLinearColor::Red) : defaultLabelColor);
 	}
 	if (EnableCheckBox) {
-		EnableCheckBox->SetIsChecked(bLocked ? true : bEnabled);
-		EnableCheckBox->SetIsEnabled(!bLocked);
+		EnableCheckBox->SetIsChecked(bEnabled);
+		EnableCheckBox->SetIsEnabled(!bLockedOn);
 	}
-	SetIsEnabled(!bLocked);
+	SetIsEnabled(!bLockedOn);
 
-	// 悬停提示：Slate对禁用(变灰)的控件照样显示ToolTip。不锁定时不设提示。
+	// 悬停提示：Slate对禁用(变灰)的控件照样显示ToolTip。没被依赖时不设提示。
 	UWidget* tooltip = nullptr;
 	if (bLocked && InDependents.Num() > 0) {
 		tooltip = BuildDependentsToolTip(TEXT("被以下内容依赖：\n") + FString::Join(InDependents, TEXT("\n")));

@@ -329,6 +329,12 @@ void UForeverPopulaceFrameworkComponent::RestoreAfterSave(const TArray<FWalkingS
 	}
 }
 
+void UForeverPopulaceFrameworkComponent::ForEachActiveCitizen(TFunctionRef<void(ACitizenElement*)> visitor) const {
+	for (const auto& [citizen, actor] : activeInstances) {
+		if (IsValid(actor)) visitor(actor);
+	}
+}
+
 ACitizenElement* UForeverPopulaceFrameworkComponent::FindActiveCitizen(Citizen* citizen) const {
 	const TObjectPtr<ACitizenElement>* found = activeInstances.Find(citizen);
 	return found ? found->Get() : nullptr;

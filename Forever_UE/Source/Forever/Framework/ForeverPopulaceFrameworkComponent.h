@@ -90,6 +90,9 @@ public:
 	// 这个市民当前在场景里的Actor(没生成时返回nullptr，不会触发生成)。
 	ACitizenElement* FindActiveCitizen(Citizen* citizen) const;
 
+	// 遍历当前已生成出Actor的所有人物(跳过已失效的)——识别模式用它枚举附近的人。
+	void ForEachActiveCitizen(TFunctionRef<void(ACitizenElement*)> visitor) const;
+
 	// 存档前调用：把场景里每个市民Actor当前的位置写回Core的Citizen(SetPosition)。平时只有市民
 	// 走远被销毁时才写回，不同步的话读档后市民会回到上一次写回的位置。
 	// 正在走路的市民按"已经走到了"记：Core里的当前房间设成目的地、清掉位置(读档后在目的地

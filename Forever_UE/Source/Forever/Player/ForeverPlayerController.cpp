@@ -16,6 +16,11 @@
 #include "UI/MapWidget.h"
 #include "UI/ForeverPausePanelWidget.h"
 #include "UI/ForeverThrowListWidget.h"
+#include "Player/ForeverIdentifyComponent.h"
+
+AForeverPlayerController::AForeverPlayerController() {
+	identifyComponent = CreateDefaultSubobject<UForeverIdentifyComponent>(TEXT("IdentifyComponent"));
+}
 
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
@@ -130,9 +135,19 @@ void AForeverPlayerController::SetupInputComponent() {
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleMap")), ETriggerEvent::Started, this, &AForeverPlayerController::ToggleMap);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("CloseMap")), ETriggerEvent::Started, this, &AForeverPlayerController::HandleCloseMap);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("TogglePause")), ETriggerEvent::Started, this, &AForeverPlayerController::TogglePause);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Identify")), ETriggerEvent::Started, this, &AForeverPlayerController::EnterIdentify);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Identify")), ETriggerEvent::Completed, this, &AForeverPlayerController::ExitIdentify);
 			}
 		}
 	}
+}
+
+void AForeverPlayerController::EnterIdentify() {
+	if (identifyComponent) identifyComponent->Enter();
+}
+
+void AForeverPlayerController::ExitIdentify() {
+	if (identifyComponent) identifyComponent->Exit();
 }
 
 void AForeverPlayerController::TogglePhone() {

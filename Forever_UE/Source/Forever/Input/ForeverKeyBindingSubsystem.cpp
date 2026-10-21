@@ -45,6 +45,8 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("SwitchWeapon1"), EKeys::One },
 		{ TEXT("SwitchWeapon2"), EKeys::Two },
 		{ TEXT("AimWeapon"), EKeys::RightMouseButton },
+		// 识别模式：按住鼠标中键显示附近人物头上的信息，松开退出，见UForeverIdentifyComponent。
+		{ TEXT("Identify"), EKeys::MiddleMouseButton },
 		// 投掷物：短按3在身上的投掷物之间切换，长按3(弹出选择列表)本期未做，见
 		// UForeverThrowableComponent。
 		{ TEXT("ThrowItem"), EKeys::Three },

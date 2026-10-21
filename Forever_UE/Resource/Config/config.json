@@ -22,7 +22,8 @@
       "building_park",
       "building_mohar",
       "building_empty --test true",
-      "building_shop"
+      "building_shop",
+      "building_yuanshen"
    ],
    "component_mods" : [
       "component_residence",
@@ -57,10 +58,10 @@
    "puzzle_mods" : [ "puzzle_tetris", "puzzle_empty --test true" ],
    "resource_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Resource",
-      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts",
-      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story"
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"
    ],
    "roadnet_mods" : [ "roadnet_jing" ],
    "room_mods" : [
@@ -75,7 +76,12 @@
    ],
    "route_mods" : [ "route_bus", "route_train", "route_air", "route_empty --test true" ],
    "scheduler_mods" : [ "scheduler_basic", "scheduler_empty --test true" ],
-   "script_mods" : [ "script_basic", "script_empty --test true" ],
+   "script_mods" : [
+      "script_yuanshen",
+      "script_test",
+      "script_basic",
+      "script_empty --test true"
+   ],
    "station_mods" : [
       "station_bus",
       "station_train",
@@ -89,7 +95,7 @@
       "storage_empty --test true"
    ],
    "story_scripts" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story/test.script"
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/ys.script"
    ],
    "terrain_mods" : [
       "terrain_river",

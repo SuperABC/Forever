@@ -160,6 +160,9 @@ GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生
 
 - **`SyncPositionsToCore`/`RestoreAfterSave`**：存档前由`UForeverSaveSubsystem::SaveToFile`调用，把场景里每个市民Actor的位置写回Core(`Citizen::SetPosition`)，平时只在市民走远被销毁时才写回。正在走路的市民按"已经走到了"写进存档：当前房间设成目的地、清掉位置(读档后在目的地房间里落脚)；已经算完还没落地的寻路结果先落地，一起算。这只为存档服务，存完`RestoreAfterSave`立刻把这些市民的Core状态还原，场景里的市民继续走完。
 
+### `ForEachActiveCitizen`
+遍历当前已生成出Actor的所有人物(`activeInstances`，跳过已失效的)。`activeInstances`是私有的，识别模式(`UForeverIdentifyComponent`)用它枚举附近的人；包含被玩家操控的那一个。
+
 ## 依赖关系
 
 - 依赖：`Source/Forever/Element/CitizenElement.h`（`SpawnActor<ACitizenElement>()`+

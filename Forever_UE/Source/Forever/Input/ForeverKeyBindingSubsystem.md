@@ -14,6 +14,8 @@
 - `ThrowItem`(默认数字键3)：投掷物。动态Boolean Action没有Hold触发器，短按/长按由`AForeverCharacter`自己判断：`Started`记真实时间，`Tick`里按住超过`longPressThreshold`就弹出选择列表(长按)，没到就松开算短按切换(松开才触发，有一点延迟)。
   在`Started`记时间、`Completed`比较`longPressThreshold`区分(短按松开时才触发，有一点延迟)。
 
+- `Identify`(默认鼠标中键)：识别模式，按住进入、松开退出，绑在`AForeverPlayerController`上，见`Player/ForeverIdentifyComponent.md`。
+
 ## 依赖关系
 - 依赖:`Forever_UE/Resource/Config/KeyBindings.ini`(找不到该文件时全部用硬编码默认值,不报错)。
 - 被谁依赖:

@@ -20,6 +20,8 @@
 
 - **投掷物选择列表**(`throwListWidget`，长按3)：跟其它常驻Widget同一套创建模式(ZOrder 5)，`throwListWidgetClass`在`BP_ForeverPlayerController`里指定为`WBP_ThrowList`，没指定会警告并跳过(长按3不弹列表)。`TogglePause`在列表打开时拒绝(和地图/手机/背包等同样的理由)。见`UI/ForeverThrowListWidget.md`。
 
+- **识别模式**(`identifyComponent`，按住鼠标中键)：`Identify`热键的`Started`/`Completed`绑在这里转给`UForeverIdentifyComponent`(挂在Controller上)，换人操控/上下载具时Controller不变，所以最稳。Controller因此有了构造函数(`CreateDefaultSubobject`)。见`Player/ForeverIdentifyComponent.md`。
+
 ## 依赖关系
 - 被`AForeverPlayerGameMode`的`PlayerControllerClass`引用。
 - 依赖`Input/ForeverKeyBindingSubsystem`(`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`动态Action)。

@@ -23,8 +23,8 @@ struct FForeverModRow
 	UPROPERTY(BlueprintReadOnly)
 	bool bEnabled = true;
 
-	// 这个(ConceptKey,ModId)当前是否因为"被其它已启用mod/已添加主线剧情脚本依赖"而锁定——
-	// 锁定时Blueprint侧对应行要勾选框强制勾中+整行变灰，见ModCheckRowWidget。
+	// 这个(ConceptKey,ModId)当前是否被"其它已启用mod/已添加主线剧情脚本"依赖。bEnabled为真时对应行
+	// 整行变灰且不能取消勾选；bEnabled为假时对应行标红、勾选框保持未勾选(可点)，见ModCheckRowWidget。
 	UPROPERTY(BlueprintReadOnly)
 	bool bLocked = false;
 

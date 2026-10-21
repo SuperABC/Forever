@@ -92,6 +92,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="building_yuanshen.h" />
+    <ClInclude Include="script_test.h" />
     <ClInclude Include="script_yuanshen.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
