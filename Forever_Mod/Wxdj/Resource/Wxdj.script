@@ -1,0 +1,21 @@
+{
+	"milestones": [
+		{
+			"milestone": "wxdj_game_start",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "record_object", "object": "\"building\"", "kind": "\"building_wxdj\"", "policy": "\"first\"", "variable": "wxdj_home" },
+				{ "type": "debug_print", "message": "\"wxdj building: \" + $$wxdj_home" },
+				{ "type": "spawn_npc", "name": "\"何逸峰\"", "gender": "\"male\"", "birthday": "\"2000-01-01\"" },
+				{ "type": "npc_teleport", "name": "\"何逸峰\"", "destination": "$$wxdj_home + \" 00001\"" },
+				{ "type": "change_control", "name": "\"何逸峰\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

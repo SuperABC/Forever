@@ -466,6 +466,16 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new ChangeControlChange(name.AsString());
 		}
+		else if (type == "record_object") {
+			// {"object":"zone|building|room","kind":mod type(可空),"policy":"first|random"(可空),"variable":结果变量}，
+			// 见Map::ApplyChange。
+			auto object = obj["object"];
+			auto variable = obj["variable"];
+			if (object.IsNull() || variable.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing object or variable for record_object change.\n");
+			}
+			change = new RecordObjectChange(object.AsString(), obj["kind"].AsString(), obj["policy"].AsString(), variable.AsString());
+		}
 		else if (type == "register_door") {
 			auto name = obj["name"];
 			auto citizen = obj["citizen"];

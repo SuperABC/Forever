@@ -2425,6 +2425,53 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 		if (target) target->SetAccess(EvaluateExpressionBool(setDoor->GetAccess(), context) ? DOOR_ACCESS_OPEN : DOOR_ACCESS_LOCKED);
 		return true;
 	}
+	if (auto* record = dynamic_cast<const RecordObjectChange*>(change)) {
+		// 候选地址按object类别收集(逻辑同PostImplement的list zones/buildings/rooms)，policy选一个写进
+		// variable；变量名规则同set_value。unordered_map遍历顺序不稳定，first只保证"某一个"，全图唯一的
+		// mod取它无碍。
+		string object = ToString(EvaluateExpression(record->GetObject(), context));
+		string kind = ToString(EvaluateExpression(record->GetKind(), context));
+		string policy = ToString(EvaluateExpression(record->GetPolicy(), context));
+		vector<string> candidates;
+		if (object == "zone") {
+			for (const auto& [name, zone] : zones) {
+				if (zone && (kind.empty() || zone->GetType() == kind)) candidates.push_back(zone->GetAddress());
+			}
+		}
+		else if (object == "building") {
+			for (const auto& [name, building] : buildings) {
+				if (building && (kind.empty() || building->GetType() == kind)) candidates.push_back(building->GetAddress());
+			}
+		}
+		else if (object == "room") {
+			for (const auto& [name, building] : buildings) {
+				if (!building) continue;
+				for (Room* room : building->GetRooms()) {
+					if (room && (kind.empty() || room->GetType() == kind)) candidates.push_back(room->GetAddress());
+				}
+			}
+		}
+		else {
+			debugf("Warning: record_object: unknown object \"%s\".\n", object.c_str());
+		}
+
+		string address;
+		if (!candidates.empty()) {
+			sort(candidates.begin(), candidates.end());
+			address = policy == "random" ? candidates[GetRandom(static_cast<int>(candidates.size()))] : candidates.front();
+		}
+		else {
+			debugf("Warning: record_object: no %s of kind \"%s\" found.\n", object.c_str(), kind.c_str());
+		}
+
+		string key;
+		VARIABLE_SCOPE scope = ResolveVariableName(record->GetVariable(), key);
+		Container* target = scope == VARIABLE_SCOPE_SELF ? context.self
+			: scope == VARIABLE_SCOPE_GLOBAL ? context.global : nullptr;
+		if (target) target->SetValue(key, ValueType(address));
+		else debugf("Warning: record_object cannot write read-only variable %s.\n", record->GetVariable().c_str());
+		return true;
+	}
 	if (auto* registerDoor = dynamic_cast<const RegisterDoorChange*>(change)) {
 		// pass是布尔表达式，留空时EvaluateExpressionBool按true处理(允许通过)。
 		Door* target = FindDoorByName(ToString(EvaluateExpression(registerDoor->GetName(), context)));

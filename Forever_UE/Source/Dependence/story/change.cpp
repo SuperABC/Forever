@@ -729,6 +729,34 @@ const std::string& SetDoorChange::GetAccess() const {
 	return access;
 }
 
+RecordObjectChange::RecordObjectChange() :
+	object(), kind(), policy(), variable() {
+
+}
+
+RecordObjectChange::RecordObjectChange(std::string object, std::string kind, std::string policy, std::string variable) :
+	object(move(object)), kind(move(kind)), policy(move(policy)), variable(move(variable)) {
+
+}
+
+RecordObjectChange::~RecordObjectChange() {
+
+}
+
+const string& RecordObjectChange::GetType() const {
+	static const string type = "record_object";
+	return type;
+}
+
+void RecordObjectChange::SetObject(std::string object) { this->object = move(object); }
+const std::string& RecordObjectChange::GetObject() const { return object; }
+void RecordObjectChange::SetKind(std::string kind) { this->kind = move(kind); }
+const std::string& RecordObjectChange::GetKind() const { return kind; }
+void RecordObjectChange::SetPolicy(std::string policy) { this->policy = move(policy); }
+const std::string& RecordObjectChange::GetPolicy() const { return policy; }
+void RecordObjectChange::SetVariable(std::string variable) { this->variable = move(variable); }
+const std::string& RecordObjectChange::GetVariable() const { return variable; }
+
 RegisterDoorChange::RegisterDoorChange() :
 	name(), citizen(), pass() {
 

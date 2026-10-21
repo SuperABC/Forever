@@ -1185,6 +1185,57 @@ private:
 
 };
 
+// 记录对象：按类别+mod type在地图上找一个对象，把它的地址写进变量，让脚本能拼出房间地址等
+class RecordObjectChange : public Change {
+public:
+	/*
+	* 默认构造记录对象变化
+	*/
+	RecordObjectChange();
+
+	/*
+	* 构造记录对象变化
+	* @object: 对象类别(表达式)，目前支持zone/building/room
+	* @kind: 该对象的mod type(表达式)，如"building_wxdj"；留空=不限
+	* @policy: 选取策略(表达式)，first=第一个匹配(默认)，random=随机一个
+	* @variable: 结果写入的变量名(规则同set_value)，值为对象地址，找不到写空串
+	*/
+	RecordObjectChange(std::string object, std::string kind, std::string policy, std::string variable);
+
+	/*
+	* 析构记录对象变化
+	*/
+	virtual ~RecordObjectChange();
+
+	/*
+	* 变化类型
+	*/
+	virtual const std::string& GetType() const override;
+
+	void SetObject(std::string object);
+	const std::string& GetObject() const;
+	void SetKind(std::string kind);
+	const std::string& GetKind() const;
+	void SetPolicy(std::string policy);
+	const std::string& GetPolicy() const;
+	void SetVariable(std::string variable);
+	const std::string& GetVariable() const;
+
+private:
+	// 对象类别(表达式)
+	std::string object;
+
+	// mod type(表达式)
+	std::string kind;
+
+	// 选取策略(表达式)
+	std::string policy;
+
+	// 结果变量名
+	std::string variable;
+
+};
+
 // 按人登记门禁例外：允许或不允许某个市民通过，优先于门本身的常开/常锁/仅主人
 class RegisterDoorChange : public Change {
 public:

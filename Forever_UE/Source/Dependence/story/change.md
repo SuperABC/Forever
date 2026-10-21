@@ -101,6 +101,14 @@ Possess`），详见`Forever/Framework/ForeverStoryFrameworkComponent.md`"ApplyC
 milestone用它验证：Job/Organization的Script能不能正确广播`game_start`+`$$self.name`能不能
 正确取到`JobMod`/`OrganizationMod`自己唯一的`GetName()`。
 
+## 记录对象(`RecordObjectChange`)
+
+`{"type":"record_object","object":"\"building\"","kind":"\"building_wxdj\"","policy":"\"first\"","variable":"wxdj_home"}`
+——脚本里拿园区/建筑/房间地址的唯一途径，不用C++ mod发`post "list buildings"`。`object`(表达式)是类别，
+目前`zone`/`building`/`room`，以后可扩展；`kind`是mod type(留空不限)；`policy`是`first`(默认，候选地址排序后取第一个)
+或`random`；`variable`是结果变量(规则同`set_value`)，值为`GetAddress()`，找不到写空串并打警告。执行在
+`Map::ApplyChange`。房间地址用隐式拼接：`$$wxdj_home + " 00001"`。
+
 ## 依赖关系
 
 - 依赖：`common/utility.h`（`ValueType`）、`common/error.h`、`expression.h`

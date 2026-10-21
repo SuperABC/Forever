@@ -91,6 +91,7 @@
     <ClCompile Include="mod_wxdj.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="building_wxdj.h" />
     <ClInclude Include="script_wxdj.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
