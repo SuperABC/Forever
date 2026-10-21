@@ -494,7 +494,34 @@ const Container* UForeverStoryFrameworkComponent::ResolveTimerOwner(const string
 		Cabin* cabin = map ? map->FindCabinByName(label) : nullptr;
 		return cabin ? cabin->GetScript() : nullptr;
 	}
-	UE_LOG(LogTemp, Warning, TEXT("create_timer: unknown category \"%s\" (global/citizen/vehicle/door/elevator, or omit for the script itself)."),
+	// 建筑/房间/园区：label写名字(实体脚本的$$self.name)或地址($$self.address)都行。
+	if (category == "zone") {
+		Map* map = framework ? framework->GetMap() : nullptr;
+		Zone* zone = map ? map->GetZone(label) : nullptr;
+		if (!zone && map) zone = map->LocateZone(label);
+		return zone ? zone->GetScript() : nullptr;
+	}
+	if (category == "building") {
+		Map* map = framework ? framework->GetMap() : nullptr;
+		Building* building = map ? map->GetBuilding(label) : nullptr;
+		if (!building && map) building = map->LocateBuilding(label);
+		return building ? building->GetScript() : nullptr;
+	}
+	if (category == "room") {
+		Map* map = framework ? framework->GetMap() : nullptr;
+		Room* room = map ? map->LocateRoom(label) : nullptr;
+		if (!room && map) {
+			for (auto& [buildingName, building] : map->GetBuildings()) {
+				if (!building) continue;
+				for (Room* candidate : building->GetRooms()) {
+					if (candidate && candidate->GetName() == label) { room = candidate; break; }
+				}
+				if (room) break;
+			}
+		}
+		return room ? room->GetScript() : nullptr;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("create_timer: unknown category \"%s\" (global/citizen/vehicle/door/elevator/zone/building/room, or omit for the script itself)."),
 		UTF8_TO_TCHAR(category.c_str()));
 	return nullptr;
 }

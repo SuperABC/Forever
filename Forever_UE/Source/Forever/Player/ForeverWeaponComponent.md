@@ -28,6 +28,7 @@
 
 ### 子弹轨迹:碰撞检测用摄像机射线,视觉线段起点是枪的位置
 `LineTraceSingleByChannel`的`start`始终是摄像机位置(命中判定依据,保证"看哪打哪"),但`DrawDebugLine`画的视觉线段起点是`weaponMesh->GetComponentLocation()`(枪的位置,为空时退化为`character->GetActorLocation()`并按角色朝向把`attachOffsetX/Y/Z`转成世界坐标叠加),终点是碰撞检测算出的`trailEnd`——两者共用同一次`LineTraceSingleByChannel`结果,不需要跑第二次射线检测。不管是否命中citizen都会画线:真正碰到东西画到`hit.ImpactPoint`,全程未碰到任何东西画到`maxRange`处的终点。用`DrawDebugLine`(黄色,5秒后消失),没有`muzzleFlashEffectPath`/`impactEffectPath`对应的真实VFX资产。
+命中citizen时在`hit.ImpactPoint`额外生成一个`AForeverExplosionEffect`(程序化爆炸,纯视觉,见`ForeverExplosionEffect.md`);打墙不触发。
 
 ### 挂载点本地偏移在`WeaponMod`里定义
 `attachOffsetX/Y/Z`(角色本地坐标系,X前/Y右/Z上,单位cm)放在`WeaponMod`(`Source/Dependence/player/weapon_mod.h`),不写死在Forever层——不同武器可以给不同持握点,不需要改Forever层代码。`SpawnWeaponMesh()`里`SetupAttachment`之后紧跟`weaponMesh->SetRelativeLocation(...)`应用这个偏移;没有mesh时的退化分支(`character->GetActorLocation()`)也要应用同一套偏移(按角色朝向`RotateVector`),否则两条分支视觉效果不一致——这是个通用的坑:任何"有mesh用mesh位置,没mesh退化成角色位置"的分支都要确认两条分支应用了同一套变换。`PistolWeapon`/`RifleWeapon`(`weapon_basic.cpp`)当前给`(20, 20, 40)`,为目测值。该偏移只对没有真实持枪socket的情况生效,换成真实手部socket后可能需要归零或重新调。

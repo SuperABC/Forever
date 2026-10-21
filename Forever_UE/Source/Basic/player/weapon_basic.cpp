@@ -13,7 +13,7 @@ const char* PistolWeapon::GetName() {
 }
 
 void PistolWeapon::SetProperty() {
-	damage = 25.f;
+	damage = 2.5f;        // 测试用：原值25，临时降到十分之一，方便反复射击测试
 	fireRate = 0.08f;     // 每秒最多12.5发
 	fullAuto = true;      // 按住左键连续开火
 	maxRange = 4000.f;    // 40米

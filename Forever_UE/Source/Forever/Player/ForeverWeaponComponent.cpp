@@ -1,6 +1,7 @@
 #include "Player/ForeverWeaponComponent.h"
 
 #include "Player/ForeverCharacter.h"
+#include "Player/ForeverExplosionEffect.h"
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
@@ -255,6 +256,9 @@ void UForeverWeaponComponent::Fire() {
 	float distance = FVector::Dist(start, hit.ImpactPoint);
 	float damage = currentWeapon->ComputeDamage(distance);
 	target->TakeDamage(damage);
+
+	// 命中位置的爆炸特效(纯视觉)。世界坐标生成，不依赖citizen存活，所以放在死亡处理之前也安全。
+	AForeverExplosionEffect::Spawn(GetWorld(), hit.ImpactPoint, hit.ImpactNormal);
 
 	if (GEngine) {
 		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Red,

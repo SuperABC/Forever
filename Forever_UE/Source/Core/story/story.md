@@ -89,7 +89,7 @@ milestone超时之类）时再补内容。
 
 - `create_timer`(name、time必填，category/label可选，都是表达式)：
   - **time**：带日期(如`"2024-05-01 08:00:00"`)是绝对时刻；只写时间(`"08:00:00"`，必须是时:分:秒)是下一次到这个钟点——今天还没过就是今天，已经过了(含正好等于现在)就是明天。和老工程一致，到时只触发一次，要每天重复就在`time_up`里再建一次。
-  - **归属**：省略category时计时器归执行这个change的脚本自己。category可以指定别的脚本：`global`/`main`=主线，`citizen`=名叫label的市民的Scheduler，`vehicle`/`door`/`elevator`=名叫label(交互名)的车辆/门/电梯。
+  - **归属**：省略category时计时器归执行这个change的脚本自己。category可以指定别的脚本：`global`/`main`=主线，`citizen`=名叫label的市民的Scheduler，`vehicle`/`door`/`elevator`=名叫label(交互名)的车辆/门/电梯。`zone`/`building`/`room`=园区/建筑/房间自己的脚本，label写名字(`$$self.name`)或地址(`$$self.address`)都行。
   - 同一个归属脚本下同名的计时器只保留一个，再建一次就是改到时时刻。
 - `remove_timer`(name)：只删执行这个change的脚本自己名下的同名计时器。
 - `time_up`(name可选，留空=这个脚本的任何计时器)：到时**只发给归属脚本**，不广播。脚本里用`local.name`读计时器名。
