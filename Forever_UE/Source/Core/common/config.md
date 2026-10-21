@@ -2,8 +2,8 @@
 
 ## 职责
 
-读取/维护`Forever_UE/Resource/Config/config.json`的静态类：`dll_paths`/`layout_paths`/
-`resource_paths`三类根目录扫描、每个concept的mod参数与启用状态、主线剧情脚本路径与
+读取/维护`Forever_UE/Resource/Config/config.json`的静态类：`dll_paths`/
+`resource_paths`两类根目录扫描、每个concept的mod参数与启用状态、主线剧情脚本路径与
 Story screen的`.script`列表，并能把当前内存状态写回文件（`WriteConfig`），供游戏启动
 配置界面（Story/Mod/Resource三个screen）使用。
 
@@ -12,7 +12,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 - **用`Dependence/common/json.h`而不是UE自带Json模块解析`config.json`**——UE的
   `FJsonSerializer`是严格JSON,不支持注释;`json.h`是JsonCpp衍生的宽松解析器,支持
   `//`/`/* */`注释,更适合手写维护的配置文件。
-- **`dll_paths`/`layout_paths`/`resource_paths`/`story_scripts`里的相对路径都相对
+- **`dll_paths`/`resource_paths`/`story_scripts`里的相对路径都相对
   `config.json`自己所在目录(`configDir`)解析**——纯文件系统概念,不依赖UE的
   `FPaths::ProjectDir`,保持`Config`engine-agnostic。
 - **`configDir`必须用`filesystem::canonical()`而不是直接`parent_path()`**——打包产物里
@@ -44,7 +44,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   `canonical()`在Windows下会把分隔符规范化成反斜杠，一旦原样塞进JSON字符串值（反斜杠后面
   跟的如果不是合法JSON转义字符，比如`\W`/`\P`/`\F`）就是非法JSON，这份自定义`JsonReader`
   遇到一处非法转义会导致整个文件解析失败（不只是这一个字段读不到，其它字段也会被一起
-  扔掉）。所有写进`dllPaths`/`layoutPaths`/`resourcePaths`/`storyScriptPaths`的路径在落盘
+  扔掉）。所有写进`dllPaths`/`resourcePaths`/`storyScriptPaths`的路径在落盘
   前都统一走这个转换。
 - **`AddDllPath`探测用的`GetMod<Concept>`符号名来自`loader.h`的
   `GetModConceptDescriptors()`**,不在`config.cpp`里重复维护一份列表,避免两处列表不同步；
@@ -67,12 +67,12 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   会从对应`<concept>_mods`数组里一并删掉，不留下"启用着一个已经不存在的dll提供的id"。
 - **`GetConceptMods`只做字符串切分,不做任何格式校验/解析**——参数部分原样返回,具体格式
   完全由消费方（mod自己注册的creator函数）决定；`Config`/`ModLoader`全程不关心参数内容。
-- **`layout_paths`/`resource_paths`用和`dll_paths`同一套
+- **`resource_paths`用和`dll_paths`同一套
   `recursive_directory_iterator`扫描手法，但不探测/加载任何东西**(`.layout`/`.script`
   是纯文本文件)，扫到就收。`AddResourcePath`在同一次扫描里按后缀分流收集`.script`
   （`resourcePaths`）、`.uplugin`（`pluginPaths`）、`.pak`（`pakPaths`）、`.layout`
-  （并入`layoutPaths`，Resource screen要求一个文件夹能同时覆盖`.layout`和`.script`，
-  不强制在两处各添加一次）。`GetScriptPath(name)`遍历`resourcePaths`按文件名（不含路径/
+  （并入内部的`layoutPaths`，没有单独的`layout_paths`配置项——一个文件夹天然同时覆盖
+  `.layout`和`.script`）。`GetScriptPath(name)`遍历`resourcePaths`按文件名（不含路径/
   扩展名）反查实际路径，供`JobMod`/`OrganizationMod`/`Story`这类只知道bare文件名、不应该
   替Mod决定"脚本实际存放在哪"的调用方使用，见`Core/society/job.md`"Script配置"一节。
   `HasResourcePaths()`供`ForeverModSubsystem::Initialize`判断要不要回退扫描默认的

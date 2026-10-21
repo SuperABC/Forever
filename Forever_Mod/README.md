@@ -8,7 +8,7 @@
   只在井字中心lot里自适应贴角放一块6x6，14层，用`Test/Resource/yuanshen_fg+.layout`/
   `yuanshen_fu+-.layout`，挂示例脚本`entity_event`。同一个DLL还有`YuanshenScript`(script mod，id `yuanshen`)：
   把剧情脚本里label为`teleport_mona`的占位符换成"把莫娜瞬移到yuanshen建筑00001房间"的`npc_teleport`。
-- `Wxdj/Cpp/Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)+空壳`WxdjScript`(id `script_wxdj`)，剧情全在`Wxdj/Resource/Wxdj.script`。
+- `Wxdj/Cpp/Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)，没有ScriptMod(main_story用`script_empty`)，剧情全在`Wxdj/Resource/Wxdj.script`。
 - `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id统一为`empty`),纯粹用来验证
   `config.json`按mod id配置的命令行式参数能一路传到mod:构造函数直接接收参数字符串,拼进
   `GetName()`,详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。

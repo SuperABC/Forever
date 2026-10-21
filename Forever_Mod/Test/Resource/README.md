@@ -1,6 +1,6 @@
 # Test/Resource
 
-`Test`组mod用到的`.layout`资源文件(`Forever_UE/Resource/Config/config.json`的`layout_paths`已收录
+`Test`组mod用到的`.layout`资源文件(`Forever_UE/Resource/Config/config.json`的`resource_paths`已收录
 这个目录)：
 
 - `yuanshen_fg+.layout`——`YuanshenBuilding`的1楼模板(5个single+2个row+楼梯+电梯井)。

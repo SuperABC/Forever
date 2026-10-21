@@ -74,4 +74,4 @@ Thumbs.db
 .dump/
 
 # ---- Personal/local test scripts (not repo content) ----
-Forever_UE/Resource/Story/ys.script
+Forever_Mod/Test/Resource/ys.script

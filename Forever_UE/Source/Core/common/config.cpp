@@ -97,7 +97,7 @@ void Config::ReadConfig(const string& path) {
 		// 找不到/打不开config.json时留空,不抛异常——调用方(ForeverModSubsystem)据此
 		// 决定要不要回退到硬编码默认目录,和UForeverKeyBindingSubsystem的容错风格一致。
 		// 但这里必须打一条警告(不是彻底静默)：这个分支和下面"json语法错误"分支长得很像
-		// (两者最终都导致dll_paths/resource_paths/layout_paths全部回退)，但根因完全不同
+		// (两者最终都导致dll_paths/resource_paths全部回退)，但根因完全不同
 		// (前者是文件都没打开——可能是路径错了，也可能是另一个进程这一瞬间以独占方式
 		// 持有这个文件比如正在WriteConfig——而不是内容有问题)，没有这条日志，排查"为什么
 		// 回退扫描了"时无法区分这两种情况，容易误以为是config.json内容写错了。
@@ -140,17 +140,8 @@ void Config::ReadConfig(const string& path) {
 		AddDllPath(ToForwardSlashes(resolved.string()));
 	}
 
-	for (const auto& layoutPath : root["layout_paths"]) {
-		// 和dll_paths同一个相对路径解析规则，相对configDir。
-		filesystem::path resolved(layoutPath.AsString());
-		if (resolved.is_relative()) {
-			resolved = filesystem::path(configDir) / resolved;
-		}
-		AddLayoutPath(ToForwardSlashes(resolved.string()));
-	}
-
 	for (const auto& resourcePath : root["resource_paths"]) {
-		// 和dll_paths/layout_paths同一个相对路径解析规则，相对configDir。
+		// 和dll_paths同一个相对路径解析规则，相对configDir。
 		filesystem::path resolved(resourcePath.AsString());
 		if (resolved.is_relative()) {
 			resolved = filesystem::path(configDir) / resolved;
@@ -161,7 +152,7 @@ void Config::ReadConfig(const string& path) {
 	mainStoryScriptModName = root["main_story"].AsString();
 
 	for (const auto& scriptPath : root["story_scripts"]) {
-		// 和dll_paths/layout_paths/resource_paths同一个相对路径解析规则，相对configDir。
+		// 和dll_paths/resource_paths同一个相对路径解析规则，相对configDir。
 		filesystem::path resolved(scriptPath.AsString());
 		if (resolved.is_relative()) {
 			resolved = filesystem::path(configDir) / resolved;
@@ -339,24 +330,6 @@ void Config::RemoveDllPath(const string& path) {
 	dllPaths.erase(path);
 }
 
-void Config::AddLayoutPath(const string& path) {
-	filesystem::path dir(path);
-	if (!filesystem::exists(dir) || !filesystem::is_directory(dir)) {
-		cerr << "[Config] Warning: layout path does not exist: " << path << "\n";
-		return;
-	}
-
-	layoutPaths.erase(path);
-
-	vector<string> found;
-	for (const auto& entry : filesystem::recursive_directory_iterator(dir)) {
-		if (!CheckFileFormat(entry.path(), ".layout"))
-			continue;
-		found.push_back(ToForwardSlashes(filesystem::absolute(entry.path()).string()));
-	}
-	layoutPaths[path] = found;
-}
-
 vector<string> Config::GetLayouts() {
 	vector<string> paths;
 	for (const auto& [_, layouts] : layoutPaths) {
@@ -395,7 +368,7 @@ void Config::AddResourcePath(const string& path) {
 			paks.push_back(full);
 		} else if (CheckFileFormat(entry.path(), ".layout")) {
 			// 游戏启动配置界面的Resource screen要求一个文件夹同时覆盖.layout和.script，
-			// 这里顺带收集进现有的layoutPaths(和AddLayoutPath共用同一个map，不新增容器)，
+			// 这里顺带收集进现有的layoutPaths(和resourcePaths同一次扫描，不新增容器)，
 			// 不强制玩家为同一个文件夹分别在两个地方各添加一次。
 			layouts.push_back(full);
 		}
@@ -475,16 +448,11 @@ void Config::SetMainStoryScriptModName(const string& name) {
 }
 
 void Config::RescanFiles() {
-	// 先拷出根目录列表——AddResourcePath/AddLayoutPath会erase再重新插入同一个key。
-	// 资源根目录同时登记在layoutPaths里，由AddResourcePath一并刷新，不再单独按layout根扫一遍。
+	// 先拷出根目录列表——AddResourcePath会erase再重新插入同一个key。.layout也由AddResourcePath
+	// 在同一次扫描里收进layoutPaths，所以只需要按resource根重扫。
 	vector<string> resourceRoots;
 	for (const auto& [root, _] : resourcePaths) resourceRoots.push_back(root);
-	vector<string> layoutRoots;
-	for (const auto& [root, _] : layoutPaths) {
-		if (!resourcePaths.count(root)) layoutRoots.push_back(root);
-	}
 	for (const string& root : resourceRoots) AddResourcePath(root);
-	for (const string& root : layoutRoots) AddLayoutPath(root);
 }
 
 vector<string> Config::FindMissingScripts(const vector<string>& scripts) {
@@ -675,8 +643,8 @@ void Config::WriteConfig(const string& path) {
 	// 文件(每台开发机上mod/资源的实际存放位置也经常不一样)，相对路径解析ConfigDir/
 	// canonical那一套反而更容易因为目录连接(junction)、当前这次是不是打包产物等情况产生
 	// 让人困惑的歧义(配置界面这几个Add按钮从原生文件/文件夹选择器拿到的本来就已经是绝对
-	// 路径)。dllPaths/layoutPaths/resourcePaths的key、storyScriptPaths的内容在内存里已经
-	// 是绝对路径(AddDllPath/AddResourcePath/AddLayoutPath调用前，ReadConfig或原生选择器
+	// 路径)。dllPaths/resourcePaths的key、storyScriptPaths的内容在内存里已经
+	// 是绝对路径(AddDllPath/AddResourcePath调用前，ReadConfig或原生选择器
 	// 都已经解析/返回成绝对路径)，这里原样写出即可。ReadConfig那边保留对相对路径的兼容
 	// 解析(没坏处，只是以后不会再有代码主动生成相对路径这种写法了)。
 	JsonValue root(DATA_OBJECT);
@@ -687,13 +655,6 @@ void Config::WriteConfig(const string& path) {
 		dllArr.append(JsonValue(rootPath));
 	}
 	root["dll_paths"] = dllArr;
-
-	JsonValue layoutArr(DATA_ARRAY);
-	for (const auto& [rootPath, _] : layoutPaths) {
-		(void)_;
-		layoutArr.append(JsonValue(rootPath));
-	}
-	root["layout_paths"] = layoutArr;
 
 	JsonValue resourceArr(DATA_ARRAY);
 	for (const auto& [rootPath, _] : resourcePaths) {

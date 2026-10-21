@@ -7,13 +7,13 @@
 #include <filesystem>
 
 
-// 读取/维护config.json的静态类:dll_paths/layout_paths/resource_paths三类根目录扫描、
+// 读取/维护config.json的静态类:dll_paths/resource_paths两类根目录扫描、
 // 每个concept的mod参数与启用状态、主线剧情脚本路径,并能把当前内存状态写回文件
 // (WriteConfig)。详见同目录config.md。
 class Config {
 public:
-	// 读取path指向的config.json,清空并重建dllPaths/layoutPaths/conceptMods。内部对
-	// dll_paths/layout_paths两个数组逐项分别调用AddDllPath/AddLayoutPath(相对路径都相对
+	// 读取path指向的config.json,清空并重建dllPaths/resourcePaths/conceptMods。内部对
+	// dll_paths/resource_paths两个数组逐项分别调用AddDllPath/AddResourcePath(相对路径都相对
 	// config.json自己所在目录configDir解析);并把所有以"_mods"结尾的顶层key当作一个concept
 	// 的mod列表解析(不需要硬编码21个concept的名字,配置文件本身决定内容)。找不到文件或json
 	// 语法错误时静默留空,不抛异常,调用方据此决定要不要回退到硬编码默认目录。
@@ -36,18 +36,12 @@ public:
 	// 移除path对应的已注册dll路径记录。
 	static void RemoveDllPath(const std::string& path);
 
-	// 递归扫描path下所有.layout文件，记下绝对路径——和AddDllPath同一个
-	// std::filesystem::recursive_directory_iterator手法，但不需要探测/加载任何东西
-	// (.layout是纯文本模板文件，不是dll)，找到就收，不做格式校验(交给
-	// BuildingLayoutLibrary::ReadTemplates解析时再报错)。
-	static void AddLayoutPath(const std::string& path);
-
 	// 所有已发现的.layout绝对路径(跨目录扁平化，不去重——理论上不会有同名冲突，
 	// BuildingLayoutLibrary按文件basename为key，后加载的会覆盖先加载的，调用方自己保证
 	// 不重复摆放同名模板)。
 	static std::vector<std::string> GetLayouts();
 
-	// 递归扫描path下所有.script文件，记下绝对路径——和AddLayoutPath同一个手法，不需要
+	// 递归扫描path下所有.script文件，记下绝对路径——和AddDllPath同一个手法，不需要
 	// 探测/加载任何东西，找到就收，不做格式校验(交给Script::ReadScript解析时再报错)。
 	// JobMod/OrganizationMod（以及Story）只写一个不含路径/扩展名的bare文件名（如
 	// "job_shop_saler"），不知道也不需要知道用户实际把脚本文件放在哪，由这里的
@@ -56,7 +50,7 @@ public:
 
 	// 是否已经有任何resource_paths被注册过——config.json没有配置resource_paths(或者根本
 	// 没有config.json)时，调用方(ForeverModSubsystem)据此决定要不要回退扫描默认的
-	// Resource/Story目录，和dll_paths/layout_paths同一个回退容错风格。
+	// Resource/Story目录，和dll_paths同一个回退容错风格。
 	static bool HasResourcePaths();
 
 	// 所有已发现的.uplugin绝对路径——和GetLayouts()同一个手法，resource_paths扫描时按

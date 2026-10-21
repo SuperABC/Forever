@@ -80,7 +80,7 @@ private:
 		const char* label; // teleport_<label>
 	};
 
-	// 顺序和Resource/Story/ys.script开头的names数组、fuck_xxx变量一致。
+	// 顺序和Test/Resource/ys.script开头的names数组、fuck_xxx变量一致。
 	static inline const std::array<Character, 30> kCharacters = { {
 		{ "莫娜", "mona" }, { "琴", "qin" }, { "优菈", "youla" }, { "迪卢克", "diluke" },
 		{ "阿贝多", "abeiduo" }, { "凝光", "ningguang" }, { "北斗", "beidou" }, { "刻晴", "keqing" },

@@ -24,6 +24,9 @@ class FOREVER_API AForeverCharacter : public ACharacter
 	friend class UForeverThrowableComponent;
 
 public:
+	// 按性别换身体网格(男Manny/女Quinn)，并重新摆放头像方块。由ACitizenElement::Init调用。
+	void ApplyBodyMesh(bool bFemale);
+
 	AForeverCharacter();
 
 	virtual void PossessedBy(AController* NewController) override;
@@ -51,6 +54,17 @@ protected:
 	// AvatarTexture参数，BeginPlay里建动态材质实例设进去)。见ForeverCharacter.md"头像方块"一节。
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UStaticMeshComponent> avatarMesh;
+
+	// 身体网格：男性用Manny、女性用Quinn(同一个骨骼SK_Mannequin，共用动画蓝图)。构造函数里按
+	// 默认路径找好，ApplyBodyMesh按性别切换。
+	UPROPERTY(EditDefaultsOnly, Category = "Mesh")
+	TObjectPtr<USkeletalMesh> maleBodyMesh;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Mesh")
+	TObjectPtr<USkeletalMesh> femaleBodyMesh;
+
+	// 按骨骼参考姿势摆放头像方块(avatarOffset/avatarRotation等)，换身体网格后要重新摆。
+	void PlaceAvatar();
 
 	// 方块边长(厘米)；avatarOffset是相对head骨骼的偏移(骨骼局部坐标)；avatarRotation是相对**角色本身**
 	// 的旋转——BeginPlay按head骨骼的参考姿势把骨骼自己的朝向抵消掉，avatarRotation为0时方块和角色对齐：

@@ -4,7 +4,7 @@
 玩家可控角色基类,被玩家自己的初始角色和`ChangeControlChange`切换过去操控的任意`ACitizenElement`共用。支持第三人称(肩后SpringArm+Camera)/第一人称(头部或眼高Camera)切换、移动/跳跃/冲刺、瞄准开火(转发给`UForeverWeaponComponent`,见`ForeverWeaponComponent.md`)、MeetOption对话选项操作。
 
 ## 关键设计
-- 不建Blueprint外壳:构造函数用`ConstructorHelpers::FObjectFinder`/`FClassFinder`引用`SKM_Manny_Simple`骨骼网格、`ABP_Unarmed`动画蓝图和`IA_Move`/`IA_Look`/`IA_MouseLook`三个Input Action、`IMC_Default`/`IMC_MouseLook`两个Mapping Context作为默认值,均为`EditDefaultsOnly`,可被覆盖。
+- 不建Blueprint外壳:构造函数用`ConstructorHelpers::FObjectFinder`/`FClassFinder`引用`SKM_Manny_Simple`/`SKM_Quinn_Simple`两个骨骼网格(`maleBodyMesh`/`femaleBodyMesh`，默认Manny，市民`Init`时按性别`ApplyBodyMesh`切换)、`ABP_Unarmed`动画蓝图和`IA_Move`/`IA_Look`/`IA_MouseLook`三个Input Action、`IMC_Default`/`IMC_MouseLook`两个Mapping Context作为默认值,均为`EditDefaultsOnly`,可被覆盖。
 - `lookAction`(IA_Look)和`mouseLookAction`(IA_MouseLook)都绑到同一个`Look()`处理函数,但分属`IMC_Default`/`IMC_MouseLook`两个Context——手柄摇杆(模拟量)和鼠标位移(增量)需要不同的Input Modifier配置。两者都必须绑定,缺`mouseLookAction`会导致鼠标转视角没反应。
 - 网格体相对Root的`(-96, 0, -90°)`偏移是标准UE Mannequin挂接惯例。
 - `Jump`/`ToggleView`/`Sprint`/`MeetOptionUp/Down/Select`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1/2`/`AimWeapon`不直接引用`UInputAction`资源,改从`UForeverKeyBindingSubsystem`(见`Input/ForeverKeyBindingSubsystem.md`)按名字取运行时动态创建的Action,按键从外部配置文件读取。
@@ -45,7 +45,7 @@ Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块
 - **存档**：`activeShoulderSlot`记录最近一次`ActivateShoulderWeapon`的槽位；读档时`AForeverFrameworkActor::RestoreControlledPawn`调用`RestoreWeaponState(slot, ammo)`改回存档时激活的武器和弹匣余量(`PossessedBy`默认激活左肩、换满弹匣)。
 
 ## 依赖关系
-- 依赖资产:`Content/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple`、`Anims/Unarmed/ABP_Unarmed`、`Content/Blueprint/Player/Input/Actions/{IA_Move,IA_Look,IA_MouseLook}`、`Content/Blueprint/Player/Input/{IMC_Default,IMC_MouseLook}`。
+- 依赖资产:`Content/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple`、`SKM_Quinn_Simple`、`Anims/Unarmed/ABP_Unarmed`、`Content/Blueprint/Player/Input/Actions/{IA_Move,IA_Look,IA_MouseLook}`、`Content/Blueprint/Player/Input/{IMC_Default,IMC_MouseLook}`。
 - 依赖`Input/ForeverKeyBindingSubsystem`提供的动态`UInputAction`(`Jump`/`ToggleView`/`Sprint`/`MeetOptionUp`/`MeetOptionDown`/`MeetOptionSelect`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1`/`SwitchWeapon2`/`AimWeapon`)。
 - 依赖`Source/Core/player/player.h`(`Player::CreateAsset`/`AddByPath`/`RemoveByPath`/`GetLeftShoulder`/`GetRightShoulder`/`GetRightHand`)、`Framework/ForeverFrameworkActor.h`(反查`Player`实例)。
 - 依赖`AForeverPlayerController::GetMeetOptionWidget()`(MeetOption三个处理函数转发)。

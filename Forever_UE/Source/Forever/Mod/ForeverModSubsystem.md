@@ -1,7 +1,7 @@
 # ForeverModSubsystem
 
 ## 职责
-负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`/`layout_paths`/`resource_paths`缺失时分别回退扫描默认目录),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,`bModsRegistered`门闩保证每个GameInstance生命周期只真正跑一次。
+负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`/`resource_paths`缺失时分别回退扫描默认目录(resource回退为`Resource/Story`+`Resource/Layouts`)),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,`bModsRegistered`门闩保证每个GameInstance生命周期只真正跑一次。
 
 ## 关键设计
 - **挂载mod自己的UE资产Plugin**(`EnsureModsRegistered()`开头):按`WITH_EDITOR`分两条路径:

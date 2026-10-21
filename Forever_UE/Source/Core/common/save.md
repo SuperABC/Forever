@@ -92,7 +92,7 @@
   - `storyScripts` / `mainStory`：Story screen 的脚本只存名字（不含路径和扩展名），读档时按 `Config::GetScriptPath` 重新解析成本机路径。
   - `scripts` / `layouts`：资源检查用的脚本名和 `.layout` 模板名（模板名取自各建筑的 `GetFloorSpecs` 快照）。
   - `gameVersion`：只用于显示和排查。
-- **存档里不出现文件路径**：脚本、布局、mod 都只存名字和 id；`dll_paths/layout_paths/resource_paths` 不进存档。
+- **存档里不出现文件路径**：脚本、布局、mod 都只存名字和 id；`dll_paths/resource_paths` 不进存档。
 - **21 个 concept 的统一操作表**（`GetConceptOps`，用模板 + 成员函数指针生成）：枚举存活实例（计数器、状态版本）、临时建实例取状态版本、恢复计数器、检查是否已注册。
 - **加载前校验分两步**：
   1. `ValidateArchive`（不改状态）：段版本 → manifest → 每个 `(concept, id)` 都有已发现的 DLL 提供 → 每个 mod 声明的依赖也在存档的 mod 集合里 → 脚本和布局资源都能在配置的目录里找到。资源检查前会先 `Config::RescanFiles`，因为文件列表是启动时扫描缓存的。

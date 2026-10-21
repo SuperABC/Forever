@@ -70,7 +70,11 @@ AForeverCharacter::AForeverCharacter()
 
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> meshFinder(
 		TEXT("/Game/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> femaleMeshFinder(
+		TEXT("/Game/Asset/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"));
+	if (femaleMeshFinder.Succeeded()) femaleBodyMesh = femaleMeshFinder.Object;
 	if (meshFinder.Succeeded()) {
+		maleBodyMesh = meshFinder.Object;
 		GetMesh()->SetSkeletalMesh(meshFinder.Object);
 		GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -96.f));
 		GetMesh()->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
@@ -234,9 +238,23 @@ void AForeverCharacter::UnPossessed()
 void AForeverCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	// 构造函数里已经按默认值摆过一次；这里按(可能被子类/蓝图默认值改过的)属性再摆一遍。
+	PlaceAvatar();
+}
 
+void AForeverCharacter::ApplyBodyMesh(bool bFemale)
+{
+	USkeletalMesh* body = bFemale ? femaleBodyMesh.Get() : maleBodyMesh.Get();
+	if (!body || GetMesh()->GetSkeletalMeshAsset() == body) return;
+	// 两个网格同一个骨骼，动画蓝图(AnimInstanceClass)不用换。
+	GetMesh()->SetSkeletalMesh(body);
+	// 头像方块挂在head骨骼上，摆放要按新网格的参考姿势重新算。
+	PlaceAvatar();
+}
+
+void AForeverCharacter::PlaceAvatar()
+{
 	if (avatarMesh) {
-		// 构造函数里已经按默认值摆过一次；这里按(可能被子类/蓝图默认值改过的)属性再摆一遍。
 		// 旋转：head骨骼在参考姿势下相对角色的朝向是骨骼自己定的(不直观)，这里把它抵消掉，让
 		// avatarRotation变成相对角色本身的旋转(0=方块+X面朝角色正前方、+Z朝上)。relative满足
 		// 骨骼朝向*relative=期望朝向，所以relative=骨骼朝向^-1*期望朝向。没挂在骨骼上时直接用。

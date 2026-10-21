@@ -1,19 +1,16 @@
 #include "building_wxdj.h"
 
 #include "map/building_factory.h"
-#include "story/script_factory.h"
-#include "script_wxdj.h"
 
 #pragma comment(lib, "Dependence.lib")
 
 int WxdjBuilding::count = 0;
 
-// 这个DLL注册一个building mod(building_wxdj)和一个script mod(script_wxdj)。建筑用到room_empty/
-// component_empty；主线脚本mod不依赖其它mod(建筑是脚本运行时按type查的，不是编译期依赖)。
+// 这个DLL只注册一个building mod(building_wxdj)，用到room_empty/component_empty。剧情没有自己的
+// ScriptMod，config.json的main_story用script_empty，逻辑全在Resource/Wxdj.script。
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
 		{ WxdjBuilding::GetId(), { "room_empty", "component_empty" } },
-		{ WxdjScript::GetId(), {} },
 	};
 	return (void*)&dependencies;
 }
@@ -32,18 +29,4 @@ extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* fact
 }
 
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {
-}
-
-extern "C" __declspec(dllexport) void* GetModScripts() {
-	static std::vector<std::string> mods = { WxdjScript::GetId() };
-	return (void*)&mods;
-}
-
-extern "C" __declspec(dllexport) void RegisterModScripts(ScriptFactory* factory) {
-	factory->RegisterScript(WxdjScript::GetId(),
-		[](const std::string&) -> ScriptMod* { return new WxdjScript(); },
-		[](ScriptMod* script) { delete script; });
-}
-
-extern "C" __declspec(dllexport) void FinishModScripts(ScriptFactory* factory) {
 }

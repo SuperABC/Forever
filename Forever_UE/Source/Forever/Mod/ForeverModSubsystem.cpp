@@ -84,20 +84,15 @@ void UForeverModSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		mods = Config::GetMods();
 	}
 
-	if (Config::GetLayouts().empty()) {
-		// config.json没有配置layout_paths(或者根本没有config.json)时,回退扫描默认的
-		// Resource/Layouts/目录——和上面dll_paths的回退同一个容错风格。
-		const FString defaultLayoutDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("Resource/Layouts"));
-		UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: config.json 未提供任何layout_paths,回退扫描默认目录 %s。"), *defaultLayoutDir);
-		Config::AddLayoutPath(TCHAR_TO_UTF8(*defaultLayoutDir));
-	}
-
 	if (!Config::HasResourcePaths()) {
 		// config.json没有配置resource_paths(或者根本没有config.json)时,回退扫描默认的
-		// Resource/Story/目录——和上面layout_paths的回退同一个容错风格。
-		const FString defaultResourceDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("Resource/Story"));
-		UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: config.json 未提供任何resource_paths,回退扫描默认目录 %s。"), *defaultResourceDir);
-		Config::AddResourcePath(TCHAR_TO_UTF8(*defaultResourceDir));
+		// Resource/Story/和Resource/Layouts/目录(.script和.layout都由resource_paths扫描)——和上面
+		// dll_paths的回退同一个容错风格。
+		for (const TCHAR* subDir : { TEXT("Resource/Story"), TEXT("Resource/Layouts") }) {
+			const FString defaultResourceDir = FPaths::Combine(FPaths::ProjectDir(), subDir);
+			UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: config.json 未提供任何resource_paths,回退扫描默认目录 %s。"), *defaultResourceDir);
+			Config::AddResourcePath(TCHAR_TO_UTF8(*defaultResourceDir));
+		}
 	}
 
 	// 到这里为止只是纯发现，写进Config静态状态供配置界面UI立刻有数据可展示——真正的Plugin/

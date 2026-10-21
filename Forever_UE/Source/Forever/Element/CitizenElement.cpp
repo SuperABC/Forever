@@ -317,6 +317,9 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 
 	SetActorLocation(FVector(worldX, worldY, worldZ));
 
+	// 身体网格按性别：男Manny、女Quinn。
+	ApplyBodyMesh(citizen->GetGender() == GENDER_FEMALE);
+
 	BuildProximityBox();
 }
 

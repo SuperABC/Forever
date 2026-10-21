@@ -61,6 +61,8 @@ SetRelativeLocation`用`-GetCapsuleComponent()->GetScaledCapsuleHalfHeight()`让
 `USkeletalMeshComponent`没有`AnimInstance`时会一直显示bind pose（T-pose），挂了之后至少
 有一个正常待机姿势。当前阶段用UE默认小白人占位，以后换真实资产。
 
+按性别选身体网格：`Init()`里调`AForeverCharacter::ApplyBodyMesh`，男性用`SKM_Manny_Simple`、女性用`SKM_Quinn_Simple`(同一个骨骼`SK_Mannequin`，动画蓝图不用换)，换完重新摆头像方块(`PlaceAvatar`)。
+
 ### 3D坐标"留空/首次随机/此后复用"——在这里落地，不在`Citizen`
 
 `Citizen`（Core）只存储`hasPosition`+`posX/Y/Z`（地图单位），真正的判断/写入逻辑在
