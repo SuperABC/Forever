@@ -28,6 +28,9 @@ using namespace std;
 // 抽公共函数，见Source/Forever/Framework/ForeverPopulaceFrameworkComponent.cpp顶部注释。
 #define TRAFFIC_WORLD_SCALE 1000.f
 
+// 车辆流式生成/销毁判断距离时Z方向的权重，和市民(POPULACE_VERTICAL_DISTANCE_WEIGHT)同一个值。
+#define TRAFFIC_VERTICAL_DISTANCE_WEIGHT 5.f
+
 // 载具用的骨骼网格是bSimulatePhysics=true的真实刚体(见VehicleElement.cpp构造函数)，和市民用的
 // 胶囊体(POPULACE_HEIGHT_EPSILON=10就够，CMC每帧温和地解算穿插)不是一回事——physics引擎对
 // 刚体生成时的穿插极其敏感，哪怕只嵌进地板1个单位，Chaos也会在后面几帧用很大的分离冲量把车
@@ -47,6 +50,12 @@ using namespace std;
 #define ROUTE_DEBUG_MIN_STEPS 16
 
 namespace {
+	float TrafficStreamingDistance(const FVector& a, const FVector& b) {
+		FVector delta = a - b;
+		delta.Z *= TRAFFIC_VERTICAL_DISTANCE_WEIGHT;
+		return delta.Size();
+	}
+
 	// 带Traffic前缀：BuildingElement.cpp也有一个同签名的匿名命名空间函数，Unity构建把两个文件
 	// 合进同一个编译单元时重名会冲突。
 	void TrafficComputeWorldPosition(const Building& building, float localX, float localY,
@@ -168,6 +177,7 @@ namespace {
 }
 
 UForeverTrafficFrameworkComponent::UForeverTrafficFrameworkComponent() {
+	PrimaryComponentTick.bCanEverTick = true;
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> pureFinder(
 		TEXT("/Game/Asset/Materials/Pure.Pure"));
 	if (pureFinder.Succeeded()) {
@@ -224,37 +234,95 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 			worldX = savedX; worldY = savedY; worldZ = savedZ; worldYaw = savedYaw;
 		}
 
-		FString blueprintPath = UTF8_TO_TCHAR(vehicle->GetBlueprintPath().data());
-		UClass* vehicleClass = LoadClass<AVehicleElement>(nullptr, *blueprintPath);
-		if (!vehicleClass) {
-			UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::GenerateVehicles: 加载车辆蓝图失败，路径=%s，车辆=%s"),
-				*blueprintPath, UTF8_TO_TCHAR(vehicle->GetName().c_str()));
+		// 只登记，不生成：TickComponent按玩家距离流式生成/销毁。
+		FCarEntry entry;
+		entry.vehicle = vehicle;
+		entry.name = UTF8_TO_TCHAR(vehicle->GetName().c_str());
+		entry.blueprintPath = UTF8_TO_TCHAR(vehicle->GetBlueprintPath().data());
+		entry.location = FVector(worldX, worldY, worldZ);
+		entry.yaw = worldYaw;
+		carEntries.Add(entry);
+	}
+}
+
+AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry) {
+	UClass* vehicleClass = LoadClass<AVehicleElement>(nullptr, *entry.blueprintPath);
+	if (!vehicleClass) {
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::SpawnCar: 加载车辆蓝图失败，路径=%s，车辆=%s"),
+			*entry.blueprintPath, *entry.name);
+		entry.bBroken = true;
+		return nullptr;
+	}
+
+	// carMesh是有真实碰撞、参与物理模拟的骨骼网格(见VehicleElement.cpp构造函数)，停在
+	// 房间里这个点离墙/地板的碰撞体很容易贴得很近，默认的生成时碰撞检测会因为"生成点被
+	// 占用"直接拒绝生成(SpawnActor返回nullptr)——照抄原ToggleVehicle MOUNT分支的做法，
+	// 用AlwaysSpawn跳过这次检测(实测：没加这个之前，PIE日志里每一次SpawnActor都报
+	// "SpawnActor failed because of collision at the spawn location"，车辆一辆都没真正
+	// 生成出来，见排查记录)。
+	FActorSpawnParameters spawnParams;
+	spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AVehicleElement* vehicleElement = GetWorld()->SpawnActor<AVehicleElement>(
+		vehicleClass, entry.location, FRotator(0.f, entry.yaw, 0.f), spawnParams);
+	if (!vehicleElement) return nullptr;
+
+	vehicleElement->Init(entry.vehicle, nullptr); // 这时候还没人上车，previousPawn先留空
+	activeVehicles.Add(entry.name, vehicleElement);
+	entry.element = vehicleElement;
+	return vehicleElement;
+}
+
+void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction) {
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (carEntries.Num() == 0) return;
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn) return;
+	FVector playerLoc = pawn->GetActorLocation();
+
+	float spawnDistUE = vehicleSpawnDistance * TRAFFIC_WORLD_SCALE;
+	float despawnDistUE = vehicleDespawnDistance * TRAFFIC_WORLD_SCALE;
+	int32 spawned = 0;
+
+	for (FCarEntry& entry : carEntries) {
+		AVehicleElement* element = entry.element.Get();
+		if (!element) {
+			if (entry.bBroken || spawned >= FMath::Max(1, maxVehicleSpawnsPerFrame)) continue;
+			if (TrafficStreamingDistance(playerLoc, entry.location) < spawnDistUE) {
+				if (SpawnCar(entry)) spawned++;
+			}
 			continue;
 		}
 
-		// carMesh是有真实碰撞、参与物理模拟的骨骼网格(见VehicleElement.cpp构造函数)，停在
-		// 房间里这个点离墙/地板的碰撞体很容易贴得很近，默认的生成时碰撞检测会因为"生成点被
-		// 占用"直接拒绝生成(SpawnActor返回nullptr)——照抄原ToggleVehicle MOUNT分支的做法，
-		// 用AlwaysSpawn跳过这次检测(实测：没加这个之前，PIE日志里每一次SpawnActor都报
-		// "SpawnActor failed because of collision at the spawn location"，车辆一辆都没真正
-		// 生成出来，见排查记录)。
-		FActorSpawnParameters spawnParams;
-		spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		AVehicleElement* vehicleElement = GetWorld()->SpawnActor<AVehicleElement>(
-			vehicleClass, FVector(worldX, worldY, worldZ), FRotator(0.f, worldYaw, 0.f), spawnParams);
-		if (!vehicleElement) continue;
-
-		vehicleElement->Init(vehicle, nullptr); // 这时候还没人上车，previousPawn先留空
-		activeVehicles.Add(UTF8_TO_TCHAR(vehicle->GetName().c_str()), vehicleElement);
+		// 生成着：记下最新位置(销毁后下次从这里生成；Core的Vehicle::SetTransform也由Actor每帧
+		// 写，存档不受影响)。正被玩家操控的车(Controller非空)不销毁。
+		entry.location = element->GetActorLocation();
+		entry.yaw = element->GetActorRotation().Yaw;
+		if (element->GetController() == nullptr && TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE) {
+			activeVehicles.Remove(entry.name);
+			element->Destroy();
+			entry.element = nullptr;
+		}
 	}
+}
+
+AVehicleElement* UForeverTrafficFrameworkComponent::FindOrSpawnVehicle(const FString& vehicleName) {
+	if (TObjectPtr<AVehicleElement>* found = activeVehicles.Find(vehicleName)) {
+		if (AVehicleElement* element = found->Get()) return element;
+		activeVehicles.Remove(vehicleName);
+	}
+	for (FCarEntry& entry : carEntries) {
+		if (entry.name == vehicleName) return SpawnCar(entry);
+	}
+	return nullptr;
 }
 
 void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller) {
 	if (!controller) return;
 
-	TObjectPtr<AVehicleElement>* found = activeVehicles.Find(vehicleName);
-	AVehicleElement* vehicleElement = found ? found->Get() : nullptr;
+	AVehicleElement* vehicleElement = FindOrSpawnVehicle(vehicleName);
 	if (!vehicleElement) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::ApplyEnterVehicle: 找不到车辆 %s"), *vehicleName);
 		return;

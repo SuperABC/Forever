@@ -156,6 +156,12 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")
 	int32 streamingBatchStride = 20;
 
+	// 每帧最多生成几个市民Actor。实测一次SpawnActor(骨骼网格角色)要5毫秒左右，一帧里连生成
+	// 好几个会出现10毫秒以上的单帧尖峰；超过上限就停止本帧扫描，下一帧从没处理的位置接着来，
+	// 市民只是晚几帧出现。
+	UPROPERTY(EditDefaultsOnly, Category = "Populace")
+	int32 maxSpawnsPerFrame = 1;
+
 	// 进入这个距离(地图单位)才生成Actor——老工程APopulaceBase同款字面值(2.0)。
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")
 	float citizenSpawnDistance = 2.f;

@@ -36,9 +36,10 @@ accommodation * exp(GetRandom(1000)/1000.0f - 0.5f)`），再调私有的
 - **年表事件编码**：`chronology[year]`里每条`(eventIdx, LIFE_TYPE)`，
   `eventIdx>=0`表示女性数组下标，`eventIdx<0`表示`-男性数组下标`（真实下标从1开始，
   0留给哨兵，符号编码不会冲突）。
-- **停止条件**：`year<100`无条件跑满，之后`year<4096`且"存活+死亡"总人数
-  （`females.size()+males.size()`，**累计出生过的人数，不是当前活人数**）达到
-  `target`前继续。
+- **停止条件**：`year<100`无条件跑满，之后`year<4096`且**当前活人数**`aliveCount`
+  达到`target`前继续（初始200人计入；出生`+1`，死亡事件把活着的人标成`LIFE_DEAD`时`-1`，
+  不是累计出生过的人数）。注意最后物化成`Citizen`时还有约5%的随机丢弃，实际市民数
+  略低于`target`。
 - **婚姻匹配**：`lowId=max(0,birth-10)`/`highId=max(0,birth+5)`是出生年，
   `maleBirths[lowId]`/`maleBirths[highId]`才是数组下标区间，在这个区间里最多试10次
   随机候选，都是已婚就放弃（这个女性永远不会再收到新的婚姻事件，不重试）。

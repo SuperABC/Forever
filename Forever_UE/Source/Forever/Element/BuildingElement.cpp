@@ -1215,6 +1215,8 @@ void ABuildingElement::UpdateCabins(float deltaSeconds) {
 	for (FCabin& cabin : cabins) {
 		if (!cabin.cabin || !cabin.comp) continue;
 		float z = cabin.cabin->GetCurrentZ() * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
+		if (FMath::IsNearlyEqual(z, cabin.lastSyncedZ, 0.01f)) continue; // 没动就不碰组件，见FCabin::lastSyncedZ
+		cabin.lastSyncedZ = z;
 		cabin.comp->SetWorldLocation(FVector(cabin.worldX, cabin.worldY, z));
 		FVector innerLocation(cabin.innerX, cabin.innerY, z + cabin.innerHalfZ);
 		if (cabin.innerTrigger) cabin.innerTrigger->SetWorldLocation(innerLocation);

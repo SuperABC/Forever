@@ -20,7 +20,17 @@ std::atomic<int32> UForeverPopulaceFrameworkComponent::pendingPathfindingTasks{ 
 #define POPULACE_WORLD_SCALE 1000.f
 #define POPULACE_HEIGHT_EPSILON 10.f
 
+// 流式生成/销毁判断距离时Z方向的权重：不同楼层的人一般互相看不到，Z差放大5倍再算距离，
+// 头顶/脚下楼层的市民就不会因为三维距离近而被生成。生成和销毁两个阈值用同一个度量，迟滞区间才一致。
+#define POPULACE_VERTICAL_DISTANCE_WEIGHT 5.f
+
 namespace {
+	float StreamingDistance(const FVector& a, const FVector& b) {
+		FVector delta = a - b;
+		delta.Z *= POPULACE_VERTICAL_DISTANCE_WEIGHT;
+		return delta.Size();
+	}
+
 	// 和CitizenElement.cpp里同名函数完全一样的公式——这里只用来估算"还没有Actor的citizen"
 	// 当前的逻辑位置，不加随机抖动(抖动是ACitizenElement::Init()真正生成时才加的一次性
 	// 效果)。返回false表示这个citizen既没有记录位置、也没有分到房间，无法估算(理论上不会
@@ -258,7 +268,13 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 	float despawnDistUE = citizenDespawnDistance * POPULACE_WORLD_SCALE;
 	int32 batchCount = FMath::Clamp(total / FMath::Max(1, streamingBatchStride), 1, total);
 
+	int32 spawnCount = 0;
+
+	int32 processed = 0;
 	for (int32 i = 0; i < batchCount; i++) {
+		// 本帧生成数已到上限：停止扫描，下一帧从还没处理的位置接着来。
+		if (spawnCount >= FMath::Max(1, maxSpawnsPerFrame)) break;
+		processed = i + 1;
 		int32 idx = (pollCursor + i) % total;
 		Citizen* citizen = allCitizens[idx];
 		if (!citizen || citizen->IsDead()) continue;
@@ -267,8 +283,9 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		if (!existing) {
 			float worldX, worldY, worldZ;
 			if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) continue;
-			if (FVector::Dist(playerLoc, FVector(worldX, worldY, worldZ)) < spawnDistUE) {
+			if (StreamingDistance(playerLoc, FVector(worldX, worldY, worldZ)) < spawnDistUE) {
 				SpawnCitizen(citizen);
+				spawnCount++;
 			}
 		}
 		else {
@@ -277,7 +294,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 				activeInstances.Remove(citizen);
 				continue;
 			}
-			if (!element->IsDespawnExempt() && FVector::Dist(playerLoc, element->GetActorLocation()) > despawnDistUE) {
+			if (!element->IsDespawnExempt() && StreamingDistance(playerLoc, element->GetActorLocation()) > despawnDistUE) {
 				// 走远到销毁距离之外：先把当前位置转回地图单位写回Citizen(这样下次重新进入
 				// 范围直接用这份记录，不再随机抖动一次)，再销毁Actor。
 				FVector loc = element->GetActorLocation();
@@ -289,7 +306,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		}
 	}
 
-	pollCursor = (pollCursor + batchCount) % total;
+	pollCursor = (pollCursor + processed) % total;
 }
 
 TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> UForeverPopulaceFrameworkComponent::SyncPositionsToCore() {

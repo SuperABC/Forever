@@ -1007,14 +1007,19 @@ const unordered_map<string, Building*>& Map::GetBuildings() const {
 
 int Map::ComputeAccommodationTarget() const {
 	int capacity = 0;
+	int residentialRooms = 0;
 	for (auto& [name, building] : buildings) {
 		if (!building) continue;
 		for (Room* room : building->GetRooms()) {
 			if (room && room->IsResidential()) {
 				capacity += room->ResidentialCapacity();
+				residentialRooms++;
 			}
 		}
 	}
+	// 累计容量不到住宅房间数的两倍(房间普遍很小)时，按"每间住宅房间一个人"算，保证每间
+	// 房至少有人住；否则维持累计容量的一半。
+	if (capacity < residentialRooms * 2) return residentialRooms;
 	return capacity / 2;
 }
 

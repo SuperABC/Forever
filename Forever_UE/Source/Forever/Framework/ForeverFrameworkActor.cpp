@@ -635,8 +635,12 @@ void AForeverFrameworkActor::EnsurePopulaceGenerated()
 
 	if (!populace) {
 		populace = new Populace();
-		populace->Init(map->ComputeAccommodationTarget());
+		int accommodation = map->ComputeAccommodationTarget();
+		populace->Init(accommodation);
 		map->Checkin(*populace);
+		// Init内部还会对accommodation做随机扰动、模拟结束后丢弃约5%，所以最终人数和它不会完全相等。
+		UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: populace generated, accommodation target %d, %d citizens."),
+			accommodation, static_cast<int32>(populace->GetCitizens().size()));
 	}
 
 	if (populaceFramework) {

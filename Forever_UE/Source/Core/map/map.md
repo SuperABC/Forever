@@ -446,8 +446,8 @@ toAnchor`，不需要额外的拼接逻辑。这条路径**不调`Road::AddOpeni
 populace.md`：
 
 - `int Map::ComputeAccommodationTarget() const`：遍历所有building的所有room，
-  `IsResidential()`的加`ResidentialCapacity()`，除以2——对"accomodation"的统计口径（先求和
-  再减半）。供调用方（`AForeverFrameworkActor::EnsurePopulaceGenerated()`）算好之后传给
+  `IsResidential()`的加`ResidentialCapacity()`并数住宅房间数：累计容量小于住宅房间数的
+  两倍时目标人数=住宅房间数（保证每间住宅房至少一个人），否则=累计容量的一半。供调用方（`AForeverFrameworkActor::EnsurePopulaceGenerated()`）算好之后传给
   `Populace::Init()`。
 - `void Map::Checkin(const Populace& populace)`：**两个完全独立的步骤**，"房产归属"决定
   每个zone/building/room的`owner`/`stated`是什么，"住处分配"决定谁实际住在(`tenants`/

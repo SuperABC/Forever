@@ -161,6 +161,7 @@ void Traffic::InitParkedVehicles(Map* map) {
 		if (id == "vehicle_empty") continue;
 		VehicleMod* probe = vehicleFactory.CreateVehicle(id);
 		if (!probe) continue;
+		probe->SetProperty(); // category由SetProperty赋值，不调用的话所有车型都是默认的"car"
 		if (probe->category == "car") carIds.push_back(id);
 		vehicleFactory.DestroyVehicle(probe);
 	}

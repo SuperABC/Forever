@@ -189,8 +189,8 @@ public:
 	// 过滤规则见CanPlaceTree，见vegetation.md。
 	void InitVegetation();
 
-	// 遍历所有building的所有room，IsResidential()的加ResidentialCapacity()，除以2——
-	// 老工程Map::InitContents()对"accomodation"的统计口径(先求和再减半)。供调用方
+	// 遍历所有building的所有room，IsResidential()的加ResidentialCapacity()并数住宅房间数：
+	// 累计容量小于住宅房间数的两倍时返回住宅房间数，否则返回累计容量的一半。供调用方
 	// (AForeverFrameworkActor::EnsurePopulaceGenerated())传给Populace::Init()。假定
 	// InitBuildings()已经跑完。
 	int ComputeAccommodationTarget() const;

@@ -12,6 +12,7 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class Map;
 class Traffic;
+class Vehicle;
 
 // 载具系统落地：车辆不再按T临时生成/销毁，改成开局时按停车位预置生成(GenerateVehicles)，
 // 玩家走近车辆用MeetOption选"上车"（见UForeverStoryFrameworkComponent::ApplyEnterVehicle→
@@ -29,6 +30,9 @@ class FOREVER_API UForeverTrafficFrameworkComponent : public UForeverFrameworkCo
 public:
 	UForeverTrafficFrameworkComponent();
 
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+		FActorComponentTickFunction* ThisTickFunction) override;
+
 	// 由AForeverFrameworkActor::EnsureTrafficGenerated()在traffic->Init(map)之后立刻调用一次：
 	// 遍历traffic->GetVehicles()，category=="car"(GetRoute()为空)的按原逻辑生成AVehicleElement
 	// (照抄BuildingElement.cpp::ComputeWorldPosition公式换算世界坐标、
@@ -36,6 +40,10 @@ public:
 	// box，存进activeVehicles供ApplyEnterVehicle按名字反查)；GetRoute()非空的(公共交通车辆)
 	// 生成ATransitVehicleElement(不需要换算停车位世界坐标，Tick里直接读vehicle->GetTransform()
 	// 驱动，初始位置无所谓，存进activeTransitVehicles)。
+	// 注意：非公共交通的车辆(AVehicleElement)不在这里直接生成，只登记停放位置(carEntries)，由
+	// TickComponent按玩家距离流式生成/销毁，和市民(UForeverPopulaceFrameworkComponent)同一个
+	// 思路：停着的车是带物理模拟的骨骼网格+Chaos车辆组件+触发盒，全城一次性生成几百辆对游戏
+	// 线程负担很重。
 	void GenerateVehicles(Map* map, Traffic* traffic);
 
 	// EnterVehicleChange的真正执行：按名字在activeVehicles里找到AVehicleElement，隐藏+
@@ -45,6 +53,10 @@ public:
 
 	// 这辆车当前在场景里的Actor(停着/私家车；公交车没有交互选项，不在这张表里)，找不到返回nullptr。
 	AVehicleElement* FindVehicleElement(const FString& vehicleName) const;
+
+	// 按名字找这辆车的Actor，当前没有生成(离玩家太远)就不看距离强制生成一个——剧情的
+	// enter_vehicle/读档恢复"正在开的车"指定的车不一定在玩家附近。找不到这辆车返回nullptr。
+	AVehicleElement* FindOrSpawnVehicle(const FString& vehicleName);
 
 	// AVehicleElement::ExitVehicle按Q调用：算出候选下车世界坐标(车辆当前transform+
 	// VehicleMod的exitOffsetX/Y/Z，按车身当前旋转变换)，用ECC_Pawn通道做胶囊体sweep检测
@@ -70,7 +82,36 @@ public:
 	// 不实际铺设——真正的铺设逻辑留给以后有真实轨道资产的内容类型消费。
 	void BuildTracks(Traffic* traffic);
 
+	// 车辆流式生成/销毁的距离(地图单位)，是市民(citizenSpawnDistance 2.0/citizenDespawnDistance 4.0)
+	// 的两倍；判断距离时Z方向放大5倍(不同楼层的东西一般互相看不到)，和市民同一个度量。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	float vehicleSpawnDistance = 4.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	float vehicleDespawnDistance = 8.f;
+
+	// 每帧最多生成几辆车(车是物理模拟的骨骼网格+Chaos组件，生成成本比市民还高)，超过就等下一帧。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	int32 maxVehicleSpawnsPerFrame = 1;
+
 private:
+	// 一辆非公共交通车辆的登记项：不管当前有没有生成Actor都存在。location/yaw是它最后一次已知
+	// 的位置(没生成时=停车位或存档/上次销毁时的位置；生成着时每帧同步)。不能标UPROPERTY：
+	// Vehicle*是Core层类型。
+	struct FCarEntry {
+		Vehicle* vehicle = nullptr;
+		FString name;
+		FString blueprintPath;
+		FVector location = FVector::ZeroVector;
+		float yaw = 0.f;
+		bool bBroken = false; // 加载蓝图失败过，不再重试(避免每帧刷警告)
+		TWeakObjectPtr<AVehicleElement> element;
+	};
+	TArray<FCarEntry> carEntries;
+
+	// 按登记项生成Actor并记进activeVehicles，失败返回nullptr。
+	AVehicleElement* SpawnCar(FCarEntry& entry);
+
 	// Vehicle::GetName()→对应的AVehicleElement，照抄
 	// UForeverPopulaceFrameworkComponent::activeInstances的思路，ApplyEnterVehicle按名字
 	// 反查用。

@@ -66,3 +66,13 @@
 
 - 公共交通车辆不支持上下车/操控，见`TransitVehicleElement.md`"待办"一节。
 - `BuildTracks`真正铺轨道mesh的逻辑没有实现，等有真实轨道资产的内容类型再补。
+
+## 预置车辆按距离流式生成/销毁（2026-10-22）
+
+非公共交通的车辆（`AVehicleElement`，带物理模拟的骨骼网格+Chaos车辆组件+触发盒）不再开局全城一次性生成：`GenerateVehicles` 只登记 `carEntries`（名字、蓝图路径、最后已知位置/朝向），`TickComponent` 按玩家距离生成/销毁，和市民同一个思路，但阈值是市民的两倍：`vehicleSpawnDistance`=4.0、`vehicleDespawnDistance`=8.0（地图单位），判断距离时 Z 差放大 5 倍（和市民同一个度量），每帧最多生成 `maxVehicleSpawnsPerFrame`=1 辆。
+
+- 销毁前位置已由 `AVehicleElement::Tick` 每帧写进 Core 的 `Vehicle::SetTransform`，下次生成用登记项里最新的位置，存档不受影响。
+- 正被玩家操控的车（`GetController()!=nullptr`）不销毁。
+- `ApplyEnterVehicle`（剧情 enter_vehicle / 读档恢复正在开的车）改用 `FindOrSpawnVehicle`：找不到活着的 Actor 就按名字强制生成，不看距离。`FindVehicleElement` 仍只返回当前活着的。
+- 公共交通车辆（`ATransitVehicleElement`）不受影响，仍然全部常驻。
+- 起因：全城约 200 辆预置车一直常驻，加上近处建筑电梯轿厢每帧重复 `SetWorldLocation`，游戏线程碰撞重叠更新占了约 16ms，见 `BuildingElement::UpdateCabins`（轿厢没动就不再同步组件）。

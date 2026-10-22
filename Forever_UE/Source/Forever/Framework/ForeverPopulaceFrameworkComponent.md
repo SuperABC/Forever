@@ -193,3 +193,8 @@ GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生
   （销毁前`GetActorLocation()`读回写的那份），不是`WalkTo`原本要走到的终点，属于已知的
   简化，真要处理可以在销毁前先检查`pendingWaypoints`是否非空、直接调用
   `NotifyArrived`兜底。
+
+## 流式判断的两处调整（2026-10-22）
+
+- 判断距离时 Z 方向放大 5 倍（`POPULACE_VERTICAL_DISTANCE_WEIGHT`），生成和销毁用同一个度量：不同楼层的人一般互相看不到，头顶/脚下楼层的市民不会因为三维距离近而被生成。
+- 每帧最多生成 `maxSpawnsPerFrame`=1 个市民 Actor：一次 `SpawnActor` 实测约 5ms，一帧连生成几个会出现尖峰；到上限就停止本帧扫描，`pollCursor` 只前进到已处理的位置。

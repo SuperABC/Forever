@@ -114,6 +114,9 @@ private:
 		TArray<FString> cachedOptions;
 		bool hasScript = false;
 		int32 playerOverlaps = 0; // 玩家当前同时压着这台电梯几个触发盒(门口和轿厢内可能同时压到)
+		// 上一次同步到组件的轿厢高度(UE单位)。轿厢没动就不再SetWorldLocation：每次SetWorldLocation
+		// 即使位置没变也会让组件重新做一遍碰撞重叠更新，近处楼多、电梯多时实测占游戏线程16毫秒。
+		float lastSyncedZ = TNumericLimits<float>::Lowest();
 	};
 
 	UBoxComponent* SpawnCabinTrigger(float centerX, float centerY, float centerZ,

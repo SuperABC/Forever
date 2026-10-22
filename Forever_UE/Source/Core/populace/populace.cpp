@@ -508,11 +508,12 @@ void Populace::GenerateCitizens(int target) {
 		}
 	}
 
-	// 自动迭代繁殖最多4096年，至少跑满100年，之后年份<4096且(存活+死亡)总人数达到target
-	// 前继续——这里是累计出生过的人数，不是当前活人数。
+	// 自动迭代繁殖最多4096年，至少跑满100年，之后年份<4096且当前活人数(aliveCount)达到
+	// target前继续——是当前还活着的人数，不是累计出生过的人数：出生时+1，死亡事件把活着的
+	// 人标成LIFE_DEAD时-1。
+	int aliveCount = static_cast<int>(females.size()) - 1 + static_cast<int>(males.size()) - 1;
 	int year = 1;
-	while (year < 100 || (year < 4096 &&
-		static_cast<int>(females.size()) + static_cast<int>(males.size()) < target)) {
+	while (year < 100 || (year < 4096 && aliveCount < target)) {
 		for (const auto& [eventIdx, lifeType] : chronology[year]) {
 			if (eventIdx >= 0) {
 				if (eventIdx >= static_cast<int>(females.size())) {
@@ -572,6 +573,7 @@ void Populace::GenerateCitizens(int target) {
 							static_cast<int>(females.size()));
 						females.push_back({ -1, n, year, -1, LIFE_SINGLE, GENDER_FEMALE,
 							females[eventIdx].spouse, eventIdx, -1, {} });
+						aliveCount++;
 						int newIdx = static_cast<int>(females.size()) - 1;
 						if (GetRandom(10) > 0) {
 							int marryYear = females.back().birth + 20 + GetRandom(15);
@@ -591,6 +593,7 @@ void Populace::GenerateCitizens(int target) {
 							static_cast<int>(males.size()));
 						males.push_back({ -1, n, year, -1, LIFE_SINGLE, GENDER_MALE,
 							females[eventIdx].spouse, eventIdx, -1, {} });
+						aliveCount++;
 						int newIdx = static_cast<int>(males.size()) - 1;
 						if (males.back().birth > currentBirth) {
 							for (int j = currentBirth + 1;
@@ -607,6 +610,7 @@ void Populace::GenerateCitizens(int target) {
 					break;
 				}
 				case LIFE_DEAD:
+					if (females[eventIdx].life != LIFE_DEAD) aliveCount--;
 					females[eventIdx].life = LIFE_DEAD;
 					break;
 				default:
@@ -618,6 +622,7 @@ void Populace::GenerateCitizens(int target) {
 				if (maleIdx >= 0 && maleIdx < static_cast<int>(males.size())) {
 					switch (lifeType) {
 					case LIFE_DEAD:
+						if (males[maleIdx].life != LIFE_DEAD) aliveCount--;
 						males[maleIdx].life = LIFE_DEAD;
 						break;
 					default:
