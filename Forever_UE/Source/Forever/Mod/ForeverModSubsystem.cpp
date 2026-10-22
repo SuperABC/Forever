@@ -117,11 +117,6 @@ void UForeverModSubsystem::ReadConfigWithFallbacks(const FString& configPath) {
 }
 
 void UForeverModSubsystem::EnsureModsRegistered() {
-	if (bModsRegistered) {
-		return;
-	}
-	bModsRegistered = true;
-
 	std::vector<std::string> mods = Config::GetActiveDllPaths();
 
 	// 挂载mod自己的UE资产Plugin——照抄老工程GlobalBase::BeginPlay()按WITH_EDITOR分两条路径
@@ -137,7 +132,9 @@ void UForeverModSubsystem::EnsureModsRegistered() {
 		FString pluginName = FPaths::GetBaseFilename(pluginFile);
 		FString contentDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(pluginDir, TEXT("Content")));
 		FString mountPoint = TEXT("/") + pluginName + TEXT("/");
+		if (mountedMountPoints.Contains(mountPoint)) continue; // 上一局已经挂载过
 		if (FPaths::DirectoryExists(contentDir)) {
+			mountedMountPoints.Add(mountPoint);
 			FPackageName::RegisterMountPoint(mountPoint, contentDir);
 			if (IAssetRegistry* assetRegistry = IAssetRegistry::Get()) {
 				assetRegistry->ScanPathsSynchronous({ mountPoint }, true);
@@ -153,7 +150,9 @@ void UForeverModSubsystem::EnsureModsRegistered() {
 		FString pakFile(UTF8_TO_TCHAR(pakPath.c_str()));
 		FString pluginName = FPaths::GetBaseFilename(pakFile);
 		FString mountPoint = TEXT("/") + pluginName + TEXT("/");
+		if (mountedMountPoints.Contains(mountPoint)) continue; // 上一局已经挂载过
 		if (FCoreDelegates::MountPaksEx.IsBound()) {
+			mountedMountPoints.Add(mountPoint);
 			TArray<UE::FMountPaksExArgs> mountArgsArr;
 			UE::FMountPaksExArgs& mountArgs = mountArgsArr.AddDefaulted_GetRef();
 			mountArgs.PakFilePath = *pakFile;

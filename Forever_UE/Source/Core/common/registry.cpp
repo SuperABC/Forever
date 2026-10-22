@@ -20,9 +20,7 @@ Registry& Registry::Get() {
 	return instance;
 }
 
-Registry::Registry() {
-	vector<string> mods = Config::GetMods();
-
+void Registry::RegisterMods(const vector<string>& mods) {
 	modLoader.RegisterConcept<TerrainFactory>(mods, "RegisterModTerrains", "FinishModTerrains", &terrainFactory);
 	modLoader.RegisterConcept<RoadnetFactory>(mods, "RegisterModRoadnets", "FinishModRoadnets", &roadnetFactory);
 	modLoader.RegisterConcept<ZoneFactory>(mods, "RegisterModZones", "FinishModZones", &zoneFactory);
@@ -44,6 +42,24 @@ Registry::Registry() {
 	modLoader.RegisterConcept<RouteFactory>(mods, "RegisterModRoutes", "FinishModRoutes", &routeFactory);
 	modLoader.RegisterConcept<StationFactory>(mods, "RegisterModStations", "FinishModStations", &stationFactory);
 	modLoader.RegisterConcept<VehicleFactory>(mods, "RegisterModVehicles", "FinishModVehicles", &vehicleFactory);
+
+	for (const string& path : mods) {
+		if (modLoader.IsLoaded(path)) loadedDllPaths.insert(path);
+	}
+}
+
+void Registry::RefreshMods() {
+	vector<string> newMods;
+	for (const string& path : Config::GetMods()) {
+		if (!loadedDllPaths.count(path)) newMods.push_back(path);
+	}
+	if (!newMods.empty()) RegisterMods(newMods);
+	ReloadModArgs();
+}
+
+Registry::Registry() {
+	vector<string> mods = Config::GetMods();
+	RegisterMods(mods);
 
 	// 构造时先按当前已经读进内存的config内容(Config::ReadConfig)灌一遍参数,保证Get()刚拿到
 	// 实例时每个Factory就有参数可用,不强制调用方第一次也要记得手动调ReloadModArgs()。

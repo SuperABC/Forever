@@ -2,10 +2,17 @@
 
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Framework/ForeverMemoryReport.h"
+#include "UObject/UObjectGlobals.h"
 
 void AForeverMenuController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 每次进入菜单(开局进来或从游戏里退出游戏回来)先强制GC，再打一行内存快照，反复进出几轮
+	// 对比这一行就能看出有没有泄漏，见ForeverMemoryReport.md。
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	ForeverMemoryReport::Log(GetWorld(), TEXT("menu"));
 
 	if (startMenuWidgetClass == nullptr) {
 		UE_LOG(LogTemp, Warning, TEXT("AForeverMenuController: startMenuWidgetClass未设置,跳过主菜单创建。"));

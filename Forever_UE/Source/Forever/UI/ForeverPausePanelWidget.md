@@ -23,3 +23,7 @@
 
 ## 待办/后续阶段
 - 无。保存前的UE侧状态同步、对话/谜题进行中拒绝保存已经在`UForeverSaveSubsystem::SaveToFile`里做了，见`ForeverSaveSubsystem.md`。
+
+## 退出游戏按钮（2026-10-22）
+`ExitButton`（`BindWidgetOptional`）：`HandleExitClicked` 先 `ClosePanel()` 还原时间缩放和输入模式，再 `OpenLevel("/Game/Levels/Menu.Menu")`。关卡切换会销毁当前世界的所有 Actor，`AForeverFrameworkActor::EndPlay` 同步 delete Core 侧的 map/populace/society/story/industry/traffic/player。没有存档确认，没保存的进度直接丢弃。回菜单后 `AForeverMenuController` 强制 GC 并打一行内存快照，见 `Framework/ForeverMemoryReport.md`。
+编辑器手工步骤：`WBP_PausePanel` 里加一个 Button，变量名必须叫 `ExitButton`（文字"退出游戏"）。没加的话不影响编译，只是没有这个按钮。

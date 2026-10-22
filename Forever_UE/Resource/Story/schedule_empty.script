@@ -53,7 +53,7 @@
             "dialogs": [
                 {
                     "list": [
-                        { "speaker": "$$self.name", "content": "\"我\" + $$self.name + \"不会放过你的！\"", "label": "", "voice": "" }
+                        { "speaker": "$$self.name", "content": "\"我\" + $$self.name + \"不会放过你的！\"", "label": "", "voice": "", "background": 4 }
                     ]
                 }
             ],

@@ -22,8 +22,7 @@
       "building_park",
       "building_mohar",
       "building_empty --test true",
-      "building_shop",
-      "building_yuanshen"
+      "building_shop"
    ],
    "component_mods" : [
       "component_residence",
@@ -34,8 +33,8 @@
       "component_empty --test true"
    ],
    "dll_paths" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
    ],
@@ -57,8 +56,8 @@
    ],
    "puzzle_mods" : [ "puzzle_tetris", "puzzle_empty --test true" ],
    "resource_paths" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"
@@ -76,12 +75,7 @@
    ],
    "route_mods" : [ "route_bus", "route_train", "route_air", "route_empty --test true" ],
    "scheduler_mods" : [ "scheduler_basic", "scheduler_empty --test true" ],
-   "script_mods" : [
-      "script_test",
-      "script_basic",
-      "script_empty --test true",
-      "script_yuanshen"
-   ],
+   "script_mods" : [ "script_test", "script_basic", "script_empty --test true" ],
    "station_mods" : [
       "station_bus",
       "station_train",

@@ -24,6 +24,7 @@ void UForeverPausePanelWidget::NativeConstruct() {
 	if (SaveButton) SaveButton->OnClicked.AddDynamic(this, &UForeverPausePanelWidget::HandleSaveClicked);
 	if (LoadButton) LoadButton->OnClicked.AddDynamic(this, &UForeverPausePanelWidget::HandleLoadClicked);
 	if (CloseButton) CloseButton->OnClicked.AddDynamic(this, &UForeverPausePanelWidget::HandleCloseClicked);
+	if (ExitButton) ExitButton->OnClicked.AddDynamic(this, &UForeverPausePanelWidget::HandleExitClicked);
 	if (MessageText) MessageText->SetVisibility(ESlateVisibility::Collapsed);
 }
 
@@ -109,6 +110,15 @@ void UForeverPausePanelWidget::HandleLoadClicked() {
 
 void UForeverPausePanelWidget::HandleCloseClicked() {
 	ClosePanel();
+}
+
+void UForeverPausePanelWidget::HandleExitClicked() {
+	// 先走一遍关闭流程把时间缩放/输入模式还原(暂停时时间缩放是0)，再切关卡：OpenLevel会销毁
+	// 当前世界——所有Actor/组件随之销毁，AForeverFrameworkActor::EndPlay同步释放Core侧的
+	// map/populace/society等对象，新关卡(菜单)的AForeverMenuController会重新接管输入。
+	// 没有存档确认：和Tab关掉界面一样，没保存的进度直接丢弃。
+	ClosePanel();
+	UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/Levels/Menu")));
 }
 
 void UForeverPausePanelWidget::ShowMessage(const FString& message, bool bError) {

@@ -24,6 +24,10 @@
 
 #include "common/loader.h"
 
+#include <string>
+#include <unordered_set>
+#include <vector>
+
 
 // 21个concept(对照表见common/loader.md)的mod注册表：mod dll的发现/注册
 // (LoadLibrary+RegisterConcept)只应该在整个UE进程生命周期里发生一次，和"每个持有者
@@ -53,6 +57,13 @@
 class Registry {
 public:
 	static Registry& Get();
+
+	// 每次真正开局调用：把config里新出现、还没加载过的mod dll补加载+注册进21个Factory(已经
+	// 加载过的dll不动)，再ReloadModArgs()刷新启用表。这样退出游戏回菜单、在配置界面新增了
+	// dll路径之后再开始游戏，新dll的mod也能用；从配置里移除的dll不卸载(Factory存的creator/
+	// deleter函数指针指向它的代码段，FreeLibrary会悬空)，保持加载，但它的mod id不在启用表里
+	// (Factory::IsEnabled按configuredArgs判断)，所以照样是禁用状态。
+	void RefreshMods();
 
 	Registry(const Registry&) = delete;
 	Registry& operator=(const Registry&) = delete;
@@ -100,6 +111,13 @@ public:
 
 private:
 	Registry();
+
+	// 对paths里的dll做21个concept的RegisterConcept(LoadLibrary+Register+Finish)，成功加载的
+	// 记进loadedDllPaths。
+	void RegisterMods(const std::vector<std::string>& paths);
+
+	// 已经成功加载并注册过的dll路径，RefreshMods只处理不在这里的。
+	std::unordered_set<std::string> loadedDllPaths;
 
 	// 持有mod dll句柄,必须活得比它注册进的21个Factory一样长——它们存的creator/deleter函数
 	// 指针指向这些dll的代码段,句柄一旦被FreeLibrary这些指针就悬空;21个Factory都是这一个

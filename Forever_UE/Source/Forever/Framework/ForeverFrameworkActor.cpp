@@ -132,13 +132,13 @@ void AForeverFrameworkActor::BeginPlay()
 	// 在PIE的Output Log里确认Actor+全部9个域组件都正常构造/初始化。
 	UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor initialized with 9 framework components: Asset/Building/Populace/Roadnet/Room/Story/Terrain/Traffic/Zone"));
 
-	// 每次真正开局都要重新按当前已经读进内存的config内容刷新一遍参数表——不同局可能用不同
-	// 的config.json(参数因此也可能不同),但mod dll的发现/注册(Registry构造函数)只应该跑
-	// 一次,两者调用频率不同,不能合并,见Source/Core/common/registry.md。放在这里(而不是
-	// 某一个具体域的Ensure*Generated()里)是因为它不属于任何单个域,下面7个Ensure*Generated()
-	// 都会用到某个Factory,理应在它们之前统一刷新一次。
+	// 每次真正开局都要按当前已经读进内存的config内容刷新Registry：补加载config里新出现的mod
+	// dll(已加载的dll不动，不卸载)，再刷新启用表/参数表——不同局可能用不同的config.json(启用
+	// 的mod和参数都可能不同)，退出游戏回菜单后新增dll路径再开始也要能用，见
+	// Source/Core/common/registry.md。放在这里(而不是某一个具体域的Ensure*Generated()里)是因为
+	// 它不属于任何单个域，下面7个Ensure*Generated()都会用到某个Factory，理应在它们之前统一刷新一次。
 
-	Registry::Get().ReloadModArgs();
+	Registry::Get().RefreshMods();
 
 	// 读档：各个域在各自的Ensure*Generated里按存档恢复；较早的存档缺哪一段，那个域就照新开局
 	// 生成(见Core/common/save.md"版本号"一节的required)。mod集合已经在RequestLoad里按存档设好了。

@@ -72,7 +72,9 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   是纯文本文件)，扫到就收。`AddResourcePath`在同一次扫描里按后缀分流收集`.script`
   （`resourcePaths`）、`.uplugin`（`pluginPaths`）、`.pak`（`pakPaths`）、`.layout`
   （并入内部的`layoutPaths`，没有单独的`layout_paths`配置项——一个文件夹天然同时覆盖
-  `.layout`和`.script`）。`GetScriptPath(name)`遍历`resourcePaths`按文件名（不含路径/
+  `.layout`和`.script`）。`GetResourceFilePath(fileName)`按带扩展名的文件名在各根目录下现扫递归查找(不缓存)，
+  给`PostImplement`的`"resource path"`查询用，让mod能读`.txt`等非`.script`/`.layout`数据文件。
+  `GetScriptPath(name)`遍历`resourcePaths`按文件名（不含路径/
   扩展名）反查实际路径，供`JobMod`/`OrganizationMod`/`Story`这类只知道bare文件名、不应该
   替Mod决定"脚本实际存放在哪"的调用方使用，见`Core/society/job.md`"Script配置"一节。
   `HasResourcePaths()`供`ForeverModSubsystem::Initialize`判断要不要回退扫描默认的

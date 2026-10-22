@@ -1,6 +1,9 @@
 #include "building_wxdj.h"
 
 #include "map/building_factory.h"
+#include "player/puzzle_factory.h"
+
+#include "puzzle_wxdj.h"
 
 #pragma comment(lib, "Dependence.lib")
 
@@ -29,4 +32,18 @@ extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* fact
 }
 
 extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factory) {
+}
+
+extern "C" __declspec(dllexport) void* GetModPuzzles() {
+	static std::vector<std::string> mods = { WxdjPuzzle::GetId() };
+	return (void*)&mods;
+}
+
+extern "C" __declspec(dllexport) void RegisterModPuzzles(PuzzleFactory* factory) {
+	factory->RegisterPuzzle(WxdjPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new WxdjPuzzle(); },
+		[](PuzzleMod* puzzle) { delete puzzle; });
+}
+
+extern "C" __declspec(dllexport) void FinishModPuzzles(PuzzleFactory* factory) {
 }

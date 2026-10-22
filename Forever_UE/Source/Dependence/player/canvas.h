@@ -172,6 +172,13 @@ public:
 	MouseEvent PopMouseEvent();
 	void ClearMouseBuffer();
 
+	// 鼠标滚轮：宿主调PushMouseWheel注入刻度(向上滚为正、向下为负)，小游戏逻辑调
+	// ConsumeMouseWheel取走自上次调用以来累计的刻度并清零。不进mouseQueue——滚轮没有
+	// 按下/抬起，也不该让只认按键事件的小游戏(Tetris/Phone)看到多余事件；只是一个POD整数，
+	// 不涉及跨模块堆分配。
+	void PushMouseWheel(int delta);
+	int ConsumeMouseWheel();
+
 private:
 	int width = 0, height = 0;
 	std::vector<uint8_t> buffer; // BGRA
@@ -184,6 +191,7 @@ private:
 	RingBuffer<int, 128> keyQueue;
 	MouseState mouseState;
 	RingBuffer<MouseEvent, 32> mouseQueue;
+	int wheelDelta = 0;
 
 	ResizeFunc resizeFunc = nullptr;
 	void* resizeUserData = nullptr;

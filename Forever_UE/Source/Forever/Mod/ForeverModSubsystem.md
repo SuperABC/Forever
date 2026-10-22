@@ -1,7 +1,7 @@
 # ForeverModSubsystem
 
 ## 职责
-负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`/`resource_paths`缺失时分别回退扫描默认目录(resource回退为`Resource/Story`+`Resource/Layouts`)),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,`bModsRegistered`门闩保证每个GameInstance生命周期只真正跑一次。
+负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`/`resource_paths`缺失时分别回退扫描默认目录(resource回退为`Resource/Story`+`Resource/Layouts`)),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,可以重复调用（退出游戏回菜单后再开始游戏）：已挂载过的Plugin/Pak按挂载点（`mountedMountPoints`）跳过，校验每次用当前config重新跑；长期持有的mod dll由`Registry::RefreshMods()`增量加载。
 
 ## 关键设计
 - **挂载mod自己的UE资产Plugin**(`EnsureModsRegistered()`开头):按`WITH_EDITOR`分两条路径:
@@ -20,7 +20,7 @@
 
 ## 待办/后续阶段
 - 随着更多领域系统在Core里落地,仍留在本类里长期验证的Factory实例可以继续转移给对应领域系统类持有(参照Terrain已转移给`Map`的先例)。
-- 不支持中途回菜单重新注册mod(`bModsRegistered`门闩只允许每个GameInstance生命周期注册一次)。
+- 回菜单后再开始游戏：新增的dll路径会被`Registry::RefreshMods()`补加载，从配置里移除的dll不卸载（保持加载、因不在启用表而被禁用）。
 - 目前"参数"只是Core透传的原始字符串,mod自己决定怎么解析;如果要支持结构化的命令行式参数(如`--density 1.0 --max 1000`),可以在Dependence层加一个共享的小型参数解析工具函数,避免每个mod自己重复写tokenize逻辑。
 
 ## ReloadConfigFrom(path)

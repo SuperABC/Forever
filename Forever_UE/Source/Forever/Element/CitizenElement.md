@@ -37,21 +37,6 @@ virtual void UnPossessed() override;                            // 先切回MOVE
 这样不管当前占有的是初始`ADefaultPawn`/`AForeverCharacter`还是某个`ACitizenElement`，
 输入映射的增删逻辑只有一份，见`[[memory:possession_driven_input_context]]`。
 
-### `nearbyCitizens`：静态列表，供`LogNearbyRelationships`调试用
-
-静态成员`TArray<TWeakObjectPtr<ACitizenElement>> nearbyCitizens`记录"当前被占有对象（玩家
-pawn，也可能是另一个citizen）附近的市民"——`OnOverlapBegin`/`OnOverlapEnd`维护这份名单。
-之所以是静态成员而不是每个Actor各自的实例状态：`LogNearbyRelationships()`是静态方法，不知道
-当前被占有的具体是哪个子类实例，只能通过一个全局入口去问"附近有没有市民"；用
-`TWeakObjectPtr`是因为市民会被流式`Destroy()`，名单里的引用要能安全感知失效。
-
-`ACitizenElement::LogNearbyRelationships()`遍历`nearbyCitizens`里仍然有效的条目，对每个人
-调`Citizen::GetAcquaintances()`/`GetExperiences()`，把熟人关系强度（6个`RELATION_TYPE`
-字段）+人际关系历史记录（按`Experience::GetCategory()`分派，见`experience.md`）拼成一行
-描述，通过`UE_LOG(LogTemp, Log, ...)`打进log（数据量可能较大，不走屏幕调试消息，事后翻
-`Saved/Logs/Forever.log`查）。目前没有任何按键绑定它，方法保留供调试用，见
-`Player/ForeverCharacter.md`"T键上下车切换"一节（T键现在指向上下车，不指向这个方法）。
-
 ### 占位资产：`SKM_Manny_Simple`
 
 和`AForeverCharacter.cpp`同款软路径（`/Game/Asset/Characters/Mannequins/Meshes/
@@ -170,15 +155,12 @@ BuildCollisionBox()`同一套写法：`"Trigger"`碰撞profile，`OnComponentBeg
   `Source/Core/populace/citizen.h`（`Citizen`）、`map/building.h`/`map/room.h`
   （Core侧数据）、`Components/SkeletalMeshComponent.h`（占位mesh）、
   `Components/BoxComponent.h`（碰撞盒）、`Kismet/GameplayStatics.h`
-  （`GetPlayerPawn`）、`Source/Core/populace/experience.h`/`school.h`、
-  `Source/Core/society/organization.h`（`LogNearbyRelationships`按`Experience`
-  类别分派打印用）。
+  （`GetPlayerPawn`）。
 - 被谁依赖：`UForeverPopulaceFrameworkComponent::TickComponent`/
   `FindOrSpawnCitizenByName`（`SpawnActor<ACitizenElement>()`+`Init()`+`Destroy()`）、
   `UForeverStoryFrameworkComponent::ApplyControlChange`（剧情`change_control`指定切换
   控制权，间接通过`FindOrSpawnCitizenByName`拿到`ACitizenElement*`后`Possess`——T键现在
   指向上下车，不走这条路径，`Possess`目前只由剧情脚本触发）。
-  `LogNearbyRelationships()`目前没有任何按键绑定它。
 
 ## 待办/后续阶段
 
@@ -188,5 +170,3 @@ BuildCollisionBox()`同一套写法：`"Trigger"`碰撞profile，`OnComponentBeg
 - 真实资产替换`SKM_Manny_Simple`占位。
 - 靠近检测碰撞盒尺寸（`CITIZEN_PROXIMITY_HALF_XY`/`_Z`）是按经验给的初始值，可能需要按
   真实资产的实际比例微调。
-- `LogNearbyRelationships()`按`nearbyCitizens`原有顺序（进入范围的先后）遍历打印，不做
-  "离玩家最近排前面"这类排序，后续如有需要可以加。

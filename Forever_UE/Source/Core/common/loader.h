@@ -61,6 +61,9 @@ public:
 	// 释放所有缓存句柄,调用方在用完这一批mod后应调用一次(见ForeverModSubsystem.cpp)。
 	void UnloadAll();
 
+	// 这个dll的句柄当前是不是已经加载并缓存(LoadLibrary失败的路径返回false)。
+	bool IsLoaded(const std::string& dllPath) const { return modHandles.count(dllPath) > 0; }
+
 private:
 	void* LoadHandle(const std::string& dllPath);
 	static void* GetSymbol(void* handle, const char* name);

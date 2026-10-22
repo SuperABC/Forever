@@ -88,3 +88,11 @@ InitNames()`）通过`SetConfig(id, true)`+`GetRoadnet()`/`GetName()`决定—�
   `new Society()`/`new Industry()`/`new Traffic()`只是占位)，
   player域也只迁移了全局时钟(见`player.md`)。等这些域真正落地、需要创建mod实例时，直接
   从`Registry::Get()`拿对应Factory引用即可，不需要再改这个类。
+
+## RefreshMods：增量加载新增的 dll（2026-10-22）
+
+`Registry` 构造时按当时的 `Config::GetMods()` 加载并注册一批 dll，之前之后都不再动，所以第一局之后在配置界面新增 dll 路径的话，这个 dll 的 mod 在同一个进程里一直是"未注册"。现在每次开局（`AForeverFrameworkActor::BeginPlay`）调 `Registry::RefreshMods()`：只对 `loadedDllPaths` 里没有的路径补做 21 个 concept 的 `RegisterConcept`（`ModLoader` 按路径缓存句柄，已加载的不重复 `LoadLibrary`），然后 `ReloadModArgs()` 刷新启用表。
+
+- 已加载的 dll **不卸载**：Factory 存的 creator/deleter 指向 dll 代码段，`FreeLibrary` 会悬空。从配置里移除的 dll 保持加载，但它的 mod id 不在 `configuredArgs`（`Factory::IsEnabled`）里，所以照样是禁用状态。
+- 单个 mod id 的启用/禁用本来就不依赖 dll 是否重新加载（`IsEnabled` 查 `configuredArgs`，每局刷新）。
+- 加载失败的路径（`IsLoaded` 为 false）不记进 `loadedDllPaths`，下一局会重试。

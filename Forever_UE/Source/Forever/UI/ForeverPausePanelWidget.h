@@ -35,12 +35,17 @@ protected:
 	// 关闭按钮：和Tab/Esc一样关闭界面、继续游戏。
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> CloseButton;
 
+	// 退出游戏：关掉暂停、销毁当前世界(AForeverFrameworkActor::EndPlay释放Core对象)，回到主菜单关卡。
+	// BindWidgetOptional：WBP_PausePanel里还没放这个按钮时不影响蓝图编译。
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> ExitButton;
+
 	// 可选：显示保存成功/失败原因的文字。没放的话结果打在屏幕左上角的调试信息里。
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> MessageText;
 
 	UFUNCTION() void HandleSaveClicked();
 	UFUNCTION() void HandleLoadClicked();
 	UFUNCTION() void HandleCloseClicked();
+	UFUNCTION() void HandleExitClicked();
 
 private:
 	void ShowMessage(const FString& message, bool bError);

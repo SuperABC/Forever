@@ -1,6 +1,7 @@
 #include "common/implement.h"
 
 #include "common/utility.h"
+#include "common/config.h"
 
 #include "populace/populace.h"
 #include "populace/citizen.h"
@@ -144,6 +145,21 @@ void PostImplement::Post(const JsonValue& request) {
 		}
 		result["result"] = "success";
 		result["addresses"] = addresses;
+		return;
+	}
+
+	// "resource path"：request["name"]是带扩展名的文件名，在resource_paths配置的根目录下找同名
+	// 文件，返回绝对路径。供mod读自己随包的数据文件(比如wxdj的招式表)，不需要任何domain指针。
+	if (request.IsObject() && request["post"].AsString() == "resource path") {
+		string path = Config::GetResourceFilePath(request["name"].AsString());
+		if (path.empty()) {
+			result["result"] = "fail";
+			result["msg"] = "resource not found: " + request["name"].AsString();
+			return;
+		}
+
+		result["result"] = "success";
+		result["path"] = path;
 		return;
 	}
 

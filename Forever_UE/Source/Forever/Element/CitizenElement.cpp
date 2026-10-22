@@ -60,105 +60,7 @@ namespace {
 		outWorldY = (building.GetPosY() + relX * s + relY * c) * CITIZEN_WORLD_SCALE;
 	}
 
-	// LogNearbyRelationships（T键）打印用的几个类型->可读文本转换，函数名加Citizen前缀
-	// 避免unity build下和其它.cpp里的同名helper撞名（本文件顶部ComputeCitizenWorldPosition
-	// 的注释已经解释过这个坑）。
-	FString CitizenRelativeTypeToString(RELATIVE_TYPE type) {
-		switch (type) {
-		case RELATIVE_SPOUSE: return TEXT("配偶");
-		case RELATIVE_PARENT: return TEXT("父母");
-		case RELATIVE_CHILD: return TEXT("子女");
-		case RELATIVE_SIBLING: return TEXT("兄弟姐妹");
-		default: return TEXT("未知");
-		}
-	}
-
-	FString CitizenRelationshipCategoryToString(RELATIONSHIP_CATEGORY category) {
-		switch (category) {
-		case RELATIONSHIP_KINSHIP: return TEXT("亲属");
-		case RELATIONSHIP_CLASSMATE: return TEXT("同学");
-		case RELATIONSHIP_COLLEAGUE: return TEXT("同事");
-		case RELATIONSHIP_ROMANTIC: return TEXT("情感");
-		default: return TEXT("未知");
-		}
-	}
-
-	FString CitizenEducationLevelToString(EDUCATION_LEVEL level) {
-		switch (level) {
-		case EDUCATION_ELEMENTARY: return TEXT("小学");
-		case EDUCATION_MIDDLE: return TEXT("中学");
-		case EDUCATION_UNIVERSITY: return TEXT("大学");
-		default: return TEXT("未知");
-		}
-	}
-
-	// 按Experience::GetCategory()分派到对应派生类，拼出一行可读描述——见experience.h
-	// "一对一"/"一对多"两种派生类的区别：同学/同事这两类不指向具体某个人，只能打印班级/
-	// 组织信息，不像亲属/情感那样能打印对方姓名。
-	FString CitizenExperienceToString(Experience* experience) {
-		if (!experience) return TEXT("(空)");
-		FString range = experience->IsOngoing()
-			? FString::Printf(TEXT("%d年至今"), experience->GetBeginYear())
-			: FString::Printf(TEXT("%d-%d年"), experience->GetBeginYear(), experience->GetEndYear());
-
-		switch (experience->GetCategory()) {
-		case RELATIONSHIP_KINSHIP: {
-			KinshipExperience* kinship = static_cast<KinshipExperience*>(experience);
-			Citizen* other = kinship->GetOther();
-			return FString::Printf(TEXT("[亲属] %s(%s) %s"),
-				*CitizenRelativeTypeToString(kinship->GetRelativeType()),
-				other ? UTF8_TO_TCHAR(other->GetName().c_str()) : TEXT("?"), *range);
-		}
-		case RELATIONSHIP_ROMANTIC: {
-			EmotionExperience* emotion = static_cast<EmotionExperience*>(experience);
-			Citizen* other = emotion->GetOther();
-			return FString::Printf(TEXT("[情感] %s %s"),
-				other ? UTF8_TO_TCHAR(other->GetName().c_str()) : TEXT("?"), *range);
-		}
-		case RELATIONSHIP_CLASSMATE: {
-			EducationExperience* education = static_cast<EducationExperience*>(experience);
-			SchoolClass* schoolClass = education->GetSchoolClass();
-			return FString::Printf(TEXT("[同学] %s(%s) %s"),
-				schoolClass ? UTF8_TO_TCHAR(schoolClass->GetSchoolName().c_str()) : TEXT("?"),
-				schoolClass ? *CitizenEducationLevelToString(schoolClass->GetLevel()) : TEXT("?"), *range);
-		}
-		case RELATIONSHIP_COLLEAGUE: {
-			JobExperience* job = static_cast<JobExperience*>(experience);
-			Organization* organization = job->GetOrganization();
-			return FString::Printf(TEXT("[同事] %s %s"),
-				organization ? UTF8_TO_TCHAR(organization->GetType().c_str()) : TEXT("?"), *range);
-		}
-		default:
-			return TEXT("[未知类型]");
-		}
-	}
-
-	// 把一个citizen的acquaintances(熟人关系强度)+experiences(四类人际关系历史记录)完整
-	// 打印到log，index只用来在多行输出里标记"这是附近名单里第几个人"，方便肉眼分组阅读。
-	void LogCitizenRelationshipData(Citizen* citizen, int32 index) {
-		if (!citizen) return;
-		UE_LOG(LogTemp, Log, TEXT("[T][%d] ========== %s =========="),
-			index, UTF8_TO_TCHAR(citizen->GetName().c_str()));
-
-		const auto& acquaintances = citizen->GetAcquaintances();
-		UE_LOG(LogTemp, Log, TEXT("[T][%d] Acquaintances(%d):"), index, static_cast<int32>(acquaintances.size()));
-		for (const auto& [name, relation] : acquaintances) {
-			UE_LOG(LogTemp, Log, TEXT("[T][%d]   %s [%s]: 熟悉=%.2f 尊敬=%.2f 好感=%.2f 信任=%.2f 竞争=%.2f 依赖=%.2f"),
-				index, UTF8_TO_TCHAR(name.c_str()), *CitizenRelationshipCategoryToString(relation.category),
-				relation[RELATION_FAMILIARITY], relation[RELATION_RESPECT], relation[RELATION_FAVOUR],
-				relation[RELATION_TRUST], relation[RELATION_COMPETING], relation[RELATION_RELIABILITY]);
-		}
-
-		const auto& experiences = citizen->GetExperiences();
-		UE_LOG(LogTemp, Log, TEXT("[T][%d] Experiences(%d):"), index, static_cast<int32>(experiences.size()));
-		for (Experience* experience : experiences) {
-			UE_LOG(LogTemp, Log, TEXT("[T][%d]   %s"), index, *CitizenExperienceToString(experience));
-		}
-	}
 }
-
-// 附近市民名单：静态成员定义。
-TArray<TWeakObjectPtr<ACitizenElement>> ACitizenElement::nearbyCitizens;
 
 ACitizenElement::ACitizenElement() {
 	// bCanEverTick=true+默认关闭Tick(SetActorTickEnabled(false))：绝大多数citizen静止
@@ -198,13 +100,8 @@ void ACitizenElement::PossessedBy(AController* NewController) {
 
 	// 被占有期间直接禁掉自己的proximityBox——这个box本来就是"检测玩家有没有靠近我"，
 	// 自己正好就是玩家的时候，box和自己的capsule必然贴在一起常驻重叠，会不停产生自己的
-	// Overlap事件。但disable只能防止"以后"的自我Overlap——如果在被占有之前，自己就已经
-	// 作为"别人身边的市民"被加进过nearbyCitizens(比如市民A靠近市民B时，B的proximityBox把
-	// B自己加进了名单，随后操控权切到B身上，但名单里这一条早在disable生效之前就已经存在，
-	// disable不会回头清掉它)，必须在这里显式把自己从名单里摘出去，否则这条陈旧的"自己"
-	// 记录会一直卡在名单最前面，干扰下一次按名单顺序遍历的逻辑。
+	// Overlap事件。
 	if (proximityBox) proximityBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	nearbyCitizens.RemoveSingle(TWeakObjectPtr<ACitizenElement>(this));
 }
 
 void ACitizenElement::UnPossessed() {
@@ -274,22 +171,6 @@ void ACitizenElement::Tick(float DeltaTime) {
 	}
 
 	AddMovementInput(toTarget.GetSafeNormal(), 1.f);
-}
-
-void ACitizenElement::LogNearbyRelationships() {
-	if (nearbyCitizens.Num() == 0) {
-		UE_LOG(LogTemp, Log, TEXT("[T] 附近市民名单为空"));
-		return;
-	}
-
-	for (int32 i = 0; i < nearbyCitizens.Num(); i++) {
-		ACitizenElement* nearby = nearbyCitizens[i].Get();
-		if (!nearby || !nearby->citizen) {
-			UE_LOG(LogTemp, Log, TEXT("[T][%d] (已失效)"), i);
-			continue;
-		}
-		LogCitizenRelationshipData(nearby->citizen, i);
-	}
 }
 
 void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponent* inFramework) {
@@ -394,7 +275,7 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	// OtherActor == this：这个citizen自己正好就是当前被占有的pawn，proximityBox和自己的
 	// capsule天然重叠(半径250 vs capsule半径42，box完全包住capsule)，这次一定会触发一次
-	// "自己进自己的box"——必须排除，否则"附近市民"名单里会常驻一个其实是自己的条目。
+	// "自己进自己的box"——必须排除，否则会给自己弹出自己的对话选项。
 	//
 	// 还必须要求OtherActor是AForeverCharacter(人物)——不加这条，开车靠近市民也会触发(玩家
 	// 当前pawn是AVehicleElement，依然满足OtherActor==pawn)，实测反馈"开车靠近另一辆车/靠近
@@ -402,8 +283,6 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 	// 玩家当前实际操控的那个人形pawn(可能是玩家自己的角色，也可能是被ChangeControlChange
 	// 换过去的某个市民)，这条Cast都会成立，不影响正常的人物靠近市民场景。
 	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
-
-	nearbyCitizens.AddUnique(TWeakObjectPtr<ACitizenElement>(this));
 
 	// 把这个市民当前的对话选项(cachedOptions快照)推给MeetOption UI——不解引用citizen，
 	// 见citizenNameOnly/cachedOptions字段声明处的安全原则说明。
@@ -422,8 +301,6 @@ void ACitizenElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AAc
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	// 和OnOverlapBegin同一条过滤，见那边的注释。
 	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
-
-	nearbyCitizens.RemoveSingle(TWeakObjectPtr<ACitizenElement>(this));
 
 	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
 		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {

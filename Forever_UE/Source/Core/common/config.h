@@ -67,6 +67,11 @@ public:
 	// 任何缓存/去重校验，理论上不会有同名冲突，调用方自己保证不重复摆放同名脚本。
 	static std::string GetScriptPath(const std::string& name);
 
+	// 按带扩展名的文件名(如"xiaohua.txt")在所有已注册resource根目录下递归查找，返回第一个
+	// 同名文件的绝对路径(正斜杠)；找不到返回空字符串。给mod读自己的数据文件用(.txt等非
+	// .script/.layout类型不会在AddResourcePath扫描时收集)，每次现扫，不缓存。
+	static std::string GetResourceFilePath(const std::string& fileName);
+
 	// main_story字段：主线剧情Script要挂载的ScriptModName，不再由Story硬编码"empty"。
 	// 字段缺失时返回空字符串，调用方(Story::Init)据此判定跳过初始化，不在这里兜底默认值。
 	static std::string GetMainStoryScriptModName();

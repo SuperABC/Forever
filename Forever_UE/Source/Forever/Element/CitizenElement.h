@@ -23,10 +23,6 @@ class UForeverPopulaceFrameworkComponent;
 // 已经有摄像机/移动/Enhanced Input绑定+PossessedBy/UnPossessed这一整套东西，直接继承复用，
 // 不需要另起一套。这次仍然默认不能移动（CharacterMovementComponent这次显式设成MOVE_None，
 // 见.cpp构造函数），只有被占有时才切换成MOVE_Walking（见PossessedBy覆写）。
-//
-// T键（Test动作）目前指向"上下车切换"（见ForeverTrafficFrameworkComponent.h），不再调用
-// 下面的LogNearbyRelationships()——这个静态方法本身没有删除（还是一个能用的调试工具），
-// 只是暂时没有任何按键绑定它。
 UCLASS()
 class FOREVER_API ACitizenElement : public AForeverCharacter
 {
@@ -51,12 +47,6 @@ public:
 	// [[memory:possession_driven_input_context]]。
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void UnPossessed() override;
-
-	// 把"当前被占有对象附近的市民名单"(nearbyCitizens)里每一个仍然有效的市民，各自的
-	// acquaintances(熟人关系强度)+experiences(四类人际关系历史记录)完整输出到log(UE_LOG，
-	// 不是屏幕调试消息)。上一版T键(Test动作)绑定过这个方法，这次T键改指向"上下车切换"（见
-	// ForeverTrafficFrameworkComponent.h），没有任何按键绑定这个方法，仍然保留供以后调试用。
-	static void LogNearbyRelationships();
 
 	// 沿一串世界坐标路径点真正走过去（Job按调度产出NPCNavigateChange时，
 	// UForeverPopulaceFrameworkComponent::RequestWalk发现这个citizen当前有对应Actor就调
@@ -133,11 +123,6 @@ private:
 	// 每个市民Scheduler Script的广播），OnOverlapBegin靠这份快照喂给MeetOption UI，
 	// 不需要在Overlap回调里解引用citizen。
 	TArray<FString> cachedOptions;
-
-	// 当前被占有对象（可能是最初的ADefaultPawn/AForeverCharacter，也可能是另一个citizen）
-	// 附近的市民名单，OnOverlapBegin/OnOverlapEnd维护。用TWeakObjectPtr而不是裸指针——
-	// 市民会被UForeverPopulaceFrameworkComponent按距离动态Destroy。
-	static TArray<TWeakObjectPtr<ACitizenElement>> nearbyCitizens;
 
 	// WalkTo正在走的路径点队列+当前索引，Tick()里消费；走完清空。
 	TArray<FVector> pendingWaypoints;

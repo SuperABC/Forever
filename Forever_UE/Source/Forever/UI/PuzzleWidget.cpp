@@ -10,12 +10,31 @@
 #include "Kismet/GameplayStatics.h"
 
 #include "UI/CanvasInputTranslation.h"
+#include "Framework/ForeverFrameworkActor.h"
+#include "common/implement.h"
 #include "common/registry.h"
 
 #undef UpdateResource
 
 
 using namespace std;
+
+// 现场构造一个PostImplement供PuzzleMod::Init/Loop向Core查询(比如wxdj查招式数据文件路径)——
+// 很轻量(7个裸指针+一个JsonValue缓存)，不用持久持有；做法和UPhoneWidget::NativeTick一致。
+// 找不到AForeverFrameworkActor(理论上不会发生)时对应域指针传nullptr，PostImplement::Post
+// 自己会处理成查询失败。
+static PostImplement MakePost(UWorld* world) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
+	return PostImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		framework ? framework->GetStory() : nullptr,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+}
 
 void UPuzzleWidget::NativeConstruct() {
 	Super::NativeConstruct();
@@ -43,7 +62,8 @@ void UPuzzleWidget::StartPuzzle(const FString& puzzleId) {
 	FIntPoint canvasSize = GetViewportSize(kFallbackCanvasWidth, kFallbackCanvasHeight);
 	canvas.Init(canvasSize.X, canvasSize.Y);
 	puzzle = new Puzzle(&Registry::Get().GetPuzzleFactory(), string(TCHAR_TO_UTF8(*puzzleId)));
-	puzzle->Init(&canvas, nullptr);
+	PostImplement post = MakePost(GetWorld());
+	puzzle->Init(&canvas, &post);
 
 	SetVisibility(ESlateVisibility::Visible);
 
@@ -89,7 +109,8 @@ void UPuzzleWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	FIntPoint viewportSize = GetViewportSize(canvas.GetWidth(), canvas.GetHeight());
 	canvas.Resize(viewportSize.X, viewportSize.Y);
 
-	int result = puzzle->Loop(&canvas, FMath::RoundToInt(DeltaTime * 1000.f), nullptr);
+	PostImplement post = MakePost(GetWorld());
+	int result = puzzle->Loop(&canvas, FMath::RoundToInt(DeltaTime * 1000.f), &post);
 	BlitCanvasToImage();
 
 	if (result != 0) {
@@ -126,21 +147,42 @@ FReply UPuzzleWidget::NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent
 	return FReply::Handled();
 }
 
-FReply UPuzzleWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
-	FVector2D localPos = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
+// 鼠标事件的Slate本地坐标(受DPI缩放影响，范围是控件的Slate尺寸)换算成画布像素坐标——画布
+// 尺寸是视口真实像素，两者只要DPI缩放不是1就不相等，不换算会以左上角为原点按比例错位。
+void UPuzzleWidget::UpdateMousePos(const FGeometry& geometry, const FPointerEvent& mouseEvent) {
+	FVector2D localPos = geometry.AbsoluteToLocal(mouseEvent.GetScreenSpacePosition());
+	FVector2D localSize = geometry.GetLocalSize();
+	if (localSize.X > 0 && localSize.Y > 0) {
+		localPos.X *= canvas.GetWidth() / localSize.X;
+		localPos.Y *= canvas.GetHeight() / localSize.Y;
+	}
 	canvas.SetMousePos(FMath::RoundToInt(localPos.X), FMath::RoundToInt(localPos.Y));
+}
+
+FReply UPuzzleWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
+	UpdateMousePos(InGeometry, InMouseEvent);
 	return FReply::Handled();
 }
 
 FReply UPuzzleWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
 	int32 button = CanvasInputTranslation::TranslateMouseButton(InMouseEvent.GetEffectingButton());
+	UpdateMousePos(InGeometry, InMouseEvent); // 按键事件自带位置，不依赖之前有没有移动过
 	if (button >= 0) canvas.PushMouseButton(button, true);
 	return FReply::Handled();
 }
 
 FReply UPuzzleWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
 	int32 button = CanvasInputTranslation::TranslateMouseButton(InMouseEvent.GetEffectingButton());
+	UpdateMousePos(InGeometry, InMouseEvent); // 按键事件自带位置，不依赖之前有没有移动过
 	if (button >= 0) canvas.PushMouseButton(button, false);
+	return FReply::Handled();
+}
+
+FReply UPuzzleWidget::NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
+	// 滚轮事件自带当前位置，先同步一次，免得小游戏取滚轮时用的是过期的鼠标位置。
+	UpdateMousePos(InGeometry, InMouseEvent);
+	// GetWheelDelta()一格通常是+-1.0，转成整数刻度(向上为正)交给Canvas累加，小游戏每帧取走。
+	canvas.PushMouseWheel(FMath::RoundToInt(InMouseEvent.GetWheelDelta()));
 	return FReply::Handled();
 }
 

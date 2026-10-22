@@ -9,7 +9,7 @@
   `yuanshen_fu+-.layout`，挂示例脚本`entity_event`。同一个DLL还有`YuanshenScript`(script mod，id `script_yuanshen`)：空壳，ys.script的逻辑全在脚本里；
   ys.script里的角色传送全在脚本里用`record_object`+`npc_teleport`写。
 - `Test/Cpp/Test/`——`TestScript`(id `script_test`)，独立DLL(Test.dll)：把`Test/Resource/test.script`的`control`占位符换成控制随机市民。
-- `Wxdj/Cpp/Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)，没有ScriptMod(main_story用`script_empty`)，剧情全在`Wxdj/Resource/Wxdj.script`。
+- `Wxdj/Cpp/Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)，没有ScriptMod(main_story用`script_empty`)，剧情全在`Wxdj/Resource/Wxdj.script`；另有`WxdjPuzzle`(id `puzzle_wxdj`，回合制战斗小游戏，战斗内核在`Wxdj/Cpp/Wxdj/battle/`，招式表`Wxdj/Resource/act/xiaohua.txt`)，开局由脚本`start_puzzle`触发。
 - `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id统一为`empty`),纯粹用来验证
   `config.json`按mod id配置的命令行式参数能一路传到mod:构造函数直接接收参数字符串,拼进
   `GetName()`,详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。

@@ -504,4 +504,15 @@ MouseEvent Canvas::PopMouseEvent() {
 
 void Canvas::ClearMouseBuffer() {
 	mouseQueue.Clear();
+	wheelDelta = 0;
+}
+
+void Canvas::PushMouseWheel(int delta) {
+	wheelDelta += delta;
+}
+
+int Canvas::ConsumeMouseWheel() {
+	int delta = wheelDelta;
+	wheelDelta = 0;
+	return delta;
 }

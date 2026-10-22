@@ -414,6 +414,20 @@ string Config::GetScriptPath(const string& name) {
 	return string();
 }
 
+string Config::GetResourceFilePath(const string& fileName) {
+	for (const auto& [rootPath, _] : resourcePaths) {
+		(void)_;
+		error_code dirIterError;
+		for (const auto& entry : filesystem::recursive_directory_iterator(
+				rootPath, filesystem::directory_options::skip_permission_denied, dirIterError)) {
+			if (entry.path().filename().string() == fileName && entry.is_regular_file()) {
+				return ToForwardSlashes(filesystem::absolute(entry.path()).string());
+			}
+		}
+	}
+	return string();
+}
+
 string Config::GetMainStoryScriptModName() {
 	return mainStoryScriptModName;
 }
