@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/InventoryTransfer.h"
+#include "UI/InventoryButtonStyle.h"
 #include "InventoryWidget.generated.h"
 
 class UScrollBox;
@@ -12,30 +14,27 @@ class Asset;
 class Player;
 class Room;
 
-// 背包UI落地：对应老蓝图BagPanel，这次要求"逻辑全部写在C++基类里，蓝图只做纯布局子类"，
-// 老蓝图BagPanel完全没有对应的C++类，这次重写成C++——见Source/Core/player/asset.md和
-// .dump/BagPanel.txt还原出的交互模型。
+// 背包UI：逻辑全部写在C++基类里，蓝图(WBP_Inventory)只做纯布局。物品的移动全部靠拖拽，
+// 规则和实际搬运见InventoryTransfer.h；这里只负责显示和把鼠标事件翻译成FInvSource/FInvDest。
 //
-// 两栏布局(不是tab切换，同时可见)：
-// - 身体栏(BodyList+BodyLabel)：5个标签按钮(LeftHand/RightHand/BackPack/LeftShoulder/
-//   RightShoulder)切换"当前显示哪个槽位的内容"，点哪个按钮就是ClickBody的Part——每个
-//   标签的根视图永远只显示"这个槽位当前那一个Asset"(0或1行)，哪怕这个Asset本身是容器
-//   (比如BackPack槽位放的PlayerBag)，根视图也不自动展开它的内容，用户明确要求"BackPack
-//   标签不要自动展开容器内容，左右手也不要自动展开"——5个标签在这一点上完全对称，没有
-//   任何特殊分支。
-// - 房间栏(RoomList+RoomLabel)：固定显示Player::GetCurrentRoom()的内容(平铺表)。
-// 两栏各自可以"进入"选中的容器再深一层：双击一个容器行(不管它是槽位根视图里的那一个
-// Asset，还是已经进入的容器内部找到的另一个容器)进入(压栈)，单击列表最前面的".."占位行
-// 退出(出栈)——用户明确要求用双击而不是Enter/Exit按钮，但原生
-// `NativeOnMouseButtonDoubleClick`会被行内的`Button`拦截、传不到这一层，改成在
-// `UAssetButtonWidget::HandleClicked`里自己按时间戳判双击，见该类头文件注释；"返回
-// 上一级"单击即触发，不需要凑双击。
+// 六类区域：
+// - 双肩(LeftShoulderButton/RightShoulderButton)、双手(LeftHandButton/RightHandButton)、
+//   后背(BackPackButton)：5个槽位按钮，既是拖拽的源也是目标。按钮文字显示槽位里的物品；
+//   点击槽位(不拖动)=让容器列表显示这个槽位里容器的内容。
+// - 容器列表(BodyList/BodyLabel)：显示选中槽位里容器的内容，双击里面的容器行进入下一层，
+//   列表最前面的".."行返回上一级。
+// - 房间列表(RoomList/RoomLabel)：当前房间里的物品(同样可以双击进入容器)；不在房间时整块隐藏。
+// - 附近列表(NearbyList/NearbyLabel，BindWidgetOptional)：Player::worldAssets里玩家周围
+//   kNearbyRadiusCm范围内的物品(投掷出去的、在房间外丢下的)，由
+//   UForeverAssetFrameworkComponent::CollectNearby用物理重叠查询收集，只在打开面板和每次
+//   操作之后收集，不每帧收集。
 //
-// Use/Drop/Pick三个按钮对"当前选中项"生效，和老工程语义完全一致(只是身体子视图从3个扩到
-// 5个)：Use=消耗selectedBody；Drop=selectedBody从当前身体侧解析出的容器/槽位移到地上(cube)：在房间里进Room::assets，
-// 室外进Player::worldAssets(拾取仍然只认房间，室外的物品目前捡不起来)；Pick=selectedRoom从房间移入当前身体侧解析出的容器/槽位。武器的"激活/卸下"
-// 完全由数字键1/2驱动(AForeverCharacter::ActivateShoulderWeapon)，这个Widget不需要知道
-// 武器系统的任何状态，见Source/Core/player/player.h"武器只挂肩膀"一节。
+// 拖拽：按下并拖动一行/一个有物品的槽位开始，拖拽过程中只有一个跟着鼠标的小框(物品名+数量，
+// 不按Ctrl=1个，按住Ctrl=整个堆叠)，松手之前不做任何判断和移动；松手后在NativeOnDrop里按
+// 鼠标位置确定目标区域，交给InventoryTransfer::Transfer校验并移动。
+// 唯一保留的按钮是UseButton(作用于选中的容器列表行，没有则作用于选中槽位里的物品)。
+// 武器的"激活/卸下"完全由数字键1/2驱动(AForeverCharacter::ActivateShoulderWeapon)，这个
+// Widget不需要知道武器系统的任何状态。
 UCLASS()
 class FOREVER_API UForeverInventoryWidget : public UUserWidget
 {
@@ -45,30 +44,30 @@ public:
 	// B键(ToggleInventory)：可见就ClosePanel，不可见就InitPanel。
 	void TogglePanel();
 
-	// 由UAssetButtonWidget::HandleClicked调用——记录选中态，房间栏/身体栏各自独立，
-	// 复刻老工程SelectBag/SelectRoom。
+	// 由UAssetButtonWidget调用：单击选中、双击进入容器、单击".."退出。
 	void SelectRow(UAssetButtonWidget* row);
-	// 由UAssetButtonWidget::HandleClicked在检测到双击(按时间戳判定，见该类注释)且
-	// row->GetAsset()->IsContainer()==true时调用，按row所属的那一侧压栈进入。
 	void EnterRow(UAssetButtonWidget* row);
-	// 由UAssetButtonWidget::HandleClicked在row->IsBackRow()==true时调用(单击即触发，
-	// 不需要双击)，按row所属的那一侧出栈退出。
 	void ExitRow(UAssetButtonWidget* row);
 
+	// 由UAssetButtonWidget在行上按下左键时调用：面板接管鼠标(捕获)，之后的移动/松开都由面板处理——
+	// 没拖动就是单击(UAssetButtonWidget::Click)，拖动超过阈值就开始拖拽，见NativeOnMouseButtonUp。
+	FReply BeginRowPress(UAssetButtonWidget* row, const FPointerEvent& InMouseEvent);
+
+	// 列表行/拖拽框的文字：类型名 [xN] [容器]。
+	static FString DescribeAsset(const Asset* asset, int amount);
+
 protected:
-	virtual void NativeConstruct() override; // 默认Collapsed+绑定全部按钮的OnClicked
+	virtual void NativeConstruct() override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeDestruct() override;
+	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 
-	UFUNCTION() void HandleClickLeftHand();
-	UFUNCTION() void HandleClickRightHand();
-	UFUNCTION() void HandleClickBackPack();
-	UFUNCTION() void HandleClickLeftShoulder();
-	UFUNCTION() void HandleClickRightShoulder();
 	UFUNCTION() void HandleUse();
-	UFUNCTION() void HandleDrop();
-	UFUNCTION() void HandlePick();
 	UFUNCTION() void HandleClose();
-	UFUNCTION() void HandleReset();
 
+	// 容器列表：选中槽位里容器的内容(及进入的子容器)。
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UScrollBox> BodyList;
 
@@ -78,9 +77,20 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> BodyLabel;
 
-	// 当前房间地址(或"不在房间中")+已进入的子容器面包屑，见RefreshRoom()。
+	// 当前房间地址+已进入的子容器面包屑，见RefreshRoom()。
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> RoomLabel;
+
+	// 附近列表。BindWidgetOptional：WBP_Inventory里还没放时不影响蓝图编译，只是不显示附近。
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScrollBox> NearbyList;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> NearbyLabel;
+
+	// 操作失败的提示(可选)；没放时回退成屏幕调试信息。
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> MessageText;
 
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> LeftHandButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> RightHandButton;
@@ -88,9 +98,6 @@ protected:
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> LeftShoulderButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> RightShoulderButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> UseButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> DropButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> PickButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> ResetButton;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> CloseButton;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Inventory")
@@ -99,29 +106,78 @@ protected:
 private:
 	void InitPanel();
 	void ClosePanel();
-	void ClickBody(const FString& part);
-	void ResetRoom();
+	void ClickSlot(EInvZone zone);
 	void ClearSelect();
+	void RefreshAll();
+	void RefreshSlots();
 	void RefreshBody();
 	void RefreshRoom();
+	void RefreshNearby();
+	void ShowMessage(const FString& text);
+
+	// 复用行对象的列表填充：返回回收的行数。bBack=true时最前面插".."行。
+	void FillList(UScrollBox* list, TArray<TObjectPtr<UAssetButtonWidget>>& pool, EInvZone zone,
+		Asset* parent, bool bBack, const TArray<Asset*>& assets);
 
 	Player* GetPlayer() const;
+	class UForeverAssetFrameworkComponent* GetAssetFramework() const;
 
-	// bodyContainerStack非空则返回栈顶(已经双击进入过的容器)，否则nullptr——身体标签的
-	// 根视图永远不自动展开，哪怕当前槽位那一个Asset本身是容器，见类注释。
+	// 槽位按钮 <-> 区域
+	UButton* SlotButton(EInvZone zone) const;
+	bool FindSlotAt(const FVector2D& screenPosition, EInvZone& outZone) const;
+	Asset* GetSlotAsset(EInvZone zone) const;
+
+	// 容器列表当前显示的容器：进入了子容器=栈顶，否则=选中槽位里的容器(没有则nullptr)。
 	Asset* ResolveBodyContainer() const;
-	// roomContainerStack非空则返回栈顶，否则nullptr(房间根列表本身不是容器，是
-	// Room::GetAssets()这个平铺表)。
 	Asset* ResolveRoomContainer() const;
+	Asset* ResolveNearbyContainer() const;
 
-	static FString BodyPartToPath(const FString& part);
 	static FString BuildBreadcrumb(const FString& root, const TArray<Asset*>& stack);
+	static FString SlotName(EInvZone zone);
 
-	FString currentBodyPart = TEXT("BackPack");
+	// 把鼠标位置翻译成拖拽目标区域；不在任何区域上返回false。
+	bool ResolveDropTarget(const FVector2D& screenPosition, FInvDest& outDest) const;
+
+	EInvZone currentSlot = EInvZone::Back;
 	TWeakObjectPtr<UAssetButtonWidget> selectedBody;
-	TWeakObjectPtr<UAssetButtonWidget> selectedRoom;
-	bool lastSelectionIsRoom = false;
+	TWeakObjectPtr<UAssetButtonWidget> selectedOther; // 房间/附近列表里的选中行，仅高亮
 
 	TArray<Asset*> bodyContainerStack;
 	TArray<Asset*> roomContainerStack;
+	TArray<Asset*> nearbyContainerStack;
+
+	TArray<TObjectPtr<UAssetButtonWidget>> bodyPool;
+	TArray<TObjectPtr<UAssetButtonWidget>> roomPool;
+	TArray<TObjectPtr<UAssetButtonWidget>> nearbyPool;
+
+	// 槽位按钮原本的文字标签(首次读到的WBP里的文字)，显示时拼成"标签: 物品"。
+	// 下标=槽位区域的枚举值(槽位是EInvZone的前5个)。
+	FString slotBaseLabels[5];
+	bool bSlotLabelsCaptured = false;
+
+	// 在槽位按钮上按下的那个槽位：拖动了就开始拖拽，没拖动松开就是点击。
+	bool bPressActive = false;  // 槽位或列表行上按着左键(面板已捕获鼠标)
+	bool bSlotPressed = false;  // 其中按下的是槽位(而不是列表行)
+	EInvZone pressedSlot = EInvZone::Back;
+	TWeakObjectPtr<UAssetButtonWidget> pressedRow;
+	FInvSource pressSource;     // 按下时的拖拽源，松手时由Transfer重新校验
+
+	// 槽位按钮被设成HitTestInvisible后原生的悬停/按下样式不再生效，这里按鼠标位置手动给
+	// 按钮上色(悬停变亮、按下更深)。
+	bool bSlotHovered = false;
+	EInvZone hoveredSlot = EInvZone::Back;
+	void UpdateSlotTints();
+	FInvButtonStyleState slotStyles[5]; // 下标=槽位区域的枚举值
+
+	// 槽位的拖拽不走UMG DragDropOperation(它的拖拽框会从发起控件左上角滑向鼠标)，面板自己捕获
+	// 鼠标、用一个贴着鼠标的框(复用AssetButtonClass的行)实现，松手时PerformDrop结算。
+	bool bSlotDragging = false;
+	bool bSlotDragAll = false;
+	FVector2D slotPressPos = FVector2D::ZeroVector;
+	UPROPERTY() TObjectPtr<UAssetButtonWidget> dragGhost;
+	void CreateGhost(Asset* asset, bool bAll);
+	void UpdateGhost(const FVector2D& screenPosition);
+	void DestroyGhost();
+	// 按松手位置确定目标区域并交给InventoryTransfer::Transfer。
+	void PerformDrop(const FInvSource& source, bool bAll, const FVector2D& screenPosition);
 };

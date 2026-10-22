@@ -33,6 +33,11 @@ public:
 	// 读档后调用：按Player::worldAssets里记的位置朝向重新生成Actor，速度为0，从静止开始模拟。
 	void RestoreWorldAssets();
 
+	// 收集center周围radiusCm厘米内、归Player::worldAssets持有的物品(背包"附近"列表)，按距离从近到远。
+	// 用球形重叠查询走引擎物理宽相位(代价和附近的数量成正比，不随worldAssets总量增长)，
+	// 位置取Actor实时位置而不是只在存档前才同步的worldAssets transform。
+	void CollectNearby(FVector center, float radiusCm, TArray<Asset*>& out) const;
+
 	// 查表Destroy()+从表里移除——不delete Asset本身，调用方/Room负责Asset的生命周期。
 	void DestroyWorldAsset(Asset* asset);
 

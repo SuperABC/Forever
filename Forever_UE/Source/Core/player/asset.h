@@ -20,7 +20,9 @@ class Asset {
 	friend class PlayerSaveCodec;
 public:
 	// id需要在config.json的"asset_mods"里启用，否则mod为空、IsValid()返回false。
-	Asset(AssetFactory* factory, const std::string& id, const std::string& name);
+	// 名字取mod->GetName()(mod保证全局唯一)，不再由调用方传入；读档时PlayerSaveCodec
+	// 用友元把name覆写回存档里的名字。
+	Asset(AssetFactory* factory, const std::string& id);
 	~Asset(); // 递归delete contents
 
 	bool IsValid() const;

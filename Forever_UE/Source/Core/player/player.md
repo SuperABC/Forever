@@ -61,7 +61,7 @@ player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 `estateAssets`（不动产/载具表，key是`Asset::GetName()`）均持有所有权，析构时全部
 `delete`。
 
-- `CreateAsset(id, name)`/`DestroyAsset(asset)`：`id`需要在`config.json`的
+- `CreateAsset(id)`/`DestroyAsset(asset)`：名字不再由调用方传入，取mod的`GetName()`（mod保证全局唯一，读档时`PlayerSaveCodec`把名字覆写回存档里的）。`SplitAsset(src, n)`从堆叠拆出n个：再`CreateAsset`一个同type的新实例（名字由它的mod保证唯一）、`count=n`，`src->count`减n。`id`需要在`config.json`的
   `"asset_mods"`数组里启用，否则`CreateAsset`返回`nullptr`（内部`new`后立刻检查
   `IsValid()`失败就`delete`）。独占持有权转交给调用方，调用方要么通过`AddByPath`等接口
   把它放进某个槽位/容器/房间，要么自己负责`DestroyAsset`。
@@ -69,8 +69,8 @@ player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
   `"back"`/`"leftShoulder"`/`"rightShoulder"`对应五个槽位，`"room"`对应
   `GetCurrentRoom()`（`"room/<assetName>"`按`Room::GetAssets()`查），多段路径（如
   `"back/PistolAmmo"`）按`'/'`切分后逐段解析到容器再查`GetContents()`。
-- `AddByPath`的放入规则：`left`/`right`(手)要求`mobility==Object`且槽位为空且
-  `!asset->IsWeapon()`（武器不能拿在手上，只能挂肩膀）；`back`同上，额外要求
+- `AddByPath`的放入规则：`left`/`right`(手)要求`mobility==Object`、`count==1`且槽位为空
+  （武器也可以拿在手上，只是激活仍然只走肩膀）；`back`同上，额外要求
   `asset->GetBackpack()==true`；`leftShoulder`/`rightShoulder`要求
   `asset->IsWeapon()==true`且槽位为空（只能放武器）；`room`要求
   `GetCurrentRoom()!=nullptr`，转发给`currentRoom->AddAsset(asset)`；多段路径转发给
@@ -89,13 +89,13 @@ player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 **左手 -> 右手 -> 背包**，每个位置先看资产本身再递归进`contents`(子项按name排序，`unordered_map`遍历顺序
 不确定，不排序会让"按3切换"的顺序飘)。`CollectThrowables`按type合并数量并带上第一个堆叠的
 `meshPath`/`meshScale`(供UE侧显示预览模型)；`TakeOneThrowable`取出一个单位——堆叠`count>1`时`count-1`并
-新建一个`count=1`的Asset(名字`type_thrown<n>`，容器按name索引需要唯一)，`count==1`时整个摘出，所有权交给
+`SplitAsset(found, 1)`新建一个`count=1`的Asset(名字由mod保证唯一)，`count==1`时整个摘出，所有权交给
 调用方；`HasThrowableInHand`只认手槽里**直接**拿着的，在手持容器里面的不算(那只手仍被容器占用)。
 UE侧缓存/激活逻辑见`Source/Forever/Player/ForeverThrowableComponent.md`。
 
 ## 房间外的物品：`worldAssets`
 
-不在任何房间、也不在身上/容器里的物品（目前就是被扔出去的投掷物）归 Player 直接持有，key=物品名，带一份位置朝向（UE 世界坐标，厘米/度；Core 只存数不解释）。物品最终落在室内也照样记在这里，不转进 `Room::assets`。位置由 UE 侧在存档前从场景里的 Actor 同步回来（见 `ForeverAssetFrameworkComponent.md`），Core 平时不更新。`TakeOneThrowable` 拆出新物品时的起名会跳过这里已有的名字（计数器不存档，读档后会从 0 重数）。
+不在任何房间、也不在身上/容器里的物品（目前就是被扔出去的投掷物）归 Player 直接持有，key=物品名，带一份位置朝向（UE 世界坐标，厘米/度；Core 只存数不解释）。物品最终落在室内也照样记在这里，不转进 `Room::assets`。位置由 UE 侧在存档前从场景里的 Actor 同步回来（见 `ForeverAssetFrameworkComponent.md`），Core 平时不更新。拆出的新物品是新建的实例，名字由它的 mod 保证全局唯一。
 
 ## 持有方式
 

@@ -72,7 +72,11 @@ public:
 	// 创建一个Asset实例，id需要在config.json的"asset_mods"数组里启用，否则返回nullptr。
 	// 独占持有权转交给调用方（调用方负责走AddByPath/AddContent等接口把它放进某个槽位/
 	// 容器/房间，否则要自己delete）。
-	Asset* CreateAsset(const std::string& id, const std::string& name);
+	// 名字由mod的GetName()给出(全局唯一)。
+	Asset* CreateAsset(const std::string& id);
+	// 从src堆叠里拆出n个(0<n<src->count)：新建一个同type的实例(名字由它的mod保证唯一)，
+	// count=n，src->count减n。失败返回nullptr、不改动src。所有权交给调用方。
+	Asset* SplitAsset(Asset* src, int n);
 	// 调用方确认这个Asset已经不在任何槽位/容器/房间表里之后调用——内部走
 	// factory->DestroyAsset(mod)+delete this，不能跳过这个方法直接delete（见
 	// AssetFactory跨DLL new/delete安全的约定）。
@@ -85,8 +89,8 @@ public:
 	Asset* GetByPath(const std::string& path) const;
 	Asset* RemoveByPath(const std::string& path); // 从槽位/容器/房间摘除，不delete
 	// 放入规则：
-	// - left/right(手)：要求mobility==Object且当前槽位为空，且asset->IsWeapon()==false
-	//   （武器不能拿在手上，只能挂肩膀）。
+	// - left/right(手)：要求mobility==Object、count==1且当前槽位为空（武器也可以拿在手上，
+	//   只是不能激活，激活仍然只走肩膀）。
 	// - back：同上，额外要求asset->GetBackpack()==true。
 	// - leftShoulder/rightShoulder：要求asset->IsWeapon()==true且当前槽位为空（只能放
 	//   武器）。
@@ -184,8 +188,4 @@ private:
 
 	// 房间外的物品，Player独占持有，见上面"房间外的物品"一节。
 	std::unordered_map<std::string, WorldAsset> worldAssets;
-
-	// TakeOneThrowable拆出来的单个Asset用它拼唯一名(按name索引)；不存档，所以起名时还要
-	// 跳过worldAssets里已有的名字。
-	int splitCounter = 0;
 };

@@ -76,7 +76,12 @@
    ],
    "route_mods" : [ "route_bus", "route_train", "route_air", "route_empty --test true" ],
    "scheduler_mods" : [ "scheduler_basic", "scheduler_empty --test true" ],
-   "script_mods" : [ "script_test", "script_basic", "script_empty --test true" ],
+   "script_mods" : [
+      "script_test",
+      "script_basic",
+      "script_empty --test true",
+      "script_yuanshen"
+   ],
    "station_mods" : [
       "station_bus",
       "station_train",

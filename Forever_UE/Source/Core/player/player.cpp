@@ -65,13 +65,22 @@ float Player::Heal(float amount) {
 
 bool Player::IsDead() const { return health <= 0.f; }
 
-Asset* Player::CreateAsset(const string& id, const string& name) {
-	Asset* asset = new Asset(&assetFactory, id, name);
+Asset* Player::CreateAsset(const string& id) {
+	Asset* asset = new Asset(&assetFactory, id);
 	if (!asset->IsValid()) {
 		delete asset;
 		return nullptr;
 	}
 	return asset;
+}
+
+Asset* Player::SplitAsset(Asset* src, int n) {
+	if (!src || n <= 0 || n >= src->GetCount()) return nullptr;
+	Asset* piece = CreateAsset(src->GetType());
+	if (!piece) return nullptr;
+	piece->SetCount(n);
+	src->SetCount(src->GetCount() - n);
+	return piece;
 }
 
 void Player::DestroyAsset(Asset* asset) {
@@ -158,12 +167,12 @@ bool Player::AddByPath(const string& path, Asset* asset) {
 
 	if (parts.size() == 1) {
 		if (parts[0] == "left") {
-			if (leftHand || asset->GetMobility() != AssetMobility::Object || asset->IsWeapon()) return false;
+			if (leftHand || asset->GetMobility() != AssetMobility::Object || asset->GetCount() != 1) return false;
 			leftHand = asset;
 			return true;
 		}
 		if (parts[0] == "right") {
-			if (rightHand || asset->GetMobility() != AssetMobility::Object || asset->IsWeapon()) return false;
+			if (rightHand || asset->GetMobility() != AssetMobility::Object || asset->GetCount() != 1) return false;
 			rightHand = asset;
 			return true;
 		}
@@ -269,15 +278,7 @@ Asset* Player::TakeOneThrowable(const string& type) {
 		if (!found) continue;
 
 		if (found->GetCount() > 1) {
-			// 读档后splitCounter从0重新数，会和存档里已经落在室外的同名物品撞车，跳过已有的名字。
-			string oneName;
-			do {
-				oneName = type + "_thrown" + to_string(splitCounter++);
-			} while (worldAssets.count(oneName));
-			Asset* one = CreateAsset(type, oneName);
-			if (!one) return nullptr;
-			found->SetCount(found->GetCount() - 1);
-			return one;
+			return SplitAsset(found, 1);
 		}
 
 		// 整个堆叠只剩一个：直接摘出来交给调用方。

@@ -5,12 +5,13 @@
 
 using namespace std;
 
-Asset::Asset(AssetFactory* factory, const string& id, const string& name) :
-	factory(factory), mod(nullptr), name(name) {
+Asset::Asset(AssetFactory* factory, const string& id) :
+	factory(factory), mod(nullptr) {
 	mod = factory->CreateAsset(id);
 	if (!mod) return;
 
 	mod->SetProperty();
+	name = mod->GetName(); // mod保证全局唯一，拷贝一份：GetName()返回的是mod内部缓冲
 	type = mod->GetType();
 	mobility = mod->mobility;
 	weight = mod->weight;
@@ -65,6 +66,7 @@ float Asset::GetSpace() const {
 
 bool Asset::AddContent(Asset* content) {
 	if (!content) return false;
+	if (contents.count(content->GetName())) return false; // 名字全局唯一，正常不会撞；防止覆盖泄漏旧物品
 	if (content->size * content->count > GetSpace()) return false;
 	contents.insert_or_assign(content->GetName(), content);
 	return true;

@@ -71,6 +71,13 @@ public:
 	void RefreshCabinOptions(const Cabin* cabin);
 	static ABuildingElement* FindForBuilding(const Building* building);
 
+	// 这个碰撞盒是不是本栋楼某个Room的进入/离开检测盒，是则返回那个Room，否则nullptr。
+	// 供玩家切换操控后按"当前重叠的盒子"重新判定所在房间用，不依赖进入/离开事件。
+	Room* FindRoomOfBox(UPrimitiveComponent* box) const {
+		Room* const* found = roomBoxLabels.Find(box);
+		return found ? *found : nullptr;
+	}
+
 private:
 	enum class ELod : uint8 { Near, Far };
 

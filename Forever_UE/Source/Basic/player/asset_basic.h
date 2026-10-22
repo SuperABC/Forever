@@ -13,7 +13,7 @@
 //   (usable=true)，用完count-1到0即销毁，不做饱食度效果。
 // - PistolAmmoAsset/RifleAmmoAsset：子弹，新id，没有对应Product。
 // - PistolWeaponAsset/RifleWeaponAsset：id和WeaponMod的PistolWeapon/RifleWeapon共用，
-//   weapon=true——只能挂左肩/右肩，不能拿在手上，见Source/Core/player/player.h的
+//   weapon=true——可以挂左肩/右肩(激活只走肩膀)，也可以拿在手上，见Source/Core/player/player.h的
 //   ActivateShoulderWeapon桥接机制。
 //
 // GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼。

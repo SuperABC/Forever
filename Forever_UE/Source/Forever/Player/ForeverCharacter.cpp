@@ -29,8 +29,11 @@
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 
+#include "Element/BuildingElement.h"
+
 #include "player/player.h"
 #include "player/asset.h"
+#include "map/room.h"
 
 AForeverCharacter::AForeverCharacter()
 {
@@ -183,29 +186,29 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 		if (Player* player = framework->GetPlayer()) {
 			bool bHasLoadout = player->GetByPath("leftShoulder") || player->GetByPath("rightShoulder") || player->GetByPath("back");
 			if (!bHasLoadout) {
-				if (Asset* pistolAsset = player->CreateAsset("asset_pistol", "ShoulderPistol")) {
+				if (Asset* pistolAsset = player->CreateAsset("asset_pistol")) {
 					player->AddByPath("leftShoulder", pistolAsset);
 				}
-				if (Asset* rifleAsset = player->CreateAsset("asset_rifle", "ShoulderRifle")) {
+				if (Asset* rifleAsset = player->CreateAsset("asset_rifle")) {
 					player->AddByPath("rightShoulder", rifleAsset);
 				}
 
-				if (Asset* bag = player->CreateAsset("asset_container", "PlayerBag")) {
+				if (Asset* bag = player->CreateAsset("asset_container")) {
 					player->AddByPath("back", bag);
-					if (Asset* pistolAmmo = player->CreateAsset("asset_ammo_pistol", "PistolAmmo")) {
+					if (Asset* pistolAmmo = player->CreateAsset("asset_ammo_pistol")) {
 						pistolAmmo->SetCount(120);
 						bag->AddContent(pistolAmmo);
 					}
-					if (Asset* rifleAmmo = player->CreateAsset("asset_ammo_rifle", "RifleAmmo")) {
+					if (Asset* rifleAmmo = player->CreateAsset("asset_ammo_rifle")) {
 						rifleAmmo->SetCount(120);
 						bag->AddContent(rifleAmmo);
 					}
 					// 投掷物：手雷、烟雾弹各10个(各一个count=10的堆叠)，按3切换，见ForeverThrowableComponent.md。
-					if (Asset* grenade = player->CreateAsset("asset_grenade", "Grenade")) {
+					if (Asset* grenade = player->CreateAsset("asset_grenade")) {
 						grenade->SetCount(10);
 						bag->AddContent(grenade);
 					}
-					if (Asset* smokeGrenade = player->CreateAsset("asset_smoke_grenade", "SmokeGrenade")) {
+					if (Asset* smokeGrenade = player->CreateAsset("asset_smoke_grenade")) {
 						smokeGrenade->SetCount(10);
 						bag->AddContent(smokeGrenade);
 					}
@@ -213,6 +216,23 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 			}
 			// EquipWeapon()会自动顶掉weaponComponent里可能残留的旧武器，不用先清理。
 			ActivateShoulderWeapon(1);
+
+			// 重新判定所在房间：房间的进入/离开回调只认"玩家当前操控的pawn"，这个角色在被玩家
+			// 占有之前早就站在房间里了，占有之后重叠状态没变，引擎不会再补发BeginOverlap，
+			// Player::currentRoom就会一直是空。这里直接看胶囊体当前重叠的房间触发盒来设置，
+			// 不依赖(也不广播)进出事件。
+			if (Cast<APlayerController>(NewController)) {
+				Room* room = nullptr;
+				TSet<UPrimitiveComponent*> overlaps;
+				GetCapsuleComponent()->GetOverlappingComponents(overlaps);
+				for (UPrimitiveComponent* component : overlaps) {
+					ABuildingElement* building = component ? Cast<ABuildingElement>(component->GetOwner()) : nullptr;
+					if (!building) continue;
+					room = building->FindRoomOfBox(component);
+					if (room) break;
+				}
+				player->SetCurrentRoom(room);
+			}
 		}
 	}
 }

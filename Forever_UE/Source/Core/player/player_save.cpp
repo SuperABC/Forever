@@ -47,8 +47,9 @@ Asset* PlayerSaveCodec::ReadAsset(AssetFactory& factory, ByteReader& r) {
 	string type = r.Str();
 	string name = r.Str();
 	int count = r.I32();
-	Asset* asset = new Asset(&factory, type, name);
+	Asset* asset = new Asset(&factory, type);
 	bool valid = asset->IsValid();
+	asset->name = name; // 覆写回存档里的名字，容器/房间/worldAssets的key都按它索引
 	if (!SaveRefs::ReadModState(valid ? asset->mod : static_cast<AssetMod*>(nullptr), r)) {
 		debugf("Warning: failed to parse saved state of asset mod %s.\n", type.c_str());
 	}

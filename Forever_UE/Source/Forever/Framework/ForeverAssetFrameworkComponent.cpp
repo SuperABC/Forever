@@ -4,6 +4,11 @@
 #include "Framework/ForeverFrameworkActor.h"
 
 #include "player/player.h"
+#include "player/asset.h"
+
+#include "Engine/World.h"
+#include "Engine/OverlapResult.h"
+#include "CollisionQueryParams.h"
 
 AAssetElement* UForeverAssetFrameworkComponent::SpawnWorldAsset(Asset* asset, FVector location, FRotator rotation) {
 	if (!asset || !GetWorld()) return nullptr;
@@ -79,6 +84,35 @@ void UForeverAssetFrameworkComponent::RestoreWorldAssets() {
 		const Player::WorldAssetTransform& t = entry.transform;
 		SpawnWorldAsset(entry.asset, FVector(t.x, t.y, t.z), FRotator(t.pitch, t.yaw, t.roll));
 	}
+}
+
+void UForeverAssetFrameworkComponent::CollectNearby(FVector center, float radiusCm, TArray<Asset*>& out) const {
+	out.Reset();
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	if (!player || !GetWorld()) return;
+
+	// AAssetElement的网格用PhysicsActor预设，对象类型是PhysicsBody。
+	TArray<FOverlapResult> overlaps;
+	GetWorld()->OverlapMultiByObjectType(overlaps, center, FQuat::Identity,
+		FCollisionObjectQueryParams(ECC_PhysicsBody), FCollisionShape::MakeSphere(radiusCm));
+
+	const auto& worldAssets = player->GetWorldAssets();
+	TArray<TPair<float, Asset*>> found;
+	TSet<Asset*> seen;
+	for (const FOverlapResult& overlap : overlaps) {
+		AAssetElement* element = Cast<AAssetElement>(overlap.GetActor());
+		Asset* asset = element ? element->GetAsset() : nullptr;
+		if (!asset || seen.Contains(asset)) continue;
+		// 只要归Player::worldAssets持有的(房间里丢的物品归Room，不在"附近"列表里)。
+		auto it = worldAssets.find(asset->GetName());
+		if (it == worldAssets.end() || it->second.asset != asset) continue;
+		seen.Add(asset);
+		found.Add({ FVector::DistSquared(element->GetActorLocation(), center), asset });
+	}
+
+	found.Sort([](const TPair<float, Asset*>& a, const TPair<float, Asset*>& b) { return a.Key < b.Key; });
+	for (const auto& entry : found) out.Add(entry.Value);
 }
 
 void UForeverAssetFrameworkComponent::DestroyWorldAsset(Asset* asset) {
