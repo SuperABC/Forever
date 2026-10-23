@@ -14,6 +14,7 @@ class UForeverInventoryWidget;
 class UMapWidget;
 class UForeverPausePanelWidget;
 class UForeverThrowListWidget;
+class UForeverFadeWidget;
 class UForeverIdentifyComponent;
 class UInputComponent;
 
@@ -34,6 +35,11 @@ class FOREVER_API AForeverPlayerController : public APlayerController
 public:
 	AForeverPlayerController();
 
+	// 重置输入模式、加动态Mapping Context、创建全部常驻Widget。幂等：只有第一次调用生效。
+	// BeginPlay会调，AForeverFrameworkActor::BeginPlay在生成世界/广播game_start之前也会调
+	// (打包版里它先于Controller的BeginPlay)，见.cpp里的说明。
+	void InitializeOnce();
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -41,6 +47,8 @@ protected:
 	// ChangeControlChange换人操控/换乘载具时不会变，是唯一能保证"任何时候按P都生效"的宿主，
 	// 见.cpp里的说明和ForeverPlayerController.md"旧MainController热键"一节。
 	virtual void SetupInputComponent() override;
+
+	bool bInitialized = false;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UMeetOptionWidget> meetOptionWidgetClass;
@@ -136,6 +144,11 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UForeverThrowListWidget> throwListWidget;
 
+	// 开局黑屏的类：只是登记给UForeverFadeSubsystem(控件本身由它持有、跨关卡存活)，见
+	// UI/ForeverFadeSubsystem.h。WBP_Fade在BP_ForeverPlayerController的类默认值里指定。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UForeverFadeWidget> fadeWidgetClass;
+
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
 	FORCEINLINE USectionSpeakingWidget* GetSectionSpeakingWidget() const { return sectionSpeakingWidget; }
@@ -146,5 +159,4 @@ public:
 	FORCEINLINE UForeverInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
 	FORCEINLINE UMapWidget* GetMapWidget() const { return mapWidget; }
 	FORCEINLINE UForeverPausePanelWidget* GetPauseWidget() const { return pauseWidget; }
-	FORCEINLINE UForeverThrowListWidget* GetThrowListWidget() const { return throwListWidget; }
-};
+	FORCEINLINE UForeverThrowListWidget* GetThrowListWidget() const { return throwListWidget; }};

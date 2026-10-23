@@ -19,6 +19,8 @@
 - `N`(导航调试可视化)：旧蓝图里是手动开关，新实现改成`UForeverRoadnetFrameworkComponent`常驻生成的调试网格，不再需要按键。
 
 - **投掷物选择列表**(`throwListWidget`，长按3)：跟其它常驻Widget同一套创建模式(ZOrder 5)，`throwListWidgetClass`在`BP_ForeverPlayerController`里指定为`WBP_ThrowList`，没指定会警告并跳过(长按3不弹列表)。`TogglePause`在列表打开时拒绝(和地图/手机/背包等同样的理由)。见`UI/ForeverThrowListWidget.md`。
+- **初始化时机(`InitializeOnce`)**：输入模式重置、Mapping Context、全部常驻Widget的创建都在幂等的`InitializeOnce()`里。打包版里`AForeverFrameworkActor::BeginPlay`(含game_start广播)先于Controller的`BeginPlay`，所以FrameworkActor在生成世界之前先调一次，`BeginPlay`里再调一次(已初始化就跳过)——否则game_start里的`start_puzzle`/对话拿到的Widget是空的被静默跳过，Controller迟到的"输入重置成Game Only"还会盖掉谜题设的UI Only(2026-10-24发现：wxdj开局谜题不弹)。
+- **开局黑屏**：控件由`UForeverFadeSubsystem`持有(跨关卡)，Controller只在`BeginPlay`最后把`fadeWidgetClass`(在`BP_ForeverPlayerController`里指定为`WBP_Fade`)登记给它并`EnsureBlack()`；没指定会警告。见`UI/ForeverFadeWidget.md`。
 
 - **识别模式**(`identifyComponent`，按住鼠标中键)：`Identify`热键的`Started`/`Completed`绑在这里转给`UForeverIdentifyComponent`(挂在Controller上)，换人操控/上下载具时Controller不变，所以最稳。Controller因此有了构造函数(`CreateDefaultSubobject`)。见`Player/ForeverIdentifyComponent.md`。
 

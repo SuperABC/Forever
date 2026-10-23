@@ -157,6 +157,8 @@ protected:
 	// 读档时脚本状态按存档恢复了：这时不广播game_start(脚本已经在存档时的进度上)，玩家操控谁
 	// 也不由game_start决定，改由RestoreControlledPawn按存档的UE段恢复。
 	bool bScriptsRestored = false;
+	// BeginPlay里整段世界生成流程(新游戏含game_start广播，读档含RestoreControlledPawn)已经走完。
+	bool bInitialGenerationDone = false;
 	void RestoreControlledPawn(const FForeverPendingLoad& load);
 
 	// add_option/remove_option执行完之后，让场景里叫这个名字的市民/车辆/门刷新交互选项快照。
@@ -236,6 +238,10 @@ protected:
 public:
 	FORCEINLINE UForeverAssetFrameworkComponent* GetAssetFramework() const { return assetFramework; }
 	FORCEINLINE UForeverBuildingFrameworkComponent* GetBuildingFramework() const { return buildingFramework; }
+
+	// BeginPlay的世界生成流程是否已经全部结束(game_start已广播完/读档的玩家与世界物品已恢复)。
+	// 开局黑屏(UForeverFadeWidget)用它判断世界是否就绪。
+	FORCEINLINE bool IsInitialGenerationDone() const { return bInitialGenerationDone; }
 	FORCEINLINE UForeverPopulaceFrameworkComponent* GetPopulaceFramework() const { return populaceFramework; }
 	FORCEINLINE UForeverRoadnetFrameworkComponent* GetRoadnetFramework() const { return roadnetFramework; }
 	FORCEINLINE UForeverRoomFrameworkComponent* GetRoomFramework() const { return roomFramework; }

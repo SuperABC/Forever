@@ -124,6 +124,10 @@ public:
 	// ABuildingElement::Tick）在"世界静止"期间依然能照常排空。
 	void RequestFreezeUntilLodSettled();
 
+	// 世界是否"视觉稳定"：没有处于RequestFreezeUntilLodSettled的冻结中，且没有building还在切换LOD。
+	// 供开局黑屏(UForeverFadeWidget)判断什么时候可以渐隐。
+	bool IsLodSettled() const { return !bFrozenForLod && pendingLodTransitionCount <= 0; }
+
 	// 供ABuildingElement在自己的Tick里transitionPending置true/false时同步调用，维护一个
 	// 全局"还有多少栋building正在切换LOD"的计数——不需要框架组件反过来遍历所有Element逐个
 	// 查询transitionPending，O(1)。

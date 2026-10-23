@@ -28,6 +28,7 @@
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "UI/PuzzleWidget.h"
+#include "UI/ForeverFadeSubsystem.h"
 
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -255,7 +256,13 @@ bool UForeverSaveSubsystem::RequestLoad(const FString& Path, FString& OutError) 
 	// 3) 通过：登记读档请求，重新进入World关卡(菜单和游戏内加载走同一条路径)。
 	pendingLoad = load;
 	if (gameInstance) {
-		UGameplayStatics::OpenLevel(gameInstance, FName(TEXT("/Game/Levels/World.World")));
+		// 先变黑再进World(OpenLevel要同步加载很久，期间画面不刷新)，见UForeverFadeSubsystem。
+		if (UForeverFadeSubsystem* fade = gameInstance->GetSubsystem<UForeverFadeSubsystem>()) {
+			fade->OpenWorldLevel();
+		}
+		else {
+			UGameplayStatics::OpenLevel(gameInstance, FName(TEXT("/Game/Levels/World.World")));
+		}
 	}
 	return true;
 }

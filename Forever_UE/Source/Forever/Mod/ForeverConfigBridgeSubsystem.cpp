@@ -2,6 +2,7 @@
 
 #include "ForeverModSubsystem.h"
 #include "ForeverDialogUtils.h"
+#include "UI/ForeverFadeSubsystem.h"
 
 #include "common/config.h"
 #include "story/script.h"
@@ -165,7 +166,13 @@ bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMess
 		if (UForeverModSubsystem* modSubsystem = gameInstance->GetSubsystem<UForeverModSubsystem>()) {
 			modSubsystem->EnsureModsRegistered();
 		}
-		UGameplayStatics::OpenLevel(gameInstance, FName(TEXT("/Game/Levels/World.World")));
+		// 先变黑再进World(OpenLevel要同步加载很久，期间画面不刷新)，见UForeverFadeSubsystem。
+		if (UForeverFadeSubsystem* fade = gameInstance->GetSubsystem<UForeverFadeSubsystem>()) {
+			fade->OpenWorldLevel();
+		}
+		else {
+			UGameplayStatics::OpenLevel(gameInstance, FName(TEXT("/Game/Levels/World.World")));
+		}
 	}
 
 	return true;

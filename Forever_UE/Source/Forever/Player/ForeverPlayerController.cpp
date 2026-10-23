@@ -16,6 +16,8 @@
 #include "UI/MapWidget.h"
 #include "UI/ForeverPausePanelWidget.h"
 #include "UI/ForeverThrowListWidget.h"
+#include "UI/ForeverFadeSubsystem.h"
+#include "UI/ForeverFadeWidget.h"
 #include "Player/ForeverIdentifyComponent.h"
 
 AForeverPlayerController::AForeverPlayerController() {
@@ -24,6 +26,17 @@ AForeverPlayerController::AForeverPlayerController() {
 
 void AForeverPlayerController::BeginPlay() {
 	Super::BeginPlay();
+	InitializeOnce();
+}
+
+void AForeverPlayerController::InitializeOnce() {
+	// 打包版里AForeverFrameworkActor::BeginPlay(含game_start广播)先于这个Controller的BeginPlay执行，
+	// game_start里的start_puzzle/对话等要用这里创建的Widget、并设置UI Only输入——如果等到本Controller
+	// 的BeginPlay才创建，Widget还是空的(start_puzzle被静默跳过)，而且下面的"输入模式重置成Game Only"
+	// 还会盖掉谜题刚设的UI Only。所以初始化提到一个幂等函数里，FrameworkActor在生成世界之前先调一次，
+	// BeginPlay里再调一次(已经初始化过就什么都不做)。
+	if (bInitialized) return;
+	bInitialized = true;
 
 	// 显式把输入模式设回Game Only+隐藏鼠标指针——不能假设这是空白状态:游戏启动配置界面
 	// (Menu关卡的AForeverMenuController::BeginPlay())会把输入模式设成UI Only+显示鼠标
@@ -121,6 +134,18 @@ void AForeverPlayerController::BeginPlay() {
 	}
 	else if ((throwListWidget = CreateWidget<UForeverThrowListWidget>(this, throwListWidgetClass)) != nullptr) {
 		throwListWidget->AddToViewport(5);
+	}
+
+	// 开局黑屏由GameInstance上的UForeverFadeSubsystem持有(跨关卡)：从菜单按下开始/加载按钮时已经
+	// 变黑并一直盖到这里；这里登记类并保证黑着(编辑器里直接PIE在World.umap上时补一个)。
+	if (UGameInstance* gameInstance = GetGameInstance()) {
+		if (UForeverFadeSubsystem* fade = gameInstance->GetSubsystem<UForeverFadeSubsystem>()) {
+			if (fadeWidgetClass == nullptr) {
+				UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: fadeWidgetClass未设置,可能没有开局黑屏。"));
+			}
+			fade->RegisterWidgetClass(fadeWidgetClass);
+			fade->EnsureBlack();
+		}
 	}
 }
 

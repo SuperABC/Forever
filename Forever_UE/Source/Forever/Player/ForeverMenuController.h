@@ -5,6 +5,7 @@
 #include "ForeverMenuController.generated.h"
 
 class UUserWidget;
+class UForeverFadeWidget;
 
 UCLASS()
 class FOREVER_API AForeverMenuController : public APlayerController
@@ -16,4 +17,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> startMenuWidgetClass;
+
+	// 开局黑屏的类，只登记给UForeverFadeSubsystem：按下开始/加载按钮的那一刻就要变黑(OpenLevel要
+	// 同步加载很久)，所以Menu关卡也要登记。WBP_Fade在BP_ForeverMenuController的类默认值里指定。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UForeverFadeWidget> fadeWidgetClass;
 };

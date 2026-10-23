@@ -37,6 +37,7 @@
 
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
+#include "Player/ForeverPlayerController.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -140,6 +141,13 @@ void AForeverFrameworkActor::BeginPlay()
 
 	Registry::Get().RefreshMods();
 
+	// 先让玩家Controller初始化好(创建Widget、重置输入模式)：打包版里本BeginPlay先于Controller的
+	// BeginPlay，而下面game_start广播里的start_puzzle/对话要用这些Widget，见
+	// AForeverPlayerController::InitializeOnce。
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		playerController->InitializeOnce();
+	}
+
 	// 读档：各个域在各自的Ensure*Generated里按存档恢复；较早的存档缺哪一段，那个域就照新开局
 	// 生成(见Core/common/save.md"版本号"一节的required)。mod集合已经在RequestLoad里按存档设好了。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
@@ -189,6 +197,8 @@ void AForeverFrameworkActor::BeginPlay()
 			if (assetFramework) assetFramework->RestoreWorldAssets();
 		}
 
+		// 到这里game_start已广播完(新游戏)/玩家与世界物品已恢复(读档)，开局黑屏据此判断可以渐隐。
+		bInitialGenerationDone = true;
 	}
 	catch (const ExceptionBase& e) {
 		UE_LOG(LogTemp, Error, TEXT("生成世界时发生致命错误，拒绝继续，退出游戏：%s"),
