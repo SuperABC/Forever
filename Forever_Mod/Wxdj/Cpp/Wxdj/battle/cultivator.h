@@ -28,6 +28,11 @@ public:
 	// 获取真气量
 	int GetCurrentMP() const;
 
+	// 获取初始(上限)健康值/武力值/真气量
+	int GetMaxHP() const;
+	int GetMaxATK() const;
+	int GetMaxMP() const;
+
 	// 获取已积攒的真气炸弹能量(释放前一直保留)
 	int GetBomb() const;
 

@@ -123,10 +123,12 @@ public:
 	void HitFail(int subject, bool log = true);
 
 	// 造成纯武力值伤害
+	// defendAttribute是受击一方这一招的属性(没有出招时取无属性)，物理效果按它取"转换成物理伤害的比例"
 	void TakeDamage(int subject, int object,
 		std::vector<std::shared_ptr<Effect>> offend,
 		std::vector<std::shared_ptr<Effect>> defend,
-		ATTRIBUTE_TYPE attribute, int amount, bool log = true);
+		ATTRIBUTE_TYPE attribute, int amount, bool log = true,
+		ATTRIBUTE_TYPE defendAttribute = ATTRIBUTE_NONE);
 
 	// 造成伤害武力值/物理伤害
 	void TakeDamage(int subject, int object,

@@ -90,6 +90,7 @@
   <ItemGroup>
     <ClCompile Include="mod_wxdj.cpp" />
     <ClCompile Include="puzzle_wxdj.cpp" />
+    <ClCompile Include="battle\ai.cpp" />
     <ClCompile Include="battle\action.cpp" />
     <ClCompile Include="battle\controller.cpp" />
     <ClCompile Include="battle\cultivator.cpp" />
@@ -99,6 +100,7 @@
     <ClInclude Include="building_wxdj.h" />
     <ClInclude Include="puzzle_wxdj.h" />
     <ClInclude Include="battle\def.h" />
+    <ClInclude Include="battle\ai.h" />
     <ClInclude Include="battle\action.h" />
     <ClInclude Include="battle\controller.h" />
     <ClInclude Include="battle\cultivator.h" />

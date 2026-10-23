@@ -26,7 +26,25 @@ void Effect::SetMiss() {
 }
 
 PhysicalEffect::PhysicalEffect() : Effect(EFFECT_PHYSICAL) {
+	for (int attribute = ATTRIBUTE_NONE; attribute <= ATTRIBUTE_ALL; ++attribute) {
+		ratios[static_cast<ATTRIBUTE_TYPE>(attribute)] = 1.0f;
+	}
+}
 
+PhysicalEffect::PhysicalEffect(float none, float metal, float wood, float water, float fire, float earth, float all) :
+	Effect(EFFECT_PHYSICAL) {
+	if (none > 0) ratios[ATTRIBUTE_NONE] = none;
+	if (metal > 0) ratios[ATTRIBUTE_METAL] = metal;
+	if (wood > 0) ratios[ATTRIBUTE_WOOD] = wood;
+	if (water > 0) ratios[ATTRIBUTE_WATER] = water;
+	if (fire > 0) ratios[ATTRIBUTE_FIRE] = fire;
+	if (earth > 0) ratios[ATTRIBUTE_EARTH] = earth;
+	if (all > 0) ratios[ATTRIBUTE_ALL] = all;
+}
+
+float PhysicalEffect::GetRatio(ATTRIBUTE_TYPE attribute) const {
+	auto it = ratios.find(attribute);
+	return (it != ratios.end()) ? it->second : 0.0f;
 }
 
 PhysicalEffect::~PhysicalEffect() {
@@ -147,6 +165,14 @@ int DotEffect::DotContinuous() const {
 	return continuousDot;
 }
 
+int DotEffect::DotRounds() const {
+	return dotRounds;
+}
+
+int DotEffect::DotInterval() const {
+	return dotInterval;
+}
+
 int DotEffect::DotOnce() {
 	currentRound++;
 	if (currentRound >= dotInterval && dotRounds > 0) {
@@ -181,6 +207,14 @@ int RebateEffect::RebateInstant() const {
 
 int RebateEffect::RebateContinuous() const {
 	return continuousRebate;
+}
+
+int RebateEffect::RebateRounds() const {
+	return rebateRounds;
+}
+
+int RebateEffect::RebateInterval() const {
+	return rebateInterval;
 }
 
 int RebateEffect::RebateOnce() {
@@ -219,6 +253,14 @@ int RecoverEffect::RecoverContinuous() const {
 	return continuousRecover;
 }
 
+int RecoverEffect::RecoverRounds() const {
+	return recoverRounds;
+}
+
+int RecoverEffect::RecoverInterval() const {
+	return recoverInterval;
+}
+
 int RecoverEffect::RecoverOnce() {
 	currentRound++;
 	if (currentRound >= recoverInterval && recoverRounds > 0) {
@@ -253,6 +295,14 @@ int CureEffect::CureInstant() const {
 
 int CureEffect::CureContinuous() const {
 	return continuousCure;
+}
+
+int CureEffect::CureRounds() const {
+	return cureRounds;
+}
+
+int CureEffect::CureInterval() const {
+	return cureInterval;
 }
 
 int CureEffect::CureOnce() {

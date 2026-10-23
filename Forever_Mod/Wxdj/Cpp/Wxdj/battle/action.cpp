@@ -128,8 +128,8 @@ DualAction::DualAction(shared_ptr<SingleAction> a1, shared_ptr<SingleAction> a2)
 	: action1(a1), action2(a2),
 	Action(ACTION_DUAL,
 		DUAL_ATTRIBUTE_PRIMARY.at({ a1->GetAttribute(), a2->GetAttribute() }),
-		static_cast<int>(0.75 * (a1->GetPoint() + a2->GetPoint())),
-		static_cast<int>(1.2 * (a1->GetPower() + a2->GetPower())),
+		static_cast<int>(DUAL_COST_FACTOR * (a1->GetPoint() + a2->GetPoint())),
+		static_cast<int>(DUAL_POWER_FACTOR * (a1->GetPower() + a2->GetPower())),
 		{}) {
 	effects.insert(effects.end(), a1->effects.begin(), a1->effects.end());
 	effects.insert(effects.end(), a2->effects.begin(), a2->effects.end());

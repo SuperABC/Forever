@@ -12,6 +12,16 @@
 
 namespace wxdj {
 
+// ---- 平衡系数(数值依据见battle.md"数值平衡"一节，改动前先看那里) ----
+// 双招：真气消耗 = DUAL_COST_FACTOR * (两招消耗之和)，威力 = DUAL_POWER_FACTOR * (两招威力之和)。
+inline constexpr double DUAL_COST_FACTOR = 1.0;
+inline constexpr double DUAL_POWER_FACTOR = 0.6;
+// 积攒真气炸弹：当前真气的这一部分转成炸弹能量，剩下的留作真气。
+inline constexpr float ACCUMULATE_FRACTION = 0.5f;
+// 释放真气炸弹：命中未正面应对的对手时，对手受到 能量*BOMB_HIT_FACTOR*(闪避修正)，自己反噬 能量*BOMB_BACKFIRE_FACTOR*(...)。
+inline constexpr float BOMB_HIT_FACTOR = 0.75f;
+inline constexpr float BOMB_BACKFIRE_FACTOR = 0.3f;
+
 // 五行属性枚举
 enum ATTRIBUTE_TYPE {
 	ATTRIBUTE_NONE, // 无属性

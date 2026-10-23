@@ -31,8 +31,17 @@ private:
 // 物理伤害效果，命中扣除生命值而非武力值
 class PhysicalEffect : public Effect {
 public:
+	// 全部属性都100%转换成物理伤害(真气炸弹用)
 	PhysicalEffect();
+	// 按对方属性分别指定"有多少比例的伤害转换成物理伤害"，剩余部分仍是招式(武力)伤害
+	PhysicalEffect(float none, float metal, float wood, float water, float fire, float earth, float all);
 	virtual ~PhysicalEffect();
+
+	// 对方这一招属性为attribute时，转换成物理伤害的比例
+	float GetRatio(ATTRIBUTE_TYPE attribute) const;
+
+private:
+	std::unordered_map<ATTRIBUTE_TYPE, float> ratios;
 };
 
 // 穿透效果，按不同属性对应比例造成额外伤害
@@ -104,6 +113,8 @@ public:
 	bool NeedHit() const;
 	int DotInstant() const;
 	int DotContinuous() const;
+	int DotRounds() const;
+	int DotInterval() const;
 	int DotOnce();
 	bool UseUp() const;
 
@@ -125,6 +136,8 @@ public:
 	bool NeedHit() const;
 	int RebateInstant() const;
 	int RebateContinuous() const;
+	int RebateRounds() const;
+	int RebateInterval() const;
 	int RebateOnce();
 	bool UseUp() const;
 
@@ -146,6 +159,8 @@ public:
 	bool NeedHit() const;
 	int RecoverInstant() const;
 	int RecoverContinuous() const;
+	int RecoverRounds() const;
+	int RecoverInterval() const;
 	int RecoverOnce();
 	bool UseUp() const;
 
@@ -167,6 +182,8 @@ public:
 	bool NeedHit() const;
 	int CureInstant() const;
 	int CureContinuous() const;
+	int CureRounds() const;
+	int CureInterval() const;
 	int CureOnce();
 	bool UseUp() const;
 

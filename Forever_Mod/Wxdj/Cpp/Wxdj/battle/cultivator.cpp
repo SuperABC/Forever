@@ -34,6 +34,18 @@ int Cultivator::GetCurrentMP() const {
 	return currentMP;
 }
 
+int Cultivator::GetMaxHP() const {
+	return maxHP;
+}
+
+int Cultivator::GetMaxATK() const {
+	return maxATK;
+}
+
+int Cultivator::GetMaxMP() const {
+	return maxMP;
+}
+
 int Cultivator::GetBomb() const {
 	return bomb;
 }
@@ -69,10 +81,20 @@ shared_ptr<Action> Cultivator::GetAction(string name) {
 	return make_shared<SkipAction>();
 }
 
+// 双招的两招必须同式：招式名是"家族名+第X式"，比较"第X式"部分；名字里没有"第"的招式不受限制。
+// 否则可以拿高式招式搭配低式的其它属性招式，便宜地改变高式招式的属性。
+static bool SameForm(const SingleAction& a, const SingleAction& b) {
+	string name1 = a.GetName(), name2 = b.GetName();
+	size_t pos1 = name1.find("第"), pos2 = name2.find("第");
+	if (pos1 == string::npos || pos2 == string::npos) return true;
+	return name1.substr(pos1) == name2.substr(pos2);
+}
+
 shared_ptr<Action> Cultivator::GetAction(int idx1, int idx2) {
 	if (idx1 < 0 || idx1 >= static_cast<int>(actions.size()) ||
 		idx2 < 0 || idx2 >= static_cast<int>(actions.size()))
 		return make_shared<SkipAction>();
+	if (!SameForm(actions[idx1], actions[idx2])) return make_shared<SkipAction>();
 	auto a1 = make_shared<SingleAction>(actions[idx1]);
 	auto a2 = make_shared<SingleAction>(actions[idx2]);
 	return make_shared<DualAction>(a1, a2);
@@ -84,7 +106,7 @@ shared_ptr<Action> Cultivator::GetAction(string name1, string name2) {
 		if (action.GetName() == name1) a1 = make_shared<SingleAction>(action);
 		if (action.GetName() == name2) a2 = make_shared<SingleAction>(action);
 	}
-	if (a1 && a2) return make_shared<DualAction>(a1, a2);
+	if (a1 && a2 && SameForm(*a1, *a2)) return make_shared<DualAction>(a1, a2);
 	return make_shared<SkipAction>();
 }
 
@@ -161,8 +183,8 @@ void Cultivator::UpdateRealm() {
 }
 
 void Cultivator::AccumulatePower() {
-	bomb += static_cast<int>(0.4f * currentMP);
-	currentMP = static_cast<int>(currentMP * 0.6f);
+	bomb += static_cast<int>(ACCUMULATE_FRACTION * currentMP);
+	currentMP = static_cast<int>(currentMP * (1.0f - ACCUMULATE_FRACTION));
 }
 
 int Cultivator::BombPower() {
@@ -239,6 +261,10 @@ shared_ptr<Effect> Cultivator::ParseEffect(const string& effectLine) {
 	iss >> effectType;
 
 	if (effectType == "physical") {
+		// 带7个比例(对方属性：无/金/木/水/火/土/五行)，不带参数时等价于全部100%
+		float none, metal, wood, water, fire, earth, all;
+		if (iss >> none >> metal >> wood >> water >> fire >> earth >> all)
+			return make_shared<PhysicalEffect>(none, metal, wood, water, fire, earth, all);
 		return make_shared<PhysicalEffect>();
 	}
 	else if (effectType == "penetrate") {

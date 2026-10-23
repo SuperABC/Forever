@@ -4,17 +4,28 @@
 #include "common/utility.h"
 
 #include "battle/action.h"
+#include "battle/ai.h"
 #include "battle/controller.h"
 #include "battle/cultivator.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <functional>
+#include <iomanip>
 #include <sstream>
 
 #pragma comment(lib, "Dependence.lib")
 
 #define MAX_LOG_LINES 200
 #define ACTION_FILE_NAME "xiaohua.txt"
+#define POLICY_FILE_NAME "ai_policy.txt"
+
+// 双方的标准初始属性(4-6阶位)，见battle/battle.md的"标准初始属性"
+#define STANDARD_HP 25800
+#define STANDARD_ATK 38900
+#define STANDARD_MP 24800
+#define STANDARD_RECOVER 619
 
 
 using namespace std;
@@ -43,11 +54,6 @@ void WxdjPuzzle::OnCanvasResize(void* userData, int width, int height) {
 	self->ClampScroll();
 }
 
-// 双招的真气消耗，和DualAction构造函数里的公式一致(取整方式也一致)。
-static int DualCost(int point1, int point2) {
-	return static_cast<int>(0.75 * (point1 + point2));
-}
-
 void WxdjPuzzle::ComputeLayout() {
 	margin = max(8, canvasW / 50);
 	statusBarH = max(90, canvasH / 5);
@@ -69,7 +75,8 @@ void WxdjPuzzle::ComputeLayout() {
 
 	modeRow = { actionPanel.x1, bodyTop, actionPanel.x2, bodyTop + btnH };
 	opRow = { actionPanel.x1, modeRow.y2 + gap, actionPanel.x2, modeRow.y2 + gap + btnH };
-	hintRect = { actionPanel.x1, opRow.y2 + gap, actionPanel.x2, opRow.y2 + gap + hintH };
+	sliderRow = { actionPanel.x1, opRow.y2 + gap, actionPanel.x2, opRow.y2 + gap + rowH };
+	hintRect = { actionPanel.x1, sliderRow.y2 + gap, actionPanel.x2, sliderRow.y2 + gap + hintH };
 	listRect = { actionPanel.x1, hintRect.y2 + gap, actionPanel.x2, max(hintRect.y2 + gap + rowH, bodyBottom) };
 	trackRect = { actionPanel.x2 - scrollBarW, listRect.y1, actionPanel.x2, listRect.y2 };
 
@@ -77,20 +84,20 @@ void WxdjPuzzle::ComputeLayout() {
 }
 
 void WxdjPuzzle::ClampScroll() {
-	int rowCount = player ? static_cast<int>(player->GetActions().size()) : 0;
+	int rowCount = RowCount();
 	int maxOffset = max(0, rowCount - visibleRows);
 	scrollOffset = max(0, min(scrollOffset, maxOffset));
 }
 
 int WxdjPuzzle::ThumbHeight() const {
-	int rowCount = player ? static_cast<int>(player->GetActions().size()) : 0;
+	int rowCount = RowCount();
 	int trackH = trackRect.y2 - trackRect.y1;
 	if (rowCount <= visibleRows) return trackH;
 	return min(trackH, max(20, trackH * visibleRows / rowCount));
 }
 
 int WxdjPuzzle::ThumbTop() const {
-	int rowCount = player ? static_cast<int>(player->GetActions().size()) : 0;
+	int rowCount = RowCount();
 	int maxOffset = max(0, rowCount - visibleRows);
 	int travel = (trackRect.y2 - trackRect.y1) - ThumbHeight();
 	if (maxOffset <= 0 || travel <= 0) return trackRect.y1;
@@ -103,7 +110,7 @@ void WxdjPuzzle::BeginScrollDrag(int mouseY) {
 }
 
 void WxdjPuzzle::UpdateScrollDrag(int mouseY) {
-	int rowCount = player ? static_cast<int>(player->GetActions().size()) : 0;
+	int rowCount = RowCount();
 	int maxOffset = max(0, rowCount - visibleRows);
 	int travel = (trackRect.y2 - trackRect.y1) - ThumbHeight();
 	if (maxOffset <= 0 || travel <= 0) return;
@@ -114,21 +121,62 @@ void WxdjPuzzle::UpdateScrollDrag(int mouseY) {
 	scrollOffset = static_cast<int>(max<int64_t>(0, min<int64_t>(offset, maxOffset)));
 }
 
-bool WxdjPuzzle::RowEnabled(int actionIdx) const {
-	if (!player) return false;
+int WxdjPuzzle::RowCount() const {
+	return static_cast<int>(families.size());
+}
+
+int WxdjPuzzle::ActionIndexOf(int familyIdx) const {
+	return families[familyIdx].firstAction + min(selectedForm, families[familyIdx].formCount - 1);
+}
+
+void WxdjPuzzle::BuildFamilies() {
+	families.clear();
+	selectedForm = 0;
+	formMax = 1;
+	if (!player) return;
+
 	const auto& actions = player->GetActions();
-	if (actionIdx < 0 || actionIdx >= static_cast<int>(actions.size())) return false;
+	for (int i = 0; i < static_cast<int>(actions.size()); ++i) {
+		// 招式名是"家族名+第X式"
+		string name = actions[i].GetName();
+		size_t pos = name.find("第");
+		string familyName = pos == string::npos ? name : name.substr(0, pos);
+		if (!families.empty() && families.back().name == familyName) {
+			++families.back().formCount;
+		}
+		else {
+			Family family;
+			family.name = familyName;
+			family.firstAction = i;
+			family.formCount = 1;
+			families.push_back(family);
+		}
+	}
+	// 滑块默认停在最高式
+	formMax = families.empty() ? 1 : families[0].formCount;
+	for (const auto& family : families) formMax = min(formMax, family.formCount);
+	selectedForm = formMax - 1;
+}
 
-	int point = actions[actionIdx].GetPoint();
-	int mp = player->GetCurrentMP();
-	if (mode == MODE_SINGLE) return point <= mp;
+void WxdjPuzzle::SliderTrack(const Widget& widget, int& x1, int& x2) const {
+	x1 = widget.x1 + rowH * 2 + 8;
+	x2 = widget.x2 - 8;
+}
 
-	if (firstPick >= 0) return DualCost(actions[firstPick].GetPoint(), point) <= mp;
+void WxdjPuzzle::SetSliderFromMouse(int mouseX) {
+	const Widget* widget = FindWidget(ID_SLIDER);
+	if (!widget || !widget->enabled) return;
+	int steps = formMax - 1;
+	int x1, x2;
+	SliderTrack(*widget, x1, x2);
+	if (steps <= 0 || x2 <= x1) return;
+	int64_t value = (static_cast<int64_t>(mouseX - x1) * steps + (x2 - x1) / 2) / (x2 - x1);
+	selectedForm = static_cast<int>(max<int64_t>(0, min<int64_t>(value, steps)));
+}
 
-	// 还没选第一招：只要它配上最便宜的一招付得起就算可选
-	int cheapest = point;
-	for (const auto& action : actions) cheapest = min(cheapest, action.GetPoint());
-	return DualCost(point, cheapest) <= mp;
+bool WxdjPuzzle::RowEnabled(int familyIdx) const {
+	// 真气不够也能出招(透支)：不足的真气由规则层按2倍扣武力值(Cultivator::ConsumeMP)，所以不因真气置灰
+	return player && familyIdx >= 0 && familyIdx < RowCount();
 }
 
 void WxdjPuzzle::RebuildWidgets() {
@@ -163,8 +211,11 @@ void WxdjPuzzle::RebuildWidgets() {
 		player && player->GetBomb() > 0);
 	add(ID_SKIP, opRow.x2 - thirdW, opRow.y1, opRow.x2, opRow.y2, true);
 
-	// 招式list：只生成当前可见的行
-	int rowCount = player ? static_cast<int>(player->GetActions().size()) : 0;
+	// 统一的"第几式"滑块：双招选了第一招之后锁定，直到第二招出完，保证双招两招同式
+	add(ID_SLIDER, sliderRow.x1, sliderRow.y1, sliderRow.x2, sliderRow.y2, firstPick < 0);
+
+	// 招式家族list：每行一个家族按钮；只生成当前可见的行
+	int rowCount = RowCount();
 	bool scrollable = rowCount > visibleRows;
 	int rowRight = scrollable ? trackRect.x1 - gap / 2 : listRect.x2;
 	for (int r = 0; r < visibleRows; ++r) {
@@ -197,6 +248,7 @@ const WxdjPuzzle::Widget* WxdjPuzzle::FindWidget(int widgetId) const {
 
 void WxdjPuzzle::SubmitPlayerAction(shared_ptr<Action> playerAction) {
 	firstPick = -1;
+	firstPickFamily = -1;
 	ResolveTurn(playerAction);
 }
 
@@ -211,6 +263,7 @@ void WxdjPuzzle::Activate(int widgetId) {
 		// 切换模式(含重复点击当前模式)都会取消已选的第一招
 		mode = (widgetId == ID_MODE_SINGLE) ? MODE_SINGLE : MODE_DUAL;
 		firstPick = -1;
+		firstPickFamily = -1;
 	}
 	else if (widgetId == ID_ACCUMULATE) {
 		SubmitPlayerAction(make_shared<AccumulateAction>());
@@ -222,12 +275,15 @@ void WxdjPuzzle::Activate(int widgetId) {
 		SubmitPlayerAction(make_shared<SkipAction>());
 	}
 	else if (widgetId >= ID_ROW_BASE) {
-		int idx = widgetId - ID_ROW_BASE;
+		// 按统一滑块当前选的那一式出招
+		int family = widgetId - ID_ROW_BASE;
+		int idx = ActionIndexOf(family);
 		if (mode == MODE_SINGLE) {
 			SubmitPlayerAction(player->GetAction(idx));
 		}
 		else if (firstPick < 0) {
 			firstPick = idx;
+			firstPickFamily = family;
 		}
 		else {
 			SubmitPlayerAction(player->GetAction(firstPick, idx));
@@ -243,6 +299,15 @@ string WxdjPuzzle::FormatLog(const Log& log) const {
 	};
 	auto cultivatorOf = [&](int idx) -> const shared_ptr<Cultivator>& {
 		return idx == 0 ? player : enemy;
+	};
+
+	// 伤害文本：武力伤害和物理伤害可能同时存在(物理效果只转换一部分伤害)
+	auto damageText = [&](const char* kind) -> string {
+		ostringstream text;
+		if (log.pointAtk > 0) text << Action::attributeText[log.attribute] << log.pointAtk << "点" << kind << "武力伤害";
+		if (log.pointAtk > 0 && log.pointHp > 0) text << "和";
+		if (log.pointHp > 0 || log.pointAtk <= 0) text << log.pointHp << "点" << kind << "物理伤害";
+		return text.str();
 	};
 
 	ostringstream oss;
@@ -267,9 +332,7 @@ string WxdjPuzzle::FormatLog(const Log& log) const {
 			<< "出招：" << log.name << "，点数" << log.pointAtk;
 		break;
 	case LOG_DAMAGE:
-		oss << nameOf(log.subject) << "对" << nameOf(log.object) << "造成";
-		if (log.pointAtk > 0) oss << Action::attributeText[log.attribute] << log.pointAtk << "点招式武力伤害";
-		else oss << log.pointHp << "点招式物理伤害";
+		oss << nameOf(log.subject) << "对" << nameOf(log.object) << "造成" << damageText("招式");
 		break;
 	case LOG_DODGE:
 		oss << nameOf(log.object) << "闪避成功";
@@ -280,14 +343,10 @@ string WxdjPuzzle::FormatLog(const Log& log) const {
 	case LOG_EFFECT:
 		switch (log.effect) {
 		case EFFECT_PENETRATE:
-			oss << nameOf(log.subject) << "对" << nameOf(log.object) << "造成";
-			if (log.pointAtk > 0) oss << Action::attributeText[log.attribute] << log.pointAtk << "点穿透武力伤害";
-			else oss << log.pointHp << "点穿透物理伤害";
+			oss << nameOf(log.subject) << "对" << nameOf(log.object) << "造成" << damageText("穿透");
 			break;
 		case EFFECT_REBOUND:
-			oss << nameOf(log.subject) << "对" << nameOf(log.object) << "造成";
-			if (log.pointAtk > 0) oss << Action::attributeText[log.attribute] << log.pointAtk << "点反弹武力伤害";
-			else oss << log.pointHp << "点反弹物理伤害";
+			oss << nameOf(log.subject) << "对" << nameOf(log.object) << "造成" << damageText("反弹");
 			break;
 		case EFFECT_ABSORB:
 			oss << nameOf(log.subject) << "吸收" << log.amount << "点真气";
@@ -340,7 +399,8 @@ void WxdjPuzzle::ResolveTurn(shared_ptr<Action> playerAction) {
 	// 敌方AI：3/4概率出单招(下标范围ac+6含积攒/炸弹等特殊选项)，1/4概率出双招
 	int ac = static_cast<int>(enemy->GetActions().size());
 	shared_ptr<Action> enemyAction;
-	if (GetRandom(4)) enemyAction = enemy->GetAction(GetRandom(ac + 6));
+	if (enemyAI) enemyAction = enemyAI->Choose(*enemy, *player, enemyFamilyActions);
+	else if (GetRandom(4)) enemyAction = enemy->GetAction(GetRandom(ac + 6));
 	else enemyAction = enemy->GetAction(GetRandom(ac), GetRandom(ac));
 
 	// pair的第二个字段是该招式指向的对手下标：玩家(0)出招指向敌人(1)，敌人(1)出招指向玩家(0)
@@ -350,6 +410,7 @@ void WxdjPuzzle::ResolveTurn(shared_ptr<Action> playerAction) {
 	AppendNews();
 	controller->EndTurn();
 	AppendNews();
+	if (enemyAI) enemyAI->Observe(*playerAction);
 
 	if (!player->IsAlive()) {
 		// 玩家阵亡(含同归于尽)都判定为失败
@@ -380,15 +441,21 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	pendingResult = 0;
 	mode = MODE_SINGLE;
 	firstPick = -1;
+	firstPickFamily = -1;
 	scrollOffset = 0;
 	hoverId = ID_NONE;
 	pressedId = ID_NONE;
 	dragging = false;
+	sliderDragging = false;
+	families.clear();
+	selectedForm = 0;
 	logLines.clear();
 	widgets.clear();
 	player.reset();
 	enemy.reset();
 	controller.reset();
+	enemyAI.reset();
+	enemyFamilyActions.clear();
 
 	if (!post) {
 		loadFailed = true;
@@ -406,12 +473,13 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	}
 	string actionPath = result["path"].AsString();
 
-	playerMaxHP = 1200; playerMaxATK = 1300; playerMaxMP = 1800;
-	enemyMaxHP = 1000; enemyMaxATK = 1100; enemyMaxMP = 1600;
+	playerMaxHP = enemyMaxHP = STANDARD_HP;
+	playerMaxATK = enemyMaxATK = STANDARD_ATK;
+	playerMaxMP = enemyMaxMP = STANDARD_MP;
 
 	try {
-		player = make_shared<Cultivator>("玩家", actionPath, playerMaxHP, playerMaxATK, playerMaxMP, 22, 45);
-		enemy = make_shared<Cultivator>("售货员", actionPath, enemyMaxHP, enemyMaxATK, enemyMaxMP, 20, 40);
+		player = make_shared<Cultivator>("玩家", actionPath, playerMaxHP, playerMaxATK, playerMaxMP, 22, STANDARD_RECOVER);
+		enemy = make_shared<Cultivator>("售货员", actionPath, enemyMaxHP, enemyMaxATK, enemyMaxMP, 20, STANDARD_RECOVER);
 	}
 	catch (const std::exception&) {
 		player.reset();
@@ -420,6 +488,21 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 		return;
 	}
 
+	BuildFamilies();
+
+	// 敌方策略：策略文件缺失或与招式家族数对不上就保持随机出招
+	JsonValue policyRequest(DATA_OBJECT);
+	policyRequest["post"] = "resource path";
+	policyRequest["name"] = POLICY_FILE_NAME;
+	post->Post(policyRequest);
+	const JsonValue& policyResult = post->GetResult();
+	if (policyResult["result"].AsString() == "success") {
+		auto ai = make_unique<PolicyAI>();
+		if (ai->Load(policyResult["path"].AsString(), RowCount())) {
+			for (const auto& family : families) enemyFamilyActions.push_back(family.firstAction + family.formCount - 1);
+			enemyAI = std::move(ai);
+		}
+	}
 	controller = make_unique<Controller>(vector<shared_ptr<Cultivator>>{ player, enemy });
 	roundNumber = 1;
 	AppendRoundHeader();
@@ -616,20 +699,49 @@ void WxdjPuzzle::DrawActionPanel(Canvas* canvas) {
 	// 提示行
 	string hint;
 	const auto& actions = player->GetActions();
-	if (mode == MODE_SINGLE) hint = "单招：点击招式立即出招";
+	if (mode == MODE_SINGLE) hint = "单招：点击按钮，按滑块选的式出招";
 	else if (firstPick < 0) hint = "双招：请选择第一招";
-	else hint = "双招：第一招「" + actions[firstPick].GetName() + "」，请选择第二招";
+	else hint = "双招：第一招「" + actions[firstPick].GetName() + "」，请选择第二招(同式，滑块已锁定)";
 	canvas->SetColor(230, 190, 90);
 	canvas->SetFontSize(max(12, hintH - 4));
 	canvas->PutString(hint, hintRect.x1, hintRect.y1);
 
-	// 招式list
+	// 统一的"第几式"滑块
 	int fontSize = max(12, rowH / 2);
 	canvas->SetFontSize(fontSize);
+	if (const Widget* slider = FindWidget(ID_SLIDER)) {
+		bool locked = !slider->enabled;
+		int steps = formMax - 1;
+		canvas->SetAlpha(1.f);
+		canvas->SetColor(42, 42, 54);
+		canvas->PutRect(slider->x1, slider->y1, slider->x2, slider->y2, true);
+
+		if (locked) canvas->SetColor(130, 130, 130);
+		else canvas->SetColor(230, 230, 230);
+		canvas->PutString("第" + to_string(selectedForm + 1) + "式", slider->x1 + 6,
+			slider->y1 + (slider->y2 - slider->y1 - canvas->GetFontHeight()) / 2);
+
+		int tx1, tx2;
+		SliderTrack(*slider, tx1, tx2);
+		int midY = (slider->y1 + slider->y2) / 2;
+		canvas->SetColor(90, 90, 110);
+		canvas->PutRect(tx1, midY - 2, tx2, midY + 2, true);
+
+		int thumbX = steps > 0 ? tx1 + (tx2 - tx1) * selectedForm / steps : tx1;
+		bool active = !locked && ((hoverId == ID_SLIDER && pressedId == ID_NONE) || sliderDragging);
+		if (locked) canvas->SetColor(110, 110, 120);
+		else canvas->SetColor(active ? 255 : 200, active ? 230 : 200, active ? 140 : 215);
+		canvas->PutRect(thumbX - 4, slider->y1 + 4, thumbX + 4, slider->y2 - 4, true);
+		canvas->SetColor(15, 15, 20);
+		canvas->PutRect(thumbX - 4, slider->y1 + 4, thumbX + 4, slider->y2 - 4, false);
+	}
+
+	// 招式家族list
 	for (const auto& widget : widgets) {
 		if (widget.id < ID_ROW_BASE) continue;
-		int idx = widget.id - ID_ROW_BASE;
-		const SingleAction& action = actions[idx];
+
+		int family = widget.id - ID_ROW_BASE;
+		const SingleAction& action = actions[ActionIndexOf(family)];
 
 		int ar, ag, ab;
 		AttributeColor(action.GetAttribute(), ar, ag, ab);
@@ -647,8 +759,8 @@ void WxdjPuzzle::DrawActionPanel(Canvas* canvas) {
 		canvas->SetColor(sr, sg, sb);
 		canvas->PutRect(widget.x1, widget.y1, widget.x1 + 5, widget.y2, true);
 
-		// 双招模式下已选的第一招用亮边框标出
-		bool picked = (mode == MODE_DUAL && firstPick == idx);
+		// 双招模式下已选的第一招所在家族用亮边框标出
+		bool picked = (mode == MODE_DUAL && firstPickFamily == family);
 		canvas->SetColor(picked ? 255 : 15, picked ? 230 : 15, picked ? 120 : 20);
 		canvas->PutRect(widget.x1, widget.y1, widget.x2, widget.y2, false);
 		if (picked) canvas->PutRect(widget.x1 + 1, widget.y1 + 1, widget.x2 - 1, widget.y2 - 1, false);
@@ -656,13 +768,168 @@ void WxdjPuzzle::DrawActionPanel(Canvas* canvas) {
 		if (widget.enabled) canvas->SetColor(255, 255, 255);
 		else canvas->SetColor(150, 150, 150);
 		int textY = widget.y1 + (widget.y2 - widget.y1 - canvas->GetFontHeight()) / 2;
-		canvas->PutString(action.GetName(), widget.x1 + 12, textY);
+		canvas->PutString(families[family].name, widget.x1 + 12, textY);
 
-		string cost = "真气" + to_string(action.GetPoint()) + "  威力" + to_string(action.GetPower());
+		string cost = to_string(action.GetPoint()) + "/" + to_string(action.GetPower());
 		canvas->PutString(cost, widget.x2 - 8 - canvas->StringWidth(cost), textY);
 	}
 
 	DrawScrollBar(canvas);
+}
+
+// 比例转成"5%"这样的文字
+static string PercentText(float value) {
+	ostringstream oss;
+	oss << setprecision(3) << value * 100.f << "%";
+	return oss.str();
+}
+
+// 7个按对方招式属性区分的比例：全部相同就写一个；只有五行属性不同就分开写；其余逐个列出
+static string RatioText(const function<float(ATTRIBUTE_TYPE)>& getRatio) {
+	float v[7];
+	for (int i = 0; i < 7; ++i) v[i] = getRatio(static_cast<ATTRIBUTE_TYPE>(i));
+
+	auto same = [&](int from, int to) {
+		for (int i = from + 1; i <= to; ++i) {
+			if (fabsf(v[i] - v[from]) > 1e-6f) return false;
+		}
+		return true;
+	};
+	if (same(0, 6)) return PercentText(v[0]);
+	if (same(0, 5)) return PercentText(v[0]) + "，对方为五行属性时" + PercentText(v[6]);
+
+	static const char* labels[7] = { "无", "金", "木", "水", "火", "土", "五行" };
+	string text = "按对方招式属性";
+	for (int i = 0; i < 7; ++i) text += string(" ") + labels[i] + PercentText(v[i]);
+	return text;
+}
+
+// 立即效果+持续效果(每隔interval回合生效一次，共rounds次)
+static string TimedText(const char* label, int instant, int continuous, int rounds, int interval, bool needHit) {
+	ostringstream oss;
+	oss << label << "：";
+	if (needHit) oss << "命中后";
+	if (instant > 0) oss << "立即" << instant << "点";
+	if (continuous > 0 && rounds > 0) {
+		if (instant > 0) oss << "；";
+		oss << "每隔" << interval << "回合" << continuous << "点，共" << rounds << "次";
+	}
+	return oss.str();
+}
+
+vector<string> WxdjPuzzle::EffectLines(int actionIdx) const {
+	vector<string> lines;
+	if (!player || actionIdx < 0 || actionIdx >= static_cast<int>(player->GetActions().size())) return lines;
+
+	// 拷贝一份再取效果(GetEffects非const)，效果对象本身只读
+	SingleAction action = player->GetActions()[actionIdx];
+	for (const auto& effect : action.GetEffects()) {
+		switch (effect->GetType()) {
+		case EFFECT_PHYSICAL: {
+			auto e = static_pointer_cast<PhysicalEffect>(effect);
+			lines.push_back("物理：" + RatioText([&](ATTRIBUTE_TYPE a) { return e->GetRatio(a); }) + "的伤害转为物理伤害(扣健康值)");
+			break;
+		}
+		case EFFECT_PENETRATE: {
+			auto e = static_pointer_cast<PenetrateEffect>(effect);
+			lines.push_back("穿透：对撞时，按较小威力的" + RatioText([&](ATTRIBUTE_TYPE a) { return e->GetRatio(a); }) + "造成额外伤害");
+			break;
+		}
+		case EFFECT_REDUCE: {
+			auto e = static_pointer_cast<ReduceEffect>(effect);
+			lines.push_back("减伤：受到的伤害减少" + RatioText([&](ATTRIBUTE_TYPE a) { return e->GetRatio(a); }));
+			break;
+		}
+		case EFFECT_REBOUND: {
+			auto e = static_pointer_cast<ReboundEffect>(effect);
+			lines.push_back("反弹：将受到伤害的" + RatioText([&](ATTRIBUTE_TYPE a) { return e->GetRatio(a); }) + "反弹给攻击者");
+			break;
+		}
+		case EFFECT_ABSORB: {
+			auto e = static_pointer_cast<AbsorbEffect>(effect);
+			lines.push_back("吸收：将造成伤害的" + RatioText([&](ATTRIBUTE_TYPE a) { return e->GetRatio(a); }) + "转化为真气");
+			break;
+		}
+		case EFFECT_LOCK: {
+			auto e = static_pointer_cast<LockEffect>(effect);
+			lines.push_back("禁锢：" + PercentText(e->GetProb()) + "概率使对手下一回合无法行动");
+			break;
+		}
+		case EFFECT_DOT: {
+			auto e = static_pointer_cast<DotEffect>(effect);
+			lines.push_back(TimedText("持续伤害", e->DotInstant(), e->DotContinuous(), e->DotRounds(), e->DotInterval(), e->NeedHit()));
+			break;
+		}
+		case EFFECT_REBATE: {
+			auto e = static_pointer_cast<RebateEffect>(effect);
+			lines.push_back(TimedText("回复真气", e->RebateInstant(), e->RebateContinuous(), e->RebateRounds(), e->RebateInterval(), e->NeedHit()));
+			break;
+		}
+		case EFFECT_RECOVER: {
+			auto e = static_pointer_cast<RecoverEffect>(effect);
+			lines.push_back(TimedText("回复武力", e->RecoverInstant(), e->RecoverContinuous(), e->RecoverRounds(), e->RecoverInterval(), e->NeedHit()));
+			break;
+		}
+		case EFFECT_CURE: {
+			auto e = static_pointer_cast<CureEffect>(effect);
+			lines.push_back(TimedText("回复健康", e->CureInstant(), e->CureContinuous(), e->CureRounds(), e->CureInterval(), e->NeedHit()));
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	return lines;
+}
+
+void WxdjPuzzle::DrawTooltip(Canvas* canvas, int mouseX, int mouseY) {
+	if (dragging || sliderDragging) return;
+	if (hoverId < ID_ROW_BASE) return;
+
+	int family = hoverId - ID_ROW_BASE;
+	if (family >= RowCount()) return;
+	int actionIdx = ActionIndexOf(family);
+	vector<string> effectLines = EffectLines(actionIdx);
+	if (effectLines.empty()) return; // 无效果的招式不显示
+
+	int fontSize = max(12, canvasH / 45);
+	canvas->SetFontSize(fontSize);
+	int lineH = canvas->GetFontHeight();
+	int pad = 6;
+	int maxWidth = max(160, canvasW / 3);
+
+	vector<string> lines;
+	lines.push_back(player->GetActions()[actionIdx].GetName());
+	for (const auto& line : effectLines) {
+		for (const auto& wrapped : WrapText(canvas, line, maxWidth)) lines.push_back(wrapped);
+	}
+
+	int textW = 0;
+	for (const auto& line : lines) textW = max(textW, canvas->StringWidth(line));
+	int w = textW + pad * 2;
+	int h = static_cast<int>(lines.size()) * lineH + pad * 2;
+
+	// 跟随鼠标，放不下就翻到鼠标另一侧，再不行就贴边
+	int x = mouseX + 16, y = mouseY + 20;
+	if (x + w > canvasW) x = mouseX - 16 - w;
+	if (y + h > canvasH) y = mouseY - 12 - h;
+	x = max(0, min(x, canvasW - w));
+	y = max(0, min(y, canvasH - h));
+
+	canvas->SetAlpha(0.94f);
+	canvas->SetColor(20, 20, 28);
+	canvas->PutRect(x, y, x + w, y + h, true);
+	canvas->SetAlpha(1.f);
+	canvas->SetColor(200, 180, 100);
+	canvas->PutRect(x, y, x + w, y + h, false);
+
+	int lineY = y + pad;
+	for (size_t i = 0; i < lines.size(); ++i) {
+		if (i == 0) canvas->SetColor(255, 220, 120);
+		else canvas->SetColor(235, 235, 235);
+		canvas->PutString(lines[i], x + pad, lineY);
+		lineY += lineH;
+	}
 }
 
 void WxdjPuzzle::DrawResultOverlay(Canvas* canvas) {
@@ -734,16 +1001,22 @@ int WxdjPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 		if (event.down) {
 			pressedId = target;
 			if (target == ID_SCROLL_THUMB) BeginScrollDrag(event.y);
+			if (target == ID_SLIDER) {
+				const Widget* slider = FindWidget(ID_SLIDER);
+				sliderDragging = slider && slider->enabled;
+				if (sliderDragging) SetSliderFromMouse(event.x);
+			}
 		}
 		else {
 			dragging = false;
+			sliderDragging = false;
 			if (pressedId != ID_NONE && pressedId == target) {
 				if (target == ID_SCROLL_TRACK) {
 					// 点轨道空白处：往点击的方向翻一页
 					scrollOffset += (event.y < ThumbTop()) ? -visibleRows : visibleRows;
 					ClampScroll();
 				}
-				else if (target != ID_SCROLL_THUMB) {
+				else if (target != ID_SCROLL_THUMB && target != ID_SLIDER) {
 					Activate(target);
 				}
 				RebuildWidgets();
@@ -757,6 +1030,11 @@ int WxdjPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	if (!mouse.buttons[MOUSE_LEFT]) {
 		pressedId = ID_NONE;
 		dragging = false;
+		sliderDragging = false;
+	}
+	if (sliderDragging) {
+		SetSliderFromMouse(mouse.x);
+		RebuildWidgets();
 	}
 	if (dragging) {
 		UpdateScrollDrag(mouse.y);
@@ -766,5 +1044,6 @@ int WxdjPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	hoverId = HitTest(mouse.x, mouse.y);
 
 	DrawScene(canvas);
+	if (phase == PHASE_SELECT) DrawTooltip(canvas, mouse.x, mouse.y);
 	return closeRequested ? pendingResult : 0;
 }

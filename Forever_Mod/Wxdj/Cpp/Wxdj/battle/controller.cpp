@@ -134,7 +134,7 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				int amount = dynamic_pointer_cast<DotEffect>(dot)->DotInstant();
 				logs.emplace_back(i, target, amount, EFFECT_DOT);
 				TakeDamage(i, target, act->GetEffects(), actions[target].first->GetEffects(),
-					act->GetAttribute(), amount);
+					act->GetAttribute(), amount, true, actions[target].first->GetAttribute());
 				AddEffect(target, make_shared<DotEffect>(*dynamic_pointer_cast<DotEffect>(dot).get()));
 			}
 
@@ -194,11 +194,11 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				(status[j] & 0x01)) {
 				// 玩家 i 施放真气炸弹，目标 j 未正面应对，计算双方伤害
 				float powerEnemy = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? 1.0f :
-					((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * 0.8f));
+					((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_HIT_FACTOR));
 				float powerSelf = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? 1.0f :
-					((1.f / (cultivators[i]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * 0.4f));
+					((1.f / (cultivators[i]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_BACKFIRE_FACTOR));
 				TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-					act_i->GetAttribute(), (int)powerEnemy);
+					act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
 				TakeDamage(i, i, act_i->GetEffects(), act_i->GetEffects(),
 					act_i->GetAttribute(), (int)powerSelf);
 			}
@@ -206,7 +206,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				// 双方互扔真气炸弹，目标 j 受到合成伤害
 				float power = sqrtf(powf((float)act_i->GetPower(), 2.f) + powf((float)act_j->GetPower(), 2.f));
 				float powerEnemy = power * (FindReaction(EFFECT_RUST) ? 1.0f :
-					((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * 0.8f));
+					((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_HIT_FACTOR));
 				TakeDamage(j, j, act_j->GetEffects(), act_j->GetEffects(),
 					act_j->GetAttribute(), (int)powerEnemy);
 			}
@@ -215,9 +215,9 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				if (act_j->GetPower() < act_i->GetPower()) {
 					float powerEnemy = (float)(act_i->GetPower() - act_j->GetPower());
 					powerEnemy *= (FindReaction(EFFECT_RUST) ? 1.0f :
-						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * 0.8f));
+						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_HIT_FACTOR));
 					TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-						act_i->GetAttribute(), (int)powerEnemy);
+						act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
 				}
 			}
 		}
@@ -242,7 +242,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					if (hit) {
 						HitSuccess(i, j, act_i, act_j);
 						TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-							act_i->GetAttribute(), act_i->GetPower());
+							act_i->GetAttribute(), act_i->GetPower(), true, act_j->GetAttribute());
 					}
 					else {
 						HitFail(i);
@@ -255,19 +255,19 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				if (act_i->GetPower() < act_j->GetPower()) {
 					powerEnemy = (float)act_j->GetPower();
 					powerEnemy *= (FindReaction(EFFECT_RUST) ? 1.0f :
-						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * 0.4f));
+						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_BACKFIRE_FACTOR));
 					TakeDamage(j, j, act_j->GetEffects(), act_j->GetEffects(),
 						act_j->GetAttribute(), (int)powerEnemy);
 				}
 				else if (act_i->GetPower() > 2 * act_j->GetPower()) {
 					powerEnemy = (float)(act_i->GetPower() - 2 * act_j->GetPower());
 					TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-						act_i->GetAttribute(), (int)powerEnemy);
+						act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
 				}
 				else {
 					powerEnemy = (float)(2 * act_j->GetPower() - act_i->GetPower());
 					powerEnemy *= (FindReaction(EFFECT_RUST) ? 1.0f :
-						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * 0.4f));
+						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_BACKFIRE_FACTOR));
 					TakeDamage(j, j, act_j->GetEffects(), act_j->GetEffects(),
 						act_j->GetAttribute(), (int)powerEnemy);
 				}
@@ -308,18 +308,18 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 						HitSuccess(i, j, act_i, act_j);
 						HitSuccess(j, i, act_j, act_i);
 						TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-							attr1, point1 - point2);
+							attr1, point1 - point2, true, attr2);
 						if (auto effect = act_i->GetEffect(EFFECT_PENETRATE)) {
 							int pen = (int)(point2 * (dynamic_pointer_cast<PenetrateEffect>(effect)->GetRatio(attr2)));
 							logs.emplace_back(i, j, attr1, pen, 0, EFFECT_PENETRATE);
 							TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-								attr1, pen, false);
+								attr1, pen, false, attr2);
 						}
 						if (auto effect = act_j->GetEffect(EFFECT_PENETRATE)) {
 							int pen = (int)(point2 * (dynamic_pointer_cast<PenetrateEffect>(effect)->GetRatio(attr1)));
 							logs.emplace_back(j, i, attr2, pen, 0, EFFECT_PENETRATE);
 							TakeDamage(j, i, act_j->GetEffects(), act_i->GetEffects(),
-								attr2, pen, false);
+								attr2, pen, false, attr1);
 						}
 					}
 					else {
@@ -332,18 +332,18 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 						HitSuccess(i, j, act_i, act_j);
 						HitSuccess(j, i, act_j, act_i);
 						TakeDamage(j, i, act_j->GetEffects(), act_i->GetEffects(),
-							attr2, point2 - point1);
+							attr2, point2 - point1, true, attr1);
 						if (auto effect = act_i->GetEffect(EFFECT_PENETRATE)) {
 							int pen = (int)(point1 * (dynamic_pointer_cast<PenetrateEffect>(effect)->GetRatio(attr2)));
 							logs.emplace_back(i, j, attr1, pen, 0, EFFECT_PENETRATE);
 							TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-								attr1, pen, false);
+								attr1, pen, false, attr2);
 						}
 						if (auto effect = act_j->GetEffect(EFFECT_PENETRATE)) {
 							int pen = (int)(point1 * (dynamic_pointer_cast<PenetrateEffect>(effect)->GetRatio(attr1)));
 							logs.emplace_back(j, i, attr2, pen, 0, EFFECT_PENETRATE);
 							TakeDamage(j, i, act_j->GetEffects(), act_i->GetEffects(),
-								attr2, pen, false);
+								attr2, pen, false, attr1);
 						}
 					}
 					else {
@@ -359,13 +359,13 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 							int pen = (int)(point2 * (dynamic_pointer_cast<PenetrateEffect>(effect)->GetRatio(attr2)));
 							logs.emplace_back(i, j, attr1, pen, 0, EFFECT_PENETRATE);
 							TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-								attr1, pen, false);
+								attr1, pen, false, attr2);
 						}
 						if (auto effect = act_j->GetEffect(EFFECT_PENETRATE)) {
 							int pen = (int)(point1 * (dynamic_pointer_cast<PenetrateEffect>(effect)->GetRatio(attr1)));
 							logs.emplace_back(j, i, attr2, pen, 0, EFFECT_PENETRATE);
 							TakeDamage(j, i, act_j->GetEffects(), act_i->GetEffects(),
-								attr2, pen, false);
+								attr2, pen, false, attr1);
 						}
 					}
 					else {
@@ -546,7 +546,7 @@ void Controller::HitSuccess(int subject, int object, shared_ptr<Action> offend,
 		int amount = dynamic_pointer_cast<DotEffect>(dot)->DotInstant();
 		if (log) logs.emplace_back(subject, object, amount, EFFECT_DOT);
 		TakeDamage(subject, object, offend->GetEffects(), defend->GetEffects(),
-			offend->GetAttribute(), amount);
+			offend->GetAttribute(), amount, true, defend->GetAttribute());
 		AddEffect(object, make_shared<DotEffect>(*dynamic_pointer_cast<DotEffect>(dot).get()));
 	}
 
@@ -582,7 +582,7 @@ void Controller::HitFail(int subject, bool log) {
 void Controller::TakeDamage(int subject, int object,
 	vector<shared_ptr<Effect>> offend,
 	vector<shared_ptr<Effect>> defend,
-	ATTRIBUTE_TYPE attribute, int amount, bool log) {
+	ATTRIBUTE_TYPE attribute, int amount, bool log, ATTRIBUTE_TYPE defendAttribute) {
 	if (FindReaction(EFFECT_BURN)) amount = static_cast<int>(amount * 1.5f);
 
 	auto reduce = find_if(defend.begin(), defend.end(),
@@ -591,27 +591,31 @@ void Controller::TakeDamage(int subject, int object,
 		amount = static_cast<int>(amount * (1.0f - dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute)));
 	}
 
-	bool physical = (find_if(offend.begin(), offend.end(),
-		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_PHYSICAL; }) != offend.end());
-	if (log) {
-		logs.emplace_back(subject, object, attribute,
-			physical ? 0 : amount,
-			physical ? amount : 0);
+	// 物理效果：按对方这一招的属性，有一部分伤害转换成物理伤害(扣健康值)，剩余的仍是招式伤害(扣武力值)
+	float physicalRatio = 0.f;
+	auto physical = find_if(offend.begin(), offend.end(),
+		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_PHYSICAL; });
+	if (physical != offend.end()) {
+		physicalRatio = min(1.f, max(0.f, dynamic_pointer_cast<PhysicalEffect>(*physical)->GetRatio(defendAttribute)));
 	}
-	cultivators[object]->TakeDamage(amount, physical);
+	int hpPart = static_cast<int>(amount * physicalRatio);
+	int atkPart = amount - hpPart;
+
+	if (log) logs.emplace_back(subject, object, attribute, atkPart, hpPart);
+	if (atkPart > 0) cultivators[object]->TakeDamage(atkPart, false);
+	if (hpPart > 0) cultivators[object]->TakeDamage(hpPart, true);
 
 	if (subject == object) return;
 
 	auto rebound = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
 	if (rebound != defend.end()) {
-		int dmg = static_cast<int>(amount * dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute));
-		if (dmg > 0) {
-			logs.emplace_back(object, subject, attribute,
-				physical ? 0 : dmg,
-				physical ? dmg : 0, EFFECT_REBOUND);
-			TakeDamage(object, subject, defend, offend, attribute,
-				physical ? 0 : dmg, physical ? dmg : 0, false);
+		float ratio = dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute);
+		int dmgAtk = static_cast<int>(atkPart * ratio);
+		int dmgHp = static_cast<int>(hpPart * ratio);
+		if (dmgAtk > 0 || dmgHp > 0) {
+			logs.emplace_back(object, subject, attribute, dmgAtk, dmgHp, EFFECT_REBOUND);
+			TakeDamage(object, subject, defend, offend, attribute, dmgAtk, dmgHp, false);
 		}
 	}
 
@@ -628,30 +632,33 @@ void Controller::TakeDamage(int subject, int object,
 	vector<shared_ptr<Effect>> offend,
 	vector<shared_ptr<Effect>> defend,
 	ATTRIBUTE_TYPE attribute, int atk, int hp, bool log) {
-	int amount = (atk > 0) ? atk : hp;
-	bool isPhysical = (hp > 0);
-
-	if (FindReaction(EFFECT_BURN)) amount = static_cast<int>(amount * 1.5f);
+	if (FindReaction(EFFECT_BURN)) {
+		atk = static_cast<int>(atk * 1.5f);
+		hp = static_cast<int>(hp * 1.5f);
+	}
 
 	if (log) logs.emplace_back(subject, object, attribute, atk, hp);
-	cultivators[object]->TakeDamage(amount, isPhysical);
+	if (atk > 0) cultivators[object]->TakeDamage(atk, false);
+	if (hp > 0) cultivators[object]->TakeDamage(hp, true);
 
+	float keep = 1.0f;
 	auto reduce = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REDUCE; });
 	if (reduce != defend.end()) {
-		amount = static_cast<int>(amount * (1.0f - dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute)));
+		keep = 1.0f - dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute);
 	}
+	int atkKept = static_cast<int>(atk * keep);
+	int hpKept = static_cast<int>(hp * keep);
 
 	auto rebound = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
 	if (rebound != defend.end()) {
-		int dmg = static_cast<int>(amount * dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute));
-		if (dmg > 0) {
-			logs.emplace_back(object, subject, attribute,
-				isPhysical ? 0 : dmg,
-				isPhysical ? dmg : 0, EFFECT_REBOUND);
-			TakeDamage(object, subject, defend, offend, attribute,
-				isPhysical ? 0 : dmg, isPhysical ? dmg : 0, false);
+		float ratio = dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute);
+		int dmgAtk = static_cast<int>(atkKept * ratio);
+		int dmgHp = static_cast<int>(hpKept * ratio);
+		if (dmgAtk > 0 || dmgHp > 0) {
+			logs.emplace_back(object, subject, attribute, dmgAtk, dmgHp, EFFECT_REBOUND);
+			TakeDamage(object, subject, defend, offend, attribute, dmgAtk, dmgHp, false);
 		}
 	}
 
@@ -660,7 +667,7 @@ void Controller::TakeDamage(int subject, int object,
 	auto absorb = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_ABSORB; });
 	if (absorb != defend.end()) {
-		int mp = static_cast<int>(amount * dynamic_pointer_cast<AbsorbEffect>(*absorb)->GetRatio(attribute));
+		int mp = static_cast<int>((atkKept + hpKept) * dynamic_pointer_cast<AbsorbEffect>(*absorb)->GetRatio(attribute));
 		logs.emplace_back(object, subject, mp, EFFECT_ABSORB);
 		RecoverMP(object, mp);
 	}
