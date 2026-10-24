@@ -154,6 +154,14 @@
   （`GenerateRoadnet(Map*)`读取`Map::GetRoads()`/`GetJunctions()`/`GetLots()`/`GetPathRoads()`
   建mesh）。
 
+## 地形贴合请求
+
+`Roadnet::DistributeRoadnet`多传一个`getHeight`回调（`Map::SampleHeight`）给mod；mod用
+`RoadnetMod::AddTerrainFit`提交的`TerrainFitRequest`（路面中轴线折线+宽度+falloff）值拷贝进
+`Roadnet::terrainFits`（`GetTerrainFits()`），由`Map::InitRoadnet`交给`Map::ApplyTerrainFits`烤进
+地形高度，细节见`map.md`"地形贴合"。请求不进存档（`MapSaveCodec`不写`terrainFits`），因为高度已经
+随`Element`存档。
+
 ## 待办/后续阶段
 
 - Traffic域（阶段4-3）会开始消费`vehicleNavGraph`/`pedestrianNavGraph`做寻路，目前这两张图

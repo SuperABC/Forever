@@ -463,16 +463,24 @@ void UForeverRoadnetFrameworkComponent::AppendFlatRoadCube(Road* road, float cen
 	float halfWidth = crossWidth * 0.5f;
 	float cx = center.GetX(), cy = center.GetY();
 
+	// 高度：路面不一定在Z=0(山路、隧道)，cube前后两端各取路面在那一点的真实高度(沿路按弧长算，
+	// 和道路瓦片用的GetPoint同一套)，不能写死贴地——过短的路段(短于0.8个瓦片)和开口都是这个cube
+	// 来铺的，写死高度时它们在山上会漏在地下或者悬在半空，看起来像一个高度错误的路口。
+	float totalLen = road->CalcDistance();
+	float halfFrac = totalLen > 1e-6f ? halfLen / totalLen : 0.f;
+	float zBack = road->GetPoint(FMath::Clamp(centerT - halfFrac, 0.f, 1.f)).GetZ() * ROAD_WORLD_SCALE + ROADNET_HEIGHT_EPSILON;
+	float zFront = road->GetPoint(FMath::Clamp(centerT + halfFrac, 0.f, 1.f)).GetZ() * ROAD_WORLD_SCALE + ROADNET_HEIGHT_EPSILON;
+
 	FVector2D p00(cx - fwdX * halfLen - perpX * halfWidth, cy - fwdY * halfLen - perpY * halfWidth);
 	FVector2D p10(cx + fwdX * halfLen - perpX * halfWidth, cy + fwdY * halfLen - perpY * halfWidth);
 	FVector2D p11(cx + fwdX * halfLen + perpX * halfWidth, cy + fwdY * halfLen + perpY * halfWidth);
 	FVector2D p01(cx - fwdX * halfLen + perpX * halfWidth, cy - fwdY * halfLen + perpY * halfWidth);
 
 	int32 base = outVertices.Num();
-	outVertices.Add(FVector(p00.X * ROAD_WORLD_SCALE, p00.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
-	outVertices.Add(FVector(p10.X * ROAD_WORLD_SCALE, p10.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
-	outVertices.Add(FVector(p11.X * ROAD_WORLD_SCALE, p11.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
-	outVertices.Add(FVector(p01.X * ROAD_WORLD_SCALE, p01.Y * ROAD_WORLD_SCALE, ROADNET_HEIGHT_EPSILON));
+	outVertices.Add(FVector(p00.X * ROAD_WORLD_SCALE, p00.Y * ROAD_WORLD_SCALE, zBack));
+	outVertices.Add(FVector(p10.X * ROAD_WORLD_SCALE, p10.Y * ROAD_WORLD_SCALE, zFront));
+	outVertices.Add(FVector(p11.X * ROAD_WORLD_SCALE, p11.Y * ROAD_WORLD_SCALE, zFront));
+	outVertices.Add(FVector(p01.X * ROAD_WORLD_SCALE, p01.Y * ROAD_WORLD_SCALE, zBack));
 	outUvs.Add(FVector2D(0, 0));
 	outUvs.Add(FVector2D(1, 0));
 	outUvs.Add(FVector2D(1, 1));

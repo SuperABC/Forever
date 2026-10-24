@@ -16,23 +16,38 @@
   (靠`GetPower(AREA_TYPE)`按分区类型竞争lot)的必要前提——分区类型如果单一固定，地图上只会
   长出一种建筑。
 - **放射臂上没有Intersection，Road在"格点"处用普通Node断开**：`buildArm`沿臂每
-  `ARM_SAMPLE_STEP=4`单位(40m)采样一次地形，每`ARM_SAMPLES_PER_CELL=8`个采样点(32单位=320m)
-  是一个lot格子边长，这些"格点"(lot角点)、隧道出入口P/Q都只是普通`Node`，不进`intersections`。
+  `ARM_SAMPLE_STEP=1`单位(10m)采样一次地形，每`ARM_SAMPLES_PER_CELL=32`个采样点(32单位=320m)
+  是一个lot格子边长，这些"格点"(lot角点)、隧道出入口P/Q、抬升山路的每个采样点都只是普通`Node`，
+  不进`intersections`。
   `RoadJunction::Build`的setback裁剪只对`Intersection`生效，所以相邻两段Road在这些点首尾直接
   相接，没有路口造成的mesh空缺；lot的边界Road仍然靠两端Node id精确匹配(`makeBoundaryRoad`)。
   **extern是臂所在直线与地图边界矩形的交点**(从角点沿臂方向的射线求出射点)，不是最后一个
-  采样点；最后一个采样点至少离extern 1个采样步(4单位)，免得最后一段Road退化。
-- **隧道**：道路默认高度固定0，隧道由`buildArm`里的采样状态机决定：地面状态下如果**下一个**
-  采样点是`mountain`就入隧道，入口P必须落在`plain`/`construction`采样点(当前点是河/海等不合格
-  地形就向回退到最近的合格采样点，中间那段按平地铺过去；回退到角点还不行就从角点起就入隧道)；
-  隧道里一直走到第一个`plain`/`construction`采样点才出隧道，出口Q同样保证落在合格地形上(山体
-  之后如果是河/海就继续隧道穿过去；一直到extern都没有合格点则隧道延伸到extern)。隧道内的格点
-  `z=TUNNEL_HEIGHT=-1.f`(相对平坦Z=0基准往下10m)，P/Q和其余格点`z=0`。P与Q之间一个隧道格点都
-  没有时在中点补一个隧道节点，保证两端的地面↔隧道过渡各有自己的坡。隧道口斜坡段额外调
-  `AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`挖开地形，否则隧道段会被山体
-  实心地形完全挡住看不见；消费方`ForeverTerrainFrameworkComponent::LookupTerrain`的判断条件要
-  放宽到"`construction`或者这个格子有hatch"，见该文件`.md`。挖洞宽度直接取
-  `roads.back().GetTotalWidth()`，跟着这条路实际配好的车道宽度走，不用固定常量。
+  采样点；最后一个采样点至少离extern 1个采样步(1单位)，免得最后一段Road退化。
+- **放射臂分两遍，每座山单独决定过山方式**：第一遍沿臂采样，只记录每个采样点的地形类型和高度
+  (`getHeight`)，把连续的`terrain_mountain`采样点切成一座座山，山脚到山脚(含进山前一个采样点和出山后
+  第一个采样点)相邻采样点之间的坡度(高度差/间距)全都不超过`MOUNTAIN_MAX_SLOPE`(0.5)，或者山后面
+  第一个采样点就是`terrain_ocean`，这座山就**抬升**，否则**挖隧道**；每座山打一行`Log: Roadnet ...`
+  日志(采样范围、最大坡度、是否连海、做法)。第二遍按结果建节点铺路。
+- **抬升**：山里每个采样点建节点，Z=该点山表面高度(`getHeight`，简单采样)，山脚前后各多一个采样点
+  (Z=0)作过渡；有一端Z>0的路段在`addRoad`里调`AddTerrainFit(&roads.back(), 0, 1, GetTotalWidth(),
+  TERRAIN_FIT_FALLOFF)`，让宿主(`Map::ApplyTerrainFits`)把路面下和路边的地形高度贴到路面高度上(路面比山
+  高就填、比山低就切，机制见`Core/map/map.md`"地形贴合")，`TERRAIN_FIT_FALLOFF`=1.5单位是路面边缘向外
+  渐变回原地形的距离。路面竖向曲线：`addControls`的控制点Z按节点坡度给(`startSlope/endSlope`)，节点坡度
+  取前后相邻节点连线的坡度(Catmull-Rom)，地面节点和隧道节点坡度取0(上山的坡从山脚开始、起始导数不
+  小于0)，每段两端坡度再夹到单调范围(与高度差同号、不超过3倍平均坡度，Fritsch-Carlson条件)，曲线不会冲出
+  两端高度；两端等高且坡度0的路段不加控制点，直线。行道树照常种在抬升的山路两侧。
+- **隧道**（陡的山、且后面不是海）：路面保持0，从山底下钻过去。隧道口（地面↔隧道的引道+下坡）整个做在
+  山外面的平地上：入口隧道节点`tIn`是进山前的最后一个采样点，地面端`p`在它前面`rampSamples`格
+  （`TUNNEL_HATCH_LENGTH`=8单位=80m）；出口隧道节点`tOut`是出山后的第一个采样点，地面端`q`在它后面
+  `rampSamples`格——进山之前就已经下到隧道高度，出山之后才开始爬回地面。隧道内（`tIn`到`tOut`）的格点
+  `z=TUNNEL_HEIGHT=-1.f`(相对平坦Z=0基准往下10m)，`p`/`q`和其余格点`z=0`；`p`到`tIn`、`tOut`到`q`之间的
+  格点去掉（只有一段完整的80m过渡，那里离山不到80m也铺不了lot）。山前/山后的平地（`p..tIn`、
+  `tOut..q`必须全是`plain`/`construction`）不够`rampSamples+1`格，或者隧道口和上一个隧道的口重叠，就放不下
+  隧道口，这座山改成抬升（日志里写原因）；不再有"隧道穿过水面"、"一直延伸到extern"的情况。隧道口
+  斜坡段额外调`AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`挖开地形，否则隧道段会被
+  山体实心地形完全挡住看不见；消费方`ForeverTerrainFrameworkComponent::LookupTerrain`的判断条件要放宽到
+  "`construction`或者这个格子有hatch"，见该文件`.md`。挖洞宽度直接取`roads.back().GetTotalWidth()`，
+  跟着这条路实际配好的车道宽度走，不用固定常量。
 - **`addRoad`的地面↔隧道过渡拆成三段Connection**：①`groundNode→flatNode`(长
   `TUNNEL_FLAT_APPROACH_LENGTH=1.5`，两端Z相同，`addControls`在两端Z相同时产出的曲线严格
   保持水平)；②`flatNode→splitNode`(真正的S形下坡)；③`splitNode→隧道`(两端同高，不需要
@@ -40,7 +55,7 @@
   段以内，不会裁到下坡曲线已经降高的位置，否则路口mesh和裁剪边界处曲线高度会不一致。
   `TUNNEL_FLAT_APPROACH_LENGTH`只需大于`setback`即可，不需要精确相等。两段hatch(引道段+
   下坡段)首尾相接，合起来覆盖范围和未拆分前一致。隧道节点离地面端不超过
-  `TUNNEL_HATCH_LENGTH`(4单位)时没有"下坡后再接平路"的空间，下坡直接以隧道节点收尾，不产生
+  `TUNNEL_HATCH_LENGTH`(8单位)时没有"下坡后再接平路"的空间，下坡直接以隧道节点收尾，不产生
   splitNode和第三段(避免零长Road)。
   - **`flatNode`/`splitNode`不登记进`intersections`**——它们是几何过渡点，不是真正的路口，
     `RoadJunction::Build`按`setback`裁剪+摆水平路口平面的逻辑不适用于这两个点(尤其
@@ -50,8 +65,9 @@
     `RoadJunction::Build`同一套横向偏移换算，只是不产生`setback`/路口平面)，按
     (端点id,车行/行人,side,laneIndex)缓存，前后两段`Road`在这个端点各自解析出同一个
     `Node*`，贯通线因此天然接上。详见`Source/Core/map/map.md`"导航图"一节。
-- **`addControls`按端点各自的`Z`取控制点高度**(`c1.z=n1.GetZ()`、`c2.z=n2.GetZ()`)，两端Z
-  相同时效果和固定`0.f`一样，两端Z不同时(隧道过渡段)能画出平滑升降的曲线。
+- **`addControls`按端点各自的`Z`和坡度取控制点高度**(`c1.z=n1.Z+startSlope*L/3`、
+  `c2.z=n2.Z-endSlope*L/3`)，坡度默认0，两端Z相同时效果和固定`0.f`一样，两端Z不同时(隧道过渡段、
+  抬升的山路)能画出平滑升降的曲线。
 - **车道配置按左右两侧车道数参数化**：`configureLanesEx(road, leftV, leftP, leftPd, rightV,
   rightP, rightPd)`按传入的六个数量分别调`AddVehicleLane`/`AddParkingLane`/
   `AddPedestrianLane`(每条车道宽度固定`LANE_WIDTH=0.5`)。`addRoad`默认`(1,0,1,1,0,1)`

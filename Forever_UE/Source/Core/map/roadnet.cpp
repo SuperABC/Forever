@@ -321,8 +321,9 @@ RoadnetMod* Roadnet::GetMod() const {
 void Roadnet::DistributeRoadnet(int width, int height,
 	const function<const string&(int, int)>& getTerrain,
 	const function<pair<bool, float>(int, int)>& getWater,
+	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
-	mod->DistributeRoadnet(width, height, getTerrain, getWater, nodeStaticCount);
+	mod->DistributeRoadnet(width, height, getTerrain, getWater, getHeight, nodeStaticCount);
 
 	for (const Node& n : mod->externs) externs.push_back(new Node(n));
 	for (const Intersection& i : mod->intersections) intersections.push_back(new Intersection(i));
@@ -358,6 +359,7 @@ void Roadnet::DistributeRoadnet(int width, int height,
 
 	// Quad+float是纯值类型，不含所有权指针，直接整体拷贝，不需要像上面几个逐个new。
 	hatches = mod->hatches;
+	terrainFits = mod->terrainFits;
 	pathRoadMaterial = mod->pathRoadMaterial;
 }
 
@@ -379,6 +381,10 @@ const vector<Lot*>& Roadnet::GetLots() const {
 
 const vector<pair<Quad, float>>& Roadnet::GetHatches() const {
 	return hatches;
+}
+
+const vector<TerrainFitRequest>& Roadnet::GetTerrainFits() const {
+	return terrainFits;
 }
 
 const TreeRequests& Roadnet::GetTrees() const {

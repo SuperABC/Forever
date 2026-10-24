@@ -12,11 +12,11 @@ Dependence\map\roadnet_mod.h`相比是全新设计——老工程的`Road`只是
 
 - **一次只应该有一个路网布局方案生效**，不是Terrain那种`GetPriority()`多mod叠加分发——
   `RoadnetFactory::SetConfig`/`GetRoadnet()`做单选，详见`roadnet_factory.md`。
-- **`DistributeRoadnet`不传`getHeight`回调，也不传`setTerrain`/`setHeight`**——道路默认高度
-  固定Z=0，不采样/不跟随真实地形高度起伏（有意的范围裁剪，隧道段用的是固定`TUNNEL_HEIGHT`
-  常量，不是采样出来的真实深度）。`getTerrain`/`getWater`两个回调保留，`JingRoadnet`的隧道
-  判断（探测`mountain`地形）就是靠`getTerrain`，`getWater`目前仍未被用到，留着给以后可能
-  的mod用。
+- **`DistributeRoadnet`有`getTerrain`/`getWater`/`getHeight`三个只读回调，没有`setTerrain`/
+  `setHeight`**——道路高度由mod自己决定：默认可以固定Z=0（`JingRoadnet`，隧道段用固定
+  `TUNNEL_HEIGHT`常量），也可以用`getHeight(x,y)`（地图element单位的连续坐标，含细化高度）采样
+  山表面高度作为路面Z（`JingRoadnet`抬升的山路），再用`AddTerrainFit`把地形贴到路面上，见下面一条。
+  `JingRoadnet`的隧道/抬升判断（探测`mountain`/`ocean`地形）靠`getTerrain`，`getWater`目前仍未被用到。
 - **`nodeStaticCount`延续`Node`跨DLL计数器传递的写法**——mod实现必须在`DistributeRoadnet`
   开头第一步调`Node::SetCount(nodeStaticCount)`，构造的所有`Node`/`Intersection`/`Road`都
   必须通过`externs`/`intersections`/`roads`/`lots`四个成员返回，不能留下"野"实例（否则
@@ -47,6 +47,12 @@ Dependence\map\roadnet_mod.h`相比是全新设计——老工程的`Road`只是
   格子有hatch"——隧道口的hatch靠这条规则在山体地形上挖出缺口，否则隧道段会被实心地形完全
   挡住看不见，详见`Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。
 
+- **`AddTerrainFit`工具方法+`terrainFits`输出成员**：`AddTerrainFit(connection, t1, t2, width,
+  falloff)`沿`[t1,t2]`按弧长约0.5单位一个点采样出路面中轴线折线（x,y,z，z是路面高度），连同
+  `width`（路面整宽）和`falloff`（路面边缘向外渐变回原地形的距离）包成`TerrainFitRequest`
+  追加进`terrainFits`。存折线而不是`Connection*`，因为mod的`roads`会扩容、指针失效。宿主
+  `Map::InitRoadnet`把请求交给`Map::ApplyTerrainFits`，把路面下和路边的地形高度烤到路面上
+  （路面比地形高就填、低就切，两种都生效），详见`Source/Core/map/map.md`"地形贴合"一节。
 - **`pathRoadMaterial`**：Zone/Building裁剪`Lot`自由空间时，每次真正的切分都会自动生成一条
   1单位宽的小路`Road`（见`Source/Dependence/map/general_geometry.md`的`Lot::SplitWithPath`）。这条
   小路不走现有"按左右车道数选`default_x_x_x`资产"的道路mesh管线（0.3车行/0.2人行两侧这种

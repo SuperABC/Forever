@@ -3,19 +3,27 @@
 #include <cmath>
 #include <algorithm>
 #include <map>
+#include <set>
 #include <cfloat>
 #include <unordered_set>
 
-// 隧道：道路延伸时如果遇到mountain地形，"钻进去"而不是贴着地形起伏铺过去，并且在隧道口用
-// RoadnetMod::AddHatch给地形挖一个洞，避免隧道段完全埋没在山体实心地形里看不见。挖洞宽度
-// 按每条路实际配好的车道宽度算，不用固定常量，见addRoad里AddHatch调用处的说明。
+// 过山有两种做法，按每座山单独决定(见buildArm)：
+//   - 抬升：山体里每个采样点的路面高度取山表面高度(getHeight)，并对这些路段请求地形贴合
+//     (RoadnetMod::AddTerrainFit)，让地形高度贴到路面高度上(路面比山高就填、比山低就切)。
+//     适用于坡度都不超过MOUNTAIN_MAX_SLOPE的山，以及后面直接连着海的山。TERRAIN_FIT_FALLOFF是路面边缘
+//     向外渐变回原地形的距离。
+//   - 隧道：道路延伸时遇到mountain地形"钻进去"而不是贴着地形起伏铺过去，并且在隧道口用
+//     RoadnetMod::AddHatch给地形挖一个洞，避免隧道段完全埋没在山体实心地形里看不见。挖洞宽度
+//     按每条路实际配好的车道宽度算，不用固定常量，见addRoad里AddHatch调用处的说明。
+#define MOUNTAIN_MAX_SLOPE 0.5f
+#define TERRAIN_FIT_FALLOFF 1.5f
 #define TUNNEL_HEIGHT -1.f
-#define TUNNEL_HATCH_LENGTH 4.f
+#define TUNNEL_HATCH_LENGTH 8.f
 
-// 放射臂沿线每ARM_SAMPLE_STEP个地图单位(4=40m)采样一次地形，每ARM_SAMPLES_PER_CELL个采样点
+// 放射臂沿线每ARM_SAMPLE_STEP个地图单位(1=10m)采样一次地形，每ARM_SAMPLES_PER_CELL个采样点
 // (=32单位=320m)是一个lot格子的边长。
-#define ARM_SAMPLE_STEP 4.f
-#define ARM_SAMPLES_PER_CELL 8
+#define ARM_SAMPLE_STEP 1.f
+#define ARM_SAMPLES_PER_CELL 32
 
 // 地面端在真正开始下坡之前先接一段完全水平的引道，长度必须盖住RoadJunction::Build按setback
 // (默认车道配置下=1.0地图单位)裁掉的路口进深——否则S形下坡从groundNode本身就开始，路口按
@@ -73,6 +81,7 @@ const char* JingRoadnet::GetName() {
 void JingRoadnet::DistributeRoadnet(int width, int height,
 	const function<const string&(int, int)>& getTerrain,
 	const function<pair<bool, float>(int, int)>& getWater,
+	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
 	Node::SetCount(nodeStaticCount);
 
@@ -115,14 +124,18 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		return "/Game/Asset/Meshes/default_" + suffix + ".default_" + suffix;
 		};
 
-	// 两端切线各贴一个控制点(1/3、2/3处，都不与真正的端点重合)：c1贴n1的高度、c2贴n2的高度，
-	// 保证节点处切线水平且非零，相邻两段路在共享node上平滑接上，不会因为控制点和端点重合
-	// 导致切线突然塌缩成0。n1.Z/n2.Z不相等时(隧道过渡段)这条曲线会在两个平缓端之间平滑升降。
-	auto addControls = [](Road& road, const Node& n1, const Node& n2) {
+	// 两端切线各贴一个控制点(1/3、2/3处，都不与真正的端点重合)，保证节点处切线非零，相邻两段路在
+	// 共享node上平滑接上，不会因为控制点和端点重合导致切线突然塌缩成0。控制点Z按节点处的坡度
+	// (startSlope/endSlope，Z每水平单位的变化量)给：c1.Z=n1.Z+startSlope*L/3、c2.Z=n2.Z-endSlope*L/3，
+	// 坡度为0时就是两端水平的S形曲线(隧道过渡段、中心的井字路用这个)；抬升的山路按相邻节点高度差给
+	// 坡度，曲线贴着山走，不再是"每段两端水平"的台阶式起伏——后者每个节点处曲率很大，路面按弦铺的
+	// 瓦片会明显偏离曲线(十几厘米)，地形贴着曲线就会穿出路面。
+	auto addControls = [](Road& road, const Node& n1, const Node& n2, float startSlope = 0.f, float endSlope = 0.f) {
 		float dx = n2.GetX() - n1.GetX();
 		float dy = n2.GetY() - n1.GetY();
-		Node c1("roadnet", n1.GetX() + dx / 3.f, n1.GetY() + dy / 3.f, n1.GetZ());
-		Node c2("roadnet", n1.GetX() + dx * 2.f / 3.f, n1.GetY() + dy * 2.f / 3.f, n2.GetZ());
+		float length = sqrt(dx * dx + dy * dy);
+		Node c1("roadnet", n1.GetX() + dx / 3.f, n1.GetY() + dy / 3.f, n1.GetZ() + startSlope * length / 3.f);
+		Node c2("roadnet", n1.GetX() + dx * 2.f / 3.f, n1.GetY() + dy * 2.f / 3.f, n2.GetZ() - endSlope * length / 3.f);
 		road.AddControls({ { c1, 1.f }, { c2, 1.f } });
 		};
 
@@ -131,8 +144,10 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	// (flatNode->splitNode，addControls给出平滑切线)，③平路(splitNode->隧道，两端同高)；
 	// 两端同号(都隧道或都地面)时维持整段一条S形Connection不拆分。车道配置(6个参数)默认是
 	// 两侧对称的(1,0,1,1,0,1)，只有井字最中间的四条"中山X路"显式传了不对称/单行的配置。
+	// startSlope/endSlope是抬升的山路两端的坡度(见addControls)，其它路段默认0。
 	auto addRoad = [&](const string& name, const Node& n1, const Node& n2,
-		int leftV = 1, int leftP = 0, int leftPd = 1, int rightV = 1, int rightP = 0, int rightPd = 1) {
+		int leftV = 1, int leftP = 0, int leftPd = 1, int rightV = 1, int rightP = 0, int rightPd = 1,
+		float startSlope = 0.f, float endSlope = 0.f) {
 		string thisMeshPath = meshPathFor(leftV, leftP, leftPd, rightV, rightP, rightPd);
 		auto configureThis = [&](Road& road) { configureLanesEx(road, leftV, leftP, leftPd, rightV, rightP, rightPd); };
 
@@ -180,8 +195,15 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		}
 
 		roads.emplace_back(name, n1, n2, thisMeshPath, meshUnit);
-		addControls(roads.back(), n1, n2);
+		// 两端等高且坡度为0的路段(地面上的路、隧道里的路)直接是直线，不加控制点；只有高度变化的路段才是曲线。
+		bool level = fabsf(n1.GetZ() - n2.GetZ()) < 1e-4f && fabsf(startSlope) < 1e-6f && fabsf(endSlope) < 1e-6f;
+		if (!level) addControls(roads.back(), n1, n2, startSlope, endSlope);
 		configureThis(roads.back());
+		// 抬升的山路(有一端Z>0)请求地形贴合：地形高度贴到路面高度上，路面宽度是配好车道之后的
+		// GetTotalWidth()。隧道(Z<0)不贴合，只在隧道口挖洞。
+		if (n1.GetZ() > 1e-4f || n2.GetZ() > 1e-4f) {
+			AddTerrainFit(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth(), TERRAIN_FIT_FALLOFF);
+		}
 		};
 
 	// 找到roads里名字为name、两端Node id正好是{n1,n2}(不分方向)的那一条，返回它自己的地址——
@@ -284,16 +306,20 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	addRoad("中山南路", intersections[3], intersections[2]);
 
 	// 从角点corner出发沿(stepX,stepY)(长度=一个lot格子边长=ARM_SAMPLES_PER_CELL个采样步)建一条
-	// 放射臂，直到地图边界：
-	//   - 每ARM_SAMPLE_STEP(40m)采样一次地形，由此决定隧道区间[P,Q]：地面状态下如果下一个采样点是
-	//     山体就要入隧道，入口P必须是plain/construction采样点(当前点是河/海等不合格地形就向回退到
-	//     最近的合格采样点，中间那段按平地铺过去)；隧道里一直走到第一个plain/construction采样点
-	//     才出隧道，出口Q同样保证落在合格地形上(出口前是水面就继续隧道穿过去)。
+	// 放射臂，直到地图边界。分两遍：
+	//   - 第一遍沿臂每ARM_SAMPLE_STEP(10m)采样，只记录每个采样点的地形类型和高度，不建任何Node/Road；
+	//     然后把连续的mountain采样点切成一座座山，每座山单独决定做法：山脚到山脚相邻采样点之间的
+	//     坡度(高度差/间距)全都不超过MOUNTAIN_MAX_SLOPE，或者山后面第一个采样点就是海，就"抬升"
+	//     (路面跟着山表面走+地形贴合)；否则"隧道"(路面保持0，从山底下钻过去)。
+	//   - 第二遍按上面的结果建节点铺路。隧道区间[P,Q]：入口P必须是plain/construction采样点(山前一个采样点
+	//     不合格，比如河/海，就向回退到最近的合格采样点，中间那段按平地铺过去；回退不会越过上一座抬升山)，
+	//     隧道里一直走到第一个plain/construction采样点才出隧道，出口Q同样保证落在合格地形上(山体之后如果
+	//     是河/海就继续隧道穿过去；一直到extern都没有合格点则隧道延伸到extern)。
 	//   - 臂上不放Intersection：每个格点(采样点序号为ARM_SAMPLES_PER_CELL的整数倍，即lot角点)、
-	//     入口P、出口Q都只是普通Node，Road在这些点首尾相接，没有路口setback造成的空缺。
+	//     入口P、出口Q、抬升山的每个采样点都只是普通Node，Road在这些点首尾相接，没有路口setback造成的空缺。
 	//     lot的边界Road仍然靠两端Node id精确匹配(makeBoundaryRoad)。
 	//   - extern是臂所在直线与地图边界的交点，不是最后一个采样点。
-	// grid收集所有格点Node(不含角点、不含extern)，z已按隧道区间赋好。
+	// grid收集所有格点Node(不含角点、不含extern)，z已按隧道/抬升赋好。
 	auto buildArm = [&](const string& name, const Node& corner, float stepX, float stepY, vector<Node>& grid) {
 		float dx = stepX / ARM_SAMPLES_PER_CELL, dy = stepY / ARM_SAMPLES_PER_CELL;
 		float cx = corner.GetX(), cy = corner.GetY();
@@ -306,78 +332,146 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		else if (dy < -1e-6f) kExt = min(kExt, (0.f - cy) / dy);
 		if (kExt < 0.f || kExt == FLT_MAX) kExt = 0.f;
 
-		// 采样序列terr[k]，k=0是角点；最后一个采样点至少离extern一个采样步(4个单位)，免得最后一段
-		// Road短到退化。getTerrain返回""表示出图。
+		// ---- 第一遍：记录采样点的地形类型和高度，k=0是角点；最后一个采样点至少离extern一个采样步，
+		// 免得最后一段Road短到退化。getTerrain返回""表示出图。 ----
 		vector<string> terr;
+		vector<float> heights;
 		terr.push_back(getTerrain(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))));
+		heights.push_back(getHeight(cx, cy));
 		for (int k = 1; static_cast<float>(k) <= kExt - 1.f; k++) {
 			string t = getTerrain(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k)));
 			if (t == "") break;
 			terr.push_back(t);
+			heights.push_back(getHeight(cx + dx * k, cy + dy * k));
 		}
 		int sampleCount = static_cast<int>(terr.size()) - 1;
 
 		auto isGood = [&](int k) { return terr[k] == "plain" || terr[k] == "construction"; };
+		auto allGood = [&](int from, int to) {
+			for (int i = from; i <= to; i++) if (!isGood(i)) return false;
+			return true;
+			};
 
-		// 隧道区间(采样点序号)：严格位于p和q之间的点在隧道里，p/q本身是地面端口；q<0表示一直到extern。
-		struct TunnelSpan { int p; int q; };
+		// ---- 切出每座山[first,last]并决定做法。陡的山要挖隧道，隧道口(地面↔隧道的引道+下坡，
+		// TUNNEL_HATCH_LENGTH=80m)整个做在山外面的平地上：入口隧道节点tIn是进山前的最后一个采样点，
+		// 地面端p在它前面rampSamples格；出口隧道节点tOut是出山后的第一个采样点，地面端q在它后面rampSamples
+		// 格——也就是说进山之前就已经下到隧道高度，出山之后才开始爬回地面。山前/山后的平地不够
+		// rampSamples+1格(或者和上一个隧道的口重叠)就放不下隧道口，这座山改成抬升。 ----
+		struct TunnelSpan { int p; int tIn; int tOut; int q; };
 		vector<TunnelSpan> tunnels;
+		vector<bool> raised(static_cast<size_t>(sampleCount) + 1, false);
+		const int rampSamples = static_cast<int>(ceilf(TUNNEL_HATCH_LENGTH / ARM_SAMPLE_STEP));
 		int lastQ = 0;
-		for (int k = 0; k < sampleCount; ) {
-			if (terr[k + 1] != "terrain_mountain") { k++; continue; }
-			int p = k;
-			while (p > lastQ && !isGood(p)) p--;
-			int q = k + 1;
-			while (q <= sampleCount && !isGood(q)) q++;
-			if (q > sampleCount) {
-				tunnels.push_back({ p, -1 });
-				break;
+		for (int k = 1; k <= sampleCount; ) {
+			if (terr[k] != "terrain_mountain") { k++; continue; }
+			int first = k;
+			while (k + 1 <= sampleCount && terr[k + 1] == "terrain_mountain") k++;
+			int last = k;
+			k++;
+
+			float maxSlope = 0.f;
+			int from = max(0, first - 1), to = min(sampleCount, last + 1);
+			for (int i = from; i < to; i++) {
+				maxSlope = max(maxSlope, fabsf(heights[i + 1] - heights[i]) / ARM_SAMPLE_STEP);
 			}
-			tunnels.push_back({ p, q });
-			lastQ = q;
-			k = q;
+			bool seaBehind = last + 1 <= sampleCount && terr[last + 1] == "terrain_ocean";
+			bool raise = seaBehind || maxSlope <= MOUNTAIN_MAX_SLOPE;
+			const char* why = raise ? "gentle or sea behind" : "steep";
+			if (!raise) {
+				TunnelSpan span{ first - 1 - rampSamples, first - 1, last + 1, last + 1 + rampSamples };
+				bool roomBefore = span.p >= lastQ && allGood(span.p, span.tIn);
+				bool roomAfter = span.q <= sampleCount && allGood(span.tOut, span.q);
+				if (roomBefore && roomAfter) {
+					tunnels.push_back(span);
+					lastQ = span.q;
+				}
+				else {
+					raise = true;
+					why = roomBefore ? "steep but not enough plain behind" : "steep but not enough plain before";
+				}
+			}
+			if (raise) {
+				for (int i = first; i <= last; i++) raised[i] = true;
+			}
+			debugf("Log: Roadnet %s mountain samples [%d,%d] max slope %.3f sea behind %d -> %s (%s).\n",
+				name.c_str(), first, last, maxSlope, seaBehind ? 1 : 0, raise ? "raise" : "tunnel", why);
 		}
 
+		// 隧道节点(Z=TUNNEL_HEIGHT)是[tIn,tOut]闭区间内的点；p/q是地面端口(Z=0)，p到tIn、tOut到q之间只有
+		// 一段引道+下坡，中间不放别的节点。
 		auto insideTunnel = [&](float k) {
-			for (const TunnelSpan& s : tunnels) {
-				if (k > static_cast<float>(s.p) && (s.q < 0 || k < static_cast<float>(s.q))) return true;
+			for (const TunnelSpan& t : tunnels) {
+				if (k >= static_cast<float>(t.tIn) && k <= static_cast<float>(t.tOut)) return true;
 			}
 			return false;
 			};
+		// 采样点的路面高度：隧道里=TUNNEL_HEIGHT，抬升山里=山表面高度，其余0。
+		auto zAt = [&](float k) {
+			if (insideTunnel(k)) return static_cast<float>(TUNNEL_HEIGHT);
+			int index = static_cast<int>(roundf(k));
+			return (index >= 0 && index <= sampleCount && raised[index]) ? heights[index] : 0.f;
+			};
 
-		// 关键点：全部格点 + 每个隧道的入口/出口；如果一个隧道的入口和出口之间一个隧道格点都没有，
-		// 在中点补一个隧道节点，保证两端的地面↔隧道过渡各有自己的坡。key=采样点序号，value=是否隧道。
-		map<float, bool> keys;
-		for (int k = ARM_SAMPLES_PER_CELL; k <= sampleCount; k += ARM_SAMPLES_PER_CELL) {
-			keys[static_cast<float>(k)] = insideTunnel(static_cast<float>(k));
+		// 关键点(key=采样点序号)：全部格点(lot边界Road按格点两端精确匹配)、每个隧道的p/tIn/tOut/q、抬升山的每个
+		// 采样点及其前后各一个采样点(平地过渡)。隧道口(p到tIn、tOut到q)里的格点去掉，让过渡正好是一段
+		// 完整的80m；那里离山不到80m，本来也铺不了lot。
+		set<float> keySet;
+		for (int k = ARM_SAMPLES_PER_CELL; k <= sampleCount; k += ARM_SAMPLES_PER_CELL) keySet.insert(static_cast<float>(k));
+		for (int k = 1; k <= sampleCount; k++) {
+			if (!raised[k]) continue;
+			for (int m = max(1, k - 1); m <= min(sampleCount, k + 1); m++) keySet.insert(static_cast<float>(m));
 		}
-		for (const TunnelSpan& s : tunnels) {
-			keys[static_cast<float>(s.p)] = false;
-			if (s.q >= 0) keys[static_cast<float>(s.q)] = false;
+		for (const TunnelSpan& t : tunnels) {
+			for (int k = t.p + 1; k < t.tIn; k++) keySet.erase(static_cast<float>(k));
+			for (int k = t.tOut + 1; k < t.q; k++) keySet.erase(static_cast<float>(k));
+			keySet.insert(static_cast<float>(t.p));
+			keySet.insert(static_cast<float>(t.tIn));
+			keySet.insert(static_cast<float>(t.tOut));
+			keySet.insert(static_cast<float>(t.q));
 		}
-		for (const TunnelSpan& s : tunnels) {
-			if (s.q < 0) continue;
-			bool hasTunnelKey = false;
-			for (const auto& [k, tunnel] : keys) {
-				if (tunnel && k > static_cast<float>(s.p) && k < static_cast<float>(s.q)) { hasTunnelKey = true; break; }
-			}
-			if (!hasTunnelKey) keys[(s.p + s.q) * 0.5f] = true;
-		}
+
+		float externZ = (sampleCount >= 1 && raised[sampleCount]) ? getHeight(cx + dx * kExt, cy + dy * kExt) : 0.f;
+
+		// 沿臂顺序的全部节点(采样点序号k，Z)：角点、关键点、extern。抬升的山路每个节点处的坡度取前后相邻节点连线的
+		// 坡度(Catmull-Rom)；地面节点(Z=0，含山脚)和隧道节点(Z<0)坡度取0——上山的坡从山脚开始、起始导数
+		// 不小于0，不会带着惯性冲到0以下；两端(角点/extern)也取0。
+		struct ArmPoint { float k; float z; };
+		vector<ArmPoint> points;
+		points.push_back({ 0.f, corner.GetZ() });
+		for (float k : keySet) points.push_back({ k, zAt(k) });
+		points.push_back({ kExt, externZ });
+		float stepLength = sqrt(dx * dx + dy * dy);
+		auto slopeAt = [&](size_t i) {
+			if (i == 0 || i + 1 >= points.size() || points[i].z < 1e-4f) return 0.f;
+			float run = (points[i + 1].k - points[i - 1].k) * stepLength;
+			return run > 1e-6f ? (points[i + 1].z - points[i - 1].z) / run : 0.f;
+			};
 
 		Node previous = corner;
-		for (const auto& [k, tunnel] : keys) {
-			// 序号0是角点自己(Intersection)，不重复建节点。
-			if (k <= 0.f) continue;
-			Node node("roadnet", cx + dx * k, cy + dy * k, tunnel ? TUNNEL_HEIGHT : 0.f);
-			addRoad(name, previous, node);
+		for (size_t i = 1; i < points.size(); i++) {
+			bool isExtern = (i + 1 == points.size());
+			Node node(isExtern ? Node("roadnet", cx + dx * kExt, cy + dy * kExt, externZ)
+				: Node("roadnet", cx + dx * points[i].k, cy + dy * points[i].k, points[i].z));
+			// 每段两端坡度夹到单调范围(与这段高度差同号、不超过3倍平均坡度，Fritsch-Carlson条件)，
+			// 三次曲线在这一段内不会冲出两端高度之外(比如山脚冲到0以下、山顶冲到最高点以上)。
+			float segmentRun = sqrt((node.GetX() - previous.GetX()) * (node.GetX() - previous.GetX())
+				+ (node.GetY() - previous.GetY()) * (node.GetY() - previous.GetY()));
+			float delta = segmentRun > 1e-6f ? (node.GetZ() - previous.GetZ()) / segmentRun : 0.f;
+			auto monotone = [delta](float slope) {
+				if (delta == 0.f) return 0.f;
+				float aligned = slope * (delta > 0.f ? 1.f : -1.f);
+				aligned = max(0.f, min(aligned, 3.f * fabsf(delta)));
+				return aligned * (delta > 0.f ? 1.f : -1.f);
+				};
+			addRoad(name, previous, node, 1, 0, 1, 1, 0, 1, monotone(slopeAt(i - 1)), monotone(slopeAt(i)));
 			previous = node;
-			if (fmodf(k, static_cast<float>(ARM_SAMPLES_PER_CELL)) == 0.f) grid.push_back(node);
+			if (isExtern) {
+				externs.emplace_back(node);
+			}
+			else if (fmodf(points[i].k, static_cast<float>(ARM_SAMPLES_PER_CELL)) == 0.f) {
+				grid.push_back(node);
+			}
 		}
-
-		bool externTunnel = !tunnels.empty() && tunnels.back().q < 0;
-		Node externNode("roadnet", cx + dx * kExt, cy + dy * kExt, externTunnel ? TUNNEL_HEIGHT : 0.f);
-		addRoad(name, previous, externNode);
-		externs.emplace_back(externNode);
 		};
 
 	// externs顺序固定：西北/东北/西南/东南四条横臂，再北西/南西/北东/南东四条竖臂。

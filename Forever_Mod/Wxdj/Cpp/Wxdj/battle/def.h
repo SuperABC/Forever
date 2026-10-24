@@ -74,6 +74,11 @@ inline const std::map<std::pair<ATTRIBUTE_TYPE, ATTRIBUTE_TYPE>, bool> ATTRIBUTE
 	{{ATTRIBUTE_ALL, ATTRIBUTE_WATER}, true}, // 五行克水
 	{{ATTRIBUTE_ALL, ATTRIBUTE_FIRE}, true}, // 五行克火
 	{{ATTRIBUTE_ALL, ATTRIBUTE_EARTH}, true}, // 五行克土
+	{{ATTRIBUTE_METAL, ATTRIBUTE_NONE}, true}, // 金克无属性
+	{{ATTRIBUTE_WOOD, ATTRIBUTE_NONE}, true}, // 木克无属性
+	{{ATTRIBUTE_WATER, ATTRIBUTE_NONE}, true}, // 水克无属性
+	{{ATTRIBUTE_FIRE, ATTRIBUTE_NONE}, true}, // 火克无属性
+	{{ATTRIBUTE_EARTH, ATTRIBUTE_NONE}, true}, // 土克无属性
 };
 
 // 双属性组合主属性映射

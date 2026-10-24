@@ -16,6 +16,7 @@ public:
 	virtual void DistributeRoadnet(int width, int height,
 		const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
+		const std::function<float(float, float)>& getHeight,
 		int nodeStaticCount) override;
 	// 道路两侧人行道上的行道树，避开开口，见roadnet_basic.md"行道树"。
 	virtual void LayoutTrees(const std::vector<Road*>& hostRoads) override;

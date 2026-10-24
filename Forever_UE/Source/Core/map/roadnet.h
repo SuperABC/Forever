@@ -102,6 +102,7 @@ public:
 	void DistributeRoadnet(int width, int height,
 		const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
+		const std::function<float(float, float)>& getHeight,
 		int nodeStaticCount);
 
 	const std::vector<Node*>& GetExterns() const;
@@ -112,6 +113,10 @@ public:
 	// mod通过RoadnetMod::AddHatch产出的地形挖洞标记(隧道口用)，纯值类型，直接拷贝自
 	// mod->hatches，不需要像Node/Road那样深拷贝。
 	const std::vector<std::pair<Quad, float>>& GetHatches() const;
+
+	// mod通过RoadnetMod::AddTerrainFit产出的地形贴合请求，纯值类型，直接拷贝自mod->terrainFits，
+	// 由Map::InitRoadnet交给Map::ApplyTerrainFits烤进地形高度。不进存档(高度已经烤进Element)。
+	const std::vector<TerrainFitRequest>& GetTerrainFits() const;
 
 	// mod在LayoutTrees里通过RoadnetMod::AddTreeSingle/AddTreeLine/AddTreeArea提交的树请求(参考系是
 	// 整张地图)，拷贝自mod->trees，由Map::InitVegetation交给Vegetation展开，见vegetation.md。
@@ -140,6 +145,7 @@ private:
 	std::vector<Road*> roads;
 	std::vector<Lot*> lots;
 	std::vector<std::pair<Quad, float>> hatches;
+	std::vector<TerrainFitRequest> terrainFits;
 	TreeRequests trees;
 	std::string pathRoadMaterial;
 

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cfloat>
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -194,7 +195,8 @@ void Map::InitRoadnet() {
 
 	auto getTerrain = [this](int x, int y) -> const string& { return this->GetTerrainRef(x, y); };
 	auto getWater = [this](int x, int y) -> pair<bool, float> { return this->GetWater(x, y); };
-	roadnet->DistributeRoadnet(width, height, getTerrain, getWater, Node::GetCount());
+	auto getHeight = [this](float x, float y) -> float { return this->SampleHeight(x, y); };
+	roadnet->DistributeRoadnet(width, height, getTerrain, getWater, getHeight, Node::GetCount());
 	roadnet->AllocateAddress();
 
 	// 把mod通过RoadnetMod::AddHatch产出的地形挖洞标记(隧道口用)转发进Map::AddHatch，
@@ -202,6 +204,9 @@ void Map::InitRoadnet() {
 	for (const auto& [quad, rotation] : roadnet->GetHatches()) {
 		AddHatch(quad, rotation);
 	}
+
+	// 地形贴合：路面高度已经由mod定好，把路面下和路边的地形高度烤到路面上。
+	ApplyTerrainFits(roadnet->GetTerrainFits());
 
 	// 按Intersection收集与之相连的Road，逐个建RoadJunction。
 	unordered_map<int, vector<Road*>> roadsByIntersection;
@@ -2111,6 +2116,129 @@ const vector<pair<Quad, float>>& Map::GetHatches(int x, int y) const {
 		return empty;
 	}
 	return At(x, y).hatches;
+}
+
+void Map::ApplyTerrainFits(const vector<TerrainFitRequest>& fits) {
+	if (fits.empty()) return;
+
+	const int sub = TERRAIN_FINE_SUBDIV;
+	const int size1 = TERRAIN_FINE_SIZE;
+
+	// 每个被碰到的element一份"贴合权重/目标高度"累加器，按它自己的17x17格点存(整数边界上的格点会
+	// 同时出现在相邻最多4个element里，每个element各存一份，算出来的值是同一个)。
+	struct ElementFit {
+		array<float, TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE> weight;
+		array<float, TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE> z;
+		array<float, TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE> dist; // 命中这个格点的最近折线距离，同权重时用来挑最近的那一段
+		ElementFit() { weight.fill(0.f); z.fill(0.f); dist.fill(FLT_MAX); }
+	};
+	unordered_map<long long, unique_ptr<ElementFit>> accumulators;
+	auto getAccumulator = [&](int ex, int ey) -> ElementFit& {
+		long long key = static_cast<long long>(ey) * width + ex;
+		auto& slot = accumulators[key];
+		if (!slot) slot = make_unique<ElementFit>();
+		return *slot;
+	};
+
+	// 1. 收集：每条请求的每一段折线，枚举它外扩(半宽+falloff)范围内的细化格点，取到折线的最近距离算权重，
+	//    同一格点被多段/多请求命中时取权重最大的(也就是离路面最近的)，所以和遍历顺序无关。
+	const int maxGx = width * sub, maxGy = height * sub;
+	for (const TerrainFitRequest& fit : fits) {
+		if (fit.centerline.empty() || fit.width <= 0.f) continue;
+		float halfWidth = fit.width * 0.5f;
+		float falloff = max(fit.falloff, 0.f);
+		float reach = halfWidth + falloff;
+
+		size_t segmentCount = max<size_t>(1, fit.centerline.size() - 1);
+		for (size_t s = 0; s < segmentCount; s++) {
+			const TerrainFitSample& a = fit.centerline[s];
+			const TerrainFitSample& b = fit.centerline[min(s + 1, fit.centerline.size() - 1)];
+
+			int gx0 = max(0, static_cast<int>(floorf((min(a.x, b.x) - reach) * sub)));
+			int gx1 = min(maxGx, static_cast<int>(ceilf((max(a.x, b.x) + reach) * sub)));
+			int gy0 = max(0, static_cast<int>(floorf((min(a.y, b.y) - reach) * sub)));
+			int gy1 = min(maxGy, static_cast<int>(ceilf((max(a.y, b.y) + reach) * sub)));
+
+			float abx = b.x - a.x, aby = b.y - a.y;
+			float len2 = abx * abx + aby * aby;
+
+			for (int gy = gy0; gy <= gy1; gy++) {
+				for (int gx = gx0; gx <= gx1; gx++) {
+					float px = static_cast<float>(gx) / sub, py = static_cast<float>(gy) / sub;
+					float t = 0.f;
+					if (len2 > 1e-12f) t = max(0.f, min(1.f, ((px - a.x) * abx + (py - a.y) * aby) / len2));
+					float dx = px - (a.x + abx * t), dy = py - (a.y + aby * t);
+					float d = sqrtf(dx * dx + dy * dy);
+
+					float w;
+					if (d <= halfWidth) w = 1.f;
+					else if (d < reach) {
+						float u = (d - halfWidth) / falloff;
+						w = 1.f - u * u * (3.f - 2.f * u);
+					}
+					else continue;
+					float roadZ = a.z + (b.z - a.z) * t;
+
+					// 这个格点属于哪些element：落在整数边界上时还属于左/下一个element的末尾行/列。
+					int exMain = gx / sub, exSub = gx % sub;
+					int eyMain = gy / sub, eySub = gy % sub;
+					for (int oy = 0; oy < 2; oy++) {
+						int ey = oy == 0 ? eyMain : eyMain - 1;
+						int j = oy == 0 ? eySub : sub;
+						if (oy == 1 && eySub != 0) continue;
+						if (ey < 0 || ey >= height) continue;
+						for (int ox = 0; ox < 2; ox++) {
+							int ex = ox == 0 ? exMain : exMain - 1;
+							int i = ox == 0 ? exSub : sub;
+							if (ox == 1 && exSub != 0) continue;
+							if (ex < 0 || ex >= width) continue;
+							ElementFit& acc = getAccumulator(ex, ey);
+							int idx = j * size1 + i;
+							// 取权重大的；权重相同(路面宽度以内权重恒为1，几段折线都命中)时取离折线最近的那
+							// 一段的路面高度——只比权重会让"最先遍历到的那一段"的高度占住整片路面，地形
+							// 就变成一级一级的台阶(下坡时高出路面、上坡时低于路面)。
+							if (w > acc.weight[idx] || (w == acc.weight[idx] && d < acc.dist[idx])) {
+								acc.weight[idx] = w;
+								acc.z[idx] = roadZ;
+								acc.dist[idx] = d;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if (accumulators.empty()) return;
+
+	// 2. 细分：被碰到的element还没有细化数组的，先按当前地形采样建出17x17——必须在写入任何高度之前
+	//    全部建完，建数组读的SampleHeight才不会读到别的element写了一半的结果。
+	for (const auto& [key, acc] : accumulators) {
+		int ex = static_cast<int>(key % width), ey = static_cast<int>(key / width);
+		if (At(ex, ey).fineHeights) continue;
+		// 先算进局部数组再挂到element上：SampleHeight一看到element有fineHeights就查表，如果先挂一个
+		// 还没填完的数组再边填边采样，读到的就是零初始化的0，整个element（路面以外的部分）都会变成0。
+		auto fine = make_unique<array<float, TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE>>();
+		for (int j = 0; j < size1; j++) {
+			for (int i = 0; i < size1; i++) {
+				(*fine)[j * size1 + i] = SampleHeight(static_cast<float>(ex) + static_cast<float>(i) / sub,
+					static_cast<float>(ey) + static_cast<float>(j) / sub);
+			}
+		}
+		At(ex, ey).fineHeights = std::move(fine);
+	}
+
+	// 3. 写入：权重>0的格点 新高度=lerp(原高度, 路面高度, 权重)；element自己的左下角整数格点同时更新
+	//    粗高度(直接写，不经SetHeight)，让粗高度和细化数组角点保持一致。
+	for (const auto& [key, acc] : accumulators) {
+		int ex = static_cast<int>(key % width), ey = static_cast<int>(key / width);
+		auto& fine = *At(ex, ey).fineHeights;
+		for (int idx = 0; idx < size1 * size1; idx++) {
+			float w = acc->weight[idx];
+			if (w <= 0.f) continue;
+			fine[idx] += (acc->z[idx] - fine[idx]) * w;
+		}
+		if (acc->weight[0] > 0.f) At(ex, ey).height = fine[0];
+	}
 }
 
 void Map::AddHatch(Quad q, float rotation) {

@@ -17,6 +17,9 @@
 // (33x33个顶点)。试过提到4倍(128)太卡，先退到2倍(64,65x65个顶点)看效果。所有跟这个数
 // 绑定的魔法数字(33、32、8)都已经改成由这个常量推导，调这一个数就行，不用逐个改。
 #define TERRAIN_LOD_GRID_SUBDIV 64
+// 显示hatch(挖洞)的最远LOD级别(含)：L0~L3的网格小格边长是1/16、1/8、1/4、1/2 element，都不跨element，
+// 可以逐格对三角形做hatch裁剪；construction格子的精确几何仍然只在L0/L1做。
+#define TERRAIN_HATCH_MAX_LEVEL 3
 // L0覆盖4个element、64段，每个element正好16段=TERRAIN_FINE_SUBDIV，各级LOD顶点都落在细化高度
 // 网格点上，Map::SampleHeight直接查表；改了这个数也不会出错，只是L0顶点落到网格点之间，改为插值。
 
@@ -476,6 +479,46 @@ namespace {
 		}
 	}
 
+	// 网格小格的三角形被hatch裁剪时用的多边形顶点：pos是世界坐标(已经含LOD接缝修正和HEIGHT_EPSILON，
+	// 即这个三角形真正渲染的位置)，index是它在BuildLevel里vertices数组中的下标——三角形原有的
+	// 角点直接复用网格顶点(和邻格共用，没有裂缝、法线连续)，裁剪新产生的交点index=-1，输出时才追加。
+	struct FClipPoint {
+		FVector pos;
+		int32 index;
+	};
+
+	// SplitConvexPolygonByLine的FClipPoint版本：交点在三角形所在平面上做3D线性插值(原三角形是
+	// 平面，边是直线，所以交点的高度正好落在原来的渲染表面上，不会漂)，侧判断只看XY。
+	void SplitClipPolygonByLine(const TArray<FClipPoint>& polygon, const FVector2D& edgeA, const FVector2D& edgeB,
+		const FVector2D& referencePoint, TArray<FClipPoint>& outInside, TArray<FClipPoint>& outOutside) {
+		outInside.Reset();
+		outOutside.Reset();
+		int32 n = polygon.Num();
+		if (n < 3) return;
+
+		FVector2D dir = edgeB - edgeA;
+		auto side = [&](const FClipPoint& p) { return dir.X * (p.pos.Y - edgeA.Y) - dir.Y * (p.pos.X - edgeA.X); };
+		bool refPositive = (dir.X * (referencePoint.Y - edgeA.Y) - dir.Y * (referencePoint.X - edgeA.X)) >= 0.f;
+
+		for (int32 i = 0; i < n; i++) {
+			const FClipPoint& cur = polygon[i];
+			const FClipPoint& next = polygon[(i + 1) % n];
+			float curSide = side(cur);
+			float nextSide = side(next);
+			bool curInside = (curSide >= 0.f) == refPositive;
+			bool nextInside = (nextSide >= 0.f) == refPositive;
+
+			if (curInside) outInside.Add(cur); else outOutside.Add(cur);
+
+			if (curInside != nextInside) {
+				float t = curSide / (curSide - nextSide);
+				FClipPoint intersection{ cur.pos + (next.pos - cur.pos) * t, -1 };
+				outInside.Add(intersection);
+				outOutside.Add(intersection);
+			}
+		}
+	}
+
 	// 把一个凸多边形(CCW，同本文件主网格quad(v00,v11,v10)/(v00,v01,v11)那一套已验证过的绕序
 	// 约定：对(左下,右下,右上,左上)这种CCW四边形要输出(v0,v2,v1)+(v0,v3,v2)而不是朴素的
 	// (v0,v1,v2)+(v0,v2,v3)才能让法线朝上)扇形三角化成FTerrainTri2D列表——把朴素fan的每个
@@ -622,7 +665,7 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			vertices[vertIdx(edgeVx, vy)] = (vertices[vertIdx(edgeVx, vy - 1)] + vertices[vertIdx(edgeVx, vy + 1)]) * 0.5f;
 
 	// construction/挖洞格子(取代旧工程的ISM立方体):只在levelIdx<=1(近处精细LOD)生效,和旧工程
-	// constructionRegion的作用范围一致。前提：所有挖洞都发生在平地上，construction格子不需要
+	// constructionRegion的作用范围一致。前提：construction格子在平地上(起伏地形上的hatch走clipGridCell)，construction格子不需要
 	// 更细的LOD细分——没有hatch命中时LookupTerrain恒返回"整格一个矩形"，直接画成一个大quad
 	// (2个三角形)；有hatch命中时返回精确的轴对齐矩形集合(rects)+角落补丁三角形(tris)，两者都
 	// 直接按精确坐标建geometry，不再对着一个固定的sub-quad网格做"quad中心是否落在矩形内"的
@@ -638,6 +681,79 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		return constructionCache.Add(key, MoveTemp(tris));
 		};
 
+	// 有hatch(且不是construction)的element里，一个网格小格(cx,cy)的两个三角形按这个element的全部
+	// hatch旋转矩形裁剪，洞里的部分丢掉，洞外的部分用原三角形的平面插值出交点(高度和原渲染表面一致)，
+	// 角点复用网格顶点。小格不会跨element(L0/L1的小格边长是1/16、1/8 element，网格和element对齐)。
+	// 三角形和BuildLevel主循环同一对角线、同一绕序：(v00,v10,v11)/(v00,v11,v01)是CCW，扇形输出
+	// (p0,p[i+1],p[i])就是主循环里的(v00,v11,v10)/(v00,v01,v11)。
+	auto clipGridCell = [this, &vertices, &triangles, worldScale](int cx, int cy, int ex, int ey) {
+		const auto& hatches = map->GetHatches(ex, ey);
+		int32 v00 = cy * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx;
+		int32 v10 = v00 + 1;
+		int32 v01 = v00 + (TERRAIN_LOD_GRID_SUBDIV + 1);
+		int32 v11 = v01 + 1;
+		const int32 cellTris[2][3] = { { v00, v10, v11 }, { v00, v11, v01 } };
+
+		for (int t = 0; t < 2; t++) {
+			TArray<FClipPoint> start;
+			FVector2D boundsMin(FLT_MAX, FLT_MAX), boundsMax(-FLT_MAX, -FLT_MAX);
+			for (int k = 0; k < 3; k++) {
+				const FVector& p = vertices[cellTris[t][k]];
+				start.Add({ p, cellTris[t][k] });
+				boundsMin.X = FMath::Min(boundsMin.X, p.X); boundsMin.Y = FMath::Min(boundsMin.Y, p.Y);
+				boundsMax.X = FMath::Max(boundsMax.X, p.X); boundsMax.Y = FMath::Max(boundsMax.Y, p.Y);
+			}
+
+			TArray<TArray<FClipPoint>> workPolys;
+			workPolys.Add(start);
+
+			for (auto& [quad, rotation] : hatches) {
+				if (workPolys.Num() == 0) break; // 这个三角形已经被挖空了
+
+				FVector2D hatchCenter(quad.GetPosX() * worldScale, quad.GetPosY() * worldScale);
+				float halfSizeX = quad.GetSizeX() * 0.5f * worldScale;
+				float halfSizeY = quad.GetSizeY() * 0.5f * worldScale;
+				float cosRot = FMath::Cos(rotation), sinRot = FMath::Sin(rotation);
+
+				// 旋转矩形的外接矩形和这个三角形的外接矩形不重叠就直接跳过。
+				float aabbHalfX = FMath::Abs(halfSizeX * cosRot) + FMath::Abs(halfSizeY * sinRot);
+				float aabbHalfY = FMath::Abs(halfSizeX * sinRot) + FMath::Abs(halfSizeY * cosRot);
+				if (hatchCenter.X + aabbHalfX <= boundsMin.X || hatchCenter.X - aabbHalfX >= boundsMax.X) continue;
+				if (hatchCenter.Y + aabbHalfY <= boundsMin.Y || hatchCenter.Y - aabbHalfY >= boundsMax.Y) continue;
+
+				FVector2D hatchPoly[4] = {
+					{ hatchCenter.X + halfSizeX * cosRot - halfSizeY * sinRot, hatchCenter.Y + halfSizeX * sinRot + halfSizeY * cosRot },
+					{ hatchCenter.X - halfSizeX * cosRot - halfSizeY * sinRot, hatchCenter.Y - halfSizeX * sinRot + halfSizeY * cosRot },
+					{ hatchCenter.X - halfSizeX * cosRot + halfSizeY * sinRot, hatchCenter.Y - halfSizeX * sinRot - halfSizeY * cosRot },
+					{ hatchCenter.X + halfSizeX * cosRot + halfSizeY * sinRot, hatchCenter.Y + halfSizeX * sinRot - halfSizeY * cosRot },
+				};
+
+				// 和LookupTerrain同一个思路：依次按矩形4条边分割，外侧部分确定在矩形外，收下；
+				// 4条边都留在内侧的部分才是洞，丢弃。
+				TArray<TArray<FClipPoint>> survivingPieces;
+				for (const TArray<FClipPoint>& piece : workPolys) {
+					TArray<FClipPoint> currentInside = piece;
+					for (int32 e = 0; e < 4 && currentInside.Num() >= 3; e++) {
+						TArray<FClipPoint> insidePart, outsidePart;
+						SplitClipPolygonByLine(currentInside, hatchPoly[e], hatchPoly[(e + 1) % 4], hatchCenter, insidePart, outsidePart);
+						if (outsidePart.Num() >= 3) survivingPieces.Add(outsidePart);
+						currentInside = MoveTemp(insidePart);
+					}
+				}
+				workPolys = MoveTemp(survivingPieces);
+			}
+
+			for (TArray<FClipPoint>& piece : workPolys) {
+				for (FClipPoint& p : piece) {
+					if (p.index < 0) p.index = vertices.Add(p.pos);
+				}
+				for (int32 i = 1; i + 1 < piece.Num(); i++) {
+					triangles.Add(piece[0].index); triangles.Add(piece[i + 1].index); triangles.Add(piece[i].index);
+				}
+			}
+		}
+	};
+
 	const int quadrantSize = TERRAIN_LOD_GRID_SUBDIV / 4; // childPos是4x4(16格)的子级覆盖位掩码,跟细分数无关,一直是4x4
 	for (int cy = 0; cy < TERRAIN_LOD_GRID_SUBDIV; cy++) {
 		for (int cx = 0; cx < TERRAIN_LOD_GRID_SUBDIV; cx++) {
@@ -645,18 +761,23 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			if ((childPos >> (15 - s)) & 1) continue;
 
 			bool drawQuad = true;
-			if (levelIdx <= 1) {
+			if (levelIdx <= TERRAIN_HATCH_MAX_LEVEL) {
 				float quadCenterMapX = startX + (cx + 0.5f) * cellSize;
 				float quadCenterMapY = startY + (cy + 0.5f) * cellSize;
 				int ex = FMath::Clamp(FMath::FloorToInt(quadCenterMapX), 0, mapSize.first - 1);
 				int ey = FMath::Clamp(FMath::FloorToInt(quadCenterMapY), 0, mapSize.second - 1);
-				// "construction"格子或者被Map::AddHatch记过洞(目前只有Roadnet隧道口这一个来源)
-				// 的格子，整格都交给下面精确geometry那一段处理，这里只负责登记(触发lookupCached
-				// 缓存)+跳过常规两三角形画法，不再做任何"quad中心是否在矩形内"的判断。
-				if (map->GetTerrain(ex, ey) == "construction" || !map->GetHatches(ex, ey).empty()) {
-					lookupCached(ex, ey);
-					drawQuad = false;
-				}
+				// "construction"格子整格交给下面LookupTerrain的精确geometry处理(平地，不需要细化高度)；
+					// 其它被Map::AddHatch记过洞的格子(Roadnet隧道口等，可能在有起伏的地形上)不能整格
+					// 换成"只有四角"的画法——那样会丢掉格子里的细化高度、和邻格的边对不上产生裂缝——
+					// 而是只对这个小格自己的两个三角形做hatch裁剪，没被切到的小格仍用共享的网格顶点。
+					if (levelIdx <= 1 && map->GetTerrain(ex, ey) == "construction") {
+						lookupCached(ex, ey);
+						drawQuad = false;
+					}
+					else if (!map->GetHatches(ex, ey).empty()) {
+						clipGridCell(cx, cy, ex, ey);
+						drawQuad = false;
+					}
 			}
 			if (!drawQuad) continue;
 

@@ -39,7 +39,7 @@
   `LookupTerrain`算出每个construction/挖洞Element的精确几何，按Element粒度处理：sub-quad
   循环遇到construction/有hatch的Element时触发`lookupCached`缓存并跳过常规两三角形画法，
   随后统一按`LookupTerrain`返回的三角形列表直接建出**精确坐标**的geometry，和sub-quad
-  网格粒度无关（前提：所有挖洞都发生在平地上，construction Element不需要更细的LOD细分）。
+  网格粒度无关（前提：construction Element在平地上，不需要更细的LOD细分；起伏地形上的hatch见下面`clipGridCell`）。
   没有hatch命中的construction Element只贡献2个三角形（1个完整矩形）。
   - **`LookupTerrain`的挖洞算法是精确凸多边形裁剪，不是"外接矩形减矩形+角落补丁三角形"的
     近似算法**——后者（每个hatch先按旋转矩形算轴对齐外接矩形(AABB)，对格子做"T形分割"挖洞，
@@ -69,8 +69,24 @@
       天然保持输入多边形的绕序不变，`FanTriangulate`对任意点数的凸多边形套用同一个"朴素fan、
       后两个顶点对调"的规则(`(v0,v[i+1],v[i])`)，消费方(`BuildLevel`)按`FTerrainTri2D`
       存好的`(A,B,C)`顺序直接建三角形，不用再另外对调。
+  - **有hatch的非construction格子(隧道口等，可能在有起伏的地形上)不走`LookupTerrain`**，而是
+    `BuildLevel`里的`clipGridCell`：只对这个网格小格(L0=1/16、L1=1/8 element，和element对齐，
+    不跨格)的两个三角形按这个element的全部hatch旋转矩形做同样的4边半平面裁剪(`FClipPoint`/
+    `SplitClipPolygonByLine`，顶点带世界坐标和网格顶点下标)。原因：`LookupTerrain`整格换成
+    "只有四角和交点"的扇形三角化，会丢掉格子里的细化高度(17x17)，且和邻格(每1/16一个顶点)
+    的共用边对不上产生裂缝；hatch登记范围是旋转矩形的外接矩形，没被真正切到的外圈格子也会被
+    整格压平。现在：没被切到的小格仍是共享网格顶点的普通两个三角形，完全在洞里的三角形丢弃，
+    被切到的三角形保留洞外部分——角点复用网格顶点(无裂缝、法线连续)，只有矩形边上的交点追加
+    新顶点，高度是原三角形平面上的3D线性插值(正好落在原来渲染的表面上，含LOD接缝修正)。
+    只有洞沿一圈是新顶点。construction格子(平地)仍走`LookupTerrain`整格路径，其中如果还有
+    hatch(地下室井口)也由`LookupTerrain`处理。
+  - 起伏地形上的"路"不靠挖洞：路网通过`RoadnetMod::AddTerrainFit`让地形高度贴到路面高度
+    （`Map::ApplyTerrainFits`直接改`fineHeights`，见`Core/map/map.md`"地形贴合"），UE这边不需要
+    任何特殊处理，地形网格照常读`SampleHeight`。hatch仍只用来挖洞。
+  - **洞沿没有侧壁**：地形是单层面片，起伏地形上从侧面/低角度能透过洞沿看到地形背面(被剔除)。
+    补侧壁需要hatch深度和"哪几面是开口"的信息，会改`AddHatch`的mod接口，暂未做。
   **挖洞判断条件是"`construction`或者这个格子有hatch"**（`LookupTerrain`开头的提前返回、
-  `BuildLevel`里调用`lookupCached`前的判断，两处必须保持一致）——隧道口所在的格子地形类型
+  `BuildLevel`里的判断；construction走`lookupCached`，其余有hatch的走`clipGridCell`）——隧道口所在的格子地形类型
   是`"terrain_mountain"`（或紧邻的`"plain"`），从来不会被判定成`"construction"`（3x3邻域全plain/
   construction才晋升，隧道口紧邻`mountain`格子，邻域条件必然不满足），如果挖洞逻辑锁死在
   只认`"construction"`，隧道口的hatch会被忽略、隧道段被山体实心地形完全挡住看不见。

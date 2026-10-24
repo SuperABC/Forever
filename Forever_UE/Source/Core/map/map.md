@@ -35,17 +35,28 @@ Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初�
   由`Vegetation::ExpandRequests`展开。
   过滤规则`CanPlaceTree`：越界、有水面、有hatch的格子不种。UE层通过`GetVegetation()`一次性
   读取渲染，见`vegetation.md`。
+- **地形贴合`ApplyTerrainFits(fits)`**：路面高度由mod指定，地形去贴路面。对每条请求的每段折线，
+  枚举它外扩(半宽+falloff)范围内的细化格点(间距1/16 element，和UE地形L0顶点重合)，取到折线
+  的最近距离d：d<=半宽权重1、目标高度=最近点路面Z；半宽<d<半宽+falloff权重按smoothstep从1
+  降到0；其余不动。同一格点被多段/多请求命中取权重最大的，和顺序无关。随后：①被碰到的
+  element没有`fineHeights`的先用`SampleHeight`建出17x17（自动细分，必须在写入前全部建完）；
+  ②每个格点新高度=lerp(原高度, 路面Z, 权重)，写进所有共用该格点的element数组（整数边界上的
+  格点属于相邻最多4个element）；③element左下角整数格点同时写粗高度`Element::height`。**不
+  经`SetHeight`**（它会清掉邻格细化数组）。路面比地形高或低都一样，新高度只取决于路面Z、权重
+  和原高度。结果随`Element`存档（`height`/`fineHeights`都已存），请求本身不存、读档也不重算。
 - **`AddHatch(Quad q, float rotation)`自动分发到所有与`q`重叠的element**——按`q`的旋转AABB
   算出重叠的格子范围，逐个格子调用`Element::hatches.emplace_back`。
 - **`InitRoadnet()`必须在`InitTerrains()`之后调用**——`RoadnetMod::DistributeRoadnet`要采样
-  已经生成好的地形类型/水面（`getTerrain`/`getWater`两个回调），道路本身高度固定0，不采样/
-  不跟随地形高度（这是范围裁剪，不是遗漏，以后要做需要加`getHeight`回调和高度贴合逻辑）。
+  已经生成好的地形类型/水面/高度（`getTerrain`/`getWater`/`getHeight`三个回调，`getHeight`就是
+  `Map::SampleHeight`，含细化高度）。路面高度由mod自己决定（固定0或者采样地形），需要地形
+  迁就路面时由mod提交`TerrainFitRequest`，见下面"地形贴合"。
   内部流程：①`ModLoader::RegisterConcept<RoadnetFactory>`发现/注册roadnet mod dll；②按
   `RoadnetFactory::GetRoadnet()`（单选，见`roadnet_factory.md`）选出唯一启用的mod，
   `new Roadnet(&roadnetFactory, id)`；③`roadnet->DistributeRoadnet(...)`+
   `roadnet->AllocateAddress()`，随后把`roadnet->GetHatches()`（目前唯一的来源是Roadnet隧道口，
   见`Source/Basic/map/roadnet_basic.md`"隧道"一节）逐个转发进`this->AddHatch(quad,rotation)`
-  ——复用Terrain阶段已经建好的挖洞机制；④按每个`Intersection`收集与之相连的`Road`，
+  ——复用Terrain阶段已经建好的挖洞机制，再调`ApplyTerrainFits(roadnet->GetTerrainFits())`
+  把地形贴到路面上；④按每个`Intersection`收集与之相连的`Road`，
   `RoadJunction::Build`逐个建路口（车行/行人锚点+路缘角点）；⑤遍历每条`Road`建"最内侧车道
   贯通线"+遍历每个`RoadJunction`建路口内部连接，一起构成`vehicleNavGraph`/
   `pedestrianNavGraph`两张导航图。具体设计理由见`roadnet.md`。

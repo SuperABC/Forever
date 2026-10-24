@@ -108,6 +108,12 @@ public:
 	// (每条Road的"最内侧车道贯通线"+每个RoadJunction的路口内部连接)。
 	void InitRoadnet();
 
+	// 把路网产出的地形贴合请求烤进地形高度(InitRoadnet里hatch转发之后调用)：请求覆盖的element自动
+	// 补上17x17细化高度，路面内的格点高度取路面高度，路面边缘向外falloff距离内平滑渐变回原高度，
+	// 路面高于或低于原地形都生效。直接写Element的细化数组和整数格点粗高度，不经SetHeight(它会清掉
+	// 邻格细化数组)。结果随Element存档，不需要保存请求，见map.md"地形贴合"一节。
+	void ApplyTerrainFits(const std::vector<TerrainFitRequest>& fits);
+
 	const std::vector<Road*>& GetRoads() const;
 	const std::vector<Intersection*>& GetIntersections() const;
 	const std::vector<Node*>& GetExterns() const;

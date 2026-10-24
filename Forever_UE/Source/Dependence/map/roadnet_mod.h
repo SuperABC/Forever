@@ -10,6 +10,21 @@
 #include <functional>
 
 
+// 地形贴合请求(RoadnetMod::AddTerrainFit产出)：路面高度由mod指定，宿主(Map::ApplyTerrainFits)把
+// 路面下和路边的地形高度贴到路面上——路面内地形高度=路面高度，路面边缘向外falloff距离内按到边缘的
+// 距离平滑渐变回原地形，不管路面比地形高还是低都生效。存的是采样好的中轴线折线(纯值类型)，不是
+// Connection指针：mod的roads会扩容，指针会失效。
+struct TerrainFitSample {
+	float x = 0.f;
+	float y = 0.f;
+	float z = 0.f; // 这一点的路面高度(地图element单位)
+};
+struct TerrainFitRequest {
+	std::vector<TerrainFitSample> centerline;
+	float width = 0.f;   // 路面整宽(地图element单位)
+	float falloff = 0.f; // 路面边缘向外渐变回原地形的距离
+};
+
 // RoadnetMod:路网布局方案的Mod扩展点。和Terrain(可以多个mod叠加分发)不同,一次只应该有
 // 一个路网布局方案生效,由RoadnetFactory::SetConfig/GetRoadnet做单选,详见roadnet_factory.h。
 class RoadnetMod {
@@ -24,11 +39,13 @@ public:
 	// 四个成员。nodeStaticCount是宿主传入的当前Node::count计数器值,实现开头必须先
 	// Node::SetCount(nodeStaticCount)再开始构造任何Node/Intersection/Road,否则跨DLL的id会冲突;
 	// 不要在mod里留下未通过这四个成员返回的Node实例。
-	// 道路高度默认固定为0,不采样地形高度起伏(这次范围裁剪,详见roadnet.md)；隧道段是唯一的
-	// 例外,靠固定TUNNEL_HEIGHT常量下探,不是采样出来的真实深度,见Basic层JingRoadnet实现。
+	// getHeight按地图element单位的连续坐标返回当前地形高度(含细化高度)，路面想跟着山抬升时用它采样，
+	// 再用AddTerrainFit把地形贴到路面上。道路高度由mod自己决定，默认可以不采样固定为0；隧道段靠
+	// 固定TUNNEL_HEIGHT常量下探，见Basic层JingRoadnet实现。
 	virtual void DistributeRoadnet(int width, int height,
 		const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
+		const std::function<float(float, float)>& getHeight,
 		int nodeStaticCount) = 0;
 
 	// 布局行道树:在整张地图(路网+园区+建筑+房间)全部生成完之后由Map::InitVegetation调用一次,
@@ -41,6 +58,11 @@ public:
 	// 隧道口挖地形洞用,照抄老工程RoadnetMod::AddHatch语义。width是Quad垂直于connection方向
 	// 的宽度，Quad朝向沿t1->t2端点连线方向。
 	void AddHatch(const Connection* connection, float t1, float t2, float width);
+
+	// 工具方法(非虚,不需要重写):请求把地形高度贴合到connection上[t1,t2]这一段的路面高度——路面本身
+	// 高度用的是connection的Node Z(GetPoint的Z)，width是路面整宽，falloff是路面边缘向外渐变回原地形
+	// 的距离。立即沿弧长采样成折线追加进terrainFits，不保留connection指针。
+	void AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff);
 
 	std::vector<Node> externs;
 	std::vector<Intersection> intersections;
@@ -65,6 +87,9 @@ public:
 	// AddHatch产出的地形挖洞标记(Quad+旋转角)，宿主(Map::InitRoadnet)会把这里的每一项转发进
 	// Map::AddHatch，复用Terrain已有的挖洞渲染机制，见map.md。
 	std::vector<std::pair<Quad, float>> hatches;
+
+	// AddTerrainFit产出的地形贴合请求，宿主(Map::InitRoadnet)按值拷贝走，见Map::ApplyTerrainFits。
+	std::vector<TerrainFitRequest> terrainFits;
 
 	// Zone/Building裁剪Lot自由空间时自动生成的小路材质路径。留空表示不指定，Forever层渲染
 	// 小路时退化用RoadPlain，见roadnet.md。
