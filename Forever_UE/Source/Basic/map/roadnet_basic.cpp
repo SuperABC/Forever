@@ -118,9 +118,11 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	// 道路3D资产命名规则(美术资产按此命名，见roadnet_basic.md)：default_左车行_左停车_左人行_
 	// 右车行_右停车_右人行——和configureLanesEx的六个参数一一对应，保证mesh资产的视觉横断面
 	// 和车道数据描述的横断面精确匹配。
-	auto meshPathFor = [](int leftV, int leftP, int leftPd, int rightV, int rightP, int rightPd) -> string {
+	// tunnel=true时用隧道内的资产(同名加"_T"后缀)，隧道口的引道/下坡仍用普通资产。
+	auto meshPathFor = [](int leftV, int leftP, int leftPd, int rightV, int rightP, int rightPd, bool tunnel = false) -> string {
 		string suffix = to_string(leftV) + "_" + to_string(leftP) + "_" + to_string(leftPd) + "_"
 			+ to_string(rightV) + "_" + to_string(rightP) + "_" + to_string(rightPd);
+		if (tunnel) suffix += "_T";
 		return "/Game/Asset/Meshes/default_" + suffix + ".default_" + suffix;
 		};
 
@@ -149,6 +151,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		int leftV = 1, int leftP = 0, int leftPd = 1, int rightV = 1, int rightP = 0, int rightPd = 1,
 		float startSlope = 0.f, float endSlope = 0.f) {
 		string thisMeshPath = meshPathFor(leftV, leftP, leftPd, rightV, rightP, rightPd);
+		string tunnelMeshPath = meshPathFor(leftV, leftP, leftPd, rightV, rightP, rightPd, true);
 		auto configureThis = [&](Road& road) { configureLanesEx(road, leftV, leftP, leftPd, rightV, rightP, rightPd); };
 
 		bool n1Tunnel = n1.GetZ() < 0.f;
@@ -180,21 +183,22 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			roads.emplace_back(name, groundNode, flatNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), groundNode, flatNode);
 			configureThis(roads.back());
-			AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
+			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			roads.emplace_back(name, flatNode, splitNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), flatNode, splitNode);
 			configureThis(roads.back());
-			AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
+			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			if (!noLevelPart) {
-				roads.emplace_back(name, splitNode, tunnelNode, thisMeshPath, meshUnit);
+				roads.emplace_back(name, splitNode, tunnelNode, tunnelMeshPath, meshUnit);
 				configureThis(roads.back());
 			}
 			return;
 		}
 
-		roads.emplace_back(name, n1, n2, thisMeshPath, meshUnit);
+		// 两端都在隧道里(Z<0)的路段是隧道内路面，用隧道内的资产。
+		roads.emplace_back(name, n1, n2, (n1Tunnel && n2Tunnel) ? tunnelMeshPath : thisMeshPath, meshUnit);
 		// 两端等高且坡度为0的路段(地面上的路、隧道里的路)直接是直线，不加控制点；只有高度变化的路段才是曲线。
 		bool level = fabsf(n1.GetZ() - n2.GetZ()) < 1e-4f && fabsf(startSlope) < 1e-6f && fabsf(endSlope) < 1e-6f;
 		if (!level) addControls(roads.back(), n1, n2, startSlope, endSlope);

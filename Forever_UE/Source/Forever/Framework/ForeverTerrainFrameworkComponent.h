@@ -67,6 +67,10 @@ private:
 	// 构建覆盖所有"ocean"地形格的海面网格
 	void BuildOceanMesh();
 
+	// 隧道口侧壁mesh：对Map::GetTunnelWallHatches()的每个hatch在洞的两条长边各做一条竖直的墙(有厚度，
+	// 内面可见、可碰撞)，其它hatch没有墙，见.cpp注释。
+	void BuildTunnelWalls();
+
 	// 重建近处混合控制纹理(NearIndexMap/NearWeightMap)，覆盖范围是以(originX,originY)为
 	// 左下角、边长sizeElements(地图元素单位)的正方形区域——只在nearControlLevel那一级LOD
 	// 自己的pivot变化时调用，见ForeverTerrainFrameworkComponent.md"近处地形混合"一节。
@@ -90,6 +94,17 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> oceanMesh;
+
+	UPROPERTY()
+	TObjectPtr<UProceduralMeshComponent> tunnelWallMesh;
+
+	// 侧壁材质：地形材质是按世界XY投影采样的，竖直面上整面都是拉伸的竖条纹，所以侧壁用单色的Pure材质
+	// (Color参数)；以后有三平面/UV贴图的材质时换这个。
+	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
+	TObjectPtr<UMaterialInterface> tunnelWallBaseMaterial;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> tunnelWallMaterial;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> terrainMaterial;

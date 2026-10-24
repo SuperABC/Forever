@@ -338,6 +338,20 @@ protected:
 	float acreage;
 };
 
+// 地形挖洞标记(Map::AddHatch，Terrain渲染时在地形上挖掉这个旋转矩形)。quad是矩形(sizeX=沿rotation方向的
+// 长度、sizeY=宽度)，rotation是长边方向(弧度)；"方向"就是rotation的前进方向：起点端=-forward、终点端
+// =+forward。wall=true的hatch(目前只有隧道口，RoadnetMod::AddTunnelHatch产出)会在洞的两条长边加竖直的
+// 侧壁(UE层ForeverTerrainFrameworkComponent::BuildTunnelWalls)，侧壁底边是洞底高度：floorStart/floorEnd
+// 是洞底(路面)在起点端/终点端的绝对高度(地图element单位)，沿路按smoothstep过渡。wall=false(默认)的
+// hatch不加任何东西。
+struct TerrainHatch {
+	Quad quad;
+	float rotation = 0.f;
+	bool wall = false;
+	float floorStart = 0.f;
+	float floorEnd = 0.f;
+};
+
 enum AREA_TYPE : int {
 	AREA_NONE,
 	AREA_RESIDENTIAL_HIGH,

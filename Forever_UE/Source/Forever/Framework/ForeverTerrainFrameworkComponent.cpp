@@ -40,6 +40,12 @@ UForeverTerrainFrameworkComponent::UForeverTerrainFrameworkComponent() {
 		nearBaseMaterial = nearMatFinder.Object;
 	}
 
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> tunnelWallMatFinder(
+		TEXT("/Game/Asset/Materials/Pure.Pure"));
+	if (tunnelWallMatFinder.Succeeded()) {
+		tunnelWallBaseMaterial = tunnelWallMatFinder.Object;
+	}
+
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> oceanMatFinder(
 		TEXT("/Water/Materials/WaterSurface/Water_Material_CustomMesh.Water_Material_CustomMesh"));
 	if (oceanMatFinder.Succeeded()) {
@@ -423,6 +429,7 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 	}
 
 	BuildOceanMesh();
+	BuildTunnelWalls();
 }
 
 float UForeverTerrainFrameworkComponent::SampleHeight(float mapX, float mapY) const {
@@ -550,7 +557,9 @@ void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FStr
 	TArray<TArray<FVector2D>> workPolys;
 	workPolys.Add({ {0.f,0.f}, {1.f,0.f}, {1.f,1.f}, {0.f,1.f} });
 
-	for (auto& [quad, rotation] : map->GetHatches(elemX, elemY)) {
+	for (const TerrainHatch& terrainHatch : map->GetHatches(elemX, elemY)) {
+		const Quad& quad = terrainHatch.quad;
+		float rotation = terrainHatch.rotation;
 		if (workPolys.Num() == 0) break; // 这个格子已经被之前的hatch挖空了，不用再判断了
 
 		float hatchCenterX = quad.GetPosX() - elemX;
@@ -707,7 +716,9 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			TArray<TArray<FClipPoint>> workPolys;
 			workPolys.Add(start);
 
-			for (auto& [quad, rotation] : hatches) {
+			for (const TerrainHatch& terrainHatch : hatches) {
+				const Quad& quad = terrainHatch.quad;
+				float rotation = terrainHatch.rotation;
 				if (workPolys.Num() == 0) break; // 这个三角形已经被挖空了
 
 				FVector2D hatchCenter(quad.GetPosX() * worldScale, quad.GetPosY() * worldScale);
@@ -994,4 +1005,102 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 	}
 	if (oceanMaterial)
 		oceanMesh->SetMaterial(0, oceanMaterial);
+}
+
+// 隧道口侧壁：对每个wall=true的hatch(RoadnetMod::AddTunnelHatch)，在洞的两条长边(沿rotation，横向
+// 偏移+-sizeY/2)各做一条竖直的墙；不加两个端头(起点端是和地面齐平的路面入口，终点端是隧道本身，隧道里
+// 的墙和顶棚用资产)。墙顶=地形高度，墙底=洞底(floorStart->floorEnd，smoothstep)再往下埋一点；做成有
+// 厚度的小板(朝洞内的内面+朝洞外的外面+顶面)，内面可见、可碰撞。其它hatch(wall=false)一概没有墙。
+#define TUNNEL_WALL_SEGMENT 0.25f       // 沿长度的断面间距(地图element单位)，墙顶跟着地形起伏
+#define TUNNEL_WALL_THICKNESS 0.1f      // 墙厚度
+#define TUNNEL_WALL_TOP_INSET 0.005f    // 墙顶比地形低多少(10m*0.005=5cm)，保证墙顶不会冒出地面
+#define TUNNEL_WALL_BOTTOM_EXTRA 0.1f   // 墙底比洞底再往下埋多少(埋在路面下)
+
+void UForeverTerrainFrameworkComponent::BuildTunnelWalls() {
+	if (!map) return;
+	AActor* owner = GetOwner();
+	if (!owner) return;
+
+	const float worldScale = 1000.f;
+	TArray<FVector> vertices;
+	TArray<int32> triangles;
+	TArray<FVector> normals;
+
+	// 按法线方向定三角形绕序：本文件约定(A,B,C)的朝向是Cross(C-A,B-A)(和BuildLevel算面法线一致)，
+	// 朝向和期望法线相反就交换B/C。每个三角形独立顶点(平直着色)。
+	auto addTriangle = [&](FVector a, FVector b, FVector c, const FVector& normal) {
+		if (FVector::DotProduct(FVector::CrossProduct(c - a, b - a), normal) < 0.f) Swap(b, c);
+		int32 base = vertices.Num();
+		vertices.Add(a); vertices.Add(b); vertices.Add(c);
+		normals.Add(normal); normals.Add(normal); normals.Add(normal);
+		triangles.Add(base); triangles.Add(base + 1); triangles.Add(base + 2);
+		};
+	auto addQuad = [&](const FVector& a, const FVector& b, const FVector& c, const FVector& d, const FVector& normal) {
+		addTriangle(a, b, c, normal);
+		addTriangle(a, c, d, normal);
+		};
+
+	for (const TerrainHatch& hatch : map->GetTunnelWallHatches()) {
+		float length = hatch.quad.GetSizeX();
+		float halfWidth = hatch.quad.GetSizeY() * 0.5f;
+		if (length <= 0.f || halfWidth <= 0.f) continue;
+		float cosRot = FMath::Cos(hatch.rotation), sinRot = FMath::Sin(hatch.rotation);
+		FVector2D forward(cosRot, sinRot), perp(-sinRot, cosRot);
+		FVector2D center(hatch.quad.GetPosX(), hatch.quad.GetPosY());
+
+		// 洞底高度沿路是起点端到终点端的smoothstep(隧道口下坡的S形曲线两端水平)。
+		auto floorAt = [&](float u) {
+			float s = u * u * (3.f - 2.f * u);
+			return hatch.floorStart + (hatch.floorEnd - hatch.floorStart) * s;
+			};
+
+		int segments = FMath::Max(1, FMath::CeilToInt(length / TUNNEL_WALL_SEGMENT));
+		for (int side = -1; side <= 1; side += 2) {
+			// 墙面法线(水平)：内面朝洞中心线，外面朝洞外。
+			FVector inward(-perp.X * side, -perp.Y * side, 0.f);
+			FVector outward = -inward;
+			for (int i = 0; i < segments; i++) {
+				float u0 = static_cast<float>(i) / segments, u1 = static_cast<float>(i + 1) / segments;
+				FVector2D p0 = center + forward * ((u0 - 0.5f) * length) + perp * (side * halfWidth);
+				FVector2D p1 = center + forward * ((u1 - 0.5f) * length) + perp * (side * halfWidth);
+				float floor0 = floorAt(u0), floor1 = floorAt(u1);
+				FVector2D o0 = p0 + perp * (side * TUNNEL_WALL_THICKNESS);
+				FVector2D o1 = p1 + perp * (side * TUNNEL_WALL_THICKNESS);
+				// 墙顶比地形低一点，内外两侧各自取自己位置的地形高度再取较低的，外侧的墙板往洞外延伸的那一
+				// 部分在地形下面，不能因为地形往外变低就冒出地面。
+				float inner0 = SampleHeight(p0.X, p0.Y) - TUNNEL_WALL_TOP_INSET;
+				float inner1 = SampleHeight(p1.X, p1.Y) - TUNNEL_WALL_TOP_INSET;
+				float top0 = inner0, top1 = inner1;
+				float outerTop0 = FMath::Min(inner0, SampleHeight(o0.X, o0.Y) - TUNNEL_WALL_TOP_INSET);
+				float outerTop1 = FMath::Min(inner1, SampleHeight(o1.X, o1.Y) - TUNNEL_WALL_TOP_INSET);
+				// 这一段地形不比洞底高(洞底和地面齐平的入口附近)就不需要墙。
+				if (top0 <= floor0 && top1 <= floor1) continue;
+				float bottom0 = floor0 - TUNNEL_WALL_BOTTOM_EXTRA, bottom1 = floor1 - TUNNEL_WALL_BOTTOM_EXTRA;
+				auto world = [&](const FVector2D& p, float z) { return FVector(p.X * worldScale, p.Y * worldScale, z * worldScale); };
+
+				addQuad(world(p0, bottom0), world(p1, bottom1), world(p1, top1), world(p0, top0), inward);
+				addQuad(world(o0, bottom0), world(o1, bottom1), world(o1, outerTop1), world(o0, outerTop0), outward);
+				addQuad(world(p0, top0), world(p1, top1), world(o1, outerTop1), world(o0, outerTop0), FVector::UpVector);
+			}
+		}
+	}
+
+	if (!tunnelWallMesh) {
+		tunnelWallMesh = NewObject<UProceduralMeshComponent>(owner, TEXT("TunnelWallMesh"));
+		tunnelWallMesh->SetupAttachment(owner->GetRootComponent());
+		tunnelWallMesh->RegisterComponent();
+		owner->AddInstanceComponent(tunnelWallMesh);
+	}
+	if (triangles.Num() == 0) {
+		tunnelWallMesh->ClearAllMeshSections();
+		return;
+	}
+
+	tunnelWallMesh->CreateMeshSection(0, vertices, triangles, normals,
+		TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), true);
+	if (!tunnelWallMaterial && tunnelWallBaseMaterial) {
+		tunnelWallMaterial = UMaterialInstanceDynamic::Create(tunnelWallBaseMaterial, this);
+		tunnelWallMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.32f, 0.30f, 0.27f, 1.f));
+	}
+	if (tunnelWallMaterial) tunnelWallMesh->SetMaterial(0, tunnelWallMaterial);
 }

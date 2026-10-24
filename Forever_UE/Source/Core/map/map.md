@@ -44,7 +44,12 @@ Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初�
   格点属于相邻最多4个element）；③element左下角整数格点同时写粗高度`Element::height`。**不
   经`SetHeight`**（它会清掉邻格细化数组）。路面比地形高或低都一样，新高度只取决于路面Z、权重
   和原高度。结果随`Element`存档（`height`/`fineHeights`都已存），请求本身不存、读档也不重算。
-- **`AddHatch(Quad q, float rotation)`自动分发到所有与`q`重叠的element**——按`q`的旋转AABB
+- **hatch的类型是`TerrainHatch`**（`quad`+`rotation`+`wall`+`floorStart`+`floorEnd`，见`general_geometry.h`）。
+  `AddHatch(const TerrainHatch&)`是主入口，`AddHatch(Quad,float)`（建筑地下室用）包成`wall=false`。
+  `GetTunnelWallHatches()`返回路网里`wall=true`的hatch(隧道口)，UE层用来生成侧壁。存档里每个hatch多存
+  `wall`(U8)+`floorStart/floorEnd`(F32)（Element和Roadnet两处共用`WriteHatches/ReadHatches`；没有改存档
+  版本号，旧存档不兼容）。
+- **`AddHatch`自动分发到所有与`q`重叠的element**——按`q`的旋转AABB
   算出重叠的格子范围，逐个格子调用`Element::hatches.emplace_back`。
 - **`InitRoadnet()`必须在`InitTerrains()`之后调用**——`RoadnetMod::DistributeRoadnet`要采样
   已经生成好的地形类型/水面/高度（`getTerrain`/`getWater`/`getHeight`三个回调，`getHeight`就是

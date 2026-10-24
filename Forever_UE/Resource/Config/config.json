@@ -57,8 +57,8 @@
    ],
    "puzzle_mods" : [ "puzzle_tetris", "puzzle_empty --test true" ],
    "resource_paths" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"

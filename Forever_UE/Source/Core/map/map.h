@@ -34,7 +34,7 @@ struct Element {
 	std::string terrain = "plain";
 	float height = 0.f;
 	std::pair<bool, float> water{ false, 0.f };
-	std::vector<std::pair<Quad, float>> hatches;
+	std::vector<TerrainHatch> hatches;
 	// 细化高度数组(17x17,覆盖[x,x+1]x[y,y+1],约定见terrain_mod.h的TERRAIN_FINE_SUBDIV),
 	// 默认为空——只有起伏大的格子(目前是河岸)才分配,用unique_ptr让没有数组的格子只多8字节。
 	std::unique_ptr<std::array<float, TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE>> fineHeights;
@@ -81,10 +81,15 @@ public:
 	// 单独设水位,这样同一次DistributeTerrain调用里不同格子可以有不同水位(倾斜水面),见
 	// terrain_mod.md"水面"一节。
 	bool SetWater(int x, int y, bool hasWater, float height);
-	const std::vector<std::pair<Quad, float>>& GetHatches(int x, int y) const;
+	const std::vector<TerrainHatch>& GetHatches(int x, int y) const;
 
 	// 自动分发到所有与q重叠的element(按q的旋转AABB计算重叠范围),和旧工程Map::AddHatch同语义。
 	void AddHatch(Quad q, float rotation);
+	void AddHatch(const TerrainHatch& hatch);
+
+	// 路网里带侧壁的hatch(隧道口，wall=true)，UE层据此生成侧壁mesh。roadnet为空返回空；读档后
+	// roadnet的hatches还在，所以也能拿到。
+	std::vector<TerrainHatch> GetTunnelWallHatches() const;
 
 	// 地形类型 -> {纹理数组槽位索引, diffuse/normal/roughness三套资产路径}
 	struct TerrainTextureInfo {

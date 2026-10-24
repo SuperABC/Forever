@@ -112,7 +112,7 @@ public:
 
 	// mod通过RoadnetMod::AddHatch产出的地形挖洞标记(隧道口用)，纯值类型，直接拷贝自
 	// mod->hatches，不需要像Node/Road那样深拷贝。
-	const std::vector<std::pair<Quad, float>>& GetHatches() const;
+	const std::vector<TerrainHatch>& GetHatches() const;
 
 	// mod通过RoadnetMod::AddTerrainFit产出的地形贴合请求，纯值类型，直接拷贝自mod->terrainFits，
 	// 由Map::InitRoadnet交给Map::ApplyTerrainFits烤进地形高度。不进存档(高度已经烤进Element)。
@@ -144,7 +144,7 @@ private:
 	std::vector<Intersection*> intersections;
 	std::vector<Road*> roads;
 	std::vector<Lot*> lots;
-	std::vector<std::pair<Quad, float>> hatches;
+	std::vector<TerrainHatch> hatches;
 	std::vector<TerrainFitRequest> terrainFits;
 	TreeRequests trees;
 	std::string pathRoadMaterial;

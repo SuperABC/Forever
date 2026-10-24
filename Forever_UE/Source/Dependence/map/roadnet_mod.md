@@ -40,6 +40,10 @@ Dependence\map\roadnet_mod.h`相比是全新设计——老工程的`Road`只是
 - **车道/开口数据直接挂在`Road`自己身上**（`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/
   `openings`，见`general_geometry.h`），不是`RoadnetMod`这一层的字段——`RoadnetMod`只负责产出`Road`
   实例，实例本身已经携带了这些数据。
+- **`AddTunnelHatch`工具方法**：隧道口用，和`AddHatch`一样挖洞，另外产出的`TerrainHatch`带`wall=true`、
+  `floorStart/floorEnd`=connection在`t1/t2`处的路面高度(Z)，UE层据此在洞的两条长边生成侧壁(见
+  `ForeverTerrainFrameworkComponent.md`"隧道口侧壁")。其它挖洞一律用`AddHatch`(不加侧壁)。`hatches`的元素类型是
+  `TerrainHatch`(`general_geometry.h`：`quad`+`rotation`+`wall`+`floorStart`+`floorEnd`)。
 - **`AddHatch`工具方法+`hatches`输出成员**：`AddHatch(connection, t1, t2, width)`签名和
   实现（`roadnet_mod.cpp`）：取`connection`在`[t1,t2]`两端的点，中点定位、两点连线方向定
   朝向、弧长定长度、`width`定宽度，包成一个`Quad`追加进`hatches`。消费方

@@ -59,6 +59,10 @@ public:
 	// 的宽度，Quad朝向沿t1->t2端点连线方向。
 	void AddHatch(const Connection* connection, float t1, float t2, float width);
 
+	// 工具方法(非虚,不需要重写):隧道口用的hatch——和AddHatch一样挖洞，另外带侧壁：洞的两条长边会生成竖直
+	// 侧壁，底边是connection在t1/t2处的路面高度(Z)。只有隧道口该用这个，其它挖洞一律用AddHatch(不加侧壁)。
+	void AddTunnelHatch(const Connection* connection, float t1, float t2, float width);
+
 	// 工具方法(非虚,不需要重写):请求把地形高度贴合到connection上[t1,t2]这一段的路面高度——路面本身
 	// 高度用的是connection的Node Z(GetPoint的Z)，width是路面整宽，falloff是路面边缘向外渐变回原地形
 	// 的距离。立即沿弧长采样成折线追加进terrainFits，不保留connection指针。
@@ -86,7 +90,7 @@ public:
 
 	// AddHatch产出的地形挖洞标记(Quad+旋转角)，宿主(Map::InitRoadnet)会把这里的每一项转发进
 	// Map::AddHatch，复用Terrain已有的挖洞渲染机制，见map.md。
-	std::vector<std::pair<Quad, float>> hatches;
+	std::vector<TerrainHatch> hatches;
 
 	// AddTerrainFit产出的地形贴合请求，宿主(Map::InitRoadnet)按值拷贝走，见Map::ApplyTerrainFits。
 	std::vector<TerrainFitRequest> terrainFits;

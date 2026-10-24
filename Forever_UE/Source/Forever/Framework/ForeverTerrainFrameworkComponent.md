@@ -83,8 +83,16 @@
   - 起伏地形上的"路"不靠挖洞：路网通过`RoadnetMod::AddTerrainFit`让地形高度贴到路面高度
     （`Map::ApplyTerrainFits`直接改`fineHeights`，见`Core/map/map.md`"地形贴合"），UE这边不需要
     任何特殊处理，地形网格照常读`SampleHeight`。hatch仍只用来挖洞。
-  - **洞沿没有侧壁**：地形是单层面片，起伏地形上从侧面/低角度能透过洞沿看到地形背面(被剔除)。
-    补侧壁需要hatch深度和"哪几面是开口"的信息，会改`AddHatch`的mod接口，暂未做。
+  - **隧道口侧壁**：地形是单层面片，洞沿没有东西，从侧面/低角度能透过洞沿看到地形背面(被剔除)。
+    `TerrainHatch::wall=true`的hatch(只有`RoadnetMod::AddTunnelHatch`产出的隧道口，其它hatch一概没有)
+    由`BuildTunnelWalls()`在`GenerateTerrain`末尾生成侧壁mesh(`tunnelWallMesh`，一次性生成，和LOD无关)：
+    洞的两条长边(沿`rotation`，横向±sizeY/2)各一条竖直墙，**不加两个端头**(起点端是和地面齐平的路面入口，
+    终点端是隧道本身，隧道里的墙和顶棚用资产)；沿长度每`TUNNEL_WALL_SEGMENT`(0.25)一个断面，墙顶=
+    `SampleHeight`−`TUNNEL_WALL_TOP_INSET`(墙顶比地形低5cm，外侧墙板再取内外两处地形较低者，不冒出地面)，墙底=洞底(`floorStart→floorEnd`的smoothstep，和S形下坡曲线
+    两端水平一致)−`TUNNEL_WALL_BOTTOM_EXTRA`(埋在路面下)，地形不比洞底高的断面跳过；做成有厚度
+    (`TUNNEL_WALL_THICKNESS`)的小板：朝洞内的内面+朝洞外的外面+顶面，三角形绕序按期望法线校正，
+    `CreateMeshSection`带碰撞，材质用单色`Pure`(`tunnelWallBaseMaterial`)：地形材质按世界XY投影采样，竖直面上整面是拉伸的竖条纹。
+    hatch的数据来源是`Map::GetTunnelWallHatches()`(取自`Roadnet::hatches`，读档后也在)。
   **挖洞判断条件是"`construction`或者这个格子有hatch"**（`LookupTerrain`开头的提前返回、
   `BuildLevel`里的判断；construction走`lookupCached`，其余有hatch的走`clipGridCell`）——隧道口所在的格子地形类型
   是`"terrain_mountain"`（或紧邻的`"plain"`），从来不会被判定成`"construction"`（3x3邻域全plain/

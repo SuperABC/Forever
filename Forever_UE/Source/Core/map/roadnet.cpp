@@ -379,7 +379,7 @@ const vector<Lot*>& Roadnet::GetLots() const {
 	return lots;
 }
 
-const vector<pair<Quad, float>>& Roadnet::GetHatches() const {
+const vector<TerrainHatch>& Roadnet::GetHatches() const {
 	return hatches;
 }
 

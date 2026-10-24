@@ -44,10 +44,12 @@
   格点去掉（只有一段完整的80m过渡，那里离山不到80m也铺不了lot）。山前/山后的平地（`p..tIn`、
   `tOut..q`必须全是`plain`/`construction`）不够`rampSamples+1`格，或者隧道口和上一个隧道的口重叠，就放不下
   隧道口，这座山改成抬升（日志里写原因）；不再有"隧道穿过水面"、"一直延伸到extern"的情况。隧道口
-  斜坡段额外调`AddHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`挖开地形，否则隧道段会被
+  斜坡段额外调`AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`挖开地形(同时让UE层给洞的
+  两条长边加侧壁)，否则隧道段会被
   山体实心地形完全挡住看不见；消费方`ForeverTerrainFrameworkComponent::LookupTerrain`的判断条件要放宽到
   "`construction`或者这个格子有hatch"，见该文件`.md`。挖洞宽度直接取`roads.back().GetTotalWidth()`，
   跟着这条路实际配好的车道宽度走，不用固定常量。
+- **隧道内路面用`_T`资产**：两端Z都<0的路段（以及三段拆分里的第三段平路）的mesh路径在`default_x_x_x`后加`_T`后缀（`meshPathFor(..., tunnel=true)`，如`default_1_0_1_1_0_1_T`），隧道口的引道和下坡仍用普通资产。
 - **`addRoad`的地面↔隧道过渡拆成三段Connection**：①`groundNode→flatNode`(长
   `TUNNEL_FLAT_APPROACH_LENGTH=1.5`，两端Z相同，`addControls`在两端Z相同时产出的曲线严格
   保持水平)；②`flatNode→splitNode`(真正的S形下坡)；③`splitNode→隧道`(两端同高，不需要

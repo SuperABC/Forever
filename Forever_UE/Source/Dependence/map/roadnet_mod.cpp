@@ -25,7 +25,22 @@ void RoadnetMod::AddHatch(const Connection* connection, float t1, float t2, floa
 	float cy = (p1.GetY() + p2.GetY()) * 0.5f;
 
 	Quad quad(cx, cy, length, width);
-	hatches.emplace_back(quad, rotation);
+	TerrainHatch hatch;
+	hatch.quad = quad;
+	hatch.rotation = rotation;
+	hatches.push_back(hatch);
+}
+
+void RoadnetMod::AddTunnelHatch(const Connection* connection, float t1, float t2, float width) {
+	if (!connection) return;
+	size_t before = hatches.size();
+	AddHatch(connection, t1, t2, width);
+	if (hatches.size() == before) return;
+
+	TerrainHatch& hatch = hatches.back();
+	hatch.wall = true;
+	hatch.floorStart = connection->GetPoint(t1).GetZ();
+	hatch.floorEnd = connection->GetPoint(t2).GetZ();
 }
 
 void RoadnetMod::AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff) {

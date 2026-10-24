@@ -137,18 +137,24 @@ namespace {
 		return v;
 	}
 
-	void WriteHatches(const vector<pair<Quad, float>>& v, ByteWriter& w) {
+	void WriteHatches(const vector<TerrainHatch>& v, ByteWriter& w) {
 		w.U32(static_cast<uint32_t>(v.size()));
-		for (const auto& [quad, rotation] : v) {
-			WriteQuad(quad, w);
-			w.F32(rotation);
+		for (const TerrainHatch& hatch : v) {
+			WriteQuad(hatch.quad, w);
+			w.F32(hatch.rotation);
+			w.U8(hatch.wall ? 1 : 0);
+			w.F32(hatch.floorStart);
+			w.F32(hatch.floorEnd);
 		}
 	}
-	vector<pair<Quad, float>> ReadHatches(ByteReader& r) {
-		vector<pair<Quad, float>> v(r.U32());
-		for (auto& [quad, rotation] : v) {
-			ReadQuad(quad, r);
-			rotation = r.F32();
+	vector<TerrainHatch> ReadHatches(ByteReader& r) {
+		vector<TerrainHatch> v(r.U32());
+		for (TerrainHatch& hatch : v) {
+			ReadQuad(hatch.quad, r);
+			hatch.rotation = r.F32();
+			hatch.wall = r.U8() != 0;
+			hatch.floorStart = r.F32();
+			hatch.floorEnd = r.F32();
 		}
 		return v;
 	}

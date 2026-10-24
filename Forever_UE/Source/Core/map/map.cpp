@@ -201,8 +201,8 @@ void Map::InitRoadnet() {
 
 	// 把mod通过RoadnetMod::AddHatch产出的地形挖洞标记(隧道口用)转发进Map::AddHatch，
 	// 复用Terrain已有的挖洞渲染机制——AddHatch自己会按Quad的旋转AABB分发到重叠的Element。
-	for (const auto& [quad, rotation] : roadnet->GetHatches()) {
-		AddHatch(quad, rotation);
+	for (const TerrainHatch& hatch : roadnet->GetHatches()) {
+		AddHatch(hatch);
 	}
 
 	// 地形贴合：路面高度已经由mod定好，把路面下和路边的地形高度烤到路面上。
@@ -2109,8 +2109,8 @@ bool Map::SetWater(int x, int y, bool hasWater, float height) {
 	return true;
 }
 
-const vector<pair<Quad, float>>& Map::GetHatches(int x, int y) const {
-	static const vector<pair<Quad, float>> empty;
+const vector<TerrainHatch>& Map::GetHatches(int x, int y) const {
+	static const vector<TerrainHatch> empty;
 	if (!CheckXY(x, y)) {
 		debugf("Warning: Invalid coordinates (%d, %d) for map.\n", x, y);
 		return empty;
@@ -2242,6 +2242,24 @@ void Map::ApplyTerrainFits(const vector<TerrainFitRequest>& fits) {
 }
 
 void Map::AddHatch(Quad q, float rotation) {
+	TerrainHatch hatch;
+	hatch.quad = q;
+	hatch.rotation = rotation;
+	AddHatch(hatch);
+}
+
+std::vector<TerrainHatch> Map::GetTunnelWallHatches() const {
+	vector<TerrainHatch> result;
+	if (!roadnet) return result;
+	for (const TerrainHatch& hatch : roadnet->GetHatches()) {
+		if (hatch.wall) result.push_back(hatch);
+	}
+	return result;
+}
+
+void Map::AddHatch(const TerrainHatch& hatch) {
+	const Quad& q = hatch.quad;
+	float rotation = hatch.rotation;
 	float hw = q.GetSizeX() * 0.5f;
 	float hh = q.GetSizeY() * 0.5f;
 	float absCos = abs(cos(rotation));
@@ -2258,7 +2276,7 @@ void Map::AddHatch(Quad q, float rotation) {
 	for (int cy = y0; cy <= y1; cy++) {
 		for (int cx = x0; cx <= x1; cx++) {
 			if (!CheckXY(cx, cy)) continue;
-			At(cx, cy).hatches.emplace_back(q, rotation);
+			At(cx, cy).hatches.push_back(hatch);
 		}
 	}
 }
