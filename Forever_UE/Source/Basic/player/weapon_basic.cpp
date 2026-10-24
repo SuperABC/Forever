@@ -90,3 +90,86 @@ void RifleWeapon::SetProperty() {
 
 	ammoType = "asset_ammo_rifle";
 }
+
+int ShotgunWeapon::count = 0;
+
+ShotgunWeapon::ShotgunWeapon() : id(count++) {
+}
+
+const char* ShotgunWeapon::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void ShotgunWeapon::SetProperty() {
+	// 近距离高伤害、射速慢、泵动式(单发)。WeaponMod还没有"一次射出多颗弹丸"的字段，所以这里
+	// 一次开火只有一条射线，用单发高伤害+小散射近似霰弹枪，数值留给PIE里试。
+	damage = 90.f;
+	fireRate = 0.9f;
+	fullAuto = false;
+	maxRange = 2500.f;     // 25米，射程短
+	baseSpread = 2.5f;     // 随机散射半角(度)
+	magazineCapacity = 6;
+	reloadDuration = 2.5f;
+
+	firstPersonMeshPath = "/Game/3rdParty/Weapons_Free/Meshes/Actors/AC_shotgun_001.AC_shotgun_001_C";
+
+	// 3D变换先全部沿用步枪的数值，后面按模型实际大小再调。
+	modelScale = 0.4f;
+	attachOffsetX = 0.f;
+	attachOffsetZ = 0.f;
+	backOffsetX = -5.f;
+	backOffsetY = 4.f;
+	backOffsetZ = 0.f;
+	muzzleOffsetX = 50.f;
+	muzzleOffsetZ = 12.f;
+
+	// 单发后坐力大，范围比步枪宽。
+	recoilPitchMin = 3.f;
+	recoilPitchMax = 4.5f;
+	recoilYawMin = -1.5f;
+	recoilYawMax = 1.5f;
+
+	ammoType = "asset_ammo_shotgun";
+}
+
+int SniperWeapon::count = 0;
+
+SniperWeapon::SniperWeapon() : id(count++) {
+}
+
+const char* SniperWeapon::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void SniperWeapon::SetProperty() {
+	// 远距离高伤害、射速最慢、栓动式(单发)、不散射。
+	damage = 150.f;
+	fireRate = 1.5f;
+	fullAuto = false;
+	maxRange = 30000.f;    // 300米
+	baseSpread = 0.f;
+	magazineCapacity = 5;
+	reloadDuration = 3.f;
+
+	firstPersonMeshPath = "/Game/3rdParty/Weapons_Free/Meshes/Actors/AC_sniper_rifle_001.AC_sniper_rifle_001_C";
+
+	// 3D变换先全部沿用步枪的数值，后面按模型实际大小再调。
+	modelScale = 0.6f;
+	attachOffsetX = 0.f;
+	attachOffsetZ = 0.f;
+	backOffsetX = -5.f;
+	backOffsetY = 4.f;
+	backOffsetZ = 0.f;
+	muzzleOffsetX = 80.f;
+	muzzleOffsetZ = 14.f;
+
+	// 单发后坐力很大、左右漂得少。
+	recoilPitchMin = 4.f;
+	recoilPitchMax = 6.f;
+	recoilYawMin = -0.8f;
+	recoilYawMax = 0.8f;
+
+	ammoType = "asset_ammo_sniper";
+}

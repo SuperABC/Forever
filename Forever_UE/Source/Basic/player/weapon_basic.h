@@ -2,7 +2,7 @@
 
 #include "player/weapon_mod.h"
 
-// 武器域默认内容——两把测试用的武器，验证WeaponMod/WeaponFactory这套机制本身+数字键
+// 武器域默认内容——四把测试用的武器(手枪/步枪/霰弹枪/狙击枪)，验证WeaponMod/WeaponFactory这套机制本身+数字键
 // 切枪+开火/换弹手感，不代表最终武器数值（具体弹道/后坐力数值调优留给PIE里试，见
 // weapon_basic.md）。
 //
@@ -34,6 +34,44 @@ public:
 
 	static const char* GetId() { return "weapon_rifle"; }
 	virtual const char* GetType() const override { return "weapon_rifle"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class ShotgunWeapon : public WeaponMod {
+public:
+	ShotgunWeapon();
+
+	static const char* GetId() { return "weapon_shotgun"; }
+	virtual const char* GetType() const override { return "weapon_shotgun"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class SniperWeapon : public WeaponMod {
+public:
+	SniperWeapon();
+
+	static const char* GetId() { return "weapon_sniper"; }
+	virtual const char* GetType() const override { return "weapon_sniper"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 

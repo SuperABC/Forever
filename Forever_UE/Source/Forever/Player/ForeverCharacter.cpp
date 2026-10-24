@@ -178,7 +178,8 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 		}
 	}
 
-	// 武器/背包系统初始化：左肩手枪+右肩步枪，背上一个容器装手枪/步枪子弹各120发——只在
+	// 武器/背包系统初始化：左肩手枪+右肩步枪，背上一个容器装手枪/步枪/霰弹枪/狙击枪子弹各120发，
+	// 外加霰弹枪和狙击枪两把枪本身——只在
 	// Player的这三个槽位全空时(开局第一次占有)才发这套初始装备。肩膀/背包挂在Player身上，
 	// 换人操控(ChangeControlChange)时跟着玩家走，不再每次PossessedBy都删掉重建：否则用掉的
 	// 子弹每换一次人就回满，读档恢复出来的背包也会被这里覆盖掉。每次占有都激活左肩，让新
@@ -204,6 +205,21 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 					if (Asset* rifleAmmo = player->CreateAsset("asset_ammo_rifle")) {
 						rifleAmmo->SetCount(120);
 						bag->AddContent(rifleAmmo);
+					}
+					// 霰弹枪、狙击枪放在背包里(不挂肩膀)，各配120发子弹；要用的话从背包拖到肩膀上激活。
+					if (Asset* shotgun = player->CreateAsset("asset_shotgun")) {
+						bag->AddContent(shotgun);
+					}
+					if (Asset* shotgunAmmo = player->CreateAsset("asset_ammo_shotgun")) {
+						shotgunAmmo->SetCount(120);
+						bag->AddContent(shotgunAmmo);
+					}
+					if (Asset* sniper = player->CreateAsset("asset_sniper")) {
+						bag->AddContent(sniper);
+					}
+					if (Asset* sniperAmmo = player->CreateAsset("asset_ammo_sniper")) {
+						sniperAmmo->SetCount(120);
+						bag->AddContent(sniperAmmo);
 					}
 					// 投掷物：手雷、烟雾弹各10个(各一个count=10的堆叠)，按3切换，见ForeverThrowableComponent.md。
 					if (Asset* grenade = player->CreateAsset("asset_grenade")) {

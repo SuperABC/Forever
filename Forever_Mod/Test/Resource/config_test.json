@@ -7,8 +7,12 @@
       "asset_burger",
       "asset_ammo_pistol",
       "asset_ammo_rifle",
+      "asset_ammo_shotgun",
+      "asset_ammo_sniper",
       "asset_pistol",
       "asset_rifle",
+      "asset_shotgun",
+      "asset_sniper",
       "asset_grenade",
       "asset_smoke_grenade",
       "asset_empty --test true"
@@ -104,6 +108,6 @@
       "vehicle_plane",
       "vehicle_empty --test true"
    ],
-   "weapon_mods" : [ "weapon_pistol", "weapon_rifle" ],
+   "weapon_mods" : [ "weapon_pistol", "weapon_rifle", "weapon_shotgun", "weapon_sniper" ],
    "zone_mods" : [ "zone_residence", "zone_empty --test true" ]
 }

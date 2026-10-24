@@ -11,8 +11,9 @@
 //   BurgerProduct共用(见Source/Basic/industry/product_basic.h)，Asset只存这个type字符串，
 //   不持有Product实例，见Source/Core/player/asset.md"武器/背包系统的桥接"一节。汉堡可使用
 //   (usable=true)，用完count-1到0即销毁，不做饱食度效果。
-// - PistolAmmoAsset/RifleAmmoAsset：子弹，新id，没有对应Product。
-// - PistolWeaponAsset/RifleWeaponAsset：id和WeaponMod的PistolWeapon/RifleWeapon共用，
+// - PistolAmmoAsset/RifleAmmoAsset/ShotgunAmmoAsset/SniperAmmoAsset：子弹，新id，没有对应Product。
+// - PistolWeaponAsset/RifleWeaponAsset/ShotgunWeaponAsset/SniperWeaponAsset：id和WeaponMod的
+//   PistolWeapon/RifleWeapon/ShotgunWeapon/SniperWeapon共用，
 //   weapon=true——可以挂左肩/右肩(激活只走肩膀)，也可以拿在手上，见Source/Core/player/player.h的
 //   ActivateShoulderWeapon桥接机制。
 //
@@ -157,6 +158,82 @@ public:
 
 	static const char* GetId() { return "asset_rifle"; }
 	virtual const char* GetType() const override { return "asset_rifle"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class ShotgunAmmoAsset : public AssetMod {
+public:
+	ShotgunAmmoAsset();
+
+	static const char* GetId() { return "asset_ammo_shotgun"; }
+	virtual const char* GetType() const override { return "asset_ammo_shotgun"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class SniperAmmoAsset : public AssetMod {
+public:
+	SniperAmmoAsset();
+
+	static const char* GetId() { return "asset_ammo_sniper"; }
+	virtual const char* GetType() const override { return "asset_ammo_sniper"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class ShotgunWeaponAsset : public AssetMod {
+public:
+	ShotgunWeaponAsset();
+
+	static const char* GetId() { return "asset_shotgun"; }
+	virtual const char* GetType() const override { return "asset_shotgun"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class SniperWeaponAsset : public AssetMod {
+public:
+	SniperWeaponAsset();
+
+	static const char* GetId() { return "asset_sniper"; }
+	virtual const char* GetType() const override { return "asset_sniper"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 

@@ -137,6 +137,74 @@ void RifleWeaponAsset::SetProperty() {
 	weaponType = "weapon_rifle";
 }
 
+int ShotgunAmmoAsset::count = 0;
+
+ShotgunAmmoAsset::ShotgunAmmoAsset() : id(count++) {
+}
+
+const char* ShotgunAmmoAsset::GetName() {
+	name = string(GetType()) + to_string(id);
+	return name.data();
+}
+
+void ShotgunAmmoAsset::SetProperty() {
+	mobility = AssetMobility::Containee;
+	weight = 0.02f;
+	size = 0.02f;
+}
+
+int SniperAmmoAsset::count = 0;
+
+SniperAmmoAsset::SniperAmmoAsset() : id(count++) {
+}
+
+const char* SniperAmmoAsset::GetName() {
+	name = string(GetType()) + to_string(id);
+	return name.data();
+}
+
+void SniperAmmoAsset::SetProperty() {
+	mobility = AssetMobility::Containee;
+	weight = 0.015f;
+	size = 0.015f;
+}
+
+int ShotgunWeaponAsset::count = 0;
+
+ShotgunWeaponAsset::ShotgunWeaponAsset() : id(count++) {
+}
+
+const char* ShotgunWeaponAsset::GetName() {
+	name = string(GetType()) + to_string(id);
+	return name.data();
+}
+
+void ShotgunWeaponAsset::SetProperty() {
+	mobility = AssetMobility::Object;
+	weight = 3.5f;
+	size = 9.0f;
+	weapon = true;
+	weaponType = "weapon_shotgun";
+}
+
+int SniperWeaponAsset::count = 0;
+
+SniperWeaponAsset::SniperWeaponAsset() : id(count++) {
+}
+
+const char* SniperWeaponAsset::GetName() {
+	name = string(GetType()) + to_string(id);
+	return name.data();
+}
+
+void SniperWeaponAsset::SetProperty() {
+	mobility = AssetMobility::Object;
+	weight = 4.5f;
+	size = 10.0f;
+	weapon = true;
+	weaponType = "weapon_sniper";
+}
+
 int GrenadeAsset::count = 0;
 
 GrenadeAsset::GrenadeAsset() : id(count++) {
