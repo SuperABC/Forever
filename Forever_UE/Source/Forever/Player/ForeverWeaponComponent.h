@@ -5,7 +5,6 @@
 #include "ForeverWeaponComponent.generated.h"
 
 class Weapon;
-class UStaticMeshComponent;
 
 // 挂在AForeverCharacter上的武器组件——开火/换弹/切枪这些"每帧/每次交互都要做"的高频路径
 // 全部是纯C++调用，直接读WeaponMod的数据字段算，不经过Story/Change/Event（见
@@ -66,17 +65,11 @@ private:
 	// 致死则广播CitizenDeceaseEvent+通知UForeverPopulaceFrameworkComponent清理。
 	void Fire();
 
-	void SpawnWeaponMesh();
-	void DestroyWeaponMesh();
-
 	// 独占持有——Weapon(Core层wrapper，见Source/Core/player/weapon.h)构造时自己调
 	// Registry::Get().GetWeaponFactory().CreateWeapon(id)，析构时自己调DestroyWeapon()
 	// 释放(跨DLL new/delete安全，和其余XxxFactory同一个约定)，EndPlay/切枪时这一层只需要
 	// 普通delete。
 	Weapon* currentWeapon = nullptr;
-
-	UPROPERTY()
-	TObjectPtr<UStaticMeshComponent> weaponMesh;
 
 	int32 currentAmmo = 0;
 	float lastFireTime = -1000.f;

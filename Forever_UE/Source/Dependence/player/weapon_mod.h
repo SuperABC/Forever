@@ -30,9 +30,12 @@ public:
 	// Asset::Asset()同一个"创建完mod实例后立刻调一次、再读字段"时机)，不是Forever层。
 	virtual void SetProperty() {}
 
-	// ---- 资产引用（纯数据，UE层按路径LoadObject）----
-	// 占位：还没有导入武器模型时留空——Forever层SpawnWeaponMesh()发现路径为空时会跳过挂
-	// mesh这一步，但开火/伤害/换弹的判定逻辑完全不受影响。
+	// ---- 资产引用（纯数据，UE层按路径加载）----
+	// 武器模型路径，UE软路径。以"_C"结尾=Actor Blueprint类(整件武器，比如枪体+弹匣的相对位置
+	// 在蓝图里，如"/Game/.../AC_pistol_001.AC_pistol_001_C")；否则=单个StaticMesh。留空=没有模型，
+	// UForeverWeaponVisualComponent什么都不显示，但开火/伤害/换弹的判定逻辑完全不受影响。
+	// 肩膀上有这把武器就显示(背在背后)，瞄准时举到attachOffset处，见
+	// Source/Forever/Player/ForeverWeaponVisualComponent.md。
 	std::string firstPersonMeshPath;
 
 	// ---- 挂载 ----
@@ -41,22 +44,44 @@ public:
 	// 换挂载点不需要碰开火逻辑。
 	std::string gripSocketName;
 
-	// 挂载点(gripSocketName对应的骨骼socket，或者留空时的角色Root)基础上的本地偏移——
-	// 没有真实持枪socket时，直接挂Root会让枪的可视网格出现在角色身体正中心附近，这三个
-	// 字段用来把它挪到看起来合理的位置(比如右肩膀靠前一点)。单位和UE一致(cm)，X前/Y右/Z上，
-	// 是角色本地坐标系下的相对偏移，不是世界坐标，不含旋转偏移。这个偏移同时决定了子弹
-	// 轨迹debugLine的视觉起点，见UForeverWeaponComponent::Fire()："gunLocation"直接读挂了
-	// 这个偏移之后的weaponMesh->GetComponentLocation()。
+	// 瞄准锚点的微调：瞄准时枪托摆放的位置，基础位置(右手靠前一点)由Core决定
+	// (Source/Core/player/weapon.cpp的kAimBase*)，这里写的是在基础位置上的偏移，不填(0)就是基础位置。
+	// 相对角色根(胶囊)，角色本地坐标，单位cm，X前/Y右/Z上，不含旋转偏移。枪体从枪托向前延伸(枪随视线
+	// 俯仰，绕枪托转)。不瞄准时枪背在背后，位置由下面的backOffset决定。
 	float attachOffsetX = 0.f;
 	float attachOffsetY = 0.f;
 	float attachOffsetZ = 0.f;
+
+	// ---- 模型和锚点：两个锚点都是枪托(模型原点，资源包的模型轴心在枪托/握把附近，+X朝前) ----
+	// 模型缩放(第三方模型不一定是真实大小)。
+	float modelScale = 1.f;
+
+	// "枪托"这个锚点在模型自己坐标系里的位置：相对模型原点的偏移，cm，缩放之后的尺寸，X前/Y右/Z上。
+	// 默认0=锚点就是模型原点。背枪锚点(backOffset)和瞄准锚点(attachOffset)都是把"这个点"放到
+	// 对应位置，所以往下(-Z)挪锚点=枪整体显示得更高，往上(+Z)=更低，往枪托方向(-X)=枪更靠前。
+	float anchorOffsetX = 0.f;
+	float anchorOffsetY = 0.f;
+	float anchorOffsetZ = 0.f;
+
+	// 枪口在模型自己坐标系里的位置：相对模型原点，cm，缩放之后的尺寸，X前/Y右/Z上(和anchorOffset
+	// 同一个坐标系，不是相对锚点)。开火时的弹道debugLine从这里画出去。
+	float muzzleOffsetX = 0.f;
+	float muzzleOffsetY = 0.f;
+	float muzzleOffsetZ = 0.f;
+
+	// 背枪锚点的微调：不瞄准时枪托放在哪，基础位置(肩胛附近)由Core决定(weapon.cpp的kBackBase*)，
+	// 这里写的是在基础位置上的偏移，不填(0)就是基础位置。相对背枪骨骼(组件的holsterBone)，角色朝向下的
+	// 坐标(cm，X前/Y右/Z上)。写的是右肩的位置，左肩上的枪自动把Y取反(左右对称)。
+	float backOffsetX = 0.f;
+	float backOffsetY = 0.f;
+	float backOffsetZ = 0.f;
 
 	// ---- 射击参数 ----
 	float damage = 25.f;
 	float fireRate = 0.15f;        // 两次开火最小间隔，秒
 	bool fullAuto = false;         // false=每次按键最多打一发，true=按住连发
 	float maxRange = 5000.f;       // UE单位(cm)
-	float baseSpread = 1.5f;       // 散射半角，度——命中方向在瞄准方向为轴的这个半角圆锥内随机
+	float baseSpread = 1.5f;       // 散射半角，度——命中方向在瞄准方向为轴的这个半角圆锥内随机(0=没有散射)
 
 	// ---- 弹药 ----
 	int magazineCapacity = 12;

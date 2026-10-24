@@ -11,6 +11,7 @@ class UInputMappingContext;
 struct FInputActionValue;
 class UForeverWeaponComponent;
 class UForeverThrowableComponent;
+class UForeverWeaponVisualComponent;
 class UStaticMeshComponent;
 class UMaterialInterface;
 class UTexture2D;
@@ -22,6 +23,8 @@ class FOREVER_API AForeverCharacter : public ACharacter
 
 	// 投掷物激活/用完/手不够时要直接开关瞄准状态(StartAim/StopAim是protected)。
 	friend class UForeverThrowableComponent;
+	// 肩膀里的武器被拖走/换掉时要重新ActivateShoulderWeapon(见ForeverWeaponVisualComponent.cpp)。
+	friend class UForeverWeaponVisualComponent;
 
 public:
 	// 按性别换身体网格(男Manny/女Quinn)，并重新摆放头像方块。由ACitizenElement::Init调用。
@@ -149,6 +152,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UForeverWeaponComponent> weaponComponent;
 
+	// 武器可视化：肩膀上的枪背在背后、瞄准时举到枪口位置，见ForeverWeaponVisualComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UForeverWeaponVisualComponent> weaponVisualComponent;
+
 	// 投掷物：数字键3。短按切换身上的投掷物(长按弹出选择列表本期未做)；激活后右键瞄准显示
 	// 预览曲线、左键扔出。和肩上的武器互斥，见ForeverThrowableComponent.md。
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
@@ -228,6 +235,7 @@ public:
 	// 供UForeverWeaponComponent::Fire()判断该用哪个摄像机做开火射线的起点/方向。
 	FORCEINLINE bool IsFirstPerson() const { return bIsFirstPerson; }
 	FORCEINLINE UForeverWeaponComponent* GetWeaponComponent() const { return weaponComponent; }
+	FORCEINLINE UForeverWeaponVisualComponent* GetWeaponVisualComponent() const { return weaponVisualComponent; }
 	FORCEINLINE UForeverThrowableComponent* GetThrowableComponent() const { return throwableComponent; }
 	// 瞄准中且手上激活的是投掷物——供AForeverHUD决定画投掷曲线还是准星。
 	bool IsAimingThrow() const;

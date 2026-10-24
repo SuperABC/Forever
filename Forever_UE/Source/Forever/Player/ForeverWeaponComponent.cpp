@@ -2,6 +2,7 @@
 
 #include "Player/ForeverCharacter.h"
 #include "Player/ForeverExplosionEffect.h"
+#include "Player/ForeverWeaponVisualComponent.h"
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
@@ -14,6 +15,7 @@
 #include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
+#include "DrawDebugHelpers.h"
 
 #include "common/registry.h"
 #include "player/weapon.h"
@@ -27,7 +29,6 @@ UForeverWeaponComponent::UForeverWeaponComponent() {
 }
 
 void UForeverWeaponComponent::EndPlay(const EEndPlayReason::Type EndPlayReason) {
-	DestroyWeaponMesh();
 	delete currentWeapon;
 	currentWeapon = nullptr;
 	Super::EndPlay(EndPlayReason);
@@ -41,20 +42,17 @@ void UForeverWeaponComponent::EquipWeapon(const FString& weaponId) {
 		return;
 	}
 
-	DestroyWeaponMesh();
 	delete currentWeapon;
 
 	currentWeapon = newWeapon;
 	currentAmmo = currentWeapon->GetMagazineCapacity();
 	bReloading = false;
 	bWantsToFire = false;
-	SpawnWeaponMesh();
 }
 
 void UForeverWeaponComponent::ClearWeapon() {
 	if (!currentWeapon) return;
 
-	DestroyWeaponMesh();
 	delete currentWeapon;
 	currentWeapon = nullptr;
 	currentAmmo = 0;
@@ -64,43 +62,6 @@ void UForeverWeaponComponent::ClearWeapon() {
 
 int32 UForeverWeaponComponent::GetMagazineCapacity() const {
 	return currentWeapon ? currentWeapon->GetMagazineCapacity() : 0;
-}
-
-void UForeverWeaponComponent::SpawnWeaponMesh() {
-	if (!currentWeapon || currentWeapon->GetFirstPersonMeshPath().empty()) return; // 见weapon_mod.h：MVP阶段mesh路径留空是正常状态
-
-	AActor* owner = GetOwner();
-	if (!owner || !owner->GetRootComponent()) return;
-
-	UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, UTF8_TO_TCHAR(currentWeapon->GetFirstPersonMeshPath().c_str()));
-	if (!mesh) return;
-
-	weaponMesh = NewObject<UStaticMeshComponent>(owner, NAME_None, RF_Transient);
-	weaponMesh->SetStaticMesh(mesh);
-	weaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	weaponMesh->SetGenerateOverlapEvents(false);
-
-	FName socket = currentWeapon->GetGripSocketName().empty() ? NAME_None : FName(UTF8_TO_TCHAR(currentWeapon->GetGripSocketName().c_str()));
-	ACharacter* character = Cast<ACharacter>(owner);
-	if (character && !socket.IsNone() && character->GetMesh() && character->GetMesh()->DoesSocketExist(socket)) {
-		weaponMesh->SetupAttachment(character->GetMesh(), socket);
-	} else {
-		// gripSocketName留空="直接挂在角色Root/胶囊体上"，见weapon_mod.h。
-		weaponMesh->SetupAttachment(owner->GetRootComponent());
-	}
-
-	// 挂载点在WeaponMod里定义的本地偏移——没有真实持枪socket时直接挂Root会让枪出现在
-	// 身体正中心，用这个偏移挪到看起来合理的位置(比如右肩膀靠前一点)，见weapon_mod.h。
-	weaponMesh->SetRelativeLocation(FVector(currentWeapon->GetAttachOffsetX(), currentWeapon->GetAttachOffsetY(), currentWeapon->GetAttachOffsetZ()));
-
-	weaponMesh->RegisterComponent();
-}
-
-void UForeverWeaponComponent::DestroyWeaponMesh() {
-	if (weaponMesh) {
-		weaponMesh->DestroyComponent();
-		weaponMesh = nullptr;
-	}
 }
 
 void UForeverWeaponComponent::StartFire() {
@@ -198,6 +159,17 @@ void UForeverWeaponComponent::Fire() {
 	FCollisionQueryParams params;
 	params.AddIgnoredActor(GetOwner());
 	bool bHit = GetWorld()->LineTraceSingleByChannel(hit, start, end, ECC_Pawn, params);
+
+#if ENABLE_DRAW_DEBUG
+	// 弹道debugLine：从枪口画到命中点(没命中画到射程终点)，用来检查"弹道是不是从枪口出来"。只是视觉，
+	// 真正的命中判定仍然是上面从摄像机射出的那一条射线。
+	if (UForeverWeaponVisualComponent* visual = character->GetWeaponVisualComponent()) {
+		FVector muzzle;
+		if (visual->GetActiveMuzzleWorldLocation(muzzle)) {
+			DrawDebugLine(GetWorld(), muzzle, bHit ? hit.ImpactPoint : end, FColor::Red, false, 1.0f, 0, 1.0f);
+		}
+	}
+#endif
 
 
 	// 后坐力：这一发子弹的碰撞检测/轨迹已经用踢之前的摄像机朝向算完了，这里踢的是"下一发"

@@ -29,6 +29,17 @@ public:
 	float GetAttachOffsetY() const;
 	float GetAttachOffsetZ() const;
 
+	float GetModelScale() const;
+	float GetAnchorOffsetX() const;
+	float GetAnchorOffsetY() const;
+	float GetAnchorOffsetZ() const;
+	float GetMuzzleOffsetX() const;
+	float GetMuzzleOffsetY() const;
+	float GetMuzzleOffsetZ() const;
+	float GetBackOffsetX() const;
+	float GetBackOffsetY() const;
+	float GetBackOffsetZ() const;
+
 	float GetDamage() const;
 	float GetFireRate() const;
 	bool IsFullAuto() const;
@@ -58,6 +69,17 @@ private:
 	float attachOffsetX = 0.f;
 	float attachOffsetY = 0.f;
 	float attachOffsetZ = 0.f;
+
+	float modelScale = 1.f;
+	float anchorOffsetX = 0.f;
+	float anchorOffsetY = 0.f;
+	float anchorOffsetZ = 0.f;
+	float muzzleOffsetX = 0.f;
+	float muzzleOffsetY = 0.f;
+	float muzzleOffsetZ = 0.f;
+	float backOffsetX = 0.f;
+	float backOffsetY = 0.f;
+	float backOffsetZ = 0.f;
 
 	float damage = 0.f;
 	float fireRate = 0.f;

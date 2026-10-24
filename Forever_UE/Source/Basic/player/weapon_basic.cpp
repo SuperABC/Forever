@@ -13,26 +13,36 @@ const char* PistolWeapon::GetName() {
 }
 
 void PistolWeapon::SetProperty() {
-	damage = 2.5f;        // 测试用：原值25，临时降到十分之一，方便反复射击测试
-	fireRate = 0.08f;     // 每秒最多12.5发
-	fullAuto = true;      // 按住左键连续开火
-	maxRange = 4000.f;    // 40米
-	baseSpread = 1.f;
-	magazineCapacity = 30;
-	reloadDuration = 1.5f;
+	damage = 20.f;
+	fireRate = 0.2f;     // 每秒最多5发
+	fullAuto = false;
+	maxRange = 5000.f;    // 50米
+	baseSpread = 0.f;      // 随机散射半角(度)，暂时设成0=没有散射
+	magazineCapacity = 8;
+	reloadDuration = 2.f;
 
-	// 没有真实持枪socket，挂在角色Root上再做这个本地偏移——挪到右肩膀靠前一点的位置，
-	// 不是身体正中心。具体数值是目测给的，手感/位置需要在PIE里再调，见
-	// weapon_mod.h/ForeverWeaponComponent.md。
+	// 武器模型：Actor Blueprint类(枪体+弹匣的相对位置在蓝图里)，路径以_C结尾，见
+	// weapon_mod.h/ForeverWeaponVisualComponent.md。
+	firstPersonMeshPath = "/Game/3rdParty/Weapons_Free/Meshes/Actors/AC_pistol_001.AC_pistol_001_C";
+
+	// 资源包的手枪模型约97cm长(真实约20cm)，缩放到约24cm。
+	modelScale = 0.25f;
+
+	// 瞄准锚点/背枪锚点(枪托)在Core给的基础位置上的微调(不填=基础位置)，见weapon_mod.h。
+	// 只调这两个，不用anchorOffset：手枪瞄准时更靠前+20(第一视角才看得到)，两处都再高1.5。
 	attachOffsetX = 20.f;
-	attachOffsetY = 20.f;
-	attachOffsetZ = 40.f;
+	attachOffsetZ = 8.f;
+	backOffsetX = -5.f;
+	backOffsetY = -4.f;
+	backOffsetZ = 10.f;
+	muzzleOffsetX = 10.f;
+	muzzleOffsetZ = 4.f;
 
 	// 后坐力比步枪轻——手枪单手持握，仿PUBG手枪的后坐力手感，垂直方向按范围随机取值。
-	recoilPitchMin = 0.8f;
-	recoilPitchMax = 1.2f;
-	recoilYawMin = -0.6f;
-	recoilYawMax = 0.6f;
+	recoilPitchMin = 1.2f;
+	recoilPitchMax = 2.f;
+	recoilYawMin = -1.2f;
+	recoilYawMax = 1.2f;
 
 	ammoType = "asset_ammo_pistol";
 }
@@ -48,24 +58,35 @@ const char* RifleWeapon::GetName() {
 }
 
 void RifleWeapon::SetProperty() {
-	damage = 18.f;
+	damage = 40.f;
 	fireRate = 0.1f;      // 每秒最多10发，全自动
 	fullAuto = true;
-	maxRange = 8000.f;    // 80米
-	baseSpread = 2.5f;    // 全自动散射更大
+	maxRange = 10000.f;    // 100米
+	baseSpread = 0.f;      // 随机散射半角(度)，暂时设成0=没有散射
 	magazineCapacity = 30;
-	reloadDuration = 2.2f;
+	reloadDuration = 1.5f;
 
-	attachOffsetX = 20.f;
-	attachOffsetY = 20.f;
-	attachOffsetZ = 40.f;
+	firstPersonMeshPath = "/Game/3rdParty/Weapons_Free/Meshes/Actors/AC_rifle_001.AC_rifle_001_C";
+
+	// 资源包的步枪模型约226cm长(真实约90cm)，缩放到约90cm。
+	modelScale = 0.4f;
+
+	// 瞄准锚点/背枪锚点(枪托)在Core给的基础位置上的微调(不填=基础位置)，见weapon_mod.h。
+	// 只调这两个，不用anchorOffset：步枪两处都再低2。
+	attachOffsetX = 0.f;
+	attachOffsetZ = 0.f;
+	backOffsetX = -5.f;
+	backOffsetY = 4.f;
+	backOffsetZ = 0.f;
+	muzzleOffsetX = 44.f;
+	muzzleOffsetZ = 11.f;
 
 	// 后坐力比手枪重、且范围更宽——全自动连发时准心会明显往上爬、左右也漂得更开，
 	// 仿PUBG步枪连发的手感，需要玩家主动压枪。
-	recoilPitchMin = 0.45f;
-	recoilPitchMax = 0.75f;
-	recoilYawMin = -0.4f;
-	recoilYawMax = 0.4f;
+	recoilPitchMin = 0.8f;
+	recoilPitchMax = 1.5f;
+	recoilYawMin = -0.8f;
+	recoilYawMax = 0.8f;
 
 	ammoType = "asset_ammo_rifle";
 }

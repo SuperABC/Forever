@@ -30,9 +30,8 @@
 `LineTraceSingleByChannel`的`start`始终是摄像机位置(保证"看哪打哪")。不画子弹轨迹线(原来的`DrawDebugLine`调试线已删除)，目前没有`muzzleFlashEffectPath`/`impactEffectPath`对应的真实VFX资产。
 命中citizen时在`hit.ImpactPoint`额外生成一个`AForeverExplosionEffect`(程序化爆炸,纯视觉,见`ForeverExplosionEffect.md`);打墙不触发。
 
-### 挂载点本地偏移在`WeaponMod`里定义
-`attachOffsetX/Y/Z`(角色本地坐标系,X前/Y右/Z上,单位cm)放在`WeaponMod`(`Source/Dependence/player/weapon_mod.h`),不写死在Forever层——不同武器可以给不同持握点,不需要改Forever层代码。`SpawnWeaponMesh()`里`SetupAttachment`之后紧跟`weaponMesh->SetRelativeLocation(...)`应用这个偏移;没有mesh时的退化分支(`character->GetActorLocation()`)也要应用同一套偏移(按角色朝向`RotateVector`),否则两条分支视觉效果不一致——这是个通用的坑:任何"有mesh用mesh位置,没mesh退化成角色位置"的分支都要确认两条分支应用了同一套变换。`PistolWeapon`/`RifleWeapon`(`weapon_basic.cpp`)当前给`(20, 20, 40)`,为目测值。该偏移只对没有真实持枪socket的情况生效,换成真实手部socket后可能需要归零或重新调。
-
+### 武器模型和摆放：交给ForeverWeaponVisualComponent
+这个组件不再生成/挂载武器模型(原来的`SpawnWeaponMesh`/`DestroyWeaponMesh`/`weaponMesh`已删除)：模型的生成、背在背后、瞄准时举到枪口位置都在`UForeverWeaponVisualComponent`，见`ForeverWeaponVisualComponent.md`。`WeaponMod::attachOffsetX/Y/Z`现在的含义是"瞄准时枪口摆放的位置"(角色本地，X前/Y右/Z上，cm)，也就是原来弹道视觉起点那个"右手靠前"。开火判定仍然只读摄像机，不受模型影响。
 ### 武器装备:肩膀Asset与"活的"WeaponMod副本分开维护
 `EquipWeapon(weaponId)`按`WeaponFactory`注册的id构造一份`Weapon`(Core层wrapper,`Source/Core/player/weapon.h`),找不到该id或未在`config.json`的`weapon_mods`数组启用时静默保留当前武器不变。`ClearWeapon()`销毁mesh+`Weapon`实例但不装备新的,供`AForeverCharacter::ActivateShoulderWeapon()`在"切到的肩膀是空的"时调用。`HasWeapon()`供`AForeverCharacter::StartAim()`判断能不能瞄准。这一层只负责"手上激活的是哪把武器及其开火/弹药状态",肩膀槽位上的Asset本体由`AForeverCharacter`/`Player`管理,见`ForeverCharacter.md`。
 
@@ -63,7 +62,7 @@
 - 若武器/瞄准等功能挂在默认关闭Tick的`AForeverCharacter`子类(如`ACitizenElement`)上失效,优先检查该子类自己的`Tick()`覆写是否在条件满足时又把Tick关掉了,而不是只看`PossessedBy`有没有打开Tick——见`CONVENTIONS.md`第11节、memory"Citizen Tick disabled by default"。
 
 ## 资产状态
-`PistolWeapon`/`RifleWeapon`(`Source/Basic/player/weapon_basic.h/.cpp`)的`firstPersonMeshPath`当前留空(武器模型尚未导入)。`SpawnWeaponMesh()`路径为空时直接跳过挂mesh,不影响开火/伤害/换弹逻辑。资产导入后把路径填进这两个类的`SetProperty()`即可(两段式构造约定,见`weapon_mod.h`),不需要改其它代码。
+`PistolWeapon`/`RifleWeapon`(`Source/Basic/player/weapon_basic.h/.cpp`)的`firstPersonMeshPath`指向`/Game/3rdParty/Weapons_Free/Meshes/Actors/AC_pistol_001`/`AC_rifle_001`的Actor Blueprint类(路径以`_C`结尾；整件武器，枪体和弹匣的相对位置在蓝图里)，由`UForeverWeaponVisualComponent`加载显示。
 
 ## 依赖关系
 - 依赖:`Source/Core/player/weapon.h`(`Weapon`,封装`Source/Dependence/player/weapon_mod.h`/`weapon_factory.h`的`WeaponMod`/`WeaponFactory`,见`weapon.md`)、`Source/Core/common/registry.h`(`Registry::Get().GetWeaponFactory()`)、`Source/Core/populace/citizen.h`(`TakeDamage`/`IsDead`)、`Source/Core/player/player.h`(`ConsumeByType`换弹扣备弹)、`Source/Forever/Player/ForeverCharacter.h`(摄像机取值/`IsFirstPerson()`/`IsAiming()`)、`Source/Forever/Element/CitizenElement.h`(`GetCitizen()`反查命中目标)、`Source/Forever/Framework/ForeverFrameworkActor.h`/`ForeverStoryFrameworkComponent.h`/`ForeverPopulaceFrameworkComponent.h`(死亡时广播Event+清理Actor)。
@@ -74,5 +73,5 @@
 - `Player::TakeDamage`没有调用方,等有会反击的NPC/敌人再接上。
 - 武器状态不按角色持久化(每次被占有都重置成默认肩挂装备)。
 - 具体弹道/后坐力/散射数值需在PIE里调优(机制已实现,当前数值为随手定的测试值)。
-- 准心是固定尺寸的原生"+",未换成贴图资产、未跟随`baseSpread`动态张开。
-- 武器mesh资产(`firstPersonMeshPath`)待导入后手动填路径。
+- 准心是固定尺寸的原生"+",未换成贴图资产、未跟随`baseSpread`动态张开。随机散射机制在(`baseSpread`半角圆锥)，Basic里手枪/步枪的`baseSpread`目前都设成0(没有散射)。
+- 武器模型的朝向/枪口位置/背枪位置都是大概值，在`UForeverWeaponVisualComponent`的属性里调，见该文档。

@@ -22,6 +22,7 @@
 #include "Player/ForeverPlayerController.h"
 #include "Player/ForeverThrowableComponent.h"
 #include "Player/ForeverWeaponComponent.h"
+#include "Player/ForeverWeaponVisualComponent.h"
 #include "UI/ForeverThrowListWidget.h"
 #include "UI/MeetOptionWidget.h"
 #include "InputActionValue.h"
@@ -129,6 +130,7 @@ AForeverCharacter::AForeverCharacter()
 	}
 
 	weaponComponent = CreateDefaultSubobject<UForeverWeaponComponent>(TEXT("WeaponComponent"));
+	weaponVisualComponent = CreateDefaultSubobject<UForeverWeaponVisualComponent>(TEXT("WeaponVisualComponent"));
 	throwableComponent = CreateDefaultSubobject<UForeverThrowableComponent>(TEXT("ThrowableComponent"));
 
 	static ConstructorHelpers::FObjectFinder<UInputAction> moveFinder(
@@ -214,6 +216,9 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 					}
 				}
 			}
+			// 武器可视化：先开始显示(之后ActivateShoulderWeapon会通知它"手上武器是哪个Asset装备的")。
+			if (weaponVisualComponent) weaponVisualComponent->BeginShowing();
+
 			// EquipWeapon()会自动顶掉weaponComponent里可能残留的旧武器，不用先清理。
 			ActivateShoulderWeapon(1);
 
@@ -239,6 +244,9 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 
 void AForeverCharacter::UnPossessed()
 {
+	// 换人/上车时肩膀上的枪跟着玩家走，旧身体上不留模型。
+	if (weaponVisualComponent) weaponVisualComponent->EndShowing();
+
 	if (APlayerController* playerController = Cast<APlayerController>(GetController())) {
 		if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(playerController->GetLocalPlayer())) {
 			subsystem->RemoveMappingContext(inputMapping);
@@ -518,6 +526,7 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 
 	activeShoulderSlot = slot;
 	Asset* toActivate = (slot == 1) ? player->GetLeftShoulder() : player->GetRightShoulder();
+	if (weaponVisualComponent) weaponVisualComponent->NotifyActivated(slot, toActivate);
 	if (!toActivate) {
 		// 这个肩膀是空的——手上也应该跟着空下来，不能继续保留切换前那把武器(比如之前拿着
 		// 右肩的枪，按1切到空的左肩，手上不该还握着右肩那把)，用户明确要求这个行为。手上
