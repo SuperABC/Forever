@@ -126,6 +126,9 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 			w.Str(SaveRefs::LookupId(schedulerIds, static_cast<const SchedulerMod*>(scheduler->mod)));
 			SaveRefs::WriteModState(scheduler->mod, w);
 		}
+		// 头像。
+		w.Str(c->avatar);
+		w.I32(c->avatarIndex);
 	}
 
 	// 班级。
@@ -295,6 +298,9 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 				c->scheduler = new Scheduler(&populace->schedulerFactory, &populace->scriptFactory, schedulerId, c);
 				if (!SaveRefs::ReadModState(c->scheduler->mod, r)) debugf("Warning: failed to parse saved state of scheduler mod %s.\n", schedulerId.c_str());
 			}
+			// 头像。
+			c->avatar = r.Str();
+			c->avatarIndex = r.I32();
 		}
 		auto citizenAt = [&](int index) -> Citizen* {
 			return (index >= 0 && index < static_cast<int>(citizens.size())) ? citizens[index] : nullptr;

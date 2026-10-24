@@ -42,6 +42,8 @@
 手动建(一个TextureSampleParameter2D `AvatarTexture`连Base Color)；还没建时保留Cube自带材质。已知效果：
 Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块内部，Cube单面渲染、从里面看不到，不挡视线。
 
+**按角色换贴图**：`SetAvatarTexture(UTexture2D*)`把贴图存进`avatarTexture`(UPROPERTY，运行时建的贴图靠它存活)并更新动态材质的`AvatarTexture`参数；动态材质实例`avatarMaterial`只建一次，`PlaceAvatar`(换身体网格时重复调用)沿用它和当前贴图。市民的头像由`ACitizenElement::Init`通过`UForeverAvatarSubsystem`设置，见`ForeverAvatarSubsystem.md`。
+
 - **存档**：`activeShoulderSlot`记录最近一次`ActivateShoulderWeapon`的槽位；读档时`AForeverFrameworkActor::RestoreControlledPawn`调用`RestoreWeaponState(slot, ammo)`改回存档时激活的武器和弹匣余量(`PossessedBy`默认激活左肩、换满弹匣)。
 
 ## 依赖关系

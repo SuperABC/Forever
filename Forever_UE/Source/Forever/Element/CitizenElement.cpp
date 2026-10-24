@@ -4,6 +4,8 @@
 #include "Framework/ForeverFrameworkActor.h"
 #include "Player/ForeverPlayerController.h"
 #include "Player/ForeverCharacter.h"
+#include "Player/ForeverAvatarSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "UI/MeetOptionWidget.h"
 
 #include "Components/CapsuleComponent.h"
@@ -13,6 +15,8 @@
 #include "Engine/Engine.h"
 
 #include "populace/citizen.h"
+#include "populace/populace.h"
+#include "player/player.h"
 #include "populace/experience.h"
 #include "populace/school.h"
 #include "society/organization.h"
@@ -200,6 +204,19 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 
 	// 身体网格按性别：男Manny、女Quinn。
 	ApplyBodyMesh(citizen->GetGender() == GENDER_FEMALE);
+
+	// 头像：按这个市民的头像文件贴到头像方块上；没有头像文件时保留默认头像。
+	if (UGameInstance* gameInstance = GetGameInstance()) {
+		if (UForeverAvatarSubsystem* avatars = gameInstance->GetSubsystem<UForeverAvatarSubsystem>()) {
+			// 按当前游戏年份算年龄，挑年龄相符的头像；全局时钟还没建时退回人口模拟的"当前年份"。
+			int32 currentYear = 0;
+			if (AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(inFramework ? inFramework->GetOwner() : nullptr)) {
+				if (Player* player = frameworkActor->GetPlayer(); player && player->GetTime()) currentYear = player->GetTime()->GetYear();
+				else if (Populace* populace = frameworkActor->GetPopulace()) currentYear = populace->GetCurrentYear();
+			}
+			SetAvatarTexture(avatars->GetCitizenAvatar(citizen, currentYear));
+		}
+	}
 
 	BuildProximityBox();
 }

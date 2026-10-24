@@ -61,8 +61,9 @@ public:
 
 	// 运行中新增一个市民(spawn_npc)：建Citizen+Scheduler，追加到citizens末尾。schedulerId为空时
 	// 按权重随机选，和开局AssignSchedulers一样。不分配住处、不登记人际关系；重名返回nullptr。
+	// avatar非空时设为市民的头像名(见Citizen::GetAvatar)，空则用构造时随机的自动头像。
 	Citizen* SpawnCitizen(const std::string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay,
-		const std::string& schedulerId);
+		const std::string& schedulerId, const std::string& avatar = "");
 
 	// 模拟结束时的"当前年份"——Map::Checkin()用它
 	// 给Citizen::GetAge()算成年/未成年。Player的全局时钟落地后，

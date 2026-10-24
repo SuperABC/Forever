@@ -413,7 +413,9 @@ void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const S
 	}
 
 	std::string schedulerId = ToString(EvaluateExpression(change->GetScheduler(), context));
-	Citizen* citizen = populace->SpawnCitizen(name, gender, birthday.GetYear(), birthday.GetMonth(), birthday.GetDay(), schedulerId);
+	// 头像名：Resource/Avatars/下不带扩展名的相对路径，空=自动(随机)头像，见Citizen::GetAvatar。
+	std::string avatar = ToString(EvaluateExpression(change->GetAvatar(), context));
+	Citizen* citizen = populace->SpawnCitizen(name, gender, birthday.GetYear(), birthday.GetMonth(), birthday.GetDay(), schedulerId, avatar);
 	if (!citizen) return;
 
 	// home是房间地址(和npc_navigate的destination同一种写法)，省略时没有住处也没有位置，要等

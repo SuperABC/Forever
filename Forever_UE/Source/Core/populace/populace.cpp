@@ -369,9 +369,10 @@ void Populace::AssignSchedulers() {
 }
 
 Citizen* Populace::SpawnCitizen(const string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay,
-	const string& schedulerId) {
+	const string& schedulerId, const string& avatar) {
 	if (name.empty() || FindCitizenByName(name)) return nullptr;
 	Citizen* citizen = new Citizen(name, gender, birthYear, birthMonth, birthDay);
+	if (!avatar.empty()) citizen->SetAvatar(avatar);
 	string selected = schedulerId.empty() ? PickSchedulerId() : schedulerId;
 	citizen->SetScheduler(new Scheduler(&schedulerFactory, &scriptFactory, selected, citizen));
 	citizens.push_back(citizen);

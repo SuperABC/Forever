@@ -8,6 +8,7 @@
 
 ## 关键设计
 
+- **头像(`avatar`/`avatarIndex`)**：`avatar`是剧情脚本(`spawn_npc`的`avatar`)指定的头像名，空=没指定；`avatarIndex`是构造时`GetRandom(kAvatarIndexRange)`随机出的自动头像编号，UE侧对该性别图片张数取模得到具体哪一张(张数是磁盘上的文件数，Core不知道，所以存大范围随机数而不是下标)。Core只存数据、不碰图片文件，两个字段随人口段存档(没升段版本)；见`Source/Forever/Player/ForeverAvatarSubsystem.md`。
 - **`spouse`/`children`**：`Map::Checkin()`按"一个家庭消费一个room名额"分配住处
   （配偶/未成年子女跟着一起搬进同一间），需要这两个字段。**不保留**父母/兄弟姐妹等
   其它血缘关系——`Checkin`只消费配偶+子女，其它关系没有消费方。

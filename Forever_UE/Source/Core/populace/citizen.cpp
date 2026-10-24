@@ -134,7 +134,8 @@ Citizen::Citizen(const string& name, GENDER_TYPE gender, int birthYear, int birt
 	gender(gender),
 	birthYear(birthYear),
 	birthMonth(birthMonth),
-	birthDay(birthDay) {
+	birthDay(birthDay),
+	avatarIndex(GetRandom(kAvatarIndexRange)) {
 }
 
 Citizen::~Citizen() {
@@ -149,6 +150,10 @@ GENDER_TYPE Citizen::GetGender() const { return gender; }
 int Citizen::GetBirthYear() const { return birthYear; }
 int Citizen::GetBirthMonth() const { return birthMonth; }
 int Citizen::GetBirthDay() const { return birthDay; }
+
+const string& Citizen::GetAvatar() const { return avatar; }
+void Citizen::SetAvatar(const string& avatar) { this->avatar = avatar; }
+int Citizen::GetAvatarIndex() const { return avatarIndex; }
 
 int Citizen::GetAge(int currentYear) const { return currentYear - birthYear; }
 

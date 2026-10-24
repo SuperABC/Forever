@@ -48,6 +48,8 @@ SetRelativeLocation`用`-GetCapsuleComponent()->GetScaledCapsuleHalfHeight()`让
 
 按性别选身体网格：`Init()`里调`AForeverCharacter::ApplyBodyMesh`，男性用`SKM_Manny_Simple`、女性用`SKM_Quinn_Simple`(同一个骨骼`SK_Mannequin`，动画蓝图不用换)，换完重新摆头像方块(`PlaceAvatar`)。
 
+按市民贴头像：`Init()`里`ApplyBodyMesh`之后向`UForeverAvatarSubsystem::GetCitizenAvatar(citizen)`要这个市民的头像贴图，再`SetAvatarTexture`；没有头像文件时保留默认头像。见`Player/ForeverAvatarSubsystem.md`。
+
 ### 3D坐标"留空/首次随机/此后复用"——在这里落地，不在`Citizen`
 
 `Citizen`（Core）只存储`hasPosition`+`posX/Y/Z`（地图单位），真正的判断/写入逻辑在

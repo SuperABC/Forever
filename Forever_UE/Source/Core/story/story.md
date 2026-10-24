@@ -107,7 +107,8 @@ milestone超时之类）时再补内容。
 - 必填`name`/`gender`/`birthday`，都是表达式。gender写`male`/`男`或`female`/`女`(其它值按女性处理并警告)；birthday要带日期，`Time`能识别的写法都行(如`"2000-08-31"`、`"2000年8月31日"`)。重名或生日解析不了就跳过并警告。
 - 可选`scheduler`(Scheduler类型id，省略时按权重随机，和开局一样)、`home`(房间地址，住进去，家和当前位置都设成这里，见`Map::SettleCitizen`)。
 - 省略home的市民没有位置，场景里不会出现，要用`npc_teleport`把他放到某个房间。
-- `avatar`/`height`/`weight`/`nick`/`deposit`/`phone`/`jobs`能解析但目前不生效——Citizen还没有这些字段。
+- 可选`avatar`(表达式，头像名)：`Resource/Avatars/`下不带扩展名的相对路径，如`"custom/hero"`，对应`Resource/Avatars/custom/hero.png`(128x128 PNG)；省略/空=自动头像(随机编号，按性别取`male/`或`female/`目录里的图)。存进`Citizen::avatar`，见`Citizen::GetAvatar`。图片本身由UE侧`UForeverAvatarSubsystem`加载，文件找不到时回退自动头像并警告。
+- `height`/`weight`/`nick`/`deposit`/`phone`/`jobs`能解析但目前不生效——Citizen还没有这些字段。
 - 新市民追加在`Populace::citizens`末尾，随存档保存；他的Scheduler脚本不会补发game_start；不登记任何人际关系。脚本里要用的名字最好写进主线脚本的`names`(name_reserve)，避免和随机生成的市民重名。
 
 ## test.script路径

@@ -166,6 +166,15 @@ public:
 	int GetBirthMonth() const;
 	int GetBirthDay() const;
 
+	// 头像。avatar是剧情脚本(spawn_npc的avatar)指定的头像名——UE侧Resource/Avatars/下不带扩展名的
+	// 相对路径，如"custom/hero"，空表示没指定；avatarIndex是构造时随机出的自动头像编号，UE侧对该性别的
+	// 头像张数取模得到具体哪一张(张数是磁盘上的文件数，Core不知道，所以存大范围随机数而不是下标)。
+	// Core只存数据，不碰图片文件。
+	static constexpr int kAvatarIndexRange = 1000000000;
+	const std::string& GetAvatar() const;
+	void SetAvatar(const std::string& avatar);
+	int GetAvatarIndex() const;
+
 	// 粗略年龄(按年份差，不精确到月/日——这次没有真正的日历/游戏时钟系统，够用来给
 	// Map::Checkin()做成年/未成年判断)。
 	int GetAge(int currentYear) const;
@@ -274,6 +283,8 @@ private:
 	int birthYear;
 	int birthMonth;
 	int birthDay;
+	int avatarIndex;
+	std::string avatar;
 
 	Citizen* spouse = nullptr;
 	std::vector<Citizen*> children;

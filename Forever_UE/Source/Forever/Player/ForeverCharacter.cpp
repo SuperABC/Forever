@@ -325,11 +325,22 @@ void AForeverCharacter::PlaceAvatar()
 		avatarMesh->SetRelativeScale3D(FVector(avatarSize / 100.f));
 		// 头像贴图：Avatar材质还没建(avatarBaseMaterial为空)时保留Cube自带材质，不报错。
 		if (avatarBaseMaterial) {
-			UMaterialInstanceDynamic* material = UMaterialInstanceDynamic::Create(avatarBaseMaterial, this);
-			if (avatarTexture) material->SetTextureParameterValue(TEXT("AvatarTexture"), avatarTexture);
-			avatarMesh->SetMaterial(0, material);
+			// 动态材质实例只建一次(换身体网格会重复调用PlaceAvatar，贴图也要沿用)。
+			if (!avatarMaterial || avatarMaterial->Parent != avatarBaseMaterial) {
+				avatarMaterial = UMaterialInstanceDynamic::Create(avatarBaseMaterial, this);
+			}
+			if (avatarTexture) avatarMaterial->SetTextureParameterValue(TEXT("AvatarTexture"), avatarTexture);
+			avatarMesh->SetMaterial(0, avatarMaterial);
 		}
 	}
+}
+
+void AForeverCharacter::SetAvatarTexture(UTexture2D* texture)
+{
+	if (!texture) return;
+	// avatarTexture是UPROPERTY，运行时建出来的贴图靠它保持存活。
+	avatarTexture = texture;
+	if (avatarMaterial) avatarMaterial->SetTextureParameterValue(TEXT("AvatarTexture"), texture);
 }
 
 void AForeverCharacter::Tick(float DeltaTime)

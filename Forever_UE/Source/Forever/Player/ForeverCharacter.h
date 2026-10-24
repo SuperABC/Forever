@@ -14,6 +14,7 @@ class UForeverThrowableComponent;
 class UForeverWeaponVisualComponent;
 class UStaticMeshComponent;
 class UMaterialInterface;
+class UMaterialInstanceDynamic;
 class UTexture2D;
 
 UCLASS()
@@ -29,6 +30,9 @@ class FOREVER_API AForeverCharacter : public ACharacter
 public:
 	// 按性别换身体网格(男Manny/女Quinn)，并重新摆放头像方块。由ACitizenElement::Init调用。
 	void ApplyBodyMesh(bool bFemale);
+
+	// 换头像贴图(市民按各自的头像文件贴)，见UForeverAvatarSubsystem。
+	void SetAvatarTexture(UTexture2D* texture);
 
 	AForeverCharacter();
 
@@ -94,6 +98,10 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
 	TObjectPtr<UTexture2D> avatarTexture;
+
+	// 头像方块的动态材质实例(PlaceAvatar建，SetAvatarTexture更新贴图参数)。
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> avatarMaterial;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> moveAction;
