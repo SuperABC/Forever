@@ -1,0 +1,14 @@
+{
+  "name": "wxdj-online",
+  "private": true,
+  "version": "0.1.0",
+  "description": "五行斗诀联机对战(测试版)",
+  "scripts": {
+    "build": "python tools/build_engine.py",
+    "dev": "python tools/build_engine.py && wrangler dev",
+    "deploy": "python tools/build_engine.py && wrangler deploy && echo. && echo Open: https://wxdj-online.wxdj.workers.dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

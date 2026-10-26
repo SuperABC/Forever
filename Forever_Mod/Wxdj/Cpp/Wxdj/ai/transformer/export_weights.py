@@ -1,4 +1,4 @@
-"""把检查点导出成浏览器能直接加载的 nn_weights.js(Tools/下，供 wxdj_simulator.html 用)。
+"""把检查点导出成浏览器能直接加载的 nn_weights.js(Tools/Local/下，供 wxdj_simulator.html 用)。
 用法：python export_weights.py [checkpoint.pt]    默认 checkpoints/latest.pt"""
 import base64
 import os
@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, '..', '..', '..', '..', 'Tools', 'nn_weights.js')
+OUT = os.path.join(HERE, '..', '..', '..', '..', 'Tools', 'Local', 'nn_weights.js')
 
 path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, 'checkpoints', 'latest.pt')
 ck = torch.load(path, map_location='cpu')

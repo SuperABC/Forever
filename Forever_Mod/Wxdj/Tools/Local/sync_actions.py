@@ -4,7 +4,7 @@ import os
 import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ACT = os.path.join(HERE, '..', 'Resource', 'act', 'xiaohua.txt')
+ACT = os.path.join(HERE, '..', '..', 'Resource', 'act', 'xiaohua.txt')
 HTML = os.path.join(HERE, 'wxdj_simulator.html')
 
 text = open(ACT, encoding='utf-8').read().replace('\r\n', '\n')

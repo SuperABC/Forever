@@ -18,7 +18,7 @@
 | `bots.py` | 脚本机器人：随机AI(游戏原来的)/单家族/最高威力/积攒炸弹，做陪练和评测 |
 | `train.py` | PPO训练 |
 | `eval_moves.py`、`eval_report.py` | 招式强度评估：`python eval_report.py checkpoints/latest.pt <式>`，输出招类使用率、各家族的单招/双招矩阵和固定套路，进度写在`progress_<式>.txt` |
-| `export_weights.py` | 把检查点导出成`../../../Tools/nn_weights.js`(模拟器html加载) |
+| `export_weights.py` | 把检查点导出成`../../../Tools/Local/nn_weights.js`(模拟器html加载) |
 | `chain.sh`、`train_only.sh`、`eval_only.sh` | 一键脚本：训练+导出+评估多个式 / 只训练+导出 / 只评估(`sh eval_only.sh 1 20`) |
 | `report_<式>.txt` | 当前这一版模型在第1/5/10/15/20式上的评估报告 |
 | `checkpoints/` | `latest.pt`(当前这一版模型，可续训)；训练日志和历史检查点已清理，训练时会重新生成 |

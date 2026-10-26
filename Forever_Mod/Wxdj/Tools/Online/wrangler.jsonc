@@ -1,0 +1,18 @@
+{
+  // 五行斗诀联机对战：静态页面(public/) + WebSocket 匹配转发(Durable Object)，全部跑在 Cloudflare 免费计划上
+  "name": "wxdj-online",
+  "main": "src/index.js",
+  // 发布到 <name>.<账号子域>.workers.dev；账号子域是 wxdj，所以地址是 https://wxdj-online.wxdj.workers.dev
+  "workers_dev": true,
+  "preview_urls": false,
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "LOBBY", "class_name": "Lobby" }]
+  },
+  // 免费计划的 Durable Object 必须是 SQLite 后端(我们并不使用存储，只是平台要求)
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Lobby"] }]
+}
