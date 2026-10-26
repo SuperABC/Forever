@@ -30,7 +30,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   `BuildChanges`识别`"set_value"`/`"place_holder"`/`"debug_print"`/`"global_message"`(message)/`"for_range"`(var/from/to/step/do，
   含两端，循环变量写进`$$self.<var>`，由`AForeverFrameworkActor::ApplyChange`递归执行)/`"npc_teleport"`(name/destination，destination是房间地址；有Actor就瞬移并打断正在走的路，没有就只改逻辑位置，被玩家占有的不动)/`"spawn_npc"`(name/gender/birthday，可选scheduler/home，见`story.md`"spawn_npc")/`"create_timer"`(name/time，可选category/label)/`"remove_timer"`(name，计时器见`story.md`"计时器")/`"launch_elevator"`(building/elevator/command，
   由Map执行，见`Source/Core/map/cabin.md`)/`"add_option"`/`"remove_option"`(name/option)/
-  `"start_puzzle"`/`"enter_vehicle"`/`"set_door"`(name/access)/`"register_door"`(name/citizen/pass)/`"npc_navigate"`(name/destination=房间地址)/
+  `"start_puzzle"`(puzzle + 可选param，param是表达式，启动时经`PuzzleMod::SetParam`交给小游戏，跟config.json `puzzle_mods`的静态args无关)/`"enter_vehicle"`/`"set_door"`(name/access)/`"register_door"`(name/citizen/pass)/`"npc_navigate"`(name/destination=房间地址)/
   `"change_control"`(name)**——`set_door`的`access`、`register_door`的`pass`是布尔表达式，JSON里写`true`/`false`
   或者`"true"`/`"false"`都行(`AsString()`把JSON布尔转成字符串，执行时`EvaluateExpressionBool`求值，也可以写
   `$$self.xxx`这类表达式)：`access`为true=常开、false=常锁；`pass`为true=允许这个人通过、false=不允许，省略按true，

@@ -26,7 +26,9 @@ public:
 	// （见USectionSpeakingWidget.h类注释）：小游戏要通过NativeOnKeyDown接收键盘事件，UIOnly
 	// 下Pawn的Enhanced Input收不到任何输入，不会跟移动/视角/MeetOption等操作打架。
 	// @puzzleId: 小游戏类型标识（PuzzleFactory里注册的id，比如"tetris"）
-	void StartPuzzle(const FString& puzzleId);
+	// @param: 剧情脚本传给小游戏的启动参数，在Init之前通过PuzzleMod::SetParam交给小游戏，空串表示
+	// 脚本没传。注意跟config.json里puzzle_mods的静态args不是一回事，那个在创建小游戏时传入。
+	void StartPuzzle(const FString& puzzleId, const FString& param = FString());
 
 protected:
 	virtual void NativeConstruct() override; // 默认Collapsed，没有小游戏在跑就不显示

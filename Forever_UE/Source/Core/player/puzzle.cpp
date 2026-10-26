@@ -25,6 +25,10 @@ string Puzzle::GetName() const {
 	return mod->GetName();
 }
 
+void Puzzle::SetParam(const string& param) {
+	mod->SetParam(param);
+}
+
 void Puzzle::Init(Canvas* canvas, PostHandle* post) {
 	mod->Init(canvas, post);
 }

@@ -336,11 +336,16 @@ void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChan
 
 void UForeverStoryFrameworkComponent::ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context) {
 	FString puzzleId = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetPuzzle(), context)).data());
+	// param是剧情脚本给小游戏的启动参数，空串表示脚本没传，不求值
+	FString param;
+	if (!change->GetParam().empty()) {
+		param = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetParam(), context)).data());
+	}
 
 	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
 	if (!playerController || !playerController->GetPuzzleWidget()) return;
 
-	playerController->GetPuzzleWidget()->StartPuzzle(puzzleId);
+	playerController->GetPuzzleWidget()->StartPuzzle(puzzleId, param);
 }
 
 void UForeverStoryFrameworkComponent::ApplyEnterVehicle(const EnterVehicleChange* change, const ScriptContext& context) {

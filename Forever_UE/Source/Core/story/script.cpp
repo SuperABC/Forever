@@ -357,7 +357,9 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			if (puzzle.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing puzzle for start_puzzle change.\n");
 			}
-			change = new StartPuzzleChange(puzzle.AsString());
+			// param可选：剧情脚本传给小游戏的启动参数(表达式)，缺省为空串
+			auto param = obj["param"];
+			change = new StartPuzzleChange(puzzle.AsString(), param.IsNull() ? string() : param.AsString());
 		}
 		else if (type == "enter_vehicle") {
 			auto vehicle = obj["vehicle"];

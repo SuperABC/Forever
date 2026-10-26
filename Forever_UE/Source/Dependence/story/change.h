@@ -1020,6 +1020,13 @@ public:
 	StartPuzzleChange(std::string puzzle);
 
 	/*
+	* 构造启动小游戏变化
+	* @puzzle: 小游戏类型标识
+	* @param: 剧情脚本传给小游戏的启动参数(表达式)，空串表示不传
+	*/
+	StartPuzzleChange(std::string puzzle, std::string param);
+
+	/*
 	* 析构启动小游戏变化
 	*/
 	virtual ~StartPuzzleChange();
@@ -1040,9 +1047,24 @@ public:
 	*/
 	const std::string& GetPuzzle() const;
 
+	/*
+	* 设置剧情脚本传给小游戏的启动参数(表达式)
+	* 注意：这跟config.json里puzzle_mods的静态args不是一回事，那个在创建小游戏时传入。
+	* @param: 参数表达式，空串表示不传
+	*/
+	void SetParam(std::string param);
+
+	/*
+	* 获取剧情脚本传给小游戏的启动参数(表达式)
+	*/
+	const std::string& GetParam() const;
+
 private:
 	// 小游戏类型标识
 	std::string puzzle;
+
+	// 剧情脚本传给小游戏的启动参数(表达式)
+	std::string param;
 
 };
 

@@ -50,7 +50,7 @@ void UPuzzleWidget::NativeConstruct() {
 	SetIsFocusable(true);
 }
 
-void UPuzzleWidget::StartPuzzle(const FString& puzzleId) {
+void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
 	if (puzzle) {
 		delete puzzle;
 		puzzle = nullptr;
@@ -62,6 +62,7 @@ void UPuzzleWidget::StartPuzzle(const FString& puzzleId) {
 	FIntPoint canvasSize = GetViewportSize(kFallbackCanvasWidth, kFallbackCanvasHeight);
 	canvas.Init(canvasSize.X, canvasSize.Y);
 	puzzle = new Puzzle(&Registry::Get().GetPuzzleFactory(), string(TCHAR_TO_UTF8(*puzzleId)));
+	puzzle->SetParam(string(TCHAR_TO_UTF8(*param))); // 必须在Init之前，让Init里就能用上
 	PostImplement post = MakePost(GetWorld());
 	puzzle->Init(&canvas, &post);
 

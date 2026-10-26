@@ -54,7 +54,10 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
   附近building的近处LOD可能还没排队建完，玩家会先掉到还没生成细节的地面上，冻结世界直到
   LOD切换队列清空再自动恢复能避免这个观感问题。
 - **`ApplyStartPuzzle`**：求值`change->GetPuzzle()`拿到小游戏id，转发给
-  `AForeverPlayerController::GetPuzzleWidget()->StartPuzzle(id)`。
+  `AForeverPlayerController::GetPuzzleWidget()->StartPuzzle(id, param)`。`param`是脚本里可选的
+  `param`表达式求值结果(没写就是空串，不求值)，`UPuzzleWidget`在`Init`之前通过
+  `Puzzle::SetParam`->`PuzzleMod::SetParam`交给小游戏；它是每次启动由剧情传入的动态参数，跟
+  config.json `puzzle_mods`的静态args(创建mod时传入)是两回事，也不进存档(谜题进行中不能存档)。
 - **`ApplyEnterVehicle`**：求值`change->GetVehicle()`拿到载具名字，转发给
   `UForeverTrafficFrameworkComponent::ApplyEnterVehicle`（真正的查找/隐藏原pawn/Possess
   逻辑在那个组件里，和`ApplyControlChange`转发给PopulaceFramework同一个分工）。

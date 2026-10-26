@@ -20,6 +20,15 @@ public:
 	virtual const char* GetName() = 0;
 
 	/*
+	* 剧情脚本(start_puzzle的param字段)传给这一局小游戏的动态启动参数，在Init之前调用一次，
+	* 默认忽略。每次启动都可以不同，用来让剧情控制小游戏的表现。
+	* 注意：这跟config.json里puzzle_mods的静态args不是一回事，那个是创建mod时传给创建函数的，
+	* 整个游戏期间固定。动态参数不进存档(谜题进行中本就不能存档)。
+	* @param: 参数字符串，格式由各小游戏自己约定，空串表示脚本没传
+	*/
+	virtual void SetParam(const std::string& param) {}
+
+	/*
 	* 小游戏开始时调用一次；canvas已经由宿主Init()好尺寸，这里只需要按
 	* canvas->GetWidth()/GetHeight()布局初始状态（比如俄罗斯方块按画布尺寸算好每个格子
 	* 多大、棋盘摆在画布什么位置）。

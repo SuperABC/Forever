@@ -39,6 +39,12 @@ public:
 	std::string GetName() const;
 
 	/*
+	* 设置剧情脚本传给小游戏的启动参数，需在Init之前调用
+	* @param: 参数字符串，空串表示脚本没传
+	*/
+	void SetParam(const std::string& param);
+
+	/*
 	* 初始化小游戏
 	* @canvas: 画布，不持有所有权
 	* @post: 向Core发起查询的句柄

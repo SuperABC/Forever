@@ -614,12 +614,20 @@ const std::string& OpenShopChange::GetSaler() const {
 }
 
 StartPuzzleChange::StartPuzzleChange() :
-	puzzle() {
+	puzzle(),
+	param() {
 
 }
 
 StartPuzzleChange::StartPuzzleChange(std::string puzzle) :
-	puzzle(move(puzzle)) {
+	puzzle(move(puzzle)),
+	param() {
+
+}
+
+StartPuzzleChange::StartPuzzleChange(std::string puzzle, std::string param) :
+	puzzle(move(puzzle)),
+	param(move(param)) {
 
 }
 
@@ -638,6 +646,14 @@ void StartPuzzleChange::SetPuzzle(std::string puzzle) {
 
 const std::string& StartPuzzleChange::GetPuzzle() const {
 	return puzzle;
+}
+
+void StartPuzzleChange::SetParam(std::string param) {
+	this->param = move(param);
+}
+
+const std::string& StartPuzzleChange::GetParam() const {
+	return param;
 }
 
 EnterVehicleChange::EnterVehicleChange() :

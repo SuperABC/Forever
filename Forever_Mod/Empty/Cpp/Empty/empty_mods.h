@@ -185,12 +185,23 @@ public:
 	virtual const char* GetType() const override { return "puzzle_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
-	// 空占位：不产生任何画面/逻辑，Loop固定返回0。
+	// 记下剧情脚本start_puzzle传来的本次启动参数(跟构造时config.json的args不是一回事)，
+	// 供Loop打印出来，用来验证param确实在Init之前到达。
+	virtual void SetParam(const std::string& param) override { this->param = param; }
+
+	// 空占位：没有任何游戏逻辑，只在窗口最左上角打印本次启动的param，Loop固定返回0。
 	virtual void Init(Canvas* canvas, PostHandle* post) override {}
-	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override { return 0; }
+	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override {
+		canvas->ClearScreen();
+		canvas->SetColor(255, 255, 255);
+		canvas->SetFontSize(24);
+		canvas->PutString("param: " + param, 0, 0);
+		return 0;
+	}
 
 private:
 	std::string name;
+	std::string param;
 };
 
 class EmptyName : public NameMod {
