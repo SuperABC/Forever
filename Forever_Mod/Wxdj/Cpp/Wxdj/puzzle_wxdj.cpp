@@ -376,6 +376,25 @@ string WxdjPuzzle::FormatLog(const Log& log) const {
 		case EFFECT_CURE:
 			oss << nameOf(log.subject) << "恢复" << log.amount << "点健康值";
 			break;
+		case EFFECT_INCREASE:
+			oss << nameOf(log.subject) << "连招增伤，威力+" << log.amount << "%";
+			break;
+		case EFFECT_SHIELD:
+			if (log.subject >= 0) oss << nameOf(log.subject) << "获得" << log.amount << "点护盾";
+			else oss << nameOf(log.object) << "的护盾抵挡了" << log.amount << "点伤害";
+			break;
+		case EFFECT_CRIT:
+			oss << nameOf(log.subject) << "暴击，伤害+" << log.amount << "%";
+			break;
+		case EFFECT_TRAIT: {
+			// name是"资源|来源"
+			size_t bar = log.name.find('|');
+			string res = bar == string::npos ? log.name : log.name.substr(0, bar);
+			string src = bar == string::npos ? string() : log.name.substr(bar + 1);
+			const char* label = res == "mp" ? "真气" : res == "atk" ? "武力" : res == "hp" ? "健康" : res == "agi" ? "敏捷" : res.c_str();
+			oss << nameOf(log.subject) << (src.empty() ? string("的特性") : "的" + src) << "：" << label << (log.amount >= 0 ? "+" : "") << log.amount;
+			break;
+		}
 		default:
 			break;
 		}
@@ -445,6 +464,15 @@ void WxdjPuzzle::ResolveTurn(shared_ptr<Action> playerAction) {
 		AppendRoundHeader();
 		controller->StartTurn();
 		AppendNews();
+		// 开局的持续伤害、每回合开始类特性(扣武力/健康)、回复真气爆体都可能在回合开始就致死
+		if (!player->IsAlive()) {
+			pendingResult = -1;
+			phase = PHASE_RESULT;
+		}
+		else if (!enemy->IsAlive()) {
+			pendingResult = 1;
+			phase = PHASE_RESULT;
+		}
 	}
 }
 
@@ -912,6 +940,16 @@ vector<string> WxdjPuzzle::EffectLines(int actionIdx) const {
 		case EFFECT_CURE: {
 			auto e = static_pointer_cast<CureEffect>(effect);
 			lines.push_back(TimedText("回复健康", e->CureInstant(), e->CureContinuous(), e->CureRounds(), e->CureInterval(), e->NeedHit()));
+			break;
+		}
+		case EFFECT_INCREASE: {
+			auto e = static_pointer_cast<IncreaseEffect>(effect);
+			lines.push_back("连招增伤：连着上一回合同家族的前一式出招(中间不能积攒、放炸弹、跳过或被禁锢)，每连续一步威力多" + PercentText(e->GetRatio()) + "，不要求命中");
+			break;
+		}
+		case EFFECT_SHIELD: {
+			auto e = static_pointer_cast<ShieldEffect>(effect);
+			lines.push_back("护盾：出招时给自己加一块" + to_string(e->Initial()) + "点的护盾，持续" + to_string(e->RemainingRounds()) + "回合；同时保护武力和健康，多块盾同时存在，受伤时一起减盾量，盾都被打穿后才扣武力/健康");
 			break;
 		}
 		default:

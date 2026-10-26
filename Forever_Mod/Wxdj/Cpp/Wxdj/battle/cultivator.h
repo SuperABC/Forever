@@ -2,6 +2,7 @@
 
 #include "def.h"
 #include "action.h"
+#include "modifier.h"
 
 #include <memory>
 #include <string>
@@ -30,10 +31,22 @@ public:
 	// 获取真气量
 	int GetCurrentMP() const;
 
-	// 获取初始(上限)健康值/武力值/真气量
+	// 获取初始(上限)健康值/武力值/真气量；真气上限是有效上限(含特性的增减)，GetBaseMaxMP是基础上限
 	int GetMaxHP() const;
 	int GetMaxATK() const;
 	int GetMaxMP() const;
+	int GetBaseMaxMP() const;
+	float GetBaseMaxAGI() const;
+
+	// 特性(外部效果)，见modifier.h
+	ModifierSet& Mods();
+	const ModifierSet& Mods() const;
+
+	// 特性造成的资源增减：正=回复(受上限/真气爆体规则约束)，负=扣除(武力/健康扣到0以下会死)
+	void AdjustMP(int delta);
+	void AdjustATK(int delta);
+	void AdjustHP(int delta);
+	void AdjustAGI(float delta);
 
 	// 获取已积攒的真气炸弹能量(释放前一直保留)
 	int GetBomb() const;
@@ -62,6 +75,15 @@ public:
 
 	// 每回合自动恢复敏捷
 	void RecoverAGI();
+
+	// 连招链(increase用)：上一回合出的招(单招=1个，双招=2个基础招式)各自所在的家族、式号和已连续的步数。
+	// 本回合出家族F的第k式，如果链里有(F, k-1)就是它的步数+1，否则步数0(新起点)。
+	struct ChainEntry { std::string family; int form; int len; };
+	int PeekChain(const std::string& family, int form) const;
+	// 提交本回合出的招(家族,式号)；用不到连招的回合(跳过/积攒/炸弹/被禁锢)调用ResetChain
+	void CommitChain(const std::vector<std::pair<std::string, int>>& moves);
+	void ResetChain();
+	const std::vector<ChainEntry>& GetChain() const;
 
 	// 获取阶位
 	int GetCurrentRealm() const;
@@ -127,6 +149,8 @@ private:
 	float maxAGI; // 初始(上限)敏捷值
 	float agiLoss; // 每次跳过损失的敏捷值(连续跳过会递增)
 	int skipStreak = 0; // 已经连续跳过了几次
+	std::vector<ChainEntry> chain; // 连招链(上一回合的招)
+	ModifierSet modSet; // 特性
 	float agiRecover; // 每回合自动恢复的敏捷值
 	float bombMultiplier; // 炸弹积攒倍率
 	Realm currentRealm;

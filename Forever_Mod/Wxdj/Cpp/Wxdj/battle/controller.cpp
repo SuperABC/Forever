@@ -123,41 +123,59 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 		int target = actions[i].second;
 
 		if (act->GetType() == ACTION_SKIP) {
+			cultivators[i]->ResetChain();
 			SkipMove(i);
 			PaySkip(i);
 		}
 		else if (act->GetType() == ACTION_ACCUMULATE) {
+			cultivators[i]->ResetChain();
 			MakeMove(i, target, act->GetPoint(), act->GetText(), act->GetPower());
 			cultivators[i]->AccumulatePower();
 			cultivators[i]->ResetSkipStreak();
 		}
 		else if (status[i] & 0x01) {
+			cultivators[i]->ResetChain();
 			SkipMove(i);
 			PaySkip(i);
 		}
 		else if (act->GetType() == ACTION_BOMB && cultivators[i]->GetBomb() <= 0) {
+			cultivators[i]->ResetChain();
 			// 空炸弹：没有积攒过就释放，等于一次"纯跳过"——不翻倍敏捷、不损失敏捷(闪避照常用自己的敏捷)，也不出招；
 			// 代价是这个回合不回复真气(把回合开始自然回复的真气撤销)
 			SkipMove(i);
 			cultivators[i]->UndoMP(regenMP[i]);
 		}
 		else if (act->GetType() == ACTION_BOMB) {
+			cultivators[i]->ResetChain();
 			// 战报里写明这次释放的炸弹能量(出招时才取出，所以先取再记)
 			int bombPower = cultivators[i]->BombPower();
+			if (!cultivators[i]->Mods().All().empty()) {
+				double adj = cultivators[i]->Mods().Sum(MOD_BOMB_POWER, ATTRIBUTE_NONE, *cultivators[i]);
+				if (adj != 0) bombPower = max(0, static_cast<int>(bombPower * (1.0 + adj)));
+			}
 			MakeMove(i, target, act->GetPoint(), act->GetText() + "(能量" + to_string(bombPower) + ")", act->GetPower());
 			dynamic_pointer_cast<BombAction>(act)->SetPower(bombPower);
 			cultivators[i]->ResetSkipStreak();
 		}
 		else {
 			cultivators[i]->ResetSkipStreak();
-			MakeMove(i, target, act->GetPoint(), act->GetText(), act->GetPower());
+			int chainBonus = 0, critPercent = 0;
+			ApplyPower(i, target, act, chainBonus, critPercent);
+			int cost = act->GetPoint();
+			if (!cultivators[i]->Mods().All().empty()) {
+				double adj = cultivators[i]->Mods().Sum(MOD_COST, act->GetAttribute(), *cultivators[i]);
+				if (adj != 0) cost = max(0, static_cast<int>(cost * (1.0 + adj)));
+			}
+			MakeMove(i, target, cost, act->GetText(), act->GetPower());
+			if (chainBonus > 0) logs.emplace_back(i, target, chainBonus, EFFECT_INCREASE);
+			if (critPercent > 0) logs.emplace_back(i, target, critPercent, EFFECT_CRIT);
 
 			auto dot = act->GetEffect(EFFECT_DOT);
 			if (dot && !dynamic_pointer_cast<DotEffect>(dot)->NeedHit()) {
 				int amount = dynamic_pointer_cast<DotEffect>(dot)->DotInstant();
 				logs.emplace_back(i, target, amount, EFFECT_DOT);
 				TakeDamage(i, target, act->GetEffects(), actions[target].first->GetEffects(),
-					act->GetAttribute(), amount, true, actions[target].first->GetAttribute());
+					act->GetAttribute(), TakenZone(target, act->GetAttribute(), amount), true, actions[target].first->GetAttribute());
 				AddEffect(target, make_shared<DotEffect>(*dynamic_pointer_cast<DotEffect>(dot).get()));
 			}
 
@@ -183,6 +201,13 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				logs.emplace_back(i, -1, amount, EFFECT_CURE);
 				RecoverHP(i, amount);
 				AddEffect(i, make_shared<CureEffect>(*dynamic_pointer_cast<CureEffect>(cure).get()));
+			}
+
+			auto shield = act->GetEffect(EFFECT_SHIELD);
+			if (shield) {
+				auto s = make_shared<ShieldEffect>(*dynamic_pointer_cast<ShieldEffect>(shield).get());
+				logs.emplace_back(i, -1, s->Strength(), EFFECT_SHIELD);
+				AddEffect(i, s);
 			}
 		}
 	}
@@ -231,7 +256,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				float powerEnemy = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_PASSIVE);
 				float powerSelf = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
 				TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-					act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
+					act_i->GetAttribute(), TakenZone(j, act_i->GetAttribute(), (int)powerEnemy), true, act_j->GetAttribute());
 				TakeDamage(i, i, act_i->GetEffects(), act_i->GetEffects(),
 					act_i->GetAttribute(), (int)powerSelf);
 			}
@@ -248,7 +273,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					float powerEnemy = (float)(act_i->GetPower() - act_j->GetPower());
 					powerEnemy *= (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_ACTIVE);
 					TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-						act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
+						act_i->GetAttribute(), TakenZone(j, act_i->GetAttribute(), (int)powerEnemy), true, act_j->GetAttribute());
 				}
 			}
 		}
@@ -265,17 +290,14 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				float defenderAGI = cultivators[j]->GetAGI();
 				bool canDodge = true;   // 被禁锢又选了积攒的人也用自己当前的敏捷闪避
 				if (skipAgi[j] > 0.f) { defenderAGI = skipAgi[j]; canDodge = true; }
-				double dodgeChance = FindReaction(EFFECT_RUST) ? 0 : DodgeChance(cultivators[i]->GetAGI(), defenderAGI);
+				double dodgeChance = DodgeProb(i, j, act_i->GetAttribute(), defenderAGI);
 				if (canDodge && dist(rng) < dodgeChance) {
 					DodgeSuccess(i, j);
 					BuildDualEnvironment(act_i);   // 双招被闪避=未命中，它的效果计入场地效果
 					continue;
 				}
 				else {
-					bool hit = true;
-					if (FindReaction(EFFECT_DUST)) {
-						hit = (dist(rng) < 0.5f);
-					}
+					bool hit = RollHit(i, act_i->GetAttribute());
 					if (hit) {
 						HitSuccess(i, j, act_i, act_j);
 						TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
@@ -329,9 +351,8 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					BuildDualEnvironment(act_j);
 				};
 
-				bool dust = FindReaction(EFFECT_DUST);
 				if (point1 > point2) {
-					bool hit = dust ? (dist(rng) < 0.5f) : true;
+					bool hit = RollHit(i, attr1);
 					if (hit) {
 						HitSuccess(i, j, act_i, act_j);
 						HitSuccess(j, i, act_j, act_i);
@@ -356,7 +377,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					}
 				}
 				else if (point2 > point1) {
-					bool hit = dust ? (dist(rng) < 0.5f) : true;
+					bool hit = RollHit(i, attr1);
 					if (hit) {
 						HitSuccess(i, j, act_i, act_j);
 						HitSuccess(j, i, act_j, act_i);
@@ -381,7 +402,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					}
 				}
 				else {
-					bool hit = dust ? (dist(rng) < 0.5f) : true;
+					bool hit = RollHit(i, attr1);
 					if (hit) {
 						HitSuccess(i, j, act_i, act_j);
 						HitSuccess(j, i, act_j, act_i);
@@ -434,7 +455,12 @@ void Controller::EndTurn() {
 		else ++it;
 	}
 
+	for (auto& c : cultivators) c->Mods().Tick();
 	for (auto& c : cultivators) c->UpdateRealm();
+}
+
+void Controller::Seed(unsigned int seed) {
+	rng.seed(seed);
 }
 
 void Controller::AddEffect(int idx, shared_ptr<Effect> effect) {
@@ -466,6 +492,7 @@ void Controller::AddEnvironment(shared_ptr<Effect> effect) {
 }
 
 void Controller::ExecEffect(STAGE_TYPE stage) {
+	ExecModifiers(stage);
 	for (int i = 0; i < (int)effects.size(); ++i) {
 		for (int j = 0; j < (int)effects[i].size(); ++j) {
 			auto& eff = effects[i][j];
@@ -482,7 +509,7 @@ void Controller::ExecEffect(STAGE_TYPE stage) {
 					int dmg = dynamic_pointer_cast<DotEffect>(eff)->DotOnce();
 					if (dmg != 0) {
 						logs.emplace_back(-1, i, dmg, EFFECT_DOT);
-						TakeDamage(-1, i, {}, {}, ATTRIBUTE_NONE, dmg, false);
+						TakeDamage(-1, i, {}, {}, ATTRIBUTE_NONE, TakenZone(i, ATTRIBUTE_NONE, dmg), false);
 					}
 					if (dynamic_pointer_cast<DotEffect>(eff)->UseUp()) {
 						effects[i].erase(effects[i].begin() + j);
@@ -511,6 +538,16 @@ void Controller::ExecEffect(STAGE_TYPE stage) {
 						RecoverATK(i, atk, false);
 					}
 					if (dynamic_pointer_cast<RecoverEffect>(eff)->UseUp()) {
+						effects[i].erase(effects[i].begin() + j);
+						--j;
+					}
+				}
+				break;
+			case EFFECT_SHIELD:
+				if (stage == STAGE_END) {
+					auto shield = dynamic_pointer_cast<ShieldEffect>(eff);
+					shield->PassRound();
+					if (shield->UseUp()) {
 						effects[i].erase(effects[i].begin() + j);
 						--j;
 					}
@@ -621,7 +658,7 @@ void Controller::HitSuccess(int subject, int object, shared_ptr<Action> offend,
 		int amount = dynamic_pointer_cast<DotEffect>(dot)->DotInstant();
 		if (log) logs.emplace_back(subject, object, amount, EFFECT_DOT);
 		TakeDamage(subject, object, offend->GetEffects(), defend->GetEffects(),
-			offend->GetAttribute(), amount, true, defend->GetAttribute());
+			offend->GetAttribute(), TakenZone(object, offend->GetAttribute(), amount), true, defend->GetAttribute());
 		AddEffect(object, make_shared<DotEffect>(*dynamic_pointer_cast<DotEffect>(dot).get()));
 	}
 
@@ -658,13 +695,27 @@ void Controller::TakeDamage(int subject, int object,
 	vector<shared_ptr<Effect>> offend,
 	vector<shared_ptr<Effect>> defend,
 	ATTRIBUTE_TYPE attribute, int amount, bool log, ATTRIBUTE_TYPE defendAttribute) {
-	if (FindReaction(EFFECT_BURN)) amount = static_cast<int>(amount * 1.5f);
+	// 特性：免疫该属性
+	if (object >= 0 && object < static_cast<int>(cultivators.size()) && !cultivators[object]->Mods().All().empty() &&
+		cultivators[object]->Mods().Any(MOD_IMMUNE, attribute, *cultivators[object])) {
+		amount = 0;
+	}
+
+	// 场地乘区：灼烧是1.5，特性可以按属性以1为基准加减；没有特性时和以前一样
+	double fieldAdj = 0;
+	if (subject >= 0 && subject < static_cast<int>(cultivators.size()) && !cultivators[subject]->Mods().All().empty())
+		fieldAdj = cultivators[subject]->Mods().Sum(MOD_FIELD_MULT, attribute, *cultivators[subject]);
+	if (fieldAdj != 0) amount = static_cast<int>(amount * max(0.0, (FindReaction(EFFECT_BURN) ? 1.5 : 1.0) + fieldAdj));
+	else if (FindReaction(EFFECT_BURN)) amount = static_cast<int>(amount * 1.5f);
 
 	auto reduce = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REDUCE; });
 	if (reduce != defend.end()) {
 		amount = static_cast<int>(amount * (1.0f - dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute)));
 	}
+
+	// 护盾：同时保护武力和健康，先于物理转换/反弹
+	amount = ApplyShield(object, amount);
 
 	// 物理效果：按对方这一招的属性，有一部分伤害转换成物理伤害(扣健康值)，剩余的仍是招式伤害(扣武力值)
 	float physicalRatio = 0.f;
@@ -679,10 +730,16 @@ void Controller::TakeDamage(int subject, int object,
 	// 反弹是减伤的升级版：受击者只承受反弹之后剩下的伤害，被反弹的那部分全部还给攻击者
 	int reboundAtk = 0, reboundHp = 0;
 	if (subject != object) {
+		float ratio = 0.f;
 		auto rebound = find_if(defend.begin(), defend.end(),
 			[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
-		if (rebound != defend.end()) {
-			float ratio = min(1.f, max(0.f, dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute)));
+		if (rebound != defend.end()) ratio = dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute);
+		if (object >= 0 && !cultivators[object]->Mods().All().empty()) {
+			double adj = cultivators[object]->Mods().Sum(MOD_REBOUND, attribute, *cultivators[object]);   // 特性的反弹比例加到反弹效果上
+			if (adj != 0) ratio += static_cast<float>(adj);
+		}
+		ratio = min(1.f, max(0.f, ratio));
+		if (ratio > 0.f) {
 			reboundAtk = static_cast<int>(atkPart * ratio);
 			reboundHp = static_cast<int>(hpPart * ratio);
 		}
@@ -692,6 +749,7 @@ void Controller::TakeDamage(int subject, int object,
 	if (log) logs.emplace_back(subject, object, attribute, ownAtk, ownHp);
 	if (ownAtk > 0) cultivators[object]->TakeDamage(ownAtk, false);
 	if (ownHp > 0) cultivators[object]->TakeDamage(ownHp, true);
+	ApplyDamageTriggers(subject, object, attribute, ownAtk + ownHp);
 
 	if (subject == object) return;
 
@@ -728,6 +786,16 @@ void Controller::TakeDamage(int subject, int object,
 		hp = static_cast<int>(hp * keep);
 	}
 
+	// 护盾：穿透量按武力/健康原来的比例分摊
+	if (atk + hp > 0) {
+		int total = atk + hp;
+		int through = ApplyShield(object, total);
+		if (through != total) {
+			atk = static_cast<int>(atk * (static_cast<double>(through) / total));
+			hp = through - atk;
+		}
+	}
+
 	// 反弹是减伤的升级版：只承受反弹之后剩下的伤害
 	int reboundAtk = 0, reboundHp = 0;
 	if (subject != object) {
@@ -744,6 +812,7 @@ void Controller::TakeDamage(int subject, int object,
 	if (log) logs.emplace_back(subject, object, attribute, ownAtk, ownHp);
 	if (ownAtk > 0) cultivators[object]->TakeDamage(ownAtk, false);
 	if (ownHp > 0) cultivators[object]->TakeDamage(ownHp, true);
+	ApplyDamageTriggers(subject, object, attribute, ownAtk + ownHp);   // 反弹回来的伤害也触发特性
 
 	if (subject == object) return;
 
@@ -759,6 +828,229 @@ void Controller::TakeDamage(int subject, int object,
 		logs.emplace_back(object, subject, mp, EFFECT_ABSORB);
 		RecoverMP(object, mp);
 	}
+}
+
+// 有效威力：本回合出的招(单招=1个，双招=2个基础招式)各自按"家族+式号"查连招链，再乘上特性的各个乘区。
+//   单个基础招式的威力 = (基础威力 + 特性的基础威力加成) x (1 + 增伤比例 x 连续步数)；双招再乘DUAL_POWER_FACTOR；
+//   然后依次乘暴击(1+暴击伤害)、自己的增伤乘区(1+加和)、目标的易伤乘区(1+加和)。同一乘区内加算，乘区之间相乘。
+// 没有任何加成时不动威力(保证没有increase、没有特性的招式和以前逐位一致，也不多抽随机数)。
+void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, int& chainBonus, int& critPercent) {
+	chainBonus = 0;
+	critPercent = 0;
+	vector<shared_ptr<SingleAction>> comps;
+	if (act->GetType() == ACTION_SINGLE) comps.push_back(dynamic_pointer_cast<SingleAction>(act));
+	else if (act->GetType() == ACTION_DUAL) {
+		auto dual = dynamic_pointer_cast<DualAction>(act);
+		comps.push_back(dual->GetAction1());
+		comps.push_back(dual->GetAction2());
+	}
+	else {
+		cultivators[idx]->ResetChain();
+		return;
+	}
+
+	Cultivator& me = *cultivators[idx];
+	bool dual = act->GetType() == ACTION_DUAL;
+	vector<pair<string, int>> moves;
+	double chainSum = 0, fullSum = 0;
+	bool boosted = false, added = false;
+	for (auto& c : comps) {
+		string family = FamilyOfName(c->GetName());
+		int form = FormOfName(c->GetName());
+		int n = me.PeekChain(family, form);
+		double ratio = 0;
+		if (auto inc = dynamic_pointer_cast<IncreaseEffect>(c->GetEffect(EFFECT_INCREASE))) ratio = inc->GetRatio();
+		if (ratio * n > 0) boosted = true;
+		double base = c->GetBasePower();
+		double add = 0;
+		for (const auto& m : me.Mods().All()) {
+			if (m.kind != MOD_BASE_POWER || !(m.attrMask & (1u << static_cast<int>(c->GetAttribute()))) || !ModifierSet::CondHolds(m.cond, me)) continue;
+			add += m.percent ? base * m.value / 100.0 : m.value;
+		}
+		if (add != 0) added = true;
+		chainSum += base * (1.0 + ratio * n);
+		fullSum += (base + add) * (1.0 + ratio * n);
+		moves.emplace_back(family, form);
+	}
+	me.CommitChain(moves);
+
+	if (boosted) {
+		int chainPower = static_cast<int>(dual ? DUAL_POWER_FACTOR * chainSum : chainSum);
+		chainBonus = max(0, static_cast<int>(lround((static_cast<double>(chainPower) / max(1, act->GetBasePower()) - 1.0) * 100.0)));
+	}
+
+	ATTRIBUTE_TYPE attr = act->GetAttribute();
+	double mult = 1.0;
+	bool zoned = false;
+	if (!me.Mods().All().empty()) {
+		double dealt = me.Mods().Sum(MOD_DMG_DEALT, attr, me);
+		if (dealt != 0) { mult *= max(0.0, 1.0 + dealt); zoned = true; }
+	}
+	if (target >= 0 && target < static_cast<int>(cultivators.size()) && !cultivators[target]->Mods().All().empty()) {
+		double taken = cultivators[target]->Mods().Sum(MOD_DMG_TAKEN, attr, *cultivators[target]);
+		if (taken != 0) { mult *= max(0.0, 1.0 + taken); zoned = true; }
+	}
+	double rate = critBaseRate + (me.Mods().All().empty() ? 0.0 : me.Mods().Sum(MOD_CRIT_RATE, attr, me));
+	if (rate > 0) {
+		uniform_real_distribution<double> dist(0.0, 1.0);
+		if (dist(rng) < rate) {
+			double cd = max(0.0, critBaseDamage + (me.Mods().All().empty() ? 0.0 : me.Mods().Sum(MOD_CRIT_DMG, attr, me)));
+			mult *= 1.0 + cd;
+			critPercent = static_cast<int>(lround(cd * 100.0));
+			zoned = true;
+		}
+	}
+
+	if (!boosted && !added && !zoned) {
+		act->SetPower(act->GetBasePower());
+		return;
+	}
+	double power = (dual ? DUAL_POWER_FACTOR * fullSum : fullSum) * mult;
+	act->SetPower(power >= 2147483647.0 ? 2147483647 : static_cast<int>(power));
+}
+
+// 护盾：所有盾一起减去同一个伤害值，穿透量=伤害-最大那块盾的强度；强度被打光的盾移除
+int Controller::ApplyShield(int object, int amount) {
+	if (amount <= 0 || object < 0 || object >= static_cast<int>(effects.size())) return amount;
+	int maxStrength = 0;
+	for (auto& e : effects[object]) {
+		if (e->GetType() == EFFECT_SHIELD) maxStrength = max(maxStrength, dynamic_pointer_cast<ShieldEffect>(e)->Strength());
+	}
+	if (maxStrength <= 0) return amount;
+	for (auto it = effects[object].begin(); it != effects[object].end(); ) {
+		if ((*it)->GetType() == EFFECT_SHIELD) {
+			auto shield = dynamic_pointer_cast<ShieldEffect>(*it);
+			shield->Reduce(amount);
+			if (shield->Strength() <= 0) { it = effects[object].erase(it); continue; }
+		}
+		++it;
+	}
+	int absorbed = min(amount, maxStrength);
+	logs.emplace_back(-1, object, absorbed, EFFECT_SHIELD);
+	return amount - absorbed;
+}
+
+// ---- 特性 ----
+void Controller::SetCritBase(double rate, double damage) {
+	critBaseRate = rate;
+	critBaseDamage = damage;
+}
+
+// 特性造成的资源增减(正=回复，负=扣除)，战报里写"资源|来源"
+void Controller::ApplyTraitDelta(int holder, MOD_KIND resourceKind, int delta, const string& source) {
+	if (delta == 0) return;
+	Cultivator& c = *cultivators[holder];
+	const char* resource = "mp";
+	switch (resourceKind) {
+	case MOD_MP_ROUND: case MOD_DEAL_MP: case MOD_TAKE_MP: case MOD_NOW_MP: c.AdjustMP(delta); resource = "mp"; break;
+	case MOD_ATK_ROUND: case MOD_DEAL_ATK: case MOD_TAKE_ATK: case MOD_NOW_ATK: c.AdjustATK(delta); resource = "atk"; break;
+	case MOD_HP_ROUND: case MOD_DEAL_HP: case MOD_TAKE_HP: case MOD_NOW_HP: c.AdjustHP(delta); resource = "hp"; break;
+	default: return;
+	}
+	logs.emplace_back(holder, -1, delta, EFFECT_TRAIT);
+	logs.back().name = string(resource) + "|" + source;
+}
+
+// 每回合类特性：真气/武力/健康的回复或扣除，按timing在回合开始或回合结束执行(武力/健康扣除会致死)
+void Controller::ExecModifiers(STAGE_TYPE stage) {
+	if (stage != STAGE_START && stage != STAGE_END) return;
+	MOD_TIMING timing = stage == STAGE_START ? MOD_AT_START : MOD_AT_END;
+	for (int i = 0; i < static_cast<int>(cultivators.size()); ++i) {
+		Cultivator& c = *cultivators[i];
+		if (c.Mods().All().empty()) continue;
+		auto list = c.Mods().All();
+		for (const auto& m : list) {
+			if (m.timing != timing) continue;
+			if (m.kind != MOD_MP_ROUND && m.kind != MOD_ATK_ROUND && m.kind != MOD_HP_ROUND) continue;
+			if (!ModifierSet::CondHolds(m.cond, c)) continue;
+			double base = m.kind == MOD_MP_ROUND ? c.GetMaxMP() : m.kind == MOD_ATK_ROUND ? c.GetMaxATK() : c.GetMaxHP();
+			int delta = static_cast<int>(m.percent ? base * m.value / 100.0 : m.value);
+			ApplyTraitDelta(i, m.kind, delta, m.source);
+		}
+	}
+}
+
+// 触发类特性：造成伤害时(持有者是出手方)、受到伤害时(持有者是受击方)回复或扣除真气/武力/健康
+void Controller::ApplyDamageTriggers(int subject, int object, ATTRIBUTE_TYPE attribute, int damage) {
+	if (damage <= 0) return;
+	auto run = [&](int holder, MOD_KIND mp, MOD_KIND atk, MOD_KIND hp) {
+		if (holder < 0 || holder >= static_cast<int>(cultivators.size())) return;
+		Cultivator& c = *cultivators[holder];
+		if (c.Mods().All().empty()) return;
+		auto list = c.Mods().All();
+		for (const auto& m : list) {
+			if (m.kind != mp && m.kind != atk && m.kind != hp) continue;
+			if (!(m.attrMask & (1u << static_cast<int>(attribute))) || !ModifierSet::CondHolds(m.cond, c)) continue;
+			int delta = static_cast<int>(m.percent ? damage * m.value / 100.0 : m.value);
+			ApplyTraitDelta(holder, m.kind, delta, m.source);
+		}
+	};
+	if (subject >= 0 && subject != object) run(subject, MOD_DEAL_MP, MOD_DEAL_ATK, MOD_DEAL_HP);
+	run(object, MOD_TAKE_MP, MOD_TAKE_ATK, MOD_TAKE_HP);
+}
+
+void Controller::AddModifier(int holder, const Modifier& m) {
+	if (holder < 0 || holder >= static_cast<int>(cultivators.size())) return;
+	Cultivator& c = *cultivators[holder];
+	switch (m.kind) {
+	case MOD_NOW_MP: case MOD_NOW_ATK: case MOD_NOW_HP: {
+		double base = m.kind == MOD_NOW_MP ? c.GetMaxMP() : m.kind == MOD_NOW_ATK ? c.GetMaxATK() : c.GetMaxHP();
+		ApplyTraitDelta(holder, m.kind, static_cast<int>(m.percent ? base * m.value / 100.0 : m.value), m.source);
+		return;
+	}
+	case MOD_NOW_AGI: {
+		double delta = m.percent ? c.GetMaxAGI() * m.value / 100.0 : m.value;
+		c.AdjustAGI(static_cast<float>(delta));
+		logs.emplace_back(holder, -1, static_cast<int>(delta), EFFECT_TRAIT);
+		logs.back().name = "agi|" + m.source;
+		return;
+	}
+	case MOD_NOW_FIELD:
+		AddReactionEnvironment(static_cast<int>(m.value));
+		return;
+	case MOD_CLEAR_FIELD:
+		environment.clear();
+		return;
+	case MOD_UNLOCK:
+		status[holder] &= ~0x01;
+		effects[holder].erase(remove_if(effects[holder].begin(), effects[holder].end(),
+			[](const shared_ptr<Effect>& e) { return e->GetType() == EFFECT_LOCK; }), effects[holder].end());
+		return;
+	default:
+		c.Mods().Add(m);
+	}
+}
+
+void Controller::RemoveModifiers(int holder, const string& source) {
+	if (holder < 0 || holder >= static_cast<int>(cultivators.size())) return;
+	cultivators[holder]->Mods().RemoveBySource(source);
+}
+
+double Controller::DodgeProb(int attacker, int defender, ATTRIBUTE_TYPE attribute, float defenderAGI) {
+	bool rust = FindReaction(EFFECT_RUST);
+	const Cultivator& d = *cultivators[defender];
+	double adj = d.Mods().All().empty() ? 0.0 : d.Mods().Sum(MOD_DODGE, attribute, d);
+	// 闪避率乘区：1 + 特性加和 - 锈蚀(1)；没有特性时锈蚀就是不能闪避
+	if (adj == 0) return rust ? 0 : DodgeChance(cultivators[attacker]->GetAGI(), defenderAGI);
+	double zone = 1.0 + adj - (rust ? 1.0 : 0.0);
+	return min(1.0, max(0.0, DodgeChance(cultivators[attacker]->GetAGI(), defenderAGI) * zone));
+}
+
+int Controller::TakenZone(int object, ATTRIBUTE_TYPE attribute, int amount) {
+	if (object < 0 || object >= static_cast<int>(cultivators.size()) || cultivators[object]->Mods().All().empty()) return amount;
+	double taken = cultivators[object]->Mods().Sum(MOD_DMG_TAKEN, attribute, *cultivators[object]);
+	return taken == 0 ? amount : static_cast<int>(amount * max(0.0, 1.0 + taken));
+}
+
+bool Controller::RollHit(int attacker, ATTRIBUTE_TYPE attribute) {
+	const Cultivator& a = *cultivators[attacker];
+	double adj = a.Mods().All().empty() ? 0.0 : a.Mods().Sum(MOD_HIT, attribute, a);
+	// 命中率乘区：1 + 特性加和 - 扬尘(0.5)；够1就必中，不抽随机数
+	double zone = 1.0 + adj - (FindReaction(EFFECT_DUST) ? 0.5 : 0.0);
+	if (zone >= 1.0) return true;
+	if (zone <= 0.0) return false;
+	uniform_real_distribution<double> dist(0.0, 1.0);
+	return dist(rng) < zone;
 }
 
 // 跳过要损失敏捷：付得起(之后不低于1)就记下翻倍后的闪避敏捷，付不起就标记这回合没有闪避

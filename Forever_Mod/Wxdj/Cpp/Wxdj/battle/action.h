@@ -16,7 +16,8 @@ protected:
 	ACTION_TYPE type; // 招式类型
 	ATTRIBUTE_TYPE attribute; // 招式属性
 	int point; // 真气消耗
-	int power; // 基础威力
+	int power; // 本回合的有效威力(连招增伤/炸弹能量会改它)
+	int basePower; // 招式表里的基础威力
 	std::vector<std::shared_ptr<Effect>> effects; // 附加效果列表
 
 public:
@@ -33,8 +34,14 @@ public:
 	// 获取招式真气量消耗
 	int GetPoint() const;
 
-	// 获取招式基础攻击力
+	// 获取招式当前威力
 	int GetPower() const;
+
+	// 获取招式表里的基础威力(不含连招增伤)
+	int GetBasePower() const;
+
+	// 设置本回合的有效威力(炸弹释放时的能量、连招增伤后的威力)
+	void SetPower(int p);
 
 	// 获取指定类型的效果
 	std::shared_ptr<Effect> GetEffect(EFFECT_TYPE type) const;
@@ -66,7 +73,6 @@ public:
 class BombAction : public Action {
 public:
 	BombAction();
-	void SetPower(int power);
 	virtual std::string GetText() const override { return "释放真气炸弹"; }
 };
 

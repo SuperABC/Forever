@@ -9,7 +9,7 @@ index.html             主界面（入口）：开始匹配 / 人机对战 / 查
 public/index.html      【生成物】部署后站点根的主界面：tools/build_index.py 从 ../index.html 生成（去掉 public/ 前缀）
 public/match.html      联机对战页（精简版界面 + 返回按钮）
 public/online.js       联机流程 + 界面逻辑
-public/ai.html         人机对战 = 原来的离线模拟器（战斗引擎 + 内置默认招式表 + AI推理），本地双击也能玩
+public/ai.html         人机对战 = 原来的离线模拟器（战斗引擎 + 内置默认招式表 + AI推理），本地双击也能玩；页面里有"特性调试"面板（PvE的装备/秘诀/丹药/场地效果，见 Cpp/Wxdj/battle/battle.md），联机页不带特性
 public/ai_weights.js   训练好的AI权重（ai.html 通过 <script src> 读它，两个文件放同一目录）
 public/guide.html      说明书（由 tools/guide/make_guide.py 生成，本地双击也能看）
 public/engine.js       战斗引擎【生成物，勿手改】：tools/build_engine.py 从 ai.html 抽出来，联机页用

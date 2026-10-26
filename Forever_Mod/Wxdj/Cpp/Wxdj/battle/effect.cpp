@@ -319,6 +319,52 @@ bool CureEffect::UseUp() const {
 	return cureRounds <= 0;
 }
 
+IncreaseEffect::IncreaseEffect(float ratio) : Effect(EFFECT_INCREASE), ratio(ratio) {
+
+}
+
+IncreaseEffect::~IncreaseEffect() {
+
+}
+
+float IncreaseEffect::GetRatio() const {
+	return ratio;
+}
+
+ShieldEffect::ShieldEffect(int strength, int rounds) :
+	Effect(EFFECT_SHIELD), strength(strength), initial(strength), rounds(rounds) {
+
+}
+
+ShieldEffect::~ShieldEffect() {
+
+}
+
+int ShieldEffect::Strength() const {
+	return strength;
+}
+
+int ShieldEffect::RemainingRounds() const {
+	return rounds;
+}
+
+int ShieldEffect::Initial() const {
+	return initial;
+}
+
+void ShieldEffect::Reduce(int amount) {
+	strength -= amount;
+	if (strength < 0) strength = 0;
+}
+
+void ShieldEffect::PassRound() {
+	--rounds;
+}
+
+bool ShieldEffect::UseUp() const {
+	return rounds <= 0 || strength <= 0;
+}
+
 BurnEffect::BurnEffect() : Effect(EFFECT_BURN), burnRounds(3), currentRound(0) {
 
 }

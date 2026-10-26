@@ -319,6 +319,7 @@ static void FillState(const Controller& ctl, int seat, int round, float* o) {
 	}
 	i += 4;
 	o[i++] = round / 40.f;
+	wxfeat::StateExtras(ctl, seat, o + SD - 8);
 }
 
 // 出招记录里的一方：类别/属性/消耗/威力/效果种类(照 env.cpp 的 ActionRecord)

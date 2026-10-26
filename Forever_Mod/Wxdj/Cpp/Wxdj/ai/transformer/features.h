@@ -5,6 +5,7 @@
 // 所有数值都按"自己/对手的初始属性"归一化，所以不同阶位、不同属性规模的招式文件可以用同一个模型。
 
 #include "action.h"
+#include "controller.h"
 #include "cultivator.h"
 
 #include <algorithm>
@@ -14,8 +15,8 @@
 
 namespace wxfeat {
 
-constexpr int FM = 75;      // 每个招式的特征维数
-constexpr int SD = 41;      // 局面特征维数
+constexpr int FM = 81;      // 每个招式的特征维数(75~80是increase/shield/式号，追加在原来的75维后面)
+constexpr int SD = 49;      // 局面特征维数(最后8维是双方的护盾/连招，追加在原来的41维后面)
 constexpr int HK = 8;       // 记录最近多少回合
 constexpr int HD = 59;      // 每回合记录的特征维数
 
@@ -83,6 +84,42 @@ inline void MoveFeatures(wxdj::SingleAction& a, const wxdj::Cultivator& self, co
 		o[i] = Clamp(d->CureInstant() / sHP); o[i + 1] = Clamp(d->CureContinuous() / sHP);
 		o[i + 2] = d->CureRounds() / 10.f; o[i + 3] = d->CureInterval() / 5.f;
 		o[65 + 9] = 1.f;
+	}
+	// 追加的维度(旧模型对它们的权重补零，所以旧模型行为不变，重训之后才会用到)
+	if (auto e = a.GetEffect(EFFECT_INCREASE)) {
+		o[75] = 1.f;
+		o[76] = Clamp(static_cast<IncreaseEffect*>(e.get())->GetRatio());
+	}
+	if (auto e = a.GetEffect(EFFECT_SHIELD)) {
+		auto* s = static_cast<ShieldEffect*>(e.get());
+		o[77] = 1.f;
+		o[78] = Clamp(s->Initial() / sATK);
+		o[79] = s->RemainingRounds() / 5.f;
+	}
+	o[80] = FormOfName(a.GetName()) / 20.f;   // 式号，让模型能认出"接着上一式往上连"
+}
+
+// 局面特征最后8维：先自己再对手，各4维——最大护盾强度(相对武力上限)、护盾块数、连招链长、连招里最高的式号。
+// o指向局面特征的第SD-8维。只用Controller/Cultivator的公开接口，训练环境和游戏里推理共用。
+inline void StateExtras(const wxdj::Controller& ctl, int seat, float* o) {
+	using namespace wxdj;
+	for (int k = 0; k < 2; ++k) {
+		int idx = k == 0 ? seat : 1 - seat;
+		auto c = ctl.GetCultivator(idx);
+		float matk = static_cast<float>(std::max(1, c->GetMaxATK()));
+		float maxShield = 0.f;
+		int count = 0;
+		for (const auto& e : ctl.GetEffectsOf(idx)) {
+			if (e->GetType() != EFFECT_SHIELD) continue;
+			maxShield = std::max(maxShield, static_cast<float>(static_cast<ShieldEffect*>(e.get())->Strength()));
+			++count;
+		}
+		int len = 0, form = 0;
+		for (const auto& ce : c->GetChain()) { len = std::max(len, ce.len); form = std::max(form, ce.form); }
+		o[k * 4 + 0] = Clamp(maxShield / matk);
+		o[k * 4 + 1] = count / 3.f;
+		o[k * 4 + 2] = len / 10.f;
+		o[k * 4 + 3] = form / 20.f;
 	}
 }
 

@@ -241,6 +241,34 @@ enum EFFECT_TYPE {
 	EFFECT_RUST, // 金水锈蚀
 	EFFECT_DUST, // 土火扬尘
 	EFFECT_MUD, // 土水泥沼
+	EFFECT_INCREASE, // 连续升式增伤(招式效果，不进双招的合并效果)
+	EFFECT_SHIELD, // 护盾(同时保护武力和健康)
+	EFFECT_CRIT, // 暴击(只用于日志)
+	EFFECT_TRAIT, // 特性触发/生效(只用于日志：name="资源|来源"，资源是mp/atk/hp/agi，amount带符号)
 };
+
+// 招式名是"家族名+第X式"：拆出家族名和式号(第一式=1 ... 第二十式=20)；名字里没有"第"返回式号0(不参与连招)。
+inline std::string FamilyOfName(const std::string& name) {
+	size_t p = name.find("\xE7\xAC\xAC"); // "第"的UTF-8
+	return p == std::string::npos ? name : name.substr(0, p);
+}
+inline int FormOfName(const std::string& name) {
+	size_t p = name.find("\xE7\xAC\xAC");
+	if (p == std::string::npos) return 0;
+	std::string s = name.substr(p + 3);
+	size_t q = s.find("\xE5\xBC\x8F"); // "式"
+	if (q != std::string::npos) s = s.substr(0, q);
+	static const char* digits[] = { "\xE4\xB8\x80", "\xE4\xBA\x8C", "\xE4\xB8\x89", "\xE5\x9B\x9B", "\xE4\xBA\x94",
+		"\xE5\x85\xAD", "\xE4\xB8\x83", "\xE5\x85\xAB", "\xE4\xB9\x9D" };   // 一~九
+	int total = 0, cur = 0;
+	for (size_t i = 0; i + 2 < s.size() + 0 && i + 3 <= s.size(); i += 3) {
+		std::string ch = s.substr(i, 3);
+		if (ch == "\xE5\x8D\x81") { total += (cur == 0 ? 1 : cur) * 10; cur = 0; }   // 十
+		else {
+			for (int d = 0; d < 9; ++d) if (ch == digits[d]) { cur = d + 1; break; }
+		}
+	}
+	return total + cur;
+}
 
 }

@@ -9,7 +9,7 @@
 
 | 文件 | 作用 |
 |---|---|
-| `env.cpp`、`features.h` | 训练环境`wxenv.dll`：批量并行对局，导出C接口；特征(招式75维/局面41维/每回合记录59维x8回合)定义在`features.h`，以后游戏里推理复用 |
+| `env.cpp`、`features.h` | 训练环境`wxenv.dll`：批量并行对局，导出C接口；特征(招式81维/局面49维/每回合记录59维x8回合；75~80和最后8维是increase/shield相关的追加维度)定义在`features.h`，以后游戏里推理复用 |
 | `build.ps1` | 编译`wxenv.dll`(改了`battle/`后重新跑；执行策略拦截时用`powershell -ExecutionPolicy Bypass -File build.ps1`) |
 | `wxenv.py` | `wxenv.dll`的ctypes封装 |
 | `gen_pool.py` | 生成随机化的招式文件池(真实家族的随机子集/扰动 + 合成家族 + 式的子集) |
@@ -17,7 +17,8 @@
 | `bots.py` | 脚本机器人：随机/单家族/最高威力/积攒炸弹，训练时当陪练、评测时当参照(不在游戏里) |
 | `train.py` | PPO训练 |
 | `eval_moves.py`、`eval_report.py` | 招式强度评估：`python eval_report.py checkpoints/latest.pt <式>`，输出招类使用率、各家族的单招/双招矩阵和固定套路，进度写在`progress_<式>.txt` |
-| `ai_test.cpp` | 游戏里C++推理(`battle/ai.cpp`)的对拍程序：用游戏的招式表和导出的`ai_weights.bin`跑两个回合，打印logit，和网页版同一场景的JS输出比，误差应<=1e-4。编译：`cl /O2 /EHsc /std:c++17 /utf-8 /I ../../battle ai_test.cpp ../../battle/{action,controller,cultivator,effect,ai}.cpp`，运行：`nntest 招式表xiaohua.txt ai_weights.bin` |
+| `ai_test.cpp` | 游戏里C++推理(`battle/ai.cpp`)的对拍程序：用游戏的招式表和导出的`ai_weights.bin`跑两个回合，打印logit，和网页版同一场景的JS输出比，误差应<=1e-4。编译：`cl /O2 /EHsc /std:c++17 /utf-8 /I ../../battle ai_test.cpp ../../battle/{action,controller,cultivator,effect,modifier,ai}.cpp`，运行：`nntest 招式表xiaohua.txt ai_weights.bin` |
+| `pad_checkpoint.py` | 特征扩维(75→81、41→49)之后，把旧检查点的输入层补零列(旧模型输出不变)，不用重训；重训时不需要 |
 | `export_weights.py` | 把检查点导出成`../../../Online/public/ai_weights.js`(网页版加载)和`../../../Resource/act/ai_weights.bin`(游戏里C++推理读) |
 | `chain.sh`、`train_only.sh`、`eval_only.sh` | 一键脚本：训练+导出+评估多个式 / 只训练+导出 / 只评估(`sh eval_only.sh 1 20`) |
 | `report_<式>.txt` | 当前这一版模型在第1/5/10/15/20式上的评估报告 |

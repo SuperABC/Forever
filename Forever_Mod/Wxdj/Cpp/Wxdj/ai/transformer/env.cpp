@@ -142,6 +142,7 @@ void FillState(Game& g, int seat, float* o) {
 	}
 	i += 4;
 	o[i++] = g.round / 40.f;
+	StateExtras(*g.ct, seat, o + SD - 8);
 }
 
 shared_ptr<Action> Build(Cultivator& c, int cls, int m1, int m2) {

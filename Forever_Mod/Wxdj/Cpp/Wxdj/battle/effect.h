@@ -196,6 +196,38 @@ private:
 	int currentRound; // 从上一次触发开始已累计的回合数
 };
 
+// 连续升式增伤：本招连着上一回合的"同家族前一式"出，每连续一步威力多加ratio(第n步 x(1+ratio*n))
+class IncreaseEffect : public Effect {
+public:
+	IncreaseEffect(float ratio);
+	virtual ~IncreaseEffect();
+
+	float GetRatio() const;
+
+private:
+	float ratio;
+};
+
+// 护盾：出招时给自己加一块，同时保护武力和健康；多块盾同时存在、各自独立计时，
+// 受到伤害时所有盾一起减去同一个伤害值，穿透量=伤害-最大的那块盾的强度
+class ShieldEffect : public Effect {
+public:
+	ShieldEffect(int strength, int rounds);
+	virtual ~ShieldEffect();
+
+	int Strength() const;
+	int RemainingRounds() const;
+	int Initial() const; // 出招时的强度(显示/招式提示用)
+	void Reduce(int amount); // 一起减去伤害值
+	void PassRound();
+	bool UseUp() const;
+
+private:
+	int strength; // 当前剩余强度
+	int initial;
+	int rounds; // 还剩几回合(含当前回合)
+};
+
 // 金火灼烧场地效果
 class BurnEffect : public Effect {
 public:

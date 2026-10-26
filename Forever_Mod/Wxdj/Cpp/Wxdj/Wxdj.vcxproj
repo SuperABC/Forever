@@ -95,6 +95,7 @@
     <ClCompile Include="battle\controller.cpp" />
     <ClCompile Include="battle\cultivator.cpp" />
     <ClCompile Include="battle\effect.cpp" />
+    <ClCompile Include="battle\modifier.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="building_wxdj.h" />
@@ -105,6 +106,7 @@
     <ClInclude Include="battle\controller.h" />
     <ClInclude Include="battle\cultivator.h" />
     <ClInclude Include="battle\effect.h" />
+    <ClInclude Include="battle\modifier.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

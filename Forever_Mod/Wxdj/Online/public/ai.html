@@ -100,6 +100,19 @@
     #log { max-height: 40vh; }
   }
 
+  /* ---- 特性调试面板 ---- */
+  #traitBox { background: var(--panel); border: 1px solid var(--panel-line); padding: 6px 8px; }
+  #traitBox > summary { cursor: pointer; color: var(--gold); }
+  #traitBox .tline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; font-size: 13px; }
+  #traitBox .tcols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; font-size: 13px; }
+  #traitBox textarea { width: 100%; background: #262630; color: var(--text); border: 1px solid var(--panel-line); border-radius: 3px; font: 12px/1.4 Consolas, monospace; padding: 4px 6px; resize: vertical; }
+  #traitMsg { color: #e6be5a; font-size: 12px; }
+  #traitHelp { font-size: 12px; color: #b8b8c4; line-height: 1.5; margin-top: 4px; }
+  #traitHelp code { color: #ffdc78; }
+  #traitHelp table { border-collapse: collapse; width: 100%; }
+  #traitHelp td { border-top: 1px solid #34343f; padding: 2px 4px; vertical-align: top; }
+  #traitHelp td:first-child { white-space: nowrap; color: #ffdc78; }
+
   /* ---- 联机站点追加：返回主界面 ---- */
   .wxdj-back { display: inline-block; text-decoration: none; cursor: pointer; border: 1px solid #0f0f14; background: #465a82; color: #fff;
     padding: 6px 12px; border-radius: 3px; font-size: 13px; line-height: 1.4; }
@@ -131,6 +144,24 @@
   <div id="body">
     <div id="leftCol">
       <div id="log"></div>
+      <details id="traitBox">
+        <summary>特性调试（PvE：装备/秘诀/丹药/场地）<span id="traitCount" style="color:#9a9aaa;font-size:12px"></span></summary>
+        <div class="tline">
+          <label>基础暴击率 <input type="text" id="critRate" value="0" style="width:3.4em"></label>
+          <label>基础暴击伤害 <input type="text" id="critDmg" value="0.5" style="width:3.4em"></label>
+          <button id="critPve" type="button" title="PvE默认：暴击率5%、暴击伤害+50%（PvP没有暴击）">PvE默认(5%/+50%)</button>
+        </div>
+        <div class="tcols">
+          <div><div>我方特性（每行一条）</div><textarea id="traitMe" rows="6" spellcheck="false" placeholder="mod dmg_dealt 0.5 attr=fire src=戒指&#10;mod mp_round 100 timing=end dur=5 src=丹药"></textarea></div>
+          <div><div>敌方特性</div><textarea id="traitEnemy" rows="6" spellcheck="false" placeholder="mod hp_round -2% timing=start src=毒"></textarea></div>
+        </div>
+        <div class="tline">
+          <button id="traitApply" type="button" title="按文本框里的特性和暴击设置重新开战">应用并重新开战</button>
+          <button id="traitNow" type="button" title="把文本框里的特性立刻加到当前对局（立即类效果马上生效），不重开；重复点会重复添加">立即加到当前对局</button>
+          <span id="traitMsg"></span>
+        </div>
+        <details><summary>格式与种类说明</summary><div id="traitHelp"></div></details>
+      </details>
       <div id="manual">
         <div class="title">敌方出招（手动）：下回合敌方出这一招</div>
         <div class="line">
@@ -172,7 +203,7 @@
  * 特征、网络结构必须和训练端完全一致：改了那边就要同步这里并重新导出权重。 */
 (function (global) {
   "use strict";
-  const FM = 75, SD = 41, HK = 8, HD = 59, D = 128, HEADS = 4, LATENTS = 16, BLOCKS = 3;
+  const FM = 81, SD = 49, HK = 8, HD = 59, D = 128, HEADS = 4, LATENTS = 16, BLOCKS = 3;
   const NEG = -1e9;
 
   /* ---------------- 张量小工具(行优先 Float32Array) ---------------- */
@@ -366,6 +397,12 @@
       i += 4;
     };
     timed(E_DOT, 6, oATK); timed(E_REBATE, 7, sMP); timed(E_RECOVER, 8, sATK); timed(E_CURE, 9, sHP);
+    // 追加的维度(旧模型对它们的权重补零，所以旧模型行为不变，重训之后才会用到)
+    const inc = find(E_INCREASE);
+    if (inc) { o[75] = 1; o[76] = clamp(inc.ratio); }
+    const shield = find(E_SHIELD);
+    if (shield) { o[77] = 1; o[78] = clamp(shield.initial / sATK); o[79] = shield.rounds / 5; }
+    o[80] = formOfName(act.name || "") / 20;   // 式号，让模型能认出"接着上一式往上连"
     return o;
   }
 
@@ -396,6 +433,15 @@
     }
     i += 4;
     o[i++] = round / 40;
+    // 最后8维：先自己再对手，各4维——最大护盾强度(相对武力上限)、护盾块数、连招链长、连招里最高的式号
+    for (let k = 0; k < 2; k++) {
+      const idx = k === 0 ? seat : 1 - seat, c = ctl.cultivators[idx];
+      let maxShield = 0, count = 0, len = 0, form = 0;
+      for (const e of ctl.effects[idx]) if (e.type === E_SHIELD) { maxShield = Math.max(maxShield, e.strength); count++; }
+      for (const ce of c.chain) { len = Math.max(len, ce.len); form = Math.max(form, ce.form); }
+      o[SD - 8 + k * 4] = clamp(maxShield / Math.max(1, c.maxATK)); o[SD - 7 + k * 4] = count / 3;
+      o[SD - 6 + k * 4] = len / 10; o[SD - 5 + k * 4] = form / 20;
+    }
     return o;
   }
 
@@ -1037,6 +1083,90 @@ absorb 2 2 2 2 2 2 2
 五行八卦掌第十八式 all 2831 6587 4-6 0
 五行八卦掌第十九式 all 3430 8212 4-6 0
 五行八卦掌第二十式 all 4127 10167 4-6 0
+
+# 测试增量：无属性，消耗/威力与同式的无招完全相同，只多一个increase效果(连续出同家族的前一式之后，本招威力x(1+比例x连续步数))；比例0.2=每连一步多20%，第1式连到第20式第20步为x4.8。仅用于测试increase的平衡，数值是估计值
+测试增量第一式 none 100 200 3-1 1
+increase 0.2
+测试增量第二式 none 120 246 3-2 1
+increase 0.2
+测试增量第三式 none 144 302 3-3 1
+increase 0.2
+测试增量第四式 none 172 370 3-4 1
+increase 0.2
+测试增量第五式 none 208 458 3-5 1
+increase 0.2
+测试增量第六式 none 250 562 3-6 1
+increase 0.2
+测试增量第七式 none 300 690 4-1 1
+increase 0.2
+测试增量第八式 none 360 846 4-1 1
+increase 0.2
+测试增量第九式 none 432 1036 4-2 1
+increase 0.2
+测试增量第十式 none 518 1270 4-2 1
+increase 0.2
+测试增量第十一式 none 622 1555 4-3 1
+increase 0.2
+测试增量第十二式 none 745 1900 4-3 1
+increase 0.2
+测试增量第十三式 none 895 2327 4-4 1
+increase 0.2
+测试增量第十四式 none 1075 2850 4-4 1
+increase 0.2
+测试增量第十五式 none 1290 3483 4-5 1
+increase 0.2
+测试增量第十六式 none 1548 4257 4-5 1
+increase 0.2
+测试增量第十七式 none 1860 5208 4-5 1
+increase 0.2
+测试增量第十八式 none 2230 6356 4-6 1
+increase 0.2
+测试增量第十九式 none 2680 7772 4-6 1
+increase 0.2
+测试增量第二十式 none 3200 9440 4-6 1
+increase 0.2
+
+# 测试护盾：无属性，消耗/威力与同式的无招完全相同，只多一个shield效果(出招时给自己加一块护盾，强度=本式威力的一半，持续2回合，同时保护武力和健康)；仅用于测试shield的平衡，数值是估计值
+测试护盾第一式 none 100 200 3-1 1
+shield 100 2
+测试护盾第二式 none 120 246 3-2 1
+shield 123 2
+测试护盾第三式 none 144 302 3-3 1
+shield 151 2
+测试护盾第四式 none 172 370 3-4 1
+shield 185 2
+测试护盾第五式 none 208 458 3-5 1
+shield 229 2
+测试护盾第六式 none 250 562 3-6 1
+shield 281 2
+测试护盾第七式 none 300 690 4-1 1
+shield 345 2
+测试护盾第八式 none 360 846 4-1 1
+shield 423 2
+测试护盾第九式 none 432 1036 4-2 1
+shield 518 2
+测试护盾第十式 none 518 1270 4-2 1
+shield 635 2
+测试护盾第十一式 none 622 1555 4-3 1
+shield 777 2
+测试护盾第十二式 none 745 1900 4-3 1
+shield 950 2
+测试护盾第十三式 none 895 2327 4-4 1
+shield 1163 2
+测试护盾第十四式 none 1075 2850 4-4 1
+shield 1425 2
+测试护盾第十五式 none 1290 3483 4-5 1
+shield 1741 2
+测试护盾第十六式 none 1548 4257 4-5 1
+shield 2128 2
+测试护盾第十七式 none 1860 5208 4-5 1
+shield 2604 2
+测试护盾第十八式 none 2230 6356 4-6 1
+shield 3178 2
+测试护盾第十九式 none 2680 7772 4-6 1
+shield 3886 2
+测试护盾第二十式 none 3200 9440 4-6 1
+shield 4720 2
 `;
 
 /* ============ 战斗内核：照 Forever_Mod/Wxdj/Cpp/Wxdj/battle 逐段移植，规则不改 ============ */
@@ -1056,7 +1186,8 @@ const SKIP_AGI_FACTOR = 2;   // 跳过(含被禁锢而无法出招)时敏捷翻�
 
 const A_SKIP = 0, A_ACCUMULATE = 1, A_BOMB = 2, A_SINGLE = 3, A_DUAL = 4;
 const E_NONE = 0, E_PHYSICAL = 1, E_PENETRATE = 2, E_REDUCE = 3, E_REBOUND = 4, E_ABSORB = 5, E_LOCK = 6,
-  E_DOT = 7, E_REBATE = 8, E_RECOVER = 9, E_CURE = 10, E_BURN = 11, E_RUST = 12, E_DUST = 13, E_MUD = 14;
+  E_DOT = 7, E_REBATE = 8, E_RECOVER = 9, E_CURE = 10, E_BURN = 11, E_RUST = 12, E_DUST = 13, E_MUD = 14,
+  E_INCREASE = 15, E_SHIELD = 16, E_CRIT = 17, E_TRAIT = 18;
 const STAGE_START = 0, STAGE_ACTION = 1, STAGE_CHECK = 2, STAGE_END = 3;
 const L_MP = 0, L_ATK = 1, L_HP = 2, L_CONSUME = 3, L_SKIP = 4, L_MOVE = 5, L_DAMAGE = 6, L_DODGE = 7, L_FAIL = 8, L_EFFECT = 9;
 
@@ -1080,6 +1211,23 @@ const DUAL_PRIMARY = (() => {
   both(ALL, NONE, ALL);
   return m;
 })();
+
+// 招式名是"家族名+第X式"：拆出家族名和式号(第一式=1 ... 第二十式=20)；没有"第"的式号为0(不参与连招)
+const CN_DIGITS = "一二三四五六七八九";
+function familyOfName(n) { const p = n.indexOf("第"); return p < 0 ? n : n.slice(0, p); }
+function formOfName(n) {
+  const p = n.indexOf("第");
+  if (p < 0) return 0;
+  let s = n.slice(p + 1);
+  const q = s.indexOf("式");
+  if (q >= 0) s = s.slice(0, q);
+  let total = 0, cur = 0;
+  for (const ch of s) {
+    if (ch === "十") { total += (cur === 0 ? 1 : cur) * 10; cur = 0; }
+    else { const d = CN_DIGITS.indexOf(ch); if (d >= 0) cur = d + 1; }
+  }
+  return total + cur;
+}
 
 /* ---- 效果 ---- */
 function ratioEffect(type, r) {
@@ -1120,12 +1268,69 @@ function parseEffect(line) {
       const type = { dot: E_DOT, rebate: E_REBATE, recover: E_RECOVER, cure: E_CURE }[kind];
       return timedEffect(type, nums[0] | 0, nums[1] | 0, nums[2] | 0, nums[3] | 0);
     }
+    case "increase": return has(1) ? { type: E_INCREASE, ratio: Math.fround(nums[0]) } : null;   // 和C++的float一致
+    case "shield": return has(2) ? { type: E_SHIELD, strength: nums[0] | 0, initial: nums[0] | 0, rounds: nums[1] | 0 } : null;
   }
   return null;
 }
 
+/* ---- 特性(外部效果)：照 battle/modifier.h/.cpp 逐段移植，规则和数值公式见 battle.md 的"特性系统" ----
+ * 一条特性 = {kind, value, percent, attrMask, duration, timing, cond, source}；同种类的数值取加和，持续时间各算各的。
+ * 解析的文本格式：  mod <种类> <数值>[%] [attr=none,metal,wood,water,fire,earth,all|elements] [cond=hp<50] [dur=3] [timing=end] [src=名字] */
+const MOD_KINDS = ["mp_round", "atk_round", "hp_round", "skip_agi", "agi_recover", "agi_max", "mp_max", "acc_ratio", "bomb_power",
+  "base_power", "dmg_dealt", "dmg_taken", "field_mult", "crit_rate", "crit_dmg", "dodge", "hit", "cost",
+  "deal_mp", "deal_atk", "deal_hp", "take_mp", "take_atk", "take_hp", "rebound", "immune",
+  "now_mp", "now_atk", "now_hp", "now_agi", "now_field", "clear_field", "unlock"];
+const MOD_ATTR_ALL = 0x7F;
+const MOD_STATS = { hp: 1, atk: 2, mp: 3, agi: 4 };
+function parseModAttrs(text) {
+  let mask = 0;
+  for (const item of text.split(",")) {
+    if (item in ATTR_PARSE) mask |= 1 << ATTR_PARSE[item];
+    else if (item === "elements") mask |= (1 << METAL) | (1 << WOOD) | (1 << WATER) | (1 << FIRE) | (1 << EARTH);
+    else if (item === "any") mask |= MOD_ATTR_ALL;
+    else return 0;
+  }
+  return mask;
+}
+function parseModifier(line) {
+  const t = line.trim().split(/\s+/).filter(Boolean);
+  let k = 0;
+  if (t[k] === "mod") k++;
+  if (k >= t.length || MOD_KINDS.indexOf(t[k]) < 0) return null;
+  const m = { kind: t[k++], value: 0, percent: false, attrMask: MOD_ATTR_ALL, duration: -1, timing: 0, cond: { stat: 0, less: true, pct: 0 }, source: "" };
+  let pending = null;
+  if (k >= t.length) return (m.kind === "clear_field" || m.kind === "unlock") ? m : null;
+  if (m.kind === "clear_field" || m.kind === "unlock") pending = t[k++];   // 数值被忽略，后面当参数继续解析
+  else {
+    let v = t[k++];
+    if (v.endsWith("%")) { m.percent = true; v = v.slice(0, -1); }
+    if (v === "" || Number.isNaN(Number(v))) return null;
+    m.value = Number(v);
+  }
+  const handle = tok => {
+    if (tok === "%") { m.percent = true; return true; }
+    if (tok.startsWith("attr=")) { m.attrMask = parseModAttrs(tok.slice(5)); return m.attrMask !== 0; }
+    if (tok.startsWith("dur=")) { m.duration = parseInt(tok.slice(4)) || 0; return m.duration !== 0; }
+    if (tok.startsWith("timing=")) { const v = tok.slice(7); if (v === "start") m.timing = 0; else if (v === "end") m.timing = 1; else return false; return true; }
+    if (tok.startsWith("src=")) { m.source = tok.slice(4); return true; }
+    if (tok.startsWith("cond=")) {
+      const v = tok.slice(5), pos = v.search(/[<>]/);
+      if (pos <= 0) return false;
+      const stat = MOD_STATS[v.slice(0, pos)];
+      if (!stat) return false;
+      m.cond = { stat, less: v[pos] === "<", pct: parseFloat(v.slice(pos + 1)) || 0 };
+      return true;
+    }
+    return false;
+  };
+  if (pending !== null && !handle(pending)) return null;
+  for (; k < t.length; k++) if (!handle(t[k])) return null;
+  return m;
+}
+
 /* ---- 招式 ---- */
-function makeAction(type, attr, point, power, effects, text) { return { type, attr, point, power, effects, text }; }
+function makeAction(type, attr, point, power, effects, text) { return { type, attr, point, power, basePower: power, effects, text }; }   // basePower：招式表里的威力；power：本回合有效威力(连招增伤/炸弹能量)
 const skipAction = () => makeAction(A_SKIP, NONE, 0, 0, [], "无");
 const accumulateAction = () => makeAction(A_ACCUMULATE, NONE, 0, 0, [], "积攒真气炸弹");
 const bombAction = () => makeAction(A_BOMB, NONE, 0, 0, [physicalAll()], "释放真气炸弹");
@@ -1138,7 +1343,7 @@ function dualAction(a1, a2) {
   const attr = DUAL_PRIMARY[a1.attr + "," + a2.attr];
   const a = makeAction(A_DUAL, attr,
     Math.trunc(DUAL_COST_FACTOR * (a1.point + a2.point)), Math.trunc(DUAL_POWER_FACTOR * (a1.power + a2.power)),
-    a1.effects.concat(a2.effects.filter(e => !a1.effects.some(o => o.type === e.type))),   // 同名效果只取第一个招式的
+    a1.effects.filter(e => e.type !== E_INCREASE).concat(a2.effects.filter(e => e.type !== E_INCREASE && !a1.effects.some(o => o.type === e.type))),   // 同名效果只取第一个招式的；increase不并进双招(两个基础招式各自带自己的连招增伤)
     "(" + a1.name + ", " + a2.name + ")");
   a.action1 = a1; a.action2 = a2;
   return a;
@@ -1180,13 +1385,67 @@ class Cultivator {
     this.name = name; this.defs = defs;
     this.maxHP = this.currentHP = hp; this.maxATK = this.currentATK = atk; this.maxMP = this.currentMP = mp;
     // 敏捷：当前值agi，上限maxAgi；闪避一次损失agiLoss，每回合自动恢复agiRecover(不超过上限)
-    this.agi = agi; this.maxAgi = agi; this.agiLoss = agiLoss; this.agiRecover = agiRecover; this.skipStreak = 0;
+    this.agi = agi; this.maxAgi = agi; this.agiLoss = agiLoss; this.agiRecover = agiRecover; this.skipStreak = 0; this.chain = []; this.mods = [];   // mods：特性
     this.recover = recover; this.bomb = 0; this.bombMultiplier = bombMultiplier;   // 炸弹积攒倍率：个人属性，由所在阶位决定
   }
-  skipLoss() { return this.agiLoss + SKIP_STREAK_EXTRA_LOSS * this.skipStreak; }   // 这次跳过要扣多少敏捷
+  // 连招链(increase用)：上一回合出的招(单招=1个，双招=2个基础招式)的[家族,式号,已连续步数]；本回合出家族F的第k式，链里有(F,k-1)就是步数+1，否则0
+  peekChain(family, form) {
+    if (form <= 1) return 0;
+    const e = this.chain.find(x => x.family === family && x.form === form - 1);
+    return e ? e.len + 1 : 0;
+  }
+  commitChain(moves) { this.chain = moves.map(m => ({ family: m[0], form: m[1], len: this.peekChain(m[0], m[1]) })); }
+  resetChain() { this.chain = []; }
+  // ---- 特性 ----
+  condHolds(cond) {
+    if (!cond || cond.stat === 0) return true;
+    let cur = 0, max = 1;
+    if (cond.stat === 1) { cur = this.currentHP; max = this.maxHP; }
+    else if (cond.stat === 2) { cur = this.currentATK; max = this.maxATK; }
+    else if (cond.stat === 3) { cur = this.currentMP; max = this.maxMP; }
+    else { cur = this.agi; max = this.maxAgi; }
+    if (max <= 0) max = 1;
+    const pct = cur / max * 100;
+    return cond.less ? pct < cond.pct : pct > cond.pct;
+  }
+  modSum(kind, attr) {
+    let total = 0;
+    for (const m of this.mods) if (m.kind === kind && (m.attrMask & (1 << attr)) && this.condHolds(m.cond)) total += m.value;
+    return total;
+  }
+  modAny(kind, attr) { return this.mods.some(m => m.kind === kind && (m.attrMask & (1 << attr)) && this.condHolds(m.cond)); }
+  scaledSum(kind, base) {   // percent的按base*value/100，否则直接加(忽略属性掩码)
+    let total = 0;
+    for (const m of this.mods) if (m.kind === kind && this.condHolds(m.cond)) total += m.percent ? base * m.value / 100 : m.value;
+    return total;
+  }
+  getMaxMP() {   // 有效真气上限(含特性)；maxMP是基础上限
+    if (!this.mods.length) return this.maxMP;
+    const adj = this.scaledSum("mp_max", this.maxMP);
+    return adj === 0 ? this.maxMP : Math.max(1, Math.trunc(this.maxMP + adj));
+  }
+  getMaxAgi() {
+    if (!this.mods.length) return this.maxAgi;
+    const adj = this.scaledSum("agi_max", this.maxAgi);
+    return adj === 0 ? this.maxAgi : Math.max(1, Math.fround(this.maxAgi + adj));
+  }
+  adjustMP(delta) { if (delta > 0) this.recoverMP(delta); else if (delta < 0) this.currentMP = Math.max(0, this.currentMP + delta); }
+  adjustATK(delta) { if (delta > 0) this.recoverATK(delta); else if (delta < 0) this.currentATK += delta; }
+  adjustHP(delta) { if (delta > 0) this.recoverHP(delta); else if (delta < 0) this.currentHP = Math.max(0, this.currentHP + delta); }
+  adjustAgi(delta) { this.agi = Math.max(1, Math.min(this.getMaxAgi(), this.agi + delta)); }
+  tickMods() { for (const m of this.mods) if (m.duration > 0) m.duration--; this.mods = this.mods.filter(m => m.duration !== 0); }
+  skipLoss() {   // 这次跳过要扣多少敏捷
+    let loss = this.agiLoss + SKIP_STREAK_EXTRA_LOSS * this.skipStreak;
+    if (this.mods.length) { const adj = this.scaledSum("skip_agi", 0); if (adj !== 0) loss = Math.max(0, loss + adj); }
+    return loss;
+  }
   canDodge() { return this.agi - this.skipLoss() >= 1 - 1e-4; }   // 跳过得起吗：跳过要损失agiLoss点敏捷，之后敏捷不能低于1
   consumeAgi() { this.agi = Math.max(1, this.agi - this.skipLoss()); this.skipStreak++; }
-  recoverAgi() { this.agi = Math.min(this.maxAgi, this.agi + this.agiRecover); }
+  recoverAgi() {
+    let rec = this.agiRecover;
+    if (this.mods.length) { const adj = this.scaledSum("agi_recover", 0); if (adj !== 0) rec = Math.max(0, rec + adj); }
+    this.agi = Math.min(this.getMaxAgi(), this.agi + rec);
+  }
   isAlive() { return this.currentHP > 0 && this.currentATK > 0; }
   getAction(a, b) {
     const n = this.defs.length;
@@ -1209,8 +1468,9 @@ class Cultivator {
   }
   recoverMP(amount) {
     this.currentMP += amount <= 0 ? this.recover : amount;
-    if (this.currentMP > this.maxMP * 2) this.currentHP = 0;
-    else if (this.currentMP > this.maxMP) this.currentMP = this.maxMP;
+    const cap = this.getMaxMP();
+    if (this.currentMP > cap * 2) this.currentHP = 0;
+    else if (this.currentMP > cap) this.currentMP = cap;
   }
   consumeMP(amount) {
     if (this.currentMP >= amount) this.currentMP -= amount;
@@ -1228,7 +1488,9 @@ class Cultivator {
   }
   accumulatePower() {
     // 消耗当前真气的一部分，按倍数存进炸弹
-    const spent = Math.trunc(ACCUMULATE_FRACTION * this.currentMP);
+    let fraction = ACCUMULATE_FRACTION;
+    if (this.mods.length) { const adj = this.scaledSum("acc_ratio", 0); if (adj !== 0) fraction = Math.min(1, Math.max(0, fraction + adj)); }
+    const spent = Math.trunc(fraction * this.currentMP);
     this.currentMP -= spent;
     this.bomb += Math.trunc(spent * this.bombMultiplier);
   }
@@ -1254,7 +1516,9 @@ class Controller {
     this.regenMP = cultivators.map(() => 0);   // 这回合开始时自然回复的真气量，空炸弹要把它撤销
     this.skipAgi = cultivators.map(() => 0);   // 这回合跳过的人：>0=跳过的闪避用这个敏捷(付不起时是原来的)，0=没跳过
     this.logs = []; this.mark = 0;
+    this.critBaseRate = 0; this.critBaseDamage = 0.5;   // 基础暴击率/暴击伤害：PvE对局创建时设置，默认不暴击(PvP的随机数序列不变)
   }
+  setCritBase(rate, damage) { this.critBaseRate = rate; this.critBaseDamage = damage; }
   getNews() { const news = this.logs.slice(this.mark); this.mark = this.logs.length; return news; }
   rand() { return Math.random(); }
 
@@ -1269,31 +1533,46 @@ class Controller {
     this.execEffect(STAGE_ACTION);
     for (let i = 0; i < this.cultivators.length; i++) {
       const act = actions[i][0], target = actions[i][1];
-      if (act.type === A_SKIP) { this.skipMove(i); this.paySkip(i); }
+      if (act.type === A_SKIP) { this.cultivators[i].resetChain(); this.skipMove(i); this.paySkip(i); }
       else if (act.type === A_ACCUMULATE) {
+        this.cultivators[i].resetChain();
         this.makeMove(i, target, act.point, act.text, act.power);
         this.cultivators[i].accumulatePower();
         this.cultivators[i].skipStreak = 0;
       }
-      else if (this.status[i] & 1) { this.skipMove(i); this.paySkip(i); }
+      else if (this.status[i] & 1) { this.cultivators[i].resetChain(); this.skipMove(i); this.paySkip(i); }
       else if (act.type === A_BOMB && this.cultivators[i].bomb <= 0) {
+        this.cultivators[i].resetChain();
         this.skipMove(i);   // 空炸弹：纯跳过，不翻倍敏捷、不损失敏捷，闪避照常用自己的敏捷；这回合不回复真气
         this.cultivators[i].currentMP = Math.max(0, this.cultivators[i].currentMP - this.regenMP[i]);
       }
       else if (act.type === A_BOMB) {
-        const bombPower = this.cultivators[i].bombPower();   // 战报里写明这次释放的炸弹能量
+        this.cultivators[i].resetChain();
+        let bombPower = this.cultivators[i].bombPower();   // 战报里写明这次释放的炸弹能量
+        if (this.cultivators[i].mods.length) {
+          const adj = this.cultivators[i].modSum("bomb_power", NONE);
+          if (adj !== 0) bombPower = Math.max(0, Math.trunc(bombPower * (1.0 + adj)));
+        }
         this.makeMove(i, target, act.point, act.text + "(能量" + bombPower + ")", act.power);
         act.power = bombPower;
         this.cultivators[i].skipStreak = 0;
       }
       else {
         this.cultivators[i].skipStreak = 0;
-        this.makeMove(i, target, act.point, act.text, act.power);
+        const { chainBonus, critPercent } = this.applyPower(i, target, act);
+        let cost = act.point;
+        if (this.cultivators[i].mods.length) {
+          const adj = this.cultivators[i].modSum("cost", act.attr);
+          if (adj !== 0) cost = Math.max(0, Math.trunc(cost * (1.0 + adj)));
+        }
+        this.makeMove(i, target, cost, act.text, act.power);
+        if (chainBonus > 0) this.logs.push(logEffectAmount(i, target, chainBonus, E_INCREASE));
+        if (critPercent > 0) this.logs.push(logEffectAmount(i, target, critPercent, E_CRIT));
         const dot = getEffect(act, E_DOT);
         if (dot && !dot.needHit) {
           const amount = dot.instant;
           this.logs.push(logEffectAmount(i, target, amount, E_DOT));
-          this.takeDamage(i, target, act.effects, actions[target][0].effects, act.attr, amount, true, actions[target][0].attr);
+          this.takeDamage(i, target, act.effects, actions[target][0].effects, act.attr, this.takenZone(target, act.attr, amount), true, actions[target][0].attr);
           this.addEffect(target, cloneEffect(dot));
         }
         for (const [type, apply, log] of [
@@ -1306,6 +1585,12 @@ class Controller {
             apply(eff.instant);
             this.addEffect(i, cloneEffect(eff));
           }
+        }
+        const shield = getEffect(act, E_SHIELD);
+        if (shield) {
+          const s = cloneEffect(shield);
+          this.logs.push(logEffectAmount(i, -1, s.strength, E_SHIELD));
+          this.addEffect(i, s);
         }
       }
     }
@@ -1331,7 +1616,7 @@ class Controller {
         if (notFaced) {
           const powerEnemy = actI.power * (rust() ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_PASSIVE);
           const powerSelf = actI.power * (rust() ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
-          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, Math.trunc(powerEnemy), true, actJ.attr);
+          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, this.takenZone(j, actI.attr, Math.trunc(powerEnemy)), true, actJ.attr);
           this.takeDamage(i, i, actI.effects, actI.effects, actI.attr, Math.trunc(powerSelf));
         }
         else if (actJ.type === A_BOMB && actions[j][1] === i) {
@@ -1342,7 +1627,7 @@ class Controller {
         else if (actJ.power < actI.power) {
           let powerEnemy = actI.power - actJ.power;
           powerEnemy *= (rust() ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_ACTIVE);
-          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, Math.trunc(powerEnemy), true, actJ.attr);
+          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, this.takenZone(j, actI.attr, Math.trunc(powerEnemy)), true, actJ.attr);
         }
         continue;
       }
@@ -1353,10 +1638,9 @@ class Controller {
         // 付不起(闪避之后敏捷会低于1)就无法闪避；没跳过的一方照常用自己的敏捷闪避，被禁锢时不能闪避
         let defAgi = cj.agi, canDodge = true;   // 被禁锢又选了积攒的人也用自己当前的敏捷闪避
         if (this.skipAgi[j] > 0) { defAgi = this.skipAgi[j]; canDodge = true; }
-        const dodgeChance = rust() ? 0 : (defAgi * defAgi) / (ci.agi * ci.agi + defAgi * defAgi);
+        const dodgeChance = this.dodgeProb(i, j, actI.attr, defAgi);
         if (canDodge && this.rand() < dodgeChance) { this.dodgeSuccess(i, j); this.buildDualEnvironment(actI); continue; }   // 双招被闪避=未命中，计入场地效果
-        let hit = true;
-        if (this.findReaction(E_DUST)) hit = this.rand() < 0.5;
+        const hit = this.rollHit(i, actI.attr);
         if (hit) {
           this.hitSuccess(i, j, actI, actJ);
           this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, actI.power, true, actJ.attr);
@@ -1390,8 +1674,7 @@ class Controller {
         // 双方出招的最终属性碰撞产生的场地效果；双招自己的两个基础招式构造的场地效果只在双招未命中时才产生
         const clashReaction = this.addReaction(this.checkReaction(attr1, attr2));
 
-        const dust = this.findReaction(E_DUST);
-        const hit = dust ? this.rand() < 0.5 : true;
+        const hit = this.rollHit(i, attr1);
         if (!hit) {
           this.hitFail(i);
           if (!clashReaction) { this.buildDualEnvironment(actI); this.buildDualEnvironment(actJ); }
@@ -1434,6 +1717,7 @@ class Controller {
   endTurn() {
     this.execEffect(STAGE_END);
     this.environment = this.environment.filter(e => { e.currentRound++; return e.currentRound < e.total; });
+    for (const c of this.cultivators) c.tickMods();
   }
 
   addEffect(idx, effect) { if (idx >= 0 && idx < this.effects.length) this.effects[idx].push(effect); }
@@ -1443,7 +1727,19 @@ class Controller {
   }
 
   execEffect(stage) {
-    if (stage !== STAGE_START) return; // 所有持续效果都只在回合开始阶段结算
+    this.execModifiers(stage);
+    if (stage === STAGE_END) {
+      // 护盾：回合结束时每块盾回合数-1，到期或强度打光就移除
+      for (let i = 0; i < this.effects.length; i++) {
+        this.effects[i] = this.effects[i].filter(e => {
+          if (e.type !== E_SHIELD) return true;
+          e.rounds--;
+          return !(e.rounds <= 0 || e.strength <= 0);
+        });
+      }
+      return;
+    }
+    if (stage !== STAGE_START) return; // 其余持续效果都只在回合开始阶段结算
     for (let i = 0; i < this.effects.length; i++) {
       for (let j = 0; j < this.effects[i].length; j++) {
         const eff = this.effects[i][j];
@@ -1451,7 +1747,7 @@ class Controller {
         if (eff.type === E_LOCK) { this.status[i] |= 1; erase(); }
         else if (eff.type === E_DOT) {
           const dmg = timedOnce(eff);
-          if (dmg !== 0) { this.logs.push(logEffectAmount(-1, i, dmg, E_DOT)); this.takeDamage(-1, i, [], [], NONE, dmg, false); }
+          if (dmg !== 0) { this.logs.push(logEffectAmount(-1, i, dmg, E_DOT)); this.takeDamage(-1, i, [], [], NONE, this.takenZone(i, NONE, dmg), false); }
           if (timedUsedUp(eff)) erase();
         }
         else if (eff.type === E_REBATE) {
@@ -1490,6 +1786,180 @@ class Controller {
   hitFail(subject) { this.logs.push(logState(L_FAIL, subject, 0)); }
   dodgeSuccess(subject, object) { this.logs.push(logDodge(subject, object)); }
 
+  // 有效威力：本回合出的招(单招=1个，双招=2个基础招式)各自按"家族+式号"查连招链，再乘上特性的各个乘区。
+  //   单个基础招式的威力 = (基础威力 + 特性的基础威力加成) x (1 + 增伤比例 x 连续步数)；双招再乘DUAL_POWER_FACTOR；
+  //   然后依次乘暴击(1+暴击伤害)、自己的增伤乘区(1+加和)、目标的易伤乘区(1+加和)。同一乘区内加算，乘区之间相乘。
+  // 没有任何加成时不动威力(保证没有increase、没有特性的招式和以前逐位一致，也不多抽随机数)。
+  applyPower(idx, target, act) {
+    const res = { chainBonus: 0, critPercent: 0 };
+    const me = this.cultivators[idx];
+    const comps = act.type === A_SINGLE ? [act] : act.type === A_DUAL ? [act.action1, act.action2] : null;
+    if (!comps) { me.resetChain(); return res; }
+    const dual = act.type === A_DUAL;
+    const moves = [];
+    let chainSum = 0, fullSum = 0, boosted = false, added = false;
+    for (const s of comps) {
+      const family = familyOfName(s.name), form = formOfName(s.name);
+      const n = me.peekChain(family, form);
+      const inc = getEffect(s, E_INCREASE);
+      const ratio = inc ? inc.ratio : 0;
+      if (ratio * n > 0) boosted = true;
+      const base = s.basePower;
+      let add = 0;
+      for (const m of me.mods) {
+        if (m.kind !== "base_power" || !(m.attrMask & (1 << s.attr)) || !me.condHolds(m.cond)) continue;
+        add += m.percent ? base * m.value / 100 : m.value;
+      }
+      if (add !== 0) added = true;
+      chainSum += base * (1.0 + ratio * n);
+      fullSum += (base + add) * (1.0 + ratio * n);
+      moves.push([family, form]);
+    }
+    me.commitChain(moves);
+    if (boosted) {
+      const chainPower = Math.trunc(dual ? DUAL_POWER_FACTOR * chainSum : chainSum);
+      res.chainBonus = Math.max(0, Math.round((chainPower / Math.max(1, act.basePower) - 1.0) * 100.0));
+    }
+    const attr = act.attr;
+    let mult = 1.0, zoned = false;
+    if (me.mods.length) {
+      const dealt = me.modSum("dmg_dealt", attr);
+      if (dealt !== 0) { mult *= Math.max(0, 1.0 + dealt); zoned = true; }
+    }
+    if (target >= 0 && target < this.cultivators.length && this.cultivators[target].mods.length) {
+      const taken = this.cultivators[target].modSum("dmg_taken", attr);
+      if (taken !== 0) { mult *= Math.max(0, 1.0 + taken); zoned = true; }
+    }
+    const rate = this.critBaseRate + (me.mods.length ? me.modSum("crit_rate", attr) : 0);
+    if (rate > 0 && this.rand() < rate) {
+      const cd = Math.max(0, this.critBaseDamage + (me.mods.length ? me.modSum("crit_dmg", attr) : 0));
+      mult *= 1.0 + cd;
+      res.critPercent = Math.round(cd * 100.0);
+      zoned = true;
+    }
+    if (!boosted && !added && !zoned) { act.power = act.basePower; return res; }
+    const power = (dual ? DUAL_POWER_FACTOR * fullSum : fullSum) * mult;
+    act.power = power >= 2147483647 ? 2147483647 : Math.trunc(power);
+    return res;
+  }
+
+  // 护盾：所有盾一起减去同一个伤害值，穿透量=伤害-最大那块盾的强度；强度被打光的盾移除
+  applyShield(object, amount) {
+    if (amount <= 0 || object < 0 || object >= this.effects.length) return amount;
+    let maxStrength = 0;
+    for (const e of this.effects[object]) if (e.type === E_SHIELD) maxStrength = Math.max(maxStrength, e.strength);
+    if (maxStrength <= 0) return amount;
+    this.effects[object] = this.effects[object].filter(e => {
+      if (e.type !== E_SHIELD) return true;
+      e.strength = Math.max(0, e.strength - amount);
+      return e.strength > 0;
+    });
+    const absorbed = Math.min(amount, maxStrength);
+    this.logs.push(logEffectAmount(-1, object, absorbed, E_SHIELD));
+    return amount - absorbed;
+  }
+
+  /* ---- 特性 ---- */
+  // 特性造成的资源增减(正=回复，负=扣除)，战报里写"资源|来源"
+  applyTraitDelta(holder, kind, delta, source) {
+    if (delta === 0) return;
+    const c = this.cultivators[holder];
+    let resource;
+    if (["mp_round", "deal_mp", "take_mp", "now_mp"].includes(kind)) { c.adjustMP(delta); resource = "mp"; }
+    else if (["atk_round", "deal_atk", "take_atk", "now_atk"].includes(kind)) { c.adjustATK(delta); resource = "atk"; }
+    else if (["hp_round", "deal_hp", "take_hp", "now_hp"].includes(kind)) { c.adjustHP(delta); resource = "hp"; }
+    else return;
+    const lg = logEffectAmount(holder, -1, delta, E_TRAIT);
+    lg.name = resource + "|" + source;
+    this.logs.push(lg);
+  }
+  // 每回合类特性：真气/武力/健康的回复或扣除，按timing在回合开始或回合结束执行(武力/健康扣除会致死)
+  execModifiers(stage) {
+    if (stage !== STAGE_START && stage !== STAGE_END) return;
+    const timing = stage === STAGE_START ? 0 : 1;
+    for (let i = 0; i < this.cultivators.length; i++) {
+      const c = this.cultivators[i];
+      if (!c.mods.length) continue;
+      for (const m of c.mods.slice()) {
+        if (m.timing !== timing) continue;
+        if (m.kind !== "mp_round" && m.kind !== "atk_round" && m.kind !== "hp_round") continue;
+        if (!c.condHolds(m.cond)) continue;
+        const base = m.kind === "mp_round" ? c.getMaxMP() : m.kind === "atk_round" ? c.maxATK : c.maxHP;
+        this.applyTraitDelta(i, m.kind, Math.trunc(m.percent ? base * m.value / 100 : m.value), m.source);
+      }
+    }
+  }
+  // 触发类特性：造成伤害时(持有者是出手方)、受到伤害时(持有者是受击方)回复或扣除真气/武力/健康
+  applyDamageTriggers(subject, object, attribute, damage) {
+    if (damage <= 0) return;
+    const run = (holder, kinds) => {
+      if (holder < 0 || holder >= this.cultivators.length) return;
+      const c = this.cultivators[holder];
+      if (!c.mods.length) return;
+      for (const m of c.mods.slice()) {
+        if (!kinds.includes(m.kind)) continue;
+        if (!(m.attrMask & (1 << attribute)) || !c.condHolds(m.cond)) continue;
+        this.applyTraitDelta(holder, m.kind, Math.trunc(m.percent ? damage * m.value / 100 : m.value), m.source);
+      }
+    };
+    if (subject >= 0 && subject !== object) run(subject, ["deal_mp", "deal_atk", "deal_hp"]);
+    run(object, ["take_mp", "take_atk", "take_hp"]);
+  }
+  // 给持有者加一条特性；立即类(now_*、清除场地、解除禁锢)加的时候马上执行、不保存
+  addModifier(holder, m) {
+    if (holder < 0 || holder >= this.cultivators.length) return;
+    const c = this.cultivators[holder];
+    switch (m.kind) {
+      case "now_mp": case "now_atk": case "now_hp": {
+        const base = m.kind === "now_mp" ? c.getMaxMP() : m.kind === "now_atk" ? c.maxATK : c.maxHP;
+        this.applyTraitDelta(holder, m.kind, Math.trunc(m.percent ? base * m.value / 100 : m.value), m.source);
+        return;
+      }
+      case "now_agi": {
+        const delta = m.percent ? c.getMaxAgi() * m.value / 100 : m.value;
+        c.adjustAgi(delta);
+        const lg = logEffectAmount(holder, -1, Math.trunc(delta), E_TRAIT);
+        lg.name = "agi|" + m.source;
+        this.logs.push(lg);
+        return;
+      }
+      case "now_field": this.addReaction(Math.trunc(m.value)); return;
+      case "clear_field": this.environment = []; return;
+      case "unlock":
+        this.status[holder] &= ~1;
+        this.effects[holder] = this.effects[holder].filter(e => e.type !== E_LOCK);
+        return;
+      default: c.mods.push(Object.assign({}, m, { cond: Object.assign({}, m.cond) }));
+    }
+  }
+  removeModifiers(holder, source) {
+    if (holder < 0 || holder >= this.cultivators.length) return;
+    this.cultivators[holder].mods = this.cultivators[holder].mods.filter(m => m.source !== source);
+  }
+  // 易伤乘区：炸弹和持续伤害也吃(招式的在出招威力里已经算过)
+  takenZone(object, attr, amount) {
+    if (object < 0 || object >= this.cultivators.length || !this.cultivators[object].mods.length) return amount;
+    const taken = this.cultivators[object].modSum("dmg_taken", attr);
+    return taken === 0 ? amount : Math.trunc(amount * Math.max(0, 1.0 + taken));
+  }
+  // 闪避率乘区：1 + 特性加和 - 锈蚀(1)；没有特性时锈蚀就是不能闪避
+  dodgeProb(attacker, defender, attr, defAgi) {
+    const rust = this.findReaction(E_RUST);
+    const d = this.cultivators[defender], a = this.cultivators[attacker];
+    const base = (defAgi * defAgi) / (a.agi * a.agi + defAgi * defAgi);
+    const adj = d.mods.length ? d.modSum("dodge", attr) : 0;
+    if (adj === 0) return rust ? 0 : base;
+    return Math.min(1, Math.max(0, base * (1.0 + adj - (rust ? 1.0 : 0.0))));
+  }
+  // 命中率乘区：1 + 特性加和 - 扬尘(0.5)；够1就必中，不抽随机数
+  rollHit(attacker, attr) {
+    const a = this.cultivators[attacker];
+    const zone = 1.0 + (a.mods.length ? a.modSum("hit", attr) : 0) - (this.findReaction(E_DUST) ? 0.5 : 0.0);
+    if (zone >= 1.0) return true;
+    if (zone <= 0.0) return false;
+    return this.rand() < zone;
+  }
+
   // 跳过一次的敏捷损失：付得起(之后不低于1)就记下翻倍后的闪避敏捷，付不起就标记这回合没有闪避
   paySkip(i) {
     const c = this.cultivators[i];
@@ -1506,7 +1976,7 @@ class Controller {
     const dot = getEffect(offend, E_DOT);
     if (dot && dot.needHit) {
       this.logs.push(logEffectAmount(subject, object, dot.instant, E_DOT));
-      this.takeDamage(subject, object, offend.effects, defend.effects, offend.attr, dot.instant, true, defend.attr);
+      this.takeDamage(subject, object, offend.effects, defend.effects, offend.attr, this.takenZone(object, offend.attr, dot.instant), true, defend.attr);
       this.addEffect(object, cloneEffect(dot));
     }
     for (const [type, apply] of [
@@ -1522,9 +1992,16 @@ class Controller {
 
   // 伤害(amount)：先减伤，再按物理比例拆成武力伤害/物理伤害，反弹、吸收
   takeDamage(subject, object, offend, defend, attribute, amount, log = true, defendAttribute = NONE) {
-    if (this.findReaction(E_BURN)) amount = Math.trunc(amount * 1.5);
+    // 特性：免疫该属性
+    if (object >= 0 && object < this.cultivators.length && this.cultivators[object].mods.length && this.cultivators[object].modAny("immune", attribute)) amount = 0;
+    // 场地乘区：灼烧是1.5，特性可以按属性以1为基准加减；没有特性时和以前一样
+    let fieldAdj = 0;
+    if (subject >= 0 && subject < this.cultivators.length && this.cultivators[subject].mods.length) fieldAdj = this.cultivators[subject].modSum("field_mult", attribute);
+    if (fieldAdj !== 0) amount = Math.trunc(amount * Math.max(0, (this.findReaction(E_BURN) ? 1.5 : 1.0) + fieldAdj));
+    else if (this.findReaction(E_BURN)) amount = Math.trunc(amount * 1.5);
     const reduce = defend.find(e => e.type === E_REDUCE);
     if (reduce) amount = Math.trunc(amount * (1 - ratioOf(reduce, attribute)));
+    amount = this.applyShield(object, amount);   // 护盾：同时保护武力和健康，先于物理转换/反弹
 
     let physicalRatio = 0;
     const physical = offend.find(e => e.type === E_PHYSICAL);
@@ -1535,17 +2012,19 @@ class Controller {
     // 反弹是减伤的升级版：受击者只承受反弹之后剩下的伤害，被反弹的那部分全部还给攻击者
     let reboundAtk = 0, reboundHp = 0;
     if (subject !== object) {
+      let ratio = 0;
       const rebound = defend.find(e => e.type === E_REBOUND);
-      if (rebound) {
-        const ratio = Math.min(1, Math.max(0, ratioOf(rebound, attribute)));
-        reboundAtk = Math.trunc(atkPart * ratio); reboundHp = Math.trunc(hpPart * ratio);
-      }
+      if (rebound) ratio = ratioOf(rebound, attribute);
+      if (object >= 0 && this.cultivators[object].mods.length) ratio += this.cultivators[object].modSum("rebound", attribute);   // 特性的反弹比例加到反弹效果上
+      ratio = Math.min(1, Math.max(0, ratio));
+      if (ratio > 0) { reboundAtk = Math.trunc(atkPart * ratio); reboundHp = Math.trunc(hpPart * ratio); }
     }
     const ownAtk = atkPart - reboundAtk, ownHp = hpPart - reboundHp;
 
     if (log) this.logs.push(logDamage(subject, object, attribute, ownAtk, ownHp));
     if (ownAtk > 0) this.cultivators[object].takeDamage(ownAtk, false);
     if (ownHp > 0) this.cultivators[object].takeDamage(ownHp, true);
+    this.applyDamageTriggers(subject, object, attribute, ownAtk + ownHp);
 
     if (subject === object) return;
 
@@ -1567,6 +2046,10 @@ class Controller {
     if (depth >= 8) return;
     const reduce = defend.find(e => e.type === E_REDUCE);
     if (reduce) { const keep = 1 - ratioOf(reduce, attribute); atk = Math.trunc(atk * keep); hp = Math.trunc(hp * keep); }
+    if (atk + hp > 0) {   // 护盾：穿透量按武力/物理原来的比例分摊
+      const total = atk + hp, through = this.applyShield(object, total);
+      if (through !== total) { atk = Math.trunc(atk * (through / total)); hp = through - atk; }
+    }
 
     let reboundAtk = 0, reboundHp = 0;
     if (subject !== object) {
@@ -1580,6 +2063,7 @@ class Controller {
     if (log) this.logs.push(logDamage(subject, object, attribute, ownAtk, ownHp));
     if (ownAtk > 0) this.cultivators[object].takeDamage(ownAtk, false);
     if (ownHp > 0) this.cultivators[object].takeDamage(ownHp, true);
+    this.applyDamageTriggers(subject, object, attribute, ownAtk + ownHp);   // 反弹回来的伤害也触发特性
 
     if (subject === object) return;
     if (reboundAtk > 0 || reboundHp > 0) {
@@ -1649,11 +2133,66 @@ function actionIndexOf(family) {
   return f.firstAction + Math.min(state.selectedForm, f.formCount - 1);
 }
 
+/* ---- 特性调试面板 ---- */
+const MOD_HELP = [
+  ["mp_round atk_round hp_round", "每回合回复(+)/扣除(-)真气/武力/健康；数值后加%=按上限的百分比；timing=start|end 选回合开始或回合结束执行；武力/健康扣到0会死"],
+  ["skip_agi", "跳过扣敏捷的调整（加到跳过损失上）"], ["agi_recover", "每回合敏捷回复的调整"], ["agi_max", "敏捷上限增/减（%=按基础上限）"],
+  ["mp_max", "真气上限增/减（%=按基础上限）；真气超过2倍上限就爆体，阈值跟着上限走"],
+  ["acc_ratio", "单次积攒比例调整（基础0.2）"], ["bomb_power", "炸弹威力增/减（炸弹自己的乘区：1+加和，0.5=+50%）"],
+  ["base_power", "x属性基础威力增/减（加算进基础伤害；%=按该招基础威力）"], ["dmg_dealt", "自己造成x属性伤害增/减（增伤乘区，0.2=+20%）"],
+  ["dmg_taken", "受到x属性伤害增/减（易伤乘区，负数=减伤；出招时按目标身上的值算）"], ["field_mult", "场地x属性伤害倍率增/减（以1为基准，灼烧本身是1.5）"],
+  ["crit_rate crit_dmg", "暴击率/暴击伤害增/减（基础值在上面设）"], ["dodge", "闪避率乘区：1+加和−锈蚀(1)，最终闪避率=原来的×这个"],
+  ["hit", "命中率乘区：1+加和−扬尘(0.5)，够1必中"], ["cost", "x属性消耗调整（0.2=+20%）"],
+  ["deal_mp deal_atk deal_hp", "自己造成x属性伤害时回复(+)/扣除(-)；%=按这次伤害量"], ["take_mp take_atk take_hp", "自己受到x属性伤害时回复/扣除"],
+  ["rebound", "受到x属性伤害的反弹比例（加到反弹效果上，夹到0~1）"], ["immune", "免疫x属性（伤害变0，数值随便写如1）"],
+  ["now_mp now_atk now_hp now_agi", "立即增/减（只在添加时执行一次，没有持续回合）"], ["now_field", "立即添加场地效果：数值11灼烧 12锈蚀 13扬尘 14泥沼"],
+  ["clear_field", "立即清除全部场地效果"], ["unlock", "立即解除禁锢"],
+];
+function buildTraitHelp() {
+  const rows = MOD_HELP.map(([k, d]) => `<tr><td>${k}</td><td>${d}</td></tr>`).join("");
+  $("traitHelp").innerHTML = `格式：<code>mod 种类 数值[%] [attr=…] [cond=…] [dur=…] [timing=…] [src=名字]</code>，<code>#</code>开头是注释。<br>
+    <code>attr=</code> 逗号分隔：none metal wood water fire earth all(五行属性的招) elements(金木水火土)，省略=全部；
+    <code>cond=hp&lt;50</code> 持有者的 hp/atk/mp/agi 占上限的百分比 低于(&lt;)/高于(&gt;) 阈值才生效；
+    <code>dur=</code> 持续回合数，-1=永久（默认）；同种类数值取加和，持续时间各算各的。<table>${rows}</table>`;
+}
+function parseTraitText(text) {
+  const mods = [], errors = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line[0] === "#") continue;
+    const m = parseModifier(line);
+    if (m) mods.push(m); else errors.push(line);
+  }
+  return { mods, errors };
+}
+function critFromPanel() {
+  const r = parseFloat($("critRate").value), d = parseFloat($("critDmg").value);
+  return [Number.isNaN(r) ? 0 : r, Number.isNaN(d) ? 0.5 : d];
+}
+// 把面板里的特性加到对局里；返回错误行
+function addTraitsFromPanel(ctl) {
+  const errors = [];
+  [["traitMe", 0], ["traitEnemy", 1]].forEach(([id, side]) => {
+    const { mods, errors: errs } = parseTraitText($(id).value);
+    errors.push(...errs);
+    for (const m of mods) ctl.addModifier(side, m);
+  });
+  return errors;
+}
+function traitSummary() {
+  const c = state.controller;
+  if (!c) return "";
+  const n0 = state.player.mods.length, n1 = state.enemy.mods.length;
+  return n0 || n1 ? "（生效中：我方" + n0 + "条 / 敌方" + n1 + "条）" : "";
+}
+
 function newBattle() {
   const [c0, c1] = state.cfg;
   state.player = new Cultivator(state.names[0], state.defs, c0.hp, c0.atk, c0.mp, c0.agi, c0.recover, c0.agiLoss, c0.agiRecover, c0.bombMultiplier);
   state.enemy = new Cultivator(state.names[1], state.defs, c1.hp, c1.atk, c1.mp, c1.agi, c1.recover, c1.agiLoss, c1.agiRecover, c1.bombMultiplier);
   state.controller = new Controller([state.player, state.enemy]);
+  { const [r, d] = critFromPanel(); state.controller.setCritBase(r, d); }
+  { const errs = addTraitsFromPanel(state.controller); $("traitMsg").textContent = errs.length ? "无法解析：" + errs.join(" ；") : ""; }
   state.ai = state.aiNet ? new WxdjAI.Agent(state.aiNet, 1) : null;
   state.phase = "select"; state.result = 0; state.resultHidden = false;
   state.firstPick = -1; state.firstPickFamily = -1;
@@ -1762,6 +2301,14 @@ function formatLog(log) {
         case E_REBATE: return who(log.subject) + "恢复" + log.amount + "点真气";
         case E_RECOVER: return who(log.subject) + "恢复" + log.amount + "点武力值";
         case E_CURE: return who(log.subject) + "恢复" + log.amount + "点健康值";
+        case E_INCREASE: return who(log.subject) + "连招增伤，威力+" + log.amount + "%";
+        case E_CRIT: return who(log.subject) + "暴击，伤害+" + log.amount + "%";
+        case E_TRAIT: {
+          const [res, src] = log.name.split("|");
+          const label = { mp: "真气", atk: "武力", hp: "健康", agi: "敏捷" }[res] || res;
+          return who(log.subject) + (src ? "的" + src : "的特性") + "：" + label + (log.amount >= 0 ? "+" : "") + log.amount;
+        }
+        case E_SHIELD: return log.subject >= 0 ? who(log.subject) + "获得" + log.amount + "点护盾" : who(log.object) + "的护盾抵挡了" + log.amount + "点伤害";
       }
   }
   return "";
@@ -1879,8 +2426,8 @@ function refreshStatus() {
     const c = cultOf(idx), root = $("status" + idx);
     root.querySelector(".name").textContent = c.name;
     const set = (f, v) => { const el = root.querySelector(`[data-f="${f}"]`); if (el && document.activeElement !== el) el.value = v; };
-    set("cur-agi", +c.agi.toFixed(1)); set("max-agi", c.maxAgi); set("agiLoss", c.agiLoss); set("agiRecover", c.agiRecover); set("bombMultiplier", c.bombMultiplier); set("recover", c.recover); set("bomb", c.bomb);
-    for (const [k, cur, max] of [["mp", c.currentMP, c.maxMP], ["atk", c.currentATK, c.maxATK], ["hp", c.currentHP, c.maxHP]]) {
+    set("cur-agi", +c.agi.toFixed(1)); set("max-agi", c.getMaxAgi()); set("agiLoss", c.agiLoss); set("agiRecover", c.agiRecover); set("bombMultiplier", c.bombMultiplier); set("recover", c.recover); set("bomb", c.bomb);
+    for (const [k, cur, max] of [["mp", c.currentMP, c.getMaxMP()], ["atk", c.currentATK, c.maxATK], ["hp", c.currentHP, c.maxHP]]) {
       set("cur-" + k, cur); set("max-" + k, max);
       const pct = max > 0 && cur > 0 ? Math.min(100, cur * 100 / max) : 0;
       root.querySelector(`[data-fill="${k}"]`).style.width = pct + "%";
@@ -1989,6 +2536,8 @@ function effectLines(def) {
       case E_REBATE: lines.push(timedText("回复真气", e)); break;
       case E_RECOVER: lines.push(timedText("回复武力", e)); break;
       case E_CURE: lines.push(timedText("回复健康", e)); break;
+      case E_INCREASE: lines.push("连招增伤：连着上一回合同家族的前一式出招(中间不能积攒、放炸弹、跳过或被禁锢)，每连续一步威力多" + pct(e.ratio) + "，不要求命中"); break;
+      case E_SHIELD: lines.push("护盾：出招时给自己加一块" + e.initial + "点的护盾，持续" + e.rounds + "回合；同时保护武力和健康，多块盾同时存在，受伤时一起减盾量，盾都被打穿后才扣武力/健康"); break;
     }
   }
   return lines;
@@ -2048,6 +2597,7 @@ function refreshAll() {
   $("overlayText").textContent = state.result > 0 ? "挑战成功" : "挑战失败";
   $("info").textContent = "招式 " + state.defs.length + " · 家族 " + state.families.length;
   $("manual").classList.toggle("show", $("enemyMode").value === "manual");
+  $("traitCount").textContent = traitSummary();
 }
 
 /* ---- 事件 ---- */
@@ -2078,6 +2628,14 @@ function init() {
   $("skipBtn").onclick = () => submit(skipAction());
   $("form").oninput = ev => { state.selectedForm = parseInt(ev.target.value) - 1; refreshActions(); };
   $("restartBtn").onclick = () => { saveCfgFromBattle(); newBattle(); };
+  buildTraitHelp();
+  $("critPve").onclick = () => { $("critRate").value = "0.05"; $("critDmg").value = "0.5"; };
+  $("traitApply").onclick = () => { saveCfgFromBattle(); newBattle(); };
+  $("traitNow").onclick = () => {
+    const errs = addTraitsFromPanel(state.controller);
+    $("traitMsg").textContent = errs.length ? "无法解析：" + errs.join(" ；") : "已加到当前对局";
+    appendNews(); checkEnd(false); refreshAll();
+  };
   $("standardBtn").onclick = applyStandardForSelectedForm;
   $("aiForm").onchange = applyStandardForSelectedForm;   // 选了AI用第几式，双方的标准属性跟着变
   $("againBtn").onclick = () => { saveCfgFromBattle(); newBattle(); };

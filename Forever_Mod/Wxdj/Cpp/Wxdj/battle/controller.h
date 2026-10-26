@@ -3,6 +3,7 @@
 #include "def.h"
 #include "action.h"
 #include "cultivator.h"
+#include "modifier.h"
 
 #include <vector>
 #include <memory>
@@ -86,6 +87,15 @@ public:
 	//回合结束阶段
 	void EndTurn();
 
+	// 固定随机种子(测试/回放用；默认每局随机)
+	void Seed(unsigned int seed);
+
+	// 特性(外部效果)：给持有者加一条特性；立即类(now_*、清除场地、解除禁锢)加的时候马上执行、不保存
+	void AddModifier(int holder, const Modifier& modifier);
+	void RemoveModifiers(int holder, const std::string& source);
+	// 基础暴击率和暴击伤害(PvE对局创建时设置；默认暴击率0，所以PvP的随机数序列和以前完全一样)
+	void SetCritBase(double rate, double damage);
+
 	// 为指定修仙者添加一个持续效果
 	void AddEffect(int cultivator, std::shared_ptr<Effect> effect);
 
@@ -164,6 +174,23 @@ private:
 	int mark = 0; // 日志输出游标
 	std::vector<Log> logs; // 所有日志
 	std::mt19937 rng; // 随机数生成器
+	double critBaseRate = 0; // 基础暴击率
+	double critBaseDamage = 0.5; // 基础暴击伤害(倍率加成)
+
+	// 算出这回合出的招(单招/双招)的有效威力：连招增伤 + 特性乘区，并更新连招链。
+	// chainBonus返回连招让威力多出的百分比(0=没有)，critPercent返回暴击伤害的百分比(0=没暴击)
+	void ApplyPower(int idx, int target, const std::shared_ptr<Action>& act, int& chainBonus, int& critPercent);
+
+	// 特性：每回合类、触发类、命中/闪避乘区
+	void ExecModifiers(STAGE_TYPE stage);
+	void ApplyTraitDelta(int holder, MOD_KIND resourceKind, int delta, const std::string& source);
+	void ApplyDamageTriggers(int subject, int object, ATTRIBUTE_TYPE attribute, int damage);
+	int TakenZone(int object, ATTRIBUTE_TYPE attribute, int amount);   // 易伤乘区：炸弹和持续伤害也吃(招式的在出招威力里已经算过)
+	double DodgeProb(int attacker, int defender, ATTRIBUTE_TYPE attribute, float defenderAGI);
+	bool RollHit(int attacker, ATTRIBUTE_TYPE attribute);
+
+	// 护盾：先过护盾再扣武力/健康，返回穿透护盾的伤害量
+	int ApplyShield(int object, int amount);
 
 	// 检查属性克制关系
 	bool CheckCounter(ATTRIBUTE_TYPE a1, ATTRIBUTE_TYPE a2);

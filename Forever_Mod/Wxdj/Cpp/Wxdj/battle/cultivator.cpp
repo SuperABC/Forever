@@ -44,8 +44,55 @@ int Cultivator::GetMaxATK() const {
 	return maxATK;
 }
 
+// 特性里"可以按基础值百分比"的数值：percent的按base*value/100，否则直接加(忽略属性掩码，条件照常判断)
+static double ScaledSum(const Cultivator& c, MOD_KIND kind, double base) {
+	double total = 0;
+	for (const auto& m : c.Mods().All()) {
+		if (m.kind != kind || !ModifierSet::CondHolds(m.cond, c)) continue;
+		total += m.percent ? base * m.value / 100.0 : m.value;
+	}
+	return total;
+}
+
 int Cultivator::GetMaxMP() const {
+	if (modSet.All().empty()) return maxMP;
+	double adj = ScaledSum(*this, MOD_MP_MAX, maxMP);
+	return adj == 0 ? maxMP : max(1, static_cast<int>(maxMP + adj));
+}
+
+int Cultivator::GetBaseMaxMP() const {
 	return maxMP;
+}
+
+float Cultivator::GetBaseMaxAGI() const {
+	return maxAGI;
+}
+
+ModifierSet& Cultivator::Mods() {
+	return modSet;
+}
+
+const ModifierSet& Cultivator::Mods() const {
+	return modSet;
+}
+
+void Cultivator::AdjustMP(int delta) {
+	if (delta > 0) RecoverMP(delta);
+	else if (delta < 0) currentMP = max(0, currentMP + delta);
+}
+
+void Cultivator::AdjustATK(int delta) {
+	if (delta > 0) RecoverATK(delta);
+	else if (delta < 0) currentATK += delta;
+}
+
+void Cultivator::AdjustHP(int delta) {
+	if (delta > 0) RecoverHP(delta);
+	else if (delta < 0) currentHP = max(0, currentHP + delta);
+}
+
+void Cultivator::AdjustAGI(float delta) {
+	AGI = max(1.f, min(GetMaxAGI(), AGI + delta));
 }
 
 int Cultivator::GetBomb() const {
@@ -65,7 +112,9 @@ float Cultivator::GetAGI() const {
 }
 
 float Cultivator::GetMaxAGI() const {
-	return maxAGI;
+	if (modSet.All().empty()) return maxAGI;
+	double adj = ScaledSum(*this, MOD_AGI_MAX, maxAGI);
+	return adj == 0 ? maxAGI : max(1.f, static_cast<float>(maxAGI + adj));
 }
 
 float Cultivator::GetAGILoss() const {
@@ -81,7 +130,12 @@ bool Cultivator::CanDodge() const {
 }
 
 void Cultivator::RecoverAGI() {
-	AGI = std::min(maxAGI, AGI + agiRecover);
+	float rec = agiRecover;
+	if (!modSet.All().empty()) {
+		double adj = ScaledSum(*this, MOD_AGI_RECOVER, 0);
+		if (adj != 0) rec = std::max(0.f, static_cast<float>(rec + adj));
+	}
+	AGI = std::min(GetMaxAGI(), AGI + rec);
 }
 
 int Cultivator::GetCurrentRealm() const {
@@ -155,11 +209,12 @@ void Cultivator::RecoverMP(int amount) {
 	else {
 		currentMP += amount;
 	}
-	if (currentMP > maxMP * 2) {
+	int cap = GetMaxMP();
+	if (currentMP > cap * 2) {
 		currentHP = 0;
 	}
-	else if (currentMP > maxMP) {
-		currentMP = maxMP;
+	else if (currentMP > cap) {
+		currentMP = cap;
 	}
 }
 
@@ -211,7 +266,12 @@ void Cultivator::ConsumeAGI() {
 }
 
 float Cultivator::SkipLoss() const {
-	return agiLoss + SKIP_STREAK_EXTRA_LOSS * skipStreak;
+	float loss = agiLoss + SKIP_STREAK_EXTRA_LOSS * skipStreak;
+	if (!modSet.All().empty()) {
+		double adj = ScaledSum(*this, MOD_SKIP_AGI, 0);
+		if (adj != 0) loss = std::max(0.f, static_cast<float>(loss + adj));
+	}
+	return loss;
 }
 
 void Cultivator::ResetSkipStreak() {
@@ -220,6 +280,30 @@ void Cultivator::ResetSkipStreak() {
 
 int Cultivator::GetSkipStreak() const {
 	return skipStreak;
+}
+
+int Cultivator::PeekChain(const string& family, int form) const {
+	if (form <= 1) return 0;
+	for (const auto& e : chain) {
+		if (e.family == family && e.form == form - 1) return e.len + 1;
+	}
+	return 0;
+}
+
+void Cultivator::CommitChain(const vector<pair<string, int>>& moves) {
+	vector<ChainEntry> next;
+	for (const auto& m : moves) {
+		next.push_back({ m.first, m.second, PeekChain(m.first, m.second) });
+	}
+	chain = next;
+}
+
+void Cultivator::ResetChain() {
+	chain.clear();
+}
+
+const vector<Cultivator::ChainEntry>& Cultivator::GetChain() const {
+	return chain;
 }
 
 void Cultivator::UpdateRealm() {
@@ -235,7 +319,12 @@ void Cultivator::UpdateRealm() {
 
 void Cultivator::AccumulatePower() {
 	// 消耗当前真气的一部分，按倍数存进炸弹
-	int spent = static_cast<int>(ACCUMULATE_FRACTION * currentMP);
+	float fraction = ACCUMULATE_FRACTION;
+	if (!modSet.All().empty()) {
+		double adj = ScaledSum(*this, MOD_ACC_RATIO, 0);
+		if (adj != 0) fraction = static_cast<float>(std::min(1.0, std::max(0.0, fraction + adj)));
+	}
+	int spent = static_cast<int>(fraction * currentMP);
 	currentMP -= spent;
 	bomb += static_cast<int>(spent * bombMultiplier);
 }
@@ -371,6 +460,14 @@ shared_ptr<Effect> Cultivator::ParseEffect(const string& effectLine) {
 			return make_shared<CureEffect>(instant, continuous, rounds, interval);
 		else if (iss >> instant)
 			return make_shared<CureEffect>(instant);
+	}
+	else if (effectType == "increase") {
+		float ratio;
+		if (iss >> ratio) return make_shared<IncreaseEffect>(ratio);
+	}
+	else if (effectType == "shield") {
+		int strength, rounds;
+		if (iss >> strength >> rounds) return make_shared<ShieldEffect>(strength, rounds);
 	}
 	return nullptr;
 }

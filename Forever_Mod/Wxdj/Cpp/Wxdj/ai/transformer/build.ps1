@@ -3,6 +3,6 @@
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $vc = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 New-Item -ItemType Directory -Force (Join-Path $here "build") | Out-Null
-$src = "env.cpp ..\..\battle\action.cpp ..\..\battle\controller.cpp ..\..\battle\cultivator.cpp ..\..\battle\effect.cpp"
+$src = "env.cpp ..\..\battle\action.cpp ..\..\battle\controller.cpp ..\..\battle\cultivator.cpp ..\..\battle\effect.cpp ..\..\battle\modifier.cpp"
 cmd /c "`"$vc`" >nul 2>&1 & cd /d `"$here`" & cl /nologo /O2 /EHsc /std:c++17 /utf-8 /LD /I ..\..\battle /I . /Fo:build\ /Fe:wxenv.dll $src" 2>&1 | Select-Object -Last 15
 if (Test-Path (Join-Path $here "wxenv.dll")) { Write-Host "OK: wxenv.dll" } else { Write-Host "BUILD FAILED"; exit 1 }
