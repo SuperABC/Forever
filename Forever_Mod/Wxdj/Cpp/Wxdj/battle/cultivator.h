@@ -38,6 +38,16 @@ public:
 	int GetBaseMaxMP() const;
 	float GetBaseMaxAGI() const;
 
+	// 玩家五行属性：位掩码(见def.h的ElementBit)，默认0=无属性，此时所有五行规则都不触发
+	unsigned GetElements() const;
+	void SetElements(unsigned mask);
+	bool HasElement(ATTRIBUTE_TYPE attr) const; // 是否"覆盖"该属性(五行要五个齐全)
+	// 对attr属性伤害的抗性(100%=1.0)：拥有的属性基础1.5，否则1.0，加上特性的增减，夹到>=0。
+	// attr=五行时：五个属性都拥有才计算，取五个抗性的平均值，否则1.0；无属性恒为1.0。
+	double Resist(ATTRIBUTE_TYPE attr) const;
+	// 自己拥有的属性的招式的威力倍率：基础1.5加特性的增减，夹到>=0
+	double ElemPowerMul(ATTRIBUTE_TYPE attr) const;
+
 	// 特性(外部效果)，见modifier.h
 	ModifierSet& Mods();
 	const ModifierSet& Mods() const;
@@ -151,6 +161,7 @@ private:
 	int skipStreak = 0; // 已经连续跳过了几次
 	std::vector<ChainEntry> chain; // 连招链(上一回合的招)
 	ModifierSet modSet; // 特性
+	unsigned elements = 0; // 五行属性掩码
 	float agiRecover; // 每回合自动恢复的敏捷值
 	float bombMultiplier; // 炸弹积攒倍率
 	Realm currentRealm;

@@ -331,8 +331,8 @@ float IncreaseEffect::GetRatio() const {
 	return ratio;
 }
 
-ShieldEffect::ShieldEffect(int strength, int rounds) :
-	Effect(EFFECT_SHIELD), strength(strength), initial(strength), rounds(rounds) {
+ShieldEffect::ShieldEffect(int strength, int rounds, unsigned mask) :
+	Effect(EFFECT_SHIELD), strength(strength), initial(strength), rounds(rounds), mask(mask) {
 
 }
 
@@ -350,6 +350,10 @@ int ShieldEffect::RemainingRounds() const {
 
 int ShieldEffect::Initial() const {
 	return initial;
+}
+
+unsigned ShieldEffect::Mask() const {
+	return mask;
 }
 
 void ShieldEffect::Reduce(int amount) {

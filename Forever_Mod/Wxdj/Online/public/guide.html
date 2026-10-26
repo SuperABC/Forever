@@ -26,7 +26,14 @@
   nav.toc .in { max-width: 1040px; margin: 0 auto; padding: 8px 16px; display: flex; gap: 6px 8px; flex-wrap: wrap; font-size: 14px; }
   nav.toc a { text-decoration: none; color: var(--ink-soft); padding: 2px 6px; border-radius: 6px; }
   nav.toc a:hover { color: var(--ink); background: var(--panel2); }
-  section { margin-top: 54px; scroll-margin-top: 56px; }
+  section { margin-top: 54px; scroll-margin-top: 104px; }
+  /* PvP / PvE 切换 */
+  nav.toc .tabs { padding-bottom: 0; gap: 8px; padding-left: 130px; }   /* 让出左上角悬浮的"返回主界面"按钮 */
+  .tabbtn { font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid var(--line); border-bottom: 0; background: var(--panel); color: var(--ink-soft); padding: 5px 18px; border-radius: 10px 10px 0 0; }
+  .tabbtn:hover { color: var(--ink); }
+  .tabbtn[aria-selected="true"] { background: var(--gold); color: #1b1608; border-color: var(--gold); }
+  .pane[hidden], nav.toc .links[hidden] { display: none; }
+  nav.toc .links { border-top: 1px solid var(--line); }
   h2 { font-size: 28px; margin: 0 0 6px; display: flex; align-items: center; gap: 12px; }
   h2 .no { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--gold); color: #1b1608; font-size: 20px; font-weight: 800; }
   h3 { font-size: 20px; margin: 26px 0 8px; }
@@ -102,6 +109,7 @@
   .kv dt { color: var(--ink-soft); }
   .kv dd { margin: 0; }
   footer { margin-top: 70px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 14px; }
+  @media (max-width: 640px) { section { scroll-margin-top: 150px; } }
   @media (max-width: 640px) { .ui .body { grid-template-columns: 1fr; } ol.legend { columns: 1; } }
 
   /* ---- 联机站点：返回主界面 ---- */
@@ -148,13 +156,23 @@
   </svg>
 </header>
 
-<nav class="toc"><div class="in">
+<nav class="toc">
+<div class="in tabs" role="tablist">
+  <button class="tabbtn" id="tab-pvp" role="tab" data-pane="pvp" aria-selected="true">PvP 对战</button>
+  <button class="tabbtn" id="tab-pve" role="tab" data-pane="pve" aria-selected="false">PvE 新增机制</button>
+</div>
+<div class="in links" data-for="pvp">
   <a href="#quick">一分钟看懂</a><a href="#ui">界面</a><a href="#res">资源</a><a href="#round">回合流程</a><a href="#acts">五种操作</a>
   <a href="#clash">对撞与闪避</a><a href="#wuxing">五行克制</a><a href="#field">场地</a><a href="#fams">招式图鉴</a><a href="#bomb">炸弹</a>
   <a href="#adv">进阶</a><a href="#tips">新手建议</a><a href="#stage">标准属性</a><a href="#demo">动画示范</a>
-</div></nav>
+</div>
+<div class="in links" data-for="pve" hidden>
+  <a href="#pve-intro">总览</a><a href="#pve-elem">五行属性</a><a href="#pve-resist">抗性</a><a href="#pve-shield">护盾</a><a href="#pve-crit">暴击</a><a href="#pve-trait">特性</a><a href="#pve-order">结算顺序</a><a href="#pve-example">大数字例子</a><a href="#pve-tips">建议</a>
+</div>
+</nav>
 
 <div class="wrap">
+<div class="pane" id="pane-pvp">
 
 <section id="quick">
   <h2><span class="no">1</span>一分钟看懂</h2>
@@ -166,6 +184,7 @@
     <li><div><b>招式分成 15 个家族，每个家族有 20 式：</b>每个家族有自己的特殊效果（穿透、禁锢、反弹、回复……），式数越大，威力越高、消耗越多、效果越强。</div></li>
     <li><div><b>除了出招，还可以「跳过」和用「真气炸弹」：</b>跳过会让你这回合的敏捷翻倍，很可能躲开对手的攻击；真气炸弹要先花几回合积攒，放出去威力惊人，但你自己也会受伤。</div></li>
   </ol>
+  <div class="note"><b>这一页讲的是 PvP 对战。</b>人机/剧情里的 PvE 在这些规则之上多了五行属性、抗性、暴击、特性等机制，等你熟悉了 PvP，再点上方的 <a href="#pve">PvE 新增机制</a> 去了解。</div>
 </section>
 
 <section id="ui">
@@ -837,6 +856,218 @@
 })();
 </script>
 
+</div>
+
+<div class="pane" id="pane-pve" hidden>
+<section id="pve-intro">
+  <h2><span class="no">1</span>PvE 比 PvP 多了什么</h2>
+  <p class="lead">PvE 用的是<b>同一套基础规则</b>：同时出招、威力对撞、五行克制、真气透支、炸弹、场地……这些在「PvP 对战」页里都讲过了，<b>请先读完那一页</b>再来看这里。</p>
+  <p>PvP 追求双方完全对等，所以没有任何额外加成。PvE 里则多出了下面这些机制，它们让你和对手可以"不对等"，也更接近一套完整的养成/配装玩法：</p>
+  <div class="grid g3">
+    <div class="card"><h4>玩家五行属性</h4><p>金木水火土各一个开关，可任意组合；拥有的属性会让你的招式更强、更抗打。</p><p><a href="#pve-elem">看详情 →</a></p></div>
+    <div class="card"><h4>属性抗性</h4><p>对自己拥有的属性的伤害，天生有 150% 抗性，受到的伤害变少。</p><p><a href="#pve-resist">看详情 →</a></p></div>
+    <div class="card"><h4>带属性的护盾</h4><p>护盾继承你的属性，挡同属性伤害时更耐用。</p><p><a href="#pve-shield">看详情 →</a></p></div>
+    <div class="card"><h4>暴击</h4><p>每次出招有概率暴击，威力额外提高。</p><p><a href="#pve-crit">看详情 →</a></p></div>
+    <div class="card"><h4>特性：装备 / 秘诀 / 丹药</h4><p>外来的各种增益和减益，可以带条件、持续回合。</p><p><a href="#pve-trait">看详情 →</a></p></div>
+    <div class="card"><h4>伤害结算顺序</h4><p>把上面这些串起来，一次伤害到底怎么算出来的。</p><p><a href="#pve-order">看详情 →</a></p></div>
+  </div>
+  <div class="note"><b>怎么对照：</b>双方都没有五行属性、也没有任何特性时，PvE 的战斗和 PvP 完全一样（暴击除外）。所以多出来的每一条，你都可以当成"在 PvP 的基础上额外叠加的一层"。</div>
+</section>
+
+<section id="pve-elem">
+  <h2><span class="no">2</span>玩家五行属性</h2>
+  <p class="lead">PvP 里每个人都是"无属性"。PvE 里，你可以拥有<b>金、木、水、火、土</b>中的任意几个——一个、两个，甚至五个都有，每个属性是独立的开关。</p>
+  <div class="grid g2">
+    <div class="card"><h3 style="margin-top:0">拥有的属性能带来什么</h3>
+      <table>
+        <tr><th style="width:96px">方面</th><th>效果</th></tr>
+        <tr><td><b>出招</b></td><td>招式的属性是你拥有的属性时，<b>威力 ×1.5</b>。</td></tr>
+        <tr><td><b>防御</b></td><td>受到你拥有的属性的伤害时，<b>抗性 150%</b>（见下面"属性抗性"）。</td></tr>
+        <tr><td><b>护盾</b></td><td>你出的护盾带有你的属性，同属性伤害扣盾更慢（见"带属性的护盾"）。</td></tr>
+      </table></div>
+    <div class="card"><h3 style="margin-top:0">"拥有"怎么判定</h3>
+      <table>
+        <tr><th style="width:96px">招式/伤害的属性</th><th>什么时候算"拥有"</th></tr>
+        <tr><td>金、木、水、火、土</td><td>你开了对应的那个开关</td></tr>
+        <tr><td><span class="chip" style="--c:#a455d6">五行</span></td><td>金木水火土<b>五个全开</b>才算</td></tr>
+        <tr><td>无属性</td><td><b>永远不算</b>，什么加成都没有</td></tr>
+      </table>
+      <p>双招按合成后的"最终属性"来判定（合成规则见 PvP 页的"五行克制"）。</p></div>
+  </div>
+  <div class="note tip"><b>例子：</b>你开了「火」「木」。出<b>狂火拳</b>（火）威力 ×1.5；出<b>砍柴功</b>（木）威力 ×1.5；出<b>五行八卦掌</b>（五行）没有加成，因为你没开齐五个；出<b>无招</b>也没有加成。</div>
+  <div class="note">这个加成倍率不是死的：有些特性可以把它从 1.5 调高，甚至调到 0（见"特性"一节）。</div>
+</section>
+
+<section id="pve-resist">
+  <h2><span class="no">3</span>属性抗性</h2>
+  <p class="lead">每个人对金、木、水、火、土各有一个<b>抗性</b>。默认是 <b>100%</b>（不减不增）；你拥有的属性是 <b>150%</b>。</p>
+  <div class="grid g2" style="align-items:start">
+    <div class="card"><h3 style="margin-top:0">换算公式</h3>
+      <p style="font-size:18px;text-align:center"><b>实际伤害 = 结算伤害 × 2 ÷ (抗性 + 1)</b></p>
+      <p>抗性越高伤害越少；抗性最低降到 <b>0%</b>，此时伤害<b>翻倍</b>。</p></div>
+    <div class="card"><table>
+      <tr><th class="c">抗性</th><th class="c">受到的伤害</th></tr>
+      <tr><td class="c">0%</td><td class="c">×2（翻倍）</td></tr>
+      <tr><td class="c">50%</td><td class="c">×1.33</td></tr>
+      <tr><td class="c"><b>100%</b>（默认）</td><td class="c">×1（不变）</td></tr>
+      <tr><td class="c"><b>150%</b>（拥有该属性）</td><td class="c">×0.8</td></tr>
+      <tr><td class="c">200%</td><td class="c">×0.67</td></tr>
+      <tr><td class="c">300%</td><td class="c">×0.5</td></tr>
+    </table></div>
+  </div>
+  <ul>
+    <li>抗性是<b>被动</b>的：你拥有「火」，别人打你的火属性伤害就按 150% 算；打你的金属性伤害，仍按 100%。</li>
+    <li><b>无属性</b>的伤害不吃抗性。</li>
+    <li><b>五行</b>属性的伤害，要你<b>五个属性都拥有</b>才计算抗性，取五个属性抗性的<b>平均值</b>；没开齐就按 100%。</li>
+    <li>抗性可以被特性调高或调低（装备、丹药等）。调到低于 100% 就是"弱点"，伤害会变多。</li>
+    <li>算在护盾<b>之前</b>：先按抗性把伤害缩小，缩小后的伤害再去撞护盾。</li>
+  </ul>
+</section>
+
+<section id="pve-shield">
+  <h2><span class="no">4</span>带属性的护盾</h2>
+  <p class="lead">护盾本身的规则不变（见 PvP 页"特殊效果小词典"）。PvE 里新增的是：<b>护盾带有你出招时拥有的属性</b>。</p>
+  <div class="grid g2" style="align-items:start">
+    <div class="card"><h3 style="margin-top:0">同属性伤害，扣盾减半</h3>
+      <p>伤害的属性被这块盾"覆盖"时（判定和上面"拥有"一样：五行伤害要五行齐全的盾），<b>这块盾被扣掉的盾量只有一半</b>（向上取整）——相当于这块盾对它来说<b>厚了一倍</b>。</p>
+      <p>盾被打光之后，<b>剩下的伤害不再减半</b>。其他属性的伤害、无属性伤害都按原来的算。</p></div>
+    <div class="card"><h3 style="margin-top:0">例子：一块 10 点的木属性盾</h3>
+      <table>
+        <tr><th>受到的伤害</th><th>结果</th></tr>
+        <tr><td>15 点木属性</td><td>扣掉 8 点盾，<b>不扣血</b>（盾剩 2）</td></tr>
+        <tr><td>25 点木属性</td><td>盾打光（顶了 20 点），<b>穿过 5 点</b></td></tr>
+        <tr><td>15 点火属性</td><td>不是同属性，盾打光，穿过 5 点</td></tr>
+      </table></div>
+  </div>
+  <div class="note">无属性的玩家出的盾也是无属性盾，不会触发减半；多块盾同时存在时，每块盾各自判定是否减半。</div>
+</section>
+
+<section id="pve-crit">
+  <h2><span class="no">5</span>暴击</h2>
+  <p class="lead">PvP 没有暴击；PvE 里每次出招都会掷一次骰子。</p>
+  <ul>
+    <li>默认<b>暴击率 5%</b>，暴击时这一招的威力<b>额外 +50%</b>（即 ×1.5）。</li>
+    <li>暴击率和暴击伤害都可以被特性调整。</li>
+    <li>暴击的威力<b>算进对撞</b>：暴击后威力变大，更容易在对撞里赢；战报里会写出"暴击，伤害 +N%"。</li>
+  </ul>
+</section>
+
+<section id="pve-trait">
+  <h2><span class="no">6</span>特性：装备、秘诀、丹药、场地</h2>
+  <p class="lead">PvE 里的各种外来加成，统称<b>特性</b>——装备、秘诀、丹药、场地给的，在战斗里都是同一套东西：<b>种类 + 数值 + 作用的属性 + 条件 + 持续回合</b>。</p>
+  <div class="grid g2">
+    <div class="card"><h3 style="margin-top:0">一条特性有哪些"开关"</h3>
+      <dl class="kv">
+        <dt>作用属性</dt><dd>只对某几个属性生效，不写就是全部。</dd>
+        <dt>条件</dt><dd>比如"健康低于 50% 时才生效"。条件看的是持有者此刻的状态。</dd>
+        <dt>持续回合</dt><dd>可以是 N 回合，到期自动消失；也可以永久。</dd>
+        <dt>叠加</dt><dd>同种类的数值<b>直接相加</b>，持续时间各算各的。</dd>
+      </dl></div>
+    <div class="card"><h3 style="margin-top:0">结算时机</h3>
+      <p><b>常驻类</b>（增伤、抗性、闪避……）：随时查询，到期后自动回到原来的数。</p>
+      <p><b>每回合类</b>（每回合回复/流失）：每回合开始或结束时执行一次。</p>
+      <p><b>触发类</b>：造成或受到伤害时才触发。</p>
+      <p><b>立即类</b>：添加的那一刻马上执行一次，不留痕迹。</p></div>
+  </div>
+  <h3>有哪些种类</h3>
+  <table>
+    <tr><th style="width:150px">类别</th><th>能做什么</th></tr>
+    <tr><td><b>每回合资源</b></td><td>每回合回复或流失真气、武力、健康（可按上限的百分比）；武力、健康被扣到 0 就会死。</td></tr>
+    <tr><td><b>上限与敏捷</b></td><td>真气上限增减（真气超过上限 2 倍就爆体的线跟着走）、敏捷上限增减、每回合敏捷回复、跳过时扣敏捷的多少、每次积攒的比例。</td></tr>
+    <tr><td><b>威力</b></td><td>某属性基础威力增减（加算）；自己造成伤害增减（<b>增伤乘区</b>）；<b>易伤</b>（受到的伤害增加，只增不减，和减伤效果同一个乘区，见下面「结算顺序」）；炸弹威力增减。</td></tr>
+    <tr><td><b>暴击</b></td><td>暴击率、暴击伤害增减。</td></tr>
+    <tr><td><b>命中与闪避</b></td><td>闪避率、命中率增减，和"锈蚀""扬尘"场地在同一个乘区里相加。</td></tr>
+    <tr><td><b>消耗</b></td><td>某属性招式的真气消耗增减。</td></tr>
+    <tr><td><b>造成/受到伤害时</b></td><td>回复或扣除真气、武力、健康（按这次伤害量的百分比）；增减受到伤害的反弹比例；<b>免疫</b>某属性（该属性伤害变 0）。</td></tr>
+    <tr><td><b>场地</b></td><td>场地对某属性的伤害倍率增减（灼烧本身是 ×1.5）；立即添加某个场地；立即清除全部场地；立即解除禁锢。</td></tr>
+    <tr><td><b>五行相关</b></td><td><b>抗性</b>增减（见"属性抗性"）；<b>同属性威力倍率</b>增减（基础 ×1.5，可以调高，最低降到 0，没有上限）；<b>立即加护盾</b>（可指定盾的属性、强度和持续回合）。</td></tr>
+  </table>
+  <div class="note tip"><b>抗性和同属性倍率都是"增量"：</b>比如某件装备写"火抗性 +0.5"，意思是火抗性从 100% 立即变成 150%；写"同属性威力倍率 −0.5"，就是 ×1.5 变成 ×1.0。抗性最低降到 0%，同属性倍率最低降到 0。</div>
+</section>
+
+<section id="pve-order">
+  <h2><span class="no">7</span>一次伤害是怎么算出来的</h2>
+  <p class="lead">把前面的内容串起来。下面是 PvE 里一次攻击从出招到扣血的完整顺序（PvP 就是去掉带"PvE"标记的几步）。</p>
+  <ol class="legend" style="columns:1">
+    <li><b>出招威力</b>：基础威力 +（特性的基础威力加成）→ 连招增伤 → 双招 ×0.6 → 然后乘上这几个乘区，乘区之间<b>相乘</b>：
+      <ul>
+        <li><span class="chip" style="--c:var(--gold)">PvE</span> 同属性倍率（拥有该属性时，默认 ×1.5）</li>
+        <li><span class="chip" style="--c:var(--gold)">PvE</span> 暴击（命中暴击时 ×(1+暴击伤害)）</li>
+        <li><span class="chip" style="--c:var(--gold)">PvE</span> 你的增伤（1+加和）</li>
+      </ul></li>
+    <li><b>对撞与命中</b>：和 PvP 一样（五行克制、穿透、闪避……），其中命中、闪避可以被特性调整。</li>
+    <li><b>伤害落到身上之前，依次经过：</b>
+      <ol>
+        <li><span class="chip" style="--c:var(--gold)">PvE</span> 免疫（免疫的属性，伤害直接变 0）</li>
+        <li>场地倍率（灼烧 ×1.5，特性可增减）</li>
+        <li><b>受到伤害乘区</b>：减伤（比如海龙金身）和<span class="chip" style="--c:var(--gold)">PvE</span> 易伤是<b>同一个乘区</b>，乘区 = 1 + 易伤加和 − 减伤比例。易伤只增不减，所以这个乘区最小就是「1 − 减伤比例」：目前最强的减伤是第 20 式海龙金身的 80%，也就是最少只受 20% 的伤害，不会更低</li>
+        <li><span class="chip" style="--c:var(--gold)">PvE</span> <b>属性抗性</b>（×2÷(抗性+1)）</li>
+        <li><b>护盾</b>（<span class="chip" style="--c:var(--gold)">PvE</span> 同属性盾扣盾减半）</li>
+        <li>物理转换（一部分伤害改扣健康）→ 反弹（还给攻击者一部分）→ 实际扣武力/健康</li>
+      </ol></li>
+    <li><b>扣血之后</b>：吸收转成真气；<span class="chip" style="--c:var(--gold)">PvE</span> 造成/受到伤害时的特性触发。</li>
+  </ol>
+</section>
+
+<section id="pve-example">
+  <h2><span class="no">8</span>例子：怎么打出一个 600 多万的数</h2>
+  <p class="lead">把前面几节的东西叠在一起，看一次攻击最多能打到多大。下面的每一个数都是<b>举例用的假设值</b>，不是游戏里现成的配置：你可以照着格式换成自己的数字再算一遍。</p>
+
+  <h3>先把"阵容"摆出来</h3>
+  <table>
+    <tr><th style="width:150px">项目</th><th>假设</th><th class="c" style="width:110px">记作</th></tr>
+    <tr><td><b>出招</b></td><td>双招：<b>木森林变换第 20 式</b>（基础威力 16898）+ <b>逆天神功第 20 式</b>（基础威力 14073）。无属性 + 木 → 合成属性是<b>木</b>。你拥有「木」。</td><td class="c">B₁=16898<br>B₂=14073</td></tr>
+    <tr><td><b>固定威力加成</b></td><td>装备给每个招式的基础威力 +2000（<code>base_power</code>）</td><td class="c">a = 2000</td></tr>
+    <tr><td><b>连招增伤</b></td><td>两招都带连招增伤，每连一步威力 +20%，从第 1 式一路连到第 20 式，连了 19 步<br><span style="color:var(--ink-soft);font-size:14px">（正式招式家族目前没有这个效果，这里假设有）</span></td><td class="c">r = 0.2<br>n = 19</td></tr>
+    <tr><td><b>同属性倍率</b></td><td>特性把 ×1.5 再提高 1.0，变成 ×2.5（<code>elem_power</code>）</td><td class="c">1.5 + 1.0</td></tr>
+    <tr><td><b>暴击</b></td><td>这一招刚好暴击；暴击伤害特性 +1.0，所以是 1 + 0.5 + 1.0</td><td class="c">×2.5</td></tr>
+    <tr><td><b>增伤</b></td><td>特性给自己造成伤害 +150%（<code>dmg_dealt</code>）</td><td class="c">1 + 1.5 = ×2.5</td></tr>
+    <tr><td><b>场地</b></td><td>灼烧场地（×1.5），特性再 +0.5（<code>field_mult</code>）</td><td class="c">1.5 + 0.5 = ×2.0</td></tr>
+    <tr><td><b>对手的易伤</b></td><td>对手受到伤害 +50%（<code>dmg_taken</code>）；他没开减伤，减伤比例是 0</td><td class="c">1 + 0.5 − 0 = ×1.5</td></tr>
+    <tr><td><b>对手的抗性</b></td><td>对手对木属性的抗性只有 50%（弱点）</td><td class="c">2 ÷ (0.5 + 1) ≈ ×1.333</td></tr>
+    <tr><td><b>对手的动作</b></td><td>这一回合他没有正面应对（跳过或积攒），所以你的威力<b>全额</b>打在他身上，没有对撞扣减；他也没有护盾</td><td class="c">—</td></tr>
+  </table>
+
+  <h3>一步一步算</h3>
+  <ol class="legend" style="columns:1">
+    <li><b>算每个招式的威力</b>：(基础威力 + 固定加成) × (1 + 每步增伤 × 连了几步)
+      <ul>
+        <li>木森林变换：(16898 + 2000) × (1 + 0.2 × 19) = 18898 × 4.8 ≈ <b>90,710</b></li>
+        <li>逆天神功：(14073 + 2000) × 4.8 = 16073 × 4.8 ≈ <b>77,150</b></li>
+      </ul></li>
+    <li><b>合成双招</b>：两招相加再 ×0.6
+      <ul><li>0.6 × (90,710 + 77,150) = 0.6 × 167,861 ≈ <b>100,716</b></li></ul></li>
+    <li><b>乘上出招乘区</b>（几个乘区之间<b>相乘</b>）
+      <ul>
+        <li>同属性倍率 ×2.5 × 暴击 ×2.5 × 增伤 ×2.5 = <b>×15.625</b></li>
+        <li>100,716 × 15.625 ≈ <b>1,573,695</b>（约 <b>157 万</b>）——这就是这一招的最终威力</li>
+      </ul></li>
+    <li><b>落到对手身上</b>（对手没应对，威力全额命中）：再乘三个"伤害乘区"
+      <ul>
+        <li>场地倍率 <b>×2.0</b></li>
+        <li>受到伤害乘区（易伤 − 减伤）：1 + 0.5 − 0 = <b>×1.5</b></li>
+        <li>抗性 2 ÷ (0.5 + 1) ≈ <b>×1.333</b></li>
+        <li>三者相乘：2.0 × 1.5 × 1.333 = <b>×4.0</b></li>
+      </ul></li>
+    <li><b>最终伤害</b>：1,573,695 × 4.0 ≈ <b>6,294,780</b>，约 <b>629 万</b>。</li>
+  </ol>
+
+  <div class="note"><b>一句话总结：</b>伤害 ≈ 双招威力 100,716 × 出招乘区 15.625 × 伤害乘区 4.0 ≈ <b>629 万</b>。出招乘区里的三个数（同属性倍率、暴击、增伤）都是"加算后再相乘"，所以每个再往上加一点，总数就是按<b>乘法</b>增长的。</div>
+  <div class="note warn"><b>别忘了现实里的"折扣"：</b>暴击默认只有 5% 的概率；对手只要正面出招，你的威力就要先和他的威力对撞（只打差额），被克制的一方威力还要减半；对手有护盾、减伤、反弹时，这个数字还会再被削掉。这个例子是"理论上能堆到的样子"，不是每回合都能打出来的。</div>
+</section>
+
+<section id="pve-tips">
+  <h2><span class="no">9</span>几条 PvE 上手建议</h2>
+  <ol class="legend" style="columns:1">
+    <li><b>先看清自己的属性，再选招。</b>同属性招式威力 ×1.5，白送的收益；拥有多个属性时，优先从这些属性的家族里挑。</li>
+    <li><b>别忽略"无属性"的代价。</b>无属性招式永远没有同属性加成，也不吃抗性；想让它们变强，主要靠自带效果（穿透、物理、禁锢）和特性。</li>
+    <li><b>五行属性要"五个齐全"才有收益。</b>只开三个属性，五行八卦掌不会加成；想吃到五行加成，就要五个都开。</li>
+    <li><b>护盾和抗性搭配用。</b>先按抗性缩伤，再撞护盾；同属性盾又能再省一半。想靠盾扛伤害，选和对手攻击属性一致的盾最划算。</li>
+    <li><b>留意对手的特性。</b>对手可能有免疫、反弹、易伤等特性，出招前先看看这一招会不会白打。</li>
+  </ol>
+</section>
+
+</div>
 
 <footer>
   <b>关于数值：</b>游戏里各招式的消耗、威力、效果数值仍在持续平衡调整中，本指南讲的是规则和思路，具体数字以游戏里显示的为准。<br>
@@ -844,5 +1075,32 @@
 </footer>
 
 </div>
+
+<script>
+// PvP / PvE 两页在同一个文件里切换；#pve / #pvp 或任何一页里的锚点都能直接打开对应那一页
+(function () {
+  var panes = { pvp: document.getElementById('pane-pvp'), pve: document.getElementById('pane-pve') };
+  var links = document.querySelectorAll('nav.toc .links');
+  var tabs = document.querySelectorAll('.tabbtn');
+  function show(name) {
+    for (var k in panes) panes[k].hidden = k !== name;
+    links.forEach(function (l) { l.hidden = l.dataset['for'] !== name; });
+    tabs.forEach(function (t) { t.setAttribute('aria-selected', String(t.dataset.pane === name)); });
+  }
+  function fromHash() {
+    var id = decodeURIComponent(location.hash.slice(1));
+    if (id === 'pvp' || id === 'pve') { show(id); window.scrollTo(0, 0); return true; }
+    var el = id && document.getElementById(id);
+    if (!el) return false;
+    for (var k in panes) if (panes[k].contains(el)) { show(k); el.scrollIntoView(); return true; }
+    return false;
+  }
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () { show(t.dataset.pane); history.replaceState(null, '', '#' + t.dataset.pane); window.scrollTo(0, 0); });
+  });
+  window.addEventListener('hashchange', fromHash);
+  if (!fromHash()) show('pvp');
+})();
+</script>
 </body>
 </html>

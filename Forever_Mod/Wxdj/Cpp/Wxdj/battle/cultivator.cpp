@@ -1,5 +1,6 @@
 #include "cultivator.h"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -66,6 +67,40 @@ int Cultivator::GetBaseMaxMP() const {
 
 float Cultivator::GetBaseMaxAGI() const {
 	return maxAGI;
+}
+
+unsigned Cultivator::GetElements() const {
+	return elements;
+}
+
+void Cultivator::SetElements(unsigned mask) {
+	elements = mask & ELEMENT_ALL_MASK;
+}
+
+bool Cultivator::HasElement(ATTRIBUTE_TYPE attr) const {
+	return ElementCovers(elements, attr);
+}
+
+double Cultivator::Resist(ATTRIBUTE_TYPE attr) const {
+	if (attr == ATTRIBUTE_NONE) return 1.0;
+	auto one = [&](ATTRIBUTE_TYPE a) {
+		double x = (elements & ElementBit(a) ? ELEM_RESIST_OWNED : 1.0);
+		if (!modSet.All().empty()) x += modSet.Sum(MOD_RESIST, a, *this);
+		return max(0.0, x);
+	};
+	if (attr == ATTRIBUTE_ALL) {
+		if (!ElementCovers(elements, ATTRIBUTE_ALL)) return 1.0;
+		double total = 0;
+		for (int a = ATTRIBUTE_METAL; a <= ATTRIBUTE_EARTH; ++a) total += one(static_cast<ATTRIBUTE_TYPE>(a));
+		return total / 5.0;
+	}
+	return one(attr);
+}
+
+double Cultivator::ElemPowerMul(ATTRIBUTE_TYPE attr) const {
+	double x = ELEM_POWER_BASE;
+	if (!modSet.All().empty()) x += modSet.Sum(MOD_ELEM_POWER, attr, *this);
+	return max(0.0, x);
 }
 
 ModifierSet& Cultivator::Mods() {

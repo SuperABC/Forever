@@ -69,6 +69,18 @@ enum ATTRIBUTE_TYPE {
 	ATTRIBUTE_ALL // 五行
 };
 
+// 玩家五行属性(金木水火土各一个开关，可任意组合)：位掩码，第n位对应ATTRIBUTE_TYPE的值，0=无属性。
+// 与Modifier的attrMask同一套编码；无属性/没有这个属性的玩家，所有五行相关规则都不触发。
+inline constexpr unsigned ELEMENT_ALL_MASK = (1u << ATTRIBUTE_METAL) | (1u << ATTRIBUTE_WOOD) | (1u << ATTRIBUTE_WATER) | (1u << ATTRIBUTE_FIRE) | (1u << ATTRIBUTE_EARTH);
+inline constexpr unsigned ElementBit(ATTRIBUTE_TYPE attr) { return attr == ATTRIBUTE_ALL ? ELEMENT_ALL_MASK : attr == ATTRIBUTE_NONE ? 0u : (1u << attr); }
+// mask是否"覆盖"这个属性：无属性永不覆盖；金木水火土要有对应位；五行要五位齐全
+inline constexpr bool ElementCovers(unsigned mask, ATTRIBUTE_TYPE attr) {
+	return attr != ATTRIBUTE_NONE && (mask & ElementBit(attr)) == ElementBit(attr);
+}
+inline constexpr double ELEM_POWER_BASE = 1.5;     // 自己拥有的属性的招式，威力倍率
+inline constexpr double ELEM_RESIST_OWNED = 1.5;   // 自己拥有的属性的初始抗性(100%=1.0)
+inline constexpr double ELEM_SHIELD_KEEP = 0.5;    // 护盾对同属性伤害：扣除的盾量乘数
+
 // 阶位枚举
 enum Realm {
 	YELLOW_INIT, // 黄阶初期

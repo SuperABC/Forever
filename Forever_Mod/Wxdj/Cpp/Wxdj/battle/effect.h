@@ -212,12 +212,13 @@ private:
 // 受到伤害时所有盾一起减去同一个伤害值，穿透量=伤害-最大的那块盾的强度
 class ShieldEffect : public Effect {
 public:
-	ShieldEffect(int strength, int rounds);
+	ShieldEffect(int strength, int rounds, unsigned mask = 0);
 	virtual ~ShieldEffect();
 
 	int Strength() const;
 	int RemainingRounds() const;
 	int Initial() const; // 出招时的强度(显示/招式提示用)
+	unsigned Mask() const; // 盾的五行属性(位掩码，见ElementBit)；0=无属性
 	void Reduce(int amount); // 一起减去伤害值
 	void PassRound();
 	bool UseUp() const;
@@ -226,6 +227,7 @@ private:
 	int strength; // 当前剩余强度
 	int initial;
 	int rounds; // 还剩几回合(含当前回合)
+	unsigned mask; // 盾的五行属性
 };
 
 // 金火灼烧场地效果

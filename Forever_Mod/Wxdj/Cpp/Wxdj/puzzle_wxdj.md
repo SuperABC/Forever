@@ -51,6 +51,11 @@
 - Core端依赖`"resource path"`查询(`Config::GetResourceFilePath`)；UE端`UPuzzleWidget`负责现场构造`PostImplement`传进
   `Init`/`Loop`、换算鼠标坐标、转发鼠标滚轮。
 
+## 玩家五行属性
+
+`SetParam`(由`UPuzzleWidget`在`Init`之前调用)解析剧情参数`elem=金木水火土的任意组合`(玩家)和`enemy_elem=…`(敌人)，`Init`里`SetElements`；不传就是无属性，和以前完全一样。
+状态条名字后面用`[金木]`标出当前五行属性；护盾hint里写了同属性扣盾减半。规则见`battle/battle.md`的"玩家五行属性"。
+
 ## 待办/后续阶段
 
 - **胜负不回传剧情**：`UPuzzleWidget`只判`Loop`返回值是否非0就结束，不把1/-1交给剧情脚本；要让`Wxdj.script`按

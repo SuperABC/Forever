@@ -38,6 +38,9 @@
   .nameRow .name { font-size: 18px; font-weight: bold; color: #e6e6e6; margin-right: 6px; }
   .nameRow label { font-size: 12px; color: #aaaabb; }
   .nameRow input { width: 64px; text-align: right; }
+  .nameRow .elemRow { font-size: 12px; color: #aaaabb; }
+  .nameRow .elemRow label { margin-left: 4px; }
+  .nameRow .elemRow input { width: auto; vertical-align: middle; }
   .barRow { display: grid; grid-template-columns: 60% 40%; align-items: center; margin-bottom: 5px; }
   .bar { height: 20px; background: var(--bar-bg); overflow: hidden; }
   .fill { height: 100%; width: 0; }
@@ -1175,6 +1178,11 @@ const ATTR_TEXT = ["无属性", "金属性", "木属性", "水属性", "火属�
 const ATTR_PARSE = { none: NONE, metal: METAL, wood: WOOD, water: WATER, fire: FIRE, earth: EARTH, all: ALL };
 
 const DUAL_COST_FACTOR = 1.0, DUAL_POWER_FACTOR = 0.6;
+// 玩家五行属性(金木水火土各一个开关)：位掩码，第n位对应属性值n，0=无属性；规则见battle.md"玩家五行属性"
+const ELEMENT_ALL_MASK = (1 << METAL) | (1 << WOOD) | (1 << WATER) | (1 << FIRE) | (1 << EARTH);
+const elementBit = attr => attr === ALL ? ELEMENT_ALL_MASK : attr === NONE ? 0 : (1 << attr);
+const elementCovers = (mask, attr) => attr !== NONE && (mask & elementBit(attr)) === elementBit(attr);   // 无属性永不覆盖；五行要五位齐全
+const ELEM_POWER_BASE = 1.5, ELEM_RESIST_OWNED = 1.5, ELEM_SHIELD_KEEP = 0.5;
 const ACCUMULATE_FRACTION = 0.2, BOMB_ACCUMULATE_MULTIPLIER = 10, BOMB_HIT_FACTOR_PASSIVE = 0.4, BOMB_HIT_FACTOR_ACTIVE = 0.8, BOMB_BACKFIRE_FACTOR = 0.2;   // 炸弹：对手没出招打0.4，出招了打(B-威力)x0.8；互扔炸弹双方各受(B1+B2)x0.2
 // 阶位对应的最大式：3-1~3-6各一式，4-1=7~8式，4-2=9~10式，4-3=11~12式，4-4=13~14式，4-5=15~17式，4-6=18~20式
 const REALM_MAX_FORM = [1, 2, 3, 4, 5, 6, 8, 8, 10, 10, 12, 12, 14, 14, 17, 17, 17, 20, 20, 20];
@@ -1280,7 +1288,7 @@ function parseEffect(line) {
 const MOD_KINDS = ["mp_round", "atk_round", "hp_round", "skip_agi", "agi_recover", "agi_max", "mp_max", "acc_ratio", "bomb_power",
   "base_power", "dmg_dealt", "dmg_taken", "field_mult", "crit_rate", "crit_dmg", "dodge", "hit", "cost",
   "deal_mp", "deal_atk", "deal_hp", "take_mp", "take_atk", "take_hp", "rebound", "immune",
-  "now_mp", "now_atk", "now_hp", "now_agi", "now_field", "clear_field", "unlock"];
+  "now_mp", "now_atk", "now_hp", "now_agi", "now_field", "clear_field", "unlock", "now_shield", "resist", "elem_power"];
 const MOD_ATTR_ALL = 0x7F;
 const MOD_STATS = { hp: 1, atk: 2, mp: 3, agi: 4 };
 function parseModAttrs(text) {
@@ -1307,6 +1315,7 @@ function parseModifier(line) {
     if (v.endsWith("%")) { m.percent = true; v = v.slice(0, -1); }
     if (v === "" || Number.isNaN(Number(v))) return null;
     m.value = Number(v);
+    if (m.kind === "dmg_taken" && m.value < 0) return null;   // 易伤只增不减：减伤只来自减伤效果
   }
   const handle = tok => {
     if (tok === "%") { m.percent = true; return true; }
@@ -1387,7 +1396,28 @@ class Cultivator {
     // 敏捷：当前值agi，上限maxAgi；闪避一次损失agiLoss，每回合自动恢复agiRecover(不超过上限)
     this.agi = agi; this.maxAgi = agi; this.agiLoss = agiLoss; this.agiRecover = agiRecover; this.skipStreak = 0; this.chain = []; this.mods = [];   // mods：特性
     this.recover = recover; this.bomb = 0; this.bombMultiplier = bombMultiplier;   // 炸弹积攒倍率：个人属性，由所在阶位决定
+    this.elements = 0;   // 五行属性掩码，0=无属性
   }
+  setElements(mask) { this.elements = mask & ELEMENT_ALL_MASK; }
+  hasElement(attr) { return elementCovers(this.elements, attr); }
+  // 对attr属性伤害的抗性(100%=1.0)：拥有的属性基础1.5，否则1.0，加上特性的增减，夹到>=0；五行=五个都拥有才算，取五个的平均值，否则1.0
+  resist(attr) {
+    if (attr === NONE) return 1.0;
+    const one = a => {
+      let x = (this.elements & elementBit(a)) ? ELEM_RESIST_OWNED : 1.0;
+      if (this.mods.length) x += this.modSum("resist", a);
+      return Math.max(0, x);
+    };
+    if (attr === ALL) {
+      if (!elementCovers(this.elements, ALL)) return 1.0;
+      let total = 0;
+      for (let a = METAL; a <= EARTH; a++) total += one(a);
+      return total / 5.0;
+    }
+    return one(attr);
+  }
+  // 自己拥有的属性的招式的威力倍率：基础1.5加特性的增减，夹到>=0
+  elemPowerMul(attr) { return Math.max(0, ELEM_POWER_BASE + (this.mods.length ? this.modSum("elem_power", attr) : 0)); }
   // 连招链(increase用)：上一回合出的招(单招=1个，双招=2个基础招式)的[家族,式号,已连续步数]；本回合出家族F的第k式，链里有(F,k-1)就是步数+1，否则0
   peekChain(family, form) {
     if (form <= 1) return 0;
@@ -1572,7 +1602,7 @@ class Controller {
         if (dot && !dot.needHit) {
           const amount = dot.instant;
           this.logs.push(logEffectAmount(i, target, amount, E_DOT));
-          this.takeDamage(i, target, act.effects, actions[target][0].effects, act.attr, this.takenZone(target, act.attr, amount), true, actions[target][0].attr);
+          this.takeDamage(i, target, act.effects, actions[target][0].effects, act.attr, amount, true, actions[target][0].attr);
           this.addEffect(target, cloneEffect(dot));
         }
         for (const [type, apply, log] of [
@@ -1589,6 +1619,7 @@ class Controller {
         const shield = getEffect(act, E_SHIELD);
         if (shield) {
           const s = cloneEffect(shield);
+          s.mask = this.cultivators[i].elements;   // 盾继承自己的五行属性
           this.logs.push(logEffectAmount(i, -1, s.strength, E_SHIELD));
           this.addEffect(i, s);
         }
@@ -1616,7 +1647,7 @@ class Controller {
         if (notFaced) {
           const powerEnemy = actI.power * (rust() ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_PASSIVE);
           const powerSelf = actI.power * (rust() ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
-          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, this.takenZone(j, actI.attr, Math.trunc(powerEnemy)), true, actJ.attr);
+          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, Math.trunc(powerEnemy), true, actJ.attr);
           this.takeDamage(i, i, actI.effects, actI.effects, actI.attr, Math.trunc(powerSelf));
         }
         else if (actJ.type === A_BOMB && actions[j][1] === i) {
@@ -1627,7 +1658,7 @@ class Controller {
         else if (actJ.power < actI.power) {
           let powerEnemy = actI.power - actJ.power;
           powerEnemy *= (rust() ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_ACTIVE);
-          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, this.takenZone(j, actI.attr, Math.trunc(powerEnemy)), true, actJ.attr);
+          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, Math.trunc(powerEnemy), true, actJ.attr);
         }
         continue;
       }
@@ -1747,7 +1778,7 @@ class Controller {
         if (eff.type === E_LOCK) { this.status[i] |= 1; erase(); }
         else if (eff.type === E_DOT) {
           const dmg = timedOnce(eff);
-          if (dmg !== 0) { this.logs.push(logEffectAmount(-1, i, dmg, E_DOT)); this.takeDamage(-1, i, [], [], NONE, this.takenZone(i, NONE, dmg), false); }
+          if (dmg !== 0) { this.logs.push(logEffectAmount(-1, i, dmg, E_DOT)); this.takeDamage(-1, i, [], [], NONE, dmg, false); const self = this.effects[i].indexOf(eff); if (self >= 0) j = self; }   // 护盾被打光会从effects[i]移除，下标要重新定位
           if (timedUsedUp(eff)) erase();
         }
         else if (eff.type === E_REBATE) {
@@ -1788,7 +1819,7 @@ class Controller {
 
   // 有效威力：本回合出的招(单招=1个，双招=2个基础招式)各自按"家族+式号"查连招链，再乘上特性的各个乘区。
   //   单个基础招式的威力 = (基础威力 + 特性的基础威力加成) x (1 + 增伤比例 x 连续步数)；双招再乘DUAL_POWER_FACTOR；
-  //   然后依次乘暴击(1+暴击伤害)、自己的增伤乘区(1+加和)、目标的易伤乘区(1+加和)。同一乘区内加算，乘区之间相乘。
+  //   然后依次乘暴击(1+暴击伤害)、自己的增伤乘区(1+加和)。目标的易伤和减伤是同一个乘区，在takeDamage里结算。同一乘区内加算，乘区之间相乘。
   // 没有任何加成时不动威力(保证没有increase、没有特性的招式和以前逐位一致，也不多抽随机数)。
   applyPower(idx, target, act) {
     const res = { chainBonus: 0, critPercent: 0 };
@@ -1822,13 +1853,10 @@ class Controller {
     }
     const attr = act.attr;
     let mult = 1.0, zoned = false;
+    if (me.hasElement(attr)) { mult *= me.elemPowerMul(attr); zoned = true; }   // 自己拥有的属性的招式：威力倍率(默认1.5)
     if (me.mods.length) {
       const dealt = me.modSum("dmg_dealt", attr);
       if (dealt !== 0) { mult *= Math.max(0, 1.0 + dealt); zoned = true; }
-    }
-    if (target >= 0 && target < this.cultivators.length && this.cultivators[target].mods.length) {
-      const taken = this.cultivators[target].modSum("dmg_taken", attr);
-      if (taken !== 0) { mult *= Math.max(0, 1.0 + taken); zoned = true; }
     }
     const rate = this.critBaseRate + (me.mods.length ? me.modSum("crit_rate", attr) : 0);
     if (rate > 0 && this.rand() < rate) {
@@ -1843,20 +1871,28 @@ class Controller {
     return res;
   }
 
-  // 护盾：所有盾一起减去同一个伤害值，穿透量=伤害-最大那块盾的强度；强度被打光的盾移除
-  applyShield(object, amount) {
+  // 护盾：所有盾一起减去同一个伤害值，穿透量=伤害-最大那块盾的有效容量；强度被打光的盾移除。
+  // 盾的五行属性覆盖这次伤害的属性时(同属性)，该盾扣除的量减半(容量翻倍，向上取整)；盾打光后剩下的伤害不再减半。
+  applyShield(object, amount, attribute) {
     if (amount <= 0 || object < 0 || object >= this.effects.length) return amount;
-    let maxStrength = 0;
-    for (const e of this.effects[object]) if (e.type === E_SHIELD) maxStrength = Math.max(maxStrength, e.strength);
-    if (maxStrength <= 0) return amount;
+    const keeps = e => elementCovers(e.mask || 0, attribute);
+    let maxCapacity = 0;
+    for (const e of this.effects[object]) if (e.type === E_SHIELD) maxCapacity = Math.max(maxCapacity, keeps(e) ? Math.round(e.strength / ELEM_SHIELD_KEEP) : e.strength);
+    if (maxCapacity <= 0) return amount;
     this.effects[object] = this.effects[object].filter(e => {
       if (e.type !== E_SHIELD) return true;
-      e.strength = Math.max(0, e.strength - amount);
+      e.strength = Math.max(0, e.strength - (keeps(e) ? Math.ceil(amount * ELEM_SHIELD_KEEP) : amount));
       return e.strength > 0;
     });
-    const absorbed = Math.min(amount, maxStrength);
+    const absorbed = Math.min(amount, maxCapacity);
     this.logs.push(logEffectAmount(-1, object, absorbed, E_SHIELD));
     return amount - absorbed;
+  }
+  // 属性抗性乘数：2/(抗性+1)；抗性=100%(默认)时恰为1
+  resistFactor(object, attribute) {
+    if (object < 0 || object >= this.cultivators.length) return 1.0;
+    const x = this.cultivators[object].resist(attribute);
+    return x === 1.0 ? 1.0 : 2.0 / (x + 1.0);
   }
 
   /* ---- 特性 ---- */
@@ -1925,22 +1961,33 @@ class Controller {
       }
       case "now_field": this.addReaction(Math.trunc(m.value)); return;
       case "clear_field": this.environment = []; return;
+      case "now_shield": {
+        // attr=五行(all)等价于五个属性齐全；none或不写attr=无属性盾；dur=-1不随回合衰减
+        let mask = 0;
+        if (m.attrMask !== MOD_ATTR_ALL) for (let a = METAL; a <= ALL; a++) if (m.attrMask & (1 << a)) mask |= elementBit(a);
+        const strength = Math.trunc(m.value);
+        if (strength <= 0) return;
+        this.logs.push(logEffectAmount(holder, -1, strength, E_SHIELD));
+        this.addEffect(holder, { type: E_SHIELD, strength, initial: strength, rounds: m.duration < 0 ? (1 << 30) : m.duration, mask });
+        return;
+      }
       case "unlock":
         this.status[holder] &= ~1;
         this.effects[holder] = this.effects[holder].filter(e => e.type !== E_LOCK);
         return;
-      default: c.mods.push(Object.assign({}, m, { cond: Object.assign({}, m.cond) }));
+      default:
+        if (m.kind === "dmg_taken" && m.value < 0) return;   // 易伤只增不减，保证受到伤害乘区不会变成0
+        c.mods.push(Object.assign({}, m, { cond: Object.assign({}, m.cond) }));
     }
   }
   removeModifiers(holder, source) {
     if (holder < 0 || holder >= this.cultivators.length) return;
     this.cultivators[holder].mods = this.cultivators[holder].mods.filter(m => m.source !== source);
   }
-  // 易伤乘区：炸弹和持续伤害也吃(招式的在出招威力里已经算过)
-  takenZone(object, attr, amount) {
-    if (object < 0 || object >= this.cultivators.length || !this.cultivators[object].mods.length) return amount;
-    const taken = this.cultivators[object].modSum("dmg_taken", attr);
-    return taken === 0 ? amount : Math.trunc(amount * Math.max(0, 1.0 + taken));
+  // 易伤(dmg_taken)特性对attr属性的加和，只增不减(负数不生效)；和减伤同一个受到伤害乘区，在takeDamage里结算
+  vulnerability(object, attr) {
+    if (object < 0 || object >= this.cultivators.length || !this.cultivators[object].mods.length) return 0;
+    return Math.max(0, this.cultivators[object].modSum("dmg_taken", attr));
   }
   // 闪避率乘区：1 + 特性加和 - 锈蚀(1)；没有特性时锈蚀就是不能闪避
   dodgeProb(attacker, defender, attr, defAgi) {
@@ -1976,7 +2023,7 @@ class Controller {
     const dot = getEffect(offend, E_DOT);
     if (dot && dot.needHit) {
       this.logs.push(logEffectAmount(subject, object, dot.instant, E_DOT));
-      this.takeDamage(subject, object, offend.effects, defend.effects, offend.attr, this.takenZone(object, offend.attr, dot.instant), true, defend.attr);
+      this.takeDamage(subject, object, offend.effects, defend.effects, offend.attr, dot.instant, true, defend.attr);
       this.addEffect(object, cloneEffect(dot));
     }
     for (const [type, apply] of [
@@ -1999,9 +2046,12 @@ class Controller {
     if (subject >= 0 && subject < this.cultivators.length && this.cultivators[subject].mods.length) fieldAdj = this.cultivators[subject].modSum("field_mult", attribute);
     if (fieldAdj !== 0) amount = Math.trunc(amount * Math.max(0, (this.findReaction(E_BURN) ? 1.5 : 1.0) + fieldAdj));
     else if (this.findReaction(E_BURN)) amount = Math.trunc(amount * 1.5);
-    const reduce = defend.find(e => e.type === E_REDUCE);
-    if (reduce) amount = Math.trunc(amount * (1 - ratioOf(reduce, attribute)));
-    amount = this.applyShield(object, amount);   // 护盾：同时保护武力和健康，先于物理转换/反弹
+    // 受到伤害乘区：减伤(海龙金身)和易伤是同一个乘区，乘区 = 1 + 易伤加和 - 减伤比例；易伤只增不减，所以乘区至少是 1 - 减伤比例
+    const reduce = defend.find(e => e.type === E_REDUCE), vuln = this.vulnerability(object, attribute);
+    if (vuln !== 0) amount = Math.trunc(amount * Math.max(0, 1 - (reduce ? ratioOf(reduce, attribute) : 0) + vuln));
+    else if (reduce) amount = Math.trunc(amount * (1 - ratioOf(reduce, attribute)));
+    { const f = this.resistFactor(object, attribute); if (f !== 1.0) amount = Math.round(amount * f); }   // 属性抗性：伤害x2/(抗性+1)，在护盾之前
+    amount = this.applyShield(object, amount, attribute);   // 护盾：同时保护武力和健康，先于物理转换/反弹
 
     let physicalRatio = 0;
     const physical = offend.find(e => e.type === E_PHYSICAL);
@@ -2044,10 +2094,12 @@ class Controller {
   takeDamageSplit(subject, object, offend, defend, attribute, atk, hp, log = true, depth = 0) {
     // 反弹回来的伤害是从已经结算过(含灼烧加成)的伤害按比例算出来的，不再乘一次灼烧；并限制反弹的递归深度
     if (depth >= 8) return;
-    const reduce = defend.find(e => e.type === E_REDUCE);
-    if (reduce) { const keep = 1 - ratioOf(reduce, attribute); atk = Math.trunc(atk * keep); hp = Math.trunc(hp * keep); }
+    const reduce = defend.find(e => e.type === E_REDUCE), vuln = this.vulnerability(object, attribute);   // 同一个受到伤害乘区：1 + 易伤加和 - 减伤比例
+    if (vuln !== 0) { const keep = Math.max(0, 1 - (reduce ? ratioOf(reduce, attribute) : 0) + vuln); atk = Math.trunc(atk * keep); hp = Math.trunc(hp * keep); }
+    else if (reduce) { const keep = 1 - ratioOf(reduce, attribute); atk = Math.trunc(atk * keep); hp = Math.trunc(hp * keep); }
+    { const f = this.resistFactor(object, attribute); if (f !== 1.0) { atk = Math.round(atk * f); hp = Math.round(hp * f); } }
     if (atk + hp > 0) {   // 护盾：穿透量按武力/物理原来的比例分摊
-      const total = atk + hp, through = this.applyShield(object, total);
+      const total = atk + hp, through = this.applyShield(object, total, attribute);
       if (through !== total) { atk = Math.trunc(atk * (through / total)); hp = through - atk; }
     }
 
@@ -2101,6 +2153,7 @@ const STANDARD = { hp: 25800, atk: 38900, mp: 24800, recover: 619, agi: 10, bomb
 const $ = id => document.getElementById(id);
 
 const state = {
+  elements: [0, 0],   // 双方的五行属性掩码(PvE)，开新局时带过去；联机PvP不用
   defs: [], families: [],        // families: {name, firstAction, formCount}
   player: null, enemy: null, controller: null,
   phase: "select",              // select | result
@@ -2140,13 +2193,16 @@ const MOD_HELP = [
   ["mp_max", "真气上限增/减（%=按基础上限）；真气超过2倍上限就爆体，阈值跟着上限走"],
   ["acc_ratio", "单次积攒比例调整（基础0.2）"], ["bomb_power", "炸弹威力增/减（炸弹自己的乘区：1+加和，0.5=+50%）"],
   ["base_power", "x属性基础威力增/减（加算进基础伤害；%=按该招基础威力）"], ["dmg_dealt", "自己造成x属性伤害增/减（增伤乘区，0.2=+20%）"],
-  ["dmg_taken", "受到x属性伤害增/减（易伤乘区，负数=减伤；出招时按目标身上的值算）"], ["field_mult", "场地x属性伤害倍率增/减（以1为基准，灼烧本身是1.5）"],
+  ["dmg_taken", "受到x属性伤害增加（易伤，只增不减，负数无效）；和减伤效果(海龙金身)同一个乘区：1+易伤加和−减伤比例，最后扣血时结算"], ["field_mult", "场地x属性伤害倍率增/减（以1为基准，灼烧本身是1.5）"],
   ["crit_rate crit_dmg", "暴击率/暴击伤害增/减（基础值在上面设）"], ["dodge", "闪避率乘区：1+加和−锈蚀(1)，最终闪避率=原来的×这个"],
   ["hit", "命中率乘区：1+加和−扬尘(0.5)，够1必中"], ["cost", "x属性消耗调整（0.2=+20%）"],
   ["deal_mp deal_atk deal_hp", "自己造成x属性伤害时回复(+)/扣除(-)；%=按这次伤害量"], ["take_mp take_atk take_hp", "自己受到x属性伤害时回复/扣除"],
   ["rebound", "受到x属性伤害的反弹比例（加到反弹效果上，夹到0~1）"], ["immune", "免疫x属性（伤害变0，数值随便写如1）"],
   ["now_mp now_atk now_hp now_agi", "立即增/减（只在添加时执行一次，没有持续回合）"], ["now_field", "立即添加场地效果：数值11灼烧 12锈蚀 13扬尘 14泥沼"],
   ["clear_field", "立即清除全部场地效果"], ["unlock", "立即解除禁锢"],
+  ["now_shield", "立即添加护盾：数值=强度，attr=护盾属性(金木水火土可多选，all=五行齐全，不写=无属性)，dur=持续回合(-1=不衰减)；同属性伤害扣盾量减半"],
+  ["resist", "对x属性(金木水火土)的抗性增/减，数值是增量(0.5=+50%)；基础：拥有该属性150%，否则100%；实际伤害=伤害x2/(抗性+1)，抗性最低0(伤害翻倍)；五行伤害要五个属性都拥有才算，取五个抗性的平均值"],
+  ["elem_power", "自己拥有的属性的招式的威力倍率增/减（基础1.5，增量，最低0，无上限；attr限定招式属性）"],
 ];
 function buildTraitHelp() {
   const rows = MOD_HELP.map(([k, d]) => `<tr><td>${k}</td><td>${d}</td></tr>`).join("");
@@ -2190,6 +2246,7 @@ function newBattle() {
   const [c0, c1] = state.cfg;
   state.player = new Cultivator(state.names[0], state.defs, c0.hp, c0.atk, c0.mp, c0.agi, c0.recover, c0.agiLoss, c0.agiRecover, c0.bombMultiplier);
   state.enemy = new Cultivator(state.names[1], state.defs, c1.hp, c1.atk, c1.mp, c1.agi, c1.recover, c1.agiLoss, c1.agiRecover, c1.bombMultiplier);
+  state.player.setElements(state.elements[0]); state.enemy.setElements(state.elements[1]);   // 五行属性开关(PvE)；联机PvP强制无属性
   state.controller = new Controller([state.player, state.enemy]);
   { const [r, d] = critFromPanel(); state.controller.setCritBase(r, d); }
   { const errs = addTraitsFromPanel(state.controller); $("traitMsg").textContent = errs.length ? "无法解析：" + errs.join(" ；") : ""; }
@@ -2392,11 +2449,20 @@ function buildStatus(idx) {
       <label title="每回合自动恢复的AGI">+/回合<input type="text" data-f="agiRecover" style="width:2.6em"></label>
       <label title="炸弹积攒倍率：按阶位给定(3-1 1.0，3-2 1.2，3-3 1.5，3-4 1.9，3-5 2.4，3-6 3.0，4-1 3.7，4-2 4.5，4-3 5.6，4-4 7.0，4-5 8.5，4-6 10)">炸弹倍率<input type="text" data-f="bombMultiplier" style="width:2.6em"></label>
       <label>回复 <input type="text" data-f="recover"></label>
-      <label>炸弹 <input type="text" data-f="bomb"></label></div>
+      <label>炸弹 <input type="text" data-f="bomb"></label>
+      <span class="elemRow" title="玩家五行属性(可任意组合)：拥有的属性的招式威力x1.5、对该属性伤害抗性150%、出的护盾带这些属性(同属性伤害扣盾减半)；五行属性的招式/伤害要五个齐全才算">五行${["金", "木", "水", "火", "土"].map((n, i) => `<label><input type="checkbox" data-e="${i + 1}">${n}</label>`).join("")}</span></div>
     ${[["mp", "MP"], ["atk", "ATK"], ["hp", "HP"]].map(([k, label]) => `
     <div class="barRow"><div class="bar"><div class="fill ${k}" data-fill="${k}"></div></div>
       <div class="val"><b>${label}</b><input type="text" data-f="cur-${k}"> / <input type="text" data-f="max-${k}"></div></div>`).join("")}`;
-  root.querySelectorAll("input").forEach(input => {
+  root.querySelectorAll("input[data-e]").forEach(box => {
+    box.addEventListener("change", () => {
+      let mask = 0;
+      root.querySelectorAll("input[data-e]").forEach(b => { if (b.checked) mask |= 1 << +b.dataset.e; });
+      state.elements[idx] = mask;
+      cultOf(idx).setElements(mask);
+    });
+  });
+  root.querySelectorAll("input:not([data-e])").forEach(input => {
     input.addEventListener("change", () => onStatusEdit(idx, input));
     input.addEventListener("keydown", ev => { if (ev.key === "Enter") input.blur(); });
   });
@@ -2425,6 +2491,7 @@ function refreshStatus() {
   [0, 1].forEach(idx => {
     const c = cultOf(idx), root = $("status" + idx);
     root.querySelector(".name").textContent = c.name;
+    root.querySelectorAll("input[data-e]").forEach(b => { b.checked = (c.elements & (1 << +b.dataset.e)) !== 0; });
     const set = (f, v) => { const el = root.querySelector(`[data-f="${f}"]`); if (el && document.activeElement !== el) el.value = v; };
     set("cur-agi", +c.agi.toFixed(1)); set("max-agi", c.getMaxAgi()); set("agiLoss", c.agiLoss); set("agiRecover", c.agiRecover); set("bombMultiplier", c.bombMultiplier); set("recover", c.recover); set("bomb", c.bomb);
     for (const [k, cur, max] of [["mp", c.currentMP, c.getMaxMP()], ["atk", c.currentATK, c.maxATK], ["hp", c.currentHP, c.maxHP]]) {
@@ -2537,7 +2604,7 @@ function effectLines(def) {
       case E_RECOVER: lines.push(timedText("回复武力", e)); break;
       case E_CURE: lines.push(timedText("回复健康", e)); break;
       case E_INCREASE: lines.push("连招增伤：连着上一回合同家族的前一式出招(中间不能积攒、放炸弹、跳过或被禁锢)，每连续一步威力多" + pct(e.ratio) + "，不要求命中"); break;
-      case E_SHIELD: lines.push("护盾：出招时给自己加一块" + e.initial + "点的护盾，持续" + e.rounds + "回合；同时保护武力和健康，多块盾同时存在，受伤时一起减盾量，盾都被打穿后才扣武力/健康"); break;
+      case E_SHIELD: lines.push("护盾：出招时给自己加一块" + e.initial + "点的护盾，持续" + e.rounds + "回合；同时保护武力和健康，多块盾同时存在，受伤时一起减盾量，盾都被打穿后才扣武力/健康；盾带出招者的五行属性，受到同属性伤害时扣盾量减半(盾打光后剩下的伤害不减半)"); break;
     }
   }
   return lines;

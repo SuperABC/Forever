@@ -476,6 +476,38 @@ void WxdjPuzzle::ResolveTurn(shared_ptr<Action> playerAction) {
 	}
 }
 
+// 把"金木水火土"的任意组合转成五行属性掩码
+static unsigned ParseElements(const string& text) {
+	unsigned mask = 0;
+	if (text.find("金") != string::npos) mask |= ElementBit(ATTRIBUTE_METAL);
+	if (text.find("木") != string::npos) mask |= ElementBit(ATTRIBUTE_WOOD);
+	if (text.find("水") != string::npos) mask |= ElementBit(ATTRIBUTE_WATER);
+	if (text.find("火") != string::npos) mask |= ElementBit(ATTRIBUTE_FIRE);
+	if (text.find("土") != string::npos) mask |= ElementBit(ATTRIBUTE_EARTH);
+	return mask;
+}
+
+// 五行属性掩码转成显示文字，如"金木"；无属性返回空串
+static string ElementsText(unsigned mask) {
+	string text;
+	if (mask & ElementBit(ATTRIBUTE_METAL)) text += "金";
+	if (mask & ElementBit(ATTRIBUTE_WOOD)) text += "木";
+	if (mask & ElementBit(ATTRIBUTE_WATER)) text += "水";
+	if (mask & ElementBit(ATTRIBUTE_FIRE)) text += "火";
+	if (mask & ElementBit(ATTRIBUTE_EARTH)) text += "土";
+	return text;
+}
+
+void WxdjPuzzle::SetParam(const string& param) {
+	playerElements = enemyElements = 0;
+	istringstream iss(param);
+	string token;
+	while (iss >> token) {
+		if (token.rfind("elem=", 0) == 0) playerElements = ParseElements(token.substr(5));
+		else if (token.rfind("enemy_elem=", 0) == 0) enemyElements = ParseElements(token.substr(11));
+	}
+}
+
 void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	canvasW = canvas->GetWidth();
 	canvasH = canvas->GetHeight();
@@ -528,6 +560,8 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	try {
 		player = make_shared<Cultivator>("玩家", actionPath, playerMaxHP, playerMaxATK, playerMaxMP, STANDARD_AGI, STANDARD_RECOVER);
 		enemy = make_shared<Cultivator>("售货员", actionPath, enemyMaxHP, enemyMaxATK, enemyMaxMP, STANDARD_AGI, STANDARD_RECOVER);
+		player->SetElements(playerElements);
+		enemy->SetElements(enemyElements);
 	}
 	catch (const std::exception&) {
 		player.reset();
@@ -659,7 +693,9 @@ void WxdjPuzzle::DrawStatusBar(Canvas* canvas, const shared_ptr<Cultivator>& cul
 	canvas->SetFontSize(nameFontSize);
 	// 名字后面写敏捷：当前/上限(跳过一次损失敏捷、每回合恢复，所以会变)
 	ostringstream agiText;
-	agiText << cultivator->GetName() << "    AGI " << fixed << setprecision(1) << cultivator->GetAGI() << "/" << cultivator->GetMaxAGI();
+	agiText << cultivator->GetName();
+	if (string elem = ElementsText(cultivator->GetElements()); !elem.empty()) agiText << "[" << elem << "]"; // 五行属性
+	agiText << "    AGI " << fixed << setprecision(1) << cultivator->GetAGI() << "/" << cultivator->GetMaxAGI();
 	canvas->PutString(agiText.str(), x, y);
 
 	int barH = max(12, statusBarH / 6);
@@ -949,7 +985,7 @@ vector<string> WxdjPuzzle::EffectLines(int actionIdx) const {
 		}
 		case EFFECT_SHIELD: {
 			auto e = static_pointer_cast<ShieldEffect>(effect);
-			lines.push_back("护盾：出招时给自己加一块" + to_string(e->Initial()) + "点的护盾，持续" + to_string(e->RemainingRounds()) + "回合；同时保护武力和健康，多块盾同时存在，受伤时一起减盾量，盾都被打穿后才扣武力/健康");
+			lines.push_back("护盾：出招时给自己加一块" + to_string(e->Initial()) + "点的护盾，持续" + to_string(e->RemainingRounds()) + "回合；同时保护武力和健康，多块盾同时存在，受伤时一起减盾量，盾都被打穿后才扣武力/健康；盾带出招者的五行属性，受到同属性伤害时扣盾量减半(盾打光后剩下的伤害不减半)");
 			break;
 		}
 		default:

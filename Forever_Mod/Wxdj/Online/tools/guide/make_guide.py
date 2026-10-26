@@ -83,6 +83,7 @@ def bar(label, color, pct, val):
     return f'''<div class="rbar"><span class="rl">{label}</span><div class="rtrack"><div class="rfill" style="width:{pct}%;background:{color}"></div></div><span class="rv">{val}</span></div>'''
 
 
+PVE = open(os.path.join(HERE, 'pve_section.html'), encoding='utf-8').read()   # PvE 页：比 PvP 多出来的机制
 DEMO = open(os.path.join(HERE, 'demo_section.html'), encoding='utf-8').read()   # 末尾的动画示范(样式+HTML+脚本)
 
 HTML = f'''<!doctype html>
@@ -113,7 +114,14 @@ HTML = f'''<!doctype html>
   nav.toc .in {{ max-width: 1040px; margin: 0 auto; padding: 8px 16px; display: flex; gap: 6px 8px; flex-wrap: wrap; font-size: 14px; }}
   nav.toc a {{ text-decoration: none; color: var(--ink-soft); padding: 2px 6px; border-radius: 6px; }}
   nav.toc a:hover {{ color: var(--ink); background: var(--panel2); }}
-  section {{ margin-top: 54px; scroll-margin-top: 56px; }}
+  section {{ margin-top: 54px; scroll-margin-top: 104px; }}
+  /* PvP / PvE 切换 */
+  nav.toc .tabs {{ padding-bottom: 0; gap: 8px; padding-left: 130px; }}   /* 让出左上角悬浮的"返回主界面"按钮 */
+  .tabbtn {{ font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; border: 1px solid var(--line); border-bottom: 0; background: var(--panel); color: var(--ink-soft); padding: 5px 18px; border-radius: 10px 10px 0 0; }}
+  .tabbtn:hover {{ color: var(--ink); }}
+  .tabbtn[aria-selected="true"] {{ background: var(--gold); color: #1b1608; border-color: var(--gold); }}
+  .pane[hidden], nav.toc .links[hidden] {{ display: none; }}
+  nav.toc .links {{ border-top: 1px solid var(--line); }}
   h2 {{ font-size: 28px; margin: 0 0 6px; display: flex; align-items: center; gap: 12px; }}
   h2 .no {{ display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--gold); color: #1b1608; font-size: 20px; font-weight: 800; }}
   h3 {{ font-size: 20px; margin: 26px 0 8px; }}
@@ -189,6 +197,7 @@ HTML = f'''<!doctype html>
   .kv dt {{ color: var(--ink-soft); }}
   .kv dd {{ margin: 0; }}
   footer {{ margin-top: 70px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 14px; }}
+  @media (max-width: 640px) {{ section {{ scroll-margin-top: 150px; }} }}
   @media (max-width: 640px) {{ .ui .body {{ grid-template-columns: 1fr; }} ol.legend {{ columns: 1; }} }}
 
   /* ---- 联机站点：返回主界面 ---- */
@@ -235,13 +244,23 @@ HTML = f'''<!doctype html>
   </svg>
 </header>
 
-<nav class="toc"><div class="in">
+<nav class="toc">
+<div class="in tabs" role="tablist">
+  <button class="tabbtn" id="tab-pvp" role="tab" data-pane="pvp" aria-selected="true">PvP 对战</button>
+  <button class="tabbtn" id="tab-pve" role="tab" data-pane="pve" aria-selected="false">PvE 新增机制</button>
+</div>
+<div class="in links" data-for="pvp">
   <a href="#quick">一分钟看懂</a><a href="#ui">界面</a><a href="#res">资源</a><a href="#round">回合流程</a><a href="#acts">五种操作</a>
   <a href="#clash">对撞与闪避</a><a href="#wuxing">五行克制</a><a href="#field">场地</a><a href="#fams">招式图鉴</a><a href="#bomb">炸弹</a>
   <a href="#adv">进阶</a><a href="#tips">新手建议</a><a href="#stage">标准属性</a><a href="#demo">动画示范</a>
-</div></nav>
+</div>
+<div class="in links" data-for="pve" hidden>
+  <a href="#pve-intro">总览</a><a href="#pve-elem">五行属性</a><a href="#pve-resist">抗性</a><a href="#pve-shield">护盾</a><a href="#pve-crit">暴击</a><a href="#pve-trait">特性</a><a href="#pve-order">结算顺序</a><a href="#pve-tips">建议</a>
+</div>
+</nav>
 
 <div class="wrap">
+<div class="pane" id="pane-pvp">
 
 <section id="quick">
   <h2><span class="no">1</span>一分钟看懂</h2>
@@ -253,6 +272,7 @@ HTML = f'''<!doctype html>
     <li><div><b>招式分成 15 个家族，每个家族有 20 式：</b>每个家族有自己的特殊效果（穿透、禁锢、反弹、回复……），式数越大，威力越高、消耗越多、效果越强。</div></li>
     <li><div><b>除了出招，还可以「跳过」和用「真气炸弹」：</b>跳过会让你这回合的敏捷翻倍，很可能躲开对手的攻击；真气炸弹要先花几回合积攒，放出去威力惊人，但你自己也会受伤。</div></li>
   </ol>
+  <div class="note"><b>这一页讲的是 PvP 对战。</b>人机/剧情里的 PvE 在这些规则之上多了五行属性、抗性、暴击、特性等机制，等你熟悉了 PvP，再点上方的 <a href="#pve">PvE 新增机制</a> 去了解。</div>
 </section>
 
 <section id="ui">
@@ -607,6 +627,11 @@ HTML = f'''<!doctype html>
 </section>
 
 {DEMO}
+</div>
+
+<div class="pane" id="pane-pve" hidden>
+{PVE}
+</div>
 
 <footer>
   <b>关于数值：</b>游戏里各招式的消耗、威力、效果数值仍在持续平衡调整中，本指南讲的是规则和思路，具体数字以游戏里显示的为准。<br>
@@ -614,6 +639,33 @@ HTML = f'''<!doctype html>
 </footer>
 
 </div>
+
+<script>
+// PvP / PvE 两页在同一个文件里切换；#pve / #pvp 或任何一页里的锚点都能直接打开对应那一页
+(function () {{
+  var panes = {{ pvp: document.getElementById('pane-pvp'), pve: document.getElementById('pane-pve') }};
+  var links = document.querySelectorAll('nav.toc .links');
+  var tabs = document.querySelectorAll('.tabbtn');
+  function show(name) {{
+    for (var k in panes) panes[k].hidden = k !== name;
+    links.forEach(function (l) {{ l.hidden = l.dataset['for'] !== name; }});
+    tabs.forEach(function (t) {{ t.setAttribute('aria-selected', String(t.dataset.pane === name)); }});
+  }}
+  function fromHash() {{
+    var id = decodeURIComponent(location.hash.slice(1));
+    if (id === 'pvp' || id === 'pve') {{ show(id); window.scrollTo(0, 0); return true; }}
+    var el = id && document.getElementById(id);
+    if (!el) return false;
+    for (var k in panes) if (panes[k].contains(el)) {{ show(k); el.scrollIntoView(); return true; }}
+    return false;
+  }}
+  tabs.forEach(function (t) {{
+    t.addEventListener('click', function () {{ show(t.dataset.pane); history.replaceState(null, '', '#' + t.dataset.pane); window.scrollTo(0, 0); }});
+  }});
+  window.addEventListener('hashchange', fromHash);
+  if (!fromHash()) show('pvp');
+}})();
+</script>
 </body>
 </html>
 '''

@@ -28,7 +28,7 @@ enum MOD_KIND {
 	// 招式乘区(value是小数，0.2=+20%，同乘区内加算、乘区之间相乘)
 	MOD_BASE_POWER,     // x属性基础威力增减(加算进基础伤害；percent=按该招基础威力的百分比)
 	MOD_DMG_DEALT,      // 自己造成x属性伤害增/减(增伤乘区)
-	MOD_DMG_TAKEN,      // 受到x属性伤害增/减(易伤乘区；负值=减伤)，按出招时目标身上的值算
+	MOD_DMG_TAKEN,      // 受到x属性伤害增加(易伤，只增不减：负数无效)；和减伤效果(海龙金身)同一个乘区：1+易伤加和-减伤比例，在TakeDamage里结算
 	MOD_FIELD_MULT,     // 场地x属性伤害倍率增/减(以1为基准加减，灼烧本身是1.5)
 	MOD_CRIT_RATE,      // 暴击率增/减
 	MOD_CRIT_DMG,       // 暴击伤害增/减
@@ -45,6 +45,10 @@ enum MOD_KIND {
 	MOD_NOW_FIELD,      // 立即添加场地效果：value=EFFECT_BURN/RUST/DUST/MUD
 	MOD_CLEAR_FIELD,    // 立即清除全部场地效果
 	MOD_UNLOCK,         // 立即解除禁锢
+	MOD_NOW_SHIELD,     // 立即添加护盾：value=强度，attr=护盾属性(金木水火土各一位，all=五位齐全，none=无属性)，dur=持续回合(-1=不衰减)
+	// 玩家五行属性(Cultivator::SetElements)相关，都是增量，没有时走默认值
+	MOD_RESIST,         // 对x属性的抗性增/减(基础：拥有该属性1.5，否则1.0；夹到>=0)；实际伤害=伤害x2/(抗性+1)
+	MOD_ELEM_POWER,     // 自己拥有的属性的招式的威力倍率增/减(基础1.5；夹到>=0)，attr限定招式属性
 	MOD_KIND_COUNT
 };
 

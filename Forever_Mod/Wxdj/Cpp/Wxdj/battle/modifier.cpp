@@ -17,7 +17,8 @@ static const char* const KIND_NAMES[MOD_KIND_COUNT] = {
 	"acc_ratio", "bomb_power",
 	"base_power", "dmg_dealt", "dmg_taken", "field_mult", "crit_rate", "crit_dmg", "dodge", "hit", "cost",
 	"deal_mp", "deal_atk", "deal_hp", "take_mp", "take_atk", "take_hp", "rebound", "immune",
-	"now_mp", "now_atk", "now_hp", "now_agi", "now_field", "clear_field", "unlock",
+	"now_mp", "now_atk", "now_hp", "now_agi", "now_field", "clear_field", "unlock", "now_shield",
+	"resist", "elem_power",
 };
 
 const char* ModKindName(MOD_KIND kind) {
@@ -25,6 +26,7 @@ const char* ModKindName(MOD_KIND kind) {
 }
 
 void ModifierSet::Add(const Modifier& m) {
+	if (m.kind == MOD_DMG_TAKEN && m.value < 0) return;   // 易伤只增不减：减伤只来自减伤效果，保证受到伤害乘区不会变成0
 	mods.push_back(m);
 }
 
@@ -127,6 +129,7 @@ bool ParseModifier(const string& line, Modifier& out) {
 		char* end = nullptr;
 		m.value = strtod(token.c_str(), &end);
 		if (end == token.c_str() || *end != '\0') return false;
+		if (m.kind == MOD_DMG_TAKEN && m.value < 0) return false;   // 易伤只增不减
 		token.clear();
 	}
 	auto handle = [&](const string& t) -> bool {

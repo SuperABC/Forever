@@ -57,6 +57,7 @@ function newBattle(seed) {
   const nameOf = s => (s === state.seat ? "你" : "对手");
   state.cults = [0, 1].map(s => new Cultivator(nameOf(s), state.defs, STANDARD.hp, STANDARD.atk, STANDARD.mp, STANDARD.agi,
     STANDARD.recover, STANDARD.agiLoss, STANDARD.agiRecover, STANDARD.bombMultiplier));
+  state.cults.forEach(c => c.setElements(0));   // PvP强制双方无属性：五行属性/抗性/护盾半价都不触发，规则和以前完全一样
   state.controller = new Controller(state.cults);
   state.controller.rand = mulberry32(seed);
   state.round = 1; state.result = 0; state.lastEnv = []; state.roundLogs = [];

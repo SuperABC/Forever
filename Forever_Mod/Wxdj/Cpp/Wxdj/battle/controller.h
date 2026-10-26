@@ -185,12 +185,14 @@ private:
 	void ExecModifiers(STAGE_TYPE stage);
 	void ApplyTraitDelta(int holder, MOD_KIND resourceKind, int delta, const std::string& source);
 	void ApplyDamageTriggers(int subject, int object, ATTRIBUTE_TYPE attribute, int damage);
-	int TakenZone(int object, ATTRIBUTE_TYPE attribute, int amount);   // 易伤乘区：炸弹和持续伤害也吃(招式的在出招威力里已经算过)
+	double Vulnerability(int object, ATTRIBUTE_TYPE attribute) const;   // 易伤加和(只增不减)：和减伤同一个受到伤害乘区，在TakeDamage里结算
 	double DodgeProb(int attacker, int defender, ATTRIBUTE_TYPE attribute, float defenderAGI);
 	bool RollHit(int attacker, ATTRIBUTE_TYPE attribute);
 
 	// 护盾：先过护盾再扣武力/健康，返回穿透护盾的伤害量
-	int ApplyShield(int object, int amount);
+	int ApplyShield(int object, int amount, ATTRIBUTE_TYPE attribute);
+	// 属性抗性乘数：2/(抗性+1)；抗性=100%(默认)时恰为1，调用方可跳过
+	double ResistFactor(int object, ATTRIBUTE_TYPE attribute) const;
 
 	// 检查属性克制关系
 	bool CheckCounter(ATTRIBUTE_TYPE a1, ATTRIBUTE_TYPE a2);

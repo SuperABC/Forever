@@ -175,7 +175,7 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				int amount = dynamic_pointer_cast<DotEffect>(dot)->DotInstant();
 				logs.emplace_back(i, target, amount, EFFECT_DOT);
 				TakeDamage(i, target, act->GetEffects(), actions[target].first->GetEffects(),
-					act->GetAttribute(), TakenZone(target, act->GetAttribute(), amount), true, actions[target].first->GetAttribute());
+					act->GetAttribute(), amount, true, actions[target].first->GetAttribute());
 				AddEffect(target, make_shared<DotEffect>(*dynamic_pointer_cast<DotEffect>(dot).get()));
 			}
 
@@ -205,7 +205,8 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 
 			auto shield = act->GetEffect(EFFECT_SHIELD);
 			if (shield) {
-				auto s = make_shared<ShieldEffect>(*dynamic_pointer_cast<ShieldEffect>(shield).get());
+				auto s = make_shared<ShieldEffect>(dynamic_pointer_cast<ShieldEffect>(shield)->Initial(),
+					dynamic_pointer_cast<ShieldEffect>(shield)->RemainingRounds(), cultivators[i]->GetElements());   // 盾继承自己的五行属性
 				logs.emplace_back(i, -1, s->Strength(), EFFECT_SHIELD);
 				AddEffect(i, s);
 			}
@@ -256,7 +257,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				float powerEnemy = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_PASSIVE);
 				float powerSelf = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
 				TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-					act_i->GetAttribute(), TakenZone(j, act_i->GetAttribute(), (int)powerEnemy), true, act_j->GetAttribute());
+					act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
 				TakeDamage(i, i, act_i->GetEffects(), act_i->GetEffects(),
 					act_i->GetAttribute(), (int)powerSelf);
 			}
@@ -273,7 +274,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					float powerEnemy = (float)(act_i->GetPower() - act_j->GetPower());
 					powerEnemy *= (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_ACTIVE);
 					TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
-						act_i->GetAttribute(), TakenZone(j, act_i->GetAttribute(), (int)powerEnemy), true, act_j->GetAttribute());
+						act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
 				}
 			}
 		}
@@ -495,7 +496,7 @@ void Controller::ExecEffect(STAGE_TYPE stage) {
 	ExecModifiers(stage);
 	for (int i = 0; i < (int)effects.size(); ++i) {
 		for (int j = 0; j < (int)effects[i].size(); ++j) {
-			auto& eff = effects[i][j];
+			auto eff = effects[i][j];   // 按值持有：持续伤害结算会让护盾被打光而从effects[i]里移除，引用/下标会失效
 			switch (eff->GetType()) {
 			case EFFECT_LOCK:
 				if (stage == STAGE_START) {
@@ -509,7 +510,9 @@ void Controller::ExecEffect(STAGE_TYPE stage) {
 					int dmg = dynamic_pointer_cast<DotEffect>(eff)->DotOnce();
 					if (dmg != 0) {
 						logs.emplace_back(-1, i, dmg, EFFECT_DOT);
-						TakeDamage(-1, i, {}, {}, ATTRIBUTE_NONE, TakenZone(i, ATTRIBUTE_NONE, dmg), false);
+						TakeDamage(-1, i, {}, {}, ATTRIBUTE_NONE, dmg, false);
+						auto self = find(effects[i].begin(), effects[i].end(), eff);   // 护盾被移除后本效果的下标变了
+						if (self != effects[i].end()) j = static_cast<int>(self - effects[i].begin());
 					}
 					if (dynamic_pointer_cast<DotEffect>(eff)->UseUp()) {
 						effects[i].erase(effects[i].begin() + j);
@@ -658,7 +661,7 @@ void Controller::HitSuccess(int subject, int object, shared_ptr<Action> offend,
 		int amount = dynamic_pointer_cast<DotEffect>(dot)->DotInstant();
 		if (log) logs.emplace_back(subject, object, amount, EFFECT_DOT);
 		TakeDamage(subject, object, offend->GetEffects(), defend->GetEffects(),
-			offend->GetAttribute(), TakenZone(object, offend->GetAttribute(), amount), true, defend->GetAttribute());
+			offend->GetAttribute(), amount, true, defend->GetAttribute());
 		AddEffect(object, make_shared<DotEffect>(*dynamic_pointer_cast<DotEffect>(dot).get()));
 	}
 
@@ -708,14 +711,23 @@ void Controller::TakeDamage(int subject, int object,
 	if (fieldAdj != 0) amount = static_cast<int>(amount * max(0.0, (FindReaction(EFFECT_BURN) ? 1.5 : 1.0) + fieldAdj));
 	else if (FindReaction(EFFECT_BURN)) amount = static_cast<int>(amount * 1.5f);
 
+	// 受到伤害乘区：减伤(海龙金身)和易伤是同一个乘区，乘区 = 1 + 易伤加和 - 减伤比例；易伤只增不减，所以乘区至少是 1 - 减伤比例
 	auto reduce = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REDUCE; });
-	if (reduce != defend.end()) {
+	double vuln = Vulnerability(object, attribute);
+	if (vuln != 0) {
+		float ratio = reduce != defend.end() ? dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute) : 0.f;
+		amount = static_cast<int>(amount * max(0.0, 1.0 - ratio + vuln));
+	}
+	else if (reduce != defend.end()) {
 		amount = static_cast<int>(amount * (1.0f - dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute)));
 	}
 
+	// 属性抗性：实际伤害=伤害x2/(抗性+1)，在护盾之前结算
+	if (double f = ResistFactor(object, attribute); f != 1.0) amount = static_cast<int>(lround(amount * f));
+
 	// 护盾：同时保护武力和健康，先于物理转换/反弹
-	amount = ApplyShield(object, amount);
+	amount = ApplyShield(object, amount, attribute);
 
 	// 物理效果：按对方这一招的属性，有一部分伤害转换成物理伤害(扣健康值)，剩余的仍是招式伤害(扣武力值)
 	float physicalRatio = 0.f;
@@ -780,16 +792,28 @@ void Controller::TakeDamage(int subject, int object,
 
 	auto reduce = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REDUCE; });
-	if (reduce != defend.end()) {
+	double vuln = Vulnerability(object, attribute);   // 同一个受到伤害乘区：1 + 易伤加和 - 减伤比例
+	if (vuln != 0) {
+		float ratio = reduce != defend.end() ? dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute) : 0.f;
+		double keep = max(0.0, 1.0 - ratio + vuln);
+		atk = static_cast<int>(atk * keep);
+		hp = static_cast<int>(hp * keep);
+	}
+	else if (reduce != defend.end()) {
 		float keep = 1.0f - dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute);
 		atk = static_cast<int>(atk * keep);
 		hp = static_cast<int>(hp * keep);
 	}
 
+	if (double f = ResistFactor(object, attribute); f != 1.0) {
+		atk = static_cast<int>(lround(atk * f));
+		hp = static_cast<int>(lround(hp * f));
+	}
+
 	// 护盾：穿透量按武力/健康原来的比例分摊
 	if (atk + hp > 0) {
 		int total = atk + hp;
-		int through = ApplyShield(object, total);
+		int through = ApplyShield(object, total, attribute);
 		if (through != total) {
 			atk = static_cast<int>(atk * (static_cast<double>(through) / total));
 			hp = through - atk;
@@ -832,7 +856,7 @@ void Controller::TakeDamage(int subject, int object,
 
 // 有效威力：本回合出的招(单招=1个，双招=2个基础招式)各自按"家族+式号"查连招链，再乘上特性的各个乘区。
 //   单个基础招式的威力 = (基础威力 + 特性的基础威力加成) x (1 + 增伤比例 x 连续步数)；双招再乘DUAL_POWER_FACTOR；
-//   然后依次乘暴击(1+暴击伤害)、自己的增伤乘区(1+加和)、目标的易伤乘区(1+加和)。同一乘区内加算，乘区之间相乘。
+//   然后依次乘暴击(1+暴击伤害)、自己的增伤乘区(1+加和)。目标的易伤和减伤是同一个乘区，在TakeDamage里结算。同一乘区内加算，乘区之间相乘。
 // 没有任何加成时不动威力(保证没有increase、没有特性的招式和以前逐位一致，也不多抽随机数)。
 void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, int& chainBonus, int& critPercent) {
 	chainBonus = 0;
@@ -882,13 +906,14 @@ void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, 
 	ATTRIBUTE_TYPE attr = act->GetAttribute();
 	double mult = 1.0;
 	bool zoned = false;
+	// 自己拥有的属性的招式：威力倍率(默认1.5)；无属性招式/没有这个属性的玩家不触发
+	if (me.HasElement(attr)) {
+		mult *= me.ElemPowerMul(attr);
+		zoned = true;
+	}
 	if (!me.Mods().All().empty()) {
 		double dealt = me.Mods().Sum(MOD_DMG_DEALT, attr, me);
 		if (dealt != 0) { mult *= max(0.0, 1.0 + dealt); zoned = true; }
-	}
-	if (target >= 0 && target < static_cast<int>(cultivators.size()) && !cultivators[target]->Mods().All().empty()) {
-		double taken = cultivators[target]->Mods().Sum(MOD_DMG_TAKEN, attr, *cultivators[target]);
-		if (taken != 0) { mult *= max(0.0, 1.0 + taken); zoned = true; }
 	}
 	double rate = critBaseRate + (me.Mods().All().empty() ? 0.0 : me.Mods().Sum(MOD_CRIT_RATE, attr, me));
 	if (rate > 0) {
@@ -909,25 +934,37 @@ void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, 
 	act->SetPower(power >= 2147483647.0 ? 2147483647 : static_cast<int>(power));
 }
 
-// 护盾：所有盾一起减去同一个伤害值，穿透量=伤害-最大那块盾的强度；强度被打光的盾移除
-int Controller::ApplyShield(int object, int amount) {
+// 护盾：所有盾一起减去同一个伤害值，穿透量=伤害-最大那块盾的有效容量；强度被打光的盾移除。
+// 盾的五行属性覆盖这次伤害的属性时(同属性)，该盾扣除的量减半(容量翻倍，向上取整)；盾打光后剩下的伤害不再减半。
+// 没有同属性的盾时和以前完全一样。
+int Controller::ApplyShield(int object, int amount, ATTRIBUTE_TYPE attribute) {
 	if (amount <= 0 || object < 0 || object >= static_cast<int>(effects.size())) return amount;
-	int maxStrength = 0;
+	auto keeps = [&](const shared_ptr<ShieldEffect>& s) { return ElementCovers(s->Mask(), attribute); };
+	int maxCapacity = 0;
 	for (auto& e : effects[object]) {
-		if (e->GetType() == EFFECT_SHIELD) maxStrength = max(maxStrength, dynamic_pointer_cast<ShieldEffect>(e)->Strength());
+		if (e->GetType() != EFFECT_SHIELD) continue;
+		auto shield = dynamic_pointer_cast<ShieldEffect>(e);
+		long long capacity = keeps(shield) ? static_cast<long long>(lround(shield->Strength() / ELEM_SHIELD_KEEP)) : shield->Strength();
+		maxCapacity = static_cast<int>(max<long long>(maxCapacity, min<long long>(capacity, 2147483647LL)));
 	}
-	if (maxStrength <= 0) return amount;
+	if (maxCapacity <= 0) return amount;
 	for (auto it = effects[object].begin(); it != effects[object].end(); ) {
 		if ((*it)->GetType() == EFFECT_SHIELD) {
 			auto shield = dynamic_pointer_cast<ShieldEffect>(*it);
-			shield->Reduce(amount);
+			shield->Reduce(keeps(shield) ? static_cast<int>(ceil(amount * ELEM_SHIELD_KEEP)) : amount);
 			if (shield->Strength() <= 0) { it = effects[object].erase(it); continue; }
 		}
 		++it;
 	}
-	int absorbed = min(amount, maxStrength);
+	int absorbed = min(amount, maxCapacity);
 	logs.emplace_back(-1, object, absorbed, EFFECT_SHIELD);
 	return amount - absorbed;
+}
+
+double Controller::ResistFactor(int object, ATTRIBUTE_TYPE attribute) const {
+	if (object < 0 || object >= static_cast<int>(cultivators.size())) return 1.0;
+	double x = cultivators[object]->Resist(attribute);
+	return x == 1.0 ? 1.0 : 2.0 / (x + 1.0);
 }
 
 // ---- 特性 ----
@@ -1011,6 +1048,19 @@ void Controller::AddModifier(int holder, const Modifier& m) {
 	case MOD_CLEAR_FIELD:
 		environment.clear();
 		return;
+	case MOD_NOW_SHIELD: {
+		// attr=五行(all)等价于五个属性齐全；none或不写attr=无属性盾；dur=-1不随回合衰减
+		unsigned mask = 0;
+		if (m.attrMask != MOD_ATTR_ALL)   // 没写attr(默认全部)=无属性盾
+		for (int a = ATTRIBUTE_METAL; a <= ATTRIBUTE_ALL; ++a)
+			if (m.attrMask & (1u << a)) mask |= ElementBit(static_cast<ATTRIBUTE_TYPE>(a));
+		int strength = static_cast<int>(m.value);
+		if (strength <= 0) return;
+		auto s = make_shared<ShieldEffect>(strength, m.duration < 0 ? (1 << 30) : m.duration, mask);
+		logs.emplace_back(holder, -1, strength, EFFECT_SHIELD);
+		AddEffect(holder, s);
+		return;
+	}
 	case MOD_UNLOCK:
 		status[holder] &= ~0x01;
 		effects[holder].erase(remove_if(effects[holder].begin(), effects[holder].end(),
@@ -1036,10 +1086,10 @@ double Controller::DodgeProb(int attacker, int defender, ATTRIBUTE_TYPE attribut
 	return min(1.0, max(0.0, DodgeChance(cultivators[attacker]->GetAGI(), defenderAGI) * zone));
 }
 
-int Controller::TakenZone(int object, ATTRIBUTE_TYPE attribute, int amount) {
-	if (object < 0 || object >= static_cast<int>(cultivators.size()) || cultivators[object]->Mods().All().empty()) return amount;
-	double taken = cultivators[object]->Mods().Sum(MOD_DMG_TAKEN, attribute, *cultivators[object]);
-	return taken == 0 ? amount : static_cast<int>(amount * max(0.0, 1.0 + taken));
+// 易伤(dmg_taken)特性对attr属性的加和，只增不减(负数不生效)；没有特性时是0
+double Controller::Vulnerability(int object, ATTRIBUTE_TYPE attribute) const {
+	if (object < 0 || object >= static_cast<int>(cultivators.size()) || cultivators[object]->Mods().All().empty()) return 0.0;
+	return max(0.0, cultivators[object]->Mods().Sum(MOD_DMG_TAKEN, attribute, *cultivators[object]));
 }
 
 bool Controller::RollHit(int attacker, ATTRIBUTE_TYPE attribute) {
