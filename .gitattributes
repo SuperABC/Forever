@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+Forever_UE/Content/3rdParty/Box_CardBoard_Old_Create/** filter=lfs diff=lfs merge=lfs -text
+Forever_UE/Content/3rdParty/PAZ_652/** filter=lfs diff=lfs merge=lfs -text
+Forever_UE/Content/3rdParty/Pineapple_grenade/** filter=lfs diff=lfs merge=lfs -text
+Forever_UE/Content/3rdParty/SM_ufekaevdw_tier_3/** filter=lfs diff=lfs merge=lfs -text
+Forever_UE/Content/3rdParty/SciFiTram/** filter=lfs diff=lfs merge=lfs -text
+Forever_UE/Content/3rdParty/ZIL_130__body____Lowpoly/** filter=lfs diff=lfs merge=lfs -text
