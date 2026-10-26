@@ -81,6 +81,8 @@ private:
 	void BeginScrollDrag(int mouseY);
 	void UpdateScrollDrag(int mouseY);
 	bool RowEnabled(int familyIdx) const;
+	// 玩家这回合是否被禁锢：被禁锢时只有积攒真气炸弹和跳过有意义，其余招式按钮全部禁用
+	bool PlayerLocked() const;
 	int RowCount() const;
 	// 家族当前滑块选中的那一式在招式表里的下标
 	int ActionIndexOf(int familyIdx) const;
@@ -101,6 +103,9 @@ private:
 
 	// 绘制
 	void DrawScene(Canvas* canvas);
+	void DrawEnvironment(Canvas* canvas);
+	// 场地效果变化(出现/刷新/消失)写进战报
+	void LogEnvironmentChanges();
 	void DrawStatusBar(Canvas* canvas, const std::shared_ptr<wxdj::Cultivator>& cultivator,
 		int x, int y, int w);
 	void DrawLogPanel(Canvas* canvas);
@@ -139,6 +144,7 @@ private:
 	std::vector<int> enemyFamilyActions;     // 敌方每个家族出招用的那一式(最高式)的招式下标
 
 	std::vector<std::string> logLines; // 滚动战报，超出上限丢弃最旧的
+	std::vector<std::pair<int, int>> lastEnvironment; // 上一回合结束时的场地效果(类型, 剩余回合)
 
 	// 交互状态
 	Mode mode = MODE_SINGLE;
@@ -160,7 +166,7 @@ private:
 	int btnH = 0, rowH = 0, rowGap = 0, scrollBarW = 0, hintH = 0;
 	int visibleRows = 0;
 	Rect logPanel, actionPanel;
-	Rect modeRow, opRow, sliderRow, hintRect, listRect, trackRect;
+	Rect modeRow, opRow, sliderRow, hintRect, listRect, trackRect, envRect;
 
 	// 双方初始属性上限(用于血条/真气条/武力条比例)，双方都用4-6阶位的标准属性
 	int playerMaxHP = 0, playerMaxATK = 0, playerMaxMP = 0;

@@ -75,3 +75,11 @@ Thumbs.db
 
 # ---- Personal/local test scripts (not repo content) ----
 Forever_Mod/Test/Resource/ys.script
+
+# 市民头像生成物(由 Forever_UE/Tools/AvatarGen 重新生成)
+Forever_UE/Resource/Avatars/
+Forever_UE/Tools/AvatarGen/node_modules/
+Forever_UE/Tools/AvatarGen/sample.png
+
+# 通用对战模型的训练工具、数据和检查点(体积大，不进仓库)
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/

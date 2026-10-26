@@ -57,6 +57,8 @@ Controller::Controller() :
 	effects(this->cultivators.size()),
 	environment(),
 	status(this->cultivators.size()),
+	regenMP(this->cultivators.size(), 0),
+	skipAgi(this->cultivators.size(), 0.f),
 	mark(0),
 	logs(),
 	rng(std::random_device{}()) {
@@ -68,6 +70,8 @@ Controller::Controller(std::vector<std::shared_ptr<Cultivator>> cultivators) :
 	effects(this->cultivators.size()),
 	environment(),
 	status(this->cultivators.size()),
+	regenMP(this->cultivators.size(), 0),
+	skipAgi(this->cultivators.size(), 0.f),
 	mark(0),
 	logs(),
 	rng(std::random_device{}()) {
@@ -82,6 +86,8 @@ void Controller::AddCultivator(shared_ptr<Cultivator> cultivator) {
 	cultivators.push_back(cultivator);
 	effects.emplace_back();
 	status.push_back(0);
+	skipAgi.push_back(0.f);
+	regenMP.push_back(0);
 }
 
 shared_ptr<Cultivator> Controller::GetCultivator(int idx) const {
@@ -92,13 +98,17 @@ shared_ptr<Cultivator> Controller::GetCultivator(int idx) const {
 
 void Controller::ResetRound() {
 	for (auto& s : status) s = 0;
+	for (auto& s : skipAgi) s = 0.f;
 }
 
 void Controller::StartTurn() {
 	ResetRound();
 	ExecEffect(STAGE_START);
 	for (int i = 0; i < (int)cultivators.size(); ++i) {
+		int mpBefore = cultivators[i]->GetCurrentMP();
 		RecoverMP(i, -1);
+		regenMP[i] = cultivators[i]->GetCurrentMP() - mpBefore;
+		cultivators[i]->RecoverAGI();
 	}
 }
 
@@ -114,19 +124,32 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 
 		if (act->GetType() == ACTION_SKIP) {
 			SkipMove(i);
+			PaySkip(i);
 		}
 		else if (act->GetType() == ACTION_ACCUMULATE) {
 			MakeMove(i, target, act->GetPoint(), act->GetText(), act->GetPower());
 			cultivators[i]->AccumulatePower();
+			cultivators[i]->ResetSkipStreak();
 		}
 		else if (status[i] & 0x01) {
 			SkipMove(i);
+			PaySkip(i);
+		}
+		else if (act->GetType() == ACTION_BOMB && cultivators[i]->GetBomb() <= 0) {
+			// 空炸弹：没有积攒过就释放，等于一次"纯跳过"——不翻倍敏捷、不损失敏捷(闪避照常用自己的敏捷)，也不出招；
+			// 代价是这个回合不回复真气(把回合开始自然回复的真气撤销)
+			SkipMove(i);
+			cultivators[i]->UndoMP(regenMP[i]);
 		}
 		else if (act->GetType() == ACTION_BOMB) {
-			MakeMove(i, target, act->GetPoint(), act->GetText(), act->GetPower());
-			dynamic_pointer_cast<BombAction>(act)->SetPower(cultivators[i]->BombPower());
+			// 战报里写明这次释放的炸弹能量(出招时才取出，所以先取再记)
+			int bombPower = cultivators[i]->BombPower();
+			MakeMove(i, target, act->GetPoint(), act->GetText() + "(能量" + to_string(bombPower) + ")", act->GetPower());
+			dynamic_pointer_cast<BombAction>(act)->SetPower(bombPower);
+			cultivators[i]->ResetSkipStreak();
 		}
 		else {
+			cultivators[i]->ResetSkipStreak();
 			MakeMove(i, target, act->GetPoint(), act->GetText(), act->GetPower());
 
 			auto dot = act->GetEffect(EFFECT_DOT);
@@ -175,6 +198,18 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 
 	ExecEffect(STAGE_CHECK);
 
+	// 被禁锢的一方这回合出的招(除了积攒)已经被跳过，它的减伤/反弹/吸收/物理等效果也不能生效，
+	// 当作跳过处理；否则对方打过来时，被跳过的招式上的减伤还会白白生效。
+	for (int j = 0; j < (int)cultivators.size(); ++j) {
+		if ((status[j] & 0x01) && actions[j].first->GetType() != ACTION_ACCUMULATE) {
+			actions[j].first = make_shared<SkipAction>();
+		}
+		// 空炸弹(释放时炸弹能量为0)只是一次纯跳过，不是炸弹
+		else if (actions[j].first->GetType() == ACTION_BOMB && actions[j].first->GetPower() <= 0) {
+			actions[j].first = make_shared<SkipAction>();
+		}
+	}
+
 	for (int i = 0; i < (int)cultivators.size(); ++i) {
 		auto& act_i = actions[i].first;
 		int target_i = actions[i].second;
@@ -193,20 +228,17 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				actions[j].second != (int)i ||
 				(status[j] & 0x01)) {
 				// 玩家 i 施放真气炸弹，目标 j 未正面应对，计算双方伤害
-				float powerEnemy = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? 1.0f :
-					((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_HIT_FACTOR));
-				float powerSelf = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? 1.0f :
-					((1.f / (cultivators[i]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_BACKFIRE_FACTOR));
+				float powerEnemy = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_PASSIVE);
+				float powerSelf = act_i->GetPower() * (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
 				TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
 					act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
 				TakeDamage(i, i, act_i->GetEffects(), act_i->GetEffects(),
 					act_i->GetAttribute(), (int)powerSelf);
 			}
 			else if (act_j->GetType() == ACTION_BOMB && actions[j].second == (int)i) {
-				// 双方互扔真气炸弹，目标 j 受到合成伤害
-				float power = sqrtf(powf((float)act_i->GetPower(), 2.f) + powf((float)act_j->GetPower(), 2.f));
-				float powerEnemy = power * (FindReaction(EFFECT_RUST) ? 1.0f :
-					((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_HIT_FACTOR));
+				// 双方互扔真气炸弹：两个炸弹之和乘反噬系数，双方一起受到(每对玩家各算一次，j 这一份由 j 自己的循环给 i)
+				float sum = (float)act_i->GetPower() + (float)act_j->GetPower();
+				float powerEnemy = sum * (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
 				TakeDamage(j, j, act_j->GetEffects(), act_j->GetEffects(),
 					act_j->GetAttribute(), (int)powerEnemy);
 			}
@@ -214,8 +246,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				// 目标 j 施放普通招式，若真气炸弹威力更大，则目标 j 受到差额伤害
 				if (act_j->GetPower() < act_i->GetPower()) {
 					float powerEnemy = (float)(act_i->GetPower() - act_j->GetPower());
-					powerEnemy *= (FindReaction(EFFECT_RUST) ? 1.0f :
-						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_HIT_FACTOR));
+					powerEnemy *= (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_ACTIVE);
 					TakeDamage(i, j, act_i->GetEffects(), act_j->GetEffects(),
 						act_i->GetAttribute(), (int)powerEnemy, true, act_j->GetAttribute());
 				}
@@ -229,9 +260,15 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				(status[j] & 0x01)) {
 				// 玩家 i 施放普通招式，目标 j 未正面应对，计算双方伤害
 				uniform_real_distribution<double> dist(0.0, 1.0);
-				double dodgeChance = FindReaction(EFFECT_RUST) ? 0 : DodgeChance(cultivators[i]->GetAGI(), cultivators[j]->GetAGI());
-				if (!(status[j] & 0x01) && dist(rng) < dodgeChance) {
+				// 对方跳过(含被禁锢而无法出招，但没有选积攒)时：付得起敏捷损失就用翻倍的敏捷闪避(被禁锢的一方也能)，
+				// 付不起(闪避之后敏捷会低于1)就不翻倍、不扣敏捷，仍用自己原来的敏捷闪避；没跳过的一方照常用自己的敏捷闪避，被禁锢又选了积攒的也一样用当前敏捷闪避
+				float defenderAGI = cultivators[j]->GetAGI();
+				bool canDodge = true;   // 被禁锢又选了积攒的人也用自己当前的敏捷闪避
+				if (skipAgi[j] > 0.f) { defenderAGI = skipAgi[j]; canDodge = true; }
+				double dodgeChance = FindReaction(EFFECT_RUST) ? 0 : DodgeChance(cultivators[i]->GetAGI(), defenderAGI);
+				if (canDodge && dist(rng) < dodgeChance) {
 					DodgeSuccess(i, j);
+					BuildDualEnvironment(act_i);   // 双招被闪避=未命中，它的效果计入场地效果
 					continue;
 				}
 				else {
@@ -246,6 +283,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					}
 					else {
 						HitFail(i);
+						BuildDualEnvironment(act_i);
 					}
 				}
 			}
@@ -254,8 +292,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				float powerEnemy = 0.f;
 				if (act_i->GetPower() < act_j->GetPower()) {
 					powerEnemy = (float)act_j->GetPower();
-					powerEnemy *= (FindReaction(EFFECT_RUST) ? 1.0f :
-						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_BACKFIRE_FACTOR));
+					powerEnemy *= (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
 					TakeDamage(j, j, act_j->GetEffects(), act_j->GetEffects(),
 						act_j->GetAttribute(), (int)powerEnemy);
 				}
@@ -266,8 +303,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				}
 				else {
 					powerEnemy = (float)(2 * act_j->GetPower() - act_i->GetPower());
-					powerEnemy *= (FindReaction(EFFECT_RUST) ? 1.0f :
-						((1.f / (cultivators[j]->GetAGI() * cultivators[j]->GetAGI() + 1.0f) + 1.f) * BOMB_BACKFIRE_FACTOR));
+					powerEnemy *= (FindReaction(EFFECT_RUST) ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
 					TakeDamage(j, j, act_j->GetEffects(), act_j->GetEffects(),
 						act_j->GetAttribute(), (int)powerEnemy);
 				}
@@ -285,21 +321,13 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				if (CheckCounter(attr1, attr2)) point2 /= 2;
 				if (CheckCounter(attr2, attr1)) point1 /= 2;
 
-				switch (CheckReaction(attr1, attr2)) {
-				case EFFECT_BURN:
-					AddEnvironment(make_shared<BurnEffect>());
-					break;
-				case EFFECT_RUST:
-					AddEnvironment(make_shared<RustEffect>());
-					break;
-				case EFFECT_DUST:
-					AddEnvironment(make_shared<DustEffect>());
-					break;
-				case EFFECT_MUD:
-					AddEnvironment(make_shared<MudEffect>());
-					break;
-				default: break;
-				}
+				// 双方出招的最终属性碰撞产生的场地效果；双招自己的两个基础招式构造的场地效果只在双招未命中时才产生(见下面未命中的分支)
+				bool clashReaction = AddReactionEnvironment(CheckReaction(attr1, attr2));
+				auto buildOnMiss = [&]() {
+					if (clashReaction) return;
+					BuildDualEnvironment(act_i);
+					BuildDualEnvironment(act_j);
+				};
 
 				bool dust = FindReaction(EFFECT_DUST);
 				if (point1 > point2) {
@@ -324,6 +352,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					}
 					else {
 						HitFail(i);
+						buildOnMiss();
 					}
 				}
 				else if (point2 > point1) {
@@ -348,6 +377,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					}
 					else {
 						HitFail(i);
+						buildOnMiss();
 					}
 				}
 				else {
@@ -370,6 +400,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 					}
 					else {
 						HitFail(i);
+						buildOnMiss();
 					}
 				}
 			}
@@ -409,6 +440,22 @@ void Controller::EndTurn() {
 void Controller::AddEffect(int idx, shared_ptr<Effect> effect) {
 	if (idx >= 0 && idx < (int)effects.size())
 		effects[idx].push_back(effect);
+}
+
+bool Controller::AddReactionEnvironment(int reaction) {
+	switch (reaction) {
+	case EFFECT_BURN: AddEnvironment(make_shared<BurnEffect>()); return true;
+	case EFFECT_RUST: AddEnvironment(make_shared<RustEffect>()); return true;
+	case EFFECT_DUST: AddEnvironment(make_shared<DustEffect>()); return true;
+	case EFFECT_MUD: AddEnvironment(make_shared<MudEffect>()); return true;
+	default: return false;
+	}
+}
+
+void Controller::BuildDualEnvironment(const shared_ptr<Action>& act) {
+	if (act->GetType() != ACTION_DUAL) return;
+	auto dual = dynamic_pointer_cast<DualAction>(act);
+	AddReactionEnvironment(CheckReaction(dual->GetAction1()->GetAttribute(), dual->GetAction2()->GetAttribute()));
 }
 
 void Controller::AddEnvironment(shared_ptr<Effect> effect) {
@@ -489,6 +536,23 @@ void Controller::ExecEffect(STAGE_TYPE stage) {
 	}
 }
 
+bool Controller::IsLocked(int idx) const {
+	return idx >= 0 && idx < static_cast<int>(status.size()) && (status[idx] & 0x01) != 0;
+}
+
+vector<pair<EFFECT_TYPE, int>> Controller::GetEnvironment() const {
+	vector<pair<EFFECT_TYPE, int>> result;
+	for (const auto& e : environment) {
+		int remaining = 0;
+		if (auto burn = dynamic_pointer_cast<BurnEffect>(e)) remaining = burn->RemainingRounds();
+		else if (auto rust = dynamic_pointer_cast<RustEffect>(e)) remaining = rust->RemainingRounds();
+		else if (auto dust = dynamic_pointer_cast<DustEffect>(e)) remaining = dust->RemainingRounds();
+		else if (auto mud = dynamic_pointer_cast<MudEffect>(e)) remaining = mud->RemainingRounds();
+		result.emplace_back(e->GetType(), remaining);
+	}
+	return result;
+}
+
 vector<Log> Controller::GetNews() {
 	vector<Log> news;
 	for (size_t i = mark; i < logs.size(); ++i) news.push_back(logs[i]);
@@ -509,6 +573,9 @@ void Controller::ConsumeMP(int idx, int amount, bool log) {
 void Controller::MakeMove(int subject, int object, int amount, string name, int point, bool log) {
 	if (FindReaction(EFFECT_MUD)) amount = static_cast<int>(amount * 1.5f);
 	if (log) logs.emplace_back(subject, object, amount, name, point);
+	// 真气不够时先扣光真气，缺的部分按2倍从武力值里透支(Cultivator::ConsumeMP)，这里把透支扣掉的武力值写进战报
+	int deficit = amount - cultivators[subject]->GetCurrentMP();
+	if (log && deficit > 0) logs.emplace_back(LOG_CONSUME, subject, deficit * 2);
 	cultivators[subject]->ConsumeMP(amount);
 }
 
@@ -601,22 +668,28 @@ void Controller::TakeDamage(int subject, int object,
 	int hpPart = static_cast<int>(amount * physicalRatio);
 	int atkPart = amount - hpPart;
 
-	if (log) logs.emplace_back(subject, object, attribute, atkPart, hpPart);
-	if (atkPart > 0) cultivators[object]->TakeDamage(atkPart, false);
-	if (hpPart > 0) cultivators[object]->TakeDamage(hpPart, true);
+	// 反弹是减伤的升级版：受击者只承受反弹之后剩下的伤害，被反弹的那部分全部还给攻击者
+	int reboundAtk = 0, reboundHp = 0;
+	if (subject != object) {
+		auto rebound = find_if(defend.begin(), defend.end(),
+			[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
+		if (rebound != defend.end()) {
+			float ratio = min(1.f, max(0.f, dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute)));
+			reboundAtk = static_cast<int>(atkPart * ratio);
+			reboundHp = static_cast<int>(hpPart * ratio);
+		}
+	}
+	int ownAtk = atkPart - reboundAtk, ownHp = hpPart - reboundHp;
+
+	if (log) logs.emplace_back(subject, object, attribute, ownAtk, ownHp);
+	if (ownAtk > 0) cultivators[object]->TakeDamage(ownAtk, false);
+	if (ownHp > 0) cultivators[object]->TakeDamage(ownHp, true);
 
 	if (subject == object) return;
 
-	auto rebound = find_if(defend.begin(), defend.end(),
-		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
-	if (rebound != defend.end()) {
-		float ratio = dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute);
-		int dmgAtk = static_cast<int>(atkPart * ratio);
-		int dmgHp = static_cast<int>(hpPart * ratio);
-		if (dmgAtk > 0 || dmgHp > 0) {
-			logs.emplace_back(object, subject, attribute, dmgAtk, dmgHp, EFFECT_REBOUND);
-			TakeDamage(object, subject, defend, offend, attribute, dmgAtk, dmgHp, false);
-		}
+	if (reboundAtk > 0 || reboundHp > 0) {
+		logs.emplace_back(object, subject, attribute, reboundAtk, reboundHp, EFFECT_REBOUND);
+		TakeDamage(object, subject, defend, offend, attribute, reboundAtk, reboundHp, false);
 	}
 
 	auto absorb = find_if(defend.begin(), defend.end(),
@@ -632,44 +705,64 @@ void Controller::TakeDamage(int subject, int object,
 	vector<shared_ptr<Effect>> offend,
 	vector<shared_ptr<Effect>> defend,
 	ATTRIBUTE_TYPE attribute, int atk, int hp, bool log) {
-	if (FindReaction(EFFECT_BURN)) {
-		atk = static_cast<int>(atk * 1.5f);
-		hp = static_cast<int>(hp * 1.5f);
-	}
+	// 反弹回来的伤害是从已经结算过(含灼烧加成)的伤害按比例算出来的，不再乘一次灼烧：否则
+	// 灼烧x1.5会让双方互相反弹的伤害越弹越大(比例>2/3时永不衰减)，递归爆栈。
+	// 另外限制反弹的递归深度，多层之后的伤害早已可以忽略。
+	static thread_local int depth = 0;
+	if (depth >= 8) return;
+	struct DepthGuard { DepthGuard() { ++depth; } ~DepthGuard() { --depth; } } guard;
 
-	if (log) logs.emplace_back(subject, object, attribute, atk, hp);
-	if (atk > 0) cultivators[object]->TakeDamage(atk, false);
-	if (hp > 0) cultivators[object]->TakeDamage(hp, true);
-
-	float keep = 1.0f;
 	auto reduce = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REDUCE; });
 	if (reduce != defend.end()) {
-		keep = 1.0f - dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute);
+		float keep = 1.0f - dynamic_pointer_cast<ReduceEffect>(*reduce)->GetRatio(attribute);
+		atk = static_cast<int>(atk * keep);
+		hp = static_cast<int>(hp * keep);
 	}
-	int atkKept = static_cast<int>(atk * keep);
-	int hpKept = static_cast<int>(hp * keep);
 
-	auto rebound = find_if(defend.begin(), defend.end(),
-		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
-	if (rebound != defend.end()) {
-		float ratio = dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute);
-		int dmgAtk = static_cast<int>(atkKept * ratio);
-		int dmgHp = static_cast<int>(hpKept * ratio);
-		if (dmgAtk > 0 || dmgHp > 0) {
-			logs.emplace_back(object, subject, attribute, dmgAtk, dmgHp, EFFECT_REBOUND);
-			TakeDamage(object, subject, defend, offend, attribute, dmgAtk, dmgHp, false);
+	// 反弹是减伤的升级版：只承受反弹之后剩下的伤害
+	int reboundAtk = 0, reboundHp = 0;
+	if (subject != object) {
+		auto rebound = find_if(defend.begin(), defend.end(),
+			[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
+		if (rebound != defend.end()) {
+			float ratio = min(1.f, max(0.f, dynamic_pointer_cast<ReboundEffect>(*rebound)->GetRatio(attribute)));
+			reboundAtk = static_cast<int>(atk * ratio);
+			reboundHp = static_cast<int>(hp * ratio);
 		}
 	}
+	int ownAtk = atk - reboundAtk, ownHp = hp - reboundHp;
+
+	if (log) logs.emplace_back(subject, object, attribute, ownAtk, ownHp);
+	if (ownAtk > 0) cultivators[object]->TakeDamage(ownAtk, false);
+	if (ownHp > 0) cultivators[object]->TakeDamage(ownHp, true);
 
 	if (subject == object) return;
+
+	if (reboundAtk > 0 || reboundHp > 0) {
+		logs.emplace_back(object, subject, attribute, reboundAtk, reboundHp, EFFECT_REBOUND);
+		TakeDamage(object, subject, defend, offend, attribute, reboundAtk, reboundHp, false);
+	}
 
 	auto absorb = find_if(defend.begin(), defend.end(),
 		[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_ABSORB; });
 	if (absorb != defend.end()) {
-		int mp = static_cast<int>((atkKept + hpKept) * dynamic_pointer_cast<AbsorbEffect>(*absorb)->GetRatio(attribute));
+		int mp = static_cast<int>((atk + hp) * dynamic_pointer_cast<AbsorbEffect>(*absorb)->GetRatio(attribute));
 		logs.emplace_back(object, subject, mp, EFFECT_ABSORB);
 		RecoverMP(object, mp);
+	}
+}
+
+// 跳过要损失敏捷：付得起(之后不低于1)就记下翻倍后的闪避敏捷，付不起就标记这回合没有闪避
+void Controller::PaySkip(int idx) {
+	Cultivator& c = *cultivators[idx];
+	if (c.CanDodge()) {
+		skipAgi[idx] = c.GetAGI() * SKIP_AGI_FACTOR;
+		c.ConsumeAGI();
+	}
+	else {
+		// 敏捷不够付这次跳过：不翻倍、不扣敏捷，但仍用自己原来的敏捷闪避(被禁锢也一样)
+		skipAgi[idx] = c.GetAGI();
 	}
 }
 
@@ -682,7 +775,7 @@ bool Controller::CheckCounter(ATTRIBUTE_TYPE a1, ATTRIBUTE_TYPE a2) {
 	return ATTRIBUTE_COUNTERS.find({ a1, a2 }) != ATTRIBUTE_COUNTERS.end();
 }
 
-double Controller::DodgeChance(int attackerAGI, int defenderAGI) {
+double Controller::DodgeChance(float attackerAGI, float defenderAGI) {
 	return static_cast<double>(defenderAGI * defenderAGI) /
 		(attackerAGI * attackerAGI + defenderAGI * defenderAGI);
 }

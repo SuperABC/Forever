@@ -14,7 +14,9 @@ namespace wxdj {
 class Cultivator {
 public:
 	Cultivator(const std::string& name, const std::string& file,
-		int hp, int atk, int mp, int agi, int recover);
+		int hp, int atk, int mp, int agi, int recover,
+		float agiLoss = 1.f, float agiRecover = 0.2f,
+		float bombMultiplier = BOMB_ACCUMULATE_MULTIPLIER);
 
 	// 获取姓名
 	std::string GetName() const;
@@ -36,8 +38,27 @@ public:
 	// 获取已积攒的真气炸弹能量(释放前一直保留)
 	int GetBomb() const;
 
-	// 获取敏捷值
-	int GetAGI() const;
+	// 炸弹积攒倍率(个人属性，由所在阶位决定)
+	float GetBombMultiplier() const;
+
+	// 获取当前敏捷值(闪避一次损失agiLoss点，每回合自动恢复agiRecover点，不超过初始值)
+	float GetAGI() const;
+	float GetMaxAGI() const;
+	float GetAGILoss() const;
+	float GetAGIRecover() const;
+
+	// 现在跳过得起吗：跳过要损失agiLoss点敏捷，之后敏捷不能低于1
+	bool CanDodge() const;
+
+	// 跳过一次，损失agiLoss点敏捷(不会低于1)
+	void ConsumeAGI();
+	// 这次跳过要损失多少敏捷：agiLoss + 连续跳过次数x0.5；出招/积攒/真放炸弹后连续次数清零
+	float SkipLoss() const;
+	void ResetSkipStreak();
+	int GetSkipStreak() const;
+
+	// 每回合自动恢复敏捷
+	void RecoverAGI();
 
 	// 获取阶位
 	int GetCurrentRealm() const;
@@ -65,6 +86,7 @@ public:
 
 	// 回复生命值
 	void RecoverMP(int amount);
+	void UndoMP(int amount); // 撤销已经回复的真气(空炸弹的回合不回复真气)
 
 	// 消耗真气量
 	void ConsumeMP(int amount);
@@ -98,7 +120,12 @@ private:
 	int currentATK;
 	int maxMP;
 	int currentMP;
-	int AGI;
+	float AGI; // 当前敏捷值
+	float maxAGI; // 初始(上限)敏捷值
+	float agiLoss; // 每次跳过损失的敏捷值(连续跳过会递增)
+	int skipStreak = 0; // 已经连续跳过了几次
+	float agiRecover; // 每回合自动恢复的敏捷值
+	float bombMultiplier; // 炸弹积攒倍率
 	Realm currentRealm;
 
 	std::vector<SingleAction> actions; // 该修仙者拥有的招式列表

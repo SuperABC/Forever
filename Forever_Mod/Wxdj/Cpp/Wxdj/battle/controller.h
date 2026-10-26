@@ -91,12 +91,20 @@ public:
 
 	// 添加场地效果
 	void AddEnvironment(std::shared_ptr<Effect> effect);
+	bool AddReactionEnvironment(int reaction); // 按反应类型加场地效果，没有反应返回false
+	void BuildDualEnvironment(const std::shared_ptr<Action>& act); // 双招未命中时，用它的两个基础招式的属性自己构造场地效果
 
 	// 执行指定阶段的效果
 	void ExecEffect(STAGE_TYPE stage);
 
 	// 获取自上次调用以来的所有新日志
 	std::vector<Log> GetNews();
+
+	// 这个修炼者这一回合是否被禁锢(回合开始时由禁锢效果设置)：被禁锢时单招/双招/释放炸弹都会被跳过
+	bool IsLocked(int cultivator) const;
+
+	// 获取当前场地效果：(效果类型, 还剩几回合)
+	std::vector<std::pair<EFFECT_TYPE, int>> GetEnvironment() const;
 
 	// 回复真气量
 	void RecoverMP(int cultivator, int amount, bool log = true);
@@ -139,11 +147,16 @@ public:
 	// 闪避成功
 	void DodgeSuccess(int subject, int object, bool log = true);
 
+	// 跳过一次的敏捷损失(见controller.cpp)
+	void PaySkip(int cultivator);
+
 private:
 	std::vector<std::shared_ptr<Cultivator>> cultivators; // 参战修炼者
 	std::vector<std::vector<std::shared_ptr<Effect>>> effects; // 每个修炼者身上的效果
 	std::vector<std::shared_ptr<Effect>> environment; // 场地效果
 	std::vector<int> status; // 状态标志位
+	std::vector<int> regenMP; // 这回合开始时自然回复的真气量，空炸弹要把它撤销
+	std::vector<float> skipAgi; // 这回合跳过的人：>0=跳过的闪避用这个敏捷(付得起是翻倍后的，付不起是原来的)，0=没有跳过
 	int mark = 0; // 日志输出游标
 	std::vector<Log> logs; // 所有日志
 	std::mt19937 rng; // 随机数生成器
@@ -152,7 +165,7 @@ private:
 	bool CheckCounter(ATTRIBUTE_TYPE a1, ATTRIBUTE_TYPE a2);
 
 	// 计算闪避概率
-	double DodgeChance(int attackerAGI, int defenderAGI);
+	double DodgeChance(float attackerAGI, float defenderAGI);
 
 	// 检查两种属性碰撞产生的元素反应类型
 	int CheckReaction(ATTRIBUTE_TYPE a1, ATTRIBUTE_TYPE a2);

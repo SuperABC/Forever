@@ -132,7 +132,14 @@ DualAction::DualAction(shared_ptr<SingleAction> a1, shared_ptr<SingleAction> a2)
 		static_cast<int>(DUAL_POWER_FACTOR * (a1->GetPower() + a2->GetPower())),
 		{}) {
 	effects.insert(effects.end(), a1->effects.begin(), a1->effects.end());
-	effects.insert(effects.end(), a2->effects.begin(), a2->effects.end());
+	// 两个招式有同名效果(同一种效果类型)时只取第一个招式的，比如逆天神功+地狱阴魔拳取逆天神功的禁锢，顺序互换就取地狱阴魔拳的
+	for (const auto& e : a2->effects) {
+		bool exists = false;
+		for (const auto& own : effects) {
+			if (own->GetType() == e->GetType()) { exists = true; break; }
+		}
+		if (!exists) effects.push_back(e);
+	}
 }
 
 DualAction::~DualAction() {

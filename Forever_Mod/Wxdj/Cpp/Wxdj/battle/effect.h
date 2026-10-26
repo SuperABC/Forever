@@ -204,6 +204,8 @@ public:
 
 	void PassRound();
 	bool UseUp() const;
+	// 还剩几回合
+	int RemainingRounds() const;
 
 private:
 	int burnRounds; // 总共持续回合数
@@ -218,6 +220,8 @@ public:
 
 	void PassRound();
 	bool UseUp() const;
+	// 还剩几回合
+	int RemainingRounds() const;
 
 private:
 	int rustRounds; // 总共持续回合数
@@ -232,6 +236,8 @@ public:
 
 	void PassRound();
 	bool UseUp() const;
+	// 还剩几回合
+	int RemainingRounds() const;
 
 private:
 	int dustRounds; // 总共持续回合数
@@ -246,6 +252,8 @@ public:
 
 	void PassRound();
 	bool UseUp() const;
+	// 还剩几回合
+	int RemainingRounds() const;
 
 private:
 	int mudRounds; // 总共持续回合数

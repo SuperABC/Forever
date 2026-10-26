@@ -26,6 +26,7 @@
 #define STANDARD_ATK 38900
 #define STANDARD_MP 24800
 #define STANDARD_RECOVER 619
+#define STANDARD_AGI 10
 
 
 using namespace std;
@@ -60,7 +61,10 @@ void WxdjPuzzle::ComputeLayout() {
 	gap = max(4, margin / 2);
 
 	// 顶部状态条占据[margin, margin+statusBarH]，下面的body左右各半：左战报、右操作栏+招式list
-	int bodyTop = margin + statusBarH + margin;
+	// 状态条下面留一行显示场地效果
+	int envH = max(20, canvasH / 30);
+	envRect = { margin, margin + statusBarH + gap, canvasW - margin, margin + statusBarH + gap + envH };
+	int bodyTop = envRect.y2 + gap;
 	int bodyBottom = max(bodyTop + 100, canvasH - margin);
 	int mid = canvasW / 2;
 
@@ -174,9 +178,14 @@ void WxdjPuzzle::SetSliderFromMouse(int mouseX) {
 	selectedForm = static_cast<int>(max<int64_t>(0, min<int64_t>(value, steps)));
 }
 
+bool WxdjPuzzle::PlayerLocked() const {
+	return phase == PHASE_SELECT && controller && controller->IsLocked(0);
+}
+
 bool WxdjPuzzle::RowEnabled(int familyIdx) const {
-	// 真气不够也能出招(透支)：不足的真气由规则层按2倍扣武力值(Cultivator::ConsumeMP)，所以不因真气置灰
-	return player && familyIdx >= 0 && familyIdx < RowCount();
+	// 真气不够也能出招(透支)：不足的真气由规则层按2倍扣武力值(Cultivator::ConsumeMP)，所以不因真气置灰；
+	// 被禁锢时全部置灰
+	return player && familyIdx >= 0 && familyIdx < RowCount() && !PlayerLocked();
 }
 
 void WxdjPuzzle::RebuildWidgets() {
@@ -198,17 +207,18 @@ void WxdjPuzzle::RebuildWidgets() {
 	}
 
 	ClampScroll();
+	if (PlayerLocked()) { firstPick = -1; firstPickFamily = -1; }
 
 	// 模式行：单招/双招
 	int halfW = (modeRow.x2 - modeRow.x1 - gap) / 2;
 	add(ID_MODE_SINGLE, modeRow.x1, modeRow.y1, modeRow.x1 + halfW, modeRow.y2, true);
 	add(ID_MODE_DUAL, modeRow.x2 - halfW, modeRow.y1, modeRow.x2, modeRow.y2, true);
 
-	// 操作行：积攒/释放真气炸弹/跳过，没有积攒过炸弹时释放不可用
+	// 操作行：积攒/释放真气炸弹/跳过，没有积攒过炸弹时释放是不扣敏捷的纯跳过(空炸弹)
 	int thirdW = (opRow.x2 - opRow.x1 - 2 * gap) / 3;
 	add(ID_ACCUMULATE, opRow.x1, opRow.y1, opRow.x1 + thirdW, opRow.y2, true);
 	add(ID_BOMB, opRow.x1 + thirdW + gap, opRow.y1, opRow.x1 + 2 * thirdW + gap, opRow.y2,
-		player && player->GetBomb() > 0);
+		player && !PlayerLocked());
 	add(ID_SKIP, opRow.x2 - thirdW, opRow.y1, opRow.x2, opRow.y2, true);
 
 	// 统一的"第几式"滑块：双招选了第一招之后锁定，直到第二招出完，保证双招两招同式
@@ -410,6 +420,7 @@ void WxdjPuzzle::ResolveTurn(shared_ptr<Action> playerAction) {
 	AppendNews();
 	controller->EndTurn();
 	AppendNews();
+	LogEnvironmentChanges();
 	if (enemyAI) enemyAI->Observe(*playerAction);
 
 	if (!player->IsAlive()) {
@@ -450,6 +461,7 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	families.clear();
 	selectedForm = 0;
 	logLines.clear();
+	lastEnvironment.clear();
 	widgets.clear();
 	player.reset();
 	enemy.reset();
@@ -478,8 +490,8 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	playerMaxMP = enemyMaxMP = STANDARD_MP;
 
 	try {
-		player = make_shared<Cultivator>("玩家", actionPath, playerMaxHP, playerMaxATK, playerMaxMP, 22, STANDARD_RECOVER);
-		enemy = make_shared<Cultivator>("售货员", actionPath, enemyMaxHP, enemyMaxATK, enemyMaxMP, 20, STANDARD_RECOVER);
+		player = make_shared<Cultivator>("玩家", actionPath, playerMaxHP, playerMaxATK, playerMaxMP, STANDARD_AGI, STANDARD_RECOVER);
+		enemy = make_shared<Cultivator>("售货员", actionPath, enemyMaxHP, enemyMaxATK, enemyMaxMP, STANDARD_AGI, STANDARD_RECOVER);
 	}
 	catch (const std::exception&) {
 		player.reset();
@@ -607,7 +619,10 @@ void WxdjPuzzle::DrawStatusBar(Canvas* canvas, const shared_ptr<Cultivator>& cul
 	int nameFontSize = max(13, statusBarH / 6);
 	canvas->SetColor(230, 230, 230);
 	canvas->SetFontSize(nameFontSize);
-	canvas->PutString(cultivator->GetName(), x, y);
+	// 名字后面写敏捷：当前/上限(跳过一次损失敏捷、每回合恢复，所以会变)
+	ostringstream agiText;
+	agiText << cultivator->GetName() << "    AGI " << fixed << setprecision(1) << cultivator->GetAGI() << "/" << cultivator->GetMaxAGI();
+	canvas->PutString(agiText.str(), x, y);
 
 	int barH = max(12, statusBarH / 6);
 	int rowGap = barH + 5;
@@ -699,12 +714,26 @@ void WxdjPuzzle::DrawActionPanel(Canvas* canvas) {
 	// 提示行
 	string hint;
 	const auto& actions = player->GetActions();
-	if (mode == MODE_SINGLE) hint = "单招：点击按钮，按滑块选的式出招";
+	if (PlayerLocked()) hint = "本回合无法出招，只能积攒真气炸弹或跳过回合";
+	else if (mode == MODE_SINGLE) hint = "单招：点击按钮，按滑块选的式出招";
 	else if (firstPick < 0) hint = "双招：请选择第一招";
 	else hint = "双招：第一招「" + actions[firstPick].GetName() + "」，请选择第二招(同式，滑块已锁定)";
-	canvas->SetColor(230, 190, 90);
-	canvas->SetFontSize(max(12, hintH - 4));
-	canvas->PutString(hint, hintRect.x1, hintRect.y1);
+	if (PlayerLocked()) {
+		// 被禁锢：整个操作栏外框标红，提示行换成醒目的红底白字
+		canvas->SetAlpha(1.f);
+		canvas->SetColor(200, 40, 40);
+		for (int k = 0; k < 3; ++k) canvas->PutRect(actionPanel.x1 - 2 - k, actionPanel.y1 - 2 - k, actionPanel.x2 + 2 + k, actionPanel.y2 + 2 + k, false);
+		canvas->PutRect(hintRect.x1, hintRect.y1 - 2, hintRect.x2, hintRect.y2 + 2, true);
+		canvas->SetColor(255, 255, 255);
+		canvas->SetFontSize(max(14, hintH));
+		string banner = "被禁锢！" + hint;
+		canvas->PutString(banner, hintRect.x1 + 6, hintRect.y1 + max(0, (hintRect.y2 - hintRect.y1 - canvas->GetFontHeight()) / 2));
+	}
+	else {
+		canvas->SetColor(230, 190, 90);
+		canvas->SetFontSize(max(12, hintH - 4));
+		canvas->PutString(hint, hintRect.x1, hintRect.y1);
+	}
 
 	// 统一的"第几式"滑块
 	int fontSize = max(12, rowH / 2);
@@ -842,7 +871,7 @@ vector<string> WxdjPuzzle::EffectLines(int actionIdx) const {
 		}
 		case EFFECT_REBOUND: {
 			auto e = static_pointer_cast<ReboundEffect>(effect);
-			lines.push_back("反弹：将受到伤害的" + RatioText([&](ATTRIBUTE_TYPE a) { return e->GetRatio(a); }) + "反弹给攻击者");
+			lines.push_back("反弹：将受到伤害的" + RatioText([&](ATTRIBUTE_TYPE a) { return e->GetRatio(a); }) + "反弹给攻击者，自己只承受剩下的(减伤的升级版)");
 			break;
 		}
 		case EFFECT_ABSORB: {
@@ -949,6 +978,77 @@ void WxdjPuzzle::DrawResultOverlay(Canvas* canvas) {
 	if (const Widget* close = FindWidget(ID_CLOSE)) DrawButton(canvas, *close, "关闭", 90, 90, 100, false);
 }
 
+// 场地效果的名字、颜色、说明
+static void EnvironmentInfo(int type, string& name, string& desc, int& r, int& g, int& b) {
+	switch (type) {
+	case EFFECT_BURN: name = "灼烧"; desc = "伤害x1.5"; r = 200; g = 80; b = 40; break;
+	case EFFECT_RUST: name = "锈蚀"; desc = "必中，炸弹系数0.5"; r = 130; g = 110; b = 140; break;
+	case EFFECT_DUST: name = "扬尘"; desc = "命中率50%"; r = 170; g = 140; b = 70; break;
+	case EFFECT_MUD: name = "泥沼"; desc = "消耗x1.5"; r = 110; g = 90; b = 55; break;
+	default: name = "?"; desc = ""; r = 90; g = 90; b = 90; break;
+	}
+}
+
+void WxdjPuzzle::LogEnvironmentChanges() {
+	if (!controller) return;
+	auto now = controller->GetEnvironment();
+	auto find = [](const vector<pair<int, int>>& list, int type) -> const pair<int, int>* {
+		for (const auto& e : list) if (e.first == type) return &e;
+		return nullptr;
+	};
+	vector<pair<int, int>> current;
+	for (const auto& e : now) current.emplace_back(static_cast<int>(e.first), e.second);
+
+	for (const auto& e : current) {
+		string name, desc; int r, g, b;
+		EnvironmentInfo(e.first, name, desc, r, g, b);
+		const auto* before = find(lastEnvironment, e.first);
+		if (!before) PushLogLine("场地出现：" + name + "(" + desc + "，还剩" + to_string(e.second) + "回合)");
+		else if (e.second > before->second) PushLogLine("场地刷新：" + name + "(还剩" + to_string(e.second) + "回合)");
+	}
+	for (const auto& e : lastEnvironment) {
+		if (!find(current, e.first)) {
+			string name, desc; int r, g, b;
+			EnvironmentInfo(e.first, name, desc, r, g, b);
+			PushLogLine("场地消失：" + name);
+		}
+	}
+	lastEnvironment = current;
+}
+
+void WxdjPuzzle::DrawEnvironment(Canvas* canvas) {
+	int fontSize = max(12, (envRect.y2 - envRect.y1) - 6);
+	canvas->SetFontSize(fontSize);
+	canvas->SetAlpha(1.f);
+	int x = envRect.x1;
+	int textY = envRect.y1 + (envRect.y2 - envRect.y1 - canvas->GetFontHeight()) / 2;
+
+	canvas->SetColor(190, 190, 200);
+	string title = "场地：";
+	canvas->PutString(title, x, textY);
+	x += canvas->StringWidth(title);
+
+	auto env = controller ? controller->GetEnvironment() : vector<pair<EFFECT_TYPE, int>>();
+	if (env.empty()) {
+		canvas->SetColor(130, 130, 140);
+		canvas->PutString("无", x, textY);
+		return;
+	}
+	for (const auto& e : env) {
+		string name, desc; int r, g, b;
+		EnvironmentInfo(e.first, name, desc, r, g, b);
+		string label = name + " " + desc + " 剩" + to_string(e.second) + "回合";
+		int w = canvas->StringWidth(label) + 14;
+		canvas->SetColor(r, g, b);
+		canvas->PutRect(x, envRect.y1, x + w, envRect.y2, true);
+		canvas->SetColor(15, 15, 20);
+		canvas->PutRect(x, envRect.y1, x + w, envRect.y2, false);
+		canvas->SetColor(255, 255, 255);
+		canvas->PutString(label, x + 7, textY);
+		x += w + 8;
+	}
+}
+
 void WxdjPuzzle::DrawScene(Canvas* canvas) {
 	canvas->SetColor(18, 18, 24);
 	canvas->SetAlpha(1.f);
@@ -960,6 +1060,7 @@ void WxdjPuzzle::DrawScene(Canvas* canvas) {
 	DrawStatusBar(canvas, player, margin, margin, halfW);
 	DrawStatusBar(canvas, enemy, margin * 2 + halfW, margin, halfW);
 
+	DrawEnvironment(canvas);
 	DrawLogPanel(canvas);
 	DrawActionPanel(canvas);
 

@@ -10,9 +10,11 @@ using namespace std;
 namespace wxdj {
 
 Cultivator::Cultivator(const string& name, const string& file,
-	int hp, int atk, int mp, int agi, int recover) :
+	int hp, int atk, int mp, int agi, int recover,
+	float agiLoss, float agiRecover, float bombMultiplier) :
 	name(name), maxHP(hp), currentHP(hp), maxATK(atk), currentATK(atk),
-	maxMP(mp), currentMP(mp), AGI(agi), currentRealm(YELLOW_INIT), recover(recover), bomb(0) {
+	maxMP(mp), currentMP(mp), AGI(static_cast<float>(agi)), maxAGI(static_cast<float>(agi)), agiLoss(agiLoss), agiRecover(agiRecover), bombMultiplier(bombMultiplier),
+	currentRealm(YELLOW_INIT), recover(recover), bomb(0) {
 	if (!LoadActions(file)) {
 		throw runtime_error("Failed to load actions from file " + file + "\n");
 	}
@@ -50,8 +52,32 @@ int Cultivator::GetBomb() const {
 	return bomb;
 }
 
-int Cultivator::GetAGI() const {
+float Cultivator::GetBombMultiplier() const {
+	return bombMultiplier;
+}
+
+float Cultivator::GetAGI() const {
 	return AGI;
+}
+
+float Cultivator::GetMaxAGI() const {
+	return maxAGI;
+}
+
+float Cultivator::GetAGILoss() const {
+	return agiLoss;
+}
+
+float Cultivator::GetAGIRecover() const {
+	return agiRecover;
+}
+
+bool Cultivator::CanDodge() const {
+	return AGI - SkipLoss() >= 1.f - 1e-4f;
+}
+
+void Cultivator::RecoverAGI() {
+	AGI = std::min(maxAGI, AGI + agiRecover);
 }
 
 int Cultivator::GetCurrentRealm() const {
@@ -133,6 +159,10 @@ void Cultivator::RecoverMP(int amount) {
 	}
 }
 
+void Cultivator::UndoMP(int amount) {
+	currentMP = max(0, currentMP - amount);
+}
+
 void Cultivator::ConsumeMP(int amount) {
 	if (currentMP >= amount) {
 		currentMP -= amount;
@@ -171,6 +201,23 @@ void Cultivator::DodgeSuccess() {
 
 }
 
+void Cultivator::ConsumeAGI() {
+	AGI = std::max(1.f, AGI - SkipLoss());
+	++skipStreak;
+}
+
+float Cultivator::SkipLoss() const {
+	return agiLoss + SKIP_STREAK_EXTRA_LOSS * skipStreak;
+}
+
+void Cultivator::ResetSkipStreak() {
+	skipStreak = 0;
+}
+
+int Cultivator::GetSkipStreak() const {
+	return skipStreak;
+}
+
 void Cultivator::UpdateRealm() {
 	for (const auto& req : REALM_ATK_REQUIREMENTS) {
 		if (currentATK >= req.second) {
@@ -183,8 +230,10 @@ void Cultivator::UpdateRealm() {
 }
 
 void Cultivator::AccumulatePower() {
-	bomb += static_cast<int>(ACCUMULATE_FRACTION * currentMP);
-	currentMP = static_cast<int>(currentMP * (1.0f - ACCUMULATE_FRACTION));
+	// 消耗当前真气的一部分，按倍数存进炸弹
+	int spent = static_cast<int>(ACCUMULATE_FRACTION * currentMP);
+	currentMP -= spent;
+	bomb += static_cast<int>(spent * bombMultiplier);
 }
 
 int Cultivator::BombPower() {

@@ -331,6 +331,10 @@ void BurnEffect::PassRound() {
 	currentRound++;
 }
 
+int BurnEffect::RemainingRounds() const {
+	return burnRounds - currentRound;
+}
+
 bool BurnEffect::UseUp() const {
 	return currentRound >= burnRounds;
 }
@@ -345,6 +349,10 @@ RustEffect::~RustEffect() {
 
 void RustEffect::PassRound() {
 	currentRound++;
+}
+
+int RustEffect::RemainingRounds() const {
+	return rustRounds - currentRound;
 }
 
 bool RustEffect::UseUp() const {
@@ -363,6 +371,10 @@ void DustEffect::PassRound() {
 	currentRound++;
 }
 
+int DustEffect::RemainingRounds() const {
+	return dustRounds - currentRound;
+}
+
 bool DustEffect::UseUp() const {
 	return currentRound >= dustRounds;
 }
@@ -377,6 +389,10 @@ MudEffect::~MudEffect() {
 
 void MudEffect::PassRound() {
 	currentRound++;
+}
+
+int MudEffect::RemainingRounds() const {
+	return mudRounds - currentRound;
 }
 
 bool MudEffect::UseUp() const {
