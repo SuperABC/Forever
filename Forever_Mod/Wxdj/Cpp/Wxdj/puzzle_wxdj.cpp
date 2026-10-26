@@ -19,7 +19,7 @@
 
 #define MAX_LOG_LINES 200
 #define ACTION_FILE_NAME "xiaohua.txt"
-#define POLICY_FILE_NAME "ai_policy.txt"
+#define AI_FILE_NAME "ai_weights.bin"
 
 // 双方的标准初始属性(4-6阶位)，见battle/battle.md的"标准初始属性"
 #define STANDARD_HP 25800
@@ -398,30 +398,38 @@ void WxdjPuzzle::AppendRoundHeader() {
 	PushLogLine("== 第" + to_string(roundNumber) + "回合 ==");
 }
 
-void WxdjPuzzle::AppendNews() {
+void WxdjPuzzle::AppendNews(vector<Log>* sink) {
 	if (!controller) return;
 	for (const auto& log : controller->GetNews()) {
 		PushLogLine(FormatLog(log));
+		if (sink) sink->push_back(log);
 	}
 }
 
 void WxdjPuzzle::ResolveTurn(shared_ptr<Action> playerAction) {
-	// 敌方AI：3/4概率出单招(下标范围ac+6含积攒/炸弹等特殊选项)，1/4概率出双招
-	int ac = static_cast<int>(enemy->GetActions().size());
+	// 敌方出招：AI没加载好(权重文件缺失/结构对不上)或推理出错时，退化成纯随机出招：
+	// 3/4概率出单招(下标范围ac+6含积攒/炸弹等特殊选项)，1/4概率出双招
 	shared_ptr<Action> enemyAction;
-	if (enemyAI) enemyAction = enemyAI->Choose(*enemy, *player, enemyFamilyActions);
-	else if (GetRandom(4)) enemyAction = enemy->GetAction(GetRandom(ac + 6));
-	else enemyAction = enemy->GetAction(GetRandom(ac), GetRandom(ac));
+	if (enemyAI) {
+		enemyAI->BeginRound(*controller);   // 记下出招前的状态，回合结束时要算这回合的状态变化
+		enemyAction = enemyAI->Choose(*controller, roundNumber, enemyFamilyActions);
+	}
+	if (!enemyAction) {
+		int ac = static_cast<int>(enemy->GetActions().size());
+		if (GetRandom(4)) enemyAction = enemy->GetAction(GetRandom(ac + 6));
+		else enemyAction = enemy->GetAction(GetRandom(ac), GetRandom(ac));
+	}
 
 	// pair的第二个字段是该招式指向的对手下标：玩家(0)出招指向敌人(1)，敌人(1)出招指向玩家(0)
+	vector<Log> roundLogs;
 	controller->ActionTurn({ {playerAction, 1}, {enemyAction, 0} });
-	AppendNews();
+	AppendNews(&roundLogs);
 	controller->CheckTurn({ {playerAction, 1}, {enemyAction, 0} });
-	AppendNews();
+	AppendNews(&roundLogs);
 	controller->EndTurn();
-	AppendNews();
+	AppendNews(&roundLogs);
 	LogEnvironmentChanges();
-	if (enemyAI) enemyAI->Observe(*playerAction);
+	if (enemyAI) enemyAI->EndRound(*controller, { playerAction, enemyAction }, roundLogs);
 
 	if (!player->IsAlive()) {
 		// 玩家阵亡(含同归于尽)都判定为失败
@@ -502,17 +510,19 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 
 	BuildFamilies();
 
-	// 敌方策略：策略文件缺失或与招式家族数对不上就保持随机出招
-	JsonValue policyRequest(DATA_OBJECT);
-	policyRequest["post"] = "resource path";
-	policyRequest["name"] = POLICY_FILE_NAME;
-	post->Post(policyRequest);
-	const JsonValue& policyResult = post->GetResult();
-	if (policyResult["result"].AsString() == "success") {
-		auto ai = make_unique<PolicyAI>();
-		if (ai->Load(policyResult["path"].AsString(), RowCount())) {
-			for (const auto& family : families) enemyFamilyActions.push_back(family.firstAction + family.formCount - 1);
-			enemyAI = std::move(ai);
+	// 敌方AI：权重文件缺失或结构对不上就不用(敌方退化成随机出招)
+	{
+		JsonValue aiRequest(DATA_OBJECT);
+		aiRequest["post"] = "resource path";
+		aiRequest["name"] = AI_FILE_NAME;
+		post->Post(aiRequest);
+		const JsonValue& aiResult = post->GetResult();
+		if (aiResult["result"].AsString() == "success") {
+			auto ai = make_unique<AI>(1);    // 敌方是控制器里的下标1
+			if (ai->Load(aiResult["path"].AsString())) {
+				for (const auto& family : families) enemyFamilyActions.push_back(family.firstAction + family.formCount - 1);   // 每个家族取最高式
+				enemyAI = std::move(ai);
+			}
 		}
 	}
 	controller = make_unique<Controller>(vector<shared_ptr<Cultivator>>{ player, enemy });

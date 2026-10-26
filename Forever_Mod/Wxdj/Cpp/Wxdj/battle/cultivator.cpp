@@ -52,6 +52,10 @@ int Cultivator::GetBomb() const {
 	return bomb;
 }
 
+int Cultivator::GetRecover() const {
+	return recover;
+}
+
 float Cultivator::GetBombMultiplier() const {
 	return bombMultiplier;
 }

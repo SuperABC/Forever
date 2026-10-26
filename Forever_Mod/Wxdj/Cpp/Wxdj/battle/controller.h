@@ -103,6 +103,10 @@ public:
 	// 这个修炼者这一回合是否被禁锢(回合开始时由禁锢效果设置)：被禁锢时单招/双招/释放炸弹都会被跳过
 	bool IsLocked(int cultivator) const;
 
+	// 某个修炼者身上的持续效果、场地效果(只读，AI的局面特征要用)
+	const std::vector<std::shared_ptr<Effect>>& GetEffectsOf(int cultivator) const;
+	const std::vector<std::shared_ptr<Effect>>& GetEnvironmentEffects() const;
+
 	// 获取当前场地效果：(效果类型, 还剩几回合)
 	std::vector<std::pair<EFFECT_TYPE, int>> GetEnvironment() const;
 

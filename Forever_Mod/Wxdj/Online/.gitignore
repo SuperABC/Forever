@@ -1,0 +1,7 @@
+node_modules/
+.wrangler/
+.dev.vars
+# 由 tools/build_engine.py 从 public/ai.html 生成(dev/deploy 会自动重新生成)
+public/engine.js
+# 站点根的 index.html：由 tools/build_index.py 从 Online/index.html 生成
+public/index.html

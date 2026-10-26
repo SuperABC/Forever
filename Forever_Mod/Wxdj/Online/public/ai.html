@@ -1,0 +1,2105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>五行斗诀 人机对战</title>
+<style>
+  :root {
+    --bg: #12121a; --panel: #1c1c24; --panel-line: #464655; --text: #dcdcdc; --gold: #e6be5a;
+    --row: #3c3c48; --row-hover: #50505c; --btn: #465a82; --btn-hover: #5a6f9a;
+    --mp: #3c82dc; --atk: #dcaf32; --hp: #d23c3c; --bar-bg: #1e1414;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 "Microsoft YaHei", "PingFang SC", sans-serif; }
+  #app { max-width: 1200px; margin: 0 auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 100%; }
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid #0f0f14; background: var(--btn); color: #fff; padding: 6px 12px; border-radius: 3px; }
+  button:hover:not(:disabled) { background: var(--btn-hover); }
+  button:active:not(:disabled) { filter: brightness(.7); }
+  button:disabled { cursor: default; background: #333340; color: #8a8a8a; }
+  select, input[type=text] { background: #262630; border: 1px solid var(--panel-line); border-radius: 3px; padding: 3px 6px; }
+  input[type=text]:focus, select:focus { outline: 1px solid var(--gold); }
+
+  #toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+  #toolbar .spacer { flex: 1; }
+  #toolbar label.file { cursor: pointer; border: 1px solid #0f0f14; background: #3d3d4c; padding: 6px 10px; border-radius: 3px; }
+  #toolbar label.file:hover { background: #4c4c5e; }
+  #toolbar input[type=file] { display: none; }
+  #info { color: #9a9aaa; }
+
+  #statusRow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .status { padding: 6px 4px; }
+  #envBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 28px; }
+  #envBar .lab { color: #bebec8; }
+  #envBar .none { color: #82828c; }
+  #envBar .chip { padding: 2px 10px; border: 1px solid #0f0f14; color: #fff; }
+  .nameRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 6px; }
+  .nameRow .name { font-size: 18px; font-weight: bold; color: #e6e6e6; margin-right: 6px; }
+  .nameRow label { font-size: 12px; color: #aaaabb; }
+  .nameRow input { width: 64px; text-align: right; }
+  .barRow { display: grid; grid-template-columns: 60% 40%; align-items: center; margin-bottom: 5px; }
+  .bar { height: 20px; background: var(--bar-bg); overflow: hidden; }
+  .fill { height: 100%; width: 0; }
+  .fill.mp { background: var(--mp); } .fill.atk { background: var(--atk); } .fill.hp { background: var(--hp); }
+  .val { display: flex; align-items: center; gap: 4px; padding-left: 8px; white-space: nowrap; }
+  .val b { width: 32px; font-weight: normal; }
+  .val input { width: 78px; text-align: right; }
+
+  #body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; min-height: 520px; }
+  #leftCol { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  #log { flex: 1; min-height: 300px; max-height: 62vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--panel-line); padding: 6px 8px; }
+  #log div { padding: 1px 0; }
+  #log .hdr { color: #e6be5a; margin-top: 8px; font-weight: bold; }
+  #manual { background: var(--panel); border: 1px solid var(--panel-line); padding: 8px; display: none; flex-direction: column; gap: 6px; }
+  #manual.show { display: flex; }
+  #manual .line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #manual select { flex: 1; min-width: 150px; }
+  #manual .title { color: var(--gold); }
+
+  #rightCol { display: flex; flex-direction: column; gap: 6px; min-height: 0; position: relative; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .row2 button, .row3 button { padding: 9px 4px; }
+  .modeBtn { background: #465a82; }
+  .modeBtn.sel { outline: 2px solid #ffe678; outline-offset: -2px; }
+  #accBtn { background: #8c6428; } #accBtn:hover { background: #a67832; }
+  #bombBtn { background: #aa3c32; } #bombBtn:hover:not(:disabled) { background: #c04c40; }
+  #skipBtn { background: #5a5a64; } #skipBtn:hover { background: #6c6c78; }
+  #sliderRow { display: flex; align-items: center; gap: 10px; background: #2a2a36; padding: 4px 8px; }
+  #sliderRow .lab { width: 56px; }
+  #sliderRow input[type=range] { flex: 1; }
+  #sliderRow.locked { color: #828282; }
+  #hint { color: #e6be5a; min-height: 20px; font-size: 13px; }
+  #lockBanner { display: none; background: #c82828; color: #fff; font-size: 18px; font-weight: bold; text-align: center; padding: 10px 6px;
+    border: 2px solid #ffd2d2; animation: lockPulse 1s ease-in-out infinite; }
+  @keyframes lockPulse { 0%, 100% { background: #c82828; } 50% { background: #8c1414; } }
+  #rightCol.locked { outline: 3px solid #e63232; outline-offset: 2px; }
+  .fam.disabled { opacity: .35; cursor: not-allowed; filter: grayscale(.7); }
+  .fam.disabled:hover { background: var(--row); }
+  #list { flex: 1; overflow-y: auto; max-height: 56vh; display: flex; flex-direction: column; gap: 2px; padding-right: 2px; }
+  .fam { display: flex; align-items: center; background: var(--row); border: 1px solid #0f0f14; cursor: pointer; min-height: 30px; padding: 0 8px 0 0; user-select: none; }
+  .fam:hover { background: var(--row-hover); }
+  .fam:active { filter: brightness(.7); }
+  .fam .stripe { width: 6px; align-self: stretch; margin-right: 8px; }
+  .fam .nm { flex: 1; color: #fff; }
+  .fam .cost { color: #fff; font-variant-numeric: tabular-nums; }
+  .fam.picked { outline: 2px solid #ffe678; outline-offset: -2px; }
+  #tip { position: fixed; z-index: 30; pointer-events: none; display: none; max-width: 340px; background: rgba(20,20,28,.95); border: 1px solid #c8b464; padding: 6px 8px; font-size: 13px; }
+  #tip .t { color: #ffdc78; margin-bottom: 2px; }
+
+  #overlay { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 18px; }
+  #overlay.show { display: flex; }
+  #overlay.win { background: rgba(20,160,50,.6); } #overlay.lose { background: rgba(180,20,20,.6); }
+  #overlay .big { font-size: 44px; color: #fff; font-weight: bold; }
+  #overlay .btns { display: flex; gap: 12px; }
+  #overlay button { padding: 10px 22px; font-size: 16px; }
+
+  @media (max-width: 820px) {
+    #statusRow, #body { grid-template-columns: 1fr; }
+    #log { max-height: 40vh; }
+  }
+
+  /* ---- 联机站点追加：返回主界面 ---- */
+  .wxdj-back { display: inline-block; text-decoration: none; cursor: pointer; border: 1px solid #0f0f14; background: #465a82; color: #fff;
+    padding: 6px 12px; border-radius: 3px; font-size: 13px; line-height: 1.4; }
+  .wxdj-back:hover { background: #5a6f9a; }
+  .wxdj-back.float { position: fixed; left: 10px; top: 10px; z-index: 50; box-shadow: 0 2px 8px #0008; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toolbar">
+    <a class="wxdj-back" href="../index.html">← 返回主界面</a>
+    <span>敌方出招</span>
+    <select id="enemyMode">
+      <option value="ai">AI</option>
+      <option value="random">随机</option>
+      <option value="manual">手动</option>
+    </select>
+    <span id="aiFormBox" title="AI每回合出招用的式（双方候选招式都取这一式）">AI用第<input type="number" id="aiForm" min="1" max="20" value="20" style="width:3.2em">式</span>
+    <button id="restartBtn" title="用当前编辑的属性上限重新开战（当前值=上限）">重新开战</button>
+    <button id="standardBtn" title="双方属性恢复为\"AI用第N式\"所在阶位的标准属性后重新开战">恢复标准属性</button>
+    <span class="spacer"></span>
+    <label class="file">加载招式文件<input type="file" id="actFile" accept=".txt"></label>
+    <span id="info"></span>
+  </div>
+
+  <div id="statusRow"><div class="status" id="status0"></div><div class="status" id="status1"></div></div>
+  <div id="envBar"></div>
+
+  <div id="body">
+    <div id="leftCol">
+      <div id="log"></div>
+      <div id="manual">
+        <div class="title">敌方出招（手动）：下回合敌方出这一招</div>
+        <div class="line">
+          <select id="mType">
+            <option value="skip">跳过</option><option value="acc">积攒真气炸弹</option><option value="bomb">释放真气炸弹</option>
+            <option value="single" selected>单招</option><option value="dual">双招</option>
+          </select>
+        </div>
+        <div class="line"><select id="mA1"></select></div>
+        <div class="line"><select id="mA2"></select></div>
+        <div class="line" id="mNote" style="color:#9a9aaa;font-size:12px"></div>
+      </div>
+    </div>
+    <div id="rightCol">
+      <div class="row2">
+        <button class="modeBtn" id="modeSingle">单招</button>
+        <button class="modeBtn" id="modeDual">双招</button>
+      </div>
+      <div class="row3">
+        <button id="accBtn">积攒真气炸弹</button>
+        <button id="bombBtn">释放真气炸弹(0)</button>
+        <button id="skipBtn">跳过</button>
+      </div>
+      <div id="sliderRow"><span class="lab" id="formLabel">第20式</span><input type="range" id="form" min="1" max="20" value="20"></div>
+      <div id="lockBanner">被禁锢！本回合无法出招<br><span style="font-size:13px;font-weight:normal">只能点击「积攒真气炸弹」或「跳过」</span></div>
+      <div id="hint"></div>
+      <div id="list"></div>
+    </div>
+  </div>
+</div>
+<div id="tip"></div>
+<div id="overlay"><div class="big" id="overlayText"></div><div class="btns"><button id="againBtn">重新开战</button><button id="closeBtn">关闭</button></div></div>
+
+<!-- AI的权重(可选)：和本文件放同一目录；没有这个文件时，"AI"选项自动隐藏 -->
+<script src="ai_weights.js"></script>
+<script>
+/* 对战AI(通用模型)的浏览器端推理：照 ai/transformer 的 model.py / features.h / env.cpp 移植。
+ * 依赖 wxdj_simulator 里的全局常量和函数(A_系列、E_系列常量和 singleFromDef 等)，权重由 ai_weights.js 提供(WXDJ_AI_WEIGHTS)。
+ * 特征、网络结构必须和训练端完全一致：改了那边就要同步这里并重新导出权重。 */
+(function (global) {
+  "use strict";
+  const FM = 75, SD = 41, HK = 8, HD = 59, D = 128, HEADS = 4, LATENTS = 16, BLOCKS = 3;
+  const NEG = -1e9;
+
+  /* ---------------- 张量小工具(行优先 Float32Array) ---------------- */
+  function erf(x) {                      // Abramowitz-Stegun 7.1.26 的高精度变体(误差~1e-7)
+    const s = x < 0 ? -1 : 1; x = Math.abs(x);
+    const t = 1 / (1 + 0.3275911 * x);
+    const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+    return s * y;
+  }
+  const gelu = v => 0.5 * v * (1 + erf(v * Math.SQRT1_2));
+
+  class W {                              // 权重表：按名字取 Float32Array
+    constructor(b64, names, shapes) {
+      const bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const all = new Float32Array(bytes.buffer);
+      this.t = {}; let off = 0;
+      names.forEach((n, i) => { const size = shapes[i].reduce((a, c) => a * c, 1); this.t[n] = all.subarray(off, off + size); off += size; });
+    }
+    get(n) { const v = this.t[n]; if (!v) throw new Error("缺少权重 " + n); return v; }
+  }
+
+  // y(n×out) = x(n×in) · W(out×in)^T + b
+  function linear(x, n, inD, w, b, outD) {
+    const y = new Float32Array(n * outD);
+    for (let r = 0; r < n; r++) {
+      const xo = r * inD, yo = r * outD;
+      for (let j = 0; j < outD; j++) {
+        let s = b ? b[j] : 0; const wo = j * inD;
+        for (let i = 0; i < inD; i++) s += x[xo + i] * w[wo + i];
+        y[yo + j] = s;
+      }
+    }
+    return y;
+  }
+  function layerNorm(x, n, d, w, b) {
+    const y = new Float32Array(n * d);
+    for (let r = 0; r < n; r++) {
+      const o = r * d; let m = 0, v = 0;
+      for (let i = 0; i < d; i++) m += x[o + i]; m /= d;
+      for (let i = 0; i < d; i++) { const c = x[o + i] - m; v += c * c; } v /= d;
+      const inv = 1 / Math.sqrt(v + 1e-5);
+      for (let i = 0; i < d; i++) y[o + i] = (x[o + i] - m) * inv * w[i] + b[i];
+    }
+    return y;
+  }
+  function geluInPlace(x) { for (let i = 0; i < x.length; i++) x[i] = gelu(x[i]); return x; }
+  function add(a, b) { const y = new Float32Array(a.length); for (let i = 0; i < a.length; i++) y[i] = a[i] + b[i]; return y; }
+
+  class Net {
+    constructor(weights) { this.w = weights; }
+
+    mlp(x, n, prefix, inD, hD, outD) {
+      const w = this.w;
+      let h = linear(x, n, inD, w.get(prefix + ".net.0.weight"), w.get(prefix + ".net.0.bias"), hD);
+      geluInPlace(h);
+      return linear(h, n, hD, w.get(prefix + ".net.2.weight"), w.get(prefix + ".net.2.bias"), outD);
+    }
+    lin(x, n, prefix, inD, outD) { return linear(x, n, inD, this.w.get(prefix + ".weight"), this.w.get(prefix + ".bias"), outD); }
+    ln(x, n, prefix) { return layerNorm(x, n, D, this.w.get(prefix + ".weight"), this.w.get(prefix + ".bias")); }
+
+    // nn.MultiheadAttention(batch_first) 前向：q(nq×D)，kv(nk×D)，不含padding(只传有效的key)
+    mha(q, nq, kv, nk, prefix) {
+      const w = this.w, inW = w.get(prefix + ".in_proj_weight"), inB = w.get(prefix + ".in_proj_bias");
+      const q2 = linear(q, nq, D, inW.subarray(0, D * D), inB.subarray(0, D), D);
+      const k2 = linear(kv, nk, D, inW.subarray(D * D, 2 * D * D), inB.subarray(D, 2 * D), D);
+      const v2 = linear(kv, nk, D, inW.subarray(2 * D * D, 3 * D * D), inB.subarray(2 * D, 3 * D), D);
+      const hd = D / HEADS, scale = 1 / Math.sqrt(hd);
+      const out = new Float32Array(nq * D), sc = new Float32Array(nk);
+      for (let h = 0; h < HEADS; h++) {
+        const ho = h * hd;
+        for (let i = 0; i < nq; i++) {
+          let mx = -Infinity;
+          for (let j = 0; j < nk; j++) {
+            let s = 0; const qo = i * D + ho, ko = j * D + ho;
+            for (let c = 0; c < hd; c++) s += q2[qo + c] * k2[ko + c];
+            s *= scale; sc[j] = s; if (s > mx) mx = s;
+          }
+          let z = 0; for (let j = 0; j < nk; j++) { sc[j] = Math.exp(sc[j] - mx); z += sc[j]; }
+          for (let j = 0; j < nk; j++) {
+            const p = sc[j] / z, vo = j * D + ho;
+            for (let c = 0; c < hd; c++) out[i * D + ho + c] += p * v2[vo + c];
+          }
+        }
+      }
+      return this.lin(out, nq, prefix + ".out_proj", D, D);
+    }
+
+    // 计算局面+记录+双方招式 -> {cls(5), l1(自己招式数), h, ctx, es}
+    forward(state, hist, histValid, msFeat, nS, moFeat, nO) {
+      const w = this.w;
+      const kind = w.get("kind"), role = w.get("role"), pos = w.get("hist_pos");
+      let st = this.mlp(state, 1, "state_enc", SD, D, D);
+      const stTok = new Float32Array(D); for (let i = 0; i < D; i++) stTok[i] = st[i] + kind[i];
+      const hs = this.mlp(hist, HK, "hist_enc", HD, D, D);
+      const nH = histValid.filter(v => v).length;
+      const embed = (feat, n, roleIdx) => {
+        const e = this.mlp(feat, n, "move_enc", FM, D, D);
+        for (let r = 0; r < n; r++) for (let i = 0; i < D; i++) e[r * D + i] += kind[2 * D + i] + role[roleIdx * D + i];
+        return e;
+      };
+      const es = embed(msFeat, nS, 0), eo = embed(moFeat, nO, 1);
+      // 有效的token：局面 + 有效的记录 + 自己招式 + 对手招式
+      const nk = 1 + nH + nS + nO, kv = new Float32Array(nk * D);
+      kv.set(stTok, 0); let p = 1;
+      for (let k = 0; k < HK; k++) if (histValid[k]) {
+        for (let i = 0; i < D; i++) kv[p * D + i] = hs[k * D + i] + pos[k * D + i] + kind[D + i];
+        p++;
+      }
+      kv.set(es, p * D); p += nS; kv.set(eo, p * D);
+      let lat = new Float32Array(LATENTS * D); lat.set(w.get("latents"));
+      for (let b = 0; b < BLOCKS; b++) {
+        const pre = "blocks." + b;
+        const kvn = this.ln(kv, nk, pre + ".nkv");
+        lat = add(lat, this.mha(this.ln(lat, LATENTS, pre + ".n1"), LATENTS, kvn, nk, pre + ".cross"));
+        const x = this.ln(lat, LATENTS, pre + ".n2");
+        lat = add(lat, this.mha(x, LATENTS, x, LATENTS, pre + ".self_attn"));
+        let f = this.lin(this.ln(lat, LATENTS, pre + ".n3"), LATENTS, pre + ".ffn.0", D, 2 * D);
+        geluInPlace(f);
+        lat = add(lat, this.lin(f, LATENTS, pre + ".ffn.2", 2 * D, D));
+      }
+      lat = this.ln(lat, LATENTS, "out_norm");
+      const h = new Float32Array(D);
+      for (let r = 0; r < LATENTS; r++) for (let i = 0; i < D; i++) h[i] += lat[r * D + i] / LATENTS;
+      for (let i = 0; i < D; i++) h[i] += stTok[i];     // 训练端: h = 潜变量均值 + (state_enc(state)+kind[0])
+      // 招式读取潜变量
+      const q = this.ln(es, nS, "ctx_norm_q"), ckv = this.ln(lat, LATENTS, "ctx_norm_kv");
+      let ctx = add(es, this.mha(q, nS, ckv, LATENTS, "ctx_attn"));
+      let f = this.ln(ctx, nS, "ctx_ffn.0");
+      f = this.lin(f, nS, "ctx_ffn.1", D, 2 * D); geluInPlace(f);
+      ctx = add(ctx, this.lin(f, nS, "ctx_ffn.3", 2 * D, D));
+      const cls = this.mlp(h, 1, "cls_head", D, D, 5);
+      const k1 = this.lin(ctx, nS, "k1", D, D), q1 = this.lin(h, 1, "q1", D, D);
+      const l1 = new Float32Array(nS);
+      for (let m = 0; m < nS; m++) { let s = 0; for (let i = 0; i < D; i++) s += q1[i] * k1[m * D + i]; l1[m] = s / Math.sqrt(D); }
+      const value = this.mlp(h, 1, "value", D, D, 1)[0];
+      return { cls, l1, h, ctx, value };
+    }
+
+    secondLogits(h, ctx, nS, pick, allowed) {
+      const pe = this.lin(ctx.subarray(pick * D, (pick + 1) * D), 1, "pick_emb", D, D);
+      const x = new Float32Array(D); for (let i = 0; i < D; i++) x[i] = h[i] + pe[i];
+      const q = this.lin(x, 1, "q2", D, D), k = this.lin(ctx, nS, "k2", D, D);
+      const l = new Float32Array(nS);
+      for (let m = 0; m < nS; m++) {
+        if (!allowed[m]) { l[m] = NEG; continue; }
+        let s = 0; for (let i = 0; i < D; i++) s += q[i] * k[m * D + i]; l[m] = s / Math.sqrt(D);
+      }
+      return l;
+    }
+  }
+
+  function sample(logits, greedy) {
+    let mx = -Infinity; for (const v of logits) if (v > mx) mx = v;
+    if (greedy) { let b = 0; for (let i = 1; i < logits.length; i++) if (logits[i] > logits[b]) b = i; return b; }
+    const p = Array.from(logits, v => Math.exp(v - mx)); let z = 0; for (const v of p) z += v;
+    let r = Math.random() * z;
+    for (let i = 0; i < p.length; i++) { r -= p[i]; if (r < 0) return i; }
+    return p.length - 1;
+  }
+
+  /* ---------------- 特征(照 features.h / env.cpp) ---------------- */
+  const clamp = v => Math.max(-10, Math.min(10, v));
+
+  function moveFeatures(act, self, opp) {
+    const o = new Float32Array(FM);
+    const mp = act.point, power = act.power;
+    const sHP = Math.max(1, self.maxHP), sATK = Math.max(1, self.maxATK), sMP = Math.max(1, self.maxMP);
+    const oHP = Math.max(1, opp.maxHP), oATK = Math.max(1, opp.maxATK);
+    let i = 0;
+    o[i++] = clamp(mp / sMP); o[i++] = Math.log1p(mp) / 10; o[i++] = clamp(power / sATK); o[i++] = Math.log1p(power) / 10;
+    o[i++] = clamp(power / oHP); o[i++] = clamp(power / oATK);
+    if (act.attr >= 0 && act.attr < 7) o[i + act.attr] = 1;
+    i += 7;
+    const find = t => act.effects.find(e => e.type === t) || null;
+    const ratios = (type, flag) => {
+      const e = find(type);
+      if (e) { for (let k = 0; k < 7; k++) o[i + k] = e.ratios[k] || 0; o[65 + flag] = 1; }
+      i += 7;
+    };
+    ratios(E_PENETRATE, 1); ratios(E_PHYSICAL, 0); ratios(E_REDUCE, 2); ratios(E_REBOUND, 3); ratios(E_ABSORB, 4);
+    const lock = find(E_LOCK);
+    if (lock) { o[i] = lock.prob; o[65 + 5] = 1; }
+    i += 1;
+    const timed = (type, flag, base) => {
+      const e = find(type);
+      if (e) {
+        o[i] = clamp(e.instant / base); o[i + 1] = clamp(e.continuous / base);
+        o[i + 2] = e.rounds / 10; o[i + 3] = e.interval / 5; o[65 + flag] = 1;
+      }
+      i += 4;
+    };
+    timed(E_DOT, 6, oATK); timed(E_REBATE, 7, sMP); timed(E_RECOVER, 8, sATK); timed(E_CURE, 9, sHP);
+    return o;
+  }
+
+  function fillState(ctl, seat, round) {
+    const o = new Float32Array(SD);
+    let i = 0;
+    for (let k = 0; k < 2; k++) {
+      const idx = k === 0 ? seat : 1 - seat, c = ctl.cultivators[idx];
+      const mhp = Math.max(1, c.maxHP), matk = Math.max(1, c.maxATK), mmp = Math.max(1, c.maxMP);
+      o[i++] = clamp(c.currentHP / mhp); o[i++] = clamp(c.currentATK / matk); o[i++] = clamp(c.currentMP / mmp);
+      o[i++] = clamp(c.bomb / mmp);
+      o[i++] = Math.log(mhp) / 12; o[i++] = Math.log(matk) / 12; o[i++] = Math.log(mmp) / 12;
+      o[i++] = c.agi / 30; o[i++] = clamp(c.recover / mmp);
+      o[i++] = (ctl.status[idx] & 1) ? 1 : 0;
+      let dot = 0, reb = 0, rec = 0, cure = 0;
+      for (const e of ctl.effects[idx]) {
+        if (e.type === E_DOT) dot += e.continuous * e.rounds;
+        else if (e.type === E_REBATE) reb += e.continuous * e.rounds;
+        else if (e.type === E_RECOVER) rec += e.continuous * e.rounds;
+        else if (e.type === E_CURE) cure += e.continuous * e.rounds;
+      }
+      o[i++] = clamp(dot / matk); o[i++] = clamp(reb / mmp); o[i++] = clamp(rec / matk); o[i++] = clamp(cure / mhp);
+      o[i++] = c.maxAgi / 30; o[i++] = c.agiLoss / 5; o[i++] = c.agiRecover / 2; o[i++] = c.bombMultiplier / 10;
+    }
+    for (const e of ctl.environment) {
+      if (e.type === E_BURN) o[i] = 1; else if (e.type === E_RUST) o[i + 1] = 1;
+      else if (e.type === E_DUST) o[i + 2] = 1; else if (e.type === E_MUD) o[i + 3] = 1;
+    }
+    i += 4;
+    o[i++] = round / 40;
+    return o;
+  }
+
+  const effOrder = () => [E_PHYSICAL, E_PENETRATE, E_REDUCE, E_REBOUND, E_ABSORB, E_LOCK, E_DOT, E_REBATE, E_RECOVER, E_CURE];   // 常量在模拟器脚本里定义，运行时才取
+  function actionRecord(act, c, out, off) {
+    const cls = act.type;
+    if (cls >= 0 && cls < 5) out[off + cls] = 1;
+    if (cls >= 3 && act.attr >= 0 && act.attr < 7) out[off + 5 + act.attr] = 1;
+    out[off + 12] = clamp(act.point / Math.max(1, c.maxMP));
+    out[off + 13] = clamp(act.power / Math.max(1, c.maxATK));
+    effOrder().forEach((t, k) => { if (act.effects.some(e => e.type === t)) out[off + 14 + k] = 1; });
+  }
+
+  /* ---------------- 对战AI ---------------- */
+  class Agent {
+    constructor(net, seat) { this.net = net; this.seat = seat; this.reset(); }
+    reset() { this.hist = []; this.snap = null; }
+
+    // 每回合出招前调用(控制器已经 startTurn)：记下出招前的状态
+    beginRound(ctl) {
+      this.snap = ctl.cultivators.map((c, idx) => ({
+        r: [c.currentHP / c.maxHP, c.currentATK / c.maxATK, c.currentMP / c.maxMP], locked: (ctl.status[idx] & 1) !== 0,
+      }));
+    }
+    // 出招结算(endTurn)之后调用：actions=[玩家席位0的招, 席位1的招]，logs=本回合产生的日志
+    endRound(ctl, actions, logs) {
+      if (!this.snap) return;
+      const s = this.seat, o = 1 - s, cs = ctl.cultivators;
+      const dodged = [false, false];
+      for (const lg of logs) if (lg.type === L_DODGE && lg.object >= 0 && lg.object < 2) dodged[lg.object] = true;
+      const row = new Float32Array(HD);
+      row[0] = 1;
+      actionRecord(actions[s], cs[s], row, 1);
+      actionRecord(actions[o], cs[o], row, 25);
+      const now = idx => [cs[idx].currentHP / cs[idx].maxHP, cs[idx].currentATK / cs[idx].maxATK, cs[idx].currentMP / cs[idx].maxMP];
+      const ns = now(s), no = now(o);
+      for (let k = 0; k < 3; k++) { row[49 + k] = clamp(ns[k] - this.snap[s].r[k]); row[52 + k] = clamp(no[k] - this.snap[o].r[k]); }
+      row[55] = dodged[s] ? 1 : 0; row[56] = dodged[o] ? 1 : 0;
+      row[57] = this.snap[s].locked ? 1 : 0; row[58] = this.snap[o].locked ? 1 : 0;
+      this.hist.push(row);
+      if (this.hist.length > HK) this.hist.shift();
+      this.snap = null;
+    }
+
+    // moves: 候选招式在 defs 里的下标数组(自己和对手共用同一份招式表)
+    forwardAll(ctl, round, defs, moves) {
+      const s = this.seat, me = ctl.cultivators[s], opp = ctl.cultivators[1 - s];
+      const acts = moves.map(i => singleFromDef(defs[i]));
+      const n = acts.length;
+      const msFeat = new Float32Array(n * FM), moFeat = new Float32Array(n * FM);
+      acts.forEach((a, k) => { msFeat.set(moveFeatures(a, me, opp), k * FM); moFeat.set(moveFeatures(a, opp, me), k * FM); });
+      const hist = new Float32Array(HK * HD), valid = new Array(HK).fill(false);
+      const off = HK - this.hist.length;
+      this.hist.forEach((row, k) => { hist.set(row, (off + k) * HD); valid[off + k] = true; });
+      const state = fillState(ctl, s, round);
+      const out = this.net.forward(state, hist, valid, msFeat, n, moFeat, n);
+      return { out, acts, n, me, state, hist, msFeat };
+    }
+
+    choose(ctl, round, defs, moves, greedy) {
+      const { out, acts, n, me } = this.forwardAll(ctl, round, defs, moves);
+      const cls = sample(out.cls, greedy);
+      this.last = { cls, value: out.value };
+      if (cls === 0) return skipAction();
+      if (cls === 1) return accumulateAction();
+      if (cls === 2) return bombAction();
+      const m1 = sample(out.l1, greedy);
+      if (cls === 3) return me.getAction(moves[m1]);
+      const allowed = acts.map(a => sameForm(acts[m1], a));
+      const m2 = sample(this.net.secondLogits(out.h, out.ctx, n, m1, allowed), greedy);
+      return me.getAction(moves[m1], moves[m2]);
+    }
+  }
+
+  global.WxdjAI = {
+    ready: () => !!global.WXDJ_AI_WEIGHTS,
+    load() {
+      const wt = global.WXDJ_AI_WEIGHTS;
+      return new Net(new W(wt.data, wt.names, wt.shapes));
+    },
+    Agent, Net, moveFeatures, fillState, constants: { FM, SD, HK, HD },
+  };
+})(window);
+</script>
+<script>
+"use strict";
+/* ============ 内置数据(Resource/act/xiaohua.txt)，可用顶部按钮换成别的文件 ============ */
+const BUILTIN_ACTIONS = String.raw`# (2026-10-26：第20式的所有参数冻结，第一式改为按效果重新调平衡——这一版是第三版估计值(第二版测出天降春雨过弱、伏羲九针/金钟罩/狂火拳/吸蜂神功偏强、开天辟地爪/木森林变换/铁手功偏弱；第二版前：第一版测出天降春雨/吸蜂神功/五行八卦掌偏强、元素家族偏强，无招不动、其余整体下调)，只动第一式的消耗/威力/效果的绝对数值(立即量、每段量)，效果的轮次/比例/概率不动；第2~19式暂时没动。2026-10-25第四次调整：海龙金身消耗x1.5、伏羲九针回复武力的量x1.5、木森林变换威力x1.2、五行八卦掌消耗x1.1威力x1.5；第三次调整：千腿威力x1.4、五行八卦掌/开天辟地爪威力x1.2、天降春雨消耗x1.1威力x0.8、逆天神功/地狱阴魔拳消耗x1.4威力x0.8；第二次调整：海龙金身威力再x1.5、铁手功/木森林变换威力再x1.2，除无招外所有家族消耗再x1.1、威力再x0.9；第一次调整：海龙金身威力x1.5、铁手功/木森林变换威力x1.2、逆天神功消耗x1.2，再把除无招外所有家族消耗x1.02、威力x0.98；下面各家族注释里的"第20式实测强度"是调整之前的，需要重新评估)
+# 数值说明：2026-10-25起第2~19式的消耗/威力/定时效果的数值(dot/rebate/recover/cure的立即量和每段量)按"和无招同式数值的比例"在第1式与第20式之间线性插值得到，再乘该式无招的数值(rebate用无招的消耗，其余用无招的威力)；比例类效果、轮次、间隔不动。第1式和第20式是手调的锚点。
+# 每个家族前的注释写了效果的变化规则，以及第20式在标准初始属性(4-6：健康25800/武力38900/真气24800)下的实测强度：
+# 相对无招多/少多少威力的价值，正数=比无招强，负数=比无招弱。标准初始属性和强度公式见 Cpp/Wxdj/battle/battle.md。
+
+# 无招：基准招式，无效果(数值固定为尺子，不调；五个元素克无属性后它被削弱，其他家族的第一式相应下调来对齐它)
+无招第一式 none 100 200 3-1 0
+无招第二式 none 120 246 3-2 0
+无招第三式 none 144 302 3-3 0
+无招第四式 none 172 370 3-4 0
+无招第五式 none 208 458 3-5 0
+无招第六式 none 250 562 3-6 0
+无招第七式 none 300 690 4-1 0
+无招第八式 none 360 846 4-1 0
+无招第九式 none 432 1036 4-2 0
+无招第十式 none 518 1270 4-2 0
+无招第十一式 none 622 1555 4-3 0
+无招第十二式 none 745 1900 4-3 0
+无招第十三式 none 895 2327 4-4 0
+无招第十四式 none 1075 2850 4-4 0
+无招第十五式 none 1290 3483 4-5 0
+无招第十六式 none 1548 4257 4-5 0
+无招第十七式 none 1860 5208 4-5 0
+无招第十八式 none 2230 6356 4-6 0
+无招第十九式 none 2680 7772 4-6 0
+无招第二十式 none 3200 9440 4-6 0
+
+# 千腿：穿透比例从第20式的一半起线性涨(第1式=R20x21/40=31.5%，每式+1.5%)，到第20式60%(对五行属性取其余属性的80%)；第20式实测强度 +17%
+千腿第一式 none 99 190 3-1 1
+penetrate 0.315 0.315 0.315 0.315 0.315 0.315 0.252
+千腿第二式 none 122 237 3-2 1
+penetrate 0.33 0.33 0.33 0.33 0.33 0.33 0.264
+千腿第三式 none 149 295 3-3 1
+penetrate 0.345 0.345 0.345 0.345 0.345 0.345 0.276
+千腿第四式 none 183 367 3-4 1
+penetrate 0.36 0.36 0.36 0.36 0.36 0.36 0.288
+千腿第五式 none 226 461 3-5 1
+penetrate 0.375 0.375 0.375 0.375 0.375 0.375 0.3
+千腿第六式 none 277 574 3-6 1
+penetrate 0.39 0.39 0.39 0.39 0.39 0.39 0.312
+千腿第七式 none 340 714 4-1 1
+penetrate 0.405 0.405 0.405 0.405 0.405 0.405 0.324
+千腿第八式 none 417 887 4-1 1
+penetrate 0.42 0.42 0.42 0.42 0.42 0.42 0.336
+千腿第九式 none 510 1101 4-2 1
+penetrate 0.435 0.435 0.435 0.435 0.435 0.435 0.348
+千腿第十式 none 624 1368 4-2 1
+penetrate 0.45 0.45 0.45 0.45 0.45 0.45 0.36
+千腿第十一式 none 764 1697 4-3 1
+penetrate 0.465 0.465 0.465 0.465 0.465 0.465 0.372
+千腿第十二式 none 933 2100 4-3 1
+penetrate 0.48 0.48 0.48 0.48 0.48 0.48 0.384
+千腿第十三式 none 1143 2605 4-4 1
+penetrate 0.495 0.495 0.495 0.495 0.495 0.495 0.396
+千腿第十四式 none 1400 3230 4-4 1
+penetrate 0.51 0.51 0.51 0.51 0.51 0.51 0.408
+千腿第十五式 none 1710 3997 4-5 1
+penetrate 0.525 0.525 0.525 0.525 0.525 0.525 0.42
+千腿第十六式 none 2091 4945 4-5 1
+penetrate 0.54 0.54 0.54 0.54 0.54 0.54 0.432
+千腿第十七式 none 2557 6123 4-5 1
+penetrate 0.555 0.555 0.555 0.555 0.555 0.555 0.444
+千腿第十八式 none 3120 7562 4-6 1
+penetrate 0.57 0.57 0.57 0.57 0.57 0.57 0.456
+千腿第十九式 none 3814 9357 4-6 1
+penetrate 0.585 0.585 0.585 0.585 0.585 0.585 0.468
+千腿第二十式 none 4632 11498 4-6 1
+penetrate 0.6 0.6 0.6 0.6 0.6 0.6 0.48
+
+# 开天辟地爪：物理比例(伤害中转换成物理伤害的比例)从第20式的一半起线性涨(第1式26.25%，每式+1.25%)，到第20式50%(对五行属性取其余属性的80%)；第20式实测强度 +7%
+开天辟地爪第一式 none 100 254 3-1 1
+physical 0.2625 0.2625 0.2625 0.2625 0.2625 0.2625 0.21
+开天辟地爪第二式 none 121 315 3-2 1
+physical 0.275 0.275 0.275 0.275 0.275 0.275 0.22
+开天辟地爪第三式 none 148 390 3-3 1
+physical 0.2875 0.2875 0.2875 0.2875 0.2875 0.2875 0.23
+开天辟地爪第四式 none 178 481 3-4 1
+physical 0.3 0.3 0.3 0.3 0.3 0.3 0.24
+开天辟地爪第五式 none 218 601 3-5 1
+physical 0.3125 0.3125 0.3125 0.3125 0.3125 0.3125 0.25
+开天辟地爪第六式 none 265 743 3-6 1
+physical 0.325 0.325 0.325 0.325 0.325 0.325 0.26
+开天辟地爪第七式 none 322 919 4-1 1
+physical 0.3375 0.3375 0.3375 0.3375 0.3375 0.3375 0.27
+开天辟地爪第八式 none 391 1136 4-1 1
+physical 0.35 0.35 0.35 0.35 0.35 0.35 0.28
+开天辟地爪第九式 none 475 1402 4-2 1
+physical 0.3625 0.3625 0.3625 0.3625 0.3625 0.3625 0.29
+开天辟地爪第十式 none 575 1731 4-2 1
+physical 0.375 0.375 0.375 0.375 0.375 0.375 0.3
+开天辟地爪第十一式 none 699 2136 4-3 1
+physical 0.3875 0.3875 0.3875 0.3875 0.3875 0.3875 0.31
+开天辟地爪第十二式 none 846 2630 4-3 1
+physical 0.4 0.4 0.4 0.4 0.4 0.4 0.32
+开天辟地爪第十三式 none 1027 3245 4-4 1
+physical 0.4125 0.4125 0.4125 0.4125 0.4125 0.4125 0.33
+开天辟地爪第十四式 none 1247 4003 4-4 1
+physical 0.425 0.425 0.425 0.425 0.425 0.425 0.34
+开天辟地爪第十五式 none 1512 4929 4-5 1
+physical 0.4375 0.4375 0.4375 0.4375 0.4375 0.4375 0.35
+开天辟地爪第十六式 none 1834 6068 4-5 1
+physical 0.45 0.45 0.45 0.45 0.45 0.45 0.36
+开天辟地爪第十七式 none 2227 7477 4-5 1
+physical 0.4625 0.4625 0.4625 0.4625 0.4625 0.4625 0.37
+开天辟地爪第十八式 none 2697 9192 4-6 1
+physical 0.475 0.475 0.475 0.475 0.475 0.475 0.38
+开天辟地爪第十九式 none 3274 11320 4-6 1
+physical 0.4875 0.4875 0.4875 0.4875 0.4875 0.4875 0.39
+开天辟地爪第二十式 none 3949 13847 4-6 1
+physical 0.5 0.5 0.5 0.5 0.5 0.5 0.4
+
+# 逆天神功：禁锢概率从第20式的一半起线性涨(第1式42%，每式+2%)，到第20式80%；第20式实测强度 +7%
+逆天神功第一式 none 100 264 3-1 1
+lock 0.42
+逆天神功第二式 none 124 327 3-2 1
+lock 0.44
+逆天神功第三式 none 155 404 3-3 1
+lock 0.46
+逆天神功第四式 none 191 498 3-4 1
+lock 0.48
+逆天神功第五式 none 239 622 3-5 1
+lock 0.5
+逆天神功第六式 none 296 767 3-6 1
+lock 0.52
+逆天神功第七式 none 366 948 4-1 1
+lock 0.54
+逆天神功第八式 none 452 1170 4-1 1
+lock 0.56
+逆天神功第九式 none 559 1442 4-2 1
+lock 0.58
+逆天神功第十式 none 689 1779 4-2 1
+lock 0.6
+逆天神功第十一式 none 850 2192 4-3 1
+lock 0.62
+逆天神功第十二式 none 1045 2696 4-3 1
+lock 0.64
+逆天神功第十三式 none 1289 3323 4-4 1
+lock 0.66
+逆天神功第十四式 none 1587 4095 4-4 1
+lock 0.68
+逆天神功第十五式 none 1952 5036 4-5 1
+lock 0.7
+逆天神功第十六式 none 2399 6193 4-5 1
+lock 0.72
+逆天神功第十七式 none 2951 7624 4-5 1
+lock 0.74
+逆天神功第十八式 none 3620 9361 4-6 1
+lock 0.76
+逆天神功第十九式 none 4449 11517 4-6 1
+lock 0.78
+逆天神功第二十式 none 5429 14073 4-6 1
+lock 0.8
+
+# 铁手功：无效果；第20式实测强度 -2%
+铁手功第一式 metal 100 150 3-1 0
+铁手功第二式 metal 121 188 3-2 0
+铁手功第三式 metal 146 235 3-3 0
+铁手功第四式 metal 175 294 3-4 0
+铁手功第五式 metal 213 370 3-5 0
+铁手功第六式 metal 258 463 3-6 0
+铁手功第七式 metal 312 578 4-1 0
+铁手功第八式 metal 376 721 4-1 0
+铁手功第九式 metal 454 899 4-2 0
+铁手功第十式 metal 548 1120 4-2 0
+铁手功第十一式 metal 662 1394 4-3 0
+铁手功第十二式 metal 798 1732 4-3 0
+铁手功第十三式 metal 964 2155 4-4 0
+铁手功第十四式 metal 1165 2681 4-4 0
+铁手功第十五式 metal 1406 3328 4-5 0
+铁手功第十六式 metal 1697 4129 4-5 0
+铁手功第十七式 metal 2051 5128 4-5 0
+铁手功第十八式 metal 2473 6352 4-6 0
+铁手功第十九式 metal 2989 7881 4-6 0
+铁手功第二十式 metal 3590 9711 4-6 0
+
+# 伏羲九针：回复/治疗的量和持续轮次、间隔逐式设定(第2~19式按第1/20式的比例插值)，见各行；第20式实测强度 +7%
+伏羲九针第一式 metal 100 51 3-1 2
+recover 33 26 3 2
+cure 23 16 3 2
+伏羲九针第二式 metal 120 64 3-2 2
+recover 40 31 3 2
+cure 29 20 3 2
+伏羲九针第三式 metal 144 81 3-3 2
+recover 46 36 3 2
+cure 33 23 3 2
+伏羲九针第四式 metal 172 101 3-4 2
+recover 55 43 4 2
+cure 37 26 4 2
+伏羲九针第五式 metal 208 128 3-5 2
+recover 64 51 4 2
+cure 44 33 4 2
+伏羲九针第六式 metal 251 160 3-6 2
+recover 76 62 4 2
+cure 53 37 4 2
+伏羲九针第七式 metal 301 201 4-1 2
+recover 89 70 4 1
+cure 63 44 4 1
+伏羲九针第八式 metal 361 251 4-1 2
+recover 103 82 4 1
+cure 73 53 4 1
+伏羲九针第九式 metal 434 313 4-2 2
+recover 122 96 4 1
+cure 84 62 4 1
+伏羲九针第十式 metal 520 392 4-2 2
+recover 142 112 4 1
+cure 97 70 4 1
+伏羲九针第十一式 metal 625 489 4-3 2
+recover 163 129 5 1
+cure 114 82 5 1
+伏羲九针第十二式 metal 749 609 4-3 2
+recover 188 148 5 1
+cure 130 95 5 1
+伏羲九针第十三式 metal 900 759 4-4 2
+recover 218 169 5 1
+cure 150 109 5 1
+伏羲九针第十四式 metal 1082 947 4-4 2
+recover 249 195 5 1
+cure 172 125 5 1
+伏羲九针第十五式 metal 1299 1178 4-5 2
+recover 284 221 6 1
+cure 195 142 6 1
+伏羲九针第十六式 metal 1560 1465 4-5 2
+recover 321 249 6 1
+cure 220 162 6 1
+伏羲九针第十七式 metal 1875 1823 4-5 2
+recover 363 279 6 1
+cure 246 182 6 1
+伏羲九针第十八式 metal 2249 2262 4-6 2
+recover 405 308 7 1
+cure 274 202 7 1
+伏羲九针第十九式 metal 2705 2812 4-6 2
+recover 449 340 7 1
+cure 300 224 7 1
+伏羲九针第二十式 metal 3231 3472 4-6 2
+recover 488 366 7 1
+cure 326 244 7 1
+
+# 金钟罩：反弹比例从第20式的一半起线性涨(第1式21%，每式+1%)，到第20式40%；第20式实测强度 -9%
+金钟罩第一式 metal 76 115 3-1 1
+rebound 0.21 0.21 0.21 0.21 0.21 0.21 0.21
+金钟罩第二式 metal 92 137 3-2 1
+rebound 0.22 0.22 0.22 0.22 0.22 0.22 0.22
+金钟罩第三式 metal 111 162 3-3 1
+rebound 0.23 0.23 0.23 0.23 0.23 0.23 0.23
+金钟罩第四式 metal 133 192 3-4 1
+rebound 0.24 0.24 0.24 0.24 0.24 0.24 0.24
+金钟罩第五式 metal 162 229 3-5 1
+rebound 0.25 0.25 0.25 0.25 0.25 0.25 0.25
+金钟罩第六式 metal 195 270 3-6 1
+rebound 0.26 0.26 0.26 0.26 0.26 0.26 0.26
+金钟罩第七式 metal 236 319 4-1 1
+rebound 0.27 0.27 0.27 0.27 0.27 0.27 0.27
+金钟罩第八式 metal 284 375 4-1 1
+rebound 0.28 0.28 0.28 0.28 0.28 0.28 0.28
+金钟罩第九式 metal 343 439 4-2 1
+rebound 0.29 0.29 0.29 0.29 0.29 0.29 0.29
+金钟罩第十式 metal 414 514 4-2 1
+rebound 0.3 0.3 0.3 0.3 0.3 0.3 0.3
+金钟罩第十一式 metal 499 600 4-3 1
+rebound 0.31 0.31 0.31 0.31 0.31 0.31 0.31
+金钟罩第十二式 metal 601 698 4-3 1
+rebound 0.32 0.32 0.32 0.32 0.32 0.32 0.32
+金钟罩第十三式 metal 726 811 4-4 1
+rebound 0.33 0.33 0.33 0.33 0.33 0.33 0.33
+金钟罩第十四式 metal 877 939 4-4 1
+rebound 0.34 0.34 0.34 0.34 0.34 0.34 0.34
+金钟罩第十五式 metal 1058 1082 4-5 1
+rebound 0.35 0.35 0.35 0.35 0.35 0.35 0.35
+金钟罩第十六式 metal 1276 1242 4-5 1
+rebound 0.36 0.36 0.36 0.36 0.36 0.36 0.36
+金钟罩第十七式 metal 1541 1421 4-5 1
+rebound 0.37 0.37 0.37 0.37 0.37 0.37 0.37
+金钟罩第十八式 metal 1858 1614 4-6 1
+rebound 0.38 0.38 0.38 0.38 0.38 0.38 0.38
+金钟罩第十九式 metal 2244 1826 4-6 1
+rebound 0.39 0.39 0.39 0.39 0.39 0.39 0.39
+金钟罩第二十式 metal 2693 2040 4-6 1
+rebound 0.4 0.4 0.4 0.4 0.4 0.4 0.4
+
+# 砍柴功：无效果；第20式实测强度 -6%
+砍柴功第一式 wood 70 100 3-1 0
+砍柴功第二式 wood 84 123 3-2 0
+砍柴功第三式 wood 101 151 3-3 0
+砍柴功第四式 wood 121 185 3-4 0
+砍柴功第五式 wood 147 229 3-5 0
+砍柴功第六式 wood 177 281 3-6 0
+砍柴功第七式 wood 213 346 4-1 0
+砍柴功第八式 wood 256 424 4-1 0
+砍柴功第九式 wood 308 519 4-2 0
+砍柴功第十式 wood 370 637 4-2 0
+砍柴功第十一式 wood 445 780 4-3 0
+砍柴功第十二式 wood 534 953 4-3 0
+砍柴功第十三式 wood 643 1167 4-4 0
+砍柴功第十四式 wood 774 1430 4-4 0
+砍柴功第十五式 wood 931 1748 4-5 0
+砍柴功第十六式 wood 1119 2137 4-5 0
+砍柴功第十七式 wood 1348 2616 4-5 0
+砍柴功第十八式 wood 1620 3193 4-6 0
+砍柴功第十九式 wood 1951 3905 4-6 0
+砍柴功第二十式 wood 2334 4745 4-6 0
+
+# 木森林变换：无效果；第20式实测强度 +23%
+木森林变换第一式 wood 135 235 3-1 0
+木森林变换第二式 wood 163 297 3-2 0
+木森林变换第三式 wood 197 374 3-3 0
+木森林变换第四式 wood 237 471 3-4 0
+木森林变换第五式 wood 288 597 3-5 0
+木森林变换第六式 wood 348 751 3-6 0
+木森林变换第七式 wood 421 945 4-1 0
+木森林变换第八式 wood 508 1186 4-1 0
+木森林变换第九式 wood 613 1486 4-2 0
+木森林变换第十式 wood 740 1862 4-2 0
+木森林变换第十一式 wood 894 2330 4-3 0
+木森林变换第十二式 wood 1077 2909 4-3 0
+木森林变换第十三式 wood 1301 3638 4-4 0
+木森林变换第十四式 wood 1572 4548 4-4 0
+木森林变换第十五式 wood 1898 5671 4-5 0
+木森林变换第十六式 wood 2291 7069 4-5 0
+木森林变换第十七式 wood 2769 8817 4-5 0
+木森林变换第十八式 wood 3339 10966 4-6 0
+木森林变换第十九式 wood 4036 13661 4-6 0
+木森林变换第二十式 wood 4847 16898 4-6 0
+
+# 海龙金身：减伤比例从第20式的一半起线性涨(第1式42%，每式+2%)，到第20式80%；第20式实测强度 -1%
+海龙金身第一式 water 99 140 3-1 1
+reduce 0.42 0.42 0.42 0.42 0.42 0.42 0.42
+海龙金身第二式 water 122 170 3-2 1
+reduce 0.44 0.44 0.44 0.44 0.44 0.44 0.44
+海龙金身第三式 water 151 205 3-3 1
+reduce 0.46 0.46 0.46 0.46 0.46 0.46 0.46
+海龙金身第四式 water 185 248 3-4 1
+reduce 0.48 0.48 0.48 0.48 0.48 0.48 0.48
+海龙金身第五式 water 229 302 3-5 1
+reduce 0.5 0.5 0.5 0.5 0.5 0.5 0.5
+海龙金身第六式 water 283 365 3-6 1
+reduce 0.52 0.52 0.52 0.52 0.52 0.52 0.52
+海龙金身第七式 water 348 442 4-1 1
+reduce 0.54 0.54 0.54 0.54 0.54 0.54 0.54
+海龙金身第八式 water 428 533 4-1 1
+reduce 0.56 0.56 0.56 0.56 0.56 0.56 0.56
+海龙金身第九式 water 525 643 4-2 1
+reduce 0.58 0.58 0.58 0.58 0.58 0.58 0.58
+海龙金身第十式 water 645 775 4-2 1
+reduce 0.6 0.6 0.6 0.6 0.6 0.6 0.6
+海龙金身第十一式 water 792 934 4-3 1
+reduce 0.62 0.62 0.62 0.62 0.62 0.62 0.62
+海龙金身第十二式 water 969 1122 4-3 1
+reduce 0.64 0.64 0.64 0.64 0.64 0.64 0.64
+海龙金身第十三式 water 1190 1351 4-4 1
+reduce 0.66 0.66 0.66 0.66 0.66 0.66 0.66
+海龙金身第十四式 water 1460 1627 4-4 1
+reduce 0.68 0.68 0.68 0.68 0.68 0.68 0.68
+海龙金身第十五式 water 1788 1953 4-5 1
+reduce 0.7 0.7 0.7 0.7 0.7 0.7 0.7
+海龙金身第十六式 water 2189 2345 4-5 1
+reduce 0.72 0.72 0.72 0.72 0.72 0.72 0.72
+海龙金身第十七式 water 2683 2817 4-5 1
+reduce 0.74 0.74 0.74 0.74 0.74 0.74 0.74
+海龙金身第十八式 water 3280 3375 4-6 1
+reduce 0.76 0.76 0.76 0.76 0.76 0.76 0.76
+海龙金身第十九式 water 4018 4050 4-6 1
+reduce 0.78 0.78 0.78 0.78 0.78 0.78 0.78
+海龙金身第二十式 water 4888 4825 4-6 1
+reduce 0.8 0.8 0.8 0.8 0.8 0.8 0.8
+
+# 天降春雨：回复真气的量和持续轮次、间隔逐式设定(第2~19式按第1/20式的比例插值)，见各行；第20式实测强度 +14%
+天降春雨第一式 water 124 57 3-1 1
+rebate 38 30 3 2
+天降春雨第二式 water 152 70 3-2 1
+rebate 50 40 3 2
+天降春雨第三式 water 187 86 3-3 1
+rebate 64 50 3 2
+天降春雨第四式 water 228 105 3-4 1
+rebate 82 66 4 2
+天降春雨第五式 water 282 129 3-5 1
+rebate 106 84 4 2
+天降春雨第六式 water 347 158 3-6 1
+rebate 136 108 4 2
+天降春雨第七式 water 425 194 4-1 1
+rebate 173 138 4 1
+天降春雨第八式 water 521 237 4-1 1
+rebate 219 174 4 1
+天降春雨第九式 water 637 290 4-2 1
+rebate 277 220 4 1
+天降春雨第十式 water 780 354 4-2 1
+rebate 349 278 4 1
+天降春雨第十一式 water 954 433 4-3 1
+rebate 439 350 5 1
+天降春雨第十二式 water 1165 528 4-3 1
+rebate 551 440 5 1
+天降春雨第十三式 water 1426 645 4-4 1
+rebate 691 552 5 1
+天降春雨第十四式 water 1744 788 4-4 1
+rebate 865 690 5 1
+天降春雨第十五式 water 2131 960 4-5 1
+rebate 1080 862 6 1
+天降春雨第十六式 water 2603 1171 4-5 1
+rebate 1346 1076 6 1
+天降春雨第十七式 water 3183 1429 4-5 1
+rebate 1678 1342 6 1
+天降春雨第十八式 water 3881 1740 4-6 1
+rebate 2084 1666 7 1
+天降春雨第十九式 water 4743 2123 4-6 1
+rebate 2593 2074 7 1
+天降春雨第二十式 water 5758 2572 4-6 1
+rebate 3200 2560 7 1
+
+# 狂火拳：持续伤害的量和持续轮次、间隔逐式设定(第2~19式按第1/20式的比例插值)，见各行；第20式实测强度 +5%
+狂火拳第一式 fire 95 44 3-1 1
+dot 58 43 3 2
+狂火拳第二式 fire 114 56 3-2 1
+dot 69 52 3 2
+狂火拳第三式 fire 136 71 3-3 1
+dot 83 62 3 2
+狂火拳第四式 fire 162 90 3-4 1
+dot 99 74 4 2
+狂火拳第五式 fire 195 115 3-5 1
+dot 119 89 4 2
+狂火拳第六式 fire 234 146 3-6 1
+dot 141 106 4 2
+狂火拳第七式 fire 280 186 4-1 1
+dot 168 126 4 1
+狂火拳第八式 fire 335 234 4-1 1
+dot 200 151 4 1
+狂火拳第九式 fire 401 295 4-2 1
+dot 236 179 4 1
+狂火拳第十式 fire 479 372 4-2 1
+dot 280 213 4 1
+狂火拳第十一式 fire 574 468 4-3 1
+dot 331 252 5 1
+狂火拳第十二式 fire 685 586 4-3 1
+dot 390 298 5 1
+狂火拳第十三式 fire 821 738 4-4 1
+dot 459 353 5 1
+狂火拳第十四式 fire 983 926 4-4 1
+dot 540 417 5 1
+狂火拳第十五式 fire 1176 1160 4-5 1
+dot 633 491 6 1
+狂火拳第十六式 fire 1406 1452 4-5 1
+dot 741 578 6 1
+狂火拳第十七式 fire 1685 1818 4-5 1
+dot 867 679 6 1
+狂火拳第十八式 fire 2014 2270 4-6 1
+dot 1009 796 7 1
+狂火拳第十九式 fire 2413 2839 4-6 1
+dot 1173 932 7 1
+狂火拳第二十式 fire 2872 3525 4-6 1
+dot 1352 1082 7 1
+
+# 地狱阴魔拳：禁锢概率从第20式的一半起线性涨(第1式31.5%，每式+1.5%)，到第20式60%；第20式实测强度 +2%
+地狱阴魔拳第一式 earth 100 200 3-1 1
+lock 0.315
+地狱阴魔拳第二式 earth 123 251 3-2 1
+lock 0.33
+地狱阴魔拳第三式 earth 151 312 3-3 1
+lock 0.345
+地狱阴魔拳第四式 earth 185 388 3-4 1
+lock 0.36
+地狱阴魔拳第五式 earth 230 488 3-5 1
+lock 0.375
+地狱阴魔拳第六式 earth 282 609 3-6 1
+lock 0.39
+地狱阴魔拳第七式 earth 347 759 4-1 1
+lock 0.405
+地狱阴魔拳第八式 earth 425 945 4-1 1
+lock 0.42
+地狱阴魔拳第九式 earth 522 1175 4-2 1
+lock 0.435
+地狱阴魔拳第十式 earth 639 1461 4-2 1
+lock 0.45
+地狱阴魔拳第十一式 earth 783 1815 4-3 1
+lock 0.465
+地狱阴魔拳第十二式 earth 957 2250 4-3 1
+lock 0.48
+地狱阴魔拳第十三式 earth 1173 2793 4-4 1
+lock 0.495
+地狱阴魔拳第十四式 earth 1437 3468 4-4 1
+lock 0.51
+地狱阴魔拳第十五式 earth 1758 4297 4-5 1
+lock 0.525
+地狱阴魔拳第十六式 earth 2150 5322 4-5 1
+lock 0.54
+地狱阴魔拳第十七式 earth 2631 6597 4-5 1
+lock 0.555
+地狱阴魔拳第十八式 earth 3212 8157 4-6 1
+lock 0.57
+地狱阴魔拳第十九式 earth 3930 10102 4-6 1
+lock 0.585
+地狱阴魔拳第二十式 earth 4775 12428 4-6 1
+lock 0.6
+
+# 吸蜂神功：吸收比例从第20式的一半起线性涨(第1式105%，每式+5%)，到第20式200%；第20式实测强度 +2%
+吸蜂神功第一式 all 114 125 3-1 1
+absorb 1.05 1.05 1.05 1.05 1.05 1.05 1.05
+吸蜂神功第二式 all 136 151 3-2 1
+absorb 1.1 1.1 1.1 1.1 1.1 1.1 1.1
+吸蜂神功第三式 all 162 182 3-3 1
+absorb 1.15 1.15 1.15 1.15 1.15 1.15 1.15
+吸蜂神功第四式 all 193 218 3-4 1
+absorb 1.2 1.2 1.2 1.2 1.2 1.2 1.2
+吸蜂神功第五式 all 232 265 3-5 1
+absorb 1.25 1.25 1.25 1.25 1.25 1.25 1.25
+吸蜂神功第六式 all 278 318 3-6 1
+absorb 1.3 1.3 1.3 1.3 1.3 1.3 1.3
+吸蜂神功第七式 all 332 382 4-1 1
+absorb 1.35 1.35 1.35 1.35 1.35 1.35 1.35
+吸蜂神功第八式 all 396 459 4-1 1
+absorb 1.4 1.4 1.4 1.4 1.4 1.4 1.4
+吸蜂神功第九式 all 472 550 4-2 1
+absorb 1.45 1.45 1.45 1.45 1.45 1.45 1.45
+吸蜂神功第十式 all 563 659 4-2 1
+absorb 1.5 1.5 1.5 1.5 1.5 1.5 1.5
+吸蜂神功第十一式 all 673 788 4-3 1
+absorb 1.55 1.55 1.55 1.55 1.55 1.55 1.55
+吸蜂神功第十二式 all 802 941 4-3 1
+absorb 1.6 1.6 1.6 1.6 1.6 1.6 1.6
+吸蜂神功第十三式 all 958 1125 4-4 1
+absorb 1.65 1.65 1.65 1.65 1.65 1.65 1.65
+吸蜂神功第十四式 all 1144 1344 4-4 1
+absorb 1.7 1.7 1.7 1.7 1.7 1.7 1.7
+吸蜂神功第十五式 all 1366 1602 4-5 1
+absorb 1.75 1.75 1.75 1.75 1.75 1.75 1.75
+吸蜂神功第十六式 all 1630 1907 4-5 1
+absorb 1.8 1.8 1.8 1.8 1.8 1.8 1.8
+吸蜂神功第十七式 all 1948 2272 4-5 1
+absorb 1.85 1.85 1.85 1.85 1.85 1.85 1.85
+吸蜂神功第十八式 all 2322 2698 4-6 1
+absorb 1.9 1.9 1.9 1.9 1.9 1.9 1.9
+吸蜂神功第十九式 all 2775 3207 4-6 1
+absorb 1.95 1.95 1.95 1.95 1.95 1.95 1.95
+吸蜂神功第二十式 all 3295 3784 4-6 1
+absorb 2 2 2 2 2 2 2
+
+# 五行八卦掌：无效果；第20式实测强度 +8%
+五行八卦掌第一式 all 110 138 3-1 0
+五行八卦掌第二式 all 133 175 3-2 0
+五行八卦掌第三式 all 161 221 3-3 0
+五行八卦掌第四式 all 194 278 3-4 0
+五行八卦掌第五式 all 237 353 3-5 0
+五行八卦掌第六式 all 287 445 3-6 0
+五行八卦掌第七式 all 348 560 4-1 0
+五行八卦掌第八式 all 421 704 4-1 0
+五行八卦掌第九式 all 510 884 4-2 0
+五行八卦掌第十式 all 616 1109 4-2 0
+五行八卦掌第十一式 all 746 1390 4-3 0
+五行八卦掌第十二式 all 901 1737 4-3 0
+五行八卦掌第十三式 all 1092 2174 4-4 0
+五行八卦掌第十四式 all 1322 2721 4-4 0
+五行八卦掌第十五式 all 1599 3397 4-5 0
+五行八卦掌第十六式 all 1935 4238 4-5 0
+五行八卦掌第十七式 all 2343 5291 4-5 0
+五行八卦掌第十八式 all 2831 6587 4-6 0
+五行八卦掌第十九式 all 3430 8212 4-6 0
+五行八卦掌第二十式 all 4127 10167 4-6 0
+`;
+
+/* ============ 战斗内核：照 Forever_Mod/Wxdj/Cpp/Wxdj/battle 逐段移植，规则不改 ============ */
+const NONE = 0, METAL = 1, WOOD = 2, WATER = 3, FIRE = 4, EARTH = 5, ALL = 6;
+const ATTR_TEXT = ["无属性", "金属性", "木属性", "水属性", "火属性", "土属性", "五行属性"];
+const ATTR_PARSE = { none: NONE, metal: METAL, wood: WOOD, water: WATER, fire: FIRE, earth: EARTH, all: ALL };
+
+const DUAL_COST_FACTOR = 1.0, DUAL_POWER_FACTOR = 0.6;
+const ACCUMULATE_FRACTION = 0.2, BOMB_ACCUMULATE_MULTIPLIER = 10, BOMB_HIT_FACTOR_PASSIVE = 0.4, BOMB_HIT_FACTOR_ACTIVE = 0.8, BOMB_BACKFIRE_FACTOR = 0.2;   // 炸弹：对手没出招打0.4，出招了打(B-威力)x0.8；互扔炸弹双方各受(B1+B2)x0.2
+// 阶位对应的最大式：3-1~3-6各一式，4-1=7~8式，4-2=9~10式，4-3=11~12式，4-4=13~14式，4-5=15~17式，4-6=18~20式
+const REALM_MAX_FORM = [1, 2, 3, 4, 5, 6, 8, 8, 10, 10, 12, 12, 14, 14, 17, 17, 17, 20, 20, 20];
+const BOMB_MULT_BY_MAXFORM = { 1: 1.0, 2: 1.2, 3: 1.5, 4: 1.9, 5: 2.4, 6: 3.0, 8: 3.7, 10: 4.5, 12: 5.6, 14: 7.0, 17: 8.5, 20: 10.0 };
+const bombMultiplierOfForm = form => BOMB_MULT_BY_MAXFORM[REALM_MAX_FORM[Math.min(20, Math.max(1, form)) - 1]];   // 炸弹积攒倍率：按阶位给定表(3-1 1.0 ... 4-6 10)
+const BOMB_RUST_FACTOR = 0.5;   // 锈蚀场地下炸弹对双方的系数
+const SKIP_STREAK_EXTRA_LOSS = 0.5;   // 连续跳过每多一次多扣0.5敏捷(1、1.5、2、2.5...)，出招/积攒/真放炸弹后清零
+const SKIP_AGI_FACTOR = 2;   // 跳过(含被禁锢而无法出招)时敏捷翻倍，只用于躲避未被正面应对的普通招式
+
+const A_SKIP = 0, A_ACCUMULATE = 1, A_BOMB = 2, A_SINGLE = 3, A_DUAL = 4;
+const E_NONE = 0, E_PHYSICAL = 1, E_PENETRATE = 2, E_REDUCE = 3, E_REBOUND = 4, E_ABSORB = 5, E_LOCK = 6,
+  E_DOT = 7, E_REBATE = 8, E_RECOVER = 9, E_CURE = 10, E_BURN = 11, E_RUST = 12, E_DUST = 13, E_MUD = 14;
+const STAGE_START = 0, STAGE_ACTION = 1, STAGE_CHECK = 2, STAGE_END = 3;
+const L_MP = 0, L_ATK = 1, L_HP = 2, L_CONSUME = 3, L_SKIP = 4, L_MOVE = 5, L_DAMAGE = 6, L_DODGE = 7, L_FAIL = 8, L_EFFECT = 9;
+
+// 属性克制：五个元素都克无属性，无属性和五行之间没有克制
+const COUNTERS = new Set([
+  [WATER, FIRE], [FIRE, WOOD], [WOOD, WATER], [EARTH, METAL], [METAL, WOOD], [WOOD, EARTH],
+  [ALL, METAL], [ALL, WOOD], [ALL, WATER], [ALL, FIRE], [ALL, EARTH],
+  [METAL, NONE], [WOOD, NONE], [WATER, NONE], [FIRE, NONE], [EARTH, NONE],
+].map(p => p.join(",")));
+
+// 双属性组合的主属性
+const DUAL_PRIMARY = (() => {
+  const m = {};
+  const set = (a, b, r) => { m[a + "," + b] = r; };
+  const both = (a, b, r) => { set(a, b, r); set(b, a, r); };
+  both(WOOD, FIRE, FIRE); both(FIRE, EARTH, EARTH); both(EARTH, METAL, EARTH); both(METAL, WATER, WATER);
+  both(WATER, WOOD, WOOD); both(FIRE, METAL, METAL); both(METAL, WOOD, METAL); both(WOOD, EARTH, WOOD);
+  both(EARTH, WATER, EARTH); both(WATER, FIRE, WATER);
+  for (const e of [METAL, WOOD, WATER, FIRE, EARTH]) { both(ALL, e, e); both(NONE, e, e); }
+  for (let a = NONE; a <= ALL; a++) set(a, a, a);
+  both(ALL, NONE, ALL);
+  return m;
+})();
+
+/* ---- 效果 ---- */
+function ratioEffect(type, r) {
+  const ratios = [0, 0, 0, 0, 0, 0, 0];
+  for (let i = 0; i < 7; i++) if (r[i] > 0) ratios[i] = r[i];
+  return { type, ratios };
+}
+function physicalAll() { return { type: E_PHYSICAL, ratios: [1, 1, 1, 1, 1, 1, 1] }; }
+function timedEffect(type, instant, continuous = 0, rounds = 0, interval = 1) {
+  return { type, instant, continuous, rounds, interval, needHit: type === E_DOT, currentRound: 0 };
+}
+function lockEffect(prob) { return { type: E_LOCK, prob, keep: true }; }
+function envEffect(type) { return { type, total: 3, currentRound: 0 }; }
+function cloneEffect(e) { return Object.assign({}, e, e.ratios ? { ratios: e.ratios.slice() } : {}); }
+function ratioOf(e, attr) { return e.ratios[attr] || 0; }
+function timedOnce(e) {
+  e.currentRound++;
+  if (e.currentRound >= e.interval && e.rounds > 0) { e.rounds--; e.currentRound = 0; return e.continuous; }
+  return 0;
+}
+const timedUsedUp = e => e.rounds <= 0;
+
+function parseEffect(line) {
+  const t = line.trim().split(/\s+/);
+  const kind = t[0];
+  const nums = t.slice(1).map(Number);
+  const has = n => nums.length >= n && nums.slice(0, n).every(x => !Number.isNaN(x));
+  switch (kind) {
+    case "physical": return has(7) ? ratioEffect(E_PHYSICAL, nums) : physicalAll();
+    case "penetrate": return has(7) ? ratioEffect(E_PENETRATE, nums) : null;
+    case "reduce": return has(7) ? ratioEffect(E_REDUCE, nums) : null;
+    case "rebound": return has(7) ? ratioEffect(E_REBOUND, nums) : null;
+    case "absorb": return has(7) ? ratioEffect(E_ABSORB, nums) : null;
+    case "lock": return has(1) ? lockEffect(nums[0]) : null;
+    case "dot": case "rebate": case "recover": case "cure": {
+      // 和原版解析一致：必须给全4个数(instant continuous rounds interval)
+      if (!has(4)) return null;
+      const type = { dot: E_DOT, rebate: E_REBATE, recover: E_RECOVER, cure: E_CURE }[kind];
+      return timedEffect(type, nums[0] | 0, nums[1] | 0, nums[2] | 0, nums[3] | 0);
+    }
+  }
+  return null;
+}
+
+/* ---- 招式 ---- */
+function makeAction(type, attr, point, power, effects, text) { return { type, attr, point, power, effects, text }; }
+const skipAction = () => makeAction(A_SKIP, NONE, 0, 0, [], "无");
+const accumulateAction = () => makeAction(A_ACCUMULATE, NONE, 0, 0, [], "积攒真气炸弹");
+const bombAction = () => makeAction(A_BOMB, NONE, 0, 0, [physicalAll()], "释放真气炸弹");
+function singleFromDef(def) {
+  const a = makeAction(A_SINGLE, def.attr, def.point, def.power, def.effects.map(cloneEffect), def.name);
+  a.name = def.name;
+  return a;
+}
+function dualAction(a1, a2) {
+  const attr = DUAL_PRIMARY[a1.attr + "," + a2.attr];
+  const a = makeAction(A_DUAL, attr,
+    Math.trunc(DUAL_COST_FACTOR * (a1.point + a2.point)), Math.trunc(DUAL_POWER_FACTOR * (a1.power + a2.power)),
+    a1.effects.concat(a2.effects.filter(e => !a1.effects.some(o => o.type === e.type))),   // 同名效果只取第一个招式的
+    "(" + a1.name + ", " + a2.name + ")");
+  a.action1 = a1; a.action2 = a2;
+  return a;
+}
+function getEffect(action, type) { return action.effects.find(e => e.type === type) || null; }
+
+// 双招的两招必须同式：招式名是"家族名+第X式"，比较"第X式"部分
+function sameForm(a, b) {
+  const p1 = a.name.indexOf("第"), p2 = b.name.indexOf("第");
+  if (p1 < 0 || p2 < 0) return true;
+  return a.name.slice(p1) === b.name.slice(p2);
+}
+
+function parseActions(text) {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const defs = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line === "" || line[0] === "#") continue;
+    const t = line.trim().split(/\s+/);
+    if (t.length < 6) continue;
+    const mp = parseInt(t[2]), atk = parseInt(t[3]), count = parseInt(t[5]);
+    if ([mp, atk, count].some(Number.isNaN)) continue;
+    const effects = [];
+    for (let k = 0; k < count; k++) {
+      i++;
+      if (i >= lines.length) break;
+      const e = parseEffect(lines[i]);
+      if (e) effects.push(e);
+    }
+    defs.push({ name: t[0], attr: ATTR_PARSE[t[1]] ?? NONE, point: mp, power: atk, realm: t[4], effects });
+  }
+  return defs;
+}
+
+/* ---- 修炼者 ---- */
+class Cultivator {
+  constructor(name, defs, hp, atk, mp, agi, recover, agiLoss = 1, agiRecover = 0.2, bombMultiplier = BOMB_ACCUMULATE_MULTIPLIER) {
+    this.name = name; this.defs = defs;
+    this.maxHP = this.currentHP = hp; this.maxATK = this.currentATK = atk; this.maxMP = this.currentMP = mp;
+    // 敏捷：当前值agi，上限maxAgi；闪避一次损失agiLoss，每回合自动恢复agiRecover(不超过上限)
+    this.agi = agi; this.maxAgi = agi; this.agiLoss = agiLoss; this.agiRecover = agiRecover; this.skipStreak = 0;
+    this.recover = recover; this.bomb = 0; this.bombMultiplier = bombMultiplier;   // 炸弹积攒倍率：个人属性，由所在阶位决定
+  }
+  skipLoss() { return this.agiLoss + SKIP_STREAK_EXTRA_LOSS * this.skipStreak; }   // 这次跳过要扣多少敏捷
+  canDodge() { return this.agi - this.skipLoss() >= 1 - 1e-4; }   // 跳过得起吗：跳过要损失agiLoss点敏捷，之后敏捷不能低于1
+  consumeAgi() { this.agi = Math.max(1, this.agi - this.skipLoss()); this.skipStreak++; }
+  recoverAgi() { this.agi = Math.min(this.maxAgi, this.agi + this.agiRecover); }
+  isAlive() { return this.currentHP > 0 && this.currentATK > 0; }
+  getAction(a, b) {
+    const n = this.defs.length;
+    if (typeof a === "string") {
+      if (b === undefined) { const d = this.defs.find(x => x.name === a); return d ? singleFromDef(d) : skipAction(); }
+      const d1 = this.defs.find(x => x.name === a), d2 = this.defs.find(x => x.name === b);
+      if (d1 && d2) { const s1 = singleFromDef(d1), s2 = singleFromDef(d2); if (sameForm(s1, s2)) return dualAction(s1, s2); }
+      return skipAction();
+    }
+    if (b === undefined) {
+      // 0..n-1 单招，n..n+2 积攒，n+3 炸弹，其余跳过
+      if (a < 0 || a >= n + 4) return skipAction();
+      if (a >= n && a <= n + 2) return accumulateAction();
+      if (a === n + 3) return bombAction();
+      return singleFromDef(this.defs[a]);
+    }
+    if (a < 0 || a >= n || b < 0 || b >= n) return skipAction();
+    const s1 = singleFromDef(this.defs[a]), s2 = singleFromDef(this.defs[b]);
+    return sameForm(s1, s2) ? dualAction(s1, s2) : skipAction();
+  }
+  recoverMP(amount) {
+    this.currentMP += amount <= 0 ? this.recover : amount;
+    if (this.currentMP > this.maxMP * 2) this.currentHP = 0;
+    else if (this.currentMP > this.maxMP) this.currentMP = this.maxMP;
+  }
+  consumeMP(amount) {
+    if (this.currentMP >= amount) this.currentMP -= amount;
+    else { const deficit = amount - this.currentMP; this.currentMP = 0; this.currentATK = Math.max(0, this.currentATK - deficit * 2); }
+  }
+  recoverATK(amount) { this.currentATK = Math.min(this.maxATK, this.currentATK + amount); }
+  recoverHP(amount) { this.currentHP = Math.min(this.maxHP, this.currentHP + amount); }
+  takeDamage(amount, physical) {
+    if (physical) this.currentHP = Math.max(0, this.currentHP - amount);
+    else {
+      if (amount >= this.currentATK * 0.6) this.currentHP = Math.max(0, this.currentHP - amount);
+      else if (amount >= this.currentATK * 0.3) this.currentHP = Math.max(0, Math.trunc(this.currentHP - amount * 0.5));
+      this.currentATK -= amount;
+    }
+  }
+  accumulatePower() {
+    // 消耗当前真气的一部分，按倍数存进炸弹
+    const spent = Math.trunc(ACCUMULATE_FRACTION * this.currentMP);
+    this.currentMP -= spent;
+    this.bomb += Math.trunc(spent * this.bombMultiplier);
+  }
+  bombPower() { const p = this.bomb; this.bomb = 0; return p; }
+}
+
+/* ---- 日志 ---- */
+const logState = (type, player, amount) => ({ type, subject: player, object: -1, attribute: NONE, pointAtk: 0, pointHp: 0, amount, name: "", effect: E_NONE });
+const logSkip = player => logState(L_SKIP, player, 0);
+const logMove = (subject, object, amount, name, point) => ({ type: L_MOVE, subject, object, attribute: NONE, pointAtk: point, pointHp: 0, amount, name, effect: E_NONE });
+const logDamage = (subject, object, attribute, pointAtk, pointHp) => ({ type: L_DAMAGE, subject, object, attribute, pointAtk, pointHp, amount: 0, name: "", effect: E_NONE });
+const logDodge = (subject, object) => ({ type: L_DODGE, subject, object, attribute: NONE, pointAtk: 0, pointHp: 0, amount: 0, name: "", effect: E_NONE });
+const logEffectDamage = (subject, object, attribute, pointAtk, pointHp, effect) => ({ type: L_EFFECT, subject, object, attribute, pointAtk, pointHp, amount: 0, name: "", effect });
+const logEffectAmount = (subject, object, amount, effect) => ({ type: L_EFFECT, subject, object, attribute: NONE, pointAtk: 0, pointHp: 0, amount, name: "", effect });
+
+/* ---- 回合控制器 ---- */
+class Controller {
+  constructor(cultivators) {
+    this.cultivators = cultivators;
+    this.effects = cultivators.map(() => []);
+    this.environment = [];
+    this.status = cultivators.map(() => 0);
+    this.regenMP = cultivators.map(() => 0);   // 这回合开始时自然回复的真气量，空炸弹要把它撤销
+    this.skipAgi = cultivators.map(() => 0);   // 这回合跳过的人：>0=跳过的闪避用这个敏捷(付不起时是原来的)，0=没跳过
+    this.logs = []; this.mark = 0;
+  }
+  getNews() { const news = this.logs.slice(this.mark); this.mark = this.logs.length; return news; }
+  rand() { return Math.random(); }
+
+  startTurn() {
+    this.status.fill(0);
+    this.skipAgi.fill(0);
+    this.execEffect(STAGE_START);
+    for (let i = 0; i < this.cultivators.length; i++) { const before = this.cultivators[i].currentMP; this.recoverMP(i, -1); this.regenMP[i] = this.cultivators[i].currentMP - before; this.cultivators[i].recoverAgi(); }
+  }
+
+  actionTurn(actions) {
+    this.execEffect(STAGE_ACTION);
+    for (let i = 0; i < this.cultivators.length; i++) {
+      const act = actions[i][0], target = actions[i][1];
+      if (act.type === A_SKIP) { this.skipMove(i); this.paySkip(i); }
+      else if (act.type === A_ACCUMULATE) {
+        this.makeMove(i, target, act.point, act.text, act.power);
+        this.cultivators[i].accumulatePower();
+        this.cultivators[i].skipStreak = 0;
+      }
+      else if (this.status[i] & 1) { this.skipMove(i); this.paySkip(i); }
+      else if (act.type === A_BOMB && this.cultivators[i].bomb <= 0) {
+        this.skipMove(i);   // 空炸弹：纯跳过，不翻倍敏捷、不损失敏捷，闪避照常用自己的敏捷；这回合不回复真气
+        this.cultivators[i].currentMP = Math.max(0, this.cultivators[i].currentMP - this.regenMP[i]);
+      }
+      else if (act.type === A_BOMB) {
+        const bombPower = this.cultivators[i].bombPower();   // 战报里写明这次释放的炸弹能量
+        this.makeMove(i, target, act.point, act.text + "(能量" + bombPower + ")", act.power);
+        act.power = bombPower;
+        this.cultivators[i].skipStreak = 0;
+      }
+      else {
+        this.cultivators[i].skipStreak = 0;
+        this.makeMove(i, target, act.point, act.text, act.power);
+        const dot = getEffect(act, E_DOT);
+        if (dot && !dot.needHit) {
+          const amount = dot.instant;
+          this.logs.push(logEffectAmount(i, target, amount, E_DOT));
+          this.takeDamage(i, target, act.effects, actions[target][0].effects, act.attr, amount, true, actions[target][0].attr);
+          this.addEffect(target, cloneEffect(dot));
+        }
+        for (const [type, apply, log] of [
+          [E_REBATE, a => this.recoverMP(i, a), E_REBATE],
+          [E_RECOVER, a => this.recoverATK(i, a), E_RECOVER],
+          [E_CURE, a => this.recoverHP(i, a), E_CURE]]) {
+          const eff = getEffect(act, type);
+          if (eff && !eff.needHit) {
+            this.logs.push(logEffectAmount(i, -1, eff.instant, log));
+            apply(eff.instant);
+            this.addEffect(i, cloneEffect(eff));
+          }
+        }
+      }
+    }
+    for (const [action] of actions) this.putoutReaction(action.attr);
+  }
+
+  checkTurn(actions) {
+    this.execEffect(STAGE_CHECK);
+    const rust = () => this.findReaction(E_RUST);
+    // 被禁锢的一方这回合出的招(除了积攒)已经被跳过，它的减伤/反弹/吸收/物理等效果也不能生效，当作跳过处理
+    actions = actions.map((a, j) => ((this.status[j] & 1) && a[0].type !== A_ACCUMULATE) ? [skipAction(), a[1]]
+      : (a[0].type === A_BOMB && a[0].power <= 0) ? [skipAction(), a[1]] : a);   // 空炸弹只是纯跳过
+    for (let i = 0; i < this.cultivators.length; i++) {
+      const actI = actions[i][0], targetI = actions[i][1];
+      if (actI.type === A_SKIP || actI.type === A_ACCUMULATE) continue;
+      if (this.status[i] & 1) continue;
+      const j = targetI;
+      const actJ = actions[j][0];
+      const ci = this.cultivators[i], cj = this.cultivators[j];
+      const notFaced = actJ.type === A_SKIP || actJ.type === A_ACCUMULATE || actions[j][1] !== i || (this.status[j] & 1);
+
+      if (actI.type === A_BOMB) {
+        if (notFaced) {
+          const powerEnemy = actI.power * (rust() ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_PASSIVE);
+          const powerSelf = actI.power * (rust() ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
+          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, Math.trunc(powerEnemy), true, actJ.attr);
+          this.takeDamage(i, i, actI.effects, actI.effects, actI.attr, Math.trunc(powerSelf));
+        }
+        else if (actJ.type === A_BOMB && actions[j][1] === i) {
+          const sum = actI.power + actJ.power;   // 互扔炸弹：两个炸弹之和乘反噬系数，双方一起受到
+          const powerEnemy = sum * (rust() ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
+          this.takeDamage(j, j, actJ.effects, actJ.effects, actJ.attr, Math.trunc(powerEnemy));
+        }
+        else if (actJ.power < actI.power) {
+          let powerEnemy = actI.power - actJ.power;
+          powerEnemy *= (rust() ? BOMB_RUST_FACTOR : BOMB_HIT_FACTOR_ACTIVE);
+          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, Math.trunc(powerEnemy), true, actJ.attr);
+        }
+        continue;
+      }
+
+      // 玩家 i 施放普通招式
+      if (notFaced) {
+        // 对方跳过(含被禁锢而无法出招，但没有选积攒)时：付得起敏捷损失就用翻倍的敏捷闪避(被禁锢的一方也能)，
+        // 付不起(闪避之后敏捷会低于1)就无法闪避；没跳过的一方照常用自己的敏捷闪避，被禁锢时不能闪避
+        let defAgi = cj.agi, canDodge = true;   // 被禁锢又选了积攒的人也用自己当前的敏捷闪避
+        if (this.skipAgi[j] > 0) { defAgi = this.skipAgi[j]; canDodge = true; }
+        const dodgeChance = rust() ? 0 : (defAgi * defAgi) / (ci.agi * ci.agi + defAgi * defAgi);
+        if (canDodge && this.rand() < dodgeChance) { this.dodgeSuccess(i, j); this.buildDualEnvironment(actI); continue; }   // 双招被闪避=未命中，计入场地效果
+        let hit = true;
+        if (this.findReaction(E_DUST)) hit = this.rand() < 0.5;
+        if (hit) {
+          this.hitSuccess(i, j, actI, actJ);
+          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, actI.power, true, actJ.attr);
+        } else { this.hitFail(i); this.buildDualEnvironment(actI); }
+      }
+      else if (actJ.type === A_BOMB && actions[j][1] === i) {
+        // 目标 j 施放真气炸弹且指向 i：只计算 j 受到的伤害
+        let powerEnemy = 0;
+        if (actI.power < actJ.power) {
+          powerEnemy = actJ.power * (rust() ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
+          this.takeDamage(j, j, actJ.effects, actJ.effects, actJ.attr, Math.trunc(powerEnemy));
+        }
+        else if (actI.power > 2 * actJ.power) {
+          powerEnemy = actI.power - 2 * actJ.power;
+          this.takeDamage(i, j, actI.effects, actJ.effects, actI.attr, Math.trunc(powerEnemy), true, actJ.attr);
+        }
+        else {
+          powerEnemy = 2 * actJ.power - actI.power;
+          powerEnemy *= (rust() ? BOMB_RUST_FACTOR : BOMB_BACKFIRE_FACTOR);
+          this.takeDamage(j, j, actJ.effects, actJ.effects, actJ.attr, Math.trunc(powerEnemy));
+        }
+      }
+      else {
+        // 双方互相施放普通招式，每对只算一次
+        if (j < i) continue;
+        let point1 = actI.power, point2 = actJ.power;
+        const attr1 = actI.attr, attr2 = actJ.attr;
+        if (this.checkCounter(attr1, attr2)) point2 = Math.trunc(point2 / 2);
+        if (this.checkCounter(attr2, attr1)) point1 = Math.trunc(point1 / 2);
+
+        // 双方出招的最终属性碰撞产生的场地效果；双招自己的两个基础招式构造的场地效果只在双招未命中时才产生
+        const clashReaction = this.addReaction(this.checkReaction(attr1, attr2));
+
+        const dust = this.findReaction(E_DUST);
+        const hit = dust ? this.rand() < 0.5 : true;
+        if (!hit) {
+          this.hitFail(i);
+          if (!clashReaction) { this.buildDualEnvironment(actI); this.buildDualEnvironment(actJ); }
+          continue;
+        }
+
+        // 穿透：额外伤害按较小的那一个威力算(平局时各按对方的)
+        const penetrate = (pointForI, pointForJ) => {
+          let eff = getEffect(actI, E_PENETRATE);
+          if (eff) {
+            const pen = Math.trunc(pointForI * ratioOf(eff, attr2));
+            this.logs.push(logEffectDamage(i, j, attr1, pen, 0, E_PENETRATE));
+            this.takeDamage(i, j, actI.effects, actJ.effects, attr1, pen, false, attr2);
+          }
+          eff = getEffect(actJ, E_PENETRATE);
+          if (eff) {
+            const pen = Math.trunc(pointForJ * ratioOf(eff, attr1));
+            this.logs.push(logEffectDamage(j, i, attr2, pen, 0, E_PENETRATE));
+            this.takeDamage(j, i, actJ.effects, actI.effects, attr2, pen, false, attr1);
+          }
+        };
+        if (point1 > point2) {
+          this.hitSuccess(i, j, actI, actJ); this.hitSuccess(j, i, actJ, actI);
+          this.takeDamage(i, j, actI.effects, actJ.effects, attr1, point1 - point2, true, attr2);
+          penetrate(point2, point2);
+        }
+        else if (point2 > point1) {
+          this.hitSuccess(i, j, actI, actJ); this.hitSuccess(j, i, actJ, actI);
+          this.takeDamage(j, i, actJ.effects, actI.effects, attr2, point2 - point1, true, attr1);
+          penetrate(point1, point1);
+        }
+        else {
+          this.hitSuccess(i, j, actI, actJ); this.hitSuccess(j, i, actJ, actI);
+          penetrate(point2, point1);
+        }
+      }
+    }
+  }
+
+  endTurn() {
+    this.execEffect(STAGE_END);
+    this.environment = this.environment.filter(e => { e.currentRound++; return e.currentRound < e.total; });
+  }
+
+  addEffect(idx, effect) { if (idx >= 0 && idx < this.effects.length) this.effects[idx].push(effect); }
+  addEnvironment(effect) {
+    const k = this.environment.findIndex(e => e.type === effect.type);
+    if (k < 0) this.environment.push(effect); else this.environment[k] = effect;
+  }
+
+  execEffect(stage) {
+    if (stage !== STAGE_START) return; // 所有持续效果都只在回合开始阶段结算
+    for (let i = 0; i < this.effects.length; i++) {
+      for (let j = 0; j < this.effects[i].length; j++) {
+        const eff = this.effects[i][j];
+        const erase = () => { this.effects[i].splice(j, 1); j--; };
+        if (eff.type === E_LOCK) { this.status[i] |= 1; erase(); }
+        else if (eff.type === E_DOT) {
+          const dmg = timedOnce(eff);
+          if (dmg !== 0) { this.logs.push(logEffectAmount(-1, i, dmg, E_DOT)); this.takeDamage(-1, i, [], [], NONE, dmg, false); }
+          if (timedUsedUp(eff)) erase();
+        }
+        else if (eff.type === E_REBATE) {
+          const v = timedOnce(eff);
+          if (v !== 0) { this.logs.push(logEffectAmount(i, -1, v, E_REBATE)); this.recoverMP(i, v, false); }
+          if (timedUsedUp(eff)) erase();
+        }
+        else if (eff.type === E_RECOVER) {
+          const v = timedOnce(eff);
+          if (v !== 0) { this.logs.push(logEffectAmount(i, -1, v, E_RECOVER)); this.recoverATK(i, v, false); }
+          if (timedUsedUp(eff)) erase();
+        }
+        else if (eff.type === E_CURE) {
+          const v = timedOnce(eff);
+          if (v !== 0) { this.logs.push(logEffectAmount(i, -1, v, E_CURE)); this.recoverHP(i, v, false); }
+          if (timedUsedUp(eff)) erase();
+        }
+      }
+    }
+  }
+
+  recoverMP(idx, amount, log = true) { if (log) this.logs.push(logState(L_MP, idx, amount)); this.cultivators[idx].recoverMP(amount); }
+  makeMove(subject, object, amount, name, point) {
+    if (this.findReaction(E_MUD)) amount = Math.trunc(amount * 1.5);
+    this.logs.push(logMove(subject, object, amount, name, point));
+    // 真气不够时先扣光真气，缺的部分按2倍从武力值里透支(consumeMP)，把透支扣掉的武力值写进战报
+    const deficit = amount - this.cultivators[subject].currentMP;
+    if (deficit > 0) this.logs.push(logState(L_CONSUME, subject, deficit * 2));
+    this.cultivators[subject].consumeMP(amount);
+  }
+  addReaction(r) { if ([E_BURN, E_RUST, E_DUST, E_MUD].includes(r)) { this.addEnvironment(envEffect(r)); return true; } return false; }
+  buildDualEnvironment(act) { if (act.type === A_DUAL) this.addReaction(this.checkReaction(act.action1.attr, act.action2.attr)); }
+  skipMove(idx) { this.logs.push(logSkip(idx)); }
+  recoverATK(idx, amount, log = true) { if (log) this.logs.push(logState(L_ATK, idx, amount)); this.cultivators[idx].recoverATK(amount); }
+  recoverHP(idx, amount, log = true) { if (log) this.logs.push(logState(L_HP, idx, amount)); this.cultivators[idx].recoverHP(amount); }
+  hitFail(subject) { this.logs.push(logState(L_FAIL, subject, 0)); }
+  dodgeSuccess(subject, object) { this.logs.push(logDodge(subject, object)); }
+
+  // 跳过一次的敏捷损失：付得起(之后不低于1)就记下翻倍后的闪避敏捷，付不起就标记这回合没有闪避
+  paySkip(i) {
+    const c = this.cultivators[i];
+    if (c.canDodge()) { this.skipAgi[i] = c.agi * SKIP_AGI_FACTOR; c.consumeAgi(); }
+    else this.skipAgi[i] = c.agi;   // 付不起：不翻倍、不扣敏捷，仍用原来的敏捷闪避
+  }
+
+  hitSuccess(subject, object, offend, defend) {
+    const lock = getEffect(offend, E_LOCK);
+    if (lock) {
+      if (this.rand() < lock.prob) { this.logs.push(logEffectAmount(subject, object, 0, E_LOCK)); this.addEffect(object, lock); }
+      else lock.keep = false;
+    }
+    const dot = getEffect(offend, E_DOT);
+    if (dot && dot.needHit) {
+      this.logs.push(logEffectAmount(subject, object, dot.instant, E_DOT));
+      this.takeDamage(subject, object, offend.effects, defend.effects, offend.attr, dot.instant, true, defend.attr);
+      this.addEffect(object, cloneEffect(dot));
+    }
+    for (const [type, apply] of [
+      [E_REBATE, a => this.recoverMP(subject, a)], [E_RECOVER, a => this.recoverATK(subject, a)], [E_CURE, a => this.recoverHP(subject, a)]]) {
+      const eff = getEffect(offend, type);
+      if (eff && eff.needHit) {
+        this.logs.push(logEffectAmount(subject, -1, eff.instant, type));
+        apply(eff.instant);
+        this.addEffect(subject, cloneEffect(eff));
+      }
+    }
+  }
+
+  // 伤害(amount)：先减伤，再按物理比例拆成武力伤害/物理伤害，反弹、吸收
+  takeDamage(subject, object, offend, defend, attribute, amount, log = true, defendAttribute = NONE) {
+    if (this.findReaction(E_BURN)) amount = Math.trunc(amount * 1.5);
+    const reduce = defend.find(e => e.type === E_REDUCE);
+    if (reduce) amount = Math.trunc(amount * (1 - ratioOf(reduce, attribute)));
+
+    let physicalRatio = 0;
+    const physical = offend.find(e => e.type === E_PHYSICAL);
+    if (physical) physicalRatio = Math.min(1, Math.max(0, ratioOf(physical, defendAttribute)));
+    const hpPart = Math.trunc(amount * physicalRatio);
+    const atkPart = amount - hpPart;
+
+    // 反弹是减伤的升级版：受击者只承受反弹之后剩下的伤害，被反弹的那部分全部还给攻击者
+    let reboundAtk = 0, reboundHp = 0;
+    if (subject !== object) {
+      const rebound = defend.find(e => e.type === E_REBOUND);
+      if (rebound) {
+        const ratio = Math.min(1, Math.max(0, ratioOf(rebound, attribute)));
+        reboundAtk = Math.trunc(atkPart * ratio); reboundHp = Math.trunc(hpPart * ratio);
+      }
+    }
+    const ownAtk = atkPart - reboundAtk, ownHp = hpPart - reboundHp;
+
+    if (log) this.logs.push(logDamage(subject, object, attribute, ownAtk, ownHp));
+    if (ownAtk > 0) this.cultivators[object].takeDamage(ownAtk, false);
+    if (ownHp > 0) this.cultivators[object].takeDamage(ownHp, true);
+
+    if (subject === object) return;
+
+    if (reboundAtk > 0 || reboundHp > 0) {
+      this.logs.push(logEffectDamage(object, subject, attribute, reboundAtk, reboundHp, E_REBOUND));
+      this.takeDamageSplit(object, subject, defend, offend, attribute, reboundAtk, reboundHp, false);
+    }
+    const absorb = defend.find(e => e.type === E_ABSORB);
+    if (absorb) {
+      const mp = Math.trunc(amount * ratioOf(absorb, attribute));
+      this.logs.push(logEffectAmount(object, subject, mp, E_ABSORB));
+      this.recoverMP(object, mp);
+    }
+  }
+
+  // 伤害(武力值部分atk、物理部分hp)：反弹回来的伤害走这个
+  takeDamageSplit(subject, object, offend, defend, attribute, atk, hp, log = true, depth = 0) {
+    // 反弹回来的伤害是从已经结算过(含灼烧加成)的伤害按比例算出来的，不再乘一次灼烧；并限制反弹的递归深度
+    if (depth >= 8) return;
+    const reduce = defend.find(e => e.type === E_REDUCE);
+    if (reduce) { const keep = 1 - ratioOf(reduce, attribute); atk = Math.trunc(atk * keep); hp = Math.trunc(hp * keep); }
+
+    let reboundAtk = 0, reboundHp = 0;
+    if (subject !== object) {
+      const rebound = defend.find(e => e.type === E_REBOUND);
+      if (rebound) {
+        const ratio = Math.min(1, Math.max(0, ratioOf(rebound, attribute)));
+        reboundAtk = Math.trunc(atk * ratio); reboundHp = Math.trunc(hp * ratio);
+      }
+    }
+    const ownAtk = atk - reboundAtk, ownHp = hp - reboundHp;
+    if (log) this.logs.push(logDamage(subject, object, attribute, ownAtk, ownHp));
+    if (ownAtk > 0) this.cultivators[object].takeDamage(ownAtk, false);
+    if (ownHp > 0) this.cultivators[object].takeDamage(ownHp, true);
+
+    if (subject === object) return;
+    if (reboundAtk > 0 || reboundHp > 0) {
+      this.logs.push(logEffectDamage(object, subject, attribute, reboundAtk, reboundHp, E_REBOUND));
+      this.takeDamageSplit(object, subject, defend, offend, attribute, reboundAtk, reboundHp, false, depth + 1);
+    }
+    const absorb = defend.find(e => e.type === E_ABSORB);
+    if (absorb) {
+      const mp = Math.trunc((atk + hp) * ratioOf(absorb, attribute));
+      this.logs.push(logEffectAmount(object, subject, mp, E_ABSORB));
+      this.recoverMP(object, mp);
+    }
+  }
+
+  checkCounter(a1, a2) { return COUNTERS.has(a1 + "," + a2); }
+  checkReaction(a1, a2) {
+    if (a1 === METAL) { if (a2 === FIRE) return E_BURN; if (a2 === WATER) return E_RUST; }
+    if (a1 === EARTH) { if (a2 === FIRE) return E_DUST; if (a2 === WATER) return E_MUD; }
+    if (a1 === FIRE) { if (a2 === METAL) return E_BURN; if (a2 === EARTH) return E_DUST; }
+    if (a1 === WATER) { if (a2 === METAL) return E_RUST; if (a2 === EARTH) return E_MUD; }
+    return E_NONE;
+  }
+  findReaction(type) { return this.environment.some(e => e.type === type); }
+  putoutReaction(attribute) {
+    const remove = types => { this.environment = this.environment.filter(e => !types.includes(e.type)); };
+    if (attribute === METAL) remove([E_DUST, E_MUD]);
+    else if (attribute === WATER) remove([E_BURN, E_DUST]);
+    else if (attribute === FIRE) remove([E_RUST, E_MUD]);
+    else if (attribute === EARTH) remove([E_BURN, E_RUST]);
+  }
+}
+
+/* ============ 界面与对局流程：布局、文案、颜色照 puzzle_wxdj ============ */
+const STANDARD = { hp: 25800, atk: 38900, mp: 24800, recover: 619, agi: 10, bombMultiplier: 10 };   // agi：标准初始敏捷，同时是敏捷上限(满了不跳过也不会再涨)
+const $ = id => document.getElementById(id);
+
+const state = {
+  defs: [], families: [],        // families: {name, firstAction, formCount}
+  player: null, enemy: null, controller: null,
+  phase: "select",              // select | result
+  mode: "single", firstPick: -1, firstPickFamily: -1, selectedForm: 19, formMax: 20,
+  round: 1, result: 0, resultHidden: false,
+  cfg: [ { hp: STANDARD.hp, atk: STANDARD.atk, mp: STANDARD.mp, agi: STANDARD.agi, recover: STANDARD.recover, agiLoss: 1, agiRecover: 0.2, bombMultiplier: STANDARD.bombMultiplier },
+         { hp: STANDARD.hp, atk: STANDARD.atk, mp: STANDARD.mp, agi: STANDARD.agi, recover: STANDARD.recover, agiLoss: 1, agiRecover: 0.2, bombMultiplier: STANDARD.bombMultiplier } ],
+  names: ["玩家", "售货员"],
+};
+
+function loadActions(text) {
+  const defs = parseActions(text);
+  if (!defs.length) return false;
+  state.defs = defs;
+  state.families = [];
+  defs.forEach((d, i) => {
+    const pos = d.name.indexOf("第");
+    const name = pos < 0 ? d.name : d.name.slice(0, pos);
+    const last = state.families[state.families.length - 1];
+    if (last && last.name === name) last.formCount++;
+    else state.families.push({ name, firstAction: i, formCount: 1 });
+  });
+  state.formMax = Math.min(...state.families.map(f => f.formCount));
+  state.selectedForm = state.formMax - 1;
+  return true;
+}
+
+function actionIndexOf(family) {
+  const f = state.families[family];
+  return f.firstAction + Math.min(state.selectedForm, f.formCount - 1);
+}
+
+function newBattle() {
+  const [c0, c1] = state.cfg;
+  state.player = new Cultivator(state.names[0], state.defs, c0.hp, c0.atk, c0.mp, c0.agi, c0.recover, c0.agiLoss, c0.agiRecover, c0.bombMultiplier);
+  state.enemy = new Cultivator(state.names[1], state.defs, c1.hp, c1.atk, c1.mp, c1.agi, c1.recover, c1.agiLoss, c1.agiRecover, c1.bombMultiplier);
+  state.controller = new Controller([state.player, state.enemy]);
+  state.ai = state.aiNet ? new WxdjAI.Agent(state.aiNet, 1) : null;
+  state.phase = "select"; state.result = 0; state.resultHidden = false;
+  state.firstPick = -1; state.firstPickFamily = -1;
+  state.round = 1;
+  state.lastEnv = [];
+  $("log").innerHTML = "";
+  appendHeader();
+  state.controller.startTurn();
+  appendNews();
+  refreshAll();
+}
+function saveCfgFromBattle() {
+  [state.player, state.enemy].forEach((c, i) => {
+    state.cfg[i] = { hp: c.maxHP, atk: c.maxATK, mp: c.maxMP, agi: c.maxAgi, recover: c.recover, agiLoss: c.agiLoss, agiRecover: c.agiRecover, bombMultiplier: c.bombMultiplier };
+  });
+}
+
+/* ---- 标准属性：按选定的式所在阶位算(和 ai/transformer 的 gen_pool.stage_stats、battle.md 的"标准初始属性"同一个公式) ----
+   同阶位的各式取几何平均的威力/消耗尺度，高阶位健康x0.6^t、武力x0.8^t、真气x1.2^t(t从第3式涨到第12式，最大0.8)。 */
+function standardForForm(form) {
+  form = Math.max(1, Math.min(20, form));
+  const base = state.defs.filter(d => d.name.startsWith("无招"));
+  const maxForm = REALM_MAX_FORM[form - 1];
+  if (base.length < 20) return Object.assign({ agiLoss: 1, agiRecover: 0.2 }, STANDARD);
+  const group = [];
+  for (let k = 1; k <= 20; k++) if (REALM_MAX_FORM[k - 1] === maxForm) group.push(k);
+  const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const sp = Math.exp(mean(group.map(k => Math.log(base[k - 1].power / base[0].power))));
+  const sc = Math.exp(mean(group.map(k => Math.log(base[k - 1].point / base[0].point))));
+  const t = 0.8 * Math.min(1, Math.max(0, (mean(group) - 3) / 9));
+  const nice = v => { const step = v < 10000 ? 10 : v < 100000 ? 100 : 1000; return Math.round(v / step) * step; };
+  return {
+    hp: nice(1000 * sp * Math.pow(0.6, t)), atk: nice(1200 * sp * Math.pow(0.8, t)), mp: nice(800 * sc * Math.pow(1.2, t)),
+    recover: Math.max(1, Math.round(20 * sc * Math.pow(1.2, t))),
+    agi: 5 + maxForm / 4, agiLoss: 1, agiRecover: 0.2, bombMultiplier: BOMB_MULT_BY_MAXFORM[maxForm],   // 标准敏捷：第1式5.25，每式+0.25，每阶对齐最大式，第20式10
+  };
+}
+// 双方都恢复成当前"AI用第N式"对应阶位的标准属性，重新开战
+function applyStandardForSelectedForm() {
+  const form = Math.max(1, Math.min(20, parseInt($("aiForm").value) || 20));
+  const std = standardForForm(form);
+  state.cfg = [Object.assign({}, std), Object.assign({}, std)];
+  newBattle();
+}
+
+/* ---- 场地效果：状态条下面一行显示，变化时写进战报(对应 WxdjPuzzle::DrawEnvironment/LogEnvironmentChanges) ---- */
+const ENV_INFO = {
+  [E_BURN]: { name: "灼烧", desc: "伤害x1.5", color: "#c85028" },
+  [E_RUST]: { name: "锈蚀", desc: "必中，炸弹系数0.5", color: "#82728c" },
+  [E_DUST]: { name: "扬尘", desc: "命中率50%", color: "#aa8c46" },
+  [E_MUD]: { name: "泥沼", desc: "消耗x1.5", color: "#6e5a37" },
+};
+const envRemaining = e => e.total - e.currentRound;
+function refreshEnvironment() {
+  const bar = $("envBar");
+  bar.innerHTML = '<span class="lab">场地：</span>';
+  const list = state.controller ? state.controller.environment : [];
+  if (!list.length) { const n = document.createElement("span"); n.className = "none"; n.textContent = "无"; bar.appendChild(n); return; }
+  for (const e of list) {
+    const info = ENV_INFO[e.type], chip = document.createElement("span");
+    chip.className = "chip"; chip.style.background = info.color;
+    chip.textContent = info.name + " " + info.desc + " 剩" + envRemaining(e) + "回合";
+    bar.appendChild(chip);
+  }
+}
+function logEnvironmentChanges() {
+  const now = state.controller.environment.map(e => [e.type, envRemaining(e)]);
+  const before = state.lastEnv || [];
+  for (const [type, left] of now) {
+    const info = ENV_INFO[type], old = before.find(b => b[0] === type);
+    if (!old) pushLogLine("场地出现：" + info.name + "(" + info.desc + "，还剩" + left + "回合)");
+    else if (left > old[1]) pushLogLine("场地刷新：" + info.name + "(还剩" + left + "回合)");
+  }
+  for (const [type] of before) if (!now.some(n => n[0] === type)) pushLogLine("场地消失：" + ENV_INFO[type].name);
+  state.lastEnv = now;
+}
+
+/* ---- 战报 ---- */
+function formatLog(log) {
+  const who = i => i === 0 ? state.player.name : i === 1 ? state.enemy.name : "";
+  const cult = i => i === 0 ? state.player : state.enemy;
+  const damageText = kind => {
+    let s = "";
+    if (log.pointAtk > 0) s += ATTR_TEXT[log.attribute] + log.pointAtk + "点" + kind + "武力伤害";
+    if (log.pointAtk > 0 && log.pointHp > 0) s += "和";
+    if (log.pointHp > 0 || log.pointAtk <= 0) s += log.pointHp + "点" + kind + "物理伤害";
+    return s;
+  };
+  switch (log.type) {
+    case L_MP: return who(log.subject) + "真气量回复至" + cult(log.subject).currentMP;
+    case L_ATK: return who(log.subject) + "武力值回复至" + cult(log.subject).currentATK;
+    case L_HP: return who(log.subject) + "健康值回复至" + cult(log.subject).currentHP;
+    case L_CONSUME: return who(log.subject) + "消耗" + log.amount + "点武力值";
+    case L_SKIP: return who(log.subject) + "跳过回合";
+    case L_MOVE: return who(log.subject) + "消耗" + log.amount + "点真气对" + who(log.object) + "出招：" + log.name + "，点数" + log.pointAtk;
+    case L_DAMAGE: return who(log.subject) + "对" + who(log.object) + "造成" + damageText("招式");
+    case L_DODGE: return who(log.object) + "闪避成功";
+    case L_FAIL: return who(log.subject) + "出招失败";
+    case L_EFFECT:
+      switch (log.effect) {
+        case E_PENETRATE: return who(log.subject) + "对" + who(log.object) + "造成" + damageText("穿透");
+        case E_REBOUND: return who(log.subject) + "对" + who(log.object) + "造成" + damageText("反弹");
+        case E_ABSORB: return who(log.subject) + "吸收" + log.amount + "点真气";
+        case E_LOCK: return who(log.object) + "被" + who(log.subject) + "禁锢";
+        case E_DOT: return who(log.object) + "受到" + log.amount + "点持续武力伤害";
+        case E_REBATE: return who(log.subject) + "恢复" + log.amount + "点真气";
+        case E_RECOVER: return who(log.subject) + "恢复" + log.amount + "点武力值";
+        case E_CURE: return who(log.subject) + "恢复" + log.amount + "点健康值";
+      }
+  }
+  return "";
+}
+function pushLogLine(text, header = false) {
+  if (!text) return;
+  const box = $("log");
+  const div = document.createElement("div");
+  div.textContent = text;
+  if (header) div.className = "hdr";
+  box.appendChild(div);
+  while (box.childElementCount > 2000) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+}
+function appendHeader() { pushLogLine("== 第" + state.round + "回合 ==", true); }
+function appendNews() { const news = state.controller.getNews(); (state.roundLogs = state.roundLogs || []).push(...news); for (const log of news) pushLogLine(formatLog(log)); }
+
+/* ---- 出招流程(对应 WxdjPuzzle::ResolveTurn) ---- */
+function enemyAction() {
+  const mode = $("enemyMode").value;
+  if (mode === "manual") return manualAction();
+  if (mode === "random" || !state.ai) {
+    // 纯随机：3/4概率从 ac+6 个选项里挑一个(含积攒/炸弹/跳过)，1/4概率随机双招
+    const e = state.enemy, n = state.defs.length, rnd = k => Math.floor(Math.random() * k);
+    if (rnd(4)) return e.getAction(rnd(n + 6));
+    return e.getAction(rnd(n), rnd(n));
+  }
+  const form = Math.max(1, Math.min(20, parseInt($("aiForm").value) || 20)) - 1;
+  const moves = state.families.map(f => f.firstAction + Math.min(form, f.formCount - 1));
+  return state.ai.choose(state.controller, state.round, state.defs, moves, false);
+}
+function manualAction() {
+  const type = $("mType").value, e = state.enemy;
+  const a1 = parseInt($("mA1").value), a2 = parseInt($("mA2").value);
+  if (type === "skip") return skipAction();
+  if (type === "acc") return accumulateAction();
+  if (type === "bomb") return bombAction();
+  if (type === "single") return e.getAction(a1);
+  return e.getAction(a1, a2);
+}
+
+function submit(playerAction) {
+  if (state.phase !== "select") return;
+  if (playerLocked() && playerAction.type !== A_SKIP && playerAction.type !== A_ACCUMULATE) return;
+  state.firstPick = -1; state.firstPickFamily = -1;
+  state.roundLogs = [];
+  if (state.ai) state.ai.beginRound(state.controller);
+  const eAct = enemyAction();
+  const c = state.controller;
+  const acts = [[playerAction, 1], [eAct, 0]];
+  c.actionTurn(acts); appendNews();
+  c.checkTurn(acts); appendNews();
+  c.endTurn(); appendNews();
+  logEnvironmentChanges();
+  if (state.ai) state.ai.endRound(state.controller, [playerAction, eAct], state.roundLogs);
+  checkEnd(true);
+  refreshAll();
+}
+function checkEnd(advance) {
+  if (!state.player.isAlive()) { state.result = -1; state.phase = "result"; state.resultHidden = false; }
+  else if (!state.enemy.isAlive()) { state.result = 1; state.phase = "result"; state.resultHidden = false; }
+  else if (advance) {
+    state.round++;
+    appendHeader();
+    state.controller.startTurn();
+    appendNews();
+    // 开局恢复真气也可能超过上限2倍而致死
+    if (!state.player.isAlive() || !state.enemy.isAlive()) checkEnd(false);
+  }
+}
+
+/* ---- 界面 ---- */
+const ATTR_COLORS = ["#505060", "#b4b4be", "#3c9646", "#326ec8", "#c84628", "#aa823c", "#9646be"];
+
+function buildStatus(idx) {
+  const root = $("status" + idx);
+  root.innerHTML = `
+    <div class="nameRow"><span class="name"></span>
+      <label>AGI <input type="text" data-f="cur-agi" style="width:3.6em"> / <input type="text" data-f="max-agi" style="width:3.2em"></label>
+      <label title="每次闪避损失的AGI">闪避-<input type="text" data-f="agiLoss" style="width:2.6em"></label>
+      <label title="每回合自动恢复的AGI">+/回合<input type="text" data-f="agiRecover" style="width:2.6em"></label>
+      <label title="炸弹积攒倍率：按阶位给定(3-1 1.0，3-2 1.2，3-3 1.5，3-4 1.9，3-5 2.4，3-6 3.0，4-1 3.7，4-2 4.5，4-3 5.6，4-4 7.0，4-5 8.5，4-6 10)">炸弹倍率<input type="text" data-f="bombMultiplier" style="width:2.6em"></label>
+      <label>回复 <input type="text" data-f="recover"></label>
+      <label>炸弹 <input type="text" data-f="bomb"></label></div>
+    ${[["mp", "MP"], ["atk", "ATK"], ["hp", "HP"]].map(([k, label]) => `
+    <div class="barRow"><div class="bar"><div class="fill ${k}" data-fill="${k}"></div></div>
+      <div class="val"><b>${label}</b><input type="text" data-f="cur-${k}"> / <input type="text" data-f="max-${k}"></div></div>`).join("")}`;
+  root.querySelectorAll("input").forEach(input => {
+    input.addEventListener("change", () => onStatusEdit(idx, input));
+    input.addEventListener("keydown", ev => { if (ev.key === "Enter") input.blur(); });
+  });
+}
+function cultOf(idx) { return idx === 0 ? state.player : state.enemy; }
+
+function onStatusEdit(idx, input) {
+  const c = cultOf(idx);
+  const f0 = input.dataset.f;
+  const v = (f0 === "cur-agi" || f0 === "max-agi" || f0 === "agiLoss" || f0 === "agiRecover" || f0 === "bombMultiplier")
+    ? parseFloat(input.value.replace(/[,\s]/g, "")) : parseInt(input.value.replace(/[,\s]/g, ""), 10);
+  if (Number.isNaN(v)) { refreshStatus(); return; }
+  const f = input.dataset.f;
+  const map = {
+    "cur-mp": "currentMP", "max-mp": "maxMP", "cur-atk": "currentATK", "max-atk": "maxATK",
+    "cur-hp": "currentHP", "max-hp": "maxHP", "cur-agi": "agi", "max-agi": "maxAgi", agiLoss: "agiLoss", agiRecover: "agiRecover", bombMultiplier: "bombMultiplier", recover: "recover", bomb: "bomb",
+  };
+  c[map[f]] = v;
+  // 编辑之后双方都活着就从结算界面回到出招界面
+  if (state.phase === "result" && state.player.isAlive() && state.enemy.isAlive()) { state.phase = "select"; state.result = 0; }
+  else if (state.phase === "select") checkEnd(false);
+  refreshAll();
+}
+
+function refreshStatus() {
+  [0, 1].forEach(idx => {
+    const c = cultOf(idx), root = $("status" + idx);
+    root.querySelector(".name").textContent = c.name;
+    const set = (f, v) => { const el = root.querySelector(`[data-f="${f}"]`); if (el && document.activeElement !== el) el.value = v; };
+    set("cur-agi", +c.agi.toFixed(1)); set("max-agi", c.maxAgi); set("agiLoss", c.agiLoss); set("agiRecover", c.agiRecover); set("bombMultiplier", c.bombMultiplier); set("recover", c.recover); set("bomb", c.bomb);
+    for (const [k, cur, max] of [["mp", c.currentMP, c.maxMP], ["atk", c.currentATK, c.maxATK], ["hp", c.currentHP, c.maxHP]]) {
+      set("cur-" + k, cur); set("max-" + k, max);
+      const pct = max > 0 && cur > 0 ? Math.min(100, cur * 100 / max) : 0;
+      root.querySelector(`[data-fill="${k}"]`).style.width = pct + "%";
+    }
+  });
+}
+
+// 玩家这回合是否被禁锢(被禁锢的一方，单招/双招/释放炸弹都会被跳过，只有积攒真气炸弹和跳过有意义)
+function playerLocked() {
+  return state.phase === "select" && state.controller && (state.controller.status[0] & 1) !== 0;
+}
+
+function hintText() {
+  if (playerLocked()) return "你被禁锢了：只能积攒真气炸弹或跳过回合";
+  if (state.mode === "single") return "单招：点击按钮，按滑块选的式出招";
+  if (state.firstPick < 0) return "双招：请选择第一招";
+  return "双招：第一招「" + state.defs[state.firstPick].name + "」，请选择第二招(同式，滑块已锁定)";
+}
+
+function refreshActions() {
+  $("modeSingle").classList.toggle("sel", state.mode === "single");
+  $("modeDual").classList.toggle("sel", state.mode === "dual");
+  const live = state.phase === "select";
+  $("accBtn").disabled = !live;
+  $("skipBtn").disabled = !live;
+  const lk = playerLocked();
+  if (lk) { state.firstPick = -1; state.firstPickFamily = -1; }
+  $("bombBtn").disabled = !live || lk;   // 没攒过炸弹也能点：空炸弹是不扣敏捷的纯跳过
+  $("lockBanner").style.display = lk ? "block" : "none";
+  $("rightCol").classList.toggle("locked", lk);
+  $("bombBtn").textContent = "释放真气炸弹(" + state.player.bomb + ")";
+  const locked = state.firstPick >= 0;
+  $("form").disabled = locked;
+  $("form").max = state.formMax;
+  $("form").value = state.selectedForm + 1;
+  $("sliderRow").classList.toggle("locked", locked);
+  $("formLabel").textContent = "第" + (state.selectedForm + 1) + "式";
+  $("hint").textContent = hintText();
+
+  const list = $("list");
+  state.families.forEach((f, i) => {
+    const row = list.children[i];
+    if (!row) return;
+    const a = state.defs[actionIndexOf(i)];
+    row.querySelector(".cost").textContent = a.point + "/" + a.power;
+    row.querySelector(".stripe").style.background = ATTR_COLORS[a.attr];
+    row.classList.toggle("picked", state.mode === "dual" && state.firstPickFamily === i);
+    row.classList.toggle("disabled", lk);
+  });
+}
+
+function buildList() {
+  const list = $("list");
+  list.innerHTML = "";
+  state.families.forEach((f, i) => {
+    const row = document.createElement("div");
+    row.className = "fam";
+    row.innerHTML = `<div class="stripe"></div><div class="nm"></div><div class="cost"></div>`;
+    row.querySelector(".nm").textContent = f.name;
+    row.addEventListener("click", () => onFamilyClick(i));
+    row.addEventListener("mousemove", ev => showTip(i, ev));
+    row.addEventListener("mouseleave", hideTip);
+    list.appendChild(row);
+  });
+}
+
+function onFamilyClick(family) {
+  if (state.phase !== "select" || playerLocked()) return;
+  const idx = actionIndexOf(family);
+  if (state.mode === "single") submit(state.player.getAction(idx));
+  else if (state.firstPick < 0) { state.firstPick = idx; state.firstPickFamily = family; refreshAll(); }
+  else submit(state.player.getAction(state.firstPick, idx));
+}
+
+/* ---- 招式效果文字(悬停提示) ---- */
+const pct = v => parseFloat((v * 100).toPrecision(3)) + "%";
+function ratioText(effect) {
+  const v = effect.ratios.slice(0, 7);
+  const same = (from, to) => { for (let i = from + 1; i <= to; i++) if (Math.abs(v[i] - v[from]) > 1e-6) return false; return true; };
+  if (same(0, 6)) return pct(v[0]);
+  if (same(0, 5)) return pct(v[0]) + "，对方为五行属性时" + pct(v[6]);
+  const labels = ["无", "金", "木", "水", "火", "土", "五行"];
+  return "按对方招式属性" + v.map((x, i) => " " + labels[i] + pct(x)).join("");
+}
+function timedText(label, e) {
+  let s = label + "：";
+  if (e.needHit) s += "命中后";
+  if (e.instant > 0) s += "立即" + e.instant + "点";
+  if (e.continuous > 0 && e.rounds > 0) {
+    if (e.instant > 0) s += "；";
+    s += "每隔" + e.interval + "回合" + e.continuous + "点，共" + e.rounds + "次";
+  }
+  return s;
+}
+function effectLines(def) {
+  const lines = [];
+  for (const e of def.effects) {
+    switch (e.type) {
+      case E_PHYSICAL: lines.push("物理：" + ratioText(e) + "的伤害转为物理伤害(扣健康值)"); break;
+      case E_PENETRATE: lines.push("穿透：对撞时，按较小威力的" + ratioText(e) + "造成额外伤害"); break;
+      case E_REDUCE: lines.push("减伤：受到的伤害减少" + ratioText(e)); break;
+      case E_REBOUND: lines.push("反弹：将受到伤害的" + ratioText(e) + "反弹给攻击者，自己只承受剩下的(减伤的升级版)"); break;
+      case E_ABSORB: lines.push("吸收：将造成伤害的" + ratioText(e) + "转化为真气"); break;
+      case E_LOCK: lines.push("禁锢：" + pct(e.prob) + "概率使对手下一回合无法行动"); break;
+      case E_DOT: lines.push(timedText("持续伤害", e)); break;
+      case E_REBATE: lines.push(timedText("回复真气", e)); break;
+      case E_RECOVER: lines.push(timedText("回复武力", e)); break;
+      case E_CURE: lines.push(timedText("回复健康", e)); break;
+    }
+  }
+  return lines;
+}
+function showTip(family, ev) {
+  const def = state.defs[actionIndexOf(family)];
+  const lines = effectLines(def);
+  const tip = $("tip");
+  if (!lines.length) { tip.style.display = "none"; return; }
+  tip.innerHTML = "";
+  const t = document.createElement("div"); t.className = "t"; t.textContent = def.name; tip.appendChild(t);
+  for (const l of lines) { const d = document.createElement("div"); d.textContent = l; tip.appendChild(d); }
+  tip.style.display = "block";
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + 16, y = ev.clientY + 20;
+  if (x + w > innerWidth) x = ev.clientX - 16 - w;
+  if (y + h > innerHeight) y = ev.clientY - 12 - h;
+  tip.style.left = Math.max(0, x) + "px"; tip.style.top = Math.max(0, y) + "px";
+}
+function hideTip() { $("tip").style.display = "none"; }
+
+/* ---- 手动敌方出招 ---- */
+function buildManualSelects() {
+  for (const id of ["mA1", "mA2"]) {
+    const sel = $(id), keep = sel.value;
+    sel.innerHTML = "";
+    state.defs.forEach((d, i) => {
+      const o = document.createElement("option");
+      o.value = i; o.textContent = d.name + "  " + d.point + "/" + d.power;
+      sel.appendChild(o);
+    });
+    if (keep) sel.value = keep;
+  }
+  updateManualNote();
+}
+function updateManualNote() {
+  const type = $("mType").value;
+  $("mA1").style.display = (type === "single" || type === "dual") ? "" : "none";
+  $("mA2").style.display = type === "dual" ? "" : "none";
+  let note = "";
+  if (type === "dual") {
+    const a = state.defs[$("mA1").value], b = state.defs[$("mA2").value];
+    if (a && b && !sameForm({ name: a.name }, { name: b.name })) note = "两招不同式，会按“跳过”处理";
+  }
+  $("mNote").textContent = note;
+}
+
+function refreshAll() {
+  refreshStatus();
+  refreshEnvironment();
+  refreshActions();
+  const over = $("overlay");
+  const showResult = state.phase === "result" && !state.resultHidden;
+  over.classList.toggle("show", showResult);
+  over.classList.toggle("win", state.result > 0);
+  over.classList.toggle("lose", state.result < 0);
+  $("overlayText").textContent = state.result > 0 ? "挑战成功" : "挑战失败";
+  $("info").textContent = "招式 " + state.defs.length + " · 家族 " + state.families.length;
+  $("manual").classList.toggle("show", $("enemyMode").value === "manual");
+}
+
+/* ---- 事件 ---- */
+function init() {
+  if (window.WxdjAI && WxdjAI.ready()) {
+    try {
+      state.aiNet = WxdjAI.load();
+      const w = window.WXDJ_AI_WEIGHTS;
+      document.title += "（AI：" + w.source + " 第" + w.iter + "轮）";
+    } catch (e) { console.error(e); }
+  }
+  if (!state.aiNet) {   // 没有权重文件：AI选项去掉，敌方默认纯随机出招
+    const opt = $("enemyMode").querySelector('option[value="ai"]');
+    if (opt) opt.remove();
+    $("enemyMode").value = "random";
+    $("aiFormBox").style.display = "none";
+  }
+  loadActions(BUILTIN_ACTIONS);
+  buildStatus(0); buildStatus(1);
+  buildList();
+  buildManualSelects();
+  newBattle();
+
+  $("modeSingle").onclick = () => { state.mode = "single"; state.firstPick = -1; state.firstPickFamily = -1; refreshAll(); };
+  $("modeDual").onclick = () => { state.mode = "dual"; state.firstPick = -1; state.firstPickFamily = -1; refreshAll(); };
+  $("accBtn").onclick = () => submit(accumulateAction());
+  $("bombBtn").onclick = () => submit(bombAction());
+  $("skipBtn").onclick = () => submit(skipAction());
+  $("form").oninput = ev => { state.selectedForm = parseInt(ev.target.value) - 1; refreshActions(); };
+  $("restartBtn").onclick = () => { saveCfgFromBattle(); newBattle(); };
+  $("standardBtn").onclick = applyStandardForSelectedForm;
+  $("aiForm").onchange = applyStandardForSelectedForm;   // 选了AI用第几式，双方的标准属性跟着变
+  $("againBtn").onclick = () => { saveCfgFromBattle(); newBattle(); };
+  $("closeBtn").onclick = () => { state.resultHidden = true; refreshAll(); };
+  $("enemyMode").onchange = refreshAll;
+  $("mType").onchange = updateManualNote;
+  $("mA1").onchange = updateManualNote; $("mA2").onchange = updateManualNote;
+
+  $("actFile").onchange = ev => readFile(ev, text => {
+    if (!loadActions(text)) { alert("招式文件解析失败"); return; }
+    buildList(); buildManualSelects(); newBattle();
+  });
+}
+function readFile(ev, cb) {
+  const file = ev.target.files[0];
+  ev.target.value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => cb(String(reader.result));
+  reader.readAsText(file, "utf-8");
+}
+init();
+</script>
+</body>
+</html>

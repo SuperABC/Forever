@@ -38,6 +38,9 @@ public:
 	// 获取已积攒的真气炸弹能量(释放前一直保留)
 	int GetBomb() const;
 
+	// 每回合自动回复的真气量
+	int GetRecover() const;
+
 	// 炸弹积攒倍率(个人属性，由所在阶位决定)
 	float GetBombMultiplier() const;
 

@@ -13,7 +13,7 @@ namespace wxdj {
 class Action;
 class Cultivator;
 class Controller;
-class PolicyAI;
+class AI;
 class Log;
 }
 
@@ -96,7 +96,8 @@ private:
 	// 出招与战报
 	void SubmitPlayerAction(std::shared_ptr<wxdj::Action> playerAction);
 	void ResolveTurn(std::shared_ptr<wxdj::Action> playerAction);
-	void AppendNews();
+	// sink不为空时，把这次取到的日志同时存一份(AI要从本回合日志里读闪避记录)
+	void AppendNews(std::vector<wxdj::Log>* sink = nullptr);
 	void PushLogLine(const std::string& text);
 	void AppendRoundHeader();
 	std::string FormatLog(const wxdj::Log& log) const;
@@ -140,7 +141,7 @@ private:
 	std::shared_ptr<wxdj::Cultivator> player;
 	std::shared_ptr<wxdj::Cultivator> enemy;
 	std::unique_ptr<wxdj::Controller> controller;
-	std::unique_ptr<wxdj::PolicyAI> enemyAI; // 敌方策略；加载失败时为空，退回随机出招
+	std::unique_ptr<wxdj::AI> enemyAI;       // 敌方AI(通用模型)；权重文件缺失/不匹配时为空，敌方退化成随机出招
 	std::vector<int> enemyFamilyActions;     // 敌方每个家族出招用的那一式(最高式)的招式下标
 
 	std::vector<std::string> logLines; // 滚动战报，超出上限丢弃最旧的

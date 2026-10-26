@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>五行斗诀</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --bg: #12121a; --text: #dcdcdc; --gold: #e6be5a; --btn: #465a82; --btn-hover: #5a6f9a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(900px 420px at 50% -10%, #3a2f6e55, transparent), var(--bg); color: var(--text);
+    font: 16px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif; }
+  main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; padding: 24px 16px; }
+  h1 { margin: 0; font-size: 56px; letter-spacing: 12px; color: var(--gold); text-shadow: 0 4px 24px #e6be5a55; }
+  .sub { margin-top: -22px; color: #9a9aaa; font-size: 15px; letter-spacing: 4px; }
+  nav { display: flex; flex-direction: column; gap: 14px; width: min(320px, 100%); }
+  nav a { display: block; text-align: center; text-decoration: none; color: #fff; background: var(--btn); border: 1px solid #0f0f14; border-radius: 6px;
+    padding: 16px 12px; font-size: 20px; font-weight: bold; letter-spacing: 4px; }
+  nav a:hover { background: var(--btn-hover); }
+  nav a:active { filter: brightness(.75); }
+  nav a small { display: block; margin-top: 2px; font-size: 12px; font-weight: normal; letter-spacing: 1px; color: #c9d2e6; }
+  nav a.match { background: #8c6428; } nav a.match:hover { background: #a67832; }
+</style>
+</head>
+<body>
+<main>
+  <h1>五行斗诀</h1>
+  <div class="sub">克制 · 资源 · 读心</div>
+  <nav>
+    <a class="match" href="public/match.html">开始匹配<small>在线 1v1，自动匹配对手</small></a>
+    <a href="public/ai.html">人机对战<small>和训练好的AI对打</small></a>
+    <a href="public/guide.html">查看说明<small>新手入门指南</small></a>
+  </nav>
+</main>
+</body>
+</html>

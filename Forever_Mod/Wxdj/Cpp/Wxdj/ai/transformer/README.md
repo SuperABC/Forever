@@ -4,7 +4,6 @@
 
 训练一个**通用**对战模型：双方的招式文件不同也能用，输入"双方招式 + 当前局面 + 这局的出招记录"，输出这回合怎么出招。
 强化学习自博弈(PPO)，没有人类数据。规则直接复用`battle/`，所以规则/系数和游戏完全一致。
-表格式的老版本见`../table/`。
 
 ## 文件
 
@@ -15,10 +14,11 @@
 | `wxenv.py` | `wxenv.dll`的ctypes封装 |
 | `gen_pool.py` | 生成随机化的招式文件池(真实家族的随机子集/扰动 + 合成家族 + 式的子集) |
 | `model.py` | 模型：Perceiver式小Transformer，输出 招类 -> 第一个招式 -> (双招)第二个招式(必须同式) |
-| `bots.py` | 脚本机器人：随机AI(游戏原来的)/单家族/最高威力/积攒炸弹，做陪练和评测 |
+| `bots.py` | 脚本机器人：随机/单家族/最高威力/积攒炸弹，训练时当陪练、评测时当参照(不在游戏里) |
 | `train.py` | PPO训练 |
 | `eval_moves.py`、`eval_report.py` | 招式强度评估：`python eval_report.py checkpoints/latest.pt <式>`，输出招类使用率、各家族的单招/双招矩阵和固定套路，进度写在`progress_<式>.txt` |
-| `export_weights.py` | 把检查点导出成`../../../Tools/Local/nn_weights.js`(模拟器html加载) |
+| `ai_test.cpp` | 游戏里C++推理(`battle/ai.cpp`)的对拍程序：用游戏的招式表和导出的`ai_weights.bin`跑两个回合，打印logit，和网页版同一场景的JS输出比，误差应<=1e-4。编译：`cl /O2 /EHsc /std:c++17 /utf-8 /I ../../battle ai_test.cpp ../../battle/{action,controller,cultivator,effect,ai}.cpp`，运行：`nntest 招式表xiaohua.txt ai_weights.bin` |
+| `export_weights.py` | 把检查点导出成`../../../Online/public/ai_weights.js`(网页版加载)和`../../../Resource/act/ai_weights.bin`(游戏里C++推理读) |
 | `chain.sh`、`train_only.sh`、`eval_only.sh` | 一键脚本：训练+导出+评估多个式 / 只训练+导出 / 只评估(`sh eval_only.sh 1 20`) |
 | `report_<式>.txt` | 当前这一版模型在第1/5/10/15/20式上的评估报告 |
 | `checkpoints/` | `latest.pt`(当前这一版模型，可续训)；训练日志和历史检查点已清理，训练时会重新生成 |

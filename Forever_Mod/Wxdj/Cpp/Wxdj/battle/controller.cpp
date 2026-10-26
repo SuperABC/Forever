@@ -536,6 +536,14 @@ void Controller::ExecEffect(STAGE_TYPE stage) {
 	}
 }
 
+const vector<shared_ptr<Effect>>& Controller::GetEffectsOf(int idx) const {
+	return effects.at(idx);
+}
+
+const vector<shared_ptr<Effect>>& Controller::GetEnvironmentEffects() const {
+	return environment;
+}
+
 bool Controller::IsLocked(int idx) const {
 	return idx >= 0 && idx < static_cast<int>(status.size()) && (status[idx] & 0x01) != 0;
 }

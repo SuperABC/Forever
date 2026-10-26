@@ -3,7 +3,7 @@
 ## 职责
 
 五行斗诀回合制战斗小游戏(`WxdjPuzzle`，id `puzzle_wxdj`)：玩家(下标0)对售货员(下标1)，玩家点按钮/招式出招，
-敌方AI随机出招，战报滚动，一方阵亡后弹出结果遮罩，点"关闭"结束。战斗规则全在`battle/`，这里只负责画面和鼠标交互。
+敌方AI出招，战报滚动，一方阵亡后弹出结果遮罩，点"关闭"结束。战斗规则全在`battle/`，这里只负责画面和鼠标交互。
 
 ## 界面布局
 
@@ -41,7 +41,7 @@
 - **状态全是实例成员**：宿主每次`start_puzzle`都`new`一个新实例，没有static状态。`GetName()`用`static int count`+`id`拼唯一名，
   `count`通过`GetInstanceCounter`/`SetInstanceCounter`进存档。
 - **Canvas没有自动折行**：`WrapText`按UTF-8码点累加`StringWidth`折行，不劈开多字节字符。
-- **敌方AI**：优先用`battle/ai.h`的`PolicyAI`，加载`Resource/act/ai_policy.txt`(自博弈训练出的表格式策略，当前是`ai/table/policies/policy_20.txt`的拷贝，重训后要重新拷贝)：先按局面选招类(跳过/积攒/炸弹/单招/双招)，再按上下文选家族，敌方出招一律用该家族的最高式(第20式)。策略文件缺失或家族数不是15就退回老工程的随机出招。
+- **敌方AI**：用`battle/ai.h`的`AI`，加载`Resource/act/ai_weights.bin`(训练好的通用模型，约92万参数/3.7MB，由`ai/transformer/export_weights.py`导出，和网页版人机对战是同一个模型、同一套特征与推理逻辑)：每回合出招前`BeginRound`，出招结算后`EndRound`(用本回合日志里的闪避记录和状态变化攒最近8回合的出招记录)，出招时从每个家族的最高式(第20式)里选，招类/第一招/双招的第二招(同式)都按网络输出的概率采样。权重文件缺失、结构对不上或推理出错时，敌方退化成纯随机出招(3/4概率出单招，下标范围含积攒/炸弹/跳过，1/4概率出双招)。C++推理和网页JS推理的logit对拍过(两个回合带出招记录，误差<=2e-5)，对拍程序见`ai/transformer/nn_ai_test.cpp`。重训模型后跑`export_weights.py`就同时更新网页和游戏的权重。
 - **阵亡判定**：玩家阵亡(含同归于尽)判负，只有敌方阵亡才判胜。
 - 数值：双方都用4-6阶位标准属性 HP25800/ATK38900/MP24800、回真气619(敏捷：玩家22、售货员20)，见`battle/battle.md`。
 
