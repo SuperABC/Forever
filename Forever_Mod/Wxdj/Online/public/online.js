@@ -134,6 +134,12 @@ function formatLog(log) {
         case E_REBATE: return who(log.subject) + "恢复" + log.amount + "点真气";
         case E_RECOVER: return who(log.subject) + "恢复" + log.amount + "点武力值";
         case E_CURE: return who(log.subject) + "恢复" + log.amount + "点健康值";
+        case E_INCREASE: {
+          if (!log.name) return who(log.subject) + "双招连招增伤合计：威力+" + log.amount + "%(按两招基础威力加权)";
+          const [nm, r, n] = log.name.split("|");
+          return who(log.subject) + "连招增伤：" + nm + "每连一步+" + r + "% x 已连" + n + "步 = 威力+" + log.amount + "%";
+        }
+        case E_SHIELD: return log.subject >= 0 ? who(log.subject) + "获得" + log.amount + "点护盾" : who(log.object) + "的护盾抵挡了" + log.amount + "点伤害";
       }
   }
   return "";
@@ -276,7 +282,13 @@ function buildStatus(idx) {
       <span class="meta" data-f="agi"></span><span class="meta" data-f="mult"></span><span class="meta" data-f="recover"></span><span class="meta" data-f="bomb"></span></div>
     ${[["mp", "MP"], ["atk", "ATK"], ["hp", "HP"]].map(([k, label]) => `
     <div class="barRow"><div class="bar"><div class="fill ${k}" data-fill="${k}"></div></div>
-      <div class="val"><b>${label}</b><span data-f="cur-${k}"></span> / <span data-f="max-${k}"></span></div></div>`).join("")}`;
+      <div class="val"><b>${label}</b><span data-f="cur-${k}"></span> / <span data-f="max-${k}"></span></div></div>`).join("")}
+    <div class="shieldRow" data-shields></div>`;
+}
+// 护盾行：每块盾一段文字，没有盾写"无"(shieldList在engine.js里)
+function renderShields(root, list) {
+  root.querySelector("[data-shields]").innerHTML = '<span class="lab">护盾：</span>' +
+    (list.length ? list.map(t => `<span class="shieldChip">${t}</span>`).join("") : '<span class="none">无</span>');
 }
 function refreshStatus() {
   if (!state.cults.length) return;
@@ -288,6 +300,7 @@ function refreshStatus() {
     set("mult", "炸弹倍率 " + c.bombMultiplier);
     set("recover", "回复 " + c.recover);
     set("bomb", "炸弹 " + c.bomb);
+    renderShields(root, shieldList(state.controller, state.cults.indexOf(c)));
     for (const [k, cur, max] of [["mp", c.currentMP, c.maxMP], ["atk", c.currentATK, c.maxATK], ["hp", c.currentHP, c.maxHP]]) {
       set("cur-" + k, cur); set("max-" + k, max);
       const pct = max > 0 && cur > 0 ? Math.min(100, cur * 100 / max) : 0;

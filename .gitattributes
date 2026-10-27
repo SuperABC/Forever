@@ -6,5 +6,6 @@ Forever_UE/Content/3rdParty/Pineapple_grenade/** filter=lfs diff=lfs merge=lfs -
 Forever_UE/Content/3rdParty/SM_ufekaevdw_tier_3/** filter=lfs diff=lfs merge=lfs -text
 Forever_UE/Content/3rdParty/SciFiTram/** filter=lfs diff=lfs merge=lfs -text
 Forever_UE/Content/3rdParty/ZIL_130__body____Lowpoly/** filter=lfs diff=lfs merge=lfs -text
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints/*.pt filter=lfs diff=lfs merge=lfs -text
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pvp/*.pt filter=lfs diff=lfs merge=lfs -text
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve/*.pt filter=lfs diff=lfs merge=lfs -text
 Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/*.sh text eol=lf

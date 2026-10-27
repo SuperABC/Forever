@@ -19,7 +19,7 @@
 
 #define MAX_LOG_LINES 200
 #define ACTION_FILE_NAME "xiaohua.txt"
-#define AI_FILE_NAME "ai_weights.bin"
+#define AI_FILE_NAME "ai_weights_pvp.bin"
 
 // 双方的标准初始属性(4-6阶位)，见battle/battle.md的"标准初始属性"
 #define STANDARD_HP 25800
@@ -376,12 +376,23 @@ string WxdjPuzzle::FormatLog(const Log& log) const {
 		case EFFECT_CURE:
 			oss << nameOf(log.subject) << "恢复" << log.amount << "点健康值";
 			break;
-		case EFFECT_INCREASE:
-			oss << nameOf(log.subject) << "连招增伤，威力+" << log.amount << "%";
+		case EFFECT_INCREASE: {
+			// name为空=双招合计；否则name="招式名|比例%|步数"，写出这个招式自己的 比例 x 步数
+			if (log.name.empty()) {
+				oss << nameOf(log.subject) << "双招连招增伤合计：威力+" << log.amount << "%(按两招基础威力加权)";
+				break;
+			}
+			size_t p1 = log.name.find('|'), p2 = log.name.find('|', p1 + 1);
+			oss << nameOf(log.subject) << "连招增伤：" << log.name.substr(0, p1) << "每连一步+" << log.name.substr(p1 + 1, p2 - p1 - 1)
+				<< "% x 已连" << log.name.substr(p2 + 1) << "步 = 威力+" << log.amount << "%";
 			break;
+		}
 		case EFFECT_SHIELD:
 			if (log.subject >= 0) oss << nameOf(log.subject) << "获得" << log.amount << "点护盾";
 			else oss << nameOf(log.object) << "的护盾抵挡了" << log.amount << "点伤害";
+			break;
+		case EFFECT_STATIC:
+			oss << nameOf(log.subject) << "的对手处于静止，静止增伤：威力+" << log.amount << "%";
 			break;
 		case EFFECT_CRIT:
 			oss << nameOf(log.subject) << "暴击，伤害+" << log.amount << "%";
@@ -724,6 +735,39 @@ void WxdjPuzzle::DrawStatusBar(Canvas* canvas, const shared_ptr<Cultivator>& cul
 	drawRow("MP", mp, maxMP, 60, 130, 220, barY);
 	drawRow("ATK", atk, maxATK, 220, 175, 50, barY + rowGap);
 	drawRow("HP", hp, maxHP, 210, 60, 60, barY + rowGap * 2);
+
+	// 护盾：没有上限，只有当前强度和剩余回合，每块盾一段文字；没有盾写"无"
+	int shieldFont = max(11, textFontSize - 1);
+	int shieldY = barY + rowGap * 3 - 4;
+	canvas->SetFontSize(shieldFont);
+	canvas->SetAlpha(1.f);
+	canvas->SetColor(190, 190, 200);
+	string title = "护盾：";
+	canvas->PutString(title, x, shieldY);
+	int sx = x + canvas->StringWidth(title);
+	vector<shared_ptr<ShieldEffect>> shields;
+	if (controller) {
+		for (const auto& effect : controller->GetEffectsOf(isPlayer ? 0 : 1)) {
+			if (effect->GetType() == EFFECT_SHIELD) shields.push_back(static_pointer_cast<ShieldEffect>(effect));
+		}
+	}
+	if (shields.empty()) {
+		canvas->SetColor(130, 130, 140);
+		canvas->PutString("无", sx, shieldY);
+		return;
+	}
+	for (const auto& shield : shields) {
+		// 盾可以是任意属性组合，所以不用颜色，直接写字：如"木火盾 1200·3回合"
+		unsigned mask = shield->Mask();
+		string elem = (mask & ELEMENT_ALL_MASK) == ELEMENT_ALL_MASK ? "五行" : ElementsText(mask);
+		string label = (elem.empty() ? "无属性" : elem) + "盾 " + to_string(shield->Strength());
+		if (shield->RemainingRounds() < (1 << 20)) label += "·" + to_string(shield->RemainingRounds()) + "回合";
+		int labelW = canvas->StringWidth(label);
+		if (sx + labelW > x + w) break; // 放不下就不画了，避免压到右边的面板
+		canvas->SetColor(230, 230, 230);
+		canvas->PutString(label, sx, shieldY);
+		sx += labelW + 12;
+	}
 }
 
 void WxdjPuzzle::DrawLogPanel(Canvas* canvas) {
@@ -788,7 +832,7 @@ void WxdjPuzzle::DrawActionPanel(Canvas* canvas) {
 	// 提示行
 	string hint;
 	const auto& actions = player->GetActions();
-	if (PlayerLocked()) hint = "本回合无法出招，只能积攒真气炸弹或跳过回合";
+	if (PlayerLocked()) hint = "本回合无法出招，只能积攒真气炸弹(这回合多受20%伤害)或跳过回合";
 	else if (mode == MODE_SINGLE) hint = "单招：点击按钮，按滑块选的式出招";
 	else if (firstPick < 0) hint = "双招：请选择第一招";
 	else hint = "双招：第一招「" + actions[firstPick].GetName() + "」，请选择第二招(同式，滑块已锁定)";
@@ -978,6 +1022,11 @@ vector<string> WxdjPuzzle::EffectLines(int actionIdx) const {
 			lines.push_back(TimedText("回复健康", e->CureInstant(), e->CureContinuous(), e->CureRounds(), e->CureInterval(), e->NeedHit()));
 			break;
 		}
+		case EFFECT_STATIC: {
+			auto e = static_pointer_cast<StaticEffect>(effect);
+			lines.push_back("静止增伤：对手这回合积攒炸弹或释放空炸弹(没攒过就放)时，本招伤害多" + PercentText(e->GetRatio()) + "(算在增伤乘区里；对手跳过不算静止)");
+			break;
+		}
 		case EFFECT_INCREASE: {
 			auto e = static_pointer_cast<IncreaseEffect>(effect);
 			lines.push_back("连招增伤：连着上一回合同家族的前一式出招(中间不能积攒、放炸弹、跳过或被禁锢)，每连续一步威力多" + PercentText(e->GetRatio()) + "，不要求命中");
@@ -985,7 +1034,7 @@ vector<string> WxdjPuzzle::EffectLines(int actionIdx) const {
 		}
 		case EFFECT_SHIELD: {
 			auto e = static_pointer_cast<ShieldEffect>(effect);
-			lines.push_back("护盾：出招时给自己加一块" + to_string(e->Initial()) + "点的护盾，持续" + to_string(e->RemainingRounds()) + "回合；同时保护武力和健康，多块盾同时存在，受伤时一起减盾量，盾都被打穿后才扣武力/健康；盾带出招者的五行属性，受到同属性伤害时扣盾量减半(盾打光后剩下的伤害不减半)");
+			lines.push_back("护盾：出招时给自己加一块武力上限" + PercentText(e->Ratio()) + "(你现在约" + to_string(static_cast<int>(e->Ratio() * static_cast<float>(player->GetMaxATK()))) + "点)的护盾，持续" + to_string(e->RemainingRounds()) + "回合；同时保护武力和健康，多块盾同时存在，受伤时一起减盾量，盾都被打穿后才扣武力/健康；盾带出招者的五行属性，受到同属性伤害时扣盾量减半(盾打光后剩下的伤害不减半)");
 			break;
 		}
 		default:

@@ -1,0 +1,128 @@
+"""PvE训练用的随机配置：双方的五行属性、基础暴击、特性(装备/秘诀/丹药)。
+
+PvE模式的训练环境(wxenv.set_mode(True))每盘对局可以带一份配置，字段见 wxenv.Env.reset 的 pve 参数：
+    elem    (甲, 乙)  五行属性掩码，第n位=属性值n(金1 木2 水3 火4 土5)，0=无属性
+    crit    (暴击率, 暴击伤害)  双方共用的基础暴击(控制器的SetCritBase)；游戏里PvE默认 5% / +50%
+    traits  (甲, 乙)  特性文本，每行一条，格式同 battle/modifier.h 的 ParseModifier(也就是网页"特性调试"面板的写法)
+
+配置分布要覆盖：
+  - 一部分对局什么都没有(和PvP一样)，保证PvE模型不会忘了怎么打PvP规则；
+  - 双方不对等(一方有装备一方没有)，因为PvE的敌人和玩家本来就不对等；
+  - 各种五行组合(含五个齐全)、抗性被调高/调低、同属性倍率被改、增伤/易伤/暴击/闪避/护盾等特性。
+特性的绝对数值(立即加的护盾)按这一方的武力上限缩放，保证不同阶位都合理。
+"""
+import numpy as np
+
+ELEM_BITS = [1 << a for a in range(1, 6)]     # 金木水火土
+ELEM_NAMES = ['metal', 'wood', 'water', 'fire', 'earth']
+
+
+def fmt(v, nd=3):
+    return ('%.*f' % (nd, v)).rstrip('0').rstrip('.') or '0'
+
+
+def random_elements(rng):
+    """每方的五行属性：35%没有，其余按个数随机(含15%五个齐全)。"""
+    r = rng.random()
+    if r < 0.35:
+        return 0
+    if r < 0.50:
+        return sum(ELEM_BITS)
+    k = int(rng.choice([1, 1, 1, 2, 2, 3, 4]))
+    return sum(ELEM_BITS[i] for i in rng.choice(5, size=k, replace=False))
+
+
+def _attr(rng, elems):
+    """特性作用的属性：一个具体元素(偏向自己拥有的)，或者不限制(None)。"""
+    if rng.random() < 0.35:
+        return None
+    owned = [i for i in range(5) if elems & ELEM_BITS[i]]
+    if owned and rng.random() < 0.6:
+        return ELEM_NAMES[int(rng.choice(owned))]
+    return ELEM_NAMES[int(rng.integers(0, 5))]
+
+
+KIND_P = np.array([8, 5, 8, 6, 4, 4, 3, 3, 3, 3, 3, 1, 4, 2, 2, 2, 2, 6], dtype=np.float64)
+KIND_P /= KIND_P.sum()
+
+
+def random_trait(rng, elems, atk):
+    """一条随机特性(文本)。atk=这一方的武力上限，用来缩放绝对数值。"""
+    kind = rng.choice(['dmg_dealt', 'dmg_taken', 'resist', 'elem_power', 'base_power', 'crit_rate', 'crit_dmg', 'dodge', 'hit', 'cost',
+                       'rebound', 'immune', 'mp_round', 'hp_round', 'atk_round', 'deal_mp', 'take_mp', 'now_shield'],
+                      p=KIND_P)
+    a = _attr(rng, elems)
+    attr = (' attr=' + a) if a else ''
+    dur = '' if rng.random() < 0.6 else ' dur=%d' % int(rng.integers(2, 8))
+    u = rng.random
+    if kind == 'dmg_dealt':
+        return 'mod dmg_dealt %s%s%s' % (fmt(0.1 + 1.9 * u() ** 1.5), attr, dur)
+    if kind == 'dmg_taken':                                    # 易伤只增不减
+        return 'mod dmg_taken %s%s%s' % (fmt(0.1 + 0.9 * u()), attr, dur)
+    if kind == 'resist':
+        a = a or ELEM_NAMES[int(rng.integers(0, 5))]           # 抗性必须指定元素
+        v = rng.uniform(-0.8, 1.5)
+        return 'mod resist %s attr=%s%s' % (fmt(v), a, dur)
+    if kind == 'elem_power':
+        return 'mod elem_power %s%s' % (fmt(rng.uniform(-1.0, 2.0)), dur)
+    if kind == 'base_power':
+        return 'mod base_power %s%%%s%s' % (fmt(10 + 90 * u(), 1), attr, dur)
+    if kind == 'crit_rate':
+        return 'mod crit_rate %s%s' % (fmt(0.05 + 0.45 * u()), dur)
+    if kind == 'crit_dmg':
+        return 'mod crit_dmg %s%s' % (fmt(0.2 + 1.8 * u()), dur)
+    if kind == 'dodge':
+        return 'mod dodge %s%s' % (fmt(0.1 + 0.4 * u()), dur)
+    if kind == 'hit':
+        return 'mod hit %s%s' % (fmt(0.1 + 0.4 * u()), dur)
+    if kind == 'cost':
+        return 'mod cost %s%s%s' % (fmt(rng.uniform(-0.3, 0.3)), attr, dur)
+    if kind == 'rebound':
+        return 'mod rebound %s%s%s' % (fmt(0.05 + 0.25 * u()), attr, dur)
+    if kind == 'immune':
+        a = a or ELEM_NAMES[int(rng.integers(0, 5))]
+        return 'mod immune 1 attr=%s%s' % (a, dur)
+    if kind == 'mp_round':
+        return 'mod mp_round %s%% timing=%s%s' % (fmt(0.5 + 3.5 * u(), 2), rng.choice(['start', 'end']), dur)
+    if kind == 'hp_round':                                     # 正=回复；负的量很小，不会直接把人扣死
+        return 'mod hp_round %s%% timing=end%s' % (fmt(rng.uniform(-0.5, 2.0), 2), dur)
+    if kind == 'atk_round':
+        return 'mod atk_round %s%% timing=end%s' % (fmt(rng.uniform(-0.5, 2.0), 2), dur)
+    if kind == 'deal_mp':
+        return 'mod deal_mp %s%%%s%s' % (fmt(1 + 9 * u(), 1), attr, dur)
+    if kind == 'take_mp':
+        return 'mod take_mp %s%%%s%s' % (fmt(1 + 9 * u(), 1), attr, dur)
+    # now_shield：立即加一块盾，强度=武力上限的10%~60%；盾属性随机(一个元素/五个齐全/无属性)
+    r = u()
+    sh = (' attr=' + ('all' if r < 0.15 else ELEM_NAMES[int(rng.integers(0, 5))])) if r < 0.85 else ''
+    d = int(rng.integers(2, 7)) if u() < 0.8 else -1
+    return 'mod now_shield %d%s dur=%d' % (max(1, int(atk * (0.1 + 0.5 * u()))), sh, d)
+
+
+def random_build(rng, atk, level):
+    """一方的配置：(五行属性掩码, 特性文本)。level 0=什么都没有 1=轻 2=重。"""
+    if level == 0:
+        return 0, ''
+    elems = random_elements(rng)
+    n = int(rng.choice([0, 1, 1, 2, 2, 3])) if level == 1 else int(rng.choice([2, 3, 4, 5, 6]))
+    lines = [random_trait(rng, elems, atk) for _ in range(n)]
+    return elems, '\n'.join(lines)
+
+
+def sample_config(rng, atk_a, atk_b, mirror=False):
+    """一盘PvE对局的配置。mirror=True时双方完全一样(评测要公平)。"""
+    r = rng.random()
+    if r < 0.15:                                               # 和PvP一样：无属性、无暴击、无特性
+        return dict(elem=(0, 0), crit=(0.0, 0.5), traits=('', ''))
+    la = int(rng.choice([0, 1, 1, 2]))
+    lb = la if mirror else int(rng.choice([0, 1, 1, 2]))
+    ea, ta = random_build(rng, atk_a, la)
+    eb, tb = (ea, ta) if mirror else random_build(rng, atk_b, lb)
+    crit = (0.0, 0.5) if rng.random() < 0.3 else ((0.05, 0.5) if rng.random() < 0.6 else (float(rng.choice([0.1, 0.2, 0.3])), float(rng.choice([0.5, 1.0]))))
+    return dict(elem=(ea, eb), crit=crit, traits=(ta, tb))
+
+
+if __name__ == '__main__':
+    rng = np.random.default_rng(1)
+    for _ in range(4):
+        print(sample_config(rng, 38900, 38900))

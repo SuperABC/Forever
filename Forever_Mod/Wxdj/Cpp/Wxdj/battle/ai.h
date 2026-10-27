@@ -15,7 +15,7 @@ namespace wxdj {
 
 // 对战AI(通用模型)：Perceiver式小Transformer(约92万参数)，输入"双方招式 + 当前局面 + 最近8回合出招记录"，
 // 输出这回合怎么出招(招类 -> 第一个招式 -> 双招的第二个招式)。结构和特征照 ai/transformer 的 model.py / features.h / env.cpp，
-// 网页版(Online/public/ai.html)里的推理是同一份逻辑的JS移植；权重文件由 ai/transformer/export_weights.py 导出(Resource/act/ai_weights.bin)。
+// 网页版(Online/public/ai.html)里的推理是同一份逻辑的JS移植；权重文件由 ai/transformer/export_weights.py 导出(Resource/act/ai_weights_pvp.bin)。
 //
 // 用法：
 //   AI ai(seat); ai.Load(path);

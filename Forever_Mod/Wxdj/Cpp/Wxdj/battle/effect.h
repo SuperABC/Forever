@@ -208,17 +208,32 @@ private:
 	float ratio;
 };
 
+// 对静止的敌人增伤：敌人这回合积攒炸弹或放空炸弹(跳过不算)时，本招的伤害在增伤乘区里多ratio
+class StaticEffect : public Effect {
+public:
+	StaticEffect(float ratio);
+	virtual ~StaticEffect();
+
+	float GetRatio() const;
+
+private:
+	float ratio;
+};
+
 // 护盾：出招时给自己加一块，同时保护武力和健康；多块盾同时存在、各自独立计时，
 // 受到伤害时所有盾一起减去同一个伤害值，穿透量=伤害-最大的那块盾的强度
 class ShieldEffect : public Effect {
 public:
-	ShieldEffect(int strength, int rounds, unsigned mask = 0);
+	// 招式文件里的shield写成(ratio=武力上限的比例, rounds)，strength在出招时按出招者的武力上限算出来(见Controller::ActionTurn)；
+	// 运行时生成的盾直接给strength(ratio=0)
+	ShieldEffect(int strength, int rounds, unsigned mask = 0, float ratio = 0.f);
 	virtual ~ShieldEffect();
 
 	int Strength() const;
 	int RemainingRounds() const;
 	int Initial() const; // 出招时的强度(显示/招式提示用)
 	unsigned Mask() const; // 盾的五行属性(位掩码，见ElementBit)；0=无属性
+	float Ratio() const; // 招式里写的盾量比例(武力上限的几分之几)；运行时的盾是0
 	void Reduce(int amount); // 一起减去伤害值
 	void PassRound();
 	bool UseUp() const;
@@ -228,6 +243,7 @@ private:
 	int initial;
 	int rounds; // 还剩几回合(含当前回合)
 	unsigned mask; // 盾的五行属性
+	float ratio; // 盾量比例(招式里的shield效果用)
 };
 
 // 金火灼烧场地效果

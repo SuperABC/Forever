@@ -85,6 +85,12 @@ def scale_effect(tok, rng, em, pm):
         return [kind] + [fmt(min(cap, max(0.0, v * em))) for v in vals]
     if kind == 'lock':
         return [kind, fmt(min(0.95, float(tok[1]) * em))]
+    if kind == 'increase':        # 连招增伤比例：每连一步威力多这么多
+        return [kind, fmt(min(1.0, float(tok[1]) * em))]
+    if kind == 'static':          # 对静止敌人的增伤比例
+        return [kind, fmt(min(1.0, float(tok[1]) * em))]
+    if kind == 'shield':          # 盾量比例(武力上限的几分之几)和持续回合
+        return [kind, fmt(min(0.6, float(tok[1]) * em)), tok[2]]
     if kind in TIMED_EFFECTS:
         a, b, rounds, interval = tok[1:5]
         return [kind, str(max(1, round(int(a) * pm * em))), str(max(1, round(int(b) * pm * em))), rounds, interval]
@@ -93,8 +99,15 @@ def scale_effect(tok, rng, em, pm):
 
 def new_effect_spec(rng):
     """合成家族的一个效果：类型+固定的形状参数，之后按第k式的强度生成每一式的数值。"""
-    kind = rng.choice(list(RATIO_EFFECTS) + ['lock'] + list(TIMED_EFFECTS))
+    kind = rng.choice(list(RATIO_EFFECTS) + ['lock'] + list(TIMED_EFFECTS) + ['increase', 'shield', 'static'])
     spec = dict(kind=kind, rel=rng.uniform(0.15, 1.0))
+    if kind == 'increase':
+        spec['rel'] = rng.uniform(0.1, 0.6)          # 第20式的比例(正式的火之高兴是0.4)
+    elif kind == 'static':
+        spec['rel'] = rng.uniform(0.2, 0.6)          # 第20式的比例(正式的天动万象是0.4)
+    elif kind == 'shield':
+        spec['rel'] = rng.uniform(0.08, 0.4)         # 第20式的盾量比例(正式的安如磐石是0.2)
+        spec['rounds'] = rng.randint(2, 4)
     if kind in RATIO_EFFECTS:
         spec['shape'] = [rng.uniform(0.8, 1.2) for _ in range(6)] + [rng.uniform(0.6, 1.0)]
     elif kind in TIMED_EFFECTS:
@@ -111,6 +124,12 @@ def effect_line(spec, k, power):
         return [kind] + [fmt(v) for v in vals]
     if kind == 'lock':
         return [kind, fmt(min(0.9, level))]
+    if kind == 'increase':        # 和正式家族一样：从第20式的一半起线性涨，R(k)=R20x(20+k)/40
+        return [kind, fmt(spec['rel'] * (20 + k) / 40.0)]
+    if kind == 'static':          # 从第1式约一半多到第20式的比例线性涨
+        return [kind, fmt(spec['rel'] * (20 + k) / 40.0)]
+    if kind == 'shield':
+        return [kind, fmt(spec['rel'] * (20 + k) / 40.0), str(spec['rounds'])]
     amt = power * spec['frac'] * spec['rel']
     return [kind, str(max(1, round(amt * 2))), str(max(1, round(amt))), str(spec['rounds']), str(spec['interval'])]
 
@@ -157,12 +176,12 @@ def make_family(rng, forms, idx, mode):
 def make_file(rng, idx, max_moves=60):
     r = rng.random()
     nfam_pool = len(REAL)
-    if r < 0.25:                       # 真实招式表(完整15个家族)，式取一个小子集
-        mode, nfam = 'real', 15
+    if r < 0.25:                       # 真实招式表(全部真实家族)，式取一个小子集
+        mode, nfam = 'real', len(REAL)
     elif r < 0.75:
-        mode, nfam = 'perturbed', rng.randint(3, 15)
+        mode, nfam = 'perturbed', rng.randint(3, len(REAL))
     else:
-        mode, nfam = 'mixed', rng.randint(4, 15)
+        mode, nfam = 'mixed', rng.randint(4, len(REAL))
     nforms = rng.choice([1, 1, 2, 2, 3, 4, 5, 6, 8, 10, 12])
     nforms = max(1, min(nforms, max_moves // nfam))
     if rng.random() < 0.5:             # 连续的式(同一阶位)
@@ -213,7 +232,7 @@ if __name__ == '__main__':
 
 
 def real_text(forms):
-    """真实招式表(15个家族)在给定式的子集上的文件内容。"""
+    """真实招式表(全部真实家族)在给定式的子集上的文件内容。"""
     stats = stage_stats(forms)
     lines = ['# stats %s' % ' '.join(fmt(stats[k]) for k in ('hp', 'atk', 'mp', 'rec', 'mult')), '# forms %s' % ' '.join(map(str, forms))]
     for f in REAL:

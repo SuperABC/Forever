@@ -25,8 +25,10 @@ inline constexpr float BOMB_ACCUMULATE_MULTIPLIER = 10.f;
 // 对手出了招受到 (B-对手出招威力)*BOMB_HIT_FACTOR_ACTIVE；自己反噬 B*BOMB_BACKFIRE_FACTOR。
 // 双方互扔炸弹：双方各受到 (B1+B2)*BOMB_BACKFIRE_FACTOR(两个炸弹之和乘反噬系数，一起生效)。
 inline constexpr float BOMB_HIT_FACTOR_PASSIVE = 0.4f;
-inline constexpr float BOMB_HIT_FACTOR_ACTIVE = 0.8f;   // 出招自带抵消和减伤/反弹等效果，所以不能把炸弹调小
+inline constexpr float BOMB_HIT_FACTOR_ACTIVE = 0.7f;   // 出招自带抵消和减伤/反弹等效果，所以不能把炸弹调小
 inline constexpr float BOMB_BACKFIRE_FACTOR = 0.2f;
+// 积攒炸弹的那一回合，自己受到的所有伤害多这么多(并入受到伤害乘区的易伤部分：乘区=1+易伤加和-减伤比例)，作为攒炸弹的一点代价。
+inline constexpr float ACCUMULATE_VULNERABILITY = 0.2f;
 // 锈蚀场地下，炸弹对双方的系数都是这个(取代上面的命中系数和反噬系数)。
 inline constexpr float BOMB_RUST_FACTOR = 0.5f;
 
@@ -257,6 +259,7 @@ enum EFFECT_TYPE {
 	EFFECT_SHIELD, // 护盾(同时保护武力和健康)
 	EFFECT_CRIT, // 暴击(只用于日志)
 	EFFECT_TRAIT, // 特性触发/生效(只用于日志：name="资源|来源"，资源是mp/atk/hp/agi，amount带符号)
+	EFFECT_STATIC, // 对静止的敌人增伤(招式效果，不进双招的合并效果；也用于日志：amount=增伤百分比)。静止=敌人这回合积攒炸弹或放空炸弹，跳过不算
 };
 
 // 招式名是"家族名+第X式"：拆出家族名和式号(第一式=1 ... 第二十式=20)；名字里没有"第"返回式号0(不参与连招)。

@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <random>
 
 
@@ -118,6 +120,13 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 
 	ExecEffect(STAGE_ACTION);
 
+	// 静止：这回合积攒炸弹，或者没被禁锢却放了空炸弹(跳过不算)；要在所有人出招之前算好，因为放炸弹会清空炸弹存量
+	staticNow.assign(cultivators.size(), 0);
+	for (int j = 0; j < (int)cultivators.size(); ++j) {
+		auto t = actions[j].first->GetType();
+		staticNow[j] = t == ACTION_ACCUMULATE || (t == ACTION_BOMB && !(status[j] & 0x01) && cultivators[j]->GetBomb() <= 0);
+	}
+
 	for (int i = 0; i < (int)cultivators.size(); ++i) {
 		auto& act = actions[i].first;
 		int target = actions[i].second;
@@ -128,6 +137,7 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 			PaySkip(i);
 		}
 		else if (act->GetType() == ACTION_ACCUMULATE) {
+			status[i] |= 0x02;   // 这一回合在积攒：受到的伤害多ACCUMULATE_VULNERABILITY(见Vulnerability)
 			cultivators[i]->ResetChain();
 			MakeMove(i, target, act->GetPoint(), act->GetText(), act->GetPower());
 			cultivators[i]->AccumulatePower();
@@ -159,15 +169,25 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 		}
 		else {
 			cultivators[i]->ResetSkipStreak();
-			int chainBonus = 0, critPercent = 0;
-			ApplyPower(i, target, act, chainBonus, critPercent);
+			int chainBonus = 0, critPercent = 0, staticPercent = 0;
+			vector<ChainStep> chainSteps;
+			ApplyPower(i, target, act, chainBonus, critPercent, staticPercent, chainSteps);
 			int cost = act->GetPoint();
 			if (!cultivators[i]->Mods().All().empty()) {
 				double adj = cultivators[i]->Mods().Sum(MOD_COST, act->GetAttribute(), *cultivators[i]);
 				if (adj != 0) cost = max(0, static_cast<int>(cost * (1.0 + adj)));
 			}
 			MakeMove(i, target, cost, act->GetText(), act->GetPower());
-			if (chainBonus > 0) logs.emplace_back(i, target, chainBonus, EFFECT_INCREASE);
+			// 连招增伤战报：每个有增伤的基础招式一条(amount=自己的 比例x步数 的百分比，name="招式名|比例%|步数")；
+			// 双招再加一条合计(name为空，amount=整个双招的威力增加百分比，按两个招式的基础威力加权)
+			for (const auto& st : chainSteps) {
+				logs.emplace_back(i, target, static_cast<int>(lround(st.ratio * st.steps * 100.0)), EFFECT_INCREASE);
+				ostringstream pct;
+				pct << setprecision(4) << st.ratio * 100.0;
+				logs.back().name = st.name + "|" + pct.str() + "|" + to_string(st.steps);
+			}
+			if (act->GetType() == ACTION_DUAL && chainBonus > 0) logs.emplace_back(i, target, chainBonus, EFFECT_INCREASE);
+			if (staticPercent > 0) logs.emplace_back(i, target, staticPercent, EFFECT_STATIC);
 			if (critPercent > 0) logs.emplace_back(i, target, critPercent, EFFECT_CRIT);
 
 			auto dot = act->GetEffect(EFFECT_DOT);
@@ -205,8 +225,10 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 
 			auto shield = act->GetEffect(EFFECT_SHIELD);
 			if (shield) {
-				auto s = make_shared<ShieldEffect>(dynamic_pointer_cast<ShieldEffect>(shield)->Initial(),
-					dynamic_pointer_cast<ShieldEffect>(shield)->RemainingRounds(), cultivators[i]->GetElements());   // 盾继承自己的五行属性
+				// 盾量 = 出招者武力上限 x 比例；盾继承自己的五行属性
+				auto proto = dynamic_pointer_cast<ShieldEffect>(shield);
+				int strength = static_cast<int>(proto->Ratio() * static_cast<float>(cultivators[i]->GetMaxATK()));
+				auto s = make_shared<ShieldEffect>(strength, proto->RemainingRounds(), cultivators[i]->GetElements());
 				logs.emplace_back(i, -1, s->Strength(), EFFECT_SHIELD);
 				AddEffect(i, s);
 			}
@@ -741,7 +763,7 @@ void Controller::TakeDamage(int subject, int object,
 
 	// 反弹是减伤的升级版：受击者只承受反弹之后剩下的伤害，被反弹的那部分全部还给攻击者
 	int reboundAtk = 0, reboundHp = 0;
-	if (subject != object) {
+	if (subject >= 0 && subject != object) {   // subject<0是持续伤害等没有出手方的伤害：不反弹(没有可反弹的对象)
 		float ratio = 0.f;
 		auto rebound = find_if(defend.begin(), defend.end(),
 			[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
@@ -822,7 +844,7 @@ void Controller::TakeDamage(int subject, int object,
 
 	// 反弹是减伤的升级版：只承受反弹之后剩下的伤害
 	int reboundAtk = 0, reboundHp = 0;
-	if (subject != object) {
+	if (subject >= 0 && subject != object) {   // subject<0是持续伤害等没有出手方的伤害：不反弹(没有可反弹的对象)
 		auto rebound = find_if(defend.begin(), defend.end(),
 			[](shared_ptr<Effect> e) { return e->GetType() == EFFECT_REBOUND; });
 		if (rebound != defend.end()) {
@@ -858,8 +880,10 @@ void Controller::TakeDamage(int subject, int object,
 //   单个基础招式的威力 = (基础威力 + 特性的基础威力加成) x (1 + 增伤比例 x 连续步数)；双招再乘DUAL_POWER_FACTOR；
 //   然后依次乘暴击(1+暴击伤害)、自己的增伤乘区(1+加和)。目标的易伤和减伤是同一个乘区，在TakeDamage里结算。同一乘区内加算，乘区之间相乘。
 // 没有任何加成时不动威力(保证没有increase、没有特性的招式和以前逐位一致，也不多抽随机数)。
-void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, int& chainBonus, int& critPercent) {
+void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, int& chainBonus, int& critPercent, int& staticPercent, vector<ChainStep>& chainSteps) {
 	chainBonus = 0;
+	staticPercent = 0;
+	chainSteps.clear();
 	critPercent = 0;
 	vector<shared_ptr<SingleAction>> comps;
 	if (act->GetType() == ACTION_SINGLE) comps.push_back(dynamic_pointer_cast<SingleAction>(act));
@@ -876,15 +900,16 @@ void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, 
 	Cultivator& me = *cultivators[idx];
 	bool dual = act->GetType() == ACTION_DUAL;
 	vector<pair<string, int>> moves;
-	double chainSum = 0, fullSum = 0;
+	double chainSum = 0, fullSum = 0, staticSum = 0;
 	bool boosted = false, added = false;
+	bool enemyStatic = target >= 0 && target < static_cast<int>(staticNow.size()) && target != idx && staticNow[target];
 	for (auto& c : comps) {
 		string family = FamilyOfName(c->GetName());
 		int form = FormOfName(c->GetName());
 		int n = me.PeekChain(family, form);
 		double ratio = 0;
 		if (auto inc = dynamic_pointer_cast<IncreaseEffect>(c->GetEffect(EFFECT_INCREASE))) ratio = inc->GetRatio();
-		if (ratio * n > 0) boosted = true;
+		if (ratio * n > 0) { boosted = true; chainSteps.push_back({ c->GetName(), static_cast<float>(ratio), n }); }
 		double base = c->GetBasePower();
 		double add = 0;
 		for (const auto& m : me.Mods().All()) {
@@ -894,6 +919,11 @@ void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, 
 		if (add != 0) added = true;
 		chainSum += base * (1.0 + ratio * n);
 		fullSum += (base + add) * (1.0 + ratio * n);
+		// 静止增伤：按这个基础招式在威力里的份量加权(双招时只有带static的那一半贡献)
+		if (enemyStatic) {
+			if (auto st = dynamic_pointer_cast<StaticEffect>(c->GetEffect(EFFECT_STATIC)))
+				staticSum += static_cast<double>(st->GetRatio()) * (base * (1.0 + ratio * n));
+		}
 		moves.emplace_back(family, form);
 	}
 	me.CommitChain(moves);
@@ -911,8 +941,12 @@ void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, 
 		mult *= me.ElemPowerMul(attr);
 		zoned = true;
 	}
-	if (!me.Mods().All().empty()) {
-		double dealt = me.Mods().Sum(MOD_DMG_DEALT, attr, me);
+	// 增伤乘区：特性的增伤加和 + 对静止敌人的增伤(都是加算)
+	double staticAdd = chainSum > 0 ? staticSum / chainSum : 0.0;
+	if (staticAdd > 0) staticPercent = static_cast<int>(lround(staticAdd * 100.0));
+	{
+		double dealt = me.Mods().All().empty() ? 0.0 : me.Mods().Sum(MOD_DMG_DEALT, attr, me);
+		dealt += staticAdd;
 		if (dealt != 0) { mult *= max(0.0, 1.0 + dealt); zoned = true; }
 	}
 	double rate = critBaseRate + (me.Mods().All().empty() ? 0.0 : me.Mods().Sum(MOD_CRIT_RATE, attr, me));
@@ -1087,9 +1121,12 @@ double Controller::DodgeProb(int attacker, int defender, ATTRIBUTE_TYPE attribut
 }
 
 // 易伤(dmg_taken)特性对attr属性的加和，只增不减(负数不生效)；没有特性时是0
+// 另外这一回合在积攒炸弹的人，固定多一份ACCUMULATE_VULNERABILITY(所有属性、所有伤害来源，包括炸弹和持续伤害)
 double Controller::Vulnerability(int object, ATTRIBUTE_TYPE attribute) const {
-	if (object < 0 || object >= static_cast<int>(cultivators.size()) || cultivators[object]->Mods().All().empty()) return 0.0;
-	return max(0.0, cultivators[object]->Mods().Sum(MOD_DMG_TAKEN, attribute, *cultivators[object]));
+	if (object < 0 || object >= static_cast<int>(cultivators.size())) return 0.0;
+	double v = (status[object] & 0x02) ? ACCUMULATE_VULNERABILITY : 0.0;
+	if (cultivators[object]->Mods().All().empty()) return v;
+	return v + max(0.0, cultivators[object]->Mods().Sum(MOD_DMG_TAKEN, attribute, *cultivators[object]));
 }
 
 bool Controller::RollHit(int attacker, ATTRIBUTE_TYPE attribute) {

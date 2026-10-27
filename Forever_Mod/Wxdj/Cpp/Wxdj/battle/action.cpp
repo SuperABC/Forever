@@ -116,6 +116,9 @@ SingleAction::SingleAction(const SingleAction& other)
 		case EFFECT_SHIELD:
 			effects.push_back(make_shared<ShieldEffect>(*dynamic_pointer_cast<ShieldEffect>(effect)));
 			break;
+		case EFFECT_STATIC:
+			effects.push_back(make_shared<StaticEffect>(*dynamic_pointer_cast<StaticEffect>(effect)));
+			break;
 		default:
 			break;
 		}
@@ -141,13 +144,13 @@ DualAction::DualAction(shared_ptr<SingleAction> a1, shared_ptr<SingleAction> a2)
 		static_cast<int>(DUAL_COST_FACTOR * (a1->GetPoint() + a2->GetPoint())),
 		static_cast<int>(DUAL_POWER_FACTOR * (a1->GetPower() + a2->GetPower())),
 		{}) {
-	// increase不并进双招的效果：两个基础招式各自带自己的连招增伤(见Controller::ChainPower)
+	// increase/static不并进双招的效果：两个基础招式各自带自己的连招增伤/静止增伤(见Controller::ApplyPower)
 	for (const auto& e : a1->effects) {
-		if (e->GetType() != EFFECT_INCREASE) effects.push_back(e);
+		if (e->GetType() != EFFECT_INCREASE && e->GetType() != EFFECT_STATIC) effects.push_back(e);
 	}
 	// 两个招式有同名效果(同一种效果类型)时只取第一个招式的，比如逆天神功+地狱阴魔拳取逆天神功的禁锢，顺序互换就取地狱阴魔拳的
 	for (const auto& e : a2->effects) {
-		if (e->GetType() == EFFECT_INCREASE) continue;
+		if (e->GetType() == EFFECT_INCREASE || e->GetType() == EFFECT_STATIC) continue;
 		bool exists = false;
 		for (const auto& own : effects) {
 			if (own->GetType() == e->GetType()) { exists = true; break; }

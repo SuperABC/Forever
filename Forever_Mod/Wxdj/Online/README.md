@@ -10,7 +10,7 @@ public/index.html      【生成物】部署后站点根的主界面：tools/bui
 public/match.html      联机对战页（精简版界面 + 返回按钮）
 public/online.js       联机流程 + 界面逻辑
 public/ai.html         人机对战 = 原来的离线模拟器（战斗引擎 + 内置默认招式表 + AI推理），本地双击也能玩；页面里有"特性调试"面板（PvE的装备/秘诀/丹药/场地效果，见 Cpp/Wxdj/battle/battle.md），联机页不带特性
-public/ai_weights.js   训练好的AI权重（ai.html 通过 <script src> 读它，两个文件放同一目录）
+public/ai_weights_pvp.js   训练好的AI权重（ai.html 通过 <script src> 读它，两个文件放同一目录）
 public/guide.html      说明书（由 tools/guide/make_guide.py 生成，本地双击也能看）
 public/engine.js       战斗引擎【生成物，勿手改】：tools/build_engine.py 从 ai.html 抽出来，联机页用
 src/index.js           Worker 入口 + Durable Object "Lobby"（WebSocket Hibernation）
@@ -34,7 +34,7 @@ wrangler.jsonc         Cloudflare 配置（assets 目录、Durable Object 绑定
 ## 改规则/招式表/模型之后怎么同步
 1. 改了 `Resource/act/xiaohua.txt`：`npm run sync`（= 更新 ai.html 内置招式表 + 重新生成联机引擎）。
 2. 改了战斗规则：直接改 `public/ai.html` 里的引擎代码，然后 `npm run build` 重新生成 `engine.js`（联机页就跟着变）。
-3. 重训了模型：`ai/transformer` 的 `export_weights.py` 会直接导出到 `public/ai_weights.js`（同时导出游戏里用的 `Resource/act/ai_weights.bin`）。
+3. 重训了模型：`ai/transformer` 的 `export_weights.py` 会直接导出到 `public/ai_weights_pvp.js`（同时导出游戏里用的 `Resource/act/ai_weights_pvp.bin`）。
 4. 改了说明书：改 `tools/guide/make_guide.py`，重跑 `python tools/guide/make_guide.py`。
 `npm run build` = 生成联机引擎 + 生成 public/index.html；`npm run dev` / `npm run deploy` 会自动先跑它。
 

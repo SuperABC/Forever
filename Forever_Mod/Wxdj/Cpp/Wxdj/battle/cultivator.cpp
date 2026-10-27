@@ -500,9 +500,13 @@ shared_ptr<Effect> Cultivator::ParseEffect(const string& effectLine) {
 		float ratio;
 		if (iss >> ratio) return make_shared<IncreaseEffect>(ratio);
 	}
+	else if (effectType == "static") {
+		float ratio;
+		if (iss >> ratio) return make_shared<StaticEffect>(ratio);
+	}
 	else if (effectType == "shield") {
-		int strength, rounds;
-		if (iss >> strength >> rounds) return make_shared<ShieldEffect>(strength, rounds);
+		float ratio; int rounds;
+		if (iss >> ratio >> rounds) return make_shared<ShieldEffect>(0, rounds, 0, ratio);   // 盾量=出招者武力上限x比例，出招时才算
 	}
 	return nullptr;
 }

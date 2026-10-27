@@ -29,9 +29,17 @@ using namespace std;
 using namespace wxdj;
 using namespace wxfeat;
 
+#ifdef _WIN32
 #define API extern "C" __declspec(dllexport)
+#else
+#define API extern "C" __attribute__((visibility("default")))
+#endif
 
 static const int MAX_ROUNDS = 80;
+
+// PvE模式：双方有五行属性/暴击/特性(见wx_pve_set)，特征在PvP的FM/SD后面追加FX/SX维(features.h)。PvP模式下维数和以前完全一样。
+static bool g_pve = false;
+static int gFM = FM, gSD = SD;
 
 namespace {
 
@@ -51,7 +59,15 @@ int KeyId(const string& s) {
 
 struct Hist { float v[HK][HD]; int len = 0; };
 
+// PvE对局配置：每方的五行属性掩码、特性文本(每行一条"mod ..."，同ai.html的特性调试面板)，以及基础暴击
+struct PveCfg {
+	unsigned elem[2] = { 0, 0 };
+	string traits[2];
+	double critRate = 0, critDmg = 0.5;
+};
+
 struct Game {
+	PveCfg cfg;
 	shared_ptr<Cultivator> c[2];
 	unique_ptr<Controller> ct;
 	int round = 0;
@@ -84,11 +100,12 @@ float Loss(const Cultivator& c) {
 void BuildMoveCache(Game& g) {
 	for (int f = 0; f < 2; ++f) {
 		auto& acts = g.c[f]->actions;
-		g.moveFeat[f].assign(acts.size(), vector<float>(FM));
+		g.moveFeat[f].assign(acts.size(), vector<float>(gFM));
 		g.form[f].assign(acts.size(), -1);
 		g.fam[f].assign(acts.size(), -1);
 		for (size_t i = 0; i < acts.size(); ++i) {
 			MoveFeatures(acts[i], *g.c[f], *g.c[1 - f], g.moveFeat[f][i].data());
+			if (g_pve) MoveExtrasPvE(acts[i], *g.c[f], *g.c[1 - f], g.moveFeat[f][i].data() + FM);
 			g.form[f][i] = KeyId(FormKey(acts[i].GetName()));
 			g.fam[f][i] = KeyId(FamilyKey(acts[i].GetName()));
 		}
@@ -96,7 +113,7 @@ void BuildMoveCache(Game& g) {
 }
 
 void FillState(Game& g, int seat, float* o) {
-	memset(o, 0, sizeof(float) * SD);
+	memset(o, 0, sizeof(float) * gSD);
 	int i = 0;
 	for (int k = 0; k < 2; ++k) {
 		int idx = k == 0 ? seat : 1 - seat;
@@ -143,6 +160,7 @@ void FillState(Game& g, int seat, float* o) {
 	i += 4;
 	o[i++] = g.round / 40.f;
 	StateExtras(*g.ct, seat, o + SD - 8);
+	if (g_pve) StateExtrasPvE(*g.ct, seat, o + SD);
 }
 
 shared_ptr<Action> Build(Cultivator& c, int cls, int m1, int m2) {
@@ -178,7 +196,23 @@ void Push(Hist& h, const float* row) {
 
 }  // namespace
 
-API void wx_dims(int* out) { out[0] = FM; out[1] = SD; out[2] = HK; out[3] = HD; }
+API void wx_dims(int* out) { out[0] = gFM; out[1] = gSD; out[2] = HK; out[3] = HD; }
+
+// 切换PvP/PvE模式(维数随之变化)：必须在创建对局(wx_init/wx_reset)之前调用，python端读维数要在它之后
+API void wx_set_mode(int pve) {
+	g_pve = pve != 0;
+	gFM = g_pve ? FM_PVE : FM;
+	gSD = g_pve ? SD_PVE : SD;
+}
+
+// 配置下一次wx_reset这盘对局的PvE设置(只在PvE模式下生效)：双方五行属性掩码(第n位=属性值n，金1木2水3火4土5)、
+// 基础暴击率/暴击伤害、双方的特性文本(每行一条，格式同modifier.h的ParseModifier；解析失败的行忽略)
+API void wx_pve_set(int gid, int elemA, int elemB, float critRate, float critDmg, const char* traitsA, const char* traitsB) {
+	PveCfg& c = g_games[gid].cfg;
+	c.elem[0] = (unsigned)elemA; c.elem[1] = (unsigned)elemB;
+	c.critRate = critRate; c.critDmg = critDmg;
+	c.traits[0] = traitsA ? traitsA : ""; c.traits[1] = traitsB ? traitsB : "";
+}
 
 API void wx_pool_clear() { g_pool.clear(); }
 
@@ -214,6 +248,19 @@ API void wx_reset(int gid, int tplA, int tplB, const float* statsA, const float*
 		g.hist[k].len = 0;
 	}
 	g.ct = make_unique<Controller>(vector<shared_ptr<Cultivator>>{ g.c[0], g.c[1] });
+	if (g_pve) {
+		for (int k = 0; k < 2; ++k) g.c[k]->SetElements(g.cfg.elem[k]);
+		g.ct->SetCritBase(g.cfg.critRate, g.cfg.critDmg);
+		for (int k = 0; k < 2; ++k) {
+			istringstream lines(g.cfg.traits[k]);
+			string line;
+			while (getline(lines, line)) {
+				Modifier m;
+				if (ParseModifier(line, m)) g.ct->AddModifier(k, m);
+			}
+		}
+		g.cfg = PveCfg();   // 配置只用一次，下一盘不设就是默认(无属性、无暴击、无特性)
+	}
 	g.round = 1;
 	g.done = false;
 	g.outcome = 0;
@@ -228,10 +275,10 @@ API int wx_nmoves(int gid, int fighter) { return (int)g_games[gid].moveFeat[figh
 API void wx_moves(int gid, int fighter, int M, float* out, int* form, int* fam) {
 	Game& g = g_games[gid];
 	int n = (int)g.moveFeat[fighter].size();
-	memset(out, 0, sizeof(float) * M * FM);
+	memset(out, 0, sizeof(float) * M * gFM);
 	for (int i = 0; i < M; ++i) {
 		if (i < n) {
-			memcpy(out + (size_t)i * FM, g.moveFeat[fighter][i].data(), sizeof(float) * FM);
+			memcpy(out + (size_t)i * gFM, g.moveFeat[fighter][i].data(), sizeof(float) * gFM);
 			form[i] = g.form[fighter][i]; fam[i] = g.fam[fighter][i];
 		} else { form[i] = -2; fam[i] = -2; }
 	}
@@ -243,7 +290,7 @@ API void wx_obs_batch(int n, const int* gids, float* state, float* hist, int* do
 		Game& g = g_games[gids[b]];
 		done[b] = g.done ? 1 : 0;
 		for (int s = 0; s < 2; ++s) {
-			FillState(g, s, state + ((size_t)b * 2 + s) * SD);
+			FillState(g, s, state + ((size_t)b * 2 + s) * gSD);
 			float* h = hist + (((size_t)b * 2 + s) * HK) * HD;
 			memset(h, 0, sizeof(float) * HK * HD);
 			int len = g.hist[s].len;

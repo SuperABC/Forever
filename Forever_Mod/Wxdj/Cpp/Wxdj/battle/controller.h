@@ -95,6 +95,7 @@ public:
 	void RemoveModifiers(int holder, const std::string& source);
 	// 基础暴击率和暴击伤害(PvE对局创建时设置；默认暴击率0，所以PvP的随机数序列和以前完全一样)
 	void SetCritBase(double rate, double damage);
+	void GetCritBase(double& rate, double& damage) const { rate = critBaseRate; damage = critBaseDamage; }   // AI的PvE局面特征要用
 
 	// 为指定修仙者添加一个持续效果
 	void AddEffect(int cultivator, std::shared_ptr<Effect> effect);
@@ -178,8 +179,12 @@ private:
 	double critBaseDamage = 0.5; // 基础暴击伤害(倍率加成)
 
 	// 算出这回合出的招(单招/双招)的有效威力：连招增伤 + 特性乘区，并更新连招链。
-	// chainBonus返回连招让威力多出的百分比(0=没有)，critPercent返回暴击伤害的百分比(0=没暴击)
-	void ApplyPower(int idx, int target, const std::shared_ptr<Action>& act, int& chainBonus, int& critPercent);
+	// chainBonus返回连招让威力多出的百分比(0=没有)，critPercent返回暴击伤害的百分比(0=没暴击)；
+	// chainSteps返回每个有连招增伤的基础招式各自的(招式名, increase比例r, 连续步数n)，战报里写出每个招式自己的 r x n
+	struct ChainStep { std::string name; float ratio; int steps; };
+	// staticPercent返回对静止敌人的增伤百分比(0=没触发)：它和特性的增伤加在同一个增伤乘区里
+	void ApplyPower(int idx, int target, const std::shared_ptr<Action>& act, int& chainBonus, int& critPercent, int& staticPercent, std::vector<ChainStep>& chainSteps);
+	std::vector<char> staticNow;   // 这回合谁是"静止"的：积攒炸弹或放空炸弹(没被禁锢)；ActionTurn开头按双方出的招算好
 
 	// 特性：每回合类、触发类、命中/闪避乘区
 	void ExecModifiers(STAGE_TYPE stage);

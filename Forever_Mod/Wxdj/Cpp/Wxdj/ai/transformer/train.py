@@ -2,9 +2,13 @@
 
 每轮：随机抽N盘对局(双方的招式文件和属性各自随机)，对手是 自己(两个席位都学习) / 历史快照 / 脚本机器人，
 并行打完 -> 算优势 -> PPO更新。定期评测并存检查点。
-用法：python train.py                    从头训练
+用法：python train.py                    从头训练PvP模型(检查点在checkpoints_pvp/)
       python train.py --resume           接着latest.pt训练
-      python train.py --hours 6          最多训练6小时
+      python train.py --iters 500        这次训练500轮(接着训练时是再训500轮)
+      python train.py --hours 6          最多训练6小时(--hours和--iters/--max_iters谁先到谁停；--hours默认0=不限时间)
+      python train.py --mode pve --init checkpoints_pvp/latest.pt --lr 1.5e-4
+                                         PvE微调：双方带随机的五行属性/暴击/特性，特征在PvP维数后面追加，
+                                         从PvP检查点补零列热启动，检查点单独存在checkpoints_pve/
 """
 import argparse
 import copy
@@ -18,11 +22,12 @@ import torch.nn.functional as F
 
 import bots
 import gen_pool
+import pve_gen
 import wxenv
 from model import Policy, param_count
+from pad_checkpoint import pad_to_shapes
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CKPT = os.path.join(HERE, 'checkpoints')
 POOL_DIR = os.path.join(HERE, 'pool')
 EVAL_DIR = os.path.join(HERE, 'pool_eval')
 M = 64
@@ -75,6 +80,13 @@ def sample_games(pool, n, rng, mirror=0.4, jitter=0.4):
             sa.append(side(a, gen_pool.std_agi(a[4]), wide))
             sb.append(side(b, float(np.clip(rng.normal(gen_pool.std_agi(b[4]), 2.0), 2, 25)), wide))
     return ta, tb, np.array(sa, dtype=np.float32), np.array(sb, dtype=np.float32)
+
+
+def reset_games(env, ta, tb, sa, sb, rng, mirror=False):
+    """重置所有对局。PvE模式下每盘再随机一份五行属性/暴击/特性配置(见pve_gen.py)；mirror=True时双方配置一样(评测要公平)。"""
+    for g in range(env.n):
+        cfg = pve_gen.sample_config(rng, sa[g][1], sb[g][1], mirror=mirror) if wxenv.PVE else None
+        env.reset(g, ta[g], tb[g], sa[g], sb[g], pve=cfg)
 
 
 class Batch:
@@ -150,8 +162,7 @@ def evaluate(net, eval_pool, dev, rng, n_games=256, tag=''):
         wins = losses = 0
         for swap in (0, 1):
             ta, tb, sa, sb = sample_games(eval_pool, n_games, rng, mirror=1.0)   # 镜像=公平，胜率才反映模型本身的强弱
-            for g in range(n_games):
-                env.reset(g, ta[g], tb[g], sa[g], sb[g])
+            reset_games(env, ta, tb, sa, sb, rng, mirror=True)
             if swap == 1:    # 让net坐席位1：用一个包装把两个席位的角色互换
                 outcome = play_swapped(env, net, bt, rng, dev)
             else:
@@ -210,14 +221,21 @@ def main():
     ap.add_argument('--lr', type=float, default=3e-4)
     ap.add_argument('--epochs', type=int, default=3)
     ap.add_argument('--mb', type=int, default=2048)
-    ap.add_argument('--hours', type=float, default=1.0)
-    ap.add_argument('--max_iters', type=int, default=10 ** 9)
+    ap.add_argument('--hours', type=float, default=0.0, help='最多训练多少小时，0=不限时间')
+    ap.add_argument('--iters', type=int, default=0, help='这次训练多少轮(接着训练时是"再训多少轮")，0=不限；和--hours/--max_iters谁先到谁停')
+    ap.add_argument('--max_iters', type=int, default=10 ** 9, help='训练到第几轮为止(轮数从0起算，续训时包含之前已经训练的轮数)')
     ap.add_argument('--eval_every', type=int, default=50)
+    ap.add_argument('--eval_games', type=int, default=256, help='每次评测对每种机器人、每个席位打多少盘')
     ap.add_argument('--resume', action='store_true')
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--d', type=int, default=128)
+    ap.add_argument('--mode', choices=['pvp', 'pve'], default='pvp', help='pvp=和游戏里PvP模型一样的特征；pve=双方有五行属性/暴击/特性，特征追加维度')
+    ap.add_argument('--init', default=None, help='热启动：从这个检查点读权重(输入层缺的列补零)，常用于从PvP模型出发训练PvE模型')
+    ap.add_argument('--ckpt_dir', default=None, help='检查点目录，默认pvp是checkpoints_pvp，pve是checkpoints_pve')
     args = ap.parse_args()
 
+    wxenv.set_mode(args.mode == 'pve')     # 必须在创建Env和模型之前：它决定特征维数
+    CKPT = os.path.join(HERE, args.ckpt_dir or ('checkpoints_pve' if args.mode == 'pve' else 'checkpoints_pvp'))
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     os.makedirs(CKPT, exist_ok=True)
     logf = open(os.path.join(CKPT, 'train.log'), 'a', encoding='utf-8')
@@ -231,17 +249,29 @@ def main():
     opt = torch.optim.Adam(net.parameters(), lr=args.lr, eps=1e-5)
     start_iter, snaps = 0, []
     if args.resume and os.path.exists(os.path.join(CKPT, 'latest.pt')):
-        ck = torch.load(os.path.join(CKPT, 'latest.pt'), map_location=dev)
+        ck = torch.load(os.path.join(CKPT, 'latest.pt'), map_location=dev, weights_only=False)
         net.load_state_dict(ck['net']); opt.load_state_dict(ck['opt']); start_iter = ck['iter']; snaps = ck.get('snaps', [])
-    log('device %s  params %d  start_iter %d' % (dev, param_count(net), start_iter), logf)
+    if args.init and start_iter == 0:
+        ck = torch.load(args.init, map_location=dev, weights_only=False)
+        sd = dict(ck['net'] if 'net' in ck else ck)
+        grown = pad_to_shapes(sd, net.state_dict())
+        net.load_state_dict(sd)
+        log('init from %s%s' % (args.init, '  (输入层补零列：' + ', '.join(grown) + ')' if grown else ''), logf)
+    log('mode %s  FM %d SD %d  device %s  params %d  start_iter %d' % (args.mode, wxenv.FM, wxenv.SD, dev, param_count(net), start_iter), logf)
 
     N, T = args.games, args.steps
     opp_nets = [Policy(d=args.d).to(dev) for _ in range(2)]
     t_begin = time.time()
     total_samples = 0
     ent_coef0 = 0.02
-    for it in range(start_iter, args.max_iters):
-        if (time.time() - t_begin) / 3600 > args.hours:
+    end_iter = min(args.max_iters, start_iter + args.iters) if args.iters > 0 else args.max_iters
+    hours_limit = args.hours if args.hours > 0 else float('inf')
+    log('plan: iter %d -> %s, eval every %d iters x %d games/bot/seat, time limit %s' % (
+        start_iter, end_iter if end_iter < 10 ** 9 else 'unlimited', args.eval_every, args.eval_games,
+        '%.1fh' % hours_limit if hours_limit != float('inf') else 'none'), logf)
+    next_it = start_iter
+    for it in range(start_iter, end_iter):
+        if (time.time() - t_begin) / 3600 > hours_limit:
             break
         # ---- 招式文件池：每隔一段时间换一批新的 ----
         if it == start_iter or it % 40 == 0:
@@ -252,20 +282,24 @@ def main():
             batch = Batch(env, dev)
             gall = torch.arange(N, device=dev)
         ta, tb, sa, sb = sample_games(pool, N, rng)
-        for g in range(N):
-            env.reset(g, ta[g], tb[g], sa[g], sb[g])
+        reset_games(env, ta, tb, sa, sb, rng)
         batch.refresh()
         r = rng.random(N)
-        opp_type = np.where(r < 0.5, 0, np.where(r < 0.8, 1, 2))     # 0自博弈 1快照 2机器人
+        # 0自博弈 1快照 2机器人 3套路开局+自博弈(前几回合席位1照脚本出招，之后同0) 4随机开局+自博弈(前1~2回合双方都随机出招，之后同0)；
+        # 脚本/随机出的招不是网络的决定，不参与学习
+        opp_type = np.where(r < 0.40, 0, np.where(r < 0.65, 1, np.where(r < 0.80, 2, np.where(r < 0.90, 3, 4))))
         if not snaps:
             opp_type = np.where(opp_type == 1, 0, opp_type)
         slot = rng.integers(0, 2, N)
         for k in range(2):
             if snaps:
                 opp_nets[k].load_state_dict(snaps[rng.integers(0, len(snaps))])
-        bot_type = rng.integers(0, 4, N)
+        bot_type = rng.choice(4, N, p=[0.2, 0.15, 0.15, 0.5])   # 固定套路占一半：要让网络学会对抗所有已知的人类套路
         bot_fam = bots.pick_family(env, np.arange(N), 1, rng)
-        learner = np.stack([np.ones(N, bool), opp_type == 0], 1)      # (N,2)
+        open_id = rng.integers(0, len(bots.OPENINGS), N)
+        rand_len = rng.integers(1, 3, N)             # 随机开局的回合数
+        scripted = np.zeros((T, N, 2), dtype=bool)   # 这一步是脚本/随机出的招(不是网络的决定)
+        learner = np.stack([np.ones(N, bool), (opp_type == 0) | (opp_type >= 3)], 1)      # (N,2)
         t0 = time.time()
 
         # ---- 采样 ----
@@ -319,6 +353,16 @@ def main():
             sel = np.where((opp_type == 2) & (done == 0))[0]
             if len(sel):
                 act[sel, 1] = bots.actions(env, sel, 1, bot_type[sel], bot_fam[sel], rng)
+            sel = np.where((opp_type == 3) & (done == 0))[0]    # 套路开局：脚本没结束的用脚本的招，结束了就是网络自博弈
+            if len(sel):
+                oa, scr = bots.opening(env, sel, 1, open_id[sel], t + 1, rng)
+                act[sel[scr], 1] = oa[scr]
+                scripted[t, sel[scr], 1] = True
+            sel = np.where((opp_type == 4) & (done == 0) & (t < rand_len))[0]
+            if len(sel):
+                for k in range(2):
+                    act[sel, k] = bots.actions(env, sel, k, np.full(len(sel), bots.OLD), bot_fam[sel], rng)
+                scripted[t, sel] = True
             reward, d, out = env.step(act.astype(np.int32))
             rews[t] = reward
             dones[t] = np.repeat(d[:, None], 2, 1)
@@ -340,7 +384,9 @@ def main():
         t_sample = time.time() - t0
 
         # ---- PPO更新 ----
-        ts, gs, ss = np.where(active[:Tn, :, None] & learner[None])
+        use = active[:Tn, :, None] & learner[None]
+        use &= ~scripted[:Tn]      # 脚本出的招不是网络的决定，不学
+        ts, gs, ss = np.where(use)
         n_samples = len(ts)
         total_samples += n_samples
         net.train()
@@ -391,7 +437,7 @@ def main():
                     (time.time() - t_begin) / 3600), logf)
         if it % args.eval_every == args.eval_every - 1:
             net.eval()
-            res = evaluate(net, eval_pool, dev, rng)
+            res = evaluate(net, eval_pool, dev, rng, n_games=args.eval_games)
             log('EVAL it %d  ' % it + '  '.join('%s 胜%.2f 败%.2f' % (k, w, l) for k, (w, l) in res.items()), logf)
             # 评测会把环境池换成评测池，重新载入训练池
             pool.load()
@@ -400,9 +446,10 @@ def main():
             torch.save({'net': net.state_dict(), 'opt': opt.state_dict(), 'iter': it + 1, 'snaps': snaps, 'args': vars(args)},
                        os.path.join(CKPT, 'latest.pt'))
             torch.save(net.state_dict(), os.path.join(CKPT, 'model_%05d.pt' % (it + 1)))
-    torch.save({'net': net.state_dict(), 'opt': opt.state_dict(), 'iter': it, 'snaps': snaps, 'args': vars(args)},
+        next_it = it + 1
+    torch.save({'net': net.state_dict(), 'opt': opt.state_dict(), 'iter': next_it, 'snaps': snaps, 'args': vars(args)},
                os.path.join(CKPT, 'latest.pt'))
-    log('done', logf)
+    log('done at iter %d' % next_it, logf)
 
 
 if __name__ == '__main__':

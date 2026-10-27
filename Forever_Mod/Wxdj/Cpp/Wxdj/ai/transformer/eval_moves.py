@@ -4,7 +4,7 @@
   使用率  网络自博弈时每个家族被选的比例(它自己觉得哪个好)
   去掉后  一方把这个家族从可用招式里去掉，对另一方(完整招式)的胜率变化 —— 越低=这个家族越重要
   单独用  一方只能用这个家族的招式(外加积攒/炸弹/跳过)，对另一方(完整招式)的胜率 —— 越高=这个家族单独越强
-用法：python eval_moves.py [checkpoint] [式]   默认 checkpoints/latest.pt、第20式
+用法：python eval_moves.py [checkpoint] [式]   默认 checkpoints_pvp/latest.pt、第20式
 """
 import os
 import sys
@@ -19,11 +19,12 @@ from train import Pool, Batch, M, net_actions
 
 dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 FAMS = [f.name for f in gen_pool.REAL]
+NF = len(FAMS)      # 真实家族数(现在17个：含火之高兴、安如磐石)
 
 
 def load(path):
     n = Policy().to(dev).eval()
-    ck = torch.load(path, map_location=dev)
+    ck = torch.load(path, map_location=dev, weights_only=False)
     n.load_state_dict(ck['net'] if 'net' in ck else ck)
     return n
 
@@ -66,8 +67,8 @@ def run(env, batch, net0, net1, mask0=None, mask1=None, record=None):
             for s in range(2):
                 cls, m1, m2 = act[alive, s, 0], act[alive, s, 1], act[alive, s, 2]
                 record['cls'] += np.bincount(cls, minlength=5)
-                record['single'] += np.bincount(m1[cls == 3], minlength=15)[:15]
-                record['dual'] += np.bincount(m1[cls == 4], minlength=15)[:15] + np.bincount(m2[cls == 4], minlength=15)[:15]
+                record['single'] += np.bincount(m1[cls == 3], minlength=NF)[:NF]
+                record['dual'] += np.bincount(m1[cls == 4], minlength=NF)[:NF] + np.bincount(m2[cls == 4], minlength=NF)[:NF]
         reward, d, out = env.step(act)
         newly = (d == 1) & ~done_all
         outcome[newly] = out[newly]
@@ -86,14 +87,19 @@ def winrate(env, batch, net, maskA=None):
 
 
 def main():
-    ck = sys.argv[1] if len(sys.argv) > 1 else os.path.join('checkpoints', 'latest.pt')
+    games = 600     # 每个对局组合打多少盘；命令行 --games N 可改
+    if '--games' in sys.argv:
+        i = sys.argv.index('--games')
+        games = int(sys.argv[i + 1])
+        del sys.argv[i:i + 2]
+    ck = sys.argv[1] if len(sys.argv) > 1 else os.path.join('checkpoints_pvp', 'latest.pt')
     form = int(sys.argv[2]) if len(sys.argv) > 2 else 20
     net = load(ck)
-    env, batch = setup(form, 600, os.path.join('pool_eval', 'moves'))
+    env, batch = setup(form, games, os.path.join('pool_eval', 'moves'))
     nm = env.nmoves(0, 0)
-    assert nm == 15
+    assert nm == NF
 
-    rec = dict(cls=np.zeros(5), single=np.zeros(15), dual=np.zeros(15))
+    rec = dict(cls=np.zeros(5), single=np.zeros(NF), dual=np.zeros(NF))
     base = run(env, batch, net, net, record=rec)
     print('== 第%d式，%s ==' % (form, os.path.basename(ck)))
     print('自博弈：胜负平 %.2f/%.2f/%.2f 招类使用率(跳过/积攒/炸弹/单招/双招) %s' % (
@@ -103,7 +109,7 @@ def main():
 
     rows = []
     full = winrate(env, batch, net, None)
-    for f in range(15):
+    for f in range(NF):
         mask_wo = torch.ones(M, dtype=torch.bool, device=dev); mask_wo[f] = False
         mask_only = torch.zeros(M, dtype=torch.bool, device=dev); mask_only[f] = True
         wo = winrate(env, batch, net, mask_wo)

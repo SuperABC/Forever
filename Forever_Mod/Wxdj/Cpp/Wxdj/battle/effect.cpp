@@ -331,8 +331,20 @@ float IncreaseEffect::GetRatio() const {
 	return ratio;
 }
 
-ShieldEffect::ShieldEffect(int strength, int rounds, unsigned mask) :
-	Effect(EFFECT_SHIELD), strength(strength), initial(strength), rounds(rounds), mask(mask) {
+StaticEffect::StaticEffect(float ratio) : Effect(EFFECT_STATIC), ratio(ratio) {
+
+}
+
+StaticEffect::~StaticEffect() {
+
+}
+
+float StaticEffect::GetRatio() const {
+	return ratio;
+}
+
+ShieldEffect::ShieldEffect(int strength, int rounds, unsigned mask, float ratio) :
+	Effect(EFFECT_SHIELD), strength(strength), initial(strength), rounds(rounds), mask(mask), ratio(ratio) {
 
 }
 
@@ -354,6 +366,10 @@ int ShieldEffect::Initial() const {
 
 unsigned ShieldEffect::Mask() const {
 	return mask;
+}
+
+float ShieldEffect::Ratio() const {
+	return ratio;
 }
 
 void ShieldEffect::Reduce(int amount) {
