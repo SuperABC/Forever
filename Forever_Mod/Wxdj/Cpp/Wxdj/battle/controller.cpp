@@ -120,6 +120,12 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 
 	ExecEffect(STAGE_ACTION);
 
+	// 禁止积攒的人(PvE的敌人)选了积攒，就当作跳过(CheckTurn里靠status的积攒位认出来)
+	for (int j = 0; j < (int)cultivators.size(); ++j) {
+		if (actions[j].first->GetType() == ACTION_ACCUMULATE && cultivators[j]->NoAccumulate())
+			actions[j].first = make_shared<SkipAction>();
+	}
+
 	// 静止：这回合积攒炸弹，或者没被禁锢却放了空炸弹(跳过不算)；要在所有人出招之前算好，因为放炸弹会清空炸弹存量
 	staticNow.assign(cultivators.size(), 0);
 	for (int j = 0; j < (int)cultivators.size(); ++j) {
@@ -245,6 +251,12 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 		throw runtime_error("Cultivators and actions mismatch.");
 
 	ExecEffect(STAGE_CHECK);
+
+	// ActionTurn里被改成跳过的积攒(禁止积攒的人)：那里没记积攒位，这里同样当作跳过
+	for (int j = 0; j < (int)cultivators.size(); ++j) {
+		if (actions[j].first->GetType() == ACTION_ACCUMULATE && !(status[j] & 0x02))
+			actions[j].first = make_shared<SkipAction>();
+	}
 
 	// 被禁锢的一方这回合出的招(除了积攒)已经被跳过，它的减伤/反弹/吸收/物理等效果也不能生效，
 	// 当作跳过处理；否则对方打过来时，被跳过的招式上的减伤还会白白生效。
@@ -900,7 +912,7 @@ void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, 
 	Cultivator& me = *cultivators[idx];
 	bool dual = act->GetType() == ACTION_DUAL;
 	vector<pair<string, int>> moves;
-	double chainSum = 0, fullSum = 0, staticSum = 0;
+	double chainSum = 0, fullSum = 0, staticAdd = 0;
 	bool boosted = false, added = false;
 	bool enemyStatic = target >= 0 && target < static_cast<int>(staticNow.size()) && target != idx && staticNow[target];
 	for (auto& c : comps) {
@@ -919,10 +931,10 @@ void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, 
 		if (add != 0) added = true;
 		chainSum += base * (1.0 + ratio * n);
 		fullSum += (base + add) * (1.0 + ratio * n);
-		// 静止增伤：按这个基础招式在威力里的份量加权(双招时只有带static的那一半贡献)
-		if (enemyStatic) {
+		// 静止增伤：比例原样加进增伤乘区；双招里两个招式都带static时，和别的同名效果一样只取第一个
+		if (enemyStatic && staticAdd == 0) {
 			if (auto st = dynamic_pointer_cast<StaticEffect>(c->GetEffect(EFFECT_STATIC)))
-				staticSum += static_cast<double>(st->GetRatio()) * (base * (1.0 + ratio * n));
+				staticAdd = static_cast<double>(st->GetRatio());
 		}
 		moves.emplace_back(family, form);
 	}
@@ -942,7 +954,6 @@ void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, 
 		zoned = true;
 	}
 	// 增伤乘区：特性的增伤加和 + 对静止敌人的增伤(都是加算)
-	double staticAdd = chainSum > 0 ? staticSum / chainSum : 0.0;
 	if (staticAdd > 0) staticPercent = static_cast<int>(lround(staticAdd * 100.0));
 	{
 		double dealt = me.Mods().All().empty() ? 0.0 : me.Mods().Sum(MOD_DMG_DEALT, attr, me);

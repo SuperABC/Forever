@@ -504,8 +504,8 @@
 </article>
 <article class="fam" style="--c:#b88a3e">
   <div class="fam-top"><span class="fam-icon">静</span><div><h4>天动万象</h4><div class="fam-tag">以静制动</div></div><span class="chip" style="--c:#b88a3e">土</span></div>
-  <p class="fam-eff"><b>效果</b>静止增伤：对手这回合积攒炸弹或释放空炸弹（没攒过就放）时，这一招的伤害多一截（22%→40%，算在增伤乘区里；跳过不算静止）</p>
-  <p class="fam-tip"><b>玩法</b>消耗是同式无招的 1.1 倍、威力是 1.05 倍，平时和普通招式差不多，专门克制“第一回合先攒炸弹”：看穿对手要攒炸弹就出它。但如果对手出的是别的招，它就只是一个平庸的招式。</p>
+  <p class="fam-eff"><b>效果</b>静止增伤：对手这回合积攒炸弹或释放空炸弹（没攒过就放）时，这一招的伤害多一截（41%→80%，算在增伤乘区里；跳过不算静止）</p>
+  <p class="fam-tip"><b>玩法</b>消耗是同式无招的 1.32 倍（第 1 式）到 1.1 倍（第 20 式）、威力是 1.05 倍，平时和普通招式差不多，专门克制“第一回合先攒炸弹”：看穿对手要攒炸弹就出它。但如果对手出的是别的招，它就只是一个平庸的招式。</p>
 </article>
 <article class="fam" style="--c:#a455d6">
   <div class="fam-top"><span class="fam-icon">吸</span><div><h4>吸蜂神功</h4><div class="fam-tag">蜂群吸元</div></div><span class="chip" style="--c:#a455d6">五行</span></div>
@@ -532,7 +532,7 @@
     <tr><td><b>禁锢</b></td><td>命中后有概率让对手<b>下回合</b>无法出招（只能积攒或跳过）。</td></tr>
     <tr><td><b>持续伤害</b></td><td>命中后先打一次，之后每隔几回合再扣一次。不受对撞抵消。</td></tr>
     <tr><td><b>回复真气/武力/健康</b></td><td>立即回复一份，之后每隔几回合再回复一份。</td></tr>
-    <tr><td><b>静止增伤</b></td><td>对手这回合<b>积攒炸弹</b>或<b>释放空炸弹</b>（没攒过就放）时，本招伤害多一截，和其他增伤加在同一个乘区里；对手<b>跳过</b>不算静止。双招里只有带这个效果的那一半按份量计入。</td></tr>
+    <tr><td><b>静止增伤</b></td><td>对手这回合<b>积攒炸弹</b>或<b>释放空炸弹</b>（没攒过就放）时，本招伤害多一截，和其他增伤加在同一个乘区里；对手<b>跳过</b>不算静止。双招里只要有一个招式带这个效果，整个双招都吃到这份增伤（两个都带只算一份）。</td></tr>
     <tr><td><b>连招增伤</b></td><td>连着上一回合<b>同家族的前一式</b>出招（比如先出第 18 式、再出第 19 式、再出第 20 式），每连续一步威力就多一截；中间只要<b>积攒、放炸弹、跳过或被禁锢</b>就断了，要从头再连。双招里包含这一招也算连着，不要求命中。</td></tr>
     <tr><td><b>护盾</b></td><td>出招时给自己加一块护盾（盾量是自己武力上限的一定比例），能同时挡<b>武力和健康</b>的伤害，只持续几回合。多块护盾可以同时存在、各自计时；受伤时每块盾都被减去同样的伤害，伤害超过最厚那块盾的部分才会真的扣武力/健康（反弹也只反弹穿过护盾的那一部分）。</td></tr>
   </table>
@@ -617,17 +617,17 @@
   <p class="lead">双方在同一阶位对决时，初始属性是一样的（敏捷按阶位：3-1 为 5.25，之后随式数每式 +0.25，4-6 为 10；式越低，跳过的敏捷损失越吃亏）。想跨阶位对决，可以自己改属性。</p>
   <table>
     <tr><th>阶位</th><th>对应式</th><th class="c">健康</th><th class="c">武力</th><th class="c">真气</th><th class="c">每回合回复真气</th></tr>
-    <tr><td>3-1</td><td>1</td><td class="c">1000</td><td class="c">1200</td><td class="c">800</td><td class="c">20</td></tr>
-    <tr><td>3-2</td><td>2</td><td class="c">1230</td><td class="c">1480</td><td class="c">960</td><td class="c">24</td></tr>
-    <tr><td>3-3</td><td>3</td><td class="c">1510</td><td class="c">1810</td><td class="c">1150</td><td class="c">29</td></tr>
-    <tr><td>3-4</td><td>4</td><td class="c">1770</td><td class="c">2180</td><td class="c">1400</td><td class="c">35</td></tr>
-    <tr><td>3-5</td><td>5</td><td class="c">2090</td><td class="c">2640</td><td class="c">1720</td><td class="c">43</td></tr>
-    <tr><td>3-6</td><td>6</td><td class="c">2450</td><td class="c">3180</td><td class="c">2100</td><td class="c">52</td></tr>
-    <tr><td>4-1</td><td>7–8</td><td class="c">3110</td><td class="c">4190</td><td class="c">2830</td><td class="c">71</td></tr>
-    <tr><td>4-2</td><td>9–10</td><td class="c">4270</td><td class="c">6050</td><td class="c">4200</td><td class="c">105</td></tr>
-    <tr><td>4-3</td><td>11–12</td><td class="c">5840</td><td class="c">8710</td><td class="c">6250</td><td class="c">156</td></tr>
-    <tr><td>4-4</td><td>13–14</td><td class="c">8560</td><td class="c">12900</td><td class="c">9080</td><td class="c">227</td></tr>
-    <tr><td>4-5</td><td>15–17</td><td class="c">14100</td><td class="c">21400</td><td class="c">14300</td><td class="c">358</td></tr>
+    <tr><td>3-1</td><td>1</td><td class="c">600</td><td class="c">800</td><td class="c">1000</td><td class="c">20</td></tr>
+    <tr><td>3-2</td><td>2</td><td class="c">760</td><td class="c">1010</td><td class="c">1190</td><td class="c">24</td></tr>
+    <tr><td>3-3</td><td>3</td><td class="c">970</td><td class="c">1270</td><td class="c">1410</td><td class="c">29</td></tr>
+    <tr><td>3-4</td><td>4</td><td class="c">1170</td><td class="c">1560</td><td class="c">1690</td><td class="c">35</td></tr>
+    <tr><td>3-5</td><td>5</td><td class="c">1430</td><td class="c">1930</td><td class="c">2060</td><td class="c">43</td></tr>
+    <tr><td>3-6</td><td>6</td><td class="c">1730</td><td class="c">2380</td><td class="c">2490</td><td class="c">52</td></tr>
+    <tr><td>4-1</td><td>7–8</td><td class="c">2330</td><td class="c">3280</td><td class="c">3270</td><td class="c">71</td></tr>
+    <tr><td>4-2</td><td>9–10</td><td class="c">3370</td><td class="c">4940</td><td class="c">4760</td><td class="c">105</td></tr>
+    <tr><td>4-3</td><td>11–12</td><td class="c">4860</td><td class="c">7420</td><td class="c">6910</td><td class="c">156</td></tr>
+    <tr><td>4-4</td><td>13–14</td><td class="c">7480</td><td class="c">11500</td><td class="c">9800</td><td class="c">227</td></tr>
+    <tr><td>4-5</td><td>15–17</td><td class="c">13300</td><td class="c">20200</td><td class="c">14900</td><td class="c">358</td></tr>
     <tr><td>4-6</td><td>18–20</td><td class="c">25800</td><td class="c">38900</td><td class="c">24800</td><td class="c">619</td></tr>
   </table>
   <p style="color:var(--ink-soft);font-size:14px">在模拟器里，选了"AI 用第 N 式"，双方的标准属性会自动换成对应阶位的这一行。</p>

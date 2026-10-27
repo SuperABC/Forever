@@ -62,6 +62,7 @@ struct Hist { float v[HK][HD]; int len = 0; };
 // PvE对局配置：每方的五行属性掩码、特性文本(每行一条"mod ..."，同ai.html的特性调试面板)，以及基础暴击
 struct PveCfg {
 	unsigned elem[2] = { 0, 0 };
+	int noAcc[2] = { 0, 0 };     // 禁止积攒炸弹(PvE的敌人)
 	string traits[2];
 	double critRate = 0, critDmg = 0.5;
 };
@@ -214,11 +215,16 @@ API void wx_pve_set(int gid, int elemA, int elemB, float critRate, float critDmg
 	c.traits[0] = traitsA ? traitsA : ""; c.traits[1] = traitsB ? traitsB : "";
 }
 
+// 禁止某一方积攒炸弹(PvE的敌人)：必须在wx_reset之前调用，只在PvE模式下生效
+API void wx_pve_noacc(int gid, int noAccA, int noAccB) {
+	g_games[gid].cfg.noAcc[0] = noAccA; g_games[gid].cfg.noAcc[1] = noAccB;
+}
+
 API void wx_pool_clear() { g_pool.clear(); }
 
 API int wx_pool_add(const char* path) {
 	try {
-		g_pool.push_back(make_shared<Cultivator>("T", path, 1000, 1200, 800, 21, 20));
+		g_pool.push_back(make_shared<Cultivator>("T", path, 600, 800, 1000, 21, 20));
 	} catch (...) { return -1; }
 	return (int)g_pool.size() - 1;
 }
@@ -250,6 +256,7 @@ API void wx_reset(int gid, int tplA, int tplB, const float* statsA, const float*
 	g.ct = make_unique<Controller>(vector<shared_ptr<Cultivator>>{ g.c[0], g.c[1] });
 	if (g_pve) {
 		for (int k = 0; k < 2; ++k) g.c[k]->SetElements(g.cfg.elem[k]);
+		for (int k = 0; k < 2; ++k) g.c[k]->SetNoAccumulate(g.cfg.noAcc[k] != 0);
 		g.ct->SetCritBase(g.cfg.critRate, g.cfg.critDmg);
 		for (int k = 0; k < 2; ++k) {
 			istringstream lines(g.cfg.traits[k]);
@@ -318,6 +325,9 @@ API void wx_step_batch(int n, const int* gids, const int* act, float* reward, in
 		// 无效的招式(越界/不同式)Build返回跳过，记录里的类别也改成跳过
 		if (cls[0] >= 3 && x->GetType() == ACTION_SKIP) cls[0] = 0;
 		if (cls[1] >= 3 && y->GetType() == ACTION_SKIP) cls[1] = 0;
+		// 禁止积攒的人(PvE敌人)选了积攒，规则层当作跳过，记录里也按跳过算
+		if (cls[0] == 1 && c0.NoAccumulate()) { cls[0] = 0; x = make_shared<SkipAction>(); }
+		if (cls[1] == 1 && c1.NoAccumulate()) { cls[1] = 0; y = make_shared<SkipAction>(); }
 
 		g.ct->ActionTurn({ { x, 1 }, { y, 0 } });
 		bool dodged[2] = { false, false };   // 席位s闪避了对手的攻击

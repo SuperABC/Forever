@@ -14,6 +14,7 @@ import torch.nn.functional as F
 import wxenv
 
 NEG = -1e9
+NOACC_IDX = 49 + 34     # PvE局面特征里"自己禁止积攒炸弹"的下标(SD+34，同features.h的NOACC_IDX)
 
 
 class MLP(nn.Module):
@@ -109,7 +110,11 @@ class Policy(nn.Module):
 
     def forward(self, state, hist, es, eo, mask_s, mask_o, form_s):
         h, ctx = self.encode(state, hist, es, eo, mask_s, mask_o)
-        return h, ctx, self.value(h).squeeze(-1).float(), self.cls_head(h).float(), self.first_logits(h, ctx, mask_s).float()
+        cls = self.cls_head(h).float()
+        # PvE：自己禁止积攒炸弹(局面特征NOACC_IDX=1，敌人)时屏蔽"积攒"这个类别；采样和PPO的logprob都走这里，PvP的维数不够长，不受影响
+        if state.shape[1] > NOACC_IDX:
+            cls = cls.masked_fill((state[:, NOACC_IDX].float() > 0.5).unsqueeze(-1) & (torch.arange(5, device=cls.device) == 1), NEG)
+        return h, ctx, self.value(h).squeeze(-1).float(), cls, self.first_logits(h, ctx, mask_s).float()
 
     @torch.no_grad()
     def act(self, state, hist, es, eo, mask_s, mask_o, form_s, greedy=False):

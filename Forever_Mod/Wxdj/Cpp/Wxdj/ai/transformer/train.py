@@ -152,35 +152,42 @@ def play(env, batch, net0, net1, bot1, bot_fam1, n_steps, rng, dev, greedy=False
     return outcome, lengths, done_all
 
 
+EMA = {}
+
+
 def evaluate(net, eval_pool, dev, rng, n_games=256, tag=''):
     """对每种脚本机器人打n_games盘(双方席位各一半)，返回胜率/败率。"""
     eval_pool.load()
     env = wxenv.Env(n_games, M)
     res = {}
-    for bt in range(4):
-        # 席位交换：前一半net在席位0，后一半在席位1(通过交换文件和属性实现不了席位，所以分两轮)
+    cases = [(bt, None, bots.NAMES[bt]) for bt in range(3)] + [(bots.ROUTINE, k, r[0]) for k, r in enumerate(bots.ROUTINES)]
+    for bt, rk, name in cases:      # 每个固定套路单独评测
         wins = losses = 0
         for swap in (0, 1):
             ta, tb, sa, sb = sample_games(eval_pool, n_games, rng, mirror=1.0)   # 镜像=公平，胜率才反映模型本身的强弱
             reset_games(env, ta, tb, sa, sb, rng, mirror=True)
             if swap == 1:    # 让net坐席位1：用一个包装把两个席位的角色互换
-                outcome = play_swapped(env, net, bt, rng, dev)
+                outcome = play_swapped(env, net, bt, rng, dev, rk)
             else:
                 batch = Batch(env, dev)
                 fam = bots.pick_family(env, np.arange(n_games), 1, rng)
+                if rk is not None:
+                    fam = np.full(n_games, rk)
                 outcome, _, _ = play(env, batch, net, None, np.full(n_games, bt), fam, 80, rng, dev)
             wins += int((outcome == 1).sum()); losses += int((outcome == -1).sum())
         total = 2 * n_games
-        res[bots.NAMES[bt]] = (wins / total, losses / total)
+        res[name] = (wins / total, losses / total)
     return res
 
 
-def play_swapped(env, net, bt, rng, dev):
+def play_swapped(env, net, bt, rng, dev, rk=None):
     """net坐席位1，机器人坐席位0。返回以net为视角的outcome(+1=net胜)。"""
     N = env.n
     batch = Batch(env, dev)
     gall = torch.arange(N, device=dev)
     fam = bots.pick_family(env, np.arange(N), 0, rng)
+    if rk is not None:
+        fam = np.full(N, rk)
     outcome = np.zeros(N, dtype=np.int32)
     done_all = np.zeros(N, dtype=bool)
     for t in range(80):
@@ -285,9 +292,14 @@ def main():
         reset_games(env, ta, tb, sa, sb, rng)
         batch.refresh()
         r = rng.random(N)
-        # 0自博弈 1快照 2机器人 3套路开局+自博弈(前几回合席位1照脚本出招，之后同0) 4随机开局+自博弈(前1~2回合双方都随机出招，之后同0)；
+        # 0自博弈 1快照 2机器人 3套路开局+自博弈(前几回合席位1照脚本出招，之后同0；开局有 护盾金身 和 天动万象+金钟罩) 4随机开局+自博弈(前1~2回合双方都随机出招，之后同0)；
         # 脚本/随机出的招不是网络的决定，不参与学习
-        opp_type = np.where(r < 0.40, 0, np.where(r < 0.65, 1, np.where(r < 0.80, 2, np.where(r < 0.90, 3, 4))))
+        # 套路开局各有自己的占比(bots.OPENINGS的第3项)，其余：自博弈32% 快照20% 机器人12% 随机开局8%
+        open_w = np.array([o[2] for o in bots.OPENINGS])
+        probs = np.array([0.32, 0.20, 0.12] + list(open_w) + [0.08])
+        k_ = np.minimum(np.searchsorted(np.cumsum(probs / probs.sum()), r, side='right'), len(probs) - 1)
+        is_open = (k_ >= 3) & (k_ < 3 + len(open_w))
+        opp_type = np.where(k_ < 3, k_, np.where(is_open, 3, 4))
         if not snaps:
             opp_type = np.where(opp_type == 1, 0, opp_type)
         slot = rng.integers(0, 2, N)
@@ -296,7 +308,7 @@ def main():
                 opp_nets[k].load_state_dict(snaps[rng.integers(0, len(snaps))])
         bot_type = rng.choice(4, N, p=[0.2, 0.15, 0.15, 0.5])   # 固定套路占一半：要让网络学会对抗所有已知的人类套路
         bot_fam = bots.pick_family(env, np.arange(N), 1, rng)
-        open_id = rng.integers(0, len(bots.OPENINGS), N)
+        open_id = np.where(is_open, k_ - 3, 0)
         rand_len = rng.integers(1, 3, N)             # 随机开局的回合数
         scripted = np.zeros((T, N, 2), dtype=bool)   # 这一步是脚本/随机出的招(不是网络的决定)
         learner = np.stack([np.ones(N, bool), (opp_type == 0) | (opp_type >= 3)], 1)      # (N,2)
@@ -400,7 +412,7 @@ def main():
         b_g = torch.from_numpy(gs).to(dev); b_s = torch.from_numpy(ss).to(dev)
         b_adv = (b_adv - b_adv.mean()) / (b_adv.std() + 1e-6)
         ent_coef = ent_coef0 * max(0.25, 1.0 - it / 1500.0)
-        stats = np.zeros(4)
+        stats = np.zeros(5)
         nb = 0
         for ep in range(args.epochs):
             perm = torch.randperm(n_samples, device=dev)
@@ -419,7 +431,7 @@ def main():
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(net.parameters(), 0.5)
                 opt.step()
-                stats += [pg.item(), vf.item(), ent.mean().item(), (ratio - 1).abs().mean().item()]
+                stats += [pg.item(), vf.item(), ent.mean().item(), (ratio - 1).abs().mean().item(), ((ratio - 1).abs() > 0.2).float().mean().item()]
                 nb += 1
         stats /= max(nb, 1)
         t_update = time.time() - t0
@@ -427,14 +439,26 @@ def main():
         if it % 5 == 4:
             snaps.append({k: v.detach().clone() for k, v in net.state_dict().items()})
             snaps = snaps[-30:]
+        # ---- 训练指标：按对手类别分的胜率(指数滑动平均，单次迭代每类只有几十盘，噪声大)、动作分布、价值拟合、PPO更新幅度 ----
+        groups = [('快照', opp_type == 1)] + [(bots.NAMES[k], (opp_type == 2) & (bot_type == k)) for k in range(3)] + [(r[0], (opp_type == 2) & (bot_type == bots.ROUTINE) & (bot_fam % len(bots.ROUTINES) == k)) for k, r in enumerate(bots.ROUTINES)] +                  [(o[0], (opp_type == 3) & (open_id == k)) for k, o in enumerate(bots.OPENINGS)]
+        for name, m in groups:
+            if m.any():
+                w, l = (final_outcome[m] == 1).mean(), (final_outcome[m] == -1).mean()
+                e = EMA.get(name)
+                EMA[name] = (w, l) if e is None else (0.9 * e[0] + 0.1 * w, 0.9 * e[1] + 0.1 * l)
+        m0 = opp_type == 0
+        if m0.any():
+            d_ = (final_outcome[m0] == 0).mean()
+            EMA['自博弈平局'] = (d_ if '自博弈平局' not in EMA else 0.9 * EMA['自博弈平局'][0] + 0.1 * d_, 0)
         if it % 5 == 0:
-            bw = [(final_outcome[opp_type == 2] == 1).mean() if (opp_type == 2).any() else 0,
-                  (final_outcome[opp_type == 1] == 1).mean() if (opp_type == 1).any() else 0]
-            log('it %5d  samples %6d  len %.1f  pg %+.4f vf %.4f ent %.3f dev %.3f | win(bot) %.2f win(snap) %.2f draw(self) %.2f | '
-                'sample %.1fs update %.1fs  total %.2fM  %.2fh' % (
-                    it, n_samples, steps_used, stats[0], stats[1], stats[2], stats[3], bw[0], bw[1],
-                    (final_outcome[opp_type == 0] == 0).mean(), t_sample, t_update, total_samples / 1e6,
-                    (time.time() - t_begin) / 3600), logf)
+            log('it %5d  samples %6d  len %.1f  pg %+.4f vf %.4f ent %.3f dev %.3f clip %.2f | sample %.1fs update %.1fs  total %.2fM  %.2fh' % (
+                it, n_samples, steps_used, stats[0], stats[1], stats[2], stats[3], stats[4], t_sample, t_update,
+                total_samples / 1e6, (time.time() - t_begin) / 3600), logf)
+            ev = 1.0 - np.var(ret[ts, gs, ss] - vals[ts, gs, ss]) / (np.var(ret[ts, gs, ss]) + 1e-8) if n_samples else 0.0
+            cls = np.bincount(acts[ts, gs, ss, 0], minlength=5) / max(n_samples, 1)
+            log('        价值解释方差 %.2f | 网络动作 跳过%.2f 积攒%.2f 炸弹%.2f 单招%.2f 双招%.2f | 自博弈平局率 %.2f' % (
+                ev, cls[0], cls[1], cls[2], cls[3], cls[4:].sum(), EMA.get('自博弈平局', (0, 0))[0]), logf)
+            log('        胜/败(滑动平均) ' + '  '.join('%s %.2f/%.2f' % (k, v[0], v[1]) for k, v in EMA.items() if k != '自博弈平局'), logf)
         if it % args.eval_every == args.eval_every - 1:
             net.eval()
             res = evaluate(net, eval_pool, dev, rng, n_games=args.eval_games)

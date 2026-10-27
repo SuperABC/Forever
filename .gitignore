@@ -84,6 +84,14 @@ Forever_UE/Tools/AvatarGen/sample.png
 # 通用对战模型的训练工具：代码和当前这一版模型(checkpoints_pvp/latest.pt，走Git LFS)进仓库，编译产物和训练生成物不进
 Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/wxenv.dll
 Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/build/
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/build_*/
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/wxenv_dev.*
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/pool_pve*/
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_*_smoke/
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_enemy/*
+!Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_enemy/latest.pt
+Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_player/*
+!Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_player/latest.pt
 Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/pool/
 Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/pool_eval/
 Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/pool_smoke/

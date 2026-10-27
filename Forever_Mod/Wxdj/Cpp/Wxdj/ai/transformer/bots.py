@@ -6,7 +6,7 @@ POWER  每回合出单招，在威力最高的3个招式里随机
 ROUTINE 固定套路：照着人类发现的一套固定打法出招(见下面的ROUTINES)，每盘随机选一个套路。
         以前这个位置是"随机积攒/放炸弹"的乌龟机器人——积攒炸弹本身是很差的循环，对它的胜率没有意义，所以换成真正有威胁的套路。
 
-加新套路：写一个 fn(env, gids, seat, st, rng) -> (n,3)数组[cls, m1, m2]，加进 ROUTINES 和 ROUTINE_NAMES 就行。
+加新套路：写一个 fn(env, gids, seat, st, rng) -> (n,3)数组[cls, m1, m2]，在 ROUTINES 里加一项 (名称, fn) 就行。
 st是这些游戏里该席位看到的局面特征(n,SD)，用下面的 S_* 下标取值；env.moves/env.form/env.fam 是该席位的招式特征。
 套路只能用对局里看得到的信息(局面特征、招式特征)，不能偷看环境内部状态，和人一样。
 """
@@ -71,7 +71,7 @@ def actions(env, gids, seat, bot_type, bot_fam, rng):
     if len(rs):
         st = env.obs(gids[rs])[0][:, seat]
         which = bot_fam[rs] % len(ROUTINES)
-        for k, fn in enumerate(ROUTINES):
+        for k, (_, fn) in enumerate(ROUTINES):
             sub = np.where(which == k)[0]
             if len(sub):
                 out[rs[sub]] = fn(env, gids[rs[sub]], seat, st[sub], rng)
@@ -106,8 +106,7 @@ def lock_bomb(env, gids, seat, st, rng):
 
 
 # 已知的人类套路。新发现的套路加到这里，训练和评测会自动覆盖。
-ROUTINES = [lock_bomb]
-ROUTINE_NAMES = ['禁锢炸弹']
+ROUTINES = [('禁锢炸弹', lock_bomb)]
 
 
 def pick_family(env, gids, seat, rng):
@@ -121,6 +120,8 @@ def pick_family(env, gids, seat, rng):
 # ---- 套路开局：只照着脚本打前几回合，之后把这一方交给网络自博弈(见train.py的opp_type==3) ----
 M_HAS_REDUCE, M_REDUCE_RATIO, M_ATTR_WATER = 67, 27, 9     # 带减伤，减伤比例(对无属性)，属性是水
 M_HAS_SHIELD, M_SHIELD_RATIO = 77, 78                      # 带护盾，盾量比例
+M_HAS_STATIC, M_STATIC_RATIO = 81, 82                      # 带static(对静止敌人增伤)，增伤比例
+M_HAS_REBOUND, M_REBOUND_RATIO, M_ATTR_METAL = 68, 34, 7   # 带反弹，反弹比例(对无属性)，属性是金
 
 
 def _best(env, gids, seat, st, flag, score_col):
@@ -159,8 +160,71 @@ def shield_golden(env, gids, seat, st, rnd, rng):
     return out, scripted
 
 
-# (名称, 函数 fn(env, gids, seat, st, 回合数, rng) -> (动作, scripted))
-OPENINGS = [('护盾金身', shield_golden)]
+def static_open(env, gids, seat, st, rnd, rng):
+    """一直出天动万象(带static的招，付得起的里static比例最大的那个)，直到对手手里有了炸弹(积攒了)；
+    然后一直出金钟罩(金属属性的反弹招，反弹比例最大的那个)，直到对手把炸弹放掉；之后由网络自博弈接管(scripted=False)，不再接回来。
+    目的是抑制"开局就攒炸弹、放炸弹"：天动万象克制攒炸弹，金钟罩挡住随后的炸弹。
+    对手一直不攒炸弹时，天动万象最多出STATIC_MAX_ROUNDS回合就交出去，避免整局都在脚本里。
+    招式表里没有带static的招时脚本整个不生效；某回合付不起想出的招就退而求其次(金钟罩换任意反弹招，再换威力最大的付得起的单招，都付不起就跳过)。
+    返回(动作(n,3), scripted(n,))。"""
+    n = len(gids)
+    gids = np.asarray(gids)
+    out = np.zeros((n, 3), dtype=np.int32)
+    ph = getattr(env, 'static_ph', None)       # 0=没在脚本里(没开始或已交出) 1=出天动万象 2=出金钟罩
+    if ph is None:
+        ph = env.static_ph = np.zeros((env.n, 2), dtype=np.int8)
+    mv = env.moves[gids, seat]
+    afford = (env.form[gids, seat] != -2) & (mv[:, :, M_COST] <= st[:, S_MP][:, None])
+    st_pick, has_st = _best(env, gids, seat, st, M_HAS_STATIC, M_STATIC_RATIO)
+    if rnd <= 1:
+        ph[gids, seat] = np.where(has_st, 1, 0)
+    p = ph[gids, seat].copy()
+    opp_bomb = st[:, S_OPP_BOMB] > 0
+    p = np.where((p == 1) & (opp_bomb | (rnd > STATIC_MAX_ROUNDS)), np.where(opp_bomb, 2, 0), p)
+    p = np.where((p == 2) & ~opp_bomb, 0, p)
+    ph[gids, seat] = p
+    reb = afford & (mv[:, :, M_HAS_REBOUND] > 0.5)
+    score = mv[:, :, M_REBOUND_RATIO] + 10.0 * (mv[:, :, M_ATTR_METAL] > 0.5)     # 金属的反弹招(金钟罩)优先，其次反弹比例最大的
+    pick_reb = np.argmax(np.where(reb, score, -1e9), axis=1)
+    best = np.argmax(np.where(afford, mv[:, :, 2], -1e9), axis=1)
+    static_ok = has_st
+    use_reb = reb.any(1)
+    pick = np.where(p == 1, np.where(static_ok, st_pick, best), np.where(use_reb, pick_reb, best))
+    out[:, 0] = np.where((p == 1) & static_ok | afford.any(1), 3, 0)
+    out[:, 1] = pick
+    return out, p > 0
+
+
+STATIC_MAX_ROUNDS = 10
+
+
+def accumulate_loop(env, gids, seat, st, rnd, rng):
+    """循环：积攒2回合 -> 海龙金身(水属性减伤最大的招) -> 释放炸弹 -> 再从头积攒。整局都按这个套路出，不交给网络。
+    海龙金身付不起/没有时退而求其次出付得起的威力最大的单招，都付不起就跳过；释放炸弹时手里没炸弹就直接重新积攒。
+    返回(动作(n,3), scripted(n,))。"""
+    n = len(gids)
+    gids = np.asarray(gids)
+    out = np.zeros((n, 3), dtype=np.int32)
+    cy = getattr(env, 'loop_step', None)        # 循环里的第几步：0,1=积攒 2=海龙金身 3=放炸弹
+    if cy is None:
+        cy = env.loop_step = np.zeros((env.n, 2), dtype=np.int8)
+    if rnd <= 1:
+        cy[gids, seat] = 0
+    c = cy[gids, seat].copy()
+    c = np.where((c == 3) & (st[:, S_BOMB] <= 0), 0, c)    # 没炸弹可放，重新积攒
+    mv = env.moves[gids, seat]
+    afford = (env.form[gids, seat] != -2) & (mv[:, :, M_COST] <= st[:, S_MP][:, None])
+    water = afford & (mv[:, :, M_HAS_REDUCE] > 0.5) & (mv[:, :, M_ATTR_WATER] > 0.5)
+    lg = np.argmax(np.where(water, mv[:, :, M_REDUCE_RATIO], -1.0), axis=1)
+    fb = np.argmax(np.where(afford, mv[:, :, 2], -1e9), axis=1)
+    out[:, 0] = np.where(c <= 1, 1, np.where(c == 3, 2, np.where(afford.any(1), 3, 0)))
+    out[:, 1] = np.where(c == 2, np.where(water.any(1), lg, fb), 0)
+    cy[gids, seat] = (c + 1) % 4
+    return out, np.ones(n, dtype=bool)
+
+
+# (名称, 函数 fn(env, gids, seat, st, 回合数, rng) -> (动作, scripted), 占全部训练对局的比例)
+OPENINGS = [('护盾金身', shield_golden, 0.08), ('天动万象+金钟罩', static_open, 0.15), ('积攒+海龙金身+放炸弹循环', accumulate_loop, 0.15)]
 
 
 def opening(env, gids, seat, which, rnd, rng):
@@ -170,8 +234,86 @@ def opening(env, gids, seat, which, rnd, rng):
     st = env.obs(gids)[0][:, seat]
     out = np.zeros((len(gids), 3), dtype=np.int32)
     scr = np.zeros(len(gids), dtype=bool)
-    for k, (_, fn) in enumerate(OPENINGS):
+    for k, (_, fn, _w) in enumerate(OPENINGS):
         sub = np.where(which == k)[0]
         if len(sub):
             out[sub], scr[sub] = fn(env, gids[sub], seat, st[sub], rnd, rng)
     return out, scr
+
+
+# ---- PvE：玩家侧的陪练(训练敌人模型用)。玩家有很多招式和加成，这里放几种"人会怎么玩"的脚本 ----
+M_HAS_INCREASE, M_FORM = 75, 80       # 带increase(连招增伤)，式号/20
+S_SHIELD = 41                          # 局面特征：自己最大那块盾/自己武力上限
+PVE_PLAYER_NAMES = ['随机AI', '最高威力', '连招爬升', '护盾龟', '禁锢炸弹']
+
+
+def _afford(env, gids, seat, st):
+    mv = env.moves[gids, seat]
+    return mv, (env.form[gids, seat] != -2) & (mv[:, :, M_COST] <= st[:, S_MP][:, None])
+
+
+def _skip_or(out, ok, pick):
+    out[:, 0] = np.where(ok, 3, 0)
+    out[:, 1] = np.where(ok, pick, 0)
+    return out
+
+
+def climber(env, gids, seat, st, rng):
+    """连招爬升：专挑带increase的招，接着上一回合的同家族往上一式出(第k式、k+1式、k+2式……)，断了(付不起)就从最低式重新开始；
+    没有increase招式时出付得起的威力最大的单招。上一回合出的(家族,式号)记在env上。"""
+    n = len(gids)
+    gids = np.asarray(gids)
+    out = np.zeros((n, 3), dtype=np.int32)
+    mem = getattr(env, 'climb_mem', None)
+    if mem is None:
+        mem = env.climb_mem = np.full((env.n, 2, 2), -1, dtype=np.int64)   # [游戏, 席位, (家族, 式号)]
+    rnd = np.rint(st[:, S_ROUND] * 40)
+    mem[gids[rnd <= 1], seat] = -1
+    mv, afford = _afford(env, gids, seat, st)
+    fam = env.fam[gids, seat]
+    form = np.rint(mv[:, :, M_FORM] * 20).astype(np.int64)
+    inc = afford & (mv[:, :, M_HAS_INCREASE] > 0.5)
+    last_fam, last_form = mem[gids, seat, 0], mem[gids, seat, 1]
+    nxt = inc & (fam == last_fam[:, None]) & (form == (last_form + 1)[:, None])
+    start = np.argmin(np.where(inc, form + rng.random(form.shape) * 0.5, 1e9), axis=1)    # 从最低式重新开始(同式随机)
+    pick_inc = np.where(nxt.any(1), np.argmax(nxt, axis=1), start)
+    best = np.argmax(np.where(afford, mv[:, :, 2], -1e9), axis=1)
+    use_inc = inc.any(1)
+    pick = np.where(use_inc, pick_inc, best)
+    ok = afford.any(1)
+    mem[gids, seat, 0] = np.where(ok, fam[np.arange(n), pick], -1)
+    mem[gids, seat, 1] = np.where(ok & use_inc, form[np.arange(n), pick], -1)
+    return _skip_or(out, ok, pick)
+
+
+def shield_turtle(env, gids, seat, st, rng):
+    """护盾龟：自己身上没盾(或盾很薄)时先开一块盾(盾量最大的那个)，有盾了就出付得起的威力最大的单招。"""
+    n = len(gids)
+    gids = np.asarray(gids)
+    out = np.zeros((n, 3), dtype=np.int32)
+    mv, afford = _afford(env, gids, seat, st)
+    sh = afford & (mv[:, :, M_HAS_SHIELD] > 0.5)
+    pick_sh = np.argmax(np.where(sh, mv[:, :, M_SHIELD_RATIO], -1.0), axis=1)
+    best = np.argmax(np.where(afford, mv[:, :, 2], -1e9), axis=1)
+    want = sh.any(1) & (st[:, S_SHIELD] < 0.02)
+    return _skip_or(out, afford.any(1), np.where(want, pick_sh, best))
+
+
+def pve_player_actions(env, gids, seat, kind, rng):
+    """kind(n,)：PVE_PLAYER_NAMES 的下标。返回(n,3)=[cls,m1,m2]。"""
+    gids = np.asarray(gids)
+    kind = np.asarray(kind)
+    out = np.zeros((len(gids), 3), dtype=np.int32)
+    fam = pick_family(env, gids, seat, rng)
+    for k in range(len(PVE_PLAYER_NAMES)):
+        sub = np.where(kind == k)[0]
+        if not len(sub):
+            continue
+        g = gids[sub]
+        if k in (0, 1):
+            out[sub] = actions(env, g, seat, np.full(len(g), OLD if k == 0 else POWER), fam[sub], rng)
+            continue
+        st = env.obs(g)[0][:, seat]
+        fn = {2: climber, 3: shield_turtle, 4: lock_bomb}[k]
+        out[sub] = fn(env, g, seat, st, rng)
+    return out

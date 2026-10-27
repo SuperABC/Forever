@@ -9,11 +9,12 @@
 
 | 文件 | 作用 |
 |---|---|
-| `env.cpp`、`features.h` | 训练环境`wxenv.dll`：批量并行对局，导出C接口；特征(招式83维/局面49维/每回合记录59维x8回合；75~82和最后8维是increase/shield/static相关的追加维度)定义在`features.h`，以后游戏里推理复用。**PvE模式**(`wx_set_mode(1)`)在PvP维数后面再追加：招式5维(`MoveExtrasPvE`：自己拥有该属性/同属性倍率/增伤/对手抗性乘数/对手易伤)、局面34维(`StateExtrasPvE`：双方的五行属性、五个抗性、最厚盾的属性、暴击)，PvE模型输入维数 88/83；PvP的局面里这些维度恒为0 |
+| `env.cpp`、`features.h` | 训练环境`wxenv.dll`：批量并行对局，导出C接口；特征(招式83维/局面49维/每回合记录59维x8回合；75~82和最后8维是increase/shield/static相关的追加维度)定义在`features.h`，以后游戏里推理复用。**PvE模式**(`wx_set_mode(1)`)在PvP维数后面再追加：招式7维(`MoveExtrasPvE`：自己拥有该属性/同属性倍率/增伤/对手抗性乘数/对手易伤 + 威力相对对手总生命、消耗相对自己真气上限的两个对数特征)、局面40维(`StateExtrasPvE`：双方的五行属性、五个抗性、最厚盾的属性、暴击 + 自己/对手是否禁止积攒炸弹、双方健康/武力/真气/总生命的规模差的对数)，PvE模型输入维数 90/89；没有五行/特性配置的PvP式局面里，五行/特性相关的追加维度恒为0 |
 | `build.ps1`、`build.sh` | 编译`wxenv.dll`(Windows)/`libwxenv.so`(Linux/macOS)(改了`battle/`或`features.h`后重新跑；执行策略拦截时用`powershell -ExecutionPolicy Bypass -File build.ps1`) |
 | `wxenv.py` | `wxenv.dll`的ctypes封装；`set_mode(pve)`切换PvP/PvE(要在建Env和模型之前)，`Env.reset(..., pve=配置)` |
 | `gen_pool.py` | 生成随机化的招式文件池(真实家族的随机子集/扰动 + 合成家族 + 式的子集)；合成/扰动的家族里也有increase(连招增伤)和shield(盾量=武力上限的比例)效果 |
 | `pve_gen.py` | PvE训练的随机配置：双方五行属性(35%无/15%五个齐全/其余1~4个)、基础暴击、各种特性(增伤/易伤/抗性/同属性倍率/暴击/闪避/命中/反弹/免疫/每回合回复/立即加盾……)；15%的对局什么都没有(=PvP规则)，双方可以不对等 |
+| `train_pve2.py`、`train_pve2.ps1` | **PvE非对称训练**：敌人模型(席位1，游戏里用的) + 玩家陪练模型(席位0)两个网络、两个优化器，玩家侧招式多、加成多、三维小，敌人侧三维是玩家的10~100倍、招式少(2~9个)、效果0.3~0.7倍、不能积攒炸弹。每轮的对局：玩家当前版vs敌人当前版(35%，都学)、玩家历史快照vs敌人(20%，敌人学)、玩家当前版vs敌人历史快照(15%，玩家学)、脚本玩家vs敌人(30%，敌人学；脚本见`bots.PVE_PLAYER_NAMES`：随机AI/最高威力/连招爬升/护盾龟/禁锢炸弹)。配置见`pve_gen.sample_asym`(玩家加增伤类特性使它堆满加成后需要4~25回合打穿敌人)，敌人招式文件见`gen_pool.generate_enemy`。评测：敌人模型对每种玩家、k=10/30/100三档的胜率(训练日志`EVAL`行)；检查点 `checkpoints_pve_enemy/`、`checkpoints_pve_player/` |
 | `smoke_test.py` | 冒烟测试(几分钟)：维数、"无配置时PvE特征=PvP特征+零"、补零热启动输出一致、两种模式的train.py各跑2轮、导出权重；长时间训练的脚本会先跑它 |
 | `train_pvp.ps1/.sh`、`train_pve.ps1/.sh` | 一键脚本，见下面"训练" |
 | `model.py` | 模型：Perceiver式小Transformer，输出 招类 -> 第一个招式 -> (双招)第二个招式(必须同式) |
@@ -47,6 +48,9 @@ powershell -ExecutionPolicy Bypass -File train_pvp.ps1 -Iters 1000 -Resume     #
 # 2. PvE模型：从PvP检查点热启动微调
 powershell -ExecutionPolicy Bypass -File train_pve.ps1 -Iters 600
 powershell -ExecutionPolicy Bypass -File train_pve.ps1 -Iters 300 -Resume
+# 2b. PvE非对称训练(敌人模型+玩家陪练模型，推荐；游戏里用敌人模型)
+powershell -ExecutionPolicy Bypass -File train_pve2.ps1 -Iters 600
+powershell -ExecutionPolicy Bypass -File train_pve2.ps1 -Iters 300 -Resume
 # 参数(两个脚本通用)：-Iters 这次训练多少轮 | -Hours 最多多少小时(0=不限，和-Iters谁先到谁停) | -EvalEvery 每多少轮评测一次
 #   -EvalGames 训练中每次评测每种机器人每个席位打多少盘(默认256) | -ReportGames 结束后招式强度报告每个对局组合打多少盘(PvP脚本，默认100)
 #   -Games/-Steps 每轮采样多少盘/每盘最多多少回合 | -Lr 学习率(PvE脚本) | -Init 热启动的PvP检查点(PvE脚本)
@@ -61,7 +65,7 @@ python export_weights.py --pve checkpoints_pve/latest.pt                        
 ```
 Linux/macOS用`sh train_pvp.sh`/`sh train_pve.sh`，参数写成`--iters 2000 --eval-every 50 --eval-games 256 --report-games 100`(同名)，先自动`sh build.sh`。训练日志在各检查点目录的`train.log`，`plan:`那行写了这次打算训练到哪一轮。
 推理端：网页人机对战(`ai.html`)已经支持PvE权重——`ai_weights_pve.js`放在`ai_weights_pvp.js`旁边，顶部"模型"开关就能选PvP/PvE(没有这个文件时PvE选项灰掉)，
-网络按权重的输入维数(88/83=PvE)自动选特征，PvE的5+34维特征的JS实现和`features.h`逐项对拍过(最大差<1e-6)。
+网络按权重的输入维数(90/89=PvE)自动选特征，PvE的7+40维特征的JS实现和`features.h`逐项对拍过(最大差<1e-6)。
 游戏里的C++推理(`battle/ai.cpp`)目前仍只认PvP维数的权重，PvE模型要接入需要让`ai.cpp`按权重维数调用`MoveExtrasPvE/StateExtrasPvE`。
 
 每轮：随机抽N盘对局(双方招式文件、属性各自随机，40%镜像)，对手 50%自己 / 30%历史快照 / 20%脚本机器人；

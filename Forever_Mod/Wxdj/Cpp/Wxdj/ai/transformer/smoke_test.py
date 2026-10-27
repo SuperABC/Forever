@@ -92,9 +92,12 @@ def main():
     st2, hi2, _ = env2.obs()
     if not (np.array_equal(st2[:, :, :sd1], st1) and np.array_equal(env2.moves[..., :fm1], moves1) and np.array_equal(hi2, hi1)):
         fail('没有PvE配置时，PvE环境的前面维度和PvP不一致')
-    if np.abs(st2[:, :, sd1:]).max() != 0 or np.abs(env2.moves[..., fm1:]).max() != 0:
-        fail('没有PvE配置时，追加的维度应该全是0')
-    say('无配置时 PvE特征 = PvP特征 + 全零追加维度  OK')
+    # 追加维度里：五行/抗性/暴击/特性相关的(招式前5维、局面前34维)没有配置时是0；后面的跨规模对数特征和禁止积攒标志不要求为0(权重补零，所以不影响热启动)
+    if np.abs(st2[:, :, sd1:sd1 + 34]).max() != 0 or np.abs(env2.moves[..., fm1:fm1 + 5]).max() != 0:
+        fail('没有PvE配置时，五行/特性相关的追加维度应该全是0')
+    if st2[:, :, sd1 + 34].max() != 0:
+        fail('没有配置时不该有禁止积攒标志')
+    say('无配置时 PvE特征 = PvP特征 + 零追加维度(五行/特性)  OK')
 
     # ---- 3. 补零热启动：输出一致 ----
     torch.manual_seed(1)
@@ -152,18 +155,24 @@ def main():
     run(['train.py', '--mode', 'pve', '--init', os.path.join('checkpoints_smoke_pvp', 'latest.pt'), '--ckpt_dir', 'checkpoints_smoke_pve', '--lr', '1.5e-4'] + tiny)
     run(['train.py', '--mode', 'pve', '--resume', '--ckpt_dir', 'checkpoints_smoke_pve'] + tiny[:6] + ['--iters', '1'] + tiny[8:])
     say('train.py PvP / PvE(热启动) / PvE(续训) 各跑通  OK')
+    run(['train_pve2.py', '--init', os.path.join('checkpoints_smoke_pvp', 'latest.pt'), '--ckpt_suffix', '_smoke', '--games', '32', '--steps', '10', '--pool', '16',
+         '--iters', '2', '--eval_every', '2', '--eval_games', '8', '--d', '64', '--hours', '1'])
+    run(['train_pve2.py', '--resume', '--ckpt_suffix', '_smoke', '--games', '32', '--steps', '10', '--pool', '16', '--iters', '1', '--eval_every', '5', '--eval_games', '8', '--d', '64'])
+    say('train_pve2.py(敌人+玩家双模型) 热启动 / 续训 跑通  OK')
 
     # ---- 5. 导出到临时目录 ----
     tmp = tempfile.mkdtemp(prefix='wxdj_export_')
     run(['export_weights.py', os.path.join('checkpoints_smoke_pvp', 'latest.pt'), '--out_dir', tmp])
     run(['export_weights.py', '--pve', os.path.join('checkpoints_smoke_pve', 'latest.pt'), '--out_dir', tmp])
-    for f in ('ai_weights_pvp.js', 'ai_weights_pvp.bin', 'ai_weights_pve.js', 'ai_weights_pve.bin'):
+    run(['export_weights.py', '--pve', os.path.join('checkpoints_pve_enemy_smoke', 'latest.pt'), '--out_dir', tmp])
+    run(['export_weights.py', '--pve', os.path.join('checkpoints_pve_player_smoke', 'latest.pt'), '--tag', '_pve_player', '--out_dir', tmp])
+    for f in ('ai_weights_pvp.js', 'ai_weights_pvp.bin', 'ai_weights_pve.js', 'ai_weights_pve.bin', 'ai_weights_pve_player.js', 'ai_weights_pve_player.bin'):
         if not os.path.exists(os.path.join(tmp, f)):
             fail('没有导出 ' + f)
     say('导出权重 OK (%s)' % tmp)
 
     if not KEEP:
-        for d in ('checkpoints_smoke_pvp', 'checkpoints_smoke_pve', 'pool_smoke'):
+        for d in ('checkpoints_smoke_pvp', 'checkpoints_smoke_pve', 'pool_smoke', 'checkpoints_pve_enemy_smoke', 'checkpoints_pve_player_smoke', 'pool_pve_smoke'):
             shutil.rmtree(os.path.join(HERE, d), ignore_errors=True)
         shutil.rmtree(tmp, ignore_errors=True)
     say('ALL OK')

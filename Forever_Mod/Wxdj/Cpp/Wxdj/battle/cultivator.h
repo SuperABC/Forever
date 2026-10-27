@@ -141,6 +141,10 @@ public:
 	// 更新阶位
 	void UpdateRealm();
 
+	// 禁止积攒炸弹(PvE的敌人)：选了积攒就当作跳过。默认可以积攒
+	bool NoAccumulate() const { return noAccumulate; }
+	void SetNoAccumulate(bool v) { noAccumulate = v; }
+
 	// 积攒真气炸弹
 	void AccumulatePower();
 
@@ -159,6 +163,7 @@ private:
 	float maxAGI; // 初始(上限)敏捷值
 	float agiLoss; // 每次跳过损失的敏捷值(连续跳过会递增)
 	int skipStreak = 0; // 已经连续跳过了几次
+	bool noAccumulate = false; // 禁止积攒炸弹
 	std::vector<ChainEntry> chain; // 连招链(上一回合的招)
 	ModifierSet modSet; // 特性
 	unsigned elements = 0; // 五行属性掩码

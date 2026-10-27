@@ -122,6 +122,68 @@ def sample_config(rng, atk_a, atk_b, mirror=False):
     return dict(elem=(ea, eb), crit=crit, traits=(ta, tb))
 
 
+# ---------------- 非对称PvE：玩家(席位0，招式多、加成多) 对 敌人(席位1，三维是玩家的十倍百倍、招式少、效果小、不能积攒炸弹) ----------------
+_MAXPOWER = {}
+
+
+def file_max_power(path):
+    """招式文件里最强的单招基础威力(缓存)。招式行格式：名字 属性 消耗 威力 阶位 效果数。"""
+    v = _MAXPOWER.get(path)
+    if v is None:
+        v = 1
+        for line in open(path, encoding='utf-8'):
+            t = line.split(' ')
+            if len(t) == 6 and t[4].count('-') == 1 and t[3].isdigit():
+                v = max(v, int(t[3]))
+        _MAXPOWER[path] = v
+    return v
+
+
+def boost_traits(rng, elems, target):
+    """给玩家的"增伤类"特性，让这些乘区的乘积约等于 target(>1)：把 ln(target) 随机分给 增伤/基础威力/暴击 三个乘区，每个乘区再拆成1~3条特性。
+    PvE里玩家要靠堆叠加成才打得动十倍百倍血量的敌人，所以单条数值不设上限。返回特性行的列表。"""
+    if target <= 1.3:
+        return []
+    zones = [z for z in ('dmg_dealt', 'base_power', 'crit') if rng.random() < 0.7] or ['dmg_dealt']
+    share = rng.dirichlet(np.ones(len(zones)))
+    lines = []
+    for z, f in zip(zones, share):
+        mult = float(np.exp(np.log(target) * f))          # 这个乘区要达到的倍数
+        if mult <= 1.02:
+            continue
+        if z == 'crit':                                   # 期望倍率 = 1 + 暴击率 x 暴击伤害
+            lines.append('mod crit_rate %s' % fmt(rng.uniform(0.3, 0.9)))
+            lines.append('mod crit_dmg %s' % fmt((mult - 1.0) / 0.6))
+            continue
+        k = int(rng.integers(1, 4))
+        parts = rng.dirichlet(np.ones(k))
+        a = _attr(rng, elems) if rng.random() < 0.3 else None
+        attr = (' attr=' + a) if a else ''
+        for part in parts:
+            amount = (mult - 1.0) * part                  # 同乘区内加算
+            if z == 'dmg_dealt':
+                lines.append('mod dmg_dealt %s%s' % (fmt(amount, 3), attr))
+            else:
+                lines.append('mod base_power %s%%%s' % (fmt(amount * 100.0, 1), attr))
+    return lines
+
+
+def sample_asym(rng, player_path, player_atk, enemy_atk, enemy_life, k):
+    """一盘非对称PvE的配置。
+    k=敌人相对标准属性的规模倍数(10~100)，enemy_life=敌人的健康+武力，player_path=玩家的招式文件(用来估计玩家单回合能打多少)。
+    玩家：重配置(level 2)的随机特性，再加增伤类特性(boost_traits)，让玩家"堆满加成后"打穿敌人需要的回合数大约是 4~25 回合；
+    敌人：轻配置(0~3条特性)，招式在文件里已经是少而弱的；敌人不能积攒炸弹(noacc)。"""
+    ea, ta = random_build(rng, player_atk, 2)
+    eb, tb = random_build(rng, enemy_atk, int(rng.choice([0, 1, 1])))
+    turns = float(np.exp(rng.uniform(np.log(4.0), np.log(25.0))))
+    need = enemy_life / max(1.0, file_max_power(player_path) * 0.6) / turns      # 0.6：不是每回合都能打满、有时要躲有时要防
+    boost = boost_traits(rng, ea, need)
+    if boost:
+        ta = (ta + '\n' if ta else '') + '\n'.join(boost)
+    crit = (0.05, 0.5) if rng.random() < 0.7 else (0.0, 0.5)
+    return dict(elem=(ea, eb), crit=crit, traits=(ta, tb), noacc=(0, 1), need=need, k=k)
+
+
 if __name__ == '__main__':
     rng = np.random.default_rng(1)
     for _ in range(4):

@@ -155,6 +155,7 @@
         <div class="tline">
           <label>基础暴击率 <input type="text" id="critRate" value="0" style="width:3.4em"></label>
           <label>基础暴击伤害 <input type="text" id="critDmg" value="0.5" style="width:3.4em"></label>
+          <label title="PvE的敌人不能积攒炸弹：选了积攒就当作跳过，AI也不会选"><input type="checkbox" id="noAccEnemy"> 敌方禁止积攒炸弹</label>
           <button id="critPve" type="button" title="PvE默认：暴击率5%、暴击伤害+50%（PvP没有暴击）">PvE默认(5%/+50%)</button>
         </div>
         <div class="tcols">
@@ -212,7 +213,7 @@
 (function (global) {
   "use strict";
   // FM/SD是PvP模型的特征维数；PvE模型在后面再追加FX/SX维(features.h的MoveExtrasPvE/StateExtrasPvE)，网络用哪种由权重的输入维数决定
-  const FM = 83, SD = 49, FX = 5, SX = 34, HK = 8, HD = 59, D = 128, HEADS = 4, LATENTS = 16, BLOCKS = 3;
+  const FM = 83, SD = 49, FX = 7, SX = 40, HK = 8, HD = 59, D = 128, HEADS = 4, LATENTS = 16, BLOCKS = 3;
   const NEG = -1e9;
 
   /* ---------------- 张量小工具(行优先 Float32Array) ---------------- */
@@ -265,8 +266,8 @@
   class Net {
     constructor(weights) {
       this.w = weights;
-      this.fm = weights.shapes["move_enc.net.0.weight"][1];   // 招式特征维数：83=PvP模型，88=PvE模型
-      this.sd = weights.shapes["state_enc.net.0.weight"][1];  // 局面特征维数：49=PvP模型，83=PvE模型
+      this.fm = weights.shapes["move_enc.net.0.weight"][1];   // 招式特征维数：83=PvP模型，90=PvE模型
+      this.sd = weights.shapes["state_enc.net.0.weight"][1];  // 局面特征维数：49=PvP模型，89=PvE模型
       this.pve = this.fm > FM;
     }
 
@@ -350,6 +351,7 @@
       f = this.lin(f, nS, "ctx_ffn.1", D, 2 * D); geluInPlace(f);
       ctx = add(ctx, this.lin(f, nS, "ctx_ffn.3", 2 * D, D));
       const cls = this.mlp(h, 1, "cls_head", D, D, 5);
+      if (state.length > SD + 34 && state[SD + 34] > 0.5) cls[1] = NEG;   // PvE：自己禁止积攒炸弹时屏蔽"积攒"这个类别
       const k1 = this.lin(ctx, nS, "k1", D, D), q1 = this.lin(h, 1, "q1", D, D);
       const l1 = new Float32Array(nS);
       for (let m = 0; m < nS; m++) { let s = 0; for (let i = 0; i < D; i++) s += q1[i] * k1[m * D + i]; l1[m] = s / Math.sqrt(D); }
@@ -426,6 +428,9 @@
       const x = opp.resist(attr);
       if (x !== 1) o[FM + 3] = clamp(2 / (x + 1) - 1);
       if (opp.mods.length) o[FM + 4] = clamp(Math.max(0, opp.modSum("dmg_taken", attr)) / 2);
+      // 跨规模的两个对数特征：威力相对对手总生命(健康+武力)、消耗相对自己真气上限
+      o[FM + 5] = Math.log10(Math.max(1, power) / (Math.max(1, opp.maxHP) + Math.max(1, opp.maxATK))) / 4;
+      o[FM + 6] = Math.log10(Math.max(1, mp) / sMP) / 4;
     }
     return o;
   }
@@ -466,7 +471,7 @@
       o[SD - 8 + k * 4] = clamp(maxShield / Math.max(1, c.maxATK)); o[SD - 7 + k * 4] = count / 3;
       o[SD - 6 + k * 4] = len / 10; o[SD - 5 + k * 4] = form / 20;
     }
-    if (pve) {   // PvE追加的34维(StateExtrasPvE)：先自己再对手，各17维——五行属性5位、对五个元素的抗性5维((抗性-1)/2)、最厚那块盾的五行属性5位、暴击率、暴击伤害
+    if (pve) {   // PvE追加的40维(StateExtrasPvE，前34维如下，后6维见下)：先自己再对手，各17维——五行属性5位、对五个元素的抗性5维((抗性-1)/2)、最厚那块盾的五行属性5位、暴击率、暴击伤害
       for (let k = 0; k < 2; k++) {
         const idx = k === 0 ? seat : 1 - seat, c = ctl.cultivators[idx], p = SD + k * 17;
         for (let a = METAL; a <= EARTH; a++) { o[p + a - 1] = (c.elements & (1 << a)) ? 1 : 0; o[p + 5 + a - 1] = clamp((c.resist(a) - 1) / 2); }
@@ -479,6 +484,12 @@
         if (c.mods.length) { rate += c.modSum("crit_rate", NONE); dmg += c.modSum("crit_dmg", NONE); }
         if (rate > 0) { o[p + 15] = clamp(rate); o[p + 16] = clamp(Math.max(0, dmg)); }
       }
+      // 追加6维(下标SD+34起)：自己/对手是否禁止积攒炸弹，自己相对对手的 健康/武力/真气/总生命(健康+武力) 的log10比值/2
+      const me = ctl.cultivators[seat], op = ctl.cultivators[1 - seat];
+      const lr = (a, b) => Math.log10(Math.max(1, a) / Math.max(1, b)) / 2;
+      o[SD + 34] = me.noAccumulate ? 1 : 0; o[SD + 35] = op.noAccumulate ? 1 : 0;
+      o[SD + 36] = lr(me.maxHP, op.maxHP); o[SD + 37] = lr(me.maxATK, op.maxATK); o[SD + 38] = lr(me.maxMP, op.maxMP);
+      o[SD + 39] = lr(me.maxHP + me.maxATK, op.maxHP + op.maxATK);
     }
     return o;
   }
@@ -581,6 +592,9 @@ const BUILTIN_ACTIONS = String.raw`# (2026-10-26：第20式的所有参数冻结
 # (2026-10-27第五次数值调整：火之高兴所有式消耗x0.98；五行八卦掌所有式消耗x0.95；安如磐石/海龙金身第20式消耗x1.05(第1式不变，第2~19式按比例插值)；天降春雨所有式威力x0.8、回复量(当局量和每段量)x0.95)
 # (2026-10-27第六次数值调整：地狱阴魔拳第1式消耗x1.1；金钟罩所有式消耗x1.05；狂火拳所有式威力x1.05；天降春雨所有式消耗x0.95；木森林变换/五行八卦掌第20式威力x0.98；伏羲九针/海龙金身第20式消耗x0.95。只改第1式或第20式的，另一端不变，第2~19式按比例插值)
 # (2026-10-27第七次数值调整：狂火拳第1式消耗x1.1；火之高兴所有式消耗x1.05；五行八卦掌第20式威力x0.98；开天辟地爪第1式威力x1.02；伏羲九针/金钟罩/吸蜂神功所有式消耗x0.98；安如磐石第20式消耗x1.02。只改第1式或第20式的，另一端不变，第2~19式按比例插值)
+# (2026-10-27第八次数值调整：天降春雨第1式威力x0.8；伏羲九针/安如磐石第20式消耗x0.98/x1.02；天动万象static比例改为第1式41%线性涨到第20式60%。只改第1式或第20式的，另一端不变，第2~19式按比例插值)
+# (2026-10-27第九次数值调整：五行八卦掌第20式威力x0.95、逆天神功第20式消耗x0.98(第1式不变，第2~19式按比例插值)；安如磐石所有式消耗x0.95；天动万象static比例改为第1式41%线性涨到第20式80%)
+# (2026-10-27第十次数值调整：天动万象第1式消耗x1.2(第20式不变)；海龙金身第20式消耗x1.02(第1式不变)；第2~19式按比例插值)
 # 数值说明：2026-10-25起第2~19式的消耗/威力/定时效果的数值(dot/rebate/recover/cure的立即量和每段量)按"和无招同式数值的比例"在第1式与第20式之间线性插值得到，再乘该式无招的数值(rebate用无招的消耗，其余用无招的威力)；比例类效果、轮次、间隔不动。第1式和第20式是手调的锚点。
 # 每个家族前的注释写了效果的变化规则，以及第20式在标准初始属性(4-6：健康25800/武力38900/真气24800)下的实测强度：
 # 相对无招多/少多少威力的价值，正数=比无招强，负数=比无招弱。标准初始属性和强度公式见 Cpp/Wxdj/battle/battle.md。
@@ -696,41 +710,41 @@ physical 0.5 0.5 0.5 0.5 0.5 0.5 0.4
 lock 0.42
 逆天神功第二式 none 124 329 3-2 1
 lock 0.44
-逆天神功第三式 none 155 409 3-3 1
+逆天神功第三式 none 154 409 3-3 1
 lock 0.46
-逆天神功第四式 none 191 507 3-4 1
+逆天神功第四式 none 190 507 3-4 1
 lock 0.48
-逆天神功第五式 none 239 635 3-5 1
+逆天神功第五式 none 237 635 3-5 1
 lock 0.5
-逆天神功第六式 none 296 789 3-6 1
+逆天神功第六式 none 294 789 3-6 1
 lock 0.52
-逆天神功第七式 none 366 980 4-1 1
+逆天神功第七式 none 363 980 4-1 1
 lock 0.54
-逆天神功第八式 none 452 1216 4-1 1
+逆天神功第八式 none 448 1216 4-1 1
 lock 0.56
-逆天神功第九式 none 559 1507 4-2 1
+逆天神功第九式 none 553 1507 4-2 1
 lock 0.58
-逆天神功第十式 none 689 1869 4-2 1
+逆天神功第十式 none 681 1869 4-2 1
 lock 0.6
-逆天神功第十一式 none 850 2314 4-3 1
+逆天神功第十一式 none 839 2314 4-3 1
 lock 0.62
-逆天神功第十二式 none 1045 2860 4-3 1
+逆天神功第十二式 none 1031 2860 4-3 1
 lock 0.64
-逆天神功第十三式 none 1289 3542 4-4 1
+逆天神功第十三式 none 1270 3542 4-4 1
 lock 0.66
-逆天神功第十四式 none 1587 4386 4-4 1
+逆天神功第十四式 none 1562 4386 4-4 1
 lock 0.68
-逆天神功第十五式 none 1952 5418 4-5 1
+逆天神功第十五式 none 1920 5418 4-5 1
 lock 0.7
-逆天神功第十六式 none 2399 6694 4-5 1
+逆天神功第十六式 none 2358 6694 4-5 1
 lock 0.72
-逆天神功第十七式 none 2951 8277 4-5 1
+逆天神功第十七式 none 2898 8277 4-5 1
 lock 0.74
-逆天神功第十八式 none 3620 10209 4-6 1
+逆天神功第十八式 none 3552 10209 4-6 1
 lock 0.76
-逆天神功第十九式 none 4449 12614 4-6 1
+逆天神功第十九式 none 4362 12614 4-6 1
 lock 0.78
-逆天神功第二十式 none 5429 15480 4-6 1
+逆天神功第二十式 none 5320 15480 4-6 1
 lock 0.8
 
 # 铁手功：无效果；第20式实测强度 -2%
@@ -765,55 +779,55 @@ cure 32 22 3 2
 伏羲九针第三式 metal 132 81 3-3 2
 recover 51 40 3 2
 cure 36 25 3 2
-伏羲九针第四式 metal 157 101 3-4 2
+伏羲九针第四式 metal 156 101 3-4 2
 recover 61 47 4 2
 cure 41 29 4 2
-伏羲九针第五式 metal 188 128 3-5 2
+伏羲九针第五式 metal 187 128 3-5 2
 recover 72 56 4 2
 cure 48 36 4 2
-伏羲九针第六式 metal 224 160 3-6 2
+伏羲九针第六式 metal 223 160 3-6 2
 recover 85 66 4 2
 cure 58 41 4 2
-伏羲九针第七式 metal 268 201 4-1 2
+伏羲九针第七式 metal 266 201 4-1 2
 recover 99 78 4 1
 cure 69 48 4 1
-伏羲九针第八式 metal 319 251 4-1 2
+伏羲九针第八式 metal 316 251 4-1 2
 recover 117 91 4 1
 cure 80 58 4 1
-伏羲九针第九式 metal 379 313 4-2 2
+伏羲九针第九式 metal 376 313 4-2 2
 recover 136 107 4 1
 cure 92 68 4 1
-伏羲九针第十式 metal 451 392 4-2 2
+伏羲九针第十式 metal 447 392 4-2 2
 recover 158 124 4 1
 cure 107 77 4 1
-伏羲九针第十一式 metal 537 489 4-3 2
+伏羲九针第十一式 metal 532 489 4-3 2
 recover 185 144 5 1
 cure 125 90 5 1
-伏羲九针第十二式 metal 639 609 4-3 2
+伏羲九针第十二式 metal 632 609 4-3 2
 recover 215 166 5 1
 cure 143 105 5 1
-伏羲九针第十三式 metal 761 759 4-4 2
+伏羲九针第十三式 metal 752 759 4-4 2
 recover 248 191 5 1
 cure 165 120 5 1
-伏羲九针第十四式 metal 907 947 4-4 2
+伏羲九针第十四式 metal 895 947 4-4 2
 recover 285 220 5 1
 cure 189 138 5 1
-伏羲九针第十五式 metal 1080 1178 4-5 2
+伏羲九针第十五式 metal 1065 1178 4-5 2
 recover 327 252 6 1
 cure 215 156 6 1
-伏羲九针第十六式 metal 1286 1465 4-5 2
+伏羲九针第十六式 metal 1266 1465 4-5 2
 recover 373 286 6 1
 cure 242 178 6 1
-伏羲九针第十七式 metal 1533 1823 4-5 2
+伏羲九针第十七式 metal 1507 1823 4-5 2
 recover 424 323 6 1
 cure 271 200 6 1
-伏羲九针第十八式 metal 1823 2262 4-6 2
+伏羲九针第十八式 metal 1791 2262 4-6 2
 recover 477 363 7 1
 cure 301 222 7 1
-伏羲九针第十九式 metal 2173 2812 4-6 2
+伏羲九针第十九式 metal 2132 2812 4-6 2
 recover 535 404 7 1
 cure 330 246 7 1
-伏羲九针第二十式 metal 2573 3472 4-6 2
+伏羲九针第二十式 metal 2522 3472 4-6 2
 recover 591 443 7 1
 cure 359 268 7 1
 
@@ -908,81 +922,81 @@ rebound 0.4 0.4 0.4 0.4 0.4 0.4 0.4
 reduce 0.42 0.42 0.42 0.42 0.42 0.42 0.42
 海龙金身第二式 water 124 170 3-2 1
 reduce 0.44 0.44 0.44 0.44 0.44 0.44 0.44
-海龙金身第三式 water 154 205 3-3 1
+海龙金身第三式 water 155 205 3-3 1
 reduce 0.46 0.46 0.46 0.46 0.46 0.46 0.46
-海龙金身第四式 water 191 248 3-4 1
+海龙金身第四式 water 192 248 3-4 1
 reduce 0.48 0.48 0.48 0.48 0.48 0.48 0.48
-海龙金身第五式 water 240 302 3-5 1
+海龙金身第五式 water 241 302 3-5 1
 reduce 0.5 0.5 0.5 0.5 0.5 0.5 0.5
-海龙金身第六式 water 298 365 3-6 1
+海龙金身第六式 water 300 365 3-6 1
 reduce 0.52 0.52 0.52 0.52 0.52 0.52 0.52
-海龙金身第七式 water 370 442 4-1 1
+海龙金身第七式 water 373 442 4-1 1
 reduce 0.54 0.54 0.54 0.54 0.54 0.54 0.54
-海龙金身第八式 water 458 533 4-1 1
+海龙金身第八式 water 463 533 4-1 1
 reduce 0.56 0.56 0.56 0.56 0.56 0.56 0.56
-海龙金身第九式 water 568 643 4-2 1
+海龙金身第九式 water 574 643 4-2 1
 reduce 0.58 0.58 0.58 0.58 0.58 0.58 0.58
-海龙金身第十式 water 702 775 4-2 1
+海龙金身第十式 water 710 775 4-2 1
 reduce 0.6 0.6 0.6 0.6 0.6 0.6 0.6
-海龙金身第十一式 water 868 934 4-3 1
+海龙金身第十一式 water 879 934 4-3 1
 reduce 0.62 0.62 0.62 0.62 0.62 0.62 0.62
-海龙金身第十二式 water 1069 1122 4-3 1
+海龙金身第十二式 water 1085 1122 4-3 1
 reduce 0.64 0.64 0.64 0.64 0.64 0.64 0.64
-海龙金身第十三式 water 1321 1351 4-4 1
+海龙金身第十三式 water 1341 1351 4-4 1
 reduce 0.66 0.66 0.66 0.66 0.66 0.66 0.66
-海龙金身第十四式 water 1630 1627 4-4 1
+海龙金身第十四式 water 1656 1627 4-4 1
 reduce 0.68 0.68 0.68 0.68 0.68 0.68 0.68
-海龙金身第十五式 water 2009 1953 4-5 1
+海龙金身第十五式 water 2042 1953 4-5 1
 reduce 0.7 0.7 0.7 0.7 0.7 0.7 0.7
-海龙金身第十六式 water 2473 2345 4-5 1
+海龙金身第十六式 water 2516 2345 4-5 1
 reduce 0.72 0.72 0.72 0.72 0.72 0.72 0.72
-海龙金身第十七式 water 3047 2817 4-5 1
+海龙金身第十七式 water 3102 2817 4-5 1
 reduce 0.74 0.74 0.74 0.74 0.74 0.74 0.74
-海龙金身第十八式 water 3743 3375 4-6 1
+海龙金身第十八式 water 3814 3375 4-6 1
 reduce 0.76 0.76 0.76 0.76 0.76 0.76 0.76
-海龙金身第十九式 water 4607 4050 4-6 1
+海龙金身第十九式 water 4697 4050 4-6 1
 reduce 0.78 0.78 0.78 0.78 0.78 0.78 0.78
-海龙金身第二十式 water 5631 4825 4-6 1
+海龙金身第二十式 water 5744 4825 4-6 1
 reduce 0.8 0.8 0.8 0.8 0.8 0.8 0.8
 
 # 天降春雨：回复真气的量和持续轮次、间隔逐式设定(第2~19式按第1/20式的比例插值)，见各行；第20式实测强度 +14%
-天降春雨第一式 water 118 46 3-1 1
+天降春雨第一式 water 118 37 3-1 1
 rebate 26 22 3 2
-天降春雨第二式 water 144 56 3-2 1
+天降春雨第二式 water 144 46 3-2 1
 rebate 35 28 3 2
-天降春雨第三式 water 178 69 3-3 1
+天降春雨第三式 water 178 57 3-3 1
 rebate 46 37 3 2
-天降春雨第四式 water 217 84 3-4 1
+天降春雨第四式 water 217 70 3-4 1
 rebate 59 48 4 2
-天降春雨第五式 water 268 103 3-5 1
+天降春雨第五式 water 268 88 3-5 1
 rebate 77 61 4 2
-天降春雨第六式 water 330 126 3-6 1
+天降春雨第六式 water 330 108 3-6 1
 rebate 100 79 4 2
-天降春雨第七式 water 404 155 4-1 1
+天降春雨第七式 water 404 134 4-1 1
 rebate 127 101 4 1
-天降春雨第八式 water 495 190 4-1 1
+天降春雨第八式 water 495 166 4-1 1
 rebate 162 129 4 1
-天降春雨第九式 water 605 232 4-2 1
+天降春雨第九式 water 605 205 4-2 1
 rebate 206 164 4 1
-天降春雨第十式 water 741 283 4-2 1
+天降春雨第十式 water 741 254 4-2 1
 rebate 261 209 4 1
-天降春雨第十一式 water 906 346 4-3 1
+天降春雨第十一式 water 906 314 4-3 1
 rebate 331 263 5 1
-天降春雨第十二式 water 1107 422 4-3 1
+天降春雨第十二式 water 1107 387 4-3 1
 rebate 415 333 5 1
-天降春雨第十三式 water 1355 516 4-4 1
+天降春雨第十三式 water 1355 478 4-4 1
 rebate 523 417 5 1
-天降春雨第十四式 water 1657 630 4-4 1
+天降春雨第十四式 water 1657 591 4-4 1
 rebate 657 525 5 1
-天降春雨第十五式 water 2024 768 4-5 1
+天降春雨第十五式 water 2024 728 4-5 1
 rebate 824 657 6 1
-天降春雨第十六式 water 2473 937 4-5 1
+天降春雨第十六式 water 2473 898 4-5 1
 rebate 1030 823 6 1
-天降春雨第十七式 water 3024 1143 4-5 1
+天降春雨第十七式 water 3024 1107 4-5 1
 rebate 1287 1028 6 1
-天降春雨第十八式 water 3687 1392 4-6 1
+天降春雨第十八式 water 3687 1363 4-6 1
 rebate 1602 1281 7 1
-天降春雨第十九式 water 4506 1698 4-6 1
+天降春雨第十九式 water 4506 1680 4-6 1
 rebate 1997 1597 7 1
 天降春雨第二十式 water 5470 2058 4-6 1
 rebate 2469 1975 7 1
@@ -1113,46 +1127,46 @@ lock 0.585
 地狱阴魔拳第二十式 earth 4775 12428 4-6 1
 lock 0.6
 
-# 安如磐石：土属性，高消耗低威力(消耗=同式无招x1.5，第1式调为x1.35、第20式调为x1.767、其间按比例线性插值；威力=同式无招x0.5)，效果是shield：出招时(不需要命中)给自己加一块护盾，盾量=出招者武力上限x比例，持续回合数：3-1~3-6阶位(第1~6式)2回合，其余3回合(含出招当回合)，同时保护武力和健康；比例从第20式的一半起线性涨(第1式=R20x21/40=10.5%，每式+0.5%)，到第20式20%(标准4-6阶位武力上限38900时盾量7780)；第20式实测强度 待评估
-安如磐石第一式 earth 135 100 3-1 1
+# 安如磐石：土属性，高消耗低威力(消耗=同式无招x1.5，第1式调为x1.28、第20式调为x1.7125、其间按比例线性插值；威力=同式无招x0.5)，效果是shield：出招时(不需要命中)给自己加一块护盾，盾量=出招者武力上限x比例，持续回合数：3-1~3-6阶位(第1~6式)2回合，其余3回合(含出招当回合)，同时保护武力和健康；比例从第20式的一半起线性涨(第1式=R20x21/40=10.5%，每式+0.5%)，到第20式20%(标准4-6阶位武力上限38900时盾量7780)；第20式实测强度 待评估
+安如磐石第一式 earth 128 100 3-1 1
 shield 0.105 2
-安如磐石第二式 earth 165 123 3-2 1
+安如磐石第二式 earth 157 123 3-2 1
 shield 0.11 2
-安如磐石第三式 earth 201 151 3-3 1
+安如磐石第三式 earth 191 151 3-3 1
 shield 0.115 2
-安如磐石第四式 earth 244 185 3-4 1
+安如磐石第四式 earth 232 185 3-4 1
 shield 0.12 2
-安如磐石第五式 earth 299 229 3-5 1
+安如磐石第五式 earth 286 229 3-5 1
 shield 0.125 2
-安如磐石第六式 earth 365 281 3-6 1
+安如磐石第六式 earth 349 281 3-6 1
 shield 0.13 2
-安如磐石第七式 earth 445 345 4-1 1
+安如磐石第七式 earth 426 345 4-1 1
 shield 0.135 3
-安如磐石第八式 earth 541 423 4-1 1
+安如磐石第八式 earth 519 423 4-1 1
 shield 0.14 3
-安如磐石第九式 earth 659 518 4-2 1
+安如磐石第九式 earth 633 518 4-2 1
 shield 0.145 3
-安如磐石第十式 earth 802 635 4-2 1
+安如磐石第十式 earth 770 635 4-2 1
 shield 0.15 3
-安如磐石第十一式 earth 976 778 4-3 1
+安如磐石第十一式 earth 939 778 4-3 1
 shield 0.155 3
-安如磐石第十二式 earth 1186 950 4-3 1
+安如磐石第十二式 earth 1141 950 4-3 1
 shield 0.16 3
-安如磐石第十三式 earth 1444 1164 4-4 1
+安如磐石第十三式 earth 1391 1164 4-4 1
 shield 0.165 3
-安如磐石第十四式 earth 1758 1425 4-4 1
+安如磐石第十四式 earth 1695 1425 4-4 1
 shield 0.17 3
-安如磐石第十五式 earth 2138 1742 4-5 1
+安如磐石第十五式 earth 2063 1742 4-5 1
 shield 0.175 3
-安如磐石第十六式 earth 2600 2129 4-5 1
+安如磐石第十六式 earth 2511 2129 4-5 1
 shield 0.18 3
-安如磐石第十七式 earth 3164 2604 4-5 1
+安如磐石第十七式 earth 3059 2604 4-5 1
 shield 0.185 3
-安如磐石第十八式 earth 3843 3178 4-6 1
+安如磐石第十八式 earth 3717 3178 4-6 1
 shield 0.19 3
-安如磐石第十九式 earth 4677 3886 4-6 1
+安如磐石第十九式 earth 4529 3886 4-6 1
 shield 0.195 3
-安如磐石第二十式 earth 5655 4720 4-6 1
+安如磐石第二十式 earth 5480 4720 4-6 1
 shield 0.2 3
 
 # 吸蜂神功：吸收比例从第20式的一半起线性涨(第1式105%，每式+5%)，到第20式200%；第20式实测强度 +2%
@@ -1200,66 +1214,66 @@ absorb 2 2 2 2 2 2 2
 # 五行八卦掌：无效果；第20式实测强度 +8%
 五行八卦掌第一式 all 100 138 3-1 0
 五行八卦掌第二式 all 120 174 3-2 0
-五行八卦掌第三式 all 145 219 3-3 0
-五行八卦掌第四式 all 175 275 3-4 0
-五行八卦掌第五式 all 214 349 3-5 0
-五行八卦掌第六式 all 259 439 3-6 0
-五行八卦掌第七式 all 314 551 4-1 0
-五行八卦掌第八式 all 380 691 4-1 0
-五行八卦掌第九式 all 461 865 4-2 0
-五行八卦掌第十式 all 556 1083 4-2 0
-五行八卦掌第十一式 all 674 1355 4-3 0
-五行八卦掌第十二式 all 813 1690 4-3 0
-五行八卦掌第十三式 all 985 2112 4-4 0
-五行八卦掌第十四式 all 1193 2638 4-4 0
-五行八卦掌第十五式 all 1443 3287 4-5 0
-五行八卦掌第十六式 all 1746 4095 4-5 0
-五行八卦掌第十七式 all 2115 5104 4-5 0
-五行八卦掌第十八式 all 2555 6344 4-6 0
-五行八卦掌第十九式 all 3096 7898 4-6 0
-五行八卦掌第二十式 all 3725 9765 4-6 0
+五行八卦掌第三式 all 145 218 3-3 0
+五行八卦掌第四式 all 175 272 3-4 0
+五行八卦掌第五式 all 214 344 3-5 0
+五行八卦掌第六式 all 259 431 3-6 0
+五行八卦掌第七式 all 314 540 4-1 0
+五行八卦掌第八式 all 380 675 4-1 0
+五行八卦掌第九式 all 461 843 4-2 0
+五行八卦掌第十式 all 556 1052 4-2 0
+五行八卦掌第十一式 all 674 1313 4-3 0
+五行八卦掌第十二式 all 813 1633 4-3 0
+五行八卦掌第十三式 all 985 2036 4-4 0
+五行八卦掌第十四式 all 1193 2537 4-4 0
+五行八卦掌第十五式 all 1443 3154 4-5 0
+五行八卦掌第十六式 all 1746 3921 4-5 0
+五行八卦掌第十七式 all 2115 4877 4-5 0
+五行八卦掌第十八式 all 2555 6050 4-6 0
+五行八卦掌第十九式 all 3096 7518 4-6 0
+五行八卦掌第二十式 all 3725 9277 4-6 0
 
-# 天动万象：土属性，消耗是同式无招的x1.1、威力是同式无招的x1.05(初始值，待调)，效果是static：对静止的敌人(这回合积攒炸弹或释放空炸弹的人；跳过不算)伤害增加，比例算在增伤乘区里，从第1式的22%线性涨到第20式的40%。用来克制第一回合无脑攒炸弹：天动万象克攒炸弹，攒炸弹克其他招，其他招克天动万象。
-天动万象第一式 earth 110 210 3-1 1
-static 0.22
-天动万象第二式 earth 132 258 3-2 1
-static 0.2295
-天动万象第三式 earth 158 317 3-3 1
-static 0.2389
-天动万象第四式 earth 189 389 3-4 1
-static 0.2484
-天动万象第五式 earth 229 481 3-5 1
-static 0.2579
-天动万象第六式 earth 275 590 3-6 1
-static 0.2674
-天动万象第七式 earth 330 725 4-1 1
-static 0.2768
-天动万象第八式 earth 396 888 4-1 1
-static 0.2863
-天动万象第九式 earth 475 1088 4-2 1
-static 0.2958
-天动万象第十式 earth 570 1334 4-2 1
-static 0.3053
-天动万象第十一式 earth 684 1633 4-3 1
-static 0.3147
-天动万象第十二式 earth 820 1995 4-3 1
-static 0.3242
-天动万象第十三式 earth 985 2443 4-4 1
-static 0.3337
-天动万象第十四式 earth 1183 2993 4-4 1
-static 0.3432
-天动万象第十五式 earth 1419 3657 4-5 1
-static 0.3526
-天动万象第十六式 earth 1703 4470 4-5 1
-static 0.3621
-天动万象第十七式 earth 2046 5468 4-5 1
-static 0.3716
-天动万象第十八式 earth 2453 6674 4-6 1
-static 0.3811
-天动万象第十九式 earth 2948 8161 4-6 1
-static 0.3905
+# 天动万象：土属性，消耗第1式是同式无招的x1.32、第20式是x1.1、其间按比例线性插值、威力是同式无招的x1.05(初始值，待调)，效果是static：对静止的敌人(这回合积攒炸弹或释放空炸弹的人；跳过不算)伤害增加，比例算在增伤乘区里，从第1式的41%线性涨到第20式的80%。用来克制第一回合无脑攒炸弹：天动万象克攒炸弹，攒炸弹克其他招，其他招克天动万象。
+天动万象第一式 earth 132 210 3-1 1
+static 0.41
+天动万象第二式 earth 157 258 3-2 1
+static 0.4305
+天动万象第三式 earth 187 317 3-3 1
+static 0.4511
+天动万象第四式 earth 221 389 3-4 1
+static 0.4716
+天动万象第五式 earth 265 481 3-5 1
+static 0.4921
+天动万象第六式 earth 316 590 3-6 1
+static 0.5126
+天动万象第七式 earth 375 725 4-1 1
+static 0.5332
+天动万象第八式 earth 446 888 4-1 1
+static 0.5537
+天动万象第九式 earth 530 1088 4-2 1
+static 0.5742
+天动万象第十式 earth 630 1334 4-2 1
+static 0.5947
+天动万象第十一式 earth 749 1633 4-3 1
+static 0.6153
+天动万象第十二式 earth 889 1995 4-3 1
+static 0.6358
+天动万象第十三式 earth 1057 2443 4-4 1
+static 0.6563
+天动万象第十四式 earth 1257 2993 4-4 1
+static 0.6768
+天动万象第十五式 earth 1494 3657 4-5 1
+static 0.6974
+天动万象第十六式 earth 1774 4470 4-5 1
+static 0.7179
+天动万象第十七式 earth 2111 5468 4-5 1
+static 0.7384
+天动万象第十八式 earth 2505 6674 4-6 1
+static 0.7589
+天动万象第十九式 earth 2979 8161 4-6 1
+static 0.7795
 天动万象第二十式 earth 3520 9912 4-6 1
-static 0.4
+static 0.8
 `;
 
 /* ============ 战斗内核：照 Forever_Mod/Wxdj/Cpp/Wxdj/battle 逐段移植，规则不改 ============ */
@@ -1280,7 +1294,7 @@ function shieldList(ctl, idx) {
   return ctl.effects[idx].filter(e => e.type === E_SHIELD).map(e =>
     elementsText(e.mask || 0) + "盾 " + e.strength + (e.rounds >= (1 << 20) ? "" : "·" + e.rounds + "回合"));
 }
-const ACCUMULATE_FRACTION = 0.2, BOMB_ACCUMULATE_MULTIPLIER = 10, BOMB_HIT_FACTOR_PASSIVE = 0.4, BOMB_HIT_FACTOR_ACTIVE = 0.7, BOMB_BACKFIRE_FACTOR = 0.2, ACCUMULATE_VULNERABILITY = 0.2;   // 积攒的回合受到的伤害多20%(易伤)；炸弹：对手没出招打0.4，出招了打(B-威力)x0.7；互扔炸弹双方各受(B1+B2)x0.2
+const ACCUMULATE_FRACTION = 0.2,BOMB_ACCUMULATE_MULTIPLIER = 10, BOMB_HIT_FACTOR_PASSIVE = 0.4, BOMB_HIT_FACTOR_ACTIVE = 0.7, BOMB_BACKFIRE_FACTOR = 0.2, ACCUMULATE_VULNERABILITY = 0.2;   // 积攒的回合受到的伤害多20%(易伤)；炸弹：对手没出招打0.4，出招了打(B-威力)x0.7；互扔炸弹双方各受(B1+B2)x0.2
 // 阶位对应的最大式：3-1~3-6各一式，4-1=7~8式，4-2=9~10式，4-3=11~12式，4-4=13~14式，4-5=15~17式，4-6=18~20式
 const REALM_MAX_FORM = [1, 2, 3, 4, 5, 6, 8, 8, 10, 10, 12, 12, 14, 14, 17, 17, 17, 20, 20, 20];
 const BOMB_MULT_BY_MAXFORM = { 1: 1.0, 2: 1.2, 3: 1.5, 4: 1.9, 5: 2.4, 6: 3.0, 8: 3.7, 10: 4.5, 12: 5.6, 14: 7.0, 17: 8.5, 20: 10.0 };
@@ -1492,7 +1506,7 @@ class Cultivator {
     this.name = name; this.defs = defs;
     this.maxHP = this.currentHP = hp; this.maxATK = this.currentATK = atk; this.maxMP = this.currentMP = mp;
     // 敏捷：当前值agi，上限maxAgi；闪避一次损失agiLoss，每回合自动恢复agiRecover(不超过上限)
-    this.agi = agi; this.maxAgi = agi; this.agiLoss = agiLoss; this.agiRecover = agiRecover; this.skipStreak = 0; this.chain = []; this.mods = [];   // mods：特性
+    this.agi = agi; this.maxAgi = agi; this.agiLoss = agiLoss; this.agiRecover = agiRecover; this.skipStreak = 0; this.chain = []; this.mods = []; this.noAccumulate = false;   // mods：特性；noAccumulate：禁止积攒炸弹(PvE敌人)
     this.recover = recover; this.bomb = 0; this.bombMultiplier = bombMultiplier;   // 炸弹积攒倍率：个人属性，由所在阶位决定
     this.elements = 0;   // 五行属性掩码，0=无属性
   }
@@ -1659,6 +1673,8 @@ class Controller {
 
   actionTurn(actions) {
     this.execEffect(STAGE_ACTION);
+    // 禁止积攒的人(PvE的敌人)选了积攒，就当作跳过(checkTurn里靠status的积攒位认出来)
+    actions = actions.map((a, j) => (a[0].type === A_ACCUMULATE && this.cultivators[j].noAccumulate) ? [skipAction(), a[1]] : a);
     // 静止：这回合积攒炸弹，或者没被禁锢却放了空炸弹(跳过不算)；要在所有人出招之前算好，因为放炸弹会清空炸弹存量
     this.staticNow = actions.map((a, j) => a[0].type === A_ACCUMULATE || (a[0].type === A_BOMB && !(this.status[j] & 1) && this.cultivators[j].bomb <= 0));
     for (let i = 0; i < this.cultivators.length; i++) {
@@ -1739,6 +1755,7 @@ class Controller {
 
   checkTurn(actions) {
     this.execEffect(STAGE_CHECK);
+    actions = actions.map((a, j) => (a[0].type === A_ACCUMULATE && !(this.status[j] & 2)) ? [skipAction(), a[1]] : a);   // actionTurn里没积攒成的(禁止积攒的人)当作跳过
     const rust = () => this.findReaction(E_RUST);
     // 被禁锢的一方这回合出的招(除了积攒)已经被跳过，它的减伤/反弹/吸收/物理等效果也不能生效，当作跳过处理
     actions = actions.map((a, j) => ((this.status[j] & 1) && a[0].type !== A_ACCUMULATE) ? [skipAction(), a[1]]
@@ -1937,7 +1954,7 @@ class Controller {
     if (!comps) { me.resetChain(); return res; }
     const dual = act.type === A_DUAL;
     const moves = [];
-    let chainSum = 0, fullSum = 0, staticSum = 0, boosted = false, added = false;
+    let chainSum = 0, fullSum = 0, staticAdd = 0, boosted = false, added = false;
     const enemyStatic = target >= 0 && target < this.cultivators.length && target !== idx && !!this.staticNow && !!this.staticNow[target];
     for (const s of comps) {
       const family = familyOfName(s.name), form = formOfName(s.name);
@@ -1954,8 +1971,8 @@ class Controller {
       if (add !== 0) added = true;
       chainSum += base * (1.0 + ratio * n);
       fullSum += (base + add) * (1.0 + ratio * n);
-      // 静止增伤：按这个基础招式在威力里的份量加权(双招时只有带static的那一半贡献)
-      if (enemyStatic) { const st = getEffect(s, E_STATIC); if (st) staticSum += st.ratio * (base * (1.0 + ratio * n)); }
+      // 静止增伤：比例原样加进增伤乘区；双招里两个招式都带static时，和别的同名效果一样只取第一个
+      if (enemyStatic && staticAdd === 0) { const st = getEffect(s, E_STATIC); if (st) staticAdd = st.ratio; }
       moves.push([family, form]);
     }
     me.commitChain(moves);
@@ -1967,7 +1984,6 @@ class Controller {
     let mult = 1.0, zoned = false;
     if (me.hasElement(attr)) { mult *= me.elemPowerMul(attr); zoned = true; }   // 自己拥有的属性的招式：威力倍率(默认1.5)
     // 增伤乘区：特性的增伤加和 + 对静止敌人的增伤(都是加算)
-    const staticAdd = chainSum > 0 ? staticSum / chainSum : 0;
     if (staticAdd > 0) res.staticPercent = Math.round(staticAdd * 100);
     {
       let dealt = me.mods.length ? me.modSum("dmg_dealt", attr) : 0;
@@ -2369,6 +2385,7 @@ function newBattle() {
   const [c0, c1] = state.cfg;
   state.player = new Cultivator(state.names[0], state.defs, c0.hp, c0.atk, c0.mp, c0.agi, c0.recover, c0.agiLoss, c0.agiRecover, c0.bombMultiplier);
   state.enemy = new Cultivator(state.names[1], state.defs, c1.hp, c1.atk, c1.mp, c1.agi, c1.recover, c1.agiLoss, c1.agiRecover, c1.bombMultiplier);
+  state.enemy.noAccumulate = $("noAccEnemy").checked;   // PvE：敌人禁止积攒炸弹
   state.player.setElements(state.elements[0]); state.enemy.setElements(state.elements[1]);   // 五行属性开关(PvE)；联机PvP强制无属性
   state.controller = new Controller([state.player, state.enemy]);
   { const [r, d] = critFromPanel(); state.controller.setCritBase(r, d); }
@@ -2403,9 +2420,11 @@ function standardForForm(form) {
   const sp = Math.exp(mean(group.map(k => Math.log(base[k - 1].power / base[0].power))));
   const sc = Math.exp(mean(group.map(k => Math.log(base[k - 1].point / base[0].point))));
   const t = 0.8 * Math.min(1, Math.max(0, (mean(group) - 3) / 9));
+  // 第1式的健康/武力/真气改过两次(先600/1000/800，再600/800/1000)，第20式不变，每次改动的比例按阶位最大式线性插值到第20式的1，相乘
+  const firstRatio = r1 => r1 + (1 - r1) * (maxForm - 1) / 19;
   const nice = v => { const step = v < 10000 ? 10 : v < 100000 ? 100 : 1000; return Math.round(v / step) * step; };
   return {
-    hp: nice(1000 * sp * Math.pow(0.6, t)), atk: nice(1200 * sp * Math.pow(0.8, t)), mp: nice(800 * sc * Math.pow(1.2, t)),
+    hp: nice(1000 * firstRatio(600 / 1000) * sp * Math.pow(0.6, t)), atk: nice(1200 * firstRatio(1000 / 1200) * firstRatio(800 / 1000) * sp * Math.pow(0.8, t)), mp: nice(800 * firstRatio(1000 / 800) * sc * Math.pow(1.2, t)),
     recover: Math.max(1, Math.round(20 * sc * Math.pow(1.2, t))),
     agi: 5 + maxForm / 4, agiLoss: 1, agiRecover: 0.2, bombMultiplier: BOMB_MULT_BY_MAXFORM[maxForm],   // 标准敏捷：第1式5.25，每式+0.25，每阶对齐最大式，第20式10
   };
@@ -2653,7 +2672,7 @@ function refreshActions() {
   $("modeSingle").classList.toggle("sel", state.mode === "single");
   $("modeDual").classList.toggle("sel", state.mode === "dual");
   const live = state.phase === "select";
-  $("accBtn").disabled = !live;
+  $("accBtn").disabled = !live || state.player.noAccumulate;   // PvE：禁止积攒炸弹的一方
   $("skipBtn").disabled = !live;
   const lk = playerLocked();
   if (lk) { state.firstPick = -1; state.firstPickFamily = -1; }

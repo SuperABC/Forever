@@ -19,8 +19,13 @@ if '--out_dir' in argv:
     i = argv.index('--out_dir')
     OUT_DIR = argv[i + 1]
     del argv[i:i + 2]
+TAG = None          # --tag _pve_player：输出文件名/全局变量名的后缀(导出玩家陪练模型，不覆盖敌人模型的 ai_weights_pve)
+if '--tag' in argv:
+    i = argv.index('--tag')
+    TAG = argv[i + 1]
+    del argv[i:i + 2]
 args = argv
-SUFFIX = '_pve' if PVE else '_pvp'
+SUFFIX = TAG or ('_pve' if PVE else '_pvp')
 OUT = os.path.join(OUT_DIR or os.path.join(HERE, '..', '..', '..', '..', 'Online', 'public'), 'ai_weights%s.js' % SUFFIX)
 
 path = args[0] if args else os.path.join(HERE, 'checkpoints_pve' if PVE else 'checkpoints_pvp', 'latest.pt')
@@ -30,7 +35,7 @@ names = list(sd.keys())
 chunks = [sd[n].detach().float().contiguous().numpy().reshape(-1) for n in names]
 data = np.concatenate(chunks).astype('<f4').tobytes()
 js = 'window.WXDJ_AI_WEIGHTS%s = {\n  source: %r, iter: %s,\n  names: %s,\n  shapes: %s,\n  data: "%s"\n};\n' % (
-    '_PVE' if PVE else '_PVP', os.path.basename(path), ck.get('iter', 'null') if isinstance(ck, dict) else 'null',
+    SUFFIX.upper(), os.path.basename(path), ck.get('iter', 'null') if isinstance(ck, dict) else 'null',
     [n for n in names], [list(sd[n].shape) for n in names], base64.b64encode(data).decode())
 js = js.replace("'", '"')
 open(OUT, 'w', encoding='utf-8', newline='\n').write(js)

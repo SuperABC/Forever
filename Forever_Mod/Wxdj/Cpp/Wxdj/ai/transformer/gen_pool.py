@@ -19,7 +19,6 @@ TIMED_EFFECTS = ('dot', 'recover', 'cure', 'rebate')
 SHRINK_HP, SHRINK_ATK, GROW_MP = 0.6, 0.8, 1.2
 BASE = dict(hp=1000, atk=1200, mp=800, rec=20)
 
-
 class Family:
     def __init__(self, name, forms):
         self.name = name
@@ -48,7 +47,6 @@ REAL = load_real()
 def realm_max_form(form):
     return [1, 2, 3, 4, 5, 6, 8, 8, 10, 10, 12, 12, 14, 14, 17, 17, 17, 20, 20, 20][min(20, max(1, form)) - 1]
 
-
 BOMB_MULT = {1: 1.0, 2: 1.2, 3: 1.5, 4: 1.9, 5: 2.4, 6: 3.0, 8: 3.7, 10: 4.5, 12: 5.6, 14: 7.0, 17: 8.5, 20: 10.0}   # 阶位最大式 -> 炸弹积攒倍率
 
 
@@ -62,12 +60,26 @@ RULER = [(f['mp'], f['power']) for f in next(x for x in REAL if x.name == BASELI
 SUFFIX = [f['suffix'] for f in REAL[0].forms]
 
 
+# 第1式的健康/武力/真气依次改过两次(每次第20式都保持不变)：先改成 FIRST_STEPS[0]，再改成 FIRST_STEPS[1]。
+# 每次改动的比例 = 这次第1式的值 / 上一次第1式的值，随阶位最大式从第1式线性插值到第20式的1，各次的比例相乘
+FIRST_STEPS = [dict(hp=1000, atk=1200, mp=800), dict(hp=600, atk=1000, mp=800), dict(hp=600, atk=800, mp=1000)]   # 第一项是原始基准
+
+
+def first_form_ratio(key, max_form):
+    r = 1.0
+    for prev, cur in zip(FIRST_STEPS, FIRST_STEPS[1:]):
+        r1 = cur[key] / prev[key]
+        r *= r1 + (1.0 - r1) * (max_form - 1) / 19.0
+    return r
+
+
 def stage_stats(forms):
+    mf = realm_max_form(max(forms))
     sp = math.exp(sum(math.log(RULER[k - 1][1] / RULER[0][1]) for k in forms) / len(forms))
     sc = math.exp(sum(math.log(RULER[k - 1][0] / RULER[0][0]) for k in forms) / len(forms))
     t = 0.8 * min(1.0, max(0.0, (sum(forms) / len(forms) - 3.0) / 9.0))
-    return dict(hp=BASE['hp'] * sp * SHRINK_HP ** t, atk=BASE['atk'] * sp * SHRINK_ATK ** t,
-                mp=BASE['mp'] * sc * GROW_MP ** t, rec=BASE['rec'] * sc * GROW_MP ** t,
+    return dict(hp=BASE['hp'] * first_form_ratio('hp', mf) * sp * SHRINK_HP ** t, atk=BASE['atk'] * first_form_ratio('atk', mf) * sp * SHRINK_ATK ** t,
+                mp=BASE['mp'] * first_form_ratio('mp', mf) * sc * GROW_MP ** t, rec=BASE['rec'] * sc * GROW_MP ** t,
                 mult=BOMB_MULT[realm_max_form(max(forms))])
 
 
@@ -104,7 +116,7 @@ def new_effect_spec(rng):
     if kind == 'increase':
         spec['rel'] = rng.uniform(0.1, 0.6)          # 第20式的比例(正式的火之高兴是0.4)
     elif kind == 'static':
-        spec['rel'] = rng.uniform(0.2, 0.6)          # 第20式的比例(正式的天动万象是0.4)
+        spec['rel'] = rng.uniform(0.3, 1.0)          # 第20式的比例(正式的天动万象是0.8)
     elif kind == 'shield':
         spec['rel'] = rng.uniform(0.08, 0.4)         # 第20式的盾量比例(正式的安如磐石是0.2)
         spec['rounds'] = rng.randint(2, 4)
@@ -134,13 +146,16 @@ def effect_line(spec, k, power):
     return [kind, str(max(1, round(amt * 2))), str(max(1, round(amt))), str(spec['rounds']), str(spec['interval'])]
 
 
-def make_family(rng, forms, idx, mode):
-    """mode: perturbed(真实家族的随机扰动) / synthetic(合成)。返回(家族名, 每式一个块的行文本)。"""
+def make_family(rng, forms, idx, mode, weak=1.0):
+    """mode: perturbed(真实家族的随机扰动) / synthetic(合成)。weak<1：效果强度打折(PvE的敌人招式效果比玩家的小，基础威力和消耗不变)。
+    返回(家族名, 每式一个块的行文本)。"""
     if mode == 'synthetic':
         name = '新%d' % idx
         attr = rng.choice(ATTRS)
         cm, pm = rng.lognormvariate(0, 0.5), rng.lognormvariate(0, 0.5)
         specs = [new_effect_spec(rng) for _ in range(rng.choice([0, 0, 1, 1, 2]))]
+        for sp in specs:
+            sp['rel'] *= weak
         blocks = []
         for k in forms:
             mp, power = max(1, round(RULER[k - 1][0] * cm)), max(1, round(RULER[k - 1][1] * pm))
@@ -156,8 +171,11 @@ def make_family(rng, forms, idx, mode):
     attr = fam.forms[0]['attr']
     if rng.random() < 0.25:
         attr = rng.choice(ATTRS)
+    em *= weak
     drop = rng.random() < 0.15
     extra = new_effect_spec(rng) if rng.random() < 0.2 else None
+    if extra is not None:
+        extra['rel'] *= weak
     blocks = []
     for k in forms:
         f = fam.forms[k - 1]
@@ -204,6 +222,38 @@ def make_file(rng, idx, max_moves=60):
         for b in blocks:
             lines.extend(b)
     return '\n'.join(lines) + '\n', stats, forms
+
+
+def make_enemy_file(rng, idx):
+    """PvE敌人的招式文件：只有1~3个家族、每个1~3式(共2~9个招式)，效果强度打到0.3~0.7倍，基础威力和消耗和正式表同量级。
+    文件头的stats是这个阶位的标准属性，训练时再乘规模倍数(敌人的三维是玩家的十倍百倍)。"""
+    nfam = rng.randint(1, 3)
+    nforms = rng.choice([1, 1, 2, 2, 3])
+    if rng.random() < 0.6:
+        start = rng.randint(1, 20 - nforms + 1)
+        forms = list(range(start, start + nforms))
+    else:
+        forms = sorted(rng.sample(range(1, 21), nforms))
+    weak = rng.uniform(0.3, 0.7)
+    chosen = [make_family(rng, forms, i, 'perturbed' if rng.random() < 0.7 else 'synthetic', weak) for i in range(nfam)]
+    stats = stage_stats(forms)
+    lines = ['# stats %s' % ' '.join(fmt(stats[k]) for k in ('hp', 'atk', 'mp', 'rec', 'mult')), '# forms %s' % ' '.join(map(str, forms))]
+    for _, blocks in chosen:
+        for b in blocks:
+            lines.extend(b)
+    return '\n'.join(lines) + '\n', stats, forms
+
+
+def generate_enemy(out_dir, count, seed):
+    os.makedirs(out_dir, exist_ok=True)
+    rng = random.Random(seed)
+    paths = []
+    for i in range(count):
+        text, stats, forms = make_enemy_file(rng, i)
+        p = os.path.join(out_dir, 'e%05d.txt' % i)
+        open(p, 'w', encoding='utf-8', newline='\n').write(text)
+        paths.append(p)
+    return paths
 
 
 def generate(out_dir, count, seed, max_moves=60):

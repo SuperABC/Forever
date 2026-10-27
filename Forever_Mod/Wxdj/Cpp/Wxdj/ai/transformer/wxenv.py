@@ -10,7 +10,7 @@ import sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_lib = ctypes.CDLL(os.path.join(HERE, 'wxenv.dll' if sys.platform == 'win32' else 'libwxenv.so'))
+_lib = ctypes.CDLL(os.path.join(HERE, os.environ.get('WXENV_DLL') or ('wxenv.dll' if sys.platform == 'win32' else 'libwxenv.so')))   # WXENV_DLL：训练占着wxenv.dll时，另编一份(build.ps1 -Out)测试用
 
 _f32 = np.ctypeslib.ndpointer(dtype=np.float32, flags='C_CONTIGUOUS')
 _i32 = np.ctypeslib.ndpointer(dtype=np.int32, flags='C_CONTIGUOUS')
@@ -18,6 +18,7 @@ _i32 = np.ctypeslib.ndpointer(dtype=np.int32, flags='C_CONTIGUOUS')
 _lib.wx_dims.argtypes = [_i32]
 _lib.wx_set_mode.argtypes = [ctypes.c_int]
 _lib.wx_pve_set.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_char_p, ctypes.c_char_p]
+_lib.wx_pve_noacc.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
 _lib.wx_pool_add.argtypes = [ctypes.c_char_p]
 _lib.wx_pool_add.restype = ctypes.c_int
 _lib.wx_pool_size.restype = ctypes.c_int
@@ -78,6 +79,8 @@ class Env:
             c = pve or {}
             e, cr, tr = c.get('elem', (0, 0)), c.get('crit', (0.0, 0.5)), c.get('traits', ('', ''))
             _lib.wx_pve_set(g, int(e[0]), int(e[1]), float(cr[0]), float(cr[1]), tr[0].encode('utf-8'), tr[1].encode('utf-8'))
+            na = c.get('noacc', (0, 0))
+            _lib.wx_pve_noacc(g, int(na[0]), int(na[1]))
         _lib.wx_reset(g, tpl_a, tpl_b, pad(stats_a), pad(stats_b))
         for f in range(2):
             _lib.wx_moves(g, f, self.M, self.moves[g, f], self.form[g, f], self.fam[g, f])

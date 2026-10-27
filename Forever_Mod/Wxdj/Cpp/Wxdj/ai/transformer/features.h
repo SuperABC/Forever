@@ -22,8 +22,9 @@ constexpr int HD = 59;      // 每回合记录的特征维数
 
 // PvE追加的特征(玩家五行属性/抗性/暴击/特性)：PvP模型的维数FM/SD不变，PvE模型在它们后面再追加FX/SX维，全部以"没有这些东西=0"为基线，
 // 所以PvP的对局(没有五行/暴击/特性)里这些维度恒为0，PvP权重补零列后输出不变。只在PvE模式的训练环境和PvE模型的推理里计算。
-constexpr int FX = 5;       // 每个招式追加的维数
-constexpr int SX = 34;      // 局面追加的维数(双方各17)
+constexpr int FX = 7;       // 每个招式追加的维数(前5维是属性相关，后2维是跨规模的对数特征)
+constexpr int SX = 40;      // 局面追加的维数(前34维双方各17；后6维是禁止积攒标志和双方三维的规模差，见StateExtrasPvE)
+constexpr int NOACC_IDX = SD + 34;   // PvE局面特征里"自己禁止积攒"的下标：模型据此屏蔽积攒这个类别
 constexpr int FM_PVE = FM + FX;
 constexpr int SD_PVE = SD + SX;
 
@@ -124,6 +125,10 @@ inline void MoveExtrasPvE(wxdj::SingleAction& a, const wxdj::Cultivator& self, c
 	double x = opp.Resist(attr);
 	if (x != 1.0) o[3] = Clamp(static_cast<float>(2.0 / (x + 1.0) - 1.0));
 	if (!opp.Mods().All().empty()) o[4] = Clamp(static_cast<float>(std::max(0.0, opp.Mods().Sum(MOD_DMG_TAKEN, attr, opp)) / 2.0));
+	// 跨规模(PvE的敌人三维是玩家的十倍百倍)：除法特征会缩到1e-4量级分辨不出来，所以补两个对数特征
+	double oLife = static_cast<double>(std::max(1, opp.GetMaxHP())) + std::max(1, opp.GetMaxATK());
+	o[5] = static_cast<float>(std::log10(std::max(1.0, static_cast<double>(a.GetPower())) / oLife) / 4.0);
+	o[6] = static_cast<float>(std::log10(std::max(1.0, static_cast<double>(a.GetPoint())) / std::max(1, self.GetMaxMP())) / 4.0);
 }
 
 // PvE局面追加特征，o指向局面特征的第SD维(共SX维)：先自己再对手，各17维——五行属性5位、对五个元素的抗性5维((抗性-1)/2)、
@@ -158,6 +163,16 @@ inline void StateExtrasPvE(const wxdj::Controller& ctl, int seat, float* o) {
 		}
 		if (rate > 0) { p[15] = Clamp(static_cast<float>(rate)); p[16] = Clamp(static_cast<float>(std::max(0.0, dmg))); }
 	}
+	// 追加6维(下标34起)：自己/对手是否禁止积攒炸弹，自己相对对手的 健康/武力/真气/总生命(健康+武力) 的log10比值/2(规模差百倍=±1)
+	auto me = ctl.GetCultivator(seat), op = ctl.GetCultivator(1 - seat);
+	float* q = o + 34;
+	q[0] = me->NoAccumulate() ? 1.f : 0.f;
+	q[1] = op->NoAccumulate() ? 1.f : 0.f;
+	auto lr = [](double a, double b) { return static_cast<float>(std::log10(std::max(1.0, a) / std::max(1.0, b)) / 2.0); };
+	q[2] = lr(me->GetMaxHP(), op->GetMaxHP());
+	q[3] = lr(me->GetMaxATK(), op->GetMaxATK());
+	q[4] = lr(me->GetMaxMP(), op->GetMaxMP());
+	q[5] = lr(static_cast<double>(me->GetMaxHP()) + me->GetMaxATK(), static_cast<double>(op->GetMaxHP()) + op->GetMaxATK());
 }
 
 // 局面特征最后8维：先自己再对手，各4维——最大护盾强度(相对武力上限)、护盾块数、连招链长、连招里最高的式号。
