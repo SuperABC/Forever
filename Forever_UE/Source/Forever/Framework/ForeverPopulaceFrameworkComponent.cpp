@@ -3,6 +3,7 @@
 #include "Element/CitizenElement.h"
 
 #include "Kismet/GameplayStatics.h"
+#include "Framework/ForeverFrameworkActor.h"
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
 
@@ -248,6 +249,12 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(co
 void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	// 世界还在分阶段生成：game_start广播(给市民加交互选项)之前不能流式生成市民，否则生成时烘焙的
+	// 选项快照是空的，见AForeverFrameworkActor::BeginPlay。
+	if (const AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(GetOwner())) {
+		if (!frameworkActor->IsInitialGenerationDone()) return;
+	}
 
 	// 把RequestWalk异步派发到线程池、已经算完的寻路结果落地——这一步必须在游戏线程上做
 	// (ApplyWalkResult会碰activeInstances/ACitizenElement这些UObject相关状态)，

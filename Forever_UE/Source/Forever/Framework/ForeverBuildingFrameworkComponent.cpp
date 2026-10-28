@@ -1,6 +1,7 @@
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 
 #include "Element/BuildingElement.h"
+#include "Framework/ForeverFrameworkActor.h"
 
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -135,10 +136,16 @@ void UForeverBuildingFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 	// 世界因为RequestFreezeUntilLodSettled被冻结、且所有building都已经排空LOD切换队列——
 	// 恢复正常时间倍率。这个检查本身不受时间倍率影响（TickComponent仍然按正常帧率被调用，
 	// 只是DeltaTime被缩放），所以冻结期间也能正常侦测到"排空"这一刻。
-	if (bFrozenForLod && pendingLodTransitionCount <= 0) {
+	if (IsWorldGenerationDone()) postGenerationFrames++;
+	if (bFrozenForLod && postGenerationFrames > kPostGenerationGateFrames && pendingLodTransitionCount <= 0) {
 		bFrozenForLod = false;
 		UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.f);
 	}
+}
+
+bool UForeverBuildingFrameworkComponent::IsWorldGenerationDone() const {
+	const AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(GetOwner());
+	return frameworkActor == nullptr || frameworkActor->IsInitialGenerationDone();
 }
 
 void UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled() {

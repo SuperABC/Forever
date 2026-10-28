@@ -57,20 +57,29 @@ public:
 	// 边界——Core.lib静态链接进本模块,不是跨DLL new/delete场景)。
 	virtual ~AForeverFrameworkActor();
 
-	// 幂等(map已存在直接返回):只保证Map这一个域——新建Map、依次跑InitTerrains/InitRoadnet/
-	// InitZones/InitBuildings、交给Terrain/Roadnet/Zone/Building四个Framework组件生成对应
-	// 网格(顺序不能反,Roadnet要采样地形/水面,Zone/Building要用到Roadnet产出的Lot)。**不会
-	// 调用其它Ensure*Generated()**——BeginPlay()里已经按依赖顺序把全部7个显式列出来顺序
-	// 调用了,函数体内部重复调上游没有意义(见BeginPlay定义处的说明)。BeginPlay和
-	// ForeverPlayerGameMode::FindPlayerStart_Implementation都会调用它,保证不论两者实际调用顺序
-	// 如何,出生点计算时地形都已经生成好,详见ForeverFrameworkActor.md。
-	void EnsureMapGenerated();
+	// 地图域拆成"Core数据 + UE网格"十个步骤，由BeginPlay登记的生成阶段(BuildGenerationStages)按顺序
+	// 每帧执行一个，让开局进度条有机会重绘。顺序不能变：先把Core里的数据(Init*)全部算完，再统一
+	// 生成UE网格(Roadnet要采样地形/水面，Zone/Building要用到Roadnet产出的Lot)。读档时BuildMapTerrain
+	// 从存档恢复整张地图，其余Init*跳过。**不会调用其它阶段**——顺序由BuildGenerationStages显式列出。
+	void BuildMapTerrain();   // 新建/恢复Map，InitTerrains
+	void BuildMapRoadnet();
+	void BuildMapZones();
+	void BuildMapBuildings();
+	void BuildMapVegetation();
+	void GenerateTerrainMesh();
+	void GenerateRoadnetMesh();
+	void GenerateZoneMesh();
+	void GenerateBuildingMesh();
+	void GenerateVegetationMesh();
+
+	// 地图中心、地形生成之前用的出生位置(GameMode找出生点时地形还没生成)，见ForeverPlayerGameMode.cpp。
+	static FVector GetDefaultSpawnLocation();
 
 	// 幂等(populace已存在直接返回):只保证Populace这一个域——new Populace()、
 	// Populace::Init(map->ComputeAccommodationTarget())、map->Checkin(*populace)、交给
-	// populaceFramework缓存citizen列表。假定map已经生成好(EnsureMapGenerated()已经跑过,
+	// populaceFramework缓存citizen列表。假定map已经生成好(地图的各个步骤已经跑过,
 	// 要用到Map::ComputeAccommodationTarget()/Checkin()),调用方负责保证调用顺序,这个函数
-	// 自己不会调EnsureMapGenerated()。
+	// 自己不会调地图的步骤。
 	void EnsurePopulaceGenerated();
 
 	// 幂等(society已存在直接返回):只保证Society这一个域——new Society()、
@@ -78,7 +87,7 @@ public:
 	// Organization自己遍历claimed components设计Job)、
 	// Society::RecruitCitizens(populace->GetCitizens(), populace->GetCurrentYear())把
 	// 成年市民随机匹配到还空缺的Job上。假定map/populace都已经生成好,调用方负责保证调用
-	// 顺序,这个函数自己不会调EnsureMapGenerated()/EnsurePopulaceGenerated(),见
+	// 顺序,这个函数自己不会调地图步骤/EnsurePopulaceGenerated(),见
 	// society.md。
 	void EnsureSocietyGenerated();
 
@@ -131,6 +140,21 @@ protected:
 	// 处理。没有声明mod_dependences（字段不存在/为空）视为直接通过，什么都不做。
 	void ValidateMainStoryDependencies();
 
+	// 世界生成阶段：BeginPlay登记，Tick每帧执行一个(RunGenerationStep)，见.cpp里BeginPlay的说明。
+	struct FGenerationStage {
+		FText label;
+		TFunction<void()> run;
+	};
+	TArray<FGenerationStage> generationStages;
+	int32 generationStageIndex = 0;
+	bool bStageLabelShown = false;
+	bool bGenerationFailed = false;
+	int32 generationStartDelayFrames = 2;
+	// 地图是从存档恢复的(BuildMapTerrain设置)：这时后面几个Init*步骤跳过。
+	bool bMapRestored = false;
+	void BuildGenerationStages();
+	void RunGenerationStep();
+
 	// 驱动Player的全局时钟(Player::Tick)——目前这个Actor唯一需要每帧更新
 	// 的东西，见ForeverFrameworkActor.md"Tick"一节。
 	virtual void Tick(float DeltaTime) override;
@@ -145,8 +169,7 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// 读档：第一次调用时从UForeverSaveSubsystem取走等待中的读档请求(之后一直返回同一份，没有
-	// 读档时返回nullptr)。GameMode找出生点时就会触发EnsureMapGenerated，比BeginPlay还早，所以
-	// 两边都通过这个函数取，谁先调用谁触发，见ForeverFrameworkActor.md"读档"一节。
+	// 读档时返回nullptr)。第一次调用(BeginPlay里)触发，见ForeverFrameworkActor.md"读档"一节。
 	FForeverPendingLoad* FetchActiveLoad();
 	TSharedPtr<FForeverPendingLoad> activeLoad;
 	bool bActiveLoadFetched = false;
@@ -242,6 +265,10 @@ public:
 	// BeginPlay的世界生成流程是否已经全部结束(game_start已广播完/读档的玩家与世界物品已恢复)。
 	// 开局黑屏(UForeverFadeWidget)用它判断世界是否就绪。
 	FORCEINLINE bool IsInitialGenerationDone() const { return bInitialGenerationDone; }
+
+	// 开局进度条用：总格数(生成阶段数+最后一格"构建场景")、已完成格数、当前阶段名。每个阶段完成算一格；
+	// 生成完之后"构建场景"(等建筑LOD排空，IsLodSettled)再占最后一格。BeginPlay之前total为0。
+	void GetLoadProgress(int32& outDone, int32& outTotal, FText& outLabel) const;
 	FORCEINLINE UForeverPopulaceFrameworkComponent* GetPopulaceFramework() const { return populaceFramework; }
 	FORCEINLINE UForeverRoadnetFrameworkComponent* GetRoadnetFramework() const { return roadnetFramework; }
 	FORCEINLINE UForeverRoomFrameworkComponent* GetRoomFramework() const { return roomFramework; }

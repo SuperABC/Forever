@@ -25,7 +25,7 @@
   的裸指针（`Citizen`只持有`Zone*`/`Building*`/`Room*`裸指针、析构不解引用它们；`Map`也
   不持有任何`Citizen*`），删除顺序不影响内存安全，`EndPlay`/析构里从`story`往前`delete`
   只是跟`BeginPlay()`创建顺序保持直觉上的对称。
-- **7个`Ensure*Generated()`，每个只保证自己那一个域**：`EnsureMapGenerated()`/
+- **(已改为分阶段生成，见下文"分阶段生成 + 开局进度"一节；`EnsureMapGenerated()`已拆成十个步骤)** **7个`Ensure*Generated()`，每个只保证自己那一个域**：`EnsureMapGenerated()`/
   `EnsurePopulaceGenerated()`/`EnsureSocietyGenerated()`/`EnsurePlayerGenerated()`/
   `EnsureIndustryGenerated()`/`EnsureTrafficGenerated()`/`EnsureStoryGenerated()`各自都是
   幂等的（自己的指针已存在就直接返回），函数体内只做自己那部分初始化，**不会调用别的
@@ -187,6 +187,32 @@ context)`是消费任意`Change*`的唯一入口——`populace->Tick`的回调�
   (`UI/ForeverFadeWidget`)用它加上`UForeverBuildingFrameworkComponent::IsLodSettled()`判断世界就绪。game_start广播是同步的，
   没有单独的"响应完"事件，这个标志就是它的等价物。
 
+
+### 分阶段生成 + 开局进度(`BuildGenerationStages`/`RunGenerationStep`/`GetLoadProgress`)
+
+世界生成不再在`BeginPlay`里一口气同步跑完(一整段会卡死主线程几十秒，开局黑屏上的进度条在两步之间没机会
+重绘)，而是`BeginPlay`登记一串阶段，`Tick`每帧执行一个。**该文档上文提到的`EnsureMapGenerated()`已拆成十个
+步骤**(`BuildMapTerrain/Roadnet/Zones/Buildings/Vegetation`先把Core数据全部算完，再`GenerateTerrainMesh/
+RoadnetMesh/ZoneMesh/BuildingMesh/VegetationMesh`统一生成UE网格，顺序和原来一次性生成时完全一致；读档时
+`BuildMapTerrain`从存档恢复整张地图，其余`Build*`跳过)，各个`Ensure*Generated()`原样保留。
+
+阶段(新游戏/读档同一套)：加载模组(`RefreshMods`+`ValidateMainStoryDependencies`) → 构建地形 → 构建路网 → 构建园区 →
+构建建筑 → 栽种植被 → 生成地形/道路/园区/建筑/植被模型 → 构建人口 → 构建社会与产业(Society+Player+Industry) →
+构建交通 → 执行开局剧情(读档：恢复存档，即`EnsureStoryGenerated`) → 构建载具(读档：恢复载具与玩家，含
+`RestoreControlledPawn`/`RestoreWorldAssets`) → (进图后)构建场景。载具必须排在剧情之后，见`EnsureTrafficGenerated`
+声明处的说明。
+
+- 每个阶段占两帧：第一帧只让`GetLoadProgress`里的"当前阶段名"被控件读到并画出来，第二帧才执行(阶段本身会同步
+  卡住主线程)。`LoadMap`结束后先空等2帧让黑屏先渲染。每个阶段单独`try/catch ExceptionBase`：打日志+`QuitGame`，
+  不再继续、不置完成标志。
+- `bInitialGenerationDone`在最后一个阶段完成后置true；之前`Tick`只驱动生成、不推进游戏时钟/调度。
+  生成完成时玩家如果还是过渡用的`ADefaultPawn`，会被挪到地形上方的地图中心。
+- `GetLoadProgress(done, total, label)`：total=阶段数+1(最后一格"构建场景"，等`IsLodSettled()`)；BeginPlay之前total=0。
+- 生成完成前其它组件不干活：`ForeverBuildingFrameworkComponent`/`ABuildingElement::Tick`(不做LOD切换，冻结也不
+  解除，`IsLodSettled()`要等生成完再过2帧才为真——生成完那一帧各楼的Tick可能排在组件Tick之后才排队)、
+  `ForeverTerrainFrameworkComponent`(地形LOD环)、`ForeverPopulaceFrameworkComponent`(否则game_start之前就流式
+  生成市民，选项快照为空)。
+- `AForeverPlayerGameMode`不再提前生成地图：出生点用`GetDefaultSpawnLocation()`(地图中心常量位置)。
 
 ## 依赖关系
 - 依赖`Framework/ForeverFrameworkComponent.h`及其9个具体子类头文件、`Source/Core/map/map.h`、

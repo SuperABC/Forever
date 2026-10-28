@@ -1124,6 +1124,9 @@ void ABuildingElement::Tick(float DeltaTime) {
 
 	if (!building || !framework.IsValid()) return;
 
+	// 世界还在分阶段生成：玩家只是过渡用的DefaultPawn，先不做LOD切换(见AForeverFrameworkActor::BeginPlay)。
+	if (!framework->IsWorldGenerationDone()) return;
+
 	// 电梯行程放在最前面：不依赖玩家Pawn，也不管LOD(远景下电梯照样到站)。
 	UpdateCabins(DeltaTime);
 

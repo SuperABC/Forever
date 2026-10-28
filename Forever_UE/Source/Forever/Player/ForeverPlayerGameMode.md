@@ -15,3 +15,7 @@
 
 ## 待办/后续阶段
 - 一旦`World.umap`里手动放置了真实的`AForeverFrameworkActor`,删除`EnsureFrameworkActorExists`的动态兜底生成逻辑。
+
+> 2026-10-27：世界生成改成分阶段(见`Framework/ForeverFrameworkActor.md`"分阶段生成 + 开局进度")，`BeginPlay`/`EnsureFrameworkActorExists()`
+> 不再调用`EnsureMapGenerated()`(已拆成每帧一个的阶段)，`FindPlayerStart_Implementation`用`AForeverFrameworkActor::
+> GetDefaultSpawnLocation()`(地图中心常量位置)当过渡出生点；真正的位置由game_start/读档决定。

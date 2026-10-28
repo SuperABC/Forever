@@ -36,6 +36,7 @@
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 
 #include "Kismet/KismetSystemLibrary.h"
+#include "GameFramework/DefaultPawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Player/ForeverPlayerController.h"
 
@@ -133,56 +134,75 @@ void AForeverFrameworkActor::BeginPlay()
 	// 在PIE的Output Log里确认Actor+全部9个域组件都正常构造/初始化。
 	UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor initialized with 9 framework components: Asset/Building/Populace/Roadnet/Room/Story/Terrain/Traffic/Zone"));
 
-	// 每次真正开局都要按当前已经读进内存的config内容刷新Registry：补加载config里新出现的mod
-	// dll(已加载的dll不动，不卸载)，再刷新启用表/参数表——不同局可能用不同的config.json(启用
-	// 的mod和参数都可能不同)，退出游戏回菜单后新增dll路径再开始也要能用，见
-	// Source/Core/common/registry.md。放在这里(而不是某一个具体域的Ensure*Generated()里)是因为
-	// 它不属于任何单个域，下面7个Ensure*Generated()都会用到某个Factory，理应在它们之前统一刷新一次。
-
-	Registry::Get().RefreshMods();
-
 	// 先让玩家Controller初始化好(创建Widget、重置输入模式)：打包版里本BeginPlay先于Controller的
-	// BeginPlay，而下面game_start广播里的start_puzzle/对话要用这些Widget，见
+	// BeginPlay，而game_start广播里的start_puzzle/对话要用这些Widget，见
 	// AForeverPlayerController::InitializeOnce。
 	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
 		playerController->InitializeOnce();
 	}
 
-	// 读档：各个域在各自的Ensure*Generated里按存档恢复；较早的存档缺哪一段，那个域就照新开局
+	// 读档：各个域在各自的生成步骤里按存档恢复；较早的存档缺哪一段，那个域就照新开局
 	// 生成(见Core/common/save.md"版本号"一节的required)。mod集合已经在RequestLoad里按存档设好了。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
 		UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor: loading %s - the world is restored from the save (sections missing from older saves are regenerated)."),
 			*load->path);
 	}
 
-	// 按依赖顺序显式列出全部7个域的Ensure*Generated()——一个函数体内写出来的调用顺序就是
-	// 实际执行顺序,不存在"调用方可能不按顺序调"这回事,所以每个Ensure*Generated()自己只保证
-	// 自己那个域,不会再调用别的Ensure*Generated()。顺序本身由真实依赖决定:EnsurePopulaceGenerated
-	// 要用到map(Map::ComputeAccommodationTarget/Checkin),必须排在EnsureMapGenerated之后;
-	// EnsurePlayerGenerated要用到populace->GetCurrentYear(),必须排在EnsurePopulaceGenerated
-	// 之后;Society/Industry/Traffic/Story这次都是互相独立的空骨架或独立数据源,顺序上没有
-	// 别的硬性要求。ValidateMainStoryDependencies()放在最前面——校验主线剧情.script声明的
-	// mod_dependences，不满足就直接拒绝生成世界，不浪费时间跑完地图/市民生成再失败。
-	//
-	// 这一整段包一层try/catch：Core层遇到"生成世界过程中出现的致命错误"（mod_dependences
-	// 缺失依赖、Name::GenerateName重试耗尽仍撞上name_reserve占位名、chinese取名器未启用等，
-	// 见populace.md/name.md/script.md相关章节）统一THROW_EXCEPTION，不需要每一层调用方
-	// 各自判断/传递失败信号——这里是唯一需要真正处理这类异常的地方（打日志+退出游戏），
-	// 中间的Populace::Init()/EnsurePopulaceGenerated()等每一层都不需要感知这个异常。
-	try {
+	// 世界生成不再在BeginPlay里一口气同步跑完，而是拆成一串"阶段"，由Tick每帧执行一个：整段同步
+	// 生成会卡死主线程几十秒，开局黑屏上的进度条(UForeverFadeWidget)在两步之间根本没机会重绘。
+	// 阶段的顺序就是依赖顺序(显式列出，每个Ensure*Generated()自己只保证自己那个域，不会再调别的
+	// Ensure*Generated())：EnsurePopulaceGenerated要用到map(Map::ComputeAccommodationTarget/Checkin)，
+	// EnsurePlayerGenerated要用到populace->GetCurrentYear()，载具必须在Story之后(game_start要先把
+	// "上车"选项加进vehicle->GetOptions()，生成AVehicleElement时BuildProximityBox()烘焙的选项快照才
+	// 不会是空的，见EnsureTrafficGenerated()声明处)。每个阶段单独try/catch：Core层遇到"生成世界过程中
+	// 出现的致命错误"(mod_dependences缺失依赖、Name::GenerateName重试耗尽仍撞上name_reserve占位名、
+	// chinese取名器未启用等，见populace.md/name.md/script.md相关章节)统一THROW_EXCEPTION，这里是
+	// 唯一需要真正处理这类异常的地方(打日志+退出游戏)，中间的每一层都不需要感知这个异常。
+	BuildGenerationStages();
+}
+
+void AForeverFrameworkActor::BuildGenerationStages()
+{
+	const bool bLoading = FetchActiveLoad() != nullptr;
+	auto add = [this](const TCHAR* label, TFunction<void()> run) {
+		FGenerationStage stage;
+		stage.label = FText::FromString(label);
+		stage.run = MoveTemp(run);
+		generationStages.Add(MoveTemp(stage));
+	};
+
+	add(TEXT("加载模组"), [this]() {
+		// 每次真正开局都要按当前已经读进内存的config内容刷新Registry：补加载config里新出现的mod
+		// dll(已加载的dll不动，不卸载)，再刷新启用表/参数表——不同局可能用不同的config.json(启用
+		// 的mod和参数都可能不同)，退出游戏回菜单后新增dll路径再开始也要能用，见
+		// Source/Core/common/registry.md。放在这里(而不是某一个具体域的生成步骤里)是因为
+		// 它不属于任何单个域，后面的步骤都会用到某个Factory，理应在它们之前统一刷新一次。
+		Registry::Get().RefreshMods();
+		// 校验主线剧情.script声明的mod_dependences，不满足就直接拒绝生成世界，不浪费时间跑完
+		// 地图/市民生成再失败。
 		ValidateMainStoryDependencies();
-		EnsureMapGenerated();
-		EnsurePopulaceGenerated();
+	});
+	add(TEXT("构建地形"), [this]() { BuildMapTerrain(); });
+	add(TEXT("构建路网"), [this]() { BuildMapRoadnet(); });
+	add(TEXT("构建园区"), [this]() { BuildMapZones(); });
+	add(TEXT("构建建筑"), [this]() { BuildMapBuildings(); });
+	add(TEXT("栽种植被"), [this]() { BuildMapVegetation(); });
+	// Core里的数据全部算完之后才统一生成UE网格(顺序不能反，Roadnet要采样地形/水面，Zone/Building
+	// 要用到Roadnet产出的Lot)。
+	add(TEXT("生成地形模型"), [this]() { GenerateTerrainMesh(); });
+	add(TEXT("生成道路模型"), [this]() { GenerateRoadnetMesh(); });
+	add(TEXT("生成园区模型"), [this]() { GenerateZoneMesh(); });
+	add(TEXT("生成建筑模型"), [this]() { GenerateBuildingMesh(); });
+	add(TEXT("生成植被模型"), [this]() { GenerateVegetationMesh(); });
+	add(TEXT("构建人口"), [this]() { EnsurePopulaceGenerated(); });
+	add(TEXT("构建社会与产业"), [this]() {
 		EnsureSocietyGenerated();
 		EnsurePlayerGenerated();
 		EnsureIndustryGenerated();
-		EnsureTrafficGenerated();
-		EnsureStoryGenerated();
-
-		// 必须排在EnsureStoryGenerated()(进而BroadcastGameStart())之后——车辆自己的Script
-		// (vehicle_basic.script)的game_start milestone要先广播完、把"上车"选项加进
-		// vehicle->GetOptions()，GenerateVehicles()生成AVehicleElement时BuildProximityBox()
-		// 烘焙的选项快照才不会是空的，见EnsureTrafficGenerated()声明处的说明。
+	});
+	add(TEXT("构建交通"), [this]() { EnsureTrafficGenerated(); });
+	add(bLoading ? TEXT("恢复存档") : TEXT("执行开局剧情"), [this]() { EnsureStoryGenerated(); });
+	add(bLoading ? TEXT("恢复载具与玩家") : TEXT("构建载具"), [this]() {
 		if (trafficFramework) {
 			trafficFramework->GenerateVehicles(map, traffic);
 			trafficFramework->BuildRouteDebugMesh(traffic);
@@ -196,16 +216,73 @@ void AForeverFrameworkActor::BeginPlay()
 			// 房间外的物品(被扔出去的投掷物等)：按存档里的位置朝向重新生成，从静止开始模拟。
 			if (assetFramework) assetFramework->RestoreWorldAssets();
 		}
+	});
+}
 
-		// 到这里game_start已广播完(新游戏)/玩家与世界物品已恢复(读档)，开局黑屏据此判断可以渐隐。
-		bInitialGenerationDone = true;
+void AForeverFrameworkActor::RunGenerationStep()
+{
+	if (bGenerationFailed || bInitialGenerationDone) return;
+
+	// LoadMap刚结束的头几帧先空等：让黑屏和第0格进度先真正渲染出来。
+	if (generationStartDelayFrames > 0) {
+		generationStartDelayFrames--;
+		return;
+	}
+
+	// 每个阶段占两帧：第一帧只是让"当前阶段名"(GetLoadProgress)被控件读到并画出来，第二帧才执行
+	// 这个阶段——阶段本身会同步卡住主线程，不先画好文字，用户看到的就是上一格的文字卡很久。
+	if (!bStageLabelShown) {
+		bStageLabelShown = true;
+		return;
+	}
+	bStageLabelShown = false;
+
+	try {
+		generationStages[generationStageIndex].run();
 	}
 	catch (const ExceptionBase& e) {
+		bGenerationFailed = true;
 		UE_LOG(LogTemp, Error, TEXT("生成世界时发生致命错误，拒绝继续，退出游戏：%s"),
 			UTF8_TO_TCHAR(e.GetDetailedInfo().data()));
 		UKismetSystemLibrary::QuitGame(this, UGameplayStatics::GetPlayerController(GetWorld(), 0),
 			EQuitPreference::Quit, false);
+		return;
 	}
+
+	generationStageIndex++;
+	if (generationStageIndex >= generationStages.Num()) {
+		// 玩家还是过渡用的DefaultPawn(没有任何人把控制权交给市民)时，把它从生成前的临时位置挪到
+		// 地形上方的地图中心。
+		if (APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0)) {
+			if (ADefaultPawn* pawn = Cast<ADefaultPawn>(playerController->GetPawn())) {
+				if (terrainFramework && terrainFramework->IsTerrainGenerated()) {
+					pawn->SetActorLocation(terrainFramework->GetMapCenterWorldLocation());
+				}
+			}
+		}
+		bInitialGenerationDone = true;
+	}
+}
+
+void AForeverFrameworkActor::GetLoadProgress(int32& outDone, int32& outTotal, FText& outLabel) const
+{
+	// 总格数 = 生成阶段数 + 最后一格"构建场景"(进图之后等建筑LOD排空)。阶段还没登记(BeginPlay之前)
+	// 返回total=0，由控件显示"正在载入…"。
+	const int32 stageCount = generationStages.Num();
+	outTotal = stageCount > 0 ? stageCount + 1 : 0;
+	if (stageCount == 0) {
+		outDone = 0;
+		outLabel = FText::GetEmpty();
+		return;
+	}
+	if (!bInitialGenerationDone) {
+		outDone = generationStageIndex;
+		outLabel = generationStages[FMath::Min(generationStageIndex, stageCount - 1)].label;
+		return;
+	}
+	const bool bSettled = buildingFramework == nullptr || buildingFramework->IsLodSettled();
+	outDone = bSettled ? outTotal : stageCount;
+	outLabel = FText::FromString(TEXT("构建场景"));
 }
 
 void AForeverFrameworkActor::ValidateMainStoryDependencies() {
@@ -458,6 +535,13 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// 世界还在一阶段一阶段地生成：驱动生成，且不推进游戏时钟/调度——此时domain对象只有一部分存在，
+	// 开局当天的"第一帧强制跨天"也必须等story建好之后才能触发。
+	if (!bInitialGenerationDone) {
+		RunGenerationStep();
+		return;
+	}
+
 	// player在EnsurePlayerGenerated()跑完之前是nullptr——BeginPlay里7个Ensure*Generated()
 	// 在Super::BeginPlay()之后同步跑完，引擎只会在BeginPlay之后才调用Tick，理论上不会遇到
 	// 空指针，这里判空只是和其它地方一致的防御性写法。
@@ -561,7 +645,7 @@ FForeverPendingLoad* AForeverFrameworkActor::FetchActiveLoad()
 	return activeLoad.Get();
 }
 
-void AForeverFrameworkActor::EnsureMapGenerated()
+void AForeverFrameworkActor::BuildMapTerrain()
 {
 	if (map) return;
 
@@ -571,6 +655,7 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 		std::string error;
 		map = MapSaveCodec::Load(load->archive, error);
 		if (map) {
+			bMapRestored = true;
 			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: %s"), UTF8_TO_TCHAR(MapSaveCodec::GetLastReport().c_str()));
 			SaveGame::RestoreInstanceCounters(load->manifest);
 		}
@@ -587,37 +672,71 @@ void AForeverFrameworkActor::EnsureMapGenerated()
 	if (!map) {
 		map = new Map(kDefaultMapWidth, kDefaultMapHeight);
 		map->InitTerrains();
-		map->InitRoadnet();
-		map->InitZones();
-		map->InitBuildings();
-		// 植被放在最后：要等路网开口/园区/建筑/房间全部生成完，行道树才能避开出入口。
-		map->InitVegetation();
 	}
+}
 
-	if (terrainFramework) {
-		terrainFramework->GenerateTerrain(map);
-	}
-	if (roadnetFramework) {
-		// InitZones/InitBuildings裁剪Lot自由空间时新增的小路(Map::GetPathRoads())要在这里面
-		// 一起画出来，必须放在InitZones/InitBuildings跑完之后调用，见
-		// ForeverRoadnetFrameworkComponent.md"小路可视化"一节。
-		roadnetFramework->GenerateRoadnet(map);
-	}
-	if (zoneFramework) {
-		zoneFramework->GenerateZones(map);
-	}
+// 下面四个Init*在读档时都已经由存档恢复，跳过；顺序和原来一次性生成时完全一致(先把Core里的数据
+// 全部算完，再统一生成UE网格——网格生成会用到后面几步产出的数据，见各Generate*Mesh的注释)。
+void AForeverFrameworkActor::BuildMapRoadnet()
+{
+	if (!bMapRestored) map->InitRoadnet();
+}
+
+void AForeverFrameworkActor::BuildMapZones()
+{
+	if (!bMapRestored) map->InitZones();
+}
+
+void AForeverFrameworkActor::BuildMapBuildings()
+{
+	if (!bMapRestored) map->InitBuildings();
+}
+
+void AForeverFrameworkActor::BuildMapVegetation()
+{
+	// 植被放在最后：要等路网开口/园区/建筑/房间全部生成完，行道树才能避开出入口。
+	if (!bMapRestored) map->InitVegetation();
+}
+
+void AForeverFrameworkActor::GenerateTerrainMesh()
+{
+	if (terrainFramework) terrainFramework->GenerateTerrain(map);
+}
+
+void AForeverFrameworkActor::GenerateRoadnetMesh()
+{
+	// InitZones/InitBuildings裁剪Lot自由空间时新增的小路(Map::GetPathRoads())要在这里面
+	// 一起画出来，必须放在InitZones/InitBuildings跑完之后调用，见
+	// ForeverRoadnetFrameworkComponent.md"小路可视化"一节。
+	if (roadnetFramework) roadnetFramework->GenerateRoadnet(map);
+}
+
+void AForeverFrameworkActor::GenerateZoneMesh()
+{
+	if (zoneFramework) zoneFramework->GenerateZones(map);
+}
+
+void AForeverFrameworkActor::GenerateBuildingMesh()
+{
 	// Room进入/离开检测碰撞盒现在由ABuildingElement自己生成(每栋building的所有Room都跟着
 	// 这栋楼自己的近/远LOD组件一起attach到它专属的Actor上，不再是roomFramework这个单例组件
 	// 统一生成)，buildingFramework->GenerateBuildings(map)已经涵盖了这一步，不需要在这里
 	// 再单独调用roomFramework——见Source/Forever/Element/BuildingElement.md。
-	if (buildingFramework) {
-		buildingFramework->GenerateBuildings(map);
-	}
+	if (buildingFramework) buildingFramework->GenerateBuildings(map);
+}
+
+void AForeverFrameworkActor::GenerateVegetationMesh()
+{
 	// 植被：Core里的树在InitVegetation时已经全部展开好，这里一次性
 	// 加载mesh+批量实例化；Z取地形高度，必须在GenerateTerrain之后(用的是同一个Map::SampleHeight)。
-	if (vegetationFramework) {
-		vegetationFramework->GenerateVegetation(map);
-	}
+	if (vegetationFramework) vegetationFramework->GenerateVegetation(map);
+}
+
+FVector AForeverFrameworkActor::GetDefaultSpawnLocation()
+{
+	// 地图正中心(地图单位*1000=UE单位)，高度只是过渡值：地形此时还没生成，玩家真正的位置由
+	// game_start/RestoreControlledPawn决定。
+	return FVector(kDefaultMapWidth * 500.f, kDefaultMapHeight * 500.f, 200.f);
 }
 
 void AForeverFrameworkActor::EnsurePopulaceGenerated()

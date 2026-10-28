@@ -4,7 +4,6 @@
 #include "ForeverPlayerController.h"
 #include "ForeverPlayerState.h"
 #include "Framework/ForeverFrameworkActor.h"
-#include "Framework/ForeverTerrainFrameworkComponent.h"
 
 #include "EngineUtils.h"
 #include "GameFramework/DefaultPawn.h"
@@ -32,15 +31,10 @@ void AForeverPlayerGameMode::BeginPlay()
 AForeverFrameworkActor* AForeverPlayerGameMode::EnsureFrameworkActorExists()
 {
 	for (TActorIterator<AForeverFrameworkActor> it(GetWorld()); it; ++it) {
-		it->EnsureMapGenerated();
 		return *it;
 	}
 
-	AForeverFrameworkActor* spawned = GetWorld()->SpawnActor<AForeverFrameworkActor>(FVector::ZeroVector, FRotator::ZeroRotator);
-	if (spawned) {
-		spawned->EnsureMapGenerated();
-	}
-	return spawned;
+	return GetWorld()->SpawnActor<AForeverFrameworkActor>(FVector::ZeroVector, FRotator::ZeroRotator);
 }
 
 AActor* AForeverPlayerGameMode::FindPlayerStart_Implementation(AController* player, const FString& incomingName)
@@ -65,16 +59,10 @@ AActor* AForeverPlayerGameMode::FindPlayerStart_Implementation(AController* play
 		}
 	}
 
-	// 地图正中心作为出生点(要求#5)。EnsureFrameworkActorExists是幂等的,不论BeginPlay和这里
-	// 谁先跑到,这一步结束时地形一定已经生成好。
-	FVector spawnLocation(0.f, 0.f, 100.f);
-	if (AForeverFrameworkActor* framework = EnsureFrameworkActorExists()) {
-		if (UForeverTerrainFrameworkComponent* terrain = framework->GetTerrainFramework()) {
-			if (terrain->IsTerrainGenerated()) {
-				spawnLocation = terrain->GetMapCenterWorldLocation();
-			}
-		}
-	}
+	// 地图正中心作为出生点(要求#5)。世界生成现在拆成每帧一个阶段(见AForeverFrameworkActor::BeginPlay)，
+	// 找出生点时地形还没生成，所以只用地图中心的常量位置当过渡——玩家真正的位置由game_start的
+	// change_control/RestoreControlledPawn决定，没人接管时生成完成后会被挪到地形上方。
+	FVector spawnLocation = AForeverFrameworkActor::GetDefaultSpawnLocation();
 
 	UE_LOG(LogTemp, Log, TEXT("AForeverPlayerGameMode::FindPlayerStart_Implementation: no PlayerStart in level, spawning at map center %s."),
 		*spawnLocation.ToString());

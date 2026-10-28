@@ -6,6 +6,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Kismet/GameplayStatics.h"
+#include "Framework/ForeverFrameworkActor.h"
 #include "UObject/ConstructorHelpers.h"
 
 #include "map/map.h"
@@ -59,6 +60,10 @@ void UForeverTerrainFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 
 	if (!map) return;
 	if (currentPivots.empty()) return;
+	// 世界还在分阶段生成：地形LOD环要围着真正的玩家(game_start/读档指定的市民)转，不是过渡用的DefaultPawn。
+	if (const AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(GetOwner())) {
+		if (!frameworkActor->IsInitialGenerationDone()) return;
+	}
 
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn) return;

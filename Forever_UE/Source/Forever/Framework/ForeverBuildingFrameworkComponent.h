@@ -126,7 +126,11 @@ public:
 
 	// 世界是否"视觉稳定"：没有处于RequestFreezeUntilLodSettled的冻结中，且没有building还在切换LOD。
 	// 供开局黑屏(UForeverFadeWidget)判断什么时候可以渐隐。
-	bool IsLodSettled() const { return !bFrozenForLod && pendingLodTransitionCount <= 0; }
+	bool IsLodSettled() const { return postGenerationFrames > kPostGenerationGateFrames && !bFrozenForLod && pendingLodTransitionCount <= 0; }
+
+	// 世界生成流程(AForeverFrameworkActor::IsInitialGenerationDone)是否已经走完。生成期间玩家只是个
+	// 过渡用的DefaultPawn，building/terrain/市民的Tick都要等生成完再开始干活(见各自的TickComponent)。
+	bool IsWorldGenerationDone() const;
 
 	// 供ABuildingElement在自己的Tick里transitionPending置true/false时同步调用，维护一个
 	// 全局"还有多少栋building正在切换LOD"的计数——不需要框架组件反过来遍历所有Element逐个
@@ -193,6 +197,10 @@ private:
 	// 见RequestFreezeUntilLodSettled/NotifyLodTransitionStarted/Finished注释。
 	int32 pendingLodTransitionCount = 0;
 	bool bFrozenForLod = false;
+	// 生成完成之后经过的帧数：生成完的那一帧，各ABuildingElement的Tick可能排在本组件TickComponent之后才把
+	// 近处LOD排进队列，立刻判定"没有待处理的转场"会提前解冻/误报稳定，所以多等几帧。
+	int32 postGenerationFrames = 0;
+	static constexpr int32 kPostGenerationGateFrames = 2;
 
 	// 电梯轿厢匀速巡航速度(UE单位/秒，默认300≈3m/s)——
 	// ComputeCabinZ里缓入/缓出用的speedup(u)=cruiseSpeed*smoothstep(u)这条曲线，峰值加速度
