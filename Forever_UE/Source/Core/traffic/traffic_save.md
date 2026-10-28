@@ -50,3 +50,6 @@
 ## 待办 / 后续
 
 - 玩家驾驶中的车速在 P6 处理，也可能不存。
+
+## 停站事件
+读档创建线路后调用`route->SilenceInitialStopEvents()`：读档后第一次`Route::Update`只记录各车停靠状态、不发`enter_stop`(车辆script的变量/选项已随存档恢复，再发会重复加选项)。`on_route`在恢复线路绑定时同步置1。

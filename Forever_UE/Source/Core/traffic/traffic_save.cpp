@@ -1,6 +1,7 @@
 #include "traffic_save.h"
 
 #include "traffic/traffic.h"
+#include "story/script.h"
 
 #include "common/save.h"
 #include "common/save_refs.h"
@@ -212,6 +213,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, bool resto
 			string modId = r.Str();
 			Route* route = new Route(&traffic->routeFactory, modId, name);
 			traffic->routes[name] = route;
+			route->SilenceInitialStopEvents(); // 读档后第一次Update只记录停靠状态，不补发enter_stop
 			if (!SaveRefs::ReadModState(route->mod, r)) debugf("Warning: failed to parse saved state of route mod %s.\n", modId.c_str());
 
 			uint32_t stopCount = r.U32();
@@ -305,6 +307,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, bool resto
 			auto routeIt = traffic->routes.find(routeName);
 			vehicle->route = routeIt != traffic->routes.end() ? routeIt->second : nullptr;
 			vehicle->routeLine = routeLine;
+			if (vehicle->script && vehicle->route) vehicle->script->SetValue("on_route", ValueType(1));
 			vehicle->x = x; vehicle->y = y; vehicle->z = z; vehicle->yaw = yaw;
 		}
 

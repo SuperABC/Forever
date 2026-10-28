@@ -59,3 +59,6 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
   （`ToggleVehicle`用`GetBlueprintPath()`决定`SpawnActor`哪个类）、
   `Source/Forever/Element/VehicleElement.h/.cpp`（`AVehicleElement`不持有所有权的
   引用，每帧`SetTransform`写回）。
+
+## on_route脚本变量
+车辆Script创建时写`on_route=0`，`SetRouteBinding`(及读档恢复线路绑定)置1。同一个VehicleMod既能跑线路又能停车位(公交)，车辆script靠`$$self.on_route`区分要不要提供"驾驶"选项，见`Resource/Story/vehicle_bus.script`。

@@ -97,3 +97,6 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 
 - 其余68种event/change类型的JSON分发分支（`"place_holder"`已接入）。
 - 多剧情共享同一份milestone缓存/避免命名冲突的机制（如按名称占用），等真的需要多剧情时再加。
+
+## 载具/公交相关解析
+`BuildEvent`新增`enter_stop`/`leave_stop`(stop)、`enter_vehicle`/`leave_vehicle`(vehicle/mode)；`BuildChanges`新增`board_vehicle`、`leave_vehicle`(原先类已声明未解析)、`force_leave`。详见`Dependence/story/event.md`/`change.md`。

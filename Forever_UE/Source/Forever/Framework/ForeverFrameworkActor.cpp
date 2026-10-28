@@ -12,6 +12,10 @@
 #include "story/script.h"
 #include "industry/industry.h"
 #include "traffic/traffic.h"
+#include "traffic/route.h"
+#include "traffic/station.h"
+#include "traffic/vehicle.h"
+#include "story/event.h"
 #include "player/player.h"
 #include "common/registry.h"
 #include "common/utility.h"
@@ -29,6 +33,7 @@
 #include "common/json.h"
 #include "Element/CitizenElement.h"
 #include "Element/VehicleElement.h"
+#include "Element/TransitVehicleElement.h"
 #include "Element/DoorComponent.h"
 #include "Element/BuildingElement.h"
 #include "map/cabin.h"
@@ -432,6 +437,20 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	// 搭乘/下车/强制下车同理，见UForeverStoryFrameworkComponent::ApplyBoardVehicle等。
+	if (auto* boardVehicle = dynamic_cast<const BoardVehicleChange*>(change)) {
+		if (storyFramework) storyFramework->ApplyBoardVehicle(boardVehicle, context);
+		return;
+	}
+	if (auto* leaveVehicle = dynamic_cast<const LeaveVehicleChange*>(change)) {
+		if (storyFramework) storyFramework->ApplyLeaveVehicle(leaveVehicle, context);
+		return;
+	}
+	if (auto* forceLeave = dynamic_cast<const ForceLeaveChange*>(change)) {
+		if (storyFramework) storyFramework->ApplyForceLeave(forceLeave, context);
+		return;
+	}
+
 	// 都不是这个Actor自己能处理的类型，转发给七个域各自的ApplyChange，谁认识就处理(同一种
 	// Change可以有好几个域都认识，比如add_option门/市民/车辆各管各的)。七个域都不认识时才打一条
 	// "未实现"警告——用UE_LOG，进Output Log/Forever.log(Core的debugf只走OutputDebugString)。
@@ -520,6 +539,7 @@ void AForeverFrameworkActor::RefreshInteractOptions(const std::string& name) {
 	}
 	if (trafficFramework) {
 		if (AVehicleElement* element = trafficFramework->FindVehicleElement(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
+		if (ATransitVehicleElement* element = trafficFramework->FindTransitElement(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
 	}
 	if (map) {
 		if (Door* door = map->FindDoorByName(name)) {
@@ -613,7 +633,24 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	}
 
 	if (industry) industry->Tick(*player->GetTime(), crossedDay, &postImplement);
-	if (traffic) traffic->Tick(*player->GetTime(), crossedDay, &postImplement);
+	if (traffic) {
+		traffic->Tick(*player->GetTime(), crossedDay, &postImplement);
+
+		// 公交停稳/离站：Core只产出事件队列，转发给载具自己的script(脚本据此控制上下车选项)。
+		if (storyFramework) {
+			for (const Route::StopEvent& stopEvent : traffic->ConsumeStopEvents()) {
+				if (!stopEvent.vehicle || !stopEvent.station) continue;
+				if (stopEvent.entering) {
+					EnterStopEvent event(stopEvent.station->GetName());
+					storyFramework->BroadcastToVehicle(event, stopEvent.vehicle);
+				}
+				else {
+					LeaveStopEvent event(stopEvent.station->GetName());
+					storyFramework->BroadcastToVehicle(event, stopEvent.vehicle);
+				}
+			}
+		}
+	}
 	if (story) story->Tick(*player->GetTime(), crossedDay, &postImplement);
 
 	// 到时的计时器给各自的归属脚本发time_up。
@@ -968,10 +1005,17 @@ void AForeverFrameworkActor::RestoreControlledPawn(const FForeverPendingLoad& lo
 		}
 	}
 	if (!vehicleName.IsEmpty() && trafficFramework) {
-		trafficFramework->ApplyEnterVehicle(vehicleName, playerController);
-		if (hasPose) {
-			if (APawn* vehicle = playerController->GetPawn()) {
-				vehicle->SetActorLocationAndRotation(pawnLocation, pawnRotation, false, nullptr, ETeleportType::TeleportPhysics);
+		// 读档恢复不发enter_vehicle事件(script变量/选项已随存档恢复)。线路公交(搭乘)的位置由Core
+		// 的Route算，不能用存档里的位姿覆盖。
+		if (trafficFramework->FindTransitElement(vehicleName)) {
+			trafficFramework->ApplyBoardVehicle(vehicleName, playerController, /*bSilent=*/true);
+		}
+		else {
+			trafficFramework->ApplyEnterVehicle(vehicleName, playerController, /*bSilent=*/true);
+			if (hasPose) {
+				if (APawn* vehicle = playerController->GetPawn()) {
+					vehicle->SetActorLocationAndRotation(pawnLocation, pawnRotation, false, nullptr, ETeleportType::TeleportPhysics);
+				}
 			}
 		}
 	}

@@ -152,7 +152,16 @@ void AVehicleElement::BuildProximityBox()
 	if (!vehicle) return;
 
 	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
-	box->SetBoxExtent(FVector(250.f, 250.f, 120.f));
+	FVector boxExtent(250.f, 250.f, 120.f);
+	FVector boxCenter = FVector::ZeroVector;
+	if (vehicle->GetCategory() != "car" && carMesh) {
+		// 公交这类比轿车大得多的车型：触发盒取车身自己的局部包围盒再外扩一圈，刚好比模型大一点。
+		const FBoxSphereBounds localBounds = carMesh->CalcBounds(FTransform::Identity);
+		boxExtent = localBounds.BoxExtent + FVector(150.f, 150.f, 50.f);
+		boxCenter = localBounds.Origin;
+	}
+	box->SetBoxExtent(boxExtent);
+	box->SetRelativeLocation(boxCenter);
 	box->SetCollisionProfileName(TEXT("Trigger"));
 	box->SetupAttachment(RootComponent);
 	box->OnComponentBeginOverlap.AddDynamic(this, &AVehicleElement::OnOverlapBegin);

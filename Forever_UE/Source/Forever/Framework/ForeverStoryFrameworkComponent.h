@@ -16,6 +16,10 @@ class RemoveTimerChange;
 class Script;
 class Container;
 class EnterVehicleChange;
+class BoardVehicleChange;
+class LeaveVehicleChange;
+class ForceLeaveChange;
+class Vehicle;
 struct ScriptContext;
 
 // Script->Milestone->Event/Dialog/Change架构跑通到"游戏开始广播
@@ -117,6 +121,16 @@ public:
 	// @change: 待执行的进入载具变化
 	// @context: 变量路由上下文，用于求值change->GetVehicle()
 	void ApplyEnterVehicle(const EnterVehicleChange* change, const ScriptContext& context);
+
+	// board_vehicle(搭乘线路公交)/leave_vehicle(下车)/force_leave(强制下车)的实际执行，同样只能在UE层做，
+	// 真正的逻辑在UForeverTrafficFrameworkComponent::ApplyBoardVehicle/ApplyLeaveVehicle。
+	void ApplyBoardVehicle(const BoardVehicleChange* change, const ScriptContext& context);
+	void ApplyLeaveVehicle(const LeaveVehicleChange* change, const ScriptContext& context);
+	void ApplyForceLeave(const ForceLeaveChange* change, const ScriptContext& context);
+
+	// 把一个事件只发给这辆载具自己的Script(enter_stop/leave_stop/enter_vehicle/leave_vehicle)，匹配出的
+	// Dialog/Change交给ProcessScriptActions。内部现场构造PostImplement。
+	void BroadcastToVehicle(Event& event, Vehicle* vehicle);
 
 	// 把ProcessScriptActions匹配出的一个Dialog
 	// 交给这个函数展示，不直接打印到屏幕左上角（Dialog分支选项"没有

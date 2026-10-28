@@ -131,3 +131,5 @@ Script(`includeMain`为true时连主线也算)，匹配结果交给`ProcessScrip
 
 ## 待办/后续阶段
 
+## 载具Change/事件
+`ApplyBoardVehicle`/`ApplyLeaveVehicle`/`ApplyForceLeave`转发`board_vehicle`/`leave_vehicle`/`force_leave`到`UForeverTrafficFrameworkComponent`；`BroadcastToVehicle(event, vehicle)`把事件只发给这辆载具自己的Script(停站事件和进出载具事件用)。

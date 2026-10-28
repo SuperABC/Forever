@@ -1,6 +1,7 @@
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 
 #include "Framework/ForeverFrameworkActor.h"
+#include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Element/VehicleElement.h"
 #include "Element/TransitVehicleElement.h"
 #include "Element/CitizenElement.h"
@@ -12,6 +13,7 @@
 #include "map/building.h"
 #include "map/room.h"
 #include "common/utility.h"
+#include "story/event.h"
 
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -199,7 +201,10 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 			const string& blueprintPath = vehicle->GetBlueprintPath();
 			if (!blueprintPath.empty()) {
 				FString path = UTF8_TO_TCHAR(blueprintPath.data());
-				if (UClass* loaded = LoadClass<ATransitVehicleElement>(nullptr, *path)) {
+				// 公交同时带了给停车场驾驶用的BP(继承AVehicleElement)：加载出来不是
+				// ATransitVehicleElement的子类就忽略，路线车仍用默认的ATransitVehicleElement。
+				UClass* loaded = LoadClass<APawn>(nullptr, *path);
+				if (loaded && loaded->IsChildOf(ATransitVehicleElement::StaticClass())) {
 					transitClass = loaded;
 				}
 			}
@@ -319,7 +324,24 @@ AVehicleElement* UForeverTrafficFrameworkComponent::FindOrSpawnVehicle(const FSt
 	return nullptr;
 }
 
-void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller) {
+void UForeverTrafficFrameworkComponent::FireVehicleEvent(Vehicle* vehicle, bool entering, const char* mode) {
+	if (!vehicle) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UForeverStoryFrameworkComponent* storyFramework = framework ? framework->GetStoryFramework() : nullptr;
+	if (!storyFramework) return;
+
+	// 只发给被进出的这辆车自己的script，见vehicle_bus.script。
+	if (entering) {
+		EnterVehicleEvent event(vehicle->GetName(), mode);
+		storyFramework->BroadcastToVehicle(event, vehicle);
+	}
+	else {
+		LeaveVehicleEvent event(vehicle->GetName(), mode);
+		storyFramework->BroadcastToVehicle(event, vehicle);
+	}
+}
+
+void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent) {
 	if (!controller) return;
 
 	AVehicleElement* vehicleElement = FindOrSpawnVehicle(vehicleName);
@@ -347,15 +369,68 @@ void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicle
 	currentPawn->SetActorEnableCollision(false);
 	vehicleElement->SetPreviousPawn(currentPawn);
 	controller->Possess(vehicleElement);
+	if (!bSilent) FireVehicleEvent(vehicleElement->GetVehicle(), true, "drive");
 }
 
-void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controller) {
+ATransitVehicleElement* UForeverTrafficFrameworkComponent::FindTransitElement(const FString& vehicleName) const {
+	const TObjectPtr<ATransitVehicleElement>* found = activeTransitVehicles.Find(vehicleName);
+	return found ? found->Get() : nullptr;
+}
+
+void UForeverTrafficFrameworkComponent::ApplyBoardVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent) {
 	if (!controller) return;
 
-	AVehicleElement* vehicleElement = Cast<AVehicleElement>(controller->GetPawn());
-	if (!vehicleElement) return;
+	ATransitVehicleElement* transitElement = FindTransitElement(vehicleName);
+	if (!transitElement || !transitElement->CanBoard()) {
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::ApplyBoardVehicle: 找不到可搭乘的载具 %s"), *vehicleName);
+		return;
+	}
 
-	Vehicle* vehicle = vehicleElement->GetVehicle();
+	APawn* currentPawn = controller->GetPawn();
+	if (!currentPawn || currentPawn == transitElement) return;
+
+	// 和ApplyEnterVehicle同一套：隐藏原pawn、解除距离销毁豁免要在下车时配对做。
+	if (ACitizenElement* citizenElement = Cast<ACitizenElement>(currentPawn)) {
+		citizenElement->SetDespawnExempt(true);
+	}
+	currentPawn->SetActorHiddenInGame(true);
+	currentPawn->SetActorEnableCollision(false);
+	transitElement->SetPreviousPawn(currentPawn);
+	controller->Possess(transitElement);
+	if (!bSilent) FireVehicleEvent(transitElement->GetVehicle(), true, "ride");
+}
+
+void UForeverTrafficFrameworkComponent::ApplyLeaveVehicle(const FString& vehicleName, APlayerController* controller, bool bForce) {
+	if (!controller) return;
+
+	// 脚本指定了载具名时，只在玩家真的在这辆车里才下车(比如公交收班不能把坐在别的车里的玩家踢下来)。
+	Vehicle* current = nullptr;
+	if (AVehicleElement* vehicleElement = Cast<AVehicleElement>(controller->GetPawn())) current = vehicleElement->GetVehicle();
+	else if (ATransitVehicleElement* transitElement = Cast<ATransitVehicleElement>(controller->GetPawn())) current = transitElement->GetVehicle();
+	if (!current) return;
+	if (!vehicleName.IsEmpty() && vehicleName != UTF8_TO_TCHAR(current->GetName().c_str())) return;
+
+	ExitVehicle(controller, bForce);
+}
+
+void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controller, bool bForce) {
+	if (!controller) return;
+
+	// 驾驶(AVehicleElement)和搭乘(ATransitVehicleElement)共用这条下车流程：搭乘者不做遮挡判定(公交
+	// 的下车点是估计值、车在站里停着)；驾驶者除非强制下车，否则要过遮挡判定。
+	APawn* vehicleElement = controller->GetPawn();
+	Vehicle* vehicle = nullptr;
+	APawn* previousPawn = nullptr;
+	bool bRide = false;
+	if (AVehicleElement* driven = Cast<AVehicleElement>(vehicleElement)) {
+		vehicle = driven->GetVehicle();
+		previousPawn = driven->GetPreviousPawn().Get();
+	}
+	else if (ATransitVehicleElement* ridden = Cast<ATransitVehicleElement>(vehicleElement)) {
+		vehicle = ridden->GetVehicle();
+		previousPawn = ridden->GetPreviousPawn().Get();
+		bRide = true;
+	}
 	if (!vehicle) return;
 
 	// 下车点——车身局部坐标系下的偏移(VehicleMod指定，默认左侧)，按车辆当前transform(位置+
@@ -379,7 +454,7 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 	FVector pathStart = vehicleElement->GetActorLocation();
 	pathStart.Z = candidateLocation.Z;
 
-	if (IsExitPathBlocked(GetWorld(), pathStart, candidateLocation, queryParams)) {
+	if (!bRide && !bForce && IsExitPathBlocked(GetWorld(), pathStart, candidateLocation, queryParams)) {
 		if (GEngine) {
 			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("下车位置被挡住，无法下车"));
 		}
@@ -387,7 +462,6 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 	}
 
 	float dismountYaw = vehicleElement->GetActorRotation().Yaw;
-	APawn* previousPawn = vehicleElement->GetPreviousPawn().Get();
 	if (!previousPawn) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::ExitVehicle: previousPawn已失效，玩家将没有可控对象"));
 		return;
@@ -418,6 +492,9 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 	// 继承车身的翻滚姿态，照抄原ToggleVehicle DISMOUNT分支的说明。
 	previousPawn->SetActorLocationAndRotation(candidateLocation, FRotator(0.f, dismountYaw, 0.f));
 	controller->SetControlRotation(FRotator(0.f, dismountYaw, 0.f));
+
+	// 人已经站回下车点：通知这辆车的script(公交据此把"下车"换回"上车")。
+	FireVehicleEvent(vehicle, false, bRide ? "ride" : "drive");
 
 	// 车辆本身不销毁——这次是预置在停车位的真实物件，不是一次性测试对象，下车后原地留着
 	// 供下次再上车。

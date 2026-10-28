@@ -55,3 +55,7 @@ Possess切换逻辑在那边，见其自身注释）不是一回事——`Traffi
 ## 待办/后续阶段
 
 - `Route`/`Station`两个Mod扩展点的业务聚合逻辑（当前空骨架）。
+
+## 停站事件与测试代码
+- `Traffic::ConsumeStopEvents()`/`SilenceInitialStopEvents()`：汇总各线路的停站/离站事件，见`route.md`。
+- `InitParkedVehicles`里有一段**测试代码**：停车位的车有50%概率换成`category=="bus"`且`drivable`的车型，用来试驾驶公交，测完整段删掉(`busIds`及其选择那一行)。

@@ -76,6 +76,21 @@ public:
 	// 结果完全一致，见route.md"时刻表"一节。
 	void Update(float elapsedSeconds);
 
+	// 停站/离站事件：载具进入/离开停靠(dwell)状态的边沿。Update()每次算完一辆车的相位后，和上一次
+	// 记下的状态比较——上次不在站这次在某个站=entering，上次在站这次不在=leaving，上次在站A这次
+	// 在站B(两次Update之间隔了整个停站)=先A的leaving再B的entering。事件放进待取队列，由
+	// Traffic::ConsumeStopEvents()汇总交给UE层发给载具自己的script，Core自己不碰script。
+	struct StopEvent {
+		Vehicle* vehicle = nullptr;
+		Station* station = nullptr;
+		bool entering = true;
+	};
+	std::vector<StopEvent> ConsumeStopEvents();
+
+	// 读档后调用：下一次Update()只记录每辆车当前的停靠状态、不发事件(载具script的变量/选项已经
+	// 随存档恢复，再发一次enter_stop会让script重复加选项)。新开局不调，第一次Update()正常发。
+	void SilenceInitialStopEvents();
+
 private:
 	static int PackStop(int station, int interfaceIndex);
 
@@ -95,7 +110,9 @@ private:
 	// 沿legs(一条环线)按localTime(已经对线路总周期取模)驱动一辆车：逐腿累减"行驶耗时
 	// (edge->length/speed)+停靠耗时(dwellSeconds)"，落在行驶区间就按EvaluateEdge算位置，
 	// 落在停靠区间就直接停在toStation对应接口坐标上。
-	void DriveVehicle(Vehicle* vehicle, const std::vector<RouteLeg>& legs, float localTime) const;
+	// outDwellStation：这一刻载具正停靠在哪个站(没有停靠=nullptr)，Update()拿它检测停站/离站边沿。
+	void DriveVehicle(Vehicle* vehicle, const std::vector<RouteLeg>& legs, float localTime,
+		Station** outDwellStation) const;
 
 	RouteFactory* factory = nullptr;
 	RouteMod* mod = nullptr;
@@ -108,4 +125,10 @@ private:
 	// Build()里mod->LayoutRoute用的站点表(真实站点+这条线路创建的边缘站点)，graph的key
 	// (PackStop)里的站点下标就是这张表的下标。存档要靠它把key换成站点名，见traffic_save.md。
 	std::vector<Station*> stopStations;
+
+	// 停站/离站边沿检测：key是载具，value是上次Update()时它正停靠的站(nullptr=在行驶)；key不存在
+	// 表示还没观察过这辆车。不进存档(读档后第一次Update重新观察，见SilenceInitialStopEvents)。
+	std::unordered_map<Vehicle*, Station*> lastStopStation;
+	std::vector<StopEvent> pendingStopEvents;
+	bool silentInitialStopState = false;
 };

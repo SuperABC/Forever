@@ -13,6 +13,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class Map;
 class ScriptFactory;
@@ -60,6 +61,11 @@ public:
 	// DifferenceInSeconds自己的日历感知差值处理，不需要另外补偿)，再对每条route调用
 	// route->Update(elapsedSeconds)驱动线路车辆。
 	void Tick(const Time& currentTime, bool crossedDay, PostHandle* post);
+
+	// 取走所有线路自上次调用以来的停站/离站事件(见Route::StopEvent)，AForeverFrameworkActor在
+	// Tick之后调用、转发给对应载具的script。读档后调用SilenceInitialStopEvents()让下一次Tick不补发。
+	std::vector<Route::StopEvent> ConsumeStopEvents();
+	void SilenceInitialStopEvents();
 
 	// 认识AddOptionChange：按name找Vehicle、调vehicle->AddOption(option)，照抄
 	// Populace::ApplyChange对应分支。EnterVehicleChange是UE-only效果(找AVehicleElement、

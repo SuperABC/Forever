@@ -130,3 +130,11 @@ milestone用它验证：Job/Organization的Script能不能正确广播`game_star
   两者需要一起补齐（`ChangeControlChange`/`DebugPrintChange`不计入这个待办——它们的执行
   逻辑按设计就不在`Story::ApplyChange`里；`DebugPrintChange`已经有JSON分发分支，
   `ChangeControlChange`不需要）。
+
+## 载具相关Change(公共交通)
+
+- `enter_vehicle`(vehicle)：驾驶某辆载具(原有)。
+- `board_vehicle`(vehicle)：搭乘线路上的公交——不是驾驶：玩家Possess公交Pawn后只有鼠标视角、WASD无效，车自己跑。`BoardVehicleChange`，UE层执行(`UForeverTrafficFrameworkComponent::ApplyBoardVehicle`)。
+- `leave_vehicle`(vehicle)：玩家下车(驾驶和搭乘都行)；驾驶者要过下车点遮挡判定，搭乘者不判定。vehicle非空时只在玩家正在这辆里才执行。`LeaveVehicleChange`(此前只声明，现已补上解析和执行)。
+- `force_leave`(vehicle，可空)：强制下车(比如公交收班)，驾驶和搭乘都生效，不做遮挡判定。`ForceLeaveChange`。
+三者都只能在UE层执行(Core不认识Actor/Controller)，`AForeverFrameworkActor::ApplyChange`里`dynamic_cast`转发给`UForeverStoryFrameworkComponent`。

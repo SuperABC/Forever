@@ -245,7 +245,9 @@ void Route::EvaluateEdge(const RouteEdge& edge, float arcLength,
 	}
 }
 
-void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float localTime) const {
+void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float localTime,
+	Station** outDwellStation) const {
+	if (outDwellStation) *outDwellStation = nullptr;
 	if (!vehicle || !mod || legs.empty()) return;
 
 	// 缓动时长(真实秒，mod->easeSeconds，各线路类型自己校准，见route_mod.h的说明)——
@@ -283,6 +285,7 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 
 	if (inDwell) {
 		const RouteLeg& leg = legs[legIndex];
+		if (outDwellStation) *outDwellStation = leg.toStation;
 		const vector<StationInterface>& interfaces = leg.toStation->GetInterfaces();
 		if (leg.toInterfaceIndex >= 0 && leg.toInterfaceIndex < static_cast<int>(interfaces.size())) {
 			const StationInterface& iface = interfaces[leg.toInterfaceIndex];
@@ -405,7 +408,32 @@ void Route::Update(float elapsedSeconds) {
 			float phase = period * static_cast<float>(k) / static_cast<float>(vehicleCount);
 			float localTime = fmodf(elapsedSeconds + phase, period);
 			if (localTime < 0.f) localTime += period;
-			DriveVehicle(vehicles[k], legs, localTime);
+			Vehicle* vehicle = vehicles[k];
+			Station* dwellStation = nullptr;
+			DriveVehicle(vehicle, legs, localTime, &dwellStation);
+
+			// 停站/离站边沿检测，见route.h的StopEvent说明。
+			auto last = lastStopStation.find(vehicle);
+			if (last == lastStopStation.end()) {
+				if (!silentInitialStopState && dwellStation) pendingStopEvents.push_back({ vehicle, dwellStation, true });
+				lastStopStation[vehicle] = dwellStation;
+			}
+			else if (last->second != dwellStation) {
+				if (last->second) pendingStopEvents.push_back({ vehicle, last->second, false });
+				if (dwellStation) pendingStopEvents.push_back({ vehicle, dwellStation, true });
+				last->second = dwellStation;
+			}
 		}
 	}
+	silentInitialStopState = false;
+}
+
+vector<Route::StopEvent> Route::ConsumeStopEvents() {
+	vector<StopEvent> result;
+	result.swap(pendingStopEvents);
+	return result;
+}
+
+void Route::SilenceInitialStopEvents() {
+	silentInitialStopState = true;
 }

@@ -287,3 +287,6 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 
 这一步做完之后可以考虑把`ChaosModularVehicleExamples`这个插件从`Forever.uproject`里
 禁用（只是用来提供`SKM_SportsCar`兜底测试车型，不再需要它之后没有别的依赖）。
+
+## 非轿车的触发盒
+`BuildProximityBox`：`category!="car"`(公交)时触发盒取`carMesh`局部包围盒外扩(XY 150/Z 50)；轿车仍是固定250x250x120。

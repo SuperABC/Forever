@@ -995,3 +995,157 @@ void UseAssetEvent::SetAsset(std::string asset) {
 const std::string& UseAssetEvent::GetAsset() const {
 	return asset;
 }
+
+EnterStopEvent::EnterStopEvent(std::string stop) :
+	stop(move(stop)) {
+
+}
+
+EnterStopEvent::~EnterStopEvent() {
+
+}
+
+const string& EnterStopEvent::GetType() const {
+	static const string type = "enter_stop";
+	return type;
+}
+
+bool EnterStopEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+	return MatchLocationField(stop, static_cast<EnterStopEvent*>(e)->stop, context);
+}
+
+pair<bool, ValueType> EnterStopEvent::GetLocalValue(const string& key) const {
+	if (key == "stop") return { true, ValueType(stop) };
+	return { false, ValueType() };
+}
+
+void EnterStopEvent::SetStop(std::string stop) {
+	this->stop = move(stop);
+}
+
+const std::string& EnterStopEvent::GetStop() const {
+	return stop;
+}
+
+LeaveStopEvent::LeaveStopEvent(std::string stop) :
+	stop(move(stop)) {
+
+}
+
+LeaveStopEvent::~LeaveStopEvent() {
+
+}
+
+const string& LeaveStopEvent::GetType() const {
+	static const string type = "leave_stop";
+	return type;
+}
+
+bool LeaveStopEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+	return MatchLocationField(stop, static_cast<LeaveStopEvent*>(e)->stop, context);
+}
+
+pair<bool, ValueType> LeaveStopEvent::GetLocalValue(const string& key) const {
+	if (key == "stop") return { true, ValueType(stop) };
+	return { false, ValueType() };
+}
+
+void LeaveStopEvent::SetStop(std::string stop) {
+	this->stop = move(stop);
+}
+
+const std::string& LeaveStopEvent::GetStop() const {
+	return stop;
+}
+
+EnterVehicleEvent::EnterVehicleEvent(std::string vehicle, std::string mode) :
+	vehicle(move(vehicle)), mode(move(mode)) {
+
+}
+
+EnterVehicleEvent::~EnterVehicleEvent() {
+
+}
+
+const string& EnterVehicleEvent::GetType() const {
+	static const string type = "enter_vehicle";
+	return type;
+}
+
+bool EnterVehicleEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<EnterVehicleEvent*>(e);
+	if (!MatchLocationField(vehicle, other->vehicle, context)) return false;
+	if (!MatchLocationField(mode, other->mode, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> EnterVehicleEvent::GetLocalValue(const string& key) const {
+	if (key == "vehicle") return { true, ValueType(vehicle) };
+	if (key == "mode") return { true, ValueType(mode) };
+	return { false, ValueType() };
+}
+
+void EnterVehicleEvent::SetVehicle(std::string vehicle) {
+	this->vehicle = move(vehicle);
+}
+
+const std::string& EnterVehicleEvent::GetVehicle() const {
+	return vehicle;
+}
+
+void EnterVehicleEvent::SetMode(std::string mode) {
+	this->mode = move(mode);
+}
+
+const std::string& EnterVehicleEvent::GetMode() const {
+	return mode;
+}
+
+LeaveVehicleEvent::LeaveVehicleEvent(std::string vehicle, std::string mode) :
+	vehicle(move(vehicle)), mode(move(mode)) {
+
+}
+
+LeaveVehicleEvent::~LeaveVehicleEvent() {
+
+}
+
+const string& LeaveVehicleEvent::GetType() const {
+	static const string type = "leave_vehicle";
+	return type;
+}
+
+bool LeaveVehicleEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<LeaveVehicleEvent*>(e);
+	if (!MatchLocationField(vehicle, other->vehicle, context)) return false;
+	if (!MatchLocationField(mode, other->mode, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> LeaveVehicleEvent::GetLocalValue(const string& key) const {
+	if (key == "vehicle") return { true, ValueType(vehicle) };
+	if (key == "mode") return { true, ValueType(mode) };
+	return { false, ValueType() };
+}
+
+void LeaveVehicleEvent::SetVehicle(std::string vehicle) {
+	this->vehicle = move(vehicle);
+}
+
+const std::string& LeaveVehicleEvent::GetVehicle() const {
+	return vehicle;
+}
+
+void LeaveVehicleEvent::SetMode(std::string mode) {
+	this->mode = move(mode);
+}
+
+const std::string& LeaveVehicleEvent::GetMode() const {
+	return mode;
+}

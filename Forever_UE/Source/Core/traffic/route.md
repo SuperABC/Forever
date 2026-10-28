@@ -83,3 +83,6 @@
 - `trackMesh`铺真实轨道mesh的逻辑没有任何内置线路用到，见`route_mod.md`"待办"一节。
 - `bidirectional`双向边的实际驾驶路径（`reversed`分支）没有被任何内置线路触发过，只验证过
   代码逻辑自洽，没有PIE实测——以后真的有双向线路类型时要重新验证一遍。
+
+## 停站/离站事件
+`Route::Update`每次算完一辆车的相位后，和`lastStopStation`(上次停靠的站，nullptr=在行驶)比较：不在→在站=entering，在站→不在=leaving，站A→站B(两次Update之间跨过整个停站)=先A的leaving再B的entering。事件进`pendingStopEvents`，`ConsumeStopEvents()`取走(`Traffic::ConsumeStopEvents`汇总所有线路)。`DriveVehicle`通过`outDwellStation`带出当前停靠的站。读档后`SilenceInitialStopEvents()`让第一次Update只记状态不发事件(`traffic_save.cpp`加载线路时调用)；新开局第一次Update正常发。Core不碰script，由`AForeverFrameworkActor::Tick`转发为`enter_stop`/`leave_stop`事件。

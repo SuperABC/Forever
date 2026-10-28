@@ -1454,3 +1454,100 @@ private:
 	// 资产类型
 	std::string asset;
 };
+
+// 载具(公交)进站并停稳。由UE层在Core检测到停靠边沿后发给这辆载具自己的script(不广播)，
+// 让script控制上下车选项：见Resource/Story/vehicle_bus.script。
+class EnterStopEvent : public Event {
+public:
+	/*
+	* 构造进站事件
+	* @stop: 站点名称
+	*/
+	EnterStopEvent(std::string stop);
+
+	virtual ~EnterStopEvent();
+
+	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，stop是表达式，留空表示不限站点
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.stop读站点名称
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetStop(std::string stop);
+	const std::string& GetStop() const;
+
+private:
+	std::string stop;
+};
+
+// 载具(公交)启动离站，字段同EnterStopEvent。
+class LeaveStopEvent : public Event {
+public:
+	LeaveStopEvent(std::string stop);
+	virtual ~LeaveStopEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetStop(std::string stop);
+	const std::string& GetStop() const;
+
+private:
+	std::string stop;
+};
+
+// 玩家进入载具(驾驶或搭乘都算)。由UE层只发给被进入的那辆载具自己的script。注意：和同名的
+// EnterVehicleChange(让玩家去开某辆车)是两套东西——这个是"发生了"的通知，那个是"去做"的指令。
+class EnterVehicleEvent : public Event {
+public:
+	/*
+	* @vehicle: 载具名称
+	* @mode: "drive"(驾驶)或"ride"(搭乘)
+	*/
+	EnterVehicleEvent(std::string vehicle, std::string mode);
+	virtual ~EnterVehicleEvent();
+
+	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：vehicle/mode是表达式，留空表示不限
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.vehicle/local.mode读字段
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetVehicle(std::string vehicle);
+	const std::string& GetVehicle() const;
+	void SetMode(std::string mode);
+	const std::string& GetMode() const;
+
+private:
+	std::string vehicle;
+	std::string mode;
+};
+
+// 玩家离开载具(驾驶或搭乘都算)，字段同EnterVehicleEvent。
+class LeaveVehicleEvent : public Event {
+public:
+	LeaveVehicleEvent(std::string vehicle, std::string mode);
+	virtual ~LeaveVehicleEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetVehicle(std::string vehicle);
+	const std::string& GetVehicle() const;
+	void SetMode(std::string mode);
+	const std::string& GetMode() const;
+
+private:
+	std::string vehicle;
+	std::string mode;
+};

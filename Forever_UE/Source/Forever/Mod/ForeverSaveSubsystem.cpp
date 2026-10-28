@@ -17,6 +17,7 @@
 #include "common/json.h"
 #include "Element/CitizenElement.h"
 #include "Element/VehicleElement.h"
+#include "Element/TransitVehicleElement.h"
 #include "populace/citizen.h"
 #include "traffic/vehicle.h"
 #include "player/player.h"
@@ -93,6 +94,11 @@ namespace {
 		if (AVehicleElement* vehicle = Cast<AVehicleElement>(pawn)) {
 			if (vehicle->GetVehicle()) root["controlledVehicle"] = vehicle->GetVehicle()->GetName();
 			pawn = vehicle->GetPreviousPawn().Get();
+		}
+		else if (ATransitVehicleElement* transit = Cast<ATransitVehicleElement>(pawn)) {
+			// 搭乘中的线路公交：同样记载具名，读档由RestoreControlledPawn走ApplyBoardVehicle。
+			if (transit->GetVehicle()) root["controlledVehicle"] = transit->GetVehicle()->GetName();
+			pawn = transit->GetPreviousPawn().Get();
 		}
 		if (ACitizenElement* citizen = Cast<ACitizenElement>(pawn)) {
 			if (citizen->GetCitizen()) root["controlledCitizen"] = citizen->GetCitizen()->GetName();

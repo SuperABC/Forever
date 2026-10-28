@@ -157,12 +157,14 @@ void Traffic::InitParkedVehicles(Map* map) {
 	// 留在vehicles里，见traffic.md"停车位车辆"一节。
 	vector<string> allIds = vehicleFactory.GetRegisteredIds();
 	vector<string> carIds;
+	vector<string> busIds; // 测试代码：可驾驶的公交，见下面车位循环里的50%选择，测完整段删掉
 	for (const string& id : allIds) {
 		if (id == "vehicle_empty") continue;
 		VehicleMod* probe = vehicleFactory.CreateVehicle(id);
 		if (!probe) continue;
 		probe->SetProperty(); // category由SetProperty赋值，不调用的话所有车型都是默认的"car"
 		if (probe->category == "car") carIds.push_back(id);
+		if (probe->category == "bus" && probe->drivable) busIds.push_back(id);
 		vehicleFactory.DestroyVehicle(probe);
 	}
 
@@ -178,6 +180,8 @@ void Traffic::InitParkedVehicles(Map* map) {
 				if (carIds.empty()) continue; // 没有真正可用的车型，跳过这个车位
 
 				string modId = carIds[GetRandom(static_cast<int>(carIds.size()))];
+				// 测试：停车位里的车有一半概率换成公交，用来试驾驶公交(临时代码，测完删掉)。
+				if (!busIds.empty() && GetRandom(2) == 0) modId = busIds[GetRandom(static_cast<int>(busIds.size()))];
 				string name = "Vehicle" + to_string(vehicleCounter++);
 
 				Vehicle* vehicle = CreateVehicle(modId, name);
@@ -265,6 +269,19 @@ void Traffic::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
 	for (auto& [name, route] : routes) {
 		route->Update(elapsedSeconds);
 	}
+}
+
+vector<Route::StopEvent> Traffic::ConsumeStopEvents() {
+	vector<Route::StopEvent> result;
+	for (auto& [name, route] : routes) {
+		vector<Route::StopEvent> events = route->ConsumeStopEvents();
+		result.insert(result.end(), events.begin(), events.end());
+	}
+	return result;
+}
+
+void Traffic::SilenceInitialStopEvents() {
+	for (auto& [name, route] : routes) route->SilenceInitialStopEvents();
 }
 
 bool Traffic::ApplyChange(const Change* change, const ScriptContext& context) {

@@ -1150,6 +1150,42 @@ private:
 
 };
 
+// 搭乘载具(公交)：和EnterVehicleChange(驾驶)区别：搭乘只是坐进去，不能操控，载具自己运行，
+// 视角可以用鼠标转。UE层执行(Possess载具Pawn)，见ForeverTrafficFrameworkComponent::ApplyBoardVehicle。
+class BoardVehicleChange : public Change {
+public:
+	BoardVehicleChange();
+	BoardVehicleChange(std::string vehicle);
+	virtual ~BoardVehicleChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetVehicle(std::string vehicle);
+	const std::string& GetVehicle() const;
+
+private:
+	// 载具名称(表达式)
+	std::string vehicle;
+};
+
+// 强制玩家下车(比如公交收班)：驾驶和搭乘都生效，不检查下车点是否被挡、不看是否在站。
+// vehicle留空=玩家当前所在的任何载具；非空=只在玩家正在这辆载具里时才执行。
+class ForceLeaveChange : public Change {
+public:
+	ForceLeaveChange();
+	ForceLeaveChange(std::string vehicle);
+	virtual ~ForceLeaveChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetVehicle(std::string vehicle);
+	const std::string& GetVehicle() const;
+
+private:
+	// 载具名称(表达式，可空)
+	std::string vehicle;
+};
+
 // 设置门禁(常开/常锁)
 class SetDoorChange : public Change {
 public:

@@ -49,7 +49,20 @@ public:
 	// EnterVehicleChange的真正执行：按名字在activeVehicles里找到AVehicleElement，隐藏+
 	// despawn-exempt当前pawn、记进vehicleElement的previousPawn，Possess过去。找不到车辆/
 	// 当前没有pawn时打一条Warning，不崩溃。
-	void ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller);
+	// bSilent=true时不给车辆script发enter_vehicle事件(读档恢复"正在开的车"：script变量/选项已随存档
+	// 恢复，再发一次事件会让script重复处理)。
+	void ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent = false);
+
+	// board_vehicle Change的真正执行：搭乘线路上的公交(ATransitVehicleElement)。和ApplyEnterVehicle
+	// 同一套(隐藏原pawn、记previousPawn、Possess)，区别是搭乘者只有鼠标视角、车自己跑。bSilent同上。
+	void ApplyBoardVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent = false);
+
+	// leave_vehicle / force_leave Change的真正执行：玩家下车(驾驶和搭乘都行)。vehicleName为空=玩家当前
+	// 所在的任何载具，非空=只在玩家正在这辆里才执行。bForce=true(force_leave)时驾驶者也不做遮挡判定。
+	void ApplyLeaveVehicle(const FString& vehicleName, APlayerController* controller, bool bForce);
+
+	// 线路上的公交Actor(按Vehicle::GetName()查)，找不到返回nullptr。
+	ATransitVehicleElement* FindTransitElement(const FString& vehicleName) const;
 
 	// 这辆车当前在场景里的Actor(停着/私家车；公交车没有交互选项，不在这张表里)，找不到返回nullptr。
 	AVehicleElement* FindVehicleElement(const FString& vehicleName) const;
@@ -65,7 +78,8 @@ public:
 	// "挡住"，见ExitVehicle实现里的说明)，被挡住就在左上角打印拒绝提示、不下车；没被挡住就
 	// 恢复previousPawn（位置/显示/碰撞/Possess），车辆本身不销毁(这次是预置的真实物件，不是
 	// 一次性测试对象)。
-	void ExitVehicle(APlayerController* controller);
+	// 搭乘者(ATransitVehicleElement)也走这条流程，但不做遮挡判定；bForce=true时驾驶者也不做。
+	void ExitVehicle(APlayerController* controller, bool bForce = false);
 
 	// 公共交通线路的调试画线：每种stationType一个UProceduralMeshComponent+MID(bus绿/train蓝/
 	// plane红/其它默认色)，按route->GetLines()里每条腿的edge几何采样连成ribbon，边中点画一个
@@ -95,6 +109,9 @@ public:
 	int32 maxVehicleSpawnsPerFrame = 1;
 
 private:
+	// 玩家进出载具(驾驶或搭乘)时给这辆车自己的script发enter_vehicle/leave_vehicle事件。
+	void FireVehicleEvent(Vehicle* vehicle, bool entering, const char* mode);
+
 	// 一辆非公共交通车辆的登记项：不管当前有没有生成Actor都存在。location/yaw是它最后一次已知
 	// 的位置(没生成时=停车位或存档/上次销毁时的位置；生成着时每帧同步)。不能标UPROPERTY：
 	// Vehicle*是Core层类型。

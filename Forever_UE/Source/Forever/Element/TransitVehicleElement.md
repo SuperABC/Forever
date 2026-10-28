@@ -56,3 +56,10 @@
 
 - 不支持操控/搭乘——`VehicleMod::drivable`/`boardable`已经预留了这个开关，真要做的话这个
   类需要补充和`AVehicleElement`类似的`Possess`/上下车逻辑，这次不实现。
+
+## 公交：骨骼网格与搭乘
+- `transitMeshPath`指向骨骼网格(公交PAZ_652的`SKM_paz_652`)时用`skeletalBody`显示(root保持1倍缩放)；指向静态网格(飞机)走`bodyMesh`；失败退化立方体。`Init`打日志输出骨骼网格包围盒。
+- `VehicleMod::boardable`且骨骼网格时建触发盒(包围盒外扩XY 150/Z 50cm)和SpringArm+Camera。玩家的`AForeverCharacter`进盒→把车辆options推给`UMeetOptionWidget`；`PossessedBy`只加`IMC_MouseLook`(无`IMC_Default`，WASD无效)、绑鼠标视角和F/滚轮选项输入，**在车上一直显示options**(不需要盒)，没有Q下车键，下车只走script的"下车"选项或`force_leave`。
+- `ShowOptions`先`RemoveName`再逐个`AddOption`，不用`ReplaceOptions`(它在名下没有按钮时是空操作，停站前选项为空，之后新增的选项会丢)。
+- 搭乘/下车流程在`UForeverTrafficFrameworkComponent::ApplyBoardVehicle`/`ExitVehicle`；存档记`controlledVehicle`，读档走`ApplyBoardVehicle(bSilent)`，不用存档位姿覆盖(位置由Core Route算)。
+- 路线车的运动仍由Core驱动(运动学)，之后改成AI Controller物理驾驶时事件/Change/script/触发盒可复用。

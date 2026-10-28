@@ -30,6 +30,7 @@
 #include "populace/citizen.h"
 #include "populace/scheduler.h"
 #include "traffic/traffic.h"
+#include "traffic/vehicle.h"
 #include "map/door.h"
 #include "map/map.h"
 #include "map/cabin.h"
@@ -359,6 +360,58 @@ void UForeverStoryFrameworkComponent::ApplyEnterVehicle(const EnterVehicleChange
 	if (!playerController) return;
 
 	trafficFramework->ApplyEnterVehicle(name, playerController);
+}
+
+void UForeverStoryFrameworkComponent::ApplyBoardVehicle(const BoardVehicleChange* change, const ScriptContext& context) {
+	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetVehicle(), context)).data());
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
+	APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (!trafficFramework || !playerController) return;
+
+	trafficFramework->ApplyBoardVehicle(name, playerController);
+}
+
+void UForeverStoryFrameworkComponent::ApplyLeaveVehicle(const LeaveVehicleChange* change, const ScriptContext& context) {
+	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetVehicle(), context)).data());
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
+	APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (!trafficFramework || !playerController) return;
+
+	trafficFramework->ApplyLeaveVehicle(name, playerController, /*bForce=*/false);
+}
+
+void UForeverStoryFrameworkComponent::ApplyForceLeave(const ForceLeaveChange* change, const ScriptContext& context) {
+	FString name;
+	if (!change->GetVehicle().empty()) {
+		name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetVehicle(), context)).data());
+	}
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
+	APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (!trafficFramework || !playerController) return;
+
+	trafficFramework->ApplyLeaveVehicle(name, playerController, /*bForce=*/true);
+}
+
+void UForeverStoryFrameworkComponent::BroadcastToVehicle(Event& event, Vehicle* vehicle) {
+	if (!story || !vehicle || !vehicle->GetScript()) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	BroadcastToScript(event, vehicle->GetScript(), postImplement);
 }
 
 void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const ScriptContext& context, int32 insertIndex) {

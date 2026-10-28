@@ -41,7 +41,26 @@ const char* BusVehicle::GetName() {
 
 void BusVehicle::SetProperty() {
 	category = "bus";
-	sizeX = 1000.f; sizeY = 300.f; sizeZ = 300.f; // UE单位，一辆公交车大致的长宽高占位比例
+	sizeX = 786.f; sizeY = 312.f; sizeZ = 347.f; // UE单位，PAZ_652模型的实际包围盒
+
+	// 路线上的公交(ATransitVehicleElement，运动学显示)和停车场里的公交(AVehicleElement，Chaos物理驾驶)
+	// 用同一个模型：transitMeshPath是骨骼网格(车头+X，原点在车身中心地面，轮骨Phys_Wheel_FL/FR/BL/BR)，
+	// blueprintPath是从BP_VehicleBasic派生的驾驶蓝图，CarMesh用的也是这个骨骼网格。
+	transitMeshPath = "/Game/3rdParty/PAZ_652/StaticMeshes/SKM_paz_652.SKM_paz_652";
+	blueprintPath = "/Game/Blueprint/Vehicle/BP_VehicleBus.BP_VehicleBus_C";
+
+	// 脚本：上下车/驾驶选项，见Resource/Story/vehicle_bus.script。
+	scriptModName = "script_empty";
+	milestoneNames = { "vehicle_bus" };
+
+	// 下车点(车身局部坐标)：车头+X，乘客从右侧(+Y)靠前的车门下。是估计值，不合适再调。
+	exitOffsetX = 250.f;
+	exitOffsetY = 250.f;
+	exitOffsetZ = 100.f;
+
+	drivable = true;
+	boardable = true;
+	capacity = 30;
 }
 
 int TrainVehicle::count = 0;

@@ -303,6 +303,16 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			if (type == "enter_room") event = new EnterRoomEvent(obj["zone"].AsString(), obj["building"].AsString(), obj["room"].AsString());
 			else event = new LeaveRoomEvent(obj["zone"].AsString(), obj["building"].AsString(), obj["room"].AsString());
 		}
+		else if (type == "enter_stop" || type == "leave_stop") {
+			// stop可以省略(留空=不限站点)，见EnterStopEvent::Match。
+			if (type == "enter_stop") event = new EnterStopEvent(obj["stop"].AsString());
+			else event = new LeaveStopEvent(obj["stop"].AsString());
+		}
+		else if (type == "enter_vehicle" || type == "leave_vehicle") {
+			// vehicle/mode都可以省略(留空=不限)，见EnterVehicleEvent::Match。mode是"drive"/"ride"。
+			if (type == "enter_vehicle") event = new EnterVehicleEvent(obj["vehicle"].AsString(), obj["mode"].AsString());
+			else event = new LeaveVehicleEvent(obj["vehicle"].AsString(), obj["mode"].AsString());
+		}
 		else if (type == "time_up") {
 			// name可以省略(留空=这个脚本的任何计时器到时都触发)，见TimeUpEvent::Match。
 			event = new TimeUpEvent(obj["name"].AsString());
@@ -367,6 +377,25 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing vehicle for enter_vehicle change.\n");
 			}
 			change = new EnterVehicleChange(vehicle.AsString());
+		}
+		else if (type == "board_vehicle") {
+			auto vehicle = obj["vehicle"];
+			if (vehicle.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing vehicle for board_vehicle change.\n");
+			}
+			change = new BoardVehicleChange(vehicle.AsString());
+		}
+		else if (type == "leave_vehicle") {
+			auto vehicle = obj["vehicle"];
+			if (vehicle.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing vehicle for leave_vehicle change.\n");
+			}
+			change = new LeaveVehicleChange(vehicle.AsString());
+		}
+		else if (type == "force_leave") {
+			// vehicle可以省略(留空=玩家当前所在的任何载具)，见ForceLeaveChange。
+			auto vehicle = obj["vehicle"];
+			change = new ForceLeaveChange(vehicle.IsNull() ? string() : vehicle.AsString());
 		}
 		else if (type == "set_door") {
 			// access可以写JSON布尔(true/false)，也可以写字符串表达式——AsString()把JSON布尔转成

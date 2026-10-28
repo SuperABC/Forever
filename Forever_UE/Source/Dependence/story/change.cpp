@@ -710,6 +710,60 @@ const std::string& LeaveVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
+BoardVehicleChange::BoardVehicleChange() :
+	vehicle() {
+
+}
+
+BoardVehicleChange::BoardVehicleChange(std::string vehicle) :
+	vehicle(move(vehicle)) {
+
+}
+
+BoardVehicleChange::~BoardVehicleChange() {
+
+}
+
+const string& BoardVehicleChange::GetType() const {
+	static const string type = "board_vehicle";
+	return type;
+}
+
+void BoardVehicleChange::SetVehicle(std::string vehicle) {
+	this->vehicle = move(vehicle);
+}
+
+const std::string& BoardVehicleChange::GetVehicle() const {
+	return vehicle;
+}
+
+ForceLeaveChange::ForceLeaveChange() :
+	vehicle() {
+
+}
+
+ForceLeaveChange::ForceLeaveChange(std::string vehicle) :
+	vehicle(move(vehicle)) {
+
+}
+
+ForceLeaveChange::~ForceLeaveChange() {
+
+}
+
+const string& ForceLeaveChange::GetType() const {
+	static const string type = "force_leave";
+	return type;
+}
+
+void ForceLeaveChange::SetVehicle(std::string vehicle) {
+	this->vehicle = move(vehicle);
+}
+
+const std::string& ForceLeaveChange::GetVehicle() const {
+	return vehicle;
+}
+
 SetDoorChange::SetDoorChange() :
 	name(), access() {
 

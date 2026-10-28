@@ -76,3 +76,8 @@
 - `ApplyEnterVehicle`（剧情 enter_vehicle / 读档恢复正在开的车）改用 `FindOrSpawnVehicle`：找不到活着的 Actor 就按名字强制生成，不看距离。`FindVehicleElement` 仍只返回当前活着的。
 - 公共交通车辆（`ATransitVehicleElement`）不受影响，仍然全部常驻。
 - 起因：全城约 200 辆预置车一直常驻，加上近处建筑电梯轿厢每帧重复 `SetWorldLocation`，游戏线程碰撞重叠更新占了约 16ms，见 `BuildingElement::UpdateCabins`（轿厢没动就不再同步组件）。
+
+## 公交搭乘/下车/事件
+- `ApplyBoardVehicle(name, controller, bSilent)`：搭乘线路公交(隐藏原pawn、记previousPawn、Possess)。`ApplyLeaveVehicle(name, controller, bForce)`：leave_vehicle/force_leave执行入口，name非空时只在玩家正在这辆里才执行。`ExitVehicle(controller, bForce)`驾驶/搭乘共用：搭乘者不做遮挡判定，驾驶者除非force才判定。`FindTransitElement`按名字查线路公交Actor。
+- `FireVehicleEvent`：进出载具时给**这辆车自己的**script发`enter_vehicle`/`leave_vehicle`事件(mode=drive/ride)；`ApplyEnterVehicle`/`ApplyBoardVehicle`的`bSilent`用于读档恢复(不发)。
+- `GenerateVehicles`线路车分支：`blueprintPath`加载出来不是`ATransitVehicleElement`子类(公交带的是停车场驾驶用的BP_VehicleBus)就忽略，仍用`ATransitVehicleElement`。
