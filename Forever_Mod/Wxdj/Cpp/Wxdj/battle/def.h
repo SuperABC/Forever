@@ -31,6 +31,8 @@ inline constexpr float BOMB_BACKFIRE_FACTOR = 0.2f;
 inline constexpr float ACCUMULATE_VULNERABILITY = 0.2f;
 // 锈蚀场地下，炸弹对双方的系数都是这个(取代上面的命中系数和反噬系数)。
 inline constexpr float BOMB_RUST_FACTOR = 0.5f;
+// 场地效果(灼烧/锈蚀/扬尘/泥沼)出现之后持续几个回合；出现的那一回合不算。内部多存1回合，下一个回合开始时减一，减到0就立刻消失
+inline constexpr int FIELD_EFFECT_ROUNDS = 3;
 
 // 跳过回合(含被禁锢而无法出招)时敏捷的倍数，只用于躲避对方未被正面应对的普通招式：双方敏捷相同时，
 // 跳过的一方有 4/(1+4)=80% 的概率躲开；被禁锢的一方如果选择积攒真气炸弹(没有跳过)，仍然不能躲避。

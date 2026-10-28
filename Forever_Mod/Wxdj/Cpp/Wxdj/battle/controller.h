@@ -169,6 +169,8 @@ private:
 	std::vector<std::shared_ptr<Cultivator>> cultivators; // 参战修炼者
 	std::vector<std::vector<std::shared_ptr<Effect>>> effects; // 每个修炼者身上的效果
 	std::vector<std::shared_ptr<Effect>> environment; // 场地效果
+	bool deferEnvironment = false; // CheckTurn结算期间为true：场地反应先排队，结算完再统一生成
+	std::vector<int> pendingReactions;
 	std::vector<int> status; // 状态标志位
 	std::vector<int> regenMP; // 这回合开始时自然回复的真气量，空炸弹要把它撤销
 	std::vector<float> skipAgi; // 这回合跳过的人：>0=跳过的闪避用这个敏捷(付得起是翻倍后的，付不起是原来的)，0=没有跳过

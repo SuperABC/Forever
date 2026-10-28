@@ -1359,7 +1359,8 @@ function timedEffect(type, instant, continuous = 0, rounds = 0, interval = 1) {
   return { type, instant, continuous, rounds, interval, needHit: type === E_DOT, currentRound: 0 };
 }
 function lockEffect(prob) { return { type: E_LOCK, prob, keep: true }; }
-function envEffect(type) { return { type, total: 3, currentRound: 0 }; }
+const FIELD_EFFECT_ROUNDS = 3;   // 场地效果出现之后持续几个回合(出现的那一回合不算)；内部多存1回合，下一个回合开始时减一，减到0就立刻消失
+function envEffect(type) { return { type, total: FIELD_EFFECT_ROUNDS + 1, currentRound: 0 }; }
 function cloneEffect(e) { return Object.assign({}, e, e.ratios ? { ratios: e.ratios.slice() } : {}); }
 function ratioOf(e, attr) { return e.ratios[attr] || 0; }
 function timedOnce(e) {
@@ -1667,6 +1668,7 @@ class Controller {
   startTurn() {
     this.status.fill(0);
     this.skipAgi.fill(0);
+    this.environment = this.environment.filter(e => ++e.currentRound < e.total);   // 场地效果回合开始时减一：出现的那一回合不算，减到0就立刻消失
     this.execEffect(STAGE_START);
     for (let i = 0; i < this.cultivators.length; i++) { const before = this.cultivators[i].currentMP; this.recoverMP(i, -1); this.regenMP[i] = this.cultivators[i].currentMP - before; this.cultivators[i].recoverAgi(); }
   }
@@ -1750,11 +1752,13 @@ class Controller {
         }
       }
     }
-    for (const [action] of actions) this.putoutReaction(action.attr);
   }
 
   checkTurn(actions) {
     this.execEffect(STAGE_CHECK);
+    // 场地效果的生成和清除都等招式和伤害结算完了再做；清除看各方原本出招的属性(被禁锢等改成跳过之前)
+    const putoutAttrs = actions.map(a => a[0].attr);
+    this.deferEnvironment = true; this.pendingReactions = [];
     actions = actions.map((a, j) => (a[0].type === A_ACCUMULATE && !(this.status[j] & 2)) ? [skipAction(), a[1]] : a);   // actionTurn里没积攒成的(禁止积攒的人)当作跳过
     const rust = () => this.findReaction(E_RUST);
     // 被禁锢的一方这回合出的招(除了积攒)已经被跳过，它的减伤/反弹/吸收/物理等效果也不能生效，当作跳过处理
@@ -1869,11 +1873,14 @@ class Controller {
         }
       }
     }
+    this.deferEnvironment = false;
+    for (const attr of putoutAttrs) this.putoutReaction(attr);
+    for (const r of this.pendingReactions) this.addReaction(r);
+    this.pendingReactions = [];
   }
 
   endTurn() {
     this.execEffect(STAGE_END);
-    this.environment = this.environment.filter(e => { e.currentRound++; return e.currentRound < e.total; });
     for (const c of this.cultivators) c.tickMods();
   }
 
@@ -1935,7 +1942,11 @@ class Controller {
     if (deficit > 0) this.logs.push(logState(L_CONSUME, subject, deficit * 2));
     this.cultivators[subject].consumeMP(amount);
   }
-  addReaction(r) { if ([E_BURN, E_RUST, E_DUST, E_MUD].includes(r)) { this.addEnvironment(envEffect(r)); return true; } return false; }
+  addReaction(r) {
+    if (![E_BURN, E_RUST, E_DUST, E_MUD].includes(r)) return false;
+    if (this.deferEnvironment) this.pendingReactions.push(r); else this.addEnvironment(envEffect(r));
+    return true;
+  }
   buildDualEnvironment(act) { if (act.type === A_DUAL) this.addReaction(this.checkReaction(act.action1.attr, act.action2.attr)); }
   skipMove(idx) { this.logs.push(logSkip(idx)); }
   recoverATK(idx, amount, log = true) { if (log) this.logs.push(logState(L_ATK, idx, amount)); this.cultivators[idx].recoverATK(amount); }
@@ -2444,7 +2455,7 @@ const ENV_INFO = {
   [E_DUST]: { name: "扬尘", desc: "命中率50%", color: "#aa8c46" },
   [E_MUD]: { name: "泥沼", desc: "消耗x1.5", color: "#6e5a37" },
 };
-const envRemaining = e => e.total - e.currentRound;
+const envRemaining = e => e.total - Math.max(e.currentRound, 1);   // 出现时还没减过，按"之后还剩几回合"显示
 function refreshEnvironment() {
   const bar = $("envBar");
   bar.innerHTML = '<span class="lab">场地：</span>';

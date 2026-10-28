@@ -385,7 +385,7 @@ bool ShieldEffect::UseUp() const {
 	return rounds <= 0 || strength <= 0;
 }
 
-BurnEffect::BurnEffect() : Effect(EFFECT_BURN), burnRounds(3), currentRound(0) {
+BurnEffect::BurnEffect() : Effect(EFFECT_BURN), burnRounds(FIELD_EFFECT_ROUNDS + 1), currentRound(0) {
 
 }
 
@@ -398,14 +398,14 @@ void BurnEffect::PassRound() {
 }
 
 int BurnEffect::RemainingRounds() const {
-	return burnRounds - currentRound;
+	return burnRounds - max(currentRound, 1);   // 出现时还没减过，按"之后还剩几回合"显示
 }
 
 bool BurnEffect::UseUp() const {
 	return currentRound >= burnRounds;
 }
 
-RustEffect::RustEffect() : Effect(EFFECT_RUST), rustRounds(3), currentRound(0) {
+RustEffect::RustEffect() : Effect(EFFECT_RUST), rustRounds(FIELD_EFFECT_ROUNDS + 1), currentRound(0) {
 
 }
 
@@ -418,14 +418,14 @@ void RustEffect::PassRound() {
 }
 
 int RustEffect::RemainingRounds() const {
-	return rustRounds - currentRound;
+	return rustRounds - max(currentRound, 1);   // 出现时还没减过，按"之后还剩几回合"显示
 }
 
 bool RustEffect::UseUp() const {
 	return currentRound >= rustRounds;
 }
 
-DustEffect::DustEffect() : Effect(EFFECT_DUST), dustRounds(3), currentRound(0) {
+DustEffect::DustEffect() : Effect(EFFECT_DUST), dustRounds(FIELD_EFFECT_ROUNDS + 1), currentRound(0) {
 
 }
 
@@ -438,14 +438,14 @@ void DustEffect::PassRound() {
 }
 
 int DustEffect::RemainingRounds() const {
-	return dustRounds - currentRound;
+	return dustRounds - max(currentRound, 1);   // 出现时还没减过，按"之后还剩几回合"显示
 }
 
 bool DustEffect::UseUp() const {
 	return currentRound >= dustRounds;
 }
 
-MudEffect::MudEffect() : Effect(EFFECT_MUD), mudRounds(3), currentRound(0) {
+MudEffect::MudEffect() : Effect(EFFECT_MUD), mudRounds(FIELD_EFFECT_ROUNDS + 1), currentRound(0) {
 
 }
 
@@ -458,7 +458,7 @@ void MudEffect::PassRound() {
 }
 
 int MudEffect::RemainingRounds() const {
-	return mudRounds - currentRound;
+	return mudRounds - max(currentRound, 1);   // 出现时还没减过，按"之后还剩几回合"显示
 }
 
 bool MudEffect::UseUp() const {

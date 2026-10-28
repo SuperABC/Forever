@@ -105,6 +105,18 @@ void Controller::ResetRound() {
 
 void Controller::StartTurn() {
 	ResetRound();
+
+	// 场地效果的回合计数在回合开始时减一：出现的那一回合(结算后才生成)不算；内部多存了1回合，所以减到0说明持续回合数用完了，立刻消失
+	for (auto it = environment.begin(); it != environment.end(); ) {
+		bool useUp = false;
+		if (auto burn = dynamic_pointer_cast<BurnEffect>(*it)) { burn->PassRound(); useUp = burn->UseUp(); }
+		else if (auto rust = dynamic_pointer_cast<RustEffect>(*it)) { rust->PassRound(); useUp = rust->UseUp(); }
+		else if (auto dust = dynamic_pointer_cast<DustEffect>(*it)) { dust->PassRound(); useUp = dust->UseUp(); }
+		else if (auto mud = dynamic_pointer_cast<MudEffect>(*it)) { mud->PassRound(); useUp = mud->UseUp(); }
+		if (useUp) it = environment.erase(it);
+		else ++it;
+	}
+
 	ExecEffect(STAGE_START);
 	for (int i = 0; i < (int)cultivators.size(); ++i) {
 		int mpBefore = cultivators[i]->GetCurrentMP();
@@ -241,9 +253,6 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 		}
 	}
 
-	for (auto& [action, _] : actions) {
-		PutoutReaction(action->GetAttribute());
-	}
 }
 
 void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
@@ -251,6 +260,14 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 		throw runtime_error("Cultivators and actions mismatch.");
 
 	ExecEffect(STAGE_CHECK);
+
+	// 清除场地效果看各方原本出招的属性(被禁锢等改成跳过之前)
+	vector<ATTRIBUTE_TYPE> putoutAttributes;
+	for (auto& [action, _] : actions) putoutAttributes.push_back(action->GetAttribute());
+
+	// 场地效果的生成和清除都等招式和伤害结算完了再做：这一回合所有的命中、闪避、伤害、炸弹系数看到的都是回合开始时的场地
+	deferEnvironment = true;
+	pendingReactions.clear();
 
 	// ActionTurn里被改成跳过的积攒(禁止积攒的人)：那里没记积攒位，这里同样当作跳过
 	for (int j = 0; j < (int)cultivators.size(); ++j) {
@@ -462,33 +479,16 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 			}
 		}
 	}
+
+	// 结算完毕：先按本回合各方出招的属性清除场地效果，再加上本回合新生成的
+	deferEnvironment = false;
+	for (ATTRIBUTE_TYPE attribute : putoutAttributes) PutoutReaction(attribute);
+	for (int reaction : pendingReactions) AddReactionEnvironment(reaction);
+	pendingReactions.clear();
 }
 
 void Controller::EndTurn() {
 	ExecEffect(STAGE_END);
-
-	// 场地效果的回合计数
-	for (auto it = environment.begin(); it != environment.end(); ) {
-		bool useUp = false;
-		if (auto burn = dynamic_pointer_cast<BurnEffect>(*it)) {
-			burn->PassRound();
-			useUp = burn->UseUp();
-		}
-		else if (auto rust = dynamic_pointer_cast<RustEffect>(*it)) {
-			rust->PassRound();
-			useUp = rust->UseUp();
-		}
-		else if (auto dust = dynamic_pointer_cast<DustEffect>(*it)) {
-			dust->PassRound();
-			useUp = dust->UseUp();
-		}
-		else if (auto mud = dynamic_pointer_cast<MudEffect>(*it)) {
-			mud->PassRound();
-			useUp = mud->UseUp();
-		}
-		if (useUp) it = environment.erase(it);
-		else ++it;
-	}
 
 	for (auto& c : cultivators) c->Mods().Tick();
 	for (auto& c : cultivators) c->UpdateRealm();
@@ -504,6 +504,11 @@ void Controller::AddEffect(int idx, shared_ptr<Effect> effect) {
 }
 
 bool Controller::AddReactionEnvironment(int reaction) {
+	if (deferEnvironment) {   // 结算中：只记下来，CheckTurn结束时统一生成
+		if (reaction != EFFECT_BURN && reaction != EFFECT_RUST && reaction != EFFECT_DUST && reaction != EFFECT_MUD) return false;
+		pendingReactions.push_back(reaction);
+		return true;
+	}
 	switch (reaction) {
 	case EFFECT_BURN: AddEnvironment(make_shared<BurnEffect>()); return true;
 	case EFFECT_RUST: AddEnvironment(make_shared<RustEffect>()); return true;
