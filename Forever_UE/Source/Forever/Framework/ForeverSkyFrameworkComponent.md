@@ -97,3 +97,20 @@
   如果视觉效果偏暗/偏亮/雾太浓，优先调这些常数，不需要改公式结构。
 - 没有月相/星空系统，以后如果需要可以在这个组件里加一个独立的"月光"`DirectionalLight`
   (夜晚chronode>0.8时启用，白天关闭)，这次范围内不做。
+
+## 夜晚随游戏时间变暗(2026-10-30)
+
+之前夜晚太亮的原因：太阳18:00~06:00虽然已经是0，但①`ambientLight`常量300 lux(比真实月光亮三个数量级)；
+②曝光只设了一个符号含糊的`AutoExposureMinBrightness`，自动曝光在暗场景里一路提亮(项目开了
+`ExtendDefaultLuminanceRange`，单位是EV100，EV越大越暗)，Local Exposure还会提亮暗部；③SkyLight默认Static、从不管理。
+现在全部按**白天系数t**(`DayFactor`：太阳高度正弦在-0.12~0.2之间smoothstep，0=深夜、1=白天，黄昏黎明约一个游戏小时过渡)驱动：
+
+- **环境光**：`UpdateAmbientLight`，强度=`Lerp(nightAmbientLux=2, dayAmbientLux=300, t)`。
+- **曝光**：`UpdatePostProcess`，`Min=Lerp(nightExposureEV=3, dayExposureMinEV=-10, t)`、`Max=Lerp(nightExposureEV, dayExposureMaxEV=20, t)`——夜里Min=Max，
+  等于固定曝光、不再自动适应；白天回到宽范围自动曝光(和之前一致)。同时`LocalExposureShadowContrastScale`夜里1.0、白天0.8(ini里的值)。
+  `EnsureSkyGenerated`里对找到/生成的PostProcessVolume总是设`bUnbound`、`Priority=100`和三个`bOverride_*`(之前复用关卡里手放的体积时override没开，赋值无效)。
+- **SkyLight**：设成Movable+`SetRealTimeCaptureEnabled(true)`，跟着SkyAtmosphere变暗；不手动改强度。
+- 这些数值都是`UPROPERTY(EditAnywhere, Category="Sky|Night")`，先按"月夜微亮"给，PIE里调。`nightAmbientLux`和`nightExposureEV`要配合调：
+  环境光越亮，EV要越大(越暗)才能压住。夜里还是太亮先调大`nightExposureEV`(每+1暗一档)，轮廓都看不见就调小。
+- `GetCurrentExposureEV()`/`GetReferenceDayEV()`：识别名牌按它换算亮度。
+- 没有月光和星空(以后加月光时，夜间`ambientLight`强度可以直接让给月光那盏灯)。如果夜里仍然很亮，先查关卡里是否手放了别的PostProcessVolume或相机蓝图带后处理覆盖。

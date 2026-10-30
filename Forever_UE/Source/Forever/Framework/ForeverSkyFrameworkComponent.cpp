@@ -6,6 +6,7 @@
 // (没有独立的Engine/SkyAtmosphere.h)，和USkyAtmosphereComponent共用一个头文件。
 #include "Components/SkyAtmosphereComponent.h"
 #include "Engine/SkyLight.h"
+#include "Components/SkyLightComponent.h"
 #include "Engine/ExponentialHeightFog.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Engine/PostProcessVolume.h"
@@ -64,7 +65,8 @@ void UForeverSkyFrameworkComponent::EnsureSkyGenerated() {
 				// "微弱"——比sunLight正午10万lux的量级低了两个数量级，只是让纯黑的室内
 				// 能看清形状，不会让白天的室外看起来变化(10万lux面前几百lux的叠加几乎
 				// 不可见)，具体数值是占位性质，PIE里看效果不够/太强再调。
-				ambientComponent->SetIntensity(300.0f);
+				// 初始值用白天强度，之后UpdateAmbientLight()每帧按时间插值(夜里压低)。
+				ambientComponent->SetIntensity(dayAmbientLux);
 				ambientComponent->SetLightColor(FLinearColor(0.8f, 0.85f, 1.0f)); // 偏冷调中性光
 				// 这个光源不参与大气/云层渲染("谁是太阳"这件事只应该是sunLight一个)，
 				// 显式退出竞争，避免SkyAtmosphere/体积云在两个方向光之间选择困难。
@@ -85,6 +87,14 @@ void UForeverSkyFrameworkComponent::EnsureSkyGenerated() {
 	if (!skyLight) {
 		skyLight = Cast<ASkyLight>(UGameplayStatics::GetActorOfClass(world, ASkyLight::StaticClass()));
 		if (!skyLight) skyLight = world->SpawnActor<ASkyLight>();
+		// 运行时程序化生成的场景要用可移动+实时捕获的SkyLight，它才会跟着SkyAtmosphere变亮变暗；
+		// 关卡里手放的SkyLight同样套用(Static的捕获停在编辑器里的状态，夜里会一直漏白天的光)。
+		if (skyLight) {
+			if (USkyLightComponent* skyComponent = skyLight->GetLightComponent()) {
+				skyComponent->SetMobility(EComponentMobility::Movable);
+				skyComponent->SetRealTimeCaptureEnabled(true);
+			}
+		}
 	}
 	if (!heightFog) {
 		heightFog = Cast<AExponentialHeightFog>(UGameplayStatics::GetActorOfClass(world, AExponentialHeightFog::StaticClass()));
@@ -102,16 +112,18 @@ void UForeverSkyFrameworkComponent::EnsureSkyGenerated() {
 	}
 	if (!postProcessVolume) {
 		postProcessVolume = Cast<APostProcessVolume>(UGameplayStatics::GetActorOfClass(world, APostProcessVolume::StaticClass()));
-		if (!postProcessVolume) {
-			postProcessVolume = world->SpawnActor<APostProcessVolume>();
-			if (postProcessVolume) {
-				// 没有编辑器摆好的包围盒，必须整个世界生效。
-				postProcessVolume->bUnbound = true;
-				// 老工程这个override开关是在编辑器Details面板手动勾的，这次程序Spawn必须
-				// 显式打开，否则下面UpdatePostProcess()对AutoExposureMinBrightness的赋值
-				// 不会有任何效果。
-					postProcessVolume->Settings.bOverride_AutoExposureMinBrightness = true;
-			}
+		if (!postProcessVolume) postProcessVolume = world->SpawnActor<APostProcessVolume>();
+		if (postProcessVolume) {
+			// 没有编辑器摆好的包围盒，必须整个世界生效；关卡里手放的也一样处理——夜晚曝光必须全图一致。
+			postProcessVolume->bUnbound = true;
+			// 优先级比关卡里其它后处理体积高，曝光以这里为准。
+			postProcessVolume->Priority = 100.f;
+			// override开关在编辑器Details面板里是手动勾的，程序Spawn/复用都必须显式打开，否则
+			// UpdatePostProcess()里的赋值不会有任何效果。
+			FPostProcessSettings& settings = postProcessVolume->Settings;
+			settings.bOverride_AutoExposureMinBrightness = true;
+			settings.bOverride_AutoExposureMaxBrightness = true;
+			settings.bOverride_LocalExposureShadowContrastScale = true;
 		}
 	}
 }
@@ -126,6 +138,7 @@ void UForeverSkyFrameworkComponent::UpdateSky(const Time& currentTime) {
 	UpdateSkyAtmosphere(chronode);
 	UpdateHeightFog(chronode);
 	UpdatePostProcess(chronode);
+	UpdateAmbientLight(chronode);
 }
 
 namespace {
@@ -138,6 +151,14 @@ namespace {
 	}
 
 	constexpr float kSunMaxIntensity = 100000.0f; // 正午直射光，lux
+
+	// 白天系数t(0=深夜,1=白天)：太阳高度的正弦sinAlt(=SunIntensityFactor去掉relu，夜里为负)在-0.12~0.2之间
+	// smoothstep，黄昏黎明有约一个游戏小时的平滑过渡，不是18点/6点突变。
+	float DayFactor(float chronode) {
+		const float sinAlt = -FMath::Cos(2.0f * PI * chronode);
+		const float t = FMath::Clamp((sinAlt + 0.12f) / 0.32f, 0.0f, 1.0f);
+		return t * t * (3.0f - 2.0f * t);
+	}
 }
 
 void UForeverSkyFrameworkComponent::UpdateSunLight(float chronode) {
@@ -207,6 +228,21 @@ void UForeverSkyFrameworkComponent::UpdateHeightFog(float chronode) {
 void UForeverSkyFrameworkComponent::UpdatePostProcess(float chronode) {
 	if (!postProcessVolume) return;
 
-	float globalIntensity = -FMath::Cos(chronode * PI * 2);
-	postProcessVolume->Settings.AutoExposureMinBrightness = globalIntensity * 10;
+	// 夜里Min=Max=nightExposureEV(固定曝光，不再自动适应成"和白天一样亮")，白天回到宽范围的自动曝光，
+	// 黄昏黎明按白天系数t线性过渡。注意单位是EV100(项目开了ExtendDefaultLuminanceRange)。
+	const float t = DayFactor(chronode);
+	FPostProcessSettings& settings = postProcessVolume->Settings;
+	settings.AutoExposureMinBrightness = FMath::Lerp(nightExposureEV, dayExposureMinEV, t);
+	settings.AutoExposureMaxBrightness = FMath::Lerp(nightExposureEV, dayExposureMaxEV, t);
+	settings.LocalExposureShadowContrastScale = FMath::Lerp(nightLocalShadowContrast, dayLocalShadowContrast, t);
+	currentExposureEV = FMath::Lerp(nightExposureEV, referenceDayEV, t);
+}
+
+void UForeverSkyFrameworkComponent::UpdateAmbientLight(float chronode) {
+	if (!ambientLight) return;
+
+	// 没有太阳的夜里，300 lux的常量环境光比真实月光亮三个数量级，是夜晚发亮的主因，按白天系数压下去。
+	if (UDirectionalLightComponent* ambientComponent = Cast<UDirectionalLightComponent>(ambientLight->GetLightComponent())) {
+		ambientComponent->SetIntensity(FMath::Lerp(nightAmbientLux, dayAmbientLux, DayFactor(chronode)));
+	}
 }

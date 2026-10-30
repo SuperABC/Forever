@@ -3,6 +3,7 @@
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
+#include "Framework/ForeverSkyFrameworkComponent.h"
 #include "UI/ForeverIdentifyTagWidget.h"
 
 #include "Camera/PlayerCameraManager.h"
@@ -63,7 +64,8 @@ void UForeverIdentifyComponent::AddTag(ACitizenElement* citizenActor)
 	tag->SetTwoSided(true);
 	tag->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	tag->SetCastShadow(false);
-	tag->SetTintColorAndOpacity(FLinearColor(tintBrightness, tintBrightness, tintBrightness, 1.f));
+	const float brightness = ComputeTintBrightness();
+	tag->SetTintColorAndOpacity(FLinearColor(brightness, brightness, brightness, 1.f));
 
 	// 挂在人物身上：人走动时标签跟着走，人被销毁时标签一起消失。
 	tag->SetupAttachment(citizenActor->GetRootComponent());
@@ -77,6 +79,16 @@ void UForeverIdentifyComponent::AddTag(ACitizenElement* citizenActor)
 		widget->SetLines(BuildLines(*citizenActor->GetCitizen()), resolutionScale);
 	}
 	tags.Add(tag);
+}
+
+float UForeverIdentifyComponent::ComputeTintBrightness() const
+{
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(this, AForeverFrameworkActor::StaticClass()));
+	UForeverSkyFrameworkComponent* sky = framework ? framework->GetSkyFramework() : nullptr;
+	if (!sky) return tintBrightness;
+	// 曝光EV每低1，画面亮一倍：夜里EV比白天参考值低，标签亮度按2的幂次缩小。
+	return tintBrightness * FMath::Pow(2.f, sky->GetCurrentExposureEV() - sky->GetReferenceDayEV());
 }
 
 void UForeverIdentifyComponent::Exit()
@@ -106,9 +118,13 @@ void UForeverIdentifyComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	const FRotator facing = FRotationMatrix::MakeFromXZ(
 		-cameraRotation.Vector(), FRotationMatrix(cameraRotation).GetUnitAxis(EAxis::Z)).Rotator();
 
+	// 识别期间时间还在走(黄昏/黎明曝光在变)，亮度跟着当前曝光每帧换算。
+	const float brightness = ComputeTintBrightness();
+	const FLinearColor tint(brightness, brightness, brightness, 1.f);
 	tags.RemoveAll([&](const TWeakObjectPtr<UWidgetComponent>& tag) {
 		if (!tag.IsValid()) return true; // 人物被销毁，标签已经跟着消失
 		tag->SetWorldRotation(facing);
+		tag->SetTintColorAndOpacity(tint);
 		return false;
 	});
 }

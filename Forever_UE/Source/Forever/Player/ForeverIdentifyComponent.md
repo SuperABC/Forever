@@ -21,3 +21,8 @@
 ## 待办/后续
 - 更多信息行(年龄、职业等)。
 - 白天曝光材质(如果需要)。
+
+## 名牌亮度跟着曝光走(2026-10-30)
+
+昼夜曝光(见`Framework/ForeverSkyFrameworkComponent.md`"夜晚随游戏时间变暗")夜里固定在比白天亮得多的EV，固定的`tintBrightness=10000`会过曝。
+现在`tintBrightness`是白天参考曝光(`referenceDayEV`)下的值，创建和识别期间每帧都乘`2^(当前EV-参考EV)`(`ComputeTintBrightness`)；拿不到天空组件时保持原值。

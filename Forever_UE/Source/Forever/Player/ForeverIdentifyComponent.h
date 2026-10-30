@@ -55,7 +55,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Identify")
 	float resolutionScale = 1.f;
 
-	// 标签颜色乘数(可以大于1)：白天曝光很重，世界里的UI默认亮度不够，用它提亮。
+	// 标签颜色乘数(可以大于1)：白天曝光很重，世界里的UI默认亮度不够，用它提亮。这是**白天参考曝光**下
+	// 的值(UForeverSkyFrameworkComponent::referenceDayEV)；夜里曝光变亮时每帧按
+	// 2^(当前EV-参考EV)缩小，不然夜里名牌会过曝。
 	UPROPERTY(EditAnywhere, Category = "Identify")
 	float tintBrightness = 10000.f;
 
@@ -68,6 +70,9 @@ private:
 	TArray<FString> BuildLines(const Citizen& citizen) const;
 
 	void AddTag(ACitizenElement* citizenActor);
+
+	// 按当前曝光换算后的标签亮度(拿不到天空组件时就是tintBrightness)。
+	float ComputeTintBrightness() const;
 
 	bool bActive = false;
 	TArray<TWeakObjectPtr<UWidgetComponent>> tags;
