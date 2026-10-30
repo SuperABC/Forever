@@ -21,6 +21,7 @@ class Traffic;
 class Player;
 class Change;
 class SpawnNpcChange;
+class NPCReviveChange;
 struct ScriptContext;
 
 class USceneComponent;
@@ -187,9 +188,19 @@ protected:
 	// add_option/remove_option执行完之后，让场景里叫这个名字的市民/车辆/门刷新交互选项快照。
 	void RefreshInteractOptions(const std::string& name);
 
+public:
+	// 世界坐标所在的地址文本：房间地址 > 建筑地址 > 园区地址 > 地块(block)地址 > "x,y,z"(地图单位)。
+	// 房间/建筑/园区用它们的触发盒做一次小球重叠查询反查，地块用地块矩形做几何包含判断。
+	// 死亡事件的local.location用，见CitizenDeceaseEvent。
+	std::string DescribeLocation(const FVector& worldLocation) const;
+
+protected:
+
 	// spawn_npc：Core里建市民(Populace::SpawnCitizen)、按home住进房间(Map::SettleCitizen)，再登记进
 	// UE的流式生成列表——要用到Populace/Map/PopulaceFramework三方，所以放在UE层分支。
 	void ApplySpawnNpc(const SpawnNpcChange* change, const ScriptContext& context);
+	// npc_revive：Citizen::Revive，之后需要npc_teleport才会出现在场景里。
+	void ApplyReviveNpc(const NPCReviveChange* change, const ScriptContext& context);
 
 	// Map的生命周期归这个Actor持有(纯C++类型,不是UPROPERTY)。
 	// Zone/Building/Roadnet等系统共用同一个Map实例,不是各自另建一个。

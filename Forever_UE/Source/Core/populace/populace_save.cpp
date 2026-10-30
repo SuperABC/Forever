@@ -119,6 +119,7 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		w.F32(c->posX); w.F32(c->posY); w.F32(c->posZ);
 		w.F32(c->health);
 		w.F32(c->maxHealth);
+		w.U8(c->isDead ? 1 : 0);
 		WriteStrings(c->options, w);
 		const Scheduler* scheduler = c->scheduler;
 		w.U8(scheduler ? 1 : 0);
@@ -289,6 +290,7 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			c->posX = r.F32(); c->posY = r.F32(); c->posZ = r.F32();
 			c->health = r.F32();
 			c->maxHealth = r.F32();
+			c->isDead = r.U8() != 0;
 			// options(剧情脚本加的交互选项)：存档带脚本状态段时读档会跳过game_start广播，按存档恢复；
 			// 没有(P4及更早的存档)时game_start会重新加一遍，这里不恢复，避免重复。
 			vector<string> options = ReadStrings(r);

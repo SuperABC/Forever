@@ -46,10 +46,12 @@
             "milestone": "self_decease",
             "triggers": [ { "type": "citizen_decease", "name": "$$self.name" } ],
             "visible": false,
-            "drop": "true",
+            "drop": "false",
             "description": "",
             "goal": "",
-            "changes": [],
+            "changes": [
+                { "type": "create_timer", "name": "revive", "time": "00:00:04", "mode": "real" }
+            ],
             "dialogs": [
                 {
                     "list": [
@@ -57,6 +59,20 @@
                     ]
                 }
             ],
+            "subsequences": []
+        },
+        {
+            "milestone": "self_revive",
+            "triggers": [ { "type": "time_up", "name": "revive" } ],
+            "visible": false,
+            "drop": "false",
+            "description": "",
+            "goal": "",
+            "changes": [
+                { "type": "npc_revive", "name": "$$self.name" },
+                { "type": "npc_teleport", "name": "$$self.name", "destination": "home" }
+            ],
+            "dialogs": [],
             "subsequences": []
         }
     ]

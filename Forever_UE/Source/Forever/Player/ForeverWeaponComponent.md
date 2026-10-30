@@ -75,3 +75,6 @@
 - 具体弹道/后坐力/散射数值需在PIE里调优(机制已实现,当前数值为随手定的测试值)。
 - 准心是固定尺寸的原生"+",未换成贴图资产、未跟随`baseSpread`动态张开。随机散射机制在(`baseSpread`半角圆锥)，Basic里手枪/步枪的`baseSpread`目前都设成0(没有散射)。
 - 武器模型的朝向/枪口位置/背枪位置都是大概值，在`UForeverWeaponVisualComponent`的属性里调，见该文档。
+
+## 死亡不再是单向状态
+`Citizen::IsDead()`现在由独立字段`isDead`决定，`npc_revive`可以复活，见`Core/populace/citizen.md`。测试：`Resource/Story/schedule_empty.script`里`self_decease`创建`mode:"real"`的4秒计时器，`self_revive`在`time_up`时复活并teleport回家。

@@ -50,3 +50,6 @@
 - `Counter`目前仍然没有被任何domain实际使用——`Time`已经被`Player`(游戏时钟)、
   `Traffic`(`Route::Update`的时刻表)等系统广泛使用，`ValueType`被`story/condition.h`
   的脚本表达式引擎使用，只有`Counter`还停留在"可编译但没有调用方"的状态。
+
+## Time解析扩展
+中文格式年份允许1~4位，时间部分既可以是`HH:MM:SS`也可以是`H时M分S秒`(如`0年1月1日0时0分4秒`)。

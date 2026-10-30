@@ -147,3 +147,10 @@ milestone超时之类）时再补内容。
 `AForeverFrameworkActor::EnsurePlayerGenerated` 按顺序遍历（后面的覆盖前面的同名设置）。
 `main_story` 仍然只决定主线 Script 用哪个 ScriptMod，不决定读哪些文件。
 
+## 计时器：mode
+`create_timer`的`mode`(表达式，缺省absolute)决定`time`怎么解释：
+- `absolute`：游戏内绝对时刻，必须带年月日(如`"2024-05-01 08:00:00"`)；已经过去则无效(打警告)。只有钟点的写法在这里无效，用`next`。
+- `relative`：游戏内相对时长，从“0年1月1日0时”起算，如`"00:00:04"`、`"0年1月1日0时0分4秒"`=4个游戏秒后。
+- `real`：现实相对时长，写法同relative，按现实秒走(存`StoryTimer::realTime/remaining`，每帧`Story::AdvanceRealTimers(dt)`扣减)。游戏时间约为现实的120倍，几秒的现实延时要用`real`。没有“现实绝对时间”。
+- `next`：游戏内未来某天的某个钟点。日期是相对天数(年月日减0年1月1日，支持`2月10日`=40天、`1月40日`=39天，日期不限范围)，时间是绝对钟点；钟点早于当前钟点则天数再加一。例：现在10点，`1日8点`=明天8点，`2日8点`=后天8点，`1日11点`=当天11点；只写钟点`"08:00:00"`=下一次8点。
+relative/real/next的time由`ParseTimerOffset`解析(`[Y年]M月D日[ H:M:S或H时M分S秒]`、`YYYY-MM-DD[ H:M:S]`、`H:M:S`)，不走`Time`类(它会校验日期范围)。存档计时器记录追加`U8 realTime`+`F32 remaining`。

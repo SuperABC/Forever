@@ -100,3 +100,6 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 
 ## 载具/公交相关解析
 `BuildEvent`新增`enter_stop`/`leave_stop`(stop)、`enter_vehicle`/`leave_vehicle`(vehicle/mode)；`BuildChanges`新增`board_vehicle`、`leave_vehicle`(原先类已声明未解析)、`force_leave`。详见`Dependence/story/event.md`/`change.md`。
+
+## 本次新增解析
+`npc_revive`(name必填，health可选，缺省满血)；`create_timer`新增可选`mode`(absolute/relative/real/next)；`citizen_decease`触发条件见`Dependence/story/event.md`。

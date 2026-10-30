@@ -5,6 +5,7 @@
 
 #include "populace/scheduler.h"
 #include "populace/experience.h"
+#include "map/room.h"
 
 #include <algorithm>
 
@@ -225,7 +226,13 @@ void Citizen::SetBuilding(Building* value) { building = value; }
 Room* Citizen::GetRoom() const { return room; }
 void Citizen::SetRoom(Room* value) { room = value; }
 Room* Citizen::GetCurrentRoom() const { return currentRoom; }
-void Citizen::SetCurrentRoom(Room* value) { currentRoom = value; }
+void Citizen::SetCurrentRoom(Room* value) {
+	// 房间的occupants跟着currentRoom走(旧房间移出、新房间加入)。读档直接赋值字段，不经过这里。
+	if (currentRoom == value) return;
+	if (currentRoom) currentRoom->RemoveOccupant(this);
+	currentRoom = value;
+	if (currentRoom && !isDead) currentRoom->AddOccupant(this);
+}
 
 bool Citizen::HasPosition() const { return hasPosition; }
 
@@ -258,13 +265,29 @@ float Citizen::GetHealth() const { return health; }
 float Citizen::GetMaxHealth() const { return maxHealth; }
 
 float Citizen::TakeDamage(float amount) {
+	if (isDead) return 0.f;
 	health = max(0.f, health - amount);
+	if (health <= 0.f) Die();
 	return health;
 }
 
 float Citizen::Heal(float amount) {
+	if (isDead) return 0.f;
 	health = min(maxHealth, health + amount);
 	return health;
 }
 
-bool Citizen::IsDead() const { return health <= 0.f; }
+bool Citizen::IsDead() const { return isDead; }
+
+void Citizen::Die() {
+	if (isDead) return;
+	isDead = true;
+	health = 0.f;
+	SetCurrentRoom(nullptr);
+	ClearPosition();
+}
+
+void Citizen::Revive(float newHealth) {
+	isDead = false;
+	health = (newHealth <= 0.f || newHealth > maxHealth) ? maxHealth : newHealth;
+}

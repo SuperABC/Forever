@@ -95,10 +95,38 @@ void Story::CreateTimer(const string& name, const Time& target, const string& ow
 	for (StoryTimer& timer : timers) {
 		if (timer.name == name && timer.ownerKey == ownerKey) {
 			timer.target = target;
+			timer.realTime = false;
+			timer.remaining = 0.0;
 			return;
 		}
 	}
-	timers.push_back({ target, name, ownerKey });
+	StoryTimer timer;
+	timer.target = target;
+	timer.name = name;
+	timer.ownerKey = ownerKey;
+	timers.push_back(timer);
+}
+
+void Story::CreateRealTimer(const string& name, double seconds, const string& ownerKey) {
+	for (StoryTimer& timer : timers) {
+		if (timer.name == name && timer.ownerKey == ownerKey) {
+			timer.realTime = true;
+			timer.remaining = seconds;
+			return;
+		}
+	}
+	StoryTimer timer;
+	timer.name = name;
+	timer.ownerKey = ownerKey;
+	timer.realTime = true;
+	timer.remaining = seconds;
+	timers.push_back(timer);
+}
+
+void Story::AdvanceRealTimers(double deltaSeconds) {
+	for (StoryTimer& timer : timers) {
+		if (timer.realTime) timer.remaining -= deltaSeconds;
+	}
 }
 
 void Story::RemoveTimer(const string& name, const string& ownerKey) {
@@ -110,7 +138,7 @@ void Story::RemoveTimer(const string& name, const string& ownerKey) {
 vector<StoryTimer> Story::PopExpiredTimers(const Time& now) {
 	vector<StoryTimer> expired;
 	for (auto it = timers.begin(); it != timers.end();) {
-		if (it->target <= now) {
+		if (it->realTime ? it->remaining <= 0.0 : it->target <= now) {
 			expired.push_back(*it);
 			it = timers.erase(it);
 		}
@@ -118,7 +146,11 @@ vector<StoryTimer> Story::PopExpiredTimers(const Time& now) {
 			++it;
 		}
 	}
-	sort(expired.begin(), expired.end(), [](const StoryTimer& a, const StoryTimer& b) { return a.target < b.target; });
+	// 游戏时间计时器按到时时刻先后，现实时间计时器排在后面按剩余时间(越负越早到)。
+	stable_sort(expired.begin(), expired.end(), [](const StoryTimer& a, const StoryTimer& b) {
+		if (a.realTime != b.realTime) return !a.realTime;
+		return a.realTime ? a.remaining < b.remaining : a.target < b.target;
+		});
 	return expired;
 }
 

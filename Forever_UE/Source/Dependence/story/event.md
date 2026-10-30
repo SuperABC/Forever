@@ -46,7 +46,7 @@
 
 - `game_start`
 - `option_dialog`(name/option)
-- `citizen_decease`(name/reason，留空=不限)：`CitizenDeceaseEvent::Match`按name/reason过滤(都是表达式)，和`OptionDialogEvent::Match`同一个写法。市民死亡时由`UForeverStoryFrameworkComponent::BroadcastCitizenDecease`广播给主线脚本和死者自己的Scheduler脚本(按name找，和`option_dialog`同一个模式)。
+- `citizen_decease`(name/reason/killer/weapon/part，留空=不限)：`CitizenDeceaseEvent::Match`按name/reason过滤(都是表达式)，和`OptionDialogEvent::Match`同一个写法。市民死亡时由`UForeverStoryFrameworkComponent::BroadcastCitizenDecease`广播给主线脚本和死者自己的Scheduler脚本(按name找，和`option_dialog`同一个模式)。
 - 事件字段：`option_dialog`在脚本里可以用`local.name`/`local.option`读到被点的对象名和选项文字，`citizen_decease`可以用`local.name`/`local.reason`读到死者姓名和死因(`GetLocalValue`)。
 - `global_message`(message，留空=收到任何全局消息都触发)：只由`global_message`这个Change发出——执行时求出消息文本，`UForeverStoryFrameworkComponent::BroadcastGlobalMessage`广播给所有挂了Script的东西(主线/组织/岗位/市民Scheduler/车辆/门，和`game_start`同一个范围)。脚本里用`local.message`读消息内容。收到消息的里程碑可以再发全局消息，嵌套深度超过8层时丢弃并打警告，防止互相触发无限递归。
 - `speaking_finish`(label，留空=任何带label的台词播完都触发)：对话列表里某句台词可以写`"label"`(表达式)，玩家推进离开这一句时`UForeverStoryFrameworkComponent::AdvanceDialog`调`BroadcastSpeakingFinish`，广播给所有挂了Script的东西(含主线，和`global_message`同一个范围)。脚本里用`local.label`读label。沿用老工程用法：剧情对话最后一句写label，下一个里程碑用`speaking_finish`接上。
@@ -54,3 +54,14 @@
 - `enter_zone`/`leave_zone`(zone)、`enter_building`/`leave_building`(zone/building)、`enter_room`/`leave_room`(zone/building/room)：只认玩家本人(当前操控的Pawn，开车时就是车)进出园区/建筑/房间的Trigger碰撞盒，字段都是表达式、留空不限。字段值是`Zone/Building/Room::GetName()`，不在园区里的建筑zone为空。由`UForeverStoryFrameworkComponent::BroadcastPlayerLocation`广播给所有挂了Script的东西(含主线)，同时更新系统变量`system.player.zone`/`system.player.building`/`system.player.room`(离开时只有当前值还是这个名字才清空)。脚本里用`local.zone`/`local.building`/`local.room`读名字。园区碰撞盒只有带内部建筑的园区才有。
 - `enter_stop`/`leave_stop`(stop，留空=不限站点)：公交(公共交通载具)停稳进站/启动离站。Core的`Route::Update`检测停靠边沿产出队列，`AForeverFrameworkActor::Tick`在`traffic->Tick`之后取走(`Traffic::ConsumeStopEvents`)，**只发给这辆载具自己的Script**(`UForeverStoryFrameworkComponent::BroadcastToVehicle`)。读档后第一次Update不补发(`Traffic::SilenceInitialStopEvents`)。脚本里用`local.stop`读站点名。见`Resource/Story/vehicle_bus.script`。
 - `enter_vehicle`/`leave_vehicle`事件(vehicle/mode，留空=不限；mode是`"drive"`驾驶/`"ride"`搭乘，注意作为表达式要写成`"\"ride\""`)：玩家进入/离开载具，只发给被进出的那辆载具自己的Script；读档恢复不发。脚本里用`local.vehicle`/`local.mode`读。**注意和同名的`enter_vehicle`/`leave_vehicle` Change是两套**——事件是"发生了"的通知，Change是"去做"的指令，互不冲突，`BuildEvent`/`BuildChanges`各自识别。
+
+### citizen_decease的击杀信息(武器击杀)
+脚本里除`local.name`/`local.reason`外还能读：
+- `local.killer`：凶手姓名(开枪的市民；不是市民则为空串)
+- `local.weapon`：武器种类(`Weapon::GetType()`)
+- `local.part`：命中部位`head`/`body`/`legs`——射线只打得到胶囊体，按命中点在胶囊体上的相对高度粗分(>=80%头，40%~80%躯干，其余腿)
+- `local.damage`：致死那一发的伤害值(数值)
+- `local.visible`：凶手能否看到死者(布尔)——连接死者和凶手中心点的线段用`ECC_Visibility`检测，两人自己忽略，被墙等挡住为假
+- `local.location`：死亡地址，按房间地址 > 建筑地址 > 园区地址 > 地块(block)地址 > `"x,y,z"`(地图单位，两位小数)的优先级。房间/建筑/园区用它们已有的触发盒做小球重叠反查(`AForeverFrameworkActor::DescribeLocation`)，地块用顶层Lot的旋转矩形做几何包含。
+触发条件里killer/weapon/part也是表达式、留空不限；damage/visible/location只能在里程碑的changes/dialogs/condition里通过`$$local.xxx`读。目前只有武器击杀带这些信息(此时`reason`固定为`"player"`，武器种类看`weapon`)，其它死因这几个字段为空/0/假。
+

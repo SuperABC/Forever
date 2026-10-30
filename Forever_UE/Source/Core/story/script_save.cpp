@@ -157,6 +157,8 @@ void ScriptSaveCodec::Save(const SaveWorld& world, SaveArchive& archive) {
 			const Time& t = timer.target;
 			w.I32(t.GetYear()); w.I32(t.GetMonth()); w.I32(t.GetDay());
 			w.I32(t.GetHour()); w.I32(t.GetMinute()); w.I32(t.GetSecond()); w.I32(t.GetMillisecond());
+			w.U8(timer.realTime ? 1 : 0);
+			w.F32(static_cast<float>(timer.remaining));
 		}
 	}
 
@@ -230,6 +232,8 @@ bool ScriptSaveCodec::Load(const SaveArchive& archive, Map* map, Populace* popul
 			timer.ownerKey = r.Str();
 			int year = r.I32(), month = r.I32(), day = r.I32();
 			int hour = r.I32(), minute = r.I32(), second = r.I32(), millisecond = r.I32();
+			timer.realTime = r.U8() != 0;
+			timer.remaining = r.F32();
 			if (r.Failed()) break;
 			timer.target = Time(year, month, day, hour, minute, second, millisecond);
 			story->timers.push_back(timer);

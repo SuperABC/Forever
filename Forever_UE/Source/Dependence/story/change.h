@@ -805,6 +805,32 @@ private:
 
 };
 
+// 复活市民：isDead清除、血量恢复。复活后没有房间也没有位置，需要后续npc_teleport把他放到某个房间。
+class NPCReviveChange : public Change {
+public:
+	NPCReviveChange();
+
+	/*
+	* @name: 市民姓名(表达式)
+	* @health: 复活后的血量(表达式，留空=满血)
+	*/
+	NPCReviveChange(std::string name, std::string health);
+
+	virtual ~NPCReviveChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetName(std::string name);
+	const std::string& GetName() const;
+
+	void SetHealth(std::string health);
+	const std::string& GetHealth() const;
+
+private:
+	std::string name;
+	std::string health;
+};
+
 // 瞬移市民
 class NPCTeleportChange : public Change {
 public:
@@ -1378,7 +1404,8 @@ public:
 	* @name, time: 计时器名称与目标时刻
 	* @category, label: 所属脚本类型与实体名称
 	*/
-	CreateTimerChange(std::string name, std::string time, std::string category, std::string label);
+	CreateTimerChange(std::string name, std::string time, std::string category, std::string label,
+		std::string mode = std::string());
 
 	/*
 	* 析构创建计时器变化
@@ -1434,12 +1461,26 @@ public:
 	*/
 	const std::string& GetLabel() const;
 
+	/*
+	* time的解释方式(表达式)，留空=absolute：
+	*   "absolute"：游戏内绝对时刻(带年月日，如"2024-05-01 08:00:00")，已经过去则无效；
+	*   "relative"：游戏内相对时长(从0年1月1日0时起算，如"00:00:04"=4个游戏秒后)；
+	*   "real"：现实相对时长，写法同relative，按现实时间走；
+	*   "next"：游戏内未来某天的某个钟点——日期部分是相对天数(年月日减0年1月1日，支持"2月10日"、
+	*           "1月40日"写法)，时间部分是绝对钟点，钟点早于当前钟点则天数再加一。
+	*/
+	void SetMode(std::string mode);
+	const std::string& GetMode() const;
+
 private:
 	// 计时器名称
 	std::string name;
 
 	// 目标时刻
 	std::string time;
+
+	// time的解释方式
+	std::string mode;
 
 	// 所属脚本类型
 	std::string category;

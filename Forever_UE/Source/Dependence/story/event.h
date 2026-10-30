@@ -910,6 +910,18 @@ public:
 	CitizenDeceaseEvent(std::string name, std::string reason);
 
 	/*
+	* 构造带完整击杀信息的市民死亡事件(武器击杀)
+	* @killer: 凶手姓名(开枪的市民，不是市民时为空)
+	* @weapon: 武器种类(Weapon::GetType())
+	* @part: 命中部位："head"头/"body"躯干/"legs"腿(按命中点在胶囊体上的高度粗分)
+	* @damage: 致死那一发的伤害值
+	* @visible: 凶手是否能看到死者(连接死者和凶手中心点的线段没被遮挡物挡住)
+	* @location: 死亡地址：房间地址 > 建筑地址 > 园区地址 > 地块(block)地址 > "x,y,z"三维坐标(地图单位)
+	*/
+	CitizenDeceaseEvent(std::string name, std::string reason, std::string killer, std::string weapon,
+		std::string part, double damage, bool visible, std::string location);
+
+	/*
 	* 析构市民死亡事件
 	*/
 	virtual ~CitizenDeceaseEvent();
@@ -919,12 +931,13 @@ public:
 	*/
 	virtual const std::string& GetType() const override;
 	/*
-	* 匹配：作为脚本里的触发条件时，name/reason是表达式，留空表示不限(任何市民/任何死因)，
-	* 和OptionDialogEvent::Match同一个写法
+	* 匹配：作为脚本里的触发条件时，name/reason/killer/weapon/part是表达式，留空表示不限
+	* (任何市民/任何死因/任何凶手/任何武器/任何部位)，和OptionDialogEvent::Match同一个写法
 	*/
 	virtual bool Match(Event* e, const ScriptContext& context) override;
 	/*
-	* 脚本里用local.<字段>读这个事件的字段(local.name/local.reason)，没有这个字段返回{false, ...}
+	* 脚本里用local.<字段>读这个事件的字段(local.name/reason/killer/weapon/part/damage/visible/location)，
+	* 没有这个字段返回{false, ...}
 	*/
 	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
@@ -950,12 +963,34 @@ public:
 	*/
 	const std::string& GetReason() const;
 
+	void SetKiller(std::string killer);
+	const std::string& GetKiller() const;
+	void SetWeapon(std::string weapon);
+	const std::string& GetWeapon() const;
+	void SetPart(std::string part);
+	const std::string& GetPart() const;
+	void SetDamage(double damage);
+	double GetDamage() const;
+	void SetVisible(bool visible);
+	bool GetVisible() const;
+	void SetLocation(std::string location);
+	const std::string& GetLocation() const;
+
 private:
 	// 市民姓名
 	std::string name;
 
 	// 死亡原因
 	std::string reason;
+
+	// 击杀信息(武器击杀才有，其它死因为空/0)。killer/weapon/part作为触发条件时是表达式，
+	// 其余三个只在运行时事件里有意义。
+	std::string killer;
+	std::string weapon;
+	std::string part;
+	double damage = 0.0;
+	bool visible = false;
+	std::string location;
 };
 
 // 受伤

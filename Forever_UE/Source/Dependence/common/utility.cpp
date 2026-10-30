@@ -118,7 +118,8 @@ Time::Time(string time) :
 	}
 
 	// 尝试匹配常见的中文格式: YYYY年MM月DD日 HH:MM:SS
-	regex chinese_pattern(R"(^(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s+(\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?)?$)");
+	// 时间部分既可以是 HH:MM:SS 也可以是 H时M分S秒；年份1~4位(0年1月1日0时0分4秒 表示相对时长，见create_timer)。
+	regex chinese_pattern(R"(^(\d{1,4})年(\d{1,2})月(\d{1,2})日(?:\s*(\d{1,2})(?::|时)(\d{1,2})(?::|分)(\d{1,2})(?:秒)?(?:\.(\d{1,3}))?)?$)");
 
 	if (regex_match(time, match, chinese_pattern)) {
 		year = stoi(match[1]);

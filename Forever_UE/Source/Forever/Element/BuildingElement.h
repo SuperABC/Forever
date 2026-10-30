@@ -78,6 +78,10 @@ public:
 		return found ? *found : nullptr;
 	}
 
+	// 这个碰撞盒是不是本栋楼整体的进入/离开检测盒，是则返回这栋楼，否则nullptr。
+	// 供AForeverFrameworkActor::DescribeLocation按世界坐标反查所在建筑用。
+	Building* FindBuildingOfBox(UPrimitiveComponent* box) const;
+
 private:
 	enum class ELod : uint8 { Near, Far };
 

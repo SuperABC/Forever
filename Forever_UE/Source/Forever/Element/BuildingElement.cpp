@@ -276,6 +276,10 @@ void ABuildingElement::Init(Building* inBuilding, UForeverBuildingFrameworkCompo
 
 TMap<const Building*, TWeakObjectPtr<ABuildingElement>> ABuildingElement::elementsByBuilding;
 
+Building* ABuildingElement::FindBuildingOfBox(UPrimitiveComponent* box) const {
+	return (box && box == collisionBox.Get()) ? building : nullptr;
+}
+
 ABuildingElement* ABuildingElement::FindForBuilding(const Building* inBuilding) {
 	const TWeakObjectPtr<ABuildingElement>* found = elementsByBuilding.Find(inBuilding);
 	return found ? found->Get() : nullptr;

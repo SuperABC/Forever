@@ -104,3 +104,9 @@
 - 通用的自由游走AI——有Job的市民已经能按调度（上下班）走动/寻路（见`job.md`/
   `Source/Forever/Element/CitizenElement.md`"WalkTo"一节），但没有Job、或者Job没有
   产生调度的市民仍然是"站在分配到的房间里的固定点"，没有工作驱动之外的自主移动。
+
+## 死亡与复活
+- `isDead`是独立字段(不再由`health<=0`推出)，存档在`maxHealth`之后多存一个U8。`TakeDamage`把血量扣到0时调用`Die()`；`Heal`对死人无效。
+- `Die()`：`isDead`置位、血量归零，从当前房间`occupants`移除并清空`currentRoom`/位置；**保留“家”**(`room`/tenant/building/zone/lot)。
+- `Revive(health=-1)`：清除`isDead`，血量恢复(<=0或超过`maxHealth`取满血)；**不设房间/位置**，要后续`npc_teleport`(destination可写`"home"`)才会在场景里出现。脚本入口是`npc_revive` Change。
+- `SetCurrentRoom`现在同步维护房间`occupants`(旧房间移出、新房间加入；死人不加入)，`Map::SettleCitizen`不再单独`AddOccupant`。读档直接赋值字段，不经过它。

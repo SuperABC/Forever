@@ -68,4 +68,8 @@ private:
 	// 碰撞盒 -> zone->GetName()(UTF-8)，进出园区事件用。烘焙好的快照，Overlap回调绝不解引用
 	// Zone*/Map*，和Building同一套安全原则。
 	TMap<UPrimitiveComponent*, std::string> zoneBoxNames;
+
+public:
+	// 这个碰撞盒是不是某个园区的检测盒，是则返回园区名，否则nullptr。供DescribeLocation按世界坐标反查用。
+	const std::string* FindZoneNameOfBox(UPrimitiveComponent* box) const { return zoneBoxNames.Find(box); }
 };

@@ -35,6 +35,12 @@
 #include "Element/VehicleElement.h"
 #include "Element/TransitVehicleElement.h"
 #include "Element/DoorComponent.h"
+#include "Framework/ForeverZoneFrameworkComponent.h"
+#include "map/building.h"
+#include "map/zone.h"
+#include "Engine/World.h"
+#include "Engine/OverlapResult.h"
+#include "CollisionQueryParams.h"
 #include "Element/BuildingElement.h"
 #include "map/cabin.h"
 #include "map/door.h"
@@ -406,12 +412,19 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		std::string destination = ToString(EvaluateExpression(teleport->GetDestination(), context));
 		Citizen* citizen = populace ? populace->FindCitizenByName(name) : nullptr;
 		Room* dest = map ? map->LocateRoom(destination) : nullptr;
+		// destination写"home"=这个市民的家(复活后回家用)。
+		if (!dest && citizen && destination == "home") dest = citizen->GetRoom();
 		if (!citizen || !dest) {
 			UE_LOG(LogTemp, Warning, TEXT("npc_teleport: %s not found (name=\"%s\", destination=\"%s\")."),
 				citizen ? TEXT("destination room") : TEXT("citizen"), UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(destination.c_str()));
 			return;
 		}
 		if (populaceFramework) populaceFramework->TeleportCitizen(citizen, dest);
+		return;
+	}
+
+	if (auto* reviveNpc = dynamic_cast<const NPCReviveChange*>(change)) {
+		ApplyReviveNpc(reviveNpc, context);
 		return;
 	}
 
@@ -479,6 +492,26 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	}
 }
 
+void AForeverFrameworkActor::ApplyReviveNpc(const NPCReviveChange* change, const ScriptContext& context) {
+	if (!populace || !change) return;
+	std::string name = ToString(EvaluateExpression(change->GetName(), context));
+	Citizen* citizen = populace->FindCitizenByName(name);
+	if (!citizen) {
+		UE_LOG(LogTemp, Warning, TEXT("npc_revive: citizen \"%s\" not found."), UTF8_TO_TCHAR(name.c_str()));
+		return;
+	}
+	if (!citizen->IsDead()) {
+		UE_LOG(LogTemp, Warning, TEXT("npc_revive: citizen \"%s\" is not dead, skipped."), UTF8_TO_TCHAR(name.c_str()));
+		return;
+	}
+	float health = -1.f;
+	if (!change->GetHealth().empty()) {
+		health = static_cast<float>(ToDouble(EvaluateExpression(change->GetHealth(), context)));
+	}
+	// 复活后没有房间也没有位置：要等npc_teleport(destination可写"home")把他放进某个房间才会出现。
+	citizen->Revive(health);
+}
+
 void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const ScriptContext& context) {
 	if (!populace || !change) return;
 	std::string name = ToString(EvaluateExpression(change->GetName(), context));
@@ -530,6 +563,65 @@ void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const S
 	}
 
 	if (populaceFramework) populaceFramework->AddCitizen(citizen);
+}
+
+std::string AForeverFrameworkActor::DescribeLocation(const FVector& worldLocation) const {
+	// 地图单位=1000个UE单位，和各Framework组件的WORLD_SCALE同一个值。
+	constexpr float kWorldScale = 1000.f;
+
+	// 房间/建筑/园区：用它们已经建好的触发盒反查——小球重叠查询，Trigger档案对所有通道都是Overlap。
+	Room* room = nullptr;
+	Building* building = nullptr;
+	const std::string* zoneName = nullptr;
+	TArray<FOverlapResult> overlaps;
+	if (GetWorld()->OverlapMultiByChannel(overlaps, worldLocation, FQuat::Identity, ECC_Pawn,
+		FCollisionShape::MakeSphere(20.f))) {
+		for (const FOverlapResult& overlap : overlaps) {
+			UPrimitiveComponent* component = overlap.GetComponent();
+			if (!component) continue;
+			if (ABuildingElement* buildingElement = Cast<ABuildingElement>(component->GetOwner())) {
+				if (!room) room = buildingElement->FindRoomOfBox(component);
+				if (!building) building = buildingElement->FindBuildingOfBox(component);
+			}
+			else if (zoneFramework && !zoneName) {
+				zoneName = zoneFramework->FindZoneNameOfBox(component);
+			}
+		}
+	}
+	if (room) {
+		std::string address = room->GetAddress();
+		if (!address.empty()) return address;
+	}
+	if (building) {
+		std::string address = building->GetAddress();
+		if (!address.empty()) return address;
+	}
+	if (zoneName && map) {
+		if (Zone* zone = map->GetZone(*zoneName)) {
+			std::string address = zone->GetAddress();
+			if (!address.empty()) return address;
+		}
+	}
+
+	// 地块(block=顶层Lot)：点是否落在地块的旋转矩形里(Quad的位置是中心，旋转是弧度)。
+	if (map) {
+		float x = worldLocation.X / kWorldScale, y = worldLocation.Y / kWorldScale;
+		for (Lot* lot : map->GetLots()) {
+			if (!lot) continue;
+			float dx = x - lot->GetPosX(), dy = y - lot->GetPosY();
+			float c = FMath::Cos(lot->GetRotation()), s = FMath::Sin(lot->GetRotation());
+			float localX = dx * c + dy * s, localY = -dx * s + dy * c;
+			if (FMath::Abs(localX) <= lot->GetSizeX() * 0.5f && FMath::Abs(localY) <= lot->GetSizeY() * 0.5f) {
+				std::string address = lot->GetAddress();
+				if (!address.empty()) return address;
+				break;
+			}
+		}
+	}
+
+	FString coordinates = FString::Printf(TEXT("%.2f,%.2f,%.2f"),
+		worldLocation.X / kWorldScale, worldLocation.Y / kWorldScale, worldLocation.Z / kWorldScale);
+	return TCHAR_TO_UTF8(*coordinates);
 }
 
 void AForeverFrameworkActor::RefreshInteractOptions(const std::string& name) {
@@ -656,7 +748,7 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	if (story) story->Tick(*player->GetTime(), crossedDay, &postImplement);
 
 	// 到时的计时器给各自的归属脚本发time_up。
-	if (storyFramework) storyFramework->FireExpiredTimers();
+	if (storyFramework) storyFramework->FireExpiredTimers(DeltaTime);
 }
 
 namespace {

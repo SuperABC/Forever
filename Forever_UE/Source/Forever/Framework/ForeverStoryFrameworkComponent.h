@@ -27,6 +27,7 @@ struct ScriptContext;
 // ApplyChange"这一步。详见ForeverStoryFrameworkComponent.md。
 class PostImplement;
 class Event;
+class CitizenDeceaseEvent;
 
 UCLASS()
 class FOREVER_API UForeverStoryFrameworkComponent : public UForeverFrameworkComponent
@@ -69,8 +70,11 @@ public:
 	// "任意Event广播给任意Script"机制——就是照抄OptionDialog的写法单独写一次，见
 	// Source/Forever/Player/ForeverWeaponComponent.md"为什么不做通用广播机制"一节。
 	// @name: 死者姓名字面量
-	// @reason: 死亡原因字面量（这次固定传"gunshot"）
+	// @reason: 死亡原因字面量（玩家用武器击杀时是"player"，武器种类见CitizenDeceaseEvent::weapon）
 	void BroadcastCitizenDecease(const FString& name, const FString& reason);
+
+	// 同上，但直接发一个已经填好击杀信息(凶手/武器/部位/伤害/可见/死亡地址)的事件，武器击杀用。
+	void BroadcastCitizenDecease(CitizenDeceaseEvent& event);
 
 	// 执行global_message这个Change时调用(AForeverFrameworkActor::ApplyChange)：构造一个
 	// GlobalMessageEvent，广播给所有挂了Script的东西——主线、每个组织、每个岗位、每个市民的
@@ -96,7 +100,7 @@ public:
 	// ApplyChange转发到这里，FireExpiredTimers每帧在Story::Tick之后调用。
 	void ApplyCreateTimer(const CreateTimerChange* change, const ScriptContext& context);
 	void ApplyRemoveTimer(const RemoveTimerChange* change, const ScriptContext& context);
-	void FireExpiredTimers();
+	void FireExpiredTimers(float deltaSeconds);
 
 	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。不在
 	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。这次改成

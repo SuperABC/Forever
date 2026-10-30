@@ -319,7 +319,9 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 		}
 		else if (type == "citizen_decease") {
 			// name/reason都可以省略(留空=不限)，见CitizenDeceaseEvent::Match。
-			event = new CitizenDeceaseEvent(obj["name"].AsString(), obj["reason"].AsString());
+			// killer/weapon/part同样可省略(留空=不限)；damage/visible/location只在运行时事件里有，不能做过滤。
+			event = new CitizenDeceaseEvent(obj["name"].AsString(), obj["reason"].AsString(), obj["killer"].AsString(),
+				obj["weapon"].AsString(), obj["part"].AsString(), 0.0, false, std::string());
 		}
 		else {
 			// 其余事件类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
@@ -427,6 +429,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			for (Change* child : BuildChanges(obj["do"])) nested.push_back(child);
 			change = new ForRangeChange(var.AsString(), from.AsString(), to.AsString(), obj["step"].AsString(), move(nested));
 		}
+		else if (type == "npc_revive") {
+			auto name = obj["name"];
+			if (name.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name for npc_revive change.\n");
+			}
+			// health可以省略(=满血)。
+			change = new NPCReviveChange(name.AsString(), obj["health"].AsString());
+		}
 		else if (type == "npc_teleport") {
 			auto name = obj["name"];
 			auto destination = obj["destination"];
@@ -456,7 +466,9 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or time for create_timer change.\n");
 			}
 			// category/label可以省略：省略时计时器归创建它的脚本自己，见story.md"计时器"一节。
-			change = new CreateTimerChange(name.AsString(), time.AsString(), obj["category"].AsString(), obj["label"].AsString());
+			// mode省略=absolute，可选absolute/relative/real/next，见CreateTimerChange::SetMode。
+			change = new CreateTimerChange(name.AsString(), time.AsString(), obj["category"].AsString(), obj["label"].AsString(),
+				obj["mode"].AsString());
 		}
 		else if (type == "remove_timer") {
 			auto name = obj["name"];

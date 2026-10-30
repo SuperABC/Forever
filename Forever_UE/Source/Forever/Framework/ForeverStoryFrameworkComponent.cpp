@@ -18,6 +18,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 
+#include <regex>
+
 #include "story/story.h"
 #include "story/script.h"
 #include "story/dialog.h"
@@ -272,6 +274,11 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 }
 
 void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& name, const FString& reason) {
+	CitizenDeceaseEvent event(string(TCHAR_TO_UTF8(*name)), string(TCHAR_TO_UTF8(*reason)));
+	BroadcastCitizenDecease(event);
+}
+
+void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(CitizenDeceaseEvent& event) {
 	if (!story || !GEngine) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -285,8 +292,7 @@ void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& nam
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
 
-	string nameUtf8 = TCHAR_TO_UTF8(*name);
-	CitizenDeceaseEvent event(nameUtf8, string(TCHAR_TO_UTF8(*reason)));
+	const string nameUtf8 = event.GetName();
 
 	auto matchOne = [&](Script* script) {
 		if (!script) return;
@@ -584,6 +590,63 @@ const Container* UForeverStoryFrameworkComponent::ResolveTimerOwner(const string
 	return nullptr;
 }
 
+namespace {
+	// create_timer的relative/real/next模式把time解析成“天数+钟点”：日期部分是相对天数(年月日减0年1月1日，
+	// 日期不限范围，如1月40日=39天)。支持：
+	//   "[Y年]M月D日[ H:M:S 或 H时M分S秒]"、"YYYY-MM-DD[ H:M:S]"、"H:M:S"(只有钟点，天数0)。
+	// 不用Time类解析：Time会校验日期范围(1月40日非法)。
+	struct TimerOffset {
+		int days = 0;
+		int hour = 0;
+		int minute = 0;
+		int second = 0;
+		int millisecond = 0;
+	};
+
+	bool ParseTimerOffset(const string& text, TimerOffset& out) {
+		smatch match;
+		int year = 0, month = 1, day = 1;
+		auto readTime = [&](int firstGroup) {
+			if (match[firstGroup].matched) {
+				out.hour = stoi(match[firstGroup]);
+				out.minute = stoi(match[firstGroup + 1]);
+				out.second = stoi(match[firstGroup + 2]);
+			}
+		};
+
+		static const regex chinese(R"(^(?:(\d{1,4})年)?(\d{1,2})月(\d{1,4})日(?:\s*(\d{1,2})(?::|时)(\d{1,2})(?::|分)(\d{1,2})(?:秒)?)?$)");
+		static const regex iso(R"(^(\d{1,4})-(\d{1,2})-(\d{1,4})(?:[T ](\d{1,2}):(\d{1,2}):(\d{1,2}))?$)");
+		static const regex clockOnly(R"(^(\d{1,2}):(\d{1,2}):(\d{1,2})$)");
+
+		if (regex_match(text, match, chinese)) {
+			year = match[1].matched ? stoi(match[1]) : 0;
+			month = stoi(match[2]);
+			day = stoi(match[3]);
+			readTime(4);
+		}
+		else if (regex_match(text, match, iso)) {
+			year = stoi(match[1]);
+			month = stoi(match[2]);
+			day = stoi(match[3]);
+			readTime(4);
+		}
+		else if (regex_match(text, match, clockOnly)) {
+			readTime(1);
+			return true;
+		}
+		else {
+			return false;
+		}
+
+		if (month < 1 || month > 12 || day < 1) return false;
+		// 年月日减0年1月1日：整年 + 整月 + (日-1)。
+		int days = Time::DaysBetweenYears(0, year);
+		for (int m = 1; m < month; m++) days += Time::DaysInMonth(year, m);
+		out.days = days + (day - 1);
+		return true;
+	}
+}
+
 void UForeverStoryFrameworkComponent::ApplyCreateTimer(const CreateTimerChange* change, const ScriptContext& context) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Player* player = framework ? framework->GetPlayer() : nullptr;
@@ -600,25 +663,73 @@ void UForeverStoryFrameworkComponent::ApplyCreateTimer(const CreateTimerChange* 
 		return;
 	}
 
-	// time两种写法：带日期(如"2024-05-01 08:00:00")是绝对时刻；只有时间("08:00:00")是下一次到这个
-	// 钟点——今天还没过就是今天，已经过了(含正好等于现在)就是明天，和老工程一致。
-	Time parsed;
-	try {
-		parsed = Time(timeText);
-	}
-	catch (const ExceptionBase&) {
-		UE_LOG(LogTemp, Warning, TEXT("create_timer \"%s\": cannot parse time \"%s\"."),
-			UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(timeText.c_str()));
+	// mode决定time怎么解释，见CreateTimerChange::SetMode：absolute(默认)/relative/real/next。
+	string mode = change->GetMode().empty() ? string("absolute") : ToString(EvaluateExpression(change->GetMode(), context));
+	const Time& now = *player->GetTime();
+
+	auto warn = [&](const char* reason) {
+		UE_LOG(LogTemp, Warning, TEXT("create_timer \"%s\" (mode=%s, time=\"%s\"): %s"),
+			UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(mode.c_str()), UTF8_TO_TCHAR(timeText.c_str()), UTF8_TO_TCHAR(reason));
+	};
+
+	if (mode == "absolute") {
+		Time parsed;
+		try {
+			parsed = Time(timeText);
+		}
+		catch (const ExceptionBase&) {
+			warn("cannot parse time.");
+			return;
+		}
+		if (!parsed.IsValid()) {
+			warn("absolute needs a full date; use mode \"next\" for a time of day.");
+			return;
+		}
+		if (parsed <= now) {
+			warn("time is in the past, ignored.");
+			return;
+		}
+		story->CreateTimer(name, parsed, ownerKey);
 		return;
 	}
-	const Time& now = *player->GetTime();
-	Time target = parsed;
-	if (!parsed.IsValid()) {
-		target = now;
-		target.SetTime(parsed.GetHour(), parsed.GetMinute(), parsed.GetSecond(), parsed.GetMillisecond());
-		if (target <= now) target.AddDays(1);
+
+	TimerOffset offset;
+	if (!ParseTimerOffset(timeText, offset)) {
+		warn("cannot parse time.");
+		return;
 	}
-	story->CreateTimer(name, target, ownerKey);
+
+	if (mode == "relative") {
+		Time target = now;
+		target.AddDays(offset.days);
+		target.AddHours(offset.hour);
+		target.AddMinutes(offset.minute);
+		target.AddSeconds(offset.second);
+		target.AddMilliseconds(offset.millisecond);
+		story->CreateTimer(name, target, ownerKey);
+	}
+	else if (mode == "real") {
+		double seconds = offset.days * 86400.0 + offset.hour * 3600.0 + offset.minute * 60.0 + offset.second
+			+ offset.millisecond / 1000.0;
+		story->CreateRealTimer(name, seconds, ownerKey);
+	}
+	else if (mode == "next") {
+		// 日期是相对天数，时间是绝对钟点；钟点早于当前钟点就再晚一天。例：现在10点，1日8点=明天8点，
+		// 2日8点=后天8点，1日11点=当天11点。
+		int days = offset.days;
+		auto timeOfDay = [](int h, int m, int s, int ms) { return ((h * 60 + m) * 60 + s) * 1000 + ms; };
+		if (timeOfDay(offset.hour, offset.minute, offset.second, offset.millisecond)
+			< timeOfDay(now.GetHour(), now.GetMinute(), now.GetSecond(), now.GetMillisecond())) {
+			days += 1;
+		}
+		Time target = now;
+		target.SetTime(offset.hour, offset.minute, offset.second, offset.millisecond);
+		target.AddDays(days);
+		story->CreateTimer(name, target, ownerKey);
+	}
+	else {
+		warn("unknown mode (absolute/relative/real/next).");
+	}
 }
 
 void UForeverStoryFrameworkComponent::ApplyRemoveTimer(const RemoveTimerChange* change, const ScriptContext& context) {
@@ -629,10 +740,12 @@ void UForeverStoryFrameworkComponent::ApplyRemoveTimer(const RemoveTimerChange* 
 	story->RemoveTimer(ToString(EvaluateExpression(change->GetName(), context)), ownerKey);
 }
 
-void UForeverStoryFrameworkComponent::FireExpiredTimers() {
+void UForeverStoryFrameworkComponent::FireExpiredTimers(float deltaSeconds) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Player* player = framework ? framework->GetPlayer() : nullptr;
 	if (!story || !player || !player->GetTime()) return;
+
+	story->AdvanceRealTimers(deltaSeconds);
 
 	vector<StoryTimer> expired = story->PopExpiredTimers(*player->GetTime());
 	if (expired.empty()) return;

@@ -646,6 +646,13 @@ CitizenDeceaseEvent::CitizenDeceaseEvent(std::string name, std::string reason) :
 
 }
 
+CitizenDeceaseEvent::CitizenDeceaseEvent(std::string name, std::string reason, std::string killer, std::string weapon,
+	std::string part, double damage, bool visible, std::string location) :
+	name(move(name)), reason(move(reason)), killer(move(killer)), weapon(move(weapon)), part(move(part)),
+	damage(damage), visible(visible), location(move(location)) {
+
+}
+
 CitizenDeceaseEvent::~CitizenDeceaseEvent() {
 
 }
@@ -661,12 +668,21 @@ bool CitizenDeceaseEvent::Match(Event* e, const ScriptContext& context) {
 	auto* other = static_cast<CitizenDeceaseEvent*>(e);
 	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
 	if (!reason.empty() && ToString(EvaluateExpression(reason, context)) != other->reason) return false;
+	if (!killer.empty() && ToString(EvaluateExpression(killer, context)) != other->killer) return false;
+	if (!weapon.empty() && ToString(EvaluateExpression(weapon, context)) != other->weapon) return false;
+	if (!part.empty() && ToString(EvaluateExpression(part, context)) != other->part) return false;
 	return true;
 }
 
 pair<bool, ValueType> CitizenDeceaseEvent::GetLocalValue(const string& key) const {
 	if (key == "name") return { true, ValueType(name) };
 	if (key == "reason") return { true, ValueType(reason) };
+	if (key == "killer") return { true, ValueType(killer) };
+	if (key == "weapon") return { true, ValueType(weapon) };
+	if (key == "part") return { true, ValueType(part) };
+	if (key == "damage") return { true, ValueType(damage) };
+	if (key == "visible") return { true, ValueType(visible) };
+	if (key == "location") return { true, ValueType(location) };
 	return { false, ValueType() };
 }
 
@@ -684,6 +700,54 @@ void CitizenDeceaseEvent::SetReason(std::string reason) {
 
 const std::string& CitizenDeceaseEvent::GetReason() const {
 	return reason;
+}
+
+void CitizenDeceaseEvent::SetKiller(std::string killer) {
+	this->killer = move(killer);
+}
+
+const std::string& CitizenDeceaseEvent::GetKiller() const {
+	return killer;
+}
+
+void CitizenDeceaseEvent::SetWeapon(std::string weapon) {
+	this->weapon = move(weapon);
+}
+
+const std::string& CitizenDeceaseEvent::GetWeapon() const {
+	return weapon;
+}
+
+void CitizenDeceaseEvent::SetPart(std::string part) {
+	this->part = move(part);
+}
+
+const std::string& CitizenDeceaseEvent::GetPart() const {
+	return part;
+}
+
+void CitizenDeceaseEvent::SetDamage(double damage) {
+	this->damage = damage;
+}
+
+double CitizenDeceaseEvent::GetDamage() const {
+	return damage;
+}
+
+void CitizenDeceaseEvent::SetVisible(bool visible) {
+	this->visible = visible;
+}
+
+bool CitizenDeceaseEvent::GetVisible() const {
+	return visible;
+}
+
+void CitizenDeceaseEvent::SetLocation(std::string location) {
+	this->location = move(location);
+}
+
+const std::string& CitizenDeceaseEvent::GetLocation() const {
+	return location;
 }
 
 PlayerInjuredEvent::PlayerInjuredEvent(std::string wound) :

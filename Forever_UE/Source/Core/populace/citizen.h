@@ -273,9 +273,17 @@ public:
 	// 的流式生成会跳过IsDead()的citizen，不会再帮它生成/重新生成ACitizenElement。
 	float GetHealth() const;
 	float GetMaxHealth() const;
+	// 死亡是独立状态(isDead)，不再只靠health推：TakeDamage把血量扣到0时调用Die()。Heal不会让死人
+	// 复活，复活只能走Revive()(npc_revive Change)。
 	float TakeDamage(float amount);
 	float Heal(float amount);
 	bool IsDead() const;
+	// 死亡处理：isDead置位、血量归零；从当前所在房间的occupants移除并清空currentRoom/位置。
+	// 不动“家”(room/tenant/building/zone/lot)——复活后用npc_teleport的"home"回去。
+	void Die();
+	// 复活：isDead清除，血量恢复到health(<=0或超过maxHealth时取maxHealth)。不设房间/位置，
+	// 需要后续npc_teleport把他放到某个房间才会在场景里出现。
+	void Revive(float health = -1.f);
 
 private:
 	std::string name;
@@ -313,4 +321,5 @@ private:
 	// 进入武器系统新增。100点是随手给的默认值，具体数值等PIE里试手感再调。
 	float health = 100.f;
 	float maxHealth = 100.f;
+	bool isDead = false;
 };

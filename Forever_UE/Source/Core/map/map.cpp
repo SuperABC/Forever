@@ -1039,7 +1039,6 @@ void Map::SettleCitizen(Citizen* citizen, Room* room) {
 		citizen->SetLot(building->GetParentLot());
 	}
 	room->AddTenant(citizen);
-	room->AddOccupant(citizen);
 }
 
 void Map::Checkin(const Populace& populace) {

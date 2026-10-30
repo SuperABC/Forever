@@ -489,6 +489,41 @@ const std::string& RemoveNpcChange::GetName() const {
 	return name;
 }
 
+NPCReviveChange::NPCReviveChange() :
+	name(), health() {
+
+}
+
+NPCReviveChange::NPCReviveChange(std::string name, std::string health) :
+	name(move(name)), health(move(health)) {
+
+}
+
+NPCReviveChange::~NPCReviveChange() {
+
+}
+
+const string& NPCReviveChange::GetType() const {
+	static const string type = "npc_revive";
+	return type;
+}
+
+void NPCReviveChange::SetName(std::string name) {
+	this->name = move(name);
+}
+
+const std::string& NPCReviveChange::GetName() const {
+	return name;
+}
+
+void NPCReviveChange::SetHealth(std::string health) {
+	this->health = move(health);
+}
+
+const std::string& NPCReviveChange::GetHealth() const {
+	return health;
+}
+
 NPCTeleportChange::NPCTeleportChange() :
 	name(), destination() {
 
@@ -871,12 +906,13 @@ const std::string& RegisterDoorChange::GetPass() const {
 }
 
 CreateTimerChange::CreateTimerChange() :
-	name(), time(), category(), label() {
+	name(), time(), category(), label(), mode() {
 
 }
 
-CreateTimerChange::CreateTimerChange(std::string name, std::string time, std::string category, std::string label) :
-	name(move(name)), time(move(time)), category(move(category)), label(move(label)) {
+CreateTimerChange::CreateTimerChange(std::string name, std::string time, std::string category, std::string label,
+	std::string mode) :
+	name(move(name)), time(move(time)), category(move(category)), label(move(label)), mode(move(mode)) {
 
 }
 
@@ -887,6 +923,14 @@ CreateTimerChange::~CreateTimerChange() {
 const string& CreateTimerChange::GetType() const {
 	static const string type = "create_timer";
 	return type;
+}
+
+void CreateTimerChange::SetMode(std::string mode) {
+	this->mode = move(mode);
+}
+
+const std::string& CreateTimerChange::GetMode() const {
+	return mode;
 }
 
 void CreateTimerChange::SetName(std::string name) {

@@ -15,10 +15,14 @@
 // 一个计时器：到target时刻(游戏时间)给ownerKey指向的那个Script发一次time_up，然后删除。
 // ownerKey是ScriptSaveCodec::CollectScripts的稳定键(story.main/scheduler:<i>/vehicle:<名>/...)，
 // 不存Script*：持有者可能被销毁/读档重建，到时再按键查，查不到就丢弃。
+// realTime为true时是现实时间计时器：不看target，每帧由AdvanceRealTimers扣remaining(现实秒)，
+// <=0到时。
 struct StoryTimer {
 	Time target;
 	std::string name;
 	std::string ownerKey;
+	bool realTime = false;
+	double remaining = 0.0;
 };
 
 class Story {
@@ -91,6 +95,9 @@ public:
 	* 计时器只保留一个，再次创建就是改到时时刻。
 	*/
 	void CreateTimer(const std::string& name, const Time& target, const std::string& ownerKey);
+	// 现实时间计时器：seconds现实秒之后到时，由AdvanceRealTimers(每帧传入帧间隔)推进。
+	void CreateRealTimer(const std::string& name, double seconds, const std::string& ownerKey);
+	void AdvanceRealTimers(double deltaSeconds);
 	void RemoveTimer(const std::string& name, const std::string& ownerKey);
 	// 取出所有target<=now的计时器(按到时先后)并从列表里删除。
 	std::vector<StoryTimer> PopExpiredTimers(const Time& now);

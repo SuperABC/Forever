@@ -198,3 +198,6 @@ GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生
 
 - 判断距离时 Z 方向放大 5 倍（`POPULACE_VERTICAL_DISTANCE_WEIGHT`），生成和销毁用同一个度量：不同楼层的人一般互相看不到，头顶/脚下楼层的市民不会因为三维距离近而被生成。
 - 每帧最多生成 `maxSpawnsPerFrame`=1 个市民 Actor：一次 `SpawnActor` 实测约 5ms，一帧连生成几个会出现尖峰；到上限就停止本帧扫描，`pollCursor` 只前进到已处理的位置。
+
+## 死人不被调度
+`RequestWalk`/`ApplyWalkResult`/`NotifyArrived`对`IsDead()`的市民直接返回，`TeleportCitizen`打警告后返回，避免调度把死人放回房间；复活(`npc_revive`)后再teleport才恢复。

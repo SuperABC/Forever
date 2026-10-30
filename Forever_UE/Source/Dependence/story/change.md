@@ -138,3 +138,8 @@ milestone用它验证：Job/Organization的Script能不能正确广播`game_star
 - `leave_vehicle`(vehicle)：玩家下车(驾驶和搭乘都行)；驾驶者要过下车点遮挡判定，搭乘者不判定。vehicle非空时只在玩家正在这辆里才执行。`LeaveVehicleChange`(此前只声明，现已补上解析和执行)。
 - `force_leave`(vehicle，可空)：强制下车(比如公交收班)，驾驶和搭乘都生效，不做遮挡判定。`ForceLeaveChange`。
 三者都只能在UE层执行(Core不认识Actor/Controller)，`AForeverFrameworkActor::ApplyChange`里`dynamic_cast`转发给`UForeverStoryFrameworkComponent`。
+
+## npc_revive 与 create_timer.mode
+- `npc_revive`(name, health可选)：`NPCReviveChange`，UE层`AForeverFrameworkActor::ApplyReviveNpc`执行。只对已死亡的市民生效；复活后没有房间和位置，需接`npc_teleport`。
+- `npc_teleport`的destination写`"home"`=该市民的家(`Citizen::GetRoom()`)。
+- `create_timer`新增`mode`：`absolute`(默认)/`relative`/`real`/`next`，见`Core/story/story.md`"计时器：mode"。

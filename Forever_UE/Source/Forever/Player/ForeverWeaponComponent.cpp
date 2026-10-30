@@ -19,6 +19,7 @@
 
 #include "common/registry.h"
 #include "player/weapon.h"
+#include "story/event.h"
 #include "player/player.h"
 #include "populace/citizen.h"
 
@@ -210,7 +211,32 @@ void UForeverWeaponComponent::Fire() {
 		if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 			UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 			if (framework->GetStoryFramework()) {
-				framework->GetStoryFramework()->BroadcastCitizenDecease(deadName, TEXT("gunshot"));
+				// 击杀信息：凶手(开枪的市民)、武器种类、命中部位、致死伤害、凶手是否可见、死亡地址。
+				ACitizenElement* killerElement = Cast<ACitizenElement>(GetOwner());
+				Citizen* killer = killerElement ? killerElement->GetCitizen() : nullptr;
+
+				// 命中部位：射线只打得到胶囊体，按命中点在胶囊体上的相对高度粗分——
+				// 顶部20%算头，下半截(40%以下)算腿，中间躯干。
+				float radius = 0.f, halfHeight = 0.f;
+				hitCitizen->GetSimpleCollisionCylinder(radius, halfHeight);
+				float relativeHeight = halfHeight > 0.f
+					? (hit.ImpactPoint.Z - (hitCitizen->GetActorLocation().Z - halfHeight)) / (2.f * halfHeight) : 0.5f;
+				const char* part = relativeHeight >= 0.8f ? "head" : (relativeHeight >= 0.4f ? "body" : "legs");
+
+				// 凶手是否可见：连接死者和凶手中心点的线段有没有被遮挡物(墙等)挡住，两人自己不算遮挡。
+				bool visible = false;
+				if (killerElement) {
+					FCollisionQueryParams sightParams;
+					sightParams.AddIgnoredActor(hitCitizen);
+					sightParams.AddIgnoredActor(killerElement);
+					visible = !GetWorld()->LineTraceTestByChannel(hitCitizen->GetActorLocation(),
+						killerElement->GetActorLocation(), ECC_Visibility, sightParams);
+				}
+
+				CitizenDeceaseEvent event(std::string(TCHAR_TO_UTF8(*deadName)), "player",
+					killer ? killer->GetName() : std::string(), currentWeapon->GetType(), part, damage, visible,
+					framework->DescribeLocation(hitCitizen->GetActorLocation()));
+				framework->GetStoryFramework()->BroadcastCitizenDecease(event);
 			}
 			if (framework->GetPopulaceFramework()) {
 				framework->GetPopulaceFramework()->HandleCitizenDeath(target);

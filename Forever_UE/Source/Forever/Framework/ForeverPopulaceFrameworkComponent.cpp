@@ -109,6 +109,7 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::SpawnCitizen(Citizen* citiz
 
 void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* destination) {
 	if (!citizen || !destination || !map) return;
+	if (citizen->IsDead()) return; // 死人不再被调度，见Citizen::Die
 
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 	if (existing && *existing && (*existing)->GetController() != nullptr) {
@@ -160,7 +161,7 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 
 void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room* destination,
 	const TArray<FVector>& waypoints) {
-	if (!citizen || !destination) return;
+	if (!citizen || !destination || citizen->IsDead()) return;
 
 	// 重新查一次activeInstances——从RequestWalk发起(可能异步经过若干帧)到这里落地之间，
 	// citizen完全可能被流式销毁/重新生成过，也可能刚被玩家占有，不能沿用发起那一刻的
@@ -194,6 +195,11 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 
 void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room* destination) {
 	if (!citizen || !destination) return;
+	if (citizen->IsDead()) {
+		UE_LOG(LogTemp, Warning, TEXT("npc_teleport: %s is dead, skipped (use npc_revive first)."),
+			UTF8_TO_TCHAR(citizen->GetName().c_str()));
+		return;
+	}
 
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 	if (existing && *existing) {
@@ -217,7 +223,7 @@ void UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding() {
 }
 
 void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* destination) {
-	if (!citizen || !destination) return;
+	if (!citizen || !destination || citizen->IsDead()) return;
 	citizen->SetCurrentRoom(destination);
 }
 
