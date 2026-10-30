@@ -75,12 +75,22 @@
 - 被谁依赖：`Core/traffic/traffic.cpp`的`InitRoutes`（创建`Route`、调`Build`）/
   `InitTransitVehicles`（按`GetVehiclesPerLine()`创建车辆、`AddVehicleToLine`）/`Tick`
   （调`Update`）；`Forever/Framework/ForeverTrafficFrameworkComponent.cpp`的
-  `BuildRouteDebugMesh`（读`GetLines()`画调试线）/`BuildTracks`（读`ShouldDrawPath()`/
-  `GetTrackMesh()`）。
+  `BuildRouteDebugMesh`（读`GetLines()`画调试线）/`BuildTracks`（读`ShouldInstantiate()`/
+  `GetTrackMesh()`/`GetTrackTunnelMesh()`/`GetTrackUnit()`和每条边的`track`）。
+
+## 实例化线路（火车铺轨）
+
+- `mod->instantiate && !useRoadnet`的线路，`Build()`在`LayoutRoute`之后、建边几何之前调`mod->BuildTrack()`
+  （地形回调绑`Map::GetTerrainRef/GetWater/SampleHeight`，同`Map::InitRoadnet`），把返回的`hatches`/`terrainFits`
+  转发给`Map::AddHatch`/`Map::ApplyTerrainFits`（烘焙进地形，所以`Traffic`必须在"生成地形模型"之前构建，见
+  `ForeverFrameworkActor.md`阶段顺序）。
+- `trackEdges[i]`非空的link，`BuildEdgeGeometry`按它的分段值建`Connection`链（`owned=true`）代替单段贝塞尔，
+  值同时存进`RouteEdge::track`（存档用，`traffic_save.md`）。
+- `EvaluateEdge`额外算俯仰角，`DriveVehicle`经`Vehicle::SetPitch`带出（instantiate线路才非零，停靠时清零，
+  纯运行时不进存档），`ATransitVehicleElement::Tick`据此让火车上坡/进隧道时跟着倾斜。
 
 ## 待办/后续阶段
 
-- `trackMesh`铺真实轨道mesh的逻辑没有任何内置线路用到，见`route_mod.md`"待办"一节。
 - `bidirectional`双向边的实际驾驶路径（`reversed`分支）没有被任何内置线路触发过，只验证过
   代码逻辑自洽，没有PIE实测——以后真的有双向线路类型时要重新验证一遍。
 

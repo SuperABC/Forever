@@ -19,7 +19,7 @@ struct FHitResult;
 
 // 公共交通线路车辆(公交/火车/飞机)在场景里对应的Actor——运动学地沿Route算出来的transform
 // 移动，不模拟物理(Tick里直接读vehicle->GetTransform())。外观有三种，按VehicleMod的字段选：
-// transitMeshPath指向骨骼网格(公交PAZ_652)用skeletalBody显示；指向静态网格(飞机)用bodyMesh；
+// transitMeshPath指向骨骼网格(公交PAZ_652)用skeletalBody显示；指向静态网格：可搭乘的(火车)用staticBody，不可搭乘的(飞机)用bodyMesh；
 // 为空用按sizeX/Y/Z缩放的/Engine/BasicShapes/Cube占位，见public_transport_plan.md。
 //
 // 骨骼网格且VehicleMod::boardable时这辆车可以被搭乘(公交)：
@@ -77,6 +77,12 @@ protected:
 	// 骨骼网格外观(公交)：挂在bodyMesh(RootComponent)下，构造时隐藏，Init加载成功才显示。
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USkeletalMeshComponent> skeletalBody;
+
+	// 可搭乘的静态网格外观(火车SciFiTram)：和skeletalBody同一个道理，挂在bodyMesh(RootComponent)下，缩放只作用在
+	// 自己身上(root保持1倍，触发盒/相机才不会被缩)。构造时隐藏，Init加载成功且载具可搭乘才显示。不可搭乘的静态网格(飞机)
+	// 仍然直接放在bodyMesh上。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UStaticMeshComponent> staticBody;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USpringArmComponent> cameraBoom;

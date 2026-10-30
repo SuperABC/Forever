@@ -10,6 +10,7 @@
 - **运动学跟随，不是物理驱动**：`Tick`每帧直接读`vehicle->GetTransform()`(`Core`层
   `Route::Update`早已按时刻表算好的世界坐标+偏航角)写`SetActorLocationAndRotation`，
   和`AVehicleElement`(真实可驾驶载具，`bSimulatePhysics=true`的骨骼网格)完全是两套机制——
+  `Tick`同时读`vehicle->GetPitch()`设俯仰角（火车沿坡道/隧道口行驶时跟着轨道倾斜，其余线路恒为0）。
   这里没有刚体、没有碰撞响应，`Tick`只是把Core算好的数字誊抄到Actor transform上。
   `TRANSIT_WORLD_SCALE`(=1000)和`ForeverTrafficFrameworkComponent.cpp`的
   `TRAFFIC_WORLD_SCALE`是同一个值、同一套"地图单位→UE厘米"换算，这个项目的既有约定是每个
@@ -63,3 +64,5 @@
 - `ShowOptions`先`RemoveName`再逐个`AddOption`，不用`ReplaceOptions`(它在名下没有按钮时是空操作，停站前选项为空，之后新增的选项会丢)。
 - 搭乘/下车流程在`UForeverTrafficFrameworkComponent::ApplyBoardVehicle`/`ExitVehicle`；存档记`controlledVehicle`，读档走`ApplyBoardVehicle(bSilent)`，不用存档位姿覆盖(位置由Core Route算)。
 - 路线车的运动仍由Core驱动(运动学)，之后改成AI Controller物理驾驶时事件/Change/script/触发盒可复用。
+
+- **可搭乘的静态网格(火车SciFiTram)**(2026-10-30)：`Init`里`transitMeshPath`加载出静态网格且`vehicle->IsBoardable()`时，模型放在子组件`staticBody`上(缩放只作用在它自己身上)，`bodyMesh`置空，再用网格包围盒调`BuildBoardingComponents`建触发盒/相机，和骨骼网格那条路一致；不可搭乘的静态网格(飞机)仍直接放在`bodyMesh`上。

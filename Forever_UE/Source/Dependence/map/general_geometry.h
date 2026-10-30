@@ -352,6 +352,29 @@ struct TerrainHatch {
 	float floorEnd = 0.f;
 };
 
+// 地形贴合请求(BuildTerrainFit产出)：路面/轨道高度由mod指定，宿主(Map::ApplyTerrainFits)把面下和边上的
+// 地形高度贴到这个高度上——内部地形高度=线高度，边缘向外falloff距离内按到边缘的距离平滑渐变回原地形，
+// 不管线比地形高还是低都生效。存的是采样好的中轴线折线(纯值类型)，不是Connection指针：mod自己的
+// roads/连线容器会扩容，指针会失效。路网(RoadnetMod)和线路(RouteMod)共用。
+struct TerrainFitSample {
+	float x = 0.f;
+	float y = 0.f;
+	float z = 0.f; // 这一点的线高度(地图element单位)
+};
+struct TerrainFitRequest {
+	std::vector<TerrainFitSample> centerline;
+	float width = 0.f;   // 整宽(地图element单位)
+	float falloff = 0.f; // 边缘向外渐变回原地形的距离
+};
+
+// 把connection上[t1,t2]这一段包成一个Quad追加进out(隧道口挖地形洞用，照抄老工程语义)。width是Quad垂直于
+// connection方向的宽度，Quad朝向沿t1->t2端点连线方向。tunnel=true时hatch带侧壁(wall=true)，底边是
+// connection在t1/t2处的Z，只有隧道口该用。RoadnetMod::AddHatch/AddTunnelHatch、RouteMod的同名辅助都转调这里。
+void BuildHatch(const Connection* connection, float t1, float t2, float width, bool tunnel, std::vector<TerrainHatch>& out);
+
+// 把connection上[t1,t2]这一段沿弧长按固定间距采样成折线，追加一个TerrainFitRequest进out。
+void BuildTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, std::vector<TerrainFitRequest>& out);
+
 enum AREA_TYPE : int {
 	AREA_NONE,
 	AREA_RESIDENTIAL_HIGH,

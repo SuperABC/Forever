@@ -75,7 +75,23 @@ const char* TrainVehicle::GetName() {
 
 void TrainVehicle::SetProperty() {
 	category = "train";
-	sizeX = 2000.f; sizeY = 300.f; sizeZ = 350.f;
+	sizeX = 2134.f; sizeY = 399.f; sizeZ = 577.f; // UE单位，SciFiTram模型的实际包围盒(原点在车身中心附近，底面略低于0)
+
+	// 路线上的火车(ATransitVehicleElement，运动学显示)用SciFiTram静态网格(长边沿X，原点在车身中心地面附近)，
+	// 只能搭乘不能驾驶，没有停车位版本，所以没有blueprintPath。
+	transitMeshPath = "/Game/3rdParty/SciFiTram/StaticMeshes/SciFiTram.SciFiTram";
+
+	// 脚本：停站时的上车/下车选项，见Resource/Story/vehicle_train.script。
+	scriptModName = "script_empty";
+	milestoneNames = { "vehicle_train" };
+
+	// 下车点(车身局部坐标)：车头+X，乘客从右侧(+Y)车身中段下。是估计值，不合适再调。
+	exitOffsetX = 0.f;
+	exitOffsetY = 320.f;
+	exitOffsetZ = 100.f;
+
+	boardable = true;
+	capacity = 80;
 }
 
 int PlaneVehicle::count = 0;

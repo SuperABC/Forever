@@ -61,6 +61,12 @@ ATransitVehicleElement::ATransitVehicleElement()
 	skeletalBody->SetCanEverAffectNavigation(false);
 	skeletalBody->SetVisibility(false);
 
+	staticBody = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StaticBody"));
+	staticBody->SetupAttachment(RootComponent);
+	staticBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	staticBody->SetCanEverAffectNavigation(false);
+	staticBody->SetVisibility(false);
+
 	// 搭乘视角：弹簧臂+相机，和AVehicleElement同一套(臂跟随控制器旋转，鼠标转视角)。位置/臂长
 	// 在BuildBoardingComponents里按模型包围盒调整。
 	cameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
@@ -123,6 +129,19 @@ void ATransitVehicleElement::Init(Vehicle* inVehicle)
 			return;
 		}
 		if (UStaticMesh* mesh = Cast<UStaticMesh>(asset)) {
+			if (vehicle->IsBoardable()) {
+				// 可搭乘的静态网格(火车)：模型放在子组件staticBody上，root保持1倍，触发盒/相机不被缩放，和骨骼网格同一套。
+				bodyMesh->SetStaticMesh(nullptr);
+				staticBody->SetStaticMesh(mesh);
+				staticBody->SetRelativeScale3D(FVector(meshScale, meshScale, meshScale));
+				staticBody->SetVisibility(true);
+
+				const FBoxSphereBounds bounds = mesh->GetBounds();
+				UE_LOG(LogTemp, Log, TEXT("ATransitVehicleElement::Init: %s 静态网格包围盒 origin=%s extent=%s (x%.2f)"),
+					UTF8_TO_TCHAR(vehicle->GetName().c_str()), *bounds.Origin.ToString(), *bounds.BoxExtent.ToString(), meshScale);
+				BuildBoardingComponents(bounds);
+				return;
+			}
 			bodyMesh->SetStaticMesh(mesh);
 			bodyMesh->SetWorldScale3D(FVector(meshScale, meshScale, meshScale));
 			return;
@@ -335,5 +354,5 @@ void ATransitVehicleElement::Tick(float DeltaTime)
 	// 和行驶方向没对齐的问题，见Init()里的说明。
 	SetActorLocationAndRotation(
 		FVector(x * TRANSIT_WORLD_SCALE, y * TRANSIT_WORLD_SCALE, z * TRANSIT_WORLD_SCALE),
-		FRotator(0.f, yaw + meshYawOffsetDegrees, 0.f));
+		FRotator(vehicle->GetPitch(), yaw + meshYawOffsetDegrees, 0.f));
 }

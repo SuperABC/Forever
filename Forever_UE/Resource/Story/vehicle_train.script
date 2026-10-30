@@ -1,0 +1,112 @@
+{
+	// 火车自己的milestone脚本(TrainVehicle::milestoneNames={"vehicle_train"}加载)，照抄vehicle_bus.script，
+	// 去掉"驾驶"：火车只在线路上跑、只能搭乘，只在停站时提供"上车"/"下车"。
+	// 停站事件由C++在公交停稳(enter_stop)/启动离站(leave_stop)时只发给这辆车自己的脚本；进出载具
+	// 事件(enter_vehicle/leave_vehicle，mode=ride搭乘/drive驾驶)同样只发给被进出的这辆车。
+	// 脚本变量：stopped(是否正停在站里)、aboard(玩家是否正搭乘在这辆车上)。
+	// 上车/下车选项只在停稳时存在：leave_stop把两个选项都撤掉(车开走时不能下车)；已经在车上的玩家
+	// 在下一站enter_stop时重新拿到"下车"。强制下车(force_leave)也会触发leave_vehicle事件，
+	// 此时车在行驶(stopped=0)，不会错误地把"上车"加回来。
+	"milestones": [
+		{
+			"milestone": "ready",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.stopped", "value": "0" },
+				{ "type": "set_value", "variable": "self.aboard", "value": "0" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "arrive",
+			"triggers": [ { "type": "enter_stop" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.stopped", "value": "1" },
+				{ "type": "add_option", "name": "$$self.name", "option": "上车", "condition": "$$self.aboard == 0" },
+				{ "type": "add_option", "name": "$$self.name", "option": "下车", "condition": "$$self.aboard == 1" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "depart",
+			"triggers": [ { "type": "leave_stop" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.stopped", "value": "0" },
+				{ "type": "remove_option", "name": "$$self.name", "option": "上车" },
+				{ "type": "remove_option", "name": "$$self.name", "option": "下车" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "board",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "上车" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "board_vehicle", "vehicle": "$$self.name" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "alight",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "下车" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "leave_vehicle", "vehicle": "$$self.name" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "got_on",
+			"triggers": [ { "type": "enter_vehicle", "mode": "\"ride\"" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.aboard", "value": "1" },
+				{ "type": "remove_option", "name": "$$self.name", "option": "上车" },
+				{ "type": "add_option", "name": "$$self.name", "option": "下车", "condition": "$$self.stopped == 1" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "got_off",
+			"triggers": [ { "type": "leave_vehicle", "mode": "\"ride\"" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.aboard", "value": "0" },
+				{ "type": "remove_option", "name": "$$self.name", "option": "下车" },
+				{ "type": "add_option", "name": "$$self.name", "option": "上车", "condition": "$$self.stopped == 1" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

@@ -10,21 +10,6 @@
 #include <functional>
 
 
-// 地形贴合请求(RoadnetMod::AddTerrainFit产出)：路面高度由mod指定，宿主(Map::ApplyTerrainFits)把
-// 路面下和路边的地形高度贴到路面上——路面内地形高度=路面高度，路面边缘向外falloff距离内按到边缘的
-// 距离平滑渐变回原地形，不管路面比地形高还是低都生效。存的是采样好的中轴线折线(纯值类型)，不是
-// Connection指针：mod的roads会扩容，指针会失效。
-struct TerrainFitSample {
-	float x = 0.f;
-	float y = 0.f;
-	float z = 0.f; // 这一点的路面高度(地图element单位)
-};
-struct TerrainFitRequest {
-	std::vector<TerrainFitSample> centerline;
-	float width = 0.f;   // 路面整宽(地图element单位)
-	float falloff = 0.f; // 路面边缘向外渐变回原地形的距离
-};
-
 // RoadnetMod:路网布局方案的Mod扩展点。和Terrain(可以多个mod叠加分发)不同,一次只应该有
 // 一个路网布局方案生效,由RoadnetFactory::SetConfig/GetRoadnet做单选,详见roadnet_factory.h。
 class RoadnetMod {

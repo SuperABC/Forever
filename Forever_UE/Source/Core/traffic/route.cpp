@@ -47,20 +47,26 @@ const string& Route::GetVehicleType() const {
 }
 
 bool Route::UsesRoadnet() const { return mod && mod->useRoadnet; }
-bool Route::ShouldDrawPath() const { return mod && mod->drawPath; }
+bool Route::ShouldInstantiate() const { return mod && mod->instantiate; }
 
 const string& Route::GetTrackMesh() const {
 	static const string empty;
 	return mod ? mod->trackMesh : empty;
 }
 
+const string& Route::GetTrackTunnelMesh() const {
+	static const string empty;
+	return mod ? mod->trackTunnelMesh : empty;
+}
+
+float Route::GetTrackWidth() const { return mod ? mod->trackWidth : 0.f; }
 float Route::GetTrackUnit() const { return mod ? mod->trackUnit : 0.f; }
 int Route::GetVehiclesPerLine() const { return mod ? mod->vehiclesPerLine : 0; }
 
 int Route::PackStop(int station, int interfaceIndex) { return station * 100 + interfaceIndex; }
 
 Route::RouteEdge Route::BuildEdgeGeometry(Map* map, Station* from, int fromInterfaceIndex,
-	Station* to, int toInterfaceIndex) const {
+	Station* to, int toInterfaceIndex, const vector<TrackSegment>* track) const {
 	RouteEdge edge;
 	if (!mod || !from || !to) return edge;
 	if (fromInterfaceIndex < 0 || fromInterfaceIndex >= static_cast<int>(from->GetInterfaces().size())) return edge;
@@ -87,6 +93,21 @@ Route::RouteEdge Route::BuildEdgeGeometry(Map* map, Station* from, int fromInter
 			edge.owned = false; // 全部借用Station/Map已有的Connection，不持有
 		}
 	} else {
+		if (track && !track->empty()) {
+			// instantiate线路：按mod给的分段值建Connection链(过山抬升/隧道的高度变化都在里面)。
+			for (const TrackSegment& seg : *track) {
+				Connection* conn = new Connection(Node("route", seg.x1, seg.y1, seg.z1), Node("route", seg.x2, seg.y2, seg.z2));
+				conn->AddControls({ { Node("route_ctrl", seg.c1x, seg.c1y, seg.c1z), 1.f },
+					{ Node("route_ctrl", seg.c2x, seg.c2y, seg.c2z), 1.f } });
+				edge.segments.push_back(conn);
+			}
+			edge.owned = true;
+			edge.track = *track;
+			edge.length = 0.f;
+			for (Connection* seg : edge.segments) edge.length += seg->CalcDistance();
+			return edge;
+		}
+
 		// 非路网边：三次贝塞尔，端点切线和接口方向一致，相邻边在站点处切线连续，见
 		// route.md"接口与平滑曲线"一节。控制点z分别取A.z/B.z，支持飞机这类有高度变化的线路。
 		float controlLength = mod->controlLength;
@@ -144,7 +165,37 @@ void Route::Build(Map* map, const vector<Station*>& stations, vector<Station*>& 
 		outCreatedEdgeStations.push_back(edgeStation);
 	}
 
-	for (const RouteLink& link : mod->links) {
+	// instantiate线路：先让mod沿每条link铺轨(过山抬升/挖隧道)，几何交给BuildEdgeGeometry、请求转发给
+	// Map——和Map::InitRoadnet对路网的做法一致，所以Traffic必须在地形网格生成之前构建。读档不走这里
+	// (地形已经烘焙，几何从存档读)，见traffic_save.md。
+	if (mod->instantiate && !mod->useRoadnet) {
+		auto interfaceInfo = [&](const RouteStop& stop, RouteStationInfo& out) {
+			if (stop.station < 0 || stop.station >= static_cast<int>(resolvedStations.size())) return false;
+			const vector<StationInterface>& interfaces = resolvedStations[stop.station]->GetInterfaces();
+			if (stop.interfaceIndex < 0 || stop.interfaceIndex >= static_cast<int>(interfaces.size())) return false;
+			const StationInterface& iface = interfaces[stop.interfaceIndex];
+			out.x = iface.x; out.y = iface.y; out.z = iface.z;
+			out.arriveDirX = iface.arriveDirX; out.arriveDirY = iface.arriveDirY;
+			out.departDirX = iface.departDirX; out.departDirY = iface.departDirY;
+			out.stationIndex = stop.station; out.interfaceIndex = stop.interfaceIndex;
+			return true;
+			};
+		vector<RouteTrackLinkEnds> linkEnds(mod->links.size());
+		for (size_t i = 0; i < mod->links.size(); i++) {
+			if (!interfaceInfo(mod->links[i].from, linkEnds[i].from) || !interfaceInfo(mod->links[i].to, linkEnds[i].to)) {
+				linkEnds[i].from.stationIndex = -1; // 越界的link，下面建边时同样会被跳过
+			}
+		}
+		auto getTerrain = [map](int x, int y) -> const string& { return map->GetTerrainRef(x, y); };
+		auto getWater = [map](int x, int y) -> pair<bool, float> { return map->GetWater(x, y); };
+		auto getHeight = [map](float x, float y) -> float { return map->SampleHeight(x, y); };
+		mod->BuildTrack(linkEnds, getTerrain, getWater, getHeight);
+		for (const TerrainHatch& hatch : mod->hatches) map->AddHatch(hatch);
+		map->ApplyTerrainFits(mod->terrainFits);
+	}
+
+	for (size_t linkIndex = 0; linkIndex < mod->links.size(); linkIndex++) {
+		const RouteLink& link = mod->links[linkIndex];
 		if (link.from.station < 0 || link.from.station >= static_cast<int>(resolvedStations.size()) ||
 			link.to.station < 0 || link.to.station >= static_cast<int>(resolvedStations.size())) {
 			debugf("Route::Build: 线路%s的link引用了越界的站点下标，跳过。\n", name.c_str());
@@ -153,7 +204,9 @@ void Route::Build(Map* map, const vector<Station*>& stations, vector<Station*>& 
 
 		Station* fromStation = resolvedStations[link.from.station];
 		Station* toStation = resolvedStations[link.to.station];
-		RouteEdge edge = BuildEdgeGeometry(map, fromStation, link.from.interfaceIndex, toStation, link.to.interfaceIndex);
+		const vector<TrackSegment>* track = (linkIndex < mod->trackEdges.size() && !mod->trackEdges[linkIndex].segments.empty())
+			? &mod->trackEdges[linkIndex].segments : nullptr;
+		RouteEdge edge = BuildEdgeGeometry(map, fromStation, link.from.interfaceIndex, toStation, link.to.interfaceIndex, track);
 		if (edge.segments.empty()) {
 			debugf("Route::Build: 线路%s的一条link几何构建失败(%s->%s)，跳过。\n",
 				name.c_str(), fromStation->GetName().c_str(), toStation->GetName().c_str());
@@ -202,6 +255,7 @@ void Route::Build(Map* map, const vector<Station*>& stations, vector<Station*>& 
 			leg.toInterfaceIndex = toStop.interfaceIndex;
 			leg.edge = &graphIt->second.at(toKey);
 			leg.dwellAtDestination = toStop.dwell;
+			leg.silentDwell = toStop.dwell && toStop.silent;
 			legs.push_back(leg);
 		}
 
@@ -219,7 +273,7 @@ void Route::AddVehicleToLine(size_t lineIndex, Vehicle* vehicle) {
 }
 
 void Route::EvaluateEdge(const RouteEdge& edge, float arcLength,
-	float& outX, float& outY, float& outZ, float& outYawDegrees) const {
+	float& outX, float& outY, float& outZ, float& outYawDegrees, float& outPitchDegrees) const {
 	vector<Connection*> ordered = edge.segments;
 	if (edge.reversed) reverse(ordered.begin(), ordered.end());
 
@@ -239,6 +293,7 @@ void Route::EvaluateEdge(const RouteEdge& edge, float arcLength,
 
 			outX = point.GetX(); outY = point.GetY(); outZ = point.GetZ();
 			outYawDegrees = ToDegrees(atan2f(dy, dx));
+			outPitchDegrees = ToDegrees(atan2f(dz, sqrtf(dx * dx + dy * dy)));
 			return;
 		}
 		remaining -= segLength;
@@ -285,12 +340,13 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 
 	if (inDwell) {
 		const RouteLeg& leg = legs[legIndex];
-		if (outDwellStation) *outDwellStation = leg.toStation;
+		if (outDwellStation && !leg.silentDwell) *outDwellStation = leg.toStation;
 		const vector<StationInterface>& interfaces = leg.toStation->GetInterfaces();
 		if (leg.toInterfaceIndex >= 0 && leg.toInterfaceIndex < static_cast<int>(interfaces.size())) {
 			const StationInterface& iface = interfaces[leg.toInterfaceIndex];
 			float yawDeg = ToDegrees(atan2f(iface.arriveDirY, iface.arriveDirX));
 			vehicle->SetTransform(iface.x, iface.y, iface.z, yawDeg);
+			vehicle->SetPitch(0.f);
 		}
 		return;
 	}
@@ -382,9 +438,10 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 	float arcLength = segArcLength - lengthBeforeResultLeg;
 	arcLength = max(0.f, min(arcLength, resultLeg.edge->length));
 
-	float x, y, z, yaw;
-	EvaluateEdge(*resultLeg.edge, arcLength, x, y, z, yaw);
+	float x, y, z, yaw, pitch = 0.f;
+	EvaluateEdge(*resultLeg.edge, arcLength, x, y, z, yaw, pitch);
 	vehicle->SetTransform(x, y, z, yaw);
+	vehicle->SetPitch(mod->instantiate ? pitch : 0.f);
 }
 
 void Route::Update(float elapsedSeconds) {

@@ -105,7 +105,20 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive&
 		}
 		sort(edges.begin(), edges.end());
 		w.U32(static_cast<uint32_t>(edges.size()));
-		for (auto& [fromKey, toKey, reversed] : edges) { w.I32(fromKey); w.I32(toKey); w.U8(reversed); }
+		for (auto& [fromKey, toKey, reversed] : edges) {
+			w.I32(fromKey); w.I32(toKey); w.U8(reversed);
+			if (reversed) continue; // 反向边共用正向那份几何
+			// instantiate线路的分段几何：地形已经按它抬升/挖洞，读档不能重新规划，直接存值。
+			const vector<TrackSegment>& track = route->graph.at(fromKey).at(toKey).track;
+			w.U32(static_cast<uint32_t>(track.size()));
+			for (const TrackSegment& seg : track) {
+				w.F32(seg.x1); w.F32(seg.y1); w.F32(seg.z1);
+				w.F32(seg.c1x); w.F32(seg.c1y); w.F32(seg.c1z);
+				w.F32(seg.c2x); w.F32(seg.c2y); w.F32(seg.c2z);
+				w.F32(seg.x2); w.F32(seg.y2); w.F32(seg.z2);
+				w.U8(seg.tunnel ? 1 : 0);
+			}
+		}
 
 		auto stopOf = [&](const Station* station) {
 			auto it = stopIndex.find(station);
@@ -117,7 +130,7 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive&
 			for (const Route::RouteLeg& leg : legs) {
 				w.I32(stopOf(leg.fromStation)); w.I32(leg.fromInterfaceIndex);
 				w.I32(stopOf(leg.toStation)); w.I32(leg.toInterfaceIndex);
-				w.U8(leg.dwellAtDestination ? 1 : 0);
+				w.U8(leg.dwellAtDestination ? (leg.silentDwell ? 2 : 1) : 0); // 2=停靠但不触发事件
 			}
 		}
 
@@ -224,11 +237,26 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, bool resto
 
 			// 连线：正向的按两端站点接口重新算几何；反向的共用正向那一份(owned=false)。
 			vector<tuple<int, int, uint8_t>> edges(r.U32());
-			for (auto& [fromKey, toKey, reversed] : edges) { fromKey = r.I32(); toKey = r.I32(); reversed = r.U8(); }
-			for (auto& [fromKey, toKey, reversed] : edges) {
+			vector<vector<TrackSegment>> tracks(edges.size()); // 下标和edges一一对应(反向边留空)
+			for (size_t e = 0; e < edges.size(); e++) {
+				auto& [fromKey, toKey, reversed] = edges[e];
+				fromKey = r.I32(); toKey = r.I32(); reversed = r.U8();
+				if (reversed) continue;
+				vector<TrackSegment>& track = tracks[e];
+				track.resize(r.U32());
+				for (TrackSegment& seg : track) {
+					seg.x1 = r.F32(); seg.y1 = r.F32(); seg.z1 = r.F32();
+					seg.c1x = r.F32(); seg.c1y = r.F32(); seg.c1z = r.F32();
+					seg.c2x = r.F32(); seg.c2y = r.F32(); seg.c2z = r.F32();
+					seg.x2 = r.F32(); seg.y2 = r.F32(); seg.z2 = r.F32();
+					seg.tunnel = r.U8() != 0;
+				}
+			}
+			for (size_t e = 0; e < edges.size(); e++) {
+				auto& [fromKey, toKey, reversed] = edges[e];
 				if (reversed) continue;
 				Route::RouteEdge edge = route->BuildEdgeGeometry(&map, stopAt(fromKey / 100), fromKey % 100,
-					stopAt(toKey / 100), toKey % 100);
+					stopAt(toKey / 100), toKey % 100, &tracks[e]);
 				route->graph[fromKey][toKey] = edge;
 			}
 			for (auto& [fromKey, toKey, reversed] : edges) {
@@ -248,13 +276,15 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, bool resto
 				for (uint32_t m = 0; m < legCount && !r.Failed(); m++) {
 					int fromStop = r.I32(), fromInterface = r.I32();
 					int toStop = r.I32(), toInterface = r.I32();
-					bool dwell = r.U8() != 0;
+					uint8_t dwellCode = r.U8();
+					bool dwell = dwellCode != 0;
 					Route::RouteLeg leg;
 					leg.fromStation = stopAt(fromStop);
 					leg.fromInterfaceIndex = fromInterface;
 					leg.toStation = stopAt(toStop);
 					leg.toInterfaceIndex = toInterface;
 					leg.dwellAtDestination = dwell;
+					leg.silentDwell = dwellCode == 2;
 					auto graphIt = route->graph.find(Route::PackStop(fromStop, fromInterface));
 					if (graphIt != route->graph.end()) {
 						auto edgeIt = graphIt->second.find(Route::PackStop(toStop, toInterface));

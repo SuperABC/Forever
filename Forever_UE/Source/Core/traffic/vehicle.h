@@ -72,6 +72,9 @@ public:
 
 	void SetTransform(float x, float y, float z, float yaw);
 	void GetTransform(float& outX, float& outY, float& outZ, float& outYaw) const;
+	// 俯仰角(角度制，抬头为正)：只有沿坡道/隧道口行驶的线路载具(Route::Update)会写，纯运行时，不进存档。
+	void SetPitch(float pitchDegrees);
+	float GetPitch() const;
 
 private:
 	VehicleFactory* factory;
@@ -92,4 +95,5 @@ private:
 	float y = 0.0f;
 	float z = 0.0f;
 	float yaw = 0.0f;
+	float pitch = 0.0f;
 };

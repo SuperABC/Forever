@@ -16,20 +16,24 @@
   公式一旦调整，手推的结论就会全部失效，必须从真实车道方向数据反推。
 - **`LayoutDualTrackStationLoop`(TrainRoute/AirRoute共用)的拓扑**：
   ```
-  左边界 -> leftIn -(跑道/轨道1)-> stop1 -> rightOut -> 右边界 -> rightIn -(跑道/轨道2)-> stop2 -> leftOut -> 左边界
+  leftEdgeIn -> leftIn -(轨道1)-> stop1 -> rightOut -> rightEdgeOut -> rightEdgeMid -> rightEdgeIn -> rightIn -(轨道2)-> stop2 -> leftOut -> leftEdgeOut -> leftEdgeMid -> (回到leftEdgeIn)
   ```
   `interfaces`固定顺序`[leftIn, rightOut, rightIn, leftOut]`(`TrainStation`/
   `AirStation::Layout`保证，见`station_basic.md`)。`leftIn`/`rightOut`朝向相同，两点连线
-  是跑道/轨道1；`rightIn`/`leftOut`同理是跑道/轨道2。左右边界沿各自接口的朝向射线求和地图
-  边界的交点(`RayBoxIntersection`)，代表"飞机/火车从图外飞来/飞走"。
+  是跑道/轨道1；`rightIn`/`leftOut`同理是跑道/轨道2。每个地图边界有两条线：出地图的线（`xxOut`端点，
+  沿出站接口的出发方向射线求和地图边界的交点`RayBoxIntersection`）和进地图的线（`xxIn`端点，沿进站接口
+  出发方向的反向回溯到边界），两个端点之间插一个虚拟车站`xxMid`（位置、`z`取平均）。`Out->Mid->In`是贴着边界的
+  一小段横向连线（Out出发/Mid两头/In到达都朝侧向，三点直线连接）。`Mid`是`dwell=true, silent=true`——火车
+  会在那里停靠`dwellSeconds`，但不触发`enter_stop`/`leave_stop`事件（`Route::DriveVehicle`不把它报给边沿检测，
+  `RouteLeg::silentDwell`，存档里用dwell字节的值2表示）。
   - `stop1`/`stop2`是各自跑道/轨道两端的中点(位置、朝向、`z`都是简单平均，两端共线同向，
-    中点自然也在同一条线上)，和`leftEdge`/`rightEdge`一样借用"没有building的合成站点"
+    中点自然也在同一条线上)，和边缘站点一样借用"没有building的合成站点"
     机制(`RouteStationInfo.isEdge=true`，只是复用`Route::Build()`已有的创建+收集逻辑，不
-    代表真的是地图边缘)。`leftIn`/`rightOut`/`rightIn`/`leftOut`/`leftEdge`/`rightEdge`
-    六个点全部标`dwell=false`(纯过路点)，只有`stop1`/`stop2`是`dwell=true`——真正的停靠
+    代表真的是地图边缘)。`leftIn`/`rightOut`/`rightIn`/`leftOut`和边缘的Out/In端点
+    全部标`dwell=false`(纯过路点)，只有`stop1`/`stop2`是`dwell=true`——真正的停靠
     动作只应该发生在跑道/轨道的中点，不是每个过路接口都停一次。
-  - `outEdgeStations`的四个元素(`leftEdge/rightEdge/stop1/stop2`)顺序决定了它们在
-    `resolvedStations`里的下标(`realStation+1`到`+4`)，这个假设建立在"全图只有这一个真实
+  - `outEdgeStations`的八个元素(`leftEdgeOut/Mid/In`、`rightEdgeOut/Mid/In`、`stop1/stop2`)顺序决定了它们在
+    `resolvedStations`里的下标(`realStation+1`到`+8`)，这个假设建立在"全图只有这一个真实
     站点"(`realStation = leftIn.stationIndex`恒定不变)之上，新增元素/调整顺序时要同步检查
     这几个下标常量。
 - **`speed`/`dwellSeconds`按`timeFlowRatio`换算**——三个具体类型的构造函数都在基类默认值
@@ -45,9 +49,21 @@
   `Core/traffic/traffic.cpp`的`InitRoutes`通过`RouteFactory`创建、调`Route::Build`
   (间接触发`LayoutRoute`)。
 
+## TrainRoute::BuildTrack（过山爬坡/隧道）
+
+`TrainRoute`是`instantiate=true`的线路：`trackMesh`=`SM_ufekaevdw_tier_3`（沿X轴延伸，轴心在起点边，长约250cm，
+`trackUnit=0.25`），`trackWidth=0.8`。`BuildTrack`对每条link：
+1. 把Core单段贝塞尔的平面曲线按弧长每`TRACK_SAMPLE_STEP`(1单位=10m)采样，记录每点地形类型和`getHeight`高度；
+2. 把连续的`terrain_mountain`切成一座座山，规则照抄`JingRoadnet::buildArm`（常量`MOUNTAIN_MAX_SLOPE`/
+   `TUNNEL_HEIGHT`/`TUNNEL_HATCH_LENGTH`/`TERRAIN_FIT_FALLOFF`在`route_basic.cpp`里重新定义，两边数值要保持
+   一致，改动时一起看）：最大坡度<=0.5或山后是海→抬升（高度取山表面，请求`AddTerrainFit`）；否则→隧道（前后
+   各8单位的S形坡道，坡道段`AddTunnelHatch`挖带侧壁的洞，中间水平隧道段`tunnel=true`），前后平地放不下
+   坡道则退化为抬升；车站两端`TRACK_STATION_FLAT_SAMPLES`个采样点保持水平；
+3. 每相邻两点输出一段三次贝塞尔（坡度夹到单调范围，同roadnet），完全水平且共线的连续点合并成一段。
+
 ## 待办/后续阶段
 
 - `TrainRoute`/`AirRoute`假设全图只有一个真实站点(`LayoutDualTrackStationLoop`直接用
   `interfaces[0..3]`，不做分组)，多个同类型站点同时存在的情况不支持，真需要时要把
   `BusRoute`那套"不依赖假设、从真实数据反推"的思路搬过来用在"多个站点怎么分组连线"这一层。
-- `trackMesh`留空，铺真实轨道的逻辑没有实现，见`route_mod.md`"待办"一节。
+- `TrainRoute`的隧道内轨道暂时复用`trackMesh`（没有专用资产），见`route_mod.md`。

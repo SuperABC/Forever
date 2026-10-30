@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include <string>
 #include "Framework/ForeverFrameworkComponent.h"
 #include "ForeverTrafficFrameworkComponent.generated.h"
 
@@ -8,6 +9,7 @@ class APlayerController;
 class AVehicleElement;
 class ATransitVehicleElement;
 class UProceduralMeshComponent;
+class UInstancedStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class Map;
@@ -90,10 +92,10 @@ public:
 
 	void BuildRouteDebugMesh(Traffic* traffic);
 
-	// 铺公共交通专属的轨道/跑道mesh——只处理ShouldDrawPath()&&!GetTrackMesh().empty()的线路，
+	// 铺instantiate线路(火车)的轨道mesh——只处理ShouldInstantiate()&&!GetTrackMesh().empty()的线路，
 	// 思路同ForeverRoadnetFrameworkComponent的BuildRoadInstances(按弧长重复摆放
-	// InstancedStaticMeshComponent)。这次三种内置线路的trackMesh都是空字符串，只打一条Log，
-	// 不实际铺设——真正的铺设逻辑留给以后有真实轨道资产的内容类型消费。
+	// InstancedStaticMeshComponent)，区别是轨道mesh的轴心在起点边(沿X轴向前延伸)，所以每块摆在
+	// 自己的起点而不是中点；隧道段换用GetTrackTunnelMesh()(空则复用GetTrackMesh())。
 	void BuildTracks(Traffic* traffic);
 
 	// 车辆流式生成/销毁的距离(地图单位)，是市民(citizenSpawnDistance 2.0/citizenDespawnDistance 4.0)
@@ -139,6 +141,11 @@ private:
 	// 按名字反查，纯粹持有引用防止被GC，和activeVehicles分开存只是为了类型不同。
 	UPROPERTY()
 	TMap<FString, TObjectPtr<ATransitVehicleElement>> activeTransitVehicles;
+
+	// mesh路径→轨道ISM(每种mesh一个，RF_Transient，不进存档，每次开局/读档重新铺)。
+	UPROPERTY()
+	TMap<FString, TObjectPtr<UInstancedStaticMeshComponent>> trackMeshInstances;
+	UInstancedStaticMeshComponent* GetOrCreateTrackISM(const std::string& meshPath);
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> pureBaseMaterial;

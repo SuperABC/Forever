@@ -29,7 +29,9 @@
 ## 关键设计
 
 - **线路不重新排**。`Route::Build` 会按传入站点的顺序给站点编号，再交给 mod 的 `LayoutRoute` 排线路。站点顺序来自 `unordered_map` 的遍历顺序，读档后会变，所以不能重跑 `Build`。改为直接存它的结果（站点表、连线、停靠顺序）。
-- **连线几何不存**。连线的几何（`RouteEdge`）由 `Route::BuildEdgeGeometry` 按两端站点接口重新计算：
+- **instantiate线路的分段几何要存**：每条正向连线后面跟一份`TrackSegment`列表（x/y/z、两个控制点、`tunnel`），读档按它重建
+  `Connection`链，不重新规划——地形已经按它抬升/挖洞，重新采样会得出不同结果。非instantiate线路这份列表为空。
+- **其余连线几何不存**。连线的几何（`RouteEdge`）由 `Route::BuildEdgeGeometry` 按两端站点接口重新计算：
   - 走路网的线路借用地图导航图的边，再加站点的旁路（`Station::EnsureRoadLink`，按需创建）；
   - 不走路网的线路是贝塞尔曲线。
 

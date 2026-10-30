@@ -1492,3 +1492,50 @@ const vector<pair<string, float>>& Lot::GetCandidates() const {
 void Lot::ClearCandidates() {
 	candidates.clear();
 }
+
+// 贴合请求折线的采样间距(地图element单位)：路/轨道是平滑曲线，0.5对地形贴合(格点间距1/16)足够。
+#define TERRAIN_FIT_SAMPLE_SPACING 0.5f
+
+void BuildHatch(const Connection* connection, float t1, float t2, float width, bool tunnel, vector<TerrainHatch>& out) {
+	if (!connection) return;
+
+	Node p1 = connection->GetPoint(t1);
+	Node p2 = connection->GetPoint(t2);
+
+	float dx = p2.GetX() - p1.GetX();
+	float dy = p2.GetY() - p1.GetY();
+	float length = connection->CalcDistance(t1, t2);
+	if (length <= 0.f) return;
+
+	float rotation = atan2(dy, dx);
+	float cx = (p1.GetX() + p2.GetX()) * 0.5f;
+	float cy = (p1.GetY() + p2.GetY()) * 0.5f;
+
+	TerrainHatch hatch;
+	hatch.quad = Quad(cx, cy, length, width);
+	hatch.rotation = rotation;
+	if (tunnel) {
+		hatch.wall = true;
+		hatch.floorStart = p1.GetZ();
+		hatch.floorEnd = p2.GetZ();
+	}
+	out.push_back(hatch);
+}
+
+void BuildTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, vector<TerrainFitRequest>& out) {
+	if (!connection) return;
+
+	float length = connection->CalcDistance(t1, t2);
+	if (length <= 0.f || width <= 0.f) return;
+
+	TerrainFitRequest request;
+	request.width = width;
+	request.falloff = max(falloff, 0.f);
+	int segments = max(1, static_cast<int>(ceil(length / TERRAIN_FIT_SAMPLE_SPACING)));
+	for (int i = 0; i <= segments; i++) {
+		float t = t1 + (t2 - t1) * static_cast<float>(i) / static_cast<float>(segments);
+		Node p = connection->GetPoint(t);
+		request.centerline.push_back({ p.GetX(), p.GetY(), p.GetZ() });
+	}
+	out.push_back(std::move(request));
+}

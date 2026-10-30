@@ -27,8 +27,10 @@ public:
 	const std::string& GetStationType() const;
 	const std::string& GetVehicleType() const;
 	bool UsesRoadnet() const;
-	bool ShouldDrawPath() const;
+	bool ShouldInstantiate() const;
 	const std::string& GetTrackMesh() const;
+	const std::string& GetTrackTunnelMesh() const; // 空=复用GetTrackMesh()
+	float GetTrackWidth() const;
 	float GetTrackUnit() const;
 	int GetVehiclesPerLine() const;
 
@@ -41,6 +43,9 @@ public:
 		bool owned = false;
 		bool reversed = false;
 		float length = 0.f; // 全部segments的CalcDistance()之和
+		// instantiate线路：mod给的分段几何(值类型)，segments就是按它建的Connection链；存档存这份、
+		// 读档按它重建(地形已经被抬升/挖洞，不能重新规划)。空=没有实例化轨道(单段贝塞尔)。
+		std::vector<TrackSegment> track;
 	};
 
 	// 线路上的一腿：从(fromStation,fromInterfaceIndex)到(toStation,toInterfaceIndex)，edge
@@ -55,6 +60,8 @@ public:
 		// 到达toStation后不停留，直接接着跑下一腿，DriveVehicle()/Update()的耗时计算都要跳过
 		// 这一腿的停靠耗时(dwellSeconds)，不只是跳过停靠时的渲染。
 		bool dwellAtDestination = true;
+		// 停靠但不触发进站/离站事件(RouteStop::silent)：DriveVehicle不把这个站报给Update的边沿检测。
+		bool silentDwell = false;
 	};
 
 	// 收集map里stationType==mod->stationType的所有Station接口，调mod->LayoutRoute()；为
@@ -100,12 +107,13 @@ private:
 	// ->to的上游锚点)+to的inEdge拼起来(都是借来的边，owned=false)。useRoadnet==false时，
 	// 按2.3节的三次贝塞尔公式新建一条曲线边(owned=true)。任一环节失败时返回的RouteEdge
 	// segments为空，调用方(Build())据此跳过这条link。
+	// track非空(instantiate线路)时，非路网边改用它建分段Connection链，代替单段贝塞尔。
 	RouteEdge BuildEdgeGeometry(Map* map, Station* from, int fromInterfaceIndex,
-		Station* to, int toInterfaceIndex) const;
+		Station* to, int toInterfaceIndex, const std::vector<TrackSegment>* track = nullptr) const;
 
 	// 在edge(可能是多段segments拼起来的)上按弧长arcLength取点，写出世界坐标+偏航角(角度制)。
 	void EvaluateEdge(const RouteEdge& edge, float arcLength,
-		float& outX, float& outY, float& outZ, float& outYawDegrees) const;
+		float& outX, float& outY, float& outZ, float& outYawDegrees, float& outPitchDegrees) const;
 
 	// 沿legs(一条环线)按localTime(已经对线路总周期取模)驱动一辆车：逐腿累减"行驶耗时
 	// (edge->length/speed)+停靠耗时(dwellSeconds)"，落在行驶区间就按EvaluateEdge算位置，

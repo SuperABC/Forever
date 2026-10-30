@@ -40,11 +40,11 @@
   (`AppendRouteArrow`，`leg.edge->reversed`时指向相反)，站点接口画小方块
   (`AppendRouteStationBox`)。由`bShowRouteDebug`控制，关闭时`ClearMeshSection`而不是
   跳过构建——避免关闭调试开关之后旧的可视化网格残留在场景里。
-- **`BuildTracks`这次三种内置线路的`trackMesh`都是空字符串**，只在
-  `ShouldDrawPath()&&GetTrackMesh().empty()`时打一条Log，不实际铺——真正"沿弧长重复摆放
-  `InstancedStaticMeshComponent`"的逻辑(思路同`ForeverRoadnetFrameworkComponent::
-  BuildRoadInstances`)留给以后有真实轨道资产的内容类型消费，见
-  `Dependence/traffic/route_mod.md`"待办"一节。
+- **`BuildTracks`铺轨**：对`ShouldInstantiate()`的线路（火车），遍历`GetLines()`的边（跳过`reversed`、按边指针
+  去重），每个`Connection`段照抄`BuildRoadInstances`的平铺（块数夹在`[0.8,1.2]*trackUnit`，`scaleAlong`拉伸，
+  `GetOrCreateTrackISM`每种mesh一个`RF_Transient`的ISM）。区别：轨道mesh轴心在起点边（沿+X延伸），所以每块
+  摆在自己的**起点**，朝向取起点→终点的3D方向（含坡度）；`edge->track[i].tunnel`的段换用
+  `GetTrackTunnelMesh()`（空则复用`GetTrackMesh()`）。读档时同样重铺（几何从存档来）。
 
 - **读档后的车辆位置**：`AVehicleElement::Tick`每帧把位置写回`Vehicle::SetTransform`(进存档)。`GenerateVehicles`发现这份记录非零时按记录的位置生成，不放回车位(新开局时记录全为0，照常放车位)。
 
@@ -65,7 +65,7 @@
 ## 待办/后续阶段
 
 - 公共交通车辆不支持上下车/操控，见`TransitVehicleElement.md`"待办"一节。
-- `BuildTracks`真正铺轨道mesh的逻辑没有实现，等有真实轨道资产的内容类型再补。
+- 暂无隧道专用轨道资产，隧道内复用`trackMesh`。
 
 ## 预置车辆按距离流式生成/销毁（2026-10-22）
 

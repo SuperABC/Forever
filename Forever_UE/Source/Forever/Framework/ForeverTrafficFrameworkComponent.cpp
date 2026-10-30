@@ -19,6 +19,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "ProceduralMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
@@ -625,20 +627,94 @@ void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 	applySection(otherRouteMesh, otherRouteMaterial, otherVertices, otherTriangles);
 }
 
+UInstancedStaticMeshComponent* UForeverTrafficFrameworkComponent::GetOrCreateTrackISM(const string& meshPath) {
+	if (meshPath.empty()) return nullptr;
+	FString key = UTF8_TO_TCHAR(meshPath.c_str());
+
+	if (auto* found = trackMeshInstances.Find(key)) {
+		return *found;
+	}
+
+	AActor* owner = GetOwner();
+	if (!owner) return nullptr;
+
+	UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, *key);
+	if (!mesh) {
+		debugf("UForeverTrafficFrameworkComponent::GetOrCreateTrackISM: failed to load track mesh %s.\n", meshPath.c_str());
+		return nullptr;
+	}
+
+	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(owner, NAME_None, RF_Transient);
+	ism->SetStaticMesh(mesh);
+	ism->SetupAttachment(owner->GetRootComponent());
+	ism->RegisterComponent();
+	owner->AddInstanceComponent(ism);
+
+	trackMeshInstances.Add(key, ism);
+	return ism;
+}
+
 void UForeverTrafficFrameworkComponent::BuildTracks(Traffic* traffic) {
 	if (!traffic) return;
 
-	for (auto& [routeName, route] : traffic->GetRoutes()) {
-		if (!route || !route->ShouldDrawPath()) continue;
+	// 重铺前清掉上一次的实例(同一个Actor上重新开局/读档)。
+	for (auto& [key, ism] : trackMeshInstances) {
+		if (ism) ism->ClearInstances();
+	}
 
-		if (route->GetTrackMesh().empty()) {
-			// 这次三种内置线路里唯一drawPath=true的是TrainRoute，trackMesh留空——只打一条Log，
-			// 真正沿弧长铺InstancedStaticMeshComponent的逻辑(思路同
-			// ForeverRoadnetFrameworkComponent::BuildRoadInstances)留给以后有真实轨道资产的
-			// 内容类型实现，见public_transport_plan.md"铺轨"一节。
-			debugf("UForeverTrafficFrameworkComponent::BuildTracks: route %s has empty trackMesh, skip laying tracks.\n",
+	for (auto& [routeName, route] : traffic->GetRoutes()) {
+		if (!route || !route->ShouldInstantiate()) continue;
+
+		const string& trackMesh = route->GetTrackMesh();
+		float unit = route->GetTrackUnit();
+		if (trackMesh.empty() || unit <= 0.f) {
+			debugf("UForeverTrafficFrameworkComponent::BuildTracks: route %s has no trackMesh/trackUnit, skip laying tracks.\n",
 				route->GetName().c_str());
+			continue;
 		}
+		const string& tunnelMesh = route->GetTrackTunnelMesh().empty() ? trackMesh : route->GetTrackTunnelMesh();
+
+		// 正反向共用同一份几何，同一条边只铺一次(跳过reversed和重复的边指针)。
+		TSet<const Route::RouteEdge*> laid;
+		int32 instanceCount = 0;
+		for (const vector<Route::RouteLeg>& legs : route->GetLines()) {
+			for (const Route::RouteLeg& leg : legs) {
+				const Route::RouteEdge* edge = leg.edge;
+				if (!edge || edge->reversed || laid.Contains(edge)) continue;
+				laid.Add(edge);
+
+				for (size_t segIndex = 0; segIndex < edge->segments.size(); segIndex++) {
+					Connection* conn = edge->segments[segIndex];
+					bool tunnel = segIndex < edge->track.size() && edge->track[segIndex].tunnel;
+					UInstancedStaticMeshComponent* ism = GetOrCreateTrackISM(tunnel ? tunnelMesh : trackMesh);
+					if (!ism || !conn) continue;
+
+					// 同BuildRoadInstances：n夹在[0.8,1.2]*unit之内，scaleAlong把每块拉伸到实际段长。
+					float segLen = conn->CalcDistance();
+					int nLow = FMath::CeilToInt(segLen / (1.2f * unit));
+					int nHigh = FMath::FloorToInt(segLen / (0.8f * unit));
+					int n = (nLow <= nHigh && nLow > 0) ? FMath::Clamp(FMath::RoundToInt(segLen / unit), nLow, nHigh) : FMath::Max(1, FMath::RoundToInt(segLen / unit));
+					float scaleAlong = (segLen / n) / unit;
+
+					for (int k = 0; k < n; k++) {
+						float t0 = static_cast<float>(k) / n;
+						float t1 = static_cast<float>(k + 1) / n;
+						Node start = conn->GetPoint(t0);
+						Node end = conn->GetPoint(t1);
+						FVector startW(start.GetX() * TRAFFIC_WORLD_SCALE, start.GetY() * TRAFFIC_WORLD_SCALE, start.GetZ() * TRAFFIC_WORLD_SCALE);
+						FVector endW(end.GetX() * TRAFFIC_WORLD_SCALE, end.GetY() * TRAFFIC_WORLD_SCALE, end.GetZ() * TRAFFIC_WORLD_SCALE);
+
+						// 轨道mesh沿局部+X延伸、轴心在起点边：摆在块的起点，朝向取起点->终点的3D方向。
+						FVector fwd = (endW - startW).GetSafeNormal();
+						if (fwd.IsNearlyZero()) fwd = FVector::ForwardVector;
+						ism->AddInstance(FTransform(fwd.Rotation(), startW, FVector(scaleAlong, 1.f, 1.f)));
+						instanceCount++;
+					}
+				}
+			}
+		}
+		debugf("UForeverTrafficFrameworkComponent::BuildTracks: route %s laid %d track instance(s).\n",
+			route->GetName().c_str(), instanceCount);
 	}
 }
 

@@ -120,3 +120,6 @@ void Vehicle::SetTransform(float inX, float inY, float inZ, float inYaw) {
 void Vehicle::GetTransform(float& outX, float& outY, float& outZ, float& outYaw) const {
 	outX = x; outY = y; outZ = z; outYaw = yaw;
 }
+
+void Vehicle::SetPitch(float pitchDegrees) { pitch = pitchDegrees; }
+float Vehicle::GetPitch() const { return pitch; }

@@ -192,6 +192,9 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	add(TEXT("构建园区"), [this]() { BuildMapZones(); });
 	add(TEXT("构建建筑"), [this]() { BuildMapBuildings(); });
 	add(TEXT("栽种植被"), [this]() { BuildMapVegetation(); });
+	// 交通要在地形网格生成之前构建：instantiate线路(火车)铺轨时要像路网一样采样地形、请求抬升/挖隧道洞
+	// (Map::ApplyTerrainFits/AddHatch)，这些得在地形网格生成之前落地。Traffic只依赖Map(站点/车位/路网)。
+	add(TEXT("构建交通"), [this]() { EnsureTrafficGenerated(); });
 	// Core里的数据全部算完之后才统一生成UE网格(顺序不能反，Roadnet要采样地形/水面，Zone/Building
 	// 要用到Roadnet产出的Lot)。
 	add(TEXT("生成地形模型"), [this]() { GenerateTerrainMesh(); });
@@ -205,7 +208,6 @@ void AForeverFrameworkActor::BuildGenerationStages()
 		EnsurePlayerGenerated();
 		EnsureIndustryGenerated();
 	});
-	add(TEXT("构建交通"), [this]() { EnsureTrafficGenerated(); });
 	add(bLoading ? TEXT("恢复存档") : TEXT("执行开局剧情"), [this]() { EnsureStoryGenerated(); });
 	add(bLoading ? TEXT("恢复载具与玩家") : TEXT("构建载具"), [this]() {
 		if (trafficFramework) {

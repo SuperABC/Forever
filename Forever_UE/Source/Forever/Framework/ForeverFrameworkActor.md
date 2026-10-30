@@ -197,10 +197,10 @@ RoadnetMesh/ZoneMesh/BuildingMesh/VegetationMesh`统一生成UE网格，顺序�
 `BuildMapTerrain`从存档恢复整张地图，其余`Build*`跳过)，各个`Ensure*Generated()`原样保留。
 
 阶段(新游戏/读档同一套)：加载模组(`RefreshMods`+`ValidateMainStoryDependencies`) → 构建地形 → 构建路网 → 构建园区 →
-构建建筑 → 栽种植被 → 生成地形/道路/园区/建筑/植被模型 → 构建人口 → 构建社会与产业(Society+Player+Industry) →
-构建交通 → 执行开局剧情(读档：恢复存档，即`EnsureStoryGenerated`) → 构建载具(读档：恢复载具与玩家，含
+构建建筑 → 栽种植被 → 构建交通 → 生成地形/道路/园区/建筑/植被模型 → 构建人口 → 构建社会与产业(Society+Player+Industry) →
+执行开局剧情(读档：恢复存档，即`EnsureStoryGenerated`) → 构建载具(读档：恢复载具与玩家，含
 `RestoreControlledPawn`/`RestoreWorldAssets`) → (进图后)构建场景。载具必须排在剧情之后，见`EnsureTrafficGenerated`
-声明处的说明。
+声明处的说明。构建交通排在地形网格之前，是因为instantiate线路（火车）铺轨时要像路网一样请求地形抬升/挖隧道洞。
 
 - 每个阶段占两帧：第一帧只让`GetLoadProgress`里的"当前阶段名"被控件读到并画出来，第二帧才执行(阶段本身会同步
   卡住主线程)。`LoadMap`结束后先空等2帧让黑屏先渲染。每个阶段单独`try/catch ExceptionBase`：打日志+`QuitGame`，

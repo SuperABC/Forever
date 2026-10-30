@@ -77,3 +77,7 @@ Dependence\map\roadnet_mod.h`相比是全新设计——老工程的`Road`只是
   在`DistributeRoadnet`时原样拷贝一份）、`Source/Basic/map/roadnet_basic.h`（`JingRoadnet`）、
   `Forever_Mod/Empty`的`EmptyRoadnet`demo mod、`Source/Core/map/zone.md`/`building.md`
   （Zone/Building读取lot的边界`Road`映射）。
+
+- **挖洞/贴地的实现已提到`general_geometry`**：`AddHatch`/`AddTunnelHatch`/`AddTerrainFit`三个成员现在只是转调
+  `general_geometry.h`的`BuildHatch`/`BuildTerrainFit`，`TerrainFitSample`/`TerrainFitRequest`也搬到了那里，
+  `RouteMod`（火车铺轨）共用同一份实现。行为和接口不变。
