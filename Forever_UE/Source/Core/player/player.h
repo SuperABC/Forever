@@ -108,6 +108,7 @@ public:
 	bool AddEstateAsset(Asset* asset);
 	Asset* GetEstateAsset(const std::string& name) const;
 	void RemoveEstateAsset(const std::string& name);
+	const std::unordered_map<std::string, Asset*>& GetEstateAssets() const { return estateAssets; }
 
 	// 真实物理位置(不是剧情/场景语义)，由BuildingElement的Room重叠检测回调维护，见
 	// Source/Forever/Element/BuildingElement.cpp的OnRoomOverlapBegin/End。
@@ -117,6 +118,23 @@ public:
 	// 转发到backPack(不存在返回0/false)——供ForeverWeaponComponent换弹时查/扣备弹。
 	int CountByType(const std::string& type) const;
 	bool ConsumeByType(const std::string& type, int amount);
+
+	// ---- 脚本驱动的物品收纳/扣除(pick_asset/grant_asset/deduct_asset/drop_asset) ----
+	// 把一件资产放到玩家身上，不处理它原来的位置(调用方先把它从房间/地面摘下来；失败时自己放回去)。
+	// 顺序：①没有背包且它是可背的(GetBackpack、Object、count==1)就背上；②有背包且空间够(size*count，
+	// 堆叠整体算)放进背包；③否则右手空放右手、再左手空放左手(手只收Object且count==1的单件)；④都不行失败，
+	// 不改变任何状态。
+	enum class StoreResult { Failed, AsBackpack, InBackpack, RightHand, LeftHand };
+	StoreResult StoreAsset(Asset* asset);
+
+	// 左右手和背包(递归容器)里指定类型的总数；不含肩膀。
+	int CountOwned(const std::string& type) const;
+	// 摘下amount个指定类型的物品(必要时拆堆叠)交给调用方(out)，所有权转给调用方。数量不够返回false且不改
+	// 变任何状态。被摘下的件如果是容器，里面的东西跟着一起走。
+	bool TakeOwned(const std::string& type, int amount, std::vector<Asset*>& out);
+
+	// 按名字找资产(手/肩/背及其容器内容、estate、worldAssets)；找不到返回nullptr。房间里的见Map::FindAssetByName。
+	Asset* FindAssetByName(const std::string& name) const;
 
 	// ---- 投掷物 ----
 	struct ThrowableEntry {

@@ -1586,3 +1586,56 @@ private:
 	std::string vehicle;
 	std::string mode;
 };
+
+// 获得资产：捡起(pick_asset/背包界面拖进身上)或凭空获得(grant_asset)之后通知脚本成功与否。执行Change的
+// 情况发给执行这个Change的脚本，背包界面里的移动发给这件资产自己的脚本；根资产是容器时，容器和递归进去
+// 的每一件资产各发一次。
+class GetAssetEvent : public Event {
+public:
+	/*
+	* @type: 资产类型(Asset::GetType()，即mod id)
+	* @result: "success"或"fail"
+	*/
+	GetAssetEvent(std::string type, std::string result);
+	virtual ~GetAssetEvent();
+
+	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为触发条件时type/result是表达式，留空表示不限
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.type/local.result读字段
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetAssetType(std::string type);
+	const std::string& GetAssetType() const;
+	void SetResult(std::string result);
+	const std::string& GetResult() const;
+
+private:
+	std::string type;
+	std::string result;
+};
+
+// 失去资产：drop_asset/deduct_asset(成功或失败：身上没有指定物品或数量不足)，以及背包界面里把东西
+// 放到地面/房间。分发规则同GetAssetEvent。
+class LoseAssetEvent : public Event {
+public:
+	LoseAssetEvent(std::string type, std::string result);
+	virtual ~LoseAssetEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetAssetType(std::string type);
+	const std::string& GetAssetType() const;
+	void SetResult(std::string result);
+	const std::string& GetResult() const;
+
+private:
+	std::string type;
+	std::string result;
+};

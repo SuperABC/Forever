@@ -9,6 +9,7 @@
 #include "story/milestone.h"
 
 #include <string>
+#include <vector>
 #include <unordered_map>
 
 
@@ -207,3 +208,8 @@ private:
 	std::unordered_map<std::string, ValueType> variables;
 
 };
+
+// 按mod的scriptModName/milestoneNames创建Script：两者都空(没有自定义script mod也没有里程碑)返回nullptr——
+// 这个mod的实例没有脚本，GetScript()为空，也不挂弹选项的触发盒。scriptModName为空但有里程碑时按"script_empty"
+// 创建(空字符串等价于script_empty，不需要在依赖里声明)。里程碑文件按Config::GetScriptPath读取。
+Script* MakeScript(ScriptFactory* factory, const std::string& scriptModName, const std::vector<std::string>& milestoneNames);

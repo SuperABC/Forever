@@ -65,3 +65,7 @@
 - `local.location`：死亡地址，按房间地址 > 建筑地址 > 园区地址 > 地块(block)地址 > `"x,y,z"`(地图单位，两位小数)的优先级。房间/建筑/园区用它们已有的触发盒做小球重叠反查(`AForeverFrameworkActor::DescribeLocation`)，地块用顶层Lot的旋转矩形做几何包含。
 触发条件里killer/weapon/part也是表达式、留空不限；damage/visible/location只能在里程碑的changes/dialogs/condition里通过`$$local.xxx`读。目前只有武器击杀带这些信息(此时`reason`固定为`"player"`，武器种类看`weapon`)，其它死因这几个字段为空/0/假。
 
+- `get_asset`/`lose_asset`(asset_type、result，都是表达式、留空不限)：脚本里读`local.type`(资产mod id)和`local.result`(`"success"`/`"fail"`)。
+  - **get_asset**：`pick_asset`/`grant_asset`之后(成功和失败都发)，以及背包界面把东西从地面区(房间/附近)拖进身上区(肩/手/背/容器)。
+  - **lose_asset**：`drop_asset`/`deduct_asset`(成功对每件被扣/丢的资产发一次；失败=身上没有指定类型或数量不足，发一次，type是Change里要求的类型)，以及背包界面把东西从身上拖到地面区(只会成功)。
+  - **发给谁**：Change触发的发给**执行这个Change的脚本**(`context.self`)；背包界面里的移动发给**这件资产自己的脚本**(没有脚本则不发)。根资产是容器时，容器和递归进去的每件资产各发一次。`UForeverStoryFrameworkComponent::NotifyAssetEvent`分发，同时在屏幕左上角显示“获取/失去 xxx”(测试用)；事件处理里再触发资产事件的嵌套深度上限8。

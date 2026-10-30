@@ -20,6 +20,7 @@ class BoardVehicleChange;
 class LeaveVehicleChange;
 class ForceLeaveChange;
 class Vehicle;
+class Asset;
 struct ScriptContext;
 
 // Script->Milestone->Event/Dialog/Change架构跑通到"游戏开始广播
@@ -136,6 +137,19 @@ public:
 	// Dialog/Change交给ProcessScriptActions。内部现场构造PostImplement。
 	void BroadcastToVehicle(Event& event, Vehicle* vehicle);
 
+	// 资产(Asset)脚本：新建的资产(凭空给出/第一次变成场景物体)若有脚本且还没收过game_start，补发一次
+	// GameStartEvent给它自己的脚本(脚本里一般在这时add_option)，并置scriptStarted。含容器内容。
+	void StartAssetScript(Asset* asset);
+
+	// get_asset/lose_asset事件分发：对root及其递归容器内的每一件资产各发一次(根资产是容器时容器本身和里面
+	// 所有的都要发)。sender非空(来自pick/grant/deduct/drop这些Change)=发给执行Change的那个脚本；sender为空
+	// (背包界面里的移动)=发给该资产自己的脚本(没有脚本则不发)。同时在屏幕左上角显示“获取/失去 xxx”。
+	// result是"success"或"fail"。
+	void NotifyAssetEvent(Asset* root, bool bGet, const std::string& result, Script* sender);
+
+	// 没有具体资产实例的失败(身上没有指定类型/数量不足)：只按类型发一个事件给sender。
+	void NotifyAssetResult(bool bGet, const std::string& type, const std::string& result, Script* sender);
+
 	// 把ProcessScriptActions匹配出的一个Dialog
 	// 交给这个函数展示，不直接打印到屏幕左上角（Dialog分支选项"没有
 	// 玩家交互，默认打印第一个Option"的限制已解除，见ForeverStoryFrameworkComponent.md）。
@@ -183,6 +197,10 @@ private:
 	Script* FindScriptByKey(const std::string& key) const;
 	// create_timer的category/label指定的目标脚本(category为空时就是self)。
 	const Container* ResolveTimerOwner(const std::string& category, const std::string& label, const Container* self) const;
+
+	// get_asset/lose_asset事件处理里又执行Change再触发事件的嵌套深度，超过上限丢弃并警告，防止互相触发。
+	int32 assetEventDepth = 0;
+	static constexpr int32 kMaxAssetEventDepth = 8;
 
 	// BroadcastGlobalMessage当前的嵌套深度，见那边的注释。
 	int32 globalMessageDepth = 0;

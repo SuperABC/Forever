@@ -59,3 +59,6 @@
   五个槽位+`estateAssets`不动产载具表，均持有所有权）、`Room`（`assets`表，持有所有权）、
   `Source/Forever/Framework/ForeverAssetFrameworkComponent`（世界掉落物`AAssetElement`
   持有非owning指针，真正所有权仍在`Room`/容器里）。
+
+## 脚本与选项
+`AssetMod::scriptModName/milestoneNames`(默认都空)→`Asset`构造时`MakeScript`创建Script(都空则为空)，`$$self.name`=资产实例名、`$$self.type`=mod id。`Asset`有自己的`options`(`AddOption/RemoveOption/GetOptions`)和`scriptStarted`(是否已收过game_start；新建资产在第一次变成场景物体或`grant_asset`后由`StartAssetScript`补发)。`FindDescendant(name)`递归按名字找容器内容。存档：`options`和`scriptStarted`追加在mod状态之后；脚本状态由`script_save`的`asset:<名字>`键保存。

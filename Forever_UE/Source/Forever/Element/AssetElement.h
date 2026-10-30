@@ -8,6 +8,9 @@
 
 class UStaticMeshComponent;
 class UStaticMesh;
+class UBoxComponent;
+class UPrimitiveComponent;
+struct FHitResult;
 class Asset;
 
 // 物品/资产在世界里的可视化表示——默认用项目通用的Cube占位(和ABuildingElement/
@@ -40,7 +43,36 @@ public:
 	// 不忽略会被顶开)；小而快的球体开连续碰撞检测，避免穿过薄墙/地面。
 	void Launch(const FVector& velocity, AActor* thrower);
 
+	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
+	// 调用)：重新烘焙快照；玩家站在触发盒里时同步换掉屏幕上的选项。没有触发盒(资产没有脚本)时空操作。
+	void RefreshOptions();
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 private:
+	// 资产带脚本(asset->GetScript()非空)才建：比网格大一圈的只overlap触发盒，玩家的AForeverCharacter进入时
+	// 把asset->GetOptions()推给MeetOption，照抄AVehicleElement::BuildProximityBox。
+	void BuildProximityBox();
+
+	UFUNCTION()
+	void OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	UFUNCTION()
+	void OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
+	void BakeOptions();
+	void ShowOptions();
+	void HideOptions();
+
+	UPROPERTY()
+	TObjectPtr<UBoxComponent> proximityBox;
+
+	// 名字和选项的快照，Overlap回调只读这份，不解引用asset(和AVehicleElement同一套安全原则)。
+	FString assetNameOnly;
+	TArray<FString> cachedOptions;
+	bool bPlayerInBox = false;
+
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> mesh;
 

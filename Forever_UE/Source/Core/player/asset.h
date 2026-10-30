@@ -5,6 +5,9 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
+
+class Script;
 
 
 // Asset：物品/资产的实例——照抄Storage的"factory+mod+自己的可变状态"模式，不是照抄老工程
@@ -23,7 +26,7 @@ public:
 	// 名字取mod->GetName()(mod保证全局唯一)，不再由调用方传入；读档时PlayerSaveCodec
 	// 用友元把name覆写回存档里的名字。
 	Asset(AssetFactory* factory, const std::string& id);
-	~Asset(); // 递归delete contents
+	~Asset(); // 递归delete contents，delete script
 
 	bool IsValid() const;
 
@@ -42,6 +45,19 @@ public:
 	const std::string& GetMeshPath() const; // 空=沿用Cube占位
 	float GetMeshScale() const;
 	bool IsContainer() const; // volume > 0
+
+	// 脚本：mod的scriptModName/milestoneNames都空则为nullptr(见MakeScript)。选项(add_option/remove_option
+	// 加的交互选项)照抄Vehicle::AddOption/RemoveOption。scriptStarted=这个脚本是否已经收到过game_start
+	// (新建的资产在第一次变成场景物体/凭空给出时补发一次，见UForeverStoryFrameworkComponent::StartAssetScript)。
+	Script* GetScript() const;
+	const std::vector<std::string>& GetOptions() const;
+	void AddOption(const std::string& option);
+	void RemoveOption(const std::string& option);
+	bool IsScriptStarted() const;
+	void SetScriptStarted(bool value);
+
+	// 在自己的contents里递归按名字找(不含自己)，找不到返回nullptr。
+	Asset* FindDescendant(const std::string& name) const;
 
 	int GetCount() const;
 	void SetCount(int value);
@@ -86,4 +102,8 @@ private:
 
 	int count = 1;
 	std::unordered_map<std::string, Asset*> contents; // 独占持有
+
+	Script* script = nullptr; // 独占持有，可为空
+	std::vector<std::string> options;
+	bool scriptStarted = false;
 };

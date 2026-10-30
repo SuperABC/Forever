@@ -5,6 +5,7 @@
 #include "story/change.h"
 #include "common/error.h"
 #include "common/json.h"
+#include "common/config.h"
 
 #include <fstream>
 #include <filesystem>
@@ -308,6 +309,12 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			if (type == "enter_stop") event = new EnterStopEvent(obj["stop"].AsString());
 			else event = new LeaveStopEvent(obj["stop"].AsString());
 		}
+		else if (type == "get_asset" || type == "lose_asset") {
+			// JSON里的"type"已经是事件类型本身，资产类型的过滤字段叫asset_type；asset_type/result都可以省略
+			// (留空=不限)，见GetAssetEvent::Match。脚本里读事件字段仍然是$$local.type/$$local.result。
+			if (type == "get_asset") event = new GetAssetEvent(obj["asset_type"].AsString(), obj["result"].AsString());
+			else event = new LoseAssetEvent(obj["asset_type"].AsString(), obj["result"].AsString());
+		}
 		else if (type == "enter_vehicle" || type == "leave_vehicle") {
 			// vehicle/mode都可以省略(留空=不限)，见EnterVehicleEvent::Match。mode是"drive"/"ride"。
 			if (type == "enter_vehicle") event = new EnterVehicleEvent(obj["vehicle"].AsString(), obj["mode"].AsString());
@@ -428,6 +435,22 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			vector<const Change*> nested;
 			for (Change* child : BuildChanges(obj["do"])) nested.push_back(child);
 			change = new ForRangeChange(var.AsString(), from.AsString(), to.AsString(), obj["step"].AsString(), move(nested));
+		}
+		else if (type == "pick_asset") {
+			// asset可以省略(=执行这个Change的脚本所属的资产)。
+			change = new PickAssetChange(obj["asset"].AsString());
+		}
+		else if (type == "grant_asset" || type == "deduct_asset" || type == "drop_asset") {
+			// JSON里的"type"已经是Change类型本身，资产类型的字段叫asset_type。
+			auto assetType = obj["asset_type"];
+			if (assetType.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing asset_type for " + type + " change.\n");
+			}
+			// count可以省略(=1)。
+			string count = obj["count"].AsString();
+			if (type == "grant_asset") change = new GrantAssetChange(assetType.AsString(), count);
+			else if (type == "deduct_asset") change = new DeductAssetChange(assetType.AsString(), count);
+			else change = new DropAssetChange(assetType.AsString(), count);
 		}
 		else if (type == "npc_revive") {
 			auto name = obj["name"];
@@ -582,4 +605,14 @@ vector<string> Script::BuildSubsequences(const JsonValue& root) {
 		subsequences.push_back(obj.AsString());
 	}
 	return subsequences;
+}
+
+Script* MakeScript(ScriptFactory* factory, const string& scriptModName, const vector<string>& milestoneNames) {
+	if (!factory) return nullptr;
+	if (scriptModName.empty() && milestoneNames.empty()) return nullptr;
+	Script* script = new Script(factory, scriptModName.empty() ? string("script_empty") : scriptModName);
+	for (const string& milestoneName : milestoneNames) {
+		script->ReadMilestones(Config::GetScriptPath(milestoneName));
+	}
+	return script;
 }

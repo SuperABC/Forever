@@ -3,6 +3,8 @@
 #include "common/utility.h"
 #include "common/registry.h"
 #include "map/room.h"
+#include "story/change.h"
+#include "story/expression.h"
 
 #include <algorithm>
 
@@ -316,6 +318,122 @@ bool Player::HasThrowableInHand(const string& type) const {
 }
 
 bool Player::ApplyChange(const Change* change, const ScriptContext& context) {
-	// 占位，等玩家相关的Change子类被点名实现时再补。
+	// add_option/remove_option作用在玩家身上/地上的资产上(房间里的由Map::ApplyChange处理)，名字全局唯一，
+	// 找不到静默忽略，和其它域一样。
+	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+		if (Asset* asset = FindAssetByName(ToString(EvaluateExpression(addOption->GetName(), context)))) {
+			asset->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
+		}
+		return true;
+	}
+	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		if (Asset* asset = FindAssetByName(ToString(EvaluateExpression(removeOption->GetName(), context)))) {
+			asset->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
+		}
+		return true;
+	}
 	return false;
+}
+
+Asset* Player::FindAssetByName(const string& name) const {
+	for (Asset* slot : { leftHand, rightHand, backPack, leftShoulder, rightShoulder }) {
+		if (!slot) continue;
+		if (slot->GetName() == name) return slot;
+		if (Asset* found = slot->FindDescendant(name)) return found;
+	}
+	for (const auto& [key, asset] : estateAssets) {
+		if (asset->GetName() == name) return asset;
+		if (Asset* found = asset->FindDescendant(name)) return found;
+	}
+	for (const auto& [key, world] : worldAssets) {
+		if (!world.asset) continue;
+		if (world.asset->GetName() == name) return world.asset;
+		if (Asset* found = world.asset->FindDescendant(name)) return found;
+	}
+	return nullptr;
+}
+
+Player::StoreResult Player::StoreAsset(Asset* asset) {
+	if (!asset) return StoreResult::Failed;
+	bool single = asset->GetCount() == 1 && asset->GetMobility() == AssetMobility::Object;
+
+	if (!backPack && single && asset->GetBackpack()) {
+		backPack = asset;
+		return StoreResult::AsBackpack;
+	}
+	if (backPack && asset->GetSize() * asset->GetCount() <= backPack->GetSpace() && backPack->AddContent(asset)) {
+		return StoreResult::InBackpack;
+	}
+	if (single && !rightHand) {
+		rightHand = asset;
+		return StoreResult::RightHand;
+	}
+	if (single && !leftHand) {
+		leftHand = asset;
+		return StoreResult::LeftHand;
+	}
+	return StoreResult::Failed;
+}
+
+int Player::CountOwned(const string& type) const {
+	int total = 0;
+	for (const Asset* slot : { leftHand, rightHand, backPack }) {
+		if (slot) total += slot->CountByType(type);
+	}
+	return total;
+}
+
+namespace {
+	// 从一个容器的直接子项里摘(递归进子容器)，返回还差多少。子项按name排序保证顺序稳定。
+	int TakeFromContainer(Player* player, Asset* container, const string& type, int remaining, vector<Asset*>& out) {
+		vector<string> names;
+		for (const auto& [name, content] : container->GetContents()) names.push_back(name);
+		sort(names.begin(), names.end());
+		for (const string& name : names) {
+			if (remaining <= 0) break;
+			const auto& contents = container->GetContents();
+			auto it = contents.find(name);
+			if (it == contents.end()) continue;
+			Asset* content = it->second;
+			if (content->GetType() == type) {
+				if (content->GetCount() <= remaining) {
+					remaining -= content->GetCount();
+					out.push_back(container->RemoveContent(name));
+				}
+				else if (Asset* piece = player->SplitAsset(content, remaining)) {
+					out.push_back(piece);
+					remaining = 0;
+				}
+			}
+			else if (content->IsContainer()) {
+				remaining = TakeFromContainer(player, content, type, remaining, out);
+			}
+		}
+		return remaining;
+	}
+}
+
+bool Player::TakeOwned(const string& type, int amount, vector<Asset*>& out) {
+	if (amount <= 0 || CountOwned(type) < amount) return false;
+	int remaining = amount;
+	for (Asset** slot : { &leftHand, &rightHand, &backPack }) {
+		if (remaining <= 0) break;
+		Asset* asset = *slot;
+		if (!asset) continue;
+		if (asset->GetType() == type) {
+			if (asset->GetCount() <= remaining) {
+				remaining -= asset->GetCount();
+				out.push_back(asset);
+				*slot = nullptr;
+			}
+			else if (Asset* piece = SplitAsset(asset, remaining)) {
+				out.push_back(piece);
+				remaining = 0;
+			}
+		}
+		else if (asset->IsContainer()) {
+			remaining = TakeFromContainer(this, asset, type, remaining, out);
+		}
+	}
+	return remaining <= 0;
 }

@@ -1,6 +1,8 @@
 #include "UI/InventoryTransfer.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
+#include "Framework/ForeverFrameworkActor.h"
+#include "Framework/ForeverStoryFrameworkComponent.h"
 
 #include "player/player.h"
 #include "player/asset.h"
@@ -147,6 +149,25 @@ namespace {
 		}
 	}
 
+	// get_asset/lose_asset事件：地面区(房间/附近)->身上区(肩/手/背/容器)是获得(成功或失败)，身上区->地面区是
+	// 失去(只会成功)，同类区之间不发。事件发给这件资产自己的脚本(sender传空)，容器会连里面的东西一起发，
+	// 并在左上角显示，见UForeverStoryFrameworkComponent::NotifyAssetEvent。
+	void NotifyTransfer(UForeverAssetFrameworkComponent* assetFramework, const FInvSource& source, const FInvDest& dest,
+		Asset* asset, bool bSuccess) {
+		AForeverFrameworkActor* framework = assetFramework ? Cast<AForeverFrameworkActor>(assetFramework->GetOwner()) : nullptr;
+		UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr;
+		if (!story || !asset) return;
+
+		auto isGround = [](EInvZone zone) { return zone == EInvZone::Room || zone == EInvZone::Nearby; };
+		auto isBody = [](EInvZone zone) { return InventoryTransfer::IsSlot(zone) || zone == EInvZone::Container; };
+		if (isGround(source.zone) && isBody(dest.zone)) {
+			story->NotifyAssetEvent(asset, /*bGet=*/true, bSuccess ? "success" : "fail", nullptr);
+		}
+		else if (isBody(source.zone) && isGround(dest.zone) && bSuccess) {
+			story->NotifyAssetEvent(asset, /*bGet=*/false, "success", nullptr);
+		}
+	}
+
 	// 源/目标是房间根或附近根的物品才有对应的世界Actor。
 	bool HasWorldActor(EInvZone zone, Asset* container) {
 		return !container && (zone == EInvZone::Room || zone == EInvZone::Nearby);
@@ -182,13 +203,14 @@ namespace InventoryTransfer {
 		if (source.zone == dest.zone && (IsSlot(source.zone) || source.parent == dest.container)) return false;
 
 		if (!IsAtSource(player, source)) { OutError = TEXT("物品已不在原位置"); return false; }
-		if (!CanPlace(player, dest, asset, OutError)) return false;
+		if (!CanPlace(player, dest, asset, OutError)) { NotifyTransfer(assetFramework, source, dest, asset, false); return false; }
 
 		int total = asset->GetCount();
 		int amount = all ? total : FMath::Min(1, total);
 		if (amount <= 0) return false;
 		if ((dest.zone == EInvZone::LeftHand || dest.zone == EInvZone::RightHand) && amount != 1) {
 			OutError = TEXT("手里只能拿1个物品(不按Ctrl拖拽可只拿1个)");
+			NotifyTransfer(assetFramework, source, dest, asset, false);
 			return false;
 		}
 
@@ -199,9 +221,12 @@ namespace InventoryTransfer {
 		if (Asset* target = FindMergeTarget(player, dest, asset)) {
 			if (dest.container && asset->GetSize() * amount > dest.container->GetSpace()) {
 				OutError = TEXT("容器空间不足");
+				NotifyTransfer(assetFramework, source, dest, asset, false);
 				return false;
 			}
 			target->SetCount(target->GetCount() + amount);
+			// 合并进目标之前先发事件：整个堆叠合并时这件资产马上被销毁。
+			NotifyTransfer(assetFramework, source, dest, asset, true);
 			if (amount < total) {
 				asset->SetCount(total - amount);
 			} else {
@@ -217,11 +242,11 @@ namespace InventoryTransfer {
 		bool whole = amount >= total;
 		if (!whole) {
 			moving = player->SplitAsset(asset, amount);
-			if (!moving) { OutError = TEXT("拆分失败"); return false; }
+			if (!moving) { OutError = TEXT("拆分失败"); NotifyTransfer(assetFramework, source, dest, asset, false); return false; }
 		}
 
 		Player::WorldAsset nearbyEntry;
-		if (whole && !Detach(player, source, nearbyEntry)) { OutError = TEXT("无法取出物品"); return false; }
+		if (whole && !Detach(player, source, nearbyEntry)) { OutError = TEXT("无法取出物品"); NotifyTransfer(assetFramework, source, dest, asset, false); return false; }
 
 		if (!Place(player, dest, moving, pawnLocation)) {
 			if (whole) {
@@ -231,11 +256,13 @@ namespace InventoryTransfer {
 				player->DestroyAsset(moving);
 			}
 			OutError = TEXT("放不下(位置已被占用或空间不足)");
+			NotifyTransfer(assetFramework, source, dest, asset, false);
 			return false;
 		}
 
 		if (whole && sourceHasActor && assetFramework) assetFramework->DestroyWorldAsset(asset);
 		if (destHasActor && assetFramework) assetFramework->SpawnWorldAsset(moving, pawnLocation);
+		NotifyTransfer(assetFramework, source, dest, moving, true);
 		return true;
 	}
 

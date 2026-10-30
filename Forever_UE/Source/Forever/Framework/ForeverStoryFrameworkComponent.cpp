@@ -4,6 +4,8 @@
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
+#include "Framework/ForeverAssetFrameworkComponent.h"
+#include "Element/AssetElement.h"
 #include "Element/CitizenElement.h"
 #include "Player/ForeverPlayerController.h"
 #include "UI/SectionSpeakingWidget.h"
@@ -33,6 +35,7 @@
 #include "populace/scheduler.h"
 #include "traffic/traffic.h"
 #include "traffic/vehicle.h"
+#include "player/asset.h"
 #include "map/door.h"
 #include "map/map.h"
 #include "map/cabin.h"
@@ -131,6 +134,34 @@ void UForeverStoryFrameworkComponent::BroadcastToScript(Event& event, Script* sc
 	ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
 }
 
+namespace {
+	// 玩家身上(手/肩/背)、estate、地上(worldAssets)、全部房间里的资产，含容器内容，摊平成数组。
+	void CollectAllAssets(AForeverFrameworkActor* framework, TArray<Asset*>& out) {
+		auto add = [&](auto&& self, Asset* asset) -> void {
+			if (!asset) return;
+			out.Add(asset);
+			for (auto& [childName, child] : asset->GetContents()) self(self, child);
+		};
+		if (Player* player = framework ? framework->GetPlayer() : nullptr) {
+			for (Asset* slot : { player->GetLeftHand(), player->GetRightHand(), player->GetBackPack(),
+				player->GetLeftShoulder(), player->GetRightShoulder() }) {
+				add(add, slot);
+			}
+			for (auto& [name, asset] : player->GetEstateAssets()) add(add, asset);
+			for (auto& [name, world] : player->GetWorldAssets()) add(add, world.asset);
+		}
+		if (Map* map = framework ? framework->GetMap() : nullptr) {
+			for (auto& [buildingName, building] : map->GetBuildings()) {
+				if (!building) continue;
+				for (Room* room : building->GetRooms()) {
+					if (!room) continue;
+					for (auto& [assetName, asset] : room->GetAssets()) add(add, asset);
+				}
+			}
+		}
+	}
+}
+
 void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain) {
 	if (!story) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
@@ -187,6 +218,93 @@ void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostIm
 		for (auto& [name, zone] : map->GetZones()) {
 			if (zone) broadcastOne(zone->GetScript());
 		}
+	}
+
+	// 资产(玩家身上/地上/房间里，含容器内容)带的脚本。game_start同时置scriptStarted，之后新建的资产
+	// 在StartAssetScript里补发。
+	TArray<Asset*> assets;
+	CollectAllAssets(framework, assets);
+	bool bGameStart = dynamic_cast<GameStartEvent*>(&event) != nullptr;
+	for (Asset* asset : assets) {
+		if (!asset->GetScript()) continue;
+		if (bGameStart) {
+			if (asset->IsScriptStarted()) continue;
+			asset->SetScriptStarted(true);
+		}
+		broadcastOne(asset->GetScript());
+	}
+}
+
+void UForeverStoryFrameworkComponent::StartAssetScript(Asset* asset) {
+	if (!story || !asset) return;
+	if (asset->GetScript() && !asset->IsScriptStarted()) {
+		asset->SetScriptStarted(true);
+		AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+		PostImplement postImplement(
+			framework ? framework->GetMap() : nullptr,
+			framework ? framework->GetPopulace() : nullptr,
+			framework ? framework->GetSociety() : nullptr,
+			story,
+			framework ? framework->GetIndustry() : nullptr,
+			framework ? framework->GetTraffic() : nullptr,
+			framework ? framework->GetPlayer() : nullptr);
+		GameStartEvent event;
+		BroadcastToScript(event, asset->GetScript(), postImplement);
+	}
+	// 容器里的东西各有各的脚本。先拷贝名字列表：脚本里的Change可能改动容器。
+	TArray<Asset*> children;
+	for (auto& [childName, child] : asset->GetContents()) children.Add(child);
+	for (Asset* child : children) StartAssetScript(child);
+}
+
+void UForeverStoryFrameworkComponent::NotifyAssetEvent(Asset* root, bool bGet, const string& result, Script* sender) {
+	if (!story || !root) return;
+	if (assetEventDepth >= kMaxAssetEventDepth) {
+		UE_LOG(LogTemp, Warning, TEXT("UForeverStoryFrameworkComponent::NotifyAssetEvent: nested asset event depth exceeded %d, dropped (do two scripts keep triggering each other?)"),
+			kMaxAssetEventDepth);
+		return;
+	}
+
+	// 先把整棵树摊平成快照再发：事件处理里的Change可能改动容器，边遍历边发不安全。
+	struct FNode { string type; string name; Script* ownScript; };
+	TArray<FNode> nodes;
+	auto flatten = [&](auto&& self, Asset* asset) -> void {
+		nodes.Add({ asset->GetType(), asset->GetName(), asset->GetScript() });
+		for (auto& [childName, child] : asset->GetContents()) self(self, child);
+	};
+	flatten(flatten, root);
+
+	assetEventDepth++;
+	for (const FNode& node : nodes) {
+		// 测试用：屏幕左上角显示。
+		if (GEngine) {
+			FString text = FString::Printf(TEXT("%s %s%s"), bGet ? TEXT("获取") : TEXT("失去"),
+				UTF8_TO_TCHAR(node.name.c_str()), result == "success" ? TEXT("") : TEXT(" 失败"));
+			GEngine->AddOnScreenDebugMessage(-1, 5.f, result == "success" ? FColor::Green : FColor::Red, text);
+		}
+		NotifyAssetResult(bGet, node.type, result, sender ? sender : node.ownScript);
+	}
+	assetEventDepth--;
+}
+
+void UForeverStoryFrameworkComponent::NotifyAssetResult(bool bGet, const string& type, const string& result, Script* sender) {
+	if (!story || !sender) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	if (bGet) {
+		GetAssetEvent event(type, result);
+		BroadcastToScript(event, sender, postImplement);
+	}
+	else {
+		LoseAssetEvent event(type, result);
+		BroadcastToScript(event, sender, postImplement);
 	}
 }
 
@@ -264,6 +382,13 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	Door* targetDoor = map ? map->FindDoorByName(nameUtf8) : nullptr;
 	if (targetDoor && targetDoor->GetScript()) {
 		matchOne(targetDoor->GetScript());
+	}
+
+	// 资产：name是场景里一个带脚本的资产的名字(靠近它弹出的选项)。
+	if (UForeverAssetFrameworkComponent* assetFramework = framework ? framework->GetAssetFramework() : nullptr) {
+		if (AAssetElement* element = assetFramework->FindElementByName(name)) {
+			if (Asset* asset = element->GetAsset()) matchOne(asset->GetScript());
+		}
 	}
 
 	// 电梯：name是电梯的交互名("<building名> 电梯<n>")。
@@ -518,7 +643,7 @@ string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) c
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!framework) return string();
 	for (auto& [key, candidate] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
-		framework->GetSociety(), framework->GetTraffic(), story)) {
+		framework->GetSociety(), framework->GetTraffic(), story, framework->GetPlayer())) {
 		if (candidate == script) return key;
 	}
 	return string();
@@ -528,7 +653,7 @@ Script* UForeverStoryFrameworkComponent::FindScriptByKey(const string& key) cons
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!framework || key.empty()) return nullptr;
 	for (auto& [candidateKey, script] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
-		framework->GetSociety(), framework->GetTraffic(), story)) {
+		framework->GetSociety(), framework->GetTraffic(), story, framework->GetPlayer())) {
 		if (candidateKey == key) return script;
 	}
 	return nullptr;

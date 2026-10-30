@@ -36,3 +36,6 @@
 存在 `ue` 段，由 `ForeverSaveSubsystem` 写、`AForeverFrameworkActor::RestoreControlledPawn` 读：
 - 玩家操控对象的位置和朝向、视角朝向；
 - 激活的肩膀武器 `weaponSlot` 和弹匣余量 `magazineAmmo`。读档后用 `AForeverCharacter::RestoreWeaponState` 改回存档时的状态。
+
+## 资产的options与scriptStarted
+`WriteAsset/ReadAsset`在mod状态之后追加`U32 options数量 + 各Str`、`U8 scriptStarted`；`ReadAsset`读完把脚本里的`name`变量改回存档里的名字。

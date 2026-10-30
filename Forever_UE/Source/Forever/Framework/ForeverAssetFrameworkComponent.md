@@ -40,3 +40,6 @@
 
 - 背包界面的丢弃：房间里进`Room::assets`，室外进`Player::worldAssets`；拾取仍只认房间(室外的物品捡不起来，要做的话需要房间栏显示附近的室外物品)；除投掷物外的资产仍统一用Cube占位；其余资产的真实网格/图标留作后续美术资产到位后，在各自的
   `AssetMod`里填`meshPath`即可。
+
+## 脚本驱动的背包Change
+`ApplyPickAsset/ApplyGrantAsset/ApplyDeductAsset/ApplyDropAsset`(由`AForeverFrameworkActor::ApplyChange`转发)。pick：在房间根/`worldAssets`里找到资产并摘下→`Player::StoreAsset`→成功`DestroyWorldAsset`+`get_asset(success)`，失败放回原处+`get_asset(fail)`。grant：`CreateAsset`+`SetCount`+`StoreAsset`。deduct/drop：`TakeOwned`，drop再`SpawnWorldAsset`到玩家身前。`FindElementByName(name)`按资产名找场景里的`AAssetElement`(带脚本的资产`SpawnWorldAsset`时先补发game_start再`Init`烘焙选项)。

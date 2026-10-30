@@ -1,0 +1,103 @@
+{
+	// 资产测试脚本(四种武器asset的milestoneNames={"asset_test"})。资产掉在地上、玩家走近时弹出这些选项：
+	//   捡起：pick_asset，把自己捡进身上(背包->手)，结果通过get_asset事件发回本脚本；
+	//   测试获得/扣除/丢弃：对“同类型”的资产执行grant_asset/deduct_asset/drop_asset，事件同样发回本脚本；
+	//   测试扣除过量：一次扣9999个，身上不够，验证lose_asset(fail)。
+	// get_asset/lose_asset里程碑只是debug_print，用来确认事件发给了正确的脚本(没发给的脚本不会打印)。
+	"milestones": [
+		{
+			"milestone": "ready",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "add_option", "name": "$$self.name", "option": "捡起" },
+				{ "type": "add_option", "name": "$$self.name", "option": "测试获得" },
+				{ "type": "add_option", "name": "$$self.name", "option": "测试扣除" },
+				{ "type": "add_option", "name": "$$self.name", "option": "测试丢弃" },
+				{ "type": "add_option", "name": "$$self.name", "option": "测试扣除过量" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "pick",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "捡起" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "pick_asset" } ],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "grant",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "测试获得" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "grant_asset", "asset_type": "$$self.type", "count": "1" } ],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "deduct",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "测试扣除" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "deduct_asset", "asset_type": "$$self.type", "count": "1" } ],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "drop",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "测试丢弃" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "drop_asset", "asset_type": "$$self.type", "count": "1" } ],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "deduct_too_many",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "测试扣除过量" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "deduct_asset", "asset_type": "$$self.type", "count": "9999" } ],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "on_get_asset",
+			"triggers": [ { "type": "get_asset" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "debug_print", "message": "[脚本 $$self.name] 收到 get_asset: $$local.type $$local.result" } ],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "on_lose_asset",
+			"triggers": [ { "type": "lose_asset" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [ { "type": "debug_print", "message": "[脚本 $$self.name] 收到 lose_asset: $$local.type $$local.result" } ],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

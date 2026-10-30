@@ -5,6 +5,7 @@
 #include "common/config.h"
 #include "common/registry.h"
 #include "map/room.h"
+#include "player/asset.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "story/change.h"
@@ -2456,6 +2457,22 @@ Cabin* Map::CreateCabin(Building* building, int specIndex, const ElevatorCabinSp
 	return cabin;
 }
 
+Asset* Map::FindAssetByName(const string& name) const {
+	for (const auto& [buildingName, building] : buildings) {
+		if (!building) continue;
+		for (Room* room : building->GetRooms()) {
+			if (!room) continue;
+			const auto& assets = room->GetAssets();
+			auto it = assets.find(name);
+			if (it != assets.end()) return it->second;
+			for (const auto& [key, asset] : assets) {
+				if (Asset* found = asset->FindDescendant(name)) return found;
+			}
+		}
+	}
+	return nullptr;
+}
+
 namespace {
 	// 按实体快照的scriptModName/milestoneNames建一个Script，写入name/address变量。milestoneNames为空
 	// 返回nullptr(没有脚本)，和Door/Cabin同一个约定。
@@ -2542,6 +2559,7 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 		string option = ToString(EvaluateExpression(addOption->GetOption(), context));
 		if (Door* door = FindDoorByName(name)) door->AddOption(option);
 		if (Cabin* cabin = FindCabinByName(name)) cabin->AddOption(option);
+		if (Asset* asset = FindAssetByName(name)) asset->AddOption(option); // 房间里的资产
 		return true;
 	}
 	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
@@ -2549,6 +2567,7 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 		string option = ToString(EvaluateExpression(removeOption->GetOption(), context));
 		if (Door* door = FindDoorByName(name)) door->RemoveOption(option);
 		if (Cabin* cabin = FindCabinByName(name)) cabin->RemoveOption(option);
+		if (Asset* asset = FindAssetByName(name)) asset->RemoveOption(option); // 房间里的资产
 		return true;
 	}
 	if (auto* launch = dynamic_cast<const LaunchElevatorChange*>(change)) {

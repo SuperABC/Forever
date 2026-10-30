@@ -251,6 +251,8 @@ public:
 	void BuildAllEntityScripts();
 	// 按交互名查电梯，找不到返回nullptr。
 	Cabin* FindCabinByName(const std::string& interactName) const;
+	// 按名字找房间里的资产(含容器内容)，遍历全部房间；找不到返回nullptr。玩家身上/地上的见Player::FindAssetByName。
+	Asset* FindAssetByName(const std::string& name) const;
 
 	// 所有真正放了门扇的门——不分三类，供UForeverStoryFrameworkComponent::
 	// BroadcastGameStart遍历+过滤GetScript()!=nullptr。

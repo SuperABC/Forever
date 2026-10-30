@@ -6,6 +6,12 @@
 
 class AAssetElement;
 class Asset;
+class Script;
+class PickAssetChange;
+class GrantAssetChange;
+class DeductAssetChange;
+class DropAssetChange;
+struct ScriptContext;
 
 // 世界掉落物(cube占位)的生成/销毁登记——对应旧Framework Actor `Asset`(C++ Base:
 // AssetBase)。背包UI的Drop/Pick动作分别调用SpawnWorldAsset/DestroyWorldAsset，见
@@ -40,6 +46,16 @@ public:
 
 	// 查表Destroy()+从表里移除——不delete Asset本身，调用方/Room负责Asset的生命周期。
 	void DestroyWorldAsset(Asset* asset);
+
+	// 按资产名字找场景里的Actor(只有房间里/地上的资产有)，找不到返回nullptr。
+	AAssetElement* FindElementByName(const FString& name) const;
+
+	// pick_asset/grant_asset/deduct_asset/drop_asset四个Change的执行，由AForeverFrameworkActor::ApplyChange转发。
+	// 事件(get_asset/lose_asset)发给执行Change的脚本(context.self)，见UForeverStoryFrameworkComponent::NotifyAssetEvent。
+	void ApplyPickAsset(const PickAssetChange* change, const ScriptContext& context);
+	void ApplyGrantAsset(const GrantAssetChange* change, const ScriptContext& context);
+	void ApplyDeductAsset(const DeductAssetChange* change, const ScriptContext& context);
+	void ApplyDropAsset(const DropAssetChange* change, const ScriptContext& context);
 
 private:
 	// 不能标UPROPERTY——Asset*是Core层的普通C++类型，不是UObject/USTRUCT，UHT反射不认。

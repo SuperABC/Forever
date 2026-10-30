@@ -1,6 +1,12 @@
 #include "Element/AssetElement.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "Components/BoxComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Framework/ForeverFrameworkActor.h"
+#include "Player/ForeverPlayerController.h"
+#include "Player/ForeverCharacter.h"
+#include "UI/MeetOptionWidget.h"
 #include "Engine/Engine.h"
 #include "Engine/StaticMesh.h"
 #include "UObject/ConstructorHelpers.h"
@@ -51,6 +57,91 @@ void AAssetElement::Init(Asset* inAsset) {
 	if (UStaticMesh* customMesh = LoadAssetMesh(asset->GetMeshPath())) {
 		mesh->SetStaticMesh(customMesh);
 	}
+
+	BuildProximityBox();
+}
+
+void AAssetElement::BuildProximityBox() {
+	if (!asset || !asset->GetScript() || proximityBox) return;
+
+	// 根组件带缩放(meshScale)，子组件的局部尺寸要除掉它，才是世界里120x120x80cm的一圈。
+	FVector scale = GetActorScale3D();
+	scale.X = FMath::Max(scale.X, 0.01f);
+	scale.Y = FMath::Max(scale.Y, 0.01f);
+	scale.Z = FMath::Max(scale.Z, 0.01f);
+
+	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
+	box->SetBoxExtent(FVector(120.f, 120.f, 80.f) / scale);
+	box->SetCollisionProfileName(TEXT("Trigger"));
+	box->SetupAttachment(RootComponent);
+	box->OnComponentBeginOverlap.AddDynamic(this, &AAssetElement::OnOverlapBegin);
+	box->OnComponentEndOverlap.AddDynamic(this, &AAssetElement::OnOverlapEnd);
+	box->RegisterComponent();
+	proximityBox = box;
+
+	assetNameOnly = UTF8_TO_TCHAR(asset->GetName().c_str());
+	BakeOptions();
+}
+
+void AAssetElement::BakeOptions() {
+	if (!asset) return;
+	cachedOptions.Reset();
+	for (const std::string& option : asset->GetOptions()) {
+		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+	}
+}
+
+void AAssetElement::ShowOptions() {
+	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	UMeetOptionWidget* meetOption = playerController ? playerController->GetMeetOptionWidget() : nullptr;
+	if (!meetOption) return;
+
+	AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	// 先清掉这件资产名下的旧按钮再逐个加，不依赖ReplaceOptions(名下没有按钮时它是空操作)。
+	meetOption->RemoveName(assetNameOnly);
+	for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
+		meetOption->AddOption(frameworkActor, cachedOptions[idx], assetNameOnly, idx);
+	}
+}
+
+void AAssetElement::HideOptions() {
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			meetOption->RemoveName(assetNameOnly);
+		}
+	}
+}
+
+void AAssetElement::RefreshOptions() {
+	if (!proximityBox || !asset) return;
+	BakeOptions();
+	if (bPlayerInBox) ShowOptions();
+}
+
+void AAssetElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
+	// 只有玩家当前控制的AForeverCharacter(人物)走近才弹选项，开车经过不算。
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn || OtherActor != pawn || !Cast<AForeverCharacter>(OtherActor)) return;
+	bPlayerInBox = true;
+	ShowOptions();
+}
+
+void AAssetElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn || OtherActor != pawn || !Cast<AForeverCharacter>(OtherActor)) return;
+	bPlayerInBox = false;
+	HideOptions();
+}
+
+void AAssetElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
+	// 被捡走/销毁时玩家可能还站在盒里，引擎不一定补发End：主动撤掉屏幕上这件资产的选项。
+	if (bPlayerInBox) HideOptions();
+	bPlayerInBox = false;
+	asset = nullptr;
+	Super::EndPlay(EndPlayReason);
 }
 
 void AAssetElement::Launch(const FVector& velocity, AActor* thrower) {

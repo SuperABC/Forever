@@ -13,20 +13,16 @@ Vehicle::Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const st
 	mod = factory->CreateVehicle(id);
 	if (mod) mod->SetProperty();
 
-	// scriptModName/milestoneNames由mod自己的SetProperty()决定(见vehicle_mod.h"Script配置"
-	// 一节)，这里不替mod做任何选择——mod为空是CreateVehicle本身失败的防御性兜底，仍然
-	// 硬编码"empty"作为最后一道保险，照抄Job::Job同一套写法。
-	script = new Script(scriptFactory, mod ? mod->scriptModName : "script_empty");
-	if (mod) {
-		for (const string& milestoneName : mod->milestoneNames) {
-			script->ReadMilestones(Config::GetScriptPath(milestoneName));
-		}
+	// scriptModName/milestoneNames由mod自己的SetProperty()决定(见vehicle_mod.h"Script配置"一节)，
+	// 都空则没有脚本(script为空)，见MakeScript。
+	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
+	if (script) {
 		// 供milestone脚本里$$self.name引用这辆车的唯一名字——用Vehicle自己的name(调用方在
 		// Traffic::CreateVehicle里传入、Traffic用它做unordered_map键)，不是mod->GetName()，
 		// 因为多个Vehicle实例可能共享同一个VehicleMod子类，mod->GetName()不保证跨实例唯一。
 		script->SetValue("name", ValueType(name));
 		// $$self.on_route：这辆车是不是挂在公交线路上(SetRouteBinding时置1)。同一个VehicleMod既能
-			// 跑线路又能停车位(公交)，车辆script靠它区分要不要提供"驾驶"选项，见vehicle_bus.script。
+		// 跑线路又能停车位(公交)，车辆script靠它区分要不要提供"驾驶"选项，见vehicle_bus.script。
 		script->SetValue("on_route", ValueType(0));
 	}
 }

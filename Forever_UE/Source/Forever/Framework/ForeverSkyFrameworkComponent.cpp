@@ -228,12 +228,12 @@ void UForeverSkyFrameworkComponent::UpdateHeightFog(float chronode) {
 void UForeverSkyFrameworkComponent::UpdatePostProcess(float chronode) {
 	if (!postProcessVolume) return;
 
-	// 夜里Min=Max=nightExposureEV(固定曝光，不再自动适应成"和白天一样亮")，白天回到宽范围的自动曝光，
-	// 黄昏黎明按白天系数t线性过渡。注意单位是EV100(项目开了ExtendDefaultLuminanceRange)。
+	// 夜里Min=nightExposureEV(暗景提亮的下限)、Max=nightExposureMaxEV(室内灯光等亮处仍可自动压暗)，
+	// 白天回到宽范围的自动曝光，黄昏黎明按白天系数t线性过渡。注意单位是EV100(项目开了ExtendDefaultLuminanceRange)。
 	const float t = DayFactor(chronode);
 	FPostProcessSettings& settings = postProcessVolume->Settings;
 	settings.AutoExposureMinBrightness = FMath::Lerp(nightExposureEV, dayExposureMinEV, t);
-	settings.AutoExposureMaxBrightness = FMath::Lerp(nightExposureEV, dayExposureMaxEV, t);
+	settings.AutoExposureMaxBrightness = FMath::Lerp(nightExposureMaxEV, dayExposureMaxEV, t);
 	settings.LocalExposureShadowContrastScale = FMath::Lerp(nightLocalShadowContrast, dayLocalShadowContrast, t);
 	currentExposureEV = FMath::Lerp(nightExposureEV, referenceDayEV, t);
 }

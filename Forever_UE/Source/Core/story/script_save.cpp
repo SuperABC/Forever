@@ -14,6 +14,8 @@
 #include "society/organization.h"
 #include "society/job.h"
 #include "traffic/traffic.h"
+#include "player/player.h"
+#include "player/asset.h"
 
 #include "common/save.h"
 #include "common/save_refs.h"
@@ -54,8 +56,22 @@ namespace {
 }
 
 vector<pair<string, Script*>> ScriptSaveCodec::CollectScripts(Map* map, Populace* populace,
-	Society* society, Traffic* traffic, Story* story) {
+	Society* society, Traffic* traffic, Story* story, Player* player) {
 	vector<pair<string, Script*>> scripts;
+	// 资产(含容器内容)按名字做键，名字全局唯一。
+	auto addAssetScripts = [&](auto&& self, Asset* asset) -> void {
+		if (!asset) return;
+		if (asset->GetScript()) scripts.emplace_back("asset:" + asset->GetName(), asset->GetScript());
+		for (auto& [childName, child] : asset->GetContents()) self(self, child);
+	};
+	if (player) {
+		for (Asset* slot : { player->GetLeftHand(), player->GetRightHand(), player->GetBackPack(),
+			player->GetLeftShoulder(), player->GetRightShoulder() }) {
+			addAssetScripts(addAssetScripts, slot);
+		}
+		for (auto& [name, asset] : player->GetEstateAssets()) addAssetScripts(addAssetScripts, asset);
+		for (auto& [name, world] : player->GetWorldAssets()) addAssetScripts(addAssetScripts, world.asset);
+	}
 	if (story) {
 		if (story->GetMainScript()) scripts.emplace_back("story.main", story->GetMainScript());
 		if (story->GetSystemScript()) scripts.emplace_back("story.system", story->GetSystemScript());
@@ -77,6 +93,13 @@ vector<pair<string, Script*>> ScriptSaveCodec::CollectScripts(Map* map, Populace
 		}
 		for (auto& [name, zone] : map->GetZones()) {
 			if (zone && zone->GetScript()) scripts.emplace_back("zone:" + name, zone->GetScript());
+		}
+		for (auto& [buildingName, building] : map->GetBuildings()) {
+			if (!building) continue;
+			for (Room* room : building->GetRooms()) {
+				if (!room) continue;
+				for (auto& [assetName, asset] : room->GetAssets()) addAssetScripts(addAssetScripts, asset);
+			}
 		}
 	}
 	if (society) {
@@ -109,7 +132,8 @@ vector<pair<string, Script*>> ScriptSaveCodec::CollectScripts(Map* map, Populace
 
 void ScriptSaveCodec::Save(const SaveWorld& world, SaveArchive& archive) {
 	vector<pair<string, Script*>> scripts = CollectScripts(const_cast<Map*>(world.map), const_cast<Populace*>(world.populace),
-		const_cast<Society*>(world.society), const_cast<Traffic*>(world.traffic), const_cast<Story*>(world.story));
+		const_cast<Society*>(world.society), const_cast<Traffic*>(world.traffic), const_cast<Story*>(world.story),
+		const_cast<Player*>(world.player));
 
 	ByteWriter w;
 	w.U32(static_cast<uint32_t>(scripts.size()));
@@ -166,12 +190,12 @@ void ScriptSaveCodec::Save(const SaveWorld& world, SaveArchive& archive) {
 }
 
 bool ScriptSaveCodec::Load(const SaveArchive& archive, Map* map, Populace* populace, Society* society,
-	Traffic* traffic, Story* story, string& error) {
+	Traffic* traffic, Story* story, string& error, Player* player) {
 	const SaveSection* section = archive.Find(SAVE_SECTION_SCRIPTS);
 	if (!section) return false;
 
 	unordered_map<string, Script*> byKey;
-	for (auto& [key, script] : CollectScripts(map, populace, society, traffic, story)) byKey[key] = script;
+	for (auto& [key, script] : CollectScripts(map, populace, society, traffic, story, player)) byKey[key] = script;
 
 	ByteReader r(section->data);
 	int missing = 0;

@@ -106,8 +106,9 @@
 现在全部按**白天系数t**(`DayFactor`：太阳高度正弦在-0.12~0.2之间smoothstep，0=深夜、1=白天，黄昏黎明约一个游戏小时过渡)驱动：
 
 - **环境光**：`UpdateAmbientLight`，强度=`Lerp(nightAmbientLux=2, dayAmbientLux=300, t)`。
-- **曝光**：`UpdatePostProcess`，`Min=Lerp(nightExposureEV=3, dayExposureMinEV=-10, t)`、`Max=Lerp(nightExposureEV, dayExposureMaxEV=20, t)`——夜里Min=Max，
-  等于固定曝光、不再自动适应；白天回到宽范围自动曝光(和之前一致)。同时`LocalExposureShadowContrastScale`夜里1.0、白天0.8(ini里的值)。
+- **曝光**：`UpdatePostProcess`，`Min=Lerp(nightExposureEV=3, dayExposureMinEV=-10, t)`、`Max=Lerp(nightExposureMaxEV=12, dayExposureMaxEV=20, t)`——夜里Min是暗景提亮的下限(室外夜景固定在这)，
+  Max放开到12让室内开灯等亮处仍能自动压暗(最初夜里Min=Max固定曝光，人在室内待到晚上，灯光被高灵敏度曝光爆得特别亮)；白天回到宽范围自动曝光(和之前一致)。
+  注意：室内夜里实际曝光会在Min~Max之间浮动，识别名牌按`currentExposureEV`(=nightExposureEV)换算，室内夜里会偏暗一些。同时`LocalExposureShadowContrastScale`夜里1.0、白天0.8(ini里的值)。
   `EnsureSkyGenerated`里对找到/生成的PostProcessVolume总是设`bUnbound`、`Priority=100`和三个`bOverride_*`(之前复用关卡里手放的体积时override没开，赋值无效)。
 - **SkyLight**：设成Movable+`SetRealTimeCaptureEnabled(true)`，跟着SkyAtmosphere变暗；不手动改强度。
 - 这些数值都是`UPROPERTY(EditAnywhere, Category="Sky|Night")`，先按"月夜微亮"给，PIE里调。`nightAmbientLux`和`nightExposureEV`要配合调：

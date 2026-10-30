@@ -49,8 +49,8 @@ public:
 	float nightAmbientLux = 2.f;
 
 	// 自动曝光范围(EV100，r.DefaultFeature.AutoExposure.ExtendDefaultLuminanceRange=True下的单位，EV越大
-	// 画面越暗)：白天保持原来的宽范围，夜里Min=Max=nightExposureEV，等于关掉自动适应、固定曝光——
-	// 否则自动曝光会在暗场景里一路提亮，夜晚就"适应"成白天一样亮。
+	// 画面越暗)：白天保持原来的宽范围；夜里Min=nightExposureEV(最亮只能提亮到这里，夜景不会"适应"成白天一样亮)，
+	// Max=nightExposureMaxEV(室内开灯等亮处仍能自动压暗，不至于被夜里的高灵敏度曝光爆掉)。
 	UPROPERTY(EditAnywhere, Category = "Sky|Night")
 	float dayExposureMinEV = -10.f;
 
@@ -59,6 +59,9 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Sky|Night")
 	float nightExposureEV = 3.f;
+
+	UPROPERTY(EditAnywhere, Category = "Sky|Night")
+	float nightExposureMaxEV = 12.f;
 
 	// 白天的参考曝光EV(识别名牌这类固定亮度的世界UI以它为基准换算)。
 	UPROPERTY(EditAnywhere, Category = "Sky|Night")

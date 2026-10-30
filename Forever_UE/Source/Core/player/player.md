@@ -135,3 +135,9 @@ DeltaTime)`覆写里唯一做的事就是`player->Tick(DeltaTime)`，见
   `Tick()`。
 - `CrossDay()`目前没有任何消费方接入（`Society`/`Industry`都是空骨架）。
 - 没有暂停机制（对应`AGlobalBase::GlobalPause/GlobalResume`那一套）。
+
+## 脚本驱动的收纳/扣除
+- `StoreAsset(asset)`：背包→容器→右手→左手的收纳顺序(见`change.md`的pick_asset)，失败不改变状态。
+- `CountOwned(type)`/`TakeOwned(type, amount, out)`：左右手+背包(递归容器，不含肩膀)里的数量与摘取(必要时拆堆叠)，数量不够不改变状态。
+- `FindAssetByName(name)`：手/肩/背及容器内容、estate、worldAssets里按名字找；房间里的见`Map::FindAssetByName`。
+- `Player::ApplyChange`处理资产的`add_option`/`remove_option`(房间里的资产由`Map::ApplyChange`处理)。

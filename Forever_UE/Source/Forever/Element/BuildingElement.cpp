@@ -826,8 +826,11 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 		UStaticMesh* cabinMesh = framework->ResolveMesh(spec.cabinMeshPath, framework->GetDefaultCabinMesh());
 		// isMovable=true——轿厢要随行程SetWorldLocation，必须是Movable。
 		// 整体缩到0.99：轿厢的上下面和楼层地板/天花板正好重合会z-fighting(闪烁竞争)，缩一点点错开。
-		constexpr float kCabinScale = 0.99f;
-		UStaticMeshComponent* comp = SpawnMesh(wx, wy, cabinZ,
+		constexpr float kCabinScale = 0.9f;
+		// 缩放以mesh原点(底部)为基准，整体抬高层高的0.05，缩小后的轿厢上下留的缝才对称。
+		constexpr float kCabinZLift = 0.05f;
+		float cabinMeshZOffset = minFloorHeight * BUILDING_WORLD_SCALE * kCabinZLift;
+		UStaticMeshComponent* comp = SpawnMesh(wx, wy, cabinZ + cabinMeshZOffset,
 			meshSizeX * BUILDING_WORLD_SCALE * kCabinScale, meshSizeY * BUILDING_WORLD_SCALE * kCabinScale,
 			minFloorHeight * BUILDING_WORLD_SCALE * kCabinScale,
 			meshRotation, cabinMesh, nullptr, /*isMovable=*/true);
@@ -836,6 +839,7 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 		FCabin cabin;
 		cabin.cabin = coreCabin;
 		cabin.comp = comp;
+		cabin.meshZOffset = cabinMeshZOffset;
 		cabin.worldX = wx;
 		cabin.worldY = wy;
 		cabin.rotation = meshRotation;
@@ -1227,7 +1231,7 @@ void ABuildingElement::UpdateCabins(float deltaSeconds) {
 		float z = cabin.cabin->GetCurrentZ() * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
 		if (FMath::IsNearlyEqual(z, cabin.lastSyncedZ, 0.01f)) continue; // 没动就不碰组件，见FCabin::lastSyncedZ
 		cabin.lastSyncedZ = z;
-		cabin.comp->SetWorldLocation(FVector(cabin.worldX, cabin.worldY, z));
+		cabin.comp->SetWorldLocation(FVector(cabin.worldX, cabin.worldY, z + cabin.meshZOffset));
 		FVector innerLocation(cabin.innerX, cabin.innerY, z + cabin.innerHalfZ);
 		if (cabin.innerTrigger) cabin.innerTrigger->SetWorldLocation(innerLocation);
 	}

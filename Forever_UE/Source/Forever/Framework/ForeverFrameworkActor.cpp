@@ -34,6 +34,7 @@
 #include "Element/CitizenElement.h"
 #include "Element/VehicleElement.h"
 #include "Element/TransitVehicleElement.h"
+#include "Element/AssetElement.h"
 #include "Element/DoorComponent.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
 #include "map/building.h"
@@ -423,6 +424,24 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	// 背包相关Change：需要场景里的Actor和事件分发，交给资产框架组件。
+	if (auto* pickAsset = dynamic_cast<const PickAssetChange*>(change)) {
+		if (assetFramework) assetFramework->ApplyPickAsset(pickAsset, context);
+		return;
+	}
+	if (auto* grantAsset = dynamic_cast<const GrantAssetChange*>(change)) {
+		if (assetFramework) assetFramework->ApplyGrantAsset(grantAsset, context);
+		return;
+	}
+	if (auto* deductAsset = dynamic_cast<const DeductAssetChange*>(change)) {
+		if (assetFramework) assetFramework->ApplyDeductAsset(deductAsset, context);
+		return;
+	}
+	if (auto* dropAsset = dynamic_cast<const DropAssetChange*>(change)) {
+		if (assetFramework) assetFramework->ApplyDropAsset(dropAsset, context);
+		return;
+	}
+
 	if (auto* reviveNpc = dynamic_cast<const NPCReviveChange*>(change)) {
 		ApplyReviveNpc(reviveNpc, context);
 		return;
@@ -634,6 +653,9 @@ void AForeverFrameworkActor::RefreshInteractOptions(const std::string& name) {
 	if (trafficFramework) {
 		if (AVehicleElement* element = trafficFramework->FindVehicleElement(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
 		if (ATransitVehicleElement* element = trafficFramework->FindTransitElement(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
+	}
+	if (assetFramework) {
+		if (AAssetElement* element = assetFramework->FindElementByName(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
 	}
 	if (map) {
 		if (Door* door = map->FindDoorByName(name)) {
@@ -1046,7 +1068,7 @@ void AForeverFrameworkActor::EnsureStoryGenerated()
 	// 里已经是结果了，再广播一次会重复。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
 		std::string error;
-		bScriptsRestored = ScriptSaveCodec::Load(load->archive, map, populace, society, traffic, story, error);
+		bScriptsRestored = ScriptSaveCodec::Load(load->archive, map, populace, society, traffic, story, error, player);
 		if (bScriptsRestored) {
 			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: script states restored from the save, game_start not broadcast."));
 			return;

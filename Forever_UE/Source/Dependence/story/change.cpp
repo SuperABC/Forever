@@ -1691,3 +1691,135 @@ void ChangeControlChange::SetName(std::string name) {
 const std::string& ChangeControlChange::GetName() const {
 	return name;
 }
+
+PickAssetChange::PickAssetChange() :
+	asset() {
+
+}
+
+PickAssetChange::PickAssetChange(std::string asset) :
+	asset(move(asset)) {
+
+}
+
+PickAssetChange::~PickAssetChange() {
+
+}
+
+const string& PickAssetChange::GetType() const {
+	static const string type = "pick_asset";
+	return type;
+}
+
+void PickAssetChange::SetAsset(std::string asset) {
+	this->asset = move(asset);
+}
+
+const std::string& PickAssetChange::GetAsset() const {
+	return asset;
+}
+
+GrantAssetChange::GrantAssetChange() :
+	type(), count() {
+
+}
+
+GrantAssetChange::GrantAssetChange(std::string type, std::string count) :
+	type(move(type)), count(move(count)) {
+
+}
+
+GrantAssetChange::~GrantAssetChange() {
+
+}
+
+const string& GrantAssetChange::GetType() const {
+	static const string type = "grant_asset";
+	return type;
+}
+
+void GrantAssetChange::SetAssetType(std::string type) {
+	this->type = move(type);
+}
+
+const std::string& GrantAssetChange::GetAssetType() const {
+	return type;
+}
+
+void GrantAssetChange::SetCount(std::string count) {
+	this->count = move(count);
+}
+
+const std::string& GrantAssetChange::GetCount() const {
+	return count;
+}
+
+DeductAssetChange::DeductAssetChange() :
+	type(), count() {
+
+}
+
+DeductAssetChange::DeductAssetChange(std::string type, std::string count) :
+	type(move(type)), count(move(count)) {
+
+}
+
+DeductAssetChange::~DeductAssetChange() {
+
+}
+
+const string& DeductAssetChange::GetType() const {
+	static const string type = "deduct_asset";
+	return type;
+}
+
+void DeductAssetChange::SetAssetType(std::string type) {
+	this->type = move(type);
+}
+
+const std::string& DeductAssetChange::GetAssetType() const {
+	return type;
+}
+
+void DeductAssetChange::SetCount(std::string count) {
+	this->count = move(count);
+}
+
+const std::string& DeductAssetChange::GetCount() const {
+	return count;
+}
+
+DropAssetChange::DropAssetChange() :
+	type(), count() {
+
+}
+
+DropAssetChange::DropAssetChange(std::string type, std::string count) :
+	type(move(type)), count(move(count)) {
+
+}
+
+DropAssetChange::~DropAssetChange() {
+
+}
+
+const string& DropAssetChange::GetType() const {
+	static const string type = "drop_asset";
+	return type;
+}
+
+void DropAssetChange::SetAssetType(std::string type) {
+	this->type = move(type);
+}
+
+const std::string& DropAssetChange::GetAssetType() const {
+	return type;
+}
+
+void DropAssetChange::SetCount(std::string count) {
+	this->count = move(count);
+}
+
+const std::string& DropAssetChange::GetCount() const {
+	return count;
+}

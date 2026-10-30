@@ -12,6 +12,7 @@ class Populace;
 class Society;
 class Traffic;
 class Story;
+class Player;
 class Script;
 struct SaveWorld;
 
@@ -25,11 +26,11 @@ public:
 
 	// 存档里没有这一段时返回false、error为空(调用方照新开局广播game_start)。
 	static bool Load(const SaveArchive& archive, Map* map, Populace* populace, Society* society,
-		Traffic* traffic, Story* story, std::string& error);
+		Traffic* traffic, Story* story, std::string& error, Player* player = nullptr);
 
 	// 持有者稳定键 -> Script：story.main/story.system、door:<门id>、org:<组织下标>、
-	// job:<组织下标>:<岗位下标>、scheduler:<市民下标>、vehicle:<车名>。
+	// job:<组织下标>:<岗位下标>、scheduler:<市民下标>、vehicle:<车名>、asset:<资产名>(玩家身上/地上/房间里带脚本的资产，含容器内容)。
 	// 也供计时器用(Story的计时器按这个键记录归属，见story.h StoryTimer)。
 	static std::vector<std::pair<std::string, Script*>> CollectScripts(Map* map, Populace* populace,
-		Society* society, Traffic* traffic, Story* story);
+		Society* society, Traffic* traffic, Story* story, Player* player = nullptr);
 };

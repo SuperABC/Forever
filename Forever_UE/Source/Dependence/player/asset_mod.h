@@ -3,6 +3,7 @@
 #include "common/mod_state.h"
 
 #include <string>
+#include <vector>
 // AssetMod：物品/资产的类型定义(目录性质，比照ProductMod/WeaponMod，不迁移老工程
 // DefineEstate()/DefineVehicle()/DefineObject()/DefineContainer()/DefineContainee()那套
 // 工具方法)——具体子类必须在SetProperty()里赋值公开字段，不要在构造函数里赋值，见
@@ -41,6 +42,12 @@ public:
 	// 缩放系数(网格自身尺寸不一定合适，比如100cm直径的球体当手雷要缩到0.1)。
 	std::string meshPath;
 	float meshScale = 1.f;
+
+	// 这件资产挂的Script：scriptModName是ScriptMod的id，milestoneNames是要读取的里程碑脚本名(见
+	// Resource/Story/)，和Vehicle/Job同一套机制，由SetProperty()填。两者都空(默认)=这件资产没有脚本
+	// (Asset::GetScript()==nullptr)，也不会挂弹选项的触发盒。$$self.name=资产实例名，$$self.type=mod id。
+	std::string scriptModName;
+	std::vector<std::string> milestoneNames;
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
 	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，

@@ -352,7 +352,7 @@ namespace {
 				restoredStory = new Story();
 				restoredStory->Init();
 			}
-			if (!ScriptSaveCodec::Load(first, restoredMap, restoredPopulace, restoredSociety, restoredTraffic, restoredStory, error) && !error.empty()) {
+			if (!ScriptSaveCodec::Load(first, restoredMap, restoredPopulace, restoredSociety, restoredTraffic, restoredStory, error, restoredPlayer) && !error.empty()) {
 				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: script load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
 			}
 

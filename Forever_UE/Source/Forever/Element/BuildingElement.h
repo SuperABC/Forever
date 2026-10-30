@@ -114,6 +114,7 @@ private:
 		TArray<TObjectPtr<UBoxComponent>> frontTriggers;
 		float worldX = 0.f, worldY = 0.f, rotation = 0.f;
 		float innerHalfZ = 0.f; // 轿厢内触发盒半高，中心=轿厢底+这个值
+		float meshZOffset = 0.f; // 轿厢mesh相对轿厢底的抬高(UE单位)，触发盒不受影响
 		FString interactNameOnly;
 		TArray<FString> cachedOptions;
 		bool hasScript = false;

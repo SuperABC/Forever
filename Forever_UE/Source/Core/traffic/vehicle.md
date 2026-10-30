@@ -62,3 +62,6 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
 
 ## on_route脚本变量
 车辆Script创建时写`on_route=0`，`SetRouteBinding`(及读档恢复线路绑定)置1。同一个VehicleMod既能跑线路又能停车位(公交)，车辆script靠`$$self.on_route`区分要不要提供"驾驶"选项，见`Resource/Story/vehicle_bus.script`。
+
+## 脚本可为空
+`VehicleMod::scriptModName`默认`""`，和`milestoneNames`都空则`GetScript()==nullptr`(见`Core/story/script.md`MakeScript)；`AVehicleElement`没有脚本且没有选项时不挂弹选项的触发盒，之后`add_option`出现选项时`RefreshOptions`补建。市民同理(Scheduler脚本为空且无选项不建盒)。Job/Organization/Scheduler同样可为空。

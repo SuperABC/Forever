@@ -48,7 +48,7 @@ public:
 	// Config::GetScriptPath()解析实际路径，见job_mod.h"Script配置"一节。用来驱动
 	// "靠近车辆弹出'上车'选项"这个效果——车辆自己的milestone脚本在game_start时调
 	// add_option，选中后调enter_vehicle，见Resource/Story/vehicle_basic.script。
-	std::string scriptModName = "script_empty";
+	std::string scriptModName; // 空=无自定义ScriptMod；和milestoneNames都空则实例没有Script(GetScript()==nullptr)，见MakeScript
 	std::vector<std::string> milestoneNames;
 
 	// 下车点——车身局部坐标系下的偏移(UE单位，X前进方向/Y右侧方向/Z竖直方向)，默认车身

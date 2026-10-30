@@ -2,6 +2,7 @@
 
 #include "player/player.h"
 #include "player/asset.h"
+#include "story/script.h"
 #include "map/map.h"
 #include "map/room.h"
 
@@ -38,6 +39,9 @@ void PlayerSaveCodec::WriteAsset(const Asset* asset, ByteWriter& w) {
 	w.Str(asset->name);
 	w.I32(asset->count);
 	SaveRefs::WriteModState(asset->mod, w);
+	w.U32(static_cast<uint32_t>(asset->options.size()));
+	for (const string& option : asset->options) w.Str(option);
+	w.U8(asset->scriptStarted ? 1 : 0);
 	vector<const Asset*> contents = SortedAssets(asset->contents);
 	w.U32(static_cast<uint32_t>(contents.size()));
 	for (const Asset* content : contents) WriteAsset(content, w);
@@ -54,6 +58,11 @@ Asset* PlayerSaveCodec::ReadAsset(AssetFactory& factory, ByteReader& r) {
 		debugf("Warning: failed to parse saved state of asset mod %s.\n", type.c_str());
 	}
 	asset->count = count;
+	uint32_t optionCount = r.U32();
+	for (uint32_t i = 0; i < optionCount && !r.Failed(); i++) asset->options.push_back(r.Str());
+	asset->scriptStarted = r.U8() != 0;
+	// 构造时脚本里的name是mod生成的默认名，覆写成存档里的名字。
+	if (asset->script) asset->script->SetValue("name", ValueType(name));
 	uint32_t contentCount = r.U32();
 	for (uint32_t i = 0; i < contentCount && !r.Failed(); i++) {
 		Asset* content = ReadAsset(factory, r);

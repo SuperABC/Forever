@@ -149,7 +149,9 @@ void AVehicleElement::Init(Vehicle* inVehicle, APawn* inPreviousPawn)
 
 void AVehicleElement::BuildProximityBox()
 {
-	if (!vehicle) return;
+	if (!vehicle || proximityBox) return;
+	// 没有脚本、也没有任何选项就不挂弹选项的触发盒；之后选项出现时RefreshOptions会补建。
+	if (!vehicle->GetScript() && vehicle->GetOptions().empty()) return;
 
 	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
 	FVector boxExtent(250.f, 250.f, 120.f);
@@ -346,6 +348,10 @@ void AVehicleElement::RefreshOptions() {
 	cachedOptions.Reset();
 	for (const std::string& option : vehicle->GetOptions()) {
 		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
+	}
+	if (!proximityBox) {
+		BuildProximityBox(); // 原来没有脚本/选项没建盒，现在有选项了
+		return;
 	}
 	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
 		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {

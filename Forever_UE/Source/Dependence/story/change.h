@@ -2634,3 +2634,87 @@ private:
 	std::string name;
 
 };
+
+// 捡起地上的资产(放进玩家身上)：顺序是①没背包且它可背就背上、②有背包且放得下就放包里、③否则放右手/左手、
+// ④都不行失败。堆叠资产整体考虑，不会只捡一部分。通常写在资产自己的脚本里响应“捡起”选项。结果通过
+// get_asset事件发回执行这个Change的脚本。
+class PickAssetChange : public Change {
+public:
+	PickAssetChange();
+	/*
+	* @asset: 要捡起的资产名称(表达式，留空=执行这个Change的脚本所属的资产，即$$self.name)
+	*/
+	PickAssetChange(std::string asset);
+	virtual ~PickAssetChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetAsset(std::string asset);
+	const std::string& GetAsset() const;
+
+private:
+	std::string asset;
+};
+
+// 凭空给玩家一个或一组资产，放置顺序同PickAssetChange(没有场景里的Actor需要删除)。结果通过get_asset事件
+// 发回执行这个Change的脚本。
+class GrantAssetChange : public Change {
+public:
+	GrantAssetChange();
+	/*
+	* @type: 资产类型(mod id，表达式)
+	* @count: 数量(表达式，留空=1)；多个作为一个堆叠整体，放不下就整体失败
+	*/
+	GrantAssetChange(std::string type, std::string count);
+	virtual ~GrantAssetChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetAssetType(std::string type);
+	const std::string& GetAssetType() const;
+	void SetCount(std::string count);
+	const std::string& GetCount() const;
+
+private:
+	std::string type;
+	std::string count;
+};
+
+// 扣除玩家一个或一组资产(递归左右手和背包)：身上够数才扣，否则整体失败。成功对每件被扣的资产、失败对
+// 要求的类型发lose_asset事件给执行这个Change的脚本。
+class DeductAssetChange : public Change {
+public:
+	DeductAssetChange();
+	DeductAssetChange(std::string type, std::string count);
+	virtual ~DeductAssetChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetAssetType(std::string type);
+	const std::string& GetAssetType() const;
+	void SetCount(std::string count);
+	const std::string& GetCount() const;
+
+private:
+	std::string type;
+	std::string count;
+};
+
+// 强制玩家把身上的资产丢到附近地面：数量判定同DeductAssetChange，不够整体失败。lose_asset事件同上。
+class DropAssetChange : public Change {
+public:
+	DropAssetChange();
+	DropAssetChange(std::string type, std::string count);
+	virtual ~DropAssetChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetAssetType(std::string type);
+	const std::string& GetAssetType() const;
+	void SetCount(std::string count);
+	const std::string& GetCount() const;
+
+private:
+	std::string type;
+	std::string count;
+};

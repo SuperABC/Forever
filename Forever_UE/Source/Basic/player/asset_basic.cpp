@@ -117,6 +117,7 @@ void PistolWeaponAsset::SetProperty() {
 	size = 8.0f;
 	weapon = true; // 只能挂左肩/右肩，不能拿在手上
 	weaponType = "weapon_pistol";
+	milestoneNames = { "asset_test" }; // 测试脚本：捡起/获得/扣除/丢弃选项，见Resource/Story/asset_test.script
 }
 
 int RifleWeaponAsset::count = 0;
@@ -135,6 +136,7 @@ void RifleWeaponAsset::SetProperty() {
 	size = 8.0f;
 	weapon = true;
 	weaponType = "weapon_rifle";
+	milestoneNames = { "asset_test" }; // 测试脚本：捡起/获得/扣除/丢弃选项，见Resource/Story/asset_test.script
 }
 
 int ShotgunAmmoAsset::count = 0;
@@ -185,6 +187,7 @@ void ShotgunWeaponAsset::SetProperty() {
 	size = 9.0f;
 	weapon = true;
 	weaponType = "weapon_shotgun";
+	milestoneNames = { "asset_test" }; // 测试脚本：捡起/获得/扣除/丢弃选项，见Resource/Story/asset_test.script
 }
 
 int SniperWeaponAsset::count = 0;
@@ -203,6 +206,7 @@ void SniperWeaponAsset::SetProperty() {
 	size = 10.0f;
 	weapon = true;
 	weaponType = "weapon_sniper";
+	milestoneNames = { "asset_test" }; // 测试脚本：捡起/获得/扣除/丢弃选项，见Resource/Story/asset_test.script
 }
 
 int GrenadeAsset::count = 0;

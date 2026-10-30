@@ -133,3 +133,6 @@ Script(`includeMain`为true时连主线也算)，匹配结果交给`ProcessScrip
 
 ## 载具Change/事件
 `ApplyBoardVehicle`/`ApplyLeaveVehicle`/`ApplyForceLeave`转发`board_vehicle`/`leave_vehicle`/`force_leave`到`UForeverTrafficFrameworkComponent`；`BroadcastToVehicle(event, vehicle)`把事件只发给这辆载具自己的Script(停站事件和进出载具事件用)。
+
+## 资产脚本与事件
+`StartAssetScript(asset)`(补发game_start)、`NotifyAssetEvent(root, bGet, result, sender)`(root及递归容器逐个发`get_asset`/`lose_asset`，sender非空发给sender否则发给资产自己的脚本，左上角显示)、`NotifyAssetResult`(没有具体资产的失败)。`BroadcastToAllScripts`也广播给全部资产脚本(game_start时置scriptStarted)；`OptionDialog`新增asset分支。

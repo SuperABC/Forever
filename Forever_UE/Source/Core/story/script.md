@@ -103,3 +103,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 
 ## 本次新增解析
 `npc_revive`(name必填，health可选，缺省满血)；`create_timer`新增可选`mode`(absolute/relative/real/next)；`citizen_decease`触发条件见`Dependence/story/event.md`。
+
+## MakeScript：script可为空
+`MakeScript(factory, scriptModName, milestoneNames)`：两者都空返回nullptr(这个实例没有脚本，`GetScript()==nullptr`，也不挂弹选项的触发盒)；`scriptModName`为空但有里程碑时按`"script_empty"`创建(空字符串等价script_empty，不需要在依赖里声明)。Vehicle/Job/Scheduler/Organization/Asset用它；`VehicleMod/JobMod/SchedulerMod/OrganizationMod/AssetMod::scriptModName`默认值是`""`。Room/Building/Zone的`MakeEntityScript`、Door/Cabin本来就是“没有里程碑/交互名则无脚本”。
+新增解析：Event `get_asset`/`lose_asset`(过滤字段`asset_type`、`result`，JSON的`type`已是事件类型)；Change `pick_asset`(asset，缺省=所属资产)、`grant_asset`/`deduct_asset`/`drop_asset`(asset_type、count缺省1)。

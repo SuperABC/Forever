@@ -1,5 +1,8 @@
 #include "player/asset.h"
 
+#include "common/registry.h"
+#include "story/script.h"
+
 #include <algorithm>
 #include <vector>
 
@@ -24,10 +27,17 @@ Asset::Asset(AssetFactory* factory, const string& id) :
 	throwableFlag = mod->throwable;
 	meshPath = mod->meshPath;
 	meshScale = mod->meshScale;
+
+	script = MakeScript(&Registry::Get().GetScriptFactory(), mod->scriptModName, mod->milestoneNames);
+	if (script) {
+		script->SetValue("name", ValueType(name));
+		script->SetValue("type", ValueType(type));
+	}
 }
 
 Asset::~Asset() {
 	for (auto& [name, content] : contents) delete content;
+	delete script;
 	if (mod) factory->DestroyAsset(mod);
 }
 
@@ -48,6 +58,29 @@ bool Asset::IsThrowable() const { return throwableFlag; }
 const string& Asset::GetMeshPath() const { return meshPath; }
 float Asset::GetMeshScale() const { return meshScale; }
 bool Asset::IsContainer() const { return volume > 0.f; }
+
+Script* Asset::GetScript() const { return script; }
+const vector<string>& Asset::GetOptions() const { return options; }
+
+void Asset::AddOption(const string& option) {
+	if (find(options.begin(), options.end(), option) == options.end()) options.push_back(option);
+}
+
+void Asset::RemoveOption(const string& option) {
+	options.erase(remove(options.begin(), options.end(), option), options.end());
+}
+
+bool Asset::IsScriptStarted() const { return scriptStarted; }
+void Asset::SetScriptStarted(bool value) { scriptStarted = value; }
+
+Asset* Asset::FindDescendant(const string& childName) const {
+	auto it = contents.find(childName);
+	if (it != contents.end()) return it->second;
+	for (const auto& [key, content] : contents) {
+		if (Asset* found = content->FindDescendant(childName)) return found;
+	}
+	return nullptr;
+}
 
 int Asset::GetCount() const { return count; }
 void Asset::SetCount(int value) { count = value; }

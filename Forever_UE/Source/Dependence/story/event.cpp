@@ -1213,3 +1213,93 @@ void LeaveVehicleEvent::SetMode(std::string mode) {
 const std::string& LeaveVehicleEvent::GetMode() const {
 	return mode;
 }
+
+GetAssetEvent::GetAssetEvent(std::string type, std::string result) :
+	type(move(type)), result(move(result)) {
+
+}
+
+GetAssetEvent::~GetAssetEvent() {
+
+}
+
+const string& GetAssetEvent::GetType() const {
+	static const string type = "get_asset";
+	return type;
+}
+
+bool GetAssetEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<GetAssetEvent*>(e);
+	if (!MatchLocationField(type, other->type, context)) return false;
+	if (!MatchLocationField(result, other->result, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> GetAssetEvent::GetLocalValue(const string& key) const {
+	if (key == "type") return { true, ValueType(type) };
+	if (key == "result") return { true, ValueType(result) };
+	return { false, ValueType() };
+}
+
+void GetAssetEvent::SetAssetType(std::string type) {
+	this->type = move(type);
+}
+
+const std::string& GetAssetEvent::GetAssetType() const {
+	return type;
+}
+
+void GetAssetEvent::SetResult(std::string result) {
+	this->result = move(result);
+}
+
+const std::string& GetAssetEvent::GetResult() const {
+	return result;
+}
+
+LoseAssetEvent::LoseAssetEvent(std::string type, std::string result) :
+	type(move(type)), result(move(result)) {
+
+}
+
+LoseAssetEvent::~LoseAssetEvent() {
+
+}
+
+const string& LoseAssetEvent::GetType() const {
+	static const string type = "lose_asset";
+	return type;
+}
+
+bool LoseAssetEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<LoseAssetEvent*>(e);
+	if (!MatchLocationField(type, other->type, context)) return false;
+	if (!MatchLocationField(result, other->result, context)) return false;
+	return true;
+}
+
+pair<bool, ValueType> LoseAssetEvent::GetLocalValue(const string& key) const {
+	if (key == "type") return { true, ValueType(type) };
+	if (key == "result") return { true, ValueType(result) };
+	return { false, ValueType() };
+}
+
+void LoseAssetEvent::SetAssetType(std::string type) {
+	this->type = move(type);
+}
+
+const std::string& LoseAssetEvent::GetAssetType() const {
+	return type;
+}
+
+void LoseAssetEvent::SetResult(std::string result) {
+	this->result = move(result);
+}
+
+const std::string& LoseAssetEvent::GetResult() const {
+	return result;
+}

@@ -10,15 +10,11 @@ using namespace std;
 Job::Job(JobFactory* factory, ScriptFactory* scriptFactory, const string& id, Room* position) :
 	factory(factory), position(position) {
 	mod = factory->CreateJob(id);
-	// scriptModName/milestoneNames由mod自己的SetProperty()填好(见job_mod.h"Script配置"
-	// 一节)，这里不替mod做任何选择——mod为空是CreateJob本身失败的防御性兜底，不是
-	// "决定用哪个ScriptMod"这个设计选择，因此仍然硬编码"empty"作为最后一道保险。
+	// scriptModName/milestoneNames由mod自己的SetProperty()填好(见job_mod.h"Script配置"一节)，
+	// 都空则没有脚本(script为空)，见MakeScript。
 	if (mod) mod->SetProperty();
-	script = new Script(scriptFactory, mod ? mod->scriptModName : "script_empty");
-	if (mod) {
-		for (const string& name : mod->milestoneNames) {
-			script->ReadMilestones(Config::GetScriptPath(name));
-		}
+	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
+	if (script) {
 		// 供milestone脚本里$$self.name引用这个Job的唯一名字（不是Script自己的
 		// mod->GetName()，是JobMod自己的GetName()，见job_basic.cpp"八"的唯一性修复），
 		// 见job_mod.h"Script配置"一节。

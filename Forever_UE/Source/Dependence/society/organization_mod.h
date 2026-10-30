@@ -58,7 +58,7 @@ public:
 	// Script配置——和JobMod同一组字段/同一套安全模式(见job_mod.h的说明)，这次一起补上：
 	// Organization之前完全没有自己的Script，这次让它也能挂一个。scriptModName默认
 	// "empty"，milestoneNames默认为空。
-	std::string scriptModName = "script_empty";
+	std::string scriptModName; // 空=无自定义ScriptMod；和milestoneNames都空则实例没有Script(GetScript()==nullptr)，见MakeScript
 	std::vector<std::string> milestoneNames;
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----

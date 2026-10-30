@@ -7,3 +7,6 @@
 - 数量：`all`=整个堆叠，否则只 1 个。目标里有同 type 的非容器物品 → 合并（数量累加，被并入实例销毁）；否则 n<count 时 `Player::SplitAsset` 拆成新实例（名字由 mod 保证唯一）。
 - 失败回滚：整体搬运放不进去就放回原位；拆分放不进去就把数量加回并销毁拆出的实例。
 - 世界表现：从房间根/附近根摘出 → `DestroyWorldAsset`；放入房间根/附近根 → `SpawnWorldAsset`（位置=玩家）。进入子容器里的物品没有 Actor。
+
+## get_asset/lose_asset事件
+`Transfer`在地面区(Room/Nearby)→身上区(肩/手/背/容器)时发`get_asset`(规则失败/放不下也发fail)，身上区→地面区成功时发`lose_asset`，同类区之间不发；事件发给资产自己的脚本(sender传空)。

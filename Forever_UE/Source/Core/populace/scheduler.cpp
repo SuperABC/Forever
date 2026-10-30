@@ -11,14 +11,10 @@ Scheduler::Scheduler(SchedulerFactory* factory, ScriptFactory* scriptFactory, co
 	factory(factory), citizen(citizen) {
 	mod = factory->CreateScheduler(id);
 	// scriptModName/milestoneNames由mod自己的SetProperty()填好(见scheduler_mod.h"Script
-	// 配置"一节)，mod为空是CreateScheduler本身失败的防御性兜底，仍然硬编码"empty"作为最后
-	// 一道保险，和Job::Job同一个写法。
+	// 配置"一节)，都空则没有脚本(script为空)，见MakeScript。
 	if (mod) mod->SetProperty();
-	script = new Script(scriptFactory, mod ? mod->scriptModName : "script_empty");
-	if (mod) {
-		for (const string& name : mod->milestoneNames) {
-			script->ReadMilestones(Config::GetScriptPath(name));
-		}
+	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
+	if (script) {
 		// 供milestone脚本里$$self.name引用这个Scheduler绑定的市民姓名——和Job用
 		// mod->GetName()不同，Scheduler从构造起就唯一绑定一个citizen，直接用citizen自己
 		// 的名字更贴切。

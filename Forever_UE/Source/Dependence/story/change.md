@@ -143,3 +143,11 @@ milestone用它验证：Job/Organization的Script能不能正确广播`game_star
 - `npc_revive`(name, health可选)：`NPCReviveChange`，UE层`AForeverFrameworkActor::ApplyReviveNpc`执行。只对已死亡的市民生效；复活后没有房间和位置，需接`npc_teleport`。
 - `npc_teleport`的destination写`"home"`=该市民的家(`Citizen::GetRoom()`)。
 - `create_timer`新增`mode`：`absolute`(默认)/`relative`/`real`/`next`，见`Core/story/story.md`"计时器：mode"。
+
+## 资产Change
+- `pick_asset`(asset可选，缺省=执行脚本所属的资产)：捡起地上(房间根/室外)的资产。顺序：没背包且它可背(`GetBackpack`、Object、count==1)就背上；有背包且放得下(size*count，堆叠整体算)放包里；否则右手空放右手、再左手(手只收count==1的单件)；都不行失败，资产保持原状。
+- `grant_asset`(asset_type、count缺省1)：凭空给资产，放置顺序同上，多个作为一个堆叠整体，放不下整体失败。
+- `deduct_asset`(asset_type、count)：递归左右手和背包(不含肩膀)里指定类型够数才扣并销毁，否则整体失败。
+- `drop_asset`(asset_type、count)：同样判定，够数就把它们放到玩家附近地面(在房间里进房间，否则进`Player::worldAssets`)，否则整体失败。
+- 结果通过`get_asset`/`lose_asset`事件发回执行Change的脚本，见`event.md`。
+- JSON里的`type`是Change类型本身，资产类型字段叫`asset_type`。UE层执行：`UForeverAssetFrameworkComponent::ApplyPickAsset/ApplyGrantAsset/ApplyDeductAsset/ApplyDropAsset`。
