@@ -821,8 +821,11 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 
 		UStaticMesh* cabinMesh = framework->ResolveMesh(spec.cabinMeshPath, framework->GetDefaultCabinMesh());
 		// isMovable=true——轿厢要随行程SetWorldLocation，必须是Movable。
+		// 整体缩到0.99：轿厢的上下面和楼层地板/天花板正好重合会z-fighting(闪烁竞争)，缩一点点错开。
+		constexpr float kCabinScale = 0.99f;
 		UStaticMeshComponent* comp = SpawnMesh(wx, wy, cabinZ,
-			meshSizeX * BUILDING_WORLD_SCALE, meshSizeY * BUILDING_WORLD_SCALE, minFloorHeight * BUILDING_WORLD_SCALE,
+			meshSizeX * BUILDING_WORLD_SCALE * kCabinScale, meshSizeY * BUILDING_WORLD_SCALE * kCabinScale,
+			minFloorHeight * BUILDING_WORLD_SCALE * kCabinScale,
 			meshRotation, cabinMesh, nullptr, /*isMovable=*/true);
 		if (!comp) continue;
 

@@ -213,6 +213,18 @@
 			{
 				"position": [0.7, 0, 0.1, 1],
 			},
+			{
+				"position": [0.1, 0.2, 0.05, 0],
+			},
+			{
+				"position": [0.9, -0.2, 0.05, 0],
+			},
+			{
+				"position": [0.1, 0.2, 0.95, 0],
+			},
+			{
+				"position": [0.9, -0.2, 0.95, 0],
+			},
 		],
 		"lines": [
 			{
@@ -235,7 +247,7 @@
 		"connections": [
 			{
 				"begin": {
-					"type": "single",
+					"type": "node",
 					"idx": 2,
 				},
 				"end": {
@@ -246,7 +258,7 @@
 			},
 			{
 				"begin": {
-					"type": "single",
+					"type": "node",
 					"idx": 3,
 				},
 				"end": {
@@ -389,8 +401,8 @@
 			},
 			{
 				"begin": {
-					"type": "single",
-					"idx": 0,
+					"type": "node",
+					"idx": 4,
 				},
 				"end": {
 					"type": "line",
@@ -400,8 +412,8 @@
 			},
 			{
 				"begin": {
-					"type": "single",
-					"idx": 1,
+					"type": "node",
+					"idx": 5,
 				},
 				"end": {
 					"type": "line",
@@ -451,6 +463,46 @@
 					"type": "line",
 					"idx": 3,
 					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "single",
+					"idx": 2,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "single",
+					"idx": 3,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 4,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 5,
+				},
+				"end": {
+					"type": "single",
+					"idx": 1,
 				},
 			},
 		],

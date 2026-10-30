@@ -47,7 +47,7 @@ void BusVehicle::SetProperty() {
 	// 用同一个模型：transitMeshPath是骨骼网格(车头+X，原点在车身中心地面，轮骨Phys_Wheel_FL/FR/BL/BR)，
 	// blueprintPath是从BP_VehicleBasic派生的驾驶蓝图，CarMesh用的也是这个骨骼网格。
 	transitMeshPath = "/Game/3rdParty/PAZ_652/StaticMeshes/SKM_paz_652.SKM_paz_652";
-	blueprintPath = "/Game/Blueprint/Vehicle/BP_VehicleBus.BP_VehicleBus_C";
+	blueprintPath = "/Game/3rdParty/PAZ_652/Actor/BP_VehicleBus.BP_VehicleBus_C";
 
 	// 脚本：上下车/驾驶选项，见Resource/Story/vehicle_bus.script。
 	scriptModName = "script_empty";

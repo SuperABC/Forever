@@ -516,19 +516,25 @@ const char* TrainStationBuilding::GetName() {
 
 void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
-	// 楼体贴着道路那一侧，深度方向只占35%，剩下65%的深处空间留给两条轨道/四个接口
-	// (TrainStation::Layout，depthRatio 0.65/0.85)用，不会被楼体实体挡住。用
-	// NearRoadFootprint按direction换算，见该函数注释。
+	// 楼体占满整个Building区域(不像机场那样只占贴路一侧)。注意TrainStation::Layout的两条轨道/
+	// 四个接口(depthRatio 0.55/0.65)因此落在楼体范围之内，见station_basic.md。
 	stationMod = "station_train";
-	footprint = NearRoadFootprint(direction, 0.18f, 0.35f, 0.6f);
-	basements = 0;
+	footprint = BuildingFootprintSpec();   // 默认就是中心(0.5,0.5)、占满(1,1)
+	basements = 1;
 	layers = 1;
-	floorHeights.assign(1, 0.6f);
+	floorHeights.assign(basements + layers, 0.6f);
 
 	constexpr const char* kComponent = "component_train_station";
 	constexpr int kComponentId = 0;
-	AssignFloor(0, "preset_single_room_fg", direction);
+	FloorAssetSpec assets;
+	assets.stairMeshPath = "/Game/Asset/Meshes/Stair_Line.Stair_Line";
+	// 地下1层(站台层，楼梯通上来)+地面1层(大厅，左右两间站房)，两层各有2台电梯
+	AssignFloor(-1, "preset_train_station_bg+", direction, assets);
+	AssignFloor(0, "preset_train_station_fg-", direction, assets);
 	AssignRoom(0, 0, "room_train_station", kComponent, kComponentId);
+	AssignRoom(0, 1, "room_train_station", kComponent, kComponentId);
+	AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
 }
 
 void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

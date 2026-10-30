@@ -81,16 +81,16 @@ void TrainStation::SetProperty() {
 }
 
 void TrainStation::Layout(int direction, float sizeX, float sizeY) {
-	// 两条轨道、四个接口：左入站(leftIn)-右出站(rightOut)是depthRatio=0.65这条轨道，
-	// 右入站(rightIn)-左出站(leftOut)是depthRatio=0.85那条——顺序必须是
+	// 两条轨道、四个接口：左入站(leftIn)-右出站(rightOut)是depthRatio=0.55这条轨道，
+	// 右入站(rightIn)-左出站(leftOut)是depthRatio=0.65那条——顺序必须是
 	// [leftIn, rightOut, rightIn, leftOut]，TrainRoute::LayoutRoute(route_basic.cpp的
 	// LayoutDualTrackStationLoop)按这个固定顺序把它们连成"左边界-leftIn-rightOut-右边界-
 	// rightIn-leftOut-左边界"的环，同一条轨道的两个接口必须朝向相同(沿frontage轴同一方向)，
 	// 这样Route::Build()算出来的贝塞尔控制点才会贴着两点连线、看起来是一条直的"轨道"而不是
 	// 弯的。z只抬高一个小量(1cm，不代表真实离地高度)，让调试连线不和地面/楼体网格糊在一起；
 	// 这个z同时是车辆真正停靠在这个接口时的实际高度，不能设太大，否则停车时会明显飘在半空中。
-	constexpr float kTrackDepth1 = 0.65f;
-	constexpr float kTrackDepth2 = 0.85f;
+	constexpr float kTrackDepth1 = 0.55f;   // 距离门口(贴路一侧)的深度比例
+	constexpr float kTrackDepth2 = 0.65f;
 	constexpr float kInterfaceZ = 0.001f;
 
 	float headingToRight = AlongAxisHeadingDegrees(direction, true);

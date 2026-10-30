@@ -1,0 +1,307 @@
+{
+	"elevators": [{
+		"rect": [0.5, 0, 0.8, 0, 0.6, 0, 0.9, 0],
+		"direction": 1,
+		"walls": [0, 2, 3],
+	},
+	{
+		"rect": [0.4, 0, 0.8, 0, 0.5, 0, 0.9, 0],
+		"direction": 0,
+		"walls": [1, 2, 3],
+	}],
+	"ceilings": [
+		[0, 0, 0, 0, 1, 0, 0.4, 0],
+		[0.4, 0, 0.8, 0, 0.6, 0, 0.9, 0],
+	],
+	"grounds": [
+		[0, 0, 0, 0, 0.3, 0, 0.4, 0],
+		[0.7, 0, 0, 0, 1, 0, 0.4, 0],
+		[0.3, 0, 0, 0, 0.7, 0, 0.2, 0],
+		[0.4, 0, 0.2, 0, 0.6, 0, 0.4, 0],
+		[0.3, 0, 0.8, 0, 0.4, 0, 0.9, 0],
+		[0.6, 0, 0.8, 0, 0.7, 0, 0.9, 0],
+		[0, 0, 0.4, 0, 1, 0, 0.5, 0],
+		[0, 0, 0.7, 0, 1, 0, 0.8, 0],
+		[0, 0, 0.8, 0, 0.1, 0, 0.9, 0],
+		[0.9, 0, 0.8, 0, 1, 0, 0.9, 0],
+		[0, 0, 0.9, 0, 1, 0, 1, 0],
+	],
+	"corridors": [{
+		"rect": [0.2, 0, 0, 0, 0.8, 0, 0.4, 0],
+		"walls": [2, 3],
+		"doors": [
+			{
+				"direction": 2,
+				"positions": [
+					[0.2, 0, 0.2, 0, 0.8, 0, 1, 0],
+				],
+			},
+			{
+				"direction": 3,
+				"positions": [
+					[0.4, 0, 0.2, 0, 0.6, 0, 1, 0],
+				],
+			},
+		],
+		"windows": [
+			{
+				"direction": 3,
+				"positions": [
+					[0.1, 0, 0, 0.1, 0.3, 0, 1, -0.1],
+					[0.7, 0, 0, 0.1, 0.9, 0, 1, -0.1],
+				],
+			},
+		],
+	}],
+	"singles": [{
+		"rect": [0, 0, 0, 0, 0.2, 0, 0.4, 0],
+		"direction": 1,
+		"doors": [
+			{
+				"direction": 1,
+				"positions": [
+					[0.4, 0, 0, 0.1, 0.6, 0, 1, 0],
+				],
+			},
+		],
+		"windows": [
+			{
+				"direction": 2,
+				"positions": [
+					[0.5, -0.2, 0, 0.1, 0.5, 0.2, 1, -0.1],
+				],
+			},
+			{
+				"direction": 3,
+				"positions": [
+					[0.5, -0.2, 0, 0.1, 0.5, 0.2, 1, -0.1],
+				],
+			},
+			{
+				"direction": 0,
+				"positions": [
+					[0.2, 0, 0, 0.1, 0.8, 0, 1, -0.1],
+				],
+			},
+		],
+	},
+	{
+		"rect": [0.8, 0, 0, 0, 1, 0, 0.4, 0],
+		"direction": 0,
+		"doors": [
+			{
+				"direction": 0,
+				"positions": [
+					[0.4, 0, 0, 0.1, 0.6, 0, 1, 0],
+				],
+			},
+		],
+		"windows": [
+			{
+				"direction": 2,
+				"positions": [
+					[0.5, -0.2, 0, 0.1, 0.5, 0.2, 1, -0.1],
+				],
+			},
+			{
+				"direction": 3,
+				"positions": [
+					[0.5, -0.2, 0, 0.1, 0.5, 0.2, 1, -0.1],
+				],
+			},
+			{
+				"direction": 1,
+				"positions": [
+					[0.2, 0, 0, 0.1, 0.8, 0, 1, -0.1],
+				],
+			},
+		],
+	}],
+	"pedestrianNavigation": {
+		"nodes": [
+			{
+				"position": [0.5, 0, 0, -0.2],
+			},
+			{
+				"position": [0.5, 0, 0.2, 0],
+			},
+			{
+				"position": [0.35, 0, 0.2, 0],
+			},
+			{
+				"position": [0.65, 0, 0.2, 0],
+			},
+			{
+				"position": [0.1, 0, 0.85, 0],
+			},
+			{
+				"position": [0.9, 0, 0.85, 0],
+			},
+			{
+				"position": [0.5, 0, 0.45, 0],
+			},
+			{
+				"position": [0.1, 0, 0.75, 0],
+			},
+			{
+				"position": [0.9, 0, 0.75, 0],
+			},
+			{
+				"position": [0.5, 0, 0.75, 0],
+			},
+		],
+		"lines": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "outside",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 5,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "node",
+					"idx": 2,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "node",
+					"idx": 3,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "single",
+					"idx": 0,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "single",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "node",
+					"idx": 6,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 7,
+				},
+				"end": {
+					"type": "node",
+					"idx": 4,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 8,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 7,
+				},
+				"end": {
+					"type": "node",
+					"idx": 9,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 9,
+				},
+				"end": {
+					"type": "node",
+					"idx": 8,
+				},
+			},
+		],
+	},
+	"vehicleNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": [],
+	}
+}
