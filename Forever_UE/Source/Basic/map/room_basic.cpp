@@ -80,7 +80,9 @@ const char* ParkingRoom::GetName() {
 
 void ParkingRoom::SetProperty() {
 	isParking = true;
-	parkingSpots = { { {0.5f, 0.f, 0.5f, 0.f}, 0.f } }; // 房间正中心一个车位，朝向跟房间一致
+	// 房间正中心一个车位，朝向跟房间一致；种类里的"bus"对应原先InitParkedVehicles里"一半概率换成
+	// 可驾驶公交"的临时测试逻辑(现在是数据)，不想要公交就从这里删掉"bus"。
+	parkingSpots = { { {0.5f, 0.f, 0.5f, 0.f}, 0.f, { "car", "bus" } } };
 }
 
 int FactoryRoom::count = 0;
@@ -116,4 +118,20 @@ AirportRoom::AirportRoom() : id(count++) {
 const char* AirportRoom::GetName() {
 	name = "AirportRoom" + to_string(id);
 	return name.data();
+}
+
+void AirportRoom::SetProperty() {
+	// 楼体沿路方向(frontage)的两侧各一个停机位。楼体会按朝向旋转，所以用ParkingSpot的"朝向坐标系"
+	// (见ParkingSpot注释)：第一对是沿路轴，ratio相对房间中心，0/1正好是楼体沿路方向的两端边缘，-0.15/1.15
+	// 落在楼体外侧(估计值，后面按实际机翼宽度调)；第二对是纵深轴，0.5=和楼体同一条中线。
+	// rotationDegrees=0表示朝向楼体朝向(朝路)；跑道在纵深深处(AirStation的depthRatio 0.65/0.85)，
+	// 所以停机位朝向跑道是180度。
+	constexpr float kLeftAlong = -0.15f;
+	constexpr float kRightAlong = 1.15f;
+	constexpr float kExtraOffset = 0.5f; // 再往两侧挪的绝对距离(地图单位，1单位=10米)，不受房间尺寸影响
+	isParking = true;
+	parkingSpots = {
+		{ {kLeftAlong, -kExtraOffset, 0.5f, 0.f}, 180.f, { "plane" } },
+		{ {kRightAlong, kExtraOffset, 0.5f, 0.f}, 180.f, { "plane" } },
+	};
 }

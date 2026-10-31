@@ -25,6 +25,12 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("MeetOptionUp"), EKeys::MouseScrollUp },
 		{ TEXT("MeetOptionDown"), EKeys::MouseScrollDown },
 		{ TEXT("MeetOptionSelect"), EKeys::F },
+		// 飞机动力：滚轮上增/下减，和MeetOption共用滚轮键(各自只在自己的Pawn上绑定，同一个键映射
+		// 多个动作不冲突)，只绑在AAirplaneElement::SetupPlayerInputComponent上，见AirplaneElement.md。
+		{ TEXT("ThrottleUp"), EKeys::MouseScrollUp },
+		{ TEXT("ThrottleDown"), EKeys::MouseScrollDown },
+		// 飞机自由环视：按住时视角不自动回正，只绑在AAirplaneElement上。
+		{ TEXT("FreeLook"), EKeys::C },
 		// 剧情对话SectionSpeaking的空格键推进不走这里——UForeverStoryFrameworkComponent::
 		// ShowCurrentItem在对话展示期间把输入模式切成UIOnly，Pawn的Enhanced Input完全收不到
 		// 输入，空格键改成SectionSpeaking自己的NativeOnKeyDown原生响应，见

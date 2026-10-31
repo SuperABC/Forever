@@ -63,10 +63,12 @@ public:
 	float exitOffsetY = -200.f;
 	float exitOffsetZ = 100.f;
 
-	// 车型分类——"car"是唯一可以上下车/驾驶的类型(VehicleBasic)，"bus"/"train"/"plane"
-	// 是公共交通线路车辆。Traffic::Init()的停车位分支只挑category=="car"的车型
-	// (公交/火车/飞机不停在停车位里，由Route生成、沿线路运行)，见Core/traffic/traffic.md。
-	std::string category = "car";
+	// 车型分类("car"/"bus"/"train"/"plane"...)不是实例字段：每个具体子类提供
+	//   static const char* GetCategory();
+	// 通过VehicleFactory::RegisterVehicle的CategoryFunc函数指针注册(和OrganizationMod::GetPower
+	// 同一个模式)，Core用VehicleFactory::GetCategory(id)/GetIdsByCategory(category)查询，不需要
+	// 为了读种类而创建/销毁临时mod实例。多个车型可以共用同一个种类名。停车位(ParkingSpot::categories)
+	// 按种类名挑车型，见Core/traffic/traffic.md。
 
 	// 操控/搭乘——公共交通车辆都是运动学地沿线路移动的纯展示物，不接受操控也不能上去，
 	// 先声明这两个标志、capacity留着给字段，真正的搭乘/多人座位交互以后再实现。

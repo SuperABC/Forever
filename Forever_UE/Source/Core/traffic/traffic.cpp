@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 using namespace std;
 
@@ -153,21 +154,9 @@ void Traffic::InitRoutes(Map* map) {
 }
 
 void Traffic::InitParkedVehicles(Map* map) {
-	// 先探测哪些已注册车型属于category=="car"——这几个mod实例是临时的，探测完立刻销毁，不
-	// 留在vehicles里，见traffic.md"停车位车辆"一节。
-	vector<string> allIds = vehicleFactory.GetRegisteredIds();
-	vector<string> carIds;
-	vector<string> busIds; // 测试代码：可驾驶的公交，见下面车位循环里的50%选择，测完整段删掉
-	for (const string& id : allIds) {
-		if (id == "vehicle_empty") continue;
-		VehicleMod* probe = vehicleFactory.CreateVehicle(id);
-		if (!probe) continue;
-		probe->SetProperty(); // category由SetProperty赋值，不调用的话所有车型都是默认的"car"
-		if (probe->category == "car") carIds.push_back(id);
-		if (probe->category == "bus" && probe->drivable) busIds.push_back(id);
-		vehicleFactory.DestroyVehicle(probe);
-	}
-
+	// 车型按种类查(VehicleFactory::GetIdsByCategory，种类是mod注册的static GetCategory()，不需要
+	// 创建临时mod实例)；同一种类名可以对应多个车型。每个种类查一次，缓存起来。
+	unordered_map<string, vector<string>> idsByCategory;
 	int parkingRoomCount = 0;
 
 	for (auto& [buildingName, building] : map->GetBuildings()) {
@@ -177,11 +166,16 @@ void Traffic::InitParkedVehicles(Map* map) {
 			parkingRoomCount++;
 
 			for (const ParkingSpot& spot : room->GetParkingSpots()) {
-				if (carIds.empty()) continue; // 没有真正可用的车型，跳过这个车位
+				// 在这个车位允许的种类里随机挑一个，再在该种类的车型里随机挑一个(不管是否drivable)。
+				if (spot.categories.empty()) continue;
+				const string& category = spot.categories[GetRandom(static_cast<int>(spot.categories.size()))];
+				auto found = idsByCategory.find(category);
+				if (found == idsByCategory.end())
+					found = idsByCategory.emplace(category, vehicleFactory.GetIdsByCategory(category)).first;
+				const vector<string>& ids = found->second;
+				if (ids.empty()) continue; // 这个种类没有任何已启用车型，跳过这个车位
 
-				string modId = carIds[GetRandom(static_cast<int>(carIds.size()))];
-				// 测试：停车位里的车有一半概率换成公交，用来试驾驶公交(临时代码，测完删掉)。
-				if (!busIds.empty() && GetRandom(2) == 0) modId = busIds[GetRandom(static_cast<int>(busIds.size()))];
+				string modId = ids[GetRandom(static_cast<int>(ids.size()))];
 				string name = "Vehicle" + to_string(vehicleCounter++);
 
 				Vehicle* vehicle = CreateVehicle(modId, name);
@@ -192,9 +186,29 @@ void Traffic::InitParkedVehicles(Map* map) {
 				// ratio=0/1分别是房间两侧边缘(-/+半边长)。
 				float localX = (spot.position[0] - 0.5f) * room->GetSizeX() + spot.position[1];
 				float localY = (spot.position[2] - 0.5f) * room->GetSizeY() + spot.position[3];
-				vehicle->SetParking(room, localX, localY, spot.rotationDegrees);
+				float rotation = spot.rotationDegrees;
+				int facing = building->GetDirection();
+				if (facing >= 0 && facing < 4) {
+					// 朝向坐标系(见ParkingSpot)：第一对=沿路轴，第二对=纵深轴(离路越远越正)，
+					// 换算成房间局部X/Y。和AirStation的NearRoadPoint一致：WEST/EAST纵深轴是X、沿路轴是Y，
+					// NORTH/SOUTH反过来；EAST/NORTH的路在高坐标一侧，纵深方向要翻转。
+					bool depthAlongX = (facing == FACE_WEST || facing == FACE_EAST);
+					bool flip = (facing == FACE_EAST || facing == FACE_NORTH);
+					float sizeAlong = depthAlongX ? room->GetSizeY() : room->GetSizeX();
+					float sizeDepth = depthAlongX ? room->GetSizeX() : room->GetSizeY();
+					float along = (spot.position[0] - 0.5f) * sizeAlong + spot.position[1];
+					float depth = (spot.position[2] - 0.5f) * sizeDepth + spot.position[3];
+					if (flip) depth = -depth;
+					localX = depthAlongX ? depth : along;
+					localY = depthAlongX ? along : depth;
+					// rotationDegrees的0度=朝向楼体朝向(朝路，见ParkingSpot)：房间局部坐标里朝路的方向是
+					// WEST=-X(180度)、EAST=+X(0度)、NORTH=+Y(90度)、SOUTH=-Y(270度)，再叠加车位自己的旋转。
+					static const float kFacingYawDegrees[4] = { 180.f, 0.f, 90.f, 270.f }; // 下标=FACE_WEST/EAST/NORTH/SOUTH
+					rotation += kFacingYawDegrees[facing];
+				}
+				vehicle->SetParking(room, localX, localY, rotation);
 
-				debugf("Vehicle %s parked at %s.\n", name.c_str(), room->GetAddress().c_str());
+				debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
 			}
 		}
 	}

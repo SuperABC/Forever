@@ -23,8 +23,13 @@
   - `AForeverPlayerController::BeginPlay`/`SetupInputComponent`(整份`GetBindingContext()`常驻加入Enhanced Input子系统;`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`/`TogglePause`绑定,见`Player/ForeverPlayerController.md`)。
   - `UForeverPausePanelWidget::NativeOnKeyDown`(用`GetKey("TogglePause")`取配置后的实际按键——UI Only模式下Enhanced Input不触发,只能自己比对按键)。
   - `AVehicleElement::SetupPlayerInputComponent`(`Handbrake`/`ExitVehicle`)。
+  - `AAirplaneElement::SetupPlayerInputComponent`(`ThrottleUp`/`ThrottleDown`/`FreeLook`=C)。
 - Mod可扩展点:"可绑定动作"注册表(`GetBindingDefinitions()`)是硬编码在本类里的静态列表,新增数字按键动作时在这里加一条`{名字, 默认键}`即可,不需要改配置文件解析逻辑。
 
 ## 待办/后续阶段
 - 若后续需要让玩家在游戏内改键并持久化,需要在这个类基础上加"运行时改键+写回配置文件"的能力,当前只有"启动时读取一次"。
 - Move/Look的模拟量组合按键配置化,留待有实际需求时再设计。
+
+## ThrottleUp / ThrottleDown
+
+飞机动力：默认`MouseScrollUp/MouseScrollDown`，和`MeetOptionUp/Down`共用滚轮键。只在`AAirplaneElement::SetupPlayerInputComponent`上绑定(`Started`，每格一次，加减`powerStep`)，别的Pawn不绑，所以不冲突，见`Forever/Element/AirplaneElement.md`。

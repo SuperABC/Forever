@@ -1243,10 +1243,17 @@ bool Lot::FindAdaptivePlacement(int direction, float minFrontage, float minDepth
 	// 出来的margin会落在this坐标系下早被别的mod占用的区域，RequestPlacement用this自己的坐标系
 	// 找不到任何匹配，见general_geometry.md排查记录)。
 	float frontageSize = depthAlongX ? best->GetSizeY() : best->GetSizeX();
+	// RequestPlacement每裁一刀都要求剩下的那块至少有MIN_LOT_EXTENT加一条小路的宽度，否则SplitWithPath
+	// 失败、整次放置作废(还会把best搅成半切状态，连累后面的建筑)。所以剩余空间只比请求大一点点
+	// (小于kMinLeftover)时，不留这条细边，直接把它并进建筑占地，而不是请求"刚好minFrontage x minDepth"。
+	constexpr float kMinLeftover = 4.f;
+	float depthSize = depthAlongX ? best->GetSizeX() : best->GetSizeY();
+	float frontageLeft = frontageSize - minFrontage;
+	if (frontageLeft < kMinLeftover) frontageLeft = 0.f;
 	outLot = best;
-	outMarginStart = (frontageSize - minFrontage) * 0.5f;
-	outMarginEnd = frontageSize - minFrontage - outMarginStart;
-	outDepth = minDepth;
+	outMarginStart = frontageLeft * 0.5f;
+	outMarginEnd = frontageLeft - outMarginStart;
+	outDepth = (depthSize - minDepth < kMinLeftover) ? depthSize : minDepth;
 	return true;
 }
 

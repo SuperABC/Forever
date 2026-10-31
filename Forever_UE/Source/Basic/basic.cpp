@@ -443,16 +443,16 @@ extern "C" __declspec(dllexport) void* GetModVehicles() {
 extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factory) {
 	factory->RegisterVehicle(VehicleBasic::GetId(),
 		[](const std::string&) -> VehicleMod* { return new VehicleBasic(); },
-		[](VehicleMod* m) { delete m; });
+		[](VehicleMod* m) { delete m; }, &VehicleBasic::GetCategory);
 	factory->RegisterVehicle(BusVehicle::GetId(),
 		[](const std::string&) -> VehicleMod* { return new BusVehicle(); },
-		[](VehicleMod* m) { delete m; });
+		[](VehicleMod* m) { delete m; }, &BusVehicle::GetCategory);
 	factory->RegisterVehicle(TrainVehicle::GetId(),
 		[](const std::string&) -> VehicleMod* { return new TrainVehicle(); },
-		[](VehicleMod* m) { delete m; });
+		[](VehicleMod* m) { delete m; }, &TrainVehicle::GetCategory);
 	factory->RegisterVehicle(PlaneVehicle::GetId(),
 		[](const std::string&) -> VehicleMod* { return new PlaneVehicle(); },
-		[](VehicleMod* m) { delete m; });
+		[](VehicleMod* m) { delete m; }, &PlaneVehicle::GetCategory);
 }
 extern "C" __declspec(dllexport) void FinishModVehicles(VehicleFactory* factory) {
 }

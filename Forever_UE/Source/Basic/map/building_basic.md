@@ -91,3 +91,6 @@ CDF随机填充：住宅三档权重1，`RandomAcreage`在3000~8000之间；没�
   房间类型调`ArrangeRow`/`AssignRoom`)、`common/utility.h`(`GetRandom`)。
 - 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModBuildings`注册三个类型)、
   `zone_basic.cpp`(`ResidenceZone::Layout()`内部建筑复用`ResidenceBuilding::GetId()`)。
+
+## AirportBuilding 占地
+机场`Assign`请求的地块(沿路x纵深)优先12x8(地图单位)，放不下退回和火车站一样的7x4(`FindAdaptivePlacement`的minFrontage/minDepth决定占地大小)；楼体`footprint`仍是0.18/0.35/0.6，楼体本身没变。

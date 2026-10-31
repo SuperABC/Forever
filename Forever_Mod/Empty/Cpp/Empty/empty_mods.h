@@ -399,6 +399,7 @@ public:
 	EmptyVehicle(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "vehicle_empty"; }
+	static const char* GetCategory() { return "empty"; } // 占位种类，不会被任何停车位选中
 	virtual const char* GetType() const override { return "vehicle_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 

@@ -290,3 +290,7 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 
 ## 非轿车的触发盒
 `BuildProximityBox`：`category!="car"`(公交)时触发盒取`carMesh`局部包围盒外扩(XY 150/Z 50)；轿车仍是固定250x250x120。
+
+## 飞机子类
+
+`AAirplaneElement`继承本类(复用Chaos轮子/骨骼网格/近身选项/上下机/存档位置)，把轮子改成3个(鼻轮+主轮，`AirplaneWheel.h`)，绕过本类的`SetupPlayerInputComponent`(W/S不是油门/刹车)，每帧手写飞行力学，见`AirplaneElement.md`。本类对它没有改动：`ExitVehicle()`/`Handbrake()`/`StopHandbrake()`和各输入成员都是protected，子类直接调用。

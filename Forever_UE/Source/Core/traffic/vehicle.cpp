@@ -9,7 +9,9 @@
 using namespace std;
 
 Vehicle::Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const string& id, const string& name) :
-	factory(factory), name(name) {
+	factory(factory), mod(nullptr), modId(id), name(name) {
+	category = factory->GetCategory(id);
+	if (category.empty()) category = "car";
 	mod = factory->CreateVehicle(id);
 	if (mod) mod->SetProperty();
 
@@ -58,8 +60,7 @@ float Vehicle::GetExitOffsetY() const { return mod ? mod->exitOffsetY : 0.f; }
 float Vehicle::GetExitOffsetZ() const { return mod ? mod->exitOffsetZ : 0.f; }
 
 const string& Vehicle::GetCategory() const {
-	static const string car = "car";
-	return mod ? mod->category : car;
+	return category;
 }
 
 bool Vehicle::IsDrivable() const { return mod ? mod->drivable : false; }

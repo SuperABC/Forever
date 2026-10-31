@@ -1146,7 +1146,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			WriteStrings(p.manufactureTypes, w);
 			w.U8(p.isParking ? 1 : 0);
 			w.U32(static_cast<uint32_t>(p.parkingSpots.size()));
-			for (const ParkingSpot& s : p.parkingSpots) { WriteFloats(s.position, w); w.F32(s.rotationDegrees); }
+			for (const ParkingSpot& s : p.parkingSpots) { WriteFloats(s.position, w); w.F32(s.rotationDegrees); WriteStrings(s.categories, w); }
 			w.U8(room->stated ? 1 : 0);
 		}
 
@@ -1420,7 +1420,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 			p.manufactureTypes = ReadStrings(r);
 			p.isParking = r.U8() != 0;
 			p.parkingSpots.resize(r.U32());
-			for (ParkingSpot& s : p.parkingSpots) { ReadFloats(s.position, r); s.rotationDegrees = r.F32(); }
+			for (ParkingSpot& s : p.parkingSpots) { ReadFloats(s.position, r); s.rotationDegrees = r.F32(); s.categories = ReadStrings(r); }
 			room->stated = r.U8() != 0;
 		}
 

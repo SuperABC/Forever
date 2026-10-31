@@ -28,8 +28,9 @@ struct ScriptContext;
 //    Station——不挂building，不占用任何Lot面积，直接摆在道路旁边(目前只有公交站用这条路径)。
 // 3. InitRoutes——对每个已注册且启用的RouteMod类型，收集stationType匹配的Station接口交给
 //    Route::Build()，Build()内部按需创建的边缘Station交回这里持有。
-// 4. 停车位车辆——只挑VehicleMod::category=="car"的车型(公交/火车/飞机不停车位，由Route
-//    生成/驱动)，逻辑和之前一致。
+// 4. 停车位车辆——对每个停车位在ParkingSpot::categories里随机选一个载具种类，再按
+//    VehicleFactory::GetIdsByCategory从该种类的车型里随机选一个(不管是否drivable)，种类是各
+//    VehicleMod静态GetCategory()注册的，不需要创建临时mod实例。机场停机位(种类"plane")也走这里。
 // 5. 线路车辆——对每条Route的每条line按GetVehiclesPerLine()创建车辆、SetRouteBinding、
 //    AddVehicleToLine。
 //

@@ -1,0 +1,34 @@
+{
+	// 飞机自己的milestone脚本(PlaneVehicle::milestoneNames={"vehicle_plane"}加载)。路线上的飞机和机场停机位
+	// 里的飞机共用这一个脚本，靠C++写好的$$self.on_route区分：
+	//   - on_route=0(停机位里的飞机)：提供"驾驶"选项；
+	//   - on_route=1(线路上的飞机)：不提供任何选项(暂不支持搭乘)。
+	"milestones": [
+		{
+			"milestone": "ready",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "add_option", "name": "$$self.name", "option": "驾驶", "condition": "$$self.on_route == 0" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "drive",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "驾驶" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "enter_vehicle", "vehicle": "$$self.name" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

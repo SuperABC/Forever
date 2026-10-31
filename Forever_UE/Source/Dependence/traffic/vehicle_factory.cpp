@@ -3,8 +3,22 @@
 
 using namespace std;
 
-void VehicleFactory::RegisterVehicle(const string& id, CreateFunc creator, DestroyFunc deleter) {
-	registries[id] = { creator, deleter };
+void VehicleFactory::RegisterVehicle(const string& id, CreateFunc creator, DestroyFunc deleter, CategoryFunc category) {
+	registries[id] = { creator, deleter, category ? string(category()) : string() };
+}
+
+string VehicleFactory::GetCategory(const string& id) const {
+	if (!IsEnabled(id)) return string();
+	return registries.find(id)->second.category;
+}
+
+vector<string> VehicleFactory::GetIdsByCategory(const string& category) const {
+	vector<string> ids;
+	for (const auto& [id, entry] : registries) {
+		if (configuredArgs.find(id) == configuredArgs.end()) continue;
+		if (entry.category == category) ids.push_back(id);
+	}
+	return ids;
 }
 
 VehicleMod* VehicleFactory::CreateVehicle(const string& id) {

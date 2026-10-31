@@ -152,6 +152,7 @@ public:
 	static const char* GetId() { return "room_airport"; }
 	virtual const char* GetType() const override { return "room_airport"; }
 	virtual const char* GetName() override;
+	virtual void SetProperty() override;
 
 public:
 	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。

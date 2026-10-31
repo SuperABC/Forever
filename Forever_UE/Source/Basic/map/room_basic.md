@@ -24,7 +24,7 @@
 
 ## ParkingRoom
 
-`isParking=true; parkingSpots={{{0.5f,0.f,0.5f,0.f},0.f}};`——房间正中心一个车位，朝向跟
+`isParking=true; parkingSpots={{{0.5f,0.f,0.5f,0.f},0.f,{"car","bus"}}};`——房间正中心一个车位，朝向跟
 房间一致，供`Traffic::Init()`在这里生成预置车辆，见`Source/Core/traffic/traffic.md`。
 `ShopBuilding`和`FactoryBuilding`(见`building_basic.md`)共用同一个`ParkingRoom`类。
 
@@ -40,3 +40,7 @@
 - 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModRooms`注册五个类型)、
   `building_basic.cpp`(`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding::Layout()`按
   房间类型调`ArrangeRow`/`AssignRoom`)。
+
+## AirportRoom
+
+`SetProperty()`：`isParking=true`，两个停机位（种类`{"plane"}`）：楼体会按朝向旋转，所以用"朝向坐标系"（沿路轴/纵深轴，见`ParkingSpot`注释）而不是房间局部X/Y。沿路轴ratio相对房间中心，`-0.15`/`1.15`落在楼体沿路方向两端外面（0/1是楼体边缘），纵深轴`0.5`和楼体同一条中线，rotationDegrees=0表示朝向楼体朝向(朝路)，停机位设成180度即背对路、机头朝向纵深深处的跑道。位置是估计值，常量`kLeftAlong`/`kRightAlong`(ratio)和`kExtraOffset`(绝对距离，地图单位)在`AirportRoom::SetProperty`里，不合适直接调（机翼宽、和跑道/楼体的间距按实际飞机调）。

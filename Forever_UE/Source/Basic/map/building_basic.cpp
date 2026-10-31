@@ -616,16 +616,18 @@ void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, v
 	// 排在TrainStationBuilding之后(谁先谁后由BuildingFactory::GetRegisteredIds()的枚举顺序
 	// 决定，这里不关心)，FindAdaptivePlacement会自动看到火车站(如果已经成功)留下的最新
 	// freeLots状态，自己找一块不冲突的空间，不需要硬编码"对面那一侧"。
-	constexpr float kMinFrontage = 7.f;
-	constexpr float kMinDepth = 4.f;
+	// 占地(沿路x纵深，地图单位)比火车站(7x4)大：机场要放跑道和两侧停机位。放不下大的就退回7x4。
+	constexpr float kFrontages[] = { 12.f, 7.f };
+	constexpr float kDepths[] = { 8.f, 4.f };
 
 	for (Lot* lot : lots) {
 		if (!lot || lot->GetArea() != AREA_OFFICIAL_HIGH) continue;
 
+		for (int size = 0; size < 2; size++)
 		for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {
 			Lot* targetLot;
 			float marginStart, marginEnd, depth;
-			if (!lot->FindAdaptivePlacement(dir, kMinFrontage, kMinDepth, targetLot, marginStart, marginEnd, depth)) continue;
+			if (!lot->FindAdaptivePlacement(dir, kFrontages[size], kDepths[size], targetLot, marginStart, marginEnd, depth)) continue;
 
 			// 贴到另一端的角(和火车站相反)：余量全部挪到marginStart，marginEnd=0，这样两者即使
 			// 同在一条边上也占据这条边的两个对角，中间留下整块连续空地。

@@ -44,7 +44,7 @@ public:
 	float GetExitOffsetY() const;
 	float GetExitOffsetZ() const;
 
-	const std::string& GetCategory() const; // mod->category("car"/"bus"/"train"/"plane")，mod为空返回"car"
+	const std::string& GetCategory() const; // 车型注册的种类("car"/"bus"/"train"/"plane"...)，查不到返回"car"
 	bool IsDrivable() const;
 	bool IsBoardable() const;
 	int GetCapacity() const;
@@ -79,6 +79,8 @@ public:
 private:
 	VehicleFactory* factory;
 	VehicleMod* mod;
+	std::string modId;
+	std::string category; // 构造时向factory按modId查一次(注册的static GetCategory())，未注册兜底"car"
 	std::string name;
 	Script* script;
 	std::vector<std::string> options;

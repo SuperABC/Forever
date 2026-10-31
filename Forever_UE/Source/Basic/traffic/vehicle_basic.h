@@ -18,6 +18,7 @@ public:
 	VehicleBasic();
 
 	static const char* GetId() { return "vehicle_basic"; }
+	static const char* GetCategory() { return "car"; }
 	virtual const char* GetType() const override { return "vehicle_basic"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
@@ -41,6 +42,7 @@ public:
 	BusVehicle();
 
 	static const char* GetId() { return "vehicle_bus"; }
+	static const char* GetCategory() { return "bus"; }
 	virtual const char* GetType() const override { return "vehicle_bus"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
@@ -60,6 +62,7 @@ public:
 	TrainVehicle();
 
 	static const char* GetId() { return "vehicle_train"; }
+	static const char* GetCategory() { return "train"; }
 	virtual const char* GetType() const override { return "vehicle_train"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
@@ -79,6 +82,7 @@ public:
 	PlaneVehicle();
 
 	static const char* GetId() { return "vehicle_plane"; }
+	static const char* GetCategory() { return "plane"; }
 	virtual const char* GetType() const override { return "vehicle_plane"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;

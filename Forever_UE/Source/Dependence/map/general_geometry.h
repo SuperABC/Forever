@@ -470,9 +470,21 @@ using DoorTags = std::unordered_map<int, std::vector<std::string>>;
 // ComputeDirectionalMeshTransform()处理楼梯朝向的做法一致)。老工程RoomMod::parkingSpaces
 // 只有位置、没有旋转(Vehicle::SetPosition接受旋转参数但调用点永远传0.f)，这次把这个缺口
 // 补上，见Source/Core/traffic/traffic.md。
+//
+// 坐标系是"朝向坐标系"，不是房间局部X/Y轴：楼体会按朝向旋转，房间局部X/Y哪个是沿路方向取决于
+// Building::GetDirection()，写死的数没法知道。position第一对(ratio,offset)是**沿路(frontage)轴**，
+// 第二对是**纵深轴**(0.5=房间中线，正向=离路更远)，ratio仍然相对房间中心；rotationDegrees的0度=
+// 朝向楼体的朝向(朝路，即纵深轴反方向)，所以背对路、朝向纵深深处(如机场跑道)是180度。Traffic::InitParkedVehicles按Building::GetDirection()换算成房间局部
+// 坐标，和AirStation的NearRoadPoint/AlongAxisHeadingDegrees同一套"沿路/纵深"约定。楼体没有有效
+// 朝向(GetDirection()为-1)时退回按房间局部X/Y轴解释。
+//
+// categories是这个车位允许停进来的所有载具种类(VehicleMod静态GetCategory()返回的名字，如
+// "car"/"bus"/"plane")，Traffic::InitParkedVehicles对每个车位在这里随机选一个种类、再从该种类的
+// 车型里随机选一个生成载具。飞机/汽车在这一层没有区别，只是种类名不同。
 struct ParkingSpot {
 	PointParams position{};
 	float rotationDegrees = 0.f;
+	std::vector<std::string> categories;
 };
 
 // Building楼层导航模板里的一个固定锚点(和Stair/Row这类槽位无关，模板作者自己在画布上点出来

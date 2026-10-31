@@ -294,7 +294,7 @@ extern "C" __declspec(dllexport) void* GetModVehicles() {
 extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factory) {
 	factory->RegisterVehicle(EmptyVehicle::GetId(),
 		[](const std::string& args) -> VehicleMod* { return new EmptyVehicle(args); },
-		[](VehicleMod* m) { delete m; });
+		[](VehicleMod* m) { delete m; }, &EmptyVehicle::GetCategory);
 }
 extern "C" __declspec(dllexport) void FinishModVehicles(VehicleFactory* factory) {
 }

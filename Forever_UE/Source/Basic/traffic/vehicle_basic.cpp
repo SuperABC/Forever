@@ -25,7 +25,6 @@ void VehicleBasic::SetProperty() {
 	scriptModName = "script_empty";
 	milestoneNames = { "vehicle_basic" };
 
-	category = "car";
 	drivable = true;
 }
 
@@ -40,7 +39,6 @@ const char* BusVehicle::GetName() {
 }
 
 void BusVehicle::SetProperty() {
-	category = "bus";
 	sizeX = 786.f; sizeY = 312.f; sizeZ = 347.f; // UE单位，PAZ_652模型的实际包围盒
 
 	// 路线上的公交(ATransitVehicleElement，运动学显示)和停车场里的公交(AVehicleElement，Chaos物理驾驶)
@@ -74,7 +72,6 @@ const char* TrainVehicle::GetName() {
 }
 
 void TrainVehicle::SetProperty() {
-	category = "train";
 	sizeX = 2134.f; sizeY = 399.f; sizeZ = 577.f; // UE单位，SciFiTram模型的实际包围盒(原点在车身中心附近，底面略低于0)
 
 	// 路线上的火车(ATransitVehicleElement，运动学显示)用SciFiTram静态网格(长边沿X，原点在车身中心地面附近)，
@@ -105,7 +102,6 @@ const char* PlaneVehicle::GetName() {
 }
 
 void PlaneVehicle::SetProperty() {
-	category = "plane";
 	sizeX = 3000.f; sizeY = 2500.f; sizeZ = 800.f;
 
 	// 测试飞机模型资产，来自Forever_Mod/Test/UE/Test这个独立mod的Plugin(Test)，
@@ -116,4 +112,21 @@ void PlaneVehicle::SetProperty() {
 	// 需要一个yaw修正，-90度机头朝向才对。
 	meshTransform.scale = 0.15f;
 	meshTransform.yawOffsetDegrees = -90.f;
+
+	// 机场停机位里的飞机(AAirplaneElement，Chaos物理+手写飞行力学，可驾驶)和线路上的飞机
+	// (ATransitVehicleElement，运动学显示)共用这个车型，和公交一样：blueprintPath是停机位里那架
+	// 可驾驶飞机的蓝图(继承AirplaneElement，骨骼网格/轮骨/飞行系数在蓝图里设，见AirplaneElement.md)，
+	// 路线飞机仍然用transitMeshPath。
+	blueprintPath = "/Game/3rdParty/Low-poly_Airplane/Actor/BP_VehiclePlane.BP_VehiclePlane_C";
+
+	// 脚本：停机位里的飞机提供"驾驶"选项，线路上的飞机不提供，见Resource/Story/vehicle_plane.script。
+	scriptModName = "script_empty";
+	milestoneNames = { "vehicle_plane" };
+
+	// 下车点(车身局部坐标)：机身左后方(-X后、-Y左)，避开机翼；是估计值，不合适再调。
+	exitOffsetX = -1000.f;
+	exitOffsetY = -800.f;
+	exitOffsetZ = 100.f;
+
+	drivable = true;
 }
