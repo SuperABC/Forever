@@ -12,7 +12,7 @@
 ## 选哪一张
 
 `GetCitizenAvatar(citizen)`：
-1. `Citizen::GetAvatar()` 非空 → 读 `Resource/Avatars/<avatar>.png`，找不到打警告并回退；
+1. `Citizen::GetAvatar()` 非空 → 读 `Resource/Avatars/<avatar>.png`；以 `/` 开头则当作UE资产对象路径（如mod插件里的 `/Test/Yuanshen/kong.kong`），用 `LoadObject<UTexture2D>` 加载；找不到打警告并回退；
 2. 自动 → 在**该性别、该年龄段**的头像集合里挑：年龄 = 当前游戏年份（`Player::GetTime()`，没有时退回 `Populace::GetCurrentYear()`）− 出生年，落到年龄段（3-5、6-12、13-17、18-29、30-44、45-59、60-74、75+，边界必须和 `Tools/AvatarGen/generate.mjs` 的 `BANDS` 一致，代码里是 `kBandMax`），再用 `Citizen::GetAvatarIndex() % 段内张数` 取一张。`avatarIndex` 在 Core 里随机并随存档保存，所以同一个市民读档前后头像不变；年龄在段内增长时头像不变，跨段才换（"长大了"）。该段没有图时取年龄最接近的一张。
 没有头像目录/文件读取失败 → 返回 nullptr，调用方（`ACitizenElement::Init`）保持角色默认头像。
 

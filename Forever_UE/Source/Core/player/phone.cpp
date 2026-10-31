@@ -49,9 +49,18 @@ void Phone::RecomputeLayout(int w, int h) {
 
 void Phone::BuildAppList() {
 	appTypes.clear();
+	appNames.clear();
 	for (const string& id : Registry::Get().GetAppFactory().GetRegisteredIds()) {
 		if (id == "app_empty") continue; // 每个concept都有的占位id，不当真实App显示在桌面上
 		appTypes.push_back(id);
+		// 桌面图标下显示App的GetName()：临时建一个实例取名字(不Init)，随即销毁。
+		string name = id;
+		try {
+			App probe(&Registry::Get().GetAppFactory(), id);
+			name = probe.GetName();
+		}
+		catch (...) {}
+		appNames.push_back(name);
 	}
 }
 
@@ -311,7 +320,7 @@ void Phone::RenderHome(Canvas* canvas, PostHandle* post) {
 
 		canvas->SetFontSize(max(24, height / 21));
 		canvas->SetColor(255, 255, 255);
-		const string& label = appTypes[i];
+		const string& label = appNames[i];
 		canvas->PutString(label, cellX + (cellWidth - canvas->StringWidth(label)) / 2, iconY + iconSize + height / 200);
 	}
 }
@@ -347,7 +356,7 @@ void Phone::RenderTaskList(Canvas* canvas) {
 
 		canvas->SetFontSize(max(24, height / 21));
 		canvas->SetColor(255, 255, 255);
-		canvas->PutString(entry.type, thumbX, thumbY + thumbHeight + height / 30);
+		canvas->PutString(entry.app->GetName(), thumbX, thumbY + thumbHeight + height / 30);
 
 		canvas->SetColor(220, 60, 60);
 		int closeSize = max(12, height / 25);

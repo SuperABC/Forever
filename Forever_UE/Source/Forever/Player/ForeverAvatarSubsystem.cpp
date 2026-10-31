@@ -104,12 +104,16 @@ UTexture2D* UForeverAvatarSubsystem::LoadAvatar(const FString& relativePath) {
 		return nullptr;
 	}
 
-	TArray<uint8> bytes;
-	if (!FFileHelper::LoadFileToArray(bytes, *FPaths::Combine(avatarRoot, relativePath + TEXT(".png")))) {
-		missing.Add(relativePath);
-		return nullptr;
+	// 以"/"开头的是UE资产对象路径(如mod插件内容"/Test/Yuanshen/kong.kong")，直接加载贴图资产。
+	UTexture2D* texture = nullptr;
+	if (relativePath.StartsWith(TEXT("/"))) {
+		texture = LoadObject<UTexture2D>(nullptr, *relativePath);
+	} else {
+		TArray<uint8> bytes;
+		if (FFileHelper::LoadFileToArray(bytes, *FPaths::Combine(avatarRoot, relativePath + TEXT(".png")))) {
+			texture = FImageUtils::ImportBufferAsTexture2D(bytes);
+		}
 	}
-	UTexture2D* texture = FImageUtils::ImportBufferAsTexture2D(bytes);
 	if (!texture) {
 		missing.Add(relativePath);
 		return nullptr;
