@@ -139,8 +139,8 @@
 
 `ParkingSpot`除了`position`/`rotationDegrees`新增`categories`(`vector<string>`)：这个车位允许停进来的所有载具种类（`VehicleMod`静态`GetCategory()`返回的名字）。`Traffic::InitParkedVehicles`在其中随机选一个种类再选车型。存档里紧跟`rotationDegrees`写字符串列表（`map_save.cpp`，没有升版本号）。
 
-## ParkingSpot的朝向坐标系
+## ParkingSpot的房间局部坐标系
 
-楼体按朝向旋转，房间局部X/Y哪个是沿路方向取决于`Building::GetDirection()`。所有车位都用"朝向坐标系"：`position`第一对=沿路(frontage)轴、第二对=纵深轴(离路越远越正)，ratio仍相对房间中心；`rotationDegrees`的0度=朝向楼体朝向(朝路)，朝纵深深处(跑道)是180度。`Traffic::InitParkedVehicles`按和`AirStation::NearRoadPoint`相同的规则换算成房间局部坐标(WEST/EAST纵深轴是X，NORTH/SOUTH是Y；EAST/NORTH纵深翻转；旋转角叠加朝向对应的局部yaw：WEST180/EAST0/NORTH90/SOUTH270)；楼体没有有效朝向(-1)时退回房间局部X/Y。
+`position`是房间局部坐标系里的PointParams：第一对=u轴(沿正面墙)、第二对=v轴(朝正面为正)，位置=比例x该轴长度+米数偏移，原点在房间角点；坐标系由房间自己的朝向(`Room::GetDirection()`)定义，不是建筑朝向，朝向变化时整套纯旋转，见`Core/map/room.md`。`rotationDegrees`的0度=朝向房间正面，朝房间深处(跑道)是180度。`Traffic::InitParkedVehicles`用`Room::AxisSizeU/V`、`LocalToBuildingLocal`、`FacingYawDegrees`换算成建筑局部偏移和旋转角。(旧约定对EAST/SOUTH沿路轴是镜像，不是纯旋转；现已统一。)
 
 - **`FindAdaptivePlacement`避免细边**：`RequestPlacement`每裁一刀都要求剩余部分≥`MIN_LOT_EXTENT`加一条小路宽，否则整次放置失败并把命中的子块留在半切状态。所以剩余空间(沿路的总余量、纵深的余量)小于`kMinLeftover`(4)时，不留细边，直接并进占地(margin=0 / depth=子块整个纵深)。起因：机场请求12x8时，命中子块只比请求大一点点，裁剩的细边让机场和后面的Yuanshen都放不上去。

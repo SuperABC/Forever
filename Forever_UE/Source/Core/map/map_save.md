@@ -92,3 +92,6 @@ UE 控制台命令 `Forever.SaveRoundTrip`：当前地图写段 → 读回成一
 
 - owner、tenants、occupants、房间里的物品（`Room::assets`）在 P4/P6 存。
 - 读档失败时已经建出来的部分对象没有释放（读档失败本来就会退回重新生成世界）。
+
+## 房间direction语义
+`direction`语义明确为"建筑局部坐标系下的房间朝向(正面)"，现在由`Room::LocalToBuildingLocal`等读取(停车位)；存档格式未变。

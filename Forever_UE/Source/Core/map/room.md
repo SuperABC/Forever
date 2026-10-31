@@ -10,7 +10,7 @@
 
 - **只保留和"布局/渲染/寻址"直接相关的字段**：`type`/`name`（来自`RoomMod`）、
   `parentBuilding`/`parentComponent`、`layer`（第几层，`Building::GetFloor(level)`的
-  `level`）、`direction`（朝向，`FACE_DIRECTION`）、`doors`/`windows`（`WallHole`，每侧的
+  `level`）、`direction`（房间朝向，`FACE_DIRECTION`，见下"房间局部坐标系"）、`doors`/`windows`（`WallHole`，每侧的
   开门开窗位置，供`ForeverBuildingFrameworkComponent`渲染墙体开洞用）、`number`（门牌号，
   `"b3-0001"`这种格式，`SetNumber(level,seq)`拼出——basement前缀+4位序号）、
   `navigationNode`（这个房间中心点的导航锚点，供`Building::BuildPedestrianNavigation()`里
@@ -95,3 +95,14 @@
 - 4类占位能力里workspace/storage/manufacture这3类目前没有任何生成/消费方（Job/Industry域
   还没迁移），只有residential这一类真正用起来了（`Map::ComputeAccommodationTarget()`/
   `Map::Checkin()`，见`Source/Core/populace/populace.md`）。
+
+## 房间局部坐标系
+
+`direction`是layout里指定的房间"正面"(门/临路一侧)，`ReadTemplates`已经按建筑实例朝向烘焙成**建筑局部(未旋转)坐标系下的朝向**(`InverseDirection(layoutDir, buildingFace)`)，存档里本来就存。世界朝向 = 这个方向 + `Building::GetRotation()`。
+
+房间局部坐标系和建筑/layout一样以角为原点：房间"朝北"时原点在房间(minX,minY)角(建筑局部系原点那种角)，u=沿正面墙、v=朝正面为正，yaw 0度=朝向正面；朝向是W/E/S时整套坐标系做纯旋转(和`BuildingLayoutLibrary::InversePoint`同一套)。所以家具/车位等按"房间朝北"写一次，转向由Core换算。PointParams的"比例x该轴长度+米数偏移"里，比例乘`AxisSizeU()`/`AxisSizeV()`(W/E朝向时u轴长=建筑局部SizeY，v轴长=SizeX)。
+
+- `LocalToBuildingLocal(u,v,ox,oy)`：u/v米数 -> 相对房间中心的建筑局部偏移。NORTH `(u-W/2, v-H/2)`、SOUTH `(W/2-u, H/2-v)`、WEST `(v-W/2, H/2-u)`、EAST `(W/2-v, u-H/2)`(W=SizeX，H=SizeY)；朝向无效按NORTH。
+- `FacingYawDegrees()`：局部yaw 0度在建筑局部系里的数学角(逆时针，0度=+X)：W180/E0/N90/S270。
+- `LocalToWorld(u,v)` / `LocalYawToWorld(yawDegrees)`：直接换算成世界XY(地图单位)和世界yaw(弧度，叠加建筑旋转)，给家具/asset放置用。
+- 目前只有停车位(`Traffic::InitParkedVehicles`)用它；房间触发盒/墙/门/导航节点/市民落点都是中心+轴对齐，和朝向无关。

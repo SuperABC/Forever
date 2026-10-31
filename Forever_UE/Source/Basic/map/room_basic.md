@@ -43,4 +43,4 @@
 
 ## AirportRoom
 
-`SetProperty()`：`isParking=true`，两个停机位（种类`{"plane"}`）：楼体会按朝向旋转，所以用"朝向坐标系"（沿路轴/纵深轴，见`ParkingSpot`注释）而不是房间局部X/Y。沿路轴ratio相对房间中心，`-0.15`/`1.15`落在楼体沿路方向两端外面（0/1是楼体边缘），纵深轴`0.5`和楼体同一条中线，rotationDegrees=0表示朝向楼体朝向(朝路)，停机位设成180度即背对路、机头朝向纵深深处的跑道。位置是估计值，常量`kLeftAlong`/`kRightAlong`(ratio)和`kExtraOffset`(绝对距离，地图单位)在`AirportRoom::SetProperty`里，不合适直接调（机翼宽、和跑道/楼体的间距按实际飞机调）。
+`SetProperty()`：`isParking=true`，两个停机位（种类`{"plane"}`）：用房间局部坐标系（u轴沿正面墙、v轴朝正面，原点在房间角点，见`ParkingSpot`注释/`room.md`），房间按朝向旋转时车位跟着转。u轴ratio相对房间角点，`-0.15`/`1.15`落在房间沿正面墙两端外面（0/1是房间边缘），v轴`0.5`和房间同一条中线，rotationDegrees=0表示朝向房间正面(朝路)，停机位设成180度即背对路、机头朝向房间深处的跑道。位置是估计值，常量`kLeftAlong`/`kRightAlong`(ratio)和`kExtraOffset`(绝对距离，地图单位)在`AirportRoom::SetProperty`里，不合适直接调（机翼宽、和跑道/楼体的间距按实际飞机调）。

@@ -461,22 +461,15 @@ using WallHole = std::unordered_map<int, std::vector<RectParams>>;
 // Building(Corridor/Single/Row)和Room都要用，不需要互相include对方。
 using DoorTags = std::unordered_map<int, std::vector<std::string>>;
 
-// Room内部一个停车位——位置是ratio+offset(相对房间自身宽高，和PointParams同一套约定)，
-// 但这里的ratio是**相对房间中心**的偏移比例：0.5表示偏移0(正中心)，0/1分别是房间沿这个轴
-// 两侧的边缘(-/+半边长)，不是相对房间角点的0~1——因为Room::GetPosX()/GetPosY()(Quad的约定)
-// 本身就是房间的中心点，不是角点，见Traffic::Init()换算room-local坐标的实现。
-// rotationDegrees是车辆停在这个车位时相对房间自身朝向的旋转角(角度制，房间作者填起来直观；
-// 实际换算成世界旋转时会转成弧度、叠加到Building::GetRotation()上，和
-// ComputeDirectionalMeshTransform()处理楼梯朝向的做法一致)。老工程RoomMod::parkingSpaces
-// 只有位置、没有旋转(Vehicle::SetPosition接受旋转参数但调用点永远传0.f)，这次把这个缺口
-// 补上，见Source/Core/traffic/traffic.md。
-//
-// 坐标系是"朝向坐标系"，不是房间局部X/Y轴：楼体会按朝向旋转，房间局部X/Y哪个是沿路方向取决于
-// Building::GetDirection()，写死的数没法知道。position第一对(ratio,offset)是**沿路(frontage)轴**，
-// 第二对是**纵深轴**(0.5=房间中线，正向=离路更远)，ratio仍然相对房间中心；rotationDegrees的0度=
-// 朝向楼体的朝向(朝路，即纵深轴反方向)，所以背对路、朝向纵深深处(如机场跑道)是180度。Traffic::InitParkedVehicles按Building::GetDirection()换算成房间局部
-// 坐标，和AirStation的NearRoadPoint/AlongAxisHeadingDegrees同一套"沿路/纵深"约定。楼体没有有效
-// 朝向(GetDirection()为-1)时退回按房间局部X/Y轴解释。
+// Room内部一个停车位——位置是ratio+offset(和PointParams同一套约定)：第一对(ratio,offset)是u轴(沿正面墙)，
+// 第二对是v轴(朝正面为正)，位置 = ratio x 该轴长度 + 米数偏移，原点在房间角点。坐标系是**房间局部坐标系**，
+// 由房间自己的朝向(Room::GetDirection()，layout里指定的"正面"，已含建筑实例朝向)定义，不是建筑朝向，
+// 也不是房间的建筑局部X/Y：房间"朝北"时就是建筑/layout的坐标系，其它朝向整套纯旋转，所以车位按朝北写一次即可，
+// 详见Room::LocalToBuildingLocal、Source/Core/map/room.md。
+// rotationDegrees是车辆停在这个车位时相对房间朝向的旋转角(角度制，0度=朝向房间正面，所以背对正面、
+// 朝房间深处(如机场跑道)是180度)；实际换算成世界旋转时转成弧度、叠加房间朝向和Building::GetRotation()，
+// 见Traffic::InitParkedVehicles。老工程RoomMod::parkingSpaces只有位置、没有旋转，这次把这个缺口补上，
+// 见Source/Core/traffic/traffic.md。
 //
 // categories是这个车位允许停进来的所有载具种类(VehicleMod静态GetCategory()返回的名字，如
 // "car"/"bus"/"plane")，Traffic::InitParkedVehicles对每个车位在这里随机选一个种类、再从该种类的

@@ -185,3 +185,6 @@
 - 门/窗的实际mesh——门本来就没有；窗户资产本身有问题，已删掉窗户显示逻辑，现在门/窗都只是
   纯几何缺口，等以后有能用的窗户资产再加回来。
 - 外墙/内墙材质区分——这次统一用一份`wallMaterial`，以后再按需要区分。
+
+## 房间朝向
+`Room::direction`在`AssignRoom`/`ArrangeRow`里取自烘焙过的single/row朝向(`InverseDirection(layoutDir, face)`)，即建筑局部坐标系下的房间正面方向；房间局部坐标系和换算见`room.md`。

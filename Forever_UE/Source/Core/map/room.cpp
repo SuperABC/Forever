@@ -57,6 +57,48 @@ RoomMod* Room::GetMod() const { return mod; }
 int Room::GetLayer() const { return layer; }
 int Room::GetDirection() const { return direction; }
 void Room::SetDirection(int dir) { direction = dir; }
+
+// 朝向无效按朝北；W/E时u、v两个轴和建筑局部X/Y对调。
+static int EffectiveFace(int direction) {
+	return (direction >= 0 && direction < 4) ? direction : FACE_NORTH;
+}
+
+float Room::AxisSizeU() const {
+	int face = EffectiveFace(direction);
+	return (face == FACE_WEST || face == FACE_EAST) ? GetSizeY() : GetSizeX();
+}
+
+float Room::AxisSizeV() const {
+	int face = EffectiveFace(direction);
+	return (face == FACE_WEST || face == FACE_EAST) ? GetSizeX() : GetSizeY();
+}
+
+void Room::LocalToBuildingLocal(float u, float v, float& offsetX, float& offsetY) const {
+	float halfX = GetSizeX() * 0.5f, halfY = GetSizeY() * 0.5f;
+	switch (EffectiveFace(direction)) {
+	case FACE_WEST:  offsetX = v - halfX; offsetY = halfY - u; break;
+	case FACE_EAST:  offsetX = halfX - v; offsetY = u - halfY; break;
+	case FACE_SOUTH: offsetX = halfX - u; offsetY = halfY - v; break;
+	default:         offsetX = u - halfX; offsetY = v - halfY; break; // FACE_NORTH
+	}
+}
+
+float Room::FacingYawDegrees() const {
+	static const float kFacingYawDegrees[4] = { 180.f, 0.f, 90.f, 270.f }; // 下标=FACE_WEST/EAST/NORTH/SOUTH
+	return kFacingYawDegrees[EffectiveFace(direction)];
+}
+
+pair<float, float> Room::LocalToWorld(float u, float v) const {
+	float offsetX = 0.f, offsetY = 0.f;
+	LocalToBuildingLocal(u, v, offsetX, offsetY);
+	return parentBuilding->LocalToWorld(GetPosX() + offsetX, GetPosY() + offsetY);
+}
+
+float Room::LocalYawToWorld(float yawDegrees) const {
+	const float degToRad = 3.14159265358979323846f / 180.f;
+	return parentBuilding->GetRotation() + (FacingYawDegrees() + yawDegrees) * degToRad;
+}
+
 Building* Room::GetParentBuilding() const { return parentBuilding; }
 Component* Room::GetParentComponent() const { return parentComponent; }
 const WallHole& Room::GetDoors() const { return doors; }

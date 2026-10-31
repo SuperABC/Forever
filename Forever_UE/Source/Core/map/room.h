@@ -49,6 +49,22 @@ public:
 	Script* GetScript() const;
 	void SetDirection(int direction);
 
+	// 房间局部坐标系：房间"朝北"时和建筑/layout的坐标系一样以角为原点——原点在房间(minX,minY)角，
+	// u=沿正面墙的方向、v=朝正面(direction指的那一侧，门/临路)为正，yaw 0度=朝向正面；房间朝向是
+	// W/E/S时整套坐标系做纯旋转(和BuildingLayoutLibrary::InversePoint同一套)，所以家具/车位等
+	// 只要按"房间朝北"写一次。direction是建筑局部(未旋转)坐标系下的朝向，已含建筑实例朝向，
+	// 见building.md；朝向无效(不在0..3)按朝北。
+	// u/v两个轴的长度(W/E朝向时u轴是建筑局部的SizeY、v轴是SizeX)，PointParams的比例乘它们。
+	float AxisSizeU() const;
+	float AxisSizeV() const;
+	// 局部角点系的(u,v)米数 -> 相对房间中心的建筑局部偏移(加上GetPosX/GetPosY就是建筑局部坐标)。
+	void LocalToBuildingLocal(float u, float v, float& offsetX, float& offsetY) const;
+	// 房间局部yaw 0度在建筑局部坐标系里的数学角(逆时针，0度=+X)：W180/E0/N90/S270。
+	float FacingYawDegrees() const;
+	// 局部(u,v)米数 -> 世界XY(地图单位)；局部yaw -> 世界yaw(弧度，叠加建筑世界旋转)。
+	std::pair<float, float> LocalToWorld(float u, float v) const;
+	float LocalYawToWorld(float yawDegrees) const;
+
 	Building* GetParentBuilding() const;
 	Component* GetParentComponent() const;
 

@@ -181,31 +181,14 @@ void Traffic::InitParkedVehicles(Map* map) {
 				Vehicle* vehicle = CreateVehicle(modId, name);
 				if (!vehicle) continue;
 
-				// room->GetPosX()/GetPosY()已经是房间自己的中心点(Quad的约定，不是角点)，
-				// 这里的ratio要按"相对房间中心的偏移"解释——ratio=0.5意味着偏移0(正中心)，
-				// ratio=0/1分别是房间两侧边缘(-/+半边长)。
-				float localX = (spot.position[0] - 0.5f) * room->GetSizeX() + spot.position[1];
-				float localY = (spot.position[2] - 0.5f) * room->GetSizeY() + spot.position[3];
-				float rotation = spot.rotationDegrees;
-				int facing = building->GetDirection();
-				if (facing >= 0 && facing < 4) {
-					// 朝向坐标系(见ParkingSpot)：第一对=沿路轴，第二对=纵深轴(离路越远越正)，
-					// 换算成房间局部X/Y。和AirStation的NearRoadPoint一致：WEST/EAST纵深轴是X、沿路轴是Y，
-					// NORTH/SOUTH反过来；EAST/NORTH的路在高坐标一侧，纵深方向要翻转。
-					bool depthAlongX = (facing == FACE_WEST || facing == FACE_EAST);
-					bool flip = (facing == FACE_EAST || facing == FACE_NORTH);
-					float sizeAlong = depthAlongX ? room->GetSizeY() : room->GetSizeX();
-					float sizeDepth = depthAlongX ? room->GetSizeX() : room->GetSizeY();
-					float along = (spot.position[0] - 0.5f) * sizeAlong + spot.position[1];
-					float depth = (spot.position[2] - 0.5f) * sizeDepth + spot.position[3];
-					if (flip) depth = -depth;
-					localX = depthAlongX ? depth : along;
-					localY = depthAlongX ? along : depth;
-					// rotationDegrees的0度=朝向楼体朝向(朝路，见ParkingSpot)：房间局部坐标里朝路的方向是
-					// WEST=-X(180度)、EAST=+X(0度)、NORTH=+Y(90度)、SOUTH=-Y(270度)，再叠加车位自己的旋转。
-					static const float kFacingYawDegrees[4] = { 180.f, 0.f, 90.f, 270.f }; // 下标=FACE_WEST/EAST/NORTH/SOUTH
-					rotation += kFacingYawDegrees[facing];
-				}
+				// 房间局部坐标系(见Room::LocalToBuildingLocal)：以房间朝向(正面)定义的角点系，
+				// PointParams是"比例x该轴长度+米数偏移"；换算成相对房间中心的建筑局部偏移存起来，
+				// 旋转角叠加房间朝向。
+				float u = spot.position[0] * room->AxisSizeU() + spot.position[1];
+				float v = spot.position[2] * room->AxisSizeV() + spot.position[3];
+				float localX = 0.f, localY = 0.f;
+				room->LocalToBuildingLocal(u, v, localX, localY);
+				float rotation = spot.rotationDegrees + room->FacingYawDegrees();
 				vehicle->SetParking(room, localX, localY, rotation);
 
 				debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
