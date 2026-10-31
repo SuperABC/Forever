@@ -6,6 +6,7 @@
 
 class UHierarchicalInstancedStaticMeshComponent;
 class UStaticMesh;
+class UMaterialParameterCollection;
 class Map;
 
 // 全图植被的统一渲染：每个StaticMesh一个HISM，所有树都是它的实例。GenerateVegetation一开始就把
@@ -30,6 +31,10 @@ public:
 	// 按id删除一棵树，id不存在返回false。
 	bool RemoveTree(int32 treeId);
 
+	// 每帧由AForeverFrameworkActor::Tick调用：累加风相位，把相位/风力/风向写进MPC_Wind，树的
+	// 材质(WPO)读这张表来摆动。见ForeverVegetationFrameworkComponent.md"风"一节。
+	void UpdateWind(float deltaTime);
+
 private:
 	struct FTreeSlot {
 		int32 meshIndex = INDEX_NONE;
@@ -49,6 +54,22 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Vegetation")
 	int32 cullDistanceEnd = 60000;
+
+	// 风：摆动速度(弧度/秒，相位增速)、树梢最大偏移(cm)、水平风向(Z分量不使用)。
+	UPROPERTY(EditAnywhere, Category = "Vegetation|Wind")
+	float windSpeed = 1.5f;
+
+	UPROPERTY(EditAnywhere, Category = "Vegetation|Wind")
+	float windStrength = 60.f;
+
+	UPROPERTY(EditAnywhere, Category = "Vegetation|Wind")
+	FVector windDirection = FVector(1.0, 0.4, 0.0);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialParameterCollection> windCollection;
+	bool windCollectionFailed = false;
+	bool windParameterWarned = false;
+	float windPhase = 0.f;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>> meshComponents;

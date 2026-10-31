@@ -697,6 +697,9 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	// ForeverSkyFrameworkComponent.md。
 	if (skyFramework) skyFramework->UpdateSky(*player->GetTime());
 
+	// 植被风：累加相位并写进MPC_Wind，见ForeverVegetationFrameworkComponent.md。
+	if (vegetationFramework) vegetationFramework->UpdateWind(DeltaTime);
+
 	// 驱动Job/Organization各自独立的DailyPlan/ExecNode调度（两套独立的timer，见
 	// populace.md/society.md"两套独立timer"一节）。ExecNode这次是纯C++通道，直接给
 	// Change*，Populace/Society自己不delete这些指针，所有权留在产出它们的

@@ -22,6 +22,22 @@
   cluster剔除远处的树。mobility设成Static，和FrameworkActor的sceneRoot一致。
 - 调用时机：`AForeverFrameworkActor::EnsureMapGenerated`在`GenerateBuildings`之后调用。
 
+## 风(树随风摇摆)
+
+树的摇摆是材质里的World Position Offset(按顶点相对树根高度加权的正弦位移，相位加
+`PerInstanceRandom`)，参数全部来自`/Game/3rdParty/Mossy_Tree/Materials/MPC_Wind`
+(`VEGETATION_WIND_COLLECTION_PATH`)：标量`WindPhase`、`WindStrength`，向量`WindDirection`(RG水平分量)。
+`UpdateWind(deltaTime)`由`AForeverFrameworkActor::Tick`每帧调用(在`UpdateSky`之后)，
+- **相位在C++里累加**(`windPhase += dt*windSpeed`，对2π取模)，材质只读相位；不让材质用`Time*速度`，
+  是因为运行时改风速会让相位跳变、树突然抽一下。
+- `windSpeed`(默认1.5)/`windStrength`(cm，默认60)/`windDirection`(默认(1,0.4,0)，Z忽略、归一化)是
+  `EditAnywhere`，以后天气/阵风直接改这几个值(或在这里叠噪声)。
+- MPC加载失败/缺参数各只打一次Warning，不会每帧刷。
+- 材质高度遮罩=顶点`Absolute World Position`.Z − `Object Position`.Z(实例的树根)，再除以`TreeHeight`、
+  `Saturate`、`Power`。不需要每实例自定义数据(曾试过`PerInstanceCustomData`，根因其实是WPO链里遮罩和Sine
+  误用了`Add`而不是`Multiply`，与高度来源无关，已去掉)。
+- 材质里的`TreeHeight`(树高，用于高度遮罩)是材质自己的ScalarParameter，不归C++管。
+
 ## 依赖关系
 
 - 依赖：`map/map.h`(`Map::GetVegetation`/`Map::SampleHeight`)、UE `HierarchicalInstancedStaticMeshComponent`。

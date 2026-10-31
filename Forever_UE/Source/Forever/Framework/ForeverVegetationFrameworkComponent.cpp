@@ -2,10 +2,13 @@
 
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialParameterCollection.h"
+#include "Materials/MaterialParameterCollectionInstance.h"
 
 #include "map/map.h"
 
 #define VEGETATION_WORLD_SCALE 1000.f
+#define VEGETATION_WIND_COLLECTION_PATH "/Game/3rdParty/Mossy_Tree/Materials/MPC_Wind.MPC_Wind"
 
 using namespace std;
 
@@ -90,6 +93,38 @@ bool UForeverVegetationFrameworkComponent::RemoveTree(int32 treeId) {
 	}
 	ids.RemoveAt(lastIndex);
 	return true;
+}
+
+void UForeverVegetationFrameworkComponent::UpdateWind(float deltaTime) {
+	if (windCollectionFailed) return;
+	UWorld* world = GetWorld();
+	if (!world) return;
+
+	if (!windCollection) {
+		windCollection = LoadObject<UMaterialParameterCollection>(nullptr, TEXT(VEGETATION_WIND_COLLECTION_PATH));
+		if (!windCollection) {
+			UE_LOG(LogTemp, Warning, TEXT("UForeverVegetationFrameworkComponent: failed to load wind collection %s."), TEXT(VEGETATION_WIND_COLLECTION_PATH));
+			windCollectionFailed = true; // 不重复尝试
+			return;
+		}
+	}
+
+	// 相位在这里累加而不是让材质用Time*速度：改风速时相位连续，树不会突然抽一下。
+	windPhase = FMath::Fmod(windPhase + deltaTime * windSpeed, 2.f * PI);
+
+	UMaterialParameterCollectionInstance* instance = world->GetParameterCollectionInstance(windCollection);
+	if (!instance) return;
+	FVector direction = windDirection;
+	direction.Z = 0.0;
+	direction = direction.GetSafeNormal();
+
+	bool ok = instance->SetScalarParameterValue(TEXT("WindPhase"), windPhase);
+	ok &= instance->SetScalarParameterValue(TEXT("WindStrength"), windStrength);
+	ok &= instance->SetVectorParameterValue(TEXT("WindDirection"), FLinearColor(direction.X, direction.Y, 0.f, 0.f));
+	if (!ok && !windParameterWarned) {
+		windParameterWarned = true;
+		UE_LOG(LogTemp, Warning, TEXT("UForeverVegetationFrameworkComponent: MPC_Wind lacks WindPhase/WindStrength/WindDirection."));
+	}
 }
 
 int32 UForeverVegetationFrameworkComponent::GetOrCreateMesh(const FString& meshPath) {
