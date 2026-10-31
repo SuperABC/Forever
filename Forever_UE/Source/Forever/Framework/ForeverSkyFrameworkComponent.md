@@ -103,11 +103,11 @@
 之前夜晚太亮的原因：太阳18:00~06:00虽然已经是0，但①`ambientLight`常量300 lux(比真实月光亮三个数量级)；
 ②曝光只设了一个符号含糊的`AutoExposureMinBrightness`，自动曝光在暗场景里一路提亮(项目开了
 `ExtendDefaultLuminanceRange`，单位是EV100，EV越大越暗)，Local Exposure还会提亮暗部；③SkyLight默认Static、从不管理。
-现在全部按**白天系数t**(`DayFactor`：太阳高度正弦在-0.12~0.2之间smoothstep，0=深夜、1=白天，黄昏黎明约一个游戏小时过渡)驱动：
+现在全部按**白天系数t**(`DayFactor`：太阳高度正弦在0.03~0.35之间smoothstep，0=深夜、1=白天；区间在日出之后，曾设成-0.12~0.2，结果破晓前曝光就先亮起来、太阳还没出现天就亮了)驱动：
 
 - **环境光**：`UpdateAmbientLight`，强度=`Lerp(nightAmbientLux=2, dayAmbientLux=300, t)`。
-- **曝光**：`UpdatePostProcess`，`Min=Lerp(nightExposureEV=3, dayExposureMinEV=-10, t)`、`Max=Lerp(nightExposureMaxEV=12, dayExposureMaxEV=20, t)`——夜里Min是暗景提亮的下限(室外夜景固定在这)，
-  Max放开到12让室内开灯等亮处仍能自动压暗(最初夜里Min=Max固定曝光，人在室内待到晚上，灯光被高灵敏度曝光爆得特别亮)；白天回到宽范围自动曝光(和之前一致)。
+- **曝光**：`UpdatePostProcess`，`Min=Lerp(nightExposureEV=3, dayExposureMinEV=-10, t)`、`Max=dayExposureMaxEV=20`(不分昼夜)——夜里Min是暗景提亮的下限(室外夜景固定在这)，
+  Max不设夜间上限，室内开灯等亮处能自动压暗(最初夜里Min=Max固定曝光，人在室内待到晚上，灯光被高灵敏度曝光爆得特别亮)；白天回到宽范围自动曝光(和之前一致)。
   注意：室内夜里实际曝光会在Min~Max之间浮动，识别名牌按`currentExposureEV`(=nightExposureEV)换算，室内夜里会偏暗一些。同时`LocalExposureShadowContrastScale`夜里1.0、白天0.8(ini里的值)。
   `EnsureSkyGenerated`里对找到/生成的PostProcessVolume总是设`bUnbound`、`Priority=100`和三个`bOverride_*`(之前复用关卡里手放的体积时override没开，赋值无效)。
 - **SkyLight**：设成Movable+`SetRealTimeCaptureEnabled(true)`，跟着SkyAtmosphere变暗；不手动改强度。

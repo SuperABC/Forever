@@ -152,11 +152,12 @@ namespace {
 
 	constexpr float kSunMaxIntensity = 100000.0f; // 正午直射光，lux
 
-	// 白天系数t(0=深夜,1=白天)：太阳高度的正弦sinAlt(=SunIntensityFactor去掉relu，夜里为负)在-0.12~0.2之间
-	// smoothstep，黄昏黎明有约一个游戏小时的平滑过渡，不是18点/6点突变。
+	// 白天系数t(0=深夜,1=白天)：太阳高度的正弦sinAlt(=SunIntensityFactor去掉relu，夜里为负)在0.03~0.35之间
+	// smoothstep。区间必须在太阳升起(sinAlt=0)之后，否则破晓前曝光和环境光就先亮起来，天亮了太阳还没出现；
+	// 黄昏对称，太阳落山前就基本过渡到夜里。
 	float DayFactor(float chronode) {
 		const float sinAlt = -FMath::Cos(2.0f * PI * chronode);
-		const float t = FMath::Clamp((sinAlt + 0.12f) / 0.32f, 0.0f, 1.0f);
+		const float t = FMath::Clamp((sinAlt - 0.03f) / 0.32f, 0.0f, 1.0f);
 		return t * t * (3.0f - 2.0f * t);
 	}
 }
@@ -228,12 +229,12 @@ void UForeverSkyFrameworkComponent::UpdateHeightFog(float chronode) {
 void UForeverSkyFrameworkComponent::UpdatePostProcess(float chronode) {
 	if (!postProcessVolume) return;
 
-	// 夜里Min=nightExposureEV(暗景提亮的下限)、Max=nightExposureMaxEV(室内灯光等亮处仍可自动压暗)，
-	// 白天回到宽范围的自动曝光，黄昏黎明按白天系数t线性过渡。注意单位是EV100(项目开了ExtendDefaultLuminanceRange)。
+	// 夜里Min=nightExposureEV(暗景提亮的下限)，Max不分昼夜(室内灯光等亮处仍可自动压暗)，
+	// 白天Min回到宽范围的自动曝光，黄昏黎明按白天系数t线性过渡。注意单位是EV100(项目开了ExtendDefaultLuminanceRange)。
 	const float t = DayFactor(chronode);
 	FPostProcessSettings& settings = postProcessVolume->Settings;
 	settings.AutoExposureMinBrightness = FMath::Lerp(nightExposureEV, dayExposureMinEV, t);
-	settings.AutoExposureMaxBrightness = FMath::Lerp(nightExposureMaxEV, dayExposureMaxEV, t);
+	settings.AutoExposureMaxBrightness = dayExposureMaxEV;
 	settings.LocalExposureShadowContrastScale = FMath::Lerp(nightLocalShadowContrast, dayLocalShadowContrast, t);
 	currentExposureEV = FMath::Lerp(nightExposureEV, referenceDayEV, t);
 }
