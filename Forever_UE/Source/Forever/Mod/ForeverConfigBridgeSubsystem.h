@@ -7,7 +7,7 @@
 // 一行mod enable记录，对应Config::ModEntry——Blueprint侧用来在Mod screen按行生成
 // ModCheckRow，见.dump/ModPanel.txt还原出的"每个concept一个ScrollBox，每个mod id一行"结构。
 USTRUCT(BlueprintType)
-struct FForeverModRow
+struct FModRow
 {
 	GENERATED_BODY()
 
@@ -54,7 +54,7 @@ public:
 	TArray<FString> GetDllPaths() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Config")
-	TArray<FForeverModRow> GetModRows() const;
+	TArray<FModRow> GetModRows() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Config")
 	void AddDllPath(const FString& Path);

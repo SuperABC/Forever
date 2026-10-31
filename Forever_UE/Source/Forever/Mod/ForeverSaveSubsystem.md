@@ -25,7 +25,7 @@
   剧情对话进行中、谜题进行中拒绝保存(这些中间状态不进存档)；不在游戏关卡里（比如开始菜单）时拒绝保存。保存时把地图统计
   （`MapSaveCodec::GetLastReport`）和每个段的大小打进日志。
 - **测试用控制台命令**：`Forever.Save [路径]`、`Forever.Load [路径]`，不给路径就弹对话框。正式入口是暂停界面
-  （`UI/ForeverPausePanelWidget`，Tab）的保存/加载按钮和开始菜单的`LoadGameButton`（`UI/ForeverConfigMenuWidget`）。
+  （`UI/PausePanelWidget`，Tab）的保存/加载按钮和开始菜单的`LoadGameButton`（`UI/ConfigMenuWidget`）。
 - **往返一致性检查**：控制台命令 `Forever.SaveRoundTrip`——当前世界写段 → 读回成新的 Map/Populace/Society/Traffic/Story(含脚本状态)/Player → 再写段，
   逐段比较字节(跳过 manifest)，结果打在日志和屏幕上（见 `Source/Core/map/map_save.md`"往返一致性"）。
 - **当前进度**：全部域按存档恢复（P0–P6 完成）。
@@ -34,4 +34,4 @@
 
 - 依赖：`Source/Core/common/save.h`、`Mod/ForeverDialogUtils.h`、`Mod/ForeverModSubsystem.h`；UE 的
   `Misc/Compression.h`、`Misc/FileHelper.h`。
-- 被谁依赖：`Framework/ForeverFrameworkActor.cpp`（消费读档请求）；`UI/ForeverPausePanelWidget`（暂停界面）、`UI/ForeverConfigMenuWidget`（开始菜单加载按钮）。
+- 被谁依赖：`Framework/ForeverFrameworkActor.cpp`（消费读档请求）；`UI/PausePanelWidget`（暂停界面）、`UI/ConfigMenuWidget`（开始菜单加载按钮）。

@@ -161,7 +161,7 @@ void AForeverFrameworkActor::BeginPlay()
 	}
 
 	// 世界生成不再在BeginPlay里一口气同步跑完，而是拆成一串"阶段"，由Tick每帧执行一个：整段同步
-	// 生成会卡死主线程几十秒，开局黑屏上的进度条(UForeverFadeWidget)在两步之间根本没机会重绘。
+	// 生成会卡死主线程几十秒，开局黑屏上的进度条(UFadeWidget)在两步之间根本没机会重绘。
 	// 阶段的顺序就是依赖顺序(显式列出，每个Ensure*Generated()自己只保证自己那个域，不会再调别的
 	// Ensure*Generated())：EnsurePopulaceGenerated要用到map(Map::ComputeAccommodationTarget/Checkin)，
 	// EnsurePlayerGenerated要用到populace->GetCurrentYear()，载具必须在Story之后(game_start要先把

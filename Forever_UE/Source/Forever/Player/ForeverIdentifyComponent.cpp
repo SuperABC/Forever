@@ -4,7 +4,7 @@
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverSkyFrameworkComponent.h"
-#include "UI/ForeverIdentifyTagWidget.h"
+#include "UI/IdentifyTagWidget.h"
 
 #include "Camera/PlayerCameraManager.h"
 #include "Components/CapsuleComponent.h"
@@ -17,7 +17,7 @@
 UForeverIdentifyComponent::UForeverIdentifyComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	tagWidgetClass = UForeverIdentifyTagWidget::StaticClass();
+	tagWidgetClass = UIdentifyTagWidget::StaticClass();
 }
 
 void UForeverIdentifyComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -75,7 +75,7 @@ void UForeverIdentifyComponent::AddTag(ACitizenElement* citizenActor)
 	tag->RegisterComponent();
 
 	if (!tag->GetUserWidgetObject()) tag->InitWidget();
-	if (UForeverIdentifyTagWidget* widget = Cast<UForeverIdentifyTagWidget>(tag->GetUserWidgetObject())) {
+	if (UIdentifyTagWidget* widget = Cast<UIdentifyTagWidget>(tag->GetUserWidgetObject())) {
 		widget->SetLines(BuildLines(*citizenActor->GetCitizen()), resolutionScale);
 	}
 	tags.Add(tag);

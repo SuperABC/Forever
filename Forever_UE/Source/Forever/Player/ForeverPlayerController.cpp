@@ -14,10 +14,10 @@
 #include "UI/PhoneWidget.h"
 #include "UI/InventoryWidget.h"
 #include "UI/MapWidget.h"
-#include "UI/ForeverPausePanelWidget.h"
-#include "UI/ForeverThrowListWidget.h"
-#include "UI/ForeverFadeSubsystem.h"
-#include "UI/ForeverFadeWidget.h"
+#include "UI/PausePanelWidget.h"
+#include "UI/ThrowListWidget.h"
+#include "UI/FadeSubsystem.h"
+#include "UI/FadeWidget.h"
 #include "Player/ForeverIdentifyComponent.h"
 
 AForeverPlayerController::AForeverPlayerController() {
@@ -110,7 +110,7 @@ void AForeverPlayerController::InitializeOnce() {
 	if (inventoryWidgetClass == nullptr) {
 		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: inventoryWidgetClass未设置,跳过InventoryWidget创建。"));
 	}
-	else if ((inventoryWidget = CreateWidget<UForeverInventoryWidget>(this, inventoryWidgetClass)) != nullptr) {
+	else if ((inventoryWidget = CreateWidget<UInventoryWidget>(this, inventoryWidgetClass)) != nullptr) {
 		inventoryWidget->AddToViewport();
 	}
 
@@ -124,7 +124,7 @@ void AForeverPlayerController::InitializeOnce() {
 	if (pauseWidgetClass == nullptr) {
 		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: pauseWidgetClass未设置,跳过PausePanel创建。"));
 	}
-	else if ((pauseWidget = CreateWidget<UForeverPausePanelWidget>(this, pauseWidgetClass)) != nullptr) {
+	else if ((pauseWidget = CreateWidget<UPausePanelWidget>(this, pauseWidgetClass)) != nullptr) {
 		// ZOrder比其它常驻Widget高，暂停界面盖在最上面。
 		pauseWidget->AddToViewport(10);
 	}
@@ -132,14 +132,14 @@ void AForeverPlayerController::InitializeOnce() {
 	if (throwListWidgetClass == nullptr) {
 		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: throwListWidgetClass未设置,跳过ThrowList创建(长按3不会弹出列表)。"));
 	}
-	else if ((throwListWidget = CreateWidget<UForeverThrowListWidget>(this, throwListWidgetClass)) != nullptr) {
+	else if ((throwListWidget = CreateWidget<UThrowListWidget>(this, throwListWidgetClass)) != nullptr) {
 		throwListWidget->AddToViewport(5);
 	}
 
-	// 开局黑屏由GameInstance上的UForeverFadeSubsystem持有(跨关卡)：从菜单按下开始/加载按钮时已经
+	// 开局黑屏由GameInstance上的UFadeSubsystem持有(跨关卡)：从菜单按下开始/加载按钮时已经
 	// 变黑并一直盖到这里；这里登记类并保证黑着(编辑器里直接PIE在World.umap上时补一个)。
 	if (UGameInstance* gameInstance = GetGameInstance()) {
-		if (UForeverFadeSubsystem* fade = gameInstance->GetSubsystem<UForeverFadeSubsystem>()) {
+		if (UFadeSubsystem* fade = gameInstance->GetSubsystem<UFadeSubsystem>()) {
 			if (fadeWidgetClass == nullptr) {
 				UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: fadeWidgetClass未设置,可能没有开局黑屏。"));
 			}

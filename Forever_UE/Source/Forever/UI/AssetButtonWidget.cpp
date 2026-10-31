@@ -7,7 +7,7 @@
 
 #include "player/asset.h"
 
-void UAssetButtonWidget::Setup(UForeverInventoryWidget* inOwner, Asset* inAsset, EInvZone inZone, Asset* inParent) {
+void UAssetButtonWidget::Setup(UInventoryWidget* inOwner, Asset* inAsset, EInvZone inZone, Asset* inParent) {
 	owner = inOwner;
 	asset = inAsset;
 	zone = inZone;
@@ -19,11 +19,11 @@ void UAssetButtonWidget::Setup(UForeverInventoryWidget* inOwner, Asset* inAsset,
 	UpdateButtonState(false);
 
 	if (Text && asset) {
-		Text->SetText(FText::FromString(UForeverInventoryWidget::DescribeAsset(asset, asset->GetCount())));
+		Text->SetText(FText::FromString(UInventoryWidget::DescribeAsset(asset, asset->GetCount())));
 	}
 }
 
-void UAssetButtonWidget::SetupAsBack(UForeverInventoryWidget* inOwner, EInvZone inZone) {
+void UAssetButtonWidget::SetupAsBack(UInventoryWidget* inOwner, EInvZone inZone) {
 	owner = inOwner;
 	asset = nullptr;
 	zone = inZone;
@@ -74,7 +74,7 @@ void UAssetButtonWidget::SetRowSelected(bool bSelected) {
 }
 
 FReply UAssetButtonWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
-	UForeverInventoryWidget* ownerWidget = owner.Get();
+	UInventoryWidget* ownerWidget = owner.Get();
 	if (InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton || !ownerWidget) {
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 	}
@@ -89,7 +89,7 @@ void UAssetButtonWidget::FinishPress(const FVector2D& screenPosition) {
 }
 
 void UAssetButtonWidget::Click() {
-	UForeverInventoryWidget* ownerWidget = owner.Get();
+	UInventoryWidget* ownerWidget = owner.Get();
 	if (!ownerWidget) return;
 
 	if (bIsBackRow) {

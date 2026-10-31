@@ -23,7 +23,7 @@
 #include "Player/ForeverThrowableComponent.h"
 #include "Player/ForeverWeaponComponent.h"
 #include "Player/ForeverWeaponVisualComponent.h"
-#include "UI/ForeverThrowListWidget.h"
+#include "UI/ThrowListWidget.h"
 #include "UI/MeetOptionWidget.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
@@ -272,7 +272,7 @@ void AForeverCharacter::UnPossessed()
 
 	// 换人操控时不能把列表和慢放留在世界里。
 	if (AForeverPlayerController* controller = Cast<AForeverPlayerController>(GetController())) {
-		if (UForeverThrowListWidget* list = controller->GetThrowListWidget()) list->Close();
+		if (UThrowListWidget* list = controller->GetThrowListWidget()) list->Close();
 	}
 	bThrowKeyHeld = false;
 
@@ -471,7 +471,7 @@ void AForeverCharacter::ThrowKeyPressed()
 	// 列表开着时的"按下"不是新的一次按键(打开列表切换输入模式会清空按键状态，键还按着时系统的
 	// 按键重复会让Pawn收到假的"按下")，忽略，否则会反复触发长按，列表一闪一闪。
 	if (AForeverPlayerController* controller = Cast<AForeverPlayerController>(GetController())) {
-		if (UForeverThrowListWidget* list = controller->GetThrowListWidget()) {
+		if (UThrowListWidget* list = controller->GetThrowListWidget()) {
 			if (list->IsOpen()) return;
 		}
 	}
@@ -488,7 +488,7 @@ void AForeverCharacter::ThrowKeyReleased()
 	// 列表开着时收到的"松开"是打开列表切换输入模式时按键状态被清空造成的假事件，不是真的松开，
 	// 不能据此关闭列表；真正的松开由列表控件自己的NativeOnKeyUp处理(UI Only下它才收得到按键)。
 	if (AForeverPlayerController* controller = Cast<AForeverPlayerController>(GetController())) {
-		if (UForeverThrowListWidget* list = controller->GetThrowListWidget()) {
+		if (UThrowListWidget* list = controller->GetThrowListWidget()) {
 			if (list->IsOpen()) return;
 		}
 	}
@@ -508,7 +508,7 @@ void AForeverCharacter::OpenThrowList()
 	bSwallowThrowRelease = true;
 
 	AForeverPlayerController* controller = Cast<AForeverPlayerController>(GetController());
-	UForeverThrowListWidget* list = controller ? controller->GetThrowListWidget() : nullptr;
+	UThrowListWidget* list = controller ? controller->GetThrowListWidget() : nullptr;
 	if (!list || !throwableComponent) return;
 	list->Open(throwableComponent->GetThrowableList(), throwableComponent->GetActiveType());
 }

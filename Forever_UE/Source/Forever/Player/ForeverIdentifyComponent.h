@@ -6,7 +6,7 @@
 
 class UWidgetComponent;
 class ACitizenElement;
-class UForeverIdentifyTagWidget;
+class UIdentifyTagWidget;
 class Citizen;
 
 // 识别模式：按住鼠标中键进入、松开退出。模式下，距离当前操控的Pawn一定范围内(默认20m)的所有人物
@@ -63,7 +63,7 @@ public:
 
 	// 标签控件类，默认的纯C++控件即可；想用自己做的WBP就指定。
 	UPROPERTY(EditAnywhere, Category = "Identify")
-	TSubclassOf<UForeverIdentifyTagWidget> tagWidgetClass;
+	TSubclassOf<UIdentifyTagWidget> tagWidgetClass;
 
 private:
 	// 一个人要显示哪几行——唯一生成内容的地方，以后加年龄/职业等只改这里。

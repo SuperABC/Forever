@@ -8,7 +8,7 @@
 
 ## 需求
 
-1. Tab 暂停界面里有"保存""加载"两个按钮，各自弹出文件选择窗口（`UI/ForeverPausePanelWidget`）。开始菜单也能加载存档（`UI/ForeverConfigMenuWidget` 的 `LoadGameButton`）。
+1. Tab 暂停界面里有"保存""加载"两个按钮，各自弹出文件选择窗口（`UI/PausePanelWidget`）。开始菜单也能加载存档（`UI/ConfigMenuWidget` 的 `LoadGameButton`）。
 2. 存档是单个文件（`.fsav`）。
 3. 存档里不出现任何文件路径，换电脑、换文件夹都能用。
 4. 加载时检查存档用到的 mod 是否都在，缺了就拒绝并报错。

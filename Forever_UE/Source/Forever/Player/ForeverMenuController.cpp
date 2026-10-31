@@ -4,8 +4,8 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Engine/GameInstance.h"
 #include "Framework/ForeverMemoryReport.h"
-#include "UI/ForeverFadeSubsystem.h"
-#include "UI/ForeverFadeWidget.h"
+#include "UI/FadeSubsystem.h"
+#include "UI/FadeWidget.h"
 #include "UObject/UObjectGlobals.h"
 
 void AForeverMenuController::BeginPlay()
@@ -18,7 +18,7 @@ void AForeverMenuController::BeginPlay()
 	ForeverMemoryReport::Log(GetWorld(), TEXT("menu"));
 
 	if (UGameInstance* gameInstance = GetGameInstance()) {
-		if (UForeverFadeSubsystem* fade = gameInstance->GetSubsystem<UForeverFadeSubsystem>()) {
+		if (UFadeSubsystem* fade = gameInstance->GetSubsystem<UFadeSubsystem>()) {
 			if (fadeWidgetClass == nullptr) {
 				UE_LOG(LogTemp, Warning, TEXT("AForeverMenuController: fadeWidgetClass未设置,按下开始/加载按钮时不会立刻变黑。"));
 			}

@@ -274,7 +274,7 @@ public:
 	FORCEINLINE UForeverBuildingFrameworkComponent* GetBuildingFramework() const { return buildingFramework; }
 
 	// BeginPlay的世界生成流程是否已经全部结束(game_start已广播完/读档的玩家与世界物品已恢复)。
-	// 开局黑屏(UForeverFadeWidget)用它判断世界是否就绪。
+	// 开局黑屏(UFadeWidget)用它判断世界是否就绪。
 	FORCEINLINE bool IsInitialGenerationDone() const { return bInitialGenerationDone; }
 
 	// 开局进度条用：总格数(生成阶段数+最后一格"构建场景")、已完成格数、当前阶段名。每个阶段完成算一格；

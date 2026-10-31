@@ -36,7 +36,7 @@ class Room;
 // 武器的"激活/卸下"完全由数字键1/2驱动(AForeverCharacter::ActivateShoulderWeapon)，这个
 // Widget不需要知道武器系统的任何状态。
 UCLASS()
-class FOREVER_API UForeverInventoryWidget : public UUserWidget
+class FOREVER_API UInventoryWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

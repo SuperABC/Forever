@@ -10,11 +10,11 @@ class UBackgroundSpeakingWidget;
 class USectionOptionWidget;
 class UPuzzleWidget;
 class UPhoneWidget;
-class UForeverInventoryWidget;
+class UInventoryWidget;
 class UMapWidget;
-class UForeverPausePanelWidget;
-class UForeverThrowListWidget;
-class UForeverFadeWidget;
+class UPausePanelWidget;
+class UThrowListWidget;
+class UFadeWidget;
 class UForeverIdentifyComponent;
 class UInputComponent;
 
@@ -98,10 +98,10 @@ protected:
 	// 跟前面几个Widget同一套模式(常驻创建，B键(ToggleInventory)控制开关)，见
 	// Source/Forever/UI/InventoryWidget.h、ForeverPlayerController.md"旧MainController热键"一节。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UForeverInventoryWidget> inventoryWidgetClass;
+	TSubclassOf<UInventoryWidget> inventoryWidgetClass;
 
 	UPROPERTY()
-	TObjectPtr<UForeverInventoryWidget> inventoryWidget;
+	TObjectPtr<UInventoryWidget> inventoryWidget;
 
 	void ToggleInventory();
 
@@ -117,12 +117,12 @@ protected:
 	void HandleCloseMap();
 
 	// 暂停界面(保存/加载)：跟前面几个Widget同一套模式(常驻创建)，Tab键(TogglePause)打开；
-	// 界面打开期间是UI Only输入，关闭由UForeverPausePanelWidget自己的NativeOnKeyDown处理。
+	// 界面打开期间是UI Only输入，关闭由UPausePanelWidget自己的NativeOnKeyDown处理。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UForeverPausePanelWidget> pauseWidgetClass;
+	TSubclassOf<UPausePanelWidget> pauseWidgetClass;
 
 	UPROPERTY()
-	TObjectPtr<UForeverPausePanelWidget> pauseWidget;
+	TObjectPtr<UPausePanelWidget> pauseWidget;
 
 	// 地图/手机/背包/谜题/剧情对话任何一个开着时不打开暂停界面(它们各自占着UI Only输入和
 	// 键盘焦点，叠上去会互相抢)。
@@ -139,15 +139,15 @@ protected:
 	// 长按3的投掷物选择列表：跟前面几个Widget同一套模式(常驻创建、初始折叠)，由AForeverCharacter
 	// 在长按时Open。WBP_ThrowList在BP_ForeverPlayerController的类默认值里指定。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UForeverThrowListWidget> throwListWidgetClass;
+	TSubclassOf<UThrowListWidget> throwListWidgetClass;
 
 	UPROPERTY()
-	TObjectPtr<UForeverThrowListWidget> throwListWidget;
+	TObjectPtr<UThrowListWidget> throwListWidget;
 
-	// 开局黑屏的类：只是登记给UForeverFadeSubsystem(控件本身由它持有、跨关卡存活)，见
-	// UI/ForeverFadeSubsystem.h。WBP_Fade在BP_ForeverPlayerController的类默认值里指定。
+	// 开局黑屏的类：只是登记给UFadeSubsystem(控件本身由它持有、跨关卡存活)，见
+	// UI/FadeSubsystem.h。WBP_Fade在BP_ForeverPlayerController的类默认值里指定。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UForeverFadeWidget> fadeWidgetClass;
+	TSubclassOf<UFadeWidget> fadeWidgetClass;
 
 public:
 	FORCEINLINE UMeetOptionWidget* GetMeetOptionWidget() const { return meetOptionWidget; }
@@ -156,7 +156,7 @@ public:
 	FORCEINLINE USectionOptionWidget* GetSectionOptionWidget() const { return sectionOptionWidget; }
 	FORCEINLINE UPuzzleWidget* GetPuzzleWidget() const { return puzzleWidget; }
 	FORCEINLINE UPhoneWidget* GetPhoneWidget() const { return phoneWidget; }
-	FORCEINLINE UForeverInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
+	FORCEINLINE UInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
 	FORCEINLINE UMapWidget* GetMapWidget() const { return mapWidget; }
-	FORCEINLINE UForeverPausePanelWidget* GetPauseWidget() const { return pauseWidget; }
-	FORCEINLINE UForeverThrowListWidget* GetThrowListWidget() const { return throwListWidget; }};
+	FORCEINLINE UPausePanelWidget* GetPauseWidget() const { return pauseWidget; }
+	FORCEINLINE UThrowListWidget* GetThrowListWidget() const { return throwListWidget; }};

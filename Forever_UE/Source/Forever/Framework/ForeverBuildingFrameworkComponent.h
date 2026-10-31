@@ -125,7 +125,7 @@ public:
 	void RequestFreezeUntilLodSettled();
 
 	// 世界是否"视觉稳定"：没有处于RequestFreezeUntilLodSettled的冻结中，且没有building还在切换LOD。
-	// 供开局黑屏(UForeverFadeWidget)判断什么时候可以渐隐。
+	// 供开局黑屏(UFadeWidget)判断什么时候可以渐隐。
 	bool IsLodSettled() const { return postGenerationFrames > kPostGenerationGateFrames && !bFrozenForLod && pendingLodTransitionCount <= 0; }
 
 	// 世界生成流程(AForeverFrameworkActor::IsInitialGenerationDone)是否已经走完。生成期间玩家只是个

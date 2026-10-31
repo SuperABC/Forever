@@ -61,7 +61,7 @@ namespace {
 
 }
 
-Player* UForeverInventoryWidget::GetPlayer() const {
+Player* UInventoryWidget::GetPlayer() const {
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		return framework->GetPlayer();
@@ -69,7 +69,7 @@ Player* UForeverInventoryWidget::GetPlayer() const {
 	return nullptr;
 }
 
-UForeverAssetFrameworkComponent* UForeverInventoryWidget::GetAssetFramework() const {
+UForeverAssetFrameworkComponent* UInventoryWidget::GetAssetFramework() const {
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		return framework->GetAssetFramework();
@@ -77,7 +77,7 @@ UForeverAssetFrameworkComponent* UForeverInventoryWidget::GetAssetFramework() co
 	return nullptr;
 }
 
-FString UForeverInventoryWidget::SlotName(EInvZone zone) {
+FString UInventoryWidget::SlotName(EInvZone zone) {
 	switch (zone) {
 	case EInvZone::LeftShoulder: return TEXT("LeftShoulder");
 	case EInvZone::RightShoulder: return TEXT("RightShoulder");
@@ -88,14 +88,14 @@ FString UForeverInventoryWidget::SlotName(EInvZone zone) {
 	}
 }
 
-FString UForeverInventoryWidget::DescribeAsset(const Asset* asset, int amount) {
+FString UInventoryWidget::DescribeAsset(const Asset* asset, int amount) {
 	FString label = UTF8_TO_TCHAR(asset->GetType().c_str());
 	if (amount != 1) label += FString::Printf(TEXT(" x%d"), amount);
 	if (asset->IsContainer()) label += TEXT(" [容器]");
 	return label;
 }
 
-UButton* UForeverInventoryWidget::SlotButton(EInvZone zone) const {
+UButton* UInventoryWidget::SlotButton(EInvZone zone) const {
 	switch (zone) {
 	case EInvZone::LeftShoulder: return LeftShoulderButton;
 	case EInvZone::RightShoulder: return RightShoulderButton;
@@ -106,13 +106,13 @@ UButton* UForeverInventoryWidget::SlotButton(EInvZone zone) const {
 	}
 }
 
-Asset* UForeverInventoryWidget::GetSlotAsset(EInvZone zone) const {
+Asset* UInventoryWidget::GetSlotAsset(EInvZone zone) const {
 	Player* player = GetPlayer();
 	if (!player || !InventoryTransfer::IsSlot(zone)) return nullptr;
 	return player->GetByPath(TCHAR_TO_UTF8(*InventoryTransfer::SlotPath(zone)));
 }
 
-bool UForeverInventoryWidget::FindSlotAt(const FVector2D& screenPosition, EInvZone& outZone) const {
+bool UInventoryWidget::FindSlotAt(const FVector2D& screenPosition, EInvZone& outZone) const {
 	for (EInvZone zone : kSlotZones) {
 		UButton* button = SlotButton(zone);
 		if (button && button->IsVisible() && button->GetCachedGeometry().IsUnderLocation(screenPosition)) {
@@ -123,21 +123,21 @@ bool UForeverInventoryWidget::FindSlotAt(const FVector2D& screenPosition, EInvZo
 	return false;
 }
 
-Asset* UForeverInventoryWidget::ResolveBodyContainer() const {
+Asset* UInventoryWidget::ResolveBodyContainer() const {
 	if (bodyContainerStack.Num() > 0) return bodyContainerStack.Last();
 	Asset* slotAsset = GetSlotAsset(currentSlot);
 	return (slotAsset && slotAsset->IsContainer()) ? slotAsset : nullptr;
 }
 
-Asset* UForeverInventoryWidget::ResolveRoomContainer() const {
+Asset* UInventoryWidget::ResolveRoomContainer() const {
 	return roomContainerStack.Num() > 0 ? roomContainerStack.Last() : nullptr;
 }
 
-Asset* UForeverInventoryWidget::ResolveNearbyContainer() const {
+Asset* UInventoryWidget::ResolveNearbyContainer() const {
 	return nearbyContainerStack.Num() > 0 ? nearbyContainerStack.Last() : nullptr;
 }
 
-FString UForeverInventoryWidget::BuildBreadcrumb(const FString& root, const TArray<Asset*>& stack) {
+FString UInventoryWidget::BuildBreadcrumb(const FString& root, const TArray<Asset*>& stack) {
 	FString text = root;
 	for (Asset* container : stack) {
 		text += TEXT(" > ") + FString(UTF8_TO_TCHAR(container->GetType().c_str()));
@@ -145,7 +145,7 @@ FString UForeverInventoryWidget::BuildBreadcrumb(const FString& root, const TArr
 	return text;
 }
 
-void UForeverInventoryWidget::NativeConstruct() {
+void UInventoryWidget::NativeConstruct() {
 	Super::NativeConstruct();
 
 	// 槽位按钮只负责外观：鼠标事件让它直接落到整个面板上，由面板按位置判断点中/拖中了哪个槽位
@@ -156,18 +156,18 @@ void UForeverInventoryWidget::NativeConstruct() {
 			button->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
 	}
-	if (UseButton) UseButton->OnClicked.AddDynamic(this, &UForeverInventoryWidget::HandleUse);
-	if (CloseButton) CloseButton->OnClicked.AddDynamic(this, &UForeverInventoryWidget::HandleClose);
+	if (UseButton) UseButton->OnClicked.AddDynamic(this, &UInventoryWidget::HandleUse);
+	if (CloseButton) CloseButton->OnClicked.AddDynamic(this, &UInventoryWidget::HandleClose);
 
 	SetVisibility(ESlateVisibility::Collapsed); // 默认不显示，没按B就不弹出
 }
 
-void UForeverInventoryWidget::TogglePanel() {
+void UInventoryWidget::TogglePanel() {
 	if (GetVisibility() == ESlateVisibility::Visible) ClosePanel();
 	else InitPanel();
 }
 
-void UForeverInventoryWidget::InitPanel() {
+void UInventoryWidget::InitPanel() {
 	SetVisibility(ESlateVisibility::Visible);
 
 	currentSlot = EInvZone::Back;
@@ -186,7 +186,7 @@ void UForeverInventoryWidget::InitPanel() {
 	}
 }
 
-void UForeverInventoryWidget::ClosePanel() {
+void UInventoryWidget::ClosePanel() {
 	SetVisibility(ESlateVisibility::Collapsed);
 
 	if (APlayerController* playerController = GetOwningPlayer()) {
@@ -196,21 +196,21 @@ void UForeverInventoryWidget::ClosePanel() {
 	}
 }
 
-void UForeverInventoryWidget::ClickSlot(EInvZone zone) {
+void UInventoryWidget::ClickSlot(EInvZone zone) {
 	currentSlot = zone;
 	bodyContainerStack.Empty();
 	ClearSelect();
 	RefreshBody();
 }
 
-void UForeverInventoryWidget::ClearSelect() {
+void UInventoryWidget::ClearSelect() {
 	if (UAssetButtonWidget* row = selectedBody.Get()) row->SetRowSelected(false);
 	if (UAssetButtonWidget* row = selectedOther.Get()) row->SetRowSelected(false);
 	selectedBody = nullptr;
 	selectedOther = nullptr;
 }
 
-void UForeverInventoryWidget::SelectRow(UAssetButtonWidget* row) {
+void UInventoryWidget::SelectRow(UAssetButtonWidget* row) {
 	if (!row || row->IsBackRow()) return;
 
 	if (row->GetZone() == EInvZone::Container) {
@@ -223,7 +223,7 @@ void UForeverInventoryWidget::SelectRow(UAssetButtonWidget* row) {
 	row->SetRowSelected(true);
 }
 
-void UForeverInventoryWidget::ShowMessage(const FString& text) {
+void UInventoryWidget::ShowMessage(const FString& text) {
 	if (MessageText) {
 		MessageText->SetText(FText::FromString(text));
 	} else if (GEngine) {
@@ -231,7 +231,7 @@ void UForeverInventoryWidget::ShowMessage(const FString& text) {
 	}
 }
 
-void UForeverInventoryWidget::RefreshAll() {
+void UInventoryWidget::RefreshAll() {
 	Player* player = GetPlayer();
 	if (player) {
 		// 拖拽可能把进入过的容器移走或销毁(合并)，先把失效的栈截断，再刷新各列表。
@@ -258,7 +258,7 @@ void UForeverInventoryWidget::RefreshAll() {
 	RefreshNearby();
 }
 
-void UForeverInventoryWidget::RefreshSlots() {
+void UInventoryWidget::RefreshSlots() {
 	Player* player = GetPlayer();
 	for (EInvZone zone : kSlotZones) {
 		UButton* button = SlotButton(zone);
@@ -278,7 +278,7 @@ void UForeverInventoryWidget::RefreshSlots() {
 	bSlotLabelsCaptured = true;
 }
 
-void UForeverInventoryWidget::FillList(UScrollBox* list, TArray<TObjectPtr<UAssetButtonWidget>>& pool, EInvZone zone,
+void UInventoryWidget::FillList(UScrollBox* list, TArray<TObjectPtr<UAssetButtonWidget>>& pool, EInvZone zone,
 	Asset* parent, bool bBack, const TArray<Asset*>& assets) {
 	if (!list || !AssetButtonClass) return;
 
@@ -306,7 +306,7 @@ void UForeverInventoryWidget::FillList(UScrollBox* list, TArray<TObjectPtr<UAsse
 	for (; index < pool.Num(); ++index) pool[index]->SetVisibility(ESlateVisibility::Collapsed);
 }
 
-void UForeverInventoryWidget::RefreshBody() {
+void UInventoryWidget::RefreshBody() {
 	// 背包没有变化事件，所有放入/取出/使用/丢弃之后都会走到这里——顺便刷新投掷物缓存，
 	// 激活的投掷物被拿走/用完时也能及时切换。
 	if (AForeverCharacter* character = Cast<AForeverCharacter>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0))) {
@@ -326,7 +326,7 @@ void UForeverInventoryWidget::RefreshBody() {
 	if (BodyLabel) BodyLabel->SetText(FText::FromString(BuildBreadcrumb(SlotName(currentSlot), bodyContainerStack)));
 }
 
-void UForeverInventoryWidget::RefreshRoom() {
+void UInventoryWidget::RefreshRoom() {
 	selectedOther = nullptr;
 
 	Player* player = GetPlayer();
@@ -357,7 +357,7 @@ void UForeverInventoryWidget::RefreshRoom() {
 	FillList(RoomList, roomPool, EInvZone::Room, container, container != nullptr, assets);
 }
 
-void UForeverInventoryWidget::RefreshNearby() {
+void UInventoryWidget::RefreshNearby() {
 	if (!NearbyList) return;
 
 	Player* player = GetPlayer();
@@ -378,9 +378,9 @@ void UForeverInventoryWidget::RefreshNearby() {
 	if (NearbyLabel) NearbyLabel->SetText(FText::FromString(BuildBreadcrumb(TEXT("附近"), nearbyContainerStack)));
 }
 
-void UForeverInventoryWidget::HandleClose() { ClosePanel(); }
+void UInventoryWidget::HandleClose() { ClosePanel(); }
 
-void UForeverInventoryWidget::HandleUse() {
+void UInventoryWidget::HandleUse() {
 	Player* player = GetPlayer();
 	if (!player) return;
 
@@ -404,7 +404,7 @@ void UForeverInventoryWidget::HandleUse() {
 	RefreshAll();
 }
 
-void UForeverInventoryWidget::EnterRow(UAssetButtonWidget* row) {
+void UInventoryWidget::EnterRow(UAssetButtonWidget* row) {
 	if (!row) return;
 	Asset* asset = row->GetAsset();
 	if (!asset || !asset->IsContainer()) return;
@@ -418,7 +418,7 @@ void UForeverInventoryWidget::EnterRow(UAssetButtonWidget* row) {
 	}
 }
 
-void UForeverInventoryWidget::ExitRow(UAssetButtonWidget* row) {
+void UInventoryWidget::ExitRow(UAssetButtonWidget* row) {
 	if (!row || !row->IsBackRow()) return;
 
 	ClearSelect();
@@ -430,7 +430,7 @@ void UForeverInventoryWidget::ExitRow(UAssetButtonWidget* row) {
 	}
 }
 
-FReply UForeverInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
+FReply UInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
 	EInvZone zone = EInvZone::Back;
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && FindSlotAt(InMouseEvent.GetScreenSpacePosition(), zone)) {
 		bPressActive = true;
@@ -452,7 +452,7 @@ FReply UForeverInventoryWidget::NativeOnMouseButtonDown(const FGeometry& InGeome
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
-FReply UForeverInventoryWidget::BeginRowPress(UAssetButtonWidget* row, const FPointerEvent& InMouseEvent) {
+FReply UInventoryWidget::BeginRowPress(UAssetButtonWidget* row, const FPointerEvent& InMouseEvent) {
 	if (!row) return FReply::Unhandled();
 	bPressActive = true;
 	bSlotPressed = false;
@@ -465,7 +465,7 @@ FReply UForeverInventoryWidget::BeginRowPress(UAssetButtonWidget* row, const FPo
 	return FReply::Handled().CaptureMouse(TakeWidget());
 }
 
-FReply UForeverInventoryWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
+FReply UInventoryWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
 	if (bPressActive && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) {
 		bPressActive = false;
 		bool bWasSlot = bSlotPressed;
@@ -492,7 +492,7 @@ FReply UForeverInventoryWidget::NativeOnMouseButtonUp(const FGeometry& InGeometr
 	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
 }
 
-FReply UForeverInventoryWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
+FReply UInventoryWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
 	FVector2D position = InMouseEvent.GetScreenSpacePosition();
 
 	if (bPressActive) {
@@ -518,18 +518,18 @@ FReply UForeverInventoryWidget::NativeOnMouseMove(const FGeometry& InGeometry, c
 	return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
 }
 
-void UForeverInventoryWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent) {
+void UInventoryWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent) {
 	Super::NativeOnMouseLeave(InMouseEvent);
 	bSlotHovered = false;
 	UpdateSlotTints();
 }
 
-void UForeverInventoryWidget::NativeDestruct() {
+void UInventoryWidget::NativeDestruct() {
 	DestroyGhost();
 	Super::NativeDestruct();
 }
 
-void UForeverInventoryWidget::UpdateSlotTints() {
+void UInventoryWidget::UpdateSlotTints() {
 	// 槽位按钮是HitTestInvisible，原生悬停/按下样式不再生效；这里按状态把按钮样式的Normal换成
 	// 它自己样式里的Hovered/Pressed，效果和默认响应一致。
 	for (EInvZone zone : kSlotZones) {
@@ -542,7 +542,7 @@ void UForeverInventoryWidget::UpdateSlotTints() {
 	}
 }
 
-void UForeverInventoryWidget::CreateGhost(Asset* asset, bool bAll) {
+void UInventoryWidget::CreateGhost(Asset* asset, bool bAll) {
 	DestroyGhost();
 	if (!AssetButtonClass || !asset) return;
 
@@ -555,21 +555,21 @@ void UForeverInventoryWidget::CreateGhost(Asset* asset, bool bAll) {
 	dragGhost->SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
 }
 
-void UForeverInventoryWidget::UpdateGhost(const FVector2D& screenPosition) {
+void UInventoryWidget::UpdateGhost(const FVector2D& screenPosition) {
 	if (!dragGhost) return;
 	FVector2D pixelPosition, viewportPosition;
 	USlateBlueprintLibrary::AbsoluteToViewport(this, screenPosition, pixelPosition, viewportPosition);
 	dragGhost->SetPositionInViewport(viewportPosition, false);
 }
 
-void UForeverInventoryWidget::DestroyGhost() {
+void UInventoryWidget::DestroyGhost() {
 	if (dragGhost) {
 		dragGhost->RemoveFromParent();
 		dragGhost = nullptr;
 	}
 }
 
-void UForeverInventoryWidget::PerformDrop(const FInvSource& source, bool bAll, const FVector2D& screenPosition) {
+void UInventoryWidget::PerformDrop(const FInvSource& source, bool bAll, const FVector2D& screenPosition) {
 	FInvDest dest;
 	if (!ResolveDropTarget(screenPosition, dest)) return; // 落在空白处：什么都不做
 
@@ -588,7 +588,7 @@ void UForeverInventoryWidget::PerformDrop(const FInvSource& source, bool bAll, c
 	}
 }
 
-bool UForeverInventoryWidget::ResolveDropTarget(const FVector2D& screenPosition, FInvDest& outDest) const {
+bool UInventoryWidget::ResolveDropTarget(const FVector2D& screenPosition, FInvDest& outDest) const {
 	EInvZone slot;
 	if (FindSlotAt(screenPosition, slot)) {
 		outDest.zone = slot;

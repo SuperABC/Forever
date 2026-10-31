@@ -26,10 +26,10 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("MeetOptionDown"), EKeys::MouseScrollDown },
 		{ TEXT("MeetOptionSelect"), EKeys::F },
 		// 飞机动力：滚轮上增/下减，和MeetOption共用滚轮键(各自只在自己的Pawn上绑定，同一个键映射
-		// 多个动作不冲突)，只绑在AAirplaneElement::SetupPlayerInputComponent上，见AirplaneElement.md。
+		// 多个动作不冲突)，只绑在APlaneElement::SetupPlayerInputComponent上，见PlaneElement.md。
 		{ TEXT("ThrottleUp"), EKeys::MouseScrollUp },
 		{ TEXT("ThrottleDown"), EKeys::MouseScrollDown },
-		// 飞机自由环视：按住时视角不自动回正，只绑在AAirplaneElement上。
+		// 飞机自由环视：按住时视角不自动回正，只绑在APlaneElement上。
 		{ TEXT("FreeLook"), EKeys::C },
 		// 剧情对话SectionSpeaking的空格键推进不走这里——UForeverStoryFrameworkComponent::
 		// ShowCurrentItem在对话展示期间把输入模式切成UIOnly，Pawn的Enhanced Input完全收不到
@@ -62,7 +62,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("ToggleMap"), EKeys::M },
 		{ TEXT("CloseMap"), EKeys::Escape },
 		// 暂停界面(保存/加载)：Tab开关，理由同上绑在Controller上，见AForeverPlayerController::
-		// TogglePause、UForeverPausePanelWidget(界面打开期间关闭键由它自己的NativeOnKeyDown拦)。
+		// TogglePause、UPausePanelWidget(界面打开期间关闭键由它自己的NativeOnKeyDown拦)。
 		{ TEXT("TogglePause"), EKeys::Tab },
 	};
 	return definitions;

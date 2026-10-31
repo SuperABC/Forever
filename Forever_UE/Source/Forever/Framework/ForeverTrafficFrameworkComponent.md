@@ -80,4 +80,4 @@
 ## 公交搭乘/下车/事件
 - `ApplyBoardVehicle(name, controller, bSilent)`：搭乘线路公交(隐藏原pawn、记previousPawn、Possess)。`ApplyLeaveVehicle(name, controller, bForce)`：leave_vehicle/force_leave执行入口，name非空时只在玩家正在这辆里才执行。`ExitVehicle(controller, bForce)`驾驶/搭乘共用：搭乘者不做遮挡判定，驾驶者除非force才判定。`FindTransitElement`按名字查线路公交Actor。
 - `FireVehicleEvent`：进出载具时给**这辆车自己的**script发`enter_vehicle`/`leave_vehicle`事件(mode=drive/ride)；`ApplyEnterVehicle`/`ApplyBoardVehicle`的`bSilent`用于读档恢复(不发)。
-- `GenerateVehicles`线路车分支：`blueprintPath`加载出来不是`ATransitVehicleElement`子类(公交带的是停车场驾驶用的BP_VehicleBus)就忽略，仍用`ATransitVehicleElement`。
+- `GenerateVehicles`线路车分支：`blueprintPath`加载出来不是`ATransitVehicleElement`子类(公交带的是停车场驾驶用的BP_BusElement)就忽略，仍用`ATransitVehicleElement`。

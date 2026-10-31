@@ -2,7 +2,7 @@
 
 #include "ForeverModSubsystem.h"
 #include "ForeverDialogUtils.h"
-#include "UI/ForeverFadeSubsystem.h"
+#include "UI/FadeSubsystem.h"
 
 #include "common/config.h"
 #include "story/script.h"
@@ -56,12 +56,12 @@ TArray<FString> UForeverConfigBridgeSubsystem::GetDllPaths() const {
 	return result;
 }
 
-TArray<FForeverModRow> UForeverConfigBridgeSubsystem::GetModRows() const {
-	TArray<FForeverModRow> rows;
+TArray<FModRow> UForeverConfigBridgeSubsystem::GetModRows() const {
+	TArray<FModRow> rows;
 	TMap<FString, TArray<FString>> required = ComputeRequiredModIds();
 
 	for (const Config::ModEntry& entry : Config::GetModEnables()) {
-		FForeverModRow row;
+		FModRow row;
 		row.DllPath = UTF8_TO_TCHAR(entry.dllPath.c_str());
 		row.ConceptKey = UTF8_TO_TCHAR(entry.conceptKey.c_str());
 		row.ModId = UTF8_TO_TCHAR(entry.modId.c_str());
@@ -90,7 +90,7 @@ void UForeverConfigBridgeSubsystem::SetModEnabled(const FString& ConceptKey, con
 
 bool UForeverConfigBridgeSubsystem::IsModLocked(const FString& ConceptKey, const FString& ModId) const {
 	// 锁定判定不看concept，只认mod id字符串，和Registry::CheckModRegistered同一套匹配
-	// 规则——ConceptKey这个参数只是为了和GetModRows()的FForeverModRow对称，调用方传什么
+	// 规则——ConceptKey这个参数只是为了和GetModRows()的FModRow对称，调用方传什么
 	// 都不影响结果。
 	(void)ConceptKey;
 	return ComputeRequiredModIds().Contains(ModId);
@@ -166,8 +166,8 @@ bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMess
 		if (UForeverModSubsystem* modSubsystem = gameInstance->GetSubsystem<UForeverModSubsystem>()) {
 			modSubsystem->EnsureModsRegistered();
 		}
-		// 先变黑再进World(OpenLevel要同步加载很久，期间画面不刷新)，见UForeverFadeSubsystem。
-		if (UForeverFadeSubsystem* fade = gameInstance->GetSubsystem<UForeverFadeSubsystem>()) {
+		// 先变黑再进World(OpenLevel要同步加载很久，期间画面不刷新)，见UFadeSubsystem。
+		if (UFadeSubsystem* fade = gameInstance->GetSubsystem<UFadeSubsystem>()) {
 			fade->OpenWorldLevel();
 		}
 		else {

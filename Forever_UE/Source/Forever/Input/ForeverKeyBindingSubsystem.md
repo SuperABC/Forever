@@ -21,9 +21,9 @@
 - 被谁依赖:
   - `AForeverCharacter::SetupPlayerInputComponent`(`Jump`/`ToggleView`/`Sprint`/`MeetOptionUp`/`MeetOptionDown`/`MeetOptionSelect`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1`/`SwitchWeapon2`/`AimWeapon`)。
   - `AForeverPlayerController::BeginPlay`/`SetupInputComponent`(整份`GetBindingContext()`常驻加入Enhanced Input子系统;`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`/`TogglePause`绑定,见`Player/ForeverPlayerController.md`)。
-  - `UForeverPausePanelWidget::NativeOnKeyDown`(用`GetKey("TogglePause")`取配置后的实际按键——UI Only模式下Enhanced Input不触发,只能自己比对按键)。
+  - `UPausePanelWidget::NativeOnKeyDown`(用`GetKey("TogglePause")`取配置后的实际按键——UI Only模式下Enhanced Input不触发,只能自己比对按键)。
   - `AVehicleElement::SetupPlayerInputComponent`(`Handbrake`/`ExitVehicle`)。
-  - `AAirplaneElement::SetupPlayerInputComponent`(`ThrottleUp`/`ThrottleDown`/`FreeLook`=C)。
+  - `APlaneElement::SetupPlayerInputComponent`(`ThrottleUp`/`ThrottleDown`/`FreeLook`=C)。
 - Mod可扩展点:"可绑定动作"注册表(`GetBindingDefinitions()`)是硬编码在本类里的静态列表,新增数字按键动作时在这里加一条`{名字, 默认键}`即可,不需要改配置文件解析逻辑。
 
 ## 待办/后续阶段
@@ -32,4 +32,4 @@
 
 ## ThrottleUp / ThrottleDown
 
-飞机动力：默认`MouseScrollUp/MouseScrollDown`，和`MeetOptionUp/Down`共用滚轮键。只在`AAirplaneElement::SetupPlayerInputComponent`上绑定(`Started`，每格一次，加减`powerStep`)，别的Pawn不绑，所以不冲突，见`Forever/Element/AirplaneElement.md`。
+飞机动力：默认`MouseScrollUp/MouseScrollDown`，和`MeetOptionUp/Down`共用滚轮键。只在`APlaneElement::SetupPlayerInputComponent`上绑定(`Started`，每格一次，加减`powerStep`)，别的Pawn不绑，所以不冲突，见`Forever/Element/PlaneElement.md`。

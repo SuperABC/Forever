@@ -58,7 +58,7 @@ Possess切换逻辑在那边，见其自身注释）不是一回事——`Traffi
 
 ## 停站事件与测试代码
 - `Traffic::ConsumeStopEvents()`/`SilenceInitialStopEvents()`：汇总各线路的停站/离站事件，见`route.md`。
-- `InitParkedVehicles`按停车位的`ParkingSpot::categories`选载具：先在种类里随机选一个，再用`VehicleFactory::GetIdsByCategory(category)`(每个种类只查一次、本函数内缓存)从该种类已启用的车型里随机选一个，**不管是否drivable**；种类为空/该种类没有车型就跳过这个车位。`ParkingRoom`的车位种类是`{"car","bus"}`(相当于原先"一半概率是可驾驶公交"的测试逻辑，现在是数据，不想要公交就从`ParkingRoom::SetProperty`删`"bus"`)；`AirportRoom`有左右两个车位，种类`{"plane"}`，停的是`PlaneVehicle`(可驾驶，`blueprintPath`指向飞机蓝图，见`Forever/Element/AirplaneElement.md`)。
+- `InitParkedVehicles`按停车位的`ParkingSpot::categories`选载具：先在种类里随机选一个，再用`VehicleFactory::GetIdsByCategory(category)`(每个种类只查一次、本函数内缓存)从该种类已启用的车型里随机选一个，**不管是否drivable**；种类为空/该种类没有车型就跳过这个车位。`ParkingRoom`的车位种类是`{"car","bus"}`(相当于原先"一半概率是可驾驶公交"的测试逻辑，现在是数据，不想要公交就从`ParkingRoom::SetProperty`删`"bus"`)；`AirportRoom`有左右两个车位，种类`{"plane"}`，停的是`PlaneVehicle`(可驾驶，`blueprintPath`指向飞机蓝图，见`Forever/Element/PlaneElement.md`)。
 - 车型的种类(`"car"/"bus"/"train"/"plane"`)是每个VehicleMod子类的`static const char* GetCategory()`，经`VehicleFactory::RegisterVehicle`的`CategoryFunc`注册，`Vehicle`构造时向工厂按mod id查一次存成成员(`GetCategory()`)。
 
 ## 停车位坐标

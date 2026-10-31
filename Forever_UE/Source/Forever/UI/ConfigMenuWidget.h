@@ -1,0 +1,58 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "ConfigMenuWidget.generated.h"
+
+class UButton;
+class UTextBlock;
+class UStoryPanelWidget;
+class UModPanelWidget;
+class UResourcePanelWidget;
+
+// 配置界面顶层，替代老工程StartMenu(.dump/StartMenu.txt)：三screen用plain SetVisibility
+// 切换(不是tab-control widget，和老工程ModPanel/ResourcePanel的sibling panel切换手法一致，
+// 只是从两个扩到三个)，StartButton调Bridge::ValidateAndStartGame，失败时在FailureMessage
+// (左上角，初始Collapsed)显示拒绝原因。由ForeverMenuController::BeginPlay()
+// CreateWidget+AddToViewport创建，见该类。
+UCLASS()
+class FOREVER_API UConfigMenuWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+protected:
+	virtual void NativeConstruct() override;
+
+	UFUNCTION() void HandleStoryTabClicked();
+	UFUNCTION() void HandleModTabClicked();
+	UFUNCTION() void HandleResourceTabClicked();
+	UFUNCTION() void HandleStartClicked();
+	UFUNCTION() void HandleLoadGameClicked();
+	UFUNCTION() void HandleSaveConfigClicked();
+	UFUNCTION() void HandleLoadConfigClicked();
+
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UStoryPanelWidget> StoryPanel;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UModPanelWidget> ModPanel;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UResourcePanelWidget> ResourcePanel;
+
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> StoryTabButton;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> ModTabButton;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> ResourceTabButton;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> StartButton;
+
+	// 加载存档：弹打开对话框交给UForeverSaveSubsystem::LoadWithDialog，失败原因同样显示在
+	// FailureMessage。BindWidgetOptional：WBP_ConfigMenu里还没放这个按钮时不影响蓝图编译。
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> LoadGameButton;
+
+	// 保存/读取配置：弹json文件对话框，见UForeverConfigBridgeSubsystem::Save/LoadConfigWithDialog。
+	// BindWidgetOptional：WBP_ConfigMenu里还没放按钮时不影响蓝图编译。
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> SaveConfigButton;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> LoadConfigButton;
+
+	// 左上角失败提示，初始Collapsed，ValidateAndStartGame失败时显示拒绝原因。
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> FailureMessage;
+
+private:
+	enum class ETab { Story, Mod, Resource };
+	void ShowOnly(ETab Tab);
+};

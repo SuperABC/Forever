@@ -184,7 +184,7 @@ context)`是消费任意`Change*`的唯一入口——`populace->Tick`的回调�
   `RestoreControlledPawn`同时按UE段恢复操控对象的位置朝向、视角、激活的肩膀武器和弹匣余量。
 
 - **生成完成标志**：`BeginPlay`的try块走完后置`bInitialGenerationDone`，`IsInitialGenerationDone()`对外只读。开局黑屏
-  (`UI/ForeverFadeWidget`)用它加上`UForeverBuildingFrameworkComponent::IsLodSettled()`判断世界就绪。game_start广播是同步的，
+  (`UI/FadeWidget`)用它加上`UForeverBuildingFrameworkComponent::IsLodSettled()`判断世界就绪。game_start广播是同步的，
   没有单独的"响应完"事件，这个标志就是它的等价物。
 
 

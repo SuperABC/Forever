@@ -31,7 +31,7 @@
 `vehicle_mod.h`）。`VehicleBasic`构造函数里写死指向：
 
 ```cpp
-blueprintPath = "/Game/Blueprint/Vehicle/BP_VehicleBasic.BP_VehicleBasic_C";
+blueprintPath = "/Game/Blueprint/Vehicle/BP_VehicleElement.BP_VehicleElement_C";
 ```
 
 `Vehicle::GetBlueprintPath()`只读转发这个字段。`UForeverTrafficFrameworkComponent::

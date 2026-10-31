@@ -15,7 +15,7 @@
 - 在 UI Only 面板(背包/地图等)打开时中键被屏蔽；如果按住中键时面板打开导致松开事件丢失，模式不会自动退出，再按一次中键松开即可。
 
 ## 依赖关系
-- 依赖：`UForeverPopulaceFrameworkComponent::ForEachActiveCitizen`、`ACitizenElement::GetCitizen`、`UForeverIdentifyTagWidget`、`APlayerCameraManager`。
+- 依赖：`UForeverPopulaceFrameworkComponent::ForEachActiveCitizen`、`ACitizenElement::GetCitizen`、`UIdentifyTagWidget`、`APlayerCameraManager`。
 - 被谁依赖：`AForeverPlayerController`(创建并转发热键)。
 
 ## 待办/后续

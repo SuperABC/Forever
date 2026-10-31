@@ -53,7 +53,7 @@ UE官方推荐的"一个C++基类+多个蓝图子类"车辆配置模式（很多
 这么做的），不是这个项目发明的特例。
 
 `VehicleMod`（见`vehicle_mod.h`）只存一个字符串字段`blueprintPath`，指向某个具体的
-蓝图子类资源路径（比如`/Game/Blueprint/Vehicle/BP_VehicleBasic.BP_VehicleBasic_C`——
+蓝图子类资源路径（比如`/Game/Blueprint/Vehicle/BP_VehicleElement.BP_VehicleElement_C`——
 注意蓝图生成类的对象名固定加`_C`后缀）。`UForeverTrafficFrameworkComponent::
 ToggleVehicle`的上车分支在调用`SpawnActor`**之前**，先用
 `vehicle->GetBlueprintPath()`+`LoadClass<AVehicleElement>()`拿到具体该用哪个蓝图
@@ -293,4 +293,4 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 
 ## 飞机子类
 
-`AAirplaneElement`继承本类(复用Chaos轮子/骨骼网格/近身选项/上下机/存档位置)，把轮子改成3个(鼻轮+主轮，`AirplaneWheel.h`)，绕过本类的`SetupPlayerInputComponent`(W/S不是油门/刹车)，每帧手写飞行力学，见`AirplaneElement.md`。本类对它没有改动：`ExitVehicle()`/`Handbrake()`/`StopHandbrake()`和各输入成员都是protected，子类直接调用。
+`APlaneElement`继承本类(复用Chaos轮子/骨骼网格/近身选项/上下机/存档位置)，把轮子改成3个(鼻轮+主轮，`PlaneWheel.h`)，绕过本类的`SetupPlayerInputComponent`(W/S不是油门/刹车)，每帧手写飞行力学，见`PlaneElement.md`。本类对它没有改动：`ExitVehicle()`/`Handbrake()`/`StopHandbrake()`和各输入成员都是protected，子类直接调用。
