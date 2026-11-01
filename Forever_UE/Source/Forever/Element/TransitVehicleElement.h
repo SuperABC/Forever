@@ -50,6 +50,11 @@ public:
 	// 这辆车能不能被搭乘(骨骼网格 + boardable，Init里决定)。
 	bool CanBoard() const { return bBoardable; }
 
+	// 公交近处换成物理AVehicleElement时，这辆运动学的挂起：隐藏、关Tick、关触发盒（撤掉屏幕上它名下的选项）。
+	// 恢复时反过来。搭乘中的不应被挂起（调用方保证）。
+	void SetSuspended(bool bSuspend);
+	bool IsSuspended() const { return bSuspended; }
+
 	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
 	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家在触发盒内或正乘坐时同步换掉屏幕上的选项。
 	void RefreshOptions();
@@ -127,6 +132,7 @@ private:
 	float meshYawOffsetDegrees = 0.f;
 
 	bool bBoardable = false;
+	bool bSuspended = false;
 	// 玩家的AForeverCharacter正在触发盒里 / 玩家正乘坐(PossessedBy~UnPossessed)。
 	bool bPlayerInBox = false;
 	bool bAboard = false;

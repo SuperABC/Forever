@@ -57,6 +57,11 @@ public:
 	Route* GetRoute() const;
 	int GetRouteLine() const;
 
+	// 线路公交处于"物理段"（近处由UE的物理载具+Controller驱动）时为true：Route::Update对它跳过时刻表驱动和
+	// 停站事件，位姿由载具Actor每帧写回。纯运行时，不进存档。停止运行后的线路公交会一直保持true。
+	void SetPhysicsDriven(bool driven) { physicsDriven = driven; }
+	bool IsPhysicsDriven() const { return physicsDriven; }
+
 	Script* GetScript() const;
 	const std::vector<std::string>& GetOptions() const;
 	void AddOption(const std::string& option);
@@ -99,6 +104,7 @@ private:
 
 	Route* route = nullptr;
 	int routeLine = -1;
+	bool physicsDriven = false;
 
 	float x = 0.0f;
 	float y = 0.0f;

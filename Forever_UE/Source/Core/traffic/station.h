@@ -91,6 +91,7 @@ private:
 	std::string name;
 	Building* building = nullptr;
 	Road* attachedRoad = nullptr; // 贴路站点专用，没有building时EnsureRoadLink靠这个找路
+	Map* linkedMap = nullptr; // EnsureRoadLink时登记过辅助导航节点的Map，~Station据此注销（Traffic总是先于Map销毁）
 	bool edge = false;
 
 	std::vector<StationInterface> interfaces;

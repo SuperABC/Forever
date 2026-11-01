@@ -218,9 +218,22 @@ void ATransitVehicleElement::HideOptions()
 	}
 }
 
+void ATransitVehicleElement::SetSuspended(bool bSuspend)
+{
+	if (bSuspended == bSuspend) return;
+	bSuspended = bSuspend;
+	SetActorHiddenInGame(bSuspend);
+	SetActorTickEnabled(!bSuspend);
+	if (proximityBox) proximityBox->SetCollisionEnabled(bSuspend ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryOnly);
+	if (bSuspend && bPlayerInBox && !bAboard) {
+		bPlayerInBox = false;
+		HideOptions();
+	}
+}
+
 void ATransitVehicleElement::RefreshOptions()
 {
-	if (!bBoardable) return;
+	if (!bBoardable || bSuspended) return;
 	BakeOptions();
 	if (bPlayerInBox || bAboard) ShowOptions();
 }

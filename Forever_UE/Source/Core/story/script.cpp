@@ -398,6 +398,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new TestNavigateVehicleChange(vehicle.AsString());
 		}
+		else if (type == "vehicle_command") {
+			auto vehicle = obj["vehicle"];
+			auto command = obj["command"];
+			if (vehicle.IsNull() || command.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing vehicle or command for vehicle_command change.\n");
+			}
+			change = new VehicleCommandChange(vehicle.AsString(), command.AsString());
+		}
 		else if (type == "test_navigate_citizen") {
 			auto name = obj["name"];
 			if (name.IsNull()) {

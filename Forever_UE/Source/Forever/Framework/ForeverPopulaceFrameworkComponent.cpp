@@ -114,8 +114,8 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 	if (citizen->IsDead()) return; // 死人不再被调度，见Citizen::Die
 
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
-	if (existing && *existing && (*existing)->GetController() != nullptr) {
-		// 正被玩家占有(这个项目没有AIController，非空Controller只可能是玩家占有)：
+	if (existing && *existing && (*existing)->IsPlayerControlled()) {
+		// 正被玩家占有(市民自带的ACitizenController不算，只看玩家Controller)：
 		// Job调度这次先整个不生效，被占有的市民不会自己上下班——不管是走路动画还是瞬移
 		// 都不做，等玩家取消占有之后下一次调度再正常处理。
 		return;
@@ -169,7 +169,7 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 	// citizen完全可能被流式销毁/重新生成过，也可能刚被玩家占有，不能沿用发起那一刻的
 	// existing指针/占有状态。
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
-	if (existing && *existing && (*existing)->GetController() != nullptr) {
+	if (existing && *existing && (*existing)->IsPlayerControlled()) {
 		return;
 	}
 
@@ -205,7 +205,7 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 	if (existing && *existing) {
-		if ((*existing)->GetController() != nullptr) {
+		if ((*existing)->IsPlayerControlled()) {
 			UE_LOG(LogTemp, Warning, TEXT("npc_teleport: %s is controlled by the player, skipped."),
 				UTF8_TO_TCHAR(citizen->GetName().c_str()));
 			return;
@@ -222,6 +222,19 @@ void UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding() {
 	while (pendingPathfindingTasks.load(std::memory_order_acquire) > 0) {
 		FPlatformProcess::Sleep(0.001f);
 	}
+}
+
+bool UForeverPopulaceFrameworkComponent::PlanWalkPath(Citizen* citizen, Room* destination, const FVector& from,
+	TArray<FVector>& outWaypoints) const {
+	if (!map || !citizen || !destination) return false;
+	Map::VehicleRoutePlan plan = map->PlanPedestrianRoute(citizen->GetCurrentRoom(),
+		from.X / POPULACE_WORLD_SCALE, from.Y / POPULACE_WORLD_SCALE, destination);
+	if (plan.status != Map::VehicleRoutePlan::OK) return false;
+	outWaypoints.Reset();
+	for (const Map::NavPoint& p : plan.points) {
+		outWaypoints.Add(FVector(p.x, p.y, p.z) * POPULACE_WORLD_SCALE);
+	}
+	return outWaypoints.Num() > 0;
 }
 
 void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* destination) {
@@ -241,7 +254,7 @@ void UForeverPopulaceFrameworkComponent::StartTestNavigation(const FString& citi
 		report(FString::Printf(TEXT("测试导航失败：找不到市民 %s"), *citizenName), true);
 		return;
 	}
-	if (element->GetController() != nullptr && !element->IsTestNavigating()) return; // 玩家正在操控这个市民
+	if (element->IsPlayerControlled()) return; // 玩家正在操控这个市民
 
 	// 目的地：机场一楼（0层）的房间。
 	Room* destination = nullptr;

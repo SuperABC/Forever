@@ -1,6 +1,7 @@
 #include "Element/VehicleElement.h"
 
 #include "traffic/vehicle.h"
+#include "traffic/route.h"
 
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
@@ -145,6 +146,14 @@ void AVehicleElement::Init(Vehicle* inVehicle, APawn* inPreviousPawn)
 	// 刚体)才会突然开始受重力下落，实测反馈"上车前悬空，踩油门才落地"。生成完立刻主动唤醒
 	// 一次，让车一开局就正常落到地面上，不用等玩家来踩第一脚油门。
 	if (carMesh) {
+		// 重心下移：物理状态在SpawnActor时已经创建，直接改根骨刚体的COM nudge(照抄APlaneElement::BeginPlay)。
+		// 放在Init而不是BeginPlay是因为这里才知道vehicle->GetCategory()。公交又高又宽，默认重心偏高，
+		// AI开稍微拐一下弯就侧翻。
+		FVector comOffset = busCenterOfMassOffset;
+		if (comOffset.IsNearlyZero() && vehicle && vehicle->GetCategory() == "bus") {
+			comOffset = FVector(0.f, 0.f, -busCenterOfMassDropZ);
+		}
+		if (!comOffset.IsNearlyZero()) carMesh->SetCenterOfMass(comOffset);
 		carMesh->WakeAllRigidBodies();
 	}
 }
@@ -198,6 +207,7 @@ void AVehicleElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
 			AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
 				UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+			meetOption->RemoveName(vehicleNameOnly); // 先清再加，重复的Begin事件不会叠出两份
 			for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
 				meetOption->AddOption(frameworkActor, cachedOptions[idx], vehicleNameOnly, idx);
 			}
@@ -225,8 +235,121 @@ void AVehicleElement::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		bTestNavigating = false;
 		if (UForeverTrafficFrameworkComponent* owner = navOwner.Get()) owner->ClearTestNavigationLine();
 	}
+	// 被销毁（流式离开/切回运动学）时把屏幕上这辆车名下的选项撤掉——组件销毁不一定补发End重叠事件。
+	if (EndPlayReason == EEndPlayReason::Destroyed && !vehicleNameOnly.IsEmpty() && !bRideMode) HideOptions();
 	vehicle = nullptr;
 	Super::EndPlay(EndPlayReason);
+}
+
+void AVehicleElement::SetDriveInput(float throttle, float brake, float steer)
+{
+	if (!vehicleMovement) return;
+	vehicleMovement->SetThrottleInput(throttle);
+	vehicleMovement->SetBrakeInput(brake);
+	vehicleMovement->SetSteeringInput(steer);
+}
+
+void AVehicleElement::SetHandbrake(bool bOn)
+{
+	if (vehicleMovement) vehicleMovement->SetHandbrakeInput(bOn);
+}
+
+void AVehicleElement::DisableWheelBodies()
+{
+	// SetSimulatePhysics(true)会把所有PhysType_Default的骨骼刚体重新打开，包括Chaos载具
+	// 初始化时(FixupSkeletalMesh)特意关掉模拟的轮子刚体——它们会变成独立刚体留在原地。
+	// 这里把轮子骨骼的刚体再关回去，由Chaos悬挂/动画驱动。
+	if (!carMesh || !vehicleMovement) return;
+	for (const FChaosWheelSetup& setup : vehicleMovement->WheelSetups) {
+		if (setup.BoneName == NAME_None) continue;
+		if (FBodyInstance* wheelBody = carMesh->GetBodyInstance(setup.BoneName)) {
+			wheelBody->SetInstanceSimulatePhysics(false);
+		}
+	}
+}
+
+void AVehicleElement::SetKinematicMode(bool bKinematic)
+{
+	if (bKinematicMode == bKinematic || !carMesh) return;
+	bKinematicMode = bKinematic;
+	if (bKinematic) {
+		SetDriveInput(0.f, 0.f, 0.f);
+		SetHandbrake(false);
+		carMesh->SetSimulatePhysics(false);
+	}
+}
+
+void AVehicleElement::ResumePhysics(const FVector& velocity)
+{
+	if (!carMesh) return;
+	bKinematicMode = false;
+	carMesh->SetSimulatePhysics(true);
+	DisableWheelBodies();
+	carMesh->SetPhysicsLinearVelocity(velocity);
+	carMesh->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+	carMesh->WakeAllRigidBodies();
+}
+
+float AVehicleElement::GetForwardSpeed() const
+{
+	if (!carMesh || bKinematicMode) return 0.f;
+	return FVector::DotProduct(carMesh->GetPhysicsLinearVelocity(), GetActorForwardVector());
+}
+
+float AVehicleElement::ComputeWheelbase() const
+{
+	if (!carMesh || !vehicleMovement || vehicleMovement->WheelSetups.Num() < 4) return 0.f;
+	// 约定：WheelSetups[0..1]前轮，[2..3]后轮(见构造函数)。
+	auto boneLocal = [this](int32 index) {
+		return GetActorTransform().InverseTransformPosition(carMesh->GetBoneLocation(vehicleMovement->WheelSetups[index].BoneName));
+	};
+	const FVector front = (boneLocal(0) + boneLocal(1)) * 0.5f;
+	const FVector rear = (boneLocal(2) + boneLocal(3)) * 0.5f;
+	return FMath::Abs(front.X - rear.X);
+}
+
+FVector AVehicleElement::GetFrontAxleLocation() const
+{
+	if (carMesh && vehicleMovement && vehicleMovement->WheelSetups.Num() >= 2 &&
+		vehicleMovement->WheelSetups[0].BoneName != NAME_None && vehicleMovement->WheelSetups[1].BoneName != NAME_None) {
+		return (carMesh->GetBoneLocation(vehicleMovement->WheelSetups[0].BoneName) +
+			carMesh->GetBoneLocation(vehicleMovement->WheelSetups[1].BoneName)) * 0.5f;
+	}
+	return GetActorLocation() + GetActorForwardVector() * (ComputeWheelbase() * 0.5f);
+}
+
+float AVehicleElement::GetMaxSteerAngleDegrees() const
+{
+	if (!vehicleMovement || vehicleMovement->WheelSetups.Num() == 0) return 0.f;
+	TSubclassOf<UChaosVehicleWheel> wheelClass = vehicleMovement->WheelSetups[0].WheelClass;
+	if (const UChaosVehicleWheel* wheel = wheelClass ? wheelClass->GetDefaultObject<UChaosVehicleWheel>() : nullptr) {
+		return wheel->MaxSteerAngle;
+	}
+	return 0.f;
+}
+
+void AVehicleElement::ShowOptions()
+{
+	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	if (!playerController) return;
+	UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget();
+	if (!meetOption) return;
+
+	AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	meetOption->RemoveName(vehicleNameOnly);
+	for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
+		meetOption->AddOption(frameworkActor, cachedOptions[idx], vehicleNameOnly, idx);
+	}
+}
+
+void AVehicleElement::HideOptions()
+{
+	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
+		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
+			meetOption->RemoveName(vehicleNameOnly);
+		}
+	}
 }
 
 void AVehicleElement::PossessedBy(AController* NewController)
@@ -238,29 +361,45 @@ void AVehicleElement::PossessedBy(AController* NewController)
 	// 的说明：它换Pawn/换乘载具时不会跟着变。这里只保留跟这个Pawn自己绑定的移动/视角Context。
 	if (APlayerController* playerController = Cast<APlayerController>(NewController)) {
 		if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(playerController->GetLocalPlayer())) {
-			subsystem->AddMappingContext(inputMapping, 0);
+			if (!bRideMode) subsystem->AddMappingContext(inputMapping, 0);
 			subsystem->AddMappingContext(inputLookMapping, 0);
+		}
+		if (bRideMode) {
+			// 搭乘：车由AI Controller继续开，这里只显示选项(比如停站时的"下车")。
+			if (cachedOptions.Num() == 0 && vehicle) RefreshOptions();
+			ShowOptions();
+		}
+		else {
+			// 玩家接手驾驶：松开AI可能留下的手刹。
+			SetHandbrake(false);
 		}
 	}
 }
 
 void AVehicleElement::UnPossessed()
 {
+	APlayerController* playerController = Cast<APlayerController>(GetController());
+
 	// 油门/刹车/转向是持久状态(Move()里直接SetThrottleInput/SetBrakeInput，不是每帧由输入
-	// 系统重新置0)——控制权一旦转走(不管是正常按Q下车，还是其它原因被UnPossess)，没人再调
+	// 系统重新置0)——玩家驾驶时控制权一旦转走(不管是正常按Q下车，还是其它原因被UnPossess)，没人再调
 	// Move()，上一次的油门值会一直保持，车就按原来的油门持续向前冲(实测反馈"踩着油门下车，
-	// 车还在继续加速")。这里统一在失去控制的时候清零油门/转向、拉满刹车，不管因为什么原因
-	// 下车，车都应该自己刹停，不依赖玩家下车前松开W。
-	if (vehicleMovement) {
+	// 车还在继续加速")。这里在玩家失去控制的时候清零油门/转向、拉满刹车，不管因为什么原因
+	// 下车，车都应该自己刹停，不依赖玩家下车前松开W。AI Controller换手(以及搭乘模式的玩家)
+	// 不做这件事：AI每帧自己写输入，这里清零反而会打断它。
+	if (vehicleMovement && playerController && !bRideMode) {
 		vehicleMovement->SetThrottleInput(0.f);
 		vehicleMovement->SetSteeringInput(0.f);
 		vehicleMovement->SetBrakeInput(1.f);
 	}
 
-	if (APlayerController* playerController = Cast<APlayerController>(GetController())) {
+	if (playerController) {
 		if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(playerController->GetLocalPlayer())) {
 			subsystem->RemoveMappingContext(inputMapping);
 			subsystem->RemoveMappingContext(inputLookMapping);
+		}
+		if (bRideMode) {
+			HideOptions();
+			bRideMode = false;
 		}
 	}
 
@@ -284,6 +423,9 @@ void AVehicleElement::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Started, this, &AVehicleElement::Handbrake);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Completed, this, &AVehicleElement::StopHandbrake);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Canceled, this, &AVehicleElement::StopHandbrake);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionUp")), ETriggerEvent::Started, this, &AVehicleElement::MeetOptionFocusUp);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionDown")), ETriggerEvent::Started, this, &AVehicleElement::MeetOptionFocusDown);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("MeetOptionSelect")), ETriggerEvent::Started, this, &AVehicleElement::MeetOptionSelect);
 			}
 		}
 	}
@@ -291,23 +433,20 @@ void AVehicleElement::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 void AVehicleElement::Move(const FInputActionValue& value)
 {
+	if (bRideMode) return;
 	const FVector2D movement = value.Get<FVector2D>();
 
 	if (movement.Y >= 0.f) {
-		vehicleMovement->SetThrottleInput(movement.Y); // W
-		vehicleMovement->SetBrakeInput(0.f);
+		SetDriveInput(movement.Y, 0.f, movement.X);  // W + A/D
 	} else {
-		vehicleMovement->SetThrottleInput(0.f);
-		vehicleMovement->SetBrakeInput(-movement.Y);   // S
+		SetDriveInput(0.f, -movement.Y, movement.X); // S + A/D
 	}
-	vehicleMovement->SetSteeringInput(movement.X);     // A/D
 }
 
 void AVehicleElement::StopMove(const FInputActionValue& value)
 {
-	vehicleMovement->SetThrottleInput(0.f);
-	vehicleMovement->SetBrakeInput(0.f);
-	vehicleMovement->SetSteeringInput(0.f);
+	if (bRideMode) return;
+	SetDriveInput(0.f, 0.f, 0.f);
 }
 
 void AVehicleElement::Look(const FInputActionValue& value)
@@ -320,8 +459,31 @@ void AVehicleElement::Look(const FInputActionValue& value)
 	}
 }
 
+void AVehicleElement::MeetOptionFocusUp()
+{
+	if (AForeverPlayerController* pc = Cast<AForeverPlayerController>(GetController())) {
+		if (UMeetOptionWidget* meetOption = pc->GetMeetOptionWidget()) meetOption->FocusUp();
+	}
+}
+
+void AVehicleElement::MeetOptionFocusDown()
+{
+	if (AForeverPlayerController* pc = Cast<AForeverPlayerController>(GetController())) {
+		if (UMeetOptionWidget* meetOption = pc->GetMeetOptionWidget()) meetOption->FocusDown();
+	}
+}
+
+void AVehicleElement::MeetOptionSelect()
+{
+	if (AForeverPlayerController* pc = Cast<AForeverPlayerController>(GetController())) {
+		if (UMeetOptionWidget* meetOption = pc->GetMeetOptionWidget()) meetOption->ClickFocus();
+	}
+}
+
 void AVehicleElement::ExitVehicle()
 {
+	// 搭乘模式下车走公交自己的"下车"选项(脚本alight)，Q键不处理。
+	if (bRideMode) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
 	if (framework && framework->GetTrafficFramework()) {
@@ -331,12 +493,12 @@ void AVehicleElement::ExitVehicle()
 
 void AVehicleElement::Handbrake(const FInputActionValue& value)
 {
-	if (vehicleMovement) vehicleMovement->SetHandbrakeInput(true);
+	if (!bRideMode) SetHandbrake(true);
 }
 
 void AVehicleElement::StopHandbrake(const FInputActionValue& value)
 {
-	if (vehicleMovement) vehicleMovement->SetHandbrakeInput(false);
+	if (!bRideMode) SetHandbrake(false);
 }
 
 void AVehicleElement::StartTestNavigation(const TArray<FVector>& path, Room* destination, UForeverTrafficFrameworkComponent* owner)
@@ -379,23 +541,7 @@ void AVehicleElement::FinishTestNavigation(bool arrived)
 	// 恢复成水平姿态再重新打开物理模拟，清掉残留速度，让车从当前位置自然落地。
 	FRotator rotation = GetActorRotation();
 	SetActorRotation(FRotator(0.f, rotation.Yaw, 0.f), ETeleportType::TeleportPhysics);
-	if (carMesh) {
-		carMesh->SetSimulatePhysics(true);
-		// SetSimulatePhysics(true)会把所有PhysType_Default的骨骼刚体重新打开，包括Chaos载具
-		// 初始化时(FixupSkeletalMesh)特意关掉模拟的轮子刚体——它们会变成独立刚体留在原地。
-		// 这里把轮子骨骼的刚体再关回去，由Chaos悬挂/动画驱动。
-		if (vehicleMovement) {
-			for (const FChaosWheelSetup& setup : vehicleMovement->WheelSetups) {
-				if (setup.BoneName == NAME_None) continue;
-				if (FBodyInstance* wheelBody = carMesh->GetBodyInstance(setup.BoneName)) {
-					wheelBody->SetInstanceSimulatePhysics(false);
-				}
-			}
-		}
-		carMesh->SetPhysicsLinearVelocity(FVector::ZeroVector);
-		carMesh->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
-		carMesh->WakeAllRigidBodies();
-	}
+	ResumePhysics(FVector::ZeroVector);
 
 	if (vehicle && arrived) vehicle->SetCurrentRoom(navDestination);
 	if (UForeverTrafficFrameworkComponent* owner = navOwner.Get()) owner->ClearTestNavigationLine();
@@ -509,7 +655,10 @@ void AVehicleElement::Tick(float DeltaTime)
 	if (!vehicle) return;
 
 	FVector location = GetActorLocation();
-	vehicle->SetTransform(location.X, location.Y, location.Z, GetActorRotation().Yaw);
+	// 线路公交的Core位姿用地图单位（Route::Update的约定，和停车场车辆的UE单位不同）；物理段由这里写回，
+	// 切回时刻表时Route::Update会直接覆盖。
+	const float scale = vehicle->GetRoute() ? 0.001f : 1.f;
+	vehicle->SetTransform(location.X * scale, location.Y * scale, location.Z * scale, GetActorRotation().Yaw);
 }
 
 void AVehicleElement::EnsureOptionsForPlayer(APawn* player) {
@@ -533,6 +682,12 @@ void AVehicleElement::RefreshOptions() {
 	}
 	if (!proximityBox) {
 		BuildProximityBox(); // 原来没有脚本/选项没建盒，现在有选项了
+		if (!bRideMode) return;
+	}
+	if (bRideMode) {
+		// 搭乘中：ReplaceOptions 在名下没有按钮时是空操作（上车被撤掉后列表为空，再加"下车"就丢了），
+		// 所以直接先清再加，同 ATransitVehicleElement::RefreshOptions。
+		ShowOptions();
 		return;
 	}
 	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {

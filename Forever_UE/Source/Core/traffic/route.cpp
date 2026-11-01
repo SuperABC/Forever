@@ -446,6 +446,7 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 
 void Route::Update(float elapsedSeconds) {
 	if (!mod) return;
+	lastElapsedSeconds = elapsedSeconds;
 
 	for (size_t lineIdx = 0; lineIdx < lines.size(); lineIdx++) {
 		const vector<RouteLeg>& legs = lines[lineIdx];
@@ -466,6 +467,9 @@ void Route::Update(float elapsedSeconds) {
 			float localTime = fmodf(elapsedSeconds + phase, period);
 			if (localTime < 0.f) localTime += period;
 			Vehicle* vehicle = vehicles[k];
+			// 物理段（UE层的物理公交+Controller在开）：位姿和停站事件都由UE层负责，这里不碰，
+			// 否则时刻表会和实车打架、重复发进站/离站事件。交还时刻表时ResetStopState重新观察。
+			if (vehicle->IsPhysicsDriven()) continue;
 			Station* dwellStation = nullptr;
 			DriveVehicle(vehicle, legs, localTime, &dwellStation);
 
@@ -493,4 +497,71 @@ vector<Route::StopEvent> Route::ConsumeStopEvents() {
 
 void Route::SilenceInitialStopEvents() {
 	silentInitialStopState = true;
+}
+
+void Route::ResetStopState(Vehicle* vehicle) {
+	lastStopStation.erase(vehicle);
+}
+
+Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
+	ScheduleState state;
+	if (!mod || !vehicle) return state;
+	constexpr float kGameSecondsPerRealSecond = 120.f; // 和DriveVehicle的缓动换算同一个假设
+
+	for (size_t lineIdx = 0; lineIdx < lines.size() && lineIdx < lineVehicles.size(); lineIdx++) {
+		const vector<RouteLeg>& legs = lines[lineIdx];
+		const vector<Vehicle*>& vehicles = lineVehicles[lineIdx];
+		int vehicleCount = static_cast<int>(vehicles.size());
+		for (int k = 0; k < vehicleCount; k++) {
+			if (vehicles[k] != vehicle) continue;
+
+			float period = 0.f;
+			for (const RouteLeg& leg : legs) {
+				if (!leg.edge) continue;
+				float travelTime = (mod->speed > 0.f) ? leg.edge->length / mod->speed : 0.f;
+				period += travelTime + (leg.dwellAtDestination ? mod->dwellSeconds : 0.f);
+			}
+			if (period <= 0.f) return state;
+
+			float phase = period * static_cast<float>(k) / static_cast<float>(vehicleCount);
+			float t = fmodf(lastElapsedSeconds + phase, period);
+			if (t < 0.f) t += period;
+
+			state.line = static_cast<int>(lineIdx);
+			state.speedMapPerRealSecond = mod->speed * kGameSecondsPerRealSecond;
+			for (size_t i = 0; i < legs.size(); i++) {
+				const RouteLeg& leg = legs[i];
+				if (!leg.edge) continue;
+				float travelTime = (mod->speed > 0.f) ? leg.edge->length / mod->speed : 0.f;
+				if (t < travelTime) {
+					state.valid = true;
+					state.legIndex = static_cast<int>(i);
+					return state;
+				}
+				t -= travelTime;
+				float dwell = leg.dwellAtDestination ? mod->dwellSeconds : 0.f;
+				if (t < dwell) {
+					state.valid = true;
+					state.legIndex = static_cast<int>(i);
+					state.dwelling = true;
+					state.dwellRemainingSeconds = (dwell - t) / kGameSecondsPerRealSecond;
+					return state;
+				}
+				t -= dwell;
+			}
+			return state;
+		}
+	}
+	return state;
+}
+
+vector<int> Route::GetLineStopNodeIds(size_t lineIndex) const {
+	vector<int> ids;
+	if (lineIndex >= lines.size()) return ids;
+	for (const RouteLeg& leg : lines[lineIndex]) {
+		const StationRoadLink* link = leg.fromStation ? leg.fromStation->GetRoadLink(leg.fromInterfaceIndex) : nullptr;
+		if (!link || !link->stationNode) return {};
+		ids.push_back(link->stationNode->GetId());
+	}
+	return ids;
 }

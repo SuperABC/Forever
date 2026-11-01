@@ -573,3 +573,10 @@ scriptFactory`引用成员（`CreateDoor`创建门的Script要用，和`terrainF
 大路+小路+Zone内部路里按垂足距离取最近几条，两个行驶方向各调一次`GetLaneSegmentAt`，取"车->垂足->车道下一个
 锚点->Dijkstra到目的房间导航节点"总长最短的。连不到目的地返回`NO_PATH_TO_DESTINATION`，points只含"接到路上"
 的那一小段。z只是图里的参考高度，真实高度由UE侧贴地决定。
+
+## 按节点导航 / 辅助导航节点（2026-11-01）
+- `AuxNavNode` / `RegisterAuxNavNode`：公交站 stationNode 不在 `vehicleNavGraph` 里（`Station` 自己拥有这些对象，导航图参与存档/析构），在 Map 里单独登记（运行时、不拥有）。站作终点 = 路径到 `laneFrom` 再走 `inEdge`；站作起点 = 先走 `outEdge` 再从 `laneTo` 出发；同一段车道上起点在上游的两个站 = stationNode 直线弦；室外起点恰在站所在车道段、位于站上游 = 垂足直接开到站。`Station::EnsureRoadLink` 登记、`~Station` 注销。
+- `PlanVehicleRouteToNode(startRoom, x, y, destNodeId, useHeading, hx, hy)`：终点是图节点或辅助节点；`useHeading` 时室外起点只试与车头同向的车道方向。`PlanVehicleRoute` 现在转调它。`PlanVehicleLeg(fromNodeId, toNodeId)`：节点到节点（任一端可为辅助节点），公交循环里站到站用。
+
+## 室外起点接入车道考虑车头夹角（2026-11-02）
+- `PlanVehicleRouteToNode(useHeading=true)`：不再硬过滤反向车道，而是把"车道方向与车头夹角"折算成额外距离（`kHeadingPenaltyMapUnits=1.5`，夹角 180° = 15m，线性）加到候选车道的总代价里再比较，8m 外的锐角车道优先于 2m 外的钝角车道。只比较最近的 2 条有车道的路（`kEntryRoadCandidates`），每条两个方向，所以入线寻路 `FindVehiclePath` 共 2 到 4 次。

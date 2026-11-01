@@ -1,8 +1,11 @@
 {
 	// 公交车自己的milestone脚本(BusVehicle::milestoneNames={"vehicle_bus"}加载)。路线上的公交和
 	// 停车场里的公交共用这一个脚本，靠C++写好的$$self.on_route区分：
-	//   - on_route=0(停车场里的公交)：提供"驾驶"选项，行为同vehicle_basic；
-	//   - on_route=1(线路上的公交)：不提供驾驶，只在停站时提供"上车"/"下车"。
+	//   - on_route=0(停车场里的公交)：提供"驾驶"和"测试运行"选项，驾驶行为同vehicle_basic；
+	//   - on_route=1(线路上的公交)：不提供驾驶，只在停站时提供"上车"/"下车"，并提供"停止运行"。
+	// 测试运行：公交的Controller先导航到随机一条公交环线的随机站，再开始循环（vehicle_command Change，
+	// 见UForeverTrafficFrameworkComponent::StartBusTestRun）；运行期间没有"驾驶"选项，玩家不能开车。
+	// 停止运行：Controller刹停（停站中补发leave_stop），恢复"驾驶"和"测试运行"。脚本变量running=是否在运行。
 	// 停站事件由C++在公交停稳(enter_stop)/启动离站(leave_stop)时只发给这辆车自己的脚本；进出载具
 	// 事件(enter_vehicle/leave_vehicle，mode=ride搭乘/drive驾驶)同样只发给被进出的这辆车。
 	// 脚本变量：stopped(是否正停在站里)、aboard(玩家是否正搭乘在这辆车上)。
@@ -20,7 +23,10 @@
 			"changes": [
 				{ "type": "set_value", "variable": "self.stopped", "value": "0" },
 				{ "type": "set_value", "variable": "self.aboard", "value": "0" },
-				{ "type": "add_option", "name": "$$self.name", "option": "驾驶", "condition": "$$self.on_route == 0" }
+				{ "type": "set_value", "variable": "self.running", "value": "0" },
+				{ "type": "add_option", "name": "$$self.name", "option": "驾驶", "condition": "$$self.on_route == 0" },
+				{ "type": "add_option", "name": "$$self.name", "option": "测试运行", "condition": "$$self.on_route == 0" },
+				{ "type": "add_option", "name": "$$self.name", "option": "停止运行", "condition": "$$self.on_route == 1" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -34,6 +40,40 @@
 			"goal": "",
 			"changes": [
 				{ "type": "enter_vehicle", "vehicle": "$$self.name" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "test_run",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "测试运行" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.running", "value": "1" },
+				{ "type": "remove_option", "name": "$$self.name", "option": "驾驶" },
+				{ "type": "remove_option", "name": "$$self.name", "option": "测试运行" },
+				{ "type": "add_option", "name": "$$self.name", "option": "停止运行" },
+				{ "type": "vehicle_command", "vehicle": "$$self.name", "command": "test_run" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "stop_run",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "停止运行" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.running", "value": "0" },
+				{ "type": "remove_option", "name": "$$self.name", "option": "停止运行" },
+				{ "type": "add_option", "name": "$$self.name", "option": "驾驶" },
+				{ "type": "add_option", "name": "$$self.name", "option": "测试运行" },
+				{ "type": "vehicle_command", "vehicle": "$$self.name", "command": "stop" }
 			],
 			"dialogs": [],
 			"subsequences": []

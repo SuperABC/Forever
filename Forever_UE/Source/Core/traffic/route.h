@@ -98,6 +98,30 @@ public:
 	// 随存档恢复，再发一次enter_stop会让script重复加选项)。新开局不调，第一次Update()正常发。
 	void SilenceInitialStopEvents();
 
+	// 载具当前在时刻表上的状态（公交远近切换用：近处换成物理公交+Controller时据此接管，见
+	// Source/Forever/Framework/ForeverTrafficFrameworkComponent.md）。按最近一次Update()的elapsedSeconds算，
+	// 不改变任何状态。载具不在这条Route的任何线路上 -> valid=false。
+	//   line：线路下标；legIndex：正在行驶/刚到达的那一腿（leg i 从 lines[line][i].fromStation 到
+	//   下一个站，环线的 leg i 终点就是 leg (i+1)%n 的起点）；dwelling：正停靠在leg终点站里，
+	//   dwellRemainingSeconds是剩余停靠时间（真实秒）；speedMapPerRealSecond：巡航速度（地图单位/真实秒，
+	//   缓动阶段的瞬时速度不精确，仅供给物理车一个初速度）。
+	struct ScheduleState {
+		bool valid = false;
+		int line = -1;
+		int legIndex = -1;
+		bool dwelling = false;
+		float dwellRemainingSeconds = 0.f;
+		float speedMapPerRealSecond = 0.f;
+	};
+	ScheduleState QueryVehicleState(const Vehicle* vehicle) const;
+
+	// 第lineIndex条线路每一站的车站节点id（Map辅助导航节点，见Map::AuxNavNode），顺序即行驶顺序：
+	// 第i个元素是 leg i 的起点站。任何一站没有road link（没接上路网）时返回空。
+	std::vector<int> GetLineStopNodeIds(size_t lineIndex) const;
+
+	// 载具从物理段交还给时刻表时调用：忘掉它的停靠状态，下一次Update()当作第一次观察（正好停着就补发进站事件）。
+	void ResetStopState(Vehicle* vehicle);
+
 private:
 	static int PackStop(int station, int interfaceIndex);
 
@@ -139,4 +163,5 @@ private:
 	std::unordered_map<Vehicle*, Station*> lastStopStation;
 	std::vector<StopEvent> pendingStopEvents;
 	bool silentInitialStopState = false;
+	float lastElapsedSeconds = 0.f; // 最近一次Update()的elapsedSeconds，QueryVehicleState用
 };

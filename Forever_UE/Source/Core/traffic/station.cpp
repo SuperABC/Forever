@@ -78,6 +78,7 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 
 Station::~Station() {
 	for (auto& [index, link] : roadLinks) {
+		if (linkedMap && link.stationNode) linkedMap->UnregisterAuxNavNode(link.stationNode->GetId());
 		delete link.inEdge;
 		delete link.outEdge;
 		delete link.stationNode;
@@ -124,6 +125,18 @@ const StationRoadLink* Station::EnsureRoadLink(Map* map, int interfaceIndex) {
 	link.stationNode = new Node("station", segment.worldX, segment.worldY, segment.worldZ);
 	link.inEdge = new Connection(*segment.fromAnchor, *link.stationNode);
 	link.outEdge = new Connection(*link.stationNode, *segment.toAnchor);
+
+	// 把站点登记成Map的辅助导航节点，之后Map::PlanVehicleRouteToNode/PlanVehicleLeg可以直接以stationNode的id为端点。
+	Map::AuxNavNode aux;
+	aux.node = link.stationNode;
+	aux.laneFrom = link.laneFrom;
+	aux.inEdge = link.inEdge;
+	aux.laneTo = link.laneTo;
+	aux.outEdge = link.outEdge;
+	aux.sourceEdge = link.sourceEdge;
+	aux.t = link.t;
+	map->RegisterAuxNavNode(aux);
+	linkedMap = map;
 
 	auto result = roadLinks.emplace(interfaceIndex, link);
 	return &result.first->second;

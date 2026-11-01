@@ -71,3 +71,6 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
 运行时状态，不进存档。`SetParking`时初始化成停车位房间；测试导航出发时置空、到达时设成目的房间；玩家上车
 (`ApplyEnterVehicle`)时置空。`Map::PlanVehicleRoute`据此决定起点是房间导航节点还是路网上最近的车道。读档后为
 空（当作在室外）。
+
+## physicsDriven（2026-11-01）
+- `SetPhysicsDriven/IsPhysicsDriven`：线路公交处于物理段（或已脱离时刻表）时为真，`Route::Update` 跳过。运行时状态，不进存档。

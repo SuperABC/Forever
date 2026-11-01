@@ -442,6 +442,22 @@ float UForeverTerrainFrameworkComponent::SampleHeight(float mapX, float mapY) co
 	return map ? map->SampleHeight(mapX, mapY) : 0.f;
 }
 
+bool UForeverTerrainFrameworkComponent::IsInsideLodLevel(const FVector& worldPos, int32 level, float scale) const {
+	if (level < 0 || level >= static_cast<int32>(currentPivots.size())) return false;
+	const auto& entry = currentPivots[level];
+	if (entry.first.first == INT_MIN) return false; // 这一级还没建过
+	// 和TickComponent里算originX的公式一致：区域左下角 = pivot*(size/2) - size/2，边长size（地图元素单位）。
+	const float size = entry.second;
+	const float originX = entry.first.first * (size / 2.f) - size / 2.f;
+	const float originY = entry.first.second * (size / 2.f) - size / 2.f;
+	const float centerX = originX + size / 2.f;
+	const float centerY = originY + size / 2.f;
+	const float half = size / 2.f * scale;
+	const float x = worldPos.X / 1000.f;
+	const float y = worldPos.Y / 1000.f;
+	return FMath::Abs(x - centerX) <= half && FMath::Abs(y - centerY) <= half;
+}
+
 FVector UForeverTerrainFrameworkComponent::GetMapCenterWorldLocation() const {
 	if (!map) return FVector::ZeroVector;
 

@@ -26,6 +26,10 @@
 using namespace std;
 
 namespace {
+	// 室外起点接入车道时，车道方向与车头夹角180度折合的额外距离（地图单位，1.5=15m）。
+	constexpr float kHeadingPenaltyMapUnits = 1.5f;
+	constexpr int kEntryRoadCandidates = 2; // 入线时只比较最近的几条有车道的路（每条两个方向，最多 2x 次寻路）
+
 	// 从道路中轴线到lanes[index]车道中心的偏移距离(lanes按从内到外排列，index0=最内侧)，
 	// 和roadnet.cpp里的同名私有helper逻辑一致(两处都是很小的独立算法，没有共享的必要)。
 	float LaneCenterOffset(const vector<float>& lanes, int index) {
@@ -2437,27 +2441,108 @@ Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y
 	return plan;
 }
 
-Map::VehicleRoutePlan Map::PlanVehicleRoute(Room* startRoom, float x, float y, Room* destRoom) const {
-	VehicleRoutePlan plan;
-	Node* destNode = destRoom ? destRoom->GetNavigationNode() : nullptr;
-	if (!destNode) {
-		plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
-		return plan;
-	}
-
+namespace {
 	// 沿Connection从起点到终点采样（车行边都是单向Start->End）；和上一段首尾重合的点不重复加。
-	auto appendEdge = [](vector<NavPoint>& points, Connection* connection) {
+	void AppendConnectionPoints(vector<Map::NavPoint>& points, Connection* connection) {
 		int steps = std::clamp(static_cast<int>(ceilf(connection->CalcDistance() / 0.5f)), 2, 64);
 		for (int i = points.empty() ? 0 : 1; i <= steps; i++) {
 			Node p = connection->GetPoint(static_cast<float>(i) / steps);
 			points.push_back({ p.GetX(), p.GetY(), p.GetZ() });
 		}
-	};
-	auto pathLength = [](const vector<Connection*>& edges) {
+	}
+
+	float PathLength(const vector<Connection*>& edges) {
 		float total = 0.f;
 		for (Connection* edge : edges) total += edge->CalcDistance();
 		return total;
+	}
+}
+
+void Map::RegisterAuxNavNode(const AuxNavNode& aux) {
+	if (!aux.node) return;
+	auxNavNodes[aux.node->GetId()] = aux;
+}
+
+void Map::UnregisterAuxNavNode(int nodeId) {
+	auxNavNodes.erase(nodeId);
+}
+
+const Map::AuxNavNode* Map::FindAuxNavNode(int nodeId) const {
+	auto it = auxNavNodes.find(nodeId);
+	return it != auxNavNodes.end() ? &it->second : nullptr;
+}
+
+bool Map::AppendLegPoints(int fromId, int toId, vector<NavPoint>& points) const {
+	if (fromId == toId) return true;
+	const AuxNavNode* fromAux = FindAuxNavNode(fromId);
+	const AuxNavNode* toAux = FindAuxNavNode(toId);
+
+	vector<NavPoint> leg = points;
+	auto addNode = [&leg](const Node* node) {
+		leg.push_back({ node->GetX(), node->GetY(), node->GetZ() });
 	};
+
+	// 同一段车道上，起点站在上游：直接走两个stationNode的直线弦。
+	if (fromAux && toAux && fromAux->sourceEdge == toAux->sourceEdge && fromAux->t < toAux->t) {
+		if (leg.empty()) addNode(fromAux->node);
+		addNode(toAux->node);
+		points = std::move(leg);
+		return true;
+	}
+
+	int graphFrom = fromAux ? fromAux->laneTo->GetId() : fromId;
+	int graphTo = toAux ? toAux->laneFrom->GetId() : toId;
+	vector<Connection*> middle;
+	if (graphFrom != graphTo) {
+		middle = FindVehiclePath(graphFrom, graphTo);
+		if (middle.empty()) return false;
+	}
+
+	if (fromAux) {
+		if (leg.empty()) addNode(fromAux->node);
+		AppendConnectionPoints(leg, fromAux->outEdge);
+	}
+	for (Connection* edge : middle) AppendConnectionPoints(leg, edge);
+	if (toAux) AppendConnectionPoints(leg, toAux->inEdge);
+	points = std::move(leg);
+	return true;
+}
+
+Map::VehicleRoutePlan Map::PlanVehicleLeg(int fromNodeId, int toNodeId) const {
+	VehicleRoutePlan plan;
+	if (fromNodeId == toNodeId) {
+		// 起点==终点：只给一个点（取辅助节点的坐标）。
+		if (const AuxNavNode* aux = FindAuxNavNode(fromNodeId)) {
+			plan.points.push_back({ aux->node->GetX(), aux->node->GetY(), aux->node->GetZ() });
+			plan.status = VehicleRoutePlan::OK;
+		}
+		else {
+			plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+		}
+		return plan;
+	}
+	plan.status = AppendLegPoints(fromNodeId, toNodeId, plan.points)
+		? VehicleRoutePlan::OK : VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+	if (plan.status != VehicleRoutePlan::OK) plan.points.clear();
+	return plan;
+}
+
+Map::VehicleRoutePlan Map::PlanVehicleRoute(Room* startRoom, float x, float y, Room* destRoom) const {
+	Node* destNode = destRoom ? destRoom->GetNavigationNode() : nullptr;
+	if (!destNode) {
+		VehicleRoutePlan plan;
+		plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+		return plan;
+	}
+	return PlanVehicleRouteToNode(startRoom, x, y, destNode->GetId());
+}
+
+Map::VehicleRoutePlan Map::PlanVehicleRouteToNode(Room* startRoom, float x, float y, int destNodeId,
+	bool useHeading, float headingX, float headingY) const {
+	VehicleRoutePlan plan;
+	const AuxNavNode* destAux = FindAuxNavNode(destNodeId);
+	// 终点在车行图上的接入锚点：辅助节点（公交站）接在laneFrom，之后再走inEdge。
+	int graphDestId = destAux ? destAux->laneFrom->GetId() : destNodeId;
 
 	// 车在房间里：从房间自己的导航节点出发。
 	if (startRoom) {
@@ -2465,18 +2550,17 @@ Map::VehicleRoutePlan Map::PlanVehicleRoute(Room* startRoom, float x, float y, R
 		auto outIt = startNode ? vehicleNavGraph.find(startNode->GetId()) : vehicleNavGraph.end();
 		if (outIt == vehicleNavGraph.end() || outIt->second.empty()) return plan; // NO_ROAD_CONNECTION
 
-		if (startNode->GetId() == destNode->GetId()) {
+		if (startNode->GetId() == destNodeId) {
 			plan.status = VehicleRoutePlan::OK; // 已经在目的房间
 			return plan;
 		}
-		vector<Connection*> edges = FindVehiclePath(startNode->GetId(), destNode->GetId());
 		plan.points.push_back({ startNode->GetX(), startNode->GetY(), startNode->GetZ() });
-		if (edges.empty()) {
+		if (!AppendLegPoints(startNode->GetId(), destNodeId, plan.points)) {
 			plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
-			appendEdge(plan.points, outIt->second.front().second); // 只画连出去的第一条边
+			plan.points.resize(1);
+			AppendConnectionPoints(plan.points, outIt->second.front().second); // 只画连出去的第一条边
 			return plan;
 		}
-		for (Connection* edge : edges) appendEdge(plan.points, edge);
 		plan.status = VehicleRoutePlan::OK;
 		return plan;
 	}
@@ -2507,12 +2591,13 @@ Map::VehicleRoutePlan Map::PlanVehicleRoute(Room* startRoom, float x, float y, R
 		LaneSegment segment;
 		vector<Connection*> edges;
 		bool reachable = false;
+		bool direct = false; // 终点是同一段车道上、位于下游的公交站：垂足直接开到站
 		float cost = FLT_MAX;
 	};
 	Pick best, fallback;
 	int tried = 0;
 	for (const RoadCandidate& candidate : nearby) {
-		if (tried >= 4) break;
+		if (tried >= kEntryRoadCandidates) break;
 		float t = ProjectPointOntoRoad(candidate.road, x, y);
 		float tdx, tdy, tdz;
 		candidate.road->GetTangent(t, tdx, tdy, tdz);
@@ -2523,6 +2608,18 @@ Map::VehicleRoutePlan Map::PlanVehicleRoute(Room* startRoom, float x, float y, R
 			if (!GetLaneSegmentAt(candidate.road, x, y, tdx * sign, tdy * sign, segment) || !segment.toAnchor) continue;
 			anySegment = true;
 
+				// 车头朝向已知：车道方向和车头的夹角换算成额外距离（180度 = kHeadingPenaltyMapUnits），
+				// 窄路上掉不了头，8m外夹角小的车道要优先于2m外夹角大的车道。
+				float headingPenalty = 0.f;
+				if (useHeading) {
+					float laneX = tdx * sign, laneY = tdy * sign;
+					float laneLen = sqrtf(laneX * laneX + laneY * laneY), headingLen = sqrtf(headingX * headingX + headingY * headingY);
+					if (laneLen > 1e-6f && headingLen > 1e-6f) {
+						float cosAngle = std::clamp((laneX * headingX + laneY * headingY) / (laneLen * headingLen), -1.f, 1.f);
+						headingPenalty = kHeadingPenaltyMapUnits * acosf(cosAngle) / 3.14159265f;
+					}
+				}
+
 			float toFootX = segment.worldX - x, toFootY = segment.worldY - y;
 			float toAnchorX = segment.toAnchor->GetX() - segment.worldX, toAnchorY = segment.toAnchor->GetY() - segment.worldY;
 			float approach = sqrtf(toFootX * toFootX + toFootY * toFootY) + sqrtf(toAnchorX * toAnchorX + toAnchorY * toAnchorY);
@@ -2530,15 +2627,22 @@ Map::VehicleRoutePlan Map::PlanVehicleRoute(Room* startRoom, float x, float y, R
 			Pick pick;
 			pick.valid = true;
 			pick.segment = segment;
-			if (segment.toAnchor->GetId() == destNode->GetId()) {
+			if (destAux && segment.edge == destAux->sourceEdge && segment.t <= destAux->t) {
+				float toStationX = destAux->node->GetX() - segment.worldX, toStationY = destAux->node->GetY() - segment.worldY;
+				pick.direct = true;
 				pick.reachable = true;
-				pick.cost = approach;
+				pick.cost = sqrtf(toFootX * toFootX + toFootY * toFootY) + sqrtf(toStationX * toStationX + toStationY * toStationY);
+			}
+			else if (segment.toAnchor->GetId() == graphDestId) {
+				pick.reachable = true;
+				pick.cost = approach + (destAux ? destAux->inEdge->CalcDistance() : 0.f);
 			}
 			else {
-				pick.edges = FindVehiclePath(segment.toAnchor->GetId(), destNode->GetId());
+				pick.edges = FindVehiclePath(segment.toAnchor->GetId(), graphDestId);
 				pick.reachable = !pick.edges.empty();
-				pick.cost = approach + pathLength(pick.edges);
+				pick.cost = approach + PathLength(pick.edges) + (destAux ? destAux->inEdge->CalcDistance() : 0.f);
 			}
+				pick.cost += headingPenalty;
 			if (!fallback.valid) fallback = pick;
 			if (pick.reachable && pick.cost < best.cost) best = pick;
 		}
@@ -2550,12 +2654,18 @@ Map::VehicleRoutePlan Map::PlanVehicleRoute(Room* startRoom, float x, float y, R
 
 	plan.points.push_back({ x, y, chosen.segment.worldZ });
 	plan.points.push_back({ chosen.segment.worldX, chosen.segment.worldY, chosen.segment.worldZ });
+	if (best.valid && chosen.direct) {
+		plan.points.push_back({ destAux->node->GetX(), destAux->node->GetY(), destAux->node->GetZ() });
+		plan.status = VehicleRoutePlan::OK;
+		return plan;
+	}
 	plan.points.push_back({ chosen.segment.toAnchor->GetX(), chosen.segment.toAnchor->GetY(), chosen.segment.toAnchor->GetZ() });
 	if (!best.valid) {
 		plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
 		return plan;
 	}
-	for (Connection* edge : chosen.edges) appendEdge(plan.points, edge);
+	for (Connection* edge : chosen.edges) AppendConnectionPoints(plan.points, edge);
+	if (destAux) AppendConnectionPoints(plan.points, destAux->inEdge);
 	plan.status = VehicleRoutePlan::OK;
 	return plan;
 }

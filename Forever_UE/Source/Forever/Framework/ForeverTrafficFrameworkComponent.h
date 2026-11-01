@@ -9,6 +9,9 @@
 class APlayerController;
 class AVehicleElement;
 class ATransitVehicleElement;
+class ABusController;
+class Station;
+class Route;
 class UProceduralMeshComponent;
 class UInstancedStaticMeshComponent;
 class UMaterialInstanceDynamic;
@@ -66,6 +69,33 @@ public:
 
 	// 线路上的公交Actor(按Vehicle::GetName()查)，找不到返回nullptr。
 	ATransitVehicleElement* FindTransitElement(const FString& vehicleName) const;
+
+	// ---- 公交 Controller 驱动（见 Controller/BusController、ForeverTrafficFrameworkComponent.md） ----
+	// 线路公交：远处（地形 busPhysicsLodLevel 级 LOD 范围外）是运动学的 ATransitVehicleElement（Core 时刻表），
+	// 范围内换成物理 AVehicleElement + ABusController 按站序循环；停车场公交由"测试运行"交给 ABusController。
+
+	// 公交 Controller 的进站/出站（物理段由 Controller 判定，运动学段由 Core 时刻表发，同一时刻只有一个发出方）。
+	// stationNodeId 是 Map 辅助导航节点 id（Station 的 stationNode）。
+	void FireStopEvent(Vehicle* vehicle, int32 stationNodeId, bool entering);
+
+	// vehicle_command Change 的执行：测试运行 = 随机选一条公交环线的随机站，先导航过去再开始循环；
+	// 停止运行 = 刹停并保持（线路公交同时退出时刻表，由 Controller 继续持有）。
+	void StartBusTestRun(const FString& vehicleName);
+	void StopBusRun(const FString& vehicleName);
+
+	// 公交（线路公交处于物理段时）的物理 Actor，没有返回 nullptr。
+	AVehicleElement* FindBusPhysicsElement(const FString& vehicleName) const;
+	// 线路公交是否当前是物理段 Actor；搭乘需要。不在物理段时强制切换（不看距离），失败返回 nullptr。
+	AVehicleElement* EnsureBusPhysicsElement(const FString& vehicleName);
+	// 这辆车是不是线路公交（有物理类、能做远近切换）。
+	bool IsSwitchableRouteBus(const FString& vehicleName) const;
+
+	// 线路公交在这个地形 LOD 级别内用物理（默认 4：LOD4 范围外 Chaos 地形碰撞太粗糙，物理不可靠）。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Bus")
+	int32 busPhysicsLodLevel = 4;
+	// 进入物理的范围系数（<1，滞回：进入用缩小的范围，离开用完整范围，避免边界抖动）。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Bus")
+	float busPhysicsEnterScale = 0.9f;
 
 	// 这辆车当前在场景里的Actor(停着/私家车；公交车没有交互选项，不在这张表里)，找不到返回nullptr。
 	AVehicleElement* FindVehicleElement(const FString& vehicleName) const;
@@ -126,6 +156,36 @@ public:
 	int32 maxVehicleSpawnsPerFrame = 1;
 
 private:
+	// 公交运行状态：线路公交（bRouteBus）和跑过"测试运行"的停车场公交共用。element/controller 是弱引用，
+	// Actor 的生命周期归世界。
+	struct FBusState {
+		Vehicle* vehicle = nullptr;
+		FString name;
+		bool bRouteBus = false;                 // 有 Core 时刻表的线路公交
+		bool bDetached = false;                 // 线路公交已退出时刻表（停止运行/测试运行过），由 Controller 持有
+		bool bNoPhysics = false;                // 没有物理类/没有站序，永远运动学
+		UClass* physicsClass = nullptr;         // AVehicleElement 蓝图子类，线路公交的物理表示
+		TWeakObjectPtr<ATransitVehicleElement> kinematic;
+		TWeakObjectPtr<AVehicleElement> element;
+		TWeakObjectPtr<ABusController> controller;
+	};
+	TMap<FString, FBusState> busStates;
+	TMap<int32, Station*> stationByNodeId; // 辅助导航节点 id -> 车站，FireStopEvent 用
+
+	void UpdateBusPhysicsHandoff();
+	bool BusToPhysics(FBusState& state);
+	void BusToKinematic(FBusState& state);
+	ABusController* SpawnBusController(AVehicleElement* element);
+	ABusController* GetOrCreateBusController(FBusState& state);
+	FBusState* FindOrAddBusState(const FString& vehicleName);
+	// 停车场公交/已脱离时刻表的公交是否正被 Controller 持续驱动（流式销毁时不能销毁）。
+	bool IsDrivenByController(const AVehicleElement* element) const;
+	// 收集所有公交环线：(route,line) 及其站序节点 id。
+	void CollectBusLoops(TArray<TArray<int32>>& outLoops) const;
+
+	Map* mapRef = nullptr;
+	Traffic* trafficRef = nullptr;
+
 	// 玩家进出载具(驾驶或搭乘)时给这辆车自己的script发enter_vehicle/leave_vehicle事件。
 	void FireVehicleEvent(Vehicle* vehicle, bool entering, const char* mode);
 

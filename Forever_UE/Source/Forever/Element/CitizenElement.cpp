@@ -8,10 +8,7 @@
 #include "Engine/GameInstance.h"
 #include "UI/MeetOptionWidget.h"
 
-#include "AIController.h"
-#include "AITypes.h"
-#include "NavigationData.h"
-#include "Navigation/PathFollowingComponent.h"
+#include "Controller/CitizenController.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Components/CapsuleComponent.h"
@@ -88,31 +85,18 @@ ACitizenElement::ACitizenElement() {
 	// MOVE_Walking，见PossessedBy/WalkTo。
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
 
-	// 关键：这个项目没有AIController，WalkTo带着走路期间这个citizen的Pawn::Controller
-	// 必然是nullptr(按定义——正被玩家占有的citizen不会触发调度自己上下班，见RequestWalk
-	// 的possessed跳过分支)。UCharacterMovementComponent::TickComponent默认只有
-	// Controller非空时才会调用PerformMovement()把AddMovementInput积累的输入转成真正的
-	// Velocity——Controller为空时PerformMovement()整个不会跑，AddMovementInput因此是纯
-	// 空操作：MovementMode显示MOVE_Walking、每帧都在调用AddMovementInput，但
-	// GetVelocity()/GetActorLocation()纹丝不动。必须显式打开这个开关，让PerformMovement()
-	// 在没有Controller时也照常跑。
+	// 走路期间Pawn::Controller是自己的ACitizenController（非空），按引擎默认就会跑PerformMovement；
+	// 这个开关保留是因为玩家占有/Controller被摘走的短暂空窗期里，已有的物理移动不应被卡住。
 	GetCharacterMovement()->bRunPhysicsWithNoController = true;
 }
 
 void ACitizenElement::PossessedBy(AController* NewController) {
-	// 导航测试期间玩家接管：先把测试收尾（速度还原等），再走正常占有流程。
-	if (bTestNavigating && NewController != testNavController) {
-		EndTestNavigation(false);
-	}
-
 	Super::PossessedBy(NewController); // AForeverCharacter::PossessedBy：增删Input Mapping Context
-	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 
-	// AIController占有(导航测试)：只需要能走+Tick，不碰玩家专用的东西(proximityBox照常保留)。
-	if (!Cast<APlayerController>(NewController)) {
-		SetActorTickEnabled(true);
-		return;
-	}
+	// 自己的AIController占有：保持MOVE_None和关Tick，Controller开始执行指令时才切换（见CitizenController）。
+	if (!Cast<APlayerController>(NewController)) return;
+
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 
 	// 构造函数里默认关掉了Tick(见上，绝大多数citizen静止不需要每帧开销)，但被玩家占有
 	// 之后，AForeverCharacter::Tick()要靠每帧跑才能做瞄准摄像机的平滑插值(cameraBoom
@@ -128,136 +112,66 @@ void ACitizenElement::PossessedBy(AController* NewController) {
 }
 
 void ACitizenElement::UnPossessed() {
+	// 先判断是谁在放手：玩家放手 → 恢复静止状态并让自己的AI Controller重新接管；
+	// 自己的AIController被玩家顶掉 → 只是换手，PossessedBy(玩家)马上会把状态设好。
+	const bool bPlayerLetGo = Cast<APlayerController>(GetController()) != nullptr;
+
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
 	if (proximityBox) proximityBox->SetCollisionProfileName(TEXT("Trigger")); // 恢复Trigger预设(QueryOnly+各通道Overlap)
-
-	// 玩家换到别的角色后，恢复"静止citizen默认不跑Tick"的省性能状态——但如果这个citizen
-	// 正好还在WalkTo()带的路径中间(pendingWaypoints非空)，不能关，Tick()自己走完路径后
-	// 会在Tick()内部自行SetActorTickEnabled(false)，这里关了反而会打断走路逻辑。
-	if (pendingWaypoints.Num() == 0) {
-		SetActorTickEnabled(false);
-	}
+	SetActorTickEnabled(false); // 玩家放手后恢复"静止citizen默认不跑Tick"的省性能状态
 
 	Super::UnPossessed(); // AForeverCharacter::UnPossessed：增删Input Mapping Context
+
+	if (bPlayerLetGo) RepossessAIController();
 }
 
-namespace {
-	// 到达路径点的判定阈值(UE单位)——只判水平距离，Z由CharacterMovement自己的地面
-	// 检测/重力处理，不需要精确匹配路径点的高度。
-	constexpr float kWaypointArrivalThresholdUU = 80.f;
+void ACitizenElement::RepossessAIController() {
+	if (!aiController) return;
+	// 不能在UnPossessed调用栈里直接Possess：此时APawn::Controller还没清空，下一帧再接管。
+	TWeakObjectPtr<ACitizenElement> weakThis(this);
+	if (UWorld* world = GetWorld()) {
+		world->GetTimerManager().SetTimerForNextTick([weakThis]() {
+			ACitizenElement* self = weakThis.Get();
+			if (!self || !self->aiController || self->GetController()) return;
+			self->aiController->Possess(self);
+		});
+	}
 }
 
 void ACitizenElement::WalkTo(const TArray<FVector>& waypoints, Room* destination) {
-	if (waypoints.Num() == 0) return;
-	pendingWaypoints = waypoints;
-	waypointIndex = 0;
-	walkDestination = destination;
-	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	SetActorTickEnabled(true);
+	if (waypoints.Num() == 0 || !aiController) return;
+	aiController->PushCommand(FCharacterCommand::MakeFollowPath(waypoints, destination));
+}
+
+Room* ACitizenElement::GetWalkDestination() const {
+	return aiController ? aiController->GetCurrentDestination() : nullptr;
 }
 
 void ACitizenElement::StartTestNavigation(const TArray<FVector>& path, Room* destination) {
-	if (path.Num() < 2 || !citizen) return;
-	CancelTestNavigation();
+	if (path.Num() < 2 || !citizen || !aiController) return;
+	aiController->ClearCommands();
 
-	UWorld* world = GetWorld();
-	if (!world) return;
-
-	bTestNavigating = true;
-	testNavDestination = destination;
-	SetDespawnExempt(true);
-
-	UCharacterMovementComponent* movement = GetCharacterMovement();
-	testNavSavedMaxWalkSpeed = movement->MaxWalkSpeed;
-	movement->MaxWalkSpeed = testNavSavedMaxWalkSpeed * 2.f; // 测试时走路速度翻倍
-	movement->SetMovementMode(MOVE_Walking);
-	SetActorTickEnabled(true);
-
-	FActorSpawnParameters params;
-	params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	testNavController = world->SpawnActor<AAIController>(AAIController::StaticClass(), GetActorLocation(), FRotator::ZeroRotator, params);
-	if (testNavController) testNavController->Possess(this);
-
-	// AIController只负责占有/当“操控者”（让Pawn有Controller，调度逻辑会据此跳过它）；移动本身
-	// 沿用WalkTo那套逐点AddMovementInput，只判水平距离。一开始用UPathFollowingComponent带着走，
-	// 实测人物原地打转：它的到达判定包含竖直方向，行人图节点的Z和胶囊体脚底对不上，永远判不到达，
-	// 角色冲过路径点又调头回来。
+	// path[0]是当前位置，不需要走。
 	TArray<FVector> waypoints;
 	for (int32 i = 1; i < path.Num(); i++) waypoints.Add(path[i]);
-	pendingWaypoints = waypoints;
-	waypointIndex = 0;
-	walkDestination = destination;
+
+	FCharacterCommand command = FCharacterCommand::MakeFollowPath(waypoints, destination);
+	command.speedScale = 2.f;       // 测试时走路速度翻倍
+	command.bExemptDespawn = true;  // 走远也别被流式销毁
+	command.bTestNavigation = true; // 结束/被打断时清调试线
+	aiController->PushCommand(command);
 }
 
 void ACitizenElement::CancelTestNavigation() {
-	if (bTestNavigating) EndTestNavigation(false);
-}
-
-void ACitizenElement::EndTestNavigation(bool arrived) {
-	bTestNavigating = false;
-	pendingWaypoints.Reset();
-	waypointIndex = 0;
-	walkDestination = nullptr;
-	SetDespawnExempt(false);
-
-	if (testNavSavedMaxWalkSpeed > 0.f) {
-		GetCharacterMovement()->MaxWalkSpeed = testNavSavedMaxWalkSpeed;
-		testNavSavedMaxWalkSpeed = 0.f;
-	}
-
-	AAIController* controller = testNavController;
-	testNavController = nullptr;
-	if (controller) {
-		if (GetController() == controller) controller->UnPossess(); // UnPossessed()会切回MOVE_None并按需关Tick
-		controller->Destroy();
-	}
-
-	Room* room = testNavDestination;
-	testNavDestination = nullptr;
-	if (framework.IsValid() && citizen) {
-		framework->FinishTestNavigation(citizen, arrived ? room : nullptr);
-	}
+	if (aiController) aiController->ClearCommands();
 }
 
 void ACitizenElement::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime); // AForeverCharacter::Tick：瞄准摄像机插值，被玩家占有期间必须持续跑
 
-	if (waypointIndex >= pendingWaypoints.Num()) {
-		// 被玩家占有期间不能自己把Tick关掉——PossessedBy打开Tick是为了让上面Super::Tick()的
-		// 瞄准插值每帧都能跑，但player-driven的移动不会经过WalkTo()/pendingWaypoints，所以
-		// 一旦没有待走的路径点就会立刻满足这个条件，如果不加IsPlayerControlled()这个例外，
-		// 会在被占有后的下一帧就把刚打开的Tick又关掉(实测踩过的坑，见ForeverWeaponComponent.md
-		// "瞄准"一节)。UnPossessed里会在还给AI之前把Tick关掉，不需要这里补。
-		if (!IsPlayerControlled()) {
-			SetActorTickEnabled(false);
-		}
-		return;
-	}
-
-	FVector target = pendingWaypoints[waypointIndex];
-	FVector location = GetActorLocation();
-	FVector toTarget = target - location;
-	toTarget.Z = 0.f;
-
-	if (toTarget.SizeSquared() <= kWaypointArrivalThresholdUU * kWaypointArrivalThresholdUU) {
-		waypointIndex++;
-		if (waypointIndex >= pendingWaypoints.Num()) {
-			GetCharacterMovement()->SetMovementMode(MOVE_None);
-			if (!IsPlayerControlled()) {
-				SetActorTickEnabled(false);
-			}
-			Room* arrived = walkDestination;
-			walkDestination = nullptr;
-			pendingWaypoints.Reset();
-			if (framework.IsValid() && citizen) {
-				framework->NotifyArrived(citizen, arrived);
-			}
-			if (bTestNavigating) EndTestNavigation(true); // 导航测试的手动走路兜底分支走完
-		}
-		return;
-	}
-
-	AddMovementInput(toTarget.GetSafeNormal(), 1.f);
+	// 走路已经搬到ACitizenController里；这个Actor的Tick只有被玩家占有时才需要（瞄准插值），
+	// 其余时候立刻关掉。
+	if (!IsPlayerControlled()) SetActorTickEnabled(false);
 }
 
 void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponent* inFramework) {
@@ -302,9 +216,24 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 	}
 
 	BuildProximityBox();
+
+	// 自己的AI Controller：只在市民被spawn期间存在，EndPlay里销毁。
+	if (UWorld* world = GetWorld(); world && !aiController) {
+		FActorSpawnParameters params;
+		params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		aiController = world->SpawnActor<ACitizenController>(ACitizenController::StaticClass(), GetActorLocation(), FRotator::ZeroRotator, params);
+		if (aiController) aiController->Possess(this);
+	}
 }
 
 void ACitizenElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
+	// Controller随Actor一起销毁，正在执行的指令/路径一并消失（ClearCommands里测试导航会收尾）。
+	if (aiController) {
+		aiController->ClearCommands();
+		if (GetController() == aiController) aiController->UnPossess();
+		aiController->Destroy();
+		aiController = nullptr;
+	}
 	citizen = nullptr;
 	Super::EndPlay(EndPlayReason);
 }
@@ -336,9 +265,7 @@ void ACitizenElement::TeleportToRoom(Room* destination) {
 	if (!ComputeRoomLandingSpot(destination, worldX, worldY, worldZ)) return;
 
 	// 瞬移会打断正在走的路(否则走完会回调NotifyArrived把currentRoom改回原来的目标)。
-	pendingWaypoints.Reset();
-	waypointIndex = 0;
-	walkDestination = nullptr;
+	if (aiController) aiController->ClearCommands();
 
 	SetActorLocation(FVector(worldX, worldY, worldZ));
 	citizen->SetCurrentRoom(destination);

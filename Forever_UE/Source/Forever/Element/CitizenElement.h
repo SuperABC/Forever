@@ -5,7 +5,7 @@
 
 #include "CitizenElement.generated.h"
 
-class AAIController;
+class ACitizenController;
 class UBoxComponent;
 class UPrimitiveComponent;
 class Citizen;
@@ -51,20 +51,19 @@ public:
 
 	// 沿一串世界坐标路径点真正走过去（Job按调度产出NPCNavigateChange时，
 	// UForeverPopulaceFrameworkComponent::RequestWalk发现这个citizen当前有对应Actor就调
-	// 这个方法）：打开Tick+切MOVE_Walking，每帧朝下一个路径点AddMovementInput，到达即
-	// 前进到下一个，全部走完切回MOVE_None+关Tick+回调
-	// framework->NotifyArrived(citizen, destination)更新Citizen::SetCurrentRoom。不用
-	// AIController/NavMesh——路径点已经由Map::FindPedestrianPath算好，这里只是沿现成
-	// 路径点插值前进。
+	// 这个方法）：往自己的ACitizenController推一条FollowPath指令，走路本身（AddMovementInput、
+	// 到达判定、切MOVE_Walking/MOVE_None、走完回调framework->NotifyArrived）全在Controller里，
+	// 见Controller/CitizenController.h。
 	void WalkTo(const TArray<FVector>& waypoints, Room* destination);
 
-	// 导航测试（UForeverPopulaceFrameworkComponent::StartTestNavigation）：生成一个AAIController
-	// 占有自己，占有自己当操控者，沿path（世界坐标，第一个点是当前位置）逐点AddMovementInput
-	// 只判水平距离走过去（不用UPathFollowingComponent：它的到达判定含竖直方向，导致原地打转）；走路速度翻倍。
-	// 走完/被打断时还原速度、销毁AIController，走到终点则回调framework->FinishTestNavigation。
+	// 导航测试（UForeverPopulaceFrameworkComponent::StartTestNavigation）：path（世界坐标，第一个点是
+	// 当前位置）作为一条speedScale=2、免销毁、带调试线回调的FollowPath指令推给Controller。
 	void StartTestNavigation(const TArray<FVector>& path, Room* destination);
 	void CancelTestNavigation();
-	bool IsTestNavigating() const { return bTestNavigating; }
+
+	// 自己的AI Controller（Init里创建，随Actor销毁）。玩家占有期间它不是GetController()，但对象仍在。
+	ACitizenController* GetCitizenController() const { return aiController; }
+	UForeverPopulaceFrameworkComponent* GetFramework() const { return framework.Get(); }
 
 	// 直接把这个已经生成的Actor瞬移到destination房间（房间中心+和Init()同一套随机抖动/
 	// 落地高度计算），并同步更新Citizen::SetCurrentRoom+SetPosition——
@@ -95,7 +94,7 @@ public:
 	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
 	void RefreshOptions();
 	// 正在WalkTo的目标房间，没在走路时为nullptr。存档时用来把走路中的市民记成"已经到了"。
-	Room* GetWalkDestination() const { return walkDestination; }
+	Room* GetWalkDestination() const;
 
 protected:
 	virtual void Tick(float DeltaTime) override;
@@ -103,15 +102,11 @@ protected:
 private:
 	void BuildProximityBox();
 
-	// 收尾：还原速度/免销毁标记，解除并销毁AIController；arrived为true时通知framework到达。
-	void EndTestNavigation(bool arrived);
-
-	bool bTestNavigating = false;
-	Room* testNavDestination = nullptr;
-	float testNavSavedMaxWalkSpeed = 0.f;
+	// 玩家放手后（UnPossessed）下一帧让自己的ACitizenController重新Possess。
+	void RepossessAIController();
 
 	UPROPERTY()
-	TObjectPtr<AAIController> testNavController;
+	TObjectPtr<ACitizenController> aiController;
 
 	// Init()"换房间后从未在场景里实例化过"分支、TeleportToRoom()共用的落地位置计算：
 	// 房间中心+随机抖动+楼层高度换算成落脚点世界坐标，见Init()原本的注释。room为空
@@ -142,12 +137,4 @@ private:
 	// 每个市民Scheduler Script的广播），OnOverlapBegin靠这份快照喂给MeetOption UI，
 	// 不需要在Overlap回调里解引用citizen。
 	TArray<FString> cachedOptions;
-
-	// WalkTo正在走的路径点队列+当前索引，Tick()里消费；走完清空。
-	TArray<FVector> pendingWaypoints;
-	int32 waypointIndex = 0;
-
-	// WalkTo的目标room，全部路径点走完后回调framework->NotifyArrived(citizen, destination)
-	// 时用——不持有生命周期。
-	Room* walkDestination = nullptr;
 };

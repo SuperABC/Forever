@@ -59,6 +59,11 @@ public:
 
 	bool IsTerrainGenerated() const { return map != nullptr; }
 
+	// worldPos(UE世界坐标)是否在第level级LOD(0最细)当前覆盖的正方形内。scale<1把范围按中心缩小（做进入/离开
+	// 的滞回用）。LOD还没建好/level越界返回false。物理不可靠的远处判断用，见ForeverTrafficFrameworkComponent
+	// 的公交远近切换。
+	bool IsInsideLodLevel(const FVector& worldPos, int32 level, float scale = 1.f) const;
+
 private:
 	// edgeFlags: bit0=左边与父级重合, bit1=右边, bit2=下边, bit3=上边
 	void BuildLevel(int levelIdx, std::pair<int, int> pos, float size, int childPos,

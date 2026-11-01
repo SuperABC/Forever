@@ -183,3 +183,9 @@ BuildCollisionBox()`同一套写法：`"Trigger"`碰撞profile，`OnComponentBeg
 - `AForeverCharacter::PossessedBy` 对非玩家控制器直接返回（不发初始装备/武器可视化）。
 - 车辆导航测试同时提速：`testNavSpeed` 1200、`testNavTurnRate` 180。
 - 未在 PIE 验证。
+
+## Controller 化（2026-11-01）
+- 走路不再由 `ACitizenElement::Tick` 驱动：`WalkTo()` 变成往 `ACitizenController` 推一条 `FollowPath` 指令，逐点移动/到达/`NotifyArrived` 都在 Controller 里（见 `Controller/CitizenController.md`）。`pendingWaypoints/waypointIndex/walkDestination`、`bTestNavigating/testNavController` 已删除；`GetWalkDestination()`（存档用）转问 Controller 当前指令。
+- Controller 在 `Init` 末尾创建并 Possess，`EndPlay` 销毁；玩家 Possess 时让出，`UnPossessed` 后重新 Possess。`PossessedBy` 对非玩家 Controller 直接返回。`TeleportToRoom` 先 `ClearCommands`。
+- "玩家占有"判断全部改成 `IsPlayerControlled()`（Populace 的调度/流式销毁等）。
+- 未在 PIE 验证。

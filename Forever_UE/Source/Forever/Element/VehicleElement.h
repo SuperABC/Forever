@@ -60,6 +60,33 @@ public:
 	virtual void UnPossessed() override;
 
 	Vehicle* GetVehicle() const { return vehicle; }
+	USkeletalMeshComponent* GetCarMesh() const { return carMesh; }
+	UChaosWheeledVehicleMovementComponent* GetVehicleMovement() const { return vehicleMovement; }
+
+	// 油门/刹车/转向/手刹的统一入口：玩家WASD(Move/StopMove/Handbrake)和AI Controller
+	// (AVehicleCommandController)走同一条路，AI开车和手动开车的输入语义完全一致。
+	void SetDriveInput(float throttle, float brake, float steer);
+	void SetHandbrake(bool bOn);
+
+	// 搭乘模式(公交：玩家当乘客)：Possess之前设置。PossessedBy只加视角Context(WASD无效)，常驻显示
+	// 这辆车的选项(停站时的"下车")；Move/手刹/Q键全部忽略；换手时不刹车(AI Controller继续按弱引用开)。
+	void SetRideMode(bool bRide) { bRideMode = bRide; }
+	bool IsRideMode() const { return bRideMode; }
+
+	// 运动学/物理切换(见Controller/VehicleCommandController)：运动学时关掉物理模拟，位姿由Controller
+	// 直接写；切回物理时重新开启并恢复轮子刚体状态，velocity是世界坐标线速度(UE单位/秒)。
+	void SetKinematicMode(bool bKinematic);
+	bool IsKinematicMode() const { return bKinematicMode; }
+	void ResumePhysics(const FVector& velocity);
+	// 当前沿车头方向的速度(UE单位/秒)，运动学模式下返回0。
+	float GetForwardSpeed() const;
+	// 前后轮轴距(UE单位)，取不到轮子骨骼时返回0。
+	float ComputeWheelbase() const;
+	// 前轴中心的世界位置（前轮骨骼平均），取不到时用车头方向偏半个轴距。AI转向要用它判断离导航线多远。
+	FVector GetFrontAxleLocation() const;
+	// 前轮最大转向角(度)，取不到时返回0。
+	float GetMaxSteerAngleDegrees() const;
+
 	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
 	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
 	void RefreshOptions();
@@ -84,6 +111,14 @@ public:
 	// 车头转向速度(度/秒)。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TestNavigation")
 	float testNavTurnRate = 180.f;
+
+	// 重心偏移(车身本地坐标，UE单位)。公交这类车型默认再叠加busCenterOfMassDropZ的下移，
+	// 降低重心防侧翻；两者都为0则保持骨骼网格物理资产自带的重心。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mass")
+	FVector busCenterOfMassOffset = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mass")
+	float busCenterOfMassDropZ = 60.f;
 
 protected:
 	virtual void Tick(float DeltaTime) override;
@@ -113,6 +148,11 @@ protected:
 	// 不像油门/转向有个连续的模拟量。
 	void Handbrake(const FInputActionValue& value);
 	void StopHandbrake(const FInputActionValue& value);
+
+	// 搭乘模式下选项列表的上下/确认(键位同市民对话选项)，照抄ATransitVehicleElement。
+	void MeetOptionFocusUp();
+	void MeetOptionFocusDown();
+	void MeetOptionSelect();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USkeletalMeshComponent> carMesh;
@@ -147,6 +187,12 @@ private:
 	// 弹出的"上车"选项和市民对话选项走同一个MeetOption UI/F键。
 	void BuildProximityBox();
 
+	// 搭乘期间常驻显示/撤掉选项(先RemoveName再AddOption，不重复)。
+	void ShowOptions();
+	void HideOptions();
+	// 重新打开物理后把轮子骨骼的刚体再关回去(SetSimulatePhysics(true)会把它们重新打开)。
+	void DisableWheelBodies();
+
 	UFUNCTION()
 	void OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
@@ -173,6 +219,8 @@ private:
 
 	Vehicle* vehicle = nullptr;
 	TWeakObjectPtr<APawn> previousPawn;
+	bool bRideMode = false;
+	bool bKinematicMode = false;
 
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> proximityBox;

@@ -481,6 +481,16 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* vehicleCommand = dynamic_cast<const VehicleCommandChange*>(change)) {
+		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(vehicleCommand->GetVehicle(), context)).data());
+		const std::string& command = vehicleCommand->GetCommand();
+		if (!trafficFramework) return;
+		if (command == "test_run") trafficFramework->StartBusTestRun(vehicleName);
+		else if (command == "stop") trafficFramework->StopBusRun(vehicleName);
+		else UE_LOG(LogTemp, Warning, TEXT("vehicle_command: unknown command %s"), UTF8_TO_TCHAR(command.c_str()));
+		return;
+	}
+
 	if (auto* testNavigateCitizen = dynamic_cast<const TestNavigateCitizenChange*>(change)) {
 		if (!kTestNavigationEnabled) {
 			UE_LOG(LogTemp, Warning, TEXT("test_navigate_citizen is disabled, change skipped"));
@@ -1159,7 +1169,7 @@ void AForeverFrameworkActor::RestoreControlledPawn(const FForeverPendingLoad& lo
 	if (!vehicleName.IsEmpty() && trafficFramework) {
 		// 读档恢复不发enter_vehicle事件(script变量/选项已随存档恢复)。线路公交(搭乘)的位置由Core
 		// 的Route算，不能用存档里的位姿覆盖。
-		if (trafficFramework->FindTransitElement(vehicleName)) {
+		if (trafficFramework->FindTransitElement(vehicleName) || trafficFramework->IsSwitchableRouteBus(vehicleName)) {
 			trafficFramework->ApplyBoardVehicle(vehicleName, playerController, /*bSilent=*/true);
 		}
 		else {

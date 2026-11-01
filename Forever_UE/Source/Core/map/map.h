@@ -343,6 +343,34 @@ public:
 	};
 	VehicleRoutePlan PlanVehicleRoute(Room* startRoom, float x, float y, Room* destRoom) const;
 
+	// 公交站的辅助导航节点：站点的stationNode不在vehicleNavGraph里（Station自己拥有这三样对象，
+	// 导航图又参与存档读写和析构释放，不能直接塞进去），这里单独登记（运行时、不存档、不拥有）：
+	// 站作为终点 = 路径到laneFrom再走inEdge；作为起点 = 先走outEdge再从laneTo出发；两个站在同一段
+	// 车道上且起点在上游 = 两个stationNode直线弦（见Core/traffic/route.md"同车道特例"）。
+	// Station::EnsureRoadLink创建旁路后调用Register，~Station调用Unregister。
+	struct AuxNavNode {
+		Node* node = nullptr;        // stationNode
+		Node* laneFrom = nullptr;
+		Connection* inEdge = nullptr;  // laneFrom -> node
+		Node* laneTo = nullptr;
+		Connection* outEdge = nullptr; // node -> laneTo
+		Connection* sourceEdge = nullptr;
+		float t = 0.f;
+	};
+	void RegisterAuxNavNode(const AuxNavNode& aux);
+	void UnregisterAuxNavNode(int nodeId);
+	const AuxNavNode* FindAuxNavNode(int nodeId) const;
+
+	// 和PlanVehicleRoute相同，但终点是vehicleNavGraph节点id或已登记的辅助节点（公交站）id，不要求是房间。
+	// useHeading为true时，室外起点接入车道会把车道方向与车头(headingX,headingY)的夹角折算成额外距离（180度=15m）再比较，（车头朝向已知时避免
+	// 选到反向车道）。destNodeId既不在图里也不是辅助节点 -> NO_PATH_TO_DESTINATION，points为空。
+	VehicleRoutePlan PlanVehicleRouteToNode(Room* startRoom, float x, float y, int destNodeId,
+		bool useHeading = false, float headingX = 0.f, float headingY = 0.f) const;
+
+	// 节点到节点（任意一端可以是辅助节点）。OK时points是完整折线（含起点终点），from==to时只有一个点；
+	// 连不通 -> NO_PATH_TO_DESTINATION，points为空。公交循环里站到站用。
+	VehicleRoutePlan PlanVehicleLeg(int fromNodeId, int toNodeId) const;
+
 	// 市民导航测试用：从任意起点规划一条到destRoom的行人折线（地图单位）。startRoom非空且有
 	// 行人导航节点 -> 从该房间节点出发；否则从(x,y)最近的几个行人图节点里挑第一个能走到
 	// 目的地的。points是各导航节点坐标（含起点节点和目的房间节点），起点==终点时只有一个点。
@@ -442,6 +470,13 @@ private:
 	// 邻接记录共同引用，析构时用set去重删除一次。
 	std::unordered_map<int, std::vector<std::pair<int, Connection*>>> vehicleNavGraph;
 	std::unordered_map<int, std::vector<std::pair<int, Connection*>>> pedestrianNavGraph;
+
+	// 公交站辅助导航节点（见AuxNavNode），key是stationNode的id。运行时登记，不存档。
+	std::unordered_map<int, AuxNavNode> auxNavNodes;
+
+	// from/to任意一端可以是辅助节点；把from到to的折线追加进points（起点在points为空时一起加入）。
+	// 连不通返回false（points保持原样）。
+	bool AppendLegPoints(int fromId, int toId, std::vector<NavPoint>& points) const;
 
 	// InitRoadnet/AddRoadAccessNode过程中创建的所有锚点Node(路口锚点+车道分裂新增的访问点)，
 	// 析构时统一释放；导航图本身的Connection*从vehicleNavGraph/pedestrianNavGraph遍历去重释放。

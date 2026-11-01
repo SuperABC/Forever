@@ -1159,6 +1159,35 @@ private:
 
 };
 
+// 给载具的Controller发运行指令（UE-only效果，见UForeverTrafficFrameworkComponent::StartBusTestRun/StopBusRun）：
+//   command == "test_run"：随机选一条公交环线的随机站，先导航过去再开始循环；
+//   command == "stop"：刹停并保持，线路公交同时退出时刻表。
+class VehicleCommandChange : public Change {
+public:
+	VehicleCommandChange();
+
+	/*
+	* @vehicle: 载具名称
+	* @command: "test_run" 或 "stop"
+	*/
+	VehicleCommandChange(std::string vehicle, std::string command);
+
+	virtual ~VehicleCommandChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetVehicle(std::string vehicle);
+	const std::string& GetVehicle() const;
+
+	void SetCommand(std::string command);
+	const std::string& GetCommand() const;
+
+private:
+	std::string vehicle;
+	std::string command;
+
+};
+
 // 市民导航测试：让指定市民由AIController带着沿行人导航图走到测试目的地（机场一楼房间）。
 // UE-only效果，见UForeverPopulaceFrameworkComponent::StartTestNavigation。
 class TestNavigateCitizenChange : public Change {

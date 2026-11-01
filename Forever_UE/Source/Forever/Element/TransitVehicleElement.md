@@ -66,3 +66,6 @@
 - 路线车的运动仍由Core驱动(运动学)，之后改成AI Controller物理驾驶时事件/Change/script/触发盒可复用。
 
 - **可搭乘的静态网格(火车SciFiTram)**(2026-10-30)：`Init`里`transitMeshPath`加载出静态网格且`vehicle->IsBoardable()`时，模型放在子组件`staticBody`上(缩放只作用在它自己身上)，`bodyMesh`置空，再用网格包围盒调`BuildBoardingComponents`建触发盒/相机，和骨骼网格那条路一致；不可搭乘的静态网格(飞机)仍直接放在`bodyMesh`上。
+
+## 公交近处换成物理公交（2026-11-01）
+- 线路公交（蓝图是 `AVehicleElement` 子类时）在玩家附近（地形 `busPhysicsLodLevel` 级 LOD 范围内）换成物理 `AVehicleElement` + `ABusController`，玩家搭乘的是那辆物理公交（`SetRideMode`）；这个运动学 Actor 用 `SetSuspended(true)` 挂起（隐藏、关 Tick、关触发盒、撤选项），出范围再 `SetSuspended(false)`。火车/飞机仍沿用这里的搭乘逻辑。

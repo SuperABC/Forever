@@ -66,13 +66,17 @@ public:
 	// 逻辑位置，等进入流式范围时在那里生成。被玩家占有的市民不动，和RequestWalk一样。
 	void TeleportCitizen(Citizen* citizen, Room* destination);
 
-	// ACitizenElement::WalkTo全部路径点走完后的回调：更新Citizen::SetCurrentRoom。
+	// ACitizenController的FollowPath指令走完后的回调：更新Citizen::SetCurrentRoom。
 	void NotifyArrived(Citizen* citizen, Room* destination);
+
+	// ACitizenController的GoToRoom指令用：规划from（世界坐标）到destination房间的行人路径点（世界坐标）。
+	// 起点按citizen当前房间/from位置（Map::PlanPedestrianRoute），成功且路径非空返回true。
+	bool PlanWalkPath(Citizen* citizen, Room* destination, const FVector& from, TArray<FVector>& outWaypoints) const;
 
 	// 市民导航测试（script的test_navigate_citizen Change）：让这个市民由AIController带着沿行人
 	// 导航图走到机场一楼房间。起点：市民有当前房间就从房间导航节点出发，否则从最近的行人图节点出发
 	// （Map::PlanPedestrianRoute）；画折线调试线（复用交通组件的那条线），再交给
-	// ACitizenElement::StartTestNavigation。走路速度和车辆一样在测试期间翻倍。接不上图/连不到
+	// ACitizenElement::StartTestNavigation（往ACitizenController推指令）。走路速度和车辆一样在测试期间翻倍。接不上图/连不到
 	// 目的地时屏幕左上角+日志提示。
 	void StartTestNavigation(const FString& citizenName);
 
