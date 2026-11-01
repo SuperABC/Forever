@@ -8,6 +8,8 @@
 
 #include "VehicleWheelAnimInstance.generated.h"
 
+class APlaneElement;
+
 // 每个轮子缓存的姿态数据——PreUpdate()(游戏线程)写，Evaluate()(可能在工作线程)读，
 // 之间不做任何跨线程加锁，因为FAnimInstanceProxy本身保证PreUpdate和Evaluate不会同时跑。
 struct FVehicleWheelPose
@@ -42,7 +44,15 @@ struct FOREVER_API FVehicleWheelAnimInstanceProxy : public FAnimInstanceProxy
 	virtual void PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds) override;
 	virtual bool Evaluate(FPoseContext& Output) override;
 
+	// 飞机螺旋桨：owner是APlaneElement时设置，PreUpdate读它的旋转角/骨骼名/轴，Evaluate叠加到骨骼上。
+	void SetPropellerOwner(const APlaneElement* InPlane); // 实现在cpp：header里APlaneElement只前向声明，TWeakObjectPtr赋值需要完整类型
+
 private:
+	TWeakObjectPtr<const APlaneElement> PropellerOwner;
+	FBoneReference PropellerBone;
+	float PropellerAngle = 0.f;
+	FVector PropellerAxis = FVector(1.f, 0.f, 0.f);
+
 	TWeakObjectPtr<const UChaosWheeledVehicleMovementComponent> WheeledVehicleComponent;
 	TArray<FVehicleWheelPose> WheelPoses;
 	bool bBoneReferencesInitialized = false;

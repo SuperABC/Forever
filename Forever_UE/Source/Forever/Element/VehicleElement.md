@@ -197,6 +197,9 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 `carMesh->SetAnimInstanceClass(UVehicleWheelAnimInstance::StaticClass())`和骨骼网格/
 物理设置一样必须在构造函数里设。
 
+
+- **飞机螺旋桨(2026-11-01)**：同一个`UVehicleWheelAnimInstance`顺带驱动飞机的`Propeller`骨骼。`NativeInitializeAnimation`里若owner能`Cast<APlaneElement>`就`SetPropellerOwner`；代理`PreUpdate`读`propellerAngle`、`GetPropellerBoneName()`、`GetPropellerAxis()`，`Evaluate`在车轮之后对该骨骼后乘一个绕骨骼局部轴转`propellerAngle`度的四元数。`SetPropellerOwner`的实现在cpp(header里`APlaneElement`只前向声明，`TWeakObjectPtr`赋值要完整类型)。轿车/公交不是`APlaneElement`，不受影响。
+
 ## 车辆调参：`EngineSetup`/`DifferentialSetup`/`TransmissionSetup`/`SteeringSetup`
 
 `DifferentialSetup`/`TransmissionSetup`/`SteeringSetup`保持
@@ -225,6 +228,7 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 才需要注意这一步）。
 
 - **交互选项运行中变化**：`add_option`/`remove_option`执行后，`AForeverFrameworkActor::RefreshInteractOptions`按名字找到场景里的这个对象调`RefreshOptions()`：重新烘焙`cachedOptions`快照；玩家正站在旁边时用`UMeetOptionWidget::ReplaceOptions`把屏幕上的选项整组换掉。Overlap回调仍然只读快照、不解引用Core对象。
+- **下车后补选项(2026-11-01)**：`EnsureOptionsForPlayer(player)`——`ExitVehicle`在下车那一帧的下一帧调用，若玩家已在`proximityBox`内就先`RemoveName`再按`cachedOptions`重加。原因：飞机实测下车时人在触发盒内却没有"驾驶"选项(Begin事件时序不可靠)，要走出去再走回来才有。
 
 ## 依赖关系
 

@@ -343,6 +343,19 @@ void AVehicleElement::Tick(float DeltaTime)
 	vehicle->SetTransform(location.X, location.Y, location.Z, GetActorRotation().Yaw);
 }
 
+void AVehicleElement::EnsureOptionsForPlayer(APawn* player) {
+	if (!vehicle || !proximityBox || !player || !proximityBox->IsOverlappingActor(player)) return;
+	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	UMeetOptionWidget* meetOption = playerController ? playerController->GetMeetOptionWidget() : nullptr;
+	if (!meetOption) return;
+	AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	meetOption->RemoveName(vehicleNameOnly);
+	for (int32 idx = 0; idx < cachedOptions.Num(); idx++) {
+		meetOption->AddOption(frameworkActor, cachedOptions[idx], vehicleNameOnly, idx);
+	}
+}
+
 void AVehicleElement::RefreshOptions() {
 	if (!vehicle) return;
 	cachedOptions.Reset();

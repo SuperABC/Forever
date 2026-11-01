@@ -287,6 +287,10 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			// message可以省略(留空=收到任何全局消息都触发)，见GlobalMessageEvent::Match。
 			event = new GlobalMessageEvent(obj["message"].AsString());
 		}
+		else if (type == "weather_change") {
+			// weather可以省略(留空=任何天气变化都触发)，见WeatherChangeEvent::Match。
+			event = new WeatherChangeEvent(obj["weather"].AsString());
+		}
 		else if (type == "speaking_finish") {
 			// label可以省略(留空=任何带label的台词播完都触发)，见SpeakingFinishEvent::Match。
 			event = new SpeakingFinishEvent(obj["label"].AsString());
@@ -422,6 +426,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing message for global_message change.\n");
 			}
 			change = new GlobalMessageChange(message.AsString());
+		}
+		else if (type == "change_weather") {
+			// weather是表达式，求值结果是天气名：sunny/cloudy/overcast/light_rain/heavy_rain/light_snow/heavy_snow。
+			auto weather = obj["weather"];
+			if (weather.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing weather for change_weather change.\n");
+			}
+			change = new ChangeWeatherChange(weather.AsString());
 		}
 		else if (type == "for_range") {
 			// {"var","from","to","step"(可选，默认1),"do":[changes]}，含两端；循环变量写进当前脚本自己的

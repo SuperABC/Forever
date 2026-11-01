@@ -31,6 +31,15 @@ public:
 
 	float GetPower() const { return power; }
 
+	// 螺旋桨当前旋转角(度，0~360)，由UVehicleWheelAnimInstance每帧读取并作用到螺旋桨骨骼上
+	// (和车轮同一个纯C++动画实例，不需要动画蓝图)。动力为0时转速逐渐降到0，角度停住。
+	UPROPERTY(BlueprintReadOnly, Category = "Plane|Propeller")
+	float propellerAngle = 0.f;
+
+	// 给UVehicleWheelAnimInstance用(纯C++动画实例，不走动画蓝图)：螺旋桨骨骼名和旋转轴。
+	FName GetPropellerBoneName() const { return propellerBoneName; }
+	FVector GetPropellerAxis() const { return propellerAxis; }
+
 protected:
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
@@ -76,11 +85,30 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Plane|Mass")
 	FVector centerOfMassOffset = FVector(300.f, 0.f, 0.f);
 
+	// ---- 螺旋桨 ----
+
+	// 螺旋桨骨骼名，以及绕骨骼自己哪根局部轴转(骨骼局部坐标；转歪了就在蓝图里改成(0,1,0)或(0,0,1))。
+	UPROPERTY(EditDefaultsOnly, Category = "Plane|Propeller")
+	FName propellerBoneName = TEXT("Propeller");
+	UPROPERTY(EditDefaultsOnly, Category = "Plane|Propeller")
+	FVector propellerAxis = FVector(1.f, 0.f, 0.f);
+
+	// 满动力(|power|=100)时的转速(度/秒)；转速正比于|power|，反推时也往同方向转。
+	UPROPERTY(EditDefaultsOnly, Category = "Plane|Propeller")
+	float propellerMaxSpeed = 2400.f;
+
+	// 转速向目标转速靠拢的速率(度/秒²)：加动力时慢慢转起来，收油门后慢慢停下，不会瞬间变速。
+	UPROPERTY(EditDefaultsOnly, Category = "Plane|Propeller")
+	float propellerAccel = 1200.f;
+
 	// ---- 操控 ----
 
 	// 俯仰/滚转最大角加速度(rad/s²)。
 	UPROPERTY(EditDefaultsOnly, Category = "Plane|Control")
-	float pitchAccel = 2.0f;
+	float pitchAccel = 0.6f;
+	// 压杆(机头向下)相对拉杆(机头抬升)的力度比例，<1表示低头比抬头弱。
+	UPROPERTY(EditDefaultsOnly, Category = "Plane|Control")
+	float pitchDownScale = 0.5f;
 	UPROPERTY(EditDefaultsOnly, Category = "Plane|Control")
 	float rollAccel = 3.0f;
 
@@ -130,6 +158,9 @@ private:
 
 	// 当前动力(minPower~100)，滚轮改，下机/无人时清零。
 	float power = 0.f;
+
+	// 螺旋桨当前转速(度/秒)。
+	float propellerSpeed = 0.f;
 
 	// 输入：pitchCmd>0=机头抬升(S)，rollCmd>0=向右滚转(D)。
 	float pitchCmd = 0.f;

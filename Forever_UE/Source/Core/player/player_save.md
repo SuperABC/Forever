@@ -39,3 +39,6 @@
 
 ## 资产的options与scriptStarted
 `WriteAsset/ReadAsset`在mod状态之后追加`U32 options数量 + 各Str`、`U8 scriptStarted`；`ReadAsset`读完把脚本里的`name`变量改回存档里的名字。
+
+## 天气
+段末尾(worldAssets之后)追加：天气类型U8+剩余游戏毫秒F64，更早的存档没有就当晴天+新抽倒计时。没升版本号。见`weather.md`。

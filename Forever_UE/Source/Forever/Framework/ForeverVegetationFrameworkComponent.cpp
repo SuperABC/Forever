@@ -110,7 +110,7 @@ void UForeverVegetationFrameworkComponent::UpdateWind(float deltaTime) {
 	}
 
 	// 相位在这里累加而不是让材质用Time*速度：改风速时相位连续，树不会突然抽一下。
-	windPhase = FMath::Fmod(windPhase + deltaTime * windSpeed, 2.f * PI);
+	windPhase = FMath::Fmod(windPhase + deltaTime * windSpeed * windSpeedScale, 2.f * PI);
 
 	UMaterialParameterCollectionInstance* instance = world->GetParameterCollectionInstance(windCollection);
 	if (!instance) return;
@@ -119,7 +119,7 @@ void UForeverVegetationFrameworkComponent::UpdateWind(float deltaTime) {
 	direction = direction.GetSafeNormal();
 
 	bool ok = instance->SetScalarParameterValue(TEXT("WindPhase"), windPhase);
-	ok &= instance->SetScalarParameterValue(TEXT("WindStrength"), windStrength);
+	ok &= instance->SetScalarParameterValue(TEXT("WindStrength"), windStrength * windStrengthScale);
 	ok &= instance->SetVectorParameterValue(TEXT("WindDirection"), FLinearColor(direction.X, direction.Y, 0.f, 0.f));
 	if (!ok && !windParameterWarned) {
 		windParameterWarned = true;

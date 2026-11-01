@@ -1301,84 +1301,6 @@ const std::string& RemoveVehicleChange::GetName() const {
 	return name;
 }
 
-GiveObjectChange::GiveObjectChange() :
-	object(), num() {
-
-}
-
-GiveObjectChange::GiveObjectChange(std::string object, std::string num) :
-	object(move(object)), num(move(num)) {
-
-}
-
-GiveObjectChange::~GiveObjectChange() {
-
-}
-
-const string& GiveObjectChange::GetType() const {
-	static const string type = "give_object";
-	return type;
-}
-
-void GiveObjectChange::SetObject(std::string object) {
-	this->object = move(object);
-}
-
-const std::string& GiveObjectChange::GetObject() const {
-	return object;
-}
-
-void GiveObjectChange::SetNum(std::string num) {
-	this->num = move(num);
-}
-
-const std::string& GiveObjectChange::GetNum() const {
-	return num;
-}
-
-RemoveObjectChange::RemoveObjectChange() :
-	object(), num(), force() {
-
-}
-
-RemoveObjectChange::RemoveObjectChange(std::string object, std::string num, std::string force) :
-	object(move(object)), num(move(num)), force(move(force)) {
-
-}
-
-RemoveObjectChange::~RemoveObjectChange() {
-
-}
-
-const string& RemoveObjectChange::GetType() const {
-	static const string type = "remove_object";
-	return type;
-}
-
-void RemoveObjectChange::SetObject(std::string object) {
-	this->object = move(object);
-}
-
-const std::string& RemoveObjectChange::GetObject() const {
-	return object;
-}
-
-void RemoveObjectChange::SetNum(std::string num) {
-	this->num = move(num);
-}
-
-const std::string& RemoveObjectChange::GetNum() const {
-	return num;
-}
-
-void RemoveObjectChange::SetForce(std::string force) {
-	this->force = move(force);
-}
-
-const std::string& RemoveObjectChange::GetForce() const {
-	return force;
-}
-
 PlayerInjuredChange::PlayerInjuredChange() :
 	wound() {
 
@@ -1541,41 +1463,6 @@ const std::string& ChangeTimeChange::GetDelta() const {
 	return delta;
 }
 
-ChangeCultivationChange::ChangeCultivationChange() :
-	method(), level() {
-
-}
-
-ChangeCultivationChange::ChangeCultivationChange(std::string method, std::string level) :
-	method(move(method)), level(move(level)) {
-
-}
-
-ChangeCultivationChange::~ChangeCultivationChange() {
-
-}
-
-const string& ChangeCultivationChange::GetType() const {
-	static const string type = "change_cultivation";
-	return type;
-}
-
-void ChangeCultivationChange::SetMethod(std::string method) {
-	this->method = move(method);
-}
-
-const std::string& ChangeCultivationChange::GetMethod() const {
-	return method;
-}
-
-void ChangeCultivationChange::SetLevel(std::string level) {
-	this->level = move(level);
-}
-
-const std::string& ChangeCultivationChange::GetLevel() const {
-	return level;
-}
-
 ChangeWantedChange::ChangeWantedChange() :
 	reason(), level() {
 
@@ -1636,33 +1523,6 @@ void ChangeWeatherChange::SetWeather(std::string weather) {
 
 const std::string& ChangeWeatherChange::GetWeather() const {
 	return weather;
-}
-
-ChangePolicyChange::ChangePolicyChange() :
-	policy() {
-
-}
-
-ChangePolicyChange::ChangePolicyChange(std::string policy) :
-	policy(move(policy)) {
-
-}
-
-ChangePolicyChange::~ChangePolicyChange() {
-
-}
-
-const string& ChangePolicyChange::GetType() const {
-	static const string type = "change_policy";
-	return type;
-}
-
-void ChangePolicyChange::SetPolicy(std::string policy) {
-	this->policy = move(policy);
-}
-
-const std::string& ChangePolicyChange::GetPolicy() const {
-	return policy;
 }
 
 ChangeControlChange::ChangeControlChange() :

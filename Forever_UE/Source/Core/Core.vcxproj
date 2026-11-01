@@ -102,6 +102,7 @@
     <ClCompile Include="player\player_save.cpp" />
     <ClCompile Include="player\asset.cpp" />
     <ClCompile Include="player\weapon.cpp" />
+    <ClCompile Include="player\weather.cpp" />
     <ClCompile Include="player\app.cpp" />
     <ClCompile Include="player\phone.cpp" />
     <ClCompile Include="player\puzzle.cpp" />
@@ -153,6 +154,7 @@
     <ClInclude Include="player\player_save.h" />
     <ClInclude Include="player\asset.h" />
     <ClInclude Include="player\weapon.h" />
+    <ClInclude Include="player\weather.h" />
     <ClInclude Include="player\app.h" />
     <ClInclude Include="player\phone.h" />
     <ClInclude Include="player\puzzle.h" />

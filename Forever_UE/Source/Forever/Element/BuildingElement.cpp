@@ -826,7 +826,7 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 		UStaticMesh* cabinMesh = framework->ResolveMesh(spec.cabinMeshPath, framework->GetDefaultCabinMesh());
 		// isMovable=true——轿厢要随行程SetWorldLocation，必须是Movable。
 		// 整体缩到0.99：轿厢的上下面和楼层地板/天花板正好重合会z-fighting(闪烁竞争)，缩一点点错开。
-		constexpr float kCabinScale = 0.9f;
+		constexpr float kCabinScale = 0.95f;
 		// 缩放以mesh原点(底部)为基准，整体抬高层高的0.05，缩小后的轿厢上下留的缝才对称。
 		constexpr float kCabinZLift = 0.05f;
 		float cabinMeshZOffset = minFloorHeight * BUILDING_WORLD_SCALE * kCabinZLift;

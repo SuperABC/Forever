@@ -36,6 +36,14 @@ public:
 	float GetCurrentExposureEV() const { return currentExposureEV; }
 	float GetReferenceDayEV() const { return referenceDayEV; }
 
+	// 天气对光照/雾的缩放，由UForeverWeatherFrameworkComponent每帧写入(已经平滑过渡好的值)：
+	// lightScale乘到太阳强度(和大气散射)上、一半乘到环境光上；fogScale乘到雾浓度上。
+	// 晴天都是1。见ForeverWeatherFrameworkComponent.md。
+	void SetWeatherScales(float lightScale, float fogScale) {
+		weatherLightScale = lightScale;
+		weatherFogScale = fogScale;
+	}
+
 	// ---- 夜晚随游戏时间变暗 ----
 	// 白天系数t(0=深夜,1=白天)在太阳高度-0.12~0.2之间平滑过渡(约一个游戏小时的黄昏/黎明)，下面所有
 	// "白天值/夜晚值"都按t线性插值。数值先按"月夜微亮"给，PIE里看着不对就改这些属性。
@@ -71,6 +79,14 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Sky|Night")
 	float nightLocalShadowContrast = 1.0f;
 
+	// Lumen的光照刷新速度(引擎默认1，越大越快跟上昼夜/天气的光照变化，也更费)。
+	// 注意这只管"反应多快"，不管漏光——漏光是Lumen场景(距离场/表面缓存)分辨率不够造成的。
+	UPROPERTY(EditAnywhere, Category = "Sky|Lumen")
+	float lumenSceneLightingUpdateSpeed = 3.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Sky|Lumen")
+	float lumenFinalGatherUpdateSpeed = 3.0f;
+
 private:
 	// 幂等：五样东西各自独立检查，已存在的跳过，不存在的先TActorIterator找现成的，找不到
 	// 再SpawnActor一份。
@@ -85,6 +101,9 @@ private:
 
 	// 当前帧曝光EV，UpdatePostProcess写，GetCurrentExposureEV读。
 	float currentExposureEV = 15.f;
+
+	float weatherLightScale = 1.f;
+	float weatherFogScale = 1.f;
 
 	UPROPERTY()
 	TObjectPtr<ADirectionalLight> sunLight;

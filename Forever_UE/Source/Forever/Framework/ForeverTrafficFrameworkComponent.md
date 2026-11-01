@@ -28,6 +28,7 @@
   多远"，玩家开车远离之后这个停在原地的市民会被判定为"走远的市民"直接销毁，
   `previousPawn`变成悬空指针，下车时车没了但人也出不来；下车时对称地解除这个豁免。
   `ExitVehicle`的下车点碰撞检测用`SweepTestByChannel`+`ECC_Pawn`(不能用
+- `ExitVehicle`下车点被挡时同时写屏幕红字和`LogTemp` Warning(含挡住的Actor/组件、起点终点、命中点)，扫掠改用`SweepSingleByChannel`取命中信息；下车后下一帧调`AVehicleElement::EnsureOptionsForPlayer`补弹选项。
   `ECC_Visibility`，这个项目的Pawn预设碰撞档案会忽略它；也不能用`OverlapAnyTestByChannel`
   这类重叠类查询，建筑/房间/园区边界盒是Trigger档案，重叠类查询会把它们也算成"挡住")，
   并且必须忽略载具自己(`queryParams.AddIgnoredActor(vehicleElement)`)——车身用的"Vehicle"

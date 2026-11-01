@@ -115,3 +115,6 @@
   环境光越亮，EV要越大(越暗)才能压住。夜里还是太亮先调大`nightExposureEV`(每+1暗一档)，轮廓都看不见就调小。
 - `GetCurrentExposureEV()`/`GetReferenceDayEV()`：识别名牌按它换算亮度。
 - 没有月光和星空(以后加月光时，夜间`ambientLight`强度可以直接让给月光那盏灯)。如果夜里仍然很亮，先查关卡里是否手放了别的PostProcessVolume或相机蓝图带后处理覆盖。
+
+## 天气缩放(2026-11-01)
+`SetWeatherScales(lightScale, fogScale)`由`UForeverWeatherFrameworkComponent`每帧写入(已平滑)：太阳强度和大气散射因子乘`lightScale`，环境光只吃一半，雾浓度乘`fogScale`。晴天都是1，不改变原来的昼夜行为。见`ForeverWeatherFrameworkComponent.md`。

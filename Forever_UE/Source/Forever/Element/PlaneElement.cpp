@@ -116,8 +116,10 @@ void APlaneElement::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 			enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Started, this, &APlaneElement::PlaneHandbrake);
 			enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Completed, this, &APlaneElement::PlaneStopHandbrake);
 			enhancedInput->BindAction(keyBindings->GetAction(TEXT("Handbrake")), ETriggerEvent::Canceled, this, &APlaneElement::PlaneStopHandbrake);
-			enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrottleUp")), ETriggerEvent::Started, this, &APlaneElement::ThrottleUp);
-			enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrottleDown")), ETriggerEvent::Started, this, &APlaneElement::ThrottleDown);
+			// 用Triggered而不是Started：滚轮连续滚动时按键值每帧都不为0，动作一直处于激活状态，Started只在
+			// 第一格触发一次，后面的格都被吞掉(实测"连续滚只是慢慢一格一格加")；Triggered每个有滚动的帧都触发。
+			enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrottleUp")), ETriggerEvent::Triggered, this, &APlaneElement::ThrottleUp);
+			enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrottleDown")), ETriggerEvent::Triggered, this, &APlaneElement::ThrottleDown);
 		}
 	}
 }
@@ -166,6 +168,7 @@ void APlaneElement::PlaneExit()
 
 void APlaneElement::PlaneHandbrake(const FInputActionValue& value)
 {
+	power = 0.f; // 按下刹车(空格)同时把动力归零，防止落地刹车后忘了关动力、松开刹车飞机溜车
 	Handbrake(value);
 }
 
@@ -201,6 +204,11 @@ void APlaneElement::Tick(float DeltaTime)
 	}
 	bLookedThisFrame = false;
 	cameraBoom->SetRelativeRotation(FRotator(-10.f + lookPitch, lookYaw, 0.f));
+
+	// 螺旋桨：转速向 |power|% 的目标转速靠拢，角度累加；放在物理判断前面，刚体没在模拟时也要转。
+	const float targetPropellerSpeed = FMath::Abs(power) * 0.01f * propellerMaxSpeed;
+	propellerSpeed = FMath::FInterpConstantTo(propellerSpeed, targetPropellerSpeed, DeltaTime, propellerAccel);
+	propellerAngle = FMath::Fmod(propellerAngle + propellerSpeed * DeltaTime, 360.f);
 
 	// HUD放在物理判断前面：就算刚体没在模拟(蓝图/物理资产没配好)，也要能看到动力和速度，方便排查。
 	UpdateHud(GetVelocity().Size());
@@ -256,7 +264,8 @@ void APlaneElement::Tick(float DeltaTime)
 	// ---- 角加速度(rad/s²，世界坐标) ----
 	// 约定(UE坐标系下由 ω×r 推出)：绕-右轴转=机头抬升，绕-前轴转=右翼下沉(向右滚转)。
 	const float controlAuthority = FMath::Clamp(forwardSpeed / FMath::Max(controlSpeed, 1.f), 0.f, 1.f);
-	FVector angularAccel = -right * (pitchCmd * pitchAccel * controlAuthority);
+	const float pitchScale = pitchCmd < 0.f ? pitchDownScale : 1.f; // pitchCmd<0=机头向下
+	FVector angularAccel = -right * (pitchCmd * pitchAccel * pitchScale * controlAuthority);
 	if (bAirborne) {
 		// 地面上轮子着地无法滚转，只有离地后滚转才起作用。
 		angularAccel += -forward * (rollCmd * rollAccel * controlAuthority);

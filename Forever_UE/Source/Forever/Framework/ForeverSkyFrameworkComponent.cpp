@@ -124,6 +124,10 @@ void UForeverSkyFrameworkComponent::EnsureSkyGenerated() {
 			settings.bOverride_AutoExposureMinBrightness = true;
 			settings.bOverride_AutoExposureMaxBrightness = true;
 			settings.bOverride_LocalExposureShadowContrastScale = true;
+				settings.bOverride_LumenSceneLightingUpdateSpeed = true;
+				settings.LumenSceneLightingUpdateSpeed = lumenSceneLightingUpdateSpeed;
+				settings.bOverride_LumenFinalGatherLightingUpdateSpeed = true;
+				settings.LumenFinalGatherLightingUpdateSpeed = lumenFinalGatherUpdateSpeed;
 		}
 	}
 }
@@ -169,7 +173,7 @@ void UForeverSkyFrameworkComponent::UpdateSunLight(float chronode) {
 	if (!sunComponent) return;
 
 	sunLight->SetActorRotation(FRotator(FMath::Lerp(90.0f, -270.0f, chronode), 0.0f, 0.0f));
-	sunComponent->SetIntensity(SunIntensityFactor(chronode) * kSunMaxIntensity);
+	sunComponent->SetIntensity(SunIntensityFactor(chronode) * kSunMaxIntensity * weatherLightScale);
 
 	// 原来是5段硬切(if/else if边界处颜色直接跳一截)，改成关键帧+分段线性插值，边界处
 	// 颜色连续过渡。关键帧的颜色和大致时间点原样保留原来5段各自的颜色，只是把"整段恒定"
@@ -206,7 +210,7 @@ void UForeverSkyFrameworkComponent::UpdateSkyAtmosphere(float chronode) {
 
 	USkyAtmosphereComponent* atmosphereComponent = skyAtmosphere->GetComponent();
 	if (atmosphereComponent) {
-		float sunIntensity = SunIntensityFactor(chronode) * kSunMaxIntensity;
+		float sunIntensity = SunIntensityFactor(chronode) * kSunMaxIntensity * weatherLightScale;
 		atmosphereComponent->SetMultiScatteringFactor(FMath::Clamp(sunIntensity / 50000.0f, 0.1f, 1.0f));
 	}
 }
@@ -222,7 +226,7 @@ void UForeverSkyFrameworkComponent::UpdateHeightFog(float chronode) {
 		// 最大时要"减"，午夜权重最大时反而没有额外加项，所以改成从夜间基准值往下减，
 		// 夜间(chronode=0/1)density最大=0.08，正午(chronode=0.5)density最小=0.05。
 		float fogDensity = 0.08f - FMath::Pow(1.0f - FMath::Abs(chronode - 0.5f) * 2.0f, 2.0f) * 0.03f;
-		fogComponent->SetFogDensity(fogDensity);
+		fogComponent->SetFogDensity(fogDensity * weatherFogScale);
 	}
 }
 
@@ -244,6 +248,7 @@ void UForeverSkyFrameworkComponent::UpdateAmbientLight(float chronode) {
 
 	// 没有太阳的夜里，300 lux的常量环境光比真实月光亮三个数量级，是夜晚发亮的主因，按白天系数压下去。
 	if (UDirectionalLightComponent* ambientComponent = Cast<UDirectionalLightComponent>(ambientLight->GetLightComponent())) {
-		ambientComponent->SetIntensity(FMath::Lerp(nightAmbientLux, dayAmbientLux, DayFactor(chronode)));
+		// 天气只压一半：阴天的室内/背光处不至于比晴天暗得太多。
+		ambientComponent->SetIntensity(FMath::Lerp(nightAmbientLux, dayAmbientLux, DayFactor(chronode)) * FMath::Lerp(1.f, weatherLightScale, 0.5f));
 	}
 }

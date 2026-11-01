@@ -36,6 +36,7 @@
 #include "Element/TransitVehicleElement.h"
 #include "Element/AssetElement.h"
 #include "Element/DoorComponent.h"
+#include "Framework/ForeverWeatherFrameworkComponent.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
 #include "map/building.h"
 #include "map/zone.h"
@@ -91,6 +92,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	terrainFramework = CreateDefaultSubobject<UForeverTerrainFrameworkComponent>(TEXT("TerrainFramework"));
 	trafficFramework = CreateDefaultSubobject<UForeverTrafficFrameworkComponent>(TEXT("TrafficFramework"));
 	vegetationFramework = CreateDefaultSubobject<UForeverVegetationFrameworkComponent>(TEXT("VegetationFramework"));
+	weatherFramework = CreateDefaultSubobject<UForeverWeatherFrameworkComponent>(TEXT("WeatherFramework"));
 	zoneFramework = CreateDefaultSubobject<UForeverZoneFrameworkComponent>(TEXT("ZoneFramework"));
 }
 
@@ -698,6 +700,12 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	if (skyFramework) skyFramework->UpdateSky(*player->GetTime());
 
 	// 植被风：累加相位并写进MPC_Wind，见ForeverVegetationFrameworkComponent.md。
+	// 天气：Core里的Weather已经随时钟推进过(自动随机换/脚本change_weather)，这里先把"天气变了"广播成
+	// weather_change事件，再把当前天气翻译成云/光照/风/雨雪的表现。必须在UpdateWind之前，风的倍数由它写入。
+	if (player->GetWeather().ConsumeChanged() && storyFramework) {
+		storyFramework->BroadcastWeatherChange(player->GetWeather().GetName());
+	}
+	if (weatherFramework) weatherFramework->UpdateWeather(DeltaTime, player->GetWeather(), player->GetCurrentRoom() != nullptr);
 	if (vegetationFramework) vegetationFramework->UpdateWind(DeltaTime);
 
 	// 驱动Job/Organization各自独立的DailyPlan/ExecNode调度（两套独立的timer，见

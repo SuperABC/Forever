@@ -69,3 +69,5 @@
   - **get_asset**：`pick_asset`/`grant_asset`之后(成功和失败都发)，以及背包界面把东西从地面区(房间/附近)拖进身上区(肩/手/背/容器)。
   - **lose_asset**：`drop_asset`/`deduct_asset`(成功对每件被扣/丢的资产发一次；失败=身上没有指定类型或数量不足，发一次，type是Change里要求的类型)，以及背包界面把东西从身上拖到地面区(只会成功)。
   - **发给谁**：Change触发的发给**执行这个Change的脚本**(`context.self`)；背包界面里的移动发给**这件资产自己的脚本**(没有脚本则不发)。根资产是容器时，容器和递归进去的每件资产各发一次。`UForeverStoryFrameworkComponent::NotifyAssetEvent`分发，同时在屏幕左上角显示“获取/失去 xxx”(测试用)；事件处理里再触发资产事件的嵌套深度上限8。
+
+- `weather_change`(weather，留空=任何天气变化都触发)：天气变了(系统自动随机换，或`change_weather`强制换)时由`UForeverStoryFrameworkComponent::BroadcastWeatherChange`广播给所有挂了Script的东西(含主线，和`global_message`同范围)。`WeatherChangeEvent::Match`按weather(表达式)过滤；脚本里用`local.weather`读变化后的天气名。读档不广播。天气名见`Core/player/weather.md`。

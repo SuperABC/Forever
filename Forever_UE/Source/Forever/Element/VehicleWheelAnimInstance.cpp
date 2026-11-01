@@ -3,10 +3,26 @@
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "ChaosVehicleWheel.h"
 #include "GameFramework/Actor.h"
+#include "Element/PlaneElement.h"
+
+void FVehicleWheelAnimInstanceProxy::SetPropellerOwner(const APlaneElement* InPlane)
+{
+	PropellerOwner = InPlane;
+}
 
 void FVehicleWheelAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds)
 {
 	FAnimInstanceProxy::PreUpdate(InAnimInstance, DeltaSeconds);
+
+	if (const APlaneElement* Plane = PropellerOwner.Get()) {
+		const FName PropellerBoneName = Plane->GetPropellerBoneName();
+		if (PropellerBone.BoneName != PropellerBoneName) {
+			PropellerBone.BoneName = PropellerBoneName;
+			bBoneReferencesInitialized = false;
+		}
+		PropellerAngle = Plane->propellerAngle;
+		PropellerAxis = Plane->GetPropellerAxis();
+	}
 
 	const UChaosWheeledVehicleMovementComponent* Component = WheeledVehicleComponent.Get();
 	if (!Component) return;
@@ -51,6 +67,7 @@ bool FVehicleWheelAnimInstanceProxy::Evaluate(FPoseContext& Output)
 		for (FVehicleWheelPose& Pose : WheelPoses) {
 			Pose.BoneReference.Initialize(BoneContainer);
 		}
+		PropellerBone.Initialize(BoneContainer);
 		bBoneReferencesInitialized = true;
 	}
 
@@ -74,6 +91,14 @@ bool FVehicleWheelAnimInstanceProxy::Evaluate(FPoseContext& Output)
 		BoneTransform.SetRotation(BoneTransform.GetRotation() * RollSteerQuat);
 	}
 
+	// 螺旋桨：同样后乘，绕骨骼自己的局部轴转(原因同上面车轮的说明)。
+	if (PropellerOwner.IsValid() && PropellerBone.IsValidToEvaluate(BoneContainer)) {
+		const FCompactPoseBoneIndex BoneIndex = PropellerBone.GetCompactPoseIndex(BoneContainer);
+		FTransform& BoneTransform = Output.Pose[BoneIndex];
+		const FQuat SpinQuat(PropellerAxis.GetSafeNormal(), FMath::DegreesToRadians(PropellerAngle));
+		BoneTransform.SetRotation(BoneTransform.GetRotation() * SpinQuat);
+	}
+
 	return true;
 }
 
@@ -90,4 +115,8 @@ void UVehicleWheelAnimInstance::NativeInitializeAnimation()
 		}
 	}
 	AnimInstanceProxy.SetMaxWheelSpinDegreesPerSecond(MaxWheelSpinDegreesPerSecond);
+
+	if (const APlaneElement* Plane = Cast<APlaneElement>(GetOwningActor())) {
+		AnimInstanceProxy.SetPropellerOwner(Plane);
+	}
 }

@@ -124,9 +124,9 @@ void PlaneVehicle::SetProperty() {
 	milestoneNames = { "vehicle_plane" };
 
 	// 下车点(车身局部坐标)：机身左后方(-X后、-Y左)，避开机翼；是估计值，不合适再调。
-	exitOffsetX = -1000.f;
-	exitOffsetY = -800.f;
-	exitOffsetZ = 100.f;
+	exitOffsetX = -300.f;
+	exitOffsetY = -200.f;
+	exitOffsetZ = 200.f; // 飞机原点比地面还低，100会让胶囊体底部陷进地形导致永远被挡，抬高后让人落地
 
 	drivable = true;
 }

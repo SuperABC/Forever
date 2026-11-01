@@ -47,3 +47,6 @@
 
 - 行道树的位置/间距/缩放都是粗估，还没有避开建筑出入口(RoadOpening)。
 - 运行时增删目前只有组件接口，还没有接到Story/Change之类的调用方。
+
+## 天气对风的影响(2026-11-01)
+`SetWindScale(strengthScale, speedScale)`由`UForeverWeatherFrameworkComponent`每帧写入：`WindStrength`写MPC时乘`strengthScale`，相位累加乘`speedScale`。`GetWindDirection()`给雨雪粒子借用风向。1=微风基准。

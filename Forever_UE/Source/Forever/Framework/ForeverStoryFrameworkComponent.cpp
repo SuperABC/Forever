@@ -332,6 +332,23 @@ void UForeverStoryFrameworkComponent::BroadcastGlobalMessage(const string& messa
 	globalMessageDepth--;
 }
 
+void UForeverStoryFrameworkComponent::BroadcastWeatherChange(const string& weather) {
+	if (!story) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	WeatherChangeEvent event(weather);
+	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
+}
+
 void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FString& option) {
 	if (!story || !GEngine) return;
 

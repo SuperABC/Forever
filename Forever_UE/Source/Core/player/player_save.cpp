@@ -131,6 +131,10 @@ void PlayerSaveCodec::Save(const Player& player, const Map& map, SaveArchive& ar
 		WriteAsset(entry.asset, w);
 	}
 
+	// 天气：当前类型+距下次自动换天气的剩余游戏毫秒。段尾后加的，更早的存档没有它。
+	w.U8(static_cast<uint8_t>(player.weather.type));
+	w.F64(static_cast<double>(player.weather.remainingMs));
+
 	archive.SetBinary(SAVE_SECTION_PLAYER, VersionOf(SAVE_SECTION_PLAYER), w.Take());
 }
 
@@ -182,6 +186,16 @@ Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& erro
 				transform.roll = r.F32();
 				Asset* asset = ReadAsset(player->assetFactory, r);
 				if (asset && !player->AddWorldAsset(asset, transform)) delete asset;
+			}
+		}
+
+		// 天气。也是后加的，读到末尾就当没有(保持晴天+新抽的倒计时)；读档不触发weather_change。
+		if (!r.AtEnd()) {
+			uint8_t weatherType = r.U8();
+			double remaining = r.F64();
+			if (!r.Failed() && weatherType <= static_cast<uint8_t>(Weather::Type::HeavySnow)) {
+				player->weather.type = static_cast<Weather::Type>(weatherType);
+				player->weather.remainingMs = static_cast<long long>(remaining);
 			}
 		}
 

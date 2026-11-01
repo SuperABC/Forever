@@ -14,7 +14,7 @@ public class Forever : ModuleRules
 
 		// ChaosVehicles：UChaosWheeledVehicleMovementComponent等真实车辆物理组件，见
 		// VehicleElement.cpp/.md。PhysicsCore是它的间接依赖，一并保留。
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "ProceduralMeshComponent", "Water", "PhysicsCore", "ChaosVehicles" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "ProceduralMeshComponent", "Water", "PhysicsCore", "ChaosVehicles", "Niagara" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

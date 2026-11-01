@@ -85,8 +85,8 @@ namespace {
 	// 建筑/房间/园区范围内就会被误判"被挡住"。改用SweepTestByChannel——扫掠类查询只认"Block"
 	// 响应，Trigger档案的Overlap响应天然被忽略，真正会挡人的墙体/地板/载具车身(Vehicle档案
 	// 对Pawn是Block)才会被测到。
-	bool IsExitPathBlocked(UWorld* world, const FVector& from, const FVector& to, const FCollisionQueryParams& queryParams) {
-		return world->SweepTestByChannel(
+	bool IsExitPathBlocked(UWorld* world, const FVector& from, const FVector& to, const FCollisionQueryParams& queryParams, FHitResult& outHit) {
+		return world->SweepSingleByChannel(outHit,
 			from, to, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(42.f, 96.f), queryParams);
 	}
 
@@ -456,9 +456,19 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 	FVector pathStart = vehicleElement->GetActorLocation();
 	pathStart.Z = candidateLocation.Z;
 
-	if (!bRide && !bForce && IsExitPathBlocked(GetWorld(), pathStart, candidateLocation, queryParams)) {
+	FHitResult blockHit;
+	if (!bRide && !bForce && IsExitPathBlocked(GetWorld(), pathStart, candidateLocation, queryParams, blockHit)) {
+		// 带上挡住的对象和命中点，方便定位是哪个东西挡了(而不是只知道"被挡住")；同时写日志，
+		// 屏幕消息不会进Forever.log。
+		FString blockedText = FString::Printf(
+			TEXT("下车位置被挡住，无法下车：%s / %s，起点(%.0f,%.0f,%.0f) 终点(%.0f,%.0f,%.0f) 命中(%.0f,%.0f,%.0f)"),
+			*GetNameSafe(blockHit.GetActor()), *GetNameSafe(blockHit.GetComponent()),
+			pathStart.X, pathStart.Y, pathStart.Z,
+			candidateLocation.X, candidateLocation.Y, candidateLocation.Z,
+			blockHit.ImpactPoint.X, blockHit.ImpactPoint.Y, blockHit.ImpactPoint.Z);
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::ExitVehicle: %s"), *blockedText);
 		if (GEngine) {
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("下车位置被挡住，无法下车"));
+			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, blockedText);
 		}
 		return;
 	}
@@ -497,6 +507,16 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 
 	// 人已经站回下车点：通知这辆车的script(公交据此把"下车"换回"上车")。
 	FireVehicleEvent(vehicle, false, bRide ? "ride" : "drive");
+
+	// 下车瞬间触发盒的"进入"事件不一定能把选项带出来(飞机实测：人在盒内却没有"驾驶"选项，要走出去
+	// 再走回来)，下一帧补查一次。
+	if (AVehicleElement* drivenElement = Cast<AVehicleElement>(vehicleElement)) {
+		TWeakObjectPtr<AVehicleElement> weakVehicle(drivenElement);
+		TWeakObjectPtr<APawn> weakPlayer(previousPawn);
+		GetWorld()->GetTimerManager().SetTimerForNextTick([weakVehicle, weakPlayer]() {
+			if (weakVehicle.IsValid() && weakPlayer.IsValid()) weakVehicle->EnsureOptionsForPlayer(weakPlayer.Get());
+		});
+	}
 
 	// 车辆本身不销毁——这次是预置在停车位的真实物件，不是一次性测试对象，下车后原地留着
 	// 供下次再上车。

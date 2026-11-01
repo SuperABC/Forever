@@ -85,6 +85,11 @@ public:
 	// @message: 已经求值好的消息文本
 	void BroadcastGlobalMessage(const std::string& message);
 
+	// 天气变了(自动随机换或脚本change_weather)时由AForeverFrameworkActor::Tick调用：广播
+	// WeatherChangeEvent给所有脚本(含主线)，范围和global_message一样。读档不广播。
+	// @weather: 变化后的天气名(sunny/cloudy/overcast/light_rain/heavy_rain/light_snow/heavy_snow)
+	void BroadcastWeatherChange(const std::string& weather);
+
 	// 一句带label的台词播完(玩家点击/空格推进离开这一句)时由AdvanceDialog调用：广播
 	// SpeakingFinishEvent给所有脚本(含主线)，范围和global_message一样。
 	void BroadcastSpeakingFinish(const std::string& label);

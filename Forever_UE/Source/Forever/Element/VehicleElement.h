@@ -61,6 +61,9 @@ public:
 	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
 	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
 	void RefreshOptions();
+	// 玩家刚下车站回车旁边时调用：如果玩家实际已经在触发盒里，但"进入"事件没把选项带出来
+	// (下车瞬间的重叠事件时序不可靠，飞机实测过)，就补一次选项；已经显示的会先移除再加，不会重复。
+	void EnsureOptionsForPlayer(APawn* player);
 	TWeakObjectPtr<APawn> GetPreviousPawn() const { return previousPawn; }
 
 protected:

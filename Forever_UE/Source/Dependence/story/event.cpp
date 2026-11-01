@@ -486,52 +486,6 @@ const std::string& TransactionResultEvent::GetName() const {
 	return name;
 }
 
-ObjectResultEvent::ObjectResultEvent(std::string action, std::string object, std::string result, std::string num) :
-	action(move(action)), object(move(object)), result(move(result)), num(move(num)) {
-
-}
-
-ObjectResultEvent::~ObjectResultEvent() {
-
-}
-
-const string& ObjectResultEvent::GetType() const {
-	static const string type = "object_result";
-	return type;
-}
-
-void ObjectResultEvent::SetAction(std::string action) {
-	this->action = move(action);
-}
-
-const std::string& ObjectResultEvent::GetAction() const {
-	return action;
-}
-
-void ObjectResultEvent::SetObject(std::string object) {
-	this->object = move(object);
-}
-
-const std::string& ObjectResultEvent::GetObject() const {
-	return object;
-}
-
-void ObjectResultEvent::SetResult(std::string result) {
-	this->result = move(result);
-}
-
-const std::string& ObjectResultEvent::GetResult() const {
-	return result;
-}
-
-void ObjectResultEvent::SetNum(std::string num) {
-	this->num = move(num);
-}
-
-const std::string& ObjectResultEvent::GetNum() const {
-	return num;
-}
-
 TimeUpEvent::TimeUpEvent(std::string name) :
 	name(move(name)) {
 
@@ -882,36 +836,6 @@ const std::string& PlayerSleepEvent::GetHour() const {
 	return hour;
 }
 
-CultivationChangeEvent::CultivationChangeEvent(std::string method, std::string level) :
-	method(move(method)), level(move(level)) {
-
-}
-
-CultivationChangeEvent::~CultivationChangeEvent() {
-
-}
-
-const string& CultivationChangeEvent::GetType() const {
-	static const string type = "cultivation_change";
-	return type;
-}
-
-void CultivationChangeEvent::SetMethod(std::string method) {
-	this->method = move(method);
-}
-
-const std::string& CultivationChangeEvent::GetMethod() const {
-	return method;
-}
-
-void CultivationChangeEvent::SetLevel(std::string level) {
-	this->level = move(level);
-}
-
-const std::string& CultivationChangeEvent::GetLevel() const {
-	return level;
-}
-
 WantedChangeEvent::WantedChangeEvent(std::string reason, std::string level) :
 	reason(move(reason)), level(move(level)) {
 
@@ -1000,42 +924,25 @@ const string& WeatherChangeEvent::GetType() const {
 	return type;
 }
 
+bool WeatherChangeEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<WeatherChangeEvent*>(e);
+	if (!weather.empty() && ToString(EvaluateExpression(weather, context)) != other->weather) return false;
+	return true;
+}
+
+pair<bool, ValueType> WeatherChangeEvent::GetLocalValue(const string& key) const {
+	if (key == "weather") return { true, ValueType(weather) };
+	return { false, ValueType() };
+}
+
 void WeatherChangeEvent::SetWeather(std::string weather) {
 	this->weather = move(weather);
 }
 
 const std::string& WeatherChangeEvent::GetWeather() const {
 	return weather;
-}
-
-PolicyChangeEvent::PolicyChangeEvent(std::string policy, std::string status) :
-	policy(move(policy)), status(move(status)) {
-
-}
-
-PolicyChangeEvent::~PolicyChangeEvent() {
-
-}
-
-const string& PolicyChangeEvent::GetType() const {
-	static const string type = "policy_change";
-	return type;
-}
-
-void PolicyChangeEvent::SetPolicy(std::string policy) {
-	this->policy = move(policy);
-}
-
-const std::string& PolicyChangeEvent::GetPolicy() const {
-	return policy;
-}
-
-void PolicyChangeEvent::SetStatus(std::string status) {
-	this->status = move(status);
-}
-
-const std::string& PolicyChangeEvent::GetStatus() const {
-	return status;
 }
 
 UseAssetEvent::UseAssetEvent(std::string asset) :

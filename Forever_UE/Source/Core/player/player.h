@@ -4,6 +4,7 @@
 
 #include "player/asset.h"
 #include "player/asset_factory.h"
+#include "player/weather.h"
 
 #include <string>
 #include <unordered_map>
@@ -56,6 +57,11 @@ public:
 
 	// 是否发生跨天（相对上一次Tick/SetTime时的天数）
 	bool CrossDay();
+
+	// 全局天气：Tick里随游戏时钟推进自动换天气的倒计时，change_weather在ApplyChange里处理。
+	// UE层每帧用ConsumeChanged()取变化、广播weather_change事件，见weather.md。
+	Weather& GetWeather() { return weather; }
+	const Weather& GetWeather() const { return weather; }
 
 	// 生命值——"扣血/回血/是否死亡"最小闭环，不做死亡后果(复活/game over等)，见
 	// Source/Forever/Player/ForeverWeaponComponent.md。伤害/治疗量传负数没有意义，调用方
@@ -185,6 +191,9 @@ private:
 	// 默认1现实秒=10游戏分钟，一天(1440分钟)需要144现实秒(2.4分钟)。未被脚本
 	// (global_settings.time_flow_ratio)覆盖时就是这个值生效。
 	double timeFlowRatio = 10.0;
+
+	// 天气(默认晴天，自动换天气的倒计时在Weather自己里面)
+	Weather weather;
 
 	// 100点是随手给的默认值，具体数值等PIE里试手感再调。
 	float health = 100.f;

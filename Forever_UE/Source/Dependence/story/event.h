@@ -658,86 +658,6 @@ private:
 	std::string name;
 };
 
-// 物品操作结果
-class ObjectResultEvent : public Event {
-public:
-	/*
-	* 构造物品操作结果事件
-	* @action: 操作类型，"give"/"remove"，为空时 Match 匹配任意操作
-	* @object: 被操作的 object 类型
-	* @result: 是否全部成功
-	* @num: 失败时剩余未操作数量，-1 表示不指定
-	*/
-	ObjectResultEvent(std::string action, std::string object, std::string result, std::string num);
-
-	/*
-	* 析构物品操作结果事件
-	*/
-	virtual ~ObjectResultEvent();
-
-	/*
-	* 事件类型
-	*/
-	virtual const std::string& GetType() const override;
-
-	/*
-	* 设置操作类型
-	* @action: 操作类型
-	*/
-	void SetAction(std::string action);
-
-	/*
-	* 获取操作类型
-	*/
-	const std::string& GetAction() const;
-
-	/*
-	* 设置 object 类型
-	* @object: object 类型
-	*/
-	void SetObject(std::string object);
-
-	/*
-	* 获取 object 类型
-	*/
-	const std::string& GetObject() const;
-
-	/*
-	* 设置是否成功
-	* @result: 是否成功
-	*/
-	void SetResult(std::string result);
-
-	/*
-	* 获取是否成功
-	*/
-	const std::string& GetResult() const;
-
-	/*
-	* 设置剩余未操作数量
-	* @num: 数量，-1 表示不指定
-	*/
-	void SetNum(std::string num);
-
-	/*
-	* 获取剩余未操作数量
-	*/
-	const std::string& GetNum() const;
-
-private:
-	// 操作类型
-	std::string action;
-
-	// object 类型
-	std::string object;
-
-	// 是否成功
-	std::string result;
-
-	// 剩余未操作数量
-	std::string num;
-};
-
 // 计时器到时
 class TimeUpEvent : public Event {
 public:
@@ -1203,55 +1123,6 @@ private:
 	std::string hour;
 };
 
-// 修炼变化
-class CultivationChangeEvent : public Event {
-public:
-	/*
-	* 构造修炼变化事件
-	* @method, level: 修炼方式与等级
-	*/
-	CultivationChangeEvent(std::string method, std::string level);
-
-	/*
-	* 析构修炼变化事件
-	*/
-	virtual ~CultivationChangeEvent();
-
-	/*
-	* 事件类型
-	*/
-	virtual const std::string& GetType() const override;
-
-	/*
-	* 设置修炼方式
-	* @method: 方式
-	*/
-	void SetMethod(std::string method);
-
-	/*
-	* 获取修炼方式
-	*/
-	const std::string& GetMethod() const;
-
-	/*
-	* 设置等级
-	* @level: 等级
-	*/
-	void SetLevel(std::string level);
-
-	/*
-	* 获取等级
-	*/
-	const std::string& GetLevel() const;
-
-private:
-	// 修炼方式
-	std::string method;
-
-	// 修炼等级
-	std::string level;
-};
-
 // 通缉变化
 class WantedChangeEvent : public Event {
 public:
@@ -1389,6 +1260,14 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+	/*
+	* 匹配：作为脚本里的触发条件时，weather是表达式，留空表示任何天气变化都触发
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	/*
+	* 脚本里用local.weather读到变化后的天气名
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置天气类型
@@ -1404,55 +1283,6 @@ public:
 private:
 	// 天气类型
 	std::string weather;
-};
-
-// 政策变化
-class PolicyChangeEvent : public Event {
-public:
-	/*
-	* 构造政策变化事件
-	* @policy, status: 政策名称与启用状态
-	*/
-	PolicyChangeEvent(std::string policy, std::string status);
-
-	/*
-	* 析构政策变化事件
-	*/
-	virtual ~PolicyChangeEvent();
-
-	/*
-	* 事件类型
-	*/
-	virtual const std::string& GetType() const override;
-
-	/*
-	* 设置政策名称
-	* @policy: 名称
-	*/
-	void SetPolicy(std::string policy);
-
-	/*
-	* 获取政策名称
-	*/
-	const std::string& GetPolicy() const;
-
-	/*
-	* 设置启用状态
-	* @status: 是否启用
-	*/
-	void SetStatus(std::string status);
-
-	/*
-	* 获取启用状态
-	*/
-	const std::string& GetStatus() const;
-
-private:
-	// 政策名称
-	std::string policy;
-
-	// 是否启用
-	std::string status;
 };
 
 // 使用资产

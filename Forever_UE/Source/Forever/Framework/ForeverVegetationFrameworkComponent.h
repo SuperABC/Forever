@@ -35,6 +35,15 @@ public:
 	// 材质(WPO)读这张表来摆动。见ForeverVegetationFrameworkComponent.md"风"一节。
 	void UpdateWind(float deltaTime);
 
+	// 天气对风的倍数(1=微风基准)：strengthScale乘windStrength，speedScale乘windSpeed。由
+	// UForeverWeatherFrameworkComponent每帧写入已经平滑好的值。
+	FVector GetWindDirection() const { return windDirection; }
+
+	void SetWindScale(float strengthScale, float speedScale) {
+		windStrengthScale = strengthScale;
+		windSpeedScale = speedScale;
+	}
+
 private:
 	struct FTreeSlot {
 		int32 meshIndex = INDEX_NONE;
@@ -64,6 +73,9 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Vegetation|Wind")
 	FVector windDirection = FVector(1.0, 0.4, 0.0);
+
+	float windStrengthScale = 1.f;
+	float windSpeedScale = 1.f;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialParameterCollection> windCollection;
