@@ -8,6 +8,12 @@
 #include "Engine/GameInstance.h"
 #include "UI/MeetOptionWidget.h"
 
+#include "AIController.h"
+#include "AITypes.h"
+#include "NavigationData.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/BoxComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -94,8 +100,19 @@ ACitizenElement::ACitizenElement() {
 }
 
 void ACitizenElement::PossessedBy(AController* NewController) {
+	// 导航测试期间玩家接管：先把测试收尾（速度还原等），再走正常占有流程。
+	if (bTestNavigating && NewController != testNavController) {
+		EndTestNavigation(false);
+	}
+
 	Super::PossessedBy(NewController); // AForeverCharacter::PossessedBy：增删Input Mapping Context
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+
+	// AIController占有(导航测试)：只需要能走+Tick，不碰玩家专用的东西(proximityBox照常保留)。
+	if (!Cast<APlayerController>(NewController)) {
+		SetActorTickEnabled(true);
+		return;
+	}
 
 	// 构造函数里默认关掉了Tick(见上，绝大多数citizen静止不需要每帧开销)，但被玩家占有
 	// 之后，AForeverCharacter::Tick()要靠每帧跑才能做瞄准摄像机的平滑插值(cameraBoom
@@ -139,6 +156,69 @@ void ACitizenElement::WalkTo(const TArray<FVector>& waypoints, Room* destination
 	SetActorTickEnabled(true);
 }
 
+void ACitizenElement::StartTestNavigation(const TArray<FVector>& path, Room* destination) {
+	if (path.Num() < 2 || !citizen) return;
+	CancelTestNavigation();
+
+	UWorld* world = GetWorld();
+	if (!world) return;
+
+	bTestNavigating = true;
+	testNavDestination = destination;
+	SetDespawnExempt(true);
+
+	UCharacterMovementComponent* movement = GetCharacterMovement();
+	testNavSavedMaxWalkSpeed = movement->MaxWalkSpeed;
+	movement->MaxWalkSpeed = testNavSavedMaxWalkSpeed * 2.f; // 测试时走路速度翻倍
+	movement->SetMovementMode(MOVE_Walking);
+	SetActorTickEnabled(true);
+
+	FActorSpawnParameters params;
+	params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	testNavController = world->SpawnActor<AAIController>(AAIController::StaticClass(), GetActorLocation(), FRotator::ZeroRotator, params);
+	if (testNavController) testNavController->Possess(this);
+
+	// AIController只负责占有/当“操控者”（让Pawn有Controller，调度逻辑会据此跳过它）；移动本身
+	// 沿用WalkTo那套逐点AddMovementInput，只判水平距离。一开始用UPathFollowingComponent带着走，
+	// 实测人物原地打转：它的到达判定包含竖直方向，行人图节点的Z和胶囊体脚底对不上，永远判不到达，
+	// 角色冲过路径点又调头回来。
+	TArray<FVector> waypoints;
+	for (int32 i = 1; i < path.Num(); i++) waypoints.Add(path[i]);
+	pendingWaypoints = waypoints;
+	waypointIndex = 0;
+	walkDestination = destination;
+}
+
+void ACitizenElement::CancelTestNavigation() {
+	if (bTestNavigating) EndTestNavigation(false);
+}
+
+void ACitizenElement::EndTestNavigation(bool arrived) {
+	bTestNavigating = false;
+	pendingWaypoints.Reset();
+	waypointIndex = 0;
+	walkDestination = nullptr;
+	SetDespawnExempt(false);
+
+	if (testNavSavedMaxWalkSpeed > 0.f) {
+		GetCharacterMovement()->MaxWalkSpeed = testNavSavedMaxWalkSpeed;
+		testNavSavedMaxWalkSpeed = 0.f;
+	}
+
+	AAIController* controller = testNavController;
+	testNavController = nullptr;
+	if (controller) {
+		if (GetController() == controller) controller->UnPossess(); // UnPossessed()会切回MOVE_None并按需关Tick
+		controller->Destroy();
+	}
+
+	Room* room = testNavDestination;
+	testNavDestination = nullptr;
+	if (framework.IsValid() && citizen) {
+		framework->FinishTestNavigation(citizen, arrived ? room : nullptr);
+	}
+}
+
 void ACitizenElement::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime); // AForeverCharacter::Tick：瞄准摄像机插值，被玩家占有期间必须持续跑
 
@@ -172,6 +252,7 @@ void ACitizenElement::Tick(float DeltaTime) {
 			if (framework.IsValid() && citizen) {
 				framework->NotifyArrived(citizen, arrived);
 			}
+			if (bTestNavigating) EndTestNavigation(true); // 导航测试的手动走路兜底分支走完
 		}
 		return;
 	}

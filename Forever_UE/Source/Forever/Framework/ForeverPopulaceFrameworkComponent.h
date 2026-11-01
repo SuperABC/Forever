@@ -69,6 +69,16 @@ public:
 	// ACitizenElement::WalkTo全部路径点走完后的回调：更新Citizen::SetCurrentRoom。
 	void NotifyArrived(Citizen* citizen, Room* destination);
 
+	// 市民导航测试（script的test_navigate_citizen Change）：让这个市民由AIController带着沿行人
+	// 导航图走到机场一楼房间。起点：市民有当前房间就从房间导航节点出发，否则从最近的行人图节点出发
+	// （Map::PlanPedestrianRoute）；画折线调试线（复用交通组件的那条线），再交给
+	// ACitizenElement::StartTestNavigation。走路速度和车辆一样在测试期间翻倍。接不上图/连不到
+	// 目的地时屏幕左上角+日志提示。
+	void StartTestNavigation(const FString& citizenName);
+
+	// ACitizenElement测试导航走完（或被打断）后的回调：到达时更新当前房间，并清掉调试线。
+	void FinishTestNavigation(Citizen* citizen, Room* arrivedRoom);
+
 	// 武器系统命中citizen致死时调用（Citizen::TakeDamage()让IsDead()变成true之后）：
 	// Destroy()掉对应的ACitizenElement（如果当前有）、从activeInstances摘除。之后
 	// TickComponent的流式生成循环、FindOrSpawnCitizenByName都会跳过IsDead()的citizen，

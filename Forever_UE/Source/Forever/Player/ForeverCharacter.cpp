@@ -178,6 +178,9 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 		}
 	}
 
+	// AIController占有（市民导航测试）不是玩家操控：不发初始装备、不开武器可视化。
+	if (!Cast<APlayerController>(NewController)) return;
+
 	// 武器/背包系统初始化：左肩手枪+右肩步枪，背上一个容器装手枪/步枪/霰弹枪/狙击枪子弹各120发，
 	// 外加霰弹枪和狙击枪两把枪本身——只在
 	// Player的这三个槽位全空时(开局第一次占有)才发这套初始装备。肩膀/背包挂在Player身上，

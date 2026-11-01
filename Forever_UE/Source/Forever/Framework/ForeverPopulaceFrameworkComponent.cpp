@@ -4,6 +4,8 @@
 
 #include "Kismet/GameplayStatics.h"
 #include "Framework/ForeverFrameworkActor.h"
+#include "Framework/ForeverTrafficFrameworkComponent.h"
+#include "Engine/Engine.h"
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
 
@@ -225,6 +227,72 @@ void UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding() {
 void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* destination) {
 	if (!citizen || !destination || citizen->IsDead()) return;
 	citizen->SetCurrentRoom(destination);
+}
+
+void UForeverPopulaceFrameworkComponent::StartTestNavigation(const FString& citizenName) {
+	auto report = [](const FString& text, bool bError) {
+		UE_LOG(LogTemp, Warning, TEXT("UForeverPopulaceFrameworkComponent::StartTestNavigation: %s"), *text);
+		if (GEngine) GEngine->AddOnScreenDebugMessage(9101, 8.f, bError ? FColor::Red : FColor::Yellow, text);
+	};
+
+	ACitizenElement* element = FindOrSpawnCitizenByName(citizenName);
+	Citizen* citizen = element ? element->GetCitizen() : nullptr;
+	if (!map || !citizen) {
+		report(FString::Printf(TEXT("测试导航失败：找不到市民 %s"), *citizenName), true);
+		return;
+	}
+	if (element->GetController() != nullptr && !element->IsTestNavigating()) return; // 玩家正在操控这个市民
+
+	// 目的地：机场一楼（0层）的房间。
+	Room* destination = nullptr;
+	for (const auto& [buildingName, building] : map->GetBuildings()) {
+		if (!building || building->GetType() != "building_airport") continue;
+		for (Room* room : building->GetRooms()) {
+			if (room && room->GetLayer() == 0 && room->GetNavigationNode()) { destination = room; break; }
+		}
+		if (destination) break;
+	}
+	if (!destination) {
+		report(TEXT("测试导航失败：找不到机场一楼的房间"), true);
+		return;
+	}
+
+	UForeverTrafficFrameworkComponent* trafficLine = GetOwner() ? GetOwner()->FindComponentByClass<UForeverTrafficFrameworkComponent>() : nullptr;
+
+	element->CancelTestNavigation();
+	if (trafficLine) trafficLine->ClearTestNavigationLine();
+
+	FVector location = element->GetActorLocation();
+	Map::VehicleRoutePlan plan = map->PlanPedestrianRoute(citizen->GetCurrentRoom(),
+		location.X / POPULACE_WORLD_SCALE, location.Y / POPULACE_WORLD_SCALE, destination);
+
+	if (plan.status == Map::VehicleRoutePlan::NO_ROAD_CONNECTION) {
+		report(FString::Printf(TEXT("测试导航：%s 在行人导航图里找不到可用的起点节点"), *citizenName), true);
+		return;
+	}
+
+	TArray<FVector> path;
+	path.Add(location);
+	for (const Map::NavPoint& p : plan.points) {
+		path.Add(FVector(p.x, p.y, p.z) * POPULACE_WORLD_SCALE);
+	}
+	if (trafficLine) trafficLine->ShowTestNavigationLine(path);
+
+	if (plan.status == Map::VehicleRoutePlan::NO_PATH_TO_DESTINATION) {
+		report(FString::Printf(TEXT("测试导航：%s 的行人导航图连不到机场房间，折线只画到最近的节点"), *citizenName), true);
+		if (trafficLine) trafficLine->ScheduleClearTestNavigationLine(15.f);
+		return;
+	}
+
+	element->StartTestNavigation(path, destination);
+	report(FString::Printf(TEXT("测试导航：%s 出发，折线 %d 个点"), *citizenName, path.Num()), false);
+}
+
+void UForeverPopulaceFrameworkComponent::FinishTestNavigation(Citizen* citizen, Room* arrivedRoom) {
+	if (citizen && arrivedRoom) NotifyArrived(citizen, arrivedRoom);
+	if (UForeverTrafficFrameworkComponent* trafficLine = GetOwner() ? GetOwner()->FindComponentByClass<UForeverTrafficFrameworkComponent>() : nullptr) {
+		trafficLine->ClearTestNavigationLine();
+	}
 }
 
 void UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen* citizen) {

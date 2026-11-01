@@ -17,6 +17,8 @@
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/GameInstance.h"
@@ -219,6 +221,10 @@ void AVehicleElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AAc
 
 void AVehicleElement::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (bTestNavigating) {
+		bTestNavigating = false;
+		if (UForeverTrafficFrameworkComponent* owner = navOwner.Get()) owner->ClearTestNavigationLine();
+	}
 	vehicle = nullptr;
 	Super::EndPlay(EndPlayReason);
 }
@@ -333,9 +339,172 @@ void AVehicleElement::StopHandbrake(const FInputActionValue& value)
 	if (vehicleMovement) vehicleMovement->SetHandbrakeInput(false);
 }
 
+void AVehicleElement::StartTestNavigation(const TArray<FVector>& path, Room* destination, UForeverTrafficFrameworkComponent* owner)
+{
+	if (path.Num() < 2 || !carMesh || GetController()) return;
+	if (bTestNavigating) FinishTestNavigation(false);
+
+	navPath = path;
+	navIndex = 0;
+	navDestination = destination;
+	navOwner = owner;
+	navBlockedSeconds = 0.f;
+
+	// 车身本地包围盒（假设车头朝+X，Chaos车辆骨骼网格的惯例）：sweep用；最低点到原点的距离
+	// 用来按地面高度反推原点高度，不依赖具体车型的原点放在轮子接地点还是车身中间。
+	FBoxSphereBounds localBounds = carMesh->CalcBounds(FTransform::Identity);
+	navBoxHalfExtent = localBounds.BoxExtent;
+	navBoxCenterOffset = localBounds.Origin;
+	navGroundOffset = FMath::Max(0.f, -(localBounds.Origin.Z - localBounds.BoxExtent.Z));
+
+	carMesh->SetSimulatePhysics(false);
+	if (vehicleMovement) {
+		vehicleMovement->SetThrottleInput(0.f);
+		vehicleMovement->SetSteeringInput(0.f);
+		vehicleMovement->SetBrakeInput(0.f);
+	}
+	bTestNavigating = true;
+}
+
+void AVehicleElement::CancelTestNavigation()
+{
+	if (bTestNavigating) FinishTestNavigation(false);
+}
+
+void AVehicleElement::FinishTestNavigation(bool arrived)
+{
+	bTestNavigating = false;
+	navPath.Reset();
+
+	// 恢复成水平姿态再重新打开物理模拟，清掉残留速度，让车从当前位置自然落地。
+	FRotator rotation = GetActorRotation();
+	SetActorRotation(FRotator(0.f, rotation.Yaw, 0.f), ETeleportType::TeleportPhysics);
+	if (carMesh) {
+		carMesh->SetSimulatePhysics(true);
+		// SetSimulatePhysics(true)会把所有PhysType_Default的骨骼刚体重新打开，包括Chaos载具
+		// 初始化时(FixupSkeletalMesh)特意关掉模拟的轮子刚体——它们会变成独立刚体留在原地。
+		// 这里把轮子骨骼的刚体再关回去，由Chaos悬挂/动画驱动。
+		if (vehicleMovement) {
+			for (const FChaosWheelSetup& setup : vehicleMovement->WheelSetups) {
+				if (setup.BoneName == NAME_None) continue;
+				if (FBodyInstance* wheelBody = carMesh->GetBodyInstance(setup.BoneName)) {
+					wheelBody->SetInstanceSimulatePhysics(false);
+				}
+			}
+		}
+		carMesh->SetPhysicsLinearVelocity(FVector::ZeroVector);
+		carMesh->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+		carMesh->WakeAllRigidBodies();
+	}
+
+	if (vehicle && arrived) vehicle->SetCurrentRoom(navDestination);
+	if (UForeverTrafficFrameworkComponent* owner = navOwner.Get()) owner->ClearTestNavigationLine();
+	navOwner = nullptr;
+	navDestination = nullptr;
+}
+
+bool AVehicleElement::TraceGroundZ(const FVector& xy, float aroundZ, float& outZ) const
+{
+	FCollisionQueryParams params(SCENE_QUERY_STAT(VehicleTestNavGround), false, this);
+	FHitResult hit;
+	// 起点只比当前地面高一点：找的是"脚下这层"的地面，不是头顶的天花板或别的楼层。
+	if (GetWorld()->LineTraceSingleByChannel(hit, FVector(xy.X, xy.Y, aroundZ + 150.f),
+		FVector(xy.X, xy.Y, aroundZ - 400.f), ECC_Visibility, params)) {
+		outZ = hit.ImpactPoint.Z;
+		return true;
+	}
+	return false;
+}
+
+void AVehicleElement::TickTestNavigation(float deltaTime)
+{
+	if (navPath.Num() < 2) { FinishTestNavigation(false); return; }
+
+	FVector location = GetActorLocation();
+	FRotator rotation = GetActorRotation();
+
+	// 推进路点：已经进到路点附近就看下一个，最后一个点单独判定到达。
+	constexpr float kReachRadius = 150.f;
+	constexpr float kArriveRadius = 100.f;
+	while (navIndex < navPath.Num() - 1 && FVector::DistSquared2D(location, navPath[navIndex]) < kReachRadius * kReachRadius) {
+		navIndex++;
+	}
+	const FVector target = navPath[navIndex];
+	FVector2D toTarget(target.X - location.X, target.Y - location.Y);
+	float distance = toTarget.Size();
+	if (navIndex == navPath.Num() - 1 && distance < kArriveRadius) {
+		FinishTestNavigation(true);
+		return;
+	}
+
+	// 车头冲着目标方向转（转弯半径有限，不横着走）；角度差大时减速，原地也能慢慢转过去。
+	float desiredYaw = FMath::RadiansToDegrees(FMath::Atan2(toTarget.Y, toTarget.X));
+	float newYaw = FMath::FixedTurn(rotation.Yaw, desiredYaw, testNavTurnRate * deltaTime);
+	float yawError = FMath::Abs(FMath::FindDeltaAngleDegrees(newYaw, desiredYaw));
+	float speedScale = FMath::GetMappedRangeValueClamped(FVector2D(0.f, 60.f), FVector2D(1.f, 0.15f), yawError);
+	float step = FMath::Min(testNavSpeed * speedScale * deltaTime, distance);
+
+	FVector forward = FRotator(0.f, newYaw, 0.f).Vector();
+	FVector newXY = location + forward * step;
+
+	// 高度完全由地面决定：中心、前、后三条向下射线，中心定高度，前后高度差估算俯仰。
+	float currentGroundZ = location.Z - navGroundOffset;
+	float centerGround = currentGroundZ;
+	bool hasGround = TraceGroundZ(newXY, currentGroundZ, centerGround);
+	float newGroundZ = hasGround ? FMath::FInterpTo(currentGroundZ, centerGround, deltaTime, 12.f) : currentGroundZ;
+
+	float pitch = rotation.Pitch;
+	if (hasGround) {
+		float half = navBoxHalfExtent.X * 0.8f;
+		float frontGround, rearGround;
+		if (TraceGroundZ(newXY + forward * half, centerGround, frontGround) &&
+			TraceGroundZ(newXY - forward * half, centerGround, rearGround)) {
+			float targetPitch = FMath::Clamp(FMath::RadiansToDegrees(FMath::Atan2(frontGround - rearGround, 2.f * half)), -35.f, 35.f);
+			pitch = FMath::FInterpTo(rotation.Pitch, targetPitch, deltaTime, 8.f);
+		}
+	}
+
+	FRotator newRotation(pitch, newYaw, 0.f);
+	FVector newLocation(newXY.X, newXY.Y, newGroundZ + navGroundOffset + 2.f);
+
+	// 碰撞：用车自己的碰撞通道（和物理模拟时墙/车/地形对它的阻挡一致）扫一个抬高的水平box，
+	// 底面离地30，避开路面起伏；开始就嵌着东西(bStartPenetrating)不算挡，否则永远出不来。
+	constexpr float kClearance = 30.f;
+	FVector halfExtent(navBoxHalfExtent.X, navBoxHalfExtent.Y * 0.9f, FMath::Max(20.f, navBoxHalfExtent.Z - kClearance * 0.5f));
+	auto sweepCenter = [&](const FVector& origin, float groundZ, float yaw) {
+		FVector offset = FRotator(0.f, yaw, 0.f).RotateVector(FVector(navBoxCenterOffset.X, navBoxCenterOffset.Y, 0.f));
+		return FVector(origin.X + offset.X, origin.Y + offset.Y, groundZ + kClearance + halfExtent.Z);
+	};
+	FCollisionQueryParams params(SCENE_QUERY_STAT(VehicleTestNavSweep), false, this);
+	FHitResult hit;
+	bool blocked = GetWorld()->SweepSingleByChannel(hit,
+		sweepCenter(location, currentGroundZ, rotation.Yaw), sweepCenter(newLocation, newGroundZ, newYaw),
+		FRotator(0.f, newYaw, 0.f).Quaternion(), carMesh->GetCollisionObjectType(),
+		FCollisionShape::MakeBox(halfExtent), params) && !hit.bStartPenetrating;
+
+	if (blocked) {
+		// 只转车头不前进；卡住太久放弃，别永远顶着墙。
+		navBlockedSeconds += deltaTime;
+		SetActorRotation(FRotator(rotation.Pitch, newYaw, 0.f), ETeleportType::TeleportPhysics);
+		if (navBlockedSeconds > 3.f) {
+			FString hitName = hit.GetActor() ? hit.GetActor()->GetName() : TEXT("?");
+			FString text = FString::Printf(TEXT("车辆导航被挡住，已放弃 (%s)"), *hitName);
+			UE_LOG(LogTemp, Warning, TEXT("AVehicleElement::TickTestNavigation: %s，位置=%s"), *text, *location.ToString());
+			if (GEngine) GEngine->AddOnScreenDebugMessage(9101, 8.f, FColor::Red, text);
+			FinishTestNavigation(false);
+		}
+		return;
+	}
+
+	navBlockedSeconds = 0.f;
+	SetActorLocationAndRotation(newLocation, newRotation, false, nullptr, ETeleportType::TeleportPhysics);
+}
+
 void AVehicleElement::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (bTestNavigating) TickTestNavigation(DeltaTime);
 
 	if (!vehicle) return;
 

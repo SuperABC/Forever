@@ -5,6 +5,7 @@
 
 #include "CitizenElement.generated.h"
 
+class AAIController;
 class UBoxComponent;
 class UPrimitiveComponent;
 class Citizen;
@@ -57,6 +58,14 @@ public:
 	// 路径点插值前进。
 	void WalkTo(const TArray<FVector>& waypoints, Room* destination);
 
+	// 导航测试（UForeverPopulaceFrameworkComponent::StartTestNavigation）：生成一个AAIController
+	// 占有自己，占有自己当操控者，沿path（世界坐标，第一个点是当前位置）逐点AddMovementInput
+	// 只判水平距离走过去（不用UPathFollowingComponent：它的到达判定含竖直方向，导致原地打转）；走路速度翻倍。
+	// 走完/被打断时还原速度、销毁AIController，走到终点则回调framework->FinishTestNavigation。
+	void StartTestNavigation(const TArray<FVector>& path, Room* destination);
+	void CancelTestNavigation();
+	bool IsTestNavigating() const { return bTestNavigating; }
+
 	// 直接把这个已经生成的Actor瞬移到destination房间（房间中心+和Init()同一套随机抖动/
 	// 落地高度计算），并同步更新Citizen::SetCurrentRoom+SetPosition——
 	// UForeverPopulaceFrameworkComponent::RequestWalk发现这个citizen当前有对应Actor、
@@ -93,6 +102,16 @@ protected:
 
 private:
 	void BuildProximityBox();
+
+	// 收尾：还原速度/免销毁标记，解除并销毁AIController；arrived为true时通知framework到达。
+	void EndTestNavigation(bool arrived);
+
+	bool bTestNavigating = false;
+	Room* testNavDestination = nullptr;
+	float testNavSavedMaxWalkSpeed = 0.f;
+
+	UPROPERTY()
+	TObjectPtr<AAIController> testNavController;
 
 	// Init()"换房间后从未在场景里实例化过"分支、TeleportToRoom()共用的落地位置计算：
 	// 房间中心+随机抖动+楼层高度换算成落脚点世界坐标，见Init()原本的注释。room为空

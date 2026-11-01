@@ -317,14 +317,19 @@ struct BuildingNavResult {
 	std::vector<Node*> outsideNodes;
 
 	// 车行导航图的平行三件套——语义和上面nodes/connections/outsideNodes完全一样(vehicleNodes
-	// 同样已经无条件包含vehicleOutsideNodes的每个成员，不需要也不能重复登记)，唯一区别是
+	// 同样已经无条件包含vehicleEntranceNodes/vehicleExitNodes的每个成员，不需要也不能重复登记)，唯一区别是
 	// 数据来源是各楼层的vehicleNavigation模板而不是pedestrianNavigation。之所以不共用一套
 	// 字段，是因为车行图和行人图是两张独立的图(Map::vehicleNavGraph/pedestrianNavGraph)，
 	// 合并方式也不同(车行按入度/出度判定单向连接，行人固定双向)，混在一起会分不清一个
 	// Connection*该插进哪张图。
 	std::vector<Node*> vehicleNodes;
 	std::vector<Connection*> vehicleConnections;
-	std::vector<Node*> vehicleOutsideNodes;
+	// 车行导航的显式入口/出口端点(layout里的"entrance"/"exit"类型)——和上面outsideNodes
+	// 同样已经包含在vehicleNodes里，只是单独拎出清单给Map接路网。方向由端点类型直接决定
+	// (exit: node->路，entrance: 路->node)，不再按building内部图的入度/出度推断；同一个node
+	// 可以同时出现在两个清单里。车行导航不支持"outside"类型。
+	std::vector<Node*> vehicleEntranceNodes;
+	std::vector<Node*> vehicleExitNodes;
 };
 
 // Building：持有一个具体BuildingMod实例，代表一栋已经落地的Building（继承Quad表示自己
@@ -491,7 +496,7 @@ private:
 	void BuildPedestrianNavigation(const BuildingLayoutLibrary& library, int direction, BuildingNavResult& navOut);
 
 	// 按各楼层的vehicleNavigation模板构建building内部车行导航图数据，写进navOut的
-	// vehicleNodes/vehicleConnections/vehicleOutsideNodes。转发BuildNavigationGraph
+	// vehicleNodes/vehicleConnections/vehicleEntranceNodes/vehicleExitNodes。转发BuildNavigationGraph
 	// (isVehicle=true, registerRoomNodes=false)——registerRoomNodes必须是false：
 	// Room::GetNavigationNode()只能登记进navOut.nodes一次，已经在BuildPedestrianNavigation
 	// 里做过，这里重复登记会导致同一个Node*出现在navAnchorNodes两次，~Map()清理时对它
@@ -504,7 +509,8 @@ private:
 	// 控制要不要在结尾把每个Room自己的导航节点登记进newNodes(只应该有一次调用传true)。
 	void BuildNavigationGraph(const BuildingLayoutLibrary& library, int inputDirection, bool isVehicle,
 		std::vector<Node*>& newNodes, std::vector<Connection*>& newConnections,
-		std::vector<Node*>& outsideNodes, bool registerRoomNodes);
+		std::vector<Node*>& outsideNodes, bool registerRoomNodes,
+		std::vector<Node*>* entranceNodes = nullptr, std::vector<Node*>* exitNodes = nullptr);
 
 	static float ProjectOntoLine(float px, float py, float ax, float ay, float bx, float by);
 

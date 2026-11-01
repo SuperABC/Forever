@@ -250,18 +250,12 @@ building内部的行人导航图，产出一个`BuildingNavResult`（新建节�
     同一个`Node*`会在`navAnchorNodes`里出现两次，`~Map()`按`navAnchorNodes`逐个`delete`
     时对它double free，退出游戏必现崩溃。
 
-**车辆导航（`result.vehicleNodes`/`vehicleConnections`/`vehicleOutsideNodes`）**：和上面
+**车辆导航（`result.vehicleNodes`/`vehicleConnections`/`vehicleEntranceNodes`/`vehicleExitNodes`）**：和上面
 行人分支平行处理——`result.vehicleNodes`登记进`navAnchorNodes`；
 `result.vehicleConnections`**只按`Connection`自己的`Start→End`方向单向插入
 `vehicleNavGraph`**（不能照抄行人"两个方向都插入"，车道本来就有方向性，和`InitRoadnet`给
-普通`Road`建车行图同一个"单向、按实际通行方向"的约定）；`result.vehicleOutsideNodes`里每个
-`outsideNode`，先在`result.vehicleConnections`里统计它的**入度/出度**（按`Node::GetId()`
-比较，某条connection的`GetEnd().GetId()`等于这个`outsideNode`算一次入度，`GetStart()`
-等于算一次出度）——**入度为0（只有出边）是出口**：车辆从building内部经这个node开到路上，
-最终连接方向`outsideNode→路面access node`（单向）；**出度为0（只有入边）是入口**：车辆
-从路面开进building，方向`路面access node→outsideNode`（单向）；入度出度都不为0（这个
-node在building内部图里本来就双向都在用）或都为0（孤立点）则**拒绝**接路网，只留在
-`navAnchorNodes`里（不产生pending项）。边界Road/方向判定（`GetBoundaryRoad(GetDirection())`
+普通`Road`建车行图同一个"单向、按实际通行方向"的约定）；`result.vehicleEntranceNodes`里每个node是**入口**（方向`路面access node→node`，单向），`result.vehicleExitNodes`里每个是**出口**（方向`node→路面access node`，单向），方向由layout的`entrance`/`exit`端点直接给出，不再按入度/出度推断；同一个node可以同时在两个清单里。
+边界Road/方向判定（`GetBoundaryRoad(GetDirection())`
 +投影+`useForwardSide`符号判断，决定接到路的哪一侧车道）和行人分支完全复用同一段代码。
 `Map::PendingRoadAccess`因此有`isVehicle`/`isExit`两个字段，`FlushPendingBuildingRoadAccess()`
 分组key也加入`isVehicle`（车行/人行是完全独立的车道空间，不应该混进同一组按物理顺序排序），
@@ -571,3 +565,11 @@ scriptFactory`引用成员（`CreateDoor`创建门的Script要用，和`terrainF
 `Forever_UE/Resource/Story/entity_event.script`（zone/building/room 六种进出事件写在同一个脚本里，
 三种实体都能挂；residence 的 zone/building/room 和 Yuanshen 都挂了它）。
 
+
+## 车辆路径规划：PlanVehicleRoute（测试导航用）
+
+`Map::PlanVehicleRoute(startRoom, x, y, destRoom)`返回`VehicleRoutePlan{status, points}`（地图单位折线）。
+起点在房间里 -> 从`startRoom->GetNavigationNode()`出发（房间没有车行出边 = `NO_ROAD_CONNECTION`）；否则在
+大路+小路+Zone内部路里按垂足距离取最近几条，两个行驶方向各调一次`GetLaneSegmentAt`，取"车->垂足->车道下一个
+锚点->Dijkstra到目的房间导航节点"总长最短的。连不到目的地返回`NO_PATH_TO_DESTINATION`，points只含"接到路上"
+的那一小段。z只是图里的参考高度，真实高度由UE侧贴地决定。

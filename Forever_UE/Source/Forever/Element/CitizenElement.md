@@ -172,3 +172,14 @@ BuildCollisionBox()`同一套写法：`"Trigger"`碰撞profile，`OnComponentBeg
 - 真实资产替换`SKM_Manny_Simple`占位。
 - 靠近检测碰撞盒尺寸（`CITIZEN_PROXIMITY_HALF_XY`/`_Z`）是按经验给的初始值，可能需要按
   真实资产的实际比例微调。
+
+## 导航测试（test_navigate_citizen）
+
+脚本 Change `test_navigate_citizen`（`schedule_empty.script` 里的「测试导航」选项）→ `UForeverPopulaceFrameworkComponent::StartTestNavigation(name)`：
+用 `Map::PlanPedestrianRoute` 规划行人折线（有当前房间从房间节点出发，否则取最近的行人图节点），画调试线（复用交通组件的 `ShowTestNavigationLine`），再交给 `ACitizenElement::StartTestNavigation`。
+
+- 生成 `AAIController` 占有市民，只当操控者；移动沿用 `WalkTo` 那套逐点 `AddMovementInput`（只判水平距离）；`MaxWalkSpeed` 临时 ×2。不用 `UPathFollowingComponent`：它的到达判定含竖直方向，行人图节点 Z 和脚底对不上会永远判不到达，实测原地打转。
+- 结束/被打断（`EndTestNavigation`）：还原速度、解除并销毁 AIController、取消免销毁标记；到达则 `NotifyArrived` 并清调试线。玩家接管该市民时自动收尾。
+- `AForeverCharacter::PossessedBy` 对非玩家控制器直接返回（不发初始装备/武器可视化）。
+- 车辆导航测试同时提速：`testNavSpeed` 1200、`testNavTurnRate` 180。
+- 未在 PIE 验证。

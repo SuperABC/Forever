@@ -65,3 +65,9 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
 
 ## 脚本可为空
 `VehicleMod::scriptModName`默认`""`，和`milestoneNames`都空则`GetScript()==nullptr`(见`Core/story/script.md`MakeScript)；`AVehicleElement`没有脚本且没有选项时不挂弹选项的触发盒，之后`add_option`出现选项时`RefreshOptions`补建。市民同理(Scheduler脚本为空且无选项不建盒)。Job/Organization/Scheduler同样可为空。
+
+## 当前所在房间：GetCurrentRoom / SetCurrentRoom
+
+运行时状态，不进存档。`SetParking`时初始化成停车位房间；测试导航出发时置空、到达时设成目的房间；玩家上车
+(`ApplyEnterVehicle`)时置空。`Map::PlanVehicleRoute`据此决定起点是房间导航节点还是路网上最近的车道。读档后为
+空（当作在室外）。

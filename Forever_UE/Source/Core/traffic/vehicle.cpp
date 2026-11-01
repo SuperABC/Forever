@@ -96,12 +96,16 @@ void Vehicle::RemoveOption(const string& option) {
 
 void Vehicle::SetParking(Room* inRoom, float localX, float localY, float localRotationDegrees) {
 	room = inRoom;
+	currentRoom = inRoom;
 	parkingLocalX = localX;
 	parkingLocalY = localY;
 	parkingRotationDegrees = localRotationDegrees;
 }
 
 Room* Vehicle::GetRoom() const { return room; }
+
+Room* Vehicle::GetCurrentRoom() const { return currentRoom; }
+void Vehicle::SetCurrentRoom(Room* inRoom) { currentRoom = inRoom; }
 
 void Vehicle::GetParkingLocalPosition(float& outX, float& outY) const {
 	outX = parkingLocalX;

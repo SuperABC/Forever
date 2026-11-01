@@ -211,7 +211,9 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 // pedestrianNavigation / vehicleNavigation: {
 //   nodes:       [{ position:[xr,xo,yr,yo] }, ...]
 //   lines:       [{ begin:[4], end:[4] }, ...]
-//   connections: [{ begin:endpoint, end:endpoint }, ...]
+//   connections: [{ begin:endpoint, end:endpoint, forward?:bool, backward?:bool }, ...]
+//   (vehicleNavigation only: forward = begin->end, backward = end->begin, both = two-way;
+//    absent = forward only. Same optional fields on `lines`. Stair links are always two-way.)
 // }
 //
 // Both layers share this identical structure and are edited independently — one
@@ -225,6 +227,9 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 //   { type:'single',    idx:N }            — single room's implicit nav node
 //   { type:'row',       idx:N }            — row room's implicit nav node
 //   { type:'outside'  }                    — external (no position)
+//   { type:'entrance' }                    — vehicleNavigation only: node is a road->node entrance (no position)
+//   { type:'exit'     }                    — vehicleNavigation only: node is a node->road exit (no position)
+//                                            (one node may carry both; 'outside' is pedestrianNavigation only)
 //   { type:'upstair'  }                    — external (no position)
 //   { type:'downstair'}                    — external (no position)
 //
@@ -296,12 +301,15 @@ const ALL_KEYS = ['stairs', 'elevators', 'ramps', 'ceilings', 'grounds', 'hatche
 // Navigation mode: colors for outer connection rings drawn around nodes
 const OUTER_CONN_COLORS = {
   outside:   '#ff4444',  // red
+  entrance:  '#ff9933',  // orange (vehicle navigation only)
+  exit:      '#cc44ff',  // purple (vehicle navigation only)
   upstair:   '#44cc88',  // green
   downstair: '#4488ff',  // blue
 };
 const OUTER_CONN_LABEL = {
-  outside: '外部出口', upstair: '上楼', downstair: '下楼',
+  outside: '外部出口', entrance: '车辆入口', exit: '车辆出口', upstair: '上楼', downstair: '下楼',
 };
+const VEHICLE_ONLY_OUTER = new Set(['entrance', 'exit']);
 
 // Navigation mode: colors for labeled node circles
 const NAV_CIRCLE_R = 8;  // radius for all labeled nav circles
@@ -612,7 +620,8 @@ function activeNav() {
 
 // Returns true for endpoint types that have no canvas position (outside/upstair/downstair)
 function isExternalEndpoint(ep) {
-  return ep.type === 'outside' || ep.type === 'upstair' || ep.type === 'downstair';
+  return ep.type === 'outside' || ep.type === 'entrance' || ep.type === 'exit'
+      || ep.type === 'upstair' || ep.type === 'downstair';
 }
 
 // Resolve an endpoint to [normX, normY], or null if it has no position
@@ -911,6 +920,10 @@ function drawNavMode() {
     ctx.lineTo(bx, by);
     ctx.stroke();
     ctx.restore();
+    if (S.mode === 'vehicleNavigation') {
+      if (navForward(conn))  drawNavArrow(ax, ay, bx, by, navBackward(conn) ? 0.6 : 0.5, '#7fd0ff');
+      if (navBackward(conn)) drawNavArrow(bx, by, ax, ay, navForward(conn) ? 0.6 : 0.5, '#ffb07f');
+    }
   }
 
   // ── 3. Path lines ──
@@ -930,6 +943,10 @@ function drawNavMode() {
     ctx.setLineDash(isSel ? [8, 5] : []);
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
     ctx.restore();
+    if (S.mode === 'vehicleNavigation') {
+      if (navForward(line))  drawNavArrow(bx, by, ex, ey, navBackward(line) ? 0.6 : 0.5, '#7fd0ff');
+      if (navBackward(line)) drawNavArrow(ex, ey, bx, by, navForward(line) ? 0.6 : 0.5, '#ffb07f');
+    }
 
     // Start = brown, End = orange; both labeled with line index i
     drawNavCircle(bx, by, NAV_CIRCLE_R, NAV_CIRCLE_COLOR.lineStart, i);
@@ -1347,6 +1364,40 @@ function lbl(text) {
   return Object.assign(document.createElement('label'), { textContent: text });
 }
 
+// Vehicle-navigation travel direction of a connection / path line. `forward` = begin->end
+// (顺), `backward` = end->begin (逆); both on = two-way. Fields absent in the JSON mean the
+// legacy behaviour: forward only. Pedestrian navigation is always two-way and ignores these.
+function navForward(obj)  { return obj.forward  === undefined ? true  : !!obj.forward;  }
+function navBackward(obj) { return obj.backward === undefined ? false : !!obj.backward; }
+function makeDirectionRow(obj) {
+  if (S.mode !== 'vehicleNavigation') return null;
+  const row = div('row');
+  row.appendChild(lbl('通行方向'));
+  row.appendChild(makeCheckLabel('顺(begin→end)', navForward(obj), v => {
+    obj.forward = v; obj.backward = navBackward(obj); redraw();
+  }));
+  row.appendChild(makeCheckLabel('逆(end→begin)', navBackward(obj), v => {
+    obj.backward = v; obj.forward = navForward(obj); redraw();
+  }));
+  return row;
+}
+// Small arrow head at fraction t along (x1,y1)->(x2,y2), pointing towards (x2,y2).
+function drawNavArrow(x1, y1, x2, y2, t, color) {
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+  if (len < 14) return;
+  const ux = dx / len, uy = dy / len;
+  const px = x1 + dx * t, py = y1 + dy * t, size = 7;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(px + ux * size, py + uy * size);
+  ctx.lineTo(px - ux * size - uy * size * 0.6, py - uy * size + ux * size * 0.6);
+  ctx.lineTo(px - ux * size + uy * size * 0.6, py - uy * size - ux * size * 0.6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 // ── Panel Rendering ───────────────────────────────────────────────────────────
 
 function renderPanel() {
@@ -1479,6 +1530,10 @@ function makeNavNodeSec() {
       return hasExt && hasNode;
     });
     const exists = connIdx >= 0;
+    // entrance/exit are vehicle-only; outside is pedestrian-only (the game ignores it in vehicle nav).
+    const isVehicleMode = S.mode === 'vehicleNavigation';
+    if (VEHICLE_ONLY_OUTER.has(extType) && !isVehicleMode) continue;
+    if (extType === 'outside' && isVehicleMode) continue;
     const row = div('row');
     const dot = document.createElement('span');
     dot.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:${OUTER_CONN_COLORS[extType]};flex-shrink:0;`;
@@ -1547,6 +1602,8 @@ function makeNavLineSec() {
     });
     sec.appendChild(grid);
   }
+  const lineDirectionRow = makeDirectionRow(line);
+  if (lineDirectionRow) sec.appendChild(lineDirectionRow);
 
   // Delete line: remove it and all connections referencing it, fix remaining indices
   sec.appendChild(document.createElement('hr'));
@@ -1601,6 +1658,8 @@ function makeNavConnSec() {
     });
     sec.appendChild(div('row', endSel));
   }
+  const connDirectionRow = makeDirectionRow(conn);
+  if (connDirectionRow) sec.appendChild(connDirectionRow);
 
   sec.appendChild(document.createElement('hr'));
   sec.appendChild(div('row',

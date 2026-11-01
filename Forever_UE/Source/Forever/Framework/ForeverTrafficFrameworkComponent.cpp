@@ -15,7 +15,9 @@
 #include "common/utility.h"
 #include "story/event.h"
 
+#include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "ProceduralMeshComponent.h"
@@ -307,7 +309,9 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 		// 写，存档不受影响)。正被玩家操控的车(Controller非空)不销毁。
 		entry.location = element->GetActorLocation();
 		entry.yaw = element->GetActorRotation().Yaw;
-		if (element->GetController() == nullptr && TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE) {
+		// 正在自己导航的车(测试导航)也不销毁：玩家是跟着车跑，但跑远了销毁会丢掉导航状态。
+		if (element->GetController() == nullptr && !element->IsTestNavigating() &&
+			TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE) {
 			activeVehicles.Remove(entry.name);
 			element->Destroy();
 			entry.element = nullptr;
@@ -354,6 +358,10 @@ void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicle
 
 	APawn* currentPawn = controller->GetPawn();
 	if (!currentPawn || currentPawn == vehicleElement) return;
+
+	// 玩家要自己开了：测试导航中的车先取消(恢复物理、清折线)，并且这辆车不再算"停在某个房间里"。
+	vehicleElement->CancelTestNavigation();
+	if (Vehicle* coreVehicle = vehicleElement->GetVehicle()) coreVehicle->SetCurrentRoom(nullptr);
 
 	// 隐藏之后这个pawn会一直停在原地，但UForeverPopulaceFrameworkComponent::TickComponent的
 	// 距离流式销毁只看"离当前玩家pawn多远"——玩家开车远离之后这个停在原地的市民会被判定为
@@ -645,6 +653,122 @@ void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 	applySection(trainRouteMesh, trainRouteMaterial, trainVertices, trainTriangles);
 	applySection(planeRouteMesh, planeRouteMaterial, planeVertices, planeTriangles);
 	applySection(otherRouteMesh, otherRouteMaterial, otherVertices, otherTriangles);
+}
+
+void UForeverTrafficFrameworkComponent::ClearTestNavigationLine() {
+	if (testNavMesh) testNavMesh->ClearMeshSection(0);
+	if (UWorld* world = GetWorld()) world->GetTimerManager().ClearTimer(testNavClearTimer);
+}
+
+void UForeverTrafficFrameworkComponent::StartTestNavigation(const FString& vehicleName) {
+	// 屏幕左上角+日志同时输出（屏幕消息不进Forever.log，见CONVENTIONS）；固定key 9100避免叠行。
+	auto report = [](const FString& text, bool bError) {
+		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartTestNavigation: %s"), *text);
+		if (GEngine) GEngine->AddOnScreenDebugMessage(9100, 8.f, bError ? FColor::Red : FColor::Yellow, text);
+	};
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Map* map = framework ? framework->GetMap() : nullptr;
+	AVehicleElement* element = FindOrSpawnVehicle(vehicleName);
+	Vehicle* vehicle = element ? element->GetVehicle() : nullptr;
+	if (!map || !vehicle) {
+		report(FString::Printf(TEXT("测试导航失败：找不到车辆 %s"), *vehicleName), true);
+		return;
+	}
+	if (element->GetController()) return; // 玩家正在开这辆车
+
+	// 目的地：机场一楼（0层）的房间。
+	Room* destination = nullptr;
+	for (const auto& [buildingName, building] : map->GetBuildings()) {
+		if (!building || building->GetType() != "building_airport") continue;
+		for (Room* room : building->GetRooms()) {
+			if (room && room->GetLayer() == 0 && room->GetNavigationNode()) { destination = room; break; }
+		}
+		if (destination) break;
+	}
+	if (!destination) {
+		report(TEXT("测试导航失败：找不到机场一楼的房间"), true);
+		return;
+	}
+
+	element->CancelTestNavigation();
+	ClearTestNavigationLine();
+
+	FVector carLocation = element->GetActorLocation();
+	Map::VehicleRoutePlan plan = map->PlanVehicleRoute(vehicle->GetCurrentRoom(),
+		carLocation.X / TRAFFIC_WORLD_SCALE, carLocation.Y / TRAFFIC_WORLD_SCALE, destination);
+
+	if (plan.status == Map::VehicleRoutePlan::NO_ROAD_CONNECTION) {
+		report(FString::Printf(TEXT("测试导航：%s 没有任何connection能连到大路或小路上（%s）"), *vehicleName,
+			vehicle->GetCurrentRoom() ? TEXT("起点房间没有车辆出口") : TEXT("附近找不到可用车道")), true);
+		return;
+	}
+
+	// 折线转UE世界坐标；第一个点换成车的真实位置（从房间出发时在前面补上车的位置）。
+	TArray<FVector> path;
+	path.Add(carLocation);
+	for (size_t i = 0; i < plan.points.size(); i++) {
+		const Map::NavPoint& p = plan.points[i];
+		if (i == 0 && !vehicle->GetCurrentRoom()) continue; // 路网起点就是车位置，已经补过
+		path.Add(FVector(p.x * TRAFFIC_WORLD_SCALE, p.y * TRAFFIC_WORLD_SCALE, p.z * TRAFFIC_WORLD_SCALE));
+	}
+
+	ShowTestNavigationLine(path);
+
+	if (plan.status == Map::VehicleRoutePlan::NO_PATH_TO_DESTINATION) {
+		report(FString::Printf(TEXT("测试导航：%s 的导航图连不到机场房间，折线只画到路上"), *vehicleName), true);
+		if (UWorld* world = GetWorld()) {
+			world->GetTimerManager().SetTimer(testNavClearTimer, this, &UForeverTrafficFrameworkComponent::ClearTestNavigationLine, 15.f, false);
+		}
+		return;
+	}
+
+	if (path.Num() < 2) { // 已经在目的房间
+		vehicle->SetCurrentRoom(destination);
+		report(FString::Printf(TEXT("测试导航：%s 已经在目的房间"), *vehicleName), false);
+		return;
+	}
+
+	vehicle->SetCurrentRoom(nullptr); // 出发：不再算在任何房间里，到达时由AVehicleElement设成目的房间
+	element->StartTestNavigation(path, destination, this);
+	report(FString::Printf(TEXT("测试导航：%s 出发，折线 %d 个点"), *vehicleName, path.Num()), false);
+}
+
+void UForeverTrafficFrameworkComponent::ShowTestNavigationLine(const TArray<FVector>& path) {
+	// 调试折线：水平细带+竖直细带（从侧面也看得见），抬高一点免得埋进路面。
+	AActor* owner = GetOwner();
+	if (owner && path.Num() >= 2) {
+		if (!testNavMesh) {
+			testNavMesh = NewObject<UProceduralMeshComponent>(owner, TEXT("TestNavDebug"));
+			testNavMesh->SetupAttachment(owner->GetRootComponent());
+			testNavMesh->RegisterComponent();
+			owner->AddInstanceComponent(testNavMesh);
+		}
+		if (pureBaseMaterial && !testNavMaterial) {
+			testNavMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
+			testNavMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.f, 0.6f, 0.f));
+		}
+		constexpr float kLift = 80.f, kHalfWidth = 30.f, kWallHeight = 60.f;
+		TArray<FVector> vertices;
+		TArray<int32> triangles;
+		for (int32 i = 0; i + 1 < path.Num(); i++) {
+			FVector a = path[i] + FVector(0.f, 0.f, kLift), b = path[i + 1] + FVector(0.f, 0.f, kLift);
+			AppendRouteEdgeRibbon(vertices, triangles, a, b, kHalfWidth);
+			RouteAppendQuadDoubleSided(vertices, triangles, a, b, b + FVector(0.f, 0.f, kWallHeight), a + FVector(0.f, 0.f, kWallHeight));
+		}
+		AppendRouteStationBox(vertices, triangles, FVector2D(path.Last().X, path.Last().Y),
+			ROUTE_DEBUG_NODE_HALF_SIZE, path.Last().Z + kLift, path.Last().Z + kLift + 200.f);
+		testNavMesh->ClearMeshSection(0);
+		testNavMesh->CreateMeshSection(0, vertices, triangles,
+			TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
+		if (testNavMaterial) testNavMesh->SetMaterial(0, testNavMaterial);
+	}
+}
+
+void UForeverTrafficFrameworkComponent::ScheduleClearTestNavigationLine(float seconds) {
+	if (UWorld* world = GetWorld()) {
+		world->GetTimerManager().SetTimer(testNavClearTimer, this, &UForeverTrafficFrameworkComponent::ClearTestNavigationLine, seconds, false);
+	}
 }
 
 UInstancedStaticMeshComponent* UForeverTrafficFrameworkComponent::GetOrCreateTrackISM(const string& meshPath) {

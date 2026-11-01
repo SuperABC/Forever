@@ -109,13 +109,10 @@
   outsideNodes, registerRoomNodes)`——node/line/connection解析逻辑本来就是纯数据驱动、
   和"行人"这个语义无关，`isVehicle`只决定读`library.GetPedestrianNavigation`还是
   `GetVehicleNavigation`。`BuildVehicleNavigation`写进`BuildingNavResult`的平行字段
-  `vehicleNodes`/`vehicleConnections`/`vehicleOutsideNodes`，且必须传
+  `vehicleNodes`/`vehicleConnections`/`vehicleEntranceNodes`/`vehicleExitNodes`，且必须传
   `registerRoomNodes=false`——`Room::GetNavigationNode()`的登记只能做一次(已经在
   `BuildPedestrianNavigation`那次调用里做过)，车辆build如果重复登记，`Map::navAnchorNodes`
-  会出现同一个`Node*`两次，`~Map()`清理时double free。`outsideNode`接路网的方向（单向，车道
-  本来就有方向性，不像行人固定双向）按这个node在`vehicleConnections`里的入度/出度判定：入度
-  为0是出口（`outsideNode`→路面access node）、出度为0是入口（access node→`outsideNode`）、
-  两者都不为0（building内部图里本来就双向都在用）或都为0（孤立点）则拒绝接路网，详见
+  会出现同一个`Node*`两次，`~Map()`清理时double free。车辆接路网的方向（单向，车道本来就有方向性）由layout里的`entrance`/`exit`端点类型直接决定，见下面"车辆导航的显式入口/出口端点"一节，详见
   `map.md`"InitBuildings"一节`Map::MergeBuildingNavigation`的车辆分支。
 - **`Room`自己中心点的导航节点(`Room::SetNavigationNode`)必须登记进
   `BuildingNavResult::nodes`**——这些节点由`Building::Layout()`创建、不在`floorFixedNodes`/
@@ -188,3 +185,27 @@
 
 ## 房间朝向
 `Room::direction`在`AssignRoom`/`ArrangeRow`里取自烘焙过的single/row朝向(`InverseDirection(layoutDir, face)`)，即建筑局部坐标系下的房间正面方向；房间局部坐标系和换算见`room.md`。
+
+## 车辆导航的显式入口/出口端点（entrance / exit）
+
+`vehicleNavigation`里用两个端点类型标记接路网的node，**只在车行导航里有效**（行人导航里出现会被忽略并打一条
+debugf警告）。车行导航**不再支持`outside`**（出现会被忽略并打警告；`outside`只用于行人导航）：
+
+- `{ "type": "exit" }`：另一端的node是出口，接路网后连接方向`node -> 路上access node`。
+- `{ "type": "entrance" }`：另一端的node是入口，接路网后连接方向`路上access node -> node`。
+
+和`outside`一样不生成Connection，只是标记；一个node可以同时连`entrance`和`exit`（各产生一个接路网的开口，落在
+同一个t上时`BreakThroughLine`会复用同一个access node）。解析在`Building::BuildNavigationGraph`，结果存在
+`BuildingNavResult::vehicleEntranceNodes/vehicleExitNodes`，`Map::MergeBuildingNavigation`直接按清单入
+`pendingBuildingRoadAccess`，不再看度数。
+`Source/layout_editor.html`的"层外连接"里车行导航模式多了"车辆入口/车辆出口"两项。
+
+## 车行导航连线的通行方向（forward / backward）
+
+`vehicleNavigation`里每条`connections`和每条`lines`可选带两个布尔字段：`"forward"`（沿begin->end通行）和
+`"backward"`（沿end->begin通行），都为true就是双向。缺省值`forward=true, backward=false`，等价于旧layout的
+行为（只顺向）。行人导航恒定双向，忽略这两个字段。`NavigationConnectionTemplate/NavigationLineTemplate`在
+`Dependence/map/general_geometry.h`，解析在`ParseNavigationBlock`，展开在`BuildNavigationGraph`的
+`addConnection`（line投影连接按模板begin/end确定方向）。**上下楼(upstair/downstair)匹配出来的连线车行导航恒定
+双向**，entrance/exit/outside这类标记端点不受影响。`layout_editor.html`在车行导航模式的连接/路径面板里有
+"顺/逆"两个勾选，画布上用箭头显示方向。

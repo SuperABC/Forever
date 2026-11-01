@@ -7,7 +7,9 @@
             "drop": "true",
             "description": "",
             "goal": "",
-            "changes": [ { "type": "add_option", "name": "$$self.name", "option": "测试" } ],
+            "changes": [
+                { "type": "add_option", "name": "$$self.name", "option": "测试" }
+            ],
             "dialogs": [],
             "subsequences": []
         },

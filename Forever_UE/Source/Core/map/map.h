@@ -327,6 +327,30 @@ public:
 	};
 	bool GetLaneSegmentAt(Road* road, float x, float y, float dirX, float dirY, LaneSegment& out) const;
 
+	// 车辆导航测试用：从任意起点规划一条到destRoom的折线（地图单位）。起点按两种情况：
+	// startRoom非空 -> 从该房间的导航节点出发（车在房间里）；否则 -> 从(x,y)找最近的大路/
+	// 小路/Zone内部路，垂直落在车行道中线上，再接到该车道行驶方向的下一个锚点，从那里在
+	// vehicleNavGraph上跑Dijkstra。z只是图里的参考高度，真实高度由UE物理/贴地决定。
+	//   OK：points是完整折线（起点...目的房间节点）；起点==终点（车已在目的房间）时points为空。
+	//   NO_PATH_TO_DESTINATION：找到了起点所在的路但图里连不到目的地，points只含"起点->接上
+	//     路"这一小段（供调试线显示连到了哪条路）。
+	//   NO_ROAD_CONNECTION：根本接不上路（房间没有出边/附近没有可用车道），points为空。
+	struct NavPoint { float x = 0.f, y = 0.f, z = 0.f; };
+	struct VehicleRoutePlan {
+		enum Status { OK, NO_PATH_TO_DESTINATION, NO_ROAD_CONNECTION };
+		Status status = NO_ROAD_CONNECTION;
+		std::vector<NavPoint> points;
+	};
+	VehicleRoutePlan PlanVehicleRoute(Room* startRoom, float x, float y, Room* destRoom) const;
+
+	// 市民导航测试用：从任意起点规划一条到destRoom的行人折线（地图单位）。startRoom非空且有
+	// 行人导航节点 -> 从该房间节点出发；否则从(x,y)最近的几个行人图节点里挑第一个能走到
+	// 目的地的。points是各导航节点坐标（含起点节点和目的房间节点），起点==终点时只有一个点。
+	//   OK：points是完整折线。
+	//   NO_PATH_TO_DESTINATION：找到了起点节点但图不连通，points只含这个起点节点。
+	//   NO_ROAD_CONNECTION：行人图里没有任何可用起点节点，points为空。
+	VehicleRoutePlan PlanPedestrianRoute(Room* startRoom, float x, float y, Room* destRoom) const;
+
 	// 拍平所有building的所有component，供AForeverFrameworkActor::EnsureSocietyGenerated()
 	// 喂给Society::Init——和ComputeAccommodationTarget()喂给Populace::Init同一个已有
 	// 套路，Society不知道Map/Building的存在，只接收这份拍平结果。

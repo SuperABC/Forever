@@ -780,27 +780,17 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, outsideNode, false, false });
 	}
 
-	// 车辆outside端点：方向(入口/出口)按这个node在result.vehicleConnections里的入度/出度
-	// 判定——入度为0(只有出边)是出口，车辆从building开到路上，最终连接
-	// 方向"outsideNode->access node"；出度为0(只有入边)是入口，车辆从路开进building，方向
-	// "access node->outsideNode"；入度出度都不为0(这个node在building内部图里本来就双向都
-	// 在用)或都为0(孤立点)则拒绝接路网，不产生pending项(仍然通过上面result.vehicleNodes
-	// 那次循环留在navAnchorNodes里)。
-	for (Node* outsideNode : result.vehicleOutsideNodes) {
-		if (!road) continue;
-
-		int inDegree = 0, outDegree = 0;
-		for (Connection* conn : result.vehicleConnections) {
-			if (conn->GetEnd().GetId() == outsideNode->GetId()) inDegree++;
-			if (conn->GetStart().GetId() == outsideNode->GetId()) outDegree++;
+	// 显式标记的入口/出口("entrance"/"exit"端点)：方向直接由清单决定，同一个node可以同时
+	// 在两个清单里（各产生一个接路网的开口）。
+	if (!road) return;
+	for (int pass = 0; pass < 2; pass++) {
+		bool isExit = pass == 1;
+		const vector<Node*>& markedNodes = isExit ? result.vehicleExitNodes : result.vehicleEntranceNodes;
+		for (Node* markedNode : markedNodes) {
+			float t; bool useForwardSide;
+			computeRoadSide(markedNode, t, useForwardSide);
+			pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, markedNode, true, isExit });
 		}
-		bool isExit = (inDegree == 0 && outDegree > 0);
-		bool isEntrance = (outDegree == 0 && inDegree > 0);
-		if (!isExit && !isEntrance) continue; // 都不为0(内部双向都用) 或 都为0(孤立点)，拒绝
-
-		float t; bool useForwardSide;
-		computeRoadSide(outsideNode, t, useForwardSide);
-		pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, outsideNode, true, isExit });
 	}
 }
 
@@ -2401,6 +2391,173 @@ bool Map::GetLaneSegmentAt(Road* road, float x, float y, float dirX, float dirY,
 		return true;
 	}
 	return false; // 理论不会发生：每条车道全长应该被throughLines的若干段完整覆盖
+}
+
+Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y, Room* destRoom) const {
+	VehicleRoutePlan plan;
+	Node* destNode = destRoom ? destRoom->GetNavigationNode() : nullptr;
+	if (!destNode) return plan;
+
+	// 起点候选：房间节点优先；否则按水平距离排序的行人图节点（有出边的才算），逐个试。
+	vector<const Node*> candidates;
+	Node* startNode = startRoom ? startRoom->GetNavigationNode() : nullptr;
+	if (startNode && pedestrianNavGraph.count(startNode->GetId())) {
+		candidates.push_back(startNode);
+	}
+	else {
+		vector<pair<float, const Node*>> nearest;
+		auto consider = [&](const Node* node) {
+			if (!node || !pedestrianNavGraph.count(node->GetId())) return;
+			float dx = node->GetX() - x, dy = node->GetY() - y;
+			nearest.push_back({ dx * dx + dy * dy, node });
+		};
+		for (const Node* node : navAnchorNodes) consider(node);
+		for (const Node* node : GetExterns()) consider(node);
+		sort(nearest.begin(), nearest.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+		for (size_t i = 0; i < nearest.size() && i < 6; i++) candidates.push_back(nearest[i].second);
+	}
+	if (candidates.empty()) return plan;
+
+	auto toPoint = [](const Node* node) { return NavPoint{ node->GetX(), node->GetY(), node->GetZ() }; };
+	for (const Node* candidate : candidates) {
+		if (candidate->GetId() == destNode->GetId()) {
+			plan.status = VehicleRoutePlan::OK;
+			plan.points = { toPoint(candidate) };
+			return plan;
+		}
+		vector<const Node*> path = FindPedestrianPath(candidate->GetId(), destNode->GetId());
+		if (path.empty()) continue;
+		plan.status = VehicleRoutePlan::OK;
+		for (const Node* node : path) plan.points.push_back(toPoint(node));
+		return plan;
+	}
+
+	plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+	plan.points = { toPoint(candidates.front()) };
+	return plan;
+}
+
+Map::VehicleRoutePlan Map::PlanVehicleRoute(Room* startRoom, float x, float y, Room* destRoom) const {
+	VehicleRoutePlan plan;
+	Node* destNode = destRoom ? destRoom->GetNavigationNode() : nullptr;
+	if (!destNode) {
+		plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+		return plan;
+	}
+
+	// 沿Connection从起点到终点采样（车行边都是单向Start->End）；和上一段首尾重合的点不重复加。
+	auto appendEdge = [](vector<NavPoint>& points, Connection* connection) {
+		int steps = std::clamp(static_cast<int>(ceilf(connection->CalcDistance() / 0.5f)), 2, 64);
+		for (int i = points.empty() ? 0 : 1; i <= steps; i++) {
+			Node p = connection->GetPoint(static_cast<float>(i) / steps);
+			points.push_back({ p.GetX(), p.GetY(), p.GetZ() });
+		}
+	};
+	auto pathLength = [](const vector<Connection*>& edges) {
+		float total = 0.f;
+		for (Connection* edge : edges) total += edge->CalcDistance();
+		return total;
+	};
+
+	// 车在房间里：从房间自己的导航节点出发。
+	if (startRoom) {
+		Node* startNode = startRoom->GetNavigationNode();
+		auto outIt = startNode ? vehicleNavGraph.find(startNode->GetId()) : vehicleNavGraph.end();
+		if (outIt == vehicleNavGraph.end() || outIt->second.empty()) return plan; // NO_ROAD_CONNECTION
+
+		if (startNode->GetId() == destNode->GetId()) {
+			plan.status = VehicleRoutePlan::OK; // 已经在目的房间
+			return plan;
+		}
+		vector<Connection*> edges = FindVehiclePath(startNode->GetId(), destNode->GetId());
+		plan.points.push_back({ startNode->GetX(), startNode->GetY(), startNode->GetZ() });
+		if (edges.empty()) {
+			plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+			appendEdge(plan.points, outIt->second.front().second); // 只画连出去的第一条边
+			return plan;
+		}
+		for (Connection* edge : edges) appendEdge(plan.points, edge);
+		plan.status = VehicleRoutePlan::OK;
+		return plan;
+	}
+
+	// 车不在房间里：收集所有能走车的路（大路+小路+Zone内部路），按垂足距离排序。
+	vector<Road*> roads = GetRoads();
+	for (Road* road : GetPathRoads()) roads.push_back(road);
+	for (const auto& [zoneName, zone] : GetZones()) {
+		if (!zone) continue;
+		for (Road* road : zone->GetInternalRoads()) roads.push_back(road);
+	}
+	struct RoadCandidate { Road* road; float distSq; };
+	vector<RoadCandidate> nearby;
+	for (Road* road : roads) {
+		if (!road) continue;
+		float t = ProjectPointOntoRoad(road, x, y);
+		Node foot = road->GetPoint(t);
+		float dx = foot.GetX() - x, dy = foot.GetY() - y;
+		nearby.push_back({ road, dx * dx + dy * dy });
+	}
+	sort(nearby.begin(), nearby.end(), [](const RoadCandidate& a, const RoadCandidate& b) { return a.distSq < b.distSq; });
+
+	// 每条候选路按两个行驶方向各试一次，取总长最短的；只试最近的几条（有的路没有车行道/
+	// 没接进图，GetLaneSegmentAt会失败）。找不到通路时退而求其次，用第一个拿到车道段的候选
+	// 画"接到路上"的短折线。
+	struct Pick {
+		bool valid = false;
+		LaneSegment segment;
+		vector<Connection*> edges;
+		bool reachable = false;
+		float cost = FLT_MAX;
+	};
+	Pick best, fallback;
+	int tried = 0;
+	for (const RoadCandidate& candidate : nearby) {
+		if (tried >= 4) break;
+		float t = ProjectPointOntoRoad(candidate.road, x, y);
+		float tdx, tdy, tdz;
+		candidate.road->GetTangent(t, tdx, tdy, tdz);
+		bool anySegment = false;
+		for (int direction = 0; direction < 2; direction++) {
+			float sign = direction == 0 ? 1.f : -1.f;
+			LaneSegment segment;
+			if (!GetLaneSegmentAt(candidate.road, x, y, tdx * sign, tdy * sign, segment) || !segment.toAnchor) continue;
+			anySegment = true;
+
+			float toFootX = segment.worldX - x, toFootY = segment.worldY - y;
+			float toAnchorX = segment.toAnchor->GetX() - segment.worldX, toAnchorY = segment.toAnchor->GetY() - segment.worldY;
+			float approach = sqrtf(toFootX * toFootX + toFootY * toFootY) + sqrtf(toAnchorX * toAnchorX + toAnchorY * toAnchorY);
+
+			Pick pick;
+			pick.valid = true;
+			pick.segment = segment;
+			if (segment.toAnchor->GetId() == destNode->GetId()) {
+				pick.reachable = true;
+				pick.cost = approach;
+			}
+			else {
+				pick.edges = FindVehiclePath(segment.toAnchor->GetId(), destNode->GetId());
+				pick.reachable = !pick.edges.empty();
+				pick.cost = approach + pathLength(pick.edges);
+			}
+			if (!fallback.valid) fallback = pick;
+			if (pick.reachable && pick.cost < best.cost) best = pick;
+		}
+		if (anySegment) tried++;
+	}
+
+	const Pick& chosen = best.valid ? best : fallback;
+	if (!chosen.valid) return plan; // NO_ROAD_CONNECTION
+
+	plan.points.push_back({ x, y, chosen.segment.worldZ });
+	plan.points.push_back({ chosen.segment.worldX, chosen.segment.worldY, chosen.segment.worldZ });
+	plan.points.push_back({ chosen.segment.toAnchor->GetX(), chosen.segment.toAnchor->GetY(), chosen.segment.toAnchor->GetZ() });
+	if (!best.valid) {
+		plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+		return plan;
+	}
+	for (Connection* edge : chosen.edges) appendEdge(plan.points, edge);
+	plan.status = VehicleRoutePlan::OK;
+	return plan;
 }
 
 vector<Component*> Map::GetAllComponents() const {

@@ -298,3 +298,11 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 ## 飞机子类
 
 `APlaneElement`继承本类(复用Chaos轮子/骨骼网格/近身选项/上下机/存档位置)，把轮子改成3个(鼻轮+主轮，`PlaneWheel.h`)，绕过本类的`SetupPlayerInputComponent`(W/S不是油门/刹车)，每帧手写飞行力学，见`PlaneElement.md`。本类对它没有改动：`ExitVehicle()`/`Handbrake()`/`StopHandbrake()`和各输入成员都是protected，子类直接调用。
+
+## 测试导航（StartTestNavigation）
+
+车辆靠近时脚本(`vehicle_basic.script`)多一个"测试导航"选项 -> `test_navigate_vehicle` Change ->
+`UForeverTrafficFrameworkComponent::StartTestNavigation`。`AVehicleElement::StartTestNavigation(path,...)`
+不加Controller：关掉`carMesh`物理模拟，`Tick`里`TickTestNavigation`每帧——车头`FixedTurn`转向行进方向
+(`testNavTurnRate`)、按`testNavSpeed`(默认600uu/s)前进、用车自己的碰撞通道做box sweep挡墙(卡住3秒放弃)、
+`ECC_Visibility`向下射线定高度、前后两条射线估算俯仰；到达/取消后恢复物理模拟。导航期间不会被距离流式销毁。

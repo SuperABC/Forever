@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/EngineTypes.h"
 #include <string>
 #include "Framework/ForeverFrameworkComponent.h"
 #include "ForeverTrafficFrameworkComponent.generated.h"
@@ -83,6 +84,20 @@ public:
 	// 搭乘者(ATransitVehicleElement)也走这条流程，但不做遮挡判定；bForce=true时驾驶者也不做。
 	void ExitVehicle(APlayerController* controller, bool bForce = false);
 
+	// 车辆导航测试（script的test_navigate_vehicle Change）：让这辆车自己沿车辆导航图开到机场一楼
+	// 房间。起点：车在房间里（Vehicle::GetCurrentRoom）从房间导航节点出发，否则垂直接到最近的
+	// 大路/小路；用Map::PlanVehicleRoute规划，画折线调试线，再交给AVehicleElement::
+	// StartTestNavigation用Tick驱动。接不上路/连不到目的地时屏幕左上角+日志提示。
+	void StartTestNavigation(const FString& vehicleName);
+
+	// 清掉导航调试折线（到达/取消/放弃/车被销毁时由AVehicleElement调用，或超时自动清）。
+	void ClearTestNavigationLine();
+
+	// 画导航测试折线（车辆和市民的导航测试共用同一条调试线，同一时刻只显示最后一次）。
+	void ShowTestNavigationLine(const TArray<FVector>& path);
+	// 过seconds秒自动清线（不可达时没有“到达”事件可清）。
+	void ScheduleClearTestNavigationLine(float seconds);
+
 	// 公共交通线路的调试画线：每种stationType一个UProceduralMeshComponent+MID(bus绿/train蓝/
 	// plane红/其它默认色)，按route->GetLines()里每条腿的edge几何采样连成ribbon，边中点画一个
 	// 箭头指示行驶方向，站点接口画小方块。由bShowRouteDebug控制，关闭时清空已有section而不是
@@ -149,6 +164,13 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> pureBaseMaterial;
+
+	// 车辆导航测试的调试折线（单独一个UProceduralMeshComponent，用完清空section）。
+	UPROPERTY()
+	TObjectPtr<UProceduralMeshComponent> testNavMesh;
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> testNavMaterial;
+	FTimerHandle testNavClearTimer; // 连不到目的地时折线只留一会儿
 
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> busRouteMesh;

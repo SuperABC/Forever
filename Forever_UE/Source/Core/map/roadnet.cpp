@@ -262,10 +262,14 @@ void RoadJunction::BuildConnectors(vector<Connection*>& outVehicle, vector<Conne
 		for (int i = 0; i < n; i++) {
 			const auto& cur = approaches[i];
 			const auto& next = approaches[(i + 1) % n];
-			// cur朝向next(逆时针方向)的一侧：isStart时是side1(左)，isEnd时是side0(左)
-			Node* curFacing = cur.isStart ? cur.pedestrianSide[1] : cur.pedestrianSide[0];
-			// next朝向cur(顺时针方向)的一侧：isStart时是side0(右)，isEnd时是side1(右)
-			Node* nextFacing = next.isStart ? next.pedestrianSide[0] : next.pedestrianSide[1];
+			// angle=atan2(outY,outX)升序排列，next在cur的角度增大方向。sideN的偏移方向是
+			// sperp0=(-fwdY,fwdX)=fwd逆时针转90度(2026-10-04右手边修正后)：isStart时fwd==out，
+			// side0在out的逆时针一侧；isEnd时fwd==-out，side0反而在out的顺时针一侧。
+			// cur朝向next(角度增大/out逆时针)的一侧：isStart时是side0，isEnd时是side1
+			// (修正前这里写反了，相邻两条路的人行道锚点连成了斜穿路口的对角线)。
+			Node* curFacing = cur.isStart ? cur.pedestrianSide[0] : cur.pedestrianSide[1];
+			// next朝向cur(角度减小/out顺时针)的一侧：isStart时是side1，isEnd时是side0
+			Node* nextFacing = next.isStart ? next.pedestrianSide[1] : next.pedestrianSide[0];
 			if (curFacing && nextFacing) {
 				outPedestrian.push_back(new Connection(*curFacing, *nextFacing));
 			}

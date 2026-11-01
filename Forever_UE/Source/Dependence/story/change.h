@@ -1135,6 +1135,54 @@ private:
 
 };
 
+// 车辆导航测试：让指定载具自己沿车辆导航图开到测试目的地（机场一楼房间）。UE-only效果，
+// 和EnterVehicleChange一样只能转发给UE层，见UForeverTrafficFrameworkComponent::StartTestNavigation。
+class TestNavigateVehicleChange : public Change {
+public:
+	TestNavigateVehicleChange();
+
+	/*
+	* @vehicle: 载具名称
+	*/
+	TestNavigateVehicleChange(std::string vehicle);
+
+	virtual ~TestNavigateVehicleChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetVehicle(std::string vehicle);
+	const std::string& GetVehicle() const;
+
+private:
+	// 载具名称
+	std::string vehicle;
+
+};
+
+// 市民导航测试：让指定市民由AIController带着沿行人导航图走到测试目的地（机场一楼房间）。
+// UE-only效果，见UForeverPopulaceFrameworkComponent::StartTestNavigation。
+class TestNavigateCitizenChange : public Change {
+public:
+	TestNavigateCitizenChange();
+
+	/*
+	* @name: 市民姓名
+	*/
+	TestNavigateCitizenChange(std::string name);
+
+	virtual ~TestNavigateCitizenChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetName(std::string name);
+	const std::string& GetName() const;
+
+private:
+	// 市民姓名
+	std::string name;
+
+};
+
 // 离开载具
 class LeaveVehicleChange : public Change {
 public:

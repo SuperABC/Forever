@@ -16,7 +16,9 @@ public class Forever : ModuleRules
 		// VehicleElement.cpp/.md。PhysicsCore是它的间接依赖，一并保留。
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "ProceduralMeshComponent", "Water", "PhysicsCore", "ChaosVehicles", "Niagara" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+		// AIModule/NavigationSystem：市民导航测试用AAIController+UPathFollowingComponent+FNavigationPath
+		// （脚本路径，不依赖NavMesh）。
+		PrivateDependencyModuleNames.AddRange(new string[] { "AIModule", "NavigationSystem" });
 
 		// 本模块内部按子文件夹(Player/Input/...)组织,没有Public/Private/Classes三段式结构,
 		// 把模块根目录加进来才能用"Player/Xxx.h"、"Input/Xxx.h"这种跨子目录相对路径互相include。

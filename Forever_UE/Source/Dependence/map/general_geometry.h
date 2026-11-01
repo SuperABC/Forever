@@ -492,6 +492,11 @@ struct NavigationNodeTemplate {
 struct NavigationLineTemplate {
 	PointParams begin{};
 	PointParams end{};
+	// 仅车行导航使用的通行方向（行人导航恒定双向，忽略这两个字段）：forward=沿begin->end方向的
+	// 锚点链可通行，backward=反方向可通行，都为true就是双向。layout里没写这两个字段时按旧行为
+	// 只顺向通行。
+	bool forward = true;
+	bool backward = false;
 };
 
 // 导航连接的一个端点：type取"outside"(连到building朝向的边界路，见map.md"寻址"/
@@ -509,6 +514,11 @@ struct NavigationEndpointTemplate {
 struct NavigationConnectionTemplate {
 	NavigationEndpointTemplate begin;
 	NavigationEndpointTemplate end;
+	// 仅车行导航使用的通行方向，含义同NavigationLineTemplate::forward/backward：forward=
+	// begin->end，backward=end->begin，都true=双向。对"outside/entrance/exit/upstair/downstair"
+	// 这类只做标记的端点无意义（楼层间上下楼连线恒定双向，进出口方向由端点类型决定）。
+	bool forward = true;
+	bool backward = false;
 };
 
 class Lot : public Quad {

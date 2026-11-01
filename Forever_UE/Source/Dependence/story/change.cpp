@@ -718,6 +718,60 @@ const std::string& EnterVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
+TestNavigateVehicleChange::TestNavigateVehicleChange() :
+	vehicle() {
+
+}
+
+TestNavigateVehicleChange::TestNavigateVehicleChange(std::string vehicle) :
+	vehicle(move(vehicle)) {
+
+}
+
+TestNavigateVehicleChange::~TestNavigateVehicleChange() {
+
+}
+
+const string& TestNavigateVehicleChange::GetType() const {
+	static const string type = "test_navigate_vehicle";
+	return type;
+}
+
+void TestNavigateVehicleChange::SetVehicle(std::string vehicle) {
+	this->vehicle = move(vehicle);
+}
+
+const std::string& TestNavigateVehicleChange::GetVehicle() const {
+	return vehicle;
+}
+
+TestNavigateCitizenChange::TestNavigateCitizenChange() :
+	name() {
+
+}
+
+TestNavigateCitizenChange::TestNavigateCitizenChange(std::string name) :
+	name(move(name)) {
+
+}
+
+TestNavigateCitizenChange::~TestNavigateCitizenChange() {
+
+}
+
+const string& TestNavigateCitizenChange::GetType() const {
+	static const string type = "test_navigate_citizen";
+	return type;
+}
+
+void TestNavigateCitizenChange::SetName(std::string name) {
+	this->name = move(name);
+}
+
+const std::string& TestNavigateCitizenChange::GetName() const {
+	return name;
+}
+
 LeaveVehicleChange::LeaveVehicleChange() :
 	vehicle() {
 

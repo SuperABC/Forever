@@ -466,6 +466,31 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	// 导航测试功能已停用：代码(StartTestNavigation等)保留，但Change一律拒绝并跳过。
+	// 需要重新启用时把kTestNavigationEnabled改成true，并在脚本里重新加回"测试导航"选项。
+	constexpr bool kTestNavigationEnabled = false;
+
+	if (auto* testNavigate = dynamic_cast<const TestNavigateVehicleChange*>(change)) {
+		if (!kTestNavigationEnabled) {
+			UE_LOG(LogTemp, Warning, TEXT("test_navigate_vehicle is disabled, change skipped"));
+			return;
+		}
+		// 车辆导航测试：名字可能是$$self.name之类的表达式，求值后转给交通框架组件。
+		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(testNavigate->GetVehicle(), context)).data());
+		if (trafficFramework) trafficFramework->StartTestNavigation(vehicleName);
+		return;
+	}
+
+	if (auto* testNavigateCitizen = dynamic_cast<const TestNavigateCitizenChange*>(change)) {
+		if (!kTestNavigationEnabled) {
+			UE_LOG(LogTemp, Warning, TEXT("test_navigate_citizen is disabled, change skipped"));
+			return;
+		}
+		FString citizenName = UTF8_TO_TCHAR(ToString(EvaluateExpression(testNavigateCitizen->GetName(), context)).data());
+		if (populaceFramework) populaceFramework->StartTestNavigation(citizenName);
+		return;
+	}
+
 	if (auto* enterVehicle = dynamic_cast<const EnterVehicleChange*>(change)) {
 		// 跟ChangeControlChange同一个理由：Core层不认识Actor/Controller，"把操控权切换到
 		// 载具上"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyEnterVehicle。

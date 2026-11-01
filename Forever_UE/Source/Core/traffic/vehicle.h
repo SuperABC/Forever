@@ -70,6 +70,12 @@ public:
 	void GetParkingLocalPosition(float& outX, float& outY) const;
 	float GetParkingRotationDegrees() const;
 
+	// 车辆当前所在的房间（运行时状态，不进存档）：SetParking时初始化成停车位所在房间，
+	// 导航出发时置空，到达目的房间时设成该房间。nullptr表示在室外。导航规划靠它决定起点
+	// 是房间的导航节点还是路网上最近的车道，见Map::PlanVehicleRoute。
+	Room* GetCurrentRoom() const;
+	void SetCurrentRoom(Room* inRoom);
+
 	void SetTransform(float x, float y, float z, float yaw);
 	void GetTransform(float& outX, float& outY, float& outZ, float& outYaw) const;
 	// 俯仰角(角度制，抬头为正)：只有沿坡道/隧道口行驶的线路载具(Route::Update)会写，纯运行时，不进存档。
@@ -86,6 +92,7 @@ private:
 	std::vector<std::string> options;
 
 	Room* room = nullptr;
+	Room* currentRoom = nullptr;
 	float parkingLocalX = 0.f;
 	float parkingLocalY = 0.f;
 	float parkingRotationDegrees = 0.f;

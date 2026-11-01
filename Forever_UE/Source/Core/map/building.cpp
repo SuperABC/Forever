@@ -411,9 +411,18 @@ namespace {
 			rawNodes.push_back(ReadPointParams(n["position"]));
 		}
 
-		vector<pair<PointParams, PointParams>> rawLines;
+		// 可选的通行方向字段（车行导航用）：缺省 forward=true/backward=false，保持旧layout行为。
+		auto readDirection = [](const JsonValue& e, bool& forward, bool& backward) {
+			if (e.ValidMember("forward")) forward = e["forward"].AsBool();
+			if (e.ValidMember("backward")) backward = e["backward"].AsBool();
+		};
+
+		struct RawLine { PointParams begin; PointParams end; bool forward = true; bool backward = false; };
+		vector<RawLine> rawLines;
 		for (auto& l : navRoot["lines"]) {
-			rawLines.emplace_back(ReadPointParams(l["begin"]), ReadPointParams(l["end"]));
+			RawLine rawLine{ ReadPointParams(l["begin"]), ReadPointParams(l["end"]) };
+			readDirection(l, rawLine.forward, rawLine.backward);
+			rawLines.push_back(rawLine);
 		}
 
 		auto readEndpoint = [](const JsonValue& e) -> NavigationEndpointTemplate {
@@ -429,6 +438,7 @@ namespace {
 			NavigationConnectionTemplate connTemplate;
 			connTemplate.begin = readEndpoint(c["begin"]);
 			connTemplate.end = readEndpoint(c["end"]);
+			readDirection(c, connTemplate.forward, connTemplate.backward);
 			rawConnections.push_back(connTemplate);
 		}
 
@@ -439,10 +449,12 @@ namespace {
 				nodeTemplate.position = BuildingLayoutLibrary::InversePoint(position, i);
 				navTemplate.nodes.push_back(nodeTemplate);
 			}
-			for (auto& [begin, end] : rawLines) {
+			for (const RawLine& rawLine : rawLines) {
 				NavigationLineTemplate lineTemplate;
-				lineTemplate.begin = BuildingLayoutLibrary::InversePoint(begin, i);
-				lineTemplate.end = BuildingLayoutLibrary::InversePoint(end, i);
+				lineTemplate.begin = BuildingLayoutLibrary::InversePoint(rawLine.begin, i);
+				lineTemplate.end = BuildingLayoutLibrary::InversePoint(rawLine.end, i);
+				lineTemplate.forward = rawLine.forward;
+				lineTemplate.backward = rawLine.backward;
 				navTemplate.lines.push_back(lineTemplate);
 			}
 			navTemplate.connections = rawConnections;
@@ -1117,6 +1129,8 @@ namespace {
 	// 建筑导航图构建期间，一条"贯通线"(走廊骨架线段)的运行时状态：固定端点世界坐标缓存+
 	// 沿line收集到的锚点(用于排序后串成走廊骨架)——照抄老工程LineRuntime。
 	struct LineRuntime {
+		bool forward = true;   // 车行导航通行方向，见NavigationLineTemplate::forward/backward
+		bool backward = false;
 		float beginX = 0.f, beginY = 0.f;
 		float endX = 0.f, endY = 0.f;
 		Node* nodeAt0 = nullptr;
@@ -1131,13 +1145,16 @@ void Building::BuildPedestrianNavigation(const BuildingLayoutLibrary& library, i
 }
 
 void Building::BuildVehicleNavigation(const BuildingLayoutLibrary& library, int inputDirection, BuildingNavResult& navOut) {
+	// 车行导航不再支持"outside"端点（用entrance/exit），这份清单永远为空，只为凑BuildNavigationGraph的签名。
+	vector<Node*> ignoredOutsideNodes;
 	BuildNavigationGraph(library, inputDirection, /*isVehicle=*/true,
-		navOut.vehicleNodes, navOut.vehicleConnections, navOut.vehicleOutsideNodes, /*registerRoomNodes=*/false);
+		navOut.vehicleNodes, navOut.vehicleConnections, ignoredOutsideNodes, /*registerRoomNodes=*/false,
+		&navOut.vehicleEntranceNodes, &navOut.vehicleExitNodes);
 }
 
 void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int inputDirection, bool isVehicle,
 	vector<Node*>& newNodes, vector<Connection*>& newConnections, vector<Node*>& outsideNodes,
-	bool registerRoomNodes) {
+	bool registerRoomNodes, vector<Node*>* entranceNodes, vector<Node*>* exitNodes) {
 	// 楼层间楼梯端点登记，留待所有楼层处理完后按相邻层贪心匹配。
 	vector<tuple<int, Node*, bool>> stairEndpoints;
 
@@ -1182,7 +1199,20 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 			lineRuntimes[i].beginY = lineTemplate.begin[2] * floorHeight + lineTemplate.begin[3];
 			lineRuntimes[i].endX = lineTemplate.end[0] * floorWidth + lineTemplate.end[1];
 			lineRuntimes[i].endY = lineTemplate.end[2] * floorHeight + lineTemplate.end[3];
+			lineRuntimes[i].forward = lineTemplate.forward;
+			lineRuntimes[i].backward = lineTemplate.backward;
 		}
+
+		// 加一条from->to的连接，按通行方向展开：行人导航恒定一条（Map合并时自己做成双向），
+		// 车行导航forward生成from->to、backward生成to->from，都开就是双向。
+		auto addConnection = [&](Node* from, Node* to, bool forward, bool backward) {
+			if (!isVehicle) {
+				newConnections.push_back(new Connection(*from, *to));
+				return;
+			}
+			if (forward) newConnections.push_back(new Connection(*from, *to));
+			if (backward) newConnections.push_back(new Connection(*to, *from));
+		};
 
 		auto resolveEndpoint = [&](const NavigationEndpointTemplate& endpoint) -> vector<Node*> {
 			if (endpoint.type == "node") {
@@ -1277,7 +1307,9 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 						Node* projected = makeNode(px, py);
 						newNodes.push_back(projected);
 						line.anchors.emplace_back(t, projected);
-						newConnections.push_back(new Connection(*projected, *room->GetNavigationNode()));
+						// 方向按模板的begin/end：投影端是begin时 projected->room，否则 room->projected。
+						if (beginIsProjection) addConnection(projected, room->GetNavigationNode(), connTemplate.forward, connTemplate.backward);
+						else addConnection(room->GetNavigationNode(), projected, connTemplate.forward, connTemplate.backward);
 					}
 					continue;
 				} else {
@@ -1290,7 +1322,8 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 				Node* projected = makeNode(px, py);
 				newNodes.push_back(projected);
 				line.anchors.emplace_back(t, projected);
-				newConnections.push_back(new Connection(*projected, *srcNode));
+				if (beginIsProjection) addConnection(projected, srcNode, connTemplate.forward, connTemplate.backward);
+				else addConnection(srcNode, projected, connTemplate.forward, connTemplate.backward);
 				continue;
 			}
 
@@ -1298,7 +1331,29 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 			// 出这个outside端点自己的世界坐标节点，收集进outsideNodes——由Map::
 			// InitBuildings()负责用building朝向的边界Road+AddRoadAccessNode真正接上
 			// 道路网(需要访问Map自己的数据，Building这一层做不到)，见building.md。
+			// 车行导航的显式入口/出口端点("entrance"/"exit")：不生成Connection，只把另一端的
+			// node记进对应清单，方向(路->node / node->路)由类型直接决定，同一个node可以两个都标。
+			// 行人导航里出现这两个类型没有意义，忽略。
+			if (connTemplate.begin.type == "entrance" || connTemplate.end.type == "entrance" ||
+				connTemplate.begin.type == "exit" || connTemplate.end.type == "exit") {
+				bool beginIsMarker = connTemplate.begin.type == "entrance" || connTemplate.begin.type == "exit";
+				const NavigationEndpointTemplate& markerSide = beginIsMarker ? connTemplate.begin : connTemplate.end;
+				const NavigationEndpointTemplate& otherSide = beginIsMarker ? connTemplate.end : connTemplate.begin;
+				if (!isVehicle || !entranceNodes || !exitNodes) {
+					debugf("Warning: \"%s\" endpoint is only valid in vehicleNavigation, ignored.\n", markerSide.type.c_str());
+					continue;
+				}
+				vector<Node*> otherNodes = resolveEndpoint(otherSide);
+				if (otherNodes.size() != 1 || !otherNodes[0]) continue;
+				(markerSide.type == "entrance" ? entranceNodes : exitNodes)->push_back(otherNodes[0]);
+				continue;
+			}
+
 			if (connTemplate.begin.type == "outside" || connTemplate.end.type == "outside") {
+				if (isVehicle) {
+					debugf("Warning: \"outside\" endpoint is not supported in vehicleNavigation, use \"entrance\"/\"exit\". Ignored.\n");
+					continue;
+				}
 				const NavigationEndpointTemplate& otherSide =
 					connTemplate.begin.type == "outside" ? connTemplate.end : connTemplate.begin;
 				vector<Node*> otherNodes = resolveEndpoint(otherSide);
@@ -1324,7 +1379,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 			for (Node* beginNode : beginNodes) {
 				for (Node* endNode : endNodes) {
 					if (!beginNode || !endNode) continue;
-					newConnections.push_back(new Connection(*beginNode, *endNode));
+					addConnection(beginNode, endNode, connTemplate.forward, connTemplate.backward);
 				}
 			}
 		}
@@ -1334,7 +1389,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 			sort(line.anchors.begin(), line.anchors.end(),
 				[](const pair<float, Node*>& a, const pair<float, Node*>& b) { return a.first < b.first; });
 			for (size_t i = 0; i + 1 < line.anchors.size(); i++) {
-				newConnections.push_back(new Connection(*line.anchors[i].second, *line.anchors[i + 1].second));
+				addConnection(line.anchors[i].second, line.anchors[i + 1].second, line.forward, line.backward);
 			}
 		}
 	}
@@ -1369,6 +1424,8 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 			upUsed[i] = true;
 			downUsed[j] = true;
 			newConnections.push_back(new Connection(*upList[i].first, *downList[j].first));
+			// 上下楼的连线车行导航恒定双向（上楼下楼都能走），不受layout方向选项影响。
+			if (isVehicle) newConnections.push_back(new Connection(*downList[j].first, *upList[i].first));
 		}
 	}
 
