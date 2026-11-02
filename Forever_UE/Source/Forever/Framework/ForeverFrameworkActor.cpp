@@ -466,17 +466,9 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	// 导航测试功能已停用：代码(StartTestNavigation等)保留，但Change一律拒绝并跳过。
-	// 需要重新启用时把kTestNavigationEnabled改成true，并在脚本里重新加回"测试导航"选项。
-	constexpr bool kTestNavigationEnabled = false;
-
-	if (auto* testNavigate = dynamic_cast<const TestNavigateVehicleChange*>(change)) {
-		if (!kTestNavigationEnabled) {
-			UE_LOG(LogTemp, Warning, TEXT("test_navigate_vehicle is disabled, change skipped"));
-			return;
-		}
-		// 车辆导航测试：名字可能是$$self.name之类的表达式，求值后转给交通框架组件。
-		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(testNavigate->GetVehicle(), context)).data());
+	if (auto* testNavigateVehicle = dynamic_cast<const TestNavigateVehicleChange*>(change)) {
+		// 显示这辆车当前路线的折线，不给车发任何命令；名字可能是$$self.name之类的表达式。
+		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(testNavigateVehicle->GetName(), context)).data());
 		if (trafficFramework) trafficFramework->StartTestNavigation(vehicleName);
 		return;
 	}
@@ -485,17 +477,14 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(vehicleCommand->GetVehicle(), context)).data());
 		const std::string& command = vehicleCommand->GetCommand();
 		if (!trafficFramework) return;
-		if (command == "test_run") trafficFramework->StartBusTestRun(vehicleName);
+		if (command == "run") trafficFramework->StartBusTestRun(vehicleName);
 		else if (command == "stop") trafficFramework->StopBusRun(vehicleName);
 		else UE_LOG(LogTemp, Warning, TEXT("vehicle_command: unknown command %s"), UTF8_TO_TCHAR(command.c_str()));
 		return;
 	}
 
 	if (auto* testNavigateCitizen = dynamic_cast<const TestNavigateCitizenChange*>(change)) {
-		if (!kTestNavigationEnabled) {
-			UE_LOG(LogTemp, Warning, TEXT("test_navigate_citizen is disabled, change skipped"));
-			return;
-		}
+		// 市民的test_navigate_citizen现在是"显示这个市民当前路线的折线"（"你在去哪"选项）。
 		FString citizenName = UTF8_TO_TCHAR(ToString(EvaluateExpression(testNavigateCitizen->GetName(), context)).data());
 		if (populaceFramework) populaceFramework->StartTestNavigation(citizenName);
 		return;

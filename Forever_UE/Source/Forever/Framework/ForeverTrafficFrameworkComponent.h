@@ -114,19 +114,17 @@ public:
 	// 搭乘者(ATransitVehicleElement)也走这条流程，但不做遮挡判定；bForce=true时驾驶者也不做。
 	void ExitVehicle(APlayerController* controller, bool bForce = false);
 
-	// 车辆导航测试（script的test_navigate_vehicle Change）：让这辆车自己沿车辆导航图开到机场一楼
-	// 房间。起点：车在房间里（Vehicle::GetCurrentRoom）从房间导航节点出发，否则垂直接到最近的
-	// 大路/小路；用Map::PlanVehicleRoute规划，画折线调试线，再交给AVehicleElement::
-	// StartTestNavigation用Tick驱动。接不上路/连不到目的地时屏幕左上角+日志提示。
+	// script的test_navigate_vehicle Change（和市民的test_navigate_citizen对称）：用橙色折线显示这辆车
+	// 当前的行驶路线，数据来自AVehicleCommandController::GetRemainingWaypoints，不给车发任何命令。
+	// 折线跟着车走、越走越短，一直显示到这条寻路任务完成（见TrackTestNavigationLine）。车没有在开就什么都不做。
 	void StartTestNavigation(const FString& vehicleName);
 
-	// 清掉导航调试折线（到达/取消/放弃/车被销毁时由AVehicleElement调用，或超时自动清）。
+	// 清掉导航调试折线并停止跟踪。
 	void ClearTestNavigationLine();
 
-	// 画导航测试折线（车辆和市民的导航测试共用同一条调试线，同一时刻只显示最后一次）。
-	void ShowTestNavigationLine(const TArray<FVector>& path);
-	// 过seconds秒自动清线（不可达时没有“到达”事件可清）。
-	void ScheduleClearTestNavigationLine(float seconds);
+	// 跟踪显示一条路线（车辆和市民的导航测试共用同一条调试线，同一时刻只显示最后一次）：约每0.1秒调一次
+	// source取剩余路径重画，source返回false（任务完成/对象没了）就清线并停止。没有计时器，不会自己消失。
+	void TrackTestNavigationLine(TFunction<bool(TArray<FVector>&)> source);
 
 	// 公共交通线路的调试画线：每种stationType一个UProceduralMeshComponent+MID(bus绿/train蓝/
 	// plane红/其它默认色)，按route->GetLines()里每条腿的edge几何采样连成ribbon，边中点画一个
@@ -170,6 +168,10 @@ private:
 		TWeakObjectPtr<ABusController> controller;
 	};
 	TMap<FString, FBusState> busStates;
+	// FBusState::physicsClass 是裸指针，LoadClass 出来的蓝图类没有别的引用，GC 后会悬空（SpawnActor 时崩溃），
+	// 所以另存一份 UPROPERTY 让 GC 看得见。
+	UPROPERTY()
+	TSet<TObjectPtr<UClass>> busPhysicsClasses;
 	TMap<int32, Station*> stationByNodeId; // 辅助导航节点 id -> 车站，FireStopEvent 用
 
 	void UpdateBusPhysicsHandoff();
@@ -230,7 +232,10 @@ private:
 	TObjectPtr<UProceduralMeshComponent> testNavMesh;
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> testNavMaterial;
-	FTimerHandle testNavClearTimer; // 连不到目的地时折线只留一会儿
+	// 画导航折线（只由TrackTestNavigationLine的刷新调用）。
+	void ShowTestNavigationLine(const TArray<FVector>& path);
+	TFunction<bool(TArray<FVector>&)> testNavSource; // 当前跟踪的路线来源，空=没有在显示
+	float testNavRefreshCountdown = 0.f;
 
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> busRouteMesh;

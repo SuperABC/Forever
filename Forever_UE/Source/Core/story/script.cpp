@@ -392,11 +392,11 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			change = new EnterVehicleChange(vehicle.AsString());
 		}
 		else if (type == "test_navigate_vehicle") {
-			auto vehicle = obj["vehicle"];
-			if (vehicle.IsNull()) {
-				THROW_EXCEPTION(RuntimeException, "Missing vehicle for test_navigate_vehicle change.\n");
+			auto name = obj["name"];
+			if (name.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name for test_navigate_vehicle change.\n");
 			}
-			change = new TestNavigateVehicleChange(vehicle.AsString());
+			change = new TestNavigateVehicleChange(name.AsString());
 		}
 		else if (type == "vehicle_command") {
 			auto vehicle = obj["vehicle"];

@@ -25,7 +25,6 @@ struct FCharacterCommand
 	Room* room = nullptr;
 	float speedScale = 1.f;       // 走路速度倍率
 	bool bExemptDespawn = false;  // 执行期间不被距离流式销毁
-	bool bTestNavigation = false; // 结束/被打断时回调framework->FinishTestNavigation（清调试线）
 
 	static FCharacterCommand MakeFollowPath(const TArray<FVector>& inWaypoints, Room* inRoom)
 	{
@@ -60,11 +59,14 @@ public:
 
 	// 追加一条指令；之前是空闲的话立刻开始执行。
 	void PushCommand(const FCharacterCommand& command);
-	// 清空全部指令并还原市民状态（速度/免销毁标记/移动模式）。被打断的导航测试会回调FinishTestNavigation(nullptr)。
+	// 清空全部指令并还原市民状态（速度/免销毁标记/移动模式）。
 	void ClearCommands();
 	bool HasCommands() const { return !commands.IsEmpty(); }
 	// 当前正在走的指令的目标房间，没有则nullptr（存档时用来把走路中的市民记成"已经到了"）。
 	Room* GetCurrentDestination() const;
+	// 当前FollowPath指令的剩余路径（世界坐标，第一个点是市民当前位置）和目标房间。没有可走的指令返回false。
+	// 市民被流式销毁时用它把行进交还给Core（Citizen::ResumeWalk），"你在去哪"折线也用它。
+	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination) const;
 
 	virtual void OnPossess(APawn* inPawn) override;
 	virtual void OnUnPossess() override;

@@ -56,11 +56,6 @@ public:
 	// 见Controller/CitizenController.h。
 	void WalkTo(const TArray<FVector>& waypoints, Room* destination);
 
-	// 导航测试（UForeverPopulaceFrameworkComponent::StartTestNavigation）：path（世界坐标，第一个点是
-	// 当前位置）作为一条speedScale=2、免销毁、带调试线回调的FollowPath指令推给Controller。
-	void StartTestNavigation(const TArray<FVector>& path, Room* destination);
-	void CancelTestNavigation();
-
 	// 自己的AI Controller（Init里创建，随Actor销毁）。玩家占有期间它不是GetController()，但对象仍在。
 	ACitizenController* GetCitizenController() const { return aiController; }
 	UForeverPopulaceFrameworkComponent* GetFramework() const { return framework.Get(); }

@@ -719,12 +719,12 @@ const std::string& EnterVehicleChange::GetVehicle() const {
 }
 
 TestNavigateVehicleChange::TestNavigateVehicleChange() :
-	vehicle() {
+	name() {
 
 }
 
-TestNavigateVehicleChange::TestNavigateVehicleChange(std::string vehicle) :
-	vehicle(move(vehicle)) {
+TestNavigateVehicleChange::TestNavigateVehicleChange(std::string name) :
+	name(move(name)) {
 
 }
 
@@ -737,12 +737,12 @@ const string& TestNavigateVehicleChange::GetType() const {
 	return type;
 }
 
-void TestNavigateVehicleChange::SetVehicle(std::string vehicle) {
-	this->vehicle = move(vehicle);
+void TestNavigateVehicleChange::SetName(std::string name) {
+	this->name = move(name);
 }
 
-const std::string& TestNavigateVehicleChange::GetVehicle() const {
-	return vehicle;
+const std::string& TestNavigateVehicleChange::GetName() const {
+	return name;
 }
 
 VehicleCommandChange::VehicleCommandChange() :

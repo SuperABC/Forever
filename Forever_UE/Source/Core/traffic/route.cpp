@@ -464,9 +464,9 @@ void Route::Update(float elapsedSeconds) {
 		int vehicleCount = static_cast<int>(vehicles.size());
 		for (int k = 0; k < vehicleCount; k++) {
 			float phase = period * static_cast<float>(k) / static_cast<float>(vehicleCount);
-			float localTime = fmodf(elapsedSeconds + phase, period);
-			if (localTime < 0.f) localTime += period;
 			Vehicle* vehicle = vehicles[k];
+			float localTime = fmodf(elapsedSeconds + phase + GetPhaseAdjust(vehicle), period);
+			if (localTime < 0.f) localTime += period;
 			// 物理段（UE层的物理公交+Controller在开）：位姿和停站事件都由UE层负责，这里不碰，
 			// 否则时刻表会和实车打架、重复发进站/离站事件。交还时刻表时ResetStopState重新观察。
 			if (vehicle->IsPhysicsDriven()) continue;
@@ -524,7 +524,7 @@ Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
 			if (period <= 0.f) return state;
 
 			float phase = period * static_cast<float>(k) / static_cast<float>(vehicleCount);
-			float t = fmodf(lastElapsedSeconds + phase, period);
+			float t = fmodf(lastElapsedSeconds + phase + GetPhaseAdjust(vehicle), period);
 			if (t < 0.f) t += period;
 
 			state.line = static_cast<int>(lineIdx);
@@ -553,6 +553,45 @@ Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
 		}
 	}
 	return state;
+}
+
+float Route::GetPhaseAdjust(const Vehicle* vehicle) const {
+	auto it = phaseAdjust.find(vehicle);
+	return it == phaseAdjust.end() ? 0.f : it->second;
+}
+
+bool Route::SyncVehicleProgress(const Vehicle* vehicle, int legIndex, float legFraction, bool dwelling, float dwellFraction) {
+	if (!mod || !vehicle) return false;
+	for (size_t lineIdx = 0; lineIdx < lines.size() && lineIdx < lineVehicles.size(); lineIdx++) {
+		const vector<RouteLeg>& legs = lines[lineIdx];
+		const vector<Vehicle*>& vehicles = lineVehicles[lineIdx];
+		int vehicleCount = static_cast<int>(vehicles.size());
+		for (int k = 0; k < vehicleCount; k++) {
+			if (vehicles[k] != vehicle) continue;
+			if (legIndex < 0 || legIndex >= static_cast<int>(legs.size())) return false;
+
+			float period = 0.f;
+			float target = 0.f; // 目标进度对应的时刻表时间
+			for (size_t i = 0; i < legs.size(); i++) {
+				const RouteLeg& leg = legs[i];
+				float travelTime = (leg.edge && mod->speed > 0.f) ? leg.edge->length / mod->speed : 0.f;
+				float dwell = leg.dwellAtDestination ? mod->dwellSeconds : 0.f;
+				if (static_cast<int>(i) < legIndex) target += travelTime + dwell;
+				else if (static_cast<int>(i) == legIndex) {
+					target += dwelling ? travelTime + dwell * max(0.f, min(1.f, dwellFraction))
+						: travelTime * max(0.f, min(1.f, legFraction));
+				}
+				period += travelTime + dwell;
+			}
+			if (period <= 0.f) return false;
+
+			float phase = period * static_cast<float>(k) / static_cast<float>(vehicleCount);
+			float adjust = fmodf(target - (lastElapsedSeconds + phase), period);
+			phaseAdjust[vehicle] = adjust;
+			return true;
+		}
+	}
+	return false;
 }
 
 vector<int> Route::GetLineStopNodeIds(size_t lineIndex) const {

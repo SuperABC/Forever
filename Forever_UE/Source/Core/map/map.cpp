@@ -2280,24 +2280,44 @@ const unordered_map<string, Map::TerrainTextureInfo>& Map::GetTerrainTextures() 
 }
 
 vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>>>& graph,
-	int fromNodeId, int toNodeId) const {
+	int fromNodeId, int toNodeId, const unordered_map<int, const Node*>* coords) const {
 	if (fromNodeId == toNodeId) return { fromNodeId };
+
+	// A*启发：到终点的水平直线距离。取不到坐标就退化成0（等价Dijkstra）。
+	float goalX = 0.f, goalY = 0.f;
+	bool useHeuristic = false;
+	if (coords) {
+		auto goalIt = coords->find(toNodeId);
+		if (goalIt != coords->end()) {
+			goalX = goalIt->second->GetX();
+			goalY = goalIt->second->GetY();
+			useHeuristic = true;
+		}
+	}
+	auto heuristic = [&](int id) -> float {
+		if (!useHeuristic) return 0.f;
+		auto it = coords->find(id);
+		if (it == coords->end()) return 0.f;
+		float dx = it->second->GetX() - goalX, dy = it->second->GetY() - goalY;
+		return sqrtf(dx * dx + dy * dy);
+	};
 
 	unordered_map<int, float> dist;
 	unordered_map<int, int> prev;
 	unordered_set<int> visited;
-	using QueueEntry = pair<float, int>; // (distance, nodeId)，最小堆
+	using QueueEntry = pair<float, int>; // (优先级=已走距离+启发值, nodeId)，最小堆
 	priority_queue<QueueEntry, vector<QueueEntry>, greater<QueueEntry>> queue;
 
 	dist[fromNodeId] = 0.f;
-	queue.push({ 0.f, fromNodeId });
+	queue.push({ heuristic(fromNodeId), fromNodeId });
 
 	while (!queue.empty()) {
-		auto [d, id] = queue.top();
+		auto [priority, id] = queue.top();
 		queue.pop();
 		if (visited.count(id)) continue;
 		visited.insert(id);
 		if (id == toNodeId) break;
+		float d = dist[id];
 
 		auto it = graph.find(id);
 		if (it == graph.end()) continue;
@@ -2309,7 +2329,7 @@ vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>
 			if (distIt == dist.end() || newDist < distIt->second) {
 				dist[neighborId] = newDist;
 				prev[neighborId] = id;
-				queue.push({ newDist, neighborId });
+				queue.push({ newDist + heuristic(neighborId), neighborId });
 			}
 		}
 	}
@@ -2329,19 +2349,28 @@ vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>
 }
 
 vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const {
-	vector<int> idPath = FindPath(pedestrianNavGraph, fromNodeId, toNodeId);
-	if (idPath.empty()) return {};
-
 	// id -> 拥有生命周期的Node*，供按id序列反查真正的指针（Connection::GetStart()/GetEnd()
-	// 返回的是Node副本，不能直接拿它们的地址）。
-	unordered_map<int, const Node*> nodesById;
-	for (const Node* node : navAnchorNodes) nodesById[node->GetId()] = node;
-	for (const Node* node : GetExterns()) nodesById[node->GetId()] = node;
+	// 返回的是Node副本，不能直接拿它们的地址）。缓存起来，节点数量变了才重建。
+	// 只在检查/重建时持锁；之后多个线程并发只读nodeIndex（重建只会发生在地图生成阶段，那时还没有异步寻路）。
+	{
+		std::lock_guard<std::mutex> lock(nodeIndexMutex);
+		const vector<Node*>& externs = GetExterns();
+		if (nodeIndexAnchorCount != navAnchorNodes.size() || nodeIndexExternCount != externs.size()) {
+			nodeIndex.clear();
+			for (const Node* node : navAnchorNodes) nodeIndex[node->GetId()] = node;
+			for (const Node* node : externs) nodeIndex[node->GetId()] = node;
+			nodeIndexAnchorCount = navAnchorNodes.size();
+			nodeIndexExternCount = externs.size();
+		}
+	}
+
+	vector<int> idPath = FindPath(pedestrianNavGraph, fromNodeId, toNodeId, &nodeIndex);
+	if (idPath.empty()) return {};
 
 	vector<const Node*> result;
 	for (int id : idPath) {
-		auto it = nodesById.find(id);
-		if (it != nodesById.end()) result.push_back(it->second);
+		auto it = nodeIndex.find(id);
+		if (it != nodeIndex.end()) result.push_back(it->second);
 	}
 	return result;
 }

@@ -24,6 +24,7 @@
 #include <array>
 #include <tuple>
 #include <memory>
+#include <mutex>
 
 struct ScriptContext;
 
@@ -687,6 +688,14 @@ private:
 	// FindPedestrianPath/FindVehiclePath共享的Dijkstra核心——只按节点id运算，不关心调用方
 	// 要哪张图，边权统一用Connection::CalcDistance()。返回从fromNodeId到toNodeId依次经过的
 	// 节点id序列(含起点终点)，图不连通/id不存在时返回空。
+	// coords非空时按A*运算：启发函数取节点到终点的水平直线距离（不超过任何路径的真实长度，保证最优）。
 	std::vector<int> FindPath(const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph,
-		int fromNodeId, int toNodeId) const;
+		int fromNodeId, int toNodeId, const std::unordered_map<int, const Node*>* coords = nullptr) const;
+
+	// FindPedestrianPath用的"id -> Node*"索引缓存（以前每次调用都从navAnchorNodes+externs重建，节点上万时
+	// 每次寻路光建表就很慢）。线程池里的多个任务会同时调用，所以检查/重建时加锁；节点数量变了会自动重建。
+	mutable std::mutex nodeIndexMutex;
+	mutable std::unordered_map<int, const Node*> nodeIndex;
+	mutable size_t nodeIndexAnchorCount = (size_t)-1;
+	mutable size_t nodeIndexExternCount = (size_t)-1;
 };

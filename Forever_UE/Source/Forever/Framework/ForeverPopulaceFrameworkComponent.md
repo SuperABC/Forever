@@ -201,3 +201,11 @@ GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生
 
 ## 死人不被调度
 `RequestWalk`/`ApplyWalkResult`/`NotifyArrived`对`IsDead()`的市民直接返回，`TeleportCitizen`打警告后返回，避免调度把死人放回房间；复活(`npc_revive`)后再teleport才恢复。
+
+## 寻路与流式细节
+- 市民随机导航的压力测试代码已移除（2026-11-02）：以后要做全员随机走动，在 script 里用 `npc_navigate` 等 Change 实现，不再放 C++。
+- 静止市民用 `citizenSpawnDistance`(2.0)/`citizenDespawnDistance`(4.0) 流式生成/销毁，数量不限。`FindOrSpawnCitizenByName` 不受限。
+- 关闭程序时 `bCancelPathfinding` 让还在线程池里排队的寻路任务直接跳过，`WaitForPendingPathfinding` 在销毁地图前等已开始的任务结束。
+- `HandleElementEndPlay`（仅 `EndPlayReason::Destroyed`）：Actor 以任何方式被销毁都从 `activeInstances` 摘掉，避免悬空指针。
+- `StartTestNavigation(name)`（`test_navigate_citizen` Change）用 `TrackTestNavigationLine` 持续显示该市民剩余路线的橙色折线（没有计时，市民走完这条路才清掉），数据来自 `ACitizenController::GetRemainingWaypoints`。
+- 屏幕左上角青色文字显示寻路队列长度（`bShowPathfindingQueue`，默认开）：`pendingPathfindingTasks`，已派发未算完的任务数。

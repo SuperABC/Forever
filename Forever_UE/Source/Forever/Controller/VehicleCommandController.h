@@ -79,6 +79,16 @@ public:
 	void StopNow() { ClearCommands(); }
 	bool HasCommands() const { return !commands.IsEmpty(); }
 
+	// 正在执行LoopNodes时的循环进度，供交还Core时刻表时对齐进度用（见UForeverTrafficFrameworkComponent::BusToKinematic）。
+	// legIndex：车所在的那一腿（leg i = 从nodes[i]到nodes[i+1]）；行驶中legFraction是这一腿已走的比例；
+	// 停靠中dwelling=true，车在nodes[legIndex+1]里，dwellFraction是停靠已过的比例。
+	// 不在循环指令里/没有有效路径时返回false。
+	bool QueryLoopProgress(int32& outLegIndex, float& outLegFraction, bool& outDwelling, float& outDwellFraction) const;
+
+	// 正在行驶时的剩余路径（世界坐标，第一个点是车当前位置，其后是路径上还没走过的点）。
+	// 空闲/停靠中/没有有效路径返回false。"你在去哪"折线（UForeverTrafficFrameworkComponent::StartTestNavigation）用它。
+	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints) const;
+
 	AVehicleElement* GetDrivenVehicle() const { return drivenVehicle.Get(); }
 	bool IsKinematic() const { return bKinematic; }
 	// 玩家要上车驾驶等场合：运动学段没有物理没法开，先切回物理。
@@ -182,6 +192,7 @@ private:
 	int32 stopNodeId = -1;      // 正在停靠的节点
 	bool bStopEntered = false;  // 停靠中且已经发过进站（出站要配对发）
 	float dwellRemaining = 0.f;
+	float dwellTotal = 0.f;
 	float stuckSeconds = 0.f;
 
 	bool bKinematic = false;

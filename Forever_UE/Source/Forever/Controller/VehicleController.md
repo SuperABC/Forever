@@ -25,3 +25,6 @@
 - 未在 PIE 验证。重心下移（`AVehicleElement::busCenterOfMassDropZ`，默认 60uu）和 `maxLateralAccel` 需要实测调。
 - 起步朝向与首段路径差很大（例如测试运行时车横在路上）靠方向盘打满宽转弯，可能蹭墙；不处理倒车掉头。
 - 公交撞前车会被缓慢推着走，本次不做避障。
+
+## QueryLoopProgress
+LoopNodes 执行中查询循环进度（所在的腿、这一腿已走比例；停靠中则是停靠已过比例），线路公交从物理段交还 Core 时刻表前用它对齐进度（`Route::SyncVehicleProgress`），避免位置瞬移。Controller 自己的运动学模式（停车场公交测试运行）本来就沿同一条路径接着推进，不需要这一步；市民从 Actor 交还 Core 时用剩余路径点接着推算，同理已经是连续的。

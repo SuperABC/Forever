@@ -299,18 +299,14 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 
 `APlaneElement`继承本类(复用Chaos轮子/骨骼网格/近身选项/上下机/存档位置)，把轮子改成3个(鼻轮+主轮，`PlaneWheel.h`)，绕过本类的`SetupPlayerInputComponent`(W/S不是油门/刹车)，每帧手写飞行力学，见`PlaneElement.md`。本类对它没有改动：`ExitVehicle()`/`Handbrake()`/`StopHandbrake()`和各输入成员都是protected，子类直接调用。
 
-## 测试导航（StartTestNavigation）
+## 测试导航
 
-车辆靠近时脚本(`vehicle_basic.script`)多一个"测试导航"选项 -> `test_navigate_vehicle` Change ->
-`UForeverTrafficFrameworkComponent::StartTestNavigation`。`AVehicleElement::StartTestNavigation(path,...)`
-不加Controller：关掉`carMesh`物理模拟，`Tick`里`TickTestNavigation`每帧——车头`FixedTurn`转向行进方向
-(`testNavTurnRate`)、按`testNavSpeed`(默认600uu/s)前进、用车自己的碰撞通道做box sweep挡墙(卡住3秒放弃)、
-`ECC_Visibility`向下射线定高度、前后两条射线估算俯仰；到达/取消后恢复物理模拟。导航期间不会被距离流式销毁。
+`test_navigate_vehicle` Change 现在只是显示这辆车当前路线的折线，见 `ForeverTrafficFrameworkComponent.md`；车辆自己沿折线开的那套（`StartTestNavigation/TickTestNavigation/FinishTestNavigation`、`testNavSpeed/testNavTurnRate`、`TraceGroundZ`）已删除，和市民一样。
 
 ## Controller 驱动 / 搭乘 / 重心（2026-11-01）
 - `SetDriveInput(throttle, brake, steer)` + `SetHandbrake()`：玩家 WASD（`Move/StopMove/Handbrake`）和 AI Controller（`AVehicleCommandController`）走同一路径。
 - 搭乘模式 `SetRideMode(true)`（Possess 之前）：`PossessedBy` 只加视角 Context、常驻显示选项；`Move`/手刹/Q 键忽略；`MeetOptionUp/Down/Select` 绑定（照抄 `ATransitVehicleElement`）。`UnPossessed` 只在"玩家且非搭乘"时刹车清零，AI Controller 换手不打断它。线路公交近处就是用这个让玩家当乘客。
-- 运动学/物理切换：`SetKinematicMode(true)` 关物理模拟（位姿由 Controller 写），`ResumePhysics(velocity)` 重新开启并把轮子刚体再关回去（`DisableWheelBodies`，和 `FinishTestNavigation` 共用）。`ComputeWheelbase()/GetMaxSteerAngleDegrees()/GetForwardSpeed()` 供 Controller 用。
+- 运动学/物理切换：`SetKinematicMode(true)` 关物理模拟（位姿由 Controller 写），`ResumePhysics(velocity)` 重新开启并把轮子刚体再关回去（`DisableWheelBodies`）。`ComputeWheelbase()/GetMaxSteerAngleDegrees()/GetForwardSpeed()` 供 Controller 用。
 - 重心：`Init` 里 `SetCenterOfMass`；`busCenterOfMassOffset` 非零则用它，否则 category=="bus" 用 `(0,0,-busCenterOfMassDropZ)`（默认 60uu，需 PIE 调）。放在 Init 不是 BeginPlay，因为 BeginPlay 时 `vehicle` 还没绑。
 - 线路公交的 Core 位姿用地图单位：`Tick` 写回 `Vehicle::SetTransform` 时对有 Route 的车除以 1000。
 - `EndPlay` 被销毁时撤掉屏幕上这辆车名下的选项（组件销毁不一定补发 End 重叠）。

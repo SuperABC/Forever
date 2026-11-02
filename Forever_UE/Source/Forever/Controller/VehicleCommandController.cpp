@@ -10,7 +10,7 @@
 
 namespace {
 	// 地图单位 -> UE单位，同ForeverTrafficFrameworkComponent.cpp的TRAFFIC_WORLD_SCALE。
-	constexpr float kWorldScale = 1000.f;
+	constexpr float kVehicleControllerWorldScale = 1000.f;
 	constexpr float kDefaultMaxSteerDegrees = 40.f;
 	// 停车时的速度门限：高于它用刹车踩停，低于它松刹车拉手刹（Chaos的"倒车当刹车"在低速踩刹车会挂倒挡）。
 	constexpr float kHandbrakeSpeed = 80.f;
@@ -188,7 +188,7 @@ bool AVehicleCommandController::PlanAndFollow(int32 fromNode, int32 toNode)
 		const FVector forward = vehicle->GetActorForwardVector();
 		Vehicle* core = vehicle->GetVehicle();
 		plan = map->PlanVehicleRouteToNode(core ? core->GetCurrentRoom() : nullptr,
-			loc.X / kWorldScale, loc.Y / kWorldScale, toNode, true, forward.X, forward.Y);
+			loc.X / kVehicleControllerWorldScale, loc.Y / kVehicleControllerWorldScale, toNode, true, forward.X, forward.Y);
 		// 已经从房间/停车位出发了，之后不再算"停在房间里"。
 		if (core && plan.status == Map::VehicleRoutePlan::OK) core->SetCurrentRoom(nullptr);
 	}
@@ -200,7 +200,7 @@ bool AVehicleCommandController::PlanAndFollow(int32 fromNode, int32 toNode)
 	TArray<FVector> raw;
 	raw.Reserve(plan.points.size());
 	for (const Map::NavPoint& p : plan.points) {
-		raw.Add(FVector(p.x * kWorldScale, p.y * kWorldScale, p.z * kWorldScale));
+		raw.Add(FVector(p.x * kVehicleControllerWorldScale, p.y * kVehicleControllerWorldScale, p.z * kVehicleControllerWorldScale));
 	}
 	BuildPath(raw);
 	if (!path.IsValid()) {
@@ -327,8 +327,46 @@ void AVehicleCommandController::BeginDwell(int32 nodeId, float seconds, bool bFi
 	state = EState::Dwelling;
 	stopNodeId = nodeId;
 	dwellRemaining = seconds;
+	dwellTotal = seconds;
 	bStopEntered = bFireEnter || bAlreadyEntered;
 	if (bFireEnter) OnStopEntered(nodeId, true);
+}
+
+bool AVehicleCommandController::QueryLoopProgress(int32& outLegIndex, float& outLegFraction, bool& outDwelling, float& outDwellFraction) const
+{
+	const FVehicleCommand* command = commands.Current();
+	if (!command || command->type != FVehicleCommand::EType::LoopNodes) return false;
+	const int32 count = command->nodes.Num();
+	if (count < 2) return false;
+
+	if (state == EState::Driving) {
+		if (!path.IsValid()) return false;
+		outDwelling = false;
+		outLegIndex = ((loopIndex - 1) % count + count) % count; // 正驶向nodes[loopIndex]
+		outLegFraction = FMath::Clamp(pathS / path.total, 0.f, 1.f);
+		outDwellFraction = 0.f;
+		return true;
+	}
+	if (state == EState::Dwelling) {
+		outDwelling = true;
+		outLegIndex = ((loopIndex - 2) % count + count) % count; // 停在nodes[loopIndex-1]，到达它的那一腿
+		outLegFraction = 1.f;
+		outDwellFraction = dwellTotal > 0.f ? FMath::Clamp(1.f - dwellRemaining / dwellTotal, 0.f, 1.f) : 1.f;
+		return true;
+	}
+	return false;
+}
+
+bool AVehicleCommandController::GetRemainingWaypoints(TArray<FVector>& outWaypoints) const
+{
+	AVehicleElement* vehicle = drivenVehicle.Get();
+	if (!vehicle || state != EState::Driving || !path.IsValid()) return false;
+	outWaypoints.Reset();
+	outWaypoints.Add(vehicle->GetActorLocation());
+	for (int32 i = path.cursor + 1; i < path.points.Num(); i++) {
+		outWaypoints.Add(path.points[i]);
+	}
+	return outWaypoints.Num() >= 2;
 }
 
 void AVehicleCommandController::DepartFromDwell()

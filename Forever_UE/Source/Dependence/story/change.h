@@ -1135,32 +1135,32 @@ private:
 
 };
 
-// 车辆导航测试：让指定载具自己沿车辆导航图开到测试目的地（机场一楼房间）。UE-only效果，
-// 和EnterVehicleChange一样只能转发给UE层，见UForeverTrafficFrameworkComponent::StartTestNavigation。
+// 车辆导航测试：显示指定载具当前行驶路线的折线（不给载具发任何命令）。UE-only效果，
+// 和TestNavigateCitizenChange对称，见UForeverTrafficFrameworkComponent::StartTestNavigation。
 class TestNavigateVehicleChange : public Change {
 public:
 	TestNavigateVehicleChange();
 
 	/*
-	* @vehicle: 载具名称
+	* @name: 载具名称
 	*/
-	TestNavigateVehicleChange(std::string vehicle);
+	TestNavigateVehicleChange(std::string name);
 
 	virtual ~TestNavigateVehicleChange();
 
 	virtual const std::string& GetType() const override;
 
-	void SetVehicle(std::string vehicle);
-	const std::string& GetVehicle() const;
+	void SetName(std::string name);
+	const std::string& GetName() const;
 
 private:
 	// 载具名称
-	std::string vehicle;
+	std::string name;
 
 };
 
 // 给载具的Controller发运行指令（UE-only效果，见UForeverTrafficFrameworkComponent::StartBusTestRun/StopBusRun）：
-//   command == "test_run"：随机选一条公交环线的随机站，先导航过去再开始循环；
+//   command == "run"：随机选一条公交环线的随机站，先导航过去再开始循环；
 //   command == "stop"：刹停并保持，线路公交同时退出时刻表。
 class VehicleCommandChange : public Change {
 public:
@@ -1168,7 +1168,7 @@ public:
 
 	/*
 	* @vehicle: 载具名称
-	* @command: "test_run" 或 "stop"
+	* @command: "run" 或 "stop"
 	*/
 	VehicleCommandChange(std::string vehicle, std::string command);
 

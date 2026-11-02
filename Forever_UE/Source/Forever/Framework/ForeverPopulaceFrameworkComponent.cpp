@@ -1,11 +1,13 @@
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 
 #include "Element/CitizenElement.h"
+#include "Controller/CitizenController.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Engine/Engine.h"
+#include "Components/CapsuleComponent.h"
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
 
@@ -17,6 +19,7 @@
 #include "populace/citizen.h"
 
 std::atomic<int32> UForeverPopulaceFrameworkComponent::pendingPathfindingTasks{ 0 };
+std::atomic<bool> UForeverPopulaceFrameworkComponent::bCancelPathfinding{ false };
 
 // 和CitizenElement.cpp的CITIZEN_WORLD_SCALE同一个值，这次按本文件既有约定各自维护一份，
 // 不额外抽公共头(这个约定详见BuildingElement.cpp顶部注释)。
@@ -79,6 +82,7 @@ UForeverPopulaceFrameworkComponent::UForeverPopulaceFrameworkComponent() {
 }
 
 void UForeverPopulaceFrameworkComponent::GenerateCitizens(Map* inMap, Populace* inPopulace) {
+	bCancelPathfinding.store(false, std::memory_order_release); // 新一局（PIE可能连续开）
 	map = inMap;
 	if (!map || !inPopulace) return;
 
@@ -101,11 +105,11 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::SpawnCitizen(Citizen* citiz
 	float worldX, worldY, worldZ;
 	if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) return nullptr;
 
-	ACitizenElement* element = GetWorld()->SpawnActor<ACitizenElement>();
+		ACitizenElement* element = GetWorld()->SpawnActor<ACitizenElement>();
 	if (element) {
 		element->Init(citizen, this);
 		activeInstances.Add(citizen, element);
-	}
+			}
 	return element;
 }
 
@@ -144,12 +148,17 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 	pendingPathfindingTasks.fetch_add(1, std::memory_order_relaxed);
 	TWeakObjectPtr<UForeverPopulaceFrameworkComponent> weakThis(this);
 	Async(EAsyncExecution::ThreadPool, [weakThis, mapPtr, fromId, toId, citizen, destination]() {
+		// 正在关闭：队列里还没轮到的任务直接跳过，不然排着很多Dijkstra时退出会卡很久。
+		if (bCancelPathfinding.load(std::memory_order_acquire)) {
+			pendingPathfindingTasks.fetch_sub(1, std::memory_order_release);
+			return;
+		}
 		std::vector<const Node*> path = mapPtr->FindPedestrianPath(fromId, toId);
 		TArray<FVector> waypoints;
 		waypoints.Reserve(static_cast<int32>(path.size()));
 		for (const Node* node : path) {
 			waypoints.Add(FVector(node->GetX(), node->GetY(), node->GetZ()) * POPULACE_WORLD_SCALE);
-		}
+					}
 		// weakThis.Get()在后台线程上解析是UE支持的用法(内部靠序列号判定，不需要跑在
 		// 游戏线程上)——只用来判断这个组件是不是已经被销毁，判断结果之后立刻只做入队
 		// 这一个动作，不做任何其它UObject操作。就算组件已经销毁、这里什么也不做，也不会
@@ -219,6 +228,7 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 }
 
 void UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding() {
+	bCancelPathfinding.store(true, std::memory_order_release);
 	while (pendingPathfindingTasks.load(std::memory_order_acquire) > 0) {
 		FPlatformProcess::Sleep(0.001f);
 	}
@@ -243,69 +253,27 @@ void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* d
 }
 
 void UForeverPopulaceFrameworkComponent::StartTestNavigation(const FString& citizenName) {
-	auto report = [](const FString& text, bool bError) {
-		UE_LOG(LogTemp, Warning, TEXT("UForeverPopulaceFrameworkComponent::StartTestNavigation: %s"), *text);
-		if (GEngine) GEngine->AddOnScreenDebugMessage(9101, 8.f, bError ? FColor::Red : FColor::Yellow, text);
-	};
-
 	ACitizenElement* element = FindOrSpawnCitizenByName(citizenName);
-	Citizen* citizen = element ? element->GetCitizen() : nullptr;
-	if (!map || !citizen) {
-		report(FString::Printf(TEXT("测试导航失败：找不到市民 %s"), *citizenName), true);
-		return;
-	}
-	if (element->IsPlayerControlled()) return; // 玩家正在操控这个市民
-
-	// 目的地：机场一楼（0层）的房间。
-	Room* destination = nullptr;
-	for (const auto& [buildingName, building] : map->GetBuildings()) {
-		if (!building || building->GetType() != "building_airport") continue;
-		for (Room* room : building->GetRooms()) {
-			if (room && room->GetLayer() == 0 && room->GetNavigationNode()) { destination = room; break; }
-		}
-		if (destination) break;
-	}
-	if (!destination) {
-		report(TEXT("测试导航失败：找不到机场一楼的房间"), true);
-		return;
-	}
-
-	UForeverTrafficFrameworkComponent* trafficLine = GetOwner() ? GetOwner()->FindComponentByClass<UForeverTrafficFrameworkComponent>() : nullptr;
-
-	element->CancelTestNavigation();
-	if (trafficLine) trafficLine->ClearTestNavigationLine();
-
-	FVector location = element->GetActorLocation();
-	Map::VehicleRoutePlan plan = map->PlanPedestrianRoute(citizen->GetCurrentRoom(),
-		location.X / POPULACE_WORLD_SCALE, location.Y / POPULACE_WORLD_SCALE, destination);
-
-	if (plan.status == Map::VehicleRoutePlan::NO_ROAD_CONNECTION) {
-		report(FString::Printf(TEXT("测试导航：%s 在行人导航图里找不到可用的起点节点"), *citizenName), true);
-		return;
-	}
-
+	if (!element) return;
+	ACitizenController* controller = element->GetCitizenController();
 	TArray<FVector> path;
-	path.Add(location);
-	for (const Map::NavPoint& p : plan.points) {
-		path.Add(FVector(p.x, p.y, p.z) * POPULACE_WORLD_SCALE);
+	Room* destination = nullptr;
+	if (!controller || !controller->GetRemainingWaypoints(path, destination) || path.Num() < 2) return;
+	if (UForeverTrafficFrameworkComponent* trafficLine = GetOwner() ? GetOwner()->FindComponentByClass<UForeverTrafficFrameworkComponent>() : nullptr) {
+		TWeakObjectPtr<ACitizenController> weakController(controller);
+		trafficLine->TrackTestNavigationLine([weakController](TArray<FVector>& outPath) {
+			const ACitizenController* c = weakController.Get();
+			Room* ignored = nullptr;
+			return c && c->GetRemainingWaypoints(outPath, ignored);
+		});
 	}
-	if (trafficLine) trafficLine->ShowTestNavigationLine(path);
-
-	if (plan.status == Map::VehicleRoutePlan::NO_PATH_TO_DESTINATION) {
-		report(FString::Printf(TEXT("测试导航：%s 的行人导航图连不到机场房间，折线只画到最近的节点"), *citizenName), true);
-		if (trafficLine) trafficLine->ScheduleClearTestNavigationLine(15.f);
-		return;
-	}
-
-	element->StartTestNavigation(path, destination);
-	report(FString::Printf(TEXT("测试导航：%s 出发，折线 %d 个点"), *citizenName, path.Num()), false);
 }
 
-void UForeverPopulaceFrameworkComponent::FinishTestNavigation(Citizen* citizen, Room* arrivedRoom) {
-	if (citizen && arrivedRoom) NotifyArrived(citizen, arrivedRoom);
-	if (UForeverTrafficFrameworkComponent* trafficLine = GetOwner() ? GetOwner()->FindComponentByClass<UForeverTrafficFrameworkComponent>() : nullptr) {
-		trafficLine->ClearTestNavigationLine();
-	}
+void UForeverPopulaceFrameworkComponent::HandleElementEndPlay(Citizen* citizen, ACitizenElement* element) {
+	if (!citizen) return;
+	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
+	if (!existing || existing->Get() != element) return;
+	activeInstances.Remove(citizen);
 }
 
 void UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen* citizen) {
@@ -351,6 +319,12 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		ApplyWalkResult(result.citizen, result.destination, result.waypoints);
 	}
 
+	// 屏幕左上角实时显示寻路队列长度（已派发到线程池、还没算完的任务数，含正在跑的）。
+	if (bShowPathfindingQueue && GEngine) {
+		GEngine->AddOnScreenDebugMessage(9102, 0.f, FColor::Cyan,
+			FString::Printf(TEXT("寻路队列: %d"), pendingPathfindingTasks.load(std::memory_order_relaxed)));
+	}
+
 	int32 total = allCitizens.Num();
 	if (!map || total == 0) return;
 
@@ -360,10 +334,10 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 
 	float spawnDistUE = citizenSpawnDistance * POPULACE_WORLD_SCALE;
 	float despawnDistUE = citizenDespawnDistance * POPULACE_WORLD_SCALE;
-	int32 batchCount = FMath::Clamp(total / FMath::Max(1, streamingBatchStride), 1, total);
+		int32 batchCount = FMath::Clamp(total / FMath::Max(1, streamingBatchStride), 1, total);
 
 	int32 spawnCount = 0;
-
+	
 	int32 processed = 0;
 	for (int32 i = 0; i < batchCount; i++) {
 		// 本帧生成数已到上限：停止扫描，下一帧从还没处理的位置接着来。
@@ -374,6 +348,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		if (!citizen || citizen->IsDead()) continue;
 
 		TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
+
 		if (!existing) {
 			float worldX, worldY, worldZ;
 			if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) continue;

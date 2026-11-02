@@ -147,25 +147,6 @@ Room* ACitizenElement::GetWalkDestination() const {
 	return aiController ? aiController->GetCurrentDestination() : nullptr;
 }
 
-void ACitizenElement::StartTestNavigation(const TArray<FVector>& path, Room* destination) {
-	if (path.Num() < 2 || !citizen || !aiController) return;
-	aiController->ClearCommands();
-
-	// path[0]是当前位置，不需要走。
-	TArray<FVector> waypoints;
-	for (int32 i = 1; i < path.Num(); i++) waypoints.Add(path[i]);
-
-	FCharacterCommand command = FCharacterCommand::MakeFollowPath(waypoints, destination);
-	command.speedScale = 2.f;       // 测试时走路速度翻倍
-	command.bExemptDespawn = true;  // 走远也别被流式销毁
-	command.bTestNavigation = true; // 结束/被打断时清调试线
-	aiController->PushCommand(command);
-}
-
-void ACitizenElement::CancelTestNavigation() {
-	if (aiController) aiController->ClearCommands();
-}
-
 void ACitizenElement::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime); // AForeverCharacter::Tick：瞄准摄像机插值，被玩家占有期间必须持续跑
 
@@ -233,6 +214,13 @@ void ACitizenElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 		if (GetController() == aiController) aiController->UnPossess();
 		aiController->Destroy();
 		aiController = nullptr;
+	}
+	// 不管是流式销毁还是被引擎销毁（掉出世界等），都要把自己从framework的activeInstances摘掉：
+	// 那个TMap的Citizen*键没法UPROPERTY，不会被GC置空，Actor被GC后留下悬空指针会让下一次轮询崩溃。
+	// 只处理真正的Destroy()。退出游戏/切关卡/PIE结束时Core的Populace、脚本可能已经先被释放了，
+	// citizen指针已悬空，这时碰它们会崩（Alt+F4退出崩溃就是这个）；反正整个组件也要一起销毁了。
+	if (citizen && EndPlayReason == EEndPlayReason::Destroyed) {
+		if (UForeverPopulaceFrameworkComponent* owner = framework.Get()) owner->HandleElementEndPlay(citizen, this);
 	}
 	citizen = nullptr;
 	Super::EndPlay(EndPlayReason);

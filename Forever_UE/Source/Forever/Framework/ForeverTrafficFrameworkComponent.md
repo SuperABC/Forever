@@ -85,16 +85,14 @@
 
 ## 车辆导航测试
 
-`StartTestNavigation(vehicleName)`：目的地=`building_airport`的0层第一个有导航节点的房间；调
-`Map::PlanVehicleRoute`，折线画成`testNavMesh`(橙色细带，到达/取消清除；连不到目的地时留15秒)，再交给
-`AVehicleElement::StartTestNavigation`。接不上路时左上角(key 9100)+`UE_LOG`同时提示。
+`StartTestNavigation(vehicleName)`（`test_navigate_vehicle` Change，参数 `name`，和市民的 `test_navigate_citizen` 对称）：取 `busStates` 里这辆车的 `ABusController::GetRemainingWaypoints`（车当前位置 + 路径上还没走过的点），用 `TrackTestNavigationLine` 持续显示橙色折线：约每 0.1 秒重取一次剩余路径重画（越走越短），路径取不到（任务完成/车没了）就清线，没有计时器。车和市民共用这一条线，同一时刻只显示最后一次。不生成车、不给车发任何命令；车没有在开就什么都不做、也不提示。
 
 ## 公交 Controller 驱动（2026-11-01）
 - **线路公交远近切换**（`UpdateBusPhysicsHandoff`，每帧最多切一辆）：地形 `busPhysicsLodLevel`（默认 4）级 LOD 范围外 = 运动学 `ATransitVehicleElement` + Core 时刻表；范围内 = 物理 `AVehicleElement`（蓝图路径 `GetBlueprintPath()`）+ `ABusController` 按站序循环。范围判定 `UForeverTerrainFrameworkComponent::IsInsideLodLevel`，进入用 `busPhysicsEnterScale`(0.9) 缩小的范围、离开用完整范围（滞回）。
   - 运动学→物理（`BusToPhysics`）：`Route::QueryVehicleState` 取线路/腿/是否停靠/剩余停靠，在 Core 位姿 spawn 物理公交、给初速度、`Vehicle::SetPhysicsDriven(true)`（`Route::Update` 跳过它）、下发 `LoopNodes`（停靠中带 `bStartAtStop/startDwell/bStopAlreadyEntered`）。
   - 物理→运动学（`BusToKinematic`）：`ClearCommands`（停站补 `leave_stop`）、销毁物理公交+Controller、`SetPhysicsDriven(false)`、`Route::ResetStopState`（下一次 Update 当第一次观察，正好停着就补发 `enter_stop`）、恢复运动学 Actor。玩家驾驶/搭乘中不收回。
   - `enter_stop/leave_stop` 任何时刻只有一个发出方：运动学段 = Core 时刻表（`AForeverFrameworkActor` 转发），物理段 = `ABusController`（`FireStopEvent`，用 `stationByNodeId` 把辅助节点 id 反查回车站）。
-- **测试运行 / 停止运行**（`StartBusTestRun/StopBusRun`，由 `vehicle_command` Change 触发）：测试运行 = 随机公交环线的随机站，先 `NavigateToNode`，到站后接 `LoopNodes`；停止运行 = `StopNow`。线路公交被点过测试运行/停止运行后 `bDetached`（退出时刻表，`physicsDriven` 锁定，之后由 Controller 持有，LOD 外靠 Controller 自带的运动学模式）。
+- **测试运行 / 停止运行**（`StartBusTestRun/StopBusRun`，由 `vehicle_command` Change 触发）：`run` = 随机公交环线的随机站，先 `NavigateToNode`，到站后接 `LoopNodes`；`stop` = `StopNow`。线路公交被点过测试运行/停止运行后 `bDetached`（退出时刻表，`physicsDriven` 锁定，之后由 Controller 持有，LOD 外靠 Controller 自带的运动学模式）。
 - 搭乘：`ApplyBoardVehicle` 对线路公交用物理公交 `SetRideMode(true)` 后 Possess；`ExitVehicle` 用 `IsRideMode()` 判搭乘（不做遮挡判定）；下车后 Controller 下一帧自动收回。读档 `controlledVehicle` 是线路公交走 `ApplyBoardVehicle`（物理公交不在就强制切换）。
 - 流式销毁：停车场车辆"玩家占有或 Controller 有指令在跑"时不销毁（原来的 `GetController()==nullptr` 判断会被 AI Controller 误伤）。
 - 不保存：测试运行状态不进存档，读档后公交回到停车场/默认状态（脚本变量 `running` 会随脚本存档，读档后可能与实际不一致）。

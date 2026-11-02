@@ -95,23 +95,6 @@ public:
 	void EnsureOptionsForPlayer(APawn* player);
 	TWeakObjectPtr<APawn> GetPreviousPawn() const { return previousPawn; }
 
-	// 车辆导航测试：车自己沿path(UE世界坐标折线)开到末尾，不需要Controller。导航期间关掉
-	// 物理模拟，Tick里每帧：车头转向前进方向、按速度前进、用自己的碰撞通道做box sweep挡墙、
-	// 向下射线贴地定高度并按前后轮位置估算俯仰；到达/取消后恢复物理模拟。到达时把Core里
-	// 车辆所在房间设成destination（可为空）。owner用来在结束时清掉调试折线。
-	// 见UForeverTrafficFrameworkComponent::StartTestNavigation。
-	void StartTestNavigation(const TArray<FVector>& path, Room* destination, UForeverTrafficFrameworkComponent* owner);
-	void CancelTestNavigation();
-	bool IsTestNavigating() const { return bTestNavigating; }
-
-	// 导航行驶速度(UE单位/秒)：慢一点，让人能跟着车跑。
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TestNavigation")
-	float testNavSpeed = 1200.f;
-
-	// 车头转向速度(度/秒)。
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TestNavigation")
-	float testNavTurnRate = 180.f;
-
 	// 重心偏移(车身本地坐标，UE单位)。公交这类车型默认再叠加busCenterOfMassDropZ的下移，
 	// 降低重心防侧翻；两者都为0则保持骨骼网格物理资产自带的重心。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mass")
@@ -199,23 +182,6 @@ private:
 	UFUNCTION()
 	void OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
-
-	// 测试导航的每帧推进；finished=true表示到达（false=被取消/卡死放弃）。
-	void TickTestNavigation(float deltaTime);
-	void FinishTestNavigation(bool arrived);
-	// 向下射线找地面高度（用ECC_Visibility通道：地面/楼板阻挡它，Trigger档案的各种边界盒和
-	// Pawn档案的市民都不阻挡，不会把车抬起来）。
-	bool TraceGroundZ(const FVector& xy, float aroundZ, float& outZ) const;
-
-	bool bTestNavigating = false;
-	TArray<FVector> navPath;
-	int32 navIndex = 0;
-	Room* navDestination = nullptr; // Core对象，非UPROPERTY
-	TWeakObjectPtr<UForeverTrafficFrameworkComponent> navOwner;
-	FVector navBoxHalfExtent = FVector(250.f, 100.f, 80.f); // 车身本地包围盒半尺寸，开始导航时从carMesh算
-	FVector navBoxCenterOffset = FVector::ZeroVector;       // 包围盒中心相对车辆原点的本地偏移
-	float navGroundOffset = 0.f; // 车辆原点到车身最低点的距离
-	float navBlockedSeconds = 0.f;
 
 	Vehicle* vehicle = nullptr;
 	TWeakObjectPtr<APawn> previousPawn;

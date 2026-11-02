@@ -73,15 +73,14 @@ public:
 	// 起点按citizen当前房间/from位置（Map::PlanPedestrianRoute），成功且路径非空返回true。
 	bool PlanWalkPath(Citizen* citizen, Room* destination, const FVector& from, TArray<FVector>& outWaypoints) const;
 
-	// 市民导航测试（script的test_navigate_citizen Change）：让这个市民由AIController带着沿行人
-	// 导航图走到机场一楼房间。起点：市民有当前房间就从房间导航节点出发，否则从最近的行人图节点出发
-	// （Map::PlanPedestrianRoute）；画折线调试线（复用交通组件的那条线），再交给
-	// ACitizenElement::StartTestNavigation（往ACitizenController推指令）。走路速度和车辆一样在测试期间翻倍。接不上图/连不到
-	// 目的地时屏幕左上角+日志提示。
+	// script的test_navigate_citizen Change（"你在去哪"选项）：用橙色折线（复用交通组件的那条线）显示这个
+	// 市民正在走的路线——当前位置 + 剩余路径点，折线一直显示到这条路走完。不改变市民的行动。市民必须已有Actor
+	// （玩家对话时必然在身边）；没在走路时只在屏幕左上角提示。
 	void StartTestNavigation(const FString& citizenName);
 
-	// ACitizenElement测试导航走完（或被打断）后的回调：到达时更新当前房间，并清掉调试线。
-	void FinishTestNavigation(Citizen* citizen, Room* arrivedRoom);
+		// ACitizenElement::EndPlay回调：Actor以任何方式结束（流式销毁、掉出世界被引擎销毁等）都从activeInstances摘掉
+	// （那个TMap的Citizen*键没法UPROPERTY，GC不会置空，Actor被引擎销毁后会留下悬空指针）。
+	void HandleElementEndPlay(Citizen* citizen, ACitizenElement* element);
 
 	// 武器系统命中citizen致死时调用（Citizen::TakeDamage()让IsDead()变成true之后）：
 	// Destroy()掉对应的ACitizenElement（如果当前有）、从activeInstances摘除。之后
@@ -130,7 +129,7 @@ private:
 		Citizen* citizen = nullptr;
 		Room* destination = nullptr;
 		TArray<FVector> waypoints;
-	};
+			};
 	TQueue<FPendingWalkResult, EQueueMode::Mpsc> pathResultQueue;
 
 	// RequestWalk发起异步寻路时+1，对应的后台线程任务把结果推进pathResultQueue之后-1——
@@ -140,6 +139,8 @@ private:
 	// 退出全程有效，递减操作发生在纯粹的Core数据(map/citizen/destination指针值)上，不touch
 	// 这个UObject实例本身，不存在"递减时对象已经不在了"的问题。
 	static std::atomic<int32> pendingPathfindingTasks;
+	// WaitForPendingPathfinding置位：还没开始跑的寻路任务直接跳过（只递减计数器），让关闭不用等完整个队列。
+	static std::atomic<bool> bCancelPathfinding;
 
 	// RequestWalk/TickComponent共用的路径落地逻辑：existing查一遍activeInstances(可能和
 	// RequestWalk发起寻路那一刻已经不是同一个状态——citizen可能被流式销毁/重新生成过，也
@@ -148,6 +149,7 @@ private:
 	// "没有可用导航节点、不需要走线程池"的同步分支和"线程池算完、TickComponent drain"的
 	// 异步分支共用。
 	void ApplyWalkResult(Citizen* citizen, Room* destination, const TArray<FVector>& waypoints);
+
 
 
 	// 生成一个citizen对应的ACitizenElement并登记进activeInstances——从TickComponent的
@@ -184,4 +186,9 @@ private:
 	// LOD双阈值同一个防抖动理由。
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")
 	float citizenDespawnDistance = 4.f;
+
+	// 在屏幕左上角实时显示寻路队列长度（调试用）。
+	UPROPERTY(EditDefaultsOnly, Category = "Populace")
+	bool bShowPathfindingQueue = true;
+
 };

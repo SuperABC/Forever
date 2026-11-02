@@ -3,6 +3,7 @@
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 
 #include "populace/citizen.h"
 #include "map/room.h"
@@ -47,6 +48,20 @@ void ACitizenController::ClearCommands() {
 Room* ACitizenController::GetCurrentDestination() const {
 	const FCharacterCommand* command = commands.Current();
 	return (command && bCommandStarted) ? command->room : nullptr;
+}
+
+bool ACitizenController::GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination) const {
+	const FCharacterCommand* command = commands.Current();
+	ACitizenElement* element = citizenElement.Get();
+	if (!command || !element || command->type != FCharacterCommand::EType::FollowPath || !command->room) return false;
+	outWaypoints.Reset();
+	// 路径点是脚底高度（行人图节点在地面上），Actor位置是胶囊体中心，要减掉半高，否则折线/交还Core的路径会整体抬高。
+	outWaypoints.Add(element->GetActorLocation() - FVector(0.f, 0.f, element->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+	for (int32 i = bCommandStarted ? waypointIndex : 0; i < command->waypoints.Num(); i++) {
+		outWaypoints.Add(command->waypoints[i]);
+	}
+	outDestination = command->room;
+	return true;
 }
 
 void ACitizenController::BeginCommand(FCharacterCommand& command) {
@@ -102,10 +117,7 @@ void ACitizenController::EndCommand(bool arrived) {
 	UForeverPopulaceFrameworkComponent* framework = element ? element->GetFramework() : nullptr;
 	Citizen* citizen = element ? element->GetCitizen() : nullptr;
 	if (!framework || !citizen) return;
-	if (finished.bTestNavigation) {
-		framework->FinishTestNavigation(citizen, (arrived && finished.room) ? finished.room : nullptr);
-	}
-	else if (arrived && finished.room) {
+	if (arrived && finished.room) {
 		framework->NotifyArrived(citizen, finished.room);
 	}
 }

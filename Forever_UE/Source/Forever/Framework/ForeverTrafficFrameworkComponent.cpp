@@ -241,6 +241,7 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 			// 公交：蓝图是 AVehicleElement 子类的话，玩家附近（地形 LOD 范围内）换成它的物理表示+Controller。
 			if (vehicle->GetRoute()->GetStationType() == "bus" && !blueprintPath.empty()) {
 				UClass* physicsClass = LoadClass<AVehicleElement>(nullptr, UTF8_TO_TCHAR(blueprintPath.data()));
+				if (physicsClass) busPhysicsClasses.Add(physicsClass);
 				FBusState state;
 				state.vehicle = vehicle;
 				state.name = transitName;
@@ -319,6 +320,16 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 
 	UpdateBusPhysicsHandoff();
 
+	if (testNavSource) {
+		testNavRefreshCountdown -= DeltaTime;
+		if (testNavRefreshCountdown <= 0.f) {
+			testNavRefreshCountdown = 0.1f;
+			TArray<FVector> path;
+			if (testNavSource(path) && path.Num() >= 2) ShowTestNavigationLine(path);
+			else ClearTestNavigationLine(); // 任务完成/对象没了
+		}
+	}
+
 	if (carEntries.Num() == 0) return;
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn) return;
@@ -343,7 +354,7 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 		entry.location = element->GetActorLocation();
 		entry.yaw = element->GetActorRotation().Yaw;
 		// 正在自己导航的车(测试导航)、被Controller持续驱动的公交也不销毁：跑远了销毁会丢掉运行状态。
-		if (!element->IsPlayerControlled() && !IsDrivenByController(element) && !element->IsTestNavigating() &&
+		if (!element->IsPlayerControlled() && !IsDrivenByController(element) &&
 			TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE) {
 			activeVehicles.Remove(entry.name);
 			element->Destroy();
@@ -400,8 +411,7 @@ void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicle
 		}
 	}
 
-	// 玩家要自己开了：测试导航中的车先取消(恢复物理、清折线)，并且这辆车不再算"停在某个房间里"。
-	vehicleElement->CancelTestNavigation();
+	// 玩家要自己开了：这辆车不再算"停在某个房间里"。
 	if (Vehicle* coreVehicle = vehicleElement->GetVehicle()) coreVehicle->SetCurrentRoom(nullptr);
 
 	// 隐藏之后这个pawn会一直停在原地，但UForeverPopulaceFrameworkComponent::TickComponent的
@@ -722,82 +732,27 @@ void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 }
 
 void UForeverTrafficFrameworkComponent::ClearTestNavigationLine() {
+	testNavSource = nullptr;
 	if (testNavMesh) testNavMesh->ClearMeshSection(0);
-	if (UWorld* world = GetWorld()) world->GetTimerManager().ClearTimer(testNavClearTimer);
+}
+
+void UForeverTrafficFrameworkComponent::TrackTestNavigationLine(TFunction<bool(TArray<FVector>&)> source) {
+	testNavSource = MoveTemp(source);
+	testNavRefreshCountdown = 0.f; // 下一帧就画
 }
 
 void UForeverTrafficFrameworkComponent::StartTestNavigation(const FString& vehicleName) {
-	// 屏幕左上角+日志同时输出（屏幕消息不进Forever.log，见CONVENTIONS）；固定key 9100避免叠行。
-	auto report = [](const FString& text, bool bError) {
-		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::StartTestNavigation: %s"), *text);
-		if (GEngine) GEngine->AddOnScreenDebugMessage(9100, 8.f, bError ? FColor::Red : FColor::Yellow, text);
-	};
-
-	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
-	Map* map = framework ? framework->GetMap() : nullptr;
-	AVehicleElement* element = FindOrSpawnVehicle(vehicleName);
-	Vehicle* vehicle = element ? element->GetVehicle() : nullptr;
-	if (!map || !vehicle) {
-		report(FString::Printf(TEXT("测试导航失败：找不到车辆 %s"), *vehicleName), true);
-		return;
-	}
-	if (element->GetController()) return; // 玩家正在开这辆车
-
-	// 目的地：机场一楼（0层）的房间。
-	Room* destination = nullptr;
-	for (const auto& [buildingName, building] : map->GetBuildings()) {
-		if (!building || building->GetType() != "building_airport") continue;
-		for (Room* room : building->GetRooms()) {
-			if (room && room->GetLayer() == 0 && room->GetNavigationNode()) { destination = room; break; }
-		}
-		if (destination) break;
-	}
-	if (!destination) {
-		report(TEXT("测试导航失败：找不到机场一楼的房间"), true);
-		return;
-	}
-
-	element->CancelTestNavigation();
-	ClearTestNavigationLine();
-
-	FVector carLocation = element->GetActorLocation();
-	Map::VehicleRoutePlan plan = map->PlanVehicleRoute(vehicle->GetCurrentRoom(),
-		carLocation.X / TRAFFIC_WORLD_SCALE, carLocation.Y / TRAFFIC_WORLD_SCALE, destination);
-
-	if (plan.status == Map::VehicleRoutePlan::NO_ROAD_CONNECTION) {
-		report(FString::Printf(TEXT("测试导航：%s 没有任何connection能连到大路或小路上（%s）"), *vehicleName,
-			vehicle->GetCurrentRoom() ? TEXT("起点房间没有车辆出口") : TEXT("附近找不到可用车道")), true);
-		return;
-	}
-
-	// 折线转UE世界坐标；第一个点换成车的真实位置（从房间出发时在前面补上车的位置）。
+	// 路线只有被Controller驱动的车（公交）才有；没有在开就什么都不做，不生成车、不发命令。
+	const FBusState* state = busStates.Find(vehicleName);
+	TWeakObjectPtr<ABusController> controller = state ? state->controller : nullptr;
+	if (!controller.IsValid()) return;
 	TArray<FVector> path;
-	path.Add(carLocation);
-	for (size_t i = 0; i < plan.points.size(); i++) {
-		const Map::NavPoint& p = plan.points[i];
-		if (i == 0 && !vehicle->GetCurrentRoom()) continue; // 路网起点就是车位置，已经补过
-		path.Add(FVector(p.x * TRAFFIC_WORLD_SCALE, p.y * TRAFFIC_WORLD_SCALE, p.z * TRAFFIC_WORLD_SCALE));
-	}
+	if (!controller->GetRemainingWaypoints(path) || path.Num() < 2) return;
 
-	ShowTestNavigationLine(path);
-
-	if (plan.status == Map::VehicleRoutePlan::NO_PATH_TO_DESTINATION) {
-		report(FString::Printf(TEXT("测试导航：%s 的导航图连不到机场房间，折线只画到路上"), *vehicleName), true);
-		if (UWorld* world = GetWorld()) {
-			world->GetTimerManager().SetTimer(testNavClearTimer, this, &UForeverTrafficFrameworkComponent::ClearTestNavigationLine, 15.f, false);
-		}
-		return;
-	}
-
-	if (path.Num() < 2) { // 已经在目的房间
-		vehicle->SetCurrentRoom(destination);
-		report(FString::Printf(TEXT("测试导航：%s 已经在目的房间"), *vehicleName), false);
-		return;
-	}
-
-	vehicle->SetCurrentRoom(nullptr); // 出发：不再算在任何房间里，到达时由AVehicleElement设成目的房间
-	element->StartTestNavigation(path, destination, this);
-	report(FString::Printf(TEXT("测试导航：%s 出发，折线 %d 个点"), *vehicleName, path.Num()), false);
+	TrackTestNavigationLine([controller](TArray<FVector>& outPath) {
+		const ABusController* c = controller.Get();
+		return c && c->GetRemainingWaypoints(outPath);
+	});
 }
 
 void UForeverTrafficFrameworkComponent::ShowTestNavigationLine(const TArray<FVector>& path) {
@@ -828,12 +783,6 @@ void UForeverTrafficFrameworkComponent::ShowTestNavigationLine(const TArray<FVec
 		testNavMesh->CreateMeshSection(0, vertices, triangles,
 			TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
 		if (testNavMaterial) testNavMesh->SetMaterial(0, testNavMaterial);
-	}
-}
-
-void UForeverTrafficFrameworkComponent::ScheduleClearTestNavigationLine(float seconds) {
-	if (UWorld* world = GetWorld()) {
-		world->GetTimerManager().SetTimer(testNavClearTimer, this, &UForeverTrafficFrameworkComponent::ClearTestNavigationLine, seconds, false);
 	}
 }
 
@@ -1147,6 +1096,18 @@ bool UForeverTrafficFrameworkComponent::BusToPhysics(FBusState& state) {
 
 void UForeverTrafficFrameworkComponent::BusToKinematic(FBusState& state) {
 	AVehicleElement* element = state.element.Get();
+	// 先把时刻表进度对齐到实车当前位置（必须在ClearCommands之前读控制器状态）：物理车比名义速度慢，
+	// 不对齐的话交还瞬间时刻表算出来的位置早已领先一大截，公交会"瞬移"到玩家附近。
+	if (ABusController* controller = state.controller.Get()) {
+		int32 legIndex;
+		float legFraction, dwellFraction;
+		bool bDwelling;
+		if (state.vehicle && controller->QueryLoopProgress(legIndex, legFraction, bDwelling, dwellFraction)) {
+			if (Route* route = state.vehicle->GetRoute()) {
+				route->SyncVehicleProgress(state.vehicle, legIndex, legFraction, bDwelling, dwellFraction);
+			}
+		}
+	}
 	if (ABusController* controller = state.controller.Get()) {
 		controller->ClearCommands(); // 停站中会补发 leave_stop
 		controller->Destroy();

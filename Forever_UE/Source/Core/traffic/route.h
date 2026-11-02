@@ -115,6 +115,13 @@ public:
 	};
 	ScheduleState QueryVehicleState(const Vehicle* vehicle) const;
 
+	// 载具从物理段交还时刻表前调用：把它在时刻表上的进度对齐到实车当前位置，之后时刻表从这里接着走，
+	// 不会因为物理车比名义速度慢而一交还就瞬移到"早该跑完一圈"的位置。做法是给这辆车记一个相位修正量，
+	// 让"现在"对应的时刻表时间正好等于目标进度。legIndex是实车所在的那一腿（leg i 从第 i 站到第 i+1 站），
+	// legFraction是这一腿已走的比例[0,1]；dwelling=true 表示实车停在第 legIndex+1 站里，dwellFraction是停靠已过的比例。
+	// 缓动曲线的影响忽略（按名义匀速换算时间，误差只在加减速段）。找不到这辆车返回false。
+	bool SyncVehicleProgress(const Vehicle* vehicle, int legIndex, float legFraction, bool dwelling, float dwellFraction);
+
 	// 第lineIndex条线路每一站的车站节点id（Map辅助导航节点，见Map::AuxNavNode），顺序即行驶顺序：
 	// 第i个元素是 leg i 的起点站。任何一站没有road link（没接上路网）时返回空。
 	std::vector<int> GetLineStopNodeIds(size_t lineIndex) const;
@@ -161,6 +168,10 @@ private:
 	// 停站/离站边沿检测：key是载具，value是上次Update()时它正停靠的站(nullptr=在行驶)；key不存在
 	// 表示还没观察过这辆车。不进存档(读档后第一次Update重新观察，见SilenceInitialStopEvents)。
 	std::unordered_map<Vehicle*, Station*> lastStopStation;
+
+	// SyncVehicleProgress记的每辆车的相位修正量（游戏秒），运行时数据，不存档。
+	std::unordered_map<const Vehicle*, float> phaseAdjust;
+	float GetPhaseAdjust(const Vehicle* vehicle) const;
 	std::vector<StopEvent> pendingStopEvents;
 	bool silentInitialStopState = false;
 	float lastElapsedSeconds = 0.f; // 最近一次Update()的elapsedSeconds，QueryVehicleState用

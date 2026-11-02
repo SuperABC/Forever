@@ -1,6 +1,10 @@
 {
 	// 公交车自己的milestone脚本(BusVehicle::milestoneNames={"vehicle_bus"}加载)。路线上的公交和
 	// 停车场里的公交共用这一个脚本，靠C++写好的$$self.on_route区分：
+	// 【测试入口已关闭】ready里不再添加"测试运行"/"停止运行"选项（下面的run/stop_run milestone和
+	// vehicle_command功能都保留）；要重新打开，在ready的changes里加回：
+	//   { "type": "add_option", "name": "$$self.name", "option": "测试运行", "condition": "$$self.on_route == 0" },
+	//   { "type": "add_option", "name": "$$self.name", "option": "停止运行", "condition": "$$self.on_route == 1" }
 	//   - on_route=0(停车场里的公交)：提供"驾驶"和"测试运行"选项，驾驶行为同vehicle_basic；
 	//   - on_route=1(线路上的公交)：不提供驾驶，只在停站时提供"上车"/"下车"，并提供"停止运行"。
 	// 测试运行：公交的Controller先导航到随机一条公交环线的随机站，再开始循环（vehicle_command Change，
@@ -24,9 +28,7 @@
 				{ "type": "set_value", "variable": "self.stopped", "value": "0" },
 				{ "type": "set_value", "variable": "self.aboard", "value": "0" },
 				{ "type": "set_value", "variable": "self.running", "value": "0" },
-				{ "type": "add_option", "name": "$$self.name", "option": "驾驶", "condition": "$$self.on_route == 0" },
-				{ "type": "add_option", "name": "$$self.name", "option": "测试运行", "condition": "$$self.on_route == 0" },
-				{ "type": "add_option", "name": "$$self.name", "option": "停止运行", "condition": "$$self.on_route == 1" }
+				{ "type": "add_option", "name": "$$self.name", "option": "驾驶", "condition": "$$self.on_route == 0" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -56,7 +58,7 @@
 				{ "type": "remove_option", "name": "$$self.name", "option": "驾驶" },
 				{ "type": "remove_option", "name": "$$self.name", "option": "测试运行" },
 				{ "type": "add_option", "name": "$$self.name", "option": "停止运行" },
-				{ "type": "vehicle_command", "vehicle": "$$self.name", "command": "test_run" }
+				{ "type": "vehicle_command", "vehicle": "$$self.name", "command": "run" }
 			],
 			"dialogs": [],
 			"subsequences": []

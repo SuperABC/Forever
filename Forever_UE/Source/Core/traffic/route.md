@@ -100,3 +100,6 @@
 ## 物理接管支持（2026-11-01）
 - `Vehicle::IsPhysicsDriven()`（运行时、不存档）为真时 `Route::Update` 跳过该车（不改位姿、不产出停站事件），时刻表相位照常累计。
 - `QueryVehicleState(vehicle)`：当前线路/腿/是否停靠/剩余停靠（真实秒）/巡航速度，不改状态；`GetLineStopNodeIds(line)`：每站 stationNode 的 Map 辅助节点 id（leg i 的起点站）；`ResetStopState(vehicle)`：物理段交还时刻表时忘掉停靠状态。
+
+## SyncVehicleProgress（物理段交还时刻表时对齐进度）
+`Route::SyncVehicleProgress(vehicle, legIndex, legFraction, dwelling, dwellFraction)`：给这辆车记一个运行时相位修正量 `phaseAdjust`（游戏秒，不存档），`Update`/`QueryVehicleState` 算 `localTime` 时加上它，使"现在"对应的时刻表时间等于实车的真实进度。物理公交比名义速度慢，不对齐的话一交还时刻表就按"早已跑完一圈"的位置刷新（瞬移）。按名义匀速换算，缓动段有小误差。UE 侧在 `UForeverTrafficFrameworkComponent::BusToKinematic` 里、`ClearCommands` 之前用 `AVehicleCommandController::QueryLoopProgress` 取循环进度调用。
