@@ -1,0 +1,21 @@
+# product_mod.h / product_mod.cpp
+
+## 职责
+
+`ProductMod`：一种产品的**类型定义**(不是某个仓库里的一份库存，库存数据在`Storage`自己的存量表里)。
+
+## 关键设计
+
+- **分类标签`categories`**决定哪些仓库能存它：和`StorageMod::categories`同一套字符串标签，任一交集即可入库。
+- **批次配方**：`batchSize`是"一批最少产多少份"，`ingredients`/`byproducts`的value含义是"生产一批(`batchSize`份)需要/产生多少"，不是"每1份"。`batchSize`不要求是整数，但工坊每天配置的产量必须是整批(`batchesPerDay`为正整数，见`manufacture_mod.h`)。
+- **`SetProperty()`两段式**：具体子类在这里填四个字段，不在构造函数里赋值。
+- 带存档钩子，默认不存任何东西，见`common/mod_state.md`。
+
+## 依赖关系
+
+- 依赖：`common/mod_state.h`。
+- 被谁依赖：`product_factory.h`创建它；`Core/industry/product.h`/`manufacture.h`消费它；具体实现在`Source/Basic/industry/product_basic.*`和外部mod里。
+
+## 待办/后续阶段
+
+- 无。

@@ -1,5 +1,7 @@
 # VehicleElement
 
+> **新增一种载具**（静态网格模型 → 骨骼网格体 → 蓝图 → Basic 注册）的完整流程见 `Forever_UE/Tools/VehicleRig/README.md`，脚本也在那个目录。
+
 ## 职责
 
 `AVehicleElement`：一辆车在场景里对应的Actor。照抄引擎自带Chaos Vehicle
