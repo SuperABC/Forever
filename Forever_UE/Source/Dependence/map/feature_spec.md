@@ -77,6 +77,25 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
 - 依赖：`map/general_geometry.h`（`PointParams`）。
 - 被谁依赖：`roadnet_mod.h`、`zone_mod.h`、`building_mod.h`、`Source/Core/map/vegetation.h`。
 
+## 路灯(`LampSingleSpec`/`LampLineSpec`/`LampAreaSpec`/`LampRequests`)
+
+### 职责
+
+路灯请求的数据结构，和植被同一套：单盏、一排(沿线段均匀放`num`盏，含两端)、一片(矩形内均匀随机`num`盏)。mod只"提请求"，
+Core的`Lamps`展开成一盏盏灯(见`Source/Core/map/lamp.md`)，UE层逐盏生成Actor。
+
+### 关键设计
+
+- 与植被的区别：灯是Actor蓝图而不是Mesh，所以字段是`blueprintPath`(`/Game/...BP_X.BP_X_C`，父类`ALampElement`)；
+  没有scale，换成`rotationDegrees`(宿主局部系下的朝向，度，0=+X逆时针，Core叠加宿主旋转)，同一个请求的所有灯朝向相同。
+- 坐标仍是`PointParams`、参考系由宿主决定；目前只有`RoadnetMod`提供入口(`LayoutLamps`+`AddLampSingle/Line/Area`+成员`lamps`)。
+- `num<=0`或`blueprintPath`为空的请求直接忽略；跨DLL规则同`TreeRequests`。
+
+### 依赖关系
+
+- 依赖：`map/general_geometry.h`（`PointParams`）。
+- 被谁依赖：`roadnet_mod.h`、`Source/Core/map/lamp.h`。
+
 ## 建筑自定义模型(`DecorationSpec`)
 
 ### 职责

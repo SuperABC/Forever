@@ -170,6 +170,9 @@ context)`是消费任意`Change*`的唯一入口——`populace->Tick`的回调�
   `EnsureMapGenerated`最后、`GenerateBuildings`之后调用`GenerateVegetation(map)`：Core里的树在
   `InitRoadnet`/`InitBuildings`时已经展开好，这里一次性加载mesh+批量实例化，见
   `ForeverVegetationFrameworkComponent.md`。
+- **路灯**——`lampFramework`(`UForeverLampFrameworkComponent`)：`布置路灯`阶段(`BuildMapLamps`，读档跳过)调
+  `Map::InitLamps`，`生成路灯模型`阶段(`GenerateLampMesh`，在植被之后、需要地形高度)逐盏生成`ALampElement`；`Tick`里
+  `UpdateLamps(*player->GetTime())`按游戏时间开关灯。见`ForeverLampFrameworkComponent.md`。
 - **读档请求**——`FetchActiveLoad()`第一次调用时从`UForeverSaveSubsystem::ConsumePendingLoad()`取走读档请求，之后
   一直返回同一份。GameMode找出生点(`FindPlayerStart`→`EnsureFrameworkActorExists`→`EnsureMapGenerated`)比`BeginPlay`
   还早，所以`EnsureMapGenerated`和`BeginPlay`都通过它取，谁先调用谁触发。有读档请求时`EnsureMapGenerated`用

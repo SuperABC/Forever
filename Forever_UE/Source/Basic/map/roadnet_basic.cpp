@@ -39,6 +39,13 @@
 #define TREE_SCALE 0.6f
 #define TREE_SPACING 1.f
 #define TREE_SIDEWALK_RATIO 0.f
+// 路灯(JingRoadnet::LayoutLamps，先随便摆，后面看效果再调)：和行道树共用LayoutRows的几何，
+// 放在行道树外侧(LAMP_SIDEWALK_RATIO比树的0大)，沿路每LAMP_SPACING(1.5格=15m)一盏。side0/side1的朝向
+// 自动差180度，LAMP_YAW_OFFSET(度)统一补偿蓝图里灯臂的初始朝向。
+#define LAMP_BLUEPRINT_PATH "/Game/3rdParty/Stylized_street_light/Actor/BP_StreetLight.BP_StreetLight_C"
+#define LAMP_SPACING 1.5f
+#define LAMP_SIDEWALK_RATIO 0.3f
+#define LAMP_YAW_OFFSET 0.f
 
 
 using namespace std;
@@ -644,6 +651,25 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 }
 
 void JingRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {
+	LayoutRows(hostRoads, TREE_SPACING, TREE_SIDEWALK_RATIO,
+		[this](int, float x0, float y0, float x1, float y1, int num, float) {
+			// 路网的植被参考系是整张地图(不旋转)，世界坐标直接写成PointParams{0,x,0,y}。
+			AddTreeLine({ 0.f, x0, 0.f, y0 }, { 0.f, x1, 0.f, y1 }, num, TREE_SCALE, TREE_MESH_PATH);
+		});
+}
+
+void JingRoadnet::LayoutLamps(const vector<Road*>& hostRoads) {
+	LayoutRows(hostRoads, LAMP_SPACING, LAMP_SIDEWALK_RATIO,
+		[this](int side, float x0, float y0, float x1, float y1, int num, float roadAngleDegrees) {
+			// 灯臂朝向路面：side0在perp0=(-dy,dx)一侧，朝向路面就是沿路方向-90度，side1相反(+90度)，
+			// 两排自然差180度。LAMP_YAW_OFFSET统一补偿蓝图里灯臂的初始朝向。
+			float rotation = roadAngleDegrees + (side == 0 ? -90.f : 90.f) + LAMP_YAW_OFFSET;
+			AddLampLine({ 0.f, x0, 0.f, y0 }, { 0.f, x1, 0.f, y1 }, num, rotation, LAMP_BLUEPRINT_PATH);
+		});
+}
+
+void JingRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing, float sidewalkRatio, const RowEmitter& emit) {
+	// 行道树和路灯共用这套几何，spacing/sidewalkRatio由调用方传入（下面注释里的TREE_SPACING就是spacing）。
 	// hostRoads是Core那份路网(开口已经齐全)，只读。每条地面上的大路两侧各种一排：横向偏移和
 	// Map::ComputeLaneAnchorPosition同一套约定——perp0=(-dy,dx)是side0方向，车道整体按
 	// shift=(side0宽-side1宽)/2居中。
@@ -680,23 +706,24 @@ void JingRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {
 		if (start.GetZ() < 0.f || end.GetZ() < 0.f) continue;
 		float dx = end.GetX() - start.GetX(), dy = end.GetY() - start.GetY();
 		float len = sqrt(dx * dx + dy * dy);
-		float startInset = endGap(start.GetId()) + TREE_SPACING * 0.5f;
-		float endInset = endGap(end.GetId()) + TREE_SPACING * 0.5f;
+		float startInset = endGap(start.GetId()) + spacing * 0.5f;
+		float endInset = endGap(end.GetId()) + spacing * 0.5f;
 		float usable = len - startInset - endInset;
 		if (usable <= 0.f) continue;
 		float ux = dx / len, uy = dy / len;
 		float perpX = -uy, perpY = ux;
+		float roadAngle = atan2f(dy, dx) * 57.2957795f;
 		float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
 
 		// 沿路距离s(从start量起)上哪些树位要去掉。
-		int num = static_cast<int>(usable / TREE_SPACING) + 1;
+		int num = static_cast<int>(usable / spacing) + 1;
 		float step = num > 1 ? usable / (num - 1) : 0.f;
 		// 第i棵树沿路的距离；只有一棵时种在可用范围正中间。
 		auto treeS = [&](int i) { return num > 1 ? startInset + i * step : startInset + usable * 0.5f; };
 		vector<bool> keep(num, true);
 		for (const RoadOpening& opening : road->GetOpenings()) {
 			float center = opening.t * len;
-			float half = opening.width * 0.5f + TREE_SPACING * 0.5f;
+			float half = opening.width * 0.5f + spacing * 0.5f;
 			for (int i = 0; i < num; i++) {
 				if (fabs(treeS(i) - center) < half) keep[i] = false;
 			}
@@ -708,7 +735,7 @@ void JingRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {
 			float inner = 0.f;
 			for (float w : road->GetVehicleLanes(side)) inner += w;
 			for (float w : road->GetParkingLanes(side)) inner += w;
-			float offset = inner + pedLanes[0] * TREE_SIDEWALK_RATIO;
+			float offset = inner + pedLanes[0] * sidewalkRatio;
 			float signedOffset = offset * (side == 0 ? 1.f : -1.f) - shift;
 			float ox = start.GetX() + perpX * signedOffset, oy = start.GetY() + perpY * signedOffset;
 
@@ -717,9 +744,7 @@ void JingRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {
 				int j = i;
 				while (j + 1 < num && keep[j + 1]) j++;
 				float s0 = treeS(i), s1 = treeS(j);
-				// 路网的植被参考系是整张地图(不旋转)，世界坐标直接写成PointParams{0,x,0,y}。
-				AddTreeLine({ 0.f, ox + ux * s0, 0.f, oy + uy * s0 }, { 0.f, ox + ux * s1, 0.f, oy + uy * s1 },
-					j - i + 1, TREE_SCALE, TREE_MESH_PATH);
+				emit(side, ox + ux * s0, oy + uy * s0, ox + ux * s1, oy + uy * s1, j - i + 1, roadAngle);
 				i = j + 1;
 			}
 		}

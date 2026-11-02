@@ -400,6 +400,15 @@ void Roadnet::LayoutTrees() {
 	trees = mod->trees;
 }
 
+const LampRequests& Roadnet::GetLamps() const {
+	return lamps;
+}
+
+void Roadnet::LayoutLamps() {
+	mod->LayoutLamps(roads);
+	lamps = mod->lamps;
+}
+
 const string& Roadnet::GetPathRoadMaterial() const {
 	return pathRoadMaterial;
 }

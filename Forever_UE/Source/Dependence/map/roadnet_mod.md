@@ -69,6 +69,9 @@ Dependence\map\roadnet_mod.h`相比是全新设计——老工程的`Road`只是
   `Road::GetOpenings`，可以避开出入口)，不是mod自己`roads`那份旧拷贝，只读访问。mod在里面调
   `AddTree*`只记请求进`trees`(`TreeRequests`，见`feature_spec.md`，参考系是整张地图，世界坐标写成`{0,x,0,y}`)，
   宿主`Roadnet::LayoutTrees`按值拷贝走，再交给Core的`Vegetation`展开(随机旋转/缩放、跳过水面和挖洞格子)。
+- **路灯：虚函数`LayoutLamps(hostRoads)`+非虚工具方法`AddLampSingle/AddLampLine/AddLampArea`+`lamps`**——完全同行道树：
+  `Map::InitLamps`在`InitVegetation`之后调用`LayoutLamps`一次(默认空实现，传入Core持有的`hostRoads`，只读)，mod在里面提交
+  `LampRequests`(见`feature_spec.md`，参考系整张地图)，宿主`Roadnet::LayoutLamps`按值拷贝走，交给Core的`Lamps`展开。
 
 ## 依赖关系
 

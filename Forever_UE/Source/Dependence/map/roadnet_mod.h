@@ -38,6 +38,9 @@ public:
 	// hostRoads是宿主(Core)持有的路网深拷贝(不是this->roads那份mod自己的旧拷贝),只读访问,不要
 	// 调用任何会修改它们的方法。在这里用AddTreeLine提交请求。默认不种树。
 	virtual void LayoutTrees(const std::vector<Road*>& hostRoads) {}
+	// 同LayoutTrees的时机和只读约定，在这里用AddLampSingle/AddLampLine/AddLampArea提交路灯请求
+	// (灯是Actor蓝图，见feature_spec.h的LampRequests)。默认不放灯。
+	virtual void LayoutLamps(const std::vector<Road*>& hostRoads) {}
 
 	// 工具方法(非虚,不需要重写):把connection上[t1,t2]这一段包成一个Quad追加进hatches——
 	// 隧道口挖地形洞用,照抄老工程RoadnetMod::AddHatch语义。width是Quad垂直于connection方向
@@ -94,6 +97,15 @@ public:
 	void AddTreeArea(const PointParams& from, const PointParams& to, int num, float scale,
 		const std::string& meshPath);
 	TreeRequests trees;
+
+	// 工具方法(非虚):在LayoutLamps里提交单盏/一排/一片路灯的请求,只记进lamps。参考系同树(整张
+	// 地图,不旋转)。宿主(Roadnet::LayoutLamps)在调完LayoutLamps之后按值拷贝走lamps。
+	void AddLampSingle(const PointParams& position, float rotationDegrees, const std::string& blueprintPath);
+	void AddLampLine(const PointParams& from, const PointParams& to, int num, float rotationDegrees,
+		const std::string& blueprintPath);
+	void AddLampArea(const PointParams& from, const PointParams& to, int num, float rotationDegrees,
+		const std::string& blueprintPath);
+	LampRequests lamps;
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
 	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，

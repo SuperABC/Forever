@@ -126,6 +126,8 @@
   断开都把传入的世界坐标投影回`t`（`Map::ProjectPointOntoRoad`），在这组分段里精确定位哪
   一段被跨过、干净地删掉换成两段更短的——和"谁先调用`BreakThroughLine`"这个顺序完全无关
   （详见`map.h`里`ThroughLine`/`BreakThroughLine`声明处的注释）。
+- **路灯`LayoutLamps()`/`GetLamps()`**——同`LayoutTrees`：调`mod->LayoutLamps(roads)`再把`mod->lamps`按值拷贝进`lamps`，
+  由`Map::InitLamps`交给`Lamps`展开，见`lamp.md`。
 
 ## 和老工程的关系
 

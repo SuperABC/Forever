@@ -19,6 +19,7 @@ class Room;
 #define SAVE_SECTION_MAP_ROADNET "world.map.roadnet"
 #define SAVE_SECTION_MAP_STRUCTURES "world.map.structures"
 #define SAVE_SECTION_MAP_VEGETATION "world.map.vegetation"
+#define SAVE_SECTION_MAP_LAMPS "world.map.lamps"
 
 // 地图域(地形格子/路网/导航图/Zone/Building/Room/Component/Door/植被)的存档读写。世界生成不可
 // 复现(见save.md"为什么存结果、不存种子")，所以这里存的是生成结果本身：各类对象的字段原样写出，对象之间的指针
@@ -56,6 +57,9 @@ private:
 
 	static void WriteVegetation(const Map& map, ByteWriter& w);
 	static bool ReadVegetation(Map& map, ByteReader& r, std::string& error);
+
+	static void WriteLamps(const Map& map, ByteWriter& w);
+	static bool ReadLamps(Map& map, ByteReader& r, std::string& error);
 
 	static void WriteNode(const Node& node, ByteWriter& w);
 	static Node ReadNode(ByteReader& r);

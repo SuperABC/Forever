@@ -35,6 +35,7 @@ class UForeverStoryFrameworkComponent;
 class UForeverTerrainFrameworkComponent;
 class UForeverTrafficFrameworkComponent;
 class UForeverVegetationFrameworkComponent;
+class UForeverLampFrameworkComponent;
 class UForeverWeatherFrameworkComponent;
 class UForeverZoneFrameworkComponent;
 
@@ -68,11 +69,13 @@ public:
 	void BuildMapZones();
 	void BuildMapBuildings();
 	void BuildMapVegetation();
+	void BuildMapLamps();
 	void GenerateTerrainMesh();
 	void GenerateRoadnetMesh();
 	void GenerateZoneMesh();
 	void GenerateBuildingMesh();
 	void GenerateVegetationMesh();
+	void GenerateLampMesh();
 
 	// 地图中心、地形生成之前用的出生位置(GameMode找出生点时地形还没生成)，见ForeverPlayerGameMode.cpp。
 	static FVector GetDefaultSpawnLocation();
@@ -266,6 +269,10 @@ protected:
 	// 全图植被(行道树/公园树)统一渲染，见Source/Forever/Framework/ForeverVegetationFrameworkComponent.md。
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverVegetationFrameworkComponent> vegetationFramework;
+
+	// 全图路灯(每盏一个ALampElement蓝图Actor)+昼夜开关灯，见Source/Forever/Framework/ForeverLampFrameworkComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
+	TObjectPtr<UForeverLampFrameworkComponent> lampFramework;
 
 	// 天气表现(云/雨雪/风/光照衰减)，见Source/Forever/Framework/ForeverWeatherFrameworkComponent.md。
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")

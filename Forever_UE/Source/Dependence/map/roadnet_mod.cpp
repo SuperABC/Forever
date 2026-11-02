@@ -30,3 +30,17 @@ void RoadnetMod::AddTreeArea(const PointParams& from, const PointParams& to, int
 	const string& meshPath) {
 	trees.AddArea(from, to, num, scale, meshPath);
 }
+
+void RoadnetMod::AddLampSingle(const PointParams& position, float rotationDegrees, const string& blueprintPath) {
+	lamps.AddSingle(position, rotationDegrees, blueprintPath);
+}
+
+void RoadnetMod::AddLampLine(const PointParams& from, const PointParams& to, int num, float rotationDegrees,
+	const string& blueprintPath) {
+	lamps.AddLine(from, to, num, rotationDegrees, blueprintPath);
+}
+
+void RoadnetMod::AddLampArea(const PointParams& from, const PointParams& to, int num, float rotationDegrees,
+	const string& blueprintPath) {
+	lamps.AddArea(from, to, num, rotationDegrees, blueprintPath);
+}

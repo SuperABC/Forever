@@ -97,6 +97,50 @@ struct TreeRequests {
 	void AddArea(const PointParams& from, const PointParams& to, int num, float scale, const std::string& meshPath);
 };
 
+// ---------------------------------------------------------------- 路灯
+
+// 路灯请求——和植被同一套模式：mod只描述"在哪里放、放几盏、朝向多少、用哪个蓝图"，每盏灯的实例由
+// Core的Lamps展开(见Source/Core/map/lamp.md)。灯是Actor蓝图(父类ALampElement)，不是Mesh，
+// blueprintPath形如"/Game/.../BP_X.BP_X_C"。参考系同TreeRequests(PointParams，路网=整张地图)。
+// rotationDegrees是宿主局部系下的朝向(度，数学角：0=+X、逆时针)，Core再叠加宿主自身的旋转。
+
+// 单盏灯：放在position处。
+struct LampSingleSpec {
+	PointParams position{};
+	float rotationDegrees = 0.f;
+	std::string blueprintPath;
+};
+
+// 一排灯：沿from->to均匀放num盏(含两端，num==1时放在中点)，朝向相同。
+struct LampLineSpec {
+	PointParams from{};
+	PointParams to{};
+	int num = 0;
+	float rotationDegrees = 0.f;
+	std::string blueprintPath;
+};
+
+// 一片灯：from/to是矩形的两个对角，在矩形内均匀随机放num盏，朝向相同。
+struct LampAreaSpec {
+	PointParams from{};
+	PointParams to{};
+	int num = 0;
+	float rotationDegrees = 0.f;
+	std::string blueprintPath;
+};
+
+// 三种请求的统一存储——宿主mod持有一份(成员lamps)，AddLampSingle/AddLampLine/AddLampArea转发到这里。
+// num<=0或blueprintPath为空的请求直接忽略。
+struct LampRequests {
+	std::vector<LampSingleSpec> singles;
+	std::vector<LampLineSpec> lines;
+	std::vector<LampAreaSpec> areas;
+
+	void AddSingle(const PointParams& position, float rotationDegrees, const std::string& blueprintPath);
+	void AddLine(const PointParams& from, const PointParams& to, int num, float rotationDegrees, const std::string& blueprintPath);
+	void AddArea(const PointParams& from, const PointParams& to, int num, float rotationDegrees, const std::string& blueprintPath);
+};
+
 // ---------------------------------------------------------------- 建筑自定义模型
 
 // DecorationSpec：建筑mod在场景里指定放置的一个StaticMesh(BuildingMod::AddDecoration记录)。

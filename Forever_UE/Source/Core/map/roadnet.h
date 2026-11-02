@@ -126,6 +126,13 @@ public:
 	// Map::InitVegetation在整张地图生成完之后调用一次(这时roads上的开口已经齐全)。
 	void LayoutTrees();
 
+	// mod在LayoutLamps里通过RoadnetMod::AddLampSingle/AddLampLine/AddLampArea提交的路灯请求(参考系是
+	// 整张地图)，拷贝自mod->lamps，由Map::InitLamps交给Lamps展开，见lamp.md。
+	const LampRequests& GetLamps() const;
+
+	// 调mod->LayoutLamps(this->roads)，再把mod->lamps按值拷贝进lamps。由Map::InitLamps调用一次。
+	void LayoutLamps();
+
 	// Zone/Building裁剪Lot自由空间时用的小路材质路径，直接拷贝自mod->pathRoadMaterial
 	// (纯字符串，不需要深拷贝)。留空表示mod没有指定，Forever层退化用RoadPlain。
 	const std::string& GetPathRoadMaterial() const;
@@ -147,6 +154,7 @@ private:
 	std::vector<TerrainHatch> hatches;
 	std::vector<TerrainFitRequest> terrainFits;
 	TreeRequests trees;
+	LampRequests lamps;
 	std::string pathRoadMaterial;
 
 	std::unordered_map<std::string, std::vector<Lot*>> addressesByRoad;

@@ -27,6 +27,7 @@ const vector<SaveSectionVersion>& GetSaveSectionVersions() {
 		{ SAVE_SECTION_MAP_ROADNET, 1, 1 },
 		{ SAVE_SECTION_MAP_STRUCTURES, 1, 1 },
 		{ SAVE_SECTION_MAP_VEGETATION, 1, 1 },
+		{ SAVE_SECTION_MAP_LAMPS, 1, 1 },
 		// 人口/社会段可以缺省：没有时(P2阶段的存档)这两个域在恢复出来的地图上重新生成。
 		{ SAVE_SECTION_POPULACE, 1, 1, false },
 		{ SAVE_SECTION_SOCIETY, 1, 1, false },

@@ -864,6 +864,26 @@ const Vegetation& Map::GetVegetation() const {
 	return vegetation;
 }
 
+void Map::InitLamps() {
+	int roadLamps = 0;
+	if (roadnet) {
+		roadnet->LayoutLamps();
+		// 路网的参考系是整张地图：同InitVegetation，ratio相对地图宽高，不旋转。
+		TreeFrame frame;
+		frame.toLocal = [this](const PointParams& p) {
+			return std::make_pair(p[0] * width + p[1], p[2] * height + p[3]);
+			};
+		frame.localToWorld = [](float x, float y) { return std::make_pair(x, y); };
+		roadLamps = lamps.ExpandRequests(roadnet->GetLamps(), frame, [this](float x, float y) { return CanPlaceTree(x, y); });
+	}
+	debugf("Log: Lamps road lamps=%d, total=%d, blueprints=%d.\n", roadLamps,
+		(int)lamps.GetLamps().size(), (int)lamps.GetBlueprintPaths().size());
+}
+
+const Lamps& Map::GetLamps() const {
+	return lamps;
+}
+
 bool Map::CanPlaceTree(float x, float y) const {
 	int ex = (int)floorf(x), ey = (int)floorf(y);
 	if (!CheckXY(ex, ey)) return false;

@@ -24,7 +24,7 @@
 | 段 | 内容 | 说明文档 |
 |---|---|---|
 | `manifest` | 用到的 mod、脚本名、布局名、计数器、版本 | 本文 |
-| `world.map.terrain/roadnet/structures/vegetation` | 地图与建筑 | `Source/Core/map/map_save.md` |
+| `world.map.terrain/roadnet/structures/vegetation/lamps` | 地图与建筑 | `Source/Core/map/map_save.md` |
 | `world.populace` | 市民、班级、定时器、房产和住处归属 | `Source/Core/populace/populace_save.md` |
 | `world.society` | 组织、岗位、组织定时器 | `Source/Core/society/society_save.md` |
 | `world.traffic` | 站点、线路、车辆 | `Source/Core/traffic/traffic_save.md` |

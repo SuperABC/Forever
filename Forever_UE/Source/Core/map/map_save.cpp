@@ -1581,6 +1581,35 @@ bool MapSaveCodec::ReadVegetation(Map& map, ByteReader& r, string& error) {
 	return true;
 }
 
+// ======== 路灯 ========
+
+void MapSaveCodec::WriteLamps(const Map& map, ByteWriter& w) {
+	const Lamps& l = map.lamps;
+	WriteStrings(l.blueprintPaths, w);
+	w.U32(static_cast<uint32_t>(l.lamps.size()));
+	for (const LampInstance& lamp : l.lamps) {
+		w.I32(lamp.id); w.F32(lamp.x); w.F32(lamp.y); w.F32(lamp.yaw); w.I32(lamp.blueprintIndex);
+	}
+	w.I32(l.nextId);
+}
+
+bool MapSaveCodec::ReadLamps(Map& map, ByteReader& r, string& error) {
+	Lamps& l = map.lamps;
+	l.blueprintPaths = ReadStrings(r);
+	l.blueprintIndices.clear();
+	for (size_t i = 0; i < l.blueprintPaths.size(); i++) l.blueprintIndices[l.blueprintPaths[i]] = static_cast<int>(i);
+	l.lamps.resize(r.U32());
+	for (LampInstance& lamp : l.lamps) {
+		lamp.id = r.I32(); lamp.x = r.F32(); lamp.y = r.F32(); lamp.yaw = r.F32(); lamp.blueprintIndex = r.I32();
+	}
+	l.nextId = r.I32();
+	if (r.Failed()) {
+		error = "lamps section is truncated";
+		return false;
+	}
+	return true;
+}
+
 // ======== 入口 ========
 
 string MapSaveCodec::lastReport;
@@ -1625,6 +1654,10 @@ void MapSaveCodec::Save(const Map& map, SaveArchive& archive) {
 	WriteVegetation(map, vegetation);
 	archive.SetBinary(SAVE_SECTION_MAP_VEGETATION, versionOf(SAVE_SECTION_MAP_VEGETATION), vegetation.Take());
 
+	ByteWriter lamps;
+	WriteLamps(map, lamps);
+	archive.SetBinary(SAVE_SECTION_MAP_LAMPS, versionOf(SAVE_SECTION_MAP_LAMPS), lamps.Take());
+
 	lastReport = FormatReport("saved", static_cast<int>(tables.roads.size()), static_cast<int>(tables.lots.size()),
 		static_cast<int>(tables.edges.size()), static_cast<int>(tables.zones.size()), static_cast<int>(tables.buildings.size()),
 		static_cast<int>(map.allDoors.size()), static_cast<int>(map.vegetation.trees.size()), tables.unresolved);
@@ -1636,7 +1669,8 @@ Map* MapSaveCodec::Load(const SaveArchive& archive, string& error) {
 	const SaveSection* roadnet = archive.Find(SAVE_SECTION_MAP_ROADNET);
 	const SaveSection* structures = archive.Find(SAVE_SECTION_MAP_STRUCTURES);
 	const SaveSection* vegetation = archive.Find(SAVE_SECTION_MAP_VEGETATION);
-	if (!terrain || !roadnet || !structures || !vegetation) {
+	const SaveSection* lamps = archive.Find(SAVE_SECTION_MAP_LAMPS);
+	if (!terrain || !roadnet || !structures || !vegetation || !lamps) {
 		error = "the save has no map data (it was written by an older version that only saved the manifest)";
 		return nullptr;
 	}
@@ -1661,6 +1695,8 @@ Map* MapSaveCodec::Load(const SaveArchive& archive, string& error) {
 		if (!ReadStructures(*map, tables, structuresReader, archive.Find(SAVE_SECTION_SCRIPTS) != nullptr, error)) return nullptr;
 		ByteReader vegetationReader(vegetation->data);
 		if (!ReadVegetation(*map, vegetationReader, error)) return nullptr;
+		ByteReader lampsReader(lamps->data);
+		if (!ReadLamps(*map, lampsReader, error)) return nullptr;
 
 		lastReport = FormatReport("loaded", static_cast<int>(tables.roads.size()), static_cast<int>(tables.lots.size()),
 			static_cast<int>(tables.edges.size()), static_cast<int>(tables.zones.size()), static_cast<int>(tables.buildings.size()),

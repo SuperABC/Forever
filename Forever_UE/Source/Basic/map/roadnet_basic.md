@@ -133,6 +133,11 @@
   - 开口(`Road::GetOpenings`，只有小路接口和建筑/园区出入口两种来源)：缺口=开口自己的`width`，
     中心两侧各`width/2`，两侧人行道都去(小路开口没有可靠的side信息)。
   剩下连续的几棵合成一条`AddTreeLine`。河上的桥/隧道口引道由Core的`Map::CanPlaceTree`统一跳过。
+- **路灯(`JingRoadnet::LayoutLamps`，先随便摆，待用户看效果再调)**——和行道树共用私有的`LayoutRows(hostRoads, spacing,
+  sidewalkRatio, emit)`（路口收缩距离、开口避让、每侧偏移都在这里，`emit`每次收到一段连续位置：side、起止点、盏数、沿路方向角）。
+  灯行放在行道树**外侧**：`LAMP_SIDEWALK_RATIO`(0.3，树是0)，间距`LAMP_SPACING`(1.5格=15m)，蓝图路径`LAMP_BLUEPRINT_PATH`
+  (`/Game/3rdParty/Stylized_street_light/Actor/BP_StreetLight.BP_StreetLight_C`)。朝向=沿路方向角 + (side0:-90 / side1:+90) +
+  `LAMP_YAW_OFFSET`，所以两排自然差180度，两排都朝向路面；`LAMP_YAW_OFFSET`统一补偿蓝图里灯臂的初始朝向。
 
 ## 依赖关系
 

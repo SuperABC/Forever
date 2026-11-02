@@ -63,6 +63,7 @@
 #include "Framework/ForeverTerrainFrameworkComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Framework/ForeverVegetationFrameworkComponent.h"
+#include "Framework/ForeverLampFrameworkComponent.h"
 #include "Mod/ForeverSaveSubsystem.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
 #include "Components/SceneComponent.h"
@@ -92,6 +93,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	terrainFramework = CreateDefaultSubobject<UForeverTerrainFrameworkComponent>(TEXT("TerrainFramework"));
 	trafficFramework = CreateDefaultSubobject<UForeverTrafficFrameworkComponent>(TEXT("TrafficFramework"));
 	vegetationFramework = CreateDefaultSubobject<UForeverVegetationFrameworkComponent>(TEXT("VegetationFramework"));
+	lampFramework = CreateDefaultSubobject<UForeverLampFrameworkComponent>(TEXT("LampFramework"));
 	weatherFramework = CreateDefaultSubobject<UForeverWeatherFrameworkComponent>(TEXT("WeatherFramework"));
 	zoneFramework = CreateDefaultSubobject<UForeverZoneFrameworkComponent>(TEXT("ZoneFramework"));
 }
@@ -201,6 +203,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	add(TEXT("构建园区"), [this]() { BuildMapZones(); });
 	add(TEXT("构建建筑"), [this]() { BuildMapBuildings(); });
 	add(TEXT("栽种植被"), [this]() { BuildMapVegetation(); });
+	add(TEXT("布置路灯"), [this]() { BuildMapLamps(); });
 	// 交通要在地形网格生成之前构建：instantiate线路(火车)铺轨时要像路网一样采样地形、请求抬升/挖隧道洞
 	// (Map::ApplyTerrainFits/AddHatch)，这些得在地形网格生成之前落地。Traffic只依赖Map(站点/车位/路网)。
 	add(TEXT("构建交通"), [this]() { EnsureTrafficGenerated(); });
@@ -211,6 +214,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	add(TEXT("生成园区模型"), [this]() { GenerateZoneMesh(); });
 	add(TEXT("生成建筑模型"), [this]() { GenerateBuildingMesh(); });
 	add(TEXT("生成植被模型"), [this]() { GenerateVegetationMesh(); });
+	add(TEXT("生成路灯模型"), [this]() { GenerateLampMesh(); });
 	add(TEXT("构建人口"), [this]() { EnsurePopulaceGenerated(); });
 	add(TEXT("构建社会与产业"), [this]() {
 		EnsureSocietyGenerated();
@@ -731,6 +735,8 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	}
 	if (weatherFramework) weatherFramework->UpdateWeather(DeltaTime, player->GetWeather(), player->GetCurrentRoom() != nullptr);
 	if (vegetationFramework) vegetationFramework->UpdateWind(DeltaTime);
+	// 路灯昼夜开关：只在亮度目标变化时才推给各盏灯。
+	if (lampFramework) lampFramework->UpdateLamps(*player->GetTime(), DeltaTime);
 
 	// 驱动Job/Organization各自独立的DailyPlan/ExecNode调度（两套独立的timer，见
 	// populace.md/society.md"两套独立timer"一节）。ExecNode这次是纯C++通道，直接给
@@ -886,6 +892,12 @@ void AForeverFrameworkActor::BuildMapVegetation()
 	if (!bMapRestored) map->InitVegetation();
 }
 
+void AForeverFrameworkActor::BuildMapLamps()
+{
+	// 路灯紧跟植被：同样要等开口齐全，读档时直接用存档里的灯。
+	if (!bMapRestored) map->InitLamps();
+}
+
 void AForeverFrameworkActor::GenerateTerrainMesh()
 {
 	if (terrainFramework) terrainFramework->GenerateTerrain(map);
@@ -918,6 +930,12 @@ void AForeverFrameworkActor::GenerateVegetationMesh()
 	// 植被：Core里的树在InitVegetation时已经全部展开好，这里一次性
 	// 加载mesh+批量实例化；Z取地形高度，必须在GenerateTerrain之后(用的是同一个Map::SampleHeight)。
 	if (vegetationFramework) vegetationFramework->GenerateVegetation(map);
+}
+
+void AForeverFrameworkActor::GenerateLampMesh()
+{
+	// 路灯：Core里的灯在InitLamps时已经全部展开好，这里逐盏生成Actor；Z取地形高度，必须在GenerateTerrain之后。
+	if (lampFramework) lampFramework->GenerateLamps(map);
 }
 
 FVector AForeverFrameworkActor::GetDefaultSpawnLocation()

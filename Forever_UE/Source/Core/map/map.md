@@ -35,6 +35,8 @@ Factory归属、各域的`InitXxx`生成流程、寻址、门系统、人口初�
   由`Vegetation::ExpandRequests`展开。
   过滤规则`CanPlaceTree`：越界、有水面、有hatch的格子不种。UE层通过`GetVegetation()`一次性
   读取渲染，见`vegetation.md`。
+- **路灯`Lamps lamps`，`InitLamps()`**——紧跟`InitVegetation()`之后：`roadnet->LayoutLamps()`再用路网的整图参考系由
+  `Lamps::ExpandRequests`展开，过滤同`CanPlaceTree`。UE层通过`GetLamps()`读取，见`lamp.md`。
 - **地形贴合`ApplyTerrainFits(fits)`**：路面高度由mod指定，地形去贴路面。对每条请求的每段折线，
   枚举它外扩(半宽+falloff)范围内的细化格点(间距1/16 element，和UE地形L0顶点重合)，取到折线
   的最近距离d：d<=半宽权重1、目标高度=最近点路面Z；半宽<d<半宽+falloff权重按smoothstep从1

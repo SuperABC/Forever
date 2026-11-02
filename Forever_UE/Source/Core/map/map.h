@@ -14,6 +14,7 @@
 #include "map/building.h"
 #include "map/door.h"
 #include "map/vegetation.h"
+#include "map/lamp.h"
 
 #include "common/handle.h"
 
@@ -104,6 +105,8 @@ public:
 	// 全图植被(InitVegetation里展开)，UE层UForeverVegetationFrameworkComponent一次性读取
 	// 渲染，见vegetation.md。
 	const Vegetation& GetVegetation() const;
+	// 全图路灯(InitLamps里展开)，UE层UForeverLampFrameworkComponent读取后逐盏生成Actor，见lamp.md。
+	const Lamps& GetLamps() const;
 	// 这个点(地图element单位)能不能种树：越界、有水面、有挖洞(隧道口等)的格子不种。
 	bool CanPlaceTree(float x, float y) const;
 
@@ -200,6 +203,10 @@ public:
 	// BuildingMod::LayoutTrees(quad, boundaryRoads)，按building->GetRotation()展开它的treeAreas。
 	// 过滤规则见CanPlaceTree，见vegetation.md。
 	void InitVegetation();
+
+	// 路灯：紧跟InitVegetation()之后调用(开口同样已经齐全)。目前只有路网宿主：
+	// roadnet->LayoutLamps()展开后交给Lamps，过滤规则同CanPlaceTree，见lamp.md。
+	void InitLamps();
 
 	// 遍历所有building的所有room，IsResidential()的加ResidentialCapacity()并数住宅房间数：
 	// 累计容量小于住宅房间数的两倍时返回住宅房间数，否则返回累计容量的一半。供调用方
@@ -431,6 +438,7 @@ private:
 	std::unordered_map<std::string, TerrainTextureInfo> terrainTextures;
 
 	Vegetation vegetation;
+	Lamps lamps;
 
 	Roadnet* roadnet = nullptr;
 	std::vector<RoadJunction*> junctions;
