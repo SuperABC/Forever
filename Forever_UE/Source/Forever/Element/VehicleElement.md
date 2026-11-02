@@ -53,7 +53,7 @@ UE官方推荐的"一个C++基类+多个蓝图子类"车辆配置模式（很多
 这么做的），不是这个项目发明的特例。
 
 `VehicleMod`（见`vehicle_mod.h`）只存一个字符串字段`blueprintPath`，指向某个具体的
-蓝图子类资源路径（比如`/Game/Blueprint/Vehicle/BP_VehicleElement.BP_VehicleElement_C`——
+蓝图子类资源路径（比如`/Game/3rdParty/Cars_for_Arcade_Demolition_Racing_Games/Actor/BP_VehicleElement.BP_VehicleElement_C`——
 注意蓝图生成类的对象名固定加`_C`后缀）。`UForeverTrafficFrameworkComponent::
 ToggleVehicle`的上车分支在调用`SpawnActor`**之前**，先用
 `vehicle->GetBlueprintPath()`+`LoadClass<AVehicleElement>()`拿到具体该用哪个蓝图
@@ -307,6 +307,7 @@ Blueprint，在编辑器里拖一个`Wheel Handler`（`FAnimNode_WheelController
 - `SetDriveInput(throttle, brake, steer)` + `SetHandbrake()`：玩家 WASD（`Move/StopMove/Handbrake`）和 AI Controller（`AVehicleCommandController`）走同一路径。
 - 搭乘模式 `SetRideMode(true)`（Possess 之前）：`PossessedBy` 只加视角 Context、常驻显示选项；`Move`/手刹/Q 键忽略；`MeetOptionUp/Down/Select` 绑定（照抄 `ATransitVehicleElement`）。`UnPossessed` 只在"玩家且非搭乘"时刹车清零，AI Controller 换手不打断它。线路公交近处就是用这个让玩家当乘客。
 - 运动学/物理切换：`SetKinematicMode(true)` 关物理模拟（位姿由 Controller 写），`ResumePhysics(velocity)` 重新开启并把轮子刚体再关回去（`DisableWheelBodies`）。`ComputeWheelbase()/GetMaxSteerAngleDegrees()/GetForwardSpeed()` 供 Controller 用。
-- 重心：`Init` 里 `SetCenterOfMass`；`busCenterOfMassOffset` 非零则用它，否则 category=="bus" 用 `(0,0,-busCenterOfMassDropZ)`（默认 60uu，需 PIE 调）。放在 Init 不是 BeginPlay，因为 BeginPlay 时 `vehicle` 还没绑。
+- 重心：蓝图变量 `centerOfMassOffset`（车身局部坐标，默认 0=不动，Z 取负=下移防侧翻），`BeginPlay` 里非零才 `SetCenterOfMass`。基类没有任何车型特判；公交原来硬编码的下移 60cm 现在要在 `BP_BusElement` 里填 `(0,0,-60)`。
+- 轮子半径：`wheelRadius`（蓝图可填，默认 0）>0 时，`BeginPlay` 里（不是 `Init`：`Init` 只有交通系统生成才调，直接摆在关卡里的车走不到）对每个轮位调 `vehicleMovement->SetWheelRadius(i, wheelRadius)`。Chaos 建物理读的是轮子类 CDO（默认 `UVehicleWheelFront/Rear` 半径 35），没法按实例改，所以这里在物理建好后覆盖，免得每种车型都建轮子蓝图子类。填模型轮胎实际半径（轮骨 Z=半径，ZIL-130 是 42）；0 沿用默认。只改半径，悬挂行程等仍读类默认值。
 - 线路公交的 Core 位姿用地图单位：`Tick` 写回 `Vehicle::SetTransform` 时对有 Route 的车除以 1000。
 - `EndPlay` 被销毁时撤掉屏幕上这辆车名下的选项（组件销毁不一定补发 End 重叠）。

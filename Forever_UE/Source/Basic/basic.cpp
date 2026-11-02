@@ -119,6 +119,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		// 每辆车都会创建自己的Script。
 		{ VehicleBasic::GetId(), { kScriptEmpty } },
 		{ BusVehicle::GetId(), { kScriptEmpty } },
+		{ TruckVehicle::GetId(), { kScriptEmpty } },
 		{ TrainVehicle::GetId(), { kScriptEmpty } },
 		{ PlaneVehicle::GetId(), { kScriptEmpty } },
 
@@ -437,7 +438,7 @@ extern "C" __declspec(dllexport) void FinishModStations(StationFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModVehicles() {
-	static vector<string> mods = { VehicleBasic::GetId(), BusVehicle::GetId(), TrainVehicle::GetId(), PlaneVehicle::GetId() };
+	static vector<string> mods = { VehicleBasic::GetId(), BusVehicle::GetId(), TruckVehicle::GetId(), TrainVehicle::GetId(), PlaneVehicle::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factory) {
@@ -447,6 +448,9 @@ extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factor
 	factory->RegisterVehicle(BusVehicle::GetId(),
 		[](const std::string&) -> VehicleMod* { return new BusVehicle(); },
 		[](VehicleMod* m) { delete m; }, &BusVehicle::GetCategory);
+	factory->RegisterVehicle(TruckVehicle::GetId(),
+		[](const std::string&) -> VehicleMod* { return new TruckVehicle(); },
+		[](VehicleMod* m) { delete m; }, &TruckVehicle::GetCategory);
 	factory->RegisterVehicle(TrainVehicle::GetId(),
 		[](const std::string&) -> VehicleMod* { return new TrainVehicle(); },
 		[](VehicleMod* m) { delete m; }, &TrainVehicle::GetCategory);

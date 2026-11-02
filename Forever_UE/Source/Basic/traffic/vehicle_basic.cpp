@@ -17,7 +17,7 @@ void VehicleBasic::SetProperty() {
 	// BP_VehicleElement，CarMesh用ChaosModularVehicleExamples插件自带的SKM_SportsCar，
 	// 轮子骨骼名Phys_Wheel_FL/FR/BL/BR)，骨骼网格/轮子骨骼名在蓝图编辑器里设置，这里
 	// 只存蓝图类的资源路径——见vehicle_mod.h/VehicleElement.md的说明。
-	blueprintPath = "/Game/Blueprint/Vehicle/BP_VehicleElement.BP_VehicleElement_C";
+	blueprintPath = "/Game/3rdParty/Cars_for_Arcade_Demolition_Racing_Games/Actor/BP_VehicleElement.BP_VehicleElement_C";
 
 	// "empty"这个ScriptMod id纯粹是透传(AutoCopy(actions)，不做任何占位替换)，"靠近弹出
 	// 上车选项"完全靠milestone触发就够了，不需要WrapScript介入，见
@@ -59,6 +59,35 @@ void BusVehicle::SetProperty() {
 	drivable = true;
 	boardable = true;
 	capacity = 30;
+}
+
+int TruckVehicle::count = 0;
+
+TruckVehicle::TruckVehicle() : id(count++) {
+}
+
+const char* TruckVehicle::GetName() {
+	name = "TruckVehicle" + to_string(id);
+	return name.data();
+}
+
+void TruckVehicle::SetProperty() {
+	sizeX = 556.f; sizeY = 229.f; sizeZ = 199.f; // UE单位，ZIL-130模型的实际包围盒
+
+	// 驾驶蓝图：从AVehicleElement派生，CarMesh是脚本生成的骨骼网格(车头+X，原点在车身中心地面，
+	// 轮骨Phys_Wheel_FL/FR/BL/BR)；轮子半径/重心都在蓝图里填。
+	blueprintPath = "/Game/3rdParty/ZIL_130__body____Lowpoly/Actor/BP_TruckElement.BP_TruckElement_C";
+
+	// 脚本：靠近弹出"上车"，复用小汽车的vehicle_basic。
+	scriptModName = "script_empty";
+	milestoneNames = { "vehicle_basic" };
+
+	// 下车点(车身局部坐标)：车头+X，驾驶室在前部，从左侧(-Y)车门下。是估计值，不合适再调。
+	exitOffsetX = 150.f;
+	exitOffsetY = -220.f;
+	exitOffsetZ = 100.f;
+
+	drivable = true;
 }
 
 int TrainVehicle::count = 0;

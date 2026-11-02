@@ -21,7 +21,7 @@
 - **视角**：追尾视角，弹簧臂`bUsePawnControlRotation=false`，跟着机身姿态一起转(翻滚/特技时画面跟着转)；鼠标环视只改弹簧臂相对旋转(`lookYaw/lookPitch`)，无操作`recenterDelay`(10)秒后才以`recenterSpeed`(0.3，较慢)回正；按住C(`FreeLook`)视为操作中，不回正。弹簧臂长/高度是组件默认值，蓝图里可改。
 - **无人时**：`BeginPlay`拉手刹+刹车拉住(停机位里不会滚走)；`PossessedBy`松开并清零动力；`UnPossessed`清零动力/舵量(基类拉满刹车)；无人且速度几乎为0时`Tick`不施力，让刚体能睡眠。
 - **HUD**：玩家控制时`Tick`用`AddOnScreenDebugMessage(210, 0.1s, ...)`在左上角显示`动力 xx%  速度 xxx km/h  高度 xxx m`(和游戏时钟同一做法；高度是向下射线(`ECC_WorldStatic`)到地面的距离，打不到地退回世界Z)。
-- **重心**：`centerOfMassOffset`(蓝图Details的`Plane|Mass`，机体局部cm，+X=机头)在`BeginPlay`里通过`SetCenterOfMass`叠加到物理资产算出的重心上，默认往机头方向300cm——重心靠后会把鼻轮翘起来。也可以直接在物理资产编辑器里选Root body，改Physics下的`COM Nudge`，两处别重复设置。
+- **重心**：`centerOfMassOffset`(基类`AVehicleElement`的蓝图变量，Details的`Mass`，机体局部cm，+X=机头)由基类`BeginPlay`通过`SetCenterOfMass`叠加到物理资产算出的重心上，飞机构造函数里把默认值设成往机头方向300cm——重心靠后会把鼻轮翘起来。也可以直接在物理资产编辑器里选Root body，改Physics下的`COM Nudge`，两处别重复设置。
 - **`PlaneWheel`**：`UPlaneWheelNose`(半径25、转向40度)/`UPlaneWheelMain`(半径30、手刹/刹车)，半径是估值；改半径的办法是在编辑器里基于这两个类各建一个蓝图子类改`WheelRadius`，再填进飞机蓝图的`WheelSetups[i].WheelClass`。
 
 ## 蓝图制作(UE5.7，不用Blender)

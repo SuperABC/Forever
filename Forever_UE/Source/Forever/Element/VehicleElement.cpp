@@ -145,16 +145,23 @@ void AVehicleElement::Init(Vehicle* inVehicle, APawn* inPreviousPawn)
 	// 车停在半空也不会掉下来，直到玩家上车按下第一次油门/刹车(SetThrottleInput等内部会唤醒
 	// 刚体)才会突然开始受重力下落，实测反馈"上车前悬空，踩油门才落地"。生成完立刻主动唤醒
 	// 一次，让车一开局就正常落到地面上，不用等玩家来踩第一脚油门。
-	if (carMesh) {
-		// 重心下移：物理状态在SpawnActor时已经创建，直接改根骨刚体的COM nudge(照抄APlaneElement::BeginPlay)。
-		// 放在Init而不是BeginPlay是因为这里才知道vehicle->GetCategory()。公交又高又宽，默认重心偏高，
-		// AI开稍微拐一下弯就侧翻。
-		FVector comOffset = busCenterOfMassOffset;
-		if (comOffset.IsNearlyZero() && vehicle && vehicle->GetCategory() == "bus") {
-			comOffset = FVector(0.f, 0.f, -busCenterOfMassDropZ);
-		}
-		if (!comOffset.IsNearlyZero()) carMesh->SetCenterOfMass(comOffset);
-		carMesh->WakeAllRigidBodies();
+	if (carMesh) carMesh->WakeAllRigidBodies();
+}
+
+void AVehicleElement::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// 重心偏移和轮子半径都是蓝图里按车型填的参数，放BeginPlay而不是Init：Init只有交通系统生成时才调，
+	// 直接摆在关卡里的车不会走到。物理状态在SpawnActor/注册组件时已经创建。
+	// 重心：直接改根骨刚体的COM nudge(照抄APlaneElement::BeginPlay)。
+	if (carMesh && !centerOfMassOffset.IsNearlyZero()) {
+		carMesh->SetCenterOfMass(centerOfMassOffset);
+	}
+
+	// 轮子半径在轮子类的CDO里，Chaos建物理时读CDO，没法按实例改；这里在物理建好之后按轮位覆盖。
+	if (vehicleMovement && wheelRadius > 0.f) {
+		for (int32 i = 0; i < vehicleMovement->WheelSetups.Num(); i++) vehicleMovement->SetWheelRadius(i, wheelRadius);
 	}
 }
 

@@ -110,6 +110,7 @@
    "vehicle_mods" : [
       "vehicle_basic",
       "vehicle_bus",
+      "vehicle_truck",
       "vehicle_train",
       "vehicle_plane",
       "vehicle_empty --test true"

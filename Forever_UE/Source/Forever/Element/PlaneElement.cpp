@@ -33,6 +33,10 @@ APlaneElement::APlaneElement()
 	vehicleMovement->DragCoefficient = 0.f;
 	vehicleMovement->DownforceCoefficient = 0.f;
 
+	// 重心往机头(+X)移300cm：重心靠后会把鼻轮翘起来。centerOfMassOffset是基类AVehicleElement的蓝图变量，
+	// 由基类BeginPlay应用，这里只改飞机的默认值。
+	centerOfMassOffset = FVector(300.f, 0.f, 0.f);
+
 	// 追尾视角：弹簧臂跟着机身一起转(翻滚/特技时画面跟着转)，鼠标只在这个基础上小幅环视。
 	cameraBoom->bUsePawnControlRotation = false;
 	cameraBoom->TargetArmLength = 1500.f;
@@ -51,11 +55,6 @@ void APlaneElement::BeginPlay()
 		material->bOverrideRestitutionCombineMode = true;
 		material->RestitutionCombineMode = EFrictionCombineMode::Min;
 		carMesh->SetPhysMaterialOverride(material);
-	}
-
-	// 重心偏移：物理状态此时已创建，直接改根骨刚体的COM nudge。
-	if (carMesh && !centerOfMassOffset.IsNearlyZero()) {
-		carMesh->SetCenterOfMass(centerOfMassOffset);
 	}
 
 	// 停机位里无人时用手刹+刹车拉住，不然停在斜坡上会自己滚走。

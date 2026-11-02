@@ -95,15 +95,19 @@ public:
 	void EnsureOptionsForPlayer(APawn* player);
 	TWeakObjectPtr<APawn> GetPreviousPawn() const { return previousPawn; }
 
-	// 重心偏移(车身本地坐标，UE单位)。公交这类车型默认再叠加busCenterOfMassDropZ的下移，
-	// 降低重心防侧翻；两者都为0则保持骨骼网格物理资产自带的重心。
+	// 重心相对物理资产自带重心的偏移(车身本地坐标，UE单位)，在蓝图里按车型填；全0=不动。
+	// Z取负=重心下移，防侧翻(公交又高又宽，要下移)。BeginPlay时应用。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mass")
-	FVector busCenterOfMassOffset = FVector::ZeroVector;
+	FVector centerOfMassOffset = FVector::ZeroVector;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mass")
-	float busCenterOfMassDropZ = 60.f;
+	// 四个轮子的物理半径(UE单位)，在蓝图里按车型填，BeginPlay时用SetWheelRadius按轮位写入，
+	// 不用为每种车型建轮子蓝图子类。填模型轮胎的实际半径(轮骨Z=半径)；<=0则沿用
+	// UVehicleWheelFront/Rear的默认半径。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wheels")
+	float wheelRadius = 0.f;
 
 protected:
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 

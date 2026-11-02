@@ -57,6 +57,28 @@ private:
 	std::string name;
 };
 
+// TruckVehicle：可驾驶货车(ZIL-130)——停车场里的车，和VehicleBasic一样走blueprintPath+Chaos物理，
+// 脚本复用vehicle_basic(靠近弹出"上车")。
+class TruckVehicle : public VehicleMod {
+public:
+	TruckVehicle();
+
+	static const char* GetId() { return "vehicle_truck"; }
+	static const char* GetCategory() { return "truck"; }
+	virtual const char* GetType() const override { return "vehicle_truck"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
 class TrainVehicle : public VehicleMod {
 public:
 	TrainVehicle();

@@ -80,10 +80,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Plane|Flight")
 	float weathervaneAccel = 1.0f;
 
-	// 重心偏移(cm，机体局部坐标，+X=机头方向)：叠加在物理资产自动算出的重心上。重心太靠后会把
-	// 鼻轮翘起来，往前移(正X)就能压住鼻轮。BeginPlay时应用到根骨刚体，蓝图里直接调。
-	UPROPERTY(EditDefaultsOnly, Category = "Plane|Mass")
-	FVector centerOfMassOffset = FVector(300.f, 0.f, 0.f);
 
 	// ---- 螺旋桨 ----
 
