@@ -71,3 +71,28 @@ return new PengzhanBuilding(args); }`),不用就直接忽略这个参数,详见
 `PengzhanBuilding*(*)(const std::string&)`,不能直接转换成
 `BuildingMod*(*)(const std::string&)`,必须在lambda里显式写`-> BuildingMod*`让返回值在
 lambda内部完成到基类指针的隐式转换。
+
+## 用mod提供载具(含蓝图)——实验结论与做法(2026-11-02，拿公交BP_BusElement验证)
+
+**结论**：mod可以带自己的载具蓝图，父类留在主程序里即可。验证过的是编辑器PIE下公交从`/Test/Bus/Actor/BP_BusElement`正常生成、上车、驾驶；打包版挂载新pak没有实测(挂载代码和已有的飞机静态网格同一条路径)。
+
+**边界**(原因：安装版引擎只支持单体Game构建，见`Forever_UE/Source/Forever/Element/PlaneElement.md`与CONVENTIONS)：
+- 能放进mod的：`<Name>Vehicle`(纯C++ `VehicleMod`，Dependence接口)、脚本、模型/材质/物理资产/骨架、**载具蓝图**(父类`AVehicleElement`或其蓝图子类在主程序里)。
+- 必须留在主程序的：任何新的UE C++类(`AVehicleElement`、`ATransitVehicleElement`、`APlaneElement`、`UVehicleWheelAnimInstance`、键位、相机……)。新载具如果需要新行为(如飞机的飞行力学)，主程序里要先有对应的类，mod只是继承它做蓝图。
+
+**让迷你工程(以`Forever_Mod/Test/UE/Test`为例)能创建/保存父类在主程序里的蓝图**——迷你工程原本没有Forever模块，打开这类蓝图会找不到`/Script/Forever.VehicleElement`：
+1. `Test.uproject`加`"Modules": [{ "Name": "Forever", "Type": "Editor", "LoadingPhase": "Default" }]`，`Plugins`里补上和主工程一致的`Water`、`Niagara`、`ChaosVehiclesPlugin`、`ChaosModularVehicleExamples`(用Python移资产的话再加`PythonScriptPlugin`)。
+2. 新建`Source/Test.Target.cs`(Game)、`Source/TestEditor.Target.cs`(Editor，`ExtraModuleNames.Add("Forever")`)、`Source/Forever/Forever.Build.cs`：依赖模块列表照抄主工程`Forever.Build.cs`，但路径不能用`ModuleDirectory`相对推算，要写到主工程`Forever_UE/Source`的绝对/相对路径(`Dependence`、`Core`、`Core/common`头文件目录，`Forever_UE/x64/Release/{Dependence,Core}.lib`，所以先编过`Framework.sln`)。`Source/Forever/Forever.cpp`第一行必须`#include "Forever.h"`(UHT要求)，内容`IMPLEMENT_MODULE(FDefaultGameModuleImpl, Forever);`，`Forever.h`拷主工程的。
+3. 源码：把主工程`Source/Forever/{Controller,Element,Framework,Input,Mod,Player,UI}`下所有`.h/.cpp`在迷你工程`Source/Forever/`里建**NTFS硬链接**(PowerShell `New-Item -ItemType HardLink`)，同一份代码、不会分叉。**不能用目录junction**：UBT不扫描junction，模块只会编出一个空的Forever.cpp。主工程新增文件要补建链接；用"替换文件"方式保存的工具会断开硬链接，断了要重建。
+4. 把主工程`Config/DefaultEngine.ini`的`[/Script/Engine.CollisionProfile]`整段追加到迷你工程的`DefaultEngine.ini`，否则cook报"碰撞描述文件设置不包括水体碰撞描述文件的条目"，commandlet以Failure收场(pak.bat判失败并先删掉旧pak)。
+5. 编译：`Build.bat TestEditor Win64 Development -Project=...\Test.uproject -WaitMutex -FromMsBuild`(要先关掉打开着的编辑器，Live Coding开着会拒绝)。
+
+**把主工程里已有的载具蓝图搬进mod**(以公交为例)：
+1. 把蓝图的依赖闭包拷进迷你工程`Content/`，路径和主工程`/Game/...`一致(公交：`3rdParty/PAZ_652`整个文件夹，加上父蓝图`Blueprint/Vehicle/BP_VehicleElement.uasset`)。依赖可以用`strings`式扫描uasset里的`/Game/...`得到。
+2. 父蓝图(`BP_VehicleElement`)留在迷你工程`Content/`里就行，**不要**放进`Plugins/<Mod>/Content`：它不会进pak，运行时用的是主程序里的那份，子蓝图引用的仍是`/Game/Blueprint/Vehicle/BP_VehicleElement`。
+3. 用迷你工程的`UnrealEditor-Cmd.exe Test.uproject -ExecutePythonScript=move.py -unattended`把子蓝图和它的网格/材质/贴图一次性搬到`/<Mod>/<Name>/...`。**必须用`AssetToolsHelpers.get_asset_tools().rename_assets([AssetRenameData(asset, 新文件夹, 新名字), ...])`整批改名**；逐个调`EditorAssetLibrary.rename_asset`会让蓝图里网格引用丢成None(先搬蓝图再搬网格，蓝图已存盘的引用不会被改写)。搬完用Python加载蓝图，检查`CarMesh`的`skeletal_mesh`指向新路径、`WheelSetups`的骨骼名都在。
+4. 主程序里`<Name>Vehicle::SetProperty`的`blueprintPath`改成`/<Mod>/<Name>/Actor/BP_xxx.BP_xxx_C`。编辑器PIE下`ForeverModSubsystem::EnsureModsRegistered`直接挂载插件`Content`目录(不用cook)；打包版跑mod自己的`pak.bat`(CookAll，实测约7分钟，pak因为带了公交贴图从22MB涨到131MB)。
+
+**无害的现象**：迷你工程的commandlet日志里有大量`CDO Constructor (...): Failed to find /Game/...`(主工程的IA_*、材质、网格不在迷你工程里)，只是类的默认对象里引用为空；蓝图只存与父类默认值的差异，所以不影响搬进来的蓝图。名字末尾带`_652`这类数字的资产，在uasset名字表里会被拆成`SKM_paz`+数字后缀，扫描依赖时别被误导。
+
+**没做的**：`BusVehicle`这个C++类本身没搬进`Forever_Mod`(它是纯C++ mod，搬法和`YuanshenBuilding`一样，没有技术障碍)；线路公交用的`transitMeshPath`、脚本也没搬。
