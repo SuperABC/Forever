@@ -11,6 +11,7 @@
 #include "society/society.h"
 #include "society/society_save.h"
 #include "traffic/traffic.h"
+#include "industry/industry_save.h"
 #include "traffic/traffic_save.h"
 #include "story/story.h"
 #include "story/script_save.h"
@@ -68,6 +69,7 @@ namespace {
 		world.map = framework->GetMap();
 		world.populace = framework->GetPopulace();
 		world.society = framework->GetSociety();
+		world.industry = framework->GetIndustry();
 		world.traffic = framework->GetTraffic();
 		world.story = framework->GetStory();
 		world.player = framework->GetPlayer();
@@ -339,7 +341,11 @@ namespace {
 				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: society load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
 			}
 
-			Traffic* restoredTraffic = current.traffic ? TrafficSaveCodec::Load(first, *restoredMap, true, error) : nullptr;
+			Industry* restoredIndustry = current.industry ? IndustrySaveCodec::Load(first, *restoredMap, error) : nullptr;
+			if (current.industry && !restoredIndustry) {
+				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: industry load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
+			}
+			Traffic* restoredTraffic = current.traffic ? TrafficSaveCodec::Load(first, *restoredMap, error) : nullptr;
 			if (current.traffic && !restoredTraffic) {
 				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: traffic load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
 			}
@@ -352,7 +358,7 @@ namespace {
 				restoredStory = new Story();
 				restoredStory->Init();
 			}
-			if (!ScriptSaveCodec::Load(first, restoredMap, restoredPopulace, restoredSociety, restoredTraffic, restoredStory, error, restoredPlayer) && !error.empty()) {
+			if (!ScriptSaveCodec::Load(first, restoredMap, restoredPopulace, restoredSociety, restoredTraffic, restoredStory, error, restoredPlayer)) {
 				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: script load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
 			}
 
@@ -360,6 +366,7 @@ namespace {
 			restoredWorld.map = restoredMap;
 			restoredWorld.populace = restoredPopulace;
 			restoredWorld.society = restoredSociety;
+			restoredWorld.industry = restoredIndustry;
 			restoredWorld.traffic = restoredTraffic;
 			restoredWorld.story = restoredStory;
 			restoredWorld.player = restoredPlayer;
@@ -371,6 +378,7 @@ namespace {
 			delete restoredPlayer;
 			delete restoredStory;
 			delete restoredTraffic;
+			delete restoredIndustry;
 			delete restoredSociety;
 			delete restoredPopulace;
 			delete restoredMap;

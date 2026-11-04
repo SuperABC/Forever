@@ -42,6 +42,21 @@
     <ClCompile Include="common\registry.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="populace\household.cpp">
+      <Filter>populace</Filter>
+    </ClCompile>
+    <ClCompile Include="society\economy.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\ledger.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\policy.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\settlement.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
     <ClCompile Include="society\society.cpp">
       <Filter>society</Filter>
     </ClCompile>
@@ -68,6 +83,9 @@
     </ClCompile>
     <ClCompile Include="traffic\traffic.cpp">
       <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\industry_save.cpp">
+      <Filter>industry</Filter>
     </ClCompile>
     <ClCompile Include="traffic\traffic_save.cpp">
       <Filter>traffic</Filter>
@@ -197,6 +215,21 @@
     <ClInclude Include="common\registry.h">
       <Filter>common</Filter>
     </ClInclude>
+    <ClInclude Include="populace\household.h">
+      <Filter>populace</Filter>
+    </ClInclude>
+    <ClInclude Include="society\economy.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\ledger.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\policy.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\settlement.h">
+      <Filter>society</Filter>
+    </ClInclude>
     <ClInclude Include="society\society.h">
       <Filter>society</Filter>
     </ClInclude>
@@ -223,6 +256,9 @@
     </ClInclude>
     <ClInclude Include="traffic\traffic.h">
       <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\industry_save.h">
+      <Filter>industry</Filter>
     </ClInclude>
     <ClInclude Include="traffic\traffic_save.h">
       <Filter>traffic</Filter>

@@ -140,7 +140,10 @@ void PlayerSaveCodec::Save(const Player& player, const Map& map, SaveArchive& ar
 
 Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& error) {
 	const SaveSection* section = archive.Find(SAVE_SECTION_PLAYER);
-	if (!section) return nullptr;
+	if (!section) {
+		error = "the save has no section '" SAVE_SECTION_PLAYER "'";
+		return nullptr;
+	}
 
 	try {
 		ByteReader r(section->data);

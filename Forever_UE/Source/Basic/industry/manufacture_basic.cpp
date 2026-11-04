@@ -13,7 +13,7 @@ const char* FarmManufacture::GetName() {
 }
 
 void FarmManufacture::SetTargets() {
-	targets["product_wheat"] = 1; // 每天1批(10份)小麦，无原料
+	targets["product_wheat"] = 20; // 每天20批(每批10份)=200份小麦，无原料
 }
 
 int RanchManufacture::count = 0;
@@ -27,7 +27,7 @@ const char* RanchManufacture::GetName() {
 }
 
 void RanchManufacture::SetTargets() {
-	targets["product_beef"] = 1; // 每天1批(10份)牛肉，无原料
+	targets["product_beef"] = 20; // 每天20批(每批10份)=200份牛肉，无原料
 }
 
 int FoodFactoryManufacture::count = 0;
@@ -41,5 +41,5 @@ const char* FoodFactoryManufacture::GetName() {
 }
 
 void FoodFactoryManufacture::SetTargets() {
-	targets["product_burger"] = 1; // 每天1批(5份)汉堡，需要3小麦+2牛肉(配方见BurgerProduct)
+	targets["product_burger"] = 100; // 每天100批(每批5份)=500份汉堡，每批需要3小麦+2牛肉(配方见BurgerProduct)
 }

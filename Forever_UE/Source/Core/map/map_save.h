@@ -53,7 +53,7 @@ private:
 	static bool ReadRoadnet(Map& map, LoadTables& t, ByteReader& r, std::string& error);
 
 	static void WriteStructures(const Map& map, const SaveTables& t, ByteWriter& w);
-	static bool ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool restoreOptions, std::string& error);
+	static bool ReadStructures(Map& map, LoadTables& t, ByteReader& r, std::string& error);
 
 	static void WriteVegetation(const Map& map, ByteWriter& w);
 	static bool ReadVegetation(Map& map, ByteReader& r, std::string& error);

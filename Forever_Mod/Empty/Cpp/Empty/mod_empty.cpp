@@ -209,7 +209,7 @@ extern "C" __declspec(dllexport) void RegisterModOrganizations(OrganizationFacto
 	factory->RegisterOrganization(EmptyOrganization::GetId(),
 		[](const std::string& args) -> OrganizationMod* { return new EmptyOrganization(args); },
 		[](OrganizationMod* m) { delete m; },
-		&EmptyOrganization::GetPower);
+		&EmptyOrganization::GetPower, &EmptyOrganization::GetRequirements);
 }
 extern "C" __declspec(dllexport) void FinishModOrganizations(OrganizationFactory* factory) {
 }

@@ -224,6 +224,8 @@ void Citizen::SetZone(Zone* value) { zone = value; }
 Building* Citizen::GetBuilding() const { return building; }
 void Citizen::SetBuilding(Building* value) { building = value; }
 Room* Citizen::GetRoom() const { return room; }
+Household* Citizen::GetHousehold() const { return household; }
+void Citizen::SetHousehold(Household* value) { household = value; }
 void Citizen::SetRoom(Room* value) { room = value; }
 Room* Citizen::GetCurrentRoom() const { return currentRoom; }
 void Citizen::SetCurrentRoom(Room* value) {

@@ -1043,6 +1043,17 @@ int Map::ComputeAccommodationTarget() const {
 	return capacity / 2;
 }
 
+int Map::ComputeWorkCapacity() const {
+	int capacity = 0;
+	for (auto& [name, building] : buildings) {
+		if (!building) continue;
+		for (Room* room : building->GetRooms()) {
+			if (room && room->IsWorkspace()) capacity += room->WorkspaceCapacity();
+		}
+	}
+	return capacity;
+}
+
 void Map::SettleCitizen(Citizen* citizen, Room* room) {
 	if (!citizen || !room) return;
 	Building* building = room->GetParentBuilding();
@@ -1053,7 +1064,7 @@ void Map::SettleCitizen(Citizen* citizen, Room* room) {
 		citizen->SetZone(building->GetParentZone());
 		citizen->SetLot(building->GetParentLot());
 	}
-	room->AddTenant(citizen);
+	room->AddResident(citizen);
 }
 
 void Map::Checkin(const Populace& populace) {
@@ -1061,11 +1072,9 @@ void Map::Checkin(const Populace& populace) {
 	constexpr int kProbabilityScale = 100; // 照抄老工程PROBABILITY_SCALE
 	constexpr int kZoneOwnershipChance = 2; // 照抄老工程ZONE_OWNERSHIP_CHANCE
 	constexpr int kBuildingOwnershipChance = 5; // 照抄老工程BUILDING_OWNERSHIP_CHANCE
-	// "公有(stated)"需要能在随机分配里真的出现(不只是GetStated()这个纯查询接口存在，
-	// 没有任何概率会真正触发它)，所以这里单独给公有定义两个小概率，量级上比照
-	// ownership chance，可以按需调。
-	constexpr int kZoneStatedChance = 2;
-	constexpr int kBuildingStatedChance = 3;
+	// 公有(政府拥有)的概率写在各自的mod里(ZoneMod/BuildingMod::stateOwnedChance，小数[0,1])，
+	// 这里换算成百分数和上面的ownership chance在同一个刻度上比较。
+	auto statedPercent = [](float chance) { return static_cast<int>(lround(chance * 100.f)); };
 
 	int currentYear = populace.GetCurrentYear();
 
@@ -1080,8 +1089,9 @@ void Map::Checkin(const Populace& populace) {
 	// 房产归属：按老工程Map::Checkin"Zone→Building→Room逐级下探"的算法分配owner/stated，
 	// 每一级都是"要么整体公有，要么整体归一个citizen私有，要么下探到下一级各自独立决定"
 	// 三选一，详见Source/Core/populace/populace.md"房产归属"一节。
-	auto resolveBuildingOwnership = [&adults, kProbabilityScale, kBuildingStatedChance,
-		kBuildingOwnershipChance](Building* building) {
+	auto resolveBuildingOwnership = [&adults, kProbabilityScale, kBuildingOwnershipChance,
+		statedPercent](Building* building) {
+		int kBuildingStatedChance = building->GetMod() ? statedPercent(building->GetMod()->stateOwnedChance) : 0;
 		int roll = GetRandom(kProbabilityScale);
 		if (roll < kBuildingStatedChance) {
 			building->SetStated(true);
@@ -1108,6 +1118,7 @@ void Map::Checkin(const Populace& populace) {
 
 	for (auto& [zoneName, zone] : zones) {
 		if (!zone) continue;
+		int kZoneStatedChance = zone->GetMod() ? statedPercent(zone->GetMod()->stateOwnedChance) : 0;
 		int roll = GetRandom(kProbabilityScale);
 		if (roll < kZoneStatedChance) {
 			zone->SetStated(true);
@@ -1147,7 +1158,7 @@ void Map::Checkin(const Populace& populace) {
 	}
 
 	// 分配住处：和"房产归属"是两个独立的关注点——一个room的owner是谁、和谁实际住在
-	// 里面(tenants/occupants)完全无关(可以理解成"租房")，所以这里单独重新扫一遍所有
+	// 里面(households/occupants)完全无关(可以理解成"租房")，所以这里单独重新扫一遍所有
 	// 住宅room建名额池，不复用上面归属循环的中间状态。
 	vector<Room*> pool;
 	for (auto& [name, building] : buildings) {
@@ -1159,7 +1170,7 @@ void Map::Checkin(const Populace& populace) {
 		}
 	}
 
-	// 人和房间的关系是3个独立概念(见room.h)：这里的"家"(GetRoom()/tenants)和"当前物理
+	// 人和房间的关系是3个独立概念(见room.h)：这里的"家"(GetRoom()/households)和"当前物理
 	// 位置"(GetCurrentRoom()/occupants)对citizen来说初始状态天然重合(刚分配住处，人也
 	// 就在那)，但存储上必须分开写，为将来"人在家但当前不在自己房间里"这类场景预留。
 	auto moveIn = [this](Citizen* citizen, Room* room) { SettleCitizen(citizen, room); };

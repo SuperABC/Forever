@@ -86,14 +86,14 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 
 		{ ResidenceBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ ShopBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
-		{ FactoryBuilding::GetId(), { FactoryComponent::GetId(), FactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ FactoryBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId() } },
 		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId() } },
 		{ MoharBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
 
 		{ ResidenceComponent::GetId(), { ResidenceRoom::GetId() } },
 		{ ShopComponent::GetId(), { ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId() } },
-		{ FactoryComponent::GetId(), { FactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ FactoryComponent::GetId(), { FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ TrainStationComponent::GetId(), { TrainStationRoom::GetId() } },
 		{ AirportComponent::GetId(), { AirportRoom::GetId() } },
 
@@ -101,7 +101,8 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 
 		{ SchedulerBasic::GetId(), { kScriptEmpty } },
 		{ ShopSalerJob::GetId(), { ShopRoom::GetId(), kScriptEmpty } },
-		{ ShopOrganization::GetId(), { ShopSalerJob::GetId(), kScriptEmpty } },
+		{ ShopOrganization::GetId(), { ShopSalerJob::GetId(), WarehouseKeeperJob::GetId(), kScriptEmpty } },
+		{ FactoryOrganization::GetId(), { FactoryWorkerJob::GetId() } },
 
 		{ FarmManufacture::GetId(), { WheatStorage::GetId(), WheatProduct::GetId() } },
 		{ RanchManufacture::GetId(), { BeefStorage::GetId(), BeefProduct::GetId() } },
@@ -251,7 +252,8 @@ extern "C" __declspec(dllexport) void FinishModComponents(ComponentFactory* fact
 
 extern "C" __declspec(dllexport) void* GetModRooms() {
 	static vector<string> mods = {
-		ResidenceRoom::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), FactoryRoom::GetId(),
+		ResidenceRoom::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(),
+		FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(),
 		TrainStationRoom::GetId(), AirportRoom::GetId()
 	};
 	return (void*)&mods;
@@ -269,8 +271,14 @@ extern "C" __declspec(dllexport) void RegisterModRooms(RoomFactory* factory) {
 	factory->RegisterRoom(ParkingRoom::GetId(),
 		[](const std::string&) -> RoomMod* { return new ParkingRoom(); },
 		[](RoomMod* m) { delete m; });
-	factory->RegisterRoom(FactoryRoom::GetId(),
-		[](const std::string&) -> RoomMod* { return new FactoryRoom(); },
+	factory->RegisterRoom(FarmRoom::GetId(),
+		[](const std::string&) -> RoomMod* { return new FarmRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(RanchRoom::GetId(),
+		[](const std::string&) -> RoomMod* { return new RanchRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(FoodFactoryRoom::GetId(),
+		[](const std::string&) -> RoomMod* { return new FoodFactoryRoom(); },
 		[](RoomMod* m) { delete m; });
 	factory->RegisterRoom(TrainStationRoom::GetId(),
 		[](const std::string&) -> RoomMod* { return new TrainStationRoom(); },
@@ -308,10 +316,16 @@ extern "C" __declspec(dllexport) void FinishModSchedulers(SchedulerFactory* fact
 }
 
 extern "C" __declspec(dllexport) void* GetModJobs() {
-	static vector<string> mods = { ShopSalerJob::GetId() };
+	static vector<string> mods = { ShopSalerJob::GetId(), WarehouseKeeperJob::GetId(), FactoryWorkerJob::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModJobs(JobFactory* factory) {
+	factory->RegisterJob(WarehouseKeeperJob::GetId(),
+		[](const std::string&) -> JobMod* { return new WarehouseKeeperJob(); },
+		[](JobMod* m) { delete m; });
+	factory->RegisterJob(FactoryWorkerJob::GetId(),
+		[](const std::string&) -> JobMod* { return new FactoryWorkerJob(); },
+		[](JobMod* m) { delete m; });
 	factory->RegisterJob(ShopSalerJob::GetId(),
 		[](const std::string&) -> JobMod* { return new ShopSalerJob(); },
 		[](JobMod* m) { delete m; });
@@ -320,14 +334,18 @@ extern "C" __declspec(dllexport) void FinishModJobs(JobFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModOrganizations() {
-	static vector<string> mods = { ShopOrganization::GetId() };
+	static vector<string> mods = { ShopOrganization::GetId(), FactoryOrganization::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModOrganizations(OrganizationFactory* factory) {
+	factory->RegisterOrganization(FactoryOrganization::GetId(),
+		[](const std::string&) -> OrganizationMod* { return new FactoryOrganization(); },
+		[](OrganizationMod* m) { delete m; },
+		&FactoryOrganization::GetPower, &FactoryOrganization::GetRequirements);
 	factory->RegisterOrganization(ShopOrganization::GetId(),
 		[](const std::string&) -> OrganizationMod* { return new ShopOrganization(); },
 		[](OrganizationMod* m) { delete m; },
-		&ShopOrganization::GetPower);
+		&ShopOrganization::GetPower, &ShopOrganization::GetRequirements);
 }
 extern "C" __declspec(dllexport) void FinishModOrganizations(OrganizationFactory* factory) {
 }
@@ -363,7 +381,7 @@ extern "C" __declspec(dllexport) void FinishModProducts(ProductFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModStorages() {
-	static vector<string> mods = { WheatStorage::GetId(), BeefStorage::GetId(), BurgerStorage::GetId() };
+	static vector<string> mods = { WheatStorage::GetId(), BeefStorage::GetId(), BurgerStorage::GetId(), ShopStorage::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModStorages(StorageFactory* factory) {
@@ -375,6 +393,9 @@ extern "C" __declspec(dllexport) void RegisterModStorages(StorageFactory* factor
 		[](StorageMod* m) { delete m; });
 	factory->RegisterStorage(BurgerStorage::GetId(),
 		[](const std::string&) -> StorageMod* { return new BurgerStorage(); },
+		[](StorageMod* m) { delete m; });
+	factory->RegisterStorage(ShopStorage::GetId(),
+		[](const std::string&) -> StorageMod* { return new ShopStorage(); },
 		[](StorageMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModStorages(StorageFactory* factory) {

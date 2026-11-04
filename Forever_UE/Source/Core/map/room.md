@@ -19,7 +19,7 @@
   `tenancy`/`workers`等字段——那些依赖Industry/Populace/Society这些还没迁移的领域，等
   对应领域迁移到了再回来加。
 - **4类占位能力**：`IsResidential()`/`ResidentialCapacity()`（床位数）/`IsWorkspace()`/
-  `WorkspaceCapacity()`（工位数）/`IsStorage()`/`StorageConfig()`（仓库属性）/
+  `WorkspaceCapacity()`（工位数）/`IsStorage()`/`StorageType()`（对应StorageMod id，Industry据此生成Storage）/`Rent()`（每日房租，分）/
   `IsManufacture()`/`ManufactureTypes()`（产线描述），读构造时`mod->SetProperty()`之后从`RoomMod`同名字段
   拷贝的快照`properties`（见`Source/Dependence/map/room_mod.h`）——读档时直接按存档恢复这份快照，不依赖重新
   创建的mod再算一遍（见`map_save.md`）。目前只有`ResidenceRoom`
@@ -40,29 +40,29 @@
   这个Node永远不会被delete。
 - **`GetAddress()`**：`parentBuilding->GetAddress() + " " + number`，和`Map::LocateRoom`的
   解析格式一一对应（"...<buildingName> <number>"）。
-- **人/归属和房间的4个独立概念：owner+stated / tenants / occupants**：
+- **人/归属和房间的4个独立概念：owner+stated / households / occupants**：
   - `Citizen* GetOwner() const` / `SetOwner(Citizen*)` + `bool GetStated() const` /
     `SetStated(bool)`——房间归属的完整表达，二者互斥：`owner`非空表示私有（归某个具体
     citizen），`stated`为true表示公有（`owner`保持`nullptr`——"公有"本来就不指向任何
     具体的人）。`Map::Checkin()`给每个room解析归属时二者恰好落在其中一种，不会同时/都不
     设，详见`Source/Core/populace/populace.md`"房产归属"一节——**和"谁住在这里"
-    （tenants）完全无关**，一个room的owner可以是从没在这里住过的人（相当于"房东"），
+    （households）完全无关**，一个room的owner可以是从没在这里住过的人（相当于"房东"），
     也可能恰好是自己住在这里的人。
-  - `GetTenants()` / `AddTenant(Citizen*)` / `RemoveTenant(Citizen*)`——住在这个房间的
-    人。私有归属时owner本人**有可能**也在`tenants`里（如果他自己抽中了这间当住处），但
-    这不是必然的——`Map::Checkin()`的"房产归属"和"住处分配"是两个独立、顺序执行的步骤，
-    一个room的owner和它的tenants完全可能是不相干的两拨人。
+  - `GetHouseholds()` / `AddResident(Citizen*)` / `AddHousehold()`——住在这个房间的户
+    （见`populace/household.md`，**直接替代了原来的tenants**）。入住时按夫妻/父母子女关系
+    并入已有的户、合并相连的户或新建一户，没有亲属关系的住户分属不同户。私有归属时owner本人
+    **有可能**也住在这里，但这不是必然的——"房产归属"和"住处分配"是两个独立、顺序执行的步骤。
   - `GetOccupants()` / `AddOccupant(Citizen*)` / `RemoveOccupant(Citizen*)`——当前物理
-    位置在这个房间里的人。和`tenants`是两回事：一个tenant可能人不在家（以后有真正移动
-    AI之后，citizen的当前位置可能是别的房间），一个occupant也可能不是这个房间的tenant
+    位置在这个房间里的人。和`households`是两回事：一个住户可能人不在家（以后有真正移动
+    AI之后，citizen的当前位置可能是别的房间），一个occupant也可能不是这个房间的住户
     （以后有访客/工作场景时会出现）。这次没有真正的移动AI，`Map::Checkin()`分配住处的
-    同时就让citizen"住进去"，`tenants`/`occupants`的初始状态天然重合，但数据结构上必须
+    同时就让citizen"住进去"，`households`/`occupants`的初始状态天然重合，但数据结构上必须
     分开存，为将来"人在家但当前不在自己房间里"这类场景预留。对应
     `Citizen::GetCurrentRoom()`（和`GetRoom()`即"家"是两个概念，见
     `Source/Core/populace/citizen.md`）——citizen当前在哪个房间，就应该出现在那个房间
     的`occupants`列表里，两边由调用方（目前是`Map::Checkin()`）手动同步维护，`Room`/
     `Citizen`自己都不做级联同步。
-  - `RemoveTenant`/`RemoveOccupant`目前没有任何调用方（`Map::Checkin()`只是一次性分配，
+  - `RemoveOccupant`目前没有任何调用方（`Map::Checkin()`只是一次性分配，
     没有"搬家"/"离开房间"的逻辑），add/remove配对先加上，等真正的移动/搬家逻辑接入时就
     有地方用。
 
@@ -80,13 +80,13 @@
 
 - 依赖：`Source/Dependence/map/room_mod.h`（`RoomMod`）、`room_factory.h`、
   `Source/Dependence/map/general_geometry.h`（`Quad`/`WallHole`/`Node`/`FACE_DIRECTION`）、
-  `Source/Core/populace/citizen.h`（`Citizen`，`owner`/`tenants`/`occupants`只存指针，
+  `Source/Core/populace/citizen.h`（`Citizen`，`owner`/`households`/`occupants`只存指针，
   前向声明即可，见room.h顶部）。
 - 被谁依赖：`Source/Core/map/building.h`/`.cpp`（`Building::AssignRoom`/`ArrangeRow`创建，
   `~Building()`销毁）、`Source/Core/map/component.h`（`Component::AddRoom`，不持有生命周期）、
   `Source/Forever/Framework/ForeverBuildingFrameworkComponent.cpp`（按`GetLayer()==level`
   筛选出这一层的Room，渲染墙体/门窗开洞）、`Source/Core/map/map.cpp`（`Map::Checkin()`写
-  `owner`/`tenants`/`occupants`）。
+  `owner`/`households`/`occupants`）。
 
 ## 待办/后续阶段
 

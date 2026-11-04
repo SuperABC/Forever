@@ -1140,8 +1140,8 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			w.U8(p.isResidential ? 1 : 0); w.I32(p.residentialCapacity);
 			w.U8(p.isWorkspace ? 1 : 0); w.I32(p.workspaceCapacity);
 			w.U8(p.isStorage ? 1 : 0);
-			w.U32(static_cast<uint32_t>(p.storageConfig.size()));
-			for (const string& key : SortedKeys(p.storageConfig)) { w.Str(key); w.F32(p.storageConfig.at(key)); }
+			w.Str(p.storageType);
+			w.I64(p.rent);
 			w.U8(p.isManufacture ? 1 : 0);
 			WriteStrings(p.manufactureTypes, w);
 			w.U8(p.isParking ? 1 : 0);
@@ -1235,7 +1235,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 	}
 }
 
-bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool restoreOptions, string& error) {
+bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string& error) {
 	map.doorCount = r.I32();
 	uint32_t sequenceCount = r.U32();
 	for (uint32_t i = 0; i < sequenceCount && !r.Failed(); i++) {
@@ -1410,12 +1410,8 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 			p.isResidential = r.U8() != 0; p.residentialCapacity = r.I32();
 			p.isWorkspace = r.U8() != 0; p.workspaceCapacity = r.I32();
 			p.isStorage = r.U8() != 0;
-			p.storageConfig.clear();
-			uint32_t storageCount = r.U32();
-			for (uint32_t k = 0; k < storageCount && !r.Failed(); k++) {
-				string key = r.Str();
-				p.storageConfig[key] = r.F32();
-			}
+			p.storageType = r.Str();
+			p.rent = r.I64();
 			p.isManufacture = r.U8() != 0;
 			p.manufactureTypes = ReadStrings(r);
 			p.isParking = r.U8() != 0;
@@ -1478,7 +1474,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 			cabin->targetLevel = targetLevel;
 			cabin->elapsed = elapsed;
 			// options和门一样：存档带脚本状态段时(读档跳过game_start)才恢复，否则game_start会再加一遍。
-			if (restoreOptions) cabin->options = options;
+			cabin->options = options;
 			building->cabinEntities.push_back(cabin);
 			map.cabinsByInteractName[interactName] = cabin;
 		}
@@ -1520,9 +1516,8 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, bool r
 			x, y, z, width, height, yaw, level, vehicleGate, &map.scriptFactory);
 		door->access = access;
 		for (auto& [citizen, pass] : registrations) door->registrations[citizen] = pass;
-		// options(剧情脚本加的交互选项)：存档带脚本状态段时读档会跳过game_start广播，选项按存档
-		// 恢复；没有脚本状态段(P4及更早的存档)时game_start会重新加一遍，这里不恢复，避免重复。
-		if (restoreOptions) door->options = options;
+		// options(剧情脚本加的交互选项)：读档跳过game_start广播，选项按存档恢复。
+		door->options = options;
 
 		t.doors.push_back(door);
 		map.allDoors.push_back(door);
@@ -1671,7 +1666,7 @@ Map* MapSaveCodec::Load(const SaveArchive& archive, string& error) {
 	const SaveSection* vegetation = archive.Find(SAVE_SECTION_MAP_VEGETATION);
 	const SaveSection* lamps = archive.Find(SAVE_SECTION_MAP_LAMPS);
 	if (!terrain || !roadnet || !structures || !vegetation || !lamps) {
-		error = "the save has no map data (it was written by an older version that only saved the manifest)";
+		error = "the save has no map data";
 		return nullptr;
 	}
 
@@ -1692,7 +1687,7 @@ Map* MapSaveCodec::Load(const SaveArchive& archive, string& error) {
 		ByteReader roadnetReader(roadnet->data);
 		if (!ReadRoadnet(*map, tables, roadnetReader, error)) return nullptr;
 		ByteReader structuresReader(structures->data);
-		if (!ReadStructures(*map, tables, structuresReader, archive.Find(SAVE_SECTION_SCRIPTS) != nullptr, error)) return nullptr;
+		if (!ReadStructures(*map, tables, structuresReader, error)) return nullptr;
 		ByteReader vegetationReader(vegetation->data);
 		if (!ReadVegetation(*map, vegetationReader, error)) return nullptr;
 		ByteReader lampsReader(lamps->data);

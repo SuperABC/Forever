@@ -30,8 +30,6 @@ struct SaveSectionVersion {
 	const char* name;
 	int current;
 	int minimum;
-	// 必须存在的段：缺了就拒绝读档(比如只有manifest的P0旧存档)。
-	bool required = true;
 };
 const std::vector<SaveSectionVersion>& GetSaveSectionVersions();
 
@@ -118,6 +116,7 @@ private:
 class Map;
 class Populace;
 class Society;
+class Industry;
 class Traffic;
 class Story;
 class Player;
@@ -127,6 +126,7 @@ struct SaveWorld {
 	const Map* map = nullptr;
 	const Populace* populace = nullptr;
 	const Society* society = nullptr;
+	const Industry* industry = nullptr;
 	const Traffic* traffic = nullptr;
 	const Story* story = nullptr;
 	const Player* player = nullptr;

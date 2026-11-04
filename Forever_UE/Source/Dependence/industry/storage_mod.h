@@ -3,6 +3,7 @@
 #include "common/mod_state.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 
@@ -26,6 +27,18 @@ public:
 
 	std::vector<std::string> categories;
 	float capacity = 0.f;
+
+	// 是否允许被物流取走/放入：只能放=需求方(商店仓库、工坊原料cache)，只能取=供给方(工坊产出
+	// cache)，可取可放=独立仓库(物流的缓冲层)。
+	bool canTake = true;
+	bool canPut = true;
+
+	// 需求说明，仓库靠它自己驱动物流补货，二选一(同时非空时Core只认productDemand)：
+	//   serviceTypeDemand: (货物服务类型, 比例)，如 {"food", 1.0} 表示容量的100%留给food类货物
+	//   productDemand:     (product id, 比例)，精确到某种货物
+	// 比例取值[0,1]，是占本仓库capacity的比例。两个都空表示该仓库没有补货需求。
+	std::vector<std::pair<std::string, float>> serviceTypeDemand;
+	std::vector<std::pair<std::string, float>> productDemand;
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
 	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，

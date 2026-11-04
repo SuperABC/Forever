@@ -192,7 +192,10 @@ void ScriptSaveCodec::Save(const SaveWorld& world, SaveArchive& archive) {
 bool ScriptSaveCodec::Load(const SaveArchive& archive, Map* map, Populace* populace, Society* society,
 	Traffic* traffic, Story* story, string& error, Player* player) {
 	const SaveSection* section = archive.Find(SAVE_SECTION_SCRIPTS);
-	if (!section) return false;
+	if (!section) {
+		error = "the save has no section '" SAVE_SECTION_SCRIPTS "'";
+		return false;
+	}
 
 	unordered_map<string, Script*> byKey;
 	for (auto& [key, script] : CollectScripts(map, populace, society, traffic, story, player)) byKey[key] = script;

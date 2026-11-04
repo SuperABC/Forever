@@ -2,6 +2,7 @@
 
 #include "common/mod_state.h"
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -31,6 +32,16 @@ public:
 	float batchSize = 1.f;                                       // 一批最少产多少份(x)
 	std::unordered_map<std::string, float> ingredients;          // 每批需要的原料：type->数量
 	std::unordered_map<std::string, float> byproducts;           // 每批产生的副产品：type->数量
+
+	// 价格一律int64、单位是分。要求 retailPrice > importPrice > exportPrice > 0，不满足的product
+	// 在Core::Product构造时判无效。城市内批发价由Core初始化为进出口价平均值，不是mod字段。
+	int64_t retailPrice = 0;                                     // 零售价：商店卖给市民的单价
+	int64_t importPrice = 0;                                     // 进口价：从城市外买入的单价
+	int64_t exportPrice = 0;                                     // 出口价：卖给城市外的单价
+
+	// 市民可直接消费时的服务类型和质量；serviceType为空表示暂不开放市民直接购买(小麦/牛肉)。
+	std::string serviceType;
+	float serviceQuality = 0.f;
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
 	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，

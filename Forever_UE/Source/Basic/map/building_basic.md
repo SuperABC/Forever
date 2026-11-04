@@ -57,7 +57,7 @@
     `boundaryRoads`里确实有对应方向的路时才采用，否则按老规矩随机挑一个有路的方向兜底。
   - `basements>0`：地下室`preset_single_room_pg+`(`ParkingRoom`，和`ShopBuilding`共用同一个
     `ParkingRoom`类，定义在`room_basic.h`)→1楼`preset_single_room_fg-`；否则只有1楼
-    `preset_single_room_fg`。1楼都放1个`FactoryRoom`。
+    `preset_single_room_fg`。1楼放1个工坊房间(`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`等概率随机选一)。
   - `footprint`固定0.6x0.6，`layers`显式固定为1(地上1层)，`floorHeights`统一`0.6f`，
     `FloorAssetSpec.wallMaterial="/Game/Asset/Materials/White.White"`。`basements`是否有
     地下室由`quad`尺寸判定，和地上层数无关。
@@ -87,7 +87,7 @@ CDF随机填充：住宅三档权重1，`RandomAcreage`在3000~8000之间；没�
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/building_mod.h`(`BuildingMod`基类)、`room_basic.h`
-  (`ResidenceRoom`/`ShopRoom`/`WarehouseRoom`/`ParkingRoom`/`FactoryRoom`，`Layout()`按
+  (`ResidenceRoom`/`ShopRoom`/`WarehouseRoom`/`ParkingRoom`/`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`，`Layout()`按
   房间类型调`ArrangeRow`/`AssignRoom`)、`common/utility.h`(`GetRandom`)。
 - 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModBuildings`注册三个类型)、
   `zone_basic.cpp`(`ResidenceZone::Layout()`内部建筑复用`ResidenceBuilding::GetId()`)。

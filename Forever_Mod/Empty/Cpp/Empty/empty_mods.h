@@ -263,11 +263,13 @@ public:
 	virtual const char* GetType() const override { return "organization_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
-	// Society/Organization域这次迁移新增的两个纯虚方法：这个占位mod不参与地图上真实的
-	// Component竞争，requirements留空即可(Society::Init跳过没有任何requirements的候选
-	// 类型)，DesignJobsForRoom不需要配任何Job。
+	// 这个占位mod不参与地图上真实的Component竞争，GetRequirements返回空表(Society::Init跳过
+	// 没有任何requirements的候选类型)，DesignJobsForRoom不需要配任何Job。
 	static float GetPower() { return 0.f; }
-	virtual void ComponentRequirements() override {}
+	static const std::unordered_map<std::string, std::pair<int, int>>& GetRequirements() {
+		static const std::unordered_map<std::string, std::pair<int, int>> requirements;
+		return requirements;
+	}
 	virtual void DesignJobsForRoom(const std::string&, const std::string&,
 		const std::string&, const std::string&, int) override {}
 

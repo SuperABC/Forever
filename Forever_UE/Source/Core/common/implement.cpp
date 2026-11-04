@@ -11,6 +11,8 @@
 #include "map/map.h"
 #include "map/zone.h"
 #include "map/building.h"
+#include "industry/industry.h"
+#include "industry/product.h"
 
 
 using namespace std;
@@ -51,6 +53,25 @@ void PostImplement::Post(const JsonValue& request) {
 		Citizen* citizen = housed[GetRandom(static_cast<int>(housed.size()))];
 		result["result"] = "success";
 		result["name"] = citizen->GetName();
+		return;
+	}
+
+	// "product info"：按product type查价格和服务属性(分、服务类型、质量)，商店这类组织mod看不到
+	// Industry，只能通过Post拿到售价，见organization_mod.h的CollectServices。
+	if (request.IsObject() && request["post"].AsString() == "product info") {
+		Product* product = industry ? industry->FindProduct(request["type"].AsString()) : nullptr;
+		if (!product) {
+			result["result"] = "fail";
+			result["msg"] = "product not found: " + request["type"].AsString();
+			return;
+		}
+
+		result["result"] = "success";
+		result["retail price"] = static_cast<long long>(product->GetRetailPrice());
+		result["import price"] = static_cast<long long>(product->GetImportPrice());
+		result["export price"] = static_cast<long long>(product->GetExportPrice());
+		result["service type"] = product->GetServiceType();
+		result["service quality"] = static_cast<double>(product->GetServiceQuality());
 		return;
 	}
 

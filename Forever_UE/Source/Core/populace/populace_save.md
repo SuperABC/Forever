@@ -24,7 +24,7 @@
    - 位置、生命值；
    - options；
    - Scheduler（mod 注册 id + mod 状态）；
-   - 头像（`avatar` 字符串 + `avatarIndex`，追加在每个市民记录的最后；按项目约定没升段版本，旧存档失效）。
+   - 头像（`avatar` 字符串 + `avatarIndex`，追加在每个市民记录的最后；按项目约定没升段版本）。
 4. 班级：学校名、学段、入学年份、学生下标。
 5. 第二遍：配偶、子女、经历。经历分 5 类，用 `dynamic_cast` 区分：普通、亲属、感情、教育、工作。
 6. Job 定时器、Scheduler 定时器。按 (时间, 市民下标, 节点名) 排序后写出：`std::set` 遇到同一时刻的条目时按指针地址排序，地址每次运行都不同。
@@ -43,8 +43,7 @@
 - **从房间推出其余住处字段**：市民的 lot/zone/building 不单独存。按 `Map::Checkin` 同一套规则从住处房间推出：`room->GetParentBuilding()`，再取它的 parentZone 和 parentLot。
 - **工作经历里的组织等社会段来连**：`JobExperience` 里的 `Organization*` 要等社会段读完才能连上。所以先留空，把 (经历, 组织下标) 交给 `SocietySaveCodec::Load` 去连。
 - **Scheduler 重建**：用存档里的注册 id 调用原来的构造函数，Script 的创建方式和新开局一样，再调用 `LoadState` 恢复 mod 状态。mod 的 `plans` 不用恢复：`Populace::Tick` 只在 `DailyPlan` 之后读一次 `plans` 来生成定时器，而定时器本身已经恢复了。
-- **options**：存档带脚本状态段（`world.scripts`）时读档会跳过 game_start 广播，这时按存档恢复；没有这一段的旧存档不恢复，避免重复。
-- **可以缺省**：段版本表里 `required=false`。P2 阶段的存档没有这一段时，`Load` 返回 nullptr、error 为空，`AForeverFrameworkActor` 在恢复出来的地图上重新生成人口。
+- **options**：读档会跳过 game_start 广播，所以按存档恢复。
 
 ## 依赖关系
 

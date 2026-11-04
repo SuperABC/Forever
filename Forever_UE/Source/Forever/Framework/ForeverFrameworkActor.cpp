@@ -7,6 +7,8 @@
 #include "society/society.h"
 #include "society/organization.h"
 #include "society/job.h"
+#include "society/settlement.h"
+#include "society/economy.h"
 #include "story/story.h"
 #include "story/change.h"
 #include "story/script.h"
@@ -24,6 +26,7 @@
 #include "common/error.h"
 #include "common/save.h"
 #include "map/map_save.h"
+#include "industry/industry_save.h"
 #include "populace/populace_save.h"
 #include "society/society_save.h"
 #include "traffic/traffic_save.h"
@@ -157,8 +160,7 @@ void AForeverFrameworkActor::BeginPlay()
 		playerController->InitializeOnce();
 	}
 
-	// 读档：各个域在各自的生成步骤里按存档恢复；较早的存档缺哪一段，那个域就照新开局
-	// 生成(见Core/common/save.md"版本号"一节的required)。mod集合已经在RequestLoad里按存档设好了。
+	// 读档：各个域在各自的生成步骤里按存档恢复（所有存档段都是必须的）。mod集合已经在RequestLoad里按存档设好了。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
 		UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor: loading %s - the world is restored from the save (sections missing from older saves are regenerated)."),
 			*load->path);
@@ -789,7 +791,23 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 			}, &postImplement);
 	}
 
+	if (industry && society) Economy::SyncIndustry(*society, *industry); // 倒闭企业的房间停业
 	if (industry) industry->Tick(*player->GetTime(), crossedDay, &postImplement);
+	if (industry && society && map && populace && crossedDay) {
+		// 每日经济驱动链：货款、服务买卖、房租、工资、补助，月初做月度分红，见Core/society/economy.md。
+		// 全系统资金总和必须始终为0。
+		std::vector<Room*> allRooms;
+		for (const auto& [name, building] : map->GetBuildings()) {
+			if (!building) continue;
+			for (Room* room : building->GetRooms()) allRooms.push_back(room);
+		}
+		Economy::Daily(*society, *industry, allRooms, populace->GetCitizens(), *player->GetTime(), &postImplement,
+			populace->GetCurrentYear());
+		if (society->GetLedger().Total() != 0) {
+			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: ledger total is %lld, expected 0."),
+				static_cast<int64>(society->GetLedger().Total()));
+		}
+	}
 	if (traffic) {
 		traffic->Tick(*player->GetTime(), crossedDay, &postImplement);
 
@@ -955,8 +973,7 @@ void AForeverFrameworkActor::EnsurePopulaceGenerated()
 	// populace->Init(accomodation, ...); map->Checkin(populace, ...);"同一个编排顺序，
 	// 详见Source/Core/populace/populace.md。假定map已经生成好，调用方(BeginPlay)负责保证
 	// EnsureMapGenerated()已经先跑过。
-	// 读档：按存档恢复市民(连同住处/房产归属)，不跑Init/Checkin。存档里没有人口段(P2阶段的存档)
-	// 或者恢复失败时退回新开局生成。
+	// 读档：按存档恢复市民(连同住处/房产归属)，不跑Init/Checkin。恢复失败时退回新开局生成。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
 		std::string error;
 		populace = PopulaceSaveCodec::Load(load->archive, *map, pendingJobExperienceOrganizations, error);
@@ -973,7 +990,7 @@ void AForeverFrameworkActor::EnsurePopulaceGenerated()
 	if (!populace) {
 		populace = new Populace();
 		int accommodation = map->ComputeAccommodationTarget();
-		populace->Init(accommodation);
+		populace->Init(accommodation, map->ComputeWorkCapacity());
 		map->Checkin(*populace);
 		// Init内部还会对accommodation做随机扰动、模拟结束后丢弃约5%，所以最终人数和它不会完全相等。
 		UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: populace generated, accommodation target %d, %d citizens."),
@@ -1022,6 +1039,11 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 	if (!bPopulaceRestored) {
 		society->GenerateEmploymentHistory(populace->GetCitizens(), populace->GetCurrentYear());
 	}
+
+	// 新开局：随机选成年市民当各组织的股东，再由城市外账户给每个市民和组织注资，
+	// 见Core/society/settlement.md。
+	society->AssignShareholders(populace->GetCitizens(), populace->GetCurrentYear());
+	Settlement::InitFunds(*society, populace->GetCitizens());
 }
 
 void AForeverFrameworkActor::EnsurePlayerGenerated()
@@ -1067,8 +1089,24 @@ void AForeverFrameworkActor::EnsureIndustryGenerated()
 {
 	if (industry) return;
 
-	// Industry这次还是空骨架，新增它纯粹是为了让PostImplement能拿到7个域的真实指针。
+	// 读档：Industry按地图重新生成仓库/工坊，再按存档放回库存、批发价和在制批次。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		std::string error;
+		industry = IndustrySaveCodec::Load(load->archive, *map, error);
+		if (industry) {
+			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: industry restored from the save."));
+			return;
+		}
+		if (!error.empty()) {
+			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: failed to restore industry (%s); generating it instead."), UTF8_TO_TCHAR(error.c_str()));
+		}
+	}
+
+	// 新开局：Industry按地图上的Room生成Storage/Manufacture(Room::StorageType()/ManufactureTypes())，
+	// 每个工坊的产出cache放半天产量。
 	industry = new Industry();
+	industry->Init(map->GetAllComponents());
+	industry->SeedInitialStock();
 }
 
 void AForeverFrameworkActor::EnsureTrafficGenerated()
@@ -1086,11 +1124,10 @@ void AForeverFrameworkActor::EnsureTrafficGenerated()
 	// ACitizenElement::BuildProximityBox的注释)。GenerateVehicles()真正的调用点挪到
 	// BeginPlay()里EnsureStoryGenerated()之后，见那边的调用。
 	// 读档：按存档恢复站点/线路/车辆；存档带脚本状态段时(会跳过game_start广播)连车辆的交互选项
-	// 一起恢复。存档里没有交通段时重新生成。
+	// 一起恢复。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
 		std::string error;
-		bool restoreOptions = load->archive.Find(SAVE_SECTION_SCRIPTS) != nullptr;
-		traffic = TrafficSaveCodec::Load(load->archive, *map, restoreOptions, error);
+		traffic = TrafficSaveCodec::Load(load->archive, *map, error);
 		if (traffic) {
 			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: traffic restored from the save (%d vehicles, %d stations, %d routes)."),
 				static_cast<int32>(traffic->GetVehicles().size()), static_cast<int32>(traffic->GetStations().size()),
@@ -1137,7 +1174,10 @@ void AForeverFrameworkActor::EnsureStoryGenerated()
 void AForeverFrameworkActor::RestoreControlledPawn(const FForeverPendingLoad& load)
 {
 	const SaveSection* section = load.archive.Find(SAVE_SECTION_UE);
-	if (!section) return;
+	if (!section) {
+		UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: the save has no ue section."));
+		return;
+	}
 	JsonValue root;
 	JsonReader reader;
 	std::string text(section->data.begin(), section->data.end());

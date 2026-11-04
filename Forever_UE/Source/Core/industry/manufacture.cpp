@@ -139,9 +139,32 @@ void Manufacture::ComputeRecipe() {
 
 	inputCache->SetCapacity(inputSize);
 	outputCache->SetCapacity(outputSize);
+
+	// 两个cache的物流权限：原料cache只能放(需求方)，按配方里每种原料占单日总量的比例设置精确
+	// product需求；产出cache只能取(供给方)。物流完全靠这两个cache驱动，见industry.md。
+	inputCache->SetAccess(false, true);
+	vector<pair<string, float>> demand;
+	if (inputSize > 0.f) {
+		vector<string> types;
+		for (const auto& [type, amount] : ingredients) types.push_back(type);
+		sort(types.begin(), types.end());
+		for (const string& type : types) demand.push_back({ type, ingredients.at(type) / inputSize });
+	}
+	inputCache->SetProductDemand(demand);
+	outputCache->SetAccess(true, false);
+}
+
+void Manufacture::SeedOutputCache() {
+	for (const auto& [target, activeN] : targets) {
+		Product* p = industry->FindProduct(target);
+		if (!p) continue;
+		float half = floor(activeN * p->GetBatchSize() / 2.f);
+		if (half > 0.f) outputCache->Input(target, half);
+	}
 }
 
 void Manufacture::WorkAccount() {
+	lastProduced.clear();
 	for (const auto& [target, batches] : pendingProduction) {
 		if (batches <= 0) continue;
 		auto targetIt = targets.find(target);
@@ -152,11 +175,13 @@ void Manufacture::WorkAccount() {
 
 		float actualRatio = static_cast<float>(batches) / static_cast<float>(targetIt->second);
 		outputCache->Input(target, batches * p->GetBatchSize());
+		lastProduced[target] += batches * p->GetBatchSize();
 
 		auto contribIt = byproductsByTarget.find(target);
 		if (contribIt != byproductsByTarget.end()) {
 			for (const auto& [bp, fullAmount] : contribIt->second) {
 				outputCache->Input(bp, fullAmount * actualRatio);
+				lastProduced[bp] += fullAmount * actualRatio;
 			}
 		}
 	}
@@ -164,7 +189,7 @@ void Manufacture::WorkAccount() {
 	pendingProduction.clear();
 }
 
-void Manufacture::StartProduce() {
+void Manufacture::StartProduce(float capacityRatio) {
 	if (targets.empty()) return;
 
 	// 原料限制：这一轮先按"所有原料里最紧张的那个比例"整体限制全部target——这是这次
@@ -176,7 +201,7 @@ void Manufacture::StartProduce() {
 	for (const auto& [ingredient, standard] : ingredients) {
 		if (standard <= 0.f) continue;
 		float have = inputCache->GetAmount(ingredient);
-		materialRatio = min(materialRatio, max(0.f, have / standard));
+		materialRatio = min(materialRatio, max(0.f, have / (standard * capacityRatio)));
 	}
 
 	float outputStandard = 0.f;
@@ -185,6 +210,7 @@ void Manufacture::StartProduce() {
 		if (p) outputStandard += activeN * p->GetBatchSize();
 	}
 	for (const auto& [type, amount] : byproducts) outputStandard += amount;
+	outputStandard *= capacityRatio;
 
 	float spaceRatio = 1.f;
 	if (outputStandard > 0.f) {
@@ -195,15 +221,15 @@ void Manufacture::StartProduce() {
 
 	pendingProduction.clear();
 	for (const auto& [target, activeN] : targets) {
-		int actualBatches = static_cast<int>(floor(activeN * overallRatio));
-		actualBatches = max(0, min(actualBatches, activeN));
+		int actualBatches = static_cast<int>(floor(activeN * capacityRatio * overallRatio));
+		actualBatches = max(0, actualBatches);
 		if (actualBatches > 0) pendingProduction[target] = actualBatches;
 	}
 
 	// 按overallRatio预扣inputCache里对应原料——为下一轮StartProduce()腾出准确的
 	// "当前存量"基准，不是等WorkAccount()结算时才扣。
 	for (const auto& [ingredient, standard] : ingredients) {
-		float consume = standard * overallRatio;
+		float consume = standard * capacityRatio * overallRatio;
 		if (consume > 0.f) inputCache->Output(ingredient, consume);
 	}
 }

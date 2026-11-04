@@ -20,3 +20,7 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 物流权限与需求
+- `canTake`/`canPut`：只能放=需求方（商店仓库、工坊原料cache），只能取=供给方（工坊产出cache），可取可放=独立仓库。
+- `serviceTypeDemand`（货物服务类型,比例）与`productDemand`（product id,比例）二选一，同时给出时Core只认`productDemand`；比例是占本仓库容量的比例[0,1]。仓库靠它自己驱动物流补货。

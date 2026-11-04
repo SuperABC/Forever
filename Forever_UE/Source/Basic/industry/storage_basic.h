@@ -67,3 +67,23 @@ private:
 	int id;
 	std::string name;
 };
+
+// 商店仓库(room_warehouse的storageType)：只能放不能取，需求是容量的100%留给food类货物，
+// 市民买走汉堡后空出的容量就是向上游补货的需求，见Core/industry/industry.md。
+class ShopStorage : public StorageMod {
+public:
+	ShopStorage();
+
+	static const char* GetId() { return "storage_shop"; }
+	virtual const char* GetType() const override { return "storage_shop"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};

@@ -19,3 +19,7 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 价格与服务字段
+- `retailPrice`/`importPrice`/`exportPrice`：int64、单位分，要求 零售价 > 进口价 > 出口价 > 0；`Core::Product`构造时校验，不满足则判无效。零售价是商店卖给市民的单价，进口价/出口价是与城市外交易的价格，城市内批发价由Core初始化为二者平均值（不是mod字段）。
+- `serviceType`/`serviceQuality`：市民可直接消费时的服务类型和质量；`serviceType`为空表示暂不开放市民直接购买（小麦/牛肉）。

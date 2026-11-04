@@ -3,6 +3,7 @@
 #include "society/organization.h"
 #include "society/job.h"
 #include "map/component.h"
+#include "map/room.h"
 #include "populace/citizen.h"
 #include "populace/experience.h"
 #include "common/registry.h"
@@ -39,15 +40,60 @@ Society::~Society() {
 	}
 }
 
+Party Society::OwnerOf(const Room* room) const {
+	if (roomOwnersDirty) {
+		roomOwners.clear();
+		for (Organization* organization : organizations) {
+			for (Component* component : organization->GetComponents()) {
+				if (!component) continue;
+				for (Room* owned : component->GetRooms()) roomOwners[owned] = organization;
+			}
+		}
+		roomOwnersDirty = false;
+	}
+	if (!room) return Party::Government();
+	auto it = roomOwners.find(room);
+	return it != roomOwners.end() ? Party::Of(it->second) : Party::Government();
+}
+
+void Society::AssignShareholders(const vector<Citizen*>& citizens, int currentYear) {
+	vector<Citizen*> adults;
+	for (Citizen* citizen : citizens) {
+		if (citizen && citizen->GetAge(currentYear) >= kMinAdultAge) adults.push_back(citizen);
+	}
+
+	for (Organization* organization : organizations) {
+		OrganizationMod* mod = organization->GetMod();
+		if (!mod || mod->shareholders.empty() || adults.empty()) continue;
+
+		float sum = 0.f;
+		for (float share : mod->shareholders) sum += share;
+		if (sum <= 0.f) continue;
+
+		// 不放回随机抽样：成年人不够时只选得出多少算多少。
+		vector<Citizen*> pool = adults;
+		vector<Organization::Shareholder> chosen;
+		for (float share : mod->shareholders) {
+			if (pool.empty()) break;
+			int index = GetRandom(static_cast<int>(pool.size()));
+			chosen.push_back({ pool[index], share / sum });
+			pool[index] = pool.back();
+			pool.pop_back();
+		}
+		// 人数不够时把剩余占股按比例重新归一化。
+		float chosenSum = 0.f;
+		for (const auto& s : chosen) chosenSum += s.ratio;
+		for (auto& s : chosen) s.ratio /= chosenSum;
+		organization->SetShareholders(chosen);
+	}
+}
+
 void Society::Init(const vector<Component*>& components) {
-	// 第一步：对每个已注册组织类型各构造一个临时mod实例查requirements，读完立刻销毁。
-	unordered_map<string, unordered_map<string, pair<int, int>>> requirementsByType;
+	roomOwnersDirty = true;
+	// 第一步：直接读各已注册组织类型的static组件需求(不构造mod实例)，只读引用。
+	unordered_map<string, const unordered_map<string, pair<int, int>>*> requirementsByType;
 	for (const string& id : organizationFactory.GetRegisteredIds()) {
-		OrganizationMod* temp = organizationFactory.CreateOrganization(id);
-		if (!temp) continue;
-		temp->ComponentRequirements();
-		requirementsByType[id] = temp->requirements;
-		organizationFactory.DestroyOrganization(temp);
+		requirementsByType[id] = &organizationFactory.GetRequirements(id);
 	}
 
 	// 按类型分组，池子会在下面的循环里被逐步摘取。
@@ -60,7 +106,8 @@ void Society::Init(const vector<Component*>& components) {
 		// 筛出每种要求的类型在componentsByType里剩余数量都>=min的候选类型。
 		vector<string> candidates;
 		vector<float> weights;
-		for (const auto& [id, requirements] : requirementsByType) {
+		for (const auto& [id, requirementsPtr] : requirementsByType) {
+			const auto& requirements = *requirementsPtr;
 			// 没有任何Component类型需求的组织类型(比如Forever_Mod/Empty里纯占位的
 			// EmptyOrganization)永远"满足"、永远不消耗任何Component，会让下面的循环死循环
 			// (每次都能成功分配、但componentsByType的剩余数量永不减少)——跳过这种类型，
@@ -98,7 +145,7 @@ void Society::Init(const vector<Component*>& components) {
 			}
 		}
 		const string& chosenId = candidates[chosenIdx];
-		const auto& requirements = requirementsByType[chosenId];
+		const auto& requirements = *requirementsByType[chosenId];
 
 		vector<Component*> claimed;
 		for (const auto& [type, range] : requirements) {
@@ -124,11 +171,12 @@ void Society::RecruitCitizens(const vector<Citizen*>& citizens, int currentYear)
 		}
 	}
 
+	// 只招成年人：未成年人和老年人（>=退休年龄）不工作。
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
-		if (citizen && !citizen->GetJob() && citizen->GetAge(currentYear) >= kMinAdultAge) {
-			adults.push_back(citizen);
-		}
+		if (!citizen || citizen->GetJob()) continue;
+		int age = citizen->GetAge(currentYear);
+		if (age >= kMinAdultAge && age < policy.retirementAge) adults.push_back(citizen);
 	}
 
 	// Fisher-Yates洗牌，用项目统一的GetRandom(n)（不引入std::shuffle额外的<random>引擎）。

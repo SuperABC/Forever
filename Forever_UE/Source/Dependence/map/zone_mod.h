@@ -89,6 +89,9 @@ public:
 	// 计数器保证实例名字唯一"的模式）——GetName()是普通的、无副作用的只读getter。
 	virtual const char* GetName() = 0;
 
+	// 这个Zone被政府(公有)拥有的概率[0,1]，Map::Checkin分配房产归属时读取。
+	float stateOwnedChance = 0.2f;
+
 	// 真正创建出Zone实例、SetPosition/SetBoundaryRoad都设好之后，Map::InitZones()会通过
 	// Zone::Layout()调用这一个虚方法一次，用来在这个真实例上填好walls/gates/vehicleEntries/
 	// vehicleExits/pedestrianAccess/internalRoads/internalBuildings——这几个字段本身不变，

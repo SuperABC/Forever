@@ -52,7 +52,7 @@
 | 层 | 位置 | 管什么 | 谁维护 |
 |---|---|---|---|
 | 文件格式版本 | 外层头 | 外壳布局：头字段、压缩方式、段表结构 | `SAVE_FILE_VERSION`/`SAVE_FILE_MIN_VERSION`（`Dependence/common/save_archive.h`） |
-| 段版本 | 段表里每段各带一个 | 该段的数据布局 | `GetSaveSectionVersions`（本文件），每段 `{名字, current, minimum, required}` |
+| 段版本 | 段表里每段各带一个 | 该段的数据布局 | `GetSaveSectionVersions`（本文件），每段 `{名字, current, minimum}` |
 | mod 状态版本 | manifest 里每个 (concept, id) 各一个，每份 mod 状态前面也带一个 | mod 自己 `SaveState` 写出的数据 | mod 自己的 `GetStateVersion()` |
 | 游戏版本字符串 | manifest | 只用于显示和排查，不参与判断 | `SAVE_GAME_VERSION`，发版时手动改 |
 
@@ -62,9 +62,7 @@
 - 游戏发布前，改了数据布局也**不升版本号、不写迁移**，旧存档失效也没关系，测试时重新存档即可；除非另有说明。发布之后才按"改了布局就升 current 并补迁移"执行。
 - mod 层不由 Core 迁移：`StateReader::GetSavedVersion()` 交给 mod，由 mod 自己在 `LoadState` 里判断旧数据怎么读。
 
-`required` 字段：
-- `required=true` 的段缺失时，`ValidateArchive` 直接拒绝。比如只有 manifest 的 P0 旧存档。
-- 人口、社会、交通、脚本状态、玩家、ue 段是 `required=false`：较早阶段的存档没有这些段，读档时对应的域重新生成，没有脚本状态段时 game_start 照常广播。新存档里所有段都有，不会走到这条路。
+所有段都必须存在：`ValidateArchive` 发现缺任何一段直接拒绝，各域 `Load` 遇到缺段也按错误返回（给出 `error`），没有"缺段就重新生成/跳过"的兼容路径。
 
 ## 不存的内容
 

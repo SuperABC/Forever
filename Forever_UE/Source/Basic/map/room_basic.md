@@ -2,7 +2,7 @@
 
 ## 职责
 
-`ResidenceRoom`/`ShopRoom`/`WarehouseRoom`/`ParkingRoom`/`FactoryRoom`是Room域五个默认
+`ResidenceRoom`/`ShopRoom`/`WarehouseRoom`/`ParkingRoom`/`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`是Room域的默认
 实现，合在同一份`room_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按
 业务场景拆文件)。
 
@@ -19,7 +19,8 @@
   门(`doorSpecs["room"]`)有名字"商店大门"、挂`door_shop_entrance`脚本(开局加"敲门"选项)，靠近会弹交互
   选项。挂在房间门上而不是`ShopBuilding::doorSpecs["entrance"]`，是因为商店用的一楼模板
   (`preset_lobby_linear_fg+`/`preset_circle_double_fg+-`)里门标签全是`room`，没有`entrance`。
-- `WarehouseRoom`：`isStorage=true; storageConfig={{"shop",100.f}};`。只有`ShopBuilding`
+- `FarmRoom`/`RanchRoom`/`FoodFactoryRoom`（`room_farm`/`room_ranch`/`room_food_factory`）：`isManufacture=true`，`manufactureTypes`是`manufacture_farm`/`manufacture_ranch`/`manufacture_food_factory`，工位20、房租20元。`FactoryBuilding`等概率随机选一种。
+- `WarehouseRoom`：`isStorage=true; storageType="storage_shop"; isWorkspace=true; workspaceCapacity=2; rent=2000;`。只有`ShopBuilding`
   用到(地下室+每层过道铺unused acreage)。
 
 ## ParkingRoom
@@ -27,12 +28,6 @@
 `isParking=true; parkingSpots={{{0.5f,0.f,0.5f,0.f},0.f,{"car","bus"}}};`——房间正中心一个车位，朝向跟
 房间一致，供`Traffic::Init()`在这里生成预置车辆，见`Source/Core/traffic/traffic.md`。
 `ShopBuilding`和`FactoryBuilding`(见`building_basic.md`)共用同一个`ParkingRoom`类。
-
-## FactoryRoom
-
-`isManufacture=true; manufactureTypes={"experience"};`。`"experience"`这个生产类型对应的
-`ExperienceManufacture`/`ExperienceProduct`属于Industry域，目前不接入，`manufactureTypes`
-这个占位字段先带上真实字符串，目前没有任何调用方读取它。
 
 ## 依赖关系
 

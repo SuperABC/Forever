@@ -213,8 +213,11 @@ public:
 	// (AForeverFrameworkActor::EnsurePopulaceGenerated())传给Populace::Init()。假定
 	// InitBuildings()已经跑完。
 	int ComputeAccommodationTarget() const;
+	// 全部工位房间(IsWorkspace)的WorkspaceCapacity之和，不参与人口随机采样，Populace::Init在采样之后用它
+	// 给人数封顶，避免劳动力远多于岗位导致大面积失业。
+	int ComputeWorkCapacity() const;
 
-	// 两个独立步骤："房产归属"(owner/stated)和"住处分配"(tenants/occupants)。住处分配
+	// 两个独立步骤："房产归属"(owner/stated)和"住处分配"(households/occupants)。住处分配
 	// 遍历所有building的所有room，IsResidential()的每个room贡献1个名额(不按
 	// ResidentialCapacity()重复贡献——那个capacity只用来算ComputeAccommodationTarget()的
 	// 城市级目标，不在这一步重复消费)。按"一个家庭消费一个room名额"分配：只有成年citizen

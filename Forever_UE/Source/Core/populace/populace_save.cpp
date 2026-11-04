@@ -5,6 +5,8 @@
 #include "populace/experience.h"
 #include "populace/scheduler.h"
 #include "populace/school.h"
+#include "populace/household.h"
+#include "map/room.h"
 #include "populace/name.h"
 #include "society/society.h"
 
@@ -202,7 +204,7 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 	writeTimers(populace.jobTimerSet);
 	writeTimers(populace.schedulerTimerSet);
 
-	// 市民和地图之间的归属(地图段只存了stated，owner/tenants/occupants指向市民，放在人口段)。
+	// 市民和地图之间的归属(地图段只存了stated，owner/households/occupants指向市民，放在人口段)。
 	vector<string> zoneNames;
 	for (auto& [zoneName, zone] : map.GetZones()) zoneNames.push_back(zoneName);
 	sort(zoneNames.begin(), zoneNames.end());
@@ -223,8 +225,11 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		w.U32(static_cast<uint32_t>(rooms.size()));
 		for (const Room* room : rooms) {
 			w.I32(citizenRef(room->GetOwner()));
-			w.U32(static_cast<uint32_t>(room->GetTenants().size()));
-			for (const Citizen* tenant : room->GetTenants()) w.I32(citizenRef(tenant));
+			w.U32(static_cast<uint32_t>(room->GetHouseholds().size()));
+			for (const Household* household : room->GetHouseholds()) {
+				w.U32(static_cast<uint32_t>(household->GetMembers().size()));
+				for (const Citizen* member : household->GetMembers()) w.I32(citizenRef(member));
+			}
 			w.U32(static_cast<uint32_t>(room->GetOccupants().size()));
 			for (const Citizen* occupant : room->GetOccupants()) w.I32(citizenRef(occupant));
 		}
@@ -237,11 +242,13 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 	vector<pair<JobExperience*, int>>& outPendingOrganizations, string& error) {
 	outPendingOrganizations.clear();
 	const SaveSection* section = archive.Find(SAVE_SECTION_POPULACE);
-	if (!section) return nullptr;
+	if (!section) {
+		error = "the save has no section '" SAVE_SECTION_POPULACE "'";
+		return nullptr;
+	}
 
 	try {
 		ByteReader r(section->data);
-		bool restoreOptions = archive.Find(SAVE_SECTION_SCRIPTS) != nullptr;
 		Populace* populace = new Populace();
 		populace->currentYear = r.I32();
 
@@ -291,10 +298,9 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			c->health = r.F32();
 			c->maxHealth = r.F32();
 			c->isDead = r.U8() != 0;
-			// options(剧情脚本加的交互选项)：存档带脚本状态段时读档会跳过game_start广播，按存档恢复；
-			// 没有(P4及更早的存档)时game_start会重新加一遍，这里不恢复，避免重复。
+			// options(剧情脚本加的交互选项)：读档跳过game_start广播，按存档恢复。
 			vector<string> options = ReadStrings(r);
-			if (restoreOptions) c->options = options;
+			c->options = options;
 			if (r.U8() != 0) {
 				string schedulerId = r.Str();
 				c->scheduler = new Scheduler(&populace->schedulerFactory, &populace->scriptFactory, schedulerId, c);
@@ -395,10 +401,17 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 				Room* room = (building && k < building->GetRooms().size()) ? building->GetRooms()[k] : nullptr;
 				Citizen* roomOwner = citizenAt(r.I32());
 				if (room) room->SetOwner(roomOwner);
-				uint32_t tenants = r.U32();
-				for (uint32_t m = 0; m < tenants && !r.Failed(); m++) {
-					Citizen* tenant = citizenAt(r.I32());
-					if (room && tenant) room->AddTenant(tenant);
+				uint32_t households = r.U32();
+				for (uint32_t m = 0; m < households && !r.Failed(); m++) {
+					Household* household = room ? room->AddHousehold() : nullptr;
+					uint32_t members = r.U32();
+					for (uint32_t n = 0; n < members && !r.Failed(); n++) {
+						Citizen* member = citizenAt(r.I32());
+						if (household && member) {
+							household->AddMember(member);
+							member->SetHousehold(household);
+						}
+					}
 				}
 				uint32_t occupants = r.U32();
 				for (uint32_t m = 0; m < occupants && !r.Failed(); m++) {

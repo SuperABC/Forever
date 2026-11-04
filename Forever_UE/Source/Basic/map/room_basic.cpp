@@ -15,6 +15,7 @@ const char* ResidenceRoom::GetName() {
 void ResidenceRoom::SetProperty() {
 	isResidential = true;
 	residentialCapacity = 1;
+	rent = 2000; // 每日房租20元
 	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
 	milestoneNames = { "entity_event" };
 
@@ -39,7 +40,8 @@ const char* ShopRoom::GetName() {
 
 void ShopRoom::SetProperty() {
 	isWorkspace = true;
-	workspaceCapacity = 100;
+	workspaceCapacity = 10;
+	rent = 2000;
 
 	doorSpecs["room"].mesh = "/Game/Asset/Meshes/Cube.Cube";
 	doorSpecs["room"].style = 1; // Swing
@@ -65,7 +67,11 @@ const char* WarehouseRoom::GetName() {
 
 void WarehouseRoom::SetProperty() {
 	isStorage = true;
-	storageConfig = { {"shop", 100.f} };
+	storageType = "storage_shop";
+	// 仓库也有管理员：容纳量2，Organization按容纳量一半定员。
+	isWorkspace = true;
+	workspaceCapacity = 2;
+	rent = 2000;
 }
 
 int ParkingRoom::count = 0;
@@ -83,21 +89,6 @@ void ParkingRoom::SetProperty() {
 	// 房间正中心一个车位，朝向跟房间一致；种类里的"bus"对应原先InitParkedVehicles里"一半概率换成
 	// 可驾驶公交"的临时测试逻辑(现在是数据)，不想要公交就从这里删掉"bus"。
 	parkingSpots = { { {0.5f, 0.f, 0.5f, 0.f}, 0.f, { "car", "bus", "truck" } } };
-}
-
-int FactoryRoom::count = 0;
-
-FactoryRoom::FactoryRoom() : id(count++) {
-}
-
-const char* FactoryRoom::GetName() {
-	name = "FactoryRoom" + to_string(id);
-	return name.data();
-}
-
-void FactoryRoom::SetProperty() {
-	isManufacture = true;
-	manufactureTypes = { "experience" };
 }
 
 int TrainStationRoom::count = 0;
@@ -134,4 +125,58 @@ void AirportRoom::SetProperty() {
 		{ {kLeftAlong, -kExtraOffset, 0.5f, 0.f}, 180.f, { "plane" } },
 		{ {kRightAlong, kExtraOffset, 0.5f, 0.f}, 180.f, { "plane" } },
 	};
+}
+
+int FarmRoom::count = 0;
+
+FarmRoom::FarmRoom() : id(count++) {
+}
+
+const char* FarmRoom::GetName() {
+	name = "FarmRoom" + to_string(id);
+	return name.data();
+}
+
+void FarmRoom::SetProperty() {
+	isManufacture = true;
+	manufactureTypes = { "manufacture_farm" };
+	isWorkspace = true;
+	workspaceCapacity = 20;
+	rent = 2000;
+}
+
+int RanchRoom::count = 0;
+
+RanchRoom::RanchRoom() : id(count++) {
+}
+
+const char* RanchRoom::GetName() {
+	name = "RanchRoom" + to_string(id);
+	return name.data();
+}
+
+void RanchRoom::SetProperty() {
+	isManufacture = true;
+	manufactureTypes = { "manufacture_ranch" };
+	isWorkspace = true;
+	workspaceCapacity = 20;
+	rent = 2000;
+}
+
+int FoodFactoryRoom::count = 0;
+
+FoodFactoryRoom::FoodFactoryRoom() : id(count++) {
+}
+
+const char* FoodFactoryRoom::GetName() {
+	name = "FoodFactoryRoom" + to_string(id);
+	return name.data();
+}
+
+void FoodFactoryRoom::SetProperty() {
+	isManufacture = true;
+	manufactureTypes = { "manufacture_food_factory" };
+	isWorkspace = true;
+	workspaceCapacity = 20;
+	rent = 2000;
 }

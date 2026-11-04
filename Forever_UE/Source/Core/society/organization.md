@@ -6,7 +6,7 @@
 `OrganizationMod*`（`Dependence/society/organization_mod.h`定义，具体类型如
 `ShopOrganization`）+一份自己的`Script*`（构造方式和`Job::Job()`同一套机制，见下
 "Script配置"一节），可以占多个`Component`（也可以要多种不同类型的`Component`，
-具体由`mod->requirements`决定）。构造时**自己**遍历claimed components的每个
+具体由mod的static `GetRequirements()`决定）。构造时**自己**遍历claimed components的每个
 workspace room、调`mod->DesignJobsForRoom(...)`拿到要配的job类型字符串列表，
 逐条`new Job(...)`——`Job`的分配/释放全程在Core侧（`OrganizationMod`所在的
 `Dependence`层看不到`Job`这个Core类型，见下"分层约束"）。
@@ -22,7 +22,7 @@ workspace room、调`mod->DesignJobsForRoom(...)`拿到要配的job类型字符�
 字符串/int/`Time`/`Change*`表达"要什么""配什么"：
 
 ```cpp
-virtual void ComponentRequirements() = 0; // 写进this->requirements
+static const unordered_map<string, pair<int,int>>& GetRequirements(); // 注册时交给工厂，不是实例方法
 virtual void DesignJobsForRoom(const std::string& componentType, const std::string& componentName,
 	const std::string& roomType, const std::string& roomName, int workspaceCapacity) = 0; // 写进this->vacancies
 ```
@@ -44,8 +44,8 @@ RecruitCitizens`正常招进去占用一个citizen名额的"哑"`Job`。所以�
 
 ### 跨DLL数据传递约束
 
-同`job.md`的原则：`OrganizationMod::requirements`/`vacancies`/`plans`/
-`changes`都是mod自己的成员字段，`ComponentRequirements`/`DesignJobsForRoom`/
+同`job.md`的原则：`OrganizationMod::vacancies`/`plans`/
+`changes`都是mod自己的成员字段，`DesignJobsForRoom`/
 `DailyPlan`/`ExecNode`是mod自己重写的虚方法直接写自己的成员字段；
 `Organization`只读，不`delete``mod->changes`里的指针（见`ExecNode`）。`Job*`
 对象则完全不存在这个问题——它们从头到尾就是`Organization`（Core）自己
@@ -55,15 +55,12 @@ RecruitCitizens`正常招进去占用一个citizen名额的"哑"`Job`。所以�
 ### 组织分配算法（`Society::Init`）
 
 ```
-// 第一步：对每个已注册组织类型各构造一个临时mod实例查requirements，读完立刻销毁——
+// 第一步：直接读各已注册组织类型的static GetRequirements()，不构造mod实例——
 // 这里直接操作organizationFactory，不经过Organization这层Core包装(包装类构造函数会
 // 立刻尝试从components设计Job，这一步还没有分配到任何component，不适用)。
 requirementsByType: map<组织类型id, unordered_map<Component类型, pair<min,max>>>
 for id in organizationFactory.GetRegisteredIds():
-    temp = organizationFactory.CreateOrganization(id)
-    temp->ComponentRequirements()
-    requirementsByType[id] = temp->requirements
-    organizationFactory.DestroyOrganization(temp)
+    requirementsByType[id] = &factory.GetRequirements(id)
 
 componentsByType = 按GetType()把所有传入的Component*分组
 
@@ -86,9 +83,9 @@ loop:
 用来测试"一个组织随机占1~2个`component_shop`"：
 
 ```cpp
-void ShopOrganization::ComponentRequirements() {
-	requirements.clear();
-	requirements["component_shop"] = { 1, 2 };
+const unordered_map<string, pair<int, int>>& ShopOrganization::GetRequirements() {
+	static const unordered_map<string, pair<int, int>> requirements = { { "component_shop", { 1, 2 } } };
+	return requirements;
 }
 
 void ShopOrganization::DesignJobsForRoom(const std::string& componentType, const std::string&,

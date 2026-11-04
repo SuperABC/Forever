@@ -5,6 +5,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 
@@ -13,6 +14,7 @@
 // "全城统一调配"负责(见industry.md)，Storage只是被动地被Input()/Output()读写，见
 // storage.md。
 class Storage {
+	friend class IndustrySaveCodec;
 public:
 	// 走mod系统创建的普通仓库——id需要在config.json的"storage_mods"里启用。
 	Storage(StorageFactory* factory, const std::string& id, const std::string& name);
@@ -43,6 +45,16 @@ public:
 	// 按当前存量截断，返回实际吐出的量(可能小于期望值)。
 	float Output(const std::string& type, float amount);
 
+	// 物流取放权限与补货需求说明，见storage_mod.h。直接构造的cache由Manufacture自己设置。
+	bool CanTake() const { return canTake; }
+	bool CanPut() const { return canPut; }
+	void SetAccess(bool take, bool put) { canTake = take; canPut = put; }
+	float GetCapacity() const { return capacity; }
+	const std::unordered_map<std::string, float>& GetStock() const { return stock; }
+	const std::vector<std::pair<std::string, float>>& GetServiceTypeDemand() const { return serviceTypeDemand; }
+	const std::vector<std::pair<std::string, float>>& GetProductDemand() const { return productDemand; }
+	void SetProductDemand(const std::vector<std::pair<std::string, float>>& demand) { productDemand = demand; serviceTypeDemand.clear(); }
+
 private:
 	StorageFactory* factory = nullptr;
 	StorageMod* mod = nullptr;
@@ -52,4 +64,9 @@ private:
 	std::vector<std::string> categories;
 	float capacity = 0.f;
 	std::unordered_map<std::string, float> stock;
+
+	bool canTake = true;
+	bool canPut = true;
+	std::vector<std::pair<std::string, float>> serviceTypeDemand;
+	std::vector<std::pair<std::string, float>> productDemand;
 };

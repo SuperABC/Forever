@@ -38,13 +38,13 @@ void ShopSalerJob::SetProperty() {
 	milestoneNames = { "job_shop_saler" };
 }
 
-void ShopSalerJob::DailyPlan(const Time& currentTime, PostHandle*) {
+void CommuteJob::DailyPlan(const Time& currentTime, PostHandle*) {
 	plans.clear();
 	plans["leave_home"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 9, 0);
 	plans["leave_work"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 12, 0);
 }
 
-void ShopSalerJob::ExecNode(const string& node, PostHandle* post) {
+void CommuteJob::ExecNode(const string& node, PostHandle* post) {
 	for (Change* change : changes) delete change;
 	changes.clear();
 
@@ -58,4 +58,24 @@ void ShopSalerJob::ExecNode(const string& node, PostHandle* post) {
 		if (homeAddress.empty()) return;
 		changes.push_back(new NPCNavigateChange(occupantName, homeAddress));
 	}
+}
+
+int WarehouseKeeperJob::count = 0;
+
+WarehouseKeeperJob::WarehouseKeeperJob() : id(count++) {
+}
+
+const char* WarehouseKeeperJob::GetName() {
+	name = "WarehouseKeeperJob" + to_string(id);
+	return name.data();
+}
+
+int FactoryWorkerJob::count = 0;
+
+FactoryWorkerJob::FactoryWorkerJob() : id(count++) {
+}
+
+const char* FactoryWorkerJob::GetName() {
+	name = "FactoryWorkerJob" + to_string(id);
+	return name.data();
 }

@@ -115,3 +115,20 @@ Change子类是Society域自己认识、需要处理的，空实现，返回fals
 - 被谁依赖：`Core/common/implement.h`（`PostImplement`构造函数）、
   `Source/Forever/Framework/ForeverFrameworkActor.h/.cpp`（持有+`Tick`驱动，
   `ApplyChange`转发）。
+
+## 股东与岗位（Step 4）
+- `AssignShareholders`：新开局为每个组织选股东——mod的`shareholders`占股比例归一化，随机选对应数量个**不同的**
+  成年市民；成年人不够时有多少选多少并重新归一化。股东名单和占股随社会段存档。
+- 岗位按房间容纳量的一半定员：商店房间10→5个店员，仓库房间2→1个管理员，工坊房间20→10个工人。
+
+## 倒闭（Step 6）
+企业资金为负即倒闭，员工不离职但停发工资；股东凑齐资金后重启，规则见`economy.md`。`Organization`的倒闭标记和重启后更新的股东名单随社会段存档。
+
+## 资金（Step 3）
+- `Society`持有一个`Ledger`（`ledger.h`，全城账户，总和恒为0）和一份`GovernmentPolicy`（`policy.h`）。
+- `OwnerOf(room)`：房间所在Component被哪个组织claim，就归哪个组织；没有组织占用的房间归政府。结算货款时用它把
+  Industry流水里的仓库/工坊对应到付款方，索引按`organizations`惰性重建。
+- 开局注资和货款结算见`settlement.md`。账本余额写进社会段（市民/组织按下标引用）。
+
+## 招聘
+`RecruitCitizens`只招成年人（18岁以上、未到退休年龄60岁）：未成年人和老年人不工作。

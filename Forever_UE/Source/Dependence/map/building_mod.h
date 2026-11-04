@@ -89,6 +89,9 @@ public:
 	// 无副作用的只读getter，不需要在调用时才计算。
 	virtual const char* GetName() = 0;
 
+	// 这栋Building被政府(公有)拥有的概率[0,1]，Map::Checkin分配房产归属时读取。
+	float stateOwnedChance = 0.2f;
+
 	// 真正创建出Building实例、SetPosition/SetBoundaryRoad都设好之后，Map::InitZones()/
 	// InitBuildings()会通过Building::Layout()调用这一个虚方法一次，用来在这个真实例上填好
 	// footprint/basements/layers/floorHeights/lodMaterial，以及调AssignFloor/AssignRoom/

@@ -3,8 +3,9 @@
 
 using namespace std;
 
-void OrganizationFactory::RegisterOrganization(const string& id, CreateFunc creator, DestroyFunc deleter, PowerFunc power) {
-	registries[id] = { creator, deleter, power };
+void OrganizationFactory::RegisterOrganization(const string& id, CreateFunc creator, DestroyFunc deleter, PowerFunc power,
+	RequirementsFunc requirements) {
+	registries[id] = { creator, deleter, power, requirements };
 }
 
 OrganizationMod* OrganizationFactory::CreateOrganization(const string& id) {
@@ -61,6 +62,13 @@ bool OrganizationFactory::IsEnabled(const string& id) const {
 float OrganizationFactory::GetPower(const string& id) const {
 	auto it = registries.find(id);
 	return IsEnabled(id) ? it->second.power() : 0.f;
+}
+
+const unordered_map<string, pair<int, int>>& OrganizationFactory::GetRequirements(const string& id) const {
+	static const unordered_map<string, pair<int, int>> empty;
+	auto it = registries.find(id);
+	if (!IsEnabled(id) || !it->second.requirements) return empty;
+	return it->second.requirements();
 }
 
 vector<pair<string, OrganizationMod*>> OrganizationFactory::GetLiveInstances() const {

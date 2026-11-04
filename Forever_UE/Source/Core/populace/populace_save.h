@@ -16,7 +16,7 @@ class JobExperience;
 
 // 人口域的存档读写：市民(姓名/性别/生日/性格/人际关系/经历/住处/当前所在房间/位置/生命值/
 // Scheduler)、班级、Job/Scheduler两套定时器、取名器的占位名，以及市民和地图之间的归属关系
-// (Zone/Building/Room的owner、Room的tenants/occupants)。和地图段一样存生成结果本身，读档时
+// (Zone/Building/Room的owner、Room的households/occupants)。和地图段一样存生成结果本身，读档时
 // 不跑任何生成。详见populace_save.md。
 class PopulaceSaveCodec {
 public:

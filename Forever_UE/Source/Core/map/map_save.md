@@ -62,7 +62,7 @@
 - **门**：
   - 读档时用原来的 `Door` 构造函数重建，`flippedSide` 按存档值传入，所以会和新开局一样按 spec 创建 Script。
   - 恢复 `access` 和按人登记的门禁例外 `registrations`。
-  - `options`（剧情脚本加的交互选项）：存档带脚本状态段（`world.scripts`）时读档会跳过 game_start 广播，这时按存档恢复；没有这一段的旧存档不恢复，因为 game_start 会再加一遍。
+  - `options`（剧情脚本加的交互选项）：读档会跳过 game_start 广播，所以按存档恢复。
   - Script 自身的状态由 `story/script_save` 恢复（键 `door:<门id>`）。
 - **`Node::count`**。读档时每构造一个 Node 都会让计数器多加一，所以最后精确设回存档值。新开局之后新建的 Node 会从存档时的编号继续往后编，再存一次档时这个字段也和原存档一致。mod DLL 里各自的那份 `Node::count` 不受影响：读档不会再跑 roadnet mod。
 - **布局模板不再需要**。Floor 的全部内容（楼梯、走廊、房间格子……）原样写进存档，读档不重新读 `.layout` 文件。manifest 里的 layouts 列表和读档前的资源检查保留，名字来自 `Building::GetFloorSpecs` 快照。

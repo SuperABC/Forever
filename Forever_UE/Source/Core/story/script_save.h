@@ -24,7 +24,7 @@ class ScriptSaveCodec {
 public:
 	static void Save(const SaveWorld& world, SaveArchive& archive);
 
-	// 存档里没有这一段时返回false、error为空(调用方照新开局广播game_start)。
+	// 缺脚本状态段或段损坏时返回false并给出原因(error)。
 	static bool Load(const SaveArchive& archive, Map* map, Populace* populace, Society* society,
 		Traffic* traffic, Story* story, std::string& error, Player* player = nullptr);
 

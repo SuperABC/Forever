@@ -3,6 +3,7 @@
 #include "industry/product_mod.h"
 #include "industry/product_factory.h"
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -26,6 +27,14 @@ public:
 	const std::unordered_map<std::string, float>& GetIngredients() const; // 每批需要的原料
 	const std::unordered_map<std::string, float>& GetByproducts() const;  // 每批产生的副产品
 
+	int64_t GetRetailPrice() const;  // 分
+	int64_t GetImportPrice() const;
+	int64_t GetExportPrice() const;
+	int64_t GetWholesalePrice() const; // 城市内批发价，初始=(进口价+出口价)/2，后续由市场调控
+	void SetWholesalePrice(int64_t price);
+	const std::string& GetServiceType() const; // 空=暂不开放市民直接购买
+	float GetServiceQuality() const;
+
 private:
 	ProductFactory* factory;
 	ProductMod* mod;
@@ -35,4 +44,11 @@ private:
 	float batchSize;
 	std::unordered_map<std::string, float> ingredients;
 	std::unordered_map<std::string, float> byproducts;
+
+	int64_t retailPrice = 0;
+	int64_t importPrice = 0;
+	int64_t exportPrice = 0;
+	int64_t wholesalePrice = 0;
+	std::string serviceType;
+	float serviceQuality = 0.f;
 };

@@ -7,6 +7,7 @@
 #include "map/map_save.h"
 #include "populace/populace_save.h"
 #include "society/society_save.h"
+#include "industry/industry_save.h"
 #include "traffic/traffic_save.h"
 #include "story/script_save.h"
 #include "player/player_save.h"
@@ -28,15 +29,13 @@ const vector<SaveSectionVersion>& GetSaveSectionVersions() {
 		{ SAVE_SECTION_MAP_STRUCTURES, 1, 1 },
 		{ SAVE_SECTION_MAP_VEGETATION, 1, 1 },
 		{ SAVE_SECTION_MAP_LAMPS, 1, 1 },
-		// 人口/社会段可以缺省：没有时(P2阶段的存档)这两个域在恢复出来的地图上重新生成。
-		{ SAVE_SECTION_POPULACE, 1, 1, false },
-		{ SAVE_SECTION_SOCIETY, 1, 1, false },
-		// 交通/脚本状态/UE侧状态同理(P4及更早的存档没有)：交通没有时重新生成；脚本状态没有时
-		// 照新开局广播game_start；UE段没有时由game_start决定玩家操控谁。
-		{ SAVE_SECTION_TRAFFIC, 1, 1, false },
-		{ SAVE_SECTION_SCRIPTS, 1, 1, false },
-		{ SAVE_SECTION_UE, 1, 1, false },
-		{ SAVE_SECTION_PLAYER, 1, 1, false },
+		{ SAVE_SECTION_POPULACE, 1, 1 },
+		{ SAVE_SECTION_SOCIETY, 1, 1 },
+		{ SAVE_SECTION_TRAFFIC, 1, 1 },
+		{ SAVE_SECTION_SCRIPTS, 1, 1 },
+		{ SAVE_SECTION_UE, 1, 1 },
+		{ SAVE_SECTION_PLAYER, 1, 1 },
+		{ SAVE_SECTION_INDUSTRY, 1, 1 },
 	};
 	return versions;
 }
@@ -441,6 +440,7 @@ SaveArchive SaveGame::BuildArchive(const SaveWorld& world) {
 			PopulaceSaveCodec::Save(*world.populace, *world.map, world.society, archive);
 			if (world.society) SocietySaveCodec::Save(*world.society, *world.map, *world.populace, archive);
 		}
+		if (world.industry) IndustrySaveCodec::Save(*world.industry, archive);
 		if (world.traffic) TrafficSaveCodec::Save(*world.traffic, *world.map, archive);
 		ScriptSaveCodec::Save(world, archive);
 		if (world.player) PlayerSaveCodec::Save(*world.player, *world.map, archive);
@@ -471,8 +471,8 @@ vector<string> SaveGame::ValidateArchive(const SaveArchive& archive, SaveManifes
 	}
 
 	for (const SaveSectionVersion& v : GetSaveSectionVersions()) {
-		if (v.required && !archive.Find(v.name)) {
-			errors.push_back(string("save has no section '") + v.name + "' (save is from an older version?)");
+		if (!archive.Find(v.name)) {
+			errors.push_back(string("save has no section '") + v.name + "'");
 		}
 	}
 	const SaveSection* manifestSection = archive.Find(SAVE_SECTION_MANIFEST);

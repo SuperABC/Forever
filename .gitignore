@@ -103,3 +103,6 @@ Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/progress_*.txt
 Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/__pycache__/
 Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pvp/*
 !Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pvp/latest.pt
+
+# EconSim模拟报告(运行产物,不进git)
+Forever_UE/Tools/EconSim/reports/

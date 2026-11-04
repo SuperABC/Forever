@@ -11,6 +11,10 @@
 - `SetProperty()`设`scriptModName="script_empty"`+`milestoneNames={"job_shop_saler"}`，让`Job`据此创建一个挂了`Resource/Story/job_shop_saler.script`的`Script`。
 - `GetName()`必须全局唯一。
 
+## 岗位（Step 4）
+`CommuteJob`是通勤岗位基类（9:00出门去工位、12:00回家），`ShopSalerJob`（店员，有剧情脚本）、
+`WarehouseKeeperJob`（仓库管理员）、`FactoryWorkerJob`（工坊工人）继承它，后两者没有剧情脚本。
+
 ## 依赖关系
 
 - 依赖：`society/job_mod.h`、`story/change.h`(`NPCNavigateChange`)。

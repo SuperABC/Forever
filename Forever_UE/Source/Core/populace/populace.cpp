@@ -287,9 +287,10 @@ Populace::~Populace() {
 	delete name;
 }
 
-void Populace::Init(int accommodation) {
+void Populace::Init(int accommodation, int workCapacity) {
 	InitNames();
 	int target = static_cast<int>(accommodation * expf(GetRandom(1000) / 1000.0f - 0.5f));
+	target = min(target, workCapacity); // 工位总容量只封顶，不参与上面的随机采样
 	GenerateCitizens(target);
 	AssignSchedulers();
 	GenerateRomanticRelations();

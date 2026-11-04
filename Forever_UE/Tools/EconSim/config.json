@@ -1,0 +1,48 @@
+{
+   "building_mods" : [
+      "building_residence",
+      "building_factory",
+      "building_park",
+      "building_shop"
+   ],
+   "component_mods" : [
+      "component_residence",
+      "component_shop",
+      "component_factory",
+      "component_empty --test true"
+   ],
+   "dll_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
+   ],
+   "job_mods" : [ "job_shop_saler", "job_warehouse_keeper", "job_factory_worker", "job_empty --test true" ],
+   "main_story" : "script_empty",
+   "manufacture_mods" : [
+      "manufacture_farm",
+      "manufacture_ranch",
+      "manufacture_food_factory"
+   ],
+   "name_mods" : [ "name_chinese" ],
+   "organization_mods" : [ "organization_shop", "organization_factory" ],
+   "product_mods" : [ "product_wheat", "product_beef", "product_burger" ],
+   "resource_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"
+   ],
+   "roadnet_mods" : [ "roadnet_jing" ],
+   "room_mods" : [
+      "room_residence",
+      "room_shop",
+      "room_warehouse",
+      "room_parking",
+      "room_farm",
+      "room_ranch",
+      "room_food_factory",
+      "room_empty --test true"
+   ],
+   "scheduler_mods" : [ "scheduler_basic", "scheduler_empty --test true" ],
+   "script_mods" : [ "script_basic", "script_empty --test true" ],
+   "storage_mods" : [ "storage_wheat", "storage_beef", "storage_burger", "storage_shop" ],
+   "terrain_mods" : [ "terrain_river", "terrain_ocean", "terrain_mountain" ],
+   "zone_mods" : [ "zone_residence" ]
+}

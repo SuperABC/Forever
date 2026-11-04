@@ -138,10 +138,10 @@ void Populace::InitNames() {
   `occupants`）没有必然关系。`Map::Checkin()`先跑完整的zone→building→room归属
   级联，再跑完全独立的住处分配循环，两者互不干扰。
 - **"公有"（`stated`）结果真正随机可达**：触发条件是`zone->GetStated()`/
-  `building->GetStated()`，用两个小概率（`kZoneStatedChance=2`、
-  `kBuildingStatedChance=3`，满分`kProbabilityScale=100`）让"公有"分支真的能被
-  随机命中（整体统一归属按公有/私有/下探到下一级三选一）——这两个具体数值是这个
-  工程自己定的，按需可以调整。
+  `building->GetStated()`，读各自mod的`stateOwnedChance`
+  （`ZoneMod`/`BuildingMod`，小数[0,1]，Zone和Building目前都是0.2），换成百分数后与私有概率
+  （满分`kProbabilityScale=100`）一起让"公有"分支真的能被随机命中（整体统一归属按公有/私有/
+  下探到下一级三选一）。
 - **zone内部building不重复roll**：显式跳过`GetParentZone()`非空的building，
   一个zone刚被判定"整体私有/公有"之后，它内部的building不会再被单独重新roll一次
   覆盖掉这个结果（会让级联归属形同虚设）。
@@ -314,3 +314,7 @@ Organization类型已经在用同一套CDF算法，见`society.md`），详见`s
   `adults[index]->AddAsset(asset)`——不迁移，`Asset`/`Player::assetFactory`所在
   的Player/Asset域还没进这个项目，`Citizen`也没有资产列表字段。归属本身
   （`owner`/`stated`）完整迁移了，只是不再额外生成一份"资产"记录。
+
+## 人数封顶
+
+`Init(accommodation, workCapacity)`：随机扰动得到目标人数后，取`min(目标, workCapacity)`再生成(`workCapacity`来自`Map::ComputeWorkCapacity()`，默认不封顶)。

@@ -13,6 +13,11 @@ Storage::Storage(StorageFactory* factory, const string& id, const string& name) 
 	mod->SetProperty();
 	categories = mod->categories;
 	capacity = mod->capacity;
+	canTake = mod->canTake;
+	canPut = mod->canPut;
+	// 两种需求说明二选一，同时给出时只认精确product需求。
+	productDemand = mod->productDemand;
+	if (productDemand.empty()) serviceTypeDemand = mod->serviceTypeDemand;
 }
 
 Storage::Storage(const string& name, const vector<string>& categories, float capacity) :

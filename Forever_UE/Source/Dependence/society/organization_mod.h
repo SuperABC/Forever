@@ -4,12 +4,22 @@
 #include "common/utility.h"
 #include "common/handle.h"
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 class Change;
+
+// 组织对外提供的一项服务：服务名只给组织自己后面实际提供服务时识别，类型/单价/质量给系统撮合。
+struct ServiceOffer {
+	std::string name;
+	std::string type;
+	int64_t unitPrice = 0; // 分
+	float quality = 0.f;
+	int capacity = 0;      // 当日最多能提供的份数（商店是该货物的库存），系统按它加权分配需求、防止超卖
+};
 
 // OrganizationMod：一种组织类型的行为定义(比如商店)。**Dependence层看不到Job/Component/
 // Room/Citizen这些Core类**（Core依赖Dependence，反过来不行——照抄BuildingMod::Layout/
@@ -29,9 +39,11 @@ public:
 	// Society::Init要对着"每个Component实例 x 每种已注册组织类型"做加权判断，不能为
 	// 每个组合都构造一个实例。
 
-	// 写进this->requirements：这个组织类型需要哪些Component类型(字符串)+每种数量
-	// 范围[min,max]（可以同时列多种不同类型，也可以对同一种类型要多个）。
-	virtual void ComponentRequirements() = 0;
+	// 组件需求不在实例上：这个组织类型需要哪些Component类型(字符串)+每种数量范围[min,max]
+	// (可以同时列多种不同类型，也可以对同一种类型要多个)，由mod提供一个static函数
+	// `static const std::unordered_map<std::string, std::pair<int, int>>& GetRequirements()`
+	// (返回函数内static变量的引用)，随RegisterOrganization注册，和GetPower同一个模式，
+	// Society::Init不需要为了读它构造临时实例。
 
 	// 写进this->vacancies：Core侧Organization自己遍历claimed components的每个
 	// workspace room，每个room调用一次这个方法（调用前Core会先清空vacancies），把这个
@@ -47,11 +59,27 @@ public:
 	// 类型重写，直接写自己的plans/changes成员字段，和JobMod同一个模式。
 	// @post：和JobMod::DailyPlan/ExecNode同一个用途——按需查具体citizen家/工位的地址，
 	// 见job_mod.h的说明；这次和JobMod保持接口对称，即使目前没有具体组织类型用到。
+	// 每日服务收集：系统先把组织的状态写进script(商店是self.stock.<货物类型>，值为整数库存)，
+	// stockTypes列出本次写入的货物类型，mod据此在自己的services里填本日能提供的服务(先clear再
+	// push，和vacancies同一个模式，Core只读)。post用于查询商品零售价等(post "product info")。
+	virtual void CollectServices(Container* script, const std::vector<std::string>& stockTypes,
+		PostHandle* post) {}
+
+	// 市民用掉了count份name服务：mod直接改script里的变量(商店是扣减self.stock.*)，系统随后按
+	// 变量值回写Storage，mod不碰Core里的任何对象。
+	virtual void ApplyServiceUsage(const std::string& name, int count, Container* script) {}
+
 	virtual void DailyPlan(const Time& currentTime, PostHandle* post) {}
 	virtual void ExecNode(const std::string& node, PostHandle* post) {}
 
-	std::unordered_map<std::string, std::pair<int, int>> requirements;
 	std::vector<std::string> vacancies;
+	std::vector<ServiceOffer> services; // CollectServices的输出
+
+	// 经济参数(分)：开业/重启时的初始资金；股东占股比例(Core归一化后随机选成年市民，一个元素一个
+	// 股东)；每个员工的日工资。
+	int64_t initialFunds = 0;
+	std::vector<float> shareholders;
+	int64_t wage = 0;
 	std::unordered_map<std::string, Time> plans;
 	std::vector<Change*> changes;
 

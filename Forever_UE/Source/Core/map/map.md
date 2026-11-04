@@ -582,3 +582,7 @@ scriptFactory`引用成员（`CreateDoor`创建门的Script要用，和`terrainF
 
 ## 室外起点接入车道考虑车头夹角（2026-11-02）
 - `PlanVehicleRouteToNode(useHeading=true)`：不再硬过滤反向车道，而是把"车道方向与车头夹角"折算成额外距离（`kHeadingPenaltyMapUnits=1.5`，夹角 180° = 15m，线性）加到候选车道的总代价里再比较，8m 外的锐角车道优先于 2m 外的钝角车道。只比较最近的 2 条有车道的路（`kEntryRoadCandidates`），每条两个方向，所以入线寻路 `FindVehiclePath` 共 2 到 4 次。
+
+## 工位总容量
+
+`int Map::ComputeWorkCapacity() const`：全部工位房间(`IsWorkspace()`)的`WorkspaceCapacity()`之和，不参与人口随机采样；`Populace::Init(accommodation, workCapacity)`在随机扰动之后用它给目标人数封顶，避免劳动力远多于岗位造成大面积失业。

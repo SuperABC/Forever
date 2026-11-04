@@ -15,6 +15,7 @@ class Industry;
 // 负责当天原料/产出的暂存中转。核心是构造函数里ComputeRecipe()那套"目标产量→副产物
 // 覆盖抵消→配方递归展开→再次副产物抵消"四步算法(批次化改造版，见manufacture.md)。
 class Manufacture {
+	friend class IndustrySaveCodec;
 public:
 	Manufacture(ManufactureFactory* factory, const std::string& id, const std::string& name,
 		Industry* industry);
@@ -40,12 +41,21 @@ public:
 	// 阶段A：把上一轮StartProduce()算出的pendingProduction结算进outputCache——
 	// 结算的产量/副产品都按"这一轮实际产出批次数 / 这一轮活跃目标批次数"的比例来，
 	// 不是按理论满批量结算，见manufacture.md。
+	// 新开局时把产出cache放进半天的产量(每个目标product：批数×批量÷2，取整)，读档不调用。
+	void SeedOutputCache();
+
 	void WorkAccount();
+
+	// 最近一次WorkAccount结算进产出cache的产量（含副产品，product type->数量），报表用。
+	const std::unordered_map<std::string, float>& GetLastProduced() const { return lastProduced; }
+	// 满负荷每天的净目标批数（product type->批数），乘以Product::GetBatchSize()是设计日产能。
+	const std::unordered_map<std::string, int>& GetTargets() const { return targets; }
 
 	// 阶段C：用inputCache当前存量(应该已经被本轮GlobalAllocate补过货)和outputCache
 	// 剩余空间，算这一轮实际能产几批，把结果存进pendingProduction供下一轮WorkAccount
 	// 结算，并按实际产量预扣inputCache里的原料。
-	void StartProduce();
+	// capacityRatio是产能比例(1=设计产能)，由到岗率算出，可以大于1；原料和产出空间不够时仍按比例压低。
+	void StartProduce(float capacityRatio = 1.f);
 
 private:
 	// 配方展开+副产物抵消算法，构造函数内部调，见manufacture.md。
@@ -63,5 +73,6 @@ private:
 	std::unordered_map<std::string, float> ingredients;    // 展开+抵消后的"每天净外部原料需求"(绝对量)
 	std::unordered_map<std::string, float> byproducts;     // 按targets(净活跃批次)算出的全部副产品绝对产出量
 	std::unordered_map<std::string, std::unordered_map<std::string, float>> byproductsByTarget; // 每个target各自贡献了多少副产品，供WorkAccount按比例结算
+	std::unordered_map<std::string, float> lastProduced;
 	std::unordered_map<std::string, int> pendingProduction; // 上一轮StartProduce()算出的"这批能产几批"，下一轮WorkAccount()结算
 };

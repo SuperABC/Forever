@@ -159,9 +159,12 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive&
 	archive.SetBinary(SAVE_SECTION_TRAFFIC, VersionOf(SAVE_SECTION_TRAFFIC), w.Take());
 }
 
-Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, bool restoreOptions, string& error) {
+Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& error) {
 	const SaveSection* section = archive.Find(SAVE_SECTION_TRAFFIC);
-	if (!section) return nullptr;
+	if (!section) {
+		error = "the save has no section '" SAVE_SECTION_TRAFFIC "'";
+		return nullptr;
+	}
 
 	try {
 		ByteReader r(section->data);
@@ -329,7 +332,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, bool resto
 					vehicle->mod->LoadState(stateReader);
 				}
 			}
-			if (restoreOptions) vehicle->options = options;
+			vehicle->options = options;
 			vehicle->room = room;
 			vehicle->parkingLocalX = localX;
 			vehicle->parkingLocalY = localY;

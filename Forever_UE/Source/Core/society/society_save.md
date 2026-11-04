@@ -23,7 +23,6 @@
   - Component 和房间用 `common/save_refs.h` 里的（Building 名字, 下标）编码。
 - **工作经历**：读完后，把人口段留下的 `JobExperience` 连上组织（`JobExperience` 把这个类声明成 friend）。
 - **定时器顺序**：组织定时器按 (时间, 组织下标, 节点名) 排序后写出，原因同人口段。
-- **可以缺省**：`required=false`，没有这一段时重新生成社会。如果人口是按存档恢复的，就不再跑 `GenerateEmploymentHistory`，因为经历和同事关系里已经有这些内容了。
 
 ## 依赖关系
 

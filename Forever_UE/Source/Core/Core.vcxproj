@@ -85,6 +85,11 @@
     <ClCompile Include="common\loader.cpp" />
     <ClCompile Include="common\implement.cpp" />
     <ClCompile Include="common\registry.cpp" />
+    <ClCompile Include="populace\household.cpp" />
+    <ClCompile Include="society\economy.cpp" />
+    <ClCompile Include="society\ledger.cpp" />
+    <ClCompile Include="society\policy.cpp" />
+    <ClCompile Include="society\settlement.cpp" />
     <ClCompile Include="society\society.cpp" />
     <ClCompile Include="society\society_save.cpp" />
     <ClCompile Include="society\job.cpp" />
@@ -94,6 +99,7 @@
     <ClCompile Include="industry\storage.cpp" />
     <ClCompile Include="industry\manufacture.cpp" />
     <ClCompile Include="traffic\traffic.cpp" />
+    <ClCompile Include="industry\industry_save.cpp" />
     <ClCompile Include="traffic\traffic_save.cpp" />
     <ClCompile Include="traffic\vehicle.cpp" />
     <ClCompile Include="traffic\station.cpp" />
@@ -138,6 +144,11 @@
     <ClInclude Include="common\loader.h" />
     <ClInclude Include="common\implement.h" />
     <ClInclude Include="common\registry.h" />
+    <ClInclude Include="populace\household.h" />
+    <ClInclude Include="society\economy.h" />
+    <ClInclude Include="society\ledger.h" />
+    <ClInclude Include="society\policy.h" />
+    <ClInclude Include="society\settlement.h" />
     <ClInclude Include="society\society.h" />
     <ClInclude Include="society\society_save.h" />
     <ClInclude Include="society\job.h" />
@@ -147,6 +158,7 @@
     <ClInclude Include="industry\storage.h" />
     <ClInclude Include="industry\manufacture.h" />
     <ClInclude Include="traffic\traffic.h" />
+    <ClInclude Include="industry\industry_save.h" />
     <ClInclude Include="traffic\traffic_save.h" />
     <ClInclude Include="traffic\vehicle.h" />
     <ClInclude Include="traffic\station.h" />

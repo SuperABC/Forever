@@ -21,6 +21,7 @@ class Map;
 // Populace
 
 class Citizen;
+class Household;
 class Name;
 class Scheduler;
 class Experience;

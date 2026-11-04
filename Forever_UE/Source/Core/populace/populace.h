@@ -9,6 +9,7 @@
 #include "common/handle.h"
 #include "populace/citizen.h"
 
+#include <climits>
 #include <functional>
 #include <set>
 #include <string>
@@ -30,7 +31,8 @@ public:
 	// Map的存在)。先发现/注册Name mod dll(InitNames)，再对accommodation做一次扰动
 	// (target = accommodation * exp(GetRandom(1000)/1000.0f - 0.5f))得到真正的模拟
 	// 目标，最后跑一次年表模拟，把存活个体物化成Citizen存进citizens。
-	void Init(int accommodation);
+	// workCapacity是Map::ComputeWorkCapacity()：随机扰动之后目标人数不超过它。
+	void Init(int accommodation, int workCapacity = INT_MAX);
 
 	const std::vector<Citizen*>& GetCitizens() const;
 

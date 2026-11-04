@@ -230,6 +230,10 @@ public:
 	Room* GetRoom() const;
 	void SetRoom(Room* value);
 
+	// 所属户（住在家里才有），由Room::AddResident维护。
+	Household* GetHousehold() const;
+	void SetHousehold(Household* value);
+
 	// 当前物理位置所在的房间——和上面的GetRoom()(家/tenancy)是两个独立的概念，不能互相
 	// 替代：一个citizen可能人不在家(以后有真正移动AI之后，currentRoom可能是别的房间)，
 	// 也可能待在一个自己并不租住的房间里(以后有访客/工作场景时会出现)。这次没有真正的
@@ -306,6 +310,7 @@ private:
 	Zone* zone = nullptr;
 	Building* building = nullptr;
 	Room* room = nullptr;
+	Household* household = nullptr;
 	Room* currentRoom = nullptr;
 
 	bool hasPosition = false;

@@ -476,7 +476,9 @@ void FactoryBuilding::Layout(int& direction, const Quad& quad,
 	} else {
 		AssignFloor(0, "preset_single_room_fg", direction, assets);
 	}
-	AssignRoom(0, 0, "room_factory", kComponent, kComponentId);
+	// 三种工坊房间等概率随机选一种：小麦/牛肉/汉堡工厂。
+	static const char* const kFactoryRooms[] = { "room_farm", "room_ranch", "room_food_factory" };
+	AssignRoom(0, 0, kFactoryRooms[GetRandom(3)], kComponent, kComponentId);
 }
 
 void FactoryBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

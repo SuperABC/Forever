@@ -4,6 +4,7 @@
 #include "map/feature_spec.h"
 #include "map/general_geometry.h"
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -39,7 +40,9 @@ public:
 	int workspaceCapacity = 0;        // 工位数
 
 	bool isStorage = false;
-	std::unordered_map<std::string, float> storageConfig; // 仓库属性(分区名->容量)
+	std::string storageType;          // 对应StorageMod的id，Industry初始化时据此为房间生成Storage
+
+	int64_t rent = 0;                 // 每日房租(分)，所有房间都要交，谁交见Society
 
 	bool isManufacture = false;
 	std::vector<std::string> manufactureTypes;             // 产线描述(类型列表)

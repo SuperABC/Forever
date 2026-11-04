@@ -8,11 +8,11 @@
 // ResidenceRoom：住宅Room，声明isResidential=true+residentialCapacity=1(每间住宅room=1个
 // 名额，多人合住靠Map::Checkin()的名额池逻辑，不靠这个capacity强制)。workspace/storage/
 // manufacture这3类占位属性保持RoomMod基类默认值(false/空)不动，另外3类由下面ShopRoom/
-// WarehouseRoom/FactoryRoom各自启用。
+// WarehouseRoom/三种工坊房间各自启用。
 // Basic编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
 // 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
 //
-// ResidenceRoom/ShopRoom/WarehouseRoom/ParkingRoom/FactoryRoom这五个具体类型合并进同一份
+// ResidenceRoom/ShopRoom/WarehouseRoom/ParkingRoom/三种工坊房间这些具体类型合并进同一份
 // room_basic.h/.cpp(不按residence/shop/plant各开一个文件)，和terrain_basic.h/.cpp里
 // OceanTerrain/MountainTerrain合并的方式一样，详见room_basic.md。
 //
@@ -59,7 +59,7 @@ private:
 };
 
 // WarehouseRoom：Shop布局里过道/地下室用的仓储room(isStorage=true,
-// storageConfig={{"shop",100.f}})。只有ShopBuilding用到，见room_basic.md。
+// storageType="storage_shop")。只有ShopBuilding用到，见room_basic.md。
 class WarehouseRoom : public RoomMod {
 public:
 	WarehouseRoom();
@@ -88,29 +88,6 @@ public:
 
 	static const char* GetId() { return "room_parking"; }
 	virtual const char* GetType() const override { return "room_parking"; }
-	virtual const char* GetName() override;
-	virtual void SetProperty() override;
-
-public:
-	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
-	virtual int GetInstanceCounter() const override { return count; }
-	virtual void SetInstanceCounter(int value) override { count = value; }
-private:
-	static int count;
-	int id;
-	std::string name;
-};
-
-// FactoryRoom：isManufacture=true, manufactureTypes={"experience"}——"experience"这个
-// 生产类型对应的ExperienceManufacture/ExperienceProduct属于Industry域，目前不接入，
-// manufactureTypes这个占位字段先带上真实字符串，真正被消费留到Industry域接入时再做，见
-// room_basic.md。
-class FactoryRoom : public RoomMod {
-public:
-	FactoryRoom();
-
-	static const char* GetId() { return "room_factory"; }
-	virtual const char* GetType() const override { return "room_factory"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
@@ -163,3 +140,60 @@ private:
 	int id;
 	std::string name;
 };
+
+// 三种工坊房间：生产类型是ManufactureMod的id，Industry按它为房间生成Manufacture。工厂建筑
+// (FactoryBuilding)随机选其一布局，每间工位20、房租20元，Organization按容纳量一半定员。
+class FarmRoom : public RoomMod {
+public:
+	FarmRoom();
+
+	static const char* GetId() { return "room_farm"; }
+	virtual const char* GetType() const override { return "room_farm"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class RanchRoom : public RoomMod {
+public:
+	RanchRoom();
+
+	static const char* GetId() { return "room_ranch"; }
+	virtual const char* GetType() const override { return "room_ranch"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+class FoodFactoryRoom : public RoomMod {
+public:
+	FoodFactoryRoom();
+
+	static const char* GetId() { return "room_food_factory"; }
+	virtual const char* GetType() const override { return "room_food_factory"; }
+	virtual const char* GetName() override;
+	virtual void SetProperty() override;
+
+public:
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+

@@ -17,3 +17,6 @@
 ## 待办/后续阶段
 
 - `capacity`是占位测试值，按实际存量变化速度调整。
+
+## ShopStorage
+`storage_shop`：categories={food}，容量100，只能放不能取，需求`serviceTypeDemand={food:100%}`。商店仓库房间（`room_warehouse`）的`storageType`指向它。

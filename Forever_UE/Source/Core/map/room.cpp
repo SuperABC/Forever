@@ -5,6 +5,8 @@
 #include "map/building.h"
 #include "map/door.h"
 #include "player/asset.h"
+#include "populace/citizen.h"
+#include "populace/household.h"
 #include "story/script.h"
 
 #include <sstream>
@@ -35,7 +37,8 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 	properties.isWorkspace = mod->isWorkspace;
 	properties.workspaceCapacity = mod->workspaceCapacity;
 	properties.isStorage = mod->isStorage;
-	properties.storageConfig = mod->storageConfig;
+	properties.storageType = mod->storageType;
+	properties.rent = mod->rent;
 	properties.isManufacture = mod->isManufacture;
 	properties.manufactureTypes = mod->manufactureTypes;
 	properties.isParking = mod->isParking;
@@ -45,6 +48,7 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 }
 
 Room::~Room() {
+	for (Household* household : households) delete household;
 	factory->DestroyRoom(mod);
 	for (auto& [name, asset] : assets) delete asset; // 没人捡走的地上物品，房间销毁时清理
 	for (Door* door : doorEntities) delete door;
@@ -135,7 +139,8 @@ int Room::ResidentialCapacity() const { return properties.residentialCapacity; }
 bool Room::IsWorkspace() const { return properties.isWorkspace; }
 int Room::WorkspaceCapacity() const { return properties.workspaceCapacity; }
 bool Room::IsStorage() const { return properties.isStorage; }
-unordered_map<string, float> Room::StorageConfig() const { return properties.storageConfig; }
+string Room::StorageType() const { return properties.storageType; }
+int64_t Room::Rent() const { return properties.rent; }
 bool Room::IsManufacture() const { return properties.isManufacture; }
 vector<string> Room::ManufactureTypes() const { return properties.manufactureTypes; }
 bool Room::IsParking() const { return properties.isParking; }
@@ -151,14 +156,41 @@ void Room::SetOwner(Citizen* value) { owner = value; }
 bool Room::GetStated() const { return stated; }
 void Room::SetStated(bool value) { stated = value; }
 
-const vector<Citizen*>& Room::GetTenants() const { return tenants; }
+const vector<Household*>& Room::GetHouseholds() const { return households; }
 
-void Room::AddTenant(Citizen* citizen) {
-	if (citizen) tenants.push_back(citizen);
+Household* Room::AddHousehold() {
+	Household* household = new Household(this);
+	households.push_back(household);
+	return household;
 }
 
-void Room::RemoveTenant(Citizen* citizen) {
-	tenants.erase(remove(tenants.begin(), tenants.end(), citizen), tenants.end());
+Household* Room::AddResident(Citizen* citizen) {
+	if (!citizen) return nullptr;
+
+	// 找出与新住户有亲属关系的全部户：只有一户就并入，有多户说明新住户把它们连起来了，合并成一户。
+	Household* target = nullptr;
+	for (size_t i = 0; i < households.size();) {
+		Household* household = households[i];
+		if (household->IsRelatedTo(citizen)) {
+			if (!target) {
+				target = household;
+				i++;
+			}
+			else {
+				target->Absorb(*household);
+				for (Citizen* member : target->GetMembers()) member->SetHousehold(target);
+				delete household;
+				households.erase(households.begin() + i);
+			}
+		}
+		else {
+			i++;
+		}
+	}
+	if (!target) target = AddHousehold();
+	target->AddMember(citizen);
+	citizen->SetHousehold(target);
+	return target;
 }
 
 const vector<Citizen*>& Room::GetOccupants() const { return occupants; }

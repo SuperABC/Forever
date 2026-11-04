@@ -62,7 +62,14 @@ string Organization::GetType() const {
 
 const vector<Component*>& Organization::GetComponents() const { return components; }
 const vector<Job*>& Organization::GetJobs() const { return jobs; }
+bool Organization::IsBankrupt() const { return bankrupt; }
+void Organization::SetBankrupt(bool value) { bankrupt = value; }
+
+const vector<Organization::Shareholder>& Organization::GetShareholders() const { return shareholders; }
+void Organization::SetShareholders(const vector<Shareholder>& value) { shareholders = value; }
+
 Script* Organization::GetScript() const { return script; }
+OrganizationMod* Organization::GetMod() const { return mod; }
 
 void Organization::DailyPlan(const Time& currentTime, PostHandle* post) {
 	if (mod) mod->DailyPlan(currentTime, post);

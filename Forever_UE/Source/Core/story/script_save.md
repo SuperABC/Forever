@@ -36,8 +36,6 @@
   对应地：
   - 门、市民、车辆的交互选项改为由地图、人口、交通段按存档恢复；
   - 玩家操控谁由 UE 段恢复（`AForeverFrameworkActor::RestoreControlledPawn`）。
-
-  没有这一段的旧存档照新开局广播，那时其它段也不恢复交互选项，避免重复。
 - **里程碑结构不存**。里程碑本身（触发、对话、后续）来自 `.script` 文件缓存。这里只存每个节点的 `premise`，`subsequents` 指针由 `ReadMilestones` 重新建好。
 
 ## 依赖关系
