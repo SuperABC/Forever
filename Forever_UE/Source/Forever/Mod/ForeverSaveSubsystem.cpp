@@ -11,6 +11,7 @@
 #include "society/society.h"
 #include "society/society_save.h"
 #include "traffic/traffic.h"
+#include "industry/industry.h"
 #include "industry/industry_save.h"
 #include "traffic/traffic_save.h"
 #include "story/story.h"

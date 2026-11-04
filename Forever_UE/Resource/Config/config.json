@@ -43,7 +43,12 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
    ],
-   "job_mods" : [ "job_shop_saler", "job_warehouse_keeper", "job_factory_worker", "job_empty --test true" ],
+   "job_mods" : [
+      "job_shop_saler",
+      "job_warehouse_keeper",
+      "job_factory_worker",
+      "job_empty --test true"
+   ],
    "main_story" : "script_empty",
    "manufacture_mods" : [
       "manufacture_farm",
@@ -52,7 +57,11 @@
       "manufacture_empty --test true"
    ],
    "name_mods" : [ "name_chinese" ],
-   "organization_mods" : [ "organization_shop", "organization_factory", "organization_empty --test true" ],
+   "organization_mods" : [
+      "organization_shop",
+      "organization_factory",
+      "organization_empty --test true"
+   ],
    "product_mods" : [
       "product_wheat",
       "product_beef",

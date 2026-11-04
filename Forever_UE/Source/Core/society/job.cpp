@@ -4,6 +4,7 @@
 #include "story/script_factory.h"
 #include "common/config.h"
 #include "populace/citizen.h"
+#include "map/room.h"
 
 using namespace std;
 
@@ -35,7 +36,17 @@ Room* Job::GetPosition() const { return position; }
 Script* Job::GetScript() const { return script; }
 
 Citizen* Job::GetOccupant() const { return occupant; }
-void Job::SetOccupant(Citizen* citizen) { occupant = citizen; }
+void Job::SetOccupant(Citizen* citizen) {
+	occupant = citizen;
+	// 给Job脚本暴露上班的人和通勤地址，脚本里用$$self.occupant/home/workplace
+	// 驱动上下班(npc_navigate + create_timer)，见job.md"脚本驱动通勤"。空岗时occupant/地址为空串。
+	if (script) {
+		Room* home = citizen ? citizen->GetRoom() : nullptr;
+		script->SetValue("occupant", ValueType(citizen ? citizen->GetName() : string()));
+		script->SetValue("home", ValueType(home ? home->GetAddress() : string()));
+		script->SetValue("workplace", ValueType(position ? position->GetAddress() : string()));
+	}
+}
 
 void Job::DailyPlan(const Time& currentTime, PostHandle* post) {
 	if (mod) mod->DailyPlan(currentTime, post);

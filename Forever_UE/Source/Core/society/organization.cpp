@@ -28,7 +28,8 @@ Organization::Organization(OrganizationFactory* factory, JobFactory* jobFactory,
 		for (Room* room : component->GetRooms()) {
 			if (!room || !room->IsWorkspace()) continue;
 
-			mod->vacancies.clear();
+			// 不能在这里clear：vacancies里的string在mod堆上分配，Core(UE模块重载了operator delete)
+			// 释放会崩溃；由mod在DesignJobsForRoom开头自己清空。
 			mod->DesignJobsForRoom(component->GetType(), component->GetName(),
 				room->GetType(), room->GetName(), room->WorkspaceCapacity());
 			for (const string& jobType : mod->vacancies) {

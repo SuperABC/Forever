@@ -27,6 +27,7 @@ const unordered_map<string, pair<int, int>>& ShopOrganization::GetRequirements()
 
 void ShopOrganization::DesignJobsForRoom(const std::string& componentType, const std::string&,
 	const std::string& roomType, const std::string&, int workspaceCapacity) {
+	vacancies.clear(); // 必须由mod自己清空，见organization_mod.h
 	// 按房间容纳量的一半定员。
 	if (componentType != "component_shop") return;
 	if (roomType == "room_shop") {
@@ -94,6 +95,7 @@ const unordered_map<string, pair<int, int>>& FactoryOrganization::GetRequirement
 
 void FactoryOrganization::DesignJobsForRoom(const string& componentType, const string&,
 	const string& roomType, const string&, int workspaceCapacity) {
+	vacancies.clear(); // 必须由mod自己清空，见organization_mod.h
 	// 工坊房间按容纳量的一半定员。
 	if (componentType != "component_factory") return;
 	if (roomType == "room_farm" || roomType == "room_ranch" || roomType == "room_food_factory") {

@@ -46,7 +46,8 @@ public:
 	// Society::Init不需要为了读它构造临时实例。
 
 	// 写进this->vacancies：Core侧Organization自己遍历claimed components的每个
-	// workspace room，每个room调用一次这个方法（调用前Core会先清空vacancies），把这个
+	// workspace room，每个room调用一次这个方法（Core不会清空vacancies，mod必须在方法开头自己clear：里面的string在mod堆上分配，
+	// Core侧释放会跨DLL堆崩溃），把这个
 	// room的完整上下文喂给mod——component类型/名字、room类型/名字、这个room的工位数量
 	// (WorkspaceCapacity())。mod自己决定要在这个room里配几个、什么类型的Job(可以是
 	// 不同类型混着配)，把job类型字符串逐条push进this->vacancies；Core侧读完vacancies，

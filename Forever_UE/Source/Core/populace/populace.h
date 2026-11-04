@@ -124,7 +124,7 @@ private:
 	std::vector<SchoolClass*> schoolClasses;
 
 	std::set<std::tuple<Time, Citizen*, std::string>> jobTimerSet;
-	static constexpr int kMaxJobTimersPerTick = 1;
+	static constexpr int kMaxJobTimersPerTick = 100;
 
 	// Scheduler自己独立的一套timer，和jobTimerSet完全平行（见Tick()实现），负责citizen
 	// 下班之后的行为。

@@ -8,6 +8,7 @@
 #include "map/room.h"
 
 #include <algorithm>
+#include <cmath>
 
 
 using namespace std;
@@ -253,6 +254,77 @@ void Citizen::SetPosition(float x, float y, float z) {
 
 void Citizen::ClearPosition() { hasPosition = false; }
 
+bool Citizen::IsWalking() const { return walkDestination != nullptr; }
+Room* Citizen::GetWalkDestination() const { return walkDestination; }
+
+void Citizen::BeginWalk(const std::vector<WalkPoint>& path, Room* destination, double nowSeconds, float speed) {
+	EndWalk();
+	if (path.empty() || !destination || speed <= 0.f) return;
+	walkPath = path;
+	walkDistances.assign(path.size(), 0.f);
+	for (size_t i = 1; i < path.size(); i++) {
+		float dx = path[i].x - path[i - 1].x, dy = path[i].y - path[i - 1].y, dz = path[i].z - path[i - 1].z;
+		walkDistances[i] = walkDistances[i - 1] + std::sqrt(dx * dx + dy * dy + dz * dz);
+	}
+	walkDestination = destination;
+	walkStartTime = nowSeconds;
+	walkSpeed = speed;
+	SetPosition(path[0].x, path[0].y, path[0].z);
+}
+
+void Citizen::SampleWalk(double nowSeconds, WalkPoint& outPoint, size_t& outSegment, bool& outFinished) const {
+	float travelled = static_cast<float>(std::max(0.0, nowSeconds - walkStartTime)) * walkSpeed;
+	if (travelled >= walkDistances.back()) {
+		outPoint = walkPath.back();
+		outSegment = walkPath.size() - 1;
+		outFinished = true;
+		return;
+	}
+	outFinished = false;
+	size_t i = 1;
+	while (walkDistances[i] < travelled) i++; // travelled < 总弧长，必然在末点之前停下
+	float span = walkDistances[i] - walkDistances[i - 1];
+	float t = span > 0.f ? (travelled - walkDistances[i - 1]) / span : 0.f;
+	outPoint = { walkPath[i - 1].x + (walkPath[i].x - walkPath[i - 1].x) * t,
+		walkPath[i - 1].y + (walkPath[i].y - walkPath[i - 1].y) * t,
+		walkPath[i - 1].z + (walkPath[i].z - walkPath[i - 1].z) * t };
+	outSegment = i;
+}
+
+bool Citizen::AdvanceWalk(double nowSeconds) {
+	if (!IsWalking()) return false;
+	WalkPoint point;
+	size_t segment;
+	bool finished;
+	SampleWalk(nowSeconds, point, segment, finished);
+	if (finished) {
+		Room* destination = walkDestination;
+		EndWalk();
+		SetCurrentRoom(destination);
+		ClearPosition();
+		return true;
+	}
+	SetPosition(point.x, point.y, point.z);
+	return false;
+}
+
+void Citizen::GetRemainingWalk(double nowSeconds, std::vector<WalkPoint>& outPath) const {
+	outPath.clear();
+	if (!IsWalking()) return;
+	WalkPoint point;
+	size_t segment;
+	bool finished;
+	SampleWalk(nowSeconds, point, segment, finished);
+	outPath.push_back(point);
+	for (size_t i = segment; i < walkPath.size() && !finished; i++) outPath.push_back(walkPath[i]);
+}
+
+void Citizen::EndWalk() {
+	walkDestination = nullptr;
+	walkPath.clear();
+	walkDistances.clear();
+}
+
 Job* Citizen::GetJob() const { return job; }
 void Citizen::SetJob(Job* value) { job = value; }
 
@@ -285,6 +357,7 @@ void Citizen::Die() {
 	if (isDead) return;
 	isDead = true;
 	health = 0.f;
+	EndWalk();
 	SetCurrentRoom(nullptr);
 	ClearPosition();
 }

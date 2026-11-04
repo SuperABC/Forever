@@ -86,13 +86,13 @@ ExecNode`之前会先同步`mod->occupantName = occupant ? occupant->GetName() :
 
 ### ShopSalerJob（`Source/Basic/society/job_basic.h/.cpp`）
 
-天天上班，早上9点从家出门去商店，中午12点从商店下班回家：
+天天上班，早上9点从家出门去商店，晚上18点从商店下班回家：
 
 ```cpp
 void ShopSalerJob::DailyPlan(const Time& currentTime, PostHandle*) {
 	plans.clear();
 	plans["leave_home"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 9, 0);
-	plans["leave_work"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 12, 0);
+	plans["leave_work"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 18, 0);
 }
 ```
 
@@ -173,3 +173,6 @@ Actor层。
   `mod->milestoneNames`非空）。
 - 被谁依赖：`Organization`（持有所有权，构造时`new Job(...)`）、`Citizen`（不持有
   所有权的引用）、`Populace::Tick`（驱动调度）。
+
+## 脚本驱动通勤
+上下班也可以不走C++的`DailyPlan`/`ExecNode`，写在Job自己的脚本里。`Job::SetOccupant`会给Job脚本写三个变量：`$$self.occupant`(上班的人的姓名，空串=空岗)、`$$self.home`(家的房间地址)、`$$self.workplace`(本岗位所在房间的地址)。脚本在`game_start`里`create_timer`(`mode: "next"`、`time: "09:00:00"`，同名计时器归脚本自己)，`time_up`里`npc_navigate`(name=`$$self.occupant`，destination=`$$self.workplace`/`$$self.home`，condition=`$$self.occupant != ""`)再重建次日计时器。`ShopSalerJob`用这种方式(`Resource/Story/job_shop_saler.script`，9点出门、18点回家)，`DailyPlan`为空；仓库管理员/工厂工人仍在C++里写。

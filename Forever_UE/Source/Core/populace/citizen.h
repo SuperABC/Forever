@@ -256,6 +256,22 @@ public:
 	// RequestWalk。
 	void ClearPosition();
 
+	// 没有ACitizenElement的市民在路上时的Core行进模拟（瞬态，不存档）：按"已走时间×速度"沿
+	// 路径推算当前位置并写回SetPosition，这样流式生成按位置判断时，路线经过玩家附近的市民
+	// 会被生成出来；走完路径才把currentRoom换成目的地。路径/速度都用地图单位，时间用调用方
+	// 给的秒数(UE侧传世界时间)，Core不关心时钟来源。
+	struct WalkPoint { float x, y, z; };
+	bool IsWalking() const;
+	Room* GetWalkDestination() const;
+	// 开始行进：路径第一个点就是当前位置(写进SetPosition)，currentRoom保持出发地直到走完。
+	void BeginWalk(const std::vector<WalkPoint>& path, Room* destination, double nowSeconds, float speed);
+	// 推进到nowSeconds：到达时SetCurrentRoom(destination)+ClearPosition+结束行进并返回true；
+	// 否则更新SetPosition返回false。没在行进返回false。
+	bool AdvanceWalk(double nowSeconds);
+	// 取出剩余路径(第一个点是推算出的当前位置)，供生成Actor后接着走；不改行进状态。
+	void GetRemainingWalk(double nowSeconds, std::vector<WalkPoint>& outPath) const;
+	void EndWalk();
+
 	// 当前持有的工作——Job由Organization持有所有权，这里只存一个不持有所有权的指针。
 	Job* GetJob() const;
 	void SetJob(Job* value);
@@ -317,6 +333,15 @@ private:
 	float posX = 0.f;
 	float posY = 0.f;
 	float posZ = 0.f;
+
+	// 行进模拟状态，不存档，见BeginWalk。walkDistances[i]是路径起点到第i个点的累计弧长。
+	Room* walkDestination = nullptr;
+	std::vector<WalkPoint> walkPath;
+	std::vector<float> walkDistances;
+	double walkStartTime = 0.0;
+	float walkSpeed = 0.f;
+	// 推算(nowSeconds)对应的位置和已经走过的路径段下标。
+	void SampleWalk(double nowSeconds, WalkPoint& outPoint, size_t& outSegment, bool& outFinished) const;
 
 	Job* job = nullptr;
 	Scheduler* scheduler = nullptr;

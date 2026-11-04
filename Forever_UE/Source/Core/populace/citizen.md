@@ -110,3 +110,6 @@
 - `Die()`：`isDead`置位、血量归零，从当前房间`occupants`移除并清空`currentRoom`/位置；**保留“家”**(`room`/tenant/building/zone/lot)。
 - `Revive(health=-1)`：清除`isDead`，血量恢复(<=0或超过`maxHealth`取满血)；**不设房间/位置**，要后续`npc_teleport`(destination可写`"home"`)才会在场景里出现。脚本入口是`npc_revive` Change。
 - `SetCurrentRoom`现在同步维护房间`occupants`(旧房间移出、新房间加入；死人不加入)，`Map::SettleCitizen`不再单独`AddOccupant`。读档直接赋值字段，不经过它。
+
+## 行进模拟（无Actor的市民在路上）
+瞬态、不存档。`BeginWalk(path, destination, now, speed)`记录路径(地图单位)/出发时间/速度，`AdvanceWalk(now)`按"已走时间×速度"沿路径推算位置并写回`SetPosition`，走完`SetCurrentRoom(destination)`+`ClearPosition`；`GetRemainingWalk`取剩余路径(首点=当前推算位置)；`EndWalk`/`Die`清状态。行进中`currentRoom`保持出发地。UE侧用法见`ForeverPopulaceFrameworkComponent.md`"在途市民"。

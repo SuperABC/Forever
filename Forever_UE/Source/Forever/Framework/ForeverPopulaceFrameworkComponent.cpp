@@ -8,6 +8,7 @@
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Engine/Engine.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
 
@@ -198,8 +199,22 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 		return;
 	}
 
-	// 这个citizen当前没有生成的ACitizenElement(不在流式加载范围内)：直接瞬移逻辑状态，
-	// 不模拟中途过程。
+	// 这个citizen当前没有生成的ACitizenElement(不在流式加载范围内)：路径非空时交给Core按
+	// 时间推算沿途位置(流式扫描会在位置进入生成距离时把它生成出来接着走，走完才换房间)；
+	// 路径为空(寻路失败)才直接瞬移逻辑状态。
+	if (waypoints.Num() > 1) {
+		const ACitizenElement* defaults = GetDefault<ACitizenElement>();
+		float speedUU = defaults->GetCharacterMovement()->MaxWalkSpeed;
+		std::vector<Citizen::WalkPoint> path;
+		path.reserve(waypoints.Num());
+		for (const FVector& point : waypoints) {
+			path.push_back({ static_cast<float>(point.X / POPULACE_WORLD_SCALE),
+				static_cast<float>(point.Y / POPULACE_WORLD_SCALE), static_cast<float>(point.Z / POPULACE_WORLD_SCALE) });
+		}
+		citizen->BeginWalk(path, destination, GetWorld()->GetTimeSeconds(), speedUU / POPULACE_WORLD_SCALE);
+		return;
+	}
+	citizen->EndWalk();
 	citizen->SetCurrentRoom(destination);
 	citizen->ClearPosition();
 }
@@ -223,6 +238,7 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 		return;
 	}
 
+	citizen->EndWalk();
 	citizen->SetCurrentRoom(destination);
 	citizen->ClearPosition();
 }
@@ -337,6 +353,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		int32 batchCount = FMath::Clamp(total / FMath::Max(1, streamingBatchStride), 1, total);
 
 	int32 spawnCount = 0;
+	const double now = GetWorld()->GetTimeSeconds();
 	
 	int32 processed = 0;
 	for (int32 i = 0; i < batchCount; i++) {
@@ -350,11 +367,27 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 
 		if (!existing) {
+			// 没有Actor但正在路上的市民：Core按时间推算位置(走完则已换成目的地房间)，
+			// 之后照常按位置判断要不要生成。
+			if (citizen->IsWalking()) citizen->AdvanceWalk(now);
 			float worldX, worldY, worldZ;
 			if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) continue;
 			if (StreamingDistance(playerLoc, FVector(worldX, worldY, worldZ)) < spawnDistUE) {
-				SpawnCitizen(citizen);
+				ACitizenElement* element = SpawnCitizen(citizen);
 				spawnCount++;
+				if (element && citizen->IsWalking()) {
+					// 路径点是脚底高度，Actor位置是胶囊体中心，抬一个半高再接着走剩余路段。
+					std::vector<Citizen::WalkPoint> remaining;
+					citizen->GetRemainingWalk(now, remaining);
+					TArray<FVector> waypoints;
+					for (const Citizen::WalkPoint& point : remaining) {
+						waypoints.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
+					}
+					Room* destination = citizen->GetWalkDestination();
+					citizen->EndWalk();
+					element->AddActorWorldOffset(FVector(0.f, 0.f, element->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+					element->WalkTo(waypoints, destination);
+				}
 			}
 		}
 		else {
@@ -369,6 +402,19 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 				FVector loc = element->GetActorLocation();
 				citizen->SetPosition(loc.X / POPULACE_WORLD_SCALE, loc.Y / POPULACE_WORLD_SCALE,
 					loc.Z / POPULACE_WORLD_SCALE);
+				// 还在走路：剩余路径交还Core继续按时间推算，不然目的地就丢了(currentRoom还是出发地)。
+				TArray<FVector> remainingPath;
+				Room* walkDestination = nullptr;
+				ACitizenController* controller = element->GetCitizenController();
+				if (controller && controller->GetRemainingWaypoints(remainingPath, walkDestination) && remainingPath.Num() > 1) {
+					std::vector<Citizen::WalkPoint> path;
+					for (const FVector& point : remainingPath) {
+						path.push_back({ static_cast<float>(point.X / POPULACE_WORLD_SCALE),
+							static_cast<float>(point.Y / POPULACE_WORLD_SCALE), static_cast<float>(point.Z / POPULACE_WORLD_SCALE) });
+					}
+					float speedUU = element->GetCharacterMovement()->MaxWalkSpeed;
+					citizen->BeginWalk(path, walkDestination, now, speedUU / POPULACE_WORLD_SCALE);
+				}
 				element->Destroy();
 				activeInstances.Remove(citizen);
 			}
@@ -386,6 +432,18 @@ TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> UForeverPopulaceFra
 	}
 
 	TArray<FWalkingSnapshot> walking;
+	// Core里推算中的市民(没有Actor)：存档里按"已经到了"记，存完RestoreAfterSave还原。
+	for (Citizen* citizen : allCitizens) {
+		if (!citizen || !citizen->IsWalking()) continue;
+		FWalkingSnapshot snapshot;
+		snapshot.citizen = citizen;
+		snapshot.currentRoom = citizen->GetCurrentRoom();
+		snapshot.hasPosition = citizen->HasPosition();
+		citizen->GetPosition(snapshot.x, snapshot.y, snapshot.z);
+		walking.Add(snapshot);
+		citizen->SetCurrentRoom(citizen->GetWalkDestination());
+		citizen->ClearPosition();
+	}
 	for (auto& [citizen, element] : activeInstances) {
 		if (!citizen || !element) continue;
 		FVector loc = element->GetActorLocation();

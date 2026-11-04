@@ -2,7 +2,7 @@
 
 ## 职责
 
-`ShopSalerJob`(`job_shop_saler`)：店员，天天上班——早上9点从家出门去商店，中午12点从商店下班回家。
+`ShopSalerJob`(`job_shop_saler`)：店员，天天上班——早上9点从家出门去商店，晚上18点从商店下班回家。
 
 ## 关键设计
 
@@ -12,8 +12,9 @@
 - `GetName()`必须全局唯一。
 
 ## 岗位（Step 4）
-`CommuteJob`是通勤岗位基类（9:00出门去工位、12:00回家），`ShopSalerJob`（店员，有剧情脚本）、
-`WarehouseKeeperJob`（仓库管理员）、`FactoryWorkerJob`（工坊工人）继承它，后两者没有剧情脚本。
+没有通勤基类，每个岗位自己实现`DailyPlan`/`ExecNode`（上下班时间直接写在各自`DailyPlan`的`Time(...)`里，想改成8:30就改成`8, 30`）：
+`ShopSalerJob`（店员，有剧情脚本）9:00上班18:00下班，`WarehouseKeeperJob`（仓库管理员）9:00/18:00，
+`FactoryWorkerJob`（工坊工人）8:00/17:00，后两者没有剧情脚本。
 
 ## 依赖关系
 

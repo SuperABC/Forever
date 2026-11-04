@@ -209,3 +209,6 @@ GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生
 - `HandleElementEndPlay`（仅 `EndPlayReason::Destroyed`）：Actor 以任何方式被销毁都从 `activeInstances` 摘掉，避免悬空指针。
 - `StartTestNavigation(name)`（`test_navigate_citizen` Change）用 `TrackTestNavigationLine` 持续显示该市民剩余路线的橙色折线（没有计时，市民走完这条路才清掉），数据来自 `ACitizenController::GetRemainingWaypoints`。
 - 屏幕左上角青色文字显示寻路队列长度（`bShowPathfindingQueue`，默认开）：`pendingPathfindingTasks`，已派发未算完的任务数。
+
+## 在途市民（上下班路上的人流）
+`ApplyWalkResult`对没有Actor的市民不再瞬移：路径非空时`Citizen::BeginWalk`交给Core按时间推算位置。流式扫描里这类市民每次先`AdvanceWalk`(走完即换房间)，位置进入`citizenSpawnDistance`就生成Actor(抬一个胶囊半高)，用`GetRemainingWalk`的剩余路径`WalkTo`接着走并`EndWalk`。Actor走远被流式销毁时，若还在走路，用控制器`GetRemainingWaypoints`的剩余路径`BeginWalk`交还Core，不再丢目的地。存档时没有Actor的在途市民按"已到达"记，存完`RestoreAfterSave`还原；`TeleportCitizen`/寻路失败/死亡会`EndWalk`。速度取`ACitizenElement`默认`MaxWalkSpeed`。

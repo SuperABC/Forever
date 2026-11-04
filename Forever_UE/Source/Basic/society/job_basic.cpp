@@ -38,13 +38,27 @@ void ShopSalerJob::SetProperty() {
 	milestoneNames = { "job_shop_saler" };
 }
 
-void CommuteJob::DailyPlan(const Time& currentTime, PostHandle*) {
-	plans.clear();
-	plans["leave_home"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 9, 0);
-	plans["leave_work"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 12, 0);
+void ShopSalerJob::DailyPlan(const Time&, PostHandle*) {
+	// 上下班由job_shop_saler.script的计时器驱动，这里不排任何C++节点(plans保持为空)。
 }
 
-void CommuteJob::ExecNode(const string& node, PostHandle* post) {
+int WarehouseKeeperJob::count = 0;
+
+WarehouseKeeperJob::WarehouseKeeperJob() : id(count++) {
+}
+
+const char* WarehouseKeeperJob::GetName() {
+	name = "WarehouseKeeperJob" + to_string(id);
+	return name.data();
+}
+
+void WarehouseKeeperJob::DailyPlan(const Time& currentTime, PostHandle*) {
+	plans.clear();
+	plans["leave_home"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 9, 0);
+	plans["leave_work"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 18, 0);
+}
+
+void WarehouseKeeperJob::ExecNode(const string& node, PostHandle* post) {
 	for (Change* change : changes) delete change;
 	changes.clear();
 
@@ -60,16 +74,6 @@ void CommuteJob::ExecNode(const string& node, PostHandle* post) {
 	}
 }
 
-int WarehouseKeeperJob::count = 0;
-
-WarehouseKeeperJob::WarehouseKeeperJob() : id(count++) {
-}
-
-const char* WarehouseKeeperJob::GetName() {
-	name = "WarehouseKeeperJob" + to_string(id);
-	return name.data();
-}
-
 int FactoryWorkerJob::count = 0;
 
 FactoryWorkerJob::FactoryWorkerJob() : id(count++) {
@@ -78,4 +82,26 @@ FactoryWorkerJob::FactoryWorkerJob() : id(count++) {
 const char* FactoryWorkerJob::GetName() {
 	name = "FactoryWorkerJob" + to_string(id);
 	return name.data();
+}
+
+void FactoryWorkerJob::DailyPlan(const Time& currentTime, PostHandle*) {
+	plans.clear();
+	plans["leave_home"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 8, 0);
+	plans["leave_work"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 17, 0);
+}
+
+void FactoryWorkerJob::ExecNode(const string& node, PostHandle* post) {
+	for (Change* change : changes) delete change;
+	changes.clear();
+
+	if (node == "leave_home") {
+		string workplaceAddress = QueryAddress(post, occupantName, "citizen workplace address");
+		if (workplaceAddress.empty()) return; // 查询失败，这次调度作废，不产出任何Change
+		changes.push_back(new NPCNavigateChange(occupantName, workplaceAddress));
+	}
+	else if (node == "leave_work") {
+		string homeAddress = QueryAddress(post, occupantName, "citizen home address");
+		if (homeAddress.empty()) return;
+		changes.push_back(new NPCNavigateChange(occupantName, homeAddress));
+	}
 }
