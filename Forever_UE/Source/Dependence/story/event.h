@@ -2,9 +2,11 @@
 
 #include "../common/utility.h"
 #include "../common/error.h"
+#include "../common/json.h"
 #include "expression.h"
 
 #include <string>
+#include <map>
 
 
 #undef GetMessage
@@ -577,10 +579,9 @@ private:
 class PuzzleResultEvent : public Event {
 public:
 	/*
-	* 构造小游戏结果事件
-	* @result: 结果值
+	* 构造小游戏结果事件(没有任何结果字段)
 	*/
-	PuzzleResultEvent(std::string result);
+	PuzzleResultEvent();
 
 	/*
 	* 析构小游戏结果事件
@@ -593,29 +594,34 @@ public:
 	virtual const std::string& GetType() const override;
 
 	/*
-	* 匹配：result在脚本里是表达式，非空才比较
+	* 匹配：只按类型比较
 	*/
 	virtual bool Match(Event* e, const ScriptContext& context) override;
 
 	/*
-	* local.result：结果值
+	* local.<展平名>：结果字段，见SetFromJson
 	*/
 	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
-	* 设置结果值
-	* @result: 结果值
+	* 把小游戏返回的json展平写进事件(先清空旧字段)：root必须是object，否则返回false且不写任何字段。
+	* object成员名用点号连接(a.b)，数组项用中括号加下标(items[0]、items[1].x)，
+	* 基础类型(int/double/bool/string)直接写，null忽略。
+	* @root: 小游戏返回的结果
 	*/
-	void SetResult(std::string result);
+	bool SetFromJson(const JsonValue& root);
 
 	/*
-	* 获取结果值
+	* 展平后的全部结果字段
 	*/
-	const std::string& GetResult() const;
+	const std::map<std::string, ValueType>& GetFields() const;
 
 private:
-	// 小游戏结果值
-	std::string result;
+	// 递归展平
+	void Flatten(const std::string& name, const JsonValue& value);
+
+	// 展平后的结果字段
+	std::map<std::string, ValueType> fields;
 };
 
 // 交易结果

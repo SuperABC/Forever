@@ -31,6 +31,7 @@ struct ScriptContext;
 // ApplyChange"这一步。详见ForeverStoryFrameworkComponent.md。
 class PostImplement;
 class Event;
+class PuzzleResultEvent;
 class CitizenDeceaseEvent;
 
 UCLASS()
@@ -131,8 +132,10 @@ public:
 	void ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context);
 
 	// 小游戏结束时由UPuzzleWidget::EndPuzzle调用：给启动它的那个脚本(ApplyStartPuzzle记下的)发
-	// puzzle_result事件(result固定"finish")，脚本里用来在小游戏结束后发工资之类。
-	void NotifyPuzzleFinished();
+	// puzzle_result事件，事件里是已展平的结果字段，脚本里用local.<字段名>读，用来在小游戏结束后
+	// 按成绩发工资之类。
+	// @event: 已经SetFromJson好的结果事件
+	void NotifyPuzzleFinished(PuzzleResultEvent& event);
 
 	// open_shop：找到执行这个Change的Job脚本所属的岗位和组织，打开商店界面并让它记录这个组织
 	// (购买时付款给它)。

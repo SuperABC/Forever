@@ -531,7 +531,7 @@ void UForeverStoryFrameworkComponent::ApplyStartPuzzle(const StartPuzzleChange* 
 	playerController->GetPuzzleWidget()->StartPuzzle(puzzleId, param);
 }
 
-void UForeverStoryFrameworkComponent::NotifyPuzzleFinished() {
+void UForeverStoryFrameworkComponent::NotifyPuzzleFinished(PuzzleResultEvent& event) {
 	if (!story || puzzleOwnerKey.empty()) return;
 	Script* owner = FindScriptByKey(puzzleOwnerKey);
 	puzzleOwnerKey.clear();
@@ -546,7 +546,6 @@ void UForeverStoryFrameworkComponent::NotifyPuzzleFinished() {
 		framework ? framework->GetIndustry() : nullptr,
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
-	PuzzleResultEvent event("finish");
 	BroadcastToScript(event, owner, postImplement);
 }
 

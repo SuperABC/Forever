@@ -32,7 +32,7 @@ public:
 	// 设置玩家/敌人的五行属性；不写或写不认识的字就是无属性(和以前完全一样)
 	virtual void SetParam(const std::string& param) override;
 	virtual void Init(Canvas* canvas, PostHandle* post) override;
-	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override;
+	virtual JsonValue* Loop(Canvas* canvas, int ms, PostHandle* post) override;
 
 	// 存档保存/恢复命名计数器(count)，见Source/Dependence/common/mod_state.md。
 	virtual int GetInstanceCounter() const override { return count; }
@@ -139,6 +139,9 @@ private:
 	bool loadFailed = false;
 	bool closeRequested = false;
 	int pendingResult = 0; // 战斗结束的判定，1=胜利，-1=失败
+	JsonValue result; // 返回给Core的结果，Loop结束时由Finish填好
+
+	JsonValue* Finish();
 	int roundNumber = 0;
 	unsigned playerElements = 0, enemyElements = 0; // 双方的五行属性掩码(wxdj::ElementBit)，SetParam设置
 

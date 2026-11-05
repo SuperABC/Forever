@@ -56,9 +56,10 @@ public:
 	* @canvas: 画布，不持有所有权
 	* @ms: 距上一帧的毫秒数
 	* @post: 向Core发起查询的句柄
-	* @return: 帧状态码，0继续运行，非0退出
+	* @return: nullptr继续运行；非空表示小游戏结束，指针是结果json(归mod实例所有，Puzzle销毁
+	*   前有效，调用方只读，需要的话在销毁前拷走)
 	*/
-	int Loop(Canvas* canvas, int ms, PostHandle* post);
+	JsonValue* Loop(Canvas* canvas, int ms, PostHandle* post);
 
 private:
 	// 工厂

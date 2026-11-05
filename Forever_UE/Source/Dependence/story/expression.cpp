@@ -466,6 +466,17 @@ static size_t FindMatchingQuote(const string& expr, size_t start) {
 	return string::npos;
 }
 
+// expr[start]是'['，后面紧跟若干数字和']'
+static bool IsIndexSuffix(const string& expr, size_t start) {
+	size_t i = start + 1;
+	size_t digits = 0;
+	while (i < expr.length() && isdigit(static_cast<unsigned char>(expr[i]))) {
+		i++;
+		digits++;
+	}
+	return digits > 0 && i < expr.length() && expr[i] == ']';
+}
+
 vector<string> Expression::Tokenize(const string& expr) {
 	vector<string> tokens;
 	string current;
@@ -492,6 +503,13 @@ vector<string> Expression::Tokenize(const string& expr) {
 			string quoted = expr.substr(i, end - i + 1);
 			tokens.push_back(quoted);
 			i = end + 1;
+		}
+		else if (c == '[' && current.size() > 2 && current.compare(0, 2, "$$") == 0 && IsIndexSuffix(expr, i)) {
+			// 紧跟在变量名后的[数字]是展平出来的数组项名字(如$$local.items[0].x)，并进变量token，
+			// 不当数组字面量
+			size_t close = expr.find(']', i);
+			current += expr.substr(i, close - i + 1);
+			i = close + 1;
 		}
 		else if (IsOperatorChar(c) || c == '(' || c == ')' || c == '[' || c == ']' || c == ',') {
 			if (!current.empty()) {
@@ -791,7 +809,7 @@ bool IsOperatorChar(char c) {
 }
 
 bool IsSpaceChar(char c) {
-	return isspace(static_cast<unsigned char>(c)) || c == '　';
+	return isspace(static_cast<unsigned char>(c));
 }
 
 bool IsIdentifierChar(char c) {

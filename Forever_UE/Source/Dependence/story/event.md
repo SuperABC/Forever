@@ -73,4 +73,4 @@
 - `weather_change`(weather，留空=任何天气变化都触发)：天气变了(系统自动随机换，或`change_weather`强制换)时由`UForeverStoryFrameworkComponent::BroadcastWeatherChange`广播给所有挂了Script的东西(含主线，和`global_message`同范围)。`WeatherChangeEvent::Match`按weather(表达式)过滤；脚本里用`local.weather`读变化后的天气名。读档不广播。天气名见`Core/player/weather.md`。
 
 ## NpcArriveEvent / PuzzleResultEvent
-`NpcArriveEvent(name, address)`：`Match`里name/address为空不比较，`GetLocalValue`提供`local.name`、`local.address`。`PuzzleResultEvent(result)`：`GetLocalValue`提供`local.result`。
+`NpcArriveEvent(name, address)`：`Match`里name/address为空不比较，`GetLocalValue`提供`local.name`、`local.address`。`PuzzleResultEvent()`：没有过滤字段，`Match`只比类型。`SetFromJson(root)`把小游戏`Loop`返回的json展平进事件(root必须是object，否则返回false、不写任何字段)：object成员用点号连接(`a.b`)，数组项用`[idx]`(`items[0]`、`items[1].x`)，int/double/bool/string直接写，null忽略。`GetLocalValue(展平名)`读出，脚本里写`$$local.a.b`、`$$local.items[0]`(分词器把紧跟变量名的`[数字]`并进变量token)。

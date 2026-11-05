@@ -3,6 +3,7 @@
 #include "common/mod_state.h"
 #include "player/canvas.h"
 #include "common/handle.h"
+#include "common/json.h"
 
 #include <string>
 
@@ -43,9 +44,11 @@ public:
 	* @canvas: 画布，不持有所有权
 	* @ms: 距上一帧的毫秒数，用于推进重力计时器等
 	* @post: 向Core发起查询的句柄
-	* @return: 0表示继续，非0表示这一局小游戏结束
+	* @return: nullptr表示继续；非空表示这一局小游戏结束，指针就是结果(root必须是object)，
+	*   由小游戏实例自己持有(成员变量)，到实例销毁前一直有效，Core只读不改不释放。Core会把它
+	*   展平写进puzzle_result事件，见PuzzleResultEvent::SetFromJson
 	*/
-	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) = 0;
+	virtual JsonValue* Loop(Canvas* canvas, int ms, PostHandle* post) = 0;
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
 	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，

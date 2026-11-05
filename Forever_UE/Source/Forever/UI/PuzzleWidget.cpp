@@ -14,6 +14,7 @@
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "common/implement.h"
 #include "common/registry.h"
+#include "story/event.h"
 
 #undef UpdateResource
 
@@ -85,7 +86,13 @@ void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.f);
 }
 
-void UPuzzleWidget::EndPuzzle() {
+void UPuzzleWidget::EndPuzzle(const JsonValue& result) {
+	// 结果json归mod实例所有，delete puzzle之前先展平进事件。root不是object时事件里没有任何字段。
+	PuzzleResultEvent resultEvent;
+	if (!resultEvent.SetFromJson(result)) {
+		UE_LOG(LogTemp, Warning, TEXT("Puzzle result root is not an object, result fields ignored."));
+	}
+
 	delete puzzle;
 	puzzle = nullptr;
 
@@ -101,7 +108,7 @@ void UPuzzleWidget::EndPuzzle() {
 
 	// 告诉启动这局小游戏的脚本：结束了(puzzle_result)。
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
-		if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) story->NotifyPuzzleFinished();
+		if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) story->NotifyPuzzleFinished(resultEvent);
 	}
 }
 
@@ -117,11 +124,11 @@ void UPuzzleWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
 	canvas.Resize(viewportSize.X, viewportSize.Y);
 
 	PostImplement post = MakePost(GetWorld());
-	int result = puzzle->Loop(&canvas, FMath::RoundToInt(DeltaTime * 1000.f), &post);
+	JsonValue* result = puzzle->Loop(&canvas, FMath::RoundToInt(DeltaTime * 1000.f), &post);
 	BlitCanvasToImage();
 
-	if (result != 0) {
-		EndPuzzle();
+	if (result) {
+		EndPuzzle(*result);
 	}
 }
 

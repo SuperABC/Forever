@@ -20,9 +20,13 @@ public:
 	virtual const char* GetName() override;
 
 	virtual void Init(Canvas* canvas, PostHandle* post) override;
-	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override;
+	virtual JsonValue* Loop(Canvas* canvas, int ms, PostHandle* post) override;
 
 private:
+	// 结束时填好结果({"score":n})并返回，指针归自己所有
+	JsonValue* Finish();
+	JsonValue result;
+
 	static constexpr int kBoardWidth = 10;
 	static constexpr int kBoardHeight = 20;
 	static constexpr int kPieceTypeCount = 7;
@@ -115,9 +119,10 @@ public:
 
 	virtual void SetParam(const std::string& param) override;
 	virtual void Init(Canvas* canvas, PostHandle* post) override;
-	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override;
+	virtual JsonValue* Loop(Canvas* canvas, int ms, PostHandle* post) override;
 
 private:
+	JsonValue result; // 结束时返回{}，没有任何字段
 	static int count;
 	int id;
 	std::string name;

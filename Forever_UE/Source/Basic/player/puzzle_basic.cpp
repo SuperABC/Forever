@@ -245,7 +245,13 @@ void TetrisPuzzle::ClearLines() {
 	level = 1 + totalLines / 10;
 }
 
-int TetrisPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
+JsonValue* TetrisPuzzle::Finish() {
+	result = JsonValue(DATA_OBJECT);
+	result["score"] = score;
+	return &result;
+}
+
+JsonValue* TetrisPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	while (canvas->HasPendingKey()) {
 		int raw = canvas->PopKey();
 		bool released = (raw & KEY_RELEASED_FLAG) != 0;
@@ -253,7 +259,7 @@ int TetrisPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 		if (released) continue; // 只处理按下
 
 		if (key == KEY_ESCAPE) {
-			return 1; // 不管是否已经游戏结束，ESC都直接退出这一局
+			return Finish(); // 不管是否已经游戏结束，ESC都直接退出这一局
 		}
 
 		if (gameOver) continue; // 结束画面只响应ESC，见上面
@@ -289,7 +295,7 @@ int TetrisPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 		}
 		if (DoAction(action)) {
 			canvas->ClearMouseBuffer();
-			return 1;
+			return Finish();
 		}
 		if (IsRepeatAction(action)) {
 			heldAction = action;
@@ -324,7 +330,7 @@ int TetrisPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	}
 
 	Render(canvas);
-	return 0;
+	return nullptr;
 }
 
 void TetrisPuzzle::Render(Canvas* canvas) const {
@@ -439,7 +445,7 @@ void AnyKeyPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	hasImage = LoadModImage(post, "Basic_anykey.png", image);
 }
 
-int AnyKeyPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
+JsonValue* AnyKeyPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	bool pressed = false;
 	while (canvas->HasPendingKey()) {
 		int raw = canvas->PopKey();
@@ -448,7 +454,10 @@ int AnyKeyPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	while (canvas->HasPendingMouseEvent()) {
 		if (canvas->PopMouseEvent().down) pressed = true; // 点击/触摸任意处也算按键
 	}
-	if (pressed) return 1;
+	if (pressed) {
+		result = JsonValue(DATA_OBJECT);
+		return &result;
+	}
 
 	canvas->SetColor(0, 0, 0);
 	canvas->ClearScreen();
@@ -465,5 +474,5 @@ int AnyKeyPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	canvas->SetFontSize(14);
 	string hint = "Press any key or tap";
 	canvas->PutString(hint, (canvas->GetWidth() - canvas->StringWidth(hint)) / 2, canvas->GetHeight() / 2 + 30);
-	return 0;
+	return nullptr;
 }

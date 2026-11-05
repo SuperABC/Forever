@@ -1200,7 +1200,7 @@ void WxdjPuzzle::DrawScene(Canvas* canvas) {
 	if (phase == PHASE_RESULT) DrawResultOverlay(canvas);
 }
 
-int WxdjPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
+JsonValue* WxdjPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	if (loadFailed) {
 		canvas->SetColor(18, 18, 24);
 		canvas->SetAlpha(1.f);
@@ -1208,7 +1208,8 @@ int WxdjPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 		canvas->SetColor(220, 60, 60);
 		canvas->SetFontSize(max(16, canvasH / 25));
 		canvas->PutString("招式数据加载失败", margin, margin);
-		return -1;
+		pendingResult = -1;
+		return Finish();
 	}
 
 	RebuildWidgets();
@@ -1279,5 +1280,12 @@ int WxdjPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 
 	DrawScene(canvas);
 	if (phase == PHASE_SELECT) DrawTooltip(canvas, mouse.x, mouse.y);
-	return closeRequested ? pendingResult : 0;
+	if (!closeRequested) return nullptr;
+	return Finish();
+}
+
+JsonValue* WxdjPuzzle::Finish() {
+	result = JsonValue(DATA_OBJECT);
+	result["result"] = pendingResult; // 1=胜利，-1=失败，0=中途退出
+	return &result;
 }

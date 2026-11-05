@@ -63,12 +63,16 @@ public:
 	bool IsRunning() const { return puzzle != nullptr || phone != nullptr; }
 	bool PuzzleFinished() const { return finished; }
 
+	// puzzle结束时按Core同样的规则展平后的结果("name=value"逐行)，未结束为空；root不是object时为"<invalid>"
+	const std::string& PuzzleResult() const { return resultText; }
+
 private:
 	Canvas canvas;
 	StubPost post;
 	Puzzle* puzzle = nullptr;
 	Phone* phone = nullptr;
 	bool finished = false;
+	std::string resultText;
 	std::vector<std::string> enabledPuzzles, enabledApps;
 };
 

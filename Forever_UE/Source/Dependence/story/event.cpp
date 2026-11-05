@@ -434,8 +434,7 @@ const std::string& LeaveRoomEvent::GetRoom() const {
 	return room;
 }
 
-PuzzleResultEvent::PuzzleResultEvent(std::string result) :
-	result(move(result)) {
+PuzzleResultEvent::PuzzleResultEvent() {
 
 }
 
@@ -451,22 +450,52 @@ const string& PuzzleResultEvent::GetType() const {
 bool PuzzleResultEvent::Match(Event* e, const ScriptContext& context) {
 	if (!Event::Match(e, context)) return false;
 
-	auto* other = static_cast<PuzzleResultEvent*>(e);
-	if (!result.empty() && ToString(EvaluateExpression(result, context)) != other->result) return false;
 	return true;
 }
 
 pair<bool, ValueType> PuzzleResultEvent::GetLocalValue(const string& key) const {
-	if (key == "result") return { true, ValueType(result) };
-	return { false, ValueType() };
+	auto it = fields.find(key);
+	if (it == fields.end()) return { false, ValueType() };
+	return { true, it->second };
 }
 
-void PuzzleResultEvent::SetResult(std::string result) {
-	this->result = move(result);
+bool PuzzleResultEvent::SetFromJson(const JsonValue& root) {
+	fields.clear();
+	if (!root.IsObject()) return false;
+	Flatten("", root);
+	return true;
 }
 
-const std::string& PuzzleResultEvent::GetResult() const {
-	return result;
+const std::map<std::string, ValueType>& PuzzleResultEvent::GetFields() const {
+	return fields;
+}
+
+void PuzzleResultEvent::Flatten(const string& name, const JsonValue& value) {
+	if (value.IsObject()) {
+		for (const string& member : value.GetMembers()) {
+			Flatten(name.empty() ? member : name + "." + member, value[member]);
+		}
+	}
+	else if (value.IsArray()) {
+		for (unsigned int i = 0; i < value.size(); i++) {
+			Flatten(name + "[" + to_string(i) + "]", value[i]);
+		}
+	}
+	else if (name.empty()) {
+		return;
+	}
+	else if (value.IsBool()) {
+		fields[name] = ValueType(value.AsBool());
+	}
+	else if (value.IsIntegral()) {
+		fields[name] = ValueType(value.AsInt());
+	}
+	else if (value.IsDouble()) {
+		fields[name] = ValueType(value.AsDouble());
+	}
+	else if (value.IsString()) {
+		fields[name] = ValueType(value.AsString());
+	}
 }
 
 TransactionResultEvent::TransactionResultEvent(std::string result, std::string name) :

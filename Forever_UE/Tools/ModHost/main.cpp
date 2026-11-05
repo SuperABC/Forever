@@ -270,6 +270,7 @@ namespace {
 				bool want = cmd == "expect_finished";
 				if (host.PuzzleFinished() != want) { fprintf(stderr, "%s failed\n", cmd.c_str()); return false; }
 				printf("%s ok\n", cmd.c_str());
+				if (want && !host.PuzzleResult().empty()) printf("puzzle result:\n%s", host.PuzzleResult().c_str());
 				return true;
 			}
 			fprintf(stderr, "unknown command: %s\n", cmd.c_str());

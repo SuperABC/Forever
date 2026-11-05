@@ -189,14 +189,14 @@ public:
 	// 供Loop打印出来，用来验证param确实在Init之前到达。
 	virtual void SetParam(const std::string& param) override { this->param = param; }
 
-	// 空占位：没有任何游戏逻辑，只在窗口最左上角打印本次启动的param，Loop固定返回0。
+	// 空占位：没有任何游戏逻辑，只在窗口最左上角打印本次启动的param，Loop固定返回nullptr(永不结束)。
 	virtual void Init(Canvas* canvas, PostHandle* post) override {}
-	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override {
+	virtual JsonValue* Loop(Canvas* canvas, int ms, PostHandle* post) override {
 		canvas->ClearScreen();
 		canvas->SetColor(255, 255, 255);
 		canvas->SetFontSize(24);
 		canvas->PutString("param: " + param, 0, 0);
-		return 0;
+		return nullptr;
 	}
 
 private:

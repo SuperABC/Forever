@@ -140,6 +140,6 @@ Script(`includeMain`为true时连主线也算)，匹配结果交给`ProcessScrip
 ## 玩家与经济交互
 - `BroadcastNpcArrive(citizen, room)`：市民进入新房间时给它自己的Scheduler脚本和Job脚本发`npc_arrive`，有递归深度保护。
 - `OptionDialog`的选项点击也发给被点市民的Job脚本。
-- `ApplyStartPuzzle`记下启动脚本，`NotifyPuzzleFinished()`(小游戏结束时由UPuzzleWidget调用)给它发`puzzle_result`。
+- `ApplyStartPuzzle`记下启动脚本，`NotifyPuzzleFinished(event)`(小游戏结束时由UPuzzleWidget调用，event是已展平结果的`PuzzleResultEvent`)给它发`puzzle_result`，脚本用`$$local.<展平名>`读结果字段。
 - `ApplyOpenShop`：由Job脚本反查组织，打开商店界面并让它记住该组织。`ApplyPayWage`：该组织给被操控市民发工资。
 - `ApplyControlChange`里实例化被操控市民的动态属性。

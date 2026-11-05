@@ -3,6 +3,7 @@
 #include "player/puzzle.h"
 #include "player/phone.h"
 #include "common/registry.h"
+#include "story/event.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -125,6 +126,7 @@ void ModHost::Stop() {
 	delete phone;
 	phone = nullptr;
 	finished = false;
+	resultText.clear();
 	canvas.SetResizeFunc(nullptr, nullptr);
 	canvas.ClearKeyBuffer();
 	canvas.ClearMouseBuffer();
@@ -153,7 +155,20 @@ void ModHost::Resize(int width, int height) {
 
 bool ModHost::Frame(int ms) {
 	if (puzzle && !finished) {
-		if (puzzle->Loop(&canvas, ms, &post) != 0) finished = true;
+		JsonValue* result = puzzle->Loop(&canvas, ms, &post);
+		if (result) {
+			finished = true;
+			PuzzleResultEvent event;
+			if (!event.SetFromJson(*result)) resultText = "<invalid>";
+			for (const auto& field : event.GetFields()) {
+				// utility.cpp(ToString所在)依赖windows.h，网页版不编，这里自己转字符串
+				string text = visit([](const auto& v) -> string {
+					if constexpr (is_same_v<decay_t<decltype(v)>, string>) return v;
+					else return to_string(v);
+				}, field.second);
+				resultText += field.first + "=" + text + "\n";
+			}
+		}
 	}
 	else if (phone) {
 		phone->Loop(&canvas, ms, &post);

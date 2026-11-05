@@ -33,6 +33,6 @@ void Puzzle::Init(Canvas* canvas, PostHandle* post) {
 	mod->Init(canvas, post);
 }
 
-int Puzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
+JsonValue* Puzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	return mod->Loop(canvas, ms, post);
 }

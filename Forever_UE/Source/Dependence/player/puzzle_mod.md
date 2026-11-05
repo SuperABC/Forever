@@ -8,7 +8,7 @@
 
 - **画布由宿主创建**：`Canvas`的创建和定尺寸交给UE侧宿主(`UPuzzleWidget`)，`Init`只接收一个已经`Init()`好尺寸的`Canvas*`，用`canvas->GetWidth()`/`GetHeight()`布局初始状态；不持有所有权。
 - **`SetParam(param)`**：剧情脚本`start_puzzle`的`param`字段传给这一局的**动态**启动参数，在`Init`之前调一次，默认忽略；每次启动可以不同，让剧情控制小游戏表现，格式由各小游戏自己约定。它和`config.json`里`puzzle_mods`的静态`args`(创建mod时传给创建函数、整个游戏期间固定)不是一回事；动态参数不进存档(谜题进行中本就不能存档)。
-- **`Loop`返回int**：0表示继续，非0表示这一局结束；每帧读取画布里宿主注入的键鼠事件、推进逻辑、把画面画到画布上，`ms`是距上一帧的毫秒数。
+- **`Loop`返回`JsonValue*`**：`nullptr`表示继续；非空表示这一局结束，指针就是结果(root必须是object)，由小游戏实例自己持有(成员变量，跨DLL堆规则：Core只读不改不释放)，到实例销毁前有效。Core把它展平写进`puzzle_result`事件(见`story/event.md`)。每帧读取画布里宿主注入的键鼠事件、推进逻辑、把画面画到画布上，`ms`是距上一帧的毫秒数。
 - 带存档钩子，默认不存任何东西，见`common/mod_state.md`。
 
 ## 依赖关系

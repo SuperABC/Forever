@@ -325,8 +325,8 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			else event = new LeaveVehicleEvent(obj["vehicle"].AsString(), obj["mode"].AsString());
 		}
 		else if (type == "puzzle_result") {
-			// result可以省略(留空=不限)，见PuzzleResultEvent::Match。目前小游戏结束时统一发"finish"。
-			event = new PuzzleResultEvent(obj["result"].AsString());
+			// 没有任何过滤字段，小游戏的结果字段在脚本里用local.<展平名>读，见PuzzleResultEvent::SetFromJson。
+			event = new PuzzleResultEvent();
 		}
 		else if (type == "npc_arrive") {
 			// name/address都可以省略(留空=不限)，见NpcArriveEvent::Match；address是房间地址(Room::GetAddress())。

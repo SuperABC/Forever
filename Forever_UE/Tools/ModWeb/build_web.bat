@@ -21,6 +21,7 @@ call em++ -O2 -std=c++17 -fexceptions ^
   "%SRC%\Dependence\player\canvas.cpp" "%SRC%\Dependence\player\app_factory.cpp" "%SRC%\Dependence\player\puzzle_factory.cpp" ^
   "%SRC%\Dependence\player\app_mod.cpp" "%SRC%\Dependence\player\puzzle_mod.cpp" ^
   "%SRC%\Dependence\common\json.cpp" "%SRC%\Dependence\common\error.cpp" "%SRC%\Dependence\common\handle.cpp" ^
+  "%SRC%\Dependence\story\event.cpp" "%SRC%\Dependence\story\expression.cpp" ^
   "%SRC%\Core\player\phone.cpp" "%SRC%\Core\player\app.cpp" "%SRC%\Core\player\puzzle.cpp" ^
   "%SRC%\Basic\player\puzzle_basic.cpp" "%SRC%\Basic\player\app_basic.cpp" ^
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_NAME=createModule -sENVIRONMENT=web -sSINGLE_FILE=1 ^

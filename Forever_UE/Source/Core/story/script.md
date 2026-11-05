@@ -109,5 +109,5 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 新增解析：Event `get_asset`/`lose_asset`(过滤字段`asset_type`、`result`，JSON的`type`已是事件类型)；Change `pick_asset`(asset，缺省=所属资产)、`grant_asset`/`deduct_asset`/`drop_asset`(asset_type、count缺省1)。
 
 ## 玩家与经济相关的事件/Change
-- 事件`npc_arrive`(name, address，空=不限)、`puzzle_result`(result固定"finish")。
+- 事件`npc_arrive`(name, address，空=不限)、`puzzle_result`(无过滤字段，结果字段用`$$local.<展平名>`读，见`event.md`)。
 - Change `open_shop`(无参数)、`pay_wage`(amount表达式，单位分)；`spawn_npc`新增`economy`表达式(缺省false)。

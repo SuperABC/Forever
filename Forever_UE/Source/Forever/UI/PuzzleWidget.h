@@ -57,7 +57,7 @@ private:
 	// 小游戏结束（Loop返回非0）时调用：delete puzzle、隐藏自己、恢复正常的游戏内输入——
 	// 跟UForeverStoryFrameworkComponent::ShowCurrentItem队列清空分支的收尾逻辑一致
 	// （bShowMouseCursor=false+SetInputMode_GameOnly+SetFocusToGameViewport找回视口焦点）。
-	void EndPuzzle();
+	void EndPuzzle(const JsonValue& result);
 
 	// 查真实视口像素分辨率，查不到时返回(fallbackWidth, fallbackHeight)——StartPuzzle()首次
 	// 建画布、NativeTick()每帧比对是否发生了resize，共用这一份查询逻辑。
