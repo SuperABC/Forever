@@ -25,6 +25,7 @@ call em++ -O2 -std=c++17 -fexceptions ^
   "%SRC%\Basic\player\puzzle_basic.cpp" "%SRC%\Basic\player\app_basic.cpp" ^
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_NAME=createModule -sENVIRONMENT=web -sSINGLE_FILE=1 ^
   -sDISABLE_EXCEPTION_CATCHING=0 ^
+  --embed-file "%HERE%..\..\Resource\Mod\Basic@/res/Basic" ^
   "-sEXPORTED_RUNTIME_METHODS=UTF8ToString,UTF32ToString,stringToUTF8,HEAPU8" ^
   "-sEXPORTED_FUNCTIONS=_malloc,_free" ^
   -o "%HERE%build\forever_mods.js"

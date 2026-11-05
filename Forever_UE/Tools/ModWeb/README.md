@@ -29,3 +29,4 @@ build_web.bat                    # 产出 dist\forever_mods.html
 
 - 手机上字体来自设备本身,和 Windows 下的微软雅黑字宽不完全一致。
 - 改了 `Basic` 里的 puzzle/app 之后需要重新跑 `build_web.bat` 并重新拷贝 html。
+- mod图片:`build_web.bat`用`--embed-file Resource\Mod\Basic@/res/Basic`把图片内嵌进html(虚拟文件系统根目录`/res`),所以图片越多html越大。

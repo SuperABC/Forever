@@ -2,7 +2,7 @@
 rem Count lines in all .h/.cpp files under this repo (skips build output folders).
 cd /d "%~dp0"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$skip = '\\(Intermediate|Binaries|DerivedDataCache|Saved|x64|\.vs|\.git|\.dump)\\';" ^
+  "$skip = '\\(Intermediate|Binaries|DerivedDataCache|Saved|x64|\.vs|\.git|\.dump|3rdParty|\.emsdk)\\';" ^
   "$files = Get-ChildItem -Recurse -File -Include *.h,*.cpp | Where-Object { $_.FullName -notmatch $skip };" ^
   "$root = (Get-Location).Path + '\';" ^
   "$rows = $files | ForEach-Object { $l = [IO.File]::ReadAllLines($_.FullName); $rel = $_.FullName.Substring($root.Length); $p = $rel.Split('\'); $g = if ($p.Length -ge 3) { $p[0..2] -join '\' } else { $p[0] }; [pscustomobject]@{ Group = $g; Lines = $l.Count; NonBlank = @($l | Where-Object { $_.Trim() -ne '' }).Count } };" ^

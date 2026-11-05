@@ -27,6 +27,7 @@ namespace {
 		bool list = false;
 		string script;
 		string outDir = ".";
+		string resourceDir;
 		int width = 480, height = 640;
 	};
 
@@ -241,6 +242,18 @@ namespace {
 			if (cmd == "open_app") { int n; if (!(in >> n)) return false; int x, y; PhoneLayout::HomeIcon(w, h, n, x, y); Click(x, y); return true; }
 			if (cmd == "tap_task") { int n; if (!(in >> n)) return false; int x, y; PhoneLayout::TaskThumb(w, h, n, x, y); Click(x, y); return true; }
 			if (cmd == "close_task") { int n; if (!(in >> n)) return false; int x, y; PhoneLayout::TaskClose(w, h, n, x, y); Click(x, y); return true; }
+			if (cmd == "image") { // image <文件名> x y [w h]：经"resource path"加载并用PutBitmap画到当前画布(测试用)
+				string name; int x = 0, y = 0, iw = 0, ih = 0;
+				if (!(in >> name >> x >> y)) return false;
+				in >> iw >> ih;
+				Bitmap bitmap;
+				StubPost post;
+				if (!LoadModImage(&post, name, bitmap)) { fprintf(stderr, "LoadModImage failed: %s\n", name.c_str()); return false; }
+				printf("image %s %dx%d\n", name.c_str(), bitmap.width, bitmap.height);
+				host.GetCanvas().SetAlpha(1.f);
+				host.GetCanvas().PutBitmap(bitmap, x, y, iw, ih);
+				return true;
+			}
 			if (cmd == "resize") { int nw, nh; if (!(in >> nw >> nh)) return false; host.Resize(nw, nh); Step(2); return true; }
 			if (cmd == "shot") {
 				string name; in >> name;
@@ -286,6 +299,7 @@ int main(int argc, char** argv) {
 		else if (arg == "--list") options.list = true;
 		else if (arg == "--script") options.script = next();
 		else if (arg == "--out") options.outDir = next();
+		else if (arg == "--resource") options.resourceDir = next();
 		else if (arg == "--size") {
 			string size = next();
 			if (sscanf_s(size.c_str(), "%dx%d", &options.width, &options.height) != 2) { PrintUsage(); return 2; }
@@ -301,6 +315,16 @@ int main(int argc, char** argv) {
 		dir = dir.substr(0, dir.find_last_of("\\/") + 1);
 		options.dlls.push_back(dir + "Basic.dll");
 	}
+
+	if (options.resourceDir.empty()) {
+		// 默认：exe在Forever_UE/x64/Release，Resource在Forever_UE/Resource
+		char exe[MAX_PATH];
+		GetModuleFileNameA(nullptr, exe, MAX_PATH);
+		string dir = exe;
+		dir = dir.substr(0, dir.find_last_of("\\/") + 1);
+		options.resourceDir = dir + "../../Resource";
+	}
+	StubPost::ResourceRoot() = options.resourceDir;
 
 	ModHost host;
 	for (const string& dll : options.dlls) {

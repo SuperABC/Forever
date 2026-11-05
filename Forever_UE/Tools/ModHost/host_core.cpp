@@ -5,6 +5,7 @@
 #include "common/registry.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <unordered_map>
 
 #ifdef _WIN32
@@ -19,9 +20,35 @@ StubPost::StubPost() : result(DATA_OBJECT) {
 	result["result"] = "fail";
 }
 
+string& StubPost::ResourceRoot() {
+	static string root;
+	return root;
+}
+
 void StubPost::Post(const JsonValue& request) {
-	// 桩实现：所有查询都返回失败(主屏日期/时间因此不显示)，足够验证puzzle/app本身的逻辑。
 	result = JsonValue(DATA_OBJECT);
+
+	// "resource path"：request["name"]是带扩展名的文件名，在ResourceRoot下递归找同名文件，返回路径。
+	if (request.IsObject() && request["post"].AsString() == "resource path") {
+		string name = request["name"].AsString();
+		error_code ec;
+		if (!ResourceRoot().empty()) {
+			for (const auto& entry : filesystem::recursive_directory_iterator(
+					ResourceRoot(), filesystem::directory_options::skip_permission_denied, ec)) {
+				if (entry.is_regular_file() && entry.path().filename().string() == name) {
+					string path = entry.path().generic_string();
+					result["result"] = "success";
+					result["path"] = path;
+					return;
+				}
+			}
+		}
+		result["result"] = "fail";
+		result["msg"] = "resource not found: " + name;
+		return;
+	}
+
+	// 其余查询一律失败(主屏日期/时间因此不显示)，足够验证puzzle/app本身的逻辑。
 	result["result"] = "fail";
 	result["msg"] = "post not supported in ModHost.";
 }

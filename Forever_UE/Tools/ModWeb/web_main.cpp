@@ -33,6 +33,7 @@ extern "C" {
 EMSCRIPTEN_KEEPALIVE void web_setup() {
 	if (host) return;
 	host = new ModHost();
+	StubPost::ResourceRoot() = "/res"; // build_web.bat用--embed-file把Resource/Mod/Basic内嵌到这里
 
 	ModHost::EnableIds({ TetrisPuzzle::GetId(), AnyKeyPuzzle::GetId() }, { BounceApp::GetId(), NotesApp::GetId() });
 	PuzzleFactory& puzzles = Registry::Get().GetPuzzleFactory();

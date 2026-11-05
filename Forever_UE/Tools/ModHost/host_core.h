@@ -22,6 +22,10 @@ public:
 	virtual void Post(const JsonValue& request) override;
 	virtual const JsonValue& GetResult() const override { return result; }
 
+	// "resource path"查询的根目录：在这个目录下递归按文件名找(和Core的Config::GetResourceFilePath
+	// 同样的语义)。原生默认Forever_UE/Resource，网页版是内嵌虚拟文件系统里的/res。
+	static std::string& ResourceRoot();
+
 private:
 	JsonValue result;
 };

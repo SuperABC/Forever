@@ -96,3 +96,7 @@ lambda内部完成到基类指针的隐式转换。
 **无害的现象**：迷你工程的commandlet日志里有大量`CDO Constructor (...): Failed to find /Game/...`(主工程的IA_*、材质、网格不在迷你工程里)，只是类的默认对象里引用为空；蓝图只存与父类默认值的差异，所以不影响搬进来的蓝图。名字末尾带`_652`这类数字的资产，在uasset名字表里会被拆成`SKM_paz`+数字后缀，扫描依赖时别被误导。
 
 **没做的**：`BusVehicle`这个C++类本身没搬进`Forever_Mod`(它是纯C++ mod，搬法和`YuanshenBuilding`一样，没有技术障碍)；线路公交用的`transitMeshPath`、脚本也没搬。
+
+## 图片资源约定
+
+mod自带的图片放在`<ModGroup>/Resource/`(内置Basic放`Forever_UE/Resource/Mod/Basic/`)，**文件名必须以mod名加下划线开头**(如`Basic_anykey.png`)——图片靠`Canvas`的`LoadModImage(post, 文件名, bitmap)`按文件名在`config.json`的`resource_paths`里递归查找，前缀保证全局唯一。支持PNG/JPEG/BMP/GIF/TGA等常见格式(stb_image)，详见`Forever_UE/Source/Dependence/player/canvas.md`。

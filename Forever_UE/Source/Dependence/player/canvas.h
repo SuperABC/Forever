@@ -148,6 +148,17 @@ public:
 	void PutImage(int left, int top, const Bitmap& bitmap);
 	void PutRawImage(const uint8_t* srcBGRA, int srcWidth, int srcHeight, int x, int y, int dstWidth, int dstHeight);
 
+	// 从磁盘加载图片文件(PNG/JPEG/BMP/GIF(只取第一帧)/TGA/PSD/HDR/PIC/PNM，由stb_image解码，
+	// 路径支持UTF-8)到outBitmap(BGRA，保留图片自带的alpha)。失败返回false，outBitmap不变。
+	// 不依赖Canvas实例状态，放在这里只是和Bitmap的其它操作放一起。
+	bool LoadImageFile(const std::string& path, Bitmap& outBitmap) const;
+
+	// 把bitmap缩放到dstWidth x dstHeight(<=0表示用原尺寸)画在(x,y)：双线性采样，按图片
+	// 每个像素自带的alpha(再乘当前SetAlpha整体透明度)和画布已有像素混合，所以带透明背景的
+	// 图片能正确叠在任何背景上。和PutImage(直接覆盖)/PutRawImage(忽略图片alpha)是不同的
+	// 操作，那两个保持原样。
+	void PutBitmap(const Bitmap& bitmap, int x, int y, int dstWidth = 0, int dstHeight = 0);
+
 	// 文字：见类注释——底层是Windows GDI，SetFontSize直接设置字体的像素高度(不是内置点阵
 	// 字体那种整数倍缩放)。PutString/StringWidth支持UTF-8多字节字符(中文等)和'\n'换行
 	// (GDI的TextOut本身不认换行符，内部按行拆开分别画/量)。
@@ -201,3 +212,11 @@ private:
 	void FastLine(int x1, int x2, int y); // 内部辅助：填充图形用的水平扫描线(直接按当前画笔颜色/透明度画)
 	void AllocateBuffer(); // 内部辅助：按当前width/height重新分配buffer并填充黑色不透明背景，Init/Resize共用
 };
+
+class PostHandle;
+
+// mod读自己随包图片的统一入口：通过PostHandle的"resource path"查询按文件名找到磁盘上的图片
+// (在config.json的resource_paths里递归找)，再用Canvas::LoadImageFile解码。图片放在
+// Resource/Mod/<mod名>/下，文件名必须以"<mod名>_"开头，保证全局唯一(见Dependence/README.md)。
+// 找不到文件或解码失败返回false。
+bool LoadModImage(PostHandle* post, const std::string& fileName, Bitmap& outBitmap);

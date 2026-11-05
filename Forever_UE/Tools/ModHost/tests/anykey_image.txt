@@ -1,0 +1,4 @@
+wait 100
+shot anykey_01
+click 100 100
+expect_finished

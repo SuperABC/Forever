@@ -434,6 +434,9 @@ void AnyKeyPuzzle::SetParam(const std::string& param) {
 void AnyKeyPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	canvas->ClearKeyBuffer(); // 打开瞬间还按着的键(比如点选项的那一下)不能算退出
 	canvas->ClearMouseBuffer();
+
+	// 配图：从Resource/Mod/Basic/下按文件名加载(文件名带mod名前缀保证全局唯一)，加载不到就只显示文字。
+	hasImage = LoadModImage(post, "Basic_anykey.png", image);
 }
 
 int AnyKeyPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
@@ -450,6 +453,12 @@ int AnyKeyPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
 	canvas->SetColor(0, 0, 0);
 	canvas->ClearScreen();
 	canvas->SetColor(255, 255, 255);
+	if (hasImage) {
+		int side = min(canvas->GetWidth(), canvas->GetHeight()) / 3;
+		int imgW = side, imgH = side * image.height / max(1, image.width);
+		canvas->SetAlpha(1.f);
+		canvas->PutBitmap(image, (canvas->GetWidth() - imgW) / 2, canvas->GetHeight() / 2 - 12 - imgH - 20, imgW, imgH);
+	}
 	canvas->SetFontSize(24);
 	string text = message.empty() ? string("Press any key") : message;
 	canvas->PutString(text, (canvas->GetWidth() - canvas->StringWidth(text)) / 2, canvas->GetHeight() / 2 - 12);

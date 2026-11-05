@@ -122,4 +122,6 @@ private:
 	int id;
 	std::string name;
 	std::string message;
+	Bitmap image;
+	bool hasImage = false;
 };

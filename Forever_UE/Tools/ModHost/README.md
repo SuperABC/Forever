@@ -16,13 +16,15 @@ ModHost.exe --list
 ModHost.exe --puzzle puzzle_tetris --window            # 自己玩 puzzle
 ModHost.exe --phone --window                           # 自己用手机(app)
 ModHost.exe --phone --script steps.txt --out shots     # 脚本 + 截图(无界面)
-ModHost.exe --dll X.dll --puzzle <id> [--param text] [--size 480x640]
+ModHost.exe --dll X.dll --puzzle <id> [--param text] [--size 480x640] [--resource <dir>]
 ```
 
 ## 脚本命令
 
-`wait ms` · `frame n` · `key <名>` / `keydown` / `keyup`(left right up down esc enter tab backspace space 单字符) · `click x y` · `down x y` · `up` · `move x y` · `drag x1 y1 x2 y2` · `bar back|home|tasks` · `open_app N` · `tap_task N` · `close_task N` · `resize W H` · `shot 名字`(写 PNG) · `expect_finished` / `expect_running`。`#` 开头为注释。
+`wait ms` · `frame n` · `key <名>` / `keydown` / `keyup`(left right up down esc enter tab backspace space 单字符) · `click x y` · `down x y` · `up` · `move x y` · `drag x1 y1 x2 y2` · `bar back|home|tasks` · `open_app N` · `tap_task N` · `close_task N` · `resize W H` · `image <文件名> x y [w h]`(经"resource path"加载并画图,测图片用) · `shot 名字`(写 PNG) · `expect_finished` / `expect_running`。`#` 开头为注释。
 
 ## 约定
 
 新增的 puzzle / app 必须能只靠鼠标(点击/拖动)完成键盘能做的全部操作,以便在没有键盘的手机网页(`Tools/ModWeb`)里使用。
+
+`--resource`指定"resource path"查询的根目录(递归按文件名找),默认`Forever_UE/Resource`。

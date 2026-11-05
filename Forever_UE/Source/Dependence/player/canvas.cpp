@@ -13,6 +13,16 @@
 #pragma comment(lib, "gdi32.lib")
 #endif
 
+#include "handle.h"
+#include "json.h"
+
+// 图片解码：stb_image(公共领域单头文件)，整个实现编进这个.cpp。Windows下让它按UTF-8解读路径。
+#ifdef _WIN32
+#define STBI_WINDOWS_UTF8
+#endif
+#define STB_IMAGE_IMPLEMENTATION
+#include "3rdParty/stb_image.h"
+
 
 using namespace std;
 
@@ -503,6 +513,72 @@ void Canvas::PutRawImage(const uint8_t* srcBGRA, int srcWidth, int srcHeight, in
 	}
 }
 
+bool Canvas::LoadImageFile(const string& path, Bitmap& outBitmap) const {
+	int w = 0, h = 0, channels = 0;
+	unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &channels, 4); // 强制4通道RGBA
+	if (!pixels || w <= 0 || h <= 0) {
+		if (pixels) stbi_image_free(pixels);
+		return false;
+	}
+
+	Bitmap result;
+	result.width = w;
+	result.height = h;
+	result.data.resize(static_cast<size_t>(w) * h * 4);
+	for (size_t i = 0, n = static_cast<size_t>(w) * h; i < n; i++) {
+		result.data[i * 4 + 0] = pixels[i * 4 + 2]; // B
+		result.data[i * 4 + 1] = pixels[i * 4 + 1]; // G
+		result.data[i * 4 + 2] = pixels[i * 4 + 0]; // R
+		result.data[i * 4 + 3] = pixels[i * 4 + 3]; // A
+	}
+	stbi_image_free(pixels);
+	outBitmap = std::move(result);
+	return true;
+}
+
+void Canvas::PutBitmap(const Bitmap& bitmap, int x, int y, int dstWidth, int dstHeight) {
+	int srcW = bitmap.width, srcH = bitmap.height;
+	if (srcW <= 0 || srcH <= 0 || bitmap.data.size() < static_cast<size_t>(srcW) * srcH * 4) return;
+	if (dstWidth <= 0) dstWidth = srcW;
+	if (dstHeight <= 0) dstHeight = srcH;
+
+	// 只遍历和画布相交的目标像素。
+	int x0 = max(0, -x), x1 = min(dstWidth, width - x);
+	int y0 = max(0, -y), y1 = min(dstHeight, height - y);
+	const uint8_t* src = bitmap.data.data();
+
+	for (int dy = y0; dy < y1; dy++) {
+		// 目标像素中心映射回源图坐标，做双线性采样。
+		float fy = (dy + 0.5f) * srcH / dstHeight - 0.5f;
+		int sy0 = clamp(static_cast<int>(floorf(fy)), 0, srcH - 1);
+		int sy1 = min(sy0 + 1, srcH - 1);
+		float ty = clamp(fy - sy0, 0.f, 1.f);
+
+		for (int dx = x0; dx < x1; dx++) {
+			float fx = (dx + 0.5f) * srcW / dstWidth - 0.5f;
+			int sx0 = clamp(static_cast<int>(floorf(fx)), 0, srcW - 1);
+			int sx1 = min(sx0 + 1, srcW - 1);
+			float tx = clamp(fx - sx0, 0.f, 1.f);
+
+			const uint8_t* p00 = src + (static_cast<size_t>(sy0) * srcW + sx0) * 4;
+			const uint8_t* p10 = src + (static_cast<size_t>(sy0) * srcW + sx1) * 4;
+			const uint8_t* p01 = src + (static_cast<size_t>(sy1) * srcW + sx0) * 4;
+			const uint8_t* p11 = src + (static_cast<size_t>(sy1) * srcW + sx1) * 4;
+
+			float c[4];
+			for (int k = 0; k < 4; k++) {
+				float top = p00[k] + (p10[k] - p00[k]) * tx;
+				float bottom = p01[k] + (p11[k] - p01[k]) * tx;
+				c[k] = top + (bottom - top) * ty;
+			}
+			float alpha = c[3] / 255.f * brushAlpha;
+			if (alpha <= 0.f) continue;
+			BlendPixel(x + dx, y + dy, static_cast<uint8_t>(c[2] + 0.5f), static_cast<uint8_t>(c[1] + 0.5f),
+				static_cast<uint8_t>(c[0] + 0.5f), alpha);
+		}
+	}
+}
+
 void Canvas::SetFontSize(int size) {
 	fontSize = max(1, size);
 }
@@ -600,4 +676,19 @@ int Canvas::ConsumeMouseWheel() {
 	int delta = wheelDelta;
 	wheelDelta = 0;
 	return delta;
+}
+
+bool LoadModImage(PostHandle* post, const string& fileName, Bitmap& outBitmap) {
+	if (!post) return false;
+
+	JsonValue request(DATA_OBJECT);
+	request["post"] = "resource path";
+	request["name"] = fileName;
+	post->Post(request);
+
+	const JsonValue& result = post->GetResult();
+	if (result["result"].AsString() != "success") return false;
+
+	Canvas probe; // LoadImage不依赖Canvas状态，借一个实例调用
+	return probe.LoadImageFile(result["path"].AsString(), outBitmap);
 }
