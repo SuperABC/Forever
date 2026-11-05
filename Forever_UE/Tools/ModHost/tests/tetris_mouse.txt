@@ -1,0 +1,29 @@
+# 俄罗斯方块：只用鼠标完整操作(竖屏 480x640)
+wait 300
+shot tetris_01_start
+click 60 530
+click 60 530
+click 60 530
+shot tetris_02_left3
+click 180 530
+shot tetris_03_rotate
+click 297 530
+click 297 530
+shot tetris_04_right2
+# 按住 DOWN 连发
+down 414 530
+wait 700
+up
+shot tetris_05_hold_down
+click 83 597
+click 83 597
+click 83 597
+shot tetris_06_drops
+click 240 597
+wait 500
+shot tetris_07_paused
+click 200 200
+wait 100
+expect_running
+click 396 597
+expect_finished

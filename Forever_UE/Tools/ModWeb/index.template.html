@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Forever Mods</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; overscroll-behavior: none; touch-action: none; user-select: none; -webkit-user-select: none; font-family: system-ui, "Microsoft YaHei", sans-serif; }
+  #screen { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: none; background: #000; touch-action: none; }
+  #menuBtn { position: fixed; top: max(6px, env(safe-area-inset-top)); right: 6px; width: 38px; height: 38px; border-radius: 19px; border: 1px solid #556; background: rgba(40,40,60,.6); color: #ddd; font-size: 18px; display: none; z-index: 5; }
+  #menu { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #14141c; color: #eee; padding: 24px; }
+  #menu h1 { font-size: 22px; font-weight: 600; margin: 0 0 8px; }
+  #menu p { margin: 0 0 8px; color: #99a; font-size: 13px; text-align: center; }
+  #menu button { width: min(320px, 86vw); padding: 16px; font-size: 18px; border-radius: 12px; border: 1px solid #556; background: #2a2a40; color: #fff; }
+  #menu button:active { background: #3a3a60; }
+  #err { color: #f77; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="menu"><h1>Forever Mods</h1><p>加载中…</p></div>
+<canvas id="screen"></canvas>
+<button id="menuBtn" aria-label="返回菜单">☰</button>
+<script>
+/*__MODULE_JS__*/
+</script>
+<script>
+(async function () {
+  const menu = document.getElementById('menu');
+  const screenEl = document.getElementById('screen');
+  const ctx = screenEl.getContext('2d');
+  const menuBtn = document.getElementById('menuBtn');
+
+  let M;
+  try { M = await createModule(); }
+  catch (e) { menu.innerHTML = '<h1>Forever Mods</h1><div id="err">加载失败: ' + e + '</div>'; return; }
+  M._web_setup();
+
+  const NAMES = {
+    'puzzle_tetris': '俄罗斯方块 (puzzle_tetris)', 'puzzle_anykey': '任意键 (puzzle_anykey)',
+  };
+  const mods = M.UTF8ToString(M._web_list()).split('\n').filter(Boolean).map(l => l.split(':'));
+  let running = false, last = 0;
+
+  // 逻辑分辨率：按屏幕比例定，让手机竖屏时Phone/棋盘布局和游戏里一致(竖屏宽480)。
+  let mode = 'puzzle';
+  function logicalSize() {
+    // 手机(App)固定 480x640，居中等比缩放(letterbox)，和游戏里手机界面的比例一致；
+    // puzzle 铺满整个屏幕，和游戏里 PuzzleWidget 一样按视口大小排版。
+    if (mode === 'phone') return [480, 640];
+    const w = window.innerWidth, h = window.innerHeight;
+    if (h >= w) { const lw = 480; return [lw, Math.round(lw * h / w)]; }
+    const lh = 640; return [Math.round(lh * w / h), lh];
+  }
+
+  function showMenu() {
+    running = false;
+    M._web_stop();
+    screenEl.style.display = 'none';
+    menuBtn.style.display = 'none';
+    menu.style.display = 'flex';
+  }
+
+  function buildMenu() {
+    menu.innerHTML = '<h1>Forever Mods</h1><p>C++ mod 经 WebAssembly 在本页离线运行<br>全部操作可通过触摸完成</p>';
+    const add = (label, fn) => {
+      const b = document.createElement('button'); b.textContent = label; b.onclick = fn; menu.appendChild(b);
+    };
+    add('手机 (App: bounce / notes)', () => start('phone', () => { const [w, h] = logicalSize(); return M._web_start_phone(w, h); }));
+    for (const [kind, id] of mods) {
+      if (kind !== 'puzzle') continue;
+      add(NAMES[id] || id, () => start('puzzle', () => {
+        const [w, h] = logicalSize();
+        const ptr = M._malloc(id.length * 4 + 1); M.stringToUTF8(id, ptr, id.length * 4 + 1);
+        const ok = M._web_start_puzzle(ptr, w, h); M._free(ptr); return ok;
+      }));
+    }
+  }
+
+  function start(kind, fn) {
+    mode = kind;
+    if (!fn()) { alert('启动失败'); return; }
+    menu.style.display = 'none';
+    screenEl.style.display = 'block';
+    menuBtn.style.display = 'block';
+    sizeCanvas();
+    running = true; last = performance.now();
+    requestAnimationFrame(tick);
+  }
+
+  function sizeCanvas() {
+    const w = M._web_width(), h = M._web_height();
+    if (screenEl.width !== w || screenEl.height !== h) { screenEl.width = w; screenEl.height = h; }
+    if (mode === 'phone') {
+      const k = Math.min(window.innerWidth / w, window.innerHeight / h);
+      screenEl.style.width = Math.floor(w * k) + 'px'; screenEl.style.height = Math.floor(h * k) + 'px';
+      screenEl.style.left = Math.floor((window.innerWidth - w * k) / 2) + 'px';
+      screenEl.style.top = Math.floor((window.innerHeight - h * k) / 2) + 'px';
+    } else {
+      screenEl.style.width = '100%'; screenEl.style.height = '100%'; screenEl.style.left = '0'; screenEl.style.top = '0';
+    }
+  }
+
+  function tick(now) {
+    if (!running) return;
+    const ms = Math.min(100, Math.max(1, Math.round(now - last))); last = now;
+    let finished = 0;
+    try { finished = M._web_frame(ms); }
+    catch (e) { window.__err = String(e && e.stack || e); console.error('web_frame failed', e); running = false; return; }
+    window.__ticks = (window.__ticks || 0) + 1;
+    sizeCanvas();
+    const w = M._web_width(), h = M._web_height();
+    const ptr = M._web_pixels();
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(M.HEAPU8.buffer, ptr, w * h * 4).slice(), w, h), 0, 0);
+    if (finished) { showMenu(); return; }
+    requestAnimationFrame(tick);
+  }
+
+  // ---- 输入：鼠标/触摸/笔统一走 Pointer Events，换算到逻辑坐标 ----
+  function pos(e) {
+    const r = screenEl.getBoundingClientRect();
+    return [Math.round((e.clientX - r.left) * screenEl.width / r.width), Math.round((e.clientY - r.top) * screenEl.height / r.height)];
+  }
+  screenEl.addEventListener('pointerdown', e => {
+    if (!running) return; e.preventDefault(); screenEl.setPointerCapture(e.pointerId);
+    const [x, y] = pos(e); M._web_mouse_move(x, y); M._web_mouse_button(e.button === 2 ? 1 : 0, 1);
+  });
+  screenEl.addEventListener('pointermove', e => { if (!running) return; const [x, y] = pos(e); M._web_mouse_move(x, y); });
+  const up = e => { if (!running) return; const [x, y] = pos(e); M._web_mouse_move(x, y); M._web_mouse_button(e.button === 2 ? 1 : 0, 0); };
+  screenEl.addEventListener('pointerup', up);
+  screenEl.addEventListener('pointercancel', up);
+  screenEl.addEventListener('wheel', e => { if (running) { M._web_wheel(e.deltaY < 0 ? 1 : -1); e.preventDefault(); } }, { passive: false });
+  screenEl.addEventListener('contextmenu', e => e.preventDefault());
+
+  // 桌面浏览器的键盘(手机上没有键盘也能完整操作，这里只是方便电脑调试)
+  const KEYMAP = { ArrowLeft: 0x100, ArrowUp: 0x101, ArrowRight: 0x102, ArrowDown: 0x103, Escape: 0x1b, Enter: 13, Tab: 9, Backspace: 8, ' ': 32 };
+  function keyCode(e) {
+    if (KEYMAP[e.key] !== undefined) return KEYMAP[e.key];
+    return e.key.length === 1 ? e.key.toLowerCase().charCodeAt(0) : 0;
+  }
+  window.addEventListener('keydown', e => { if (!running || e.repeat) return; const c = keyCode(e); if (c) { M._web_key(c, 1); e.preventDefault(); } });
+  window.addEventListener('keyup', e => { if (!running) return; const c = keyCode(e); if (c) { M._web_key(c, 0); e.preventDefault(); } });
+
+  window.addEventListener('resize', () => { if (running) { const [w, h] = logicalSize(); M._web_resize(w, h); sizeCanvas(); } });
+  menuBtn.onclick = showMenu;
+  // 方便自动化测试：window.__modweb 暴露少量内部函数
+  window.__modweb = { M, start, showMenu };
+
+  buildMenu();
+})();
+</script>
+</body>
+</html>

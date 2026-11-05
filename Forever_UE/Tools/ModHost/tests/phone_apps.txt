@@ -1,0 +1,24 @@
+# 手机：桌面 -> bounce -> Home -> 任务列表 -> notes -> 详情 -> 系统返回 -> 切回 -> 关闭任务
+wait 100
+shot phone_01_home
+open_app 0
+wait 600
+shot phone_02_bounce
+bar home
+shot phone_03_home_again
+open_app 1
+shot phone_04_notes_list
+click 100 140
+shot phone_05_notes_detail
+bar back
+shot phone_06_notes_back_to_list
+bar tasks
+shot phone_07_tasklist
+tap_task 0
+wait 300
+shot phone_08_resumed_bounce
+bar tasks
+close_task 1
+shot phone_09_closed_notes
+bar home
+shot phone_10_home_end

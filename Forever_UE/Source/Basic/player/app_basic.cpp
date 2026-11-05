@@ -189,5 +189,5 @@ void NotesApp::RenderDetail(Canvas* canvas) const {
 	canvas->PutString(note.body, canvas->GetWidth() / 40, canvas->GetHeight() / 10);
 
 	canvas->SetColor(180, 180, 180);
-	canvas->PutString("BACKSPACE TO RETURN", canvas->GetWidth() / 40, canvas->GetHeight() - canvas->GetHeight() / 15);
+	canvas->PutString("BACK BUTTON / BACKSPACE TO RETURN", canvas->GetWidth() / 40, canvas->GetHeight() - canvas->GetHeight() / 15);
 }

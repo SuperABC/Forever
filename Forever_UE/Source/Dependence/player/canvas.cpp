@@ -4,15 +4,20 @@
 #include <cmath>
 #include <cstring>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#else
 #define NOMINMAX
 #include <windows.h>
 
 #pragma comment(lib, "gdi32.lib")
+#endif
 
 
 using namespace std;
 
 namespace {
+#ifndef __EMSCRIPTEN__
 	// GDI字体渲染：建内存DC+HFONT，黑底白字TextOutW，GetDIBits读回灰度当覆盖率混合进画布。
 	// CreateCanvasFont里的参数组合（FW_THIN/OUT_CHARACTER_PRECIS/CLIP_CHARACTER_PRECIS等）
 	// 是经过验证能渲染出正常粗细/字形的组合——换成看起来更"标准"的FW_NORMAL/
@@ -145,6 +150,86 @@ namespace {
 		DeleteDC(memDC);
 		ReleaseDC(nullptr, screenDC);
 	}
+#else
+	// 网页(Emscripten)版文字：用浏览器的2D canvas画字，读回灰度当覆盖率，混合进buffer——
+	// 和上面GDI版同样的"按覆盖率混合"流程，只是字形来源不同。JS侧用一张离屏canvas。
+	// wchar_t在Emscripten上是32位(UTF-32)，JS侧用UTF32ToString取回。
+	EM_JS(int, web_measure_width, (const wchar_t* text, int px), {
+		if (!Module.__tc) { Module.__tc = document.createElement('canvas').getContext('2d'); }
+		Module.__tc.font = px + 'px "Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Noto Sans SC",sans-serif';
+		return Math.ceil(Module.__tc.measureText(UTF32ToString(text)).width);
+	});
+
+	EM_JS(void, web_render_line, (const wchar_t* text, int px, unsigned char* out, int w, int h), {
+		if (!Module.__tc) { Module.__tc = document.createElement('canvas').getContext('2d'); }
+		var c = Module.__tc.canvas;
+		c.width = w; c.height = h;
+		var ctx = Module.__tc;
+		ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+		ctx.font = px + 'px "Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Noto Sans SC",sans-serif';
+		ctx.textBaseline = 'top';
+		ctx.fillStyle = '#fff';
+		ctx.fillText(UTF32ToString(text), 0, Math.round(px * 0.12));
+		var data = ctx.getImageData(0, 0, w, h).data;
+		for (var i = 0, n = w * h; i < n; i++) HEAPU8[out + i] = data[i * 4];
+	});
+
+	wstring Utf8ToWide(const string& text) {
+		wstring result;
+		size_t i = 0;
+		while (i < text.size()) {
+			unsigned char c = text[i];
+			uint32_t cp = c;
+			int extra = 0;
+			if (c >= 0xF0) { cp = c & 0x07; extra = 3; }
+			else if (c >= 0xE0) { cp = c & 0x0F; extra = 2; }
+			else if (c >= 0xC0) { cp = c & 0x1F; extra = 1; }
+			i++;
+			for (int k = 0; k < extra && i < text.size(); k++, i++) cp = (cp << 6) | (static_cast<unsigned char>(text[i]) & 0x3F);
+			result.push_back(static_cast<wchar_t>(cp));
+		}
+		return result;
+	}
+
+	int MeasureLineHeight(int pixelHeight) {
+		return max(1, static_cast<int>(pixelHeight * 1.32f + 0.5f)); // 接近微软雅黑在GDI里的行高
+	}
+
+	int MeasureLineWidth(const wstring& wline, int pixelHeight) {
+		if (wline.empty()) return 0;
+		return web_measure_width(wline.c_str(), max(1, pixelHeight));
+	}
+
+	void DrawLine(vector<uint8_t>& buffer, int canvasWidth, int canvasHeight,
+		const wstring& wline, int x, int y, int pixelHeight,
+		uint8_t brushR, uint8_t brushG, uint8_t brushB, float brushAlpha) {
+		if (wline.empty()) return;
+
+		int w = MeasureLineWidth(wline, pixelHeight);
+		int h = MeasureLineHeight(pixelHeight);
+		if (w <= 0 || h <= 0) return;
+
+		vector<uint8_t> gray(static_cast<size_t>(w) * h);
+		web_render_line(wline.c_str(), max(1, pixelHeight), gray.data(), w, h);
+
+		for (int row = 0; row < h; row++) {
+			for (int col = 0; col < w; col++) {
+				uint8_t g = gray[static_cast<size_t>(row) * w + col];
+				if (!g) continue;
+
+				int px = x + col, py = y + row;
+				if (px < 0 || px >= canvasWidth || py < 0 || py >= canvasHeight) continue;
+
+				float alpha = (g / 255.f) * brushAlpha;
+				size_t idx = (static_cast<size_t>(py) * canvasWidth + px) * 4;
+				buffer[idx + 0] = static_cast<uint8_t>(buffer[idx + 0] * (1.f - alpha) + brushB * alpha);
+				buffer[idx + 1] = static_cast<uint8_t>(buffer[idx + 1] * (1.f - alpha) + brushG * alpha);
+				buffer[idx + 2] = static_cast<uint8_t>(buffer[idx + 2] * (1.f - alpha) + brushR * alpha);
+				buffer[idx + 3] = 255;
+			}
+		}
+	}
+#endif
 }
 
 Canvas::Canvas() {

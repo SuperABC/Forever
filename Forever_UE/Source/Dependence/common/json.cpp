@@ -849,9 +849,9 @@ istream& operator>>(istream& sin, JsonValue& root) {
 
 static const unsigned char kNull[sizeof(JsonValue)] = { 0 };
 const JsonValue& JsonValue::null = reinterpret_cast<const JsonValue&>(kNull[0]);
-const int JsonValue::minInt = int(~(unsigned int(-1) / 2));
-const int JsonValue::maxInt = int(unsigned int(-1) / 2);
-const unsigned int JsonValue::maxUInt = unsigned int(-1);
+const int JsonValue::minInt = int(~(static_cast<unsigned int>(-1) / 2));
+const int JsonValue::maxInt = int(static_cast<unsigned int>(-1) / 2);
+const unsigned int JsonValue::maxUInt = static_cast<unsigned int>(-1);
 
 template <typename T, typename U>
 static inline bool InRange(double d, T min, U max) {
@@ -1121,11 +1121,11 @@ int JsonValue::AsInt() const {
 unsigned int JsonValue::AsUInt() const {
 	switch (type) {
 	case DATA_INT:
-		return unsigned int(value.valueInt);
+		return static_cast<unsigned int>(value.valueInt);
 	case DATA_UINT:
-		return unsigned int(value.valueUint);
+		return static_cast<unsigned int>(value.valueUint);
 	case DATA_DOUBLE:
-		return unsigned int(value.valueDouble);
+		return static_cast<unsigned int>(value.valueDouble);
 	case DATA_NULL:
 		return 0;
 	case DATA_BOOL:
@@ -1290,7 +1290,7 @@ JsonValue& JsonValue::operator[](unsigned int index) {
 
 JsonValue& JsonValue::operator[](int index) {
 	assert(index >= 0);
-	return (*this)[unsigned int(index)];
+	return (*this)[static_cast<unsigned int>(index)];
 }
 
 const JsonValue& JsonValue::operator[](unsigned int index) const {
@@ -1313,7 +1313,7 @@ const JsonValue& JsonValue::operator[](unsigned int index) const {
 
 const JsonValue& JsonValue::operator[](int index) const {
 	assert(index >= 0);
-	return (*this)[unsigned int(index)];
+	return (*this)[static_cast<unsigned int>(index)];
 }
 
 JsonValue& JsonValue::operator[](const char* key) {

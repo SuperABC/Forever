@@ -1,0 +1,3 @@
+wait 300
+click 20 20
+shot tetris_land_01

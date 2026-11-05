@@ -45,6 +45,19 @@ private:
 	void ClearLines();
 	void Render(Canvas* canvas) const;
 
+	// 鼠标/触摸操作：画布上画一组屏幕按键，点击等价于对应键盘按键(←→↓移动/旋转/硬降/暂停/
+	// 退出)，让没有键盘的设备(手机网页)也能完整操作。键盘路径保持不变，两者并存。
+	enum Action { ACTION_LEFT, ACTION_ROTATE, ACTION_RIGHT, ACTION_DOWN, ACTION_DROP, ACTION_PAUSE, ACTION_EXIT, ACTION_COUNT };
+	struct Button {
+		int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+	};
+	int HitButton(int x, int y) const;
+	bool IsRepeatAction(int action) const;
+	// 执行一个动作，返回true表示请求退出这一局。
+	bool DoAction(int action);
+	void PlaceButtonRow(const int* actions, int count, int x, int y, int w, int h);
+	void RenderButtons(Canvas* canvas) const;
+
 	// 按画布尺寸重算格子边长/棋盘偏移/侧栏位置——Init()首次调用一次，之后画布被resize时通过
 	// Canvas::ResizeFunc回调再调一次，让窗口拉伸后棋盘还能贴合新的分辨率，不会保留旧尺寸下
 	// 算出来的布局。
@@ -72,6 +85,12 @@ private:
 	int cellSize = 0;
 	int boardOriginX = 0, boardOriginY = 0;
 	int sidebarX = 0;
+	int uiFontSize = 14;
+
+	Button buttons[ACTION_COUNT];
+	int heldAction = -1;       // 正被按住的可连发按键(←→↓)，-1=没有
+	int holdTimerMs = 0;
+	bool holdRepeating = false;
 
 public:
 	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
