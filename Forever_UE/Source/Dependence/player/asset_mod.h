@@ -34,6 +34,11 @@ public:
 	bool weapon = false;   // IsWeapon()——能否放进左肩/右肩，也是"左右手拒绝"的判据
 	std::string weaponType; // weapon为true时：在肩膀上激活这件资产时装备的WeaponMod id(比如"weapon_pistol")
 	bool usable = false;   // IsUsable()——能否被"使用"(比如汉堡)
+	// 使用时给使用者增加的饱食度(0~1，使用者的饱食度上限1，超出截断)；0=不影响。
+	float satiety = 0.f;
+	// 对应的Industry Product类型(比如"product_burger")，商店按它查零售价；空=不能在商店买。
+	// 注意和Asset自己的id(比如"asset_burger")是两回事，两者没有代码上的关联，见asset.md。
+	std::string productType;
 	// IsThrowable()——投掷物(手雷/烟雾弹)：按3键激活、瞄准后扔出去，和weapon正交(投掷物可以拿在
 	// 手上/放进容器，不能挂肩膀)。
 	bool throwable = false;

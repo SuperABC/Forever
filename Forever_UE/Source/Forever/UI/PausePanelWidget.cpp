@@ -2,6 +2,11 @@
 
 #include "Input/ForeverKeyBindingSubsystem.h"
 #include "Mod/ForeverSaveSubsystem.h"
+#include "Framework/ForeverFrameworkActor.h"
+
+#include "populace/citizen.h"
+#include "society/society.h"
+#include "society/ledger.h"
 
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/Button.h"
@@ -42,6 +47,31 @@ FReply UPausePanelWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKe
 		return FReply::Handled();
 	}
 	return FReply::Unhandled();
+}
+
+void UPausePanelWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {
+	Super::NativeTick(MyGeometry, DeltaTime);
+	if (IsOpen()) RefreshStatus();
+}
+
+void UPausePanelWidget::RefreshStatus() {
+	if (!StatusText) return;
+	FString satiety = TEXT("--");
+	FString money = TEXT("--");
+	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+		const Citizen* citizen = framework->GetControlledCitizen();
+		if (citizen && citizen->IsStatsActive()) {
+			satiety = FString::Printf(TEXT("%d%%"), FMath::RoundToInt(citizen->GetSatiety() * 100.f));
+		}
+		// 玩家的钱就是被操控市民在Ledger里的账户(分)，见Core/society/economy.md"玩家参与经济"。
+		Society* society = framework->GetSociety();
+		if (citizen && society) {
+			int64_t cents = society->GetLedger().Balance(Party::Of(citizen));
+			money = FString::Printf(TEXT("%.2f元"), static_cast<double>(cents) / 100.0);
+		}
+	}
+	StatusText->SetText(FText::FromString(FString::Printf(TEXT("饱食度：%s\n金钱：%s"), *satiety, *money)));
 }
 
 void UPausePanelWidget::TogglePanel() {

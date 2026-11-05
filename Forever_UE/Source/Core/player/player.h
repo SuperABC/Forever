@@ -33,7 +33,7 @@ public:
 	// 决定）。
 	void Init();
 
-	// 时钟周期更新：按真实帧时长推进游戏时钟。time_flow_ratio默认2.0，可以被主线剧情
+	// 时钟周期更新：按真实帧时长推进游戏时钟。time_flow_ratio默认10.0(1真实秒=10游戏分钟)，可以被主线剧情
 	// .script的global_settings.time_flow_ratio字段覆盖（见SetTimeFlowRatio），见
 	// player.md"time_flow_ratio"一节。
 	// @delta: 本帧时长（秒）

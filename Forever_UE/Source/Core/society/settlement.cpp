@@ -45,6 +45,16 @@ void Settlement::InitFunds(Society& society, const vector<Citizen*>& citizens) {
 	ledger.SetInitialInjection(-ledger.Balance(Party::Outside()));
 }
 
+void Settlement::InitFunds(Society& society, Citizen* citizen, int64_t amountCents) {
+	if (!citizen) return;
+	Ledger& ledger = society.GetLedger();
+	if (amountCents < 0) {
+		amountCents = static_cast<int64_t>(llround(max(0.f, GetRandomNormal(kCitizenFundsMean, kCitizenFundsStddev))));
+	}
+	ledger.Transfer(Party::Outside(), Party::Of(citizen), amountCents, Flow::INJECTION);
+	ledger.SetInitialInjection(-ledger.Balance(Party::Outside()));
+}
+
 GoodsSettlementReport Settlement::SettleGoods(Society& society, const Industry& industry) {
 	GoodsSettlementReport report;
 	Ledger& ledger = society.GetLedger();

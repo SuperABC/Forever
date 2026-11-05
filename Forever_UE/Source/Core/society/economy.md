@@ -42,3 +42,8 @@
 ## 依赖关系
 - 依赖：`Society`（账本、月份状态、政策）、`Industry`（库存）、`Settlement`、组织mod接口。
 - 被谁依赖：EconSim、`AForeverFrameworkActor`的每日结算。
+
+## 玩家参与经济（`PayWage` / `PlayerPurchase`）
+玩家的钱就是当前被操控市民在Ledger里的账户(`Party::Of(citizen)`)，不另设玩家钱包。
+- `PayWage(society, org, worker, amount)`：由岗位所属组织给市民发一笔工资(`Flow::WAGE`)，代扣所得税，同`PayWages`的口径。玩家操控的市民去不去上班不影响每日工资结算，所以玩家手动打工是**额外一份**工资。
+- `PlayerPurchase(society, industry, player, seller, buyer, assetType)`：买一件物品。按`asset->GetProductType()`在Industry里查零售价；先判余额，再创建物品并`StoreAsset`，放不下(无背包/已满)则销毁物品**不扣钱**；成功才付款(buyer→seller `SERVICE_PURCHASE`)，并由seller缴消费税。返回`PurchaseResult`{Success, NoMoney, NoSpace, Invalid}。

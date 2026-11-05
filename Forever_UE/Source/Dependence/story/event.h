@@ -593,6 +593,16 @@ public:
 	virtual const std::string& GetType() const override;
 
 	/*
+	* 匹配：result在脚本里是表达式，非空才比较
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+
+	/*
+	* local.result：结果值
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	/*
 	* 设置结果值
 	* @result: 结果值
 	*/
@@ -719,6 +729,16 @@ public:
 	* 事件类型
 	*/
 	virtual const std::string& GetType() const override;
+
+	/*
+	* 匹配：name/address在脚本里是表达式，非空才比较（运行时事件里是字面量，address是房间地址）
+	*/
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+
+	/*
+	* local.name：抵达者姓名；local.address：抵达的房间地址
+	*/
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	/*
 	* 设置抵达者姓名

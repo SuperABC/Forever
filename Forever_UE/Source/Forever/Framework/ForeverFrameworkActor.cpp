@@ -352,6 +352,18 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* globalSetting = dynamic_cast<const GlobalSettingChange*>(change)) {
+		// 目前只认time_flow_ratio(游戏时钟流速，1.0=1真实秒1游戏分钟)，和主线脚本global_settings同名。
+		const std::string setting = globalSetting->GetSetting();
+		if (setting == "time_flow_ratio") {
+			if (player) player->SetTimeFlowRatio(ToDouble(EvaluateExpression(globalSetting->GetValue(), context)));
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("global_setting: unknown setting \"%s\"."), UTF8_TO_TCHAR(setting.c_str()));
+		}
+		return;
+	}
+
 	if (dynamic_cast<const PlaceHolderChange*>(change)) {
 		// 只是ScriptMod::FindLabel用来定位插入位置的锚点，执行时什么都不做——不能落到下面七个域，
 		// 否则每次都会打"未实现"警告。
@@ -377,6 +389,17 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		// 跟ChangeControlChange同一个理由：Core层不知道UMG Widget的存在，"弹出一个小游戏
 		// 界面"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyStartPuzzle。
 		if (storyFramework) storyFramework->ApplyStartPuzzle(startPuzzle, context);
+		return;
+	}
+
+	if (dynamic_cast<const OpenShopChange*>(change)) {
+		// 弹商店界面也是UMG，同start_puzzle只能转发给UE层。
+		if (storyFramework) storyFramework->ApplyOpenShop(context);
+		return;
+	}
+
+	if (auto* payWage = dynamic_cast<const PayWageChange*>(change)) {
+		if (storyFramework) storyFramework->ApplyPayWage(payWage, context);
 		return;
 	}
 
@@ -563,6 +586,11 @@ void AForeverFrameworkActor::ApplyReviveNpc(const NPCReviveChange* change, const
 	citizen->Revive(health);
 }
 
+Citizen* AForeverFrameworkActor::GetControlledCitizen() const {
+	const ACitizenElement* element = Cast<ACitizenElement>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0));
+	return element ? element->GetCitizen() : nullptr;
+}
+
 void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const ScriptContext& context) {
 	if (!populace || !change) return;
 	std::string name = ToString(EvaluateExpression(change->GetName(), context));
@@ -600,18 +628,37 @@ void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const S
 	Citizen* citizen = populace->SpawnCitizen(name, gender, birthday.GetYear(), birthday.GetMonth(), birthday.GetDay(), schedulerId, avatar);
 	if (!citizen) return;
 
+	// economy：是否接入经济系统(空=false)。接入才分配住处并求职；不接入则不分配住处、不产生
+	// 每日需求、不参与招聘/交税/补助。钱包不论接不接入都开，这样之后被玩家操控时直接有钱用。
+	const std::string economyText = change->GetEconomy();
+	const bool economy = !economyText.empty() && EvaluateExpressionBool(economyText, context);
+	citizen->SetInEconomy(economy);
+	if (society) {
+		int64_t depositCents = -1;
+		const std::string depositText = ToString(EvaluateExpression(change->GetDeposit(), context));
+		if (!depositText.empty()) {
+			try { depositCents = static_cast<int64_t>(std::llround(std::stod(depositText) * 100.0)); }
+			catch (const std::exception&) {}
+		}
+		Settlement::InitFunds(*society, citizen, depositCents);
+	}
+
 	// home是房间地址(和npc_navigate的destination同一种写法)，省略时没有住处也没有位置，要等
-	// npc_teleport之类把他放到某个房间才会在场景里出现。
+	// npc_teleport之类把他放到某个房间才会在场景里出现。economy:false时只把当前位置放在这个房间，
+	// 不住进去(不进household)。
 	std::string homeText = ToString(EvaluateExpression(change->GetHome(), context));
 	if (!homeText.empty() && map) {
 		if (Room* home = map->LocateRoom(homeText)) {
-			map->SettleCitizen(citizen, home);
+			if (economy) map->SettleCitizen(citizen, home);
+			else citizen->SetCurrentRoom(home);
 		}
 		else {
 			UE_LOG(LogTemp, Warning, TEXT("spawn_npc \"%s\": home room \"%s\" not found."),
 				UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(homeText.c_str()));
 		}
 	}
+
+	if (economy && society) society->RecruitCitizen(citizen, populace->GetCurrentYear());
 
 	if (populaceFramework) populaceFramework->AddCitizen(citizen);
 }

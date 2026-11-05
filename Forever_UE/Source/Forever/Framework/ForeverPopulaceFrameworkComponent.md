@@ -202,6 +202,13 @@ GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生
 ## 死人不被调度
 `RequestWalk`/`ApplyWalkResult`/`NotifyArrived`对`IsDead()`的市民直接返回，`TeleportCitizen`打警告后返回，避免调度把死人放回房间；复活(`npc_revive`)后再teleport才恢复。
 
+## 通勤中的状态与改道（2026-11-05）
+- 开始走路（`ApplyWalkResult` 的 WalkTo / BeginWalk 两个分支）时 `currentRoom` 置空，表示人在路上、不属于任何房间；走完 `NotifyArrived` / `AdvanceWalk` 才换成目的地并发 `npc_arrive`（此时 previous 为空，一定会发）。行进信息（Actor 的 FollowPath 或 Core 的 walkPath）就是通勤中的状态来源。
+- `RequestWalk` 在路上时（`GetTransitPosition`：Actor 控制器有指令，或 Core 在推算）从**当前位置**起算：后台线程用 `Map::PlanPedestrianRoute(nullptr, x, y, dest)` 接到最近的行人图节点，路径第一个点补上当前位置。不在路上才用 currentRoom 的导航节点；已经在目的地房间直接返回。
+- 新路线取代旧路线：`ACitizenElement::WalkTo` 先 `ClearCommands` 再推指令（以前是入队排在旧路线后面）；Core 推算的 `BeginWalk` 本来就替换。
+- `latestWalkRequest`（每市民请求序号）：`RequestWalk`/`TeleportCitizen` 递增，`DrainPathResults` 丢弃序号过期的异步结果，避免旧导航的结果晚到把新路线盖掉。
+- 副作用：通勤中被换目的地的人从未"到达"过中途目标，不会误发 `npc_arrive`；script 不需要为此先 teleport。
+
 ## 寻路与流式细节
 - 市民随机导航的压力测试代码已移除（2026-11-02）：以后要做全员随机走动，在 script 里用 `npc_navigate` 等 Change 实现，不再放 C++。
 - 静止市民用 `citizenSpawnDistance`(2.0)/`citizenDespawnDistance`(4.0) 流式生成/销毁，数量不限。`FindOrSpawnCitizenByName` 不受限。
@@ -212,3 +219,12 @@ GetParentBuilding()`反查building（`ACitizenElement::Init()`里估算首次生
 
 ## 在途市民（上下班路上的人流）
 `ApplyWalkResult`对没有Actor的市民不再瞬移：路径非空时`Citizen::BeginWalk`交给Core按时间推算位置。流式扫描里这类市民每次先`AdvanceWalk`(走完即换房间)，位置进入`citizenSpawnDistance`就生成Actor(抬一个胶囊半高)，用`GetRemainingWalk`的剩余路径`WalkTo`接着走并`EndWalk`。Actor走远被流式销毁时，若还在走路，用控制器`GetRemainingWaypoints`的剩余路径`BeginWalk`交还Core，不再丢目的地。存档时没有Actor的在途市民按"已到达"记，存完`RestoreAfterSave`还原；`TeleportCitizen`/寻路失败/死亡会`EndWalk`。速度取`ACitizenElement`默认`MaxWalkSpeed`。
+
+## 到达通知
+`ReportArrival(citizen, previousRoom)`在真正到达处调用(有Actor的`NotifyArrived`、无Actor的`AdvanceWalk`返回true、寻路失败瞬移)，房间变化才转给`BroadcastNpcArrive`；存档同步/恢复不发。
+
+## 未实例化市民走得更快
+`kUnspawnedWalkSpeedScale`(10)：Core推算走路(`Citizen::BeginWalk`，没有Actor)的速度是Actor的10倍，实例化后按推算到的位置接着以正常速度走(进度被拖慢)；Actor走远被销毁、交还Core继续推算时又按10倍。
+
+## 静止/移动市民分开流式
+流式扫描把市民分两类：静止的(Actor没有走路命令，且Core没在推算它的路线)用`citizenSpawnDistance`/`citizenDespawnDistance`，最多`maxStationaryCitizens`(16)个；移动中的距离乘`movingDistanceScale`(2)，最多`maxMovingCitizens`(32)个。免销毁的(被玩家操控等)不计数。名额满了只是不再生成新的；已存在的Actor所属类别超限(比如走路的人到站变静止而静止名额已满)就超着，不会因此被销毁，只按距离销毁。

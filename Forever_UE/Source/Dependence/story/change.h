@@ -579,9 +579,11 @@ public:
 	* @height, weight: 身高与体重
 	* @nick, deposit, phone, home: 昵称、存款、手机号与住所
 	* @jobs, scheduler: 职业列表与调度类型
+	* @economy: 是否接入经济系统的布尔表达式，空=false
 	*/
 	SpawnNpcChange(std::string avatar, std::string name, std::string gender, std::string birthday, std::string height, std::string weight,
-		std::string nick, std::string deposit, std::string phone, std::string home, std::vector<std::string> jobs, std::string scheduler);
+		std::string nick, std::string deposit, std::string phone, std::string home, std::vector<std::string> jobs, std::string scheduler,
+		std::string economy = std::string());
 
 	/*
 	* 析构生成NPC变化
@@ -725,6 +727,12 @@ public:
 	*/
 	const std::string& GetScheduler() const;
 
+	/*
+	* 设置/获取是否接入经济系统(布尔表达式，空=false)
+	*/
+	void SetEconomy(std::string economy);
+	const std::string& GetEconomy() const;
+
 private:
 	// 形象标识
 	std::string avatar;
@@ -761,6 +769,9 @@ private:
 
 	// 调度类型标识
 	std::string scheduler;
+
+	// 是否接入经济系统的布尔表达式
+	std::string economy;
 
 };
 
@@ -1092,6 +1103,34 @@ private:
 	// 剧情脚本传给小游戏的启动参数(表达式)
 	std::string param;
 
+};
+
+// 给被玩家操控的市民发工资：由执行它的这个Job脚本所属岗位的组织支付(Flow::WAGE，代扣所得税)。
+class PayWageChange : public Change {
+public:
+	PayWageChange();
+
+	/*
+	* 构造发工资变化
+	* @amount: 工资金额(分)的表达式
+	*/
+	PayWageChange(std::string amount);
+	virtual ~PayWageChange();
+
+	/*
+	* 变化类型
+	*/
+	virtual const std::string& GetType() const override;
+
+	/*
+	* 设置/获取工资金额(分)的表达式
+	*/
+	void SetAmount(std::string amount);
+	const std::string& GetAmount() const;
+
+private:
+	// 工资金额(分)的表达式
+	std::string amount;
 };
 
 // 进入载具

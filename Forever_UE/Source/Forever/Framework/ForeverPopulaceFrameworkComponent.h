@@ -69,6 +69,11 @@ public:
 	// ACitizenController的FollowPath指令走完后的回调：更新Citizen::SetCurrentRoom。
 	void NotifyArrived(Citizen* citizen, Room* destination);
 
+	// 市民的currentRoom换成了新房间(previousRoom是换之前的)：房间真的变了就给它自己的
+	// Scheduler/Job脚本发npc_arrive。只在真正到达的地方调用(走完路、瞬移、寻路失败落地)，
+	// 存档用的SyncPositionsToCore/RestoreAfterSave不发。
+	void ReportArrival(Citizen* citizen, Room* previousRoom);
+
 	// ACitizenController的GoToRoom指令用：规划from（世界坐标）到destination房间的行人路径点（世界坐标）。
 	// 起点按citizen当前房间/from位置（Map::PlanPedestrianRoute），成功且路径非空返回true。
 	bool PlanWalkPath(Citizen* citizen, Room* destination, const FVector& from, TArray<FVector>& outWaypoints) const;
@@ -129,8 +134,19 @@ private:
 		Citizen* citizen = nullptr;
 		Room* destination = nullptr;
 		TArray<FVector> waypoints;
-			};
+		uint32 serial = 0; // 发起时的请求序号，落地时和latestWalkRequest比，不是最新的说明已被新导航/瞬移取代
+	};
 	TQueue<FPendingWalkResult, EQueueMode::Mpsc> pathResultQueue;
+
+	// 每个市民最近一次RequestWalk的序号（TeleportCitizen也会+1来作废在途的寻路）。只在游戏线程读写。
+	// 异步寻路期间又来了新导航时，旧的结果晚到也不能落地，否则会把新路线覆盖掉。
+	TMap<Citizen*, uint32> latestWalkRequest;
+
+	// 把已算完的寻路结果落地（跳过已被取代的）。TickComponent和SyncPositionsToCore共用。
+	void DrainPathResults();
+
+	// 市民正在路上（Actor在走FollowPath，或Core在推算）时取当前脚底世界坐标；不在路上返回false。
+	bool GetTransitPosition(Citizen* citizen, FVector& outFeet) const;
 
 	// RequestWalk发起异步寻路时+1，对应的后台线程任务把结果推进pathResultQueue之后-1——
 	// 全程只用来回答"现在是不是还有后台线程可能在读map"这一个问题，见
@@ -186,6 +202,17 @@ private:
 	// LOD双阈值同一个防抖动理由。
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")
 	float citizenDespawnDistance = 4.f;
+
+	// 同时存在的市民Actor数量上限，静止的和移动中的分开算(免销毁的不算)。
+	UPROPERTY(EditDefaultsOnly, Category = "Populace")
+	int32 maxStationaryCitizens = 16;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Populace")
+	int32 maxMovingCitizens = 32;
+
+	// 移动中的市民生成/销毁距离是静止的这么多倍。
+	UPROPERTY(EditDefaultsOnly, Category = "Populace")
+	float movingDistanceScale = 2.f;
 
 	// 在屏幕左上角实时显示寻路队列长度（调试用）。
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")

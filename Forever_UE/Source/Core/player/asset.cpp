@@ -24,6 +24,8 @@ Asset::Asset(AssetFactory* factory, const string& id) :
 	weaponFlag = mod->weapon;
 	weaponType = mod->weaponType;
 	usableFlag = mod->usable;
+	satietyValue = mod->satiety;
+	productType = mod->productType;
 	throwableFlag = mod->throwable;
 	meshPath = mod->meshPath;
 	meshScale = mod->meshScale;
@@ -54,6 +56,8 @@ bool Asset::GetBackpack() const { return backpack; }
 bool Asset::IsWeapon() const { return weaponFlag; }
 const string& Asset::GetWeaponType() const { return weaponType; }
 bool Asset::IsUsable() const { return usableFlag; }
+float Asset::GetSatiety() const { return satietyValue; }
+const std::string& Asset::GetProductType() const { return productType; }
 bool Asset::IsThrowable() const { return throwableFlag; }
 const string& Asset::GetMeshPath() const { return meshPath; }
 float Asset::GetMeshScale() const { return meshScale; }

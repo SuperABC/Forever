@@ -154,3 +154,9 @@ milestone用它验证：Job/Organization的Script能不能正确广播`game_star
 
 ## 天气(change_weather)
 - `change_weather`(weather，表达式，结果是天气名`sunny/cloudy/overcast/light_rain/heavy_rain/light_snow/heavy_snow`)：`ChangeWeatherChange`，强制换天气，同时**重置系统自动换天气的倒计时**(重新抽一个"均值2天、标准差半天"的间隔)。写法`{"type":"change_weather","weather":"\"overcast\""}`。Core就认得，由`Player::ApplyChange`执行(`Weather::SetByName`)，名字非法打警告忽略，不受冬季才下雪的限制。换成功后系统广播`weather_change`事件，见`event.md`。
+
+## OpenShopChange / PayWageChange / SpawnNpcChange.economy
+`OpenShopChange`(type "open_shop")、`PayWageChange(amount)`(type "pay_wage")；`SpawnNpcChange`新增`economy`表达式字段。
+
+## GlobalSettingChange（global_setting）
+脚本里`{ "type": "global_setting", "setting": "time_flow_ratio", "value": "1" }`：运行时修改全局设置，`value`是表达式。目前只认`time_flow_ratio`（游戏时钟流速，`Player::SetTimeFlowRatio`，1.0=1真实秒1游戏分钟，默认10.0），由`AForeverFrameworkActor::ApplyChange`执行；未知设置打警告。主线脚本顶层的`global_settings.time_flow_ratio`仍管开局初值。

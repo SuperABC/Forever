@@ -11,6 +11,7 @@
 
 #include "UI/CanvasInputTranslation.h"
 #include "Framework/ForeverFrameworkActor.h"
+#include "Framework/ForeverStoryFrameworkComponent.h"
 #include "common/implement.h"
 #include "common/registry.h"
 
@@ -97,6 +98,11 @@ void UPuzzleWidget::EndPuzzle() {
 	}
 
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.f);
+
+	// 告诉启动这局小游戏的脚本：结束了(puzzle_result)。
+	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+		if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) story->NotifyPuzzleFinished();
+	}
 }
 
 void UPuzzleWidget::NativeTick(const FGeometry& MyGeometry, float DeltaTime) {

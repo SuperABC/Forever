@@ -263,7 +263,9 @@ public:
 	struct WalkPoint { float x, y, z; };
 	bool IsWalking() const;
 	Room* GetWalkDestination() const;
-	// 开始行进：路径第一个点就是当前位置(写进SetPosition)，currentRoom保持出发地直到走完。
+	// 开始行进：路径第一个点就是当前位置(写进SetPosition)。本函数不碰currentRoom；UE侧
+	// (UForeverPopulaceFrameworkComponent)开始走路时把currentRoom设为nullptr(人在路上，不属于任何房间)，
+	// 走完AdvanceWalk/NotifyArrived才换成目的地。
 	void BeginWalk(const std::vector<WalkPoint>& path, Room* destination, double nowSeconds, float speed);
 	// 推进到nowSeconds：到达时SetCurrentRoom(destination)+ClearPosition+结束行进并返回true；
 	// 否则更新SetPosition返回false。没在行进返回false。
@@ -271,6 +273,22 @@ public:
 	// 取出剩余路径(第一个点是推算出的当前位置)，供生成Actor后接着走；不改行进状态。
 	void GetRemainingWalk(double nowSeconds, std::vector<WalkPoint>& outPath) const;
 	void EndWalk();
+
+	// 动态属性(目前只有饱食度生效)：为了不让全城市民都实时模拟，用statsActive记录"是否已实例化"，
+	// 只有实例化了的市民才参与每日更新(Populace::Tick)。目前只在被玩家change_control操控时
+	// 实例化(饱食度在[0.5,1]随机)，放手后保持实例化。存档。
+	bool IsStatsActive() const;
+	void ActivateStats(); // 已实例化则什么也不做
+	float GetSatiety() const; // 对外保留两位小数(内部存精确值，否则每帧衰减量小于0.005时永远降不下去)
+	void AddSatiety(float delta); // 截断到[0,1]，超出不惩罚
+	void DecaySatiety(double days); // 衰减：乘0.5^days(days=经过的游戏天数)，一天减半
+
+	// 是否接入统一市民模拟——目前仅指经济系统：false的市民不分配住处、不产生每日需求、不参与
+	// 招聘/交税/补助(但钱包照开，被玩家操控时能直接用钱)。开局生成的市民默认true；spawn_npc
+	// 用economy字段指定。不存档(读档时开局市民都是true，spawn出来的false市民存档里没有住处/岗位，
+	// 本来就不会被经济环节遍历到)。
+	bool IsInEconomy() const;
+	void SetInEconomy(bool value);
 
 	// 当前持有的工作——Job由Organization持有所有权，这里只存一个不持有所有权的指针。
 	Job* GetJob() const;
@@ -333,6 +351,10 @@ private:
 	float posX = 0.f;
 	float posY = 0.f;
 	float posZ = 0.f;
+
+	bool statsActive = false;
+	float satiety = 0.f;
+	bool inEconomy = true;
 
 	// 行进模拟状态，不存档，见BeginWalk。walkDistances[i]是路径起点到第i个点的累计弧长。
 	Room* walkDestination = nullptr;

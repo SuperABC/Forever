@@ -175,4 +175,7 @@ Actor层。
   所有权的引用）、`Populace::Tick`（驱动调度）。
 
 ## 脚本驱动通勤
-上下班也可以不走C++的`DailyPlan`/`ExecNode`，写在Job自己的脚本里。`Job::SetOccupant`会给Job脚本写三个变量：`$$self.occupant`(上班的人的姓名，空串=空岗)、`$$self.home`(家的房间地址)、`$$self.workplace`(本岗位所在房间的地址)。脚本在`game_start`里`create_timer`(`mode: "next"`、`time: "09:00:00"`，同名计时器归脚本自己)，`time_up`里`npc_navigate`(name=`$$self.occupant`，destination=`$$self.workplace`/`$$self.home`，condition=`$$self.occupant != ""`)再重建次日计时器。`ShopSalerJob`用这种方式(`Resource/Story/job_shop_saler.script`，9点出门、18点回家)，`DailyPlan`为空；仓库管理员/工厂工人仍在C++里写。
+上下班也可以不走C++的`DailyPlan`/`ExecNode`，写在Job自己的脚本里。`Job::SetOccupant`会给Job脚本写三个变量：`$$self.occupant`(上班的人的姓名，空串=空岗)、`$$self.home`(家的房间地址)、`$$self.workplace`(本岗位所在房间的地址)。脚本在`game_start`里`create_timer`(`mode: "next"`)，`time_up`里`npc_navigate`(name=`$$self.occupant`，destination=`$$self.workplace`/`$$self.home`，condition=`$$self.occupant != ""`)再重建次日计时器。`ShopSalerJob`和`FactoryWorkerJob`用这种方式(`DailyPlan`为空)；仓库管理员仍在C++里写。剧情计时器每帧最多处理16个(见story.md)。
+
+## 到岗选项与玩家交互
+工厂工人(`job_factory_worker.script`)和商店店员(`job_shop_saler.script`)在`npc_arrive`(到自己的工作房间)时给员工`add_option`("制作汉堡"/"购买汉堡")，下班`remove_option`。点选项是`option_dialog`，也会发给Job脚本(不止Scheduler脚本)：工人→`start_puzzle("puzzle_anykey")`，结束的`puzzle_result`→`pay_wage 10000`；店员→`open_shop`。

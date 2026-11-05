@@ -19,6 +19,7 @@ class Story;
 class Industry;
 class Traffic;
 class Player;
+class Citizen;
 class Change;
 class SpawnNpcChange;
 class NPCReviveChange;
@@ -123,6 +124,10 @@ public:
 	Industry* GetIndustry() const { return industry; }
 	Traffic* GetTraffic() const { return traffic; }
 	Player* GetPlayer() const { return player; }
+
+	// 玩家当前操控的市民(玩家Pawn是ACitizenElement时)，不是市民(载具/没有Pawn)返回nullptr。
+	// 玩家的钱就是它在Ledger里的账户，物品在Player上，见Core/society/economy.md"玩家参与经济"。
+	Citizen* GetControlledCitizen() const;
 
 	// 统一的Change消费入口——populace/society两个Tick回调、
 	// UForeverStoryFrameworkComponent::BroadcastGameStart的onActions回调，今后任何地方产出的

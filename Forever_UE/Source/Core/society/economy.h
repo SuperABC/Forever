@@ -17,6 +17,8 @@ class Society;
 class Industry;
 class Room;
 class Citizen;
+class Organization;
+class Player;
 
 // 一种服务类型当日的供需。
 struct ServiceStat {
@@ -65,6 +67,18 @@ public:
 	// （算补助），post给组织mod查询商品价格等。currentYear用来算年龄。
 	static DailyReport Daily(Society& society, Industry& industry, const std::vector<Room*>& rooms,
 		const std::vector<Citizen*>& citizens, const Time& time, PostHandle* post, int currentYear);
+
+	// ---- 玩家参与经济(玩家的钱就是被操控市民的Ledger账户) ----
+
+	// 给worker发一笔工资：organization -> worker (Flow::WAGE)，再当场代扣所得税。和每日PayWages同一套扣税。
+	static void PayWage(Society& society, Organization* organization, Citizen* worker, int64_t amountCents);
+
+	enum class PurchaseResult { Success, NoMoney, NoSpace, Invalid };
+	// 玩家买一件资产(assetType是Asset mod id，价格取它GetProductType()对应Product的零售价)：
+	// 余额不够返回NoMoney、背包放不下返回NoSpace，两种情况都不扣钱不给东西；成功才
+	// buyer -> seller (SERVICE_PURCHASE)，商店再从营业额里缴消费税(和每日RunServices同一个口径)。
+	static PurchaseResult PlayerPurchase(Society& society, Industry& industry, Player& player, Organization* seller,
+		Citizen* buyer, const std::string& assetType);
 
 private:
 	// 月度分红结算：企业税、分红、股东所得税。其余税收都在交易发生时即时缴纳。

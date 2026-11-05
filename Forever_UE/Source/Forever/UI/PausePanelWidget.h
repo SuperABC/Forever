@@ -27,6 +27,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SaveButton;
@@ -42,12 +43,17 @@ protected:
 	// 可选：显示保存成功/失败原因的文字。没放的话结果打在屏幕左上角的调试信息里。
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> MessageText;
 
+	// 可选：状态文本框，目前只写"饱食度：xx%"(被操控市民没实例化动态属性时写"--")。没放则不显示。
+	// 暂停时世界时间缩放是0，Slate的NativeTick不受影响，所以打开期间每帧刷新。
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> StatusText;
+
 	UFUNCTION() void HandleSaveClicked();
 	UFUNCTION() void HandleLoadClicked();
 	UFUNCTION() void HandleCloseClicked();
 	UFUNCTION() void HandleExitClicked();
 
 private:
+	void RefreshStatus();
 	void ShowMessage(const FString& message, bool bError);
 	// 文件对话框关掉之后键盘焦点不一定回到这个widget，重新抢一次，Tab/Esc才能继续关界面。
 	void RefocusSelf();

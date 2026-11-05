@@ -9,6 +9,9 @@
 #include "populace/citizen.h"
 #include "populace/household.h"
 #include "story/script.h"
+#include "player/player.h"
+#include "player/asset.h"
+#include "industry/product.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -242,13 +245,50 @@ void Economy::PayWages(Society& society, DailyReport& report) {
 	}
 }
 
+void Economy::PayWage(Society& society, Organization* organization, Citizen* worker, int64_t amountCents) {
+	if (!organization || !worker || amountCents <= 0) return;
+	Ledger& ledger = society.GetLedger();
+	ledger.Transfer(Party::Of(organization), Party::Of(worker), amountCents, Flow::WAGE);
+	int64_t incomeTax = society.GetPolicy().Tax(amountCents, society.GetPolicy().incomeTaxPercent);
+	ledger.Transfer(Party::Of(worker), Party::Government(), incomeTax, Flow::INCOME_TAX);
+}
+
+Economy::PurchaseResult Economy::PlayerPurchase(Society& society, Industry& industry, Player& player,
+	Organization* seller, Citizen* buyer, const string& assetType) {
+	if (!seller || !buyer) return PurchaseResult::Invalid;
+
+	Asset* asset = player.CreateAsset(assetType);
+	if (!asset) return PurchaseResult::Invalid;
+	Product* product = asset->GetProductType().empty() ? nullptr : industry.FindProduct(asset->GetProductType());
+	if (!product) {
+		player.DestroyAsset(asset);
+		return PurchaseResult::Invalid;
+	}
+
+	Ledger& ledger = society.GetLedger();
+	int64_t price = product->GetRetailPrice();
+	if (ledger.Balance(Party::Of(buyer)) < price) {
+		player.DestroyAsset(asset);
+		return PurchaseResult::NoMoney;
+	}
+	if (player.StoreAsset(asset) == Player::StoreResult::Failed) {
+		player.DestroyAsset(asset);
+		return PurchaseResult::NoSpace;
+	}
+
+	ledger.Transfer(Party::Of(buyer), Party::Of(seller), price, Flow::SERVICE_PURCHASE);
+	int64_t consumptionTax = society.GetPolicy().Tax(price, society.GetPolicy().consumptionTaxPercent);
+	ledger.Transfer(Party::Of(seller), Party::Government(), consumptionTax, Flow::CONSUMPTION_TAX);
+	return PurchaseResult::Success;
+}
+
 void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, int currentYear,
 	DailyReport& report) {
 	Ledger& ledger = society.GetLedger();
 	const GovernmentPolicy& policy = society.GetPolicy();
 
 	for (Citizen* citizen : citizens) {
-		if (!citizen || citizen->IsDead()) continue;
+		if (!citizen || citizen->IsDead() || !citizen->IsInEconomy()) continue;
 		int age = citizen->GetAge(currentYear);
 		if (age < policy.adultAge) {
 			// 未成年补助发给户里的成年人(均摊)，因为吃饭房租都是成年人付；户里没有成年人时才发给孩子自己。
@@ -371,7 +411,7 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 	// 全部找到才重启。
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
-		if (citizen && !citizen->IsDead() && citizen->GetAge(currentYear) >= society.GetPolicy().adultAge) {
+		if (citizen && !citizen->IsDead() && citizen->IsInEconomy() && citizen->GetAge(currentYear) >= society.GetPolicy().adultAge) {
 			adults.push_back(citizen);
 		}
 	}

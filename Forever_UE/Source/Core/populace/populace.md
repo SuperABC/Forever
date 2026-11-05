@@ -179,11 +179,7 @@ void Populace::InitNames() {
 post)`生成今天的调度表，塞进`Populace`自己的`jobTimerSet`（`std::set<std::tuple
 <Time, Citizen*, std::string>>`，按时间排序）；不论是否跨天，每帧从`jobTimerSet`
 弹出最多`kMaxJobTimersPerTick`个到期节点执行，避免单帧处理过多到期节点卡顿。
-**这个上限是`1`**——每个Job类型都用固定钟点（比如店员天天9点/12点），同一时刻到期
-的节点数很容易远超每帧上限，PIE验证发现`kTimeFlowRatio`调快之后9点/12点这类"大量
-市民同一时刻上下班"场景会卡顿好几帧，调到`1`让每帧的开销（尤其是
-`Map::FindPedestrianPath`的Dijkstra寻路）更均摊,代价是把同一批到期节点摊得更久
-才能处理完。Organization自己的调度是另一套完全独立的timer，放在`Society::Tick`
+**这个上限是`16`**（`kMaxSchedulerTimersPerTick`同为16）——每个Job类型都用固定钟点，同一时刻到期的节点数很容易远超每帧上限，8点/9点这类"大量市民同一时刻上下班"场景会卡顿，限流让每帧的开销（尤其是`Map::FindPedestrianPath`的Dijkstra寻路）更均摊，代价是把同一批到期节点摊得更久才能处理完。Organization自己的调度是另一套完全独立的timer，放在`Society::Tick`
 里，见`Source/Core/society/society.md`"Job的timer在Populace，Organization的
 timer在Society"一节。
 

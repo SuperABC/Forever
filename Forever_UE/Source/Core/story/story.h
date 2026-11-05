@@ -5,6 +5,7 @@
 #include "story/script.h"
 
 #include <vector>
+#include <map>
 #include <functional>
 
 
@@ -100,12 +101,25 @@ public:
 	void AdvanceRealTimers(double deltaSeconds);
 	void RemoveTimer(const std::string& name, const std::string& ownerKey);
 	// 取出所有target<=now的计时器(按到时先后)并从列表里删除。
-	std::vector<StoryTimer> PopExpiredTimers(const Time& now);
+	// maxCount：最多取出多少个，到时但没取完的留在队首，下一次接着取(分摊到多帧)。
+	std::vector<StoryTimer> PopExpiredTimers(const Time& now, size_t maxCount = SIZE_MAX);
 
 private:
-	// 计时器列表，数量很少(脚本显式创建)，直接线性扫。
-	std::vector<StoryTimer> timers;
+	// 计时器。每个上班的岗位脚本都有两个，全城可以有几千个：游戏时间计时器放在按到时时刻排序的
+	// multimap(红黑树)里，每帧只看队首，不扫全表；timerIndex按(名字, 归属键)索引，保证同owner同名
+	// 只留一个，创建/删除都是O(log n)。现实时间计时器很少，另放一个vector。
+	std::multimap<Time, StoryTimer> gameTimers;
+	std::map<std::pair<std::string, std::string>, std::multimap<Time, StoryTimer>::iterator> timerIndex;
+	std::vector<StoryTimer> realTimers;
+	void EraseTimer(const std::string& name, const std::string& ownerKey);
 
+public:
+	// 存档用：全部计时器(游戏时间的按到时先后在前，现实时间的在后)；读档先清空再逐个还原。
+	std::vector<StoryTimer> GetTimers() const;
+	void ClearTimers();
+	void RestoreTimer(const StoryTimer& timer);
+
+private:
 	// 引用`Registry::Get().GetScriptFactory()`，不再自己持有ModLoader/ScriptFactory——mod
 	// dll的发现/注册只在整个UE进程生命周期里跑一次，见Source/Core/common/registry.md。
 	// 构造函数初始化列表里绑定。

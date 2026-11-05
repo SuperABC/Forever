@@ -56,3 +56,6 @@
 ## 待办 / 后续
 
 - 无。房间里的物品（`Room::assets`）存在玩家段，见 `Source/Core/player/player_save.md`。
+
+## 动态属性
+每个市民记录末尾(avatarIndex之后)追加`U8 statsActive`+`F32 satiety`，读写严格对称；没有升版本号，旧存档会读错(游戏未发布，按约定不做迁移)。

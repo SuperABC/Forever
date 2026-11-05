@@ -82,3 +82,25 @@ private:
 	int id;
 	std::string name;
 };
+
+
+// 按任意键退出：只显示脚本通过start_puzzle的param传来的一行提示文字，收到任意按键(按下)就结束。
+// 用来占位"制作汉堡"之类还没有真正玩法的小游戏，结束后脚本靠puzzle_result事件继续往下走。
+class AnyKeyPuzzle : public PuzzleMod {
+public:
+	AnyKeyPuzzle();
+
+	static const char* GetId() { return "puzzle_anykey"; }
+	virtual const char* GetType() const override { return "puzzle_anykey"; }
+	virtual const char* GetName() override;
+
+	virtual void SetParam(const std::string& param) override;
+	virtual void Init(Canvas* canvas, PostHandle* post) override;
+	virtual int Loop(Canvas* canvas, int ms, PostHandle* post) override;
+
+private:
+	static int count;
+	int id;
+	std::string name;
+	std::string message;
+};

@@ -173,9 +173,10 @@ void ScriptSaveCodec::Save(const SaveWorld& world, SaveArchive& archive) {
 
 	// 计时器(Story::timers)：名称、归属脚本键、到时时刻。
 	const Story* story = world.story;
-	w.U32(story ? static_cast<uint32_t>(story->timers.size()) : 0u);
+	const vector<StoryTimer> savedTimers = story ? story->GetTimers() : vector<StoryTimer>();
+	w.U32(static_cast<uint32_t>(savedTimers.size()));
 	if (story) {
-		for (const StoryTimer& timer : story->timers) {
+		for (const StoryTimer& timer : savedTimers) {
 			w.Str(timer.name);
 			w.Str(timer.ownerKey);
 			const Time& t = timer.target;
@@ -251,7 +252,7 @@ bool ScriptSaveCodec::Load(const SaveArchive& archive, Map* map, Populace* popul
 
 	// 计时器。读档时归属脚本可能已经不在了，留着也无妨：到时按键查不到就丢弃。
 	if (!r.Failed() && story) {
-		story->timers.clear();
+		story->ClearTimers();
 		uint32_t timerCount = r.U32();
 		for (uint32_t k = 0; k < timerCount && !r.Failed(); k++) {
 			StoryTimer timer;
@@ -263,7 +264,7 @@ bool ScriptSaveCodec::Load(const SaveArchive& archive, Map* map, Populace* popul
 			timer.remaining = r.F32();
 			if (r.Failed()) break;
 			timer.target = Time(year, month, day, hour, minute, second, millisecond);
-			story->timers.push_back(timer);
+			story->RestoreTimer(timer);
 		}
 	}
 

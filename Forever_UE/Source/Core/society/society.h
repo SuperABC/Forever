@@ -44,6 +44,15 @@ public:
 
 	void RecruitCitizens(const std::vector<Citizen*>& citizens, int currentYear);
 
+	// 给一个开局之后才接入经济系统的市民(spawn_npc economy:true)单独求职：已有工作/不在工作年龄/没有
+	// 空缺岗位都返回false，否则随机挑一个空缺岗位安排上并返回true。
+	bool RecruitCitizen(Citizen* citizen, int currentYear);
+
+	// 按Job脚本反查岗位及其所属组织(脚本里的change以context.self为Job脚本时用，如pay_wage/open_shop)。
+	// 找不到返回nullptr。
+	Job* FindJobByScript(const Container* script) const;
+	Organization* FindOrganizationOfJob(const Job* job) const;
+
 	// 阶段3：RecruitCitizens()之后调用——(1)给每个当前在职者逐年往回推、递归到底地反推
 	// 入职历史(JobExperience，一对多里"一"的那一份，见experience.h)，从空闲成年人池里
 	// 动态摘取前任，直到推到"满18岁/最后一次毕业年份"这个硬下限或空闲成年人池耗尽为止；
@@ -93,5 +102,5 @@ private:
 	mutable bool roomOwnersDirty = true;
 
 	std::set<std::tuple<Time, Organization*, std::string>> organizationTimerSet;
-	static constexpr int kMaxOrganizationTimersPerTick = 4;
+	static constexpr int kMaxOrganizationTimersPerTick = 16;
 };

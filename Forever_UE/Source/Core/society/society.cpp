@@ -2,6 +2,7 @@
 
 #include "society/organization.h"
 #include "society/job.h"
+#include "story/script.h"
 #include "map/component.h"
 #include "map/room.h"
 #include "populace/citizen.h"
@@ -59,7 +60,7 @@ Party Society::OwnerOf(const Room* room) const {
 void Society::AssignShareholders(const vector<Citizen*>& citizens, int currentYear) {
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
-		if (citizen && citizen->GetAge(currentYear) >= kMinAdultAge) adults.push_back(citizen);
+		if (citizen && citizen->IsInEconomy() && citizen->GetAge(currentYear) >= kMinAdultAge) adults.push_back(citizen);
 	}
 
 	for (Organization* organization : organizations) {
@@ -174,7 +175,7 @@ void Society::RecruitCitizens(const vector<Citizen*>& citizens, int currentYear)
 	// 只招成年人：未成年人和老年人（>=退休年龄）不工作。
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
-		if (!citizen || citizen->GetJob()) continue;
+		if (!citizen || !citizen->IsInEconomy() || citizen->GetJob()) continue;
 		int age = citizen->GetAge(currentYear);
 		if (age >= kMinAdultAge && age < policy.retirementAge) adults.push_back(citizen);
 	}
@@ -194,6 +195,45 @@ void Society::RecruitCitizens(const vector<Citizen*>& citizens, int currentYear)
 		vacancies[i]->SetOccupant(adults[i]);
 		adults[i]->SetJob(vacancies[i]);
 	}
+}
+
+Job* Society::FindJobByScript(const Container* script) const {
+	if (!script) return nullptr;
+	for (Organization* organization : organizations) {
+		for (Job* job : organization->GetJobs()) {
+			if (job && static_cast<const Container*>(job->GetScript()) == script) return job;
+		}
+	}
+	return nullptr;
+}
+
+Organization* Society::FindOrganizationOfJob(const Job* job) const {
+	if (!job) return nullptr;
+	for (Organization* organization : organizations) {
+		for (const Job* candidate : organization->GetJobs()) {
+			if (candidate == job) return organization;
+		}
+	}
+	return nullptr;
+}
+
+bool Society::RecruitCitizen(Citizen* citizen, int currentYear) {
+	if (!citizen || citizen->GetJob()) return false;
+	int age = citizen->GetAge(currentYear);
+	if (age < kMinAdultAge || age >= policy.retirementAge) return false;
+
+	vector<Job*> vacancies;
+	for (Organization* organization : organizations) {
+		for (Job* job : organization->GetJobs()) {
+			if (job && !job->GetOccupant()) vacancies.push_back(job);
+		}
+	}
+	if (vacancies.empty()) return false;
+
+	Job* job = vacancies[GetRandom(static_cast<int>(vacancies.size()))];
+	job->SetOccupant(citizen);
+	citizen->SetJob(job);
+	return true;
 }
 
 void Society::Tick(const Time& currentTime, bool crossedDay,

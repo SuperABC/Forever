@@ -324,6 +324,14 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			if (type == "enter_vehicle") event = new EnterVehicleEvent(obj["vehicle"].AsString(), obj["mode"].AsString());
 			else event = new LeaveVehicleEvent(obj["vehicle"].AsString(), obj["mode"].AsString());
 		}
+		else if (type == "puzzle_result") {
+			// result可以省略(留空=不限)，见PuzzleResultEvent::Match。目前小游戏结束时统一发"finish"。
+			event = new PuzzleResultEvent(obj["result"].AsString());
+		}
+		else if (type == "npc_arrive") {
+			// name/address都可以省略(留空=不限)，见NpcArriveEvent::Match；address是房间地址(Room::GetAddress())。
+			event = new NpcArriveEvent(obj["name"].AsString(), obj["address"].AsString());
+		}
 		else if (type == "time_up") {
 			// name可以省略(留空=这个脚本的任何计时器到时都触发)，见TimeUpEvent::Match。
 			event = new TimeUpEvent(obj["name"].AsString());
@@ -361,6 +369,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new SetValueChange(variable.AsString(), value.AsString());
 		}
+		else if (type == "global_setting") {
+			auto setting = obj["setting"];
+			auto value = obj["value"];
+			if (setting.IsNull() || value.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing setting or value for global_setting change.\n");
+			}
+			change = new GlobalSettingChange(setting.AsString(), value.AsString());
+		}
 		else if (type == "place_holder") {
 			change = new PlaceHolderChange(obj["label"].AsString());
 		}
@@ -383,6 +399,16 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			// param可选：剧情脚本传给小游戏的启动参数(表达式)，缺省为空串
 			auto param = obj["param"];
 			change = new StartPuzzleChange(puzzle.AsString(), param.IsNull() ? string() : param.AsString());
+		}
+		else if (type == "open_shop") {
+			change = new OpenShopChange();
+		}
+		else if (type == "pay_wage") {
+			auto amount = obj["amount"];
+			if (amount.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing amount for pay_wage change.\n");
+			}
+			change = new PayWageChange(amount.AsString());
 		}
 		else if (type == "enter_vehicle") {
 			auto vehicle = obj["vehicle"];
@@ -514,7 +540,7 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			// 其余字段都可选；目前真正生效的只有name/gender/birthday/home/scheduler，见story.md"spawn_npc"。
 			change = new SpawnNpcChange(obj["avatar"].AsString(), name.AsString(), gender.AsString(), birthday.AsString(),
 				obj["height"].AsString(), obj["weight"].AsString(), obj["nick"].AsString(), obj["deposit"].AsString(),
-				obj["phone"].AsString(), obj["home"].AsString(), jobs, obj["scheduler"].AsString());
+				obj["phone"].AsString(), obj["home"].AsString(), jobs, obj["scheduler"].AsString(), obj["economy"].AsString());
 		}
 		else if (type == "create_timer") {
 			auto name = obj["name"];

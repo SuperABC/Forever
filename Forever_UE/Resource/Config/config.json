@@ -24,10 +24,10 @@
       "building_train_station",
       "building_airport",
       "building_park",
-      "building_mohar",
       "building_empty --test true",
       "building_shop",
-      "building_yuanshen"
+      "building_yuanshen",
+      "building_mohar"
    ],
    "component_mods" : [
       "component_residence",
@@ -68,7 +68,7 @@
       "product_burger",
       "product_empty --test true"
    ],
-   "puzzle_mods" : [ "puzzle_tetris", "puzzle_empty --test true" ],
+   "puzzle_mods" : [ "puzzle_tetris", "puzzle_anykey", "puzzle_empty --test true" ],
    "resource_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",

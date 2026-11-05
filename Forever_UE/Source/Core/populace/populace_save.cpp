@@ -132,6 +132,8 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		// 头像。
 		w.Str(c->avatar);
 		w.I32(c->avatarIndex);
+		w.U8(c->statsActive ? 1 : 0);
+		w.F32(c->satiety);
 	}
 
 	// 班级。
@@ -309,6 +311,8 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			// 头像。
 			c->avatar = r.Str();
 			c->avatarIndex = r.I32();
+			c->statsActive = r.U8() != 0;
+			c->satiety = r.F32();
 		}
 		auto citizenAt = [&](int index) -> Citizen* {
 			return (index >= 0 && index < static_cast<int>(citizens.size())) ? citizens[index] : nullptr;

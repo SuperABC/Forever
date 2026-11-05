@@ -41,6 +41,8 @@ public:
 	bool IsWeapon() const;
 	const std::string& GetWeaponType() const; // IsWeapon()时激活它要装备的WeaponMod id
 	bool IsUsable() const;
+	float GetSatiety() const;                 // 使用时增加的饱食度
+	const std::string& GetProductType() const; // 商店查价用的Product类型，空=不能买
 	bool IsThrowable() const;
 	const std::string& GetMeshPath() const; // 空=沿用Cube占位
 	float GetMeshScale() const;
@@ -96,6 +98,8 @@ private:
 	bool weaponFlag = false;
 	std::string weaponType;
 	bool usableFlag = false;
+	float satietyValue = 0.f;
+	std::string productType;
 	bool throwableFlag = false;
 	std::string meshPath;
 	float meshScale = 1.f;

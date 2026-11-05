@@ -11,9 +11,12 @@ class Story;
 class Change;
 class ChangeControlChange;
 class StartPuzzleChange;
+class PayWageChange;
 class CreateTimerChange;
 class RemoveTimerChange;
 class Script;
+class Citizen;
+class Room;
 class Container;
 class EnterVehicleChange;
 class BoardVehicleChange;
@@ -74,6 +77,10 @@ public:
 	// @reason: 死亡原因字面量（玩家用武器击杀时是"player"，武器种类见CitizenDeceaseEvent::weapon）
 	void BroadcastCitizenDecease(const FString& name, const FString& reason);
 
+	// 市民真正走到一个新房间时调用(UForeverPopulaceFrameworkComponent::HandleCitizenArrived)：
+	// 构造npc_arrive事件，只发给这个市民自己的Scheduler脚本和Job脚本(不广播)。
+	void BroadcastNpcArrive(Citizen* citizen, Room* room);
+
 	// 同上，但直接发一个已经填好击杀信息(凶手/武器/部位/伤害/可见/死亡地址)的事件，武器击杀用。
 	void BroadcastCitizenDecease(CitizenDeceaseEvent& event);
 
@@ -122,6 +129,18 @@ public:
 	// @change: 待执行的开始小游戏变化
 	// @context: 变量路由上下文，用于求值change->GetPuzzle()
 	void ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context);
+
+	// 小游戏结束时由UPuzzleWidget::EndPuzzle调用：给启动它的那个脚本(ApplyStartPuzzle记下的)发
+	// puzzle_result事件(result固定"finish")，脚本里用来在小游戏结束后发工资之类。
+	void NotifyPuzzleFinished();
+
+	// open_shop：找到执行这个Change的Job脚本所属的岗位和组织，打开商店界面并让它记录这个组织
+	// (购买时付款给它)。
+	void ApplyOpenShop(const ScriptContext& context);
+
+	// pay_wage：由执行这个Change的Job脚本所属组织，给被玩家操控的市民发一笔工资(Flow::WAGE，
+	// 代扣所得税)。玩家有没有真的去上班不影响每日工资结算，这是玩家手动打工额外拿的一份。
+	void ApplyPayWage(const PayWageChange* change, const ScriptContext& context);
 
 	// EnterVehicleChange的实际执行：找到指定名字的载具对应的AVehicleElement、把玩家操控权
 	// 切换过去。不在Core::Traffic::ApplyChange里处理（Core层不认识Actor/Controller），只能
@@ -206,6 +225,13 @@ private:
 	// get_asset/lose_asset事件处理里又执行Change再触发事件的嵌套深度，超过上限丢弃并警告，防止互相触发。
 	int32 assetEventDepth = 0;
 	static constexpr int32 kMaxAssetEventDepth = 8;
+
+	// 当前这局小游戏是哪个脚本启动的(稳定键，见FindScriptKey)，结束时给它发puzzle_result。
+	std::string puzzleOwnerKey;
+
+	// npc_arrive处理里又执行npc_teleport等再触发npc_arrive的嵌套深度，超过上限丢弃并警告。
+	int32 npcArriveDepth = 0;
+	static constexpr int32 kMaxNpcArriveDepth = 8;
 
 	// BroadcastGlobalMessage当前的嵌套深度，见那边的注释。
 	int32 globalMessageDepth = 0;

@@ -236,3 +236,6 @@ RoadnetMesh/ZoneMesh/BuildingMesh/VegetationMesh`统一生成UE网格，顺序�
 ## 待办/后续阶段
 - 一旦有人在`World.umap`里手动放置了真实的`AForeverFrameworkActor`，应该移除
   `ForeverPlayerGameMode`里的动态兜底生成逻辑，不要误以为是正式生成方案。
+
+## 玩家操控市民与spawn_npc经济
+`GetControlledCitizen()`：玩家Pawn是ACitizenElement时返回其市民。`ApplySpawnNpc`：每个NPC都`InitFunds`；`economy`为真才`SettleCitizen`+`RecruitCitizen`，否则只`SetCurrentRoom`(带`home`但没`economy:true`不再安家)。

@@ -47,7 +47,7 @@ BeginPlay()`）负责保证`EnsureMapGenerated()`/`EnsurePopulaceGenerated()`已
 `Society::Tick`驱动**（`Society`持有`organizationTimerSet`，遍历
 `organizations`，见`organization.md`"Organization自己的DailyPlan/ExecNode"
 一节）。两者的每帧处理上限（`kMaxJobTimersPerTick`/
-`kMaxOrganizationTimersPerTick`，都是4）互不共享。
+`kMaxOrganizationTimersPerTick`，都是16）互不共享。
 
 `AForeverFrameworkActor::Tick`每帧分别调用`populace->Tick(...)`和
 `society->Tick(...)`，两个回调都是`(实体指针, const vector<Change*>&)`签名，
@@ -132,3 +132,8 @@ Change子类是Society域自己认识、需要处理的，空实现，返回fals
 
 ## 招聘
 `RecruitCitizens`只招成年人（18岁以上、未到退休年龄60岁）：未成年人和老年人不工作。
+
+## 单人求职与反查
+- `RecruitCitizen(citizen, year)`：给一个成年市民随机分配一个空缺岗位(spawn_npc `economy:true`时用，补`JobExperience`)。
+- `FindJobByScript(script)` / `FindOrganizationOfJob(job)`：由Job脚本反查岗位和所属组织，`pay_wage`/`open_shop`用。
+- `Citizen::IsInEconomy()==false`的市民不参与股东分配和招聘。

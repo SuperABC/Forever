@@ -107,3 +107,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 ## MakeScript：script可为空
 `MakeScript(factory, scriptModName, milestoneNames)`：两者都空返回nullptr(这个实例没有脚本，`GetScript()==nullptr`，也不挂弹选项的触发盒)；`scriptModName`为空但有里程碑时按`"script_empty"`创建(空字符串等价script_empty，不需要在依赖里声明)。Vehicle/Job/Scheduler/Organization/Asset用它；`VehicleMod/JobMod/SchedulerMod/OrganizationMod/AssetMod::scriptModName`默认值是`""`。Room/Building/Zone的`MakeEntityScript`、Door/Cabin本来就是“没有里程碑/交互名则无脚本”。
 新增解析：Event `get_asset`/`lose_asset`(过滤字段`asset_type`、`result`，JSON的`type`已是事件类型)；Change `pick_asset`(asset，缺省=所属资产)、`grant_asset`/`deduct_asset`/`drop_asset`(asset_type、count缺省1)。
+
+## 玩家与经济相关的事件/Change
+- 事件`npc_arrive`(name, address，空=不限)、`puzzle_result`(result固定"finish")。
+- Change `open_shop`(无参数)、`pay_wage`(amount表达式，单位分)；`spawn_npc`新增`economy`表达式(缺省false)。

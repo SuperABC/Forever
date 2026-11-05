@@ -141,7 +141,7 @@ script->SetValue("name", ValueType(string(mod->GetName()))); // 供milestone脚�
 和`Job`结构对称，但驱动方是`Society`而不是`Populace`——两套完全独立的timer，见
 `job.md`"驱动方式"一节。`Society`持有`organizationTimerSet`
 （`std::set<std::tuple<Time, Organization*, std::string>>`），
-`kMaxOrganizationTimersPerTick`(4)是这一份的独立上限。`DailyPlan`/`ExecNode`
+`kMaxOrganizationTimersPerTick`(16)是这一份的独立上限。`DailyPlan`/`ExecNode`
 也和`JobMod`同步带`PostHandle* post`参数（见`job.md`"按需查地址：PostHandle
 参数"一节）——保持接口对称，即使目前没有具体组织类型真的用到。`ShopOrganization`
 不重写`DailyPlan`/`ExecNode`（用基类默认空实现），这套设施目前没有真正产出任何

@@ -9,6 +9,7 @@ class USectionSpeakingWidget;
 class UBackgroundSpeakingWidget;
 class USectionOptionWidget;
 class UPuzzleWidget;
+class UShopWidget;
 class UPhoneWidget;
 class UInventoryWidget;
 class UMapWidget;
@@ -84,6 +85,14 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UPuzzleWidget> puzzleWidget;
 
+	// 商店界面，由open_shop Change触发(见UForeverStoryFrameworkComponent::ApplyOpenShop)，
+	// UShopWidget自己在NativeConstruct里默认不显示。
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UShopWidget> shopWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UShopWidget> shopWidget;
+
 	// 跟前面几个Widget同一套模式，由P键(TogglePhone)控制开关，不需要手动Collapse——
 	// UPhoneWidget自己在NativeConstruct里默认不显示。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -155,6 +164,7 @@ public:
 	FORCEINLINE UBackgroundSpeakingWidget* GetBackgroundSpeakingWidget() const { return backgroundSpeakingWidget; }
 	FORCEINLINE USectionOptionWidget* GetSectionOptionWidget() const { return sectionOptionWidget; }
 	FORCEINLINE UPuzzleWidget* GetPuzzleWidget() const { return puzzleWidget; }
+	FORCEINLINE UShopWidget* GetShopWidget() const { return shopWidget; }
 	FORCEINLINE UPhoneWidget* GetPhoneWidget() const { return phoneWidget; }
 	FORCEINLINE UInventoryWidget* GetInventoryWidget() const { return inventoryWidget; }
 	FORCEINLINE UMapWidget* GetMapWidget() const { return mapWidget; }

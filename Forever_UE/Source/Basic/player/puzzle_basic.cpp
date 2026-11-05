@@ -264,3 +264,43 @@ void TetrisPuzzle::Render(Canvas* canvas) const {
 		canvas->PutString("ESC TO EXIT", boardOriginX + 10, textY + 30);
 	}
 }
+
+
+int AnyKeyPuzzle::count = 0;
+
+AnyKeyPuzzle::AnyKeyPuzzle() : id(count++) {
+
+}
+
+const char* AnyKeyPuzzle::GetName() {
+	name = "AnyKey" + to_string(id);
+	return name.data();
+}
+
+void AnyKeyPuzzle::SetParam(const std::string& param) {
+	message = param;
+}
+
+void AnyKeyPuzzle::Init(Canvas* canvas, PostHandle* post) {
+	canvas->ClearKeyBuffer(); // 打开瞬间还按着的键(比如点选项的那一下)不能算退出
+}
+
+int AnyKeyPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
+	bool pressed = false;
+	while (canvas->HasPendingKey()) {
+		int raw = canvas->PopKey();
+		if ((raw & KEY_RELEASED_FLAG) == 0) pressed = true;
+	}
+	if (pressed) return 1;
+
+	canvas->SetColor(0, 0, 0);
+	canvas->ClearScreen();
+	canvas->SetColor(255, 255, 255);
+	canvas->SetFontSize(24);
+	string text = message.empty() ? string("Press any key") : message;
+	canvas->PutString(text, (canvas->GetWidth() - canvas->StringWidth(text)) / 2, canvas->GetHeight() / 2 - 12);
+	canvas->SetFontSize(14);
+	string hint = "Press any key";
+	canvas->PutString(hint, (canvas->GetWidth() - canvas->StringWidth(hint)) / 2, canvas->GetHeight() / 2 + 30);
+	return 0;
+}

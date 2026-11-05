@@ -53,7 +53,8 @@ private:
 	std::string name;
 };
 
-// FactoryWorkerJob：工坊房间的工人，没有剧情脚本，8点上班17点下班。
+// FactoryWorkerJob：工坊房间的工人，8点上班17点下班。上下班/到岗选项/小游戏发工资都在
+// Resource/Story/job_factory_worker.script里(同ShopSalerJob)，这里的DailyPlan不排任何C++节点。
 class FactoryWorkerJob : public JobMod {
 public:
 	FactoryWorkerJob();
@@ -61,9 +62,8 @@ public:
 	static const char* GetId() { return "job_factory_worker"; }
 	virtual const char* GetType() const override { return "job_factory_worker"; }
 	virtual void DailyPlan(const Time& currentTime, PostHandle* post) override;
-	virtual void ExecNode(const std::string& node, PostHandle* post) override;
 	virtual const char* GetName() override;
-	virtual void SetProperty() override {}
+	virtual void SetProperty() override;
 
 public:
 	virtual int GetInstanceCounter() const override { return count; }

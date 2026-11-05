@@ -254,6 +254,19 @@ void Citizen::SetPosition(float x, float y, float z) {
 
 void Citizen::ClearPosition() { hasPosition = false; }
 
+bool Citizen::IsStatsActive() const { return statsActive; }
+void Citizen::ActivateStats() {
+	if (statsActive) return;
+	statsActive = true;
+	satiety = 0.5f + GetRandom(1001) / 2000.f; // [0.5, 1]
+}
+float Citizen::GetSatiety() const { return std::round(satiety * 100.f) / 100.f; }
+void Citizen::AddSatiety(float delta) { satiety = std::min(1.f, std::max(0.f, satiety + delta)); }
+void Citizen::DecaySatiety(double days) { if (days > 0) satiety *= static_cast<float>(std::pow(0.5, days)); }
+
+bool Citizen::IsInEconomy() const { return inEconomy; }
+void Citizen::SetInEconomy(bool value) { inEconomy = value; }
+
 bool Citizen::IsWalking() const { return walkDestination != nullptr; }
 Room* Citizen::GetWalkDestination() const { return walkDestination; }
 

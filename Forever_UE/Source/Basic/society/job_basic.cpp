@@ -84,24 +84,11 @@ const char* FactoryWorkerJob::GetName() {
 	return name.data();
 }
 
-void FactoryWorkerJob::DailyPlan(const Time& currentTime, PostHandle*) {
-	plans.clear();
-	plans["leave_home"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 8, 0);
-	plans["leave_work"] = Time(currentTime.GetYear(), currentTime.GetMonth(), currentTime.GetDay(), 17, 0);
+void FactoryWorkerJob::SetProperty() {
+	scriptModName = "script_empty";
+	milestoneNames = { "job_factory_worker" };
 }
 
-void FactoryWorkerJob::ExecNode(const string& node, PostHandle* post) {
-	for (Change* change : changes) delete change;
-	changes.clear();
-
-	if (node == "leave_home") {
-		string workplaceAddress = QueryAddress(post, occupantName, "citizen workplace address");
-		if (workplaceAddress.empty()) return; // 查询失败，这次调度作废，不产出任何Change
-		changes.push_back(new NPCNavigateChange(occupantName, workplaceAddress));
-	}
-	else if (node == "leave_work") {
-		string homeAddress = QueryAddress(post, occupantName, "citizen home address");
-		if (homeAddress.empty()) return;
-		changes.push_back(new NPCNavigateChange(occupantName, homeAddress));
-	}
+void FactoryWorkerJob::DailyPlan(const Time&, PostHandle*) {
+	// 上下班由job_factory_worker.script的计时器驱动，这里不排任何C++节点(plans保持为空)。
 }

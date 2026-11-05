@@ -12,9 +12,7 @@
 - `GetName()`必须全局唯一。
 
 ## 岗位（Step 4）
-没有通勤基类，每个岗位自己实现`DailyPlan`/`ExecNode`（上下班时间直接写在各自`DailyPlan`的`Time(...)`里，想改成8:30就改成`8, 30`）：
-`ShopSalerJob`（店员，有剧情脚本）9:00上班18:00下班，`WarehouseKeeperJob`（仓库管理员）9:00/18:00，
-`FactoryWorkerJob`（工坊工人）8:00/17:00，后两者没有剧情脚本。
+没有通勤基类。`ShopSalerJob`（店员，9:00/18:00）和`FactoryWorkerJob`（工坊工人，8:00/17:00）的上下班、到岗选项、玩家交互都在`Resource/Story/job_shop_saler.script`/`job_factory_worker.script`里（`SetProperty`设脚本，`DailyPlan`为空；想改成8:30改脚本里的time）。`WarehouseKeeperJob`（仓库管理员）仍在C++的`DailyPlan`/`ExecNode`里写9:00/18:00。
 
 ## 依赖关系
 

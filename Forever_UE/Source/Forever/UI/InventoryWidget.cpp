@@ -22,6 +22,7 @@
 
 #include "player/player.h"
 #include "player/asset.h"
+#include "populace/citizen.h"
 #include "map/room.h"
 
 namespace {
@@ -393,6 +394,17 @@ void UInventoryWidget::HandleUse() {
 		asset = GetSlotAsset(currentSlot);
 	}
 	if (!asset) return;
+
+	// 使用可用物品(汉堡)：给被操控的市民加饱食度(未实例化动态属性则先实例化，上限1超出截断)。
+	if (asset->IsUsable() && asset->GetCount() > 0) {
+		if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+			UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+			if (Citizen* citizen = framework->GetControlledCitizen()) {
+				citizen->ActivateStats();
+				citizen->AddSatiety(asset->GetSatiety());
+			}
+		}
+	}
 
 	if (asset->Use()) {
 		if (container) container->RemoveContent(asset->GetName());

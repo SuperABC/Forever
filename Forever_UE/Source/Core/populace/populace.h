@@ -124,10 +124,14 @@ private:
 	std::vector<SchoolClass*> schoolClasses;
 
 	std::set<std::tuple<Time, Citizen*, std::string>> jobTimerSet;
-	static constexpr int kMaxJobTimersPerTick = 100;
+	static constexpr int kMaxJobTimersPerTick = 16;
+
+	// 上一次Tick的游戏时间，用来算饱食度衰减的经过时间；不存档。
+	Time lastTickTime;
+	bool hasLastTickTime = false;
 
 	// Scheduler自己独立的一套timer，和jobTimerSet完全平行（见Tick()实现），负责citizen
 	// 下班之后的行为。
 	std::set<std::tuple<Time, Citizen*, std::string>> schedulerTimerSet;
-	static constexpr int kMaxSchedulerTimersPerTick = 1;
+	static constexpr int kMaxSchedulerTimersPerTick = 16;
 };

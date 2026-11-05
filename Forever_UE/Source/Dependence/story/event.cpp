@@ -448,6 +448,19 @@ const string& PuzzleResultEvent::GetType() const {
 	return type;
 }
 
+bool PuzzleResultEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<PuzzleResultEvent*>(e);
+	if (!result.empty() && ToString(EvaluateExpression(result, context)) != other->result) return false;
+	return true;
+}
+
+pair<bool, ValueType> PuzzleResultEvent::GetLocalValue(const string& key) const {
+	if (key == "result") return { true, ValueType(result) };
+	return { false, ValueType() };
+}
+
 void PuzzleResultEvent::SetResult(std::string result) {
 	this->result = move(result);
 }
@@ -533,6 +546,21 @@ NpcArriveEvent::~NpcArriveEvent() {
 const string& NpcArriveEvent::GetType() const {
 	static const string type = "npc_arrive";
 	return type;
+}
+
+bool NpcArriveEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<NpcArriveEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	if (!address.empty() && ToString(EvaluateExpression(address, context)) != other->address) return false;
+	return true;
+}
+
+pair<bool, ValueType> NpcArriveEvent::GetLocalValue(const string& key) const {
+	if (key == "name") return { true, ValueType(name) };
+	if (key == "address") return { true, ValueType(address) };
+	return { false, ValueType() };
 }
 
 void NpcArriveEvent::SetName(std::string name) {

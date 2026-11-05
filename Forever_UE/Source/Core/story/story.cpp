@@ -91,67 +91,88 @@ Script* Story::GetGlobalScript() const {
 	return globalScript;
 }
 
-void Story::CreateTimer(const string& name, const Time& target, const string& ownerKey) {
-	for (StoryTimer& timer : timers) {
-		if (timer.name == name && timer.ownerKey == ownerKey) {
-			timer.target = target;
-			timer.realTime = false;
-			timer.remaining = 0.0;
-			return;
-		}
+void Story::EraseTimer(const string& name, const string& ownerKey) {
+	auto it = timerIndex.find({ name, ownerKey });
+	if (it != timerIndex.end()) {
+		gameTimers.erase(it->second);
+		timerIndex.erase(it);
 	}
+	realTimers.erase(remove_if(realTimers.begin(), realTimers.end(), [&](const StoryTimer& timer) {
+		return timer.name == name && timer.ownerKey == ownerKey;
+		}), realTimers.end());
+}
+
+void Story::CreateTimer(const string& name, const Time& target, const string& ownerKey) {
+	EraseTimer(name, ownerKey);
 	StoryTimer timer;
 	timer.target = target;
 	timer.name = name;
 	timer.ownerKey = ownerKey;
-	timers.push_back(timer);
+	timerIndex[{ name, ownerKey }] = gameTimers.emplace(target, std::move(timer));
 }
 
 void Story::CreateRealTimer(const string& name, double seconds, const string& ownerKey) {
-	for (StoryTimer& timer : timers) {
-		if (timer.name == name && timer.ownerKey == ownerKey) {
-			timer.realTime = true;
-			timer.remaining = seconds;
-			return;
-		}
-	}
+	EraseTimer(name, ownerKey);
 	StoryTimer timer;
 	timer.name = name;
 	timer.ownerKey = ownerKey;
 	timer.realTime = true;
 	timer.remaining = seconds;
-	timers.push_back(timer);
+	realTimers.push_back(std::move(timer));
 }
 
 void Story::AdvanceRealTimers(double deltaSeconds) {
-	for (StoryTimer& timer : timers) {
-		if (timer.realTime) timer.remaining -= deltaSeconds;
-	}
+	for (StoryTimer& timer : realTimers) timer.remaining -= deltaSeconds;
 }
 
 void Story::RemoveTimer(const string& name, const string& ownerKey) {
-	timers.erase(remove_if(timers.begin(), timers.end(), [&](const StoryTimer& timer) {
-		return timer.name == name && timer.ownerKey == ownerKey;
-		}), timers.end());
+	EraseTimer(name, ownerKey);
 }
 
-vector<StoryTimer> Story::PopExpiredTimers(const Time& now) {
+vector<StoryTimer> Story::PopExpiredTimers(const Time& now, size_t maxCount) {
 	vector<StoryTimer> expired;
-	for (auto it = timers.begin(); it != timers.end();) {
-		if (it->realTime ? it->remaining <= 0.0 : it->target <= now) {
-			expired.push_back(*it);
-			it = timers.erase(it);
+	// 游戏时间计时器已按到时时刻排好，只弹队首；同一时刻的保持创建先后。
+	while (expired.size() < maxCount && !gameTimers.empty() && gameTimers.begin()->first <= now) {
+		auto it = gameTimers.begin();
+		timerIndex.erase({ it->second.name, it->second.ownerKey });
+		expired.push_back(std::move(it->second));
+		gameTimers.erase(it);
+	}
+	// 现实时间计时器排在后面，按剩余时间(越负越早到)。
+	vector<StoryTimer> realExpired;
+	for (size_t i = 0; i < realTimers.size() && expired.size() + realExpired.size() < maxCount;) {
+		if (realTimers[i].remaining <= 0.0) {
+			realExpired.push_back(std::move(realTimers[i]));
+			realTimers.erase(realTimers.begin() + i);
 		}
 		else {
-			++it;
+			i++;
 		}
 	}
-	// 游戏时间计时器按到时时刻先后，现实时间计时器排在后面按剩余时间(越负越早到)。
-	stable_sort(expired.begin(), expired.end(), [](const StoryTimer& a, const StoryTimer& b) {
-		if (a.realTime != b.realTime) return !a.realTime;
-		return a.realTime ? a.remaining < b.remaining : a.target < b.target;
+	stable_sort(realExpired.begin(), realExpired.end(), [](const StoryTimer& a, const StoryTimer& b) {
+		return a.remaining < b.remaining;
 		});
+	for (StoryTimer& timer : realExpired) expired.push_back(std::move(timer));
 	return expired;
+}
+
+vector<StoryTimer> Story::GetTimers() const {
+	vector<StoryTimer> all;
+	all.reserve(gameTimers.size() + realTimers.size());
+	for (const auto& [target, timer] : gameTimers) all.push_back(timer);
+	for (const StoryTimer& timer : realTimers) all.push_back(timer);
+	return all;
+}
+
+void Story::ClearTimers() {
+	gameTimers.clear();
+	timerIndex.clear();
+	realTimers.clear();
+}
+
+void Story::RestoreTimer(const StoryTimer& timer) {
+	if (timer.realTime) CreateRealTimer(timer.name, timer.remaining, timer.ownerKey);
+	else CreateTimer(timer.name, timer.target, timer.ownerKey);
 }
 
 Script* Story::GetMainScript() const {

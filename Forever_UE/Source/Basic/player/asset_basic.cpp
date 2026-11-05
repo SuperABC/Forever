@@ -66,7 +66,9 @@ void BurgerAsset::SetProperty() {
 	mobility = AssetMobility::Containee;
 	weight = 0.2f;
 	size = 0.2f;
-	usable = true; // 可使用，用完count-1到0即销毁，不做饱食度效果
+	usable = true;
+	satiety = 0.5f;               // 吃一个汉堡饱食度+0.5(上限1，超出截断)
+	productType = "product_burger"; // 商店按这个Product的零售价卖；可使用，用完count-1到0即销毁
 }
 
 int PistolAmmoAsset::count = 0;

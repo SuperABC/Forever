@@ -13,6 +13,7 @@
 #include "UI/SectionOptionWidget.h"
 #include "UI/MeetOptionWidget.h"
 #include "UI/PuzzleWidget.h"
+#include "UI/ShopWidget.h"
 
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
@@ -30,6 +31,7 @@
 #include "society/society.h"
 #include "society/organization.h"
 #include "society/job.h"
+#include "society/economy.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "populace/scheduler.h"
@@ -384,6 +386,11 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	if (target && target->GetScheduler()) {
 		matchOne(target->GetScheduler()->GetScript());
 	}
+	// 岗位的Job脚本：工作中的市民在Job脚本里加选项(见job_factory_worker.script/job_shop_saler.script)，
+	// 点击事件也要发给它。
+	if (target && target->GetJob()) {
+		matchOne(target->GetJob()->GetScript());
+	}
 
 	// 载具系统落地新增：name也可能是一辆车(见vehicle_basic.script的"上车"选项)，同样额外
 	// 匹配它自己的Script，和市民分支并列，互不影响(一个name不会同时是市民又是车辆)。
@@ -413,6 +420,30 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 	if (targetCabin && targetCabin->GetScript()) {
 		matchOne(targetCabin->GetScript());
 	}
+}
+
+void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, Room* room) {
+	if (!story || !GEngine || !citizen || !room) return;
+	if (npcArriveDepth >= kMaxNpcArriveDepth) {
+		UE_LOG(LogTemp, Warning, TEXT("npc_arrive nesting too deep, dropped."));
+		return;
+	}
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	NpcArriveEvent event(citizen->GetName(), room->GetAddress());
+	npcArriveDepth++;
+	if (citizen->GetScheduler()) BroadcastToScript(event, citizen->GetScheduler()->GetScript(), postImplement);
+	if (citizen->GetJob()) BroadcastToScript(event, citizen->GetJob()->GetScript(), postImplement);
+	npcArriveDepth--;
 }
 
 void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& name, const FString& reason) {
@@ -473,6 +504,8 @@ void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChan
 	if (APlayerController* playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0)) {
 		playerController->Possess(target);
 	}
+	// 被玩家操控的市民才实例化动态属性(饱食度)，放手后保持实例化，见Citizen::ActivateStats。
+	if (Citizen* controlled = target->GetCitizen()) controlled->ActivateStats();
 
 	// 每次切换玩家控制权都可能是"游戏刚开始"这种建筑近处LOD(楼层/房间)还没来得及排队建完
 	// 的时刻——玩家/市民会先掉到还没生成细节的地面上，等建筑加载完才落地，观感很差。这里
@@ -494,7 +527,57 @@ void UForeverStoryFrameworkComponent::ApplyStartPuzzle(const StartPuzzleChange* 
 	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
 	if (!playerController || !playerController->GetPuzzleWidget()) return;
 
+	puzzleOwnerKey = FindScriptKey(context.self);
 	playerController->GetPuzzleWidget()->StartPuzzle(puzzleId, param);
+}
+
+void UForeverStoryFrameworkComponent::NotifyPuzzleFinished() {
+	if (!story || puzzleOwnerKey.empty()) return;
+	Script* owner = FindScriptByKey(puzzleOwnerKey);
+	puzzleOwnerKey.clear();
+	if (!owner) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	PuzzleResultEvent event("finish");
+	BroadcastToScript(event, owner, postImplement);
+}
+
+void UForeverStoryFrameworkComponent::ApplyOpenShop(const ScriptContext& context) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Society* society = framework ? framework->GetSociety() : nullptr;
+	if (!society) return;
+	Organization* organization = society->FindOrganizationOfJob(society->FindJobByScript(context.self));
+	if (!organization) {
+		UE_LOG(LogTemp, Warning, TEXT("open_shop: the script is not a Job script, ignored."));
+		return;
+	}
+
+	AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0));
+	if (!playerController || !playerController->GetShopWidget()) return;
+	playerController->GetShopWidget()->OpenShop(organization);
+}
+
+void UForeverStoryFrameworkComponent::ApplyPayWage(const PayWageChange* change, const ScriptContext& context) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Society* society = framework ? framework->GetSociety() : nullptr;
+	Citizen* citizen = framework ? framework->GetControlledCitizen() : nullptr;
+	if (!society || !citizen) return;
+	Organization* organization = society->FindOrganizationOfJob(society->FindJobByScript(context.self));
+	if (!organization) {
+		UE_LOG(LogTemp, Warning, TEXT("pay_wage: the script is not a Job script, ignored."));
+		return;
+	}
+
+	int64_t amount = static_cast<int64_t>(ToInt(EvaluateExpression(change->GetAmount(), context)));
+	Economy::PayWage(*society, organization, citizen, amount);
 }
 
 void UForeverStoryFrameworkComponent::ApplyEnterVehicle(const EnterVehicleChange* change, const ScriptContext& context) {
@@ -659,6 +742,20 @@ string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) c
 	if (!script) return string();
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!framework) return string();
+	// 岗位/日程脚本数量大(几千)、timer创建和到时都要来回查，先走不分配的直接扫描，
+	// 再退回CollectScripts(它每次都重建并排序全部脚本，几千个timer同时触发时会卡很久)。
+	if (Society* society = framework->GetSociety()) {
+		const vector<Organization*>& organizations = society->GetOrganizations();
+		for (size_t i = 0; i < organizations.size(); i++) {
+			Organization* organization = organizations[i];
+			if (!organization) continue;
+			if (organization->GetScript() == script) return "org:" + to_string(i);
+			const vector<Job*>& jobs = organization->GetJobs();
+			for (size_t k = 0; k < jobs.size(); k++) {
+				if (jobs[k] && jobs[k]->GetScript() == script) return "job:" + to_string(i) + ":" + to_string(k);
+			}
+		}
+	}
 	for (auto& [key, candidate] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
 		framework->GetSociety(), framework->GetTraffic(), story, framework->GetPlayer())) {
 		if (candidate == script) return key;
@@ -669,6 +766,18 @@ string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) c
 Script* UForeverStoryFrameworkComponent::FindScriptByKey(const string& key) const {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!framework || key.empty()) return nullptr;
+	// 同FindScriptKey：岗位/组织键直接解析，不重建全部脚本。
+	if (key.compare(0, 4, "job:") == 0) {
+		size_t sep = key.find(':', 4);
+		if (sep == string::npos) return nullptr;
+		Society* society = framework->GetSociety();
+		if (!society) return nullptr;
+		size_t i = static_cast<size_t>(atoll(key.c_str() + 4)), k = static_cast<size_t>(atoll(key.c_str() + sep + 1));
+		const vector<Organization*>& organizations = society->GetOrganizations();
+		if (i >= organizations.size() || !organizations[i]) return nullptr;
+		const vector<Job*>& jobs = organizations[i]->GetJobs();
+		return k < jobs.size() && jobs[k] ? jobs[k]->GetScript() : nullptr;
+	}
 	for (auto& [candidateKey, script] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
 		framework->GetSociety(), framework->GetTraffic(), story, framework->GetPlayer())) {
 		if (candidateKey == key) return script;
@@ -882,6 +991,9 @@ void UForeverStoryFrameworkComponent::ApplyRemoveTimer(const RemoveTimerChange* 
 	story->RemoveTimer(ToString(EvaluateExpression(change->GetName(), context)), ownerKey);
 }
 
+// 每帧最多处理的到时计时器数；8点/9点这类几千个岗位脚本同时到时，多出的留到后面几帧。
+static constexpr size_t kMaxStoryTimersPerFrame = 16;
+
 void UForeverStoryFrameworkComponent::FireExpiredTimers(float deltaSeconds) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Player* player = framework ? framework->GetPlayer() : nullptr;
@@ -889,7 +1001,7 @@ void UForeverStoryFrameworkComponent::FireExpiredTimers(float deltaSeconds) {
 
 	story->AdvanceRealTimers(deltaSeconds);
 
-	vector<StoryTimer> expired = story->PopExpiredTimers(*player->GetTime());
+	vector<StoryTimer> expired = story->PopExpiredTimers(*player->GetTime(), kMaxStoryTimersPerFrame);
 	if (expired.empty()) return;
 
 	PostImplement postImplement(

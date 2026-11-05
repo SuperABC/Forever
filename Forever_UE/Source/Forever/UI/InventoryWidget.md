@@ -14,3 +14,6 @@
 - **悬停/按下样式**：槽位按钮和行内 Button 都是 HitTestInvisible，原生样式失效；`InventoryButtonStyle.h` 的 `FInvButtonStyleState` 记下 WBP 里配置的按钮样式，按状态把 Normal 换成 Hovered/Pressed 复现默认响应。
 - **槽位文字**：有物品只显示物品内容（`类型 xN [容器]`），空槽位才显示 WBP 里原来的部位标签。
 - **手只收数量为 1 的物品**：`InventoryTransfer::Transfer` 与 `Player::AddByPath` 都检查。
+
+## 使用物品加饱食度
+`HandleUse`在`asset->Use()`前，若物品可用，给被操控市民`ActivateStats()`并`AddSatiety(asset->GetSatiety())`(汉堡0.5，上限1)。

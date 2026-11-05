@@ -62,3 +62,6 @@
 
 ## 脚本与选项
 `AssetMod::scriptModName/milestoneNames`(默认都空)→`Asset`构造时`MakeScript`创建Script(都空则为空)，`$$self.name`=资产实例名、`$$self.type`=mod id。`Asset`有自己的`options`(`AddOption/RemoveOption/GetOptions`)和`scriptStarted`(是否已收过game_start；新建资产在第一次变成场景物体或`grant_asset`后由`StartAssetScript`补发)。`FindDescendant(name)`递归按名字找容器内容。存档：`options`和`scriptStarted`追加在mod状态之后；脚本状态由`script_save`的`asset:<名字>`键保存。
+
+## satiety / productType
+`GetSatiety()`(使用后加的饱食度)、`GetProductType()`(对应Industry里的产品，购买定价用)，由AssetMod的同名字段拷贝。

@@ -71,3 +71,6 @@
   - **发给谁**：Change触发的发给**执行这个Change的脚本**(`context.self`)；背包界面里的移动发给**这件资产自己的脚本**(没有脚本则不发)。根资产是容器时，容器和递归进去的每件资产各发一次。`UForeverStoryFrameworkComponent::NotifyAssetEvent`分发，同时在屏幕左上角显示“获取/失去 xxx”(测试用)；事件处理里再触发资产事件的嵌套深度上限8。
 
 - `weather_change`(weather，留空=任何天气变化都触发)：天气变了(系统自动随机换，或`change_weather`强制换)时由`UForeverStoryFrameworkComponent::BroadcastWeatherChange`广播给所有挂了Script的东西(含主线，和`global_message`同范围)。`WeatherChangeEvent::Match`按weather(表达式)过滤；脚本里用`local.weather`读变化后的天气名。读档不广播。天气名见`Core/player/weather.md`。
+
+## NpcArriveEvent / PuzzleResultEvent
+`NpcArriveEvent(name, address)`：`Match`里name/address为空不比较，`GetLocalValue`提供`local.name`、`local.address`。`PuzzleResultEvent(result)`：`GetLocalValue`提供`local.result`。

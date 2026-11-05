@@ -385,6 +385,19 @@ int Populace::GetCurrentYear() const { return currentYear; }
 
 void Populace::Tick(const Time& currentTime, bool crossedDay,
 	const function<void(Citizen*, const vector<Change*>&)>& onActions, PostHandle* post) {
+	// 动态属性：只有实例化了的市民每个Tick按经过的游戏时间衰减饱食度，每天减半即0.5^天数
+	// (目前没有任何后续影响)。lastTickTime不存档，读档后第一帧只记时间不衰减。
+	if (hasLastTickTime) {
+		double days = lastTickTime.DifferenceInSeconds(currentTime) / 86400.0;
+		if (days > 0) {
+			for (Citizen* citizen : citizens) {
+				if (citizen->IsStatsActive()) citizen->DecaySatiety(days);
+			}
+		}
+	}
+	lastTickTime = currentTime;
+	hasLastTickTime = true;
+
 	if (crossedDay) {
 		for (Citizen* citizen : citizens) {
 			Job* job = citizen->GetJob();

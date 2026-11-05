@@ -2,6 +2,7 @@
 	// ShopSalerJob的Script：上下班由计时器驱动。Core在Job::SetOccupant里给脚本写$$self.occupant(上班的人，空串=空岗)/
 	// home/workplace(房间地址)。game_start建两个当天的计时器，到时npc_navigate，再建次日的同名计时器。
 	// 9点出门去商店，18点回家；要改成8点半就把time改成"08:30:00"。
+	// 到岗(npc_arrive)后给员工加"购买汉堡"选项，玩家操控的市民点它就open_shop弹商店界面，下班时移除。
 	"milestones": [
 		{
 			"milestone": "game_start",
@@ -32,6 +33,32 @@
 			"subsequences": []
 		},
 		{
+			"milestone": "arrive_work",
+			"triggers": [ { "type": "npc_arrive", "name": "$$self.occupant", "address": "$$self.workplace" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "add_option", "name": "$$self.occupant", "option": "购买汉堡", "condition": "$$self.occupant != \"\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "option_work",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.occupant", "option": "购买汉堡" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "open_shop" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
 			"milestone": "leave_work",
 			"triggers": [ { "type": "time_up", "name": "leave_work" } ],
 			"visible": false,
@@ -39,6 +66,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
+				{ "type": "remove_option", "name": "$$self.occupant", "option": "购买汉堡", "condition": "$$self.occupant != \"\"" },
 				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\"" },
 				{ "type": "create_timer", "name": "leave_work", "time": "18:00:00", "mode": "next" }
 			],

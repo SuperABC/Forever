@@ -113,3 +113,7 @@
 
 ## 行进模拟（无Actor的市民在路上）
 瞬态、不存档。`BeginWalk(path, destination, now, speed)`记录路径(地图单位)/出发时间/速度，`AdvanceWalk(now)`按"已走时间×速度"沿路径推算位置并写回`SetPosition`，走完`SetCurrentRoom(destination)`+`ClearPosition`；`GetRemainingWalk`取剩余路径(首点=当前推算位置)；`EndWalk`/`Die`清状态。行进中`currentRoom`保持出发地。UE侧用法见`ForeverPopulaceFrameworkComponent.md`"在途市民"。
+
+## 动态属性与是否接入经济
+- 动态属性(目前只有饱食度`satiety`，0~1)：`IsStatsActive/ActivateStats/GetSatiety/AddSatiety/HalveSatiety`。未实例化的市民不更新；被`change_control`操控时`ActivateStats()`(饱食度随机0.5~1)，放手后保持实例化。每个Tick按经过的游戏时间衰减，乘`0.5^天数`(一天减半，`DecaySatiety`)，`GetSatiety()`对外保留两位小数，只影响显示，没有饿死。存档在每个市民记录末尾追加`U8 statsActive + F32 satiety`(未升版本号)。
+- `IsInEconomy/SetInEconomy`：spawn_npc `economy`不为真的市民为false，不分配住处、不招聘、不领补助、不倒闭重启。开局市民默认true。

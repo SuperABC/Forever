@@ -346,14 +346,15 @@ const std::string& RemoveOptionChange::GetOption() const {
 
 SpawnNpcChange::SpawnNpcChange() :
 	avatar(), name(), gender(), birthday(), height(), weight(),
-	nick(), deposit(), phone(), home(), jobs(), scheduler() {
+	nick(), deposit(), phone(), home(), jobs(), scheduler(), economy() {
 
 }
 
 SpawnNpcChange::SpawnNpcChange(std::string avatar, std::string name, std::string gender, std::string birthday, std::string height, std::string weight,
-	std::string nick, std::string deposit, std::string phone, std::string home, vector<std::string> jobs, std::string scheduler) :
+	std::string nick, std::string deposit, std::string phone, std::string home, vector<std::string> jobs, std::string scheduler,
+	std::string economy) :
 	avatar(move(avatar)), name(move(name)), gender(move(gender)), birthday(move(birthday)), height(move(height)), weight(move(weight)),
-	nick(move(nick)), deposit(move(deposit)), phone(move(phone)), home(move(home)), jobs(move(jobs)), scheduler(move(scheduler)) {
+	nick(move(nick)), deposit(move(deposit)), phone(move(phone)), home(move(home)), jobs(move(jobs)), scheduler(move(scheduler)), economy(move(economy)) {
 
 }
 
@@ -460,6 +461,14 @@ void SpawnNpcChange::SetScheduler(std::string scheduler) {
 
 const std::string& SpawnNpcChange::GetScheduler() const {
 	return scheduler;
+}
+
+void SpawnNpcChange::SetEconomy(std::string economy) {
+	this->economy = move(economy);
+}
+
+const std::string& SpawnNpcChange::GetEconomy() const {
+	return economy;
 }
 
 RemoveNpcChange::RemoveNpcChange() :
@@ -689,6 +698,33 @@ void StartPuzzleChange::SetParam(std::string param) {
 
 const std::string& StartPuzzleChange::GetParam() const {
 	return param;
+}
+
+PayWageChange::PayWageChange() :
+	amount() {
+
+}
+
+PayWageChange::PayWageChange(std::string amount) :
+	amount(move(amount)) {
+
+}
+
+PayWageChange::~PayWageChange() {
+
+}
+
+const string& PayWageChange::GetType() const {
+	static const string type = "pay_wage";
+	return type;
+}
+
+void PayWageChange::SetAmount(std::string amount) {
+	this->amount = move(amount);
+}
+
+const std::string& PayWageChange::GetAmount() const {
+	return amount;
 }
 
 EnterVehicleChange::EnterVehicleChange() :

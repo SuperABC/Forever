@@ -11,6 +11,7 @@
 #include "UI/BackgroundSpeakingWidget.h"
 #include "UI/SectionOptionWidget.h"
 #include "UI/PuzzleWidget.h"
+#include "UI/ShopWidget.h"
 #include "UI/PhoneWidget.h"
 #include "UI/InventoryWidget.h"
 #include "UI/MapWidget.h"
@@ -98,6 +99,13 @@ void AForeverPlayerController::InitializeOnce() {
 	}
 	else if ((puzzleWidget = CreateWidget<UPuzzleWidget>(this, puzzleWidgetClass)) != nullptr) {
 		puzzleWidget->AddToViewport();
+	}
+
+	if (shopWidgetClass == nullptr) {
+		UE_LOG(LogTemp, Warning, TEXT("AForeverPlayerController: shopWidgetClass未设置,跳过ShopWidget创建。"));
+	}
+	else if ((shopWidget = CreateWidget<UShopWidget>(this, shopWidgetClass)) != nullptr) {
+		shopWidget->AddToViewport();
 	}
 
 	if (phoneWidgetClass == nullptr) {
@@ -199,7 +207,7 @@ void AForeverPlayerController::TogglePause() {
 	}
 
 	auto isShown = [](UUserWidget* widget) { return widget && widget->IsVisible(); };
-	if (isShown(mapWidget) || isShown(phoneWidget) || isShown(inventoryWidget) || isShown(puzzleWidget)
+	if (isShown(mapWidget) || isShown(phoneWidget) || isShown(inventoryWidget) || isShown(puzzleWidget) || isShown(shopWidget)
 		|| isShown(sectionSpeakingWidget) || isShown(sectionOptionWidget) || isShown(throwListWidget)) {
 		return;
 	}

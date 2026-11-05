@@ -140,6 +140,7 @@ void ACitizenElement::RepossessAIController() {
 
 void ACitizenElement::WalkTo(const TArray<FVector>& waypoints, Room* destination) {
 	if (waypoints.Num() == 0 || !aiController) return;
+	aiController->ClearCommands(); // 新路线取代还没走完的旧路线，不排队
 	aiController->PushCommand(FCharacterCommand::MakeFollowPath(waypoints, destination));
 }
 

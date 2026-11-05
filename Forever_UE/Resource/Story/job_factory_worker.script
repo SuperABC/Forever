@@ -1,0 +1,90 @@
+{
+	// FactoryWorkerJob的Script：上下班由计时器驱动(同job_shop_saler.script，8点上班17点下班)。
+	// 到岗(npc_arrive，在自己的工作房间)后给员工加"制作汉堡"选项，下班时移除。玩家操控这个员工去点
+	// 选项：start_puzzle(任意键退出的占位小游戏)，结束后puzzle_result触发pay_wage，由工厂组织
+	// 给玩家发100元(代扣所得税)。玩家去不去打工不影响每日工资结算，这是额外一份工资。
+	"milestones": [
+		{
+			"milestone": "game_start",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "create_timer", "name": "leave_home", "time": "08:00:00", "mode": "next" },
+				{ "type": "create_timer", "name": "leave_work", "time": "17:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "leave_home",
+			"triggers": [ { "type": "time_up", "name": "leave_home" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.workplace", "condition": "$$self.occupant != \"\"" },
+				{ "type": "create_timer", "name": "leave_home", "time": "08:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "arrive_work",
+			"triggers": [ { "type": "npc_arrive", "name": "$$self.occupant", "address": "$$self.workplace" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "add_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "option_work",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.occupant", "option": "制作汉堡" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "start_puzzle", "puzzle": "\"puzzle_anykey\"", "param": "\"正在制作汉堡……\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "puzzle_done",
+			"triggers": [ { "type": "puzzle_result" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "pay_wage", "amount": "10000" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "leave_work",
+			"triggers": [ { "type": "time_up", "name": "leave_work" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "remove_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\"" },
+				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\"" },
+				{ "type": "create_timer", "name": "leave_work", "time": "17:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

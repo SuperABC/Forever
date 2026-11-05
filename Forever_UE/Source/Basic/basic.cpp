@@ -554,12 +554,15 @@ extern "C" __declspec(dllexport) void FinishModApps(AppFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModPuzzles() {
-	static vector<string> mods = { TetrisPuzzle::GetId() };
+	static vector<string> mods = { TetrisPuzzle::GetId(), AnyKeyPuzzle::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModPuzzles(PuzzleFactory* factory) {
 	factory->RegisterPuzzle(TetrisPuzzle::GetId(),
 		[](const std::string&) -> PuzzleMod* { return new TetrisPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(AnyKeyPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new AnyKeyPuzzle(); },
 		[](PuzzleMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModPuzzles(PuzzleFactory* factory) {
