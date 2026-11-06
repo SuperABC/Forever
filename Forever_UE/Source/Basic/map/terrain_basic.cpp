@@ -496,9 +496,14 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 		localHeight[peakX][peakY] = peakHeight;
 		isProcessed[peakX][peakY] = true;
 
+		// 山脊高度沿走向递减到0就停止：山脊在这一端到此为止，更远的脊格不再生成(否则速率随机游走
+		// 到负数时会从0重新爬起来，在主山外面长出又小又矮的孤立山包)。lastRidgeIdx/firstRidgeIdx是
+		// 保留下来的脊格下标范围，BFS种子只从这个范围里的脊格出发。
+		int firstRidgeIdx = 0, lastRidgeIdx = static_cast<int>(ridgeCells.size()) - 1;
 		float forwardHeight = peakHeight, forwardRate = ALONG_BASE_RATE;
 		for (int ridgeIdx = peakIndex + 1; ridgeIdx < static_cast<int>(ridgeCells.size()); ++ridgeIdx) {
 			forwardRate = clampf(forwardRate + randf(-ALONG_RATE_JITTER, ALONG_RATE_JITTER), ALONG_RATE_MIN, ALONG_RATE_MAX);
+			if (forwardHeight - forwardRate <= 0.0f) { lastRidgeIdx = ridgeIdx - 1; break; }
 			forwardHeight = clampf(forwardHeight - forwardRate, 0.0f, peakHeight);
 			auto [localX, localY] = ridgeCells[ridgeIdx];
 			localHeight[localX][localY] = forwardHeight;
@@ -508,6 +513,7 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 		float backwardHeight = peakHeight, backwardRate = ALONG_BASE_RATE;
 		for (int ridgeIdx = peakIndex - 1; ridgeIdx >= 0; --ridgeIdx) {
 			backwardRate = clampf(backwardRate + randf(-ALONG_RATE_JITTER, ALONG_RATE_JITTER), ALONG_RATE_MIN, ALONG_RATE_MAX);
+			if (backwardHeight - backwardRate <= 0.0f) { firstRidgeIdx = ridgeIdx + 1; break; }
 			backwardHeight = clampf(backwardHeight - backwardRate, 0.0f, peakHeight);
 			auto [localX, localY] = ridgeCells[ridgeIdx];
 			localHeight[localX][localY] = backwardHeight;
@@ -516,7 +522,7 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 
 		// BFS 初始化,设置紧邻山脊格子的侧向坡度并加入第一圈
 		vector<pair<int, int>> currentFront;
-		for (size_t ridgeIdx = 0; ridgeIdx < ridgeCells.size(); ++ridgeIdx) {
+		for (int ridgeIdx = firstRidgeIdx; ridgeIdx <= lastRidgeIdx; ++ridgeIdx) {
 			int ridgeX = ridgeCells[ridgeIdx].first;
 			int ridgeY = ridgeCells[ridgeIdx].second;
 			float perpDirX = -ridgeDirections[ridgeIdx].second;

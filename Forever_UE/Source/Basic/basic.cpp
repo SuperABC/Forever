@@ -22,6 +22,7 @@
 
 #include "map/terrain_basic.h"
 #include "map/roadnet_basic.h"
+#include "map/roadnet_checkboard.h"
 #include "map/zone_basic.h"
 #include "map/building_basic.h"
 #include "map/component_basic.h"
@@ -165,12 +166,15 @@ extern "C" __declspec(dllexport) void FinishModTerrains(TerrainFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModRoadnets() {
-	static vector<string> mods = { JingRoadnet::GetId() };
+	static vector<string> mods = { JingRoadnet::GetId(), CheckboardRoadnet::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModRoadnets(RoadnetFactory* factory) {
 	factory->RegisterRoadnet(JingRoadnet::GetId(),
 		[](const std::string&) -> RoadnetMod* { return new JingRoadnet(); },
+		[](RoadnetMod* m) { delete m; });
+	factory->RegisterRoadnet(CheckboardRoadnet::GetId(),
+		[](const std::string& args) -> RoadnetMod* { return new CheckboardRoadnet(args); },
 		[](RoadnetMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModRoadnets(RoadnetFactory* factory) {

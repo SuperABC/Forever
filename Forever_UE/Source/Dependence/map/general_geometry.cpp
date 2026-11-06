@@ -829,8 +829,12 @@ void Lot::SetPosition(Node n1, Node n2, Node n3, Node n4, const vector<float>& m
 	float dot3 = u3x * u4x + u3y * u4y;
 	float dot4 = u4x * u1x + u4y * u1y;
 
-	if (abs(dot1) > eps || abs(dot2) > eps ||
-		abs(dot3) > eps || abs(dot4) > eps) {
+	// 点积/边长的float误差随坐标和边长增长(大地块+旋转后的坐标)，按边长归一化后再比较
+	auto scaled = [eps = 1e-4f](float dot, float ax, float ay, float bx, float by) {
+		return abs(dot) > eps * max(1.0f, sqrt((ax * ax + ay * ay) * (bx * bx + by * by)));
+	};
+	if (scaled(dot1, u1x, u1y, u2x, u2y) || scaled(dot2, u2x, u2y, u3x, u3y) ||
+		scaled(dot3, u3x, u3y, u4x, u4y) || scaled(dot4, u4x, u4y, u1x, u1y)) {
 		THROW_EXCEPTION(InvalidArgumentException, "Block edges are not perpendicular.\n");
 	}
 
@@ -840,7 +844,7 @@ void Lot::SetPosition(Node n1, Node n2, Node n3, Node n4, const vector<float>& m
 	float len3 = sqrt(u3x * u3x + u3y * u3y);
 	float len4 = sqrt(u4x * u4x + u4y * u4y);
 
-	if (abs(len1 - len3) > eps || abs(len2 - len4) > eps) {
+	if (abs(len1 - len3) > eps * max(1.0f, len1) || abs(len2 - len4) > eps * max(1.0f, len2)) {
 		THROW_EXCEPTION(InvalidArgumentException, "Block opposite edges are not equal.\n");
 	}
 

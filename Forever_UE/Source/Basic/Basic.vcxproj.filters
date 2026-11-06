@@ -31,6 +31,9 @@
     <ClCompile Include="map\roadnet_basic.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\roadnet_checkboard.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\zone_basic.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -94,6 +97,9 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\roadnet_basic.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\roadnet_checkboard.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\zone_basic.h">

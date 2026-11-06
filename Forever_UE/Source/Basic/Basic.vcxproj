@@ -91,6 +91,7 @@
     <ClCompile Include="basic.cpp" />
     <ClCompile Include="map\terrain_basic.cpp" />
     <ClCompile Include="map\roadnet_basic.cpp" />
+    <ClCompile Include="map\roadnet_checkboard.cpp" />
     <ClCompile Include="map\zone_basic.cpp" />
     <ClCompile Include="map\building_basic.cpp" />
     <ClCompile Include="map\room_basic.cpp" />
@@ -124,6 +125,7 @@
   <ItemGroup>
     <ClInclude Include="map\terrain_basic.h" />
     <ClInclude Include="map\roadnet_basic.h" />
+    <ClInclude Include="map\roadnet_checkboard.h" />
     <ClInclude Include="map\zone_basic.h" />
     <ClInclude Include="map\building_basic.h" />
     <ClInclude Include="map\component_basic.h" />

@@ -1,0 +1,7 @@
+{
+   "dll_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release"
+   ],
+   "roadnet_mods" : [ "roadnet_checkboard --merge 0.2 --min 24 --max 48" ],
+   "terrain_mods" : [ "terrain_river", "terrain_ocean", "terrain_mountain" ]
+}
