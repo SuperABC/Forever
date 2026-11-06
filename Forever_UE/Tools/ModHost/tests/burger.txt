@@ -1,0 +1,32 @@
+# burger: run with --param "time=30 cook=2 burn=2 seed=1 orders=bun+beef+tom+ketchup;bun+chick"
+# Coordinates are for the default 480x640 window. Pantry row 1 y~=525: bun x~=52 beef 127 chick 202 lettuce 278 tomato 353 onion 428; sauces row y~=595: ketchup 70 mayo 183 salad 295 mustard 408.
+# Grill cell (r,c) centre: x=72+c*113, y=148 (row 0) / 234 (row 1). Plates centre x=72+i*113, y=355. Serve (150,440). Trash (400,440).
+shot burger_0_start
+drag 52 525 72 148
+drag 127 525 185 148
+wait 2200
+click 185 148
+drag 72 148 72 355
+drag 353 525 72 355
+drag 70 595 72 355
+shot burger_1_plate_with_bun
+wait 2300
+drag 185 148 72 355
+shot burger_2_plate_ready
+drag 72 355 150 440
+wait 300
+shot burger_3_served
+drag 202 525 298 148
+wait 4300
+shot burger_4_burnt
+drag 298 148 185 355
+drag 298 148 400 440
+drag 278 525 185 355
+drag 185 355 150 440
+shot burger_5_wrong_serve
+wait 20000
+shot burger_6_end
+wait 600
+key a
+frame 2
+expect_finished

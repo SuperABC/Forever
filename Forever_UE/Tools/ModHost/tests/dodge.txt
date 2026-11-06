@@ -1,0 +1,15 @@
+# dodge: shot before start, drag red, shot during, wait until dead, shot result
+shot dodge_0_start
+down 240 320
+move 245 320
+frame 5
+move 250 330
+frame 60
+shot dodge_1_playing
+frame 300
+shot dodge_2_later
+wait 20000
+shot dodge_3_end
+key a
+frame 2
+expect_finished

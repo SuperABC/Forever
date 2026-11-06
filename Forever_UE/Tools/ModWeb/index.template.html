@@ -39,6 +39,9 @@
 
   const NAMES = {
     'puzzle_tetris': '俄罗斯方块 (puzzle_tetris)', 'puzzle_anykey': '任意键 (puzzle_anykey)',
+    'puzzle_dodge': '躲避方块 (puzzle_dodge)', 'puzzle_rhythm': '节奏大师 (puzzle_rhythm)', 'puzzle_dance': '广场舞 (puzzle_dance)',
+    'puzzle_poker': '德州扑克 (puzzle_poker)', 'puzzle_chase': '生死时速·需键盘 (puzzle_chase)', 'puzzle_burger': '汉堡店 (puzzle_burger)',
+    'puzzle_tubes': '多色试管 (puzzle_tubes)', 'puzzle_miner': '黄金矿工 (puzzle_miner)', 'puzzle_tower': '平衡楼房 (puzzle_tower)', 'puzzle_coins': '零花钱大作战 (puzzle_coins)',
   };
   const mods = M.UTF8ToString(M._web_list()).split('\n').filter(Boolean).map(l => l.split(':'));
   let running = false, last = 0;
@@ -67,10 +70,11 @@
     const add = (label, fn) => {
       const b = document.createElement('button'); b.textContent = label; b.onclick = fn; menu.appendChild(b);
     };
-    add('手机 (App: bounce / notes)', () => start('phone', () => { const [w, h] = logicalSize(); return M._web_start_phone(w, h); }));
+    add('手机 (App: bounce / notes)', () => start('phone', () => { curId = ''; releaseAllLanes(); const [w, h] = logicalSize(); return M._web_start_phone(w, h); }));
     for (const [kind, id] of mods) {
       if (kind !== 'puzzle') continue;
       add(NAMES[id] || id, () => start('puzzle', () => {
+        curId = id; releaseAllLanes();
         const [w, h] = logicalSize();
         const ptr = M._malloc(id.length * 4 + 1); M.stringToUTF8(id, ptr, id.length * 4 + 1);
         const ok = M._web_start_puzzle(ptr, w, h); M._free(ptr); return ok;
@@ -122,12 +126,43 @@
     const r = screenEl.getBoundingClientRect();
     return [Math.round((e.clientX - r.left) * screenEl.width / r.width), Math.round((e.clientY - r.top) * screenEl.height / r.height)];
   }
+  // 引擎侧只有一个鼠标指针，多指同按做不到。节奏大师需要多指，所以网页层把每个手指按所在轨道翻译成 d/f/j/k 按键
+  // (轨道几何和 puzzle_rhythm.cpp 的 Layout 保持一致：宽 min(w, h*3/4) 居中，四等分)。
+  let curId = '';
+  const LANE_KEYS = [100, 102, 106, 107];   // d f j k
+  const fingers = new Map();                 // pointerId -> 当前所在轨道
+  const laneHeld = [0, 0, 0, 0];
+  function setFinger(id, lane) {
+    const old = fingers.has(id) ? fingers.get(id) : -1;
+    if (old === lane) return;
+    if (old >= 0 && --laneHeld[old] === 0) M._web_key(LANE_KEYS[old], 0);
+    if (lane >= 0) { fingers.set(id, lane); if (laneHeld[lane]++ === 0) M._web_key(LANE_KEYS[lane], 1); }
+    else fingers.delete(id);
+  }
+  function releaseAllLanes() { for (const id of [...fingers.keys()]) setFinger(id, -1); }
+  function rhythmLane(e) {
+    if (curId !== 'puzzle_rhythm') return -1;
+    const [x] = pos(e), w = M._web_width(), h = M._web_height();
+    const fw = Math.min(w, Math.floor(h * 3 / 4)), fx = Math.floor((w - fw) / 2);
+    if (x < fx || x >= fx + fw) return -1;
+    return Math.max(0, Math.min(3, Math.floor((x - fx) * 4 / fw)));
+  }
   screenEl.addEventListener('pointerdown', e => {
-    if (!running) return; e.preventDefault(); screenEl.setPointerCapture(e.pointerId);
+    if (!running) return; e.preventDefault(); try { screenEl.setPointerCapture(e.pointerId); } catch (_) {}
+    const lane = rhythmLane(e);
+    if (lane >= 0) { setFinger(e.pointerId, lane); return; }
     const [x, y] = pos(e); M._web_mouse_move(x, y); M._web_mouse_button(e.button === 2 ? 1 : 0, 1);
   });
-  screenEl.addEventListener('pointermove', e => { if (!running) return; const [x, y] = pos(e); M._web_mouse_move(x, y); });
-  const up = e => { if (!running) return; const [x, y] = pos(e); M._web_mouse_move(x, y); M._web_mouse_button(e.button === 2 ? 1 : 0, 0); };
+  screenEl.addEventListener('pointermove', e => {
+    if (!running) return;
+    if (fingers.has(e.pointerId)) { const lane = rhythmLane(e); if (lane >= 0) setFinger(e.pointerId, lane); return; }
+    const [x, y] = pos(e); M._web_mouse_move(x, y);
+  });
+  const up = e => {
+    if (!running) return;
+    if (fingers.has(e.pointerId)) { setFinger(e.pointerId, -1); return; }
+    const [x, y] = pos(e); M._web_mouse_move(x, y); M._web_mouse_button(e.button === 2 ? 1 : 0, 0);
+  };
   screenEl.addEventListener('pointerup', up);
   screenEl.addEventListener('pointercancel', up);
   screenEl.addEventListener('wheel', e => { if (running) { M._web_wheel(e.deltaY < 0 ? 1 : -1); e.preventDefault(); } }, { passive: false });

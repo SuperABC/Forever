@@ -23,7 +23,7 @@ call em++ -O2 -std=c++17 -fexceptions ^
   "%SRC%\Dependence\common\json.cpp" "%SRC%\Dependence\common\error.cpp" "%SRC%\Dependence\common\handle.cpp" ^
   "%SRC%\Dependence\story\event.cpp" "%SRC%\Dependence\story\expression.cpp" ^
   "%SRC%\Core\player\phone.cpp" "%SRC%\Core\player\app.cpp" "%SRC%\Core\player\puzzle.cpp" ^
-  "%SRC%\Basic\player\puzzle_basic.cpp" "%SRC%\Basic\player\app_basic.cpp" ^
+  "%SRC%\Basic\player\puzzle_basic.cpp" "%SRC%\Basic\player\puzzle_poker.cpp" "%SRC%\Basic\player\puzzle_burger.cpp" "%SRC%\Basic\player\puzzle_miner.cpp" "%SRC%\Basic\player\puzzle_tower.cpp" "%SRC%\Basic\player\puzzle_chase.cpp" "%SRC%\Basic\player\puzzle_rhythm.cpp" "%SRC%\Basic\player\puzzle_tubes.cpp" "%SRC%\Basic\player\puzzle_coins.cpp" "%SRC%\Basic\player\puzzle_dance.cpp" "%SRC%\Basic\player\puzzle_dodge.cpp" "%SRC%\Basic\player\app_basic.cpp" ^
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_NAME=createModule -sENVIRONMENT=web -sSINGLE_FILE=1 ^
   -sDISABLE_EXCEPTION_CATCHING=0 ^
   --embed-file "%HERE%..\..\Resource\Mod\Basic@/res/Basic" ^

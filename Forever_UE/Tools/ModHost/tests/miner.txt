@@ -1,0 +1,19 @@
+# miner: run with --param "time=16 swing=0.01 seed=1 preset=g3,0.5,0.5;d,0.5,0.8;s2,0.3,0.6"
+# hook stays straight down: 1st drop hauls the large gold (+500), 2nd the diamond (+600 gem bonus), 3rd finds nothing.
+shot miner_0_start
+key a
+wait 1100
+shot miner_1_hauling_gold
+wait 1500
+key a
+wait 1400
+shot miner_2_hauling_diamond
+wait 800
+key a
+wait 2500
+wait 9000
+shot miner_3_end
+wait 600
+key a
+frame 2
+expect_finished

@@ -442,7 +442,7 @@ void AnyKeyPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	canvas->ClearMouseBuffer();
 
 	// 配图：从Resource/Mod/Basic/下按文件名加载(文件名带mod名前缀保证全局唯一)，加载不到就只显示文字。
-	hasImage = LoadModImage(post, "Basic_anykey.png", image);
+	hasImage = LoadModImage(post, "puzzle_anykey_icon.png", image);
 }
 
 JsonValue* AnyKeyPuzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {

@@ -40,6 +40,16 @@
 #include "player/asset_basic.h"
 #include "player/app_basic.h"
 #include "player/puzzle_basic.h"
+#include "player/puzzle_poker.h"
+#include "player/puzzle_burger.h"
+#include "player/puzzle_miner.h"
+#include "player/puzzle_tower.h"
+#include "player/puzzle_chase.h"
+#include "player/puzzle_rhythm.h"
+#include "player/puzzle_tubes.h"
+#include "player/puzzle_coins.h"
+#include "player/puzzle_dance.h"
+#include "player/puzzle_dodge.h"
 #include "player/weapon_basic.h"
 
 #pragma comment(lib, "Dependence.lib")
@@ -554,7 +564,7 @@ extern "C" __declspec(dllexport) void FinishModApps(AppFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModPuzzles() {
-	static vector<string> mods = { TetrisPuzzle::GetId(), AnyKeyPuzzle::GetId() };
+	static vector<string> mods = { TetrisPuzzle::GetId(), AnyKeyPuzzle::GetId(), PokerPuzzle::GetId(), BurgerPuzzle::GetId(), MinerPuzzle::GetId(), TowerPuzzle::GetId(), ChasePuzzle::GetId(), RhythmPuzzle::GetId(), TubesPuzzle::GetId(), CoinsPuzzle::GetId(), DancePuzzle::GetId(), DodgePuzzle::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModPuzzles(PuzzleFactory* factory) {
@@ -563,6 +573,36 @@ extern "C" __declspec(dllexport) void RegisterModPuzzles(PuzzleFactory* factory)
 		[](PuzzleMod* m) { delete m; });
 	factory->RegisterPuzzle(AnyKeyPuzzle::GetId(),
 		[](const std::string&) -> PuzzleMod* { return new AnyKeyPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(DodgePuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new DodgePuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(DancePuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new DancePuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(CoinsPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new CoinsPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(TubesPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new TubesPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(RhythmPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new RhythmPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(ChasePuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new ChasePuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(TowerPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new TowerPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(MinerPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new MinerPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(BurgerPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new BurgerPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	factory->RegisterPuzzle(PokerPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new PokerPuzzle(); },
 		[](PuzzleMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModPuzzles(PuzzleFactory* factory) {

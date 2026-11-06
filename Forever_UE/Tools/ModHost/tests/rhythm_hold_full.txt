@@ -1,0 +1,11 @@
+at 21970 press d
+at 22969 release d
+at 22970 press f
+at 23969 release f
+at 23970 press j
+at 25000 release j
+at 46000 shot mid
+wait 3000
+key a
+frame 2
+expect_finished

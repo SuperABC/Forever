@@ -99,4 +99,4 @@ lambda内部完成到基类指针的隐式转换。
 
 ## 图片资源约定
 
-mod自带的图片放在`<ModGroup>/Resource/`(内置Basic放`Forever_UE/Resource/Mod/Basic/`)，**文件名必须以mod名加下划线开头**(如`Basic_anykey.png`)——图片靠`Canvas`的`LoadModImage(post, 文件名, bitmap)`按文件名在`config.json`的`resource_paths`里递归查找，前缀保证全局唯一。支持PNG/JPEG/BMP/GIF/TGA等常见格式(stb_image)，详见`Forever_UE/Source/Dependence/player/canvas.md`。
+mod自带的图片放在`<ModGroup>/Resource/`(内置Basic放`Forever_UE/Resource/Mod/Basic/`)，**文件名必须以所属puzzle的id加下划线开头**(如`puzzle_anykey_icon.png`、`puzzle_dodge_bg.png`)——图片靠`Canvas`的`LoadModImage(post, 文件名, bitmap)`按文件名在`config.json`的`resource_paths`里递归查找，前缀保证全局唯一。支持PNG/JPEG/BMP/GIF/TGA等常见格式(stb_image)，详见`Forever_UE/Source/Dependence/player/canvas.md`。

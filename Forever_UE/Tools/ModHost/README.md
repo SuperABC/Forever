@@ -21,7 +21,7 @@ ModHost.exe --dll X.dll --puzzle <id> [--param text] [--size 480x640] [--resourc
 
 ## 脚本命令
 
-`wait ms` · `frame n` · `key <名>` / `keydown` / `keyup`(left right up down esc enter tab backspace space 单字符) · `click x y` · `down x y` · `up` · `move x y` · `drag x1 y1 x2 y2` · `bar back|home|tasks` · `open_app N` · `tap_task N` · `close_task N` · `resize W H` · `image <文件名> x y [w h]`(经"resource path"加载并画图,测图片用) · `shot 名字`(写 PNG) · `expect_finished` / `expect_running`。`#` 开头为注释。
+`wait ms` · `frame n` · `key <名>` / `keydown` / `keyup`(left right up down esc enter tab backspace space 单字符) · `click x y` · `down x y` · `up` · `move x y` · `drag x1 y1 x2 y2` · `bar back|home|tasks` · `open_app N` · `tap_task N` · `close_task N` · `resize W H` · `image <文件名> x y [w h]`(经"resource path"加载并画图,测图片用) · `type <文本>`(每个字符发一次按键,测打字类) · `at <绝对毫秒> press|release <键>` / `at <绝对毫秒> mdown x y|mmove x y|mup|shot <名>`(推进到脚本绝对时钟再执行,时间线测试用,每步 16ms) · `shot 名字`(写 PNG) · `expect_finished` / `expect_running`。`#` 开头为注释。
 
 ## 约定
 

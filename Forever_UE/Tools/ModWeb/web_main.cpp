@@ -6,6 +6,16 @@
 #include "host_core.h"
 #include "common/registry.h"
 #include "player/puzzle_basic.h"
+#include "player/puzzle_poker.h"
+#include "player/puzzle_burger.h"
+#include "player/puzzle_miner.h"
+#include "player/puzzle_tower.h"
+#include "player/puzzle_chase.h"
+#include "player/puzzle_rhythm.h"
+#include "player/puzzle_tubes.h"
+#include "player/puzzle_coins.h"
+#include "player/puzzle_dance.h"
+#include "player/puzzle_dodge.h"
 #include "player/app_basic.h"
 
 #include <string>
@@ -35,13 +45,43 @@ EMSCRIPTEN_KEEPALIVE void web_setup() {
 	host = new ModHost();
 	StubPost::ResourceRoot() = "/res"; // build_web.bat用--embed-file把Resource/Mod/Basic内嵌到这里
 
-	ModHost::EnableIds({ TetrisPuzzle::GetId(), AnyKeyPuzzle::GetId() }, { BounceApp::GetId(), NotesApp::GetId() });
+	ModHost::EnableIds({ TetrisPuzzle::GetId(), AnyKeyPuzzle::GetId(), DodgePuzzle::GetId(), DancePuzzle::GetId(), CoinsPuzzle::GetId(), TubesPuzzle::GetId(), RhythmPuzzle::GetId(), ChasePuzzle::GetId(), TowerPuzzle::GetId(), MinerPuzzle::GetId(), BurgerPuzzle::GetId(), PokerPuzzle::GetId() }, { BounceApp::GetId(), NotesApp::GetId() });
 	PuzzleFactory& puzzles = Registry::Get().GetPuzzleFactory();
 	puzzles.RegisterPuzzle(TetrisPuzzle::GetId(),
 		[](const std::string&) -> PuzzleMod* { return new TetrisPuzzle(); },
 		[](PuzzleMod* m) { delete m; });
 	puzzles.RegisterPuzzle(AnyKeyPuzzle::GetId(),
 		[](const std::string&) -> PuzzleMod* { return new AnyKeyPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(DodgePuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new DodgePuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(DancePuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new DancePuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(CoinsPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new CoinsPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(TubesPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new TubesPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(RhythmPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new RhythmPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(ChasePuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new ChasePuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(TowerPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new TowerPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(MinerPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new MinerPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(BurgerPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new BurgerPuzzle(); },
+		[](PuzzleMod* m) { delete m; });
+	puzzles.RegisterPuzzle(PokerPuzzle::GetId(),
+		[](const std::string&) -> PuzzleMod* { return new PokerPuzzle(); },
 		[](PuzzleMod* m) { delete m; });
 	AppFactory& apps = Registry::Get().GetAppFactory();
 	apps.RegisterApp(BounceApp::GetId(),

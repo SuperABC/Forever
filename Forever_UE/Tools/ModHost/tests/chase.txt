@@ -1,0 +1,13 @@
+# chase: wrong key stuns, then typing the article start catches the thief (default params)
+shot chase_0_start
+type Tx
+wait 500
+shot chase_1_wrong_key
+wait 400
+type he city never sleeps, and neither
+frame 3
+shot chase_2_caught
+wait 600
+key a
+frame 2
+expect_finished

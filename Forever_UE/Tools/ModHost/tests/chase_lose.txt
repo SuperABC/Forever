@@ -1,0 +1,9 @@
+# chase_lose: run with --param "wpm=1200 lead=3"; thief reaches the article end while the player types nothing
+wait 400
+type The
+wait 7000
+shot chase_3_lost
+wait 600
+key a
+frame 2
+expect_finished

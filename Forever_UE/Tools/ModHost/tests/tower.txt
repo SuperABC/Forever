@@ -1,0 +1,13 @@
+# tower: run with --param "startphase=0 seed=1". The crane restarts centred on each spawn (period ~3.9 s),
+# so a drop ~2.8 s after the previous one lands near the centre. Three drops -> 3 floors, tower starts to sway; ESC ends.
+shot tower_0_start
+key a
+wait 2800
+key a
+wait 2750
+key a
+wait 1800
+shot tower_1_three_floors
+key escape
+frame 2
+expect_finished

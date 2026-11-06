@@ -1,0 +1,18 @@
+# tubes: run with --param "preset=01;10;"  (tube A red/blue, tube B blue/red, tube C empty); 3 pours solve it
+shot tubes_0_start
+click 87 400
+frame 2
+shot tubes_1_selected
+click 393 400
+click 240 400
+click 87 400
+frame 2
+shot tubes_2_after_two
+click 240 400
+click 393 400
+frame 2
+shot tubes_3_solved
+wait 600
+key a
+frame 2
+expect_finished

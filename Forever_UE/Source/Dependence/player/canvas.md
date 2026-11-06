@@ -15,7 +15,7 @@
 - **宽线**：`PutLine(..., width)`不是多次1像素直线偏移(斜线上相邻线各自取整会有缝隙)，而是按线宽算出矩形(两个填充三角形)，复用`PutTriangle`的扫描线填充，保证实心无缝；`width<=1`退化成1像素Bresenham。
 - **透明度**：`SetAlpha`(0~1)之后的所有绘图操作按这个比例和已有像素混合。
 - **图片**：`LoadImageFile(path, Bitmap&)`用stb_image(`common/3rdParty/stb_image.h`，公共领域，实现编进`canvas.cpp`)从磁盘解码，支持PNG/JPEG/BMP/GIF(只取第一帧)/TGA/PSD/HDR/PIC/PNM(不支持WebP/SVG)，Windows下路径按UTF-8解读，输出BGRA并保留alpha。`PutBitmap(bitmap,x,y,w,h)`双线性缩放+按图片每像素alpha(再乘`SetAlpha`)混合；`PutImage`(直接覆盖)和`PutRawImage`(忽略图片alpha)保持原样。`LoadImage`是Win32宏(`LoadImageW`)，所以方法名叫`LoadImageFile`。
-- **mod图片资源约定**：图片放在`Resource/Mod/<mod名>/`下，**文件名必须以`<mod名>_`开头**(如`Resource/Mod/Basic/Basic_anykey.png`)，因为查找是按文件名在`config.json`的`resource_paths`里递归匹配，前缀保证全局唯一。mod用自由函数`LoadModImage(post, "Basic_anykey.png", bitmap)`加载(内部走`PostHandle`的"resource path"查询+`LoadImageFile`)。`Bitmap`由mod这一侧创建和释放，符合上面的跨模块堆约定。网页版(`Tools/ModWeb`)把`Resource/Mod/Basic`用`--embed-file`内嵌进html，其它mod的图片要加到`build_web.bat`里。
+- **mod图片资源约定**：图片放在`Resource/Mod/<mod名>/`下，**文件名必须以`<puzzle id>_`开头**(如puzzle_dodge_bg.png；`Resource/Mod/Basic/puzzle_anykey_icon.png`)，因为查找是按文件名在`config.json`的`resource_paths`里递归匹配，前缀保证全局唯一。mod用自由函数`LoadModImage(post, "puzzle_anykey_icon.png", bitmap)`加载(内部走`PostHandle`的"resource path"查询+`LoadImageFile`)。`Bitmap`由mod这一侧创建和释放，符合上面的跨模块堆约定。网页版(`Tools/ModWeb`)把`Resource/Mod/Basic`用`--embed-file`内嵌进html，其它mod的图片要加到`build_web.bat`里。
 - **键盘**：宿主调`PushKey`注入，逻辑调`HasPendingKey`/`PopKey`/`ClearKeyBuffer`消费。常规字符键直接用ASCII值，没有ASCII字符的键用`KEY_CODE`常量(0x100以上，避免和ASCII重叠)；"抬起"事件在键码上按位或`KEY_RELEASED_FLAG`。
 - **鼠标**：宿主调`SetMousePos`/`PushMouseButton`注入，逻辑读`MouseState`/`PopMouseEvent`。滚轮是一个累计整数(`PushMouseWheel`/`ConsumeMouseWheel`)，不进事件队列——滚轮没有按下/抬起，也不该让只认按键的小游戏看到多余事件。
 

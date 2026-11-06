@@ -1,0 +1,15 @@
+# coins_grab_more: run with --param "cols=6 maxh=10 interval=50 preset=5,5;5;1;;;"
+# grab 2x5 from column 0, then grab the same value from column 1 -> hand x3; column 2 (value 1) must be refused.
+key left
+key left
+key left
+key s
+frame 2
+key right
+key s
+frame 2
+shot coins_g_1_hand_x3
+key right
+key s
+frame 2
+shot coins_g_2_refused

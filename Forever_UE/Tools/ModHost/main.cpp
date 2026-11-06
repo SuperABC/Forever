@@ -193,8 +193,10 @@ namespace {
 	private:
 		static constexpr int kStep = 16;
 
-		void Step(int count = 1) { for (int i = 0; i < count; i++) host.Frame(kStep); }
-		void Wait(int ms) { for (int t = 0; t < ms; t += kStep) host.Frame(kStep); }
+		long long clockMs = 0; // 脚本开始后已推进的模拟时间(ms)，at命令按它对齐
+
+		void Step(int count = 1) { for (int i = 0; i < count; i++) { host.Frame(kStep); clockMs += kStep; } }
+		void Wait(int ms) { for (int t = 0; t < ms; t += kStep) { host.Frame(kStep); clockMs += kStep; } }
 
 		void Click(int x, int y) {
 			host.MouseMove(x, y);
@@ -208,6 +210,36 @@ namespace {
 			int w = host.GetCanvas().GetWidth(), h = host.GetCanvas().GetHeight();
 			if (cmd == "wait") { int ms = 0; in >> ms; Wait(ms); return true; }
 			if (cmd == "frame") { int n = 1; in >> n; Step(n); return true; }
+			if (cmd == "at") {
+				// at <毫秒> press|release <键> / mdown x y / mup / mmove x y：推进到脚本时间(ms)再立即执行，不额外推进帧，
+				// 用来写精确的时间线(节奏类puzzle)。
+				long long target = 0; string sub;
+				if (!(in >> target >> sub)) return false;
+				while (clockMs + kStep <= target) Step(1);
+				if (sub == "press" || sub == "release") {
+					string name; in >> name;
+					int key = KeyFromName(name);
+					if (!key) return false;
+					if (sub == "press") host.KeyDown(key); else host.KeyUp(key);
+					return true;
+				}
+				if (sub == "mdown") { int x, y; if (!(in >> x >> y)) return false; host.MouseMove(x, y); host.MouseButton(MOUSE_LEFT, true); return true; }
+				if (sub == "mmove") { int x, y; if (!(in >> x >> y)) return false; host.MouseMove(x, y); return true; }
+				if (sub == "mup") { host.MouseButton(MOUSE_LEFT, false); return true; }
+				if (sub == "shot") { string name; in >> name; istringstream rest(name); return Exec("shot", rest); }
+				return false;
+			}
+			if (cmd == "type") {
+				// type <文本>：逐字符发按键(每个字符按下+抬起各占一帧)，空格用文本里的真实空格
+				string text;
+				getline(in, text);
+				if (!text.empty() && text[0] == ' ') text.erase(0, 1);
+				for (char c : text) {
+					int key = (c == '\n') ? KEY_ENTER : static_cast<unsigned char>(c);
+					host.KeyDown(key); Step(1); host.KeyUp(key); Step(1);
+				}
+				return true;
+			}
 			if (cmd == "key" || cmd == "keydown" || cmd == "keyup") {
 				string name; in >> name;
 				int key = KeyFromName(name);

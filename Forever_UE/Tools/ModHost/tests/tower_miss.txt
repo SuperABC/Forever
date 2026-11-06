@@ -1,0 +1,15 @@
+# tower_miss: run with --param "startphase=1.5708 swing=0.01 seed=1". The hook always starts at the right extreme (+0.34 W from centre),
+# so every immediate drop misses the base: lose all 3 lives -> result floors=0.
+key a
+wait 700
+shot tower_2_falling_miss
+wait 2000
+key a
+wait 2700
+key a
+wait 2700
+shot tower_3_end
+wait 600
+key a
+frame 2
+expect_finished

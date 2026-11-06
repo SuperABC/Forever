@@ -1,0 +1,28 @@
+# coins: chain merge (4x1 onto 1 -> 5 -> 5+5 -> 10), 500x2 elimination, drop denied on full column, overflow on shift
+# run with: --param "cols=6 maxh=10 interval=4 preset=10,1,1,1,1;5,1;10,5,10,5,10,5,10,5,10;500;500;1,5,1,5,1,5,1,5,1,5"
+shot coins_0_start
+click 127 400
+key s
+frame 2
+shot coins_1_grabbed
+click 172 400
+key d
+frame 2
+shot coins_2_chain_score15
+click 307 400
+key s
+click 262 400
+key d
+frame 2
+shot coins_3_500_eliminated
+click 217 400
+key s
+click 352 400
+key d
+frame 2
+shot coins_4_drop_denied
+wait 4500
+shot coins_5_overflow
+wait 600
+click 100 100
+frame 2
