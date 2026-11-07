@@ -19,7 +19,7 @@
   冲突。
 - **`ValueType`是脚本引擎的核心值类型**——`story/condition.h`的`Expression::Evaluate`、
   `Container::GetValue`/`SetValue`都以它为载体，`FromString`会自动推断字面量类型（布尔/
-  整数/浮点/字符串），`ToString`则会把浮点数的多余尾零裁掉，方便脚本里做字符串比较/拼接。
+  整数/浮点/字符串），`ToString`则会把浮点数的多余尾零裁掉（整数值输出`5`，`2.5`输出`2.5`），方便脚本里做字符串比较/拼接。存档按类型下标+二进制值写变量，不经过`ToString`。
 - **`OBJECT_HOLDER`/`COSTOM_INIT`/`COSTOM_RUNTIME`是纯标记宏**（定义为空），用于在声明处
   标注"这个指针成员持有对象所有权"之类的语义，不影响编译，纯粹给读代码的人看。
 - **`GetRandomNormal(mean, stddev)`**：正态分布随机浮点数，和`GetRandom(int)`同样的
@@ -28,7 +28,9 @@
   `Source/Core/populace/populace.md`"四类人际关系生成"一节。
 - **`Time`不依赖`<chrono>`做内部存储**，全部用年/月/日/时/分/秒/毫秒整数字段+手写的进位/借位
   归一化逻辑（`NormalizeTime`），构造函数支持解析ISO 8601、中文（`YYYY年MM月DD日`）、美式
-  （`MM/DD/YYYY`）及纯时间等多种字符串格式，供story脚本里写时间字面量时随意选一种熟悉的格式。
+  （`MM/DD/YYYY`）及纯时间等多种字符串格式，供story脚本里写时间字面量时随意选一种熟悉的格式。中文格式年份允许1~4位，
+  时间部分既可以是`HH:MM:SS`也可以是`H时M分S秒`，所以`0年1月1日0时0分4秒`可以表示相对时长（`create_timer`用）；
+  所有格式都不匹配时抛异常。`operator+`/`operator-`是各字段分别加减再归一化，不是日历意义的时间差。
 - **`debugf`用`OutputDebugStringA`实现，只有附加调试器时才能看到，不会写进
   `Saved/Logs/Forever.log`**——Dependence/Core/Basic层的`debugf`输出对着PIE日志文件读是
   看不到的，只有Forever UE模块层的`UE_LOG`才会写进日志文件。诊断需要玩家可见、或者免调
@@ -37,6 +39,10 @@
   调用方`Traffic::Tick`里`if (delta > 0.0) elapsedSeconds += delta;`依赖这个方向，符号
   反了会导致`elapsedSeconds`永远停在初始值不动，表现为"公交车/火车/飞机生成之后位置再也
   不变"，排查记录见`Source/Core/traffic/route.md`"`Time::DifferenceInSeconds`"一节。
+
+- **`GetRandom(Time, Time)`**：返回[begin,end]内随机一天（时间部分归零到0点），begin>end会自动交换。
+- **`GetRandom(int range)`**：返回[0,range-1]，range<=0时返回0；同样每次现场构造`mt19937`。
+- **`ToInt`/`ToDouble`/`ToBool`对string分支有既定取值**：数值转换返回0，`ToBool`空串false、非空true，调用方可以依赖。
 
 ## 依赖关系
 
@@ -47,9 +53,4 @@
 
 ## 待办/后续阶段
 
-- `Counter`目前仍然没有被任何domain实际使用——`Time`已经被`Player`(游戏时钟)、
-  `Traffic`(`Route::Update`的时刻表)等系统广泛使用，`ValueType`被`story/condition.h`
-  的脚本表达式引擎使用，只有`Counter`还停留在"可编译但没有调用方"的状态。
-
-## Time解析扩展
-中文格式年份允许1~4位，时间部分既可以是`HH:MM:SS`也可以是`H时M分S秒`(如`0年1月1日0时0分4秒`)。
+- 无。

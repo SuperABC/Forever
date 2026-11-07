@@ -3,12 +3,6 @@
 #include "puzzle_common.h"
 
 
-// 多色试管：若干试管、每管capacity层液体，开局颜色乱序，另有empty个空管。点选一个管再点另一个管把
-// 选中管最上面连续同色的液体倒过去：目标为空→全倒；目标非空→两管顶色相同才能倒，倒入min(连续层数,
-// 目标剩余容量)层。所有试管都只剩一种颜色(或空)即完成，返回步数(成功倒水的次数)。
-// 开局由生成器保证可解(带求解器验证)，并尽量让每个管内相邻层不同色。
-// 参数(key=value)：colors(6)、capacity(4)、empty(2)、seed、preset(测试用：管用分号隔开，每管从底到顶的颜色数字)。
-// 返回：{"steps","completed"}。
 class TubesPuzzle : public PuzzleMod {
 public:
 	virtual void SetParam(const std::string& param) override;

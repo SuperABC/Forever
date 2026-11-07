@@ -10,10 +10,7 @@ class Traffic;
 
 #define SAVE_SECTION_TRAFFIC "world.traffic"
 
-// 交通域的存档读写：站点(三类：建筑站点/贴路站点/边缘站点)、线路(站点表、连线、各条线路的
-// 停靠顺序、每条线路上的车)、车辆(类型、停车位、线路绑定、位置、选项)和公交计时。
-// 线路的连线几何(RouteEdge)不存：地图按存档原样恢复，读档时用Route::BuildEdgeGeometry按
-// 同样的站点接口重新算，结果一致。详见traffic_save.md。
+// 交通域的存档读写：站点、线路、车辆和公交计时；详见traffic_save.md。
 class TrafficSaveCodec {
 public:
 	static void Save(const Traffic& traffic, const Map& map, SaveArchive& archive);

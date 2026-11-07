@@ -2,70 +2,25 @@
 
 ## 职责
 
-公共交通线路车辆(公交/火车/飞机)在场景里对应的Actor——纯展示物，运动学地沿`Route`算出来
-的transform移动，不模拟物理、不接受操控/搭乘。
+公共交通线路车辆(公交/火车/飞机)在场景里对应的 `ATransitVehicleElement`(`APawn`)：**运动学**地沿 `Route` 算出的 transform 移动，不模拟物理；公交/火车(骨骼/静态网格且 `VehicleMod::boardable`)可被玩家搭乘当乘客。
 
 ## 关键设计
 
-- **运动学跟随，不是物理驱动**：`Tick`每帧直接读`vehicle->GetTransform()`(`Core`层
-  `Route::Update`早已按时刻表算好的世界坐标+偏航角)写`SetActorLocationAndRotation`，
-  和`AVehicleElement`(真实可驾驶载具，`bSimulatePhysics=true`的骨骼网格)完全是两套机制——
-  `Tick`同时读`vehicle->GetPitch()`设俯仰角（火车沿坡道/隧道口行驶时跟着轨道倾斜，其余线路恒为0）。
-  这里没有刚体、没有碰撞响应，`Tick`只是把Core算好的数字誊抄到Actor transform上。
-  `TRANSIT_WORLD_SCALE`(=1000)和`ForeverTrafficFrameworkComponent.cpp`的
-  `TRAFFIC_WORLD_SCALE`是同一个值、同一套"地图单位→UE厘米"换算，这个项目的既有约定是每个
-  需要它的`.cpp`文件各自维护一份，不额外抽公共常量。
-- **纯展示物，不参与碰撞/导航**：构造函数里`bodyMesh->SetCollisionEnabled(NoCollision)`+
-  `SetCanEverAffectNavigation(false)`——这次不做操控/搭乘，不需要挡住别的东西，也不需要被
-  别的东西的重叠检测测到，见`VehicleMod::drivable`/`boardable`字段(这次公交/火车/飞机三个
-  `VehicleMod`都设成`false`，预留给以后真的要做"公共交通能上下车"时用)。
-- **立方体占位，按`VehicleMod::sizeX/Y/Z`缩放；`transitMeshPath`非空时换成真实静态网格**：
-  `Init()`先检查`vehicle->GetTransitMeshPath()`，非空就`LoadObject<UStaticMesh>`，成功则
-  直接用这个mesh；留空(Bus/Train目前都是空)或加载失败(mod的Plugin没挂载上/路径打错)才
-  退化回`/Engine/BasicShapes/Cube`按`sizeX/sizeY/sizeZ`除以Cube默认边长(100cm)算缩放系数
-  的占位方案。`PlaneVehicle`这次接的是独立mod(`Forever_Mod/Test/UE/Test`，一个只含
-  `Content`的迷你UE工程里的`Test`Plugin)迁移过去、重命名成`airplane`的测试飞机模型，路径
-  `/Test/Airplane/StaticMeshes/airplane.airplane`——`/Test/`这个包路径前缀是
-  `ForeverModSubsystem`运行时挂载出来的(编辑器/PIE直接挂Plugin的Content目录，打包后挂该
-  Plugin自己`pak.bat`cook出来的`Test.pak`)，不是这个主工程`Content/`下的东西，见
-  `vehicle_mod.h::transitMeshPath`/`Source/Core/common/config.md`"GetPlugins/GetPakFiles"
-  一节。以后要再换/再加真实网格资产，只需要照抄这个模式，不需要改这个类本身。
-- **`VehicleMod::meshTransform`修正真实mesh的缩放/朝向，和`sizeX/Y/Z`互不影响**：
-  真实模型(`transitMeshPath`非空时)加载成功后，`SetWorldScale3D`按
-  `GetMeshScale()`(统一缩放系数，不是`sizeX/Y/Z`)缩放。这个修正解决的是"模型自己建模时的
-  正前方"和"Actor正前方(沿行驶方向)"没对齐的问题，`PlaneVehicle`的测试飞机模型本身是
-  "横着"建的，需要叠加90度(具体+90还是-90由实测确定，机头朝前还是朝后一次性判断)。
-  **`GetMeshYawOffsetDegrees()`不能在`Init()`里直接对`bodyMesh`调`SetRelativeRotation`**
-  ——`bodyMesh`是这个Actor的`RootComponent`(构造函数`RootComponent = bodyMesh;`)，
-  `Tick()`里每帧`SetActorLocationAndRotation`直接设的就是`RootComponent`的世界旋转，
-  `Init()`时设的任何`SetRelativeRotation`值会立刻被下一次`Tick`覆盖掉、完全没有效果
-  (PIE/打包exe实测反馈"旋转没有生效"才发现)。修复：`Init()`里把这个偏移缓存进成员字段
-  `meshYawOffsetDegrees`，`Tick()`每帧算朝向时叠加`yaw + meshYawOffsetDegrees`，和
-  `GetTransform()`算出来的行驶方向一起设进同一次`SetActorLocationAndRotation`调用，不是
-  设在`bodyMesh`自己的局部旋转上。
-- `vehicle`字段是裸指针引用，不持有所有权——`EndPlay`只置空不delete，`Vehicle`对象的生命
-  周期归`Traffic`管(和`ACitizenElement`/`AVehicleElement`同一套"Forever层Element只引用、
-  不管理Core对象生命周期"的安全原则)。
+- **运动学跟随，不是物理驱动**：`Tick` 每帧读 `vehicle->GetTransform()`(Core 层 `Route::Update` 按时刻表算好的地图单位坐标+偏航角)乘 `TRANSIT_WORLD_SCALE`(1000，与 `ForeverTrafficFrameworkComponent.cpp` 的 `TRAFFIC_WORLD_SCALE` 同值，各 `.cpp` 各维护一份)，再读 `vehicle->GetPitch()` 设俯仰(火车沿坡道/隧道口倾斜，其余恒为 0)，一并 `SetActorLocationAndRotation`。与 `AVehicleElement` 不同，不写回 Core。
+- **外观按 `VehicleMod` 字段选**(`Init`)：`transitMeshPath` 非空时先 `StaticLoadObject` 再判断类型(直接 `LoadObject<T>` 类型不符会刷警告)——骨骼网格(公交 `SKM_paz_652`)用子组件 `skeletalBody`；静态网格：可搭乘(火车)用子组件 `staticBody`，不可搭乘(飞机)直接放 `bodyMesh`。子组件的缩放只作用在自己身上，root 保持 1 倍，触发盒/相机才不被缩。路径为空或加载失败(mod 的 Plugin 没挂载上/路径打错)退化为 `/Engine/BasicShapes/Cube` 按 `sizeX/Y/Z` 除以 100 缩放的占位。`/Test/...` 这类包路径前缀由 `ForeverModSubsystem` 运行时挂载出来(见 `Source/Core/common/config.md`"GetPlugins/GetPakFiles")。
+- **`meshScale`/`meshYawOffsetDegrees`**：真实网格按 `GetMeshScale()` 统一缩放；`GetMeshYawOffsetDegrees()` 修正模型建模正前方与行驶方向不一致。**不能在 `Init` 里对 `bodyMesh` 设 `SetRelativeRotation`**：`bodyMesh` 是 `RootComponent`，`Tick` 每帧设的是 Root 的世界旋转，会立刻覆盖；所以缓存进 `meshYawOffsetDegrees`，在 `Tick` 里叠加到 yaw。
+- **碰撞**：`bodyMesh`/子组件都 `NoCollision` 且不影响导航；可搭乘的车另建只 overlap 的触发盒。
+- **可搭乘(`BuildBoardingComponents`，由骨骼/静态网格包围盒决定)**：触发盒=包围盒(乘 `meshScale`)外扩 XY150/Z50；相机弹簧臂挂车顶中心，臂长 1100，跟随控制器旋转。玩家的 `AForeverCharacter` 进盒 -> 把车辆 options 推给 `UMeetOptionWidget`(上车选项由 `vehicle_bus.script` 在停站时通过 `add_option`/`remove_option` 控制)；Overlap 回调只在玩家当前 pawn 且是 `AForeverCharacter` 时响应。
+- **搭乘**：`UForeverTrafficFrameworkComponent::ApplyBoardVehicle` 让玩家 `Possess` 本 Pawn，`PossessedBy` 只加 `IMC_MouseLook`(没有 `IMC_Default`，WASD 无效)、绑鼠标视角和 F/滚轮选项输入；乘坐期间**一直显示** options(不需要触发盒)；没有 Q 下车键，下车只走 script 的"下车"选项(`leave_vehicle` Change)或 `force_leave`。`ShowOptions` 先 `RemoveName` 再逐个 `AddOption`，不用 `ReplaceOptions`(它在名下没有按钮时是空操作，停站前选项为空，之后新增的选项会丢)。存档记 `controlledVehicle`，读档走 `ApplyBoardVehicle(bSilent)`，位置由 Core Route 算，不用存档位姿覆盖。
+- **运行中选项变化**：`add_option`/`remove_option` 后 `AForeverFrameworkActor::RefreshInteractOptions` 调 `RefreshOptions()` 重新烘焙快照；玩家在盒内或乘坐中时同步刷新屏幕上的选项。Overlap 回调只读 `vehicleNameOnly`/`cachedOptions` 快照，不解引用 Core 对象。
+- **挂起 `SetSuspended`**：线路公交（蓝图是 `AVehicleElement` 子类时）在玩家附近(地形 `busPhysicsLodLevel` 级 LOD 范围内)换成物理 `AVehicleElement` + `ABusController`，玩家搭乘的是那辆物理公交(`SetRideMode`)；这个运动学 Actor 被挂起(隐藏、关 Tick、关触发盒并撤选项)，出范围再恢复。搭乘中的不应被挂起(调用方保证)。火车/飞机仍沿用这里的搭乘逻辑。
+- `vehicle` 是裸指针引用，不持有所有权，`EndPlay` 只置空。
 
 ## 依赖关系
 
-- 依赖：`Core/traffic/vehicle.h`(`GetTransform`/`GetSize`)。
-- 被谁依赖：`Forever/Framework/ForeverTrafficFrameworkComponent.cpp`的`GenerateVehicles`
-  (对`vehicle->GetRoute()`非空的车辆生成这个Actor，而不是`AVehicleElement`)。
+- 依赖：`Core/traffic/vehicle.h`(`GetTransform`/`GetPitch`/`GetSize`/`GetTransitMeshPath`/`GetMeshScale`/`GetMeshYawOffsetDegrees`/`IsBoardable`)、`UMeetOptionWidget`、`Input/ForeverKeyBindingSubsystem`(`MeetOptionUp/Down/Select`)、`IA_Look`/`IA_MouseLook`/`IMC_MouseLook`。
+- 被谁依赖：`ForeverTrafficFrameworkComponent` 的 `GenerateVehicles`(对 `vehicle->GetRoute()` 非空的车辆生成)、`ApplyBoardVehicle`/`ExitVehicle`。
 
 ## 待办/后续阶段
 
-- 不支持操控/搭乘——`VehicleMod::drivable`/`boardable`已经预留了这个开关，真要做的话这个
-  类需要补充和`AVehicleElement`类似的`Possess`/上下车逻辑，这次不实现。
-
-## 公交：骨骼网格与搭乘
-- `transitMeshPath`指向骨骼网格(公交PAZ_652的`SKM_paz_652`)时用`skeletalBody`显示(root保持1倍缩放)；指向静态网格(飞机)走`bodyMesh`；失败退化立方体。`Init`打日志输出骨骼网格包围盒。
-- `VehicleMod::boardable`且骨骼网格时建触发盒(包围盒外扩XY 150/Z 50cm)和SpringArm+Camera。玩家的`AForeverCharacter`进盒→把车辆options推给`UMeetOptionWidget`；`PossessedBy`只加`IMC_MouseLook`(无`IMC_Default`，WASD无效)、绑鼠标视角和F/滚轮选项输入，**在车上一直显示options**(不需要盒)，没有Q下车键，下车只走script的"下车"选项或`force_leave`。
-- `ShowOptions`先`RemoveName`再逐个`AddOption`，不用`ReplaceOptions`(它在名下没有按钮时是空操作，停站前选项为空，之后新增的选项会丢)。
-- 搭乘/下车流程在`UForeverTrafficFrameworkComponent::ApplyBoardVehicle`/`ExitVehicle`；存档记`controlledVehicle`，读档走`ApplyBoardVehicle(bSilent)`，不用存档位姿覆盖(位置由Core Route算)。
-- 路线车的运动仍由Core驱动(运动学)，之后改成AI Controller物理驾驶时事件/Change/script/触发盒可复用。
-
-- **可搭乘的静态网格(火车SciFiTram)**(2026-10-30)：`Init`里`transitMeshPath`加载出静态网格且`vehicle->IsBoardable()`时，模型放在子组件`staticBody`上(缩放只作用在它自己身上)，`bodyMesh`置空，再用网格包围盒调`BuildBoardingComponents`建触发盒/相机，和骨骼网格那条路一致；不可搭乘的静态网格(飞机)仍直接放在`bodyMesh`上。
-
-## 公交近处换成物理公交（2026-11-01）
-- 线路公交（蓝图是 `AVehicleElement` 子类时）在玩家附近（地形 `busPhysicsLodLevel` 级 LOD 范围内）换成物理 `AVehicleElement` + `ABusController`，玩家搭乘的是那辆物理公交（`SetRideMode`）；这个运动学 Actor 用 `SetSuspended(true)` 挂起（隐藏、关 Tick、关触发盒、撤选项），出范围再 `SetSuspended(false)`。火车/飞机仍沿用这里的搭乘逻辑。
+- 不支持操控(`VehicleMod::drivable` 预留)；路线车改成 AI Controller 物理驾驶后，事件/Change/script/触发盒可复用。

@@ -56,37 +56,11 @@
 #pragma comment(lib, "Dependence.lib")
 
 
-// Basic编译为DynamicLibrary(Basic.dll),是内置的默认Mod集合——和Forever_Mod/Test、
-// Forever_Mod/Wxdj地位相同,由Config/ModLoader在运行时通过本文件导出的20组
-// GetMod<Concept>/RegisterMod<Concept>/FinishMod<Concept>符号扫描加载,不会静态链进
-// Forever.Build.cs。详见 Source/Basic/README.md。
-//
-// 每个concept统一只对应一份Source/Basic/<domain>/<concept>_basic.h/.cpp,阶段3是trivial
-// 占位XxxBasic,阶段4按系统迁移进度换成旧工程真正的默认内容,完整对照表见
-// Source/Dependence/README.md 的20个concept对照表。
-//
-// map域的Zone/Building/Room/Component这4个文件里可能装不止一个具体类型（同一个concept下
-// 不同业务场景各一个类，如ResidenceBuilding/ShopBuilding/FactoryBuilding都在
-// building_basic.h/.cpp里）——和terrain_basic.h/.cpp里OceanTerrain/MountainTerrain合并
-// 的方式一样，不再按"这个类型是哪种业务场景(residence/shop/factory)"拆文件，见
-// map/building_basic.md/room_basic.md/component_basic.md。Room额外多了个WarehouseRoom/
-// ParkingRoom(装在room_basic.h里，Factory的地下室也复用ParkingRoom)，这两个不是独立的
-// building类型，只是Shop/Factory布局内部用到的辅助room。
-//
-// society域这次迁移了Job/Organization（不要Calendar）：job_basic.h/.cpp里的JobBasic占位
-// 类换成了真正的ShopSalerJob，organization_basic.h/.cpp里的OrganizationBasic占位类换成了
-// 真正的ShopOrganization，见Source/Core/society/job.md/organization.md。
-
 using namespace std;
 
-// 每个mod id自己声明依赖的mod id列表，见Source/Core/common/loader.h
-// kModDependenciesSymbol注释。依赖id按字符串匹配、不区分concept(和IsModIdEnabled/
-// Registry::CheckModRegistered同一套既有规则)。所有mod id都带自己concept的前缀(比如
-// product_wheat和asset_wheat)，不同concept之间不会出现同一个字符串。不要声明成环(A依赖B、
-// B又依赖A)：两个都启用后会互相锁定，配置界面里哪个都关不掉。
+// 每个mod id声明依赖的mod id列表，约束见basic.md。
 extern "C" __declspec(dllexport) void* GetModDependencies() {
-	// Forever_Mod/Empty里的占位mod：会创建Script的mod(门/电梯/Scheduler/Job/Organization/Vehicle)
-	// 默认用script_empty这个ScriptMod，住宅楼的占位房间槽用room_empty。
+	// Forever_Mod/Empty里的占位mod，见basic.md。
 	static const string kScriptEmpty = "script_empty";
 	static const string kRoomEmpty = "room_empty";
 
@@ -109,6 +83,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ AirportComponent::GetId(), { AirportRoom::GetId() } },
 
 		{ ShopRoom::GetId(), { kScriptEmpty } }, // 房间门脚本
+		{ WarehouseRoom::GetId(), { ShopStorage::GetId() } }, // storageType="storage_shop"
 
 		{ SchedulerBasic::GetId(), { kScriptEmpty } },
 		{ ShopSalerJob::GetId(), { ShopRoom::GetId(), kScriptEmpty } },

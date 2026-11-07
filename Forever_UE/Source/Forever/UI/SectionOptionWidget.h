@@ -8,12 +8,8 @@ class UScrollBox;
 class USectionButtonWidget;
 class AForeverFrameworkActor;
 
-// 对应老蓝图SectionOption_C：剧情对话遇到分支选项段（Section::IsBranch()为true）时弹出的
-// 选项列表——和MeetOptionWidget是两套独立UI，管的是不同的东西：MeetOption管"靠近市民能问
-// 什么"（AddOptionChange攒起来的选项，随时可能有多个，靠滚轮/F操作），这个管"剧情对话本身
-// 走到分支时该怎么选"（一次性弹出、选完就消失，见.dump/SectionOption.txt）。逻辑全部在C++
-// 基类里，Blueprint子类只需要摆一个命名OptionContainer的ScrollBox，SectionButtonClass指向
-// 对应的SectionButton Blueprint，不写任何蓝图图表逻辑。
+// 剧情对话走到分支选项段(Section::IsBranch())时一次性弹出的选项列表；与MeetOptionWidget是两套独立UI
+// (后者是靠近市民能问什么)。
 UCLASS()
 class FOREVER_API USectionOptionWidget : public UUserWidget
 {

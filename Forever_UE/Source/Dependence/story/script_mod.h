@@ -14,12 +14,10 @@
 class Event;
 class Dialog;
 
-// 一次Script::MatchEvent匹配命中后要执行的一个动作，Dialog*/Change*都是引用（本体永远挂在
-// 某个Milestone上，见dialog.h/change.h整体注释），这里绝不delete。
+// 一次Script::MatchEvent匹配命中后要执行的一个动作；指针是引用，本体挂在Milestone上，绝不delete
 using ScriptAction = std::variant<const Dialog*, const Change*>;
 
-// ScriptMod基类，声明GetType()/GetName()两个纯虚接口，完整21个concept x 8个domain对照表见
-// Source/Dependence/README.md。
+// ScriptMod基类，说明见script_mod.md；concept/domain对照表见Source/Dependence/README.md
 class ScriptMod {
 public:
 	ScriptMod() = default;
@@ -28,52 +26,26 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 脚本逻辑重载入口，Script::MatchEvent匹配出一批actions之后、返回给调用方之前会调用一次，
-	// 让mod有机会用自己长期持有的Dialog*/Change*改写/插入内容（json表达不了的复杂剧情逻辑走
-	// 这里，见Script.md"顶层原则"）。重载时应在函数开头先调用AutoCopy(actions)，把这一层要
-	// 处理的动作先搬进actionStack，再按需替换/插入内容。默认实现：AutoCopy(actions)，即原样
-	// 透传，不做任何改写。
-	//
-	// **不能改成返回std::vector<ScriptAction>（按值）**——这里是虚方法，不override时vtable
-	// 槽位指向的默认实现会被编译进"没有override它的那个mod DLL"自己的目标文件里，这份默认
-	// 实现构造并返回的vector在该mod DLL自己的堆上分配，被Core/Forever.dll接收后析构时两边
-	// CRT堆不一致，会触发EXCEPTION_ACCESS_VIOLATION（完整背景见script_mod.md）。改成返回
-	// void+读actionStack.back()引用，能保证vector的分配和析构全程发生在同一侧（构造这个
-	// ScriptMod实例的那个模块），是和[[memory:cross_dll_allocator_crash]]同一类问题的
-	// 对应解法。
-	// @event: 触发这批actions的运行时事件
-	// @actions: 只读动作列表
-	// @context: 变量路由上下文
-	// @post: 向Core发起查询的句柄（如"随机挑一个citizen"），见common/handle.md、
-	// Core/common/implement.md——这个参数也遵循"引用/裸指针跨DLL传递安全，STL容器按值
-	// 传递不安全"的约定，Post()的请求JsonValue由调用方在自己模块里构造+析构，
-	// GetResult()返回的结果引用由提供查询的一侧管理，mod侧只读。
+	// 脚本逻辑重载入口，Script::MatchEvent匹配出一批actions后调用；重载时先AutoCopy(actions)再改写actionStack.back()。
+	// 默认实现原样透传。必须返回void而不是按值返回vector（跨DLL堆损坏），见script_mod.md
 	virtual void WrapScript(const Event* event,
 		const std::vector<ScriptAction>& actions, const ScriptContext& context, PostHandle* post) {
 		AutoCopy(actions);
 	}
 
-	// 处理完当前层的所有动作之后，Core会调用它来弹出WrapScript压入的那一层；是虚函数，
-	// 即使mod不重载，也会走mod自己所在模块链接的这份默认实现，弹出操作（vector析构、堆释放）
-	// 天然发生在构造这个ScriptMod对象的那个模块里，不需要mod额外做任何事。
+	// 弹出WrapScript压入的那一层；虚函数，保证vector的释放发生在构造该mod实例的模块
 	virtual void AutoPop() {
 		if (!actionStack.empty()) {
 			actionStack.pop_back();
 		}
 	}
 
-	// 在actionStack里新增一层，把这一层要处理的动作列表搬进去；应在WrapScript重载开头调用。
-	// 非虚：只会被(已经虚分派到mod侧的)WrapScript重载从里面调用，天然已经跑在mod自己的模块里。
-	// @actions: 只读动作列表
+	// 在actionStack里新增一层；非虚，只会被已虚分派到mod侧的WrapScript重载调用
 	void AutoCopy(const std::vector<ScriptAction>& actions) {
 		actionStack.push_back(actions);
 	}
 
-	// 在actionStack当前层（最上层）里查找label匹配的PlaceHolderChange，返回第一个匹配到的
-	// 下标；找不到返回-1。label是Expression（也可能引用变量，不是纯字面量），按传入的context
-	// 求值后再和目标label比较。非虚，理由同AutoCopy。
-	// @label: 要查找的目标标签（已经是字符串，不是表达式）
-	// @context: 变量路由上下文，用于求值每个PlaceHolderChange自己的label表达式
+	// 在actionStack最上层找label匹配的PlaceHolderChange，返回下标，找不到返回-1；非虚，理由同AutoCopy
 	int FindLabel(const std::string& label, const ScriptContext& context) const {
 		if (actionStack.empty()) return -1;
 		const std::vector<ScriptAction>& top = actionStack.back();
@@ -89,21 +61,16 @@ public:
 		return -1;
 	}
 
-	// 脚本动作栈：每次WrapScript调用对应一层，栈本身和栈里每个vector的分配/释放都发生在
-	// 构造这个ScriptMod实例的那个模块里（见AutoCopy/AutoPop），Core只通过引用读取
-	// actionStack.back()，绝不直接持有/析构它。
+	// 脚本动作栈：每次WrapScript对应一层，Core只读actionStack.back()的引用，不持有/析构
 	std::deque<std::vector<ScriptAction>> actionStack;
 
 	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
-	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
-	// 这里只放mod自己的私有数据。
+	// mod私有数据的存档/读档钩子，默认不存任何东西
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}
-	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
-	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
+	// SaveState写出数据的格式版本，默认0
 	virtual int GetStateVersion() const { return 0; }
-	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
-	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	// 唯一实例名用的静态计数器，存档时保存、读档后恢复；没有计数器的类保持默认(返回-1、Set不做事)
 	virtual int GetInstanceCounter() const { return -1; }
 	virtual void SetInstanceCounter(int) {}
 };

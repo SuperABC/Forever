@@ -58,31 +58,37 @@ public:
 
 // 数组访问越界
 class OutOfRangeException : public ExceptionBase {
+public:
 	using ExceptionBase::ExceptionBase;
 };
 
 // 死循环
 class DeadLoopException : public ExceptionBase {
+public:
 	using ExceptionBase::ExceptionBase;
 };
 
 // 网络异常
 class NetworkException : public ExceptionBase {
+public:
 	using ExceptionBase::ExceptionBase;
 };
 
 // 内存异常
 class MemoryException : public ExceptionBase {
+public:
 	using ExceptionBase::ExceptionBase;
 };
 
 // Json格式有误
 class JsonFormatException : public ExceptionBase {
+public:
 	using ExceptionBase::ExceptionBase;
 };
 
 // 其他
 class RuntimeException : public ExceptionBase {
+public:
 	using ExceptionBase::ExceptionBase;
 };
 

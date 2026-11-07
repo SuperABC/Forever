@@ -125,6 +125,33 @@ vector<ValueType> ArrayExpression::GetElementValues(const ScriptContext& context
 	return values;
 }
 
+namespace {
+	// Unary/BinaryExpression共用的"值转布尔"规则：数值非0、字符串非空为真
+	bool ValueToBool(const ValueType& value) {
+		return visit([](const auto& v) -> bool {
+			using T = decay_t<decltype(v)>;
+			if constexpr (is_same_v<T, bool>) {
+				return v;
+			}
+			else if constexpr (is_same_v<T, int>) {
+				return v != 0;
+			}
+			else if constexpr (is_same_v<T, double>) {
+				return abs(v) > 1e-10;
+			}
+			else if constexpr (is_same_v<T, string>) {
+				return !v.empty();
+			}
+			else {
+				return false;
+			}
+			}, value);
+	}
+
+	// 一元负号在中缀转后缀时改写成的内部token(含控制字符，不可能和脚本里的token冲突)
+	const string NEGATE_TOKEN = "\x01negate";
+}
+
 UnaryExpression::UnaryExpression(UnaryOperator op, shared_ptr<ExpressionNode> operand)
 	: operand(op), expression(move(operand)) {
 
@@ -165,24 +192,7 @@ ValueType UnaryExpression::ApplyLogicalNot(const ValueType& value) const {
 }
 
 bool UnaryExpression::ConvertToBool(const ValueType& value) const {
-	return visit([](const auto& v) -> bool {
-		using T = decay_t<decltype(v)>;
-		if constexpr (is_same_v<T, bool>) {
-			return v;
-		}
-		else if constexpr (is_same_v<T, int>) {
-			return v != 0;
-		}
-		else if constexpr (is_same_v<T, double>) {
-			return abs(v) > 1e-10;
-		}
-		else if constexpr (is_same_v<T, string>) {
-			return !v.empty();
-		}
-		else {
-			return false;
-		}
-		}, value);
+	return ValueToBool(value);
 }
 
 BinaryExpression::BinaryExpression(shared_ptr<ExpressionNode> left,
@@ -387,24 +397,7 @@ ValueType BinaryExpression::ComputeArithmetic(const ValueType& left, const Value
 }
 
 bool BinaryExpression::ConvertToBool(const ValueType& value) const {
-	return visit([](const auto& v) -> bool {
-		using T = decay_t<decltype(v)>;
-		if constexpr (is_same_v<T, bool>) {
-			return v;
-		}
-		else if constexpr (is_same_v<T, int>) {
-			return v != 0;
-		}
-		else if constexpr (is_same_v<T, double>) {
-			return abs(v) > 1e-10;
-		}
-		else if constexpr (is_same_v<T, string>) {
-			return !v.empty();
-		}
-		else {
-			return false;
-		}
-		}, value);
+	return ValueToBool(value);
 }
 
 bool Expression::Parse(const string& expr) {
@@ -416,6 +409,7 @@ bool Expression::Parse(const string& expr) {
 	}
 	catch (const exception& e) {
 		cerr << "Parse error: " << e.what() << endl;
+		root = nullptr;
 		return false;
 	}
 }
@@ -441,13 +435,19 @@ ValueType Expression::EvaluateValue(const ScriptContext& context) const {
 
 ValueType EvaluateExpression(const string& source, const ScriptContext& context) {
 	Expression expression;
-	expression.Parse(source);
+	if (!expression.Parse(source)) {
+		debugf("EvaluateExpression: parse failed, treated as empty: %s\n", source.c_str());
+	}
 	return expression.EvaluateValue(context);
 }
 
 bool EvaluateExpressionBool(const string& source, const ScriptContext& context) {
 	Expression expression;
-	expression.Parse(source);
+	// 解析失败的条件按false处理(而不是被当成空表达式=恒成立)
+	if (!expression.Parse(source)) {
+		debugf("EvaluateExpressionBool: parse failed, treated as false: %s\n", source.c_str());
+		return false;
+	}
 	return expression.EvaluateBool(context);
 }
 
@@ -560,6 +560,11 @@ vector<string> Expression::InfixToPostfix(const vector<string>& infix) {
 	stack<string> opStack;
 	string prev;
 
+	// "-"出现在表达式开头、运算符、左括号/左方括号/逗号之后时是一元负号
+	auto isUnaryContext = [&](const string& t) {
+		return t.empty() || IsOperator(t) || t == "(" || t == "[" || t == ",";
+	};
+
 	// 前一个 token 是右值（operand、)、]），即可作为隐式 + 的左侧
 	auto isRhs = [&](const string& t) {
 		return !t.empty() && !IsOperator(t) && t != "(" && t != "[" && t != ",";
@@ -579,7 +584,11 @@ vector<string> Expression::InfixToPostfix(const vector<string>& infix) {
 			opStack.push("+");
 		}
 
-		if (IsOperator(token)) {
+		if (token == "-" && isUnaryContext(prev)) {
+			// 前缀运算符不弹栈，直接入栈
+			opStack.push(NEGATE_TOKEN);
+		}
+		else if (IsOperator(token)) {
 			while (!opStack.empty() && opStack.top() != "(" &&
 				HigherPrecedence(opStack.top(), token)) {
 				postfix.push_back(opStack.top());
@@ -656,7 +665,10 @@ shared_ptr<ExpressionNode> Expression::ParsePostfix(const vector<string>& postfi
 			i = j;
 		}
 		else if (IsOperator(token)) {
-			if (token == "-" && exprStack.size() == 1) {
+			if (token == NEGATE_TOKEN) {
+				if (exprStack.empty()) {
+					THROW_EXCEPTION(RuntimeException, "Insufficient operands for unary minus.\n");
+				}
 				auto operand = move(exprStack.top());
 				exprStack.pop();
 				exprStack.push(make_unique<UnaryExpression>(UnaryOperator::NEGATE, move(operand)));
@@ -692,7 +704,7 @@ shared_ptr<ExpressionNode> Expression::ParsePostfix(const vector<string>& postfi
 }
 
 bool Expression::IsOperator(const string& token) {
-	return token == "+" || token == "-" || token == "*" || token == "/" ||
+	return token == NEGATE_TOKEN || token == "+" || token == "-" || token == "*" || token == "/" ||
 		token == "%" || token == "^" || token == "==" || token == "!=" ||
 		token == ">" || token == ">=" || token == "<" || token == "<=" ||
 		token == "in" || token == "&&" || token == "||" || token == "!";
@@ -709,9 +721,10 @@ bool Expression::HigherPrecedence(const string& op1, const string& op2) {
 }
 
 int Expression::GetPrecedence(const string& op) const {
-	if (op == "!" || op == "negate") return 8;
+	if (op == "!") return 8;
 	if (op == "^") return 7;
-	if (op == "*" || op == "/" || op == "%") return 6;
+	// 一元负号比^低、不比*高：-2^2 == -(2^2)
+	if (op == "*" || op == NEGATE_TOKEN || op == "/" || op == "%") return 6;
 	if (op == "+" || op == "-") return 5;
 	if (op == "in") return 4;
 	if (op == "==" || op == "!=" || op == ">" || op == ">=" || op == "<" || op == "<=") return 4;
@@ -810,8 +823,4 @@ bool IsOperatorChar(char c) {
 
 bool IsSpaceChar(char c) {
 	return isspace(static_cast<unsigned char>(c));
-}
-
-bool IsIdentifierChar(char c) {
-	return isalnum(static_cast<unsigned char>(c)) || c == '_' || (c >= 0x80 && c <= 0xFF);
 }

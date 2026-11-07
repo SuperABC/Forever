@@ -8,24 +8,6 @@
 #include <utility>
 
 
-// 最小注册表(创建/销毁/枚举)。全部公开方法都是virtual(见下)，调用永远落在构造这个
-// Factory实例的那一侧，分配器天然一致，详见Source/Dependence/README.md"关键设计"一节。
-//
-// creator/deleter用裸函数指针,不用std::function——mod侧注册的都是无捕获
-// (capture-less)lambda,天然能隐式转换成函数指针;裸指针是POD类型,跨DLL传递没有
-// "std::function内部堆缓冲由一侧分配、由另一侧释放"的风险。**不要改用std::function**——
-// 已验证会在Factory析构时崩溃,详见Source/Dependence/README.md。
-//
-// 所有公开方法(含析构函数)都标记virtual,即使目前没有任何派生类——原因见
-// Source/Dependence/README.md"关键设计"一节:Mod DLL里调用这些方法时,只有virtual
-// 才能保证实际执行的是宿主(构造这个Factory实例的那一侧)编译的那份代码,从而让
-// registries内部节点的分配和后续析构使用同一侧的堆分配器,避免跨DLL堆损坏。
-//
-// 参数传递:调用方在RegisterConcept之前调用SetModArgs,把从config.json
-// "asset_mods"数组解析出的(id, 参数字符串)表交给Factory,一直保留在
-// configuredArgs里(不并入registries,避免同一份参数存两份);CreateAsset创建实例时
-// 直接按id查configuredArgs、把参数字符串传给creator,mod自己的creator决定怎么用
-// (传给构造函数/自己存着都行)——Factory不再替mod调用任何"创建后初始化"钩子。
 class AssetFactory {
 public:
 	using CreateFunc = AssetMod*(*)(const std::string&);
@@ -54,9 +36,7 @@ public:
 	virtual void SetModArgs(const std::unordered_map<std::string, std::string>& argsById);
 
 private:
-	// 已注册且已在config.json对应\"<concept>_mods\"数组里列出（即configuredArgs里
-	// 有这个id）才算启用——CreateXxx/CheckRegistered/GetRegisteredIds都据此判断，
-	// 见Source/Core/story/script.md\"mod_dependences\"一节的设计决策。
+	// 启用=已注册且id在configuredArgs里,详见配对md。
 	bool IsEnabled(const std::string& id) const;
 
 	struct Entry {

@@ -6,7 +6,8 @@
 
 ## 关键设计
 
-- **不依赖UE头文件**，供`Basic.dll`这类运行时加载的Mod使用；但会用Windows GDI(`canvas.cpp`内部`#include <windows.h>`，不污染头文件)：字体渲染交给Windows自带字体库(默认微软雅黑，支持中英文+抗锯齿)，`SetFontSize`直接设置字体像素高度。只有一个固定默认字体，不做字体名/斜体/下划线切换，也不做SGL的文本字符网格模式。
+- **不依赖UE头文件**，供`Basic.dll`这类运行时加载的Mod使用；但会用Windows GDI(`canvas.cpp`内部`#include <windows.h>`，只在`.cpp`的匿名namespace里出现，不污染头文件——`<windows.h>`的`min/max/TEXT`等宏会和UE头冲突)：字体渲染交给Windows自带字体库(默认微软雅黑，支持中英文+抗锯齿)，`SetFontSize`直接设置字体像素高度，`PutString`/`StringWidth`支持UTF-8和`\n`换行(GDI的`TextOut`不认换行，内部按行拆开)。`CreateCanvasFont`的参数组合(`FW_THIN`/`OUT_CHARACTER_PRECIS`/`CLIP_CHARACTER_PRECIS`等)是验证过能渲染正常粗细/字形的，换成看起来更"标准"的组合会导致字母粗细/字形不一致，不要改。只有一个固定默认字体，不做字体名/斜体/下划线切换，也不做SGL的文本字符网格模式。
+- **网页(Emscripten)版**：`#ifdef __EMSCRIPTEN__`分支用浏览器2D canvas(`EM_JS`)画字，读回灰度当覆盖率混合，其余绘图共用同一套实现(`Tools/ModWeb`)。
 - **跨模块堆分配约束**：`Canvas`常横跨UE模块(`UPuzzleWidget`注入按键)和`Basic.dll`(`PuzzleMod::Loop`消费)两侧使用，而它的方法是普通非virtual成员，`canvas.cpp`会被两侧各自编译、各自链接CRT/allocator。因此：
   - 键盘/鼠标事件队列用**定长环形队列`RingBuffer`**(纯POD，不涉及堆)，不用`std::deque`，否则一侧`push`分配的块被另一侧`pop`用自己的`operator delete`释放，会堆损坏。队列满了丢弃新事件。
   - `Bitmap`(`GetImage`/`PutImage`/`PutRawImage`)是`std::vector`：约定哪个模块创建的`Bitmap`就只由这个模块扩容/释放，不要让另一侧对同一个vector做修改。
@@ -15,7 +16,7 @@
 - **宽线**：`PutLine(..., width)`不是多次1像素直线偏移(斜线上相邻线各自取整会有缝隙)，而是按线宽算出矩形(两个填充三角形)，复用`PutTriangle`的扫描线填充，保证实心无缝；`width<=1`退化成1像素Bresenham。
 - **透明度**：`SetAlpha`(0~1)之后的所有绘图操作按这个比例和已有像素混合。
 - **图片**：`LoadImageFile(path, Bitmap&)`用stb_image(`common/3rdParty/stb_image.h`，公共领域，实现编进`canvas.cpp`)从磁盘解码，支持PNG/JPEG/BMP/GIF(只取第一帧)/TGA/PSD/HDR/PIC/PNM(不支持WebP/SVG)，Windows下路径按UTF-8解读，输出BGRA并保留alpha。`PutBitmap(bitmap,x,y,w,h)`双线性缩放+按图片每像素alpha(再乘`SetAlpha`)混合；`PutImage`(直接覆盖)和`PutRawImage`(忽略图片alpha)保持原样。`LoadImage`是Win32宏(`LoadImageW`)，所以方法名叫`LoadImageFile`。
-- **mod图片资源约定**：图片放在`Resource/Mod/<mod名>/`下，**文件名必须以`<puzzle id>_`开头**(如puzzle_dodge_bg.png；`Resource/Mod/Basic/puzzle_anykey_icon.png`)，因为查找是按文件名在`config.json`的`resource_paths`里递归匹配，前缀保证全局唯一。mod用自由函数`LoadModImage(post, "puzzle_anykey_icon.png", bitmap)`加载(内部走`PostHandle`的"resource path"查询+`LoadImageFile`)。`Bitmap`由mod这一侧创建和释放，符合上面的跨模块堆约定。网页版(`Tools/ModWeb`)把`Resource/Mod/Basic`用`--embed-file`内嵌进html，其它mod的图片要加到`build_web.bat`里。
+- **mod图片资源约定**：图片放在`Resource/Mod/<mod名>/`下，**文件名按约定以`<puzzle id>_`开头**(如puzzle_dodge_bg.png；`Resource/Mod/Basic/puzzle_anykey_icon.png`；`<mod名>`只是目录名，不进文件名)。`LoadModImage`传完整文件名，`Config::GetResourceFilePath`按文件名在`config.json`的`resource_paths`里递归匹配、取第一个命中，代码不校验前缀，前缀只是靠约定保证全局唯一。mod用自由函数`LoadModImage(post, "puzzle_anykey_icon.png", bitmap)`加载(内部走`PostHandle`的"resource path"查询+`LoadImageFile`)。`Bitmap`由mod这一侧创建和释放，符合上面的跨模块堆约定。网页版(`Tools/ModWeb`)把`Resource/Mod/Basic`用`--embed-file`内嵌进html，其它mod的图片要加到`build_web.bat`里。
 - **键盘**：宿主调`PushKey`注入，逻辑调`HasPendingKey`/`PopKey`/`ClearKeyBuffer`消费。常规字符键直接用ASCII值，没有ASCII字符的键用`KEY_CODE`常量(0x100以上，避免和ASCII重叠)；"抬起"事件在键码上按位或`KEY_RELEASED_FLAG`。
 - **鼠标**：宿主调`SetMousePos`/`PushMouseButton`注入，逻辑读`MouseState`/`PopMouseEvent`。滚轮是一个累计整数(`PushMouseWheel`/`ConsumeMouseWheel`)，不进事件队列——滚轮没有按下/抬起，也不该让只认按键的小游戏看到多余事件。
 

@@ -4,9 +4,8 @@
 
 `Storage`：一个仓库的实体，或者工坊(`Manufacture`)自带的输入/输出cache（见
 `manufacture.md`）——只暴露"能装什么(`categories`)"+"当前装了多少(`stock`)"，
-不知道自己的上下游、不知道位置。**运输(谁给谁多少)完全由`Industry`的全城统一
-调配逻辑(`GlobalAllocate`，见`industry.md`)统一读写`Input`/`Output`来完成，
-`Storage`自己不主动做任何事**，不持有任何"我认识谁"的信息，也不考虑物理距离。
+不知道自己的上下游、不知道位置。**运输(谁给谁多少)完全由`Industry::Distribute()`
+（见`industry.md`）统一读写`Input`/`Output`来完成，`Storage`自己不主动做任何事**，不持有任何"我认识谁"的信息，也不考虑物理距离。
 
 ## 关键设计
 
@@ -30,9 +29,9 @@
 `stock`是`unordered_map<string, float>`，`GetSpace() = capacity - 所有类型
 存量之和`——不同产品类型共用同一个总容量池，不是每种产品类型各自独立配额。
 `Input`/`Output`都是"按空间/存量截断+返回实际值"的模式（不会抛异常/断言
-失败），调用方(`Industry::GlobalAllocate`)需要自己处理"没吃满/没吐够"的差额。
+失败），调用方(`Industry`物流)需要自己处理"没吃满/没吐够"的差额。
 
-`SetCapacity()`供`Manufacture::SetProperty()`在跑完配方展开算法、算出"这个
+`SetCapacity()`供`Manufacture::ComputeRecipe()`在跑完配方展开算法、算出"这个
 工坊今天需要多少输入/输出空间"之后调整两个内部cache的容量——这个值会随配方/
 目标产量变化而变化，不是构造时就能确定的常量。
 
@@ -40,8 +39,16 @@
 
 和某个`Product::GetCategories()`比较，只要有任一字符串相等就返回`true`。
 仓库对应的`categories`来自mod（多标签），产品的`categories`也来自mod——匹配
-只在`Industry::GlobalAllocate()`阶段发生一次，`Storage`自己不缓存任何匹配
-结果。
+只在`Industry::DistributeSupply`判断可取可放仓库收不收某产品时发生，`Storage`自己不缓存任何匹配结果。
+工坊内部cache的`categories`留空，物流对它们靠权限和需求驱动，不走分类匹配。
+
+### 物流权限与补货需求
+
+`canTake`/`canPut`决定在物流里的角色：只能放=需求方（商店仓库、工坊input cache），只能取=供给方
+（工坊output cache），可取可放=独立仓库。需求有两种、二选一（同时给出只认精确product需求）：
+`productDemand`（product id→占容量比例）和`serviceTypeDemand`（服务类型→占容量比例）。
+mod驱动的仓库从mod读这些字段；工坊cache由`Manufacture::ComputeRecipe`用`SetAccess`/`SetProductDemand`设置
+（`SetProductDemand`同时清空服务类型需求）。`stock`进存档（`industry_save.md`），其余结构数据不存。
 
 ## 依赖关系
 

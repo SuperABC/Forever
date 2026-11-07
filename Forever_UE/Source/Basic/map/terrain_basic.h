@@ -63,9 +63,8 @@ private:
 	std::string name;
 };
 
-// 河流地形(第一阶段):D8单流向算法只在山体内部结算累积流量,超过阈值的山体格子标记成
-// "terrain_river",流量流到非山体格子就停止(不继续算,也不标记)。河岸附近的格子会额外写入17x17
-// 细化高度数组,让水岸线光滑。详见terrain_basic.md。
+// 河流地形:山体内D8流量累积确定起点,流出山体后按角度/角速度模型继续蔓延,流到地图边界/海/并入已有河
+// 才保留;加宽后降河床、铺水面,河岸附近格子写入17x17细化高度数组让水岸线光滑。详见terrain_basic.md。
 class RiverTerrain : public TerrainMod {
 public:
 	RiverTerrain();

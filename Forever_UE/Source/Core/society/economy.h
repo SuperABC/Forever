@@ -13,13 +13,6 @@
 #include <vector>
 
 
-class Society;
-class Industry;
-class Room;
-class Citizen;
-class Organization;
-class Player;
-
 // 一种服务类型当日的供需。
 struct ServiceStat {
 	int demand = 0; // 市民需要的份数

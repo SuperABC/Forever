@@ -343,7 +343,7 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 				obj["weapon"].AsString(), obj["part"].AsString(), 0.0, false, std::string());
 		}
 		else {
-			// 其余事件类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
+			// 其余事件类型的JSON分发分支等该类型被点名实现时再补，见Core/story/script.md。
 			THROW_EXCEPTION(RuntimeException, "Event type not implemented yet: " + type + ".\n");
 		}
 
@@ -356,6 +356,15 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 
 vector<Change*> Script::BuildChanges(const JsonValue& root) {
 	vector<Change*> changes;
+
+	// 解析中途抛异常时释放已经new出的Change(for_range的子项由ForRangeChange析构释放)，正常返回前release
+	struct Guard {
+		vector<Change*>& owned;
+		bool released = false;
+		~Guard() {
+			if (!released) for (Change* item : owned) delete item;
+		}
+	} guard{ changes };
 
 	for (auto obj : root) {
 		string type = obj["type"].AsString();
@@ -612,7 +621,7 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			change = new RegisterDoorChange(name.AsString(), citizen.AsString(), obj["pass"].AsString());
 		}
 		else {
-			// 其余变化类型的JSON分发分支等该类型被点名实现时再补，见Script.md。
+			// 其余变化类型的JSON分发分支等该类型被点名实现时再补，见Core/story/script.md。
 			THROW_EXCEPTION(RuntimeException, "Change type not implemented yet: " + type + ".\n");
 		}
 
@@ -620,6 +629,7 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 		changes.push_back(change);
 	}
 
+	guard.released = true;
 	return changes;
 }
 
@@ -642,9 +652,7 @@ vector<Dialog*> Script::BuildDialogs(const JsonValue& root) {
 				vector<Option> options;
 				for (auto item : section) {
 					// 分支选项嵌套的dialogs/changes直接new出本体交给Option引用——这些嵌套本体
-					// 不在Milestone的顶层dialogs/changes列表里，所以也不会被Milestone析构时
-					// delete；目前test.json不含分支选项，这条路径未被实际执行到，真正的嵌套
-					// 本体归属方式留到分支选项被点名实现时再确定，见dialog.md。
+					// 不在Milestone的顶层列表里，由包含该分支段的Dialog析构时释放，见dialog.md。
 					auto nestedChanges = BuildChanges(item["changes"]);
 					options.emplace_back(item["condition"].AsString(), item["option"].AsString(),
 						BuildDialogs(item["dialogs"]), vector<const Change*>(nestedChanges.begin(), nestedChanges.end()));

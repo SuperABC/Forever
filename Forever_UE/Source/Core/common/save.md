@@ -25,6 +25,7 @@
 |---|---|---|
 | `manifest` | 用到的 mod、脚本名、布局名、计数器、版本 | 本文 |
 | `world.map.terrain/roadnet/structures/vegetation/lamps` | 地图与建筑 | `Source/Core/map/map_save.md` |
+| `world.industry` | 产业（产品、仓储、制造） | `Source/Core/industry/industry_save.md` |
 | `world.populace` | 市民、班级、定时器、房产和住处归属 | `Source/Core/populace/populace_save.md` |
 | `world.society` | 组织、岗位、组织定时器 | `Source/Core/society/society_save.md` |
 | `world.traffic` | 站点、线路、车辆 | `Source/Core/traffic/traffic_save.md` |
@@ -32,7 +33,8 @@
 | `world.player` | 时钟、生命值、物品、房间里的物品 | `Source/Core/player/player_save.md` |
 | `ue`（JSON） | 操控的市民/车辆、位置朝向、视角、激活的武器、弹匣余量 | `Source/Forever/Mod/ForeverSaveSubsystem.md` |
 
-`BuildArchive`/`BuildManifest` 接收 `SaveWorld`，即 map/populace/society/traffic/story/player 的指针。没生成的域传 nullptr，对应的段就不写。
+`BuildArchive`/`BuildManifest` 接收 `SaveWorld`，即 map/populace/society/industry/traffic/story/player 的指针。`map` 为 nullptr 时不是可存档状态，`BuildArchive` 返回空档案（不写只有 manifest 的残档：`ValidateArchive` 要求每个段都在、读不回来），调用方应先判断有 map。其余没生成的域传 nullptr，对应的段就不写（
+`map` 为空时只写 manifest；`society` 的段依赖 `populace` 非空）。
 
 读档时全部域按存档恢复，并跳过 game_start 广播。
 
@@ -68,7 +70,7 @@
 
 - 门开合到一半的动画状态：读档后门全部关着。
 - 行驶中车辆的速度。
-- 市民正在走的路线：存档时按"已经走到目的地"记，见 `Forever/Framework/ForeverPopulaceFrameworkComponent.md`。
+- 市民走路：存即时状态（当前位置起的剩余路径、目的地、速度）和"是否已实例化"，读档后沿同一条路继续走，见 `Forever/Framework/ForeverPopulaceFrameworkComponent.md`。
 - 手机和 App 的画面状态。
 - 对话队列和谜题的中间状态：这两种情况下拒绝保存。
 - UE 侧运行时增删的树：目前没有调用方。以后若要增删树，必须先改 Core 的 Vegetation 再同步到 UE，保证存档只存 Core 那一份。
@@ -95,7 +97,8 @@
 - **加载前校验分两步**：
   1. `ValidateArchive`（不改状态）：段版本 → manifest → 每个 `(concept, id)` 都有已发现的 DLL 提供 → 每个 mod 声明的依赖也在存档的 mod 集合里 → 脚本和布局资源都能在配置的目录里找到。资源检查前会先 `Config::RescanFiles`，因为文件列表是启动时扫描缓存的。
   2. `ApplyManifestConfig` 把存档的 mod 集合和剧情脚本设成当前 Config（只改内存，不写回 config.json），并 `ReloadModArgs`。之后做两项检查：
-     - `ValidateModsRegistered`：Registry 只在第一次 `Get()` 时加载 DLL，游戏内读档需要启动时没加载的 DLL，会在这里报出来，提示重启。
+     - `ValidateModsRegistered`：mod 必须已经注册进 Factory（DLL 只在 `Registry` 构造和 `RefreshMods()` 时加载），
+       读档需要一个当时没加载的 DLL 就会在这里报出来，提示重启。
      - `ValidateModStateVersions`：只对 `stateVersion>0` 的 mod 临时建实例比较。
 
      任何一步失败，调用方用返回的快照 `RestoreConfig` 恢复。

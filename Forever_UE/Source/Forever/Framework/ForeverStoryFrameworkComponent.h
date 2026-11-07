@@ -26,14 +26,13 @@ class Vehicle;
 class Asset;
 struct ScriptContext;
 
-// Script->Milestone->Event/Dialog/Change架构跑通到"游戏开始广播
-// GameStartEvent，匹配出的Dialog交给SectionSpeaking/SectionOption两个UI展示、Change转发给
-// ApplyChange"这一步。详见ForeverStoryFrameworkComponent.md。
 class PostImplement;
 class Event;
 class PuzzleResultEvent;
 class CitizenDeceaseEvent;
 
+// Story域的UE层接线点：事件广播入口、Dialog排队展示、需要UE对象的Change执行、计时器。
+// 详见ForeverStoryFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverStoryFrameworkComponent : public UForeverFrameworkComponent
 {
@@ -49,12 +48,9 @@ public:
 	// 由AForeverFrameworkActor在Story::Init()跑完后调用一次。story生命周期由调用方持有。
 	void Init(Story* inStory);
 
-	// 广播一次GameStartEvent，把匹配出的Dialog交给ShowDialog展示、Change转发给ApplyChange。
-	// 内部会现场构造一个PostImplement（见Core/common/implement.h）传给Story::BroadcastGameStart，
-	// 供WrapScript查询Core状态（如随机挑一个citizen）。**这次一起把Society下所有
-	// Organization/Job各自持有的Script、以及每个市民独占持有的Scheduler Script也广播一次
-	// game_start**（不新开函数，直接在这个函数体里遍历，复用同一份处理结果的onActions
-	// 逻辑）——否则它们各自的game_start milestone永远不会被触发，见.cpp实现。
+	// 广播一次GameStartEvent：主线走Story::BroadcastGameStart，其余所有挂了Script的对象走
+	// BroadcastToAllScripts(includeMain=false)，否则它们的game_start milestone永远不会触发。
+	// 匹配出的Dialog交给ShowDialog、Change转发给ApplyChange。
 	void BroadcastGameStart();
 
 	// 把游戏时钟写进系统变量system.time.year/month/day/hour/minute/second，剧情脚本的表达式里用
@@ -62,34 +58,29 @@ public:
 	// 每帧在Player::Tick推进时钟之后调用一次；开局广播game_start之前也调用，保证第一个事件就能读到。
 	void UpdateSystemTime();
 
-	// 玩家点击MeetOption选项时调用：构造一个OptionDialogEvent，依次匹配主线剧情Script
-	// （如果配置了）和目标市民的Scheduler Script，复用BroadcastGameStart同一套Dialog展示/
-	// Change转发逻辑（见.cpp里的ProcessScriptActions）。
+	// 玩家点击MeetOption选项时调用：构造OptionDialogEvent，匹配主线Script和name对应目标
+	// (市民/车辆/门/资产/电梯)自己的Script，见.md。
 	// @name: 对话目标（市民）姓名字面量
 	// @option: 被点击的选项文本字面量
 	void OptionDialog(const FString& name, const FString& option);
 
-	// 武器系统命中Citizen致死时调用：构造一个CitizenDeceaseEvent，和OptionDialog同一个模式
-	// 匹配主线剧情Script + 死者自己的Scheduler Script(按name找；死亡只销毁UE侧Actor，Core里
-	// 的Citizen和它的Scheduler还在)，复用同一套Dialog展示/Change转发逻辑。这次不做成通用的
-	// "任意Event广播给任意Script"机制——就是照抄OptionDialog的写法单独写一次，见
-	// Source/Forever/Player/ForeverWeaponComponent.md"为什么不做通用广播机制"一节。
+	// 市民死亡时调用：构造CitizenDeceaseEvent，匹配主线Script + 死者自己的Scheduler Script
+	// (死亡只销毁UE侧Actor，Core里的Citizen和Scheduler还在)。
+	// 为什么不做通用广播见Source/Forever/Player/ForeverWeaponComponent.md。
 	// @name: 死者姓名字面量
 	// @reason: 死亡原因字面量（玩家用武器击杀时是"player"，武器种类见CitizenDeceaseEvent::weapon）
 	void BroadcastCitizenDecease(const FString& name, const FString& reason);
 
-	// 市民真正走到一个新房间时调用(UForeverPopulaceFrameworkComponent::HandleCitizenArrived)：
-	// 构造npc_arrive事件，只发给这个市民自己的Scheduler脚本和Job脚本(不广播)。
+	// 市民真正走到一个新房间时调用(UForeverPopulaceFrameworkComponent::ReportArrival)：
+	// 构造npc_arrive事件，只发给这个市民自己的Scheduler脚本和Job脚本(不广播)，有嵌套深度保护。
 	void BroadcastNpcArrive(Citizen* citizen, Room* room);
 
 	// 同上，但直接发一个已经填好击杀信息(凶手/武器/部位/伤害/可见/死亡地址)的事件，武器击杀用。
 	void BroadcastCitizenDecease(CitizenDeceaseEvent& event);
 
-	// 执行global_message这个Change时调用(AForeverFrameworkActor::ApplyChange)：构造一个
-	// GlobalMessageEvent，广播给所有挂了Script的东西——主线、每个组织、每个岗位、每个市民的
-	// Scheduler、每辆车、每扇有Script的门(和game_start同一个范围)。global_message这个Event只由
-	// 这里发出。收到消息的里程碑可能再发一条全局消息，嵌套深度超过kMaxGlobalMessageDepth时丢弃
-	// 并警告，防止两个里程碑互相触发无限递归。
+	// 执行global_message这个Change时调用(AForeverFrameworkActor::ApplyChange)：构造GlobalMessageEvent，
+	// 广播给所有挂了Script的东西(含主线，范围同game_start)。嵌套深度超过kMaxGlobalMessageDepth时
+	// 丢弃并警告，防止两个里程碑互相触发无限递归。
 	// @message: 已经求值好的消息文本
 	void BroadcastGlobalMessage(const std::string& message);
 
@@ -116,17 +107,14 @@ public:
 	void ApplyRemoveTimer(const RemoveTimerChange* change, const ScriptContext& context);
 	void FireExpiredTimers(float deltaSeconds);
 
-	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。不在
-	// Story::ApplyChange里处理（Core层不认识Actor/Controller），只能在这一层做。这次改成
-	// public——AForeverFrameworkActor::ApplyChange统一收口所有Change的消费入口后，
-	// ChangeControlChange分支需要从那里转发调用到这里，见ForeverFrameworkActor.md。
+	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。Core层不认识
+	// Actor/Controller，所以不在Story::ApplyChange里处理；由AForeverFrameworkActor::ApplyChange转发到这里。
 	// @change: 待执行的切换控制变化
 	// @context: 变量路由上下文，用于求值change->GetName()
 	void ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context);
 
-	// StartPuzzleChange的实际执行：找到AForeverPlayerController持有的PuzzleWidget，让它
-	// 开始一局指定类型的小游戏。不在Core::Story::ApplyChange里处理（Core层不知道UMG Widget
-	// 的存在），只能在这一层做，跟ApplyControlChange同一个理由。
+	// StartPuzzleChange的实际执行：让AForeverPlayerController持有的PuzzleWidget开始一局小游戏
+	// (Core层不知道UMG Widget，理由同ApplyControlChange)，并记下启动它的脚本。
 	// @change: 待执行的开始小游戏变化
 	// @context: 变量路由上下文，用于求值change->GetPuzzle()
 	void ApplyStartPuzzle(const StartPuzzleChange* change, const ScriptContext& context);
@@ -145,11 +133,8 @@ public:
 	// 代扣所得税)。玩家有没有真的去上班不影响每日工资结算，这是玩家手动打工额外拿的一份。
 	void ApplyPayWage(const PayWageChange* change, const ScriptContext& context);
 
-	// EnterVehicleChange的实际执行：找到指定名字的载具对应的AVehicleElement、把玩家操控权
-	// 切换过去。不在Core::Traffic::ApplyChange里处理（Core层不认识Actor/Controller），只能
-	// 在这一层做，跟ApplyControlChange/ApplyStartPuzzle同一个理由。真正的查找/隐藏原pawn/
-	// Possess逻辑在UForeverTrafficFrameworkComponent::ApplyEnterVehicle里（和
-	// ApplyControlChange转发给PopulaceFramework同一个分工）。
+	// EnterVehicleChange的实际执行：求值载具名后转发给UForeverTrafficFrameworkComponent::ApplyEnterVehicle
+	// (查找/隐藏原pawn/Possess都在那边)。
 	// @change: 待执行的进入载具变化
 	// @context: 变量路由上下文，用于求值change->GetVehicle()
 	void ApplyEnterVehicle(const EnterVehicleChange* change, const ScriptContext& context);
@@ -177,38 +162,19 @@ public:
 	// 没有具体资产实例的失败(身上没有指定类型/数量不足)：只按类型发一个事件给sender。
 	void NotifyAssetResult(bool bGet, const std::string& type, const std::string& result, Script* sender);
 
-	// 把ProcessScriptActions匹配出的一个Dialog
-	// 交给这个函数展示，不直接打印到屏幕左上角（Dialog分支选项"没有
-	// 玩家交互，默认打印第一个Option"的限制已解除，见ForeverStoryFrameworkComponent.md）。
-	// Dialog::GetDialogs()拿到的Section拷贝在这里被逐个求值/展平进pendingQueue：普通台词
-	// 求值成speaker/content字符串；分支选项求值每个Option::GetOption()的显示文本，原始
-	// Option（连同它引用的嵌套dialogs/changes）整个存一份供选中后使用。求值动作必须在这次
-	// 调用里同步完成——context.local指向调用方栈上的运行时Event（BroadcastGameStart的
-	// GameStartEvent/OptionDialog的OptionDialogEvent），函数返回后就是悬垂指针，不能留到玩家
-	// 点击的那一刻（可能是任意多帧之后）才用（这个悬垂风险的完整解释见BroadcastGameStart
-	// 原本的实现注释、Story::BroadcastGameStart声明处的"用回调而不是直接返回"说明）。玩家
-	// 选中分支选项后的Change/嵌套Dialog改用一份"去掉local"的context（self/system不变——
-	// 它们指向长期存活的Script*/systemScript，只有local才是这次要规避的悬垂来源），代价是
-	// 分支选项自己的嵌套内容没法再引用local.前缀变量（比如触发这次对话的具体
-	// OptionDialogEvent.option文本）——这次范围内没有用到这个能力，真需要时得把要用的值提前
-	// 求值烘焙进某个Script的变量池，而不是设法延长Event本身的生命周期。
-	// 队列当前为空（没有对话正在展示）时处理完立刻显示第一项；否则追加到队尾，等当前对话
-	// 播完再显示——先到先播完，不打断/不并发（游戏开局多个Script同时广播game_start、都命中
-	// 对话milestone时，会排队一条条弹出，不会互相覆盖）。
+	// 把匹配出的Dialog求值并展平进pendingQueue展示：队列空时立刻显示，否则排到队尾(不打断、不并发)。
+	// 求值必须在这次调用里同步完成，因为context.local指向调用方栈上的Event，返回后即悬垂；
+	// 入队的context会清掉local，详见.md"Dialog展示"一节。
 	// @dialog: 待展示的对话（引用，不持有所有权，本体挂在触发它的Milestone上）
-	// @context: 变量路由上下文，只在这次调用同步使用，见上面的说明
+	// @context: 变量路由上下文，只在这次调用同步使用
 	void ShowDialog(const Dialog* dialog, const ScriptContext& context);
 
-	// SectionSpeaking的ClickCatcher点击后调用（见USectionSpeakingWidget::HandleClicked）：
-	// 关闭当前这一条台词，推进到队列里的下一项。队列为空时no-op。
+	// SectionSpeaking点击/空格后调用：关闭当前台词(带label则广播speaking_finish)，推进到下一项。队列为空时no-op。
 	void AdvanceDialog();
 
-	// SectionButton点击后调用（见USectionButtonWidget::HandleClicked）：index是当前分支
-	// Section::GetOptions()里被选中的那个下标——执行它的GetChanges()（转发给
-	// AForeverFrameworkActor::ApplyChange），并把它的GetDialogs()展平插到队列最前面（选中后
-	// 追加的对话应该紧接着当前分支之后立刻播放，不是排到队尾），然后推进显示。当前队首不是
-	// 分支、或index越界时no-op（防御性写法，正常UI流程不会出现这种调用）。
-	// @index: Section::GetOptions()数组下标
+	// SectionButton点击后调用：执行被选中Option的GetChanges()(转发ApplyChange)，并把它的GetDialogs()
+	// 展平插到队头紧接着播放，然后推进显示。队首不是分支或index越界时no-op。
+	// @index: 入队时过滤condition之后的选项数组下标
 	void SelectDialogOption(int32 index);
 
 private:
@@ -241,8 +207,7 @@ private:
 	static constexpr int32 kMaxGlobalMessageDepth = 8;
 
 	// 队列里的一项：要么是一条已求值好的台词，要么是一个分支（已求值好的选项文本+原始Option
-	// 拷贝，供SelectDialogOption执行）。不用TVariant——这个结构体只在这个.cpp内部私有使用，
-	// 没有反射/蓝图暴露需求，一个bool+两组字段够用，不需要额外引入TVariant的复杂度。
+	// 拷贝，供SelectDialogOption执行）。
 	struct FPendingItem {
 		bool bBranch = false;
 
@@ -259,21 +224,17 @@ private:
 		TArray<FString> optionTexts;
 		TArray<Option> options;
 
-		// 求值/执行这一项时用的上下文——self/system照抄自ShowDialog传入的原始context（指向
-		// 长期存活的Script*/systemScript），local强制清空，见ShowDialog声明处注释。
+		// 求值/执行这一项时用的上下文——self/system取自ShowDialog传入的context，local强制清空。
 		ScriptContext context;
 	};
 
-	// 把dialog->GetDialogs()展平成若干FPendingItem，插入pendingQueue的insertIndex位置——
-	// 求值动作在这里同步完成，见ShowDialog声明处注释。
+	// 把dialog->GetDialogs()展平成若干FPendingItem，插入pendingQueue的insertIndex位置，求值在这里同步完成。
 	// @insertIndex: 0表示插到队头（SelectDialogOption的嵌套对话用），
 	// pendingQueue.Num()表示追加到队尾（ShowDialog用）
 	void EnqueueDialog(const Dialog* dialog, const ScriptContext& context, int32 insertIndex);
 
-	// 显示pendingQueue最前面那一项（不弹出——弹出分别由AdvanceDialog/SelectDialogOption做，
-	// 因为要弹出"刚被处理完的那一项"而不是"即将显示的下一项"，语义上放在调用方更清楚）；
-	// 队列为空则把SectionSpeaking/SectionOption两个Widget都隐藏。找不到
-	// AForeverPlayerController/对应Widget时静默no-op（和其它UI调用点一致的防御写法）。
+	// 显示pendingQueue最前面那一项（不弹出，弹出由AdvanceDialog/SelectDialogOption做）；
+	// 队列为空则隐藏两个Widget并恢复游戏输入。找不到AForeverPlayerController/Widget时静默no-op。
 	void ShowCurrentItem();
 
 	// 后台对话：显示backgroundQueue队首并开始计时；队列为空就隐藏后台对话控件。

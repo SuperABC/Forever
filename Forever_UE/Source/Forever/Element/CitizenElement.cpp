@@ -29,36 +29,23 @@
 #include "map/room.h"
 #include "common/utility.h"
 
-// 地图单位换算——和BuildingElement.cpp的BUILDING_WORLD_SCALE同一个值，这次按本文件既有
-// 约定各自维护一份，不额外抽公共头(这个约定详见BuildingElement.cpp顶部注释)。
+// 地图单位 -> UE单位，和BuildingElement.cpp的BUILDING_WORLD_SCALE同值(各文件各自维护一份)。
 #define CITIZEN_WORLD_SCALE 1000.f
 // 楼层Z起算的"地坪"偏移(UE单位)，和BUILDING_HEIGHT_EPSILON同一个值/同一个理由。
 #define CITIZEN_HEIGHT_EPSILON 10.f
-// 地板slab厚度(UE单位)——照抄BuildingElement.cpp里kSlabThickness=0.02f(地图单位)*
-// BUILDING_WORLD_SCALE。BuildingElement.cpp把Ground slab的中心摆在
-// "floorBaseZ对应的楼层底部+半个slab厚度"，也就是说楼层真正能站人的地板表面(slab顶面)
-// 比floorBaseZ换算出来的"楼层底部"还要再高一个完整slab厚度——citizen的落脚点必须按这个
-// 顶面算，不能直接用floorBaseZ换算的楼层底部，否则会陷进地板slab里(实测发现的bug：陷入
-// 深度正好是这个厚度量级)。
+// 地板slab厚度(UE单位)，对应BuildingElement.cpp里kSlabThickness(0.02地图单位)。Ground slab中心在楼层底部+半个厚度，
+// 站人的表面(slab顶面)比floorBaseZ换算出的楼层底部高一个完整厚度，落脚点必须按顶面算，否则会陷进地板。
 #define CITIZEN_GROUND_SLAB_THICKNESS 20.f
-// 靠近检测碰撞盒尺寸(UE单位，不走地图单位换算——这个盒子纯粹是UE层的装饰性判定，和
-// Core侧map数据无关)：水平半宽~1.2m，垂直半高~0.9m——原先250/100(半宽~2.5m)明显过大，
-// 玩家离市民还有段距离MeetOption就弹出来了，缩小到贴近"对话交互"的实际范围。
+// 靠近检测碰撞盒尺寸(UE单位，纯UE层判定，与Core数据无关)：水平半宽~1.2m，垂直半高~0.9m，贴近"对话交互"的实际范围。
 #define CITIZEN_PROXIMITY_HALF_XY 120.f
 #define CITIZEN_PROXIMITY_HALF_Z 90.f
 
 using namespace std;
 
 namespace {
-	// 把Floor局部坐标(原点在楼体左下角，未旋转)转成世界坐标——和BuildingElement.cpp里
-	// ComputeWorldPosition同一个公式，这次按本文件既有约定各自维护一份。**函数名不能叫
-	// 同一个名字**：UBT的unity build会把这个模块(Forever)一批.cpp文件拼进同一个生成的
-	// Module.Forever.cpp里编译，原本"各自的匿名namespace互不可见"的隔离性在这种情况下
-	// 失效(两份匿名namespace被塞进了同一个真正的翻译单元)，两个同名同签名的函数会直接
-	// 报重定义错误(实测踩过：main分支代码不变、只是Git切了一次分支导致UBT自适应unity
-	// 排除名单重算，BuildingElement.cpp和CitizenElement.cpp第一次被一起打进同一个unity
-	// blob就编译失败了)——本文件的版本改叫`ComputeCitizenWorldPosition`避开这个问题，
-	// 其余每个文件仍然可以有自己的私有helper，只要函数名在整个Forever模块内不重复即可。
+	// 把Floor局部坐标(原点在楼体左下角，未旋转)转成世界坐标，公式同BuildingElement.cpp的ComputeWorldPosition。
+	// 函数名在整个Forever模块内必须唯一：UBT的unity build会把多个.cpp拼进同一个翻译单元，
+	// 匿名namespace里的同名同签名函数会报重定义(实测踩过)。
 	void ComputeCitizenWorldPosition(const Building& building, float localX, float localY,
 		float& outWorldX, float& outWorldY) {
 		float relX = localX - building.GetBodySizeX() * 0.5f + building.GetBodyOffsetX();
@@ -72,21 +59,15 @@ namespace {
 }
 
 ACitizenElement::ACitizenElement() {
-	// bCanEverTick=true+默认关闭Tick(SetActorTickEnabled(false))：绝大多数citizen静止
-	// 不动，不需要每帧开销；只有WalkTo()正在带它走路的这段时间才打开Tick，走完立刻关掉，
-	// 见WalkTo/Tick。
+	// 默认关闭Tick：绝大多数citizen静止不动；只有被玩家占有时才打开(见PossessedBy)。
 	PrimaryActorTick.bCanEverTick = true;
 	SetActorTickEnabled(false);
 
-	// mesh/anim/摄像机/移动参数/Enhanced Input绑定这些全部由基类AForeverCharacter的构造
-	// 函数负责（同一份占位mesh，见ForeverCharacter.cpp），这里不用重复设置。这次没有真正的
-	// AI移动逻辑——显式禁用移动模式，避免CharacterMovementComponent自己的重力/地面检测把
-	// citizen从Init()摆好的位置上挪走，只有被玩家占有、或者被WalkTo带着走路时才切换成
-	// MOVE_Walking，见PossessedBy/WalkTo。
+	// mesh/anim/摄像机/移动/输入全部由基类AForeverCharacter负责。默认禁用移动模式，避免重力/地面检测把Init()摆好的位置挪走；
+	// 被玩家占有时切MOVE_Walking，被自己的ACitizenController带着走路时由Controller切换。
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
 
-	// 走路期间Pawn::Controller是自己的ACitizenController（非空），按引擎默认就会跑PerformMovement；
-	// 这个开关保留是因为玩家占有/Controller被摘走的短暂空窗期里，已有的物理移动不应被卡住。
+	// 玩家占有/Controller被摘走的短暂空窗期里，已有的物理移动不应被卡住。
 	GetCharacterMovement()->bRunPhysicsWithNoController = true;
 }
 
@@ -98,16 +79,10 @@ void ACitizenElement::PossessedBy(AController* NewController) {
 
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 
-	// 构造函数里默认关掉了Tick(见上，绝大多数citizen静止不需要每帧开销)，但被玩家占有
-	// 之后，AForeverCharacter::Tick()要靠每帧跑才能做瞄准摄像机的平滑插值(cameraBoom
-	// SocketOffset/TargetArmLength)——必须显式重新打开，否则右键瞄准的输入事件正常触发
-	// (StartAim/StopAim能执行、bIsAiming能翻转)，但摄像机纹丝不动，因为Tick()整个没被
-	// 引擎调用。见UnPossessed里对应的关闭。
+		// 被玩家占有后，AForeverCharacter::Tick()要每帧跑才能做瞄准摄像机的平滑插值，必须重新打开(UnPossessed里关回)。
 	SetActorTickEnabled(true);
 
-	// 被占有期间直接禁掉自己的proximityBox——这个box本来就是"检测玩家有没有靠近我"，
-	// 自己正好就是玩家的时候，box和自己的capsule必然贴在一起常驻重叠，会不停产生自己的
-	// Overlap事件。
+	// 被占有期间禁掉自己的proximityBox：自己就是玩家时box和自己的capsule必然常驻重叠，会不停产生自己的Overlap事件。
 	if (proximityBox) proximityBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
@@ -209,17 +184,15 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 }
 
 void ACitizenElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
-	// Controller随Actor一起销毁，正在执行的指令/路径一并消失（ClearCommands里测试导航会收尾）。
+	// Controller随Actor一起销毁，正在执行的指令/路径一并消失。
 	if (aiController) {
 		aiController->ClearCommands();
 		if (GetController() == aiController) aiController->UnPossess();
 		aiController->Destroy();
 		aiController = nullptr;
 	}
-	// 不管是流式销毁还是被引擎销毁（掉出世界等），都要把自己从framework的activeInstances摘掉：
-	// 那个TMap的Citizen*键没法UPROPERTY，不会被GC置空，Actor被GC后留下悬空指针会让下一次轮询崩溃。
-	// 只处理真正的Destroy()。退出游戏/切关卡/PIE结束时Core的Populace、脚本可能已经先被释放了，
-	// citizen指针已悬空，这时碰它们会崩（Alt+F4退出崩溃就是这个）；反正整个组件也要一起销毁了。
+	// 不管流式销毁还是被引擎销毁，都要把自己从framework的activeInstances摘掉(TMap的Citizen*键不会被GC置空，悬空指针会让下一次轮询崩溃)。
+	// 只处理真正的Destroy()：退出游戏/切关卡/PIE结束时Core的Populace、脚本可能已先释放，citizen指针已悬空，碰它们会崩。
 	if (citizen && EndPlayReason == EEndPlayReason::Destroyed) {
 		if (UForeverPopulaceFrameworkComponent* owner = framework.Get()) owner->HandleElementEndPlay(citizen, this);
 	}
@@ -228,16 +201,12 @@ void ACitizenElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 }
 
 bool ACitizenElement::ComputeRoomLandingSpot(Room* room, float& outWorldX, float& outWorldY, float& outWorldZ) {
-	// building必须从room->GetParentBuilding()反查，不能用citizen->GetBuilding()——后者是
-	// "家"所在的building，进入society域之后room可能是别的building(比如工作单位)的room，
-	// 见ForeverPopulaceFrameworkComponent.cpp里ComputeLogicalPosition同一处修复的说明。
+	// building必须从room->GetParentBuilding()反查，不能用citizen->GetBuilding()(那是"家"，换房间后不一定同一栋楼)。
 	Building* building = room ? room->GetParentBuilding() : nullptr;
 	if (!room || !building) return false;
 
-	// 房间中心+随机偏移(老工程原公式，抖动范围±0.2地图单位)，Z用
-	// Building::GetFloorBaseZ(room->GetLayer())——比老工程"layer*楼层固定高度"的粗糙
-	// 算法更准，这栋楼各层高度本来就不均匀。actor location(capsule中心)要比楼板高一个
-	// capsule半高，脚底才会正好落在楼板上。
+	// 房间中心+随机偏移(抖动±0.2地图单位)，Z用Building::GetFloorBaseZ(room->GetLayer())；
+	// actor location是capsule中心，要比楼板高一个capsule半高，脚底才落在楼板上。
 	ComputeCitizenWorldPosition(*building, room->GetPosX(), room->GetPosY(), outWorldX, outWorldY);
 	outWorldX += (GetRandom(11) / 10.f - 0.5f) * 0.4f * CITIZEN_WORLD_SCALE;
 	outWorldY += (GetRandom(11) / 10.f - 0.5f) * 0.4f * CITIZEN_WORLD_SCALE;
@@ -263,8 +232,7 @@ void ACitizenElement::TeleportToRoom(Room* destination) {
 
 void ACitizenElement::BuildProximityBox() {
 	if (!citizen || proximityBox) return;
-	// 没有Scheduler脚本、也没有任何选项(主线脚本可能给他add_option)就不挂弹选项的触发盒；之后选项出现时
-	// RefreshOptions会补建。
+	// 没有Scheduler脚本、也没有任何选项就不挂触发盒；之后选项出现时RefreshOptions会补建。
 	if ((!citizen->GetScheduler() || !citizen->GetScheduler()->GetScript()) && citizen->GetOptions().empty()) return;
 
 	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
@@ -275,10 +243,7 @@ void ACitizenElement::BuildProximityBox() {
 	box->OnComponentEndOverlap.AddDynamic(this, &ACitizenElement::OnOverlapEnd);
 	box->RegisterComponent();
 
-	// 姓名和选项快照在这里烘焙好，Overlap回调绝不解引用citizen——和ABuildingElement同一套
-	// 安全原则。这个时间点
-	// game_start广播早已跑完（见ForeverStoryFrameworkComponent::BroadcastGameStart对每个
-	// 市民Scheduler Script的广播），citizen->GetOptions()已经是稳定内容。
+	// 姓名和选项快照在这里烘焙，Overlap回调绝不解引用citizen；此时game_start广播已跑完，选项已稳定。
 	citizenNameOnly = UTF8_TO_TCHAR(citizen->GetName().c_str());
 
 	cachedOptions.Reset();
@@ -292,15 +257,8 @@ void ACitizenElement::BuildProximityBox() {
 void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	// OtherActor == this：这个citizen自己正好就是当前被占有的pawn，proximityBox和自己的
-	// capsule天然重叠(半径250 vs capsule半径42，box完全包住capsule)，这次一定会触发一次
-	// "自己进自己的box"——必须排除，否则会给自己弹出自己的对话选项。
-	//
-	// 还必须要求OtherActor是AForeverCharacter(人物)——不加这条，开车靠近市民也会触发(玩家
-	// 当前pawn是AVehicleElement，依然满足OtherActor==pawn)，实测反馈"开车靠近另一辆车/靠近
-	// 市民都弹出了不该出现的选项"。ACitizenElement本身也继承自AForeverCharacter，只要是
-	// 玩家当前实际操控的那个人形pawn(可能是玩家自己的角色，也可能是被ChangeControlChange
-	// 换过去的某个市民)，这条Cast都会成立，不影响正常的人物靠近市民场景。
+	// 必须排除OtherActor==this(自己被占有时box与自己的capsule天然重叠)，并要求OtherActor是AForeverCharacter(人物)：
+	// 否则开车靠近市民也会弹选项。
 	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
 
 	// 把这个市民当前的对话选项(cachedOptions快照)推给MeetOption UI——不解引用citizen，
@@ -318,7 +276,7 @@ void ACitizenElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, A
 void ACitizenElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	// 和OnOverlapBegin同一条过滤，见那边的注释。
+	// 同OnOverlapBegin的过滤。
 	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
 
 	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
@@ -335,7 +293,7 @@ void ACitizenElement::RefreshOptions() {
 		cachedOptions.Add(UTF8_TO_TCHAR(option.c_str()));
 	}
 	if (!proximityBox) {
-		BuildProximityBox(); // 原来没有脚本/选项没建盒，现在有选项了
+		BuildProximityBox(); // 之前没有脚本/选项没建盒，现在有选项了
 		return;
 	}
 	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {

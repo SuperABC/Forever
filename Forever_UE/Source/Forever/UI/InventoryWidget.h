@@ -14,27 +14,8 @@ class Asset;
 class Player;
 class Room;
 
-// 背包UI：逻辑全部写在C++基类里，蓝图(WBP_Inventory)只做纯布局。物品的移动全部靠拖拽，
-// 规则和实际搬运见InventoryTransfer.h；这里只负责显示和把鼠标事件翻译成FInvSource/FInvDest。
-//
-// 六类区域：
-// - 双肩(LeftShoulderButton/RightShoulderButton)、双手(LeftHandButton/RightHandButton)、
-//   后背(BackPackButton)：5个槽位按钮，既是拖拽的源也是目标。按钮文字显示槽位里的物品；
-//   点击槽位(不拖动)=让容器列表显示这个槽位里容器的内容。
-// - 容器列表(BodyList/BodyLabel)：显示选中槽位里容器的内容，双击里面的容器行进入下一层，
-//   列表最前面的".."行返回上一级。
-// - 房间列表(RoomList/RoomLabel)：当前房间里的物品(同样可以双击进入容器)；不在房间时整块隐藏。
-// - 附近列表(NearbyList/NearbyLabel，BindWidgetOptional)：Player::worldAssets里玩家周围
-//   kNearbyRadiusCm范围内的物品(投掷出去的、在房间外丢下的)，由
-//   UForeverAssetFrameworkComponent::CollectNearby用物理重叠查询收集，只在打开面板和每次
-//   操作之后收集，不每帧收集。
-//
-// 拖拽：按下并拖动一行/一个有物品的槽位开始，拖拽过程中只有一个跟着鼠标的小框(物品名+数量，
-// 不按Ctrl=1个，按住Ctrl=整个堆叠)，松手之前不做任何判断和移动；松手后在NativeOnDrop里按
-// 鼠标位置确定目标区域，交给InventoryTransfer::Transfer校验并移动。
-// 唯一保留的按钮是UseButton(作用于选中的容器列表行，没有则作用于选中槽位里的物品)。
-// 武器的"激活/卸下"完全由数字键1/2驱动(AForeverCharacter::ActivateShoulderWeapon)，这个
-// Widget不需要知道武器系统的任何状态。
+// 背包UI：逻辑在C++基类里，WBP_Inventory只做布局。物品移动全靠拖拽，规则见InventoryTransfer.h，
+// 区域划分和交互见InventoryWidget.md。武器的激活/卸下由数字键驱动(AForeverCharacter::ActivateShoulderWeapon)，本Widget不管。
 UCLASS()
 class FOREVER_API UInventoryWidget : public UUserWidget
 {

@@ -27,16 +27,17 @@
 只有打中`ACitizenElement`才算"命中":`Cast<ACitizenElement>(hit.GetActor())`失败(打墙/打别的/未命中)在伤害判定上完全等价,直接返回,不计算`ComputeDamage()`。命中也不往屏幕上打印。
 
 ### 命中判定用摄像机射线
-`LineTraceSingleByChannel`的`start`始终是摄像机位置(保证"看哪打哪")。不画子弹轨迹线(原来的`DrawDebugLine`调试线已删除)，目前没有`muzzleFlashEffectPath`/`impactEffectPath`对应的真实VFX资产。
+`LineTraceSingleByChannel`的`start`始终是摄像机位置(保证"看哪打哪")。`ENABLE_DRAW_DEBUG`下会从枪口(`UForeverWeaponVisualComponent::GetActiveMuzzleWorldLocation`)画一条红色`DrawDebugLine`到命中点，仅用于检查弹道视觉，不参与命中判定；目前没有枪口火光/命中特效的真实VFX资产。
 命中citizen时在`hit.ImpactPoint`额外生成一个`AForeverExplosionEffect`(程序化爆炸,纯视觉,见`ForeverExplosionEffect.md`);打墙不触发。
 
 ### 武器模型和摆放：交给ForeverWeaponVisualComponent
-这个组件不再生成/挂载武器模型(原来的`SpawnWeaponMesh`/`DestroyWeaponMesh`/`weaponMesh`已删除)：模型的生成、背在背后、瞄准时举到枪口位置都在`UForeverWeaponVisualComponent`，见`ForeverWeaponVisualComponent.md`。`WeaponMod::attachOffsetX/Y/Z`现在的含义是"瞄准时枪口摆放的位置"(角色本地，X前/Y右/Z上，cm)，也就是原来弹道视觉起点那个"右手靠前"。开火判定仍然只读摄像机，不受模型影响。
+这个组件不生成/挂载武器模型：模型的生成、背在背后、瞄准时举到枪口位置都在`UForeverWeaponVisualComponent`，见`ForeverWeaponVisualComponent.md`。`WeaponMod::attachOffsetX/Y/Z`的含义是"瞄准时枪口摆放的位置"(角色本地，X前/Y右/Z上，cm)。开火判定仍然只读摄像机，不受模型影响。
+
 ### 武器装备:肩膀Asset与"活的"WeaponMod副本分开维护
 `EquipWeapon(weaponId)`按`WeaponFactory`注册的id构造一份`Weapon`(Core层wrapper,`Source/Core/player/weapon.h`),找不到该id或未在`config.json`的`weapon_mods`数组启用时静默保留当前武器不变。`ClearWeapon()`销毁mesh+`Weapon`实例但不装备新的,供`AForeverCharacter::ActivateShoulderWeapon()`在"切到的肩膀是空的"时调用。`HasWeapon()`供`AForeverCharacter::StartAim()`判断能不能瞄准。这一层只负责"手上激活的是哪把武器及其开火/弹药状态",肩膀槽位上的Asset本体由`AForeverCharacter`/`Player`管理,见`ForeverCharacter.md`。
 
-### 死亡处理:`Citizen::IsDead()`单向,不会复活
-`Citizen`/`Player`(Core)有`health`/`maxHealth`+`TakeDamage`/`Heal`/`IsDead()`,目前没有死亡后果系统(复活/game over)。`UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen*)`负责`Destroy()`掉对应`ACitizenElement`(如果存在)并从`activeInstances`摘除;`TickComponent`的流式生成循环、`FindOrSpawnCitizenByName`都会跳过`IsDead()`的citizen。`Player::TakeDamage`目前没有任何调用方,为将来"citizen/警察向玩家开火"预留。
+### 死亡处理
+`Citizen`/`Player`(Core)有`health`/`maxHealth`+`TakeDamage`/`Heal`/`IsDead()`;`IsDead()`由独立字段`isDead`决定,`npc_revive`可以复活,见`Core/populace/citizen.md`(测试:`Resource/Story/schedule_empty.script`里`self_decease`创建`mode:"real"`的4秒计时器,`self_revive`在`time_up`时复活并teleport回家)。目前没有玩家死亡后果系统(game over)。`UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen*)`负责`Destroy()`掉对应`ACitizenElement`(如果存在)并从`activeInstances`摘除;`TickComponent`的流式生成循环、`FindOrSpawnCitizenByName`都会跳过`IsDead()`的citizen。`Player::TakeDamage`目前没有任何调用方,为将来"citizen/警察向玩家开火"预留。
 
 ### 瞄准:复用现有cameraBoom/followCamera插值
 实现在`AForeverCharacter`,不在本组件里。不新建第三个`UCameraComponent`,直接在`cameraBoom`(`USpringArmComponent`)上插值`SocketOffset`/`TargetArmLength`。子弹从瞄准相机位置发出不需要改本组件代码:`Fire()`本来就读`character->GetFollowCamera()`的实时位置做开火起点,`followCamera`本身没动,动的是父级`cameraBoom`,`GetComponentLocation()`自动取到瞄准后的新位置。完整设计见`ForeverCharacter.md`"瞄准"一节。准心单独放在`AForeverHUD`类(见`ForeverHUD.md`),瞄准中才画。
@@ -76,5 +77,3 @@
 - 准心是固定尺寸的原生"+",未换成贴图资产、未跟随`baseSpread`动态张开。随机散射机制在(`baseSpread`半角圆锥)，Basic里手枪/步枪的`baseSpread`目前都设成0(没有散射)。
 - 武器模型的朝向/枪口位置/背枪位置都是大概值，在`UForeverWeaponVisualComponent`的属性里调，见该文档。
 
-## 死亡不再是单向状态
-`Citizen::IsDead()`现在由独立字段`isDead`决定，`npc_revive`可以复活，见`Core/populace/citizen.md`。测试：`Resource/Story/schedule_empty.script`里`self_decease`创建`mode:"real"`的4秒计时器，`self_revive`在`time_up`时复活并teleport回家。

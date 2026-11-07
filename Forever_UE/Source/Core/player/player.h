@@ -14,14 +14,9 @@
 // 注意：这是"物件/道具/手机"domain（Asset/App/Puzzle/Weapon四个Mod扩展点）的Player类，
 // 不是UE的AForeverPlayerController，两者是完全不同的东西。
 //
-// 目前承载全局时钟（Time*+Init/Tick/GetTime/SetTime/CrossDay）、生命值、资产系统
-// （leftHand/rightHand/backPack/leftShoulder/rightShoulder五槽位+不动产/载具表+路径
-// 寻址，见下方"资产系统"一节和player.md）。手机(Phone)、存款等字段/方法尚未迁移，见
-// player.md。
+// 承载全局时钟、天气、生命值、资产系统(五槽位+不动产/载具表+房外物品+路径寻址)，见player.md。
 
 class Change;
-struct ScriptContext;
-
 class Player {
 	// 存档：PlayerSaveCodec直接读写私有字段(player_save.md)。
 	friend class PlayerSaveCodec;
@@ -39,12 +34,12 @@ public:
 	// @delta: 本帧时长（秒）
 	void Tick(float delta);
 
-	// 和其余六个域同一个约定：返回这个Change是不是本域认识的类型，由AForeverFrameworkActor::ApplyChange
-	// 汇总。目前还不认识任何Change——玩家相关的(给物品/受伤/改时间/银行收支……)补的时候放在这里。
+	// 和其余域同一个约定：返回这个Change是不是本域认识的类型。目前认识change_weather和
+	// 玩家身上/地上资产的add_option/remove_option。
 	bool ApplyChange(const Change* change, const ScriptContext& context);
 
-	// 覆盖time_flow_ratio——由AForeverFrameworkActor::EnsurePlayerGenerated()读取主线
-	// 剧情.script的global_settings.time_flow_ratio字段后调用，没有声明则保持默认值2.0。
+	// 覆盖time_flow_ratio——EnsurePlayerGenerated()读主线脚本global_settings后调用，
+	// 运行时也可由global_setting Change调用；没有声明则保持默认值10.0。
 	void SetTimeFlowRatio(double ratio);
 
 	// 获取游戏时钟

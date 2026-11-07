@@ -13,23 +13,8 @@ class UBoxComponent;
 class UPrimitiveComponent;
 struct FHitResult;
 
-// 自动门：门扇+(可选)门框+触发盒+开关动画，挂在"所属对象的渲染Actor"身上(建筑门/房间门
-// 挂ABuildingElement，园区门挂UForeverZoneFrameworkComponent的owner)。所有数据来自构造
-// 时绑定的Core端Door*(几何/外观/门禁)，这个组件本身不持有任何跨帧状态之外的游戏逻辑——
-// 门禁判定本身是Door::CanPass()，这里只负责"谁进了触发盒→该不该开→动画插值"。
-//
-// 实现细节见DoorComponent.md，这里只记三条读代码前必须知道的事：
-// ①每扇门扇是一个独立的USceneComponent"铰链/滑轨枢轴"+挂在它下面的UStaticMeshComponent
-// 可视网格——动画只改枢轴的相对Transform(Swing转Yaw，Slide平移)，可视网格相对枢轴的
-// offset在Init()时就定好、动画过程中不变，这样枢轴的旋转/平移中心和网格资产自身的pivot
-// 约定(资产原点在哪)完全解耦，哪怕用没有调整过pivot的占位Cube也能正确摆位(自动按包围盒
-// 算offset，见door.md"实际摆位")。
-// ②`style`（Slide/Swing）和`leaves`（1/2）决定枢轴的初始布局，`Door::IsFlippedSide()`只在
-// `leaves==1`时影响"滑动方向/铰链朝哪边"，双扇恒不读这个值。Swing门往墙哪一侧开不是固定的：
-// 每次从全关开始打开时，按触发者在门哪一侧决定往另一侧开(ChooseSwingSide)。
-// ③开门的触发判定是"触发盒里有没有CanPass()通过的passer"，不是"有没有任何Actor"——门禁
-// 拒绝时门不开，但如果这扇门有Script(可交互)，MeetOption选项照常弹出(拒绝通行和拒绝对话
-// 是两件独立的事)。
+// 自动门：门扇+(可选)门框+触发盒+开关动画，绑定Core端Door*，挂在所属对象的渲染Actor上(建筑门/房间门挂ABuildingElement，园区门挂
+// UForeverZoneFrameworkComponent的owner)。门禁判定是Door::CanPass()，这里只负责"谁进触发盒→该不该开→动画插值"，实现要点见DoorComponent.md。
 UCLASS()
 class FOREVER_API UForeverDoorComponent : public USceneComponent
 {
@@ -38,9 +23,7 @@ class FOREVER_API UForeverDoorComponent : public USceneComponent
 public:
 	UForeverDoorComponent();
 
-	// 由ABuildingElement::BuildFloorSection/UForeverZoneFrameworkComponent调用一次：绑定
-	// 对应哪个Core端Door*，按Door的世界坐标/朝向/外观生成门扇/门框/触发盒。inOwnerName只用
-	// 于诊断日志(不参与任何判定逻辑)。
+	// 绑定Core端Door*，按Door的世界坐标/朝向/外观生成门扇/门框/触发盒。
 	void Init(Door* inDoor);
 	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
 	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
@@ -55,18 +38,12 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
 
-	// PIE停止/退出游戏时置空door——和ACitizenElement/AVehicleElement同一套安全原则，这个
-	// 组件的Tick/Overlap回调都要先判空。
+	// 置空door(Tick/Overlap回调都要先判空)。
 	void ClearDoor() { door = nullptr; }
 
 private:
-	// 门扇的"枢轴"结构——Swing绕Z轴转(铰链)，Slide沿本地X轴平移(滑轨)，具体数值在Init()
-	// 算好存成pivotClosed/pivotOpen两个目标相对Transform，Tick()只在两者间按SmoothStep插值，
-	// 不每帧重新计算。
-	// 纯C++结构体，不是USTRUCT——不需要反射/序列化，GC安全性由pivot/mesh各自的Attach
-	// 层级保证(SetupAttachment挂到this/pivot之后，USceneComponent自己的AttachChildren这个
-	// UPROPERTY数组就是真正的GC根，这里存一份指针只是方便按leafIndex访问，不需要再单独
-	// UPROPERTY标记一次)。
+	// 门扇的"枢轴"结构——Swing绕Z轴转(铰链)，Slide沿本地X轴平移(滑轨)；pivotClosed/pivotOpen两个目标相对Transform在Init()算好，
+	// Tick()只在两者间SmoothStep插值。不是USTRUCT：GC由SetupAttachment的Attach层级保证(AttachChildren是真正的GC根)。
 	struct FLeaf {
 		TObjectPtr<USceneComponent> pivot;
 		TObjectPtr<UStaticMeshComponent> mesh;
@@ -135,8 +112,7 @@ private:
 	bool bWantsOpen = false;
 	float openProgress = 0.f; // 0=全关，1=全开，Tick()按openSeconds插值趋近bWantsOpen对应的目标
 
-	// 这扇门的交互名(烘焙好的FString，Overlap回调只读这份快照，不解引用door)——和
-	// AVehicleElement::vehicleNameOnly同一套安全原则。
+	// 这扇门的交互名(烘焙快照，Overlap回调只读这份，不解引用door)。
 	FString interactNameOnly;
 	TArray<FString> cachedOptions;
 };

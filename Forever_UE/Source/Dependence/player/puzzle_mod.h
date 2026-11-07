@@ -8,10 +8,7 @@
 #include <string>
 
 
-// PuzzleMod：小游戏Mod基类。Init对应"小游戏进入时初始化一次"，Loop对应"每帧更新一次"。
-// 画布(Canvas)的创建和定尺寸交给UE侧宿主(UPuzzleWidget)来做，Init只接收一个已经Init()
-// 好尺寸的Canvas*，不用再单独传width/height（canvas->GetWidth()/GetHeight()已经够用），
-// 见Core/player/puzzle.md。
+// 设计见puzzle_mod.md。Canvas由UE侧宿主创建并定好尺寸,Init只接收已就绪的Canvas*。
 class PuzzleMod {
 public:
 	PuzzleMod() = default;
@@ -20,46 +17,21 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	/*
-	* 剧情脚本(start_puzzle的param字段)传给这一局小游戏的动态启动参数，在Init之前调用一次，
-	* 默认忽略。每次启动都可以不同，用来让剧情控制小游戏的表现。
-	* 注意：这跟config.json里puzzle_mods的静态args不是一回事，那个是创建mod时传给创建函数的，
-	* 整个游戏期间固定。动态参数不进存档(谜题进行中本就不能存档)。
-	* @param: 参数字符串，格式由各小游戏自己约定，空串表示脚本没传
-	*/
+	// 剧情脚本start_puzzle的param动态启动参数,Init之前调一次,默认忽略;不同于config.json的静态args,不进存档,见puzzle_mod.md。
 	virtual void SetParam(const std::string& param) {}
 
-	/*
-	* 小游戏开始时调用一次；canvas已经由宿主Init()好尺寸，这里只需要按
-	* canvas->GetWidth()/GetHeight()布局初始状态（比如俄罗斯方块按画布尺寸算好每个格子
-	* 多大、棋盘摆在画布什么位置）。
-	* @canvas: 画布，不持有所有权
-	* @post: 向Core发起查询的句柄
-	*/
+	// 小游戏开始时调用一次;canvas已定好尺寸,按GetWidth()/GetHeight()布局初始状态,不持有所有权。
 	virtual void Init(Canvas* canvas, PostHandle* post) = 0;
 
-	/*
-	* 每帧调用一次：读取canvas里宿主注入的键鼠事件、推进小游戏自身逻辑、把这一帧的画面画到
-	* canvas上。
-	* @canvas: 画布，不持有所有权
-	* @ms: 距上一帧的毫秒数，用于推进重力计时器等
-	* @post: 向Core发起查询的句柄
-	* @return: nullptr表示继续；非空表示这一局小游戏结束，指针就是结果(root必须是object)，
-	*   由小游戏实例自己持有(成员变量)，到实例销毁前一直有效，Core只读不改不释放。Core会把它
-	*   展平写进puzzle_result事件，见PuzzleResultEvent::SetFromJson
-	*/
+	// 每帧调用:读取canvas里宿主注入的键鼠事件、推进逻辑、画到canvas上;ms为距上一帧毫秒数。
+	// 返回nullptr继续;非空=这局结束,指针是结果(root必须是object),由实例自己持有,Core只读不改不释放。
 	virtual JsonValue* Loop(Canvas* canvas, int ms, PostHandle* post) = 0;
 
-	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
-	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
-	// 这里只放mod自己的私有数据。
+	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}
-	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
-	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
 	virtual int GetStateVersion() const { return 0; }
-	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
-	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	// GetName用的static count,存档保存/读档恢复;没有计数器的类保持默认。
 	virtual int GetInstanceCounter() const { return -1; }
 	virtual void SetInstanceCounter(int) {}
 };

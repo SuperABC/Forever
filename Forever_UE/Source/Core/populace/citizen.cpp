@@ -166,12 +166,10 @@ void Citizen::AddChild(Citizen* child) { if (child) children.push_back(child); }
 
 const Personality& Citizen::GetPersonality() const { return personality; }
 void Citizen::SetPersonalityValue(PERSONALITY_TYPE type, float value) { personality[type] = value; }
-void Citizen::AdjustPersonalityValue(PERSONALITY_TYPE type, float delta) { personality[type] = clamp(personality[type] + delta, 0.0f, 1.0f); }
+void Citizen::AdjustPersonalityValue(PERSONALITY_TYPE type, float delta) { personality[type] = clamp(personality[type] + delta, -1.0f, 1.0f); }
 
 void Citizen::AddAcquaintance(const string& name, RELATIONSHIP_CATEGORY category) {
-	// insert_or_assign而不是acquaintances[name]=...——Relation不再有无参默认构造，
-	// operator[]在key不存在时会先默认构造一个值再赋值，编译不过；insert_or_assign直接
-	// 就地构造/覆盖，不需要Relation可默认构造。
+	// 不能用operator[]：Relation没有无参默认构造。
 	acquaintances.insert_or_assign(name, Relation(category));
 }
 
@@ -337,6 +335,24 @@ void Citizen::EndWalk() {
 	walkPath.clear();
 	walkDistances.clear();
 }
+
+float Citizen::GetWalkSpeed() const { return walkSpeed; }
+
+void Citizen::RebaseWalk(double nowSeconds) {
+	if (!IsWalking()) return;
+	std::vector<WalkPoint> remaining;
+	GetRemainingWalk(nowSeconds, remaining);
+	Room* destination = walkDestination;
+	float speed = walkSpeed;
+	BeginWalk(remaining, destination, nowSeconds, speed);
+}
+
+void Citizen::RestartWalk(double nowSeconds) {
+	if (IsWalking()) walkStartTime = nowSeconds;
+}
+
+bool Citizen::WasSpawned() const { return wasSpawned; }
+void Citizen::SetWasSpawned(bool value) { wasSpawned = value; }
 
 Job* Citizen::GetJob() const { return job; }
 void Citizen::SetJob(Job* value) { job = value; }

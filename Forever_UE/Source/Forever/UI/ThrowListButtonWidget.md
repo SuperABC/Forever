@@ -5,7 +5,7 @@
 
 ## 关键设计
 - 逻辑在C++，外观在Blueprint子类`WBP_ThrowListButton`：需要名字对得上的`Button`(Button)和`Label`(TextBlock)。
-- 当前激活项的外观由C++处理，不需要蓝图写逻辑：`Setup`里按是否激活把`Button`的底色设成`activeColor`/`inactiveColor`(`EditDefaultsOnly`，在`WBP_ThrowListButton`的类默认值里调)。曾经用`BlueprintImplementableEvent`让蓝图实现，但`Button`/`Label`是`protected`成员，蓝图图表里拿不到这两个变量，没法写；现在这两个成员也标了`BlueprintReadOnly`。
+- 当前激活项的外观由C++处理，不需要蓝图写逻辑：`Setup`里按是否激活把`Button`的底色设成`activeColor`/`inactiveColor`(`EditDefaultsOnly`，在`WBP_ThrowListButton`的类默认值里调)。不要改回`BlueprintImplementableEvent`让蓝图实现：`Button`/`Label`是`protected`成员，蓝图图表里拿不到。
 - 点击回调用原生`DECLARE_DELEGATE_OneParam`而不是动态委托——只有C++的列表控件绑定它，不用暴露给蓝图，也能直接带`type`参数。
 
 ## 依赖关系

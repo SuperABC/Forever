@@ -15,11 +15,10 @@ Organization::Organization(OrganizationFactory* factory, JobFactory* jobFactory,
 	mod = factory->CreateOrganization(id);
 	if (!mod) return;
 
-	// scriptModName/milestoneNames由mod自己的构造函数决定，Core不替mod做任何选择，
-	// 和Job::Job()同一套机制，见organization_mod.h"Script配置"一节；都空则没有脚本。
+	// scriptModName/milestoneNames由mod决定，都空则没有脚本，和Job同一套机制。
 	script = MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames);
 	if (script) {
-		// 供milestone脚本里$$self.name引用这个Organization的唯一名字，见job.cpp同款注释。
+		// 供milestone脚本里$$self.name引用这个Organization的唯一名字。
 		script->SetValue("name", ValueType(string(mod->GetName())));
 	}
 
@@ -33,10 +32,7 @@ Organization::Organization(OrganizationFactory* factory, JobFactory* jobFactory,
 			mod->DesignJobsForRoom(component->GetType(), component->GetName(),
 				room->GetType(), room->GetName(), room->WorkspaceCapacity());
 			for (const string& jobType : mod->vacancies) {
-				// jobType对应的JobMod如果未启用（没在config.json"job_mods"数组里列出，
-				// 见job_factory.md"启用"一节），Job::GetType()内部mod为空会返回空字符串
-				// ——这种Job永远不会产出任何Change，但仍然会被Society::RecruitCitizens
-				// 正常招进去占用一个citizen名额，直接丢弃不留，不占位。
+				// jobType对应的JobMod未启用时Job::GetType()为空，这种哑岗位会白占citizen名额，丢弃。
 				Job* job = new Job(jobFactory, scriptFactory, jobType, room);
 				if (!job->GetType().empty()) {
 					jobs.push_back(job);

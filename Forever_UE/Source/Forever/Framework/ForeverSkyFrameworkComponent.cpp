@@ -15,7 +15,6 @@
 #include "common/utility.h"
 
 UForeverSkyFrameworkComponent::UForeverSkyFrameworkComponent() {
-	// 不开自己的Tick——由AForeverFrameworkActor::Tick()统一调用UpdateSky，见类头注释。
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
@@ -27,56 +26,31 @@ void UForeverSkyFrameworkComponent::EnsureSkyGenerated() {
 		sunLight = Cast<ADirectionalLight>(UGameplayStatics::GetActorOfClass(world, ADirectionalLight::StaticClass()));
 		if (!sunLight) sunLight = world->SpawnActor<ADirectionalLight>();
 		if (sunLight) {
-			// 原生C++类默认构造的UDirectionalLightComponent，Mobility默认是Static(不是
-			// 编辑器"放置Actor"面板那个默认Movable的蓝图模板)——Static灯光的方向在运行时
-			// 改了不会重新渲染，UpdateSunLight()里的SetActorRotation会执行成功但太阳视觉上
-			// 完全不动，这是实测确认的根因。必须显式设成Movable才能让每帧的旋转真正生效。
+			// 坑：代码Spawn出来的DirectionalLight默认Static，运行时改旋转不会重新渲染(太阳纹丝不动)，必须显式Movable。
 			if (UDirectionalLightComponent* sunComponent = Cast<UDirectionalLightComponent>(sunLight->GetLightComponent())) {
 				sunComponent->SetMobility(EComponentMobility::Movable);
-				// 场景里现在有两个DirectionalLight(这个+下面的ambientLight)，两者
-				// ForwardShadingPriority默认都是0(相等)，会触发引擎警告
-				// "Multiple directional lights are competing to be the single one used
-				// for forward shading, translucent, water or volumetric fog"——这个
-				// 优先级决定"体积雾/半透明/水面"这类前向渲染效果该用哪个方向光照亮，必须
-				// 真正的太阳赢，不能回退到"按亮度二选一"这个不确定的fallback。显式给
-				// sunLight比默认值更高的优先级(ambientLight保持默认0不变，见下)。
+				// 两个DirectionalLight的ForwardShadingPriority默认都是0会触发引擎竞争警告，太阳必须赢，ambientLight保持0。
 				sunComponent->SetForwardShadingPriority(1);
 			}
 		}
 	}
 	if (!ambientLight) {
-		// 没有在关卡里"找现成的"这一步——这是这个项目新加的灯光，不是老工程的既有设置，
-		// 不存在"美术已经手动摆好一份"的可能性，直接Spawn。
+		// 不找关卡里现成的，直接Spawn。
 		ambientLight = world->SpawnActor<ADirectionalLight>();
 		if (ambientLight) {
 			if (UDirectionalLightComponent* ambientComponent =
 				Cast<UDirectionalLightComponent>(ambientLight->GetLightComponent())) {
-				// 和sunLight同一个坑：原生Spawn出来的默认Mobility是Static，这个光源虽然
-				// 不随时间变化，但这个场景的建筑/地形全是运行时程序化生成的，没有走"Build
-				// Lighting"烘焙流程，Static灯光在没烘焙过的几何体上可能根本不生效，必须
-				// 也设成Movable。
+				// 同上的Static坑：场景是运行时生成、没烘焙过光照，Static灯光可能根本不生效。
 				ambientComponent->SetMobility(EComponentMobility::Movable);
-				// 关键：关掉阴影——阴影是"没有光照来源的室内一片漆黑"这个问题的根源(墙体/
-				// 天花板会挡住所有带阴影的光源)，不投射阴影的DirectionalLight会直接穿透
-				// 所有几何体，均匀照到场景里每一个表面，等效于"全图生效的环境光"，这是
-				// UE里做这种效果最直接的办法(没有用SkyLight，因为SkyLight的光照贡献是
-				// 按"这个点能看到多少天空"算的，封闭室内天然接收不到，没法解决这个问题)。
+				// 关键：关阴影，光才会穿透墙体/天花板均匀照到所有表面(SkyLight按可见天空算贡献，封闭室内照不到)。
 				ambientComponent->SetCastShadows(false);
-				// "微弱"——比sunLight正午10万lux的量级低了两个数量级，只是让纯黑的室内
-				// 能看清形状，不会让白天的室外看起来变化(10万lux面前几百lux的叠加几乎
-				// 不可见)，具体数值是占位性质，PIE里看效果不够/太强再调。
-				// 初始值用白天强度，之后UpdateAmbientLight()每帧按时间插值(夜里压低)。
+				// 初始值用白天强度，之后UpdateAmbientLight()每帧按时间插值。
 				ambientComponent->SetIntensity(dayAmbientLux);
 				ambientComponent->SetLightColor(FLinearColor(0.8f, 0.85f, 1.0f)); // 偏冷调中性光
-				// 这个光源不参与大气/云层渲染("谁是太阳"这件事只应该是sunLight一个)，
-				// 显式退出竞争，避免SkyAtmosphere/体积云在两个方向光之间选择困难。
+				// 退出大气/云层的"谁是太阳"竞争，只认sunLight。
 				ambientComponent->SetAtmosphereSunLight(false);
-				// ForwardShadingPriority保持默认值0，比上面sunLight显式设的1低——两者
-				// 不再相等，不会触发"多方向光竞争forward shading"的引擎警告，体积雾/
-				// 半透明/水面这类效果确定性地只认sunLight。
 			}
-			// 朝向随便给一个固定角度即可——反正不投射阴影，均匀照到所有表面，方向只影响
-			// 法线朝向不同的面各自亮度比例这种细微差异，不是关键参数。
+			// 朝向无关紧要(无阴影，只影响不同法线朝向面的亮度比例)。
 			ambientLight->SetActorRotation(FRotator(-45.0f, 0.0f, 0.0f));
 		}
 	}
@@ -99,10 +73,7 @@ void UForeverSkyFrameworkComponent::EnsureSkyGenerated() {
 	if (!heightFog) {
 		heightFog = Cast<AExponentialHeightFog>(UGameplayStatics::GetActorOfClass(world, AExponentialHeightFog::StaticClass()));
 		if (!heightFog) heightFog = world->SpawnActor<AExponentialHeightFog>();
-		// 默认的ExponentialHeightFog只走"雾因子"那条便宜的非体积路径，光照穿过雾气不会有
-		// 真实的体积感(光束/自阴影)。要的是"体积雾"，必须显式打开bEnableVolumetricFog——
-		// 这是一次性开关，不随时间变化，放在EnsureSkyGenerated这里，不用每帧在
-		// UpdateHeightFog里重复设置。
+		// 默认只走便宜的非体积雾，要光束/自阴影的体积感必须显式开bEnableVolumetricFog。
 		if (heightFog) {
 			if (UExponentialHeightFogComponent* fogComponent =
 				heightFog->GetComponentByClass<UExponentialHeightFogComponent>()) {
@@ -118,16 +89,15 @@ void UForeverSkyFrameworkComponent::EnsureSkyGenerated() {
 			postProcessVolume->bUnbound = true;
 			// 优先级比关卡里其它后处理体积高，曝光以这里为准。
 			postProcessVolume->Priority = 100.f;
-			// override开关在编辑器Details面板里是手动勾的，程序Spawn/复用都必须显式打开，否则
-			// UpdatePostProcess()里的赋值不会有任何效果。
+			// override开关程序Spawn/复用都必须显式打开，否则UpdatePostProcess里的赋值无效。
 			FPostProcessSettings& settings = postProcessVolume->Settings;
 			settings.bOverride_AutoExposureMinBrightness = true;
 			settings.bOverride_AutoExposureMaxBrightness = true;
 			settings.bOverride_LocalExposureShadowContrastScale = true;
-				settings.bOverride_LumenSceneLightingUpdateSpeed = true;
-				settings.LumenSceneLightingUpdateSpeed = lumenSceneLightingUpdateSpeed;
-				settings.bOverride_LumenFinalGatherLightingUpdateSpeed = true;
-				settings.LumenFinalGatherLightingUpdateSpeed = lumenFinalGatherUpdateSpeed;
+			settings.bOverride_LumenSceneLightingUpdateSpeed = true;
+			settings.LumenSceneLightingUpdateSpeed = lumenSceneLightingUpdateSpeed;
+			settings.bOverride_LumenFinalGatherLightingUpdateSpeed = true;
+			settings.LumenFinalGatherLightingUpdateSpeed = lumenFinalGatherUpdateSpeed;
 		}
 	}
 }
@@ -146,19 +116,15 @@ void UForeverSkyFrameworkComponent::UpdateSky(const Time& currentTime) {
 }
 
 namespace {
-	// 太阳光强度系数(0~1) = relu(-cos(2π·chronode))，也就是太阳仰角的正弦：太阳的俯仰是
-	// Lerp(90°, -270°, chronode)，6点/18点正好在地平线上，6~18点亮、正午最亮，18点~6点太阳在
-	// 地平线以下时恰好为0，光不会从地下照上来，全程连续。原来用sin(chronode·π)，它在(0,1)里
-	// 恒为正，只有午夜那一刻是0，夜里太阳转到地平线以下仍然有几万lux。
+	// 太阳光强度系数(0~1) = relu(-cos(2π·chronode)) = 太阳仰角的正弦：6/18点在地平线，地平线以下恰好为0。
 	float SunIntensityFactor(float chronode) {
 		return FMath::Max(0.0f, -FMath::Cos(2.0f * PI * chronode));
 	}
 
 	constexpr float kSunMaxIntensity = 100000.0f; // 正午直射光，lux
 
-	// 白天系数t(0=深夜,1=白天)：太阳高度的正弦sinAlt(=SunIntensityFactor去掉relu，夜里为负)在0.03~0.35之间
-	// smoothstep。区间必须在太阳升起(sinAlt=0)之后，否则破晓前曝光和环境光就先亮起来，天亮了太阳还没出现；
-	// 黄昏对称，太阳落山前就基本过渡到夜里。
+	// 白天系数t(0=深夜,1=白天)：太阳高度正弦在0.03~0.35之间smoothstep。区间必须在日出(sinAlt=0)之后，
+	// 否则破晓前曝光/环境光先亮起来；黄昏对称。
 	float DayFactor(float chronode) {
 		const float sinAlt = -FMath::Cos(2.0f * PI * chronode);
 		const float t = FMath::Clamp((sinAlt - 0.03f) / 0.32f, 0.0f, 1.0f);
@@ -175,12 +141,7 @@ void UForeverSkyFrameworkComponent::UpdateSunLight(float chronode) {
 	sunLight->SetActorRotation(FRotator(FMath::Lerp(90.0f, -270.0f, chronode), 0.0f, 0.0f));
 	sunComponent->SetIntensity(SunIntensityFactor(chronode) * kSunMaxIntensity * weatherLightScale);
 
-	// 原来是5段硬切(if/else if边界处颜色直接跳一截)，改成关键帧+分段线性插值，边界处
-	// 颜色连续过渡。关键帧的颜色和大致时间点原样保留原来5段各自的颜色，只是把"整段恒定"
-	// 改成"在关键帧之间线性过渡，关键帧本身是原来那段最具代表性的颜色"——0.3~0.7这段
-	// 正午保留一小段平台(两个相邻关键帧给同一个颜色)，不是整段都在渐变，光照角度变化
-	// 很小的时候颜色也不需要一直变。首尾都是夜间色，0/1在环形时间上是同一个点，首尾
-	// 颜色相同保证跨午夜也连续，不需要额外处理wraparound。
+	// 颜色关键帧分段插值(HSV)；0.3~0.7正午平台，首尾同为夜间色，跨午夜连续。
 	static const TArray<TPair<float, FLinearColor>> colorKeyframes = {
 		{0.00f, FLinearColor(0.5f, 0.5f, 0.8f)},  // 夜间
 		{0.15f, FLinearColor(1.0f, 0.5f, 0.2f)},  // 凌晨/清晨朝霞
@@ -221,10 +182,7 @@ void UForeverSkyFrameworkComponent::UpdateHeightFog(float chronode) {
 	UExponentialHeightFogComponent* fogComponent =
 		heightFog->GetComponentByClass<UExponentialHeightFogComponent>();
 	if (fogComponent) {
-		// 原来的曲线是白天(chronode=0.5附近)最浓、夜间最淡——反了，夜间的雾应该比白天
-		// 更浓。同一个(1-|chronode-0.5|*2)^2形状(1=正午,0=午夜)现在倒过来用：正午权重
-		// 最大时要"减"，午夜权重最大时反而没有额外加项，所以改成从夜间基准值往下减，
-		// 夜间(chronode=0/1)density最大=0.08，正午(chronode=0.5)density最小=0.05。
+		// 夜间雾比白天浓：午夜0.08，正午0.05，中间按(1-|chronode-0.5|*2)^2过渡。
 		float fogDensity = 0.08f - FMath::Pow(1.0f - FMath::Abs(chronode - 0.5f) * 2.0f, 2.0f) * 0.03f;
 		fogComponent->SetFogDensity(fogDensity * weatherFogScale);
 	}
@@ -233,8 +191,6 @@ void UForeverSkyFrameworkComponent::UpdateHeightFog(float chronode) {
 void UForeverSkyFrameworkComponent::UpdatePostProcess(float chronode) {
 	if (!postProcessVolume) return;
 
-	// 夜里Min=nightExposureEV(暗景提亮的下限)，Max不分昼夜(室内灯光等亮处仍可自动压暗)，
-	// 白天Min回到宽范围的自动曝光，黄昏黎明按白天系数t线性过渡。注意单位是EV100(项目开了ExtendDefaultLuminanceRange)。
 	const float t = DayFactor(chronode);
 	FPostProcessSettings& settings = postProcessVolume->Settings;
 	settings.AutoExposureMinBrightness = FMath::Lerp(nightExposureEV, dayExposureMinEV, t);
@@ -246,7 +202,6 @@ void UForeverSkyFrameworkComponent::UpdatePostProcess(float chronode) {
 void UForeverSkyFrameworkComponent::UpdateAmbientLight(float chronode) {
 	if (!ambientLight) return;
 
-	// 没有太阳的夜里，300 lux的常量环境光比真实月光亮三个数量级，是夜晚发亮的主因，按白天系数压下去。
 	if (UDirectionalLightComponent* ambientComponent = Cast<UDirectionalLightComponent>(ambientLight->GetLightComponent())) {
 		// 天气只压一半：阴天的室内/背光处不至于比晴天暗得太多。
 		ambientComponent->SetIntensity(FMath::Lerp(nightAmbientLux, dayAmbientLux, DayFactor(chronode)) * FMath::Lerp(1.f, weatherLightScale, 0.5f));

@@ -73,17 +73,13 @@
 
 AForeverFrameworkActor::AForeverFrameworkActor()
 {
-	PrimaryActorTick.bCanEverTick = true; // 驱动Player::Tick(全局时钟)，见.h的Tick覆写注释
+	PrimaryActorTick.bCanEverTick = true; // 生成阶段驱动 + 全局时钟/各域Tick，见.md"Tick"
 
 	sceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = sceneRoot;
-	// 这个Actor整个生命周期都不会移动(纯粹是"世界生成结果的挂载点")，根组件应该是Static、
-	// 不是引擎默认的Movable——不这么做的话，挂在它下面的每一个子组件(哪怕子组件自己显式设成
-	// Static)都会被引擎按"父级更活跃"的规则强制视为Movable，导致渲染器的动态图元八叉树/
-	// 物理引擎的动态broadphase里堆积海量本该是静态的图元(每栋building的墙体分段、每个
-	// Room/Building/Zone的碰撞盒等等，数量级是成千上万)，且这两套结构对"新增/移除一个动态
-	// 图元"的开销会随着已有动态图元数量增长而变差——这正是"建筑近处LOD每次整层增删都巨卡，
-	// 而且感觉越来越卡"的根因，见ForeverBuildingFrameworkComponent.md"性能"一节。
+	// 根组件必须Static:否则挂在下面的子组件(哪怕自己设成Static)都会被引擎视为Movable，
+	// 成千上万的墙体/碰撞盒堆进动态八叉树和动态broadphase，建筑LOD增删越来越卡，
+	// 见ForeverBuildingFrameworkComponent.md"性能"一节。
 	sceneRoot->SetMobility(EComponentMobility::Static);
 
 	assetFramework = CreateDefaultSubobject<UForeverAssetFrameworkComponent>(TEXT("AssetFramework"));
@@ -103,10 +99,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 
 AForeverFrameworkActor::~AForeverFrameworkActor()
 {
-	// 必须先等所有已经派发到线程池的异步寻路任务彻底跑完，才能delete map/populace——
-	// 那些后台线程手上还攥着map裸指针(算Dijkstra)、算完还要touch citizen/destination
-	// (推进pathResultQueue)，谁先跑完不确定，见
-	// UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding()的注释。
+	// 先等异步寻路任务跑完才能delete map/populace(后台线程还持有它们的裸指针)。
 	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
 	delete player;
 	delete traffic;
@@ -119,13 +112,9 @@ AForeverFrameworkActor::~AForeverFrameworkActor()
 
 void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// 同步释放map/populace/story及新增的society/industry/traffic/player(见头文件EndPlay
-	// 声明处的注释)——不能只靠析构函数兜底，那个时机取决于UObject垃圾回收，不保证在下一次
-	// PIE开始前跑完。这几个对象删除顺序互不影响内存安全(彼此都不持有对方的裸指针)，这里
-	// 按和创建相反的顺序删只是保持直觉。
+	// 同步释放各域(原因见头文件EndPlay声明处)。删除顺序互不影响内存安全，按创建的相反顺序只是保持直觉。
 
-	// 同上，必须先等所有异步寻路任务跑完——不能用"派发一个GameThread任务、等它跑完"的
-	// 方案在这里等，会在EndPlay这个本身跑在GameThread上的调用栈里死锁。
+	// 先等异步寻路任务跑完;不能用"派发GameThread任务再等"的方式，EndPlay本身在GameThread上会死锁。
 	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
 
 	delete player;
@@ -150,8 +139,7 @@ void AForeverFrameworkActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// 在PIE的Output Log里确认Actor+全部9个域组件都正常构造/初始化。
-	UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor initialized with 9 framework components: Asset/Building/Populace/Roadnet/Room/Story/Terrain/Traffic/Zone"));
+	UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor initialized with its framework components"));
 
 	// 先让玩家Controller初始化好(创建Widget、重置输入模式)：打包版里本BeginPlay先于Controller的
 	// BeginPlay，而game_start广播里的start_puzzle/对话要用这些Widget，见
@@ -166,16 +154,7 @@ void AForeverFrameworkActor::BeginPlay()
 			*load->path);
 	}
 
-	// 世界生成不再在BeginPlay里一口气同步跑完，而是拆成一串"阶段"，由Tick每帧执行一个：整段同步
-	// 生成会卡死主线程几十秒，开局黑屏上的进度条(UFadeWidget)在两步之间根本没机会重绘。
-	// 阶段的顺序就是依赖顺序(显式列出，每个Ensure*Generated()自己只保证自己那个域，不会再调别的
-	// Ensure*Generated())：EnsurePopulaceGenerated要用到map(Map::ComputeAccommodationTarget/Checkin)，
-	// EnsurePlayerGenerated要用到populace->GetCurrentYear()，载具必须在Story之后(game_start要先把
-	// "上车"选项加进vehicle->GetOptions()，生成AVehicleElement时BuildProximityBox()烘焙的选项快照才
-	// 不会是空的，见EnsureTrafficGenerated()声明处)。每个阶段单独try/catch：Core层遇到"生成世界过程中
-	// 出现的致命错误"(mod_dependences缺失依赖、Name::GenerateName重试耗尽仍撞上name_reserve占位名、
-	// chinese取名器未启用等，见populace.md/name.md/script.md相关章节)统一THROW_EXCEPTION，这里是
-	// 唯一需要真正处理这类异常的地方(打日志+退出游戏)，中间的每一层都不需要感知这个异常。
+	// 世界生成拆成一串阶段由Tick每帧执行一个，阶段顺序即依赖顺序，见.md"分阶段生成"。
 	BuildGenerationStages();
 }
 
@@ -190,14 +169,9 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	};
 
 	add(TEXT("加载模组"), [this]() {
-		// 每次真正开局都要按当前已经读进内存的config内容刷新Registry：补加载config里新出现的mod
-		// dll(已加载的dll不动，不卸载)，再刷新启用表/参数表——不同局可能用不同的config.json(启用
-		// 的mod和参数都可能不同)，退出游戏回菜单后新增dll路径再开始也要能用，见
-		// Source/Core/common/registry.md。放在这里(而不是某一个具体域的生成步骤里)是因为
-		// 它不属于任何单个域，后面的步骤都会用到某个Factory，理应在它们之前统一刷新一次。
+		// 每局开始按当前config补加载新mod dll并刷新启用表/参数表，见Source/Core/common/registry.md。
 		Registry::Get().RefreshMods();
-		// 校验主线剧情.script声明的mod_dependences，不满足就直接拒绝生成世界，不浪费时间跑完
-		// 地图/市民生成再失败。
+		// 依赖不满足就尽早拒绝生成世界。
 		ValidateMainStoryDependencies();
 	});
 	add(TEXT("构建地形"), [this]() { BuildMapTerrain(); });
@@ -206,11 +180,9 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	add(TEXT("构建建筑"), [this]() { BuildMapBuildings(); });
 	add(TEXT("栽种植被"), [this]() { BuildMapVegetation(); });
 	add(TEXT("布置路灯"), [this]() { BuildMapLamps(); });
-	// 交通要在地形网格生成之前构建：instantiate线路(火车)铺轨时要像路网一样采样地形、请求抬升/挖隧道洞
-	// (Map::ApplyTerrainFits/AddHatch)，这些得在地形网格生成之前落地。Traffic只依赖Map(站点/车位/路网)。
+	// 交通要在地形网格之前构建:instantiate线路(火车)铺轨要请求地形抬升/挖隧道洞(Map::ApplyTerrainFits/AddHatch)。
 	add(TEXT("构建交通"), [this]() { EnsureTrafficGenerated(); });
-	// Core里的数据全部算完之后才统一生成UE网格(顺序不能反，Roadnet要采样地形/水面，Zone/Building
-	// 要用到Roadnet产出的Lot)。
+	// Core数据全部算完才统一生成UE网格(Roadnet要采样地形/水面，Zone/Building要用Roadnet产出的Lot)。
 	add(TEXT("生成地形模型"), [this]() { GenerateTerrainMesh(); });
 	add(TEXT("生成道路模型"), [this]() { GenerateRoadnetMesh(); });
 	add(TEXT("生成园区模型"), [this]() { GenerateZoneMesh(); });
@@ -235,7 +207,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 		// 必须在GenerateVehicles之后——上车要用到车辆Actor。
 		if (bScriptsRestored) {
 			if (FForeverPendingLoad* load = FetchActiveLoad()) RestoreControlledPawn(*load);
-			// 房间外的物品(被扔出去的投掷物等)：按存档里的位置朝向重新生成，从静止开始模拟。
+			// 房间外的物品(被扔出去的投掷物等)：按存档位置朝向重新生成，从静止开始模拟。
 			if (assetFramework) assetFramework->RestoreWorldAssets();
 		}
 	});
@@ -288,8 +260,7 @@ void AForeverFrameworkActor::RunGenerationStep()
 
 void AForeverFrameworkActor::GetLoadProgress(int32& outDone, int32& outTotal, FText& outLabel) const
 {
-	// 总格数 = 生成阶段数 + 最后一格"构建场景"(进图之后等建筑LOD排空)。阶段还没登记(BeginPlay之前)
-	// 返回total=0，由控件显示"正在载入…"。
+	// 阶段还没登记(BeginPlay之前)返回total=0。
 	const int32 stageCount = generationStages.Num();
 	outTotal = stageCount > 0 ? stageCount + 1 : 0;
 	if (stageCount == 0) {
@@ -308,10 +279,8 @@ void AForeverFrameworkActor::GetLoadProgress(int32& outDone, int32& outTotal, FT
 }
 
 void AForeverFrameworkActor::ValidateMainStoryDependencies() {
-	// 优先遍历Story screen里玩家显式添加的脚本列表(Config::GetStoryScripts())——这个列表
-	// 为空时才退回旧的单路径查找，保证编辑器里不经过菜单、直接PIE在World.umap上的既有工作流
-	// 不受影响。这里只是个兜底二次校验：真正阻止玩家进入游戏的校验发生在配置界面点击"开始
-	// 游戏"的时候(更早)，见ForeverConfigBridgeSubsystem::ValidateAndStartGame。
+	// 优先用Story screen里玩家添加的脚本列表,为空才退回单路径(编辑器直接PIE不经过菜单)。
+	// 这是兜底二次校验,更早的校验在ForeverConfigBridgeSubsystem::ValidateAndStartGame。
 	std::vector<std::string> scripts = Config::GetStoryScripts();
 	if (scripts.empty()) {
 		std::string fallback = Config::GetMainStoryScriptPath();
@@ -335,13 +304,8 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	if (change && !change->GetCondition().empty() && !EvaluateExpressionBool(change->GetCondition(), context)) return;
 
 	if (auto* nav = dynamic_cast<const NPCNavigateChange*>(change)) {
-		// NPCNavigateChange::destination是纯std::string（原因见change.h顶部崩溃分析注释）。
-		// 这里不再能像原来lambda那样直接拿到Citizen*（这个函数的调用方只给Change本身+
-		// context），改成用change自带的occupant姓名反查Populace（Populace::
-		// FindCitizenByName）——NPCNavigateChange构造时的name本来就是occupantName，和
-		// Citizen::GetName()一致。
-		// mod生成的NPCNavigateChange里是现成的姓名/房间地址；脚本(npc_navigate)里写的可能是
-		// 表达式(比如$$self.name)——先按原样查，查不到再当表达式求值后查。
+		// 按change自带的姓名/房间地址反查(NPCNavigateChange::destination是纯std::string，见change.h)。
+		// mod生成的是现成的姓名/地址;脚本里写的可能是表达式($$self.name)——先按原样查，查不到再求值后查。
 		Citizen* citizen = populace ? populace->FindCitizenByName(nav->GetName()) : nullptr;
 		if (!citizen && populace) citizen = populace->FindCitizenByName(ToString(EvaluateExpression(nav->GetName(), context)));
 		Room* dest = map ? map->LocateRoom(nav->GetDestination()) : nullptr;
@@ -379,15 +343,13 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	}
 
 	if (auto* controlChange = dynamic_cast<const ChangeControlChange*>(change)) {
-		// 真正的操控权切换逻辑留在UForeverStoryFrameworkComponent::ApplyControlChange里不动
-		// （它本来就知道怎么找/生成citizen Actor、怎么Possess），这里只是转发调用。
+		// 操控权切换逻辑在UForeverStoryFrameworkComponent::ApplyControlChange里。
 		if (storyFramework) storyFramework->ApplyControlChange(controlChange, context);
 		return;
 	}
 
 	if (auto* startPuzzle = dynamic_cast<const StartPuzzleChange*>(change)) {
-		// 跟ChangeControlChange同一个理由：Core层不知道UMG Widget的存在，"弹出一个小游戏
-		// 界面"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyStartPuzzle。
+		// Core不知道UMG Widget，见UForeverStoryFrameworkComponent::ApplyStartPuzzle。
 		if (storyFramework) storyFramework->ApplyStartPuzzle(startPuzzle, context);
 		return;
 	}
@@ -520,8 +482,7 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	}
 
 	if (auto* enterVehicle = dynamic_cast<const EnterVehicleChange*>(change)) {
-		// 跟ChangeControlChange同一个理由：Core层不认识Actor/Controller，"把操控权切换到
-		// 载具上"这件事只能转发给UE层处理，见UForeverStoryFrameworkComponent::ApplyEnterVehicle。
+		// Core不认识Actor/Controller，见UForeverStoryFrameworkComponent::ApplyEnterVehicle。
 		if (storyFramework) storyFramework->ApplyEnterVehicle(enterVehicle, context);
 		return;
 	}
@@ -540,9 +501,8 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	// 都不是这个Actor自己能处理的类型，转发给七个域各自的ApplyChange，谁认识就处理(同一种
-	// Change可以有好几个域都认识，比如add_option门/市民/车辆各管各的)。七个域都不认识时才打一条
-	// "未实现"警告——用UE_LOG，进Output Log/Forever.log(Core的debugf只走OutputDebugString)。
+	// 转发给七个域，谁认识就处理(同一种Change可以有多个域认识，如add_option)。都不认识才打"未实现"警告
+	// (用UE_LOG，进Forever.log;Core的debugf只走OutputDebugString)。
 	bool handled = false;
 	if (map) handled |= map->ApplyChange(change, context);
 	if (populace) handled |= populace->ApplyChange(change, context);
@@ -757,28 +717,21 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 		return;
 	}
 
-	// player在EnsurePlayerGenerated()跑完之前是nullptr——BeginPlay里7个Ensure*Generated()
-	// 在Super::BeginPlay()之后同步跑完，引擎只会在BeginPlay之后才调用Tick，理论上不会遇到
-	// 空指针，这里判空只是和其它地方一致的防御性写法。
+	// 防御性判空。
 	if (!player) return;
 	player->Tick(DeltaTime);
 	// 时钟刚推进过：同步写进系统变量system.time.*，见UpdateSystemTime。
 	if (storyFramework) storyFramework->UpdateSystemTime();
 
-	// 持续在屏幕左上角显示当前游戏内时间——固定key(不是-1)保证每帧原地刷新同一行，不会
-	// 每帧都新增一条往下堆；TimeToDisplay给1秒(比一帧长)，哪怕某一帧意外跳过也不会闪烁。
+	// 固定key(不是-1)让每帧原地刷新同一行;显示1秒避免偶尔跳帧闪烁。
 	if (GEngine) {
 		GEngine->AddOnScreenDebugMessage(/*Key=*/9000, /*TimeToDisplay=*/1.f, FColor::White,
 			FString::Printf(TEXT("游戏时间: %s"), UTF8_TO_TCHAR(player->GetTime()->ToString(true, true).c_str())));
 	}
 
-	// 昼夜循环：根据刚推进过的游戏时钟驱动太阳/天空/雾/后处理，见
-	// ForeverSkyFrameworkComponent.md。
 	if (skyFramework) skyFramework->UpdateSky(*player->GetTime());
 
-	// 植被风：累加相位并写进MPC_Wind，见ForeverVegetationFrameworkComponent.md。
-	// 天气：Core里的Weather已经随时钟推进过(自动随机换/脚本change_weather)，这里先把"天气变了"广播成
-	// weather_change事件，再把当前天气翻译成云/光照/风/雨雪的表现。必须在UpdateWind之前，风的倍数由它写入。
+	// 天气:先把"变了"广播成weather_change事件，再翻译成表现。必须在UpdateWind之前，风的倍数由它写入。
 	if (player->GetWeather().ConsumeChanged() && storyFramework) {
 		storyFramework->BroadcastWeatherChange(player->GetWeather().GetName());
 	}
@@ -787,25 +740,16 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	// 路灯昼夜开关：只在亮度目标变化时才推给各盏灯。
 	if (lampFramework) lampFramework->UpdateLamps(*player->GetTime(), DeltaTime);
 
-	// 驱动Job/Organization各自独立的DailyPlan/ExecNode调度（两套独立的timer，见
-	// populace.md/society.md"两套独立timer"一节）。ExecNode这次是纯C++通道，直接给
-	// Change*，Populace/Society自己不delete这些指针，所有权留在产出它们的
-	// JobMod/OrganizationMod实例身上，这里只读值使用。
-	// 开局当天永远不会天然触发一次CrossDay()(时钟是EnsurePlayerGenerated刚设好的，"day"
-	// 缓存和当前日期本来就相同)，第一帧强制当成"跨天"，让第一天的调度表也能生成，见.h里
-	// bIsFirstTick的说明。
+	// Job/Organization各自独立的DailyPlan/ExecNode调度(见populace.md/society.md"两套独立timer")。
+	// Change*的所有权在产出它们的JobMod/OrganizationMod上，这里只读使用。
+	// 开局当天第一帧强制当成跨天，见.h里bIsFirstTick。
 	bool crossedDay = bIsFirstTick || player->CrossDay();
 	bIsFirstTick = false;
 
-	// 现场构造一个PostImplement，供Job/OrganizationMod::DailyPlan/ExecNode通过Post()
-	// 按需查citizen家/工位的具体地址（"citizen home address"/"citizen workplace
-	// address"，见Core/common/implement.cpp）——和UForeverStoryFrameworkComponent::
-	// BroadcastGameStart同一个"现场构造、只覆盖这次调用"的用法，不需要长期持有。
+	// 现场构造、只覆盖这一帧的PostImplement(Job/OrganizationMod通过Post()查地址，见Core/common/implement.cpp)。
 	PostImplement postImplement(map, populace, society, story, industry, traffic, player);
 
-	// 按EnsureXxxGenerated()的依赖顺序，六个Core域（Player已经在上面单独Tick过，推进了
-	// 全局时钟）挨个调用一遍Tick，哪怕对应域现在什么都不做——保持"每个域都有Tick"这个形状
-	// 一致，见各自Tick声明处的占位注释。
+	// 各Core域挨个Tick(Player已在上面推进了全局时钟)。
 	if (map) map->Tick(*player->GetTime(), crossedDay, &postImplement);
 
 	if (populace) {
@@ -824,10 +768,6 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	if (society) {
 		society->Tick(*player->GetTime(), crossedDay,
 			[this](Organization* organization, const std::vector<Change*>& changes) {
-				// ShopOrganization这次不产出changes，回调体基本用不到，但设施要落地——
-				// context.self指向Organization自己的Script（Organization这次一起补上了
-				// Script成员，见organization.md"Script配置"一节），和上面Populace::Tick
-				// 回调同一个处理方式。
 				ScriptContext context;
 				if (organization) context.self = organization->GetScript();
 				context.system = story ? story->GetSystemScript() : nullptr;
@@ -880,13 +820,8 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 }
 
 namespace {
-	// 默认地图尺寸(地图元素,1元素=10m)。必须满足两个条件:
-	// 1) MountainTerrain的生成密度公式densityScale=width*height/(512*512)(整数除法)要
-	//    严格大于1才会生成山(densityScale=1时mountainCount直接是0)——512x512刚好等于1,
-	//    完全不出山,这是本来的错误,1024x1024给densityScale=4。
-	// 2) LOD覆盖范围num=log2(target)-1,最粗一级LOD网格跨度4*2^(num-1)个元素必须正好等于
-	//    地图边长,最外圈网格才能完整盖住地图边缘——只有target是2的整数次幂才精确成立,
-	//    所以不能只调大随便一个数,得继续选2的整数次幂。详见Source/Basic/map/terrain_basic.md。
+		// 默认地图尺寸(地图元素,1元素=10m)，必须是2的整数次幂(LOD网格最粗一级跨度要正好等于边长)，
+		// 且width*height/(512*512)必须大于1才会生成山，详见Source/Basic/map/terrain_basic.md。
 	constexpr int kDefaultMapWidth = 1024;
 	constexpr int kDefaultMapHeight = 1024;
 }
@@ -934,8 +869,7 @@ void AForeverFrameworkActor::BuildMapTerrain()
 	}
 }
 
-// 下面四个Init*在读档时都已经由存档恢复，跳过；顺序和原来一次性生成时完全一致(先把Core里的数据
-// 全部算完，再统一生成UE网格——网格生成会用到后面几步产出的数据，见各Generate*Mesh的注释)。
+	// 读档时由存档恢复，Init*跳过。
 void AForeverFrameworkActor::BuildMapRoadnet()
 {
 	if (!bMapRestored) map->InitRoadnet();
@@ -953,13 +887,13 @@ void AForeverFrameworkActor::BuildMapBuildings()
 
 void AForeverFrameworkActor::BuildMapVegetation()
 {
-	// 植被放在最后：要等路网开口/园区/建筑/房间全部生成完，行道树才能避开出入口。
+		// 要等路网开口/园区/建筑/房间生成完，行道树才能避开出入口。
 	if (!bMapRestored) map->InitVegetation();
 }
 
 void AForeverFrameworkActor::BuildMapLamps()
 {
-	// 路灯紧跟植被：同样要等开口齐全，读档时直接用存档里的灯。
+		// 同样要等开口齐全。
 	if (!bMapRestored) map->InitLamps();
 }
 
@@ -970,9 +904,8 @@ void AForeverFrameworkActor::GenerateTerrainMesh()
 
 void AForeverFrameworkActor::GenerateRoadnetMesh()
 {
-	// InitZones/InitBuildings裁剪Lot自由空间时新增的小路(Map::GetPathRoads())要在这里面
-	// 一起画出来，必须放在InitZones/InitBuildings跑完之后调用，见
-	// ForeverRoadnetFrameworkComponent.md"小路可视化"一节。
+		// 必须在InitZones/InitBuildings之后:它们新增的小路(Map::GetPathRoads())要一起画，
+		// 见ForeverRoadnetFrameworkComponent.md"小路可视化"。
 	if (roadnetFramework) roadnetFramework->GenerateRoadnet(map);
 }
 
@@ -983,30 +916,25 @@ void AForeverFrameworkActor::GenerateZoneMesh()
 
 void AForeverFrameworkActor::GenerateBuildingMesh()
 {
-	// Room进入/离开检测碰撞盒现在由ABuildingElement自己生成(每栋building的所有Room都跟着
-	// 这栋楼自己的近/远LOD组件一起attach到它专属的Actor上，不再是roomFramework这个单例组件
-	// 统一生成)，buildingFramework->GenerateBuildings(map)已经涵盖了这一步，不需要在这里
-	// 再单独调用roomFramework——见Source/Forever/Element/BuildingElement.md。
+		// Room碰撞盒由ABuildingElement自己生成，不需要再调roomFramework，见Source/Forever/Element/BuildingElement.md。
 	if (buildingFramework) buildingFramework->GenerateBuildings(map);
 }
 
 void AForeverFrameworkActor::GenerateVegetationMesh()
 {
-	// 植被：Core里的树在InitVegetation时已经全部展开好，这里一次性
-	// 加载mesh+批量实例化；Z取地形高度，必须在GenerateTerrain之后(用的是同一个Map::SampleHeight)。
+		// Z取地形高度(Map::SampleHeight)，必须在地形生成之后。
 	if (vegetationFramework) vegetationFramework->GenerateVegetation(map);
 }
 
 void AForeverFrameworkActor::GenerateLampMesh()
 {
-	// 路灯：Core里的灯在InitLamps时已经全部展开好，这里逐盏生成Actor；Z取地形高度，必须在GenerateTerrain之后。
+		// Z取地形高度，必须在地形生成之后。
 	if (lampFramework) lampFramework->GenerateLamps(map);
 }
 
 FVector AForeverFrameworkActor::GetDefaultSpawnLocation()
 {
-	// 地图正中心(地图单位*1000=UE单位)，高度只是过渡值：地形此时还没生成，玩家真正的位置由
-	// game_start/RestoreControlledPawn决定。
+	// 地图正中心;高度只是过渡值(地形还没生成)，玩家真正位置由game_start/RestoreControlledPawn决定。
 	return FVector(kDefaultMapWidth * 500.f, kDefaultMapHeight * 500.f, 200.f);
 }
 
@@ -1014,13 +942,8 @@ void AForeverFrameworkActor::EnsurePopulaceGenerated()
 {
 	if (populace) return;
 
-	// Populace和Map平级，不是Map的成员——这里编排两者之间唯一的交互(Map::
-	// ComputeAccommodationTarget()喂给Populace::Init()，Populace::Init()跑完的结果再喂给
-	// Map::Checkin())，和老工程GlobalBase里"int accomodation = map->InitContents();
-	// populace->Init(accomodation, ...); map->Checkin(populace, ...);"同一个编排顺序，
-	// 详见Source/Core/populace/populace.md。假定map已经生成好，调用方(BeginPlay)负责保证
-	// EnsureMapGenerated()已经先跑过。
-	// 读档：按存档恢复市民(连同住处/房产归属)，不跑Init/Checkin。恢复失败时退回新开局生成。
+		// Map::ComputeAccommodationTarget喂给Populace::Init，结果再喂给Map::Checkin，见Source/Core/populace/populace.md。
+		// 读档：按存档恢复市民(连同住处/房产归属)，不跑Init/Checkin。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
 		std::string error;
 		populace = PopulaceSaveCodec::Load(load->archive, *map, pendingJobExperienceOrganizations, error);
@@ -1045,9 +968,7 @@ void AForeverFrameworkActor::EnsurePopulaceGenerated()
 	}
 
 	if (populaceFramework) {
-		// 这里不SpawnActor任何ACitizenElement——populaceFramework只是缓存
-		// populace->GetCitizens()列表，真正的生成/销毁全部按玩家距离在TickComponent里做，
-		// 见Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md。
+			// 不SpawnActor，按玩家距离流式生成由populaceFramework的TickComponent做。
 		populaceFramework->GenerateCitizens(map, populace);
 	}
 }
@@ -1073,22 +994,16 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 	}
 	if (society) return;
 
-	// Society这次真的做了组织分配+招聘（不是空骨架了）：按地图里所有Component加权随机
-	// 分配Organization（每个Organization自己遍历claimed components设计Job），再把成年
-	// 市民随机匹配到还空缺的Job上，见society.md。
+		// 按Component加权分配Organization，再把成年市民匹配到空缺Job，见society.md。
 	society = new Society();
 	society->Init(map->GetAllComponents());
 	society->RecruitCitizens(populace->GetCitizens(), populace->GetCurrentYear());
-	// 入职历史反推 + 同事关系——依赖RecruitCitizens()已经把当前在职citizen分配进Job，
-	// 也依赖Citizen::GetLastGraduationYear()（Populace::Init()里GenerateEducations()
-	// 已经算好），见society.md"四类人际关系生成"一节。人口按存档恢复时经历和同事关系里
-	// 已经有这些了，不再补一遍。
+	// 入职历史反推+同事关系依赖RecruitCitizens和毕业年份，见society.md。人口按存档恢复时已经有了，不补。
 	if (!bPopulaceRestored) {
 		society->GenerateEmploymentHistory(populace->GetCitizens(), populace->GetCurrentYear());
 	}
 
-	// 新开局：随机选成年市民当各组织的股东，再由城市外账户给每个市民和组织注资，
-	// 见Core/society/settlement.md。
+	// 新开局:选股东并由城市外账户注资，见Core/society/settlement.md。
 	society->AssignShareholders(populace->GetCitizens(), populace->GetCurrentYear());
 	Settlement::InitFunds(*society, populace->GetCitizens());
 }
@@ -1110,20 +1025,12 @@ void AForeverFrameworkActor::EnsurePlayerGenerated()
 		}
 	}
 
-	// Player这次迁移了全局时钟部分，Init()创建Time并交给AForeverFrameworkActor::Tick每帧
-	// 推进，见player.md。
 	player = new Player();
 	player->Init();
-	// 市民繁衍模拟从2000年起演化到populace自己认为的"当前年份"(Populace::GetCurrentYear()，
-	// 老工程population.cpp里time->SetYear(year+2000)的新工程对应物——那边直接改Player的
-	// 时钟，这边改成读populace算出来的年份再喂给Player::SetTime)，开局时间定为那一年的
-	// 1月1日8点，让Citizen的生日/年龄和这个初始时钟保持自洽，见populace.md"生日换算"一节。
-	// 假定populace已经生成好，调用方(BeginPlay)负责保证EnsurePopulaceGenerated()已经先跑过。
+	// 开局时间=populace当前年份1月1日8点，让Citizen生日/年龄与时钟自洽，见populace.md"生日换算"。
 	player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 
-	// 主线剧情.script的global_settings.time_flow_ratio字段——没有声明就保持
-	// Player::timeFlowRatio的默认值（2.0），见player.md"time_flow_ratio"一节。
-	// 主线读取多个文件时按顺序遍历，后面的文件覆盖前面的同名设置。
+	// 主线脚本global_settings.time_flow_ratio覆盖默认值，多个文件按顺序后者覆盖前者，见player.md。
 	for (const std::string& path : Config::GetMainStoryScriptPaths()) {
 		const auto& settings = Script::GetGlobalSettings(path);
 		if (auto it = settings.find("time_flow_ratio"); it != settings.end()) {
@@ -1160,18 +1067,10 @@ void AForeverFrameworkActor::EnsureTrafficGenerated()
 {
 	if (traffic) return;
 
-	// Traffic的Route/Station两个域仍然是空骨架，Vehicle这一份已经落地(见traffic.md)——
-	// Init(map)遍历所有停车位房间预置生成车辆(Core层，只是new Vehicle对象，这时候每辆车的
-	// options还是空的)。真正的AVehicleElement Actor生成**不能**在这里就做——
-	// AVehicleElement::Init()会立刻BuildProximityBox()烘焙一份vehicle->GetOptions()快照，
-	// 而"上车"这个选项要等下面EnsureStoryGenerated()里的BroadcastGameStart()广播完车辆自己
-	// 的Script(vehicle_basic.script的game_start milestone)之后才会被加进去——如果在这里就
-	// SpawnActor，烘焙到的会是一份空选项快照，"靠近车辆弹上车选项"永远不会出现(和
-	// ACitizenElement故意等到game_start广播跑完之后才会被距离流式生成是同一个道理，见
-	// ACitizenElement::BuildProximityBox的注释)。GenerateVehicles()真正的调用点挪到
-	// BeginPlay()里EnsureStoryGenerated()之后，见那边的调用。
-	// 读档：按存档恢复站点/线路/车辆；存档带脚本状态段时(会跳过game_start广播)连车辆的交互选项
-	// 一起恢复。
+	// 这里只建Core对象。AVehicleElement::Init会立刻烘焙vehicle->GetOptions()快照，而"上车"选项要等
+	// game_start广播后才加上，所以GenerateVehicles放在EnsureStoryGenerated之后的"构建载具"阶段
+	// (和ACitizenElement等game_start后才流式生成同理)。
+	// 读档：按存档恢复站点/线路/车辆。
 	if (FForeverPendingLoad* load = FetchActiveLoad()) {
 		std::string error;
 		traffic = TrafficSaveCodec::Load(load->archive, *map, error);
@@ -1194,8 +1093,6 @@ void AForeverFrameworkActor::EnsureStoryGenerated()
 {
 	if (story) return;
 
-	// 和map/populace不互相依赖。Init()读取Resource/Story/test.json，
-	// 随后立刻广播一次GameStartEvent，见storyFramework.md。
 	story = new Story();
 	story->Init();
 	if (storyFramework) storyFramework->Init(story);

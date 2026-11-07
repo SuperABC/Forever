@@ -2,190 +2,28 @@
 
 ## 职责
 
-一个citizen在场景里显形时对应的Actor，基类是`AForeverCharacter`（和玩家角色共用基类，带
-摄像机/移动参数/Enhanced Input绑定），这样市民既能被AI/Tick静止摆放，也能在被玩家`Possess`
-之后直接用同一套输入/移动逻辑操控。和`ABuildingElement`同一套"每个Core实例对应一个强类型
-Actor子类"模式（Actor持有指向Core对象的裸指针+指向共享框架组件的`TWeakObjectPtr`），区别
-是不常驻：`ACitizenElement`按玩家距离由`UForeverPopulaceFrameworkComponent::TickComponent`
-流式`SpawnActor`/`Destroy`——人口规模通常比建筑数量大得多，流式管理是默认选择，见
-`Source/Forever/Framework/ForeverPopulaceFrameworkComponent.md`。
-
-`UForeverPopulaceFrameworkComponent::TickComponent`判定"该显形"时`SpawnActor<
-ACitizenElement>()`+立刻调用`Init(citizen, this)`；判定"该隐藏"时先读走当前世界坐标写回
-`Citizen`，再`Destroy()`这个Actor。
+一个 citizen 在场景里显形时对应的 `ACitizenElement`，基类是 `AForeverCharacter`(和玩家角色共用摄像机/移动参数/Enhanced Input 绑定)，所以市民既能被 AI 带着走，也能被玩家 `Possess` 后直接用同一套输入/移动逻辑操控。和 `ABuildingElement` 同一套"每个 Core 实例对应一个强类型 Actor 子类"模式(Actor 持有指向 Core 对象的裸指针 + 指向共享框架组件的 `TWeakObjectPtr`)，区别是不常驻：由 `UForeverPopulaceFrameworkComponent::TickComponent` 按玩家距离流式 `SpawnActor` + `Init(citizen, this)` / 写回当前位置后 `Destroy()`(人口规模通常远大于建筑数量)，映射表 `activeInstances` 在框架组件里，见 `Framework/ForeverPopulaceFrameworkComponent.md`。
 
 ## 关键设计
 
-### 数据结构：每个Core实例对应一个强类型Actor子类
-
-`UForeverPopulaceFrameworkComponent`自己维护`TMap<Citizen*, TObjectPtr<ACitizenElement>>
-activeInstances`做映射，`ACitizenElement`不需要额外维护任何名字表——好处是每个citizen的
-碰撞盒/网格/AI状态都能自然地长在它自己的Actor上。
-
-### 移动模式跟着占有状态切换：构造函数`MOVE_None`，被占有切`MOVE_Walking`
-
-未被占有的市民默认静止（`GetCharacterMovement()->SetMovementMode(MOVE_None)`），避免
-`CharacterMovementComponent`自己的重力/地面检测把`Init()`摆好的位置挪走：
-
-```cpp
-virtual void PossessedBy(AController* NewController) override; // Super先增Input Mapping，再切MOVE_Walking
-virtual void UnPossessed() override;                            // 先切回MOVE_None，再Super减Input Mapping
-```
-
-`ACitizenElement`自己只管`CharacterMovementComponent`的开关；Input Mapping Context的
-增删完全不在这里处理，交给`Super`（`AForeverCharacter::PossessedBy`/`UnPossessed`）——
-这样不管当前占有的是初始`ADefaultPawn`/`AForeverCharacter`还是某个`ACitizenElement`，
-输入映射的增删逻辑只有一份，见`[[memory:possession_driven_input_context]]`。
-
-### 占位资产：`SKM_Manny_Simple`
-
-和`AForeverCharacter.cpp`同款软路径（`/Game/Asset/Characters/Mannequins/Meshes/
-SKM_Manny_Simple`），`ConstructorHelpers::FObjectFinder`在构造函数里加载，`GetMesh()->
-SetRelativeLocation`用`-GetCapsuleComponent()->GetScaledCapsuleHalfHeight()`让mesh的
-脚底正好落在capsule底部。动画蓝图也照抄`AForeverCharacter.cpp`挂了`ABP_Unarmed`——
-`USkeletalMeshComponent`没有`AnimInstance`时会一直显示bind pose（T-pose），挂了之后至少
-有一个正常待机姿势。当前阶段用UE默认小白人占位，以后换真实资产。
-
-按性别选身体网格：`Init()`里调`AForeverCharacter::ApplyBodyMesh`，男性用`SKM_Manny_Simple`、女性用`SKM_Quinn_Simple`(同一个骨骼`SK_Mannequin`，动画蓝图不用换)，换完重新摆头像方块(`PlaceAvatar`)。
-
-按市民贴头像：`Init()`里`ApplyBodyMesh`之后向`UForeverAvatarSubsystem::GetCitizenAvatar(citizen)`要这个市民的头像贴图，再`SetAvatarTexture`；没有头像文件时保留默认头像。见`Player/ForeverAvatarSubsystem.md`。
-
-### 3D坐标"留空/首次随机/此后复用"——在这里落地，不在`Citizen`
-
-`Citizen`（Core）只存储`hasPosition`+`posX/Y/Z`（地图单位），真正的判断/写入逻辑在
-`Init()`里：
-- `citizen->HasPosition()`为true：直接读`GetPosition()`转UE坐标（`*CITIZEN_WORLD_SCALE`）
-  摆放，不再随机。
-- 否则：用`Room::GetPosX/PosY()`（Floor局部坐标）+本文件维护的一份
-  `ComputeCitizenWorldPosition`（和`BuildingElement.cpp`的`ComputeWorldPosition`公式
-  一样，按既有约定各自维护一份，不额外抽公共头——**但函数名不能取成一样的**，见下
-  "匿名namespace命名坑"）换算房间中心世界坐标，X/Y各加随机抖动（±0.2地图单位），Z用
-  `Building::GetFloorBaseZ(room->GetLayer())`**再加一个`CITIZEN_GROUND_SLAB_THICKNESS`
-  （20 UE单位）**——`BuildingElement.cpp`把Ground slab的中心摆在"`floorBaseZ`对应的楼层
-  底部+半个slab厚度"，真正能站人的地板表面比`floorBaseZ`换算出来的"楼层底部"还要高一个完整
-  slab厚度，不加这一段会正好陷进地板slab里那么深。最后再加一个capsule半高——
-  `SetActorLocation`摆的是capsule中心，脚底(mesh)要正好落在楼板表面上。算出来**立刻**
-  `citizen->SetPosition(...)`写回——"首次随机、此后复用"的记录在`Init()`这一步就完成，不用
-  等销毁时才写。
-
-### 匿名namespace命名坑：Forever模块是unity build，"各文件互不可见"这个假设不成立
-
-`BuildingElement.cpp`/`ForeverZoneFrameworkComponent.cpp`等文件各自维护一份同名helper的
-前提，是"不同翻译单元的匿名namespace不能跨文件共用"——这在**普通MSBuild项目**
-（`Core`/`Dependence`/`Basic`）里成立，但**在UBT管理的`Forever`模块里不成立**：UBT的
-adaptive unity build会把一批`.cpp`拼进一个生成的`Module.Forever.cpp`一起编译，被拼在一起
-的文件的匿名namespace因此变成了同一个翻译单元，如果两个文件里出现同名同签名的匿名
-namespace函数会直接报重定义编译错误。这个错误具体在哪次编译触发取决于UBT当次的"最近改动"
-排除名单，**和你最后一次修改的代码可能完全无关**，容易误判。
-
-教训：每个文件按约定各自维护一份小helper这个模式本身没问题（避免过早抽象/增加不必要的头
-文件依赖），但**函数名必须在整个`Forever`模块内唯一**，不能只保证同一个文件内不重复；本
-文件的版本因此叫`ComputeCitizenWorldPosition`，不是`ComputeWorldPosition`。
-
-流式销毁时（`UForeverPopulaceFrameworkComponent::TickComponent`里），走远到销毁距离之外
-会先读`GetActorLocation()`转回地图单位写回`Citizen`，再`Destroy()`——保证"反之直接在记录
-的位置出现"：不管这个citizen被销毁过多少次，只要`hasPosition`已经为true，重新生成时永远
-用最后一次的真实位置，不再触发随机抖动。
-
-### `WalkTo`：沿现成路径点走，不用AIController/NavMesh
-
-`UForeverPopulaceFrameworkComponent::RequestWalk`发现某个citizen当前有对应
-`ACitizenElement`时会调`WalkTo(waypoints, destination)`——路径点已经由`Map::
-FindPedestrianPath`（Dijkstra）算好，这里只负责"沿着这串世界坐标走过去"：
-`SetMovementMode(MOVE_Walking)`+`SetActorTickEnabled(true)`（构造函数里
-`PrimaryActorTick.bCanEverTick=true`但默认`SetActorTickEnabled(false)`——绝大多数
-citizen静止不动，只有真正在走路时才需要每帧开销），`Tick()`里每帧朝
-`pendingWaypoints[waypointIndex]`方向`AddMovementInput`（只判水平距离，阈值
-`kWaypointArrivalThresholdUU`=80 UE单位，到达即前进到下一个路径点），全部走完切回
-`MOVE_None`+关闭Tick+回调`framework->NotifyArrived(citizen, walkDestination)`更新
-`Citizen::SetCurrentRoom`。**不用`AIController`/`NavMesh`**——路径已经是Core侧算好的现成
-数据，`WalkTo`纯粹是沿点插值前进+转向，复用`CharacterMovement`只是为了保留碰撞/坡度处理。
-
-**构造函数里必须显式打开`bRunPhysicsWithNoController`**——`UCharacterMovementComponent::
-TickComponent`默认只有`Pawn::Controller`非空时才会调用`PerformMovement()`，这个项目没有
-`AIController`，`WalkTo`带着走路的citizen按定义不会同时被玩家占有（`RequestWalk`发现被
-占有会整个跳过调度），`Controller`因此永远是`nullptr`——不开这个开关的话`AddMovementInput`
-是纯空操作，`MovementMode`显示`MOVE_Walking`、`Tick`每帧都在调用，但速度/位置纹丝不动，
-市民会永久冻结在走路起点。
-
-### `TeleportToRoom`/`ComputeRoomLandingSpot`：寻路失败时，可见的Actor也必须跟着挪
-
-`RequestWalk`寻路失败（起点/终点没有导航节点，或图不连通）但这个citizen当前**有已生成的
-`ACitizenElement`**时，不能像"没有Actor"那种情况一样只改`Citizen::SetCurrentRoom`——那样
-Core状态已经"到家"了，但这个可见的Actor完全没人碰过，会一直冻结在原地不动。
-`TeleportToRoom(Room* destination)`把Actor本身也瞬移过去：`SetActorLocation`+同步
-`citizen->SetCurrentRoom(destination)`+`citizen->SetPosition(...)`。
-
-落地位置的计算（房间中心+随机抖动+楼层高度换算，见上"3D坐标"一节）提炼成私有辅助
-`ComputeRoomLandingSpot(Room* room, float& outWorldX, float& outWorldY, float& outWorldZ)`，
-`Init()`换房间后首次实例化的分支和这里共用同一份实现。`room`为空或反查不到
-`GetParentBuilding()`时返回`false`，调用方保留原有坐标不变——和`ComputeLogicalPosition`
-同一条规则：**必须从`room->GetParentBuilding()`反查building，不能用
-`citizen->GetBuilding()`**（那是"家"building，换房间之后不再保证同一栋楼），见
-`ForeverPopulaceFrameworkComponent.md`。
-
-### 靠近检测碰撞盒——和流式生成/销毁的距离判定是两回事
-
-`proximityBox`是纯UE层的装饰性判定，用固定的UE单位常量（不走地图单位换算），和
-`UForeverPopulaceFrameworkComponent`的`citizenSpawnDistance`/`citizenDespawnDistance`
-（决定"这个citizen该不该存在于场景里"）完全独立——一个citizen存在于场景里之后，玩家还要
-再靠得更近才会触发这个盒子的Overlap（推送/收起MeetOption选项）。`BuildProximityBox()`挂在
-`RootComponent`（`ACharacter`自带的`CapsuleComponent`）上，和`ABuildingElement::
-BuildCollisionBox()`同一套写法：`"Trigger"`碰撞profile，`OnComponentBeginOverlap`/`End`
-只使用预先烘焙好的`citizenNameOnly`/`cachedOptions`，
-绝不在回调里解引用`citizen`；`OtherActor`按惯例过滤成只认
-`UGameplayStatics::GetPlayerPawn(GetWorld(),0)`。
-
-### `EndPlay`安全性——和`ABuildingElement`同一套原则
-
-`ACitizenElement`/`UForeverPopulaceFrameworkComponent`/`AForeverFrameworkActor`是三个
-独立的Actor/组件，`EndPlay`调用顺序不保证谁先谁后。`ACitizenElement`的安全性设计不依赖
-这个顺序：只保证"自己的`EndPlay`一跑完，自己不会再解引用`citizen`"，所以`EndPlay`只把
-`citizen`置空就足够安全（不在这里把当前位置写回`Citizen`——那个写回只在受控的运行时销毁
-路径里由`UForeverPopulaceFrameworkComponent`主动做，关卡卸载时`Citizen`/`Populace`可能
-已经先被析构了，见`ForeverFrameworkActor.md`）。
-
-- **交互选项运行中变化**：`add_option`/`remove_option`执行后，`AForeverFrameworkActor::RefreshInteractOptions`按名字找到场景里的这个对象调`RefreshOptions()`：重新烘焙`cachedOptions`快照；玩家正站在旁边时用`UMeetOptionWidget::ReplaceOptions`把屏幕上的选项整组换掉。Overlap回调仍然只读快照、不解引用Core对象。
+- **位置"留空/首次随机/此后复用"在这里落地，不在 `Citizen`**：`Citizen` 只存 `hasPosition`+`posX/Y/Z`(地图单位)。`Init()` 里 `HasPosition()` 为 true 直接读记录位置(`*CITIZEN_WORLD_SCALE`)；否则 `ComputeRoomLandingSpot(room)`：房间中心(`Room::GetPosX/PosY`，经本文件私有的 `ComputeCitizenWorldPosition` 换算)±0.2 地图单位随机抖动，Z = `GetFloorBaseZ(layer)` + 地坪偏移 10 + **地板 slab 厚度 20**(Ground slab 中心在楼层底部+半个厚度，站人表面是 slab 顶面，不加会陷进地板) + 胶囊半高(actor location 是胶囊中心)，算出后**立刻** `citizen->SetPosition` 写回。流式销毁时由 Populace 读 `GetActorLocation()` 写回 `Citizen`，所以不管销毁多少次，重新生成都在最后的真实位置。`building` 必须从 `room->GetParentBuilding()` 反查，不能用 `citizen->GetBuilding()`(那是"家"，换房间后不一定同一栋楼)。
+- **匿名 namespace helper 命名坑**：Forever 模块是 UBT unity build，多个 `.cpp` 会被拼进同一个翻译单元，各文件各自维护的匿名 namespace helper **函数名必须在整个模块内唯一**(本文件叫 `ComputeCitizenWorldPosition`，不能叫 `ComputeWorldPosition`)，否则重定义编译错误，且触发与最近改动无关。
+- **移动模式跟着占有状态切换**：构造函数 `MOVE_None`(避免重力/地面检测挪走 `Init()` 摆好的位置)、默认关 Tick、`bRunPhysicsWithNoController=true`；`PossessedBy` 只对玩家 Controller 响应：切 `MOVE_Walking`、**重新打开 Tick**(`AForeverCharacter::Tick` 要每帧跑才有瞄准摄像机插值，否则右键瞄准事件触发但镜头纹丝不动)、禁掉自己的 `proximityBox`(自己就是玩家时盒与胶囊常驻重叠)；`UnPossessed` 切回 `MOVE_None`、恢复盒的 `Trigger` 预设、关 Tick，玩家放手时 `RepossessAIController()` 在**下一帧**让自己的 AI Controller 重新 Possess(UnPossessed 调用栈里 `Controller` 还没清空)。Input Mapping Context 的增删交给 `Super`。`Tick()` 在非玩家控制时自己关掉。
+- **自己的 `ACitizenController`**：`Init()` 末尾创建并 Possess，`EndPlay` 里 `ClearCommands`+`UnPossess`+`Destroy`。`WalkTo(waypoints, destination)` 先 `ClearCommands`(新路线取代旧路线) 再推一条 `FollowPath`；走路/到达判定/`NotifyArrived` 全在 Controller，见 `Controller/CitizenController.md`。`GetWalkDestination()` 转问 Controller 当前指令(存档把走路中的市民记成"已经到了")。"玩家占有"判断一律用 `IsPlayerControlled()`。
+- **`TeleportToRoom`**：`RequestWalk` 寻路失败(起点/终点没有导航节点，或图不连通)但该市民有 Actor 时，Actor 也必须跟着挪(`ComputeRoomLandingSpot`+`SetActorLocation`+`SetCurrentRoom`+`SetPosition`)，并先 `ClearCommands`(否则走完会回调 `NotifyArrived` 把房间改回去)；不挪的话 Core 已"到家"而可见 Actor 冻结在原地。
+- **靠近检测碰撞盒**(`proximityBox`，半宽 120/半高 90)：纯 UE 层的装饰性判定，与流式生成/销毁的距离无关。只有有 Scheduler 脚本或有选项时才建，之后选项出现由 `RefreshOptions` 补建。姓名和选项在建盒时烘焙成快照(`citizenNameOnly`/`cachedOptions`)，Overlap 回调**绝不解引用 `citizen`**；必须排除 `OtherActor==this`，并要求 `OtherActor` 是玩家当前 pawn 且为 `AForeverCharacter`(否则开车靠近也会弹)。`add_option`/`remove_option` 后由 `AForeverFrameworkActor::RefreshInteractOptions` 调 `RefreshOptions()` 重新烘焙，并用 `UMeetOptionWidget::ReplaceOptions` 整组换掉屏幕上的选项。
+- **外观**：身体网格按性别由 `AForeverCharacter::ApplyBodyMesh` 选(男 Manny、女 Quinn，同骨架)；头像由 `UForeverAvatarSubsystem::GetCitizenAvatar(citizen, 当前游戏年份)` 提供后 `SetAvatarTexture`，没有头像文件保留默认，见 `Player/ForeverAvatarSubsystem.md`。
+- **`EndPlay` 安全性**：只保证自己的 `EndPlay` 之后不再解引用 `citizen`。只有 `EEndPlayReason::Destroyed` 才通知框架 `HandleElementEndPlay`(摘掉 `activeInstances` 里的悬空键)；退出游戏/切关卡/PIE 结束时 Core 的 Populace 可能已先释放，碰它们会崩。位置写回只在受控的运行时销毁路径里由 Populace 做。
+- `SetDespawnExempt(true)`：上车(`ToggleVehicle`)时标记不参与距离销毁(Actor 隐藏在原地，玩家开车走远会被销毁，下车时 `previousPawn` 悬空)，下车传 false。`GetCitizen()` 供武器命中后反查 `Citizen*`。
 
 ## 依赖关系
 
-- 依赖：`Player/ForeverCharacter.h`（基类）、`Components/CapsuleComponent.h`/
-  `GameFramework/CharacterMovementComponent.h`（`ACharacter`自带组件，
-  `PossessedBy`/`UnPossessed`切换`MOVE_Walking`/`MOVE_None`）、
-  `Source/Forever/Framework/ForeverPopulaceFrameworkComponent.h`（`framework`弱引用
-  回调；`FindOrSpawnCitizenByName`会强制生成/复用`ACitizenElement`，见该文件.md）、
-  `Source/Core/populace/citizen.h`（`Citizen`）、`map/building.h`/`map/room.h`
-  （Core侧数据）、`Components/SkeletalMeshComponent.h`（占位mesh）、
-  `Components/BoxComponent.h`（碰撞盒）、`Kismet/GameplayStatics.h`
-  （`GetPlayerPawn`）。
-- 被谁依赖：`UForeverPopulaceFrameworkComponent::TickComponent`/
-  `FindOrSpawnCitizenByName`（`SpawnActor<ACitizenElement>()`+`Init()`+`Destroy()`）、
-  `UForeverStoryFrameworkComponent::ApplyControlChange`（剧情`change_control`指定切换
-  控制权，间接通过`FindOrSpawnCitizenByName`拿到`ACitizenElement*`后`Possess`——T键现在
-  指向上下车，不走这条路径，`Possess`目前只由剧情脚本触发）。
+- 依赖：`Player/ForeverCharacter.h`(基类)、`Controller/CitizenController.h`、`Framework/ForeverPopulaceFrameworkComponent.h`(`framework` 弱引用回调)、`Player/ForeverAvatarSubsystem`、`UI/MeetOptionWidget`、`Core/populace/citizen.h`、`map/building.h`/`room.h`。
+- 被谁依赖：`UForeverPopulaceFrameworkComponent`(`SpawnActor`/`Init`/`Destroy`/`FindOrSpawnCitizenByName`)、`UForeverStoryFrameworkComponent::ApplyControlChange`(剧情 `change_control` 占有市民)、`UForeverWeaponComponent`(命中反查)。
 
 ## 待办/后续阶段
 
-- 未被占有的市民已经能按Job调度（上下班）走动（见上"`WalkTo`"一节），但这仅限于"有明确
-  调度触发"的场景——没有Job、或者Job没有产生调度的市民仍然是`MOVE_None`静止不动，通用的
-  "没事做的时候到处逛逛"这类自由游走AI还没有。
-- 真实资产替换`SKM_Manny_Simple`占位。
-- 靠近检测碰撞盒尺寸（`CITIZEN_PROXIMITY_HALF_XY`/`_Z`）是按经验给的初始值，可能需要按
-  真实资产的实际比例微调。
-
-## 导航测试（test_navigate_citizen）
-
-脚本 Change `test_navigate_citizen`（`schedule_empty.script` 里的「测试导航」选项）→ `UForeverPopulaceFrameworkComponent::StartTestNavigation(name)`：
-用 `Map::PlanPedestrianRoute` 规划行人折线（有当前房间从房间节点出发，否则取最近的行人图节点），画调试线（复用交通组件的 `ShowTestNavigationLine`），再交给 `ACitizenElement::StartTestNavigation`。
-
-- 生成 `AAIController` 占有市民，只当操控者；移动沿用 `WalkTo` 那套逐点 `AddMovementInput`（只判水平距离）；`MaxWalkSpeed` 临时 ×2。不用 `UPathFollowingComponent`：它的到达判定含竖直方向，行人图节点 Z 和脚底对不上会永远判不到达，实测原地打转。
-- 结束/被打断（`EndTestNavigation`）：还原速度、解除并销毁 AIController、取消免销毁标记；到达则 `NotifyArrived` 并清调试线。玩家接管该市民时自动收尾。
-- `AForeverCharacter::PossessedBy` 对非玩家控制器直接返回（不发初始装备/武器可视化）。
-- 车辆导航测试同时提速：`testNavSpeed` 1200、`testNavTurnRate` 180。
-- 未在 PIE 验证。
-
-## Controller 化（2026-11-01）
-- 走路不再由 `ACitizenElement::Tick` 驱动：`WalkTo()` 变成往 `ACitizenController` 推一条 `FollowPath` 指令，逐点移动/到达/`NotifyArrived` 都在 Controller 里（见 `Controller/CitizenController.md`）。`pendingWaypoints/waypointIndex/walkDestination`、`bTestNavigating/testNavController` 已删除；`GetWalkDestination()`（存档用）转问 Controller 当前指令。
-- Controller 在 `Init` 末尾创建并 Possess，`EndPlay` 销毁；玩家 Possess 时让出，`UnPossessed` 后重新 Possess。`PossessedBy` 对非玩家 Controller 直接返回。`TeleportToRoom` 先 `ClearCommands`。
-- "玩家占有"判断全部改成 `IsPlayerControlled()`（Populace 的调度/流式销毁等）。
-- 未在 PIE 验证。
+- 没有 Job/没有调度的市民仍静止，通用的"没事做时到处逛逛"自由游走 AI 还没有。
+- 真实资产替换占位小白人；靠近盒尺寸是经验值，可能需按真实资产微调。
+- Controller 化后的走路未在 PIE 完整验证。
+- `bRunPhysicsWithNoController=true`(构造函数里)可能是 Controller 化前的遗留，未确认是否仍需要；涉及行为风险，暂未改。

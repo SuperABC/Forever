@@ -8,9 +8,6 @@
 #include <unordered_map>
 
 
-class Citizen;
-class Organization;
-
 // 一个账户的持有者：城市外、政府、某个市民、某个组织。
 struct Party {
 	enum Kind { OUTSIDE, GOVERNMENT, CITIZEN, ORGANIZATION };

@@ -26,9 +26,7 @@ struct FThrowListItem
 };
 class UStaticMeshComponent;
 
-// 投掷物(手雷/烟雾弹)：按3在身上的投掷物之间切换，激活后右键瞄准显示预览曲线，左键把一个单位
-// 当作物理掉落物(AAssetElement)扔出去。挂在AForeverCharacter上，和UForeverWeaponComponent
-// 是并列关系——同一时刻手上要么是肩上的武器、要么是投掷物，互斥，见ForeverThrowableComponent.md。
+// 投掷物(手雷/烟雾弹)：切换、瞄准预览、投掷。与UForeverWeaponComponent互斥，见ForeverThrowableComponent.md。
 UCLASS()
 class FOREVER_API UForeverThrowableComponent : public UActorComponent
 {
@@ -55,9 +53,7 @@ public:
 
 	bool IsActive() const { return !activeType.empty(); }
 
-	// 重新扫描身上的投掷物并刷新缓存。背包没有变化事件，所以按3、投掷、背包界面操作之后、
-	// 开始瞄准/投掷之前都会调用。当前激活的投掷物用完了会自动切到下一个，全都没了则退出
-	// 投掷状态。
+	// 重新扫描身上的投掷物并刷新缓存(背包没有变化事件，调用时机见md)。激活的用完了会自动切到下一个，全没了则退出投掷状态。
 	void Refresh();
 
 	// 能不能瞄准/投掷：激活的投掷物本身就拿在手里(拿着它的手就是投掷手)，或者至少一只手是空的。
@@ -66,8 +62,7 @@ public:
 	// 左键：扔出一个单位。要求已激活且在瞄准中。
 	void Throw();
 
-	// 投掷参数(预览和真实投掷共用同一套起点/初速，真实轨迹由物理模拟决定，可能和预览有偏差，
-	// 这些值留着按手感调)。
+	// 投掷参数(预览和真实投掷共用，真实轨迹由物理决定，可能和预览有偏差)。
 	// 起点相对角色的本地偏移(cm，+X前、+Y右、+Z上)。
 	UPROPERTY(EditAnywhere, Category = "Throw")
 	FVector throwOffset = FVector(60.f, 20.f, 50.f);
@@ -99,9 +94,7 @@ private:
 	// 当前激活的投掷物type(资产id)，空=没激活。
 	std::string activeType;
 
-	// 缓存：rankByType给每个type在第一次见到时分配一个永久序号(只增不删)，entries按序号
-	// 排序——背包里少量存取不会改变已有类别的相对顺序，用完后再次出现回到原来的位置而不是
-	// 排到末尾。
+	// 缓存：rankByType给每个type永久序号，entries按序号排序，保持顺序稳定(见md)。
 	std::unordered_map<std::string, int> rankByType;
 	int nextRank = 0;
 	struct FThrowableEntry {

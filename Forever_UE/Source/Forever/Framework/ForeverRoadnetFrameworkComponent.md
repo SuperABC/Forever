@@ -2,27 +2,25 @@
 
 ## 职责
 
-`UForeverRoadnetFrameworkComponent`是路网渲染组件——道路/路口/路网开口的mesh生成，以及
-一份常驻的导航图调试可视化。老工程`RoadnetBase.UpdateRoadnet()`是纯`BlueprintImplementableEvent`
-空实现，所有实际mesh搭建逻辑都在Blueprint里；这个组件是全新写的C++ mesh生成逻辑，模式上
-参照`ForeverTerrainFrameworkComponent`（procedural mesh、材质加载via
-`ConstructorHelpers`/`LoadObject`、组件挂在owner的RootComponent下）。
+`UForeverRoadnetFrameworkComponent`是路网渲染组件——道路（ISM沿路重复摆放）、路口、开口、小路的
+mesh生成，以及可开关的导航图调试可视化。模式上参照`ForeverTerrainFrameworkComponent`
+（procedural mesh、材质固定加载走`ConstructorHelpers`、组件挂在owner的RootComponent下）。
+`GenerateRoadnet`依次建：道路ISM+开口cube、路口mesh、小路mesh、导航debug mesh。
 
 ## 关键设计
 
 - **道路正常路段的可见效果直接来自`Road::mesh`本身**——`mesh`资产（默认`default_1_1`）本身
   已经画好了车道+人行道横断面，`vehicleLanes`/`parkingLanes`/`pedestrianLanes`这几组宽度数据
   只用于结构计算（导航锚点偏移、路口路缘角点、开口cube宽度），不驱动任何单独的procedural
-  条带或材质。`BuildRoadInstances`的分段数量算法（"缩放后的mesh长度落在[0.8,1.2]×原始长度
-  区间内，取最接近total/unit的整数段数"）照抄老工程`UMeshArray::RepeatMesh1D`/
-  `RepeatMeshAlongCurve`，但不需要重新实现老工程那套自建弧长采样表——`Connection::GetPoint(f)`
+  条带或材质。`BuildRoadInstances`的分段数量算法是"缩放后的mesh长度落在[0.8,1.2]×原始长度
+  区间内，取最接近total/unit的整数段数"；不需要自建弧长采样表——`Connection::GetPoint(f)`
   本身就是弧长参数化的（`Source/Dependence/map/general_geometry.cpp`的`ResolveArcLengthParam`，
   128点惰性缓存），直接按`f=k/n`取点就已经是等弧长分段。用`UInstancedStaticMeshComponent`
   按分段结果摆放`mesh`资产实例，同时满足"沿路线分隔mesh元素"+"曲线道路"两点。
 - **每条唯一的mesh资产路径对应一个共享的`UInstancedStaticMeshComponent`**（`GetOrCreateRoadISM`
   按路径查/建），不是每条Road各自一个ISM——目前所有Road都用同一个`default_1_1`，只会建
   一个ISM，但接口上支持未来mod给不同Road配不同mesh资产。
-- **开口：整条路横断面宽度都被替换成一块贴`DefaultRoad`材质的扁平cube**，不精细地只挖开
+- **开口：整条路横断面宽度都被替换成一块贴`DefaultRoad`材质的扁平cube**（同一物理位置的车行/行人两条`RoadOpening`按`t`去重只画一次），不精细地只挖开
   人行道/停车道那一部分——`BuildRoadInstances`在命中`Road::GetOpenings()`对应弧长区间时
   跳过该分段mesh实例的摆放，`BuildOpeningMeshes`在同一段范围画一块覆盖整条路总宽度（车行
   +停车+人行道两侧加总）的cube。两处cube生成共用同一份几何逻辑（`AppendFlatRoadCube`：给定
@@ -119,3 +117,4 @@
 
 - 路口mesh的圆角/斜切、开口cube的精细化（只挖开人行道/停车道而不是整条路宽度）——明确的
   简化范围，不是遗漏。
+- 小路mesh（`BuildPathRoadMeshes`）是按起止点的直线ribbon，高度固定为`ROADNET_HEIGHT_EPSILON`，不跟随地形起伏。

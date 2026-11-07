@@ -13,8 +13,7 @@ class DeductAssetChange;
 class DropAssetChange;
 struct ScriptContext;
 
-// 世界掉落物(cube占位)的生成/销毁登记——对应旧Framework Actor `Asset`(C++ Base:
-// AssetBase)。背包UI的Drop/Pick动作分别调用SpawnWorldAsset/DestroyWorldAsset，见
+// 世界掉落物的生成/销毁登记。背包UI的Drop/Pick动作分别调用SpawnWorldAsset/DestroyWorldAsset，见
 // Source/Forever/UI/InventoryWidget.h。这个组件不持有Asset的所有权(真正所有权在
 // Room::assets或容器的contents里)，只登记"哪个Asset对应世界里哪个Actor"，方便Pick时
 // 反查到Actor销毁。

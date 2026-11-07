@@ -5,12 +5,6 @@
 #include <string>
 
 
-// 纯占位的默认story实现(没有真正的剧情内容)，Basic编译为DynamicLibrary(Basic.dll)，和
-// Forever_Mod下的Mod一样由Config/ModLoader在运行时扫描加载，不会静态链进Forever.Build.cs，
-// 见Source/Basic/README.md。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式。
 class ScriptBasic : public ScriptMod {
 public:
 	ScriptBasic();

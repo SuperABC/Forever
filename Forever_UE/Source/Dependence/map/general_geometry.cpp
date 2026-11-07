@@ -175,9 +175,7 @@ void Connection::AddControls(vector<pair<Node, float>> controls) {
 	arcLengthCache.clear();
 }
 
-// 按弧长比例f反查对应的原始Bezier多项式参数u，使GetPoint/GetTangent的参数f按物理距离线性变化
-// （即f=0.5时对应的点就是曲线弧长意义上的中点），而不是Bezier多项式意义上的中点；
-// 弧长表首次调用时惰性建好并缓存到arcLengthCache，同一条Connection之后的调用不再重新采样
+// 按弧长比例f反查Bezier多项式参数u,使f按物理距离线性变化;弧长表首次调用惰性建好并缓存到arcLengthCache
 double Connection::ResolveArcLengthParam(const vector<pair<Node*, float>>& allPoints, int m, float f) const {
 	constexpr int SAMPLES = 128;
 	if (arcLengthCache.empty()) {
@@ -983,18 +981,12 @@ Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, con
 	pathRoad->AddPedestrianLane(0, spec.pedestrianWidth);
 	pathRoad->AddPedestrianLane(1, spec.pedestrianWidth);
 
-	// 小路两端各自落在的Road上的弧长比例(直线投影近似)，不管endRoad是不是小路都要算——大路
-	// 开口标记只在endRoad不是小路时才打，但这个t值本身是Core层Map::ConnectPathRoad接导航图
-	// 时唯一需要的定位信息，两种情况(大路/小路)都要提供，所以从"只在大路分支里算"挪成"只要
-	// endRoad非空就算"。
+	// 两端落点的弧长比例t(直线投影近似),endRoad非空就算:Map::ConnectPathRoad接导航图需要它。
 	float endT1 = endRoad1 ? ProjectT(endRoad1, wx1, wy1) : 0.f;
 	float endT2 = endRoad2 ? ProjectT(endRoad2, wx2, wy2) : 0.f;
 
-	// 小路接到一条"大路"(非小路)上的那一端，给大路标一个开口——只是几何/渲染意义上的路面
-	// 缺口标记(RoadOpening)，不触碰导航图(那部分交给Core层Map::ConnectPathRoad，见map.md)。
-	// 两条小路互相连接的路口不算"大路被开口"，不在这里标记。forwardSide/isVehicle这两个字段
-	// 目前没有消费方会读（只有Map::AddRoadAccessNode自己产出的开口才用得到，用来选车道），
-	// 随便填一个值即可。
+	// 小路接到"大路"(非小路)的那一端给大路标RoadOpening(纯几何/渲染,不碰导航图);
+	// 两条小路互接不标。forwardSide/isVehicle此处无消费方,填任意值。
 	if (endRoad1 && !endRoad1->IsPathRoad()) {
 		RoadOpening opening;
 		opening.t = endT1;
@@ -1209,14 +1201,8 @@ bool Lot::FindAdaptivePlacement(int direction, float minFrontage, float minDepth
 	Lot*& outLot, float& outMarginStart, float& outMarginEnd, float& outDepth) const {
 	bool depthAlongX = (direction == FACE_WEST || direction == FACE_EAST);
 
-	// 纯查询：只用PeekFreeLots()(不会lazy-init、不会分配)。还没真正初始化过时，拿this自己当
-	// 唯一候选——语义上等价于GetFreeLots()第一次调用时会塞进去的那个初始元素，但这里不触发那次
-	// 分配，调用方(mod的Assign())后面会把outLot设进LotPlacementRequest::lot，真正的
-	// GetFreeLots()首次初始化留给Core侧的RequestPlacement调用去触发。
-	//
-	// 不要求命中的自由子块贴着*this*最外层的那条原始边——子块自己的direction方向挂的可能是
-	// 原始边界路，也可能是之前某次切割在切割线上插入的内部"path"小路，两者对这个函数来说
-	// 同等有效(内部小路同样是真实、会接入导航图的Road，贴着它盖房子完全合理)。
+	// 纯查询:只用PeekFreeLots()。未初始化时拿this自己当唯一候选(不触发lazy-init分配)。
+	// 命中的子块不要求贴着this最外层的原始边,贴着内部小路同样有效。
 	vector<Lot*> candidates = PeekFreeLots();
 	if (candidates.empty()) {
 		candidates.push_back(const_cast<Lot*>(this));
@@ -1241,15 +1227,11 @@ bool Lot::FindAdaptivePlacement(int direction, float minFrontage, float minDepth
 		return false;
 	}
 
-	// margin/depth相对best自己的尺寸反推(不是this的)——调用方要把RequestPlacement对准best
-	// (不是this)去调，让裁剪在best自己的坐标系里进行，这样无论best贴的是原始边还是内部小路都
-	// 天然正确，不需要先换算到this的坐标系再反推(换算版本的bug：子块贴的若是内部小路，换算
-	// 出来的margin会落在this坐标系下早被别的mod占用的区域，RequestPlacement用this自己的坐标系
-	// 找不到任何匹配，见general_geometry.md排查记录)。
+	// margin/depth相对best自己的尺寸反推(不是this的),调用方对best调RequestPlacement;
+	// 换算到this坐标系再反推会在子块贴内部小路时找不到匹配。
 	float frontageSize = depthAlongX ? best->GetSizeY() : best->GetSizeX();
-	// RequestPlacement每裁一刀都要求剩下的那块至少有MIN_LOT_EXTENT加一条小路的宽度，否则SplitWithPath
-	// 失败、整次放置作废(还会把best搅成半切状态，连累后面的建筑)。所以剩余空间只比请求大一点点
-	// (小于kMinLeftover)时，不留这条细边，直接把它并进建筑占地，而不是请求"刚好minFrontage x minDepth"。
+	// RequestPlacement每裁一刀都要求剩下的至少MIN_LOT_EXTENT加一条小路宽,否则整次放置失败并把best搅成半切状态;
+	// 所以剩余空间小于kMinLeftover时不留细边,直接并进占地。
 	constexpr float kMinLeftover = 4.f;
 	float depthSize = depthAlongX ? best->GetSizeX() : best->GetSizeY();
 	float frontageLeft = frontageSize - minFrontage;
@@ -1262,12 +1244,7 @@ bool Lot::FindAdaptivePlacement(int direction, float minFrontage, float minDepth
 }
 
 namespace {
-	// FillRemainder这次改用老工程的思路：先按权重CDF采样出一串(type,acreage)一直到填满某个
-	// freeLots条目的总面积（对应老工程Map::GenerateBuildings的采样循环，
-	// E:\Projects\Forever_UE\Source\Core\map\map.cpp第687-734行），再两两合并成一棵二叉树
-	// （对应老工程Quad::DivideSpace的合并阶段，E:\Projects\Forever_UE\Source\Dependence\map\
-	// general_geometry.cpp第706-730行），最后递归二分真实的Lot几何、把每个叶子安置到自己最终的矩形里
-	// （对应老工程Quad::SplitInto+DivideSpace第732-751行）。只在这个文件内部使用，不进头文件。
+	// FillRemainder三步(只在本文件内部用):采样填满 -> 二分合并成树 -> 递归安置,见general_geometry.md。
 	struct FillMergeNode {
 		float acreage = 0.f;
 		string type; // 只有叶子有意义；FILL_EMPTY_TYPE表示这段面积主动空置，不生成FillResult
@@ -1285,12 +1262,8 @@ namespace {
 		delete node;
 	}
 
-	// 老工程采样循环搬过来：按candidates权重CDF反复抽类型，直到累计面积达到acreageBlock——
-	// 只有"抽到但剩余空间连这个类型下限都放不下"才计入attempts(沿用老工程
-	// MAX_ALLOCATION_ATTEMPTS=16的值)，抽到能放的类型永远不计入尝试次数，保证"填满"优先于
-	// "尝试次数"，不会像原来贪心版本那样把成功的迭代也一起消耗进尝试预算。最后如果还差一点凑
-	// 不满(通常是attempts耗尽)，补一个FILL_EMPTY_TYPE叶子把总面积账目补齐，这样递归二分时
-	// 不会有游离在任何叶子之外的面积。
+	// 按candidates权重CDF反复抽类型直到累计面积达到acreageBlock;只有"抽到但剩余空间放不下"才计入attempts
+	// (上限MAX_ALLOCATION_ATTEMPTS=16)。凑不满时补FILL_EMPTY_TYPE叶子补齐面积账目。
 	vector<pair<string, float>> SampleFillElements(float acreageBlock,
 		const vector<pair<string, float>>& candidates,
 		const function<float(const string&)>& randomAcreage,
@@ -1332,9 +1305,7 @@ namespace {
 		return elements;
 	}
 
-	// 老工程Quad::DivideSpace合并阶段搬过来：按面积降序排序，反复把数组末尾(最小)两个元素
-	// 合并成一个新内部节点(面积=两者之和)，插入排序塞回数组维持降序，直到只剩1或2个顶层节点
-	// (只采样出一个元素时不需要合并，直接返回那一个叶子)。
+	// 按面积降序,反复合并末尾最小的两个元素成内部节点(面积相加),直到剩1或2个顶层节点。
 	FillMergeNode* BuildFillMergeTree(vector<pair<string, float>>& elements) {
 		vector<FillMergeNode*> nodes;
 		nodes.reserve(elements.size());
@@ -1378,13 +1349,8 @@ namespace {
 		return root;
 	}
 
-	// 老工程Quad::SplitInto+DivideSpace安置阶段搬过来：把region按node->left/right的面积比例
-	// 递归二分，安置到最终矩形。和老工程零宽度切割线不同，这里每一刀都是真实的
-	// Lot::SplitWithPath(带宽度的小路)，可能因为切割线两端都没有边界Road或分出来的某段小于
-	// MIN_LOT_EXTENT而失败——优先按较长边选轴，切不动就换另一条轴再试一次，两条轴都切不动就
-	// 说明这个节点没法再细分，把region整个让给面积更大的子树(另一支连同它的采样结果一起
-	// 作废，不产生FillResult，DeleteFillMergeTree释放)，这是唯一的退化点，只在几何确实分不出
-	// 两段合法矩形时才触发，不像原来贪心版本那样纯粹因为面积门槛就整块丢弃。
+	// 把region按左右子树面积比例递归二分,每刀是真实的SplitWithPath(可能失败)。优先按较长边选轴,
+	// 切不动换另一轴;两轴都不行就把region整个让给面积更大的子树(另一支作废,不产生FillResult)。
 	void PlaceFillMergeNode(Lot* region, FillMergeNode* node, const PathLaneSpec& spec,
 		vector<Lot::FillResult>& results, vector<PathRoadLink>& outLinks) {
 

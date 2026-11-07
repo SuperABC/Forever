@@ -8,11 +8,6 @@
 #include <vector>
 
 
-class Citizen;
-class Society;
-class Industry;
-class Room;
-
 // 一次货款结算的汇总，用于报表。
 struct GoodsSettlementReport {
 	int64_t internalPaid = 0;   // 城内流转货款（买方付给卖方）

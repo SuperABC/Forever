@@ -7,11 +7,7 @@
 #include <vector>
 
 
-// Storage：一个仓库的类型定义——只声明"能装什么(categories)"+"能装多少(capacity)"，
-// 不知道自己的上下游/位置，这些由Industry的全城统一调配逻辑在运行时读写，见
-// Core/industry/storage.h/storage.md。categories和ProductMod::categories同一套
-// 字符串标签，任一交集即可存放。capacity是共享容量池(不同产品类型共用总容量)，不是
-// 每种产品类型各自独立配额。
+// 设计见storage_mod.md。
 class StorageMod {
 public:
 	StorageMod() = default;
@@ -20,36 +16,25 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 具体子类必须在SetProperty()里填这两个字段，不要在构造函数里赋值——构造函数只负责
-	// id/count这类登记，和ManufactureMod::SetTargets()/TerrainMod::SetupTexture()同一套
-	// "两段式"约定，Core创建完mod实例后会立刻调一次这个方法，再读这两个字段。
+	// 子类在这里填下面的字段(不在构造函数里),Core创建实例后立刻调一次。
 	virtual void SetProperty() = 0;
 
 	std::vector<std::string> categories;
 	float capacity = 0.f;
 
-	// 是否允许被物流取走/放入：只能放=需求方(商店仓库、工坊原料cache)，只能取=供给方(工坊产出
-	// cache)，可取可放=独立仓库(物流的缓冲层)。
+	// 物流权限,语义见storage_mod.md。
 	bool canTake = true;
 	bool canPut = true;
 
-	// 需求说明，仓库靠它自己驱动物流补货，二选一(同时非空时Core只认productDemand)：
-	//   serviceTypeDemand: (货物服务类型, 比例)，如 {"food", 1.0} 表示容量的100%留给food类货物
-	//   productDemand:     (product id, 比例)，精确到某种货物
-	// 比例取值[0,1]，是占本仓库capacity的比例。两个都空表示该仓库没有补货需求。
+	// 补货需求,比例取[0,1](占capacity),二选一(同时非空只认productDemand),语义见storage_mod.md。
 	std::vector<std::pair<std::string, float>> serviceTypeDemand;
 	std::vector<std::pair<std::string, float>> productDemand;
 
-	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
-	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
-	// 这里只放mod自己的私有数据。
+	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}
-	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
-	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
 	virtual int GetStateVersion() const { return 0; }
-	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
-	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	// GetName用的static count,存档保存/读档恢复;没有计数器的类保持默认。
 	virtual int GetInstanceCounter() const { return -1; }
 	virtual void SetInstanceCounter(int) {}
 };

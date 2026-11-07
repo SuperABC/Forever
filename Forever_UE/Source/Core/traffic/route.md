@@ -97,7 +97,7 @@
 ## 停站/离站事件
 `Route::Update`每次算完一辆车的相位后，和`lastStopStation`(上次停靠的站，nullptr=在行驶)比较：不在→在站=entering，在站→不在=leaving，站A→站B(两次Update之间跨过整个停站)=先A的leaving再B的entering。事件进`pendingStopEvents`，`ConsumeStopEvents()`取走(`Traffic::ConsumeStopEvents`汇总所有线路)。`DriveVehicle`通过`outDwellStation`带出当前停靠的站。读档后`SilenceInitialStopEvents()`让第一次Update只记状态不发事件(`traffic_save.cpp`加载线路时调用)；新开局第一次Update正常发。Core不碰script，由`AForeverFrameworkActor::Tick`转发为`enter_stop`/`leave_stop`事件。
 
-## 物理接管支持（2026-11-01）
+## 物理接管支持
 - `Vehicle::IsPhysicsDriven()`（运行时、不存档）为真时 `Route::Update` 跳过该车（不改位姿、不产出停站事件），时刻表相位照常累计。
 - `QueryVehicleState(vehicle)`：当前线路/腿/是否停靠/剩余停靠（真实秒）/巡航速度，不改状态；`GetLineStopNodeIds(line)`：每站 stationNode 的 Map 辅助节点 id（leg i 的起点站）；`ResetStopState(vehicle)`：物理段交还时刻表时忘掉停靠状态。
 

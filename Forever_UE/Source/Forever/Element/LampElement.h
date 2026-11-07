@@ -55,12 +55,8 @@ struct FLampLightSettings
 	bool castShadows = false;
 };
 
-// 路灯的基类Actor：每盏灯一个实例，由UForeverLampFrameworkComponent按Core的Lamps生成并按昼夜、距离驱动。
-// Mesh、灯头动态材质都在Blueprint子类里摆(父类选LampElement)。三个状态入口：
-//   ApplyBrightness——昼夜亮度(0/1)，蓝图事件SetBrightness里改灯头emissive；
-//   SwitchNear/SwitchFar——玩家近/远切换。
-// 近处用真实光源(lights)、远处用ULampDecalComponent光斑，二者只生效一个，由RefreshLampEffects按
-// 亮度和近/远统一对齐。详见LampElement.md。
+// 路灯的基类Actor：每盏灯一个实例，由UForeverLampFrameworkComponent生成并按昼夜、距离驱动。
+// 近处用真实光源、远处用光斑Decal，详见LampElement.md。
 UCLASS()
 class FOREVER_API ALampElement : public AActor
 {

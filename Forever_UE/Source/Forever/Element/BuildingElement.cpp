@@ -32,25 +32,10 @@
 #include <algorithm>
 
 #define BUILDING_WORLD_SCALE 1000.f
-// Building没有真实高度数据，楼层cube统一从这个高度起算(相当于室外地坪grade)，这个grade
-// 同时是地上1楼的地板/basements最上面一层(地下1楼)天花板共用的同一个Z——0楼层的
-// GetFloorBaseZ(0)恒等于0，这个值只是纯渲染层"避开z-fighting"的偏移，加不加、加多少和
-// Core侧楼层数据无关。
-//
-// 数值这次从10.f改成1.f：老数值10.f比地形网格自己的z-fighting偏移
-// (ForeverTerrainFrameworkComponent.cpp的HEIGHT_EPSILON=0.002地图单位，乘
-// BUILDING_WORLD_SCALE换算成世界单位=2.f)还大，导致地下室天花板(和地上1楼地板共用同一个
-// grade)整体比地形mesh表面高8个世界单位，从外面能看见地下室天花板从地面里冒出来一截
-// (用户报告的bug)。改成比地形的2.f更小的1.f，让这个共用grade稳定沉到地形表面以下——
-// 地下室天花板朝上的一面因此低于地形，满足"看不出地下室"的要求；地上1楼的地板(同一个Z)
-// 跟着一起沉了1个世界单位(约1cm)，用户已确认这个副作用可以接受("地上一层的地板下表面
-// 可以比地形mesh低，毕竟玩家在室外的时候一直都在地面上")。1.f仍然大于0，和地形的2.f之间
-// 留了1个世界单位的间隙，避免两个网格恰好共面出现z-fighting。
-//
-// 这不是彻底修复：Building这次仍然不采样所在位置的真实地形高度(TODO，见
-// BuildingElement.md)，只是把这个全局常量和地形自己的常量放在同一个参考系里对齐大小关系，
-// 对今天"可建造的lot地形高度恒为0"这个前提成立；将来lot允许出现在非0高度地形上时，这个
-// 全局常量会需要换成真正按building位置采样SampleHeight()的方案。
+// Building没有真实高度数据，楼层cube统一从这个高度起算(相当于室外地坪grade)；它同时是地上1楼地板和地下1楼天花板共用的Z。
+// 必须小于地形mesh自己的z-fighting偏移(HEIGHT_EPSILON 0.002地图单位 x BUILDING_WORLD_SCALE = 2.f)：否则地下室天花板会从地面里冒出来一截；
+// 又必须大于0，与地形之间留1个世界单位间隙，避免共面z-fighting。这不是彻底修复：目前仍不采样building位置的真实地形高度，
+// 只对"可建造的lot地形高度恒为0"成立，将来lot允许在非0高度地形上时需改成按位置采样SampleHeight()(见BuildingElement.md待办)。
 #define BUILDING_HEIGHT_EPSILON 1.f
 // 墙体厚度(地图单位)，照抄老工程BuildingBase.cpp::ConstructQuad里写死的0.01f。
 #define BUILDING_WALL_THICKNESS 0.01f
@@ -108,11 +93,8 @@ namespace {
 		BuildingAppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011);
 	}
 
-	// 楼体子矩形的世界中心(地图单位换算成世界单位)——building自身的GetPosX/PosY()是Building
-	// 整个Quad的中心(已经是世界坐标)，楼体中心相对这个点有一个未旋转局部坐标系下的偏移
-	// (GetBodyOffsetX/Y())，这个偏移要跟着building自己的rotation一起转，才能得到楼体真正的
-	// 世界中心。只给远处LOD(整栋一个box)用；楼层内部任意一点的转换见下面更通用的
-	// ComputeWorldPosition。
+	// 楼体子矩形的世界中心：building的GetPosX/PosY()是整个Quad的中心，楼体相对它有个未旋转局部坐标系下的偏移
+	// (GetBodyOffsetX/Y())，要跟着building的rotation一起转。只给远处LOD(整栋一个box)用，楼层内任意点见ComputeWorldPosition。
 	void ComputeBodyWorldCenter(const Building& building, float& outCx, float& outCy) {
 		float cx = building.GetPosX() * BUILDING_WORLD_SCALE;
 		float cy = building.GetPosY() * BUILDING_WORLD_SCALE;
@@ -157,14 +139,8 @@ namespace {
 		float x1 = 0.f, x2 = 0.f, y1 = 0.f, y2 = 0.f;
 	};
 
-	// Stair/Ramp网格的朝向由三部分组成：building自身的世界旋转(rotation，跟着lot走，和墙体/
-	// 地板slab一致)、加上这个楼梯/坡道自己的局部direction(0-3，模板解析时已经按AssignFloor
-	// 声明的face预旋转过，见BuildingLayoutLibrary)——照抄老工程ABuildingBase::ConstructBuilding
-	// 里"GetRotation(stair.GetDirection())"这段：NORTH=0°、EAST=90°、SOUTH=180°、WEST=270°，
-	// 在老工程里这是相对building自己Actor(已经摆好世界旋转)的局部附加旋转，这次没有per-building
-	// 的Actor，要显式把这段角度和building世界旋转相加才能等价；同时WEST/EAST方向要交换
-	// sizeX/sizeY——网格局部坐标系X轴默认对齐NORTH朝向下的世界X，旋转90°/270°之后局部X/Y
-	// 和世界X/Y互换，缩放必须按局部轴给，不然90°/270°朝向的楼梯会被拉伸成错误的长宽比。
+	// Stair/Ramp网格朝向 = building世界旋转 + 自己的局部direction(0-3，NORTH=0°/EAST=90°/SOUTH=180°/WEST=270°，已在模板解析时按face预旋转)。
+	// WEST/EAST要交换sizeX/sizeY：旋转90°/270°后局部X/Y与世界X/Y互换，缩放必须按局部轴给，否则楼梯长宽比错。
 	void ComputeDirectionalMeshTransform(int direction, float sizeX, float sizeY, float buildingRotation,
 		float& outSizeX, float& outSizeY, float& outRotation) {
 		float localAngleDeg = 0.f;
@@ -180,12 +156,10 @@ namespace {
 		outRotation = buildingRotation + FMath::DegreesToRadians(localAngleDeg);
 	}
 
-	// 电梯轿厢单步推进：状态是(z, v)，v带符号(向上为正)，目标可以随时改。每个子步先判断：
-	// 1) 速度背离目标(含刚反向改目标)：以加速度a减速，过零后自然反向加速；
-	// 2) 速度朝向目标且剩余距离不够以a刹停：按v²/(2*剩余)精确减速刚好停在目标(需要的减速度超过1.5a说明
-	//    已经来不及，就按a刹车冲过目标再折返)；
-	// 3) 否则以a加速到不超过cruiseSpeed(同向改目标时速度不变，继续巡航)。
-	// 速度只在这里累积，所以中途改目标速度始终连续。返回是否已到站(此时z=targetZ、v=0)。
+	// 电梯轿厢单步推进：状态(z, v)，v带符号(向上为正)，目标可随时改。每个子步：
+	// 1) 速度背离目标：以加速度a减速，过零后自然反向加速；
+	// 2) 速度朝向目标且剩余距离不够以a刹停：按v²/(2*剩余)精确减速刚好停在目标(所需减速度超过1.5a说明来不及，就按a刹车冲过再折返)；
+	// 3) 否则以a加速到不超过cruiseSpeed。速度只在这里累积，所以中途改目标速度始终连续。返回是否已到站(z=targetZ、v=0)。
 	bool StepCabin(float& z, float& v, float targetZ, float cruiseSpeed, float accel, float deltaSeconds) {
 		constexpr float kArriveDistance = 0.5f;
 		int32 steps = FMath::Max(1, FMath::CeilToInt(deltaSeconds * 60.f));
@@ -398,11 +372,8 @@ void ABuildingElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AA
 void ABuildingElement::BuildRoomCollisionBoxes() {
 	if (!building) return;
 
-	// 原来在UForeverRoomFrameworkComponent里，全地图所有Room共用那个组件所在的单例owner——
-	// 现在挪进这里，每栋楼自己的Room碰撞盒跟着这栋楼的其它组件一起attach到elementRoot，
-	// 用的还是原来那套换算(Room自己的局部矩形按Building::LocalToWorld换算世界中心+
-	// building自身旋转，垂直范围是这个Room所在楼层的Z范围)，三个方向各-0.01(地图单位)，
-	// 和building碰撞盒的各+0.01配对，两者贴合的边界不会因为完全重合而在Overlap判定上抖动。
+	// Room局部矩形按Building::LocalToWorld换算世界中心+building旋转，垂直范围是Room所在楼层的Z范围，
+	// 三个方向各-0.01(地图单位)，与building碰撞盒的各+0.01配对，贴合边界不会因完全重合而在Overlap判定上抖动。
 	const vector<float>& floorHeights = building->GetFloorHeights();
 	int32 basements = building->GetBasementCount();
 	float margin = ROOM_COLLISION_MARGIN * BUILDING_WORLD_SCALE;
@@ -748,11 +719,8 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 			corridor.GetWall(FACE_WEST), corridor.GetWall(FACE_EAST), corridor.GetWall(FACE_NORTH), corridor.GetWall(FACE_SOUTH),
 			corridor.GetDoors(), corridor.GetWindows(), wallMaterial);
 	}
-	// Single/Row槽位隐含四面都有墙——但槽位本身在实例化成真正的Room之后，门/窗/朝向都已经
-	// 转移到Room身上(见Building::AssignRoom/ArrangeRow)，槽位自己的门窗数据不再是最新的，
-	// 这里改成遍历building->GetRooms()按GetLayer()==level筛选，画每个真正Room的墙体，
-	// 不直接用Floor::GetSingles()/GetRows()（那两个列表只是"模板槽位"，槽位数量/大小和实际
-	// 生成的Room数量不是一一对应——ArrangeRow会把一个row槽位切成好几个Room）。
+	// 槽位实例化成Room后门/窗/朝向已转移到Room身上，槽位数据不再是最新的，且一个row槽位会被ArrangeRow切成多个Room，
+	// 所以遍历building->GetRooms()按GetLayer()==level筛选，不直接用Floor::GetSingles()/GetRows()。
 	for (Room* room : building->GetRooms()) {
 		if (!room || room->GetLayer() != level) continue;
 		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, room->GetPosX(), room->GetPosY(),
@@ -1185,14 +1153,9 @@ void ABuildingElement::Tick(float DeltaTime) {
 		}
 	}
 
-	// 每个操作都要先问框架组件要一份全地图共享的预算，预算耗尽这一帧就先停手，下一帧再继续
-	// ——避免大量building同时穿越距离阈值时，所有Element在同一帧一起疯狂建组件卡成一张ppt。
-	// 必须先判断队列是否为空再消耗预算(不能反过来)，否则每一栋"这一帧其实无事可做"的building
-	// 也会白白吃掉一份全局预算，挤占真正需要建楼层的building的份额。
-	//
-	// 楼层级操作永远先尝试：只要全地图任意一栋楼还有楼层级操作排队，framework->
-	// TryConsumeLodOpBudget(true)对所有building的门操作都会拒绝发预算，门操作停滞直到
-	// 楼层级工作全部清空，见ForeverBuildingFrameworkComponent::TryConsumeLodOpBudget。
+	// 每个操作都要先问框架组件要一份全地图共享的预算，耗尽就下一帧再继续。必须先判断队列是否为空再消耗预算，
+	// 否则"这一帧无事可做"的building也会白吃预算。楼层级操作永远先尝试：全地图任意一栋楼还有楼层级操作排队时，
+	// 门操作的预算申请对所有building一律被拒绝，见ForeverBuildingFrameworkComponent::TryConsumeLodOpBudget。
 	while (!floorTierOpQueue.IsEmpty() && framework->TryConsumeLodOpBudget(/*isDoorTierOp=*/false)) {
 		FLodOp op;
 		floorTierOpQueue.Dequeue(op);

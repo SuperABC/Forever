@@ -23,7 +23,7 @@ BroadcastGameStart`/`AForeverFrameworkActor::Tick`在UE层从`AForeverFrameworkA
 取到7个指针后现场构造一个，只活这一次调用的生命周期，见`Forever/Framework/
 ForeverStoryFrameworkComponent.md`"PostImplement"一节。
 
-### 目前实现七种post类型，其余domain指针先占位
+### 目前实现的post类型，其余domain指针先占位
 
 构造函数接收全部7个指针并存成成员，`Post()`识别以下请求：
 
@@ -36,6 +36,11 @@ ForeverStoryFrameworkComponent.md`"PostImplement"一节。
   `Room`/`CurrentRoom`；这类citizen如果被挑中交给玩家操控，`ComputeLogicalPosition`
   算不出世界坐标，`SpawnCitizen`会失败，玩家只能停留在开局的飞行相机上且没有任何报错——
   只挑有家的citizen是为了避免这个失败模式。
+- `request["post"] == "product info"`（商店这类组织mod看不到`Industry`，靠它拿售价，见
+  `Dependence/society/organization_mod.h`的`CollectServices`）：`request["type"]`是product type，
+  `industry->FindProduct`查到后返回`{"result":"success","retail price","import price",
+  "export price","service type","service quality"}`；`industry`为空或查不到返回
+  `{"result":"fail","msg":"product not found: <type>"}`。
 - `request["post"] == "game time"`：读`player->GetTime()`（`Player`全局时钟，见
   `Core/player/player.md`），成功返回`{"result":"success","date":"YYYY-MM-DD",
   "time":"HH:mm"}`，`player`为空或时钟还没`Init()`时返回
@@ -69,8 +74,8 @@ ForeverStoryFrameworkComponent.md`"PostImplement"一节。
   构造时全传nullptr也能用。
 
 请求不认识（`post`字段不是上面几种，或请求本身不是JSON对象）统一返回
-`{"result":"fail","msg":"post not found."}`。`industry`/`traffic`（`map`同理）目前没有
-分支用到，`society`也没有直接用到（"citizen workplace address"走的是
+`{"result":"fail","msg":"post not found."}`。`traffic`/`society`/`story`目前没有
+分支用到（`industry`只被"product info"用，`map`只被`list *`用）（"citizen workplace address"走的是
 `Citizen::GetJob()`，不经过`Society`）——等对应域迁移出需要被查询的数据时在
 `if/else if`链上加新分支即可，不需要改构造函数签名。
 
@@ -92,8 +97,9 @@ virtual const JsonValue& GetResult() const override { return result; }
   `populace/populace.h`/`populace/citizen.h`（`Populace::GetCitizens()`/`Citizen`）、
   `player/player.h`（`Player::GetTime()`）、`society/job.h`（`Citizen::GetJob()->
   GetPosition()`）、`map/room.h`（`Room::GetAddress()`）、`map/map.h`/`map/zone.h`/`map/building.h`（`list *`三种查询）、`common/utility.h`
-  （`GetRandom`、`Time::Format`）、`Map`/`Society`/`Story`/`Industry`/`Traffic`（仅
-  前置声明或暂未使用，构造函数存指针）。
+  （`GetRandom`、`Time::Format`）、`industry/industry.h`/`industry/product.h`（"product info"）、
+  `common/config.h`（`Config::GetResourceFilePath`）、`Society`/`Story`/`Traffic`（仅
+  前置声明，构造函数存指针）。
 - 被谁依赖：`Forever/Framework/ForeverStoryFrameworkComponent.cpp`
   （`BroadcastGameStart()`现场构造`PostImplement`，传给`Story::BroadcastGameStart`的
   `post`参数）、`Forever/Framework/ForeverFrameworkActor.cpp`（`Tick()`现场构造
@@ -105,7 +111,7 @@ virtual const JsonValue& GetResult() const override { return result; }
 
 ## 待办/后续阶段
 
-- `industry`/`traffic`两个domain指针目前只存不用，等对应域迁移出需要查询的数据时再加
+- `society`/`story`/`traffic`三个domain指针目前只存不用，等对应域出现需要被查询的数据时再加
   新的`else if`分支。
 - 请求/响应的JSON字段命名（`post`/`result`/`name`/`date`/`time`/`address`/`msg`）目前
   没有形成统一约定或校验，查询类型多起来后可能需要梳理一份规范。

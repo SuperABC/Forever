@@ -15,9 +15,7 @@ const char* ResidenceZone::GetName() {
 	return name.data();
 }
 
-// 目标面积常量，不需要单位换算；换算成一个近似正方形的边长，贴着lot任意一条有路的边居中
-// 摆放。这个常量Assign()/Layout()都要用到，各自独立算一遍(side本身是纯类型级常量，不需要
-// 共享状态)。
+// 目标面积换算成近似正方形的边长side；Assign()/Layout()各自独立算一遍(纯类型级常量，不需要共享状态)。
 namespace {
 	constexpr float TARGET_ACREAGE = 20000.f;
 	// 围墙进深、大门宽度占边长的比例——Layout()铺围墙/大门、LayoutTrees()让出大门都用这两个值。
@@ -44,13 +42,8 @@ void ResidenceZone::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, voi
 	for (Lot* lot : lots) {
 		if (!lot) continue;
 
-		// 井字中心lot(固定AREA_OFFICIAL_HIGH)也允许摆围墙测试场景，和火车站(占北侧)/
-		// 机场(占南侧)共存——不排除这个area，只靠下面dir从WEST开始找第一个有边界路、
-		// frontage够用的方向这件事本身，自然避开NORTH/SOUTH：这个lot WEST边(中山西路)
-		// 肯定有边界路，dir==0(WEST)会第一个命中，不会往后扫到NORTH/SOUTH。真正是否会和
-		// 火车站/机场在几何上打架，取决于三边各自占的depth是否真的互不相交，见
-		// TrainStationBuilding/AirportBuilding::Assign(depth/margin已经调小，给WEST边的
-		// 围墙场景让出空间)。
+		// 井字中心lot(AREA_OFFICIAL_HIGH)也允许摆园区：dir从WEST开始扫，中心lot的WEST边
+		// 必有边界路，会第一个命中，园区只占这条边起点角的一块，剩余空间留给火车站/机场。
 		for (int dir = 0; dir < 4; dir++) {
 			if (!lot->GetBoundaryRoad(dir)) continue;
 			bool alongY = (dir == FACE_WEST || dir == FACE_EAST);
@@ -80,10 +73,7 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	int dir = direction;
 	bool alongY = (dir == FACE_WEST || dir == FACE_EAST);
 
-	// 围墙/大门/内部道路测试场景(需求8)：dir这条边正中间放一个大门，该边大门以外、以及其余3条
-	// 边整段铺围墙；垂直于大门所在边的一条内部道路，从大门位置贯穿到正对面的边，把zone分成
-	// 两半——四周都是墙(大门除外)，两个半区应该只通过这条内部路互通。这些字段是ZoneMod级别的
-	// (见zone_mod.h)，对这个mod产出的所有zone一视同仁。
+	// 围墙/大门/内部道路字段是ZoneMod级别的(见zone_mod.h)，布局见zone_basic.md。
 	const string wallMesh = "/Game/Asset/Meshes/Fence.Fence";
 	// wallUnit必须匹配Fence资产的实际长度——BuildWallSegment按这个值换算每段实例的缩放
 	// 倍数，估大了铺出来的实例之间会留出明显空当。
@@ -154,12 +144,8 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	access.width = gateWidth;
 	pedestrianAccess.push_back(access);
 
-	// 内部道路：垂直于dir这条边，从大门位置贯穿到正对面的边——dir是WEST/EAST时
-	// dir边是竖直的，垂直方向是水平线(y取大门的y，也就是0)横贯整个zone；dir是
-	// NORTH/SOUTH时反过来，是竖直线(x取大门的x，也就是0)。这条分割线只是一条人行道
-	// (isVehicle=false)——按ZoneInternalRoadSpec的约束，一条spec只能是纯车行单行道
-	// 或纯人行道二选一，不支持车行+人行混在一条道路里；宽度直接复用上面
-	// pedestrianAccess已经指定的gateWidth，不再单独定义一个新的宽度。
+	// 内部道路：垂直于dir这条边、过大门贯穿到正对面的边。ZoneInternalRoadSpec一条spec只能是纯
+	// 车行单行道或纯人行道二选一，这里是人行道(isVehicle=false)，宽度复用大门宽度。
 	ZoneInternalRoadSpec road;
 	if (alongY) {
 		road.x1 = -half; road.y1 = 0.f;
@@ -173,14 +159,9 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	road.width = access.width;
 	internalRoads.push_back(road);
 
-	// 内部道路把zone从中间分成两半，每一半各放一个建筑——用和独立建筑同一个类型
-	// ("building_residence"，Basic层文件间不允许互相include，这里直接写字符串明文而不是
-	// 引用ResidenceBuilding::GetId())，这样园区内部建筑天然复用ResidenceBuilding::Layout()
-	// 里的楼体footprint/地下室/楼层数据，和独立建筑在ForeverBuildingFrameworkComponent里
-	// 走同一套近/远LOD渲染时外观也一致。尺寸留出一点余量，不贴着围墙/内部道路。roadIndices
-	// 记这个建筑贴着internalRoads[0]的哪一个面——两个半区分别是内部道路的两侧，各自朝向
-	// 道路的那个面对应关系相反。direction直接复用各自roadIndices里已经声明的那个方向
-	// (朝向内部道路那一面)。
+	// 内部道路把园区分成两半，每半一栋building_residence(Basic层文件间不能互相include，所以写
+	// 字符串明文)。尺寸留余量不贴围墙/内部道路；roadIndices记贴着internalRoads[0]的哪个面，
+	// 两半相反，direction取该面朝向。
 	float buildingAlong = side * 0.6f;
 	float buildingAcross = half * 0.6f;
 	ZoneInternalBuildingSpec buildingA, buildingB;

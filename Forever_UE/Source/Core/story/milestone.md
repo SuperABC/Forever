@@ -38,6 +38,9 @@
   在`Core/story/script.h`的`ReadMilestones`里按`GetSubsequences()`统一建图，`MilestoneNode`
   本身只是纯数据结构。
 
+构造参数：`name`/`triggers`/`visible`/`drop`/`description`/`goal`/`changes`/`dialogs`/`subsequences`；
+`drop`匹配成功后求值为true则本里程碑退出`actives`（`DropSelf`）；`visible`标记是否对玩家可见。
+
 ## 依赖关系
 
 - 依赖：`Dependence/story/expression.h`（`ScriptContext`、`EvaluateExpressionBool`）、

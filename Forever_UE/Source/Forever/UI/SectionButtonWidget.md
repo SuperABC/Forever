@@ -2,7 +2,7 @@
 
 ## 职责
 
-`USectionButtonWidget`：`SectionOptionWidget`列表里的**一行剧情分支选项**(对应老蓝图`SectionButton_C`)，点击转发给`UForeverStoryFrameworkComponent::SelectDialogOption`。
+`USectionButtonWidget`：`SectionOptionWidget`列表里的**一行剧情分支选项**，点击转发给`UForeverStoryFrameworkComponent::SelectDialogOption`。
 
 ## 关键设计
 

@@ -13,14 +13,7 @@ class UPrimitiveComponent;
 struct FHitResult;
 class Asset;
 
-// 物品/资产在世界里的可视化表示——默认用项目通用的Cube占位(和ABuildingElement/
-// ForeverBuildingFrameworkComponent用的是同一份"/Game/Asset/Meshes/Cube.Cube"网格)；资产的
-// AssetMod指定了meshPath时(比如投掷物的球体)改用它指定的网格和meshScale缩放，见
-// Source/Dependence/player/asset_mod.h。带物理模拟+重力(Movable+"PhysicsActor"碰撞预设)，不是纯摆设的Static网格，
-// 玩家角色可以直接走过去推动它，见.cpp构造函数注释。由
-// UForeverAssetFrameworkComponent::SpawnWorldAsset()在Drop时SpawnActor+Init()，
-// DestroyWorldAsset()(Pick时)Destroy()——这个Actor不持有Asset的所有权，真正所有权在
-// Room::assets或某个容器的contents里。
+// 物品/资产在世界里的可视化表示(物理体，Cube占位或AssetMod指定的网格)，不持有Asset的所有权，见AssetElement.md。
 UCLASS()
 class FOREVER_API AAssetElement : public AActor
 {

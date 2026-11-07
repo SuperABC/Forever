@@ -33,12 +33,7 @@ struct FModRow
 	TArray<FString> Dependents;
 };
 
-// 游戏启动配置界面(Story/Mod/Resource三screen)的Blueprint桥接层，替代老工程的AStartBase——
-// 做成UGameInstanceSubsystem而不是AActor，不需要在Menu关卡里放置一个Actor，Menu->World的
-// OpenLevel不会把它销毁(ValidateAndStartGame需要在触发EnsureModsRegistered()和OpenLevel
-// 前后都存活)，和ForeverModSubsystem走同一套既有模式。全部方法都是Config静态方法的
-// FString<->std::string薄包装，业务逻辑只有ValidateAndStartGame的聚合校验和IsModLocked的
-// 闭包计算两处，见ForeverConfigBridgeSubsystem.md。
+// 游戏启动配置界面(Story/Mod/Resource三screen)的Blueprint桥接层，见ForeverConfigBridgeSubsystem.md。
 UCLASS()
 class FOREVER_API UForeverConfigBridgeSubsystem : public UGameInstanceSubsystem
 {

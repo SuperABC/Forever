@@ -13,6 +13,7 @@
 #include "common/utility.h"
 
 #include <algorithm>
+#include <memory>
 #include <tuple>
 #include <unordered_map>
 
@@ -125,7 +126,8 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 
 	try {
 		ByteReader r(section->data);
-		Society* society = new Society();
+		unique_ptr<Society> guard(new Society());
+		Society* society = guard.get();
 		const vector<Citizen*>& citizens = populace.GetCitizens();
 		auto citizenAt = [&](int index) -> Citizen* {
 			return (index >= 0 && index < static_cast<int>(citizens.size())) ? citizens[index] : nullptr;
@@ -220,7 +222,7 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 		for (auto& [experience, index] : pendingOrganizations) {
 			if (experience) experience->organization = organizationAt(index);
 		}
-		return society;
+		return guard.release();
 	}
 	catch (const exception& e) {
 		error = string("society load failed: ") + e.what();

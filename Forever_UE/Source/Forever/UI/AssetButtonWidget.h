@@ -11,17 +11,9 @@ class UTextBlock;
 class UInventoryWidget;
 class Asset;
 
-// 背包列表里的一行——对应老蓝图AssetButton_C。
-//
-// 内部的`Button`只负责外观(选中高亮背景色)，构造时设成HitTestInvisible：这样鼠标事件
-// 直接落到这一行自己身上(`SButton`会吞掉按下事件，导致拖拽检测和原生双击都到不了这一层)，
-// 按下只通知面板(UInventoryWidget::BeginRowPress)，由面板捕获鼠标统一处理单击/拖拽，逻辑都在C++
-// 基类里，Blueprint子类只需要摆一个命名Button的Button + 命名Text的TextBlock。
-//
-// - 单击(按下后没有拖动就松开)=选中(容器/普通行)；"返回上一级"占位行单击直接退出；
-// - 双击(第二次点击落在kDoubleClickInterval秒以内)=容器行则进入，见
-//   UInventoryWidget::EnterRow/ExitRow；
-// - 按下并拖动=开始拖拽(面板自己的贴着鼠标的框，不用UMG DragDropOperation)，见UInventoryWidget。
+// 背包列表里的一行。内部Button只负责外观(选中高亮)，构造时设成HitTestInvisible(SButton会吞掉按下事件)，
+// 按下只通知面板(UInventoryWidget::BeginRowPress)，由面板统一处理：单击=选中，双击容器行=进入，
+// "返回上一级"占位行单击退出，按下拖动=开始拖拽。
 UCLASS()
 class FOREVER_API UAssetButtonWidget : public UUserWidget
 {

@@ -31,30 +31,15 @@ void AForeverPlayerController::BeginPlay() {
 }
 
 void AForeverPlayerController::InitializeOnce() {
-	// 打包版里AForeverFrameworkActor::BeginPlay(含game_start广播)先于这个Controller的BeginPlay执行，
-	// game_start里的start_puzzle/对话等要用这里创建的Widget、并设置UI Only输入——如果等到本Controller
-	// 的BeginPlay才创建，Widget还是空的(start_puzzle被静默跳过)，而且下面的"输入模式重置成Game Only"
-	// 还会盖掉谜题刚设的UI Only。所以初始化提到一个幂等函数里，FrameworkActor在生成世界之前先调一次，
-	// BeginPlay里再调一次(已经初始化过就什么都不做)。
+	// 打包版里FrameworkActor的BeginPlay(含game_start广播)先于本Controller的BeginPlay，所以这里做成幂等函数，两边都调(见md)。
 	if (bInitialized) return;
 	bInitialized = true;
 
-	// 显式把输入模式设回Game Only+隐藏鼠标指针——不能假设这是空白状态:游戏启动配置界面
-	// (Menu关卡的AForeverMenuController::BeginPlay())会把输入模式设成UI Only+显示鼠标
-	// 指针，这个状态挂在ViewportClient/LocalPlayer身上，不是挂在PlayerController实例上，
-	// 不会因为旧的MenuController被OpenLevel销毁就自动还原——没有这一步，从配置界面点"开始
-	// 游戏"进场之后，输入会一直停留在UI Only模式，鼠标键盘操作不到任何Pawn，表现上就是
-	// "角色完全操控不了"。这里显式重置，不管上一个关卡/Controller留下什么状态都能保证
-	// 这一局是正常的Game Only输入，PIE直接在World.umap上跑(不经过Menu)同样安全——本来
-	// 就应该是这个状态。
+	// 菜单关卡留下的UI Only+鼠标指针状态挂在ViewportClient/LocalPlayer上，不会随旧Controller销毁还原，必须显式重置。
 	SetInputMode(FInputModeGameOnly());
 	bShowMouseCursor = false;
 
-	// 手机(Phone)系统：P键要求任何时候都生效(包括开局还没占有任何真正Pawn、操控着
-	// ADefaultPawn的那几帧，以及ChangeControlChange换人操控/换乘载具的瞬间)——这个动态
-	// Context常驻加在Controller上而不是Pawn的PossessedBy里，就不用依赖"当前是不是正占有着
-	// 一个真正的Pawn"，见ForeverPlayerController.md"旧MainController热键"一节。Pawn侧
-	// (AForeverCharacter.cpp/VehicleElement.cpp)不重复加这份Context。
+	// 全局热键的动态Context常驻加在Controller上，Pawn侧不重复加(见md)。
 	if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer())) {
 		if (UGameInstance* gameInstance = GetGameInstance()) {
 			if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
@@ -144,8 +129,7 @@ void AForeverPlayerController::InitializeOnce() {
 		throwListWidget->AddToViewport(5);
 	}
 
-	// 开局黑屏由GameInstance上的UFadeSubsystem持有(跨关卡)：从菜单按下开始/加载按钮时已经
-	// 变黑并一直盖到这里；这里登记类并保证黑着(编辑器里直接PIE在World.umap上时补一个)。
+	// 菜单按下开始/加载时已经变黑并盖到这里；这里登记类并保证黑着(编辑器直接PIE时补一个)。
 	if (UGameInstance* gameInstance = GetGameInstance()) {
 		if (UFadeSubsystem* fade = gameInstance->GetSubsystem<UFadeSubsystem>()) {
 			if (fadeWidgetClass == nullptr) {

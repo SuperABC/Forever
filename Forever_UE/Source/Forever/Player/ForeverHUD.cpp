@@ -7,8 +7,6 @@ void AForeverHUD::DrawHUD()
 {
 	Super::DrawHUD();
 
-	// 只有当前被这个HUD所属PlayerController占有的Pawn是AForeverCharacter且在瞄准中才画——
-	// 临时效果，先用DrawLine这类原生Canvas调用验证位置/尺寸，不引入正式的准心贴图资产。
 	AForeverCharacter* character = Cast<AForeverCharacter>(GetOwningPawn());
 	if (!character || !character->IsAiming() || !Canvas) return;
 

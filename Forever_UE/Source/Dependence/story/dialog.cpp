@@ -90,7 +90,14 @@ Dialog::Dialog() :
 }
 
 Dialog::~Dialog() {
-
+	// 分支选项里嵌套的dialogs/changes本体由持有它们的这个Dialog释放(Option是值类型、会被拷贝，不能由Option释放)
+	for (const Section& section : list) {
+		if (!section.IsBranch()) continue;
+		for (const Option& option : section.GetOptions()) {
+			for (Dialog* nested : option.GetDialogs()) delete nested;
+			for (const Change* nested : option.GetChanges()) delete nested;
+		}
+	}
 }
 
 void Dialog::AddDialog(std::string speaker, std::string content, std::string label, std::string voice, float background) {

@@ -6,12 +6,6 @@
 #include <vector>
 
 
-// Bounce——手机系统的第一个测试App：一个在画布里反弹的方块，纯Loop驱动位置积分。
-// 用来验证AppMod最基础的Init(随机初始位置/方向)和Refresh(从后台切回来后继续弹，
-// 不能被Phone重置)，不涉及Back(单页App，留空实现)。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式。
 class BounceApp : public AppMod {
 public:
 	BounceApp();
@@ -24,8 +18,7 @@ public:
 	virtual void Loop(Canvas* canvas, int ms, PostHandle* post) override;
 	virtual void Back(Canvas* canvas, PostHandle* post) override {} // 单页App，没有导航栈可退
 
-	// 从后台恢复：不重新Init，只按当前位置重画一次(不推进物理)，跟老工程TestApp::Refresh
-	// 同一个语义。
+	// 从后台恢复：不重新Init，只按当前位置重画一次(不推进物理)。
 	virtual void Refresh(Canvas* canvas, PostHandle* post) override;
 
 private:
@@ -45,12 +38,6 @@ private:
 	std::string name;
 };
 
-// Notes——手机系统的第二个测试App：硬编码几条便签的两级页面(列表->详情)。用来验证
-// Back(从详情返回列表)、鼠标点击列表项，以及Refresh(从后台切回来时停在离开前的页面/
-// 选中项，不会跳回列表)。不做老工程ZheyeApp那种JSON数据文件+配置路径查询的复杂度——
-// 数据直接硬编码在.cpp里，够验证Phone整个状态机就行。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼。
 class NotesApp : public AppMod {
 public:
 	NotesApp();

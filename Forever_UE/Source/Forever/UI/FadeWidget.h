@@ -8,14 +8,7 @@ class AForeverFrameworkActor;
 class UProgressBar;
 class UTextBlock;
 
-// 开局黑屏：盖住整个画面的全黑遮罩，上面显示加载进度条和"正在构建什么"的文字；世界就绪后整体渐变透明，
-// 渐隐完通知UFadeSubsystem移除。
-// 控件由UFadeSubsystem持有并挂在GameViewport上(跨关卡存活)，按下开始/加载按钮时立刻变黑，
-// 一直黑到World关卡的世界就绪，见FadeSubsystem.h。
-// 进度 = AForeverFrameworkActor::GetLoadProgress：世界生成拆成若干阶段(构建地形/路网/园区/建筑/人口…)，
-// 每完成一个阶段进度条前进一格，最后一格是"构建场景"(进图后等建筑LOD排空)。进度走满后才开始渐隐。
-// 逻辑都在C++里，外观由Blueprint子类(WBP_Fade)设计：一个全屏纯黑的Border/Image做底，再摆上面
-// 两个可选控件(BindWidgetOptional)；淡出作用在控件根的RenderOpacity上。详见FadeWidget.md。
+// 开局黑屏：全黑遮罩+加载进度条+状态文字，世界就绪后渐隐并通知UFadeSubsystem移除，详见FadeWidget.md。
 UCLASS()
 class FOREVER_API UFadeWidget : public UUserWidget
 {

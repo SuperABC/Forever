@@ -82,6 +82,7 @@
   <ItemGroup>
     <ClCompile Include="common\error.cpp" />
     <ClCompile Include="common\json.cpp" />
+    <ClCompile Include="common\mod_state.cpp" />
     <ClCompile Include="common\save_archive.cpp" />
     <ClCompile Include="common\utility.cpp" />
     <ClCompile Include="common\handle.cpp" />
@@ -122,6 +123,7 @@
     <ClCompile Include="player\asset_mod.cpp" />
     <ClCompile Include="player\app_mod.cpp" />
     <ClCompile Include="player\puzzle_mod.cpp" />
+    <ClCompile Include="player\weapon_mod.cpp" />
     <ClCompile Include="populace\name_mod.cpp" />
     <ClCompile Include="populace\scheduler_mod.cpp" />
     <ClCompile Include="society\job_mod.cpp" />

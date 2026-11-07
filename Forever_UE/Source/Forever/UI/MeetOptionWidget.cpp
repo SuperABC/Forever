@@ -5,11 +5,8 @@
 #include "Components/ScrollBoxSlot.h"
 #include "Components/PanelWidget.h"
 
-// 选项行之间的竖直间距(UE单位)——AddOption时施加在每个新增MeetButton的ScrollBoxSlot上，
-// 老蓝图MeetOption::AddOption同样给每个新按钮的Padding设了Top/Bottom各10。名字加
-// MeetOption前缀避免和SectionOptionWidget.cpp里同名的匿名namespace常量在unity build下撞名
-// （UBT会把这个模块一批.cpp拼进同一个Module.Forever.cpp，各自匿名namespace的隔离性在这种
-// 情况下失效，见Element/CitizenElement.cpp顶部同一个坑的说明）。
+// 选项行之间的竖直间距，施加在每个新增MeetButton的ScrollBoxSlot上(Top/Bottom各一份)。
+// 名字带MeetOption前缀：unity build会把多个.cpp拼进同一编译单元，匿名namespace里的同名常量会撞名。
 namespace {
 	constexpr float kMeetOptionRowVerticalPadding = 10.f;
 }

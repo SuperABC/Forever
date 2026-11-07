@@ -24,16 +24,20 @@ Industry::~Industry() {
 }
 
 Product* Industry::CreateProduct(const string& modId) {
-	auto it = products.find(modId);
-	if (it != products.end()) return it->second;
-
 	Product* product = new Product(&productFactory, modId);
 	if (!product->IsValid()) {
 		delete product;
 		return nullptr;
 	}
 
-	products.insert_or_assign(modId, product);
+	// 目录key是product的type(FindProduct的查询键)，不假定mod id等于type。
+	auto it = products.find(product->GetType());
+	if (it != products.end()) {
+		delete product;
+		return it->second;
+	}
+
+	products.insert_or_assign(product->GetType(), product);
 	return product;
 }
 
@@ -194,7 +198,7 @@ bool Industry::IsClosed(const Storage* storage) const {
 }
 
 bool Industry::ApplyChange(const Change* change, const ScriptContext& context) {
-	// 占位，等Industry域真的有需要处理的Change子类时再补，见industry.h声明处注释。
+	// 占位：Industry域目前没有需要处理的Change子类。
 	return false;
 }
 
@@ -211,8 +215,7 @@ void Industry::Record(Storage* from, Storage* to, const string& product, int qua
 }
 
 void Industry::Distribute() {
-	// 全部仓库(含工坊两个cache)按权限分三类，遍历顺序固定：先storages(按name)，再manufactures(按name)的
-	// input、output。
+	// 遍历顺序固定：先storages(按name)，再manufactures(按name)的input、output。
 	vector<Storage*> all;
 	for (auto& [name, storage] : storages) all.push_back(storage);
 	for (auto& [name, manufacture] : manufactures) {
@@ -336,8 +339,7 @@ void Industry::Fulfil(const vector<string>& candidates, const string& importProd
 }
 
 void Industry::DistributeSupply(const vector<Storage*>& takeOnly, const vector<Storage*>& takePut) {
-	// 供给侧只处理仓库里超出容量50%的部分(内销取完之后还剩的)：能放进其他可取可放仓库的先放，放不下的出口；
-	// 不到50%就一份都不出口。各货物按各自存量占比分摊这份超出量。
+	// 只处理超出exportKeepRatio*容量的部分(内销取完之后还剩的)，各货物按存量占比分摊这份超出量。
 	for (Storage* src : takeOnly) {
 		vector<string> types;
 		float total = 0.f;

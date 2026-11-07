@@ -11,19 +11,8 @@
 class UImage;
 class UTexture2D;
 
-// 手机(Phone)系统落地：跟UPuzzleWidget同一套Widget基类惯例(逻辑全在C++基类，Blueprint
-// 子类只摆布局)，把Core层的Phone实例跑起来、把它的画布贴到一张Image上，转发UE的键鼠事件。
-// 由AForeverPlayerController常驻持有一份实例，P键(TogglePhone)控制开关，见
-// AForeverPlayerController::SetupInputComponent。
-//
-// 跟UPuzzleWidget两个关键差异：
-// 1) 生命周期——Puzzle每次StartPuzzle都new一个新实例、结束时delete；Phone要跨越
-//    "开手机->关手机->再开手机"保持多任务状态(桌面/正在跑的App/最近任务列表)，所以
-//    phone/canvas只在第一次打开时创建，TogglePhone()此后只切换Visibility+输入模式，不
-//    delete/重建，只有Widget自己被销毁(NativeDestruct)时才真正释放。
-// 2) 画布分辨率——Puzzle用GameViewport的真实屏幕分辨率(填满全屏，1:1)；Phone改成查
-//    DisplayImage这个子控件自己的屏幕像素尺寸(同样1:1，不铺满全屏，只是取景范围换成
-//    这个子控件而不是整个视口)，见ComputeCanvasSize()。
+// 手机宿主：把Core层Phone实例跑起来、画布贴到Image上、转发键鼠事件。由AForeverPlayerController常驻持有，
+// P键(TogglePhone)开关。与PuzzleWidget的差异(生命周期跨开关保持、画布尺寸取DisplayImage)见PhoneWidget.md。
 UCLASS()
 class FOREVER_API UPhoneWidget : public UUserWidget
 {

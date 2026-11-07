@@ -33,6 +33,9 @@
     <ClCompile Include="common\json.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="common\mod_state.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="common\save_archive.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -151,6 +154,9 @@
       <Filter>player</Filter>
     </ClCompile>
     <ClCompile Include="player\puzzle_mod.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon_mod.cpp">
       <Filter>player</Filter>
     </ClCompile>
     <ClCompile Include="populace\name_mod.cpp">

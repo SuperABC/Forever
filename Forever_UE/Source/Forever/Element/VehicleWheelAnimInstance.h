@@ -10,25 +10,20 @@
 
 class APlaneElement;
 
-// 每个轮子缓存的姿态数据——PreUpdate()(游戏线程)写，Evaluate()(可能在工作线程)读，
-// 之间不做任何跨线程加锁，因为FAnimInstanceProxy本身保证PreUpdate和Evaluate不会同时跑。
+// 每个轮子缓存的姿态数据——PreUpdate()(游戏线程)写，Evaluate()(可能在工作线程)读，不加锁(Proxy保证二者不同时跑)。
 struct FVehicleWheelPose
 {
 	FBoneReference BoneReference;
-	float DisplayRotationAngle = 0.f; // 实际拿去画的滚动角度(度，累加值)——见下面"限速"说明
+	float DisplayRotationAngle = 0.f; // 实际拿去画的滚动角度(度，累加值)，限速见下
 	float SteerAngle = 0.f;    // 前轮转向角度(度)，非前轮恒为0，来自GetSteerAngle()
 
-	// UChaosVehicleWheel::GetRotationAngle()返回的是物理仿真里真实的车轮滚动角度，车速
-	// 一高这个角度每帧变化量就很大，视觉上轮子转得像抽风(实测反馈"转速太高了渲染效果太
-	// 差")——不是引擎在骗你，是真实物理转速本来就可以远超人眼觉得自然的范围。这里改成
-	// 每帧只累加"物理真实变化量"和"允许的最大变化量"里更小的那个，相当于给视觉转速单独
-	// 设一个上限，不影响实际驾驶手感(真实驾驶物理完全不受这个限制)。
+	// 视觉限速：GetRotationAngle()是物理真实滚动角，高速时每帧变化量过大会转得像抽风，
+	// 所以每帧只累加真实变化量和允许最大变化量里更小的那个(不影响驾驶物理)。
 	float LastRawRotationAngle = 0.f;
 	bool bHasLastRawAngle = false;
 };
 
-// 重写FAnimInstanceProxy::Evaluate()，绕开Animation Blueprint节点图，纯C++驱动四个
-// 轮子骨骼的滚动/转向——见VehicleElement.md"车轮滚动/转向动画"一节。
+// 重写FAnimInstanceProxy::Evaluate()，绕开Animation Blueprint节点图，纯C++驱动轮子骨骼的滚动/转向(及飞机螺旋桨)，见VehicleWheelAnimInstance.md。
 USTRUCT()
 struct FOREVER_API FVehicleWheelAnimInstanceProxy : public FAnimInstanceProxy
 {
@@ -73,8 +68,7 @@ public:
 		AnimInstanceProxy.SetWheeledVehicleComponent(InComponent);
 	}
 
-	// 视觉滚动转速上限，纯为了不同车型可以按轮子大小/预期观感各自调，默认1080度/秒(3圈/秒)
-	// 是凭经验给的一个"肉眼看起来还算连贯"的量级。
+	// 视觉滚动转速上限(度/秒)，默认1080(3圈/秒)是凭经验给的"肉眼还算连贯"的量级，不同车型可各调。
 	UPROPERTY(EditDefaultsOnly, Category = "Vehicle")
 	float MaxWheelSpinDegreesPerSecond = 1080.f;
 

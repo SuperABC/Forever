@@ -48,14 +48,17 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   `Expression`对象再存成员**——`Expression`树若被一个模块构造、另一个模块求值会导致跨模块
   堆损坏崩溃，完整原因见`Dependence/story/change.md`"字段类型是`std::string`"一节；所有
   调用点直接用`obj["xxx"].AsString()`取原始字符串，求值前才现场`Parse`。
+- **`MatchEvent`收尾的拷贝顺序**：`WrapScript`返回的是mod堆上`actionStack`一层的引用，必须先拷贝进Core自己的
+  vector再`AutoPop`，`AutoPop`之后引用失效。
+- **`ReadMilestones`**：按`subsequences`建图（`premise`计数），`premise==0`的节点进`actives`；`caches`按路径缓存，
+  同一文件只解析一次，多个Script实例共享里程碑本体（不持有所有权）。
 - **`MatchEvent`的触发条件检查在`Milestone::MatchTrigger`内部完成**，不是`Script`这一层单独
   维护的循环，见`Core/story/milestone.md`"MatchTrigger"一节。
 
 ## 主线剧情.script的三个顶层字段
 
-`Config::GetMainStoryScriptPath()`（`Config::GetScriptPath("test")`）解析出的那一份
-`.script`文件——不是Job/Organization/Scheduler各自读取的那些——额外支持三个和`"milestones"`
-平级的顶层字段，均为可选（不写就是空/默认值，不影响老`.script`文件）：
+主线剧情`.script`文件（`Config::GetMainStoryScriptPaths()`列出的每一个，不是Job/Organization/Scheduler
+各自读取的那些）额外支持三个和`"milestones"`平级的顶层字段（`name_reserve`还接受别名`names`，两者合并），均为可选（不写就是空/默认值，不影响老`.script`文件）：
 
 - **`name_reserve`**：字符串数组，剧情作者显式列出脚本里会用到的姓名，
   `Populace::InitNames()`在生成市民之前把这些名字喂给`Name::ReserveName`占位，姓名生成器
@@ -95,8 +98,8 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 
 ## 待办/后续阶段
 
-- 其余68种event/change类型的JSON分发分支（`"place_holder"`已接入）。
-- 多剧情共享同一份milestone缓存/避免命名冲突的机制（如按名称占用），等真的需要多剧情时再加。
+- 其余尚未实现的event/change类型的JSON分发分支（未知`type`抛`RuntimeException`）。
+- 多剧情共享同一份milestone缓存时的命名冲突机制，等真的需要时再加。
 
 ## 载具/公交相关解析
 `BuildEvent`新增`enter_stop`/`leave_stop`(stop)、`enter_vehicle`/`leave_vehicle`(vehicle/mode)；`BuildChanges`新增`board_vehicle`、`leave_vehicle`(原先类已声明未解析)、`force_leave`。详见`Dependence/story/event.md`/`change.md`。

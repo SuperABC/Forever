@@ -42,13 +42,8 @@ void UPuzzleWidget::NativeConstruct() {
 	Super::NativeConstruct();
 	SetVisibility(ESlateVisibility::Collapsed);
 
-	// UUserWidget::NativeSupportsKeyboardFocus()默认返回bIsFocusable(默认false)——不像
-	// SectionSpeaking那样树里有个真实的Button(点一次就能拿到焦点，之后键盘事件靠这个Button
-	// 再往上冒泡到USectionSpeakingWidget::NativeOnKeyDown)，PuzzleWidget树里只有一张纯展示
-	// 用的Image，没有任何天生可获得焦点的子控件，不显式打开这个开关的话
-	// FSlateApplication::SetKeyboardFocus会直接判定"这个控件不支持键盘焦点"而静默失败，
-	// 表现为"键盘完全没反应"（鼠标点击本身没问题——这次的Tetris只读键盘，没有接鼠标操作，
-	// 点了没反应是预期行为，不是bug）。
+	// NativeSupportsKeyboardFocus默认返回bIsFocusable(false)，树里只有展示用的Image，不打开的话
+	// SetKeyboardFocus会静默失败，键盘没反应。
 	SetIsFocusable(true);
 }
 

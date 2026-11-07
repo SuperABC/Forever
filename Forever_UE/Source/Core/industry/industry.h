@@ -13,8 +13,6 @@
 #include <unordered_set>
 #include <vector>
 
-struct ScriptContext;
-
 // 一笔货物流向。from/to为nullptr表示城市外：from为空=进口，to为空=出口，否则是城内流转。
 // Industry只记录"谁给谁多少货"，不涉及任何金额，付款由Society按这份流水结算，见industry.md。
 struct GoodsFlow {
@@ -69,21 +67,14 @@ public:
 	// 当天各工坊结算进产出cache的产量合计（product type->数量），下一次Tick开始时清空，报表用。
 	const std::map<std::string, double>& GetDailyProduction() const { return dailyProduction; }
 
-	// 停业的房间（企业倒闭）：这些房间的仓库不再参与物流，工坊不再开工。由Society每天根据企业状态
-	// 同步进来（派生数据，不单独存档）。
+	// 以下三个由Society/Economy每天同步进来，都是派生数据，不存档，语义见industry.md。
 	void SetClosedRooms(const std::unordered_set<const Room*>& rooms) { closedRooms = rooms; }
-
-	// 工坊所在房间的到岗率(实际在职人数/组织指定的招聘人数)，由Society每天同步(派生数据，不存档)。
-	// 工坊产能比例=50%*(1+到岗率)，不设上限；没登记的房间(没有指定人数)按到岗率1(即100%产能)。
-	// 出口阈值：工坊产出cache内销之后至少留下容量的这个比例，只有超出的部分才出口。由Economy每天按外部
-	// 注资比例算出(1-1/(x+1))，默认0.5(x=1)。
 	void SetExportKeepRatio(float ratio) { exportKeepRatio = ratio; }
 	void SetStaffingRatios(const std::unordered_map<const Room*, float>& ratios) { staffingRatios = ratios; }
 
 	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 private:
-	// 工坊产出cache内销之后至少留下容量的这个比例，只有超出的部分才出口。
 	float exportKeepRatio = 0.5f;
 
 	void Distribute();
@@ -94,8 +85,7 @@ private:
 		Storage* dest;
 		int amount;
 	};
-	// 满足一组需求：candidates是可以满足这批需求的product（按优先顺序），importProduct是缺口进口
-	// 时买哪一种。按统一比例把内部供给分给各需求方，没满足的部分直接进口。
+	// candidates是能满足这批需求的product（按优先顺序），importProduct是缺口进口时买哪一种。
 	void Fulfil(const std::vector<std::string>& candidates, const std::string& importProduct,
 		std::vector<Demand>& demands, const std::vector<Storage*>& sources);
 

@@ -6,10 +6,8 @@
 
 #pragma comment(lib, "Dependence.lib")
 
-int YuanshenBuilding::count = 0;
 
-// 这个DLL注册一个building mod(building_yuanshen)和一个script mod(script_yuanshen)。建筑用到
-// room_empty/component_empty和电梯的script_empty；YuanshenScript是ys.script的主线mod，ys.script要找这栋建筑，所以依赖building_yuanshen。
+// 依赖声明见building_yuanshen.md。
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
 		{ YuanshenBuilding::GetId(), { "room_empty", "component_empty", "script_empty" } },

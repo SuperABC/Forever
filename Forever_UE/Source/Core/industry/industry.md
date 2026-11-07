@@ -17,6 +17,11 @@
   product：批数×批量÷2，取整）。读档不播种，库存完全以存档为准，见`industry_save.md`。
 - **有序容器**：`products`/`storages`/`manufactures`都用`std::map`，物流先后顺序必须确定，同一份数据
   每次跑出同一个结果。
+- **目录key=type**：`CreateProduct(modId)`创建后以`Product::GetType()`为key入目录，与`FindProduct(type)`
+  同一个键，不要求mod的`GetId()`等于`GetType()`；两个mod声明同一type时后创建的被丢弃、返回先入表的那个。
+- **Society每天同步进来的派生数据（不存档）**：`SetClosedRooms`（停业房间）、`SetStaffingRatios`
+  （到岗率）、`SetExportKeepRatio`（出口阈值），都由`Economy::SyncIndustry`设置。
+- `ApplyChange`是占位（Industry域目前没有Change子类），恒返回false。
 
 ## 每日流程：`Tick()`
 
@@ -40,7 +45,8 @@ B) `Distribute()`物流；C) 全体工坊`StartProduce(产能比例)`按input ca
 货物按整份流转（`Whole()`取整，+eps避免浮点误差少算一份）。
 
 ## 停业房间
-`SetClosedRooms`：企业倒闭时它占用的房间停业——这些房间的仓库不参与物流、工坊不开工（`StartProduce`跳过）。由Society每天同步（派生数据，不单独存档）。
+`SetClosedRooms`：企业倒闭时它占用的房间停业——这些房间的仓库不参与物流（`Distribute`跳过）、工坊不开工
+（阶段C跳过`StartProduce`，但阶段A的`WorkAccount`照常结算上一轮已开工的批次）。
 
 ## 货物流水：`GoodsFlow`
 
@@ -50,10 +56,9 @@ B) `Distribute()`物流；C) 全体工坊`StartProduce(产能比例)`按input ca
 ## 依赖关系
 
 - 依赖：`Product`/`Storage`/`Manufacture`、`Room`（Init时读StorageType/ManufactureTypes）。
-- 被谁依赖：`AForeverFrameworkActor::EnsureIndustryGenerated`（Init）、Society（读流水付款）、
-  `PostImplement`（"product info"）。
+- 被谁依赖：`AForeverFrameworkActor::EnsureIndustryGenerated`（Init）、Society（`Settlement`读流水按批发价
+  付款收款，`Economy::SyncIndustry`同步派生数据）、`PostImplement`（"product info"）、`IndustrySaveCodec`（友元）。
 
 ## 待办/后续阶段
 
-- 付款结算（Step 3）。
 - 工坊每天目标批数（mod里的`targets`）目前是占位值，远小于全城日需求，缺口靠进口补。

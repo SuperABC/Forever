@@ -1,5 +1,7 @@
 #pragma once
 
+#include "class.h"
+
 #include "populace/scheduler_mod.h"
 #include "populace/scheduler_factory.h"
 
@@ -9,15 +11,8 @@
 #include <unordered_map>
 #include <vector>
 
-class Citizen;
-class Script;
-class ScriptFactory;
-class Change;
 
-// Scheduler：每个市民独占持有一个（Citizen自己持有所有权，见citizen.h）。和Job（由
-// Organization持有、构造时未必已经绑定occupant、之后靠SetOccupant事后绑定）不一样——
-// Scheduler没有类似"组织"这样的自然归属者，从new出来那一刻就唯一绑定一个Citizen，构造
-// 函数直接收Citizen*，不需要事后SetOccupant，详见scheduler.md。
+// Scheduler：每个市民独占持有一个，构造时就绑定Citizen，详见scheduler.md。
 class Scheduler {
 	// 存档：PopulaceSaveCodec直接读写私有字段(populace_save.md)。
 	friend class PopulaceSaveCodec;

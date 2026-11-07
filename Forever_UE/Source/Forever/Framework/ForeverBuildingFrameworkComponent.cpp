@@ -40,9 +40,7 @@ UForeverBuildingFrameworkComponent::UForeverBuildingFrameworkComponent() {
 	if (rampFinder.Succeeded()) {
 		defaultRampMesh = rampFinder.Object;
 	}
-	// 窗户资产有问题，用户明确要求直接删掉窗户显示逻辑(见ABuildingElement::
-	// BuildWallsForElement)——不再加载Window.Window，窗户现在只是墙上的一个几何缺口，和门
-	// 一样不生成任何东西。
+	// 窗户不加载网格：它只是墙上的一个几何缺口(见ABuildingElement::BuildWallsForElement)。
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> cabinFinder(
 		TEXT("/Game/Asset/Meshes/Elevator.Elevator"));
@@ -69,13 +67,10 @@ void UForeverBuildingFrameworkComponent::GenerateBuildings(Map* inMap) {
 		defaultWallMaterial = UMaterialInstanceDynamic::Create(buildingBaseMaterial, this);
 		defaultFloorMaterial = UMaterialInstanceDynamic::Create(buildingBaseMaterial, this);
 		defaultCeilingMaterial = UMaterialInstanceDynamic::Create(buildingBaseMaterial, this);
-		// 墙/地/顶默认都是白色(Pure材质本身默认色)，这次不分内外墙，只有一份默认墙体材质。
+		// 墙/地/顶默认都是白色(Pure材质本身默认色)，不分内外墙，只有一份默认墙体材质。
 	}
 
-	// 独立建筑和园区内部建筑一视同仁，都在这里统一渲染(不再跳过GetParentZone()不为空的)。
-	// 每栋building各SpawnActor一个专属的ABuildingElement——LOD状态机/近远处组件/电梯轿厢
-	// 全部由Element自己管理，这里只负责创建+绑定，见ForeverBuildingFrameworkComponent.h
-	// 顶部注释。
+	// 独立建筑和园区内部建筑一视同仁，都在这里统一创建Element；LOD/电梯轿厢全部由Element自己管理。
 	for (auto& [name, building] : map->GetBuildings()) {
 		if (!building) continue;
 		// 0层且没有自定义模型的建筑(ParkBuilding这类只有植被的)不生成Element；0层但有自定义

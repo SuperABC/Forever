@@ -14,18 +14,15 @@
   开门开窗位置，供`ForeverBuildingFrameworkComponent`渲染墙体开洞用）、`number`（门牌号，
   `"b3-0001"`这种格式，`SetNumber(level,seq)`拼出——basement前缀+4位序号）、
   `navigationNode`（这个房间中心点的导航锚点，供`Building::BuildPedestrianNavigation()`里
-  `"single"`/`"row"`类型的导航端点引用）。**不迁移**老工程`Room`身上的
-  `furniture`/`pivots`/`storages`/`manufactures`/`parkings`/`vehicles`/`ownership`/
-  `tenancy`/`workers`等字段——那些依赖Industry/Populace/Society这些还没迁移的领域，等
-  对应领域迁移到了再回来加。
+  `"single"`/`"row"`类型的导航端点引用）。`Room`本身不持有
+  Industry/Populace/Society侧的运行时对象（Storage/Manufacture/Job等由各自的域按`Room`的属性快照创建并反向引用`Room`）。
 - **4类占位能力**：`IsResidential()`/`ResidentialCapacity()`（床位数）/`IsWorkspace()`/
   `WorkspaceCapacity()`（工位数）/`IsStorage()`/`StorageType()`（对应StorageMod id，Industry据此生成Storage）/`Rent()`（每日房租，分）/
   `IsManufacture()`/`ManufactureTypes()`（产线描述），读构造时`mod->SetProperty()`之后从`RoomMod`同名字段
   拷贝的快照`properties`（见`Source/Dependence/map/room_mod.h`）——读档时直接按存档恢复这份快照，不依赖重新
-  创建的mod再算一遍（见`map_save.md`）。目前只有`ResidenceRoom`
-  （`Source/Basic/map/room_basic.cpp`）真正设了`isResidential=true`+
-  `residentialCapacity=1`，另外3类保持`RoomMod`基类默认值（false/空），等Job/Industry域
-  迁移时再由各自的具体`RoomMod`子类真正启用，详见`Source/Core/populace/populace.md`。
+  创建的mod再算一遍（见`map_save.md`）。`Source/Basic/map/room_basic.cpp`里的各`RoomMod`子类按用途设置这些标志（住宅、工位、仓储、制造、停车位等）。
+  消费方：`Map::ComputeAccommodationTarget()`/`Map::Checkin()`（居住）、`Organization`（工位）、`Industry`（仓储/制造）、
+  `Traffic`（停车位）。
 - **`RoomMod`极简，只有`GetType()`/`GetName()`**：`Room`不是像`Zone`/`Building`那样要参与
   "在地图上竞争地块"的顶层concept，永远是`Building`自己在`Layout()`里通过`AssignRoom`/
   `ArrangeRow`显式创建的，不需要`Assign`/`RandomAcreage`/`GetPower`这套static注册机制。
@@ -55,16 +52,17 @@
   - `GetOccupants()` / `AddOccupant(Citizen*)` / `RemoveOccupant(Citizen*)`——当前物理
     位置在这个房间里的人。和`households`是两回事：一个住户可能人不在家（以后有真正移动
     AI之后，citizen的当前位置可能是别的房间），一个occupant也可能不是这个房间的住户
-    （以后有访客/工作场景时会出现）。这次没有真正的移动AI，`Map::Checkin()`分配住处的
+    （以后有访客/工作场景时会出现）。`Map::Checkin()`分配住处的
     同时就让citizen"住进去"，`households`/`occupants`的初始状态天然重合，但数据结构上必须
-    分开存，为将来"人在家但当前不在自己房间里"这类场景预留。对应
+    分开存（"人在家但当前不在自己房间里"）。对应
     `Citizen::GetCurrentRoom()`（和`GetRoom()`即"家"是两个概念，见
     `Source/Core/populace/citizen.md`）——citizen当前在哪个房间，就应该出现在那个房间
     的`occupants`列表里，两边由调用方（目前是`Map::Checkin()`）手动同步维护，`Room`/
     `Citizen`自己都不做级联同步。
-  - `RemoveOccupant`目前没有任何调用方（`Map::Checkin()`只是一次性分配，
-    没有"搬家"/"离开房间"的逻辑），add/remove配对先加上，等真正的移动/搬家逻辑接入时就
-    有地方用。
+
+- **`assets`（房间地上摆放的资产）**：`Room`独占持有这些`Asset`（析构时`delete`，和`households`/`occupants`
+  那两个非owning指针不同），key=`Asset::GetName()`；`RemoveAsset`只摘除不delete，调用方接手所有权。
+  "当前房间"是玩家真实物理位置（`Player::currentRoom`），见`Source/Core/player/asset.md`。
 
 ### 房间门
 
@@ -90,11 +88,7 @@
 
 ## 待办/后续阶段
 
-- furniture/pivots/storages/manufactures/parkings/vehicles/ownership/tenancy等字段——
-  依赖Industry/Populace/Society，等对应领域迁移到了再回来加。
-- 4类占位能力里workspace/storage/manufacture这3类目前没有任何生成/消费方（Job/Industry域
-  还没迁移），只有residential这一类真正用起来了（`Map::ComputeAccommodationTarget()`/
-  `Map::Checkin()`，见`Source/Core/populace/populace.md`）。
+- furniture/pivots等家具类字段：目前没有。
 
 ## 房间局部坐标系
 

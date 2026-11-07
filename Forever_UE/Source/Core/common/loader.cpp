@@ -6,8 +6,7 @@
 using namespace std;
 
 namespace {
-	// 顺序就是Mod screen中列21个按钮的显示顺序(ModPanelWidget::NativeConstruct按
-	// 这张表的顺序遍历生成)，按人为指定的分组顺序排列，不是字母序/发现顺序。
+	// 顺序即Mod screen按钮的显示顺序(人为分组，不是字母序)
 	const vector<ModConceptDescriptor> kModConceptDescriptors = {
 		{ "Terrains",      "GetModTerrains",      "RegisterModTerrains",      "FinishModTerrains" },
 		{ "Roadnets",      "GetModRoadnets",      "RegisterModRoadnets",      "FinishModRoadnets" },

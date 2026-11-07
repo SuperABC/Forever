@@ -8,7 +8,7 @@
 
 - **四分类是同一个`AssetMobility`枚举字段，不是四个子类**：`Estate`(不动产)/`Vehicle`(载具)/`Object`(独立物体)/`Containee`(容器内容物)。"是否为容器"用`volume > 0`表达，和`mobility`正交，照抄老工程的设计，见`Core/player/asset.md`。
 - **`SetProperty()`两段式**：具体子类在这里赋值公开字段，不在构造函数里赋值。
-- **字段**：`weight`/`size`/`volume`；`backpack`(能否放进"后背"槽)；`weapon`+`weaponType`(能否放进左肩/右肩，以及在肩膀上激活时装备的`WeaponMod` id)；`usable`(能否被"使用")；`throwable`(投掷物，按3键激活、瞄准后扔出，和`weapon`正交)；`meshPath`+`meshScale`(世界里掉落物/投掷预览的静态网格，空=Forever层默认Cube占位)。
+- **字段**：`weight`/`size`/`volume`；`satiety`(使用时给使用者增加的饱食度，0~1，超出截断，0=不影响)；`productType`(对应的Industry `Product`类型，商店据此查零售价，空=不能在商店买；与Asset自己的id没有代码关联)；`backpack`(能否放进"后背"槽)；`weapon`+`weaponType`(能否放进左肩/右肩，以及在肩膀上激活时装备的`WeaponMod` id)；`usable`(能否被"使用")；`throwable`(投掷物，按3键激活、瞄准后扔出，和`weapon`正交)；`meshPath`+`meshScale`(世界里掉落物/投掷预览的静态网格，空=Forever层默认Cube占位)。
 - **脚本**：`scriptModName`+`milestoneNames`，和Vehicle/Job同一套机制；两者都空(默认)=这件资产没有脚本、也不挂弹选项的触发盒。`$$self.name`=资产实例名，`$$self.type`=mod id。
 - 带存档钩子，默认不存任何东西，见`common/mod_state.md`。
 

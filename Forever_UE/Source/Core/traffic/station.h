@@ -1,5 +1,7 @@
 #pragma once
 
+#include "class.h"
+
 #include "traffic/station_mod.h"
 #include "traffic/station_factory.h"
 
@@ -7,11 +9,6 @@
 #include <unordered_map>
 #include <vector>
 
-class Building;
-class Map;
-class Road;
-class Node;
-class Connection;
 
 // 一个站点接口的世界坐标信息——由StationMod::interfaces(建筑占地矩形局部坐标)按
 // Building::LocalToWorld换算而来，见traffic.md"InitStations"一节。
@@ -21,13 +18,9 @@ struct StationInterface {
 	float departDirX = 0.f, departDirY = 0.f;
 };
 
-// 公交接入路网的旁路——laneFrom/laneTo/sourceEdge是Map既有车道贯通线段的端点/原始连接
-// (Map拥有生命周期，这里只存裸指针引用，不delete)；stationNode/inEdge/outEdge是Station自己
-// 新建、只属于这个Station的旁路节点+两条直线弦连接(laneFrom->stationNode->laneTo，两点
-// 直连，不是对原车道曲线的真正切割——和Map::BreakThroughLine对既有车道新增访问点的精度
-// 一致，见route.md"公交接入路网"一节)，都不登记进Map的throughLines/vehicleNavGraph，不
-// 影响原车道、不开口，Station析构时负责delete这三样。t是这个站点在sourceEdge上的弧长比例，
-// 供Route::Build()判断"两个站点是否在同一段原车道上"这个特例。
+// 公交接入路网的旁路：laneFrom/laneTo/sourceEdge借用Map既有对象(不delete)；stationNode/
+// inEdge/outEdge是Station自己新建的，Station析构时delete，不登记进Map。t是站点在sourceEdge上
+// 的弧长比例，供Route判断同车道特例。详见station.md。
 struct StationRoadLink {
 	Node* laneFrom = nullptr;
 	Node* laneTo = nullptr;
@@ -38,13 +31,8 @@ struct StationRoadLink {
 	float t = 0.f;
 };
 
-// Station：一个上下车点的实体。真实站点独占持有一个StationMod实例(照抄Vehicle/Job持有mod
-// 的模式)；边缘站点(RouteMod::LayoutRoute()的edgeStations请求创建，供非路网线路两头伸出
-// 地图边界用，见route_mod.h)没有建筑也没有mod，走单独的构造函数，不经过factory。
-//
-// 必须在所有建筑落地之后创建——Traffic::InitStations()遍历map所有building时，building的
-// Layout()/导航图合并都早已跑完，这里只读Building已经缓存好的数据(GetDirection()/
-// GetSizeX()/GetSizeY()/LocalToWorld())，不会触发building自己的二次布局。
+// Station：一个上下车点的实体。三种构造场景(建筑站点/边缘站点/贴路站点)和"必须在建筑落地后创建"
+// 的约束见station.md。
 class Station {
 	// 存档：TrafficSaveCodec直接读写私有字段(traffic_save.md)。
 	friend class TrafficSaveCodec;

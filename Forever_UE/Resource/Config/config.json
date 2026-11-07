@@ -68,7 +68,21 @@
       "product_burger",
       "product_empty --test true"
    ],
-   "puzzle_mods" : [ "puzzle_tetris", "puzzle_anykey", "puzzle_dodge", "puzzle_rhythm", "puzzle_dance", "puzzle_poker", "puzzle_chase", "puzzle_burger", "puzzle_tubes", "puzzle_miner", "puzzle_tower", "puzzle_coins", "puzzle_empty --test true" ],
+   "puzzle_mods" : [
+      "puzzle_tetris",
+      "puzzle_anykey",
+      "puzzle_dodge",
+      "puzzle_rhythm",
+      "puzzle_dance",
+      "puzzle_poker",
+      "puzzle_chase",
+      "puzzle_burger",
+      "puzzle_tubes",
+      "puzzle_miner",
+      "puzzle_tower",
+      "puzzle_coins",
+      "puzzle_empty --test true"
+   ],
    "resource_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",

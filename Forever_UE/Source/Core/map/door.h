@@ -17,20 +17,15 @@ enum DOOR_KIND_TYPE : int { DOOR_KIND_ZONE, DOOR_KIND_BUILDING, DOOR_KIND_ROOM }
 // Map::CreateDoor按这个顺序转换。
 enum DOOR_ACCESS_TYPE : int { DOOR_ACCESS_OPEN, DOOR_ACCESS_OWNER, DOOR_ACCESS_LOCKED };
 
-// Door：一扇真正放了门扇的门的运行期实体——只有DoorSpec.mesh非空才会被Map::CreateDoor
-// 创建，纯门洞(没标签/查不到spec/mesh为空)不会有对应的Door实例。外观/开关方式全部来自
-// 创建时传入的DoorSpec快照(不持有spec来源mod的指针，几何/mesh/style等创建后不会再变)，
-// 门本身没有需要多态的行为，所以不做DoorMod/DoorFactory这套mod机制。
+// 一扇真正放了门扇的门的运行期实体(mesh为空的纯门洞不会创建)，外观/开关方式来自创建时的DoorSpec快照，设计见door.md
 class Door {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;
 public:
 	Door() = delete;
 
-	// id/interactName/flippedSide都由Map::CreateDoor算好传入(分别依赖Map自己维护的全局
-	// 计数器/per-owner序号计数器/随机数)，Door自己不重新计算。interactName非空时在构造函数
-	// 内部创建Script(照抄Vehicle::Vehicle的模式)，为空则script恒为nullptr。zone/building/
-	// room三者按kind只有一个非空，Door不持有它们的生命周期。
+	// id/interactName/flippedSide由Map::CreateDoor算好传入；interactName非空才创建Script；
+	// zone/building/room按kind只有一个非空，Door不持有它们的生命周期
 	Door(const std::string& id, DOOR_KIND_TYPE kind, const std::string& tag, const DoorSpec& spec,
 		Zone* zone, Building* building, Room* room, const std::string& interactName, bool flippedSide,
 		float x, float y, float z, float width, float height, float yaw, int level, bool isVehicleGate,
@@ -63,24 +58,16 @@ public:
 	int GetLevel() const;
 	bool IsVehicleGate() const;
 
-	// 单扇门(leaves==1)的朝向——spec.randomSide为true时创建时掷过的硬币结果，之后固定
-	// 不变；leaves==2或spec.randomSide为false时恒为false，Forever层按false=默认朝向处理。
+	// 单扇门(leaves==1)且spec.randomSide时创建时掷的硬币结果，其余恒为false
 	bool IsFlippedSide() const;
 
-	// 门禁：先看按人登记的例外(Register)——who登记过就按登记的结果(允许/不允许)，优先于下面的
-	// 门禁模式；没登记过再按模式：Open→任何人都能过；Locked→任何人都不能过；Owner→所属对象
-	// (Zone/Building/Room)GetStated()==true时视同Open，否则isPlayer为true按Open处理(占位，这次
-	// 没有真正的玩家门禁判定)，否则who是所属对象的GetOwner()才能过。who为空(调用方无法判定
-	// 身份，比如空车/公交)时不看登记，Owner门禁下按false处理(不能过)。
+	// 门禁判定顺序见door.md"CanPass判定顺序"
 	DOOR_ACCESS_TYPE GetAccess() const;
 	void SetAccess(DOOR_ACCESS_TYPE access);
-	// 按名字登记例外(pass=true允许通过/false不允许)，再次登记同一个人覆盖之前的结果——
-	// Map::ApplyChange处理RegisterDoorChange时只有一个citizen名字字符串，没有办法从Map反查到
-	// 真正的Citizen*(Map不持有Populace引用)，所以用名字比对，不是指针比对，见CanPass的实现。
+	// 按名字登记例外(Map只有名字没有Citizen*)，再次登记覆盖
 	void Register(const std::string& citizenName, bool pass);
 	bool CanPass(const Citizen* who, bool isPlayer) const;
 
-	// 交互——只有GetScript()!=nullptr(即spec.name非空)的门才有意义。
 	Script* GetScript() const;
 	const std::vector<std::string>& GetOptions() const;
 	void AddOption(const std::string& option);
@@ -112,8 +99,6 @@ private:
 	std::vector<std::string> options;
 };
 
-// 建筑门/房间门的放置判定：tag为空、doorSpecs里查不到这个tag、查到了但mesh为空，这三种
-// 情况都返回nullptr(墙上的洞照常保留，只是不放门)；其余情况返回对应的DoorSpec。园区门
-// 不走这个函数(没有tag概念)，直接在调用处判断gate.door.mesh是否为空，见zone.cpp。
+// 建筑门/房间门的放置判定：tag为空/查不到/mesh为空返回nullptr(只是门洞)。园区门不走这个函数，见zone.cpp
 const DoorSpec* ResolveDoorSpec(const std::unordered_map<std::string, DoorSpec>& doorSpecs,
 	const std::string& tag);

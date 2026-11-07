@@ -112,14 +112,8 @@ void ShopOrganization::DesignJobsForRoom(const std::string& componentType, const
 兜底建一个"script_empty"壳，因为`Organization`构造函数本来就在mod为空时整个提前
 返回，不需要额外处理）：
 
-```cpp
-script = new Script(scriptFactory, mod->scriptModName);
-for (const string& name : mod->milestoneNames) {
-	script->ReadMilestones(Config::GetScriptPath(name));
-}
-script->SetValue("name", ValueType(string(mod->GetName()))); // 供milestone脚本里
-	// $$self.name引用这个Organization的唯一名字，见job.cpp同款注释
-```
+`script = MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames)`（都空则没有脚本），随后
+`script->SetValue("name", mod->GetName())`，供milestone脚本里`$$self.name`引用。
 
 `~Organization()`里`delete script;`。`GetScript() const`供`Organization`所在
 的`Script`被外部（`UForeverStoryFrameworkComponent::BroadcastGameStart`）拿到
@@ -131,7 +125,7 @@ script->SetValue("name", ValueType(string(mod->GetName()))); // 供milestone脚�
 ### 招聘（`Society::RecruitCitizens`）
 
 收集所有`organizations`里`GetOccupant()==nullptr`的`Job*`到`vacancies`，收集
-所有满足`GetAge(currentYear)>=18`且`GetJob()==nullptr`的`Citizen*`到
+所有`IsInEconomy()`、`GetJob()==nullptr`且年龄在[18, 退休年龄60)的`Citizen*`到
 `adults`，两边各自用项目统一的`GetRandom(n)`做Fisher-Yates洗牌，按
 `min(size)`一一配对（`vacancies[i]->SetOccupant(adults[i])`+
 `adults[i]->SetJob(vacancies[i])`），效果等价于随机配对。

@@ -1,7 +1,6 @@
 # FadeWidget / FadeSubsystem（开局黑屏）
 
 盖住整个画面的全黑遮罩：**按下开始/加载按钮的那一帧立刻变黑**，一直黑到World关卡世界就绪，再整体渐变透明并移除。
-以后要在这个界面加加载进度条，布局直接在WBP里加即可。
 
 ## 为什么要有Subsystem
 
@@ -12,7 +11,7 @@
 - `OpenWorldLevel()`先`ShowBlack()`，再用`FTSTicker`等3帧让黑屏真正渲染出来，才调`OpenLevel`。
   开始游戏（`UForeverConfigBridgeSubsystem::ValidateAndStartGame`）和读档（`UForeverSaveSubsystem::RequestLoad`，
   菜单/暂停面板共用）都走它；校验失败路径不会变黑。
-- Menu/World两个Controller在`BeginPlay`里`RegisterWidgetClass`登记`fadeWidgetClass`（类在各自BP里指定）；
+- `AForeverMenuController::BeginPlay`和`AForeverPlayerController::InitializeOnce`里`RegisterWidgetClass`登记`fadeWidgetClass`（类在各自BP里指定）；
   World的Controller还会`EnsureBlack()`——编辑器里直接PIE在World.umap上（没经过按钮）时补一个黑屏。
 
 ## 就绪条件（新游戏、读档共用）
@@ -40,7 +39,7 @@ C++只写逻辑，外观在`WBP_Fade`（父类`UFadeWidget`）里设计：
 
 控件`HitTestInvisible`，不拦截输入；ZOrder 100（高于PausePanel的10，低于背包拖拽ghost的1000）。
 
-## 进度条与状态文字(2026-10-27)
+## 进度条与状态文字
 
 按下开始/加载按钮到渐隐之间显示分阶段进度：`AForeverFrameworkActor::GetLoadProgress(done, total, label)`
 (阶段列表和说明见`Framework/ForeverFrameworkActor.md`"分阶段生成 + 开局进度")。控件每帧轮询：

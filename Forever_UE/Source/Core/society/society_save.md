@@ -3,9 +3,11 @@
 ## 职责
 
 社会域的存档读写，类名 `SocietySaveCodec`，写成一个二进制段 `world.society`。内容：
-- 组织：类型、占用的 Component、mod 状态、mod 名字；
+- 组织：类型、占用的 Component、mod 状态、mod 名字、股东名单、倒闭标记；
 - 每个组织的 Job：类型、工位房间、在职市民、mod 状态、mod 名字；
-- 组织定时器。
+- 组织定时器；
+- 账本：城市外/政府余额、市民和组织余额（按下标引用）、累计流水 `flowTotals`、开局注资 `initialInjection`；
+- `lastMonthKey`（月结进度）。
 
 存档系统总说明见 `Source/Core/common/save.md`，人口部分见 `Source/Core/populace/populace_save.md`。
 
@@ -23,6 +25,7 @@
   - Component 和房间用 `common/save_refs.h` 里的（Building 名字, 下标）编码。
 - **工作经历**：读完后，把人口段留下的 `JobExperience` 连上组织（`JobExperience` 把这个类声明成 friend）。
 - **定时器顺序**：组织定时器按 (时间, 组织下标, 节点名) 排序后写出，原因同人口段。
+- `Load` 用 `unique_ptr<Society>` 暂存新建的 `Society`，失败路径（段截断、异常）自动析构，成功才 `release`。
 
 ## 依赖关系
 
@@ -34,4 +37,4 @@
 
 ## 待办 / 后续
 
-- 无。组织和 Job 的 Script 状态由 `story/script_save` 恢复（键 `org:<i>`、`job:<i>:<k>`）。
+- 组织和 Job 的 Script 状态由 `story/script_save` 恢复（键 `org:<i>`、`job:<i>:<k>`）。

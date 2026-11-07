@@ -19,17 +19,8 @@ namespace {
 		return { x + dirX * tBest, y + dirY * tBest };
 	}
 
-	// TrainRoute/AirRoute共用的"单站双跑道(轨道)、四接口"拓扑：
-	// 左边界->leftIn->rightOut->右边界->rightIn->leftOut->左边界，闭合成一个环。interfaces
-	// 传入顺序固定为[leftIn, rightOut, rightIn, leftOut](TrainStation/AirStation::Layout
-	// 保证)——leftIn/rightOut这两个接口朝向相同(沿frontage轴同一方向)，中间那条直线就是
-	// "跑道/轨道1"；rightIn/leftOut同理朝相反方向，是"跑道/轨道2"。
-	//
-	// 左边界的位置沿leftIn朝向的反方向(即leftIn进站之前、飞机/火车从图外飞来的方向)射线出图
-	// 边界得到；右边界同理沿rightOut朝向(飞机/火车离站后继续飞向图外的方向)射线出图。两个
-	// 边界节点的arrive/depart朝向都直接复用相邻接口自己的朝向(同向的一段直接复用，掉头的
-	// 那一段取反)，左右边界各自固定对应着leftIn/rightOut这一组。
-	// edgeHeight覆盖边缘站点的z(AirRoute用巡航高度，TrainRoute用接口原本的z)。
+	// TrainRoute/AirRoute共用的单站双跑道(轨道)四接口环线拓扑，见route_basic.md。
+	// overrideEdgeZ为true时边缘站点的z取edgeHeight(AirRoute用巡航高度)，否则用接口原本的z。
 	void LayoutDualTrackStationLoop(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY,
 		bool overrideEdgeZ, float edgeHeight,
 		vector<RouteStationInfo>& outEdgeStations, vector<RouteLink>& outLinks,
@@ -89,13 +80,9 @@ namespace {
 			rightIn, -rightIn.departDirX, -rightIn.departDirY,
 			"edgeRightOut", "edgeRightMid", "edgeRightIn", rightEdgeOut, rightEdgeMid, rightEdgeIn);
 
-		// 真正的停靠点——跑道/轨道中点，飞机/火车只在这里停dwellSeconds。leftIn/rightOut/
-		// rightIn/leftOut(入站/出站接口)和边缘的Out/In端点全部降级成纯过路点
-		// (RouteStop::dwell=false，到达后不停留直接接着跑下一腿)——真实世界里乘客在跑道/站台
-		// 中段上下客，不是在跑道两端分别停一次。stop1/stop2和边缘站点一样借用"没有
-		// building的合成站点"机制(isEdge=true只是为了复用Route::Build()已有的创建+收集逻辑，
-		// 不代表真的是地图边缘)。两点都落在各自跑道的直线上(同一朝向)，中点位置+朝向直接取
-		// 两端平均即可，贝塞尔控制点会自然退化成直线，不会在中点产生拐弯。
+		// 真正的停靠点：跑道/轨道中点(只有这里dwell=true)，其余接口和边缘端点都是纯过路点。
+		// isEdge=true只是复用Route::Build()创建合成站点的逻辑，不代表真的是地图边缘。
+		// 两端共线同向，位置和朝向取平均即可，贝塞尔会自然退化成直线。
 		RouteStationInfo stop1; // 跑道/轨道1(leftIn<->rightOut)中点
 		stop1.name = "stop1";
 		stop1.x = (leftIn.x + rightOut.x) * 0.5f;
@@ -168,30 +155,16 @@ void BusRoute::SetProperty() {
 	useRoadnet = true;
 	instantiate = false;
 
-	// speed/dwellSeconds的单位是"地图单位/游戏内秒"、"游戏内秒"，不是真实秒——Traffic::Tick
-	// 喂给Route::Update的elapsedSeconds来自Player::Tick()里的time->AddMilliseconds(delta*60*
-	// 1000*timeFlowRatio)，默认timeFlowRatio=2.0，也就是1个真实秒=120个游戏内秒。按"车环一圈
-	// (公交站环线实测约120~180地图单位)大约跑40~60真实秒、停站约3真实秒"校准：
-	// speed=0.025(=3地图单位/真实秒)，dwellSeconds=360(=3真实秒)。如果以后time_flow_ratio
-	// 被剧情脚本改了，这几个值的真实秒观感会跟着等比例变化，到时候要一起重新校准。
+	// speed/dwellSeconds是游戏内秒单位(默认1真实秒=120游戏内秒)，校准依据见route_basic.md。
 	speed = 0.025f;
 	dwellSeconds = 360.f;
 
-	// 公交每一站都停(dwellAtDestination恒为true)，"行驶区段"退化成单条leg，调大easeSeconds时
-	// DriveVehicle()会自动把ta/td钳在"这条leg行驶时长的一半"，站间距短的leg会自然变成全程
-	// 加速+全程减速、没有真正匀速的中段，这正是"尽量缓"这个要求在站间距有限时能做到的最大
-	// 效果，不需要额外处理，直接给一个足够大的值即可(注意DriveVehicle()里这个字段真实秒->
-	// 游戏内秒的换算系数要乘对，见route.md"DriveVehicle的缓动"一节)。
+	// 公交每站都停，ta/td会被DriveVehicle钳到单条leg时长的一半，直接给足够大的值即可，见route_basic.md。
 	easeSeconds = 20.f;
 }
 
 void BusRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) {
-	// 不依赖任何"哪个方向是南/北/顺时针/逆时针"的假设，直接从每个接口自己真实的departDir
-	// 反推它天生属于哪个绕行方向：一个点如果沿着"绕形心转圈"的切线方向走，它的朝向和"位置
-	// 相对形心的半径向量"之间的2D叉积(radial.x*dir.y-radial.y*dir.x)符号是固定的(纯数学
-	// 事实，和地图哪边是南北、Y轴朝哪无关)——同号的一组自然构成同一个绕行方向，叉积符号本身
-	// 就决定了这组应该按角度升序还是降序首尾相接(推导见下buildLoop调用处)。这样无论Map层的
-	// 左右手约定以后再怎么变，这里都会自动跟着真实车道方向重新分组，不需要手推。
+	// 从每个接口自己的departDir反推绕行方向并分两组成环，不假设南北/顺逆时针，见route_basic.md。
 	if (interfaces.size() < 4) return; // 凑不出两条至少2站的环线，留空
 
 	float centerX = 0.f, centerY = 0.f;
@@ -202,8 +175,7 @@ void BusRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX
 	auto angleAroundCenter = [&](const RouteStationInfo& info) {
 		return atan2f(info.y - centerY, info.x - centerX);
 	};
-	// radial x departDir的2D叉积：>=0这一组的朝向和"角度增大方向"同向，必须按角度升序首尾
-	// 相接才会贴着每个点自己的departDir走；<0这一组则相反，必须按角度降序——见下buildLoop。
+	// radial x departDir的2D叉积：>=0的一组按角度升序首尾相接，<0的一组按降序——见下buildLoop。
 	auto rotationSign = [&](const RouteStationInfo& info) {
 		float rx = info.x - centerX, ry = info.y - centerY;
 		return rx * info.departDirY - ry * info.departDirX;
@@ -258,22 +230,18 @@ void TrainRoute::SetProperty() {
 	vehicleType = "vehicle_train";
 	useRoadnet = false;
 	instantiate = true;
-	// 轨道mesh沿X轴延伸、轴心在起点边(不像道路在中心)，长约250cm、宽约243cm，单位=0.25地图单位
-	// (1地图单位=10m)。暂时没有隧道专用资产，隧道内复用同一个mesh。
+	// 轨道mesh沿X轴延伸、轴心在起点边，长约250cm=0.25地图单位(1地图单位=10m)。
+	// 没有隧道专用资产(trackTunnelMesh留空)，隧道内复用trackMesh。
 	trackMesh = "/Game/3rdParty/SM_ufekaevdw_tier_3/StaticMeshes/SM_ufekaevdw_tier_3.SM_ufekaevdw_tier_3";
 	trackTunnelMesh = "";
 	trackUnit = 0.25f;
 	trackWidth = 0.8f; // 比轨道本身宽，给列车和隧道口留余量
 
-	// 单位换算见BusRoute::SetProperty()的注释——同样的timeFlowRatio=2.0默认值下1真实秒=
-	// 120游戏内秒。火车的环线大部分长度是两段"车站到地图边缘"的长途
-	// (LayoutDualTrackStationLoop，实测约2000地图单位)，按"跑一圈大约170真实秒、进站停约
-	// 5真实秒"校准：speed=0.1(=12地图单位/真实秒)，dwellSeconds=600(=5真实秒)。
+	// 校准依据见route_basic.md：跑一圈约170真实秒、进站停约5真实秒。
 	speed = 0.1f;
 	dwellSeconds = 600.f;
 
-	// 火车体型大，启动/刹车要比普通载具更缓才符合实际手感(DriveVehicle()里这个字段真实
-	// 秒->游戏内秒的换算系数要乘对，见route.md"DriveVehicle的缓动"一节)。
+	// 火车体型大，启动/刹车比普通载具更缓。
 	easeSeconds = 40.f;
 }
 
@@ -519,15 +487,11 @@ void AirRoute::SetProperty() {
 	useRoadnet = false;
 	instantiate = false;
 
-	// 单位换算见BusRoute::SetProperty()的注释。飞机比火车快，环线也略长(实测约2050地图
-	// 单位)，按"跑一圈大约100真实秒、停约6真实秒(登机/下客)"校准：speed=0.175(=21地图
-	// 单位/真实秒)，dwellSeconds=720(=6真实秒)。
+	// 校准依据见route_basic.md：跑一圈约100真实秒、停约6真实秒。
 	speed = 0.175f;
 	dwellSeconds = 720.f;
 
-	// 飞机比火车更大更重，启动/刹车要比火车还缓一点(DriveVehicle()里这个字段真实秒->
-	// 游戏内秒的换算系数要乘对，见route.md"DriveVehicle的缓动"一节；区段总时长大约是半圈
-	// 减去停靠，DriveVehicle()会自动把ta/td钳在区段总时长一半以内，不会出现负的匀速段)。
+	// 飞机比火车更大更重，启动/刹车更缓。
 	easeSeconds = 50.f;
 }
 

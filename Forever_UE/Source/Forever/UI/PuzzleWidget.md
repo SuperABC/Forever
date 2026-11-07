@@ -15,7 +15,7 @@
 ## 依赖关系
 
 - 依赖：Core `Puzzle`、`Dependence/player/canvas.h`、`CanvasInputTranslation`。
-- 被谁依赖：`Framework/ForeverStoryFrameworkComponent`、`Framework/ForeverSaveSubsystem`、`Controller/ForeverPlayerController`。
+- 被谁依赖：`Framework/ForeverStoryFrameworkComponent`、`Mod/ForeverSaveSubsystem`、`Player/ForeverPlayerController`。
 
 ## 待办/后续阶段
 

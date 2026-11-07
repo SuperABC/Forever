@@ -2,7 +2,7 @@
 
 ## 职责
 
-`USectionOptionWidget`：剧情对话走到**分支选项段**(`Section::IsBranch()`)时弹出的选项列表(对应老蓝图`SectionOption_C`)。
+`USectionOptionWidget`：剧情对话走到**分支选项段**(`Section::IsBranch()`)时弹出的选项列表。
 
 ## 关键设计
 
@@ -12,7 +12,7 @@
 ## 依赖关系
 
 - 依赖：`SectionButtonWidget`、`ForeverFrameworkActor`。
-- 被谁依赖：`Framework/ForeverStoryFrameworkComponent`(`ShowCurrentItem`)、`Controller/ForeverPlayerController`。
+- 被谁依赖：`Framework/ForeverStoryFrameworkComponent`(`ShowCurrentItem`)、`Player/ForeverPlayerController`。
 
 ## 待办/后续阶段
 

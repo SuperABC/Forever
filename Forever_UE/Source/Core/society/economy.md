@@ -37,7 +37,8 @@
 ## 关键设计
 - 全部金额int64分，资金只经`Ledger::Transfer`流动，总和恒为0。
 - "需求类型"目前写死`food`（成年人1份、未成年半份），没有按积蓄选质量的逻辑。
-- 员工不会因为企业亏损离职；企业倒闭、停发工资、重启在后续阶段。
+- 员工不会因为企业亏损离职。
+- 每日顺序里 `UpdateBankruptcies` 与 `SyncIndustry` 在货款结算之前，Industry 必须已经 `Tick`。
 
 ## 依赖关系
 - 依赖：`Society`（账本、月份状态、政策）、`Industry`（库存）、`Settlement`、组织mod接口。

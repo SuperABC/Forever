@@ -31,11 +31,10 @@
 - **相位在C++里累加**(`windPhase += dt*windSpeed`，对2π取模)，材质只读相位；不让材质用`Time*速度`，
   是因为运行时改风速会让相位跳变、树突然抽一下。
 - `windSpeed`(默认1.5)/`windStrength`(cm，默认60)/`windDirection`(默认(1,0.4,0)，Z忽略、归一化)是
-  `EditAnywhere`，以后天气/阵风直接改这几个值(或在这里叠噪声)。
+  `EditAnywhere`基准值；天气再乘上倍数(见下)，阵风以后可在这里叠噪声。
 - MPC加载失败/缺参数各只打一次Warning，不会每帧刷。
 - 材质高度遮罩=顶点`Absolute World Position`.Z − `Object Position`.Z(实例的树根)，再除以`TreeHeight`、
-  `Saturate`、`Power`。不需要每实例自定义数据(曾试过`PerInstanceCustomData`，根因其实是WPO链里遮罩和Sine
-  误用了`Add`而不是`Multiply`，与高度来源无关，已去掉)。
+  `Saturate`、`Power`，不需要每实例自定义数据。WPO链里遮罩和Sine必须用`Multiply`，不是`Add`。
 - 材质里的`TreeHeight`(树高，用于高度遮罩)是材质自己的ScalarParameter，不归C++管。
 
 ## 依赖关系
@@ -48,5 +47,5 @@
 - 行道树的位置/间距/缩放都是粗估，还没有避开建筑出入口(RoadOpening)。
 - 运行时增删目前只有组件接口，还没有接到Story/Change之类的调用方。
 
-## 天气对风的影响(2026-11-01)
+## 天气对风的影响
 `SetWindScale(strengthScale, speedScale)`由`UForeverWeatherFrameworkComponent`每帧写入：`WindStrength`写MPC时乘`strengthScale`，相位累加乘`speedScale`。`GetWindDirection()`给雨雪粒子借用风向。1=微风基准。

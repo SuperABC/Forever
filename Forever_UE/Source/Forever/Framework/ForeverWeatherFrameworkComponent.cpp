@@ -29,7 +29,7 @@
 UForeverWeatherFrameworkComponent::UForeverWeatherFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = false;
 
-	// 下标=Weather::Type：晴/多云/阴/小雨/大雨/小雪/大雪。数值是第一版粗估，PIE里调。
+	// 下标=Weather::Type：晴/多云/阴/小雨/大雨/小雪/大雪。数值是粗估，PIE里调。
 	auto make = [](float coverage, float density, float lightScale, float fogScale,
 		float windStrength, float windSpeed, float rain, float snow) {
 		FForeverWeatherParams params;

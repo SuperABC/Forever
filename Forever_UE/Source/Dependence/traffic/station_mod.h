@@ -7,45 +7,26 @@
 #include <vector>
 
 
-// 一个站点接口——位置用建筑占地矩形(Building自身的Quad，不是楼体footprint)的局部坐标声明，
-// 原点在占地矩形左下角、未旋转(和NavigationNodeTemplate同一套ratio+offset约定，不是
-// ParkingSpot那种"相对中心"的约定，因为轨道/跑道接口经常落在楼体外、靠近占地矩形边缘的空地
-// 上，用左下角做原点换算更直观)。headingDegrees是接口朝向，相对建筑自身旋转
-// (Building::GetRotation())，角度制；z是地图单位，相对地面(配合Building::GetFloorBaseZ(0)
-// 换算成世界高度，机场跑道/火车站台都贴地，这个字段主要给以后非贴地站点(比如高架)留口子)。
+// 一个站点接口:position用建筑占地矩形(Building自身Quad,不是楼体footprint)的局部坐标(原点左下角、未旋转,
+// ratio+offset约定),headingDegrees相对建筑旋转(度),z相对地面(地图单位)。见station_mod.md。
 struct StationInterfaceSpec {
 	PointParams position{};
 	float headingDegrees = 0.f;
 	float z = 0.f;
 };
 
-// 不挂建筑、直接贴着道路摆的站点请求(目前只有公交站用，见StationMod::AssignRoads)——road是
-// 贴哪条路，t是沿road弧长比例(0~1)的位置，rightSide决定贴在road哪一侧(沿Road Start->End
-// 方向，true=右手边，和Map::ResolveAccessLane"side0=右手边"的既有约定一致)。Core负责把
-// (road,t,rightSide)换算成世界坐标+朝向，mod自己不用管Node/Connection这些几何细节。
+// 不挂建筑、直接贴着道路摆的站点请求(AssignRoads用):road+沿弧长比例t+rightSide(沿Start->End的右手边)。
+// Core负责换算成世界坐标+朝向。
 struct RoadStationRequest {
 	Road* road = nullptr;
 	float t = 0.5f;
 	bool rightSide = true;
 };
 
-// AssignRoads()往外层交回结果用的回调——和BuildingMod::Assign的PlacementEmitFunc同一个机制
-// (裸函数指针，调用方Core编译的那份代码，跨DLL安全)。
+// AssignRoads()交回结果的回调(裸函数指针,体编译在调用方一侧,跨DLL安全),同PlacementEmitFunc。
 using RoadStationEmitFunc = void(*)(void* context, const RoadStationRequest& request);
 
-// StationMod：一个站点承载的上下车接口定义，两种挂载方式二选一：
-// 1. 挂在建筑上——BuildingMod::stationMod这个字符串单向声明"这栋楼配哪个站点"
-//    (building_mod.h)，Traffic::InitStations()据此创建Station、调一次Layout()填好
-//    interfaces(相对建筑占地矩形的局部坐标)，见火车站/机场。
-// 2. 直接贴着道路摆，不占用任何Lot面积——AssignRoads()声明想贴哪些路、哪一侧，
-//    Traffic::InitRoadsideStations()据此直接在道路旁边创建Station(只有一个世界坐标接口，
-//    不经过Layout()/interfaces这套建筑相对坐标系)，见公交站。两种方式用的是同一个
-//    StationMod基类/同一套config.json"station_mods"注册机制，只是走的Core创建路径不同。
-//
-// stationType是通用交通类别词(比如"bus"/"train"/"plane")，不是mod名——Core只做字符串相等
-// 匹配，RouteMod::stationType声明自己要接哪类站点，同一个类别词可以对应多种StationMod(不同
-// 外观/不同接口布局)，解耦站点外观和线路连接逻辑，见traffic/route_mod.h、Core/traffic/
-// traffic.md"站点与线路"一节。
+// 设计见station_mod.md。stationType是通用交通类别词("bus"/"train"/"plane"),不是mod名,RouteMod按它匹配。
 class StationMod {
 public:
 	StationMod() = default;
@@ -54,43 +35,24 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 具体子类必须在这里填stationType，不要在构造函数里赋值——构造函数只负责id/count
-	// 这类登记，和StorageMod::SetProperty()同一套"两段式"约定。注意不能指望在AssignRoads()
-	// 里设stationType：AssignRoads()是static方法(见下)，根本没有实例可以赋值，必须在这个
-	// SetProperty()里设好。Core在创建完mod实例后会立刻调一次这个方法，再读stationType/调
-	// Layout()。
+	// 子类在这里填stationType(不在构造函数里;AssignRoads是static,不能在那里设),Core创建实例后立刻调一次。
 	virtual void SetProperty() {}
 
 	std::string stationType;
 	std::vector<StationInterfaceSpec> interfaces;
 
-	// 建筑Layout()之后Core调用一次，用来按这栋楼的实际朝向/占地尺寸(地图单位)填好
-	// interfaces——direction是Building::GetDirection()缓存下来的值(落地时已经解析过，不是
-	// -1)，sizeX/sizeY是这栋楼占地矩形(Quad)的实际尺寸，不是楼体footprint尺寸。不关心朝向/
-	// 尺寸、固定几个接口的站点类型可以不实现这个方法，直接在SetProperty()里填好interfaces。
-	// 挂道路的站点类型(实现AssignRoads的那些)不需要override这个，留空即可。
+	// 建筑Layout()之后Core调用一次,按这栋楼的实际朝向和占地尺寸(地图单位,Quad尺寸)填interfaces。
+	// 固定接口的类型可在SetProperty()里直接填;挂道路的类型留空。
 	virtual void Layout(int direction, float sizeX, float sizeY) {}
 
-	// 不挂建筑、贴着道路摆的站点类型实现这个：扫一遍全图所有Road，想贴哪条路、哪一侧就调一次
-	// emit(context, request)。这个方法只用来跑一次性的"全图探测"，不需要读/写任何实例状态，
-	// 所以不是虚方法——和BuildingMod::Assign/ZoneMod::Layout里RandomAcreage/GetAcreageMin/
-	// GetAcreageMax/GetPower/Assign同一个"按类型固定、不需要任何实例"的static方法约定：基类
-	// 不声明，每个具体子类必须实现同名static方法，通过StationFactory::RegisterStation的额外
-	// 函数指针参数注册，详见station_factory.h。Traffic::InitRoadsideStations()直接调
-	// StationFactory::AssignRoads(id, ...)转发到这个注册的函数指针，不需要创建/销毁任何
-	// StationMod实例做"探测"。挂建筑的站点类型(实现Layout()的那些)不需要这个，给个空实现即可：
-	//   static void AssignRoads(const std::vector<Road*>&, RoadStationEmitFunc, void*) {}
+	// 挂道路的站点类型还须实现static void AssignRoads(const std::vector<Road*>&, RoadStationEmitFunc, void*)
+	// (基类不声明,通过RegisterStation注册),不需要的给空实现,见station_mod.md。
 
-	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
-	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
-	// 这里只放mod自己的私有数据。
+	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}
-	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
-	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
 	virtual int GetStateVersion() const { return 0; }
-	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
-	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	// GetName用的static count,存档保存/读档恢复;没有计数器的类保持默认。
 	virtual int GetInstanceCounter() const { return -1; }
 	virtual void SetInstanceCounter(int) {}
 };

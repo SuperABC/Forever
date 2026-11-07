@@ -603,6 +603,15 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 	AppendRoundHeader();
 	controller->StartTurn();
 	AppendNews();
+	// 开局的持续伤害、回合开始类特性也可能一开局就致死
+	if (!player->IsAlive()) {
+		pendingResult = -1;
+		phase = PHASE_RESULT;
+	}
+	else if (!enemy->IsAlive()) {
+		pendingResult = 1;
+		phase = PHASE_RESULT;
+	}
 }
 
 vector<string> WxdjPuzzle::WrapText(Canvas* canvas, const string& text, int maxWidth) {

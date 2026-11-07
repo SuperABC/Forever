@@ -3,12 +3,6 @@
 #include "puzzle_common.h"
 
 
-// 平衡楼房(工地)：吊车摆动着吊一层房子，点击/空格松绳垂直落下，落在已搭楼体的顶层上。
-// 与顶层(以它此刻摇摆后的位置计)重叠宽度占楼层宽度的比例>=overlap算搭上，否则这块房子掉走并扣一条命。
-// 楼体摇摆幅度=相邻楼层左右偏移绝对值之和(以楼层宽度计)越大越大，且越高的楼层摆得越大(顶层最大)。
-// 吊车摆速随层数略增。三条命用完结束，镜头随楼高上卷。
-// 参数(key=value)：lives(默认3)、swing(吊车基础摆速倍率，默认1)、overlap(默认0.25)、seed、startphase(吊车起始相位，仅测试用，默认随机)。
-// 返回：{"floors"(成功搭上的层数),"completed"(是否因命用完结束)}。
 class TowerPuzzle : public PuzzleMod {
 public:
 	virtual void SetParam(const std::string& param) override;

@@ -15,6 +15,7 @@
 #include "common/utility.h"
 
 #include <algorithm>
+#include <memory>
 #include <set>
 #include <tuple>
 #include <unordered_map>
@@ -134,6 +135,17 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		w.I32(c->avatarIndex);
 		w.U8(c->statsActive ? 1 : 0);
 		w.F32(c->satiety);
+		// 即时行进状态和"是否已实例化"(追加在记录最后，按项目约定没升段版本)：路径首点是当前位置，
+		// 读档后沿同一条路继续走；wasSpawned让UE侧读档后先把这些市民生成出来，见citizen.md。
+		w.U8(c->wasSpawned ? 1 : 0);
+		bool walking = c->IsWalking();
+		w.U8(walking ? 1 : 0);
+		if (walking) {
+			SaveRefs::WriteRoom(c->walkDestination, w);
+			w.F32(c->walkSpeed);
+			w.U32(static_cast<uint32_t>(c->walkPath.size()));
+			for (const Citizen::WalkPoint& point : c->walkPath) { w.F32(point.x); w.F32(point.y); w.F32(point.z); }
+		}
 	}
 
 	// 班级。
@@ -251,13 +263,16 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 
 	try {
 		ByteReader r(section->data);
-		Populace* populace = new Populace();
+		// 失败路径由guard析构整个Populace(含已读入的市民/班级/Name)，成功才release。
+		unique_ptr<Populace> guard(new Populace());
+		Populace* populace = guard.get();
 		populace->currentYear = r.I32();
 
 		if (r.U8() != 0) {
 			string nameId = r.Str();
 			if (!populace->nameFactory.CheckRegistered(nameId)) {
 				error = "name mod '" + nameId + "' is not available";
+				outPendingOrganizations.clear();
 				return nullptr;
 			}
 			populace->nameFactory.SetConfig(nameId, true);
@@ -313,6 +328,20 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			c->avatarIndex = r.I32();
 			c->statsActive = r.U8() != 0;
 			c->satiety = r.F32();
+			c->wasSpawned = r.U8() != 0;
+			if (r.U8() != 0) {
+				Room* destination = SaveRefs::ReadRoom(map, r);
+				float speed = r.F32();
+				uint32_t pointCount = r.U32();
+				vector<Citizen::WalkPoint> path;
+				for (uint32_t k = 0; k < pointCount && !r.Failed(); k++) {
+					Citizen::WalkPoint point;
+					point.x = r.F32(); point.y = r.F32(); point.z = r.F32();
+					path.push_back(point);
+				}
+				// 起算时间先记0，UE侧GenerateCitizens再用RebaseWalk对齐到当前游戏时钟。
+				if (!r.Failed()) c->BeginWalk(path, destination, 0.0, speed);
+			}
 		}
 		auto citizenAt = [&](int index) -> Citizen* {
 			return (index >= 0 && index < static_cast<int>(citizens.size())) ? citizens[index] : nullptr;
@@ -427,16 +456,19 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 
 		if (r.Failed()) {
 			error = "populace section is truncated";
+			outPendingOrganizations.clear(); // 指向guard将释放的JobExperience
 			return nullptr;
 		}
-		return populace;
+		return guard.release();
 	}
 	catch (const exception& e) {
 		error = string("populace load failed: ") + e.what();
+		outPendingOrganizations.clear();
 		return nullptr;
 	}
 	catch (...) {
 		error = "populace load failed with an unknown error";
+		outPendingOrganizations.clear();
 		return nullptr;
 	}
 }

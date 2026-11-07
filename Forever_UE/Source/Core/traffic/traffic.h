@@ -1,5 +1,7 @@
 #pragma once
 
+#include "class.h"
+
 #include "traffic/vehicle.h"
 #include "traffic/vehicle_factory.h"
 #include "traffic/station.h"
@@ -7,7 +9,6 @@
 #include "traffic/route.h"
 #include "traffic/route_factory.h"
 
-#include "common/class.h"
 #include "common/handle.h"
 #include "common/utility.h"
 
@@ -15,25 +16,8 @@
 #include <unordered_map>
 #include <vector>
 
-class Map;
-class ScriptFactory;
-struct ScriptContext;
 
-// Traffic：按name索引持有全部当前存在的Vehicle*/Station*/Route*。Init(Map*)按顺序做五件事
-// (见traffic.md"Init"一节)：
-// 1. InitStations——遍历map所有building，对BuildingMod::stationMod非空的，创建对应Station
-//    (调一次StationMod::Layout())。
-// 2. InitRoadsideStations——对每个已注册的StationMod类型，调StationFactory::AssignRoads
-//    (static方法，不需要创建任何实例)探测要贴哪些路/哪一侧，再对每条请求单独创建一个真正的
-//    Station——不挂building，不占用任何Lot面积，直接摆在道路旁边(目前只有公交站用这条路径)。
-// 3. InitRoutes——对每个已注册且启用的RouteMod类型，收集stationType匹配的Station接口交给
-//    Route::Build()，Build()内部按需创建的边缘Station交回这里持有。
-// 4. 停车位车辆——对每个停车位在ParkingSpot::categories里随机选一个载具种类，再按
-//    VehicleFactory::GetIdsByCategory从该种类的车型里随机选一个(不管是否drivable)，种类是各
-//    VehicleMod静态GetCategory()注册的，不需要创建临时mod实例。机场停机位(种类"plane")也走这里。
-// 5. 线路车辆——对每条Route的每条line按GetVehiclesPerLine()创建车辆、SetRouteBinding、
-//    AddVehicleToLine。
-//
+// Traffic：按name索引持有全部当前存在的Vehicle*/Station*/Route*。Init(Map*)的五步顺序和细节见traffic.md。
 // 注意：这个类和UForeverTrafficFrameworkComponent（UE层Traffic域组件，上下车的Possess
 // 切换逻辑在那边，见ForeverTrafficFrameworkComponent.md）不是一回事，Traffic不知道UE
 // Actor/Controller的存在，两者没有互相持有关系。
@@ -68,13 +52,8 @@ public:
 	std::vector<Route::StopEvent> ConsumeStopEvents();
 	void SilenceInitialStopEvents();
 
-	// 认识AddOptionChange：按name找Vehicle、调vehicle->AddOption(option)，照抄
-	// Populace::ApplyChange对应分支。EnterVehicleChange是UE-only效果(找AVehicleElement、
-	// Possess)，不在这里处理，和ChangeControlChange一样直接在
-	// AForeverFrameworkActor::ApplyChange里dynamic_cast转发给UE层。
-	// 返回这个Change是不是本域认识的类型(认识就返回true，不管目标对象找没找到——找不到目标静默
-	// 忽略是既有的宽松约定)。AForeverFrameworkActor::ApplyChange汇总七个域的结果，全都不认识时
-	// 才打"未实现"警告。
+	// 认识add_option/remove_option(按name找Vehicle)；返回是否认识该类型，找不到目标静默忽略。
+	// EnterVehicleChange是UE-only效果，不在这里处理。
 	bool ApplyChange(const Change* change, const ScriptContext& context);
 
 private:

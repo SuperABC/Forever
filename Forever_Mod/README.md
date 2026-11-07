@@ -1,24 +1,18 @@
 # Forever_Mod
 
-阶段3示例Mod目录,验证"Mod发现/加载/注册(含参数传递)"链路可用。当前有三个mod组,均只
-实现`GetId`/`GetType`/`GetName`三个身份接口,不含真正玩法逻辑(留给阶段4对应系统迁移时
-补上):
+外部Mod目录，每个子目录是一组独立的纯Win32 DLL mod，运行时由`Config`/`ModLoader`按`config.json`的`dll_paths`发现并加载：
 
-- `Test/Cpp/Yuanshen/`——`YuanshenBuilding`(id `yuanshen`)，继承`BuildingMod`，是真正实现了玩法的测试建筑：
-  只在井字中心lot里自适应贴角放一块6x6，14层，用`Test/Resource/yuanshen_fg+.layout`/
-  `yuanshen_fu+-.layout`，挂示例脚本`entity_event`。同一个DLL还有`YuanshenScript`(script mod，id `script_yuanshen`)：空壳，ys.script的逻辑全在脚本里；
-  ys.script里的角色传送全在脚本里用`record_object`+`npc_teleport`写。
-- `Test/Cpp/Test/`——`TestScript`(id `script_test`)，独立DLL(Test.dll)：把`Test/Resource/test.script`的`control`占位符换成控制随机市民。
-- `Wxdj/Cpp/Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)，没有ScriptMod(main_story用`script_empty`)，剧情全在`Wxdj/Resource/Wxdj.script`；另有`WxdjPuzzle`(id `puzzle_wxdj`，回合制战斗小游戏，战斗内核在`Wxdj/Cpp/Wxdj/battle/`，招式表`Wxdj/Resource/act/xiaohua.txt`)，开局由脚本`start_puzzle`触发。
-- `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id统一为`empty`),纯粹用来验证
-  `config.json`按mod id配置的命令行式参数能一路传到mod:构造函数直接接收参数字符串,拼进
-  `GetName()`,详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。
+- `Test/`——测试mod组，详见`Test/Cpp/Yuanshen/building_yuanshen.md`、`Test/Cpp/Test/script_test.md`、`Test/Resource/README.md`：
+  - `Test/Cpp/Yuanshen/`(`Yuanshen.dll`)：`YuanshenBuilding`(id `building_yuanshen`，中心lot里自适应贴角的6x6、14层)和空壳`YuanshenScript`(id `script_yuanshen`)，配`Test/Resource/ys.script`。
+  - `Test/Cpp/Test/`(`Test.dll`)：`TestScript`(id `script_test`)，把`Test/Resource/test.script`的`control`占位符换成控制随机市民。
+  - `Test/UE/Test/`：迷你UE工程，用于制作载具蓝图等UE资产并打成pak(见下文)。
+- `Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)，没有ScriptMod(`main_story`用`script_empty`)，剧情全在`Wxdj/Resource/Wxdj.script`；另有`WxdjPuzzle`(id `puzzle_wxdj`，回合制战斗小游戏，战斗内核在`Wxdj/Cpp/Wxdj/battle/`，招式表`Wxdj/Resource/act/xiaohua.txt`)，开局由脚本`start_puzzle`触发。
+- `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id为`<concept>_empty`)，用来验证`config.json`按mod id配置的命令行式参数能一路传到mod：构造函数直接接收参数字符串，拼进`GetName()`，详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。
 
 ## 目录结构约定
 
-每个mod组(`Test`、`Wxdj`)是`Cpp/`(每个具体mod一个`.vcxproj`,产出`DynamicLibrary`)+
-`Resource/`(资源文件,阶段3为空占位)两部分,一个`.sln`引用该组下所有`.vcxproj`。**不复刻**
-旧工程`Forever_Mods/<ModName>/UE/<ModName>/`那样的每mod独立UE壳工程——阶段3不需要。
+每个mod组(`Test`、`Wxdj`、`Empty`)是`Cpp/`(每个具体mod一个`.vcxproj`,产出`DynamicLibrary`)+
+`Resource/`(资源文件)两部分,一个`.sln`引用该组下所有`.vcxproj`。需要UE资产的mod组另带一个迷你UE工程(`Test/UE/Test`)。
 
 ## 每个mod `.vcxproj`必须遵守的约定
 
@@ -27,11 +21,11 @@
 - `IncludePath`只指向`Forever_UE/Source/Dependence`及其`common`子目录,**不指向
   `Forever_UE/Source/Core`**——Mod只依赖Dependence接口层,这也是为什么
   `<Concept>Factory`必须和`<Concept>Mod`同放在Dependence(见
-  `Forever_UE/Source/Core/README.md`"实现期修正"一节),不能放在Core。
+  `Forever_UE/Source/Core/README.md`),不能放在Core。
 - `LibraryPath`指向`Forever_UE/x64/<Config>`,`.cpp`里`#pragma comment(lib, "Dependence.lib")`。
 - **`RuntimeLibrary`必须和`Forever_UE/Source/Dependence/Dependence.vcxproj`一致**
   (`MultiThreadedDebugDLL`/`MultiThreadedDLL`)——CRT不匹配是"`LoadLibrary`成功但跨DLL调用
-  崩溃"的典型原因,阶段3的三个示例mod已经对齐这个设置。
+  崩溃"的典型原因。
 - `OutDir`显式设为`$(ProjectDir)..\x64\$(Configuration)\`,即
   `Forever_Mod/<ModGroup>/Cpp/x64/<Config>/<ModName>.dll`——`Forever_UE/Resource/Config/
   config.json`的`dll_paths`按mod组根目录配置(相对config.json自身路径,如
@@ -59,22 +53,21 @@ extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory*);   //
 不需要、也不会带参数——参数只在creator被调用时才出现。mod的creator决定怎么用这个参数
 (最常见的做法是转发给具体子类的构造函数,如`[](const std::string& args) -> BuildingMod* {
 return new PengzhanBuilding(args); }`),不用就直接忽略这个参数,详见
-`Forever_UE/Source/Dependence/README.md`。**这条机制之前有一版是创建完实例之后再调用一次
-`instance->ApplyArgs(args)`**——被指出"创建完之后再传参数"没有意义(构造函数用不上,
-`const`成员也没法在构造之后再赋值),已经改成现在这版,不要照着抄。
+`Forever_UE/Source/Dependence/README.md`。**不要**改成创建实例之后再调`instance->ApplyArgs(args)`
+这类钩子：构造函数已经跑完，`const`成员无法再赋值，参数到手太晚。
 
 **creator lambda必须显式标注`-> BuildingMod*`返回类型**(不能让编译器推导成
 `PengzhanBuilding*`)——`<Concept>Factory::CreateFunc`是裸函数指针类型
 (`BuildingMod*(*)(const std::string&)`,不是`std::function`,原因见
-`Forever_UE/Source/Core/README.md`"实现期修正"),裸函数指针要求签名**完全一致**,没有
+`Forever_UE/Source/Core/README.md`),裸函数指针要求签名**完全一致**,没有
 协变:一个返回`PengzhanBuilding*`的无捕获lambda只能转换成
 `PengzhanBuilding*(*)(const std::string&)`,不能直接转换成
 `BuildingMod*(*)(const std::string&)`,必须在lambda里显式写`-> BuildingMod*`让返回值在
 lambda内部完成到基类指针的隐式转换。
 
-## 用mod提供载具(含蓝图)——实验结论与做法(2026-11-02，拿公交BP_BusElement验证)
+## 用mod提供载具(含蓝图)
 
-**结论**：mod可以带自己的载具蓝图，父类留在主程序里即可。验证过的是编辑器PIE下公交从`/Test/Bus/Actor/BP_BusElement`正常生成、上车、驾驶；打包版挂载新pak没有实测(挂载代码和已有的飞机静态网格同一条路径)。
+**结论**：mod可以带自己的载具蓝图，父类留在主程序里即可。已验证：编辑器PIE下公交从`/Test/Bus/Actor/BP_BusElement`正常生成、上车、驾驶；打包版挂载新pak未实测(挂载代码和已有的飞机静态网格同一条路径)。
 
 **边界**(原因：安装版引擎只支持单体Game构建，见`Forever_UE/Source/Forever/Element/PlaneElement.md`与CONVENTIONS)：
 - 能放进mod的：`<Name>Vehicle`(纯C++ `VehicleMod`，Dependence接口)、脚本、模型/材质/物理资产/骨架、**载具蓝图**(父类`AVehicleElement`或其蓝图子类在主程序里)。
@@ -95,7 +88,7 @@ lambda内部完成到基类指针的隐式转换。
 
 **无害的现象**：迷你工程的commandlet日志里有大量`CDO Constructor (...): Failed to find /Game/...`(主工程的IA_*、材质、网格不在迷你工程里)，只是类的默认对象里引用为空；蓝图只存与父类默认值的差异，所以不影响搬进来的蓝图。名字末尾带`_652`这类数字的资产，在uasset名字表里会被拆成`SKM_paz`+数字后缀，扫描依赖时别被误导。
 
-**没做的**：`BusVehicle`这个C++类本身没搬进`Forever_Mod`(它是纯C++ mod，搬法和`YuanshenBuilding`一样，没有技术障碍)；线路公交用的`transitMeshPath`、脚本也没搬。
+**未做**：`BusVehicle`这个C++类本身没搬进`Forever_Mod`(它是纯C++ mod，搬法和`YuanshenBuilding`一样，没有技术障碍)；线路公交用的`transitMeshPath`、脚本也没搬。
 
 ## 图片资源约定
 

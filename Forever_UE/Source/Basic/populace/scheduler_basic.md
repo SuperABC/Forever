@@ -6,8 +6,9 @@
 
 ## 关键设计
 
-- 不写实际测试逻辑——`DailyPlan`/`ExecNode`这套机制已经在`Job`/`Organization`验证过，和`EmptyJob::DailyPlan`同一个"占位，不产生任何调度"的做法。
-- `SetProperty()`的Script配置指向一个空的`schedule_empty.script`(`Resource/Story/schedule_empty.script`)。
+- `DailyPlan`留空，是"占位，不产生任何调度"的做法(`DailyPlan`/`ExecNode`机制由`Job`/`Organization`使用)。
+- `SetProperty()`设`scriptModName="script_empty"`+`milestoneNames={"schedule_empty"}`，对应一个空的`schedule_empty.script`(`Resource/Story/schedule_empty.script`)；依赖`script_empty`见`basic.md`。
+- `GetName()`必须全局唯一：static计数器+id+现拼。
 - **`static float GetPower()`返回1.f**：`RegisterModSchedulers`注册时作为`PowerFunc`传给`SchedulerFactory::RegisterScheduler`，`Populace::AssignSchedulers()`据此建CDF做加权随机分配，见`Core/populace/populace.md`。
 
 ## 依赖关系

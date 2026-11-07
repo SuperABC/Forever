@@ -17,21 +17,17 @@ struct TerrainTexturePaths {
 	std::string roughness;
 };
 
-// Terrain实体:持有一个具体TerrainMod实例(由TerrainFactory创建/销毁),把它的业务方法
-// 转发出来。自身不持有任何地图格子数据——格子数据(地形类型/高度/水面/hatch)在Map/Element
-// 里,详见 Source/Core/map/terrain.md、map.md。
+// 某个TerrainMod实例的薄包装，不持有地图格子数据，详见terrain.md
 class Terrain {
 public:
 	Terrain() = delete;
 
-	// @factory: 地形工厂; @terrainId: 地形静态类型标识(工厂里已注册的id)
 	Terrain(TerrainFactory* factory, const std::string& terrainId);
 	~Terrain();
 
 	std::string GetType() const;
 	std::string GetName() const;
 
-	// 持有的mod实例——以后需要读mod内部数据的调用方直接用，不需要另外拷贝。
 	TerrainMod* GetMod() const;
 
 	float GetPriority() const;
@@ -54,8 +50,7 @@ private:
 };
 
 // ---------------------------------------------------------------- 近处地形混合
-// 以下原来是独立的terrain_blend.h，合并进terrain.h：给近处地形材质生成混合控制纹理的数据，
-// 由UE侧ForeverTerrainFrameworkComponent::RebuildNearControl调用。
+// 给近处地形材质生成混合控制纹理，由ForeverTerrainFrameworkComponent::RebuildNearControl调用
 
 struct NearBlendParams {
 	int texelsPerElement = 16;
@@ -83,8 +78,7 @@ struct NearBlendStats {
 	int64_t distinctIdHistogram[6] = { 0, 0, 0, 0, 0, 0 };
 };
 
-// 近处地形的混合权重生成：纯C++，算法本身只依赖标准库(不碰Map/Terrain/任何UE类型)。详见
-// terrain.md"近处地形混合"一节。
+// 近处地形的混合权重生成(只依赖标准库)，详见terrain.md"近处地形混合"一节
 class NearTerrainBlend {
 public:
 	explicit NearTerrainBlend(const NearBlendParams& params);

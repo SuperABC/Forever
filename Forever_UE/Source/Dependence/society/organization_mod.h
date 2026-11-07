@@ -21,11 +21,7 @@ struct ServiceOffer {
 	int capacity = 0;      // 当日最多能提供的份数（商店是该货物的库存），系统按它加权分配需求、防止超卖
 };
 
-// OrganizationMod：一种组织类型的行为定义(比如商店)。**Dependence层看不到Job/Component/
-// Room/Citizen这些Core类**（Core依赖Dependence，反过来不行——照抄BuildingMod::Layout/
-// Assign只出现Quad/Road/Lot这几个Dependence层类型的既有模式），所以这里的接口只用
-// 字符串/int/Time/Change*表达"要什么""配什么"，真正的Component/Room遍历和new Job(...)
-// 全部在Core侧的Organization类里做，见Source/Core/society/organization.md。
+// 设计见organization_mod.md。Dependence层看不到Job/Component/Room/Citizen,接口只用字符串/int/Time/Change*。
 class OrganizationMod {
 public:
 	OrganizationMod() = default;
@@ -34,40 +30,19 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// static float GetPower(); // 通过OrganizationFactory::RegisterOrganization的
-	// PowerFunc函数指针注册——和BuildingMod::GetPower同一个模式，基础值，不需要实例，
-	// Society::Init要对着"每个Component实例 x 每种已注册组织类型"做加权判断，不能为
-	// 每个组合都构造一个实例。
+	// 子类还必须实现static GetPower()和static GetRequirements(),通过RegisterOrganization注册,见organization_mod.md。
 
-	// 组件需求不在实例上：这个组织类型需要哪些Component类型(字符串)+每种数量范围[min,max]
-	// (可以同时列多种不同类型，也可以对同一种类型要多个)，由mod提供一个static函数
-	// `static const std::unordered_map<std::string, std::pair<int, int>>& GetRequirements()`
-	// (返回函数内static变量的引用)，随RegisterOrganization注册，和GetPower同一个模式，
-	// Society::Init不需要为了读它构造临时实例。
-
-	// 写进this->vacancies：Core侧Organization自己遍历claimed components的每个
-	// workspace room，每个room调用一次这个方法（Core不会清空vacancies，mod必须在方法开头自己clear：里面的string在mod堆上分配，
-	// Core侧释放会跨DLL堆崩溃），把这个
-	// room的完整上下文喂给mod——component类型/名字、room类型/名字、这个room的工位数量
-	// (WorkspaceCapacity())。mod自己决定要在这个room里配几个、什么类型的Job(可以是
-	// 不同类型混着配)，把job类型字符串逐条push进this->vacancies；Core侧读完vacancies，
-	// 对每一条按顺序new Job(...)，position都设成这次传进来的room。这个room不需要配
-	// 任何Job就不push。
+	// 每个workspace房间调一次,把要配的job类型字符串push进this->vacancies。
+	// 必须在方法开头自己clear:Core不清空(string在mod堆上分配,Core侧释放会跨DLL堆崩溃)。
 	virtual void DesignJobsForRoom(const std::string& componentType, const std::string& componentName,
 		const std::string& roomType, const std::string& roomName, int workspaceCapacity) = 0;
 
-	// 可选：这次大部分组织不需要自己的调度(比如发工资)，默认空实现——真要用的具体组织
-	// 类型重写，直接写自己的plans/changes成员字段，和JobMod同一个模式。
-	// @post：和JobMod::DailyPlan/ExecNode同一个用途——按需查具体citizen家/工位的地址，
-	// 见job_mod.h的说明；这次和JobMod保持接口对称，即使目前没有具体组织类型用到。
-	// 每日服务收集：系统先把组织的状态写进script(商店是self.stock.<货物类型>，值为整数库存)，
-	// stockTypes列出本次写入的货物类型，mod据此在自己的services里填本日能提供的服务(先clear再
-	// push，和vacancies同一个模式，Core只读)。post用于查询商品零售价等(post "product info")。
+	// 每日服务收集:系统先把状态写进script(商店是self.stock.<货物类型>),stockTypes列出写入的类型,
+	// mod在services里填本日能提供的服务(先clear再push)。post可查商品零售价等(post "product info")。
 	virtual void CollectServices(Container* script, const std::vector<std::string>& stockTypes,
 		PostHandle* post) {}
 
-	// 市民用掉了count份name服务：mod直接改script里的变量(商店是扣减self.stock.*)，系统随后按
-	// 变量值回写Storage，mod不碰Core里的任何对象。
+	// 市民用掉了count份name服务:mod改script变量,系统随后回写Storage。
 	virtual void ApplyServiceUsage(const std::string& name, int count, Container* script) {}
 
 	virtual void DailyPlan(const Time& currentTime, PostHandle* post) {}
@@ -76,30 +51,22 @@ public:
 	std::vector<std::string> vacancies;
 	std::vector<ServiceOffer> services; // CollectServices的输出
 
-	// 经济参数(分)：开业/重启时的初始资金；股东占股比例(Core归一化后随机选成年市民，一个元素一个
-	// 股东)；每个员工的日工资。
+	// 经济参数(分),语义见organization_mod.md。
 	int64_t initialFunds = 0;
 	std::vector<float> shareholders;
 	int64_t wage = 0;
 	std::unordered_map<std::string, Time> plans;
 	std::vector<Change*> changes;
 
-	// Script配置——和JobMod同一组字段/同一套安全模式(见job_mod.h的说明)，这次一起补上：
-	// Organization之前完全没有自己的Script，这次让它也能挂一个。scriptModName默认
-	// "empty"，milestoneNames默认为空。
+	// Script配置,同JobMod。
 	std::string scriptModName; // 空=无自定义ScriptMod；和milestoneNames都空则实例没有Script(GetScript()==nullptr)，见MakeScript
 	std::vector<std::string> milestoneNames;
 
-	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
-	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
-	// 这里只放mod自己的私有数据。
+	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}
-	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
-	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
 	virtual int GetStateVersion() const { return 0; }
-	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
-	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	// GetName用的static count,存档保存/读档恢复;没有计数器的类保持默认。
 	virtual int GetInstanceCounter() const { return -1; }
 	virtual void SetInstanceCounter(int) {}
 };

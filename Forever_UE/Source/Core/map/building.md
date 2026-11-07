@@ -22,7 +22,7 @@
   `FACE_NORTH`原样处理)得到楼体局部点，`LocalToWorld`转世界坐标；yaw=`GetRotation()`+朝向偏移
   (face0=270°/face1=90°/face2=0/face3=180°，和InversePoint的点映射是同一个旋转)+`spec.yaw`。
   所以模型和楼层布局一样跟着建筑朝向转。UE层只在近处LOD生成，见`BuildingElement.md`。
-- **允许0层建筑**——`Layout()`里`layers = max(0, mod->layers)`（以前强制至少1层）。
+- **允许0层建筑**——`Layout()`里`layers = max(0, mod->layers)`。
   `basements`和`layers`都为0时整栋没有任何`Floor`，`GetFloor(level)`恒返回nullptr，导航/门/
   hatch转发这些按`floors`或`mod->floors`遍历的循环自然什么都不做。给`ParkBuilding`这类只有植被、
   不放楼体的"建筑"用(植被走`BuildingMod::AddTreeArea`，见`vegetation.md`)；UE层
@@ -63,12 +63,13 @@
   发生，不涉及跨DLL问题）：`AssignFloor(level, templateName, face, assets)`声明第`level`层
   (0-based，0=1楼，负数=地下室)用哪个`.layout`模板+朝向+资产(`FloorAssetSpec`：墙体材质+
   地板材质+天花板材质+楼梯网格+坡道网格，留空用`ForeverBuildingFrameworkComponent`的组件级
-  默认值——这次不做外墙/内墙材质区分，统一一份`wallMaterial`，以后要分再加字段)；
+  默认值——不区分外墙/内墙材质，统一一份`wallMaterial`)；
   `AssignRoom`/`ArrangeRow`把某层某个槽位(`Single`/`Row`)实例化成真正的`Room`，按
   `(component名字,id)`分组挂到对应`Component`上。`Building::Layout()`按这些记录：①填
   `floors`(每层调`ReadFloor`)；②按`(component,id)`去重创建`Component`，逐个槽位调
   `AssignRoom`/`ArrangeRow`创建`Room`；③给每个`Room`创建导航锚点；④调
   `BuildPedestrianNavigation`构建内部导航图。
+- **模板名必须存在**：`Building::Layout()`对`mod->floors`里每个非空的`templateName`先用`BuildingLayoutLibrary::HasTemplate`校验，找不到直接抛`InvalidArgumentException`(开局即报错)；读档前`Config::FindMissingLayouts`对存档manifest里的模板名做同样的检查，两边口径一致，不会出现能开局、存了却读不回来的情况。空模板名表示这层故意不用模板，不校验。
 - **`.layout`模板只描述楼梯/坡道的2D位置+朝向+哪几侧有墙，不携带3D网格信息**——
   楼梯/坡道的实际3D网格由`FloorAssetSpec::stairMeshPath`/`rampMeshPath`作为`AssignFloor`
   的显式参数指定，模板名字只决定楼梯/坡道摆在楼体的哪个位置、多大、朝哪，不决定拿什么3D
@@ -80,6 +81,12 @@
   (楼层范围不能重叠)。`Layout()`把spec拷进快照`cabins`(`GetCabins()`)，`BuildCabins(Map&)`按它逐条创建Core的
   `Cabin`(电梯实体：Script、交互选项、所在楼层、行程状态)，登记进`cabinEntities`(`GetCabinEntities()`，析构时释放)，
   详见`cabin.md`。
+- **楼层先占位再填充**：`Layout()`先按层号(`-basements..layers-1`)建出全部空`Floor`，再用`mod->floors`的模板逐层
+  `ReadFloor`填充——mod漏配某一层时`GetFloor(level)`返回"没有任何元素"的空`Floor`而不是nullptr，渲染层不用特殊处理。
+  `floorHeights`长度和`basements+layers`对不上时整体按`kDefaultFloorHeight`(0.4)补齐。
+- **`ArrangeRow`切分房间数**：`num = row面积/acreage`，`num<1`或小数部分>=0.5就进一(四舍五入)，至少1间，沿`row`长边等分；
+  `acreage<=0`直接不建。
+- **`BuildCabins`的校验**：楼层范围非法(min>max或超出楼层)、或和同一口井里已建的轿厢楼层范围重叠，打warning并跳过该条spec。
 - **`Hatch`不是用来挖building自己楼层的`Ground`/`Ceiling`的**——`Ceiling`/`Ground`都是照
   模板原样绘制，不做任何运行时裁剪；`Hatch`真正的用途是喂给`Map::AddHatch`去挖**世界地形**
   的洞，而且只有地下一层(离地表最近的那层basement)的`Hatch`才有意义——只有basement会真正
@@ -118,12 +125,7 @@
   `BuildingNavResult::nodes`**——这些节点由`Building::Layout()`创建、不在`floorFixedNodes`/
   `line`锚点那条链路里，容易漏登记，漏了会导致`Map::navAnchorNodes`永远拿不到这些节点
   （内存泄漏+导航图可视化画不出来）。
-- **`Room`/`Component`大幅裁剪**：老工程`Room`还挂着`ownership`/`tenancy`/`workers`/
-  `storages`/`manufactures`/`parkings`/`vehicles`/`assets`等字段，全部依赖Industry/
-  Populace/Society这些还没迁移的领域，这次不迁移，等对应领域迁移到了再回来加，详见
-  `room.h`/`component.h`。这次只做`Component`(组合，绑定在单个Building内部)，不做
-  `Organization`(公司/组织，持有跨building的多个组合)——`Organization`依赖的
-  `Populace`/`Job`还没迁移，留到以后Society阶段。
+- **`Component`只绑定在单个Building内部**，跨building的撮合由`Organization`负责，见`component.md`；`Room`的字段见`room.md`。
 - **`GetAddress()`**：有`parentZone`时`parentZone->GetAddress() + " " + GetName()`，否则
   `parentLot->GetAddress() + " " + GetName()`，和`Map::LocateBuilding`的两种解析格式
   （`"<road> <index> <buildingName>"`/`"<road> <index> <zoneName> <buildingName>"`）
@@ -152,8 +154,12 @@
 (`x1=p[0]*horizSpan+p[1]`等)，只是这次是Core端复刻(算地图单位，不是UE单位)，详见
 `door.md`。由`Map::InitBuildings()`在`building->Layout(...)`的**三个**调用点(显式占位/
 园区内部建筑/`FillRemainder`)之后各调一次`building->BuildDoors(*this)`。
+门洞的`y1/y2`是"从天花板往下量"的距离（和渲染层挖墙洞的约定一致），所以门底边离地板的高度是
+`floorHeight-max(y1,y2)`，不是`min(y1,y2)`（写反过，门会悬在半空）；门的yaw=墙外法线朝向(`normalYaw`)+
+`building->GetRotation()`。
 
 - **mod声明式字段快照**：`Layout()`时把`mod->floors`/`cabins`/`stationMod`拷进`floorSpecs`/`cabins`/`stationMod`，
+  另有`scriptModName`/`milestoneNames`(非空才有`Script`，由`Map::BuildBuildingScripts`创建、析构时释放)，
   UE层(`BuildingElement`读楼层材质/buildShell、电梯轿厢)、Traffic(`InitStations`)、存档manifest(布局模板名)都读
   `GetFloorSpec`/`GetFloorSpecs`/`GetCabins`/`GetStationMod`，不直接读mod——读档时mod是重新创建的空实例、`Layout`
   不会再跑，见`map_save.md`。以后新增"运行时要读的mod公共字段"也照这个做法加快照。
@@ -173,15 +179,10 @@
 
 ## 待办/后续阶段
 
-- `Organization`(公司/组织)、Society领域的跨building组合撮合——依赖还没迁移的Populace/Job。
 - 电梯：开关门动画、载客的NPC调度还没做；呼叫/选层/行程/Script已经做了，见`cabin.md`。
-- 车辆导航(`vehicleNavigation`)的寻路消费方——`BuildVehicleNavigation`已经把车行图接进
-  `Map::vehicleNavGraph`，但Traffic域还没迁移，这次只负责把图接好，不含任何寻路逻辑。
-- `Room`的furniture/pivots/storages/manufactures/parkings/vehicles/ownership/tenancy等
-  字段——依赖Industry/Populace/Society，等对应领域迁移到了再回来加。
 - 门/窗的实际mesh——门本来就没有；窗户资产本身有问题，已删掉窗户显示逻辑，现在门/窗都只是
   纯几何缺口，等以后有能用的窗户资产再加回来。
-- 外墙/内墙材质区分——这次统一用一份`wallMaterial`，以后再按需要区分。
+- 外墙/内墙材质区分——目前统一用一份`wallMaterial`，以后再按需要区分。
 
 ## 房间朝向
 `Room::direction`在`AssignRoom`/`ArrangeRow`里取自烘焙过的single/row朝向(`InverseDirection(layoutDir, face)`)，即建筑局部坐标系下的房间正面方向；房间局部坐标系和换算见`room.md`。

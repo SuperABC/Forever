@@ -8,7 +8,7 @@
 // 棋盘格路网生成器，详见roadnet_checkboard.md。
 class CheckboardRoadnet : public RoadnetMod {
 public:
-	// args是config.json里mod id后面的参数串："--merge 0.1 --min 24 --max 48"，解析不到的用默认值。
+	// args是config.json里mod id后面的参数串："--merge 0.2 --bridge 0.5 --min 24 --max 48"，解析不到的用默认值。
 	explicit CheckboardRoadnet(const std::string& args);
 	virtual ~CheckboardRoadnet();
 

@@ -97,13 +97,7 @@ struct Personality {
 
 // 人际关系
 struct Relation {
-	// 构造人际关系，各项属性初始化为0。category标记这两个人是四类关系（亲属/同学/同事/
-	// 情感）里的哪一种——同一个RELATIONSHIP_CATEGORY枚举，见experience.h。配偶标记成
-	// RELATIONSHIP_KINSHIP（亲属），不是RELATIONSHIP_ROMANTIC——情感类别专指恋人/情人，
-	// 婚姻关系本身归亲属（对应的恋爱阶段仍然会生成一条EmotionExperience，但那是
-	// experiences列表里的历史记录，不影响这里的category），见populace.md"四类人际关系
-	// 生成"一节。没有无参默认构造——category必须在创建时就明确指定，不存在"还不知道
-	// 这是什么关系"的中间状态。
+	// 各项属性初始化为0。没有无参默认构造：category必须在创建时指定，语义见citizen.md。
 	Relation(RELATIONSHIP_CATEGORY category);
 
 	// 按类型访问关系字段（可写）
@@ -143,22 +137,14 @@ struct Relation {
 	float reliability;
 };
 
-// Citizen存姓名/性别/生日、所在lot/园区/建筑/房间、3D坐标——不存资产(assets)，依赖还
-// 没迁移的Industry域，等对应域迁移到了再回来加，详见Source/Core/populace/populace.md。
-//
-// 纯Core类型，不#include任何UE头文件(和Building/Room同一个约定)——Lot/Zone/Building/Room
-// 这里只做前向声明，3D坐标用裸float三元组而不是FVector，转UE坐标的工作留给Forever层的
-// ACitizenElement，和ComputeWorldPosition一类函数把map单位转UE单位的既有分工一致。
+// 市民数据类：纯Core类型，3D坐标用裸float三元组，设计见citizen.md。
 class Citizen {
 	// 存档：PopulaceSaveCodec直接读写私有字段(populace_save.md)。
 	friend class PopulaceSaveCodec;
 public:
 	Citizen(const std::string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay);
 
-	// Scheduler由Citizen自己独占持有(和Job由Organization持有不同——Scheduler没有类似
-	// "组织"这样的自然归属者，见scheduler.md)，因此需要一个真正的析构函数delete它，
-	// 不再是纯POD式默认析构。
-	~Citizen();
+	~Citizen(); // delete scheduler和全部experiences
 
 	const std::string& GetName() const;
 	GENDER_TYPE GetGender() const;
@@ -166,22 +152,16 @@ public:
 	int GetBirthMonth() const;
 	int GetBirthDay() const;
 
-	// 头像。avatar是剧情脚本(spawn_npc的avatar)指定的头像名——UE侧Resource/Avatars/下不带扩展名的
-	// 相对路径，如"custom/hero"，空表示没指定；avatarIndex是构造时随机出的自动头像编号，UE侧对该性别的
-	// 头像张数取模得到具体哪一张(张数是磁盘上的文件数，Core不知道，所以存大范围随机数而不是下标)。
-	// Core只存数据，不碰图片文件。
+	// 头像：avatar是脚本指定的头像名(空=没指定)，avatarIndex是随机的自动头像编号，见citizen.md。
 	static constexpr int kAvatarIndexRange = 1000000000;
 	const std::string& GetAvatar() const;
 	void SetAvatar(const std::string& avatar);
 	int GetAvatarIndex() const;
 
-	// 粗略年龄(按年份差，不精确到月/日——这次没有真正的日历/游戏时钟系统，够用来给
-	// Map::Checkin()做成年/未成年判断)。
+	// 粗略年龄(按年份差，不精确到月/日)。
 	int GetAge(int currentYear) const;
 
-	// 配偶/子女——Populace::GenerateCitizens()模拟结束后，只把幸存双方都物化成Citizen的
-	// 婚姻/亲子关系保留下来(见populace.cpp)，供Map::Checkin()决定"配偶/未成年子女要不要
-	// 跟着一起搬进同一间"。这次不保留父母/兄弟姐妹等其它亲属关系——Checkin只需要这两种。
+	// 配偶/子女：只保留幸存双方都物化成Citizen的关系，不保留父母/兄弟姐妹，见citizen.md。
 	Citizen* GetSpouse() const;
 	void SetSpouse(Citizen* value);
 	const std::vector<Citizen*>& GetChildren() const;
@@ -196,31 +176,21 @@ public:
 	void SetAcquaintanceValue(const std::string& name, RELATION_TYPE type, float value);
 	void AdjustAcquaintanceValue(const std::string& name, RELATION_TYPE type, float delta);
 
-	// 熟人列表整表——供调试/日志用途遍历全部acquaintances（比如T键打印附近市民关系数据，
-	// 见CitizenElement.md），正常游戏逻辑按姓名查询用上面几个方法即可，不需要整表遍历。
+	// 熟人列表整表，供调试/日志遍历；正常逻辑按姓名查询。
 	const std::unordered_map<std::string, Relation>& GetAcquaintances() const;
 
-	// 四类人际关系(亲属/同学/同事/情感)的可追溯历史记录，和acquaintances对应——见
-	// experience.h、populace.md"四类人际关系生成"一节。取得Experience的所有权，
-	// ~Citizen()统一delete。
+	// 四类人际关系的可追溯历史记录，见experience.md。Citizen取得所有权。
 	const std::vector<Experience*>& GetExperiences() const;
 	void AddExperience(Experience* experience);
 
-	// 当前情人(可以同时有多个)——对experiences的派生查询，不是独立存储字段：找所有
-	// category是RELATIONSHIP_ROMANTIC、IsOngoing()为true、且GetOther()不是当前配偶的
-	// EmotionExperience，收集其GetOther()。
+	// 当前情人(可以有多个)：对experiences的派生查询，不是独立字段。
 	std::vector<Citizen*> GetCurrentLovers() const;
 
-	// 这个人自己的求学阶段——最后一次毕业的年份，从未上过学/仍在读时返回-1。独立存储
-	// 字段(不是experiences的派生查询)：这是citizen自己的事实性数据，不是和某个具体他人
-	// 的关系，见populace.md同一节"关键设计决策"。Society::GenerateEmploymentHistory()
-	// 用它给入职年份定下限。
+	// 最后一次毕业的年份，从未上过学/仍在读返回-1。独立存储字段，见citizen.md。
 	int GetLastGraduationYear() const;
 	void SetLastGraduationYear(int year);
 
-	// 所在lot/园区/建筑/房间——这是"家"(tenancy)，Map::Checkin()分配住处时一次性设好，
-	// 没有"搬家"逻辑，不需要级联清空，保留最简单的setter就够。**这不代表citizen当前人
-	// 在这里**——人在家还是在别处是另一个概念，见GetCurrentRoom()。
+	// 所在lot/园区/建筑/房间是"家"，不代表人当前在这里(见GetCurrentRoom)。
 	Lot* GetLot() const;
 	void SetLot(Lot* value);
 	Zone* GetZone() const;
@@ -234,38 +204,25 @@ public:
 	Household* GetHousehold() const;
 	void SetHousehold(Household* value);
 
-	// 当前物理位置所在的房间——和上面的GetRoom()(家/tenancy)是两个独立的概念，不能互相
-	// 替代：一个citizen可能人不在家(以后有真正移动AI之后，currentRoom可能是别的房间)，
-	// 也可能待在一个自己并不租住的房间里(以后有访客/工作场景时会出现)。这次没有真正的
-	// 移动AI，citizen只会在Map::Checkin()分配住处的同时"住进去"，两者初始状态天然重合，
-	// 但数据结构上必须分开存。对应Room::GetOccupants()——citizen当前在哪个房间，就应该
-	// 出现在那个房间的occupants列表里，两边由调用方(目前是Map::Checkin())同步维护，这个
-	// 类自己不做级联同步。
+	// 当前物理位置所在的房间，和GetRoom()(家)是两个独立概念，见citizen.md。
+	// SetCurrentRoom同步维护房间的occupants。
 	Room* GetCurrentRoom() const;
 	void SetCurrentRoom(Room* value);
 
-	// 3D坐标——留空(hasPosition为false)表示"换房间后从未在场景里实例化过"；首次实例化时
-	// Forever层按房间中心+随机偏移算出来后写回，此后一直复用这份记录。
+	// 3D坐标：hasPosition为false表示还没有实例化过位置，见citizen.md。
 	bool HasPosition() const;
 	void GetPosition(float& outX, float& outY, float& outZ) const;
 	void SetPosition(float x, float y, float z);
 
-	// 把hasPosition重置回false(和"换房间后从未在场景里实例化过"是同一个状态)，不改
-	// posX/Y/Z本身(反正hasPosition==false时不会被读取)。给"citizen当前没有对应
-	// ACitizenElement、瞬移到新room"这个场景用，见UForeverPopulaceFrameworkComponent::
-	// RequestWalk。
+	// 把hasPosition重置回false，不改posX/Y/Z本身。
 	void ClearPosition();
 
-	// 没有ACitizenElement的市民在路上时的Core行进模拟（瞬态，不存档）：按"已走时间×速度"沿
-	// 路径推算当前位置并写回SetPosition，这样流式生成按位置判断时，路线经过玩家附近的市民
-	// 会被生成出来；走完路径才把currentRoom换成目的地。路径/速度都用地图单位，时间用调用方
-	// 给的秒数(UE侧传世界时间)，Core不关心时钟来源。
+	// 没有ACitizenElement的市民在路上时的Core行进模拟，见citizen.md。路径、目的地和速度随人口段存档
+	// (存档前由UE侧RebaseWalk改写成"以当前位置为起点的剩余路径")，读档时用BeginWalk(.., 0, ..)恢复。
 	struct WalkPoint { float x, y, z; };
 	bool IsWalking() const;
 	Room* GetWalkDestination() const;
-	// 开始行进：路径第一个点就是当前位置(写进SetPosition)。本函数不碰currentRoom；UE侧
-	// (UForeverPopulaceFrameworkComponent)开始走路时把currentRoom设为nullptr(人在路上，不属于任何房间)，
-	// 走完AdvanceWalk/NotifyArrived才换成目的地。
+	// 开始行进：路径第一个点就是当前位置(写进SetPosition)。本函数不碰currentRoom。
 	void BeginWalk(const std::vector<WalkPoint>& path, Room* destination, double nowSeconds, float speed);
 	// 推进到nowSeconds：到达时SetCurrentRoom(destination)+ClearPosition+结束行进并返回true；
 	// 否则更新SetPosition返回false。没在行进返回false。
@@ -273,20 +230,26 @@ public:
 	// 取出剩余路径(第一个点是推算出的当前位置)，供生成Actor后接着走；不改行进状态。
 	void GetRemainingWalk(double nowSeconds, std::vector<WalkPoint>& outPath) const;
 	void EndWalk();
+	float GetWalkSpeed() const;
+	// 把行进改写成"从nowSeconds推算出的当前位置起的剩余路径"，起算时间设为nowSeconds：轨迹不变，
+	// 但路径首点就是当前位置、已走弧长为0。存档前调用，读档后用它把起算时间对齐到新的游戏时钟。
+	void RebaseWalk(double nowSeconds);
+	// 读档后把起算时间设成nowSeconds(存档里的路径本来就是以当前位置为起点，已走弧长为0)。
+	void RestartWalk(double nowSeconds);
 
-	// 动态属性(目前只有饱食度生效)：为了不让全城市民都实时模拟，用statsActive记录"是否已实例化"，
-	// 只有实例化了的市民才参与每日更新(Populace::Tick)。目前只在被玩家change_control操控时
-	// 实例化(饱食度在[0.5,1]随机)，放手后保持实例化。存档。
+	// 存档时这个市民是否有Actor(已实例化)。只在存档/读档之间有意义：存档前由UE侧按场景写入，读档后
+	// UE侧据此强制先生成这些市民，生成完清掉。不参与任何游戏逻辑。
+	bool WasSpawned() const;
+	void SetWasSpawned(bool value);
+
+	// 动态属性(目前只有饱食度)：只有statsActive的市民参与Populace::Tick的衰减，见citizen.md。
 	bool IsStatsActive() const;
 	void ActivateStats(); // 已实例化则什么也不做
 	float GetSatiety() const; // 对外保留两位小数(内部存精确值，否则每帧衰减量小于0.005时永远降不下去)
 	void AddSatiety(float delta); // 截断到[0,1]，超出不惩罚
 	void DecaySatiety(double days); // 衰减：乘0.5^days(days=经过的游戏天数)，一天减半
 
-	// 是否接入统一市民模拟——目前仅指经济系统：false的市民不分配住处、不产生每日需求、不参与
-	// 招聘/交税/补助(但钱包照开，被玩家操控时能直接用钱)。开局生成的市民默认true；spawn_npc
-	// 用economy字段指定。不存档(读档时开局市民都是true，spawn出来的false市民存档里没有住处/岗位，
-	// 本来就不会被经济环节遍历到)。
+	// 是否接入经济系统，见citizen.md。不存档。
 	bool IsInEconomy() const;
 	void SetInEconomy(bool value);
 
@@ -294,33 +257,25 @@ public:
 	Job* GetJob() const;
 	void SetJob(Job* value);
 
-	// 负责citizen下班之后行为的调度器——由Populace::AssignSchedulers()在生成citizen之后
-	// 加权随机分配一个，Citizen自己独占持有所有权(和Job不同，见~Citizen()注释)。
+	// 负责下班之后行为的调度器，Citizen独占持有所有权，见scheduler.md。
 	Scheduler* GetScheduler() const;
 	void SetScheduler(Scheduler* value);
 
-	// 当前可供玩家点击的对话选项文本列表——由AddOptionChange（见Populace::ApplyChange）
-	// 追加，供MeetOption UI在玩家靠近时读取展示，见Element/CitizenElement.cpp。
+	// 当前可供玩家点击的对话选项文本，由Populace::ApplyChange处理add_option/remove_option。
 	const std::vector<std::string>& GetOptions() const;
 	void AddOption(const std::string& option);
 	void RemoveOption(const std::string& option);
 
-	// 生命值——进入武器系统时新增，和Player同一套最小闭环(扣血/回血/是否死亡，不做死亡后果，
-	// 见Source/Forever/Player/ForeverWeaponComponent.md)。IsDead()一旦为true就不会再变回
-	// false——这次没有复活/救治逻辑，纯粹是个单向状态；Forever层UForeverPopulaceFrameworkComponent
-	// 的流式生成会跳过IsDead()的citizen，不会再帮它生成/重新生成ACitizenElement。
+	// 生命值与死亡，见citizen.md。
 	float GetHealth() const;
 	float GetMaxHealth() const;
-	// 死亡是独立状态(isDead)，不再只靠health推：TakeDamage把血量扣到0时调用Die()。Heal不会让死人
-	// 复活，复活只能走Revive()(npc_revive Change)。
+	// TakeDamage把血量扣到0时调用Die()；Heal不会让死人复活，复活只能走Revive()。
 	float TakeDamage(float amount);
 	float Heal(float amount);
 	bool IsDead() const;
-	// 死亡处理：isDead置位、血量归零；从当前所在房间的occupants移除并清空currentRoom/位置。
-	// 不动“家”(room/tenant/building/zone/lot)——复活后用npc_teleport的"home"回去。
+	// 死亡：isDead置位、血量归零、结束行进、离开当前房间并清位置；不动“家”。
 	void Die();
-	// 复活：isDead清除，血量恢复到health(<=0或超过maxHealth时取maxHealth)。不设房间/位置，
-	// 需要后续npc_teleport把他放到某个房间才会在场景里出现。
+	// 复活：清除isDead，血量恢复(<=0或超过maxHealth取满血)；不设房间/位置。
 	void Revive(float health = -1.f);
 
 private:
@@ -356,7 +311,9 @@ private:
 	float satiety = 0.f;
 	bool inEconomy = true;
 
-	// 行进模拟状态，不存档，见BeginWalk。walkDistances[i]是路径起点到第i个点的累计弧长。
+	bool wasSpawned = false;
+
+	// 行进模拟状态，见BeginWalk。walkDistances[i]是路径起点到第i个点的累计弧长。
 	Room* walkDestination = nullptr;
 	std::vector<WalkPoint> walkPath;
 	std::vector<float> walkDistances;
@@ -370,7 +327,7 @@ private:
 
 	std::vector<std::string> options;
 
-	// 进入武器系统新增。100点是随手给的默认值，具体数值等PIE里试手感再调。
+	// 100点是随手给的默认值，待PIE试手感再调。
 	float health = 100.f;
 	float maxHealth = 100.f;
 	bool isDead = false;

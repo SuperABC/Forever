@@ -5,7 +5,7 @@
 
 ## 流程（DistributeRoadnet）
 1. 旋转坐标系(u东、v南，角度同井字 ±0.2rad)里，从北到南铺横路、从西到东铺竖路，间距为 [min,max] 随机整数；交点变换到世界坐标得到 node。
-2. 丢弃不在 `construction` 元素上的 node。
+2. 丢弃不在 `construction` 元素上、或离地图四边不足 `EDGE_MARGIN_RATIO`(10%)的 node(路网不靠边)。
 3. 相邻存活 node 连"抽象边"；沿线有山的边标 special（河/海不处理）。
 3a. 有效 node 必须连着至少两条边：断头/孤立的 node 删掉(连带那条边)，迭代到稳定；补长连接按这个"有效 node"判断。
 3b. 补长连接：遍历初始横/竖线(横线、竖线都隔一条选一条，各自随机起始奇偶，避免相邻山路太近)，同一条线上相邻两个有效 node 之间隔了≥4 个无效 node 且其中有山里的，按 50% 概率补一条长边(铺路走和普通边相同的抬升/隧道逻辑，不挂 lot)；新补的长边之间不能交叉(横、竖长边在同一网格点上相交即冲突，丢弃)。长边参与联通性判断，端点强制保留成路口。
@@ -21,3 +21,15 @@
 - special(跨山)边两侧不建 lot，因此保留的跨山路没有 lot 邻接；隧道放不下(山前后平地<8格)时按井字规则退化为抬升。
 - 路名 "东西第N路/南北第N路"（N为线序号）；无随机种子参数，每次生成不同。
 - 可视化工具：Tools/RoadnetViz。
+- 车道配置固定为对称默认(1,0,1,1,0,1)，资产名固定 `default_1_0_1_1_0_1`(隧道内加 `_T`)；`addRoad`/`layRoad`/`LayoutRows` 与 `JingRoadnet` 的同名逻辑是复制的(规则见 `roadnet_basic.md`)，改一边要同步另一边。
+- 构造参数 `--merge`/`--bridge` 夹到[0,1]，`--min` 至少 2、`--max` 不小于 `--min`。
+- 各步骤的 `special`/`keep` 标记都是针对"沿线采样到山/河"的抽象边；大 lot 合并后外圈每边只取第一段所在的链作边界 Road，因此边界 Road 与 lot 该边不一定等长。
+
+## 依赖关系
+
+- 依赖：`map/roadnet_mod.h`(`RoadnetMod`基类)、`common/utility.h`。
+- 被谁依赖：`Source/Basic/basic.cpp`(`GetModRoadnets`/`RegisterModRoadnets` 注册，creator 把 args 传给构造函数)。
+
+## 待办/后续阶段
+
+- 与 `JingRoadnet` 重复的建路/行道树几何逻辑尚未抽成共享代码(Basic 层文件间不互相 include)。

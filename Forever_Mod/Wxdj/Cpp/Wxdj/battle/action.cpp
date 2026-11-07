@@ -138,12 +138,12 @@ vector<shared_ptr<Effect>>& SingleAction::GetEffects() {
 }
 
 DualAction::DualAction(shared_ptr<SingleAction> a1, shared_ptr<SingleAction> a2)
-	: action1(a1), action2(a2),
-	Action(ACTION_DUAL,
+	: Action(ACTION_DUAL,
 		DUAL_ATTRIBUTE_PRIMARY.at({ a1->GetAttribute(), a2->GetAttribute() }),
 		static_cast<int>(DUAL_COST_FACTOR * (a1->GetPoint() + a2->GetPoint())),
 		static_cast<int>(DUAL_POWER_FACTOR * (a1->GetPower() + a2->GetPower())),
-		{}) {
+		{}),
+	action1(a1), action2(a2) {
 	// increase/static不并进双招的效果：两个基础招式各自带自己的连招增伤/静止增伤(见Controller::ApplyPower)
 	for (const auto& e : a1->effects) {
 		if (e->GetType() != EFFECT_INCREASE && e->GetType() != EFFECT_STATIC) effects.push_back(e);

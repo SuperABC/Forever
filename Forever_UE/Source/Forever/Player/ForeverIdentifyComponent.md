@@ -11,7 +11,7 @@
 - **始终正对摄像机**：Tick 里把所有标签的世界朝向设成 `MakeFromXZ(-相机前向, 相机上方向)`(平行于屏幕，不是"看向相机位置"——后者让屏幕边缘的标签倾斜)，只更新朝向。
 - **文字用 UWidgetComponent 而不是 UTextRenderComponent**：后者默认字体没有 CJK 回退，人物名字是中文。
 - 世界空间控件会被墙/物体挡住(深度测试)，隔墙看不到。
-- **曝光**：项目白天曝光很重，世界里的 UI 亮度默认不够；`tintBrightness`(可 >1)乘在标签颜色上提亮。固定倍数在白天/夜里不能同时合适，如果白天仍然发暗，正确做法和爆炸特效一样：做一个小材质(`SlateUI` 贴图参数乘 Eye Adaptation Inverse)设给标签组件。
+- **曝光**：项目白天曝光很重，世界里的 UI 亮度默认不够；`tintBrightness`(可 >1)乘在标签颜色上提亮。它是白天参考曝光(`referenceDayEV`)下的值，创建和识别期间每帧再乘 `2^(当前EV-参考EV)`(`ComputeTintBrightness`)，否则夜里(曝光变亮)会过曝；拿不到天空组件时保持原值，曝光见 `Framework/ForeverSkyFrameworkComponent.md`。如果白天仍然发暗，正确做法和爆炸特效一样：做一个小材质(`SlateUI` 贴图参数乘 Eye Adaptation Inverse)设给标签组件。
 - 在 UI Only 面板(背包/地图等)打开时中键被屏蔽；如果按住中键时面板打开导致松开事件丢失，模式不会自动退出，再按一次中键松开即可。
 
 ## 依赖关系
@@ -21,8 +21,3 @@
 ## 待办/后续
 - 更多信息行(年龄、职业等)。
 - 白天曝光材质(如果需要)。
-
-## 名牌亮度跟着曝光走(2026-10-30)
-
-昼夜曝光(见`Framework/ForeverSkyFrameworkComponent.md`"夜晚随游戏时间变暗")夜里固定在比白天亮得多的EV，固定的`tintBrightness=10000`会过曝。
-现在`tintBrightness`是白天参考曝光(`referenceDayEV`)下的值，创建和识别期间每帧都乘`2^(当前EV-参考EV)`(`ComputeTintBrightness`)；拿不到天空组件时保持原值。

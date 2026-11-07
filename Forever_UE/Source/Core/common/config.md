@@ -101,6 +101,16 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   `GetModDependences()`导出符号的依赖声明——粒度是单个mod id，不是DLL：同一个DLL
   注册的多个mod可以各自声明不同的依赖，不需要共用一份。
 
+- **`GetLayouts()`不去重**：`BuildingLayoutLibrary`按文件basename为key，同名`.layout`后加载的会覆盖先加载的，
+  调用方自己保证不重复摆放同名模板。
+- **`GetMainStoryScriptPaths()`**：Story screen的`story_scripts`列表非空时就是这份列表（按顺序，各文件的
+  milestones/names/`name_reserve`/`global_settings`合并进同一个主线`Script`），为空时退回只有
+  `GetMainStoryScriptPath()`（目前固定bare名`"test"`，集中一处避免字面量到处重复）。
+- **新发现的mod默认禁用**：`IsModEnabled`对没列出的id（含`jsonKey`整个不存在）返回false，刚`AddDllPath`扫出来的mod
+  需要在Mod screen手动勾选一次才生效。
+- **`WriteConfig`只在Start Game校验通过那一刻调用一次**，不是每次编辑都自动保存；`<concept>_mods`数组就是
+  `conceptMods`原样写回。
+
 ## 存档相关接口
 
 - `ConceptKeyToJsonKey` 改成 public：存档按 `"<concept>_mods"` key 记 mod，和 `GetModEnables()` 的 conceptKey 对照要用。

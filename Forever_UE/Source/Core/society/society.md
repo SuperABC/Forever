@@ -5,6 +5,7 @@
 `Society`：Job+Organization域的聚合入口。不引入Calendar（"哪几天上班/几点
 上下班"）——直接写进具体`JobMod`子类的`DailyPlan`里，详见`job.md`。三件事：
 
+0. **`AssignShareholders`**：新开局给每个组织选股东，见下"股东与岗位"。
 1. **`Init(components)`**：按地图里所有`Component`加权随机分配`Organization`
    （每个`Organization`自己遍历claimed components设计Job），算法见
    `organization.md`"组织分配算法"一节。
@@ -34,7 +35,6 @@ BeginPlay()`）负责保证`EnsureMapGenerated()`/`EnsurePopulaceGenerated()`已
 
 ### Factory引用成员
 
-不自己持有`ModLoader`/`OrganizationFactory`/`JobFactory`/`ScriptFactory`——
 绑定`Registry::Get()`对应的三个Factory引用成员（`OrganizationFactory&`/
 `JobFactory&`/`ScriptFactory&`），mod dll的发现/注册（`LoadLibrary`+
 `RegisterConcept`）只在整个UE进程生命周期里发生一次，归`Registry`全局管，和
@@ -101,9 +101,8 @@ ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。
 
 ### `ApplyChange`
 
-`Society::ApplyChange(const Change*, const ScriptContext&)`——目前没有任何
-Change子类是Society域自己认识、需要处理的，空实现，返回false(域自己不打"未实现"警告：`ApplyChange`返回是否认识，七个域都不认识时由`AForeverFrameworkActor::ApplyChange`统一打一条)。等Society域
-真的长出需要处理的Change子类时再补内容。
+`Society::ApplyChange(const Change*, const ScriptContext&)`恒返回false（Society域目前没有自己认识的Change子类；
+七个域都不认识时由`AForeverFrameworkActor::ApplyChange`统一打"未实现"警告）。
 
 ## 依赖关系
 

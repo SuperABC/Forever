@@ -26,7 +26,7 @@
 namespace {
 
 	// FNV-1a字符串哈希——用来把地形type/园区建筑name映射成固定的色相，同一个名字不管重启
-	// 多少次都是同一个颜色，比老工程"每次运行重新随机"更稳定、也不会采到过暗/过灰的颜色
+	// 多少次都是同一个颜色，更稳定、也不会采到过暗/过灰的颜色
 	// (饱和度/明度固定，只有色相随哈希变化)，见MapWidget.md"颜色方案"一节。
 	uint32 HashStringFNV1a(const std::string& s) {
 		uint32 h = 2166136261u;
@@ -61,17 +61,8 @@ namespace {
 			return it->second;
 		}
 
-		// 直接用hash%360做色相的话，名字数量一少(比如就"平原"/"山地"/"海洋"几种地形)，
-		// 哈希值完全可能恰好落在相邻的色相附近(比如40°和55°)，饱和度/明度又是固定常量，
-		// 视觉上几乎分不出来。改成离散分桶：先把色相量化成12个均匀分布、彼此间隔30°的桶
-		// (用哈希的一段选桶号)，桶内只允许一个很小范围的抖动(不会抖到隔壁桶的范围里)；
-		// 再用哈希另外两段分别在饱和度、明度上各做一次二选一的跳变——相当于12色相桶×2
-		// 饱和度×2明度=48种组合的离散调色板，"哈希值差一点"的两个名字很大概率落进完全不同
-		// 的桶组合，不会再像纯连续映射那样挨得很近。同样是纯按名字算的确定性结果，不依赖
-		// 遍历顺序，同名字跨session还是同一个颜色。
-		// 固定异或盐值整体平移一下哈希空间——纯粹为了把"plain"这个具体名字挪出蓝色那个桶
-		// (跟玩家朝向箭头的颜色撞了)，不影响前面说的分桶/跳变逻辑，只是把所有名字的取值
-		// 起点统一挪了一下，各名字之间原有的区分度不受影响。
+		// 色相离散分桶(12桶x30度，桶内小抖动)，饱和度/明度各二选一：名字少时纯连续映射会让相邻哈希的颜色
+		// 几乎分不出来。纯按名字算，同名字跨session同色。固定异或盐值只是把"plain"挪出和玩家朝向箭头撞色的蓝色桶。
 		uint32 h = HashStringFNV1a(name) ^ 0x9E3779B9u;
 		int hueBin = h % 12;
 		float hueJitter = static_cast<float>((h / 12) % 100) / 100.f * 20.f; // 0~20°，不超出30°一格的范围
@@ -93,8 +84,8 @@ namespace {
 	}
 
 	// 园区/建筑footprint——Zone/Building都是Quad(中心+尺寸)带自己的GetRotation()(弧度)，
-	// 不是轴对齐矩形，不能用Canvas::PutRect(那个只能画平行坐标轴的矩形)，照抄老工程"4个
-	// 角点拆成2个三角形"的画法，再叠一层边框线区分层次(填色之上画4条深一点的边)。
+	// 不是轴对齐矩形，不能用Canvas::PutRect(只能画轴对齐矩形)，
+	// 拆成2个三角形填充，再叠4条深一点的边框线区分层次。
 	void DrawQuadFootprint(Canvas& canvas, float centerX, float centerY, float sizeX, float sizeY,
 		float rotationRadians, int scale, Color fillColor) {
 		float hx = sizeX * 0.5f, hy = sizeY * 0.5f;
@@ -214,7 +205,7 @@ void UMapWidget::DrawFullMap() {
 	canvas.Init(mapWidth * scale, mapHeight * scale);
 
 	// 地形：按格填块，PutRect只用在这里——地形格子是轴对齐规则网格，没有旋转角，PutRect
-	// 填一个倍数×倍数的色块代替老工程的单像素PutPixel，画布分辨率更高、边界更清晰。
+	// 填一个倍数×倍数的色块代替单像素PutPixel，画布分辨率更高、边界更清晰。
 	std::unordered_map<std::string, Color> terrainColors;
 	for (int y = 0; y < mapHeight; y++) {
 		for (int x = 0; x < mapWidth; x++) {
@@ -286,19 +277,9 @@ void UMapWidget::ApplyZoomPanToMaterial() {
 }
 
 void UMapWidget::ClampUVOffset() {
-	// 老公式halfRange=0.5-0.5/zoomLevel只在"DisplayImage正好贴合视口、没有任何内容被
-	// cover裁到屏幕外"时才对(等价于下面公式里k=1的特例)。cover铺满会裁边的那条轴，
-	// DisplayImage本身比视口大，光靠这个老公式会把uvOffset锁在0附近，永远摸不到被裁掉
-	// 那部分内容(真实复现过：玩家走到离北边界50地图单位时箭头就跑出画面，因为那部分
-	// 内容本来就在屏幕外、而且clamp不让拖过去)。
-	//
-	// 推导：材质公式textureUV=(screenUV-0.5)*UVScale+0.5+uvOffset，screenUV在
-	// DisplayImage整个尺寸上取[0,1]，但视口只看得到其中一段：
-	// screenUV_visible=[0.5-k/2, 0.5+k/2]，k=viewportSize/displaySize(这条轴视口占
-	// DisplayImage实际尺寸的比例，cover裁边的轴k<1，贴合视口的轴k=1)。代入材质公式、
-	// 令可见textureUV范围贴着[0,1]两端(刚好能摸到边界、又不会漏出贴图外)，解出
-	// uvOffset的合法范围是±(0.5-k/(2*zoomLevel))——k=1时退化成老公式，k<1时range
-	// 变大，允许拖到更靠边的位置，正好补上被cover裁掉的那部分。
+	// uvOffset合法范围是±(0.5-k/(2*zoomLevel))，k=视口/DisplayImage在该轴的尺寸比(贴合视口的轴k=1，
+	// cover裁边的轴k<1)。k<1时范围更大，才能拖到被裁到屏幕外的那部分内容。
+	// 推导：材质公式textureUV=(screenUV-0.5)*UVScale+0.5+uvOffset，可见screenUV=[0.5-k/2, 0.5+k/2]，令可见textureUV贴着[0,1]两端。
 	FVector2D viewportSize = GetCachedGeometry().GetLocalSize();
 	FVector2D displaySize = ComputeCoverSize(viewportSize);
 	if (displaySize.X <= 0.f || displaySize.Y <= 0.f) return;
@@ -316,7 +297,7 @@ void UMapWidget::ClampUVOffset() {
 FReply UMapWidget::NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
 	if (!DisplayImage) return FReply::Handled();
 
-	// 以鼠标当前位置为缩放中心(照抄老工程的行为，不是永远缩放视口正中心)：先算出缩放前
+	// 以鼠标当前位置为缩放中心(不是视口正中心)：先算出缩放前
 	// 鼠标指着的是贴图上哪个点(textureUV)，再反解缩放后应该有的uvOffset，让这个点缩放
 	// 前后始终停在鼠标指针下面不动。推导：材质公式textureUV=(screenUV-0.5)*(1/zoom)+0.5+
 	// uvOffset，要求同一个textureUV在新旧zoom下对应同一个screenUV，解出

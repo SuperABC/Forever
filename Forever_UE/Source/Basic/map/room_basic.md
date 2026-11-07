@@ -2,40 +2,33 @@
 
 ## 职责
 
-`ResidenceRoom`/`ShopRoom`/`WarehouseRoom`/`ParkingRoom`/`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`是Room域的默认
-实现，合在同一份`room_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按
-业务场景拆文件)。
+Room域的默认实现，合在同一份`room_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)。`SetProperty()`里按类型声明房间的功能属性(`isResidential`/`isWorkspace`/`isStorage`/`isManufacture`/`isParking`及对应容量、房租、停车位、门规格)，没声明的属性保持`RoomMod`基类默认值。
 
-## ResidenceRoom
+| 类型 | id | 属性 |
+| --- | --- | --- |
+| `ResidenceRoom` | `room_residence` | `isResidential`，`residentialCapacity=1`，房租2000(每日20元)，挂`entity_event`脚本 |
+| `ShopRoom` | `room_shop` | `isWorkspace`，`workspaceCapacity=10`，房租2000 |
+| `WarehouseRoom` | `room_warehouse` | `isStorage`，`storageType="storage_shop"`；另有管理员工位`isWorkspace`，`workspaceCapacity=2`，房租2000 |
+| `ParkingRoom` | `room_parking` | `isParking`，房间正中心一个车位 |
+| `TrainStationRoom` | `room_train_station` | 无任何功能标志，纯普通房间(候车厅) |
+| `AirportRoom` | `room_airport` | `isParking`，两个停机位 |
+| `FarmRoom`/`RanchRoom`/`FoodFactoryRoom` | `room_farm`/`room_ranch`/`room_food_factory` | `isManufacture`，`manufactureTypes`分别是`manufacture_farm`/`manufacture_ranch`/`manufacture_food_factory`；`isWorkspace`，容量20，房租2000 |
 
-`isResidential=true; residentialCapacity=1;`——每间住宅room=1个名额，多人合住靠
-`Map::Checkin()`的名额池逻辑，不靠这个capacity强制。`workspace`/`storage`/`manufacture`
-这3类占位属性保持`RoomMod`基类默认值(`false`/空)不动。
+## 关键设计
 
-## ShopRoom / WarehouseRoom
-
-- `ShopRoom`：`isWorkspace=true; workspaceCapacity=100;`。`workspaceCapacity`这个"工位数"
-  占位字段带真实数值，真正被Job系统消费留到Society域接入时再做，目前没有任何调用方读取它。
-  门(`doorSpecs["room"]`)有名字"商店大门"、挂`door_shop_entrance`脚本(开局加"敲门"选项)，靠近会弹交互
-  选项。挂在房间门上而不是`ShopBuilding::doorSpecs["entrance"]`，是因为商店用的一楼模板
-  (`preset_lobby_linear_fg+`/`preset_circle_double_fg+-`)里门标签全是`room`，没有`entrance`。
-- `FarmRoom`/`RanchRoom`/`FoodFactoryRoom`（`room_farm`/`room_ranch`/`room_food_factory`）：`isManufacture=true`，`manufactureTypes`是`manufacture_farm`/`manufacture_ranch`/`manufacture_food_factory`，工位20、房租20元。`FactoryBuilding`等概率随机选一种。
-- `WarehouseRoom`：`isStorage=true; storageType="storage_shop"; isWorkspace=true; workspaceCapacity=2; rent=2000;`。只有`ShopBuilding`
-  用到(地下室+每层过道铺unused acreage)。
-
-## ParkingRoom
-
-`isParking=true; parkingSpots={{{0.5f,0.f,0.5f,0.f},0.f,{"car","bus"}}};`——房间正中心一个车位，朝向跟
-房间一致，供`Traffic::Init()`在这里生成预置车辆，见`Source/Core/traffic/traffic.md`。
-`ShopBuilding`和`FactoryBuilding`(见`building_basic.md`)共用同一个`ParkingRoom`类。
+- **`ResidenceRoom`**：每间住宅room=1个名额，多人合住靠`Map::Checkin()`的名额池逻辑，不靠这个capacity强制。
+- **门规格`doorSpecs["room"]`**：只有单/排房间门洞带`room`标签才会用到，见`Core/map/door.h`的`ResolveDoorSpec`。住宅和商店房间都是随机左右转动的单开门(Swing，占位用`Cube`资产)。
+- **`ShopRoom`的门有名字"商店大门"、挂`door_shop_entrance`脚本**(开局加"敲门"选项，靠近会弹交互选项)。挂在房间门而不是`ShopBuilding::doorSpecs["entrance"]`上，是因为商店用的一楼模板(`preset_lobby_linear_fg+`/`preset_circle_double_fg+-`)里门标签全是`room`，没有`entrance`，`ShopBuilding`的`entrance`规格对不上任何门。
+- 带`isWorkspace`的房间(商店/仓库/工坊)，Organization按容纳量一半定员。
+- **`ParkingRoom`**：车位种类`{"car","bus","truck"}`，供`Traffic::Init()`在这里生成预置车辆，见`Source/Core/traffic/traffic.md`；不想要某种车就从这个列表里删。`ShopBuilding`和`FactoryBuilding`共用同一个`ParkingRoom`类。
+- **`AirportRoom`的停机位**用房间局部坐标系(u轴沿正面墙、v轴朝正面，原点在房间角点，见`ParkingSpot`注释/`room.md`)，房间按朝向旋转时车位跟着转。u轴ratio相对房间角点：`kLeftAlong=-0.15`/`kRightAlong=1.15`落在房间沿正面墙两端的外面(0/1是房间边缘)，再各向外挪`kExtraOffset`(绝对距离，地图单位，不受房间尺寸影响)；v轴`0.5`和房间同一条中线。`rotationDegrees=180`即背对路、机头朝向房间深处的跑道。位置是估计值，常量在`AirportRoom::SetProperty`里，按实际机翼宽度、和跑道/楼体的间距调。
+- 三种工坊房间由`FactoryBuilding`等概率随机选一种；生产类型是`ManufactureMod`的id，Industry按它为房间生成`Manufacture`。
 
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/room_mod.h`(`RoomMod`基类)。
-- 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModRooms`注册五个类型)、
-  `building_basic.cpp`(`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding::Layout()`按
-  房间类型调`ArrangeRow`/`AssignRoom`)。
+- 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModRooms`注册全部类型，`ShopRoom`依赖`script_empty`做门脚本)；`building_basic.cpp`里各`Layout()`按房间类型调`ArrangeRow`/`AssignRoom`；Society域`ShopSalerJob`依赖`ShopRoom`。
 
-## AirportRoom
+## 待办/后续阶段
 
-`SetProperty()`：`isParking=true`，两个停机位（种类`{"plane"}`）：用房间局部坐标系（u轴沿正面墙、v轴朝正面，原点在房间角点，见`ParkingSpot`注释/`room.md`），房间按朝向旋转时车位跟着转。u轴ratio相对房间角点，`-0.15`/`1.15`落在房间沿正面墙两端外面（0/1是房间边缘），v轴`0.5`和房间同一条中线，rotationDegrees=0表示朝向房间正面(朝路)，停机位设成180度即背对路、机头朝向房间深处的跑道。位置是估计值，常量`kLeftAlong`/`kRightAlong`(ratio)和`kExtraOffset`(绝对距离，地图单位)在`AirportRoom::SetProperty`里，不合适直接调（机翼宽、和跑道/楼体的间距按实际飞机调）。
+- 无。

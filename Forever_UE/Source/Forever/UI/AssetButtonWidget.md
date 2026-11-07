@@ -2,7 +2,7 @@
 
 ## 职责
 
-`UAssetButtonWidget`：背包列表里的**一行**(对应老蓝图`AssetButton_C`)，显示一个`Asset`的名字，支持选中、单击、双击进入容器、按下拖拽。
+`UAssetButtonWidget`：背包列表里的**一行**，显示一个`Asset`的名字，支持选中、单击、双击进入容器、按下拖拽。
 
 ## 关键设计
 

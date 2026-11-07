@@ -7,7 +7,7 @@
 - 班级；
 - Job 和 Scheduler 两套定时器；
 - 取名器的占位名；
-- 市民和地图之间的归属关系：Zone/Building/Room 的 owner，Room 的 tenants/occupants。
+- 市民和地图之间的归属关系：Zone/Building/Room 的 owner，Room 的 households（每户的成员）/occupants。
 
 存档系统总说明见 `Source/Core/common/save.md`，地图部分见 `Source/Core/map/map_save.md`。
 
@@ -31,7 +31,7 @@
 7. 归属关系：
    - 每个 Zone（按名字排序）的 owner；
    - 每个 Building（按名字排序）的 owner；
-   - 该 Building 每个房间的 owner、tenants、occupants。
+   - 该 Building 每个房间的 owner、households（每户成员列表）、occupants。
 
 ## 关键设计
 
@@ -44,6 +44,9 @@
 - **工作经历里的组织等社会段来连**：`JobExperience` 里的 `Organization*` 要等社会段读完才能连上。所以先留空，把 (经历, 组织下标) 交给 `SocietySaveCodec::Load` 去连。
 - **Scheduler 重建**：用存档里的注册 id 调用原来的构造函数，Script 的创建方式和新开局一样，再调用 `LoadState` 恢复 mod 状态。mod 的 `plans` 不用恢复：`Populace::Tick` 只在 `DailyPlan` 之后读一次 `plans` 来生成定时器，而定时器本身已经恢复了。
 - **options**：读档会跳过 game_start 广播，所以按存档恢复。
+- **不存档的字段**：`inEconomy`（见 `citizen.md`）、`lastTickTime`。行进模拟状态不再丢弃，见末尾"行进与实例化"。
+- **段必须存在**：没有人口段或段损坏时 `Load` 返回 nullptr 并给出 error。
+- `Load` 用 `unique_ptr<Populace>` 暂存新建的 `Populace`，失败路径（取名 mod 不可用、段截断、异常）自动析构并清空 `outPendingOrganizations`（其中的 `JobExperience*` 随之失效），成功才 `release`。
 
 ## 依赖关系
 
@@ -55,7 +58,15 @@
 
 ## 待办 / 后续
 
-- 无。房间里的物品（`Room::assets`）存在玩家段，见 `Source/Core/player/player_save.md`。
+- 房间里的物品（`Room::assets`）存在玩家段，见 `Source/Core/player/player_save.md`。
 
 ## 动态属性
-每个市民记录末尾(avatarIndex之后)追加`U8 statsActive`+`F32 satiety`，读写严格对称；没有升版本号，旧存档会读错(游戏未发布，按约定不做迁移)。
+每个市民记录末尾(avatarIndex之后)追加`U8 statsActive`+`F32 satiety`，读写严格对称。
+
+## 行进与实例化
+每个市民记录末尾(`satiety`之后)追加，读写严格对称，按项目约定没升段版本：
+- `U8 wasSpawned`：存档时这个市民是否有 Actor（UE 侧写入）。
+- `U8 walking`；为 1 时再写：目的地房间（`WriteRoom`）、`F32 speed`、`U32 n`、n 个 `(F32 x, y, z)`。路径首点是存档时的当前位置，已走弧长为 0。
+
+读档后：有路径的市民用 `BeginWalk(path, destination, 0, speed)` 恢复，起算时间由 UE 侧在 `GenerateCitizens` 里用 `RestartWalk` 对齐；
+`wasSpawned` 的市民由 UE 侧先强制生成（不看距离和数量上限），保证看到的人不比存档前少。

@@ -5,18 +5,9 @@
 
 #include "PlaneElement.generated.h"
 
-// 可驾驶飞机：停在机场停机位里、玩家可以上去开的那架(路线上的飞机是运动学的
-// ATransitVehicleElement，和这个类无关)。继承AVehicleElement是为了复用它的Chaos轮子
-// (鼻轮转向/主轮手刹/滚动)、骨骼网格+物理、近身"驾驶"选项、上下机和位置存档、
-// LoadClass<AVehicleElement>(blueprintPath)那条生成/流式链路。
-//
-// 飞行力学是手写的(轮子之外的全部)，每帧对carMesh施加"加速度"(AddForce/AddTorque的bAccelChange=
-// true，忽略质量，系数和飞机质量无关)：推力、阻力、升力、速度朝机头对齐、机头朝速度风标、
-// 俯仰/滚转控制力矩、角速度阻尼。力和力矩都按机体局部轴向合成，不用欧拉角，所以任意姿态
-// (360度筋斗、倒飞)都成立。详见PlaneElement.md。
-//
-// 操控：鼠标滚轮=动力(-50~100，负=反推减速/倒车)，W=机头向下，S=机头抬升，A/D同时给轮子转向和空中滚转
-// (在地面轮子起作用、不能滚转；在空中滚转起作用、轮子悬空无效)，鼠标=环视，Q下机，Space手刹。
+// 可驾驶飞机：停在机场停机位里、玩家可以上去开的那架(路线上的飞机是运动学的ATransitVehicleElement)。
+// 继承AVehicleElement复用Chaos轮子/骨骼网格/选项/上下机链路，飞行力学每帧手写，详见PlaneElement.md。
+// 操控：滚轮=动力(-50~100)，W机头向下，S机头抬升，A/D地面转向+空中滚转，鼠标环视，C自由环视，Q下机，Space手刹。
 UCLASS(Blueprintable)
 class FOREVER_API APlaneElement : public AVehicleElement
 {

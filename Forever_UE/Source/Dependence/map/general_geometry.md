@@ -135,12 +135,14 @@
   `InitBuildings`直接调用`Lot::RequestPlacement`/`FillRemainder`）；`Source/Dependence/map/
   zone_mod.h`/`building_mod.h`（`LotPlacementRequest`定义在这里，两个mod头文件共用）。
 
-## ParkingSpot::categories
+## ParkingSpot
 
-`ParkingSpot`除了`position`/`rotationDegrees`新增`categories`(`vector<string>`)：这个车位允许停进来的所有载具种类（`VehicleMod`静态`GetCategory()`返回的名字）。`Traffic::InitParkedVehicles`在其中随机选一个种类再选车型。存档里紧跟`rotationDegrees`写字符串列表（`map_save.cpp`，没有升版本号）。
+`ParkingSpot{position, rotationDegrees, categories}`：`categories`(`vector<string>`)是这个车位允许停进来的载具种类(`VehicleMod`静态`GetCategory()`返回的名字)，`Traffic::InitParkedVehicles`在其中随机选一个种类再选车型。存档里紧跟`rotationDegrees`写字符串列表(`map_save.cpp`)。
 
-## ParkingSpot的房间局部坐标系
+### 房间局部坐标系
 
-`position`是房间局部坐标系里的PointParams：第一对=u轴(沿正面墙)、第二对=v轴(朝正面为正)，位置=比例x该轴长度+米数偏移，原点在房间角点；坐标系由房间自己的朝向(`Room::GetDirection()`)定义，不是建筑朝向，朝向变化时整套纯旋转，见`Core/map/room.md`。`rotationDegrees`的0度=朝向房间正面，朝房间深处(跑道)是180度。`Traffic::InitParkedVehicles`用`Room::AxisSizeU/V`、`LocalToBuildingLocal`、`FacingYawDegrees`换算成建筑局部偏移和旋转角。(旧约定对EAST/SOUTH沿路轴是镜像，不是纯旋转；现已统一。)
+`position`是房间局部坐标系里的PointParams：第一对=u轴(沿正面墙)、第二对=v轴(朝正面为正)，位置=比例x该轴长度+米数偏移，原点在房间角点；坐标系由房间自己的朝向(`Room::GetDirection()`)定义，不是建筑朝向，朝向变化时整套纯旋转，见`Core/map/room.md`。`rotationDegrees`的0度=朝向房间正面，朝房间深处(跑道)是180度。`Traffic::InitParkedVehicles`用`Room::AxisSizeU/V`、`LocalToBuildingLocal`、`FacingYawDegrees`换算成建筑局部偏移和旋转角。
 
-- **`FindAdaptivePlacement`避免细边**：`RequestPlacement`每裁一刀都要求剩余部分≥`MIN_LOT_EXTENT`加一条小路宽，否则整次放置失败并把命中的子块留在半切状态。所以剩余空间(沿路的总余量、纵深的余量)小于`kMinLeftover`(4)时，不留细边，直接并进占地(margin=0 / depth=子块整个纵深)。起因：机场请求12x8时，命中子块只比请求大一点点，裁剩的细边让机场和后面的Yuanshen都放不上去。
+- **`FindAdaptivePlacement`避免细边**：`RequestPlacement`每裁一刀都要求剩余部分≥`MIN_LOT_EXTENT`加一条小路宽，否则整次放置失败并把命中的子块留在半切状态。所以剩余空间(沿路的总余量、纵深的余量)小于`kMinLeftover`(4)时，不留细边，直接并进占地(margin=0 / depth=子块整个纵深)。
+- **`FindAdaptivePlacement`的margin/depth相对命中子块`best`自己的尺寸反推**，调用方对`best`调`RequestPlacement`：命中的可能贴着原始边界路，也可能贴着之前切割插入的内部小路(同样是接入导航图的真实Road，贴着它盖房子合法)；换算到顶层Lot坐标系再反推，在子块贴内部小路时会落进已被别的mod占用的区域而匹配失败。
+- **`SplitWithPath`的开口标记**：小路端落在"大路"(非小路)上时给那条路加`RoadOpening`(宽度=小路总宽，`t`按直线投影`ProjectT`近似，弯道中间开口不精确)；两条小路互接不标。这只是几何/渲染标记，不接导航图。`endT`不论大路小路都要算(`Map::ConnectPathRoad`需要)。

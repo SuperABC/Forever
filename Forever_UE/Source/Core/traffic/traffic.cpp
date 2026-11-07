@@ -91,14 +91,8 @@ void Traffic::InitRoadsideStations(Map* map) {
 			if (len < 1e-6f) len = 1.f;
 			dx /= len; dy /= len;
 
-			// rightSide对应side0(沿Road Start->End方向的右手边，这个项目+Y=南，真正右手边
-			// 是(-tdy,tdx)，和直觉上的左右相反，见Map::ComputeLaneAnchorPosition的perp0公式)。
-			//
-			// 站点坐标直接问GetLaneSegmentAt要这条车道的真实世界坐标(和Station::EnsureRoadLink
-			// 后续给这同一个站点接旁路时用的是完全同一次查询逻辑)，不要自己算一个大概的偏移——
-			// 车站必须精确落在车道中线上，否则会出现"停靠时瞬移到车站独立坐标、起步后又瞬移回
-			// 车道坐标"的问题。travelDirX/Y是这条车道实际的车流方向(side0=正向，side1=反向)，
-			// 查不到对应车道(比如单行道只有一侧)时放弃这个请求。
+			// rightSide对应side0；+Y=南，右手边是(-tdy,tdx)，和直觉相反(见Map::ComputeLaneAnchorPosition)。
+			// 站点坐标必须取GetLaneSegmentAt的真实车道坐标，见station.md；查不到车道(单行道只有一侧)放弃该请求。
 			float travelDirX = request.rightSide ? dx : -dx;
 			float travelDirY = request.rightSide ? dy : -dy;
 
@@ -200,7 +194,13 @@ void Traffic::InitParkedVehicles(Map* map) {
 }
 
 void Traffic::InitTransitVehicles() {
-	for (auto& [routeName, route] : routes) {
+	// routes是unordered_map，先按线路名排序再遍历，车辆编号(Transit<N>)才与哈希顺序无关。
+	vector<string> routeNames;
+	routeNames.reserve(routes.size());
+	for (const auto& [routeName, route] : routes) routeNames.push_back(routeName);
+	sort(routeNames.begin(), routeNames.end());
+	for (const string& routeName : routeNames) {
+		Route* route = routes.at(routeName);
 		const vector<vector<Route::RouteLeg>>& lines = route->GetLines();
 		for (size_t lineIdx = 0; lineIdx < lines.size(); lineIdx++) {
 			for (int k = 0; k < route->GetVehiclesPerLine(); k++) {

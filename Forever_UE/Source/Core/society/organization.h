@@ -12,20 +12,9 @@
 #include <unordered_map>
 #include <vector>
 
-class Component;
-class Job;
-class Change;
-class Script;
-class ScriptFactory;
 
-// Organization：一份具体组织的实体（比如一家商店），独占持有一个OrganizationMod实例+
-// 一份自己的Script（构造时按mod->scriptModName创建、按mod->milestoneNames加载
-// milestone，和Job同一套机制，见job_mod.h/organization_mod.h"Script配置"一节），
-// 可以占多个Component（也可以要多种不同类型的Component，具体由mod的static GetRequirements()决定，
-// 见organization_mod.h）。构造时自己遍历claimed components的每个workspace room、调
-// mod->DesignJobsForRoom(...)拿到要配的job类型字符串列表，逐条new Job(...)——Job的
-// 分配/释放全程在Core侧（OrganizationMod所在的Dependence层看不到Job这个Core类型），
-// 见organization.md"分层约束"一节。
+// Organization：一份具体组织的实体（比如一家商店），独占持有一个OrganizationMod实例+一份Script，
+// 占用若干Component，构造时按workspace room设计并new出Job，见organization.md。
 class Organization {
 	// 存档：SocietySaveCodec直接读写私有字段(society_save.md)。
 	friend class SocietySaveCodec;
@@ -56,8 +45,7 @@ public:
 	void DailyPlan(const Time& currentTime, PostHandle* post); // 转调mod->DailyPlan(...)
 	const std::unordered_map<std::string, Time>& GetPlans() const;
 
-	// 和Job::ExecNode同一个"读mod->GetChanges()、不delete"写法，纯C++通道。@post透传给
-	// mod，见job.h的同名参数说明。
+	// 和Job::ExecNode同一个"只读mod->changes、不delete"写法。
 	std::vector<Change*> ExecNode(const std::string& node, PostHandle* post);
 
 private:

@@ -2,8 +2,8 @@
 
 ## 职责
 
-`Story`是Script->Milestone->Event/Dialog/Change架构的聚合入口，负责GameStart广播+
-`SetValueChange`执行这条链路。不包含计时器、对话历史、全局消息队列等功能（见"待办"）。
+`Story`是Script->Milestone->Event/Dialog/Change架构的聚合入口，负责GameStart广播、
+`SetValueChange`执行和计时器。不包含对话历史、全局消息队列等功能（见"待办"）。
 
 ## 持有的内容
 
@@ -15,29 +15,17 @@
   `Forever_Mod/Empty`提供id为`"script_empty"`的`EmptyScript`）。
 - `Script* mainScript`：主线剧情Script——一份剧本只能由一个Script表示，`Init()`从
   `Resource/Story/test.script`读取。
-- `Script* systemScript`：`system.`前缀路由的目标（见`Dependence/story/expression.md`
-- `Script* globalScript`：全局变量池，没有前缀的变量(`$$x`、`set_value`的`variable`)路由到这里，脚本可读可写；`systemScript`是系统变量，脚本只读、只由C++写。
-  "ScriptContext"一节）——一个不加载任何milestone、纯粹当`Container`变量池用的`Script`。
+- `Script* systemScript`：`system.`前缀路由的目标（见`Dependence/story/expression.md`"ScriptContext"一节），
+  脚本只读、只由C++写；不加载任何milestone，纯粹当`Container`变量池用。
+- `Script* globalScript`：全局变量池，没有前缀的变量(`$$x`、`set_value`的`variable`)路由到这里，脚本可读可写。
+- 计时器：`gameTimers`/`timerIndex`/`realTimers`，见下"计时器"。
 
 ## `ScriptModName`从`config.json`的`"main_story"`字段读
 
 `Story::Init()`从`Config::GetMainStoryScriptModName()`（读`config.json`的`"main_story"`
-字段）拿到真正的`scriptModName`，字段缺失或对应ScriptMod没有注册时跳过初始化：
-
-```cpp
-void Story::Init() {
-	string scriptModName = Config::GetMainStoryScriptModName();
-	if (scriptModName.empty() || !scriptFactory.CheckRegistered(scriptModName)) {
-		debugf("Warning: main_story script mod not configured or not registered, Story::Init skipped.\n");
-		return;
-	}
-	systemScript = new Script(&scriptFactory, scriptModName);
-	mainScript = new Script(&scriptFactory, scriptModName);
-	mainScript->ReadMilestones(Config::GetScriptPath("test"));
-}
-```
-
-`config.json`当前配的是`"main_story": "script_yuanshen"`。
+字段）拿到`scriptModName`，字段缺失或对应ScriptMod没有注册时跳过初始化（`mainScript`等保持nullptr）。
+否则用它创建`systemScript`/`globalScript`/`mainScript`三个`Script`，再对`Config::GetMainStoryScriptPaths()`
+的每个文件调`mainScript->ReadMilestones`（见文末"主线读取全部 story_scripts"）。
 
 ## `BroadcastGameStart`用回调而不是直接返回`vector<ScriptAction>`
 
@@ -85,7 +73,7 @@ milestone超时之类）时再补内容。
 
 ## 计时器
 
-`Story::timers`(`StoryTimer{target, name, ownerKey}`)。脚本里这样用：
+`Story`持有`StoryTimer{target, name, ownerKey, realTime, remaining}`。脚本里这样用：
 
 - `create_timer`(name、time必填，category/label可选，都是表达式)：
   - **time**：带日期(如`"2024-05-01 08:00:00"`)是绝对时刻；只写时间(`"08:00:00"`，必须是时:分:秒)是下一次到这个钟点——今天还没过就是今天，已经过了(含正好等于现在)就是明天。和老工程一致，到时只触发一次，要每天重复就在`time_up`里再建一次。
@@ -112,13 +100,10 @@ milestone超时之类）时再补内容。
 - `height`/`weight`/`nick`/`deposit`/`phone`/`jobs`能解析但目前不生效——Citizen还没有这些字段。
 - 新市民追加在`Populace::citizens`末尾，随存档保存；他的Scheduler脚本不会补发game_start；不登记任何人际关系。脚本里要用的名字最好写进主线脚本的`names`(name_reserve)，避免和随机生成的市民重名。
 
-## test.script路径
+## 剧本文件路径
 
-`Resource/Story/test.script`，实际存放位置由`config.json`的`"resource_paths"`数组
-（`["../Story"]`）决定，`Story::Init()`用`Config::GetScriptPath("test")`按bare文件名反查
-实际路径，不自己拼`filesystem::path`。`Config::AddResourcePath`只按`.script`扩展名扫描
-（见`config.md`"resource_paths"一节）。目前没有多剧情路径管理机制，固定用"test"这一个bare
-名字跑主线剧情（见"待办"）。
+`Resource/Story/*.script`，实际存放位置由`config.json`的`"resource_paths"`决定，按bare文件名经
+`Config::GetScriptPath`反查，`Config::AddResourcePath`只按`.script`扩展名扫描（见`config.md`）。
 
 ## 依赖关系
 
@@ -135,8 +120,7 @@ milestone超时之类）时再补内容。
 
 ## 待办/后续阶段
 
-- 计时器（`CreateTimer`/`PopExpiredTimers`）、对话历史（`AddTalk`/`GetHistory`）、全局消息队列
-  （`AddMessage`/`PopMessages`），等对应功能被点名时再加。
+- 对话历史（`AddTalk`/`GetHistory`）、全局消息队列（`AddMessage`/`PopMessages`），等对应功能被点名时再加。
 - 多剧情路径管理（类似`AddScript`/`RemoveScript`），等需要同时维护多份剧情时再加。
 
 ## 主线读取全部 story_scripts

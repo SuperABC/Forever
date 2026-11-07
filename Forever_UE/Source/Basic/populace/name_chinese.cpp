@@ -4,10 +4,6 @@
 
 #include <cmath>
 
-// 生成给定名时的最大重试次数——当前实现其实从不会真正重试(见GenerateName两参数重载
-// 注释)。
-#define MAX_ALLOCATION_ATTEMPTS 16
-
 
 using namespace std;
 
@@ -50,10 +46,7 @@ void ChineseName::GetSurname(const string& fullName,
 
 void ChineseName::GenerateName(bool allowMale, bool allowFemale, bool allowNeutral,
 	const function<void(const string&)>& setResult) const {
-	// 姓氏按"前面的姓更常见"做非均匀采样：N=surnames.size()，从[0,N²)里均匀取randVal，
-	// idx=floor(sqrt(randVal))本身就是非均匀的(idx越大概率越高)，surnameIdx=N-1-idx把
-	// 这个偏向反过来，让数组靠前(常见姓氏排在前面，见InitializeSurnames)的项被抽中的概率
-	// 远高于靠后的——不存权重表，靠数组顺序+这个sqrt反索引隐式实现"常见姓氏更常见"。
+	// 姓氏非均匀采样(靠前的姓更常见)，算法见name_chinese.md。
 	int randVal = GetRandom(static_cast<int>(surnames.size() * surnames.size()));
 	int idx = static_cast<int>(sqrt(static_cast<float>(randVal)));
 	int surnameIdx = static_cast<int>(surnames.size()) - 1 - idx;
@@ -69,7 +62,7 @@ void ChineseName::GenerateName(const string& surname,
 		allowNeutral ? static_cast<int>(neutralNames.size()) : 0,
 	};
 
-	// 1个字8/9的样本落在GetRandom(9)==0，2个字的样本占其余8/9——两字名远比单字名常见。
+	// 单字名只在GetRandom(9)==0时出现(1/9)，其余8/9是两字名。
 	int nameLength = 1 + static_cast<int>(static_cast<bool>(GetRandom(9)));
 	int listLength = nameList[0] + nameList[1] + nameList[2];
 
@@ -80,30 +73,25 @@ void ChineseName::GenerateName(const string& surname,
 	}
 	if (listLength == 0) return; // 词库本身是空的(理论上不会发生)，生成失败
 
+	// 名字拼接不会失败(词库已确认非空)，也没有查重，所以不需要重试。
 	string givenName;
-	int attempt = 0;
-	while (true) {
-		if (attempt++ > MAX_ALLOCATION_ATTEMPTS) return;
-		givenName.clear();
-		for (int i = 0; i < nameLength; ++i) {
-			int pick = GetRandom(listLength);
-			if (pick < nameList[0]) {
-				givenName += maleNames[pick];
+	for (int i = 0; i < nameLength; ++i) {
+		int pick = GetRandom(listLength);
+		if (pick < nameList[0]) {
+			givenName += maleNames[pick];
+		}
+		else {
+			pick -= nameList[0];
+			if (pick < nameList[1]) {
+				givenName += femaleNames[pick];
 			}
 			else {
-				pick -= nameList[0];
-				if (pick < nameList[1]) {
-					givenName += femaleNames[pick];
-				}
-				else {
-					pick -= nameList[1];
-					givenName += neutralNames[pick];
-				}
+				pick -= nameList[1];
+				givenName += neutralNames[pick];
 			}
 		}
-		setResult(surname + givenName);
-		return;
 	}
+	setResult(surname + givenName);
 }
 
 void ChineseName::InitializeSurnames() {

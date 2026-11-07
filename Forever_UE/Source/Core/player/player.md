@@ -4,9 +4,10 @@
 `Player`类，不是UE的`AForeverPlayerController`——两者是完全不同的东西，动手前先确认没有
 认错文件。
 
-`Player`目前承载三块：全局时钟（`Time*`+`Init/Tick/GetTime/SetTime/CrossDay`）、生命值
-（`GetHealth`/`TakeDamage`/`Heal`/`IsDead`）、资产系统（`Asset`的五个槽位+不动产/载具表+
-路径寻址）。手机(`Phone`)、存款等字段/方法尚未迁移。
+`Player`承载：全局时钟（`Time*`+`Init/Tick/GetTime/SetTime/CrossDay`）、天气（`Weather`，见
+`weather.md`）、生命值（`GetHealth`/`TakeDamage`/`Heal`/`IsDead`）、资产系统（`Asset`的五个槽位+
+不动产/载具表+房外物品`worldAssets`+路径寻址+脚本驱动的收纳/扣除）。`Phone`不由`Player`持有，
+由UE侧`PhoneWidget`持有。
 
 ## 时钟行为
 
@@ -18,21 +19,18 @@
   `timeFlowRatio == 1.0`时"1真实秒 = 1游戏分钟"。默认值`10.0`（1现实秒=10游戏分钟，一天
   1440分钟需要144现实秒）。**不要把`timeFlowRatio`调得太高**：流速太快时`Populace::Tick`/
   `Society::Tick`的`jobTimerSet`/`organizationTimerSet`会在同一时刻堆积大量到期节点，
-  每帧固定上限(`kMaxJobTimersPerTick`=4)吐不完积压，表现为9点/12点这类"大量市民同一时刻
+  每帧固定上限(`kMaxJobTimersPerTick`=16)吐不完积压，表现为9点/12点这类"大量市民同一时刻
   下班/上班"场景卡顿。
 
   `timeFlowRatio`是可写成员，`SetTimeFlowRatio(ratio)`覆盖默认值：
-  `AForeverFrameworkActor::EnsurePlayerGenerated()`在`player->Init()`之后读一次主线
-  剧情`.script`的`global_settings.time_flow_ratio`字段（`Script::GetGlobalSettings(
-  Config::GetMainStoryScriptPath())`），有声明就调`SetTimeFlowRatio`覆盖默认值，没有
-  就保持默认值不变。`global_settings`是主线剧情`.script`文件级别的顶层字段（不是
-  `config.json`级别，也不是运行时`Change`可改的），在`Story`对象创建之前、`Player`生成
-  的时候一次性读完，见`Core/story/script.md`"主线剧情.script新增三个顶层字段"一节。
-  `Story`目前只有`systemScript`一个`Script*`做`system.`前缀变量池，没有独立的settings
-  字典。
-- `SetTime(const Time&)`/`CrossDay()`：供以后`change_time`一类Change或Society/
-  Populace/Industry的"跨天触发日程"逻辑使用——`CrossDay()`目前没有任何调用方接入，只是
-  接口先落地；`SetTime`目前唯一的调用方是下面这条"开局时间=人口模拟结束年份"的逻辑。
+  `AForeverFrameworkActor::EnsurePlayerGenerated()`在`player->Init()`之后遍历
+  `Config::GetMainStoryScriptPaths()`，对每个主线脚本读`Script::GetGlobalSettings(path)`的
+  `time_flow_ratio`，有声明就调`SetTimeFlowRatio`（多个文件后者覆盖前者），没有就保持默认值。
+  `global_settings`是主线脚本文件级别的顶层字段，见`story/script.md`。运行时也可由
+  `global_setting` Change（`AForeverFrameworkActor::ApplyChange`处理）改写。
+- `SetTime(const Time&)`/`CrossDay()`：`SetTime`记下跳变前的天数，让`CrossDay()`（相对上一次
+  `Tick`/`SetTime`时的天数）能正确检测跨天；`AForeverFrameworkActor::Tick`据此判断
+  `crossedDay`（第一帧强制当作跨天），`SetTime`目前用于开局时间。
 
 ## 开局时间=人口模拟结束年份
 
@@ -117,7 +115,7 @@ DeltaTime)`覆写里唯一做的事就是`player->Tick(DeltaTime)`，见
 
 ## 依赖关系
 
-- 依赖：`Dependence/common/utility.h`（`Time`类）、`Dependence/player/asset_mod.h`/
+- 依赖：`player/weather.h`、`Dependence/common/utility.h`（`Time`类）、`Dependence/player/asset_mod.h`/
   `asset_factory.h`（通过`Core/player/asset.h`的`Asset`/`AssetFactory`）、
   `Core/map/room.h`（`Room::GetAssets`/`AddAsset`/`RemoveAsset`）。
 - 被谁依赖：`Core/common/implement.h`（`PostImplement`构造函数+`"game time"`查询）、
@@ -127,13 +125,7 @@ DeltaTime)`覆写里唯一做的事就是`player->Tick(DeltaTime)`，见
 
 ## 范围边界
 
-- 不迁移手机(`Phone`)、存款相关字段/方法。
-- 不维护`Story::GetSetting`/`Config::GetGlobalSettings`那一套全局设置字典——
-  `time_flow_ratio`走主线剧情`.script`的`global_settings`顶层字段（见上"时钟行为"
-  一节），不支持`GlobalSettingChange`这类运行时改写。
-- 不把`system.time.year/month/...`写进`Story`的`systemScript`变量池——`Story`没有
-  `Tick()`。
-- `CrossDay()`目前没有任何消费方接入（`Society`/`Industry`都是空骨架）。
+- 不含存款相关字段/方法。
 - 没有暂停机制（对应`AGlobalBase::GlobalPause/GlobalResume`那一套）。
 
 ## 脚本驱动的收纳/扣除

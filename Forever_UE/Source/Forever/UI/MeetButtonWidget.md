@@ -2,7 +2,7 @@
 
 ## 职责
 
-`UMeetButtonWidget`：`MeetOptionWidget`滚动列表里的**一行交互选项**(对应老蓝图`MeetButton_C`)，点击转发给`UForeverStoryFrameworkComponent::OptionDialog`。
+`UMeetButtonWidget`：`MeetOptionWidget`滚动列表里的**一行交互选项**，点击转发给`UForeverStoryFrameworkComponent::OptionDialog`。
 
 ## 关键设计
 

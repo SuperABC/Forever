@@ -18,9 +18,7 @@ struct LampInstance {
 	int blueprintIndex = 0;
 };
 
-// 全图路灯的统一存储：把mod提交的LampRequests(单盏/一排/一片，见feature_spec.h)按宿主参考系换算
-// 后展开成一盏盏LampInstance。规则同Vegetation，区别是灯的朝向由请求指定、不做随机旋转/缩放。
-// 由Map持有，UE层的UForeverLampFrameworkComponent读出来逐盏生成Actor。详见lamp.md。
+// 全图路灯的统一存储，详见lamp.md
 class Lamps {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;

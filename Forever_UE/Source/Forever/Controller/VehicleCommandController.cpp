@@ -558,8 +558,6 @@ void AVehicleCommandController::TickDrivingPhysics(AVehicleElement* vehicle, flo
 
 	// 转向：Stanley（航向误差 + 横向偏差修正），紧贴导航线，偏一点就打方向。
 	// 航向参考取前方一小段（lookaheadBase+lookaheadGain*v）处的路径切线，弯道提前开始转。
-	const float wheelbase = FMath::Max(vehicle->ComputeWheelbase(), 200.f);
-	(void)wheelbase;
 	float maxSteer = vehicle->GetMaxSteerAngleDegrees();
 	if (maxSteer < 1.f) maxSteer = kDefaultMaxSteerDegrees;
 	const float preview = lookaheadBase + lookaheadGain * FMath::Max(speed, 0.f);

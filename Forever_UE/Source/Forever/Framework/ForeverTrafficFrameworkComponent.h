@@ -20,14 +20,8 @@ class Map;
 class Traffic;
 class Vehicle;
 
-// 载具系统落地：车辆不再按T临时生成/销毁，改成开局时按停车位预置生成(GenerateVehicles)，
-// 玩家走近车辆用MeetOption选"上车"（见UForeverStoryFrameworkComponent::ApplyEnterVehicle→
-// ApplyEnterVehicle），驾驶时按Q下车（AVehicleElement::ExitVehicle→ExitVehicle，带下车点
-// 碰撞检测）。详见ForeverTrafficFrameworkComponent.md。
-//
-// 这次新增公共交通(大巴/火车/飞机)：GenerateVehicles额外给GetRoute()非空的Vehicle生成
-// ATransitVehicleElement(运动学立方体占位，不能上下车)；BuildRouteDebugMesh/BuildTracks
-// 是公共交通专属的调试画线/铺轨道，见public_transport_plan.md。
+// 载具：按停车位预置的小汽车(按距离流式生成/销毁)、玩家上下车、公共交通(公交/火车/飞机)、
+// 公交Controller驱动与远近切换、线路调试画线与铺轨。详见ForeverTrafficFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverTrafficFrameworkComponent : public UForeverFrameworkComponent
 {
@@ -39,22 +33,13 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
 
-	// 由AForeverFrameworkActor::EnsureTrafficGenerated()在traffic->Init(map)之后立刻调用一次：
-	// 遍历traffic->GetVehicles()，category=="car"(GetRoute()为空)的按原逻辑生成AVehicleElement
-	// (照抄BuildingElement.cpp::ComputeWorldPosition公式换算世界坐标、
-	// LoadClass<AVehicleElement>(vehicle->GetBlueprintPath())、SpawnActor、Init、建proximity
-	// box，存进activeVehicles供ApplyEnterVehicle按名字反查)；GetRoute()非空的(公共交通车辆)
-	// 生成ATransitVehicleElement(不需要换算停车位世界坐标，Tick里直接读vehicle->GetTransform()
-	// 驱动，初始位置无所谓，存进activeTransitVehicles)。
-	// 注意：非公共交通的车辆(AVehicleElement)不在这里直接生成，只登记停放位置(carEntries)，由
-	// TickComponent按玩家距离流式生成/销毁，和市民(UForeverPopulaceFrameworkComponent)同一个
-	// 思路：停着的车是带物理模拟的骨骼网格+Chaos车辆组件+触发盒，全城一次性生成几百辆对游戏
-	// 线程负担很重。
+	// 由AForeverFrameworkActor在traffic->Init(map)之后调用一次。GetRoute()非空的公共交通车辆立刻生成
+	// ATransitVehicleElement(存进activeTransitVehicles)；普通小汽车只登记停放位置(carEntries)，
+	// 由TickComponent按玩家距离流式生成/销毁AVehicleElement(全城一次性生成物理车辆负担太重)。
 	void GenerateVehicles(Map* map, Traffic* traffic);
 
-	// EnterVehicleChange的真正执行：按名字在activeVehicles里找到AVehicleElement，隐藏+
-	// despawn-exempt当前pawn、记进vehicleElement的previousPawn，Possess过去。找不到车辆/
-	// 当前没有pawn时打一条Warning，不崩溃。
+	// EnterVehicleChange的真正执行：按名字找(不在场景则强制生成)AVehicleElement，隐藏+despawn-exempt当前pawn、
+	// 记进vehicleElement的previousPawn，Possess过去。找不到车辆/当前没有pawn时打Warning。
 	// bSilent=true时不给车辆script发enter_vehicle事件(读档恢复"正在开的车"：script变量/选项已随存档
 	// 恢复，再发一次事件会让script重复处理)。
 	void ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent = false);
@@ -104,14 +89,9 @@ public:
 	// enter_vehicle/读档恢复"正在开的车"指定的车不一定在玩家附近。找不到这辆车返回nullptr。
 	AVehicleElement* FindOrSpawnVehicle(const FString& vehicleName);
 
-	// AVehicleElement::ExitVehicle按Q调用：算出候选下车世界坐标(车辆当前transform+
-	// VehicleMod的exitOffsetX/Y/Z，按车身当前旋转变换)，用ECC_Pawn通道做胶囊体sweep检测
-	// (见[[memory:pawn_preset_ignores_visibility]]，不能用ECC_Visibility；也不能用
-	// OverlapAnyTestByChannel，建筑/房间/园区边界盒是Trigger档案，重叠类查询会把它们也算成
-	// "挡住"，见ExitVehicle实现里的说明)，被挡住就在左上角打印拒绝提示、不下车；没被挡住就
-	// 恢复previousPawn（位置/显示/碰撞/Possess），车辆本身不销毁(这次是预置的真实物件，不是
-	// 一次性测试对象)。
-	// 搭乘者(ATransitVehicleElement)也走这条流程，但不做遮挡判定；bForce=true时驾驶者也不做。
+	// AVehicleElement::ExitVehicle按Q调用：按车身transform+VehicleMod的exitOffset算下车点，ECC_Pawn胶囊体
+	// sweep检测遮挡(坑见.cpp)，被挡住就打印拒绝提示、不下车；否则恢复previousPawn，车辆本身不销毁。
+	// 搭乘者(ATransitVehicleElement/搭乘模式的物理公交)也走这条流程但不做遮挡判定；bForce=true时驾驶者也不做。
 	void ExitVehicle(APlayerController* controller, bool bForce = false);
 
 	// script的test_navigate_vehicle Change（和市民的test_navigate_citizen对称）：用橙色折线显示这辆车
@@ -126,23 +106,16 @@ public:
 	// source取剩余路径重画，source返回false（任务完成/对象没了）就清线并停止。没有计时器，不会自己消失。
 	void TrackTestNavigationLine(TFunction<bool(TArray<FVector>&)> source);
 
-	// 公共交通线路的调试画线：每种stationType一个UProceduralMeshComponent+MID(bus绿/train蓝/
-	// plane红/其它默认色)，按route->GetLines()里每条腿的edge几何采样连成ribbon，边中点画一个
-	// 箭头指示行驶方向，站点接口画小方块。由bShowRouteDebug控制，关闭时清空已有section而不是
-	// 跳过(避免旧可视化残留)。
+	// 公共交通线路调试画线(每种stationType一个mesh+MID，详见.md)，bShowRouteDebug为false时清空已有section。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Debug")
 	bool bShowRouteDebug = true;
 
 	void BuildRouteDebugMesh(Traffic* traffic);
 
-	// 铺instantiate线路(火车)的轨道mesh——只处理ShouldInstantiate()&&!GetTrackMesh().empty()的线路，
-	// 思路同ForeverRoadnetFrameworkComponent的BuildRoadInstances(按弧长重复摆放
-	// InstancedStaticMeshComponent)，区别是轨道mesh的轴心在起点边(沿X轴向前延伸)，所以每块摆在
-	// 自己的起点而不是中点；隧道段换用GetTrackTunnelMesh()(空则复用GetTrackMesh())。
+	// 铺instantiate线路(火车)的轨道ISM，只处理ShouldInstantiate()且有trackMesh的线路，详见.md。
 	void BuildTracks(Traffic* traffic);
 
-	// 车辆流式生成/销毁的距离(地图单位)，是市民(citizenSpawnDistance 2.0/citizenDespawnDistance 4.0)
-	// 的两倍；判断距离时Z方向放大5倍(不同楼层的东西一般互相看不到)，和市民同一个度量。
+	// 车辆流式生成/销毁的距离(地图单位)，是市民的两倍；判断距离时Z方向放大5倍，和市民同一个度量。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	float vehicleSpawnDistance = 4.f;
 
@@ -191,9 +164,8 @@ private:
 	// 玩家进出载具(驾驶或搭乘)时给这辆车自己的script发enter_vehicle/leave_vehicle事件。
 	void FireVehicleEvent(Vehicle* vehicle, bool entering, const char* mode);
 
-	// 一辆非公共交通车辆的登记项：不管当前有没有生成Actor都存在。location/yaw是它最后一次已知
-	// 的位置(没生成时=停车位或存档/上次销毁时的位置；生成着时每帧同步)。不能标UPROPERTY：
-	// Vehicle*是Core层类型。
+	// 一辆非公共交通车辆的登记项：不管当前有没有生成Actor都存在。location/yaw是最后一次已知的位置
+	// (没生成时=停车位或存档/上次销毁时的位置；生成着时每帧同步)。不能标UPROPERTY：Vehicle*是Core层类型。
 	struct FCarEntry {
 		Vehicle* vehicle = nullptr;
 		FString name;
@@ -208,14 +180,12 @@ private:
 	// 按登记项生成Actor并记进activeVehicles，失败返回nullptr。
 	AVehicleElement* SpawnCar(FCarEntry& entry);
 
-	// Vehicle::GetName()→对应的AVehicleElement，照抄
-	// UForeverPopulaceFrameworkComponent::activeInstances的思路，ApplyEnterVehicle按名字
-	// 反查用。
+	// Vehicle::GetName()→当前活着的AVehicleElement(含物理段的线路公交)，上车按名字反查用。
 	UPROPERTY()
 	TMap<FString, TObjectPtr<AVehicleElement>> activeVehicles;
 
-	// Vehicle::GetName()→对应的ATransitVehicleElement——这次公共交通车辆不能上下车，不需要
-	// 按名字反查，纯粹持有引用防止被GC，和activeVehicles分开存只是为了类型不同。
+	// Vehicle::GetName()→对应的ATransitVehicleElement(线路上的运动学公共交通车辆)，持有引用防止被GC，
+	// FindTransitElement按名字查。
 	UPROPERTY()
 	TMap<FString, TObjectPtr<ATransitVehicleElement>> activeTransitVehicles;
 

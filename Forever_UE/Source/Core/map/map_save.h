@@ -1,37 +1,27 @@
 #pragma once
 
+#include "class.h"
+
 #include "common/save_archive.h"
 
 #include <string>
 
 
-class Map;
-class Node;
-class Connection;
-class Road;
-class Lot;
-class Floor;
-class Room;
-
-// 段名。地图拆成4段，各自带段版本(版本表见common/save.cpp的GetSaveSectionVersions)，改哪一段
-// 的布局只升哪一段。
+// 段名。地图拆成5段，各自带段版本(版本表见common/save.cpp的GetSaveSectionVersions)
 #define SAVE_SECTION_MAP_TERRAIN "world.map.terrain"
 #define SAVE_SECTION_MAP_ROADNET "world.map.roadnet"
 #define SAVE_SECTION_MAP_STRUCTURES "world.map.structures"
 #define SAVE_SECTION_MAP_VEGETATION "world.map.vegetation"
 #define SAVE_SECTION_MAP_LAMPS "world.map.lamps"
 
-// 地图域(地形格子/路网/导航图/Zone/Building/Room/Component/Door/植被)的存档读写。世界生成不可
-// 复现(见save.md"为什么存结果、不存种子")，所以这里存的是生成结果本身：各类对象的字段原样写出，对象之间的指针
-// 换成编号(Road/Lot/导航边按表下标，导航锚点按Node id，Zone/Building/Door按顺序下标)，读档
-// 时按编号重建对象再连回指针，不调用任何mod的Layout/Distribute。需要直接读写私有字段，
-// 所以相关类都把这个类声明成friend。详见map_save.md。
+// 地图域的存档读写：存生成结果、指针换成编号，读档时重建对象，不调用任何mod的Layout/Distribute。
+// 相关类都把它声明成friend以直接读写私有字段。详见map_save.md
 class MapSaveCodec {
 public:
-	// 把map写进archive的4个地图段。
+	// 把map写进archive的5个地图段。
 	static void Save(const Map& map, SaveArchive& archive);
 
-	// 按archive里的4个地图段重建一张Map。失败返回nullptr并给出原因(这时已经建出来的部分
+	// 按archive里的5个地图段重建一张Map。失败返回nullptr并给出原因(这时已经建出来的部分
 	// 对象不保证释放干净——读档失败本来就要退回重新生成世界)。
 	static Map* Load(const SaveArchive& archive, std::string& error);
 

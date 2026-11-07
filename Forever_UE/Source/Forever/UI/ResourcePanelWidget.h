@@ -8,10 +8,8 @@ class UScrollBox;
 class UButton;
 class UPathRowWidget;
 
-// Resource screen：只保留老工程ResourcePanel(.dump/ResourcePanel.txt)的资源文件夹列表那
-// 一半——.script列表移到新增的StoryPanelWidget(Story screen)，这里的ResourceList
-// 对应Config::AddResourcePath发现的文件夹，一个文件夹同时覆盖.layout和.script(见
-// config.md"DLL级依赖声明"旁边新增的说明)。
+// Resource screen：资源文件夹列表，对应Config::AddResourcePath发现的文件夹，一个文件夹同时覆盖
+// .layout和.script。.script列表在StoryPanelWidget。
 UCLASS()
 class FOREVER_API UResourcePanelWidget : public UUserWidget
 {

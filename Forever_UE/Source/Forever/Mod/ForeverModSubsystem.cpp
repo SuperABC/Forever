@@ -37,11 +37,9 @@ namespace {
 		return map;
 	}
 
-	// 20个concept共用的校验逻辑:遍历factory里已注册的id,创建一个临时实例(Create<Concept>
-	// 内部会查SetModArgs预先设置好的参数表,把参数字符串直接传给creator创建实例),把
-	// id/GetType()/GetName()打进日志(GetName()对Empty<Concept>会把参数字符串带回来,用于
-	// 验证参数传递链路),再销毁。create/destroy用lambda传入,因为20个<Concept>Factory的
-	// Create/Destroy方法名各不相同,没有共同基类可以多态调用。
+	// 16个concept共用的校验逻辑:遍历factory里已注册的id,创建一个临时实例,把id/GetType()/GetName()
+	// 打进日志(GetName()对Empty<Concept>会把参数字符串带回来,用于验证参数传递链路),再销毁。
+	// create/destroy用lambda传入,因为各<Concept>Factory的Create/Destroy方法名不同,没有共同基类。
 	template <typename FactoryT, typename CreateFn, typename DestroyFn>
 	void ValidateFactory(FactoryT& factory, const TCHAR* label, CreateFn create, DestroyFn destroy) {
 		for (const std::string& id : factory.GetRegisteredIds()) {
@@ -79,10 +77,7 @@ bool UForeverModSubsystem::ReloadConfigFrom(const FString& Path) {
 }
 
 void UForeverModSubsystem::ReadConfigWithFallbacks(const FString& configPath) {
-	// 诊断用：Config内部用std::cerr打印警告，这个进程(尤其是-game Standalone)不一定有
-	// 对应的控制台/重定向把它接进Forever.log——之前几次"回退扫描"排查时完全没看到任何
-	// [Config]开头的warning，但又确实触发了回退，说明那些cerr警告大概率没有被这次log文件
-	// 捕获到。这里改用UE_LOG打印同等信息，确保不管运行模式如何都能在log文件里看到。
+	// Config内部用std::cerr打印警告，进程(尤其-game Standalone)不一定把它接进Forever.log，所以这里用UE_LOG打印诊断信息。
 	UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: configPath=%s, exists=%d"),
 		*configPath, FPaths::FileExists(configPath) ? 1 : 0);
 	Config::ReadConfig(TCHAR_TO_UTF8(*configPath));
@@ -111,21 +106,14 @@ void UForeverModSubsystem::ReadConfigWithFallbacks(const FString& configPath) {
 		}
 	}
 
-	// 到这里为止只是纯发现，写进Config静态状态供配置界面UI立刻有数据可展示——真正的Plugin/
-	// Pak挂载和Factory注册/校验挪进EnsureModsRegistered()，由配置界面"开始游戏"按钮校验
-	// 通过后显式调用，不在这里(关卡加载之前)无条件跑。
 }
 
 void UForeverModSubsystem::EnsureModsRegistered() {
 	std::vector<std::string> mods = Config::GetActiveDllPaths();
 
-	// 挂载mod自己的UE资产Plugin——照抄老工程GlobalBase::BeginPlay()按WITH_EDITOR分两条路径
-	// 的写法(见PACKAGING_PLAN/config.md"GetPlugins/GetPakFiles"一节)。独立mod的UE资产只能
-	// 以Plugin形态存在(UE资产只能通过已注册的挂载点访问，原始文件夹不是合法挂载对象)，
-	// resource_paths扫描到的.uplugin/.pak就是这些mod自己的迷你UE工程里Plugin的产物。
+	// 挂载mod自己的UE资产Plugin，Editor/打包分两条路径，原因见ForeverModSubsystem.md。
 #if WITH_EDITOR
-	// Editor/PIE：直接挂载Plugin的Content目录，不需要cook/pak——纯粹告诉引擎"这个包名
-	// 前缀去这个磁盘目录找"，不需要在主.uproject的Plugins列表里启用这个Plugin。
+	// Editor/PIE：直接挂载Plugin的Content目录，不需要cook/pak，也不用在主.uproject里启用。
 	for (const std::string& pluginPath : Config::GetPlugins()) {
 		FString pluginFile(UTF8_TO_TCHAR(pluginPath.c_str()));
 		FString pluginDir = FPaths::GetPath(pluginFile);
@@ -143,9 +131,7 @@ void UForeverModSubsystem::EnsureModsRegistered() {
 		}
 	}
 #else
-	// 打包/Shipping：挂载mod自己的迷你UE工程cook+UnrealPak出来的.pak，内部路径固定写死成
-	// "../../../<PluginName>/Content/"(UnrealPak打包时的约定，mod自己的pak.bat生成filelist
-	// 时就是这么写的，两边必须对得上，不能按这个主工程自己的目录结构现算)。
+	// 打包/Shipping：挂载mod的.pak，内部路径固定为"../../../<PluginName>/Content/"(mod自己的pak.bat生成filelist时必须对得上)。
 	for (const std::string& pakPath : Config::GetPakFiles()) {
 		FString pakFile(UTF8_TO_TCHAR(pakPath.c_str()));
 		FString pluginName = FPaths::GetBaseFilename(pakFile);
@@ -158,12 +144,8 @@ void UForeverModSubsystem::EnsureModsRegistered() {
 			mountArgs.PakFilePath = *pakFile;
 			mountArgs.Order = 4;
 			mountArgs.MountOptions.MountFlags = FPakMountOptions::EMountFlags::SkipContainerFile;
-			// 不能靠这个调用的返回值判断要不要继续——实测在这个引擎版本下，pak文件本身已经
-			// 挂载成功(LogPakFile能看到"Mounted Pak file...")，但这个返回值仍然是false，
-			// 如果靠它gate下面RegisterMountPoint，会一直停在引擎自己打的那条警告("Mount
-			// point ... is not mounted to a valid Root Path yet")描述的半挂载状态，包名
-			// 永远连不上磁盘内容。RegisterMountPoint本身是幂等的纯注册操作，不需要靠这个
-			// 返回值做条件判断，挂了就应该紧接着注册。
+			// 不能靠返回值gate下面的RegisterMountPoint：pak挂载成功时它仍可能返回false，
+			// 否则会停在"Mount point ... is not mounted to a valid Root Path yet"的半挂载状态。
 			FCoreDelegates::MountPaksEx.Execute(mountArgsArr);
 			{
 				FString virtualContentDir = TEXT("../../../") + pluginName + TEXT("/Content/");

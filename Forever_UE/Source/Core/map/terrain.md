@@ -4,23 +4,18 @@
 
 `Terrain`是某个具体`TerrainMod`实例的薄包装——构造时向`TerrainFactory`要一个实例（按id，如
 `"terrain_ocean"`/`"terrain_mountain"`），把`GetType`/`GetName`/`GetPriority`/`SetupTexture`/`GetTextures`/
-`DistributeTerrain`原样转发出去，析构时交还给Factory销毁（水面现在per-cell设置，不再经过
-`Terrain`/`TerrainMod`任何getter，见`terrain_mod.md`"水面"一节，这个类也相应没有`GetWater`
-了）。`GetTextures()`返回
-`TerrainTexturePaths{diffuse, normal, roughness}`三个路径打包的小结构体（不是单独一个
-`GetTexture()`返回diffuse字符串——近处/远处材质重做之后normal/roughness也要走这条通路，
-见`ForeverTerrainFrameworkComponent.md`"近处地形混合"一节）。
+`DistributeTerrain`原样转发出去，析构时交还给Factory销毁（水面是per-cell设置的，不经过
+`Terrain`/`TerrainMod`的getter，见`terrain_mod.md`"水面"一节）。`GetTextures()`返回
+`TerrainTexturePaths{diffuse, normal, roughness}`三个路径打包的小结构体（normal/roughness
+也走这条通路，见`ForeverTerrainFrameworkComponent.md`"近处地形混合"一节）。
 
 ## 关键设计
 
 - **自身不持有任何地图格子数据**——地形类型/高度/细化高度/水面/hatch这些格子数据活在`Map`/`Element`
   （见`map.md`），`Terrain`只是"某个地形类型的行为句柄"，`Map::InitTerrains()`按优先级顺序
   临时创建一批`Terrain*`跑完`DistributeTerrain`就地析构，不长期持有。
-- **没有迁移老工程的`EmptyTerrain`**——老工程`terrain.h`里声明了一个`EmptyTerrain`
-  （priority=0、`DistributeTerrain`空实现），本来是`Map::InitTerrains`里硬编码注册的兜底
-  地形。`Forever_Mod/Empty`这个demo mod已经有一个同名同用途的`EmptyTerrain`（id`"terrain_empty"`），
-  会通过`ModLoader`正常发现注册，没必要在Core层再重复实现一份、还要操心两边id`"terrain_empty"`
-  撞在同一个`TerrainFactory::registries`里谁覆盖谁的问题。这是有意的范围裁剪。
+- **Core层没有内置兜底地形**：占位的`EmptyTerrain`（id`"terrain_empty"`）由`Forever_Mod/Empty`通过`ModLoader`
+  正常发现注册，Core不再重复实现一份，避免同一个id在`TerrainFactory::registries`里互相覆盖。
 - **析构必须走`TerrainFactory::DestroyTerrain`，不能直接`delete mod`**——`mod`可能是
   Basic.dll或某个Forever_Mod DLL里`new`出来的实例，析构要走它自己注册时提供的deleter，这是
   `TerrainFactory`本身已经处理好的跨DLL new/delete安全（见`terrain_factory.md`），`Terrain`
@@ -32,7 +27,7 @@
 - 被谁依赖：`Source/Core/map/map.h`（`Map::InitTerrains()`临时构造`Terrain*`跑
   `DistributeTerrain`，见`map.md`）。
 
-## 近处地形混合（`NearTerrainBlend`，原`terrain_blend.h/.cpp`，已合并进本文件）
+## 近处地形混合（`NearTerrainBlend`）
 
 ### 职责
 
@@ -80,5 +75,5 @@
 
 ### 待办/后续阶段
 
-- UE 侧集成（两张控制纹理、近处材质 `TemplateNear`）见计划文档，这个文件本身不依赖它们。
+- UE 侧集成（两张控制纹理、近处材质 `TemplateNear`）见`ForeverTerrainFrameworkComponent.md`，这个文件本身不依赖它们。
 - `ComputeTexelReference` 只用于验证，不在游戏里调用。

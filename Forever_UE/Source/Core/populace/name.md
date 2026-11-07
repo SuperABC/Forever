@@ -25,11 +25,9 @@ concept只需要唯一一个"当前生效"的取名算法给`Populace`用，不�
   交给`BeginPlay()`的`try/catch`处理（打日志+退出游戏）。方法签名不变，两个重载都是
   `const`，`reserve`只读不写，`const`语义不受影响。
 
-  调用方是`Populace::InitNames()`——`new Name(...)`之后立刻遍历主线剧情`.script`的
-  `name_reserve`字段（`Script::GetNameReserve(Config::GetMainStoryScriptPath())`）
-  逐个调`ReserveName`，早于`GenerateCitizens(target)`生成任何citizen，见
-  `Core/story/script.md`"主线剧情.script新增三个顶层字段"一节、`populace.md`
-  "InitNames"一节。
+  调用方是`Populace::InitNames()`——`new Name(...)`之后遍历`Config::GetMainStoryScriptPaths()`，
+  对每个主线脚本的`name_reserve`字段（`Script::GetNameReserve(path)`）逐个调`ReserveName`，
+  早于`GenerateCitizens(target)`生成任何citizen，见`story/script.md`、`populace.md`"InitNames"一节。
 
 ## 依赖关系
 

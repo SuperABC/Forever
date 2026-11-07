@@ -13,24 +13,10 @@ class UMaterialInstanceDynamic;
 class Map;
 class Building;
 
-// 楼体footprint/楼层/两级LOD + 楼层内部布局：Building的可视化cube
-// 收缩到BuildingMod声明的楼体子矩形，按basements/layers/floorHeights逐层堆叠(地下室往
-// Z=0以下堆)。两级LOD：远处整栋一个box(材质由BuildingMod::lodMaterial指定，留空用默认
-// 灰色)；近处是真正的楼层内部结构(走廊/房间隔墙/门洞/窗户/楼梯/电梯井/坡道)，每面墙体分段/
-// 地板/天花板slab/楼梯坡道网格都是一个独立的UStaticMeshComponent(不用PMC section也不用
-// ISM——建筑楼体要频繁整层增删，独立组件增删最直接)。
-//
-// 这个组件本身不再直接持有任何per-building的渲染状态/组件——每栋building各有一个专属的
-// ABuildingElement Actor(见Source/Forever/Element/BuildingElement.h)，LOD状态机、近/远
-// 处组件、电梯轿厢动画全部在Element自己的Tick里做。这样每栋building的组件都attach到它自己
-// 专属的Actor上，不会像早期实现那样全地图共用一个owner Actor(会被物理引擎的碰撞体焊接开销
-// 拖累，且开销随owner身上组件总数线性增长，全地图共用就等于挨个building互相拖累，见
-// ForeverBuildingFrameworkComponent.md"性能"一节)。
-//
-// 这个组件保留的职责：GenerateBuildings()时按map->GetBuildings()各SpawnActor一个Element；
-// 集中加载/缓存全地图共用的默认资产(材质/网格，按软路径缓存，不适合每个Element各自维护一份)；
-// 通过TryConsumeLodOpBudget()给所有Element提供一个全局共享的"每帧最多处理几条LOD操作"预算，
-// 避免大量building同时穿越距离阈值时所有Element在同一帧一起疯狂建组件。
+// 每栋Building各有一个专属ABuildingElement(Source/Forever/Element/BuildingElement.h)，两级LOD
+// (远处单box/近处楼层内部结构)、电梯轿厢动画全在Element自己的Tick里做。这个组件只负责按
+// map->GetBuildings()生成Element、集中缓存全地图共用的默认资产、提供全局共享的LOD操作预算
+// 和"冻结世界"机制。设计与性能背景见ForeverBuildingFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverBuildingFrameworkComponent : public UForeverFrameworkComponent
 {
@@ -71,32 +57,21 @@ public:
 	UMaterialInstanceDynamic* GetDefaultCeilingMaterial() const { return defaultCeilingMaterial; }
 
 	// 共享配置，Element的Tick/动画计算直接读取。
-	// 远->近(建细节)的触发距离——比近->远的阈值小，两者不共用一个值(见下)，形成一段迟滞区间。
+	// 远->近的触发距离。比近->远的阈值小，两者之间是迟滞区，避免临界距离附近反复Near/Far切换。
 	float GetLodNearEnterDistance() const { return lodNearEnterDistance; }
-	// 近->远(退化成单box)的触发距离——比远->近的阈值大。两个阈值之间(这次是20~40)是"迟滞区"：
-	// 已经是Near的building要离得比刚进入时更远才会退回Far，避免玩家在临界距离附近小范围
-	// 来回走动时，building反复Near/Far抖动式切换(每次切换都要建/删一整层楼的组件，抖动等于
-	// 反复触发ForeverBuildingFrameworkComponent.md"性能排查"一节那个卡顿)。
+	// 近->远的触发距离。
 	float GetLodFarExitDistance() const { return lodFarExitDistance; }
 	float GetCabinCruiseSpeed() const { return cabinCruiseSpeed; }
 	float GetCabinEaseSeconds() const { return cabinEaseSeconds; }
 
-	// 每条"门批次"操作最多处理几扇门——ABuildingElement::BuildDoorBatch()读取。门的构造
-	// (UForeverDoorComponent::Init)比墙体/地板的ISM AddInstance贵不少(4~6次
-	// RegisterComponent)，拆成小批次、和楼层级操作分开节流，见下面TryConsumeLodOpBudget。
+	// 每条"门批次"操作最多处理几扇门——门的构造比墙体/地板贵，拆成小批次、和楼层级操作分开节流。
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
 	int32 maxDoorsPerOp = 4;
 	int32 GetMaxDoorsPerOp() const { return maxDoorsPerOp; }
 
-	// 全地图共享的每帧LOD操作预算——每个ABuildingElement在自己的Tick里执行任何一条LOD操作
-	// (建/删一层楼、建电梯轿厢、建一批门等)之前都要先来这里申请一份，申请失败就等下一帧再试。
-	// 预算本身每帧由这个组件的TickComponent重置一次，替代之前"框架组件自己维护一个全局
-	// 队列、自己挨个执行"的做法——现在队列下放到每个Element自己维护(拆成楼层级/门级两条，
-	// 见ABuildingElement::floorTierOpQueue/doorTierOpQueue声明处注释)，这里只保留节流的
-	// "总闸"，并额外给门级操作加一道全局优先级门槛：只要全地图任意一栋building还有楼层级
-	// 操作排队未执行(pendingFloorTierOps>0)，所有building的门级操作都申请不到预算——这是
-	// "任意建筑的楼层加载插队到任意建筑的门加载前面"的实现关键，不需要building互相感知
-	// 彼此，只需要都查询这同一份全局计数。
+	// 全地图共享的每帧LOD操作预算：Element执行任何LOD操作前先来申请，失败就下一帧再试，预算每帧由
+	// TickComponent重置。门级操作另有全局优先级门槛：全地图任意building还有楼层级操作排队
+	// (pendingFloorTierOps>0)时，所有门级申请都被拒绝，不需要building互相感知。
 	bool TryConsumeLodOpBudget(bool isDoorTierOp) {
 		if (isDoorTierOp && pendingFloorTierOps > 0) return false;
 		if (frameOpBudgetRemaining <= 0) return false;
@@ -104,24 +79,14 @@ public:
 		return true;
 	}
 
-	// 供ABuildingElement在Tick()里排队/执行楼层级操作(BuildFarMesh/DeleteAllNearMeshes/
-	// BuildFloorMesh/BuildElevatorCabins/DeleteFarMesh——不含BuildDoorBatch)时成对调用，
-	// 维护一个全局"还有多少条楼层级操作排队未执行"的计数，供TryConsumeLodOpBudget查询。
-	// 和下面的NotifyLodTransitionStarted/Finished是两件不同的事：那一对按"转场"计数(一栋
-	// 楼一次转场=1，不管它排了几条操作)，用于冻结世界；这一对按"操作条数"计数，用于门级
-	// 操作的全局优先级门槛，不要混用。
+	// 供ABuildingElement排队/执行楼层级操作(不含BuildDoorBatch)时成对调用，维护"排队中的楼层级操作条数"。
+	// 和NotifyLodTransitionStarted/Finished(按转场计数，用于冻结世界)是两件事，不要混用。
 	void NotifyFloorTierOpEnqueued(int32 count) { pendingFloorTierOps += count; }
 	void NotifyFloorTierOpExecuted() { pendingFloorTierOps = FMath::Max(0, pendingFloorTierOps - 1); }
 
-	// 请求"冻结世界直到所有building的LOD切换队列清空"——由切换玩家控制权
-	// （ChangeControlChange，见ForeverStoryFrameworkComponent::ApplyControlChange）触发：
-	// 游戏刚开始/新占有一个citizen时，附近building的近处LOD（楼层/房间细节）可能还没排队
-	// 建完，玩家/市民会先掉到还没生成细节的地面上再等建筑加载完，观感很差。这里直接把
-	// UGameplayStatics::SetGlobalTimeDilation设成0（整个世界完全静止：物理/移动全部
-	// 停摆），TickComponent每帧检查pendingLodTransitionCount是否清零，清零后自动恢复成
-	// 1.f——Tick函数本身不受时间倍率影响，仍然按正常帧率被调用，只是DeltaTime被缩放到0，
-	// 所以LOD队列（消耗预算的处理不依赖DeltaTime，见TryConsumeLodOpBudget/
-	// ABuildingElement::Tick）在"世界静止"期间依然能照常排空。
+	// 冻结世界(全局时间倍率置0)直到所有building的LOD切换队列清空，TickComponent检测到清空后恢复1。
+	// 由切换玩家控制权(ForeverStoryFrameworkComponent::ApplyControlChange)触发。Tick仍按正常帧率
+	// 调用、只是DeltaTime缩放为0，而LOD队列的处理不读DeltaTime，所以冻结期间队列照常排空。
 	void RequestFreezeUntilLodSettled();
 
 	// 世界是否"视觉稳定"：没有处于RequestFreezeUntilLodSettled的冻结中，且没有building还在切换LOD。
@@ -202,17 +167,12 @@ private:
 	int32 postGenerationFrames = 0;
 	static constexpr int32 kPostGenerationGateFrames = 2;
 
-	// 电梯轿厢匀速巡航速度(UE单位/秒，默认300≈3m/s)——
-	// ComputeCabinZ里缓入/缓出用的speedup(u)=cruiseSpeed*smoothstep(u)这条曲线，峰值加速度
-	// =1.5*cruiseSpeed/cabinEaseSeconds，只要cabinEaseSeconds不变，cruiseSpeed翻倍就会让
-	// 峰值加速度也自动翻倍(两者都正比于cruiseSpeed)，不需要额外再调cabinEaseSeconds——原来
-	// 150(≈1.5m/s)翻倍成300(≈3m/s)。
+	// 电梯轿厢匀速巡航速度(UE单位/秒，默认300≈3m/s)。缓入/缓出速度曲线是cruiseSpeed*smoothstep(u)，
+	// 加速度正比于cruiseSpeed/cabinEaseSeconds。
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
 	float cabinCruiseSpeed = 300.f;
 
-	// 电梯轿厢两端缓入/缓出各自的时长(秒)，超过半程距离对应时间时会被自动夹到刚好半程，
-	// 退化成"没有匀速段、只有缓入接缓出"，不会算出负的匀速时间。这次不改——上面cruiseSpeed
-	// 翻倍已经让加速度自动翻倍，这个值再改会变成加速度4倍，超出"2倍"的要求。
+	// 电梯轿厢两端缓入/缓出各自的时长(秒)，超过半程时间会被夹到半程(没有匀速段，不会算出负时间)。
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
 	float cabinEaseSeconds = 1.5f;
 };

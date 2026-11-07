@@ -22,6 +22,9 @@
   |---|---|
   | 主线、系统变量池、全局变量池 | `story.main`、`story.system`、`story.global` |
   | 门 | `door:<门id>` |
+  | 电梯轿厢 | `cabin:<交互名>` |
+  | 建筑、园区、房间 | `building:<名>`、`zone:<名>`、`room:<房间地址>` |
+  | 资产（玩家身上/地上/房间里带脚本的，含容器内容） | `asset:<资产名>` |
   | 组织 | `org:<组织下标>` |
   | 岗位 | `job:<组织下标>:<岗位下标>` |
   | Scheduler | `scheduler:<市民下标>` |

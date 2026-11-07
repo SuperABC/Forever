@@ -7,9 +7,7 @@
 class Citizen;
 class UTexture2D;
 
-// 市民头像贴图的加载器：头像是磁盘上的128x128 PNG(Resource/Avatars/{male|female}/NNNNN.png，由
-// Tools/AvatarGen生成)，运行时按需读取并建成UTexture2D，不导入成UE资产。详见ForeverAvatarSubsystem.md。
-// 市民按距离流式生成/销毁，所以带一个LRU缓存；文件缺失/目录不存在时返回空，调用方保留默认头像。
+// 市民头像贴图的加载器(磁盘PNG→UTexture2D，带LRU缓存)，详见ForeverAvatarSubsystem.md。
 UCLASS()
 class FOREVER_API UForeverAvatarSubsystem : public UGameInstanceSubsystem
 {
@@ -18,9 +16,7 @@ class FOREVER_API UForeverAvatarSubsystem : public UGameInstanceSubsystem
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-	// 取这个市民的头像：citizen->GetAvatar()非空先找Resource/Avatars/<avatar>.png(找不到打警告并回退
-	// 自动)；自动=在该性别、该市民年龄所在年龄段的头像集合里，按avatarIndex取模挑一张(年龄=
-	// currentYear-出生年)。该年龄段没有图时取年龄最接近的。没有可用头像返回nullptr。
+	// 取这个市民的头像，选图规则见md。没有可用头像返回nullptr。
 	UTexture2D* GetCitizenAvatar(const Citizen* citizen, int32 currentYear);
 
 private:
@@ -40,8 +36,7 @@ private:
 	// 按年龄从小到大排序；下标0=男、1=女。
 	TArray<FAvatarEntry> entries[2];
 
-	// LRU缓存：超过maxCached时淘汰最久没用的。被角色引用着的贴图不会被GC掉(角色的avatarTexture持有它)，
-	// 淘汰只是以后再取时重新读一次。
+	// LRU缓存：超过maxCached时淘汰最久没用的。
 	UPROPERTY()
 	TMap<FString, TObjectPtr<UTexture2D>> cache;
 	TMap<FString, uint64> lastUsed;

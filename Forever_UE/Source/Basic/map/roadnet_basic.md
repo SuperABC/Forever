@@ -70,20 +70,7 @@
 - **`addControls`按端点各自的`Z`和坡度取控制点高度**(`c1.z=n1.Z+startSlope*L/3`、
   `c2.z=n2.Z-endSlope*L/3`)，坡度默认0，两端Z相同时效果和固定`0.f`一样，两端Z不同时(隧道过渡段、
   抬升的山路)能画出平滑升降的曲线。
-- **车道配置按左右两侧车道数参数化**：`configureLanesEx(road, leftV, leftP, leftPd, rightV,
-  rightP, rightPd)`按传入的六个数量分别调`AddVehicleLane`/`AddParkingLane`/
-  `AddPedestrianLane`(每条车道宽度固定`LANE_WIDTH=0.5`)。`addRoad`默认`(1,0,1,1,0,1)`
-  (两侧对称、车行道每方向1条、不设停车道、人行道每侧1条)，绝大多数Road(所有放射臂)用这
-  一套；只有井字最中间的四条"中山×路"显式传了不对称/单行的配置，用于验证车道居中
-  (`roadnet.md`"车道居中"一节)、单行道开口(`map.md`"单行道开口"一节)：
-  ```cpp
-  addRoad("中山西路", intersections[0], intersections[3], 1, 0, 1, 2, 0, 1); // 左1右2，双向不对称
-  addRoad("中山东路", intersections[1], intersections[2], 2, 0, 1, 1, 0, 1); // 左2右1，镜像
-  addRoad("中山北路", intersections[0], intersections[1], 0, 0, 1, 2, 0, 1); // 左0右2，单行道
-  addRoad("中山南路", intersections[3], intersections[2], 2, 0, 1, 0, 0, 1); // 左2右0，单行道(镜像)
-  ```
-  left/right对应`Road`的side0/side1(`perp0`定义下的右手边/左手边，和整个代码库"side0=
-  右手边"的既有约定一致)。
+- **车道配置按左右两侧车道数参数化**：`configureLanesEx(road, leftV, leftP, leftPd, rightV, rightP, rightPd)`按六个数量分别调`AddVehicleLane`/`AddParkingLane`/`AddPedestrianLane`(每条宽`LANE_WIDTH=0.5`)。`addRoad`默认`(1,0,1,1,0,1)`(两侧对称、车行道每方向1条、不设停车道、人行道每侧1条)，当前井字最中间四条"中山×路"和所有放射臂都用这一套，参数化接口保留给不对称/单行配置(验证车道居中见`roadnet.md`"车道居中"、单行道开口见`map.md`"单行道开口")。left/right对应`Road`的side0/side1(side0=右手边，整个代码库一致)。
 - **`Lot`的margin从临街`Road`自己的车道宽度直接算**：`roadMargin(road)`返回
   `road.GetTotalWidth() * 0.5f`，不需要关心lot落在road哪一侧("车道居中"改造后，连线是
   整条车道横断面的几何中心，两侧最外缘到连线的距离永远相等)。边界Road先落地成局部指针
@@ -101,8 +88,7 @@
     时的语义一致。
 - **道路3D资产命名规则按车道数编码**：`meshPathFor`拼出
   `default_左车行_左停车_左人行_右车行_右停车_右人行`(六个数字，和`configureLanesEx`的
-  六个参数一一对应)，比如默认对称配置对应`default_1_0_1_1_0_1`，"中山北路"(左0右2单行)
-  对应`default_0_0_1_2_0_1`，对应资产已经在`Content/Asset/Meshes/`按这套命名放好。
+  六个参数一一对应)，比如默认对称配置对应`default_1_0_1_1_0_1`，单行配置如左0右2对应`default_0_0_1_2_0_1`，对应资产已经在`Content/Asset/Meshes/`按这套命名放好。
   `meshUnit`固定`0.5f`不随配置变化(假设所有变体资产按同一个物理长度制作，是美术资产层面
   的约定)。
 - **`lots`的`emplace_back`里margin的`{...}`必须显式写成`vector<float>{...}`**，不能用裸
@@ -147,5 +133,5 @@
 
 ## 待办/后续阶段
 
-- 如果以后要支持"全程按真实地形/水面高度起伏"(不只是隧道这一种情况)，`extendChain`需要把
-  非隧道分支的`0.f`换成真实的`sampleHeight(x,y)`(含水面+1的架桥逻辑)。
+- 如果以后要支持"全程按真实地形/水面高度起伏"(不只是隧道和抬升山路)，放射臂的非山体采样点Z需要从`0.f`换成真实`getHeight`(含水面+1的架桥逻辑)。
+- 行道树/路灯的数值(`TREE_*`/`LAMP_*`)是粗估值，待看效果再调。

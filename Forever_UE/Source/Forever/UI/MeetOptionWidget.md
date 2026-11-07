@@ -2,7 +2,7 @@
 
 ## 职责
 
-`UMeetOptionWidget`：靠近市民/载具/门等可交互对象时弹出的**交互选项列表**(对应老蓝图`MeetOption_C`)，支持键盘/滚轮移动高亮、确认选中。
+`UMeetOptionWidget`：靠近市民/载具/门等可交互对象时弹出的**交互选项列表**，支持键盘/滚轮移动高亮、确认选中。
 
 ## 关键设计
 
@@ -14,7 +14,7 @@
 ## 依赖关系
 
 - 依赖：`MeetButtonWidget`、`ForeverFrameworkActor`。
-- 被谁依赖：`Element/AssetElement`、`BuildingElement`、`CitizenElement`、`DoorComponent`、`TransitVehicleElement`、`VehicleElement`，`Framework/ForeverStoryFrameworkComponent`，`Player/ForeverCharacter`、`Controller/ForeverPlayerController`。
+- 被谁依赖：`Element/AssetElement`、`BuildingElement`、`CitizenElement`、`DoorComponent`、`TransitVehicleElement`、`VehicleElement`，`Framework/ForeverStoryFrameworkComponent`，`Player/ForeverCharacter`、`Player/ForeverPlayerController`。
 
 ## 待办/后续阶段
 

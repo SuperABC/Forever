@@ -58,10 +58,10 @@ milestone内容。`script->SetValue("name", ...)`填的是`citizen->GetName()`�
 的名字给`$self.name`更贴切，和`Job`用`mod->GetName()`（因为一个Job类型可能有多个
 实例，需要mod自己的计数器区分）语义不同。
 
-### `Populace::Tick`里独立的第三套timer
+### `Populace::Tick`里独立的第二套timer
 
 和`Job`（`jobTimerSet`）、`Organization`（`organizationTimerSet`，在
-`Society::Tick`里）完全平行的第三套独立timer——`schedulerTimerSet`，放在
+`Society::Tick`里）平行的独立timer——`schedulerTimerSet`，放在
 `Populace::Tick`里（`Scheduler`和`Job`一样挂在`Citizen`身上，`Populace`本来就要
 遍历所有citizen），结构、每帧处理上限（`kMaxSchedulerTimersPerTick`）、驱动方式
 （`crossedDay`时生成今天的调度表、每帧弹出到期节点执行）都和`jobTimerSet`那一段

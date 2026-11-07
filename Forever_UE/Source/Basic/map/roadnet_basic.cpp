@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <algorithm>
-#include <map>
 #include <set>
 #include <cfloat>
 #include <unordered_set>
@@ -25,12 +24,8 @@
 #define ARM_SAMPLE_STEP 1.f
 #define ARM_SAMPLES_PER_CELL 32
 
-// 地面端在真正开始下坡之前先接一段完全水平的引道，长度必须盖住RoadJunction::Build按setback
-// (默认车道配置下=1.0地图单位)裁掉的路口进深——否则S形下坡从groundNode本身就开始，路口按
-// "groundNode这个平面"裁掉的那一截曲线其实已经下降了一部分高度，路口mesh(强制铺成一个平面，
-// 见roadnet.md"路口高度"一节)和曲线实际高度对不上，看起来像"路口范围内已经开始下坡"。
-// 引道两端Z相同，addControls在这种情况下产出的Connection整条严格保持水平，不管路口实际裁掉
-// 多长，裁掉的部分必然还在引道以内，因此不需要精确对齐setback——只要比它大留出余量即可。
+// 隧道口地面端先接一段完全水平的引道，必须比RoadJunction::Build按setback裁掉的路口进深长，
+// 否则被裁掉的那截曲线已经下降，和强制铺成平面的路口mesh(见roadnet.md"路口高度")高度对不上。
 #define TUNNEL_FLAT_APPROACH_LENGTH 1.5f
 // 行道树(JingRoadnet::LayoutTrees，先粗估，后面再细调)：种在人行道正中间(TREE_SIDEWALK_
 // RATIO=从人行道内侧量起的比例)，沿路每TREE_SPACING一棵。路口/开口让出的距离都按实际几何
@@ -107,12 +102,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	vector<Node> verticalNode2n;
 	vector<Node> verticalNode2s;
 
-	// 车道配置按左右两侧各自的(车行,停车,人行)数量参数化——默认(1,0,1,1,0,1)是两侧对称配置
-	// (车行道每个方向1条宽0.5，不设停车道，人行道每侧1条宽0.5紧贴车行道外侧)，绝大多数Road
-	// 用这一套；井字最中间的四条"中山X路"改用不对称/单行配置，用来验证车道居中、单行道开口
-	// 这些逻辑，见下方addRoad调用处和roadnet_basic.md"车道资产命名"一节。
-	// left=side0，right=side1，和perp0定义下"side0=右手边"这个既有约定一致。车道宽度统一用
-	// LANE_WIDTH，不按数量再细分。
+	// 车道配置按左右两侧各自的(车行,停车,人行)数量参数化，addRoad默认(1,0,1,1,0,1)两侧对称。
+	// left=side0，right=side1，和perp0下"side0=右手边"的既有约定一致。车道宽度统一LANE_WIDTH。
 	auto configureLanesEx = [&](Road& road, int leftV, int leftP, int leftPd, int rightV, int rightP, int rightPd) {
 		for (int i = 0; i < leftV; i++) road.AddVehicleLane(0, LANE_WIDTH);
 		for (int i = 0; i < leftP; i++) road.AddParkingLane(0, LANE_WIDTH);
@@ -122,10 +113,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		for (int i = 0; i < rightPd; i++) road.AddPedestrianLane(1, LANE_WIDTH);
 		};
 
-	// 道路3D资产命名规则(美术资产按此命名，见roadnet_basic.md)：default_左车行_左停车_左人行_
-	// 右车行_右停车_右人行——和configureLanesEx的六个参数一一对应，保证mesh资产的视觉横断面
-	// 和车道数据描述的横断面精确匹配。
-	// tunnel=true时用隧道内的资产(同名加"_T"后缀)，隧道口的引道/下坡仍用普通资产。
+	// 道路资产命名default_左车行_左停车_左人行_右车行_右停车_右人行，见roadnet_basic.md。
+	// tunnel=true加"_T"后缀(隧道内路面)，隧道口的引道/下坡仍用普通资产。
 	auto meshPathFor = [](int leftV, int leftP, int leftPd, int rightV, int rightP, int rightPd, bool tunnel = false) -> string {
 		string suffix = to_string(leftV) + "_" + to_string(leftP) + "_" + to_string(leftPd) + "_"
 			+ to_string(rightV) + "_" + to_string(rightP) + "_" + to_string(rightPd);
@@ -133,12 +122,10 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		return "/Game/Asset/Meshes/default_" + suffix + ".default_" + suffix;
 		};
 
-	// 两端切线各贴一个控制点(1/3、2/3处，都不与真正的端点重合)，保证节点处切线非零，相邻两段路在
-	// 共享node上平滑接上，不会因为控制点和端点重合导致切线突然塌缩成0。控制点Z按节点处的坡度
-	// (startSlope/endSlope，Z每水平单位的变化量)给：c1.Z=n1.Z+startSlope*L/3、c2.Z=n2.Z-endSlope*L/3，
-	// 坡度为0时就是两端水平的S形曲线(隧道过渡段、中心的井字路用这个)；抬升的山路按相邻节点高度差给
-	// 坡度，曲线贴着山走，不再是"每段两端水平"的台阶式起伏——后者每个节点处曲率很大，路面按弦铺的
-	// 瓦片会明显偏离曲线(十几厘米)，地形贴着曲线就会穿出路面。
+	// 控制点放在1/3、2/3处(不与端点重合)，保证节点处切线非零。控制点Z按节点坡度(startSlope/endSlope，
+	// Z每水平单位的变化量)给：c1.Z=n1.Z+startSlope*L/3、c2.Z=n2.Z-endSlope*L/3；坡度0是两端水平的S形
+	// (隧道过渡段、平地)。抬升山路必须给坡度让曲线贴着山走，两端水平的台阶式起伏曲率太大，路面
+	// 按弦铺的瓦片会偏离曲线十几厘米，地形贴着曲线就会穿出路面。
 	auto addControls = [](Road& road, const Node& n1, const Node& n2, float startSlope = 0.f, float endSlope = 0.f) {
 		float dx = n2.GetX() - n1.GetX();
 		float dy = n2.GetY() - n1.GetY();
@@ -148,12 +135,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		road.AddControls({ { c1, 1.f }, { c2, 1.f } });
 		};
 
-	// 建一条路：一端隧道一端地面(Z<0和Z>=0各一个)时，拆成三段独立Connection——①地面端水平
-	// 引道(groundNode->flatNode，长TUNNEL_FLAT_APPROACH_LENGTH，两端同高)，②真正的S形下坡
-	// (flatNode->splitNode，addControls给出平滑切线)，③平路(splitNode->隧道，两端同高)；
-	// 两端同号(都隧道或都地面)时维持整段一条S形Connection不拆分。车道配置(6个参数)默认是
-	// 两侧对称的(1,0,1,1,0,1)，只有井字最中间的四条"中山X路"显式传了不对称/单行的配置。
-	// startSlope/endSlope是抬升的山路两端的坡度(见addControls)，其它路段默认0。
+	// 建一条路：一端隧道一端地面时拆成三段Connection(水平引道/S形下坡/平路)，两端同号则整段一条，
+	// 见roadnet_basic.md。startSlope/endSlope是抬升山路两端的坡度(见addControls)，其它默认0。
 	auto addRoad = [&](const string& name, const Node& n1, const Node& n2,
 		int leftV = 1, int leftP = 0, int leftPd = 1, int rightV = 1, int rightP = 0, int rightPd = 1,
 		float startSlope = 0.f, float endSlope = 0.f) {
@@ -180,13 +163,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			Node splitNode = noLevelPart ? tunnelNode
 				: Node("roadnet", groundNode.GetX() + ux * TUNNEL_HATCH_LENGTH, groundNode.GetY() + uy * TUNNEL_HATCH_LENGTH, tunnelNode.GetZ());
 
-			// 水平引道本身也可能已经压在mountain地形上(hasMountainNearby的探测半径比这段
-			// 引道长)，所以也要单独开一个hatch，两段hatch首尾相接，合起来覆盖
-			// (groundNode到splitNode)整段范围，不会因为拆分出引道而漏挖。
-			// 挖洞宽度必须用这条路配好车道之后的GetTotalWidth()(和roadMargin同一个取值)，
-			// 不能用固定宽度常量——车道配置不对称/加宽时固定宽度的洞只能挖穿路面中间一部分，
-			// 两侧车道/人行道底下会留着没挖穿的实心山体，导致走近隧道口时在地形和路面mesh
-			// 碰撞咬合不上的边界处穿模掉下去。
+			// 引道本身也可能压在山体上，所以也单独开hatch，两段hatch首尾相接覆盖groundNode到splitNode整段。
+			// 挖洞宽度必须取配好车道后的GetTotalWidth()，不能用固定常量：洞窄于路面会在两侧留下
+			// 实心山体，走近隧道口时在地形和路面碰撞咬合不上的边界穿模掉下去。
 			roads.emplace_back(name, groundNode, flatNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), groundNode, flatNode);
 			configureThis(roads.back());
@@ -217,17 +196,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		}
 		};
 
-	// 找到roads里名字为name、两端Node id正好是{n1,n2}(不分方向)的那一条，返回它自己的地址——
-	// 不另外new/构造一份独立的Road。lot的边界必须和roads里真正会被渲染/以后可能被
-	// Lot::SplitWithPath加开口的那个对象是同一个，不能是看起来配置一样但其实是另一个对象的
-	// 拷贝(否则改动传不到roads里，小路接到大路上时给大路加的开口会画不出来)。调用这个lambda
-	// 时roads必须已经不会再增长(所有addRoad调用都已经跑完)，取到的地址才是稳定的——本文件
-	// 里所有makeBoundaryRoad调用都在addRoad调用序列结束之后，满足这个前提。
-	// 找不到精确匹配就返回nullptr——常见原因是这一整段正好跨越隧道过渡点(n1/n2一个在地面一个
-	// 在隧道里，或者addRoad按TUNNEL_HEIGHT相关逻辑把这段拆成了引道/下坡/平路三小段，见addRoad
-	// 实现)，roads里不会再有任何一条正好首尾等于(n1,n2)的entry。这种情况下调用方(见下方几处
-	// lots.emplace_back)必须直接跳过这个lot，不铺任何Zone/Building——没必要为了保住一块紧贴
-	// 隧道的lot而给它凑一个假的边界Road。
+	// 找roads里名字为name、两端Node id为{n1,n2}(不分方向)的那一条，返回它自己的地址(不构造拷贝，
+	// 否则给边界加开口传不到roads里)。调用时roads必须不再增长，地址才稳定。
+	// 找不到返回nullptr(这段跨了隧道过渡点被拆成多段)，调用方必须放弃这块lot。
 	auto makeBoundaryRoad = [&](const string& name, const Node& n1, const Node& n2) -> Road* {
 		int idA = n1.GetId(), idB = n2.GetId();
 		for (Road& r : roads) {
@@ -238,11 +209,8 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		return nullptr;
 		};
 
-	// lot的margin直接从临街road自己的车道宽度算，不再手动指定固定常量——以后车道配置一旦改动
-	// (configureLanes)，margin自动跟着变，不需要另外找一个ROAD_MARGIN常量手动保持同步。
-	// 不需要判断lot落在road哪一侧：车道横断面现在以Connection连线为几何中心居中（见
-	// Source/Core/map/roadnet.md"车道居中"一节），不管side0/side1怎么分配，两侧最外缘到
-	// 连线的距离永远都精确等于road.GetTotalWidth()的一半，两侧margin天然相等，不用再分side。
+	// lot的margin直接取临街road车道宽度的一半：车道横断面以连线为中心居中(见
+	// Source/Core/map/roadnet.md"车道居中")，两侧margin天然相等，不用分side。
 	auto roadMargin = [](const Road& road) -> float {
 		return road.GetTotalWidth() * 0.5f;
 		};
@@ -263,14 +231,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		return !(hasNeg && hasPos);
 		};
 
-	// 放置一个lot之前，要检查这个lot(四个角围出来的四边形，不只是四个角本身)覆盖的每一个
-	// element，只要有一个不是"construction"就不放这个lot——原来只抽样检查四个角够不够
-	// buildable(plain或construction都算)，这次改成扫描lot内部全部element、而且只认
-	// "construction"严格一种：construction是Map::InitTerrains那边"周围3x3全是plain/
-	// construction才晋升"的产物，边缘上混杂着真正plain的那一圈格子贴着mountain/river/
-	// ocean这类不规则地形，只抽样四个角可能漏判，lot实际铺出来的那块地里混进了贴着不规则
-	// 地形的格子；要求整块lot严格落在已经晋升的construction区域内部，天然避开所有这种
-	// 边缘地带。
+	// lot覆盖的每个element(不只四个角)都必须是"construction"才放：construction是
+	// Map::InitTerrains"周围3x3全是plain/construction才晋升"的产物，plain边缘圈贴着山/河/海等不规则
+	// 地形，只抽样四个角会漏判。
 	auto isLotFullyConstruction = [&](const Node& nw, const Node& ne, const Node& se, const Node& sw) -> bool {
 		float minX = min({ nw.GetX(), ne.GetX(), se.GetX(), sw.GetX() });
 		float maxX = max({ nw.GetX(), ne.GetX(), se.GetX(), sw.GetX() });
@@ -307,29 +270,14 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	float dirSin = northEast.GetY() - northWest.GetY();
 	float dirCos = northEast.GetX() - northWest.GetX();
 
-	// 井字最中间的四条路——之前故意配成不对称/单行用来验证车道居中/路口收缩/单行道开口这些
-	// 逻辑，现在改回和其余道路一样的对称默认配置(双向各1条车行道)，应用户要求给公共交通
-	// 测试腾出一个规整的中心方形地块，不再需要这几条路本身验证车道不对称。
-	// (必须先于放射臂建路：lot里直接用&roads[0..3]引用这四条路。)
+	// 井字最中间的四条路，用默认对称车道配置。必须先于放射臂建路：lot里直接用&roads[0..3]引用它们。
 	addRoad("中山西路", intersections[0], intersections[3]);
 	addRoad("中山东路", intersections[1], intersections[2]);
 	addRoad("中山北路", intersections[0], intersections[1]);
 	addRoad("中山南路", intersections[3], intersections[2]);
 
-	// 从角点corner出发沿(stepX,stepY)(长度=一个lot格子边长=ARM_SAMPLES_PER_CELL个采样步)建一条
-	// 放射臂，直到地图边界。分两遍：
-	//   - 第一遍沿臂每ARM_SAMPLE_STEP(10m)采样，只记录每个采样点的地形类型和高度，不建任何Node/Road；
-	//     然后把连续的mountain采样点切成一座座山，每座山单独决定做法：山脚到山脚相邻采样点之间的
-	//     坡度(高度差/间距)全都不超过MOUNTAIN_MAX_SLOPE，或者山后面第一个采样点就是海，就"抬升"
-	//     (路面跟着山表面走+地形贴合)；否则"隧道"(路面保持0，从山底下钻过去)。
-	//   - 第二遍按上面的结果建节点铺路。隧道区间[P,Q]：入口P必须是plain/construction采样点(山前一个采样点
-	//     不合格，比如河/海，就向回退到最近的合格采样点，中间那段按平地铺过去；回退不会越过上一座抬升山)，
-	//     隧道里一直走到第一个plain/construction采样点才出隧道，出口Q同样保证落在合格地形上(山体之后如果
-	//     是河/海就继续隧道穿过去；一直到extern都没有合格点则隧道延伸到extern)。
-	//   - 臂上不放Intersection：每个格点(采样点序号为ARM_SAMPLES_PER_CELL的整数倍，即lot角点)、
-	//     入口P、出口Q、抬升山的每个采样点都只是普通Node，Road在这些点首尾相接，没有路口setback造成的空缺。
-	//     lot的边界Road仍然靠两端Node id精确匹配(makeBoundaryRoad)。
-	//   - extern是臂所在直线与地图边界的交点，不是最后一个采样点。
+	// 从角点corner沿(stepX,stepY)(一个lot格子边长=ARM_SAMPLES_PER_CELL个采样步)建一条放射臂直到地图边界，
+	// 分两遍(采样判定每座山抬升/隧道，再按结果建节点铺路)，规则见roadnet_basic.md。
 	// grid收集所有格点Node(不含角点、不含extern)，z已按隧道/抬升赋好。
 	auto buildArm = [&](const string& name, const Node& corner, float stepX, float stepY, vector<Node>& grid) {
 		float dx = stepX / ARM_SAMPLES_PER_CELL, dy = stepY / ARM_SAMPLES_PER_CELL;
@@ -363,11 +311,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			return true;
 			};
 
-		// ---- 切出每座山[first,last]并决定做法。陡的山要挖隧道，隧道口(地面↔隧道的引道+下坡，
-		// TUNNEL_HATCH_LENGTH=80m)整个做在山外面的平地上：入口隧道节点tIn是进山前的最后一个采样点，
-		// 地面端p在它前面rampSamples格；出口隧道节点tOut是出山后的第一个采样点，地面端q在它后面rampSamples
-		// 格——也就是说进山之前就已经下到隧道高度，出山之后才开始爬回地面。山前/山后的平地不够
-		// rampSamples+1格(或者和上一个隧道的口重叠)就放不下隧道口，这座山改成抬升。 ----
+		// ---- 切出每座山[first,last]并决定做法；隧道口做在山外平地上，不够放就改抬升，见roadnet_basic.md。 ----
 		struct TunnelSpan { int p; int tIn; int tOut; int q; };
 		vector<TunnelSpan> tunnels;
 		vector<bool> raised(static_cast<size_t>(sampleCount) + 1, false);
@@ -565,8 +509,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		}
 	}
 
-	// 沿每条放射臂继续按isLotFullyConstruction细分lot——整块lot覆盖的所有element都必须是
-	// construction才放，不是只抽样四个角。
+	// 沿每条放射臂继续细分lot，检查不通过或找不到边界Road就break(这个方向后面不再放lot)。
 	for (size_t i = 1; i < min(horizontalNode1w.size(), horizontalNode2w.size()); i++) {
 		const Node& nwNode = horizontalNode1w[i];
 		const Node& neNode = horizontalNode1w[i - 1];
@@ -669,20 +612,9 @@ void JingRoadnet::LayoutLamps(const vector<Road*>& hostRoads) {
 }
 
 void JingRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing, float sidewalkRatio, const RowEmitter& emit) {
-	// 行道树和路灯共用这套几何，spacing/sidewalkRatio由调用方传入（下面注释里的TREE_SPACING就是spacing）。
-	// hostRoads是Core那份路网(开口已经齐全)，只读。每条地面上的大路两侧各种一排：横向偏移和
-	// Map::ComputeLaneAnchorPosition同一套约定——perp0=(-dy,dx)是side0方向，车道整体按
-	// shift=(side0宽-side1宽)/2居中。
-	// 纵向统一规则："缺口"边缘之外再留半个TREE_SPACING才种第一棵——
-	//   ①端点是Intersection(真正的路口)：缺口=路口收缩距离，和RoadJunction::Build同一个定义
-	//     (这个路口所有连接路里GetTotalWidth()最大值的一半)，也就是这条路可见路面开始的位置；
-	//   ②端点是普通Node(lot角格点/地图边缘残端)：道路本身连续，缺口=0，相邻两段在node两侧各留
-	//     半格，拼起来正好一个完整间距，树连续不断也不会在node上重复种两棵；
-	//   ③开口(Road::GetOpenings，只有小路接口和建筑/园区出入口两种来源，普通node不会产生开口)：
-	//     缺口=开口自己的width，以开口中心为准两侧各width/2，再各留半格。
-	// 剩下连续的几棵合成一条AddTreeLine。开口两侧人行道都避开(SplitWithPath产的开口没有可靠的
-	// side信息)。隧道口附近的引道两端Z也是0，靠Core的CanPlaceTree跳过挖洞格子。
-	// Core的Intersection是从this->intersections深拷贝的，拷贝保留id，按id判断即可。
+	// 行道树/路灯共用的几何，缺口规则见roadnet_basic.md"行道树"。hostRoads是Core那份路网(开口齐全)，只读。
+	// 横向偏移同Map::ComputeLaneAnchorPosition：perp0=(-dy,dx)是side0方向，整体按
+	// shift=(side0宽-side1宽)/2居中。Core的Intersection深拷贝自this->intersections且保留id，按id判断。
 	unordered_set<int> intersectionIds;
 	for (const Intersection& intersection : intersections) intersectionIds.insert(intersection.GetId());
 	// 路口收缩距离：hostRoads就是Core建RoadJunction时用的那批大路，含隧道段，全部参与。

@@ -68,7 +68,7 @@ void BurgerAsset::SetProperty() {
 	size = 0.2f;
 	usable = true;
 	satiety = 0.5f;               // 吃一个汉堡饱食度+0.5(上限1，超出截断)
-	productType = "product_burger"; // 商店按这个Product的零售价卖；可使用，用完count-1到0即销毁
+	productType = "product_burger"; // 商店按这个Product的零售价卖；使用一次count-1，到0销毁
 }
 
 int PistolAmmoAsset::count = 0;
@@ -117,7 +117,7 @@ void PistolWeaponAsset::SetProperty() {
 	mobility = AssetMobility::Object;
 	weight = 3.0f;
 	size = 8.0f;
-	weapon = true; // 只能挂左肩/右肩，不能拿在手上
+	weapon = true; // 能挂左肩/右肩；左右手拒绝武器(见AssetMod::weapon)
 	weaponType = "weapon_pistol";
 	milestoneNames = { "asset_test" }; // 测试脚本：捡起/获得/扣除/丢弃选项，见Resource/Story/asset_test.script
 }

@@ -4,7 +4,7 @@
 using namespace std;
 
 namespace {
-	// 位置类事件(进出园区/建筑/房间)的字段匹配：触发条件里的字段是表达式，留空表示不限。
+	// 纯字符串字段的匹配（位置/站点/载具/资产事件共用，名字沿用最初的位置类事件）：触发条件里的字段是表达式，留空表示不限。
 	bool MatchLocationField(const string& expr, const string& actual, const ScriptContext& context) {
 		return expr.empty() || ToString(EvaluateExpression(expr, context)) == actual;
 	}

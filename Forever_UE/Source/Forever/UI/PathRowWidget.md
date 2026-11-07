@@ -2,7 +2,7 @@
 
 ## 职责
 
-`UPathRowWidget`：**一行=一个路径+删除按钮**，Story screen(脚本列表)、Resource screen(资源文件夹列表)、Mod screen(dll路径)共用，替代老工程`PathItem`。
+`UPathRowWidget`：**一行=一个路径+删除按钮**，Story screen(脚本列表)、Resource screen(资源文件夹列表)、Mod screen(dll路径)共用。
 
 ## 关键设计
 

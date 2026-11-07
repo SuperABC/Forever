@@ -8,11 +8,8 @@ class UScrollBox;
 class UMeetButtonWidget;
 class AForeverFrameworkActor;
 
-// 对应老蓝图MeetOption_C：靠近一个市民时弹出的对话选项列表。滚动列表本体是OptionContainer
-// （ScrollBox），每个选项是一个UMeetButtonWidget子控件；Focus记录当前键盘/滚轮高亮的行下标，
-// OptionMap按"目标姓名+下标"这个复合key记录每个选项对应的控件，供RemoveName批量移除。
-// 逻辑全部在C++基类里，Blueprint子类只需要摆一个命名OptionContainer的ScrollBox，
-// MeetButtonClass指向对应的MeetButton Blueprint，不写任何蓝图图表逻辑。
+// 靠近市民时的对话选项列表(OptionContainer ScrollBox，每项一个UMeetButtonWidget)。Focus记录键盘/滚轮高亮行，
+// OptionMap按"目标姓名+下标"记录每项控件供RemoveName批量移除。
 UCLASS()
 class FOREVER_API UMeetOptionWidget : public UUserWidget
 {
@@ -42,14 +39,11 @@ public:
 	void FocusUp();
 	void FocusDown();
 
-	// 确认选中当前高亮行——对应老蓝图MeetOption::ClickFocus，转发给对应MeetButton的
-	// ClickButton()。
+	// 确认选中当前高亮行，转发给对应MeetButton的ClickButton()。
 	void ClickFocus();
 
 protected:
-	// 每帧刷新当前Focus行的高亮颜色（黄色），其它行恢复默认（白色），并把高亮行滚动进可视
-	// 区域——对应老蓝图MeetOption的Tick逻辑。只在Focus实际变化时才重刷颜色，避免每帧无谓
-	// SetBackgroundColor。
+	// 刷新Focus行高亮并滚动进可视区域；只在Focus实际变化时重刷颜色。
 	virtual void NativeTick(const FGeometry& MyGeometry, float DeltaTime) override;
 
 	UPROPERTY(meta = (BindWidget))

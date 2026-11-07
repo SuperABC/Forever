@@ -10,10 +10,7 @@
 
 class Change;
 
-// SchedulerMod：每个市民挂一个的行为调度器定义。上班的行为完全由Citizen::GetJob()
-// 负责（Populace::Tick驱动Job::DailyPlan/ExecNode），Scheduler负责的是下班之后的
-// 行为——结构和JobMod（Source/Dependence/society/job_mod.h）一致，DailyPlan/
-// ExecNode这套调度机制同样和milestone/JSON完全独立，见job.md"DailyPlan/ExecNode"一节。
+// 设计见scheduler_mod.md。
 class SchedulerMod {
 public:
 	SchedulerMod() = default;
@@ -22,47 +19,30 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 具体子类必须在这里填scriptModName/milestoneNames，不要在构造函数里赋值——构造
-	// 函数只负责id/count这类登记，和StorageMod::SetProperty()同一套"两段式"约定。Core
-	// 创建完mod实例后会立刻调一次这个方法，再读这两个字段。
+	// 子类在这里填scriptModName/milestoneNames(不在构造函数里),Core创建实例后立刻调一次。
 	virtual void SetProperty() {}
 
-	// Script配置——和JobMod/OrganizationMod同一个"mod自己声明意图，Core只读"安全模式：
-	// 两个普通成员字段，不通过返回值传递。scriptModName默认"empty"，milestoneNames默认
-	// 为空，每项是不含路径/扩展名的bare文件名，Core通过Config::GetScriptPath()解析实际
-	// 路径，见job_mod.h"Script配置"一节。
-	std::string scriptModName; // 空=无自定义ScriptMod；和milestoneNames都空则实例没有Script(GetScript()==nullptr)，见MakeScript
+	// Script配置,同JobMod,见scheduler_mod.md。
+	std::string scriptModName; // 空=无自定义ScriptMod;和milestoneNames都空则实例没有Script(GetScript()==nullptr),见MakeScript
 	std::vector<std::string> milestoneNames;
 
-	// 生成今天的调度表，直接写进this->plans(node名->今天触发的具体时间)。这次负责的是
-	// citizen下班之后的行为（上班逻辑已经在JobMod::DailyPlan/ExecNode里）；这次迁移只
-	// 搭接口形状，不写实际测试逻辑（该机制已经在Job/Organization验证过），具体子类的
-	// DailyPlan留空即可。
-	// @post：向Core发起查询的句柄，同JobMod::DailyPlan，不需要这个能力可以忽略。
+	// 生成今天的调度表,写进this->plans(node名->触发时间)。负责下班之后的行为。post同JobMod::DailyPlan。
 	virtual void DailyPlan(const Time& currentTime, PostHandle* post) = 0;
 
-	// 执行一个到期节点：直接new Change*写进this->changes(所有权留在这个mod实例身上，
-	// 不转移给调用方)。调用前调用方已经保证清空了上一次的残留（见Scheduler::ExecNode）。
-	// 不需要对某个节点做任何事的类型不用重写。
+	// 执行一个到期节点:new Change*写进this->changes(所有权留在mod实例上),调用前已清空残留。
 	virtual void ExecNode(const std::string& node, PostHandle* post) {}
 
-	// 当前绑定的市民姓名——由Scheduler在调用ExecNode前同步进来，供ExecNode里构造需要
-	// 知道"是谁"的Change使用，和JobMod::occupantName同一个字段用途。
+	// 当前绑定的市民姓名,由Scheduler在调用ExecNode前同步,同JobMod::occupantName。
 	std::string occupantName;
 
 	std::unordered_map<std::string, Time> plans;
 	std::vector<Change*> changes;
 
-	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
-	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
-	// 这里只放mod自己的私有数据。
+	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}
-	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
-	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
 	virtual int GetStateVersion() const { return 0; }
-	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
-	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	// GetName用的static count,存档保存/读档恢复;没有计数器的类保持默认。
 	virtual int GetInstanceCounter() const { return -1; }
 	virtual void SetInstanceCounter(int) {}
 };

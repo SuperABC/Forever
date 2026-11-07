@@ -49,10 +49,8 @@ struct FForeverWeatherParams
 	float snow = 0.f;
 };
 
-// 天气的UE表现层：Core里的Weather(Player::GetWeather())只决定"现在是什么天气"，这里把它翻译成
-// 云量、阳光/雾、树的风、雨雪粒子，并在天气变化时按现实时间平滑过渡。详见
-// ForeverWeatherFrameworkComponent.md。组件自己不开TickComponent，由AForeverFrameworkActor::Tick
-// 每帧调用UpdateWeather(和UpdateSky同一个规矩)。
+// 天气的UE表现层：把Core的Weather翻译成云量、阳光/雾、树的风、雨雪粒子、地面湿润/积雪，天气变化时按现实时间平滑过渡。
+// 组件自己不开Tick，由AForeverFrameworkActor::Tick每帧调UpdateWeather。详见ForeverWeatherFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverWeatherFrameworkComponent : public UForeverFrameworkComponent
 {
@@ -65,7 +63,7 @@ public:
 	// @playerIndoors: 玩家在室内时雨雪粒子平滑压到0(出门再回来)
 	void UpdateWeather(float deltaTime, const Weather& weather, bool playerIndoors);
 
-	// 7种天气各一组目标参数，下标=Weather::Type。构造函数里填默认值，PIE里直接在Framework Actor细节里调。
+	// 7种天气各一组目标参数，下标=Weather::Type，默认值在构造函数里，PIE里在Framework Actor细节里调。
 	UPROPERTY(EditAnywhere, Category = "Weather")
 	TArray<FForeverWeatherParams> weatherParams;
 
@@ -88,8 +86,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Weather|Precipitation")
 	float indoorFadeSeconds = 1.5f;
 
-	// 地面湿润/积雪贴花：跟随相机的俯投影大贴花，材质参数见.md。
-	// 贴花投影盒的水平半径(cm)和垂直半高(cm)。
+	// 地面湿润/积雪贴花(跟随相机的俯投影大贴花，见.md)：投影盒的水平半径(cm)和垂直半高(cm)。
 	UPROPERTY(EditAnywhere, Category = "Weather|Ground")
 	float decalRadius = 15000.f;
 

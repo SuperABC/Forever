@@ -34,12 +34,7 @@ void PostImplement::Post(const JsonValue& request) {
 			return;
 		}
 
-		// 只从"已经有家"(GetRoom()非空)的citizen里挑——地图生成的住宅room数量如果不够
-		// 覆盖所有成年citizen("一个家庭消费一个room名额"的池子提前耗尽)，会有一部分citizen
-		// 始终没有Room/CurrentRoom；这种citizen如果被挑中当"交给玩家操控"的目标，
-		// UForeverPopulaceFrameworkComponent::ComputeLogicalPosition算不出世界坐标，
-		// SpawnCitizen/FindOrSpawnCitizenByName返回nullptr，玩家会停留在开局的
-		// ADefaultPawn(飞行相机)上且没有任何报错弹窗。
+		// 只挑有家的：无Room的citizen会让UE层算不出世界坐标、玩家无报错地卡在飞行相机上，见implement.md
 		vector<Citizen*> housed;
 		for (Citizen* citizen : populace->GetCitizens()) {
 			if (citizen && citizen->GetRoom()) housed.push_back(citizen);
@@ -56,8 +51,6 @@ void PostImplement::Post(const JsonValue& request) {
 		return;
 	}
 
-	// "product info"：按product type查价格和服务属性(分、服务类型、质量)，商店这类组织mod看不到
-	// Industry，只能通过Post拿到售价，见organization_mod.h的CollectServices。
 	if (request.IsObject() && request["post"].AsString() == "product info") {
 		Product* product = industry ? industry->FindProduct(request["type"].AsString()) : nullptr;
 		if (!product) {
@@ -88,12 +81,7 @@ void PostImplement::Post(const JsonValue& request) {
 		return;
 	}
 
-	// "citizen home address"/"citizen workplace address"：按姓名查一个citizen，返回它
-	// 家/工位房间的具体地址(Room::GetAddress()，"<building地址> <门牌号>"格式)——
-	// NPCNavigateChange::destination必须是这种能被Map::LocateRoom(address)直接解析回
-	// Room*的具体地址字符串，不能写"home"/"workplace"这种描述性文本(JobMod所在的
-	// Dependence层看不到Citizen/Room这些Core类型，只能通过Post查询拿到字符串结果)，
-	// 见Dependence/society/job_mod.h。两个post类型共用同一段按姓名查citizen的逻辑。
+	// 两个post类型共用按姓名查citizen的逻辑
 	if (request.IsObject() && (request["post"].AsString() == "citizen home address" ||
 		request["post"].AsString() == "citizen workplace address")) {
 		bool wantHome = request["post"].AsString() == "citizen home address";
@@ -131,11 +119,6 @@ void PostImplement::Post(const JsonValue& request) {
 		return;
 	}
 
-	// "list zones"/"list buildings"/"list rooms"：request["type"]是要找的mod type(Zone/Building/
-	// Room::GetType()，比如"yuanshen")，返回地图上所有该type的实例的地址(GetAddress())数组，成功
-	// 返回{"result":"success","addresses":[...]}，没有匹配也是success+空数组；map为空返回fail。
-	// 类型全图唯一的mod(比如只会放一栋的测试建筑)取addresses[0]即可。Map的zones/buildings是
-	// 无序容器，返回顺序不保证稳定；rooms遍历每个building->GetRooms()。
 	if (request.IsObject() && (request["post"].AsString() == "list zones" ||
 		request["post"].AsString() == "list buildings" || request["post"].AsString() == "list rooms")) {
 		string kind = request["post"].AsString();
@@ -169,8 +152,6 @@ void PostImplement::Post(const JsonValue& request) {
 		return;
 	}
 
-	// "resource path"：request["name"]是带扩展名的文件名，在resource_paths配置的根目录下找同名
-	// 文件，返回绝对路径。供mod读自己随包的数据文件(比如wxdj的招式表)，不需要任何domain指针。
 	if (request.IsObject() && request["post"].AsString() == "resource path") {
 		string path = Config::GetResourceFilePath(request["name"].AsString());
 		if (path.empty()) {

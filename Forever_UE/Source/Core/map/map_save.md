@@ -6,15 +6,16 @@
 - 地形格子（含细高度）；
 - 路网、Lot 树、路口；
 - 导航锚点、车行图和行人图、贯通线；
-- Zone、Building、Floor、Component、Room；
+- Zone、Building、Floor、Component、Room、电梯轿厢（Cabin）；
 - 门；
-- 植被。
+- 植被；
+- 路灯。
 
-存档系统总说明见 `Source/Core/common/save.md`。存档的 P2（地图）和 P3（建筑）合并在这里实现，原因见下面"为什么地图和建筑一起恢复"一节。
+存档系统总说明见 `Source/Core/common/save.md`。地图和建筑在这里一起恢复，原因见下面"为什么地图和建筑一起恢复"一节。
 
 ## 文件格式
 
-地图拆成 4 个二进制段，都用 `ByteWriter`/`ByteReader` 读写，小端序。各段的版本号在 `common/save.cpp` 的 `GetSaveSectionVersions` 里登记。
+地图拆成 5 个二进制段，都用 `ByteWriter`/`ByteReader` 读写，小端序。各段的版本号在 `common/save.cpp` 的 `GetSaveSectionVersions` 里登记。
 
 | 段 | 内容 |
 |---|---|
@@ -33,7 +34,7 @@
   - `Node`、`Connection`、`Road`、`Lot`；
   - `Roadnet`、`Map`、`Zone`、`Building`；
   - `Floor` 以及 `Stair`、`Elevator`、`Ramp`、`Ceiling`、`Ground`、`Hatch`、`Corridor`、`Single`、`Row`；
-  - `Room`、`Component`、`Door`、`Vegetation`。
+  - `Room`、`Component`、`Door`、`Cabin`、`Lamp`、`Vegetation`。
 
   友元声明不改变类的布局。mod 基类没有改动。
 - **指针换成编号**：
@@ -58,12 +59,15 @@
   - `Room` 的属性。
 
   **以后新增"运行时要读的 mod 公共字段"时，也必须在包装类里拷一份快照，并加进这里的存档。**
-- **不从 Core 往 mod 的容器里写数据**。Core 和 mod DLL 的分配器不同（见 memory"Cross-DLL allocator crash"），所以 Core 不能写 mod 自己的 `std::vector` 等容器。这也是用快照而不是"把字段写回 mod"的原因。
+- **不从 Core 往 mod 的容器里写数据**。Core 和 mod DLL 的分配器不同（见 CONVENTIONS §4），所以 Core 不能写 mod 自己的 `std::vector` 等容器。这也是用快照而不是"把字段写回 mod"的原因。
 - **门**：
   - 读档时用原来的 `Door` 构造函数重建，`flippedSide` 按存档值传入，所以会和新开局一样按 spec 创建 Script。
   - 恢复 `access` 和按人登记的门禁例外 `registrations`。
   - `options`（剧情脚本加的交互选项）：读档会跳过 game_start 广播，所以按存档恢复。
   - Script 自身的状态由 `story/script_save` 恢复（键 `door:<门id>`）。
+- **电梯轿厢**：每个 Building 存其 `cabinEntities`（spec 下标、交互名、所在楼层/Z、行程状态、`options`）。读档用
+  `Cabin` 构造函数按 `Building::GetCabins` 快照里的 spec 重建（会创建 Script），再覆盖运行状态；`options` 同门，按存档恢复；
+  Script 状态由 `story/script_save` 恢复（键 `cabin:<交互名>`）。
 - **`Node::count`**。读档时每构造一个 Node 都会让计数器多加一，所以最后精确设回存档值。新开局之后新建的 Node 会从存档时的编号继续往后编，再存一次档时这个字段也和原存档一致。mod DLL 里各自的那份 `Node::count` 不受影响：读档不会再跑 roadnet mod。
 - **布局模板不再需要**。Floor 的全部内容（楼梯、走廊、房间格子……）原样写进存档，读档不重新读 `.layout` 文件。manifest 里的 layouts 列表和读档前的资源检查保留，名字来自 `Building::GetFloorSpecs` 快照。
 
@@ -75,7 +79,7 @@
 - 把贯通线断开再接入建筑（`BreakThroughLine`）；
 - 往地形上挖洞（hatches）。
 
-存档时这些改动都已经做过了。如果只恢复地图、再在上面重新生成建筑，这些改动会叠加第二次。所以地图域整体按存档恢复。人口、社会、交通、剧情、玩家暂时仍在恢复出来的地图上重新生成：它们只读地图，或者只改不在地图段里的字段，比如 owner 和 tenants。
+存档时这些改动都已经做过了。如果只恢复地图、再在上面重新生成建筑，这些改动会叠加第二次。所以地图域整体按存档恢复。人口、社会、产业、交通、剧情、玩家各有自己的存档段（见 `common/save.md`），读档时在恢复出来的地图上按各自存档还原，通过 `SaveRefs`（`common/save_refs.h`）引用 Room/Component。
 
 ## 往返一致性
 
@@ -91,8 +95,8 @@ UE 控制台命令 `Forever.SaveRoundTrip`：当前地图写段 → 读回成一
 
 ## 待办 / 后续
 
-- owner、tenants、occupants、房间里的物品（`Room::assets`）在 P4/P6 存。
+- 无。
 - 读档失败时已经建出来的部分对象没有释放（读档失败本来就会退回重新生成世界）。
 
 ## 房间direction语义
-`direction`语义明确为"建筑局部坐标系下的房间朝向(正面)"，现在由`Room::LocalToBuildingLocal`等读取(停车位)；存档格式未变。
+`Room::direction`是"建筑局部坐标系下的房间朝向(正面)"，随 Room 原样存档，`Room::LocalToBuildingLocal`等直接读取。

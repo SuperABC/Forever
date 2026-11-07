@@ -23,11 +23,8 @@
 #define DOOR_THICKNESS 6.f
 
 namespace {
-	// 门资产缓存：按软路径缓存已解析的UStaticMesh*，同一个路径(目前所有门都用占位Cube)不用
-	// 每扇门各自重新LoadObject一次——加门之后近LOD生成变卡，排查发现每扇门Init()都各自独立
-	// LoadObject，没有走ABuildingElement::SpawnCube/SpawnMesh那套"按软路径缓存"的惯例
-	// (ForeverBuildingFrameworkComponent.md里meshCache/lodMaterialCache同款做法)，这里补上
-	// 同样的缓存。用TWeakObjectPtr而不是硬引用，避免永久持有资产不被GC。
+	// 门资产缓存：按软路径缓存已解析的UStaticMesh*，避免每扇门Init()各自LoadObject(近LOD生成会变卡)；
+	// 用TWeakObjectPtr避免永久持有资产不被GC。
 	TMap<FString, TWeakObjectPtr<UStaticMesh>> GDoorMeshCache;
 
 	UStaticMesh* LoadDoorMesh(const FString& path) {
@@ -154,12 +151,8 @@ void UForeverDoorComponent::BuildLeaves(UStaticMesh* mesh, float doorWidth, floa
 			closed = FTransform(FRotator::ZeroRotator, FVector(restX, 0.f, 0.f));
 			open = FTransform(FRotator::ZeroRotator, FVector(restX + dir * slideDist, 0.f, 0.f));
 		} else {
-			// Swing：leaves==1铰链在洞口某一侧边缘(IsFlippedSide()决定哪一侧)，门扇从铰链
-			// 延伸到洞口另一端(整个doorWidth)；leaves==2两扇各自铰链在洞口两端外侧边缘，
-			// 各覆盖半个doorWidth，对称打开。门扇mesh的包围盒中心要落在"离铰链半个扇宽"处
-			// (pivot本地+X方向，因为mesh局部X轴就是"沿墙"方向)，开门时pivot绕本地Z轴转
-			// amount度。往墙哪一侧开由ChooseSwingSide在每次开门时按触发者位置决定，这里先
-			// 按"往本地+Y一侧开"算好默认值。
+			// Swing：leaves==1铰链在洞口一侧边缘(IsFlippedSide()决定哪侧)，门扇覆盖整个doorWidth；leaves==2两扇铰链在洞口两端外侧，各覆盖半个doorWidth。
+			// mesh包围盒中心落在离铰链半个扇宽处(pivot本地+X=沿墙)，开门时pivot绕本地Z转amount度；往墙哪一侧开由ChooseSwingSide按触发者位置决定，这里先按+Y侧算默认值。
 			float leafWidth = leafCount == 2 ? doorWidth * 0.5f : doorWidth;
 			float hingeX;
 			if (leafCount == 2) {
@@ -211,11 +204,8 @@ void UForeverDoorComponent::BuildFrame(UStaticMesh* frameMesh, float doorWidth, 
 
 void UForeverDoorComponent::BuildTriggerBox(float doorWidth, float doorHeight) {
 	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
-	// 门两侧各伸出1.5米；车行门伸出4米，宽度也相应放大，见door_system_plan.md"UE：自动门
-	// 组件"一节。注意单位：DOOR_WORLD_SCALE是"地图单位->UE单位"的换算系数(1地图单位=
-	// 1000UE单位=10米)，这里要的是"米"，不是"地图单位"——不能直接把1.5/4.0当地图单位传进
-	// 去（会算出15米/40米的触发范围，离门老远就自动开门），必须先换算成地图单位(米数/10)
-	// 再乘DOOR_WORLD_SCALE。
+	// 门两侧各伸出1.5米；车行门伸出4米。注意单位：DOOR_WORLD_SCALE是地图单位->UE单位(1地图单位=10米)，
+	// 这里的米数必须先换算成地图单位(米数/10)再乘DOOR_WORLD_SCALE，否则触发范围会放大10倍。
 	float paddingMeters = door->IsVehicleGate() ? 4.f : 1.5f;
 	float padding = (paddingMeters / 10.f) * DOOR_WORLD_SCALE;
 	box->SetBoxExtent(FVector(doorWidth * 0.5f + padding * (door->IsVehicleGate() ? 1.5f : 1.f),

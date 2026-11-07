@@ -2,8 +2,7 @@
 
 ## 职责
 
-三个内置`RouteMod`实现：`BusRoute`(接入现有车道路网的环线分组)、`TrainRoute`/`AirRoute`
-(共用`LayoutDualTrackStationLoop`，单站双跑道/轨道拓扑)。
+三个内置`RouteMod`实现：`BusRoute`(`route_bus`，`stationType="bus"`、`useRoadnet=true`、`instantiate=false`，接入现有车道路网的环线分组)、`TrainRoute`(`route_train`，`stationType="train"`、`useRoadnet=false`走三次贝塞尔、`instantiate=true`沿线铺轨)、`AirRoute`(`route_air`，`stationType="plane"`、`instantiate=false`，边缘站点z取巡航高度`kCruiseHeight`=100地图单位，跑道接口/中点停靠点仍贴地)。后两者共用`LayoutDualTrackStationLoop`，拓扑相同。
 
 ## 关键设计
 
@@ -36,11 +35,17 @@
     `resolvedStations`里的下标(`realStation+1`到`+8`)，这个假设建立在"全图只有这一个真实
     站点"(`realStation = leftIn.stationIndex`恒定不变)之上，新增元素/调整顺序时要同步检查
     这几个下标常量。
-- **`speed`/`dwellSeconds`按`timeFlowRatio`换算**——三个具体类型的构造函数都在基类默认值
-  (`speed=1.f`/`dwellSeconds=30.f`，对应120地图单位/真实秒、0.25真实秒停靠)之上重新校准，
-  具体数值和推导见各自构造函数的注释，背景见`route_mod.md`"speed/dwellSeconds的单位"一节。
-  公交环线短，火车/飞机环线长(大部分长度是"站点到地图边缘"的长途)，三者的`speed`/
-  `dwellSeconds`因此不一样。
+- **`speed`/`dwellSeconds`的单位是游戏内秒，不是真实秒**：`Traffic::Tick`喂给`Route::Update`的`elapsedSeconds`来自`Player::Tick()`里`time->AddMilliseconds(delta*60*1000*timeFlowRatio)`，默认`timeFlowRatio=2.0`，即1真实秒=120游戏内秒。三个类型在`SetProperty`里按下表校准(基类默认值`speed=1`/`dwellSeconds=30`)；如果`time_flow_ratio`被剧情脚本改了，真实秒观感会等比例变化，要一起重新校准。背景见`route_mod.md`"speed/dwellSeconds的单位"一节。
+
+  | 类型 | 环线长度(地图单位) | 目标 | speed | dwellSeconds | easeSeconds |
+  |---|---|---|---|---|---|
+  | 公交 | 约120~180 | 一圈40~60真实秒、停站约3真实秒 | 0.025(3单位/真实秒) | 360 | 20 |
+  | 火车 | 约2000(大部分是站到地图边缘的长途) | 一圈约170真实秒、进站停约5真实秒 | 0.1(12单位/真实秒) | 600 | 40 |
+  | 飞机 | 约2050 | 一圈约100真实秒、停约6真实秒 | 0.175(21单位/真实秒) | 720 | 50 |
+
+- **`easeSeconds`(启停缓动)**：火车/飞机体型大，启动刹车更缓。`DriveVehicle()`会自动把加减速时长钳在单个行驶区段时长的一半以内，所以公交每站都停时区段退化成单条leg，站间距短的leg会变成全程加速+全程减速、没有匀速中段，这是"尽量缓"在站间距有限时的最大效果，直接给足够大的值即可。详见`route.md`"DriveVehicle的缓动"一节。
+- **`LayoutDualTrackStationLoop`的边界节点**：左边界沿`leftIn`朝向的反方向射线出图得到(飞机/火车从图外来的方向)，右边界沿`rightOut`朝向射线出图；边界节点的到达/出发朝向直接复用相邻接口的朝向(同向的复用，掉头的取反)。`overrideEdgeZ`为true时边缘站点z取`edgeHeight`(AirRoute的巡航高度)，否则取接口原本的z。
+- **`BusRoute`分组的推导**：一个点沿"绕形心转圈"的切线方向走时，它的朝向和"位置相对形心的半径向量"的2D叉积符号是固定的纯数学事实，与地图南北/Y轴朝向无关；因此无论Map层的左右手约定怎么变，都会按真实车道方向自动重新分组。
 
 ## 依赖关系
 

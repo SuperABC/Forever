@@ -51,25 +51,19 @@
 using namespace std;
 
 namespace {
-	// 从BroadcastGameStart原来的onActions lambda体搬出来的自由函数——OptionDialog()这次
-	// 需要复用同一套"Dialog交给ShowDialog展示/Change转发给ApplyChange"的处理逻辑，不再只是
-	// BroadcastGameStart内部的一次性lambda。不进头文件：ScriptAction是std::variant，没法
-	// 前置声明，进头文件要多#include一个story/script_mod.h，没必要。
+	// 所有广播入口共用的"Dialog交给ShowDialog展示/Change转发给ApplyChange"处理。不进头文件：
+	// ScriptAction是std::variant，没法前置声明，进头文件要多#include一个story/script_mod.h。
 	void ProcessScriptActions(AForeverFrameworkActor* framework, const vector<ScriptAction>& actions,
 		const ScriptContext& context) {
 		for (const auto& action : actions) {
 			if (auto dialogPtr = get_if<const Dialog*>(&action)) {
-				// 不在这里直接打印，交给
-				// UForeverStoryFrameworkComponent::ShowDialog统一展示/排队，见该函数声明处
-				// 注释。
+				// 交给ShowDialog统一展示/排队。
 				if (framework && framework->GetStoryFramework()) {
 					framework->GetStoryFramework()->ShowDialog(*dialogPtr, context);
 				}
 			}
 			else if (auto changePtr = get_if<const Change*>(&action)) {
-				// 统一交给AForeverFrameworkActor::ApplyChange消费——不再在这里各自手写
-				// dynamic_cast dispatch，见ForeverFrameworkActor.md"统一的Change消费入口"
-				// 一节。
+				// 统一交给AForeverFrameworkActor::ApplyChange消费，见ForeverFrameworkActor.md"统一的Change消费入口"。
 				if (framework) framework->ApplyChange(*changePtr, context);
 			}
 		}
@@ -98,9 +92,8 @@ void UForeverStoryFrameworkComponent::UpdateSystemTime() {
 void UForeverStoryFrameworkComponent::BroadcastGameStart() {
 	if (!story || !GEngine) return;
 
-	// 现场构造一个PostImplement，供WrapScript通过Post()查询Core状态（这次唯一用到的查询是
-	// "random citizen"，见Core/common/implement.md）。生命周期只需要覆盖这次广播，不用长期
-	// 持有。
+	// 现场构造一个PostImplement，供WrapScript通过Post()查询Core状态(如"random citizen"，见Core/common/implement.md)，
+	// 生命周期只覆盖这次广播。
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Society* society = framework ? framework->GetSociety() : nullptr;
 	PostImplement postImplement(
@@ -392,16 +385,14 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 		matchOne(target->GetJob()->GetScript());
 	}
 
-	// 载具系统落地新增：name也可能是一辆车(见vehicle_basic.script的"上车"选项)，同样额外
-	// 匹配它自己的Script，和市民分支并列，互不影响(一个name不会同时是市民又是车辆)。
+	// name也可能是一辆车(见vehicle_basic.script的"上车"选项)，额外匹配它自己的Script，和其它分支并列。
 	Traffic* traffic = framework ? framework->GetTraffic() : nullptr;
 	Vehicle* targetVehicle = traffic ? traffic->FindVehicleByName(nameUtf8) : nullptr;
 	if (targetVehicle && targetVehicle->GetScript()) {
 		matchOne(targetVehicle->GetScript());
 	}
 
-	// 门系统落地新增：name也可能是一扇门的交互名(见door_shop_entrance.script的"敲门"选项)，
-	// 同样额外匹配，和市民/车辆分支并列。
+	// name也可能是一扇门的交互名(见door_shop_entrance.script的"敲门"选项)，额外匹配它的Script。
 	Map* map = framework ? framework->GetMap() : nullptr;
 	Door* targetDoor = map ? map->FindDoorByName(nameUtf8) : nullptr;
 	if (targetDoor && targetDoor->GetScript()) {
@@ -507,10 +498,8 @@ void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChan
 	// 被玩家操控的市民才实例化动态属性(饱食度)，放手后保持实例化，见Citizen::ActivateStats。
 	if (Citizen* controlled = target->GetCitizen()) controlled->ActivateStats();
 
-	// 每次切换玩家控制权都可能是"游戏刚开始"这种建筑近处LOD(楼层/房间)还没来得及排队建完
-	// 的时刻——玩家/市民会先掉到还没生成细节的地面上，等建筑加载完才落地，观感很差。这里
-	// 请求冻结世界(UE时间倍率归0，物理/移动全部停摆)直到所有building的LOD切换队列清空，
-	// 见UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled。
+	// 切换控制权时建筑近处LOD可能还没建完(如游戏刚开始)，玩家会先掉到没有细节的地面上：
+	// 请求冻结世界直到LOD切换队列清空，见UForeverBuildingFrameworkComponent::RequestFreezeUntilLodSettled。
 	if (framework && framework->GetBuildingFramework()) {
 		framework->GetBuildingFramework()->RequestFreezeUntilLodSettled();
 	}
@@ -651,8 +640,8 @@ void UForeverStoryFrameworkComponent::EnqueueDialog(const Dialog* dialog, const 
 	// 排在前面的changes已经生效，见Script::MatchEvent先放changes再放dialogs)。
 	if (!dialog->GetCondition().empty() && !EvaluateExpressionBool(dialog->GetCondition(), context)) return;
 
-	// self/system指向长期存活的Script*/systemScript，照抄传入的context；local指向调用方
-	// 栈上的运行时Event，这次调用一结束就悬垂，强制清空，见ShowDialog声明处注释。
+	// self/system指向长期存活的Script*/systemScript，照抄传入的context；local指向调用方栈上的Event，
+	// 这次调用一结束就悬垂，强制清空。
 	ScriptContext deferredContext = context;
 	deferredContext.local = nullptr;
 
@@ -1125,27 +1114,18 @@ void UForeverStoryFrameworkComponent::ShowCurrentItem() {
 	if (pendingQueue.Num() == 0) {
 		if (speakingWidget) speakingWidget->HideLine();
 		if (optionWidget) optionWidget->HideOptions();
-		// 对话结束，重新露出MeetOption（Visible是AddToViewport()之后的默认可见状态）——
-		// 见下面"对话展示期间"分支里把它藏起来的说明。
+		// 对话结束，重新露出MeetOption（Visible是AddToViewport()之后的默认可见状态）。
 		if (meetOptionWidget) meetOptionWidget->SetVisibility(ESlateVisibility::Visible);
 
-		// 对话播完，恢复正常的游戏内输入。光把bShowMouseCursor/SetInputMode改回去还不够——
-		// UIOnly期间点SectionButton/ClickCatcher这次鼠标点击本身会把Slate的键盘/鼠标焦点
-		// 转移到那个Button上，SetInputMode(GameOnly)并不会主动抢回来，停留在UI焦点上的话
-		// 即使鼠标已经隐藏，Look这个Enhanced Input Action也收不到鼠标移动事件（对话关闭后
-		// 鼠标不消失、也没法转视角）。必须再调用一次SetFocusToGameViewport()把
-		// 焦点抢回游戏视口。
+		// 对话播完恢复游戏输入。光改SetInputMode不够：UIOnly期间点击会把Slate焦点转到Button上，
+		// 焦点留在UI时Look收不到鼠标移动(鼠标不消失、没法转视角)，必须再SetFocusToGameViewport()抢回来。
 		playerController->bShowMouseCursor = false;
 		UWidgetBlueprintLibrary::SetInputMode_GameOnly(playerController);
 		UWidgetBlueprintLibrary::SetFocusToGameViewport();
 		return;
 	}
 
-	// 同时把MeetOption藏起来——对话（不管是台词还是分支）展示期间，"靠近市民能问什么"这个
-	// 列表不应该跟剧情对话同屏抢注意力/抢点击，见老蓝图SectionButton.SelectOption分支里
-	// "选完把MeetOption.SetVisibility(Visible)调回来"那段逻辑（.dump/SelectionButton.txt）。
-	// 用SetVisibility而不是加一个MeetOptionWidget自己的Show/Hide方法——UUserWidget的
-	// SetVisibility本来就是public UFUNCTION，不需要再包一层。
+	// 对话展示期间把MeetOption藏起来，免得"靠近市民能问什么"的列表和剧情对话同屏抢注意力/抢点击。
 	if (meetOptionWidget) meetOptionWidget->SetVisibility(ESlateVisibility::Collapsed);
 
 	const FPendingItem& item = pendingQueue[0];
@@ -1163,17 +1143,9 @@ void UForeverStoryFrameworkComponent::ShowCurrentItem() {
 		widgetToFocus = speakingWidget;
 	}
 
-	// 对话展示期间切UIOnly（仿照老工程SectionButton点击后调SetInputMode_GameOnly、隐含
-	// 之前是"游戏动作完全不响应"这个状态，见.dump/SelectionButton.txt）——UIOnly下Pawn的
-	// Enhanced Input完全收不到任何输入，Jump/Move/Look/MeetOption的F/滚轮全都天然不会
-	// 误触发，不需要像"空格键同时绑Jump和推进对话"那样一个个手动判断"对话是不是在展示"
-	// （之前踩过这个坑：GameAndUI下Jump还是会响应，按空格推进对话的同时角色会跳一下）。
-	// ClickCatcher/SectionButton的鼠标点击在UIOnly下依然正常工作，跟GameAndUI没有区别；
-	// 唯一的代价是SectionSpeaking的空格键推进不能再走Enhanced Input（Pawn收不到输入），
-	// 改成SectionSpeaking自己的NativeOnKeyDown原生响应键盘事件，所以这里必须把
-	// widgetToFocus指定成当前实际显示的那个Widget，它才能拿到键盘焦点，见
-	// USectionSpeakingWidget.h类注释。不判断"是不是刚从空队列进入"，每次都设一遍——
-	// 重复设置同一个输入模式/显示鼠标状态没有副作用，比额外维护一个"上一次状态"标记简单。
+	// 对话展示期间切UIOnly:Pawn的Enhanced Input收不到输入，Jump/Move/MeetOption不会误触发(GameAndUI下按空格推进对话角色会跳)。
+	// 代价是SectionSpeaking的空格推进改走NativeOnKeyDown，所以widgetToFocus必须是当前显示的Widget才能拿到键盘焦点
+	// (见USectionSpeakingWidget.h)。每次都设一遍，重复设置无副作用。
 	playerController->bShowMouseCursor = true;
 	UWidgetBlueprintLibrary::SetInputMode_UIOnlyEx(playerController, widgetToFocus, EMouseLockMode::DoNotLock, false);
 }

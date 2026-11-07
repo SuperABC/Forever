@@ -48,19 +48,7 @@ struct FVehicleCommand
 	}
 };
 
-// 载具Controller基类（公交现在用，以后各种交通工具共用）：维护指令列表+当前执行哪条（TCommandQueue），
-// 用和玩家WASD完全一样的油门/刹车/转向输入（AVehicleElement::SetDriveInput）开车。
-//
-// 路径跟随：指令 -> Map规划的折线（Map单位x1000=UE单位）-> 250uu重采样 -> 每点曲率限速
-// v=sqrt(aLat/k) -> 终点v=0并反向扫描刹车距离，得到"弯前/站前提前减速"的速度剖面；转向用pure pursuit，
-// 油门/刹车对速度误差做P控制，到站拉手刹。
-//
-// 执行模式：物理（真实Chaos驾驶）/运动学（不发输入，Controller自己积分速度沿同一条路径推进，关物理）。
-// 远离玩家（地形LOD范围外，物理不可靠）自动切运动学，靠近切回物理；指令/停站状态机两种模式共用，所以切换不丢状态。
-// 范围判定由owner（UForeverTrafficFrameworkComponent）通过SetPhysicsRangeQuery注入，带滞回。
-//
-// 控制权：drivenVehicle是弱引用。玩家搭乘（SetRideMode）时Possess权在玩家手里，这里照样每帧发输入；玩家驾驶
-// （非搭乘）时不发输入；玩家放手后车没有Controller了，下一帧自动重新Possess回来。
+// 载具Controller基类：指令队列驱动的自动驾驶，路径跟随/物理-运动学双模式/控制权交接见VehicleCommandController.md。
 UCLASS()
 class FOREVER_API AVehicleCommandController : public AAIController
 {

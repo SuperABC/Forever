@@ -43,15 +43,14 @@ MeetOption交互选项。
 
 组件本地+Y就是墙法线方向（local X=沿墙）。每扇门扇记一个`swingYaw = extendSign * amount`
 ——"往+Y一侧开"时要转的角度：门扇方向是`extendSign*X`，绕Z转θ后Y分量=`extendSign*sinθ`，
-所以θ必须和`extendSign`同号。以前固定θ=+amount（双扇第二扇取反），铰链在+X侧的单扇门
-(`extendSign=-1`)就会往-Y开——`randomSide`随机的是铰链侧，结果开门方向也跟着随机了。
+所以θ必须和`extendSign`同号(不能固定取+amount，否则铰链在+X侧的单扇门会往-Y开，开门方向跟着随机的铰链侧走)。
 
-现在门**从全关状态**被一个`CanPass()`通过的Actor触发时（`!bWantsOpen && openProgress≈0`），
+门**从全关状态**被一个`CanPass()`通过的Actor触发时（`!bWantsOpen && openProgress≈0`），
 `ChooseSwingSide`把它的位置变换到组件本地坐标：在+Y一侧就往-Y开，反之往+Y开，所有门扇
 `openTransform`的Yaw改成`side * swingYaw`。效果：从房间外靠近就往房间里推开，从房间里
 靠近就往外推开（不依赖"哪一侧算房间内"的约定，按触发者实际位置判断）。门已经开着、或者
 正在关但还没关严时不改方向——后来的人从另一侧过来就顺着已经开的方向走，门扇不会在半空中
-反向翻转。`randomSide`现在只决定单扇门铰链装在左边还是右边。Slide门不受影响。
+反向翻转。`randomSide`只决定单扇门铰链装在左边还是右边。Slide门不受影响。
 
 ### 身份判定：`ResolvePasserIdentity`
 
@@ -88,7 +87,6 @@ MeetOption交互选项。
 
 ## 待办/后续阶段
 
-- 真实资产到位后(见`door_system_plan.md`第七节)，`frameMesh`/`mesh`路径从Basic层配置
-  里换成真实路径即可，这个组件的代码不需要改任何一行。
+- 真实资产到位后(见`door_system_plan.md`第七节)，把Basic层配置里的`frameMesh`/`mesh`路径换成真实路径即可，组件代码不用改。
 - 门扇运动中碰撞保持开启(`ETeleportType::None`)，如果实测发现会把人推飞，改成动画期间
   关闭门扇碰撞(`SetCollisionEnabled(ECollisionEnabled::NoCollision)`，动画结束再恢复)。

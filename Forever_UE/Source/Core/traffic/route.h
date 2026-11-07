@@ -1,5 +1,7 @@
 #pragma once
 
+#include "class.h"
+
 #include "traffic/route_mod.h"
 #include "traffic/route_factory.h"
 #include "traffic/station.h"
@@ -8,9 +10,6 @@
 #include <unordered_map>
 #include <vector>
 
-class Map;
-class Connection;
-class Vehicle;
 
 // Route：一类线路的实体，独占持有一个RouteMod实例(照抄Vehicle/Job持有mod的模式)。Build()
 // 收集stationType匹配的Station接口、调mod->LayoutRoute()组织成有向图+若干条环线；Update()

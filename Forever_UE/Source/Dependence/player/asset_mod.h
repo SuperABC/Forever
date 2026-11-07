@@ -4,13 +4,8 @@
 
 #include <string>
 #include <vector>
-// AssetMod：物品/资产的类型定义(目录性质，比照ProductMod/WeaponMod，不迁移老工程
-// DefineEstate()/DefineVehicle()/DefineObject()/DefineContainer()/DefineContainee()那套
-// 工具方法)——具体子类必须在SetProperty()里赋值公开字段，不要在构造函数里赋值，见
-// asset_basic.h。
-//
-// 四分类(不动产/载具/独立物体/容器内容物)是同一个mobility枚举字段，不是四个子类，照抄
-// 老工程"是否为容器"用volume>0表达、和mobility正交的设计，见Source/Core/player/asset.md。
+// 设计见asset_mod.md。
+// 四分类(不动产/载具/独立物体/容器内容物)是同一个mobility字段;"是否为容器"用volume>0表达,与mobility正交。
 enum class AssetMobility { Estate, Vehicle, Object, Containee };
 
 class AssetMod {
@@ -21,9 +16,7 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
-	// 具体子类必须在这里填下面这几个字段，不要在构造函数里赋值——构造函数只负责id/count
-	// 这类登记，和StorageMod::SetProperty()/RoomMod::SetProperty()同一套"两段式"约定。
-	// Core创建完mod实例后会立刻调一次这个方法，再读这几个字段。
+	// 子类在这里填下面的字段(不在构造函数里),Core创建实例后立刻调一次。
 	virtual void SetProperty() {}
 
 	AssetMobility mobility = AssetMobility::Object;
@@ -34,36 +27,25 @@ public:
 	bool weapon = false;   // IsWeapon()——能否放进左肩/右肩，也是"左右手拒绝"的判据
 	std::string weaponType; // weapon为true时：在肩膀上激活这件资产时装备的WeaponMod id(比如"weapon_pistol")
 	bool usable = false;   // IsUsable()——能否被"使用"(比如汉堡)
-	// 使用时给使用者增加的饱食度(0~1，使用者的饱食度上限1，超出截断)；0=不影响。
+	// 使用时给使用者增加的饱食度(0~1,超出截断);0=不影响。
 	float satiety = 0.f;
-	// 对应的Industry Product类型(比如"product_burger")，商店按它查零售价；空=不能在商店买。
-	// 注意和Asset自己的id(比如"asset_burger")是两回事，两者没有代码上的关联，见asset.md。
+	// 对应的Industry Product类型(如"product_burger"),商店据此查零售价;空=不能在商店买。与Asset自己的id无代码关联。
 	std::string productType;
-	// IsThrowable()——投掷物(手雷/烟雾弹)：按3键激活、瞄准后扔出去，和weapon正交(投掷物可以拿在
-	// 手上/放进容器，不能挂肩膀)。
+	// IsThrowable():投掷物(手雷/烟雾弹),与weapon正交。
 	bool throwable = false;
-	// 这件资产在世界里(掉落物/投掷预览)显示的静态网格路径(UE软路径，比如
-	// "/Game/Asset/Meshes/Sphere.Sphere")，空=沿用Forever层默认的Cube占位。meshScale是整体
-	// 缩放系数(网格自身尺寸不一定合适，比如100cm直径的球体当手雷要缩到0.1)。
+	// 世界里(掉落物/投掷预览)显示的静态网格软路径,空=Forever层默认Cube占位;meshScale为整体缩放。
 	std::string meshPath;
 	float meshScale = 1.f;
 
-	// 这件资产挂的Script：scriptModName是ScriptMod的id，milestoneNames是要读取的里程碑脚本名(见
-	// Resource/Story/)，和Vehicle/Job同一套机制，由SetProperty()填。两者都空(默认)=这件资产没有脚本
-	// (Asset::GetScript()==nullptr)，也不会挂弹选项的触发盒。$$self.name=资产实例名，$$self.type=mod id。
+	// 资产的Script,两者都空=没有脚本也不挂选项触发盒,见asset_mod.md。
 	std::string scriptModName;
 	std::vector<std::string> milestoneNames;
 
-	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
-	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
-	// 这里只放mod自己的私有数据。
+	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}
-	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
-	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
 	virtual int GetStateVersion() const { return 0; }
-	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
-	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	// GetName用的static count,存档保存/读档恢复;没有计数器的类保持默认。
 	virtual int GetInstanceCounter() const { return -1; }
 	virtual void SetInstanceCounter(int) {}
 };

@@ -7,7 +7,7 @@
 是为了能统一按`UForeverFrameworkComponent::StaticClass()`查询/遍历`AForeverFrameworkActor`
 身上的所有域组件，而不用逐个列举具体类型。
 
-`AForeverFrameworkActor`按域划分出9个具体子类，分别对应旧Framework Actor及其C++ Base类：
+`AForeverFrameworkActor`按域划分出9个对应旧Framework Actor的具体子类，另有4个新增的功能组件(Sky/Vegetation/Lamp/Weather，见下表之后)：
 
 | 域组件 | 旧Framework Actor | 旧C++ Base类(Core层) |
 |---|---|---|
@@ -21,7 +21,10 @@
 | `UForeverTrafficFrameworkComponent` | Traffic | `TrafficBase`（独立文档见`ForeverTrafficFrameworkComponent.md`） |
 | `UForeverZoneFrameworkComponent` | Zone | `ZoneBase`（独立文档见`ForeverZoneFrameworkComponent.md`） |
 
-这份共用文档现在只覆盖基类本身——9个具体子类全部已经有各自的独立`.md`（含
+新增的4个组件没有旧工程对应物，各有独立`.md`：`UForeverSkyFrameworkComponent`(昼夜循环)、`UForeverVegetationFrameworkComponent`(全图植被+风)、
+`UForeverLampFrameworkComponent`(路灯)、`UForeverWeatherFrameworkComponent`(天气表现)。
+
+这份共用文档现在只覆盖基类本身——全部具体子类都已经有各自的独立`.md`（含
 `UForeverRoomFrameworkComponent`，虽然当前是空实现，但有自己的文档说明原因）。
 
 **没有`UForeverGlobalFrameworkComponent`**：旧工程`GlobalBase`"放在关卡里、串起其它

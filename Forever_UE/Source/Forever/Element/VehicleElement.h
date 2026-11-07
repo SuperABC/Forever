@@ -18,22 +18,9 @@ class UInputMappingContext;
 struct FInputActionValue;
 struct FHitResult;
 
-// 一辆车在场景里对应的Actor——只提供驾驶(Chaos真实悬挂/轮胎/引擎物理)/相机/输入这些
-// 所有车型公用的逻辑，不写死任何具体车型的外观。不直接继承AWheeledVehiclePawn(它固定
-// 用USkeletalMeshComponent存在私有字段里，没有开放子类覆盖的方式)，而是自己组合
-// USkeletalMeshComponent+UChaosWheeledVehicleMovementComponent+相机/输入，效果等价。
-//
-// **具体每种车型(轿车/卡车/……)的外观是继承这个类的蓝图(Blueprint)子类**——骨骼网格
-// (CarMesh组件)、四个轮子的骨骼名(VehicleMovement组件的Wheel Setups)都是
-// EditAnywhere属性，蓝图子类在Details面板里设置即可，不需要写C++代码。
-// `VehicleMod::blueprintPath`存的就是某个这样的蓝图子类的资源路径，
-// `UForeverTrafficFrameworkComponent::ToggleVehicle`生成车辆前用这个路径
-// `LoadClass<AVehicleElement>()`拿到具体该用哪个类。这样设计是因为
-// `UChaosWheeledVehicleMovementComponent`要求骨骼网格必须在Actor构造函数阶段就绑定
-// 好(见VehicleElement.md"骨骼网格必须在组件注册之前就绑好"一节)，而`SpawnActor<T>()`
-// 不支持给构造函数传自定义参数——"这个Actor该长什么样"只能靠"生成之前就选好用哪个
-// UClass"来决定，蓝图子类的属性覆盖恰好在蓝图保存时就烘焙进了那个类自己的CDO，早于
-// 任何运行时SpawnActor调用，天然满足这个时序要求。详见VehicleElement.md。
+// 一辆车在场景里对应的Actor：Chaos真实物理驾驶/相机/输入，所有车型公用，不写死外观。
+// 每种车型的外观(骨骼网格、轮子骨骼名)是继承本类的蓝图子类，VehicleMod::blueprintPath指向它，
+// 原因和流程见VehicleElement.md。
 UCLASS(Blueprintable)
 class FOREVER_API AVehicleElement : public APawn
 {
@@ -42,18 +29,15 @@ class FOREVER_API AVehicleElement : public APawn
 public:
 	AVehicleElement();
 
-	// 由UForeverTrafficFrameworkComponent::GenerateVehicles在生成这辆预置车辆时调用一次：
-	// 绑定这个Element对应哪个Vehicle，这时候还没人上车，inPreviousPawn传nullptr。外观
-	// (骨骼网格/轮子骨骼名)由生成这个Actor时选用的具体蓝图子类决定，和这里的Vehicle实例
-	// 无关，这个函数不需要做任何外观相关的事。调用后会建好proximity box(靠近弹"上车"选项)。
+	// 由UForeverTrafficFrameworkComponent生成车辆时调用一次：绑定对应的Vehicle，预置车辆没人上车时
+	// inPreviousPawn传nullptr。外观由蓝图子类决定，与这里无关。会建好proximity box(靠近弹"上车"选项)。
 	void Init(Vehicle* inVehicle, APawn* inPreviousPawn);
 
 	// 由UForeverTrafficFrameworkComponent::ApplyEnterVehicle在真正上车那一刻调用：记住
 	// 上车前被占有的pawn，下车时(ExitVehicle)要恢复谁。
 	void SetPreviousPawn(APawn* inPreviousPawn) { previousPawn = inPreviousPawn; }
 
-	// PIE停止/退出游戏时置空vehicle指针——Vehicle所有权在Traffic身上，这里不delete，和
-	// ACitizenElement::EndPlay同一套安全原则。
+	// 置空vehicle指针(Vehicle所有权在Traffic身上，这里不delete，同ACitizenElement::EndPlay)。
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual void PossessedBy(AController* NewController) override;
@@ -111,32 +95,23 @@ protected:
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-	// W/S(movement.Y)按正负分别转发给vehicleMovement->SetThrottleInput/SetBrakeInput
-	// (不是简单地把movement.Y原样当油门用)——UChaosVehicleMovementComponent默认
-	// bReverseAsBrake=true，油门/刹车被设计成像真车的两个独立踏板：车速较高时按S是正常
-	// 刹车，车速降到接近0之后继续按住S才会挂倒挡真正往后开，不是一松手就立刻倒车，见
-	// VehicleElement.md。A/D(movement.X)转发给SetSteeringInput。
+	// W/S(movement.Y)按正负分别转成油门/刹车(不能把S当负油门，否则无法倒车)，A/D转向，见VehicleElement.md。
 	void Move(const FInputActionValue& value);
 
-	// WSAD松开(Completed/Canceled)时把三个输入归零——Enhanced Input的Triggered事件一旦
-	// 输入回到(0,0)就不会再触发，不显式归零的话会停留在松手前的最后一个值上。
+	// WSAD松开(Completed/Canceled)时三个输入归零(Triggered在输入回到(0,0)后不再触发，不归零会停在最后一个值)。
 	void StopMove(const FInputActionValue& value);
 
-	// 鼠标/手柄视角——只转相机(cameraBoom的bUsePawnControlRotation)，不转车身，和
-	// AForeverCharacter::Look同一个处理方式，只是这里没有共同基类，各自维护一份。
+	// 鼠标/手柄视角——只转相机(cameraBoom的bUsePawnControlRotation)，不转车身。
 	void Look(const FInputActionValue& value);
 
-	// Q键：转发给UForeverTrafficFrameworkComponent::ExitVehicle，带下车点碰撞检测，见
-	// ForeverTrafficFrameworkComponent.h的说明。
+	// Q键：转发给UForeverTrafficFrameworkComponent::ExitVehicle(带下车点碰撞检测)。
 	void ExitVehicle();
 
-	// 空格手刹：按住/松开分别转发给vehicleMovement->SetHandbrakeInput(true/false)，
-	// 绑在Started/Completed而不是Move()那种Triggered——手刹是纯粹的按下/松开两态开关，
-	// 不像油门/转向有个连续的模拟量。
+	// 空格手刹：绑在Started/Completed(两态开关，没有连续模拟量，不用Triggered)。
 	void Handbrake(const FInputActionValue& value);
 	void StopHandbrake(const FInputActionValue& value);
 
-	// 搭乘模式下选项列表的上下/确认(键位同市民对话选项)，照抄ATransitVehicleElement。
+	// 搭乘模式下选项列表的上下/确认(键位同市民对话选项)，同ATransitVehicleElement。
 	void MeetOptionFocusUp();
 	void MeetOptionFocusDown();
 	void MeetOptionSelect();
@@ -169,9 +144,7 @@ protected:
 	TObjectPtr<UInputMappingContext> inputLookMapping;
 
 private:
-	// 玩家靠近检测——照抄ACitizenElement::BuildProximityBox/OnOverlapBegin/OnOverlapEnd
-	// 同一套写法，数据源从citizen->GetName()/GetOptions()换成vehicle->GetName()/GetOptions()，
-	// 弹出的"上车"选项和市民对话选项走同一个MeetOption UI/F键。
+	// 玩家靠近检测，写法同ACitizenElement::BuildProximityBox，选项走同一个MeetOption UI/F键。
 	void BuildProximityBox();
 
 	// 搭乘期间常驻显示/撤掉选项(先RemoveName再AddOption，不重复)。
@@ -195,8 +168,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> proximityBox;
 
-	// vehicle->GetName()/GetOptions()的快照，BuildProximityBox()里烘焙好，Overlap回调只读
-	// 这份快照，不解引用vehicle，和ACitizenElement同一套安全原则。
+	// vehicle->GetName()/GetOptions()的快照，Overlap回调只读这份，不解引用vehicle(同ACitizenElement)。
 	FString vehicleNameOnly;
 	TArray<FString> cachedOptions;
 };

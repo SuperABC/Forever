@@ -58,9 +58,7 @@ namespace {
 			[toId](const pair<int, Connection*>& e) { return e.first == toId; }), edges.end());
 	}
 
-	// ZoneMod/BuildingMod::Assign()一次扫完全地图lot、通过PlacementEmitFunc回调把想要的
-	// 显式占位请求交回来——这个函数体编译在Core这一侧，mod调它触发的push_back用的是Core自己
-	// 的分配器，不会出现"mod分配、Core释放"的跨DLL问题，详见map.md"寻址"一节。
+		// Assign()通过PlacementEmitFunc回调交回占位请求：函数体编译在Core这一侧，push_back用Core自己的分配器(跨DLL安全)。
 	void EmitPlacementRequest(void* context, const LotPlacementRequest& request) {
 		static_cast<vector<LotPlacementRequest>*>(context)->push_back(request);
 	}
@@ -178,6 +176,10 @@ void Map::InitTerrains() {
 }
 
 void Map::InitRoadnet() {
+	if (roadnet) {
+		debugf("Warning: roadnet already exists (generated or restored from save), skip InitRoadnet.\n");
+		return;
+	}
 	for (auto& [id, args] : Config::GetConceptMods("roadnet_mods")) {
 		roadnetFactory.SetConfig(id, true);
 	}
@@ -245,21 +247,10 @@ void Map::InitRoadnet() {
 		externById[e->GetId()] = e;
 	}
 
-	// 还有一类端点既不是RoadJunction也不是extern：某个mod把一条路自己拆成了好几段独立Road
-	// (比如JingRoadnet的隧道引道/下坡/隧道内平路三段式，见roadnet_basic.md"隧道"一节)，中间
-	// 的分段点(flatNode/splitNode)只是几何过渡、并不是真正的路口——不能把它们登记成
-	// Intersection去走RoadJunction::Build那一套(会按setback裁剪+摆一个强制水平的路口平面，
-	// 分段点可能卡在斜坡曲线中间，会生出一个不该出现在斜坡上的路口平面)。但每条
-	// 车道/人行道仍然要按真实宽度摆开自己的锚点——不能像"没有真正分叉"的extern端点那样退化成
-	// 所有车道共用一个点：这类分段点两端车道数/宽度配置完全一致(前后两段Road用同一套
-	// configureLanesEx参数)，只是几何上直接续接，没有理由让车道在这里挤到一起。
-	// passthroughAnchorCache按(端点id,车行/行人,side,laneIndex)缓存已经现算出来的锚点——
-	// 前一段Road在这个端点的"终点锚点"和后一段Road在这个端点的"起点锚点"用的是同一个端点id、
-	// 同一套side/laneIndex，第二次请求直接命中缓存，两条贯通线因此接到同一个Node*上；两段路
-	// 在分段点处方向连续(引道/S形曲线的切线在flatNode/splitNode处完全一致，见roadnet_basic.md
-	// "隧道"一节addControls的说明)，所以用哪一段路现算都是同一个结果，缓存本身只是为了保证
-	// 两次现算返回的是同一个Node*，不是为了避免重复计算。key用位运算手工压缩(节点id实际规模
-	// 远小于2^47，不会溢出)，避免为了一个4维小缓存另外引入<map>/<tuple>依赖。
+	// 还有一类端点既不是RoadJunction也不是extern：mod把一条路拆成多段独立Road时的中间分段点(如JingRoadnet隧道的flatNode/splitNode，
+	// 见roadnet_basic.md"隧道")。它们不是Intersection(走RoadJunction::Build会摆出强制水平的路口平面)，也不能像extern那样把所有车道
+	// 收成一点(两侧车道配置一致，应按真实宽度摆开)，所以现算"直接经过"锚点，详见map.md"InitRoadnet"。
+	// passthroughAnchorCache按(端点id,车行/行人,side,laneIndex)缓存，保证前后两段Road在分段点拿到同一个Node*；key用位运算压缩(节点id远小于2^47)。
 	unordered_map<int64_t, Node*> passthroughAnchorCache;
 	auto makePassthroughKey = [](int nodeId, bool isVehicle, int side, int laneIndex) -> int64_t {
 		return (static_cast<int64_t>(nodeId) << 16) | (isVehicle ? (1LL << 15) : 0)
@@ -272,8 +263,7 @@ void Map::InitRoadnet() {
 		road->GetTangent(atStart ? 0.f : 1.f, tdx, tdy, tdz);
 		float tlen = sqrt(tdx * tdx + tdy * tdy);
 		if (tlen < 1e-6f) tlen = 1.f;
-		// 右手边修正(2026-10-04，见Map::ComputeLaneAnchorPosition声明处的完整说明)：
-		// 这个项目+Y=南，真正的右手边公式是(-tdy,tdx)，不是(tdy,-tdx)。
+			// 右手边是(-tdy,tdx)：本项目+Y=南，见ComputeLaneAnchorPosition实现处。
 		float perp0X = -tdy / tlen, perp0Y = tdx / tlen;
 
 		float side0Width = road->GetSideWidth(0), side1Width = road->GetSideWidth(1);
@@ -328,11 +318,8 @@ void Map::InitRoadnet() {
 		return anchor;
 		};
 
-	// 每条Road的贯通线：车行边单向插入(按该side实际通行方向)，行人边双向插入。每条物理车道
-	// (不只是最内侧/最靠左最靠右)都各自有一条贯通线、各自的锚点(车行；行人仍然每侧共用一个
-	// 锚点，见resolveAnchor注释)——锚点本身也必须逐车道化(RoadJunction::Build，见
-	// roadnet.md"车道级导航锚点"一节)，否则只加贯通线条目但仍共用同一个锚点时，多条线会
-	// 重叠成一条看不出区别。
+	// 每条Road的贯通线：车行边单向(按该side通行方向)，行人边双向；每条物理车道各有一条贯通线和各自的锚点
+	// (车行逐车道，行人每侧共用一个锚点)，否则多条线共用端点会重叠，见roadnet.md"车道级导航锚点"。
 	for (Road* road : roadnet->GetRoads()) {
 		for (int cat = 0; cat < 2; cat++) { // 0=vehicle, 1=pedestrian
 			bool isVehicle = (cat == 0);
@@ -381,9 +368,7 @@ void Map::InitRoadnet() {
 }
 
 namespace {
-	// 按剩余空闲面积(Lot::GetFreeAcreage())降序排序的全图lot列表——每个mod的Distribute()
-	// 调用前都要重新算一次，因为上一个mod的显式占位可能已经改变了各lot的剩余空闲面积
-	// (关键设计决策3)。
+		// 按剩余空闲面积降序排序的lot列表；每个mod的Assign前都要重新排，因为上一个mod的占位会改变各lot的剩余面积。
 	vector<Lot*> SortLotsByFreeAcreage(const vector<Lot*>& lots) {
 		vector<Lot*> sorted = lots;
 		std::sort(sorted.begin(), sorted.end(), [](Lot* a, Lot* b) {
@@ -409,7 +394,7 @@ namespace {
 		hostRoad->GetTangent(hostT, hdx, hdy, hdz);
 		float hlen = sqrt(hdx * hdx + hdy * hdy);
 		if (hlen < 1e-6f) hlen = 1.f;
-		// 右手边修正，见Map::ComputeLaneAnchorPosition声明处的说明：+Y=南，公式是(-hdy,hdx)。
+		// 右手边修正，见Map::ComputeLaneAnchorPosition实现处的说明：+Y=南，公式是(-hdy,hdx)。
 		float hostPerp0X = -hdy / hlen, hostPerp0Y = hdx / hlen;
 
 		float dot = dirX * hostPerp0X + dirY * hostPerp0Y;
@@ -418,12 +403,8 @@ namespace {
 }
 
 void Map::InitZones() {
-	// 一个本体独占一个mod实例：Distribute()/explicitPlacements改成static Assign()，一次调用
-	// 扫完全地图的lot拿到这个类型想要的所有显式占位请求(不存在任何实例)，逐条尝试
-	// RequestPlacement，只有真的成功了才CreateZone一次——不会再出现"构造了一个mod实例结果这块
-	// 地不要了、白白析构"的情况，因为问的过程完全不需要实例。这样mod实例的所有数据(walls/gates/
-	// internalBuildings等)从始至终只属于一个Zone，不需要再另外拷贝一份到Zone自己身上，
-	// Map::InitBuildings()要用的时候直接问zone->GetMod()就行。
+	// 一个Zone独占一个mod实例：先用static Assign一次扫完全图lot拿到占位请求(不需要实例)，RequestPlacement成功才CreateZone，
+	// 详见map.md"InitZones"。
 	PathLaneSpec pathSpec;
 	for (auto& id : zoneFactory.GetRegisteredIds()) {
 		vector<Lot*> lots = SortLotsByFreeAcreage(GetLots());
@@ -457,16 +438,11 @@ void Map::InitZones() {
 			for (auto& [dir, road] : boundaryRoads) {
 				zone->SetBoundaryRoad(dir, road);
 			}
-			zone->Layout(request.direction); // 内部自己调mod->Layout(...)，填好walls/gates/
-				// 内部道路/内部建筑——放在SetPosition/SetBoundaryRoad之后调用
+			zone->Layout(request.direction); // 必须在SetPosition/SetBoundaryRoad之后
 			zone->BuildDoors(*this); // 园区大门——Layout()填好mod->gates之后才能读到数据
 			BuildZoneScript(zone);
 
-			// 出入口接图 + 内部道路：同一个zone在这次调用期间共用一份anchorCache，
-			// 让内部道路端点能复用出入口已经建好的zone侧锚点(坐标+类别重合就是同一个点)。
-			// 围墙/大门(mod->walls/mod->gates)不需要在这里搬运——Zone::GetWalls()/
-			// GetGates()直接转发zone自己持有的这个mod，纯数据搬运不做任何几何/导航图
-			// 计算，渲染细节全部下放到Forever层(ForeverZoneFrameworkComponent)。
+			// 出入口和内部道路共用一份anchorCache(每个zone一份)：坐标+类别重合就复用同一个zone侧锚点。围墙/大门无需搬运(Zone直接转发mod)。
 			vector<tuple<float, float, bool, Node*>> anchorCache;
 			for (const ZoneAccessPoint& pt : mod->vehicleEntries) {
 				ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, true, anchorCache);
@@ -484,13 +460,7 @@ void Map::InitZones() {
 			}
 			zone->SetInternalRoads(builtInternalRoads);
 
-			// 内部建筑不能在这里实例化——PlaceZoneInternalBuilding要new
-			// Building(&buildingFactory, spec.type)，但buildingFactory的mod注册在
-			// InitBuildings()里才做(InitBuildings()必须在InitZones()之后跑，要用到这里
-			// 裁剪完的剩余空闲面积)，这时候buildingFactory还是空的，CreateBuilding会
-			// 返回nullptr导致Building构造函数抛异常崩溃。改由InitBuildings()里遍历
-			// zones、直接读zone->GetMod()->internalBuildings，不需要Zone另外存一份
-			// "待实例化"的副本。
+			// 内部建筑统一由InitBuildings落地(Layout要用InitBuildings开头才加载的buildingLayoutLibrary)，直接读zone->GetMod()->internalBuildings。
 
 			if (!AddZone(zone)) {
 				delete zone; // ~Zone()里factory->DestroyZone(mod)会跟着跑，重名时不留悬空引用
@@ -526,9 +496,7 @@ void Map::InitBuildings() {
 
 	PathLaneSpec pathSpec;
 
-	// 显式占位：先用static Assign一次性扫完全部lot拿到这个类型想要的所有placement请求(不存在
-	// 任何实例)，再逐条尝试RequestPlacement，只有真的成功了才CreateBuilding一次——不会再出现
-	// "new了一个mod实例结果这块lot根本不要、白白构造又销毁"的情况，因为问的过程完全不需要实例。
+	// 显式占位：static Assign一次扫完全部lot拿到占位请求，RequestPlacement成功才CreateBuilding(问的过程不需要实例)。
 	for (auto& id : buildingFactory.GetRegisteredIds()) {
 		vector<LotPlacementRequest> requests;
 		buildingFactory.Assign(id, GetLots(), &EmitPlacementRequest, &requests);
@@ -547,10 +515,8 @@ void Map::InitBuildings() {
 			}
 			if (!success) continue;
 
-			// request.lot是Lot::FindAdaptivePlacement探测阶段(在mod DLL里，纯读)命中的一个
-			// 嵌套子块时，adaptiveParent非空——真正的顶层Lot是adaptiveParent，这里要把lot自己
-			// 用剩的残余空间/新增小路搬回adaptiveParent，否则下一个building类型看不到真正还剩
-			// 多少空间，见PromoteAdaptiveRemainder注释。
+			// request.lot是FindAdaptivePlacement(mod DLL内纯读)命中的嵌套子块时adaptiveParent非空：要把子块用剩的空间/新小路搬回
+			// adaptiveParent，下一个building类型才能看到真实剩余空间，见map.md"自适应占位"。
 			if (request.adaptiveParent) {
 				PromoteAdaptiveRemainder(request.adaptiveParent, lot);
 				// 自适应命中的子块是Lot::FindAdaptivePlacement点中的freeLots嵌套子块，不是路网分配过地址
@@ -575,8 +541,7 @@ void Map::InitBuildings() {
 			}
 			BuildingNavResult navResult;
 			building->Layout(request.direction, buildingLayoutLibrary, roomFactory, componentFactory, navResult);
-			// 显式占位有真实direction；内部自己调mod->Layout(...)+解析footprint/楼层/
-			// lodMaterial+实例化楼层/房间/组合+构建行人内部导航图
+			// 显式占位传真实direction
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
@@ -606,8 +571,7 @@ void Map::InitBuildings() {
 			Building* building = PlaceZoneInternalBuilding(zone, spec, zoneInternalRoads, mod);
 			BuildingNavResult navResult;
 			building->Layout(spec.direction, buildingLayoutLibrary, roomFactory, componentFactory, navResult);
-			// 用spec自己声明的朝向；PlaceZoneInternalBuilding内部已经SetPosition/
-			// SetBoundaryRoad完
+			// 用spec自己声明的朝向
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
@@ -652,8 +616,7 @@ void Map::InitBuildings() {
 			}
 			BuildingNavResult navResult;
 			building->Layout(-1, buildingLayoutLibrary, roomFactory, componentFactory, navResult);
-			// 权重CDF/FillRemainder落地，没有direction概念，传-1(mod自己可能兜底选一个
-			// 真实方向，见building_mod.h)
+			// FillRemainder落地没有direction概念，传-1(mod可能兜底选方向，见building_mod.h)
 			MergeBuildingNavigation(building, navResult);
 			ForwardBuildingHatches(building);
 			building->BuildDoors(*this);
@@ -665,21 +628,12 @@ void Map::InitBuildings() {
 		lot->ClearCandidates();
 	}
 
-	// 三段落地循环全部跑完、这次InitZones()+InitBuildings()涉及到的所有PathRoadLink都已经
-	// 收进pendingPathRoadLinks之后，才统一按物理顺序真正接入道路网——同样不能在循环内部
-	// 就地调用ConnectPathRoad，见FlushPendingPathRoadLinks()注释。必须先于
-	// FlushPendingBuildingRoadAccess()：后者依赖的BreakThroughLine一样会读/改
-	// throughLines当前的"剩余尾巴"状态，小路先把自己那部分接好，语义上更接近原本内联调用
-	// ConnectPathRoad时的相对顺序(小路在同一次循环体内先于building的导航合并发生)。
+	// 三段落地循环全部跑完后才统一按物理顺序接入小路(不能循环内就地ConnectPathRoad)；必须先于FlushPendingBuildingRoadAccess，
+	// 因为后者的BreakThroughLine会读/改throughLines。见map.md"ConnectPathRoad"。
 	FlushPendingPathRoadLinks();
 
-	// 三段落地循环全部跑完、这次InitBuildings()涉及到的所有building的outside端点都已经
-	// 收进pendingBuildingRoadAccess之后，才统一按物理顺序真正断开道路网——不能在上面任何
-	// 一段循环内部就地调用，见FlushPendingBuildingRoadAccess()注释。
+	// 同理，building的outside端点也统一按物理顺序接入，见map.md"Building内部布局"。
 	FlushPendingBuildingRoadAccess();
-
-	// 不再需要"scanners"表和函数末尾的统一销毁——每个mod实例的生命周期现在完全绑定它独占的
-	// Building，跟着~Building()一起销毁。
 }
 
 float Map::ProjectPointOntoRoad(Road* road, float px, float py) {
@@ -734,9 +688,7 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		pedestrianNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
 		pedestrianNavGraph[end.GetId()].emplace_back(start.GetId(), conn);
 	}
-	// 车行图不能照抄行人"两个方向都插入"——车道本来就有方向性，这里只按Connection自己的
-	// Start->End方向单向插入，方向由Building::BuildVehicleNavigation()按模板数据(upstair/
-	// downstair贪心匹配、或line/node连接顺序)算好，Map不重新判断。
+	// 车行图只按Connection的Start->End单向插入(方向由Building::BuildVehicleNavigation算好，Map不重新判断)。
 	for (Connection* conn : result.vehicleConnections) {
 		Node start = conn->GetStart(), end = conn->GetEnd();
 		vehicleNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
@@ -753,8 +705,7 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		road->GetTangent(outT, tdx, tdy, tdz);
 		float tlen = sqrtf(tdx * tdx + tdy * tdy);
 		if (tlen < 1e-6f) tlen = 1.f;
-		// 右手边修正(2026-10-04，见Map::ComputeLaneAnchorPosition声明处的完整说明)：
-		// 这个项目+Y=南，真正的右手边公式是(-tdy,tdx)，不是(tdy,-tdx)。
+			// 右手边是(-tdy,tdx)：本项目+Y=南，见ComputeLaneAnchorPosition实现处。
 		float perp0X = -tdy / tlen, perp0Y = tdx / tlen;
 		float dx = outsideNode->GetX() - basePoint.GetX(), dy = outsideNode->GetY() - basePoint.GetY();
 		// building在Road哪一侧：比较building中心相对Road中心线在t处的法向偏移符号
@@ -764,23 +715,13 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		};
 
 	for (Node* outsideNode : result.outsideNodes) {
-		// 不在这里push进navAnchorNodes——outsideNode本来就是resolveEndpoint()解出的某个
-		// "node"/"line"锚点或Room自己的导航节点，这几种节点在Building::BuildPedestrianNavigation()
-		// 里创建/收集时已经无条件push进了navOut.nodes(newNodes)，上面的result.nodes循环
-		// 已经登记过一次；这里如果再push一次，同一个Node*就会在navAnchorNodes里出现两次，
-		// ~Map()清理时对它delete两次(double free)，退出游戏必现崩溃。
-		if (!road) continue; // building没有可用的边界Road(mod没能兜底选出方向)，这个"outside"
-			// 端点只留在navOut.nodes里(已经在上面登记过)，不连道路网，见building.md"行人导航"一节。
+		// 不在这里push进navAnchorNodes：outsideNode本来就在result.nodes里，再push会在~Map()时double free。
+		if (!road) continue; // 没有边界Road(mod没能选出方向)：只留在result.nodes里，不连路网
 
 		float t; bool useForwardSide;
 		computeRoadSide(outsideNode, t, useForwardSide);
 
-		// 不在这里立即AddRoadAccessNode——同一条路上可能有好几栋building各自贡献一个
-		// outside端点，真正断开的先后顺序必须按它们在road上的物理位置(t)排列，不能是这里
-		// 处理building的顺序(哪个building先跑到这一步纯粹取决于三段落地循环各自的遍历
-		// 顺序，和物理位置无关)，否则BreakThroughLine"每次都断当前剩余尾巴"这个假设会被
-		// 打破，见FlushPendingBuildingRoadAccess()注释。这里只记下来，交给InitBuildings()
-		// 最后统一调用FlushPendingBuildingRoadAccess()处理。
+		// 只记下来，不立即AddRoadAccessNode：同一条路上的断开必须按物理位置(t)排序，见FlushPendingBuildingRoadAccess。
 		pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, outsideNode, false, false });
 	}
 
@@ -899,24 +840,20 @@ void Map::FlushPendingBuildingRoadAccess() {
 		float t;
 		Node* outsideNode;
 		bool isExit; // 仅isVehicle==true时有意义
+		bool useForwardSide; // 原请求的朝向，原样传给AddRoadAccessNode(单行道回退到对侧时不能由解析后的side反推)
 	};
 	unordered_map<Road*, vector<Entry>> grouped;
 	for (const PendingRoadAccess& pending : pendingBuildingRoadAccess) {
 		int side, laneIndex;
 		if (!ResolveAccessLane(pending.road, pending.isVehicle, pending.useForwardSide, side, laneIndex)) continue;
-		grouped[pending.road].push_back({ pending.isVehicle, side, laneIndex, pending.t, pending.outsideNode, pending.isExit });
+		grouped[pending.road].push_back({ pending.isVehicle, side, laneIndex, pending.t, pending.outsideNode, pending.isExit, pending.useForwardSide });
 	}
 	pendingBuildingRoadAccess.clear();
 
-	constexpr float kAccessOpeningWidth = 1.f; // 门洞大致宽度(地图单位)，供Forever层挖空
-		// 对应长度的人行道/车行道，这次先用一个固定值，不按具体门的开口宽度精细对应。
+	constexpr float kAccessOpeningWidth = 1.f; // 门洞大致宽度(地图单位)，供Forever层挖空，固定值不按具体门精细对应
 	for (auto& [road, entries] : grouped) {
-		// 同一条车道(同isVehicle同side同laneIndex)内部按它自己的实际通行方向排序：side0沿
-		// Start->End(t升序)，side1沿End->Start(t降序)——和ThroughLine/BreakThroughLine
-		// "fromAnchor每次都往通行方向前进"的约定对齐，见map.h的FlushPendingBuildingRoadAccess()
-		// 注释。isVehicle作为第一优先级排序键，保证车行/人行两类entry不会被打乱顺序地混在一起
-		// 处理(虽然两者本来就走各自独立的ThroughLine数组、混着处理也不会互相污染状态，这里
-		// 单纯是为了同一辆road的日志/调试顺序更直观)。
+		// 同一条车道内按通行方向排序(side0 t升序，side1 t降序)，匹配BreakThroughLine"fromAnchor往通行方向前进"的约定；
+		// 前三个键只是让车行/人行、各side、各车道的entry分组。
 		sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) {
 			if (a.isVehicle != b.isVehicle) return a.isVehicle < b.isVehicle;
 			if (a.side != b.side) return a.side < b.side;
@@ -926,7 +863,7 @@ void Map::FlushPendingBuildingRoadAccess() {
 
 		for (Entry& entry : entries) {
 			Node* accessNode = AddRoadAccessNode(road, entry.t, entry.isVehicle,
-				entry.side == 0, kAccessOpeningWidth);
+				entry.useForwardSide, kAccessOpeningWidth);
 			if (!accessNode) continue; // 这条Road两侧都没有对应类别车道，没法接，outsideNode保持孤立。
 
 			if (!entry.isVehicle) {
@@ -976,12 +913,8 @@ void Map::FlushPendingPathRoadLinks() {
 			});
 	}
 
-	// 一条link同时占两个touch(可能落在两条不同的host road上)，两端必须在同一次
-	// ConnectPathRoad调用里处理，不能像building access那样把每个touch当独立工作项直接
-	// 排序——改用Kahn拓扑排序：每个分组内相邻两个touch形成一条"前者所属link必须先处理"的
-	// 依赖边，综合所有分组算出link之间的全局处理顺序。理论上只有很反常的路网几何才会在
-	// 多条host道路之间形成排序环，出现环时剩余部分退化成按原始发现顺序处理，不阻塞整个
-	// 流程(不会崩溃，只是环内那几条link之间仍可能有本文件描述的局部绕路，属已知兜底简化)。
+	// 一条link占两个touch(可能落在不同host road上)，两端必须在同一次ConnectPathRoad里处理，不能把touch当独立工作项排序，
+	// 所以用Kahn拓扑排序：每组内相邻touch形成"前者所属link先处理"的依赖边。出现环(只有很反常的路网几何)时剩余部分按原始顺序追加，不阻塞。
 	size_t n = pendingPathRoadLinks.size();
 	vector<vector<size_t>> adj(n);
 	vector<int> indegree(n, 0);
@@ -1068,10 +1001,10 @@ void Map::SettleCitizen(Citizen* citizen, Room* room) {
 }
 
 void Map::Checkin(const Populace& populace) {
-	constexpr int kAdultAge = 18; // 照抄老工程ADULT_AGE
-	constexpr int kProbabilityScale = 100; // 照抄老工程PROBABILITY_SCALE
-	constexpr int kZoneOwnershipChance = 2; // 照抄老工程ZONE_OWNERSHIP_CHANCE
-	constexpr int kBuildingOwnershipChance = 5; // 照抄老工程BUILDING_OWNERSHIP_CHANCE
+	constexpr int kAdultAge = 18;
+	constexpr int kProbabilityScale = 100;
+	constexpr int kZoneOwnershipChance = 2; // zone整体归一个随机成年人私有的百分比概率
+	constexpr int kBuildingOwnershipChance = 5; // building整体归一个随机成年人私有的百分比概率
 	// 公有(政府拥有)的概率写在各自的mod里(ZoneMod/BuildingMod::stateOwnedChance，小数[0,1])，
 	// 这里换算成百分数和上面的ownership chance在同一个刻度上比较。
 	auto statedPercent = [](float chance) { return static_cast<int>(lround(chance * 100.f)); };
@@ -1086,9 +1019,7 @@ void Map::Checkin(const Populace& populace) {
 	}
 	if (adults.empty()) return;
 
-	// 房产归属：按老工程Map::Checkin"Zone→Building→Room逐级下探"的算法分配owner/stated，
-	// 每一级都是"要么整体公有，要么整体归一个citizen私有，要么下探到下一级各自独立决定"
-	// 三选一，详见Source/Core/populace/populace.md"房产归属"一节。
+	// 房产归属：Zone->Building->Room逐级下探，每级三选一(整体公有/整体私有/下探各自决定)，详见map.md"房产归属与住处分配"。
 	auto resolveBuildingOwnership = [&adults, kProbabilityScale, kBuildingOwnershipChance,
 		statedPercent](Building* building) {
 		int kBuildingStatedChance = building->GetMod() ? statedPercent(building->GetMod()->stateOwnedChance) : 0;
@@ -1148,10 +1079,7 @@ void Map::Checkin(const Populace& populace) {
 		}
 	}
 
-	// 不属于任何zone的独立building各自走一遍同一套building级归属逻辑——只处理
-	// GetParentZone()为空的，属于某个zone的building已经在上面的zone循环里处理过了
-	// (老工程这里是无条件遍历Map::buildings，会把zone内部building的归属重新独立骰
-	// 一次、覆盖掉刚设好的zone级归属，这次判定是老工程的疏漏，不逐字复刻，见populace.md)。
+	// 不属于任何zone的独立building各走一遍building级归属；zone内的building已在上面处理过，不能再骰一次覆盖zone级归属。
 	for (auto& [buildingName, building] : buildings) {
 		if (!building || building->GetParentZone()) continue;
 		resolveBuildingOwnership(building);
@@ -1175,11 +1103,8 @@ void Map::Checkin(const Populace& populace) {
 	// 就在那)，但存储上必须分开写，为将来"人在家但当前不在自己房间里"这类场景预留。
 	auto moveIn = [this](Citizen* citizen, Room* room) { SettleCitizen(citizen, room); };
 
-	// 只有成年citizen各自去随机抽一个room名额（GetRandom(pool.size())+swap-remove，照抄
-	// 老工程Map::Checkin同一套"一个家庭消费一个room名额"逻辑，不是"一人一间"）；配偶
-	// （GetSpouse()非空且还没房间）以90%概率（GetRandom(10)>0，老工程同款）跟着搬进同一间，
-	// 未成年子女（GetChildren()里年龄<18且还没房间的）无条件一起搬进同一间。未成年citizen
-	// 不会独立抽房间——只能通过父母这边被带进去，和老工程"只遍历adults"效果一致。
+	// 只有成年citizen各自随机抽一个room名额(swap-remove)，一个家庭消费一个名额；配偶以90%概率(GetRandom(10)>0)跟着搬进同一间，
+	// 未成年子女无条件一起搬。未成年citizen不独立抽房间。
 	for (Citizen* citizen : adults) {
 		if (citizen->GetRoom()) continue; // 已经被配偶那边带着分到房间了
 		if (pool.empty()) break;
@@ -1193,12 +1118,7 @@ void Map::Checkin(const Populace& populace) {
 			moveIn(spouse, room);
 		}
 
-		// 子女搬进同一间不依赖配偶是否一起搬进来——单亲家庭(GetSpouse()本身为空，或配偶没
-		// 通过上面90%的判定跟着搬进来)的孩子也应该有地方住，不能因为"没配偶/配偶没搬进来"
-		// 就连孩子一起漏掉。之前这段逻辑写在上面的if(spouse...)块里面，跟这里的注释("未成年
-		// 子女无条件一起搬进同一间")自相矛盾——单亲家庭的孩子会被永远漏分房间，跟住宅room
-		// 是否够用无关(哪怕全地图房子都空着也一样分不到)，见Room/Citizen::GetRoom()的
-		// "房子空着但有市民没房子"这个bug报告。
+			// 子女搬进同一间不依赖配偶是否同住，否则单亲家庭(或配偶没通过90%判定)的孩子会永远分不到房间。
 		for (Citizen* child : citizen->GetChildren()) {
 			if (child && !child->GetRoom() && child->GetAge(currentYear) < kAdultAge) {
 				moveIn(child, room);
@@ -1349,10 +1269,8 @@ bool Map::ResolveAccessLane(Road* road, bool isVehicle, bool useForwardSide, int
 	const vector<float>& requestedLanes = isVehicle ? road->GetVehicleLanes(requestedSide) : road->GetPedestrianLanes(requestedSide);
 	const vector<float>& oppositeLanes = isVehicle ? road->GetVehicleLanes(1 - requestedSide) : road->GetPedestrianLanes(1 - requestedSide);
 
-	// 单行道特殊情况：请求的side本身没有对应类别车道，但对侧有——说明这是单行道，
-	// useForwardSide不再表示"正向/反向"，改按"要最靠右(true)还是最靠左(false)的车道"重新
-	// 解释，实际车道从对侧取，见map.h的AddRoadAccessNode注释。两侧都没有车道就是真的没有
-	// 对应类别的通行空间，返回false。
+		// 单行道：请求的side没有对应类别车道但对侧有时，useForwardSide改按"要最靠右(true)/最靠左(false)的车道"重新解释，
+		// 实际车道从对侧取，见map.md"导航图与贯通线"。两侧都没有车道返回false。
 	int side;
 	if (!requestedLanes.empty()) {
 		side = requestedSide;
@@ -1370,13 +1288,8 @@ bool Map::ResolveAccessLane(Road* road, bool isVehicle, bool useForwardSide, int
 	float sideSign = (side == 0) ? 1.f : -1.f;
 	float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
 
-	// 车道下标选择：每条车道现在都有自己专属的贯通线(见InitRoadnet的建图注释)，不再需要
-	// "内侧线不动、外侧新增分支"这套workaround——直接选出目标车道，找到它自己的贯通线断开
-	// 就行。双向路(对侧也有同类车道)没有方向可选，固定用最外侧车道(和原始设计"新访问点代表
-	// 外侧车道"一致，唯一车道时"最外侧"就是它自己)；单行路(对侧完全没有同类车道)没有
-	// "内外侧"参照，按useForwardSide要求的左右方向，在这一侧的车道里找有符号偏移(居中后，
-	// 见roadnet.md"车道居中"一节)最靠近那个方向极值的车道——useForwardSide=true要最靠右
-	// (偏移最大)，false要最靠左(偏移最小)。
+	// 车道选择：双向路固定最外侧车道(新访问点代表外侧车道)；单行路按useForwardSide选居中后(见roadnet.md"车道居中")
+	// 有符号偏移最大(true，最靠右)/最小(false，最靠左)的车道。
 	int laneIndex = 0;
 	if (lanes.size() >= 2) {
 		if (oneWay) {
@@ -1408,12 +1321,7 @@ Node* Map::AddRoadAccessNode(Road* road, float t, bool isVehicle, bool useForwar
 	int side, laneIndex;
 	if (!ResolveAccessLane(road, isVehicle, useForwardSide, side, laneIndex)) return nullptr;
 
-	// 车道横断面世界坐标必须用ComputeLaneAnchorPosition算，不能只按车行道公式
-	// (offsetDist=LaneCenterOffset(lanes,laneIndex)，直接从道路中心线量)——行人道
-	// (isVehicle=false)物理上在同侧车行道+停车道外侧，必须先加上同侧车行道+停车道的
-	// 总宽度才是真正的人行道基准。ComputeLaneAnchorPosition对isVehicle=false会先加上
-	// SumWidths(车行道)+SumWidths(停车道)再叠加人行道自己的居中偏移，和RoadJunction::Build
-	// 里pedestrianSide锚点用的是同一套算法。
+	// 世界坐标必须用ComputeLaneAnchorPosition算：人行道在同侧车行+停车道外侧，不能直接从中轴线量。
 	auto [nx, ny] = ComputeLaneAnchorPosition(road, t, isVehicle, side, laneIndex);
 	Node basePoint = road->GetPoint(t);
 
@@ -1433,10 +1341,7 @@ Node* Map::AddRoadAccessNode(Road* road, float t, bool isVehicle, bool useForwar
 Node* Map::BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex, float worldX, float worldY, float worldZ) {
 	if (!road || laneIndex < 0) return nullptr;
 
-	// t容差：两次投影出的t理论上应该完全相等的场景（比如同一个断点被不同调用方各自算了一次）
-	// 允许有极小的浮点误差；复用距离容差：断点几乎正好落在某个既有端点上时，直接复用那个
-	// node，不新建一个和它几乎重合的node（世界坐标单位下约10厘米量级，比车道宽度小得多，
-	// 不会误判成两个不同的断点）。
+	// kThroughLineEps是t比较的浮点容差；kThroughLineReuseDistSq：断点离既有端点不到约10cm时直接复用该node，不新建重合的node。
 	constexpr float kThroughLineEps = 1e-4f;
 	constexpr float kThroughLineReuseDistSq = 0.0001f;
 
@@ -1444,9 +1349,7 @@ Node* Map::BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex,
 	int idx = (isVehicle ? 0 : 2) + side;
 	vector<ThroughLine>& lines = throughLines[road][idx];
 
-	// 找到laneIndex匹配、且[tLo,tHi]跨过breakT的那一段——不管它是最初覆盖整条车道的那一段，
-	// 还是之前已经被断过若干次剩下的某个片段，也不管这次调用和其它调用的先后顺序，只认
-	// t范围，见map.h声明处注释。
+	// 找laneIndex匹配且[tLo,tHi]跨过breakT的那一段，只认t范围，与调用顺序无关，见map.md"导航图与贯通线"。
 	int foundIdx = -1;
 	for (int i = 0; i < static_cast<int>(lines.size()); i++) {
 		if (lines[i].laneIndex != laneIndex) continue;
@@ -1514,11 +1417,8 @@ pair<float, float> Map::ComputeLaneAnchorPosition(Road* road, float t, bool isVe
 	road->GetTangent(t, tdx, tdy, tdz);
 	float tlen = sqrtf(tdx * tdx + tdy * tdy);
 	if (tlen < 1e-6f) tlen = 1.f;
-	// 这个项目世界坐标+Y=南(roadnet_basic.cpp intersections的实际取值证实，不是常见地图
-	// "北=+Y"的假设)，真正的右手边公式是(-tdy,tdx)，不是标准数学"逆时针90度的镜像(顺时针)"
-	// 公式(tdy,-tdx)——那个公式只在+Y=北时才是右手边。手推验证：朝南(0,1)时真正的右手边是
-	// 西(-1,0)，而(tdy,-tdx)=(1,0)=东，是左手边。这个公式在map.cpp/roadnet.cpp里一共出现
-	// 9处，必须全部保持一致，否则路口/zone出入口/小路旁路和这里的车道锚点会互相对不上。
+	// 本项目世界坐标+Y=南，右手边公式是(-tdy,tdx)，不是+Y=北时的(tdy,-tdx)(朝南(0,1)时右手边是西(-1,0))。
+	// map.cpp/roadnet.cpp里所有用到perp0的地方必须保持一致，否则路口/zone出入口/小路旁路和车道锚点会对不上。
 	float perp0X = -tdy / tlen, perp0Y = tdx / tlen;
 
 	float shift = (road->GetSideWidth(0) - road->GetSideWidth(1)) * 0.5f;
@@ -1563,20 +1463,15 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 	float vehOffset = vehWidth * 0.5f;
 	float pedOffset = vehWidth + pedWidth * 0.5f;
 
-	// 小路自身固定的perp0——**必须用Road自己Start->End方向算，不能用上面的dirX/dirY**：
-	// dirX/dirY是"离开当前这一端、伸向小路另一端"的方向，在Start端和End端正好相反，如果拿它
-	// 算perp0，side0/side1在两端会对应到物理上相反的两侧(西端的"+"是南侧，东端的"+"却是北侧)，
-	// 连线时(ConnectPathRoad拿两端同一个下标拼成一条line)就会拧成交叉——西端南侧车道接到了
-	// 东端北侧车道。side0/side1的物理含义必须在小路全长上保持一致，
-	// 和Road自己车道数据(GetVehicleLanes(0)/(1)，SplitWithPath建小路时就是用Start->End
-	// 方向的perp0铺的)对齐，因此这里固定用path->GetStart()->GetEnd()方向，不随isStartEnd翻转。
+	// 小路自身固定的perp0：必须用Road自己Start->End方向，不能用dirX/dirY(它在Start/End端相反，side0/side1会在两端对应物理上相反的
+	// 两侧，连线交叉)。side0/side1的物理含义要和SplitWithPath铺的车道数据一致。
 	Node pathStart = path->GetStart();
 	Node pathEnd = path->GetEnd();
 	float gdx = pathEnd.GetX() - pathStart.GetX();
 	float gdy = pathEnd.GetY() - pathStart.GetY();
 	float glen = sqrtf(gdx * gdx + gdy * gdy);
 	if (glen < 1e-6f) glen = 1.f;
-	// 右手边修正，见Map::ComputeLaneAnchorPosition声明处的说明：+Y=南，公式是(-gdy,gdx)。
+	// 右手边修正，见Map::ComputeLaneAnchorPosition实现处的说明：+Y=南，公式是(-gdy,gdx)。
 	float pathPerp0X = -gdy / glen, pathPerp0Y = gdx / glen;
 
 	// 小路side0沿Start->End走，side1沿End->Start走：Start端离开(entering)的是side0、
@@ -1584,15 +1479,9 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 	int enteringSide = isStartEnd ? 0 : 1;
 	int exitingSide = isStartEnd ? 1 : 0;
 
-	// **修复"车道/人行道都堆在中轴线上"的根因**：下面host分支里Nin/Nout(以及PnA/PnB等)如果
-	// 直接用ComputeLaneAnchorPosition算出来的同一个(vx,vy)断两次，会在完全相同的坐标上产生
-	// 两个不同的node——views上看不出区别，ConnectPathRoad拿它们连成的小路自己的side0/side1
-	// 贯通线(veh0=start[0]->end[0]，veh1=end[1]->start[1])于是首尾都落在同一对坐标上，
-	// 几何上重合成一条线，视觉上就是"只有中轴线一条车道"。这里在每个host断点上，沿小路自身
-	// 的pathPerp0方向按小路自己的车道/人行道半宽各偏移一点，让entering/exiting(或near的
-	// side0/side1)两个断点分别落在小路两条车道各自的延长线上，和小路自身中段的车道几何真正
-	// 对齐，不再是同一个点。enterSign统一控制"entering那一侧偏移量的符号"，exiting/side1
-	// 自动取反，两者始终关于host断点对称。
+	// host分支里同一断点处断两次得到的Nin/Nout(及PnA/PnB等)若坐标相同，小路自己的side0/side1贯通线会重合成一条线。
+	// 所以沿小路自身pathPerp0方向按车道/人行道半宽各偏移一点，让两个断点落在小路两条车道各自的延长线上；
+	// enterSign控制entering侧的符号，exiting取反。
 	float enterSign = (enteringSide == 0) ? 1.f : -1.f;
 
 	if (!hostRoad) {
@@ -1611,7 +1500,7 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 	float hlen = sqrtf(hdx * hdx + hdy * hdy);
 	if (hlen < 1e-6f) hlen = 1.f;
 	float hostFwdX = hdx / hlen, hostFwdY = hdy / hlen;
-	// 右手边修正，见Map::ComputeLaneAnchorPosition声明处的说明：+Y=南，公式是(-hostFwdY,hostFwdX)。
+	// 右手边修正，见Map::ComputeLaneAnchorPosition实现处的说明：+Y=南，公式是(-hostFwdY,hostFwdX)。
 	float hostPerp0X = -hostFwdY, hostPerp0Y = hostFwdX;
 
 	// 近侧判定：小路离开连接点、伸向自己另一端的方向，和host的perp0点积>=0就是host的side0，
@@ -1623,14 +1512,8 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 	auto pickLaneIndex = [](const vector<float>& lanes) -> int {
 		return lanes.empty() ? -1 : static_cast<int>(lanes.size()) - 1;
 		};
-	// 单行道(近侧车道数组本身就是空的，比如"单行道双车道"只在farSide铺了2条车道)退化去用
-	// farSide时，要选**最靠近路中心线**的那条(下标0)，不是outermost(下标size()-1)——outermost
-	// 是给"这一侧本身就是near"的情况用的("离小路最近"=离curb最近=离中心线最远)，但退化到
-	// farSide时小路其实紧贴着中心线这一侧(near侧车道数为空)，farSide车道里离小路最近的反而是
-	// 下标0那条(挨着中心线)，不是下标size()-1那条(farSide自己的outermost、离小路最远那条)。
-	// 原先两种情况都用pickLaneIndex(outermost)，导致所有退化到同一farSide的小路(不管near侧
-	// 本来该是side0还是side1)全部挤到farSide同一条outermost车道上，就是"都连接到同一侧车道"
-	// 这个bug。
+	// 近侧没有车道(单行道只在farSide铺车道)而退化用farSide时，要选紧贴中心线的下标0，不是outermost——此时小路紧贴中心线这一侧；
+	// 若仍用outermost，所有退化到同一farSide的小路会挤到同一条车道上。
 	auto pickFallbackLaneIndex = [](const vector<float>& lanes) -> int {
 		return lanes.empty() ? -1 : 0;
 		};
@@ -1830,21 +1713,15 @@ Node* Map::ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, boo
 
 	auto [worldX, worldY] = ZoneLocalToWorld(zone, x, y);
 
-	// 直线投影近似算hostRoad上的弧长比例t，和general_geometry.cpp里ProjectT同样的做法。
-	Node hostStart = hostRoad->GetStart();
-	Node hostEnd = hostRoad->GetEnd();
-	float hdx = hostEnd.GetX() - hostStart.GetX();
-	float hdy = hostEnd.GetY() - hostStart.GetY();
-	float hLenSq = hdx * hdx + hdy * hdy;
-	float t = (hLenSq < 1e-9f) ? 0.f
-		: max(0.f, min(1.f, ((worldX - hostStart.GetX()) * hdx + (worldY - hostStart.GetY()) * hdy) / hLenSq));
+	// 投影到hostRoad中心线求弧长比例t(曲线host也准确)，和BreakThroughLine内部同一套算法。
+	float t = ProjectPointOntoRoad(hostRoad, worldX, worldY);
 
 	Node hostPoint = hostRoad->GetPoint(t);
 	float tdx, tdy, tdz;
 	hostRoad->GetTangent(t, tdx, tdy, tdz);
 	float tLen = sqrtf(tdx * tdx + tdy * tdy);
 	if (tLen < 1e-6f) tLen = 1.f;
-	// 右手边修正，见Map::ComputeLaneAnchorPosition声明处的说明：+Y=南，公式是(-tdy,tdx)。
+	// 右手边修正，见Map::ComputeLaneAnchorPosition实现处的说明：+Y=南，公式是(-tdy,tdx)。
 	float hostPerp0X = -tdy / tLen, hostPerp0Y = tdx / tLen;
 
 	// zone中心相对hostPoint在perp0方向的点积>=0就是host的side0，否则side1——和
@@ -1901,12 +1778,8 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 		road->AddPedestrianLane(0, spec.width);
 	}
 
-	// 端点世界坐标+类别(车行/行人)在ZONE_ANCHOR_MERGE_RADIUS容差内重合就复用anchorCache里
-	// 已有的node(可能是出入口锚点，也可能是同一个zone里另一条内部道路的端点)，否则新建孤立
-	// 锚点并登记进cache。容差取1个地图单位——比车道偏移量级(0.15~0.4)大得多，保证出入口
-	// 锚点(落在zone声明的原始坐标上，没有车道偏移)和下面按ComputeLaneAnchorPosition算出来的
-	// 车道锚点(带偏移)还能被判定成"同一个位置"自动桥接；比zone自身尺寸(测试场景约14个单位)
-	// 小得多，不会误合并本不相关的两个点。
+	// 端点世界坐标+类别在ZONE_ANCHOR_MERGE_RADIUS容差(1地图单位)内重合就复用anchorCache里的node，否则新建并登记。
+	// 容差要大于车道偏移量级(0.15~0.4)，才能让出入口锚点(mod声明的原始坐标)与带偏移的车道锚点自动桥接；又远小于zone尺寸，不会误合并。
 	constexpr float ZONE_ANCHOR_MERGE_RADIUS_SQ = 1.f;
 	auto findOrCreate = [&](float wx, float wy, bool wantVehicle) -> Node* {
 		for (auto& [cx, cy, cIsVehicle, node] : anchorCache) {
@@ -1919,11 +1792,7 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 		return n;
 		};
 
-	// 锚点位置必须用ComputeLaneAnchorPosition算(t=0/1对应Start/End，side固定0，和
-	// InitRoadnet/ResolvePathEndAnchors同一套公式)，不能直接用road两端裸的中轴线坐标——单一
-	// 车道时这个公式算出来的偏移正好是0(shift和offsetDist抵消，见实现)，等价于直接用中轴线，
-	// 但保留这个调用是为了和大路/小路的锚点算法保持同一套写法，不需要因为"只有一条车道"另开
-	// 一套特例公式。
+	// 锚点位置用ComputeLaneAnchorPosition算(t=0/1，side=0)，与大路/小路同一套写法；单车道时偏移恰为0，等价于中轴线坐标。
 	if (spec.isVehicle) {
 		auto [fx, fy] = ComputeLaneAnchorPosition(road, 0.f, true, 0, 0);
 		auto [tx, ty] = ComputeLaneAnchorPosition(road, 1.f, true, 0, 0);
@@ -2429,8 +2298,7 @@ bool Map::GetLaneSegmentAt(Road* road, float x, float y, float dirX, float dirY,
 
 	float t = ProjectPointOntoRoad(road, x, y);
 
-	// 用dir和道路在t处的切线点积判断"同向"的那一侧——和ConnectPathRoad/
-	// ConnectZoneAccessPoint判断近侧用的dot product是同一个思路，见map.h相关注释。
+	// 用dir和道路在t处切线的点积判断同向的那一侧(同ConnectPathRoad/ConnectZoneAccessPoint判断近侧的思路)。
 	float tdx, tdy, tdz;
 	road->GetTangent(t, tdx, tdy, tdz);
 	bool useForwardSide = (dirX * tdx + dirY * tdy) >= 0.f;
@@ -2873,14 +2741,11 @@ Door* Map::FindDoorByName(const string& interactName) const {
 const vector<Door*>& Map::GetAllDoors() const { return allDoors; }
 
 void Map::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
-	// 占位，等Map域真的有需要每帧处理的逻辑时再补，见map.h声明处注释。
+	// 空实现，见map.md。
 }
 
 bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
-	// 四种门相关的Change(AddOption/RemoveOption/SetDoor/RegisterDoor)，全部按交互名在doorsByInteractName里找门，找不到静默忽略——
-	// 和Traffic::ApplyChange处理AddOptionChange找不到Vehicle时同一个宽松处理，见
-	// map.h声明处注释。AddOptionChange/RemoveOptionChange这两种本来就存在(给
-	// Vehicle/Citizen用)，这次是给Door也接上，不是新增Change类型。
+	// 门/电梯/资产的选项与门状态Change，全部按交互名查目标，找不到静默忽略(同Traffic::ApplyChange)。
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
 		string name = ToString(EvaluateExpression(addOption->GetName(), context));
 		string option = ToString(EvaluateExpression(addOption->GetOption(), context));

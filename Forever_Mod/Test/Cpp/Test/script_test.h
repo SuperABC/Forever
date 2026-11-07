@@ -5,18 +5,17 @@
 #include "common/json.h"
 #include "story/script_mod.h"
 
-// TestScript：test.script的主线ScriptMod，把game_start里label为"control"的PlaceHolderChange换成"控制一个
-// 随机有家的市民"的ChangeControlChange，否则玩家停在飞行相机上。
-//
-// controlChange是mod自己长期持有的成员，actionStack只存它的指针，见script_mod.h"mod往actionStack里
-// 塞的指针必须是mod自己长期维护"的约定。
+// 设计说明见script_test.md。
 class TestScript : public ScriptMod {
 public:
-	TestScript() { name = std::string("test") + std::to_string(count++); }
+	TestScript() : id(count++) { }
 
 	static const char* GetId() { return "script_test"; }
 	virtual const char* GetType() const override { return "script_test"; }
-	virtual const char* GetName() override { return name.c_str(); }
+	virtual const char* GetName() override {
+		name = "test" + std::to_string(id);
+		return name.data();
+	}
 
 	virtual void WrapScript(const Event* event, const std::vector<ScriptAction>& actions,
 		const ScriptContext& context, PostHandle* post) override {
@@ -41,6 +40,7 @@ public:
 
 private:
 	static inline int count = 0;
+	int id;
 	std::string name;
 	ChangeControlChange controlChange;
 };

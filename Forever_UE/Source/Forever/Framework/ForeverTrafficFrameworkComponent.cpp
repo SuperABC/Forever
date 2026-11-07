@@ -31,29 +31,25 @@
 
 using namespace std;
 
-// 和BuildingElement.cpp同名常量/同一个公式——这个项目的既有约定是每个需要room-local→世界
-// 坐标换算的.cpp文件各自抄一份(ForeverPopulaceFrameworkComponent.cpp也是这么做的)，不额外
-// 抽公共函数，见Source/Forever/Framework/ForeverPopulaceFrameworkComponent.cpp顶部注释。
+// 和BuildingElement.cpp同名常量/同一个公式：每个需要room-local→世界坐标换算的.cpp各自维护一份，不抽公共函数。
 #define TRAFFIC_WORLD_SCALE 1000.f
 
 // 车辆流式生成/销毁判断距离时Z方向的权重，和市民(POPULACE_VERTICAL_DISTANCE_WEIGHT)同一个值。
 #define TRAFFIC_VERTICAL_DISTANCE_WEIGHT 5.f
 
-// 载具用的骨骼网格是bSimulatePhysics=true的真实刚体(见VehicleElement.cpp构造函数)，和市民用的
-// 胶囊体(POPULACE_HEIGHT_EPSILON=10就够，CMC每帧温和地解算穿插)不是一回事——physics引擎对
-// 刚体生成时的穿插极其敏感，哪怕只嵌进地板1个单位，Chaos也会在后面几帧用很大的分离冲量把车
-// 弹开，实测反馈"一开局就有些车被弹飞到天上"。生成点要离地板明显有余量，让车自己靠重力自然
-// 落地，而不是生成时就蹭着地板，50个单位(0.5米)是比车轮半径大的一个保守值。
+// 载具骨骼网格是bSimulatePhysics=true的刚体(见VehicleElement.cpp构造函数)，对生成时的穿插极其敏感：
+// 哪怕嵌进地板1个单位，Chaos也会用很大的分离冲量把车弹飞。生成点要离地板留余量让车靠重力落地，
+// 50个单位(0.5米)是比车轮半径大的保守值。
 #define TRAFFIC_HEIGHT_EPSILON 50.f
 
-// 公交/火车/飞机线路调试画线用的尺寸(UE单位)，纯debug标记，照抄
-// ForeverRoadnetFrameworkComponent.cpp导航图debug可视化的经验值(NAV_DEBUG_*)。
+// 公交/火车/飞机线路调试画线用的尺寸(UE单位)，纯debug标记，取值同
+// ForeverRoadnetFrameworkComponent.cpp导航图debug可视化(NAV_DEBUG_*)。
 #define ROUTE_DEBUG_EDGE_HALF_WIDTH 8.f
 #define ROUTE_DEBUG_NODE_HALF_SIZE 40.f
 #define ROUTE_DEBUG_HEIGHT 50.f
 #define ROUTE_DEBUG_ARROW_LENGTH 120.f
 #define ROUTE_DEBUG_ARROW_HALF_WIDTH 40.f
-// 每隔多少地图单位采一个样，至少16段——照抄public_transport_plan.md"调试画线"一节的数值。
+// 每隔多少地图单位采一个样，至少16段。
 #define ROUTE_DEBUG_SAMPLE_STEP 0.25f
 #define ROUTE_DEBUG_MIN_STEPS 16
 
@@ -76,26 +72,15 @@ namespace {
 		outWorldY = (building.GetPosY() + relX * s + relY * c) * TRAFFIC_WORLD_SCALE;
 	}
 
-	// 下车点能不能用：既要终点本身站得下人，也要车到终点这一路没有东西挡着（车贴墙时，
-	// exitOffsetY算出来的点可能已经在墙的另一侧——那个点自己是空的，但路上隔着一堵墙，人
-	// 不应该直接穿墙过去）。从车身中心sweep到候选下车点，一次查询同时覆盖"终点被占用"和
-	// "半路被挡"两种情况。
-	//
-	// 不能用OverlapAnyTestByChannel/OverlapMulti这类"重叠类"查询——建筑/房间/园区的边界盒
-	// (ABuildingElement::BuildCollisionBox/BuildRoomCollisionBoxes、
-	// UForeverZoneFrameworkComponent的box，还有市民/车辆自己的proximity box)全都是"Trigger"
-	// 碰撞档案(QueryOnly+对所有通道都是Overlap，用来触发进出提示/MeetOption，不是真的拿来挡
-	// 人的)，重叠类查询对"Block"和"Overlap"响应一视同仁，只要没设成Ignore就算命中，车只要停在
-	// 建筑/房间/园区范围内就会被误判"被挡住"。改用SweepTestByChannel——扫掠类查询只认"Block"
-	// 响应，Trigger档案的Overlap响应天然被忽略，真正会挡人的墙体/地板/载具车身(Vehicle档案
-	// 对Pawn是Block)才会被测到。
+	// 下车点能不能用：既要终点站得下人，也要车到终点这一路没有东西挡着(车贴墙时下车点可能在墙另一侧)。
+	// 从车身中心sweep到候选点。坑：不能用Overlap类查询——建筑/房间/园区/市民/车辆的边界盒都是Trigger档案(对所有通道Overlap)，
+	// 重叠查询会把它们误判成挡路；扫掠只认Block，真正挡人的墙体/地板/车身(Vehicle档案对Pawn是Block)才会命中。
 	bool IsExitPathBlocked(UWorld* world, const FVector& from, const FVector& to, const FCollisionQueryParams& queryParams, FHitResult& outHit) {
 		return world->SweepSingleByChannel(outHit,
 			from, to, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(42.f, 96.f), queryParams);
 	}
 
-	// 双面四边形——和ForeverRoadnetFrameworkComponent.cpp的RoadnetAppendQuadDoubleSided同一个
-	// 技巧，这个项目的既有约定是每个需要它的.cpp文件各自抄一份，不额外抽公共函数。
+	// 双面四边形，同ForeverRoadnetFrameworkComponent.cpp的RoadnetAppendQuadDoubleSided(各.cpp各自维护一份)。
 	void RouteAppendQuadDoubleSided(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector& v00, const FVector& v10, const FVector& v11, const FVector& v01) {
 		int32 base = vertices.Num();
@@ -106,7 +91,7 @@ namespace {
 		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 3);
 	}
 
-	// 站点接口用的小box，照抄AppendNavBox。
+	// 站点接口用的小box，同Roadnet的AppendNavBox。
 	void AppendRouteStationBox(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector2D& center, float halfSize, float zBottom, float zTop) {
 		FVector v000(center.X - halfSize, center.Y - halfSize, zBottom);
@@ -126,7 +111,7 @@ namespace {
 		RouteAppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011);
 	}
 
-	// 两点间的细ribbon，照抄AppendNavEdgeRibbon。
+	// 两点间的细ribbon，同Roadnet的AppendNavEdgeRibbon。
 	void AppendRouteEdgeRibbon(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector& from, const FVector& to, float halfWidth) {
 		FVector2D dir2D(to.X - from.X, to.Y - from.Y);
@@ -138,9 +123,8 @@ namespace {
 		RouteAppendQuadDoubleSided(vertices, triangles, from - offset, to - offset, to + offset, from + offset);
 	}
 
-	// 一条edge(可能是多段segments拼起来的)按弧长采样成世界坐标(UE单位)折线——不管edge->reversed
-	// (那个标志只影响Route::Update()驱动载具时的遍历方向/切线符号，画出来的曲线形状本身和
-	// 方向无关，正向反向用的是同一组segments)。相邻两段共享的端点只采一次，避免重复顶点。
+	// 一条edge(多段segments拼起来)按弧长采样成世界坐标折线。edge->reversed只影响遍历方向/切线符号，
+	// 不影响曲线形状，所以不处理。相邻两段共享的端点只采一次。
 	void SampleRouteEdge(const Route::RouteEdge& edge, TArray<FVector>& outPoints) {
 		for (Connection* seg : edge.segments) {
 			if (!seg) continue;
@@ -156,8 +140,7 @@ namespace {
 		}
 	}
 
-	// 在折线中点画一个小箭头指示行驶方向(edge->reversed时指向相反)——两个三角形拼成箭头形状，
-	// 双面绘制，从任意角度看都不会因为背面剔除而消失。
+	// 在折线中点画一个小箭头指示行驶方向(reversed时指向相反)，两个相反绕序的三角形双面绘制。
 	void AppendRouteArrow(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const TArray<FVector>& points, bool reversed) {
 		if (points.Num() < 2) return;
@@ -215,16 +198,15 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 		if (!vehicle) continue;
 
 		if (vehicle->GetRoute()) {
-			// 公共交通车辆(category!=car)：不停车位，不需要换算世界坐标——Tick里直接读
-			// vehicle->GetTransform()驱动，第一帧Tick就会跳到Route算出来的真实位置，生成时
-			// 给个原点占位无所谓。
+			// 公共交通车辆：不需要换算世界坐标，Tick里直接读vehicle->GetTransform()驱动，生成时原点占位。
 			UClass* transitClass = ATransitVehicleElement::StaticClass();
 			const string& blueprintPath = vehicle->GetBlueprintPath();
+			UClass* loaded = nullptr; // 蓝图只加载这一次，transit类与公交物理表示的判断共用
 			if (!blueprintPath.empty()) {
 				FString path = UTF8_TO_TCHAR(blueprintPath.data());
 				// 公交同时带了给停车场驾驶用的BP(继承AVehicleElement)：加载出来不是
 				// ATransitVehicleElement的子类就忽略，路线车仍用默认的ATransitVehicleElement。
-				UClass* loaded = LoadClass<APawn>(nullptr, *path);
+				loaded = LoadClass<APawn>(nullptr, *path);
 				if (loaded && loaded->IsChildOf(ATransitVehicleElement::StaticClass())) {
 					transitClass = loaded;
 				}
@@ -240,7 +222,7 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 
 			// 公交：蓝图是 AVehicleElement 子类的话，玩家附近（地形 LOD 范围内）换成它的物理表示+Controller。
 			if (vehicle->GetRoute()->GetStationType() == "bus" && !blueprintPath.empty()) {
-				UClass* physicsClass = LoadClass<AVehicleElement>(nullptr, UTF8_TO_TCHAR(blueprintPath.data()));
+				UClass* physicsClass = (loaded && loaded->IsChildOf(AVehicleElement::StaticClass())) ? loaded : nullptr;
 				if (physicsClass) busPhysicsClasses.Add(physicsClass);
 				FBusState state;
 				state.vehicle = vehicle;
@@ -256,8 +238,7 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 
 		Room* room = vehicle->GetRoom();
 		Building* building = room ? room->GetParentBuilding() : nullptr;
-		if (!room || !building) continue; // 不是预置在停车位里的车辆(理论上这次Traffic::Init
-										   // 生成的车辆都会有room，防御性写法)
+		if (!room || !building) continue; // 不是预置在停车位里的车辆(防御性写法)
 
 		float localX, localY;
 		vehicle->GetParkingLocalPosition(localX, localY);
@@ -295,12 +276,8 @@ AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry) {
 		return nullptr;
 	}
 
-	// carMesh是有真实碰撞、参与物理模拟的骨骼网格(见VehicleElement.cpp构造函数)，停在
-	// 房间里这个点离墙/地板的碰撞体很容易贴得很近，默认的生成时碰撞检测会因为"生成点被
-	// 占用"直接拒绝生成(SpawnActor返回nullptr)——照抄原ToggleVehicle MOUNT分支的做法，
-	// 用AlwaysSpawn跳过这次检测(实测：没加这个之前，PIE日志里每一次SpawnActor都报
-	// "SpawnActor failed because of collision at the spawn location"，车辆一辆都没真正
-	// 生成出来，见排查记录)。
+	// carMesh有真实碰撞，停车位离墙/地板很近，默认的生成时碰撞检测会因"生成点被占用"拒绝生成
+	// (日志报"SpawnActor failed because of collision at the spawn location")，所以用AlwaysSpawn跳过。
 	FActorSpawnParameters spawnParams;
 	spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
@@ -414,18 +391,14 @@ void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicle
 	// 玩家要自己开了：这辆车不再算"停在某个房间里"。
 	if (Vehicle* coreVehicle = vehicleElement->GetVehicle()) coreVehicle->SetCurrentRoom(nullptr);
 
-	// 隐藏之后这个pawn会一直停在原地，但UForeverPopulaceFrameworkComponent::TickComponent的
-	// 距离流式销毁只看"离当前玩家pawn多远"——玩家开车远离之后这个停在原地的市民会被判定为
-	// "走远的市民"直接Destroy掉，previousPawn变成悬空指针，下车时车没了但人也出不来、操控
-	// 彻底失灵(照抄原ToggleVehicle MOUNT分支踩过的坑)。上车期间标记豁免，下车时解除。
+	// 隐藏后的pawn留在原地，玩家开车远离后会被Populace的距离流式销毁当成"走远的市民"Destroy掉，
+	// previousPawn变悬空指针，下车时人出不来。所以上车期间标记豁免，下车时解除。
 	if (ACitizenElement* citizenElement = Cast<ACitizenElement>(currentPawn)) {
 		citizenElement->SetDespawnExempt(true);
 	}
 
-	// 上车后"走远一步才能再上车"是已知的小瑕疵：SetActorEnableCollision(false)不保证同步清掉
-	// 陈旧的重叠记录，试过"调UpdateOverlaps()强制清一次"(没用)、"先挪到远处制造一次干净的
-	// End再隐藏"(这一步会连带触发离开当前房间/建筑的边界盒，弹出不该出现的"离开XX"提示)，
-	// 两条路都有副作用，先回退到最朴素的写法——有这个小瑕疵，但不会有额外的误报提示。
+	// 已知小瑕疵：上车后要走远一步才能再上车(SetActorEnableCollision(false)不保证同步清掉陈旧重叠记录)。
+	// 不要再试UpdateOverlaps()强制清(没用)，也不要先挪到远处再隐藏(会触发离开房间/建筑边界盒的误报提示)。
 	currentPawn->SetActorHiddenInGame(true);
 	currentPawn->SetActorEnableCollision(false);
 	vehicleElement->SetPreviousPawn(currentPawn);
@@ -515,24 +488,16 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 	}
 	if (!vehicle) return;
 
-	// 下车点——车身局部坐标系下的偏移(VehicleMod指定，默认左侧)，按车辆当前transform(位置+
-	// 完整旋转，侧翻/颠簸时也一起考虑)变换成候选世界坐标。
+	// 下车点：车身局部坐标系下的偏移(VehicleMod指定，默认左侧)，按车辆当前完整transform变换成候选世界坐标。
 	FVector localOffset(vehicle->GetExitOffsetX(), vehicle->GetExitOffsetY(), vehicle->GetExitOffsetZ());
 	FVector candidateLocation = vehicleElement->GetActorTransform().TransformPositionNoScale(localOffset);
 
-	// 检测这个位置站不站得下人——用ECC_Pawn通道，不能用ECC_Visibility(这个项目的Pawn预设
-	// 碰撞档案会忽略ECC_Visibility，见[[memory:pawn_preset_ignores_visibility]])。胶囊体
-	// 尺寸照抄AForeverCharacter构造函数里InitCapsuleSize(42.f, 96.0f)的实际数值。
-	//
-	// 必须忽略载具自己：carMesh用的是引擎自带的"Vehicle"碰撞档案，对ECC_Pawn默认是Block，
-	// 下车点只在车身旁边200个单位，不排除车身自己的话，这次重叠检测测到的其实是"车身挡住
-	// 了自己旁边的下车点"——不管车四周多空旷都会报true，之前"任何时候都无法下车"就是这个根因。
+	// 检测下车点站不站得下人:用ECC_Pawn通道(Pawn预设忽略ECC_Visibility)，胶囊体尺寸同AForeverCharacter的InitCapsuleSize(42, 96)。
+	// 必须忽略载具自己:carMesh的Vehicle档案对ECC_Pawn是Block，否则永远下不了车。
 	FCollisionQueryParams queryParams;
 	queryParams.AddIgnoredActor(vehicleElement);
 
-	// 起点用车身中心(Z对齐到下车点的高度)——车辆自己已经被queryParams忽略，这段sweep只会测到
-	// 车和下车点之间真正的外部遮挡物(典型情况：车贴墙停，exitOffsetY算出来的点落在墙的另一
-	// 侧，起点到终点这一路会先穿过墙体，sweep在墙上就会报true)。
+	// 起点用车身中心(Z对齐下车点)：sweep只会测到车和下车点之间的外部遮挡(典型：车贴墙停，下车点在墙另一侧)。
 	FVector pathStart = vehicleElement->GetActorLocation();
 	pathStart.Z = candidateLocation.Z;
 
@@ -568,19 +533,10 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 		citizenElement->SetDespawnExempt(false);
 	}
 
-	// 先恢复显示/碰撞+重新Possess，最后才移动位置——顺序很重要，两层坑：
-	// 1. 移动时这个pawn的碰撞如果还是disabled，移动不会触发UpdateOverlaps()（没碰撞的组件
-	//    直接跳过重叠检测），车辆的proximity box就感知不到人已经站回来了，"上车"选项再也
-	//    不会弹出来(下车后无法重新上车的根因)。必须先启用碰撞再移动。
-	// 2. 更隐蔽的一点：OnOverlapBegin里用UGameplayStatics::GetPlayerPawn(0)来判断"靠近的是不是
-	//    玩家自己"——如果Possess放在移动之后，那么移动触发UpdateOverlaps、同步派发
-	//    OnOverlapBegin的那一刻，controller名义上还占有着车(Possess还没执行)，GetPlayerPawn()
-	//    返回的还是载具，proximityBox那边"OtherActor==pawn"直接判不通过，这次本该触发的
-	//    "进入了下车点所在的那个box"事件就被白白丢掉了——而这个box后续也不会再有新的重叠变化
-	//    (人已经站在里面不会再动)，所以选项一直不出现，必须走远再走近制造一次新的
-	//    Begin/End转换才能刷出来，这正是实测反馈的现象(不管下车点落在当前车还是旁边另一辆车
-	//    的box里都一样)。Possess提到移动之前，派发事件那一刻GetPlayerPawn()就已经正确指向
-	//    previousPawn了。
+	// 先恢复显示/碰撞+重新Possess，最后才移动位置，顺序不能变:
+	// 1. 移动时碰撞若还是disabled，不会触发UpdateOverlaps，车辆proximity box感知不到人回来，"上车"选项不再弹出。
+	// 2. OnOverlapBegin用GetPlayerPawn(0)判断"靠近的是不是玩家"，Possess晚于移动的话，派发事件时它还是载具，
+	//    判不通过，事件被丢掉；人站在box里不再有新的Begin/End，选项一直不出现。
 	previousPawn->SetActorHiddenInGame(false);
 	previousPawn->SetActorEnableCollision(true);
 	controller->Possess(previousPawn);
@@ -602,8 +558,7 @@ void UForeverTrafficFrameworkComponent::ExitVehicle(APlayerController* controlle
 		});
 	}
 
-	// 车辆本身不销毁——这次是预置在停车位的真实物件，不是一次性测试对象，下车后原地留着
-	// 供下次再上车。
+	// 车辆本身不销毁，下车后原地留着供下次再上车。
 }
 
 void UForeverTrafficFrameworkComponent::GetRouteDebugTarget(const FString& stationType,
@@ -629,8 +584,7 @@ void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 	AActor* owner = GetOwner();
 	if (!owner) return;
 
-	// 四个类别各一个UProceduralMeshComponent，照抄
-	// ForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh的组件创建方式。
+	// 四个类别各一个UProceduralMeshComponent，创建方式同ForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh。
 	auto ensureMesh = [&](TObjectPtr<UProceduralMeshComponent>& mesh, const TCHAR* debugName) {
 		if (!mesh) {
 			mesh = NewObject<UProceduralMeshComponent>(owner, debugName);

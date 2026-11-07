@@ -10,8 +10,7 @@
 
 ## 依赖关系
 - 依赖`AForeverMenuController`。
-- 被`Config/DefaultEngine.ini`里主菜单关卡对应的GameMode override引用(尚未配置,需要在编辑器里给菜单关卡指定这个GameMode)。
+- 其蓝图子类`BP_ForeverMenuGameMode`是`DefaultEngine.ini`的`GlobalDefaultGameMode`,菜单关卡(`Menu.umap`)沿用它。
 
 ## 待办/后续阶段
-- 核对`DefaultPawnClass = nullptr`是否符合实际需求(目前基于"主菜单关卡通常不需要玩家出生/行走"的推断)。
-- 主菜单关卡与UI资源就位后,在编辑器里把菜单地图的GameMode Override设置为这个类。
+- 无。

@@ -20,12 +20,7 @@
 - **`DistributeTerrain`用6个`std::function`回调读写地图，不直接依赖`Map`/`Element`类型**——
   这是Dependence层一贯的做法（Mod DLL不知道也不需要知道`Map`的具体实现），调用方（`Map`）
   把自己的`GetTerrain`/`SetTerrain`/`GetHeight`/`SetHeight`/`SetWater`/`SetFineHeights`包成闭包传进去。
-- **水面(`setWater`)独立于地形类型(`setTerrain`)，每个格子单独设置**——以前水面走
-  `waterHeight`这个成员，`SetupTexture()`填一次、整个`DistributeTerrain`调用期间所有
-  格子共用同一个水位，没法做出倾斜水面（河流沿下坡方向每个格子高度不一样，水位也该跟着
-  不一样）。现在`DistributeTerrain`拿到的`setWater(x,y,hasWater,height)`是per-cell的，
-  哪个格子要水、水位多少完全由mod自己在算法里决定，`OceanTerrain`/`RiverTerrain`都已经
-  迁移到这套机制，见`terrain_basic.md`。
+- **水面(`setWater(x,y,hasWater,height)`)独立于地形类型(`setTerrain`)，每个格子单独设置**——不同格子可以给不同水位(高度单位是地图元素)，用来构造倾斜水面(河流沿下坡方向)。哪个格子要水、水位多少完全由mod在算法里决定，`OceanTerrain`/`RiverTerrain`的用法见`terrain_basic.md`。
 - **细化高度(`setFineHeights`)按需逐格设置，默认没有**——粗高度`height`是格点`(x,y)`上的
   一个采样，10m一格，UE侧双线性插值在格子边界只有C0连续，起伏大的地方(河岸)会出现明显
   折痕。mod可以给个别element传一个`TERRAIN_FINE_SIZE`×`TERRAIN_FINE_SIZE`(17×17)的高度
@@ -36,8 +31,6 @@
   `setHeight`再`setFineHeights`，因为`Map::SetHeight`会清掉共用该格点的4块细化数组，防止
   后跑的mod改了粗高度之后细化数据过期。数据只传`const float*`，Core自己分配内存拷贝，不会
   跨DLL释放mod分配的内存。目前只有`RiverTerrain`的河岸用到，见`terrain_basic.md`。
-- **没有`ShapeFilter`工具方法**——3x3邻域多数投票平滑滤波，目前没有任何地形Mod需要它。如果
-  未来某个地形Mod确实需要这类平滑滤波，再按需加回，不用为了"完整"而维护一个没人用的方法。
 - **`diffusePath`/`normalPath`/`roughnessPath`是公开数据成员，不是私有+getter**——
   `Terrain`包装类（`Source/Core/map/terrain.h`）的`GetTextures()`直接读
   `mod->diffusePath`/`mod->normalPath`/`mod->roughnessPath`打包成`TerrainTexturePaths`
@@ -45,11 +38,13 @@
 
 ## 依赖关系
 
-- 依赖：无（纯C++，不依赖Core/UE）。
+- 依赖：`common/mod_state.h`（纯C++，不依赖Core/UE）。
 - 被谁依赖：`Source/Core/map/terrain.h`（`Terrain`包装类持有`TerrainMod*`）、
   `Source/Basic/map/terrain_basic.h`（`OceanTerrain`/`MountainTerrain`）、
   `Forever_Mod/Empty`的`EmptyTerrain`demo mod。
 
+- 带存档钩子(`SaveState`/`LoadState`/`GetStateVersion`/`GetInstanceCounter`/`SetInstanceCounter`)，默认不存任何东西，见`common/mod_state.md`。
+
 ## 待办/后续阶段
 
-- 如果后续出现"某个地形Mod需要平滑滤波工具"的真实需求，把`ShapeFilter`加回来。
+- 无。

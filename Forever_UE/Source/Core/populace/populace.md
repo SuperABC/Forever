@@ -15,15 +15,18 @@ map->Checkin(*populace);
 
 负责的事：年表模拟生成citizen人口、姓名生成（`Name`/`NameFactory`）、住处+房产归属
 对接（`Map::Checkin`的数据来源）、Job调度驱动（`Populace::Tick`）、Scheduler加权
-分配、四类人际关系生成（亲属/同学/情感三类，同事关系见`society.md`）。
+分配、四类人际关系生成（亲属/同学/情感三类，同事关系见`society.md`）、饱食度衰减、运行时新增市民
+（`SpawnCitizen`）。
 
 ## 关键设计
 
 ### 年表模拟算法
 
-`Populace::Init(int accommodation)`先对`accommodation`做一次扰动（`target =
-accommodation * exp(GetRandom(1000)/1000.0f - 0.5f)`），再调私有的
-`GenerateCitizens(target)`跑年表模拟算法，几个容易出偏差的细节：
+`Populace::Init(accommodation, workCapacity)`先对`accommodation`做一次扰动（`target =
+accommodation * exp(GetRandom(1000)/1000.0f - 0.5f)`），再取`min(target, workCapacity)`（`workCapacity`来自
+`Map::ComputeWorkCapacity()`，只封顶、不参与随机采样，默认不封顶），再调私有的`GenerateCitizens(target)`跑
+年表模拟算法。`Init`的步骤顺序：`InitNames`→`GenerateCitizens`→`AssignSchedulers`→`GenerateRomanticRelations`→
+`GenerateEducations`。几个容易出偏差的细节：
 
 - **100男100女起始种子**：出生年`GetRandom(20)`（0~19），死亡年`birth+60+
   GetRandom(40)`（everyone都有），女性额外排一次婚姻年`birth+20+GetRandom(15)`。
@@ -106,7 +109,7 @@ void Populace::InitNames() {
 		THROW_EXCEPTION(RuntimeException, "No name mod available.\n");
 	}
 	name = new Name(&nameFactory, activeId);
-	// ...ReserveName，见name.md"ReserveName"一节
+	// ...遍历Config::GetMainStoryScriptPaths()，对每个脚本的name_reserve调ReserveName，见name.md
 }
 ```
 
@@ -123,9 +126,7 @@ void Populace::InitNames() {
 `GenerateName`，不直接持有/调用`NameMod*`，和`Terrain`/`Script`等其它concept
 "上层聚合类只操作Core层包装类"的架构一致，见`name.md`。
 
-**一处和老工程行为不同的点**：给最初100男100女种子生成姓名时，统一按"按性别选
-对应词库+中性词库永远允许"（和`LIFE_BIRTH`事件一致），不是两个性别都固定传
-`(male=false, female=true, neutral=true)`。
+最初100男100女种子的姓名按性别选对应词库+中性词库永远允许（和`LIFE_BIRTH`事件一致）。
 
 ## 房产归属（`Map::Checkin`）
 
@@ -134,8 +135,8 @@ void Populace::InitNames() {
 一节、字段设计见`Source/Core/map/room.md`/`zone.md`。几个关键决策：
 
 - **"归属"和"住处"是两个独立概念**：一个room的owner由独立的"房产归属"流程决定
-  （可能是从没在这里住过的人，即房东），和"谁实际住在这里"（`tenants`/
-  `occupants`）没有必然关系。`Map::Checkin()`先跑完整的zone→building→room归属
+  （可能是从没在这里住过的人，即房东），和"谁实际住在这里"（`households`，见`household.md`）/
+  谁当前在这里（`occupants`）没有必然关系。`Map::Checkin()`先跑完整的zone→building→room归属
   级联，再跑完全独立的住处分配循环，两者互不干扰。
 - **"公有"（`stated`）结果真正随机可达**：触发条件是`zone->GetStated()`/
   `building->GetStated()`，读各自mod的`stateOwnedChance`
@@ -168,7 +169,10 @@ void Populace::InitNames() {
   `Source/Forever/Framework/ForeverPopulaceFrameworkComponent.h/.cpp`
   （`GenerateCitizens(Map*, Populace*)`缓存`GetCitizens()`列表）。
 
-## Tick：驱动Job的调度
+## Tick：饱食度衰减 + 驱动Job/Scheduler的调度
+
+每次`Tick`先做饱食度衰减：对`IsStatsActive()`的市民调`DecaySatiety(经过的游戏天数)`；`lastTickTime`不存档，
+读档后第一帧只记时间不衰减。随后是两套调度。
 
 `Populace::Tick(currentTime, crossedDay, onActions, post)`——`Job`的timer放在
 这里（不是`Society`），因为`Job`由`Citizen`直接持有引用，`Populace`本来就要遍历
@@ -284,6 +288,12 @@ Organization类型已经在用同一套CDF算法，见`society.md`），详见`s
 `SchoolClass`遍历`GetStudents()`两两互相`AddAcquaintance`，不像同事关系那样只
 随机抽一部分（见`society.md`）。
 
+## `SpawnCitizen`
+
+`SpawnCitizen(name, gender, birth, schedulerId, avatar)`：脚本`spawn_npc`在运行中新增市民——建`Citizen`+
+`Scheduler`（`schedulerId`为空按权重随机，同`AssignSchedulers`的`PickSchedulerId`），追加到`citizens`末尾；
+不分配住处、不登记人际关系；空名或重名返回nullptr。`avatar`非空则设为头像名。
+
 ## `ApplyChange`/`FindCitizenByName`
 
 `Populace::ApplyChange(const Change*, const ScriptContext&)`——处理市民的`add_option`/`remove_option`，
@@ -311,6 +321,7 @@ Organization类型已经在用同一套CDF算法，见`society.md`），详见`s
   的Player/Asset域还没进这个项目，`Citizen`也没有资产列表字段。归属本身
   （`owner`/`stated`）完整迁移了，只是不再额外生成一份"资产"记录。
 
-## 人数封顶
+## 已知风险
 
-`Init(accommodation, workCapacity)`：随机扰动得到目标人数后，取`min(目标, workCapacity)`再生成(`workCapacity`来自`Map::ComputeWorkCapacity()`，默认不封顶)。
+- 年表模拟里`LIFE_MARRY`取候选用`GetRandom(maleBirths[highId]-maleBirths[lowId])`，依赖前面两个
+  `maleBirths`相等/为-1的提前`break`保证参数为正；改动这段前先确认。

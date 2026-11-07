@@ -12,7 +12,7 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   dll是合法mod"(探测完即释放句柄,详见`config.md`);`ModLoader`回答"把这些合法dll接入
   某个具体系统的Factory"(常驻句柄,按需调用注册/收尾)。这是两件调用频率不同的事:探测在
   `ReadConfig`时做一次,注册要按每个系统(Building/Script/……)各自的Factory分别做。
-- **`GetModConceptDescriptors()`是全部concept的DLL导出符号名唯一权威列表**——
+- **`GetModConceptDescriptors()`是全部21个concept的DLL导出符号名唯一权威列表**——
   `conceptKey`只是内部使用的可读标签(`"Buildings"`/`"Scripts"`等),真正决定探测/注册
   行为的是`getModSymbol`/`registerModSymbol`/`finishModSymbol`三个字符串。
   `Config::AddDllPath`复用这份列表的`getModSymbol`做探测,避免两处维护同一份符号表。
@@ -41,18 +41,38 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   重复调用`RegisterMod<Concept>`,后一次覆盖前一次——目前不处理这个情况,建议开发时只保留
   一份构建产物在`Forever_Mod/`下。
 
+### concept与domain对照
+
+| domain | concept |
+|---|---|
+| map | Terrains / Roadnets / Zones / Buildings / Components / Rooms |
+| populace | Names / Schedulers |
+| society | Jobs / Organizations |
+| story | Scripts |
+| industry | Products / Storages / Manufactures |
+| traffic | Vehicles / Stations / Routes |
+| player | Assets / Puzzles / Apps / Weapons |
+
+`GetModConceptDescriptors()`里的顺序是Mod screen按钮的显示顺序(`ModPanelWidget`按它遍历)，人为分组，不是字母序。
+
+### `GetModDependencies`导出符号
+
+`kModDependenciesSymbol`整个DLL只有一份，不属于任何concept，由`Config::AddDllPath`在探测concept符号的同一次
+`LoadLibrary`里顺带读取，不在描述符表里(表的行是3个per-concept符号)。返回内容是这个DLL里**每个mod id各自**的
+依赖列表配对表(`vector<pair<modId, vector<depId>>>`，静态对象指针，调用方只读不释放，和`GetMod<Concept>`
+同一套约定)，一个DLL注册的多个互不相关的mod可以各自声明不同依赖；modId全局唯一(CONVENTIONS §5)，不需要带
+concept前缀。给游戏启动配置界面的依赖校验用，见`config.md`。
+
 ## 依赖关系
 
 - 依赖:无引擎依赖,纯C++(`<windows.h>`只在`.cpp`里)。
 - 被谁依赖:`Source/Core/common/config.cpp`(用`GetModConceptDescriptors()`做探测)、
-  `Source/Core/common/registry.cpp`(持有全部21个concept唯一的`ModLoader`实例，构造函数里
+  `Source/Core/common/registry.cpp`(持有全部21个concept唯一的`ModLoader`实例，`RegisterMods`里
   对每个concept各调一次`RegisterConcept`，见`registry.md`)、
   `Source/Forever/Mod/ForeverModSubsystem.cpp`(验证用途,构造独立的临时`ModLoader`
   实例,和`Registry`那份互不相关)。
 
 ## 待办/后续阶段
 
-- 按系统迁移进度,逐个把`GetModConceptDescriptors()`里其余concept接入对应系统
-  的`RegisterConcept`调用(目前只有`ForeverModSubsystem`验证了Buildings/Scripts两项)。
 - 如果同一个dll需要支持"重新扫描/热重载"场景,需要在`UnloadAll`之外补充"卸载单个
   dll"的能力,目前只支持一次性加载、退出时整体卸载。

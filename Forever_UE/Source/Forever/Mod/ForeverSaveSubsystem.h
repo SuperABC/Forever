@@ -14,10 +14,7 @@ struct FForeverPendingLoad {
 	SaveManifest manifest;
 };
 
-// 存档/读档的UE侧入口：文件读写、外层头(magic+版本+长度)、zlib压缩、文件对话框、加载前校验和
-// 报错、把通过校验的读档请求交给World关卡(AForeverFrameworkActor开局时ConsumePendingLoad)。
-// Core侧的manifest/校验/版本表见Source/Core/common/save.h。做成UGameInstanceSubsystem：菜单
-// 加载和游戏内加载都要跨一次OpenLevel，pendingLoad必须活过关卡切换。详见ForeverSaveSubsystem.md。
+// 存档/读档的UE侧入口，详见ForeverSaveSubsystem.md。
 UCLASS()
 class FOREVER_API UForeverSaveSubsystem : public UGameInstanceSubsystem
 {

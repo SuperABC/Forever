@@ -1,4 +1,4 @@
-# zone.h / zone.cpp（`building.h`/`.cpp`同构，见文末）
+# zone.h / zone.cpp
 
 ## 职责
 
@@ -7,9 +7,8 @@
 `Zone`占据的矩形直接就是它自己（`SetPosition`/`GetPosX`等都是`Quad`现成的方法），不额外
 持有一个`footprint`字段。
 
-`Zone`不实现"Zone内部再持有一批`Building`"的递归布局——只是一个类型+矩形的占位对象，落地时
-`Map::InitZones()`会调用继承来的`SetPosition`把它摆到`Lot::RequestPlacement`裁剪出来的位置
-上，然后就结束了，见`Source/Core/map/map.md`"InitZones"一节。
+`Zone`落地时`Map::InitZones()`调用继承来的`SetPosition`把它摆到`Lot::RequestPlacement`裁剪出来的位置上；
+园区内部的道路/建筑由`ZoneMod`显式声明（见下），不是自动填充剩余空间，见`Source/Core/map/map.md`"InitZones"一节。
 
 ## 关键设计
 
@@ -52,11 +51,10 @@
   围墙/大门的局部坐标语义（参考边+margin+depth，原点在Zone矩形中心）不需要额外坐标转换
   字段——渲染时Forever层直接拿`Zone`自己的`GetPosX/PosY/SizeX/SizeY/GetRotation()`+这份
   数据现算世界坐标。
-- **`Layout(int direction)`（Core编译的转发方法）**：`mod->Layout(direction, *this,
-  GetBoundaryRoads())`——`Zone`这一层没有需要额外解析缓存的数据(`GetWalls()`/`GetGates()`
-  本来就直接转发`mod->walls`/`mod->gates`)，这个方法纯粹是让`Map::InitZones()`不用自己摸
-  `mod`指针，和`Building::Layout()`保持同样的调用形态（`Building`那边因为要解析楼体/楼层/
-  LOD数据，`Layout()`内部除了转发还要做更多事，见下）。
+- **`Layout(int direction)`**：转发`mod->Layout(direction, *this, GetBoundaryRoads())`，并把`walls`/`gates`/
+  脚本字段(`scriptModName`/`milestoneNames`)快照到`Zone`自己身上、记下`direction`、换算`decorations`——读档时mod是
+  重新创建的空实例、`Layout`不会再跑，这些快照由`MapSaveCodec`直接还原（`map_save.md`）。`BuildDoors`遍历快照`gates`；读档后门由存档里的`Door`记录重建，不再调用`BuildDoors`
+  （它判断车辆门时读的`mod->vehicleEntries/vehicleExits`没有快照，所以只能在新开局`Layout`之后调用）。
 - **寻址唯一性**：`GetName()`直接转发`mod->GetName()`，唯一性由mod自己在**构造函数**里维护
   static计数器保证，`Zone`本身不做任何消歧——`Map::AddZone`发现重名只是拒绝加入+`debugf`
   警告，作为mod实现有误时的兜底，不是保证唯一性的主要手段。`Map::GetZone(name)`按这个唯一
@@ -79,8 +77,8 @@
 
 ### 园区大门
 
-`ZoneGateSpec`新增`DoorSpec door`字段（见`Dependence/map/zone_mod.h`），`mesh`为空=只是
-围墙让出的空当，不放门。`Zone`新增`doorEntities`+`BuildDoors(Map&)`：遍历`mod->gates`，
+`ZoneGateSpec`带`DoorSpec door`字段（见`Dependence/map/zone_mod.h`），`mesh`为空=只是
+围墙让出的空当，不放门。`Zone`持有`doorEntities`（析构时释放）+`BuildDoors(Map&)`：遍历快照`gates`，
 `gate.door.mesh`非空就按和`ForeverZoneFrameworkComponent::BuildWallSegment`同一套
 "参考边+margin+depth+depthInward"公式算出世界坐标(Core端复刻，算地图单位不是UE单位)，
 调`map.CreateDoor(DOOR_KIND_ZONE, ...)`。`IsVehicleGate`按这段范围是否和
@@ -108,81 +106,10 @@
   `ZoneLocalToWorld`/`ConnectZoneAccessPoint`/`ConnectZoneInternalRoad`/
   `PlaceZoneInternalBuilding`四个私有方法）、
   `Source/Forever/Framework/ForeverZoneFrameworkComponent.h/.cpp`（`GenerateZones(Map*)`
-  读`Zone::GetWalls()`铺围墙ISM——不画扁box占位，围墙本身已经足够表达zone范围）。
+  读`Zone::GetWalls()`/`GetGates()`铺围墙ISM）。
 
 ## 待办/后续阶段
 
 - Zone内部再对自己剩余的矩形跑一次Building分配流程（推迟，等设计好细节再补）——现有的
   `internalBuildings`是`ZoneMod`显式指定的固定建筑列表，不是自动填充剩余空间，两者不是
   一回事。
-- 大门资产/渲染（`ZoneGateSpec`这次只存位置数据，没有mesh字段）。
-
----
-
-# building.h / building.cpp
-
-和`Zone`结构基本一样（同样继承`Quad`），`Building`从构造到析构只持有**一个**`BuildingMod`
-实例：`Building(BuildingFactory* factory, BuildingMod* mod)`构造，`~Building()`里
-`factory->DestroyBuilding(mod)`——每个mod实例的生命周期完全绑定它独占的`Building`，这样
-"寻址唯一性计数器写在mod构造函数里"这套和`Zone`一致的机制能正确工作（mod实例如果被多个
-`Building`共用，构造函数只会跑一次却要服务好几个`Building`，计数器起不到区分作用）。
-
-`BuildingMod`没有`Distribute()`/`explicitPlacements`/`candidateWeights`：
-- **显式占位**：和`ZoneMod`同样是static `Assign(lots, emit, context)`，一次调用扫完
-  全地图的lot；`Map::InitBuildings()`的处理流程和`InitZones()`完全同构，见`map.md`。
-- **`RandomAcreage()`/`GetAcreageMin()`/`GetAcreageMax()`（`FillRemainder`采样面积用）、
-  `GetPower(AREA_TYPE)`（按分区类型给lot登记权重）**：子类必须实现的static方法，通过
-  `BuildingFactory::RegisterBuilding`的额外函数指针参数注册（和`creator`/`deleter`同样的
-  裸函数指针机制——`AssignFunc`内部用`PlacementEmitFunc`回调把结果交回调用方、回调函数体
-  编译在调用方那一侧，不返回/不持有任何容器，避免跨DLL分配器问题，`RandomAcreage`等返回值
-  是纯`float`，同样没有容器所有权问题）。这些查询完全不需要构造`BuildingMod`实例，只有
-  真正落地成功才会`CreateBuilding`一次——`Map::InitBuildings()`不需要`scanners`表。
-
-**`Layout(int direction)`（Core编译，Building自己的落地入口）**：调用方在
-`SetPosition`/`SetBoundaryRoad`都设好之后调用一次，内部先调
-`mod->Layout(direction, *this, GetBoundaryRoads())`（`this`已经是`Quad`、边界路也已经是
-真实数据），再把`mod->footprint`（`BuildingFootprintSpec`，楼体在Building自身`Quad`里的
-位置：两个比例float表示楼体中心、两个比例float表示楼体长宽比例，不复用`Quad`类型本身）/
-`basements`/`layers`/`floorHeights`/`lodMaterial`解析成`Building`自己的绝对（相对自身
-中心，未旋转局部坐标）数值并缓存——`GetBodyOffsetX/Y()`/`GetBodySizeX/Y()`/
-`GetBasementCount()`/`GetLayerCount()`/`GetFloorHeights()`/`GetLodMaterialPath()`
-这几个getter读的就是这份缓存。`direction`对显式占位(`Assign`产出)落地的`Building`是`Assign`
-选中的真实方向；对权重CDF/`FillRemainder`落地、以及目前的园区内部建筑，`direction`分别传
--1、`spec.direction`（`ZoneInternalBuildingSpec`的字段）。`footprint`/`basements`/
-`layers`/`floorHeights`/`lodMaterial`这几个字段**不能在mod构造函数里设**——构造函数此时还
-不知道任何落地上下文，必须等`Layout()`才有意义，和`ZoneMod`的`walls`/`gates`同理。楼体/
-楼层/LOD渲染见`Source/Forever/Framework/ForeverBuildingFrameworkComponent.md`。
-
-`boundaryRoads`（四周边界Road）和`Zone`同样的字段/语义，`Map::InitBuildings()`在显式占位
-和`FillRemainder`两条路径上都会填（`FillRemainder`产出的`Lot::FillResult`也有
-`boundaryRoads`字段，见`general_geometry.md`）。
-
-**寻址唯一性**：和`Zone`同样，`GetName()`直接转发`mod->GetName()`，唯一性由mod自己在构造
-函数里维护static计数器保证，`Map::AddBuilding`发现重名只是拒绝加入+`debugf`警告兜底。
-`Map::GetBuilding(name)`扁平查找；`Map::LocateBuilding(address)`按"`<road> <index>
-<buildingName>`"（直接落在Lot上、没有`parentZone`的Building）或"`<road> <index>
-<zoneName> <buildingName>`"（Zone内部的Building）分层查找，详见`map.md`"寻址"一节。
-
-**`Building`比`Zone`多两个字段，专门给Zone内部建筑用**：
-- `Zone* parentZone`：只是纯粹的反向查询登记（"这个building在哪个园区里"），**不参与
-  `GetRotation()`计算**——旋转转发走的还是`parentLot`那条链路。和`parentLot`同时设置，
-  不是二选一：`Map::PlaceZoneInternalBuilding`把内部建筑的`parentLot`直接设成**它所属
-  Zone自己的`parentLot`**（`zone->GetParentLot()`），这样`GetRotation()`的转发基准天然和
-  zone一致，不需要为此单独引入一条"转发到`parentZone->GetRotation()`"的路径。
-- `float relativeRotation`：叠加在`GetRotation()`结果上的附加偏移，默认0（普通顶层Building
-  不受影响，等价于原来纯转发`parentLot->GetRotation()`的行为）。`SetParentLot(Lot*, float
-  relativeRotation = 0.f)`用一个默认参数设置它，旧调用点(`SetParentLot(lot)`)不用改。
-  `GetRotation()`是`(parentLot ? parentLot->GetRotation() : 0.f) + relativeRotation`。
-  对应`ZoneInternalBuildingSpec::relativeRotation`（"以园区旋转为基准继续旋转"，见
-  `zone_mod.md`）。
-
-**`owner`/`GetStated()`（房产归属）**：和`Zone`同一套字段/语义（`Citizen* owner =
-nullptr`+`bool stated = false`，互斥），`Map::Checkin()`给每个不属于任何zone的独立building
-随机roll一次"整个building统一归属"；属于某个zone的building要么被zone级联下来的归属直接
-设定（zone统一归属时），要么在zone没有统一归属的情况下由zone那边的循环单独给每个
-internalBuilding各roll一次"整个building统一归属"——不会被`Map::buildings`里对同一个
-building再重复roll一次，详见`populace.md`"房产归属"一节。building一旦统一归属，会把
-owner/stated**级联写到它所有的`Room`**——一个建筑属于某人或公有时，这个建筑里的所有房间
-都属于这个人或公有；**如果building内部不同room各自独立归属不同人，`owner`/`stated`保持
-默认值（`nullptr`/`false`）**，不需要显式重置，天然由"只在统一归属分支才调用setter"这个
-结构保证。

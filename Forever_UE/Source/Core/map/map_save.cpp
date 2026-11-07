@@ -1473,7 +1473,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 			cabin->fromZ = fromZ;
 			cabin->targetLevel = targetLevel;
 			cabin->elapsed = elapsed;
-			// options和门一样：存档带脚本状态段时(读档跳过game_start)才恢复，否则game_start会再加一遍。
+			// options同门：读档跳过game_start广播，选项按存档恢复。
 			cabin->options = options;
 			building->cabinEntities.push_back(cabin);
 			map.cabinsByInteractName[interactName] = cabin;

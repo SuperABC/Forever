@@ -29,56 +29,21 @@
 #include <vector>
 
 
-// 21个concept(对照表见common/loader.md)的mod注册表：mod dll的发现/注册
-// (LoadLibrary+RegisterConcept)只应该在整个UE进程生命周期里发生一次，和"每个持有者
-// (Map/Populace/Story/……)每次开局实际生成一遍对象、结束时整个释放、下次开局重新生成"这件
-// 事完全分开——Map/Populace/Story不自己持有ModLoader+Factory，改成持有一个引用成员，指向
-// 这里对应的Factory。common/是Core里各域都可以依赖的顶层位置(implement.h的PostHandle
-// 同款定位)。
-//
-// 用函数内static实现懒汉单例(Get()首次调用时构造，构造函数里跑完全部21个RegisterConcept)，
-// 不挂在任何UE Subsystem的生命周期上——Core要保持engine-agnostic(见CONVENTIONS.md)，纯
-// C++单例足够满足"全局只注册一次"：Core.lib静态链接进UnrealEditor-Forever.dll，只要这个
-// dll不被卸载/热重载，函数内static对象就活得比任何一次PIE开的Map/Populace/Story都长。
-//
-// 21个Factory对"已注册mod id列表"之外没有会跨局累积的状态——CreateXxx/DestroyXxx只是按
-// 注册时存的creator/deleter函数指针创建/销毁一个实例，跟调用了多少次、上一局是不是已经开过
-// 完全无关，所以多局共用同一个Factory实例是安全的。
-//
-// **`SetModArgs`不在这份"只做一次"的范围内**——`RegisterConcept`(dll发现/加载/把
-// creator/deleter函数指针记进Factory)和`SetModArgs`(把这次config.json"<concept>_mods"
-// 数组解析出的id->参数字符串表交给Factory，`CreateXxx(id)`创建实例时查这张表、把参数字符串
-// 直接传给creator函数)是两件不同频率的事：前者只要mod dll本身没变就不需要重新扫描，
-// 后者每次实际开局都可能不一样（不同局可以指向不同的config文件，参数也可能不同）。构造
-// 函数只调一次`RegisterConcept`，`SetModArgs`拆到`ReloadModArgs()`里单独暴露，调用方
-// (`AForeverFrameworkActor::BeginPlay()`，在7个`Ensure*Generated()`之前)在每次真正开局、
-// 确认这一局要用的config已经被`Config::ReadConfig`读进内存之后，调一次
-// `Registry::Get().ReloadModArgs()`刷新参数表，不需要也不应该重新触发dll扫描。
+// 21个concept的mod注册表(全局单例)，设计见registry.md
 class Registry {
 public:
 	static Registry& Get();
 
-	// 每次真正开局调用：把config里新出现、还没加载过的mod dll补加载+注册进21个Factory(已经
-	// 加载过的dll不动)，再ReloadModArgs()刷新启用表。这样退出游戏回菜单、在配置界面新增了
-	// dll路径之后再开始游戏，新dll的mod也能用；从配置里移除的dll不卸载(Factory存的creator/
-	// deleter函数指针指向它的代码段，FreeLibrary会悬空)，保持加载，但它的mod id不在启用表里
-	// (Factory::IsEnabled按configuredArgs判断)，所以照样是禁用状态。
+	// 补加载config里新出现的mod dll并刷新启用表，见registry.md
 	void RefreshMods();
 
 	Registry(const Registry&) = delete;
 	Registry& operator=(const Registry&) = delete;
 
-	// 重新按当前Config::GetConceptMods()的内容给全部21个Factory调一次SetModArgs——不重新
-	// LoadLibrary、不重新RegisterConcept，只刷新"mod id -> 参数字符串"这张表。每次真正开局
-	// (读了新的config文件之后)都应该调一次，因为不同局可能用不同的config.json，见
-	// Source/Core/common/registry.md"SetModArgs的调用频率"一节。
+	// 只刷新"mod id -> 参数字符串"表，不重新加载dll
 	void ReloadModArgs();
 
-	// 对全部21个Factory各查一次CheckRegistered(id)，只要有任意一个认得这个id就返回
-	// true——mod id不带concept前缀，不能靠字符串猜它属于哪个concept("building_clean"
-	// 完全可能是个Job mod)，所以这里不按concept分流，直接全局匹配，供
-	// AForeverFrameworkActor::ValidateMainStoryDependencies()校验mod_dependences用，
-	// 见script.md"mod_dependences"一节的设计决策。
+	// 任意一个Factory认得这个id即true(id不带concept前缀)
 	bool CheckModRegistered(const std::string& id) const;
 
 	TerrainFactory& GetTerrainFactory() { return terrainFactory; }
@@ -112,16 +77,13 @@ public:
 private:
 	Registry();
 
-	// 对paths里的dll做21个concept的RegisterConcept(LoadLibrary+Register+Finish)，成功加载的
-	// 记进loadedDllPaths。
+	// 对paths里的dll做21个concept的RegisterConcept，成功加载的记进loadedDllPaths
 	void RegisterMods(const std::vector<std::string>& paths);
 
 	// 已经成功加载并注册过的dll路径，RefreshMods只处理不在这里的。
 	std::unordered_set<std::string> loadedDllPaths;
 
-	// 持有mod dll句柄,必须活得比它注册进的21个Factory一样长——它们存的creator/deleter函数
-	// 指针指向这些dll的代码段,句柄一旦被FreeLibrary这些指针就悬空;21个Factory都是这一个
-	// 单例的成员,生命周期天然一致。
+	// 必须活得比21个Factory一样长(creator/deleter指向dll代码段)
 	ModLoader modLoader;
 
 	TerrainFactory terrainFactory;

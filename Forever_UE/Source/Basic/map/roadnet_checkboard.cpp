@@ -4,7 +4,6 @@
 
 #include <cmath>
 #include <algorithm>
-#include <map>
 #include <set>
 #include <queue>
 #include <sstream>
@@ -568,8 +567,8 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		}
 		// 长边：任一端死了就整条删掉。
 		for (int a = 0; a < nu * nv; a++) {
-			if (hLongTo[a] >= 0 && (!alive[a] || !alive[hLongTo[a]])) { if (hLongTo[a] >= 0) hLongFrom[hLongTo[a]] = -1; hLongTo[a] = -1; }
-			if (vLongTo[a] >= 0 && (!alive[a] || !alive[vLongTo[a]])) { if (vLongTo[a] >= 0) vLongFrom[vLongTo[a]] = -1; vLongTo[a] = -1; }
+			if (hLongTo[a] >= 0 && (!alive[a] || !alive[hLongTo[a]])) { hLongFrom[hLongTo[a]] = -1; hLongTo[a] = -1; }
+			if (vLongTo[a] >= 0 && (!alive[a] || !alive[vLongTo[a]])) { vLongFrom[vLongTo[a]] = -1; vLongTo[a] = -1; }
 		}
 		// 边的另一端可能在孤岛里(边只存在于同一分量内，所以不会出现)，保险起见再按端点清一遍。
 		for (int j = 0; j < nv; j++) {
@@ -765,7 +764,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		return false;
 		};
 
-	struct Chain { int a; int b; bool horizontal; int line; bool special; int roadIndex; };
+	struct Chain { int a; int b; bool horizontal; int line; int roadIndex; };
 	vector<Chain> chains;
 	vector<int> hChain(static_cast<size_t>(nu) * nv, -1), vChain(static_cast<size_t>(nu) * nv, -1);
 	for (int j = 0; j < nv; j++) {
@@ -778,7 +777,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 				int end = start + 1;
 				while (removable(end, j) && hEdge[nodeIndex(end, j)]) end++;
 				int id = static_cast<int>(chains.size());
-				chains.push_back({ nodeIndex(start, j), nodeIndex(end, j), true, j, hSpecial[nodeIndex(start, j)] != 0, -1 });
+				chains.push_back({ nodeIndex(start, j), nodeIndex(end, j), true, j, -1 });
 				for (int k = start; k < end; k++) hChain[nodeIndex(k, j)] = id;
 			}
 			if (vEdge[a] && vChain[a] < 0) {
@@ -787,7 +786,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 				int end = start + 1;
 				while (removable(i, end) && vEdge[nodeIndex(i, end)]) end++;
 				int id = static_cast<int>(chains.size());
-				chains.push_back({ nodeIndex(i, start), nodeIndex(i, end), false, i, vSpecial[nodeIndex(i, start)] != 0, -1 });
+				chains.push_back({ nodeIndex(i, start), nodeIndex(i, end), false, i, -1 });
 				for (int k = start; k < end; k++) vChain[nodeIndex(i, k)] = id;
 			}
 		}
@@ -795,8 +794,8 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 
 	// 长边各自一条链(special：跨山，不挂lot)。
 	for (int a = 0; a < nu * nv; a++) {
-		if (hLongTo[a] >= 0) chains.push_back({ a, hLongTo[a], true, a / nu, true, -1 });
-		if (vLongTo[a] >= 0) chains.push_back({ a, vLongTo[a], false, a % nu, true, -1 });
+		if (hLongTo[a] >= 0) chains.push_back({ a, hLongTo[a], true, a / nu, -1 });
+		if (vLongTo[a] >= 0) chains.push_back({ a, vLongTo[a], false, a % nu, -1 });
 	}
 
 	// =========================================================================================
@@ -888,20 +887,7 @@ void CheckboardRoadnet::LayoutLamps(const vector<Road*>& hostRoads) {
 }
 
 void CheckboardRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing, float sidewalkRatio, const RowEmitter& emit) {
-	// 行道树和路灯共用这套几何，spacing/sidewalkRatio由调用方传入（下面注释里的TREE_SPACING就是spacing）。
-	// hostRoads是Core那份路网(开口已经齐全)，只读。每条地面上的大路两侧各种一排：横向偏移和
-	// Map::ComputeLaneAnchorPosition同一套约定——perp0=(-dy,dx)是side0方向，车道整体按
-	// shift=(side0宽-side1宽)/2居中。
-	// 纵向统一规则："缺口"边缘之外再留半个TREE_SPACING才种第一棵——
-	//   ①端点是Intersection(真正的路口)：缺口=路口收缩距离，和RoadJunction::Build同一个定义
-	//     (这个路口所有连接路里GetTotalWidth()最大值的一半)，也就是这条路可见路面开始的位置；
-	//   ②端点是普通Node(lot角格点/地图边缘残端)：道路本身连续，缺口=0，相邻两段在node两侧各留
-	//     半格，拼起来正好一个完整间距，树连续不断也不会在node上重复种两棵；
-	//   ③开口(Road::GetOpenings，只有小路接口和建筑/园区出入口两种来源，普通node不会产生开口)：
-	//     缺口=开口自己的width，以开口中心为准两侧各width/2，再各留半格。
-	// 剩下连续的几棵合成一条AddTreeLine。开口两侧人行道都避开(SplitWithPath产的开口没有可靠的
-	// side信息)。隧道口附近的引道两端Z也是0，靠Core的CanPlaceTree跳过挖洞格子。
-	// Core的Intersection是从this->intersections深拷贝的，拷贝保留id，按id判断即可。
+	// 与JingRoadnet::LayoutRows完全相同的几何(复制而来)，缺口规则见roadnet_basic.md"行道树"。
 	unordered_set<int> intersectionIds;
 	for (const Intersection& intersection : intersections) intersectionIds.insert(intersection.GetId());
 	// 路口收缩距离：hostRoads就是Core建RoadJunction时用的那批大路，含隧道段，全部参与。

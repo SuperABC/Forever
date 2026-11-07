@@ -6,14 +6,8 @@
 
 class Weapon;
 
-// 挂在AForeverCharacter上的武器组件——开火/换弹/切枪这些"每帧/每次交互都要做"的高频路径
-// 全部是纯C++调用，直接读WeaponMod的数据字段算，不经过Story/Change/Event（见
-// ForeverWeaponComponent.md"高频/低频两条路径"一节，照抄weapon_system_plan.md原始设计的
-// 这条核心原则）。只有命中导致Citizen死亡这一个"低频/叙事阈值"时刻会跨到Story
-// （UForeverStoryFrameworkComponent::BroadcastCitizenDecease）。
-//
-// 已实现范围（见ForeverWeaponComponent.md）：hitscan开火+伤害+换弹+数字键切枪+瞄准+后坐力，
-// 不做：通缉值、警察JobMod、反抗小游戏、ArrestPlayerChange。
+// 挂在AForeverCharacter上的武器组件：开火/换弹/切枪等高频路径全是纯C++调用，只有致死时才
+// 跨到Story，见ForeverWeaponComponent.md。
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class FOREVER_API UForeverWeaponComponent : public UActorComponent
 {
@@ -26,21 +20,14 @@ public:
 		FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	// 按WeaponFactory里注册的id切换到那把武器（比如"weapon_pistol"/"weapon_rifle"，见
-	// Source/Basic/player/weapon_basic.h）——找不到该id、或该id没在config.json
-	// "weapon_mods"数组里启用时，静默保留当前武器不变（和其余concept的CreateXxx失败处理
-	// 惯例一致，不抛异常）。
-	// @weaponId: WeaponMod::GetType()/静态GetId()对应的字符串
+	// 按WeaponFactory里注册的id切换武器；id未注册/未启用时静默保留当前武器。
 	void EquipWeapon(const FString& weaponId);
 
-	// 按下/松开开火键。单发武器(WeaponMod::fullAuto为false)只在按下瞬间打一发(仍然受
-	// fireRate冷却限制)；全自动武器按住期间TickComponent每帧检查冷却到了没有，到了就
-	// 自动再打一发，直到StopFire()。
+	// 按下/松开开火键。单发武器只在按下瞬间打一发；全自动武器按住期间由TickComponent按冷却连发。
 	void StartFire();
 	void StopFire();
 
-	// 手动换弹——换弹完成时从Player背包按WeaponMod::ammoType扣减整个弹匣容量的备弹，见.cpp
-	// TickComponent换弹完成分支。
+	// 手动换弹，备弹在换弹计时结束时才扣(见md)。
 	void Reload();
 
 	bool IsReloading() const { return bReloading; }
@@ -49,26 +36,17 @@ public:
 	void SetCurrentAmmo(int32 value) { currentAmmo = FMath::Clamp(value, 0, GetMagazineCapacity()); }
 	int32 GetMagazineCapacity() const;
 
-	// 当前手上是不是空的(没有激活任何武器)——供AForeverCharacter::StartAim()判断能不能
-	// 瞄准(手上没武器没法瞄准)，也供ActivateShoulderWeapon()判断要不要先清空。
+	// 手上是否激活了武器。
 	bool HasWeapon() const { return currentWeapon != nullptr; }
 
-	// 清空当前武器(销毁mesh+WeaponMod实例)，不装备新的——供
-	// AForeverCharacter::ActivateShoulderWeapon()在"切到的那个肩膀是空的"时调用：这时
-	// 手上应该跟着空下来，不能继续保留切换前的那把武器。
+	// 清空当前武器，不装备新的(切到空肩膀时手上要跟着空下来)。
 	void ClearWeapon();
 
 private:
-	// 真正的一次开火：冷却/弹药检查通过后，从当前摄像机（第一/第三人称由
-	// AForeverCharacter::IsFirstPerson()决定用哪个）沿视线方向(叠加baseSpread随机散射)
-	// 打一条LineTraceSingleByChannel，命中ACitizenElement就调Citizen::TakeDamage()，
-	// 致死则广播CitizenDeceaseEvent+通知UForeverPopulaceFrameworkComponent清理。
+	// 一次开火：瞄准/冷却/弹药检查通过后从摄像机打一条射线，命中市民则结算伤害，致死则广播事件。
 	void Fire();
 
-	// 独占持有——Weapon(Core层wrapper，见Source/Core/player/weapon.h)构造时自己调
-	// Registry::Get().GetWeaponFactory().CreateWeapon(id)，析构时自己调DestroyWeapon()
-	// 释放(跨DLL new/delete安全，和其余XxxFactory同一个约定)，EndPlay/切枪时这一层只需要
-	// 普通delete。
+	// 独占持有；Weapon自己经Factory创建/销毁WeaponMod(跨DLL安全)，这一层普通delete即可。
 	Weapon* currentWeapon = nullptr;
 
 	int32 currentAmmo = 0;

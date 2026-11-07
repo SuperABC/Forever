@@ -12,39 +12,31 @@
 
 namespace wxdj {
 
-// ---- 平衡系数(数值依据见battle.md"数值平衡"一节，改动前先看那里) ----
+// ---- 平衡系数(含义和数值依据见battle.md，改动前先看那里) ----
 // 双招：真气消耗 = DUAL_COST_FACTOR * (两招消耗之和)，威力 = DUAL_POWER_FACTOR * (两招威力之和)。
 inline constexpr double DUAL_COST_FACTOR = 1.0;
 inline constexpr double DUAL_POWER_FACTOR = 0.6;
-// 积攒真气炸弹：每次消耗当前真气的ACCUMULATE_FRACTION，消耗量按倍率存进炸弹。倍率是修炼者的个人属性，
-// 由所在阶位决定，按表给定(3-1阶=第1式=1.0，3-2阶=1.2，3-3阶=1.5，3-4阶=1.9，3-5阶=2.4，3-6阶=3.0，4-1阶=3.7，4-2阶=4.5，4-3阶=5.6，4-4阶=7.0，4-5阶=8.5，4-6阶=第18~20式=10)，
-// 同一阶位的各式共用这个最大式，见RealmMaxForm/BombMultiplierOfForm。下面是默认值(4-6阶位)。
+// 积攒真气炸弹：每次消耗当前真气的ACCUMULATE_FRACTION，按修炼者的炸弹倍率存进炸弹(倍率见BombMultiplierOfForm)。BOMB_ACCUMULATE_MULTIPLIER是默认值(4-6阶位)。
 inline constexpr float ACCUMULATE_FRACTION = 0.2f;
 inline constexpr float BOMB_ACCUMULATE_MULTIPLIER = 10.f;
-// 释放真气炸弹(能量B=累积量)：对手没出招(跳过/积攒/空炸弹/被禁锢)时受到 B*BOMB_HIT_FACTOR_PASSIVE，
-// 对手出了招受到 (B-对手出招威力)*BOMB_HIT_FACTOR_ACTIVE；自己反噬 B*BOMB_BACKFIRE_FACTOR。
-// 双方互扔炸弹：双方各受到 (B1+B2)*BOMB_BACKFIRE_FACTOR(两个炸弹之和乘反噬系数，一起生效)。
+// 释放真气炸弹(能量B=累积量)的结算见battle.md；PASSIVE=对手没出招，ACTIVE=对手出了招。
 inline constexpr float BOMB_HIT_FACTOR_PASSIVE = 0.4f;
 inline constexpr float BOMB_HIT_FACTOR_ACTIVE = 0.7f;   // 出招自带抵消和减伤/反弹等效果，所以不能把炸弹调小
 inline constexpr float BOMB_BACKFIRE_FACTOR = 0.2f;
-// 积攒炸弹的那一回合，自己受到的所有伤害多这么多(并入受到伤害乘区的易伤部分：乘区=1+易伤加和-减伤比例)，作为攒炸弹的一点代价。
+// 积攒炸弹的那一回合，自己受到的所有伤害多这么多(并入受到伤害乘区的易伤部分)。
 inline constexpr float ACCUMULATE_VULNERABILITY = 0.2f;
 // 锈蚀场地下，炸弹对双方的系数都是这个(取代上面的命中系数和反噬系数)。
 inline constexpr float BOMB_RUST_FACTOR = 0.5f;
-// 场地效果(灼烧/锈蚀/扬尘/泥沼)出现之后持续几个回合；出现的那一回合不算。内部多存1回合，下一个回合开始时减一，减到0就立刻消失
+// 场地效果出现之后持续几个回合(出现的那一回合不算，内部多存1回合)
 inline constexpr int FIELD_EFFECT_ROUNDS = 3;
 
-// 跳过回合(含被禁锢而无法出招)时敏捷的倍数，只用于躲避对方未被正面应对的普通招式：双方敏捷相同时，
-// 跳过的一方有 4/(1+4)=80% 的概率躲开；被禁锢的一方如果选择积攒真气炸弹(没有跳过)，仍然不能躲避。
+// 跳过回合(含被禁锢而无法出招)时闪避用的敏捷倍数：双方敏捷相同时，跳过的一方有 4/(1+4)=80% 的概率躲开
 inline constexpr int SKIP_AGI_FACTOR = 2;
 
-// 连续跳过要多扣敏捷：第1次扣agiLoss，之后每连续多跳一次多扣SKIP_STREAK_EXTRA_LOSS(默认1、1.5、2、2.5...)；
-// 只要这回合出了招/积攒/真放了炸弹，连续次数清零；空炸弹不算跳过也不清零。目的是压住"一直跳过"，
-// 真气不够时应该改出便宜的低式招式。
+// 连续跳过每多一次多扣的敏捷(规则见battle.md)
 inline constexpr float SKIP_STREAK_EXTRA_LOSS = 0.5f;
 
-// 阶位对应的最大式：阶位按xiaohua.txt里的阶位列(3-1~3-6各一式，4-1=7~8式，4-2=9~10式，4-3=11~12式，
-// 4-4=13~14式，4-5=15~17式，4-6=18~20式)。传入第几式，返回它所在阶位的最大式。
+// 传入第几式，返回它所在阶位的最大式(阶位划分同xiaohua.txt的阶位列：3-1~3-6各一式，4-1=7~8，4-2=9~10，4-3=11~12，4-4=13~14，4-5=15~17，4-6=18~20)
 inline int RealmMaxForm(int form) {
 	static const int maxForm[20] = { 1, 2, 3, 4, 5, 6, 8, 8, 10, 10, 12, 12, 14, 14, 17, 17, 17, 20, 20, 20 };
 	if (form < 1) form = 1;
@@ -52,9 +44,8 @@ inline int RealmMaxForm(int form) {
 	return maxForm[form - 1];
 }
 
-// 炸弹积攒倍率：所在阶位的最大式/2。
+// 炸弹积攒倍率：按所在阶位的最大式查表
 inline float BombMultiplierOfForm(int form) {
-	// 按阶位给定：3-1 1.0，3-2 1.2，3-3 1.5，3-4 1.9，3-5 2.4，3-6 3.0，4-1 3.7，4-2 4.5，4-3 5.6，4-4 7.0，4-5 8.5，4-6 10.0
 	switch (RealmMaxForm(form)) {
 	case 1: return 1.0f; case 2: return 1.2f; case 3: return 1.5f; case 4: return 1.9f; case 5: return 2.4f; case 6: return 3.0f;
 	case 8: return 3.7f; case 10: return 4.5f; case 12: return 5.6f; case 14: return 7.0f; case 17: return 8.5f;

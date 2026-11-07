@@ -7,7 +7,7 @@
 
 // 存档文件外层格式版本(文件头里紧跟magic的那个号)——管外壳布局：头字段、压缩方式、段表结构。
 // 外层头(magic "FEVR" + 这个版本 + 未压缩长度 + 压缩体)由UE层写，因为压缩用UE的FCompression；
-// 这里只放常量和"压缩体"内部的分段容器。见save_archive.md"版本号"一节。
+// 这里只放常量和"压缩体"内部的分段容器。见Source/Core/common/save.md"版本号"一节。
 constexpr int SAVE_FILE_VERSION = 1;
 // 当前代码还能读的最旧外层版本，比它还旧的存档直接拒绝。
 constexpr int SAVE_FILE_MIN_VERSION = 1;

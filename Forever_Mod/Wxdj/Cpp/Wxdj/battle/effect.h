@@ -150,7 +150,7 @@ private:
 	int currentRound; // 从上一次触发开始已累计的回合数
 };
 
-// 回复武力值效果，命中触发后每隔固定回合回复一次武力值
+// 回复武力值效果，不需要命中，出招即触发，之后每隔固定回合回复一次武力值
 class RecoverEffect : public Effect {
 public:
 	RecoverEffect(int instant, int continuous = 0, int rounds = 0, int interval = 1);
@@ -173,7 +173,7 @@ private:
 	int currentRound; // 从上一次触发开始已累计的回合数
 };
 
-// 回复健康值效果，命中触发后每隔固定回合回复一次健康值
+// 回复健康值效果，不需要命中，出招即触发，之后每隔固定回合回复一次健康值
 class CureEffect : public Effect {
 public:
 	CureEffect(int instant, int continuous = 0, int rounds = 0, int interval = 1);

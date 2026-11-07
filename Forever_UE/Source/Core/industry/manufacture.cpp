@@ -17,9 +17,8 @@ Manufacture::Manufacture(ManufactureFactory* factory, const string& id, const st
 	outputCache = nullptr;
 	if (!mod) return;
 
-	// 内部cache直接构造，不走mod系统(见storage.md)，categories留空——
-	// Industry::GlobalAllocate()对工坊cache是直接查Manufacture自己的
-	// ingredients/targets/byproducts表来判断"缺哪种类型"，不靠Storage::AcceptsCategory()。
+	// 内部cache直接构造，不走mod系统(见storage.md)，categories留空：
+	// 物流靠SetAccess/SetProductDemand驱动，不靠Storage::AcceptsCategory()。
 	inputCache = new Storage(name + "#input", {}, 0.f);
 	outputCache = new Storage(name + "#output", {}, 0.f);
 
@@ -57,10 +56,8 @@ void Manufacture::ComputeRecipe() {
 	unordered_set<string> targetTypes;
 	for (const auto& [target, N] : mod->targets) targetTypes.insert(target);
 
-	// Step1(估算用): 假设全部配置的targets原样满批达成,算出全部副产品的绝对产出量，
-	// 只用来给Step2算"副产物能覆盖几整批"，不直接作为最终的byproducts结果——真正的
-	// byproducts要等Step2把targets收敛成"净活跃批次数"之后，按活跃批次重新算一遍
-	// (见下面的Step1b)，否则会把"本来就没有真的去生产"的那部分批次的副产品也算进去。
+	// Step1(估算用): 假设全部配置的targets原样满批达成算副产品量，只供Step2判断能覆盖几整批，
+	// 不是最终byproducts(最终值见Step1b)。
 	unordered_map<string, float> estimatedByproducts;
 	for (const auto& [target, N] : mod->targets) {
 		Product* p = industry->FindProduct(target);
@@ -80,9 +77,7 @@ void Manufacture::ComputeRecipe() {
 		if (activeN > 0) targets[target] = activeN;
 	}
 
-	// Step1b: 用Step2收敛出的"净活跃批次数"重新算一遍byproducts，这次是真正要用的结果，
-	// 同时记下每个target各自贡献了多少(byproductsByTarget)，供WorkAccount()按"这一轮
-	// 实际产出批次/净活跃批次"的比例结算副产品用。
+	// Step1b: 按净活跃批次数重算byproducts，并记下每个target各自的贡献(byproductsByTarget)。
 	unordered_map<string, float> allByproducts;
 	for (const auto& [target, activeN] : targets) {
 		Product* p = industry->FindProduct(target);
@@ -140,8 +135,7 @@ void Manufacture::ComputeRecipe() {
 	inputCache->SetCapacity(inputSize);
 	outputCache->SetCapacity(outputSize);
 
-	// 两个cache的物流权限：原料cache只能放(需求方)，按配方里每种原料占单日总量的比例设置精确
-	// product需求；产出cache只能取(供给方)。物流完全靠这两个cache驱动，见industry.md。
+	// 原料cache只能放(需求方)，精确product需求=各原料占单日总量的比例；产出cache只能取(供给方)。
 	inputCache->SetAccess(false, true);
 	vector<pair<string, float>> demand;
 	if (inputSize > 0.f) {
@@ -192,11 +186,7 @@ void Manufacture::WorkAccount() {
 void Manufacture::StartProduce(float capacityRatio) {
 	if (targets.empty()) return;
 
-	// 原料限制：这一轮先按"所有原料里最紧张的那个比例"整体限制全部target——这是这次
-	// 优先跑通简单案例(单target/无中间产品展开)的简化版本，测试案例(农场/牧场/食品
-	// 加工厂)都只有一个target，这个简化和"精确到每个target分摊"在这些案例上等价。
-	// 更复杂的多target互相抵消场景要不要精确到按target分摊，留到后续更复杂的测试
-	// 案例再验证，见manufacture.md。
+	// 原料限制：按所有原料里最紧张的那个比例整体限制全部target（不按target分摊，见manufacture.md待办）。
 	float materialRatio = 1.f;
 	for (const auto& [ingredient, standard] : ingredients) {
 		if (standard <= 0.f) continue;
@@ -226,8 +216,7 @@ void Manufacture::StartProduce(float capacityRatio) {
 		if (actualBatches > 0) pendingProduction[target] = actualBatches;
 	}
 
-	// 按overallRatio预扣inputCache里对应原料——为下一轮StartProduce()腾出准确的
-	// "当前存量"基准，不是等WorkAccount()结算时才扣。
+	// 按overallRatio预扣原料，让下一轮StartProduce()看到准确的当前存量。
 	for (const auto& [ingredient, standard] : ingredients) {
 		float consume = standard * capacityRatio * overallRatio;
 		if (consume > 0.f) inputCache->Output(ingredient, consume);

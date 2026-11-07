@@ -11,7 +11,7 @@
 - `Basic.vcxproj`是`DynamicLibrary`，输出目录和`Dependence.lib`/`Core.lib`相同
   (`Forever_UE/x64/<Config>/`)，`IncludePath`/链接只依赖`Dependence`，不依赖`Core`——这是
   Basic作为"Mod DLL"定位的必然要求，和`CONVENTIONS.md`"Mod只link Dependence.lib"的规则对齐。
-- 根目录`Basic.cpp`为每个concept导出`GetMod<Concept>`/`RegisterMod<Concept>`/
+- 根目录`basic.cpp`为每个concept导出`GetMod<Concept>`/`RegisterMod<Concept>`/
   `FinishMod<Concept>`三个符号，按`XxxBasic::GetId()`注册具体实现。
 - `Forever_UE/Resource/Config/config.json`的`dll_paths`需要包含Basic的输出目录，
   `Config::AddDllPath`才会扫描到`Basic.dll`。
@@ -25,5 +25,4 @@
 
 ## 待办/后续阶段
 
-- 确认Mod和Basic在同一个Factory里注册时id冲突如何处理(目前`building_mods`等配置数组和
-  Basic各自用独立的id空间，还没出现真正的冲突场景)。
+- 确认Mod和Basic在同一个Factory里注册时id冲突如何处理(所有mod id带concept前缀，目前没有出现冲突场景)。

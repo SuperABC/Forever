@@ -3,19 +3,6 @@
 #include "puzzle_common.h"
 
 
-// 汉堡店(餐厅后厨)：限时time秒内尽量多地按订单做汉堡。全部拖拽操作(指针按下-移动-松开)。
-// 屏幕自上而下：订单栏、2x4平板锅(8格)、4个盘位、出餐区+垃圾桶、食材区(面包/牛肉/鸡肉/生菜/西红柿/洋葱)和酱料区(4种)。
-//  - 面包/牛肉/鸡肉先拖进空锅格；生菜/西红柿/洋葱和酱料直接拖到盘里。点一下锅里的格子翻面。
-//  - 锅里每格两面各有自己的计时(只有朝下的一面累计，翻面后暂停这面、累计另一面)：累计达到cook秒变"熟"，
-//    再过burn秒变"糊"。面包单面熟了就行(任一面熟且没有糊的面)；牛肉/鸡肉要两面都熟且都没糊。
-//    没熟或糊了的不能拖到盘里(只能扔垃圾桶)。
-//  - 4个盘位各放一个汉堡(食材集合，不分顺序，同种只能一份)。把盘拖到出餐区：与某个订单集合完全一致就得分并移除该订单；
-//    不一致则出餐无效，盘被清空(不扣分)。盘拖到垃圾桶也是清空。
-//  - 订单：每隔order_min~order_max秒来一单，必含面包+牛肉或鸡肉，生菜/西红柿/洋葱、4种酱料各自随机；
-//    分值=10+3x额外食材数，倒计时=40秒+5秒x额外食材数，过期删除；同时最多max_orders单。
-// 参数(key=value)：time(默认60)、cook(默认6)、burn(默认5)、order_min(默认6)、order_max(默认12)、max_orders(默认4)、seed、
-// orders(测试用，开头几单固定："bun+beef+tom+ketchup;bun+chick"，名字bun/beef/chick/lett/tom/onion/ketchup/mayo/salad/mustard)。
-// 返回：{"score","served","expired","completed"}。
 class BurgerPuzzle : public PuzzleMod {
 public:
 	virtual void SetParam(const std::string& param) override;

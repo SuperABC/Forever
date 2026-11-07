@@ -43,13 +43,10 @@ namespace {
 
 	constexpr float kPi = 3.14159265358979323846f;
 
-	// 墙面信息——完全照抄Forever/Element/BuildingElement.cpp::BuildWallsForElement的
-	// FFaceInfo表(horizBase/horizSpan/alongY/acrossFixed公式必须和渲染层挖墙洞用的完全
-	// 一致，否则门扇和门洞对不齐，见door.md风险清单)，这次额外加一个normalYaw——墙的
-	// 外法线方向(弧度，这栋building自身旋转=0时的局部朝向，Building::BuildDoors()会再
-	// 加上building->GetRotation()得到世界朝向)：EAST(+X)=0，SOUTH(+Y)=π/2，WEST(-X)=π，
-	// NORTH(-Y)=-π/2，和LocalToWorld()用的标准cos/sin旋转约定(yaw=0即局部X轴直接映射
-	// 到世界X轴)保持一致。
+	// 墙面信息：horizBase/horizSpan/alongY/acrossFixed公式必须和Forever/Element/BuildingElement.cpp
+	// ::BuildWallsForElement的FFaceInfo表完全一致，否则门扇和渲染层挖的门洞对不齐(见door.md)。
+	// normalYaw是墙外法线朝向(弧度，building旋转=0时的局部朝向，BuildDoors再叠加GetRotation())：
+	// EAST=0，SOUTH=π/2，WEST=π，NORTH=-π/2，与LocalToWorld的cos/sin旋转约定一致。
 	struct DoorFaceInfo { bool alongY; float horizBase; float horizSpan; float acrossFixed; float normalYaw; };
 
 	array<DoorFaceInfo, 4> ComputeDoorFaces(float centerX, float centerY, float sizeX, float sizeY) {
@@ -62,11 +59,8 @@ namespace {
 		return faces;
 	}
 
-	// 把一个WallHole+DoorTags里的每个门洞resolve+CreateDoor，kind/zone/building/room由
-	// 调用方(Building::BuildDoors)按corridor还是room传不同组合。centerX/Y/sizeX/Y是这个
-	// 元素(corridor或room)在building楼体局部坐标系里的中心+尺寸(都是Quad，GetPosX()等
-	// 直接取)，floorHeight是这一层楼的高度(map单位)，floorBaseZ是Building::GetFloorBaseZ
-	// (level)。
+	// 把WallHole+DoorTags里的每个门洞resolve+CreateDoor。centerX/Y/sizeX/Y是元素(corridor或room)
+	// 在楼体局部坐标系里的中心和尺寸，floorHeight/floorBaseZ是所在层的高度和底部Z(地图单位)。
 	void BuildDoorsForElement(Map& map, const WallHole& holes, const DoorTags& tags,
 		const unordered_map<string, DoorSpec>& doorSpecs, float centerX, float centerY,
 		float sizeX, float sizeY, float floorHeight, float floorBaseZ, int level,
@@ -97,11 +91,8 @@ namespace {
 				pair<float, float> worldPos = building->LocalToWorld(localX, localY);
 				float width = fabsf(x2 - x1);
 				float height = fabsf(y2 - y1);
-				// y1/y2是"从天花板往下量"的距离，不是"从地板往上量"(照抄Forever/Element/
-				// BuildingElement.cpp::BuildWallsForElement的约定，和挖墙洞的代码保持一致，
-				// 否则门洞和挖出来的墙洞对不上)——door底边离地板的距离=floorHeight-max(y1,y2)，
-				// 不是min(y1,y2)。最初写成floorBaseZ+min(y1,y2)，把门摆到了离地板足足一个
-				// "门楣厚度"那么高的地方，实测复现(门离地很远)。
+					// y1/y2是"从天花板往下量"的距离(和BuildWallsForElement挖墙洞的约定一致)，所以门底边离地板
+					// =floorHeight-max(y1,y2)，不是min(y1,y2)；写反会让门悬在半空。
 				float z = floorBaseZ + (floorHeight - max(y1, y2));
 				float yaw = face.normalYaw + building->GetRotation();
 
@@ -367,9 +358,8 @@ PointParams BuildingLayoutLibrary::InversePoint(const PointParams& point, int fa
 }
 
 RectParams BuildingLayoutLibrary::InverseWall(const RectParams& pos, int direction, int face) {
-	// face=0(逆时针90度+x翻转)：翻转水平墙(NORTH=2,SOUTH=3)；face=1(顺时针90度+x翻转)：
-	// 翻转竖直墙(WEST=0,EAST=1)；face=2(不变)：不翻转；face=3(180度)：全部翻转——照抄
-	// 老工程注释与实现。
+	// 某些旋转会翻转沿墙方向：face0翻转水平墙(NORTH/SOUTH)，face1翻转竖直墙(WEST/EAST)，face2不翻转，
+	// face3全部翻转；翻转时起终点对调并做1-ratio镜像。
 	bool flip = false;
 	switch (face) {
 	case 0: flip = (direction == 2 || direction == 3); break;
@@ -640,8 +630,7 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 
 		array<NavigationTemplate, 4> vehicleNav4;
 		if (root.ValidMember("vehicleNavigation")) {
-			// 这次只解析、不使用，留给以后车辆域真正做"车辆能进建筑内部"这个玩法时再消费
-			// (Building::Layout()不会读这份数据)。
+			// 车行导航模板，由Building::BuildVehicleNavigation使用。
 			ParseNavigationBlock(root["vehicleNavigation"], vehicleNav4);
 		}
 		vehicleNavigationTemplates[basename] = std::move(vehicleNav4);
@@ -658,6 +647,11 @@ namespace {
 		if (it == map.end()) return empty;
 		return it->second[face];
 	}
+}
+
+bool BuildingLayoutLibrary::HasTemplate(const string& name) const {
+	// 每个.layout文件解析时每类元素都会登记一项(哪怕是空数组)，用stairTemplates代表"这个模板存在"。
+	return stairTemplates.count(name) > 0;
 }
 
 const vector<Stair>& BuildingLayoutLibrary::GetStairs(const string& name, int face) const {
@@ -763,10 +757,8 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	scriptModName = mod->scriptModName;
 	scriptMilestones = mod->milestoneNames;
 
-	// 自定义模型：位置/yaw按face=2(模板原样)定义，按最终朝向用和楼层模板同一个InversePoint
-	// 换算(direction==-1没有朝向，按原样处理)，再经LocalToWorld叠加建筑自身的世界旋转。yaw的
-	// 朝向偏移和InversePoint的点映射是同一个旋转：face0把(1,0)转到(0,-1)即-90°(=270°)，face1
-	// 转到(0,1)即+90°，face3是180°——和老工程BuildingMod::AddDecoration的偏移一致。
+		// 自定义模型：位置/yaw按face=2(模板原样)定义，按最终朝向用InversePoint换算(direction==-1按原样)，
+		// 再经LocalToWorld叠加建筑的世界旋转；yaw的朝向偏移见FaceYawDegrees。
 	decorations.clear();
 	{
 		const float degToRad = 3.14159265358979323846f / 180.f;
@@ -799,6 +791,12 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 		floors.emplace_back(idx - basements, bodySizeX, bodySizeY);
 	}
 	for (auto& [level, spec] : mod->floors) {
+		// 模板名找不到和读档时"missing layout"一样算错误：静默当空模板会让这一层没有任何房间，
+		// 开局能进、存档却读不回来。templateName为空表示这层故意不用模板。
+		if (!spec.templateName.empty() && !library.HasTemplate(spec.templateName)) {
+			THROW_EXCEPTION(InvalidArgumentException, "Building " + name + " floor " + to_string(level) +
+				" uses missing layout template: " + spec.templateName + ".\n");
+		}
 		ReadFloor(level, spec.face, spec.templateName, library);
 	}
 
@@ -1327,13 +1325,10 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 				continue;
 			}
 
-			// outside端：这次不照抄老工程"连building边界最近两个角"的近似，只在这里实例化
-			// 出这个outside端点自己的世界坐标节点，收集进outsideNodes——由Map::
-			// InitBuildings()负责用building朝向的边界Road+AddRoadAccessNode真正接上
-			// 道路网(需要访问Map自己的数据，Building这一层做不到)，见building.md。
-			// 车行导航的显式入口/出口端点("entrance"/"exit")：不生成Connection，只把另一端的
-			// node记进对应清单，方向(路->node / node->路)由类型直接决定，同一个node可以两个都标。
-			// 行人导航里出现这两个类型没有意义，忽略。
+			// outside端只实例化出自己的世界坐标节点收进outsideNodes，真正接路网由Map::InitBuildings做
+			// (Building访问不到Map数据)，见building.md"行人导航"。
+			// entrance/exit端(仅车行导航)：不生成Connection，只把另一端node记进对应清单，方向由类型决定，
+			// 同一个node可以两个都标；行人导航里出现这两个类型没有意义，忽略。
 			if (connTemplate.begin.type == "entrance" || connTemplate.end.type == "entrance" ||
 				connTemplate.begin.type == "exit" || connTemplate.end.type == "exit") {
 				bool beginIsMarker = connTemplate.begin.type == "entrance" || connTemplate.begin.type == "exit";
@@ -1349,6 +1344,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 				continue;
 			}
 
+			// outside端：行人导航专用，车行导航改用entrance/exit。
 			if (connTemplate.begin.type == "outside" || connTemplate.end.type == "outside") {
 				if (isVehicle) {
 					debugf("Warning: \"outside\" endpoint is not supported in vehicleNavigation, use \"entrance\"/\"exit\". Ignored.\n");
@@ -1429,13 +1425,9 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 		}
 	}
 
-	// Room自己中心点的导航节点由Room持有(Layout()里创建)，不在上面floorFixedNodes/line
-	// 锚点这条链路里，但仍然要登记进navOut.nodes，否则Map::navAnchorNodes永远拿不到它们——
-	// 既没办法在导航图可视化里按坐标画出来，也没有任何地方会delete它们(内存泄漏)。照抄
-	// 老工程BuildNavigation结尾"for (auto room : rooms) newNodes.push_back(room->
-	// GetNavigationNode())"这一步。**只有registerRoomNodes=true(行人那次调用)才做**——
-	// 车行调用如果也做一遍，同一个Room的Node*会被登记进navAnchorNodes两次，~Map()清理时
-	// double free，见BuildVehicleNavigation声明处的注释。
+	// Room自己中心点的导航节点由Room持有(Layout()里创建)，不在floorFixedNodes/line锚点链路里，
+	// 但必须登记进newNodes，否则Map::navAnchorNodes拿不到它们(可视化画不出来、也没人delete)。
+	// 只有行人那次调用登记：车行再登记一遍会让同一个Node*进navAnchorNodes两次，~Map()时double free。
 	if (registerRoomNodes) {
 		for (Room* room : rooms) {
 			if (room && room->GetNavigationNode()) {

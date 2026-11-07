@@ -34,8 +34,7 @@ void Config::NormalizeUniqueConcepts() {
 		auto it = conceptMods.find(jsonKey);
 		if (it == conceptMods.end())
 			continue;
-		// 只保留数组里排在最前面的那个条目，其余直接从数组删掉——这张数组本身就是启用
-		// 状态的唯一真相来源，收口即直接截断数组，不需要额外的平行状态。
+		// 数组即启用状态的唯一真相，直接截断即可
 		if (it->second.size() > 1) {
 			it->second.erase(it->second.begin() + 1, it->second.end());
 		}
@@ -51,12 +50,8 @@ string Config::ConceptKeyToJsonKey(const string& conceptKey) {
 }
 
 namespace {
-	// filesystem::absolute()/canonical()等"分解再重组"的操作在Windows下会把路径分隔符
-	// 规范化成反斜杠，即使原始输入是正斜杠——这个字符串一旦原样塞进JSON字符串值(反斜杠
-	// 后面跟的如果不是合法JSON转义字符,比如"\W"/"\P"/"\F")就是非法JSON,这份自定义
-	// JsonReader遇到一处非法转义会导致整个文件解析失败(不只是这一个字段读不到,
-	// dll_paths等其它字段也会被一起扔掉)。统一在这里收口成正斜杠，覆盖所有写回
-	// config.json的路径，不是只修某一处。
+	// absolute()/canonical()在Windows下会产出反斜杠，原样写进JSON会因非法转义让整个文件解析失败，
+	// 所以所有写回config.json的路径统一在这里收口成正斜杠。
 	string ToForwardSlashes(const string& path) {
 		string result = path;
 		for (char& c : result) {
@@ -94,27 +89,13 @@ void Config::ReadConfig(const string& path) {
 
 	ifstream fin(path);
 	if (!fin.is_open()) {
-		// 找不到/打不开config.json时留空,不抛异常——调用方(ForeverModSubsystem)据此
-		// 决定要不要回退到硬编码默认目录,和UForeverKeyBindingSubsystem的容错风格一致。
-		// 但这里必须打一条警告(不是彻底静默)：这个分支和下面"json语法错误"分支长得很像
-		// (两者最终都导致dll_paths/resource_paths全部回退)，但根因完全不同
-		// (前者是文件都没打开——可能是路径错了，也可能是另一个进程这一瞬间以独占方式
-		// 持有这个文件比如正在WriteConfig——而不是内容有问题)，没有这条日志，排查"为什么
-		// 回退扫描了"时无法区分这两种情况，容易误以为是config.json内容写错了。
+		// 留空不抛异常，调用方据此回退默认目录；但要打警告，区分"文件打不开"(路径错/被独占)和"JSON语法错误"。
 		cerr << "[Config] Warning: cannot open config file: " << path << "\n";
 		return;
 	}
 
-	// 必须用canonical()而不是直接取parent_path()——Windows对一条路径字符串里嵌入的".."是
-	// 纯文本/词法化解析(GetFullPathNameW那一套，不会真的打开每一级目录去看是不是reparse
-	// point)，不会"看穿"目录连接(junction)。打包产物里Resource/是用mklink /J连接指向开发树
-	// 真实位置的(见Forever_UE/pak.bat)，如果这里只取parent_path()，configDir会是一条还停留
-	// 在"连接点那一侧"的路径，后面dll_paths/resource_paths里"../../../Forever_Mod/..."这种
-	// 相对写法对着这条路径词法化展开，文本上只会在连接点所在的归档目录树内部兜圈子，永远
-	// 走不到连接指向的真实开发树里的Forever_Mod——用canonical()强制走一次真正打开目录、
-	// 跟随reparse point的OS级解析，把configDir变成连接目标那一侧的真实绝对路径，后续所有
-	// 相对路径的".."才会从正确的起点往上退。这一步只需要做一次，PIE/未打包的开发环境下
-	// Resource本来就是真目录，canonical()是无副作用的空操作。
+	// 必须canonical()而不是parent_path()：Resource/在打包产物里是mklink /J目录连接，词法化的".."
+	// 不会跟随reparse point，会在归档目录树内部兜圈子，走不到真实开发树。PIE下是无副作用的空操作。
 	error_code canonicalError;
 	filesystem::path canonicalPath = filesystem::canonical(filesystem::path(path), canonicalError);
 	configDir = (canonicalError ? filesystem::path(path) : canonicalPath).parent_path().string();
@@ -131,8 +112,7 @@ void Config::ReadConfig(const string& path) {
 	}
 
 	for (const auto& dllPath : root["dll_paths"]) {
-		// dll_paths里的相对路径,相对config.json自己所在目录(configDir)解析——纯文件系统
-		// 概念,不依赖UE的FPaths::ProjectDir,保持Config engine-agnostic。
+		// 相对路径相对configDir解析
 		filesystem::path resolved(dllPath.AsString());
 		if (resolved.is_relative()) {
 			resolved = filesystem::path(configDir) / resolved;
@@ -160,9 +140,7 @@ void Config::ReadConfig(const string& path) {
 		AddStoryScript(ToForwardSlashes(resolved.string()));
 	}
 
-	// 任何以"_mods"结尾的顶层key都当作一个concept的mod列表解析(如"building_mods"),不
-	// 硬编码21个concept的名字——config.json本身决定内容有哪些。每个数组元素是形如"id"或
-	// "id 参数..."的字符串,按第一个空格切成(id, 参数字符串)。
+	// 所有以"_mods"结尾的顶层key都当作一个concept的mod列表；元素"id"或"id 参数..."按第一个空格切开
 	const string suffix = "_mods";
 	for (const string& key : root.GetMembers()) {
 		if (key.size() <= suffix.size())
@@ -222,23 +200,15 @@ void Config::AddDllPath(const string& path) {
 
 	RemoveDllPath(path);
 
-	// skip_permission_denied：文件夹选得范围越大，越容易递归到没有访问权限的子目录
-	// (比如系统目录)——默认选项下，光是构造/自增这个iterator碰到一个这样的子目录就会
-	// 抛filesystem::filesystem_error，没有这个选项的话一个子目录没权限就会导致整次
-	// 扫描提前中断，这个选项让迭代器自己跳过那个子目录继续，不需要我们在这里额外
-	// try/catch。
+	// skip_permission_denied：递归到无权限子目录时跳过，而不是抛filesystem_error中断整次扫描
 	error_code dirIterError;
 	for (const auto& entry : filesystem::recursive_directory_iterator(
 			dir, filesystem::directory_options::skip_permission_denied, dirIterError)) {
 		if (!CheckFileFormat(entry.path(), ".dll"))
 			continue;
 
-		// 跳过路径里带"Debug"目录段的dll——Debug配置用/MDd调试CRT编译,std::string内存
-		// 布局和这个模块(Development/Release)不兼容,跨DLL读它返回的vector<string>内容
-		// 会读到按调试CRT布局解释的垂悬/错位数据,直接崩(EXCEPTION_ACCESS_VIOLATION，见
-		// config.md)。手工配置的dll_paths一直靠人工只填Release目录规避这个坑,但回退扫描
-		// (ForeverModSubsystem::Initialize()的默认目录分支)会无差别递归整个目录树,必须在
-		// 这里挡掉,不能指望每条路径都是人工精确配置的。
+		// 跳过带"Debug"目录段的dll：/MDd调试CRT的std::string布局不兼容，跨DLL读返回的vector<string>会崩；
+		// 回退扫描会无差别递归整个目录树，必须在这里挡掉(见config.md)
 		bool underDebugDir = false;
 		for (const auto& part : entry.path()) {
 			string partLower = part.string();
@@ -260,10 +230,7 @@ void Config::AddDllPath(const string& path) {
 
 		HMODULE modHandle = LoadLibraryA(full.data());
 		if (modHandle) {
-			// 符号存在就真的调用一次，读取返回的vector<string>*内容(mod内static
-			// vector，调用方只读不释放，和mod_empty.cpp::GetMod<Concept>s()的既有形状
-			// 一致，在本工程统一动态CRT(MultiThreadedDLL/MultiThreadedDebugDLL)下安全)，
-			// 拿到这个dll实际提供哪些(concept,modId)，FreeLibrary之前完成，不长期持有句柄。
+			// 真正调用一次读出(concept,modId)，FreeLibrary之前完成；返回的static vector调用方只读不释放
 			for (const auto& descriptor : GetModConceptDescriptors()) {
 				auto getModFunc = reinterpret_cast<GetModFunc>(GetProcAddress(modHandle, descriptor.getModSymbol));
 				if (!getModFunc)
@@ -277,9 +244,7 @@ void Config::AddDllPath(const string& path) {
 				}
 			}
 
-			// per-mod依赖声明探测——一个DLL一份导出符号，但内容是这个DLL里每个mod id各自
-			// 的依赖列表配对表，不是整个DLL共用一份，见loader.h kModDependenciesSymbol
-			// 注释。
+			// per-mod依赖声明探测，见loader.h kModDependenciesSymbol
 			auto getDepsFunc = reinterpret_cast<GetModFunc>(GetProcAddress(modHandle, kModDependenciesSymbol));
 			if (getDepsFunc) {
 				if (void* raw = getDepsFunc()) {
@@ -319,8 +284,7 @@ void Config::RemoveDllPath(const string& path) {
 								[&modId](const pair<string, string>& e) { return e.first == modId; }),
 							entries.end());
 					}
-					// 这个dll提供的modId被移除了，它自己声明的依赖也跟着一起清掉——
-					// modDependences按modId存，不是按dllPath存，见config.h注释。
+					// 依赖声明按modId存，随之清掉
 					modDependences.erase(modId);
 				}
 			}
@@ -360,8 +324,7 @@ void Config::AddResourcePath(const string& path) {
 		if (CheckFileFormat(entry.path(), ".script")) {
 			scripts.push_back(full);
 		} else if (CheckFileFormat(entry.path(), ".uplugin")) {
-			// 独立迷你UE工程里的Plugin——WITH_EDITOR下直接挂载这个Plugin的Content目录，
-			// 不需要cook/pak，见config.md"打包功能迁移"一节。
+			// 独立迷你UE工程里的Plugin：WITH_EDITOR下直接挂载Content目录，不需要cook/pak
 			plugins.push_back(full);
 		} else if (CheckFileFormat(entry.path(), ".pak")) {
 			// 同一个Plugin cook+UnrealPak出来的产物，非编辑器(打包)下MountPaksEx挂载。
@@ -495,7 +458,7 @@ vector<pair<string, string>> Config::GetConceptMods(const string& jsonKey) {
 	return it->second;
 }
 
-// ---- 游戏启动配置界面(Story/Mod/Resource三screen)新增 ----
+// ---- 游戏启动配置界面(Story/Mod/Resource三screen)使用的接口 ----
 
 vector<Config::ModEntry> Config::GetModEnables() {
 	NormalizeUniqueConcepts();
@@ -531,9 +494,7 @@ void Config::SetModEnabled(const string& conceptKey, const string& modId, bool e
 		entries.erase(it);
 	}
 
-	// Roadnet/Name这两个concept只应该同时生效一个(不是Terrain那种按GetPriority()多mod
-	// 叠加的语义，见roadnet_factory.md)——选中一个之后，把这个concept下所有已发现的其它
-	// mod id都从数组里删掉，不是"UI上看起来单选"，是真的从"<concept>_mods"数组移除。
+	// Roadnets/Names单选：选中后把同concept下其它已发现id全部从数组移除
 	if (enabled && (conceptKey == "Roadnets" || conceptKey == "Names")) {
 		for (const auto& [dllPath, ids] : dllConceptIds) {
 			(void)dllPath;
@@ -653,14 +614,7 @@ void Config::WriteConfig(const string& path) {
 	// 规范化过的状态。
 	NormalizeUniqueConcepts();
 
-	// 直接写绝对路径，不再转成相对configDir的路径——config.json本来就不是跨设备使用的
-	// 文件(每台开发机上mod/资源的实际存放位置也经常不一样)，相对路径解析ConfigDir/
-	// canonical那一套反而更容易因为目录连接(junction)、当前这次是不是打包产物等情况产生
-	// 让人困惑的歧义(配置界面这几个Add按钮从原生文件/文件夹选择器拿到的本来就已经是绝对
-	// 路径)。dllPaths/resourcePaths的key、storyScriptPaths的内容在内存里已经
-	// 是绝对路径(AddDllPath/AddResourcePath调用前，ReadConfig或原生选择器
-	// 都已经解析/返回成绝对路径)，这里原样写出即可。ReadConfig那边保留对相对路径的兼容
-	// 解析(没坏处，只是以后不会再有代码主动生成相对路径这种写法了)。
+	// 写绝对路径(config.json不跨设备使用)，ReadConfig仍兼容解析相对路径
 	JsonValue root(DATA_OBJECT);
 
 	JsonValue dllArr(DATA_ARRAY);

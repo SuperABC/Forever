@@ -9,16 +9,13 @@
 #include <vector>
 
 
-// Product：一种产品的类型目录条目——只是配方/分类定义，不是"某个仓库里的一份库存"，
-// 库存数量全部放进Storage自己的存量表，见storage.h。Industry按产品type各创建一份，
-// 存进自己的目录，供Storage/Manufacture查配方/分类用，见product.md。
+// Product：一种产品的类型目录条目(配方/分类/价格)，不存库存数量，见product.md。
 class Product {
 public:
 	Product(ProductFactory* factory, const std::string& id);
 	~Product(); // factory->DestroyProduct(mod)
 
-	// mod为空(id没有被注册/没有在config.json"product_mods"里启用)说明创建失败，
-	// 调用方应当整个丢弃这个Product，见Industry::CreateProduct。
+	// mod为空(id没有注册/没有启用/价格不合法)说明创建失败，调用方应当整个丢弃这个Product。
 	bool IsValid() const;
 
 	const std::string& GetType() const;

@@ -14,16 +14,12 @@
 #include <unordered_set>
 
 #define ROAD_WORLD_SCALE 1000.f
-// 开口cube/路口mesh都铺在Z=0(地图单位)，和这一片"plain"地形的高度基本重合，会跟地形网格
-// 发生共面z-fighting(和ForeverTerrainFrameworkComponent.cpp的HEIGHT_EPSILON是同一个问题)。
-// 1cm(世界单位)——地形本身按element为单位起伏，1cm相对10m一个格子的尺度依然可以
-// 忽略不计，足够压过地形高度采样的误差范围又不会太明显地"浮空"。
+// 开口cube/路口mesh等的高度偏移，避免和地形网格共面z-fighting
+// (和ForeverTerrainFrameworkComponent.cpp的HEIGHT_EPSILON同类问题)；相对10m一格的尺度可忽略。
 #define ROADNET_HEIGHT_EPSILON 10.f
 
-// 导航图debug可视化用的box/ribbon尺寸(世界单位)——纯debug标记，不追求精确物理尺寸，数值是
-// 早前验证阶段调出来的经验值：一开始试过纯平面(单一Z高度)画node/edge，PIE里完全看不见
-// (和开口/路口mesh最初的z-fighting是同一类问题，纯平面即使有ROADNET_HEIGHT_EPSILON也太薄)，
-// 改成真正有厚度的3D box(node)/宽度的ribbon(edge)才终于稳定可见，厚度定在50(约5cm)。
+// 导航图debug可视化用的box/ribbon尺寸(世界单位)，经验值：纯平面(单一Z高度)在PIE里看不见，
+// 必须有真正的厚度(50，约5cm)才稳定可见。
 #define NAV_DEBUG_HEIGHT 50.f
 #define NAV_DEBUG_NODE_HALF_SIZE 40.f
 #define NAV_DEBUG_EDGE_HALF_WIDTH 8.f
@@ -31,9 +27,7 @@
 using namespace std;
 
 namespace {
-	// 双面四边形：不区分正反面，四个角点无论按什么环绕顺序传入，两个方向的三角形都会画一遍——
-	// 导航debug mesh的box/ribbon朝向五花八门(任意角度的道路/任意方向的路口连接)，用这个技巧
-	// 就不用为每个面单独推导"哪个环绕顺序才是正面朝上"，从任意角度看都不会因为背面剔除而消失。
+	// 双面四边形：四个角点无论环绕顺序，两个方向的三角形都画一遍，避免背面剔除让debug mesh消失。
 	void RoadnetAppendQuadDoubleSided(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector& v00, const FVector& v10, const FVector& v11, const FVector& v01) {
 		int32 base = vertices.Num();
@@ -44,8 +38,7 @@ namespace {
 		triangles.Add(base); triangles.Add(base + 2); triangles.Add(base + 3);
 	}
 
-	// 导航锚点用的小box：以center为中心、halfSize为水平半边长、[zBottom,zTop]为竖直范围的
-	// 轴对齐长方体，6个面都用RoadnetAppendQuadDoubleSided画，不需要关心每个面的外法线朝向。
+	// 导航锚点用的小轴对齐长方体：center为中心、halfSize为水平半边长、[zBottom,zTop]为竖直范围。
 	void AppendNavBox(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector2D& center, float halfSize, float zBottom, float zTop) {
 		FVector v000(center.X - halfSize, center.Y - halfSize, zBottom);
@@ -65,8 +58,7 @@ namespace {
 		RoadnetAppendQuadDoubleSided(vertices, triangles, v010, v000, v001, v011); // -X
 	}
 
-	// 导航连接用的细ribbon：from/to是两端锚点的世界坐标(各自的Z已经是该锚点box顶面的高度，
-	// 见BuildNavGraphDebugMesh)，halfWidth是垂直于连线方向的半宽。
+	// 导航连接用的细ribbon：from/to的Z已经是两端锚点box顶面高度，halfWidth是垂直于连线方向的半宽。
 	void AppendNavEdgeRibbon(TArray<FVector>& vertices, TArray<int32>& triangles,
 		const FVector& from, const FVector& to, float halfWidth) {
 		FVector2D dir2D(to.X - from.X, to.Y - from.Y);
@@ -117,10 +109,8 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 	junctionMesh->RegisterComponent();
 	owner->AddInstanceComponent(junctionMesh);
 
-	// 每条road在连着真实路口的那一端要收缩tiling范围，把面积让给路口mesh，避免路口处两条路
-	// 的mesh互相重叠z-fighting——收缩距离必须用RoadJunction::Build里同一个approach.setback，
-	// 不能自己另算一套，否则路面收缩量和路口mesh路缘角点的外移量对不上，要么留空隙要么重叠
-	// (见ForeverRoadnetFrameworkComponent.md)。
+	// 连着真实路口的那一端收缩tiling，面积让给路口mesh；收缩距离必须用同一个approach.setback，
+	// 否则和路缘角点外移量对不上(见.md)。
 	TMap<Road*, float> trimAtStart, trimAtEnd;
 	for (RoadJunction* junction : map->GetJunctions()) {
 		for (const RoadJunctionApproach& ap : junction->GetApproaches()) {
@@ -161,9 +151,7 @@ void UForeverRoadnetFrameworkComponent::BuildPathRoadMeshes() {
 	UMaterialInterface* baseMaterial = roadPlainBaseMaterial;
 	const string& materialPath = map->GetPathRoadMaterial();
 	if (!materialPath.empty()) {
-		// 运行时按字符串路径加载资产——和roadPlainBaseMaterial那种只能在构造函数里用的
-		// ConstructorHelpers::FObjectFinder不是一回事，这里的路径来自RoadnetMod运行时数据，
-		// 编译期不知道具体是哪个资产。
+		// 路径来自RoadnetMod运行时数据，只能运行时加载(不能用ConstructorHelpers)。
 		UObject* loaded = StaticLoadObject(UMaterialInterface::StaticClass(), nullptr, UTF8_TO_TCHAR(materialPath.c_str()));
 		if (UMaterialInterface* loadedMaterial = Cast<UMaterialInterface>(loaded)) {
 			baseMaterial = loadedMaterial;
@@ -233,8 +221,7 @@ void UForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh() {
 	}
 
 	if (!bShowNavigationDebug) {
-		// 关闭时清空已有section而不是整个跳过——避免"曾经打开过、现在关掉"时旧的可视化
-		// mesh一直残留在场景里。
+		// 关闭时清空已有section而不是跳过，避免旧可视化残留。
 		vehicleNavMesh->ClearMeshSection(0);
 		pedestrianNavMesh->ClearMeshSection(0);
 		return;
@@ -333,9 +320,8 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 	float totalLen = road->CalcDistance();
 	if (totalLen <= 0.f) return;
 
-	// 两端各收缩trimStart/trimEnd(地图单位)，把tiling范围限制在[tLow,tHigh]——收缩掉的那截
-	// 面积交给路口mesh覆盖，两者不再重叠，见头文件注释。收缩量不超过总长的45%，避免两端
-	// 收缩量之和意外超过整条路长度导致tLow>=tHigh。
+	// 两端各收缩trimStart/trimEnd(地图单位)，tiling限制在[tLow,tHigh]，收缩掉的那截由路口mesh覆盖。
+	// 收缩量不超过总长的45%，避免两端之和超过整条路长度导致tLow>=tHigh。
 	float tLow = FMath::Clamp(trimStart / totalLen, 0.f, 0.45f);
 	float tHigh = 1.f - FMath::Clamp(trimEnd / totalLen, 0.f, 0.45f);
 	if (tHigh <= tLow) return;
@@ -343,10 +329,8 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 	UInstancedStaticMeshComponent* ism = GetOrCreateRoadISM(road->GetMesh());
 	if (!ism) return;
 
-	// 按每个开口把[tLow,tHigh]切成若干互不重叠的"保留区间"，每段各自独立铺tiling——这样铺出来
-	// 的缺口精确等于开口自身的[t-halfFrac,t+halfFrac]范围(和BuildOpeningMeshes算cube长度用的
-	// 是同一个halfFrac公式)，不按固定unit分段、按段中点判断是否命中开口——那样缺口宽度只能
-	// 凑整到unit的倍数、和cube宽度对不上，见ForeverRoadnetFrameworkComponent.md。
+	// 按每个开口把[tLow,tHigh]切成互不重叠的保留区间，各自独立铺tiling，缺口精确等于开口的
+	// [t-halfFrac,t+halfFrac](不按固定unit分段判断，否则缺口宽度只能凑整到unit倍数，见.md)。
 	TArray<TPair<float, float>> keepRanges;
 	keepRanges.Add(TPair<float, float>(tLow, tHigh));
 	for (const RoadOpening& op : road->GetOpenings()) {
@@ -365,10 +349,8 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 		keepRanges = next;
 	}
 
-	// 分段数量算法照抄老工程UMeshArray::RepeatMeshAlongCurve："scaledPrim落在[0.8,1.2]*primLen
-	// 区间内"这条约束；因为Connection::GetPoint(f)本身已经是弧长参数化的(和
-	// RepeatMeshAlongCurve内部自建的弧长表是同一套算法)，这里不需要再自己建一份弧长采样表，
-	// 直接按t=rangeStart+(rangeEnd-rangeStart)*k/n取点即可得到该保留区间内的等弧长分段。
+	// 分段数量：缩放后的单节长度落在[0.8,1.2]*unit内，取最接近rangeLen/unit的整数；
+	// Connection::GetPoint(f)本身是弧长参数化的，按t=rangeStart+(rangeEnd-rangeStart)*k/n取点即等弧长分段。
 	auto tileRange = [&](float rangeStart, float rangeEnd) {
 		float rangeLen = totalLen * (rangeEnd - rangeStart);
 		if (rangeLen <= 0.f) return;
@@ -421,15 +403,11 @@ void UForeverRoadnetFrameworkComponent::BuildOpeningMeshes(Road* road,
 	const vector<RoadOpening>& openings = road->GetOpenings();
 	if (openings.empty()) return;
 
-	// 开口cube宽度取该road横断面总宽(两侧车行+停车+人行道加总)，覆盖整条路的宽度——
-	// 要求5的简化做法：直接用一块贴RoadPlain材质的扁平cube代替原本该段的沿路重复mesh，
-	// 不做"只挖开人行道/停车道"的精细几何裁剪，见ForeverRoadnetFrameworkComponent.md。
+	// 开口cube宽度取该road横断面总宽，用一块扁平cube代替该段沿路重复mesh(简化做法，见.md)。
 	float totalWidth = road->GetTotalWidth();
 
-	// 同一个物理开口位置常常会有车行、人行各一条RoadOpening记录(Map::AddRoadAccessNode按
-	// isVehicle分别调用、各自往road->openings里追加一条)，但视觉上只需要一块贴地cube盖住
-	// 这段路面——两条记录的t/width如果一样，就是同一个物理开口，不去重的话会在完全相同的
-	// 位置画两个完全重合的扁平quad，PIE里z-fighting闪烁。
+	// 同一个物理开口常有车行、人行各一条RoadOpening(Map::AddRoadAccessNode按isVehicle分别追加)，
+	// 按t去重，否则重合的两个quad会z-fighting闪烁。
 	vector<float> drawnTs;
 	for (const RoadOpening& op : openings) {
 		bool alreadyDrawn = false;
@@ -448,9 +426,8 @@ void UForeverRoadnetFrameworkComponent::AppendFlatRoadCube(Road* road, float cen
 	if (!road) return;
 	if (crossWidth <= 0.f) crossWidth = 1.f;
 
-	// 车道横断面现在以Connection连线为几何中心居中（见Source/Core/map/roadnet.md"车道居中"
-	// 一节），下面按cx/cy±perp*halfWidth对称展开cube的写法因此正确——不需要再关心side0/side1
-	// 具体怎么分配。
+	// 车道横断面以Connection连线为几何中心居中（见Source/Core/map/roadnet.md"车道居中"一节），
+	// 所以按cx/cy±perp*halfWidth对称展开cube。
 	Node center = road->GetPoint(centerT);
 	float dx, dy, dz;
 	road->GetTangent(centerT, dx, dy, dz);
@@ -463,9 +440,8 @@ void UForeverRoadnetFrameworkComponent::AppendFlatRoadCube(Road* road, float cen
 	float halfWidth = crossWidth * 0.5f;
 	float cx = center.GetX(), cy = center.GetY();
 
-	// 高度：路面不一定在Z=0(山路、隧道)，cube前后两端各取路面在那一点的真实高度(沿路按弧长算，
-	// 和道路瓦片用的GetPoint同一套)，不能写死贴地——过短的路段(短于0.8个瓦片)和开口都是这个cube
-	// 来铺的，写死高度时它们在山上会漏在地下或者悬在半空，看起来像一个高度错误的路口。
+	// 高度：路面不一定在Z=0(山路、隧道)，cube前后两端各取路面在该点的真实高度，不能写死贴地，
+	// 否则短缺口和开口在山上会漏在地下或悬空。
 	float totalLen = road->CalcDistance();
 	float halfFrac = totalLen > 1e-6f ? halfLen / totalLen : 0.f;
 	float zBack = road->GetPoint(FMath::Clamp(centerT - halfFrac, 0.f, 1.f)).GetZ() * ROAD_WORLD_SCALE + ROADNET_HEIGHT_EPSILON;
@@ -485,9 +461,7 @@ void UForeverRoadnetFrameworkComponent::AppendFlatRoadCube(Road* road, float cen
 	outUvs.Add(FVector2D(1, 0));
 	outUvs.Add(FVector2D(1, 1));
 	outUvs.Add(FVector2D(0, 1));
-	// 环绕顺序：对照ForeverTerrainFrameworkComponent::BuildLevel验证过的(v00,v11,v10)/(v00,v01,v11)
-	// 模式，UE(左手坐标系)要求从上方看是"顺时针"(标准数学XY凸包意义下的负向面积)才是正面朝上；
-	// 早期版本这里写反了(正面朝下，从上方完全看不到)，PIE验证后改正。
+	// 环绕顺序：UE(左手坐标系)要求从上方看是"顺时针"才是正面朝上，对照ForeverTerrainFrameworkComponent::BuildLevel的验证过的模式。
 	outTriangles.Add(base); outTriangles.Add(base + 1); outTriangles.Add(base + 2);
 	outTriangles.Add(base); outTriangles.Add(base + 2); outTriangles.Add(base + 3);
 }
@@ -506,10 +480,8 @@ void UForeverRoadnetFrameworkComponent::BuildJunctionMeshes() {
 		Intersection* node = junction->GetNode();
 		if (!node) continue;
 
-		// 中心点/curb点各自取该approach采样到的真实曲线高度(node->GetZ()/ap.curbZ，地图单位)，
-		// 不再统一用ROADNET_HEIGHT_EPSILON这个平地假设——隧道场景下路口可能整体埋在地下
-		// (TUNNEL_HEIGHT)，而curb点又各自沿不同road采样，彼此高度不一定相同(见roadnet.h
-		// curbZ字段注释)，扇形三角化允许每个顶点独立取高度，不需要整个多边形共面。
+		// 中心点/curb点各自取真实曲线高度(node->GetZ()/ap.curbZ，地图单位)：隧道场景下路口可能埋在
+		// 地下，curb点沿不同road采样高度不一定相同(见roadnet.h curbZ注释)，扇形三角化允许顶点独立取高度。
 		int32 centerIdx = vertices.Num();
 		vertices.Add(FVector(node->GetX() * ROAD_WORLD_SCALE, node->GetY() * ROAD_WORLD_SCALE, node->GetZ() * ROAD_WORLD_SCALE + ROADNET_HEIGHT_EPSILON));
 		uvs.Add(FVector2D(0.5f, 0.5f));

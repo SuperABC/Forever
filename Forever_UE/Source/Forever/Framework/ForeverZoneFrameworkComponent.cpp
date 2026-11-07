@@ -12,7 +12,6 @@
 #include "map/door.h"
 #include "map/map.h"
 #include "map/zone.h"
-#include "map/zone.h"
 #include "map/building.h"
 #include "map/general_geometry.h"
 #include "story/event.h"
@@ -59,9 +58,7 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 		for (const ZoneWallSpec& wall : zone->GetWalls()) {
 			BuildWallSegment(wall, *zone);
 		}
-		// Zone碰撞盒数量级和building差不多(远小于Room)，先直接留在这个组件的单例owner上，
-		// 不像Building/Room那样拆到per-building的Actor——排查已经证实真凶是"owner身上组件
-		// 总数"，Zone数量级不大，没必要为了这么少的数量单独动这个结构。
+		// Zone数量级不大(远小于Room)，碰撞盒直接挂在这个组件的单例owner上，不需要per-zone的Actor。
 		BuildCollisionBox(zone);
 		BuildDecorations(*zone);
 
@@ -120,6 +117,7 @@ UInstancedStaticMeshComponent* UForeverZoneFrameworkComponent::GetOrCreateWallIS
 	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(owner, NAME_None, RF_Transient);
 	ism->SetStaticMesh(mesh);
 	ism->SetupAttachment(owner->GetRootComponent());
+	ism->SetMobility(EComponentMobility::Static); // 与Building一致：Mobility显式Static且在RegisterComponent前
 	ism->RegisterComponent();
 	owner->AddInstanceComponent(ism);
 
@@ -152,11 +150,8 @@ void UForeverZoneFrameworkComponent::BuildWallSegment(const ZoneWallSpec& wall, 
 	float depthDirX = wall.depthInward ? inwardX : -inwardX;
 	float depthDirY = wall.depthInward ? inwardY : -inwardY;
 
-	// 这里必须偏移整个wall.depth(不是depth*0.5f)——沿边方向的marginStart/marginEnd收缩量
-	// 用的是完整的depth(见下面lenStart/lenEnd)，两个轴描述的是同一个"整体往里缩进depth"，
-	// 如果这里只偏移depth的一半，围墙的中心线实际只往里缩了depth/2，跟沿边方向缩进的完整
-	// depth对不上：相邻两条墙的中心线端点就会分别停在两个不同的点上，而不是同一个点，
-	// 拼出来的墙角自然就会露出缺口(缺口宽度正好是这里少偏移掉的depth/2)。
+	// 必须偏移整个wall.depth(不是depth*0.5f)：沿边方向的marginStart/marginEnd收缩量也是完整的depth，
+	// 只偏移一半的话相邻两条墙的中心线端点对不上，墙角会露出缺口。
 	float centerAcrossX = edgeX + depthDirX * wall.depth;
 	float centerAcrossY = edgeY + depthDirY * wall.depth;
 
@@ -237,11 +232,8 @@ void UForeverZoneFrameworkComponent::BuildCollisionBox(Zone* zone) {
 	box->SetBoxExtent(FVector(hx, hy, hz));
 	box->SetCollisionProfileName(TEXT("Trigger"));
 	box->SetupAttachment(owner->GetRootComponent());
-	// 常驻碰撞盒创建之后永远不会再移动——mobility+世界坐标都要在RegisterComponent()之前
-	// 设好，否则要么设置不生效要么引擎报警告，且会白白拖累渲染器动态图元八叉树/物理引擎
-	// 动态broadphase(这两套结构对Movable图元的插入/更新开销会随已有数量增长变差，是
-	// "建筑近处LOD每次整层增删都巨卡"的根因之一，见ForeverBuildingFrameworkComponent.md
-	// "性能"一节，这里的碰撞盒虽然不在那个路径上，但同样应该是Static)。
+	// 常驻碰撞盒不会再移动：mobility+世界坐标都要在RegisterComponent()之前设好(Static组件注册后不能再移动)，
+	// 见ForeverBuildingFrameworkComponent.md"性能"一节。
 	box->SetMobility(EComponentMobility::Static);
 	box->SetWorldLocation(FVector(zone->GetPosX() * ZONE_WORLD_SCALE, zone->GetPosY() * ZONE_WORLD_SCALE, cz));
 	box->SetWorldRotation(FRotator(0.f, FMath::RadiansToDegrees(zone->GetRotation()), 0.f));
@@ -254,20 +246,27 @@ void UForeverZoneFrameworkComponent::BuildCollisionBox(Zone* zone) {
 }
 
 namespace {
-	UForeverStoryFrameworkComponent* FindZoneStoryFramework(UWorld* world) {
-		AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
-			UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
+	UForeverStoryFrameworkComponent* FindZoneStoryFramework(AForeverFrameworkActor* framework) {
 		return framework ? framework->GetStoryFramework() : nullptr;
 	}
 
 	// 进出事件只发给这个园区自己的Script：按名字现查(碰撞盒回调里只烘焙了名字，不持有Zone*)。
-	Script* FindZoneScript(UWorld* world, const std::string& zoneName) {
-		AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
-			UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
+	Script* FindZoneScript(AForeverFrameworkActor* framework, const std::string& zoneName) {
 		Map* map = framework ? framework->GetMap() : nullptr;
 		Zone* zone = map ? map->GetZone(zoneName) : nullptr;
 		return zone ? zone->GetScript() : nullptr;
 	}
+}
+
+AForeverFrameworkActor* UForeverZoneFrameworkComponent::GetFrameworkActor() {
+	// 缓存弱引用：Overlap回调频繁触发，不要每次GetActorOfClass全World查找。
+	AForeverFrameworkActor* framework = cachedFrameworkActor.Get();
+	if (!framework) {
+		framework = Cast<AForeverFrameworkActor>(
+			UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+		cachedFrameworkActor = framework;
+	}
+	return framework;
 }
 
 void UForeverZoneFrameworkComponent::OnZoneOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -275,10 +274,10 @@ void UForeverZoneFrameworkComponent::OnZoneOverlapBegin(UPrimitiveComponent* Ove
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
 	const std::string* name = zoneBoxNames.Find(OverlappedComponent);
-	UForeverStoryFrameworkComponent* storyFramework = FindZoneStoryFramework(GetWorld());
+	UForeverStoryFrameworkComponent* storyFramework = FindZoneStoryFramework(GetFrameworkActor());
 	if (!name || !storyFramework) return;
 	EnterZoneEvent event(*name);
-	storyFramework->BroadcastPlayerLocation(event, "zone", *name, /*entering=*/true, FindZoneScript(GetWorld(), *name));
+	storyFramework->BroadcastPlayerLocation(event, "zone", *name, /*entering=*/true, FindZoneScript(GetFrameworkActor(), *name));
 }
 
 void UForeverZoneFrameworkComponent::OnZoneOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -286,8 +285,8 @@ void UForeverZoneFrameworkComponent::OnZoneOverlapEnd(UPrimitiveComponent* Overl
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn) return;
 	const std::string* name = zoneBoxNames.Find(OverlappedComponent);
-	UForeverStoryFrameworkComponent* storyFramework = FindZoneStoryFramework(GetWorld());
+	UForeverStoryFrameworkComponent* storyFramework = FindZoneStoryFramework(GetFrameworkActor());
 	if (!name || !storyFramework) return;
 	LeaveZoneEvent event(*name);
-	storyFramework->BroadcastPlayerLocation(event, "zone", *name, /*entering=*/false, FindZoneScript(GetWorld(), *name));
+	storyFramework->BroadcastPlayerLocation(event, "zone", *name, /*entering=*/false, FindZoneScript(GetFrameworkActor(), *name));
 }

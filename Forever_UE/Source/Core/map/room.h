@@ -14,18 +14,7 @@
 class Script;
 
 
-// WallHole(一面墙上的门/窗开口列表)定义在general_geometry.h——Room和building.h的Corridor/Single/
-// Row都要用，general_geometry.h是两边都已经包含的公共底层头。
-
-// Room(房间)：Building内部布局实例化出来的一个具体房间，继承Quad表示自己在Building楼体
-// 局部坐标系(以Building::GetBodySizeX/Y()为宽高，原点在楼体左下角，未旋转)里占据的矩形。
-// 这次只保留和"布局/渲染/寻址"直接相关的部分——不迁移老工程Room身上的furniture/pivots/
-// storages/manufactures/parkings/vehicles/ownership/tenancy/workers等字段，那些依赖
-// Industry/Populace/Society这些还没迁移的领域，等对应领域迁移到了再回来加。
-//
-// 和Component一样，Room永远是Building自己在Layout()里通过AssignRoom/ArrangeRow显式创建
-// 的，不参与地块竞争，不需要Assign/RandomAcreage这套static注册机制——独占持有一个RoomMod
-// 实例，构造时创建、析构时factory->DestroyRoom(mod)。
+// Building内部布局实例化出来的房间，继承Quad(建筑楼体局部坐标系下的矩形)，设计见room.md
 class Room : public Quad {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;
@@ -40,7 +29,6 @@ public:
 	std::string GetType() const;
 	std::string GetName() const;
 
-	// 这个Room持有的mod实例——不需要另外拷贝一份。
 	RoomMod* GetMod() const;
 
 	int GetLayer() const;
@@ -50,11 +38,7 @@ public:
 	Script* GetScript() const;
 	void SetDirection(int direction);
 
-	// 房间局部坐标系：房间"朝北"时和建筑/layout的坐标系一样以角为原点——原点在房间(minX,minY)角，
-	// u=沿正面墙的方向、v=朝正面(direction指的那一侧，门/临路)为正，yaw 0度=朝向正面；房间朝向是
-	// W/E/S时整套坐标系做纯旋转(和BuildingLayoutLibrary::InversePoint同一套)，所以家具/车位等
-	// 只要按"房间朝北"写一次。direction是建筑局部(未旋转)坐标系下的朝向，已含建筑实例朝向，
-	// 见building.md；朝向无效(不在0..3)按朝北。
+	// 房间局部坐标系(u/v/yaw约定)见room.md"房间局部坐标系"；朝向无效(不在0..3)按朝北。
 	// u/v两个轴的长度(W/E朝向时u轴是建筑局部的SizeY、v轴是SizeX)，PointParams的比例乘它们。
 	float AxisSizeU() const;
 	float AxisSizeV() const;
@@ -75,9 +59,7 @@ public:
 	void SetDoors(WallHole doors, DoorTags tags = {});
 	void SetWindows(WallHole windows);
 
-	// 房间门：Building::BuildDoors()遍历这个room的每个门洞时，用mod->doorSpecs做
-	// ResolveDoorSpec，需要放门就调map.CreateDoor(DOOR_KIND_ROOM, ...)创建，再
-	// AddDoorEntity登记进这里——由这个Room持有生命周期(析构时释放)，不是Building。
+	// Building::BuildDoors()创建的房间门登记在这里，由Room持有生命周期
 	void AddDoorEntity(Door* door);
 	const std::vector<Door*>& GetDoorEntities() const;
 
@@ -108,26 +90,13 @@ public:
 	bool IsParking() const;
 	const std::vector<ParkingSpot>& GetParkingSpots() const;
 
-	// 人/归属和房间的关系——4个独立的概念，不能互相替代，分开存：
-	// - owner/stated：房间的归属，有且只有一种结果——要么私有(owner指向具体某个
-	//   citizen，stated=false)，要么公有(stated=true，owner保持nullptr，"公有"本来就
-	//   不指向任何一个具体citizen)。Map::Checkin()给每个room解析归属时，两者互斥，
-	//   永远恰好落在其中一种，不会同时/都不设(见Map::Checkin()"房产归属"一节，
-	//   populace.md)。
-	// - households：住在这个房间的户，0户或多户（户里是有夫妻/父母子女关系的住户，没有亲属
-	//   关系的住户分属不同户），公有归属没有owner，但一样可以有户。
-	// - occupants：当前物理位置在这个房间里的人，0个或多个——和households是两回事：一个
-	//   住户可能人不在家(以后有真正移动AI之后，citizen的当前位置可能是别的房间)，一个
-	//   occupant也可能不是这个房间的住户(以后有访客/工作场景时会出现)。这次没有真正的
-	//   移动AI，citizen只会在Map::Checkin()分配住处的同时"住进去"，两者的初始状态天然
-	//   重合，但数据结构上必须分开存，为将来"人在家但当前不在自己房间里"这类场景预留。
+	// 归属(owner/stated，二者互斥)、住户(households)、当前在场的人(occupants)是3个独立概念，见room.md
 	Citizen* GetOwner() const;
 	void SetOwner(Citizen* value);
 	bool GetStated() const;
 	void SetStated(bool value);
 
-	// 住在这个房间里的户（替代原来的tenants）。成员入住用AddResident：按亲属关系并入已有的户、
-	// 合并相连的户或新建一户，见populace/household.h。读档按存档重建户用AddHousehold。
+	// AddResident按亲属关系并入已有的户/合并相连的户/新建一户，见populace/household.h；读档重建户用AddHousehold
 	const std::vector<Household*>& GetHouseholds() const;
 	Household* AddResident(Citizen* citizen);
 	Household* AddHousehold();
@@ -136,11 +105,7 @@ public:
 	void AddOccupant(Citizen* citizen);
 	void RemoveOccupant(Citizen* citizen);
 
-	// 房间地上摆放的资产——独占持有(和households/occupants不同，那两个是非owning指针，指向
-	// Populace持有的Citizen；这里房间真的拥有这些Asset的生命周期)。key=Asset::GetName()。
-	// 这次的"当前房间"是玩家真实物理位置(见Player::currentRoom)，不是老工程的剧情/场景
-	// 语义，见Source/Core/player/asset.md、Source/Forever/Element/BuildingElement.cpp的
-	// OnRoomOverlapBegin/End。
+	// 房间地上摆放的资产，房间独占持有(析构时delete)，key=Asset::GetName()
 	const std::unordered_map<std::string, Asset*>& GetAssets() const;
 	void AddAsset(Asset* asset);
 	Asset* RemoveAsset(const std::string& name); // 摘除不delete，调用方接手所有权

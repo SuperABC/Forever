@@ -21,13 +21,9 @@ class FOREVER_API UPuzzleWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	// 由UForeverStoryFrameworkComponent::ApplyStartPuzzle调用：创建对应类型的Core层Puzzle
-	// 实例、Init()、把自己设为可见、切输入模式成UIOnly。UIOnly的原因跟SectionSpeaking一样
-	// （见USectionSpeakingWidget.h类注释）：小游戏要通过NativeOnKeyDown接收键盘事件，UIOnly
-	// 下Pawn的Enhanced Input收不到任何输入，不会跟移动/视角/MeetOption等操作打架。
-	// @puzzleId: 小游戏类型标识（PuzzleFactory里注册的id，比如"tetris"）
-	// @param: 剧情脚本传给小游戏的启动参数，在Init之前通过PuzzleMod::SetParam交给小游戏，空串表示
-	// 脚本没传。注意跟config.json里puzzle_mods的静态args不是一回事，那个在创建小游戏时传入。
+	// 由ApplyStartPuzzle调用：创建Core层Puzzle、Init()、设为可见、切UIOnly输入(原因见md)。
+	// puzzleId是PuzzleFactory里注册的id；param是脚本传的启动参数，Init前经PuzzleMod::SetParam交给小游戏，
+	// 与config.json里puzzle_mods的静态args不是一回事。
 	void StartPuzzle(const FString& puzzleId, const FString& param = FString());
 
 protected:
@@ -48,10 +44,7 @@ protected:
 	TObjectPtr<UImage> DisplayImage;
 
 private:
-	// 把canvas当前像素缓冲区贴到DisplayImage上——UTexture2D::CreateTransient+
-	// Lock/Memcpy/Unlock/UpdateResource这套写法照抄老工程CanvasBuffer::ApplyImage
-	// （E:\Projects\Forever_UE\Source\Forever\Utility\CanvasBuffer.cpp），不涉及文字，
-	// 直接搬。
+	// 把canvas当前像素缓冲区贴到DisplayImage上(CreateTransient+Lock/Memcpy/Unlock/UpdateResource)。
 	void BlitCanvasToImage();
 
 	// 小游戏结束（Loop返回非0）时调用：delete puzzle、隐藏自己、恢复正常的游戏内输入——

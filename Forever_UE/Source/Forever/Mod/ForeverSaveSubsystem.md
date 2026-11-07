@@ -3,8 +3,7 @@
 ## 职责
 
 存档/读档的 UE 侧入口（`UGameInstanceSubsystem`）：文件读写、外层头、zlib 压缩、文件对话框、加载前校验和报错，
-以及把通过校验的读档请求交给 World 关卡。Core 侧的 manifest、校验、版本表见 `Source/Core/common/save.md`，
-存档系统总说明见 `Source/Core/common/save.md`。
+以及把通过校验的读档请求交给 World 关卡。Core 侧的 manifest、校验、版本表和存档系统总说明见 `Source/Core/common/save.md`。
 
 ## 关键设计
 
@@ -21,14 +20,13 @@
 - **保存**：从当前关卡里的 `AForeverFrameworkActor` 取 Map/Populace/Society/Traffic/Story 组成 `SaveWorld` 传给
   `SaveGame::BuildArchive`，再写 UE 段(JSON：玩家操控的市民 `controlledCitizen`、车辆 `controlledVehicle`、位置朝向
   `pawnX/Y/Z/pawnYaw`、视角 `controlPitch/controlYaw`、`weaponSlot`、`magazineAmmo`)；
-  保存前先等后台寻路线程停下(`WaitForPendingPathfinding`)，再把场景里市民Actor的位置写回Core(`SyncPositionsToCore`，正在走路的市民按已经到达目的地写进存档，存完用`RestoreAfterSave`还原)；
+  保存前先等后台寻路线程停下(`WaitForPendingPathfinding`)，再把场景里市民Actor的位置写回Core(`SyncPositionsToCore`，正在走路的市民存即时状态——剩余路径、目的地、速度，并记下每个市民是否已实例化，读档后按存档先把已实例化的市民全部生成出来；Actor在走的临时交给Core行进模拟，存完用`RestoreAfterSave`还原)；
   剧情对话进行中、谜题进行中拒绝保存(这些中间状态不进存档)；不在游戏关卡里（比如开始菜单）时拒绝保存。保存时把地图统计
   （`MapSaveCodec::GetLastReport`）和每个段的大小打进日志。
 - **测试用控制台命令**：`Forever.Save [路径]`、`Forever.Load [路径]`，不给路径就弹对话框。正式入口是暂停界面
   （`UI/PausePanelWidget`，Tab）的保存/加载按钮和开始菜单的`LoadGameButton`（`UI/ConfigMenuWidget`）。
 - **往返一致性检查**：控制台命令 `Forever.SaveRoundTrip`——当前世界写段 → 读回成新的 Map/Populace/Society/Traffic/Story(含脚本状态)/Player → 再写段，
   逐段比较字节(跳过 manifest)，结果打在日志和屏幕上（见 `Source/Core/map/map_save.md`"往返一致性"）。
-- **当前进度**：全部域按存档恢复（P0–P6 完成）。
 
 ## 依赖关系
 

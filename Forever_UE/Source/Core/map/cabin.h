@@ -8,11 +8,7 @@
 
 class ScriptFactory;
 
-// 一台电梯(轿厢)——每条ElevatorCabinSpec(BuildingMod::AssignElevatorCabin)对应一台。持有自己的Script
-// (spec里指定scriptModName/milestoneNames时才有)、交互选项、当前所在楼层和行程状态。UE层只负责按这里
-// 的状态摆放轿厢、推进行程(ABuildingElement::Tick)，状态本身在Core，LOD重建/远景/存档都不丢。
-// 楼层用人类直觉层号：0=1楼，负数=地下。高度都是地图单位(不含UE的BUILDING_HEIGHT_EPSILON)。
-// 详见cabin.md。
+// 一台电梯(轿厢)，状态全在Core、UE层只负责摆放和推进行程。楼层用人类直觉层号(0=1楼，负数=地下)，详见cabin.md
 class Cabin {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;

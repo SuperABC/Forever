@@ -1,7 +1,7 @@
 # ForeverModSubsystem
 
 ## 职责
-负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`/`resource_paths`缺失时分别回退扫描默认目录(resource回退为`Resource/Story`+`Resource/Layouts`)),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,可以重复调用（退出游戏回菜单后再开始游戏）：已挂载过的Plugin/Pak按挂载点（`mountedMountPoints`）跳过，校验每次用当前config重新跑；长期持有的mod dll由`Registry::RefreshMods()`增量加载。
+负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`缺失时回退扫描`../Forever_Mod`,`resource_paths`缺失时回退为`Resource/Story`+`Resource/Layouts`),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。`ReadConfig`对缺失/无效文件只留空状态不报错,所以回退按"结果为空"判定;`Config`内部的警告走`std::cerr`,不一定进`Forever.log`,这里另用`UE_LOG`打印诊断。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,可以重复调用（退出游戏回菜单后再开始游戏）：已挂载过的Plugin/Pak按挂载点（`mountedMountPoints`）跳过，校验每次用当前config重新跑；长期持有的mod dll由`Registry::RefreshMods()`增量加载。
 
 ## 关键设计
 - **挂载mod自己的UE资产Plugin**(`EnsureModsRegistered()`开头):按`WITH_EDITOR`分两条路径:
@@ -16,7 +16,7 @@
 
 ## 依赖关系
 - 依赖:`Source/Core/common/config.h`(`Config::ReadConfig`/`GetMods`/`AddDllPath`/`GetConceptMods`等)、`Source/Core/common/loader.h`(`ModLoader::RegisterConcept`/`UnloadAll`)、16个`<domain>/<concept>_factory.h`(Component/Room/Asset/App/Puzzle/Name/Scheduler/Job/Organization/Script/Product/Storage/Manufacture/Route/Station/Vehicle)。
-- 被谁依赖:`UForeverConfigBridgeSubsystem::ValidateAndStartGame`(依赖校验通过后调用`EnsureModsRegistered()`,再`OpenLevel`)。UE会在game instance启动时自动实例化所有`UGameInstanceSubsystem`,`Initialize()`不需要手动触发。
+- 被谁依赖:`UForeverConfigBridgeSubsystem::ValidateAndStartGame`(依赖校验通过后调用`EnsureModsRegistered()`,再`OpenLevel`)、`UForeverSaveSubsystem::RequestLoad`(读档时应用存档的mod集合后调用)。UE会在game instance启动时自动实例化所有`UGameInstanceSubsystem`,`Initialize()`不需要手动触发。
 
 ## 待办/后续阶段
 - 随着更多领域系统在Core里落地,仍留在本类里长期验证的Factory实例可以继续转移给对应领域系统类持有(参照Terrain已转移给`Map`的先例)。

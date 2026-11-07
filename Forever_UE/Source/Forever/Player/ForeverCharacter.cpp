@@ -42,12 +42,8 @@ AForeverCharacter::AForeverCharacter()
 
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
-	// Mesh的碰撞预设"CharacterMesh"的ObjectType同样是Pawn，对着任何Trigger(比如
-	// ABuildingElement/ACitizenElement那些进入/离开检测盒)会各自独立生成一次Overlap——
-	// Capsule触发一次、Mesh再触发一次，表现为同一次进出打印两条一样的消息；蒙皮网格还会随
-	// 动画摆动肢体，静止不动时也可能被相邻Room盒的边界扫到，造成"明明没进房间却不停进出"的
-	// 抖动。这两个bug的根源都是Mesh不该参与游戏逻辑判定的Overlap——只有Capsule(角色的
-	// 真实包围体，不随动画摆动)才应该触发这些检测。
+	// Mesh的碰撞预设ObjectType也是Pawn：不关的话进出检测盒会触发两次Overlap，且蒙皮网格随动画摆动
+	// 会被相邻Room盒边界扫到造成抖动。只让Capsule触发这些检测。
 	GetMesh()->SetGenerateOverlapEvents(false);
 
 	bUseControllerRotationPitch = false;
@@ -168,9 +164,7 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
-	// keyBindings->GetBindingContext()这份动态Context不在这里加了——现在由
-	// AForeverPlayerController::BeginPlay常驻加一份，理由是它换Pawn/换乘载具时不会跟着变，
-	// 见那边的注释。这里只保留跟这个Pawn自己绑定的移动/视角Context。
+	// 动态按键Context由AForeverPlayerController常驻添加，这里只加这个Pawn自己的移动/视角Context。
 	if (APlayerController* playerController = Cast<APlayerController>(NewController)) {
 		if (UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(playerController->GetLocalPlayer())) {
 			subsystem->AddMappingContext(inputMapping, 0);
@@ -181,12 +175,8 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 	// AIController占有（市民导航测试）不是玩家操控：不发初始装备、不开武器可视化。
 	if (!Cast<APlayerController>(NewController)) return;
 
-	// 武器/背包系统初始化：左肩手枪+右肩步枪，背上一个容器装手枪/步枪/霰弹枪/狙击枪子弹各120发，
-	// 外加霰弹枪和狙击枪两把枪本身——只在
-	// Player的这三个槽位全空时(开局第一次占有)才发这套初始装备。肩膀/背包挂在Player身上，
-	// 换人操控(ChangeControlChange)时跟着玩家走，不再每次PossessedBy都删掉重建：否则用掉的
-	// 子弹每换一次人就回满，读档恢复出来的背包也会被这里覆盖掉。每次占有都激活左肩，让新
-	// 角色手上握着枪，见ForeverWeaponComponent.md。
+	// 初始装备只在Player的肩膀/背包槽位全空时(开局第一次占有)发：这些槽位挂在Player身上跟着玩家走，
+	// 每次占有都重建会让子弹回满、覆盖读档恢复的背包。内容见md。
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		if (Player* player = framework->GetPlayer()) {
@@ -235,28 +225,24 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 					}
 				}
 			}
-			// 武器可视化：先开始显示(之后ActivateShoulderWeapon会通知它"手上武器是哪个Asset装备的")。
+			// 武器可视化先开始显示，ActivateShoulderWeapon才能通知它手上武器由哪个Asset装备。
 			if (weaponVisualComponent) weaponVisualComponent->BeginShowing();
 
 			// EquipWeapon()会自动顶掉weaponComponent里可能残留的旧武器，不用先清理。
 			ActivateShoulderWeapon(1);
 
-			// 重新判定所在房间：房间的进入/离开回调只认"玩家当前操控的pawn"，这个角色在被玩家
-			// 占有之前早就站在房间里了，占有之后重叠状态没变，引擎不会再补发BeginOverlap，
-			// Player::currentRoom就会一直是空。这里直接看胶囊体当前重叠的房间触发盒来设置，
-			// 不依赖(也不广播)进出事件。
-			if (Cast<APlayerController>(NewController)) {
-				Room* room = nullptr;
-				TSet<UPrimitiveComponent*> overlaps;
-				GetCapsuleComponent()->GetOverlappingComponents(overlaps);
-				for (UPrimitiveComponent* component : overlaps) {
-					ABuildingElement* building = component ? Cast<ABuildingElement>(component->GetOwner()) : nullptr;
-					if (!building) continue;
-					room = building->FindRoomOfBox(component);
-					if (room) break;
-				}
-				player->SetCurrentRoom(room);
+			// 重新判定所在房间：占有前就站在房间里，占有后重叠状态没变，引擎不会补发BeginOverlap，
+			// Player::currentRoom会一直为空。直接看胶囊体当前重叠的房间触发盒，不广播进出事件。
+			Room* room = nullptr;
+			TSet<UPrimitiveComponent*> overlaps;
+			GetCapsuleComponent()->GetOverlappingComponents(overlaps);
+			for (UPrimitiveComponent* component : overlaps) {
+				ABuildingElement* building = component ? Cast<ABuildingElement>(component->GetOwner()) : nullptr;
+				if (!building) continue;
+				room = building->FindRoomOfBox(component);
+				if (room) break;
 			}
+			player->SetCurrentRoom(room);
 		}
 	}
 }
@@ -350,16 +336,12 @@ void AForeverCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// 瞄准摄像机平滑过渡——每帧把cameraBoom的SocketOffset/TargetArmLength朝目标值(瞄准中
-	// 用aimSocketOffset/aimArmLength，否则用defaultSocketOffset/defaultArmLength)插值一步，
-	// 不是StartAim/StopAim里直接赋值瞬间跳变，见头文件aimTransitionSpeed注释。这个Tick()
-	// 要正常跑，前提是这个实例的Actor Tick没被关掉——ACitizenElement默认对静止citizen关闭
-	// Tick(省性能)，被玩家占有时会重新打开，见ACitizenElement::PossessedBy/UnPossessed。
 	// 长按3：按住的真实时间到阈值就弹出投掷物选择列表。
 	if (bThrowKeyHeld && GetWorld()->GetRealTimeSeconds() - throwKeyPressTime >= longPressThreshold) {
 		OpenThrowList();
 	}
 
+	// 瞄准摄像机平滑过渡。依赖Actor Tick没被关掉：ACitizenElement默认关闭Tick，被玩家占有时由PossessedBy重新打开。
 	FVector targetSocketOffset = bIsAiming ? aimSocketOffset : defaultSocketOffset;
 	float targetArmLength = bIsAiming ? aimArmLength : defaultArmLength;
 	cameraBoom->SocketOffset = FMath::VInterpTo(cameraBoom->SocketOffset, targetSocketOffset, DeltaTime, aimTransitionSpeed);
@@ -391,8 +373,8 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("SwitchWeapon1")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchToWeapon1);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("SwitchWeapon2")), ETriggerEvent::Started, this, &AForeverCharacter::SwitchToWeapon2);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrowItem")), ETriggerEvent::Started, this, &AForeverCharacter::ThrowKeyPressed);
-					enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrowItem")), ETriggerEvent::Completed, this, &AForeverCharacter::ThrowKeyReleased);
-					enhancedInput->BindAction(keyBindings->GetAction(TEXT("AimWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::StartAim);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ThrowItem")), ETriggerEvent::Completed, this, &AForeverCharacter::ThrowKeyReleased);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("AimWeapon")), ETriggerEvent::Started, this, &AForeverCharacter::StartAim);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("AimWeapon")), ETriggerEvent::Completed, this, &AForeverCharacter::StopAim);
 			}
 		}
@@ -413,8 +395,7 @@ void AForeverCharacter::ToggleCameraView()
 
 void AForeverCharacter::UpdateRotationMode()
 {
-	// 第一人称、或者瞄准中(不管第几人称)，角色朝向都要跟摄像机走，不是跟移动方向走——
-	// 瞄准时人应该正对着准星指向的地方，不能因为往侧面/后面移动就转向移动方向。
+	// 第一人称或瞄准中，角色朝向跟摄像机走而不是移动方向。
 	bool bFaceCamera = bIsFirstPerson || bIsAiming;
 	bUseControllerRotationYaw = bFaceCamera;
 	GetCharacterMovement()->bOrientRotationToMovement = !bFaceCamera;
@@ -558,9 +539,7 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 	Asset* toActivate = (slot == 1) ? player->GetLeftShoulder() : player->GetRightShoulder();
 	if (weaponVisualComponent) weaponVisualComponent->NotifyActivated(slot, toActivate);
 	if (!toActivate) {
-		// 这个肩膀是空的——手上也应该跟着空下来，不能继续保留切换前那把武器(比如之前拿着
-		// 右肩的枪，按1切到空的左肩，手上不该还握着右肩那把)，用户明确要求这个行为。手上
-		// 空了之后StartAim()会因为HasWeapon()==false而拒绝瞄准。
+		// 这个肩膀是空的：手上跟着空下来，不保留切换前那把；StartAim()会因HasWeapon()==false拒绝瞄准。
 		weaponComponent->ClearWeapon();
 		if (GEngine) {
 			GEngine->AddOnScreenDebugMessage(201, 3.f, FColor::Cyan, TEXT("当前武器: 无"));
@@ -568,16 +547,12 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 		return;
 	}
 
-	// 武器Asset本身留在肩膀槽位上不动，不删除/不挪走——用户明确要求"激活成手上能开火的武器
-	// 不要把武器asset本身给删了，要还放在左右肩膀上"。EquipWeapon()只是让
-	// ForeverWeaponComponent额外持有一份"活的"WeaponMod副本用于开火/换弹模拟，肩膀上的
-	// Asset和这份"活的"副本是同一把枪的两种表示，彼此独立维护，互不删除/创建对方——
-	// EquipWeapon内部自己会先销毁上一把"活的"武器(如果有)，不需要这里手动处理。
+	// 武器Asset留在肩膀槽位上不动，EquipWeapon只让组件额外持有一份"活的"WeaponMod副本(会先销毁旧副本)。
 	// 资产id(asset_pistol)和武器id(weapon_pistol)分属两个concept，由资产自己声明对应哪把武器。
 	FString activatedType = UTF8_TO_TCHAR(toActivate->GetWeaponType().c_str());
 	weaponComponent->EquipWeapon(activatedType);
 
-	// 屏幕左上角提示当前切到了哪把枪——用固定Key(不是-1)，切枪会刷新同一行，不往下堆叠。
+	// 固定Key，切枪刷新同一行。
 	if (GEngine) {
 		GEngine->AddOnScreenDebugMessage(201, 3.f, FColor::Cyan,
 			FString::Printf(TEXT("当前武器: %s"), *activatedType));
@@ -586,8 +561,7 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 
 void AForeverCharacter::StartAim()
 {
-	// 激活的是投掷物：只要拿着它的手就是投掷手，或者至少一只手是空的就能瞄准；两只手都被
-	// 别的东西占着时仍保持激活，但不能瞄准。不要求HasWeapon()，也没有武器的右手限制。
+	// 激活的是投掷物：用CanThrow()判断，不要求HasWeapon()，也没有武器的右手限制。
 	if (throwableComponent && throwableComponent->IsActive()) {
 		throwableComponent->Refresh(); // 背包没有变化事件，开始瞄准前重新核对
 		if (!throwableComponent->IsActive() || !throwableComponent->CanThrow()) return;
@@ -596,12 +570,10 @@ void AForeverCharacter::StartAim()
 		return;
 	}
 
-	// 手上没有激活任何武器就没法瞄准——用户明确要求："左右肩为空的时候切过去，因为没有
-	// 武器，这个时候无法瞄准"。
+	// 手上没有激活任何武器就没法瞄准。
 	if (!weaponComponent || !weaponComponent->HasWeapon()) return;
 
-	// 手里攥着背包物品(不管是不是武器，因为武器根本不会出现在这里，见"武器只挂肩膀"设计)
-	// 就没法空手瞄准——和武器挂载机制彼此独立的常识性限制，逼玩家先Drop手里的东西。
+	// 右手攥着背包物品时没法瞄准(武器只挂肩膀，不会在手里)，要先放下。
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
 		if (Player* player = framework->GetPlayer()) {

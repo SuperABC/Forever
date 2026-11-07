@@ -331,18 +331,13 @@ API void wx_step_batch(int n, const int* gids, const int* act, float* reward, in
 
 		g.ct->ActionTurn({ { x, 1 }, { y, 0 } });
 		bool dodged[2] = { false, false };   // 席位s闪避了对手的攻击
-		bool lockHit[2] = { false, false };  // 席位s禁锢了对手
 		g.ct->CheckTurn({ { x, 1 }, { y, 0 } });
 		g.ct->EndTurn();
 		for (auto& log : g.ct->logs) {
 			if (log.type == LOG_DODGE && log.object >= 0 && log.object < 2) dodged[log.object] = true;
-			if (log.type == LOG_EFFECT && log.effect == EFFECT_LOCK && log.subject >= 0 && log.subject < 2) lockHit[log.subject] = true;
 		}
 		g.ct->logs.clear(); g.ct->mark = 0;
 
-		float rec[2][24];
-		ActionRecord(*x, cls[0], c0, rec[0]);
-		ActionRecord(*y, cls[1], c1, rec[1]);
 		Cultivator* cs[2] = { &c0, &c1 };
 		for (int s = 0; s < 2; ++s) {
 			int o = 1 - s;
@@ -360,7 +355,6 @@ API void wx_step_batch(int n, const int* gids, const int* act, float* reward, in
 			row[57] = locked[s] ? 1.f : 0.f;  row[58] = locked[o] ? 1.f : 0.f;
 			Push(g.hist[s], row);
 		}
-		(void)lockHit;
 
 		float lossAfter[2] = { Loss(c0), Loss(c1) };
 		for (int s = 0; s < 2; ++s) reward[b * 2 + s] = (lossAfter[1 - s] - lossBefore[1 - s]) - (lossAfter[s] - lossBefore[s]);

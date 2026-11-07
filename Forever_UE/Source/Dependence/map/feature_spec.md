@@ -41,7 +41,6 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
 
 ### 待办/后续阶段
 
-- 没有做瞄准倍率/后坐力一类"手感参数"——门不需要。
 - `scriptModName`/`milestoneNames`只有`name`非空时才会被`Map::CreateDoor`读取，`name`
   为空的纯自动门这两个字段即使填了也不会生效，不是bug。
 
@@ -101,8 +100,7 @@ Core的`Lamps`展开成一盏盏灯(见`Source/Core/map/lamp.md`)，UE层逐盏�
 ### 职责
 
 建筑mod在`Layout()`里用`BuildingMod::AddDecoration(spec)`指定在场景里放一个StaticMesh(比如一整栋
-建筑的成品模型)，给出位置/离地高度/缩放/旋转。照搬老工程(`E:\Projects\Forever_UE`)
-`BuildingMod::AddDecoration`的特性：位置和yaw按一个固定朝向定义，实际朝向不同时自动旋转。
+建筑的成品模型)，给出位置/离地高度/缩放/旋转。位置和yaw按一个固定朝向(face=2)定义，实际朝向不同时自动旋转。
 
 ### 关键设计
 
@@ -110,7 +108,7 @@ Core的`Lamps`展开成一盏盏灯(见`Source/Core/map/lamp.md`)，UE层逐盏�
   在楼体左下角，ratio相对楼体宽高)，按face=2(`FACE_NORTH`，模板"原样"那个朝向)定义；Core在
   `Building::Layout()`里按建筑最终`direction`调`BuildingLayoutLibrary::InversePoint`换算——和
   .layout模板里的楼梯/房间用的是同一个函数，所以模型和楼层布局永远一起转。yaw按同一个旋转叠加
-  (face0=+270°、face1=+90°、face2=0、face3=+180°，和老工程一致)，再叠加建筑自身的世界旋转。
+  (face0=+270°、face1=+90°、face2=0、face3=+180°)，再叠加建筑自身的世界旋转。
 - `z`/`scale*`/`pitch`/`roll`不随朝向变化；缩放是资产原尺寸的倍数，不像楼梯那样按包围盒拟合。
 - 只在建筑近处LOD显示，见`Source/Forever/Element/BuildingElement.md`。
 
@@ -122,4 +120,4 @@ Core的`Lamps`展开成一盏盏灯(见`Source/Core/map/lamp.md`)，UE层逐盏�
 ## 摆位实例(`DecorationInstance`)
 
 - `DecorationInstance`：`DecorationSpec`按宿主(建筑/园区)最终朝向换算好的世界摆位，Core算好、UE层只读，
-  建筑和园区共用(原来是Core的`BuildingDecoration`)。
+  建筑和园区共用。`x`/`y`/`z`地图单位，`yaw`弧度，`pitch`/`roll`度，`scale*`是资产原尺寸倍数。

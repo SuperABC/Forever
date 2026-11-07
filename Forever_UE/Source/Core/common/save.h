@@ -1,5 +1,7 @@
 #pragma once
 
+#include "class.h"
+
 #include "common/save_archive.h"
 #include "common/mod_state.h"
 #include "common/json.h"
@@ -9,9 +11,7 @@
 #include <utility>
 
 
-// 存档/读档的Core侧编排：manifest(用到的mod/脚本/布局、版本、计数器)、段版本表、mod状态的
-// JSON读写实现、加载前校验、把存档的mod集合应用到当前Config。UE层(ForeverSaveSubsystem)负责
-// 文件、压缩和界面。详见save.md。
+// 存档/读档的Core侧编排，详见save.md
 
 // 游戏版本字符串，只写进manifest用于显示/排查，不参与兼容性判断。发版时手动改。
 #define SAVE_GAME_VERSION "0.1.0"
@@ -24,8 +24,7 @@
 // UE侧状态(JSON，由ForeverSaveSubsystem读写)：当前操控的市民/车辆等。
 #define SAVE_SECTION_UE "ue"
 
-// 段版本表：每个段的当前版本和当前代码还能读的最旧版本。改某个段的数据布局时只升那一段的
-// current，并在save.cpp里补一个从旧版本升上来的迁移；比minimum还旧、或者比current还新的段拒绝读。
+// 段版本表：每个段的当前版本和还能读的最旧版本，规则见save.md"版本号"一节
 struct SaveSectionVersion {
 	const char* name;
 	int current;
@@ -113,13 +112,6 @@ private:
 	mutable std::string scratch;
 };
 
-class Map;
-class Populace;
-class Society;
-class Industry;
-class Traffic;
-class Story;
-class Player;
 
 // 存档时传给SaveGame的当前世界(还没生成的域传nullptr，对应的段就不写)。
 struct SaveWorld {
@@ -138,9 +130,7 @@ public:
 	// 存活实例)、脚本名、布局模板名(按map里各建筑的楼层模板快照)。
 	static SaveManifest BuildManifest(const SaveWorld& world);
 
-	// 生成存档"压缩体"里的分段容器：manifest + 地图4段(map_save.h) + 人口(populace_save.h) +
-	// 社会(society_save.h) + 交通(traffic_save.h) + 脚本状态(script_save.h) + 玩家(player_save.h)，
-	// 段列表见save.md。
+	// 生成存档"压缩体"里的分段容器，段列表见save.md
 	static SaveArchive BuildArchive(const SaveWorld& world);
 
 	// 加载前校验(不改任何状态)：段版本、manifest解析、mod是否都被已发现的DLL提供、依赖、
@@ -158,8 +148,7 @@ public:
 	static ConfigSnapshot ApplyManifestConfig(const SaveManifest& manifest);
 	static void RestoreConfig(const ConfigSnapshot& snapshot);
 
-	// mod是否真的注册进了Factory(DLL已加载且已启用)。Registry只在第一次Get()时加载DLL，游戏内读档
-	// 需要一个启动时没加载过的DLL就会在这里报出来(只能重启游戏)。必须在ApplyManifestConfig之后调用。
+	// mod是否真的注册进了Factory(DLL已加载且已启用)，必须在ApplyManifestConfig之后调用，见save.md
 	static std::vector<std::string> ValidateModsRegistered(const SaveManifest& manifest);
 
 	// mod状态版本检查：存档里某个mod的stateVersion比当前mod的GetStateVersion()还新就报错。只对

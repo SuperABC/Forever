@@ -7,9 +7,7 @@
 #include <unordered_set>
 
 
-// Name实体：持有一个具体NameMod实例(由NameFactory创建/销毁)，把它的取名业务方法转发出来。
-// 架构上和Terrain(Core/map/terrain.h)同一个模式——Populace只允许操作这个Core层concept，
-// 不允许直接持有/调用NameMod*，详见populace.md。
+// Name实体：持有一个NameMod实例(由NameFactory创建/销毁)并转发取名方法，见name.md。
 class Name {
 	// 存档：PopulaceSaveCodec直接读写私有字段(populace_save.md)。
 	friend class PopulaceSaveCodec;
@@ -36,8 +34,7 @@ public:
 	std::string GenerateName(const std::string& surname,
 		bool allowMale, bool allowFemale, bool allowNeutral) const;
 
-	// 占位一个姓名——GenerateName不会返回这个名字（内部撞上就重试，见.cpp）。给主线剧情
-	// 脚本里出现的角色名占位用（name_reserve字段），见populace.md"InitNames"一节。
+	// 占位一个姓名，GenerateName不会返回它(给剧情脚本name_reserve用)。
 	void ReserveName(const std::string& name);
 
 private:

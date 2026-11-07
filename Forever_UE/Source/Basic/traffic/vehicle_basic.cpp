@@ -13,15 +13,10 @@ const char* VehicleBasic::GetName() {
 }
 
 void VehicleBasic::SetProperty() {
-	// 外观：指向一个继承AVehicleElement的蓝图类(Content/Blueprint/Vehicle/
-	// BP_VehicleElement，CarMesh用ChaosModularVehicleExamples插件自带的SKM_SportsCar，
-	// 轮子骨骼名Phys_Wheel_FL/FR/BL/BR)，骨骼网格/轮子骨骼名在蓝图编辑器里设置，这里
-	// 只存蓝图类的资源路径——见vehicle_mod.h/VehicleElement.md的说明。
+	// 外观：继承AVehicleElement的蓝图类，骨骼网格/轮骨在蓝图里设，这里只存资源路径，见vehicle_basic.md。
 	blueprintPath = "/Game/3rdParty/Cars_for_Arcade_Demolition_Racing_Games/Actor/BP_VehicleElement.BP_VehicleElement_C";
 
-	// "empty"这个ScriptMod id纯粹是透传(AutoCopy(actions)，不做任何占位替换)，"靠近弹出
-	// 上车选项"完全靠milestone触发就够了，不需要WrapScript介入，见
-	// Resource/Story/vehicle_basic.script。
+	// script_empty纯透传，"靠近弹出上车选项"完全靠milestone触发，见Resource/Story/vehicle_basic.script。
 	scriptModName = "script_empty";
 	milestoneNames = { "vehicle_basic" };
 
@@ -41,9 +36,7 @@ const char* BusVehicle::GetName() {
 void BusVehicle::SetProperty() {
 	sizeX = 786.f; sizeY = 312.f; sizeZ = 347.f; // UE单位，PAZ_652模型的实际包围盒
 
-	// 路线上的公交(ATransitVehicleElement，运动学显示)和停车场里的公交(AVehicleElement，Chaos物理驾驶)
-	// 用同一个模型：transitMeshPath是骨骼网格(车头+X，原点在车身中心地面，轮骨Phys_Wheel_FL/FR/BL/BR)，
-	// blueprintPath是从BP_VehicleElement派生的驾驶蓝图，CarMesh用的也是这个骨骼网格。
+	// 路线公交(transitMeshPath)和停车场公交(blueprintPath)共用同一个骨骼网格，见vehicle_basic.md。
 	transitMeshPath = "/Game/3rdParty/PAZ_652/StaticMeshes/SKM_paz_652.SKM_paz_652";
 	blueprintPath = "/Game/3rdParty/PAZ_652/Actor/BP_BusElement.BP_BusElement_C";
 
@@ -74,8 +67,7 @@ const char* TruckVehicle::GetName() {
 void TruckVehicle::SetProperty() {
 	sizeX = 556.f; sizeY = 229.f; sizeZ = 199.f; // UE单位，ZIL-130模型的实际包围盒
 
-	// 驾驶蓝图：从AVehicleElement派生，CarMesh是脚本生成的骨骼网格(车头+X，原点在车身中心地面，
-	// 轮骨Phys_Wheel_FL/FR/BL/BR)；轮子半径/重心都在蓝图里填。
+	// 驾驶蓝图：从AVehicleElement派生，轮子半径/重心在蓝图里填。
 	blueprintPath = "/Game/3rdParty/ZIL_130__body____Lowpoly/Actor/BP_TruckElement.BP_TruckElement_C";
 
 	// 脚本：靠近弹出"上车"，复用小汽车的vehicle_basic。
@@ -103,8 +95,7 @@ const char* TrainVehicle::GetName() {
 void TrainVehicle::SetProperty() {
 	sizeX = 2134.f; sizeY = 399.f; sizeZ = 577.f; // UE单位，SciFiTram模型的实际包围盒(原点在车身中心附近，底面略低于0)
 
-	// 路线上的火车(ATransitVehicleElement，运动学显示)用SciFiTram静态网格(长边沿X，原点在车身中心地面附近)，
-	// 只能搭乘不能驾驶，没有停车位版本，所以没有blueprintPath。
+	// 只有路线版本(静态网格，长边沿X)，没有blueprintPath。
 	transitMeshPath = "/Game/3rdParty/SciFiTram/StaticMeshes/SciFiTram.SciFiTram";
 
 	// 脚本：停站时的上车/下车选项，见Resource/Story/vehicle_train.script。
@@ -133,8 +124,7 @@ const char* PlaneVehicle::GetName() {
 void PlaneVehicle::SetProperty() {
 	sizeX = 3000.f; sizeY = 2500.f; sizeZ = 800.f;
 
-	// 测试飞机模型资产，来自Forever_Mod/Test/UE/Test这个独立mod的Plugin(Test)，
-	// ForeverModSubsystem运行时挂载成"/Test/..."包路径，见vehicle_mod.h::transitMeshPath。
+	// 模型资产来自Forever_Mod/Test的Plugin，运行时挂载成"/Test/..."包路径，见vehicle_mod.h::transitMeshPath。
 	transitMeshPath = "/Test/Airplane/StaticMeshes/airplane.airplane";
 
 	// 模型原始尺寸偏大，缩放到0.15才合适。模型本身是横着建的(正前方不是UE约定的+X)，
@@ -142,10 +132,7 @@ void PlaneVehicle::SetProperty() {
 	meshTransform.scale = 0.15f;
 	meshTransform.yawOffsetDegrees = -90.f;
 
-	// 机场停机位里的飞机(APlaneElement，Chaos物理+手写飞行力学，可驾驶)和线路上的飞机
-	// (ATransitVehicleElement，运动学显示)共用这个车型，和公交一样：blueprintPath是停机位里那架
-	// 可驾驶飞机的蓝图(继承PlaneElement，骨骼网格/轮骨/飞行系数在蓝图里设，见PlaneElement.md)，
-	// 路线飞机仍然用transitMeshPath。
+	// 停机位飞机用blueprintPath(继承PlaneElement，见PlaneElement.md)，路线飞机用transitMeshPath。
 	blueprintPath = "/Game/3rdParty/Low-poly_Airplane/Actor/BP_PlaneElement.BP_PlaneElement_C";
 
 	// 脚本：停机位里的飞机提供"驾驶"选项，线路上的飞机不提供，见Resource/Story/vehicle_plane.script。

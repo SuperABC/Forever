@@ -171,12 +171,9 @@ public:
 	~Intersection();
 };
 
-// 车道分裂/开口标记，直接挂在Road自己身上，不在Map侧另开表。两个产出方：①Map::
-// AddRoadAccessNode——同时断开导航图车道贯通线、用forwardSide/isVehicle选中具体车道；
-// ②Lot::SplitWithPath——小路接到一条大路上时标一个纯几何/渲染意义的开口，不碰导航图，这种
-// 情况forwardSide/isVehicle没有意义(没有消费方会读，只是保留默认值)。
-// t: 沿Road弧长比例位置；width: 开口沿道路方向的长度；forwardSide: 取用road哪一侧
-// （vehicleLanes[0]/pedestrianLanes[0]为true，[1]为false）；isVehicle: 车行(true)还是行人(false)开口。
+// 车道分裂/开口标记,挂在Road自身。产出方:Map::AddRoadAccessNode(断开导航图车道并选中车道)、
+// Lot::SplitWithPath(纯几何/渲染开口,此时forwardSide/isVehicle无意义)。
+// t:沿Road弧长比例;width:开口沿路长度;forwardSide:vehicleLanes[0]/pedestrianLanes[0]为true;isVehicle:车行/行人。
 struct RoadOpening {
 	float t = 0.f;
 	float width = 0.f;
@@ -215,10 +212,9 @@ public:
 	// 获取道路mesh基准长度（沿Connection弧长按此长度重复摆放GetMesh()资产一次）
 	float GetUnit() const;
 
-	// 车道数据：每个数组下标0=沿Connection方向前进的一侧，1=反向一侧；vector每个元素是一条车道的宽度，
-	// 数组大小即车道数，0=不存在。视觉效果由GetMesh()/GetUnit()整体承担（该mesh资产本身已经画好了
-	// 车道+人行道横断面），这几组数据只用于结构计算（lot margin、路口路缘角点、导航锚点偏移）。
-	// parking/pedestrian两侧只代表物理位置，不代表通行方向；vehicle两侧的方向性由side本身隐含。
+	// 车道数据:下标0=沿Connection方向一侧,1=反向一侧;元素是车道宽度,数组大小=车道数。
+	// 这些数据只用于结构计算(lot margin、路口路缘、导航锚点偏移),视觉由GetMesh()/GetUnit()承担。
+	// parking/pedestrian两侧只代表物理位置,不代表通行方向。
 	void AddVehicleLane(int side, float width);
 	const std::vector<float>& GetVehicleLanes(int side) const;
 	void AddParkingLane(int side, float width);
@@ -233,16 +229,11 @@ public:
 	// side(0/1)车行+停车+人行道宽度总和。
 	float GetSideWidth(int side) const;
 
-	// 是否是Zone/Building裁剪Lot自由空间时自动生成的小路（Lot::SplitWithPath创建），
-	// 不是RoadnetMod铺设的正式路。分类信息记在Road自己身上——持有Road*的调用方（比如以后
-	// 要重新给小路接导航图时）直接问这条Road自己就够了，不需要额外拿着Map的某个列表去做
-	// 成员检查。
+	// 是否是Lot::SplitWithPath裁剪出的小路(不是RoadnetMod铺设的正式路),分类记在Road自身。
 	void SetPathRoad(bool isPath = true);
 	bool IsPathRoad() const;
 
-	// 两侧宽度相加——Connection连线代表的是整条车道横断面的**几何中心**，不是两侧的分界线
-	// （哪怕side0/side1车道数、宽度完全不对称，甚至单行道只有一侧有车道，连线也严格居中），
-	// 这个值就是这条路在路口/lot边界处需要让出的横向总宽度。详见roadnet.md"车道居中"一节。
+	// 两侧宽度相加。Connection连线是车道横断面的几何中心(两侧不对称也严格居中),见roadnet.md"车道居中"。
 	float GetTotalWidth() const;
 
 private:
@@ -338,12 +329,9 @@ protected:
 	float acreage;
 };
 
-// 地形挖洞标记(Map::AddHatch，Terrain渲染时在地形上挖掉这个旋转矩形)。quad是矩形(sizeX=沿rotation方向的
-// 长度、sizeY=宽度)，rotation是长边方向(弧度)；"方向"就是rotation的前进方向：起点端=-forward、终点端
-// =+forward。wall=true的hatch(目前只有隧道口，RoadnetMod::AddTunnelHatch产出)会在洞的两条长边加竖直的
-// 侧壁(UE层ForeverTerrainFrameworkComponent::BuildTunnelWalls)，侧壁底边是洞底高度：floorStart/floorEnd
-// 是洞底(路面)在起点端/终点端的绝对高度(地图element单位)，沿路按smoothstep过渡。wall=false(默认)的
-// hatch不加任何东西。
+// 地形挖洞标记。quad.sizeX=沿rotation(长边方向,弧度)的长度,sizeY=宽度。wall=true(隧道口,
+// RoadnetMod::AddTunnelHatch)时在两条长边加竖直侧壁,floorStart/floorEnd是洞底在起/终点端的绝对高度
+// (地图element单位,沿路smoothstep过渡)。
 struct TerrainHatch {
 	Quad quad;
 	float rotation = 0.f;
@@ -352,10 +340,8 @@ struct TerrainHatch {
 	float floorEnd = 0.f;
 };
 
-// 地形贴合请求(BuildTerrainFit产出)：路面/轨道高度由mod指定，宿主(Map::ApplyTerrainFits)把面下和边上的
-// 地形高度贴到这个高度上——内部地形高度=线高度，边缘向外falloff距离内按到边缘的距离平滑渐变回原地形，
-// 不管线比地形高还是低都生效。存的是采样好的中轴线折线(纯值类型)，不是Connection指针：mod自己的
-// roads/连线容器会扩容，指针会失效。路网(RoadnetMod)和线路(RouteMod)共用。
+// 地形贴合请求(BuildTerrainFit产出),宿主Map::ApplyTerrainFits把面下和边上的地形贴到线高度,
+// 边缘向外falloff内渐变。存采样好的折线而非Connection指针(mod的容器会扩容)。RoadnetMod和RouteMod共用。
 struct TerrainFitSample {
 	float x = 0.f;
 	float y = 0.f;
@@ -367,9 +353,8 @@ struct TerrainFitRequest {
 	float falloff = 0.f; // 边缘向外渐变回原地形的距离
 };
 
-// 把connection上[t1,t2]这一段包成一个Quad追加进out(隧道口挖地形洞用，照抄老工程语义)。width是Quad垂直于
-// connection方向的宽度，Quad朝向沿t1->t2端点连线方向。tunnel=true时hatch带侧壁(wall=true)，底边是
-// connection在t1/t2处的Z，只有隧道口该用。RoadnetMod::AddHatch/AddTunnelHatch、RouteMod的同名辅助都转调这里。
+// 把connection上[t1,t2]包成Quad追加进out(挖地形洞)。tunnel=true时带侧壁,仅隧道口用。
+// RoadnetMod::AddHatch/AddTunnelHatch、RouteMod的同名辅助都转调这里。
 void BuildHatch(const Connection* connection, float t1, float t2, float width, bool tunnel, std::vector<TerrainHatch>& out);
 
 // 把connection上[t1,t2]这一段沿弧长按固定间距采样成折线，追加一个TerrainFitRequest进out。
@@ -395,9 +380,8 @@ enum AREA_TYPE : int {
 
 class Lot;
 
-// 小路车道配置：车行vehicleWidth+人行pedestrianWidth各两侧，无停车道，宽度固定
-// vehicleWidth*2+pedestrianWidth*2（默认0.3/0.2，两侧共1单位）。小路的材质是全图统一的一个
-// 值（Roadnet::GetPathRoadMaterial()），不需要每条小路自己记一份，因此不在这个结构体里。
+// 小路车道配置:车行vehicleWidth+人行pedestrianWidth各两侧,无停车道(默认0.3/0.2,总宽1单位)。
+// 材质全图统一(Roadnet::GetPathRoadMaterial()),不在此结构体里。
 struct PathLaneSpec {
 	float vehicleWidth = 0.3f;
 	float pedestrianWidth = 0.2f;
@@ -412,24 +396,17 @@ struct LotPlacementRequest {
 	float marginEnd = 0.f;
 	float depth = 0.f;
 
-	// 非空时说明lot不是调用方传进Assign()的那个顶层Lot本身，而是Lot::FindAdaptivePlacement在
-	// 它的freeLots里点中的一个子块——RequestPlacement成功之后，调用方(Map::InitZones()/
-	// InitBuildings())要把lot自己剩下的freeLots/pathRoadLinks搬回adaptiveParent、并把lot从
-	// adaptiveParent->GetFreeLots()里摘掉再delete，这样下一个mod类型的FindAdaptivePlacement才能
-	// 看到真正还剩多少空间（否则lot会继续以"看起来完整未使用"的样子留在adaptiveParent里）。这个
-	// 搬运步骤必须在Core编译的代码里做，不能让mod自己做，见FindAdaptivePlacement声明处的说明。
+	// 非空=lot是FindAdaptivePlacement在该顶层Lot的freeLots里命中的嵌套子块;
+	// RequestPlacement成功后由Core(Map::InitZones/InitBuildings)把残余搬回adaptiveParent,见general_geometry.md。
 	Lot* adaptiveParent = nullptr;
 };
 
-// Zone/BuildingMod的Assign()一次性扫描全地图的lot列表、决定要显式占位哪些lot时，通过这个回调把
-// 每条LotPlacementRequest交回调用方——回调函数本身（emit指向的代码）由调用方(Core编译的
-// Map::InitZones()/InitBuildings())提供，mod只是调用它，不持有/不增长/不返回任何容器，跨DLL安全
-// (原因见BuildingFactory/ZoneFactory的AssignFunc注释)。裸函数指针，和creator/deleter同一个机制。
+// Assign()把每条LotPlacementRequest交回调用方的回调(体编译在调用方一侧,mod不持有任何容器,
+// 跨DLL安全)。裸函数指针,与creator/deleter同机制。
 using PlacementEmitFunc = void(*)(void* context, const LotPlacementRequest& request);
 
-// Lot::SplitWithPath产出的一条小路及其两端各自连到的路+弧长位置，供Core层(Map::ConnectPathRoad)
-// 接导航图用。endRoad1/endRoad2可能为nullptr(小路这一端没有可连的路，见SplitWithPath"关键设计
-// 决策8"——但两端不能同时为空)，此时Map按孤立端点处理，不接到任何已有贯通线上。
+// SplitWithPath产出的小路及两端连到的路+弧长位置,供Map::ConnectPathRoad接导航图。
+// endRoad1/endRoad2可为nullptr(两端不能同时为空),此时按孤立端点处理。
 struct PathRoadLink {
 	Road* road = nullptr;
 	Road* endRoad1 = nullptr;
@@ -438,42 +415,24 @@ struct PathRoadLink {
 	float endT2 = 0.f;
 };
 
-// Building内部布局模板(.layout文件)里，一个矩形/点在"某个尺寸的房间里"的相对位置描述——
-// ratio+offset两部分：worldCoord = ratio*floor自身宽或高 + offset，同一份模板换到不同实际
-// 楼层尺寸时套用同一个公式即可复用。矩形用8个float(两个对角点各自的x/y两套ratio+offset)，
-// 点用4个float(一个点的x/y两套ratio+offset)——照抄老工程语义，纯数学，和UE/引擎无关，
-// 见Source/Core/map/building.md"模板数据模型"一节。
+// Building内部布局模板(.layout)里矩形/点的相对位置:worldCoord = ratio*floor宽或高 + offset。
+// 矩形8个float(两个对角点各x/y两套ratio+offset),点4个float,见Source/Core/map/building.md"模板数据模型"。
 using RectParams = std::array<float, 8>;
 using PointParams = std::array<float, 4>;
 
-// 一面墙上的门/窗开口列表，按FACE_DIRECTION(0-3)分组——每个开口只保留位置ratio参数
-// (RectParams，沿墙方向+垂直方向各一对ratio+offset)，照抄老工程Corridor/Single/Row的
-// doors/windows字段；老工程原本每个开口还搭配一个Quad(供以后扩展用)，但从未被任何消费方
-// 读取过(BuildingBase.cpp::ConstructQuad解构时直接把Quad那一半丢掉)，这次不带这个用不到
-// 的字段。Building(Corridor/Single/Row)和Room都要用这个类型，放在general_geometry.h这个公共
-// 底层头，不需要互相include对方。
+// 一面墙上的门/窗开口列表,按FACE_DIRECTION(0-3)分组,每个开口只保留位置ratio参数(RectParams)。
+// 放在公共底层头,Building(Corridor/Single/Row)和Room共用。
 using WallHole = std::unordered_map<int, std::vector<RectParams>>;
 
-// 一面墙上每个门洞的layout标签——下标和WallHole的下标(FACE_DIRECTION)一一对应，每个
-// direction下的vector和对应WallHole[direction]逐个元素对齐(同一次AddDoor调用追加的
-// position/tag一一配对)。没有标签的门洞对应空字符串，ResolveDoorSpec按这个空字符串
-// 判定"不可选中，永远只是个洞"，见Core/map/door.h。和WallHole同样放在这个公共底层头，
-// Building(Corridor/Single/Row)和Room都要用，不需要互相include对方。
+// 每个门洞的layout标签,下标与WallHole一一对应(同一次AddDoor追加的position/tag配对)。
+// 无标签=空字符串,ResolveDoorSpec据此判定"只是个洞",见Core/map/door.h。
 using DoorTags = std::unordered_map<int, std::vector<std::string>>;
 
-// Room内部一个停车位——位置是ratio+offset(和PointParams同一套约定)：第一对(ratio,offset)是u轴(沿正面墙)，
-// 第二对是v轴(朝正面为正)，位置 = ratio x 该轴长度 + 米数偏移，原点在房间角点。坐标系是**房间局部坐标系**，
-// 由房间自己的朝向(Room::GetDirection()，layout里指定的"正面"，已含建筑实例朝向)定义，不是建筑朝向，
-// 也不是房间的建筑局部X/Y：房间"朝北"时就是建筑/layout的坐标系，其它朝向整套纯旋转，所以车位按朝北写一次即可，
-// 详见Room::LocalToBuildingLocal、Source/Core/map/room.md。
-// rotationDegrees是车辆停在这个车位时相对房间朝向的旋转角(角度制，0度=朝向房间正面，所以背对正面、
-// 朝房间深处(如机场跑道)是180度)；实际换算成世界旋转时转成弧度、叠加房间朝向和Building::GetRotation()，
-// 见Traffic::InitParkedVehicles。老工程RoomMod::parkingSpaces只有位置、没有旋转，这次把这个缺口补上，
-// 见Source/Core/traffic/traffic.md。
-//
-// categories是这个车位允许停进来的所有载具种类(VehicleMod静态GetCategory()返回的名字，如
-// "car"/"bus"/"plane")，Traffic::InitParkedVehicles对每个车位在这里随机选一个种类、再从该种类的
-// 车型里随机选一个生成载具。飞机/汽车在这一层没有区别，只是种类名不同。
+// Room内部一个停车位。position用PointParams约定:第一对=u轴(沿正面墙)、第二对=v轴(朝正面为正),
+// 原点在房间角点,坐标系由房间自己的朝向(Room::GetDirection())定义,详见general_geometry.md。
+// rotationDegrees:相对房间朝向的旋转角(度,0=朝向房间正面,180=朝房间深处)。
+// categories:允许停入的载具种类(VehicleMod::GetCategory()的名字,如"car"/"bus"/"plane"),
+// Traffic::InitParkedVehicles对每个车位随机选种类再选车型。
 struct ParkingSpot {
 	PointParams position{};
 	float rotationDegrees = 0.f;
@@ -486,25 +445,19 @@ struct NavigationNodeTemplate {
 	PointParams position{};
 };
 
-// Building楼层导航模板里的一条"贯通线"(通常代表一条走廊的可通行中轴线)，两端是固定点；
-// NavigationConnectionTemplate里type=="line"、vertex==-1的连接会动态投影到这条线上，
-// 不是端点本身。
+// Building楼层导航模板里的"贯通线"(走廊可通行中轴线),两端固定;
+// NavigationConnectionTemplate里type=="line"、vertex==-1的连接动态投影到这条线上。
 struct NavigationLineTemplate {
 	PointParams begin{};
 	PointParams end{};
-	// 仅车行导航使用的通行方向（行人导航恒定双向，忽略这两个字段）：forward=沿begin->end方向的
-	// 锚点链可通行，backward=反方向可通行，都为true就是双向。layout里没写这两个字段时按旧行为
-	// 只顺向通行。
+	// 仅车行导航用的通行方向(行人恒双向):forward=沿begin->end,backward=反向,都true=双向;layout未写时只顺向。
 	bool forward = true;
 	bool backward = false;
 };
 
-// 导航连接的一个端点：type取"outside"(连到building朝向的边界路，见map.md"寻址"/
-// building.md"行人导航"一节)/"node"(NavigationNodeTemplate固定锚点)/"line"(贯通线，
-// vertex=0取begin端、1取end端、-1表示动态投影到线上离对端最近的点)/"single"或"row"
-// (对应槽位实例化出的Room自己的导航锚点)/"upstair"或"downstair"(和上一层/下一层对应的
-// 竖向通道锚点做跨楼层匹配，见Building::BuildPedestrianNavigation)。idx是node/line/
-// single/row数组里的下标，outside/upstair/downstair不需要idx。
+// 导航连接的端点:type取"outside"(连到building朝向的边界路)/"node"(固定锚点)/"line"(贯通线,
+// vertex=0取begin、1取end、-1动态投影)/"single"或"row"(对应Room自己的锚点)/"upstair"或"downstair"
+// (跨楼层竖向通道匹配,见Building::BuildPedestrianNavigation)。idx是node/line/single/row数组下标。
 struct NavigationEndpointTemplate {
 	std::string type;
 	int idx = -1;
@@ -514,9 +467,7 @@ struct NavigationEndpointTemplate {
 struct NavigationConnectionTemplate {
 	NavigationEndpointTemplate begin;
 	NavigationEndpointTemplate end;
-	// 仅车行导航使用的通行方向，含义同NavigationLineTemplate::forward/backward：forward=
-	// begin->end，backward=end->begin，都true=双向。对"outside/entrance/exit/upstair/downstair"
-	// 这类只做标记的端点无意义（楼层间上下楼连线恒定双向，进出口方向由端点类型决定）。
+	// 仅车行导航用的通行方向,含义同NavigationLineTemplate;对只做标记的端点(outside/upstair等)无意义。
 	bool forward = true;
 	bool backward = false;
 };
@@ -531,10 +482,7 @@ public:
 	// 根据中心点和长宽构造地块
 	Lot(float x, float y, float w, float h, float r);
 
-	// 根据连续三个端点构造地块；boundary可选，直接在构造时按FACE_DIRECTION登记边界Road
-	// （等价于构造完再逐个调SetBoundaryRoad，只是不用在调用方那边另开一个pair/map），
-	// 指针必须由调用方保证有效性（RoadnetMod侧必须指向自己roads数组里的元素本身，语义
-	// 和SetBoundaryRoad完全一致，见该方法注释）。
+	// 根据连续三个端点构造地块;boundary可选,等价于构造后逐个SetBoundaryRoad,指针有效性由调用方保证。
 	Lot(Node n1, Node n2, Node n3, std::vector<float> margin = std::vector<float>(4, 0.f),
 		const std::unordered_map<int, Road*>& boundary = {});
 
@@ -578,37 +526,18 @@ public:
 	void AddAddress(const std::string& road, int index);
 	const std::vector<std::pair<std::string, int>>& GetAddresses() const;
 
-	// 格式"<road> <index>"，取GetAddresses()[0]（角地块有多个地址时任选其一即可——和
-	// LocateLot本来就是"用哪个地址都能查到同一个Lot"的语义一致）。没有任何地址(理论上不会，
-	// AllocateAddress保证每个临街Lot至少有一个)时返回空串。
+	// 格式"<road> <index>",取GetAddresses()[0];没有地址时返回空串。
 	std::string GetAddress() const;
 
-	// 四周边界Road：下标按FACE_DIRECTION(0-3)，不是每个方向都一定有entry(挨着相邻lot的
-	// 内部分界线方向没有对应的路)。Lot不持有这些指针的生命周期，由构造方(RoadnetMod/Roadnet)
-	// 各自管理，和AddAddress一样是构造完lot几何之后再由调用方填入的数据。
+	// 四周边界Road,下标为FACE_DIRECTION(0-3),某方向可能没有。Lot不持有指针的生命周期。
 	void SetBoundaryRoad(int direction, Road* road);
 	Road* GetBoundaryRoad(int direction) const;
 	const std::unordered_map<int, Road*>& GetBoundaryRoads() const;
 
-	// 把当前矩形沿splitAlongX方向、在局部坐标splitCoordinate处（原点在左下角，参照GetPosition
-	// 的局部坐标系）切成两段，中间嵌入一条按spec配置车道的1单位宽小路Road（构造出来后立刻
-	// SetPathRoad(true)标记自己，其余调用方以后可以直接问这条Road自己，不需要另外记表）。
-	// splitAlongX为true时切割线垂直于局部X轴（南北向小路，两段都保留原NORTH/SOUTH边界，各自的
-	// WEST/EAST一个继承原边界、一个指向新小路）；为false时反过来（东西向小路，两段都保留原
-	// WEST/EAST边界，各自的NORTH/SOUTH一个继承原边界、一个指向新小路）。小路两端如果落在一条
-	// "大路"（非小路的边界Road）上，就给那条大路加一个RoadOpening标记路面缺口（宽度=小路总宽，
-	// t按直线投影近似算，见实现的ProjectT）；落在另一条小路上则不标（两条小路的路口不算"大路
-	// 被开口"）。这一步（SplitWithPath自己）只是几何/渲染标记，不接入导航图——两端原有的边界
-	// Road不会被这次切割改动任何Connection数据；真正把小路接进vehicleNavGraph/
-	// pedestrianNavGraph是Core层Map::ConnectPathRoad的职责（读下面endRoad1/endT1/endRoad2/
-	// endT2这几个字段），见map.md"ConnectPathRoad"一节，不在这个函数里做。
-	// 如果this在splitAlongX对应的两个端面方向（splitAlongX时是NORTH/SOUTH，否则WEST/EAST）
-	// 都没有边界Road，直接拒绝，返回{nullptr,nullptr,nullptr}——不产生两端都不挨路的孤岛小路。
-	// splitCoordinate不在有效范围内（切不出两段有效尺寸）同样返回{nullptr,nullptr,nullptr}。
-	// endRoad1/endT1对应splitAlongX时的NORTH端(否则WEST端)，endRoad2/endT2对应SOUTH端(否则
-	// EAST端)——和pathRoad自己的Start/End一一对应(Start落在endRoad1上，End落在endRoad2上)。
-	// endT按Start->End直线投影近似算(ProjectT)，endRoad为空时endT无意义(留默认值0)。这两组
-	// 字段供Core层Map::ConnectPathRoad接导航图用；RoadOpening.t用的是同一次ProjectT计算结果。
+	// 沿局部坐标(原点左下角,同GetPosition)splitCoordinate处切成两段,中间嵌入一条1单位宽小路Road
+	// (已SetPathRoad(true))。两端面方向都没有边界Road或切不出两段有效尺寸时返回{nullptr,nullptr,nullptr}。
+	// endRoad1/endT1对应splitAlongX时的NORTH端(否则WEST端),endRoad2/endT2对应另一端;endT按直线投影近似,
+	// 供Map::ConnectPathRoad接导航图。几何/开口标记规则见general_geometry.md。
 	struct SplitResult {
 		Lot* lowerLot = nullptr;
 		Lot* upperLot = nullptr;
@@ -620,75 +549,29 @@ public:
 	};
 	SplitResult SplitWithPath(bool splitAlongX, float splitCoordinate, const PathLaneSpec& spec);
 
-	// 自由子地块池：只读枚举，惰性初始化——第一次通过RequestPlacement/FillRemainder访问时，
-	// 如果freeLots还是空的，先塞入一个和this自身范围重合、边界Road直接继承this->boundaryRoads
-	// 的初始元素。子地块不会再有自己的子地块，只有顶层Lot会真正用到这个池。
-	//
-	// 注意：这个惰性初始化本身会new一个Lot、push_back进this->freeLots——这个分配/容器增长动作
-	// 必须只在Core编译的代码(Map::InitZones()/InitBuildings()，运行时属于UnrealEditor-Forever.dll
-	// 这个真正的UE模块，operator new/delete被PerModuleInline.inl接到FMemory)里发生，绝对不能从
-	// mod DLL(Basic.dll等，用的是普通CRT分配器)的调用栈里触发——哪怕调用的是完全同一份Lot::
-	// GetFreeLots()源码，Dependence.lib被两个模块各自静态链接一份，这次调用实际执行哪一份取决于
-	// 调用指令本身编译进了哪个最终binary，不是看代码写在哪个.cpp里。一旦this->freeLots的buffer
-	// 由一个模块的分配器分配、又被另一个模块的分配器reallocate/free，就会堆损坏(exit时或者下一次
-	// 任意堆操作时crash，现象是STATUS_HEAP_CORRUPTION，参见general_geometry.md"跨DLL分配器"一节/
-	// cross-dll-allocator-crash笔记——这正是FindAdaptivePlacement v3那次踩到的坑：直接从
-	// TrainStationBuilding::Assign(Basic.dll)里调了RequestPlacement，表现为PIE一进场景就
-	// 整个UnrealEditor.exe直接退出)。mod DLL只能调下面的PeekFreeLots()这个纯读版本。
+	// 自由子地块池,惰性初始化(首次访问时new一个Lot并push_back)。该分配只能发生在Core编译的代码里,
+	// mod DLL只能用下面的PeekFreeLots(),原因见general_geometry.md"跨DLL分配器"。
 	std::vector<Lot*>& GetFreeLots();
 	float GetFreeAcreage();
 
-	// GetFreeLots()的纯只读版本，专供mod DLL在Assign()探测阶段调用：freeLots还没真正初始化过
-	// (freeLotsInitialized==false)时直接返回空vector，绝不触发那个会new的lazy-init；已经初始化
-	// 过(说明之前已经有某次Core侧的RequestPlacement调用安全地做过lazy-init了)时按值拷贝一份
-	// 返回——拷贝本身分配在调用方自己的模块里，不和this->freeLots共享buffer，不会把两个模块的
-	// 分配器搅到一起。
+	// GetFreeLots()的纯只读版本,供mod DLL在Assign()里调用:未初始化时返回空,否则按值拷贝。
 	std::vector<Lot*> PeekFreeLots() const;
 
-	// 在freeLots中找一块贴着direction方向道路、放得下[marginStart,marginEnd]x[0,depth]矩形的
-	// 自由子块，精确裁剪出来。direction在this(顶层Lot)自己的边界Road表里没有对应Road时直接
-	// 返回false，不做任何回退。裁剪通过最多3次SplitWithPath调用完成，新增小路记进this自己的
-	// pathRoadLinks（见下GetPathRoadLinks注释——this就是RoadnetMod初始化的那个顶层Lot，调用方
-	// 不需要另外传引用出参收集）；不满足最小2x2单位或不可达的子块被丢弃，不追加回freeLots。成功
-	// 返回true，*outPlaced写入裁出的世界坐标矩形；失败返回false，freeLots不变。outBoundaryRoads
-	// 非空时，成功后写入裁出的这块地实际靠着的边界Road（真正被裁出来的Lot在返回前会被delete，
-	// 这份信息不写出来的话调用方就再也拿不到——Zone/Building要记录自己四周的road需要这个）。
+	// 在freeLots中找贴着direction道路、放得下[marginStart,marginEnd]x[0,depth]的自由子块并精确裁剪。
+	// 该方向无边界Road返回false。新增小路记进this的pathRoadLinks;成功时*outPlaced为世界矩形,
+	// outBoundaryRoads非空则写入实际靠着的边界Road(裁出的临时Lot返回前会被delete)。
 	bool RequestPlacement(int direction, float marginStart, float marginEnd, float depth,
 		const PathLaneSpec& spec, Quad* outPlaced,
 		std::unordered_map<int, Road*>* outBoundaryRoads = nullptr);
 
-	// 自适应版本：不要求调用方自己猜一组marginStart/marginEnd/depth去刚好避开别的mod已经占掉
-	// 的区域——用PeekFreeLots()(纯读)在当前freeLots里找一块贴着direction方向道路、frontage
-	// (沿道路方向)至少minFrontage、depth(垂直道路方向)至少minDepth的自由子块(挑面积最大的
-	// 一个)，margin取居中(多余的frontage两侧平分)。
-	//
-	// 这条路贴的可能是原始lot自己的四条边界路，也可能是之前某次切割(SplitWithPath)在切割线上
-	// 插入的内部"path"小路——后者同样是真实的、会接入导航图的Road，贴着它盖房子完全合理(比如
-	// 临街小巷两侧盖房子)，不要求必须贴着最外层那四条原始边。
-	//
-	// 这是一个纯查询——const成员函数，不碰任何会导致分配/释放的路径(用PeekFreeLots()而不是
-	// GetFreeLots()，freeLots一个指针都不会动，更不会调RequestPlacement)，可以安全地从mod
-	// DLL(Basic.dll等)的Assign()探测阶段直接调用，见GetFreeLots()/PeekFreeLots()声明处的说明。
-	// *outLot*就是PeekFreeLots()返回列表里命中的那个指针本身(如果freeLots还没初始化过，退化为
-	// this自己)，margin/depth相对outLot自己的尺寸(不是this的)——调用方(mod的Assign())要把
-	// outLot原样设进LotPlacementRequest::lot，并在outLot!=this(即命中的是一个真正的嵌套子块，
-	// 不是this自身)时把LotPlacementRequest::adaptiveParent设成this，供Core编译的处理阶段
-	// (Map::InitZones()/InitBuildings())在RequestPlacement成功之后把outLot自己的残余freeLots/
-	// pathRoadLinks搬回this、把outLot从this->GetFreeLots()里摘掉再delete——这个搬运步骤同样
-	// 必须在Core侧做，不能在这个函数里提前做掉(FindAdaptivePlacement v3那版的错误：直接在这里
-	// 调outLot->RequestPlacement()，结果是从Basic.dll的调用栈触发了this->freeLots的分配器
-	// 操作，PIE一进场景整个UnrealEditor.exe直接退出，STATUS_HEAP_CORRUPTION，见general_geometry.md
-	// "跨DLL分配器"一节/cross-dll-allocator-crash笔记)。
-	//
-	// 找不到满足条件的自由子块返回false，out参数不修改。
+	// 自适应版本:纯查询(const,只用PeekFreeLots(),可从mod DLL的Assign()调用),找frontage>=minFrontage、
+	// depth>=minDepth的最大自由子块,margin居中。*outLot是命中的子块,margin/depth相对它自己;
+	// outLot!=this时调用方须把LotPlacementRequest::adaptiveParent设成this。找不到返回false。
+	// 真正的裁剪/搬运必须在Core侧做,见general_geometry.md。
 	bool FindAdaptivePlacement(int direction, float minFrontage, float minDepth,
 		Lot*& outLot, float& outMarginStart, float& outMarginEnd, float& outDepth) const;
 
-	// 对freeLots和候选权重表做CDF随机填充，每确定一个候选的目标面积后用SplitWithPath递归二分
-	// 定位到某个freeLot里。分割轴优先选择能让两侧都保住可达性的那个，只有在按这个轴切会导致
-	// 某一侧宽度不足2单位时才被迫换轴（阈值用7留余量），换轴后产生的不可达一侧被丢弃。没有分配
-	// 出去的剩余空间直接丢弃（对应"设成空地"）。新增小路记进this自己的pathRoadLinks，同
-	// RequestPlacement。
+	// 对freeLots按候选权重CDF随机填充,递归二分定位(流程见general_geometry.md),剩余空间丢弃。新增小路记进pathRoadLinks。
 	struct FillResult {
 		std::string type;
 		Quad footprint;
@@ -699,22 +582,13 @@ public:
 		const std::function<float(const std::string&)>& randomAcreage,
 		const std::function<std::pair<float, float>(const std::string&)>& acreageMinMax);
 
-	// RequestPlacement/FillRemainder在this(RoadnetMod初始化的顶层Lot)自己的freeLots里切出来的
-	// 每一条小路(连同两端连接信息)都记在这里——小路是Zone/Building裁剪这个顶层Lot的空闲空间时
-	// 产生的副产品，归属关系上本来就该跟着这个顶层Lot走，不需要另外找个地方(比如Map)单独维护
-	// 一份"这些小路是谁的"记录。析构时一并delete每条link.road。
+	// RequestPlacement/FillRemainder在this的freeLots里切出的小路及连接信息,析构时一并delete link.road。
 	const std::vector<PathRoadLink>& GetPathRoadLinks() const;
 
-	// 把pathRoadLinks整体搬出去并清空自己这边：只给Map(Core编译的代码)在"adaptive placement"
-	// 流程里把一个已经被消耗过的嵌套子块(FindAdaptivePlacement命中的那个outLot)的新增小路转交
-	// 给它的上级顶层Lot用——转交之后这个子块对象很快就会被delete，如果不先清空，~Lot()会把这些
-	// 小路的Road*也删掉，而这些Road*可能正被刚创建的Building/Zone自己的boundaryRoads引用着，
-	// 变成悬空指针。不对mod DLL公开调用约定(虽然签名是public，但只有Map会用)。
+	// 把pathRoadLinks搬出并清空自己;仅Map的adaptive placement流程用(否则子块析构会删掉仍被引用的Road*)。
 	std::vector<PathRoadLink> TakePathRoadLinks();
 
-	// TakePathRoadLinks()的反向操作：把一批(通常是从某个嵌套子块身上Take出来的)PathRoadLink
-	// 追加进pathRoadLinks——同样只给Map用，让"adaptive placement"流程里真正切出来的小路能被
-	// 记到正确的顶层Lot身上，供GetPathRoadLinks()/GetPathRoads()查到。
+	// TakePathRoadLinks()的反向操作,仅Map用。
 	void AdoptPathRoadLinks(std::vector<PathRoadLink>&& links);
 
 	// 从GetPathRoadLinks()按值筛出.road，纯供Forever层遍历渲染用；Map::GetPathRoads()汇总所有

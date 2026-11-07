@@ -3,21 +3,27 @@
 ## 职责
 
 `Vehicle`：一辆车的实体，独占持有一个`VehicleMod*`（`Dependence/traffic/vehicle_mod.h`
-定义，目前唯一的具体类型是测试车型`VehicleBasic`）——完全照抄`Job`持有`JobMod`的模式
+定义，具体车型在`Basic/traffic`）——完全照抄`Job`持有`JobMod`的模式
 （见`society/job.h/.md`），构造函数传入`VehicleFactory*`+id，内部调
 `factory->CreateVehicle(id)`拿到`VehicleMod*`，析构时`factory->DestroyVehicle(mod)`。
 **`Vehicle`由`Traffic`持有所有权**（`unordered_map<string, Vehicle*>`，按name索引，见
 `traffic.md`）。
 
-字段刻意保持最少（"能上下车、能开动"这个最小闭环）：
+主要字段：
 
-- `name`：`Traffic`按这个索引，也是UE侧`Vehicle::GetName()`/
-  `Traffic::DestroyVehicle(name)`的key。
-- `mod`：转发`GetType()`（`mod`为空时返回空字符串——`mod`为空说明`CreateVehicle`本身
-  失败，见下"创建失败"一节）。
-- `x`/`y`/`z`/`yaw`：当前世界坐标+朝向，由UE侧`AVehicleElement::Tick`每帧
-  `SetTransform`写回，供将来Traffic/Room等系统查询用——目前没有任何系统会去读它，纯粹是
-  为了不丢这份信息。
+- `name`：`Traffic`按这个索引，也是UE侧`Traffic::DestroyVehicle(name)`的key。
+- `mod`：转发`GetType()`/`GetCategory()`/`IsDrivable()`/`IsBoardable()`/`GetCapacity()`/
+  `GetSize()`/`GetBlueprintPath()`/`GetTransitMeshPath()`/网格变换/下车偏移等只读属性
+  （`mod`为空时返回空/默认值，见下"创建失败"）。种类`GetCategory()`在构造时向工厂按modId查一次
+  （注册的静态`GetCategory()`），查不到兜底`"car"`。
+- `x`/`y`/`z`/`yaw`/`pitch`：当前世界位姿，由UE侧`AVehicleElement::Tick`或`Route::Update`
+  通过`SetTransform`/`SetPitch`写回；`pitch`只有沿坡道/隧道行驶的线路载具才非零，纯运行时不存档。
+- `script`/`options`：自己的`Script`（按`mod->scriptModName`创建、按`mod->milestoneNames`加载
+  milestone）和交互选项列表（照抄`Citizen`），驱动"靠近弹出上车选项"。
+- `room`+停车位局部坐标+旋转：`Traffic::InitParkedVehicles`生成时`SetParking`一次，只服务
+  于"生成时摆在哪"。
+- `route`/`routeLine`：线路公交由`Traffic::InitTransitVehicles`调`SetRouteBinding`设置，
+  普通小汽车恒为`nullptr`；UE层据此决定生成`AVehicleElement`还是`ATransitVehicleElement`。
 
 **不存`driver`/`owner`字段**：这一阶段明确不考虑车辆和房间/停车位的关系，"谁在开这辆车"
 这份信息由UE侧`AVehicleElement::previousPawn`自己保留（上车前被占有的pawn，下车时要
@@ -72,5 +78,6 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
 (`ApplyEnterVehicle`)时置空。`Map::PlanVehicleRoute`据此决定起点是房间导航节点还是路网上最近的车道。读档后为
 空（当作在室外）。
 
-## physicsDriven（2026-11-01）
-- `SetPhysicsDriven/IsPhysicsDriven`：线路公交处于物理段（或已脱离时刻表）时为真，`Route::Update` 跳过。运行时状态，不进存档。
+## physicsDriven
+- `SetPhysicsDriven/IsPhysicsDriven`：线路公交处于物理段（近处由UE物理载具+Controller驱动，或已脱离时刻表）时为真，
+  `Route::Update`对它跳过时刻表驱动和停站事件。运行时状态，不进存档。

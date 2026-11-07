@@ -19,10 +19,8 @@ class UTexture2D;
 class UTexture2DArray;
 class Map;
 
-// 局部坐标(单位:地形格,1格=10m,相对格子左下角)三角形,construction/挖洞格子的实心地形
-// 三角化输出用——按格子局部坐标[0,1]x[0,1]和hatch矩形做精确多边形裁剪(不再是"轴对齐外接矩形
-// 减矩形+角落补丁三角形"的近似),任意凸多边形扇形三角化后都能用这一个统一的三角形结构表示,
-// 不需要再分rects/tris两种特化形状。
+// 局部坐标(单位:地形格,1格=10m,相对格子左下角)三角形:construction/挖洞格子的实心地形
+// 经精确多边形裁剪、扇形三角化后的输出。
 struct FTerrainTri2D {
 	FVector2D A, B, C;
 };
@@ -36,8 +34,7 @@ struct FForeverLodBoundary {
 	TArray<FVector> right;  // vx=TERRAIN_LOD_GRID_SUBDIV
 };
 
-// 动态LOD(clipmap式)地形网格 + 海面网格。挖洞(construction格子的
-// 洞)直接在网格生成时用LookupTerrain的凸多边形裁剪算法完成,不用ISM摆放小立方体。
+// 动态LOD(clipmap式)地形网格 + 水面网格 + 隧道口侧壁。挖洞在网格生成时用凸多边形裁剪完成。
 // 详见ForeverTerrainFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverTerrainFrameworkComponent : public UForeverFrameworkComponent
@@ -84,12 +81,9 @@ private:
 	// 采样地图高度(mapX/mapY为地图元素单位坐标),转发Map::SampleHeight(含细化高度),BuildLevel与出生点计算共用
 	float SampleHeight(float mapX, float mapY) const;
 
-	// construction/挖洞格子的实心地形几何:只有该格子是"construction"或者命中了hatch时才有
-	// 输出。用精确的凸多边形裁剪(格子[0,1]x[0,1]依次按每个hatch矩形的4条边分割成"确定在矩形外
-	// (实心)"/"还需要继续判断"两部分,详见.cpp实现)算出真正的实心地形区域(可能不止一块,比如
-	// 一条跨格的hatch可能把格子劈成两侧独立的两块)，扇形三角化后
-	// 输出，不是BlueprintCallable(没有Blueprint/ISM消费方)。
-	void LookupTerrain(int elemX, int elemY, FString& type, float& height,
+	// construction/有hatch格子的实心地形几何(精确凸多边形裁剪+扇形三角化，可能不止一块，算法见.md)。
+	// 格子既不是"construction"也没有hatch时没有输出。
+	void LookupTerrain(int elemX, int elemY, FString& type,
 		TArray<FTerrainTri2D>& tris) const;
 
 	Map* map = nullptr; // 非持有,AForeverFrameworkActor拥有生命周期
@@ -103,8 +97,8 @@ private:
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> tunnelWallMesh;
 
-	// 侧壁材质：地形材质是按世界XY投影采样的，竖直面上整面都是拉伸的竖条纹，所以侧壁用单色的Pure材质
-	// (Color参数)；以后有三平面/UV贴图的材质时换这个。
+	// 侧壁材质：地形材质按世界XY投影采样，竖直面上是拉伸的竖条纹，所以侧壁用单色Pure材质(Color参数)；
+	// 以后有三平面/UV贴图的材质时换这个。
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
 	TObjectPtr<UMaterialInterface> tunnelWallBaseMaterial;
 
@@ -121,30 +115,29 @@ private:
 	TObjectPtr<UTexture2D> terrainIndexMap;
 
 	// 法线+粗糙度打包数组(BGRA8,sRGB关,R/G=法线xy,B=粗糙度,A=255)，和terrainDiffuseArray
-	// 槡位对齐，近/远两个材质共用一份。
+	// 槽位对齐，近/远两个材质共用一份。
 	UPROPERTY()
 	TObjectPtr<UTexture2DArray> terrainNormalRoughArray;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> oceanMaterial;
 
-	// 固定的基础材质(编辑器可覆盖),CONVENTIONS.md §4的ConstructorHelpers模式
+	// 固定的基础材质(编辑器可覆盖),构造函数里ConstructorHelpers加载
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
 	TObjectPtr<UMaterialInterface> terrainBaseMaterial;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
 	TObjectPtr<UMaterialInterface> oceanBaseMaterial;
 
-	// 近处(细LOD)材质和它的控制纹理——见terrain.md"近处地形混合"一节/ForeverTerrainFrameworkComponent.md
-	// "近处地形混合"一节。
+	// 近处(细LOD)材质和它的控制纹理——见terrain.md和.md的"近处地形混合"一节。
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
-	int32 nearControlLevel = 3; // 控制纹理对应哪一级LOD的覆盖区域，夹到[0,num-1]；从2调到3是为了把near/far缝合线挪远，缓解K在两种材质里算法不一致导致的法线接缝（见ForeverTerrainFrameworkComponent.md）
+	int32 nearControlLevel = 3; // 控制纹理对应哪一级LOD的覆盖区域，夹到[0,num-1]；取大一些把near/far缝合线挪远，缓解K在两种材质里算法不一致导致的法线接缝（见.md）
 
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
 	int32 nearTexelsPerElement = 16;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
-	float nearBlendRadius = 2.f; // 夹到[1,3]，见NearBlendParams；从1.5调到2加宽近处混合过渡带
+	float nearBlendRadius = 2.f; // 夹到[1,3]，见NearBlendParams；越大近处混合过渡带越宽
 
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
 	TObjectPtr<UMaterialInterface> nearBaseMaterial;
@@ -159,7 +152,7 @@ private:
 	TObjectPtr<UTexture2D> nearWeightMap;
 
 	std::unique_ptr<NearTerrainBlend> nearBlend;
-	// 整张地图的槡位id/construction标记，GenerateTerrain里填一次，RebuildNearControl每次
+	// 整张地图的槽位id/construction标记，GenerateTerrain里填一次，RebuildNearControl每次
 	// 调用NearTerrainBlend::BuildRegion时复用，不用每次重新扫全图。
 	std::vector<uint8_t> nearSliceIds, nearIsConstruction;
 	// 当前控制纹理覆盖区域的左下角(地图元素坐标，取整)，RebuildNearControl只在这个值真的

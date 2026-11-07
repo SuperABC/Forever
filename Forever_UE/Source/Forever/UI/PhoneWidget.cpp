@@ -139,19 +139,8 @@ FReply UPhoneWidget::NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent&
 }
 
 FReply UPhoneWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) {
-	// 不能用InGeometry(整个UPhoneWidget自己的几何信息)做AbsoluteToLocal——跟PuzzleWidget
-	// 不一样，Phone的DisplayImage这次特意做成手机形状、不铺满整个Widget(见类注释)，如果
-	// DisplayImage在Widget里有偏移，按Widget自己的原点算出来的本地坐标会跟画布像素坐标对不
-	// 上，表现为"点哪里都像是点在了画布的另一个位置"。改成用DisplayImage自己的CachedGeometry
-	// 做转换。
-	//
-	// 但只做AbsoluteToLocal还不够：它算出来的是这个Geometry的"本地Slate单位"坐标，跟
-	// GetAbsoluteSize()(真实屏幕像素，ComputeCanvasSize()用来定画布分辨率的那个)不是同一个
-	// 度量——两者之间差一个这个控件自己的累积缩放比例(GetLocalSize()跟GetAbsoluteSize()的
-	// 比值，通常来自UMG的DPI Scale曲线)，且这个比例对x/y是同一个值，正好对应"点击位置跟
-	// 实际位置差一个固定比例(不是固定偏移)"这个症状——之前把AbsoluteToLocal的结果直接当画布
-	// 像素坐标用，相当于漏乘了这个缩放比例。这里显式按LocalSize/AbsoluteSize的比例把本地坐标
-	// 换算成画布像素坐标，跟ComputeCanvasSize()用的是同一个基准。
+	// 不能用InGeometry：DisplayImage是手机形状、在Widget里有偏移。要用DisplayImage自己的CachedGeometry做AbsoluteToLocal，
+	// 再按LocalSize/AbsoluteSize(DPI缩放)换算成画布像素坐标，和ComputeCanvasSize()同一基准，否则点击位置差一个固定比例。
 	if (!DisplayImage) return FReply::Handled();
 	FGeometry displayGeometry = DisplayImage->GetCachedGeometry();
 	FVector2D localPos = displayGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());

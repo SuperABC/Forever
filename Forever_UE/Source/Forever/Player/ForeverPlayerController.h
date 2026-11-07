@@ -19,15 +19,7 @@ class UFadeWidget;
 class UForeverIdentifyComponent;
 class UInputComponent;
 
-// 旧蓝图MainController的"MouseScrollUp/Down + F对话选项"三个热键归属这个Controller(见ForeverPlayerController.md)
-// ——照抄AForeverMenuController::BeginPlay的CreateWidget+AddToViewport模式，常驻创建一份
-// MeetOptionWidget（不像StartMenu那样只在特定时机才创建），靠列表是否为空来决定视觉上
-// "有没有弹出"，具体Add/Remove由ACitizenElement在玩家靠近/离开市民时驱动。
-//
-// 同一套模式再常驻创建SectionSpeaking/SectionOption两个剧情对话展示控件，初始折叠隐藏，
-// 由UForeverStoryFrameworkComponent::ShowCurrentItem在匹配出Dialog时按需切换显示——三个
-// Widget的创建与生命周期完全独立，任何一个的xxxWidgetClass没配置只跳过那一个的创建，不
-// 影响另外两个。
+// 玩家Controller：常驻创建全部游玩期UI Widget，承载不随Pawn变化的全局热键，见ForeverPlayerController.md。
 UCLASS()
 class FOREVER_API AForeverPlayerController : public APlayerController
 {
@@ -36,17 +28,13 @@ class FOREVER_API AForeverPlayerController : public APlayerController
 public:
 	AForeverPlayerController();
 
-	// 重置输入模式、加动态Mapping Context、创建全部常驻Widget。幂等：只有第一次调用生效。
-	// BeginPlay会调，AForeverFrameworkActor::BeginPlay在生成世界/广播game_start之前也会调
-	// (打包版里它先于Controller的BeginPlay)，见.cpp里的说明。
+	// 重置输入模式、加动态Mapping Context、创建全部常驻Widget。幂等；调用时机见md。
 	void InitializeOnce();
 
 protected:
 	virtual void BeginPlay() override;
 
-	// P键(TogglePhone)绑在这里而不是Pawn的SetupPlayerInputComponent——Controller在
-	// ChangeControlChange换人操控/换乘载具时不会变，是唯一能保证"任何时候按P都生效"的宿主，
-	// 见.cpp里的说明和ForeverPlayerController.md"旧MainController热键"一节。
+	// 全局热键绑在这里而不是Pawn上：换人操控/换乘载具时Controller不变，见md。
 	virtual void SetupInputComponent() override;
 
 	bool bInitialized = false;
@@ -76,25 +64,21 @@ protected:
 	UPROPERTY()
 	TObjectPtr<USectionOptionWidget> sectionOptionWidget;
 
-	// 跟前面三个Widget同一套模式，由StartPuzzleChange触发（见
-	// UForeverStoryFrameworkComponent::ApplyStartPuzzle）——不需要像sectionSpeakingWidget
-	// 那样在BeginPlay里手动Collapse，UPuzzleWidget自己在没有StartPuzzle之前默认不显示。
+	// 由StartPuzzleChange触发(UForeverStoryFrameworkComponent::ApplyStartPuzzle)，自己默认不显示。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UPuzzleWidget> puzzleWidgetClass;
 
 	UPROPERTY()
 	TObjectPtr<UPuzzleWidget> puzzleWidget;
 
-	// 商店界面，由open_shop Change触发(见UForeverStoryFrameworkComponent::ApplyOpenShop)，
-	// UShopWidget自己在NativeConstruct里默认不显示。
+	// 商店界面，由open_shop Change触发(UForeverStoryFrameworkComponent::ApplyOpenShop)，自己默认不显示。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UShopWidget> shopWidgetClass;
 
 	UPROPERTY()
 	TObjectPtr<UShopWidget> shopWidget;
 
-	// 跟前面几个Widget同一套模式，由P键(TogglePhone)控制开关，不需要手动Collapse——
-	// UPhoneWidget自己在NativeConstruct里默认不显示。
+	// 由P键(TogglePhone)控制开关，自己默认不显示。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UPhoneWidget> phoneWidgetClass;
 
@@ -104,8 +88,7 @@ protected:
 	// P键(TogglePhone)的处理函数，转发给phoneWidget->TogglePhone()。
 	void TogglePhone();
 
-	// 跟前面几个Widget同一套模式(常驻创建，B键(ToggleInventory)控制开关)，见
-	// Source/Forever/UI/InventoryWidget.h、ForeverPlayerController.md"旧MainController热键"一节。
+	// B键(ToggleInventory)控制开关。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UInventoryWidget> inventoryWidgetClass;
 
@@ -114,8 +97,7 @@ protected:
 
 	void ToggleInventory();
 
-	// 游戏内地图：跟前面几个Widget同一套模式(常驻创建)，M键(ToggleMap)开关、Esc键
-	// (CloseMap)只关不开，见Source/Forever/UI/MapWidget.h。
+	// 游戏内地图：M键(ToggleMap)开关、Esc键(CloseMap)只关不开。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UMapWidget> mapWidgetClass;
 
@@ -125,8 +107,7 @@ protected:
 	void ToggleMap();
 	void HandleCloseMap();
 
-	// 暂停界面(保存/加载)：跟前面几个Widget同一套模式(常驻创建)，Tab键(TogglePause)打开；
-	// 界面打开期间是UI Only输入，关闭由UPausePanelWidget自己的NativeOnKeyDown处理。
+	// 暂停界面(保存/加载)：Tab键(TogglePause)打开；打开期间是UI Only输入，关闭由UPausePanelWidget自己处理。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UPausePanelWidget> pauseWidgetClass;
 
@@ -145,16 +126,14 @@ protected:
 	void EnterIdentify();
 	void ExitIdentify();
 
-	// 长按3的投掷物选择列表：跟前面几个Widget同一套模式(常驻创建、初始折叠)，由AForeverCharacter
-	// 在长按时Open。WBP_ThrowList在BP_ForeverPlayerController的类默认值里指定。
+	// 长按3的投掷物选择列表，由AForeverCharacter在长按时Open。WBP_ThrowList在BP_ForeverPlayerController的类默认值里指定。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UThrowListWidget> throwListWidgetClass;
 
 	UPROPERTY()
 	TObjectPtr<UThrowListWidget> throwListWidget;
 
-	// 开局黑屏的类：只是登记给UFadeSubsystem(控件本身由它持有、跨关卡存活)，见
-	// UI/FadeSubsystem.h。WBP_Fade在BP_ForeverPlayerController的类默认值里指定。
+	// 开局黑屏的类：只登记给UFadeSubsystem(控件由它持有、跨关卡存活)。WBP_Fade在BP_ForeverPlayerController的类默认值里指定。
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UFadeWidget> fadeWidgetClass;
 

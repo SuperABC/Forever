@@ -9,7 +9,9 @@
 
 和`Change`/`Event`一样，**Dialog本体只在`Milestone`里持有一份**（`Milestone::dialogs`拥有
 所有权，析构时delete），别处（`Option::dialogs`、`Script::MatchEvent`返回的`ScriptAction`）
-一律用裸指针引用，绝不delete。`Option::changes`同理引用`Change*`本体（也挂在`Milestone`上）。
+一律用裸指针引用，绝不delete。分支选项里嵌套的`dialogs`/`changes`本体（`Script::BuildDialogs`
+解析时`new`出）不在`Milestone`的顶层列表里，由包含该分支段的`Dialog`在析构时递归`delete`——`Option`是被拷贝的值类型，
+不能由它释放。
 
 ## 延迟求值
 
@@ -29,19 +31,9 @@
 
 ## 分支选项
 
-`Section::IsBranch()`区分普通台词段/分支选项段。当前没有玩家交互，`Option`的选中逻辑不在
-`Dialog`/`Section`/`Option`任何一个类自己身上（保持职责单一），由调用方
-（`Forever/Framework/ForeverStoryFrameworkComponent`）决定："默认选中`GetOptions()[0]`"，
-见`ForeverStoryFrameworkComponent.md`。
-
-## 嵌套Option的dialogs/changes归属（已知的未完成点）
-
-`Core/story/script.cpp`的`Script::BuildDialogs`解析分支选项时，`Option`引用的嵌套
-`dialogs`/`changes`是递归调用`BuildDialogs`/`BuildChanges`当场`new`出来的——这些嵌套本体
-**不在**外层`Milestone`的顶层`dialogs`/`changes`列表里，所以也不会被`Milestone`析构时
-`delete`。当前`test.json`不含分支选项，这条路径没有被实际执行到；等分支选项被真正点名实现时，
-需要重新设计"嵌套本体到底归谁持有"（可能是给`Milestone`新增一个专门的owned池来承接所有嵌套
-层级的Dialog/Change本体），不要在没有想清楚之前简单认为现在的写法是最终方案。
+`Section::IsBranch()`区分普通台词段/分支选项段。选中逻辑不在`Dialog`/`Section`/`Option`身上（保持职责单一），由调用方
+`UForeverStoryFrameworkComponent::EnqueueDialog`处理：对每个`Option`先按`condition`过滤（求值为假的选项不出现），文本用
+`EvaluateExpression`求值；全部选项被过滤掉则整个分支跳过。`Dialog`自己的`condition`为假时整段不展示。
 
 ## 依赖关系
 
@@ -54,4 +46,4 @@
 
 ## 待办/后续阶段
 
-- 嵌套Option的dialogs/changes本体持有/回收机制（见上"已知的未完成点"）。
+- 无。

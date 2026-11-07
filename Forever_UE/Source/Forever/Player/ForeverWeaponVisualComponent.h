@@ -7,14 +7,8 @@
 class Asset;
 class AForeverFrameworkActor;
 
-// 武器可视化：左/右肩槽位里有武器就生成模型、取下就删除；不瞄准时背在背后(绑在脊柱骨骼上，
-// 跟着动画走)，瞄准时当前激活的那把枪移到右手靠前(WeaponMod::attachOffset，原来的弹道视觉起点)，
-// 枪口朝摄像机瞄准方向。只是视觉：开火判定仍然是UForeverWeaponComponent::Fire()从摄像机射出。
-// 详见ForeverWeaponVisualComponent.md。
-//
-// 作为AForeverCharacter的常驻组件(市民以后装备武器也复用)，组件自己不关心"是谁的武器"：
-// 武器从GetShoulderAsset()取，现在的实现是"被玩家占有时读Player的肩膀，否则没有"，以后市民
-// 有自己的装备时改这一个函数。组件默认不Tick，BeginShowing()才打开。
+// 武器可视化：肩膀槽位里的武器生成模型，不瞄准时背在背后，瞄准时激活的那把举到枪口位置。
+// 只是视觉，详见ForeverWeaponVisualComponent.md。
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class FOREVER_API UForeverWeaponVisualComponent : public UActorComponent
 {
@@ -31,12 +25,10 @@ public:
 	void BeginShowing();
 	void EndShowing();
 
-	// 当前激活(瞄准持枪)那把枪的枪口世界坐标，供开火时画弹道debugLine检查"弹道是不是从枪口出来"。
-	// 枪口=模型联合包围盒在+X方向的最远点。没有激活的枪模型时返回false。
+	// 当前激活那把枪的枪口世界坐标(WeaponMod::muzzleOffset)，供开火时画弹道debugLine。没有激活的枪模型时返回false。
 	bool GetActiveMuzzleWorldLocation(FVector& OutLocation) const;
 
-	// AForeverCharacter::ActivateShoulderWeapon调用：记录"手上武器是由哪个Asset装备出来的"，
-	// 之后肩膀里这个槽位的Asset变了(拖走/换成别的)就自动重新ActivateShoulderWeapon。
+	// AForeverCharacter::ActivateShoulderWeapon调用：记录手上武器由哪个Asset装备，之后槽位里的Asset变了就自动重新激活。
 	void NotifyActivated(int32 slot, Asset* asset);
 
 	// ---- 位置/旋转：都是大概值，看效果再调 ----
@@ -44,11 +36,9 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Holster")
 	FName holsterBone = TEXT("spine_03");
 
-	// 背枪的姿势(旋转)：模型+X(枪口方向)的朝向，用角色朝向下的直观坐标，内部按骨骼参考姿势补偿，
-	// 和AForeverCharacter::PlaceAvatar同一个办法。Pitch=60表示枪口朝上偏前。Roll是绕模型自己的X轴
-	// (枪管轴)转，FRotator合成时先转Roll，所以是在物体自己坐标系里转：左肩+90、右肩-90(UE的Roll正方向实测和预想相反，
-	// 即从枪托往枪口看右肩顺时针、左肩逆时针对应的Roll符号)，让枪平着背在肩上而不是立着；方向反了就把两个Roll的符号对调。枪托放哪(背枪锚点)由
-	// WeaponMod::backOffset决定，不在这里。
+	// 背枪的姿势(模型+X枪口方向的朝向，角色朝向下的直观坐标，内部按骨骼参考姿势补偿)。
+	// Roll绕枪管轴转让枪平着背：UE的Roll正方向实测和预想相反，左肩+90、右肩-90，方向反了就对调符号。
+	// 枪托放哪由WeaponMod::backOffset决定。
 	UPROPERTY(EditAnywhere, Category = "Holster")
 	FRotator holsterRotationLeft = FRotator(85.f, -5.f, 90.f);
 	UPROPERTY(EditAnywhere, Category = "Holster")
@@ -80,8 +70,7 @@ private:
 		float modelScale = 1.f;
 	};
 
-	// 数据源：这个角色左(1)/右(2)肩上的武器Asset。现在只有被玩家占有的角色有(Player的肩膀)，
-	// 以后市民有自己的装备时改这里。
+	// 数据源：这个角色左(1)/右(2)肩上的武器Asset，见md。
 	Asset* GetShoulderAsset(int32 slot) const;
 
 	const FWeaponVisualDef* FindDef(const FString& weaponType);

@@ -121,10 +121,8 @@ bool ParseModifier(const string& line, Modifier& out) {
 		out = m;
 		return true;
 	}
-	if (m.kind == MOD_CLEAR_FIELD || m.kind == MOD_UNLOCK) {
-		// 数值被忽略，后面的token当参数继续解析
-	}
-	else {
+	// 清除场地/解除禁锢的数值被忽略，后面的token当参数继续解析
+	if (m.kind != MOD_CLEAR_FIELD && m.kind != MOD_UNLOCK) {
 		if (!token.empty() && token.back() == '%') { m.percent = true; token.pop_back(); }
 		char* end = nullptr;
 		m.value = strtod(token.c_str(), &end);

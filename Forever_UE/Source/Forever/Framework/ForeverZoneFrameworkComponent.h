@@ -9,17 +9,14 @@
 class UInstancedStaticMeshComponent;
 class UBoxComponent;
 class UPrimitiveComponent;
+class AForeverFrameworkActor;
 class Map;
 class Zone;
 struct ZoneWallSpec;
 struct FHitResult;
 
-// Zone只是一个footprint+类型的占位对象(Zone内部再摆Building的递归
-// 布局明确推迟，见map.md"InitZones"一节)。可视化手段是围墙——Zone自身不画扁box占位
-// (围墙本身已经足够表达zone范围)，只按ZoneMod声明的ZoneWallSpec沿边铺设围墙mesh实例；
-// 大门这次没有资产，只在Zone上存数据，不生成任何几何。园区内部建筑(Zone::GetInternalBuildings)
-// 改由ForeverBuildingFrameworkComponent统一渲染(和顶层Building走同一套楼体footprint/楼层/
-// LOD逻辑)，这个组件不再单独画一份扁box。详见ForeverZoneFrameworkComponent.md。
+// 园区(Zone)的围墙、大门、自定义模型和进出检测碰撞盒。围墙按ZoneMod声明的ZoneWallSpec沿边铺ISM实例；
+// 园区内部建筑不在这里画，由ForeverBuildingFrameworkComponent统一渲染。详见ForeverZoneFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverZoneFrameworkComponent : public UForeverFrameworkComponent
 {
@@ -61,6 +58,9 @@ private:
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
 	Map* map = nullptr;
+
+	AForeverFrameworkActor* GetFrameworkActor();
+	TWeakObjectPtr<AForeverFrameworkActor> cachedFrameworkActor;
 
 	UPROPERTY()
 	TMap<FString, TObjectPtr<UInstancedStaticMeshComponent>> wallMeshInstances;

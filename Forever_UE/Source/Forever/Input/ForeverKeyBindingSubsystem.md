@@ -12,14 +12,12 @@
 - 同一个物理键可以映射到多个不同的`UInputAction`而不冲突(如`Jump`和`Handbrake`都默认绑空格键,分别只在`AForeverCharacter`/`AVehicleElement`各自的`SetupPlayerInputComponent`里绑定消费)。
 
 - `ThrowItem`(默认数字键3)：投掷物。动态Boolean Action没有Hold触发器，短按/长按由`AForeverCharacter`自己判断：`Started`记真实时间，`Tick`里按住超过`longPressThreshold`就弹出选择列表(长按)，没到就松开算短按切换(松开才触发，有一点延迟)。
-  在`Started`记时间、`Completed`比较`longPressThreshold`区分(短按松开时才触发，有一点延迟)。
-
 - `Identify`(默认鼠标中键)：识别模式，按住进入、松开退出，绑在`AForeverPlayerController`上，见`Player/ForeverIdentifyComponent.md`。
 
 ## 依赖关系
 - 依赖:`Forever_UE/Resource/Config/KeyBindings.ini`(找不到该文件时全部用硬编码默认值,不报错)。
 - 被谁依赖:
-  - `AForeverCharacter::SetupPlayerInputComponent`(`Jump`/`ToggleView`/`Sprint`/`MeetOptionUp`/`MeetOptionDown`/`MeetOptionSelect`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1`/`SwitchWeapon2`/`AimWeapon`)。
+  - `AForeverCharacter::SetupPlayerInputComponent`(`Jump`/`ToggleView`/`Sprint`/`MeetOptionUp`/`MeetOptionDown`/`MeetOptionSelect`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1`/`SwitchWeapon2`/`AimWeapon`/`ThrowItem`)。
   - `AForeverPlayerController::BeginPlay`/`SetupInputComponent`(整份`GetBindingContext()`常驻加入Enhanced Input子系统;`TogglePhone`/`ToggleInventory`/`ToggleMap`/`CloseMap`/`TogglePause`绑定,见`Player/ForeverPlayerController.md`)。
   - `UPausePanelWidget::NativeOnKeyDown`(用`GetKey("TogglePause")`取配置后的实际按键——UI Only模式下Enhanced Input不触发,只能自己比对按键)。
   - `AVehicleElement::SetupPlayerInputComponent`(`Handbrake`/`ExitVehicle`)。
@@ -30,6 +28,7 @@
 - 若后续需要让玩家在游戏内改键并持久化,需要在这个类基础上加"运行时改键+写回配置文件"的能力,当前只有"启动时读取一次"。
 - Move/Look的模拟量组合按键配置化,留待有实际需求时再设计。
 
-## ThrottleUp / ThrottleDown
+## 飞机专属动作
 
-飞机动力：默认`MouseScrollUp/MouseScrollDown`，和`MeetOptionUp/Down`共用滚轮键。只在`APlaneElement::SetupPlayerInputComponent`上绑定(`Started`，每格一次，加减`powerStep`)，别的Pawn不绑，所以不冲突，见`Forever/Element/PlaneElement.md`。
+- `ThrottleUp`/`ThrottleDown`：飞机动力，默认`MouseScrollUp/MouseScrollDown`，和`MeetOptionUp/Down`共用滚轮键。只在`APlaneElement::SetupPlayerInputComponent`上绑定(`Started`，每格一次，加减`powerStep`)，别的Pawn不绑，所以不冲突，见`Element/PlaneElement.md`。
+- `FreeLook`(默认C)：按住时视角不自动回正，只绑在`APlaneElement`上。

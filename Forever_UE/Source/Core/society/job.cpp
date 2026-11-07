@@ -11,14 +11,11 @@ using namespace std;
 Job::Job(JobFactory* factory, ScriptFactory* scriptFactory, const string& id, Room* position) :
 	factory(factory), position(position) {
 	mod = factory->CreateJob(id);
-	// scriptModName/milestoneNames由mod自己的SetProperty()填好(见job_mod.h"Script配置"一节)，
-	// 都空则没有脚本(script为空)，见MakeScript。
+	// scriptModName/milestoneNames由mod的SetProperty()填好，都空则没有脚本，见MakeScript。
 	if (mod) mod->SetProperty();
 	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
 	if (script) {
-		// 供milestone脚本里$$self.name引用这个Job的唯一名字（不是Script自己的
-		// mod->GetName()，是JobMod自己的GetName()，见job_basic.cpp"八"的唯一性修复），
-		// 见job_mod.h"Script配置"一节。
+		// 供milestone脚本里$$self.name引用这个Job的唯一名字（JobMod的GetName()）。
 		script->SetValue("name", ValueType(string(mod->GetName())));
 	}
 }
@@ -61,5 +58,5 @@ vector<Change*> Job::ExecNode(const string& node, PostHandle* post) {
 	if (!mod) return {};
 	mod->occupantName = occupant ? occupant->GetName() : string();
 	mod->ExecNode(node, post);
-	return mod->changes; // 只复制指针值，所有权留在mod自己身上，见job.h的说明
+	return mod->changes; // 只复制指针值，所有权留在mod自己身上
 }

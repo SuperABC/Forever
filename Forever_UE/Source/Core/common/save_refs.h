@@ -15,11 +15,7 @@
 #include <vector>
 
 
-// 跨域存档引用的统一编码，人口/社会/交通等域的存档都用这一套(只用各类的公开接口)：
-// - Room/Component：(所属Building名字, 在building->GetRooms()/GetComponents()里的下标)。地图段按
-//   存档原样恢复，读回来的下标和保存时一致。
-// - Time：年月日时分秒毫秒逐个写。
-// 详见save.md"跨域引用"一节。
+// 跨域存档引用的统一编码，详见save.md"跨域引用"一节
 namespace SaveRefs {
 	template <typename T>
 	int IndexOf(const std::vector<T*>& list, const T* item) {

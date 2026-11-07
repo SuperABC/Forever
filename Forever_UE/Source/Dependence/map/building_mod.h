@@ -11,17 +11,15 @@
 #include <utility>
 
 
-// (component名字, id)分组key的hash函数对象——AssignRoom/ArrangeRow用这个组合key把散落在
-// 不同楼层/槽位的Room归到同一个Component下，见下面singles/rows两个容器的注释。
+// (component名字, id)分组key的hash函数对象,singles/rows用。
 struct BuildingComponentKeyHash {
 	size_t operator()(const std::pair<std::string, int>& key) const {
 		return std::hash<std::string>()(key.first) ^ (std::hash<int>()(key.second) << 1);
 	}
 };
 
-// 楼体在Building自身Quad里的位置——两个比例float表示楼体中心在Quad里的位置(0.5,0.5=居中，同
-// Quad::posX/posY"矩形中心点"的语义)，两个比例float表示楼体长宽相对Quad长宽的比例。不复用Quad
-// 类型本身(那样会把Quad正常的"中心点+尺寸"语义挪用成"比例袋子"，容易搞混)。
+// 楼体在Building自身Quad里的位置,全是比例(中心比例0.5=居中)。故意不复用Quad类型,
+// 避免把"中心点+尺寸"语义挪用成"比例袋子"。
 struct BuildingFootprintSpec {
 	float centerRatioX = 0.5f;
 	float centerRatioY = 0.5f;
@@ -29,54 +27,36 @@ struct BuildingFootprintSpec {
 	float sizeRatioY = 1.f;
 };
 
-// 一层楼可配置的渲染资产——留空的字段由Forever层用组件级默认值兜底(墙/地/顶默认White，
-// 楼梯/坡道默认老工程同款的Stair.Stair/Ramp.Ramp)。这次不区分外墙/内墙材质，统一用
-// wallMaterial一份(以后要分的话在这里加字段即可)。.layout模板本身不携带任何材质/网格
-// 信息(和老工程一致，模板只描述2D位置/朝向/哪几侧有墙)，楼梯/坡道用什么3D网格必须由mod
-// 在这里显式指定，不能指望"选了某个模板名字"就间接带出3D资产。
+// 一层楼可配置的渲染资产,留空的字段由Forever层用组件级默认值兜底。
 struct FloorAssetSpec {
 	std::string wallMaterial;
 	std::string floorMaterial;
 	std::string ceilingMaterial;
 	std::string stairMeshPath;
-	// 这一层要不要由框架构造近处的外观(墙壁/地板/天花板)——外观已经由AddDecoration的成品模型
-	// 提供时(比如Mohar)在AssignFloor传入的assets里手动写成false。只影响渲染：房间/导航/门/
-	// 楼梯网格/Room碰撞盒照常生成，远处LOD的灰色方块也不受影响。默认true。
+	// 近处外观(墙/地板/天花板)是否由框架构造,见building_mod.md。
 	bool buildShell = true;
 	std::string rampMeshPath;
 };
 
-// 一层楼要用哪个.layout模板、朝向、资产——AssignFloor/AssignFloors记录进BuildingMod::floors，
-// Building::Layout()读出来查BuildingLayoutLibrary实例化。
+// 一层楼的.layout模板、朝向、资产。
 struct FloorLayoutSpec {
 	std::string templateName;
 	int face = FACE_SOUTH;
 	FloorAssetSpec assets;
 };
 
-// 一台电梯轿厢——照抄老工程Cabin(name/temp/idx/minFloor/maxFloor/script)的模式，去掉
-// temp(未用到)和script(Script域还没迁移)，加上可配置的mesh路径。shaftIndex对应
-// 每层.layout模板"elevators"数组里的第几个(0-based)——同一个shaftIndex假定跨楼层指向同一口
-// 井道(要求mod保证模板里elevator条目顺序跨楼层一致，这次没有更强的位置匹配机制，照抄老工程
-// AddElevator用一个裸idx区分电梯、不做任何几何反推的做法)。
+// 一台电梯轿厢。shaftIndex是每层.layout模板"elevators"数组里的下标,假定跨楼层指向同一口井道。
 struct ElevatorCabinSpec {
 	int shaftIndex = 0;
 	int minFloor = 0;  // 人类直觉层号(0=1楼，负数=地下)，含
 	int maxFloor = 0;  // 含
 	std::string cabinMeshPath; // 留空用组件默认Elevator mesh
-	// 这台电梯的Script：milestoneNames非空才创建(和DoorSpec同一个约定)，见Core/map/cabin.md。
+	// milestoneNames非空才创建Script,见Core/map/cabin.md。
 	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
 };
 
-// BuildingMod：Building有两种生成方式（显式占位 + 权重CDF随机填充，见
-// Source/Core/map/map.md"InitBuildings"一节）。
-//
-// 和Zone一样是"一个本体独占一个mod实例"模型：RandomAcreage/GetAcreageMin/GetAcreageMax/
-// GetPower/Assign全部是不需要实例的static方法，每个具体子类必须实现，通过
-// BuildingFactory::RegisterBuilding的额外函数指针参数注册（和creator/deleter同样的裸函数
-// 指针机制，见building_factory.h）——这样查询这些"按类型固定"的信息完全不需要构造任何
-// BuildingMod实例，只有真正落地成功时才会CreateBuilding一次。
+// 设计见building_mod.md。
 class BuildingMod {
 public:
 	BuildingMod() = default;
@@ -84,103 +64,55 @@ public:
 
 	virtual const char* GetType() const = 0;
 
-	// 每个mod实例独占服务一个Building，这个名字在构造函数里定死即可（老工程"mod自己维护static
-	// 计数器保证实例名字唯一"的模式，见Map::AddBuilding的寻址唯一性说明）——GetName()是普通的、
-	// 无副作用的只读getter，不需要在调用时才计算。
 	virtual const char* GetName() = 0;
 
-	// 这栋Building被政府(公有)拥有的概率[0,1]，Map::Checkin分配房产归属时读取。
+	// 被政府(公有)拥有的概率[0,1],Map::Checkin读取。
 	float stateOwnedChance = 0.2f;
 
-	// 真正创建出Building实例、SetPosition/SetBoundaryRoad都设好之后，Map::InitZones()/
-	// InitBuildings()会通过Building::Layout()调用这一个虚方法一次，用来在这个真实例上填好
-	// footprint/basements/layers/floorHeights/lodMaterial，以及调AssignFloor/AssignRoom/
-	// ArrangeRow记录楼层/房间布局——构造函数此时还不知道任何落地上下文，不能在构造函数里定
-	// 这些值。direction是**引用参数**：对显式占位(Assign产出)落地的Building，传入的是Assign
-	// 选中的真实方向；对权重CDF/FillRemainder落地的Building传入-1(没有方向概念)，这种情况下
-	// 如果这个mod关心方向(比如需要靠GetBoundaryRoad(direction)找一条边界路)，应该从
-	// boundaryRoads里挑一个非空的key用GetRandom(...)随机选一个方向回写进direction，让
-	// 这栋building最终有一个确定的、有真实边界路的方向(building内部行人导航的"outside"
-	// 端点需要靠这个方向找到应该连去哪条路，见Source/Core/map/building.md)；boundaryRoads
-	// 一个非空的都没有时保持-1即可(building四周确实没有任何边界路)。不关心方向的mod
-	// (比如footprint/楼层数据是固定值、不随方向变化的测试类型)不用管这个参数，保持传入值
-	// 不变没有任何副作用。quad/boundaryRoads是这个Building真正落地的矩形和四周道路——纯
-	// 只读输入，不涉及任何跨DLL容器所有权问题(Quad没有动态容器，unordered_map<int,Road*>
-	// 只是读指针值)，Building本身就是Quad的子类，调用方直接传*this即可。
+	// 落地后由Building::Layout()调用一次;direction是引用参数,语义见building_mod.md。
 	virtual void Layout(int& direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) {}
 
-	// 布局这栋building范围内的树:在整张地图(路网+园区+建筑+房间)全部生成完之后由
-	// Map::InitVegetation对每栋building调用一次,参数和Layout()一样(纯只读输入)。在这里用
-	// AddTreeSingle/AddTreeLine/AddTreeArea提交请求。默认不种树。
+	// 整张地图生成完后由Map::InitVegetation调用一次,在这里用AddTree*提交树请求。默认不种树。
 	virtual void LayoutTrees(const Quad& quad, const std::unordered_map<int, Road*>& boundaryRoads) {}
 
-	// 楼体位置/楼层/LOD材质——按类型固定的配置，在Layout(...)里设置。
+	// 楼体位置/楼层/LOD材质,在Layout(...)里设置。
 	BuildingFootprintSpec footprint;
 	int basements = 0;
 	int layers = 1;
-	// 楼层高度，地图单位，从最底下的地下室到最高层，长度必须是basements+layers；由
-	// Building::Layout()读取校验，长度不对会用默认值补齐。
+	// 楼层高度(地图单位),自最深地下室到最高层,长度应为basements+layers,不对由Building::Layout()补默认值。
 	std::vector<float> floorHeights;
-	// 远处LOD单个cube用的材质软路径；留空时渲染层用默认灰色材质。
+	// 远处LOD cube的材质软路径,留空用默认灰色。
 	std::string lodMaterial;
 
-	// 这栋building承载哪个StationMod(填mod id，比如"station_bus")——公共交通站点建筑用，
-	// 空字符串表示这不是一个站点建筑。building和station是两个独立的mod实例，这里只是单向
-	// 声明"这栋楼要配一个站点"，Traffic::InitStations()据此创建对应的Station并调用
-	// StationMod::Layout()，见traffic/station_mod.h。
+	// 这栋楼承载的StationMod id(如"station_bus"),空=非站点建筑,见building_mod.md。
 	std::string stationMod;
 
-	// 这个建筑(Building)挂的Script：scriptModName是ScriptMod的id，milestoneNames是要读取的里程碑脚本名
-	// 数组(Config::GetScriptPath解析)，和DoorSpec/ElevatorCabinSpec同一个约定——milestoneNames
-	// 非空才创建Script，空=没有脚本(默认)。玩家进出这个建筑(Building)的enter/leave事件只发给它自己的
-	// Script，不再广播给全部脚本，见Core/map/map.md"实体脚本"一节。在Layout(...)里设置。
+	// 建筑的Script,milestoneNames非空才创建,见Core/map/map.md"实体脚本"一节。在Layout(...)里设置。
 	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
 
-	// 声明第level层用哪个模板+朝向+资产。level：0-based，0=1楼，负数=地下室(-1=地下一层，
-	// 离地表最近的那层)——和floorHeights下标同一套人类直觉编号(不是老工程"basements偏移后
-	// 的数组下标"，Building::Layout()内部自己做偏移换算)。同一个level重复调用会覆盖之前
-	// 记录的那份。
+	// level:0=1楼,负数=地下室(-1=地下一层);同一level重复调用覆盖。
 	void AssignFloor(int level, const std::string& templateName, int face, FloorAssetSpec assets = {});
 	// 所有层(从-basements到layers-1)都用同一个模板+资产。
 	void AssignFloors(const std::string& templateName, int face, FloorAssetSpec assets = {});
-	// 每层各自一个模板+资产，templateNames/assets按"从最深地下室到最高层"的顺序排列，
-	// 长度必须等于basements+layers(assets留空则每层都用默认FloorAssetSpec{})；长度不对
-	// 是mod自己的bug，多出来的条目被忽略，不够的层级不会被赋值(等价于没调AssignFloor)。
+	// 每层各自一个模板+资产,按最深地下室到最高层排列,长度应为basements+layers。
 	void AssignFloors(const std::vector<std::string>& templateNames, int face,
 		const std::vector<FloorAssetSpec>& assets = {});
 
-	// 把第level层第slot个single槽位实例化成一个类型为room的Room，挂到(component,id)这个
-	// 组合(Component)上——同一个(component,id)多次调用会把Room都归到同一个Component下，
-	// 哪怕它们分布在不同楼层。
+	// 第level层第slot个single槽位实例化成room类型的Room,归入(component,id)分组。
 	void AssignRoom(int level, int slot, const std::string& room, const std::string& component, int id);
-	// 把第level层第slot个row槽位按目标面积acreage切成若干个类型为room的Room，挂到组合上。
+	// 第level层第slot个row槽位按目标面积acreage切成若干Room。
 	void ArrangeRow(int level, int slot, const std::string& room, float acreage,
 		const std::string& component, int id);
 
-	// 声明这栋building有一台电梯轿厢，对应shaftIndex号井道，在minFloor~maxFloor之间往返
-	// (这次没有真正的调度逻辑，Forever层只做一个占位性质的往返动画，见
-	// ForeverBuildingFrameworkComponent.md)。同一栋building可以调用多次声明多台电梯。
-	// 同一口井可以声明多台电梯(楼层范围不能重叠，重叠的后一条会被跳过)。scriptModName/milestoneNames
-	// 指定这台电梯的Script(game_start里给自己加"前往x层"选项，见Resource/Story/elevator_basic.script)。
+	// 声明一台电梯轿厢,同一口井可声明多台(楼层范围不能重叠,重叠的后一条被跳过)。
 	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "",
 		std::string scriptModName = "script_empty", std::vector<std::string> milestoneNames = {});
 
-	// 以下四个不再是虚方法——它们不需要任何实例状态，改成每个具体子类的static方法，通过
-	// BuildingFactory::RegisterBuilding的额外参数注册，详见building_factory.h。子类必须实现
-	// 同名static方法(不是override，因为基类不声明它们)：
-	//   static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
-	//     —— 一次调用扫完全地图的lot，决定这个类型想要显式占位哪些lot，想要哪块就调一次
-	//        emit(context, request)，request.lot必须设成对应的那个lot。不用显式占位的类型给
-	//        空实现即可。
-	//   static float RandomAcreage();
-	//   static float GetAcreageMin();
-	//   static float GetAcreageMax();
-	//   static float GetPower(AREA_TYPE area); // 这个类型在某个分区类型的lot上的权重，0表示不考虑
+	// 子类还必须实现一组static方法(基类不声明),通过RegisterBuilding注册,见building_mod.md。
 
-	// 供Building::Layout()读取，mod自己不需要直接操作这几个容器(全部通过上面AssignFloor/
-	// AssignFloors/AssignRoom/ArrangeRow写入)。
+	// 供Building::Layout()读取,mod通过上面的Assign*/ArrangeRow写入,不直接操作。
 	std::unordered_map<int, FloorLayoutSpec> floors;
 	// (component,id) -> [(level, slot, roomType)]，AssignRoom记录的single槽位。
 	std::unordered_map<std::pair<std::string, int>, std::vector<std::tuple<int, int, std::string>>,
@@ -191,14 +123,10 @@ public:
 	// AssignElevatorCabin记录的电梯轿厢列表。
 	std::vector<ElevatorCabinSpec> cabins;
 
-	// 建筑门——负责所有非single/row元素(目前只有corridor)上的门，tag->DoorSpec，在
-	// Layout()里填写。只有layout里对应方向的门洞带了这个tag才会查到这份spec，没有标签的
-	// 门洞永远不可选中，查不到tag或者查到了mesh为空同样只是个洞，见feature_spec.h/door.h。
+	// 非single/row元素(目前只有corridor)上的门,tag->DoorSpec,在Layout()里填写,见feature_spec.h/door.h。
 	std::unordered_map<std::string, DoorSpec> doorSpecs;
 
-	// 在LayoutTrees里提交单棵/一排/一片树的请求，只记进trees，随机旋转/缩放由Core统一处理，见
-	// feature_spec.h的TreeRequests。参考系是建筑quad(整块地，不是楼体footprint)，按朝北写，Core按
-	// 建筑朝向和建筑旋转换算；Map::InitVegetation在LayoutTrees()之后读取展开。
+	// 在LayoutTrees里提交树请求(记进trees),参考系见building_mod.md。
 	void AddTreeSingle(const PointParams& position, float scale, const std::string& meshPath);
 	void AddTreeLine(const PointParams& from, const PointParams& to, int num, float scale,
 		const std::string& meshPath);
@@ -206,23 +134,17 @@ public:
 		const std::string& meshPath);
 	TreeRequests trees;
 
-	// 在场景里放一个自定义StaticMesh(比如成品建筑模型)——在Layout()里调用，位置/yaw按face=2
-	// 定义，Core按建筑最终朝向自动旋转，见feature_spec.h的DecorationSpec。只在近处LOD显示。
+	// 放一个自定义StaticMesh(如成品建筑模型),在Layout()里调用,见feature_spec.h的DecorationSpec。
 	void AddDecoration(const DecorationSpec& spec);
 
-	// AddDecoration记录的模型，Building::Layout()在mod->Layout()之后读取换算。
+	// AddDecoration的记录。
 	std::vector<DecorationSpec> decorations;
 
-	// ---- 存档(见Source/Dependence/common/mod_state.md) ----
-	// mod私有数据的存档/读档钩子，默认不存任何东西。基类里的公共声明字段由Core直接快照，
-	// 这里只放mod自己的私有数据。
+	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}
 	virtual void LoadState(StateReader&) {}
-	// SaveState写出数据的格式版本：改了自己SaveState的格式就加一，读档时从
-	// StateReader::GetSavedVersion()拿到当时的版本自己迁移。默认0。
 	virtual int GetStateVersion() const { return 0; }
-	// 这个mod类用来生成唯一实例名的静态计数器——存档保存、读档后恢复，避免读档后新建的实例和
-	// 恢复出来的名字撞车。没有计数器的类保持默认(返回-1、Set不做事)。
+	// GetName用的static count,存档保存/读档恢复;没有计数器的类保持默认。
 	virtual int GetInstanceCounter() const { return -1; }
 	virtual void SetInstanceCounter(int) {}
 };

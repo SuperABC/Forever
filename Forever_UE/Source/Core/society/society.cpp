@@ -109,10 +109,7 @@ void Society::Init(const vector<Component*>& components) {
 		vector<float> weights;
 		for (const auto& [id, requirementsPtr] : requirementsByType) {
 			const auto& requirements = *requirementsPtr;
-			// 没有任何Component类型需求的组织类型(比如Forever_Mod/Empty里纯占位的
-			// EmptyOrganization)永远"满足"、永远不消耗任何Component，会让下面的循环死循环
-			// (每次都能成功分配、但componentsByType的剩余数量永不减少)——跳过这种类型，
-			// 不当作候选。
+			// 没有Component需求的类型永远"满足"又不消耗Component，会让循环死循环，跳过。
 			if (requirements.empty()) continue;
 			bool satisfied = true;
 			for (const auto& [type, range] : requirements) {
@@ -260,7 +257,7 @@ void Society::Tick(const Time& currentTime, bool crossedDay,
 }
 
 bool Society::ApplyChange(const Change* change, const ScriptContext& context) {
-	// 占位，等Society域真的有需要处理的Change子类时再补，见society.h声明处注释。
+	// 占位：Society域目前没有需要处理的Change子类。
 	return false;
 }
 

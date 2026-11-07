@@ -26,8 +26,7 @@ Story::~Story() {
 }
 
 void Story::Init() {
-	// ScriptModName从config.json的"main_story"字段读，不由Core硬编码——"用哪个ScriptMod"
-	// 这个决策交给配置，和Job/Organization的Script配置是同一个原则。
+	// ScriptModName从config.json的"main_story"字段读，不由Core硬编码。
 	string scriptModName = Config::GetMainStoryScriptModName();
 	if (scriptModName.empty() || !scriptFactory.CheckRegistered(scriptModName)) {
 		debugf("Warning: main_story script mod not configured or not registered, Story::Init skipped.\n");
@@ -80,7 +79,7 @@ bool Story::ApplyChange(const Change* change, const ScriptContext& context) {
 }
 
 void Story::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
-	// 占位，等Story域真的有需要每帧处理的逻辑时再补，见story.h声明处注释。
+	// 占位：Story域目前没有每帧逻辑。
 }
 
 Script* Story::GetSystemScript() const {

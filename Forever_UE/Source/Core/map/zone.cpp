@@ -13,15 +13,10 @@ using namespace std;
 
 namespace {
 	constexpr float kPi = 3.14159265358979323846f;
-	// ZoneGateSpec没有高度字段，这里给一个固定值，见door_system_plan.md门资产规格一节
-	// "园区大门约3m*2m"的建议尺寸。单位是地图单位，1地图单位=10米(DOOR_WORLD_SCALE/
-	// BUILDING_WORLD_SCALE=1000)，0.25地图单位=2.5米——不要直接写成2.5(会被当成"2.5米"
-	// 理解，实际变成25米高的园区大门)。
+	// ZoneGateSpec没有高度字段，园区大门约3m*2m。单位是地图单位(1地图单位=10米)，0.25=2.5米，别写成2.5
 	constexpr float kZoneGateHeight = 0.25f;
 
-	// 和Building::BuildDoors()用的normalYaw表同一套约定(EAST=0/SOUTH=π/2/WEST=π/
-	// NORTH=-π/2)，这里独立一份——两处都是很小的自包含表，没有共享的必要，和map.cpp/
-	// roadnet.cpp里LaneCenterOffset/SumWidths同样处理方式。
+	// 和Building::BuildDoors()的normalYaw表同一套约定(EAST=0/SOUTH=π/2/WEST=π/NORTH=-π/2)，各自独立一份
 	float FaceNormalYaw(int direction) {
 		switch (direction) {
 		case FACE_EAST: return 0.f;
@@ -215,7 +210,7 @@ void Zone::BuildDoors(Map& map) {
 		return face;
 		};
 
-	for (const ZoneGateSpec& gate : mod->gates) {
+	for (const ZoneGateSpec& gate : gates) {
 		if (gate.door.mesh.empty()) continue;
 
 		bool alongY = (gate.direction == FACE_WEST || gate.direction == FACE_EAST);

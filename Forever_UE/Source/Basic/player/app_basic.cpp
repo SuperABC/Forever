@@ -10,9 +10,7 @@
 using namespace std;
 
 namespace {
-	constexpr float kSpeed = 240.f; // 像素/秒，按画布尺寸动态定坐标，但速度直接用像素/秒定值——
-									 // 反正这个App只是验证Init/Loop/Refresh三个生命周期，不追求
-									 // 在不同分辨率下观感一致。
+	constexpr float kSpeed = 240.f; // 像素/秒，定值，不随画布分辨率缩放
 }
 
 int BounceApp::count = 0;
@@ -68,8 +66,7 @@ void BounceApp::Render(Canvas* canvas) const {
 	canvas->PutRect(static_cast<int>(posX), static_cast<int>(posY),
 		static_cast<int>(posX) + boxSize, static_cast<int>(posY) + boxSize, true);
 
-	// 标题字号跟NotesApp的"NOTES"/Phone的"HOME"/"TASKS"统一用height/17这一档，避免几个
-	// App各写各的除数导致标题大小看着不一致。
+	// 标题字号跟NotesApp的"NOTES"/Phone的"HOME"/"TASKS"统一用height/17这一档。
 	canvas->SetFontSize(max(26, canvas->GetHeight() / 17));
 	canvas->SetColor(255, 255, 255);
 	canvas->PutString("BOUNCE", canvas->GetWidth() / 40, canvas->GetHeight() / 40);
@@ -147,10 +144,7 @@ void NotesApp::RenderList(Canvas* canvas) const {
 	canvas->SetColor(30, 30, 45);
 	canvas->ClearScreen();
 
-	// 标题字号(App名字这一档)跟BounceApp的"BOUNCE"/Phone的"HOME"/"TASKS"统一用height/17，
-	// 这一档要比App内其它文字都大——只是测试用的观感约定，不是硬性规定，具体某个App
-	// 顶部名字该多大、跟内容比例如何，由实现这个App的作者自己决定。Y留一点顶部边距
-	// (不贴着手机屏幕上边缘)。
+	// 标题字号(App名字这一档)统一用height/17，比App内其它文字都大；Y留一点顶部边距。
 	canvas->SetFontSize(max(26, canvas->GetHeight() / 17));
 	canvas->SetColor(255, 255, 255);
 	canvas->PutString("NOTES", canvas->GetWidth() / 40, canvas->GetHeight() / 60);
@@ -165,9 +159,7 @@ void NotesApp::RenderList(Canvas* canvas) const {
 		// 内容字号比顶部"NOTES"这一档小一档(height/23 < height/17)。
 		canvas->SetFontSize(max(21, canvas->GetHeight() / 23));
 		canvas->SetColor(255, 255, 255);
-		// 垂直居中：PutString的y参数是文字顶部，按行高(GetFontHeight，不是行高的一半那种
-		// 拍脑袋估法)让文字在这一行的rowHeight范围内正好上下居中，而不是固定用rowHeight/4
-		// 这种跟字号大小无关的写死偏移(字号一变就跟着偏)。
+		// 垂直居中：PutString的y是文字顶部，用GetFontHeight算偏移，字号变了也不会偏。
 		int textTop = y + (rowHeight - canvas->GetFontHeight()) / 2;
 		canvas->PutString(notes[i].title, canvas->GetWidth() / 30, textTop);
 	}
@@ -180,8 +172,7 @@ void NotesApp::RenderDetail(Canvas* canvas) const {
 	if (selection < 0 || selection >= static_cast<int>(notes.size())) return;
 	const Note& note = notes[selection];
 
-	// 详情页的笔记标题/正文都属于"App内容"，不是App名字本身，字号跟列表项统一用内容这一档
-	// (比顶部"NOTES"小)。
+	// 详情页标题/正文属于App内容，字号用内容这一档(比顶部"NOTES"小)。
 	canvas->SetFontSize(max(21, canvas->GetHeight() / 23));
 	canvas->SetColor(255, 255, 255);
 	canvas->PutString(note.title, canvas->GetWidth() / 40, canvas->GetHeight() / 60);

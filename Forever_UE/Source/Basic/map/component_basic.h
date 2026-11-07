@@ -5,15 +5,7 @@
 #include <string>
 
 
-// ResidenceComponent/ShopComponent/FactoryComponent：Component域默认内容，三个都是trivial
-// 占位(InitComponent逻辑本来就是空的)，合并进同一份component_basic.h/.cpp(不按
-// residence/shop/plant各开一个文件)，和terrain_basic.h/.cpp里OceanTerrain/MountainTerrain
-// 合并的方式一样。
-// Basic编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式。
+// Component域默认内容：五个类型都是无字段无逻辑的trivial占位，合并在本文件，详见component_basic.md。
 class ResidenceComponent : public ComponentMod {
 public:
 	ResidenceComponent();
@@ -68,9 +60,7 @@ private:
 	std::string name;
 };
 
-// TrainStationComponent/AirportComponent：公共交通站点建筑用的trivial占位component，和上面
-// 三个一样InitComponent逻辑本来就是空的(公交站不挂建筑，不需要这个，见
-// station_basic.h的BusStation)。
+// TrainStationComponent/AirportComponent：火车站/机场建筑用的占位component。
 class TrainStationComponent : public ComponentMod {
 public:
 	TrainStationComponent();

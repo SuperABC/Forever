@@ -11,8 +11,8 @@
 
 class Event;
 
-// 表达式求值时的变量路由上下文：self./system./local. 三个关键字前缀分别路由到这三个槽位，
-// 找不到对应槽位或者变量名压根没有可识别的前缀时，一律按"变量不存在"处理（不额外报错）。
+// 表达式求值时的变量路由上下文：self./system./local. 前缀和无前缀（全局）分别路由到下面四个槽位，
+// 槽位为空或变量不存在时一律按"变量不存在"处理（求值为0，不报错），见expression.md
 struct ScriptContext {
 	// self. 前缀路由目标：拥有当前表达式的 Script 自己的变量池
 	Container* self = nullptr;
@@ -55,48 +55,25 @@ enum class UnaryOperator : int {
 // 表达式树节点基类（名字叫ExpressionNode，Expression这个名字留给对外门面类用）
 class ExpressionNode {
 public:
-	/*
-	* 构造表达式树节点基类
-	*/
 	ExpressionNode();
 
-	/*
-	* 析构表达式树节点基类
-	*/
 	virtual ~ExpressionNode();
 
-	/*
-	* 求值
-	* @context: 变量路由上下文
-	* @return: 表达式求值结果
-	*/
 	virtual ValueType Evaluate(const ScriptContext& context) const = 0;
 };
 
-// 变量表达式：name是$$前缀之后的原始文本(可能形如"self.name"/"system_foo"/"local.message")，
-// 求值时按第一个'.'或'_'切出前缀关键字路由到ScriptContext对应槽位，见Evaluate实现。
+// 变量表达式：name是$$之后的原始文本(如"self.name"/"local.message"/"fuck_mona")，
+// 求值时按ResolveVariableName路由到ScriptContext对应槽位
 class VariableExpression : public ExpressionNode {
 private:
 	// 变量名（$$之后的原始文本，不做任何字符替换）
 	std::string name;
 
 public:
-	/*
-	* 按变量名构造变量表达式
-	* @expression: 变量名字符串
-	*/
 	VariableExpression(const std::string& expression);
 
-	/*
-	* 析构变量表达式
-	*/
 	virtual ~VariableExpression();
 
-	/*
-	* 求值：按self./system./local.前缀路由到对应变量池查值，查不到或前缀未识别都返回默认值0
-	* @context: 变量路由上下文
-	* @return: 变量值
-	*/
 	ValueType Evaluate(const ScriptContext& context) const override;
 };
 
@@ -107,22 +84,10 @@ private:
 	ValueType value;
 
 public:
-	/*
-	* 按常量值构造常量表达式
-	* @expression: 常量值
-	*/
 	ConstantExpression(ValueType expression);
 
-	/*
-	* 析构常量表达式
-	*/
 	~ConstantExpression();
 
-	/*
-	* 求值：直接返回常量值
-	* @context: 变量路由上下文
-	* @return: 常量值
-	*/
 	ValueType Evaluate(const ScriptContext& context) const override;
 };
 
@@ -133,29 +98,12 @@ private:
 	std::vector<std::shared_ptr<ExpressionNode>> elements;
 
 public:
-	/*
-	* 按元素表达式列表构造数组表达式
-	* @expression: 元素表达式列表
-	*/
 	ArrayExpression(std::vector<std::shared_ptr<ExpressionNode>> expression);
 
-	/*
-	* 析构数组表达式
-	*/
 	~ArrayExpression();
 
-	/*
-	* 获取各元素求值结果列表
-	* @context: 变量路由上下文
-	* @return: 各元素值的列表
-	*/
 	std::vector<ValueType> GetElementValues(const ScriptContext& context) const;
 
-	/*
-	* 求值：将所有元素打包为数组值
-	* @context: 变量路由上下文
-	* @return: 数组值
-	*/
 	ValueType Evaluate(const ScriptContext& context) const override;
 };
 
@@ -169,45 +117,17 @@ private:
 	std::shared_ptr<ExpressionNode> expression;
 
 public:
-	/*
-	* 按运算符和操作数构造单目表达式
-	* @op: 单目运算符
-	* @operand: 操作数表达式
-	*/
 	UnaryExpression(UnaryOperator op, std::shared_ptr<ExpressionNode> operand);
 
-	/*
-	* 析构单目表达式
-	*/
 	~UnaryExpression();
 
-	/*
-	* 求值：对操作数应用单目运算符
-	* @context: 变量路由上下文
-	* @return: 运算结果
-	*/
 	ValueType Evaluate(const ScriptContext& context) const override;
 
 private:
-	/*
-	* 对值应用取反运算
-	* @value: 待取反的值
-	* @return: 取反后的值
-	*/
 	ValueType ApplyNegate(const ValueType& value) const;
 
-	/*
-	* 对值应用逻辑非运算
-	* @value: 待取非的值
-	* @return: 逻辑非结果
-	*/
 	ValueType ApplyLogicalNot(const ValueType& value) const;
 
-	/*
-	* 将值转换为布尔类型
-	* @value: 待转换的值
-	* @return: 布尔值
-	*/
 	bool ConvertToBool(const ValueType& value) const;
 };
 
@@ -224,48 +144,17 @@ private:
 	BinaryOperator operand;
 
 public:
-	/*
-	* 按左右操作数和运算符构造双目表达式
-	* @left, right: 左右操作数表达式
-	* @op: 双目运算符
-	*/
 	BinaryExpression(std::shared_ptr<ExpressionNode> left, std::shared_ptr<ExpressionNode> right, BinaryOperator op);
 
-	/*
-	* 析构双目表达式
-	*/
 	~BinaryExpression();
 
-	/*
-	* 求值：对左右操作数应用双目运算符
-	* @context: 变量路由上下文
-	* @return: 运算结果
-	*/
 	ValueType Evaluate(const ScriptContext& context) const override;
 
 private:
-	/*
-	* 对两个值执行比较运算并返回布尔结果
-	* @left, right: 左右操作数值
-	* @op: 比较运算符
-	* @return: 比较结果
-	*/
 	bool GetComparisonResult(const ValueType& left, const ValueType& right, BinaryOperator op) const;
 
-	/*
-	* 根据运算符对两个值执行比较，返回布尔类型的ValueType
-	* @left, right: 左右操作数值
-	* @op: 比较运算符
-	* @return: 比较结果（ValueType包装的bool）
-	*/
 	ValueType CompareValues(const ValueType& left, const ValueType& right, BinaryOperator op) const;
 
-	/*
-	* 对同类型值执行比较运算
-	* @left, right: 同类型的左右操作数
-	* @op: 比较运算符
-	* @return: 比较结果
-	*/
 	template<typename T>
 	static bool CompareSameType(const T& left, const T& right, BinaryOperator op) {
 		switch (op) {
@@ -279,12 +168,6 @@ private:
 		}
 	}
 
-	/*
-	* 对不同类型值执行比较运算（尝试数值提升或转字符串比较）
-	* @left, right: 不同类型的左右操作数
-	* @op: 比较运算符
-	* @return: 比较结果
-	*/
 	template<typename T1, typename T2>
 	static bool CompareDifferentType(const T1& left, const T2& right, BinaryOperator op) {
 		if constexpr (std::is_arithmetic_v<T1> && std::is_arithmetic_v<T2>) {
@@ -302,26 +185,10 @@ private:
 		}
 	}
 
-	/*
-	* 对两个值执行算术运算
-	* @left, right: 左右操作数值
-	* @op: 算术运算符
-	* @return: 算术运算结果
-	*/
 	ValueType ComputeArithmetic(const ValueType& left, const ValueType& right, BinaryOperator op) const;
 
-	/*
-	* 将值转换为布尔类型
-	* @value: 待转换的值
-	* @return: 布尔值
-	*/
 	bool ConvertToBool(const ValueType& value) const;
 
-	/*
-	* 将值转换为字符串
-	* @value: 待转换的值
-	* @return: 字符串表示
-	*/
 	template<typename T>
 	static std::string toString(const T& value) {
 		if constexpr (std::is_same_v<T, std::string>) {
@@ -336,143 +203,46 @@ private:
 	}
 };
 
-// 表达式门面：剧情json里所有的值理论上都是字符串表达式，统一由这个类解析+求值。不支持
-// $$(expr)间接寻址语法，$$name按self./system./local.前缀路由到ScriptContext三个槽位
-// （见ScriptContext注释），".":点号本身不参与分词，只是标识符里的普通字符，不需要特判。
+// 表达式门面：剧情json里所有的值理论上都是字符串表达式，统一由这个类解析+求值，见expression.md
 class Expression {
 public:
-	/*
-	* 解析表达式字符串，构建表达式树
-	* @expr: 表达式字符串
-	* @return: 解析是否成功
-	*/
 	bool Parse(const std::string& expr);
 
-	/*
-	* 对表达式求值并返回布尔结果
-	* @context: 变量路由上下文
-	* @return: 布尔求值结果
-	*/
 	bool EvaluateBool(const ScriptContext& context) const;
 
-	/*
-	* 对表达式求值并返回通用类型结果
-	* @context: 变量路由上下文
-	* @return: 求值结果
-	*/
 	ValueType EvaluateValue(const ScriptContext& context) const;
 
 private:
 	// 表达式树根节点
 	std::shared_ptr<ExpressionNode> root;
 
-	/*
-	* 将表达式字符串分词
-	* @expr: 待分词的表达式字符串
-	* @return: 词元列表
-	*/
 	std::vector<std::string> Tokenize(const std::string& expr);
 
-	/*
-	* 将词元列表解析为表达式树
-	* @tokens: 词元列表
-	* @return: 表达式树根节点
-	*/
 	std::shared_ptr<ExpressionNode> ParseExpression(const std::vector<std::string>& tokens);
 
-	/*
-	* 将中缀词元列表转换为后缀（逆波兰）形式
-	* @infix: 中缀词元列表
-	* @return: 后缀词元列表
-	*/
 	std::vector<std::string> InfixToPostfix(const std::vector<std::string>& infix);
 
-	/*
-	* 将后缀词元列表构建为表达式树
-	* @postfix: 后缀词元列表
-	* @return: 表达式树根节点
-	*/
 	std::shared_ptr<ExpressionNode> ParsePostfix(const std::vector<std::string>& postfix);
 
-	/*
-	* 判断词元是否为运算符
-	* @token: 待判断的词元
-	* @return: 是否为运算符
-	*/
 	bool IsOperator(const std::string& token);
 
-	/*
-	* 比较两个运算符的优先级
-	* @op1, op2: 两个运算符
-	* @return: op1优先级是否高于op2
-	*/
 	bool HigherPrecedence(const std::string& op1, const std::string& op2);
 
-	/*
-	* 获取运算符优先级数值
-	* @op: 运算符
-	* @return: 优先级数值
-	*/
 	int GetPrecedence(const std::string& op) const;
 
-	/*
-	* 判断运算符是否右结合
-	* @op: 运算符
-	* @return: 是否右结合
-	*/
 	bool RightAssociative(const std::string& op);
 
-	/*
-	* 将字符串词元转换为对应的双目运算符枚举值
-	* @token: 运算符词元
-	* @return: 双目运算符枚举值
-	*/
 	BinaryOperator GetOperator(const std::string& token) const;
 
-	/*
-	* 将词元解析为操作数表达式
-	* @token: 操作数词元
-	* @return: 操作数表达式
-	*/
 	std::shared_ptr<ExpressionNode> ParseOperand(const std::string& token);
 
-	/*
-	* 将词元解析为常量表达式
-	* @token: 常量词元
-	* @return: 常量表达式
-	*/
 	std::shared_ptr<ExpressionNode> ParseConstant(const std::string& token);
 
-	/*
-	* 判断字符是否为运算符字符
-	* @c: 待判断的字符
-	* @return: 是否为运算符字符
-	*/
 	bool OperatorChar(char c);
 };
 
-/*
-* 便捷函数：把DSL源码字符串就地Parse成一次性的Expression对象再求值，Parse+Evaluate在
-* 同一次调用里发生、由调用方自己所在的模块编译执行——这是把所有Change/Event字段从
-* "预先解析好存成员"改成"存原始DSL源码字符串"之后的配套设施，取代原来到处都是的
-* `field.EvaluateValue(context)`/`field.EvaluateBool(context)`调用点。原来的写法里
-* Expression树可能在一个模块（比如某个Mod DLL）里构造、又在另一个模块（比如UE的
-* Forever模块）里对着树节点做虚函数求值——UE给自己的模块重载了全局operator new/delete
-* 走FMemory，普通Win32 DLL没有这层重载，两边一旦发生"构造Expression时分配堆内存的模块"
-* 和"求值时因为虚函数调用触发另一次堆分配、又在别的模块被释放"不一致，就是堆损坏
-* （PIE验证复现过一次真实崩溃：NPCNavigateChange::destination装了个真实房间地址，
-* 超出std::string的SSO阈值触发了堆分配，才第一次真正踩上）。现在字段只存字符串，
-* 求值这一步统一用这两个函数，Parse和Evaluate/EvaluateBool在同一次调用里完成，永远
-* 是调用方自己模块的代码在执行，不会有对象跨模块存活的情况。
-* @source: DSL源码字符串
-* @context: 变量路由上下文
-* @return: 求值结果
-*/
 ValueType EvaluateExpression(const std::string& source, const ScriptContext& context);
 
-/*
-* 同EvaluateExpression，返回布尔求值结果，对应Expression::EvaluateBool
-*/
 bool EvaluateExpressionBool(const std::string& source, const ScriptContext& context);
 
 // 变量所在的变量池。
@@ -483,32 +253,8 @@ enum VARIABLE_SCOPE : int {
 	VARIABLE_SCOPE_GLOBAL, // 全局变量(没有前缀)，脚本可读可写
 };
 
-/*
-* 解析变量名：以self./system./local.开头的按前缀路由到对应变量池，去掉前缀剩下的是变量名(只有点号
-* 是分隔符)；其余名字一律是全局变量，整个名字(含下划线，比如self_x)就是变量名。读($$x)和写
-* (set_value的variable)共用这一条规则，写的时候只有self和全局变量能写。
-* @name: 变量名(读的时候是$$后面那部分)
-* @outKey: 去掉前缀之后的变量名
-*/
 VARIABLE_SCOPE ResolveVariableName(const std::string& name, std::string& outKey);
 
-/*
-* 判断字符是否为运算符字符（全局工具函数）
-* @c: 待判断的字符
-* @return: 是否为运算符字符
-*/
 bool IsOperatorChar(char c);
 
-/*
-* 判断字符是否为空白字符（全局工具函数）
-* @c: 待判断的字符
-* @return: 是否为空白字符
-*/
 bool IsSpaceChar(char c);
-
-/*
-* 判断字符是否为标识符字符（全局工具函数）
-* @c: 待判断的字符
-* @return: 是否为标识符字符
-*/
-bool IsIdentifierChar(char c);

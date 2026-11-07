@@ -23,12 +23,19 @@
 
   只有点号是分隔符，去掉前缀剩下的是变量名；没有前缀时整个名字(含下划线)就是变量名：`$$test`、
   `$$fuck_mona`、`$$self_x`读的都是全局变量。
-  不需要调用方逐个变量显式注册。
+  `ResolveVariableName`同时被读（`$$x`）和写（`set_value`的`variable`）使用，写时只有`self`和全局能写。
 - **`.`点号本身不参与分词**——`.`落在"既不是空白/引号/运算符/括号"的默认分支，和字母数字
   下划线一样被当成标识符的一部分，`$$self.name`会被分词成一个完整token`"self.name"`，不需要
   为点号写任何特判逻辑。`VariableExpression::Evaluate`按`ResolveVariableName`
   只认`self`/`system`/`local`后面紧跟的那一个`.`，切出的剩余部分原样保留、不做任何字符
   替换（`self.job.title`切出的变量名是`"job.title"`，不是`"job_title"`）。
+- **求值语义**：空表达式`EvaluateValue`得空串、`EvaluateBool`得true（所以空`condition`=恒成立）；`EvaluateBool`结果不是bool会抛`RuntimeException`；
+  `Parse`失败返回false并往cerr打印、`root`保持空；`EvaluateExpressionBool`解析失败时按**false**处理（并`debugf`警告，语法错误的condition不会被当成恒成立），`EvaluateExpression`解析失败时得空串（并`debugf`警告）。
+  `$$`后第一个字符必须是字母/下划线/非ASCII才算变量，否则当字符串常量。
+- **隐式字符串拼接**：相邻两个操作数之间自动插入`+`；`+`任一侧是字符串即拼接。整数运算保持int，含double则转double；除零/模零抛异常。
+  `-`出现在表达式开头、运算符、`(`/`[`/`,`之后时是一元负号（中缀转后缀时改写成内部前缀运算符token，入栈不弹栈），所以`1 + -5`、`a * -5`、`(-3)`都能正确求值；优先级比`^`低、不高于`*`，即`-2^2 == -4`。
+- **`EvaluateExpression`/`EvaluateExpressionBool`**：把DSL源码就地`Parse`成一次性`Expression`再求值，Parse和Evaluate在同一次调用、同一个模块里完成，
+  `Expression`树从不跨模块存活（原因见`change.md`"字段类型是`std::string`"）。所有Change/Event/Dialog字段都存源码字符串，统一用这两个函数求值。
 - **表达式树节点抽象基类叫`ExpressionNode`**，`Expression`这个名字留给对外门面类用。树节点层
   的实现（`VariableExpression`/`ConstantExpression`/`ArrayExpression`/`UnaryExpression`/
   `BinaryExpression`）、分词器、中缀转后缀、运算符优先级、隐式字符串拼接，属于纯粹的表达式

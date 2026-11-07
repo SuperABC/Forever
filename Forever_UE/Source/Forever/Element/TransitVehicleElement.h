@@ -17,18 +17,8 @@ class UInputMappingContext;
 struct FInputActionValue;
 struct FHitResult;
 
-// 公共交通线路车辆(公交/火车/飞机)在场景里对应的Actor——运动学地沿Route算出来的transform
-// 移动，不模拟物理(Tick里直接读vehicle->GetTransform())。外观有三种，按VehicleMod的字段选：
-// transitMeshPath指向骨骼网格(公交PAZ_652)用skeletalBody显示；指向静态网格：可搭乘的(火车)用staticBody，不可搭乘的(飞机)用bodyMesh；
-// 为空用按sizeX/Y/Z缩放的/Engine/BasicShapes/Cube占位，见public_transport_plan.md。
-//
-// 骨骼网格且VehicleMod::boardable时这辆车可以被搭乘(公交)：
-// - 触发盒(模型包围盒外扩一圈)：玩家的AForeverCharacter走进盒里，把车辆script的options推给
-//   MeetOption(上车选项由vehicle_bus.script在停站时通过add_option/remove_option控制)；
-// - 搭乘：UForeverTrafficFrameworkComponent::ApplyBoardVehicle让玩家Possess这个Pawn，
-//   只有鼠标视角(IMC_MouseLook)，没有IMC_Default，所以WASD无效；车继续自己跑。车上只要
-//   在乘坐就一直显示车辆的options(不需要触发盒)，F/滚轮选择；没有Q下车键，下车只走script的
-//   "下车"选项(board后的leave_vehicle Change)或force_leave。
+// 公共交通线路车辆(公交/火车/飞机)在场景里对应的Actor：运动学地沿Route算出的transform移动，不模拟物理。
+// 外观选择、可搭乘(触发盒/搭乘视角)规则见TransitVehicleElement.md。
 UCLASS(Blueprintable)
 class FOREVER_API ATransitVehicleElement : public APawn
 {
@@ -43,7 +33,7 @@ public:
 
 	Vehicle* GetVehicle() const { return vehicle; }
 
-	// 搭乘前被占有的pawn(下车时要恢复谁)，和AVehicleElement同一套。
+	// 搭乘前被占有的pawn(下车时要恢复谁)。
 	void SetPreviousPawn(APawn* inPreviousPawn) { previousPawn = inPreviousPawn; }
 	TWeakObjectPtr<APawn> GetPreviousPawn() const { return previousPawn; }
 
@@ -68,10 +58,10 @@ protected:
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-	// 鼠标/手柄视角——只转相机，和AVehicleElement::Look同一个处理方式。
+	// 鼠标/手柄视角——只转相机。
 	void Look(const FInputActionValue& value);
 
-	// F/滚轮的选项焦点输入，照抄AForeverCharacter的同名函数(搭乘时玩家不再是Character)。
+	// F/滚轮的选项焦点输入(搭乘时玩家不再是Character，所以这里要自己绑)。
 	void MeetOptionFocusUp();
 	void MeetOptionFocusDown();
 	void MeetOptionSelect();
@@ -83,9 +73,8 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USkeletalMeshComponent> skeletalBody;
 
-	// 可搭乘的静态网格外观(火车SciFiTram)：和skeletalBody同一个道理，挂在bodyMesh(RootComponent)下，缩放只作用在
-	// 自己身上(root保持1倍，触发盒/相机才不会被缩)。构造时隐藏，Init加载成功且载具可搭乘才显示。不可搭乘的静态网格(飞机)
-	// 仍然直接放在bodyMesh上。
+	// 可搭乘的静态网格外观(火车)：同skeletalBody，缩放只作用在自己身上(root保持1倍，触发盒/相机才不被缩)。
+	// 构造时隐藏，Init加载成功且可搭乘才显示；不可搭乘的静态网格(飞机)直接放在bodyMesh上。
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UStaticMeshComponent> staticBody;
 
@@ -115,8 +104,7 @@ private:
 	void OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
-	// 把cachedOptions推给MeetOption(先清掉这辆车名下的旧按钮再逐个加，不依赖ReplaceOptions——
-	// 它在名下没有按钮时是空操作，停站前选项列表是空的，这时加上去的新选项就丢了)。
+	// 把cachedOptions推给MeetOption(先清再加，不用ReplaceOptions：它在名下没有按钮时是空操作，新选项会丢)。
 	void ShowOptions();
 	void HideOptions();
 
@@ -125,10 +113,7 @@ private:
 	Vehicle* vehicle = nullptr;
 	TWeakObjectPtr<APawn> previousPawn;
 
-	// 缓存vehicle->GetMeshYawOffsetDegrees()——bodyMesh是这个Actor的RootComponent，
-	// Tick()里SetActorLocationAndRotation直接设的是RootComponent的世界旋转，Init()
-	// 时单独对bodyMesh调SetRelativeRotation不会有任何效果(马上被下一次Tick覆盖)，这个
-	// 偏移必须叠进Tick()每帧算的朝向里，见.cpp Tick()的说明。
+	// 缓存vehicle->GetMeshYawOffsetDegrees()，叠进Tick()每帧算的朝向里(不能设在bodyMesh的相对旋转上，会被Tick覆盖)。
 	float meshYawOffsetDegrees = 0.f;
 
 	bool bBoardable = false;
@@ -140,8 +125,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> proximityBox;
 
-	// vehicle->GetName()/GetOptions()的快照，Overlap回调只读这份快照，不解引用vehicle，和
-	// AVehicleElement同一套安全原则。
+	// vehicle->GetName()/GetOptions()的快照，Overlap回调只读这份，不解引用vehicle。
 	FString vehicleNameOnly;
 	TArray<FString> cachedOptions;
 };

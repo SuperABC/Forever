@@ -5,12 +5,6 @@
 #include <string>
 
 
-// 工业系统测试案例——三个仓库：小麦仓库/牛肉仓库/汉堡仓库，categories分别对应
-// product_basic.h里三个产品的categories，见Source/Core/industry/industry.md。
-// capacity是占位测试值，跑通之后按实际观察到的存量变化速度调整。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼。
-
 class WheatStorage : public StorageMod {
 public:
 	WheatStorage();
@@ -68,8 +62,6 @@ private:
 	std::string name;
 };
 
-// 商店仓库(room_warehouse的storageType)：只能放不能取，需求是容量的100%留给food类货物，
-// 市民买走汉堡后空出的容量就是向上游补货的需求，见Core/industry/industry.md。
 class ShopStorage : public StorageMod {
 public:
 	ShopStorage();

@@ -38,5 +38,10 @@ mod 把自己的私有数据写进存档、读档时读回来的接口：`StateW
 
 ## 依赖关系
 
-- 依赖：只有标准库。
+- 依赖：只有标准库（`<cstdint>`）。
 - 被谁依赖：21 个 `*_mod.h` 基类；`Source/Core/common/save.*`。
+
+## 待办/后续阶段
+
+- `mod_state.h` 目前没有配套的 `.cpp`（纯虚接口，全部内联），不符合 CONVENTIONS.md §2"每个 `.h` 配同名 `.cpp`"的约定；
+  补建时要同步加进 `Dependence.vcxproj` 的 `ClCompile` 和 `.filters`。

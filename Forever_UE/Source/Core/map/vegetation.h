@@ -46,9 +46,7 @@ struct TreeFrame {
 	float rotation = 0.f;
 };
 
-// 全图植被的统一存储：把mod提交的TreeRequests(单棵/一排/一片，见feature_spec.h)按宿主参考系换算后
-// 展开成一棵棵TreeInstance，随机旋转/随机缩放的规则只在这里实现一份。由Map持有，UE层的
-// UForeverVegetationFrameworkComponent一次性读出来按mesh分组实例化渲染。详见vegetation.md。
+// 全图植被的统一存储，详见vegetation.md
 class Vegetation {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;

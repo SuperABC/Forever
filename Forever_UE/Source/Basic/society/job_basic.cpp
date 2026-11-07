@@ -5,12 +5,8 @@
 using namespace std;
 
 namespace {
-	// 向Core查occupant家/工位的具体房间地址(Room::GetAddress()格式)——
-	// NPCNavigateChange::destination不能再写"home"/"workplace"这种描述性文本，必须是
-	// 能被Map::LocateRoom(address)直接解析回Room*的具体地址字符串，这个job所在的
-	// Dependence层看不到Citizen/Room这些Core类型，只能通过PostHandle按姓名查询拿到
-	// 字符串结果，见Core/common/implement.cpp的"citizen home/workplace address"两个
-	// post类型。查询失败(citizen没有家/没有job等理论上不会发生的情况)返回空字符串。
+	// 通过PostHandle向Core查occupant家/工位的房间地址(post类型"citizen home/workplace address")，
+	// 见job_basic.md。查询失败返回空字符串。
 	string QueryAddress(PostHandle* post, const string& occupantName, const char* postType) {
 		if (!post) return string();
 		JsonValue request(DATA_OBJECT);

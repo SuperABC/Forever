@@ -7,13 +7,8 @@
 class UTextBlock;
 class UCheckBox;
 
-// 一行=一个mod id的勾选框，替代老工程CheckEnable——该dump本身是损坏的(内容实际是
-// BagPanel.txt的ClearSelect函数被误拷贝进来)，结构只能从ModPanel.txt对它的引用反推。
-// 被依赖(bLocked)且已勾选时整行(SetIsEnabled(false))变灰、勾选框不能取消；被依赖但还没勾选时
-// 文字标红、勾选框保持未勾选且可点。切换时调
-// ForeverConfigBridgeSubsystem::SetModEnabled，再回调InOnChanged(拥有者
-// ModPanelWidget::RefreshAllRows)做级联刷新——禁用/启用任何一个id都可能让别的id的
-// 锁定状态跟着变，所以不能只刷新自己这一行。
+// 一行=一个mod id的勾选框。被依赖(bLocked)且已勾选时整行变灰不能取消；被依赖但未勾选时文字标红。
+// 切换时调ForeverConfigBridgeSubsystem::SetModEnabled，再回调拥有者ModPanelWidget::RefreshAllRows做级联刷新。
 UCLASS()
 class FOREVER_API UModCheckRowWidget : public UUserWidget
 {

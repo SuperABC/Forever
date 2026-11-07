@@ -2,8 +2,7 @@
 
 ## 职责
 
-三个内置`StationMod`实现：`BusStation`(贴路，不占Lot面积)、`TrainStation`/`AirStation`
-(挂建筑，各4个接口/两条轨道或跑道)。
+三个内置`StationMod`实现：`BusStation`(`station_bus`，贴路，不挂建筑、不占Lot面积)、`TrainStation`(`station_train`，挂`TrainStationBuilding`)/`AirStation`(`station_air`，挂`AirportBuilding`)，后两者各4个接口/两条轨道或跑道，`AssignRoads`为空实现(不贴路)。
 
 ## 关键设计
 
@@ -26,15 +25,13 @@
   `Basic/traffic/route_basic.cpp`的`LayoutDualTrackStationLoop`硬编码依赖(按下标
   `0/1/2/3`直接取，不是按名字查)，两边必须保持一致。深度分两档(火车`0.55`/`0.65`，飞机`0.65`/`0.85`)是为了让两条
   轨道/跑道在空间上分开，不重叠在同一条线上。
+- **同一条轨道的两个接口朝向必须相同**(沿frontage轴同一方向)，`Route::Build()`算出的贝塞尔控制点才会贴着两点连线、是一条直的"轨道"。
 - **接口`z`抬高到`0.001`(1cm)而不是贴地的`0`**——只是让调试连线不和地面/楼体网格糊在一起，
   `AirStation`的跑道本身仍然贴地，真正的"巡航高度"由`AirRoute::LayoutRoute`在生成地图边缘
   站点时额外叠加(`overrideEdgeZ`/`edgeHeight`参数，只覆盖边缘点)。这个`z`同时是车辆真正
   停靠在这个接口时的实际高度，不能设太大，否则飞机/火车停下来会明显飘在半空中。
-- **楼体footprint贴路、接口留在远离道路一侧**——`TrainStationBuilding`/`AirportBuilding`的
-  `Layout()`(`Basic/map/building_basic.cpp`)用`NearRoadFootprint`把楼体压到靠近道路的一侧
-  (深度0~0.37左右)，这两个`Layout()`的`depthRatio`(`0.65`/`0.85`)都在楼体深度范围之外，
-  保证公共交通连线不穿过楼体实体——两边的深度数值改动要互相对照，不能只改一边。接口本身的
-  世界坐标换算不受楼体footprint偏移影响(见`Core/traffic/station.md`"接口坐标换算"一节)。
+- **机场：楼体贴路、跑道接口留在远离道路一侧**——`AirportBuilding::Layout()`(`Basic/map/building_basic.cpp`)用`NearRoadFootprint`把楼体压到靠近道路的一侧，跑道`depthRatio`(`0.65`/`0.85`)在楼体深度范围之外，保证连线不穿过楼体——两边的深度数值改动要互相对照。
+- **火车站：楼体占满整个Building区域**(默认footprint，不贴路一侧)，所以轨道接口(`depthRatio` `0.55`/`0.65`)落在楼体范围内：楼体是地下1层`preset_train_station_bg+`(4条楼梯通上来)+地面1层`preset_train_station_fg-`(大厅+左右两间`room_train_station`)，轨道在地面层之下/之中穿过。接口本身的世界坐标换算不受楼体footprint偏移影响(见`Core/traffic/station.md`"接口坐标换算"一节)。
 - `BusStation::AssignRoads`只贴井字路网中心正方形的四条边道路(`JingRoadnet::
   DistributeRoadnet`里固定这几个名字)，每条路取中点(`t=0.5`)、两侧(`rightSide=true/false`)
   各摆一个——只验证这一个测试场景，不遍历全图所有路。
@@ -43,7 +40,6 @@
 
 - 依赖：`Dependence/traffic/station_mod.h`、`Dependence/map/general_geometry.h`
   (`FACE_DIRECTION`/`PointParams`/`Road`)。
-- **火车站楼的布局(2026-10-30)**：`TrainStationBuilding::Layout`换成地下1层`preset_train_station_bg+`(4条楼梯通上来，楼梯网格用`Stair_Line`)+地面1层`preset_train_station_fg-`(大厅+左右两间`room_train_station`)，两层共2口电梯井，`AssignElevatorCabin`加2台往返-1~0层的电梯；楼体footprint占满整个Building区域(2026-10-30起，不再贴路一侧)，`TrainStation::Layout`的轨道接口因此落在楼体范围内；火车轨道的depthRatio改成0.55/0.65(`kTrackDepth1/2`，跑道仍是0.65/0.85)。还没进游戏看过效果。
 - 被谁依赖：`Basic/map/building_basic.cpp`的`TrainStationBuilding`/`AirportBuilding`
   (`stationMod`字段分别指向`"station_train"`/`"station_air"`)；
   `Basic/traffic/route_basic.cpp`的`LayoutDualTrackStationLoop`硬编码依赖
@@ -52,6 +48,7 @@
 
 ## 待办/后续阶段
 
+- 火车站楼的新布局(地下层+地面层、轨道接口落在楼体内)还没进游戏看过效果，见`map/building_basic.md`。
 - 只验证了"全图恰好一个火车站+一个机场"的场景——`TrainRoute`/`AirRoute`的`LayoutRoute`
   假设全图只有一个真实站点(见`route_basic.md`)，多个同类型站点同时存在的情况没有验证过，
   暂不支持。

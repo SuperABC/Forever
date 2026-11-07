@@ -20,6 +20,7 @@
   默认`true`保持原有行为。公交每一站都要停是对的，但火车/飞机的入站/出站接口、地图边缘点
   不该停——真实世界里乘客在跑道/站台**中段**上下客，不是在跑道两端分别停一次。具体用法见
   `Basic/traffic/route_basic.md`的`LayoutDualTrackStationLoop`一节。
+- **`RouteStop`**：`station`是站点接口列表(真实站点在前、`edgeStations`在后)的下标，`interfaceIndex`是该站点第几个接口；`silent`(仅`dwell=true`时有效)表示停靠但不触发`enter_stop`/`leave_stop`，用于地图边缘的虚拟车站。
 - **`RouteLink.bidirectional`**：`true`表示同一份几何两个方向都能走（比如单线铁路），
   Core建图时会额外登记一条反向边，倒序遍历同一份`segments`、切线取反，不复制几何（见
   `route.md`"有向图与双向边"一节）。内置线路（公交/火车/飞机）全部是单向环线，没有实际
@@ -47,7 +48,7 @@
 
 ## 实例化路线（铺轨、过山爬坡/隧道）
 
-- `instantiate`（替换了原来没用上的`drawPath`）：true表示这条线路要在世界里实例化成真实轨道——火车true，
+- `instantiate`：true表示这条线路要在世界里实例化成真实轨道——火车true，
   公交（走现有路网）/飞机false。`trackMesh`是轨道资产，`trackTunnelMesh`是隧道内用的资产（留空=复用
   `trackMesh`，目前还没有隧道专用资产），`trackUnit`是一块轨道沿弧长的长度，`trackWidth`是占地整宽
   （挖隧道洞/地形贴合用）。
@@ -58,8 +59,7 @@
   不放`Node`/`Connection`，避免跨DLL的id/所有权问题），并用`AddTunnelHatch`/`AddTerrainFit`提交请求
   （`hatches`/`terrainFits`）。`trackEdges[i]`留空=沿用Core的单段贝塞尔。
 - `AddHatch`/`AddTunnelHatch`/`AddTerrainFit`三个工具方法和`RoadnetMod`同名方法实现相同，都转调
-  `general_geometry.h`里的`BuildHatch`/`BuildTerrainFit`；`TerrainFitSample`/`TerrainFitRequest`也在那里
-  （原来在`roadnet_mod.h`），`RoadnetMod`的接口不变。
+  `general_geometry.h`里的`BuildHatch`/`BuildTerrainFit`；`TerrainFitSample`/`TerrainFitRequest`也定义在那里。
 
 ## 待办/后续阶段
 

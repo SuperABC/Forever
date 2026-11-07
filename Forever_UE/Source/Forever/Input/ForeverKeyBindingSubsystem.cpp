@@ -20,7 +20,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// （车辆专属，不是全局/不在Controller上）——上车改成MeetOption选"上车"选项，不再
 		// 用热键，见ForeverTrafficFrameworkComponent::ApplyEnterVehicle/ExitVehicle。
 		{ TEXT("ExitVehicle"), EKeys::Q },
-		// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，见ForeverPlayerController.md"旧MainController热键"一节，AForeverCharacter::SetupPlayerInputComponent
+		// MeetOption对话选项UI：滚轮上下移动高亮/F键确认选中，AForeverCharacter::SetupPlayerInputComponent
 		// 转发到AForeverPlayerController持有的MeetOptionWidget。
 		{ TEXT("MeetOptionUp"), EKeys::MouseScrollUp },
 		{ TEXT("MeetOptionDown"), EKeys::MouseScrollDown },
@@ -31,17 +31,12 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("ThrottleDown"), EKeys::MouseScrollDown },
 		// 飞机自由环视：按住时视角不自动回正，只绑在APlaneElement上。
 		{ TEXT("FreeLook"), EKeys::C },
-		// 剧情对话SectionSpeaking的空格键推进不走这里——UForeverStoryFrameworkComponent::
-		// ShowCurrentItem在对话展示期间把输入模式切成UIOnly，Pawn的Enhanced Input完全收不到
-		// 输入，空格键改成SectionSpeaking自己的NativeOnKeyDown原生响应，见
-		// USectionSpeakingWidget.h类注释。
-		// 手机(Phone)系统：这个热键绑在AForeverPlayerController上,不是Pawn上——玩家会通过
-		// ChangeControlChange换着操控不同市民/载具,Controller是唯一在换人时不变的对象,见
-		// AForeverPlayerController::SetupInputComponent。
+		// 剧情对话SectionSpeaking的空格键推进不走这里：对话期间输入模式是UIOnly，Enhanced Input收不到，
+		// 由SectionSpeaking自己的NativeOnKeyDown响应。
+		// 手机(Phone)：绑在AForeverPlayerController上而非Pawn上——玩家会换着操控不同市民/载具，
+		// Controller是唯一在换人时不变的对象。
 		{ TEXT("TogglePhone"), EKeys::P },
-		// 背包(Inventory)系统：这个热键和TogglePhone绑在同一个Controller上，理由同上——
-		// 玩家会通过ChangeControlChange换着操控不同市民/载具，见
-		// AForeverPlayerController::SetupInputComponent、ForeverPlayerController.md"旧MainController热键"一节。
+		// 背包(Inventory)：和TogglePhone一样绑在Controller上，理由同上。
 		{ TEXT("ToggleInventory"), EKeys::B },
 		// 武器系统：鼠标左键开火(按住连发交给全自动武器自己的fireRate冷却判断，见
 		// UForeverWeaponComponent::TickComponent)/R键换弹/数字键1、2切枪，见
@@ -53,8 +48,7 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		{ TEXT("AimWeapon"), EKeys::RightMouseButton },
 		// 识别模式：按住鼠标中键显示附近人物头上的信息，松开退出，见UForeverIdentifyComponent。
 		{ TEXT("Identify"), EKeys::MiddleMouseButton },
-		// 投掷物：短按3在身上的投掷物之间切换，长按3(弹出选择列表)本期未做，见
-		// UForeverThrowableComponent。
+		// 投掷物：短按3在身上的投掷物之间切换，长按3弹出选择列表，见UForeverThrowableComponent。
 		{ TEXT("ThrowItem"), EKeys::Three },
 		// 游戏内地图：M开/关(ToggleMap)，Esc只关不开(CloseMap)——跟TogglePhone/
 		// ToggleInventory同样的理由绑在Controller上，见AForeverPlayerController::

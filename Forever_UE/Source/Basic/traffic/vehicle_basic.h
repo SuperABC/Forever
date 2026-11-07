@@ -5,14 +5,6 @@
 #include <string>
 
 
-// 测试车型——构造函数里把meshPath写死指向项目里现成的测试小汽车静态网格
-// (Content/3rdParty/Cars_for_Arcade_Demolition_Racing_Games/StaticMeshes/Car.uasset)，
-// 供AVehicleElement::Init()加载。Basic编译为DynamicLibrary(Basic.dll)，和Forever_Mod下的
-// Mod一样由Config/ModLoader在运行时扫描加载,不会静态链进Forever.Build.cs,见
-// Source/Basic/README.md。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式。
 class VehicleBasic : public VehicleMod {
 public:
 	VehicleBasic();
@@ -33,10 +25,6 @@ private:
 	std::string name;
 };
 
-// BusVehicle/TrainVehicle/PlaneVehicle：公共交通线路车辆——blueprintPath留空，UE层
-// ATransitVehicleElement按sizeX/Y/Z缩放/Engine/BasicShapes/Cube占位；drivable=boardable=
-// false(不做操控/搭乘，只预留字段)。三个类型合并进同一份vehicle_basic.h/.cpp，和
-// VehicleBasic同一个文件组织约定。
 class BusVehicle : public VehicleMod {
 public:
 	BusVehicle();
@@ -57,8 +45,6 @@ private:
 	std::string name;
 };
 
-// TruckVehicle：可驾驶货车(ZIL-130)——停车场里的车，和VehicleBasic一样走blueprintPath+Chaos物理，
-// 脚本复用vehicle_basic(靠近弹出"上车")。
 class TruckVehicle : public VehicleMod {
 public:
 	TruckVehicle();

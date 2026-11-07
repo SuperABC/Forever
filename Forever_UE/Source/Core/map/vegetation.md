@@ -35,3 +35,8 @@ mesh下标）。由`Map`持有（`Map::GetVegetation()`），UE层`UForeverVeget
 
 - 依赖：`map/feature_spec.h`(Dependence)、`common/utility.h`(`GetRandom`/`GetRandomNormal`)。
 - 被谁依赖：`map.h`(`Map::vegetation`)、`Source/Forever/Framework/ForeverVegetationFrameworkComponent`。
+
+
+## 待办/后续阶段
+
+- 无。

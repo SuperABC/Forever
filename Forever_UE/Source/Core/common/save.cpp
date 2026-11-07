@@ -433,8 +433,10 @@ SaveManifest SaveGame::BuildManifest(const SaveWorld& world) {
 
 SaveArchive SaveGame::BuildArchive(const SaveWorld& world) {
 	SaveArchive archive;
+	// 没有map的世界不是可存档状态：返回空档案(无任何段)，不写只有manifest的残档(ValidateArchive要求每个段都在，读不回来)。
+	if (!world.map) return archive;
 	archive.SetJson(SAVE_SECTION_MANIFEST, 1, BuildManifest(world).ToJson().WriteCompact());
-	if (world.map) {
+	{
 		MapSaveCodec::Save(*world.map, archive);
 		if (world.populace) {
 			PopulaceSaveCodec::Save(*world.populace, *world.map, world.society, archive);

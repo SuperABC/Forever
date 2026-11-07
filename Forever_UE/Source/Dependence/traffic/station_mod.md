@@ -28,6 +28,7 @@
   接口的世界坐标**和楼体footprint的偏移（`BuildingFootprintSpec`）完全无关**，楼体想往路边
   挪多远都不会牵动接口位置，这正是楼体贴路、把深处空间让给跑道/站台能够不改
   `StationInterfaceSpec`数值就直接生效的原因。
+- **`SetProperty()`两段式**：stationType必须在`SetProperty()`里填，不能指望在`AssignRoads()`里设(它是static，没有实例)；Core创建完实例后立刻调一次，再读`stationType`/调`Layout()`。`Layout(direction, sizeX, sizeY)`的`direction`是`Building::GetDirection()`缓存值(已解析，非-1)，`sizeX/sizeY`是占地矩形尺寸，不是楼体footprint尺寸。
 - **`headingDegrees`同时代表到达和出发方向**——这个项目目前没有"进站朝向≠出站朝向"的站点
   类型，`Core/traffic/station.cpp`换算时`arriveDir`/`departDir`恒相等。真正需要两个不同
   朝向的"跑道/轨道两端"场景，靠同一个站点声明**两对**接口（比如`TrainStation`/`AirStation`

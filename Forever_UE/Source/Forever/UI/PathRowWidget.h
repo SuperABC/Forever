@@ -7,10 +7,8 @@
 class UTextBlock;
 class UButton;
 
-// 一行=一个路径+删除按钮，Story screen(脚本列表)和Resource screen(资源文件夹列表)共用，
-// 替代老工程PathItem(.dump/PathItem.txt：文本+DeleteButton)。SetupRow传入的OnDelete回调
-// 由拥有者(StoryPanelWidget/ResourcePanelWidget)决定删除时具体调哪个Config mutator，这个
-// 类本身不知道自己是Story行还是Resource行，不需要为两种用途各写一个子类。
+// 一行=一个路径+删除按钮，Story screen和Resource screen共用。SetupRow传入的OnDelete回调由拥有者
+// (StoryPanelWidget/ResourcePanelWidget)决定调哪个Config mutator，本类不区分用途。
 UCLASS()
 class FOREVER_API UPathRowWidget : public UUserWidget
 {

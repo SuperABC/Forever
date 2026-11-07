@@ -11,7 +11,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "DesktopPlatformModule.h"
 #include "IDesktopPlatform.h"
-#include "Framework/Application/SlateApplication.h"
 
 namespace {
 

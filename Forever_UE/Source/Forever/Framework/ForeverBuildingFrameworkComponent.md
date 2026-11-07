@@ -23,7 +23,7 @@ Element自己同步建好远处灰色cube作为基线状态，之后的LOD状态
 **为什么是每栋building一个专属Actor，不是全地图共用一个owner**：UE的物理引擎对"同一个
 Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld），焊接开销随这个owner身上已有
 组件总数线性增长——如果全地图所有building的近处LOD组件共用一个owner，就是所有building
-互相拖累，地图越大/玩家探索得越久，新建一层楼越卡（完整排查过程见下面"性能排查"一节）。
+互相拖累，地图越大/玩家探索得越久，新建一层楼越卡（见下面"性能"一节）。
 拆成每栋building专属Actor之后，这个爆炸范围被关进了"单栋楼自己的组件数"（几百到几千），
 不会波及其它building。
 
@@ -32,8 +32,7 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 显示）、楼梯/坡道实体、电梯井墙体、地板/天花板两层独立薄slab，数据全部来自
 `Source/Core/map/building.h`的`Floor`/`Room`（`Building::GetFloor(level)`/`GetRooms()`），
 几何生成逻辑照抄老工程`ABuildingBase::ConstructBuilding`/`ConstructQuad`。以下几节描述的是
-算法本身；承载这些算法的代码在`ABuildingElement`里（原来的`Building*`/
-`FBuildingRenderState&`两个参数，现在是Element自己的成员）。
+算法本身；承载这些算法的代码在`ABuildingElement`里。
 
 - **0层且没有自定义模型的建筑不生成Element**——`GenerateBuildings`跳过
   `GetBasementCount()+GetLayerCount()==0`且`GetDecorations()`为空的building(例如只有植被的
@@ -42,7 +41,7 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 
 ## 两级LOD
 
-- **近处（`EBuildingLod::Near`）**：完整楼层内部结构，见"近处楼层几何"一节。
+- **近处（`ELod::Near`）**：完整楼层内部结构，见"近处楼层几何"一节。
 - **远处（`ELod::Far`）**：整栋一个box，贴`ResolveLodMaterial(building)`解析出来的
   材质——`Building::GetLodMaterialPath()`（转发`BuildingMod::lodMaterial`）非空时按路径
   `LoadObject`+创建MID（框架组件缓存，避免重复创建）；留空时用框架组件的`defaultLodMaterial`
@@ -54,7 +53,7 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
   `lodFarExitDistance`（默认80，近→远的触发距离），都是`UPROPERTY(EditDefaultsOnly)`，
   地图单位。近→远的阈值故意比远→近的大——已经精细化的building要离得更远才会退化成单box，
   防止玩家在临界距离附近小范围来回走动时反复Near/Far抖动式切换（每次切换都要建/删一整层楼
-  的组件，抖动会反复触发下面"性能排查"一节的那类卡顿）。按viewer
+  的组件，抖动会反复触发下面"性能"一节的那类卡顿）。按viewer
   （`UGameplayStatics::GetPlayerPawn(GetWorld(),0)->GetActorLocation()/
   BUILDING_WORLD_SCALE`）到`building`世界中心的**水平（`FVector2D`）距离**判定，忽略高度差。
 
@@ -72,15 +71,12 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 设成`"BlockAll"`（不依赖ISM默认碰撞值），墙体/地板/天花板只需要纯阻挡碰撞（挡住玩家走动、
 挡住`ECC_Pawn`通道的开火线检测）。
 
-**建层时`AddCubeInstance`不逐个调`AddInstance()`，攒够一层再批量提交**：计时诊断发现
-单层墙体多的楼层（300+段）原来逐段调`UInstancedStaticMeshComponent::AddInstance()`要堆
-到单帧90~120ms——有`BlockAll`碰撞的ISM每次单实例`AddInstance`都要同步建一次该实例的
-碰撞体+更新渲染状态，这部分开销几乎线性于实例数（约0.14ms/实例）。现在`AddCubeInstance`
-只是把world transform按材质分组暂存进`ABuildingElement::pendingCubeTransforms`
-（`TMap<UMaterialInterface*, TArray<FTransform>>`），`BuildFloorSection`画完一层全部
-墙体+地板天花板之后统一调`FlushCubeInstances()`，对每个材质各调一次批量API
-`AddInstances(transforms, false, true)`，把实例缓冲区扩容/渲染状态更新/碰撞体创建合并
-成一次，而不是逐个调用各付一次固定开销。
+**建层时`AddCubeInstance`不逐个调`AddInstance()`，攒够一层再批量提交**：有`BlockAll`碰撞的ISM每次单实例
+`AddInstance`都要同步建一次该实例的碰撞体+更新渲染状态，开销几乎线性于实例数（约0.14ms/实例，
+300+段墙的楼层单帧可达90~120ms）。所以`AddCubeInstance`只是把world transform按材质分组暂存进
+`ABuildingElement::pendingCubeTransforms`（`TMap<UMaterialInterface*, TArray<FTransform>>`），
+`BuildFloorSection`画完一层全部墙体+地板天花板之后统一调`FlushCubeInstances()`，对每个材质各调一次
+批量API`AddInstances(transforms, false, true)`，把实例缓冲区扩容/渲染状态更新/碰撞体创建合并成一次。
 
 楼梯/坡道这类有真实3D资产的元素，和电梯轿厢(`isMovable=true`每帧播动画)、门
 (`UForeverDoorComponent`，独立开合动画)不纳入ISM，用`SpawnMesh`各自生成独立
@@ -187,10 +183,9 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 
 ## 门和楼层分队列、分优先级
 
-门系统上线后发现：每扇门的`UForeverDoorComponent::Init`要花4~6次`RegisterComponent()`，
-如果跟墙体/楼梯/地板一起塞进同一个`BuildFloorMesh`操作单位，这部分开销会被悄悄摊进"建
-一层楼"的预算里，加门之后楼层加载明显变卡。解法是把门拆成独立的`BuildDoorBatch`操作类型
-（见`BuildingElement.h`的`ELodOpType`），并给它一套**全局优先级门槛**：
+每扇门的`UForeverDoorComponent::Init`要花4~6次`RegisterComponent()`，如果跟墙体/楼梯/地板一起塞进
+同一个`BuildFloorMesh`操作单位，这部分开销会被悄悄摊进"建一层楼"的预算里。所以门是独立的
+`BuildDoorBatch`操作类型（见`BuildingElement.h`的`ELodOpType`），并有一套**全局优先级门槛**：
 
 ```cpp
 bool TryConsumeLodOpBudget(bool isDoorTierOp) {
@@ -213,8 +208,7 @@ building互相感知彼此是谁、在干什么，只需要都查询这同一份
 这套计数和`pendingLodTransitionCount`（见下面"冻结世界"一节）是两件不同的事，不要
 混用：`pendingLodTransitionCount`按"转场"计数（一栋楼一次转场=1，不管排了几条操作），
 给冻结世界用；`pendingFloorTierOps`按"操作条数"计数，只给门级操作的优先级门槛用。
-`maxDoorsPerOp`（默认4，`EditDefaultsOnly`可调）控制每条`BuildDoorBatch`处理几扇门，
-对应用户"先试一帧4扇"的原始诉求。
+`maxDoorsPerOp`（默认4，`EditDefaultsOnly`可调）控制每条`BuildDoorBatch`处理几扇门。
 
 每个Element自己也要把`floorTierOpQueue`/`doorTierOpQueue`拆成两个独立的`TQueue`，不能
 用一个混合队列靠`Peek()`队首类型判断——否则一栋楼自己排在队尾的楼层级操作会被排在队头、
@@ -276,7 +270,7 @@ Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的名�
 （`ABuildingElement::buildingNameOnly`/`zoneNameOnly`，一个Element只对应一个碰撞盒），绝不解引用
 `Building*`/`Map*`——和上面`EndPlay`那条安全原则完全一致。`OtherActor`过滤成只认
 `UGameplayStatics::GetPlayerPawn(GetWorld(),0)`，和LOD距离判定同一个约定。只发进出建筑事件
-(`enter_building`/`leave_building`)，不再往屏幕上打印。
+(`enter_building`/`leave_building`)。
 
 ## 电梯轿厢
 
@@ -300,46 +294,29 @@ Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的名�
     某层模板没有这口井就跳过。玩家进入任意一个弹出电梯选项(按计数防重复)，全部离开收起；
     `ClearNearSections`销毁前先解绑回调，玩家还在里面就显式收起。
 
-## 性能排查：组件挂载粒度决定物理引擎碰撞焊接开销
+## 性能：组件挂载粒度决定物理引擎碰撞焊接开销
 
-**现象**：加载/切换一层楼的近处LOD耗时特别长，且随地图运行时间越用越卡。
+UE对"同一个Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld），新增一个子组件的开销正比于
+这个owner身上已有组件总数。由此得到几条约束，以后遇到"随运行时间越用越卡"的症状优先怀疑这几点：
 
-**根因**：UE对"同一个Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld），新增
-一个子组件的开销正比于这个owner身上已有组件总数。两个独立因素共同导致症状：
+- **Mobility必须显式设成Static，且要在`RegisterComponent()`之前**：`USceneComponent`不设置时默认是
+  `Movable`，父级`Movable`时子级即使设了`Static`也不会真正生效。`SpawnCube`/`SpawnMesh`、各组件的
+  `BuildCollisionBox`在`NewObject`之后、`RegisterComponent()`之前`SetMobility(Static)`，
+  `SetWorldLocation`/`Rotation`/`Scale3D`也必须在注册之前（`Static`组件注册后引擎不允许再"移动"它）；
+  `AForeverFrameworkActor`的`sceneRoot`同样显式`Static`。唯一的例外是电梯轿厢（`SpawnMesh`的
+  `isMovable=true`），因为它每帧`SetWorldLocation`播动画。Movable图元会把渲染器/物理引擎的动态结构
+  基数堆得很高，Room碰撞盒这类成千上万的常驻组件尤其明显。
+- **不要让全地图的近处LOD组件共用一个owner Actor**：每栋building是专属`ABuildingElement`Actor，
+  近处组件全部attach在它身上，"owner组件总数"被关进单栋楼自己的量级。Building/Room两级碰撞盒在
+  `ABuildingElement`里（见`Source/Forever/Element/BuildingElement.md`），
+  `UForeverRoomFrameworkComponent`是空骨架（见`ForeverRoomFrameworkComponent.md`）；Zone一级数量级
+  不大，碰撞盒直接留在`ForeverZoneFrameworkComponent`的单例owner上。
+- **墙体/地板/天花板用按材质分组的常驻ISM**（见"近处楼层几何"一节）：单栋楼内部组件数仍会随楼层累积，
+  单组件注册耗时跟着涨；常驻ISM让近/远LOD切换只是`AddInstances`/`ClearInstances()`，不再反复
+  `RegisterComponent`/`DestroyComponent`。
 
-1. **Mobility没有显式设成Static**：`SpawnCube`/`SpawnMesh`、三个Framework组件的碰撞盒、
-   `AForeverFrameworkActor`根组件`sceneRoot`，全部`NewObject`之后没有调用`SetMobility`，
-   `USceneComponent`不设置时引擎默认值是`Movable`——父级`Movable`时子级即使手动设了
-   `Static`也不会真正生效为Static（子级不能比父级更静态）。地图初始化时`Room`碰撞盒一次性
-   生成成千上万个，全部被当成"事实上不动但引擎当成Movable"的动态图元，把渲染器/物理引擎的
-   动态结构基数堆得很高，后续每次近处LOD整层增删都明显更慢，且随玩家探索范围扩大越用越卡。
-2. **全地图所有building的近处LOD组件共用一个owner Actor**：即使修好Mobility，单组件耗时
-   仍然和"owner身上组件总数"几乎精确线性相关，且在同一栋楼连续建多层楼、完全没有发生任何
-   销毁的情况下这个比值也在爬升——排除了销毁堆积，坐实是物理引擎对同一个owner根组件下的
-   大量Static碰撞子组件做焊接，每新增一个都要重算已有shape数组，开销随已焊接的shape数
-   线性增长。
-
-**修复**：
-- `AForeverFrameworkActor`构造函数给`sceneRoot`显式`SetMobility(Static)`；
-  `SpawnCube`/`SpawnMesh`/各组件`BuildCollisionBox`在`NewObject`之后、`RegisterComponent()`
-  之前调用`SetMobility(Static)`（`SpawnMesh`的`isMovable`参数只有电梯轿厢那次调用传
-  `true`，因为轿厢每帧要`SetWorldLocation`播动画）；`SetWorldLocation`/`Rotation`/
-  `Scale3D`这几行也要跟着挪到`RegisterComponent()`之前——`Static`组件注册之后引擎不允许
-  再"移动"它。Zone的围墙ISM/Roadnet/Terrain的既有mesh组件没有一起改——它们组件数量本来就
-  少，不受这个问题影响；同样的Mobility检查思路以后遇到类似"越用越卡"的症状应该优先怀疑。
-- **每栋building拆成专属`ABuildingElement`Actor**，近处LOD组件全部attach到这个专属Actor
-  而不是框架单例owner——这样"owner身上组件总数"被关进单栋楼自己的量级，不再随全地图组件
-  总数/游戏时间增长，换一栋新楼立刻重置回低位。Building/Room两级碰撞盒挪进了
-  `ABuildingElement`（见`Source/Forever/Element/BuildingElement.md`），
-  `UForeverRoomFrameworkComponent`恢复回空骨架（见`ForeverRoomFrameworkComponent.md`）；
-  Zone一级数量级不大（远小于Room），直接留在`ForeverZoneFrameworkComponent`的单例owner上。
-- **墙体/地板/天花板cube改成ISM**（见上"近处楼层几何"一节）：拆Actor之后残留的问题是单栋
-  building内部——"这栋楼自己的组件数"仍然会随楼层累积，单组件注册耗时跟着涨（虽然不再传染
-  给其它building）。改成按材质分组的常驻ISM之后，近/远LOD切换只是`AddInstance`/
-  `ClearInstances()`，不再反复`RegisterComponent`/`DestroyComponent`，消除了这条残留曲线。
-
-如果某栋特别大的楼转场卡顿感仍然明显，可以考虑把挂载粒度从"每栋building一个Actor"再
-细化成"每栋building的每一层楼一个Actor"，但目前(建筑规模)没有验证这一步是否真的必要。
+如果某栋特别大的楼转场卡顿仍然明显，可以考虑把挂载粒度再细化成"每栋building的每一层楼一个Actor"，
+目前未验证是否必要。
 
 ## 依赖关系
 
@@ -355,7 +332,7 @@ Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的名�
   （`EnsureMapGenerated()`在`GenerateZones`之后调用一次`GenerateBuildings`）；
   `Source/Forever/Element/BuildingElement.cpp`通过`TWeakObjectPtr<
   UForeverBuildingFrameworkComponent>`反向调用`ResolveMaterial`/`ResolveMesh`/
-  `Get*默认资产`/`GetLodSwitchDistance`/`GetCabinCruiseSpeed`/`GetCabinEaseSeconds`/
+  `Get*默认资产`/`GetLodNearEnterDistance`/`GetLodFarExitDistance`/`GetCabinCruiseSpeed`/`GetCabinEaseSeconds`/
   `TryConsumeLodOpBudget`/`NotifyLodTransitionStarted`/`NotifyLodTransitionFinished`/
   `NotifyFloorTierOpEnqueued`/`NotifyFloorTierOpExecuted`/`GetMaxDoorsPerOp`；
   `Source/Forever/Framework/ForeverStoryFrameworkComponent.cpp`（`ApplyControlChange`
@@ -363,12 +340,8 @@ Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的名�
 
 ## 待办/后续阶段
 
-- 电梯轿厢的真实调度逻辑（呼叫按钮、开关门、载客、`Script`挂钩）——这次只有mod声明+3D网格+
-  占位性质的往返动画。
-- 按mod自定义LOD切换距离/每帧队列上限——这次先用组件级`UPROPERTY`固定值(40/80/4)，不做到
-  per-mod可配置。
-- 3D(含高度)距离判定——这次用水平距离。
-- 外墙/内墙材质区分——这次统一用一份`wallMaterial`。
-- 门/窗的实际mesh——门照抄老工程本来就没有；窗户资产有问题，已删掉窗户显示逻辑，现在门/窗
-  都只是纯几何缺口，等以后有能用的窗户资产再考虑加回`SpawnMesh`调用（`
+- 按mod自定义LOD切换距离/每帧队列上限——目前是组件级`UPROPERTY`固定值（40/80/1），不是per-mod可配置。
+- 3D(含高度)距离判定——目前用水平距离。
+- 外墙/内墙材质区分——目前统一用一份`wallMaterial`。
+- 窗户的实际mesh——窗户目前只是纯几何缺口（门的开合由`UForeverDoorComponent`负责），有能用的窗户资产后再考虑加回`SpawnMesh`调用（`
   ComputeDirectionalMeshTransform`这类朝向/尺寸换算可以直接复用楼梯/坡道那一套）。

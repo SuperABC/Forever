@@ -9,26 +9,19 @@
 #include <vector>
 
 
-// Storage：一个仓库(或者工坊自带的输入/输出cache，见manufacture.h)的实体——只暴露
-// "能装什么"+"当前装了多少"，不知道自己的上下游/位置。运输由Industry统一做的
-// "全城统一调配"负责(见industry.md)，Storage只是被动地被Input()/Output()读写，见
-// storage.md。
+// Storage：一个仓库(或工坊自带的输入/输出cache)，被动地被Industry物流读写，见storage.md。
 class Storage {
 	friend class IndustrySaveCodec;
 public:
 	// 走mod系统创建的普通仓库——id需要在config.json的"storage_mods"里启用。
 	Storage(StorageFactory* factory, const std::string& id, const std::string& name);
 
-	// 直接构造，不经过mod系统——专供Manufacture创建自己的内部输入/输出cache用
-	// (见manufacture.md)。这两个cache是"生产逻辑的暂存中转"，不是玩家能配置的内容，
-	// 给一个纯内部实现细节强加一层mod配置没有必要(Factory::IsEnabled()要求registries
-	// 和configuredArgs两边都有)；直接给categories/capacity构造，跳过mod系统。
+	// 直接构造，不经过mod系统，专供Manufacture创建内部cache，见storage.md。
 	Storage(const std::string& name, const std::vector<std::string>& categories, float capacity);
 
 	~Storage(); // 只有mod驱动的构造才需要factory->DestroyStorage(mod)
 
-	// mod驱动的构造：mod为空(id没有被注册/没有在config.json"storage_mods"里启用)
-	// 说明创建失败，调用方应当整个丢弃这个Storage。直接构造的Storage总是有效。
+	// mod驱动的构造失败(id没有注册/没有启用)时为false，调用方应当丢弃；直接构造的总是有效。
 	bool IsValid() const;
 
 	const std::string& GetName() const;
@@ -45,7 +38,7 @@ public:
 	// 按当前存量截断，返回实际吐出的量(可能小于期望值)。
 	float Output(const std::string& type, float amount);
 
-	// 物流取放权限与补货需求说明，见storage_mod.h。直接构造的cache由Manufacture自己设置。
+	// 物流取放权限与补货需求，语义见storage_mod.h。直接构造的cache由Manufacture自己设置。
 	bool CanTake() const { return canTake; }
 	bool CanPut() const { return canPut; }
 	void SetAccess(bool take, bool put) { canTake = take; canPut = put; }

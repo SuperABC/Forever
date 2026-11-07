@@ -14,9 +14,8 @@
 
 #define DIFFUSE_TEX_SIZE 2048
 #define HEIGHT_EPSILON 0.002f
-// 每级LOD mesh的网格细分数(每级都是这个数,级与级之间只有size不一样)——原来是32
-// (33x33个顶点)。试过提到4倍(128)太卡，先退到2倍(64,65x65个顶点)看效果。所有跟这个数
-// 绑定的魔法数字(33、32、8)都已经改成由这个常量推导，调这一个数就行，不用逐个改。
+// 每级LOD mesh的网格细分数(每级都是这个数,级与级之间只有size不一样；64即65x65个顶点，128实测太卡)。
+// BuildLevel里所有跟它绑定的数(顶点数、行跨度、父子边界偏移)都由它推导，调这一个数即可。
 #define TERRAIN_LOD_GRID_SUBDIV 64
 // 显示hatch(挖洞)的最远LOD级别(含)：L0~L3的网格小格边长是1/16、1/8、1/4、1/2 element，都不跨element，
 // 可以逐格对三角形做hatch裁剪；construction格子的精确几何仍然只在L0/L1做。
@@ -154,13 +153,8 @@ void UForeverTerrainFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 }
 
 namespace {
-	// 读取srcTexture的原始像素数据，只有分辨率恰好是expectedSize×expectedSize时才成功——
-	// 这是贴图数组构建代码本来就有的校验逻辑(以前只检查字节数够不够，现在统一成"分辨率必须
-	// 正好符合"，TerrainDiffuseArray/TerrainNormalRoughArray两个数组共用这一份)。
-	// 按源贴图实际分辨率重采样到expectedSize x expectedSize(最近邻,BGRA8逐像素拷贝)——不
-	// 要求美术资产必须精确准备成expectedSize,源贴图比目标小/大/不是正方形都能处理,只有真正
-	// 读不到源数据(纹理空/没有mip)才失败。对所有地形diffuse/normal/roughness贴图通用,不是
-	// 只为某一种地形特判。
+	// 读取srcTexture的原始像素，按源分辨率最近邻重采样到expectedSize x expectedSize(BGRA8逐像素拷贝)，
+	// 源贴图比目标大/小/非正方形都能处理，只有读不到源数据(纹理空/没有mip)才失败。diffuse/normal/roughness数组共用。
 	bool LoadRawBGRA8(UTexture2D* srcTexture, int32 expectedSize, TArray64<uint8>& outBytes) {
 		if (!srcTexture) return false;
 		int64 expectedBytes = (int64)expectedSize * expectedSize * 4;
@@ -248,9 +242,8 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 				roughnessTextures[textureInfo.slice] = LoadObject<UTexture2D>(nullptr, *FString(textureInfo.roughness.c_str()));
 		}
 
-		// 构建TerrainDiffuseArray:逐槡位直接拷贝源贴图的BGRA8字节,分辨率不对/加载失败时
-		// 整层填中性灰(128,128,128,255),同时打一条Warning——以前这里检查不过就直接留黑,
-		// 不会报错也看不出哪里错了。
+		// 构建TerrainDiffuseArray:逐槽位拷贝源贴图的BGRA8字节(按源尺寸最近邻重采样到DIFFUSE_TEX_SIZE),
+		// 读不到数据时整层填中性灰(128,128,128,255)并打一条Warning。
 		terrainDiffuseArray = NewObject<UTexture2DArray>(this, NAME_None, RF_Transient);
 		terrainDiffuseArray->Filter = TF_Bilinear;
 		terrainDiffuseArray->SRGB = true;
@@ -298,8 +291,8 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 			terrainDiffuseArray->UpdateResource();
 		}
 
-		// 构建TerrainNormalRoughArray:每个槡位把法线源的R/G(法线xy)和粗糙度源的R(灰度)
-		// 打包进同一层,sRGB关(存的是打包数据不是颜色)。两个源都缺/都不合规格时整层填平的
+		// 构建TerrainNormalRoughArray:每个槽位把法线源的R/G(法线xy)和粗糙度源的R(灰度)
+		// 打包进同一层,sRGB关(存的是打包数据不是颜色)。源缺失/读不到时填平的
 		// 法线(128,128)+中性粗糙度(204≈0.8)。
 		terrainNormalRoughArray = NewObject<UTexture2DArray>(this, NAME_None, RF_Transient);
 		terrainNormalRoughArray->Filter = TF_Bilinear;
@@ -355,7 +348,7 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 			terrainNormalRoughArray->UpdateResource();
 		}
 
-		// 构建地形索引图(远处用):每像素存储该元素的地形类型槡位索引(PF_G8);同时顺手填好
+		// 构建地形索引图(远处用):每像素存储该元素的地形类型槽位索引(PF_G8);同时顺手填好
 		// nearSliceIds/nearIsConstruction(近处混合用),两份数据来自同一次扫描,不重复遍历。
 		auto [mapWidth, mapHeight] = map->GetSize();
 		terrainIndexMap = UTexture2D::CreateTransient(mapWidth, mapHeight, PF_G8, TEXT("TerrainIndexMap"));
@@ -558,23 +551,19 @@ namespace {
 	}
 }
 
-void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FString& type, float& height,
+void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FString& type,
 	TArray<FTerrainTri2D>& tris) const {
 	if (!map) return;
 
 	type = FString(map->GetTerrain(elemX, elemY).c_str());
-	// 挖洞不再只限"construction"格子——Roadnet阶段-2给隧道口调用Map::AddHatch时，落点的格子
-	// 地形类型是"mountain"（或紧邻的"plain"），只要这个格子有hatch就要继续走多边形裁剪逻辑，
-	// 不能在这里直接退出，否则隧道段会被山体实心地形完全挡住看不见，详见roadnet_basic.md
-	// "隧道"一节。
+	// 挖洞条件是"construction"或这个格子有hatch：隧道口所在格子是mountain/plain，必须因hatch继续
+	// 走裁剪，否则隧道段被山体实心地形挡住，详见roadnet_basic.md"隧道"一节。
 	if (type != "construction" && map->GetHatches(elemX, elemY).empty()) return;
 
-	height = map->GetHeight(elemX, elemY);
 	tris.Empty();
 
-	// 这个格子里"还没被判定为实心/还没被判定为洞、需要继续跟下一个hatch比对"的剩余区域，可能
-	// 不止一块(多边形列表)，局部坐标[0,1]x[0,1]，初始就是整个格子(单一多边形,CCW:
-	// 左下->右下->右上->左上，和本文件主网格quad同一套绕序约定)。
+	// 这个格子里还需要跟下一个hatch比对的剩余区域(可能不止一块)，局部坐标[0,1]x[0,1]，
+	// 初始是整个格子(CCW:左下->右下->右上->左上，和主网格quad同一套绕序约定)。
 	TArray<TArray<FVector2D>> workPolys;
 	workPolys.Add({ {0.f,0.f}, {1.f,0.f}, {1.f,1.f}, {0.f,1.f} });
 
@@ -606,15 +595,9 @@ void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FStr
 			{ hatchCenterX + halfSizeX * cosRot + halfSizeY * sinRot, hatchCenterY + halfSizeX * sinRot - halfSizeY * cosRot },
 		};
 
-		// 依次按hatch矩形的4条边裁剪：每一块现有的剩余区域，只要在某一条边的"外侧"，就已经能
-		// 确定它落在hatch矩形整体的外面(4个半平面的交集之外)——不用再继续判断剩下的边，直接
-		// 进survivingPieces，留到下一个hatch接着比对；"内侧"的部分还要继续拿下一条边判断。
-		// 4条边全部判断完之后还留在currentInside里的，就是真正同时落在4个半平面内部、被这个
-		// hatch矩形真正挖穿的洞——直接丢弃，不进入survivingPieces。这个"依次按半平面分割、
-		// 外侧确定即收下"的结构和原来按AABB做T形分割是同一个思路，只是把"轴对齐矩形的4条边"
-		// 换成"任意旋转矩形的4条边"，因此不再需要"只在包含hatch中心的格子里补角落三角形"这个
-		// 只对"整个hatch都落在单一格子内"才成立的特例——不管hatch跨了几个格子，每个格子都独立
-		// 按自己的[0,1]范围和hatch的4条边精确裁剪，天然得到正确结果。
+	// 依次按hatch矩形的4条边裁剪(任意旋转矩形的4个半平面)：某块剩余区域只要落在一条边的外侧，就确定在hatch外面，
+	// 直接进survivingPieces留给下一个hatch；内侧部分继续拿下一条边判断。4条边都在内侧的才是被挖穿的洞，丢弃。
+	// hatch跨几个格子都无所谓，每个格子独立按自己的[0,1]范围精确裁剪。
 		TArray<TArray<FVector2D>> survivingPieces;
 		for (const TArray<FVector2D>& piece : workPolys) {
 			TArray<FVector2D> currentInside = piece;
@@ -629,8 +612,7 @@ void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FStr
 	}
 
 	// workPolys现在就是这个格子里真正的实心地形区域(可能是好几块互不相连的多边形)，扇形三角化
-	// 成最终输出——没有任何hatch命中时workPolys就是初始的整格方块，输出2个三角形，和原来
-	// "没有hatch命中时rects恒为整格一个矩形"的行为完全一致。
+	// 输出；没有hatch命中时就是整格方块，输出2个三角形。
 	for (const TArray<FVector2D>& piece : workPolys) {
 		FanTriangulate(piece, tris);
 	}
@@ -649,9 +631,7 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 	const float worldScale = 1000.f;
 
 	// 材质不读网格UV,全部用世界坐标(AbsoluteWorldPosition/1000=地图element坐标)采样,
-	// 不需要再给顶点算UV——这样L0~L2的主网格和construction/挖洞三角形(以前UV约定不一样,
-	// 混在同一个section/材质里会读出回绕后的随机内容,是一个确定性bug)天然统一,见
-	// ForeverTerrainFrameworkComponent.md"近处地形混合"一节。
+	// 所以CreateMeshSection不传UV,见.md"近处地形混合"一节。
 	TArray<FVector> vertices;
 	TArray<int32> triangles;
 
@@ -694,20 +674,15 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		for (int vy = 1; vy < TERRAIN_LOD_GRID_SUBDIV; vy += 2)
 			vertices[vertIdx(edgeVx, vy)] = (vertices[vertIdx(edgeVx, vy - 1)] + vertices[vertIdx(edgeVx, vy + 1)]) * 0.5f;
 
-	// construction/挖洞格子(取代旧工程的ISM立方体):只在levelIdx<=1(近处精细LOD)生效,和旧工程
-	// constructionRegion的作用范围一致。前提：construction格子在平地上(起伏地形上的hatch走clipGridCell)，construction格子不需要
-	// 更细的LOD细分——没有hatch命中时LookupTerrain恒返回"整格一个矩形"，直接画成一个大quad
-	// (2个三角形)；有hatch命中时返回精确的轴对齐矩形集合(rects)+角落补丁三角形(tris)，两者都
-	// 直接按精确坐标建geometry，不再对着一个固定的sub-quad网格做"quad中心是否落在矩形内"的
-	// 近似测试——那种测试量出来的洞边界只能精确到sub-quad网格的粒度，和真实矩形边界对不上，
-	// 会带出明显的格子锯齿，详见ForeverTerrainFrameworkComponent.md"挖洞"一节这次的修正说明。
+	// construction格子:只在levelIdx<=1(近处精细LOD)用LookupTerrain的精确三角形整格替换(construction在平地上)；
+	// 其它有hatch的格子(可能在起伏地形上)在levelIdx<=TERRAIN_HATCH_MAX_LEVEL时走clipGridCell，详见.md"挖洞"一节。
 	TMap<TPair<int32, int32>, TArray<FTerrainTri2D>> constructionCache;
 	auto lookupCached = [this, &constructionCache](int ex, int ey) -> const TArray<FTerrainTri2D>& {
 		TPair<int32, int32> key(ex, ey);
 		if (auto* found = constructionCache.Find(key)) return *found;
-		FString type; float h = 0.f;
+		FString type;
 		TArray<FTerrainTri2D> tris;
-		LookupTerrain(ex, ey, type, h, tris);
+		LookupTerrain(ex, ey, type, tris);
 		return constructionCache.Add(key, MoveTemp(tris));
 		};
 
@@ -822,10 +797,8 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		}
 	}
 
-	// 为每个涉及到的construction/挖洞Element画出LookupTerrain精确裁剪出的实心地形三角形——
-	// 没有hatch命中时就是完整一格的2个三角形，有hatch命中(含跨格)时是裁剪出的精确形状，绕序
-	// (A,B,C)已经在LookupTerrain的FanTriangulate里按本函数主网格quad同一套约定处理过，这里
-	// 直接按原顺序建三角形，不用再对调。
+	// 为每个涉及到的construction Element画出LookupTerrain裁剪出的实心地形三角形；绕序(A,B,C)
+	// 已在FanTriangulate里按主网格quad同一套约定处理过，这里直接按原顺序建。
 	if (levelIdx <= 1) {
 		for (const auto& entry : constructionCache) {
 			int32 ex = entry.Key.Key, ey = entry.Key.Value;
@@ -844,11 +817,9 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		}
 	}
 
-	// 顶点法线/切线之前一直传空数组,ProceduralMeshComponent不会帮你算,相当于整张地形
-	// (尤其是山体陡坡)一直在用未定义的法线参与光照——这里按面法线面积加权累加到顶点、
-	// 再归一化得到平滑法线;切线不follow网格UV(已经不读UV了),而是把世界X轴投影到切平面上
-	// 做Gram-Schmidt正交化,和材质里"U方向=世界X"(TileUV=P*TilesPerElement,P=世界XY/1000)
-	// 的纹理方向约定对上,否则法线贴图的凹凸方向会跟纹理贴图对不齐。
+	// ProceduralMeshComponent不会自动算法线：按面法线面积加权累加到顶点再归一化得到平滑法线;
+	// 切线把世界X轴投影到切平面做Gram-Schmidt正交化，和材质里"U方向=世界X"
+	// (TileUV=P*TilesPerElement,P=世界XY/1000)的约定对上，否则法线贴图凹凸方向会和纹理对不齐。
 	TArray<FVector> normals;
 	normals.SetNumZeroed(vertices.Num());
 	for (int32 t = 0; t < triangles.Num(); t += 3) {
@@ -917,9 +888,7 @@ void UForeverTerrainFrameworkComponent::RebuildNearControl(float originX, float 
 	std::vector<uint8_t> outIds, outWeights;
 	nearBlend->BuildRegion(region, outIds, outWeights);
 
-	// res和GenerateTerrain里创建这两张纹理时用的res恒定一致(sizeElements/
-	// nearTexelsPerElement都不会在运行时变)，Lock后直接Realloc到同样的字节数，和diffuse
-	// 数组构建时的写法同一个约定——原地更新，不是每次CreateTransient新纹理。
+	// res和GenerateTerrain里创建纹理时恒定一致，原地Realloc到同样字节数更新，不重新CreateTransient。
 	int32 res = sizeElements * nearTexelsPerElement;
 	int64 expectedBytes = (int64)res * res * 4;
 	auto writeTexture = [expectedBytes](UTexture2D* tex, const std::vector<uint8_t>& bytes) {
@@ -955,7 +924,7 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 	auto [width, height] = map->GetSize();
 	const float worldScale = 1000.f;
 
-	// 共享网格顶点:(width+1)*(height+1)个格点,高度固定为0
+	// 共享网格顶点:(width+1)*(height+1)个格点,高度初始0，有水的格子把4个角写成水位(相邻格水位不同时后写的覆盖)
 	TArray<FVector> vertices;
 	TArray<FVector2D> uvs;
 	vertices.Reserve((width + 1) * (height + 1));
@@ -966,7 +935,7 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 			uvs.Add(FVector2D(vx, vy));
 		}
 
-	// 只为地形类型为"ocean"的格子生成两个三角形
+	// 只为有水面的格子(map->GetWater(x,y).first，海洋和河流)生成两个三角形
 	TArray<int32> triangles;
 	auto vertIdx = [width](int vx, int vy) { return vy * (width + 1) + vx; };
 	for (int y = 0; y < height; y++) {
@@ -986,9 +955,7 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 	}
 	if (triangles.Num() == 0) return;
 
-	// 水面现在会倾斜(海洋本身还是平的,但河流水面每个格子高度不一样)，之前传空法线数组
-	// 靠材质/引擎兜底在平面上还看不出问题，倾斜之后没有法线光照会不正常——按面法线面积
-	// 加权累加到顶点、归一化，和BuildLevel地形主网格那次修法线同一套手法。
+	// 河流水面每个格子高度不同会倾斜，必须带法线：按面法线面积加权累加到顶点再归一化(同BuildLevel)。
 	TArray<FVector> normals;
 	normals.SetNumZeroed(vertices.Num());
 	for (int32 t = 0; t < triangles.Num(); t += 3) {

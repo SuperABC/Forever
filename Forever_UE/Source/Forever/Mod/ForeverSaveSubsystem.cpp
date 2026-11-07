@@ -289,7 +289,7 @@ TSharedPtr<FForeverPendingLoad> UForeverSaveSubsystem::ConsumePendingLoad() {
 	return load;
 }
 
-// ---- 测试用控制台命令(暂停界面/菜单按钮在P1接入)：Forever.Save [路径] / Forever.Load [路径]，不给路径就弹对话框 ----
+// ---- 测试用控制台命令：Forever.Save [路径] / Forever.Load [路径]，不给路径就弹对话框(正式入口是暂停界面/菜单按钮) ----
 
 namespace {
 	UForeverSaveSubsystem* GetSaveSubsystem(UWorld* world) {

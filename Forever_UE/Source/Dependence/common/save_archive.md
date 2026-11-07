@@ -21,9 +21,16 @@
   大数组用 `ByteWriter` 写紧凑二进制，避免 JSON 文本膨胀。
 - **解析失败不崩溃**：`Parse` 对截断/错位/未知段类型都返回 false 并给出原因；`ByteReader` 读越界时置 `Failed()`、
   后续读返回 0，调用方读完一个段检查一次 `Failed()` 即可。
-- 同名段 `SetSection` 会替换，不会重复。
+- 同名段 `SetSection` 会替换，不会重复；段按首次写入的顺序保存。
+- `Parse` 只校验压缩体内部结构（段表、段类型、长度不超过剩余字节），**不检查** magic 和 `SAVE_FILE_VERSION`——这些在外层头里，
+  由 UE 层的 `UForeverSaveSubsystem` 负责校验；各段的版本也由读段的域自己检查。
+- `ByteReader::Str` / `Bytes` 对长度字段先对照剩余字节再分配，防止坏档里的超大长度触发巨量分配。
 
 ## 依赖关系
 
 - 依赖：只有标准库。
 - 被谁依赖：`Source/Core/common/save.*`、`Source/Forever/Mod/ForeverSaveSubsystem.*`。
+
+## 待办/后续阶段
+
+- 无。

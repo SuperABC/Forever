@@ -10,14 +10,8 @@ class UPathRowWidget;
 class UConceptButtonWidget;
 class UModCheckRowWidget;
 
-// Mod screen：三栏布局——
-// - 左列DllList：当前已加载的全部dll(根目录)路径，删除=Bridge::RemoveDllPath，和
-//   AddDllPathButton一起管理Config::GetDllPaths()。
-// - 中列ConceptList：固定的21个concept按钮，按Source/Core/common/loader.h
-//   GetModConceptDescriptors()的顺序在NativeConstruct里动态生成一次(这张表运行期不变)，
-//   不需要在Blueprint里手摆21个按钮。
-// - 右列ModList：点击中列某个concept按钮后，清空重新显示该concept下全部已发现的mod id
-//   勾选框；再点另一个concept按钮时重复这个"清空再生成"的过程。
+// Mod screen：左列DllList(dll根目录路径，增删经Bridge)、中列ConceptList(按
+// GetModConceptDescriptors()顺序在NativeConstruct里动态生成一次)、右列ModList(选中concept下的mod id勾选框)。
 UCLASS()
 class FOREVER_API UModPanelWidget : public UUserWidget
 {

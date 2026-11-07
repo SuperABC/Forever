@@ -48,19 +48,9 @@ std::vector<std::string> milestoneNames; // 默认为空，每项是不含路径
 `ShopSalerJob`构造函数里设`scriptModName = "script_empty"; milestoneNames =
 {"job_shop_saler"};`。`Job::Job()`：
 
-```cpp
-script = new Script(scriptFactory, mod ? mod->scriptModName : "script_empty"); // mod为空是
-	// CreateJob本身失败的防御性兜底，不是"决定用哪个ScriptMod"这个设计选择
-if (mod) {
-	for (const string& name : mod->milestoneNames) {
-		script->ReadMilestones(Config::GetScriptPath(name)); // 按bare文件名反查实际
-			// 路径——Config::resource_paths/.script扫描机制，见Config.md
-	}
-	script->SetValue("name", ValueType(string(mod->GetName()))); // 供milestone脚本里
-		// $$self.name引用这个Job的唯一名字（是JobMod自己的GetName()，不是Script的
-		// mod->GetName()），见job_basic.cpp的GetName()唯一性修复
-}
-```
+`Job::Job()`先`mod->SetProperty()`，再用`MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames)`
+创建`Script`并加载milestone（两者都空则没有脚本，`script`为nullptr），然后`script->SetValue("name", mod->GetName())`，
+供milestone脚本里`$$self.name`引用这个Job的唯一名字（JobMod的`GetName()`）。
 
 `Config::GetScriptPath(name)`（`Source/Core/common/config.h/.cpp`）按不含路径/
 扩展名的bare文件名反查`.script`文件的实际绝对路径——文件实际存放在哪由
@@ -84,9 +74,10 @@ delete c; changes.clear();`清掉上一次的残留）或mod实例最终析构�
 ExecNode`之前会先同步`mod->occupantName = occupant ? occupant->GetName() :
 ""`，供`ExecNode`构造`NPCNavigateChange`这类需要知道"是谁"的Change使用。
 
-### ShopSalerJob（`Source/Basic/society/job_basic.h/.cpp`）
+### C++调度的例子：WarehouseKeeperJob（`Source/Basic/society/job_basic.h/.cpp`）
 
-天天上班，早上9点从家出门去商店，晚上18点从商店下班回家：
+`ShopSalerJob`/`FactoryWorkerJob`的上下班已改为脚本驱动（见下"脚本驱动通勤"），`DailyPlan`为空；
+仓库管理员`WarehouseKeeperJob`仍走C++的`DailyPlan`/`ExecNode`。下面的写法示意这条通道（9点出门、18点回家）：
 
 ```cpp
 void ShopSalerJob::DailyPlan(const Time& currentTime, PostHandle*) {
@@ -136,8 +127,8 @@ if (result["result"].AsString() == "success") {
 address"`取`citizen->GetRoom()->GetAddress()`，`"citizen workplace
 address"`取`citizen->GetJob()->GetPosition()->GetAddress()`
 （`Job::GetPosition()`就是这份工作的工位room），查不到citizen/citizen没有家/
-没有job都返回`{"result":"fail","msg":"..."}`。`ShopSalerJob::ExecNode`把这段
-查询逻辑提炼成本文件匿名namespace里的`QueryAddress`辅助函数，查询失败（理论上
+没有job都返回`{"result":"fail","msg":"..."}`。`WarehouseKeeperJob::ExecNode`把这段
+查询逻辑提炼成`job_basic.cpp`匿名namespace里的`QueryAddress`辅助函数，查询失败（理论上
 不会发生）直接放弃这次调度、不产出任何`Change`。
 
 `post`这个具体实例由调用方（`AForeverFrameworkActor::Tick`）在调用
@@ -154,7 +145,7 @@ address"`取`citizen->GetJob()->GetPosition()->GetAddress()`
 `Player::CrossDay()`为true时遍历所有持有job的citizen生成今天的调度、塞进
 `Populace`自己的`jobTimerSet`（`std::set<std::tuple<Time, Citizen*,
 std::string>>`，按时间排序）；不论是否跨天，每帧从`jobTimerSet`弹出最多
-`kMaxJobTimersPerTick`(4)个到期节点执行，避免单帧处理过多到期节点卡顿。**Job的
+`kMaxJobTimersPerTick`(16)个到期节点执行，避免单帧处理过多到期节点卡顿。**Job的
 timer和Organization的timer分开放**：Job的timer在`Populace`
 （`jobTimerSet`），Organization的timer在`Society`
 （`organizationTimerSet`，见`organization.md`），两套完全独立，各自的每帧处理

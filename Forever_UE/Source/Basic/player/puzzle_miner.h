@@ -3,14 +3,6 @@
 #include "puzzle_common.h"
 
 
-// 黄金矿工(矿场)：矿工在顶部，钩子绕转轴来回摆动；点击/按任意键放出钩子，碰到物体后按物体重量决定收回速度。
-// 不分关卡不开商店，限时time秒，时间到结算。只有金块计入"金币"，钻石单独记"额外收入"，石块等其他物品不计分。
-// 物体：大/中/小金块(500/250/100)、石块(重、慢、0分)、钻石(600，轻)；一部分金块会左右缓慢移动；
-// 石块多且可能遮挡金块(钩子碰到最前面的那个就停)。难度越高摆得越快、物体越多、石块越多、移动的越多、遮挡越多。
-// 每局在靠近底部放moving_gems(默认2)个左右移动的钻石，金块都不动；勾住东西往回拉的速度是原来的一半。
-// 参数(key=value)：time(默认60)、moving_gems、difficulty(1~3，默认2)、hook(放钩速度，占画布高度每秒的比例，默认0.7)、seed、
-// swing(摆速倍率，默认1，仅调试用)、preset(固定物体，仅测试用："类型,x,y;..."，类型g1/g2/g3/s1/s2/d，x,y是0~1的画布比例)。
-// 返回：{"gold","diamond","completed"(是否正常到时结束)}。
 class MinerPuzzle : public PuzzleMod {
 public:
 	virtual void SetParam(const std::string& param) override;

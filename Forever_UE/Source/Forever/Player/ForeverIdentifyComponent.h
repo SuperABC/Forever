@@ -9,10 +9,7 @@ class ACitizenElement;
 class UIdentifyTagWidget;
 class Citizen;
 
-// 识别模式：按住鼠标中键进入、松开退出。模式下，距离当前操控的Pawn一定范围内(默认20m)的所有人物
-// (包括被操控的角色)头上出现世界空间的文字标签，近大远小、始终正对摄像机。同一次识别模式里
-// 参与的人物和内容在进入那一刻定下来，不再更新，退出再进入才刷新。挂在AForeverPlayerController上
-// (换人操控/上下载具时Controller不变)。见ForeverIdentifyComponent.md。
+// 识别模式：按住鼠标中键时，附近所有人物头上出现世界空间的名字标签。挂在AForeverPlayerController上，见ForeverIdentifyComponent.md。
 UCLASS()
 class FOREVER_API UForeverIdentifyComponent : public UActorComponent
 {

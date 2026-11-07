@@ -13,14 +13,9 @@
 #include <unordered_map>
 #include <array>
 
-class Script;
 
-
-// 楼梯/电梯/坡道：都是"矩形+朝向+四面是否有墙"，照抄老工程Stair/Elevator/Ramp(字段/方法
-// 完全一样，只是分成三个类型名以后如果需要各自加字段更清楚)。params是从.layout模板解析出的
-// ratio+offset相对参数，InstanciateQuad(width,height)按楼层实际宽高换算成绝对Quad——width/
-// height就是这栋Building的楼体尺寸(GetBodySizeX/Y())，换算结果是"以楼体左下角为原点、未旋转"
-// 的局部坐标，不是世界坐标(世界坐标转换见Building::LocalToWorld)。
+// 楼梯/电梯/坡道：矩形+朝向+四面是否有墙。params是ratio+offset相对参数，InstanciateQuad(width,height)按楼体尺寸
+// 换算成楼体局部坐标(原点楼体左下角，未旋转)的绝对Quad，世界坐标转换见Building::LocalToWorld
 class Stair : public Quad {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;
@@ -99,10 +94,7 @@ private:
 	RectParams params;
 };
 
-// 地板/天花板洞口：只有位置矩形，没有方向/墙——这次不用来裁剪Building自己楼层的Ceiling/
-// Ground(那些照模板原样绘制，不做运行时裁剪)，只有地下一层(离地表最近的那层basement)的
-// Hatch会被Map::InitBuildings()取出来转发进Map::AddHatch去挖世界地形，见building.md
-// "地下室与地表hatch"一节。
+// 地板/天花板洞口：只有位置矩形。只有地下一层(离地表最近的basement)的Hatch会被Map转发进Map::AddHatch挖世界地形，见building.md
 class Hatch : public Quad {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;
@@ -243,10 +235,8 @@ struct NavigationTemplate {
 	std::vector<NavigationConnectionTemplate> connections;
 };
 
-// 全局共享的建筑内部布局模板仓库：从磁盘.layout文件解析出来，Map::InitBuildings()加载
-// 一次，传给每个Building::Layout()查询。命名上和ZoneMod::Layout()/BuildingMod::Layout()/
-// Building::Layout()这一整套"落地后摆布局"虚方法区分开(不叫老工程的"Layout"这个名字，避免
-// 看错成同一个概念)，详见building.md。
+// 全局共享的建筑内部布局模板仓库(.layout解析结果)，Map::InitBuildings加载一次传给每个Building::Layout()；
+// 故意不叫Layout，避免与各类Layout()虚方法混淆，详见building.md
 class BuildingLayoutLibrary {
 public:
 	// 扫描paths指向的每个.layout文件，解析并预算好4个朝向(InverseParams/InverseDirection/
@@ -254,8 +244,12 @@ public:
 	// 之前解析的内容重新来一遍。
 	void ReadTemplates(const std::vector<std::string>& paths);
 
+	// 模板名对应的.layout是否已被解析。Building::Layout()用它拒绝不存在的模板名(抛异常)，和读档前
+	// 的"missing layout"检查保持一致。
+	bool HasTemplate(const std::string& name) const;
+
 	// 按模板名+朝向(0-3)查询这9类元素+2套导航模板，查不到返回空(引用一个静态空实例，不是
-	// 抛异常——mod自己保证传的模板名字存在，Building::Layout()这一层不需要重复校验)。
+	// 抛异常；模板名是否存在由Building::Layout()用HasTemplate先校验)。
 	const std::vector<Stair>& GetStairs(const std::string& name, int face) const;
 	const std::vector<Elevator>& GetElevators(const std::string& name, int face) const;
 	const std::vector<Ramp>& GetRamps(const std::string& name, int face) const;
@@ -266,13 +260,10 @@ public:
 	const std::vector<Row>& GetRows(const std::string& name, int face) const;
 	const std::vector<Hatch>& GetHatches(const std::string& name, int face) const;
 	const NavigationTemplate& GetPedestrianNavigation(const std::string& name, int face) const;
-	// 这次只解析、不使用，留给以后车辆域真正做"车辆能进建筑内部"这个玩法时再消费。
+		// 车行导航模板，由Building::BuildVehicleNavigation使用。
 	const NavigationTemplate& GetVehicleNavigation(const std::string& name, int face) const;
 
-	// 4个方向转换辅助函数——本来应该是private(只在ReadTemplates内部解析用)，但
-	// ParseNavigationBlock(building.cpp里的匿名namespace自由函数，不是成员)也要用
-	// InversePoint，干脆整体设成public：都是纯函数(没有任何实例状态)，公开出去没有
-	// 封装上的坏处。
+	// 4个方向转换辅助函数：纯函数，设成public是因为building.cpp里的ParseNavigationBlock也要用
 	static RectParams InverseParams(const RectParams& params, int face);
 	static int InverseDirection(int direction, int face);
 	static PointParams InversePoint(const PointParams& point, int face);
@@ -296,8 +287,7 @@ private:
 	std::unordered_map<std::string, std::array<NavigationTemplate, 4>> vehicleNavigationTemplates;
 };
 
-// Building::Layout()内部构建行人导航图的结果，交还给Map::InitBuildings()合并进全局图——
-// Building自己不直接碰Map的私有成员，见building.md"行人导航"一节。
+// Building::Layout()构建内部导航图的结果，交还给Map::InitBuildings()合并，见building.md"行人导航"
 struct BuildingNavResult {
 	// 需要登记进Map::navAnchorNodes统一管理生命周期/可视化的新建节点——包含building内部
 	// 导航图专属的固定/投影锚点，也包含每个Room自己的导航节点(Building::Layout()里创建、
@@ -305,47 +295,22 @@ struct BuildingNavResult {
 	std::vector<Node*> nodes;
 	// 需要登记进Map::pedestrianNavGraph(双向)的新建连接。
 	std::vector<Connection*> connections;
-	// "outside"类型的端点节点——Map::InitBuildings()负责用building->GetBoundaryRoad
-	// (building->GetDirection())+投影求t+AddRoadAccessNode把它们接上道路网，见
-	// building.md"行人导航"一节；Building自己不知道怎么连Road。**这里的每个指针本来就已经
-	// 是上面`nodes`的成员之一**(它们本来就是resolveEndpoint()解出的某个"node"/"line"锚点
-	// 或Room导航节点，创建/收集时已经无条件进了`nodes`)，只是单独拎出来给Map一份"这些需要
-	// 接道路网"的清单，不是一份独立于`nodes`之外的新节点集合——Map合并时只应该把这份清单
-	// 当成"nodes的子集,用来找该连哪条路"来读，不能再把它们重新push进navAnchorNodes一次，
-	// 否则同一个Node*登记两次，~Map()清理时按navAnchorNodes遍历delete会对它double free
-	// (见map.md"InitBuildings"一节)。
+	// "outside"类型的端点节点，Map据此接上道路网。每个成员同时也在上面的nodes里，只是单独拎出清单——
+	// 不能再push进navAnchorNodes，否则同一个Node*登记两次，~Map()会double free
 	std::vector<Node*> outsideNodes;
 
-	// 车行导航图的平行三件套——语义和上面nodes/connections/outsideNodes完全一样(vehicleNodes
-	// 同样已经无条件包含vehicleEntranceNodes/vehicleExitNodes的每个成员，不需要也不能重复登记)，唯一区别是
-	// 数据来源是各楼层的vehicleNavigation模板而不是pedestrianNavigation。之所以不共用一套
-	// 字段，是因为车行图和行人图是两张独立的图(Map::vehicleNavGraph/pedestrianNavGraph)，
-	// 合并方式也不同(车行按入度/出度判定单向连接，行人固定双向)，混在一起会分不清一个
-	// Connection*该插进哪张图。
+	// 车行导航图的平行字段(来源是vehicleNavigation模板)。车行图和行人图是两张独立的图，合并方式也不同
+	// (车行按入度/出度判定单向，行人固定双向)
 	std::vector<Node*> vehicleNodes;
 	std::vector<Connection*> vehicleConnections;
-	// 车行导航的显式入口/出口端点(layout里的"entrance"/"exit"类型)——和上面outsideNodes
-	// 同样已经包含在vehicleNodes里，只是单独拎出清单给Map接路网。方向由端点类型直接决定
-	// (exit: node->路，entrance: 路->node)，不再按building内部图的入度/出度推断；同一个node
-	// 可以同时出现在两个清单里。车行导航不支持"outside"类型。
+	// 车行导航的显式入口/出口端点(layout里的"entrance"/"exit")，已包含在vehicleNodes里；方向由类型决定，
+	// 车行导航不支持"outside"
 	std::vector<Node*> vehicleEntranceNodes;
 	std::vector<Node*> vehicleExitNodes;
 };
 
-// Building：持有一个具体BuildingMod实例，代表一栋已经落地的Building（继承Quad表示自己
-// 占据的矩形）。楼体footprint(基本形状)+楼层高度是Building自己的字段；每层楼内部具体
-// 长什么样(墙/走廊/房间/楼梯/电梯/坡道/导航)由mod在Layout()里通过AssignFloor/AssignRoom/
-// ArrangeRow声明，这里解析成真正的Floor/Room/Component数据，详见map.md"InitBuildings"
-// 一节+building.md。
-//
-// 仿照老工程、和Zone同一个模式：Building独占持有一个mod实例的生命周期，构造时创建、析构时
-// factory->DestroyBuilding(mod)。
-//
-// 不自己存一份rotation，直接转发parentLot->GetRotation()再叠加relativeRotation——普通(非
-// 园区内部)building的relativeRotation恒为0，等价于原来纯转发的行为；园区内部building由
-// Map::PlaceZoneInternalBuilding用SetParentLot(zone->GetParentLot(), spec.relativeRotation)
-// 设置，parentLot直接复用zone自己的parentLot(所以转发基准天然和zone一致)，relativeRotation
-// 是相对zone自身旋转的附加偏移。
+// 已落地的Building(继承Quad)，独占一个BuildingMod实例，设计见building.md。
+// rotation不自存：转发parentLot->GetRotation()再叠加relativeRotation(园区内部建筑用，见SetParentLot)
 class Building : public Quad {
 	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
 	friend class MapSaveCodec;
@@ -354,29 +319,17 @@ class Building : public Quad {
 public:
 	Building() = delete;
 
-	// @factory: building工厂(用于~Building()里DestroyBuilding); @mod: 这个Building独占持有的
-	// mod实例(调用方保证不会再有别的Building共用同一个mod指针)。
 	Building(BuildingFactory* factory, BuildingMod* mod);
 	~Building();
 
 	std::string GetType() const;
 	std::string GetName() const;
 
-	// 这个Building持有的mod实例——不需要另外拷贝一份。
 	BuildingMod* GetMod() const;
 
-	// 调用方在SetPosition/SetBoundaryRoad都设好之后调用一次：内部先调
-	// mod->Layout(direction, *this, GetBoundaryRoads())（this已经是Quad、边界路也已经是真实
-	// 数据；direction是引用参数，mod可能把-1改写成一个真实方向，见building_mod.h），再把
-	// mod->footprint/basements/layers/floorHeights/lodMaterial解析成Building自己的绝对
-	// (相对自身中心)数值并缓存，然后按mod记录的floors/singles/rows实例化每一层的Floor+
-	// Room+Component，最后构建行人内部导航图。direction对显式占位落地是Assign选中的真实
-	// 方向；对权重CDF/FillRemainder落地传-1（没有方向概念，交给mod自己兜底）；对园区内部
-	// 建筑传spec.direction。roomFactory/componentFactory是Map持有的工厂实例，Building自己
-	// 不持有(只在这一次调用里临时用来创建Room/Component，不需要跟Building自己持有的
-	// BuildingFactory一样长期存一份指针——Room/Component创建完之后靠自己的factory指针
-	// 析构，不依赖这里传的引用继续存活)。navOut收集这次调用产出的行人导航结果，供调用方
-	// (Map::InitBuildings())合并进全局导航图。
+	// 落地入口：在SetPosition/SetBoundaryRoad之后调用一次，转发mod->Layout并解析楼体/楼层/房间/Component/导航，见building.md。
+	// direction语义同BuildingMod::Layout(显式占位是Assign选中的方向，其余传-1/spec.direction)；
+	// roomFactory/componentFactory只在本次调用里临时使用；navOut由Map::InitBuildings合并进全局导航图
 	void Layout(int direction, const BuildingLayoutLibrary& library,
 		RoomFactory& roomFactory, ComponentFactory& componentFactory, BuildingNavResult& navOut);
 
@@ -452,33 +405,17 @@ public:
 	Road* GetBoundaryRoad(int direction) const;
 	const std::unordered_map<int, Road*>& GetBoundaryRoads() const;
 
-	// 归属——照抄老工程Building::GetOwner/SetOwner/GetStated/SetStated(Map::Checkin()
-	// 分配房产归属时用)。owner和stated互斥：owner非空表示这整栋building(连同内部所有
-	// room)归一个citizen私有；stated为true表示公有(owner保持空)。**这栋building里不同
-	// room各自独立归属不同人时，owner/stated都保持默认值(nullptr/false)**——不需要显式
-	// "重置"，Map::Checkin()只在"整栋building统一归属"分支才会调用这两个setter，一开始
-	// 就按房间各自独立分配的话根本不会调用它们，天然保持null，见room.h同一套owner/stated
-	// 设计说明。
+	// 房产归属：owner(私有)与stated(公有)互斥；内部各room独立归属时两者保持默认值，见building.md
 	Citizen* GetOwner() const;
 	void SetOwner(Citizen* value);
 	bool GetStated() const;
 	void SetStated(bool value);
 
-	// 建筑门+房间门：①遍历每层Floor::GetCorridors()(以后其他非single/row元素同理)的每个
-	// 门洞，用mod->doorSpecs做ResolveDoorSpec，需要放门就调map.CreateDoor(
-	// DOOR_KIND_BUILDING, ...)，登记进这个Building自己的doorEntities(析构时释放)；
-	// ②遍历GetRooms()的每个room的每个门洞，用room->GetMod()->doorSpecs做
-	// ResolveDoorSpec，需要放门就调map.CreateDoor(DOOR_KIND_ROOM, ...)，登记进对应
-	// room自己的doorEntities(room->AddDoorEntity，room持有生命周期，不是Building)。
-	// 两件事放在同一个方法里是因为Building本来就持有rooms的指针、遍历一次就够，不是说
-	// 房间门归Building持有。由Map::InitBuildings()在building->Layout(...)的三个调用点
-	// 之后各调一次，见map.cpp。
+	// 建筑门(corridor门洞，登记进doorEntities)和房间门(登记进对应room)，见building.md"建筑门"
 	void BuildDoors(Map& map);
 	const std::vector<Door*>& GetDoorEntities() const;
 
-	// 电梯：按GetCabins()(ElevatorCabinSpec)逐条调map.CreateCabin创建Cabin，登记进cabinEntities(析构时
-	// 释放)。同一口井楼层范围和已建的电梯重叠的跳过并警告；初始楼层是1楼(夹到这台电梯的范围内)。
-	// 由Map::InitBuildings()在BuildDoors之后各调一次。
+	// 按GetCabins()逐条创建Cabin，登记进cabinEntities，见cabin.md
 	void BuildCabins(Map& map);
 	const std::vector<Cabin*>& GetCabinEntities() const;
 
@@ -491,22 +428,13 @@ private:
 	void ArrangeRow(int level, int slot, const std::string& roomType, float acreage, Component* component,
 		RoomFactory& roomFactory);
 
-	// 按各楼层的pedestrianNavigation模板构建building内部行人导航图数据，见BuildingNavResult
-	// 注释。转发BuildNavigationGraph(isVehicle=false, registerRoomNodes=true)。
+	// 行人导航图(转发BuildNavigationGraph，isVehicle=false, registerRoomNodes=true)，见BuildingNavResult
 	void BuildPedestrianNavigation(const BuildingLayoutLibrary& library, int direction, BuildingNavResult& navOut);
 
-	// 按各楼层的vehicleNavigation模板构建building内部车行导航图数据，写进navOut的
-	// vehicleNodes/vehicleConnections/vehicleEntranceNodes/vehicleExitNodes。转发BuildNavigationGraph
-	// (isVehicle=true, registerRoomNodes=false)——registerRoomNodes必须是false：
-	// Room::GetNavigationNode()只能登记进navOut.nodes一次，已经在BuildPedestrianNavigation
-	// 里做过，这里重复登记会导致同一个Node*出现在navAnchorNodes两次，~Map()清理时对它
-	// double free(和building内部导航图double free是同一类问题，见map.md)。
+	// 车行导航图，写进navOut的vehicle*字段。registerRoomNodes必须为false，否则Room导航节点重复登记会让~Map() double free
 	void BuildVehicleNavigation(const BuildingLayoutLibrary& library, int direction, BuildingNavResult& navOut);
 
-	// BuildPedestrianNavigation/BuildVehicleNavigation共享的算法实现——node/line/connection
-	// 解析逻辑本来就是纯数据驱动、和"行人"这个语义无关，isVehicle只决定读
-	// library.GetPedestrianNavigation还是GetVehicleNavigation这一件事。registerRoomNodes
-	// 控制要不要在结尾把每个Room自己的导航节点登记进newNodes(只应该有一次调用传true)。
+	// 行人/车行共用的算法：isVehicle只决定读哪套导航模板；registerRoomNodes控制是否把Room导航节点登记进newNodes(只能登记一次)
 	void BuildNavigationGraph(const BuildingLayoutLibrary& library, int inputDirection, bool isVehicle,
 		std::vector<Node*>& newNodes, std::vector<Connection*>& newConnections,
 		std::vector<Node*>& outsideNodes, bool registerRoomNodes,
@@ -555,8 +483,8 @@ private:
 	Citizen* owner = nullptr;
 	bool stated = false;
 
-	// corridor等非single/row元素上真正放了门扇的门——只在BuildDoors()非空填入(查到的门洞
-	// 带了没在doorSpecs表里对应mesh为空的tag时不会有对应的Door)，析构时释放。
+	// corridor门洞上的门，BuildDoors填入，析构时释放(room的门归对应Room)；tag在doorSpecs里解析不出
+	// spec的门洞不会生成Door。
 	std::vector<Door*> doorEntities;
 
 	// 电梯实体，见BuildCabins。

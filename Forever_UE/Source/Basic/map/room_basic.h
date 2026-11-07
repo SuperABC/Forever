@@ -5,19 +5,7 @@
 #include <string>
 
 
-// ResidenceRoom：住宅Room，声明isResidential=true+residentialCapacity=1(每间住宅room=1个
-// 名额，多人合住靠Map::Checkin()的名额池逻辑，不靠这个capacity强制)。workspace/storage/
-// manufacture这3类占位属性保持RoomMod基类默认值(false/空)不动，另外3类由下面ShopRoom/
-// WarehouseRoom/三种工坊房间各自启用。
-// Basic编译为DynamicLibrary(Basic.dll),和Forever_Mod下的Mod一样由Config/ModLoader在
-// 运行时扫描加载,不会静态链进Forever.Build.cs,见 Source/Basic/README.md。
-//
-// ResidenceRoom/ShopRoom/WarehouseRoom/ParkingRoom/三种工坊房间这些具体类型合并进同一份
-// room_basic.h/.cpp(不按residence/shop/plant各开一个文件)，和terrain_basic.h/.cpp里
-// OceanTerrain/MountainTerrain合并的方式一样，详见room_basic.md。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼，和
-// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式。
+// Room域默认内容：各类型的属性和设计见room_basic.md。
 class ResidenceRoom : public RoomMod {
 public:
 	ResidenceRoom();
@@ -37,8 +25,7 @@ private:
 	std::string name;
 };
 
-// ShopRoom：商店营业room，isWorkspace=true, workspaceCapacity=100。workspaceCapacity这个
-// "工位数"占位字段带上真实数值，真正被Job系统消费留到Society域接入时再做，见room_basic.md。
+// 商店营业room。
 class ShopRoom : public RoomMod {
 public:
 	ShopRoom();
@@ -58,8 +45,7 @@ private:
 	std::string name;
 };
 
-// WarehouseRoom：Shop布局里过道/地下室用的仓储room(isStorage=true,
-// storageType="storage_shop")。只有ShopBuilding用到，见room_basic.md。
+// Shop布局里过道/地下室用的仓储room，只有ShopBuilding用到。
 class WarehouseRoom : public RoomMod {
 public:
 	WarehouseRoom();
@@ -79,9 +65,7 @@ private:
 	std::string name;
 };
 
-// ParkingRoom：Shop/Factory地下停车场room，isParking=true+一个房间正中心的停车位，供
-// Traffic::Init()在这里生成预置车辆，见Source/Core/traffic/traffic.md。ShopBuilding和
-// FactoryBuilding共用同一个ParkingRoom类。
+// Shop/Factory地下停车场room，ShopBuilding和FactoryBuilding共用。
 class ParkingRoom : public RoomMod {
 public:
 	ParkingRoom();
@@ -101,9 +85,8 @@ private:
 	std::string name;
 };
 
-// TrainStationRoom/AirportRoom：公共交通站点建筑的候车厅/候机厅，不设任何
-// isResidential/isWorkspace/isStorage/isManufacture/isParking标志——纯粹一个普通房间
-// (公交站不挂建筑，不需要这个，见station_basic.h的BusStation)。
+// TrainStationRoom/AirportRoom：火车站候车厅/机场候机厅。TrainStationRoom是纯普通房间，
+// AirportRoom声明了停机位。
 class TrainStationRoom : public RoomMod {
 public:
 	TrainStationRoom();
@@ -141,8 +124,7 @@ private:
 	std::string name;
 };
 
-// 三种工坊房间：生产类型是ManufactureMod的id，Industry按它为房间生成Manufacture。工厂建筑
-// (FactoryBuilding)随机选其一布局，每间工位20、房租20元，Organization按容纳量一半定员。
+// 三种工坊房间，由FactoryBuilding随机选其一布局。
 class FarmRoom : public RoomMod {
 public:
 	FarmRoom();

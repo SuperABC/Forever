@@ -5,15 +5,8 @@
 #include <vector>
 
 
-// 定长环形队列，纯POD、不涉及任何堆分配——Canvas实例常常横跨两个不同的二进制模块使用
-// （比如UE的Forever模块通过UPuzzleWidget::NativeOnKeyDown调PushKey注入按键，运行时加载的
-// Basic.dll里的PuzzleMod实现通过Loop()调PopKey/ClearKeyBuffer消费），而Canvas的这些方法都
-// 是普通(非virtual)成员函数——canvas.cpp会被两侧各自的编译流程独立编译进各自的二进制，
-// 各自链接各自的CRT/allocator。如果这里用std::deque这类会做堆分配的容器，UE模块这一侧
-// push分配出来的内部块，被Basic.dll这一侧pop/clear时用它自己的operator delete去释放，
-// 就是[[memory:cross_dll_allocator_crash]]那种跨模块堆损坏（表现为按一次键就直接静默
-// 退出、连崩溃报告都不弹，堆损坏往往来不及走正常的异常处理）。定长数组+首尾游标完全不
-// 涉及堆，两侧谁调用都只是读写栈上/成员内的固定内存，天然规避这个问题。
+// 定长环形队列,纯POD不涉及堆分配:Canvas横跨UE模块和Basic.dll两侧使用,事件队列若用std::deque,
+// 一侧push分配的块被另一侧pop释放会堆损坏。队列满了丢弃新事件。见canvas.md。
 template<typename T, int Capacity>
 class RingBuffer {
 public:
@@ -46,12 +39,7 @@ struct Color {
 	uint8_t r = 0, g = 0, b = 0, a = 255;
 };
 
-// 内存位图（BGRA，和Canvas像素缓冲区同一种格式），供GetImage/PutImage/PutRawImage这几个
-// "内存位图搬运"操作用——不涉及任何文件编解码，纯内存拷贝/缩放。这几个方法目前没有被
-// TetrisPuzzle用到，暂时还没有实际跨模块传递Bitmap的场景；但如果以后哪个PuzzleMod要跨
-// Init/Loop之外的方式在两个模块间传递同一个Bitmap实例并互相扩容/释放，会撞上跟RingBuffer
-// 类注释里同一个跨模块堆分配问题——保持"哪个模块的调用创建的Bitmap，就只由这个模块自己的
-// 调用去扩容/释放"这个约定，不要让另一侧对同一个vector做mutable操作。
+// 内存位图(BGRA,同Canvas像素缓冲区),纯内存拷贝/缩放。约定哪个模块创建的Bitmap就只由它扩容/释放(跨模块堆分配,见canvas.md)。
 struct Bitmap {
 	int width = 0, height = 0;
 	std::vector<uint8_t> data;
@@ -72,16 +60,10 @@ struct MouseEvent {
 
 enum MOUSE_BUTTON : int { MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE };
 
-// 画布尺寸变化回调——参考SGL的resize注册机制。裸函数指针+void* userData，不用std::function：
-// 原因跟PuzzleFactory的CreateFunc/DestroyFunc一样，Canvas可能横跨UE模块和运行时加载的
-// Basic.dll两侧使用（见RingBuffer类注释里的跨模块堆分配问题），std::function内部的闭包一旦
-// 发生堆分配就会撞上同一个坑。userData让PuzzleMod的实现能把回调转发回自己的实例（注册一个
-// static转发函数+this指针即可，不需要真正的成员函数指针类型）。
+// 画布尺寸变化回调:裸函数指针+userData,不用std::function(跨模块堆分配,见canvas.md)。
 using ResizeFunc = void(*)(void* userData, int width, int height);
 
-// 键盘扩展键码——常规字符键(字母/数字/空格等)直接用其ASCII值('a'/' '这种)传给PushKey/
-// PopKey比较，只有没有对应ASCII字符的键才需要专门常量，数值特意选在0x100以上避免跟ASCII
-// 范围重叠。
+// 键盘扩展键码:常规字符键直接用ASCII值,无ASCII字符的键用下面的常量(0x100以上避免重叠)。
 enum KEY_CODE : int {
 	KEY_BACKSPACE = '\b', KEY_TAB = '\t', KEY_ENTER = '\r', KEY_ESCAPE = 0x1b,
 	KEY_LEFT = 0x100, KEY_UP, KEY_RIGHT, KEY_DOWN,
@@ -92,27 +74,15 @@ enum KEY_CODE : int {
 // 本身。
 constexpr int KEY_RELEASED_FLAG = 0x8000;
 
-// 通用2D图形/输入画布——接口覆盖范围参考SGL(github.com/SuperABC/SGL)，命名和这个项目其它
-// 类保持一致的PascalCase风格。不#include任何UE头，供Basic.dll这类运行时加载的Mod使用（见
-// [[memory:basic_is_runtime_dll]]），但会用到Windows GDI(canvas.cpp内部#include
-// <windows.h>，只在.cpp里出现，不污染这个头文件/它的调用方)——这个项目本来就只面向
-// Windows(UE_5.7 Win64 + VS2022工具链)，Dependence层"engine-agnostic"这条约定指的是
-// "不依赖UE"，不等于"不能用Win32 API"：字体渲染交给Windows自带的字体库(默认微软雅黑，
-// 支持中英文+抗锯齿)，见PutString/StringWidth的.cpp实现。不支持SGL的setFontName/
-// setFontStyle这种切换字体/斜体/下划线的完整API，只用一个固定默认字体，按SetFontSize
-// 指定像素高度；也不做SGL的TEXT_MAP字符网格模式，只有BIT_MAP画布这一种。
+// 通用2D图形/输入画布(接口参考SGL),不依赖UE头,供Basic.dll这类Mod使用;文字渲染的实现细节(GDI/网页)和限制见canvas.md。
 class Canvas {
 public:
 	Canvas();
 
 	void Init(int width, int height); // 分配像素缓冲区，填充黑色不透明背景；不会触发ResizeFunc
-									   // (第一次创建画布，PuzzleMod::Init里直接用
-									   // canvas->GetWidth()/GetHeight()拿初始尺寸即可，不需要
-									   // 回调通知)
+	// 宿主侦测到视口尺寸变化后调用:重新分配缓冲区(旧内容不保留)并调已注册的ResizeFunc;尺寸没变则跳过。
 
-	// 宿主(UPuzzleWidget)侦测到真实视口尺寸变化后调用：重新分配像素缓冲区(旧内容不保留——
-	// 反正PuzzleMod::Loop每帧都会整张重画)，再调用已注册的ResizeFunc(如果有)通知PuzzleMod
-	// 调整内部布局(比如棋盘格子大小/居中偏移)。尺寸没变化时直接跳过，不会误触发回调。
+	// 注册尺寸变化回调(PuzzleMod::Init里调用),同时只支持一个,重复调用覆盖,传nullptr取消。
 	void Resize(int width, int height);
 
 	// 注册尺寸变化回调，PuzzleMod::Init里调用。同一时刻只支持一个回调(和这个项目其它单播
@@ -133,10 +103,7 @@ public:
 	Color GetPixel(int x, int y) const;
 	void PutLine(int x1, int y1, int x2, int y2);
 
-	// 有宽度的直线——不是多次调用上面那个1像素Bresenham直线做偏移近似(斜线方向上会因为
-	// 相邻线各自独立取整产生缝隙，真实复现过)，是按线宽算出一个矩形(两个填充三角形)、复用
-	// PutTriangle已有的扫描线填充算法，保证是一整块实心区域，不会有缝隙。width<=1时退化成
-	// 调用上面那个1像素版本。
+	// 有宽度的直线:按线宽算出矩形(两个填充三角形)实心无缝;width<=1退化为1像素版本。
 	void PutLine(int x1, int y1, int x2, int y2, int width);
 	void PutRect(int x1, int y1, int x2, int y2, bool fill);
 	void PutTriangle(int x1, int y1, int x2, int y2, int x3, int y3, bool fill);
@@ -148,20 +115,13 @@ public:
 	void PutImage(int left, int top, const Bitmap& bitmap);
 	void PutRawImage(const uint8_t* srcBGRA, int srcWidth, int srcHeight, int x, int y, int dstWidth, int dstHeight);
 
-	// 从磁盘加载图片文件(PNG/JPEG/BMP/GIF(只取第一帧)/TGA/PSD/HDR/PIC/PNM，由stb_image解码，
-	// 路径支持UTF-8)到outBitmap(BGRA，保留图片自带的alpha)。失败返回false，outBitmap不变。
-	// 不依赖Canvas实例状态，放在这里只是和Bitmap的其它操作放一起。
+	// 从磁盘加载图片到outBitmap(BGRA,保留alpha,路径UTF-8),失败返回false且outBitmap不变,格式见canvas.md。
 	bool LoadImageFile(const std::string& path, Bitmap& outBitmap) const;
 
-	// 把bitmap缩放到dstWidth x dstHeight(<=0表示用原尺寸)画在(x,y)：双线性采样，按图片
-	// 每个像素自带的alpha(再乘当前SetAlpha整体透明度)和画布已有像素混合，所以带透明背景的
-	// 图片能正确叠在任何背景上。和PutImage(直接覆盖)/PutRawImage(忽略图片alpha)是不同的
-	// 操作，那两个保持原样。
+	// 缩放到dstWidth x dstHeight(<=0=原尺寸)画在(x,y),双线性采样,按图片alpha(再乘SetAlpha)混合。
 	void PutBitmap(const Bitmap& bitmap, int x, int y, int dstWidth = 0, int dstHeight = 0);
 
-	// 文字：见类注释——底层是Windows GDI，SetFontSize直接设置字体的像素高度(不是内置点阵
-	// 字体那种整数倍缩放)。PutString/StringWidth支持UTF-8多字节字符(中文等)和'\n'换行
-	// (GDI的TextOut本身不认换行符，内部按行拆开分别画/量)。
+	// 文字:SetFontSize设置字体像素高度;PutString/StringWidth支持UTF-8和'\n'换行。
 	void SetFontSize(int size);
 	void PutChar(char ch, int x, int y); // 单字符，内部转发给PutString(std::string(1,ch), x, y)
 	int PutString(const std::string& text, int x, int y); // 支持'\n'换行，返回渲染总高度(像素)
@@ -183,10 +143,7 @@ public:
 	MouseEvent PopMouseEvent();
 	void ClearMouseBuffer();
 
-	// 鼠标滚轮：宿主调PushMouseWheel注入刻度(向上滚为正、向下为负)，小游戏逻辑调
-	// ConsumeMouseWheel取走自上次调用以来累计的刻度并清零。不进mouseQueue——滚轮没有
-	// 按下/抬起，也不该让只认按键事件的小游戏(Tetris/Phone)看到多余事件；只是一个POD整数，
-	// 不涉及跨模块堆分配。
+	// 鼠标滚轮:宿主PushMouseWheel注入(向上为正),ConsumeMouseWheel取走累计值并清零;不进mouseQueue。
 	void PushMouseWheel(int delta);
 	int ConsumeMouseWheel();
 
@@ -215,8 +172,5 @@ private:
 
 class PostHandle;
 
-// mod读自己随包图片的统一入口：通过PostHandle的"resource path"查询按文件名找到磁盘上的图片
-// (在config.json的resource_paths里递归找)，再用Canvas::LoadImageFile解码。图片放在
-// Resource/Mod/<mod名>/下，文件名必须以"<mod名>_"开头，保证全局唯一(见Dependence/README.md)。
-// 找不到文件或解码失败返回false。
+// mod读自己随包图片的统一入口:经PostHandle的"resource path"查询按文件名找到图片再解码,文件名约定见canvas.md。
 bool LoadModImage(PostHandle* post, const std::string& fileName, Bitmap& outBitmap);

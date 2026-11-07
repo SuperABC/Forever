@@ -5,20 +5,6 @@
 #include <string>
 
 
-// 物品/背包系统测试案例——8个具体资产：
-// - ContainerAsset：背包容器(cube占位)，能背在后背。
-// - WheatAsset/BeefAsset/BurgerAsset：id和Industry的WheatProduct/BeefProduct/
-//   BurgerProduct共用(见Source/Basic/industry/product_basic.h)，Asset只存这个type字符串，
-//   不持有Product实例，见Source/Core/player/asset.md"武器/背包系统的桥接"一节。汉堡可使用
-//   (usable=true)，用完count-1到0即销毁，不做饱食度效果。
-// - PistolAmmoAsset/RifleAmmoAsset/ShotgunAmmoAsset/SniperAmmoAsset：子弹，新id，没有对应Product。
-// - PistolWeaponAsset/RifleWeaponAsset/ShotgunWeaponAsset/SniperWeaponAsset：id和WeaponMod的
-//   PistolWeapon/RifleWeapon/ShotgunWeapon/SniperWeapon共用，
-//   weapon=true——可以挂左肩/右肩(激活只走肩膀)，也可以拿在手上，见Source/Core/player/player.h的
-//   ActivateShoulderWeapon桥接机制。
-//
-// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id+GetName里现拼。
-
 class ContainerAsset : public AssetMod {
 public:
 	ContainerAsset();
@@ -247,9 +233,6 @@ private:
 	std::string name;
 };
 
-// 投掷物：手雷/烟雾弹。throwable=true，Object机动性(能拿在手上、放进容器，不能挂肩膀)。
-// 网格用项目自己路径下的球体(Content/Asset/Meshes/Sphere)，直径100cm，meshScale缩到10cm。
-// 落地后的效果(爆炸/烟雾)本期没做，只是被扔出去、5秒后消失。
 class GrenadeAsset : public AssetMod {
 public:
 	GrenadeAsset();

@@ -3,20 +3,6 @@
 #include "puzzle_common.h"
 
 
-// 节奏大师(4键，只做视觉判断，没有背景音乐)：音符从上往下落，到底部判定线时按对应轨道的键
-// (d f j k，或在屏幕上点/按住对应轨道)。支持两种音符：
-//   tap  单点；
-//   hold 长条：头按下后需要一直按住，过程中每半拍一个判定点，长条可以中途换轨(玩家随之换键/横向滑动)。
-// 谱面是文本文件(通过post "resource path"按名字找，默认puzzle_rhythm_demo.chart)，格式(#开头是注释)：
-//   bpm 120                      每分钟节拍数
-//   offset 2000                  第0拍对应的毫秒
-//   tap <拍> <轨0-3>             单点
-//   hold <起拍> <止拍> <起轨> [<拍>:<轨> ...]    长条，后面的节点表示到该拍长条换到该轨
-// 判定：tap/长条头误差<=perfect(默认45ms)为Perfect，<=normal(默认110ms)为Normal，更晚为Miss；
-// 长条每个判定点按住了正确轨道算Perfect，否则Miss。总分100万平均分给所有判定单元，Perfect拿满，Normal拿60%。
-// 参数(key=value)：chart(谱面文件名)、speed(音符从顶到判定线的毫秒，默认1500)、lead(开始前等待毫秒，默认2000)、
-// perfect、normal。
-// 返回：{"score","perfect","normal","miss","maxCombo","completed"}。
 class RhythmPuzzle : public PuzzleMod {
 public:
 	virtual void SetParam(const std::string& param) override;

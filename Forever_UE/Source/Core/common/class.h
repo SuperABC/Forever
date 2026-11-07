@@ -16,6 +16,9 @@ class Cabin;
 class Component;
 class Room;
 class Door;
+class Floor;
+class Road;
+class Connection;
 class Map;
 
 // Populace
@@ -42,6 +45,7 @@ class Change;
 class Story;
 class Script;
 class ScriptFactory;
+struct ScriptContext;
 
 // Industry
 
@@ -52,6 +56,7 @@ class Industry;
 class Traffic;
 class Station;
 class Route;
+class Vehicle;
 
 // Player
 

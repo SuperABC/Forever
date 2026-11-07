@@ -49,13 +49,7 @@ void TetrisPuzzle::Init(Canvas* canvas, PostHandle* post) {
 }
 
 void TetrisPuzzle::RecomputeLayout(int width, int height) {
-	// 棋盘按画布高度留出边距后算格子边长；侧栏放在棋盘右边，显示分数/等级/下一个方块预览，
-	// 宽度按cellSize估一个够用的近似值(侧栏内容都是短文字+一个方块预览，不需要精确量出
-	// 实际渲染宽度)。"棋盘+侧栏"作为一个整体在画布内居中，而不是钉死在左上角——这样窗口
-	// 拉伸/切分辨率之后主游戏区域始终保持在屏幕正中间。
-	//
-	// 屏幕按键(鼠标/触摸操作)的位置：竖屏(手机)放在棋盘下方一整条；横屏放在侧栏右边一个
-	// 两列的按键面板。
+	// 布局规则见puzzle_basic.md。
 	int gap = 20;
 	bool portrait = width < height * 12 / 10;
 
@@ -248,6 +242,7 @@ void TetrisPuzzle::ClearLines() {
 JsonValue* TetrisPuzzle::Finish() {
 	result = JsonValue(DATA_OBJECT);
 	result["score"] = score;
+	result["completed"] = gameOver; // 俄罗斯方块没有通关，堆到顶自然结束算true，中途ESC/EXIT为false
 	return &result;
 }
 

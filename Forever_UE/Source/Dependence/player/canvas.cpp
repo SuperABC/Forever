@@ -28,16 +28,9 @@ using namespace std;
 
 namespace {
 #ifndef __EMSCRIPTEN__
-	// GDI字体渲染：建内存DC+HFONT，黑底白字TextOutW，GetDIBits读回灰度当覆盖率混合进画布。
-	// CreateCanvasFont里的参数组合（FW_THIN/OUT_CHARACTER_PRECIS/CLIP_CHARACTER_PRECIS等）
-	// 是经过验证能渲染出正常粗细/字形的组合——换成看起来更"标准"的FW_NORMAL/
-	// OUT_DEFAULT_PRECIS/ANTIALIASED_QUALITY/FF_DONTCARE会导致字母粗细/字形不一致，不要
-	// 改动这组参数。
-	//
-	// 这些辅助函数不做成Canvas的成员方法——HDC/HFONT这些Windows类型不能出现在canvas.h的
-	// 声明里(会把<windows.h>连带min/max/TEXT等宏定义带进每一个#include了canvas.h的文件，
-	// 这个头文件被Forever模块的PuzzleWidget.h/PhoneWidget.h广泛引用，跟UE自己的头文件混在
-	// 一起容易冲突)，所以GDI相关的实现细节整个封在这个.cpp的匿名namespace里。
+	// GDI字体渲染:内存DC+HFONT,黑底白字TextOutW,读回灰度当覆盖率混合。
+	// CreateCanvasFont的参数组合(FW_THIN/OUT_CHARACTER_PRECIS/CLIP_CHARACTER_PRECIS等)是验证过能渲染正常粗细/字形的,不要改。
+	// 这些辅助函数封在匿名namespace里,不做成成员:HDC/HFONT不能出现在canvas.h(会把<windows.h>的宏带给所有包含者)。
 	const wchar_t* kDefaultFontName = L"Microsoft YaHei"; // 中英文都覆盖
 
 	HFONT CreateCanvasFont(int pixelHeight) {
@@ -90,10 +83,7 @@ namespace {
 		return sz.cx;
 	}
 
-	// 画一行文字(不含'\n')到(x,y)：黑底白字渲染到一张内存位图上，读回灰度值当覆盖率，按
-	// 当前画笔颜色/alpha跟buffer已有像素混合——和Canvas::BlendPixel同样的"按alpha插值"算法，
-	// 这里内联展开(BlendPixel是Canvas的私有成员方法，这里是.cpp里的自由函数，直接操作
-	// buffer/canvasWidth/canvasHeight这几个传进来的引用/值)。
+	// 画一行文字(不含'\n'):黑底白字渲染到内存位图,灰度当覆盖率,按画笔颜色/alpha混合(同BlendPixel算法,内联展开)。
 	void DrawLine(vector<uint8_t>& buffer, int canvasWidth, int canvasHeight,
 		const wstring& wline, int x, int y, int pixelHeight,
 		uint8_t brushR, uint8_t brushG, uint8_t brushB, float brushAlpha) {
@@ -161,9 +151,7 @@ namespace {
 		ReleaseDC(nullptr, screenDC);
 	}
 #else
-	// 网页(Emscripten)版文字：用浏览器的2D canvas画字，读回灰度当覆盖率，混合进buffer——
-	// 和上面GDI版同样的"按覆盖率混合"流程，只是字形来源不同。JS侧用一张离屏canvas。
-	// wchar_t在Emscripten上是32位(UTF-32)，JS侧用UTF32ToString取回。
+	// 网页(Emscripten)版文字:浏览器2D canvas画字,读回灰度当覆盖率混合;wchar_t在Emscripten上是32位。
 	EM_JS(int, web_measure_width, (const wchar_t* text, int px), {
 		if (!Module.__tc) { Module.__tc = document.createElement('canvas').getContext('2d'); }
 		Module.__tc.font = px + 'px "Microsoft YaHei","PingFang SC","Noto Sans CJK SC","Noto Sans SC",sans-serif';
@@ -343,9 +331,7 @@ void Canvas::PutLine(int x1, int y1, int x2, int y2, int width) {
 		return;
 	}
 
-	// 沿线段方向算出垂直单位向量，往两侧各偏移半个线宽得到4个角点，拆成2个填充三角形
-	// (复用PutTriangle的扫描线填充)——这是一整块实心矩形区域，逐像素判定在不在矩形内，
-	// 不是"画几条独立的线再堆在一起"，不会有缝隙。
+	// 沿线段垂直方向往两侧各偏移半个线宽得4个角点,拆成2个填充三角形(复用PutTriangle)。
 	float dx = static_cast<float>(x2 - x1), dy = static_cast<float>(y2 - y1);
 	float len = sqrtf(dx * dx + dy * dy);
 	float px = 0.f, py = 0.f;

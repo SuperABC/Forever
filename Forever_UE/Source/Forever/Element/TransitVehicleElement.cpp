@@ -24,8 +24,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 
-// 和ForeverTrafficFrameworkComponent.cpp的TRAFFIC_WORLD_SCALE同一个值，这次按本文件既有
-// 约定各自维护一份(项目既有约定，见ForeverTrafficFrameworkComponent.cpp顶部注释)。
+// 地图单位 -> UE单位，和ForeverTrafficFrameworkComponent.cpp的TRAFFIC_WORLD_SCALE同值(各文件各自维护一份)。
 #define TRANSIT_WORLD_SCALE 1000.f
 
 // Cube.Cube默认边长100cm，缩放系数=目标尺寸/100。
@@ -67,8 +66,7 @@ ATransitVehicleElement::ATransitVehicleElement()
 	staticBody->SetCanEverAffectNavigation(false);
 	staticBody->SetVisibility(false);
 
-	// 搭乘视角：弹簧臂+相机，和AVehicleElement同一套(臂跟随控制器旋转，鼠标转视角)。位置/臂长
-	// 在BuildBoardingComponents里按模型包围盒调整。
+	// 搭乘视角：弹簧臂+相机(臂跟随控制器旋转)，位置在BuildBoardingComponents里按模型包围盒调整。
 	cameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	cameraBoom->SetupAttachment(RootComponent);
 	cameraBoom->TargetArmLength = TRANSIT_CAMERA_ARM_LENGTH;
@@ -102,17 +100,14 @@ void ATransitVehicleElement::Init(Vehicle* inVehicle)
 	vehicle = inVehicle;
 	if (!vehicle || !bodyMesh) return;
 
-	// transitMeshPath非空时优先加载真实网格——模型自己的尺寸就是对的，不再按sizeX/Y/Z缩放立方体。
-	// 先按任意资产加载再判断是骨骼网格还是静态网格(直接LoadObject<T>在类型不符时会刷警告)。
-	// 加载失败(mod的Plugin没挂载上/路径打错)时退化回立方体占位，和留空时的默认行为一致，
-	// 见vehicle_mod.h::transitMeshPath的说明。
+	// transitMeshPath非空时优先加载真实网格(尺寸以模型为准)。先按任意资产加载再判断骨骼/静态网格
+	// (直接LoadObject<T>类型不符会刷警告)；失败时退化回立方体占位。
 	const std::string& meshPath = vehicle->GetTransitMeshPath();
 	if (!meshPath.empty()) {
 		UObject* asset = StaticLoadObject(UObject::StaticClass(), nullptr, UTF8_TO_TCHAR(meshPath.c_str()));
 		float meshScale = vehicle->GetMeshScale();
-		// 不能在这里直接SetRelativeRotation——bodyMesh是RootComponent，Tick()里
-		// SetActorLocationAndRotation直接设的就是RootComponent的世界旋转，这里设的
-		// 任何值都会被下一次Tick覆盖掉。缓存这个偏移，叠进Tick()每帧算的朝向里。
+		// 不能在这里SetRelativeRotation：bodyMesh是RootComponent，会被Tick()的SetActorLocationAndRotation覆盖。
+		// 缓存偏移，叠进Tick()的朝向。
 		meshYawOffsetDegrees = vehicle->GetMeshYawOffsetDegrees();
 
 		if (USkeletalMesh* skeletal = Cast<USkeletalMesh>(asset)) {
@@ -241,8 +236,7 @@ void ATransitVehicleElement::RefreshOptions()
 void ATransitVehicleElement::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	// 和AVehicleElement::OnOverlapBegin同一条过滤：只有玩家当前控制的AForeverCharacter(人物)走近
-	// 才弹选项，别的载具/路人经过不算。
+	// 只有玩家当前控制的AForeverCharacter(人物)走近才弹选项，别的载具/路人经过不算。
 	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
 	if (!pawn || OtherActor != pawn || OtherActor == this || !Cast<AForeverCharacter>(OtherActor)) return;
 
@@ -262,8 +256,9 @@ void ATransitVehicleElement::OnOverlapEnd(UPrimitiveComponent* OverlappedCompone
 
 void ATransitVehicleElement::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Vehicle所有权在Traffic身上，这里不delete，和ACitizenElement/AVehicleElement同一套
-	// 安全原则。
+	// 被销毁时把屏幕上这辆车名下的选项撤掉(乘坐中被销毁不会再走UnPossessed/End重叠)。
+	if (EndPlayReason == EEndPlayReason::Destroyed && !vehicleNameOnly.IsEmpty()) HideOptions();
+	// Vehicle所有权在Traffic身上，这里只置空。
 	vehicle = nullptr;
 	Super::EndPlay(EndPlayReason);
 }
@@ -361,10 +356,7 @@ void ATransitVehicleElement::Tick(float DeltaTime)
 
 	float x, y, z, yaw;
 	vehicle->GetTransform(x, y, z, yaw);
-	// Route::Update()直接用地图单位写transform(不像AVehicleElement::Tick那样反过来从UE坐标
-	// 换算回去)，这里要乘WORLD_SCALE换成UE单位，和ForeverTrafficFrameworkComponent.cpp里
-	// ComputeWorldPosition同一套换算约定。叠加meshYawOffsetDegrees修正模型自己的正前方
-	// 和行驶方向没对齐的问题，见Init()里的说明。
+	// Route::Update()用地图单位写transform，这里乘WORLD_SCALE换成UE单位；叠加meshYawOffsetDegrees修正模型正前方与行驶方向的偏差。
 	SetActorLocationAndRotation(
 		FVector(x * TRANSIT_WORLD_SCALE, y * TRANSIT_WORLD_SCALE, z * TRANSIT_WORLD_SCALE),
 		FRotator(vehicle->GetPitch(), yaw + meshYawOffsetDegrees, 0.f));

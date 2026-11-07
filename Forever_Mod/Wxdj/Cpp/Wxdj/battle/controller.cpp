@@ -340,10 +340,9 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				// 对方跳过(含被禁锢而无法出招，但没有选积攒)时：付得起敏捷损失就用翻倍的敏捷闪避(被禁锢的一方也能)，
 				// 付不起(闪避之后敏捷会低于1)就不翻倍、不扣敏捷，仍用自己原来的敏捷闪避；没跳过的一方照常用自己的敏捷闪避，被禁锢又选了积攒的也一样用当前敏捷闪避
 				float defenderAGI = cultivators[j]->GetAGI();
-				bool canDodge = true;   // 被禁锢又选了积攒的人也用自己当前的敏捷闪避
-				if (skipAgi[j] > 0.f) { defenderAGI = skipAgi[j]; canDodge = true; }
+				if (skipAgi[j] > 0.f) defenderAGI = skipAgi[j];
 				double dodgeChance = DodgeProb(i, j, act_i->GetAttribute(), defenderAGI);
-				if (canDodge && dist(rng) < dodgeChance) {
+				if (dist(rng) < dodgeChance) {
 					DodgeSuccess(i, j);
 					BuildDualEnvironment(act_i);   // 双招被闪避=未命中，它的效果计入场地效果
 					continue;
@@ -893,10 +892,7 @@ void Controller::TakeDamage(int subject, int object,
 	}
 }
 
-// 有效威力：本回合出的招(单招=1个，双招=2个基础招式)各自按"家族+式号"查连招链，再乘上特性的各个乘区。
-//   单个基础招式的威力 = (基础威力 + 特性的基础威力加成) x (1 + 增伤比例 x 连续步数)；双招再乘DUAL_POWER_FACTOR；
-//   然后依次乘暴击(1+暴击伤害)、自己的增伤乘区(1+加和)。目标的易伤和减伤是同一个乘区，在TakeDamage里结算。同一乘区内加算，乘区之间相乘。
-// 没有任何加成时不动威力(保证没有increase、没有特性的招式和以前逐位一致，也不多抽随机数)。
+// 有效威力的乘区装配见battle.md"出招威力的乘区装配"；没有任何加成时不动威力，也不多抽随机数。
 void Controller::ApplyPower(int idx, int target, const shared_ptr<Action>& act, int& chainBonus, int& critPercent, int& staticPercent, vector<ChainStep>& chainSteps) {
 	chainBonus = 0;
 	staticPercent = 0;

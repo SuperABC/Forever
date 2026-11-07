@@ -74,9 +74,14 @@ Core对象的STL容器mutator"，而是"mod的编译产物里默认实现构造�
 新增虚方法本身）不涉及vtable槽位变化，但函数签名变了同样要重新编译这三个mod，否则调用点
 传参数量对不上。
 
+## 存档钩子
+
+`SaveState`/`LoadState`（mod私有数据，默认不存）、`GetStateVersion`（SaveState格式版本，默认0）、`GetInstanceCounter`/`SetInstanceCounter`
+（唯一实例名用的静态计数器，存档保存、读档恢复；没有计数器的类保持默认）。基类里的公共声明字段由Core直接快照。见`Source/Dependence/common/mod_state.md`。
+
 ## 依赖关系
 
-- 依赖：`expression.h`（`ScriptContext`、`EvaluateExpression`）、`change.h`（`FindLabel`里
+- 依赖：`common/mod_state.h`、`expression.h`（`ScriptContext`、`EvaluateExpression`）、`change.h`（`FindLabel`里
   `dynamic_cast<const PlaceHolderChange*>`）、`../common/handle.h`（`PostHandle`）、
   `<deque>`。
 - 被谁依赖：`script_factory.h`（`ScriptFactory::CreateFunc`/`DestroyFunc`按`ScriptMod*`工作）、

@@ -736,17 +736,11 @@ string ToString(const ValueType& value) {
 		}
 		else if constexpr (is_same_v<T, double>) {
 			string str = to_string(v);
-			size_t dot_pos = str.find('.');
-			if (dot_pos != string::npos) {
-				size_t last_non_zero = str.find_last_not_of('0');
-				if (last_non_zero != string::npos && last_non_zero > dot_pos) {
-					if (str[last_non_zero] == '.') {
-						str = str.substr(0, last_non_zero);
-					}
-					else {
-						str = str.substr(0, last_non_zero + 1);
-					}
-				}
+			if (str.find('.') != string::npos) {
+				// 裁掉小数部分末尾的0，裁完只剩小数点就连小数点一起去掉(5.000000 -> 5, 2.500000 -> 2.5)
+				size_t last = str.find_last_not_of('0');
+				if (str[last] == '.') last--;
+				str.erase(last + 1);
 			}
 			return str;
 		}

@@ -2,85 +2,30 @@
 
 ## 职责
 
-`RoadnetMod`定义路网布局方案Mod必须实现的业务接口。和老工程`E:\Projects\Forever_UE\Source\
-Dependence\map\roadnet_mod.h`相比是全新设计——老工程的`Road`只是一条带mesh资产路径的中心线，
-车道/人行道/停车道完全是Blueprint侧靠一个mesh资产铺出来的视觉效果，C++层不知道车道数；这个
-项目要求车道级导航图、路口mesh、路中间加Node分裂车道，老工程完全没有对应实现，具体设计见
-`Source/Core/map/roadnet.md`。
+`RoadnetMod`定义路网布局方案Mod必须实现的业务接口：产出`Node`/`Intersection`/`Road`/`Lot`，以及隧道口挖洞、路面贴地、行道树、路灯请求。车道级导航图、路口mesh、路中间加Node分裂车道的设计见`Source/Core/map/roadnet.md`。
 
 ## 关键设计
 
-- **一次只应该有一个路网布局方案生效**，不是Terrain那种`GetPriority()`多mod叠加分发——
-  `RoadnetFactory::SetConfig`/`GetRoadnet()`做单选，详见`roadnet_factory.md`。
-- **`DistributeRoadnet`有`getTerrain`/`getWater`/`getHeight`三个只读回调，没有`setTerrain`/
-  `setHeight`**——道路高度由mod自己决定：默认可以固定Z=0（`JingRoadnet`，隧道段用固定
-  `TUNNEL_HEIGHT`常量），也可以用`getHeight(x,y)`（地图element单位的连续坐标，含细化高度）采样
-  山表面高度作为路面Z（`JingRoadnet`抬升的山路），再用`AddTerrainFit`把地形贴到路面上，见下面一条。
-  `JingRoadnet`的隧道/抬升判断（探测`mountain`/`ocean`地形）靠`getTerrain`，`getWater`目前仍未被用到。
-- **`nodeStaticCount`延续`Node`跨DLL计数器传递的写法**——mod实现必须在`DistributeRoadnet`
-  开头第一步调`Node::SetCount(nodeStaticCount)`，构造的所有`Node`/`Intersection`/`Road`都
-  必须通过`externs`/`intersections`/`roads`/`lots`四个成员返回，不能留下"野"实例（否则
-  宿主侧的id计数器和mod侧不同步，后续深拷贝会拿到重复id）。
-- **`lots`是`vector<Lot>`，边界`Road`映射直接记在每个`Lot`自己身上（`Lot::
-  SetBoundaryRoad`/`GetBoundaryRoads`）**，不额外拿一个`pair`/`map`在旁边和`Lot`并排存——
-  `Lot`本来就有这套边界API，没必要在`RoadnetMod`层再维护一份等价的数据结构；`Lot`的三点/
-  四点构造函数都有一个可选的`boundary`参数（`general_geometry.h`），实现方可以直接在构造`Lot`的
-  同时把边界`Road*`传进去，等价于构造完再逐个调`SetBoundaryRoad`，只是不用另开一个map。不带
-  边界`Intersection`映射——Roadnet阶段产出的是"划出一块块地"，后面Zone/Building在lot里继续
-  摆内容时需要知道这块地临哪条路（建筑朝向、出入口该开在哪条路上），所以边界`Road`信息要
-  留着；但lot四角对应哪个`Intersection`用不上——车行/行人导航图直接挂在`Road`/
-  `Intersection`上（见`Source/Core/map/roadnet.h`的`RoadJunction`），不需要通过lot中转。
-  `unordered_map<int, Road*>`的`int`键沿用`general_geometry.h`的`FACE_DIRECTION`（0-3）。**这里存的
-  是`Road*`，而且必须指向`this->roads`里的同一个元素，不能是另外new/构造的独立对象**——
-  Zone/Building裁剪Lot空间时给"大路"加开口(`Lot::SplitWithPath`调`Road::AddOpening`)是直接
-  改这个指针指向的对象；如果边界这里存的是独立拷贝，改的就只是这份拷贝，`roads`里真正会被
-  渲染的那条路根本不受影响，PIE里看不到开口。所以这个字段类型是`Road*`不是`Road`，且要求
-  实现方自己保证指针有效性——取地址前必须确保`this->roads`不会再增长，`vector`扩容会让
-  之前取的地址失效，具体做法见`roadnet_basic.md`"`makeBoundaryRoad`"一节。
-- **车道/开口数据直接挂在`Road`自己身上**（`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/
-  `openings`，见`general_geometry.h`），不是`RoadnetMod`这一层的字段——`RoadnetMod`只负责产出`Road`
-  实例，实例本身已经携带了这些数据。
-- **`AddTunnelHatch`工具方法**：隧道口用，和`AddHatch`一样挖洞，另外产出的`TerrainHatch`带`wall=true`、
-  `floorStart/floorEnd`=connection在`t1/t2`处的路面高度(Z)，UE层据此在洞的两条长边生成侧壁(见
-  `ForeverTerrainFrameworkComponent.md`"隧道口侧壁")。其它挖洞一律用`AddHatch`(不加侧壁)。`hatches`的元素类型是
-  `TerrainHatch`(`general_geometry.h`：`quad`+`rotation`+`wall`+`floorStart`+`floorEnd`)。
-- **`AddHatch`工具方法+`hatches`输出成员**：`AddHatch(connection, t1, t2, width)`签名和
-  实现（`roadnet_mod.cpp`）：取`connection`在`[t1,t2]`两端的点，中点定位、两点连线方向定
-  朝向、弧长定长度、`width`定宽度，包成一个`Quad`追加进`hatches`。消费方
-  `ForeverTerrainFrameworkComponent::LookupTerrain`挖洞判断是"`construction`地形或者这个
-  格子有hatch"——隧道口的hatch靠这条规则在山体地形上挖出缺口，否则隧道段会被实心地形完全
-  挡住看不见，详见`Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。
-
-- **`AddTerrainFit`工具方法+`terrainFits`输出成员**：`AddTerrainFit(connection, t1, t2, width,
-  falloff)`沿`[t1,t2]`按弧长约0.5单位一个点采样出路面中轴线折线（x,y,z，z是路面高度），连同
-  `width`（路面整宽）和`falloff`（路面边缘向外渐变回原地形的距离）包成`TerrainFitRequest`
-  追加进`terrainFits`。存折线而不是`Connection*`，因为mod的`roads`会扩容、指针失效。宿主
-  `Map::InitRoadnet`把请求交给`Map::ApplyTerrainFits`，把路面下和路边的地形高度烤到路面上
-  （路面比地形高就填、低就切，两种都生效），详见`Source/Core/map/map.md`"地形贴合"一节。
-- **`pathRoadMaterial`**：Zone/Building裁剪`Lot`自由空间时，每次真正的切分都会自动生成一条
-  1单位宽的小路`Road`（见`Source/Dependence/map/general_geometry.md`的`Lot::SplitWithPath`）。这条
-  小路不走现有"按左右车道数选`default_x_x_x`资产"的道路mesh管线（0.3车行/0.2人行两侧这种
-  非整车道宽度套不进那套命名约定），Forever层直接画一个贴材质的扁cube，材质路径就是这个
-  字段——留空表示mod没有指定，退化用`DefaultRoad`。普通`public`字符串成员，和
-  `externs`/`roads`等现有字段风格一致，`JingRoadnet`不设置也是合法状态。
-- **行道树：虚函数`LayoutTrees(hostRoads)`+非虚工具方法`AddTreeSingle/AddTreeLine/AddTreeArea`+`trees`**——树放在
-  整张地图最后一个阶段布局：`Map::InitVegetation`在路网/园区/建筑/房间全部生成完之后调用
-  `LayoutTrees`一次(默认空实现)，传入的`hostRoads`是Core持有的那份路网(已经带上全部开口
-  `Road::GetOpenings`，可以避开出入口)，不是mod自己`roads`那份旧拷贝，只读访问。mod在里面调
-  `AddTree*`只记请求进`trees`(`TreeRequests`，见`feature_spec.md`，参考系是整张地图，世界坐标写成`{0,x,0,y}`)，
-  宿主`Roadnet::LayoutTrees`按值拷贝走，再交给Core的`Vegetation`展开(随机旋转/缩放、跳过水面和挖洞格子)。
-- **路灯：虚函数`LayoutLamps(hostRoads)`+非虚工具方法`AddLampSingle/AddLampLine/AddLampArea`+`lamps`**——完全同行道树：
-  `Map::InitLamps`在`InitVegetation`之后调用`LayoutLamps`一次(默认空实现，传入Core持有的`hostRoads`，只读)，mod在里面提交
-  `LampRequests`(见`feature_spec.md`，参考系整张地图)，宿主`Roadnet::LayoutLamps`按值拷贝走，交给Core的`Lamps`展开。
+- **一次只有一个路网布局方案生效**，不是Terrain那种`GetPriority()`多mod叠加分发——`RoadnetFactory::SetConfig`/`GetRoadnet()`做单选，见`roadnet_factory.md`。
+- **`DistributeRoadnet`有`getTerrain`/`getWater`/`getHeight`三个只读回调，没有`setTerrain`/`setHeight`**：道路高度由mod自己决定。默认可固定Z=0(隧道段用固定`TUNNEL_HEIGHT`常量下探，见`JingRoadnet`)，也可用`getHeight(x,y)`(地图element单位的连续坐标，含细化高度)采样山表面高度作为路面Z，再用`AddTerrainFit`把地形贴到路面上。`JingRoadnet`靠`getTerrain`探测`mountain`/`ocean`判断隧道/抬升，`getWater`目前未被用到。
+- **`nodeStaticCount`**：mod实现必须在`DistributeRoadnet`开头第一步调`Node::SetCount(nodeStaticCount)`(跨DLL的`Node` id计数器同步)，构造的所有`Node`/`Intersection`/`Road`都必须通过`externs`/`intersections`/`roads`/`lots`四个成员返回，不能留下"野"实例，否则宿主和mod的id计数器不同步，后续深拷贝会拿到重复id。
+- **`lots`是`vector<Lot>`，边界`Road`映射记在每个`Lot`自己身上**(`Lot::SetBoundaryRoad`/`GetBoundaryRoads`，键是`FACE_DIRECTION`0-3，缺失=那一侧没有路；`Lot`构造函数的可选`boundary`参数等价于构造后逐个`SetBoundaryRoad`)。不存边界`Intersection`映射：车行/行人导航图直接挂在`Road`/`Intersection`上(`Source/Core/map/roadnet.h`的`RoadJunction`)，不经lot中转。
+- **边界`Road*`必须指向`this->roads`里的同一个元素，不能是独立拷贝**：Zone/Building裁剪Lot空间时(`Lot::SplitWithPath`)会通过这个指针给"大路"加`RoadOpening`，独立拷贝会让开口加不到真正被渲染的那条路上(PIE里看不到开口)。实现方要保证指针有效：取地址前必须把所有往`roads`增长的调用做完，`vector`扩容会让之前取的地址失效，做法见`roadnet_basic.md`的`makeBoundaryRoad`。
+- **车道/开口数据挂在`Road`自己身上**(`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/`openings`，见`general_geometry.h`)，`RoadnetMod`只负责产出`Road`实例。
+- **挖洞/贴地**：`AddHatch`/`AddTunnelHatch`/`AddTerrainFit`三个非虚工具方法只是转调`general_geometry.h`的`BuildHatch`/`BuildTerrainFit`(`RouteMod`火车铺轨共用同一份实现)。
+  - `AddHatch(connection, t1, t2, width)`：取`connection`在`[t1,t2]`两端的点，中点定位、连线方向定朝向、弧长定长度、`width`定宽度，包成`TerrainHatch`追加进`hatches`。消费方`ForeverTerrainFrameworkComponent::LookupTerrain`挖洞判断是"`construction`地形或这个格子有hatch"，隧道口靠这条规则在山体上挖出缺口，否则隧道段被实心地形挡住，见`Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。
+  - `AddTunnelHatch`：隧道口专用，`TerrainHatch`带`wall=true`、`floorStart/floorEnd`=`connection`在`t1/t2`处的路面高度，UE层据此在洞的两条长边生成竖直侧壁；其它挖洞一律用`AddHatch`。
+  - `AddTerrainFit(connection, t1, t2, width, falloff)`：沿`[t1,t2]`按弧长约0.5单位一个点采样成路面中轴折线(x,y,z，z=Node Z即路面高度)，连同`width`(路面整宽)和`falloff`(边缘向外渐变回原地形的距离)包成`TerrainFitRequest`追加进`terrainFits`。存折线而不是`Connection*`，因为mod的`roads`会扩容、指针失效。宿主`Map::InitRoadnet`把请求交给`Map::ApplyTerrainFits`，路面比地形高就填、低就切，见`Source/Core/map/map.md`"地形贴合"。
+- **`pathRoadMaterial`**：Zone/Building裁剪`Lot`自由空间时每次真正的切分都会自动生成一条1单位宽的小路(`Lot::SplitWithPath`)。小路不走"按左右车道数选`default_x_x_x`资产"的管线(0.3车行/0.2人行这种非整车道宽度套不进去)，Forever层直接画贴材质的扁cube，材质就是这个字段；留空退化用`DefaultRoad`(`JingRoadnet`不设置也是合法状态)。`Roadnet`在`DistributeRoadnet`时原样拷贝一份。
+- **行道树**：`LayoutTrees(hostRoads)`(默认空)+非虚`AddTreeSingle/AddTreeLine/AddTreeArea`+`trees`。`Map::InitVegetation`在路网/园区/建筑/房间全部生成完之后调一次，`hostRoads`是Core持有的路网深拷贝(已带全部开口`Road::GetOpenings`，可避开出入口，不是mod自己`roads`那份旧拷贝)，只读，不要调会修改它的方法。参考系是整张地图(不旋转)，世界坐标写成`{0,x,0,y}`。宿主`Roadnet::LayoutTrees`按值拷贝走`trees`，再由Core的`Vegetation`展开，见`feature_spec.md`。
+- **路灯**：`LayoutLamps(hostRoads)`+`AddLampSingle/AddLampLine/AddLampArea`+`lamps`，完全同行道树；`Map::InitLamps`在`InitVegetation`之后调一次，宿主`Roadnet::LayoutLamps`拷贝走交给Core的`Lamps`展开。
+- 带存档钩子(`SaveState`/`LoadState`/`GetStateVersion`/`GetInstanceCounter`/`SetInstanceCounter`)，默认不存任何东西，见`common/mod_state.md`。
 
 ## 依赖关系
 
-- 依赖：`map/general_geometry.h`（`Node`/`Intersection`/`Road`/`Lot`）。
-- 被谁依赖：`Source/Core/map/roadnet.h`（`Roadnet`包装类持有`RoadnetMod*`，`pathRoadMaterial`
-  在`DistributeRoadnet`时原样拷贝一份）、`Source/Basic/map/roadnet_basic.h`（`JingRoadnet`）、
-  `Forever_Mod/Empty`的`EmptyRoadnet`demo mod、`Source/Core/map/zone.md`/`building.md`
-  （Zone/Building读取lot的边界`Road`映射）。
+- 依赖：`map/general_geometry.h`(`Node`/`Intersection`/`Road`/`Lot`/`TerrainHatch`/`TerrainFitRequest`)、`map/feature_spec.h`、`common/mod_state.h`。
+- 被谁依赖：`Source/Core/map/roadnet.h`(`Roadnet`包装类持有`RoadnetMod*`)、`Source/Basic/map/roadnet_basic.h`(`JingRoadnet`)、`Forever_Mod/Empty`的`EmptyRoadnet`、`Source/Core/map/zone.md`/`building.md`(读取lot的边界`Road`映射)。
 
-- **挖洞/贴地的实现已提到`general_geometry`**：`AddHatch`/`AddTunnelHatch`/`AddTerrainFit`三个成员现在只是转调
-  `general_geometry.h`的`BuildHatch`/`BuildTerrainFit`，`TerrainFitSample`/`TerrainFitRequest`也搬到了那里，
-  `RouteMod`（火车铺轨）共用同一份实现。行为和接口不变。
+## 待办/后续阶段
+
+- 无。

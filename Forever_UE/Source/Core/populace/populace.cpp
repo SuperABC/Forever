@@ -25,8 +25,7 @@ using namespace std;
 
 namespace {
 
-// LIFE_TYPE/Human——只在模拟期间用来推进人口数量，模拟结束后不对外暴露，也不保留进
-// Citizen，见citizen.h。
+// LIFE_TYPE/Human：只在模拟期间用，不对外暴露，也不保留进Citizen。
 enum LIFE_TYPE : int {
 	LIFE_SINGLE,
 	LIFE_MARRY,
@@ -423,10 +422,7 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 		jobCount++;
 	}
 
-	// Scheduler自己独立的一套timer，负责citizen下班之后的行为，和上面Job的timer完全平行——
-	// 结构、上限、驱动方式都照抄，只是换成citizen->GetScheduler()，共用同一个onActions
-	// 回调（回调签名本来就是通用的(Citizen*, const vector<Change*>&)，不关心Change是
-	// Job产的还是Scheduler产的）。
+	// Scheduler的timer，和上面Job的timer平行，共用onActions回调。
 	if (crossedDay) {
 		for (Citizen* citizen : citizens) {
 			Scheduler* scheduler = citizen->GetScheduler();
@@ -465,7 +461,7 @@ bool Populace::ApplyChange(const Change* change, const ScriptContext& context) {
 		return true;
 	}
 
-	// 占位，等Populace域真的有需要处理的其它Change子类时再补，见populace.h声明处注释。
+	// 占位：Populace域目前只认add_option/remove_option。
 	return false;
 }
 

@@ -5,11 +5,6 @@
 #include "story/change.h"
 
 
-// ShopSalerJob：店员，天天上班，早上9点从家出门去商店，晚上18点从商店下班回家。上下班由
-// Resource/Story/job_shop_saler.script里的计时器+npc_navigate驱动(脚本里用$$self.occupant/
-// home/workplace，见job.md"脚本驱动通勤")，这里的DailyPlan不排任何C++节点。SetProperty()里设
-// scriptModName="script_empty"+milestoneNames={"job_shop_saler"}，见job.md"Script配置"一节。
-
 class ShopSalerJob : public JobMod {
 public:
 	ShopSalerJob();
@@ -17,8 +12,6 @@ public:
 	static const char* GetId() { return "job_shop_saler"; }
 	virtual const char* GetType() const override { return "job_shop_saler"; }
 	virtual void DailyPlan(const Time& currentTime, PostHandle* post) override;
-	// GetName()必须全局唯一，见CONVENTIONS.md——static计数器+id，和
-	// Source/Basic/map/terrain_basic.h/.cpp的OceanTerrain同一个模式。
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
@@ -32,7 +25,6 @@ private:
 	std::string name;
 };
 
-// WarehouseKeeperJob：商店仓库房间的管理员，没有剧情脚本，9点上班18点下班。
 class WarehouseKeeperJob : public JobMod {
 public:
 	WarehouseKeeperJob();
@@ -53,8 +45,6 @@ private:
 	std::string name;
 };
 
-// FactoryWorkerJob：工坊房间的工人，8点上班17点下班。上下班/到岗选项/小游戏发工资都在
-// Resource/Story/job_factory_worker.script里(同ShopSalerJob)，这里的DailyPlan不排任何C++节点。
 class FactoryWorkerJob : public JobMod {
 public:
 	FactoryWorkerJob();

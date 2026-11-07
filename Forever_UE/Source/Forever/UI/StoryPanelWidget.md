@@ -6,7 +6,7 @@
 
 ## 关键设计
 
-- 纯新设计，老工程没有这个screen，结构照抄`ResourcePanelWidget`的`ScrollBox`+`PathRowWidget`模式；`RefreshRows`重建列表，`AddScriptButton`弹文件对话框添加。行间距用`ScrollBoxUtils`。
+- 结构同`ResourcePanelWidget`的`ScrollBox`+`PathRowWidget`模式；`RefreshRows`重建列表，`AddScriptButton`弹文件对话框添加。行间距用`ScrollBoxUtils`。
 
 ## 依赖关系
 

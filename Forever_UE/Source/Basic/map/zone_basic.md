@@ -13,6 +13,9 @@
 - **`LayoutTrees`**：沿四面栅栏内侧每隔一段种一棵树，大门那一段让出来。坐标按"朝北"写，Core按大门方向旋转。
 - **自定义模型/树的测试配置**用`#define`(`ZONE_KIT_*`急救包、`ZONE_TREE_*`树的网格路径/缩放/间距/内缩)，先给默认值，看过效果再调。
 - 挂示例脚本`entity_event`(进出事件只发给这个实体自己的`Script`)，见`Resource/Story/entity_event.script`。
+- **内部布局细节**：两栋内部建筑沿内部道路两侧各占一半，沿路方向长`0.6*side`、垂直方向深`0.6*(side/2)`，不贴围墙/内部道路；`roadIndices`记它贴着`internalRoads[0]`的哪一面，两半相反，`direction`取该面朝向。内部道路宽度复用大门宽度`side*GATE_WIDTH_RATIO`。大门是滑动双开门(`Cube`资产占位)。
+- **`LayoutTrees`**：沿西/东边从北角种到南角，南边各往里收一个间距避开已种的角，北边(大门边)分成大门两侧两段，开口两侧各再让出半个间距(和行道树避让开口同一规则)。树的位置用`PointParams`的ratio+offset，坐标按朝北写，原点在quad西北角(+X东、+Y南)。
+- **急救包装饰**(`ZONE_KIT_*`)：大门开口两端各一个，离北边`ZONE_KIT_INSET`。
 
 ## 依赖关系
 

@@ -9,11 +9,8 @@
 
 class Industry;
 
-// Manufacture(工坊)：实际生产东西的单位——"工厂"这个中文叫法在本项目里专指
-// mod创建/销毁管理器(XxxFactory)，容易混淆，这个概念中文统一叫"工坊"，类名不变。
-// 自带inputCache/outputCache两个内部Storage(直接构造，不走mod系统，见storage.md)，
-// 负责当天原料/产出的暂存中转。核心是构造函数里ComputeRecipe()那套"目标产量→副产物
-// 覆盖抵消→配方递归展开→再次副产物抵消"四步算法(批次化改造版，见manufacture.md)。
+// Manufacture(工坊)：实际生产东西的单位，自带inputCache/outputCache两个内部Storage。
+// 配方展开算法与每日结算流程见manufacture.md。
 class Manufacture {
 	friend class IndustrySaveCodec;
 public:
@@ -21,8 +18,7 @@ public:
 		Industry* industry);
 	~Manufacture(); // factory->DestroyManufacture(mod) + delete inputCache/outputCache
 
-	// mod为空(id没有被注册/没有在config.json"manufacture_mods"里启用)说明创建失败，
-	// 调用方应当整个丢弃这个Manufacture。
+	// mod为空(id没有注册/没有启用)说明创建失败，调用方应当整个丢弃这个Manufacture。
 	bool IsValid() const;
 
 	const std::string& GetName() const;
@@ -30,20 +26,13 @@ public:
 	Storage* GetInputCache() const;
 	Storage* GetOutputCache() const;
 
-	// 展开+抵消后的"每天净外部原料需求"(绝对量，假设今天全部活跃批次都能达成)——
-	// Industry::GlobalAllocate()用这个减去inputCache当前存量算出"这个工坊的输入cache
-	// 还缺多少某种原料"。
+	// 展开+抵消后的"每天净外部原料需求"(绝对量，假设全部活跃批次都能达成)。
 	const std::unordered_map<std::string, float>& GetIngredientNeeds() const;
 
-	// 每日三阶段中的两步，第三步(全城统一调配)在Industry::GlobalAllocate()里对全部
-	// Storage/Manufacture统一做，不是Manufacture自己的方法，见industry.md。
-
-	// 阶段A：把上一轮StartProduce()算出的pendingProduction结算进outputCache——
-	// 结算的产量/副产品都按"这一轮实际产出批次数 / 这一轮活跃目标批次数"的比例来，
-	// 不是按理论满批量结算，见manufacture.md。
 	// 新开局时把产出cache放进半天的产量(每个目标product：批数×批量÷2，取整)，读档不调用。
 	void SeedOutputCache();
 
+	// 阶段A：把上一轮StartProduce()算出的pendingProduction结算进outputCache。
 	void WorkAccount();
 
 	// 最近一次WorkAccount结算进产出cache的产量（含副产品，product type->数量），报表用。
@@ -51,14 +40,11 @@ public:
 	// 满负荷每天的净目标批数（product type->批数），乘以Product::GetBatchSize()是设计日产能。
 	const std::unordered_map<std::string, int>& GetTargets() const { return targets; }
 
-	// 阶段C：用inputCache当前存量(应该已经被本轮GlobalAllocate补过货)和outputCache
-	// 剩余空间，算这一轮实际能产几批，把结果存进pendingProduction供下一轮WorkAccount
-	// 结算，并按实际产量预扣inputCache里的原料。
-	// capacityRatio是产能比例(1=设计产能)，由到岗率算出，可以大于1；原料和产出空间不够时仍按比例压低。
+	// 阶段C：算这一轮实际能产几批存进pendingProduction，并预扣inputCache里的原料。
+	// capacityRatio是产能比例(1=设计产能)，可以大于1；原料和产出空间不够时仍按比例压低。
 	void StartProduce(float capacityRatio = 1.f);
 
 private:
-	// 配方展开+副产物抵消算法，构造函数内部调，见manufacture.md。
 	void ComputeRecipe();
 
 	Industry* industry;

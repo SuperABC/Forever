@@ -1,5 +1,8 @@
 # ForeverMemoryReport — 内存泄漏怎么查
 
+## 职责
+内存泄漏排查工具：一行日志快照 + 控制台命令，没有运行时逻辑。实现是 `ForeverMemoryReport.h/.cpp`（命名空间函数 `Log` 加一个 `FAutoConsoleCommandWithWorld`）。统计的 Actor 类别：`ACitizenElement`/`ABuildingElement`/`AVehicleElement`/`ATransitVehicleElement`/`AAssetElement`。
+
 ## 内置的快照
 `ForeverMemoryReport::Log(world, tag)` 往 `Saved/Logs/Forever.log` 打一行：
 
@@ -24,3 +27,6 @@
 ## 已知不会被"退出游戏"销毁的东西（设计如此）
 - `Registry` 单例（函数内 static）和已加载的 mod DLL：进程生命周期内常驻，不会卸载（工厂里存的函数指针指向 DLL 代码段）。但每次开局 `Registry::RefreshMods()` 会补加载 config 里新增的 DLL 并刷新启用表，所以回菜单后改勾选、新增 DLL 路径再开始游戏都会生效；从配置里移除的 DLL 保持加载但被禁用。
 - `Config` 静态状态、Basic 等 mod 里的 `static int count` 命名计数器：不重置，只会让新建物品的名字继续往后编号，不会撞名。
+
+## 依赖关系
+- 依赖：各 `Element/*Element.h`（只用 `IsA` 计数）。被 `AForeverMenuController::BeginPlay` 调用。

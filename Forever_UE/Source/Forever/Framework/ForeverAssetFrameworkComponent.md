@@ -25,6 +25,7 @@
 - `SpawnThrownAsset`：投掷。同一个Actor，额外`Launch`给初速度(开CCD、忽略投掷者)。Asset先记进
   `Player::worldAssets`(房间外的物品，所有权归Player，不进`Room::assets`，落点在室内也一样)再生成Actor；
   同名已存在则整个失败，不留没有归属的Actor。扔出去之后不会自动消失(落地后的效果由以后的物品自己设计)。
+- `CollectNearby(center, radiusCm, out)`：背包"附近"列表用。球形重叠查询(`ECC_PhysicsBody`对象类型，因为`AAssetElement`网格用`PhysicsActor`预设)走引擎物理宽相位，代价正比于附近物品数而不是`worldAssets`总量；只收归`Player::worldAssets`持有的(房间里的物品归`Room`，不进该列表)，位置取Actor实时位置，按距离从近到远排序。
 - `SyncWorldAssetsToCore`/`RestoreWorldAssets`：存档前把场景里这些Actor的实际位置朝向写回
   `Player::worldAssets`(`ForeverSaveSubsystem`的保存流程里，和市民位置同步一起)；读档后按记的位置朝向
   重新生成Actor，**速度不存**，从静止开始模拟(`AForeverFrameworkActor`读档分支里`RestoreControlledPawn`之后调用)。
@@ -33,13 +34,14 @@
 
 ## 依赖关系
 
-- 依赖：`Source/Forever/Element/AssetElement.h`(`SpawnActor`的目标类型)。
-- 被谁依赖：`Source/Forever/UI/InventoryWidget.h`(Drop/Pick交互)。
+- 依赖：`Source/Forever/Element/AssetElement.h`(`SpawnActor`的目标类型)、Core `player/player.h`/`player/asset.h`/`map/room.h`、`ForeverStoryFrameworkComponent`(`StartAssetScript`/`NotifyAssetEvent`/`NotifyAssetResult`)。
+- 被谁依赖：`Source/Forever/UI/InventoryWidget.h`(Drop/Pick交互)、`AForeverFrameworkActor::ApplyChange`(四个资产Change)、存档/读档流程。
 
 ## 待办/后续阶段
 
-- 背包界面的丢弃：房间里进`Room::assets`，室外进`Player::worldAssets`；拾取仍只认房间(室外的物品捡不起来，要做的话需要房间栏显示附近的室外物品)；除投掷物外的资产仍统一用Cube占位；其余资产的真实网格/图标留作后续美术资产到位后，在各自的
+- 背包界面的丢弃：房间里进`Room::assets`，室外进`Player::worldAssets`；除投掷物外的资产仍统一用Cube占位；其余资产的真实网格/图标留作后续美术资产到位后，在各自的
   `AssetMod`里填`meshPath`即可。
 
 ## 脚本驱动的背包Change
+
 `ApplyPickAsset/ApplyGrantAsset/ApplyDeductAsset/ApplyDropAsset`(由`AForeverFrameworkActor::ApplyChange`转发)。pick：在房间根/`worldAssets`里找到资产并摘下→`Player::StoreAsset`→成功`DestroyWorldAsset`+`get_asset(success)`，失败放回原处+`get_asset(fail)`。grant：`CreateAsset`+`SetCount`+`StoreAsset`。deduct/drop：`TakeOwned`，drop再`SpawnWorldAsset`到玩家身前。`FindElementByName(name)`按资产名找场景里的`AAssetElement`(带脚本的资产`SpawnWorldAsset`时先补发game_start再`Init`烘焙选项)。

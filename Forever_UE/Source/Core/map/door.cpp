@@ -79,9 +79,7 @@ bool Door::CanPass(const Citizen* who, bool isPlayer) const {
 	if (access == DOOR_ACCESS_LOCKED) return false;
 	if (access == DOOR_ACCESS_OPEN) return true;
 
-	// Owner：所属对象公有(GetStated()==true)时视同Open；isPlayer暂时按Open处理(这次没有
-	// 真正的玩家门禁判定，见door.h注释)；否则who必须是所属对象的GetOwner()或者在Allow()
-	// 登记过名字的citizen。
+	// Owner：所属对象公有则视同Open；isPlayer暂按Open处理；否则who必须是所属对象的GetOwner()
 	bool stated = false;
 	Citizen* owner = nullptr;
 	if (zone) { stated = zone->GetStated(); owner = zone->GetOwner(); }

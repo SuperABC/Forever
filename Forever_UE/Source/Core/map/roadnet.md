@@ -34,7 +34,7 @@
     被`delete`两次（double free）。没有匹配上真实路、走了兜底独立拷贝分支的边界`Road*`
     （理论上不应该出现，见`roadnet_basic.md`"`makeBoundaryRoad`"一节）也会被这个去重集合
     正确收纳，不会漏删。
-- **边界`Road`指针直接存在`Lot`自己身上**（`Dependence/map/general_geometry.h`的`Lot`新增
+- **边界`Road`指针直接存在`Lot`自己身上**（`Dependence/map/general_geometry.h`的`Lot`提供
   `SetBoundaryRoad(dir, Road*)`/`GetBoundaryRoad(dir)`/`GetBoundaryRoads()`（`Lot`不持有
   这些指针的生命周期，仍然由`Roadnet`统一去重`delete`）），不是`Roadnet::lots`旁边单独挂一份
   `unordered_map`——`Roadnet::lots`/`Map::GetLots()`是`vector<Lot*>`。这样拿到一个`Lot*`
@@ -113,10 +113,10 @@
   - 行人**不是全联通**：①人行横道——同一条路自己两侧都有人行道锚点时，直接连一条
     `pedestrianSide[0]↔pedestrianSide[1]`，代表穿过这条路本身的人行横道；单侧人行道的路不
     生成人行横道。②转角人行道——按夹角排序后，每一对夹角相邻（环状，含首尾）的路，各自算出
-    朝向对方那一侧的人行道锚点（用outward方向+isStart推导，见`roadnet.cpp`注释），两侧都有
+    朝向对方那一侧的人行道锚点（用outward方向+isStart推导，见下面"方向约定"），两侧都有
     人行道才连，代表沿人行道绕过这个转角、不横穿任何一条路。行人边双向插入图（人行道没有
     方向限制）。
-  - 这次先做直线连接，不做转弯半径/圆角——和路口mesh的简化程度一致（见
+  - 路口内连接是直线，不做转弯半径/圆角——和路口mesh的简化程度一致（见
     `ForeverRoadnetFrameworkComponent.md`）。
 - **`Map::AddRoadAccessNode`用到的"贯通线"记录（`Map::ThroughLine`）是`Map`自己的私有实现
   细节，不在`Roadnet`/`RoadJunction`里**——因为它要跨越`InitRoadnet`一次性建图和之后任意时刻
@@ -126,21 +126,20 @@
   断开都把传入的世界坐标投影回`t`（`Map::ProjectPointOntoRoad`），在这组分段里精确定位哪
   一段被跨过、干净地删掉换成两段更短的——和"谁先调用`BreakThroughLine`"这个顺序完全无关
   （详见`map.h`里`ThroughLine`/`BreakThroughLine`声明处的注释）。
-- **路灯`LayoutLamps()`/`GetLamps()`**——同`LayoutTrees`：调`mod->LayoutLamps(roads)`再把`mod->lamps`按值拷贝进`lamps`，
+- **方向约定**：这个项目+Y=南，side0=前进方向的右手边，横向偏移方向`sperp0=(-fwdY,fwdX)`（不是标准数学的
+  `(fwdY,-fwdX)`，见`Map::ComputeLaneAnchorPosition`声明处）。`isStart`时fwd==out，side0在out的逆时针侧；
+  `isEnd`时fwd==-out，side0在顺时针侧。所以转角人行道里，cur朝向next(角度增大)的一侧：`isStart`取side0、
+  `isEnd`取side1；next朝向cur的一侧相反。`Build()`里的`perp0X/perp0Y`没有被使用（用的是采样点处重新取的
+  `sperp0X/Y`），是死变量。
+- **`curbLeft`/`curbRight`的顺序是硬约束**：它们只被`BuildJunctionMeshes()`按`[curbRight_0,curbLeft_0,...]`的
+  固定顺序铺扇形网格，名字不对应真实左右手。`isStart`端side1给`curbRight`、side0给`curbLeft`，`isEnd`端相反；
+  顺序反了扇形三角化会在每个路口开口处拧一下。
+- **树`LayoutTrees()`/`GetTrees()`**——调`mod->LayoutTrees(roads)`并拷贝`mod->trees`，由`Map::InitVegetation`交给
+  `Vegetation`展开，见`vegetation.md`。
+- **路灯`LayoutLamps()`/`GetLamps()`**——同`LayoutTrees`：调`mod->LayoutLamps(roads)`再把`mod->lamps`按值拷贝进`lamps`，
   由`Map::InitLamps`交给`Lamps`展开，见`lamp.md`。
 
-## 和老工程的关系
-
-老工程`Roadnet`（`E:\Projects\Forever_UE\Source\Core\map\roadnet.h`）只是`RoadnetMod`的薄包装
-+ lot深拷贝 + `AllocateAddress`/`LocateBlock`，这几部分原样对照迁移（深拷贝手法、
-`AllocateAddress`按边界路分配序号的语义）。但老工程完全没有：
-- 车道级别的任何数据（`Road`只是一条中心线+mesh资产路径）。
-- 路口数据结构或路口mesh（`RoadnetBase.cpp`视觉上就是几条路的mesh直接重叠）。
-- 车行/行人分离的导航图（老工程导航图在`Map::InitNavigationGraph`，粒度是"每条Road一条边"，
-  端点直接是共享的`Intersection`坐标，没有车道级偏移）。
-
-`RoadJunction`、车行/行人双图、`Map::AddRoadAccessNode`都是本项目的新设计，不是照抄老工程
-代码，具体决策记录见`Source/Dependence/map/roadnet_mod.md`。
+## 其它字段
 
 - **`pathRoadMaterial`**：`DistributeRoadnet`时原样拷贝一份`mod->pathRoadMaterial`（纯
   字符串，不需要深拷贝），`GetPathRoadMaterial()`只读转发。用途和存在理由见
@@ -166,5 +165,4 @@
 
 ## 待办/后续阶段
 
-- Traffic域（阶段4-3）会开始消费`vehicleNavGraph`/`pedestrianNavGraph`做寻路，目前这两张图
-  只负责"建出来、能查询"，不涉及任何寻路算法。
+- 无。寻路由`Map::FindPedestrianPath`/`FindVehiclePath`提供（见`map.md`），`Roadnet`/`RoadJunction`只负责建图。

@@ -25,14 +25,6 @@
 #include "traffic/station_mod.h"
 #include "traffic/vehicle_mod.h"
 
-// 阶段3示例mod:验证"config.json按mod id配置的命令行式参数"能透传到mod。20个concept各
-// 一个EmptyXxx,id是"<concept>_empty"(比如room_empty/script_empty),和其它mod一样带concept前缀。参数不在ApplyArgs这个创建后钩子里传给mod,而是
-// 直接由Create<Concept>喂给creator——config.json"<concept>_mods"数组里"empty --test true"
-// 这种写法解析出的参数字符串,创建实例那一刻就作为构造函数参数交给EmptyXxx,mod自己决定怎么用
-// (这里全部选择存进name成员)。GetName()把构造时收到的参数字符串拼进返回值,方便在
-// ForeverModSubsystem的验证日志里确认参数确实从config.json一路传到了这里。真正的业务逻辑
-// 本阶段不需要,阶段4对应系统落地时,这类占位mod的定位和旧工程"empty"系列mod一致(空实现兜底)。
-
 class EmptyTerrain : public TerrainMod {
 public:
 	EmptyTerrain(const std::string& args) { name = "empty(" + args + ")"; }
@@ -73,10 +65,6 @@ private:
 	std::string name;
 };
 
-// EmptyZone/EmptyBuilding这次会话改回"一个本体独占一个mod实例"模型：Distribute()/
-// explicitPlacements改成static Assign()（空实现，不参与显式占位）；寻址用的唯一名字计数器
-// 直接写在构造函数里（老工程ResidentialZone::count同款），不再需要ApplyArgs把参数字符串拼进
-// name（参数字符串如果还需要体现可以另外存一个字段，不影响寻址用的name）。
 class EmptyZone : public ZoneMod {
 public:
 	EmptyZone() { lastName = std::string("empty") + std::to_string(count++); }
@@ -92,7 +80,7 @@ public:
 private:
 	std::string lastName;
 public:
-	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	// 存档保存/恢复命名计数器count，见Source/Dependence/common/mod_state.md。
 	virtual int GetInstanceCounter() const override { return count; }
 	virtual void SetInstanceCounter(int value) override { count = value; }
 private:
@@ -116,7 +104,7 @@ public:
 private:
 	std::string lastName;
 public:
-	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	// 存档保存/恢复命名计数器count，见Source/Dependence/common/mod_state.md。
 	virtual int GetInstanceCounter() const override { return count; }
 	virtual void SetInstanceCounter(int value) override { count = value; }
 private:
@@ -248,7 +236,6 @@ public:
 	virtual const char* GetType() const override { return "job_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
-	// Society/Job域这次迁移新增的纯虚方法：这个占位mod不产生任何调度。
 	virtual void DailyPlan(const Time&, PostHandle*) override {}
 
 private:
@@ -263,8 +250,7 @@ public:
 	virtual const char* GetType() const override { return "organization_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
-	// 这个占位mod不参与地图上真实的Component竞争，GetRequirements返回空表(Society::Init跳过
-	// 没有任何requirements的候选类型)，DesignJobsForRoom不需要配任何Job。
+	// GetRequirements返回空表，Society::Init会跳过它。
 	static float GetPower() { return 0.f; }
 	static const std::unordered_map<std::string, std::pair<int, int>>& GetRequirements() {
 		static const std::unordered_map<std::string, std::pair<int, int>> requirements;
@@ -277,11 +263,6 @@ private:
 	std::string name;
 };
 
-// WrapScript这次真正接入Post查询：game_start那个milestone的changes数组最后一项是
-// PlaceHolderChange{label:"control"}（见Resource/Story/test.json），命中后向Core查询
-// "random citizen"，把结果姓名塞进controlChange（长期持有、永不delete，见script_mod.md
-// "mod往actionStack里塞的指针必须是mod自己长期维护"的约定），原地替换掉actionStack顶层里
-// 那个PlaceHolderChange。
 class EmptyScript : public ScriptMod {
 public:
 	EmptyScript(const std::string& args) { name = "empty(" + args + ")"; }
@@ -322,8 +303,7 @@ public:
 	virtual const char* GetType() const override { return "product_empty"; }
 	virtual const char* GetName() override { return name.data(); }
 
-	// 空占位：categories/batchSize/ingredients/byproducts保持基类默认值不填，见
-	// product_mod.h"两段式"约定的说明(SetProperty留空也可以)。
+	// 空占位：字段保持基类默认值。
 	virtual void SetProperty() override {}
 
 private:

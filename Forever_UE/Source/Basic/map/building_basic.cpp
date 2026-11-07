@@ -9,16 +9,11 @@
 using namespace std;
 
 namespace {
-	// 把楼体压到靠近道路的一侧，深度方向只占bodyDepthSizeRatio这么大一块、贴着道路那条边
-	// (bodyDepthCenterRatio是这块body在深度方向上的中心、相对"贴道路=0、远离道路=1"这同一套
-	// 0~1比例，和station_basic.cpp的NearRoadPoint用的是完全一致的direction->深度轴映射约定，
-	// 这里单独写一份是因为BuildingFootprintSpec用(centerRatio,sizeRatio)描述一个区间而不是
-	// NearRoadPoint的(alongRatio,depthRatio)单点坐标，换算方式不同，没法直接调用它)——剩下的
-	// 深处空间留给StationMod的站台/跑道接口用，避免公共交通连线穿过楼体实体(用户实测反馈
-	// "建筑楼体没有偏移，还位于建筑矩形的中心，导致公共交通路线穿过楼体"就是因为之前
-	// centerRatio固定0.5、bodyOffsetX/Y恒为0，见Building::Layout()里
-	// bodyOffsetX=(fp.centerRatioX-0.5)*GetSizeX()这个换算)。bodyFrontageSizeRatio是沿
-	// 道路方向(frontage轴)的占比，不需要跟着direction做任何换算。
+	// 把楼体压到靠近道路的一侧：深度方向只占bodyDepthSizeRatio、贴着道路那条边，剩下的深处空间
+	// 留给StationMod的站台/跑道，避免公共交通连线穿过楼体。bodyDepthCenterRatio按"贴道路=0、
+	// 远离道路=1"给，direction->深度轴的映射和station_basic.cpp的NearRoadPoint一致(那边用
+	// 单点坐标，这里用区间(centerRatio,sizeRatio)，换算不同所以单独写一份)。
+	// bodyFrontageSizeRatio是沿道路方向的占比，不随direction变化。
 	BuildingFootprintSpec NearRoadFootprint(int direction, float bodyDepthCenterRatio,
 		float bodyDepthSizeRatio, float bodyFrontageSizeRatio) {
 		bool depthAlongX = (direction == FACE_WEST || direction == FACE_EAST);
@@ -51,10 +46,9 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
 	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
 	milestoneNames = { "entity_event" };
-	// direction对显式占位是真实方向，对权重CDF/FillRemainder落地传进来是-1——这个类型的
-	// 楼层内部布局(AssignFloor选的模板)按direction摆朝向，所以-1时要从boundaryRoads里随机
-	// 挑一个有真实边界路的方向回写，保证这栋building最终有确定方向可用(行人/车辆导航的
-	// "outside"端点要靠这个方向找到该连去哪条路，见building_mod.h的Layout()注释)。
+	// direction对显式占位是真实方向，权重CDF/FillRemainder落地时是-1：-1时从boundaryRoads随机
+	// 挑一个有真实边界路的方向回写，行人/车辆导航的"outside"端点要靠它找到该连的路，见
+	// building_mod.h的Layout()注释。
 	if (direction < 0) {
 		std::vector<int> candidates;
 		for (auto& [dir, road] : boundaryRoads) {
@@ -94,14 +88,10 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
 
-	// 按quad尺寸分档随机选一套模板组合(layout 0-3)+对应的房间槽位密度(size)，layout==1/3
-	// 自带电梯井道模板数据(preset_lobby_wing_*/preset_nshape_double_*)，AssignElevatorCabin
-	// 靠这两个分支才有真正的Elevator几何可用。
-	//
-	// 方向：按quad尺寸/朝向算出的"偏好方向"覆盖掉一开始GetRandom(4)的初始值，但只有偏好
-	// 方向在boundaryRoads里确实有非空条目时才采用，否则保留上面已经兜底好的direction——
-	// 不检查就直接覆盖会导致上面费心兜底出来的、行人/车辆导航outside端点能用的direction
-	// 被换成一个查不到路的方向。
+	// 按quad尺寸分档随机选一套模板组合(layout 0-3)+房间槽位密度(size)。只有layout==1/3的模板
+	// (preset_lobby_wing_*/preset_nshape_double_*)带电梯井道，AssignElevatorCabin靠它们产出Elevator几何。
+	// 偏好方向只有在boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction
+	// (否则outside端点会查不到路)。
 	int layout = 0;
 	float size = 120.f;
 	int preferredDirection = direction;
@@ -274,9 +264,7 @@ const char* ShopBuilding::GetName() {
 
 void ShopBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
-	// direction对显式占位是真实方向，对权重CDF/FillRemainder落地传进来是-1——照抄
-	// ResidenceBuilding同款兜底：先从boundaryRoads里随机挑一个有真实边界路的方向，保证这栋
-	// building最终有确定方向可用(行人/车辆导航的"outside"端点要靠它找到该连去哪条路)。
+	// direction==-1时的兜底，同ResidenceBuilding::Layout。
 	if (direction < 0) {
 		std::vector<int> candidates;
 		for (auto& [dir, road] : boundaryRoads) {
@@ -293,8 +281,7 @@ void ShopBuilding::Layout(int& direction, const Quad& quad,
 	if (quad.GetSizeY() < 6.f) scaleY = (quad.GetSizeY() - 2.4f) / quad.GetSizeY();
 	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, scaleX, scaleY };
 
-	// 和ResidenceBuilding一样，只有偏好方向在boundaryRoads里确实有非空条目时才采用，否则
-	// 保留上面已经兜底好的direction，避免行人/车辆导航outside端点查不到路。
+	// 同ResidenceBuilding：偏好方向在boundaryRoads里有非空条目才采用。
 	int preferredDirection = (quad.GetSizeX() > quad.GetSizeY())
 		? (FACE_WEST + GetRandom(2))
 		: (FACE_NORTH + GetRandom(2));
@@ -318,7 +305,7 @@ void ShopBuilding::Layout(int& direction, const Quad& quad,
 	FloorAssetSpec assets;
 	assets.wallMaterial = "/Game/Asset/Materials/White.White";
 
-	// layers固定2层(不像Residence那样按acreage随机分档)，见building_basic.md。
+	// layers固定2层(不像Residence按acreage分档)。
 	layers = 2;
 
 	if (quad.GetAcreage() < 6000.f) {
@@ -442,8 +429,7 @@ void FactoryBuilding::Layout(int& direction, const Quad& quad,
 		}
 	}
 
-	// direction引用参数是唯一的输出，这个偏好方向要真正生效：同ResidenceBuilding/
-	// ShopBuilding一样，只有boundaryRoads里确实有这个方向的路时才采用。
+	// 同ResidenceBuilding：偏好方向在boundaryRoads里有路才采用。
 	int preferredDirection;
 	if (quad.GetSizeX() > quad.GetSizeY()) {
 		preferredDirection = FACE_NORTH + GetRandom(2);
@@ -464,8 +450,7 @@ void FactoryBuilding::Layout(int& direction, const Quad& quad,
 	FloorAssetSpec assets;
 	assets.wallMaterial = "/Game/Asset/Materials/White.White";
 
-	// 工厂地上固定1层楼，显式赋值不依赖BuildingMod基类默认值。basements是否有地下室由上面
-	// quad尺寸判定，和地上层数无关。
+	// 地上固定1层，显式赋值不依赖BuildingMod基类默认值。
 	layers = 1;
 	floorHeights.assign(basements + layers, 0.6f);
 
@@ -485,7 +470,7 @@ void FactoryBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, v
 	// 不用显式占位。
 }
 
-// 公式基数2000和min/max常量4000/16000不一致是既有数值，不做"修正"。
+// 公式基数2000和GetAcreageMin的4000不一致(RandomAcreage可能小于Min)，是既有数值。
 float FactoryBuilding::RandomAcreage() {
 	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 1.f, 2);
 }
@@ -518,8 +503,8 @@ const char* TrainStationBuilding::GetName() {
 
 void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
-	// 楼体占满整个Building区域(不像机场那样只占贴路一侧)。注意TrainStation::Layout的两条轨道/
-	// 四个接口(depthRatio 0.55/0.65)因此落在楼体范围之内，见station_basic.md。
+	// 楼体占满整个Building区域(不像机场只占贴路一侧)，TrainStation::Layout的两条轨道/四个接口
+	// (depthRatio 0.55/0.65)因此落在楼体范围之内，见station_basic.md。
 	stationMod = "station_train";
 	footprint = BuildingFootprintSpec();   // 默认就是中心(0.5,0.5)、占满(1,1)
 	basements = 1;
@@ -540,11 +525,8 @@ void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 }
 
 void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
-	// 测试布局：固定在井字中心正方形lot(AREA_OFFICIAL_HIGH)上找一块地方，和机场
-	// (AirportBuilding::Assign)、围墙测试场景(ResidenceZone)共存——不再手动猜哪个方向/
-	// margin刚好能避开别人已经占掉的区域，而是用Lot::FindAdaptivePlacement按"现在实际还剩
-	// 多少自由空间"自适应选：依次尝试4个方向，每个方向用当前freeLots真实算出一组保证命中
-	// 的margin/depth，哪个方向先找到可用空间就用哪个，不挑剔具体是哪一侧。
+	// 在井字中心lot(AREA_OFFICIAL_HIGH)上找一块地方，和机场/园区共存：用
+	// Lot::FindAdaptivePlacement按当前剩余自由空间自适应选，依次尝试4个方向，先找到可用空间的方向就用。
 	constexpr float kMinFrontage = 7.f;
 	constexpr float kMinDepth = 4.f;
 
@@ -556,18 +538,13 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 			float marginStart, marginEnd, depth;
 			if (!lot->FindAdaptivePlacement(dir, kMinFrontage, kMinDepth, targetLot, marginStart, marginEnd, depth)) continue;
 
-			// 贴到命中子块这条边"起点"那个角：FindAdaptivePlacement给的是居中的margin，两边余量
-			// 合并全部挪到marginEnd，让火车站挤在角落，把完整的大块空地留给后面的建筑。
+			// FindAdaptivePlacement给的是居中的margin：余量全挪到marginEnd，让火车站贴在这条边的起点角。
 			marginEnd += marginStart;
 			marginStart = 0.f;
 
-			// request.lot是targetLot(FindAdaptivePlacement命中的那个自由子块)，不是lot本身——
-			// 子块贴的道路可能是切割产生的内部小路，margin/depth是相对子块自己的尺寸算的，必须
-			// 让RequestPlacement在子块自己的坐标系里裁剪，见FindAdaptivePlacement的说明。
-			// adaptiveParent只在targetLot真的是lot freeLots里的一个嵌套子块时才设(targetLot!=lot
-			// 说明命中的不是lot自己，而是PeekFreeLots()返回的某个子块)——Core侧处理这条request
-			// 成功之后要靠这个字段把targetLot自己的残余空间/新增小路搬回lot，不能在这里(Basic.dll)
-			// 自己搬，见FindAdaptivePlacement声明处的说明。
+			// request.lot是命中的自由子块targetLot而不是lot本身：margin/depth是相对子块算的，
+			// 要在子块自己的坐标系里裁剪。adaptiveParent仅在targetLot!=lot时设，Core处理成功后
+			// 靠它把子块的残余空间/新增小路搬回lot(不能在Basic.dll里搬)，见FindAdaptivePlacement声明。
 			LotPlacementRequest request;
 			request.lot = targetLot;
 			request.adaptiveParent = (targetLot != lot) ? lot : nullptr;
@@ -599,8 +576,7 @@ const char* AirportBuilding::GetName() {
 
 void AirportBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
-	// 和TrainStationBuilding同样贴路一侧的footprint，理由见那边的注释——AirStation::Layout的
-	// 两条跑道depthRatio是0.65/0.85，同一组数值。
+	// 楼体贴路一侧(NearRoadFootprint)，深处留给AirStation::Layout的两条跑道(depthRatio 0.65/0.85)。
 	stationMod = "station_air";
 	footprint = NearRoadFootprint(direction, 0.18f, 0.35f, 0.6f);
 	basements = 0;
@@ -614,11 +590,9 @@ void AirportBuilding::Layout(int& direction, const Quad& quad,
 }
 
 void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
-	// 和TrainStationBuilding::Assign同一个自适应思路——这个Assign在Building阶段的处理顺序
-	// 排在TrainStationBuilding之后(谁先谁后由BuildingFactory::GetRegisteredIds()的枚举顺序
-	// 决定，这里不关心)，FindAdaptivePlacement会自动看到火车站(如果已经成功)留下的最新
-	// freeLots状态，自己找一块不冲突的空间，不需要硬编码"对面那一侧"。
-	// 占地(沿路x纵深，地图单位)比火车站(7x4)大：机场要放跑道和两侧停机位。放不下大的就退回7x4。
+	// 同TrainStationBuilding::Assign的自适应思路：FindAdaptivePlacement会看到先处理的建筑留下的最新
+	// freeLots状态(处理顺序由BuildingFactory::GetRegisteredIds()决定，这里不关心)。
+	// 占地(沿路x纵深，地图单位)优先12x8(要放跑道和两侧停机位)，放不下退回和火车站一样的7x4。
 	constexpr float kFrontages[] = { 12.f, 7.f };
 	constexpr float kDepths[] = { 8.f, 4.f };
 
@@ -631,8 +605,7 @@ void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, v
 			float marginStart, marginEnd, depth;
 			if (!lot->FindAdaptivePlacement(dir, kFrontages[size], kDepths[size], targetLot, marginStart, marginEnd, depth)) continue;
 
-			// 贴到另一端的角(和火车站相反)：余量全部挪到marginStart，marginEnd=0，这样两者即使
-			// 同在一条边上也占据这条边的两个对角，中间留下整块连续空地。
+			// 余量全挪到marginStart，贴另一端的角(和火车站相反)，两者同在一条边时占两个对角。
 			marginStart += marginEnd;
 			marginEnd = 0.f;
 
@@ -655,8 +628,7 @@ float AirportBuilding::GetAcreageMin() { return 2000.f; }
 float AirportBuilding::GetAcreageMax() { return 2000.f; }
 float AirportBuilding::GetPower(AREA_TYPE area) { return 0.f; }
 
-// 公园种树用的mesh(和行道树同一棵测试树)和密度：每PARK_ELEMENTS_PER_TREE个element²一棵
-// (约每200m²一棵)，先粗估。
+// 公园种树的mesh(和行道树同一棵测试树)和密度：每PARK_ELEMENTS_PER_TREE个element²一棵(约每200m²)。
 #define PARK_TREE_MESH_PATH "/Game/3rdParty/Mossy_Tree/StaticMeshes/mossy-tree.mossy-tree"
 #define PARK_TREE_SCALE 1.f
 #define PARK_ELEMENTS_PER_TREE 2.f
@@ -673,7 +645,7 @@ const char* ParkBuilding::GetName() {
 
 void ParkBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
-	// 0层：Core不会为它建任何Floor，UE层也不会生成楼体(见building.md"允许0层建筑")。
+	// 0层：Core不建Floor，UE层不生成楼体(见building.md"允许0层建筑")。
 	basements = 0;
 	layers = 0;
 	floorHeights.clear();
@@ -726,9 +698,8 @@ float ParkBuilding::GetPower(AREA_TYPE area) {
 #define MOHAR_YAW -90.f
 // 楼体footprint的四条边(地图单位，1=10m)，按"朝北"(face=2，模板原样)定义、相对模型中心(=地块
 // 中心)：+X是东、+Y是南(大门在北墙)，所以WEST/NORTH是负数。其余朝向按InversePoint同一套旋转换算，
-// 和模型、楼层模板一起转；模型本身不动。layout模板3rdparty_mohar_fu1按这个footprint拟合一楼范围。
-// 当前值：目测30m*30m起步，往远离大门的方向(南)挪5m，再按实测：南边向北收3m+1m、西边向西扩0.5m+0.5m、
-// 东边向西收1.5m+1m；之后北边向南收0.5m、西边向东收0.5m、南边再向北收1m。
+// 和模型、楼层模板一起转；模型本身不动。layout模板3rdparty_mohar_fg1按这个footprint拟合一楼范围。
+// 数值是按模型实测调出来的。
 #define MOHAR_BODY_WEST -1.55f
 #define MOHAR_BODY_EAST 1.25f
 #define MOHAR_BODY_NORTH -0.95f
@@ -737,9 +708,9 @@ float ParkBuilding::GetPower(AREA_TYPE area) {
 #define MOHAR_FLOOR1_HEIGHT 0.55f
 #define MOHAR_FLOOR2_HEIGHT 0.4f
 #define MOHAR_FLOOR3_HEIGHT 0.4f
-#define MOHAR_FLOOR1_TEMPLATE "3rdparty_mohar_fu1"
-// 二楼先试着复用一楼的模板(对不上再换fu2)；三楼用单独的fu3。
-#define MOHAR_FLOOR2_TEMPLATE "3rdparty_mohar_fu1"
+#define MOHAR_FLOOR1_TEMPLATE "3rdparty_mohar_fg1"
+// 一楼用fg1，二楼用fu2，三楼用fu3，各层模板独立。
+#define MOHAR_FLOOR2_TEMPLATE "3rdparty_mohar_fu2"
 #define MOHAR_FLOOR3_TEMPLATE "3rdparty_mohar_fu3"
 // 每层要不要由框架构造墙壁/地板/天花板(FloorAssetSpec::buildShell)：成品模型已经包含这些，三层
 // 都关掉；房间/Room碰撞盒照常生成。核对某一层的房间范围时把那一层临时改成true就能看到框架画的楼层。
@@ -771,7 +742,7 @@ void MoharBuilding::Layout(int& direction, const Quad& quad,
 		}
 	}
 
-	// 各层用3rdparty_mohar_fu*模板拟合模型里的房间；楼体外观由下面的成品模型提供，每层的
+	// 各层用3rdparty_mohar_fg1/fu2/fu3模板拟合模型里的房间；楼体外观由下面的成品模型提供，每层的
 	// buildShell控制框架要不要再构造近处的墙壁/地板/天花板(远处方块照常画)，见MOHAR_FLOOR*_BUILD_SHELL。
 	int face = direction >= 0 ? direction : FACE_NORTH;
 	// 朝北坐标系里的楼体尺寸和中心(相对模型)，再换算到实际朝向：尺寸在朝东/西时宽和进深互换，

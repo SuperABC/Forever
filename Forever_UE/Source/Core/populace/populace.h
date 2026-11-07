@@ -16,8 +16,6 @@
 #include <tuple>
 #include <vector>
 
-struct ScriptContext;
-
 // Populace：和Map平级的顶层Core类，不是挂在Map底下的工具函数集合——自己管理Citizen*的
 // 生命周期，不知道Map的存在，详见Source/Core/populace/populace.md。
 class Populace {
@@ -27,100 +25,60 @@ public:
 	Populace();
 	~Populace();
 
-	// accommodation由调用方从Map::ComputeAccommodationTarget()算好传进来(Populace不知道
-	// Map的存在)。先发现/注册Name mod dll(InitNames)，再对accommodation做一次扰动
-	// (target = accommodation * exp(GetRandom(1000)/1000.0f - 0.5f))得到真正的模拟
-	// 目标，最后跑一次年表模拟，把存活个体物化成Citizen存进citizens。
-	// workCapacity是Map::ComputeWorkCapacity()：随机扰动之后目标人数不超过它。
+	// accommodation来自Map::ComputeAccommodationTarget()，workCapacity来自Map::ComputeWorkCapacity()
+	// (扰动后的目标人数只封顶)。流程见populace.md。
 	void Init(int accommodation, int workCapacity = INT_MAX);
 
 	const std::vector<Citizen*>& GetCitizens() const;
 
-	// 驱动Job的DailyPlan/ExecNode调度（Organization那一份调度在Society::Tick里，两套
-	// 独立的timer，见populace.md"两套独立timer"一节）：crossedDay时给每个持有job的
-	// citizen生成今天的调度、塞进jobTimerSet；不论是否crossedDay，每帧从jobTimerSet
-	// 弹出最多kMaxJobTimersPerTick个到期节点执行。回调带Citizen*——调用方
-	// (AForeverFrameworkActor::Tick)要按这个Citizen*决定NPCNavigateChange具体怎么
-	// 生效（找它当前是否有已生成的ACitizenElement），Populace自己不知道Actor层。
-	// @post：透传给Job::DailyPlan/ExecNode，再转发到JobMod，供mod按需查citizen家/工位
-	// 的具体地址（见Dependence/society/job_mod.h），Populace自己不解读这个句柄。
+	// 驱动饱食度衰减和Job/Scheduler两套定时器，见populace.md"Tick"。onActions回调带Citizen*，
+	// post原样透传给Job/Scheduler。
 	void Tick(const Time& currentTime, bool crossedDay,
 		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions, PostHandle* post);
 
-	// 处理市民的add_option/remove_option(按姓名找市民)。
-	// 返回这个Change是不是本域认识的类型(认识就返回true，不管目标对象找没找到——找不到目标静默
-	// 忽略是既有的宽松约定)。AForeverFrameworkActor::ApplyChange汇总七个域的结果，全都不认识时
-	// 才打"未实现"警告。
+	// 处理add_option/remove_option。返回是不是本域认识的类型(认识就true，找不到目标静默忽略)。
 	bool ApplyChange(const Change* change, const ScriptContext& context);
 
-	// 按姓名线性查找Citizen*——不强制生成/持有任何Actor，纯Core层数据查询。供
-	// AForeverFrameworkActor::ApplyChange处理NPCNavigateChange时，用change自带的occupant
-	// 姓名反查Citizen*（原来的Tick回调直接拿到Citizen*形参，改成统一的
-	// ApplyChange(const Change*, const ScriptContext&)签名后不再有实体指针，只能反过来按名字
-	// 查，和UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName是同一个思路，一个在
-	// Core层查数据，一个在UE层顺带生成Actor）。找不到返回nullptr。
+	// 按姓名线性查找，找不到返回nullptr。
 	Citizen* FindCitizenByName(const std::string& name) const;
 
-	// 运行中新增一个市民(spawn_npc)：建Citizen+Scheduler，追加到citizens末尾。schedulerId为空时
-	// 按权重随机选，和开局AssignSchedulers一样。不分配住处、不登记人际关系；重名返回nullptr。
-	// avatar非空时设为市民的头像名(见Citizen::GetAvatar)，空则用构造时随机的自动头像。
+	// 运行中新增市民(spawn_npc)，见populace.md。重名返回nullptr。
 	Citizen* SpawnCitizen(const std::string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay,
 		const std::string& schedulerId, const std::string& avatar = "");
 
-	// 模拟结束时的"当前年份"——Map::Checkin()用它
-	// 给Citizen::GetAge()算成年/未成年。Player的全局时钟落地后，
-	// AForeverFrameworkActor::EnsurePlayerGenerated()也用这个值把开局时间设成这一年的
-	// 1月1日8点(player->SetTime(Time(GetCurrentYear(), 1, 1, 8))，见player.md)。
-	// Init()跑完之前返回默认值2000。
+	// 模拟结束时的"当前年份"，Init()跑完之前返回默认值2000。
 	int GetCurrentYear() const;
 
 private:
-	// 创建"chinese"这个具体实现的Name概念实例——name mod dll的发现/注册不在这里做，属于
-	// `Registry`全局一次性注册的范围(见Source/Core/common/registry.md)，nameFactory已经是
-	// 绑定好的引用成员，这里只用它创建实例。Populace自己只操作Core层的Name概念，不直接
-	// 持有/调用NameMod*，见Source/Core/populace/populace.md、Source/Core/populace/name.md。
+	// 按config选取名算法创建Name，并登记剧情占位名，见populace.md。
 	void InitNames();
 
-	// 年表模拟算法，见populace.cpp/populace.md。
-	// 函数体末尾顺带生成亲属关系(GenerateKinshipRelations，含配偶/子女/兄弟姐妹)——需要
-	// 用到模拟阶段的Human数据(结婚年份/父母索引)，这些数据物化成Citizen后就丢弃了，只能
-	// 在这个函数体内、Human数组还在作用域内时处理，见populace.md"四类人际关系生成"一节。
+	// 年表模拟，末尾顺带生成亲属关系(需要模拟阶段的Human数据)，见populace.md。
 	void GenerateCitizens(int target);
 
-	// 情感关系(恋爱/婚姻/情人)历史生成——GenerateCitizens()之后调用，读取
-	// GenerateCitizens()已经生成好的KinshipExperience(RELATIVE_SPOUSE)::GetBeginYear()
-	// 当结婚年份用，不重新计算，见populace.md同一节。
+	// 情感关系(恋爱/婚姻/情人)历史生成，见populace.md。
 	void GenerateRomanticRelations();
 
-	// 虚拟学校/班级 + 同学关系生成——按年份正序推进的编年模拟，见populace.md同一节。
+	// 虚拟学校/班级 + 同学关系生成，见populace.md。
 	void GenerateEducations();
 
-	// 给每个citizen加权随机分配一个Scheduler——累加所有已注册Scheduler类型的权重建CDF
-	// (用SchedulerFactory::GetPower(id)单个查询，和Society::Init选Organization类型
-	// 同一套CDF算法)，对每个citizen roll一个随机数选中一个类型。GenerateCitizens()跑完、
-	// citizens列表已经就绪之后调用一次，见populace.md。
+	// 给每个citizen加权随机分配一个Scheduler，见populace.md。
 	void AssignSchedulers();
 	// 按SchedulerFactory::GetPower加权随机选一个Scheduler类型，没有注册任何类型时返回空串。
 	std::string PickSchedulerId() const;
 
-	// 引用`Registry::Get().GetNameFactory()`，不再自己持有ModLoader/NameFactory——mod dll
-	// 的发现/注册只在整个UE进程生命周期里跑一次，见Source/Core/common/registry.md。构造函数
-	// 初始化列表里绑定。
+	// 引用Registry里的全局Factory(见common/registry.md)，构造函数初始化列表里绑定。
 	NameFactory& nameFactory;
 	Name* name = nullptr; // InitNames()创建，~Populace()里delete(Name析构会调用nameFactory.DestroyName())
 
-	// 引用`Registry::Get().GetSchedulerFactory()`/`GetScriptFactory()`，和nameFactory
-	// 同一个模式——scriptFactory是每个Scheduler独占的Script（见scheduler.h）需要的构造
-	// 参数，Populace这次第一次需要依赖Story域的ScriptFactory，和Society持有
-	// ScriptFactory引用成员（给Job/Organization各自的Script用）是同一个先例。
+	// scriptFactory是每个Scheduler独占的Script需要的构造参数。
 	SchedulerFactory& schedulerFactory;
 	ScriptFactory& scriptFactory;
 
 	std::vector<Citizen*> citizens;
 	int currentYear = 2000;
 
-	// 虚拟学校/班级——没有Mod/Factory背书的纯Core实体，GenerateEducations()生成，
-	// ~Populace()统一delete，见school.h。
+	// 虚拟学校/班级，GenerateEducations()生成，~Populace()统一delete。
 	std::vector<SchoolClass*> schoolClasses;
 
 	std::set<std::tuple<Time, Citizen*, std::string>> jobTimerSet;
@@ -130,8 +88,7 @@ private:
 	Time lastTickTime;
 	bool hasLastTickTime = false;
 
-	// Scheduler自己独立的一套timer，和jobTimerSet完全平行（见Tick()实现），负责citizen
-	// 下班之后的行为。
+	// Scheduler独立的一套timer，和jobTimerSet平行。
 	std::set<std::tuple<Time, Citizen*, std::string>> schedulerTimerSet;
 	static constexpr int kMaxSchedulerTimersPerTick = 16;
 };

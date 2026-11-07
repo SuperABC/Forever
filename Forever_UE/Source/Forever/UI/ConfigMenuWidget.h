@@ -10,11 +10,8 @@ class UStoryPanelWidget;
 class UModPanelWidget;
 class UResourcePanelWidget;
 
-// 配置界面顶层，替代老工程StartMenu(.dump/StartMenu.txt)：三screen用plain SetVisibility
-// 切换(不是tab-control widget，和老工程ModPanel/ResourcePanel的sibling panel切换手法一致，
-// 只是从两个扩到三个)，StartButton调Bridge::ValidateAndStartGame，失败时在FailureMessage
-// (左上角，初始Collapsed)显示拒绝原因。由ForeverMenuController::BeginPlay()
-// CreateWidget+AddToViewport创建，见该类。
+// 配置界面顶层：三个screen用SetVisibility切换，StartButton调Bridge::ValidateAndStartGame，失败时在
+// FailureMessage显示拒绝原因。由AForeverMenuController::BeginPlay经startMenuWidgetClass创建。
 UCLASS()
 class FOREVER_API UConfigMenuWidget : public UUserWidget
 {

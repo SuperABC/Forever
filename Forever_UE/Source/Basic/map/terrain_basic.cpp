@@ -5,15 +5,11 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
-#include <fstream>
 #include <tuple>
 #include <unordered_set>
 #include <string>
 
-// 海平面水位(地图元素单位)——Ocean/River都要用，两边共用一个常量，不要各自写各自的
-// 字面量，不然谁改了忘记改另一边，河口就会出现"河水比海水还低/高一截"的落差。这是
-// 唯一横跨多个地形类的常量，所以留在文件顶部；其余各地形专属的常量都挪到各自那一段
-// 代码前面，不再和其他地形的常量混在一起。
+// 海平面水位(地图元素单位)：Ocean/River共用一个常量，分开写会让河口出现河水/海水的落差。
 #define SEA_LEVEL -0.1f
 
 using namespace std;
@@ -55,10 +51,7 @@ const char* OceanTerrain::GetName() {
 }
 
 float OceanTerrain::GetPriority() const {
-	// 必须低于MountainTerrain(见下面0.95)——海洋要后跑，这样碰到山体的海岸线段不会把
-	// 山直接覆盖成海(下面4条海岸线雕刻循环里有专门的"已经是mountain就跳过"保护)，而是
-	// 绕着已经生成好的山体雕刻，山体自己原有的侧向衰减坡度(平滑降到0)留在海岸边，不会
-	// 出现"海直接切掉半座山"的硬悬崖。
+	// 必须低于MountainTerrain(0.95)：海后跑，海岸线雕刻绕开已生成的山体(见terrain_basic.md)。
 	return 0.9f;
 }
 
@@ -103,10 +96,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 			if (coastLimit > width)
 				coastLimit = width;
 			for (int x = 0; x < coastLimit; x++) {
-				// 已经是山的格子不雕刻成海——山先跑，这里绕开已经摆好的山体，让山自己
-				// 原有的侧向衰减坡度(平滑降到0)留在海岸边，不会出现海直接切掉半座山的
-				// 硬悬崖。isOcean不标记为true，这个格子对后面"是不是海岸线"的BFS种子
-				// 判定来说，跟普通平地邻居没有任何区别——不需要额外特判。
+				// 已经是山的格子不雕刻成海；isOcean保持false，对后面的海岸线BFS种子判定等同普通陆地。
 				if (getTerrain(x, y) == "terrain_mountain") continue;
 				setTerrain(x, y, GetType());
 				isOcean[x][y] = true;
@@ -299,8 +289,7 @@ void OceanTerrain::DistributeTerrain(int width, int height,
 		ringIndex++;
 	}
 
-	// 写回全局地图高度+水面——水位固定-0.1(和改之前完全一样的视觉效果),只是改成调
-	// 新的per-cell setWater而不是让SetupTexture里的waterHeight统一铺一遍。
+	// 写回全局地图高度+水面(per-cell setWater，水位固定SEA_LEVEL)。
 	for (int x = 0; x < width; x++)
 		for (int y = 0; y < height; y++)
 			if (isOcean[x][y]) {
@@ -352,8 +341,7 @@ const char* MountainTerrain::GetName() {
 }
 
 float MountainTerrain::GetPriority() const {
-	// 必须高于OceanTerrain(见上面0.9)——山要先跑，海岸线雕刻的时候才能看到已经摆好的
-	// 山体，绕开它雕刻，而不是在空地图上先铺好海，之后山再被迫跳过/硬撞上海洋格子。
+	// 必须高于OceanTerrain(0.9)：山先跑，海岸线雕刻才能看到并绕开山体。
 	return 0.95f;
 }
 
@@ -657,11 +645,10 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 // "RiverTerrain"一节。
 // ============================================================================
 
-// 累积流量超过这个值的山体格子才有资格成为河流起点——第一阶段debug用的起始值，看完
-// Blue贴图标出来的位置效果再调。
+// 累积流量超过这个值的山体格子才有资格成为河流起点(起始值，待按效果调)。
 #define RIVER_FLOW_THRESHOLD 30.0f
-// 新河流起点与所有已有起点的最小距离(element单位，1 element=10m)——起点挤得太近会长出
-// 一堆紧挨着的平行短河。200=2000m，从100加大到这个值。
+// 新河流起点与所有已有起点的最小距离(element单位，1 element=10m，200=2000m)——起点挤得太近会长出
+// 一堆紧挨着的平行短河。
 #define RIVER_ORIGIN_MIN_SPACING 200.0f
 // 流出山体之后，流向用角度(弧度)表示，偏向速度是角速度(标量，不是向量)——只保留偏向
 // 速度这一层，不再叠加偏向加速度(导数阶数太高，行为难控制)。每步直接给角速度加一个
@@ -740,9 +727,7 @@ float RiverTerrain::GetPriority() const {
 }
 
 void RiverTerrain::SetupTexture() {
-	// 调试阶段用的纯色Blue贴图已经验证过河道位置没问题,正式效果改成跟平地同一张贴图——
-	// 河床本身会凹下去、上面盖一层水面mesh,河道在视觉上已经靠地形凹陷+水面表现出来,
-	// 不需要再用地表材质本身的颜色去额外强调。
+	// 和平地同一张贴图：河道靠地形凹陷+水面mesh表现，不需要地表材质额外强调。
 	diffusePath = "/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse";
 	// normalPath/roughnessPath留空——现有fallback逻辑会填平的法线+中性粗糙度
 }
@@ -1081,7 +1066,6 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		};
 
 	int originCount = 0, keptCount = 0, shortCount = 0;
-	vector<vector<int>> oceanMouthChains; // 诊断用，见下面origin循环里的记录点
 	for (int idx : mountainIndices) { // 同一个降序顺序，"先到达阈值的"就是先遍历到的
 		if (isRiver[idx] || accum[idx] < RIVER_FLOW_THRESHOLD) continue;
 		int x = idx % width, y = idx / width;
@@ -1141,6 +1125,8 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			for (int p = 0; p < cutoffPos; p++) isRiver[mountainPath[p]] = false;
 			int newOriginIdx = mountainPath[cutoffPos];
 			riverOrigins.back() = { newOriginIdx % width, newOriginIdx / width };
+			// 保留下来的山体段重新从0起算riverDistance(原值是从被撤销的原起点数的)。
+			for (int p = cutoffPos; p < (int)mountainPath.size(); p++) riverDistance[mountainPath[p]] = p - cutoffPos;
 		}
 
 		int ex = exit % width, ey = exit / width;
@@ -1155,7 +1141,8 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		// 流程计数接着"保留下来的那段山体路径"长度继续数(不是整条mountainTouched的原始
 		// 长度)——过陡截断之后前面那段已经撤销，不算在"从源头流了多远"里面。
 		int mountainKeptLen = (int)mountainPath.size() - cutoffPos;
-		auto [reason, plainTouched] = continueRiverOutsideMountain(ex, ey, initDirX, initDirY, mountainTouched, mountainKeptLen);
+		vector<int> keptMountainPath(mountainPath.begin() + cutoffPos, mountainPath.end()); // 不含已撤销的格子
+		auto [reason, plainTouched] = continueRiverOutsideMountain(ex, ey, initDirX, initDirY, keptMountainPath, mountainKeptLen);
 		bool kept = (reason == RiverEnd::MapEdge || reason == RiverEnd::Ocean || reason == RiverEnd::OtherRiver);
 		// 长度=过陡截断之后保留的山体段+流出山体之后新标记的格子(含入海口接驳/延伸的格子)，
 		// 不够RIVER_MIN_LENGTH就和其他失败原因一样整条撤销。
@@ -1169,11 +1156,6 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			riverOrigins.pop_back();
 		} else {
 			keptCount++;
-			// 诊断用：到底是哪几个格子接上了海——先只记下标，等最后提交完(地形/高度/水位
-			// 都写进真实地图之后)再统一读出来打进日志，不在这里提前读(这时候还没commit，
-			// 读到的还是没改过的原始值)。只记"碰到海"这种结束方式，其余(地图边界/并入别的
-			// 河)跟这次排查的问题无关，不记。
-			if (reason == RiverEnd::Ocean) oceanMouthChains.push_back(plainTouched);
 		}
 	}
 
@@ -1261,10 +1243,6 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		}
 	}
 
-	// 诊断用：DistributeTerrain接口里setWater是只写的(没有配对的getWater回调)，提交完
-	// 之后没法再读回"这个格子最后水位到底是多少"——这里单独存一份，commit循环里顺手记
-	// 下来，供最后的诊断日志打印，不额外多算一次。
-	vector<float> debugWaterHeight(cellCount, -9999.0f); // -9999=没有水(哨兵值,不是真实水位)
 	int riverCount = 0;
 	for (int idx = 0; idx < cellCount; idx++) {
 		if (isRiver[idx]) {
@@ -1299,7 +1277,6 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			// 格子真实的原始地形类型判断的，覆盖所有被加宽/blur卷入的真海洋格子。
 			float waterHeight = wasOcean ? SEA_LEVEL : originalHeight + SEA_LEVEL;
 			setWater(x, y, true, waterHeight);
-			debugWaterHeight[idx] = waterHeight;
 			// 河床比周围矮一截，只给河流格子自己铺水面的话，凹陷边缘会露出水面mesh的侧面
 			// (看起来像一块水"悬浮"在坑里，能看到切面)——把8个邻居也铺上同一片水面接住这个
 			// 落差，挡住侧边界。跳过已经是河流/海洋的邻居，不覆盖它们各自更准确的水位
@@ -1311,7 +1288,6 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 				string nt = getTerrain(nx, ny);
 				if (nt == "terrain_river" || nt == "terrain_ocean") continue;
 				setWater(nx, ny, true, waterHeight);
-				debugWaterHeight[ny * width + nx] = waterHeight;
 			}
 			riverCount++;
 		}
@@ -1395,55 +1371,4 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 
 	debugf("Log: River mountain cells=%d, max accum=%.2f, threshold=%.2f, origins=%d, kept=%d, too short=%d, marked river=%d, fine cells=%d, max fine corner error=%.6f.\n",
 		(int)mountainIndices.size(), maxAccum, RIVER_FLOW_THRESHOLD, originCount, keptCount, shortCount, riverCount, fineCount, maxFineCornerError);
-
-	// debugf走OutputDebugStringA,不进UE的Forever.log,调试阶段临时再写一份到文件方便直接读——
-	// 验证完效果之后会删掉这段。
-	{
-		std::ofstream f("C:/Workspace/UE5/Projects/Forever/Forever_UE/Saved/river_debug.log", std::ios::app);
-		if (f) {
-			f << "mountain cells=" << mountainIndices.size()
-				<< " max accum=" << maxAccum
-				<< " threshold=" << RIVER_FLOW_THRESHOLD
-				<< " origins=" << originCount
-				<< " kept=" << keptCount
-				<< " too short=" << shortCount
-				<< " marked river=" << riverCount
-				<< " fine cells=" << fineCount
-				<< " max fine corner error=" << maxFineCornerError << "\n";
-			// 排查"河流入海口和海洋之间断开"问题的专用诊断：第一版诊断按"neighbor
-			// terrain==ocean"筛选，结果一个都没打出来——因为convertTouchingOceanToRiver
-			// 已经把触发判定的那个/那些海洋格子本身也改成了"terrain_river"，提交完之后它自然不再
-			// 显示"terrain_ocean"，不代表没有邻居。改成不筛选，直接把链路最后一个touched格子周围
-			// 一块9x9的方格(terrain+height+water)整块打出来，不管是river/ocean/plain，
-			// 这样才能看到真正未被转换的海洋从哪里开始、中间到底有没有真的留着原高度的
-			// 陆地、以及水位是不是在边界处突然跳了一截（接口没有getWater回调读不回已经
-			// 提交的水位，ocean格子没被river动过的话水位必然是固定的SEA_LEVEL，river/被
-			// 并入的格子用commit循环里顺手记下来的debugWaterHeight，没被设过水的格子打
-			// "no water"）。
-			for (auto& chain : oceanMouthChains) {
-				if (chain.empty()) continue;
-				int lastIdx = chain.back();
-				int cx = lastIdx % width, cy = lastIdx / width;
-				f << "  [ocean mouth chain, 9x9 grid around last cell (" << cx << "," << cy << ")]\n";
-				for (int gy = cy - 4; gy <= cy + 4; gy++) {
-					f << "    y=" << gy << ": ";
-					for (int gx = cx - 4; gx <= cx + 4; gx++) {
-						if (gx < 0 || gx >= width || gy < 0 || gy >= height) {
-							f << "[out] ";
-							continue;
-						}
-						string t = getTerrain(gx, gy);
-						float h = getHeight(gx, gy);
-						int gIdx = gy * width + gx;
-						string waterStr;
-						if (t == "terrain_ocean") waterStr = "w=" + std::to_string(SEA_LEVEL) + "(fixed)";
-						else if (debugWaterHeight[gIdx] > -9000.0f) waterStr = "w=" + std::to_string(debugWaterHeight[gIdx]);
-						else waterStr = "no water";
-						f << "[" << t << " h=" << h << " " << waterStr << "] ";
-					}
-					f << "\n";
-				}
-			}
-		}
-	}
 }
