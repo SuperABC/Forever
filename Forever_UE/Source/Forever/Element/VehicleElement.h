@@ -41,6 +41,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual void PossessedBy(AController* NewController) override;
+	virtual void PawnClientRestart() override; // 上车后摆正视角(见cpp)
 	virtual void UnPossessed() override;
 
 	Vehicle* GetVehicle() const { return vehicle; }

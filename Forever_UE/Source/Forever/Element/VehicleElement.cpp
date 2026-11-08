@@ -349,6 +349,17 @@ void AVehicleElement::PossessedBy(AController* NewController)
 	}
 }
 
+void AVehicleElement::PawnClientRestart()
+{
+	Super::PawnClientRestart();
+
+	// APlayerController::OnPossess在PossessedBy之后才SetControlRotation(车身姿态)，所以只能在这里(其后的ClientRestart)改：
+	// 车歪着视角就一直歪，翻着则上下颠倒。只保留朝向(yaw)，roll强制归零、pitch放平；之后Look只改yaw/pitch。
+	if (APlayerController* playerController = Cast<APlayerController>(GetController())) {
+		playerController->SetControlRotation(FRotator(-15.f, GetActorRotation().Yaw, 0.f));
+	}
+}
+
 void AVehicleElement::UnPossessed()
 {
 	APlayerController* playerController = Cast<APlayerController>(GetController());
