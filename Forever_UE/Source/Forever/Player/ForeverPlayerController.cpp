@@ -20,9 +20,49 @@
 #include "UI/FadeSubsystem.h"
 #include "UI/FadeWidget.h"
 #include "Player/ForeverIdentifyComponent.h"
+#include "Framework/ForeverFrameworkActor.h"
+#include "Framework/ForeverTrafficFrameworkComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "map/map.h"
+#include "map/building.h"
+#include "map/room.h"
 
 AForeverPlayerController::AForeverPlayerController() {
 	identifyComponent = CreateDefaultSubobject<UForeverIdentifyComponent>(TEXT("IdentifyComponent"));
+}
+
+void AForeverPlayerController::OnPossess(APawn* inPawn) {
+	Super::OnPossess(inPawn);
+	// 切换操控（上下车、换人）后导航线要按新Pawn重新规划；没有活动导航时RefreshGuide什么都不做。
+	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
+		if (UForeverTrafficFrameworkComponent* traffic = framework->GetTrafficFramework()) traffic->RefreshGuide();
+	}
+}
+
+void AForeverPlayerController::TestNavigate() {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	Map* map = framework ? framework->GetMap() : nullptr;
+	UForeverTrafficFrameworkComponent* traffic = framework ? framework->GetTrafficFramework() : nullptr;
+	if (!map || !traffic) return;
+
+	// 所有停车场和住宅房间合成一个列表，等概率取一个。
+	TArray<Room*> candidates;
+	for (const auto& [name, building] : map->GetBuildings()) {
+		if (!building) continue;
+		for (Room* room : building->GetRooms()) {
+			if (room && (room->IsParking() || room->IsResidential())) candidates.Add(room);
+		}
+	}
+	if (candidates.Num() == 0) {
+		UE_LOG(LogTemp, Warning, TEXT("TestNavigate: 没有停车场或住宅房间"));
+		return;
+	}
+	Room* target = candidates[FMath::RandRange(0, candidates.Num() - 1)];
+	UE_LOG(LogTemp, Log, TEXT("TestNavigate: 导航到 %s（%s，%d 个候选）"), UTF8_TO_TCHAR(target->GetAddress().c_str()),
+		UTF8_TO_TCHAR(target->GetType().c_str()), candidates.Num());
+	traffic->StartGuide(target);
 }
 
 void AForeverPlayerController::BeginPlay() {
@@ -152,6 +192,7 @@ void AForeverPlayerController::SetupInputComponent() {
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleMap")), ETriggerEvent::Started, this, &AForeverPlayerController::ToggleMap);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("CloseMap")), ETriggerEvent::Started, this, &AForeverPlayerController::HandleCloseMap);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("TogglePause")), ETriggerEvent::Started, this, &AForeverPlayerController::TogglePause);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("TestNavigate")), ETriggerEvent::Started, this, &AForeverPlayerController::TestNavigate);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Identify")), ETriggerEvent::Started, this, &AForeverPlayerController::EnterIdentify);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Identify")), ETriggerEvent::Completed, this, &AForeverPlayerController::ExitIdentify);
 			}

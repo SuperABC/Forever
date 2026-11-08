@@ -1093,6 +1093,16 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 		}
 		w.Str(building->stationMod);
 		w.Str(building->scriptModName); WriteStrings(building->scriptMilestones, w);
+		// 1楼行人外部连接点：都是Map锚点表里的节点，按id引用（没登记的丢掉）。
+		{
+			vector<int> outsideIds;
+			for (const Node* node : building->outsideNodes) {
+				auto found = node ? t.anchorsById.find(node->GetId()) : t.anchorsById.end();
+				if (found != t.anchorsById.end() && found->second == node) outsideIds.push_back(node->GetId());
+			}
+			w.U32(static_cast<uint32_t>(outsideIds.size()));
+			for (int id : outsideIds) w.I32(id);
+		}
 
 		w.U32(static_cast<uint32_t>(building->floors.size()));
 		for (const Floor& floor : building->floors) WriteFloor(floor, w);
@@ -1334,6 +1344,12 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 		}
 		building->stationMod = r.Str();
 		building->scriptModName = r.Str(); building->scriptMilestones = ReadStrings(r);
+		{
+			uint32_t outsideCount = r.U32();
+			for (uint32_t i = 0; i < outsideCount; i++) {
+				if (Node* node = t.AnchorAt(r.I32())) building->outsideNodes.push_back(node);
+			}
+		}
 
 		uint32_t floorCount = r.U32();
 		for (uint32_t j = 0; j < floorCount && !r.Failed(); j++) {

@@ -32,3 +32,5 @@
 
 - `ThrottleUp`/`ThrottleDown`：飞机动力，默认`MouseScrollUp/MouseScrollDown`，和`MeetOptionUp/Down`共用滚轮键。只在`APlaneElement::SetupPlayerInputComponent`上绑定(`Started`，每格一次，加减`powerStep`)，别的Pawn不绑，所以不冲突，见`Element/PlaneElement.md`。
 - `FreeLook`(默认C)：按住时视角不自动回正，只绑在`APlaneElement`上。
+
+- `TestNavigate`(默认T，测试)：绑在`AForeverPlayerController`上，随机导航到一个停车场/住宅房间，见`ForeverPlayerController.md`。

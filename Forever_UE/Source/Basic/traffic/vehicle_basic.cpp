@@ -18,7 +18,7 @@ void VehicleBasic::SetProperty() {
 
 	// script_empty纯透传，"靠近弹出上车选项"完全靠milestone触发，见Resource/Story/vehicle_basic.script。
 	scriptModName = "script_empty";
-	milestoneNames = { "vehicle_basic", "vehicle_stress" };
+	milestoneNames = { "vehicle_basic" };
 
 	drivable = true;
 }

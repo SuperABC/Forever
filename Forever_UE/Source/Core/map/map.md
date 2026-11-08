@@ -152,3 +152,8 @@
 
 - `InitTerrains()`假定调用方（`AForeverFrameworkActor::BeginPlay`）之前已经跑过`Config::ReadConfig`（由`ForeverModSubsystem`在game instance启动时做，早于任何关卡的`BeginPlay`）——这个顺序依赖只是约定，没有代码层面强制。
 - `Map::Tick`目前是空实现，等Map域有每帧逻辑再补。
+
+## 导航线相关：外部连接点与到任意点的车行规划
+
+- `Building::GetOutsideNodes()`：行人导航模板里"outside"端点（1楼外部连接点），`Map::MergeBuildingNavigation`在init时从`BuildingNavResult::outsideNodes`记下，节点仍由`navAnchorNodes`持有。进存档：`map_save`的Building段在`scriptMilestones`之后写`U32 count + 每项锚点id`，读档用`AnchorAt`还原（没加版本号，旧存档读不了）。
+- `PlanVehicleRouteToPoint(startRoom,x,y,destX,destY,...)`：终点是室外任意点；取离它最近的车道段（两个方向×`kEntryRoadCandidates`条路），先`PlanVehicleRouteToNode`到该车道边的上游锚点，再补一个垂足点（最后一项`edges`是上游锚点→垂足），取总长最短的。导航线用它给"车到不了的房间"画到建筑外部。

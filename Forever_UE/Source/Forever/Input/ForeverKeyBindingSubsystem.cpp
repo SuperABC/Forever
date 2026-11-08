@@ -58,6 +58,8 @@ const TArray<UForeverKeyBindingSubsystem::FBindingDefinition>& UForeverKeyBindin
 		// 暂停界面(保存/加载)：Tab开关，理由同上绑在Controller上，见AForeverPlayerController::
 		// TogglePause、UPausePanelWidget(界面打开期间关闭键由它自己的NativeOnKeyDown拦)。
 		{ TEXT("TogglePause"), EKeys::Tab },
+		// 测试：T随机导航到一个停车场或住宅房间（visualize_navigation的测试入口），绑在Controller上，见AForeverPlayerController::TestNavigate。
+		{ TEXT("TestNavigate"), EKeys::T },
 	};
 	return definitions;
 }

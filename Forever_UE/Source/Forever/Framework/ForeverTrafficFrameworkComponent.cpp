@@ -24,6 +24,9 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Character.h"
+#include "Components/CapsuleComponent.h"
+#include "player/player.h"
 #include "Kismet/GameplayStatics.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -354,9 +357,11 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 	if (testNavSource) {
 		testNavRefreshCountdown -= DeltaTime;
 		if (testNavRefreshCountdown <= 0.f) {
-			testNavRefreshCountdown = 0.1f;
+			testNavRefreshCountdown = testNavRefreshInterval;
 			TArray<FVector> path;
-			if (testNavSource(path) && path.Num() >= 2) ShowTestNavigationLine(path);
+			// 拷一份再调：source里可能重新规划（RefreshGuide会换掉testNavSource，不能在自己执行时被销毁）。
+			const TFunction<bool(TArray<FVector>&)> source = testNavSource;
+			if (source(path) && path.Num() >= 2) ShowTestNavigationLine(path);
 			else ClearTestNavigationLine(); // 任务完成/对象没了
 		}
 	}
@@ -780,27 +785,145 @@ void UForeverTrafficFrameworkComponent::ClearTestNavigationLine() {
 	if (testNavMesh) testNavMesh->ClearMeshSection(0);
 }
 
-void UForeverTrafficFrameworkComponent::TrackTestNavigationLine(TFunction<bool(TArray<FVector>&)> source) {
+void UForeverTrafficFrameworkComponent::TrackTestNavigationLine(TFunction<bool(TArray<FVector>&)> source, float interval) {
 	testNavSource = MoveTemp(source);
+	testNavRefreshInterval = FMath::Max(0.02f, interval);
 	testNavRefreshCountdown = 0.f; // 下一帧就画
 }
 
-void UForeverTrafficFrameworkComponent::StartTestNavigation(const FString& vehicleName) {
-	// 路线只有被Controller驱动的车（公交）才有；没有在开就什么都不做，不生成车、不发命令。
-	const FBusState* state = busStates.Find(vehicleName);
-	TWeakObjectPtr<ABusController> controller = state ? state->controller : nullptr;
-	if (!controller.IsValid()) return;
-	TArray<FVector> path;
-	if (!controller->GetRemainingWaypoints(path) || path.Num() < 2) return;
+void UForeverTrafficFrameworkComponent::StartGuide(Room* target) {
+	guide.target = target;
+	guide.path.Reset();
+	RefreshGuide();
+}
 
-	TrackTestNavigationLine([controller](TArray<FVector>& outPath) {
-		const ABusController* c = controller.Get();
-		return c && c->GetRemainingWaypoints(outPath);
-	});
+void UForeverTrafficFrameworkComponent::ClearGuide() {
+	guide = FGuide();
+	ClearTestNavigationLine();
+}
+
+void UForeverTrafficFrameworkComponent::HideGuideLine() {
+	guide.path.Reset();
+	ClearTestNavigationLine();
+}
+
+void UForeverTrafficFrameworkComponent::RefreshGuide() {
+	if (!guide.target) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Map* map = framework ? framework->GetMap() : nullptr;
+	Player* corePlayer = framework ? framework->GetPlayer() : nullptr;
+	APlayerController* controller = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	APawn* pawn = controller ? controller->GetPawn() : nullptr;
+	if (!map || !pawn) { HideGuideLine(); return; }
+
+	Map::VehicleRoutePlan plan;
+	bool bOutside = false;
+	if (const ACharacter* character = Cast<ACharacter>(pawn)) {
+		// 步行（含玩家占有的市民）：人行道导航，终点就是目标房间。
+		FVector feet = pawn->GetActorLocation();
+		if (const UCapsuleComponent* capsule = character->GetCapsuleComponent()) feet.Z -= capsule->GetScaledCapsuleHalfHeight();
+		plan = map->PlanPedestrianRoute(corePlayer ? corePlayer->GetCurrentRoom() : nullptr,
+			feet.X / TRAFFIC_WORLD_SCALE, feet.Y / TRAFFIC_WORLD_SCALE, guide.target);
+	}
+	else if (const AVehicleElement* vehicle = Cast<AVehicleElement>(pawn)) {
+		if (vehicle->IsRideMode()) { HideGuideLine(); return; } // 公交乘客：不画
+		// 开车：车道导航。先试直接到房间；车到不了就去建筑1楼外部连接点附近的车道。
+		const FVector location = pawn->GetActorLocation();
+		const FVector forward = pawn->GetActorForwardVector();
+		const float x = location.X / TRAFFIC_WORLD_SCALE, y = location.Y / TRAFFIC_WORLD_SCALE;
+		Room* startRoom = vehicle->GetVehicle() ? vehicle->GetVehicle()->GetCurrentRoom() : nullptr;
+		plan = map->PlanVehicleRoute(startRoom, x, y, guide.target);
+		if (plan.status != Map::VehicleRoutePlan::OK || plan.points.empty()) {
+			bOutside = true;
+			plan = Map::VehicleRoutePlan();
+			Building* building = guide.target->GetParentBuilding();
+			float bestDistance = FLT_MAX;
+			if (building) {
+				// 外部连接点"任意一个"：取离车最近的，路线最短。
+				for (Node* outside : building->GetOutsideNodes()) {
+					if (!outside) continue;
+					const float dx = outside->GetX() - x, dy = outside->GetY() - y;
+					const float distance = dx * dx + dy * dy;
+					if (distance >= bestDistance) continue;
+					Map::VehicleRoutePlan candidate = map->PlanVehicleRouteToPoint(startRoom, x, y, outside->GetX(), outside->GetY(), true, forward.X, forward.Y);
+					if (candidate.status != Map::VehicleRoutePlan::OK) continue;
+					bestDistance = distance;
+					plan = std::move(candidate);
+				}
+			}
+		}
+	}
+	else {
+		HideGuideLine(); // 其它Pawn：不画
+		return;
+	}
+
+	if (plan.status != Map::VehicleRoutePlan::OK || plan.points.size() < 2) {
+		UE_LOG(LogTemp, Warning, TEXT("visualize_navigation: 规划不到 %s（status=%d）"),
+			UTF8_TO_TCHAR(guide.target->GetAddress().c_str()), static_cast<int32>(plan.status));
+		HideGuideLine();
+		return;
+	}
+	guide.bEndsAtOutside = bOutside;
+	guide.path.Reset();
+	for (const Map::NavPoint& point : plan.points) {
+		guide.path.Add(FVector(point.x * TRAFFIC_WORLD_SCALE, point.y * TRAFFIC_WORLD_SCALE, point.z * TRAFFIC_WORLD_SCALE));
+	}
+	TWeakObjectPtr<UForeverTrafficFrameworkComponent> weakThis(this);
+	TrackTestNavigationLine([weakThis](TArray<FVector>& outPath) {
+		UForeverTrafficFrameworkComponent* self = weakThis.Get();
+		return self && self->UpdateGuide(outPath);
+	}, guideRefreshInterval);
+}
+
+bool UForeverTrafficFrameworkComponent::UpdateGuide(TArray<FVector>& outPath) {
+	if (!guide.target || guide.path.Num() < 2) return false;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* corePlayer = framework ? framework->GetPlayer() : nullptr;
+	APlayerController* controller = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	APawn* pawn = controller ? controller->GetPawn() : nullptr;
+	if (!pawn) return false;
+
+	// 到达目标房间：导航完成（线终止在外部连接点的不销毁，要下车刷新后再走进房间）。
+	if (!guide.bEndsAtOutside && corePlayer && corePlayer->GetCurrentRoom() == guide.target) {
+		guide = FGuide();
+		return false;
+	}
+
+	// 玩家投影到折线上最近的一段：已走过的前缀裁掉；偏离太远重新规划。
+	const FVector position = pawn->GetActorLocation();
+	int32 nearestSegment = 0;
+	float nearestDistanceSq = FLT_MAX;
+	FVector nearestPoint = guide.path[0];
+	for (int32 i = 0; i + 1 < guide.path.Num(); i++) {
+		const FVector closest = FMath::ClosestPointOnSegment(position, guide.path[i], guide.path[i + 1]);
+		const float distanceSq = FVector::DistSquared(closest, position);
+		if (distanceSq < nearestDistanceSq) { nearestDistanceSq = distanceSq; nearestSegment = i; nearestPoint = closest; }
+	}
+	const float replan = guideReplanDistance * TRAFFIC_WORLD_SCALE;
+	if (nearestDistanceSq > replan * replan) {
+		RefreshGuide();
+		if (!guide.target || guide.path.Num() < 2) return false;
+		outPath = guide.path;
+		return true;
+	}
+	TArray<FVector> remaining;
+	if (nearestSegment + 1 >= guide.path.Num() - 1) {
+		// 已经在最后一段：保留这一段不裁完，线停在终点上（外部连接点的线不消失）。
+		remaining.Add(guide.path[guide.path.Num() - 2]);
+		remaining.Add(guide.path.Last());
+	}
+	else {
+		remaining.Add(nearestPoint);
+		for (int32 i = nearestSegment + 1; i < guide.path.Num(); i++) remaining.Add(guide.path[i]);
+	}
+	guide.path = remaining;
+	outPath = remaining;
+	return true;
 }
 
 void UForeverTrafficFrameworkComponent::ShowTestNavigationLine(const TArray<FVector>& path) {
-	// 调试折线：水平细带+竖直细带（从侧面也看得见），抬高一点免得埋进路面。
+	// 导航折线：浅蓝色水平扁带，抬高一点免得埋进路面。
 	AActor* owner = GetOwner();
 	if (owner && path.Num() >= 2) {
 		if (!testNavMesh) {
@@ -811,15 +934,14 @@ void UForeverTrafficFrameworkComponent::ShowTestNavigationLine(const TArray<FVec
 		}
 		if (pureBaseMaterial && !testNavMaterial) {
 			testNavMaterial = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
-			testNavMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.f, 0.6f, 0.f));
+			testNavMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.45f, 0.78f, 1.f));
 		}
-		constexpr float kLift = 80.f, kHalfWidth = 30.f, kWallHeight = 60.f;
+		constexpr float kLift = 80.f, kHalfWidth = 30.f;
 		TArray<FVector> vertices;
 		TArray<int32> triangles;
 		for (int32 i = 0; i + 1 < path.Num(); i++) {
 			FVector a = path[i] + FVector(0.f, 0.f, kLift), b = path[i + 1] + FVector(0.f, 0.f, kLift);
 			AppendRouteEdgeRibbon(vertices, triangles, a, b, kHalfWidth);
-			RouteAppendQuadDoubleSided(vertices, triangles, a, b, b + FVector(0.f, 0.f, kWallHeight), a + FVector(0.f, 0.f, kWallHeight));
 		}
 		AppendRouteStationBox(vertices, triangles, FVector2D(path.Last().X, path.Last().Y),
 			ROUTE_DEBUG_NODE_HALF_SIZE, path.Last().Z + kLift, path.Last().Z + kLift + 200.f);

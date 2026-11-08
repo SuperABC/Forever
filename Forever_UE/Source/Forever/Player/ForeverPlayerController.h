@@ -37,6 +37,12 @@ protected:
 	// 全局热键绑在这里而不是Pawn上：换人操控/换乘载具时Controller不变，见md。
 	virtual void SetupInputComponent() override;
 
+	// 换人操控/上下载具时Controller不变但Pawn变了：刷新玩家导航线（visualize_navigation），见md。
+	virtual void OnPossess(APawn* inPawn) override;
+
+	// T键（测试）：等概率随机选一个停车场或住宅房间，显示导航线。
+	void TestNavigate();
+
 	bool bInitialized = false;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")

@@ -69,11 +69,6 @@ public:
 	// 起点按citizen当前房间/from位置（Map::PlanPedestrianRoute），成功且路径非空返回true。
 	bool PlanWalkPath(Citizen* citizen, Room* destination, const FVector& from, TArray<FVector>& outWaypoints) const;
 
-	// script的test_navigate_citizen Change（"你在去哪"选项）：用橙色折线（复用交通组件的那条线）显示这个
-	// 市民正在走的路线——当前位置 + 剩余路径点，折线一直显示到这条路走完。不改变市民的行动。市民必须已有Actor
-	// （玩家对话时必然在身边）；没在走路时只在屏幕左上角提示。
-	void StartTestNavigation(const FString& citizenName);
-
 	// ACitizenElement::EndPlay回调：Actor以任何方式结束（流式销毁、掉出世界被引擎销毁等）都从activeInstances摘掉
 	// （那个TMap的Citizen*键没法UPROPERTY，GC不会置空，Actor被引擎销毁后会留下悬空指针）。
 	void HandleElementEndPlay(Citizen* citizen, ACitizenElement* element);

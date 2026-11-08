@@ -430,13 +430,6 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new EnterVehicleChange(vehicle.AsString());
 		}
-		else if (type == "test_navigate_vehicle") {
-			auto name = obj["name"];
-			if (name.IsNull()) {
-				THROW_EXCEPTION(RuntimeException, "Missing name for test_navigate_vehicle change.\n");
-			}
-			change = new TestNavigateVehicleChange(name.AsString());
-		}
 		else if (type == "vehicle_command") {
 			auto vehicle = obj["vehicle"];
 			auto command = obj["command"];
@@ -453,12 +446,12 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			}
 			change = new VehicleNavigateChange(vehicle.AsString(), destination.AsString());
 		}
-		else if (type == "test_navigate_citizen") {
-			auto name = obj["name"];
-			if (name.IsNull()) {
-				THROW_EXCEPTION(RuntimeException, "Missing name for test_navigate_citizen change.\n");
+		else if (type == "visualize_navigation") {
+			auto address = obj["address"];
+			if (address.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing address for visualize_navigation change.\n");
 			}
-			change = new TestNavigateCitizenChange(name.AsString());
+			change = new VisualizeNavigationChange(address.AsString());
 		}
 		else if (type == "board_vehicle") {
 			auto vehicle = obj["vehicle"];

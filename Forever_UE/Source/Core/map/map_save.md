@@ -100,3 +100,7 @@ UE 控制台命令 `Forever.SaveRoundTrip`：当前地图写段 → 读回成一
 
 ## 房间direction语义
 `Room::direction`是"建筑局部坐标系下的房间朝向(正面)"，随 Room 原样存档，`Room::LocalToBuildingLocal`等直接读取。
+
+## Building段：外部连接点
+
+`scriptMilestones`之后、`floors`之前：`U32 count`+每项`I32 锚点id`（`Building::outsideNodes`，没登记进锚点表的丢掉），读档用`LoadTables::AnchorAt`。未加版本号，旧存档读不了。

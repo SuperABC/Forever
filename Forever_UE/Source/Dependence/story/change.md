@@ -95,10 +95,9 @@
 - `vehicle_command`(vehicle, command)：`"run"`=随机选一条公交环线的随机站，先导航过去再开始循环；`"stop"`=刹停并保持，线路公交同时退出
   时刻表（`StartBusTestRun`/`StopBusRun`）。
 - `vehicle_navigate`(vehicle, destination)：让载具由Controller开到`destination`（房间地址表达式；字面量`"random"`=随机一个有车行节点的地下室房间，目前只有工厂）。
-  到达后给这辆车自己的script发`vehicle_arrive`事件，在该事件里再发`vehicle_navigate`就是连续随机导航（压力测试，见`Resource/Story/vehicle_stress.script`）。
+  到达后给这辆车自己的script发`vehicle_arrive`事件，在该事件里再发`vehicle_navigate`就是连续随机导航（可用来写随机导航压力测试）。
   UE层`UForeverTrafficFrameworkComponent::NavigateVehicle`执行：请求入队、每帧按`maxVehicleSpawnsPerFrame`处理，必要时生成车辆Actor。
-- `test_navigate_vehicle`(name)：显示指定载具当前行驶路线的折线，不给载具发命令；`test_navigate_citizen`(name)：让市民由AIController
-  走到测试目的地（机场一楼房间），`UForeverPopulaceFrameworkComponent::StartTestNavigation`。
+- `visualize_navigation`(address)：给玩家显示到某个房间(目前只支持房间地址，表达式)的导航线。玩家步行按人行道画，开车按车道画（车到不了的房间画到该建筑1楼外部连接点附近的车道），其它Pawn（公交乘客等）不画；切换操控自动刷新，玩家进入目标房间后消失。UE层`UForeverTrafficFrameworkComponent::StartGuide`执行。合并了原来的`test_navigate_vehicle`/`test_navigate_citizen`。
 - 以上全部只能在UE层执行，`AForeverFrameworkActor::ApplyChange`里`dynamic_cast`转发给对应Component。
 - **注意**：同名的`enter_vehicle`/`leave_vehicle`也是事件类型（见`event.md`），事件是"发生了"的通知，Change是"去做"的指令，
   `BuildEvent`/`BuildChanges`各自识别，互不冲突。

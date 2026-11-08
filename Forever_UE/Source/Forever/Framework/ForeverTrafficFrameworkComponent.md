@@ -66,9 +66,9 @@
 
 ### 导航测试折线
 
-`StartTestNavigation(vehicleName)`（`test_navigate_vehicle` Change，和市民的`test_navigate_citizen`对称）：取`busStates`里这辆车`ABusController::GetRemainingWaypoints`，用`TrackTestNavigationLine`持续显示橙色折线。
-`TrackTestNavigationLine(source)`：约每0.1秒重取剩余路径重画（越走越短），`source`返回false（任务完成/对象没了）就清线，没有计时器，不会自己消失。车和市民共用这一条线，同一时刻只显示最后一次。
-不生成车、不发命令；车没有在被Controller驱动就什么都不做、也不提示。
+## 玩家导航线（visualize_navigation / T键）
+
+`StartGuide(Room* target)`保存目标并`RefreshGuide()`：按玩家当前Pawn分三种——`ACharacter`（步行，含占有的市民）→`Map::PlanPedestrianRoute`终点是目标房间；非乘客模式的`AVehicleElement`→先`Map::PlanVehicleRoute`到房间，规划不出来（车到不了）就在`target->GetParentBuilding()->GetOutsideNodes()`（建筑init时记下、进存档的1楼行人外部连接点）里取离车最近且`Map::PlanVehicleRouteToPoint`可达的一个，线终止在那条车道上的垂足（`bEndsAtOutside`）；乘客模式/其它Pawn→只清线，目标保留。线复用`TrackTestNavigationLine`（间隔`guideRefreshInterval`=0.5s），`UpdateGuide`每次把玩家投影到折线上，裁掉已走前缀，偏离折线超过`guideReplanDistance`(2=20m)重新规划；`!bEndsAtOutside`且`Player::GetCurrentRoom()==target`时销毁；终止在外部的线永远不因靠近终点销毁（下车→`AForeverPlayerController::OnPossess`触发`RefreshGuide`→变成步行线）。`TrackTestNavigationLine`每次调用前拷贝`testNavSource`，所以source里可以安全地重新规划。T键入口见`ForeverPlayerController.md`。
 
 ### 线路调试画线与铺轨
 
@@ -82,7 +82,7 @@
 
 ## 脚本驱动的车辆导航（vehicle_navigate / vehicle_arrive）
 
-`NavigateVehicle(name, destination)`（`ForeverFrameworkActor::ApplyChange`转发`VehicleNavigateChange`）只入队，`TickComponent`每帧最多处理`maxVehicleSpawnsPerFrame`个：`FindOrSpawnVehicle`（必要时生成车辆Actor，线路公交/玩家正在开的车跳过）→ 选目的地（`"random"`=`PickRandomVehicleRoom`：车行导航图里有节点的房间，地下室优先，排除车当前房间；否则`Map::LocateRoom(地址)`）→ `GetOrCreateCarDriver`（通用`AVehicleCommandController`，经`SpawnDriver`，和公交共用）→ `ClearCommands`+`PushCommand(MakeNavigate(房间导航节点id))`。Controller的`SetNavigateFinishedCallback`回调只把结果入队，下一次Tick的`ProcessNavResults`里：到达则`SetCurrentRoom(目的房间)`并给这辆车自己的script发`VehicleArriveEvent`（规划失败只打警告，不重试）；回调不直接发事件，避免`vehicle_arrive`→`vehicle_navigate`→立刻到达的递归。`IsDrivenByController`也认`carDrivers`，所以导航中的车不会被流式销毁。压力测试脚本见`Resource/Story/vehicle_stress.script`（挂在`VehicleBasic::milestoneNames`上）。**没有Actor的车和市民一样由Core推算**：`StartVehicleNavigation`对没有Actor的车直接同步规划（`PlanVehicleRouteToNode`），路线（UE单位）交给`Vehicle::BeginDrive`（速度=Controller的`maxSpeed`×`kUnspawnedDriveSpeedScale`(10)，和市民一致），`TickComponent`每帧`AdvanceDrive`推进并写回Transform（`entry.location/yaw`同步），走完发抵达；进入生成距离才`SpawnCar`并`HandOffDriveToActor`（`EndDrive`+Controller重新规划导航到目的房间）；走远（超过销毁距离）`HandBackDriveToCore`把Controller的剩余路径交还Core并销毁Actor。开局不会批量生成Actor。Core推算期间不经过路口管理；推算状态不进存档。
+`NavigateVehicle(name, destination)`（`ForeverFrameworkActor::ApplyChange`转发`VehicleNavigateChange`）只入队，`TickComponent`每帧最多处理`maxVehicleSpawnsPerFrame`个：`FindOrSpawnVehicle`（必要时生成车辆Actor，线路公交/玩家正在开的车跳过）→ 选目的地（`"random"`=`PickRandomVehicleRoom`：车行导航图里有节点的房间，地下室优先，排除车当前房间；否则`Map::LocateRoom(地址)`）→ `GetOrCreateCarDriver`（通用`AVehicleCommandController`，经`SpawnDriver`，和公交共用）→ `ClearCommands`+`PushCommand(MakeNavigate(房间导航节点id))`。Controller的`SetNavigateFinishedCallback`回调只把结果入队，下一次Tick的`ProcessNavResults`里：到达则`SetCurrentRoom(目的房间)`并给这辆车自己的script发`VehicleArriveEvent`（规划失败只打警告，不重试）；回调不直接发事件，避免`vehicle_arrive`→`vehicle_navigate`→立刻到达的递归。`IsDrivenByController`也认`carDrivers`，所以导航中的车不会被流式销毁。**没有Actor的车和市民一样由Core推算**：`StartVehicleNavigation`对没有Actor的车直接同步规划（`PlanVehicleRouteToNode`），路线（UE单位）交给`Vehicle::BeginDrive`（速度=Controller的`maxSpeed`×`kUnspawnedDriveSpeedScale`(10)，和市民一致），`TickComponent`每帧`AdvanceDrive`推进并写回Transform（`entry.location/yaw`同步），走完发抵达；进入生成距离才`SpawnCar`并`HandOffDriveToActor`（`EndDrive`+Controller重新规划导航到目的房间）；走远（超过销毁距离）`HandBackDriveToCore`把Controller的剩余路径交还Core并销毁Actor。开局不会批量生成Actor。Core推算期间不经过路口管理；推算状态不进存档。
 `GenerateVehicles`不清请求队列（`game_start`比它先发生），`mapRef`没设时`ProcessPendingNavigations`不处理。注意：停在没有车行节点的房间里的车规划不出路线（只有工厂有车行节点）。
 
 ## 有序通行的基础设施
@@ -100,7 +100,7 @@
 - 被依赖：`AForeverFrameworkActor::BeginPlay()`在`EnsureTrafficGenerated()`→`EnsureStoryGenerated()`之后依次调用`GenerateVehicles`/`BuildRouteDebugMesh`/`BuildTracks`
   （必须排在`EnsureStoryGenerated()`之后——车辆script的`game_start`要先广播完，生成`AVehicleElement`时建触发盒烘焙的选项快照才不会是空的）；
   `UForeverStoryFrameworkComponent`调用`ApplyEnterVehicle`/`ApplyBoardVehicle`/`ApplyLeaveVehicle`；`AForeverFrameworkActor`调用`StartBusTestRun`/`StopBusRun`/`StartTestNavigation`（以及读档恢复时的`ApplyBoardVehicle`）；
-  `AVehicleElement::ExitVehicle`调用`ExitVehicle`；`UForeverPopulaceFrameworkComponent::StartTestNavigation`调用`TrackTestNavigationLine`；`ABusController`调用`FireStopEvent`。
+  `AVehicleElement::ExitVehicle`调用`ExitVehicle`；`AForeverFrameworkActor`的`visualize_navigation`和`AForeverPlayerController`（`TestNavigate`/`OnPossess`）调用`StartGuide`/`RefreshGuide`；`ABusController`调用`FireStopEvent`。
 
 ## 待办/后续阶段
 

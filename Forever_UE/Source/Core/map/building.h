@@ -358,6 +358,11 @@ public:
 	const std::vector<ElevatorCabinSpec>& GetCabins() const;
 	const std::string& GetStationMod() const;
 
+	// 行人导航里"outside"端点对应的1楼外部连接点（Map::MergeBuildingNavigation在init时记下，进存档）。
+	// 节点由Map::navAnchorNodes持有，这里只是引用。导航线用它当"到不了房间的车"的目的地，见Map::PlanVehicleRouteToPoint。
+	const std::vector<Node*>& GetOutsideNodes() const;
+	void SetOutsideNodes(const std::vector<Node*>& nodes);
+
 	// 这栋建筑自己的Script(BuildingMod::milestoneNames非空才有，否则nullptr)，Map::BuildBuildingScripts创建，析构时释放。
 	Script* GetScript() const;
 
@@ -469,6 +474,7 @@ private:
 	std::string scriptModName = "script_empty";
 	std::vector<std::string> scriptMilestones;
 	Script* script = nullptr;
+	std::vector<Node*> outsideNodes;
 
 	std::vector<Floor> floors;
 	std::vector<Component*> components;

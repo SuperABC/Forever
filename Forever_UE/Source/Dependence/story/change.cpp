@@ -754,31 +754,31 @@ const std::string& EnterVehicleChange::GetVehicle() const {
 	return vehicle;
 }
 
-TestNavigateVehicleChange::TestNavigateVehicleChange() :
-	name() {
+VisualizeNavigationChange::VisualizeNavigationChange() :
+	address() {
 
 }
 
-TestNavigateVehicleChange::TestNavigateVehicleChange(std::string name) :
-	name(move(name)) {
+VisualizeNavigationChange::VisualizeNavigationChange(std::string address) :
+	address(move(address)) {
 
 }
 
-TestNavigateVehicleChange::~TestNavigateVehicleChange() {
+VisualizeNavigationChange::~VisualizeNavigationChange() {
 
 }
 
-const string& TestNavigateVehicleChange::GetType() const {
-	static const string type = "test_navigate_vehicle";
+const string& VisualizeNavigationChange::GetType() const {
+	static const string type = "visualize_navigation";
 	return type;
 }
 
-void TestNavigateVehicleChange::SetName(std::string name) {
-	this->name = move(name);
+void VisualizeNavigationChange::SetAddress(std::string address) {
+	this->address = move(address);
 }
 
-const std::string& TestNavigateVehicleChange::GetName() const {
-	return name;
+const std::string& VisualizeNavigationChange::GetAddress() const {
+	return address;
 }
 
 VehicleCommandChange::VehicleCommandChange() :
@@ -849,33 +849,6 @@ void VehicleNavigateChange::SetDestination(std::string destination) {
 
 const std::string& VehicleNavigateChange::GetDestination() const {
 	return destination;
-}
-
-TestNavigateCitizenChange::TestNavigateCitizenChange() :
-	name() {
-
-}
-
-TestNavigateCitizenChange::TestNavigateCitizenChange(std::string name) :
-	name(move(name)) {
-
-}
-
-TestNavigateCitizenChange::~TestNavigateCitizenChange() {
-
-}
-
-const string& TestNavigateCitizenChange::GetType() const {
-	static const string type = "test_navigate_citizen";
-	return type;
-}
-
-void TestNavigateCitizenChange::SetName(std::string name) {
-	this->name = move(name);
-}
-
-const std::string& TestNavigateCitizenChange::GetName() const {
-	return name;
 }
 
 LeaveVehicleChange::LeaveVehicleChange() :

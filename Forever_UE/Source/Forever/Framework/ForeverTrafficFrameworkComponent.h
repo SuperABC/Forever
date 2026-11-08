@@ -97,17 +97,30 @@ public:
 	// 搭乘者(ATransitVehicleElement/搭乘模式的物理公交)也走这条流程但不做遮挡判定；bForce=true时驾驶者也不做。
 	void ExitVehicle(APlayerController* controller, bool bForce = false);
 
-	// script的test_navigate_vehicle Change（和市民的test_navigate_citizen对称）：用橙色折线显示这辆车
-	// 当前的行驶路线，数据来自AVehicleCommandController::GetRemainingWaypoints，不给车发任何命令。
-	// 折线跟着车走、越走越短，一直显示到这条寻路任务完成（见TrackTestNavigationLine）。车没有在开就什么都不做。
-	void StartTestNavigation(const FString& vehicleName);
+	// ---- 玩家导航线（script的visualize_navigation Change / T键测试入口） ----
+	// 给玩家显示"到target房间怎么走"：玩家步行按人行道画；开车按车道画，车到不了的房间画到target所在建筑1楼外部
+	// 连接点附近的车道（线终止在外部，车到了也不消失，下车后刷新成步行线）；乘客/其它Pawn不画。
+	// target留着，切换操控（AForeverPlayerController::OnPossess）时RefreshGuide重新规划。
+	void StartGuide(Room* target);
+	// 按玩家当前Pawn重新规划并画线；没有活动导航时什么都不做。
+	void RefreshGuide();
+	// 取消导航并清线。
+	void ClearGuide();
+	bool HasGuide() const { return guide.target != nullptr; }
+
+	// 导航线刷新间隔(秒)：每次裁剪玩家已经走过的前缀、判断偏离/到达。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic|Guide")
+	float guideRefreshInterval = 0.5f;
+	// 玩家偏离折线超过这个距离(地图单位，1=10m，默认2=20m)就重新规划。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic|Guide")
+	float guideReplanDistance = 2.f;
 
 	// 清掉导航调试折线并停止跟踪。
 	void ClearTestNavigationLine();
 
-	// 跟踪显示一条路线（车辆和市民的导航测试共用同一条调试线，同一时刻只显示最后一次）：约每0.1秒调一次
-	// source取剩余路径重画，source返回false（任务完成/对象没了）就清线并停止。没有计时器，不会自己消失。
-	void TrackTestNavigationLine(TFunction<bool(TArray<FVector>&)> source);
+	// 跟踪显示一条路线（同一时刻只显示最后一次）：每interval秒调一次source取路径重画，source返回false
+	// （任务完成/对象没了）就清线并停止。没有计时器，不会自己消失。
+	void TrackTestNavigationLine(TFunction<bool(TArray<FVector>&)> source, float interval = 0.1f);
 
 	// 公共交通线路调试画线(每种stationType一个mesh+MID，详见.md)，bShowRouteDebug为false时清空已有section。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Debug")
@@ -287,6 +300,16 @@ private:
 	void ShowTestNavigationLine(const TArray<FVector>& path);
 	TFunction<bool(TArray<FVector>&)> testNavSource; // 当前跟踪的路线来源，空=没有在显示
 	float testNavRefreshCountdown = 0.f;
+	float testNavRefreshInterval = 0.1f;
+
+	struct FGuide {
+		Room* target = nullptr;
+		bool bEndsAtOutside = false; // 线终止在建筑外部连接点，不是目标房间
+		TArray<FVector> path;        // 剩余路径（UE单位），随玩家前进被裁剪
+	};
+	FGuide guide;
+	void HideGuideLine();
+	bool UpdateGuide(TArray<FVector>& outPath); // TrackTestNavigationLine的source
 
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> busRouteMesh;

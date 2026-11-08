@@ -615,24 +615,25 @@ private:
 
 };
 
-// 车辆导航测试：显示指定载具当前行驶路线的折线（不给载具发任何命令）。UE-only效果，
-// 和TestNavigateCitizenChange对称，见UForeverTrafficFrameworkComponent::StartTestNavigation。
-class TestNavigateVehicleChange : public Change {
+// 给玩家显示"到某个房间怎么走"的导航线（UE-only效果，见UForeverTrafficFrameworkComponent::StartGuide）：
+// 玩家步行就按人行道画，开车就按车道画（车到不了的房间画到建筑1楼外部连接点附近的车道），其它情况不画；
+// 切换操控时自动刷新，玩家进入目标房间后消失。目前只支持房间地址。
+class VisualizeNavigationChange : public Change {
 public:
-	TestNavigateVehicleChange();
+	VisualizeNavigationChange();
 
-	TestNavigateVehicleChange(std::string name);
+	VisualizeNavigationChange(std::string address);
 
-	virtual ~TestNavigateVehicleChange();
+	virtual ~VisualizeNavigationChange();
 
 	virtual const std::string& GetType() const override;
 
-	void SetName(std::string name);
-	const std::string& GetName() const;
+	void SetAddress(std::string address);
+	const std::string& GetAddress() const;
 
 private:
-	// 载具名称
-	std::string name;
+	// 目标房间地址（Room::GetAddress()，表达式）
+	std::string address;
 
 };
 
@@ -686,27 +687,6 @@ private:
 
 	// 目标房间地址（表达式）或"random"
 	std::string destination;
-
-};
-
-// 市民导航测试：让指定市民由AIController带着沿行人导航图走到测试目的地（机场一楼房间）。
-// UE-only效果，见UForeverPopulaceFrameworkComponent::StartTestNavigation。
-class TestNavigateCitizenChange : public Change {
-public:
-	TestNavigateCitizenChange();
-
-	TestNavigateCitizenChange(std::string name);
-
-	virtual ~TestNavigateCitizenChange();
-
-	virtual const std::string& GetType() const override;
-
-	void SetName(std::string name);
-	const std::string& GetName() const;
-
-private:
-	// 市民姓名
-	std::string name;
 
 };
 

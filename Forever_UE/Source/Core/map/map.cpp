@@ -694,6 +694,8 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		vehicleNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
 	}
 
+	building->SetOutsideNodes(result.outsideNodes); // 导航线要用：到不了房间的车改去1楼外部连接点
+
 	Road* road = building->GetBoundaryRoad(building->GetDirection());
 
 	// building在Road哪一侧+对应弧长比例t——行人/车辆的outside端点接路网都要用这同一套算法，
@@ -2635,6 +2637,63 @@ Map::VehicleRoutePlan Map::PlanVehicleRouteToNode(Room* startRoom, float x, floa
 	if (destAux) AppendConnectionPoints(plan.points, destAux->inEdge, &plan.edges);
 	plan.status = VehicleRoutePlan::OK;
 	return plan;
+}
+
+Map::VehicleRoutePlan Map::PlanVehicleRouteToPoint(Room* startRoom, float x, float y, float destX, float destY,
+	bool useHeading, float headingX, float headingY) const {
+	VehicleRoutePlan best;
+	float bestCost = FLT_MAX;
+
+	vector<Road*> roads = GetRoads();
+	for (Road* road : GetPathRoads()) roads.push_back(road);
+	for (const auto& [zoneName, zone] : GetZones()) {
+		if (!zone) continue;
+		for (Road* road : zone->GetInternalRoads()) roads.push_back(road);
+	}
+	struct RoadCandidate { Road* road; float distSq; };
+	vector<RoadCandidate> nearby;
+	for (Road* road : roads) {
+		if (!road) continue;
+		float t = ProjectPointOntoRoad(road, destX, destY);
+		Node foot = road->GetPoint(t);
+		float dx = foot.GetX() - destX, dy = foot.GetY() - destY;
+		nearby.push_back({ road, dx * dx + dy * dy });
+	}
+	sort(nearby.begin(), nearby.end(), [](const RoadCandidate& a, const RoadCandidate& b) { return a.distSq < b.distSq; });
+
+	int tried = 0;
+	for (const RoadCandidate& candidate : nearby) {
+		if (tried >= kEntryRoadCandidates) break;
+		float t = ProjectPointOntoRoad(candidate.road, destX, destY);
+		float tdx, tdy, tdz;
+		candidate.road->GetTangent(t, tdx, tdy, tdz);
+		bool anySegment = false;
+		for (int direction = 0; direction < 2; direction++) {
+			float sign = direction == 0 ? 1.f : -1.f;
+			LaneSegment segment;
+			if (!GetLaneSegmentAt(candidate.road, destX, destY, tdx * sign, tdy * sign, segment) || !segment.fromAnchor) continue;
+			anySegment = true;
+
+			VehicleRoutePlan plan = PlanVehicleRouteToNode(startRoom, x, y, segment.fromAnchor->GetId(), useHeading, headingX, headingY);
+			if (plan.status != VehicleRoutePlan::OK || plan.points.empty()) continue;
+			float cost = 0.f;
+			for (size_t i = 1; i < plan.points.size(); i++) {
+				float dx = plan.points[i].x - plan.points[i - 1].x, dy = plan.points[i].y - plan.points[i - 1].y;
+				cost += sqrtf(dx * dx + dy * dy);
+			}
+			float lastX = plan.points.back().x - segment.worldX, lastY = plan.points.back().y - segment.worldY;
+			cost += sqrtf(lastX * lastX + lastY * lastY);
+			if (cost >= bestCost) continue;
+
+			int lastIndex = static_cast<int>(plan.points.size()) - 1;
+			plan.points.push_back({ segment.worldX, segment.worldY, segment.worldZ });
+			plan.edges.push_back({ segment.edge, lastIndex, lastIndex + 1 }); // 上游锚点到垂足，只是这条车道边的前半段
+			bestCost = cost;
+			best = std::move(plan);
+		}
+		if (anySegment) tried++;
+	}
+	return best; // 没有可达候选：沿用默认的NO_ROAD_CONNECTION
 }
 
 vector<Component*> Map::GetAllComponents() const {

@@ -267,6 +267,12 @@ public:
 	VehicleRoutePlan PlanVehicleRouteToNode(Room* startRoom, float x, float y, int destNodeId,
 		bool useHeading = false, float headingX = 0.f, float headingY = 0.f) const;
 
+	// 同PlanVehicleRouteToNode，但终点是室外任意一点(destX,destY)：找离它最近的车道段，路线终止在车道上的垂足
+	// （导航线用：车到不了的房间改去建筑1楼外部连接点附近的车道）。终点锚=该车道边的上游锚点，再沿边走到垂足。
+	// OK：points是完整折线(最后一点是垂足)；其余状态同PlanVehicleRouteToNode。
+	VehicleRoutePlan PlanVehicleRouteToPoint(Room* startRoom, float x, float y, float destX, float destY,
+		bool useHeading = false, float headingX = 0.f, float headingY = 0.f) const;
+
 	// 节点到节点（任意一端可以是辅助节点）。OK时points是完整折线（含起点终点），from==to时只有一个点；
 	// 连不通 -> NO_PATH_TO_DESTINATION，points为空。公交循环里站到站用。
 	VehicleRoutePlan PlanVehicleLeg(int fromNodeId, int toNodeId) const;

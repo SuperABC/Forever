@@ -44,7 +44,7 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 
 ### `FindOrSpawnCitizenByName` / `SpawnCitizen`
 
-剧情`ChangeControlChange`、`StartTestNavigation`等指定的市民不一定在玩家附近，
+剧情`ChangeControlChange`等指定的市民不一定在玩家附近，
 `FindOrSpawnCitizenByName`按`Citizen::GetName()`（UTF-8转`FString`）在`allCitizens`里线性查找，
 已有Actor直接返回，否则`SpawnCitizen`强制生成，不看距离、不受数量上限限制。找不到同名/已死亡/生成失败返回`nullptr`。
 `SpawnCitizen`是流式生成和强制生成共用的私有函数，调用方保证`citizen`非空且不在`activeInstances`里。
@@ -110,16 +110,13 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 
 - `ForEachActiveCitizen` / `FindActiveCitizen`：识别模式（`UForeverIdentifyComponent`）等枚举/查询已生成Actor，前者包含被玩家操控的那个，不触发生成。
 - `PlanWalkPath`：`ACitizenController`的`GoToRoom`指令用，同步规划`from`到`destination`房间的行人路径点（`Map::PlanPedestrianRoute`）。
-- `StartTestNavigation(name)`（script的`test_navigate_citizen` Change）：`FindOrSpawnCitizenByName`后用
-  `UForeverTrafficFrameworkComponent::TrackTestNavigationLine`持续显示该市民剩余路线的橙色折线（无计时，走完才清），
-  数据来自`ACitizenController::GetRemainingWaypoints`。
 
 ## 依赖关系
 
 - 依赖：`Element/CitizenElement.h`、`Controller/CitizenController.h`、`Source/Core`的`populace/populace.h`/`citizen.h`、
   `map/map.h`/`building.h`/`room.h`/`general_geometry.h`、`UForeverTrafficFrameworkComponent`（测试折线）、
   `UForeverStoryFrameworkComponent`（`BroadcastNpcArrive`）、`Async/Async.h`、`Containers/Queue.h`、`HAL/PlatformProcess.h`。
-- 被依赖：`AForeverFrameworkActor`（`EnsurePopulaceGenerated`、`Tick`里转发`RequestWalk`/`TeleportCitizen`/`AddCitizen`/`StartTestNavigation`、`EndPlay`/析构里`WaitForPendingPathfinding`）、
+- 被依赖：`AForeverFrameworkActor`（`EnsurePopulaceGenerated`、`Tick`里转发`RequestWalk`/`TeleportCitizen`/`AddCitizen`、`EndPlay`/析构里`WaitForPendingPathfinding`）、
   `UForeverStoryFrameworkComponent`（`FindOrSpawnCitizenByName`）、武器系统（`HandleCitizenDeath`）、
   存档子系统、`ACitizenElement`/`ACitizenController`（`NotifyArrived`、`HandleElementEndPlay`、`PlanWalkPath`）。
 

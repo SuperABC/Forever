@@ -391,23 +391,6 @@ void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* p
 	}
 }
 
-void UForeverPopulaceFrameworkComponent::StartTestNavigation(const FString& citizenName) {
-	ACitizenElement* element = FindOrSpawnCitizenByName(citizenName);
-	if (!element) return;
-	ACitizenController* controller = element->GetCitizenController();
-	TArray<FVector> path;
-	Room* destination = nullptr;
-	if (!controller || !controller->GetRemainingWaypoints(path, destination) || path.Num() < 2) return;
-	if (UForeverTrafficFrameworkComponent* trafficLine = GetOwner() ? GetOwner()->FindComponentByClass<UForeverTrafficFrameworkComponent>() : nullptr) {
-		TWeakObjectPtr<ACitizenController> weakController(controller);
-		trafficLine->TrackTestNavigationLine([weakController](TArray<FVector>& outPath) {
-			const ACitizenController* c = weakController.Get();
-			Room* ignored = nullptr;
-			return c && c->GetRemainingWaypoints(outPath, ignored);
-		});
-	}
-}
-
 void UForeverPopulaceFrameworkComponent::HandleElementEndPlay(Citizen* citizen, ACitizenElement* element) {
 	if (!citizen) return;
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);

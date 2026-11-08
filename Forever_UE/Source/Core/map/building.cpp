@@ -1034,6 +1034,8 @@ const FloorLayoutSpec* Building::GetFloorSpec(int level) const {
 const unordered_map<int, FloorLayoutSpec>& Building::GetFloorSpecs() const { return floorSpecs; }
 const vector<ElevatorCabinSpec>& Building::GetCabins() const { return cabins; }
 const string& Building::GetStationMod() const { return stationMod; }
+const vector<Node*>& Building::GetOutsideNodes() const { return outsideNodes; }
+void Building::SetOutsideNodes(const vector<Node*>& nodes) { outsideNodes = nodes; }
 Script* Building::GetScript() const { return script; }
 
 const Floor* Building::GetFloor(int level) const {

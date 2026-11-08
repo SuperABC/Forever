@@ -468,13 +468,6 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* testNavigateVehicle = dynamic_cast<const TestNavigateVehicleChange*>(change)) {
-		// 显示这辆车当前路线的折线，不给车发任何命令；名字可能是$$self.name之类的表达式。
-		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(testNavigateVehicle->GetName(), context)).data());
-		if (trafficFramework) trafficFramework->StartTestNavigation(vehicleName);
-		return;
-	}
-
 	if (auto* vehicleCommand = dynamic_cast<const VehicleCommandChange*>(change)) {
 		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(vehicleCommand->GetVehicle(), context)).data());
 		const std::string& command = vehicleCommand->GetCommand();
@@ -497,10 +490,15 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
-	if (auto* testNavigateCitizen = dynamic_cast<const TestNavigateCitizenChange*>(change)) {
-		// 市民的test_navigate_citizen现在是"显示这个市民当前路线的折线"（"你在去哪"选项）。
-		FString citizenName = UTF8_TO_TCHAR(ToString(EvaluateExpression(testNavigateCitizen->GetName(), context)).data());
-		if (populaceFramework) populaceFramework->StartTestNavigation(citizenName);
+	if (auto* visualize = dynamic_cast<const VisualizeNavigationChange*>(change)) {
+		// 地址先按原文查，查不到再当表达式求值（和npc_navigate一致）。
+		Room* target = map ? map->LocateRoom(visualize->GetAddress()) : nullptr;
+		if (!target && map) target = map->LocateRoom(ToString(EvaluateExpression(visualize->GetAddress(), context)));
+		if (!target) {
+			UE_LOG(LogTemp, Warning, TEXT("visualize_navigation: 找不到房间 %s"), UTF8_TO_TCHAR(visualize->GetAddress().c_str()));
+			return;
+		}
+		if (trafficFramework) trafficFramework->StartGuide(target);
 		return;
 	}
 
