@@ -83,4 +83,18 @@ private:
 	bool bCommandStarted = false;
 	int32 waypointIndex = 0;
 	float savedMaxWalkSpeed = 0.f;
+
+	// 前进方向的横向扰动：相向而行的两个人沿同一条线对撞时会顶牛，每个人加一个随时间缓慢摆动的横向分量
+	// （相位每人随机），两人摆到不同侧就错开了。amplitude是横向分量占前进分量的比例（0=关闭），
+	// 离当前路径点不到wanderFadeDistance（UE单位）时线性衰减到0，保证能走进到达判定圈。
+	UPROPERTY(EditAnywhere, Category = "Citizen|Steering")
+	float wanderAmplitude = 0.1f;
+
+	UPROPERTY(EditAnywhere, Category = "Citizen|Steering")
+	float wanderFrequency = 1.2f; // 弧度/秒
+
+	UPROPERTY(EditAnywhere, Category = "Citizen|Steering")
+	float wanderFadeDistance = 250.f;
+
+	float wanderPhase = 0.f;
 };

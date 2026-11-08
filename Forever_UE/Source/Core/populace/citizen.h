@@ -237,6 +237,15 @@ public:
 	// 读档后把起算时间设成nowSeconds(存档里的路径本来就是以当前位置为起点，已走弧长为0)。
 	void RestartWalk(double nowSeconds);
 
+	// 行走实例化概率：每次开始走路（寻路落地时）按这个概率抽一次，决定这次行走途中经过玩家附近时要不要生成Actor
+	// (RollWalkInstantiable)。抽中才参与实例化，没抽中的这趟路全程只在Core里推算位置，不占Actor名额，
+	// 街上就不会被走路的人挤满上限。默认-1(跟随UE侧按人流动态算的全局概率)；脚本spawn出来的故事市民设成1。随人口段存档。
+	float GetWalkInstantiateProbability() const;
+	void SetWalkInstantiateProbability(float value);
+	// globalProbability：自己没单独设过概率(默认-1)时采用的全局概率。
+	void RollWalkInstantiable(float globalProbability);
+	bool IsWalkInstantiable() const;
+
 	// 存档时这个市民是否有Actor(已实例化)。只在存档/读档之间有意义：存档前由UE侧按场景写入，读档后
 	// UE侧据此强制先生成这些市民，生成完清掉。不参与任何游戏逻辑。
 	bool WasSpawned() const;
@@ -319,6 +328,8 @@ private:
 	bool inEconomy = true;
 
 	bool wasSpawned = false;
+	float walkInstantiateProbability = -1.f; // <0=跟随全局动态概率
+	bool walkInstantiable = true; // 当前这趟行走是否参与实例化，开始走路时按概率抽，见RollWalkInstantiable
 
 	// 行进模拟状态，见BeginWalk。walkDistances[i]是路径起点到第i个点的累计弧长。
 	Room* walkDestination = nullptr;

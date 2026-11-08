@@ -148,6 +148,9 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 			w.U32(static_cast<uint32_t>(c->walkPath.size()));
 			for (const Citizen::WalkPoint& point : c->walkPath) { w.F32(point.x); w.F32(point.y); w.F32(point.z); }
 		}
+		// 行走实例化概率和当前这趟的抽签结果(追加在记录最后，按项目约定没升段版本)。
+		w.F32(c->walkInstantiateProbability);
+		w.U8(c->walkInstantiable ? 1 : 0);
 	}
 
 	// 班级。
@@ -346,6 +349,8 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 				// 起算时间先记0，UE侧GenerateCitizens再用RebaseWalk对齐到当前游戏时钟。
 				if (!r.Failed()) c->BeginWalk(path, destination, 0.0, speed);
 			}
+			c->walkInstantiateProbability = r.F32();
+			c->walkInstantiable = r.U8() != 0;
 		}
 		auto citizenAt = [&](int index) -> Citizen* {
 			return (index >= 0 && index < static_cast<int>(citizens.size())) ? citizens[index] : nullptr;

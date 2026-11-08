@@ -86,6 +86,7 @@ void ACitizenController::BeginCommand(FCharacterCommand& command) {
 
 	bCommandStarted = true;
 	waypointIndex = 0;
+	wanderPhase = FMath::FRand() * UE_TWO_PI; // 每条路线重抽，不能放构造函数（实例会拷贝CDO的值，所有人相位相同）
 
 	UCharacterMovementComponent* movement = element->GetCharacterMovement();
 	savedMaxWalkSpeed = movement->MaxWalkSpeed;
@@ -151,5 +152,11 @@ void ACitizenController::Tick(float deltaTime) {
 		return;
 	}
 
-	element->AddMovementInput(toTarget.GetSafeNormal(), 1.f);
+	FVector direction = toTarget.GetSafeNormal();
+	if (wanderAmplitude > 0.f) {
+		const float fade = FMath::Clamp(toTarget.Size() / FMath::Max(wanderFadeDistance, 1.f), 0.f, 1.f);
+		const float sway = FMath::Sin(GetWorld()->GetTimeSeconds() * wanderFrequency + wanderPhase) * wanderAmplitude * fade;
+		direction = (direction + FVector(-direction.Y, direction.X, 0.f) * sway).GetSafeNormal();
+	}
+	element->AddMovementInput(direction, 1.f);
 }

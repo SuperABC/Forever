@@ -564,7 +564,15 @@ void UForeverStoryFrameworkComponent::ApplyPayWage(const PayWageChange* change, 
 		return;
 	}
 
-	int64_t amount = static_cast<int64_t>(ToInt(EvaluateExpression(change->GetAmount(), context)));
+	// 表达式写错(比如变量漏了$$前缀被当成字符串去做算术)会抛异常，脚本数据错误不能把游戏带崩。
+	int64_t amount = 0;
+	try {
+		amount = static_cast<int64_t>(ToInt(EvaluateExpression(change->GetAmount(), context)));
+	}
+	catch (const std::exception& e) {
+		UE_LOG(LogTemp, Warning, TEXT("pay_wage: amount expression failed (%s), ignored."), UTF8_TO_TCHAR(e.what()));
+		return;
+	}
 	Economy::PayWage(*society, organization, citizen, amount);
 }
 

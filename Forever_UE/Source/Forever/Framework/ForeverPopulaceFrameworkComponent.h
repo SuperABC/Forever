@@ -151,6 +151,12 @@ private:
 	TMap<Citizen*, TObjectPtr<ACitizenElement>> activeInstances;
 	int32 pollCursor = 0;
 
+	// 非故事市民每趟行走参与实例化的概率(全局)：初始1，扫描中记录进入生成距离的行走者数峰值x，
+	// 取1.5*maxMovingCitizens/x，只减不增。故事市民在Citizen上单独设成1，不受它影响。
+	float walkInstantiateProbability = 1.f;
+	int32 peakWalkersInRange = 0;
+	int32 sweepWalkersInRange = 0;
+
 	// 每帧只轮询1/streamingBatchStride的citizen，避免每帧全量距离检测。
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")
 	int32 streamingBatchStride = 20;

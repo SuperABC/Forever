@@ -41,6 +41,9 @@ AForeverCharacter::AForeverCharacter()
 	PrimaryActorTick.bCanEverTick = true; // 瞄准摄像机插值需要每帧跑，见Tick()
 
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
+	// 和载具不互相阻挡：车是Chaos物理模拟的，人的胶囊是运动学的"无限重"，硬碰撞时人会把车顶走。
+	// 改成Overlap后车完全不受人影响；人被车推走由AVehicleElement::PushNearbyCharacters手动做。
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Vehicle, ECR_Overlap);
 
 	// Mesh的碰撞预设ObjectType也是Pawn：不关的话进出检测盒会触发两次Overlap，且蒙皮网格随动画摆动
 	// 会被相邻Room盒边界扫到造成抖动。只让Capsule触发这些检测。

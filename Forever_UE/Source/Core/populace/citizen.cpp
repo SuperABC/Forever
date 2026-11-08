@@ -331,6 +331,14 @@ void Citizen::GetRemainingWalk(double nowSeconds, std::vector<WalkPoint>& outPat
 	for (size_t i = segment; i < walkPath.size() && !finished; i++) outPath.push_back(walkPath[i]);
 }
 
+float Citizen::GetWalkInstantiateProbability() const { return walkInstantiateProbability; }
+void Citizen::SetWalkInstantiateProbability(float value) { walkInstantiateProbability = std::min(1.f, std::max(0.f, value)); }
+void Citizen::RollWalkInstantiable(float globalProbability) {
+	float probability = walkInstantiateProbability >= 0.f ? walkInstantiateProbability : std::min(1.f, std::max(0.f, globalProbability));
+	walkInstantiable = probability >= 1.f || GetRandom(10000) < static_cast<int>(probability * 10000.f);
+}
+bool Citizen::IsWalkInstantiable() const { return walkInstantiable; }
+
 void Citizen::EndWalk() {
 	walkDestination = nullptr;
 	walkPath.clear();

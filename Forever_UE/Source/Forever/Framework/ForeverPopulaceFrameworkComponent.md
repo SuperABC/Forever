@@ -127,3 +127,11 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 
 - `streamingBatchStride`/距离阈值/数量上限是经验初始值，人口规模和地图尺寸确定后按PIE结果调整。
 - 全员随机走动之类的压力测试不放C++，在script里用`npc_navigate`等Change实现。
+
+## 行走实例化概率
+每次行走的寻路结果落地时(`ApplyWalkResult`)掷一次骰子(`Citizen::RollWalkInstantiable(全局概率)`)，决定这次行走是否参与流式实例化。
+不参与的市民在 `TickComponent` 里一直由 Core 按时间推算位置，走完为止，不占 `maxMovingCitizens` 名额，也不会在视口中间凭空出现。
+
+全局概率 `walkInstantiateProbability` 是动态的：初始1；每扫完一整轮 `allCitizens`，统计进入生成距离(×`movingDistanceScale`)的行走者数
+(含已实例化的和被排除的)，取历史峰值x，概率 = min(当前, 1.5*maxMovingCitizens/x)，只减不增——第一次高峰期只是在测x，从第二次高峰起才真正限流。
+`Citizen::walkInstantiateProbability` 默认-1表示跟随全局；脚本 `spawn_npc` 的故事市民设成1，不受影响。该字段和本趟抽签结果随存档保存(未升版本)；全局概率与峰值不存档。

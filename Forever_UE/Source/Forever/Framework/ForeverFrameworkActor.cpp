@@ -588,6 +588,8 @@ void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const S
 	std::string avatar = ToString(EvaluateExpression(change->GetAvatar(), context));
 	Citizen* citizen = populace->SpawnCitizen(name, gender, birthday.GetYear(), birthday.GetMonth(), birthday.GetDay(), schedulerId, avatar);
 	if (!citizen) return;
+	// 脚本spawn出来的是故事市民，走路必须每次都参与实例化。
+	citizen->SetWalkInstantiateProbability(1.f);
 
 	// economy：是否接入经济系统(空=false)。接入才分配住处并求职；不接入则不分配住处、不产生
 	// 每日需求、不参与招聘/交税/补助。钱包不论接不接入都开，这样之后被玩家操控时直接有钱用。

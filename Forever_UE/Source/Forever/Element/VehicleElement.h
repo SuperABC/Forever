@@ -93,6 +93,9 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
+
+	// 把和车身重叠的人挪出车身（车不受人影响，人被车推着走），见实现处注释。
+	void PushNearbyCharacters();
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 	// W/S(movement.Y)按正负分别转成油门/刹车(不能把S当负油门，否则无法倒车)，A/D转向，见VehicleElement.md。

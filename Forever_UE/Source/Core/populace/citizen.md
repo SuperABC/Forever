@@ -80,3 +80,6 @@
 
 - 资产（`Citizen`上没有资产列表）。
 - 没有Job或Job没有产生调度的市民仍是“站在分配到的房间里的固定点”，没有工作驱动之外的自主移动。
+
+## 行走实例化概率
+`GetWalkInstantiateProbability/SetWalkInstantiateProbability/RollWalkInstantiable/IsWalkInstantiable`：见 ForeverPopulaceFrameworkComponent.md“行走实例化概率”。

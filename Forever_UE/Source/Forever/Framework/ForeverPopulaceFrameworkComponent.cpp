@@ -220,6 +220,9 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 		return;
 	}
 
+	// 新的一次行走开始：按行走实例化概率决定这次走路是否参与流式实例化(见Citizen::RollWalkInstantiable)。
+	citizen->RollWalkInstantiable(walkInstantiateProbability);
+
 	if (waypoints.Num() > 0 && existing && *existing) {
 		// WalkTo会取代正在走的旧路线；出发后人在路上，不属于任何房间，走到了NotifyArrived才换成目的地。
 		(*existing)->WalkTo(waypoints, destination);
@@ -486,9 +489,14 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 			float worldX, worldY, worldZ;
 			if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) continue;
 			const bool moving = citizen->IsWalking();
-			if (moving ? movingCount >= maxMovingCitizens : stationaryCount >= maxStationaryCitizens) continue;
 			const float spawnLimit = moving ? spawnDistUE * movingDistanceScale : spawnDistUE;
-			if (StreamingDistance(playerLoc, FVector(worldX, worldY, worldZ)) < spawnLimit) {
+			const bool inRange = StreamingDistance(playerLoc, FVector(worldX, worldY, worldZ)) < spawnLimit;
+			// 统计进入生成距离的行走者(不论这趟是否可实例化)，用来动态调行走实例化概率。
+			if (moving && inRange) sweepWalkersInRange++;
+			// 这次行走被概率排除在实例化之外：一直由Core推算，走完为止。
+			if (moving && !citizen->IsWalkInstantiable()) continue;
+			if (moving ? movingCount >= maxMovingCitizens : stationaryCount >= maxStationaryCitizens) continue;
+			if (inRange) {
 				ACitizenElement* element = SpawnCitizen(citizen);
 				spawnCount++;
 				if (element) (moving ? movingCount : stationaryCount)++;
@@ -502,6 +510,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 				continue;
 			}
 			const bool moving = isMoving(element);
+			if (moving) sweepWalkersInRange++;
 			const float despawnLimit = moving ? despawnDistUE * movingDistanceScale : despawnDistUE;
 			// 只按距离销毁；某一类数量超过上限(比如走路的人到站变成静止的而静止名额已满)就超着，只是不再生成新的。
 			if (!element->IsDespawnExempt() && StreamingDistance(playerLoc, element->GetActorLocation()) > despawnLimit) {
@@ -529,6 +538,16 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		}
 	}
 
+	// 扫完一整轮：本轮范围内行走者数x刷新峰值，概率取1.5*y/x(y=maxMovingCitizens)，只减不增。
+	// 峰值(而不是当前值)保证高峰过后概率不会回弹，所以第二次高峰起才真正生效。
+	if (pollCursor + processed >= total) {
+		peakWalkersInRange = FMath::Max(peakWalkersInRange, sweepWalkersInRange);
+		sweepWalkersInRange = 0;
+		if (peakWalkersInRange > 0) {
+			walkInstantiateProbability = FMath::Min(walkInstantiateProbability,
+				1.5f * FMath::Max(1, maxMovingCitizens) / peakWalkersInRange);
+		}
+	}
 	pollCursor = (pollCursor + processed) % total;
 }
 

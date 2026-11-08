@@ -16,6 +16,9 @@
 #include "Camera/CameraComponent.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/OverlapResult.h"
+#include "GameFramework/Character.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/Engine.h"
@@ -467,11 +470,45 @@ void AVehicleElement::StopHandbrake(const FInputActionValue& value)
 	if (!bRideMode) SetHandbrake(false);
 }
 
+void AVehicleElement::PushNearbyCharacters()
+{
+	UWorld* world = GetWorld();
+	if (!world || !carMesh || !carMesh->IsCollisionEnabled()) return;
+
+	// 车的包围盒内所有Pawn胶囊。人的胶囊对Vehicle通道是Overlap（ForeverCharacter构造里设的），两边都不产生阻挡/物理接触，
+	// 车完全不受人影响；"人被车推着走"在这里手动做：把和车身重叠的人沿最小穿透方向挪出车身，
+	// 车往前开时每帧都会穿进去一点再被挪出来，效果就是被车头推着走，不弹开。
+	const FBoxSphereBounds bounds = carMesh->Bounds;
+	FCollisionQueryParams params(SCENE_QUERY_STAT(VehiclePushCharacters), false, this);
+	TArray<FOverlapResult> overlaps;
+	if (!world->OverlapMultiByObjectType(overlaps, bounds.Origin, FQuat::Identity,
+		FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeBox(bounds.BoxExtent), params)) return;
+
+	TSet<ACharacter*> handled;
+	for (const FOverlapResult& overlap : overlaps) {
+		UCapsuleComponent* capsule = Cast<UCapsuleComponent>(overlap.GetComponent());
+		ACharacter* character = capsule ? Cast<ACharacter>(capsule->GetOwner()) : nullptr;
+		if (!character || character->GetRootComponent() != capsule || handled.Contains(character)) continue;
+		// 隐藏上车的玩家pawn关了碰撞（SetActorEnableCollision(false)），不能被挪。
+		if (!character->GetActorEnableCollision() || !capsule->IsCollisionEnabled()) continue;
+		handled.Add(character);
+
+		FMTDResult mtd;
+		if (!carMesh->ComputePenetration(mtd, capsule->GetCollisionShape(), capsule->GetComponentLocation(), capsule->GetComponentQuat())) continue;
+		FVector adjust = mtd.Direction * (mtd.Distance + 1.f);
+		adjust.Z = 0.f; // 只水平推：站在车顶/车边时别把人往上弹
+		if (adjust.IsNearlyZero()) continue;
+		character->AddActorWorldOffset(adjust, true); // 带扫掠：不会被车推进墙里
+	}
+}
+
 void AVehicleElement::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
 	if (!vehicle) return;
+
+	PushNearbyCharacters();
 
 	FVector location = GetActorLocation();
 	// 线路公交的Core位姿用地图单位（Route::Update的约定，和停车场车辆的UE单位不同）；物理段由这里写回，
