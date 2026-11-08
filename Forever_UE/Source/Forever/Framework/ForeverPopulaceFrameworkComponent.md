@@ -24,7 +24,7 @@
 - **迟滞**：`citizenSpawnDistance`(2.0地图单位) < `citizenDespawnDistance`(4.0)，避免临界距离来回生成/销毁。
 - **静止/移动分开**：静止的（Actor没有走路命令）用上述两个距离，最多`maxStationaryCitizens`(16)个；
   移动中的（Actor有走路命令，或Core正在推算路线）距离乘`movingDistanceScale`(2)，最多
-  `maxMovingCitizens`(32)个。免销毁的（`IsDespawnExempt()`，如被玩家操控）不计数。名额满了只是不再生成新的，
+  `maxMovingCitizens`(16)个。免销毁的（`IsDespawnExempt()`，如被玩家操控）不计数。名额满了只是不再生成新的，
   已存在的Actor只按距离销毁，不因类别超限被销毁。
 - **未生成时的位置**：`ComputeLogicalPosition`——`HasPosition()`用记录值，否则用`GetCurrentRoom()`中心，
   **不加随机抖动**（抖动是`ACitizenElement::Init()`生成时的一次性效果）。building必须从

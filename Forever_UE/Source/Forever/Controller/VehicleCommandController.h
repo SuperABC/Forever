@@ -9,6 +9,8 @@
 class AVehicleElement;
 class UForeverTrafficFrameworkComponent;
 class Map;
+class Connection;
+class JunctionTraffic;
 
 // 交通工具Controller的一条指令。Core/UE只负责往Controller里塞指令，开车细节全在Controller里。
 struct FVehicleCommand
@@ -77,13 +79,28 @@ public:
 	// 空闲/停靠中/没有有效路径返回false。"你在去哪"折线（UForeverTrafficFrameworkComponent::StartTestNavigation）用它。
 	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints) const;
 
+	// NavigateToNode指令结束时回调(bArrived=false表示规划不到)，在指令已出队、控制器回到Idle之后调用，
+	// 所以回调里可以直接PushCommand。LoopNodes不回调。
+	void SetNavigateFinishedCallback(TFunction<void(AVehicleCommandController*, int32, bool)> callback) { navigateFinished = MoveTemp(callback); }
+
 	AVehicleElement* GetDrivenVehicle() const { return drivenVehicle.Get(); }
 	bool IsKinematic() const { return bKinematic; }
 	// 玩家要上车驾驶等场合：运动学段没有物理没法开，先切回物理。
 	void ForcePhysicsMode();
 
+	// 给同一路网上其它Controller做跟车判断用的当前状态（UE单位，cm）。没有驾驶的车返回false。
+	struct FTrafficState
+	{
+		FVector location = FVector::ZeroVector;
+		FVector forward = FVector::ForwardVector;
+		float speed = 0.f;      // 沿车头方向的速度，倒车为负
+		float halfLength = 0.f;
+	};
+	bool GetTrafficState(FTrafficState& out) const;
+
 	virtual void OnPossess(APawn* inPawn) override;
 	virtual void Tick(float deltaTime) override;
+	virtual void EndPlay(const EEndPlayReason::Type endPlayReason) override;
 
 	// ---- 可调参数（UE单位，cm） ----
 	UPROPERTY(EditAnywhere, Category = "Drive")
@@ -121,6 +138,31 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Drive")
 	float pathSpacing = 250.f;
 
+	// ---- 有序通行（跟车 + 路口请求），见VehicleCommandController.md"有序通行" ----
+	UPROPERTY(EditAnywhere, Category = "Traffic")
+	bool bEnableTraffic = true;
+	// 跟车时距（秒）：Krauss安全速度里的反应时间T。
+	UPROPERTY(EditAnywhere, Category = "Traffic")
+	float followTimeGap = 0.8f;
+	// 停稳后车头离前车车尾的最小间距。
+	UPROPERTY(EditAnywhere, Category = "Traffic")
+	float standstillGap = 200.f;
+	// 被路口挡住时车头停在路口入口（停止线）之前多远。
+	UPROPERTY(EditAnywhere, Category = "Traffic")
+	float stopLineMargin = 250.f;
+	// 路口请求的视距余量：刹停距离 + 速度*请求间隔 + 这个值以内才开始对下一条路口连线请求。
+	UPROPERTY(EditAnywhere, Category = "Traffic")
+	float junctionRequestMargin = 600.f;
+	// 对路口请求的间隔（交通时钟秒，租约是它的10倍）。
+	UPROPERTY(EditAnywhere, Category = "Traffic")
+	float junctionRequestInterval = 0.1f;
+	// 前方多宽以内的车算"在我的路径上"（中心线横向距离，UE单位）。
+	UPROPERTY(EditAnywhere, Category = "Traffic")
+	float pathHalfWidth = 240.f;
+	// 跟车/路口出口检查往前看多远。
+	UPROPERTY(EditAnywhere, Category = "Traffic")
+	float trafficLookahead = 6000.f;
+
 protected:
 	// 到站/出站钩子（子类发事件、决定停靠时长）。bLoop=true表示是LoopNodes里的站。
 	virtual void OnStopEntered(int32 nodeId, bool bLoop) {}
@@ -134,11 +176,32 @@ protected:
 private:
 	enum class EState { Idle, Driving, Dwelling };
 
+	// 路径上的一条路口连线（JunctionTraffic管理的Connection）所占的弧长区间，和请求/持有状态。
+	struct FJunctionMarker
+	{
+		const Connection* conn = nullptr;
+		float startS = 0.f;
+		float endS = 0.f;
+		bool bHeld = false;        // 路口已放行（持有中，续租）
+		bool bRequested = false;   // 曾经请求过（离开/放弃时要Leave，清掉排队记录）
+		double nextRequest = 0.0;  // 下次可请求的交通时钟
+	};
+
+	// 规划结果里一条路口连线对应的世界坐标起终点，BuildJunctionMarkers用它在建好的路径上找弧长。
+	struct FEdgeSpan
+	{
+		const Connection* conn = nullptr;
+		FVector from = FVector::ZeroVector;
+		FVector to = FVector::ZeroVector;
+	};
+
 	struct FPath
 	{
 		TArray<FVector> points;
 		TArray<float> arc;    // 累计弧长
 		TArray<float> speed;  // 速度剖面
+		TArray<FJunctionMarker> junctions; // 按弧长升序
+		int32 junctionCursor = 0;          // 第一个车尾还没出去的连线
 		float total = 0.f;
 		int32 cursor = 0;
 		bool IsValid() const { return points.Num() >= 2 && total > 1.f; }
@@ -146,8 +209,30 @@ private:
 		float SpeedAt(float s) const;
 		// 把pos投影到路径上（窗口向前搜索），更新cursor，返回弧长s。
 		float Project(const FVector& pos, bool bFullSearch);
+		// 只读版本：在线段[first,last]里找最近点，返回弧长，outLateral是水平距离。
+		float ProjectConst(const FVector& pos, int32 first, int32 last, float& outLateral) const;
 	};
 
+	// 前方最近的一辆车（跟车对象）或障碍。
+	struct FLeader
+	{
+		float centerS = 0.f; // 它的中心在我路径上的弧长
+		float rearS = 0.f;   // 它的车尾在我路径上的弧长（和我的车头比较得到间距）
+		float speed = 0.f;   // 沿我行进方向的速度（>=0）
+	};
+
+	void BuildJunctionMarkers(const TArray<FEdgeSpan>& spans);
+	// 释放全部路口持有/排队（换路径、清指令、销毁时）。
+	void ReleaseJunctions();
+	float GetHalfLength(AVehicleElement* vehicle);
+	// 沿路径找中心在minCenterS之后、横向在pathHalfWidth内的最近的其它被驱动车辆。
+	bool FindLeader(float minCenterS, float halfLength, FLeader& out) const;
+	// 用物体类型(Pawn/Vehicle)沿路径向前扫一遍，找行人、玩家等不在登记表里的障碍，结果缓存0.1秒。
+	void ScanObstacles(AVehicleElement* vehicle, float frontS, float speed, double now);
+	// 跟车 + 路口 gate 给出的速度上限（UE单位）；没有限制返回FLT_MAX。bOutStopping=上限已逼近0（要停住）。
+	float ComputeTrafficLimit(AVehicleElement* vehicle, float speed, bool& bOutStopping);
+
+	TFunction<void(AVehicleCommandController*, int32, bool)> navigateFinished;
 	void StartNextCommand();
 	void FinishCommand();
 	// fromNode<0 = 从当前车位规划；返回是否规划成功并开始行驶。
@@ -182,6 +267,10 @@ private:
 	float dwellRemaining = 0.f;
 	float dwellTotal = 0.f;
 	float stuckSeconds = 0.f;
+	float halfLength = 0.f;     // 车身半长（UE单位），第一次用到时从骨骼网格取
+	FLeader obstacle;           // ScanObstacles的缓存结果(rearS在路径弧长上)
+	bool bObstacle = false;
+	double nextObstacleScan = 0.0;
 
 	bool bKinematic = false;
 	float kinSpeed = 0.f;

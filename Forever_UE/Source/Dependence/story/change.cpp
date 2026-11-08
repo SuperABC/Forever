@@ -816,6 +816,41 @@ const std::string& VehicleCommandChange::GetCommand() const {
 	return command;
 }
 
+VehicleNavigateChange::VehicleNavigateChange() :
+	vehicle(), destination() {
+
+}
+
+VehicleNavigateChange::VehicleNavigateChange(std::string vehicle, std::string destination) :
+	vehicle(move(vehicle)), destination(move(destination)) {
+
+}
+
+VehicleNavigateChange::~VehicleNavigateChange() {
+
+}
+
+const string& VehicleNavigateChange::GetType() const {
+	static const string type = "vehicle_navigate";
+	return type;
+}
+
+void VehicleNavigateChange::SetVehicle(std::string vehicle) {
+	this->vehicle = move(vehicle);
+}
+
+const std::string& VehicleNavigateChange::GetVehicle() const {
+	return vehicle;
+}
+
+void VehicleNavigateChange::SetDestination(std::string destination) {
+	this->destination = move(destination);
+}
+
+const std::string& VehicleNavigateChange::GetDestination() const {
+	return destination;
+}
+
 TestNavigateCitizenChange::TestNavigateCitizenChange() :
 	name() {
 

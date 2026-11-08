@@ -114,6 +114,9 @@
     <ClCompile Include="traffic\route.cpp">
       <Filter>traffic</Filter>
     </ClCompile>
+    <ClCompile Include="traffic\junction.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
     <ClCompile Include="player\player.cpp">
       <Filter>player</Filter>
     </ClCompile>
@@ -300,6 +303,9 @@
       <Filter>traffic</Filter>
     </ClInclude>
     <ClInclude Include="traffic\route.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\junction.h">
       <Filter>traffic</Filter>
     </ClInclude>
     <ClInclude Include="player\player.h">

@@ -6,6 +6,8 @@
 #include "Element/TransitVehicleElement.h"
 #include "Element/CitizenElement.h"
 #include "Controller/BusController.h"
+#include "Controller/VehicleCommandController.h"
+#include "traffic/junction.h"
 #include "Framework/ForeverTerrainFrameworkComponent.h"
 #include "traffic/traffic.h"
 #include "traffic/vehicle.h"
@@ -14,6 +16,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "map/roadnet.h"
 #include "common/utility.h"
 #include "story/event.h"
 
@@ -180,8 +183,17 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 	if (!map || !traffic) return;
 	mapRef = map;
 	trafficRef = traffic;
+	junctionTraffic.Reset(); // 换了地图：路口表按新Map重建
 	busStates.Empty();
 	stationByNodeId.Empty();
+	// pendingNavigations不清：game_start（车辆脚本的vehicle_navigate）比GenerateVehicles先发生，请求要留到车辆登记好之后处理。
+	pendingNavResults.Empty();
+	carDrivers.Empty();
+	navTargets.Empty();
+	vehicleRoomCache.Empty();
+	reachableCache.Empty();
+	junctionCenters.Empty();
+	bJunctionCentersBuilt = false;
 
 	// 辅助导航节点 id -> 车站：Controller 进出站时按节点 id 反查是哪个站，发 enter_stop/leave_stop。
 	for (const auto& [routeName, route] : traffic->GetRoutes()) {
@@ -267,13 +279,48 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 	}
 }
 
-AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry) {
+bool UForeverTrafficFrameworkComponent::IsNearJunction(const FVector& location) {
+	if (minSpawnDistanceFromJunction <= 0.f || !mapRef) return false;
+	if (!bJunctionCentersBuilt) {
+		bJunctionCentersBuilt = true;
+		for (RoadJunction* junction : mapRef->GetJunctions()) {
+			Intersection* center = junction ? junction->GetNode() : nullptr;
+			if (center) junctionCenters.Add(FVector2D(center->GetX() * TRAFFIC_WORLD_SCALE, center->GetY() * TRAFFIC_WORLD_SCALE));
+		}
+	}
+	const float limit = minSpawnDistanceFromJunction * TRAFFIC_WORLD_SCALE;
+	const float limitSq = limit * limit;
+	for (const FVector2D& center : junctionCenters) {
+		if (FVector2D::DistSquared(center, FVector2D(location.X, location.Y)) < limitSq) return true;
+	}
+	return false;
+}
+
+AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry, bool bCheckSpace) {
 	UClass* vehicleClass = LoadClass<AVehicleElement>(nullptr, *entry.blueprintPath);
 	if (!vehicleClass) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::SpawnCar: 加载车辆蓝图失败，路径=%s，车辆=%s"),
 			*entry.blueprintPath, *entry.name);
 		entry.bBroken = true;
 		return nullptr;
+	}
+
+	if (bCheckSpace) {
+		// 行进中的车（Core推算中）路口附近不生成，等它开出去；停着的车不限制。
+		if (entry.vehicle && entry.vehicle->IsDriving() && IsNearJunction(entry.location)) return nullptr;
+		// 生成点和别的车（Vehicle通道：物理车、Controller驱动的车）的车身重叠就先不生成，免得叠在一起。
+		// 车身尺寸取蓝图默认对象的carMesh包围盒（略微缩小，贴着停的车不算占用）。
+		const AVehicleElement* defaults = vehicleClass->GetDefaultObject<AVehicleElement>();
+		const USkeletalMeshComponent* defaultMesh = defaults ? defaults->GetCarMesh() : nullptr;
+		FVector extent = defaultMesh ? defaultMesh->CalcBounds(FTransform::Identity).BoxExtent : FVector(250.f, 110.f, 90.f);
+		extent = FVector(FMath::Max(extent.X, 150.f), FMath::Max(extent.Y, 80.f), FMath::Max(extent.Z, 60.f));
+		const FQuat rotation = FRotator(0.f, entry.yaw, 0.f).Quaternion();
+		const FVector center = entry.location + FVector(0.f, 0.f, extent.Z + 20.f);
+		FCollisionQueryParams queryParams(SCENE_QUERY_STAT(VehicleSpawnSpace), false);
+		if (GetWorld()->OverlapAnyTestByObjectType(center, rotation, FCollisionObjectQueryParams(ECC_Vehicle),
+			FCollisionShape::MakeBox(extent * 0.85f), queryParams)) {
+			return nullptr;
+		}
 	}
 
 	// carMesh有真实碰撞，停车位离墙/地板很近，默认的生成时碰撞检测会因"生成点被占用"拒绝生成
@@ -288,6 +335,7 @@ AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry) {
 	vehicleElement->Init(entry.vehicle, nullptr); // 这时候还没人上车，previousPawn先留空
 	activeVehicles.Add(entry.name, vehicleElement);
 	entry.element = vehicleElement;
+	entry.spawnedAt = GetWorld()->GetTimeSeconds();
 	return vehicleElement;
 }
 
@@ -295,7 +343,13 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	// 交通时钟放在所有早返回之前：暂停时DeltaTime为0不走，卡顿的大帧夹到0.25s免得租约被一帧耗光。
+	trafficClock += FMath::Min(DeltaTime, 0.25f);
+	drivers.RemoveAll([](const TWeakObjectPtr<AVehicleCommandController>& driver) { return !driver.IsValid(); });
+
 	UpdateBusPhysicsHandoff();
+	ProcessNavResults();
+	ProcessPendingNavigations();
 
 	if (testNavSource) {
 		testNavRefreshCountdown -= DeltaTime;
@@ -315,13 +369,42 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 	float spawnDistUE = vehicleSpawnDistance * TRAFFIC_WORLD_SCALE;
 	float despawnDistUE = vehicleDespawnDistance * TRAFFIC_WORLD_SCALE;
 	int32 spawned = 0;
+	int32 movingVehicles = 0;
+	for (const FCarEntry& entry : carEntries) {
+		if (AVehicleElement* active = entry.element.Get()) {
+			if (!active->IsPlayerControlled() && IsDrivenByController(active)) movingVehicles++;
+		}
+	}
 
 	for (FCarEntry& entry : carEntries) {
 		AVehicleElement* element = entry.element.Get();
 		if (!element) {
+			// 没有Actor但在Core里推算行驶的车（vehicle_navigate）：按时间推进位置，走完发抵达，之后照常按位置判断要不要生成。
+			if (entry.vehicle && entry.vehicle->IsDriving()) {
+				Room* driveDestination = entry.vehicle->GetDriveDestination();
+				const bool bRandom = randomTargets.FindRef(entry.name);
+				if (entry.vehicle->AdvanceDrive(GetWorld()->GetTimeSeconds())) {
+					pendingNavResults.Add({ entry.vehicle, driveDestination, true, bRandom });
+					navTargets.Remove(entry.name);
+				}
+				float dx, dy, dz, dyaw;
+				entry.vehicle->GetTransform(dx, dy, dz, dyaw);
+				entry.location = FVector(dx, dy, dz);
+				entry.yaw = dyaw;
+			}
 			if (entry.bBroken || spawned >= FMath::Max(1, maxVehicleSpawnsPerFrame)) continue;
-			if (TrafficStreamingDistance(playerLoc, entry.location) < spawnDistUE) {
-				if (SpawnCar(entry)) spawned++;
+			const bool bMoving = entry.vehicle && entry.vehicle->IsDriving();
+			if (bMoving && movingVehicles >= maxMovingVehicles) continue; // 行进中车辆名额满了：继续由Core推算
+			const float playerDistance = TrafficStreamingDistance(playerLoc, entry.location);
+			if (bMoving && playerDistance < minSpawnDistanceFromPlayer * TRAFFIC_WORLD_SCALE) continue; // 离玩家太近：不在眼前生成
+			if (playerDistance < spawnDistUE) {
+				if (SpawnCar(entry, true)) {
+					spawned++;
+					if (bMoving) {
+						HandOffDriveToActor(entry);
+						movingVehicles++;
+					}
+				}
 			}
 			continue;
 		}
@@ -331,8 +414,15 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 		entry.location = element->GetActorLocation();
 		entry.yaw = element->GetActorRotation().Yaw;
 		// 正在自己导航的车(测试导航)、被Controller持续驱动的公交也不销毁：跑远了销毁会丢掉运行状态。
-		if (!element->IsPlayerControlled() && !IsDrivenByController(element) &&
-			TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE) {
+		if (!element->IsPlayerControlled() && IsDrivenByController(element)) {
+			// 脚本导航中的车：走远了把剩余路径交还Core继续推算并销毁Actor（和市民一样）；
+			// 交不回去（公交等）就保留。
+			if (TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE &&
+				GetWorld()->GetTimeSeconds() - entry.spawnedAt >= minVehicleLifetime) HandBackDriveToCore(entry);
+		}
+		else if (!element->IsPlayerControlled() &&
+			TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE &&
+			GetWorld()->GetTimeSeconds() - entry.spawnedAt >= minVehicleLifetime) {
 			activeVehicles.Remove(entry.name);
 			element->Destroy();
 			entry.element = nullptr;
@@ -877,7 +967,11 @@ UForeverTrafficFrameworkComponent::FBusState* UForeverTrafficFrameworkComponent:
 
 bool UForeverTrafficFrameworkComponent::IsDrivenByController(const AVehicleElement* element) const {
 	if (!element || !element->GetVehicle()) return false;
-	const FBusState* state = busStates.Find(UTF8_TO_TCHAR(element->GetVehicle()->GetName().c_str()));
+	const FString elementName = UTF8_TO_TCHAR(element->GetVehicle()->GetName().c_str());
+	if (const TWeakObjectPtr<AVehicleCommandController>* driver = carDrivers.Find(elementName)) {
+		if (driver->IsValid() && (*driver)->HasCommands()) return true;
+	}
+	const FBusState* state = busStates.Find(elementName);
 	if (!state) return false;
 	const ABusController* controller = state->controller.Get();
 	return controller && controller->HasCommands();
@@ -901,12 +995,30 @@ AVehicleElement* UForeverTrafficFrameworkComponent::EnsureBusPhysicsElement(cons
 	return nullptr;
 }
 
+void UForeverTrafficFrameworkComponent::RegisterDriver(AVehicleCommandController* driver) {
+	if (driver) drivers.AddUnique(driver);
+}
+
+JunctionTraffic* UForeverTrafficFrameworkComponent::GetJunctionTraffic() {
+	if (!junctionTraffic.IsValid() && mapRef) {
+		junctionTraffic = MakeShared<JunctionTraffic>();
+		junctionTraffic->BuildFromMap(*mapRef);
+		UE_LOG(LogTemp, Log, TEXT("UForeverTrafficFrameworkComponent: junction traffic built (%d connections)."),
+			static_cast<int32>(junctionTraffic->GetConnectionCount()));
+	}
+	return junctionTraffic.Get();
+}
+
 ABusController* UForeverTrafficFrameworkComponent::SpawnBusController(AVehicleElement* element) {
-	if (!element || !GetWorld()) return nullptr;
+	return Cast<ABusController>(SpawnDriver(ABusController::StaticClass(), element));
+}
+
+AVehicleCommandController* UForeverTrafficFrameworkComponent::SpawnDriver(UClass* controllerClass, AVehicleElement* element) {
+	if (!element || !controllerClass || !GetWorld()) return nullptr;
 	FActorSpawnParameters params;
 	params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	ABusController* controller = GetWorld()->SpawnActor<ABusController>(
-		ABusController::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, params);
+	AVehicleCommandController* controller = Cast<AVehicleCommandController>(GetWorld()->SpawnActor<AActor>(
+		controllerClass, FVector::ZeroVector, FRotator::ZeroRotator, params));
 	if (!controller) return nullptr;
 
 	controller->Setup(mapRef, this);
@@ -1122,6 +1234,249 @@ void UForeverTrafficFrameworkComponent::StartBusTestRun(const FString& vehicleNa
 		// 线路公交退出时刻表，之后一直由 Controller 持有（LOD 外靠 Controller 的运动学模式）。
 		state->bDetached = true;
 		if (state->vehicle) state->vehicle->SetPhysicsDriven(true);
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// 脚本驱动的车辆导航（vehicle_navigate / vehicle_arrive）
+// ---------------------------------------------------------------------------------------------
+
+void UForeverTrafficFrameworkComponent::NavigateVehicle(const FString& vehicleName, const FString& destination) {
+	pendingNavigations.Add({ vehicleName, destination });
+}
+
+void UForeverTrafficFrameworkComponent::ProcessPendingNavigations() {
+	if (!mapRef || !trafficRef) return; // 车辆还没登记（GenerateVehicles之前）：请求先留着
+	int32 budget = FMath::Max(1, maxVehicleSpawnsPerFrame);
+	while (pendingNavigations.Num() > 0 && budget-- > 0) {
+		const FNavRequest request = pendingNavigations[0];
+		pendingNavigations.RemoveAt(0);
+		StartVehicleNavigation(request);
+	}
+}
+
+Room* UForeverTrafficFrameworkComponent::PickRandomVehicleRoom(const Room* exclude) {
+	if (!mapRef) return nullptr;
+	if (vehicleRoomCache.Num() == 0) {
+		// 有车行节点(在vehicleNavGraph里)的房间，地下室(layer<0)优先；没有地下室的就用全部。
+		const auto& graph = mapRef->GetVehicleNavGraph();
+		TArray<Room*> basement, other;
+		for (const auto& [buildingName, building] : mapRef->GetBuildings()) {
+			if (!building) continue;
+			for (Room* room : building->GetRooms()) {
+				Node* node = room ? room->GetNavigationNode() : nullptr;
+				if (!node || graph.find(node->GetId()) == graph.end()) continue;
+				(room->GetLayer() < 0 ? basement : other).Add(room);
+			}
+		}
+		vehicleRoomCache = basement.Num() > 0 ? basement : other;
+		UE_LOG(LogTemp, Log, TEXT("UForeverTrafficFrameworkComponent: %d rooms with vehicle nodes (basement %d)."),
+			vehicleRoomCache.Num(), basement.Num());
+	}
+	if (vehicleRoomCache.Num() == 0) return nullptr;
+
+	// 车在房间里：只在从它出发沿车行图真正走得到的房间里挑（很多地下室互相不连通，乱挑大多规划不到）。
+	Node* startNode = exclude ? exclude->GetNavigationNode() : nullptr;
+	if (startNode) {
+		TSet<int32>* reachable = reachableCache.Find(startNode->GetId());
+		if (!reachable) {
+			TSet<int32> visited;
+			TArray<int32> stack;
+			visited.Add(startNode->GetId());
+			stack.Add(startNode->GetId());
+			const auto& graph = mapRef->GetVehicleNavGraph();
+			while (stack.Num() > 0) {
+				const int32 current = stack.Pop();
+				auto it = graph.find(current);
+				if (it == graph.end()) continue;
+				for (const auto& edge : it->second) {
+					bool bAlready = false;
+					visited.Add(edge.first, &bAlready);
+					if (!bAlready) stack.Add(edge.first);
+				}
+			}
+			reachable = &reachableCache.Add(startNode->GetId(), MoveTemp(visited));
+		}
+		TArray<Room*> candidates;
+		for (Room* room : vehicleRoomCache) {
+			Node* node = room->GetNavigationNode();
+			if (room != exclude && node && reachable->Contains(node->GetId())) candidates.Add(room);
+		}
+		return candidates.Num() > 0 ? candidates[FMath::RandRange(0, candidates.Num() - 1)] : nullptr;
+	}
+
+	for (int32 attempt = 0; attempt < 8; attempt++) {
+		Room* room = vehicleRoomCache[FMath::RandRange(0, vehicleRoomCache.Num() - 1)];
+		if (room != exclude || vehicleRoomCache.Num() == 1) return room;
+	}
+	return vehicleRoomCache[0];
+}
+
+AVehicleCommandController* UForeverTrafficFrameworkComponent::GetOrCreateCarDriver(const FString& vehicleName, AVehicleElement* element) {
+	if (TWeakObjectPtr<AVehicleCommandController>* found = carDrivers.Find(vehicleName)) {
+		if (AVehicleCommandController* existing = found->Get()) {
+			if (existing->GetDrivenVehicle() == element) return existing;
+		}
+		carDrivers.Remove(vehicleName);
+	}
+	AVehicleCommandController* controller = SpawnDriver(AVehicleCommandController::StaticClass(), element);
+	if (!controller) return nullptr;
+	TWeakObjectPtr<UForeverTrafficFrameworkComponent> weakThis(this);
+	controller->SetNavigateFinishedCallback([weakThis](AVehicleCommandController* c, int32 nodeId, bool bArrived) {
+		if (UForeverTrafficFrameworkComponent* self = weakThis.Get()) self->OnCarNavigateFinished(c, nodeId, bArrived);
+	});
+	carDrivers.Add(vehicleName, controller);
+	return controller;
+}
+
+void UForeverTrafficFrameworkComponent::StartVehicleNavigation(const FNavRequest& request) {
+	if (!mapRef) return;
+	// 线路公交有自己的时刻表/循环指令，不接这条路。
+	if (const FBusState* busState = busStates.Find(request.vehicleName)) {
+		if (busState->bRouteBus) return;
+	}
+	FCarEntry* entry = nullptr;
+	for (FCarEntry& candidate : carEntries) {
+		if (candidate.name == request.vehicleName) { entry = &candidate; break; }
+	}
+	if (!entry || !entry->vehicle) {
+		UE_LOG(LogTemp, Warning, TEXT("vehicle_navigate: 找不到车辆 %s"), *request.vehicleName);
+		return;
+	}
+	Vehicle* core = entry->vehicle;
+	AVehicleElement* element = entry->element.Get();
+	if (element && element->IsPlayerControlled()) return; // 玩家在开
+
+	// 车停在没有车行节点的房间里（只有工厂有）必然规划失败，直接跳过。
+	Room* parked = core->GetCurrentRoom();
+	Node* parkedNode = parked ? parked->GetNavigationNode() : nullptr;
+	if (parked && (!parkedNode || mapRef->GetVehicleNavGraph().find(parkedNode->GetId()) == mapRef->GetVehicleNavGraph().end())) {
+		static int32 skipped = 0;
+		if (++skipped % 100 == 1) {
+			UE_LOG(LogTemp, Warning, TEXT("vehicle_navigate: 车辆 %s 停在没有车行节点的房间，跳过（共跳过 %d 辆）"), *request.vehicleName, skipped);
+		}
+		return;
+	}
+
+	const bool bRandom = request.destination == TEXT("random");
+	Room* destination = bRandom ? PickRandomVehicleRoom(core->GetCurrentRoom())
+		: mapRef->LocateRoom(TCHAR_TO_UTF8(*request.destination));
+	Node* node = destination ? destination->GetNavigationNode() : nullptr;
+	if (!node) {
+		UE_LOG(LogTemp, Warning, TEXT("vehicle_navigate: 车辆 %s 找不到目的地 %s"), *request.vehicleName, *request.destination);
+		return;
+	}
+	navTargets.Add(request.vehicleName, destination);
+	randomTargets.Add(request.vehicleName, bRandom);
+
+	// 有Actor（在玩家附近）：交给Controller开。
+	if (element) {
+		AVehicleCommandController* controller = GetOrCreateCarDriver(request.vehicleName, element);
+		if (!controller) return;
+		controller->ClearCommands();
+		controller->PushCommand(FVehicleCommand::MakeNavigate(node->GetId()));
+		return;
+	}
+
+	// 没有Actor：和市民一样，Core按时间沿路线推算位置，进入生成距离才生成Actor（见TickComponent）。
+	float x, y, z, yaw;
+	core->GetTransform(x, y, z, yaw);
+	const float yawRad = FMath::DegreesToRadians(yaw);
+	Map::VehicleRoutePlan plan = mapRef->PlanVehicleRouteToNode(core->GetCurrentRoom(),
+		x / TRAFFIC_WORLD_SCALE, y / TRAFFIC_WORLD_SCALE, node->GetId(), true, FMath::Cos(yawRad), FMath::Sin(yawRad));
+	if (plan.status != Map::VehicleRoutePlan::OK) {
+		UE_LOG(LogTemp, Log, TEXT("vehicle_navigate: 车辆 %s 从 %s 规划到 %s 失败，status=%d(1=无路径到终点,2=起点无出路)"), *request.vehicleName,
+			core->GetCurrentRoom() ? UTF8_TO_TCHAR(core->GetCurrentRoom()->GetAddress().c_str()) : TEXT("室外"),
+			UTF8_TO_TCHAR(destination->GetAddress().c_str()), static_cast<int32>(plan.status));
+		pendingNavResults.Add({ core, destination, false, bRandom });
+		navTargets.Remove(request.vehicleName);
+		return;
+	}
+	std::vector<Vehicle::DrivePoint> path;
+	for (const Map::NavPoint& p : plan.points) {
+		path.push_back({ p.x * TRAFFIC_WORLD_SCALE, p.y * TRAFFIC_WORLD_SCALE, p.z * TRAFFIC_WORLD_SCALE + TRAFFIC_HEIGHT_EPSILON });
+	}
+	core->SetCurrentRoom(nullptr);
+	core->BeginDrive(path, destination, GetWorld()->GetTimeSeconds(),
+		GetDefault<AVehicleCommandController>()->maxSpeed * kUnspawnedDriveSpeedScale);
+	if (!core->IsDriving()) { // 已经在目的地/路线只有一个点：当作立刻到达
+		core->SetCurrentRoom(destination);
+		pendingNavResults.Add({ core, destination, true, bRandom });
+		navTargets.Remove(request.vehicleName);
+	}
+}
+
+void UForeverTrafficFrameworkComponent::HandOffDriveToActor(FCarEntry& entry) {
+	Vehicle* core = entry.vehicle;
+	AVehicleElement* element = entry.element.Get();
+	Room* destination = core ? core->GetDriveDestination() : nullptr;
+	Node* node = destination ? destination->GetNavigationNode() : nullptr;
+	if (!element || !node) return;
+	core->EndDrive();
+	if (AVehicleCommandController* controller = GetOrCreateCarDriver(entry.name, element)) {
+		controller->ClearCommands();
+		controller->PushCommand(FVehicleCommand::MakeNavigate(node->GetId()));
+	}
+}
+
+bool UForeverTrafficFrameworkComponent::HandBackDriveToCore(FCarEntry& entry) {
+	AVehicleElement* element = entry.element.Get();
+	Room** destination = navTargets.Find(entry.name);
+	TWeakObjectPtr<AVehicleCommandController>* driver = carDrivers.Find(entry.name);
+	if (!element || !destination || !*destination || !driver || !driver->IsValid()) return false;
+	TArray<FVector> remaining;
+	if (!(*driver)->GetRemainingWaypoints(remaining) || remaining.Num() < 2) return false;
+	std::vector<Vehicle::DrivePoint> path;
+	for (const FVector& point : remaining) path.push_back({ static_cast<float>(point.X), static_cast<float>(point.Y), static_cast<float>(point.Z) });
+	entry.vehicle->SetCurrentRoom(nullptr);
+	entry.vehicle->BeginDrive(path, *destination, GetWorld()->GetTimeSeconds(), (*driver)->maxSpeed * kUnspawnedDriveSpeedScale);
+	if (!entry.vehicle->IsDriving()) return false;
+	(*driver)->ClearCommands();
+	carDrivers.Remove(entry.name);
+	activeVehicles.Remove(entry.name);
+	element->Destroy();
+	entry.element = nullptr;
+	return true;
+}
+
+void UForeverTrafficFrameworkComponent::OnCarNavigateFinished(AVehicleCommandController* controller, int32 nodeId, bool bArrived) {
+	AVehicleElement* element = controller ? controller->GetDrivenVehicle() : nullptr;
+	Vehicle* core = element ? element->GetVehicle() : nullptr;
+	if (!core) return;
+	const FString name = UTF8_TO_TCHAR(core->GetName().c_str());
+	Room** target = navTargets.Find(name);
+	if (!target || !*target) return;
+	pendingNavResults.Add({ core, *target, bArrived, randomTargets.FindRef(name) });
+	navTargets.Remove(name);
+}
+
+void UForeverTrafficFrameworkComponent::ProcessNavResults() {
+	if (pendingNavResults.Num() == 0) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UForeverStoryFrameworkComponent* storyFramework = framework ? framework->GetStoryFramework() : nullptr;
+	const TArray<FNavResult> results = MoveTemp(pendingNavResults);
+	pendingNavResults.Reset();
+	for (const FNavResult& result : results) {
+		if (!result.bArrived) {
+			// 随机目的地可能连不通（比如只有出口没有入口的地下室），换一个再试，最多5次。
+			const FString failedName = UTF8_TO_TCHAR(result.vehicle->GetName().c_str());
+			int32& tries = randomRetries.FindOrAdd(failedName);
+			if (result.bRandom && ++tries <= 5) {
+				pendingNavigations.Add({ failedName, TEXT("random") });
+				continue;
+			}
+			tries = 0;
+			UE_LOG(LogTemp, Warning, TEXT("vehicle_navigate: 车辆 %s 规划不到 %s，放弃"),
+				UTF8_TO_TCHAR(result.vehicle->GetName().c_str()), UTF8_TO_TCHAR(result.room->GetAddress().c_str()));
+			continue;
+		}
+		// 车现在停在这个房间的导航节点上：记成"在房间里"，下一次规划就从房间出发。
+		result.vehicle->SetCurrentRoom(result.room);
+		if (!storyFramework) continue;
+		randomRetries.Remove(UTF8_TO_TCHAR(result.vehicle->GetName().c_str()));
+		UE_LOG(LogTemp, Log, TEXT("vehicle_arrive: 车辆 %s 抵达 %s"), UTF8_TO_TCHAR(result.vehicle->GetName().c_str()), UTF8_TO_TCHAR(result.room->GetAddress().c_str()));
+		VehicleArriveEvent event(result.vehicle->GetName(), result.room->GetAddress());
+		storyFramework->BroadcastToVehicle(event, result.vehicle);
 	}
 }
 

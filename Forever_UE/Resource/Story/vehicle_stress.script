@@ -1,0 +1,33 @@
+{
+	// 车辆压力测试(只挂在VehicleBasic的milestoneNames上，不需要时去掉即可)：开局每辆车随机导航到一个
+	// 有车行节点的地下室房间(目前只有工厂)，到达(vehicle_arrive)后立刻再起一次随机导航，永远循环。
+	// 车辆在没有车行节点的房间里(普通停车位)规划不出路线，会在日志里报警并停在原地。
+	"milestones": [
+		{
+			"milestone": "stress_start",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "vehicle_navigate", "vehicle": "$$self.name", "destination": "random" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "stress_again",
+			"triggers": [ { "type": "vehicle_arrive" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "vehicle_navigate", "vehicle": "$$self.name", "destination": "random" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

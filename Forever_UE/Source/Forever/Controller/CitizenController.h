@@ -8,6 +8,9 @@
 
 class ACitizenElement;
 class Room;
+class Connection;
+class JunctionTraffic;
+class UForeverTrafficFrameworkComponent;
 
 // 人物Controller的一条指令。
 struct FCharacterCommand
@@ -73,6 +76,11 @@ public:
 	virtual void Tick(float deltaTime) override;
 
 private:
+	// 过马路的路口通行：走到人行横道前向路口请求，没放行就在路沿等，放行后走过去，过完Leave。
+	// 返回true=这一帧要原地等。waypoints是节点坐标串，这里靠坐标匹配JunctionTraffic里的人行横道连线。
+	bool GateCrosswalk(ACitizenElement* element, const FCharacterCommand& command, const FVector& toTarget);
+	void ReleaseCrosswalk();
+
 	void BeginCommand(FCharacterCommand& command);
 	// arrived=true 表示走到了终点；false 表示被打断。
 	void EndCommand(bool arrived);
@@ -97,4 +105,18 @@ private:
 	float wanderFadeDistance = 250.f;
 
 	float wanderPhase = 0.f;
+
+	// 人行横道通行状态：crossing非空=正持有这条横道(每requestInterval续租)，走到crossingEndIndex这个路径点后Leave。
+	const Connection* crossing = nullptr;
+	int32 crossingEndIndex = -1;
+	const Connection* pendingCrossing = nullptr; // 下一段是横道，还没放行
+	int32 pendingCheckedIndex = -1;              // pendingCrossing是为哪个路径点算的
+	double nextCrossingRequest = 0.0;
+
+	UPROPERTY(EditAnywhere, Category = "Citizen|Traffic")
+	float crossingRequestDistance = 350.f; // 离横道起点多近开始请求(UE单位)
+	UPROPERTY(EditAnywhere, Category = "Citizen|Traffic")
+	float crossingWaitDistance = 120.f;    // 没放行时停在离横道起点多近
+	UPROPERTY(EditAnywhere, Category = "Citizen|Traffic")
+	float crossingRequestInterval = 0.1f;  // 交通时钟秒
 };

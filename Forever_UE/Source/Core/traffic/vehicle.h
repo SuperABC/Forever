@@ -74,6 +74,20 @@ public:
 	void SetPitch(float pitchDegrees);
 	float GetPitch() const;
 
+	// ---- Core行驶推算（没有Actor的车，和Citizen::BeginWalk/AdvanceWalk对称，见vehicle.md）----
+	// 路径点和速度都用UE单位(cm、cm/s)，和SetTransform一致；nowSeconds由调用方给（UE层用世界时间）。
+	// 纯运行时，不进存档（读档后车停在最后一次写入的Transform上）。
+	struct DrivePoint { float x, y, z; };
+	bool IsDriving() const;
+	Room* GetDriveDestination() const;
+	// 开始推算：车位置置为path[0]。path为空/destination为空/speed<=0则什么都不做（等于EndDrive）。
+	void BeginDrive(const std::vector<DrivePoint>& path, Room* destination, double nowSeconds, float speed);
+	// 推进到nowSeconds并写Transform(含yaw)；走完则EndDrive+SetCurrentRoom(destination)并返回true。
+	bool AdvanceDrive(double nowSeconds);
+	// 从当前位置起的剩余路径（首点=当前位置）。
+	void GetRemainingDrive(double nowSeconds, std::vector<DrivePoint>& outPath) const;
+	void EndDrive();
+
 private:
 	VehicleFactory* factory;
 	VehicleMod* mod;
@@ -98,4 +112,11 @@ private:
 	float z = 0.0f;
 	float yaw = 0.0f;
 	float pitch = 0.0f;
+
+	Room* driveDestination = nullptr;
+	std::vector<DrivePoint> drivePath;
+	std::vector<float> driveDistances; // 路径起点到第i个点的累计弧长
+	double driveStartTime = 0.0;
+	float driveSpeed = 0.f;
+	void SampleDrive(double nowSeconds, DrivePoint& outPoint, size_t& outSegment, bool& outFinished, float& outYaw) const;
 };

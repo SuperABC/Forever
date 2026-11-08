@@ -81,3 +81,7 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
 ## physicsDriven
 - `SetPhysicsDriven/IsPhysicsDriven`：线路公交处于物理段（近处由UE物理载具+Controller驱动，或已脱离时刻表）时为真，
   `Route::Update`对它跳过时刻表驱动和停站事件。运行时状态，不进存档。
+
+## Core行驶推算（BeginDrive/AdvanceDrive）
+
+和`Citizen::BeginWalk/AdvanceWalk`对称：没有Actor的车由UE层给一条路线（UE单位cm、速度cm/s），Core按`nowSeconds`沿折线推算位置并写`Transform`（含yaw），走完`SetCurrentRoom(目的房间)`并返回true。`GetRemainingDrive`取从当前位置起的剩余路径，`EndDrive`取消。纯运行时，不进存档。用法见`Forever/Framework/ForeverTrafficFrameworkComponent.md`。

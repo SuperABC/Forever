@@ -60,6 +60,7 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
     根资产是容器时，容器和递归进去的每件资产各发一次。`UForeverStoryFrameworkComponent::NotifyAssetEvent`分发，同时在屏幕左上角显示
     “获取/失去 xxx”(测试用)；事件处理里再触发资产事件的嵌套深度上限8。
 - `npc_arrive`(name/address，留空不比较)：`address`是房间地址(`Room::GetAddress()`)。`local.name`/`local.address`。
+- `vehicle_arrive`(vehicle/address，留空不比较)：车辆Controller导航到房间后由`UForeverTrafficFrameworkComponent`只发给这辆车自己的script；`address`是房间地址。`local.vehicle`/`local.address`。
 - `puzzle_result`：没有过滤字段，`Match`只比类型。`SetFromJson(root)`把小游戏`Loop`返回的json展平进事件(root必须是object，否则返回false、
   不写任何字段)：object成员用点号连接(`a.b`)，数组项用`[idx]`(`items[0]`、`items[1].x`)，int/double/bool/string直接写，null忽略。
   `GetLocalValue(展平名)`读出，脚本里写`$$local.a.b`、`$$local.items[0]`(分词器把紧跟变量名的`[数字]`并进变量token)。

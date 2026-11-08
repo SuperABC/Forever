@@ -94,6 +94,9 @@
 - `force_leave`(vehicle，可空)：强制下车(比如公交收班)，驾驶和搭乘都生效，不做遮挡判定；留空=玩家当前所在的任何载具。
 - `vehicle_command`(vehicle, command)：`"run"`=随机选一条公交环线的随机站，先导航过去再开始循环；`"stop"`=刹停并保持，线路公交同时退出
   时刻表（`StartBusTestRun`/`StopBusRun`）。
+- `vehicle_navigate`(vehicle, destination)：让载具由Controller开到`destination`（房间地址表达式；字面量`"random"`=随机一个有车行节点的地下室房间，目前只有工厂）。
+  到达后给这辆车自己的script发`vehicle_arrive`事件，在该事件里再发`vehicle_navigate`就是连续随机导航（压力测试，见`Resource/Story/vehicle_stress.script`）。
+  UE层`UForeverTrafficFrameworkComponent::NavigateVehicle`执行：请求入队、每帧按`maxVehicleSpawnsPerFrame`处理，必要时生成车辆Actor。
 - `test_navigate_vehicle`(name)：显示指定载具当前行驶路线的折线，不给载具发命令；`test_navigate_citizen`(name)：让市民由AIController
   走到测试目的地（机场一楼房间），`UForeverPopulaceFrameworkComponent::StartTestNavigation`。
 - 以上全部只能在UE层执行，`AForeverFrameworkActor::ApplyChange`里`dynamic_cast`转发给对应Component。

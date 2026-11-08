@@ -2308,6 +2308,15 @@ vector<Connection*> Map::FindVehiclePath(int fromNodeId, int toNodeId) const {
 	return result;
 }
 
+Connection* Map::FindPedestrianEdge(int fromNodeId, int toNodeId) const {
+	auto it = pedestrianNavGraph.find(fromNodeId);
+	if (it == pedestrianNavGraph.end()) return nullptr;
+	for (const auto& [neighborId, connection] : it->second) {
+		if (neighborId == toNodeId) return connection;
+	}
+	return nullptr;
+}
+
 bool Map::GetLaneSegmentAt(Road* road, float x, float y, float dirX, float dirY, LaneSegment& out) const {
 	if (!road) return false;
 
@@ -2376,6 +2385,9 @@ Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y
 		if (path.empty()) continue;
 		plan.status = VehicleRoutePlan::OK;
 		for (const Node* node : path) plan.points.push_back(toPoint(node));
+		for (size_t i = 0; i + 1 < path.size(); i++) {
+			plan.edges.push_back({ FindPedestrianEdge(path[i]->GetId(), path[i + 1]->GetId()), static_cast<int>(i), static_cast<int>(i + 1) });
+		}
 		return plan;
 	}
 
@@ -2386,12 +2398,15 @@ Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y
 
 namespace {
 	// 沿Connection从起点到终点采样（车行边都是单向Start->End）；和上一段首尾重合的点不重复加。
-	void AppendConnectionPoints(vector<Map::NavPoint>& points, Connection* connection) {
+	// edges非空时记录这条Connection占用的点下标范围(首点是和上一段共用的端点)。
+	void AppendConnectionPoints(vector<Map::NavPoint>& points, Connection* connection, vector<Map::NavEdge>* edges = nullptr) {
 		int steps = std::clamp(static_cast<int>(ceilf(connection->CalcDistance() / 0.5f)), 2, 64);
+		int first = points.empty() ? 0 : static_cast<int>(points.size()) - 1;
 		for (int i = points.empty() ? 0 : 1; i <= steps; i++) {
 			Node p = connection->GetPoint(static_cast<float>(i) / steps);
 			points.push_back({ p.GetX(), p.GetY(), p.GetZ() });
 		}
+		if (edges) edges->push_back({ connection, first, static_cast<int>(points.size()) - 1 });
 	}
 
 	float PathLength(const vector<Connection*>& edges) {
@@ -2415,12 +2430,14 @@ const Map::AuxNavNode* Map::FindAuxNavNode(int nodeId) const {
 	return it != auxNavNodes.end() ? &it->second : nullptr;
 }
 
-bool Map::AppendLegPoints(int fromId, int toId, vector<NavPoint>& points) const {
+bool Map::AppendLegPoints(int fromId, int toId, vector<NavPoint>& points, vector<NavEdge>* edges) const {
 	if (fromId == toId) return true;
 	const AuxNavNode* fromAux = FindAuxNavNode(fromId);
 	const AuxNavNode* toAux = FindAuxNavNode(toId);
 
 	vector<NavPoint> leg = points;
+	vector<NavEdge> legEdges;
+	if (edges) legEdges = *edges;
 	auto addNode = [&leg](const Node* node) {
 		leg.push_back({ node->GetX(), node->GetY(), node->GetZ() });
 	};
@@ -2428,8 +2445,11 @@ bool Map::AppendLegPoints(int fromId, int toId, vector<NavPoint>& points) const 
 	// 同一段车道上，起点站在上游：直接走两个stationNode的直线弦。
 	if (fromAux && toAux && fromAux->sourceEdge == toAux->sourceEdge && fromAux->t < toAux->t) {
 		if (leg.empty()) addNode(fromAux->node);
+		int first = static_cast<int>(leg.size()) - 1;
 		addNode(toAux->node);
+		legEdges.push_back({ fromAux->sourceEdge, first, static_cast<int>(leg.size()) - 1 });
 		points = std::move(leg);
+		if (edges) *edges = std::move(legEdges);
 		return true;
 	}
 
@@ -2443,11 +2463,12 @@ bool Map::AppendLegPoints(int fromId, int toId, vector<NavPoint>& points) const 
 
 	if (fromAux) {
 		if (leg.empty()) addNode(fromAux->node);
-		AppendConnectionPoints(leg, fromAux->outEdge);
+		AppendConnectionPoints(leg, fromAux->outEdge, &legEdges);
 	}
-	for (Connection* edge : middle) AppendConnectionPoints(leg, edge);
-	if (toAux) AppendConnectionPoints(leg, toAux->inEdge);
+	for (Connection* edge : middle) AppendConnectionPoints(leg, edge, &legEdges);
+	if (toAux) AppendConnectionPoints(leg, toAux->inEdge, &legEdges);
 	points = std::move(leg);
+	if (edges) *edges = std::move(legEdges);
 	return true;
 }
 
@@ -2464,9 +2485,9 @@ Map::VehicleRoutePlan Map::PlanVehicleLeg(int fromNodeId, int toNodeId) const {
 		}
 		return plan;
 	}
-	plan.status = AppendLegPoints(fromNodeId, toNodeId, plan.points)
+	plan.status = AppendLegPoints(fromNodeId, toNodeId, plan.points, &plan.edges)
 		? VehicleRoutePlan::OK : VehicleRoutePlan::NO_PATH_TO_DESTINATION;
-	if (plan.status != VehicleRoutePlan::OK) plan.points.clear();
+	if (plan.status != VehicleRoutePlan::OK) { plan.points.clear(); plan.edges.clear(); }
 	return plan;
 }
 
@@ -2498,10 +2519,11 @@ Map::VehicleRoutePlan Map::PlanVehicleRouteToNode(Room* startRoom, float x, floa
 			return plan;
 		}
 		plan.points.push_back({ startNode->GetX(), startNode->GetY(), startNode->GetZ() });
-		if (!AppendLegPoints(startNode->GetId(), destNodeId, plan.points)) {
+		if (!AppendLegPoints(startNode->GetId(), destNodeId, plan.points, &plan.edges)) {
 			plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
 			plan.points.resize(1);
-			AppendConnectionPoints(plan.points, outIt->second.front().second); // 只画连出去的第一条边
+			plan.edges.clear();
+			AppendConnectionPoints(plan.points, outIt->second.front().second, &plan.edges); // 只画连出去的第一条边
 			return plan;
 		}
 		plan.status = VehicleRoutePlan::OK;
@@ -2599,16 +2621,18 @@ Map::VehicleRoutePlan Map::PlanVehicleRouteToNode(Room* startRoom, float x, floa
 	plan.points.push_back({ chosen.segment.worldX, chosen.segment.worldY, chosen.segment.worldZ });
 	if (best.valid && chosen.direct) {
 		plan.points.push_back({ destAux->node->GetX(), destAux->node->GetY(), destAux->node->GetZ() });
+		plan.edges.push_back({ chosen.segment.edge, 1, 2 });
 		plan.status = VehicleRoutePlan::OK;
 		return plan;
 	}
 	plan.points.push_back({ chosen.segment.toAnchor->GetX(), chosen.segment.toAnchor->GetY(), chosen.segment.toAnchor->GetZ() });
+	plan.edges.push_back({ chosen.segment.edge, 1, 2 }); // 垂足到下游锚点，只是这条车道边的后半段
 	if (!best.valid) {
 		plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
 		return plan;
 	}
-	for (Connection* edge : chosen.edges) AppendConnectionPoints(plan.points, edge);
-	if (destAux) AppendConnectionPoints(plan.points, destAux->inEdge);
+	for (Connection* edge : chosen.edges) AppendConnectionPoints(plan.points, edge, &plan.edges);
+	if (destAux) AppendConnectionPoints(plan.points, destAux->inEdge, &plan.edges);
 	plan.status = VehicleRoutePlan::OK;
 	return plan;
 }

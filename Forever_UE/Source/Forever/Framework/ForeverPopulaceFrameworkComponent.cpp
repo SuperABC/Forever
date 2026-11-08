@@ -131,6 +131,7 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::SpawnCitizen(Citizen* citiz
 	if (element) {
 		element->Init(citizen, this);
 		activeInstances.Add(citizen, element);
+		spawnTimes.Add(citizen, GetWorld()->GetTimeSeconds());
 			}
 	return element;
 }
@@ -412,6 +413,7 @@ void UForeverPopulaceFrameworkComponent::HandleElementEndPlay(Citizen* citizen, 
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 	if (!existing || existing->Get() != element) return;
 	activeInstances.Remove(citizen);
+	spawnTimes.Remove(citizen);
 }
 
 void UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen* citizen) {
@@ -546,7 +548,8 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 			if (moving) sweepWalkersInRange++;
 			const float despawnLimit = moving ? despawnDistUE * movingDistanceScale : despawnDistUE;
 			// 只按距离销毁；某一类数量超过上限(比如走路的人到站变成静止的而静止名额已满)就超着，只是不再生成新的。
-			if (!element->IsDespawnExempt() && StreamingDistance(playerLoc, element->GetActorLocation()) > despawnLimit) {
+			if (!element->IsDespawnExempt() && StreamingDistance(playerLoc, element->GetActorLocation()) > despawnLimit &&
+				now - spawnTimes.FindRef(citizen) >= minCitizenLifetime) {
 				// 走远到销毁距离之外：先把当前位置转回地图单位写回Citizen(这样下次重新进入
 				// 范围直接用这份记录，不再随机抖动一次)，再销毁Actor。
 				FVector loc = element->GetActorLocation();

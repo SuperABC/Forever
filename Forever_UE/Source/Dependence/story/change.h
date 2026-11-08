@@ -661,6 +661,34 @@ private:
 
 };
 
+// 载具自动导航：让指定载具由Controller开到某个房间（UE-only效果，见UForeverTrafficFrameworkComponent::NavigateVehicle）。
+// destination是房间地址(Room::GetAddress()，可以是表达式)，或字面量"random"=随机一个有车行节点的地下室房间（目前只有工厂）。
+// 到达后给这辆车自己的script发vehicle_arrive事件，脚本里在那个事件里再发vehicle_navigate就是连续随机导航（压力测试）。
+class VehicleNavigateChange : public Change {
+public:
+	VehicleNavigateChange();
+
+	VehicleNavigateChange(std::string vehicle, std::string destination);
+
+	virtual ~VehicleNavigateChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetVehicle(std::string vehicle);
+	const std::string& GetVehicle() const;
+
+	void SetDestination(std::string destination);
+	const std::string& GetDestination() const;
+
+private:
+	// 载具名称（表达式）
+	std::string vehicle;
+
+	// 目标房间地址（表达式）或"random"
+	std::string destination;
+
+};
+
 // 市民导航测试：让指定市民由AIController带着沿行人导航图走到测试目的地（机场一楼房间）。
 // UE-only效果，见UForeverPopulaceFrameworkComponent::StartTestNavigation。
 class TestNavigateCitizenChange : public Change {

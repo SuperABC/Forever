@@ -213,6 +213,10 @@ public:
 	// 对vehicleNavGraph寻路(共享私有FindPath)，返回依次经过的Connection*序列(公交线路要拼接真实车道几何，见traffic/route.md)；找不到返回空。
 	std::vector<Connection*> FindVehiclePath(int fromNodeId, int toNodeId) const;
 
+	// 行人图里fromNodeId与toNodeId之间的边(双向边，两个方向查到同一个Connection*)；没有直接相连返回nullptr。
+	// 供FindPedestrianPath的结果回查边(路口管理按Connection*限行，见traffic/junction.md)，只读、线程安全。
+	Connection* FindPedestrianEdge(int fromNodeId, int toNodeId) const;
+
 	// 纯只读查询(公交站旁路用)：(x,y)沿(dirX,dirY)方向看，落在road哪一条车行贯通线段上、段两端锚点是谁。
 	// 不修改throughLines/导航图；road为空、没有车行道或t不在任何段内返回false。
 	struct LaneSegment {
@@ -226,10 +230,18 @@ public:
 
 	// 车辆/行人导航测试用，详见map.md"路径规划"
 	struct NavPoint { float x = 0.f, y = 0.f, z = 0.f; };
+	// points[firstPoint..lastPoint]这一段折线走的是edge(含车道边和路口连线)；相邻两段共用端点。
+	// 室外起点接入车道时第一段是车道边的一部分(垂足到下游锚点)，起点到垂足那一小段不属于任何edge。
+	struct NavEdge {
+		Connection* edge = nullptr;
+		int firstPoint = 0;
+		int lastPoint = 0;
+	};
 	struct VehicleRoutePlan {
 		enum Status { OK, NO_PATH_TO_DESTINATION, NO_ROAD_CONNECTION };
 		Status status = NO_ROAD_CONNECTION;
 		std::vector<NavPoint> points;
+		std::vector<NavEdge> edges; // 按行进顺序，与points的下标对应
 	};
 	VehicleRoutePlan PlanVehicleRoute(Room* startRoom, float x, float y, Room* destRoom) const;
 
@@ -344,7 +356,8 @@ private:
 
 	// from/to任意一端可以是辅助节点；把from到to的折线追加进points（起点在points为空时一起加入）。
 	// 连不通返回false（points保持原样）。
-	bool AppendLegPoints(int fromId, int toId, std::vector<NavPoint>& points) const;
+	// edges非空时同步追加每段折线对应的Connection(下标按points)。
+	bool AppendLegPoints(int fromId, int toId, std::vector<NavPoint>& points, std::vector<NavEdge>* edges = nullptr) const;
 
 	// InitRoadnet/AddRoadAccessNode过程中创建的所有锚点Node(路口锚点+车道分裂新增的访问点)，
 	// 析构时统一释放；导航图本身的Connection*从vehicleNavGraph/pedestrianNavGraph遍历去重释放。

@@ -80,6 +80,18 @@
   `edge->track[i].tunnel`的段换用`GetTrackTunnelMesh()`（空则复用`GetTrackMesh()`）。读档时同样重铺（几何从存档来）。
 - `GenerateVehicles`每个组件实例只调用一次：新开局/读档都经`LoadMap`重建`AForeverFrameworkActor`及其组件，所以不需要清`carEntries`/`activeVehicles`/`activeTransitVehicles`；同一蓝图路径在公交分支只`LoadClass`一次，transit类与物理表示类共用结果。
 
+## 脚本驱动的车辆导航（vehicle_navigate / vehicle_arrive）
+
+`NavigateVehicle(name, destination)`（`ForeverFrameworkActor::ApplyChange`转发`VehicleNavigateChange`）只入队，`TickComponent`每帧最多处理`maxVehicleSpawnsPerFrame`个：`FindOrSpawnVehicle`（必要时生成车辆Actor，线路公交/玩家正在开的车跳过）→ 选目的地（`"random"`=`PickRandomVehicleRoom`：车行导航图里有节点的房间，地下室优先，排除车当前房间；否则`Map::LocateRoom(地址)`）→ `GetOrCreateCarDriver`（通用`AVehicleCommandController`，经`SpawnDriver`，和公交共用）→ `ClearCommands`+`PushCommand(MakeNavigate(房间导航节点id))`。Controller的`SetNavigateFinishedCallback`回调只把结果入队，下一次Tick的`ProcessNavResults`里：到达则`SetCurrentRoom(目的房间)`并给这辆车自己的script发`VehicleArriveEvent`（规划失败只打警告，不重试）；回调不直接发事件，避免`vehicle_arrive`→`vehicle_navigate`→立刻到达的递归。`IsDrivenByController`也认`carDrivers`，所以导航中的车不会被流式销毁。压力测试脚本见`Resource/Story/vehicle_stress.script`（挂在`VehicleBasic::milestoneNames`上）。**没有Actor的车和市民一样由Core推算**：`StartVehicleNavigation`对没有Actor的车直接同步规划（`PlanVehicleRouteToNode`），路线（UE单位）交给`Vehicle::BeginDrive`（速度=Controller的`maxSpeed`×`kUnspawnedDriveSpeedScale`(10)，和市民一致），`TickComponent`每帧`AdvanceDrive`推进并写回Transform（`entry.location/yaw`同步），走完发抵达；进入生成距离才`SpawnCar`并`HandOffDriveToActor`（`EndDrive`+Controller重新规划导航到目的房间）；走远（超过销毁距离）`HandBackDriveToCore`把Controller的剩余路径交还Core并销毁Actor。开局不会批量生成Actor。Core推算期间不经过路口管理；推算状态不进存档。
+`GenerateVehicles`不清请求队列（`game_start`比它先发生），`mapRef`没设时`ProcessPendingNavigations`不处理。注意：停在没有车行节点的房间里的车规划不出路线（只有工厂有车行节点）。
+
+## 有序通行的基础设施
+
+- `RegisterDriver/GetDrivers`：被 `AVehicleCommandController` 驱动的车辆登记表（`Setup` 时登记，弱引用，每帧清理失效项），跟车判断遍历它。
+- `GetJunctionTraffic()`：第一次用到时按 `mapRef` 的路口建 `JunctionTraffic`（`BuildFromMap`），`GenerateVehicles` 换地图时重置；不依赖 `Traffic::Init`（读档不会重跑它）。
+- `GetTrafficClock()`：交通时钟，`TickComponent` 开头（所有早返回之前）累加 `min(DeltaTime, 0.25)`；暂停时 time dilation=0 所以不走。路口的 0.1s 请求间隔和 1s 租约都按它。
+- 市民（`ACitizenController::GateCrosswalk`）也通过它拿路口管理器和时钟。
+
 ## 依赖关系
 
 - 依赖：`ForeverFrameworkActor`（`GetOwner()`拿`GetStoryFramework()`/`GetTerrainFramework()`）、`ForeverTerrainFrameworkComponent`（`IsInsideLodLevel`）、`ForeverStoryFrameworkComponent`（`BroadcastToVehicle`）、

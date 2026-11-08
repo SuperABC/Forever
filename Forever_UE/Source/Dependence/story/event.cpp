@@ -608,6 +608,51 @@ const std::string& NpcArriveEvent::GetAddress() const {
 	return address;
 }
 
+VehicleArriveEvent::VehicleArriveEvent(std::string vehicle, std::string address) :
+	vehicle(move(vehicle)), address(move(address)) {
+
+}
+
+VehicleArriveEvent::~VehicleArriveEvent() {
+
+}
+
+const string& VehicleArriveEvent::GetType() const {
+	static const string type = "vehicle_arrive";
+	return type;
+}
+
+bool VehicleArriveEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<VehicleArriveEvent*>(e);
+	if (!vehicle.empty() && ToString(EvaluateExpression(vehicle, context)) != other->vehicle) return false;
+	if (!address.empty() && ToString(EvaluateExpression(address, context)) != other->address) return false;
+	return true;
+}
+
+pair<bool, ValueType> VehicleArriveEvent::GetLocalValue(const string& key) const {
+	if (key == "vehicle") return { true, ValueType(vehicle) };
+	if (key == "address") return { true, ValueType(address) };
+	return { false, ValueType() };
+}
+
+void VehicleArriveEvent::SetVehicle(std::string vehicle) {
+	this->vehicle = move(vehicle);
+}
+
+const std::string& VehicleArriveEvent::GetVehicle() const {
+	return vehicle;
+}
+
+void VehicleArriveEvent::SetAddress(std::string address) {
+	this->address = move(address);
+}
+
+const std::string& VehicleArriveEvent::GetAddress() const {
+	return address;
+}
+
 NPCMeetEvent::NPCMeetEvent(std::string npc) :
 	npc(move(npc)) {
 

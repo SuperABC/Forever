@@ -375,6 +375,35 @@ private:
 	std::string address;
 };
 
+// 载具抵达：车辆Controller导航到房间(vehicle_navigate)后，只发给这辆车自己的script。
+class VehicleArriveEvent : public Event {
+public:
+	VehicleArriveEvent(std::string vehicle, std::string address);
+
+	virtual ~VehicleArriveEvent();
+
+	virtual const std::string& GetType() const override;
+
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetVehicle(std::string vehicle);
+
+	const std::string& GetVehicle() const;
+
+	void SetAddress(std::string address);
+
+	const std::string& GetAddress() const;
+
+private:
+	// 抵达的载具名称
+	std::string vehicle;
+
+	// 抵达的房间地址
+	std::string address;
+};
+
 // NPC相遇
 class NPCMeetEvent : public Event {
 public:

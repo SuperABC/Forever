@@ -155,6 +155,11 @@ private:
 	// GenerateCitizens时缓存的扁平数组，用于按下标轮询分片；Citizen*不涉及所有权。
 	TArray<Citizen*> allCitizens;
 	TMap<Citizen*, TObjectPtr<ACitizenElement>> activeInstances;
+	TMap<Citizen*, double> spawnTimes; // 最近一次生成的世界时间，minCitizenLifetime内不允许流式销毁
+
+	// 市民生成后至少存活这么多秒才允许流式销毁(刚生成就销毁可能碰上物理/组件还没初始化完)。
+	UPROPERTY(EditDefaultsOnly, Category = "Populace")
+	float minCitizenLifetime = 2.f;
 	int32 pollCursor = 0;
 
 	bool bTimeSkipping = false;
@@ -186,7 +191,7 @@ private:
 	int32 maxStationaryCitizens = 16;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")
-	int32 maxMovingCitizens = 32;
+	int32 maxMovingCitizens = 16;
 
 	// 移动中的市民生成/销毁距离是静止的这么多倍。
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")

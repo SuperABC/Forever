@@ -5,6 +5,7 @@
 #include "common/config.h"
 
 #include <algorithm>
+#include <cmath>
 
 using namespace std;
 
@@ -120,6 +121,84 @@ void Vehicle::SetTransform(float inX, float inY, float inZ, float inYaw) {
 
 void Vehicle::GetTransform(float& outX, float& outY, float& outZ, float& outYaw) const {
 	outX = x; outY = y; outZ = z; outYaw = yaw;
+}
+
+bool Vehicle::IsDriving() const { return driveDestination != nullptr; }
+Room* Vehicle::GetDriveDestination() const { return driveDestination; }
+
+void Vehicle::BeginDrive(const std::vector<DrivePoint>& path, Room* destination, double nowSeconds, float speed) {
+	EndDrive();
+	if (path.empty() || !destination || speed <= 0.f) return;
+	drivePath = path;
+	driveDistances.assign(path.size(), 0.f);
+	for (size_t i = 1; i < path.size(); i++) {
+		float dx = path[i].x - path[i - 1].x, dy = path[i].y - path[i - 1].y, dz = path[i].z - path[i - 1].z;
+		driveDistances[i] = driveDistances[i - 1] + sqrt(dx * dx + dy * dy + dz * dz);
+	}
+	driveDestination = destination;
+	driveStartTime = nowSeconds;
+	driveSpeed = speed;
+	float startYaw = yaw;
+	if (path.size() > 1) startYaw = atan2(path[1].y - path[0].y, path[1].x - path[0].x) * 180.f / 3.14159265f;
+	SetTransform(path[0].x, path[0].y, path[0].z, startYaw);
+}
+
+void Vehicle::SampleDrive(double nowSeconds, DrivePoint& outPoint, size_t& outSegment, bool& outFinished, float& outYaw) const {
+	float travelled = static_cast<float>(max(0.0, nowSeconds - driveStartTime)) * driveSpeed;
+	size_t last = drivePath.size() - 1;
+	if (travelled >= driveDistances.back() || drivePath.size() < 2) {
+		outPoint = drivePath.back();
+		outSegment = last;
+		outFinished = true;
+		outYaw = yaw;
+		if (last >= 1) outYaw = atan2(drivePath[last].y - drivePath[last - 1].y, drivePath[last].x - drivePath[last - 1].x) * 180.f / 3.14159265f;
+		return;
+	}
+	outFinished = false;
+	size_t i = 1;
+	while (driveDistances[i] < travelled) i++;
+	float span = driveDistances[i] - driveDistances[i - 1];
+	float t = span > 0.f ? (travelled - driveDistances[i - 1]) / span : 0.f;
+	outPoint = { drivePath[i - 1].x + (drivePath[i].x - drivePath[i - 1].x) * t,
+		drivePath[i - 1].y + (drivePath[i].y - drivePath[i - 1].y) * t,
+		drivePath[i - 1].z + (drivePath[i].z - drivePath[i - 1].z) * t };
+	outSegment = i;
+	outYaw = atan2(drivePath[i].y - drivePath[i - 1].y, drivePath[i].x - drivePath[i - 1].x) * 180.f / 3.14159265f;
+}
+
+bool Vehicle::AdvanceDrive(double nowSeconds) {
+	if (!IsDriving()) return false;
+	DrivePoint point;
+	size_t segment;
+	bool finished;
+	float outYaw;
+	SampleDrive(nowSeconds, point, segment, finished, outYaw);
+	SetTransform(point.x, point.y, point.z, outYaw);
+	if (finished) {
+		Room* destination = driveDestination;
+		EndDrive();
+		SetCurrentRoom(destination);
+		return true;
+	}
+	return false;
+}
+
+void Vehicle::GetRemainingDrive(double nowSeconds, std::vector<DrivePoint>& outPath) const {
+	outPath.clear();
+	if (!IsDriving()) return;
+	DrivePoint point;
+	size_t segment;
+	bool finished;
+	float outYaw;
+	SampleDrive(nowSeconds, point, segment, finished, outYaw);
+	outPath.push_back(point);
+	for (size_t i = segment; i < drivePath.size() && !finished; i++) outPath.push_back(drivePath[i]);
+}
+
+void Vehicle::EndDrive() {
+	driveDestination = nullptr;
+	drivePath.clear();
+	driveDistances.clear();
 }
 
 void Vehicle::SetPitch(float pitchDegrees) { pitch = pitchDegrees; }

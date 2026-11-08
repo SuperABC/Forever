@@ -485,6 +485,18 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* vehicleNavigate = dynamic_cast<const VehicleNavigateChange*>(change)) {
+		FString vehicleName = UTF8_TO_TCHAR(ToString(EvaluateExpression(vehicleNavigate->GetVehicle(), context)).data());
+		// "random"是字面量，不是表达式；其余当表达式求值，求不出来就按原文当地址。
+		std::string destination = vehicleNavigate->GetDestination();
+		if (destination != "random") {
+			std::string evaluated = ToString(EvaluateExpression(destination, context));
+			if (!evaluated.empty()) destination = evaluated;
+		}
+		if (trafficFramework) trafficFramework->NavigateVehicle(vehicleName, UTF8_TO_TCHAR(destination.data()));
+		return;
+	}
+
 	if (auto* testNavigateCitizen = dynamic_cast<const TestNavigateCitizenChange*>(change)) {
 		// 市民的test_navigate_citizen现在是"显示这个市民当前路线的折线"（"你在去哪"选项）。
 		FString citizenName = UTF8_TO_TCHAR(ToString(EvaluateExpression(testNavigateCitizen->GetName(), context)).data());

@@ -332,6 +332,10 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			// name/address都可以省略(留空=不限)，见NpcArriveEvent::Match；address是房间地址(Room::GetAddress())。
 			event = new NpcArriveEvent(obj["name"].AsString(), obj["address"].AsString());
 		}
+		else if (type == "vehicle_arrive") {
+			// vehicle/address都可以省略(留空=不限)，见VehicleArriveEvent::Match；事件只发给这辆车自己的script。
+			event = new VehicleArriveEvent(obj["vehicle"].AsString(), obj["address"].AsString());
+		}
 		else if (type == "time_up") {
 			// name可以省略(留空=这个脚本的任何计时器到时都触发)，见TimeUpEvent::Match。
 			event = new TimeUpEvent(obj["name"].AsString());
@@ -440,6 +444,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing vehicle or command for vehicle_command change.\n");
 			}
 			change = new VehicleCommandChange(vehicle.AsString(), command.AsString());
+		}
+		else if (type == "vehicle_navigate") {
+			auto vehicle = obj["vehicle"];
+			auto destination = obj["destination"];
+			if (vehicle.IsNull() || destination.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing vehicle or destination for vehicle_navigate change.\n");
+			}
+			change = new VehicleNavigateChange(vehicle.AsString(), destination.AsString());
 		}
 		else if (type == "test_navigate_citizen") {
 			auto name = obj["name"];

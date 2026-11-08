@@ -19,6 +19,9 @@ class UMaterialInterface;
 class Map;
 class Traffic;
 class Vehicle;
+class Room;
+class JunctionTraffic;
+class AVehicleCommandController;
 
 // 载具：按停车位预置的小汽车(按距离流式生成/销毁)、玩家上下车、公共交通(公交/火车/飞机)、
 // 公交Controller驱动与远近切换、线路调试画线与铺轨。详见ForeverTrafficFrameworkComponent.md。
@@ -119,12 +122,43 @@ public:
 	// 以时刻表为准(不对齐实车进度)，靠近玩家的之后会被UpdateBusPhysicsHandoff重新切回物理。
 	void ResyncBusesAfterTimeSkip();
 
+	// ---- 有序通行（路口管理 + 跟车，见AVehicleCommandController.md"有序通行"） ----
+	// 被Controller驱动的车辆登记表（跟车判断遍历它）；Controller在Setup时登记，Actor销毁后弱引用自然失效。
+	void RegisterDriver(AVehicleCommandController* driver);
+	const TArray<TWeakObjectPtr<AVehicleCommandController>>& GetDrivers() const { return drivers; }
+	// 路口通行管理器，第一次要用时按Map的路口建（读档/新开局都走这条，不依赖Traffic::Init）；没有Map时返回nullptr。
+	JunctionTraffic* GetJunctionTraffic();
+	// 交通时钟（秒）：只在游戏未暂停时累加（暂停=time dilation 0，DeltaTime为0），单帧增量夹到0.25s；
+	// 路口请求的0.1s间隔和1s租约都按它计，不随游戏内时间加速。
+	double GetTrafficClock() const { return trafficClock; }
+
+	// ---- 脚本驱动的车辆导航（vehicle_navigate change / vehicle_arrive 事件） ----
+	// 请求入队，TickComponent里每帧最多处理maxVehicleSpawnsPerFrame个（必要时生成车辆Actor）。
+	// destination：房间地址，或"random"=随机一个有车行节点的地下室房间。
+	void NavigateVehicle(const FString& vehicleName, const FString& destination);
+
 	// 车辆流式生成/销毁的距离(地图单位)，是市民的两倍；判断距离时Z方向放大5倍，和市民同一个度量。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
-	float vehicleSpawnDistance = 4.f;
+	float vehicleSpawnDistance = 8.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	float vehicleDespawnDistance = 8.f;
+
+	// 流式生成行进中的车(Core推算中，停着的车不限制)时，离路口中心(2D)这个距离以内不生成(地图单位，1=10m；默认4=40m)，等车开出这个范围再出现。<=0关闭。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	float minSpawnDistanceFromJunction = 4.f;
+
+	// 车生成后至少存活这么多秒才允许销毁/交还Core(Chaos载具的物理代理还没建好就销毁会断言崩溃)。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	float minVehicleLifetime = 2.f;
+
+	// 行进中的车(Core推算中)生成时离玩家至少这个距离(地图单位，默认4=40m)，免得在玩家眼前凭空冒出来。<=0关闭。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	float minSpawnDistanceFromPlayer = 4.f;
+
+	// 场景里同时存在(有Actor)的行进中车辆上限(被Controller驱动的车，含公交)；满了之后Core推算的车继续推算，不生成Actor。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	int32 maxMovingVehicles = 16;
 
 	// 每帧最多生成几辆车(车是物理模拟的骨骼网格+Chaos组件，生成成本比市民还高)，超过就等下一帧。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
@@ -166,6 +200,43 @@ private:
 	Map* mapRef = nullptr;
 	Traffic* trafficRef = nullptr;
 
+	// ---- 脚本驱动的车辆导航 ----
+	struct FNavRequest {
+		FString vehicleName;
+		FString destination;
+	};
+	struct FNavResult {
+		Vehicle* vehicle = nullptr;
+		Room* room = nullptr;
+		bool bArrived = false;
+		bool bRandom = false;
+	};
+	TMap<FString, int32> randomRetries;
+	TMap<FString, bool> randomTargets;
+	TArray<FNavRequest> pendingNavigations;
+	TArray<FNavResult> pendingNavResults; // Controller回调只入队，下一次Tick再发事件，避免vehicle_arrive->vehicle_navigate递归
+	TMap<FString, TWeakObjectPtr<AVehicleCommandController>> carDrivers; // 脚本导航用的通用Controller(公交用busStates)
+	TMap<FString, Room*> navTargets; // 车辆名 -> 正在去的房间
+	TArray<Room*> vehicleRoomCache;
+	TMap<int32, TSet<int32>> reachableCache; // 起点导航节点id -> 沿车行图能到的所有节点id（懒算），随机目的地只在这里面挑
+	TArray<FVector2D> junctionCenters; // UE单位，懒建，换地图时清空
+	bool bJunctionCentersBuilt = false;
+	bool IsNearJunction(const FVector& location);  // 有车行节点的房间，先放地下室的，懒建
+	void ProcessPendingNavigations();
+	void ProcessNavResults();
+	void StartVehicleNavigation(const FNavRequest& request);
+	// Core推算(没有Actor)时的车速倍数：和市民的kUnspawnedWalkSpeedScale一样，实际速度=Controller的maxSpeed×该倍数。
+	static constexpr float kUnspawnedDriveSpeedScale = 10.f;
+
+	Room* PickRandomVehicleRoom(const Room* exclude);
+	AVehicleCommandController* GetOrCreateCarDriver(const FString& vehicleName, AVehicleElement* element);
+	AVehicleCommandController* SpawnDriver(UClass* controllerClass, AVehicleElement* element);
+	void OnCarNavigateFinished(AVehicleCommandController* controller, int32 nodeId, bool bArrived);
+
+	TSharedPtr<JunctionTraffic> junctionTraffic;
+	TArray<TWeakObjectPtr<AVehicleCommandController>> drivers;
+	double trafficClock = 0.0;
+
 	// 玩家进出载具(驾驶或搭乘)时给这辆车自己的script发enter_vehicle/leave_vehicle事件。
 	void FireVehicleEvent(Vehicle* vehicle, bool entering, const char* mode);
 
@@ -178,12 +249,17 @@ private:
 		FVector location = FVector::ZeroVector;
 		float yaw = 0.f;
 		bool bBroken = false; // 加载蓝图失败过，不再重试(避免每帧刷警告)
+		double spawnedAt = 0.0; // 最近一次生成的世界时间；刚生成的车至少存活minVehicleLifetime秒才允许销毁(Chaos载具的物理代理还没建好就销毁会断言崩溃)
 		TWeakObjectPtr<AVehicleElement> element;
 	};
 	TArray<FCarEntry> carEntries;
+	// 没有Actor的车在Core里推算行驶时的移交：进入生成距离后生成Actor交给Controller / 走远后把剩余路径交还Core并销毁Actor。
+	void HandOffDriveToActor(FCarEntry& entry);
+	bool HandBackDriveToCore(FCarEntry& entry);
 
 	// 按登记项生成Actor并记进activeVehicles，失败返回nullptr。
-	AVehicleElement* SpawnCar(FCarEntry& entry);
+	// bCheckSpace：生成点被别的车占着就不生成（返回nullptr，下次再试），流式生成用；脚本/上车等强制生成不检查。
+	AVehicleElement* SpawnCar(FCarEntry& entry, bool bCheckSpace = false);
 
 	// Vehicle::GetName()→当前活着的AVehicleElement(含物理段的线路公交)，上车按名字反查用。
 	UPROPERTY()

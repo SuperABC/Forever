@@ -135,6 +135,10 @@
 
 `terrainFactory`/`roadnetFactory`/`zoneFactory`/`buildingFactory`/`roomFactory`/`componentFactory`/`scriptFactory`七个Factory不是Map自己持有，而是引用`Registry::Get()`那份整个进程只注册一次的实例（所有concept集中注册的地方，不只是map域，见`common/registry.md`）。mod dll的发现/注册（`LoadLibrary`+`RegisterConcept`）与"实际生成/销毁地图对象"完全分开：Map每次开局构造/结束析构都不会重新扫描dll，也不会丢失已注册的mod类型。引用成员只能在构造函数初始化列表绑定，所以`map.cpp`必须include `common/registry.h`；**声明顺序必须与初始化列表书写顺序一致**（C++按声明顺序初始化）。`scriptFactory`给门/电梯/实体Script创建用。
 
+## 路径边序列（`NavEdge`）
+
+`VehicleRoutePlan` 除了 `points` 还有 `edges`：每项 `{Connection* edge, firstPoint, lastPoint}` 表示 `points[firstPoint..lastPoint]` 这段折线走的是哪条 Connection（车道边和路口连线都有，相邻两段共用端点）。`PlanVehicleRouteToNode`/`PlanVehicleLeg`/`AppendLegPoints` 车行路线填；室外起点接入车道的第一段是车道边的后半段（垂足→下游锚点），起点到垂足那一小段不属于任何 edge。`PlanPedestrianRoute` 也填（用 `FindPedestrianEdge` 回查）。`FindPedestrianEdge(from,to)` 是只读的行人图查边，线程安全。路口通行管理（`traffic/junction.md`）按 `Connection*` 指针识别路口连线。
+
 ## 存档
 
 地图域整体由`map_save.h`的`MapSaveCodec`（`Map`的friend）写进存档/按存档重建，读档时不跑`Init*`里的任何生成，详见`map_save.md`。`orphanLots`只在读档时有内容：自适应占位用过的嵌套子块（生成时已从父块摘掉，新开局无人持有），读档后由Map持有、`~Map()`释放。

@@ -18,6 +18,21 @@
 - **子类钩子**：`OnStopEntered`/`OnStopLeft`/`GetDwellSeconds`，公交在`ABusController`里实现。
 - 可调参数(UE单位cm)都是`UPROPERTY(EditAnywhere)`：`maxSpeed`/`maxLateralAccel`(弯道限速，防侧翻关键)/`maxBrakeDecel`/`maxAccel`/`arriveDistance`/`arriveSpeed`等。
 
+## 导航结束回调
+
+`SetNavigateFinishedCallback(f(controller,node,bArrived))`：`NavigateToNode`到达或规划失败时，在指令已出队、回到Idle之后调用（回调里可以直接`PushCommand`）；`LoopNodes`不回调。`UForeverTrafficFrameworkComponent`用它发`vehicle_arrive`。
+
+## 有序通行（跟车 + 路口请求）
+
+每帧在 `TickDrivingPhysics/Kinematic` 里调 `ComputeTrafficLimit`，目标速度 = `min(速度剖面, 跟车限速, 障碍限速, 停止线限速)`；`bEnableTraffic=false` 整个关掉。
+
+- **前车**：`FindLeader` 遍历 `UForeverTrafficFrameworkComponent::GetDrivers()`（被驱动车辆登记表），把对方车心投影到**我的路径**上，横向在 `pathHalfWidth` 内且在前方、高差<400 的最近一辆就是前车（和车道/边无关，所以同车道排队、汇入、路口里交叉都覆盖）。用 Krauss 安全速度 `v=-bT+sqrt((bT)²+vl²+2b·gap)`（b=0.8×`maxBrakeDecel`，T=`followTimeGap`，gap 扣掉 `standstillGap`）。对方速度取沿我行进方向的分量（≥0）。
+- **障碍**：`ScanObstacles` 每 0.1s 沿路径向前每 250uu 做一个半径 170 的 `ECC_Pawn`+`ECC_Vehicle` 球形 overlap（忽略自己和已登记车辆；注意本项目 Pawn 预设忽略 Visibility，必须用对象类型），找到行人/玩家/无人驾驶车就当作前车并入 Krauss。人的胶囊对载具通道是 Overlap（车不会被挡），`AVehicleElement::PushNearbyCharacters` 只是最后兜底，所以靠这个扫描提前减速。
+- **路口**：`PlanAndFollow` 把 `Map::VehicleRoutePlan::edges` 里属于 `JunctionTraffic` 的连线转成 `FPath::junctions`（`FJunctionMarker`，弧长区间靠把规划折线端点投影到建好的路径上得到）。进入视距（刹停距离+速度×请求间隔+`junctionRequestMargin`）且是队头（我和入口之间没有前车）后，每 `junctionRequestInterval`（交通时钟秒）`Request` 一次；放行后继续请求续租，车尾出了连线终点 `Leave`；没放行就在入口前 `stopLineMargin` 处按 `sqrt(2·b·距离)` 限速停住。车头已经压进连线就当作持有，不再退回。出口检查把连线终点之后第一辆前车的车尾距离（地图单位）作为 `exitFree` 传给路口。
+- **对速度合成的影响**：物理模式限速到 <30 且速度低于 `kHandbrakeSpeed` 时松刹车拉手刹原地等；卡住计时在被前车/路口挡住时不累加；运动学的 60uu 最小蠕行在限速<60 时关闭。
+- **清理**：`ClearCommands`/`FinishCommand`/重新规划/`EndPlay` 都会 `ReleaseJunctions` 对所有请求过的连线 `Leave`；租约（1s）兜底。
+- **限制**：目前只有 `Controller` 驱动的车（公交、测试导航车）进登记表，没有"最多 16 辆"的强制上限（私家车实例化时再加）；停在路中的车（含停靠的公交）会挡住后车，不会变道超车。
+
 ## 依赖关系
 
 - 依赖：`TCommandQueue`、`AVehicleElement`、`UForeverTrafficFrameworkComponent`、`Core/map/map.h`(导航图)。

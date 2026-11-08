@@ -4,9 +4,14 @@
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 
 #include "map/map.h"
+#include "map/room.h"
 #include "traffic/vehicle.h"
+#include "traffic/junction.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/World.h"
+#include "Engine/OverlapResult.h"
+#include "CollisionQueryParams.h"
 
 namespace {
 	// 地图单位 -> UE单位，同ForeverTrafficFrameworkComponent.cpp的TRAFFIC_WORLD_SCALE。
@@ -88,6 +93,33 @@ float AVehicleCommandController::FPath::Project(const FVector& pos, bool bFullSe
 	return arc[bestSeg] + bestT * (arc[bestSeg + 1] - arc[bestSeg]);
 }
 
+float AVehicleCommandController::FPath::ProjectConst(const FVector& pos, int32 first, int32 last, float& outLateral) const
+{
+	outLateral = FLT_MAX;
+	if (points.Num() < 2) return 0.f;
+	first = FMath::Clamp(first, 0, points.Num() - 2);
+	last = FMath::Clamp(last, first, points.Num() - 2);
+	float bestDistSq = FLT_MAX;
+	int32 bestSeg = first;
+	float bestT = 0.f;
+	for (int32 i = first; i <= last; i++) {
+		FVector ab = points[i + 1] - points[i];
+		ab.Z = 0.f;
+		FVector ap = pos - points[i];
+		ap.Z = 0.f;
+		const float lenSq = ab.SizeSquared();
+		const float t = lenSq > KINDA_SMALL_NUMBER ? FMath::Clamp(FVector::DotProduct(ap, ab) / lenSq, 0.f, 1.f) : 0.f;
+		const float distSq = FVector::DistSquared2D(pos, points[i] + ab * t);
+		if (distSq < bestDistSq) {
+			bestDistSq = distSq;
+			bestSeg = i;
+			bestT = t;
+		}
+	}
+	outLateral = FMath::Sqrt(bestDistSq);
+	return arc[bestSeg] + bestT * (arc[bestSeg + 1] - arc[bestSeg]);
+}
+
 // ---------------------------------------------------------------------------------------------
 // 生命周期 / 指令
 // ---------------------------------------------------------------------------------------------
@@ -103,6 +135,13 @@ void AVehicleCommandController::Setup(Map* inMap, UForeverTrafficFrameworkCompon
 {
 	map = inMap;
 	ownerFramework = inOwner;
+	if (inOwner) inOwner->RegisterDriver(this);
+}
+
+void AVehicleCommandController::EndPlay(const EEndPlayReason::Type endPlayReason)
+{
+	ReleaseJunctions();
+	Super::EndPlay(endPlayReason);
 }
 
 void AVehicleCommandController::OnPossess(APawn* inPawn)
@@ -124,6 +163,7 @@ void AVehicleCommandController::ClearCommands()
 	if (state == EState::Dwelling && bStopEntered) OnStopLeft(stopNodeId);
 	bStopEntered = false;
 	commands.Clear();
+	ReleaseJunctions();
 	path = FPath();
 	state = EState::Idle;
 	lastNodeId = -1;
@@ -135,6 +175,7 @@ void AVehicleCommandController::ClearCommands()
 void AVehicleCommandController::FinishCommand()
 {
 	commands.Advance();
+	ReleaseJunctions();
 	path = FPath();
 	state = EState::Idle;
 	StartNextCommand();
@@ -148,7 +189,11 @@ void AVehicleCommandController::StartNextCommand()
 
 	if (command->type == FVehicleCommand::EType::NavigateToNode) {
 		targetNode = command->node;
-		if (!PlanAndFollow(-1, command->node)) FinishCommand();
+		if (!PlanAndFollow(-1, command->node)) {
+			const int32 failedNode = command->node;
+			FinishCommand();
+			if (navigateFinished) navigateFinished(this, failedNode, false);
+		}
 		return;
 	}
 
@@ -179,6 +224,7 @@ bool AVehicleCommandController::PlanAndFollow(int32 fromNode, int32 toNode)
 	AVehicleElement* vehicle = drivenVehicle.Get();
 	if (!vehicle || !map) return false;
 
+	ReleaseJunctions();
 	Map::VehicleRoutePlan plan;
 	if (fromNode >= 0) {
 		plan = map->PlanVehicleLeg(fromNode, toNode);
@@ -193,7 +239,10 @@ bool AVehicleCommandController::PlanAndFollow(int32 fromNode, int32 toNode)
 		if (core && plan.status == Map::VehicleRoutePlan::OK) core->SetCurrentRoom(nullptr);
 	}
 	if (plan.status != Map::VehicleRoutePlan::OK || plan.points.empty()) {
-		UE_LOG(LogTemp, Warning, TEXT("AVehicleCommandController: 规划不到节点 %d (from %d)"), toNode, fromNode);
+		Vehicle* failCore = vehicle->GetVehicle();
+		Room* failRoom = failCore ? failCore->GetCurrentRoom() : nullptr;
+		UE_LOG(LogTemp, Warning, TEXT("AVehicleCommandController: 规划不到节点 %d (from %d)，status=%d(0=OK,1=无路径到终点,2=起点无出路)，起点房间=%s"),
+			toNode, fromNode, static_cast<int32>(plan.status), failRoom ? UTF8_TO_TCHAR(failRoom->GetAddress().c_str()) : TEXT("无(室外)"));
 		return false;
 	}
 
@@ -203,6 +252,18 @@ bool AVehicleCommandController::PlanAndFollow(int32 fromNode, int32 toNode)
 		raw.Add(FVector(p.x * kVehicleControllerWorldScale, p.y * kVehicleControllerWorldScale, p.z * kVehicleControllerWorldScale));
 	}
 	BuildPath(raw);
+	if (path.IsValid() && ownerFramework.IsValid()) {
+		// 路径里属于路口的连线记成标记，之后在这些弧长区间前向路口请求通行。
+		if (JunctionTraffic* junctionTraffic = ownerFramework->GetJunctionTraffic()) {
+			TArray<FEdgeSpan> spans;
+			for (const Map::NavEdge& edge : plan.edges) {
+				if (!edge.edge || !junctionTraffic->IsManaged(edge.edge)) continue;
+				if (edge.firstPoint < 0 || edge.lastPoint >= static_cast<int32>(raw.Num()) || edge.firstPoint >= edge.lastPoint) continue;
+				spans.Add({ edge.edge, raw[edge.firstPoint], raw[edge.lastPoint] });
+			}
+			BuildJunctionMarkers(spans);
+		}
+	}
 	if (!path.IsValid()) {
 		// 起点就是终点（已经在那里）：当作立刻到达。
 		state = EState::Driving;
@@ -397,7 +458,9 @@ void AVehicleCommandController::OnArrived()
 
 	if (command->type == FVehicleCommand::EType::NavigateToNode) {
 		lastNodeId = targetNode;
+		const int32 arrivedNode = targetNode;
 		FinishCommand();
+		if (navigateFinished) navigateFinished(this, arrivedNode, true);
 		return;
 	}
 
@@ -407,6 +470,224 @@ void AVehicleCommandController::OnArrived()
 	loopIndex = (loopIndex + 1) % count;
 	lastNodeId = arrivedNode;
 	BeginDwell(arrivedNode, GetDwellSeconds(arrivedNode), true);
+}
+
+// ---------------------------------------------------------------------------------------------
+// 有序通行：跟车 + 路口请求
+// ---------------------------------------------------------------------------------------------
+
+float AVehicleCommandController::GetHalfLength(AVehicleElement* vehicle)
+{
+	if (halfLength <= 0.f && vehicle) {
+		if (USkeletalMeshComponent* mesh = vehicle->GetCarMesh()) {
+			halfLength = mesh->CalcBounds(FTransform::Identity).BoxExtent.X;
+		}
+		if (halfLength < 100.f) halfLength = 250.f; // 取不到/异常小：按普通轿车半长兜底
+	}
+	return halfLength;
+}
+
+bool AVehicleCommandController::GetTrafficState(FTrafficState& out) const
+{
+	AVehicleElement* vehicle = drivenVehicle.Get();
+	if (!vehicle) return false;
+	out.location = vehicle->GetActorLocation();
+	out.forward = vehicle->GetActorForwardVector();
+	out.speed = bKinematic ? kinSpeed : vehicle->GetForwardSpeed();
+	out.halfLength = halfLength > 0.f ? halfLength : 250.f;
+	return true;
+}
+
+void AVehicleCommandController::BuildJunctionMarkers(const TArray<FEdgeSpan>& spans)
+{
+	path.junctions.Reset();
+	path.junctionCursor = 0;
+	bObstacle = false;
+	const int32 last = path.points.Num() - 2;
+	float previousEnd = 0.f;
+	for (const FEdgeSpan& span : spans) {
+		float lateral;
+		const float startS = path.ProjectConst(span.from, 0, last, lateral);
+		const float endS = path.ProjectConst(span.to, 0, last, lateral);
+		// 圆角和采样会让投影有几十cm误差；起点不回退到上一条之前，太短/反向的丢掉。
+		if (endS <= startS + 1.f || startS < previousEnd - 100.f) continue;
+		FJunctionMarker marker;
+		marker.conn = span.conn;
+		marker.startS = FMath::Max(startS, previousEnd);
+		marker.endS = endS;
+		path.junctions.Add(marker);
+		previousEnd = endS;
+	}
+}
+
+void AVehicleCommandController::ReleaseJunctions()
+{
+	UForeverTrafficFrameworkComponent* framework = ownerFramework.Get();
+	JunctionTraffic* junctionTraffic = framework ? framework->GetJunctionTraffic() : nullptr;
+	if (junctionTraffic) {
+		const int64_t entity = JunctionTraffic::MakeEntity(JunctionTraffic::EntityKind::Vehicle, GetUniqueID());
+		for (FJunctionMarker& marker : path.junctions) {
+			if (marker.bHeld || marker.bRequested) junctionTraffic->Leave(marker.conn, entity);
+			marker.bHeld = marker.bRequested = false;
+		}
+	}
+}
+
+bool AVehicleCommandController::FindLeader(float minCenterS, float myHalfLength, FLeader& out) const
+{
+	UForeverTrafficFrameworkComponent* framework = ownerFramework.Get();
+	AVehicleElement* self = drivenVehicle.Get();
+	if (!framework || !self || !path.IsValid()) return false;
+
+	const FVector myLocation = self->GetActorLocation();
+	const int32 first = FMath::Max(0, path.cursor - 3);
+	const int32 last = path.cursor + 120;
+	bool bFound = false;
+	for (const TWeakObjectPtr<AVehicleCommandController>& weak : framework->GetDrivers()) {
+		const AVehicleCommandController* other = weak.Get();
+		if (!other || other == this) continue;
+		FTrafficState otherState;
+		if (!other->GetTrafficState(otherState)) continue;
+		if (FVector::Dist2D(otherState.location, myLocation) > trafficLookahead + myHalfLength + otherState.halfLength) continue;
+
+		float lateral;
+		const float s = path.ProjectConst(otherState.location, first, last, lateral);
+		if (lateral > pathHalfWidth || s <= minCenterS) continue;
+		if (bFound && s >= out.centerS) continue;
+
+		FVector tangent;
+		const FVector onPath = path.Sample(s, &tangent);
+		if (FMath::Abs(onPath.Z - otherState.location.Z) > 400.f) continue; // 上下层（桥/隧道）不算前车
+
+		const FVector2D forward2D(otherState.forward.X, otherState.forward.Y);
+		const float along = otherState.speed * FVector2D::DotProduct(forward2D.GetSafeNormal(), FVector2D(tangent.X, tangent.Y).GetSafeNormal());
+		out.centerS = s;
+		out.rearS = s - otherState.halfLength;
+		out.speed = FMath::Max(0.f, along);
+		bFound = true;
+	}
+	return bFound;
+}
+
+void AVehicleCommandController::ScanObstacles(AVehicleElement* vehicle, float frontS, float speed, double now)
+{
+	if (now < nextObstacleScan) return;
+	nextObstacleScan = now + 0.1;
+	bObstacle = false;
+
+	UWorld* world = GetWorld();
+	UForeverTrafficFrameworkComponent* framework = ownerFramework.Get();
+	if (!world || !framework) return;
+
+	const float decel = maxBrakeDecel * 0.8f;
+	const float forwardSpeed = FMath::Max(speed, 0.f);
+	const float scanLength = FMath::Min(trafficLookahead, forwardSpeed * forwardSpeed / (2.f * decel) + forwardSpeed * followTimeGap + 1200.f);
+
+	// 已登记的被驱动车辆由FindLeader按路径判断(带速度)，这里只找其它东西：行人、玩家、没人驾驶的车。
+	FCollisionQueryParams params(SCENE_QUERY_STAT(VehicleObstacleScan), false, vehicle);
+	for (const TWeakObjectPtr<AVehicleCommandController>& weak : framework->GetDrivers()) {
+		if (const AVehicleCommandController* other = weak.Get()) {
+			if (AVehicleElement* otherVehicle = other->GetDrivenVehicle()) params.AddIgnoredActor(otherVehicle);
+		}
+	}
+	FCollisionObjectQueryParams objects;
+	objects.AddObjectTypesToQuery(ECC_Pawn);
+	objects.AddObjectTypesToQuery(ECC_Vehicle);
+
+	constexpr float kStep = 250.f;
+	constexpr float kRadius = 170.f;
+	for (float distance = 100.f; distance <= scanLength; distance += kStep) {
+		const float s = frontS + distance;
+		if (s >= path.total) break;
+		FVector tangent;
+		const FVector point = path.Sample(s, &tangent);
+		TArray<FOverlapResult> overlaps;
+		if (!world->OverlapMultiByObjectType(overlaps, point + FVector(0.f, 0.f, 150.f), FQuat::Identity, objects,
+			FCollisionShape::MakeSphere(kRadius), params)) continue;
+		for (const FOverlapResult& overlap : overlaps) {
+			const AActor* actor = overlap.GetActor();
+			if (!actor) continue;
+			obstacle.centerS = s;
+			obstacle.rearS = s - kRadius;
+			obstacle.speed = FMath::Max(0.f, static_cast<float>(FVector::DotProduct(actor->GetVelocity(), tangent)));
+			bObstacle = true;
+			return;
+		}
+	}
+}
+
+float AVehicleCommandController::ComputeTrafficLimit(AVehicleElement* vehicle, float speed, bool& bOutStopping)
+{
+	bOutStopping = false;
+	UForeverTrafficFrameworkComponent* framework = ownerFramework.Get();
+	if (!bEnableTraffic || !framework || !vehicle || !path.IsValid()) return FLT_MAX;
+
+	const float half = GetHalfLength(vehicle);
+	const float frontS = pathS + half;
+	const float decel = maxBrakeDecel * 0.8f; // 留余量：实际刹车达不到标称减速度
+	const float speedForward = FMath::Max(speed, 0.f);
+	float limit = FLT_MAX;
+
+	// 1. 同路径前车：Krauss安全速度 v = -bT + sqrt((bT)^2 + vl^2 + 2*b*gap)，保证前车急刹也撞不上。
+	FLeader leader;
+	const bool bHasLeader = FindLeader(pathS, half, leader);
+	if (bHasLeader) {
+		const float gap = FMath::Max(0.f, leader.rearS - frontS - standstillGap);
+		const float bt = decel * followTimeGap;
+		limit = FMath::Min(limit, -bt + FMath::Sqrt(bt * bt + leader.speed * leader.speed + 2.f * decel * gap));
+	}
+
+	// 1b. 行人/玩家等不在登记表里的障碍：同样按Krauss提前减速，不能等撞上之后靠推挤。
+	ScanObstacles(vehicle, frontS, speed, framework->GetTrafficClock());
+	if (bObstacle) {
+		const float gap = FMath::Max(0.f, obstacle.rearS - frontS - standstillGap);
+		const float bt = decel * followTimeGap;
+		limit = FMath::Min(limit, -bt + FMath::Sqrt(bt * bt + obstacle.speed * obstacle.speed + 2.f * decel * gap));
+	}
+
+	// 2. 路口：只和连线打交道。进入视距后每junctionRequestInterval请求一次，放行后继续续租，
+	//    车尾出了连线终点才Leave；没放行就在停止线前停住。
+	JunctionTraffic* junctionTraffic = path.junctions.Num() > 0 ? framework->GetJunctionTraffic() : nullptr;
+	if (junctionTraffic) {
+		const double now = framework->GetTrafficClock();
+		const int64_t entity = JunctionTraffic::MakeEntity(JunctionTraffic::EntityKind::Vehicle, GetUniqueID());
+		const float lengthMap = 2.f * half / kVehicleControllerWorldScale;
+		for (int32 i = path.junctionCursor; i < path.junctions.Num(); i++) {
+			FJunctionMarker& marker = path.junctions[i];
+			if (pathS - half > marker.endS) { // 车尾已经出了这条连线
+				if (marker.bHeld || marker.bRequested) junctionTraffic->Leave(marker.conn, entity);
+				marker.bHeld = marker.bRequested = false;
+				if (i == path.junctionCursor) path.junctionCursor++;
+				continue;
+			}
+
+			const float distToEntry = marker.startS - frontS;
+			const float lookDistance = speedForward * speedForward / (2.f * decel) + speedForward * junctionRequestInterval + junctionRequestMargin;
+			if (!marker.bHeld && distToEntry > lookDistance) break;
+			// 只有队头才请求：我和入口之间还有别的车时，前车自己会请求，我靠跟车限速排队。
+			if (!marker.bHeld && bHasLeader && leader.centerS < marker.startS) break;
+
+			if (now >= marker.nextRequest) {
+				marker.nextRequest = now + junctionRequestInterval;
+				// 出口检查：连线终点之后的车道还剩多少空位（地图单位）。
+				float exitFree = 1e9f;
+				FLeader ahead;
+				if (FindLeader(marker.endS, half, ahead)) exitFree = FMath::Max(0.f, ahead.rearS - marker.endS) / kVehicleControllerWorldScale;
+				const bool bGo = junctionTraffic->Request(marker.conn, entity, now, lengthMap, exitFree);
+				marker.bRequested = true;
+				// 车头已经压进连线了就不再退回去(停在路口里更糟)，当作持有。
+				marker.bHeld = bGo || distToEntry < 0.f;
+			}
+			if (!marker.bHeld) {
+				const float distToStop = marker.startS - stopLineMargin - frontS;
+				limit = FMath::Min(limit, distToStop <= 0.f ? 0.f : FMath::Sqrt(2.f * decel * distToStop));
+				break; // 被挡在这条前面，后面的路口不用看
+			}
+		}
+	}
+
+	bOutStopping = limit < 30.f;
+	return limit;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -535,6 +816,8 @@ void AVehicleCommandController::TickDrivingPhysics(AVehicleElement* vehicle, flo
 	pathS = FMath::Max(pathS, path.Project(pos, false));
 	const float speed = vehicle->GetForwardSpeed();
 	const float remain = path.total - pathS;
+	bool bTrafficStopping = false;
+	const float trafficLimit = ComputeTrafficLimit(vehicle, speed, bTrafficStopping);
 
 	// 到站判定：够近且够慢；或者非常近；或者在终点附近卡住不动。
 	if (remain < 40.f || (remain <= arriveDistance && FMath::Abs(speed) < arriveSpeed)) {
@@ -543,7 +826,7 @@ void AVehicleCommandController::TickDrivingPhysics(AVehicleElement* vehicle, flo
 		OnArrived();
 		return;
 	}
-	if (remain < kStuckRemainDistance && FMath::Abs(speed) < 20.f) {
+	if (remain < kStuckRemainDistance && FMath::Abs(speed) < 20.f && !bTrafficStopping) { // 被前车/路口挡住不算卡住
 		stuckSeconds += deltaTime;
 		if (stuckSeconds >= kStuckSeconds) {
 			vehicle->SetDriveInput(0.f, 0.f, 0.f);
@@ -577,7 +860,13 @@ void AVehicleCommandController::TickDrivingPhysics(AVehicleElement* vehicle, flo
 	const float steer = FMath::Clamp((headingError + crossTrackAngle) / maxSteer, -1.f, 1.f);
 
 	// 速度：剖面已经包含弯前/站前提前减速；这里只做油门/刹车的P控制。
-	const float targetSpeed = path.SpeedAt(pathS + FMath::Max(speed, 0.f) * 0.3f);
+	const float targetSpeed = FMath::Min(path.SpeedAt(pathS + FMath::Max(speed, 0.f) * 0.3f), trafficLimit);
+	if (bTrafficStopping && FMath::Abs(speed) < kHandbrakeSpeed) {
+		// 要停住且已经很慢：松刹车拉手刹原地等（同HoldStill，低速踩刹车会挂倒挡）。
+		vehicle->SetDriveInput(0.f, 0.f, 0.f);
+		vehicle->SetHandbrake(true);
+		return;
+	}
 	const float error = targetSpeed - speed;
 	float throttle = 0.f, brake = 0.f;
 	if (error > 0.f) {
@@ -592,12 +881,14 @@ void AVehicleCommandController::TickDrivingPhysics(AVehicleElement* vehicle, flo
 
 void AVehicleCommandController::TickDrivingKinematic(AVehicleElement* vehicle, float deltaTime)
 {
-	const float targetSpeed = path.SpeedAt(pathS);
+	bool bTrafficStopping = false;
+	const float trafficLimit = ComputeTrafficLimit(vehicle, kinSpeed, bTrafficStopping);
+	const float targetSpeed = FMath::Min(path.SpeedAt(pathS), trafficLimit);
 	if (kinSpeed < targetSpeed) kinSpeed = FMath::Min(targetSpeed, kinSpeed + maxAccel * deltaTime);
 	else kinSpeed = FMath::Max(targetSpeed, kinSpeed - maxBrakeDecel * deltaTime);
 	// 离终点很近时给一个最低爬行速度，避免离散积分在终点前停住。
 	const float remain = path.total - pathS;
-	if (remain > 40.f && kinSpeed < 60.f) kinSpeed = FMath::Min(60.f, FMath::Max(targetSpeed, 60.f));
+	if (remain > 40.f && kinSpeed < 60.f && trafficLimit >= 60.f) kinSpeed = FMath::Min(60.f, FMath::Max(targetSpeed, 60.f));
 	pathS = FMath::Min(path.total, pathS + kinSpeed * deltaTime);
 
 	FVector tangent;

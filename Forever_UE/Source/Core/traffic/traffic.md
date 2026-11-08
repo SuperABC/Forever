@@ -68,6 +68,10 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 不在这里处理，由`AForeverFrameworkActor::ApplyChange`转发给UE层。七个域都不认识时由
 `AForeverFrameworkActor::ApplyChange`统一打"未实现"警告，见`Forever/Framework/ForeverFrameworkActor.md`。
 
+## 路口通行管理
+
+`JunctionTraffic`（`junction.h/.cpp`，见 `junction.md`）和 `Traffic` 没有持有关系：它只依赖 `Map` 的路口与导航图，由 UE 层 `UForeverTrafficFrameworkComponent::GetJunctionTraffic()` 按需建，所以读档（不重跑 `Traffic::Init`）也能用。
+
 ## 依赖关系
 
 - 依赖：`traffic/vehicle.h`/`station.h`/`route.h`、`Dependence/traffic/*_factory.h`、

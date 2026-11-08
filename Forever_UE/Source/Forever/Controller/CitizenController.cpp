@@ -2,6 +2,8 @@
 
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
+#include "Framework/ForeverTrafficFrameworkComponent.h"
+#include "traffic/junction.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 
@@ -12,6 +14,8 @@ namespace {
 	// 到达路径点的判定阈值(UE单位)——只判水平距离，Z由CharacterMovement自己的地面检测/重力处理，
 	// 不需要精确匹配路径点的高度。
 	constexpr float kWaypointArrivalThresholdUU = 80.f;
+	// 地图单位 -> UE单位，同ForeverPopulaceFrameworkComponent.cpp的POPULACE_WORLD_SCALE。
+	constexpr float kCitizenWorldScale = 1000.f;
 }
 
 ACitizenController::ACitizenController() {
@@ -28,6 +32,7 @@ void ACitizenController::OnPossess(APawn* inPawn) {
 void ACitizenController::OnUnPossess() {
 	// 玩家接管/市民销毁：正在走的路作废，还原速度等状态（此时pawn还没被摘走）。
 	ClearCommands();
+	ReleaseCrosswalk();
 	citizenElement.Reset();
 	Super::OnUnPossess();
 }
@@ -98,6 +103,7 @@ void ACitizenController::BeginCommand(FCharacterCommand& command) {
 void ACitizenController::EndCommand(bool arrived) {
 	FCharacterCommand* current = commands.Current();
 	if (!current) return;
+	ReleaseCrosswalk();
 	FCharacterCommand finished = *current;
 
 	ACitizenElement* element = citizenElement.Get();
@@ -121,6 +127,78 @@ void ACitizenController::EndCommand(bool arrived) {
 	if (arrived && finished.room) {
 		framework->NotifyArrived(citizen, finished.room);
 	}
+}
+
+void ACitizenController::ReleaseCrosswalk() {
+	if (crossing || pendingCrossing) {
+		ACitizenElement* element = citizenElement.Get();
+		UForeverPopulaceFrameworkComponent* populace = element ? element->GetFramework() : nullptr;
+		AActor* owner = populace ? populace->GetOwner() : nullptr;
+		UForeverTrafficFrameworkComponent* traffic = owner ? owner->FindComponentByClass<UForeverTrafficFrameworkComponent>() : nullptr;
+		JunctionTraffic* junctionTraffic = traffic ? traffic->GetJunctionTraffic() : nullptr;
+		if (junctionTraffic) {
+			const int64_t entity = JunctionTraffic::MakeEntity(JunctionTraffic::EntityKind::Pedestrian, GetUniqueID());
+			if (crossing) junctionTraffic->Leave(crossing, entity);
+			if (pendingCrossing) junctionTraffic->Leave(pendingCrossing, entity);
+		}
+	}
+	crossing = nullptr;
+	pendingCrossing = nullptr;
+	crossingEndIndex = -1;
+	pendingCheckedIndex = -1;
+}
+
+bool ACitizenController::GateCrosswalk(ACitizenElement* element, const FCharacterCommand& command, const FVector& toTarget) {
+	UForeverPopulaceFrameworkComponent* populace = element->GetFramework();
+	AActor* owner = populace ? populace->GetOwner() : nullptr;
+	UForeverTrafficFrameworkComponent* traffic = owner ? owner->FindComponentByClass<UForeverTrafficFrameworkComponent>() : nullptr;
+	JunctionTraffic* junctionTraffic = traffic ? traffic->GetJunctionTraffic() : nullptr;
+	if (!junctionTraffic) return false;
+
+	const double now = traffic->GetTrafficClock();
+	const int64_t entity = JunctionTraffic::MakeEntity(JunctionTraffic::EntityKind::Pedestrian, GetUniqueID());
+
+	// 正在过横道：续租；走过横道终点就放行。
+	if (crossing) {
+		if (waypointIndex > crossingEndIndex) {
+			junctionTraffic->Leave(crossing, entity);
+			crossing = nullptr;
+			crossingEndIndex = -1;
+		}
+		else {
+			if (now >= nextCrossingRequest) {
+				nextCrossingRequest = now + crossingRequestInterval;
+				junctionTraffic->Request(crossing, entity, now, 0.f, 1e9f);
+			}
+			return false;
+		}
+	}
+
+	// 下一段(当前目标点 -> 再下一个点)是横道吗：每个目标点只匹配一次。
+	if (pendingCheckedIndex != waypointIndex) {
+		if (pendingCrossing) junctionTraffic->Leave(pendingCrossing, entity);
+		pendingCrossing = nullptr;
+		pendingCheckedIndex = waypointIndex;
+		if (waypointIndex + 1 < command.waypoints.Num()) {
+			const FVector& a = command.waypoints[waypointIndex];
+			const FVector& b = command.waypoints[waypointIndex + 1];
+			pendingCrossing = junctionTraffic->FindCrosswalk(a.X / kCitizenWorldScale, a.Y / kCitizenWorldScale, b.X / kCitizenWorldScale, b.Y / kCitizenWorldScale);
+		}
+	}
+	if (!pendingCrossing) return false;
+
+	const float distance = toTarget.Size();
+	if (distance > crossingRequestDistance) return false;
+	if (now >= nextCrossingRequest) {
+		nextCrossingRequest = now + crossingRequestInterval;
+		if (junctionTraffic->Request(pendingCrossing, entity, now, 0.f, 1e9f)) {
+			crossing = pendingCrossing;
+			crossingEndIndex = waypointIndex + 1;
+			pendingCrossing = nullptr;
+			return false;
+		}
+	}
+	return distance <= crossingWaitDistance; // 没放行：走到路沿就停，别再往前
 }
 
 void ACitizenController::Tick(float deltaTime) {
@@ -151,6 +229,8 @@ void ACitizenController::Tick(float deltaTime) {
 		if (waypointIndex >= command->waypoints.Num()) EndCommand(true);
 		return;
 	}
+
+	if (GateCrosswalk(element, *command, toTarget)) return; // 路口没放行：原地等
 
 	FVector direction = toTarget.GetSafeNormal();
 	if (wanderAmplitude > 0.f) {
