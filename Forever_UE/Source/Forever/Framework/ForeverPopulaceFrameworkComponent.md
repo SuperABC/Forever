@@ -32,8 +32,8 @@
   `currentRoom`换到工作单位后两者不同栋，混用会算出错误世界坐标，症状是上班时间商店里看不到店员）。
 - **销毁**：先把Actor位置转回地图单位`SetPosition`回`Citizen`（下次直接在记录位置出现），
   若还在走路，用控制器`GetRemainingWaypoints`的剩余路径`BeginWalk`交还Core，不丢目的地，再`Destroy()`并摘出`activeInstances`。
-- **死人**：流式循环、`FindOrSpawnCitizenByName`、`RequestWalk`/`ApplyWalkResult`/`NotifyArrived`
-  都跳过`IsDead()`的市民，`TeleportCitizen`打警告后返回；`HandleCitizenDeath`销毁其Actor。复活（`npc_revive`）后再teleport才恢复。
+- **死人和离城的人**：流式循环、`FindOrSpawnCitizenByName`、`RequestWalk`/`ApplyWalkResult`/`NotifyArrived`
+  都跳过`!IsActive()`（死亡或离城）的市民，`TeleportCitizen`打警告后返回；`HandleCitizenDeath`销毁其Actor，死亡和离城（`AForeverFrameworkActor`收到`DailyReport::departed`后逐个调用）共用它。复活（`npc_revive`）后再teleport才恢复，离城不可逆。
 
 ### `activeInstances`
 

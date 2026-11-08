@@ -32,8 +32,9 @@ public:
 	static void InitFunds(Society& society, const std::vector<Citizen*>& citizens);
 
 	// 给开局之后新生成的市民(spawn_npc)单独开钱包注资：amountCents<0按开局同一个正态分布随机，
-	// 否则用指定金额(分)。同样计入开局注资基准，避免三重负反馈的基准偏小。是否接入经济系统无关。
-	static void InitFunds(Society& society, Citizen* citizen, int64_t amountCents = -1);
+	// 否则用指定金额(分)。resetBaseline=true(默认)同样计入开局注资基准，避免三重负反馈的基准偏小；
+	// 迁入人口传false，基准保持开局值。是否接入经济系统无关。
+	static void InitFunds(Society& society, Citizen* citizen, int64_t amountCents = -1, bool resetBaseline = true);
 
 	// 按本日货物流水结算货款：城内流转按批发价、进口按进口价（外加关税）、出口按出口价。
 	static GoodsSettlementReport SettleGoods(Society& society, const Industry& industry);

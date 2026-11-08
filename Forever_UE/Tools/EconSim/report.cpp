@@ -10,12 +10,15 @@
 #include "society/job.h"
 #include "society/organization.h"
 #include "society/society.h"
+#include "society/market.h"
+#include "society/treasury.h"
 #include "industry/industry.h"
 
 #include <algorithm>
 #include <cstdarg>
 #include <filesystem>
 #include <map>
+#include <unordered_set>
 #include <vector>
 
 
@@ -164,7 +167,7 @@ void Reporter::PrintCity() {
 	int year = populace.GetCurrentYear();
 	int minors = 0, adults = 0, elderly = 0, dead = 0, employed = 0;
 	for (Citizen* citizen : populace.GetCitizens()) {
-		if (citizen->IsDead()) { dead++; continue; }
+		if (!citizen->IsActive()) { dead++; continue; }
 		int age = citizen->GetAge(year);
 		if (age < 18) minors++;
 		else if (age >= 60) elderly++;
@@ -286,11 +289,12 @@ void Reporter::PrintCitizens(const Snapshot& begin, const Snapshot& end) {
 	PrintFlows(begin, end, Party::CITIZEN);
 	Out("  期末存款合计 %s\n", Yuan(end.citizens).c_str());
 
-	// 存款分布。
+	// 净资产分布：活期余额+存款+国债本金。
 	const Ledger& ledger = society.GetLedger();
+	const Treasury& treasury = society.GetTreasury();
 	vector<int64_t> balances;
 	for (Citizen* citizen : populace.GetCitizens()) {
-		if (!citizen->IsDead()) balances.push_back(ledger.Balance(Party::Of(citizen)));
+		if (citizen->IsActive()) balances.push_back(ledger.Balance(Party::Of(citizen)) + treasury.DepositOf(citizen) + treasury.BondsOf(citizen));
 	}
 	if (balances.empty()) return;
 	sort(balances.begin(), balances.end());
@@ -309,7 +313,7 @@ void Reporter::PrintCitizens(const Snapshot& begin, const Snapshot& end) {
 		{ "2万 - 5万元", 20000 * y, 50000 * y }, { "5万元以上", 50000 * y, kInf } };
 	vector<int> counts = Histogram(balances, buckets);
 	int maxCount = *max_element(counts.begin(), counts.end());
-	Out("  存款分布(人数):\n");
+	Out("  净资产分布(人数):\n");
 	for (size_t i = 0; i < buckets.size(); i++) {
 		Out("    %-14s %6d (%5.1f%%) %s\n", buckets[i].label.c_str(), counts[i], 100.0 * counts[i] / balances.size(),
 			Bar(counts[i], maxCount).c_str());
@@ -323,9 +327,33 @@ void Reporter::PrintCitizens(const Snapshot& begin, const Snapshot& end) {
 	}
 	int64_t topShare = 0;
 	for (size_t i = balances.size() - balances.size() / 10; i < balances.size(); i++) topShare += balances[i];
-	Out("  穷人(<2500元) %d 人 (%.1f%%) | 中等 %zu 人 | 富人(>=1万元) %d 人 (%.1f%%) | 最富10%%的人持有存款的 %.1f%%\n", poor,
+	Out("  穷人(<2500元) %d 人 (%.1f%%) | 中等 %zu 人 | 富人(>=1万元) %d 人 (%.1f%%) | 最富10%%的人持有净资产的 %.1f%%\n", poor,
 		100.0 * poor / balances.size(), balances.size() - poor - rich, rich, 100.0 * rich / balances.size(),
 		sum > 0 ? 100.0 * topShare / sum : 0.0);
+
+	// 穷人构成：按年龄段/有无工作拆开，并对比"只看活期余额"和"余额+存款"两种口径。
+	struct Group { const char* name; int count = 0, poorCash = 0, poorWorth = 0; int64_t cash = 0, worth = 0; };
+	Group groups[4] = { { "未成年" }, { "成年有工作" }, { "成年无工作" }, { "老年" } };
+	int year = populace.GetCurrentYear();
+	for (Citizen* citizen : populace.GetCitizens()) {
+		if (!citizen->IsActive()) continue;
+		int age = citizen->GetAge(year);
+		int g = age < society.GetPolicy().adultAge ? 0 : age >= 60 ? 3 : citizen->GetJob() ? 1 : 2;
+		int64_t cash = ledger.Balance(Party::Of(citizen));
+		int64_t worth = cash + treasury.DepositOf(citizen) + treasury.BondsOf(citizen);
+		groups[g].count++;
+		groups[g].cash += cash;
+		groups[g].worth += worth;
+		if (cash < 2500 * y) groups[g].poorCash++;
+		if (worth < 2500 * y) groups[g].poorWorth++;
+	}
+	Out("  穷人构成(穷=活期余额<2500元 / 括号内=净资产(余额+存款+国债)<2500元):\n");
+	for (const Group& group : groups) {
+		if (group.count == 0) continue;
+		Out("    %-8s %6d 人, 穷人 %5d (%4.1f%%) / (%4.1f%%), 人均余额 %s, 人均净资产 %s\n", group.name, group.count, group.poorCash,
+			100.0 * group.poorCash / group.count, 100.0 * group.poorWorth / group.count,
+			Yuan(group.cash / group.count).c_str(), Yuan(group.worth / group.count).c_str());
+	}
 }
 
 void Reporter::PrintOrganizations(const Snapshot& begin, const Snapshot& end) {
@@ -387,20 +415,142 @@ void Reporter::PrintRunSummary(const string& title, const ServiceTotals& totals)
 	Out("  吃饭: 需求 %lld 份, 卖出 %lld 份, 没买到 %lld 份(%.2f%%), 营业额 %s\n", totals.demand, totals.sold, totals.unmet,
 		totals.demand ? 100.0 * totals.unmet / totals.demand : 0.0, Yuan(totals.revenue).c_str());
 	Out("  企业: 本期新倒闭 %d 家, 重启 %d 家\n", totals.newBankruptcies, totals.restarts);
+	{
+		// 岗位与就业：开放岗位/空缺/成年无工作的人数，以及本期的招聘、裁员流动。
+		int positions = 0, filled = 0;
+		for (const Organization* organization : society.GetOrganizations()) {
+			positions += organization->OpenPositionCount();
+			filled += organization->EmployeeCount();
+		}
+		int unemployed = 0;
+		int year = populace.GetCurrentYear();
+		for (const Citizen* citizen : populace.GetCitizens()) {
+			if (!citizen->IsActive() || !citizen->IsInEconomy() || citizen->GetJob()) continue;
+			int age = citizen->GetAge(year);
+			if (age >= society.GetPolicy().adultAge && age < society.GetPolicy().retirementAge) unemployed++;
+		}
+		Out("  就业: 开放岗位 %d 个(在岗 %d, 空缺 %d), 成年无工作 %d 人 | 本期再就业 %d 人, 月结扩招 %d 岗/裁掉 %d 岗(其中在岗 %d 人), 倒闭裁员 %d 人, 重启重开 %d 岗\n",
+			positions, filled, positions - filled, unemployed, totals.hired, totals.positionsOpened, totals.positionsClosed,
+			totals.dismissed, totals.dismissedByBankruptcy, totals.positionsReopened);
+	}
 	PrintIndustry(totals);
+}
+
+void Reporter::PrintFinance(const string& title, const string& label, const FinanceTotals& totals, int immigrantsActive) {
+	const Ledger& ledger = society.GetLedger();
+	const Treasury& treasury = society.GetTreasury();
+	const Market& market = society.GetMarket();
+
+	// 人口。
+	int active = 0, dead = 0, gone = 0, employed = 0, adultsActive = 0;
+	for (const Citizen* citizen : populace.GetCitizens()) {
+		if (citizen->IsDead()) dead++;
+		else if (citizen->IsDeparted()) gone++;
+		else {
+			active++;
+			if (citizen->GetJob()) employed++;
+			if (citizen->GetAge(populace.GetCurrentYear()) >= society.GetPolicy().adultAge) adultsActive++;
+		}
+	}
+	int initial = populace.GetInitialPopulation();
+	Out("---- %s人口迁入迁出 ----\n", title.c_str());
+	Out("  在场 %d 人(开局 %d, 目标1.5倍=%d); 累计死亡 %d, 累计离城 %d; 在岗 %d 人(在场成年人 %d)\n", active, initial,
+		static_cast<int>(initial * 1.5), dead, gone, employed, adultsActive);
+	Out("  本期迁入 %d 人, 离城 %d 人(%d 户), 其中迁入者 %d 人; 迁入者目前仍在场 %d 人\n", totals.immigrated, totals.departed,
+		totals.departedHouseholds, totals.departedImmigrants, immigrantsActive);
+
+	// 股市。
+	int listed = 0, holders = 0, withHistory = 0;
+	int64_t totalIssued = 0, cap = 0, minPrice = 0, maxPrice = 0, priceSum = 0, heldShares = 0;
+	double yieldSum = 0.0;
+	unordered_set<const Citizen*> holderSet;
+	for (Organization* organization : society.GetOrganizations()) {
+		int64_t price = market.Price(ledger, organization);
+		if (price <= 0) continue;
+		listed++;
+		priceSum += price;
+		cap += price * organization->GetTotalShares();
+		totalIssued += organization->GetTotalShares();
+		minPrice = listed == 1 ? price : min(minPrice, price);
+		maxPrice = max(maxPrice, price);
+		for (const Organization::Shareholder& s : organization->GetShareholders()) {
+			heldShares += s.shares;
+			holderSet.insert(s.citizen);
+		}
+		if (market.HasDividendHistory(organization)) {
+			withHistory++;
+			yieldSum += market.AnnualYield(ledger, organization);
+		}
+	}
+	holders = static_cast<int>(holderSet.size());
+	double avgPrice = listed ? static_cast<double>(priceSum) / listed : 0.0;
+	double avgYield = withHistory ? yieldSum / withHistory : 0.0;
+	Out("---- %s股市 ----\n", title.c_str());
+	Out("  上市 %d 支(不含倒闭); 股价 平均 %s / 最低 %s / 最高 %s; 总市值 %s\n", listed, Yuan(static_cast<int64_t>(avgPrice)).c_str(),
+		Yuan(minPrice).c_str(), Yuan(maxPrice).c_str(), Yuan(cap).c_str());
+	Out("  持股市民 %d 人, 市民持股占总股数 %.1f%%; 平均年化股息率 %.2f%%\n", holders,
+		totalIssued ? 100.0 * heldShares / static_cast<double>(totalIssued) : 0.0, avgYield * 100.0);
+	Out("  本期成交 %lld 股, 成交额 %s\n", static_cast<long long>(totals.volume), Yuan(totals.turnover).c_str());
+	Out("  本期增发 %lld 股(老股东认购 %lld 股), 募资 %s; 全市场总股本 %lld 股\n", static_cast<long long>(totals.sharesIssued),
+		static_cast<long long>(totals.sharesSubscribed), Yuan(totals.issueProceeds).c_str(), static_cast<long long>(totalIssued));
+
+	// 存款、国债、印钞。
+	int depositors = 0;
+	for (const Citizen* citizen : populace.GetCitizens()) {
+		if (treasury.DepositOf(citizen) > 0) depositors++;
+	}
+	Out("---- %s存款/国债/印钞 ----\n", title.c_str());
+	Out("  存款余额 %s(%d 人存款); 本期存入 %s, 取出 %s; 利息 存款 %s + 国债 %s, 利息所得税 %s\n", Yuan(treasury.TotalDeposits()).c_str(),
+		depositors, Yuan(totals.deposited).c_str(), Yuan(totals.withdrawn).c_str(), Yuan(totals.depositInterest).c_str(),
+		Yuan(totals.bondInterest).c_str(), Yuan(totals.interestTax).c_str());
+	Out("  国债余额 %s(%d 张); 本期新发 %s, 到期偿还 %s; 本期印钞 %s\n", Yuan(treasury.TotalBonds()).c_str(),
+		static_cast<int>(treasury.GetBonds().size()), Yuan(totals.bondIssued).c_str(), Yuan(totals.bondRepaid).c_str(),
+		Yuan(totals.printed).c_str());
+	Out("  政府账户 %s, 净头寸 %s(账户−存款−国债); 城市外账户 %s; 税率系数 %.3f, 补助系数 %.3f\n",
+		Yuan(ledger.Balance(Party::Government())).c_str(), Yuan(treasury.NetPosition(ledger)).c_str(),
+		Yuan(ledger.Balance(Party::Outside())).c_str(), society.GetPolicy().taxFactor, society.GetPolicy().allowanceFactor);
+
+	FinanceRow row;
+	row.label = label;
+	row.active = active;
+	row.immigrated = totals.immigrated;
+	row.departed = totals.departed;
+	row.immigrantsActive = immigrantsActive;
+	row.turnover = totals.turnover;
+	row.deposits = treasury.TotalDeposits();
+	row.bonds = treasury.TotalBonds();
+	row.printed = totals.printed;
+	row.government = ledger.Balance(Party::Government());
+	row.net = treasury.NetPosition(ledger);
+	row.marketCap = cap;
+	row.avgPrice = avgPrice;
+	row.avgYield = avgYield;
+	financeRows.push_back(row);
+}
+
+void Reporter::PrintFinanceTable() {
+	Out("\n==================== 逐月金融/人口汇总 ====================\n");
+	Out("%-8s %7s %6s %6s %8s %14s %16s %16s %14s %16s %9s %8s\n", "时点", "在场", "迁入", "离城", "迁入者在", "股票成交额", "存款", "国债", "印钞", "净头寸", "平均股价", "股息率");
+	for (const FinanceRow& row : financeRows) {
+		Out("%-8s %7d %6d %6d %8d %14s %16s %16s %14s %16s %9s %7.2f%%\n", row.label.c_str(), row.active, row.immigrated, row.departed,
+			row.immigrantsActive, Yuan(row.turnover).c_str(), Yuan(row.deposits).c_str(), Yuan(row.bonds).c_str(),
+			Yuan(row.printed).c_str(), Yuan(row.net).c_str(), Yuan(static_cast<int64_t>(row.avgPrice)).c_str(), row.avgYield * 100.0);
+	}
 }
 
 void Reporter::RecordSummaryRow(const string& label) {
 	SummaryRow row;
 	row.label = label;
 	const Ledger& ledger = society.GetLedger();
-	row.government = ledger.Balance(Party::Government());
+	const Treasury& treasury = society.GetTreasury();
+	// 存款和国债本金在账本上记在政府名下，这里归还给市民：个人合计含存款+国债，政府取扣除负债后的净额。
+	row.government = treasury.NetPosition(ledger);
 	row.outside = ledger.Balance(Party::Outside());
-	row.citizens = ledger.CitizensTotal();
+	row.citizens = ledger.CitizensTotal() + treasury.TotalDeposits() + treasury.TotalBonds();
 	row.organizations = ledger.OrganizationsTotal();
 	for (Citizen* citizen : populace.GetCitizens()) {
-		if (citizen->IsDead()) continue;
-		int64_t balance = ledger.Balance(Party::Of(citizen));
+		if (!citizen->IsActive()) continue;
+		int64_t balance = ledger.Balance(Party::Of(citizen)) + society.GetTreasury().DepositOf(citizen) + society.GetTreasury().BondsOf(citizen);
 		if (balance < 2500 * 100) row.poor++;
 		else if (balance >= 10000 * 100) row.rich++;
 	}

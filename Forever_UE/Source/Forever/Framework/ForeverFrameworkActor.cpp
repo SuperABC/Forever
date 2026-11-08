@@ -9,6 +9,7 @@
 #include "society/job.h"
 #include "society/settlement.h"
 #include "society/economy.h"
+#include "society/immigration.h"
 #include "story/story.h"
 #include "story/change.h"
 #include "story/script.h"
@@ -788,8 +789,19 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 			if (!building) continue;
 			for (Room* room : building->GetRooms()) allRooms.push_back(room);
 		}
-		Economy::Daily(*society, *industry, allRooms, populace->GetCitizens(), *player->GetTime(), &postImplement,
-			populace->GetCurrentYear());
+		DailyReport economyReport = Economy::Daily(*society, *industry, allRooms, populace->GetCitizens(),
+			*player->GetTime(), &postImplement, populace->GetCurrentYear(), GetControlledCitizen());
+		// 本月整户离城的市民：移除他们在场景里的Actor。
+		if (populaceFramework) {
+			for (Citizen* departed : economyReport.departed) populaceFramework->HandleCitizenDeath(departed);
+		}
+		// 城外迁入的新市民：登记给人口组件，之后按距离流式生成Actor。
+		for (Citizen* immigrant : Immigration::Daily(*society, *populace, *map, populace->GetCurrentYear())) {
+			if (populaceFramework) populaceFramework->AddCitizen(immigrant);
+		}
+		if (!economyReport.departed.empty()) {
+			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: %d citizens left the city."), static_cast<int32>(economyReport.departed.size()));
+		}
 		if (society->GetLedger().Total() != 0) {
 			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: ledger total is %lld, expected 0."),
 				static_cast<int64>(society->GetLedger().Total()));

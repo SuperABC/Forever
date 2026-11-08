@@ -51,6 +51,21 @@
     <ClCompile Include="society\ledger.cpp">
       <Filter>society</Filter>
     </ClCompile>
+    <ClCompile Include="society\treasury.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\market.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\immigration.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\investor.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\emigration.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
     <ClCompile Include="society\policy.cpp">
       <Filter>society</Filter>
     </ClCompile>
@@ -222,6 +237,21 @@
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="society\ledger.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\treasury.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\market.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\immigration.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\investor.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\emigration.h">
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="society\policy.h">

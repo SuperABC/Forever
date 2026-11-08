@@ -40,7 +40,16 @@ enum class Flow {
 	CORPORATE_TAX,    // 企业税
 	DIVIDEND,         // 分红
 	RESTART_FUNDS,    // 重启集资
-	DEBT_WRITE_OFF,   // 重启时核销的旧负债
+	DEBT_WRITE_OFF,   // 核销的旧负债（企业重启、离城市民的欠款）
+	DEPOSIT,          // 市民存入政府
+	WITHDRAW,         // 市民从政府取出存款
+	DEPOSIT_INTEREST, // 存款利息（政府付给市民）
+	STOCK_TRADE,      // 股票成交款（买方付给卖方）
+	BOND_ISSUE,       // 国债认购款（市民付给政府）
+	BOND_REPAY,       // 国债本金偿还（政府付给市民）
+	BOND_INTEREST,    // 国债利息（政府付给市民）
+	PRINT_MONEY,      // 印钞（城市外账户直接打给政府）
+	EMIGRATE,         // 离城市民带走的正余额（付给城市外）
 	COUNT
 };
 const char* FlowName(Flow flow); // 中文名
@@ -57,8 +66,6 @@ public:
 	void SetInitialInjection(int64_t value) { initialInjection = value; }
 	// 当前全部注资(城市外账户余额取反)与开局注资之比x，范围[0,+inf)；没记过开局注资时返回1。
 	double InjectionRatio() const;
-	// 政府余额与开局注资之比，符号和政府余额相同；没记过开局注资时返回0。
-	double GovernmentRatio() const;
 
 	// from付给to amount分。amount<=0或者from==to不做任何事。不检查余额：账户可以变成负数
 	// （企业资金为负即倒闭，由上层判断）。

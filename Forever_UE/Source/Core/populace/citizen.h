@@ -278,6 +278,13 @@ public:
 	// 复活：清除isDead，血量恢复(<=0或超过maxHealth取满血)；不设房间/位置。
 	void Revive(float health = -1.f);
 
+	// 离开城市(Emigration)：departed置位、断开工作、结束行进、离开当前房间并清位置；不动“家”和户，
+	// 账户由Emigration结算。不可逆。
+	bool IsDeparted() const;
+	void Depart();
+	// 还在城里活动的人：没死、没离城。经济/流式生成等“人在不在场”的判断统一用它。
+	bool IsActive() const;
+
 private:
 	std::string name;
 	GENDER_TYPE gender;
@@ -331,4 +338,5 @@ private:
 	float health = 100.f;
 	float maxHealth = 100.f;
 	bool isDead = false;
+	bool departed = false;
 };

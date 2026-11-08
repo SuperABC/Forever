@@ -46,8 +46,14 @@ public:
 	Citizen* SpawnCitizen(const std::string& name, GENDER_TYPE gender, int birthYear, int birthMonth, int birthDay,
 		const std::string& schedulerId, const std::string& avatar = "");
 
+	// 运行中迁入一位成年新市民（Immigration用）：随机性别、随机姓名（重名重试）、20~45岁随机生日、
+	// 随机日程类型，不设住处/积蓄/工作。姓名一直撞车时返回nullptr。
+	Citizen* SpawnImmigrant(int currentYear);
+
 	// 模拟结束时的"当前年份"，Init()跑完之前返回默认值2000。
 	int GetCurrentYear() const;
+	// 开局（Init跑完）时的市民总数，迁入机制以它为基准。状态，随人口段存档。
+	int GetInitialPopulation() const { return initialPopulation; }
 
 private:
 	// 按config选取名算法创建Name，并登记剧情占位名，见populace.md。
@@ -77,6 +83,7 @@ private:
 
 	std::vector<Citizen*> citizens;
 	int currentYear = 2000;
+	int initialPopulation = 0;
 
 	// 虚拟学校/班级，GenerateEducations()生成，~Populace()统一delete。
 	std::vector<SchoolClass*> schoolClasses;

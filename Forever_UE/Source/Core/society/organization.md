@@ -7,7 +7,7 @@
 `ShopOrganization`）+一份自己的`Script*`（构造方式和`Job::Job()`同一套机制，见下
 "Script配置"一节），可以占多个`Component`（也可以要多种不同类型的`Component`，
 具体由mod的static `GetRequirements()`决定）。构造时**自己**遍历claimed components的每个
-workspace room、调`mod->DesignJobsForRoom(...)`拿到要配的job类型字符串列表，
+workspace room、调`mod->DesignJobsForRoom(..., reset)`让mod往`vacancies`(岗位计划，`{房间名,类型}`)追加，再由`ReconcileJobs`按计划new出Job，
 逐条`new Job(...)`——`Job`的分配/释放全程在Core侧（`OrganizationMod`所在的
 `Dependence`层看不到`Job`这个Core类型，见下"分层约束"）。
 
@@ -24,7 +24,7 @@ workspace room、调`mod->DesignJobsForRoom(...)`拿到要配的job类型字符�
 ```cpp
 static const unordered_map<string, pair<int,int>>& GetRequirements(); // 注册时交给工厂，不是实例方法
 virtual void DesignJobsForRoom(const std::string& componentType, const std::string& componentName,
-	const std::string& roomType, const std::string& roomName, int workspaceCapacity) = 0; // 写进this->vacancies
+	const std::string& roomType, const std::string& roomName, int workspaceCapacity, bool reset) = 0; // 追加进this->vacancies，reset先清空
 ```
 
 真正的`Component`/`Room`遍历和`new Job(...)`全部在`Organization`（Core侧代码）
@@ -89,16 +89,15 @@ const unordered_map<string, pair<int, int>>& ShopOrganization::GetRequirements()
 }
 
 void ShopOrganization::DesignJobsForRoom(const std::string& componentType, const std::string&,
-	const std::string& roomType, const std::string&, int workspaceCapacity) {
-	if (componentType == "component_shop" && roomType == "room_shop" && workspaceCapacity > 0) {
-		vacancies.push_back("job_shop_saler");
+	const std::string& roomType, const std::string& roomName, int workspaceCapacity, bool reset) {
+	if (reset) vacancies.clear();
+	if (componentType == "component_shop" && roomType == "room_shop") {
+		for (int i = 0; i < workspaceCapacity; i++) vacancies.push_back({ roomName, "job_shop_saler" });
 	}
 }
 ```
 
-**每个`room_shop`类型的workspace room恰好配一个店员**（不管这个房间
-`WorkspaceCapacity()`具体是多少，`workspaceCapacity==0`就不配）——不是"按容量
-数量重复配"，接口本身支持"一个room配多个/多种不同类型Job"，只是这里用不上。
+**每个`room_shop`类型的workspace room按`WorkspaceCapacity()`配满编的店员**，接口同样支持"一个room配多种不同类型Job"。
 `GetPower()`固定返回`1.f`（目前只有这一种组织类型，权重值本身没有意义）。
 
 ### Script配置：和Job同一套`scriptModName`/`milestoneNames`机制
@@ -151,3 +150,8 @@ Change，是为将来"组织级调度"（比如发工资）预留的接口，不
 - 被谁依赖：`Society`（持有所有权，`Society::Init`构造）、
   `UForeverStoryFrameworkComponent::BroadcastGameStart`（`GetScript()`+
   `Organization::GetJobs()`遍历广播game_start，见.md"Script配置"一节）。
+
+## 股份
+- 每个组织开局发行`Organization::kTotalShares`（10000）股，当前总股数是`GetTotalShares()`（增发会抬高它，倒闭重启时复位，随社会段存档）。`shareholders`是`{市民, 股数}`列表，没被市民持有的是库存股（`TreasuryShares`=总股数−市民持股）。
+- `SharesOf`/`AdjustShares`查询和调整某个市民的持股（归零时移出列表，不检查总量，由`Market`保证不超发）；`SplitShares`按权重把总股数分给一组市民（人数不够时重新归一化，最后一位补齐余数）。
+- 开局由`Society::AssignShareholders`按mod占股比例分配，之后随`Market`成交变化；分红按持股数，见`economy.md`/`market.md`。

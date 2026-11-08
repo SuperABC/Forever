@@ -88,6 +88,11 @@
     <ClCompile Include="populace\household.cpp" />
     <ClCompile Include="society\economy.cpp" />
     <ClCompile Include="society\ledger.cpp" />
+    <ClCompile Include="society\treasury.cpp" />
+    <ClCompile Include="society\market.cpp" />
+    <ClCompile Include="society\investor.cpp" />
+    <ClCompile Include="society\emigration.cpp" />
+    <ClCompile Include="society\immigration.cpp" />
     <ClCompile Include="society\policy.cpp" />
     <ClCompile Include="society\settlement.cpp" />
     <ClCompile Include="society\society.cpp" />
@@ -147,6 +152,11 @@
     <ClInclude Include="populace\household.h" />
     <ClInclude Include="society\economy.h" />
     <ClInclude Include="society\ledger.h" />
+    <ClInclude Include="society\treasury.h" />
+    <ClInclude Include="society\market.h" />
+    <ClInclude Include="society\investor.h" />
+    <ClInclude Include="society\emigration.h" />
+    <ClInclude Include="society\immigration.h" />
     <ClInclude Include="society\policy.h" />
     <ClInclude Include="society\settlement.h" />
     <ClInclude Include="society\society.h" />

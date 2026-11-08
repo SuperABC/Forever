@@ -25,4 +25,4 @@
 - 被谁依赖：每日经济驱动（EconSim、`AForeverFrameworkActor`）。
 
 ## `InitFunds`
-`InitFunds(society, citizen, amountCents=-1)`：给一个市民建钱包并注入初始资金(`Outside→citizen, INJECTION`，计入`initialInjection`基准)，缺省金额取N(5000元, 2000元)。spawn_npc出来的每个市民都调用，不管是否接入经济系统，这样之后被玩家操控时直接有钱可用。
+`InitFunds(society, citizen, amountCents=-1, resetBaseline=true)`：给一个市民建钱包并注入初始资金(`Outside→citizen, INJECTION`，默认计入`initialInjection`基准；迁入人口传`resetBaseline=false`，基准保持开局值)，缺省金额取N(5000元, 2000元)。spawn_npc出来的每个市民都调用，不管是否接入经济系统，这样之后被玩家操控时直接有钱可用。

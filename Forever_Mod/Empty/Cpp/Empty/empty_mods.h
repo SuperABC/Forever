@@ -257,7 +257,7 @@ public:
 		return requirements;
 	}
 	virtual void DesignJobsForRoom(const std::string&, const std::string&,
-		const std::string&, const std::string&, int) override {}
+		const std::string&, const std::string&, int, bool) override {}
 
 private:
 	std::string name;

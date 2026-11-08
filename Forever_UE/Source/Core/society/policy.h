@@ -18,9 +18,16 @@ struct GovernmentPolicy {
 	int retirementAge = 60;           // 年满此年龄领养老金；18岁到此年龄之间没有工作的领失业补助
 	int adultAge = 18;                // 低于此年龄是未成年，领未成年补助
 
-	// 负反馈系数(派生数据，每天由Economy::SyncIndustry按政府余额/开局注资重算，不存档)：
+	// 金融参数，见treasury.md/market.md/investor.md。利率单位是基点(1bp=0.01%)，年化。
+	int depositRateBp = 300;          // 存款年利率3%，每月结息
+	int bondPremiumBp = 300;          // 国债年利率 = 存款利率 + 此溢价
+	int bondTermDays = 360;           // 国债期限（游戏天）
+	int64_t reserve = 200000;         // 市民自留的现金缓冲 2000元，超出的才拿去存款/炒股/买国债
+	int investIntervalDays = 7;       // 每个市民每隔多少天做一次存款/炒股决策（按下标错开）
+
+	// 负反馈系数(派生数据，每天由Economy::SyncIndustry按政府净头寸/开局注资重算，不存档)：
 	// 企业税/所得税/消费税/房租税 = 基础税率 × taxFactor(政府盈余越多越低，范围[0,2])，关税不参与；
-	// 三种补助 = 基础补助 × allowanceFactor(政府盈余越多越高)。
+	// 三种补助 = 基础补助 × allowanceFactor(政府盈余越多越高)。政府净头寸=政府账户−存款负债−国债负债。
 	double taxFactor = 1.0;
 	double allowanceFactor = 1.0;
 

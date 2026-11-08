@@ -106,7 +106,7 @@
 
 `Populace`是与`Map`平级的顶层Core类（不知道Map存在），Map只单向读外部传入的`Populace`，详见`Source/Core/populace/populace.md`：
 
-- `ComputeAccommodationTarget()`：遍历所有building的room，`IsResidential()`的累加`ResidentialCapacity()`并数住宅房间数；累计容量小于住宅房间数两倍时目标人数=住宅房间数（每间至少一人），否则=累计容量的一半。`ComputeWorkCapacity()`：全部`IsWorkspace()`房间的`WorkspaceCapacity()`之和，不参与人口随机采样，`Populace::Init(accommodation, workCapacity)`在随机扰动之后用它给人数封顶，避免劳动力远多于岗位造成大面积失业。
+- `ComputeAccommodationTarget()`：遍历所有building的room，`IsResidential()`的累加`ResidentialCapacity()`并数住宅房间数；累计容量小于住宅房间数两倍时目标人数=住宅房间数（每间至少一人），否则=累计容量的一半。`ComputeWorkCapacity()`：全部`IsWorkspace()`房间的`WorkspaceCapacity()×2`之和（容量是满编，岗位最多可超编到2倍，所以劳动力上限按2倍算），不参与人口随机采样，`Populace::Init(accommodation, workCapacity)`在随机扰动之后用它给人数封顶，避免劳动力远多于岗位造成大面积失业。
 - `GetAllComponents()`：拍平每个Building的`GetComponents()`，供`EnsureSocietyGenerated()`喂给`Society::Init`（Society不知道Map/Building）。
 - `Checkin(populace)`是**两个独立步骤**，"房产归属"决定每个zone/building/room的`owner`/`stated`，"住处分配"决定谁实际住进哪个room（owner可以从没住过，相当于房东），见`room.md`：
   1. **房产归属**：只在有成年citizen时进行。每个zone先`GetRandom(100)`在"公有（`stateOwnedChance`，写在各自mod里，换算百分数）/整个zone归一个随机成年人私有（`kZoneOwnershipChance`=2）/下探到各building"三选一；building一级同样三选一（公有/私有`kBuildingOwnershipChance`=5/下探到各room各自随机`SetOwner`）。**一旦某级判定"整体统一归属"，owner/stated一路级联写到其下所有building/room**；下探分支里上一级保持默认（`nullptr`/`false`），不需要显式重置（只在统一归属分支才调setter）。不属于任何zone的独立building单独走一遍building级roll，**跳过`GetParentZone()`非空的**（避免覆盖zone级联下来的归属），详见`populace.md`"房产归属"。

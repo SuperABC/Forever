@@ -43,12 +43,35 @@ public:
 		long long demand = 0, sold = 0, unmet = 0;
 		int64_t revenue = 0;
 		int newBankruptcies = 0, restarts = 0;
+		int hired = 0;                 // 再就业配对成功人数
+		int dismissedByBankruptcy = 0; // 企业倒闭裁掉的在岗人数
+		int positionsReopened = 0;     // 重启企业重开/新建的岗位数
+		int positionsOpened = 0, positionsClosed = 0, dismissed = 0; // 月结扩招/裁员
 	};
 	void PrintRunSummary(const std::string& title, const ServiceTotals& totals);
+
+	// 一个月内的金融/人口流动累计，由主循环累加后传入PrintFinance。
+	struct FinanceTotals {
+		int immigrated = 0;           // 迁入人数
+		int departed = 0;             // 离城人数
+		int departedHouseholds = 0;   // 离城户数
+		int departedImmigrants = 0;   // 离城的人里，本次模拟中迁入的人数
+		int64_t turnover = 0;         // 股票成交额
+		int64_t volume = 0;           // 股票成交股数
+		int64_t sharesIssued = 0, sharesSubscribed = 0, issueProceeds = 0; // 增发新股数/老股东认购数/募资
+		int64_t deposited = 0, withdrawn = 0;       // 存入/取出
+		int64_t depositInterest = 0, bondInterest = 0, interestTax = 0;
+		int64_t bondIssued = 0, bondRepaid = 0;     // 国债新发/到期偿还
+		int64_t printed = 0;          // 印钞
+	};
+	// 输出人口迁入迁出、股市、存款、国债、印钞的月度概况，并记入逐月金融汇总表。
+	// immigrantsActive是本次模拟迁入、目前仍在场的人数。
+	void PrintFinance(const std::string& title, const std::string& label, const FinanceTotals& totals, int immigrantsActive);
 
 	// 跨月汇总表用：记下本期末的几个关键余额。
 	void RecordSummaryRow(const std::string& label);
 	void PrintSummaryTable();
+	void PrintFinanceTable();
 
 private:
 	struct Snapshot {
@@ -85,4 +108,12 @@ private:
 		std::map<std::string, long long> imported, exported, internal;
 	} industryPeriod;
 	std::vector<SummaryRow> summary;
+
+	struct FinanceRow {
+		std::string label;
+		int active = 0, immigrated = 0, departed = 0, immigrantsActive = 0;
+		int64_t turnover = 0, deposits = 0, bonds = 0, printed = 0, government = 0, net = 0, marketCap = 0;
+		double avgPrice = 0.0, avgYield = 0.0;
+	};
+	std::vector<FinanceRow> financeRows;
 };

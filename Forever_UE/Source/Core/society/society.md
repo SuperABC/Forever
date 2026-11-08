@@ -117,14 +117,15 @@ ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。
 
 ## 股东与岗位（Step 4）
 - `AssignShareholders`：新开局为每个组织选股东——mod的`shareholders`占股比例归一化，随机选对应数量个**不同的**
-  成年市民；成年人不够时有多少选多少并重新归一化。股东名单和占股随社会段存档。
+  成年市民；成年人不够时有多少选多少并重新归一化，再按`Organization::SplitShares`换算成股数（总数`kTotalShares`=10000，
+  最后一位补齐余数）。之后持股随股市成交变化，没被市民持有的是库存股。股东名单和持股数随社会段存档。
 - 岗位按房间容纳量的一半定员：商店房间10→5个店员，仓库房间2→1个管理员，工坊房间20→10个工人。
 
 ## 倒闭（Step 6）
-企业资金为负即倒闭，员工不离职但停发工资；股东凑齐资金后重启，规则见`economy.md`。`Organization`的倒闭标记和重启后更新的股东名单随社会段存档。
+企业资金为负即倒闭，员工全部裁掉（变失业者）；股东凑齐资金后重启，岗位恢复满编并由每天的再就业（`Society::MatchUnemployed`）重新招人，规则见`economy.md`。`MatchUnemployed`每天把在场的成年无工作者随机配对到开放空缺（`Job::IsOpen()`），`RecruitCitizens`是它的开局入口。`Organization`的倒闭标记和重启后更新的股东名单随社会段存档。
 
 ## 资金（Step 3）
-- `Society`持有一个`Ledger`（`ledger.h`，全城账户，总和恒为0）和一份`GovernmentPolicy`（`policy.h`）。
+- `Society`持有一个`Ledger`（`ledger.h`，全城账户，总和恒为0）、一份`GovernmentPolicy`（`policy.h`）、政府负债簿`Treasury`（存款/国债，`treasury.h`）和股市`Market`（`market.h`）。`GovernmentNetRatio()`=政府净头寸/开局注资，负反馈用它。
 - `OwnerOf(room)`：房间所在Component被哪个组织claim，就归哪个组织；没有组织占用的房间归政府。结算货款时用它把
   Industry流水里的仓库/工坊对应到付款方，索引按`organizations`惰性重建。
 - 开局注资和货款结算见`settlement.md`。账本余额写进社会段（市民/组织按下标引用）。

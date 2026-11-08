@@ -45,6 +45,9 @@ void Job::SetOccupant(Citizen* citizen) {
 	}
 }
 
+bool Job::IsOpen() const { return !closed; }
+void Job::SetClosed(bool value) { closed = value; }
+
 void Job::DailyPlan(const Time& currentTime, PostHandle* post) {
 	if (mod) mod->DailyPlan(currentTime, post);
 }

@@ -6,6 +6,7 @@
 #include "populace/scheduler.h"
 #include "populace/experience.h"
 #include "map/room.h"
+#include "society/job.h"
 
 #include <algorithm>
 #include <cmath>
@@ -390,6 +391,22 @@ void Citizen::Die() {
 	SetCurrentRoom(nullptr);
 	ClearPosition();
 }
+
+bool Citizen::IsDeparted() const { return departed; }
+
+void Citizen::Depart() {
+	if (departed) return;
+	departed = true;
+	if (job) {
+		job->SetOccupant(nullptr);
+		job = nullptr;
+	}
+	EndWalk();
+	SetCurrentRoom(nullptr);
+	ClearPosition();
+}
+
+bool Citizen::IsActive() const { return !isDead && !departed; }
 
 void Citizen::Revive(float newHealth) {
 	isDead = false;

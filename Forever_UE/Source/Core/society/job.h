@@ -28,6 +28,11 @@ public:
 	Citizen* GetOccupant() const; // 当前持有这份工作的市民，不持有
 	void SetOccupant(Citizen* citizen);
 
+	// 岗位是否开放：扩招/重开时开放，裁员/倒闭时关闭。Job对象只增不删（存档下标和脚本键依赖jobs的顺序），
+	// 关闭的岗位不算空缺、不招人、不发工资。关闭时占用者必须已经被清掉。
+	bool IsOpen() const;
+	void SetClosed(bool value);
+
 	// 生成今天的调度表：转调mod->DailyPlan，结果就是mod->plans。@post透传给mod。
 	void DailyPlan(const Time& currentTime, PostHandle* post);
 	const std::unordered_map<std::string, Time>& GetPlans() const;
@@ -42,4 +47,5 @@ private:
 	Script* script;
 	Room* position;
 	Citizen* occupant = nullptr;
+	bool closed = false;
 };

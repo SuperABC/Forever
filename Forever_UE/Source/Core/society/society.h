@@ -8,6 +8,8 @@
 
 #include "society/ledger.h"
 #include "society/policy.h"
+#include "society/treasury.h"
+#include "society/market.h"
 
 #include "common/utility.h"
 #include "common/handle.h"
@@ -36,6 +38,9 @@ public:
 
 	// 阶段2：把成年且未到退休年龄、还没有job的市民随机匹配到空缺的Job上。
 	void RecruitCitizens(const std::vector<Citizen*>& citizens, int currentYear);
+	// 再就业：和RecruitCitizens同一套随机配对，只招在场的人、只填开放的岗位；每天调一次，
+	// 让被裁员/企业倒闭的人和扩招/重启空出的岗位尽快对上。返回新就业人数。
+	int MatchUnemployed(const std::vector<Citizen*>& citizens, int currentYear);
 
 	// 给一个开局之后才接入经济系统的市民(spawn_npc economy:true)单独求职：已有工作/不在工作年龄/没有
 	// 空缺岗位都返回false，否则随机挑一个空缺岗位安排上并返回true。
@@ -64,6 +69,13 @@ public:
 	const Ledger& GetLedger() const { return ledger; }
 	const GovernmentPolicy& GetPolicy() const { return policy; }
 	GovernmentPolicy& GetPolicy() { return policy; } // 负反馈系数由Economy每天写入
+	// 政府的存款/国债负债簿和股市，见treasury.h/market.h。
+	Treasury& GetTreasury() { return treasury; }
+	const Treasury& GetTreasury() const { return treasury; }
+	Market& GetMarket() { return market; }
+	const Market& GetMarket() const { return market; }
+	// 政府净头寸与开局注资之比，符号和净头寸相同；没记过开局注资时返回0。负反馈用它，借款不会抬高它，印钞会。
+	double GovernmentNetRatio() const;
 	// 上一次月结（分红）所处的月份（年*12+月），0=还没有开始计月。状态，随社会段存档。
 	int GetLastMonthKey() const { return lastMonthKey; }
 	void SetLastMonthKey(int value) { lastMonthKey = value; }
@@ -80,6 +92,8 @@ private:
 
 	Ledger ledger;
 	GovernmentPolicy policy;
+	Treasury treasury;
+	Market market;
 	int lastMonthKey = 0;
 
 	// 房间 -> 占用它的组织，按organizations惰性重建（Init/读档后置脏）。

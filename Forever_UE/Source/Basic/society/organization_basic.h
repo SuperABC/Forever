@@ -15,7 +15,8 @@ public:
 	static const std::unordered_map<std::string, std::pair<int, int>>& GetRequirements();
 
 	virtual void DesignJobsForRoom(const std::string& componentType, const std::string& componentName,
-		const std::string& roomType, const std::string& roomName, int workspaceCapacity) override;
+		const std::string& roomType, const std::string& roomName, int workspaceCapacity, bool reset) override;
+	virtual void MonthlySettle(const OrganizationMonthlyState& state) override;
 	virtual void CollectServices(Container* script, const std::vector<std::string>& stockTypes,
 		PostHandle* post) override;
 	virtual void ApplyServiceUsage(const std::string& name, int count, Container* script) override;
@@ -42,7 +43,8 @@ public:
 	static const std::unordered_map<std::string, std::pair<int, int>>& GetRequirements();
 
 	virtual void DesignJobsForRoom(const std::string& componentType, const std::string& componentName,
-		const std::string& roomType, const std::string& roomName, int workspaceCapacity) override;
+		const std::string& roomType, const std::string& roomName, int workspaceCapacity, bool reset) override;
+	virtual void MonthlySettle(const OrganizationMonthlyState& state) override;
 
 public:
 	virtual int GetInstanceCounter() const override { return count; }

@@ -294,6 +294,7 @@ void Populace::Init(int accommodation, int workCapacity) {
 	AssignSchedulers();
 	GenerateRomanticRelations();
 	GenerateEducations();
+	initialPopulation = static_cast<int>(citizens.size());
 }
 
 void Populace::InitNames() {
@@ -379,6 +380,23 @@ Citizen* Populace::SpawnCitizen(const string& name, GENDER_TYPE gender, int birt
 	return citizen;
 }
 
+Citizen* Populace::SpawnImmigrant(int year) {
+	constexpr int kMinAge = 20;
+	constexpr int kAgeSpan = 26; // 20~45岁
+	constexpr int kNameAttempts = 8;
+	if (!name) return nullptr;
+
+	GENDER_TYPE gender = GetRandom(2) == 0 ? GENDER_MALE : GENDER_FEMALE;
+	int birthYear = year - kMinAge - GetRandom(kAgeSpan);
+	int birthMonth = 1 + GetRandom(12);
+	int birthDay = 1 + GetRandom(28);
+	for (int attempt = 0; attempt < kNameAttempts; attempt++) {
+		string candidate = name->GenerateName(gender == GENDER_MALE, gender == GENDER_FEMALE, true);
+		if (Citizen* citizen = SpawnCitizen(candidate, gender, birthYear, birthMonth, birthDay, "")) return citizen;
+	}
+	return nullptr;
+}
+
 const vector<Citizen*>& Populace::GetCitizens() const { return citizens; }
 int Populace::GetCurrentYear() const { return currentYear; }
 
@@ -426,7 +444,7 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 	if (crossedDay) {
 		for (Citizen* citizen : citizens) {
 			Scheduler* scheduler = citizen->GetScheduler();
-			if (!scheduler) continue;
+			if (!scheduler || citizen->IsDeparted()) continue;
 			scheduler->DailyPlan(currentTime, post);
 			for (const auto& [node, time] : scheduler->GetPlans()) {
 				schedulerTimerSet.insert({ time, citizen, node });
@@ -440,7 +458,7 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 		const auto& [target, citizen, node] = *it;
 		if (currentTime < target) break;
 		Scheduler* scheduler = citizen->GetScheduler();
-		if (scheduler) {
+		if (scheduler && !citizen->IsDeparted()) {
 			vector<Change*> changes = scheduler->ExecNode(node, post);
 			onActions(citizen, changes);
 		}

@@ -170,3 +170,7 @@ Actor层。
 
 ## 到岗选项与玩家交互
 工厂工人(`job_factory_worker.script`)和商店店员(`job_shop_saler.script`)在`npc_arrive`(到自己的工作房间)时给员工`add_option`("制作汉堡"/"购买汉堡")，下班`remove_option`。点选项是`option_dialog`，也会发给Job脚本(不止Scheduler脚本)：工人→`start_puzzle("puzzle_anykey")`，结束的`puzzle_result`(无过滤字段)→`pay_wage 10000`；店员→`open_shop`。
+
+## 开放/关闭
+
+`Job::IsOpen()`/`SetClosed()`：岗位关闭后不算空缺、不招人、不发工资，占用者必须已被清掉。月结裁员和企业倒闭走关闭，扩招和重启走重开（先重开已有的再新建），Job对象只增不删——存档按`Organization::jobs`的顺序写、脚本键`job:<组织下标>:<岗位下标>`依赖这个顺序。存档里每个Job记录末尾追加一个`U8 closed`。

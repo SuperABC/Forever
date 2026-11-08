@@ -31,7 +31,7 @@ const vector<Citizen*>& Household::GetMembers() const { return members; }
 vector<Citizen*> Household::GetAdults(int currentYear) const {
 	vector<Citizen*> adults;
 	for (Citizen* member : members) {
-		if (member && member->GetAge(currentYear) >= 18) adults.push_back(member);
+		if (member && member->IsActive() && member->GetAge(currentYear) >= 18) adults.push_back(member);
 	}
 	return adults;
 }

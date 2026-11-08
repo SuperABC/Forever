@@ -40,7 +40,7 @@ const char* ShopRoom::GetName() {
 
 void ShopRoom::SetProperty() {
 	isWorkspace = true;
-	workspaceCapacity = 10;
+	workspaceCapacity = 5;
 	rent = 2000;
 
 	doorSpecs["room"].mesh = "/Game/Asset/Meshes/Cube.Cube";
@@ -68,9 +68,9 @@ const char* WarehouseRoom::GetName() {
 void WarehouseRoom::SetProperty() {
 	isStorage = true;
 	storageType = "storage_shop";
-	// 仓库也有管理员：容纳量2，Organization按容纳量一半定员。
+	// 仓库也有管理员：容纳量1，Organization按容纳量满编定员。
 	isWorkspace = true;
-	workspaceCapacity = 2;
+	workspaceCapacity = 1;
 	rent = 2000;
 }
 
@@ -141,7 +141,7 @@ void FarmRoom::SetProperty() {
 	isManufacture = true;
 	manufactureTypes = { "manufacture_farm" };
 	isWorkspace = true;
-	workspaceCapacity = 20;
+	workspaceCapacity = 10;
 	rent = 2000;
 }
 
@@ -159,7 +159,7 @@ void RanchRoom::SetProperty() {
 	isManufacture = true;
 	manufactureTypes = { "manufacture_ranch" };
 	isWorkspace = true;
-	workspaceCapacity = 20;
+	workspaceCapacity = 10;
 	rent = 2000;
 }
 
@@ -177,6 +177,6 @@ void FoodFactoryRoom::SetProperty() {
 	isManufacture = true;
 	manufactureTypes = { "manufacture_food_factory" };
 	isWorkspace = true;
-	workspaceCapacity = 20;
+	workspaceCapacity = 10;
 	rent = 2000;
 }

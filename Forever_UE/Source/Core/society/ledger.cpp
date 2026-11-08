@@ -36,11 +36,6 @@ double Ledger::InjectionRatio() const {
 	return max(0.0, static_cast<double>(-outside) / static_cast<double>(initialInjection));
 }
 
-double Ledger::GovernmentRatio() const {
-	if (initialInjection <= 0) return 0.0;
-	return static_cast<double>(government) / static_cast<double>(initialInjection);
-}
-
 const char* FlowName(Flow flow) {
 	switch (flow) {
 	case Flow::INJECTION: return "城市外注资";
@@ -61,6 +56,15 @@ const char* FlowName(Flow flow) {
 	case Flow::DIVIDEND: return "分红";
 	case Flow::RESTART_FUNDS: return "重启集资";
 	case Flow::DEBT_WRITE_OFF: return "核销负债";
+	case Flow::DEPOSIT: return "存款";
+	case Flow::WITHDRAW: return "取款";
+	case Flow::DEPOSIT_INTEREST: return "存款利息";
+	case Flow::STOCK_TRADE: return "股票成交";
+	case Flow::BOND_ISSUE: return "国债认购";
+	case Flow::BOND_REPAY: return "国债还本";
+	case Flow::BOND_INTEREST: return "国债利息";
+	case Flow::PRINT_MONEY: return "印钞";
+	case Flow::EMIGRATE: return "离城带走";
 	default: return "?";
 	}
 }

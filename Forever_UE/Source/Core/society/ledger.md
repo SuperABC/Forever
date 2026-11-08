@@ -13,6 +13,9 @@
 ## 依赖关系
 - 被谁依赖：`Society`持有一个`Ledger`；`Settlement`通过它转账。
 
+## 金融类转账（Flow）
+`Flow`除了货款、税、工资等，还有：`DEPOSIT`/`WITHDRAW`（存取款）、`DEPOSIT_INTEREST`、`STOCK_TRADE`（股票成交款）、`BOND_ISSUE`/`BOND_REPAY`/`BOND_INTEREST`（国债）、`PRINT_MONEY`（城市外账户直接打给政府的印钞）、`EMIGRATE`（离城市民带走的正余额付给城市外）；`DEBT_WRITE_OFF`除了企业重启，也用于核销离城市民的欠款。`flowTotals`的长度随`Flow::COUNT`变化。存款、国债本金这类"政府欠谁"的记录不在账本里，在`Treasury`。
+
 ## 开局注资
 
-`initialInjection`：开局`InitFunds`给全城(市民+组织)的注资总额，三重负反馈的基准，随社会段存档。`InjectionRatio()`=当前全部注资(城市外账户取反)/开局注资，`GovernmentRatio()`=政府余额/开局注资(带符号)，见`policy.md`。
+`initialInjection`：开局`InitFunds`给全城(市民+组织)的注资总额，三重负反馈的基准，随社会段存档。`InjectionRatio()`=当前全部注资(城市外账户取反)/开局注资，政府一侧的比例用`Society::GovernmentNetRatio()`（政府净头寸/开局注资，见`treasury.md`、`policy.md`）。

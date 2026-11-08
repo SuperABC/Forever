@@ -45,14 +45,14 @@ void Settlement::InitFunds(Society& society, const vector<Citizen*>& citizens) {
 	ledger.SetInitialInjection(-ledger.Balance(Party::Outside()));
 }
 
-void Settlement::InitFunds(Society& society, Citizen* citizen, int64_t amountCents) {
+void Settlement::InitFunds(Society& society, Citizen* citizen, int64_t amountCents, bool resetBaseline) {
 	if (!citizen) return;
 	Ledger& ledger = society.GetLedger();
 	if (amountCents < 0) {
 		amountCents = static_cast<int64_t>(llround(max(0.f, GetRandomNormal(kCitizenFundsMean, kCitizenFundsStddev))));
 	}
 	ledger.Transfer(Party::Outside(), Party::Of(citizen), amountCents, Flow::INJECTION);
-	ledger.SetInitialInjection(-ledger.Balance(Party::Outside()));
+	if (resetBaseline) ledger.SetInitialInjection(-ledger.Balance(Party::Outside()));
 }
 
 GoodsSettlementReport Settlement::SettleGoods(Society& society, const Industry& industry) {
@@ -114,8 +114,12 @@ RentReport Settlement::PayRents(Society& society, const vector<Room*>& rooms, in
 			for (size_t i = 0; i < households.size(); i++) {
 				// 户里的成年人均摊；没有成年人（理论上不会发生）时由全体成员均摊。
 				vector<Citizen*> payers = households[i]->GetAdults(currentYear);
-				if (payers.empty()) payers = households[i]->GetMembers();
-				if (payers.empty()) continue;
+				if (payers.empty()) {
+					for (Citizen* member : households[i]->GetMembers()) {
+						if (member && member->IsActive()) payers.push_back(member);
+					}
+				}
+				if (payers.empty()) continue; // 全家离城或去世的户不付房租
 				vector<int64_t> shares = SplitEvenly(householdShares[i], payers.size());
 				for (size_t k = 0; k < payers.size(); k++) ledger.Transfer(Party::Of(payers[k]), landlord, shares[k], Flow::RENT);
 			}

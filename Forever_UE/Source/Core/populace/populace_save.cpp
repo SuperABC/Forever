@@ -88,6 +88,7 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 	}
 
 	w.I32(populace.currentYear);
+	w.I32(populace.initialPopulation);
 
 	// 取名器：注册id + 占位名(已经用掉/剧情保留的名字，之后新生成的市民不会重名)。
 	const Name* name = populace.name;
@@ -135,6 +136,7 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		w.I32(c->avatarIndex);
 		w.U8(c->statsActive ? 1 : 0);
 		w.F32(c->satiety);
+		w.U8(c->departed ? 1 : 0);
 		// 即时行进状态和"是否已实例化"(追加在记录最后，按项目约定没升段版本)：路径首点是当前位置，
 		// 读档后沿同一条路继续走；wasSpawned让UE侧读档后先把这些市民生成出来，见citizen.md。
 		w.U8(c->wasSpawned ? 1 : 0);
@@ -267,6 +269,7 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 		unique_ptr<Populace> guard(new Populace());
 		Populace* populace = guard.get();
 		populace->currentYear = r.I32();
+		populace->initialPopulation = r.I32();
 
 		if (r.U8() != 0) {
 			string nameId = r.Str();
@@ -328,6 +331,7 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			c->avatarIndex = r.I32();
 			c->statsActive = r.U8() != 0;
 			c->satiety = r.F32();
+			c->departed = r.U8() != 0;
 			c->wasSpawned = r.U8() != 0;
 			if (r.U8() != 0) {
 				Room* destination = SaveRefs::ReadRoom(map, r);

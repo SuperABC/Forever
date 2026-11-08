@@ -41,6 +41,12 @@ Society::~Society() {
 	}
 }
 
+double Society::GovernmentNetRatio() const {
+	int64_t injection = ledger.GetInitialInjection();
+	if (injection <= 0) return 0.0;
+	return static_cast<double>(treasury.NetPosition(ledger)) / static_cast<double>(injection);
+}
+
 Party Society::OwnerOf(const Room* room) const {
 	if (roomOwnersDirty) {
 		roomOwners.clear();
@@ -73,19 +79,17 @@ void Society::AssignShareholders(const vector<Citizen*>& citizens, int currentYe
 
 		// 不放回随机抽样：成年人不够时只选得出多少算多少。
 		vector<Citizen*> pool = adults;
-		vector<Organization::Shareholder> chosen;
+		vector<Citizen*> picked;
+		vector<float> pickedShare;
 		for (float share : mod->shareholders) {
 			if (pool.empty()) break;
 			int index = GetRandom(static_cast<int>(pool.size()));
-			chosen.push_back({ pool[index], share / sum });
+			picked.push_back(pool[index]);
+			pickedShare.push_back(share);
 			pool[index] = pool.back();
 			pool.pop_back();
 		}
-		// 人数不够时把剩余占股按比例重新归一化。
-		float chosenSum = 0.f;
-		for (const auto& s : chosen) chosenSum += s.ratio;
-		for (auto& s : chosen) s.ratio /= chosenSum;
-		organization->SetShareholders(chosen);
+		organization->SetShareholders(Organization::SplitShares(picked, pickedShare));
 	}
 }
 
@@ -162,17 +166,22 @@ void Society::Init(const vector<Component*>& components) {
 }
 
 void Society::RecruitCitizens(const vector<Citizen*>& citizens, int currentYear) {
+	MatchUnemployed(citizens, currentYear);
+}
+
+int Society::MatchUnemployed(const vector<Citizen*>& citizens, int currentYear) {
 	vector<Job*> vacancies;
 	for (Organization* organization : organizations) {
 		for (Job* job : organization->GetJobs()) {
-			if (job && !job->GetOccupant()) vacancies.push_back(job);
+			if (job && job->IsOpen() && !job->GetOccupant()) vacancies.push_back(job);
 		}
 	}
+	if (vacancies.empty()) return 0;
 
 	// 只招成年人：未成年人和老年人（>=退休年龄）不工作。
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
-		if (!citizen || !citizen->IsInEconomy() || citizen->GetJob()) continue;
+		if (!citizen || !citizen->IsActive() || !citizen->IsInEconomy() || citizen->GetJob()) continue;
 		int age = citizen->GetAge(currentYear);
 		if (age >= kMinAdultAge && age < policy.retirementAge) adults.push_back(citizen);
 	}
@@ -192,6 +201,7 @@ void Society::RecruitCitizens(const vector<Citizen*>& citizens, int currentYear)
 		vacancies[i]->SetOccupant(adults[i]);
 		adults[i]->SetJob(vacancies[i]);
 	}
+	return static_cast<int>(n);
 }
 
 Job* Society::FindJobByScript(const Container* script) const {
@@ -222,7 +232,7 @@ bool Society::RecruitCitizen(Citizen* citizen, int currentYear) {
 	vector<Job*> vacancies;
 	for (Organization* organization : organizations) {
 		for (Job* job : organization->GetJobs()) {
-			if (job && !job->GetOccupant()) vacancies.push_back(job);
+			if (job && job->IsOpen() && !job->GetOccupant()) vacancies.push_back(job);
 		}
 	}
 	if (vacancies.empty()) return false;

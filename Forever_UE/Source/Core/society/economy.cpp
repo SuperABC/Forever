@@ -3,6 +3,7 @@
 #include "society/society.h"
 #include "society/organization.h"
 #include "society/job.h"
+#include "society/emigration.h"
 #include "industry/industry.h"
 #include "map/component.h"
 #include "map/room.h"
@@ -23,6 +24,46 @@ using namespace std;
 namespace {
 	// 本版市民只需要吃饭：每人每天1份food服务。以后有更多需求类型时扩展这里。
 	constexpr const char* kMealServiceType = "food";
+
+	// 增发：总股本最多涨到初始发行量的4倍（是否增发、增发多少由mod在MonthlySettle里决定）。
+	constexpr int64_t kMaxShareMultiple = 4;
+
+	// 月结时让mod看一眼现状并就地调整岗位计划/分红率/增发股数，再按计划对账岗位。
+	void SettleOrganization(Society& society, Organization* organization, int64_t balance, int64_t profit,
+		MonthlyReport& report) {
+		OrganizationMod* mod = organization->GetMod();
+		vector<Room*> rooms = organization->WorkspaceRooms();
+		vector<string> names;
+		names.reserve(rooms.size());
+		for (const Room* room : rooms) names.push_back(room->GetName());
+		vector<RoomState> roomStates(rooms.size());
+		for (size_t i = 0; i < rooms.size(); i++) {
+			roomStates[i].room = names[i].c_str();
+			roomStates[i].capacity = rooms[i]->WorkspaceCapacity();
+		}
+
+		OrganizationMonthlyState state;
+		state.balance = balance;
+		state.profit = profit;
+		state.initialFunds = mod->initialFunds;
+		state.totalShares = organization->GetTotalShares();
+		state.treasuryShares = organization->TreasuryShares();
+		state.sharePrice = society.GetMarket().Price(society.GetLedger(), organization);
+		state.employees = organization->EmployeeCount();
+		state.positions = organization->OpenPositionCount();
+		state.rooms = roomStates.data();
+		state.roomCount = static_cast<int>(roomStates.size());
+
+		mod->issueShares = 0;
+		mod->MonthlySettle(state);
+		// 没有岗位计划的mod（外部Mod、不设计岗位的组织）不动岗位。
+		if (!mod->vacancies.empty()) {
+			Organization::JobChange change = organization->ReconcileJobs();
+			report.positionsOpened += change.opened;
+			report.positionsClosed += change.closed;
+			report.dismissed += change.dismissed;
+		}
+	}
 
 	// 一笔钱平均分成n份，余数（分）依次多给前几份，总额不变。
 	vector<int64_t> SplitEvenly(int64_t amount, size_t parts) {
@@ -59,7 +100,8 @@ namespace {
 }
 
 DailyReport Economy::Daily(Society& society, Industry& industry, const std::vector<Room*>& rooms,
-	const std::vector<Citizen*>& citizens, const Time& time, PostHandle* post, int currentYear) {
+	const std::vector<Citizen*>& citizens, const Time& time, PostHandle* post, int currentYear,
+	const Citizen* protectedCitizen) {
 	DailyReport report;
 
 	// 跨月先把上个月的分红结掉，再开始今天的日结。
@@ -68,11 +110,12 @@ DailyReport Economy::Daily(Society& society, Industry& industry, const std::vect
 		society.SetLastMonthKey(monthKey);
 	}
 	else if (monthKey != society.GetLastMonthKey()) {
-		report.month = Monthly(society);
+		report.month = Monthly(society, rooms, currentYear, protectedCitizen, report);
 		society.SetLastMonthKey(monthKey);
 	}
 
 	UpdateBankruptcies(society, citizens, currentYear, report);
+	report.hired = society.MatchUnemployed(citizens, currentYear);
 	SyncIndustry(society, industry);
 
 	report.goods = Settlement::SettleGoods(society, industry);
@@ -80,7 +123,34 @@ DailyReport Economy::Daily(Society& society, Industry& industry, const std::vect
 	report.rent = Settlement::PayRents(society, rooms, currentYear);
 	PayWages(society, report);
 	PaySubsidies(society, citizens, currentYear, report);
+
+	// 金融：国债到期还本，市民存取款/挂股票单，撮合成交，最后政府账户为负时发债/印钞补缺口。
+	Treasury& treasury = society.GetTreasury();
+	treasury.AdvanceDay();
+	report.bondRepaid = treasury.RepayMatured(society.GetLedger());
+	report.invest = Investor::Daily(society, citizens, currentYear, treasury.GetDay());
+	report.stock = society.GetMarket().Clear(society.GetLedger(), society.GetOrganizations());
+	FundGovernment(society, citizens, currentYear, report);
 	return report;
+}
+
+void Economy::FundGovernment(Society& society, const vector<Citizen*>& citizens, int currentYear,
+	DailyReport& report) {
+	Ledger& ledger = society.GetLedger();
+	const GovernmentPolicy& policy = society.GetPolicy();
+	int64_t shortfall = -ledger.Balance(Party::Government());
+	if (shortfall <= 0) return;
+
+	// 先向市民发国债，利率比存款高。募集的钱进政府账户，但同时记国债负债，不会抬高净头寸。
+	report.bondIssued = Investor::SubscribeBonds(society, citizens, currentYear, shortfall,
+		policy.depositRateBp + policy.bondPremiumBp, policy.bondTermDays);
+	shortfall -= report.bondIssued;
+
+	// 国债补不满的缺口直接印钞：城市外账户直接打给政府，没有负债，净头寸随之回升。
+	if (shortfall > 0) {
+		ledger.Transfer(Party::Outside(), Party::Government(), shortfall, Flow::PRINT_MONEY);
+		report.moneyPrinted = shortfall;
+	}
 }
 
 void Economy::RunServices(Society& society, Industry& industry, const vector<Room*>& rooms,
@@ -130,7 +200,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 			// 成年人每天1份，未成年(<adultAge)吃一半，整户合计向上取整到整份。
 			int halfPortions = 0;
 			for (const Citizen* member : household->GetMembers()) {
-				if (!member || member->IsDead()) continue;
+				if (!member || !member->IsActive()) continue;
 				halfPortions += member->GetAge(currentYear) < society.GetPolicy().adultAge ? 1 : 2;
 			}
 			int portions = (halfPortions + 1) / 2;
@@ -175,7 +245,11 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 		// 五、各户依次从提供者的配额里买：成年成员均摊付款。市民账户允许为负，每人每天1份food必须满足，只受库存限制。
 		for (const Need& need : typeNeeds) {
 			vector<Citizen*> payers = need.household->GetAdults(currentYear);
-			if (payers.empty()) payers = need.household->GetMembers();
+			if (payers.empty()) {
+				for (Citizen* member : need.household->GetMembers()) {
+					if (member && member->IsActive()) payers.push_back(member);
+				}
+			}
 			int remaining = need.quantity;
 			for (Provider& provider : typeProviders) {
 				if (remaining <= 0) break;
@@ -230,10 +304,10 @@ void Economy::PayWages(Society& society, DailyReport& report) {
 	Ledger& ledger = society.GetLedger();
 	for (Organization* organization : society.GetOrganizations()) {
 		OrganizationMod* mod = organization->GetMod();
-		if (!mod || mod->wage <= 0 || organization->IsBankrupt()) continue; // 倒闭企业停发工资，员工不离职
+		if (!mod || mod->wage <= 0 || organization->IsBankrupt()) continue; // 倒闭企业停发工资（员工在倒闭时已全部裁掉）
 		for (Job* job : organization->GetJobs()) {
 			Citizen* worker = job ? job->GetOccupant() : nullptr;
-			if (!worker || worker->IsDead()) continue;
+			if (!worker || !worker->IsActive()) continue;
 			ledger.Transfer(Party::Of(organization), Party::Of(worker), mod->wage, Flow::WAGE);
 			// 所得税即时缴纳：发工资时当场代扣。
 			int64_t incomeTax = society.GetPolicy().Tax(mod->wage, society.GetPolicy().incomeTaxPercent);
@@ -288,7 +362,7 @@ void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, i
 	const GovernmentPolicy& policy = society.GetPolicy();
 
 	for (Citizen* citizen : citizens) {
-		if (!citizen || citizen->IsDead() || !citizen->IsInEconomy()) continue;
+		if (!citizen || !citizen->IsActive() || !citizen->IsInEconomy()) continue;
 		int age = citizen->GetAge(currentYear);
 		if (age < policy.adultAge) {
 			// 未成年补助发给户里的成年人(均摊)，因为吃饭房租都是成年人付；户里没有成年人时才发给孩子自己。
@@ -322,40 +396,108 @@ void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, i
 	}
 }
 
-MonthlyReport Economy::Monthly(Society& society) {
+MonthlyReport Economy::Monthly(Society& society, const vector<Room*>& rooms, int currentYear,
+	const Citizen* protectedCitizen, DailyReport& dailyReport) {
 	MonthlyReport report;
 	report.settled = true;
 	Ledger& ledger = society.GetLedger();
 	const GovernmentPolicy& policy = society.GetPolicy();
 
-	// 企业账户超过初始资金的部分是可分配利润：先缴企业税，税后按占股比例分给股东，少于初始资金不分红。
+	unordered_set<const Organization*> paidThisMonth;
+	// 先让mod看当月利润并调整岗位计划/分红率/增发股数（MonthlySettle），再对账岗位。
+	// 可分配利润 = min(当月利润, 账户超过初始资金的部分)：先缴企业税，税后按mod的分红率取一部分、按持股数分给股东
+	// （库存股的那份留在企业），留存的利润不会下个月再被当成利润重复征税/分红。少于初始资金不分红。
 	// 股东拿到分红时当场缴所得税（税收一律即时缴纳）。
 	for (Organization* organization : society.GetOrganizations()) {
 		OrganizationMod* mod = organization->GetMod();
 		if (!mod || organization->IsBankrupt()) continue;
-		int64_t surplus = ledger.Balance(Party::Of(organization)) - mod->initialFunds;
-		const vector<Organization::Shareholder>& shareholders = organization->GetShareholders();
-		if (surplus <= 0 || shareholders.empty()) continue;
+		int64_t balance = ledger.Balance(Party::Of(organization));
+		int64_t last = organization->GetLastSettledBalance();
+		int64_t profit = balance - (last == Organization::kUnsettled ? mod->initialFunds : last);
+		SettleOrganization(society, organization, balance, profit, report);
 
-		int64_t corporateTax = policy.Tax(surplus, policy.corporateTaxPercent);
+		int64_t base = min(profit, balance - mod->initialFunds);
+		const vector<Organization::Shareholder>& shareholders = organization->GetShareholders();
+		if (base <= 0 || shareholders.empty()) continue;
+		paidThisMonth.insert(organization);
+
+		int64_t corporateTax = policy.Tax(base, policy.corporateTaxPercent);
 		ledger.Transfer(Party::Of(organization), Party::Government(), corporateTax, Flow::CORPORATE_TAX);
 		report.corporateTax += corporateTax;
 
-		int64_t distributable = surplus - corporateTax;
+		// 税后利润只发分红率那一部分，其余留在企业账户（抬高净资产，股价随之上涨）。
+		float payoutRatio = max(0.f, min(1.f, mod->dividendPayoutRatio));
+		int64_t distributable = static_cast<int64_t>(static_cast<double>(base - corporateTax) * payoutRatio);
 		int64_t paid = 0;
-		for (size_t i = 0; i < shareholders.size(); i++) {
-			int64_t dividend = static_cast<int64_t>(static_cast<double>(distributable) * shareholders[i].ratio);
-			if (i + 1 == shareholders.size()) dividend = distributable - paid; // 最后一位拿走余数，总额不丢分
+		for (const Organization::Shareholder& shareholder : shareholders) {
+			int64_t dividend = distributable * shareholder.shares / organization->GetTotalShares();
 			if (dividend <= 0) continue;
-			ledger.Transfer(Party::Of(organization), Party::Of(shareholders[i].citizen), dividend, Flow::DIVIDEND);
+			ledger.Transfer(Party::Of(organization), Party::Of(shareholder.citizen), dividend, Flow::DIVIDEND);
 			int64_t incomeTax = policy.Tax(dividend, policy.incomeTaxPercent);
-			ledger.Transfer(Party::Of(shareholders[i].citizen), Party::Government(), incomeTax, Flow::INCOME_TAX);
+			ledger.Transfer(Party::Of(shareholder.citizen), Party::Government(), incomeTax, Flow::INCOME_TAX);
 			report.dividendIncomeTax += incomeTax;
 			paid += dividend;
 		}
 		report.dividends += paid;
+		society.GetMarket().RecordDividend(organization, static_cast<double>(distributable) / organization->GetTotalShares());
 	}
+	// 本月没有分红的组织（亏损、低于初始资金、倒闭）记0，免得沿用过期的股息率。
+	for (Organization* organization : society.GetOrganizations()) {
+		if (!paidThisMonth.count(organization)) society.GetMarket().RecordDividend(organization, 0.0);
+	}
+
+	// 增发：mod在MonthlySettle里给出本月增发的股数，按当前股价向老股东配售，募到的钱进企业账户。
+	IssueShares(society, report);
+
+	// 记下月结完成后的余额，下个月的当月利润从它算起。
+	for (Organization* organization : society.GetOrganizations()) {
+		if (!organization->IsBankrupt()) organization->SetLastSettledBalance(ledger.Balance(Party::Of(organization)));
+	}
+
+	// 存款和国债结息（政府付息，市民当场缴所得税）。
+	report.interest = society.GetTreasury().PayInterest(ledger, policy);
+
+	// 离城检查：一户里所有在场的成年人净资产都为负，整户搬走。
+	vector<Citizen*> departed = Emigration::Monthly(society, rooms, currentYear, protectedCitizen);
+	report.departedCitizens = static_cast<int>(departed.size());
+	unordered_set<const Household*> households;
+	for (Citizen* citizen : departed) households.insert(citizen->GetHousehold());
+	report.departedHouseholds = static_cast<int>(households.size());
+	dailyReport.departed.insert(dailyReport.departed.end(), departed.begin(), departed.end());
 	return report;
+}
+
+void Economy::IssueShares(Society& society, MonthlyReport& report) {
+	Ledger& ledger = society.GetLedger();
+	const GovernmentPolicy& policy = society.GetPolicy();
+	for (Organization* organization : society.GetOrganizations()) {
+		OrganizationMod* mod = organization->GetMod();
+		if (!mod || organization->IsBankrupt() || mod->issueShares <= 0) continue;
+		// mod在MonthlySettle里要求的增发股数，总股本最多涨到初始的kMaxShareMultiple倍。
+		int64_t total = organization->GetTotalShares();
+		int64_t price = society.GetMarket().Price(ledger, organization);
+		if (price <= 0) continue;
+		int64_t issue = min(mod->issueShares, Organization::kTotalShares * kMaxShareMultiple - total);
+		mod->issueShares = 0;
+		if (issue <= 0) continue;
+
+		// 新股先全部进库存股；老股东按持股比例优先认购，认购额受现金（扣掉备用金）限制，认不完的留在库存股里等市场买。
+		organization->SetTotalShares(total + issue);
+		int64_t sold = 0;
+		vector<Organization::Shareholder> holders = organization->GetShareholders();
+		for (const Organization::Shareholder& holder : holders) {
+			int64_t entitlement = issue * holder.shares / total;
+			int64_t cash = max<int64_t>(0, ledger.Balance(Party::Of(holder.citizen)) - policy.reserve);
+			int64_t take = min(entitlement, cash / price);
+			if (take <= 0) continue;
+			ledger.Transfer(Party::Of(holder.citizen), Party::Of(organization), take * price, Flow::STOCK_TRADE);
+			organization->AdjustShares(holder.citizen, take);
+			sold += take;
+		}
+		report.sharesIssued += issue;
+		report.sharesSubscribed += sold;
+		report.issueProceeds += sold * price;
+	}
 }
 
 void Economy::SyncIndustry(Society& society, Industry& industry) {
@@ -369,27 +511,31 @@ void Economy::SyncIndustry(Society& society, Industry& industry) {
 	}
 	industry.SetClosedRooms(closed);
 
-	// 到岗率：房间里实际有人的岗位数/组织指定的岗位数(只统计有岗位的房间)，工坊产能按它走。
-	unordered_map<const Room*, int> designed, filled;
+	// 到岗率：房间里开放岗位上的在岗人数/房间容量(容量=满编，只统计有开放岗位的房间)，工坊产能按它走。
+	// 扩招超编时大于1，产能随之升高；容量为0的房间退回按开放岗位数算。
+	unordered_map<const Room*, int> open, filled;
 	for (const Organization* organization : society.GetOrganizations()) {
 		for (const Job* job : organization->GetJobs()) {
-			if (!job || !job->GetPosition()) continue;
-			designed[job->GetPosition()]++;
+			if (!job || !job->IsOpen() || !job->GetPosition()) continue;
+			open[job->GetPosition()]++;
 			if (job->GetOccupant()) filled[job->GetPosition()]++;
 		}
 	}
 	unordered_map<const Room*, float> staffing;
-	for (const auto& [room, count] : designed) staffing[room] = static_cast<float>(filled[room]) / count;
+	for (const auto& [room, count] : open) {
+		int denominator = room->WorkspaceCapacity() > 0 ? room->WorkspaceCapacity() : count;
+		staffing[room] = static_cast<float>(filled[room]) / denominator;
+	}
 	industry.SetStaffingRatios(staffing);
 
 	// 三重负反馈，都以开局外部注资为基准：
 	// 1) 出口阈值 = 1-1/(x+1)，x=当前全部注资/开局注资：城里的钱越多，工坊产出仓留得越多，出口越少；
-	// 2) 税率系数 = 1-atan(g)*2/pi，g=政府余额/开局注资：盈余降税(最低0)、负债加税(最高2倍)；
+	// 2) 税率系数 = 1-atan(g)*2/pi，g=政府净头寸/开局注资（净头寸=政府账户−存款−国债本金，借款不抬高它，印钞会）：盈余降税(最低0)、负债加税(最高2倍)；
 	// 3) 补助系数 = exp(g)：盈余多发、负债少发。
 	const Ledger& ledger = society.GetLedger();
 	double x = ledger.InjectionRatio();
 	industry.SetExportKeepRatio(static_cast<float>(1.0 - 1.0 / (x + 1.0)));
-	double g = ledger.GovernmentRatio();
+	double g = society.GovernmentNetRatio();
 	GovernmentPolicy& policy = society.GetPolicy();
 	policy.taxFactor = 1.0 - atan(g) / 3.14159265358979323846 * 2.0;
 	policy.allowanceFactor = exp(g);
@@ -398,20 +544,22 @@ void Economy::SyncIndustry(Society& society, Industry& industry) {
 void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citizens, int currentYear,
 	DailyReport& report) {
 	Ledger& ledger = society.GetLedger();
+	Treasury& treasury = society.GetTreasury();
 
 	// 一、资金为负的企业倒闭。
 	for (Organization* organization : society.GetOrganizations()) {
 		if (!organization->IsBankrupt() && ledger.Balance(Party::Of(organization)) < 0) {
 			organization->SetBankrupt(true);
+			report.dismissedByBankruptcy += organization->LayOffAll(); // 员工全部裁掉，重启后重新招聘
 			report.newBankruptcies++;
 		}
 	}
 
-	// 二、倒闭的企业：每个股东位都要找到一位存款超过"初始资金×占股比例"的成年市民（同一人只担一个股东位），
-	// 全部找到才重启。
+	// 二、倒闭的企业：每个股东位都要找到一位活期余额加存款超过"初始资金×占股比例"的成年市民（同一人只担一个股东位），
+	// 全部找到才重启。出资时活期不够的部分先从存款取。
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
-		if (citizen && !citizen->IsDead() && citizen->IsInEconomy() && citizen->GetAge(currentYear) >= society.GetPolicy().adultAge) {
+		if (citizen && citizen->IsActive() && citizen->IsInEconomy() && citizen->GetAge(currentYear) >= society.GetPolicy().adultAge) {
 			adults.push_back(citizen);
 		}
 	}
@@ -419,17 +567,22 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 	for (Organization* organization : society.GetOrganizations()) {
 		OrganizationMod* mod = organization->GetMod();
 		if (!organization->IsBankrupt() || !mod) continue;
-		const vector<Organization::Shareholder>& slots = organization->GetShareholders();
-		if (slots.empty()) continue;
+		if (mod->shareholders.empty()) continue;
+
+		// 股东位按mod声明的占股比例（归一化），旧股东的持股作废。
+		float weightSum = 0.f;
+		for (float weight : mod->shareholders) weightSum += weight;
+		if (weightSum <= 0.f) continue;
 
 		unordered_set<const Citizen*> taken;
-		vector<Organization::Shareholder> chosen;
+		vector<Citizen*> pickedCitizens;
+		vector<float> pickedWeights;
 		bool complete = true;
-		for (const Organization::Shareholder& slot : slots) {
-			int64_t required = static_cast<int64_t>(static_cast<double>(mod->initialFunds) * slot.ratio);
+		for (float weight : mod->shareholders) {
+			int64_t required = static_cast<int64_t>(static_cast<double>(mod->initialFunds) * weight / weightSum);
 			vector<Citizen*> candidates;
 			for (Citizen* citizen : adults) {
-				if (!taken.count(citizen) && ledger.Balance(Party::Of(citizen)) > required) candidates.push_back(citizen);
+				if (!taken.count(citizen) && ledger.Balance(Party::Of(citizen)) + treasury.DepositOf(citizen) > required) candidates.push_back(citizen);
 			}
 			if (candidates.empty()) {
 				complete = false;
@@ -437,9 +590,11 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 			}
 			Citizen* picked = candidates[GetRandom(static_cast<int>(candidates.size()))];
 			taken.insert(picked);
-			chosen.push_back({ picked, slot.ratio });
+			pickedCitizens.push_back(picked);
+			pickedWeights.push_back(weight);
 		}
 		if (!complete) continue;
+		vector<Organization::Shareholder> chosen = Organization::SplitShares(pickedCitizens, pickedWeights);
 
 		// 核销旧负债（城市外账户承担），股东按占股比例集齐初始资金，重新营业。
 		int64_t debt = -ledger.Balance(Party::Of(organization));
@@ -449,13 +604,19 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 		}
 		int64_t contributed = 0;
 		for (size_t i = 0; i < chosen.size(); i++) {
-			int64_t share = static_cast<int64_t>(static_cast<double>(mod->initialFunds) * chosen[i].ratio);
+			int64_t share = mod->initialFunds * chosen[i].shares / Organization::kTotalShares;
 			if (i + 1 == chosen.size()) share = mod->initialFunds - contributed; // 最后一位补齐，总额正好等于初始资金
+			int64_t cash = ledger.Balance(Party::Of(chosen[i].citizen));
+			if (cash < share) treasury.Withdraw(ledger, chosen[i].citizen, share - cash);
 			ledger.Transfer(Party::Of(chosen[i].citizen), Party::Of(organization), share, Flow::RESTART_FUNDS);
 			contributed += share;
 		}
 		organization->SetShareholders(chosen);
+		organization->SetTotalShares(Organization::kTotalShares); // 重启后重新发行，增发的股本作废
+		society.GetMarket().ResetQuote(organization);
 		organization->SetBankrupt(false);
+		report.positionsReopened += organization->ReopenInitial().opened; // 岗位恢复到开局满编，由每天的再就业补人
+		organization->SetLastSettledBalance(ledger.Balance(Party::Of(organization)));
 		report.restarts++;
 		report.restartFunds += contributed;
 	}

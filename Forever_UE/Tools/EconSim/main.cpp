@@ -8,6 +8,7 @@
 #include "populace/citizen.h"
 #include "society/ledger.h"
 #include "society/economy.h"
+#include "society/immigration.h"
 #include "report.h"
 #include "common/implement.h"
 #include "society/society_save.h"
@@ -32,6 +33,7 @@
 #include <exception>
 #include <cstdlib>
 #include <map>
+#include <unordered_set>
 #include <string>
 
 
@@ -247,9 +249,10 @@ namespace {
 		}
 		for (const auto& [type, count] : jobsByType) printf("[Step4] 岗位 %s: %d (已招%d)\n", type.c_str(), count, filledByType[type]);
 		for (Organization* organization : society.GetOrganizations()) {
-			float sum = 0.f;
-			for (const auto& s : organization->GetShareholders()) sum += s.ratio;
-			printf("[Step4] 示例组织 %s 股东%zu人 占股和=%.3f\n", organization->GetType().c_str(), organization->GetShareholders().size(), sum);
+			int64_t sum = 0;
+			for (const auto& s : organization->GetShareholders()) sum += s.shares;
+			printf("[Step4] 示例组织 %s 股东%zu人 持股和=%lld/%lld\n", organization->GetType().c_str(), organization->GetShareholders().size(),
+			static_cast<long long>(sum), static_cast<long long>(organization->GetTotalShares()));
 			break;
 		}
 	}
@@ -309,14 +312,23 @@ namespace {
 			for (Room* room : building->GetRooms()) allRooms.push_back(room);
 		PostImplement post(&city, &populace, &society, nullptr, &industry, nullptr, nullptr);
 
+		std::unordered_set<const Citizen*> immigrantSet; // 本次模拟中迁入的市民
 		auto simStart = chrono::steady_clock::now();
 		for (int month = 1; month <= months; month++) {
 			int year = startYear + (month - 1) / 12;
 			int calendarMonth = (month - 1) % 12 + 1;
 			reporter.BeginPeriod();
 			Reporter::ServiceTotals totals;
+			Reporter::FinanceTotals finance;
 			for (int day = 1; day <= DaysInMonth(year, calendarMonth); day++) {
 				Time time(year, calendarMonth, day);
+				// 压力测试：环境变量ECON_DRAIN=每天从政府账户划走的分数，用来把政府打成赤字，验证发国债和印钞。
+				char* drain = nullptr;
+				size_t drainLength = 0;
+				if (_dupenv_s(&drain, &drainLength, "ECON_DRAIN") == 0 && drain) {
+					society.GetLedger().Transfer(Party::Government(), Party::Outside(), atoll(drain), Flow::DEBT_WRITE_OFF);
+					free(drain);
+				}
 				Economy::SyncIndustry(society, industry);
 				industry.Tick(time, true, &post);
 				DailyReport daily = Economy::Daily(society, industry, allRooms, populace.GetCitizens(), time, &post,
@@ -329,8 +341,36 @@ namespace {
 					totals.unmet += stat.unmet;
 					totals.revenue += stat.revenue;
 				}
+				for (Citizen* arrived : Immigration::Daily(society, populace, city, populace.GetCurrentYear())) {
+					immigrantSet.insert(arrived);
+					finance.immigrated++;
+				}
+				finance.turnover += daily.stock.turnover;
+				finance.volume += daily.stock.volume;
+				finance.bondIssued += daily.bondIssued;
+				finance.bondRepaid += daily.bondRepaid;
+				finance.printed += daily.moneyPrinted;
+				finance.deposited += daily.invest.deposited;
+				finance.withdrawn += daily.invest.withdrawn;
+				finance.depositInterest += daily.month.interest.deposit;
+				finance.bondInterest += daily.month.interest.bond;
+				finance.interestTax += daily.month.interest.tax;
+				finance.departed += static_cast<int>(daily.departed.size());
+				finance.departedHouseholds += daily.month.departedHouseholds;
+				finance.sharesIssued += daily.month.sharesIssued;
+				finance.sharesSubscribed += daily.month.sharesSubscribed;
+				finance.issueProceeds += daily.month.issueProceeds;
+				for (Citizen* gone : daily.departed) {
+					if (immigrantSet.count(gone)) finance.departedImmigrants++;
+				}
 				totals.newBankruptcies += daily.newBankruptcies;
 				totals.restarts += daily.restarts;
+				totals.hired += daily.hired;
+				totals.dismissedByBankruptcy += daily.dismissedByBankruptcy;
+				totals.positionsReopened += daily.positionsReopened;
+				totals.positionsOpened += daily.month.positionsOpened;
+				totals.positionsClosed += daily.month.positionsClosed;
+				totals.dismissed += daily.month.dismissed;
 				if (society.GetLedger().Total() != 0) {
 					printf("!!! %d-%02d-%02d 全系统资金总和不为0: %s\n", year, calendarMonth, day,
 						FormatMoney(society.GetLedger().Total()).c_str());
@@ -340,6 +380,24 @@ namespace {
 			snprintf(title, sizeof(title), "%d年%d月 (第%d个月)", year, calendarMonth, month);
 			reporter.PrintPeriod(title);
 			reporter.PrintRunSummary(title, totals);
+			{
+				int immigrantsActive = 0;
+				for (const Citizen* c : immigrantSet) if (c->IsActive()) immigrantsActive++;
+				char financeLabel[32];
+				snprintf(financeLabel, sizeof(financeLabel), "%d月末", calendarMonth);
+				reporter.PrintFinance(title, financeLabel, finance, immigrantsActive);
+			}
+			{
+				const Treasury& treasury = society.GetTreasury();
+				int activeCount = 0;
+				for (const Citizen* c : populace.GetCitizens()) if (c->IsActive()) activeCount++;
+				printf("[金融] 股票成交额=%s 存款=%s 国债=%s(本月新发%s) 印钞=%s 政府账户=%s 净头寸=%s 城市外=%s 离城%d人 迁入%d人 在场%d人\n",
+					FormatMoney(finance.turnover).c_str(), FormatMoney(treasury.TotalDeposits()).c_str(), FormatMoney(treasury.TotalBonds()).c_str(),
+					FormatMoney(finance.bondIssued).c_str(), FormatMoney(finance.printed).c_str(),
+					FormatMoney(society.GetLedger().Balance(Party::Government())).c_str(),
+					FormatMoney(treasury.NetPosition(society.GetLedger())).c_str(),
+					FormatMoney(society.GetLedger().Balance(Party::Outside())).c_str(), finance.departed, finance.immigrated, activeCount);
+			}
 			char label[32];
 			snprintf(label, sizeof(label), "%d月末", calendarMonth);
 			reporter.RecordSummaryRow(label);
@@ -349,6 +407,7 @@ namespace {
 				society.GetPolicy().allowanceFactor);
 		}
 		reporter.PrintSummaryTable();
+		reporter.PrintFinanceTable();
 	}
 
 	// Step 1自检:价格/仓库权限/房间字段/商店服务收集这几项mod数据改造是否生效。
@@ -531,9 +590,32 @@ static int RealMain(int argc, char** argv) {
 				const auto& y = restored->GetOrganizations()[i]->GetShareholders();
 				shareholdersSame = x.size() == y.size();
 				for (size_t k = 0; shareholdersSame && k < x.size(); k++)
-					shareholdersSame = x[k].citizen == y[k].citizen && x[k].ratio == y[k].ratio;
+					shareholdersSame = x[k].citizen == y[k].citizen && x[k].shares == y[k].shares;
 			}
 			printf("[SaveCheck] 股东往返一致=%d\n", shareholdersSame);
+			// 岗位:每个组织的Job数、closed标记、占用者、岗位计划(vacancies)和lastSettledBalance读回后必须一致。
+			bool jobsSame = restored->GetOrganizations().size() == society.GetOrganizations().size();
+			int closedJobs = 0;
+			size_t planEntries = 0;
+			for (size_t i = 0; jobsSame && i < society.GetOrganizations().size(); i++) {
+				const Organization* x = society.GetOrganizations()[i];
+				const Organization* y = restored->GetOrganizations()[i];
+				jobsSame = x->GetJobs().size() == y->GetJobs().size() && x->GetLastSettledBalance() == y->GetLastSettledBalance();
+				if (x->GetMod() && y->GetMod()) {
+					const auto& vx = x->GetMod()->vacancies;
+					const auto& vy = y->GetMod()->vacancies;
+					jobsSame = jobsSame && vx.size() == vy.size();
+					planEntries += vx.size();
+					for (size_t k = 0; jobsSame && k < vx.size(); k++) jobsSame = vx[k].room == vy[k].room && vx[k].type == vy[k].type;
+				}
+				for (size_t k = 0; jobsSame && k < x->GetJobs().size(); k++) {
+					const Job* a = x->GetJobs()[k];
+					const Job* b = y->GetJobs()[k];
+					if (!a->IsOpen()) closedJobs++;
+					jobsSame = a->IsOpen() == b->IsOpen() && a->GetType() == b->GetType() && (a->GetOccupant() == nullptr) == (b->GetOccupant() == nullptr);
+				}
+			}
+			printf("[SaveCheck] 岗位往返一致=%d (已关闭岗位%d个, 岗位计划条目%zu条)\n", jobsSame, closedJobs, planEntries);
 			const auto& da = first.Find(SAVE_SECTION_SOCIETY)->data;
 			const auto& db = second.Find(SAVE_SECTION_SOCIETY)->data;
 			size_t diff = 0;

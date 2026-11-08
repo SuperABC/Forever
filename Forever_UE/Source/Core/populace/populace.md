@@ -19,6 +19,7 @@ map->Checkin(*populace);
 （`SpawnCitizen`）。
 
 ## 关键设计
+- `initialPopulation`：`Init`跑完时的市民总数，随人口段存档，`Immigration`以它为基准（目标是它的1.5倍）。`SpawnImmigrant`是迁入用的随机成年新市民（性别/姓名/20~45岁生日/日程随机，不设住处、积蓄、工作），见`society/immigration.md`。
 
 ### 年表模拟算法
 

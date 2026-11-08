@@ -94,7 +94,7 @@ void UForeverPopulaceFrameworkComponent::GenerateCitizens(Map* inMap, Populace* 
 		allCitizens.Add(citizen);
 		// 读档恢复：Core行进的起算时间对齐到新关卡的游戏时钟；存档时已实例化的市民排队强制生成。
 		citizen->RestartWalk(now);
-		if (citizen->WasSpawned() && !citizen->IsDead()) pendingRestoreSpawns.Add(citizen);
+		if (citizen->WasSpawned() && citizen->IsActive()) pendingRestoreSpawns.Add(citizen);
 		citizen->SetWasSpawned(false);
 	}
 }
@@ -137,7 +137,7 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::SpawnCitizen(Citizen* citiz
 
 void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* destination) {
 	if (!citizen || !destination || !map) return;
-	if (citizen->IsDead()) return; // 死人不再被调度，见Citizen::Die
+	if (!citizen->IsActive()) return; // 死人和离城的人不再被调度，见Citizen::Die/Depart
 
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 	if (existing && *existing && (*existing)->IsPlayerControlled()) {
@@ -212,7 +212,7 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 
 void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room* destination,
 	const TArray<FVector>& waypoints) {
-	if (!citizen || !destination || citizen->IsDead()) return;
+	if (!citizen || !destination || !citizen->IsActive()) return;
 
 	// 重新查一次activeInstances：从发起到落地隔了若干帧，citizen可能已被流式销毁/重新生成或被玩家占有。
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
@@ -265,8 +265,8 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 
 void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room* destination) {
 	if (!citizen || !destination) return;
-	if (citizen->IsDead()) {
-		UE_LOG(LogTemp, Warning, TEXT("npc_teleport: %s is dead, skipped (use npc_revive first)."),
+	if (!citizen->IsActive()) {
+		UE_LOG(LogTemp, Warning, TEXT("npc_teleport: %s is dead or departed, skipped (use npc_revive first)."),
 			UTF8_TO_TCHAR(citizen->GetName().c_str()));
 		return;
 	}
@@ -340,14 +340,14 @@ bool UForeverPopulaceFrameworkComponent::PlanWalkPath(Citizen* citizen, Room* de
 }
 
 void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* destination) {
-	if (!citizen || !destination || citizen->IsDead()) return;
+	if (!citizen || !destination || !citizen->IsActive()) return;
 	Room* previous = citizen->GetCurrentRoom();
 	citizen->SetCurrentRoom(destination);
 	ReportArrival(citizen, previous);
 }
 
 void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* previousRoom) {
-	if (!citizen || citizen->IsDead() || citizen->GetCurrentRoom() == previousRoom) return;
+	if (!citizen || !citizen->IsActive() || citizen->GetCurrentRoom() == previousRoom) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr) {
 		story->BroadcastNpcArrive(citizen, citizen->GetCurrentRoom());
@@ -391,7 +391,7 @@ void UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen* citizen) {
 
 ACitizenElement* UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(const FString& name) {
 	for (Citizen* citizen : allCitizens) {
-		if (!citizen || citizen->IsDead()) continue;
+		if (!citizen || !citizen->IsActive()) continue;
 		if (name != UTF8_TO_TCHAR(citizen->GetName().c_str())) continue;
 
 		if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen)) {
@@ -432,7 +432,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		int32 restored = 0;
 		while (pendingRestoreSpawns.Num() > 0 && restored < FMath::Max(1, maxSpawnsPerFrame)) {
 			Citizen* citizen = pendingRestoreSpawns.Pop(EAllowShrinking::No);
-			if (!citizen || citizen->IsDead() || activeInstances.Contains(citizen)) continue;
+			if (!citizen || !citizen->IsActive() || activeInstances.Contains(citizen)) continue;
 			if (ACitizenElement* element = SpawnCitizen(citizen)) {
 				HandOffWalkToElement(citizen, element, restoreNow);
 				restored++;
@@ -472,7 +472,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 		processed = i + 1;
 		int32 idx = (pollCursor + i) % total;
 		Citizen* citizen = allCitizens[idx];
-		if (!citizen || citizen->IsDead()) continue;
+		if (!citizen || !citizen->IsActive()) continue;
 
 		TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 

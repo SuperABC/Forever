@@ -61,10 +61,11 @@
 - 房间里的物品（`Room::assets`）存在玩家段，见 `Source/Core/player/player_save.md`。
 
 ## 动态属性
-每个市民记录末尾(avatarIndex之后)追加`U8 statsActive`+`F32 satiety`，读写严格对称。
+每个市民记录末尾(avatarIndex之后)追加`U8 statsActive`+`F32 satiety`+`U8 departed`，读写严格对称。
+人口段头部`currentYear`之后是`I32 initialPopulation`（开局市民总数，迁入机制的基准）。
 
 ## 行进与实例化
-每个市民记录末尾(`satiety`之后)追加，读写严格对称，按项目约定没升段版本：
+每个市民记录末尾(`departed`之后)追加，读写严格对称，按项目约定没升段版本：
 - `U8 wasSpawned`：存档时这个市民是否有 Actor（UE 侧写入）。
 - `U8 walking`；为 1 时再写：目的地房间（`WriteRoom`）、`F32 speed`、`U32 n`、n 个 `(F32 x, y, z)`。路径首点是存档时的当前位置，已走弧长为 0。
 

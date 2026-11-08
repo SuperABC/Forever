@@ -981,7 +981,7 @@ int Map::ComputeWorkCapacity() const {
 	for (auto& [name, building] : buildings) {
 		if (!building) continue;
 		for (Room* room : building->GetRooms()) {
-			if (room && room->IsWorkspace()) capacity += room->WorkspaceCapacity();
+			if (room && room->IsWorkspace()) capacity += room->WorkspaceCapacity() * 2; // 容量=满编，最多可超编到2倍
 		}
 	}
 	return capacity;

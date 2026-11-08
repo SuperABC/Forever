@@ -72,8 +72,8 @@ public:
 	// （那个TMap的Citizen*键没法UPROPERTY，GC不会置空，Actor被引擎销毁后会留下悬空指针）。
 	void HandleElementEndPlay(Citizen* citizen, ACitizenElement* element);
 
-	// citizen死亡后调用：Destroy对应Actor并摘除，之后流式生成和FindOrSpawnCitizenByName都跳过死人。
-	// @citizen: 已经确认IsDead()的citizen；调用方负责先调TakeDamage()判定死亡。
+	// citizen死亡或离城后调用：Destroy对应Actor并摘除，之后流式生成和FindOrSpawnCitizenByName都跳过它。
+	// @citizen: 已经确认!IsActive()的citizen（死亡先调TakeDamage()判定，离城由Emigration置位）。
 	void HandleCitizenDeath(Citizen* citizen);
 
 	// 供AForeverFrameworkActor::EndPlay/析构在delete map/populace之前调用：取消排队中的寻路任务，
