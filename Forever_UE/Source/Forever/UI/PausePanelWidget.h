@@ -47,6 +47,8 @@ protected:
 	UFUNCTION() void HandleExitClicked();
 
 private:
+	// 打开时记下的全局时间膨胀，关闭时还原(打开时置0暂停世界)。
+	float previousDilation = 1.f;
 	void RefreshStatus();
 	void ShowMessage(const FString& message, bool bError);
 	// 文件对话框关掉之后键盘焦点不一定回到这个widget，重新抢一次，Tab/Esc才能继续关界面。

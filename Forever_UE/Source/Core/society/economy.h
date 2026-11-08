@@ -90,12 +90,24 @@ public:
 	// 给worker发一笔工资：organization -> worker (Flow::WAGE)，再当场代扣所得税。和每日PayWages同一套扣税。
 	static void PayWage(Society& society, Organization* organization, Citizen* worker, int64_t amountCents);
 
+	// 商店里的一种商品：组织所有仓库里库存>=1、并且有对应Asset(Asset的productType指向它)的Product。
+	struct ShopItem {
+		std::string productType;
+		std::string assetType;
+		int64_t price = 0; // 零售价(分)
+		int stock = 0;     // 组织所有仓库的库存之和(向下取整)
+		float size = 0.f;  // 一件Asset的size(体积)
+	};
+	// 组织名下全部仓库的商品列表，按productType字典序。
+	static std::vector<ShopItem> ListShopItems(Industry& industry, Player& player, const Organization* organization);
+
 	enum class PurchaseResult { Success, NoMoney, NoSpace, Invalid };
-	// 玩家买一件资产(assetType是Asset mod id，价格取它GetProductType()对应Product的零售价)：
-	// 余额不够返回NoMoney、背包放不下返回NoSpace，两种情况都不扣钱不给东西；成功才
-	// buyer -> seller (SERVICE_PURCHASE)，商店再从营业额里缴消费税(和每日RunServices同一个口径)。
-	static PurchaseResult PlayerPurchase(Society& society, Industry& industry, Player& player, Organization* seller,
-		Citizen* buyer, const std::string& assetType);
+	// 玩家按购物车(productType, 数量)买东西：购物车必须不超库存、总价不超过buyer账本余额(存款/国债不在账本余额里)、
+	// 身上放得下(Player::PlanCarry)，否则返回NoMoney/NoSpace/Invalid且什么都不改。成功后按方案把每件放到容器/手上，
+	// 只对实际放下的件数：buyer -> seller (SERVICE_PURCHASE)，商店再缴消费税(和每日RunServices同一个口径)，并从组织
+	// 仓库里扣库存。
+	static PurchaseResult PlayerPurchaseCart(Society& society, Industry& industry, Player& player, Organization* seller,
+		Citizen* buyer, const std::vector<std::pair<std::string, int>>& cart);
 
 private:
 	// 配股增发：账户低于初始资金一定比例（但还没为负）的企业增发新股，老股东按持股比例优先认购，认不完的进库存股。

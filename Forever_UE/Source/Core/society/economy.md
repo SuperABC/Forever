@@ -56,7 +56,8 @@
 - 依赖：`Society`（账本、月份状态、政策、Treasury、Market）、`Industry`（库存）、`Settlement`、`Investor`、`Emigration`、组织mod接口。
 - 被谁依赖：EconSim、`AForeverFrameworkActor`的每日结算。
 
-## 玩家参与经济（`PayWage` / `PlayerPurchase`）
+## 玩家参与经济（`PayWage` / `ListShopItems` / `PlayerPurchaseCart`）
 玩家的钱就是当前被操控市民在Ledger里的账户(`Party::Of(citizen)`)，不另设玩家钱包。
 - `PayWage(society, org, worker, amount)`：由岗位所属组织给市民发一笔工资(`Flow::WAGE`)，代扣所得税，同`PayWages`的口径。玩家操控的市民去不去上班不影响每日工资结算，所以玩家手动打工是**额外一份**工资。
-- `PlayerPurchase(society, industry, player, seller, buyer, assetType)`：买一件物品。按`asset->GetProductType()`在Industry里查零售价；先判余额，再创建物品并`StoreAsset`，放不下(无背包/已满)则销毁物品**不扣钱**；成功才付款(buyer→seller `SERVICE_PURCHASE`)，并由seller缴消费税。返回`PurchaseResult`{Success, NoMoney, NoSpace, Invalid}。
+- `ListShopItems(industry, player, organization)`：商店商品列表。组织占用的Component里所有房间对应的仓库库存按productType汇总(向下取整，>=1)，价格取Product零售价，`Player::FindAssetTypeByProduct`找不到对应Asset的不列出，按productType字典序。
+- `PlayerPurchaseCart(society, industry, player, seller, buyer, cart)`：按购物车(productType→数量)买。要求不超库存、总价不超过buyer的账本余额(存款/国债已转到政府账户，不在账本余额里)、`Player::PlanCarry`可行，否则返回NoMoney/NoSpace/Invalid且不改任何状态；成功后按方案把每件(count=1)放进容器(`AddContent`)或手上(`AddByPath`)，只对实际放下的件数付款(buyer→seller `SERVICE_PURCHASE`)、由seller缴消费税，并按仓库顺序`Storage::Output`扣库存。返回`PurchaseResult`{Success, NoMoney, NoSpace, Invalid}。

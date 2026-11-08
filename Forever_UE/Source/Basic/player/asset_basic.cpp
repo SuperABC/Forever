@@ -63,7 +63,7 @@ const char* BurgerAsset::GetName() {
 }
 
 void BurgerAsset::SetProperty() {
-	mobility = AssetMobility::Containee;
+	mobility = AssetMobility::Object;   // Object才能拿在手上：没背包时商店按空手数限制购买量
 	weight = 0.2f;
 	size = 0.2f;
 	usable = true;

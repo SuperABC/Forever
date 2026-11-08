@@ -145,6 +145,8 @@ void UMapWidget::ToggleMap() {
 }
 
 void UMapWidget::OpenMap() {
+	if (GetVisibility() == ESlateVisibility::Visible) return;
+
 	if (!bMapDrawn) {
 		DrawFullMap();
 		BlitCanvasToImage();
@@ -163,6 +165,8 @@ void UMapWidget::OpenMap() {
 	}
 
 	SetVisibility(ESlateVisibility::Visible);
+	previousDilation = UGameplayStatics::GetGlobalTimeDilation(this);
+	UGameplayStatics::SetGlobalTimeDilation(this, 0.f);
 
 	if (APlayerController* playerController = GetOwningPlayer()) {
 		playerController->bShowMouseCursor = true;
@@ -175,6 +179,7 @@ void UMapWidget::CloseMap() {
 	if (GetVisibility() != ESlateVisibility::Visible) return;
 
 	SetVisibility(ESlateVisibility::Collapsed);
+	UGameplayStatics::SetGlobalTimeDilation(this, previousDilation);
 	bDragging = false;
 
 	if (APlayerController* playerController = GetOwningPlayer()) {

@@ -129,6 +129,8 @@ DeltaTime)`覆写里唯一做的事就是`player->Tick(DeltaTime)`，见
 - 没有暂停机制（对应`AGlobalBase::GlobalPause/GlobalResume`那一套）。
 
 ## 脚本驱动的收纳/扣除
+- `FindAssetTypeByProduct(productType)`：哪个Asset的productType指向这个Product(商店用)，首次调用时临时创建每个已启用Asset读完销毁，结果缓存。
+- `PlanCarry(sizes)`：商店用的携带方案。容器=背包和手里的容器(含嵌套容器)，各自剩余空间`GetSpace()`是一个箱子；先全部装进容器，装不下就把最大的拿在一只空手上，再不行第二大拿在另一只手上，还不行`feasible=false`。装箱用First-Fit-Decreasing(多箱装箱NP难，这是近似，单背包时精确)。返回每件的去处、是否有容器、空手数、容器剩余空间之和。
 - `StoreAsset(asset)`：背包→容器→右手→左手的收纳顺序(见`change.md`的pick_asset)，失败不改变状态。
 - `CountOwned(type)`/`TakeOwned(type, amount, out)`：左右手+背包(递归容器，不含肩膀)里的数量与摘取(必要时拆堆叠)，数量不够不改变状态。
 - `FindAssetByName(name)`：手/肩/背及容器内容、estate、worldAssets里按名字找；房间里的见`Map::FindAssetByName`。

@@ -48,6 +48,8 @@ void UPuzzleWidget::NativeConstruct() {
 }
 
 void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
+	// 重复启动时世界已经被上一局暂停了，不能把暂停后的值当成"之前的值"。
+	const bool alreadyPaused = puzzle != nullptr;
 	if (puzzle) {
 		delete puzzle;
 		puzzle = nullptr;
@@ -78,6 +80,7 @@ void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
 	// 手法。UMG的NativeTick走Slate自己的每帧真实时间(FApp::GetDeltaTime)，不经过
 	// AWorldSettings::TimeDilation缩放，所以世界归零之后这里的puzzle->Loop还是能按正常速度
 	// 跑，只是场景里的Actor/AI/物理(包括AForeverFrameworkActor::Tick驱动的城市模拟)会停住。
+	if (!alreadyPaused) previousDilation = UGameplayStatics::GetGlobalTimeDilation(GetWorld());
 	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 0.f);
 }
 
@@ -99,7 +102,7 @@ void UPuzzleWidget::EndPuzzle(const JsonValue& result) {
 		UWidgetBlueprintLibrary::SetFocusToGameViewport();
 	}
 
-	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.f);
+	UGameplayStatics::SetGlobalTimeDilation(GetWorld(), previousDilation);
 
 	// 告诉启动这局小游戏的脚本：结束了(puzzle_result)。
 	if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {

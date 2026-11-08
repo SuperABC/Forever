@@ -111,6 +111,9 @@ private:
 
 	bool bMapDrawn = false;
 
+	// 打开时记下的全局时间膨胀，关闭时还原(打开时置0暂停世界)。
+	float previousDilation = 1.f;
+
 	float zoomLevel = 1.f;
 	FVector2D uvOffset = FVector2D::ZeroVector;
 

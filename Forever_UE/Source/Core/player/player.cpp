@@ -383,6 +383,82 @@ Player::StoreResult Player::StoreAsset(Asset* asset) {
 	return StoreResult::Failed;
 }
 
+string Player::FindAssetTypeByProduct(const string& productType) {
+	if (!productAssetTypesBuilt) {
+		productAssetTypesBuilt = true;
+		for (const string& id : assetFactory.GetRegisteredIds()) {
+			Asset* asset = CreateAsset(id);
+			if (!asset) continue;
+			if (!asset->GetProductType().empty()) productAssetTypes.emplace(asset->GetProductType(), id);
+			DestroyAsset(asset);
+		}
+	}
+	auto it = productAssetTypes.find(productType);
+	return it == productAssetTypes.end() ? string() : it->second;
+}
+
+namespace {
+	// 把一件资产和它里面嵌套的所有容器依次收进out。
+	void CollectContainers(Asset* asset, vector<Asset*>& out) {
+		if (!asset) return;
+		if (asset->IsContainer()) out.push_back(asset);
+		vector<string> names;
+		for (const auto& [name, content] : asset->GetContents()) names.push_back(name);
+		sort(names.begin(), names.end());
+		for (const string& name : names) CollectContainers(asset->GetContents().at(name), out);
+	}
+}
+
+Player::CarryPlan Player::PlanCarry(const vector<float>& sizes) const {
+	CarryPlan plan;
+	plan.targets.assign(sizes.size(), CarryTarget());
+	plan.freeHands = (leftHand ? 0 : 1) + (rightHand ? 0 : 1);
+
+	vector<Asset*> containers;
+	for (Asset* root : { backPack, leftHand, rightHand }) CollectContainers(root, containers);
+	vector<float> spaces;
+	for (const Asset* container : containers) {
+		spaces.push_back(container->GetSpace());
+		plan.containerSpace += spaces.back();
+	}
+	plan.hasContainer = !containers.empty();
+
+	// 按size从大到小排(相同size按输入顺序，保证结果确定)。
+	vector<size_t> order(sizes.size());
+	for (size_t i = 0; i < order.size(); i++) order[i] = i;
+	stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return sizes[a] > sizes[b]; });
+
+	// k=手上拿几件(最大的k件)，从0试到空闲手数，第一个其余能装进容器的就是方案。
+	for (int k = 0; k <= plan.freeHands && k <= static_cast<int>(order.size()); k++) {
+		vector<float> left = spaces;
+		vector<CarryTarget> targets(sizes.size());
+		bool ok = true;
+		for (size_t rank = static_cast<size_t>(k); rank < order.size() && ok; rank++) {
+			size_t index = order[rank];
+			ok = false;
+			for (size_t c = 0; c < left.size(); c++) {
+				if (sizes[index] <= left[c] + 1e-4f) {
+					left[c] -= sizes[index];
+					targets[index] = { CarryTarget::Container, containers[c] };
+					ok = true;
+					break;
+				}
+			}
+		}
+		if (!ok) continue;
+
+		// 先占右手，再左手，和StoreAsset一致。
+		vector<CarryTarget::Kind> hands;
+		if (!rightHand) hands.push_back(CarryTarget::RightHand);
+		if (!leftHand) hands.push_back(CarryTarget::LeftHand);
+		for (int rank = 0; rank < k; rank++) targets[order[rank]] = { hands[rank], nullptr };
+		plan.targets = targets;
+		plan.feasible = true;
+		return plan;
+	}
+	return plan;
+}
+
 int Player::CountOwned(const string& type) const {
 	int total = 0;
 	for (const Asset* slot : { leftHand, rightHand, backPack }) {

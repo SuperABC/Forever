@@ -5,7 +5,7 @@
 
 ## 关键设计
 - 由`AForeverPlayerController::InitializeOnce`常驻创建(`pauseWidgetClass`，`AddToViewport(10)`盖在其它常驻Widget上面)，`NativeConstruct`里默认`Collapsed`。
-- 暂停用全局时间缩放(打开设0，关闭设1)。建筑LOD冻结(`ForeverBuildingFrameworkComponent`)和谜题(`PuzzleWidget`)也用时间缩放=0，并且结束时会改回1，所以**时间缩放已经是0时不允许打开暂停界面**——否则它们结束时会意外解除暂停，关暂停界面时也会解除它们的冻结。UE会把时间缩放夹到WorldSettings的最小值(默认0.0001)，所以按`< 0.01`判断。
+- 暂停用全局时间缩放(打开时记下当前值并设0，关闭时还原成打开前的值)。建筑LOD冻结(`ForeverBuildingFrameworkComponent`)和谜题(`PuzzleWidget`)也用时间缩放=0，并且结束时会改回1，所以**时间缩放已经是0时不允许打开暂停界面**——否则它们结束时会意外解除暂停，关暂停界面时也会解除它们的冻结。UE会把时间缩放夹到WorldSettings的最小值(默认0.0001)，所以按`< 0.01`判断。
 - 输入模式切换照抄`UMapWidget`：打开时UI Only+显示鼠标+`SetKeyboardFocus`，关闭时Game Only+`SetFocusToGameViewport`。UI Only下Enhanced Input收不到按键，关闭键要在`NativeOnKeyDown`里自己拦：比对`UForeverKeyBindingSubsystem::GetKey("TogglePause")`(按配置，不写死Tab)，`Esc`固定也能关。
 - 文件对话框关掉后键盘焦点不一定回到界面上，`RefocusSelf`重新抢一次，Tab/Esc才能继续关。
 - 加载成功时`RequestLoad`已经发起`OpenLevel`，关卡连同暂停状态和这个Widget一起销毁，新关卡的`AForeverPlayerController::InitializeOnce`重置输入模式，这里不收尾。

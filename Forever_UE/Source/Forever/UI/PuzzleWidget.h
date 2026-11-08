@@ -44,6 +44,8 @@ protected:
 	TObjectPtr<UImage> DisplayImage;
 
 private:
+	// 打开时记下的全局时间膨胀，关闭时还原(打开时置0暂停世界)。
+	float previousDilation = 1.f;
 	// 把canvas当前像素缓冲区贴到DisplayImage上(CreateTransient+Lock/Memcpy/Unlock/UpdateResource)。
 	void BlitCanvasToImage();
 

@@ -89,6 +89,7 @@ void UPausePanelWidget::OpenPanel() {
 
 	SetVisibility(ESlateVisibility::Visible);
 	if (MessageText) MessageText->SetVisibility(ESlateVisibility::Collapsed);
+	previousDilation = UGameplayStatics::GetGlobalTimeDilation(this);
 	UGameplayStatics::SetGlobalTimeDilation(this, 0.f);
 
 	if (APlayerController* playerController = GetOwningPlayer()) {
@@ -102,7 +103,7 @@ void UPausePanelWidget::ClosePanel() {
 	if (!IsOpen()) return;
 
 	SetVisibility(ESlateVisibility::Collapsed);
-	UGameplayStatics::SetGlobalTimeDilation(this, 1.f);
+	UGameplayStatics::SetGlobalTimeDilation(this, previousDilation);
 
 	if (APlayerController* playerController = GetOwningPlayer()) {
 		playerController->bShowMouseCursor = false;

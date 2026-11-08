@@ -4,7 +4,7 @@
 
 物品/背包系统的默认资产，共14个`AssetMod`：
 - `ContainerAsset`(`asset_container`)：背包容器，`backpack=true`、`volume=50`，能背在后背。
-- `WheatAsset`/`BeefAsset`/`BurgerAsset`(`asset_wheat`/`asset_beef`/`asset_burger`)：食物，`Containee`。
+- `WheatAsset`/`BeefAsset`(`asset_wheat`/`asset_beef`)：食物，`Containee`。`BurgerAsset`(`asset_burger`)：食物，`Object`(能拿在手上，没背包时商店按空手数限制购买量)。
 - `PistolAmmoAsset`/`RifleAmmoAsset`/`ShotgunAmmoAsset`/`SniperAmmoAsset`(`asset_ammo_*`)：子弹，没有对应`Product`。
 - `PistolWeaponAsset`/`RifleWeaponAsset`/`ShotgunWeaponAsset`/`SniperWeaponAsset`(`asset_pistol`等)：武器资产，`weapon=true`。
 - `GrenadeAsset`/`SmokeGrenadeAsset`(`asset_grenade`/`asset_smoke_grenade`)：投掷物，`throwable=true`。

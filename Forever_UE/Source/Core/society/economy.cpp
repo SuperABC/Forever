@@ -15,6 +15,8 @@
 #include "industry/product.h"
 
 #include <algorithm>
+#include <map>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -327,33 +329,100 @@ void Economy::PayWage(Society& society, Organization* organization, Citizen* wor
 	ledger.Transfer(Party::Of(worker), Party::Government(), incomeTax, Flow::INCOME_TAX);
 }
 
-Economy::PurchaseResult Economy::PlayerPurchase(Society& society, Industry& industry, Player& player,
-	Organization* seller, Citizen* buyer, const string& assetType) {
+vector<Economy::ShopItem> Economy::ListShopItems(Industry& industry, Player& player, const Organization* organization) {
+	vector<ShopItem> items;
+	if (!organization) return items;
+	vector<Storage*> storages = StoragesOf(organization, industry);
+
+	set<string> types;
+	for (const Storage* storage : storages) {
+		for (const auto& [type, amount] : storage->GetStock()) types.insert(type);
+	}
+	for (const string& type : types) {
+		int stock = StockOf(storages, type);
+		if (stock < 1) continue;
+		Product* product = industry.FindProduct(type);
+		if (!product) continue;
+		string assetType = player.FindAssetTypeByProduct(type);
+		if (assetType.empty()) continue;
+		Asset* sample = player.CreateAsset(assetType);
+		if (!sample) continue;
+
+		ShopItem item;
+		item.productType = type;
+		item.assetType = assetType;
+		item.price = product->GetRetailPrice();
+		item.stock = stock;
+		item.size = sample->GetSize();
+		player.DestroyAsset(sample);
+		items.push_back(item);
+	}
+	return items;
+}
+
+Economy::PurchaseResult Economy::PlayerPurchaseCart(Society& society, Industry& industry, Player& player,
+	Organization* seller, Citizen* buyer, const vector<pair<string, int>>& cart) {
 	if (!seller || !buyer) return PurchaseResult::Invalid;
 
-	Asset* asset = player.CreateAsset(assetType);
-	if (!asset) return PurchaseResult::Invalid;
-	Product* product = asset->GetProductType().empty() ? nullptr : industry.FindProduct(asset->GetProductType());
-	if (!product) {
-		player.DestroyAsset(asset);
-		return PurchaseResult::Invalid;
+	vector<Storage*> storages = StoragesOf(seller, industry);
+	int64_t total = 0;
+	vector<string> unitTypes;  // 每一件对应的productType
+	vector<string> unitAssets; // 每一件对应的Asset类型
+	vector<float> unitSizes;
+	for (const auto& [productType, quantity] : cart) {
+		if (quantity <= 0) continue;
+		Product* product = industry.FindProduct(productType);
+		string assetType = player.FindAssetTypeByProduct(productType);
+		if (!product || assetType.empty() || quantity > StockOf(storages, productType)) return PurchaseResult::Invalid;
+		Asset* sample = player.CreateAsset(assetType);
+		if (!sample) return PurchaseResult::Invalid;
+		float size = sample->GetSize();
+		player.DestroyAsset(sample);
+
+		total += product->GetRetailPrice() * quantity;
+		for (int i = 0; i < quantity; i++) {
+			unitTypes.push_back(productType);
+			unitAssets.push_back(assetType);
+			unitSizes.push_back(size);
+		}
 	}
+	if (unitTypes.empty()) return PurchaseResult::Invalid;
 
 	Ledger& ledger = society.GetLedger();
-	int64_t price = product->GetRetailPrice();
-	if (ledger.Balance(Party::Of(buyer)) < price) {
-		player.DestroyAsset(asset);
-		return PurchaseResult::NoMoney;
-	}
-	if (player.StoreAsset(asset) == Player::StoreResult::Failed) {
-		player.DestroyAsset(asset);
-		return PurchaseResult::NoSpace;
+	if (ledger.Balance(Party::Of(buyer)) < total) return PurchaseResult::NoMoney;
+	Player::CarryPlan plan = player.PlanCarry(unitSizes);
+	if (!plan.feasible) return PurchaseResult::NoSpace;
+
+	// 按方案把每一件放到容器/手上，只对放下的件收钱、扣库存。
+	map<string, int> bought;
+	int64_t charged = 0;
+	for (size_t i = 0; i < unitTypes.size(); i++) {
+		Asset* asset = player.CreateAsset(unitAssets[i]);
+		if (!asset) continue;
+		const Player::CarryTarget& target = plan.targets[i];
+		bool placed = false;
+		if (target.kind == Player::CarryTarget::Container) placed = target.container->AddContent(asset);
+		else if (target.kind == Player::CarryTarget::RightHand) placed = player.AddByPath("right", asset);
+		else if (target.kind == Player::CarryTarget::LeftHand) placed = player.AddByPath("left", asset);
+		if (!placed) {
+			player.DestroyAsset(asset);
+			continue;
+		}
+		bought[unitTypes[i]]++;
+		charged += industry.FindProduct(unitTypes[i])->GetRetailPrice();
 	}
 
-	ledger.Transfer(Party::Of(buyer), Party::Of(seller), price, Flow::SERVICE_PURCHASE);
-	int64_t consumptionTax = society.GetPolicy().Tax(price, society.GetPolicy().consumptionTaxPercent);
+	for (const auto& [productType, quantity] : bought) {
+		float remaining = static_cast<float>(quantity);
+		for (Storage* storage : storages) {
+			if (remaining <= 0.f) break;
+			remaining -= storage->Output(productType, remaining);
+		}
+	}
+	ledger.Transfer(Party::Of(buyer), Party::Of(seller), charged, Flow::SERVICE_PURCHASE);
+	int64_t consumptionTax = society.GetPolicy().Tax(charged, society.GetPolicy().consumptionTaxPercent);
 	ledger.Transfer(Party::Of(seller), Party::Government(), consumptionTax, Flow::CONSUMPTION_TAX);
-	return PurchaseResult::Success;
+	return charged > 0 ? PurchaseResult::Success : PurchaseResult::NoSpace;
 }
 
 void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, int currentYear,

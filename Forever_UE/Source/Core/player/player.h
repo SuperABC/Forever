@@ -128,6 +128,28 @@ public:
 	enum class StoreResult { Failed, AsBackpack, InBackpack, RightHand, LeftHand };
 	StoreResult StoreAsset(Asset* asset);
 
+	// 商店用：哪个Asset类型的productType等于这个Product类型(没有返回空串)。首次调用时临时创建每个已启用的
+	// Asset读一下再销毁，结果缓存。
+	std::string FindAssetTypeByProduct(const std::string& productType);
+
+	// 一批待携带的物品(每个元素=一件的size，都按count=1的Object算)放到身上的方案：先全部装进容器(背包、手里的容器，
+	// 含其中嵌套的容器，每个容器是一个箱子，容量=自己的GetSpace())，装不下就把最大的拿在一只空手上，再不行第二大
+	// 拿在另一只空手上，还不行就不可行。装箱用First-Fit-Decreasing(多箱装箱是NP难的，这是启发式近似；只有一个
+	// 背包时是精确的)。
+	struct CarryTarget {
+		enum Kind { Container, LeftHand, RightHand, None };
+		Kind kind = None;
+		Asset* container = nullptr; // kind==Container时的目标容器
+	};
+	struct CarryPlan {
+		bool feasible = false;
+		bool hasContainer = false;  // 身上是否有任何容器(有的话个数不受限，只受体积限)
+		int freeHands = 0;          // 空闲的手(0~2)
+		float containerSpace = 0.f; // 所有容器剩余空间之和
+		std::vector<CarryTarget> targets; // 与输入sizes一一对应；不可行时全为None
+	};
+	CarryPlan PlanCarry(const std::vector<float>& sizes) const;
+
 	// 左右手和背包(递归容器)里指定类型的总数；不含肩膀。
 	int CountOwned(const std::string& type) const;
 	// 摘下amount个指定类型的物品(必要时拆堆叠)交给调用方(out)，所有权转给调用方。数量不够返回false且不改
@@ -196,6 +218,9 @@ private:
 
 	// ---- 资产系统 ----
 	AssetFactory& assetFactory;
+
+	std::unordered_map<std::string, std::string> productAssetTypes; // FindAssetTypeByProduct的缓存
+	bool productAssetTypesBuilt = false;
 
 	Asset* leftHand = nullptr;
 	Asset* rightHand = nullptr;

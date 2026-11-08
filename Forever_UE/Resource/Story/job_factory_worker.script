@@ -1,8 +1,8 @@
 {
 	// FactoryWorkerJob的Script：上下班由计时器驱动(同job_shop_saler.script，8点上班17点下班)。
 	// 到岗(npc_arrive，在自己的工作房间)后给员工加"制作汉堡"选项，下班时移除。玩家操控这个员工去点
-	// 选项：start_puzzle(任意键退出的占位小游戏)，结束后puzzle_result触发pay_wage，由工厂组织
-	// 给玩家发100元(代扣所得税)。玩家去不去打工不影响每日工资结算，这是额外一份工资。
+	// 选项：start_puzzle("puzzle_burger"汉堡店小游戏)，结束后puzzle_result触发pay_wage，按得分(local.score)
+	// 发两倍得分的钱(每分2元，即local.score*200分)，由工厂组织支付(代扣所得税)。玩家去不去打工不影响每日工资结算，这是额外一份工资。
 	"milestones": [
 		{
 			"milestone": "game_start",
@@ -53,7 +53,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "start_puzzle", "puzzle": "\"puzzle_anykey\"", "param": "\"正在制作汉堡……\"" }
+				{ "type": "start_puzzle", "puzzle": "\"puzzle_burger\"" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -66,7 +66,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "pay_wage", "amount": "10000" }
+				{ "type": "pay_wage", "amount": "local.score * 200" }
 			],
 			"dialogs": [],
 			"subsequences": []
