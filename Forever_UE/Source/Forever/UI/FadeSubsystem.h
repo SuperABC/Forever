@@ -29,10 +29,20 @@ public:
 	// World关卡进场时调用：黑屏还没显示(比如编辑器里直接PIE在World.umap上)就补一个。
 	void EnsureBlack();
 
+	// 游戏内黑屏(跳时间用)：从透明渐变到全黑后保持黑屏，进度条显示框架的跳时间进度，直到ReleaseHold。
+	// 返回false=没法显示(没登记widget类/没有视口)，调用方不必等黑屏。
+	bool BeginHoldBlack();
+	// 已经完全黑下来并在保持中。
+	bool IsHeldBlack() const;
+	// 结束保持：进度条补满后渐隐，渐隐完自动从视口移除。
+	void ReleaseHold();
+
 	// 变黑，等几帧让黑屏画出来，再OpenLevel(World)。开始游戏/读档共用。
 	void OpenWorldLevel();
 
 private:
+	// 创建(必要时)并挂到视口，返回widget；失败返回nullptr。不改变widget的状态。
+	UFadeWidget* EnsureWidgetShown();
 	void HandleFinished();
 	void RemoveFromViewport();
 

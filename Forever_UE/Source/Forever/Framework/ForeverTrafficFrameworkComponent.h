@@ -115,6 +115,10 @@ public:
 	// 铺instantiate线路(火车)的轨道ISM，只处理ShouldInstantiate()且有trackMesh的线路，详见.md。
 	void BuildTracks(Traffic* traffic);
 
+	// 跳时间(jump_time)结束后调用：线路公交的物理表示(实车位置)已经跟时刻表脱节，全部收回运动学、
+	// 以时刻表为准(不对齐实车进度)，靠近玩家的之后会被UpdateBusPhysicsHandoff重新切回物理。
+	void ResyncBusesAfterTimeSkip();
+
 	// 车辆流式生成/销毁的距离(地图单位)，是市民的两倍；判断距离时Z方向放大5倍，和市民同一个度量。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	float vehicleSpawnDistance = 4.f;
@@ -149,7 +153,8 @@ private:
 
 	void UpdateBusPhysicsHandoff();
 	bool BusToPhysics(FBusState& state);
-	void BusToKinematic(FBusState& state);
+	// bSyncProgress=false：不把时刻表对齐到实车位置(跳时间之后实车位置已作废，以时刻表为准)。
+	void BusToKinematic(FBusState& state, bool bSyncProgress = true);
 	ABusController* SpawnBusController(AVehicleElement* element);
 	ABusController* GetOrCreateBusController(FBusState& state);
 	FBusState* FindOrAddBusState(const FString& vehicleName);

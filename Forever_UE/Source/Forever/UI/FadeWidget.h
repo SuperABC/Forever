@@ -18,6 +18,12 @@ public:
 	// 回到全黑+等待就绪状态(每次重新变黑时调用)。
 	void ResetToBlack();
 
+	// 游戏内黑屏(跳时间)：从透明渐变到全黑，之后保持黑屏并显示框架的跳时间进度(AForeverFrameworkActor::
+	// GetTimeSkipProgress)，直到Release。Release后进度条补满再渐隐，渐隐完成触发onFinished。
+	void BeginHold();
+	void Release();
+	bool IsHeldBlack() const { return state == EState::Holding; }
+
 	// 渐隐完成时触发(控件此时已经完全透明)，由UFadeSubsystem用来把它从视口移除。
 	FSimpleDelegate onFinished;
 
@@ -25,6 +31,10 @@ protected:
 	virtual void NativeConstruct() override;
 	// InDeltaTime是真实时间——等待期间世界被SetGlobalTimeDilation(0)冻结，渐隐不能用世界时间。
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+	// BeginHold时从透明渐变到全黑用的秒数。
+	UPROPERTY(EditDefaultsOnly, Category = "Fade")
+	float fadeToBlackDuration = 0.6f;
 
 	// 世界就绪后，从全黑渐变到完全透明用的秒数。
 	UPROPERTY(EditDefaultsOnly, Category = "Fade")
@@ -52,7 +62,7 @@ protected:
 	TObjectPtr<UTextBlock> StatusText;
 
 private:
-	enum class EState : uint8 { Waiting, Fading, Done };
+	enum class EState : uint8 { Waiting, Fading, Done, FadingToBlack, Holding };
 
 	// 取当前World里的FrameworkActor；还没出现(关卡还在加载)返回nullptr。
 	AForeverFrameworkActor* FindFramework(UWorld* world);
@@ -65,6 +75,7 @@ private:
 	// 已经开始等"构建场景"(生成流程走完)之后的秒数，兜底用。
 	float settleElapsed = 0.f;
 	float displayedPercent = 0.f;
+	bool bReleaseRequested = false;
 	TWeakObjectPtr<UWorld> trackedWorld;
 	TWeakObjectPtr<AForeverFrameworkActor> framework;
 };

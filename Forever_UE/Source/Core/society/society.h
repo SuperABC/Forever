@@ -34,17 +34,17 @@ public:
 	void Init(const std::vector<Component*>& components);
 
 	// 新开局为每个组织选股东：mod的shareholders占股比例归一化后，随机选对应数量个不同的成年市民。
-	void AssignShareholders(const std::vector<Citizen*>& citizens, int currentYear);
+	void AssignShareholders(const std::vector<Citizen*>& citizens, const Time& now);
 
 	// 阶段2：把成年且未到退休年龄、还没有job的市民随机匹配到空缺的Job上。
-	void RecruitCitizens(const std::vector<Citizen*>& citizens, int currentYear);
+	void RecruitCitizens(const std::vector<Citizen*>& citizens, const Time& now);
 	// 再就业：和RecruitCitizens同一套随机配对，只招在场的人、只填开放的岗位；每天调一次，
 	// 让被裁员/企业倒闭的人和扩招/重启空出的岗位尽快对上。返回新就业人数。
-	int MatchUnemployed(const std::vector<Citizen*>& citizens, int currentYear);
+	int MatchUnemployed(const std::vector<Citizen*>& citizens, const Time& now);
 
 	// 给一个开局之后才接入经济系统的市民(spawn_npc economy:true)单独求职：已有工作/不在工作年龄/没有
 	// 空缺岗位都返回false，否则随机挑一个空缺岗位安排上并返回true。
-	bool RecruitCitizen(Citizen* citizen, int currentYear);
+	bool RecruitCitizen(Citizen* citizen, const Time& now);
 
 	// 按Job脚本反查岗位及其所属组织(脚本里的change以context.self为Job脚本时用，如pay_wage/open_shop)。
 	// 找不到返回nullptr。
@@ -56,6 +56,9 @@ public:
 
 	// 每帧：Organization自己的DailyPlan/ExecNode调度(和Populace::Tick驱动Job那一份独立的timer)。
 	// @post透传给Organization::DailyPlan/ExecNode。
+	// 是否还有已到时(<=currentTime)但没处理的组织timer(每次Tick有条数上限)，用法同Populace::HasDueTimers。
+	bool HasDueTimers(const Time& currentTime) const;
+
 	void Tick(const Time& currentTime, bool crossedDay,
 		const std::function<void(Organization*, const std::vector<Change*>&)>& onActions, PostHandle* post);
 

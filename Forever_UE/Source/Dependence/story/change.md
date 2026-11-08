@@ -169,3 +169,7 @@
 
 - 上面"没有JSON分支的20种"Change：被点名实现时需要同时补`Script::BuildChanges`分支和某个域/UE层的执行分支，两者要一起补。
 - 嵌套`Option`里的Change本体没有回收机制，见`dialog.md`。
+
+## JumpTimeChange(`jump_time`)
+字段`time`、`mode`(均为表达式)，含义同`create_timer`的absolute/relative/next(不支持`real`)；目标不晚于现在静默不执行。
+执行见`ForeverFrameworkActor.md`“跳时间”。JSON：`{ "type": "jump_time", "time": "08:00:00", "mode": "next" }`。

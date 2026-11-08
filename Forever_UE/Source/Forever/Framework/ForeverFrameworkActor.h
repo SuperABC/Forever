@@ -21,6 +21,8 @@ class Traffic;
 class Player;
 class Citizen;
 class Change;
+class Time;
+class PostImplement;
 class SpawnNpcChange;
 class NPCReviveChange;
 struct ScriptContext;
@@ -184,6 +186,22 @@ protected:
 	// 第一帧强制当作跨天:开局当天不会天然触发CrossDay(),否则第一天的Job/Organization调度表生成不出来。
 	bool bIsFirstTick = true;
 
+	// 一帧里推进各Core域一次(Tick和跳时间共用)：map/populace/society/industry/(跨天则经济+移民)/traffic/story，
+	// 顺序不能变。时钟(player)和天气已经由调用方推进好。
+	void StepWorld(bool crossedDay);
+	void TickPopulaceDomain(bool crossedDay, PostImplement& postImplement);
+	void TickSocietyDomain(bool crossedDay, PostImplement& postImplement);
+
+	// 跳时间(jump_time)：分帧小步推进时钟，见BeginTimeSkip。
+	void RunTimeSkipBudget();
+	void FinishTimeSkip();
+	bool bTimeSkipping = false;
+	bool bSkipFade = false;          // 黑屏成功显示了(没显示就不等黑屏)
+	Time* skipStart = nullptr;
+	Time* skipTarget = nullptr;
+	double skipTotalSeconds = 0.0;
+	double skipDoneSeconds = 0.0;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<USceneComponent> sceneRoot;
 
@@ -231,6 +249,13 @@ protected:
 	TObjectPtr<UForeverZoneFrameworkComponent> zoneFramework;
 
 public:
+	// jump_time：把游戏时钟快进到target(必须晚于现在)，期间的计时器/经济/事件都照常发生。画面渐黑并显示进度，
+	// 每帧在预算内推进若干小步，完成后渐隐。跳的过程中再次调用被忽略。
+	void BeginTimeSkip(const Time& target);
+	FORCEINLINE bool IsTimeSkipping() const { return bTimeSkipping; }
+	// 跳时间进度(0..1)和说明文字，供黑屏进度条用；没在跳返回false。
+	bool GetTimeSkipProgress(float& outFraction, FText& outLabel) const;
+
 	FORCEINLINE UForeverAssetFrameworkComponent* GetAssetFramework() const { return assetFramework; }
 	FORCEINLINE UForeverBuildingFrameworkComponent* GetBuildingFramework() const { return buildingFramework; }
 

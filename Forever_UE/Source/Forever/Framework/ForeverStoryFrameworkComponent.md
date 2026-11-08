@@ -108,3 +108,7 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
 ## 待办/后续阶段
 
 - 分支选项的嵌套内容不能引用`local.`前缀变量（见"Dialog展示"一节）；暂无脚本用到，真需要时把值烘焙进Script变量池。
+
+## 跳时间相关
+- `ResolveJumpTarget(change, context, out)`：jump_time目标时刻(和create_timer共用匿名函数`ResolveTimerTarget`)，返回是否需要跳。
+- `DrainExpiredTimers(maxIterations)`：把到期的game计时器全部发完(不推进real计时器)，供跳时间每一步使用；`FireExpiredTimers`也走同一个`FireTimerBatch`。

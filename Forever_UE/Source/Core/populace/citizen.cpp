@@ -159,6 +159,11 @@ void Citizen::SetAvatar(const string& avatar) { this->avatar = avatar; }
 int Citizen::GetAvatarIndex() const { return avatarIndex; }
 
 int Citizen::GetAge(int currentYear) const { return currentYear - birthYear; }
+int Citizen::GetAge(const Time& now) const {
+	int age = now.GetYear() - birthYear;
+	if (now.GetMonth() < birthMonth || (now.GetMonth() == birthMonth && now.GetDay() < birthDay)) age--;
+	return age;
+}
 
 Citizen* Citizen::GetSpouse() const { return spouse; }
 void Citizen::SetSpouse(Citizen* value) { spouse = value; }

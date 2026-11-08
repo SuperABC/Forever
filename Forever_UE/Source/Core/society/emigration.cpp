@@ -43,14 +43,14 @@ void Emigration::Depart(Society& society, const vector<Room*>& rooms, Citizen* c
 	citizen->Depart();
 }
 
-vector<Citizen*> Emigration::Monthly(Society& society, const vector<Room*>& rooms, int currentYear,
+vector<Citizen*> Emigration::Monthly(Society& society, const vector<Room*>& rooms, const Time& now,
 	const Citizen* protectedCitizen) {
 	vector<Citizen*> departed;
 	for (const Room* room : rooms) {
 		if (!room || !room->IsResidential()) continue;
 		for (Household* household : room->GetHouseholds()) {
 			if (protectedCitizen && household->Contains(protectedCitizen)) continue;
-			vector<Citizen*> adults = household->GetAdults(currentYear);
+			vector<Citizen*> adults = household->GetAdults(now);
 			if (adults.empty()) continue;
 
 			bool allNegative = true;

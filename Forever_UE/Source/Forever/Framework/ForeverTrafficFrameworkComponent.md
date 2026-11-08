@@ -94,3 +94,7 @@
 
 - 公共交通运动学车辆本身不支持驾驶，见`TransitVehicleElement.md`"待办"一节。
 - 暂无隧道专用轨道资产，隧道内复用`trackMesh`。
+
+## 跳时间后的公交
+`ResyncBusesAfterTimeSkip()`：线路公交的物理车(实车位置)已跟时刻表脱节，全部`BusToKinematic(state, false)`(不对齐实车进度)，
+靠近玩家的之后由`UpdateBusPhysicsHandoff`按时刻表位置重新切物理。玩家在开/搭乘的不动。

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "class.h"
+#include "common/utility.h"
 
 #include <cstdint>
 #include <vector>
@@ -13,7 +14,7 @@ public:
 	static int64_t NetWorth(const Society& society, const Citizen* citizen);
 
 	// 月度检查所有户，满足条件的整户离开，返回离开的全部市民。protectedCitizen所在的户跳过（玩家当前控制的人）。
-	static std::vector<Citizen*> Monthly(Society& society, const std::vector<Room*>& rooms, int currentYear,
+	static std::vector<Citizen*> Monthly(Society& society, const std::vector<Room*>& rooms, const Time& now,
 		const Citizen* protectedCitizen);
 
 private:

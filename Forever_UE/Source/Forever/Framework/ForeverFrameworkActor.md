@@ -99,3 +99,16 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
 ## 待办/后续阶段
 
 - 一旦有人在`World.umap`里手动放置了真实的`AForeverFrameworkActor`，应该移除`ForeverPlayerGameMode`里的动态兜底生成逻辑，不要误以为是正式生成方案。
+
+## 跳时间(jump_time)
+`ApplyChange`的`JumpTimeChange`分支 → `BeginTimeSkip(target)`。流程：
+1. `Begin`：`populaceFramework->BeginTimeSkip()`(在途行走全部冲刷到目的地，之后`RequestWalk`同步瞬移+`npc_arrive`)、
+   `SetCinematicMode`锁移动/视角、`UFadeSubsystem::BeginHoldBlack()`渐黑；黑屏保持住之后才开始推进(没显示黑屏则直接开始)。
+2. 每帧`Tick`在跳期间整体让位给`RunTimeSkipBudget`(预算约8ms墙钟)：小步推进，步长=min(1游戏小时, 下一个0点, 目标)；
+   每步`SetTime`→`CrossDay`(这一步跨了0点才为真，保证每日体恰好一天一次)→天气`Tick`+`weather_change`→`StepWorld`
+   (map/populace/society/industry/经济+移民/traffic/story，**与常规Tick共用同一份**)→反复排空Job/Scheduler/组织到期项
+   (`HasDueTimers`)→`DrainExpiredTimers`(story计时器)。
+3. `FinishTimeSkip`：结束跳时间模式、`ResyncBusesAfterTimeSkip`(公交物理车收回，以时刻表为准)、解锁输入、`ReleaseHold`渐隐。
+进度：`GetTimeSkipProgress`(已推进游戏秒/总秒)，黑屏进度条直接用。跳期间再触发jump_time被忽略。
+局限：走路用瞬移代替；`Traffic::elapsedSeconds`是float，超长跳(>约190天)精度下降；`StepWorld`开头把游戏年份同步给`Populace::currentYear`(`SetCurrentYear`，年龄随之增长)，常规Tick和跳时间共用。
+`StepWorld`/`TickPopulaceDomain`/`TickSocietyDomain`是从原Tick里抽出来的，顺序不能变。

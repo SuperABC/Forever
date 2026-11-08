@@ -56,6 +56,8 @@
 #include "GameFramework/DefaultPawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Player/ForeverPlayerController.h"
+#include "UI/FadeSubsystem.h"
+#include "HAL/PlatformTime.h"
 
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
@@ -102,6 +104,8 @@ AForeverFrameworkActor::~AForeverFrameworkActor()
 {
 	// 先等异步寻路任务跑完才能delete map/populace(后台线程还持有它们的裸指针)。
 	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
+	delete skipStart;
+	delete skipTarget;
 	delete player;
 	delete traffic;
 	delete industry;
@@ -453,6 +457,12 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* jumpTime = dynamic_cast<const JumpTimeChange*>(change)) {
+		Time target;
+		if (storyFramework && storyFramework->ResolveJumpTarget(jumpTime, context, target)) BeginTimeSkip(target);
+		return;
+	}
+
 	if (auto* removeTimer = dynamic_cast<const RemoveTimerChange*>(change)) {
 		if (storyFramework) storyFramework->ApplyRemoveTimer(removeTimer, context);
 		return;
@@ -621,7 +631,7 @@ void AForeverFrameworkActor::ApplySpawnNpc(const SpawnNpcChange* change, const S
 		}
 	}
 
-	if (economy && society) society->RecruitCitizen(citizen, populace->GetCurrentYear());
+	if (economy && society) society->RecruitCitizen(citizen, *player->GetTime());
 
 	if (populaceFramework) populaceFramework->AddCitizen(citizen);
 }
@@ -722,6 +732,15 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 
 	// 防御性判空。
 	if (!player) return;
+
+	// 跳时间中：常规的时钟推进/Core Tick整体让位给跳时间循环(黑屏完全盖住之后才开始，免得看见世界突变)。
+	if (bTimeSkipping) {
+		UGameInstance* gameInstance = GetGameInstance();
+		UFadeSubsystem* fade = gameInstance ? gameInstance->GetSubsystem<UFadeSubsystem>() : nullptr;
+		if (!bSkipFade || (fade && fade->IsHeldBlack())) RunTimeSkipBudget();
+		return;
+	}
+
 	player->Tick(DeltaTime);
 	// 时钟刚推进过：同步写进系统变量system.time.*，见UpdateSystemTime。
 	if (storyFramework) storyFramework->UpdateSystemTime();
@@ -749,12 +768,13 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	bool crossedDay = bIsFirstTick || player->CrossDay();
 	bIsFirstTick = false;
 
-	// 现场构造、只覆盖这一帧的PostImplement(Job/OrganizationMod通过Post()查地址，见Core/common/implement.cpp)。
-	PostImplement postImplement(map, populace, society, story, industry, traffic, player);
+	StepWorld(crossedDay);
 
-	// 各Core域挨个Tick(Player已在上面推进了全局时钟)。
-	if (map) map->Tick(*player->GetTime(), crossedDay, &postImplement);
+	// 到时的计时器给各自的归属脚本发time_up。
+	if (storyFramework) storyFramework->FireExpiredTimers(DeltaTime);
+}
 
+void AForeverFrameworkActor::TickPopulaceDomain(bool crossedDay, PostImplement& postImplement) {
 	if (populace) {
 		populace->Tick(*player->GetTime(), crossedDay,
 			[this](Citizen* citizen, const std::vector<Change*>& changes) {
@@ -767,7 +787,9 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 				}
 			}, &postImplement);
 	}
+}
 
+void AForeverFrameworkActor::TickSocietyDomain(bool crossedDay, PostImplement& postImplement) {
 	if (society) {
 		society->Tick(*player->GetTime(), crossedDay,
 			[this](Organization* organization, const std::vector<Change*>& changes) {
@@ -780,6 +802,23 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 				}
 			}, &postImplement);
 	}
+}
+
+void AForeverFrameworkActor::StepWorld(bool crossedDay)
+{
+	// 年份变了就同步给人口(年龄=currentYear-出生年)，要在各域Tick之前，它们当天就用新年龄。
+	if (populace && player->GetTime()->GetYear() != populace->GetCurrentYear()) {
+		populace->SetCurrentYear(player->GetTime()->GetYear());
+	}
+
+	// 现场构造、只覆盖这一帧的PostImplement(Job/OrganizationMod通过Post()查地址，见Core/common/implement.cpp)。
+	PostImplement postImplement(map, populace, society, story, industry, traffic, player);
+
+	// 各Core域挨个Tick(Player已在上面推进了全局时钟)。
+	if (map) map->Tick(*player->GetTime(), crossedDay, &postImplement);
+
+	TickPopulaceDomain(crossedDay, postImplement);
+	TickSocietyDomain(crossedDay, postImplement);
 
 	if (industry && society) Economy::SyncIndustry(*society, *industry); // 倒闭企业的房间停业
 	if (industry) industry->Tick(*player->GetTime(), crossedDay, &postImplement);
@@ -792,13 +831,13 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 			for (Room* room : building->GetRooms()) allRooms.push_back(room);
 		}
 		DailyReport economyReport = Economy::Daily(*society, *industry, allRooms, populace->GetCitizens(),
-			*player->GetTime(), &postImplement, populace->GetCurrentYear(), GetControlledCitizen());
+			*player->GetTime(), &postImplement, GetControlledCitizen());
 		// 本月整户离城的市民：移除他们在场景里的Actor。
 		if (populaceFramework) {
 			for (Citizen* departed : economyReport.departed) populaceFramework->HandleCitizenDeath(departed);
 		}
 		// 城外迁入的新市民：登记给人口组件，之后按距离流式生成Actor。
-		for (Citizen* immigrant : Immigration::Daily(*society, *populace, *map, populace->GetCurrentYear())) {
+		for (Citizen* immigrant : Immigration::Daily(*society, *populace, *map, *player->GetTime())) {
 			if (populaceFramework) populaceFramework->AddCitizen(immigrant);
 		}
 		if (!economyReport.departed.empty()) {
@@ -828,9 +867,115 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 		}
 	}
 	if (story) story->Tick(*player->GetTime(), crossedDay, &postImplement);
+}
 
-	// 到时的计时器给各自的归属脚本发time_up。
-	if (storyFramework) storyFramework->FireExpiredTimers(DeltaTime);
+namespace {
+	// 跳时间每帧最多花的墙钟时间(秒)：剩下的留给渲染，进度条才能刷新。
+	constexpr double kTimeSkipFrameBudgetSeconds = 0.008;
+	// 单步最长的游戏时间(小时)：必须小于任何循环计时器的间隔，见jump_time的文档。
+	constexpr int kTimeSkipMaxStepHours = 1;
+	// 同一时刻反复Tick排空到期项的批数上限(防死循环)。
+	constexpr int kTimeSkipMaxDrainRounds = 256;
+}
+
+void AForeverFrameworkActor::BeginTimeSkip(const Time& target)
+{
+	if (bTimeSkipping || !player || !bInitialGenerationDone) return;
+	const double total = player->GetTime()->DifferenceInSeconds(target);
+	if (total <= 0.0) return;
+
+	skipStart = new Time(*player->GetTime());
+	skipTarget = new Time(target);
+	skipTotalSeconds = total;
+	skipDoneSeconds = 0.0;
+	bTimeSkipping = true;
+
+	// 在途的行走一律先到达；跳期间npc_navigate直接瞬移。
+	if (populaceFramework) populaceFramework->BeginTimeSkip();
+
+	// 锁住移动/视角输入，黑屏渐变完成后才开始推进。
+	if (APlayerController* playerController = UGameplayStatics::GetPlayerController(this, 0)) {
+		playerController->SetCinematicMode(true, false, false, true, true);
+	}
+	UGameInstance* gameInstance = GetGameInstance();
+	UFadeSubsystem* fade = gameInstance ? gameInstance->GetSubsystem<UFadeSubsystem>() : nullptr;
+	bSkipFade = fade && fade->BeginHoldBlack();
+}
+
+bool AForeverFrameworkActor::GetTimeSkipProgress(float& outFraction, FText& outLabel) const
+{
+	if (!bTimeSkipping) return false;
+	outFraction = skipTotalSeconds > 0.0 ? static_cast<float>(FMath::Clamp(skipDoneSeconds / skipTotalSeconds, 0.0, 1.0)) : 1.f;
+	outLabel = FText::FromString(TEXT("正在跳过时间"));
+	return true;
+}
+
+void AForeverFrameworkActor::RunTimeSkipBudget()
+{
+	const double deadline = FPlatformTime::Seconds() + kTimeSkipFrameBudgetSeconds;
+	while (true) {
+		if (*player->GetTime() >= *skipTarget) {
+			FinishTimeSkip();
+			return;
+		}
+
+		// 下一站：1小时后、下一个0点、目标，取最近的。0点单独成站保证每个日子的"每日体"恰好跑一次。
+		Time next = *player->GetTime();
+		next.AddHours(kTimeSkipMaxStepHours);
+		Time midnight = *player->GetTime();
+		midnight.SetTime(0, 0, 0, 0);
+		midnight.AddDays(1);
+		if (midnight < next) next = midnight;
+		if (*skipTarget < next) next = *skipTarget;
+
+		const double stepSeconds = player->GetTime()->DifferenceInSeconds(next);
+		player->SetTime(next);                       // SetTime记下旧的日，CrossDay()据此判断这一步是否跨了0点
+		const bool crossedDay = player->CrossDay();
+		player->GetWeather().Tick(static_cast<long long>(stepSeconds * 1000.0), next.GetMonth());
+
+		if (storyFramework) storyFramework->UpdateSystemTime();
+		if (player->GetWeather().ConsumeChanged() && storyFramework) {
+			storyFramework->BroadcastWeatherChange(player->GetWeather().GetName());
+		}
+
+		StepWorld(crossedDay);
+
+		// Job/Scheduler/组织的到期项每次Tick有条数上限：同一时刻反复Tick(不再算跨天)直到排空。
+		PostImplement postImplement(map, populace, society, story, industry, traffic, player);
+		for (int round = 0; round < kTimeSkipMaxDrainRounds; round++) {
+			const bool populaceDue = populace && populace->HasDueTimers(*player->GetTime());
+			const bool societyDue = society && society->HasDueTimers(*player->GetTime());
+			if (!populaceDue && !societyDue) break;
+			if (populaceDue) TickPopulaceDomain(false, postImplement);
+			if (societyDue) TickSocietyDomain(false, postImplement);
+		}
+		if (storyFramework) storyFramework->DrainExpiredTimers(kTimeSkipMaxDrainRounds);
+
+		skipDoneSeconds = skipStart->DifferenceInSeconds(*player->GetTime());
+		if (FPlatformTime::Seconds() >= deadline) return;
+	}
+}
+
+void AForeverFrameworkActor::FinishTimeSkip()
+{
+	bTimeSkipping = false;
+	delete skipStart;
+	delete skipTarget;
+	skipStart = nullptr;
+	skipTarget = nullptr;
+
+	if (populaceFramework) populaceFramework->EndTimeSkip();
+	if (trafficFramework) trafficFramework->ResyncBusesAfterTimeSkip();
+	if (storyFramework) storyFramework->UpdateSystemTime();
+
+	if (APlayerController* playerController = UGameplayStatics::GetPlayerController(this, 0)) {
+		playerController->SetCinematicMode(false, false, false, true, true);
+	}
+	if (bSkipFade) {
+		UGameInstance* gameInstance = GetGameInstance();
+		if (UFadeSubsystem* fade = gameInstance ? gameInstance->GetSubsystem<UFadeSubsystem>() : nullptr) fade->ReleaseHold();
+	}
+	bSkipFade = false;
 }
 
 namespace {
@@ -1011,14 +1156,16 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 		// 按Component加权分配Organization，再把成年市民匹配到空缺Job，见society.md。
 	society = new Society();
 	society->Init(map->GetAllComponents());
-	society->RecruitCitizens(populace->GetCitizens(), populace->GetCurrentYear());
+	// 开局日期(1月1日8点)：世界生成时玩家时钟还没建。
+	const Time startTime(populace->GetCurrentYear(), 1, 1, 8);
+	society->RecruitCitizens(populace->GetCitizens(), startTime);
 	// 入职历史反推+同事关系依赖RecruitCitizens和毕业年份，见society.md。人口按存档恢复时已经有了，不补。
 	if (!bPopulaceRestored) {
 		society->GenerateEmploymentHistory(populace->GetCitizens(), populace->GetCurrentYear());
 	}
 
 	// 新开局:选股东并由城市外账户注资，见Core/society/settlement.md。
-	society->AssignShareholders(populace->GetCitizens(), populace->GetCurrentYear());
+	society->AssignShareholders(populace->GetCitizens(), startTime);
 	Settlement::InitFunds(*society, populace->GetCitizens());
 }
 

@@ -1048,11 +1048,11 @@ bool UForeverTrafficFrameworkComponent::BusToPhysics(FBusState& state) {
 	return true;
 }
 
-void UForeverTrafficFrameworkComponent::BusToKinematic(FBusState& state) {
+void UForeverTrafficFrameworkComponent::BusToKinematic(FBusState& state, bool bSyncProgress) {
 	AVehicleElement* element = state.element.Get();
 	// 先把时刻表进度对齐到实车当前位置（必须在ClearCommands之前读控制器状态）：物理车比名义速度慢，
 	// 不对齐的话交还瞬间时刻表算出来的位置早已领先一大截，公交会"瞬移"到玩家附近。
-	if (ABusController* controller = state.controller.Get()) {
+	if (ABusController* controller = bSyncProgress ? state.controller.Get() : nullptr) {
 		int32 legIndex;
 		float legFraction, dwellFraction;
 		bool bDwelling;
@@ -1078,6 +1078,15 @@ void UForeverTrafficFrameworkComponent::BusToKinematic(FBusState& state) {
 		if (Route* route = state.vehicle->GetRoute()) route->ResetStopState(state.vehicle);
 	}
 	if (ATransitVehicleElement* kinematic = state.kinematic.Get()) kinematic->SetSuspended(false);
+}
+
+void UForeverTrafficFrameworkComponent::ResyncBusesAfterTimeSkip() {
+	for (TPair<FString, FBusState>& pair : busStates) {
+		FBusState& state = pair.Value;
+		if (!state.bRouteBus || state.bDetached || !state.element.IsValid()) continue;
+		if (state.element->IsPlayerControlled()) continue; // 玩家在开/搭乘：不动
+		BusToKinematic(state, false); // 之后UpdateBusPhysicsHandoff会按时刻表位置重新决定要不要切物理
+	}
 }
 
 void UForeverTrafficFrameworkComponent::StartBusTestRun(const FString& vehicleName) {

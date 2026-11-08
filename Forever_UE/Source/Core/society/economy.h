@@ -79,10 +79,10 @@ public:
 	static void SyncIndustry(Society& society, Industry& industry);
 
 	// industry必须已经在今天Tick过（流水是当天的）。rooms是全城房间（算房租和户），citizens是全体市民
-	// （算补助），post给组织mod查询商品价格等。currentYear用来算年龄。protectedCitizen是玩家当前控制的市民，
+	// （算补助），post给组织mod查询商品价格等。now用来按生日算年龄。protectedCitizen是玩家当前控制的市民，
 	// 他所在的户不会被判离城。
 	static DailyReport Daily(Society& society, Industry& industry, const std::vector<Room*>& rooms,
-		const std::vector<Citizen*>& citizens, const Time& time, PostHandle* post, int currentYear,
+		const std::vector<Citizen*>& citizens, const Time& time, PostHandle* post,
 		const Citizen* protectedCitizen = nullptr);
 
 	// ---- 玩家参与经济(玩家的钱就是被操控市民的Ledger账户) ----
@@ -114,20 +114,20 @@ private:
 	static void IssueShares(Society& society, MonthlyReport& report);
 
 	// 月度结算：企业税、分红、股东所得税，存款/国债结息，离城检查。其余税收都在交易发生时即时缴纳。
-	static MonthlyReport Monthly(Society& society, const std::vector<Room*>& rooms, int currentYear,
+	static MonthlyReport Monthly(Society& society, const std::vector<Room*>& rooms, const Time& now,
 		const Citizen* protectedCitizen, DailyReport& report);
 
 	// 政府账户为负时发国债补流动性，国债补不满的缺口直接印钞。
-	static void FundGovernment(Society& society, const std::vector<Citizen*>& citizens, int currentYear,
+	static void FundGovernment(Society& society, const std::vector<Citizen*>& citizens, const Time& now,
 		DailyReport& report);
 
 	// 倒闭与重启：资金为负的企业倒闭；之后每天查询，mod的每个股东位都能找到存款超过"初始资金×占股比例"的
 	// 成年市民时，从这些人账户按占股比例集齐初始资金，核销旧负债，旧股东的股份作废、换成新股东，重新营业。
-	static void UpdateBankruptcies(Society& society, const std::vector<Citizen*>& citizens, int currentYear,
+	static void UpdateBankruptcies(Society& society, const std::vector<Citizen*>& citizens, const Time& now,
 		DailyReport& report);
 	static void RunServices(Society& society, Industry& industry, const std::vector<Room*>& rooms,
-		PostHandle* post, int currentYear, DailyReport& report);
+		PostHandle* post, const Time& now, DailyReport& report);
 	static void PayWages(Society& society, DailyReport& report);
-	static void PaySubsidies(Society& society, const std::vector<Citizen*>& citizens, int currentYear,
+	static void PaySubsidies(Society& society, const std::vector<Citizen*>& citizens, const Time& now,
 		DailyReport& report);
 };

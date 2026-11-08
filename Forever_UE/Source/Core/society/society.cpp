@@ -63,10 +63,10 @@ Party Society::OwnerOf(const Room* room) const {
 	return it != roomOwners.end() ? Party::Of(it->second) : Party::Government();
 }
 
-void Society::AssignShareholders(const vector<Citizen*>& citizens, int currentYear) {
+void Society::AssignShareholders(const vector<Citizen*>& citizens, const Time& now) {
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
-		if (citizen && citizen->IsInEconomy() && citizen->GetAge(currentYear) >= kMinAdultAge) adults.push_back(citizen);
+		if (citizen && citizen->IsInEconomy() && citizen->GetAge(now) >= kMinAdultAge) adults.push_back(citizen);
 	}
 
 	for (Organization* organization : organizations) {
@@ -165,11 +165,11 @@ void Society::Init(const vector<Component*>& components) {
 	}
 }
 
-void Society::RecruitCitizens(const vector<Citizen*>& citizens, int currentYear) {
-	MatchUnemployed(citizens, currentYear);
+void Society::RecruitCitizens(const vector<Citizen*>& citizens, const Time& now) {
+	MatchUnemployed(citizens, now);
 }
 
-int Society::MatchUnemployed(const vector<Citizen*>& citizens, int currentYear) {
+int Society::MatchUnemployed(const vector<Citizen*>& citizens, const Time& now) {
 	vector<Job*> vacancies;
 	for (Organization* organization : organizations) {
 		for (Job* job : organization->GetJobs()) {
@@ -182,7 +182,7 @@ int Society::MatchUnemployed(const vector<Citizen*>& citizens, int currentYear) 
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
 		if (!citizen || !citizen->IsActive() || !citizen->IsInEconomy() || citizen->GetJob()) continue;
-		int age = citizen->GetAge(currentYear);
+		int age = citizen->GetAge(now);
 		if (age >= kMinAdultAge && age < policy.retirementAge) adults.push_back(citizen);
 	}
 
@@ -224,9 +224,9 @@ Organization* Society::FindOrganizationOfJob(const Job* job) const {
 	return nullptr;
 }
 
-bool Society::RecruitCitizen(Citizen* citizen, int currentYear) {
+bool Society::RecruitCitizen(Citizen* citizen, const Time& now) {
 	if (!citizen || citizen->GetJob()) return false;
-	int age = citizen->GetAge(currentYear);
+	int age = citizen->GetAge(now);
 	if (age < kMinAdultAge || age >= policy.retirementAge) return false;
 
 	vector<Job*> vacancies;
@@ -241,6 +241,10 @@ bool Society::RecruitCitizen(Citizen* citizen, int currentYear) {
 	job->SetOccupant(citizen);
 	citizen->SetJob(job);
 	return true;
+}
+
+bool Society::HasDueTimers(const Time& currentTime) const {
+	return !organizationTimerSet.empty() && std::get<0>(*organizationTimerSet.begin()) <= currentTime;
 }
 
 void Society::Tick(const Time& currentTime, bool crossedDay,

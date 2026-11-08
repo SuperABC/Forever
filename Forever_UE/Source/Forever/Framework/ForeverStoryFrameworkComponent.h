@@ -13,6 +13,7 @@ class ChangeControlChange;
 class StartPuzzleChange;
 class PayWageChange;
 class CreateTimerChange;
+class JumpTimeChange;
 class RemoveTimerChange;
 class Script;
 class Citizen;
@@ -106,6 +107,12 @@ public:
 	void ApplyCreateTimer(const CreateTimerChange* change, const ScriptContext& context);
 	void ApplyRemoveTimer(const RemoveTimerChange* change, const ScriptContext& context);
 	void FireExpiredTimers(float deltaSeconds);
+	// 跳时间用：把已到时的计时器全部发完(不推进real计时器)，最多maxIterations批(每批kMaxStoryTimersPerFrame个)，
+	// 超过说明有计时器在同一时刻反复重置自己，打警告后放弃。
+	void DrainExpiredTimers(int32 maxIterations);
+	// jump_time的目标时刻：和create_timer同一套mode/time解析(不支持real)。返回true才需要跳(目标晚于现在)；
+	// 过去的绝对时间、不往前的偏移都静默返回false。
+	bool ResolveJumpTarget(const JumpTimeChange* change, const ScriptContext& context, Time& outTarget);
 
 	// ChangeControlChange的实际执行：把玩家操控权切换到指定姓名的市民身上。Core层不认识
 	// Actor/Controller，所以不在Story::ApplyChange里处理；由AForeverFrameworkActor::ApplyChange转发到这里。
@@ -178,6 +185,9 @@ public:
 	void SelectDialogOption(int32 index);
 
 private:
+	// 弹出并发送最多maxCount个到时计时器，返回是否有过到时的(FireExpiredTimers/DrainExpiredTimers共用)。
+	bool FireTimerBatch(size_t maxCount);
+
 	// 把event广播给组织/岗位/市民Scheduler/车辆/门的全部Script(includeMain为true时连主线也算)，
 	// 匹配出的Dialog/Change交给ProcessScriptActions。BroadcastGameStart和BroadcastGlobalMessage共用。
 	void BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain);

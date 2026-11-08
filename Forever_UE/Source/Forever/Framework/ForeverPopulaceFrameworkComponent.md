@@ -135,3 +135,7 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 全局概率 `walkInstantiateProbability` 是动态的：初始1；每扫完一整轮 `allCitizens`，统计进入生成距离(×`movingDistanceScale`)的行走者数
 (含已实例化的和被排除的)，取历史峰值x，概率 = min(当前, 1.5*maxMovingCitizens/x)，只减不增——第一次高峰期只是在测x，从第二次高峰起才真正限流。
 `Citizen::walkInstantiateProbability` 默认-1表示跟随全局；脚本 `spawn_npc` 的故事市民设成1，不受影响。该字段和本趟抽签结果随存档保存(未升版本)；全局概率与峰值不存档。
+
+## 跳时间
+`BeginTimeSkip()`：丢弃未落地的寻路结果并使在途任务作废(序号+1)，把所有在途行走(Actor在走的、Core推算中的)`TeleportCitizen`到各自目的地，
+然后`bTimeSkipping`为真，`RequestWalk`直接`TeleportCitizen`。`EndTimeSkip()`关闭。玩家占有的市民不动。

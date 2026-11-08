@@ -22,6 +22,7 @@ void UFadeWidget::ResetToBlack() {
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 	SetRenderOpacity(1.f);
 	state = EState::Waiting;
+	bReleaseRequested = false;
 	elapsed = 0.f;
 	settleElapsed = 0.f;
 	displayedPercent = 0.f;
@@ -29,6 +30,22 @@ void UFadeWidget::ResetToBlack() {
 	framework.Reset();
 	if (ProgressBar) ProgressBar->SetPercent(0.f);
 	if (StatusText) StatusText->SetText(FText::FromString(kLoadingText));
+}
+
+void UFadeWidget::BeginHold() {
+	SetVisibility(ESlateVisibility::HitTestInvisible);
+	SetRenderOpacity(0.f);
+	state = EState::FadingToBlack;
+	bReleaseRequested = false;
+	elapsed = 0.f;
+	displayedPercent = 0.f;
+	framework.Reset();
+	if (ProgressBar) ProgressBar->SetPercent(0.f);
+	if (StatusText) StatusText->SetText(FText::GetEmpty());
+}
+
+void UFadeWidget::Release() {
+	if (state == EState::FadingToBlack || state == EState::Holding) bReleaseRequested = true;
 }
 
 AForeverFrameworkActor* UFadeWidget::FindFramework(UWorld* world) {
@@ -113,6 +130,42 @@ void UFadeWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime) {
 		}
 		else {
 			SetRenderOpacity(alpha);
+		}
+		break;
+	}
+	case EState::FadingToBlack: {
+		elapsed += InDeltaTime;
+		const float alpha = fadeToBlackDuration > KINDA_SMALL_NUMBER ? elapsed / fadeToBlackDuration : 1.f;
+		if (alpha >= 1.f) {
+			SetRenderOpacity(1.f);
+			state = EState::Holding;
+		}
+		else {
+			SetRenderOpacity(alpha);
+		}
+		break;
+	}
+	case EState::Holding: {
+		UGameInstance* gameInstance = GetGameInstance();
+		AForeverFrameworkActor* frameworkActor = FindFramework(gameInstance ? gameInstance->GetWorld() : nullptr);
+		float target = displayedPercent;
+		FText label = FText::FromString(TEXT("正在跳过时间"));
+		if (bReleaseRequested) {
+			target = 1.f;
+		}
+		else if (frameworkActor) {
+			frameworkActor->GetTimeSkipProgress(target, label);
+		}
+		displayedPercent = FMath::FInterpConstantTo(displayedPercent, target, InDeltaTime, barInterpSpeed);
+		if (ProgressBar) ProgressBar->SetPercent(displayedPercent);
+		if (StatusText) {
+			StatusText->SetText(FText::FromString(FString::Printf(TEXT("%s  (%d%%)"), *label.ToString(),
+				FMath::FloorToInt(displayedPercent * 100.f))));
+		}
+		// 进度条补满后再渐隐，让最后一截能被看见。
+		if (bReleaseRequested && displayedPercent >= 0.999f) {
+			state = EState::Fading;
+			elapsed = 0.f;
 		}
 		break;
 	}

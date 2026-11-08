@@ -56,3 +56,8 @@ C++只写逻辑，外观在`WBP_Fade`（父类`UFadeWidget`）里设计：
    Canvas锚点底部居中，宽600高12)。Style里Fill Image设成纯色/圆角方块，Background Image设成半透明深灰。C++按格设置百分比，
    所以是一条"一格一格前进"的连续进度条；想要真正的分格外观，在它上面叠一层等分的分隔线图片即可，不用改代码。
 2. **TextBlock**：**名字必须叫`StatusText`、勾上Is Variable**，放在进度条上方居中。
+
+## 游戏内保持黑屏(跳时间)
+`BeginHold()`：从透明渐变(`fadeToBlackDuration`)到全黑，进入Holding：进度条/文字取`AForeverFrameworkActor::GetTimeSkipProgress`，
+文字形如“正在跳过时间  (35%)”。`Release()`后进度条补满再按`fadeDuration`渐隐，渐隐完成触发`onFinished`。`IsHeldBlack()`=已完全变黑并保持中。
+WBP_Fade无需改动(沿用`ProgressBar`/`StatusText`)。

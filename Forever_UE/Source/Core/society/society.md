@@ -9,7 +9,7 @@
 1. **`Init(components)`**：按地图里所有`Component`加权随机分配`Organization`
    （每个`Organization`自己遍历claimed components设计Job），算法见
    `organization.md`"组织分配算法"一节。
-2. **`RecruitCitizens(citizens, currentYear)`**：把成年市民随机匹配到还空缺的
+2. **`RecruitCitizens(citizens, now)`（now按生日算年龄；开局传1月1日8点）**：把成年市民随机匹配到还空缺的
    Job上，见`organization.md`"招聘"一节。
 3. **`GenerateEmploymentHistory(citizens, currentYear)`**：反推入职历史+生成
    同事关系，见下"四类人际关系生成：同事关系"一节。
@@ -137,3 +137,6 @@ ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。
 - `RecruitCitizen(citizen, year)`：给一个成年市民随机分配一个空缺岗位(spawn_npc `economy:true`时用，补`JobExperience`)。
 - `FindJobByScript(script)` / `FindOrganizationOfJob(job)`：由Job脚本反查岗位和所属组织，`pay_wage`/`open_shop`用。
 - `Citizen::IsInEconomy()==false`的市民不参与股东分配和招聘。
+
+## HasDueTimers
+`HasDueTimers(now)`：是否还有已到时但没处理的组织timer，用法同`Populace::HasDueTimers`。

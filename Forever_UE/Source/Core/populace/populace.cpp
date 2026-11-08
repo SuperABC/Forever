@@ -399,6 +399,12 @@ Citizen* Populace::SpawnImmigrant(int year) {
 
 const vector<Citizen*>& Populace::GetCitizens() const { return citizens; }
 int Populace::GetCurrentYear() const { return currentYear; }
+void Populace::SetCurrentYear(int year) { currentYear = year; }
+
+bool Populace::HasDueTimers(const Time& currentTime) const {
+	return (!jobTimerSet.empty() && std::get<0>(*jobTimerSet.begin()) <= currentTime)
+		|| (!schedulerTimerSet.empty() && std::get<0>(*schedulerTimerSet.begin()) <= currentTime);
+}
 
 void Populace::Tick(const Time& currentTime, bool crossedDay,
 	const function<void(Citizen*, const vector<Change*>&)>& onActions, PostHandle* post) {

@@ -19,3 +19,6 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 保持黑屏
+`BeginHoldBlack()`(返回是否成功显示)/`IsHeldBlack()`/`ReleaseHold()`，给跳时间用，见`FadeWidget.md`。

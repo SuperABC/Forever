@@ -162,13 +162,13 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 	// 头像：按这个市民的头像文件贴到头像方块上；没有头像文件时保留默认头像。
 	if (UGameInstance* gameInstance = GetGameInstance()) {
 		if (UForeverAvatarSubsystem* avatars = gameInstance->GetSubsystem<UForeverAvatarSubsystem>()) {
-			// 按当前游戏年份算年龄，挑年龄相符的头像；全局时钟还没建时退回人口模拟的"当前年份"。
-			int32 currentYear = 0;
+			// 按当前游戏日期（按生日）算年龄，挑年龄相符的头像；全局时钟还没建时退回人口模拟"当前年份"的1月1日。
+			Time now(0, 1, 1, 8);
 			if (AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(inFramework ? inFramework->GetOwner() : nullptr)) {
-				if (Player* player = frameworkActor->GetPlayer(); player && player->GetTime()) currentYear = player->GetTime()->GetYear();
-				else if (Populace* populace = frameworkActor->GetPopulace()) currentYear = populace->GetCurrentYear();
+				if (Player* player = frameworkActor->GetPlayer(); player && player->GetTime()) now = *player->GetTime();
+				else if (Populace* populace = frameworkActor->GetPopulace()) now = Time(populace->GetCurrentYear(), 1, 1, 8);
 			}
-			SetAvatarTexture(avatars->GetCitizenAvatar(citizen, currentYear));
+			SetAvatarTexture(avatars->GetCitizenAvatar(citizen, now));
 		}
 	}
 

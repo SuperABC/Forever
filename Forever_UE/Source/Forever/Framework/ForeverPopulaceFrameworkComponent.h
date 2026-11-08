@@ -51,6 +51,12 @@ public:
 	// 逻辑位置，等进入流式范围时在那里生成。被玩家占有的市民不动，和RequestWalk一样。
 	void TeleportCitizen(Citizen* citizen, Room* destination);
 
+	// 跳时间(jump_time)期间：RequestWalk不再异步寻路，直接TeleportCitizen到目的地(同步到达，npc_arrive照常触发)。
+	// Begin把全部在途的行走(异步寻路结果、Core推算中的、Actor正在走的)冲刷到各自的目的地，再开启这个模式；
+	// 玩家占有的市民不动。End关闭模式。
+	void BeginTimeSkip();
+	void EndTimeSkip() { bTimeSkipping = false; }
+
 	// ACitizenController的FollowPath指令走完后的回调：更新Citizen::SetCurrentRoom。
 	void NotifyArrived(Citizen* citizen, Room* destination);
 
@@ -150,6 +156,8 @@ private:
 	TArray<Citizen*> allCitizens;
 	TMap<Citizen*, TObjectPtr<ACitizenElement>> activeInstances;
 	int32 pollCursor = 0;
+
+	bool bTimeSkipping = false;
 
 	// 非故事市民每趟行走参与实例化的概率(全局)：初始1，扫描中记录进入生成距离的行走者数峰值x，
 	// 取1.5*maxMovingCitizens/x，只减不增。故事市民在Citizen上单独设成1，不受它影响。

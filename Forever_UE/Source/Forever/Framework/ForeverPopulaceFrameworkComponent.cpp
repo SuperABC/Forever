@@ -147,6 +147,12 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 		return;
 	}
 
+	// 跳时间期间路走不完(寻路异步、走路要帧)，同步瞬移到目的地并触发npc_arrive。
+	if (bTimeSkipping) {
+		TeleportCitizen(citizen, destination);
+		return;
+	}
+
 	// 新的一次导航：在途的旧寻路结果（晚到的）作废。
 	const uint32 serial = ++latestWalkRequest.FindOrAdd(citizen);
 
@@ -294,6 +300,33 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 	citizen->SetCurrentRoom(destination);
 	citizen->ClearPosition();
 	ReportArrival(citizen, previous);
+}
+
+void UForeverPopulaceFrameworkComponent::BeginTimeSkip() {
+	bTimeSkipping = true;
+
+	// 已算完还没落地的寻路结果丢掉；还在线程池里的任务靠序号+1作废(晚到的结果DrainPathResults会丢弃)。
+	FPendingWalkResult discarded;
+	while (pathResultQueue.Dequeue(discarded)) {}
+	for (TPair<Citizen*, uint32>& pair : latestWalkRequest) ++pair.Value;
+
+	// 在途的行走一律在起点时刻到达目的地。
+	for (int32 i = 0; i < allCitizens.Num(); i++) {
+		Citizen* citizen = allCitizens[i];
+		if (!citizen || !citizen->IsActive()) continue;
+
+		Room* destination = nullptr;
+		if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen); existing && *existing) {
+			if ((*existing)->IsPlayerControlled()) continue;
+			ACitizenController* controller = (*existing)->GetCitizenController();
+			TArray<FVector> remaining;
+			if (controller) controller->GetRemainingWaypoints(remaining, destination);
+		}
+		else if (citizen->IsWalking()) {
+			destination = citizen->GetWalkDestination();
+		}
+		if (destination) TeleportCitizen(citizen, destination);
+	}
 }
 
 void UForeverPopulaceFrameworkComponent::DrainPathResults() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "class.h"
+#include "common/utility.h"
 
 #include <vector>
 
@@ -13,7 +14,7 @@ public:
 
 	Room* GetRoom() const;
 	const std::vector<Citizen*>& GetMembers() const;
-	std::vector<Citizen*> GetAdults(int currentYear) const;
+	std::vector<Citizen*> GetAdults(const Time& now) const;
 
 	bool Contains(const Citizen* citizen) const;
 	// citizen和本户任一成员是不是夫妻或父母子女关系。

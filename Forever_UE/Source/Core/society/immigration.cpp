@@ -22,7 +22,7 @@ namespace {
 	constexpr double kTargetRatio = 1.5; // 目标人口 = 开局人口 × 1.5
 }
 
-vector<Citizen*> Immigration::Daily(Society& society, Populace& populace, Map& map, int currentYear) {
+vector<Citizen*> Immigration::Daily(Society& society, Populace& populace, Map& map, const Time& now) {
 	vector<Citizen*> arrived;
 	int x = populace.GetInitialPopulation();
 	if (x <= 0) return arrived;
@@ -54,12 +54,12 @@ vector<Citizen*> Immigration::Daily(Society& society, Populace& populace, Map& m
 		vacancies[index] = vacancies.back();
 		vacancies.pop_back();
 
-		Citizen* citizen = populace.SpawnImmigrant(currentYear);
+		Citizen* citizen = populace.SpawnImmigrant(now.GetYear());
 		if (!citizen) break;
 		citizen->SetInEconomy(true);
 		Settlement::InitFunds(society, citizen, -1, false);
 		map.SettleCitizen(citizen, home);
-		society.RecruitCitizen(citizen, currentYear);
+		society.RecruitCitizen(citizen, now);
 		arrived.push_back(citizen);
 	}
 	return arrived;

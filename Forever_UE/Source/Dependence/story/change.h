@@ -837,6 +837,32 @@ private:
 
 };
 
+// 跳过游戏时间：把游戏时钟快进到目标时刻，期间的计时器/经济/事件都照常发生。time和mode的含义同
+// CreateTimerChange(absolute/relative/next，不支持real)；目标不晚于现在时什么都不做。
+class JumpTimeChange : public Change {
+public:
+	JumpTimeChange();
+
+	JumpTimeChange(std::string time, std::string mode = std::string());
+
+	virtual ~JumpTimeChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetTime(std::string time);
+	const std::string& GetTime() const;
+
+	void SetMode(std::string mode);
+	const std::string& GetMode() const;
+
+private:
+	// 目标时刻(表达式)
+	std::string time;
+
+	// time的解释方式(表达式)，空=absolute
+	std::string mode;
+};
+
 // 创建计时器
 class CreateTimerChange : public Change {
 public:

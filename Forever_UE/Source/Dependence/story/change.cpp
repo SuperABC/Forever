@@ -1030,6 +1030,41 @@ const std::string& RegisterDoorChange::GetPass() const {
 	return pass;
 }
 
+JumpTimeChange::JumpTimeChange() :
+	time(), mode() {
+
+}
+
+JumpTimeChange::JumpTimeChange(std::string time, std::string mode) :
+	time(move(time)), mode(move(mode)) {
+
+}
+
+JumpTimeChange::~JumpTimeChange() {
+
+}
+
+const string& JumpTimeChange::GetType() const {
+	static const string type = "jump_time";
+	return type;
+}
+
+void JumpTimeChange::SetTime(std::string time) {
+	this->time = move(time);
+}
+
+const std::string& JumpTimeChange::GetTime() const {
+	return time;
+}
+
+void JumpTimeChange::SetMode(std::string mode) {
+	this->mode = move(mode);
+}
+
+const std::string& JumpTimeChange::GetMode() const {
+	return mode;
+}
+
 CreateTimerChange::CreateTimerChange() :
 	name(), time(), category(), label(), mode() {
 

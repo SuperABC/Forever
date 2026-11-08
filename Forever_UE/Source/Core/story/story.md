@@ -139,3 +139,8 @@ milestone超时之类）时再补内容。
 - `real`：现实相对时长，写法同relative，按现实秒走(存`StoryTimer::realTime/remaining`，每帧`Story::AdvanceRealTimers(dt)`扣减)。游戏时间约为现实的120倍，几秒的现实延时要用`real`。没有“现实绝对时间”。
 - `next`：游戏内未来某天的某个钟点。日期是相对天数(年月日减0年1月1日，支持`2月10日`=40天、`1月40日`=39天，日期不限范围)，时间是绝对钟点；钟点早于当前钟点则天数再加一。例：现在10点，`1日8点`=明天8点，`2日8点`=后天8点，`1日11点`=当天11点；只写钟点`"08:00:00"`=下一次8点。
 relative/real/next的time由`ParseTimerOffset`解析(`[Y年]M月D日[ H:M:S或H时M分S秒]`、`YYYY-MM-DD[ H:M:S]`、`H:M:S`)，不走`Time`类(它会校验日期范围)。存档计时器记录追加`U8 realTime`+`F32 remaining`。
+
+## jump_time(跳过游戏时间)
+把游戏时钟快进到目标时刻，期间到时的计时器(game型，real型不推进)、Job/Scheduler/组织计划、每日经济/工业/移民、月结、天气、公交都按顺序发生。
+目标解析与`create_timer`共用(`ResolveTimerTarget`)：过去的absolute、relative偏移<=0、next恰好等于此刻，都静默不执行。
+写脚本注意：跳期间会话/小游戏等UI被黑屏盖住，别在会被跳过的timer里弹对话；循环计时器的间隔不要小于1游戏小时(单步上限)。

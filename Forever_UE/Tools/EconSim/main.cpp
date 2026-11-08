@@ -65,8 +65,7 @@ namespace {
 			Time time(2000, 1 + (day - 1) / 30, 1 + (day - 1) % 30);
 			Economy::SyncIndustry(society, industry);
 			industry.Tick(time, true, &post);
-			DailyReport report = Economy::Daily(society, industry, allRooms, populace.GetCitizens(), time, &post,
-				populace.GetCurrentYear());
+			DailyReport report = Economy::Daily(society, industry, allRooms, populace.GetCitizens(), time, &post);
 
 			long long imported = 0, exported = 0, internal = 0;
 			for (const GoodsFlow& flow : industry.GetFlows()) {
@@ -109,7 +108,7 @@ namespace {
 			ledger.Transfer(Party::Outside(), Party::Of(organization), max<int64_t>(0, gap) + profit, Flow::INJECTION);
 			Time nextMonth(2000, 1 + days / 30 + 1, 1);
 			industry.Tick(nextMonth, true, &post);
-			DailyReport r = Economy::Daily(society, industry, allRooms, populace.GetCitizens(), nextMonth, &post, populace.GetCurrentYear());
+			DailyReport r = Economy::Daily(society, industry, allRooms, populace.GetCitizens(), nextMonth, &post);
 			printf("[DividendCheck] 利润%s -> 企业税%s(期望%s) 分红%s(期望%s) 股东所得税%s(期望%s) 总和%s\n",
 				FormatMoney(profit).c_str(), FormatMoney(r.month.corporateTax).c_str(), FormatMoney(profit * 25 / 100).c_str(),
 				FormatMoney(r.month.dividends).c_str(), FormatMoney(profit - profit * 25 / 100).c_str(),
@@ -123,7 +122,7 @@ namespace {
 			testDay++;
 			Economy::SyncIndustry(society, industry);
 			industry.Tick(time, true, &post);
-			return Economy::Daily(society, industry, allRooms, citizens, time, &post, populace.GetCurrentYear());
+			return Economy::Daily(society, industry, allRooms, citizens, time, &post);
 		};
 		// 倒闭 -> 同一天股东集资重启:把一个组织打成负资产,下一天应当倒闭并立刻重启(市民存款足够)。
 		{
@@ -331,8 +330,7 @@ namespace {
 				}
 				Economy::SyncIndustry(society, industry);
 				industry.Tick(time, true, &post);
-				DailyReport daily = Economy::Daily(society, industry, allRooms, populace.GetCitizens(), time, &post,
-					populace.GetCurrentYear());
+				DailyReport daily = Economy::Daily(society, industry, allRooms, populace.GetCitizens(), time, &post);
 				reporter.AccumulateIndustryDay();
 				if (daily.services.count("food")) {
 					const ServiceStat& stat = daily.services.at("food");
@@ -341,7 +339,7 @@ namespace {
 					totals.unmet += stat.unmet;
 					totals.revenue += stat.revenue;
 				}
-				for (Citizen* arrived : Immigration::Daily(society, populace, city, populace.GetCurrentYear())) {
+				for (Citizen* arrived : Immigration::Daily(society, populace, city, time)) {
 					immigrantSet.insert(arrived);
 					finance.immigrated++;
 				}
@@ -490,8 +488,9 @@ static int RealMain(int argc, char** argv) {
 
 	Society society;
 	society.Init(city.GetAllComponents());
-	society.RecruitCitizens(populace.GetCitizens(), populace.GetCurrentYear());
-	society.AssignShareholders(populace.GetCitizens(), populace.GetCurrentYear());
+	const Time startTime(populace.GetCurrentYear(), 1, 1, 8);
+	society.RecruitCitizens(populace.GetCitizens(), startTime);
+	society.AssignShareholders(populace.GetCitizens(), startTime);
 
 	if (argc > 4 && string(argv[4]) == "census") {
 		// 人口岗位普查: 市民总数/成年人(>=18)/劳动年龄人口(18~退休年龄前)/岗位总数/在职人数/就业率。

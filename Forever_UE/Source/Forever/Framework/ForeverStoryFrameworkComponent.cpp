@@ -892,6 +892,59 @@ namespace {
 		out.days = days + (day - 1);
 		return true;
 	}
+
+	enum class TimerResolve { Ok, Real, Past, NeedsDate, Unparsable, UnknownMode };
+
+	// create_timer与jump_time共用：把mode+time解析成目标时刻。mode为real时不产生Time，返回Real并把秒数写进*realSeconds
+	// (jump_time传nullptr)。
+	TimerResolve ResolveTimerTarget(const string& mode, const string& timeText, const Time& now, Time& target, double* realSeconds) {
+		if (mode == "absolute") {
+			Time parsed;
+			try {
+				parsed = Time(timeText);
+			}
+			catch (const ExceptionBase&) {
+				return TimerResolve::Unparsable;
+			}
+			if (!parsed.IsValid()) return TimerResolve::NeedsDate;
+			if (parsed <= now) return TimerResolve::Past;
+			target = parsed;
+			return TimerResolve::Ok;
+		}
+
+		TimerOffset offset;
+		if (mode != "relative" && mode != "real" && mode != "next") return TimerResolve::UnknownMode;
+		if (!ParseTimerOffset(timeText, offset)) return TimerResolve::Unparsable;
+
+		if (mode == "relative") {
+			target = now;
+			target.AddDays(offset.days);
+			target.AddHours(offset.hour);
+			target.AddMinutes(offset.minute);
+			target.AddSeconds(offset.second);
+			target.AddMilliseconds(offset.millisecond);
+			return TimerResolve::Ok;
+		}
+		if (mode == "real") {
+			if (realSeconds) {
+				*realSeconds = offset.days * 86400.0 + offset.hour * 3600.0 + offset.minute * 60.0 + offset.second
+					+ offset.millisecond / 1000.0;
+			}
+			return TimerResolve::Real;
+		}
+		// next：日期是相对天数，时间是绝对钟点；钟点早于当前钟点就再晚一天。例：现在10点，1日8点=明天8点，
+		// 2日8点=后天8点，1日11点=当天11点。
+		int days = offset.days;
+		auto timeOfDay = [](int h, int m, int s, int ms) { return ((h * 60 + m) * 60 + s) * 1000 + ms; };
+		if (timeOfDay(offset.hour, offset.minute, offset.second, offset.millisecond)
+			< timeOfDay(now.GetHour(), now.GetMinute(), now.GetSecond(), now.GetMillisecond())) {
+			days += 1;
+		}
+		target = now;
+		target.SetTime(offset.hour, offset.minute, offset.second, offset.millisecond);
+		target.AddDays(days);
+		return TimerResolve::Ok;
+	}
 }
 
 void UForeverStoryFrameworkComponent::ApplyCreateTimer(const CreateTimerChange* change, const ScriptContext& context) {
@@ -919,64 +972,48 @@ void UForeverStoryFrameworkComponent::ApplyCreateTimer(const CreateTimerChange* 
 			UTF8_TO_TCHAR(name.c_str()), UTF8_TO_TCHAR(mode.c_str()), UTF8_TO_TCHAR(timeText.c_str()), UTF8_TO_TCHAR(reason));
 	};
 
-	if (mode == "absolute") {
-		Time parsed;
-		try {
-			parsed = Time(timeText);
-		}
-		catch (const ExceptionBase&) {
-			warn("cannot parse time.");
-			return;
-		}
-		if (!parsed.IsValid()) {
-			warn("absolute needs a full date; use mode \"next\" for a time of day.");
-			return;
-		}
-		if (parsed <= now) {
-			warn("time is in the past, ignored.");
-			return;
-		}
-		story->CreateTimer(name, parsed, ownerKey);
-		return;
+	Time target;
+	double realSeconds = 0.0;
+	switch (ResolveTimerTarget(mode, timeText, now, target, &realSeconds)) {
+	case TimerResolve::Ok: story->CreateTimer(name, target, ownerKey); break;
+	case TimerResolve::Real: story->CreateRealTimer(name, realSeconds, ownerKey); break;
+	case TimerResolve::Past: warn("time is in the past, ignored."); break;
+	case TimerResolve::NeedsDate: warn("absolute needs a full date; use mode \"next\" for a time of day."); break;
+	case TimerResolve::Unparsable: warn("cannot parse time."); break;
+	case TimerResolve::UnknownMode: warn("unknown mode (absolute/relative/real/next)."); break;
 	}
+}
 
-	TimerOffset offset;
-	if (!ParseTimerOffset(timeText, offset)) {
-		warn("cannot parse time.");
-		return;
-	}
+bool UForeverStoryFrameworkComponent::ResolveJumpTarget(const JumpTimeChange* change, const ScriptContext& context, Time& outTarget) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	if (!player || !player->GetTime()) return false;
 
-	if (mode == "relative") {
-		Time target = now;
-		target.AddDays(offset.days);
-		target.AddHours(offset.hour);
-		target.AddMinutes(offset.minute);
-		target.AddSeconds(offset.second);
-		target.AddMilliseconds(offset.millisecond);
-		story->CreateTimer(name, target, ownerKey);
+	string timeText = ToString(EvaluateExpression(change->GetTime(), context));
+	string mode = change->GetMode().empty() ? string("absolute") : ToString(EvaluateExpression(change->GetMode(), context));
+	const Time& now = *player->GetTime();
+
+	switch (ResolveTimerTarget(mode, timeText, now, outTarget, nullptr)) {
+	case TimerResolve::Ok:
+		// 只往前跳：目标不晚于现在(relative偏移为0、next恰好等于此刻等)同样什么都不做。
+		return outTarget > now;
+	case TimerResolve::Past:
+		return false; // 过去的绝对时间：静默不执行
+	case TimerResolve::Real:
+		UE_LOG(LogTemp, Warning, TEXT("jump_time: mode \"real\" is not supported, ignored."));
+		return false;
+	case TimerResolve::NeedsDate:
+		UE_LOG(LogTemp, Warning, TEXT("jump_time (time=\"%s\"): absolute needs a full date; use mode \"next\" for a time of day."),
+			UTF8_TO_TCHAR(timeText.c_str()));
+		return false;
+	case TimerResolve::Unparsable:
+		UE_LOG(LogTemp, Warning, TEXT("jump_time: cannot parse time \"%s\"."), UTF8_TO_TCHAR(timeText.c_str()));
+		return false;
+	case TimerResolve::UnknownMode:
+		UE_LOG(LogTemp, Warning, TEXT("jump_time: unknown mode \"%s\" (absolute/relative/next)."), UTF8_TO_TCHAR(mode.c_str()));
+		return false;
 	}
-	else if (mode == "real") {
-		double seconds = offset.days * 86400.0 + offset.hour * 3600.0 + offset.minute * 60.0 + offset.second
-			+ offset.millisecond / 1000.0;
-		story->CreateRealTimer(name, seconds, ownerKey);
-	}
-	else if (mode == "next") {
-		// 日期是相对天数，时间是绝对钟点；钟点早于当前钟点就再晚一天。例：现在10点，1日8点=明天8点，
-		// 2日8点=后天8点，1日11点=当天11点。
-		int days = offset.days;
-		auto timeOfDay = [](int h, int m, int s, int ms) { return ((h * 60 + m) * 60 + s) * 1000 + ms; };
-		if (timeOfDay(offset.hour, offset.minute, offset.second, offset.millisecond)
-			< timeOfDay(now.GetHour(), now.GetMinute(), now.GetSecond(), now.GetMillisecond())) {
-			days += 1;
-		}
-		Time target = now;
-		target.SetTime(offset.hour, offset.minute, offset.second, offset.millisecond);
-		target.AddDays(days);
-		story->CreateTimer(name, target, ownerKey);
-	}
-	else {
-		warn("unknown mode (absolute/relative/real/next).");
-	}
+	return false;
 }
 
 void UForeverStoryFrameworkComponent::ApplyRemoveTimer(const RemoveTimerChange* change, const ScriptContext& context) {
@@ -991,14 +1028,25 @@ void UForeverStoryFrameworkComponent::ApplyRemoveTimer(const RemoveTimerChange* 
 static constexpr size_t kMaxStoryTimersPerFrame = 16;
 
 void UForeverStoryFrameworkComponent::FireExpiredTimers(float deltaSeconds) {
+	if (!story) return;
+	story->AdvanceRealTimers(deltaSeconds);
+	FireTimerBatch(kMaxStoryTimersPerFrame);
+}
+
+void UForeverStoryFrameworkComponent::DrainExpiredTimers(int32 maxIterations) {
+	for (int32 i = 0; i < maxIterations; i++) {
+		if (!FireTimerBatch(kMaxStoryTimersPerFrame)) return;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("DrainExpiredTimers: still has due timers after %d batches (a timer re-arming at the same instant?)."), maxIterations);
+}
+
+bool UForeverStoryFrameworkComponent::FireTimerBatch(size_t maxCount) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Player* player = framework ? framework->GetPlayer() : nullptr;
-	if (!story || !player || !player->GetTime()) return;
+	if (!story || !player || !player->GetTime()) return false;
 
-	story->AdvanceRealTimers(deltaSeconds);
-
-	vector<StoryTimer> expired = story->PopExpiredTimers(*player->GetTime(), kMaxStoryTimersPerFrame);
-	if (expired.empty()) return;
+	vector<StoryTimer> expired = story->PopExpiredTimers(*player->GetTime(), maxCount);
+	if (expired.empty()) return false;
 
 	PostImplement postImplement(
 		framework->GetMap(), framework->GetPopulace(), framework->GetSociety(), story,
@@ -1016,6 +1064,7 @@ void UForeverStoryFrameworkComponent::FireExpiredTimers(float deltaSeconds) {
 		context.local = &event;
 		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
 	}
+	return true;
 }
 
 void UForeverStoryFrameworkComponent::ShowCurrentBackground() {

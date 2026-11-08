@@ -562,6 +562,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			change = new CreateTimerChange(name.AsString(), time.AsString(), obj["category"].AsString(), obj["label"].AsString(),
 				obj["mode"].AsString());
 		}
+		else if (type == "jump_time") {
+			auto time = obj["time"];
+			if (time.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing time for jump_time change.\n");
+			}
+			// mode同create_timer(absolute/relative/next，不支持real)，省略=absolute。
+			change = new JumpTimeChange(time.AsString(), obj["mode"].AsString());
+		}
 		else if (type == "remove_timer") {
 			auto name = obj["name"];
 			if (name.IsNull()) {

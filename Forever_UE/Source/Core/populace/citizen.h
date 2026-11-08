@@ -1,6 +1,7 @@
 #pragma once
 
 #include "class.h"
+#include "common/utility.h"
 #include "populace/experience.h" // RELATIONSHIP_CATEGORY——Relation::category字段用
 
 #include <string>
@@ -159,7 +160,10 @@ public:
 	int GetAvatarIndex() const;
 
 	// 粗略年龄(按年份差，不精确到月/日)。
+	// 按年份算的粗年龄(今年-出生年)，只给人口/岗位历史按年回溯生成用；运行时的年龄判断用下面按生日算的。
 	int GetAge(int currentYear) const;
+	// 到now这一天的实际年龄：没过今年生日就少一岁。
+	int GetAge(const Time& now) const;
 
 	// 配偶/子女：只保留幸存双方都物化成Citizen的关系，不保留父母/兄弟姐妹，见citizen.md。
 	Citizen* GetSpouse() const;

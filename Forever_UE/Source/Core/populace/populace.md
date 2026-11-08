@@ -326,3 +326,6 @@ Organization类型已经在用同一套CDF算法，见`society.md`），详见`s
 
 - 年表模拟里`LIFE_MARRY`取候选用`GetRandom(maleBirths[highId]-maleBirths[lowId])`，依赖前面两个
   `maleBirths`相等/为-1的提前`break`保证参数为正；改动这段前先确认。
+
+## HasDueTimers
+`HasDueTimers(now)`：是否还有已到时但没处理的Job/Scheduler timer(每次Tick各有16条上限)。跳时间同一时刻反复Tick直到它为false。

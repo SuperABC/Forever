@@ -15,8 +15,8 @@ namespace {
 	constexpr int kStockPicks = 3;       // 从中挑几支买
 	constexpr double kSellFraction = 0.25;
 
-	bool CanInvest(const Citizen* citizen, int currentYear, int adultAge) {
-		return citizen && citizen->IsActive() && citizen->IsInEconomy() && citizen->GetAge(currentYear) >= adultAge;
+	bool CanInvest(const Citizen* citizen, const Time& now, int adultAge) {
+		return citizen && citizen->IsActive() && citizen->IsInEconomy() && citizen->GetAge(now) >= adultAge;
 	}
 
 	struct Holding {
@@ -44,7 +44,7 @@ double Investor::Risk(const Citizen* citizen) {
 	return max(0.0, min(1.0, risk));
 }
 
-Investor::Summary Investor::Daily(Society& society, const vector<Citizen*>& citizens, int currentYear, int64_t dayIndex) {
+Investor::Summary Investor::Daily(Society& society, const vector<Citizen*>& citizens, const Time& now, int64_t dayIndex) {
 	Summary summary;
 	Ledger& ledger = society.GetLedger();
 	Treasury& treasury = society.GetTreasury();
@@ -58,7 +58,7 @@ Investor::Summary Investor::Daily(Society& society, const vector<Citizen*>& citi
 	for (size_t index = 0; index < citizens.size(); index++) {
 		Citizen* citizen = citizens[index];
 		if (static_cast<int64_t>(index) % interval != dayIndex % interval) continue;
-		if (!CanInvest(citizen, currentYear, policy.adultAge)) continue;
+		if (!CanInvest(citizen, now, policy.adultAge)) continue;
 		summary.deciders++;
 
 		int64_t cash = ledger.Balance(Party::Of(citizen));
@@ -132,7 +132,7 @@ Investor::Summary Investor::Daily(Society& society, const vector<Citizen*>& citi
 	return summary;
 }
 
-int64_t Investor::SubscribeBonds(Society& society, const vector<Citizen*>& citizens, int currentYear,
+int64_t Investor::SubscribeBonds(Society& society, const vector<Citizen*>& citizens, const Time& now,
 	int64_t needed, int rateBp, int termDays) {
 	Ledger& ledger = society.GetLedger();
 	const GovernmentPolicy& policy = society.GetPolicy();
@@ -143,7 +143,7 @@ int64_t Investor::SubscribeBonds(Society& society, const vector<Citizen*>& citiz
 	size_t start = static_cast<size_t>(GetRandom(static_cast<int>(citizens.size())));
 	for (size_t offset = 0; offset < citizens.size() && raised < needed; offset++) {
 		Citizen* citizen = citizens[(start + offset) % citizens.size()];
-		if (!CanInvest(citizen, currentYear, policy.adultAge)) continue;
+		if (!CanInvest(citizen, now, policy.adultAge)) continue;
 		int64_t surplus = ledger.Balance(Party::Of(citizen)) - policy.reserve;
 		if (surplus <= 0) continue;
 		int64_t willing = static_cast<int64_t>(static_cast<double>(surplus) * (1.0 - Risk(citizen)) * 0.5);

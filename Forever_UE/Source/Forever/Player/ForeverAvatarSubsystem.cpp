@@ -42,7 +42,7 @@ void UForeverAvatarSubsystem::ScanAvatars() {
 	}
 }
 
-UTexture2D* UForeverAvatarSubsystem::GetCitizenAvatar(const Citizen* citizen, int32 currentYear) {
+UTexture2D* UForeverAvatarSubsystem::GetCitizenAvatar(const Citizen* citizen, const Time& now) {
 	if (!citizen) return nullptr;
 
 	const std::string& custom = citizen->GetAvatar();
@@ -58,7 +58,7 @@ UTexture2D* UForeverAvatarSubsystem::GetCitizenAvatar(const Citizen* citizen, in
 	// 年龄段边界必须和Tools/AvatarGen/generate.mjs里的BANDS一致；同一段内的市民从这一段的头像里按
 	// avatarIndex挑，年龄在段内增长时头像不变，跨段才换(自然的"长大了")。
 	static const int32 kBandMax[] = { 5, 12, 17, 29, 44, 59, 74, MAX_int32 };
-	const int32 age = FMath::Max(0, currentYear - citizen->GetBirthYear());
+	const int32 age = FMath::Max(0, citizen->GetAge(now));
 	int32 bandMin = 0, bandMax = MAX_int32;
 	for (int32 i = 0; i < UE_ARRAY_COUNT(kBandMax); i++) {
 		if (age <= kBandMax[i]) {

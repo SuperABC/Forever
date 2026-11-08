@@ -1,6 +1,7 @@
 #pragma once
 
 #include "class.h"
+#include "common/utility.h"
 
 #include "society/ledger.h"
 
@@ -41,5 +42,5 @@ public:
 
 	// 日结房租：每个有房租的房间由使用者付给房东（私有=owner，公有或无主=政府），房东再按房租税率把房租收入的一部分当场交给政府。住宅由里面的户付（多户合住均分，每户再由成年成员均摊，没人住不收），
 	// 工坊/商店等由占用该房间的组织付。
-	static RentReport PayRents(Society& society, const std::vector<Room*>& rooms, int currentYear);
+	static RentReport PayRents(Society& society, const std::vector<Room*>& rooms, const Time& now);
 };

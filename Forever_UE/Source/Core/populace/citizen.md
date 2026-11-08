@@ -21,7 +21,7 @@
 - **`spouse`/`children`**：只保留模拟结束后双方都幸存的婚姻/亲子关系，供`Map::Checkin()`决定配偶/未成年子女
   是否搬进同一间。**不保留**父母/兄弟姐妹链接（没有消费方）；兄弟姐妹关系在生成时就写进了`acquaintances`/
   `KinshipExperience`。
-- **`GetAge(currentYear)`是粗略年龄**：按年份差，不精确到月/日；`currentYear`来自`Populace::GetCurrentYear()`。
+- **两种年龄**：`GetAge(const Time& now)`按生日算（没过今年生日少一岁），运行时的成年/退休/补助/投资等判断都用它；`GetAge(int year)`是按年份差的粗年龄，只给按年回溯生成人口/入职历史/Checkin用。
 - **家和当前位置是两个独立字段**：`GetRoom()`（家，`Map::Checkin`一次性设好，不搬家）与`GetCurrentRoom()`
   （当前物理位置）不能合并。`SetCurrentRoom`同步维护房间`occupants`（旧房间移出、新房间加入；死人不加入）；
   读档直接赋值字段，不经过它。Forever层渲染位置读`GetCurrentRoom()`。所属户`GetHousehold()`由

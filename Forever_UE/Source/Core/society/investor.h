@@ -1,6 +1,7 @@
 #pragma once
 
 #include "class.h"
+#include "common/utility.h"
 
 #include <cstdint>
 #include <vector>
@@ -23,10 +24,10 @@ public:
 
 	// 每天：policy.investIntervalDays天一轮，今天轮到的成年市民各做一次决策，存取款当场执行，
 	// 股票只挂单，由Market::Clear撮合。dayIndex是Treasury::GetDay。
-	static Summary Daily(Society& society, const std::vector<Citizen*>& citizens, int currentYear, int64_t dayIndex);
+	static Summary Daily(Society& society, const std::vector<Citizen*>& citizens, const Time& now, int64_t dayIndex);
 
 	// 国债发行日：按风险偏好（越保守越愿意买）让有富余现金的市民认购，直到凑够needed或没人买，
 	// 返回实际募集额(分)。
-	static int64_t SubscribeBonds(Society& society, const std::vector<Citizen*>& citizens, int currentYear,
+	static int64_t SubscribeBonds(Society& society, const std::vector<Citizen*>& citizens, const Time& now,
 		int64_t needed, int rateBp, int termDays);
 };

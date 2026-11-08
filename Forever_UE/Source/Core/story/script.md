@@ -114,3 +114,5 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 ## 玩家与经济相关的事件/Change
 - 事件`npc_arrive`(name, address，空=不限)、`puzzle_result`(无过滤字段，结果字段用`$$local.<展平名>`读，见`event.md`)。
 - Change `open_shop`(无参数)、`pay_wage`(amount表达式，单位分)；`spawn_npc`新增`economy`表达式(缺省false)。
+
+- Change`jump_time`(`time`必填，`mode`可选)：解析为`JumpTimeChange`，见`Dependence/story/change.md`。

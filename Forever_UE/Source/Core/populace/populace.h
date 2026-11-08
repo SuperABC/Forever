@@ -33,6 +33,10 @@ public:
 
 	// 驱动饱食度衰减和Job/Scheduler两套定时器，见populace.md"Tick"。onActions回调带Citizen*，
 	// post原样透传给Job/Scheduler。
+	// 是否还有已到时(<=currentTime)但没处理的Job/Scheduler timer(每次Tick各有条数上限)。跳时间用：
+	// 反复Tick同一时刻直到它为false。
+	bool HasDueTimers(const Time& currentTime) const;
+
 	void Tick(const Time& currentTime, bool crossedDay,
 		const std::function<void(Citizen*, const std::vector<Change*>&)>& onActions, PostHandle* post);
 
@@ -52,6 +56,8 @@ public:
 
 	// 模拟结束时的"当前年份"，Init()跑完之前返回默认值2000。
 	int GetCurrentYear() const;
+	// 跳时间跨年时由框架同步(年龄=currentYear-出生年)，随人口段存档。
+	void SetCurrentYear(int year);
 	// 开局（Init跑完）时的市民总数，迁入机制以它为基准。状态，随人口段存档。
 	int GetInitialPopulation() const { return initialPopulation; }
 

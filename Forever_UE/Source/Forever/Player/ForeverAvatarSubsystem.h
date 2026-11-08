@@ -5,6 +5,7 @@
 #include "ForeverAvatarSubsystem.generated.h"
 
 class Citizen;
+class Time;
 class UTexture2D;
 
 // 市民头像贴图的加载器(磁盘PNG→UTexture2D，带LRU缓存)，详见ForeverAvatarSubsystem.md。
@@ -17,7 +18,7 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	// 取这个市民的头像，选图规则见md。没有可用头像返回nullptr。
-	UTexture2D* GetCitizenAvatar(const Citizen* citizen, int32 currentYear);
+	UTexture2D* GetCitizenAvatar(const Citizen* citizen, const Time& now);
 
 private:
 	// 读相对Resource/Avatars/的路径(不带扩展名)；命中缓存直接返回，失败(含缓存过的失败)返回nullptr。

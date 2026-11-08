@@ -102,7 +102,7 @@ namespace {
 }
 
 DailyReport Economy::Daily(Society& society, Industry& industry, const std::vector<Room*>& rooms,
-	const std::vector<Citizen*>& citizens, const Time& time, PostHandle* post, int currentYear,
+	const std::vector<Citizen*>& citizens, const Time& time, PostHandle* post,
 	const Citizen* protectedCitizen) {
 	DailyReport report;
 
@@ -112,31 +112,31 @@ DailyReport Economy::Daily(Society& society, Industry& industry, const std::vect
 		society.SetLastMonthKey(monthKey);
 	}
 	else if (monthKey != society.GetLastMonthKey()) {
-		report.month = Monthly(society, rooms, currentYear, protectedCitizen, report);
+		report.month = Monthly(society, rooms, time, protectedCitizen, report);
 		society.SetLastMonthKey(monthKey);
 	}
 
-	UpdateBankruptcies(society, citizens, currentYear, report);
-	report.hired = society.MatchUnemployed(citizens, currentYear);
+	UpdateBankruptcies(society, citizens, time, report);
+	report.hired = society.MatchUnemployed(citizens, time);
 	SyncIndustry(society, industry);
 
 	report.goods = Settlement::SettleGoods(society, industry);
-	RunServices(society, industry, rooms, post, currentYear, report);
-	report.rent = Settlement::PayRents(society, rooms, currentYear);
+	RunServices(society, industry, rooms, post, time, report);
+	report.rent = Settlement::PayRents(society, rooms, time);
 	PayWages(society, report);
-	PaySubsidies(society, citizens, currentYear, report);
+	PaySubsidies(society, citizens, time, report);
 
 	// 金融：国债到期还本，市民存取款/挂股票单，撮合成交，最后政府账户为负时发债/印钞补缺口。
 	Treasury& treasury = society.GetTreasury();
 	treasury.AdvanceDay();
 	report.bondRepaid = treasury.RepayMatured(society.GetLedger());
-	report.invest = Investor::Daily(society, citizens, currentYear, treasury.GetDay());
+	report.invest = Investor::Daily(society, citizens, time, treasury.GetDay());
 	report.stock = society.GetMarket().Clear(society.GetLedger(), society.GetOrganizations());
-	FundGovernment(society, citizens, currentYear, report);
+	FundGovernment(society, citizens, time, report);
 	return report;
 }
 
-void Economy::FundGovernment(Society& society, const vector<Citizen*>& citizens, int currentYear,
+void Economy::FundGovernment(Society& society, const vector<Citizen*>& citizens, const Time& now,
 	DailyReport& report) {
 	Ledger& ledger = society.GetLedger();
 	const GovernmentPolicy& policy = society.GetPolicy();
@@ -144,7 +144,7 @@ void Economy::FundGovernment(Society& society, const vector<Citizen*>& citizens,
 	if (shortfall <= 0) return;
 
 	// 先向市民发国债，利率比存款高。募集的钱进政府账户，但同时记国债负债，不会抬高净头寸。
-	report.bondIssued = Investor::SubscribeBonds(society, citizens, currentYear, shortfall,
+	report.bondIssued = Investor::SubscribeBonds(society, citizens, now, shortfall,
 		policy.depositRateBp + policy.bondPremiumBp, policy.bondTermDays);
 	shortfall -= report.bondIssued;
 
@@ -156,7 +156,7 @@ void Economy::FundGovernment(Society& society, const vector<Citizen*>& citizens,
 }
 
 void Economy::RunServices(Society& society, Industry& industry, const vector<Room*>& rooms,
-	PostHandle* post, int currentYear, DailyReport& report) {
+	PostHandle* post, const Time& now, DailyReport& report) {
 	Ledger& ledger = society.GetLedger();
 
 	vector<string> stockTypes;
@@ -203,7 +203,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 			int halfPortions = 0;
 			for (const Citizen* member : household->GetMembers()) {
 				if (!member || !member->IsActive()) continue;
-				halfPortions += member->GetAge(currentYear) < society.GetPolicy().adultAge ? 1 : 2;
+				halfPortions += member->GetAge(now) < society.GetPolicy().adultAge ? 1 : 2;
 			}
 			int portions = (halfPortions + 1) / 2;
 			if (portions > 0) needs[kMealServiceType].push_back({ household, portions });
@@ -246,7 +246,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 
 		// 五、各户依次从提供者的配额里买：成年成员均摊付款。市民账户允许为负，每人每天1份food必须满足，只受库存限制。
 		for (const Need& need : typeNeeds) {
-			vector<Citizen*> payers = need.household->GetAdults(currentYear);
+			vector<Citizen*> payers = need.household->GetAdults(now);
 			if (payers.empty()) {
 				for (Citizen* member : need.household->GetMembers()) {
 					if (member && member->IsActive()) payers.push_back(member);
@@ -425,19 +425,19 @@ Economy::PurchaseResult Economy::PlayerPurchaseCart(Society& society, Industry& 
 	return charged > 0 ? PurchaseResult::Success : PurchaseResult::NoSpace;
 }
 
-void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, int currentYear,
+void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, const Time& now,
 	DailyReport& report) {
 	Ledger& ledger = society.GetLedger();
 	const GovernmentPolicy& policy = society.GetPolicy();
 
 	for (Citizen* citizen : citizens) {
 		if (!citizen || !citizen->IsActive() || !citizen->IsInEconomy()) continue;
-		int age = citizen->GetAge(currentYear);
+		int age = citizen->GetAge(now);
 		if (age < policy.adultAge) {
 			// 未成年补助发给户里的成年人(均摊)，因为吃饭房租都是成年人付；户里没有成年人时才发给孩子自己。
 			int64_t allowance = policy.Allowance(policy.minorAllowance);
 			vector<Citizen*> guardians;
-			if (citizen->GetHousehold()) guardians = citizen->GetHousehold()->GetAdults(currentYear);
+			if (citizen->GetHousehold()) guardians = citizen->GetHousehold()->GetAdults(now);
 			if (guardians.empty()) {
 				ledger.Transfer(Party::Government(), Party::Of(citizen), allowance, Flow::MINOR_ALLOWANCE);
 			}
@@ -465,7 +465,7 @@ void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, i
 	}
 }
 
-MonthlyReport Economy::Monthly(Society& society, const vector<Room*>& rooms, int currentYear,
+MonthlyReport Economy::Monthly(Society& society, const vector<Room*>& rooms, const Time& now,
 	const Citizen* protectedCitizen, DailyReport& dailyReport) {
 	MonthlyReport report;
 	report.settled = true;
@@ -527,7 +527,7 @@ MonthlyReport Economy::Monthly(Society& society, const vector<Room*>& rooms, int
 	report.interest = society.GetTreasury().PayInterest(ledger, policy);
 
 	// 离城检查：一户里所有在场的成年人净资产都为负，整户搬走。
-	vector<Citizen*> departed = Emigration::Monthly(society, rooms, currentYear, protectedCitizen);
+	vector<Citizen*> departed = Emigration::Monthly(society, rooms, now, protectedCitizen);
 	report.departedCitizens = static_cast<int>(departed.size());
 	unordered_set<const Household*> households;
 	for (Citizen* citizen : departed) households.insert(citizen->GetHousehold());
@@ -610,7 +610,7 @@ void Economy::SyncIndustry(Society& society, Industry& industry) {
 	policy.allowanceFactor = exp(g);
 }
 
-void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citizens, int currentYear,
+void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citizens, const Time& now,
 	DailyReport& report) {
 	Ledger& ledger = society.GetLedger();
 	Treasury& treasury = society.GetTreasury();
@@ -628,7 +628,7 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 	// 全部找到才重启。出资时活期不够的部分先从存款取。
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
-		if (citizen && citizen->IsActive() && citizen->IsInEconomy() && citizen->GetAge(currentYear) >= society.GetPolicy().adultAge) {
+		if (citizen && citizen->IsActive() && citizen->IsInEconomy() && citizen->GetAge(now) >= society.GetPolicy().adultAge) {
 			adults.push_back(citizen);
 		}
 	}

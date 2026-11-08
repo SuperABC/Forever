@@ -93,7 +93,7 @@ GoodsSettlementReport Settlement::SettleGoods(Society& society, const Industry& 
 	return report;
 }
 
-RentReport Settlement::PayRents(Society& society, const vector<Room*>& rooms, int currentYear) {
+RentReport Settlement::PayRents(Society& society, const vector<Room*>& rooms, const Time& now) {
 	RentReport report;
 	Ledger& ledger = society.GetLedger();
 	const GovernmentPolicy& policy = society.GetPolicy();
@@ -113,7 +113,7 @@ RentReport Settlement::PayRents(Society& society, const vector<Room*>& rooms, in
 			vector<int64_t> householdShares = SplitEvenly(rent, households.size());
 			for (size_t i = 0; i < households.size(); i++) {
 				// 户里的成年人均摊；没有成年人（理论上不会发生）时由全体成员均摊。
-				vector<Citizen*> payers = households[i]->GetAdults(currentYear);
+				vector<Citizen*> payers = households[i]->GetAdults(now);
 				if (payers.empty()) {
 					for (Citizen* member : households[i]->GetMembers()) {
 						if (member && member->IsActive()) payers.push_back(member);

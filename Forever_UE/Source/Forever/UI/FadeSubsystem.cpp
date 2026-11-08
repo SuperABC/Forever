@@ -29,25 +29,50 @@ void UFadeSubsystem::RegisterWidgetClass(TSubclassOf<UFadeWidget> cls) {
 	}
 }
 
-void UFadeSubsystem::ShowBlack() {
+UFadeWidget* UFadeSubsystem::EnsureWidgetShown() {
 	if (widgetClass == nullptr) {
-		UE_LOG(LogTemp, Warning, TEXT("UFadeSubsystem: 没有任何Controller登记fadeWidgetClass，不显示开局黑屏。"));
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("UFadeSubsystem: 没有任何Controller登记fadeWidgetClass，不显示黑屏。"));
+		return nullptr;
 	}
 	UGameInstance* gameInstance = GetGameInstance();
 	UGameViewportClient* viewport = gameInstance ? gameInstance->GetGameViewportClient() : nullptr;
-	if (viewport == nullptr) return;
+	if (viewport == nullptr) return nullptr;
 
 	if (widget == nullptr) {
 		widget = CreateWidget<UFadeWidget>(gameInstance, widgetClass);
-		if (widget == nullptr) return;
+		if (widget == nullptr) return nullptr;
 		widget->onFinished.BindUObject(this, &UFadeSubsystem::HandleFinished);
 	}
-	widget->ResetToBlack();
+	return widget;
+}
+
+void UFadeSubsystem::ShowBlack() {
+	UFadeWidget* fade = EnsureWidgetShown();
+	if (fade == nullptr) return;
+	fade->ResetToBlack();
 	if (!bShown) {
-		viewport->AddViewportWidgetContent(widget->TakeWidget(), kFadeZOrder);
+		GetGameInstance()->GetGameViewportClient()->AddViewportWidgetContent(fade->TakeWidget(), kFadeZOrder);
 		bShown = true;
 	}
+}
+
+bool UFadeSubsystem::BeginHoldBlack() {
+	UFadeWidget* fade = EnsureWidgetShown();
+	if (fade == nullptr) return false;
+	fade->BeginHold();
+	if (!bShown) {
+		GetGameInstance()->GetGameViewportClient()->AddViewportWidgetContent(fade->TakeWidget(), kFadeZOrder);
+		bShown = true;
+	}
+	return true;
+}
+
+bool UFadeSubsystem::IsHeldBlack() const {
+	return bShown && widget != nullptr && widget->IsHeldBlack();
+}
+
+void UFadeSubsystem::ReleaseHold() {
+	if (bShown && widget != nullptr) widget->Release();
 }
 
 void UFadeSubsystem::EnsureBlack() {
