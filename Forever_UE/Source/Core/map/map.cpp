@@ -928,6 +928,21 @@ void Map::FlushPendingPathRoadLinks() {
 		}
 	}
 
+	// 小路接在另一条小路上时，被接的小路自己的贯通线（throughLines）要先建好，否则BreakThroughLine找不到线段返回nullptr，
+	// 这一端退化成孤立锚点、整条小路及其上的建筑从行人图里脱开。所以host小路的link必须先于挂在它上面的link。
+	unordered_map<Road*, size_t> linkOfRoad;
+	for (size_t i = 0; i < n; i++) linkOfRoad[pendingPathRoadLinks[i].road] = i;
+	for (size_t i = 0; i < n; i++) {
+		const PathRoadLink& link = pendingPathRoadLinks[i];
+		for (Road* host : { link.endRoad1, link.endRoad2 }) {
+			if (!host || !host->IsPathRoad()) continue;
+			auto it = linkOfRoad.find(host);
+			if (it == linkOfRoad.end() || it->second == i) continue;
+			adj[it->second].push_back(i);
+			indegree[i]++;
+		}
+	}
+
 	vector<bool> done(n, false);
 	queue<size_t> ready;
 	for (size_t i = 0; i < n; i++) if (indegree[i] == 0) ready.push(i);
