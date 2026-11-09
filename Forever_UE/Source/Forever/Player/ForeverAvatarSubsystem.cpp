@@ -104,7 +104,7 @@ UTexture2D* UForeverAvatarSubsystem::LoadAvatar(const FString& relativePath) {
 		return nullptr;
 	}
 
-	// 以"/"开头的是UE资产对象路径(如mod插件内容"/Test/Yuanshen/kong.kong")，直接加载贴图资产。
+	// 以"/"开头的是UE资产对象路径(如mod插件内容"/Yuanshen/kong.kong")，直接加载贴图资产。
 	UTexture2D* texture = nullptr;
 	if (relativePath.StartsWith(TEXT("/"))) {
 		texture = LoadObject<UTexture2D>(nullptr, *relativePath);

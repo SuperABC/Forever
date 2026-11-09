@@ -8,7 +8,7 @@
 
 // WxdjBuilding：五行斗诀开局的全局唯一建筑——只在井字路网中心lot(AREA_OFFICIAL_HIGH)里自适应贴路放一块
 // 6x6，不参与权重随机填充(GetPower恒0)。3层，1楼用wxdj_fg+.layout(5个single房间，房间号00001~00005)，
-// 2楼及以上用wxdj_fu+-.layout；layout是从Test组yuanshen模板拷贝的，没有电梯、没有挂脚本。
+// 2楼及以上用wxdj_fu+-.layout；layout是从Yuanshen组yuanshen模板拷贝的，没有电梯、没有挂脚本。
 // 剧情通过Wxdj.script里的record_object(kind=building_wxdj)拿到它的地址，不需要C++。
 class WxdjBuilding : public BuildingMod {
 public:

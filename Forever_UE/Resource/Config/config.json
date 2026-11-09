@@ -42,6 +42,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Yuanshen/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
    ],
    "job_mods" : [
@@ -87,6 +88,8 @@
    "resource_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/UE/Test",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Yuanshen/UE/Yuanshen",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Yuanshen/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts",
@@ -127,7 +130,7 @@
       "storage_empty --test true"
    ],
    "story_scripts" : [
-      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/ys.script"
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Yuanshen/Resource/ys.script"
    ],
    "terrain_mods" : [
       "terrain_river",

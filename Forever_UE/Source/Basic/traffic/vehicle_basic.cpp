@@ -124,8 +124,8 @@ const char* PlaneVehicle::GetName() {
 void PlaneVehicle::SetProperty() {
 	sizeX = 3000.f; sizeY = 2500.f; sizeZ = 800.f;
 
-	// 模型资产来自Forever_Mod/Test的Plugin，运行时挂载成"/Test/..."包路径，见vehicle_mod.h::transitMeshPath。
-	transitMeshPath = "/Test/Airplane/StaticMeshes/airplane.airplane";
+	// 线路飞机和停机位飞机共用Forever_UE的Low-poly_Airplane模型，见vehicle_mod.h::transitMeshPath。
+	transitMeshPath = "/Game/3rdParty/Low-poly_Airplane/StaticMeshes/low_poly_airplane.low_poly_airplane";
 
 	// 模型原始尺寸偏大，缩放到0.15才合适。模型本身是横着建的(正前方不是UE约定的+X)，
 	// 需要一个yaw修正，-90度机头朝向才对。

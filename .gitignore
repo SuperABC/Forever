@@ -74,7 +74,7 @@ Thumbs.db
 .dump/
 
 # ---- Personal/local test scripts (not repo content) ----
-Forever_Mod/Test/Resource/ys.script
+Forever_Mod/Yuanshen/Resource/ys.script
 
 # 市民头像生成物(由 Forever_UE/Tools/AvatarGen 重新生成)
 Forever_UE/Resource/Avatars/

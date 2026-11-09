@@ -2,16 +2,18 @@
 
 外部Mod目录，每个子目录是一组独立的纯Win32 DLL mod，运行时由`Config`/`ModLoader`按`config.json`的`dll_paths`发现并加载：
 
-- `Test/`——测试mod组，详见`Test/Cpp/Yuanshen/building_yuanshen.md`、`Test/Cpp/Test/script_test.md`、`Test/Resource/README.md`：
-  - `Test/Cpp/Yuanshen/`(`Yuanshen.dll`)：`YuanshenBuilding`(id `building_yuanshen`，中心lot里自适应贴角的6x6、14层)和空壳`YuanshenScript`(id `script_yuanshen`)，配`Test/Resource/ys.script`。
+- `Test/`——测试mod组，详见`Test/Cpp/Test/script_test.md`、`Test/Resource/README.md`：
   - `Test/Cpp/Test/`(`Test.dll`)：`TestScript`(id `script_test`)，把`Test/Resource/test.script`的`control`占位符换成控制随机市民。
   - `Test/UE/Test/`：迷你UE工程，用于制作载具蓝图等UE资产并打成pak(见下文)。
+- `Yuanshen/`——原神角色剧情mod组，详见`Yuanshen/Cpp/Yuanshen/building_yuanshen.md`、`Yuanshen/Resource/README.md`：
+  - `Yuanshen/Cpp/Yuanshen/`(`Yuanshen.dll`)：`YuanshenBuilding`(id `building_yuanshen`，中心lot里自适应贴角的6x6、14层)和空壳`YuanshenScript`(id `script_yuanshen`)，配`Yuanshen/Resource/ys.script`。
+  - `Yuanshen/UE/Yuanshen/`：迷你UE工程，插件`Yuanshen`里是角色头像贴图(挂载成`/Yuanshen/<名字>`)，`pak.bat`打成`Plugins/Yuanshen_Pak/Yuanshen.pak`。
 - `Wxdj/`——五行斗诀：`WxdjBuilding`(id `building_wxdj`，中心lot唯一的6x6三层楼)，没有ScriptMod(`main_story`用`script_empty`)，剧情全在`Wxdj/Resource/Wxdj.script`；另有`WxdjPuzzle`(id `puzzle_wxdj`，回合制战斗小游戏，战斗内核在`Wxdj/Cpp/Wxdj/battle/`，招式表`Wxdj/Resource/act/xiaohua.txt`)，开局由脚本`start_puzzle`触发。
 - `Empty/Cpp/Empty/`——20个concept各一个`Empty<Concept>`(id为`<concept>_empty`)，用来验证`config.json`按mod id配置的命令行式参数能一路传到mod：构造函数直接接收参数字符串，拼进`GetName()`，详见`Forever_UE/Source/Forever/Mod/ForeverModSubsystem.md`。
 
 ## 目录结构约定
 
-每个mod组(`Test`、`Wxdj`、`Empty`)是`Cpp/`(每个具体mod一个`.vcxproj`,产出`DynamicLibrary`)+
+每个mod组(`Test`、`Yuanshen`、`Wxdj`、`Empty`)是`Cpp/`(每个具体mod一个`.vcxproj`,产出`DynamicLibrary`)+
 `Resource/`(资源文件)两部分,一个`.sln`引用该组下所有`.vcxproj`。需要UE资产的mod组另带一个迷你UE工程(`Test/UE/Test`)。
 
 ## 每个mod `.vcxproj`必须遵守的约定

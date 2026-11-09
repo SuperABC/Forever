@@ -25,7 +25,7 @@ ZIL-130货车，只有停车场版本(和`VehicleBasic`同一条路线)。`bluep
 `transitMeshPath`=`/Game/3rdParty/SciFiTram/StaticMeshes/SciFiTram.SciFiTram`(静态网格，长边沿X，包围盒约2134x399x577)，`milestoneNames={"vehicle_train"}`，`exitOffset`=(0,320,100)(右侧车身中段)，`boardable=true`，`capacity=80`，`drivable=false`。模型车头朝向和下车点都是估计值，不对再调`meshTransform.yawOffsetDegrees`/`exitOffset`。
 
 ### PlaneVehicle
-- 两种用法：线路上的飞机(`Route`生成，`ATransitVehicleElement`，用`transitMeshPath`=`/Test/Airplane/StaticMeshes/airplane.airplane`，资产来自`Forever_Mod/Test`的Plugin，运行时挂载成`/Test/...`包路径；`meshTransform.scale=0.15`，模型横着建所以`yawOffsetDegrees=-90`)和机场停机位里的飞机(`AirportRoom`车位，`APlaneElement`可驾驶，用`blueprintPath`=`/Game/3rdParty/Low-poly_Airplane/Actor/BP_PlaneElement.BP_PlaneElement_C`，见`Forever/Element/PlaneElement.md`)。`vehicle_plane.script`靠`$$self.on_route`区分：只有`on_route==0`的才提供"驾驶"选项。
+- 两种用法：线路上的飞机(`Route`生成，`ATransitVehicleElement`，用`transitMeshPath`=`/Game/3rdParty/Low-poly_Airplane/StaticMeshes/low_poly_airplane.low_poly_airplane`，和停机位飞机共用Forever_UE的模型；`meshTransform.scale=0.15`，模型横着建所以`yawOffsetDegrees=-90`)和机场停机位里的飞机(`AirportRoom`车位，`APlaneElement`可驾驶，用`blueprintPath`=`/Game/3rdParty/Low-poly_Airplane/Actor/BP_PlaneElement.BP_PlaneElement_C`，见`Forever/Element/PlaneElement.md`)。`vehicle_plane.script`靠`$$self.on_route`区分：只有`on_route==0`的才提供"驾驶"选项。
 - `size`=(3000,2500,800)，`drivable=true`。`exitOffset`=(-300,-200,200)：机身左后方，避开机翼；Z=200是因为飞机原点比地面低约9cm，Z=100时胶囊体底部陷进TerrainLod被挡(日志实测命中点Z=2)，抬高后人才能落地。
 
 ## 依赖关系

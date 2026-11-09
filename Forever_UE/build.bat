@@ -22,6 +22,10 @@ echo ==== Building Forever_Mod\Test ====
 "%MSBUILD%" "%MOD_ROOT%\Test\Cpp\Test.sln" /p:Configuration=Release /p:Platform=x64 /m
 if errorlevel 1 goto :fail
 
+echo ==== Building Forever_Mod\Yuanshen ====
+"%MSBUILD%" "%MOD_ROOT%\Yuanshen\Cpp\Yuanshen.sln" /p:Configuration=Release /p:Platform=x64 /m
+if errorlevel 1 goto :fail
+
 echo ==== Building Forever_Mod\Wxdj ====
 "%MSBUILD%" "%MOD_ROOT%\Wxdj\Cpp\Wxdj.sln" /p:Configuration=Release /p:Platform=x64 /m
 if errorlevel 1 goto :fail
