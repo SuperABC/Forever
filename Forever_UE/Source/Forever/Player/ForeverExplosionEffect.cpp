@@ -14,9 +14,9 @@
 #define EXPLOSION_SPHERE_DIAMETER 100.f
 
 // 火焰材质(Additive，参数Color/EmissiveStrength/Opacity)：火球、冲击波环、火花共用。
-#define EXPLOSION_FIRE_MATERIAL_PATH TEXT("/Game/Asset/Materials/ExplosionFire.ExplosionFire")
+#define EXPLOSION_FIRE_MATERIAL_PATH TEXT("/Game/Asset/Effects/Explosion/ExplosionFire.ExplosionFire")
 // 烟材质(半透明，参数Color/Opacity)。
-#define EXPLOSION_SMOKE_MATERIAL_PATH TEXT("/Game/Asset/Materials/ExplosionSmoke.ExplosionSmoke")
+#define EXPLOSION_SMOKE_MATERIAL_PATH TEXT("/Game/Asset/Effects/Explosion/ExplosionSmoke.ExplosionSmoke")
 
 AForeverExplosionEffect::AForeverExplosionEffect()
 {

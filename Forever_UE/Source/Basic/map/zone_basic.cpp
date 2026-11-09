@@ -74,7 +74,7 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	bool alongY = (dir == FACE_WEST || dir == FACE_EAST);
 
 	// 围墙/大门/内部道路字段是ZoneMod级别的(见zone_mod.h)，布局见zone_basic.md。
-	const string wallMesh = "/Game/Asset/Meshes/Fence.Fence";
+	const string wallMesh = "/Game/Asset/Zone/Fence/Fence.Fence";
 	// wallUnit必须匹配Fence资产的实际长度——BuildWallSegment按这个值换算每段实例的缩放
 	// 倍数，估大了铺出来的实例之间会留出明显空当。
 	constexpr float wallUnit = 0.2f;
@@ -96,7 +96,7 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	gate.depth = WALL_DEPTH;
 	// 园区大门：滑动双开门，占位先用项目自己的Cube资产，见door_system_plan.md"用户追加的
 	// 具体门型要求"一节——双扇对称滑开不需要randomSide(默认false)。
-	gate.door.mesh = "/Game/Asset/Meshes/Cube.Cube";
+	gate.door.mesh = "/Game/Asset/Building/Elements/Cube.Cube";
 	gate.door.style = 0; // Slide
 	gate.door.leaves = 2;
 	gates.push_back(gate);

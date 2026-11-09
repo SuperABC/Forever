@@ -49,7 +49,7 @@ const vector<RoadJunctionApproach>& RoadJunction::GetApproaches() const {
 
 RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads, vector<Node*>& outCreatedNodes) {
 	// 先扫一遍这个路口连着的所有路，记下每条路自己的Start->End切线/outward方向/两侧宽度，
-	// 顺便求出这个路口全局最宽的一侧(globalSetback)。这一步不生成任何几何，只收集数据。
+	// 这一步不生成任何几何，只收集数据。
 	struct PendingApproach {
 		Road* road;
 		bool isStart;
@@ -58,7 +58,6 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 		float side0Width, side1Width;
 	};
 	vector<PendingApproach> pending;
-	float globalSetback = 0.f;
 
 	for (Road* road : roads) {
 		Node start = road->GetStart();
@@ -83,8 +82,6 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 		float side0Width = road->GetSideWidth(0);
 		float side1Width = road->GetSideWidth(1);
 
-		// 车道横断面以连线居中，两侧最外缘到连线都是GetTotalWidth()/2，路口收缩距离取其一半。
-		globalSetback = max(globalSetback, road->GetTotalWidth() * 0.5f);
 		pending.push_back({ road, isStart, fwdX, fwdY, outX, outY, side0Width, side1Width });
 	}
 
@@ -108,9 +105,9 @@ RoadJunction* RoadJunction::Build(Intersection* node, const vector<Road*>& roads
 		// 两侧对称时shift=0，见roadnet.md"车道居中"。
 		float shift = (side0Width - side1Width) * 0.5f;
 
-		// 收缩距离取整个路口的globalSetback而不是本路自己两侧宽度，见roadnet.md"路口收缩距离"；
+		// 收缩距离直接取Road上路网mod写好的缩进(Road::GetSetback)，见roadnet.md"路口收缩距离"；
 		// Forever层道路tiling用同一个值回缩。
-		approach.setback = globalSetback;
+		approach.setback = road->GetSetback(isStart);
 
 		// 基准点取沿road弧长离端点setback处的真实曲线坐标(road->GetPoint)；tFrac的clamp与Forever层
 		// BuildRoadInstances算tLow/tHigh完全相同，路口mesh边界才能和可见路面起点严丝合缝(含高度)，

@@ -414,7 +414,8 @@ Road::Road(const Road& other) :
 	parkingLanes{ other.parkingLanes[0], other.parkingLanes[1] },
 	pedestrianLanes{ other.pedestrianLanes[0], other.pedestrianLanes[1] },
 	openings(other.openings),
-	isPathRoad(other.isPathRoad) {
+	isPathRoad(other.isPathRoad),
+	setbacks{ other.setbacks[0], other.setbacks[1] } {
 
 }
 
@@ -432,6 +433,8 @@ Road& Road::operator=(const Road& other) {
 		pedestrianLanes[1] = other.pedestrianLanes[1];
 		openings = other.openings;
 		isPathRoad = other.isPathRoad;
+		setbacks[0] = other.setbacks[0];
+		setbacks[1] = other.setbacks[1];
 	}
 	return *this;
 }
@@ -499,6 +502,14 @@ void Road::SetPathRoad(bool isPath) {
 
 bool Road::IsPathRoad() const {
 	return isPathRoad;
+}
+
+void Road::SetSetback(bool atStart, float value) {
+	setbacks[atStart ? 0 : 1] = max(value, 0.f);
+}
+
+float Road::GetSetback(bool atStart) const {
+	return setbacks[atStart ? 0 : 1];
 }
 
 float Road::GetSideWidth(int side) const {
@@ -735,17 +746,19 @@ void Lot::SetPosition(Node n1, Node n2, Node n3, const vector<float>& margin) {
 	float sx = sqrt(ux * ux + uy * uy);
 	float sy = sqrt(vx * vx + vy * vy);
 
-	// 应用边距
+	// 应用边距。中心偏移要按原始边长把u/v归一化(偏移量=(两侧边距差)/2)，不能除缩小后的sx/sy，
+	// 否则两侧边距不等时(比如一边是宽路一边是窄路)偏移被放大，lot边缘离路差一小段。
+	const float fullX = sx, fullY = sy;
 	sx -= margin[1] + margin[3];
 	sy -= margin[0] + margin[2];
 
 	// 计算中心点：p1 和 p3 的对角线中心，加上边距偏移
 	float cx = (x1 + x3) / 2.0f
-		+ (margin[3] - margin[1]) * ux / (2.0f * sx)
-		+ (margin[2] - margin[0]) * vx / (2.0f * sy);
+		+ (margin[3] - margin[1]) * ux / (2.0f * fullX)
+		+ (margin[2] - margin[0]) * vx / (2.0f * fullY);
 	float cy = (y1 + y3) / 2.0f
-		+ (margin[3] - margin[1]) * uy / (2.0f * sx)
-		+ (margin[2] - margin[0]) * vy / (2.0f * sy);
+		+ (margin[3] - margin[1]) * uy / (2.0f * fullX)
+		+ (margin[2] - margin[0]) * vy / (2.0f * fullY);
 
 	// 计算旋转角度（p1p2 与 x 轴夹角）
 	float rot = atan2(uy, ux);
@@ -853,13 +866,14 @@ void Lot::SetPosition(Node n1, Node n2, Node n3, Node n4, const vector<float>& m
 	// 计算旋转角度（使用第一条边 nodes[0]->nodes[1]）
 	float rot = atan2(u1y, u1x);
 
-	// 应用边距
+	// 应用边距。中心偏移=(两侧边距差)/2，u1/u2是没归一化的边向量，要除原始边长(sx/sy缩小之前的len1/len2)，
+	// 不能除缩小后的sx/sy，否则两侧边距不等时偏移被放大，lot边缘离路差一小段。
 	sx -= margin[1] + margin[0];
 	sy -= margin[2] + margin[3];
-	cx += (margin[0] - margin[1]) * u1x / (2.0f * sx)
-		+ (margin[3] - margin[2]) * u2x / (2.0f * sy);
-	cy += (margin[0] - margin[1]) * u1y / (2.0f * sx)
-		+ (margin[3] - margin[2]) * u2y / (2.0f * sy);
+	cx += (margin[0] - margin[1]) * u1x / (2.0f * len1)
+		+ (margin[3] - margin[2]) * u2x / (2.0f * len2);
+	cy += (margin[0] - margin[1]) * u1y / (2.0f * len1)
+		+ (margin[3] - margin[2]) * u2y / (2.0f * len2);
 
 	// 更新成员变量
 	posX = cx;

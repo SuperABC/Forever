@@ -75,13 +75,13 @@ UForeverRoadnetFrameworkComponent::UForeverRoadnetFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = false;
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> roadPlainFinder(
-		TEXT("/Game/Asset/Materials/DefaultRoad.DefaultRoad"));
+		TEXT("/Game/Asset/Roadnet/Default/Material/DefaultRoad.DefaultRoad"));
 	if (roadPlainFinder.Succeeded()) {
 		roadPlainBaseMaterial = roadPlainFinder.Object;
 	}
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> pureFinder(
-		TEXT("/Game/Asset/Materials/Pure.Pure"));
+		TEXT("/Game/Asset/Building/Materials/Pure.Pure"));
 	if (pureFinder.Succeeded()) {
 		pureBaseMaterial = pureFinder.Object;
 	}

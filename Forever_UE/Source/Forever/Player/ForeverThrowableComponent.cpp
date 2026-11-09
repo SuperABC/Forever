@@ -240,7 +240,7 @@ void UForeverThrowableComponent::UpdatePreview()
 	}
 	if (bNewMesh || previewMeshPath != meshPath) {
 		UStaticMesh* mesh = AAssetElement::LoadAssetMesh(meshPath);
-		if (!mesh) mesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Asset/Meshes/Cube.Cube"));
+		if (!mesh) mesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Asset/Building/Elements/Cube.Cube"));
 		previewMesh->SetStaticMesh(mesh);
 		// 没指定meshPath时落地的是100cm的Cube，预览不跟着放那么大，缩到手雷大小。
 		previewMesh->SetWorldScale3D(FVector(meshPath.empty() ? 0.1f : meshScale));
@@ -265,7 +265,7 @@ void UForeverThrowableComponent::UpdatePathMesh(const TArray<FVector>& points, b
 		pathMesh->SetWorldTransform(FTransform::Identity);
 
 		// 复用爆炸特效的火焰材质(Additive自发光，已抵消自动曝光)，调成白色。平面正对镜头时Fresnel为0，整条线亮度均匀。
-		if (UMaterialInterface* material = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Asset/Materials/ExplosionFire.ExplosionFire"))) {
+		if (UMaterialInterface* material = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Asset/Effects/Explosion/ExplosionFire.ExplosionFire"))) {
 			if (UMaterialInstanceDynamic* instance = UMaterialInstanceDynamic::Create(material, pathMesh)) {
 				instance->SetVectorParameterValue(TEXT("Color"), FLinearColor::White);
 				instance->SetScalarParameterValue(TEXT("EmissiveStrength"), 2.f);

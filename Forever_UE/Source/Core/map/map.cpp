@@ -77,9 +77,9 @@ Map::Map(int width, int height) :
 	scriptFactory(Registry::Get().GetScriptFactory()),
 	terrainTextures() {
 	TerrainTextureInfo plainTexture{ 0,
-		"/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse",
-		"/Game/Asset/Textures/Terrain/PlainNormal.PlainNormal",
-		"/Game/Asset/Textures/Terrain/PlainRoughness.PlainRoughness" };
+		"/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse",
+		"/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal",
+		"/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness" };
 	terrainTextures = {
 		{ "plain", plainTexture },
 		{ "construction", plainTexture }

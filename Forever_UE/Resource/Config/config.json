@@ -23,7 +23,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Wxdj/Resource",
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Layouts"
    ],
-   "roadnet_mods" : [ "roadnet_jing --length -1" ],
+   "roadnet_mods" : [ "roadnet_checkboard" ],
    "room_mods" : [ "room_factory", "room_residence", "room_empty" ],
    "route_mods" : [],
    "scheduler_mods" : [],

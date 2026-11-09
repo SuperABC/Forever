@@ -10,7 +10,7 @@
 - **结算**：扫到任何阻挡物子弹就消失；只有打中`ACitizenElement`才调`ApplyCitizenHit`(伤害、爆炸、致死广播`CitizenDeceaseEvent`并`HandleCitizenDeath`)，打墙/地面无任何效果。飞出`maxRange`(按累计飞行距离)也消失。伤害按命中点的累计飞行距离在伤害曲线上插值。
 - **伤害曲线采样**：`WeaponMod::ComputeDamage`是虚函数(mod可override成任意衰减)，而Weapon对象会随换枪销毁。所以发射时在`[0,maxRange]`等距采样9点存进子弹，命中时线性插值，既保留mod的曲线又不依赖Weapon的生命周期。
 - **射手失效**：飞行期间射手可能死亡/销毁，命中时`shooter`弱引用失效则击杀事件的凶手为空，其余照常结算。命中时目标可能已被别的子弹打死(`IsDead()`)，此时无效果。
-- **曳光弹**：一个`UInstancedStaticMeshComponent`(引擎Sphere，沿飞行方向拉成粗1.5cm的尾巴)承载所有子弹，每帧重建实例；材质复用`/Game/Asset/Materials/ExplosionFire`(Additive自发光，已抵消自动曝光，参数`Color`/`EmissiveStrength`/`Opacity`，带Fresnel衰减)。尾巴长度=max(300cm, 本帧飞过的距离)，且不超过已飞距离(刚出膛不拖到玩家脸上)。**为什么这么大**：子弹一帧飞好几米，尾巴短了就只闪成一个点；Fresnel让细长体边缘变暗，所以亮度取大。长度/粗细/亮度是cpp顶部的常量，需要在PIE里目测调整。
+- **曳光弹**：一个`UInstancedStaticMeshComponent`(引擎Sphere，沿飞行方向拉成粗1.5cm的尾巴)承载所有子弹，每帧重建实例；材质复用`/Game/Asset/Effects/Explosion/ExplosionFire`(Additive自发光，已抵消自动曝光，参数`Color`/`EmissiveStrength`/`Opacity`，带Fresnel衰减)。尾巴长度=max(300cm, 本帧飞过的距离)，且不超过已飞距离(刚出膛不拖到玩家脸上)。**为什么这么大**：子弹一帧飞好几米，尾巴短了就只闪成一个点；Fresnel让细长体边缘变暗，所以亮度取大。长度/粗细/亮度是cpp顶部的常量，需要在PIE里目测调整。
 
 ## 注意
 - 子弹不进存档，换关/退出即丢。

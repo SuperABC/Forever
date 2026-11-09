@@ -244,8 +244,8 @@ void GrenadeAsset::SetProperty() {
 	weight = 0.4f;
 	size = 0.3f;
 	throwable = true;
-	meshPath = "/Game/Asset/Meshes/Sphere.Sphere";
-	meshScale = 0.1f; // 100cm直径的球体缩到10cm
+	meshPath = "/Game/3rdParty/Pineapple_grenade/StaticMeshes/pineapple_grenade.pineapple_grenade";
+	meshScale = 1.f; // 先按模型原始尺寸，PIE里看大小再调
 }
 
 int SmokeGrenadeAsset::count = 0;
@@ -263,6 +263,6 @@ void SmokeGrenadeAsset::SetProperty() {
 	weight = 0.4f;
 	size = 0.3f;
 	throwable = true;
-	meshPath = "/Game/Asset/Meshes/Sphere.Sphere";
-	meshScale = 0.1f;
+	meshPath = "/Game/3rdParty/Pineapple_grenade/StaticMeshes/pineapple_grenade.pineapple_grenade";
+	meshScale = 1.f;
 }

@@ -18,32 +18,32 @@ UForeverBuildingFrameworkComponent::UForeverBuildingFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> buildingFinder(
-		TEXT("/Game/Asset/Materials/Pure.Pure"));
+		TEXT("/Game/Asset/Building/Materials/Pure.Pure"));
 	if (buildingFinder.Succeeded()) {
 		buildingBaseMaterial = buildingFinder.Object;
 	}
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> cubeFinder(
-		TEXT("/Game/Asset/Meshes/Cube.Cube"));
+		TEXT("/Game/Asset/Building/Elements/Cube.Cube"));
 	if (cubeFinder.Succeeded()) {
 		cubeMesh = cubeFinder.Object;
 	}
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> stairFinder(
-		TEXT("/Game/Asset/Meshes/Stair.Stair"));
+		TEXT("/Game/Asset/Building/Elements/Stair_Return.Stair_Return"));
 	if (stairFinder.Succeeded()) {
 		defaultStairMesh = stairFinder.Object;
 	}
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> rampFinder(
-		TEXT("/Game/Asset/Meshes/Ramp.Ramp"));
+		TEXT("/Game/Asset/Building/Elements/Ramp.Ramp"));
 	if (rampFinder.Succeeded()) {
 		defaultRampMesh = rampFinder.Object;
 	}
 	// 窗户不加载网格：它只是墙上的一个几何缺口(见ABuildingElement::BuildWallsForElement)。
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> cabinFinder(
-		TEXT("/Game/Asset/Meshes/Elevator.Elevator"));
+		TEXT("/Game/Asset/Building/Elements/Elevator.Elevator"));
 	if (cabinFinder.Succeeded()) {
 		defaultCabinMesh = cabinFinder.Object;
 	}

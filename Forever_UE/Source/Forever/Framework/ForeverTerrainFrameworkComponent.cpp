@@ -29,19 +29,19 @@ UForeverTerrainFrameworkComponent::UForeverTerrainFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> terrainMatFinder(
-		TEXT("/Game/Asset/Materials/TemplateFar.TemplateFar"));
+		TEXT("/Game/Asset/Terrain/Template/TemplateFar.TemplateFar"));
 	if (terrainMatFinder.Succeeded()) {
 		terrainBaseMaterial = terrainMatFinder.Object;
 	}
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> nearMatFinder(
-		TEXT("/Game/Asset/Materials/TemplateNear.TemplateNear"));
+		TEXT("/Game/Asset/Terrain/Template/TemplateNear.TemplateNear"));
 	if (nearMatFinder.Succeeded()) {
 		nearBaseMaterial = nearMatFinder.Object;
 	}
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> tunnelWallMatFinder(
-		TEXT("/Game/Asset/Materials/Pure.Pure"));
+		TEXT("/Game/Asset/Building/Materials/Pure.Pure"));
 	if (tunnelWallMatFinder.Succeeded()) {
 		tunnelWallBaseMaterial = tunnelWallMatFinder.Object;
 	}

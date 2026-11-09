@@ -56,9 +56,9 @@ float OceanTerrain::GetPriority() const {
 }
 
 void OceanTerrain::SetupTexture() {
-	diffusePath = "/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse";
-	normalPath = "/Game/Asset/Textures/Terrain/PlainNormal.PlainNormal";
-	roughnessPath = "/Game/Asset/Textures/Terrain/PlainRoughness.PlainRoughness";
+	diffusePath = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
+	normalPath = "/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal";
+	roughnessPath = "/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness";
 }
 
 void OceanTerrain::DistributeTerrain(int width, int height,
@@ -346,9 +346,9 @@ float MountainTerrain::GetPriority() const {
 }
 
 void MountainTerrain::SetupTexture() {
-	diffusePath = "/Game/Asset/Textures/Terrain/RockDiffuse.RockDiffuse";
-	normalPath = "/Game/Asset/Textures/Terrain/RockNormal.RockNormal";
-	roughnessPath = "/Game/Asset/Textures/Terrain/RockRoughness.RockRoughness";
+	diffusePath = "/Game/Asset/Terrain/Rock/RockDiffuse.RockDiffuse";
+	normalPath = "/Game/Asset/Terrain/Rock/RockNormal.RockNormal";
+	roughnessPath = "/Game/Asset/Terrain/Rock/RockRoughness.RockRoughness";
 }
 
 void MountainTerrain::DistributeTerrain(int width, int height,
@@ -728,7 +728,7 @@ float RiverTerrain::GetPriority() const {
 
 void RiverTerrain::SetupTexture() {
 	// 和平地同一张贴图：河道靠地形凹陷+水面mesh表现，不需要地表材质额外强调。
-	diffusePath = "/Game/Asset/Textures/Terrain/PlainDiffuse.PlainDiffuse";
+	diffusePath = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
 	// normalPath/roughnessPath留空——现有fallback逻辑会填平的法线+中性粗糙度
 }
 

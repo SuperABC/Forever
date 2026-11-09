@@ -22,7 +22,7 @@ void ResidenceRoom::SetProperty() {
 	// 房间门：随机左右转动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
 	// "用户追加的具体门型要求"一节。只有single/row的门洞带了"room"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	doorSpecs["room"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["room"].mesh = "/Game/Asset/Building/Elements/Cube.Cube";
 	doorSpecs["room"].style = 1; // Swing
 	doorSpecs["room"].leaves = 1;
 	doorSpecs["room"].randomSide = true;
@@ -43,7 +43,7 @@ void ShopRoom::SetProperty() {
 	workspaceCapacity = 5;
 	rent = 2000;
 
-	doorSpecs["room"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["room"].mesh = "/Game/Asset/Building/Elements/Cube.Cube";
 	doorSpecs["room"].style = 1; // Swing
 	doorSpecs["room"].leaves = 1;
 	doorSpecs["room"].randomSide = true;
@@ -70,7 +70,7 @@ void OfficeRoom::SetProperty() {
 	workspaceCapacity = 5;
 	rent = 2000;
 
-	doorSpecs["room"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["room"].mesh = "/Game/Asset/Building/Elements/Cube.Cube";
 	doorSpecs["room"].style = 1; // Swing
 	doorSpecs["room"].leaves = 1;
 	doorSpecs["room"].randomSide = true;

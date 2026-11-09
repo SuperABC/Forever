@@ -119,16 +119,16 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> defaultCeilingMaterial; // 近处天花板默认白色
 
 	UPROPERTY()
-	TObjectPtr<UStaticMesh> defaultStairMesh; // 默认楼梯网格(/Game/Asset/Meshes/Stair.Stair)
+	TObjectPtr<UStaticMesh> defaultStairMesh; // 默认楼梯网格(/Game/Asset/Building/Elements/Stair_Return.Stair_Return)
 
 	UPROPERTY()
-	TObjectPtr<UStaticMesh> defaultRampMesh; // 默认坡道网格(/Game/Asset/Meshes/Ramp.Ramp)
+	TObjectPtr<UStaticMesh> defaultRampMesh; // 默认坡道网格(/Game/Asset/Building/Elements/Ramp.Ramp)
 
 	UPROPERTY()
-	TObjectPtr<UStaticMesh> cubeMesh; // 单位立方体网格(/Game/Asset/Meshes/Cube.Cube)，SpawnCube用
+	TObjectPtr<UStaticMesh> cubeMesh; // 单位立方体网格(/Game/Asset/Building/Elements/Cube.Cube)，SpawnCube用
 
 	UPROPERTY()
-	TObjectPtr<UStaticMesh> defaultCabinMesh; // 默认电梯轿厢网格(/Game/Asset/Meshes/Elevator.Elevator)
+	TObjectPtr<UStaticMesh> defaultCabinMesh; // 默认电梯轿厢网格(/Game/Asset/Building/Elements/Elevator.Elevator)
 
 	UPROPERTY()
 	TMap<FString, TObjectPtr<UMaterialInstanceDynamic>> lodMaterialCache; // 按软路径缓存MID(远处LOD/近处墙地顶材质共用一份缓存)

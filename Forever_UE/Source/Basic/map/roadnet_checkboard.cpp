@@ -27,16 +27,18 @@
 #define TREE_MESH_PATH "/Game/3rdParty/Mossy_Tree/StaticMeshes/mossy-tree.mossy-tree"
 #define TREE_SCALE 0.6f
 #define TREE_SPACING 1.f
-#define TREE_SIDEWALK_RATIO 0.f
+#define TREE_SIDEWALK_RATIO 0.25f
 #define LAMP_BLUEPRINT_PATH "/Game/3rdParty/Stylized_street_light/Actor/BP_StreetLight.BP_StreetLight_C"
 #define LAMP_SPACING 1.5f
-#define LAMP_SIDEWALK_RATIO 0.3f
+#define LAMP_SIDEWALK_RATIO 0.9f
 #define LAMP_YAW_OFFSET 0.f
 
 // 补长连接：同一条线上两个有效node之间至少隔LONG_GAP_MIN个无效node(其中有山里的)才可能补，补的概率。
 #define LONG_GAP_MIN 4
 #define LONG_EDGE_PROBABILITY 0.5f
 
+// 主干道：隔一条选一条的横线/竖线上的实际连续道路里，所含格点(node)数最多的前1/4(向上取整)，每侧车行道数改成MAIN_ROAD_LANES(2=双向4车道)。
+#define MAIN_ROAD_LANES 2
 #define DENSITY_RING_HIGH 0.1f
 #define DENSITY_RING_HIGH_MIDDLE 0.3f
 #define DENSITY_RING_MIDDLE_LOW 0.5f
@@ -45,6 +47,63 @@
 using namespace std;
 
 namespace {
+		// 路口缩进(写进Road::SetSetback)：必须在所有路的车道都配好之后调用，宽度是后改的。规则同roadnet_basic.cpp的同名函数
+		// (复制而来，改一边要同步另一边)：两侧都是平角缩进0；两侧最小夹角是直角取构成直角的路(含自己)半宽最大值；有锐角取构成锐角的路半宽最大值的两倍。
+		void AssignJunctionSetbacks(vector<Road>& roads, const vector<Intersection>& intersections) {
+			const float PI = 3.14159265358979f;
+			const float EPS = 0.05f;  // 约3度的角度容差
+			struct Arm { Road* road; bool isStart; float angle; float halfWidth; };
+			unordered_map<int, vector<Arm>> armsByNode;
+			unordered_set<int> intersectionIds;
+			for (const Intersection& intersection : intersections) intersectionIds.insert(intersection.GetId());
+			for (Road& road : roads) {
+				road.SetSetback(true, 0.f);
+				road.SetSetback(false, 0.f);
+				for (bool isStart : { true, false }) {
+					int nodeId = isStart ? road.GetStart().GetId() : road.GetEnd().GetId();
+					if (!intersectionIds.count(nodeId)) continue;
+					float tx, ty, tz;
+					road.GetTangent(isStart ? 0.f : 1.f, tx, ty, tz);
+					float angle = isStart ? atan2f(ty, tx) : atan2f(-ty, -tx);
+					armsByNode[nodeId].push_back({ &road, isStart, angle, road.GetTotalWidth() * 0.5f });
+				}
+			}
+			for (auto& [nodeId, arms] : armsByNode) {
+				sort(arms.begin(), arms.end(), [](const Arm& a, const Arm& b) { return a.angle < b.angle; });
+				size_t count = arms.size();
+				for (size_t k = 0; k < count; k++) {
+					// 逆时针方向到下一条、顺时针方向到上一条的夹角，只有一条路时两侧都是整圈。
+					auto gapTo = [&](size_t other, bool counterClockwise) {
+						if (other == k) return 2.f * PI;
+						float gap = counterClockwise ? arms[other].angle - arms[k].angle : arms[k].angle - arms[other].angle;
+						while (gap <= 0.f) gap += 2.f * PI;
+						return gap;
+						};
+					float nextGap = gapTo((k + 1) % count, true), prevGap = gapTo((k + count - 1) % count, false);
+					float nextWidth = arms[(k + 1) % count].halfWidth, prevWidth = arms[(k + count - 1) % count].halfWidth;
+					float minGap = min(nextGap, prevGap);
+					float setback = 0.f;
+					if (minGap >= PI - EPS) {
+						setback = 0.f;
+					}
+					else if (minGap < PI * 0.5f - EPS) {
+						setback = arms[k].halfWidth;
+						if (nextGap < PI * 0.5f - EPS) setback = max(setback, nextWidth);
+						if (prevGap < PI * 0.5f - EPS) setback = max(setback, prevWidth);
+						setback *= 2.f;
+					}
+					else {
+						// 直角/钝角：只看两侧夹角<180度的邻路半宽，不含自己。
+						if (nextGap < PI - EPS) setback = max(setback, nextWidth);
+						if (prevGap < PI - EPS) setback = max(setback, prevWidth);
+					}
+					float length = arms[k].road->CalcDistance();
+					if (length > 1e-6f) setback = min(setback, length * 0.45f);
+					arms[k].road->SetSetback(arms[k].isStart, setback);
+				}
+			}
+		}
+
 	// 住宅/商业/工业/办公四种类型均匀随机，密度由level给(0=高,1=中,2=低)。
 	AREA_TYPE RandomArea(int level) {
 		static constexpr AREA_TYPE kAreas[4][3] = {
@@ -120,14 +179,20 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 	const float LANE_WIDTH = 0.5f;
 
 	// ---- 建路辅助：照抄JingRoadnet::DistributeRoadnet里同名lambda，车道配置固定为默认的对称(1,0,1,1,0,1) ----
+	// 正在铺的这条路每侧的车行道数(1=普通路，MAIN_ROAD_LANES=主干道)，铺每条链之前设置，addRoad/layRoad读取。
+	int currentLanes = 1;
 	auto configureLanes = [&](Road& road) {
-		road.AddVehicleLane(0, LANE_WIDTH);
-		road.AddPedestrianLane(0, LANE_WIDTH);
-		road.AddVehicleLane(1, LANE_WIDTH);
-		road.AddPedestrianLane(1, LANE_WIDTH);
+		for (int side = 0; side < 2; side++) {
+			for (int k = 0; k < currentLanes; k++) road.AddVehicleLane(side, LANE_WIDTH);
+			road.AddPedestrianLane(side, LANE_WIDTH);
+		}
 		};
-	const string meshPath = "/Game/Asset/Meshes/default_1_0_1_1_0_1.default_1_0_1_1_0_1";
-	const string tunnelMeshPath = "/Game/Asset/Meshes/default_1_0_1_1_0_1_T.default_1_0_1_1_0_1_T";
+	// 资产命名default_左车行_左停车_左人行_右车行_右停车_右人行(隧道内加_T)，见roadnet_basic.md。
+	auto meshPathFor = [&](bool tunnel) -> string {
+		string suffix = to_string(currentLanes) + "_0_1_" + to_string(currentLanes) + "_0_1";
+		if (tunnel) suffix += "_T";
+		return "/Game/Asset/Roadnet/Default/Mesh/default_" + suffix + ".default_" + suffix;
+		};
 
 	auto addControls = [](Road& road, const Node& n1, const Node& n2, float startSlope = 0.f, float endSlope = 0.f) {
 		float dx = n2.GetX() - n1.GetX();
@@ -142,6 +207,8 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 	auto addRoad = [&](const string& name, const Node& n1, const Node& n2, float startSlope = 0.f, float endSlope = 0.f) {
 		bool n1Tunnel = n1.GetZ() < 0.f;
 		bool n2Tunnel = n2.GetZ() < 0.f;
+		const string meshPath = meshPathFor(false);
+		const string tunnelMeshPath = meshPathFor(true);
 
 		if (n1Tunnel != n2Tunnel) {
 			const Node& groundNode = n1Tunnel ? n2 : n1;
@@ -443,6 +510,8 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 	//     长边只会在两者都"跨过"的网格点上相交，用覆盖标记判断，冲突的丢弃。
 	//     hLongTo[a]=横向长边从a指向的右端node下标(-1无)，hLongFrom[b]是反向记录；竖向同理。
 	// =========================================================================================
+	// 横线、竖线各自随机的起始奇偶：补长连接和主干道都只在这些隔一条选一条的线上做。
+	const int hParity = GetRandom(2), vParity = GetRandom(2);
 	vector<int> hLongTo(static_cast<size_t>(nu) * nv, -1), hLongFrom(static_cast<size_t>(nu) * nv, -1);
 	vector<int> vLongTo(static_cast<size_t>(nu) * nv, -1), vLongFrom(static_cast<size_t>(nu) * nv, -1);
 	{
@@ -453,8 +522,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 			if (posX[n] < 0.f || posY[n] < 0.f || x >= width || y >= height) return false;
 			return getTerrain(x, y) == "terrain_mountain";
 			};
-		// 横线、竖线都隔一条选一条(各自随机起始奇偶)，避免两条相邻的山路挨得太近。
-		const int hParity = GetRandom(2), vParity = GetRandom(2);
+		// 横线、竖线都隔一条选一条(奇偶在上面随机)，避免两条相邻的山路挨得太近。
 		for (int j = 0; j < nv; j++) {
 			if (j % 2 != hParity) continue;
 			int previous = -1;
@@ -701,6 +769,61 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 	}
 
 	// =========================================================================================
+	// 6b. 主干道：在隔一条选一条的横线/竖线上，把线上"实际连续"的道路(沿线相邻存活node靠普通边或长边一路连着，
+	//     断开就是另一段)按所含格点数从多到少排，横向、竖向各取前1/4(向上取整)，改成每侧MAIN_ROAD_LANES条车行道。
+	//     放在补长连接、删边、大lot合并之后，所以连续性看的是最终留下来的边。hWide[a]标记边(a,a+1)，
+	//     vWide[a]标记边(a,a+nu)，hLongWide/vLongWide标记从a出发的长边。
+	// =========================================================================================
+	vector<char> hWide(static_cast<size_t>(nu) * nv, 0), vWide(static_cast<size_t>(nu) * nv, 0);
+	vector<char> hLongWide(static_cast<size_t>(nu) * nv, 0), vLongWide(static_cast<size_t>(nu) * nv, 0);
+	{
+		struct MainRun { int nodes = 0; vector<pair<int, bool>> edges; };  // edges：边起点node下标、是否长边
+		auto collectRuns = [&](bool horizontal) {
+			vector<MainRun> runs;
+			int lines = horizontal ? nv : nu, length = horizontal ? nu : nv, parity = horizontal ? hParity : vParity;
+			for (int line = 0; line < lines; line++) {
+				if (line % 2 != parity) continue;
+				auto at = [&](int k) { return horizontal ? nodeIndex(k, line) : nodeIndex(line, k); };
+				for (int k = 0; k < length; ) {
+					if (!alive[at(k)]) { k++; continue; }
+					MainRun run;
+					run.nodes = 1;
+					int cur = k;
+					while (true) {
+						int a = at(cur), next = -1;
+						bool isLong = false;
+						const vector<char>& edge = horizontal ? hEdge : vEdge;
+						const vector<int>& longTo = horizontal ? hLongTo : vLongTo;
+						if (cur + 1 < length && edge[a]) next = cur + 1;
+						else if (longTo[a] >= 0) { next = horizontal ? longTo[a] % nu : longTo[a] / nu; isLong = true; }
+						if (next < 0) break;
+						run.edges.push_back({ a, isLong });
+						run.nodes++;
+						cur = next;
+					}
+					if (!run.edges.empty()) runs.push_back(std::move(run));
+					k = cur + 1;
+				}
+			}
+			return runs;
+			};
+		for (bool horizontal : { true, false }) {
+			vector<MainRun> runs = collectRuns(horizontal);
+			// 格点数多的优先，数量取1/4(向上取整)。
+			stable_sort(runs.begin(), runs.end(), [](const MainRun& x, const MainRun& y) { return x.nodes > y.nodes; });
+			size_t widened = (runs.size() + 3) / 4;
+			for (size_t r = 0; r < widened; r++) {
+				for (const pair<int, bool>& e : runs[r].edges) {
+					vector<char>& mark = e.second ? (horizontal ? hLongWide : vLongWide) : (horizontal ? hWide : vWide);
+					mark[e.first] = 1;
+				}
+			}
+			debugf("Log: Roadnet checkboard main roads %s: %d of %d widened.\n", horizontal ? "horizontal" : "vertical",
+				static_cast<int>(widened), static_cast<int>(runs.size()));
+		}
+	}
+
+	// =========================================================================================
 	// 7. 过滤没用的node：只连了东西两条或南北两条(共线)且都不跨山的node删掉，两条路并成一条。
 	//    chain：沿一条横/竖线的一整串被并起来的边，a/b是两端的node。
 	// =========================================================================================
@@ -764,7 +887,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		return false;
 		};
 
-	struct Chain { int a; int b; bool horizontal; int line; int roadIndex; };
+	struct Chain { int a; int b; bool horizontal; int line; int roadIndex; bool wide = false; };
 	vector<Chain> chains;
 	vector<int> hChain(static_cast<size_t>(nu) * nv, -1), vChain(static_cast<size_t>(nu) * nv, -1);
 	for (int j = 0; j < nv; j++) {
@@ -792,10 +915,13 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		}
 	}
 
+	// 普通链：一条链里的边都在同一段连续道路上，看第一条边有没有被标成主干道就够了。
+	for (Chain& chain : chains) chain.wide = chain.horizontal ? hWide[chain.a] : vWide[chain.a];
+
 	// 长边各自一条链(special：跨山，不挂lot)。
 	for (int a = 0; a < nu * nv; a++) {
-		if (hLongTo[a] >= 0) chains.push_back({ a, hLongTo[a], true, a / nu, -1 });
-		if (vLongTo[a] >= 0) chains.push_back({ a, vLongTo[a], false, a % nu, -1 });
+		if (hLongTo[a] >= 0) chains.push_back({ a, hLongTo[a], true, a / nu, -1, hLongWide[a] != 0 });
+		if (vLongTo[a] >= 0) chains.push_back({ a, vLongTo[a], false, a % nu, -1, vLongWide[a] != 0 });
 	}
 
 	// =========================================================================================
@@ -815,9 +941,11 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		if (intersectionOf[chain.a] < 0 || intersectionOf[chain.b] < 0) continue;
 		string chainName = chain.horizontal ? "东西第" + to_string(chain.line + 1) + "路" : "南北第" + to_string(chain.line + 1) + "路";
 		chain.roadIndex = static_cast<int>(roads.size());
+		currentLanes = chain.wide ? MAIN_ROAD_LANES : 1;
 		layRoad(chainName, intersections[intersectionOf[chain.a]], intersections[intersectionOf[chain.b]]);
 	}
 
+	currentLanes = 1;
 	// 四条出口路：从选中的node沿棋盘格方向一直铺到地图边界，边界点作为extern。
 	for (const ExternPick& pick : externPicks) {
 		Node externNode("roadnet", pick.endX, pick.endY, 0.f);
@@ -866,6 +994,9 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 			vChain[nodeIndex(i, j)], vChain[nodeIndex(i + 2, j)], hChain[nodeIndex(i, j)], hChain[nodeIndex(i, j + 2)]);
 	}
 
+	// 所有路的车道都配好之后统一写路口缩进。
+	AssignJunctionSetbacks(roads, intersections);
+
 	debugf("Log: Roadnet checkboard %d nodes, %d roads, %d lots (%d big), theta %.3f.\n",
 		static_cast<int>(intersections.size()), static_cast<int>(roads.size()), static_cast<int>(lots.size()),
 		static_cast<int>(bigLots.size()), theta);
@@ -891,18 +1022,10 @@ void CheckboardRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing
 	unordered_set<int> intersectionIds;
 	for (const Intersection& intersection : intersections) intersectionIds.insert(intersection.GetId());
 	// 路口收缩距离：hostRoads就是Core建RoadJunction时用的那批大路，含隧道段，全部参与。
-	unordered_map<int, float> junctionSetback;
-	for (const Road* road : hostRoads) {
-		if (!road || road->IsPathRoad()) continue;
-		for (int endId : { road->GetStart().GetId(), road->GetEnd().GetId() }) {
-			if (!intersectionIds.count(endId)) continue;
-			float& setback = junctionSetback[endId];
-			setback = max(setback, road->GetTotalWidth() * 0.5f);
-		}
-	}
-	auto endGap = [&](int nodeId) {
-		auto found = junctionSetback.find(nodeId);
-		return found != junctionSetback.end() ? found->second : 0.f;
+	// 路口收缩距离直接读Road上mod写好的缩进(AssignJunctionSetbacks)，只有连着Intersection的那端才有缩进。
+	auto endGap = [&](const Road* road, bool isStart) {
+		int endId = isStart ? road->GetStart().GetId() : road->GetEnd().GetId();
+		return intersectionIds.count(endId) ? road->GetSetback(isStart) : 0.f;
 		};
 
 	for (const Road* road : hostRoads) {
@@ -911,8 +1034,8 @@ void CheckboardRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing
 		if (start.GetZ() < 0.f || end.GetZ() < 0.f) continue;
 		float dx = end.GetX() - start.GetX(), dy = end.GetY() - start.GetY();
 		float len = sqrt(dx * dx + dy * dy);
-		float startInset = endGap(start.GetId()) + spacing * 0.5f;
-		float endInset = endGap(end.GetId()) + spacing * 0.5f;
+		float startInset = endGap(road, true) + spacing * 0.5f;
+		float endInset = endGap(road, false) + spacing * 0.5f;
 		float usable = len - startInset - endInset;
 		if (usable <= 0.f) continue;
 		float ux = dx / len, uy = dy / len;

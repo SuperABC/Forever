@@ -110,8 +110,7 @@
   语义一致)。
 - **行道树(`JingRoadnet::LayoutTrees`，粗估，待细调)**——地图全部生成完之后才调用，遍历Core
   传进来的大路(跳过小路、两端有隧道Z<0的路段)，对每一侧有人行道的种一排：横向偏移沿用`Map::ComputeLaneAnchorPosition`的约定
-  (`perp0=(-dy,dx)`、`shift=(side0宽-side1宽)/2`)，落在人行道正中间
-  (`TREE_SIDEWALK_RATIO`)；间距`TREE_SPACING`(1格=10m)。mesh是`TREE_MESH_PATH`(Mossy_Tree测试
+  (`perp0=(-dy,dx)`、`shift=(side0宽-side1宽)/2`)，从人行道内侧量起占人行道宽度的`TREE_SIDEWALK_RATIO`(0.25)处；间距`TREE_SPACING`(1格=10m)。mesh是`TREE_MESH_PATH`(Mossy_Tree测试
   树)，scale=`TREE_SCALE`(0.6)。纵向让出的距离不用定值，统一规则是"缺口边缘之外再留半个间距"：
   - 端点是Intersection(按`this->intersections`的id判断，Core深拷贝保留id)：缺口=路口收缩距离，
     和`RoadJunction::Build`同一个定义(该路口所有连接大路`GetTotalWidth()`最大值的一半)，即这条
@@ -123,9 +122,14 @@
   剩下连续的几棵合成一条`AddTreeLine`。河上的桥/隧道口引道由Core的`Map::CanPlaceTree`统一跳过。
 - **路灯(`JingRoadnet::LayoutLamps`，先随便摆，待用户看效果再调)**——和行道树共用私有的`LayoutRows(hostRoads, spacing,
   sidewalkRatio, emit)`（路口收缩距离、开口避让、每侧偏移都在这里，`emit`每次收到一段连续位置：side、起止点、盏数、沿路方向角）。
-  灯行放在行道树**外侧**：`LAMP_SIDEWALK_RATIO`(0.3，树是0)，间距`LAMP_SPACING`(1.5格=15m)，蓝图路径`LAMP_BLUEPRINT_PATH`
+  灯行放在行道树**外侧**：`LAMP_SIDEWALK_RATIO`(0.9，树是0.25)，间距`LAMP_SPACING`(1.5格=15m)，蓝图路径`LAMP_BLUEPRINT_PATH`
   (`/Game/3rdParty/Stylized_street_light/Actor/BP_StreetLight.BP_StreetLight_C`)。朝向=沿路方向角 + (side0:-90 / side1:+90) +
   `LAMP_YAW_OFFSET`，所以两排自然差180度，两排都朝向路面；`LAMP_YAW_OFFSET`统一补偿蓝图里灯臂的初始朝向。
+
+- **路口缩进(`AssignJunctionSetbacks`，`DistributeRoadnet`最后调用)**：所有路的车道配好之后，对每个Intersection的每条连接路，看它在路口两侧
+  与相邻路的夹角（容差约3°）：两侧都是平角(≥180°)缩进0；两侧最小夹角是直角(或钝角)取两侧夹角<180°的邻路半宽的最大值(不含自己)；
+  两侧有锐角取构成锐角的几条路(含自己)半宽最大值的两倍。再按0.45倍路长封顶，用`Road::SetSetback(isStart, value)`写进Road，
+  Core的`RoadJunction::Build`和行道树/路灯`LayoutRows`都读它。`roadnet_checkboard.cpp`有一份复制，改一边要同步。
 
 ## 依赖关系
 

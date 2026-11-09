@@ -31,13 +31,13 @@
 没有角色资产，所有角色(玩家和全部NPC，`ACitizenElement`也继承这个类)都是同一个小白人，所以每个角色头上
 放一个贴头像的方块来区分：`avatarMesh`(UStaticMeshComponent)挂在`head`骨骼socket上，和
 `firstPersonCamera`同一种挂法(没有head时退化成挂在胶囊体顶部)，跟着走路姿势一起动。方块用项目的
-`/Game/Asset/Meshes/Cube.Cube`(原生边长100，缩放=`avatarSize`/100)，不参与碰撞/overlap/导航。
+`/Game/Asset/Building/Elements/Cube.Cube`(原生边长100，缩放=`avatarSize`/100)，不参与碰撞/overlap/导航。
 `BeginPlay`里重新摆一次：`avatarOffset`是相对head骨骼的偏移(骨骼局部坐标)，`avatarOffsetInCharacter`是在它基础上按角色方向
 (+X前+Y右+Z上)的微调(当前往下5cm盖住下巴，按骨骼参考姿势转回骨骼坐标再叠加)，`avatarSize`默认30cm；
 旋转按head骨骼的参考姿势(`FAnimationRuntime::GetComponentSpaceTransformRefPose`+mesh相对旋转)把骨骼
 自己的朝向抵消掉，`avatarRotation`就变成相对角色本身的旋转——0时方块+X面朝角色正前方(正面)、+Z朝上，
-之后仍跟着head骨骼的动画一起动。然后再用`/Game/Asset/Materials/Avatar`建动态材质实例，把`avatarTexture`(现在所有人
-都是硬编码的`/Game/Asset/Textures/Avatars/default`)设进`AvatarTexture`参数。Avatar材质需要在编辑器里
+之后仍跟着head骨骼的动画一起动。然后再用`/Game/Asset/Characters/Avatar/Avatar`建动态材质实例，把`avatarTexture`(现在所有人
+都是硬编码的`/Game/Asset/Characters/Avatar/default`)设进`AvatarTexture`参数。Avatar材质需要在编辑器里
 手动建(一个TextureSampleParameter2D `AvatarTexture`连Base Color)；还没建时保留Cube自带材质。已知效果：
 Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块内部，Cube单面渲染、从里面看不到，不挡视线。
 

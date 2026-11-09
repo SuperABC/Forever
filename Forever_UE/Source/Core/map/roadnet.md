@@ -48,7 +48,10 @@
   setback"之后的点。`setback`这个值必须由Forever层的道路tiling收缩量直接复用（不能自己
   另算一套），两者才能严丝合缝，见`Source/Forever/Framework/
   ForeverRoadnetFrameworkComponent.md`。
-- **`setback`取整个路口所有连接路里、总宽度(`Road::GetTotalWidth()`)最大的那条的**一半**，
+- **【已改】`setback`现在直接取`Road::GetSetback(isStart)`**，由路网mod在所有路的车道配好之后按路口实际夹角写入
+  (Jing/Checkboard的`AssignJunctionSetbacks`，规则见各自.md)，每个approach各自一个值，可以为0。
+  下面是旧方案的说明（取整个路口最大半宽的统一值），仅供理解历史原因：
+- **（旧）`setback`取整个路口所有连接路里、总宽度(`Road::GetTotalWidth()`)最大的那条的**一半**，
   不是任何一条路自己的宽度**（`RoadJunction::Build`先用一个`pending`数组扫一遍这个路口的所有
   approach，边扫边求`globalSetback = max(所有路GetTotalWidth()/2)`，第二遍才用这个全局值给
   每个approach赋`approach.setback`）——如果每条路的`setback`只按自己宽度算，窄的那条路会

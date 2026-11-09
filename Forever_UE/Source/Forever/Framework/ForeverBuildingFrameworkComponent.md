@@ -121,7 +121,7 @@ processFace`的约定：`y1`是"开口顶到天花板"这段实心墙(过梁/门
 按`building->GetMod()->floors[level].assets`（`FloorAssetSpec`，`AssignFloor`时mod声明的）
 解析这一层的`wallMaterial`/`floorMaterial`/`ceilingMaterial`（`ResolveMaterial`，留空用
 组件默认，不分内外墙，统一一份默认墙体材质）+`stairMeshPath`/`rampMeshPath`
-（`ResolveMesh`，留空用组件默认的`Stair.Stair`/`Ramp.Ramp`）。地板/天花板两层独立薄slab
+（`ResolveMesh`，留空用组件默认的`Stair_Return.Stair_Return`/`Ramp.Ramp`）。地板/天花板两层独立薄slab
 （`kSlabThickness=0.02f`地图单位，照抄老工程），贴地坪往上一点点/贴楼层顶往下一点点，中间
 留一条窄缝，和相邻楼层的对应slab不共面。
 
@@ -285,7 +285,7 @@ Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的名�
 - **近处LOD的表现**：远→近切换时在所有`BuildFloorMesh`之后跑`BuildElevatorCabins`
   (`BuildElevatorCabinsForBuilding`)，近→远的`ClearNearSections`一并清空。对每台Core电梯：
   - 轿厢网格：用`minFloor`那一层模板的这口井定位/定尺寸(`ComputeDirectionalMeshTransform`，资产默认
-    `/Game/Asset/Meshes/Elevator.Elevator`，Z缩放用`minFloor`的层高)，**从Core记录的当前高度生成**；
+    `/Game/Asset/Building/Elements/Elevator.Elevator`，Z缩放用`minFloor`的层高)，**从Core记录的当前高度生成**；
     `UpdateCabins`在近处每帧按Core高度摆放。
   - 交互触发盒(`SpawnCabinTrigger`，Trigger碰撞预设)：轿厢内一个(宽/高为轿厢的`kElevatorInnerScale`=0.8，沿开口方向
     深度为轿厢进深的`kElevatorInnerDepthScale`=0.5、贴着轿厢门平面，Movable，跟着轿厢移动)；这台电梯负责的每一层电梯

@@ -28,25 +28,83 @@
 // 隧道口地面端先接一段完全水平的引道，必须比RoadJunction::Build按setback裁掉的路口进深长，
 // 否则被裁掉的那截曲线已经下降，和强制铺成平面的路口mesh(见roadnet.md"路口高度")高度对不上。
 #define TUNNEL_FLAT_APPROACH_LENGTH 1.5f
-// 行道树(JingRoadnet::LayoutTrees，先粗估，后面再细调)：种在人行道正中间(TREE_SIDEWALK_
+// 行道树(JingRoadnet::LayoutTrees，先粗估，后面再细调)：种在人行道内侧附近(TREE_SIDEWALK_
 // RATIO=从人行道内侧量起的比例)，沿路每TREE_SPACING一棵。路口/开口让出的距离都按实际几何
 // 算(路口收缩距离、开口宽度)，见JingRoadnet::LayoutTrees和roadnet_basic.md。
 #define TREE_MESH_PATH "/Game/3rdParty/Mossy_Tree/StaticMeshes/mossy-tree.mossy-tree"
 #define TREE_SCALE 0.6f
 #define TREE_SPACING 1.f
-#define TREE_SIDEWALK_RATIO 0.f
+#define TREE_SIDEWALK_RATIO 0.25f
 // 路灯(JingRoadnet::LayoutLamps，先随便摆，后面看效果再调)：和行道树共用LayoutRows的几何，
-// 放在行道树外侧(LAMP_SIDEWALK_RATIO比树的0大)，沿路每LAMP_SPACING(1.5格=15m)一盏。side0/side1的朝向
+// 放在行道树外侧(LAMP_SIDEWALK_RATIO比树的TREE_SIDEWALK_RATIO大)，沿路每LAMP_SPACING(1.5格=15m)一盏。side0/side1的朝向
 // 自动差180度，LAMP_YAW_OFFSET(度)统一补偿蓝图里灯臂的初始朝向。
 #define LAMP_BLUEPRINT_PATH "/Game/3rdParty/Stylized_street_light/Actor/BP_StreetLight.BP_StreetLight_C"
 #define LAMP_SPACING 1.5f
-#define LAMP_SIDEWALK_RATIO 0.3f
+#define LAMP_SIDEWALK_RATIO 0.9f
 #define LAMP_YAW_OFFSET 0.f
 
 
 using namespace std;
 
 namespace {
+		// 路口缩进(写进Road::SetSetback)：必须在所有路的车道都配好之后调用，宽度是后改的。对每个路口的每条连接路，
+		// 看它在路口两侧与相邻路的夹角：两侧都是平角(>=180度)缩进为0；两侧最小夹角是直角(或钝角)取构成直角的这几条路
+		// (含自己)半宽的最大值；两侧有锐角取构成锐角的这几条路(含自己)半宽最大值的两倍。再按0.45倍路长封顶(同Core的tFrac clamp)。
+		void AssignJunctionSetbacks(vector<Road>& roads, const vector<Intersection>& intersections) {
+			const float PI = 3.14159265358979f;
+			const float EPS = 0.05f;  // 约3度的角度容差
+			struct Arm { Road* road; bool isStart; float angle; float halfWidth; };
+			unordered_map<int, vector<Arm>> armsByNode;
+			unordered_set<int> intersectionIds;
+			for (const Intersection& intersection : intersections) intersectionIds.insert(intersection.GetId());
+			for (Road& road : roads) {
+				road.SetSetback(true, 0.f);
+				road.SetSetback(false, 0.f);
+				for (bool isStart : { true, false }) {
+					int nodeId = isStart ? road.GetStart().GetId() : road.GetEnd().GetId();
+					if (!intersectionIds.count(nodeId)) continue;
+					float tx, ty, tz;
+					road.GetTangent(isStart ? 0.f : 1.f, tx, ty, tz);
+					float angle = isStart ? atan2f(ty, tx) : atan2f(-ty, -tx);
+					armsByNode[nodeId].push_back({ &road, isStart, angle, road.GetTotalWidth() * 0.5f });
+				}
+			}
+			for (auto& [nodeId, arms] : armsByNode) {
+				sort(arms.begin(), arms.end(), [](const Arm& a, const Arm& b) { return a.angle < b.angle; });
+				size_t count = arms.size();
+				for (size_t k = 0; k < count; k++) {
+					// 逆时针方向到下一条、顺时针方向到上一条的夹角，只有一条路时两侧都是整圈。
+					auto gapTo = [&](size_t other, bool counterClockwise) {
+						if (other == k) return 2.f * PI;
+						float gap = counterClockwise ? arms[other].angle - arms[k].angle : arms[k].angle - arms[other].angle;
+						while (gap <= 0.f) gap += 2.f * PI;
+						return gap;
+						};
+					float nextGap = gapTo((k + 1) % count, true), prevGap = gapTo((k + count - 1) % count, false);
+					float nextWidth = arms[(k + 1) % count].halfWidth, prevWidth = arms[(k + count - 1) % count].halfWidth;
+					float minGap = min(nextGap, prevGap);
+					float setback = 0.f;
+					if (minGap >= PI - EPS) {
+						setback = 0.f;
+					}
+					else if (minGap < PI * 0.5f - EPS) {
+						setback = arms[k].halfWidth;
+						if (nextGap < PI * 0.5f - EPS) setback = max(setback, nextWidth);
+						if (prevGap < PI * 0.5f - EPS) setback = max(setback, prevWidth);
+						setback *= 2.f;
+					}
+					else {
+						// 直角/钝角：只看两侧夹角<180度的邻路半宽，不含自己。
+						if (nextGap < PI - EPS) setback = max(setback, nextWidth);
+						if (prevGap < PI - EPS) setback = max(setback, prevWidth);
+					}
+					float length = arms[k].road->CalcDistance();
+					if (length > 1e-6f) setback = min(setback, length * 0.45f);
+					arms[k].road->SetSetback(arms[k].isStart, setback);
+				}
+			}
+		}
+
 	// 井字中心lot固定AREA_OFFICIAL_HIGH，其余所有非中心lot(4个紧邻中心的臂lot+更外圈延伸出去
 	// 的lot)按1:1:1随机分配成高密度住宅/商业/工业区——这是ShopBuilding/FactoryBuilding按
 	// GetPower(AREA_TYPE)竞争lot的前提，分区类型如果单一固定，地图上只会长出一种建筑。
@@ -127,7 +185,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		string suffix = to_string(leftV) + "_" + to_string(leftP) + "_" + to_string(leftPd) + "_"
 			+ to_string(rightV) + "_" + to_string(rightP) + "_" + to_string(rightPd);
 		if (tunnel) suffix += "_T";
-		return "/Game/Asset/Meshes/default_" + suffix + ".default_" + suffix;
+		return "/Game/Asset/Roadnet/Default/Mesh/default_" + suffix + ".default_" + suffix;
 		};
 
 	// 控制点放在1/3、2/3处(不与端点重合)，保证节点处切线非零。控制点Z按节点坡度(startSlope/endSlope，
@@ -604,6 +662,9 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			});
 		lots.back().SetArea(RandomHighDensityArea());
 	}
+
+	// 所有路的车道都配好之后统一写路口缩进。
+	AssignJunctionSetbacks(roads, intersections);
 }
 
 void JingRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {
@@ -631,18 +692,10 @@ void JingRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing, floa
 	unordered_set<int> intersectionIds;
 	for (const Intersection& intersection : intersections) intersectionIds.insert(intersection.GetId());
 	// 路口收缩距离：hostRoads就是Core建RoadJunction时用的那批大路，含隧道段，全部参与。
-	unordered_map<int, float> junctionSetback;
-	for (const Road* road : hostRoads) {
-		if (!road || road->IsPathRoad()) continue;
-		for (int endId : { road->GetStart().GetId(), road->GetEnd().GetId() }) {
-			if (!intersectionIds.count(endId)) continue;
-			float& setback = junctionSetback[endId];
-			setback = max(setback, road->GetTotalWidth() * 0.5f);
-		}
-	}
-	auto endGap = [&](int nodeId) {
-		auto found = junctionSetback.find(nodeId);
-		return found != junctionSetback.end() ? found->second : 0.f;
+	// 路口收缩距离直接读Road上mod写好的缩进(AssignJunctionSetbacks)，只有连着Intersection的那端才有缩进。
+	auto endGap = [&](const Road* road, bool isStart) {
+		int endId = isStart ? road->GetStart().GetId() : road->GetEnd().GetId();
+		return intersectionIds.count(endId) ? road->GetSetback(isStart) : 0.f;
 		};
 
 	for (const Road* road : hostRoads) {
@@ -651,8 +704,8 @@ void JingRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing, floa
 		if (start.GetZ() < 0.f || end.GetZ() < 0.f) continue;
 		float dx = end.GetX() - start.GetX(), dy = end.GetY() - start.GetY();
 		float len = sqrt(dx * dx + dy * dy);
-		float startInset = endGap(start.GetId()) + spacing * 0.5f;
-		float endInset = endGap(end.GetId()) + spacing * 0.5f;
+		float startInset = endGap(road, true) + spacing * 0.5f;
+		float endInset = endGap(road, false) + spacing * 0.5f;
 		float usable = len - startInset - endInset;
 		if (usable <= 0.f) continue;
 		float ux = dx / len, uy = dy / len;

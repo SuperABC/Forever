@@ -22,7 +22,7 @@ using namespace std;
 
 // 曳光弹用爆炸特效的火焰材质(Additive自发光，已抵消自动曝光，参数Color/EmissiveStrength/Opacity)。
 #define BULLET_TRACER_MESH_PATH TEXT("/Engine/BasicShapes/Sphere.Sphere")
-#define BULLET_TRACER_MATERIAL_PATH TEXT("/Game/Asset/Materials/ExplosionFire.ExplosionFire")
+#define BULLET_TRACER_MATERIAL_PATH TEXT("/Game/Asset/Effects/Explosion/ExplosionFire.ExplosionFire")
 
 namespace {
 	// 仿真固定子步(秒)。子弹最快约700m/s，一个子步走约6m，线段扫掠不会穿透。

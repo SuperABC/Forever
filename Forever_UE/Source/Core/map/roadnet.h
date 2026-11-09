@@ -36,8 +36,8 @@ struct RoadJunctionApproach {
 	// curbLeft/curbRight/车行行人锚点共用的高度，沿road弧长在setback处采样(隧道场景高度连续变化)
 	float curbZ = 0.f;
 
-	// 这条路在这一端的收缩距离：取整个路口所有连接路里GetTotalWidth()最大者的一半(全局最大值，
-	// 保证宽路不被窄路逼着穿过别的路的路面)，见roadnet.md"路口收缩距离"
+	// 这条路在这一端的收缩距离：直接取road->GetSetback(isStart)，由路网mod按路口实际夹角写好，
+	// 见roadnet.md"路口收缩距离"
 	float setback = 0.f;
 };
 

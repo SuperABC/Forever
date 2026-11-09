@@ -233,6 +233,11 @@ public:
 	void SetPathRoad(bool isPath = true);
 	bool IsPathRoad() const;
 
+	// 路口缩进：这条路在起点端(atStart)/终点端离路口中心沿路中轴的缩进距离，默认0。由RoadnetMod在所有路的车道
+	// 配好之后按路口实际情况统一写入(宽度是后改的)，Core的RoadJunction::Build和mod的行道树/路灯布局直接读它。
+	void SetSetback(bool atStart, float value);
+	float GetSetback(bool atStart) const;
+
 	// 两侧宽度相加。Connection连线是车道横断面的几何中心(两侧不对称也严格居中),见roadnet.md"车道居中"。
 	float GetTotalWidth() const;
 
@@ -251,6 +256,7 @@ private:
 	std::vector<float> pedestrianLanes[2];
 	std::vector<RoadOpening> openings;
 	bool isPathRoad = false;
+	float setbacks[2] = { 0.f, 0.f };
 };
 
 class Quad {

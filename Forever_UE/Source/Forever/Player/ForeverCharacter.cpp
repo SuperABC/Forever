@@ -115,15 +115,15 @@ AForeverCharacter::AForeverCharacter()
 	avatarMesh->SetGenerateOverlapEvents(false);
 	avatarMesh->SetCanEverAffectNavigation(false);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> avatarCubeFinder(TEXT("/Game/Asset/Meshes/Cube.Cube"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> avatarCubeFinder(TEXT("/Game/Asset/Building/Elements/Cube.Cube"));
 	if (avatarCubeFinder.Succeeded()) {
 		avatarMesh->SetStaticMesh(avatarCubeFinder.Object);
 	}
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> avatarMaterialFinder(TEXT("/Game/Asset/Materials/Avatar.Avatar"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> avatarMaterialFinder(TEXT("/Game/Asset/Characters/Avatar/Avatar.Avatar"));
 	if (avatarMaterialFinder.Succeeded()) {
 		avatarBaseMaterial = avatarMaterialFinder.Object;
 	}
-	static ConstructorHelpers::FObjectFinder<UTexture2D> avatarTextureFinder(TEXT("/Game/Asset/Textures/Avatars/default.default"));
+	static ConstructorHelpers::FObjectFinder<UTexture2D> avatarTextureFinder(TEXT("/Game/Asset/Characters/Avatar/default.default"));
 	if (avatarTextureFinder.Succeeded()) {
 		avatarTexture = avatarTextureFinder.Object;
 	}
