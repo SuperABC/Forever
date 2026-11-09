@@ -46,6 +46,9 @@ public:
 	bool IsFullAuto() const;
 	float GetMaxRange() const;
 	float GetBaseSpread() const;
+	float GetMuzzleVelocity() const;
+	float GetBulletGravityScale() const;
+	int GetPelletCount() const;
 
 	int GetMagazineCapacity() const;
 	// 弹匣容量大于0才用弹药；相机这类武器为false(不扣子弹、不换弹)。
@@ -93,6 +96,9 @@ private:
 	bool fullAuto = false;
 	float maxRange = 0.f;
 	float baseSpread = 0.f;
+	float muzzleVelocity = 0.f;
+	float bulletGravityScale = 1.f;
+	int pelletCount = 1;
 
 	int magazineCapacity = 0;
 	float reloadDuration = 0.f;

@@ -16,11 +16,13 @@ const char* PistolWeapon::GetName() {
 }
 
 void PistolWeapon::SetProperty() {
+	fireMode = FireMode::Ballistic;
 	damage = 20.f;
 	fireRate = 0.2f;     // 每秒最多5发
 	fullAuto = false;
 	maxRange = 5000.f;    // 50米
 	baseSpread = 0.f;      // 随机散射半角(度)，暂时设成0=没有散射
+	muzzleVelocity = 25000.f; // 250m/s，游戏化初速(比真实枪低)，50米外下坠约20cm
 	magazineCapacity = 8;
 	reloadDuration = 2.f;
 
@@ -60,11 +62,13 @@ const char* RifleWeapon::GetName() {
 }
 
 void RifleWeapon::SetProperty() {
+	fireMode = FireMode::Ballistic;
 	damage = 40.f;
 	fireRate = 0.1f;      // 每秒最多10发，全自动
 	fullAuto = true;
 	maxRange = 10000.f;    // 100米
 	baseSpread = 0.f;      // 随机散射半角(度)，暂时设成0=没有散射
+	muzzleVelocity = 40000.f; // 400m/s，100米处下坠约30cm
 	magazineCapacity = 30;
 	reloadDuration = 1.5f;
 
@@ -103,13 +107,16 @@ const char* ShotgunWeapon::GetName() {
 }
 
 void ShotgunWeapon::SetProperty() {
-	// 近距离高伤害、射速慢、泵动式(单发)。WeaponMod没有"一次射出多颗弹丸"的字段，
-	// 一次开火只有一条射线，用单发高伤害+小散射近似。
-	damage = 90.f;
+	// 近距离高伤害、射速慢、泵动式(单发)。一次开火射出pelletCount颗弹丸，每颗独立散射、独立结算伤害，
+	// 所以damage是单颗弹丸的伤害(8颗全中约120)。
+	fireMode = FireMode::Ballistic;
+	damage = 15.f;
 	fireRate = 0.9f;
 	fullAuto = false;
 	maxRange = 2500.f;     // 25米，射程短
 	baseSpread = 2.5f;     // 随机散射半角(度)
+	muzzleVelocity = 20000.f; // 200m/s
+	pelletCount = 8;
 	magazineCapacity = 6;
 	reloadDuration = 2.5f;
 
@@ -146,11 +153,13 @@ const char* SniperWeapon::GetName() {
 
 void SniperWeapon::SetProperty() {
 	// 远距离高伤害、射速最慢、栓动式(单发)、不散射。
+	fireMode = FireMode::Ballistic;
 	damage = 150.f;
 	fireRate = 1.5f;
 	fullAuto = false;
 	maxRange = 30000.f;    // 300米
 	baseSpread = 0.f;
+	muzzleVelocity = 70000.f; // 700m/s，300米处下坠约90cm
 	magazineCapacity = 5;
 	reloadDuration = 3.f;
 

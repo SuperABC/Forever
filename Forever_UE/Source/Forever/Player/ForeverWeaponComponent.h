@@ -52,6 +52,10 @@ private:
 	void Fire();
 	// Hitscan：从摄像机打一条射线，命中市民则结算伤害，致死则广播事件。
 	void FireHitscan(AForeverCharacter* character);
+	// Ballistic：从枪口朝摄像机瞄准点发射pelletCount颗子弹，交给UForeverBulletSubsystem逐帧飞行，命中延迟到抵达。
+	void FireBallistic(AForeverCharacter* character);
+	// 每次开火的后坐力(Hitscan/Ballistic共用)。
+	void ApplyRecoil(AForeverCharacter* character);
 	// Custom(相机等)：调Weapon::FireCustom → WeaponMod::OnFire，mod通过PostHandle向Core发请求(相机=截屏)。
 	void FireCustom(AForeverCharacter* character);
 

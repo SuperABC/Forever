@@ -26,9 +26,12 @@
 这个项目的`Pawn`碰撞预设对`Visibility`通道是`Ignore`(见`CONVENTIONS.md`第11节),用`ECC_Visibility`做射线检测会打墙正常、打citizen直接穿过去。`Fire()`用`ECC_Pawn`通道,`BlockAll`/`BlockAllDynamic`对未覆盖通道默认Block(挡墙),`Pawn`预设对`Pawn`通道也是默认Block(挡citizen),两者都正常命中。
 只有打中`ACitizenElement`才算"命中":`Cast<ACitizenElement>(hit.GetActor())`失败(打墙/打别的/未命中)在伤害判定上完全等价,直接返回,不计算`ComputeDamage()`。命中也不往屏幕上打印。
 
-### 命中判定用摄像机射线
-`LineTraceSingleByChannel`的`start`始终是摄像机位置(保证"看哪打哪")。`ENABLE_DRAW_DEBUG`下会从枪口(`UForeverWeaponVisualComponent::GetActiveMuzzleWorldLocation`)画一条红色`DrawDebugLine`到命中点，仅用于检查弹道视觉，不参与命中判定；目前没有枪口火光/命中特效的真实VFX资产。
-命中citizen时在`hit.ImpactPoint`额外生成一个`AForeverExplosionEffect`(程序化爆炸,纯视觉,见`ForeverExplosionEffect.md`);打墙不触发。
+### 开火的两种命中方式
+- **`FireMode::Hitscan`**：`LineTraceSingleByChannel`的`start`是摄像机位置，瞬间判定。
+- **`FireMode::Ballistic`**(四把枪默认)：`FireBallistic`先从摄像机打一条射线找瞄准点(命中点，没命中取射程终点，保证"看哪打哪")，再让`pelletCount`颗子弹从枪口(`UForeverWeaponVisualComponent::GetActiveMuzzleWorldLocation`)朝瞄准点飞，每颗在`baseSpread`圆锥内独立散射。瞄准点离枪口<50cm或方向与摄像机朝向夹角>45°(第三人称贴墙)时退回摄像机朝向。子弹交给`UForeverBulletSubsystem`飞行和结算，见`ForeverBulletSubsystem.md`；伤害曲线(`ComputeDamage`)在发射时采样9点存进子弹，射手换枪/死亡不影响飞行中的子弹。射线和子弹都忽略射手本人和挂在他身上的Actor(武器模型)。
+- 两者共用`ApplyRecoil`(后坐力)和`UForeverBulletSubsystem::ApplyCitizenHit`(伤害、爆炸特效、击杀事件)。
+
+命中citizen时在`hit.ImpactPoint`额外生成一个`AForeverExplosionEffect`(程序化爆炸,纯视觉,见`ForeverExplosionEffect.md`);打墙不触发。目前没有枪口火光的真实VFX资产。
 
 ### 武器模型和摆放：交给ForeverWeaponVisualComponent
 这个组件不生成/挂载武器模型：模型的生成、背在背后、瞄准时举到枪口位置都在`UForeverWeaponVisualComponent`，见`ForeverWeaponVisualComponent.md`。`WeaponMod::attachOffsetX/Y/Z`的含义是"瞄准时枪口摆放的位置"(角色本地，X前/Y右/Z上，cm)。开火判定仍然只读摄像机，不受模型影响。

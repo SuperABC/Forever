@@ -10,8 +10,9 @@ class PostHandle;
 // 开火方式:决定Forever层的UForeverWeaponComponent开火时走哪条结算路径(射线伤害/拍照/...),
 // 后续火箭弹、颜料球等抛射物武器各加一个值。
 enum class FireMode {
-	Hitscan = 0,	// 摄像机射线命中判定+伤害(手枪/步枪/霰弹枪/狙击枪)
+	Hitscan = 0,	// 摄像机射线瞬间命中判定+伤害
 	Custom = 1,		// 自定义(相机等):开火后调WeaponMod::OnFire,由mod自己通过PostHandle向Core发请求,不走射线伤害
+	Ballistic = 2,	// 真实弹道(手枪/步枪/霰弹枪/狙击枪):从枪口发射pelletCount颗逐帧飞行的子弹,命中延迟到子弹抵达
 };
 
 // 设计见weapon_mod.md:纯数据描述,开火/命中判定在Forever层的UForeverWeaponComponent里。
@@ -64,6 +65,11 @@ public:
 	bool fullAuto = false;         // false=每次按键最多打一发，true=按住连发
 	float maxRange = 5000.f;       // UE单位(cm)
 	float baseSpread = 1.5f;       // 散射半角，度——命中方向在瞄准方向为轴的这个半角圆锥内随机(0=没有散射)
+
+	// ---- 弹道(仅fireMode==Ballistic使用) ----
+	float muzzleVelocity = 40000.f; // 初速，cm/s
+	float bulletGravityScale = 1.f; // 重力倍率(1=世界重力，0=直线飞行)
+	int pelletCount = 1;            // 一次开火射出的弹丸数(霰弹枪>1)，每颗弹丸独立散射，伤害各自结算
 
 	// ---- 弹药 ----
 	// magazineCapacity=0表示这把武器不用弹药(相机):不扣子弹、不换弹、不显示弹药数。

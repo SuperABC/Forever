@@ -44,6 +44,9 @@ Weapon::Weapon(WeaponFactory* factory, const string& id) :
 	fullAuto = mod->fullAuto;
 	maxRange = mod->maxRange;
 	baseSpread = mod->baseSpread;
+	muzzleVelocity = mod->muzzleVelocity;
+	bulletGravityScale = mod->bulletGravityScale;
+	pelletCount = mod->pelletCount;
 	magazineCapacity = mod->magazineCapacity;
 	reloadDuration = mod->reloadDuration;
 	ammoType = mod->ammoType;
@@ -83,6 +86,9 @@ float Weapon::GetFireRate() const { return fireRate; }
 bool Weapon::IsFullAuto() const { return fullAuto; }
 float Weapon::GetMaxRange() const { return maxRange; }
 float Weapon::GetBaseSpread() const { return baseSpread; }
+float Weapon::GetMuzzleVelocity() const { return muzzleVelocity; }
+float Weapon::GetBulletGravityScale() const { return bulletGravityScale; }
+int Weapon::GetPelletCount() const { return pelletCount; }
 
 int Weapon::GetMagazineCapacity() const { return magazineCapacity; }
 bool Weapon::UsesAmmo() const { return magazineCapacity > 0; }

@@ -1,6 +1,7 @@
 #include "Player/ForeverWeaponComponent.h"
 
 #include "Player/ForeverCharacter.h"
+#include "Player/ForeverBulletSubsystem.h"
 #include "Player/ForeverExplosionEffect.h"
 #include "Player/ForeverWeaponVisualComponent.h"
 #include "Element/CitizenElement.h"
@@ -17,7 +18,6 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
-#include "DrawDebugHelpers.h"
 #include "HAL/FileManager.h"
 #include "Async/Async.h"
 #include "Engine/GameViewportClient.h"
@@ -173,6 +173,9 @@ void UForeverWeaponComponent::Fire() {
 	case FireMode::Custom:
 		FireCustom(character);
 		break;
+	case FireMode::Ballistic:
+		FireBallistic(character);
+		break;
 	case FireMode::Hitscan:
 	default:
 		FireHitscan(character);
@@ -235,6 +238,19 @@ void UForeverWeaponComponent::FireCustom(AForeverCharacter* character) {
 	currentWeapon->FireCustom(&post);
 }
 
+void UForeverWeaponComponent::ApplyRecoil(AForeverCharacter* character) {
+	// 后坐力：踢的是下一发的朝向，不影响这一发。直接改ControlRotation而不用AddControllerPitchInput
+	// (会被InputPitchScale缩放、方向不直观)；不自动回正，见md。
+	if (AController* controller = character->GetController()) {
+		float pitchKick = FMath::FRandRange(currentWeapon->GetRecoilPitchMin(), currentWeapon->GetRecoilPitchMax());
+		float yawKick = FMath::FRandRange(currentWeapon->GetRecoilYawMin(), currentWeapon->GetRecoilYawMax());
+		FRotator recoiledRotation = controller->GetControlRotation();
+		recoiledRotation.Pitch += pitchKick;
+		recoiledRotation.Yaw += yawKick;
+		controller->SetControlRotation(recoiledRotation);
+	}
+}
+
 void UForeverWeaponComponent::FireHitscan(AForeverCharacter* character) {
 	UCameraComponent* camera = character->IsFirstPerson() ? character->GetFirstPersonCamera() : character->GetFollowCamera();
 	if (!camera) return;
@@ -252,78 +268,70 @@ void UForeverWeaponComponent::FireHitscan(AForeverCharacter* character) {
 	params.AddIgnoredActor(GetOwner());
 	bool bHit = GetWorld()->LineTraceSingleByChannel(hit, start, end, ECC_Pawn, params);
 
-#if ENABLE_DRAW_DEBUG
-	// 弹道debugLine(枪口→命中点/射程终点)，只是视觉，命中判定仍是上面从摄像机射出的射线。
+	ApplyRecoil(character);
+
+	if (!bHit) return;
+	float damage = currentWeapon->ComputeDamage(FVector::Dist(start, hit.ImpactPoint));
+	UForeverBulletSubsystem::ApplyCitizenHit(GetWorld(), GetOwner(), currentWeapon->GetType(), damage, hit);
+}
+
+void UForeverWeaponComponent::FireBallistic(AForeverCharacter* character) {
+	UForeverBulletSubsystem* bullets = GetWorld()->GetSubsystem<UForeverBulletSubsystem>();
+	UCameraComponent* camera = character->IsFirstPerson() ? character->GetFirstPersonCamera() : character->GetFollowCamera();
+	if (!bullets || !camera) return;
+
+	// 射手自己和挂在他身上的Actor(武器模型)都不挡弹道：枪口就在武器模型尖端。
+	TArray<TWeakObjectPtr<AActor>> ignored;
+	FCollisionQueryParams params;
+	{
+		TArray<AActor*> attached;
+		GetOwner()->GetAttachedActors(attached, true, true);
+		attached.Add(GetOwner());
+		for (AActor* actor : attached) {
+			ignored.Add(actor);
+			params.AddIgnoredActor(actor);
+		}
+	}
+
+	// 先从摄像机找瞄准点(保证"看哪打哪")，再让子弹从枪口朝瞄准点飞，真实的飞行和碰撞都从枪口开始。
+	float maxRange = currentWeapon->GetMaxRange();
+	FVector cameraStart = camera->GetComponentLocation();
+	FVector cameraForward = camera->GetForwardVector();
+	FHitResult aimHit;
+	bool bAimHit = GetWorld()->LineTraceSingleByChannel(aimHit, cameraStart, cameraStart + cameraForward * maxRange,
+		ECC_Pawn, params);
+	FVector aimPoint = bAimHit ? aimHit.ImpactPoint : cameraStart + cameraForward * maxRange;
+
+	FVector muzzle = cameraStart;
 	if (UForeverWeaponVisualComponent* visual = character->GetWeaponVisualComponent()) {
-		FVector muzzle;
-		if (visual->GetActiveMuzzleWorldLocation(muzzle)) {
-			DrawDebugLine(GetWorld(), muzzle, bHit ? hit.ImpactPoint : end, FColor::Red, false, 1.0f, 0, 1.0f);
-		}
-	}
-#endif
-
-
-	// 后坐力：踢的是下一发的朝向，不影响这一发。直接改ControlRotation而不用AddControllerPitchInput
-	// (会被InputPitchScale缩放、方向不直观)；不自动回正，见md。
-	if (AController* controller = character->GetController()) {
-		float pitchKick = FMath::FRandRange(currentWeapon->GetRecoilPitchMin(), currentWeapon->GetRecoilPitchMax());
-		float yawKick = FMath::FRandRange(currentWeapon->GetRecoilYawMin(), currentWeapon->GetRecoilYawMax());
-		FRotator recoiledRotation = controller->GetControlRotation();
-		recoiledRotation.Pitch += pitchKick;
-		recoiledRotation.Yaw += yawKick;
-		controller->SetControlRotation(recoiledRotation);
+		visual->GetActiveMuzzleWorldLocation(muzzle);
 	}
 
-	// 只有打中ACitizenElement才算命中，打墙/落空都不产生任何效果。
-	ACitizenElement* hitCitizen = bHit ? Cast<ACitizenElement>(hit.GetActor()) : nullptr;
-	if (!hitCitizen) return;
-
-	Citizen* target = hitCitizen->GetCitizen();
-	if (!target || target->IsDead()) return;
-
-	float distance = FVector::Dist(start, hit.ImpactPoint);
-	float damage = currentWeapon->ComputeDamage(distance);
-	target->TakeDamage(damage);
-
-	// 命中位置的爆炸特效(纯视觉)。世界坐标生成，不依赖citizen存活，所以放在死亡处理之前也安全。
-	AForeverExplosionEffect::Spawn(GetWorld(), hit.ImpactPoint, hit.ImpactNormal);
-
-
-	if (target->IsDead()) {
-		FString deadName = UTF8_TO_TCHAR(target->GetName().c_str());
-		if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
-			UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
-			if (framework->GetStoryFramework()) {
-				// 击杀信息：凶手(开枪的市民)、武器种类、命中部位、致死伤害、凶手是否可见、死亡地址。
-				ACitizenElement* killerElement = Cast<ACitizenElement>(GetOwner());
-				Citizen* killer = killerElement ? killerElement->GetCitizen() : nullptr;
-
-				// 命中部位：射线只打得到胶囊体，按命中点在胶囊体上的相对高度粗分——
-				// 顶部20%算头，下半截(40%以下)算腿，中间躯干。
-				float radius = 0.f, halfHeight = 0.f;
-				hitCitizen->GetSimpleCollisionCylinder(radius, halfHeight);
-				float relativeHeight = halfHeight > 0.f
-					? (hit.ImpactPoint.Z - (hitCitizen->GetActorLocation().Z - halfHeight)) / (2.f * halfHeight) : 0.5f;
-				const char* part = relativeHeight >= 0.8f ? "head" : (relativeHeight >= 0.4f ? "body" : "legs");
-
-				// 凶手是否可见：连接死者和凶手中心点的线段有没有被遮挡物(墙等)挡住，两人自己不算遮挡。
-				bool visible = false;
-				if (killerElement) {
-					FCollisionQueryParams sightParams;
-					sightParams.AddIgnoredActor(hitCitizen);
-					sightParams.AddIgnoredActor(killerElement);
-					visible = !GetWorld()->LineTraceTestByChannel(hitCitizen->GetActorLocation(),
-						killerElement->GetActorLocation(), ECC_Visibility, sightParams);
-				}
-
-				CitizenDeceaseEvent event(std::string(TCHAR_TO_UTF8(*deadName)), "player",
-					killer ? killer->GetName() : std::string(), currentWeapon->GetType(), part, damage, visible,
-					framework->DescribeLocation(hitCitizen->GetActorLocation()));
-				framework->GetStoryFramework()->BroadcastCitizenDecease(event);
-			}
-			if (framework->GetPopulaceFramework()) {
-				framework->GetPopulaceFramework()->HandleCitizenDeath(target);
-			}
-		}
+	// 瞄准点离枪口太近或偏到枪口身后/侧面(第三人称贴墙)时，枪口→瞄准点的方向不可靠，退回摄像机朝向。
+	FVector baseDirection = (aimPoint - muzzle).GetSafeNormal();
+	if (FVector::Dist(aimPoint, muzzle) < 50.f || FVector::DotProduct(baseDirection, cameraForward) < 0.7f) {
+		baseDirection = cameraForward;
 	}
+
+	// 伤害曲线在发射时采样一次，一次开火的所有弹丸共用。
+	FBullet prototype;
+	prototype.position = muzzle;
+	prototype.maxRange = maxRange;
+	prototype.gravityScale = currentWeapon->GetBulletGravityScale();
+	prototype.shooter = GetOwner();
+	prototype.ignored = ignored;
+	prototype.weaponType = currentWeapon->GetType();
+	for (int32 i = 0; i < FBullet::DamageSamples; ++i) {
+		prototype.damageCurve[i] = currentWeapon->ComputeDamage(maxRange * i / (FBullet::DamageSamples - 1));
+	}
+
+	float spreadRad = FMath::DegreesToRadians(currentWeapon->GetBaseSpread());
+	float speed = currentWeapon->GetMuzzleVelocity();
+	for (int32 pellet = 0; pellet < FMath::Max(1, currentWeapon->GetPelletCount()); ++pellet) {
+		FBullet bullet = prototype;
+		bullet.velocity = FMath::VRandCone(baseDirection, spreadRad) * speed;
+		bullets->AddBullet(MoveTemp(bullet));
+	}
+
+	ApplyRecoil(character);
 }

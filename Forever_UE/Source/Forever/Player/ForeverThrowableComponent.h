@@ -25,6 +25,7 @@ struct FThrowListItem
 	int32 count = 0;
 };
 class UStaticMeshComponent;
+class UProceduralMeshComponent;
 
 // 投掷物(手雷/烟雾弹)：切换、瞄准预览、投掷。与UForeverWeaponComponent互斥，见ForeverThrowableComponent.md。
 UCLASS()
@@ -87,6 +88,7 @@ private:
 	void ShowActiveMessage() const;
 	void ShowNoThrowableMessage() const;
 	void UpdatePreview();
+	void UpdatePathMesh(const TArray<FVector>& points, bool bHit);
 	void HidePreview();
 	void ComputeLaunch(FVector& outStart, FVector& outVelocity) const;
 	int32 IndexOfType(const std::string& type) const;
@@ -109,4 +111,8 @@ private:
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> previewMesh;
 	std::string previewMeshPath; // 当前previewMesh已经设成了哪个路径，避免每帧重复加载
+
+	// 预览曲线：朝向摄像机的平面带(程序化网格)，每帧重建。
+	UPROPERTY()
+	TObjectPtr<UProceduralMeshComponent> pathMesh;
 };
