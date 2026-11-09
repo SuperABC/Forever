@@ -24,3 +24,6 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 开火方式 `FireMode`
+`fireMode`(`Hitscan`默认 / `Custom`)只是数据标签，决定Forever层`UForeverWeaponComponent::Fire()`走哪条结算路径：`Hitscan`=摄像机射线+伤害，`Custom`=开火后调`WeaponMod::OnFire(PostHandle*)`，由mod自己通过`post`向Core发请求(相机发`"screenshot"`截屏；不耗弹药、无伤害)。`OnFire`默认空实现，`post`只在这次调用期间有效。后续火箭弹、颜料球等抛射物武器各加一个值，各自结算，不共用射线逻辑。`magazineCapacity=0`表示不用弹药(不扣子弹、不换弹、不显示弹药数)。

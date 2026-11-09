@@ -13,11 +13,21 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/HUD.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 #include "DrawDebugHelpers.h"
+#include "HAL/FileManager.h"
+#include "Async/Async.h"
+#include "Engine/GameViewportClient.h"
+#include "ImageUtils.h"
+#include "Misc/DateTime.h"
+#include "Misc/Paths.h"
+#include "UnrealClient.h"
 
 #include "common/registry.h"
+#include "common/implement.h"
 #include "player/weapon.h"
 #include "story/event.h"
 #include "player/player.h"
@@ -49,6 +59,31 @@ void UForeverWeaponComponent::EquipWeapon(const FString& weaponId) {
 	currentAmmo = currentWeapon->GetMagazineCapacity();
 	bReloading = false;
 	bWantsToFire = false;
+
+	// 相机第一次拍照要加载ImageWrapper模块/初始化PNG编码，装备时用一张1x1的图预热，避免第一次拍照多卡。
+	if (currentWeapon->GetFireMode() == FireMode::Custom) {
+		static bool bWarmedUp = false;
+		if (!bWarmedUp) {
+			bWarmedUp = true;
+			FColor pixel(0, 0, 0, 255);
+			TArray64<uint8> ignored;
+			FImageUtils::CompressImage(ignored, TEXT("png"), FImageView(&pixel, 1, 1));
+		}
+	}
+}
+
+void UForeverWeaponComponent::WarmUpScreenshot() {
+	static bool bWarmedUp = false;
+	if (bWarmedUp) return;
+	bWarmedUp = true;
+
+	// 订阅回调时引擎不写文件，直接把像素交给我们，这里丢掉即可；一次性订阅，用完退订。
+	auto handle = MakeShared<FDelegateHandle>();
+	*handle = UGameViewportClient::OnScreenshotCaptured().AddLambda(
+		[handle](int32, int32, const TArray<FColor>&) {
+			UGameViewportClient::OnScreenshotCaptured().Remove(*handle);
+		});
+	FScreenshotRequest::RequestScreenshot(TEXT("warmup.png"), /*bInShowUI=*/false, /*bAddFilenameSuffix=*/false);
 }
 
 void UForeverWeaponComponent::ClearWeapon() {
@@ -75,7 +110,7 @@ void UForeverWeaponComponent::StopFire() {
 }
 
 void UForeverWeaponComponent::Reload() {
-	if (!currentWeapon || bReloading) return;
+	if (!currentWeapon || bReloading || !currentWeapon->UsesAmmo()) return;
 	if (currentAmmo >= currentWeapon->GetMagazineCapacity()) return;
 
 	bReloading = true;
@@ -109,8 +144,10 @@ void UForeverWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	// 固定Key每帧刷新同一行、显示时长很短，武器被清掉或换人后自己消失；只显示玩家正在操控的Pawn。
 	APawn* ownerPawn = Cast<APawn>(GetOwner());
 	if (GEngine && currentWeapon && ownerPawn && ownerPawn->IsPlayerControlled()) {
-		GEngine->AddOnScreenDebugMessage(200, 0.1f, FColor::White,
-			FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->GetMagazineCapacity()));
+		if (currentWeapon->UsesAmmo()) {
+			GEngine->AddOnScreenDebugMessage(200, 0.1f, FColor::White,
+				FString::Printf(TEXT("弹药: %d/%d"), currentAmmo, currentWeapon->GetMagazineCapacity()));
+		}
 	}
 }
 
@@ -124,11 +161,81 @@ void UForeverWeaponComponent::Fire() {
 	float now = GetWorld()->GetTimeSeconds();
 	if (now - lastFireTime < currentWeapon->GetFireRate()) return;
 
-	if (currentAmmo <= 0) return;
-
+	// 不用弹药的武器(相机，magazineCapacity=0)跳过弹药检查和扣减。
+	if (currentWeapon->UsesAmmo()) {
+		if (currentAmmo <= 0) return;
+		currentAmmo--;
+	}
 	lastFireTime = now;
-	currentAmmo--;
 
+	// 按开火方式分派结算：射线伤害/拍照，后续火箭弹、颜料球等抛射物武器各自加一条，不共用射线逻辑。
+	switch (currentWeapon->GetFireMode()) {
+	case FireMode::Custom:
+		FireCustom(character);
+		break;
+	case FireMode::Hitscan:
+	default:
+		FireHitscan(character);
+		break;
+	}
+}
+
+void UForeverWeaponComponent::FireCustom(AForeverCharacter* character) {
+	// 现场构造一个PostImplement交给武器mod的OnFire(做法和UPuzzleWidget的MakePost一致)，mod通过它向Core发请求。
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	PostImplement post(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		framework ? framework->GetStory() : nullptr,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	// "screenshot"请求的执行者：存到<项目>/Saved/Photos/<name>_<时间戳>.png(临时路径)，FScreenshotRequest在本帧渲染结束后写盘。
+	// 截图读的是视口渲染结果，UMG(Slate)本来就不在里面；但AHUD的准星是画在渲染目标上的，会被截进去，所以截屏这一帧临时关掉HUD。
+	TWeakObjectPtr<AHUD> hud;
+	if (APlayerController* playerController = Cast<APlayerController>(character->GetController())) hud = playerController->GetHUD();
+
+	post.SetScreenshotHandler([hud](const string& name) -> string {
+		FString fileName = FString::Printf(TEXT("%s_%s.png"), UTF8_TO_TCHAR(name.c_str()),
+			*FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+		FString path = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Photos"), fileName));
+		// 引擎默认在游戏线程同步压PNG+写盘(约250ms，第一次更久)。这里订阅截屏回调接管：引擎只做GPU回读，
+		// 拿到像素后马上返回，PNG压缩和写盘丢到线程池。回调是一次性的，用完立刻退订，不影响别处的截屏。
+		auto handle = MakeShared<FDelegateHandle>();
+		*handle = UGameViewportClient::OnScreenshotCaptured().AddLambda(
+			[handle](int32 width, int32 height, const TArray<FColor>& colors) {
+				UGameViewportClient::OnScreenshotCaptured().Remove(*handle);
+				FString file = FScreenshotRequest::GetFilename();
+				if (file.IsEmpty() || colors.Num() < width * height) return;
+
+				Async(EAsyncExecution::ThreadPool, [pixels = colors, width, height, file]() {
+					IFileManager::Get().MakeDirectory(*FPaths::GetPath(file), true);
+					FImageView view(pixels.GetData(), width, height);
+					FImageUtils::SaveImageByExtension(*file, view);
+				});
+			});
+		// 请求本帧渲染结束时处理(HUD在这之前画)，所以现在关HUD、处理完(无论成功失败)再恢复。
+		if (AHUD* hudActor = hud.Get()) {
+			if (hudActor->bShowHUD) {
+				hudActor->bShowHUD = false;
+				auto restoreHandle = MakeShared<FDelegateHandle>();
+				*restoreHandle = FScreenshotRequest::OnScreenshotRequestProcessed().AddLambda([hud, restoreHandle]() {
+					FScreenshotRequest::OnScreenshotRequestProcessed().Remove(*restoreHandle);
+					if (AHUD* h = hud.Get()) h->bShowHUD = true;
+				});
+			}
+		}
+		FScreenshotRequest::RequestScreenshot(path, /*bInShowUI=*/false, /*bAddFilenameSuffix=*/false);
+		return string(TCHAR_TO_UTF8(*path));
+	});
+
+	currentWeapon->FireCustom(&post);
+}
+
+void UForeverWeaponComponent::FireHitscan(AForeverCharacter* character) {
 	UCameraComponent* camera = character->IsFirstPerson() ? character->GetFirstPersonCamera() : character->GetFollowCamera();
 	if (!camera) return;
 

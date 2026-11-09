@@ -118,6 +118,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ RifleWeaponAsset::GetId(), { RifleWeapon::GetId() } },
 		{ ShotgunWeaponAsset::GetId(), { ShotgunWeapon::GetId() } },
 		{ SniperWeaponAsset::GetId(), { SniperWeapon::GetId() } },
+		{ CameraWeaponAsset::GetId(), { CameraWeapon::GetId() } }, // 相机不用弹药，没有对应的弹药资产依赖
 	};
 	return (void*)&dependencies;
 }
@@ -476,7 +477,7 @@ extern "C" __declspec(dllexport) void* GetModAssets() {
 		BurgerAsset::GetId(), PistolAmmoAsset::GetId(), RifleAmmoAsset::GetId(),
 		ShotgunAmmoAsset::GetId(), SniperAmmoAsset::GetId(),
 		PistolWeaponAsset::GetId(), RifleWeaponAsset::GetId(),
-		ShotgunWeaponAsset::GetId(), SniperWeaponAsset::GetId(),
+		ShotgunWeaponAsset::GetId(), SniperWeaponAsset::GetId(), CameraWeaponAsset::GetId(),
 		GrenadeAsset::GetId(), SmokeGrenadeAsset::GetId() };
 	return (void*)&mods;
 }
@@ -516,6 +517,9 @@ extern "C" __declspec(dllexport) void RegisterModAssets(AssetFactory* factory) {
 		[](AssetMod* m) { delete m; });
 	factory->RegisterAsset(SniperWeaponAsset::GetId(),
 		[](const std::string&) -> AssetMod* { return new SniperWeaponAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(CameraWeaponAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new CameraWeaponAsset(); },
 		[](AssetMod* m) { delete m; });
 	factory->RegisterAsset(GrenadeAsset::GetId(),
 		[](const std::string&) -> AssetMod* { return new GrenadeAsset(); },
@@ -589,7 +593,7 @@ extern "C" __declspec(dllexport) void FinishModPuzzles(PuzzleFactory* factory) {
 
 extern "C" __declspec(dllexport) void* GetModWeapons() {
 	static vector<string> mods = { PistolWeapon::GetId(), RifleWeapon::GetId(),
-		ShotgunWeapon::GetId(), SniperWeapon::GetId() };
+		ShotgunWeapon::GetId(), SniperWeapon::GetId(), CameraWeapon::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModWeapons(WeaponFactory* factory) {
@@ -604,6 +608,9 @@ extern "C" __declspec(dllexport) void RegisterModWeapons(WeaponFactory* factory)
 		[](WeaponMod* m) { delete m; });
 	factory->RegisterWeapon(SniperWeapon::GetId(),
 		[](const std::string&) -> WeaponMod* { return new SniperWeapon(); },
+		[](WeaponMod* m) { delete m; });
+	factory->RegisterWeapon(CameraWeapon::GetId(),
+		[](const std::string&) -> WeaponMod* { return new CameraWeapon(); },
 		[](WeaponMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModWeapons(WeaponFactory* factory) {

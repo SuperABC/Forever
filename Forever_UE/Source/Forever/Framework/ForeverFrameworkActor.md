@@ -27,7 +27,7 @@
 整段同步生成会卡死主线程几十秒，开局黑屏上的进度条没机会重绘，所以`BeginPlay`只登记一串阶段(`generationStages`)，`Tick`每帧执行一个。`BeginPlay`先调
 `AForeverPlayerController::InitializeOnce`(打包版里本Actor的BeginPlay先于Controller的，game_start里的小游戏/对话要用Widget)。
 
-阶段顺序(新游戏/读档同一套)：加载模组(`Registry::RefreshMods`+`ValidateMainStoryDependencies`) → 构建地形 → 路网 → 园区 → 建筑 → 栽种植被 → 布置路灯 →
+阶段顺序(新游戏/读档同一套)：加载模组(`Registry::RefreshMods`+`ValidateMainStoryDependencies`) → 预热截屏(`UForeverWeaponComponent::WarmUpScreenshot`，相机拍照第一次GPU回读约0.5s卡顿，趁加载界面先偷偷截一张丢掉) → 构建地形 → 路网 → 园区 → 建筑 → 栽种植被 → 布置路灯 →
 构建交通 → 生成地形/道路/园区/建筑/植被/路灯模型 → 构建人口 → 构建社会与产业(Society+Player+Industry) → 执行开局剧情(读档：恢复存档，即`EnsureStoryGenerated`) →
 构建载具(读档：恢复载具与玩家，含`RestoreControlledPawn`/`RestoreWorldAssets`) → (进图后)构建场景。
 

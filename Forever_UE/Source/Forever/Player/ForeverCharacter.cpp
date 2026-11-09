@@ -217,6 +217,10 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 						sniperAmmo->SetCount(120);
 						bag->AddContent(sniperAmmo);
 					}
+					// 相机：不用弹药，同样放背包里，从背包拖到肩膀上激活后右键瞄准。
+					if (Asset* camera = player->CreateAsset("asset_camera")) {
+						bag->AddContent(camera);
+					}
 					// 投掷物：手雷、烟雾弹各10个(各一个count=10的堆叠)，按3切换，见ForeverThrowableComponent.md。
 					if (Asset* grenade = player->CreateAsset("asset_grenade")) {
 						grenade->SetCount(10);

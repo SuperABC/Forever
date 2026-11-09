@@ -34,6 +34,7 @@
 #include "story/script_save.h"
 #include "player/player_save.h"
 #include "Player/ForeverCharacter.h"
+#include "Player/ForeverWeaponComponent.h"
 #include "common/json.h"
 #include "Element/CitizenElement.h"
 #include "Element/VehicleElement.h"
@@ -179,6 +180,8 @@ void AForeverFrameworkActor::BuildGenerationStages()
 		// 依赖不满足就尽早拒绝生成世界。
 		ValidateMainStoryDependencies();
 	});
+	// 拍照(相机武器)第一次GPU回读要初始化资源，约0.5s卡顿；趁加载界面先偷偷截一张丢掉，见UForeverWeaponComponent::WarmUpScreenshot。
+	add(TEXT("预热截屏"), []() { UForeverWeaponComponent::WarmUpScreenshot(); });
 	add(TEXT("构建地形"), [this]() { BuildMapTerrain(); });
 	add(TEXT("构建路网"), [this]() { BuildMapRoadnet(); });
 	add(TEXT("构建园区"), [this]() { BuildMapZones(); });

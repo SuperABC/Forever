@@ -165,6 +165,25 @@ void PostImplement::Post(const JsonValue& request) {
 		return;
 	}
 
+	if (request.IsObject() && request["post"].AsString() == "screenshot") {
+		if (!screenshotHandler) {
+			result["result"] = "fail";
+			result["msg"] = "screenshot not supported.";
+			return;
+		}
+
+		string path = screenshotHandler(request["name"].AsString());
+		if (path.empty()) {
+			result["result"] = "fail";
+			result["msg"] = "screenshot failed.";
+			return;
+		}
+
+		result["result"] = "success";
+		result["path"] = path;
+		return;
+	}
+
 	result["result"] = "fail";
 	result["msg"] = "post not found.";
 }

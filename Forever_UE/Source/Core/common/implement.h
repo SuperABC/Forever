@@ -5,6 +5,9 @@
 #include "common/handle.h"
 #include "common/json.h"
 
+#include <functional>
+#include <string>
+
 
 class PostImplement : public PostHandle {
 public:
@@ -13,6 +16,10 @@ public:
 
 	virtual void Post(const JsonValue& request) override;
 	virtual const JsonValue& GetResult() const override;
+
+	// "screenshot"请求的实际执行者：Core看不到UE，由Forever层注入。参数=文件名前缀，返回保存路径(空=失败)。
+	using ScreenshotHandler = std::function<std::string(const std::string& name)>;
+	void SetScreenshotHandler(ScreenshotHandler handler) { screenshotHandler = std::move(handler); }
 
 private:
 	Map* map;
@@ -24,4 +31,5 @@ private:
 	Player* player;
 
 	JsonValue result;
+	ScreenshotHandler screenshotHandler;
 };

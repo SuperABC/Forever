@@ -37,3 +37,6 @@ override成别的曲线），没法在构造时就"拷成一个值"，所以`Wea
   `WeaponFactory`）。
 - 被谁依赖：`Source/Forever/Player/ForeverWeaponComponent`（`currentWeapon`成员是
   `Weapon*`）。
+
+## FireMode / UsesAmmo
+`GetFireMode()`转发`WeaponMod::fireMode`；`UsesAmmo()`=`magazineCapacity>0`，相机这类不用弹药的武器返回false，`FireCustom(post)`转发`WeaponMod::OnFire(post)`(仅`Custom`开火方式用)。由`UForeverWeaponComponent`据此跳过弹药检查/换弹/弹药显示。

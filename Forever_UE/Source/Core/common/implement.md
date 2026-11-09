@@ -73,6 +73,11 @@ ForeverStoryFrameworkComponent.md`"PostImplement"一节。
   找不到返回`{"result":"fail","msg":"resource not found: <name>"}`。不需要任何domain指针，所以
   构造时全传nullptr也能用。
 
+- `request["post"] == "screenshot"`（相机武器开火用）：`request["name"]`是文件名前缀。Core看不到UE，截屏由Forever层通过
+  `SetScreenshotHandler`注入（没注入返回`{"result":"fail","msg":"screenshot not supported."}`）；handler返回保存路径，成功返回
+  `{"result":"success","path":"<路径>"}`，handler返回空串返回`{"result":"fail","msg":"screenshot failed."}`。`UForeverWeaponComponent`
+  在相机开火时现场构造`PostImplement`并注入handler（`FScreenshotRequest`，存到`Saved/Photos/`）。
+
 请求不认识（`post`字段不是上面几种，或请求本身不是JSON对象）统一返回
 `{"result":"fail","msg":"post not found."}`。`traffic`/`society`/`story`目前没有
 分支用到（`industry`只被"product info"用，`map`只被`list *`用）（"citizen workplace address"走的是

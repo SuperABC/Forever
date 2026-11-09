@@ -40,6 +40,7 @@ public:
 	float GetBackOffsetY() const;
 	float GetBackOffsetZ() const;
 
+	FireMode GetFireMode() const;
 	float GetDamage() const;
 	float GetFireRate() const;
 	bool IsFullAuto() const;
@@ -47,6 +48,8 @@ public:
 	float GetBaseSpread() const;
 
 	int GetMagazineCapacity() const;
+	// 弹匣容量大于0才用弹药；相机这类武器为false(不扣子弹、不换弹)。
+	bool UsesAmmo() const;
 	float GetReloadDuration() const;
 	const std::string& GetAmmoType() const;
 
@@ -58,6 +61,9 @@ public:
 	// 转发给mod->ComputeDamage(distance)——保留mod指针活到Weapon析构，就是为了这个转发
 	// (唯一一个没法在构造时就拷完值的字段，因为它是按距离算的，不是常量)。
 	float ComputeDamage(float distance) const;
+
+	// fireMode==Custom的武器开火：转发给mod->OnFire(post)，由mod自己通过post向Core发请求。
+	void FireCustom(PostHandle* post) const;
 
 private:
 	WeaponFactory* factory;
@@ -81,6 +87,7 @@ private:
 	float backOffsetY = 0.f;
 	float backOffsetZ = 0.f;
 
+	FireMode fireMode = FireMode::Hitscan;
 	float damage = 0.f;
 	float fireRate = 0.f;
 	bool fullAuto = false;

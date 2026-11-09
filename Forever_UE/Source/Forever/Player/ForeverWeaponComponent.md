@@ -20,7 +20,7 @@
 2. 通缉值→警察JobMod这条真正需要通用广播机制的链路不在当前范围内,现有需求用已有写法就能满足。
 
 ### `WeaponMod`没有`Fire()`/`ApplyRecoil()`虚方法
-`WeaponMod`只留纯数据字段(`damage`/`maxRange`/`baseSpread`/`fireRate`/`magazineCapacity`/`reloadDuration`等)+一个纯数学的`ComputeDamage(float distance)`虚方法(只用Core类型,和`BuildingMod::Layout()`只用`Quad`/`Road*`同一约定),真正的开火判定/相机取值/碰撞查询都放在这个UE侧组件里——避免发明一套"Dependence层声明、Forever层实现"的跨层虚方法签名。
+`WeaponMod`只留纯数据字段(`damage`/`maxRange`/`baseSpread`/`fireRate`/`magazineCapacity`/`reloadDuration`等)+一个纯数学的`ComputeDamage(float distance)`虚方法(只用Core类型,和`BuildingMod::Layout()`只用`Quad`/`Road*`同一约定),真正的开火判定/相机取值/碰撞查询都放在这个UE侧组件里——避免发明一套"Dependence层声明、Forever层实现"的跨层虚方法签名。唯一例外是`OnFire(PostHandle*)`：`Custom`开火方式的武器(相机)开火后回调，mod只能通过`PostHandle`向Core发请求，不碰UE类型。
 
 ### 命中判定用`ECC_Pawn`,不是`ECC_Visibility`
 这个项目的`Pawn`碰撞预设对`Visibility`通道是`Ignore`(见`CONVENTIONS.md`第11节),用`ECC_Visibility`做射线检测会打墙正常、打citizen直接穿过去。`Fire()`用`ECC_Pawn`通道,`BlockAll`/`BlockAllDynamic`对未覆盖通道默认Block(挡墙),`Pawn`预设对`Pawn`通道也是默认Block(挡citizen),两者都正常命中。
@@ -77,3 +77,6 @@
 - 准心是固定尺寸的原生"+",未换成贴图资产、未跟随`baseSpread`动态张开。随机散射机制在(`baseSpread`半角圆锥)，Basic里手枪/步枪的`baseSpread`目前都设成0(没有散射)。
 - 武器模型的朝向/枪口位置/背枪位置都是大概值，在`UForeverWeaponVisualComponent`的属性里调，见该文档。
 
+
+### 开火方式分派(`FireMode`)与不用弹药的武器
+`Fire()`只做公共闸门(有武器/没在换弹/正在瞄准/冷却)，之后若`Weapon::UsesAmmo()`才检查并扣`currentAmmo`，然后按`Weapon::GetFireMode()`分派：`Hitscan`→`FireHitscan()`(原有的摄像机射线+伤害+爆炸特效+击杀事件+后坐力)，`Custom`→`FireCustom()`(现场构造`PostImplement`并注入截屏handler，调`Weapon::FireCustom(&post)`→`WeaponMod::OnFire`，mod自己通过`post`向Core发请求；相机发`"screenshot"`，用`FScreenshotRequest`存到`Saved/Photos/`，路径是临时的)。截屏卡顿优化：引擎默认在游戏线程同步压PNG(约250ms，第一次约800ms)，所以`FireCustom`订阅一次性的`UGameViewportClient::OnScreenshotCaptured`接管——引擎只做GPU回读，拿到像素后PNG压缩+写盘丢到线程池；装备相机时(`EquipWeapon`)用1x1图预热ImageWrapper；第一次GPU回读的初始化(约0.5s)由`WarmUpScreenshot`趁加载界面预热掉(`AForeverFrameworkActor`的"预热截屏"阶段)，拍照实测每张约50ms。截图读的是视口渲染结果，UMG(Slate)本来就不在里面；AHUD的准星是画在渲染目标上的，所以截屏这一帧临时`bShowHUD=false`，`OnScreenshotRequestProcessed`时恢复。火箭弹、颜料球等抛射物武器再加`FireMode`值和各自的`FireXxx()`，不复用射线。`!UsesAmmo()`的武器`Reload()`直接返回，`TickComponent`不显示"弹药: X/Y"。

@@ -38,6 +38,7 @@ Weapon::Weapon(WeaponFactory* factory, const string& id) :
 	backOffsetX = kBackBaseX + mod->backOffsetX;
 	backOffsetY = kBackBaseY + mod->backOffsetY;
 	backOffsetZ = kBackBaseZ + mod->backOffsetZ;
+	fireMode = mod->fireMode;
 	damage = mod->damage;
 	fireRate = mod->fireRate;
 	fullAuto = mod->fullAuto;
@@ -76,6 +77,7 @@ float Weapon::GetBackOffsetX() const { return backOffsetX; }
 float Weapon::GetBackOffsetY() const { return backOffsetY; }
 float Weapon::GetBackOffsetZ() const { return backOffsetZ; }
 
+FireMode Weapon::GetFireMode() const { return fireMode; }
 float Weapon::GetDamage() const { return damage; }
 float Weapon::GetFireRate() const { return fireRate; }
 bool Weapon::IsFullAuto() const { return fullAuto; }
@@ -83,6 +85,7 @@ float Weapon::GetMaxRange() const { return maxRange; }
 float Weapon::GetBaseSpread() const { return baseSpread; }
 
 int Weapon::GetMagazineCapacity() const { return magazineCapacity; }
+bool Weapon::UsesAmmo() const { return magazineCapacity > 0; }
 float Weapon::GetReloadDuration() const { return reloadDuration; }
 const string& Weapon::GetAmmoType() const { return ammoType; }
 
@@ -93,4 +96,8 @@ float Weapon::GetRecoilYawMax() const { return recoilYawMax; }
 
 float Weapon::ComputeDamage(float distance) const {
 	return mod ? mod->ComputeDamage(distance) : 0.f;
+}
+
+void Weapon::FireCustom(PostHandle* post) const {
+	if (mod) mod->OnFire(post);
 }

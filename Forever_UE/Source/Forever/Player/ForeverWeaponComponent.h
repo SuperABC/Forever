@@ -5,6 +5,7 @@
 #include "ForeverWeaponComponent.generated.h"
 
 class Weapon;
+class AForeverCharacter;
 
 // 挂在AForeverCharacter上的武器组件：开火/换弹/切枪等高频路径全是纯C++调用，只有致死时才
 // 跨到Story，见ForeverWeaponComponent.md。
@@ -42,9 +43,17 @@ public:
 	// 清空当前武器，不装备新的(切到空肩膀时手上要跟着空下来)。
 	void ClearWeapon();
 
+	// 预热截屏的GPU回读：第一次截屏要初始化回读资源(约0.5s卡顿)，先偷偷截一张丢掉，
+	// 把这次卡顿放到加载界面(AForeverFrameworkActor的"预热截屏"阶段)。整个进程只做一次。
+	static void WarmUpScreenshot();
+
 private:
-	// 一次开火：瞄准/冷却/弹药检查通过后从摄像机打一条射线，命中市民则结算伤害，致死则广播事件。
+	// 一次开火：瞄准/冷却/弹药检查通过后，按WeaponMod的FireMode分派到下面各自的结算路径。
 	void Fire();
+	// Hitscan：从摄像机打一条射线，命中市民则结算伤害，致死则广播事件。
+	void FireHitscan(AForeverCharacter* character);
+	// Custom(相机等)：调Weapon::FireCustom → WeaponMod::OnFire，mod通过PostHandle向Core发请求(相机=截屏)。
+	void FireCustom(AForeverCharacter* character);
 
 	// 独占持有；Weapon自己经Factory创建/销毁WeaponMod(跨DLL安全)，这一层普通delete即可。
 	Weapon* currentWeapon = nullptr;

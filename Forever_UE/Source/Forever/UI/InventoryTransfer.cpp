@@ -173,6 +173,59 @@ namespace {
 		return !container && (zone == EInvZone::Room || zone == EInvZone::Nearby);
 	}
 
+	bool IsShoulder(EInvZone zone) {
+		return zone == EInvZone::LeftShoulder || zone == EInvZone::RightShoulder;
+	}
+
+	// 把武器asset拖到已有武器occupant的肩膀上：两把互换，肩上的武器放到asset原来的位置(同一个槽位/容器/房间/附近)。
+	// 摘下两件→校验occupant能不能放到asset的原位置→各自放好；任一步失败整体回滚。
+	bool SwapShoulderWeapon(Player* player, UForeverAssetFrameworkComponent* assetFramework, FVector pawnLocation,
+		const FInvSource& source, const FInvDest& dest, Asset* occupant, FString& OutError) {
+		Asset* asset = source.asset;
+		if (asset->GetCount() != 1 || occupant->GetCount() != 1) { OutError = TEXT("成堆的武器不能互换"); return false; }
+
+		const FInvDest sourceDest{ source.zone, source.parent };
+		const FInvSource occupantSource{ dest.zone, occupant, nullptr };
+
+		Player::WorldAsset nearbyEntry;
+		if (!Detach(player, source, nearbyEntry)) { OutError = TEXT("无法取出物品"); return false; }
+		Player::WorldAsset ignored;
+		if (!Detach(player, occupantSource, ignored)) {
+			Reattach(player, source, nearbyEntry);
+			OutError = TEXT("无法取出肩上的武器");
+			return false;
+		}
+
+		auto rollback = [&](bool occupantPlaced) {
+			if (occupantPlaced) Detach(player, FInvSource{ source.zone, occupant, source.parent }, ignored);
+			Reattach(player, occupantSource, ignored);
+			Reattach(player, source, nearbyEntry);
+		};
+
+		FString error;
+		if (!CanPlace(player, sourceDest, occupant, error)) {
+			rollback(false);
+			OutError = TEXT("肩上的武器放不到这里：") + error;
+			return false;
+		}
+		if (!Place(player, sourceDest, occupant, pawnLocation)) {
+			rollback(false);
+			OutError = TEXT("肩上的武器放不下(位置已被占用或空间不足)");
+			return false;
+		}
+		if (!Place(player, dest, asset, pawnLocation)) {
+			rollback(true);
+			OutError = TEXT("放不下(位置已被占用或空间不足)");
+			return false;
+		}
+
+		if (HasWorldActor(source.zone, source.parent) && assetFramework) assetFramework->DestroyWorldAsset(asset);
+		if (HasWorldActor(sourceDest.zone, sourceDest.container) && assetFramework) assetFramework->SpawnWorldAsset(occupant, pawnLocation);
+		NotifyTransfer(assetFramework, source, dest, asset, true);
+		NotifyTransfer(assetFramework, occupantSource, sourceDest, occupant, true);
+		return true;
+	}
+
 } // namespace
 
 namespace InventoryTransfer {
@@ -203,6 +256,14 @@ namespace InventoryTransfer {
 		if (source.zone == dest.zone && (IsSlot(source.zone) || source.parent == dest.container)) return false;
 
 		if (!IsAtSource(player, source)) { OutError = TEXT("物品已不在原位置"); return false; }
+
+		// 目标肩膀已有武器：互换而不是报"该位置已有物品"。
+		if (IsShoulder(dest.zone) && asset->IsWeapon()) {
+			Asset* occupant = player->GetByPath(TCHAR_TO_UTF8(*SlotPath(dest.zone)));
+			if (occupant && occupant != asset) {
+				return SwapShoulderWeapon(player, assetFramework, pawnLocation, source, dest, occupant, OutError);
+			}
+		}
 		if (!CanPlace(player, dest, asset, OutError)) { NotifyTransfer(assetFramework, source, dest, asset, false); return false; }
 
 		int total = asset->GetCount();

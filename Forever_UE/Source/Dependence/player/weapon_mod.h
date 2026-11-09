@@ -5,6 +5,15 @@
 #include <string>
 #include <algorithm>
 
+class PostHandle;
+
+// 开火方式:决定Forever层的UForeverWeaponComponent开火时走哪条结算路径(射线伤害/拍照/...),
+// 后续火箭弹、颜料球等抛射物武器各加一个值。
+enum class FireMode {
+	Hitscan = 0,	// 摄像机射线命中判定+伤害(手枪/步枪/霰弹枪/狙击枪)
+	Custom = 1,		// 自定义(相机等):开火后调WeaponMod::OnFire,由mod自己通过PostHandle向Core发请求,不走射线伤害
+};
+
 // 设计见weapon_mod.md:纯数据描述,开火/命中判定在Forever层的UForeverWeaponComponent里。
 class WeaponMod {
 public:
@@ -49,6 +58,7 @@ public:
 	float backOffsetZ = 0.f;
 
 	// ---- 射击参数 ----
+	FireMode fireMode = FireMode::Hitscan;
 	float damage = 25.f;
 	float fireRate = 0.15f;        // 两次开火最小间隔，秒
 	bool fullAuto = false;         // false=每次按键最多打一发，true=按住连发
@@ -56,6 +66,7 @@ public:
 	float baseSpread = 1.5f;       // 散射半角，度——命中方向在瞄准方向为轴的这个半角圆锥内随机(0=没有散射)
 
 	// ---- 弹药 ----
+	// magazineCapacity=0表示这把武器不用弹药(相机):不扣子弹、不换弹、不显示弹药数。
 	int magazineCapacity = 12;
 	float reloadDuration = 1.5f;   // 秒
 
@@ -74,6 +85,10 @@ public:
 		float falloff = 1.f - std::min(distance, maxRange) / maxRange;
 		return damage * falloff;
 	}
+
+	// fireMode==Custom的武器每次开火(通过瞄准/冷却/弹药闸门之后)调一次:mod在这里通过post向Core发请求
+	// (比如相机发"screenshot"请求截屏),默认什么都不做。post只在这次调用期间有效,不要保存。
+	virtual void OnFire(PostHandle* post) {}
 
 	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}

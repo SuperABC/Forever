@@ -25,3 +25,5 @@
 ## 待办/后续阶段
 
 - 投掷物落地后的效果(爆炸/烟雾)没做，现在只是被扔出去后消失，见`Core/player/asset.md`。
+
+- `CameraWeaponAsset`(`asset_camera`)：相机的肩槽资产，`weapon=true; weaponType="weapon_camera"`，初始放在玩家背包里，拖到肩膀上激活。
