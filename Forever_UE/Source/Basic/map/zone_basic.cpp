@@ -159,13 +159,13 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	road.width = access.width;
 	internalRoads.push_back(road);
 
-	// 内部道路把园区分成两半，每半一栋building_residence(Basic层文件间不能互相include，所以写
+	// 内部道路把园区分成两半，每半一栋building_residence_high(Basic层文件间不能互相include，所以写
 	// 字符串明文)。尺寸留余量不贴围墙/内部道路；roadIndices记贴着internalRoads[0]的哪个面，
 	// 两半相反，direction取该面朝向。
 	float buildingAlong = side * 0.6f;
 	float buildingAcross = half * 0.6f;
 	ZoneInternalBuildingSpec buildingA, buildingB;
-	buildingA.type = buildingB.type = "building_residence";
+	buildingA.type = buildingB.type = "building_residence_high";
 	buildingA.relativeRotation = buildingB.relativeRotation = 0.f;
 	if (alongY) {
 		buildingA.x = 0.f; buildingA.y = -half / 2.f;

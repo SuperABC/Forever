@@ -5,6 +5,7 @@
 #include <set>
 #include <cfloat>
 #include <unordered_set>
+#include <sstream>
 
 // 过山有两种做法，按每座山单独决定(见buildArm)：
 //   - 抬升：山体里每个采样点的路面高度取山表面高度(getHeight)，并对这些路段请求地形贴合
@@ -59,8 +60,15 @@ namespace {
 
 int JingRoadnet::count = 0;
 
-JingRoadnet::JingRoadnet() : id(count++) {
-
+JingRoadnet::JingRoadnet(const string& args) : id(count++) {
+	istringstream stream(args);
+	string token;
+	while (stream >> token) {
+		if (token == "--length") {
+			int value;
+			if (stream >> value) length = value;
+		}
+	}
 }
 
 JingRoadnet::~JingRoadnet() {
@@ -446,7 +454,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		lots.back().SetArea(AREA_OFFICIAL_HIGH);
 	}
 
-	if (horizontalNode1w.size() >= 1 && horizontalNode2w.size() >= 1) {
+	// length>=0时每个臂最多length个lot：紧邻中心的象限lot是第1个(length==0则一个都不放)，
+	// 后面沿臂细分的第i块是第i+1个，所以细分循环上限是length。
+	const bool armLots = length != 0;
+	const size_t extendLimit = length < 0 ? SIZE_MAX : static_cast<size_t>(length);
+
+	if (armLots && horizontalNode1w.size() >= 1 && horizontalNode2w.size() >= 1) {
 		Road* boundary2 = makeBoundaryRoad("城西北路", horizontalNode1w[0], intersections[0]);
 		Road* boundary3 = makeBoundaryRoad("城西南路", horizontalNode2w[0], intersections[3]);
 		// 找不到边界Road(这一段跨了隧道过渡点，被addRoad拆成了好几小段，见makeBoundaryRoad
@@ -463,7 +476,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			lots.back().SetArea(RandomHighDensityArea());
 		}
 	}
-	if (horizontalNode1e.size() >= 1 && horizontalNode2e.size() >= 1) {
+	if (armLots && horizontalNode1e.size() >= 1 && horizontalNode2e.size() >= 1) {
 		Road* boundary2 = makeBoundaryRoad("城东北路", horizontalNode1e[0], intersections[1]);
 		Road* boundary3 = makeBoundaryRoad("城东南路", horizontalNode2e[0], intersections[2]);
 		if (boundary2 && boundary3 &&
@@ -478,7 +491,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			lots.back().SetArea(RandomHighDensityArea());
 		}
 	}
-	if (verticalNode1n.size() >= 1 && verticalNode2n.size() >= 1) {
+	if (armLots && verticalNode1n.size() >= 1 && verticalNode2n.size() >= 1) {
 		Road* boundary0 = makeBoundaryRoad("城北西路", verticalNode1n[0], intersections[0]);
 		Road* boundary1 = makeBoundaryRoad("城北东路", verticalNode2n[0], intersections[1]);
 		if (boundary0 && boundary1 &&
@@ -493,7 +506,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			lots.back().SetArea(RandomHighDensityArea());
 		}
 	}
-	if (verticalNode1s.size() >= 1 && verticalNode2s.size() >= 1) {
+	if (armLots && verticalNode1s.size() >= 1 && verticalNode2s.size() >= 1) {
 		Road* boundary0 = makeBoundaryRoad("城南西路", verticalNode1s[0], intersections[3]);
 		Road* boundary1 = makeBoundaryRoad("城南东路", verticalNode2s[0], intersections[2]);
 		if (boundary0 && boundary1 &&
@@ -510,7 +523,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	}
 
 	// 沿每条放射臂继续细分lot，检查不通过或找不到边界Road就break(这个方向后面不再放lot)。
-	for (size_t i = 1; i < min(horizontalNode1w.size(), horizontalNode2w.size()); i++) {
+	for (size_t i = 1; i < min({ horizontalNode1w.size(), horizontalNode2w.size(), extendLimit }); i++) {
 		const Node& nwNode = horizontalNode1w[i];
 		const Node& neNode = horizontalNode1w[i - 1];
 		const Node& seNode = horizontalNode2w[i - 1];
@@ -532,7 +545,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		lots.back().SetArea(RandomHighDensityArea());
 	}
 
-	for (size_t i = 1; i < min(horizontalNode1e.size(), horizontalNode2e.size()); i++) {
+	for (size_t i = 1; i < min({ horizontalNode1e.size(), horizontalNode2e.size(), extendLimit }); i++) {
 		const Node& nwNode = horizontalNode1e[i - 1];
 		const Node& neNode = horizontalNode1e[i];
 		const Node& seNode = horizontalNode2e[i];
@@ -552,7 +565,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		lots.back().SetArea(RandomHighDensityArea());
 	}
 
-	for (size_t i = 1; i < min(verticalNode1n.size(), verticalNode2n.size()); i++) {
+	for (size_t i = 1; i < min({ verticalNode1n.size(), verticalNode2n.size(), extendLimit }); i++) {
 		const Node& nwNode = verticalNode1n[i];
 		const Node& neNode = verticalNode2n[i];
 		const Node& seNode = verticalNode2n[i - 1];
@@ -572,7 +585,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		lots.back().SetArea(RandomHighDensityArea());
 	}
 
-	for (size_t i = 1; i < min(verticalNode1s.size(), verticalNode2s.size()); i++) {
+	for (size_t i = 1; i < min({ verticalNode1s.size(), verticalNode2s.size(), extendLimit }); i++) {
 		const Node& nwNode = verticalNode1s[i - 1];
 		const Node& neNode = verticalNode2s[i - 1];
 		const Node& seNode = verticalNode2s[i];

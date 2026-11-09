@@ -55,6 +55,27 @@ void ShopRoom::SetProperty() {
 	doorSpecs["room"].milestoneNames = { "door_shop_entrance" };
 }
 
+int OfficeRoom::count = 0;
+
+OfficeRoom::OfficeRoom() : id(count++) {
+}
+
+const char* OfficeRoom::GetName() {
+	name = "OfficeRoom" + to_string(id);
+	return name.data();
+}
+
+void OfficeRoom::SetProperty() {
+	isWorkspace = true;
+	workspaceCapacity = 5;
+	rent = 2000;
+
+	doorSpecs["room"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["room"].style = 1; // Swing
+	doorSpecs["room"].leaves = 1;
+	doorSpecs["room"].randomSide = true;
+}
+
 int WarehouseRoom::count = 0;
 
 WarehouseRoom::WarehouseRoom() : id(count++) {

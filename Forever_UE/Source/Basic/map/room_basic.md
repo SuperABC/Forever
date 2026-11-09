@@ -7,6 +7,7 @@ Room域的默认实现，合在同一份`room_basic.h/.cpp`里(每个concept统�
 | 类型 | id | 属性 |
 | --- | --- | --- |
 | `ResidenceRoom` | `room_residence` | `isResidential`，`residentialCapacity=1`，房租2000(每日20元)，挂`entity_event`脚本 |
+| `OfficeRoom` | `room_office` | `isWorkspace`，`workspaceCapacity=5`，房租2000；`OfficeBuilding`(三档密度)的房间，没有挂脚本的门 |
 | `ShopRoom` | `room_shop` | `isWorkspace`，`workspaceCapacity=5`（满编；月结可超编到2倍），房租2000 |
 | `WarehouseRoom` | `room_warehouse` | `isStorage`，`storageType="storage_shop"`；另有管理员工位`isWorkspace`，`workspaceCapacity=1`，房租2000 |
 | `ParkingRoom` | `room_parking` | `isParking`，房间正中心一个车位 |

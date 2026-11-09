@@ -6,7 +6,8 @@
 // 井字路网生成器，详见roadnet_basic.md。
 class JingRoadnet : public RoadnetMod {
 public:
-	JingRoadnet();
+	// args是config.json里mod id后面的参数串："--length 3"(四个臂向外最多伸出几个lot，<0或不填=不限制)。
+	explicit JingRoadnet(const std::string& args = "");
 	virtual ~JingRoadnet();
 
 	static const char* GetId();
@@ -36,4 +37,6 @@ private:
 	static int count;
 	int id;
 	std::string name;
+	// 每个臂向外最多伸出的lot数(紧邻中心的那块算第1个)，<0=不限制。
+	int length = -1;
 };

@@ -2,9 +2,10 @@
 
 ## 职责
 
-Component域的默认实现，五个类型都是无字段、无逻辑的trivial占位，合在同一份`component_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)：
+Component域的默认实现，六个类型都是无字段、无逻辑的trivial占位，合在同一份`component_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)：
 
 - `ResidenceComponent`(`component_residence`)、`ShopComponent`(`component_shop`)、`FactoryComponent`(`component_factory`)：住宅/商店/工厂建筑的房间归属。
+- `OfficeComponent`(`component_office`)：办公楼建筑的房间归属(`room_office`)。
 - `TrainStationComponent`(`component_train_station`)、`AirportComponent`(`component_airport`)：火车站/机场建筑用。公交站不走Building/Lot路径，不需要component，见`traffic/station_basic.md`。
 
 ## 关键设计

@@ -1,14 +1,24 @@
 {
    "building_mods" : [
-      "building_residence",
-      "building_factory",
+      "building_residence_high",
+      "building_residence_middle",
+      "building_residence_low",
+      "building_factory_high",
+      "building_factory_middle",
+      "building_factory_low",
+      "building_office_high",
+      "building_office_middle",
+      "building_office_low",
       "building_park",
-      "building_shop"
+      "building_shop_high",
+      "building_shop_middle",
+      "building_shop_low"
    ],
    "component_mods" : [
       "component_residence",
       "component_shop",
       "component_factory",
+      "component_office",
       "component_empty --test true"
    ],
    "dll_paths" : [
@@ -32,6 +42,7 @@
    "roadnet_mods" : [ "roadnet_jing" ],
    "room_mods" : [
       "room_residence",
+      "room_office",
       "room_shop",
       "room_warehouse",
       "room_parking",

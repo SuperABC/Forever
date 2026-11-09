@@ -2,7 +2,7 @@
 
 ## 职责
 
-Building域的七个默认实现，合在同一份`building_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)：`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding`(住宅/商店/工厂)、`TrainStationBuilding`/`AirportBuilding`(火车站/机场)、`ParkBuilding`(公园)、`MoharBuilding`(成品模型住宅)。
+Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档密度，加上火车站/机场/公园/Mohar)，合在同一份`building_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)：`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding`(住宅/商店/工厂)、`TrainStationBuilding`/`AirportBuilding`(火车站/机场)、`ParkBuilding`(公园)、`MoharBuilding`(成品模型住宅)。
 
 ## 关键设计
 
@@ -11,16 +11,23 @@ Building域的七个默认实现，合在同一份`building_basic.h/.cpp`里(每
 - **`GetPower(AREA_TYPE)`限定分区类型**：住宅/商店/工厂分别只在住宅/商业/工业三档分区返回`1.f`，否则会在别的分区和其它类型一起参与`FillRemainder`的权重CDF竞争而混入。没有对应建筑类型的分区(目前办公区，除中心lot被火车站/机场/园区占用外)保持空地，属预期。分区由路网生成，见`roadnet_basic.md`。
 - **火车站/机场/公园/Mohar的`Layout`依赖`RoadnetMod`之外的约定**：`stationMod`字符串指向`traffic/station_basic`里的StationMod。
 
+## 三档密度与办公楼
+
+- **住宅/商店/工厂/办公楼各拆成高/中/低三个注册的mod**，共12个，类名`ResidenceHighBuilding`等：`building_{residence,shop,factory,office}_{high,middle,low}`。**每个类完全独立实现，没有共用基类**：各自有自己的`Layout()`、`Assign`、`RandomAcreage`/`GetAcreageMin`/`GetAcreageMax`、`GetPower`和命名计数器；目前同一类型的三档以及办公楼与住宅，逻辑都是同一份的拷贝，以后各自改，互不影响。
+- `GetPower`只在对应类型和密度的分区返回`1.f`：`AREA_{RESIDENTIAL,COMMERCIAL,INDUSTRIAL,OFFICIAL}_{HIGH,MIDDLE,LOW}`。
+- **办公楼**：`Layout()`是住宅布局的拷贝(同一套模板/电梯/楼层数分档)，房间换成`room_office`、组件换成`component_office`，不挂住宅的`entity_event`示例脚本。
+- 下面`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding`几节描述的是对应类型**当前（三档共同）的逻辑**，指的是三个档次各自那份拷贝。
+
 ## ResidenceBuilding
 
-- `GetPower`：`AREA_RESIDENTIAL_HIGH/MIDDLE/LOW`返回`1.f`。`RandomAcreage()=2000*(1+rand*2)^2`，`GetAcreageMin()=2000`，`GetAcreageMax()=18000`。`Assign()`空实现。
+- `GetPower`：由三档子类各自决定(见上)。`RandomAcreage()=2000*(1+rand*2)^2`，`GetAcreageMin()=2000`，`GetAcreageMax()=18000`。`Assign()`空实现。
 - `Layout()`：`footprint`居中占80%，`basements=1`；`layers`按`quad.GetAcreage()`分档(`<5000`→3-5，`<10000`→6-9，否则10-14)；层高地上统一0.4、地下室0.35。按`quad`尺寸分档随机选一套模板组合(`layout` 0-3)和房间槽位密度`size`：`layout==1/3`带电梯井道模板(`preset_lobby_wing_*`/`preset_nshape_double_*`)，配合`AssignElevatorCabin`产出`Elevator`几何(脚本`elevator_basic`)。`layout==3`的第0个槽位是`room_empty`占位，不铺真实房间。
 - 大门`doorSpecs["entrance"]`：随机左右滑动单开门(`Cube`资产占位)，只有corridor门洞带`entrance`标签才用到，见`Core/map/door.h`的`ResolveDoorSpec`。
 - 挂示例脚本`entity_event`。
 
 ## ShopBuilding
 
-- `GetPower`：商业三档分区。`RandomAcreage()=4000*(1+rand)^2`，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`。
+- `GetPower`：由三档子类各自决定。`RandomAcreage()=4000*(1+rand)^2`，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`。
 - `Layout()`：`footprint`居中占0.6(某边`<6`时收到`(size-2.4)/size`)，`layers`固定2，每层`FloorAssetSpec.wallMaterial`为`White`，层高统一0.4。复用`preset_lobby_linear_*`/`preset_circle_double_*`模板：
   - `quad.GetAcreage() < 6000`：无地下室。1楼`preset_lobby_linear_fg+`(`ShopRoom`+`WarehouseRoom`过道)→2楼`preset_lobby_linear_fu-`(纯`WarehouseRoom`)。
   - 否则`basements=1`，地下室随机选`preset_circle_double_pg+`(`ParkingRoom`)或`preset_circle_double_bg+`(5间`WarehouseRoom`)；1楼`preset_circle_double_fg+-`(2间`ShopRoom`+4间`WarehouseRoom`)，2楼`preset_circle_double_fu+-`(5间`WarehouseRoom`)。
@@ -53,7 +60,7 @@ Building域的七个默认实现，合在同一份`building_basic.h/.cpp`里(每
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/building_mod.h`(`BuildingMod`基类)、`common/utility.h`(`GetRandom`)；用字符串引用`room_basic`/`component_basic`里各类型的id(Basic层文件间不互相`#include`)。
-- 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModBuildings`注册七个类型，依赖表声明所需的component/room/script)；`zone_basic.cpp`(`ResidenceZone::Layout()`内部建筑引用`building_residence`)；`traffic/station_basic`(`station_train`/`station_air`依赖对应Building)。
+- 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModBuildings`注册七个类型，依赖表声明所需的component/room/script)；`zone_basic.cpp`(`ResidenceZone::Layout()`内部建筑引用`building_residence_high`)；`traffic/station_basic`(`station_train`/`station_air`依赖对应Building)。
 
 ## 待办/后续阶段
 

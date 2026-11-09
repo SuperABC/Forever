@@ -32,17 +32,17 @@ namespace {
 	}
 }
 
-int ResidenceBuilding::count = 0;
+int ResidenceHighBuilding::count = 0;
 
-ResidenceBuilding::ResidenceBuilding() : id(count++) {
+ResidenceHighBuilding::ResidenceHighBuilding() : id(count++) {
 }
 
-const char* ResidenceBuilding::GetName() {
+const char* ResidenceHighBuilding::GetName() {
 	name = string(GetType()) + std::to_string(id);
 	return name.data();
 }
 
-void ResidenceBuilding::Layout(int& direction, const Quad& quad,
+void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
 	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
 	milestoneNames = { "entity_event" };
@@ -224,45 +224,473 @@ void ResidenceBuilding::Layout(int& direction, const Quad& quad,
 	}
 }
 
-void ResidenceBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+void ResidenceHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
 	// 不用显式占位。
 }
 
-float ResidenceBuilding::RandomAcreage() {
+float ResidenceHighBuilding::RandomAcreage() {
 	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 2.f, 2);
 }
 
-float ResidenceBuilding::GetAcreageMin() {
+float ResidenceHighBuilding::GetAcreageMin() {
 	return 2000.f;
 }
 
-float ResidenceBuilding::GetAcreageMax() {
+float ResidenceHighBuilding::GetAcreageMax() {
 	return 18000.f;
 }
 
-float ResidenceBuilding::GetPower(AREA_TYPE area) {
-	// 只在住宅分区(高/中/低密度)上有权重，和ShopBuilding/FactoryBuilding各自只在商业/工业
-	// 分区有权重(见building_basic.md)保持互斥——否则会在商业/工业分区上和Shop/Factory一起
-	// 参与FillRemainder的权重CDF竞争，导致商业区/工业区里混入住宅建筑。这个通用占位类型不
-	// 细分三档密度权重，统一按1.f处理。办公/商业/工业分区上返回0，意味着没有对应类型建筑
-	// 竞争的分区(目前只有办公区，还没有Office建筑类型)那块lot会暂时保持空地，属于预期行为。
-	if (area == AREA_RESIDENTIAL_HIGH || area == AREA_RESIDENTIAL_MIDDLE || area == AREA_RESIDENTIAL_LOW) {
+float ResidenceHighBuilding::GetPower(AREA_TYPE area) {
+	// 只在住宅高密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_OFFICIAL_HIGH) {
 		return 1.f;
 	}
 	return 0.f;
 }
 
-int ShopBuilding::count = 0;
+int ResidenceMiddleBuilding::count = 0;
 
-ShopBuilding::ShopBuilding() : id(count++) {
+ResidenceMiddleBuilding::ResidenceMiddleBuilding() : id(count++) {
 }
 
-const char* ShopBuilding::GetName() {
+const char* ResidenceMiddleBuilding::GetName() {
 	name = string(GetType()) + std::to_string(id);
 	return name.data();
 }
 
-void ShopBuilding::Layout(int& direction, const Quad& quad,
+void ResidenceMiddleBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
+	milestoneNames = { "entity_event" };
+	// direction对显式占位是真实方向，权重CDF/FillRemainder落地时是-1：-1时从boundaryRoads随机
+	// 挑一个有真实边界路的方向回写，行人/车辆导航的"outside"端点要靠它找到该连的路，见
+	// building_mod.h的Layout()注释。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f }; // 楼体占地块80%，居中
+	basements = 1;
+	// 楼层数按地块面积分档。
+	if (quad.GetAcreage() < 5000.f) {
+		layers = 3 + GetRandom(3);
+	} else if (quad.GetAcreage() < 10000.f) {
+		layers = 6 + GetRandom(4);
+	} else {
+		layers = 10 + GetRandom(5);
+	}
+	floorHeights.clear();
+	floorHeights.push_back(0.35f); // 地下室
+	// 地上每层高度统一0.4，不循环取不同值。
+	for (int i = 0; i < layers; i++) {
+		floorHeights.push_back(0.4f);
+	}
+	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
+
+	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
+	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// spec，见Core/map/door.h的ResolveDoorSpec。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
+
+	constexpr const char* kComponent = "component_residence";
+	constexpr int kComponentId = 0;
+
+	// 按quad尺寸分档随机选一套模板组合(layout 0-3)+房间槽位密度(size)。只有layout==1/3的模板
+	// (preset_lobby_wing_*/preset_nshape_double_*)带电梯井道，AssignElevatorCabin靠它们产出Elevator几何。
+	// 偏好方向只有在boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction
+	// (否则outside端点会查不到路)。
+	int layout = 0;
+	float size = 120.f;
+	int preferredDirection = direction;
+	if (quad.GetSizeX() <= 3.f || quad.GetSizeY() <= 3.f) {
+		layout = 0;
+		size = 40.f;
+		if (quad.GetSizeX() > 3.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 3.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else if (quad.GetSizeX() <= 6.f || quad.GetSizeY() <= 6.f) {
+		layout = GetRandom(2);
+		size = 160.f;
+		if (quad.GetSizeX() > 6.f) preferredDirection = layout * 2 + GetRandom(2);
+		if (quad.GetSizeY() > 6.f) preferredDirection = 2 - layout * 2 + GetRandom(2);
+	} else if (quad.GetSizeX() <= 9.f || quad.GetSizeY() <= 9.f) {
+		layout = 2;
+		size = 120.f;
+		if (quad.GetSizeX() > 9.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 9.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else {
+		layout = 3;
+		size = 120.f;
+		if (quad.GetSizeX() > quad.GetSizeY()) preferredDirection = FACE_WEST + GetRandom(2);
+		else preferredDirection = FACE_NORTH + GetRandom(2);
+	}
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	if (layout == 0) {
+		AssignFloor(-1, "preset_straight_linear_bg+", direction);
+		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_residence", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_straight_linear_fg+-", direction);
+		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_residence", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_straight_linear_fu+-", direction);
+			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_residence", size, kComponent, kComponentId);
+		}
+	} else if (layout == 1) {
+		AssignFloor(-1, "preset_lobby_wing_bg+", direction);
+		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_residence", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lobby_wing_fg+-", direction);
+		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_residence", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lobby_wing_fu+-", direction);
+			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_residence", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	} else if (layout == 2) {
+		AssignFloor(-1, "preset_lshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_residence", kComponent, kComponentId);
+		AssignRoom(-1, 1, "room_residence", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_residence", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_residence", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_residence", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_residence", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_residence", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_residence", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_residence", size, kComponent, kComponentId);
+		}
+	} else { // layout == 3
+		AssignFloor(-1, "preset_nshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_empty", kComponent, kComponentId); // 占位槽位，不铺真实房间
+		AssignRoom(-1, 1, "room_residence", kComponent, kComponentId);
+		AssignRoom(-1, 2, "room_residence", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 5, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 6, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 7, "room_residence", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_nshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_empty", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_residence", kComponent, kComponentId);
+		AssignRoom(0, 2, "room_residence", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 5, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 6, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 7, "room_residence", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_nshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_empty", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_residence", kComponent, kComponentId);
+			AssignRoom(i, 2, "room_residence", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 5, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 6, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 7, "room_residence", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	}
+}
+
+void ResidenceMiddleBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+float ResidenceMiddleBuilding::RandomAcreage() {
+	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 2.f, 2);
+}
+
+float ResidenceMiddleBuilding::GetAcreageMin() {
+	return 2000.f;
+}
+
+float ResidenceMiddleBuilding::GetAcreageMax() {
+	return 18000.f;
+}
+
+float ResidenceMiddleBuilding::GetPower(AREA_TYPE area) {
+	// 只在住宅中密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_RESIDENTIAL_MIDDLE) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int ResidenceLowBuilding::count = 0;
+
+ResidenceLowBuilding::ResidenceLowBuilding() : id(count++) {
+}
+
+const char* ResidenceLowBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void ResidenceLowBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
+	milestoneNames = { "entity_event" };
+	// direction对显式占位是真实方向，权重CDF/FillRemainder落地时是-1：-1时从boundaryRoads随机
+	// 挑一个有真实边界路的方向回写，行人/车辆导航的"outside"端点要靠它找到该连的路，见
+	// building_mod.h的Layout()注释。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f }; // 楼体占地块80%，居中
+	basements = 1;
+	// 楼层数按地块面积分档。
+	if (quad.GetAcreage() < 5000.f) {
+		layers = 3 + GetRandom(3);
+	} else if (quad.GetAcreage() < 10000.f) {
+		layers = 6 + GetRandom(4);
+	} else {
+		layers = 10 + GetRandom(5);
+	}
+	floorHeights.clear();
+	floorHeights.push_back(0.35f); // 地下室
+	// 地上每层高度统一0.4，不循环取不同值。
+	for (int i = 0; i < layers; i++) {
+		floorHeights.push_back(0.4f);
+	}
+	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
+
+	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
+	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// spec，见Core/map/door.h的ResolveDoorSpec。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
+
+	constexpr const char* kComponent = "component_residence";
+	constexpr int kComponentId = 0;
+
+	// 按quad尺寸分档随机选一套模板组合(layout 0-3)+房间槽位密度(size)。只有layout==1/3的模板
+	// (preset_lobby_wing_*/preset_nshape_double_*)带电梯井道，AssignElevatorCabin靠它们产出Elevator几何。
+	// 偏好方向只有在boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction
+	// (否则outside端点会查不到路)。
+	int layout = 0;
+	float size = 120.f;
+	int preferredDirection = direction;
+	if (quad.GetSizeX() <= 3.f || quad.GetSizeY() <= 3.f) {
+		layout = 0;
+		size = 40.f;
+		if (quad.GetSizeX() > 3.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 3.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else if (quad.GetSizeX() <= 6.f || quad.GetSizeY() <= 6.f) {
+		layout = GetRandom(2);
+		size = 160.f;
+		if (quad.GetSizeX() > 6.f) preferredDirection = layout * 2 + GetRandom(2);
+		if (quad.GetSizeY() > 6.f) preferredDirection = 2 - layout * 2 + GetRandom(2);
+	} else if (quad.GetSizeX() <= 9.f || quad.GetSizeY() <= 9.f) {
+		layout = 2;
+		size = 120.f;
+		if (quad.GetSizeX() > 9.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 9.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else {
+		layout = 3;
+		size = 120.f;
+		if (quad.GetSizeX() > quad.GetSizeY()) preferredDirection = FACE_WEST + GetRandom(2);
+		else preferredDirection = FACE_NORTH + GetRandom(2);
+	}
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	if (layout == 0) {
+		AssignFloor(-1, "preset_straight_linear_bg+", direction);
+		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_residence", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_straight_linear_fg+-", direction);
+		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_residence", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_straight_linear_fu+-", direction);
+			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_residence", size, kComponent, kComponentId);
+		}
+	} else if (layout == 1) {
+		AssignFloor(-1, "preset_lobby_wing_bg+", direction);
+		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_residence", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lobby_wing_fg+-", direction);
+		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_residence", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lobby_wing_fu+-", direction);
+			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_residence", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	} else if (layout == 2) {
+		AssignFloor(-1, "preset_lshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_residence", kComponent, kComponentId);
+		AssignRoom(-1, 1, "room_residence", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_residence", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_residence", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_residence", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_residence", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_residence", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_residence", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_residence", size, kComponent, kComponentId);
+		}
+	} else { // layout == 3
+		AssignFloor(-1, "preset_nshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_empty", kComponent, kComponentId); // 占位槽位，不铺真实房间
+		AssignRoom(-1, 1, "room_residence", kComponent, kComponentId);
+		AssignRoom(-1, 2, "room_residence", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 5, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 6, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(-1, 7, "room_residence", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_nshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_empty", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_residence", kComponent, kComponentId);
+		AssignRoom(0, 2, "room_residence", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 5, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 6, "room_residence", size, kComponent, kComponentId);
+		ArrangeRow(0, 7, "room_residence", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_nshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_empty", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_residence", kComponent, kComponentId);
+			AssignRoom(i, 2, "room_residence", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 5, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 6, "room_residence", size, kComponent, kComponentId);
+			ArrangeRow(i, 7, "room_residence", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	}
+}
+
+void ResidenceLowBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+float ResidenceLowBuilding::RandomAcreage() {
+	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 2.f, 2);
+}
+
+float ResidenceLowBuilding::GetAcreageMin() {
+	return 2000.f;
+}
+
+float ResidenceLowBuilding::GetAcreageMax() {
+	return 18000.f;
+}
+
+float ResidenceLowBuilding::GetPower(AREA_TYPE area) {
+	// 只在住宅低密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_RESIDENTIAL_LOW) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int ShopHighBuilding::count = 0;
+
+ShopHighBuilding::ShopHighBuilding() : id(count++) {
+}
+
+const char* ShopHighBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void ShopHighBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
 	// direction==-1时的兜底，同ResidenceBuilding::Layout。
 	if (direction < 0) {
@@ -383,41 +811,351 @@ void ShopBuilding::Layout(int& direction, const Quad& quad,
 	}
 }
 
-void ShopBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+void ShopHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
 	// 不用显式占位。
 }
 
-float ShopBuilding::RandomAcreage() {
+float ShopHighBuilding::RandomAcreage() {
 	return 4000.f * powf(1.f + GetRandom(1000) / 1000.f * 1.f, 2);
 }
 
-float ShopBuilding::GetAcreageMin() {
+float ShopHighBuilding::GetAcreageMin() {
 	return 4000.f;
 }
 
-float ShopBuilding::GetAcreageMax() {
+float ShopHighBuilding::GetAcreageMax() {
 	return 16000.f;
 }
 
-float ShopBuilding::GetPower(AREA_TYPE area) {
-	// 只在商业分区(高/中/低密度)上有权重。
-	if (area == AREA_COMMERCIAL_HIGH || area == AREA_COMMERCIAL_MIDDLE || area == AREA_COMMERCIAL_LOW) {
+float ShopHighBuilding::GetPower(AREA_TYPE area) {
+	// 只在商店高密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_COMMERCIAL_HIGH) {
 		return 1.f;
 	}
 	return 0.f;
 }
 
-int FactoryBuilding::count = 0;
+int ShopMiddleBuilding::count = 0;
 
-FactoryBuilding::FactoryBuilding() : id(count++) {
+ShopMiddleBuilding::ShopMiddleBuilding() : id(count++) {
 }
 
-const char* FactoryBuilding::GetName() {
+const char* ShopMiddleBuilding::GetName() {
 	name = string(GetType()) + std::to_string(id);
 	return name.data();
 }
 
-void FactoryBuilding::Layout(int& direction, const Quad& quad,
+void ShopMiddleBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// direction==-1时的兜底，同ResidenceBuilding::Layout。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	float scaleX = 0.6f;
+	float scaleY = 0.6f;
+	if (quad.GetSizeX() < 6.f) scaleX = (quad.GetSizeX() - 2.4f) / quad.GetSizeX();
+	if (quad.GetSizeY() < 6.f) scaleY = (quad.GetSizeY() - 2.4f) / quad.GetSizeY();
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, scaleX, scaleY };
+
+	// 同ResidenceBuilding：偏好方向在boundaryRoads里有非空条目才采用。
+	int preferredDirection = (quad.GetSizeX() > quad.GetSizeY())
+		? (FACE_WEST + GetRandom(2))
+		: (FACE_NORTH + GetRandom(2));
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	// 商店大门：随机左右滑动的单开门，有名字可以交互("敲门")，照抄vehicle_basic.script的
+	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].name = "商店大门";
+	doorSpecs["entrance"].scriptModName = "script_empty";
+	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
+
+	constexpr const char* kComponent = "component_shop";
+	constexpr int kComponentId = 0;
+	FloorAssetSpec assets;
+	assets.wallMaterial = "/Game/Asset/Materials/White.White";
+
+	// layers固定2层(不像Residence按acreage分档)。
+	layers = 2;
+
+	if (quad.GetAcreage() < 6000.f) {
+		basements = 0;
+		floorHeights.assign(layers, 0.4f);
+
+		AssignFloor(0, "preset_lobby_linear_fg+", direction, assets);
+		AssignRoom(0, 0, "room_shop", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_warehouse", 200.f, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_warehouse", 200.f, kComponent, kComponentId);
+		// layers==2时这个循环体是no-op(1 < layers-1 == 1 < 1为false)，保留循环结构不简化，
+		// layers以后如果改成可变值这段逻辑会自动生效。
+		for (int i = 1; i < layers - 1; i++) {
+			AssignFloor(i, "preset_lobby_linear_fu+-", direction, assets);
+			AssignRoom(i, 0, "room_warehouse", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_warehouse", 200.f, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_warehouse", 200.f, kComponent, kComponentId);
+		}
+		AssignFloor(layers - 1, "preset_lobby_linear_fu-", direction, assets);
+		AssignRoom(layers - 1, 0, "room_warehouse", kComponent, kComponentId);
+		ArrangeRow(layers - 1, 0, "room_warehouse", 200.f, kComponent, kComponentId);
+		ArrangeRow(layers - 1, 1, "room_warehouse", 200.f, kComponent, kComponentId);
+	} else {
+		basements = 1;
+		floorHeights.assign(basements + layers, 0.4f);
+
+		if (GetRandom(2)) {
+			AssignFloor(-1, "preset_circle_double_pg+", direction, assets);
+			AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
+		} else {
+			AssignFloor(-1, "preset_circle_double_bg+", direction, assets);
+			AssignRoom(-1, 0, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(-1, 1, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(-1, 2, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(-1, 3, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(-1, 4, "room_warehouse", kComponent, kComponentId);
+			ArrangeRow(-1, 0, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 1, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 2, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 3, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 4, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 5, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 6, "room_warehouse", 100.f, kComponent, kComponentId);
+		}
+
+		AssignFloor(0, "preset_circle_double_fg+-", direction, assets);
+		AssignRoom(0, 0, "room_shop", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_shop", kComponent, kComponentId);
+		AssignRoom(0, 2, "room_warehouse", kComponent, kComponentId);
+		AssignRoom(0, 3, "room_warehouse", kComponent, kComponentId);
+		AssignRoom(0, 4, "room_warehouse", kComponent, kComponentId);
+		AssignRoom(0, 5, "room_warehouse", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 5, "room_warehouse", 100.f, kComponent, kComponentId);
+
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_circle_double_fu+-", direction, assets);
+			AssignRoom(i, 0, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(i, 2, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(i, 3, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(i, 4, "room_warehouse", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 5, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 6, "room_warehouse", 100.f, kComponent, kComponentId);
+		}
+	}
+}
+
+void ShopMiddleBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+float ShopMiddleBuilding::RandomAcreage() {
+	return 4000.f * powf(1.f + GetRandom(1000) / 1000.f * 1.f, 2);
+}
+
+float ShopMiddleBuilding::GetAcreageMin() {
+	return 4000.f;
+}
+
+float ShopMiddleBuilding::GetAcreageMax() {
+	return 16000.f;
+}
+
+float ShopMiddleBuilding::GetPower(AREA_TYPE area) {
+	// 只在商店中密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_COMMERCIAL_MIDDLE) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int ShopLowBuilding::count = 0;
+
+ShopLowBuilding::ShopLowBuilding() : id(count++) {
+}
+
+const char* ShopLowBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void ShopLowBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// direction==-1时的兜底，同ResidenceBuilding::Layout。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	float scaleX = 0.6f;
+	float scaleY = 0.6f;
+	if (quad.GetSizeX() < 6.f) scaleX = (quad.GetSizeX() - 2.4f) / quad.GetSizeX();
+	if (quad.GetSizeY() < 6.f) scaleY = (quad.GetSizeY() - 2.4f) / quad.GetSizeY();
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, scaleX, scaleY };
+
+	// 同ResidenceBuilding：偏好方向在boundaryRoads里有非空条目才采用。
+	int preferredDirection = (quad.GetSizeX() > quad.GetSizeY())
+		? (FACE_WEST + GetRandom(2))
+		: (FACE_NORTH + GetRandom(2));
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	// 商店大门：随机左右滑动的单开门，有名字可以交互("敲门")，照抄vehicle_basic.script的
+	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].name = "商店大门";
+	doorSpecs["entrance"].scriptModName = "script_empty";
+	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
+
+	constexpr const char* kComponent = "component_shop";
+	constexpr int kComponentId = 0;
+	FloorAssetSpec assets;
+	assets.wallMaterial = "/Game/Asset/Materials/White.White";
+
+	// layers固定2层(不像Residence按acreage分档)。
+	layers = 2;
+
+	if (quad.GetAcreage() < 6000.f) {
+		basements = 0;
+		floorHeights.assign(layers, 0.4f);
+
+		AssignFloor(0, "preset_lobby_linear_fg+", direction, assets);
+		AssignRoom(0, 0, "room_shop", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_warehouse", 200.f, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_warehouse", 200.f, kComponent, kComponentId);
+		// layers==2时这个循环体是no-op(1 < layers-1 == 1 < 1为false)，保留循环结构不简化，
+		// layers以后如果改成可变值这段逻辑会自动生效。
+		for (int i = 1; i < layers - 1; i++) {
+			AssignFloor(i, "preset_lobby_linear_fu+-", direction, assets);
+			AssignRoom(i, 0, "room_warehouse", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_warehouse", 200.f, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_warehouse", 200.f, kComponent, kComponentId);
+		}
+		AssignFloor(layers - 1, "preset_lobby_linear_fu-", direction, assets);
+		AssignRoom(layers - 1, 0, "room_warehouse", kComponent, kComponentId);
+		ArrangeRow(layers - 1, 0, "room_warehouse", 200.f, kComponent, kComponentId);
+		ArrangeRow(layers - 1, 1, "room_warehouse", 200.f, kComponent, kComponentId);
+	} else {
+		basements = 1;
+		floorHeights.assign(basements + layers, 0.4f);
+
+		if (GetRandom(2)) {
+			AssignFloor(-1, "preset_circle_double_pg+", direction, assets);
+			AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
+		} else {
+			AssignFloor(-1, "preset_circle_double_bg+", direction, assets);
+			AssignRoom(-1, 0, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(-1, 1, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(-1, 2, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(-1, 3, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(-1, 4, "room_warehouse", kComponent, kComponentId);
+			ArrangeRow(-1, 0, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 1, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 2, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 3, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 4, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 5, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(-1, 6, "room_warehouse", 100.f, kComponent, kComponentId);
+		}
+
+		AssignFloor(0, "preset_circle_double_fg+-", direction, assets);
+		AssignRoom(0, 0, "room_shop", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_shop", kComponent, kComponentId);
+		AssignRoom(0, 2, "room_warehouse", kComponent, kComponentId);
+		AssignRoom(0, 3, "room_warehouse", kComponent, kComponentId);
+		AssignRoom(0, 4, "room_warehouse", kComponent, kComponentId);
+		AssignRoom(0, 5, "room_warehouse", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_warehouse", 100.f, kComponent, kComponentId);
+		ArrangeRow(0, 5, "room_warehouse", 100.f, kComponent, kComponentId);
+
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_circle_double_fu+-", direction, assets);
+			AssignRoom(i, 0, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(i, 2, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(i, 3, "room_warehouse", kComponent, kComponentId);
+			AssignRoom(i, 4, "room_warehouse", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 5, "room_warehouse", 100.f, kComponent, kComponentId);
+			ArrangeRow(i, 6, "room_warehouse", 100.f, kComponent, kComponentId);
+		}
+	}
+}
+
+void ShopLowBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+float ShopLowBuilding::RandomAcreage() {
+	return 4000.f * powf(1.f + GetRandom(1000) / 1000.f * 1.f, 2);
+}
+
+float ShopLowBuilding::GetAcreageMin() {
+	return 4000.f;
+}
+
+float ShopLowBuilding::GetAcreageMax() {
+	return 16000.f;
+}
+
+float ShopLowBuilding::GetPower(AREA_TYPE area) {
+	// 只在商店低密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_COMMERCIAL_LOW) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int FactoryHighBuilding::count = 0;
+
+FactoryHighBuilding::FactoryHighBuilding() : id(count++) {
+}
+
+const char* FactoryHighBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void FactoryHighBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
 	if (direction < 0) {
 		std::vector<int> candidates;
@@ -466,26 +1204,839 @@ void FactoryBuilding::Layout(int& direction, const Quad& quad,
 	AssignRoom(0, 0, kFactoryRooms[GetRandom(3)], kComponent, kComponentId);
 }
 
-void FactoryBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+void FactoryHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
 	// 不用显式占位。
 }
 
 // 公式基数2000和GetAcreageMin的4000不一致(RandomAcreage可能小于Min)，是既有数值。
-float FactoryBuilding::RandomAcreage() {
+float FactoryHighBuilding::RandomAcreage() {
 	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 1.f, 2);
 }
 
-float FactoryBuilding::GetAcreageMin() {
+float FactoryHighBuilding::GetAcreageMin() {
 	return 4000.f;
 }
 
-float FactoryBuilding::GetAcreageMax() {
+float FactoryHighBuilding::GetAcreageMax() {
 	return 16000.f;
 }
 
-float FactoryBuilding::GetPower(AREA_TYPE area) {
-	// 只在工业分区(高/中/低密度)上有权重。
-	if (area == AREA_INDUSTRIAL_HIGH || area == AREA_INDUSTRIAL_MIDDLE || area == AREA_INDUSTRIAL_LOW) {
+float FactoryHighBuilding::GetPower(AREA_TYPE area) {
+	// 只在工厂高密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_INDUSTRIAL_HIGH) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int FactoryMiddleBuilding::count = 0;
+
+FactoryMiddleBuilding::FactoryMiddleBuilding() : id(count++) {
+}
+
+const char* FactoryMiddleBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void FactoryMiddleBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	// 同ResidenceBuilding：偏好方向在boundaryRoads里有路才采用。
+	int preferredDirection;
+	if (quad.GetSizeX() > quad.GetSizeY()) {
+		preferredDirection = FACE_NORTH + GetRandom(2);
+		if (quad.GetSizeX() > 4.f) basements = 1;
+	} else {
+		preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 4.f) basements = 1;
+	}
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.6f, 0.6f };
+
+	constexpr const char* kComponent = "component_factory";
+	constexpr int kComponentId = 0;
+	FloorAssetSpec assets;
+	assets.wallMaterial = "/Game/Asset/Materials/White.White";
+
+	// 地上固定1层，显式赋值不依赖BuildingMod基类默认值。
+	layers = 1;
+	floorHeights.assign(basements + layers, 0.6f);
+
+	if (basements > 0) {
+		AssignFloor(-1, "preset_single_room_pg+", direction, assets);
+		AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
+		AssignFloor(0, "preset_single_room_fg-", direction, assets);
+	} else {
+		AssignFloor(0, "preset_single_room_fg", direction, assets);
+	}
+	// 三种工坊房间等概率随机选一种：小麦/牛肉/汉堡工厂。
+	static const char* const kFactoryRooms[] = { "room_farm", "room_ranch", "room_food_factory" };
+	AssignRoom(0, 0, kFactoryRooms[GetRandom(3)], kComponent, kComponentId);
+}
+
+void FactoryMiddleBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+// 公式基数2000和GetAcreageMin的4000不一致(RandomAcreage可能小于Min)，是既有数值。
+float FactoryMiddleBuilding::RandomAcreage() {
+	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 1.f, 2);
+}
+
+float FactoryMiddleBuilding::GetAcreageMin() {
+	return 4000.f;
+}
+
+float FactoryMiddleBuilding::GetAcreageMax() {
+	return 16000.f;
+}
+
+float FactoryMiddleBuilding::GetPower(AREA_TYPE area) {
+	// 只在工厂中密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_INDUSTRIAL_MIDDLE) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int FactoryLowBuilding::count = 0;
+
+FactoryLowBuilding::FactoryLowBuilding() : id(count++) {
+}
+
+const char* FactoryLowBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void FactoryLowBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	// 同ResidenceBuilding：偏好方向在boundaryRoads里有路才采用。
+	int preferredDirection;
+	if (quad.GetSizeX() > quad.GetSizeY()) {
+		preferredDirection = FACE_NORTH + GetRandom(2);
+		if (quad.GetSizeX() > 4.f) basements = 1;
+	} else {
+		preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 4.f) basements = 1;
+	}
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.6f, 0.6f };
+
+	constexpr const char* kComponent = "component_factory";
+	constexpr int kComponentId = 0;
+	FloorAssetSpec assets;
+	assets.wallMaterial = "/Game/Asset/Materials/White.White";
+
+	// 地上固定1层，显式赋值不依赖BuildingMod基类默认值。
+	layers = 1;
+	floorHeights.assign(basements + layers, 0.6f);
+
+	if (basements > 0) {
+		AssignFloor(-1, "preset_single_room_pg+", direction, assets);
+		AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
+		AssignFloor(0, "preset_single_room_fg-", direction, assets);
+	} else {
+		AssignFloor(0, "preset_single_room_fg", direction, assets);
+	}
+	// 三种工坊房间等概率随机选一种：小麦/牛肉/汉堡工厂。
+	static const char* const kFactoryRooms[] = { "room_farm", "room_ranch", "room_food_factory" };
+	AssignRoom(0, 0, kFactoryRooms[GetRandom(3)], kComponent, kComponentId);
+}
+
+void FactoryLowBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+// 公式基数2000和GetAcreageMin的4000不一致(RandomAcreage可能小于Min)，是既有数值。
+float FactoryLowBuilding::RandomAcreage() {
+	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 1.f, 2);
+}
+
+float FactoryLowBuilding::GetAcreageMin() {
+	return 4000.f;
+}
+
+float FactoryLowBuilding::GetAcreageMax() {
+	return 16000.f;
+}
+
+float FactoryLowBuilding::GetPower(AREA_TYPE area) {
+	// 只在工厂低密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_INDUSTRIAL_LOW) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int OfficeHighBuilding::count = 0;
+
+OfficeHighBuilding::OfficeHighBuilding() : id(count++) {
+}
+
+const char* OfficeHighBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void OfficeHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+float OfficeHighBuilding::RandomAcreage() {
+	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 2.f, 2);
+}
+
+float OfficeHighBuilding::GetAcreageMin() {
+	return 2000.f;
+}
+
+float OfficeHighBuilding::GetAcreageMax() {
+	return 18000.f;
+}
+
+void OfficeHighBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// layout照抄住宅(模板/电梯/楼层数分档都一样)，房间换成办公室；不挂住宅的entity_event示例脚本。
+	// direction对显式占位是真实方向，权重CDF/FillRemainder落地时是-1：-1时从boundaryRoads随机
+	// 挑一个有真实边界路的方向回写，行人/车辆导航的"outside"端点要靠它找到该连的路，见
+	// building_mod.h的Layout()注释。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f }; // 楼体占地块80%，居中
+	basements = 1;
+	// 楼层数按地块面积分档。
+	if (quad.GetAcreage() < 5000.f) {
+		layers = 3 + GetRandom(3);
+	} else if (quad.GetAcreage() < 10000.f) {
+		layers = 6 + GetRandom(4);
+	} else {
+		layers = 10 + GetRandom(5);
+	}
+	floorHeights.clear();
+	floorHeights.push_back(0.35f); // 地下室
+	// 地上每层高度统一0.4，不循环取不同值。
+	for (int i = 0; i < layers; i++) {
+		floorHeights.push_back(0.4f);
+	}
+	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
+
+	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
+	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// spec，见Core/map/door.h的ResolveDoorSpec。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
+
+	constexpr const char* kComponent = "component_office";
+	constexpr int kComponentId = 0;
+
+	// 按quad尺寸分档随机选一套模板组合(layout 0-3)+房间槽位密度(size)。只有layout==1/3的模板
+	// (preset_lobby_wing_*/preset_nshape_double_*)带电梯井道，AssignElevatorCabin靠它们产出Elevator几何。
+	// 偏好方向只有在boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction
+	// (否则outside端点会查不到路)。
+	int layout = 0;
+	float size = 120.f;
+	int preferredDirection = direction;
+	if (quad.GetSizeX() <= 3.f || quad.GetSizeY() <= 3.f) {
+		layout = 0;
+		size = 40.f;
+		if (quad.GetSizeX() > 3.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 3.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else if (quad.GetSizeX() <= 6.f || quad.GetSizeY() <= 6.f) {
+		layout = GetRandom(2);
+		size = 160.f;
+		if (quad.GetSizeX() > 6.f) preferredDirection = layout * 2 + GetRandom(2);
+		if (quad.GetSizeY() > 6.f) preferredDirection = 2 - layout * 2 + GetRandom(2);
+	} else if (quad.GetSizeX() <= 9.f || quad.GetSizeY() <= 9.f) {
+		layout = 2;
+		size = 120.f;
+		if (quad.GetSizeX() > 9.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 9.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else {
+		layout = 3;
+		size = 120.f;
+		if (quad.GetSizeX() > quad.GetSizeY()) preferredDirection = FACE_WEST + GetRandom(2);
+		else preferredDirection = FACE_NORTH + GetRandom(2);
+	}
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	if (layout == 0) {
+		AssignFloor(-1, "preset_straight_linear_bg+", direction);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_straight_linear_fg+-", direction);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_straight_linear_fu+-", direction);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+		}
+	} else if (layout == 1) {
+		AssignFloor(-1, "preset_lobby_wing_bg+", direction);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lobby_wing_fg+-", direction);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lobby_wing_fu+-", direction);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	} else if (layout == 2) {
+		AssignFloor(-1, "preset_lshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_office", kComponent, kComponentId);
+		AssignRoom(-1, 1, "room_office", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_office", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_office", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_office", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_office", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_office", size, kComponent, kComponentId);
+		}
+	} else { // layout == 3
+		AssignFloor(-1, "preset_nshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_empty", kComponent, kComponentId); // 占位槽位，不铺真实房间
+		AssignRoom(-1, 1, "room_office", kComponent, kComponentId);
+		AssignRoom(-1, 2, "room_office", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 5, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 6, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 7, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_nshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_empty", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_office", kComponent, kComponentId);
+		AssignRoom(0, 2, "room_office", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 5, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 6, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 7, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_nshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_empty", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_office", kComponent, kComponentId);
+			AssignRoom(i, 2, "room_office", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 5, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 6, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 7, "room_office", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	}
+}
+
+float OfficeHighBuilding::GetPower(AREA_TYPE area) {
+	// 只在办公楼高密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_OFFICIAL_HIGH) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int OfficeMiddleBuilding::count = 0;
+
+OfficeMiddleBuilding::OfficeMiddleBuilding() : id(count++) {
+}
+
+const char* OfficeMiddleBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void OfficeMiddleBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+float OfficeMiddleBuilding::RandomAcreage() {
+	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 2.f, 2);
+}
+
+float OfficeMiddleBuilding::GetAcreageMin() {
+	return 2000.f;
+}
+
+float OfficeMiddleBuilding::GetAcreageMax() {
+	return 18000.f;
+}
+
+void OfficeMiddleBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// layout照抄住宅(模板/电梯/楼层数分档都一样)，房间换成办公室；不挂住宅的entity_event示例脚本。
+	// direction对显式占位是真实方向，权重CDF/FillRemainder落地时是-1：-1时从boundaryRoads随机
+	// 挑一个有真实边界路的方向回写，行人/车辆导航的"outside"端点要靠它找到该连的路，见
+	// building_mod.h的Layout()注释。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f }; // 楼体占地块80%，居中
+	basements = 1;
+	// 楼层数按地块面积分档。
+	if (quad.GetAcreage() < 5000.f) {
+		layers = 3 + GetRandom(3);
+	} else if (quad.GetAcreage() < 10000.f) {
+		layers = 6 + GetRandom(4);
+	} else {
+		layers = 10 + GetRandom(5);
+	}
+	floorHeights.clear();
+	floorHeights.push_back(0.35f); // 地下室
+	// 地上每层高度统一0.4，不循环取不同值。
+	for (int i = 0; i < layers; i++) {
+		floorHeights.push_back(0.4f);
+	}
+	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
+
+	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
+	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// spec，见Core/map/door.h的ResolveDoorSpec。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
+
+	constexpr const char* kComponent = "component_office";
+	constexpr int kComponentId = 0;
+
+	// 按quad尺寸分档随机选一套模板组合(layout 0-3)+房间槽位密度(size)。只有layout==1/3的模板
+	// (preset_lobby_wing_*/preset_nshape_double_*)带电梯井道，AssignElevatorCabin靠它们产出Elevator几何。
+	// 偏好方向只有在boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction
+	// (否则outside端点会查不到路)。
+	int layout = 0;
+	float size = 120.f;
+	int preferredDirection = direction;
+	if (quad.GetSizeX() <= 3.f || quad.GetSizeY() <= 3.f) {
+		layout = 0;
+		size = 40.f;
+		if (quad.GetSizeX() > 3.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 3.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else if (quad.GetSizeX() <= 6.f || quad.GetSizeY() <= 6.f) {
+		layout = GetRandom(2);
+		size = 160.f;
+		if (quad.GetSizeX() > 6.f) preferredDirection = layout * 2 + GetRandom(2);
+		if (quad.GetSizeY() > 6.f) preferredDirection = 2 - layout * 2 + GetRandom(2);
+	} else if (quad.GetSizeX() <= 9.f || quad.GetSizeY() <= 9.f) {
+		layout = 2;
+		size = 120.f;
+		if (quad.GetSizeX() > 9.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 9.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else {
+		layout = 3;
+		size = 120.f;
+		if (quad.GetSizeX() > quad.GetSizeY()) preferredDirection = FACE_WEST + GetRandom(2);
+		else preferredDirection = FACE_NORTH + GetRandom(2);
+	}
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	if (layout == 0) {
+		AssignFloor(-1, "preset_straight_linear_bg+", direction);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_straight_linear_fg+-", direction);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_straight_linear_fu+-", direction);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+		}
+	} else if (layout == 1) {
+		AssignFloor(-1, "preset_lobby_wing_bg+", direction);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lobby_wing_fg+-", direction);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lobby_wing_fu+-", direction);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	} else if (layout == 2) {
+		AssignFloor(-1, "preset_lshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_office", kComponent, kComponentId);
+		AssignRoom(-1, 1, "room_office", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_office", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_office", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_office", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_office", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_office", size, kComponent, kComponentId);
+		}
+	} else { // layout == 3
+		AssignFloor(-1, "preset_nshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_empty", kComponent, kComponentId); // 占位槽位，不铺真实房间
+		AssignRoom(-1, 1, "room_office", kComponent, kComponentId);
+		AssignRoom(-1, 2, "room_office", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 5, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 6, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 7, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_nshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_empty", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_office", kComponent, kComponentId);
+		AssignRoom(0, 2, "room_office", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 5, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 6, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 7, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_nshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_empty", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_office", kComponent, kComponentId);
+			AssignRoom(i, 2, "room_office", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 5, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 6, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 7, "room_office", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	}
+}
+
+float OfficeMiddleBuilding::GetPower(AREA_TYPE area) {
+	// 只在办公楼中密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_OFFICIAL_MIDDLE) {
+		return 1.f;
+	}
+	return 0.f;
+}
+
+int OfficeLowBuilding::count = 0;
+
+OfficeLowBuilding::OfficeLowBuilding() : id(count++) {
+}
+
+const char* OfficeLowBuilding::GetName() {
+	name = string(GetType()) + std::to_string(id);
+	return name.data();
+}
+
+void OfficeLowBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
+	// 不用显式占位。
+}
+
+float OfficeLowBuilding::RandomAcreage() {
+	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 2.f, 2);
+}
+
+float OfficeLowBuilding::GetAcreageMin() {
+	return 2000.f;
+}
+
+float OfficeLowBuilding::GetAcreageMax() {
+	return 18000.f;
+}
+
+void OfficeLowBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// layout照抄住宅(模板/电梯/楼层数分档都一样)，房间换成办公室；不挂住宅的entity_event示例脚本。
+	// direction对显式占位是真实方向，权重CDF/FillRemainder落地时是-1：-1时从boundaryRoads随机
+	// 挑一个有真实边界路的方向回写，行人/车辆导航的"outside"端点要靠它找到该连的路，见
+	// building_mod.h的Layout()注释。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f }; // 楼体占地块80%，居中
+	basements = 1;
+	// 楼层数按地块面积分档。
+	if (quad.GetAcreage() < 5000.f) {
+		layers = 3 + GetRandom(3);
+	} else if (quad.GetAcreage() < 10000.f) {
+		layers = 6 + GetRandom(4);
+	} else {
+		layers = 10 + GetRandom(5);
+	}
+	floorHeights.clear();
+	floorHeights.push_back(0.35f); // 地下室
+	// 地上每层高度统一0.4，不循环取不同值。
+	for (int i = 0; i < layers; i++) {
+		floorHeights.push_back(0.4f);
+	}
+	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
+
+	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
+	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// spec，见Core/map/door.h的ResolveDoorSpec。
+	doorSpecs["entrance"].mesh = "/Game/Asset/Meshes/Cube.Cube";
+	doorSpecs["entrance"].style = 0; // Slide
+	doorSpecs["entrance"].leaves = 1;
+	doorSpecs["entrance"].randomSide = true;
+
+	constexpr const char* kComponent = "component_office";
+	constexpr int kComponentId = 0;
+
+	// 按quad尺寸分档随机选一套模板组合(layout 0-3)+房间槽位密度(size)。只有layout==1/3的模板
+	// (preset_lobby_wing_*/preset_nshape_double_*)带电梯井道，AssignElevatorCabin靠它们产出Elevator几何。
+	// 偏好方向只有在boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction
+	// (否则outside端点会查不到路)。
+	int layout = 0;
+	float size = 120.f;
+	int preferredDirection = direction;
+	if (quad.GetSizeX() <= 3.f || quad.GetSizeY() <= 3.f) {
+		layout = 0;
+		size = 40.f;
+		if (quad.GetSizeX() > 3.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 3.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else if (quad.GetSizeX() <= 6.f || quad.GetSizeY() <= 6.f) {
+		layout = GetRandom(2);
+		size = 160.f;
+		if (quad.GetSizeX() > 6.f) preferredDirection = layout * 2 + GetRandom(2);
+		if (quad.GetSizeY() > 6.f) preferredDirection = 2 - layout * 2 + GetRandom(2);
+	} else if (quad.GetSizeX() <= 9.f || quad.GetSizeY() <= 9.f) {
+		layout = 2;
+		size = 120.f;
+		if (quad.GetSizeX() > 9.f) preferredDirection = FACE_WEST + GetRandom(2);
+		if (quad.GetSizeY() > 9.f) preferredDirection = FACE_NORTH + GetRandom(2);
+	} else {
+		layout = 3;
+		size = 120.f;
+		if (quad.GetSizeX() > quad.GetSizeY()) preferredDirection = FACE_WEST + GetRandom(2);
+		else preferredDirection = FACE_NORTH + GetRandom(2);
+	}
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	if (layout == 0) {
+		AssignFloor(-1, "preset_straight_linear_bg+", direction);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_straight_linear_fg+-", direction);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_straight_linear_fu+-", direction);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+		}
+	} else if (layout == 1) {
+		AssignFloor(-1, "preset_lobby_wing_bg+", direction);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lobby_wing_fg+-", direction);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lobby_wing_fu+-", direction);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	} else if (layout == 2) {
+		AssignFloor(-1, "preset_lshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_office", kComponent, kComponentId);
+		AssignRoom(-1, 1, "room_office", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_lshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_office", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_office", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_lshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_office", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_office", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_office", size, kComponent, kComponentId);
+		}
+	} else { // layout == 3
+		AssignFloor(-1, "preset_nshape_double_bg+", direction);
+		AssignRoom(-1, 0, "room_empty", kComponent, kComponentId); // 占位槽位，不铺真实房间
+		AssignRoom(-1, 1, "room_office", kComponent, kComponentId);
+		AssignRoom(-1, 2, "room_office", kComponent, kComponentId);
+		ArrangeRow(-1, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 4, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 5, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 6, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(-1, 7, "room_office", size, kComponent, kComponentId);
+		AssignFloor(0, "preset_nshape_double_fg+-", direction);
+		AssignRoom(0, 0, "room_empty", kComponent, kComponentId);
+		AssignRoom(0, 1, "room_office", kComponent, kComponentId);
+		AssignRoom(0, 2, "room_office", kComponent, kComponentId);
+		ArrangeRow(0, 0, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 1, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 2, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 3, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 4, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 5, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 6, "room_office", size, kComponent, kComponentId);
+		ArrangeRow(0, 7, "room_office", size, kComponent, kComponentId);
+		for (int i = 1; i < layers; i++) {
+			AssignFloor(i, "preset_nshape_double_fu+-", direction);
+			AssignRoom(i, 0, "room_empty", kComponent, kComponentId);
+			AssignRoom(i, 1, "room_office", kComponent, kComponentId);
+			AssignRoom(i, 2, "room_office", kComponent, kComponentId);
+			ArrangeRow(i, 0, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 1, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 2, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 3, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 4, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 5, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 6, "room_office", size, kComponent, kComponentId);
+			ArrangeRow(i, 7, "room_office", size, kComponent, kComponentId);
+		}
+		AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+		AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	}
+}
+
+float OfficeLowBuilding::GetPower(AREA_TYPE area) {
+	// 只在办公楼低密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
+	if (area == AREA_OFFICIAL_LOW) {
 		return 1.f;
 	}
 	return 0.f;
@@ -676,9 +2227,6 @@ float ParkBuilding::GetPower(AREA_TYPE area) {
 	// 绿地分区本来就该是公园；住宅分区给一个较小的权重，让测试时住宅区里也能刷出几块公园
 	// (现在的井字路网不产出AREA_GREEN的lot)。
 	if (area == AREA_GREEN) return 1.f;
-	if (area == AREA_RESIDENTIAL_HIGH || area == AREA_RESIDENTIAL_MIDDLE || area == AREA_RESIDENTIAL_LOW) {
-		return 0.25f;
-	}
 	return 0.f;
 }
 
@@ -808,8 +2356,8 @@ float MoharBuilding::GetAcreageMax() {
 }
 
 float MoharBuilding::GetPower(AREA_TYPE area) {
-	if (area == AREA_RESIDENTIAL_HIGH || area == AREA_RESIDENTIAL_MIDDLE || area == AREA_RESIDENTIAL_LOW) {
-		return 1.f;
+	if (area == AREA_RESIDENTIAL_HIGH) {
+		return 0.5f;
 	}
 	return 0.f;
 }

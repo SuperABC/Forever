@@ -8,9 +8,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "debug_print", "message": "\"test before set value: \" + $$test" },
-				{ "type": "set_value", "variable": "test", "value": "1" },
-				{ "type": "debug_print", "message": "\"test after set value: \" + $$test" },
+				{"type": "global_setting", "setting": "time_flow_ratio", "value": "1"},
 				{ "type": "place_holder", "label": "control" }
 			],
 			"dialogs": [],

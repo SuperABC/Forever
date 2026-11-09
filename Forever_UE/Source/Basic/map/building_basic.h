@@ -5,21 +5,21 @@
 
 // Building域默认内容，各类型的设计见building_basic.md。RandomAcreage/GetAcreageMin/
 // GetAcreageMax/GetPower/Assign都是不需要实例的static方法(通过BuildingFactory::RegisterBuilding
-// 注册)。
-class ResidenceBuilding : public BuildingMod {
-public:
-	// 构造函数不设footprint/楼层等，这些要等Layout()拿到落地上下文才能定。
-	ResidenceBuilding();
+// 注册)。住宅/商店/工厂/办公楼各分高/中/低三档，12个类各自独立实现、没有共用基类，三档的
+// 逻辑目前是同一份的拷贝，以后各自改。
 
-	static const char* GetId() { return "building_residence"; }
-	virtual const char* GetType() const override { return "building_residence"; }
+// 住宅(高密度)：只在住宅高密度分区(AREA_RESIDENTIAL_HIGH)上有权重。
+class ResidenceHighBuilding : public BuildingMod {
+public:
+	ResidenceHighBuilding();
+
+	static const char* GetId() { return "building_residence_high"; }
+	virtual const char* GetType() const override { return "building_residence_high"; }
 	virtual const char* GetName() override;
 
-	// direction==-1(FillRemainder落地)时从boundaryRoads随机挑一个有边界路的方向回写，见building_basic.md。
 	virtual void Layout(int& direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) override;
 
-	// 不用显式占位，空实现。
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
 	static float RandomAcreage();
 	static float GetAcreageMin();
@@ -36,19 +36,18 @@ private:
 	std::string name;
 };
 
-// 商店建筑。
-class ShopBuilding : public BuildingMod {
+// 住宅(中密度)：只在住宅中密度分区(AREA_RESIDENTIAL_MIDDLE)上有权重。
+class ResidenceMiddleBuilding : public BuildingMod {
 public:
-	ShopBuilding();
+	ResidenceMiddleBuilding();
 
-	static const char* GetId() { return "building_shop"; }
-	virtual const char* GetType() const override { return "building_shop"; }
+	static const char* GetId() { return "building_residence_middle"; }
+	virtual const char* GetType() const override { return "building_residence_middle"; }
 	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) override;
 
-	// 不用显式占位，走权重CDF随机填充路径(空实现)。
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
 	static float RandomAcreage();
 	static float GetAcreageMin();
@@ -65,13 +64,265 @@ private:
 	std::string name;
 };
 
-// 工厂建筑。
-class FactoryBuilding : public BuildingMod {
+// 住宅(低密度)：只在住宅低密度分区(AREA_RESIDENTIAL_LOW)上有权重。
+class ResidenceLowBuilding : public BuildingMod {
 public:
-	FactoryBuilding();
+	ResidenceLowBuilding();
 
-	static const char* GetId() { return "building_factory"; }
-	virtual const char* GetType() const override { return "building_factory"; }
+	static const char* GetId() { return "building_residence_low"; }
+	virtual const char* GetType() const override { return "building_residence_low"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 商店(高密度)：只在商店高密度分区(AREA_COMMERCIAL_HIGH)上有权重。
+class ShopHighBuilding : public BuildingMod {
+public:
+	ShopHighBuilding();
+
+	static const char* GetId() { return "building_shop_high"; }
+	virtual const char* GetType() const override { return "building_shop_high"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 商店(中密度)：只在商店中密度分区(AREA_COMMERCIAL_MIDDLE)上有权重。
+class ShopMiddleBuilding : public BuildingMod {
+public:
+	ShopMiddleBuilding();
+
+	static const char* GetId() { return "building_shop_middle"; }
+	virtual const char* GetType() const override { return "building_shop_middle"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 商店(低密度)：只在商店低密度分区(AREA_COMMERCIAL_LOW)上有权重。
+class ShopLowBuilding : public BuildingMod {
+public:
+	ShopLowBuilding();
+
+	static const char* GetId() { return "building_shop_low"; }
+	virtual const char* GetType() const override { return "building_shop_low"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 工厂(高密度)：只在工厂高密度分区(AREA_INDUSTRIAL_HIGH)上有权重。
+class FactoryHighBuilding : public BuildingMod {
+public:
+	FactoryHighBuilding();
+
+	static const char* GetId() { return "building_factory_high"; }
+	virtual const char* GetType() const override { return "building_factory_high"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 工厂(中密度)：只在工厂中密度分区(AREA_INDUSTRIAL_MIDDLE)上有权重。
+class FactoryMiddleBuilding : public BuildingMod {
+public:
+	FactoryMiddleBuilding();
+
+	static const char* GetId() { return "building_factory_middle"; }
+	virtual const char* GetType() const override { return "building_factory_middle"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 工厂(低密度)：只在工厂低密度分区(AREA_INDUSTRIAL_LOW)上有权重。
+class FactoryLowBuilding : public BuildingMod {
+public:
+	FactoryLowBuilding();
+
+	static const char* GetId() { return "building_factory_low"; }
+	virtual const char* GetType() const override { return "building_factory_low"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 办公楼(高密度)：只在办公楼高密度分区(AREA_OFFICIAL_HIGH)上有权重。
+class OfficeHighBuilding : public BuildingMod {
+public:
+	OfficeHighBuilding();
+
+	static const char* GetId() { return "building_office_high"; }
+	virtual const char* GetType() const override { return "building_office_high"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 办公楼(中密度)：只在办公楼中密度分区(AREA_OFFICIAL_MIDDLE)上有权重。
+class OfficeMiddleBuilding : public BuildingMod {
+public:
+	OfficeMiddleBuilding();
+
+	static const char* GetId() { return "building_office_middle"; }
+	virtual const char* GetType() const override { return "building_office_middle"; }
+	virtual const char* GetName() override;
+
+	virtual void Layout(int& direction, const Quad& quad,
+		const std::unordered_map<int, Road*>& boundaryRoads) override;
+
+	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context);
+	static float RandomAcreage();
+	static float GetAcreageMin();
+	static float GetAcreageMax();
+	static float GetPower(AREA_TYPE area);
+
+public:
+	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+	int id;
+	std::string name;
+};
+
+// 办公楼(低密度)：只在办公楼低密度分区(AREA_OFFICIAL_LOW)上有权重。
+class OfficeLowBuilding : public BuildingMod {
+public:
+	OfficeLowBuilding();
+
+	static const char* GetId() { return "building_office_low"; }
+	virtual const char* GetType() const override { return "building_office_low"; }
 	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
