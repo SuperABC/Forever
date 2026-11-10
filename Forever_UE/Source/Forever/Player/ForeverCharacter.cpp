@@ -115,11 +115,11 @@ AForeverCharacter::AForeverCharacter()
 	avatarMesh->SetGenerateOverlapEvents(false);
 	avatarMesh->SetCanEverAffectNavigation(false);
 
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> avatarCubeFinder(TEXT("/Game/Asset/Building/Elements/Cube.Cube"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> avatarCubeFinder(TEXT("/Game/Asset/Common/Mesh/Cube.Cube"));
 	if (avatarCubeFinder.Succeeded()) {
 		avatarMesh->SetStaticMesh(avatarCubeFinder.Object);
 	}
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> avatarMaterialFinder(TEXT("/Game/Asset/Characters/Avatar/Avatar.Avatar"));
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> avatarMaterialFinder(TEXT("/Game/Asset/Common/Material/TextureStatic.TextureStatic"));
 	if (avatarMaterialFinder.Succeeded()) {
 		avatarBaseMaterial = avatarMaterialFinder.Object;
 	}
@@ -325,7 +325,7 @@ void AForeverCharacter::PlaceAvatar()
 			if (!avatarMaterial || avatarMaterial->Parent != avatarBaseMaterial) {
 				avatarMaterial = UMaterialInstanceDynamic::Create(avatarBaseMaterial, this);
 			}
-			if (avatarTexture) avatarMaterial->SetTextureParameterValue(TEXT("AvatarTexture"), avatarTexture);
+			if (avatarTexture) avatarMaterial->SetTextureParameterValue(TEXT("Texture"), avatarTexture);
 			avatarMesh->SetMaterial(0, avatarMaterial);
 		}
 	}
@@ -336,7 +336,7 @@ void AForeverCharacter::SetAvatarTexture(UTexture2D* texture)
 	if (!texture) return;
 	// avatarTexture是UPROPERTY，运行时建出来的贴图靠它保持存活。
 	avatarTexture = texture;
-	if (avatarMaterial) avatarMaterial->SetTextureParameterValue(TEXT("AvatarTexture"), texture);
+	if (avatarMaterial) avatarMaterial->SetTextureParameterValue(TEXT("Texture"), texture);
 }
 
 void AForeverCharacter::Tick(float DeltaTime)

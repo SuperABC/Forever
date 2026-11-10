@@ -4,7 +4,7 @@
 `AAssetElement`：物品/资产在世界里的可视化表示。由`UForeverAssetFrameworkComponent::SpawnWorldAsset()`在Drop时`SpawnActor(Deferred)`+`Init(asset)`，`DestroyWorldAsset()`(Pick时)销毁；**不持有`Asset`所有权**(`asset`是非owning裸指针，真正所有权在`Room::assets`或某个容器的`contents`里，`EndPlay`置空)。
 
 ## 关键设计
-- 网格：默认`/Game/Asset/Building/Elements/Cube.Cube`占位(与`ABuildingElement`同一份)；`AssetMod::meshPath`非空时用`LoadAssetMesh`加载(加载失败回退引擎球体并打Warning)，投掷预览模型也用这个函数以保证和掉落物同一份网格。缩放不在`Init`里设，由生成方经`SpawnActorDeferred`的Transform传入(物理体在BeginPlay时就按这个缩放创建)。
+- 网格：默认`/Game/Asset/Common/Mesh/Cube.Cube`占位(与`ABuildingElement`同一份)；`AssetMod::meshPath`非空时用`LoadAssetMesh`加载(加载失败回退引擎球体并打Warning)，投掷预览模型也用这个函数以保证和掉落物同一份网格。缩放不在`Init`里设，由生成方经`SpawnActorDeferred`的Transform传入(物理体在BeginPlay时就按这个缩放创建)。
 - 物理：Movable + `PhysicsActor`碰撞预设 + 模拟物理 + 重力，玩家角色可以直接推动；`SetAngularDamping(3)`防止球体(投掷物)落地后无限滚动，不加线性阻尼以免飞行弧线偏离预览曲线。
 - `Launch(velocity, thrower)`：投掷初速度；`thrower`的碰撞被忽略(起点在投掷者胶囊体附近，否则会被顶开)；开CCD防止小而快的球体穿过薄墙/地面。
 

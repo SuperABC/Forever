@@ -16,7 +16,7 @@
 - `SpawnWorldAsset`只负责`SpawnActor`+`Init`+登记进表；`DestroyWorldAsset`只负责查表
   `Destroy()`+从表里移除，都不管`Asset`本身的生命周期——调用方/`Room`负责`Asset`的创建
   和释放。
-- `AAssetElement`默认用项目通用的Cube占位网格(`/Game/Asset/Building/Elements/Cube.Cube`，和
+- `AAssetElement`默认用项目通用的Cube占位网格(`/Game/Asset/Common/Mesh/Cube.Cube`，和
   `ABuildingElement`同一份资产)；资产的`AssetMod::meshPath`非空时改用它指定的网格和`meshScale`缩放
   (比如投掷物的球体)。带物理模拟+重力(Movable + 碰撞预设能被玩家推动)，不是纯摆设的Static网格。
 - `SpawnWorldAsset`用`SpawnActorDeferred`：先`Init`换好网格、把`meshScale`写进Transform再

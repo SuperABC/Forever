@@ -39,7 +39,7 @@
 #define BUILDING_HEIGHT_EPSILON 1.f
 // 墙体厚度(地图单位)，照抄老工程BuildingBase.cpp::ConstructQuad里写死的0.01f。
 #define BUILDING_WALL_THICKNESS 0.01f
-// UE标准立方体静态网格(/Game/Asset/Building/Elements/Cube.Cube)的原生边长(cm)——AddCubeInstance/
+// UE标准立方体静态网格(/Game/Asset/Common/Mesh/Cube.Cube)的原生边长(cm)——AddCubeInstance/
 // SpawnMesh用这个值把它缩放到目标尺寸，缩放系数=目标尺寸/这个原生边长。
 #define BUILDING_CUBE_MESH_SIZE 100.f
 // building碰撞盒在X/Y/Z三个方向各放大的量(地图单位)，和Room碰撞盒的-0.01配对，保证两者

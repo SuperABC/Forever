@@ -41,7 +41,7 @@ UForeverTerrainFrameworkComponent::UForeverTerrainFrameworkComponent() {
 	}
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> tunnelWallMatFinder(
-		TEXT("/Game/Asset/Building/Materials/Pure.Pure"));
+		TEXT("/Game/Asset/Common/Material/PureColor.PureColor"));
 	if (tunnelWallMatFinder.Succeeded()) {
 		tunnelWallBaseMaterial = tunnelWallMatFinder.Object;
 	}

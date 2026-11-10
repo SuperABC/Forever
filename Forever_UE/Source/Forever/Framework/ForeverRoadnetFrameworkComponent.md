@@ -20,7 +20,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **每条唯一的mesh资产路径对应一个共享的`UInstancedStaticMeshComponent`**（`GetOrCreateRoadISM`
   按路径查/建），不是每条Road各自一个ISM——目前所有Road都用同一个`default_1_1`，只会建
   一个ISM，但接口上支持未来mod给不同Road配不同mesh资产。
-- **开口：整条路横断面宽度都被替换成一块贴`DefaultRoad`材质的扁平cube**（同一物理位置的车行/行人两条`RoadOpening`按`t`去重只画一次），不精细地只挖开
+- **开口：整条路横断面宽度都被替换成一块贴`Road`材质的扁平cube**（同一物理位置的车行/行人两条`RoadOpening`按`t`去重只画一次），不精细地只挖开
   人行道/停车道那一部分——`BuildRoadInstances`在命中`Road::GetOpenings()`对应弧长区间时
   跳过该分段mesh实例的摆放，`BuildOpeningMeshes`在同一段范围画一块覆盖整条路总宽度（车行
   +停车+人行道两侧加总）的cube。两处cube生成共用同一份几何逻辑（`AppendFlatRoadCube`：给定
@@ -30,7 +30,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **路口mesh是直线简化版**（`BuildJunctionMeshes`）：每个`RoadJunction`的`approaches`已经按
   夹角排好序，把`curbRight[i]`/`curbLeft[i]`两两相邻连成边界点序列（`(right_i,left_i)`是
   road i自己的"开口宽度"边，`(left_i,right_{i+1})`是road i与road i+1之间的桥接边），从路口
-  中心（`Intersection`自身坐标）扇形三角剖分，贴`DefaultRoad`材质。不做圆角/斜切。
+  中心（`Intersection`自身坐标）扇形三角剖分，贴`Road`材质。不做圆角/斜切。
 - **开口cube和路口mesh都带碰撞**——`CreateMeshSection`的`bCreateCollision`传`true`。道路
   本身的ISM实例走`UInstancedStaticMeshComponent`默认碰撞（跟着`default_1_1`资产自带的
   collision setup走）。

@@ -176,7 +176,7 @@ namespace {
 UForeverTrafficFrameworkComponent::UForeverTrafficFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> pureFinder(
-		TEXT("/Game/Asset/Building/Materials/Pure.Pure"));
+		TEXT("/Game/Asset/Common/Material/PureColor.PureColor"));
 	if (pureFinder.Succeeded()) {
 		pureBaseMaterial = pureFinder.Object;
 	}

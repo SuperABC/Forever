@@ -28,7 +28,7 @@ AAssetElement::AAssetElement() {
 	mesh->SetAngularDamping(3.f);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> cubeFinder(
-		TEXT("/Game/Asset/Building/Elements/Cube.Cube"));
+		TEXT("/Game/Asset/Common/Mesh/Cube.Cube"));
 	if (cubeFinder.Succeeded()) {
 		mesh->SetStaticMesh(cubeFinder.Object);
 	}

@@ -240,7 +240,7 @@ void UForeverThrowableComponent::UpdatePreview()
 	}
 	if (bNewMesh || previewMeshPath != meshPath) {
 		UStaticMesh* mesh = AAssetElement::LoadAssetMesh(meshPath);
-		if (!mesh) mesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Asset/Building/Elements/Cube.Cube"));
+		if (!mesh) mesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Asset/Common/Mesh/Cube.Cube"));
 		previewMesh->SetStaticMesh(mesh);
 		// 没指定meshPath时落地的是100cm的Cube，预览不跟着放那么大，缩到手雷大小。
 		previewMesh->SetWorldScale3D(FVector(meshPath.empty() ? 0.1f : meshScale));

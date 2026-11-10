@@ -9,7 +9,7 @@
 - **没有背包变化事件**，所以`Refresh()`在这些时机调用：每次按3、投掷前后、开始瞄准前、`UInventoryWidget::RefreshBody()`(背包界面所有放入/取出/使用/丢弃都会走到)。
 - **用完自动切换**：`Refresh()`发现激活的type没了，取旧下标处的下一个(原来排在它后面的会顶到同一个下标，末尾循环)并激活；一个都没有了才退出投掷状态、结束瞄准、显示"当前没有投掷物"。退出后手上是空的(不会自动切回武器)，按3可重新开始。
 - **手的规则**(`CanThrow()`)：激活的type直接拿在某只手里(拿着它的手就是投掷手)，或至少一只手是空的。投掷物在手持容器**里面**不算拿在手里。两只手都被别的东西占着时仍可激活，只是`AForeverCharacter::StartAim`拒绝瞄准。
-- **预览模型**：瞄准时在投掷起点显示一个`UStaticMeshComponent`，网格/缩放取自资产的`meshPath`/`meshScale`(和掉落物同一个`AAssetElement::LoadAssetMesh`)；`meshPath`空时用Cube缩到0.1。`LoadAssetMesh`返回空时回退`/Game/Asset/Building/Elements/Cube`。
+- **预览模型**：瞄准时在投掷起点显示一个`UStaticMeshComponent`，网格/缩放取自资产的`meshPath`/`meshScale`(和掉落物同一个`AAssetElement::LoadAssetMesh`)；`meshPath`空时用Cube缩到0.1。`LoadAssetMesh`返回空时回退`/Game/Asset/Common/Mesh/Cube`。
 - **HUD文字**复用武器名的`AddOnScreenDebugMessage` Key 201，切换武器/投掷物时同一行互相覆盖。
 - **预览曲线画成世界里的平面带网格**(`pathMesh`，`UProceduralMeshComponent`，每帧重建：顶点写世界坐标，朝向摄像机的平面带，宽度正比于到摄像机的距离，所以屏幕上粗细恒定，约1.5像素，效果等同DrawDebugLine；落点是正对镜头的小方块)：和场景一起深度测试，被墙/地形挡住的部分看不见。不用HUD的屏幕空间线条(没有遮挡关系)，也不用`DrawDebugLine`(Shipping/Test构建里被编译掉)。材质复用爆炸特效的`ExplosionFire`(白色)。瞄准投掷时`AForeverHUD`不画准星。
 - **什么都可以标记成可投掷**：只看`Asset::IsThrowable()`，和是不是武器无关，比如汉堡把`throwable`设为true就能被扔(Containee机动性的物品只能放容器里，不能拿在手上)。

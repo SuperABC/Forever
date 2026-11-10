@@ -85,7 +85,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
 	FRotator avatarRotation = FRotator(0.f, 90.f, 0.f);
 
-	// 头像材质(需要名为AvatarTexture的贴图参数)和默认头像贴图；市民的头像经SetAvatarTexture替换。
+	// 头像材质(需要名为Texture的贴图参数)和默认头像贴图；市民的头像经SetAvatarTexture替换。
 	UPROPERTY(EditDefaultsOnly, Category = "Avatar")
 	TObjectPtr<UMaterialInterface> avatarBaseMaterial;
 
