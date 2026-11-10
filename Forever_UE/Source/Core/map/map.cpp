@@ -180,6 +180,8 @@ void Map::InitRoadnet() {
 		debugf("Warning: roadnet already exists (generated or restored from save), skip InitRoadnet.\n");
 		return;
 	}
+	// 工厂是全局的，上一局留下的启用标记要先清掉，否则换了路网mod再开局还是按旧的生成。
+	for (const string& id : roadnetFactory.GetRegisteredIds()) roadnetFactory.SetConfig(id, false);
 	for (auto& [id, args] : Config::GetConceptMods("roadnet_mods")) {
 		roadnetFactory.SetConfig(id, true);
 	}

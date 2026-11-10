@@ -710,6 +710,7 @@ bool MapSaveCodec::ReadRoadnet(Map& map, LoadTables& t, ByteReader& r, string& e
 			error = "roadnet mod '" + id + "' is not available";
 			return false;
 		}
+		for (const string& other : map.roadnetFactory.GetRegisteredIds()) map.roadnetFactory.SetConfig(other, false);
 		map.roadnetFactory.SetConfig(id, true);
 		map.roadnet = new Roadnet(&map.roadnetFactory, id);
 		Roadnet* roadnet = map.roadnet;

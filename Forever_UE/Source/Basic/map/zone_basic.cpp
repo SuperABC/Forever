@@ -42,7 +42,7 @@ void ResidenceZone::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, voi
 	for (Lot* lot : lots) {
 		if (!lot) continue;
 
-		// 井字中心lot(AREA_OFFICIAL_HIGH)也允许摆园区：dir从WEST开始扫，中心lot的WEST边
+		// 井字中心lot(AREA_TEST)也允许摆园区：dir从WEST开始扫，中心lot的WEST边
 		// 必有边界路，会第一个命中，园区只占这条边起点角的一块，剩余空间留给火车站/机场。
 		for (int dir = 0; dir < 4; dir++) {
 			if (!lot->GetBoundaryRoad(dir)) continue;

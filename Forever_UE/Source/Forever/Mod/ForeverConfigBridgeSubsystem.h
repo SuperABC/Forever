@@ -88,6 +88,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Config")
 	void RemoveStoryScript(const FString& Path);
 
+	// 主线剧情mod(config.json的main_story)：只能从已启用的script mod里选一个。
+	// GetEnabledScriptMods返回script_mods里已启用的全部id；GetMainStory当前主线mod id(没设返回空串)；
+	// SetMainStory只接受已启用的script mod id，其它忽略。
+	UFUNCTION(BlueprintCallable, Category = "Config")
+	TArray<FString> GetEnabledScriptMods() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Config")
+	FString GetMainStory() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Config")
+	void SetMainStory(const FString& ModId);
+
 	// ---- 共用 ----
 
 	// 校验Story screen全部脚本的mod_dependences + 每个已启用的mod id自己声明的

@@ -71,10 +71,18 @@ public:
 	static std::vector<ModEntry> GetModEnables();
 
 	// 粒度到id，直接增删<concept>_mods数组项(该数组是启用状态的唯一真相)
+	// Roadnets/Names是"必须且只能启用一个"的单选concept：启用其一会取消同concept其它id，
+	// 且对已启用的那个传enabled=false无效(不允许取消到一个都没有)。
 	static void SetModEnabled(const std::string& conceptKey, const std::string& modId, bool enabled);
+
+	// 是否是单选concept(Roadnets/Names)
+	static bool IsUniqueConcept(const std::string& conceptKey);
 
 	// 没列出的id视为未启用，新发现的mod默认禁用
 	static bool IsModEnabled(const std::string& conceptKey, const std::string& modId);
+
+	// 当前dll_paths下是否有dll提供这个(concept,id)——没提供的id在UI里不显示。
+	static bool IsModDiscovered(const std::string& conceptKey, const std::string& modId);
 
 	// 只认id字符串、不看concept，给依赖校验用
 	static bool IsModIdEnabled(const std::string& id);
@@ -133,6 +141,8 @@ private:
 
 	// Roadnets/Names单选：数组里只保留最前面一个，见config.md
 	static void NormalizeUniqueConcepts();
+	// 丢掉未被发现的mod id和失效的main_story（WriteConfig保存前调用）。
+	static void PruneUndiscoveredMods();
 
 	static std::string configDir;
 

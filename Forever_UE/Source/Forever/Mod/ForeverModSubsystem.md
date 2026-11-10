@@ -1,7 +1,7 @@
 # ForeverModSubsystem
 
 ## 职责
-负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`缺失时回退扫描`../Forever_Mod`,`resource_paths`缺失时回退为`Resource/Story`+`Resource/Layouts`),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。`ReadConfig`对缺失/无效文件只留空状态不报错,所以回退按"结果为空"判定;`Config`内部的警告走`std::cerr`,不一定进`Forever.log`,这里另用`UE_LOG`打印诊断。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,可以重复调用（退出游戏回菜单后再开始游戏）：已挂载过的Plugin/Pak按挂载点（`mountedMountPoints`）跳过，校验每次用当前config重新跑；长期持有的mod dll由`Registry::RefreshMods()`增量加载。
+负责mod的发现、Plugin/Pak资产挂载、16个concept的`<Concept>Factory`注册与校验。`Initialize()`在GameInstance启动时只做纯发现(读取`Resource/Config/config.json`,`dll_paths`缺失时回退扫描`../Forever_Mod`,`resource_paths`不回退，没配置就是没有),把结果写进`Config`静态状态供配置界面UI展示,不做任何Plugin/Pak挂载或Factory注册。`ReadConfig`对缺失/无效文件只留空状态不报错,所以回退按"结果为空"判定;`Config`内部的警告走`std::cerr`,不一定进`Forever.log`,这里另用`UE_LOG`打印诊断。真正的挂载+注册+校验在`EnsureModsRegistered()`,由`UForeverConfigBridgeSubsystem::ValidateAndStartGame`校验通过、`OpenLevel`进入正式关卡之前显式调用,可以重复调用（退出游戏回菜单后再开始游戏）：已挂载过的Plugin/Pak按挂载点（`mountedMountPoints`）跳过，校验每次用当前config重新跑；长期持有的mod dll由`Registry::RefreshMods()`增量加载。
 
 ## 关键设计
 - **挂载mod自己的UE资产Plugin**(`EnsureModsRegistered()`开头):按`WITH_EDITOR`分两条路径:
@@ -25,4 +25,4 @@
 
 ## ReloadConfigFrom(path)
 
-菜单"读取配置"用：`Config::ReadConfig(path)` 后若 dll_paths、resource_paths、story_scripts 全空，视为文件无效(ReadConfig 对打不开/语法错误只留空状态不报错)，恢复读回 config.json 并返回 false；否则套用与 `Initialize()` 相同的缺省目录回退(`ReadConfigWithFallbacks`)。只更新内存发现状态，不挂载不注册。
+菜单"读取配置"用：`Config::ReadConfig(path)` 后若 dll_paths、resource_paths、story_scripts 全空，视为文件无效(ReadConfig 对打不开/语法错误只留空状态不报错)，恢复读回 config.json 并返回 false；否则套用与 `Initialize()` 相同的缺省目录回退(`ReadConfigWithFallbacks`，只对 dll_paths 回退，resource_paths 没配置就是没有)。只更新内存发现状态，不挂载不注册。

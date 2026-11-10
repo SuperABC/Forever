@@ -281,6 +281,7 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 				outPendingOrganizations.clear();
 				return nullptr;
 			}
+			for (const string& other : populace->nameFactory.GetRegisteredIds()) populace->nameFactory.SetConfig(other, false);
 			populace->nameFactory.SetConfig(nameId, true);
 			populace->name = new Name(&populace->nameFactory, nameId);
 			if (!SaveRefs::ReadModState(populace->name->mod, r)) debugf("Warning: failed to parse saved state of name mod %s.\n", nameId.c_str());

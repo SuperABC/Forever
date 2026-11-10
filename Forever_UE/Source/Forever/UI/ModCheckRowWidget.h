@@ -19,6 +19,10 @@ public:
 	void SetRowData(const FString& InDllPath, const FString& InConceptKey, const FString& InModId,
 		bool bEnabled, bool bLocked, const TArray<FString>& InDependents, TFunction<void()> InOnChanged);
 
+	// 单选行（主线剧情列表用）：勾选=被选中，选中的那行勾选框禁用（不能取消，只能选别的来切换）；
+	// 勾上未选中的行时调InOnSelect(modId)，由调用方改选并刷新整个列表。不经过Bridge::SetModEnabled。
+	void SetSelectRowData(const FString& InModId, bool bSelected, TFunction<void(const FString&)> InOnSelect);
+
 protected:
 	virtual void NativeConstruct() override;
 
@@ -39,6 +43,7 @@ private:
 	FString conceptKey;
 	FString modId;
 	TFunction<void()> onChanged;
+	TFunction<void(const FString&)> onSelect; // 非空=单选行模式
 
 	// 文字默认颜色，首次SetRowData时从控件上记下来，标红后能还原。
 	FSlateColor defaultLabelColor;

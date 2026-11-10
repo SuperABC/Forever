@@ -24,3 +24,11 @@
 ## 待办/后续阶段
 
 - `IsModLocked`是蓝图可调用接口，每次调用都重算整个依赖闭包(`ComputeRequiredModIds`)；若蓝图界面逐行调用，行数多时可把闭包缓存成员并在模组列表变化/刷新处失效(C++侧调用方只有`GetModRows`，已只算一次)。
+
+## 路网/取名必选校验
+`ValidateAndStartGame`在依赖校验之后检查`Roadnets`/`Names`各自启用数恰好为1（0个或多个都加进失败信息），menu输出框显示并拦截开局。Mod行UI里已选中的单选项勾选框禁用，只能选别的切换（`UModCheckRowWidget`）。
+
+## 主线剧情mod
+`GetEnabledScriptMods()`/`GetMainStory()`/`SetMainStory(id)`：main_story只能是已启用的script mod。`ValidateAndStartGame`校验main_story非空且在script_mods里，否则在menu输出框报错。
+
+`GetEnabledScriptMods`只返回当前dll提供的已启用script mod；`GetMainStory`在所选mod被取消启用或不在当前dll里时返回空，所以开局报错是“没有选择主线剧情mod”而不是“未启用”。

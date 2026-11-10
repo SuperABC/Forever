@@ -137,3 +137,13 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
   其中声明了同一个mod id，`ModLoader::RegisterConcept`会重复调用
   `RegisterMod<Concept>`，后一次覆盖前一次——目前未去重，开发时建议只保留一份构建产物在
   `Forever_Mod/`下。
+
+## 单选concept(Roadnets/Names)
+必须且只能启用一个：`SetModEnabled`启用其一会取消同concept其它id，对已启用的传`enabled=false`无效(`IsUniqueConcept`)。
+`ValidateAndStartGame`开局前校验这两个concept各恰好一个，否则在menu报错拦截。运行时`Map::InitRoadnet`/`Populace::InitNames`
+仍保留"没配置就选第一个已注册的"兜底(直接PIE不经过menu时用)。
+
+## 保存时丢弃看不见的mod
+加载的config里某些mod id当前dll_paths下没有dll提供，UI里不会显示。`WriteConfig`保存前调`PruneUndiscoveredMods`：把这些id从各`<concept>_mods`里删掉
+(`IsModDiscovered`判断)，并且main_story不是"已启用的script mod"时清空。`NormalizeUniqueConcepts`单选收口时优先留第一个已发现的，不会被前面藏起来的陈旧id挤掉。
+`SetModEnabled`取消启用的script mod正是main_story时同时清空main_story。

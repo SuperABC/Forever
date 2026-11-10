@@ -111,6 +111,25 @@ void UForeverConfigBridgeSubsystem::RemoveResourcePath(const FString& Path) {
 	Config::RemoveResourcePath(TCHAR_TO_UTF8(*Path));
 }
 
+TArray<FString> UForeverConfigBridgeSubsystem::GetEnabledScriptMods() const {
+	TArray<FString> result;
+	for (const auto& [id, args] : Config::GetConceptMods("script_mods")) {
+		if (Config::IsModDiscovered("Scripts", id)) result.Add(UTF8_TO_TCHAR(id.c_str())); // 藏起来的陈旧id不算
+	}
+	return result;
+}
+
+FString UForeverConfigBridgeSubsystem::GetMainStory() const {
+	// 主线mod被取消启用/不在当前加载的dll里就算没选。
+	const FString mainStory = UTF8_TO_TCHAR(Config::GetMainStoryScriptModName().c_str());
+	return GetEnabledScriptMods().Contains(mainStory) ? mainStory : FString();
+}
+
+void UForeverConfigBridgeSubsystem::SetMainStory(const FString& ModId) {
+	if (!GetEnabledScriptMods().Contains(ModId)) return;
+	Config::SetMainStoryScriptModName(TCHAR_TO_UTF8(*ModId));
+}
+
 TArray<FString> UForeverConfigBridgeSubsystem::GetStoryScripts() const {
 	TArray<FString> result;
 	for (const std::string& path : Config::GetStoryScripts()) {
@@ -149,6 +168,29 @@ bool UForeverConfigBridgeSubsystem::ValidateAndStartGame(FString& OutFailureMess
 				failures.Add(FString::Printf(TEXT("Mod \"%s\" 依赖的mod \"%s\" 未启用"),
 					UTF8_TO_TCHAR(entry.modId.c_str()), UTF8_TO_TCHAR(id.c_str())));
 			}
+		}
+	}
+
+	// 路网和取名必须且只能启用一个mod，缺一个游戏就没法生成地图/市民。
+	struct FUniqueConcept { const char* key; const TCHAR* label; };
+	for (const FUniqueConcept& item : { FUniqueConcept{ "Roadnets", TEXT("路网(Roadnet)") }, FUniqueConcept{ "Names", TEXT("取名(Name)") } }) {
+		int32 enabledCount = 0;
+		for (const Config::ModEntry& entry : Config::GetModEnables()) {
+			if (entry.enabled && entry.conceptKey == item.key) enabledCount++;
+		}
+		if (enabledCount == 0) {
+			failures.Add(FString::Printf(TEXT("没有启用任何%s mod，必须且只能启用一个"), item.label));
+		}
+		else if (enabledCount > 1) {
+			failures.Add(FString::Printf(TEXT("启用了%d个%s mod，必须且只能启用一个"), enabledCount, item.label));
+		}
+	}
+
+	// 主线剧情mod必须从已启用的script mod里选一个。
+	{
+		// GetMainStory在main_story没设、或所选script mod已被取消启用/不在当前dll里时都返回空：统一报"没有选择"。
+		if (GetMainStory().IsEmpty()) {
+			failures.Add(TEXT("没有选择主线剧情mod(Story面板的主线列表里选一个)"));
 		}
 	}
 

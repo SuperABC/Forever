@@ -305,6 +305,8 @@ void Populace::InitNames() {
 	// （不是Terrain/Zone/Building那种按GetPriority()/权重多mod叠加），和
 	// Map::InitRoadnet()同一套写法——不在C++里硬编码具体mod名字，config.json的
 	// "name_mods"数组列出哪个id就用哪个：
+	// 工厂是全局的，上一局留下的启用标记要先清掉，否则换了取名mod再开局还是用旧的。
+	for (const string& id : nameFactory.GetRegisteredIds()) nameFactory.SetConfig(id, false);
 	for (const auto& [id, args] : Config::GetConceptMods("name_mods")) {
 		nameFactory.SetConfig(id, true);
 	}

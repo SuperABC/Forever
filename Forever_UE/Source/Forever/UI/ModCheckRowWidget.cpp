@@ -1,6 +1,7 @@
 #include "ModCheckRowWidget.h"
 
 #include "Mod/ForeverConfigBridgeSubsystem.h"
+#include "common/config.h"
 
 #include "Components/TextBlock.h"
 #include "Components/CheckBox.h"
@@ -41,7 +42,9 @@ void UModCheckRowWidget::SetRowData(const FString& InDllPath, const FString& InC
 	}
 	if (EnableCheckBox) {
 		EnableCheckBox->SetIsChecked(bEnabled);
-		EnableCheckBox->SetIsEnabled(!bLockedOn);
+		// 单选concept(路网/取名)已选中的那个不能取消，只能选别的来切换。
+		const bool bRadioSelected = bEnabled && Config::IsUniqueConcept(TCHAR_TO_UTF8(*conceptKey));
+		EnableCheckBox->SetIsEnabled(!bLockedOn && !bRadioSelected);
 	}
 	SetIsEnabled(!bLockedOn);
 
@@ -50,10 +53,36 @@ void UModCheckRowWidget::SetRowData(const FString& InDllPath, const FString& InC
 	if (bLocked && InDependents.Num() > 0) {
 		tooltip = BuildDependentsToolTip(TEXT("被以下内容依赖：\n") + FString::Join(InDependents, TEXT("\n")));
 	}
+	if (!tooltip && bEnabled && Config::IsUniqueConcept(TCHAR_TO_UTF8(*conceptKey))) {
+		tooltip = BuildDependentsToolTip(TEXT("这类mod必须且只能启用一个，选择其它项来切换"));
+	}
 	SetToolTip(tooltip);
 	if (EnableCheckBox) {
 		EnableCheckBox->SetToolTip(tooltip);
 	}
+}
+
+void UModCheckRowWidget::SetSelectRowData(const FString& InModId, bool bSelected, TFunction<void(const FString&)> InOnSelect) {
+	modId = InModId;
+	onSelect = MoveTemp(InOnSelect);
+	onChanged = nullptr;
+
+	if (ModIdLabel) {
+		ModIdLabel->SetText(FText::FromString(modId));
+		if (!bDefaultLabelColorCaptured) {
+			defaultLabelColor = ModIdLabel->GetColorAndOpacity();
+			bDefaultLabelColorCaptured = true;
+		}
+		ModIdLabel->SetColorAndOpacity(defaultLabelColor);
+	}
+	if (EnableCheckBox) {
+		EnableCheckBox->SetIsChecked(bSelected);
+		EnableCheckBox->SetIsEnabled(!bSelected);
+	}
+	SetIsEnabled(true);
+	UWidget* tooltip = bSelected ? BuildDependentsToolTip(TEXT("主线剧情必须且只能选一个，选择其它项来切换")) : nullptr;
+	SetToolTip(tooltip);
+	if (EnableCheckBox) EnableCheckBox->SetToolTip(tooltip);
 }
 
 UWidget* UModCheckRowWidget::BuildDependentsToolTip(const FString& Text) {
@@ -74,6 +103,12 @@ UWidget* UModCheckRowWidget::BuildDependentsToolTip(const FString& Text) {
 }
 
 void UModCheckRowWidget::HandleCheckChanged(bool bIsChecked) {
+	if (onSelect) {
+		// 单选行：只响应"勾上"，取消由禁用的勾选框挡住；回调里会刷新整个列表。
+		if (bIsChecked) onSelect(modId);
+		else if (EnableCheckBox) EnableCheckBox->SetIsChecked(true);
+		return;
+	}
 	if (UGameInstance* gameInstance = GetGameInstance()) {
 		if (UForeverConfigBridgeSubsystem* bridge = gameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>()) {
 			bridge->SetModEnabled(conceptKey, modId, bIsChecked);

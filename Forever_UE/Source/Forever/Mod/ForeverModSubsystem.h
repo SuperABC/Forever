@@ -22,7 +22,7 @@ public:
 	bool ReloadConfigFrom(const FString& Path);
 
 private:
-	// ReadConfig + dll_paths/resource_paths缺省时回退扫描默认目录，Initialize和ReloadConfigFrom共用。
+	// ReadConfig + dll_paths缺省时回退扫描默认目录(resource_paths不回退)，Initialize和ReloadConfigFrom共用。
 	void ReadConfigWithFallbacks(const FString& configPath);
 
 	// 已经挂载过的Plugin/Pak挂载点("/PluginName/")，重复调用EnsureModsRegistered时跳过。

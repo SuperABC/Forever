@@ -381,6 +381,7 @@ enum AREA_TYPE : int {
 	AREA_OFFICIAL_MIDDLE,
 	AREA_OFFICIAL_LOW,
 	AREA_GREEN,
+	AREA_TEST,	// 测试分区：井字路网中心lot专用，原先放在AREA_OFFICIAL_HIGH里的建筑都改放这里
 	AREA_END
 };
 

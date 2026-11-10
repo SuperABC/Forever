@@ -688,7 +688,7 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 // 走原来的"并入别的河"收尾。拐的比例沿用RIVER_COAST_STEER_COEF。
 #define RIVER_NEIGHBOR_AVOID_DISTANCE 4.0f
 #define RIVER_COAST_STEER_COEF 0.0625f
-// 地图正中心留给井字路网中心lot(AREA_OFFICIAL_HIGH，见roadnet_basic.cpp)用——河流只要
+// 地图正中心留给井字路网中心lot(AREA_TEST，见roadnet_basic.cpp)用——河流只要
 // 流经地图中心这片区域(宽高方向各3/8~5/8那一块)，不管是山体内还是流出山体之后，整条河
 // (两段一起)直接作废，不让河流占掉地图中心那块地。
 #define RIVER_CENTER_MIN_FRAC (3.0f / 8.0f)

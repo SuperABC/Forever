@@ -242,7 +242,7 @@ float ResidenceHighBuilding::GetAcreageMax() {
 
 float ResidenceHighBuilding::GetPower(AREA_TYPE area) {
 	// 只在住宅高密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_OFFICIAL_HIGH) {
+	if (area == AREA_RESIDENTIAL_HIGH) {
 		return 1.f;
 	}
 	return 0.f;
@@ -2076,13 +2076,13 @@ void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 }
 
 void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
-	// 在井字中心lot(AREA_OFFICIAL_HIGH)上找一块地方，和机场/园区共存：用
+	// 在井字中心lot(AREA_TEST)上找一块地方，和机场/园区共存：用
 	// Lot::FindAdaptivePlacement按当前剩余自由空间自适应选，依次尝试4个方向，先找到可用空间的方向就用。
 	constexpr float kMinFrontage = 7.f;
 	constexpr float kMinDepth = 4.f;
 
 	for (Lot* lot : lots) {
-		if (!lot || lot->GetArea() != AREA_OFFICIAL_HIGH) continue;
+		if (!lot || lot->GetArea() != AREA_TEST) continue;
 
 		for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {
 			Lot* targetLot;
@@ -2148,7 +2148,7 @@ void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, v
 	constexpr float kDepths[] = { 8.f, 4.f };
 
 	for (Lot* lot : lots) {
-		if (!lot || lot->GetArea() != AREA_OFFICIAL_HIGH) continue;
+		if (!lot || lot->GetArea() != AREA_TEST) continue;
 
 		for (int size = 0; size < 2; size++)
 		for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {

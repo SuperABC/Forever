@@ -1,0 +1,36 @@
+{
+   "app_mods" : [],
+   "asset_mods" : [],
+   "building_mods" : [ "building_residence_high" ],
+   "component_mods" : [ "component_residence" ],
+   "dll_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
+   ],
+   "job_mods" : [],
+   "main_story" : "script_test",
+   "manufacture_mods" : [],
+   "name_mods" : [ "name_chinese" ],
+   "organization_mods" : [],
+   "product_mods" : [],
+   "puzzle_mods" : [],
+   "resource_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts"
+   ],
+   "roadnet_mods" : [ "roadnet_checkboard" ],
+   "room_mods" : [ "room_residence", "room_empty" ],
+   "route_mods" : [],
+   "scheduler_mods" : [],
+   "script_mods" : [ "script_empty", "script_test" ],
+   "station_mods" : [],
+   "storage_mods" : [],
+   "story_scripts" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
+   ],
+   "terrain_mods" : [ "terrain_ocean", "terrain_river", "terrain_mountain" ],
+   "vehicle_mods" : [],
+   "weapon_mods" : [],
+   "zone_mods" : []
+}

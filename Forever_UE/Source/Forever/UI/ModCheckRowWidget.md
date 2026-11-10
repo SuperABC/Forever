@@ -18,3 +18,6 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 单选行模式
+`SetSelectRowData(modId, bSelected, onSelect)`：主线剧情列表用。选中行勾选框禁用，勾上别的行调`onSelect(modId)`，不走`Bridge::SetModEnabled`。

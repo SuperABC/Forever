@@ -1,3 +1,4 @@
+#include <set>
 #include "config.h"
 
 #include "json.h"
@@ -34,10 +35,44 @@ void Config::NormalizeUniqueConcepts() {
 		auto it = conceptMods.find(jsonKey);
 		if (it == conceptMods.end())
 			continue;
-		// 数组即启用状态的唯一真相，直接截断即可
+		// 数组即启用状态的唯一真相。留下第一个"已发现"的(UI看得见的)，其它全删；一个都没发现就留第一个，
+		// 不然藏起来的陈旧id排在前面会把真正选中的那个挤掉。
 		if (it->second.size() > 1) {
-			it->second.erase(it->second.begin() + 1, it->second.end());
+			size_t keep = 0;
+			for (size_t i = 0; i < it->second.size(); i++) {
+				if (IsModDiscovered(conceptKey, it->second[i].first)) { keep = i; break; }
+			}
+			pair<string, string> kept = it->second[keep];
+			it->second.assign(1, kept);
 		}
+	}
+}
+
+bool Config::IsModDiscovered(const string& conceptKey, const string& modId) {
+	for (const auto& [dllPath, ids] : dllConceptIds) {
+		(void)dllPath;
+		for (const auto& [ck, id] : ids) {
+			if (ck == conceptKey && id == modId) return true;
+		}
+	}
+	return false;
+}
+
+void Config::PruneUndiscoveredMods() {
+	// 已发现的(jsonKey, id)集合：当前dll_paths下的dll实际提供的mod，也就是UI里看得见的。
+	set<pair<string, string>> discovered;
+	for (const auto& [dllPath, ids] : dllConceptIds) {
+		(void)dllPath;
+		for (const auto& [ck, id] : ids) discovered.insert({ ConceptKeyToJsonKey(ck), id });
+	}
+	for (auto& [jsonKey, entries] : conceptMods) {
+		entries.erase(remove_if(entries.begin(), entries.end(),
+			[&](const pair<string, string>& e) { return discovered.find({ jsonKey, e.first }) == discovered.end(); }),
+			entries.end());
+	}
+	// 主线剧情mod也必须是已启用且看得见的script mod，否则视为没选。
+	if (!mainStoryScriptModName.empty() && !IsModEnabled("Scripts", mainStoryScriptModName)) {
+		mainStoryScriptModName.clear();
 	}
 }
 
@@ -478,7 +513,16 @@ vector<Config::ModEntry> Config::GetModEnables() {
 	return rows;
 }
 
+bool Config::IsUniqueConcept(const string& conceptKey) {
+	return conceptKey == "Roadnets" || conceptKey == "Names";
+}
+
 void Config::SetModEnabled(const string& conceptKey, const string& modId, bool enabled) {
+	// Roadnets/Names必须且只能启用一个：选中的不能取消，只能通过选另一个来切换。
+	if (!enabled && IsUniqueConcept(conceptKey) && IsModEnabled(conceptKey, modId)) return;
+	// 取消启用的script mod正是主线剧情时，主线变成"没选"。
+	if (!enabled && conceptKey == "Scripts" && mainStoryScriptModName == modId) mainStoryScriptModName.clear();
+
 	string jsonKey = ConceptKeyToJsonKey(conceptKey);
 	auto& entries = conceptMods[jsonKey];
 	auto it = find_if(entries.begin(), entries.end(),
@@ -495,7 +539,7 @@ void Config::SetModEnabled(const string& conceptKey, const string& modId, bool e
 	}
 
 	// Roadnets/Names单选：选中后把同concept下其它已发现id全部从数组移除
-	if (enabled && (conceptKey == "Roadnets" || conceptKey == "Names")) {
+	if (enabled && IsUniqueConcept(conceptKey)) {
 		for (const auto& [dllPath, ids] : dllConceptIds) {
 			(void)dllPath;
 			for (const auto& [ck, id] : ids) {
@@ -613,6 +657,8 @@ void Config::WriteConfig(const string& path) {
 	// (比如直接走ValidateAndStartGame，中间没有UI刷新过列表)，写进文件的也必须是已经
 	// 规范化过的状态。
 	NormalizeUniqueConcepts();
+	// 当前加载的dll里没有的mod是UI里看不见的，不能悄悄存进文件。
+	PruneUndiscoveredMods();
 
 	// 写绝对路径(config.json不跨设备使用)，ReadConfig仍兼容解析相对路径
 	JsonValue root(DATA_OBJECT);

@@ -95,17 +95,7 @@ void UForeverModSubsystem::ReadConfigWithFallbacks(const FString& configPath) {
 		mods = Config::GetMods();
 	}
 
-	if (!Config::HasResourcePaths()) {
-		// config.json没有配置resource_paths(或者根本没有config.json)时,回退扫描默认的
-		// Resource/Story/和Resource/Layouts/目录(.script和.layout都由resource_paths扫描)——和上面
-		// dll_paths的回退同一个容错风格。
-		for (const TCHAR* subDir : { TEXT("Resource/Story"), TEXT("Resource/Layouts") }) {
-			const FString defaultResourceDir = FPaths::Combine(FPaths::ProjectDir(), subDir);
-			UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: config.json 未提供任何resource_paths,回退扫描默认目录 %s。"), *defaultResourceDir);
-			Config::AddResourcePath(TCHAR_TO_UTF8(*defaultResourceDir));
-		}
-	}
-
+	// resource_paths不做回退：config.json里没有就是没有。
 }
 
 void UForeverModSubsystem::EnsureModsRegistered() {

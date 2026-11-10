@@ -41,7 +41,7 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 ## TrainStationBuilding / AirportBuilding
 
 - 全图各唯一一个，`GetPower`恒0不参与权重CDF，`RandomAcreage`/`Min`/`Max`固定2000，靠`Assign`显式占位。分别承载`StationMod`的`station_train`/`station_air`(`stationMod`字段)。
-- **`Assign`**：只看井字中心lot(`AREA_OFFICIAL_HIGH`)，依次尝试4个方向用`Lot::FindAdaptivePlacement`按当前实际剩余空间自适应找位置，不挑具体方向，和园区(`ResidenceZone`)共存。火车站要沿路`7`x纵深`4`(地图单位)，余量全挪到`marginEnd`贴边起点角；机场优先`12`x`8`，放不下退回`7`x`4`，余量全挪到`marginStart`贴另一端的角，这样两者即使同在一条边上也占两个对角。`request.lot`是命中的自由子块而不是`lot`本身，`adaptiveParent`仅在二者不同时设，供Core把子块残余空间搬回，见`FindAdaptivePlacement`声明。
+- **`Assign`**：只看井字中心lot(`AREA_TEST`)，依次尝试4个方向用`Lot::FindAdaptivePlacement`按当前实际剩余空间自适应找位置，不挑具体方向，和园区(`ResidenceZone`)共存。火车站要沿路`7`x纵深`4`(地图单位)，余量全挪到`marginEnd`贴边起点角；机场优先`12`x`8`，放不下退回`7`x`4`，余量全挪到`marginStart`贴另一端的角，这样两者即使同在一条边上也占两个对角。`request.lot`是命中的自由子块而不是`lot`本身，`adaptiveParent`仅在二者不同时设，供Core把子块残余空间搬回，见`FindAdaptivePlacement`声明。
 - **`TrainStationBuilding::Layout`**：`footprint`占满整个Building区域，`basements=1`+`layers=1`，层高0.6；地下1层站台层`preset_train_station_bg+`(楼梯通上来，`Stair_Line`资产)、地面1层大厅`preset_train_station_fg-`放2间`TrainStationRoom`，两层各2台电梯。`TrainStation::Layout`的轨道/接口(`depthRatio` 0.55/0.65)因此落在楼体范围内。
 - **`AirportBuilding::Layout`**：无地下室、1层，层高0.6，模板`preset_single_room_fg`+1间`AirportRoom`。`footprint`用`NearRoadFootprint(direction, 0.18, 0.35, 0.6)`把楼体压到靠路一侧，深处留给`AirStation::Layout`的跑道(`depthRatio` 0.65/0.85)，避免公共交通连线穿过楼体实体。
 

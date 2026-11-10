@@ -1,0 +1,30 @@
+{
+   "app_mods" : [],
+   "asset_mods" : [],
+   "building_mods" : [],
+   "component_mods" : [],
+   "dll_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
+   ],
+   "job_mods" : [],
+   "main_story" : "script_empty",
+   "manufacture_mods" : [],
+   "name_mods" : [ "name_chinese" ],
+   "organization_mods" : [],
+   "product_mods" : [],
+   "puzzle_mods" : [],
+   "resource_paths" : [],
+   "roadnet_mods" : [ "roadnet_empty" ],
+   "room_mods" : [],
+   "route_mods" : [],
+   "scheduler_mods" : [],
+   "script_mods" : [ "script_empty" ],
+   "station_mods" : [],
+   "storage_mods" : [],
+   "story_scripts" : [],
+   "terrain_mods" : [ "terrain_ocean", "terrain_mountain", "terrain_river" ],
+   "vehicle_mods" : [],
+   "weapon_mods" : [],
+   "zone_mods" : []
+}

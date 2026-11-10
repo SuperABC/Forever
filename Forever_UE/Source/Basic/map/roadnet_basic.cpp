@@ -105,7 +105,7 @@ namespace {
 			}
 		}
 
-	// 井字中心lot固定AREA_OFFICIAL_HIGH，其余所有非中心lot(4个紧邻中心的臂lot+更外圈延伸出去
+	// 井字中心lot固定AREA_TEST，其余所有非中心lot(4个紧邻中心的臂lot+更外圈延伸出去
 	// 的lot)按1:1:1随机分配成高密度住宅/商业/工业区——这是ShopBuilding/FactoryBuilding按
 	// GetPower(AREA_TYPE)竞争lot的前提，分区类型如果单一固定，地图上只会长出一种建筑。
 	AREA_TYPE RandomHighDensityArea() {
@@ -509,7 +509,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		lots.emplace_back(northWest, northEast, southEast, southWest,
 			vector<float>{ roadMargin(roads[0]), roadMargin(roads[1]), roadMargin(roads[2]), roadMargin(roads[3]) },
 			unordered_map<int, Road*>{ {0, &roads[0]}, {1, &roads[1]}, {2, &roads[2]}, {3, &roads[3]} });
-		lots.back().SetArea(AREA_OFFICIAL_HIGH);
+		lots.back().SetArea(AREA_TEST);
 	}
 
 	// length>=0时每个臂最多length个lot：紧邻中心的象限lot是第1个(length==0则一个都不放)，

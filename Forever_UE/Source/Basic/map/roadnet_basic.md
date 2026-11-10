@@ -10,8 +10,7 @@
 
 - **`--length N`构造参数**(config.json里`"roadnet_jing --length 3"`)：每个臂向外最多伸出N个lot，紧邻中心的象限lot算第1个，N=0则只剩中心lot；N<0或不填=不限制(原行为)。只限制lot，放射路本身仍铺到地图边界的`extern`。
 
-- **非中心lot的分区类型按1:1:1随机分配**：井字中心lot固定`AREA_OFFICIAL_HIGH`(高密度办公
-  区)；其余所有lot(4个紧邻中心的臂lot+4条放射臂细分出来的外圈lot，每次细分独立随机)调用
+- **非中心lot的分区类型按1:1:1随机分配**：井字中心lot固定`AREA_TEST`(测试分区)；其余所有lot(4个紧邻中心的臂lot+4条放射臂细分出来的外圈lot，每次细分独立随机)调用
   文件内匿名namespace的`RandomHighDensityArea()`，从`{AREA_RESIDENTIAL_HIGH,
   AREA_COMMERCIAL_HIGH, AREA_INDUSTRIAL_HIGH}`等权重随机选一个(每个lot独立掷骰子，不保证
   整张地图恰好1:1:1均分)。这是支撑`building_basic.md`里`ShopBuilding`/`FactoryBuilding`

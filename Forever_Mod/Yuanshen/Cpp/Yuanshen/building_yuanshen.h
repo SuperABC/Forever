@@ -56,7 +56,7 @@ public:
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
 		constexpr float kSize = 6.f;
 		for (Lot* lot : lots) {
-			if (!lot || lot->GetArea() != AREA_OFFICIAL_HIGH) continue;
+			if (!lot || lot->GetArea() != AREA_TEST) continue;
 
 			for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {
 				Lot* targetLot;

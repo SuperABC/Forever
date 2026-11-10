@@ -1,6 +1,7 @@
 #include "StoryPanelWidget.h"
 
 #include "PathRowWidget.h"
+#include "ModCheckRowWidget.h"
 #include "Mod/ForeverConfigBridgeSubsystem.h"
 
 #include "Components/ScrollBox.h"
@@ -20,6 +21,8 @@ void UStoryPanelWidget::NativeConstruct() {
 }
 
 void UStoryPanelWidget::RefreshRows() {
+	RefreshMainStoryList();
+
 	if (ScriptList) {
 		ScriptList->ClearChildren();
 	}
@@ -49,6 +52,30 @@ void UStoryPanelWidget::RefreshRows() {
 			RefreshRows();
 		});
 		AddChildWithGap(ScriptList, rowWidget);
+	}
+}
+
+void UStoryPanelWidget::RefreshMainStoryList() {
+	if (!MainStoryList) return;
+	MainStoryList->ClearChildren();
+	if (!ModCheckRowClass) return;
+
+	UGameInstance* gameInstance = GetGameInstance();
+	UForeverConfigBridgeSubsystem* bridge = gameInstance ? gameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>() : nullptr;
+	if (!bridge) return;
+
+	const FString selected = bridge->GetMainStory();
+	for (const FString& modId : bridge->GetEnabledScriptMods()) {
+		UModCheckRowWidget* row = CreateWidget<UModCheckRowWidget>(this, ModCheckRowClass);
+		if (!row) continue;
+		row->SetSelectRowData(modId, modId == selected, [this](const FString& picked) {
+			UGameInstance* innerGameInstance = GetGameInstance();
+			if (UForeverConfigBridgeSubsystem* innerBridge = innerGameInstance ? innerGameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>() : nullptr) {
+				innerBridge->SetMainStory(picked);
+			}
+			RefreshMainStoryList();
+		});
+		AddChildWithGap(MainStoryList, row);
 	}
 }
 
