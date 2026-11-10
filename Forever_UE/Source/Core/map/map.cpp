@@ -1347,12 +1347,15 @@ Node* Map::AddRoadAccessNode(Road* road, float t, bool isVehicle, bool useForwar
 	Node* newNode = BreakThroughLine(road, isVehicle, side, laneIndex, nx, ny, basePoint.GetZ());
 	if (!newNode) return nullptr;
 
-	RoadOpening opening;
-	opening.t = t;
-	opening.width = openingWidth;
-	opening.forwardSide = useForwardSide;
-	opening.isVehicle = isVehicle;
-	road->AddOpening(opening);
+	// 行人出入口不给道路开口(只接导航图)，只有车行出入口才在路缘上挖口。
+	if (isVehicle) {
+		RoadOpening opening;
+		opening.t = t;
+		opening.width = openingWidth;
+		opening.forwardSide = useForwardSide;
+		opening.isVehicle = isVehicle;
+		road->AddOpening(opening);
+	}
 
 	return newNode;
 }
@@ -1756,12 +1759,15 @@ Node* Map::ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, boo
 	Node* roadNode = BreakThroughLine(hostRoad, isVehicle, side, laneIndex, lx, ly, hostPoint.GetZ());
 	if (!roadNode) return nullptr;
 
-	RoadOpening opening;
-	opening.t = t;
-	opening.width = width;
-	opening.forwardSide = true;
-	opening.isVehicle = isVehicle;
-	hostRoad->AddOpening(opening);
+	// 行人出入口不给道路开口(只接导航图)，只有车行出入口才在路缘上挖口。
+	if (isVehicle) {
+		RoadOpening opening;
+		opening.t = t;
+		opening.width = width;
+		opening.forwardSide = true;
+		opening.isVehicle = isVehicle;
+		hostRoad->AddOpening(opening);
+	}
 
 	Node* zoneNode = MakeIsolatedAnchor(worldX, worldY, hostPoint.GetZ(), isVehicle ? "vehicle" : "pedestrian");
 	anchorCache.emplace_back(worldX, worldY, isVehicle, zoneNode);

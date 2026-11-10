@@ -19,8 +19,8 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts"
    ],
-   "roadnet_mods" : [ "roadnet_checkboard" ],
-   "room_mods" : [ "room_residence", "room_empty" ],
+   "roadnet_mods" : [ "roadnet_jing --length 0" ],
+   "room_mods" : [ "room_residence", "room_parking" ],
    "route_mods" : [],
    "scheduler_mods" : [],
    "script_mods" : [ "script_empty", "script_test" ],
@@ -29,7 +29,7 @@
    "story_scripts" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
    ],
-   "terrain_mods" : [ "terrain_ocean", "terrain_river", "terrain_mountain" ],
+   "terrain_mods" : [],
    "vehicle_mods" : [],
    "weapon_mods" : [],
    "zone_mods" : []

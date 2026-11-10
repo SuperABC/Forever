@@ -21,7 +21,8 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 ## ResidenceBuilding
 
 - `GetPower`：由三档子类各自决定(见上)。`RandomAcreage()=2000*(1+rand*2)^2`，`GetAcreageMin()=2000`，`GetAcreageMax()=18000`。`Assign()`空实现。
-- `Layout()`：`footprint`居中占80%，`basements=1`；`layers`按`quad.GetAcreage()`分档(`<5000`→3-5，`<10000`→6-9，否则10-14)；层高地上统一0.4、地下室0.35。按`quad`尺寸分档随机选一套模板组合(`layout` 0-3)和房间槽位密度`size`：`layout==1/3`带电梯井道模板(`preset_lobby_wing_*`/`preset_nshape_double_*`)，配合`AssignElevatorCabin`产出`Elevator`几何(脚本`elevator_basic`)。`layout==3`的第0个槽位是`room_empty`占位，不铺真实房间。
+- 住宅高密度(`ResidenceHighBuilding`)的面积：`RandomAcreage()=4000*(1+rand)^2`(4000~16000)，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`。
+- `Layout()`：`basements=1`；`layers`**7~12随机**(地上，另有地下1层)(住宅高密度，其余两档仍按`quad.GetAcreage()`分档)；层高地上统一0.4、地下室0.35。**住宅高密度(`ResidenceHighBuilding`)只用`preset_residential_wing_*`系列模板**(地下室`bg+`放`room_parking`单槽位、1楼`fg+-`、2楼`fl+-`、3楼及以上`fu+-`(多出2个single，各放`room_residence`)，地上每层各4排`room_residence`，2个电梯井道)，不再按尺寸分档；偏好朝向沿用wing模板的取法(长边X→南北向，否则东西向，仅在对应边界路存在时采用)。**楼体`footprint`**：开间方向(垂直于进深)居中、两侧各留0.2的空隙；进深方向(朝向轴)最多4(地图单位)并**居中**，地块没这么深就占满。房间面积`ArrangeRow`的`size`=300。其余两档仍是原来的按尺寸分档随机选模板(`layout` 0-3)。
 - 大门`doorSpecs["entrance"]`：随机左右滑动单开门(`Cube`资产占位)，只有corridor门洞带`entrance`标签才用到，见`Core/map/door.h`的`ResolveDoorSpec`。
 - 挂示例脚本`entity_event`。
 

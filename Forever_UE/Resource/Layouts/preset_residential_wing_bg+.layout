@@ -1,0 +1,285 @@
+{
+	"stairs": [{
+		"rect": [0.4, -0.4, 0.6, 0, 0.4, 0, 0.8, 0],
+		"direction": 2,
+		"walls": [0, 1],
+	},
+	{
+		"rect": [0.6, 0, 0.6, 0, 0.6, 0.4, 0.8, 0],
+		"direction": 2,
+		"walls": [0, 1],
+	}],
+	"elevators": [{
+		"rect": [0.6, 0, 0.8, 0, 0.6, 0.4, 1, 0],
+		"direction": 0,
+		"walls": [1, 2, 3],
+	},
+	{
+		"rect": [0.4, -0.4, 0.8, 0, 0.4, 0, 1, 0],
+		"direction": 1,
+		"walls": [0, 2, 3],
+	}],
+	"ramps": [{
+		"rect": [0.4, -0.4, 0, 0, 0.4, 0, 0.3, 0],
+		"direction": 3,
+		"walls": [0, 1],
+	},
+	{
+		"rect": [0.6, 0, 0, 0, 0.6, 0.4, 0.3, 0],
+		"direction": 3,
+		"walls": [0, 1],
+	}],
+	"ceilings": [
+		[0, 0, 0.1, 0, 0.4, -0.4, 1, 0],
+		[0.6, 0.4, 0.1, 0, 1, 0, 1, 0],
+		[0.4, -0.4, 0.3, 0, 0.6, 0.4, 0.6, 0],
+		[0.4, 0, 0.1, 0, 0.6, 0, 0.3, 0],
+		[0.4, 0, 0.6, 0, 0.6, 0, 1, 0],
+	],
+	"grounds": [
+		[0, 0, 0.1, 0, 1, 0, 1, 0],
+	],
+	"hatches": [
+		[0.4, -0.4, 0, 0, 0.4, 0, 0.3, 0],
+		[0.6, 0, 0, 0, 0.6, 0.4, 0.3, 0],
+		[0.6, 0, 0.6, 0, 0.6, 0.4, 1, 0],
+		[0.4, -0.4, 0.6, 0, 0.4, 0, 1, 0],
+	],
+	"singles": [{
+		"rect": [0, 0, 0.1, 0, 1, 0, 1, 0],
+		"direction": 2,
+		"doors": [
+			{
+				"direction": 2,
+				"positions": [
+					[0.4, -0.4, 0, 0, 0.4, 0, 1, 0],
+					[0.6, 0, 0, 0, 0.6, 0.4, 1, 0],
+				],
+			},
+		],
+	}],
+	"pedestrianNavigation": {
+		"nodes": [
+			{
+				"position": [0.4, -0.3, 0.8, -0.1],
+			},
+			{
+				"position": [0.4, -0.1, 0.8, -0.1],
+			},
+			{
+				"position": [0.6, 0.1, 0.8, -0.1],
+			},
+			{
+				"position": [0.6, 0.3, 0.8, -0.1],
+			},
+			{
+				"position": [0.4, -0.2, 0.55, 0],
+			},
+			{
+				"position": [0.6, 0.2, 0.55, 0],
+			},
+		],
+		"lines": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 4,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "single",
+					"idx": 0,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 5,
+				},
+				"end": {
+					"type": "single",
+					"idx": 0,
+				},
+			},
+		],
+	},
+	"vehicleNavigation": {
+		"nodes": [
+			{
+				"position": [0.2, 0, 0.3, 0],
+			},
+			{
+				"position": [0.8, 0, 0.3, 0],
+			},
+			{
+				"position": [0.4, -0.2, 0.3, 0],
+			},
+			{
+				"position": [0.6, 0.2, 0.3, 0],
+			},
+			{
+				"position": [0.2, 0, 0.55, 0],
+			},
+			{
+				"position": [0.8, 0, 0.55, 0],
+			},
+		],
+		"lines": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "node",
+					"idx": 0,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "node",
+					"idx": 3,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 4,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "single",
+					"idx": 0,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 5,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+			},
+		],
+	}
+}

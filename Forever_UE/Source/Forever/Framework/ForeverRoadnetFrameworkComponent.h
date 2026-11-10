@@ -85,9 +85,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Roadnet")
 	TObjectPtr<UMaterialInterface> roadPlainBaseMaterial;
 
-	// 导航图debug可视化开关，默认关闭(避免常驻开销)，核对导航图时在编辑器里勾选。
+	// 导航图debug可视化开关，目前默认打开(核对导航图用)，不看时在编辑器里取消勾选以免常驻开销。
 	UPROPERTY(EditAnywhere, Category = "Roadnet|Debug")
-	bool bShowNavigationDebug = false;
+	bool bShowNavigationDebug = true;
 
 	// 车行/行人导航debug共用的基础材质(Color参数默认白色)；行人MID把Color设成黑色以区分。
 	UPROPERTY(EditDefaultsOnly, Category = "Roadnet|Debug")

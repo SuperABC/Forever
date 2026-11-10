@@ -302,6 +302,8 @@ UInstancedStaticMeshComponent* UForeverRoadnetFrameworkComponent::GetOrCreateRoa
 
 	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(owner, NAME_None, RF_Transient);
 	ism->SetStaticMesh(mesh);
+	// 每个实例带2个自定义数据：沿路方向的水平单位向量(cos,sin)，供材质把世界UV转到顺着路的坐标系，见.md。
+	ism->NumCustomDataFloats = 2;
 	ism->SetupAttachment(owner->GetRootComponent());
 	ism->RegisterComponent();
 	owner->AddInstanceComponent(ism);
@@ -388,7 +390,12 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 			if (fwd.IsNearlyZero()) fwd = FVector::ForwardVector;
 
 			FTransform xform(fwd.Rotation(), mid, FVector(scaleAlong, 1.f, 1.f));
-			ism->AddInstance(xform);
+			int32 instanceIndex = ism->AddInstance(xform);
+			FVector2D dirXY(fwd.X, fwd.Y);
+			dirXY = dirXY.GetSafeNormal();
+			if (dirXY.IsNearlyZero()) dirXY = FVector2D(1.f, 0.f);
+			ism->SetCustomDataValue(instanceIndex, 0, dirXY.X, false);
+			ism->SetCustomDataValue(instanceIndex, 1, dirXY.Y, false);
 		}
 		};
 

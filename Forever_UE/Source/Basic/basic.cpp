@@ -69,7 +69,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 
 		{ ResidenceZone::GetId(), { ResidenceHighBuilding::GetId() } },
 
-		{ ResidenceHighBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
+		{ ResidenceHighBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 电梯脚本；地下室停车库
 		{ ResidenceMiddleBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ ResidenceLowBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ ShopHighBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
