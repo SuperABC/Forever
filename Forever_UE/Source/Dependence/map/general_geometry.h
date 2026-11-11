@@ -172,8 +172,8 @@ public:
 };
 
 // 车道分裂/开口标记,挂在Road自身。产出方:Map::AddRoadAccessNode(断开导航图车道并选中车道)、
-// Lot::SplitWithPath(纯几何/渲染开口,此时forwardSide/isVehicle无意义)。
-// t:沿Road弧长比例;width:开口沿路长度;forwardSide:vehicleLanes[0]/pedestrianLanes[0]为true;isVehicle:车行/行人。
+// Lot::SplitWithPath(纯几何/渲染开口,forwardSide按小路伸向大路哪一侧填,isVehicle无意义)。
+// t:沿Road弧长比例;width:开口沿路长度;forwardSide:开口落在side0(vehicleLanes[0]/pedestrianLanes[0]那一侧)为true、side1为false,渲染据此只在这一侧开口;isVehicle:车行/行人。
 struct RoadOpening {
 	float t = 0.f;
 	float width = 0.f;
@@ -222,6 +222,12 @@ public:
 	void AddPedestrianLane(int side, float width);
 	const std::vector<float>& GetPedestrianLanes(int side) const;
 
+	// 开口段用的"去掉某一侧人行道"的路面资产(side=0/1，命名同GetMesh，原点在该资产自己横断面的正中心)，空=没有。
+	// 一个开口只在一侧时，开口段不再整条路宽换成平面cube，而是这侧换成无人行道资产+缺的人行道区域补一块路面材质，
+	// 另一侧人行道保留，见ForeverRoadnetFrameworkComponent.md。
+	void SetSidewalkFreeMesh(int side, const std::string& mesh);
+	std::string GetSidewalkFreeMesh(int side) const;
+
 	// 车道分裂/开口标记，见RoadOpening注释。
 	void AddOpening(const RoadOpening& opening);
 	const std::vector<RoadOpening>& GetOpenings() const;
@@ -250,6 +256,9 @@ private:
 
 	// 道路mesh基准长度
 	float unit;
+
+	// 去掉side侧人行道后的路面资产路径，见SetSidewalkFreeMesh
+	std::string sidewalkFreeMesh[2];
 
 	std::vector<float> vehicleLanes[2];
 	std::vector<float> parkingLanes[2];

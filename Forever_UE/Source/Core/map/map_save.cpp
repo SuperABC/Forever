@@ -374,6 +374,8 @@ void MapSaveCodec::WriteRoad(const Road& road, ByteWriter& w) {
 	w.Str(road.name);
 	w.Str(road.mesh);
 	w.F32(road.unit);
+	w.Str(road.sidewalkFreeMesh[0]);
+	w.Str(road.sidewalkFreeMesh[1]);
 	WriteConnection(road, w);
 	for (int side = 0; side < 2; side++) {
 		WriteFloatVector(road.vehicleLanes[side], w);
@@ -391,11 +393,15 @@ Road* MapSaveCodec::ReadRoad(ByteReader& r) {
 	string name = r.Str();
 	string mesh = r.Str();
 	float unit = r.F32();
+	string sidewalkFree0 = r.Str();
+	string sidewalkFree1 = r.Str();
 	Node begin = ReadNode(r);
 	Node end = ReadNode(r);
 	float beginT = r.F32(), endT = r.F32();
 	vector<pair<Node, float>> controls = ReadControls(r, &MapSaveCodec::ReadNode);
 	Road* road = new Road(name, begin, end, mesh, unit, beginT, endT);
+	road->sidewalkFreeMesh[0] = sidewalkFree0;
+	road->sidewalkFreeMesh[1] = sidewalkFree1;
 	if (!controls.empty()) road->AddControls(controls);
 	for (int side = 0; side < 2; side++) {
 		road->vehicleLanes[side] = ReadFloatVector(r);

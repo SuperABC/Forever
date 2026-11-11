@@ -5,7 +5,7 @@
 `UForeverRoadnetFrameworkComponent`是路网渲染组件——道路（ISM沿路重复摆放）、路口、开口、小路的
 mesh生成，以及可开关的导航图调试可视化。模式上参照`ForeverTerrainFrameworkComponent`
 （procedural mesh、材质固定加载走`ConstructorHelpers`、组件挂在owner的RootComponent下）。
-`GenerateRoadnet`依次建：道路ISM+开口cube、路口mesh、小路mesh、导航debug mesh。
+`GenerateRoadnet`依次建：道路ISM+开口(无人行道资产+补路面矩形/整宽cube)、路口mesh、小路mesh、导航debug mesh。
 
 ## 关键设计
 
@@ -20,13 +20,18 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **每条唯一的mesh资产路径对应一个共享的`UInstancedStaticMeshComponent`**（`GetOrCreateRoadISM`
   按路径查/建），不是每条Road各自一个ISM——目前所有Road都用同一个`default_1_1`，只会建
   一个ISM，但接口上支持未来mod给不同Road配不同mesh资产。
-- **开口：整条路横断面宽度都被替换成一块贴`Road`材质的扁平cube**（同一物理位置的车行/行人两条`RoadOpening`按`t`去重只画一次），不精细地只挖开
-  人行道/停车道那一部分——`BuildRoadInstances`在命中`Road::GetOpenings()`对应弧长区间时
-  跳过该分段mesh实例的摆放，`BuildOpeningMeshes`在同一段范围画一块覆盖整条路总宽度（车行
-  +停车+人行道两侧加总）的cube。两处cube生成共用同一份几何逻辑（`AppendFlatRoadCube`：给定
-  road上的中心弧长比例+沿路长度+横向宽度，画一块扁平quad）。`BuildRoadInstances`按`unit`
-  铺不出至少一节`default_x_x_x`实例的短缺口（比如两个相邻开口之间只剩很短一截），同样退化
-  成`AppendFlatRoadCube`扁平cube，不留视觉空隙。
+- **开口按侧处理**（`BuildRoadInstances`一并完成，原来的`BuildOpeningMeshes`已删）：同一条路上重叠的`RoadOpening`先合并成一段
+  （同一物理开口的车行/行人两条同t同宽，合并后只处理一次），每段记录落在哪一侧（`RoadOpening.forwardSide`，true=side0）。
+  - **开口只在一侧、这侧有人行道、且`Road::GetSidewalkFreeMesh(side)`配了无人行道资产（能加载）**：开口段不画整宽cube，
+    改成**一个**拉伸到开口长度的无人行道资产实例（开口一般不大，不重复铺），另一侧人行道原样保留，缺的人行道区域
+    （宽=该侧人行道总宽，贴路面最外缘）补一块`Road`材质的扁平矩形（`AppendFlatRoadCube`的`lateralOffset`参数）。
+    **资产原点在它自己横断面的正中心**，去掉side侧人行道（宽`pedWidth`）后中心比路中心往另一侧挪`pedWidth/2`，
+    所以实例要反向补回：side0被去掉实例沿side0方向（右手垂线`(-dy,dx)`）偏`-pedWidth/2`，side1被去掉偏`+pedWidth/2`；
+    补的矩形中心在`±(总宽-pedWidth)/2`（沿side0方向为正，side0取正）。横断面布局见`Map::ComputeLaneAnchorPosition`。
+  - **其余**（两侧都开口、该侧本来没人行道、资产没配/加载失败）：整条路宽换成一块`Road`材质的扁平cube（旧行为）。
+  无人行道资产命名同普通资产（`default_左车行_左停车_左人行_右车行_右停车_右人行`，去掉的那一侧人行数为0），
+  由RoadnetMod在建路时用`Road::SetSidewalkFreeMesh`配好，不用旋转；加载失败只警告一次（`failedRoadMeshes`）。
+  `BuildRoadInstances`按`unit`铺不出至少一节实例的短缺口，同样退化成`AppendFlatRoadCube`扁平cube，不留视觉空隙。
 - **路口mesh是直线简化版**（`BuildJunctionMeshes`）：每个`RoadJunction`的`approaches`已经按
   夹角排好序，把`curbRight[i]`/`curbLeft[i]`两两相邻连成边界点序列（`(right_i,left_i)`是
   road i自己的"开口宽度"边，`(left_i,right_{i+1})`是road i与road i+1之间的桥接边），从路口
@@ -95,10 +100,10 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   `RoadJunction::Build()`按`sampleT`采样`road->GetPoint(sampleT)`得到真实X/Y/Z，不是
   直线近似，否则隧道口S形坡道的高度变化会被漏掉，导致台阶断层，详见`Source/Core/map/
   roadnet.md`"路口高度"一节）。
-- **道路tiling的开口缺口按每个开口的精确`[t-halfFrac,t+halfFrac]`区间切分保留区间**（区间
+- **道路tiling的开口缺口按每段合并后开口的精确`[tStart,tEnd]`区间切分保留区间**（区间
   减法，支持同一条路多个开口），不是"整体铺一遍再按段中点跳过"——否则缺口宽度只能凑整到
   unit的倍数，和开口cube的精确宽度对不上。
-- **`BuildOpeningMeshes`的cube以`road->GetPoint(op.t)`为中心、按`Road::GetTotalWidth()`
+- **整宽开口cube以`road->GetPoint(t)`为中心、按`Road::GetTotalWidth()`
   对称展开**——这个写法依赖`Connection`连线是整条车道横断面的几何中心（车道居中约定，见
   `roadnet.md`"车道居中"一节），单行道等不对称配置如果连线不在总宽度中点会让cube偏出实际
   路面范围。

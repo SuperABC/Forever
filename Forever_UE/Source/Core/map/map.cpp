@@ -1352,7 +1352,8 @@ Node* Map::AddRoadAccessNode(Road* road, float t, bool isVehicle, bool useForwar
 		RoadOpening opening;
 		opening.t = t;
 		opening.width = openingWidth;
-		opening.forwardSide = useForwardSide;
+		// 记真正落到的side(不是请求朝向：单行道请求落在空侧会回退到对侧)，渲染据此只在这一侧开口。
+		opening.forwardSide = (side == 0);
 		opening.isVehicle = isVehicle;
 		road->AddOpening(opening);
 	}
@@ -1764,7 +1765,7 @@ Node* Map::ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, boo
 		RoadOpening opening;
 		opening.t = t;
 		opening.width = width;
-		opening.forwardSide = true;
+		opening.forwardSide = (side == 0);
 		opening.isVehicle = isVehicle;
 		hostRoad->AddOpening(opening);
 	}

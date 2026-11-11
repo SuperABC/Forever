@@ -109,3 +109,5 @@ UE 控制台命令 `Forever.SaveRoundTrip`：当前地图写段 → 读回成一
 Stair/Elevator/Ramp/Corridor/Single/Row 以及 Room 在原有字段之后各多存 `WallStyle[4]`（每面墙 4 个侧面各 tag+material 两个字符串，`WriteWallStyles/ReadWallStyles`）。没升存档版本号，旧存档读不了。
 
 Building 在 `lodMaterialPath` 之后多存一个字符串 `gapMaterialPath`（楼体空隙填充材质，没升存档版本号）。
+
+- `Road`在`unit`之后多存`sidewalkFreeMesh[0]`、`sidewalkFreeMesh[1]`两个字符串（去掉某侧人行道的开口资产，见`general_geometry.md`），旧存档不兼容（按约定未升版本）。

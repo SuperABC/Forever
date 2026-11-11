@@ -1,0 +1,15 @@
+{
+	"grounds": [
+		{"rect": [0, 0, 0.1, 0, 1, 0, 1, 0], "tag": "roof"},
+	],
+	"pedestrianNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": [],
+	},
+	"vehicleNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": [],
+	}
+}

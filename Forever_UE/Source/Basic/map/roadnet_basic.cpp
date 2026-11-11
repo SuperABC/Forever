@@ -209,6 +209,12 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		string thisMeshPath = meshPathFor(leftV, leftP, leftPd, rightV, rightP, rightPd);
 		string tunnelMeshPath = meshPathFor(leftV, leftP, leftPd, rightV, rightP, rightPd, true);
 		auto configureThis = [&](Road& road) { configureLanesEx(road, leftV, leftP, leftPd, rightV, rightP, rightPd); };
+		// 开口落在某一侧时，这侧换用"该侧不含人行道"的资产(另一侧不变)，该侧本来就没有人行道则不设(渲染退回整条路宽开口)。
+		auto setSidewalkFree = [&](Road& road) {
+			// 资产名的左三位对应side0、右三位对应side1(同configureLanesEx)，去掉哪侧人行道就把哪侧的人行数写0。
+			if (leftPd > 0) road.SetSidewalkFreeMesh(0, meshPathFor(leftV, leftP, 0, rightV, rightP, rightPd));
+			if (rightPd > 0) road.SetSidewalkFreeMesh(1, meshPathFor(leftV, leftP, leftPd, rightV, rightP, 0));
+			};
 
 		bool n1Tunnel = n1.GetZ() < 0.f;
 		bool n2Tunnel = n2.GetZ() < 0.f;
@@ -235,11 +241,13 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			roads.emplace_back(name, groundNode, flatNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), groundNode, flatNode);
 			configureThis(roads.back());
+			setSidewalkFree(roads.back());
 			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			roads.emplace_back(name, flatNode, splitNode, thisMeshPath, meshUnit);
 			addControls(roads.back(), flatNode, splitNode);
 			configureThis(roads.back());
+			setSidewalkFree(roads.back());
 			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			if (!noLevelPart) {
@@ -255,6 +263,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		bool level = fabsf(n1.GetZ() - n2.GetZ()) < 1e-4f && fabsf(startSlope) < 1e-6f && fabsf(endSlope) < 1e-6f;
 		if (!level) addControls(roads.back(), n1, n2, startSlope, endSlope);
 		configureThis(roads.back());
+		if (!(n1Tunnel && n2Tunnel)) setSidewalkFree(roads.back());
 		// 抬升的山路(有一端Z>0)请求地形贴合：地形高度贴到路面高度上，路面宽度是配好车道之后的
 		// GetTotalWidth()。隧道(Z<0)不贴合，只在隧道口挖洞。
 		if (n1.GetZ() > 1e-4f || n2.GetZ() > 1e-4f) {

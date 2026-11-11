@@ -2,17 +2,36 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 #include "DoorComponent.generated.h"
 
 class Door;
 class Citizen;
 class USkeletalMesh;
-class USkeletalMeshComponent;
 class UDoorAnimInstance;
 class UBoxComponent;
 class UPrimitiveComponent;
 struct FHitResult;
+
+// 门用的骨骼网格组件：包围盒固定为"关门状态的网格盒 + 门扇绕铰链转到任意角度扫过的范围"，不随动画/Physics Asset每帧重算。
+// 默认的重算在门扇转开后跟不上姿势，门会被可见性/遮挡剔除成一帧有一帧无；等比放大包围盒则会让包围球过大拖慢阴影/灯光，
+// 所以这里按门的形状精确给盒子。盒子是组件局部(缩放前的网格)空间，见CalcBounds。
+UCLASS()
+class FOREVER_API UDoorMeshComponent : public USkeletalMeshComponent
+{
+	GENERATED_BODY()
+
+public:
+	void SetDoorLocalBounds(const FBoxSphereBounds& inBounds) { doorLocalBounds = inBounds; }
+
+	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override {
+		return doorLocalBounds.TransformBy(LocalToWorld);
+	}
+
+private:
+	FBoxSphereBounds doorLocalBounds = FBoxSphereBounds(FVector::ZeroVector, FVector(50.f), 50.f);
+};
 
 // 自动门：骨骼网格门+触发盒+挡板+开合度，绑定Core端Door*，挂在所属对象的渲染Actor上(建筑门/房间门挂ABuildingElement，园区门挂
 // UForeverZoneFrameworkComponent的owner)。门禁判定是Door::CanPass()，这里只负责"谁进触发盒→该不该开→开合度插值→写给动画实例"，
@@ -76,7 +95,7 @@ private:
 	static TMap<const Door*, TWeakObjectPtr<UForeverDoorComponent>> componentsByDoor;
 
 	UPROPERTY()
-	TObjectPtr<USkeletalMeshComponent> doorMesh;
+	TObjectPtr<UDoorMeshComponent> doorMesh;
 
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> blocker;

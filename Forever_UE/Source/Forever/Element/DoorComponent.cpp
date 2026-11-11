@@ -110,13 +110,15 @@ void UForeverDoorComponent::Init(Door* inDoor) {
 }
 
 void UForeverDoorComponent::BuildSkeletalDoor(USkeletalMesh* mesh, float doorWidth, float doorHeight) {
-	USkeletalMeshComponent* comp = NewObject<USkeletalMeshComponent>(this, NAME_None, RF_Transient);
+	UDoorMeshComponent* comp = NewObject<UDoorMeshComponent>(this, NAME_None, RF_Transient);
 	comp->SetSkeletalMeshAsset(mesh);
 	if (mesh->GetPhysicsAsset()) {
 		// 骨骼网格带Physics Asset：门扇的碰撞盒挂在door骨上，kinematic随动画转动，开着的门扇也挡人。
 		// 只做查询碰撞(挡角色/载具)，不模拟物理，也不产生重叠事件(否则会和自己的触发盒互相触发)。
 		comp->SetCollisionProfileName(TEXT("BlockAllDynamic"));
 		comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		// 第三人称弹簧臂用Camera通道探测：开着的门扇正好横在镜头和角色之间时，镜头会被忽进忽出而闪烁，所以忽略Camera。
+		comp->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
 		comp->SetGenerateOverlapEvents(false);
 		comp->SetCanEverAffectNavigation(false);
 	} else {
@@ -124,10 +126,10 @@ void UForeverDoorComponent::BuildSkeletalDoor(USkeletalMesh* mesh, float doorWid
 	}
 	comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	comp->SetAnimInstanceClass(LoadDoorAnimClass(UTF8_TO_TCHAR(door->GetAnimClass().c_str())));
-	// 不按可见性跳过姿势评估：门全关后会暂停动画，若暂停前一次都没评估过(刚生成时还没被渲染)，
-	// 门就会停在动画蓝图未求值的初始姿势上(表现为初始开着，靠近后才瞬间关上)。
-	comp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
-	comp->SetupAttachment(this);
+	// 没渲染的门不评估姿势(省CPU)；刚生成时还没被渲染的初始姿势由下面的同步评估保证是关着的。
+	comp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+	// 门是小物件，不投阴影：骨骼网格的动态阴影会让虚拟阴影图(VSM)每个门都做一遍标记，门多的场景开销很大。
+	comp->SetCastShadow(false);	comp->SetupAttachment(this);
 	comp->RegisterComponent();
 
 	// 立刻按开合度0同步评估一次姿势，保证第一帧就是关着的。
@@ -146,8 +148,16 @@ void UForeverDoorComponent::BuildSkeletalDoor(USkeletalMesh* mesh, float doorWid
 	float scaleZ = extent.Z > KINDA_SMALL_NUMBER ? doorHeight / (2.f * extent.Z) : 1.f;
 	FVector scale(scaleXY, scaleXY, scaleZ);
 	comp->SetRelativeScale3D(scale);
+
 	comp->SetRelativeLocation(FVector(0.f, 0.f, doorHeight * 0.5f) -
 		FVector(scale.X * bounds.Origin.X, scale.Y * bounds.Origin.Y, scale.Z * bounds.Origin.Z));
+
+	// 包围盒(网格局部空间，UDoorMeshComponent::CalcBounds里再乘组件变换)：门扇绕铰链(在门洞边缘)转开，最远扫到离门洞
+	// 约一个门宽(2*extent.X)的位置，两个方向都可能(OpenSide)，所以Y方向在原厚度上加这么多；X、Z保持网格自带范围。
+	// 默认的包围盒每帧按动画重算，跟不上门扇姿势会被剔除成一帧有一帧无；等比放大又会让包围球过大拖慢阴影/灯光。
+	FVector doorExtent(extent.X, extent.Y + 2.f * extent.X, extent.Z);
+	comp->SetDoorLocalBounds(FBoxSphereBounds(bounds.Origin, doorExtent, doorExtent.Size()));
+	comp->UpdateBounds();
 
 	doorMesh = comp;
 }

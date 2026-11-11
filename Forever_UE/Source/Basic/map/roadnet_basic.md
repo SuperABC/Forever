@@ -140,3 +140,5 @@
 
 - 如果以后要支持"全程按真实地形/水面高度起伏"(不只是隧道和抬升山路)，放射臂的非山体采样点Z需要从`0.f`换成真实`getHeight`(含水面+1的架桥逻辑)。
 - 行道树/路灯的数值(`TREE_*`/`LAMP_*`)是粗估值，待看效果再调。
+
+- **开口用的无人行道资产**：`addRoad`（以及`roadnet_checkboard`的同名lambda）建路后调`Road::SetSidewalkFreeMesh`：某侧有人行道就配“该侧人行数为0、其余不变”的资产。资产名左三位=side0、右三位=side1，所以side0版是名字里左人行为0的文件（如`default_1_0_1_1_0_1`的side0版是`default_1_0_0_1_0_1`），side1版是右人行为0的文件（`default_1_0_1_1_0_0`）；资产几何上side0=本地+Y(沿路方向的右手边)，命名要和几何一致，隧道内路段不配。资产在`Content/Asset/Roadnet/Default/Mesh/`，原点在各自横断面中心，渲染端自己补偿偏移，见`ForeverRoadnetFrameworkComponent.md`。

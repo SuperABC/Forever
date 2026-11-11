@@ -40,19 +40,20 @@ private:
 	void BuildNavGraphDebugMesh(const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph,
 		UProceduralMeshComponent* mesh, UMaterialInstanceDynamic* material);
 
-	// 沿road弧长按其mesh/unit重复摆放ISM实例，开口区间跳过(由BuildOpeningMeshes画cube)。
+	// 沿road弧长按其mesh/unit重复摆放ISM实例，同时处理这条路上的开口(重叠的开口先合并成一段)：
+	//  - 开口只在一侧、且这侧有人行道并配了无人行道资产(Road::GetSidewalkFreeMesh)：开口段换成一个拉伸到开口长度的
+	//    无人行道资产(横向挪半个人行道宽对齐原点)，缺的人行道区域补一块路面材质矩形，另一侧人行道保留；
+	//  - 其余(两侧都开口、该侧本来没人行道、资产没配/加载失败)：整条路宽换成一块扁平cube。
 	// trimStart/trimEnd(地图单位)：该端连着真实路口时tiling往回收缩的距离，避免与路口mesh重叠z-fighting；
-	// 端点是地图边缘则传0。铺不出一节实例的短缺口退化成扁平cube，写入和BuildOpeningMeshes共用的缓冲区。
+	// 端点是地图边缘则传0。铺不出一节实例的短缺口也退化成扁平cube。cube/矩形写进outVertices等缓冲区(调用方汇总后一次性CreateMeshSection)。
 	void BuildRoadInstances(Road* road, float trimStart, float trimEnd,
 		TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs);
 
-	// 每条road的每个开口生成一个扁平cube，追加进缓冲区(调用方汇总后一次性CreateMeshSection)。
-	void BuildOpeningMeshes(Road* road, TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs);
-
-	// 生成一块扁平cube追加进缓冲区：以road在centerT处为中心，沿切线长lengthAlongRoad、垂直方向宽crossWidth。
-	// 开口cube和短缺口共用。
+	// 生成一块扁平矩形追加进缓冲区：以road在centerT处为中心，沿切线长lengthAlongRoad、垂直方向宽crossWidth，
+	// lateralOffset(地图单位)是矩形中心相对road连线沿side0方向(右手垂线)的横向偏移，默认0=居中。
+	// 开口cube、补人行道的矩形和短缺口共用。
 	void AppendFlatRoadCube(Road* road, float centerT, float lengthAlongRoad, float crossWidth,
-		TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs);
+		TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs, float lateralOffset = 0.f);
 
 	// 每个路口按approach.angle排序后的curb点围成多边形，从路口中心扇形三角剖分，贴RoadPlain材质。
 	void BuildJunctionMeshes();
@@ -68,6 +69,8 @@ private:
 
 	UPROPERTY()
 	TMap<FString, TObjectPtr<UInstancedStaticMeshComponent>> roadMeshInstances;
+	// 加载失败的道路资产路径，只警告一次，之后直接返回空(开口会退回整条路宽的扁平cube)。
+	TSet<FString> failedRoadMeshes;
 
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> junctionMesh;

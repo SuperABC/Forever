@@ -61,7 +61,7 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	}
 
 	basements = 1;
-	layers = 7 + GetRandom(6); // 地上7~12层随机，另有地下1层
+	layers = 8 + GetRandom(6); // 地上8~13层随机(含最顶上只有屋面的fr层，住人层7~12)，另有地下1层
 	floorHeights.clear();
 	floorHeights.push_back(0.35f); // 地下室
 	// 地上每层高度统一0.4，不循环取不同值。
@@ -113,18 +113,23 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	AssignFloor(0, "preset_residential_wing_fg+-", direction);
 	AssignFloor(1, "preset_residential_wing_fl+-", direction);
 	for (int level = 2; level < layers; level++) {
-		// 最高层换成顶层模板fr-(没有楼梯、天花板是屋顶)，single/row数量与fu+-一致。
-		AssignFloor(level, level == layers - 1 ? "preset_residential_wing_fr-" : "preset_residential_wing_fu+-", direction);
+		// 最顶上再加一层屋面层fr(只有地面、没有房间)；其下一层(最高住人层)换成顶层模板fr-(没有楼梯、天花板是屋顶)，single/row数量与fu+-一致。
+		if (level == layers - 1) {
+			AssignFloor(level, "preset_residential_wing_fr", direction);
+			continue;
+		}
+		AssignFloor(level, level == layers - 2 ? "preset_residential_wing_fr-" : "preset_residential_wing_fu+-", direction);
 		AssignRoom(level, 0, "room_residence", kComponent, kComponentId); // fu+-多出的两个single
 		AssignRoom(level, 1, "room_residence", kComponent, kComponentId);
 	}
-	for (int level = 0; level < layers; level++) {
+	for (int level = 0; level < layers - 1; level++) { // 最顶上的屋面层fr没有房间
 		for (int row = 0; row < 4; row++) {
 			ArrangeRow(level, row, "room_residence", size, kComponent, kComponentId);
 		}
 	}
-	AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
-	AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	// 电梯到最高住人层(fr-)，不到屋面层。
+	AssignElevatorCabin(0, -basements, layers - 2, "", "script_empty", { "elevator_basic" });
+	AssignElevatorCabin(1, -basements, layers - 2, "", "script_empty", { "elevator_basic" });
 }
 
 void ResidenceHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

@@ -127,7 +127,6 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 		float ts = trimAtStart.Contains(road) ? trimAtStart[road] : 0.f;
 		float te = trimAtEnd.Contains(road) ? trimAtEnd[road] : 0.f;
 		BuildRoadInstances(road, ts, te, openingVertices, openingTriangles, openingUvs);
-		BuildOpeningMeshes(road, openingVertices, openingTriangles, openingUvs);
 	}
 	if (openingTriangles.Num() > 0) {
 		openingMesh->CreateMeshSection(0, openingVertices, openingTriangles,
@@ -297,8 +296,13 @@ UInstancedStaticMeshComponent* UForeverRoadnetFrameworkComponent::GetOrCreateRoa
 	AActor* owner = GetOwner();
 	if (!owner) return nullptr;
 
+	if (failedRoadMeshes.Contains(key)) return nullptr;
 	UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, *key);
-	if (!mesh) return nullptr;
+	if (!mesh) {
+		failedRoadMeshes.Add(key);
+		UE_LOG(LogTemp, Warning, TEXT("UForeverRoadnetFrameworkComponent: 道路资产加载失败: %s"), *key);
+		return nullptr;
+	}
 
 	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(owner, NAME_None, RF_Transient);
 	ism->SetStaticMesh(mesh);
@@ -331,14 +335,36 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 	UInstancedStaticMeshComponent* ism = GetOrCreateRoadISM(road->GetMesh());
 	if (!ism) return;
 
-	// 按每个开口把[tLow,tHigh]切成互不重叠的保留区间，各自独立铺tiling，缺口精确等于开口的
-	// [t-halfFrac,t+halfFrac](不按固定unit分段判断，否则缺口宽度只能凑整到unit倍数，见.md)。
+	// 开口按重叠合并成一段段簇，每簇记录落在哪一侧(forwardSide=side0)。同一个物理开口常有车行、人行各一条
+	// RoadOpening(同t同宽)，合并后只处理一次，也避免重叠的cube z-fighting。
+	struct FOpeningCluster { float tStart; float tEnd; bool side0; bool side1; };
+	TArray<FOpeningCluster> clusters;
+	{
+		TArray<FOpeningCluster> raw;
+		for (const RoadOpening& op : road->GetOpenings()) {
+			float halfFrac = (op.width * 0.5f) / totalLen;
+			raw.Add({ op.t - halfFrac, op.t + halfFrac, op.forwardSide, !op.forwardSide });
+		}
+		raw.Sort([](const FOpeningCluster& a, const FOpeningCluster& b) { return a.tStart < b.tStart; });
+		for (const FOpeningCluster& c : raw) {
+			if (clusters.Num() > 0 && c.tStart < clusters.Last().tEnd) {
+				FOpeningCluster& last = clusters.Last();
+				last.tEnd = FMath::Max(last.tEnd, c.tEnd);
+				last.side0 |= c.side0;
+				last.side1 |= c.side1;
+			} else {
+				clusters.Add(c);
+			}
+		}
+	}
+
+	// 按每段开口把[tLow,tHigh]切成互不重叠的保留区间，各自独立铺tiling，缺口精确等于开口的
+	// [tStart,tEnd](不按固定unit分段判断，否则缺口宽度只能凑整到unit倍数，见.md)。
 	TArray<TPair<float, float>> keepRanges;
 	keepRanges.Add(TPair<float, float>(tLow, tHigh));
-	for (const RoadOpening& op : road->GetOpenings()) {
-		float halfFrac = (op.width * 0.5f) / totalLen;
-		float opStart = op.t - halfFrac;
-		float opEnd = op.t + halfFrac;
+	for (const FOpeningCluster& cluster : clusters) {
+		float opStart = cluster.tStart;
+		float opEnd = cluster.tEnd;
 
 		TArray<TPair<float, float>> next;
 		for (const TPair<float, float>& range : keepRanges) {
@@ -402,34 +428,70 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 	for (const TPair<float, float>& range : keepRanges) {
 		tileRange(range.Key, range.Value);
 	}
-}
 
-void UForeverRoadnetFrameworkComponent::BuildOpeningMeshes(Road* road,
-	TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs) {
-	if (!road) return;
-	const vector<RoadOpening>& openings = road->GetOpenings();
-	if (openings.empty()) return;
+	// 开口段只在一侧时：这侧换无人行道资产(单个实例拉伸到开口长度，开口一般不大不用重复)，缺的人行道区域补一块
+	// 路面材质矩形，另一侧人行道保留。资产原点在它自己横断面的正中心，去掉side侧人行道(宽pedWidth)后中心比原来的
+	// 路中心往另一侧挪pedWidth/2，所以实例要往相反方向(side0被去掉就往side1方向、反之亦然)补回这半个人行道宽。
+	// 横断面布局见Map::ComputeLaneAnchorPosition：side0占[-shift, W/2]、side1占[-W/2, -shift]，人行道在各自最外侧，
+	// 沿side0方向(右手垂线)为正。条件不满足(两侧都开口、该侧没人行道、资产没配/加载失败)返回false。
+	auto placeSidewalkFreeSegment = [&](int side, float t0, float t1) -> bool {
+		float pedWidth = 0.f;
+		for (float w : road->GetPedestrianLanes(side)) pedWidth += w;
+		if (pedWidth <= 0.f) return false;
+		string freeMeshPath = road->GetSidewalkFreeMesh(side);
+		if (freeMeshPath.empty()) return false;
+		UInstancedStaticMeshComponent* freeIsm = GetOrCreateRoadISM(freeMeshPath);
+		if (!freeIsm) return false;
 
-	// 开口cube宽度取该road横断面总宽，用一块扁平cube代替该段沿路重复mesh(简化做法，见.md)。
-	float totalWidth = road->GetTotalWidth();
+		// 整段落在路口收缩区里，由路口mesh覆盖，什么都不用画。
+		if (t1 <= t0) return true;
 
-	// 同一个物理开口常有车行、人行各一条RoadOpening(Map::AddRoadAccessNode按isVehicle分别追加)，
-	// 按t去重，否则重合的两个quad会z-fighting闪烁。
-	vector<float> drawnTs;
-	for (const RoadOpening& op : openings) {
-		bool alreadyDrawn = false;
-		for (float t : drawnTs) {
-			if (FMath::Abs(t - op.t) < 1e-4f) { alreadyDrawn = true; break; }
+		float segLen = totalLen * (t1 - t0);
+		float tMid = (t0 + t1) * 0.5f;
+		Node start = road->GetPoint(t0);
+		Node end = road->GetPoint(t1);
+		float dx, dy, dz;
+		road->GetTangent(tMid, dx, dy, dz);
+		FVector startW(start.GetX() * ROAD_WORLD_SCALE, start.GetY() * ROAD_WORLD_SCALE, start.GetZ() * ROAD_WORLD_SCALE);
+		FVector endW(end.GetX() * ROAD_WORLD_SCALE, end.GetY() * ROAD_WORLD_SCALE, end.GetZ() * ROAD_WORLD_SCALE);
+		FVector mid = (startW + endW) * 0.5f;
+		FVector fwd = FVector(dx, dy, dz).GetSafeNormal();
+		if (fwd.IsNearlyZero()) fwd = FVector::ForwardVector;
+
+		FVector2D perp0(-fwd.Y, fwd.X);
+		perp0 = perp0.GetSafeNormal();
+		float originShift = (side == 0 ? -1.f : 1.f) * pedWidth * 0.5f; // 资产中心相对路中心的横向位置(地图单位，沿side0方向为正)
+		mid.X += perp0.X * originShift * ROAD_WORLD_SCALE;
+		mid.Y += perp0.Y * originShift * ROAD_WORLD_SCALE;
+
+		FTransform xform(fwd.Rotation(), mid, FVector(segLen / unit, 1.f, 1.f));
+		int32 instanceIndex = freeIsm->AddInstance(xform);
+		FVector2D dirXY(fwd.X, fwd.Y);
+		dirXY = dirXY.GetSafeNormal();
+		if (dirXY.IsNearlyZero()) dirXY = FVector2D(1.f, 0.f);
+		freeIsm->SetCustomDataValue(instanceIndex, 0, dirXY.X, false);
+		freeIsm->SetCustomDataValue(instanceIndex, 1, dirXY.Y, false);
+
+		// 缺的人行道区域：贴最外缘，宽pedWidth、长segLen，补一块路面材质矩形。
+		float stripCenter = (road->GetTotalWidth() - pedWidth) * 0.5f * (side == 0 ? 1.f : -1.f);
+		AppendFlatRoadCube(road, tMid, segLen, pedWidth, outVertices, outTriangles, outUvs, stripCenter);
+		return true;
+	};
+
+	for (const FOpeningCluster& cluster : clusters) {
+		bool placed = false;
+		if (cluster.side0 != cluster.side1) {
+			placed = placeSidewalkFreeSegment(cluster.side0 ? 0 : 1, FMath::Max(cluster.tStart, tLow), FMath::Min(cluster.tEnd, tHigh));
 		}
-		if (alreadyDrawn) continue;
-		drawnTs.push_back(op.t);
-
-		AppendFlatRoadCube(road, op.t, op.width, totalWidth, outVertices, outTriangles, outUvs);
+		if (!placed) {
+			AppendFlatRoadCube(road, (cluster.tStart + cluster.tEnd) * 0.5f, (cluster.tEnd - cluster.tStart) * totalLen,
+				road->GetTotalWidth(), outVertices, outTriangles, outUvs);
+		}
 	}
 }
 
 void UForeverRoadnetFrameworkComponent::AppendFlatRoadCube(Road* road, float centerT, float lengthAlongRoad, float crossWidth,
-	TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs) {
+	TArray<FVector>& outVertices, TArray<int32>& outTriangles, TArray<FVector2D>& outUvs, float lateralOffset) {
 	if (!road) return;
 	if (crossWidth <= 0.f) crossWidth = 1.f;
 
@@ -445,7 +507,8 @@ void UForeverRoadnetFrameworkComponent::AppendFlatRoadCube(Road* road, float cen
 
 	float halfLen = lengthAlongRoad * 0.5f;
 	float halfWidth = crossWidth * 0.5f;
-	float cx = center.GetX(), cy = center.GetY();
+	// 这里的perp是side0方向(右手垂线)的反方向，沿side0偏移lateralOffset就是沿-perp挪。
+	float cx = center.GetX() - perpX * lateralOffset, cy = center.GetY() - perpY * lateralOffset;
 
 	// 高度：路面不一定在Z=0(山路、隧道)，cube前后两端各取路面在该点的真实高度，不能写死贴地，
 	// 否则短缺口和开口在山上会漏在地下或悬空。
@@ -512,7 +575,7 @@ void UForeverRoadnetFrameworkComponent::BuildJunctionMeshes() {
 		}
 
 		// approaches按angle升序(标准数学逆时针)排列，boundaryIdx因此也是逆时针序——扇形三角化
-		// 要反过来传(centerIdx,b,a)才是UE要的顺时针/正面朝上环绕，见BuildOpeningMeshes同一条注释。
+		// 要反过来传(centerIdx,b,a)才是UE要的顺时针/正面朝上环绕，见AppendFlatRoadCube同一条注释。
 		int32 m = boundaryIdx.Num();
 		for (int32 i = 0; i < m; i++) {
 			int32 a = boundaryIdx[i];

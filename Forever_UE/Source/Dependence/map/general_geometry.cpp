@@ -410,6 +410,7 @@ Road::Road(const Road& other) :
 	name(other.name),
 	mesh(other.mesh),
 	unit(other.unit),
+	sidewalkFreeMesh{ other.sidewalkFreeMesh[0], other.sidewalkFreeMesh[1] },
 	vehicleLanes{ other.vehicleLanes[0], other.vehicleLanes[1] },
 	parkingLanes{ other.parkingLanes[0], other.parkingLanes[1] },
 	pedestrianLanes{ other.pedestrianLanes[0], other.pedestrianLanes[1] },
@@ -425,6 +426,8 @@ Road& Road::operator=(const Road& other) {
 		name = other.name;
 		mesh = other.mesh;
 		unit = other.unit;
+		sidewalkFreeMesh[0] = other.sidewalkFreeMesh[0];
+		sidewalkFreeMesh[1] = other.sidewalkFreeMesh[1];
 		vehicleLanes[0] = other.vehicleLanes[0];
 		vehicleLanes[1] = other.vehicleLanes[1];
 		parkingLanes[0] = other.parkingLanes[0];
@@ -486,6 +489,16 @@ const vector<float>& Road::GetPedestrianLanes(int side) const {
 	static const vector<float> empty;
 	if (side != 0 && side != 1) return empty;
 	return pedestrianLanes[side];
+}
+
+void Road::SetSidewalkFreeMesh(int side, const string& meshPath) {
+	if (side != 0 && side != 1) return;
+	sidewalkFreeMesh[side] = meshPath;
+}
+
+string Road::GetSidewalkFreeMesh(int side) const {
+	if (side != 0 && side != 1) return string();
+	return sidewalkFreeMesh[side];
 }
 
 void Road::AddOpening(const RoadOpening& opening) {
@@ -1000,12 +1013,21 @@ Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, con
 	float endT2 = endRoad2 ? ProjectT(endRoad2, wx2, wy2) : 0.f;
 
 	// 小路接到"大路"(非小路)的那一端给大路标RoadOpening(纯几何/渲染,不碰导航图);
-	// 两条小路互接不标。forwardSide/isVehicle此处无消费方,填任意值。
+	// 两条小路互接不标。小路只伸向大路的一侧(它所在lot那一侧)：用小路另一端相对大路切线的右手垂线(-ty,tx)
+	// 判断是side0还是side1，渲染据此只在这一侧开口。isVehicle此处无消费方,填任意值。
+	auto sideOfPathOn = [&](Road* host, float hostT, float fromX, float fromY, float otherX, float otherY) -> bool {
+		float tx, ty, tz;
+		host->GetTangent(hostT, tx, ty, tz);
+		float tl = sqrtf(tx * tx + ty * ty);
+		if (tl < 1e-6f) return true;
+		float perp0X = -ty / tl, perp0Y = tx / tl;
+		return (otherX - fromX) * perp0X + (otherY - fromY) * perp0Y >= 0.f;
+		};
 	if (endRoad1 && !endRoad1->IsPathRoad()) {
 		RoadOpening opening;
 		opening.t = endT1;
 		opening.width = pathWidth;
-		opening.forwardSide = true;
+		opening.forwardSide = sideOfPathOn(endRoad1, endT1, wx1, wy1, wx2, wy2);
 		opening.isVehicle = true;
 		endRoad1->AddOpening(opening);
 	}
@@ -1013,7 +1035,7 @@ Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, con
 		RoadOpening opening;
 		opening.t = endT2;
 		opening.width = pathWidth;
-		opening.forwardSide = true;
+		opening.forwardSide = sideOfPathOn(endRoad2, endT2, wx2, wy2, wx1, wy1);
 		opening.isVehicle = true;
 		endRoad2->AddOpening(opening);
 	}

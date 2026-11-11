@@ -194,6 +194,16 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		return "/Game/Asset/Roadnet/Default/Mesh/default_" + suffix + ".default_" + suffix;
 		};
 
+	// 开口落在某一侧时，这侧换用"该侧不含人行道"的资产(另一侧不变)，见JingRoadnet的同名lambda。
+	auto setSidewalkFree = [&](Road& road) {
+		string lanes = to_string(currentLanes);
+		string side0 = "default_" + lanes + "_0_0_" + lanes + "_0_1";
+		string side1 = "default_" + lanes + "_0_1_" + lanes + "_0_0";
+		// 资产名的左三位对应side0、右三位对应side1(同configureLanes)。
+		road.SetSidewalkFreeMesh(0, "/Game/Asset/Roadnet/Default/Mesh/" + side0 + "." + side0);
+		road.SetSidewalkFreeMesh(1, "/Game/Asset/Roadnet/Default/Mesh/" + side1 + "." + side1);
+		};
+
 	auto addControls = [](Road& road, const Node& n1, const Node& n2, float startSlope = 0.f, float endSlope = 0.f) {
 		float dx = n2.GetX() - n1.GetX();
 		float dy = n2.GetY() - n1.GetY();
@@ -227,11 +237,13 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 			roads.emplace_back(name, groundNode, flatNode, meshPath, meshUnit);
 			addControls(roads.back(), groundNode, flatNode);
 			configureLanes(roads.back());
+			setSidewalkFree(roads.back());
 			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			roads.emplace_back(name, flatNode, splitNode, meshPath, meshUnit);
 			addControls(roads.back(), flatNode, splitNode);
 			configureLanes(roads.back());
+			setSidewalkFree(roads.back());
 			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			if (!noLevelPart) {
@@ -245,6 +257,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		bool level = fabsf(n1.GetZ() - n2.GetZ()) < 1e-4f && fabsf(startSlope) < 1e-6f && fabsf(endSlope) < 1e-6f;
 		if (!level) addControls(roads.back(), n1, n2, startSlope, endSlope);
 		configureLanes(roads.back());
+		if (!(n1Tunnel && n2Tunnel)) setSidewalkFree(roads.back());
 		if (n1.GetZ() > 1e-4f || n2.GetZ() > 1e-4f) {
 			AddTerrainFit(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth(), TERRAIN_FIT_FALLOFF);
 		}
