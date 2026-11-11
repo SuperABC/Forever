@@ -103,12 +103,16 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 		footprint.sizeRatioX = max(0.f, quad.GetSizeX() - 2.f * kSideGap) / quad.GetSizeX();
 	}
 
+	// 顶层模板fr-的屋顶打了"roof"标签，对应黑色材质实例。
+	SetSurfaceMaterial("roof", "/Game/Asset/Building/Material/Black.Black");
+
 	AssignFloor(-1, "preset_residential_wing_bg+", direction);
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
 	AssignFloor(0, "preset_residential_wing_fg+-", direction);
 	AssignFloor(1, "preset_residential_wing_fl+-", direction);
 	for (int level = 2; level < layers; level++) {
-		AssignFloor(level, "preset_residential_wing_fu+-", direction);
+		// 最高层换成顶层模板fr-(没有楼梯、天花板是屋顶)，single/row数量与fu+-一致。
+		AssignFloor(level, level == layers - 1 ? "preset_residential_wing_fr-" : "preset_residential_wing_fu+-", direction);
 		AssignRoom(level, 0, "room_residence", kComponent, kComponentId); // fu+-多出的两个single
 		AssignRoom(level, 1, "room_residence", kComponent, kComponentId);
 	}

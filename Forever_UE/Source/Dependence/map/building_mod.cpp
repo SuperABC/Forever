@@ -7,6 +7,10 @@ void BuildingMod::AssignFloor(int level, const string& templateName, int face, F
 	floors[level] = FloorLayoutSpec{ templateName, face, std::move(assets) };
 }
 
+void BuildingMod::SetSurfaceMaterial(const string& tag, const string& materialPath) {
+	surfaceMaterials[tag] = materialPath;
+}
+
 void BuildingMod::AssignFloors(const string& templateName, int face, FloorAssetSpec assets) {
 	for (int level = -basements; level < layers; level++) {
 		floors[level] = FloorLayoutSpec{ templateName, face, assets };

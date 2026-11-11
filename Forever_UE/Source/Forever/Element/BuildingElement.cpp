@@ -39,6 +39,8 @@
 #define BUILDING_HEIGHT_EPSILON 1.f
 // 墙体厚度(地图单位)，照抄老工程BuildingBase.cpp::ConstructQuad里写死的0.01f。
 #define BUILDING_WALL_THICKNESS 0.01f
+// 天花板slab整体上移、地板slab整体下移的世界单位(cm)，避免slab顶/底面和墙顶/墙底共面z-fighting，见BuildFloorSection。
+#define BUILDING_SLAB_Z_SHIFT 1.f
 // UE标准立方体静态网格(/Game/Asset/Common/Mesh/Cube.Cube)的原生边长(cm)——AddCubeInstance/
 // SpawnMesh用这个值把它缩放到目标尺寸，缩放系数=目标尺寸/这个原生边长。
 #define BUILDING_CUBE_MESH_SIZE 100.f
@@ -741,18 +743,19 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	if (buildShell) for (const Ground& ground : floor->GetGrounds()) {
 		float wx, wy;
 		ComputeWorldPosition(*building, ground.GetPosX(), ground.GetPosY(), wx, wy);
-		float wz = floorBottomWorld + kSlabThickness * 0.5f * BUILDING_WORLD_SCALE;
+		float wz = floorBottomWorld + kSlabThickness * 0.5f * BUILDING_WORLD_SCALE - BUILDING_SLAB_Z_SHIFT;
 		float sizeX = ground.GetSizeX() * BUILDING_WORLD_SCALE, sizeY = ground.GetSizeY() * BUILDING_WORLD_SCALE;
 		float sizeZ = kSlabThickness * BUILDING_WORLD_SCALE;
-		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, floorMaterial);
+		// 带标签的地板用mod登记的材质实例，没有/加载失败退回这一层的地板材质(默认白色)。
+		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, framework->ResolveMaterial(ground.GetMaterial(), floorMaterial));
 	}
 	if (buildShell) for (const Ceiling& ceiling : floor->GetCeilings()) {
 		float wx, wy;
 		ComputeWorldPosition(*building, ceiling.GetPosX(), ceiling.GetPosY(), wx, wy);
-		float wz = floorTopWorld - kSlabThickness * 0.5f * BUILDING_WORLD_SCALE;
+		float wz = floorTopWorld - kSlabThickness * 0.5f * BUILDING_WORLD_SCALE + BUILDING_SLAB_Z_SHIFT;
 		float sizeX = ceiling.GetSizeX() * BUILDING_WORLD_SCALE, sizeY = ceiling.GetSizeY() * BUILDING_WORLD_SCALE;
 		float sizeZ = kSlabThickness * BUILDING_WORLD_SCALE;
-		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, ceilingMaterial);
+		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, framework->ResolveMaterial(ceiling.GetMaterial(), ceilingMaterial));
 	}
 
 	FlushCubeInstances();

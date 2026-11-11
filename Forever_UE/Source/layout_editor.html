@@ -290,7 +290,9 @@ const MODE_TYPES = {
 };
 
 // Capability sets for geometry element types
-const SIMPLE   = new Set(['ceilings', 'grounds', 'hatches']);
+const SIMPLE   = new Set(['hatches']);
+// 天花板/地板内部是{rect, tag?}对象(tag可选，对应mod里登记的材质)；没有tag时仍按旧格式输出裸8数组。
+const TAGGED   = new Set(['ceilings', 'grounds']);
 const HAS_DIR  = new Set(['stairs', 'ramps', 'elevators', 'singles', 'rows']);
 const HAS_WALL = new Set(['stairs', 'ramps', 'elevators', 'corridors']);
 const HAS_DOOR = new Set(['corridors', 'singles', 'rows']);
@@ -1703,6 +1705,21 @@ function makeSelSec() {
   sec.appendChild(div('sec-title', `${TYPE_LABEL[type]}  #${idx}`));
   sec.appendChild(makeRectEdit(type, item));
 
+  if (TAGGED.has(type)) {
+    sec.appendChild(document.createElement('hr'));
+    sec.appendChild(div('field-title', '标签 (留空=白色默认)'));
+    const tagInput = Object.assign(document.createElement('input'), {
+      type: 'text', value: item.tag || '', placeholder: '如 roof'
+    });
+    tagInput.addEventListener('change', () => {
+      snapshot();
+      const v = tagInput.value.trim();
+      if (v) item.tag = v; else delete item.tag;
+      redraw();
+    });
+    sec.appendChild(div('row', tagInput));
+  }
+
   if (HAS_DIR.has(type)) {
     sec.appendChild(document.createElement('hr'));
     sec.appendChild(div('field-title', '朝向'));
@@ -2071,6 +2088,7 @@ function parseAndApply(text, name, handle = null) {
     const entry = makeBlankEntry(name);
     entry.handle = handle;
     ALL_KEYS.forEach(k => { entry.data[k] = parsed[k] || []; });
+    TAGGED.forEach(k => { entry.data[k] = entry.data[k].map(it => Array.isArray(it) ? { rect: it } : it); });
     // Legacy (pre-migration) files stored the pedestrian layer under the bare
     // "navigation" key — accept it as a fallback alias so old files still load.
     const rawPedNav = parsed.pedestrianNavigation || parsed.navigation;
@@ -2218,6 +2236,12 @@ function serializeLayout() {
       lines.push(`\t"${key}": [`);
       elemArray.forEach(item => lines.push(`\t\t${fmt8(item)},`));
       lines.push(`\t],`);
+    } else if (TAGGED.has(key)) {
+      lines.push(`	"${key}": [`);
+      elemArray.forEach(item => lines.push(item.tag
+        ? `		{"rect": ${fmt8(item.rect)}, "tag": ${JSON.stringify(item.tag)}},`
+        : `		${fmt8(item.rect)},`));
+      lines.push(`	],`);
     } else {
       const serializedItems = elemArray.map(obj => serializeObj(obj, '\t\t'));
       lines.push(`\t"${key}": [${serializedItems.join(',\n\t')}],`);

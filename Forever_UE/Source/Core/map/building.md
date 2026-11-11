@@ -34,6 +34,7 @@
   `WallHole`(`unordered_map<int,vector<RectParams>>`，key是`FACE_DIRECTION`)描述一面墙上的
   门/窗开口列表。
 - **`Stair`/`Elevator`/`Ramp`/`Ceiling`/`Ground`/`Corridor`/`Hatch`/`Single`/`Row`九个元素类
+  - **地板/天花板标签与材质**：`.layout`的`ceilings`/`grounds`条目可写成`{"rect":[8个数], "tag":"roof"}`(纯数组写法仍可用，无标签)；`Ceiling`/`Ground`多存`tag`和`material`(材质实例软路径)，`Building::ReadFloor`实例化时按tag查`mod->surfaceMaterials`(`BuildingMod::SetSurfaceMaterial`)抄上，没有tag或没登记就留空，Forever层渲染时空=退回白色默认。两个字段随存档保存(`map_save`的ceilings/grounds多写两个字符串，没升存档版本)。
   +`Floor`+`BuildingLayoutLibrary`**：九个元素类都是`Quad`的子类，构造时只存一份`RectParams`，
   调`InstanciateQuad(width,height)`才按楼层实际宽高换算出绝对`Quad`(局部坐标，原点在楼体
   左下角，未旋转)。`Floor`是一层楼实例化完的完整数据(9个vector)。`BuildingLayoutLibrary`

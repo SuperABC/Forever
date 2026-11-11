@@ -123,6 +123,12 @@ public:
 	// AssignElevatorCabin记录的电梯轿厢列表。
 	std::vector<ElevatorCabinSpec> cabins;
 
+	// 地板/天花板标签->材质实例软路径(如"roof"->"/Game/Asset/Building/Material/Black.Black"),在Layout()里用
+	// SetSurfaceMaterial填写。.layout里ceilings/grounds条目带"tag"才会查这张表;没有标签、或标签没登记,
+	// 退回楼层资产/框架默认的白色。Core在Building::ReadFloor实例化地板/天花板时把路径抄到每块上。
+	void SetSurfaceMaterial(const std::string& tag, const std::string& materialPath);
+	std::unordered_map<std::string, std::string> surfaceMaterials;
+
 	// 非single/row元素(目前只有corridor)上的门,tag->DoorSpec,在Layout()里填写,见feature_spec.h/door.h。
 	std::unordered_map<std::string, DoorSpec> doorSpecs;
 

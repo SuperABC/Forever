@@ -529,15 +529,24 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 
 		array<vector<Ceiling>, 4> ceilings4;
 		for (auto& c : root["ceilings"]) {
-			RectParams rect = ReadRectParams(c);
-			for (int i = 0; i < 4; i++) ceilings4[i].emplace_back(InverseParams(rect, i));
+			// 条目是纯8数组(无标签)或{"rect":[...], "tag":"..."}。
+			RectParams rect = ReadRectParams(c.IsObject() ? c["rect"] : c);
+			string tag = c.IsObject() && !c["tag"].IsNull() ? c["tag"].AsString() : "";
+			for (int i = 0; i < 4; i++) {
+				ceilings4[i].emplace_back(InverseParams(rect, i));
+				ceilings4[i].back().SetTag(tag);
+			}
 		}
 		ceilingTemplates[basename] = std::move(ceilings4);
 
 		array<vector<Ground>, 4> grounds4;
 		for (auto& g : root["grounds"]) {
-			RectParams rect = ReadRectParams(g);
-			for (int i = 0; i < 4; i++) grounds4[i].emplace_back(InverseParams(rect, i));
+			RectParams rect = ReadRectParams(g.IsObject() ? g["rect"] : g);
+			string tag = g.IsObject() && !g["tag"].IsNull() ? g["tag"].AsString() : "";
+			for (int i = 0; i < 4; i++) {
+				grounds4[i].emplace_back(InverseParams(rect, i));
+				grounds4[i].back().SetTag(tag);
+			}
 		}
 		groundTemplates[basename] = std::move(grounds4);
 
@@ -867,12 +876,20 @@ void Building::ReadFloor(int level, int face, const string& templateName, const 
 		ramp.InstanciateQuad(width, height);
 		floor.AddRamp(ramp);
 	}
+	// 带标签的地板/天花板按mod登记的标签->材质表抄上材质路径，没有标签或没登记就留空(渲染层用白色)。
+	auto surfaceMaterial = [&](const string& tag) {
+		if (tag.empty() || !mod) return string();
+		auto found = mod->surfaceMaterials.find(tag);
+		return found != mod->surfaceMaterials.end() ? found->second : string();
+		};
 	for (Ceiling ceiling : library.GetCeilings(templateName, face)) {
 		ceiling.InstanciateQuad(width, height);
+		ceiling.SetMaterial(surfaceMaterial(ceiling.GetTag()));
 		floor.AddCeiling(ceiling);
 	}
 	for (Ground ground : library.GetGrounds(templateName, face)) {
 		ground.InstanciateQuad(width, height);
+		ground.SetMaterial(surfaceMaterial(ground.GetTag()));
 		floor.AddGround(ground);
 	}
 	for (Corridor corridor : library.GetCorridors(templateName, face)) {

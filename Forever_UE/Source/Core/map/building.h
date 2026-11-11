@@ -79,8 +79,16 @@ public:
 	explicit Ceiling(RectParams params);
 	void InstanciateQuad(float width, float height);
 
+	// .layout里的标签和mod(BuildingMod::SetSurfaceMaterial)按标签查到的材质实例软路径，都可为空(空=白色默认)。
+	const std::string& GetTag() const { return tag; }
+	void SetTag(std::string value) { tag = std::move(value); }
+	const std::string& GetMaterial() const { return material; }
+	void SetMaterial(std::string value) { material = std::move(value); }
+
 private:
 	RectParams params;
+	std::string tag;
+	std::string material;
 };
 
 class Ground : public Quad {
@@ -90,8 +98,16 @@ public:
 	explicit Ground(RectParams params);
 	void InstanciateQuad(float width, float height);
 
+	// 同Ceiling。
+	const std::string& GetTag() const { return tag; }
+	void SetTag(std::string value) { tag = std::move(value); }
+	const std::string& GetMaterial() const { return material; }
+	void SetMaterial(std::string value) { material = std::move(value); }
+
 private:
 	RectParams params;
+	std::string tag;
+	std::string material;
 };
 
 // 地板/天花板洞口：只有位置矩形。只有地下一层(离地表最近的basement)的Hatch会被Map转发进Map::AddHatch挖世界地形，见building.md

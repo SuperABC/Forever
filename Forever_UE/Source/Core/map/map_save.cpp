@@ -938,8 +938,18 @@ void MapSaveCodec::WriteFloor(const Floor& floor, ByteWriter& w) {
 	writeDirWalls(floor.stairs);
 	writeDirWalls(floor.elevators);
 	writeDirWalls(floor.ramps);
-	writePlain(floor.ceilings);
-	writePlain(floor.grounds);
+	// 地板/天花板在普通矩形之外多存标签和材质路径(没升存档版本号，旧存档读不了)。
+	auto writeSurfaces = [&](const auto& list) {
+		w.U32(static_cast<uint32_t>(list.size()));
+		for (const auto& e : list) {
+			WriteFloats(e.params, w);
+			WriteQuad(e, w);
+			w.Str(e.tag);
+			w.Str(e.material);
+		}
+		};
+	writeSurfaces(floor.ceilings);
+	writeSurfaces(floor.grounds);
 	writePlain(floor.hatches);
 
 	writeOpenings(floor.corridors, true);
@@ -997,8 +1007,21 @@ void MapSaveCodec::ReadFloor(Floor& floor, ByteReader& r) {
 	readDirWalls(floor.stairs);
 	readDirWalls(floor.elevators);
 	readDirWalls(floor.ramps);
-	readPlain(floor.ceilings);
-	readPlain(floor.grounds);
+	auto readSurfaces = [&](auto& list) {
+		using T = typename std::decay_t<decltype(list)>::value_type;
+		uint32_t n = r.U32();
+		for (uint32_t i = 0; i < n && !r.Failed(); i++) {
+			RectParams params;
+			ReadFloats(params, r);
+			T e(params);
+			ReadQuad(e, r);
+			e.tag = r.Str();
+			e.material = r.Str();
+			list.push_back(e);
+		}
+		};
+	readSurfaces(floor.ceilings);
+	readSurfaces(floor.grounds);
 	readPlain(floor.hatches);
 
 	readOpenings(floor.corridors);
