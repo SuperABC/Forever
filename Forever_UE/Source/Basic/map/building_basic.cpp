@@ -1,5 +1,4 @@
 #include "building_basic.h"
-#include "door_assets.h"
 
 #include "common/utility.h"
 
@@ -60,36 +59,31 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 		}
 	}
 
-	basements = 1;
-	layers = 8 + GetRandom(6); // 地上8~13层随机(含最顶上只有屋面的fr层，住人层7~12)，另有地下1层
+	// side布局：地上7~12层随机，没有地下室。
+	basements = 0;
+	layers = 7 + GetRandom(6);
 	floorHeights.clear();
-	floorHeights.push_back(0.35f); // 地下室
-	// 地上每层高度统一0.4，不循环取不同值。
+	// 每层高度统一0.4。
 	for (int i = 0; i < layers; i++) {
 		floorHeights.push_back(0.4f);
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
-	// spec，见Core/map/door.h的ResolveDoorSpec。
-	UseDefaultDoor(doorSpecs["entrance"]);
-
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
 
-	// 只用preset_residential_wing系列模板：地下1层bg+(停车库)，1楼fg+-，2楼fl+-，3楼及以上fu+-。
-	// 偏好方向沿用原来wing模板的取法：长边朝向正对的路，
+	// 只用preset_residential_side系列模板(1楼fg+、顶层fu-、中间fu+-)(原wing布局的C++备份见building_basic_wing_backup.txt)。
+	// 偏好方向：长边朝向正对的路，
 	// 只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction(否则outside端点会查不到路)。
-	constexpr float size = 300.f; // 房间面积
 	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_NORTH + GetRandom(2) : FACE_WEST + GetRandom(2);
 	auto roadIt = boundaryRoads.find(preferredDirection);
 	if (roadIt != boundaryRoads.end() && roadIt->second) {
 		direction = preferredDirection;
 	}
 
-	// 楼体摆法：朝向轴(进深)上最多4(地图单位)，地块没这么深就占满，更深就取4并居中；
+	// 楼体摆法：朝向轴(进深)上最多3(地图单位)，地块没这么深就占满，更深就取3并居中；
 	// 垂直于进深的方向(开间)居中，两侧各留kSideGap的空隙。
-	constexpr float kMaxDepth = 4.f;
+	constexpr float kMaxDepth = 3.f;
 	constexpr float kSideGap = 0.2f;
 	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 1.f, 1.f };
 	if (direction == FACE_WEST || direction == FACE_EAST) {
@@ -100,36 +94,29 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 		footprint.sizeRatioX = max(0.f, quad.GetSizeX() - 2.f * kSideGap) / quad.GetSizeX();
 	}
 
-	// 顶层模板fr-的屋顶打了"roof"标签，对应黑色材质实例。
+	// 墙面/地面/屋顶标签 -> 材质实例(side与wing两套layout用到的标签)。
 	SetSurfaceMaterial("roof", "/Game/Asset/Building/Material/Black.Black");
 	SetSurfaceMaterial("brick", "/Game/Asset/Building/Material/Brick.Brick");
 	SetSurfaceMaterial("concrete", "/Game/Asset/Building/Material/Concrete.Concrete");
+	SetSurfaceMaterial("clay", "/Game/Asset/Building/Material/Clay.Clay");
 	SetSurfaceMaterial("pavement", "/Game/Asset/Building/Material/Pavement.Pavement");
 	// 楼体与建筑范围之间的空隙铺人行道材质。
 	gapMaterial = "/Game/Asset/Building/Material/Pavement.Pavement";
 
-	AssignFloor(-1, "preset_residential_wing_bg+", direction);
-	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
-	AssignFloor(0, "preset_residential_wing_fg+-", direction);
-	AssignFloor(1, "preset_residential_wing_fl+-", direction);
-	for (int level = 2; level < layers; level++) {
-		// 最顶上再加一层屋面层fr(只有地面、没有房间)；其下一层(最高住人层)换成顶层模板fr-(没有楼梯、天花板是屋顶)，single/row数量与fu+-一致。
-		if (level == layers - 1) {
-			AssignFloor(level, "preset_residential_wing_fr", direction);
-			continue;
-		}
-		AssignFloor(level, level == layers - 2 ? "preset_residential_wing_fr-" : "preset_residential_wing_fu+-", direction);
-		AssignRoom(level, 0, "room_residence", kComponent, kComponentId); // fu+-多出的两个single
-		AssignRoom(level, 1, "room_residence", kComponent, kComponentId);
-	}
-	for (int level = 0; level < layers - 1; level++) { // 最顶上的屋面层fr没有房间
-		for (int row = 0; row < 4; row++) {
-			ArrangeRow(level, row, "room_residence", size, kComponent, kComponentId);
+	// 1楼fg+，顶层fu-，中间fu+-；每层8个single，4个电梯井道贯穿全楼。
+	FloorAssetSpec assets;
+	assets.stairMeshPath = "/Game/Asset/Building/Mesh/Stair_Line.Stair_Line"; // 直跑楼梯，不用默认的Stair_Return
+	for (int level = 0; level < layers; level++) {
+		const char* templateName = level == 0 ? "preset_residential_side_fg+"
+			: level == layers - 1 ? "preset_residential_side_fu-" : "preset_residential_side_fu+-";
+		AssignFloor(level, templateName, direction, assets);
+		for (int slot = 0; slot < 8; slot++) {
+			AssignRoom(level, slot, "room_residence", kComponent, kComponentId);
 		}
 	}
-	// 电梯到最高住人层(fr-)，不到屋面层。
-	AssignElevatorCabin(0, -basements, layers - 2, "", "script_empty", { "elevator_basic" });
-	AssignElevatorCabin(1, -basements, layers - 2, "", "script_empty", { "elevator_basic" });
+	for (int elevator = 0; elevator < 4; elevator++) {
+		AssignElevatorCabin(elevator, 0, layers - 1, "", "script_empty", { "elevator_basic" });
+	}
 }
 
 void ResidenceHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
@@ -137,15 +124,15 @@ void ResidenceHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc e
 }
 
 float ResidenceHighBuilding::RandomAcreage() {
-	return 4000.f * powf(1.f + GetRandom(1000) / 1000.f, 2); // 4000~16000，平方使小地块更常见
+	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f, 2); // 2000~8000，平方使小地块更常见
 }
 
 float ResidenceHighBuilding::GetAcreageMin() {
-	return 4000.f;
+	return 2000.f;
 }
 
 float ResidenceHighBuilding::GetAcreageMax() {
-	return 16000.f;
+	return 8000.f;
 }
 
 float ResidenceHighBuilding::GetPower(AREA_TYPE area) {
@@ -204,9 +191,10 @@ void ResidenceMiddleBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	UseDefaultDoor(doorSpecs["entrance"]);
+	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
@@ -416,9 +404,10 @@ void ResidenceLowBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	UseDefaultDoor(doorSpecs["entrance"]);
+	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
@@ -623,7 +612,8 @@ void ShopHighBuilding::Layout(int& direction, const Quad& quad,
 
 	// 商店大门：骨骼动画门，有名字可以交互("敲门")，照抄vehicle_basic.script的
 	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
-	UseDefaultDoor(doorSpecs["entrance"]);
+	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 	doorSpecs["entrance"].name = "商店大门";
 	doorSpecs["entrance"].scriptModName = "script_empty";
 	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
@@ -775,7 +765,8 @@ void ShopMiddleBuilding::Layout(int& direction, const Quad& quad,
 
 	// 商店大门：骨骼动画门，有名字可以交互("敲门")，照抄vehicle_basic.script的
 	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
-	UseDefaultDoor(doorSpecs["entrance"]);
+	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 	doorSpecs["entrance"].name = "商店大门";
 	doorSpecs["entrance"].scriptModName = "script_empty";
 	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
@@ -927,7 +918,8 @@ void ShopLowBuilding::Layout(int& direction, const Quad& quad,
 
 	// 商店大门：骨骼动画门，有名字可以交互("敲门")，照抄vehicle_basic.script的
 	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
-	UseDefaultDoor(doorSpecs["entrance"]);
+	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 	doorSpecs["entrance"].name = "商店大门";
 	doorSpecs["entrance"].scriptModName = "script_empty";
 	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
@@ -1351,9 +1343,10 @@ void OfficeHighBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	UseDefaultDoor(doorSpecs["entrance"]);
+	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 
 	constexpr const char* kComponent = "component_office";
 	constexpr int kComponentId = 0;
@@ -1562,9 +1555,10 @@ void OfficeMiddleBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	UseDefaultDoor(doorSpecs["entrance"]);
+	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 
 	constexpr const char* kComponent = "component_office";
 	constexpr int kComponentId = 0;
@@ -1773,9 +1767,10 @@ void OfficeLowBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	UseDefaultDoor(doorSpecs["entrance"]);
+	doorSpecs["entrance"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["entrance"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 
 	constexpr const char* kComponent = "component_office";
 	constexpr int kComponentId = 0;

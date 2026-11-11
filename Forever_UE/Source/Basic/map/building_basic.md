@@ -21,8 +21,8 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 ## ResidenceBuilding
 
 - `GetPower`：由三档子类各自决定(见上)。`RandomAcreage()=2000*(1+rand*2)^2`，`GetAcreageMin()=2000`，`GetAcreageMax()=18000`。`Assign()`空实现。
-- 住宅高密度(`ResidenceHighBuilding`)的面积：`RandomAcreage()=4000*(1+rand)^2`(4000~16000)，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`。
-- `Layout()`：`basements=1`；`layers`**8~13随机**(地上，含最顶上的屋面层，另有地下1层；住人层7~12)(住宅高密度，其余两档仍按`quad.GetAcreage()`分档)；层高地上统一0.4、地下室0.35。**住宅高密度(`ResidenceHighBuilding`)只用`preset_residential_wing_*`系列模板**(地下室`bg+`放`room_parking`单槽位、1楼`fg+-`、2楼`fl+-`、3楼及以上`fu+-`、最高住人层换成`fr-`(顶层模板，无楼梯；single/row数量与`fu+-`相同；屋顶天花板打了`roof`标签，`Layout`里`SetSurfaceMaterial("roof", ".../Building/Material/Black.Black")`)(多出2个single，各放`room_residence`)，地上每个住人层各4排`room_residence`，2个电梯井道到`fr-`层)；`fr-`之上再加一层屋面层`fr`(`preset_residential_wing_fr`，只有`roof`地面，无房间/电梯)，不再按尺寸分档；偏好朝向沿用wing模板的取法(长边X→南北向，否则东西向，仅在对应边界路存在时采用)。**楼体`footprint`**：开间方向(垂直于进深)居中、两侧各留0.2的空隙；进深方向(朝向轴)最多4(地图单位)并**居中**，地块没这么深就占满。房间面积`ArrangeRow`的`size`=300。其余两档仍是原来的按尺寸分档随机选模板(`layout` 0-3)。
+- 住宅高密度(`ResidenceHighBuilding`)的面积：`RandomAcreage()=2000*(1+rand)^2`(2000~8000)，`GetAcreageMin()=2000`，`GetAcreageMax()=8000`。
+- `ResidenceHighBuilding::Layout()`：只服务 `preset_residential_side_*`（旧 `preset_residential_wing_*` 版本的 C++ 备份在 `building_basic_wing_backup.txt`，不参与编译）。`basements=0`、`layers`=7~12 随机、层高统一 0.4；1 楼 `fg+`、顶层 `fu-`、中间 `fu+-`，每层 8 个 single 放 `room_residence`，4 个电梯井道各配一台 `elevator_basic` 轿厢贯穿全楼；每层 `stairMeshPath`=`Stair_Line`。`footprint`：进深方向(朝向轴)上限 3(地图单位)，地块没这么深就占满，更深取 3 并居中；开间方向居中、两侧各留 0.2；朝向偏好长边正对的路(仅对应边界路存在时采用)。登记的表面标签：`roof`→Black、`brick`→Brick、`concrete`→Concrete、`clay`→Clay、`pavement`→Pavement；`gapMaterial`=Pavement(楼体与建筑范围之间的空隙)。其余两档仍是原来的按尺寸分档随机选模板(`layout` 0-3)。
 - 大门`doorSpecs["entrance"]`：随机左右滑动单开门(`Cube`资产占位)，只有corridor门洞带`entrance`标签才用到，见`Core/map/door.h`的`ResolveDoorSpec`。
 - 挂示例脚本`entity_event`。
 
@@ -67,6 +67,3 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 
 - `MOHAR_*`的footprint、层高、模板、缩放等数值是按实测调的默认值，还要按效果继续调。
 - 二楼模板`fu2`目前和一楼`fg1`内容一样，等二楼房间范围对上模型再调。
-
-## 墙标签测试
-`ResidenceHighBuilding` 登记了 `outer`→`Black`、`inner`→`White`；`preset_residential_wing_fr-.layout` 第一个联排的北墙打了 `{"north":"outer","south":"inner"}` 用来验证墙侧面材质（需先在 UE 里做好 `Wall`）。

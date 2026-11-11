@@ -1,5 +1,4 @@
 #include "room_basic.h"
-#include "door_assets.h"
 
 using namespace std;
 
@@ -20,11 +19,11 @@ void ResidenceRoom::SetProperty() {
 	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
 	milestoneNames = { "entity_event" };
 
-	// 房间门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有single/row的门洞带了"room"
-	// 这个tag才会用到这份spec，见Core/map/door.h的ResolveDoorSpec。
-	// "home"：preset_residential_wing_fg+-.layout里两个row的门洞标签，用来测试骨骼门。
-	UseDefaultDoor(doorSpecs["room"]);
-	UseDefaultDoor(doorSpecs["home"]);
+	// 房间门：骨骼动画门(目前所有门共用测试门)。只有single/row的门洞带了对应tag
+	// 才会用到这份spec，见Core/map/door.h的ResolveDoorSpec。
+	// 住宅房间门洞统一用"home"标签。
+	doorSpecs["home"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["home"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 }
 
 int ShopRoom::count = 0;
@@ -42,7 +41,8 @@ void ShopRoom::SetProperty() {
 	workspaceCapacity = 5;
 	rent = 2000;
 
-	UseDefaultDoor(doorSpecs["room"]);
+	doorSpecs["room"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["room"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 	// 商店房间的门有名字、挂脚本，可以交互("敲门")。商店用的一楼模板(preset_lobby_linear_fg+/
 	// preset_circle_double_fg+-)里门标签全是"room"、没有"entrance"，ShopBuilding的
 	// doorSpecs["entrance"]对不上任何门，所以挂在这里，见Resource/Story/door_shop_entrance.script。
@@ -66,7 +66,8 @@ void OfficeRoom::SetProperty() {
 	workspaceCapacity = 5;
 	rent = 2000;
 
-	UseDefaultDoor(doorSpecs["room"]);
+	doorSpecs["room"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	doorSpecs["room"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 }
 
 int WarehouseRoom::count = 0;

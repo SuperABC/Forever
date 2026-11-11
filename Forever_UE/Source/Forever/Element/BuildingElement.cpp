@@ -865,10 +865,9 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		float bodyY0 = building->GetBodyOffsetY() - building->GetBodySizeY() * 0.5f;
 		float bodyY1 = building->GetBodyOffsetY() + building->GetBodySizeY() * 0.5f;
 		float c = FMath::Cos(rotation), s = FMath::Sin(rotation);
-		// 底面与1楼地面齐平(0cm)，上表面10cm，和lot内小路(ROADNET_HEIGHT_EPSILON)同高，两者相接处没有台阶。
-		constexpr float kGapHeight = 10.f;
-		float wz = floorBottomWorld - BUILDING_SLAB_Z_SHIFT + kGapHeight * 0.5f;
-		float sizeZ = kGapHeight;
+		// 高度/厚度与1楼地面完全一致(下表面0cm、上表面20cm)。
+		float wz = floorBottomWorld + kSlabThickness * 0.5f * BUILDING_WORLD_SCALE - BUILDING_SLAB_Z_SHIFT;
+		float sizeZ = kSlabThickness * BUILDING_WORLD_SCALE;
 		UMaterialInterface* gapMaterial = framework->ResolveMaterial(gapPath, floorMaterial);
 		// 局部矩形[x0,x1]x[y0,y1]一块cube；左右两条占满quad高度，上下两条只占楼体宽度，四块不重叠。
 		auto addGapStrip = [&](float x0, float x1, float y0, float y1) {

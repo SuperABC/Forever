@@ -105,9 +105,6 @@
     <ClInclude Include="map\zone_basic.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\door_assets.h">
-      <Filter>map</Filter>
-    </ClInclude>
     <ClInclude Include="map\building_basic.h">
       <Filter>map</Filter>
     </ClInclude>

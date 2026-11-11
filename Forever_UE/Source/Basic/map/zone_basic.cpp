@@ -1,5 +1,4 @@
 #include "zone_basic.h"
-#include "door_assets.h"
 
 #include <cmath>
 
@@ -95,8 +94,9 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	gate.marginStart = gateMargin;
 	gate.marginEnd = gateMargin;
 	gate.depth = WALL_DEPTH;
-	// 园区大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)，车行门很宽，会被拉得很大。
-	UseDefaultDoor(gate.door);
+	// 园区大门：骨骼动画门(目前所有门共用测试门)，车行门很宽，会被拉得很大。
+	gate.door.mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
+	gate.door.animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
 	gates.push_back(gate);
 
 	// 四个方向的进深统一都是WALL_DEPTH，每条边贴墙角的一端缩进也统一都是WALL_DEPTH，
