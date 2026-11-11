@@ -30,3 +30,6 @@
 
 ## 墙面标签
 `SetSurfaceMaterial(tag, path)` 的标签表同时服务地板/天花板和墙的四个侧面（`.layout` 里 `wallTags`），标签命名空间共用。没有标签或没登记就不指定该侧面材质。
+
+## 楼体空隙填充（gapMaterial）
+`std::string gapMaterial`：building 整块 quad 与楼体(body)之间空隙的地面材质软路径，空=不填充（默认）。Core 在 `Building::Layout` 拷贝成快照 `gapMaterialPath`（进存档）。

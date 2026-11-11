@@ -221,3 +221,6 @@ debugf警告）。车行导航**不再支持`outside`**（出现会被忽略并�
 `Building::ReadFloor` 用 `mod->surfaceMaterials`（和地板/天花板同一张 `SetSurfaceMaterial` 表）把标签翻成材质路径填进 `materials`。
 每一面墙单独设置，不合并相邻元素共用的边、不去重；门窗把墙切成多段时每段沿用这面墙的设置。
 `AssignRoom` 把 single 的 4 面全部继承给 Room；`ArrangeRow` 只继承落在联排外边界上的面（房间之间的隔墙不带标签）。
+
+## 楼体空隙填充
+`Building::GetGapMaterialPath()` 是 `mod->gapMaterial` 的快照（`map_save` 随 Building 写读，没升版本号）。渲染层据此在 1 楼把 quad 与楼体之间的回形空隙铺成地面，见 BuildingElement.md。

@@ -1122,6 +1122,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 		w.I32(building->layers);
 		WriteFloatVector(building->floorHeights, w);
 		w.Str(building->lodMaterialPath);
+		w.Str(building->gapMaterialPath);
 		WriteDecorations(building->decorations, w);
 		w.U32(static_cast<uint32_t>(building->floorSpecs.size()));
 		for (int level : SortedKeys(building->floorSpecs)) {
@@ -1374,6 +1375,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 		building->layers = r.I32();
 		building->floorHeights = ReadFloatVector(r);
 		building->lodMaterialPath = r.Str();
+		building->gapMaterialPath = r.Str();
 		building->decorations = ReadDecorations(r);
 		uint32_t specCount = r.U32();
 		for (uint32_t j = 0; j < specCount && !r.Failed(); j++) {

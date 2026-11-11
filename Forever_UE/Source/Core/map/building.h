@@ -392,6 +392,8 @@ public:
 	int GetLayerCount() const;
 	const std::vector<float>& GetFloorHeights() const; // 长度basements+layers，从下到上
 	const std::string& GetLodMaterialPath() const;
+	// 楼体与building quad之间空隙的填充材质(mod->gapMaterial在Layout时的快照，空=不填充)。
+	const std::string& GetGapMaterialPath() const;
 	// mod->decorations按最终朝向换算后的世界摆位(DecorationInstance见feature_spec.h)，UE层只在
 	// 近处LOD按这份数据生成组件，见building.md"自定义模型"一节。
 	const std::vector<DecorationInstance>& GetDecorations() const;
@@ -511,6 +513,7 @@ private:
 	int layers = 1;
 	std::vector<float> floorHeights;
 	std::string lodMaterialPath;
+	std::string gapMaterialPath;
 	std::vector<DecorationInstance> decorations;
 	// mod->floors/cabins/stationMod的快照，见GetFloorSpec注释。
 	std::unordered_map<int, FloorLayoutSpec> floorSpecs;

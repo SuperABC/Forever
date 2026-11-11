@@ -69,4 +69,4 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 - 二楼模板`fu2`目前和一楼`fg1`内容一样，等二楼房间范围对上模型再调。
 
 ## 墙标签测试
-`ResidenceHighBuilding` 登记了 `outer`→`Black`、`inner`→`White`；`preset_residential_wing_fr-.layout` 第一个联排的北墙打了 `{"north":"outer","south":"inner"}` 用来验证墙侧面材质（需先在 UE 里做好 `WallCube`）。
+`ResidenceHighBuilding` 登记了 `outer`→`Black`、`inner`→`White`；`preset_residential_wing_fr-.layout` 第一个联排的北墙打了 `{"north":"outer","south":"inner"}` 用来验证墙侧面材质（需先在 UE 里做好 `Wall`）。

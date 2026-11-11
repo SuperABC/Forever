@@ -40,4 +40,11 @@
 - Building 不采样所在位置的真实地形高度(`BUILDING_HEIGHT_EPSILON` 的前提是 lot 地形高度恒为 0)，将来 lot 允许在非 0 高度地形上时需按 building 位置采样 `SampleHeight()`。
 - 单栋 building 内楼层特别多/大时，一次近 LOD 转场里该楼组件数仍从 0 涨到全部楼层之和；若卡顿明显，可把挂载粒度细化成"每层楼一个 Actor"，见 `ForeverBuildingFrameworkComponent.md`"性能排查"一节末尾。
 
-- **墙按侧面材质（WallCube）**：`BuildWallsForElement` 多一个 `const WallStyle* styles`（4 项，下标=墙朝向）。某面墙的 `WallStyle` 有任意材质时，整面墙（门窗洞口切出的每一段都一样）走 `AddWallInstance`，用 `/Game/Asset/Building/Mesh/Wall.Wall`（边长 100，同 Cube；槽 0 东 1南 2西 3北 4上下），四个侧面未配材质的退回这层的墙材质，槽 4 固定 `White`；ISM 池按 5 个材质的组合分组（`wallInstancePools`/`pendingWallTransforms`，`FlushCubeInstances` 一并提交，`ClearNearSections` 一并清空）。没有任何标签的墙继续走原来的单材质 Cube；`WallCube` 资产不存在（`ResolveMesh` 失败）时也退回普通 Cube。WallCube 只随建筑整体 `rotation` 旋转，不随墙方向旋转，所以东/南/西/北始终对应建筑局部坐标轴。
+- **墙按侧面材质（Wall）**：`BuildWallsForElement` 多一个 `const WallStyle* styles`（4 项，下标=墙朝向）。某面墙的 `WallStyle` 有任意材质时，整面墙（门窗洞口切出的每一段都一样）走 `AddWallInstance`，用 `/Game/Asset/Building/Mesh/Wall.Wall`（边长 100，同 Cube；槽 0 东 1南 2西 3北 4上下），四个侧面未配材质的退回这层的墙材质，槽 4 固定 `White`；ISM 池按 5 个材质的组合分组（`wallInstancePools`/`pendingWallTransforms`，`FlushCubeInstances` 一并提交，`ClearNearSections` 一并清空）。没有任何标签的墙继续走原来的单材质 Cube；`Wall` 资产不存在（`ResolveMesh` 失败）时也退回普通 Cube。Wall 只随建筑整体 `rotation` 旋转，不随墙方向旋转，所以东/南/西/北始终对应建筑局部坐标轴。
+
+- **墙向元素内侧偏移 1/4 墙厚**：`BuildWallsForElement` 里每面墙的跨墙坐标朝自己元素内部偏移 `BUILDING_WALL_THICKNESS * 0.25`（西/北边 +，东/南边 −），相邻元素共用的边上两堵墙中心错开半个墙厚、部分重叠但不共面，材质不同也不会 z-fighting；沿墙长度和高度不变。
+
+- **墙/地板/天花板cube的PerInstanceCustomData**：`GetOrCreateCubeInstancePool`给每个ISM设`NumCustomDataFloats=2`，`FlushCubeInstances`为每个实例写入建筑朝向的水平单位向量`(cos, sin)`(索引0/1，和路网ISM约定一致)，材质里用`PerInstanceCustomData`读。同一材质的墙和地板/天花板共用一个池，所以数据也一并带上。
+- 带标签的墙(Wall池`wallInstancePools`)同样设`NumCustomDataFloats=2`并写入`(cos, sin)`，约定与上面一致。
+
+- **楼体空隙填充**：`BuildFloorSection` 画 1 楼(level 0)时，若 `building->GetGapMaterialPath()` 非空，用 4 块普通 cube 把 building quad 与楼体矩形之间的回形空隙铺上（左右两条占满 quad 高度，上下两条只占楼体宽度，互不重叠），底面与 1 楼 `Ground` 底面齐平(0cm)、上表面 10cm（`kGapHeight`，和 lot 内小路 `ROADNET_HEIGHT_EPSILON` 同高），材质 `ResolveMaterial(gapPath, 地板材质)`；走 `AddCubeInstance`，所以同样带 `(cos, sin)` 的 PerInstanceCustomData。

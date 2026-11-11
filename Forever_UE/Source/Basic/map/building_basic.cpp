@@ -107,6 +107,9 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	SetSurfaceMaterial("roof", "/Game/Asset/Building/Material/Black.Black");
 	SetSurfaceMaterial("brick", "/Game/Asset/Building/Material/Brick.Brick");
 	SetSurfaceMaterial("concrete", "/Game/Asset/Building/Material/Concrete.Concrete");
+	SetSurfaceMaterial("pavement", "/Game/Asset/Building/Material/Pavement.Pavement");
+	// 楼体与建筑范围之间的空隙铺人行道材质。
+	gapMaterial = "/Game/Asset/Building/Material/Pavement.Pavement";
 
 	AssignFloor(-1, "preset_residential_wing_bg+", direction);
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);

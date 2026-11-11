@@ -833,6 +833,7 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 		floorHeights.assign(expected, kDefaultFloorHeight);
 	}
 	lodMaterialPath = mod->lodMaterial;
+	gapMaterialPath = mod->gapMaterial;
 	floorSpecs.clear();
 	for (auto& [level, spec] : mod->floors) floorSpecs[level] = spec;
 	cabins = mod->cabins;
@@ -1137,6 +1138,7 @@ int Building::GetBasementCount() const { return basements; }
 int Building::GetLayerCount() const { return layers; }
 const vector<float>& Building::GetFloorHeights() const { return floorHeights; }
 const string& Building::GetLodMaterialPath() const { return lodMaterialPath; }
+const string& Building::GetGapMaterialPath() const { return gapMaterialPath; }
 const vector<DecorationInstance>& Building::GetDecorations() const { return decorations; }
 
 const FloorLayoutSpec* Building::GetFloorSpec(int level) const {

@@ -181,7 +181,7 @@ private:
 		float sizeX, float sizeY, float sizeZ, float rotation, UStaticMesh* mesh, UMaterialInterface* material,
 		bool isMovable = false);
 
-	// 五材质槽WallCube的ISM池key：东南西北四个侧面的材质+上下面材质，见AddWallInstance。
+	// 五材质槽Wall的ISM池key：东南西北四个侧面的材质+上下面材质，见AddWallInstance。
 	struct FWallMaterialKey {
 		UMaterialInterface* slots[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 		bool operator==(const FWallMaterialKey& other) const {
@@ -195,7 +195,7 @@ private:
 		}
 	};
 
-	// 带材质的墙体段走WallCube(槽0东 1南 2西 3北 4上下)，按(五个材质)分组走独立ISM池，其余同AddCubeInstance。
+	// 带材质的墙体段走Wall(槽0东 1南 2西 3北 4上下)，按(五个材质)分组走独立ISM池，其余同AddCubeInstance。
 	void AddWallInstance(float centerX, float centerY, float centerZ,
 		float sizeX, float sizeY, float sizeZ, float rotation, const FWallMaterialKey& key);
 	UInstancedStaticMeshComponent* GetOrCreateWallInstancePool(const FWallMaterialKey& key);
@@ -227,12 +227,16 @@ private:
 	// AddCubeInstance按材质分组暂存world transform，一层楼画完后由FlushCubeInstances()对每个材质批量AddInstances()一次
 	// (逐个AddInstance在BlockAll碰撞的ISM上每次约0.1~0.4ms)。只在BuildFloorSection内部临时持有，提交后清空。
 	TMap<UMaterialInterface*, TArray<FTransform>> pendingCubeTransforms;
+	// 与pendingCubeTransforms逐实例对应的自定义数据(每实例2个float：建筑朝向的(cos, sin))，Flush时写入ISM的PerInstanceCustomData，材质里可读。
+	TMap<UMaterialInterface*, TArray<float>> pendingCubeCustomData;
 
-	// WallCube(五材质槽)的ISM池与暂存，结构同上，key换成五个材质的组合。wallCubeMesh首次用到时才解析，失败(用户还没做资产)就一直是nullptr，带标签的墙退回普通Cube。
+	// Wall(五材质槽)的ISM池与暂存，结构同上，key换成五个材质的组合。wallMesh首次用到时才解析，失败(用户还没做资产)就一直是nullptr，带标签的墙退回普通Cube。
 	TMap<FWallMaterialKey, TObjectPtr<UInstancedStaticMeshComponent>> wallInstancePools;
 	TMap<FWallMaterialKey, TArray<FTransform>> pendingWallTransforms;
-	TObjectPtr<UStaticMesh> wallCubeMesh;
-	bool wallCubeResolved = false;
+	// 与pendingWallTransforms逐实例对应的自定义数据(每实例(cos, sin))，同pendingCubeCustomData。
+	TMap<FWallMaterialKey, TArray<float>> pendingWallCustomData;
+	TObjectPtr<UStaticMesh> wallMesh;
+	bool wallMeshResolved = false;
 
 	// 近处这栋building当前占用的楼梯/坡道3D网格组件(SpawnMesh产出，网格/材质各不相同、
 	// 数量少，不纳入ISM改造)，按floorIndex分组，方便ClearNearSections整栋清空。墙体/

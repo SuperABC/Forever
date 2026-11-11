@@ -84,6 +84,8 @@ public:
 	std::vector<float> floorHeights;
 	// 远处LOD cube的材质软路径,留空用默认灰色。
 	std::string lodMaterial;
+	// 填充building整块quad与楼体(body)之间空隙的地面材质软路径,空=不填充。空隙是回形环,渲染层用4块cube铺,高度同1楼地面。
+	std::string gapMaterial;
 
 	// 这栋楼承载的StationMod id(如"station_bus"),空=非站点建筑,见building_mod.md。
 	std::string stationMod;

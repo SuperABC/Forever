@@ -41,8 +41,6 @@
 #define BUILDING_WALL_THICKNESS 0.01f
 // 天花板slab整体上移、地板slab整体下移的世界单位(cm)，避免slab顶/底面和墙顶/墙底共面z-fighting，见BuildFloorSection。
 #define BUILDING_SLAB_Z_SHIFT 1.f
-// 每个元素的墙整体向自身内侧偏移的距离(世界单位cm)：相邻元素共用的边上两堵墙不再共面，材质不同时不会z-fighting。
-#define BUILDING_WALL_INWARD_SHIFT 1.f
 // UE标准立方体静态网格(/Game/Asset/Common/Mesh/Cube.Cube)的原生边长(cm)——AddCubeInstance/
 // SpawnMesh用这个值把它缩放到目标尺寸，缩放系数=目标尺寸/这个原生边长。
 #define BUILDING_CUBE_MESH_SIZE 100.f
@@ -479,6 +477,8 @@ UInstancedStaticMeshComponent* ABuildingElement::GetOrCreateCubeInstancePool(UMa
 	ism->SetCollisionProfileName(TEXT("BlockAll"));
 	ism->SetGenerateOverlapEvents(false);
 	if (material) ism->SetMaterial(0, material);
+	// 每实例自定义数据：[0]=cos [1]=sin，建筑朝向的水平单位向量(和路网ISM的约定一致)，材质里用PerInstanceCustomData读。
+	ism->NumCustomDataFloats = 2;
 	ism->RegisterComponent();
 	AddInstanceComponent(ism);
 	cubeInstancePools.Add(material, ism);
@@ -496,20 +496,24 @@ void ABuildingElement::AddCubeInstance(float centerX, float centerY, float cente
 		FVector(sizeX / BUILDING_CUBE_MESH_SIZE, sizeY / BUILDING_CUBE_MESH_SIZE,
 			sizeZ / BUILDING_CUBE_MESH_SIZE));
 	pendingCubeTransforms.FindOrAdd(material).Add(worldTransform);
+	TArray<float>& customData = pendingCubeCustomData.FindOrAdd(material);
+	customData.Add(FMath::Cos(rotation));
+	customData.Add(FMath::Sin(rotation));
 }
 
 UInstancedStaticMeshComponent* ABuildingElement::GetOrCreateWallInstancePool(const FWallMaterialKey& key) {
 	if (TObjectPtr<UInstancedStaticMeshComponent>* found = wallInstancePools.Find(key)) {
 		return *found;
 	}
-	if (!wallCubeMesh) return nullptr;
+	if (!wallMesh) return nullptr;
 
 	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
-	ism->SetStaticMesh(wallCubeMesh);
+	ism->SetStaticMesh(wallMesh);
 	ism->SetupAttachment(elementRoot);
 	ism->SetMobility(EComponentMobility::Static);
 	ism->SetCollisionProfileName(TEXT("BlockAll"));
 	ism->SetGenerateOverlapEvents(false);
+	ism->NumCustomDataFloats = 2; // 同cube池：[0]=cos [1]=sin
 	for (int32 i = 0; i < 5; i++) {
 		if (key.slots[i]) ism->SetMaterial(i, key.slots[i]);
 	}
@@ -521,13 +525,16 @@ UInstancedStaticMeshComponent* ABuildingElement::GetOrCreateWallInstancePool(con
 
 void ABuildingElement::AddWallInstance(float centerX, float centerY, float centerZ,
 	float sizeX, float sizeY, float sizeZ, float rotation, const FWallMaterialKey& key) {
-	// 同AddCubeInstance：只暂存，一层楼画完后FlushCubeInstances()批量提交。WallCube同样约定边长BUILDING_CUBE_MESH_SIZE。
+	// 同AddCubeInstance：只暂存，一层楼画完后FlushCubeInstances()批量提交。Wall同样约定边长BUILDING_CUBE_MESH_SIZE。
 	FTransform worldTransform(
 		FRotator(0.f, FMath::RadiansToDegrees(rotation), 0.f),
 		FVector(centerX, centerY, centerZ),
 		FVector(sizeX / BUILDING_CUBE_MESH_SIZE, sizeY / BUILDING_CUBE_MESH_SIZE,
 			sizeZ / BUILDING_CUBE_MESH_SIZE));
 	pendingWallTransforms.FindOrAdd(key).Add(worldTransform);
+	TArray<float>& customData = pendingWallCustomData.FindOrAdd(key);
+	customData.Add(FMath::Cos(rotation));
+	customData.Add(FMath::Sin(rotation));
 }
 
 void ABuildingElement::FlushCubeInstances() {
@@ -535,17 +542,35 @@ void ABuildingElement::FlushCubeInstances() {
 		if (transforms.IsEmpty()) continue;
 		UInstancedStaticMeshComponent* ism = GetOrCreateCubeInstancePool(material);
 		if (!ism) continue;
-		ism->AddInstances(transforms, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
+		TArray<int32> indices = ism->AddInstances(transforms, /*bShouldReturnIndices=*/true, /*bWorldSpace=*/true);
+		const TArray<float>* customData = pendingCubeCustomData.Find(material);
+		if (customData && customData->Num() == indices.Num() * 2) {
+			for (int32 i = 0; i < indices.Num(); i++) {
+				ism->SetCustomDataValue(indices[i], 0, (*customData)[i * 2], false);
+				ism->SetCustomDataValue(indices[i], 1, (*customData)[i * 2 + 1], false);
+			}
+			ism->MarkRenderStateDirty();
+		}
 	}
 	pendingCubeTransforms.Empty();
+	pendingCubeCustomData.Empty();
 
 	for (auto& [key, transforms] : pendingWallTransforms) {
 		if (transforms.IsEmpty()) continue;
 		UInstancedStaticMeshComponent* ism = GetOrCreateWallInstancePool(key);
 		if (!ism) continue;
-		ism->AddInstances(transforms, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
+		TArray<int32> indices = ism->AddInstances(transforms, /*bShouldReturnIndices=*/true, /*bWorldSpace=*/true);
+		const TArray<float>* customData = pendingWallCustomData.Find(key);
+		if (customData && customData->Num() == indices.Num() * 2) {
+			for (int32 i = 0; i < indices.Num(); i++) {
+				ism->SetCustomDataValue(indices[i], 0, (*customData)[i * 2], false);
+				ism->SetCustomDataValue(indices[i], 1, (*customData)[i * 2 + 1], false);
+			}
+			ism->MarkRenderStateDirty();
+		}
 	}
 	pendingWallTransforms.Empty();
+	pendingWallCustomData.Empty();
 }
 
 UStaticMeshComponent* ABuildingElement::SpawnMesh(float centerX, float centerY, float centerZ,
@@ -619,18 +644,18 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 		// 按沿墙方向的localX/localY(alongY决定跨墙坐标固定用acrossFixed，沿墙坐标用segCenter)
 		// 生成一段墙体cube，zBot/zTop是世界坐标——照抄老工程BuildingBase.cpp::ConstructQuad
 		// 的makePos/makeSize思路，只是这次每段都是独立组件，不是往同一个PMC里追加顶点。
-		// 这面墙有标签对应的材质就走WallCube(东南西北四个侧面各自的材质，没配的侧面退回这层墙材质，上下固定白色)，
-		// WallCube资产还不存在时退回普通Cube；整面墙共用同一个key，门窗洞口切出的每一段都继承它。
+		// 这面墙有标签对应的材质就走Wall(东南西北四个侧面各自的材质，没配的侧面退回这层墙材质，上下固定白色)，
+		// Wall资产还不存在时退回普通Cube；整面墙共用同一个key，门窗洞口切出的每一段都继承它。
 		FWallMaterialKey wallKey;
-		bool useWallCube = false;
+		bool useWallMesh = false;
 		if (styles && styles[face.dir].HasMaterial()) {
-			if (!wallCubeResolved) {
-				wallCubeResolved = true;
-				wallCubeMesh = framework->ResolveMesh("/Game/Asset/Building/Mesh/Wall.Wall", nullptr);
+			if (!wallMeshResolved) {
+				wallMeshResolved = true;
+				wallMesh = framework->ResolveMesh("/Game/Asset/Building/Mesh/Wall.Wall", nullptr);
 			}
-			if (wallCubeMesh) {
+			if (wallMesh) {
 				const WallStyle& style = styles[face.dir];
-				// WallCube槽位 0东 1南 2西 3北 对应WallStyle下标(FACE_DIRECTION) 1东 3南 0西 2北。
+				// Wall槽位 0东 1南 2西 3北 对应WallStyle下标(FACE_DIRECTION) 1东 3南 0西 2北。
 				static const int32 kSideOfSlot[4] = { FACE_EAST, FACE_SOUTH, FACE_WEST, FACE_NORTH };
 				auto resolve = [&](const std::string& path) -> UMaterialInterface* {
 					UMaterialInterface* found = framework->ResolveMaterial(path, nullptr);
@@ -640,7 +665,7 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 					wallKey.slots[slot] = resolve(style.materials[kSideOfSlot[slot]]);
 				}
 				wallKey.slots[4] = resolve("/Game/Asset/Building/Material/White.White");
-				useWallCube = true;
+				useWallMesh = true;
 			}
 		}
 
@@ -649,8 +674,8 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 			float segCenter = (segStart + segEnd) * 0.5f;
 			float segLen = segEnd - segStart;
 			// 西/北边的墙往+方向、东/南边的墙往-方向，即朝元素内部偏移。
-			float inward = (face.dir == FACE_WEST || face.dir == FACE_NORTH ? 1.f : -1.f)
-				* BUILDING_WALL_INWARD_SHIFT / BUILDING_WORLD_SCALE;
+			// 偏移量=1/4墙厚：相邻元素共用的边上两堵墙中心错开半个墙厚、部分重叠但不共面，材质不同时不会z-fighting。
+			float inward = (face.dir == FACE_WEST || face.dir == FACE_NORTH ? 1.f : -1.f) * BUILDING_WALL_THICKNESS * 0.25f;
 			float across = face.acrossFixed + inward;
 			float localX = face.alongY ? across : segCenter;
 			float localY = face.alongY ? segCenter : across;
@@ -660,7 +685,7 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 			float sizeYWorld = (face.alongY ? segLen : BUILDING_WALL_THICKNESS) * BUILDING_WORLD_SCALE;
 			float wz = (zBot + zTop) * 0.5f;
 			float sizeZWorld = zTop - zBot;
-			if (useWallCube) AddWallInstance(wx, wy, wz, sizeXWorld, sizeYWorld, sizeZWorld, rotation, wallKey);
+			if (useWallMesh) AddWallInstance(wx, wy, wz, sizeXWorld, sizeYWorld, sizeZWorld, rotation, wallKey);
 			else AddCubeInstance(wx, wy, wz, sizeXWorld, sizeYWorld, sizeZWorld, rotation, wallMaterial);
 			};
 
@@ -828,6 +853,36 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		float sizeX = ceiling.GetSizeX() * BUILDING_WORLD_SCALE, sizeY = ceiling.GetSizeY() * BUILDING_WORLD_SCALE;
 		float sizeZ = kSlabThickness * BUILDING_WORLD_SCALE;
 		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, framework->ResolveMaterial(ceiling.GetMaterial(), ceilingMaterial));
+	}
+
+	// 1楼：把楼体(body)与building整块quad之间的回形空隙用4块cube铺上mod指定的材质，高度/厚度同1楼地面。
+	const std::string& gapPath = building->GetGapMaterialPath();
+	if (level == 0 && !gapPath.empty()) {
+		// 在building quad中心的未旋转局部系里：quad半宽半高、楼体矩形。
+		float quadHalfX = building->GetSizeX() * 0.5f, quadHalfY = building->GetSizeY() * 0.5f;
+		float bodyX0 = building->GetBodyOffsetX() - building->GetBodySizeX() * 0.5f;
+		float bodyX1 = building->GetBodyOffsetX() + building->GetBodySizeX() * 0.5f;
+		float bodyY0 = building->GetBodyOffsetY() - building->GetBodySizeY() * 0.5f;
+		float bodyY1 = building->GetBodyOffsetY() + building->GetBodySizeY() * 0.5f;
+		float c = FMath::Cos(rotation), s = FMath::Sin(rotation);
+		// 底面与1楼地面齐平(0cm)，上表面10cm，和lot内小路(ROADNET_HEIGHT_EPSILON)同高，两者相接处没有台阶。
+		constexpr float kGapHeight = 10.f;
+		float wz = floorBottomWorld - BUILDING_SLAB_Z_SHIFT + kGapHeight * 0.5f;
+		float sizeZ = kGapHeight;
+		UMaterialInterface* gapMaterial = framework->ResolveMaterial(gapPath, floorMaterial);
+		// 局部矩形[x0,x1]x[y0,y1]一块cube；左右两条占满quad高度，上下两条只占楼体宽度，四块不重叠。
+		auto addGapStrip = [&](float x0, float x1, float y0, float y1) {
+			if (x1 - x0 <= 0.f || y1 - y0 <= 0.f) return;
+			float lx = (x0 + x1) * 0.5f, ly = (y0 + y1) * 0.5f;
+			float wx = (building->GetPosX() + lx * c - ly * s) * BUILDING_WORLD_SCALE;
+			float wy = (building->GetPosY() + lx * s + ly * c) * BUILDING_WORLD_SCALE;
+			AddCubeInstance(wx, wy, wz, (x1 - x0) * BUILDING_WORLD_SCALE, (y1 - y0) * BUILDING_WORLD_SCALE,
+				sizeZ, rotation, gapMaterial);
+		};
+		addGapStrip(-quadHalfX, bodyX0, -quadHalfY, quadHalfY);
+		addGapStrip(bodyX1, quadHalfX, -quadHalfY, quadHalfY);
+		addGapStrip(bodyX0, bodyX1, -quadHalfY, bodyY0);
+		addGapStrip(bodyX0, bodyX1, bodyY1, quadHalfY);
 	}
 
 	FlushCubeInstances();
