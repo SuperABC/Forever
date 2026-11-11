@@ -1,4 +1,5 @@
 #include "building_basic.h"
+#include "door_assets.h"
 
 #include "common/utility.h"
 
@@ -69,13 +70,9 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
-	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
+	UseDefaultDoor(doorSpecs["entrance"]);
 
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
@@ -202,13 +199,9 @@ void ResidenceMiddleBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
-	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
+	UseDefaultDoor(doorSpecs["entrance"]);
 
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
@@ -418,13 +411,9 @@ void ResidenceLowBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
-	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
+	UseDefaultDoor(doorSpecs["entrance"]);
 
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
@@ -627,15 +616,12 @@ void ShopHighBuilding::Layout(int& direction, const Quad& quad,
 		direction = preferredDirection;
 	}
 
-	// 商店大门：随机左右滑动的单开门，有名字可以交互("敲门")，照抄vehicle_basic.script的
+	// 商店大门：骨骼动画门，有名字可以交互("敲门")，照抄vehicle_basic.script的
 	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
+	UseDefaultDoor(doorSpecs["entrance"]);
 	doorSpecs["entrance"].name = "商店大门";
 	doorSpecs["entrance"].scriptModName = "script_empty";
 	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
 
 	constexpr const char* kComponent = "component_shop";
 	constexpr int kComponentId = 0;
@@ -782,15 +768,12 @@ void ShopMiddleBuilding::Layout(int& direction, const Quad& quad,
 		direction = preferredDirection;
 	}
 
-	// 商店大门：随机左右滑动的单开门，有名字可以交互("敲门")，照抄vehicle_basic.script的
+	// 商店大门：骨骼动画门，有名字可以交互("敲门")，照抄vehicle_basic.script的
 	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
+	UseDefaultDoor(doorSpecs["entrance"]);
 	doorSpecs["entrance"].name = "商店大门";
 	doorSpecs["entrance"].scriptModName = "script_empty";
 	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
 
 	constexpr const char* kComponent = "component_shop";
 	constexpr int kComponentId = 0;
@@ -937,15 +920,12 @@ void ShopLowBuilding::Layout(int& direction, const Quad& quad,
 		direction = preferredDirection;
 	}
 
-	// 商店大门：随机左右滑动的单开门，有名字可以交互("敲门")，照抄vehicle_basic.script的
+	// 商店大门：骨骼动画门，有名字可以交互("敲门")，照抄vehicle_basic.script的
 	// game_start->add_option模式，见Resource/Story/door_shop_entrance.script。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
+	UseDefaultDoor(doorSpecs["entrance"]);
 	doorSpecs["entrance"].name = "商店大门";
 	doorSpecs["entrance"].scriptModName = "script_empty";
 	doorSpecs["entrance"].milestoneNames = { "door_shop_entrance" };
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
 
 	constexpr const char* kComponent = "component_shop";
 	constexpr int kComponentId = 0;
@@ -1366,13 +1346,9 @@ void OfficeHighBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
-	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
+	UseDefaultDoor(doorSpecs["entrance"]);
 
 	constexpr const char* kComponent = "component_office";
 	constexpr int kComponentId = 0;
@@ -1581,13 +1557,9 @@ void OfficeMiddleBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
-	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
+	UseDefaultDoor(doorSpecs["entrance"]);
 
 	constexpr const char* kComponent = "component_office";
 	constexpr int kComponentId = 0;
@@ -1796,13 +1768,9 @@ void OfficeLowBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
 
-	// 建筑大门：随机左右滑动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
-	// "用户追加的具体门型要求"一节。只有corridor的门洞带了"entrance"这个tag才会用到这份
+	// 建筑大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有corridor的门洞带了"entrance"这个tag才会用到这份
 	// spec，见Core/map/door.h的ResolveDoorSpec。
-	doorSpecs["entrance"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["entrance"].style = 0; // Slide
-	doorSpecs["entrance"].leaves = 1;
-	doorSpecs["entrance"].randomSide = true;
+	UseDefaultDoor(doorSpecs["entrance"]);
 
 	constexpr const char* kComponent = "component_office";
 	constexpr int kComponentId = 0;

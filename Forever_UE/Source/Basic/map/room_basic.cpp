@@ -1,4 +1,5 @@
 #include "room_basic.h"
+#include "door_assets.h"
 
 using namespace std;
 
@@ -19,13 +20,11 @@ void ResidenceRoom::SetProperty() {
 	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
 	milestoneNames = { "entity_event" };
 
-	// 房间门：随机左右转动的单开门，占位先用项目自己的Cube资产，见door_system_plan.md
-	// "用户追加的具体门型要求"一节。只有single/row的门洞带了"room"这个tag才会用到这份
-	// spec，见Core/map/door.h的ResolveDoorSpec。
-	doorSpecs["room"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["room"].style = 1; // Swing
-	doorSpecs["room"].leaves = 1;
-	doorSpecs["room"].randomSide = true;
+	// 房间门：骨骼动画门(目前所有门共用测试门，见door_assets.h)。只有single/row的门洞带了"room"
+	// 这个tag才会用到这份spec，见Core/map/door.h的ResolveDoorSpec。
+	// "home"：preset_residential_wing_fg+-.layout里两个row的门洞标签，用来测试骨骼门。
+	UseDefaultDoor(doorSpecs["room"]);
+	UseDefaultDoor(doorSpecs["home"]);
 }
 
 int ShopRoom::count = 0;
@@ -43,10 +42,7 @@ void ShopRoom::SetProperty() {
 	workspaceCapacity = 5;
 	rent = 2000;
 
-	doorSpecs["room"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["room"].style = 1; // Swing
-	doorSpecs["room"].leaves = 1;
-	doorSpecs["room"].randomSide = true;
+	UseDefaultDoor(doorSpecs["room"]);
 	// 商店房间的门有名字、挂脚本，可以交互("敲门")。商店用的一楼模板(preset_lobby_linear_fg+/
 	// preset_circle_double_fg+-)里门标签全是"room"、没有"entrance"，ShopBuilding的
 	// doorSpecs["entrance"]对不上任何门，所以挂在这里，见Resource/Story/door_shop_entrance.script。
@@ -70,10 +66,7 @@ void OfficeRoom::SetProperty() {
 	workspaceCapacity = 5;
 	rent = 2000;
 
-	doorSpecs["room"].mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	doorSpecs["room"].style = 1; // Swing
-	doorSpecs["room"].leaves = 1;
-	doorSpecs["room"].randomSide = true;
+	UseDefaultDoor(doorSpecs["room"]);
 }
 
 int WarehouseRoom::count = 0;

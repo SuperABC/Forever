@@ -1,4 +1,5 @@
 #include "zone_basic.h"
+#include "door_assets.h"
 
 #include <cmath>
 
@@ -94,11 +95,8 @@ void ResidenceZone::Layout(int direction, const Quad& quad,
 	gate.marginStart = gateMargin;
 	gate.marginEnd = gateMargin;
 	gate.depth = WALL_DEPTH;
-	// 园区大门：滑动双开门，占位先用项目自己的Cube资产，见door_system_plan.md"用户追加的
-	// 具体门型要求"一节——双扇对称滑开不需要randomSide(默认false)。
-	gate.door.mesh = "/Game/Asset/Common/Mesh/Cube.Cube";
-	gate.door.style = 0; // Slide
-	gate.door.leaves = 2;
+	// 园区大门：骨骼动画门(目前所有门共用测试门，见door_assets.h)，车行门很宽，会被拉得很大。
+	UseDefaultDoor(gate.door);
 	gates.push_back(gate);
 
 	// 四个方向的进深统一都是WALL_DEPTH，每条边贴墙角的一端缩进也统一都是WALL_DEPTH，

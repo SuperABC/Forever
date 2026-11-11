@@ -13,12 +13,12 @@
 using namespace std;
 
 Door::Door(const string& id, DOOR_KIND_TYPE kind, const string& tag, const DoorSpec& spec,
-	Zone* zone, Building* building, Room* room, const string& interactName, bool flippedSide,
+	Zone* zone, Building* building, Room* room, const string& interactName,
 	float x, float y, float z, float width, float height, float yaw, int level, bool isVehicleGate,
 	ScriptFactory* scriptFactory) :
 	id(id), kind(kind), tag(tag), spec(spec), zone(zone), building(building), room(room),
 	interactName(interactName), x(x), y(y), z(z), width(width), height(height), yaw(yaw),
-	level(level), vehicleGate(isVehicleGate), flippedSide(flippedSide),
+	level(level), vehicleGate(isVehicleGate),
 	access(static_cast<DOOR_ACCESS_TYPE>(spec.access)) {
 
 	if (!interactName.empty()) {
@@ -45,10 +45,7 @@ Building* Door::GetBuilding() const { return building; }
 Room* Door::GetRoom() const { return room; }
 
 const string& Door::GetMesh() const { return spec.mesh; }
-const string& Door::GetFrameMesh() const { return spec.frameMesh; }
-int Door::GetStyle() const { return spec.style; }
-int Door::GetLeaves() const { return spec.leaves; }
-float Door::GetOpenAmount() const { return spec.openAmount; }
+const string& Door::GetAnimClass() const { return spec.animClass; }
 float Door::GetOpenSeconds() const { return spec.openSeconds; }
 
 float Door::GetX() const { return x; }
@@ -59,8 +56,6 @@ float Door::GetHeight() const { return height; }
 float Door::GetYaw() const { return yaw; }
 int Door::GetLevel() const { return level; }
 bool Door::IsVehicleGate() const { return vehicleGate; }
-
-bool Door::IsFlippedSide() const { return flippedSide; }
 
 DOOR_ACCESS_TYPE Door::GetAccess() const { return access; }
 void Door::SetAccess(DOOR_ACCESS_TYPE value) { access = value; }

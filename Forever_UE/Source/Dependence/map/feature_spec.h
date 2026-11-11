@@ -10,11 +10,12 @@
 
 // ---------------------------------------------------------------- 门
 
-// 一扇门的外观/交互/开门动画描述,mesh为空=只是门洞不放门,见feature_spec.md。
+// 一扇门的外观/交互描述,mesh为空=只是门洞不放门,见feature_spec.md。
+// 门是骨骼动画：Forever层只把"开合度"(0=全关,1=全开)喂给动画蓝图,模型怎么动完全由骨骼网格+动画蓝图决定。
 struct DoorSpec {
 	// ---- 外观 ----
-	std::string mesh;                         // 门扇资产软路径；空=只是门洞，不放门
-	std::string frameMesh;                    // 可选门框资产(静止不动)，空=不放门框
+	std::string mesh;                         // 门的骨骼网格资产软路径(含门框，会动的部分绑在骨上)；空=只是门洞，不放门
+	std::string animClass;                    // 动画蓝图类软路径(…_C，父类是UDoorAnimInstance)；空=用基类，门不动
 
 	// ---- 交互 ----
 	std::string name;                         // 门名；非空才创建Script，见door.h"Script"一节
@@ -24,15 +25,8 @@ struct DoorSpec {
 	// ---- 门禁 ----
 	int access = 0;                           // 0=Open 1=Owner 2=Locked，默认Open
 
-	// ---- 开门动画参数(全部由Forever层代码驱动，资产不带动画) ----
-	int style = 0;                            // 0=Slide推拉 1=Swing平开
-	int leaves = 1;                           // 1=单扇 2=双扇对开(第二扇由代码镜像生成)
-	float openAmount = 0.f;                   // Slide:滑出距离占扇宽比例(0=默认1)；
-	                                           // Swing:开门角度，度(0=默认90)
-	float openSeconds = 0.5f;                 // 开/关一次的时长，秒
-
-	// 单扇门(leaves==1)是否在创建时随机一次朝向(只是开关,结果存在Door实例上),见feature_spec.md。
-	bool randomSide = false;
+	// ---- 开门动画 ----
+	float openSeconds = 0.5f;                 // 开/关一次的时长，秒(开合度从0到1所用时间)
 };
 
 // ---------------------------------------------------------------- 植被

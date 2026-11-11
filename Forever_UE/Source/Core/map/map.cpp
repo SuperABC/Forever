@@ -2736,9 +2736,7 @@ Door* Map::CreateDoor(DOOR_KIND_TYPE kind, Zone* zone, Building* building, Room*
 		interactName = ownerName + " " + spec.name + to_string(seq);
 	}
 
-	bool flippedSide = (spec.leaves == 1 && spec.randomSide) ? (GetRandom(2) == 0) : false;
-
-	Door* door = new Door(id, kind, tag, spec, zone, building, room, interactName, flippedSide,
+	Door* door = new Door(id, kind, tag, spec, zone, building, room, interactName,
 		x, y, z, width, height, yaw, level, isVehicleGate, &scriptFactory);
 
 	doorsById[id] = door;

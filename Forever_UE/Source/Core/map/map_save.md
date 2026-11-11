@@ -61,7 +61,7 @@
   **以后新增"运行时要读的 mod 公共字段"时，也必须在包装类里拷一份快照，并加进这里的存档。**
 - **不从 Core 往 mod 的容器里写数据**。Core 和 mod DLL 的分配器不同（见 CONVENTIONS §4），所以 Core 不能写 mod 自己的 `std::vector` 等容器。这也是用快照而不是"把字段写回 mod"的原因。
 - **门**：
-  - 读档时用原来的 `Door` 构造函数重建，`flippedSide` 按存档值传入，所以会和新开局一样按 spec 创建 Script。
+  - 读档时用原来的 `Door` 构造函数重建，所以会和新开局一样按 spec 创建 Script。
   - 恢复 `access` 和按人登记的门禁例外 `registrations`。
   - `options`（剧情脚本加的交互选项）：读档会跳过 game_start 广播，所以按存档恢复。
   - Script 自身的状态由 `story/script_save` 恢复（键 `door:<门id>`）。

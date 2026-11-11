@@ -14,10 +14,10 @@ mesh为空都返回nullptr（只是门洞）。园区门不走这个函数，直
 
 ## 关键设计
 
-- **id/交互名/随机朝向都由`Map::CreateDoor`算好再传进构造函数，`Door`自己不重新计算**
-  ——这三者都依赖`Map`自己维护的状态（全局门计数器、按"所属对象+spec.name"分组的序号
-  计数器、随机数生成），`Door`构造函数只是单纯持有这些已经算好的值，职责边界清楚：
-  `Map`管"这是第几扇门/叫什么/随不随机"，`Door`管"这扇门的状态和行为"。
+- **id/交互名都由`Map::CreateDoor`算好再传进构造函数，`Door`自己不重新计算**
+  ——这两者都依赖`Map`自己维护的状态（全局门计数器、按"所属对象+spec.name"分组的序号
+  计数器），`Door`构造函数只是单纯持有这些已经算好的值，职责边界清楚：
+  `Map`管"这是第几扇门/叫什么"，`Door`管"这扇门的状态和行为"。
 - **Script创建和`Vehicle::Vehicle`同一个模式，但多设一个`"label"`**：`interactName`非空
   才会创建Script（`spec.name`为空的纯自动门恒为`nullptr`），创建后`SetValue("name",
   interactName)`+`SetValue("label", spec.name)`——门需要区分"交互名"（完整的、带编号的
@@ -43,10 +43,7 @@ mesh为空都返回nullptr（只是门洞）。园区门不走这个函数，直
   字符串/枚举转换表；脚本里的`set_door`只能设常开/常锁两种：`access`是布尔表达式，`true`→`Open`，
   `false`→`Locked`(`Map::ApplyChange`里`EvaluateExpressionBool`)。`Owner`模式只来自mod的`DoorSpec::access`
   初始值。
-- **`IsFlippedSide()`只在`leaves==1 && spec.randomSide`为true时才有意义**——双扇门
-  两扇对称镜像，没有"选哪一边"的歧义，恒为`false`；`spec.randomSide`为`false`的单扇门
-  也恒为`false`（没开随机化开关），Forever层`UForeverDoorComponent`按这个值决定具体
-  渲染/动画细节，见`Forever/Element/DoorComponent.md`。
+- **Core不存开合状态**：门的外观是骨骼网格+动画蓝图（`GetMesh()`/`GetAnimClass()`），开合度`openProgress`(0~1)由Forever层`UForeverDoorComponent`按触发盒和`GetOpenSeconds()`自己插值，再喂给动画蓝图；Core只管"谁能过"（`CanPass`）。没有Slide/Swing/单双扇/随机朝向这些概念，见`Forever/Element/DoorComponent.md`。
 
 ## 依赖关系
 
@@ -58,8 +55,8 @@ mesh为空都返回nullptr（只是门洞）。园区门不走这个函数，直
 - 被谁依赖：`Source/Core/map/map.h`（`CreateDoor`/`FindDoorByName`/`GetAllDoors`/
   `ApplyChange`四个Change分支）、`Source/Core/map/zone.h`/`building.h`/`room.h`
   （各自的`doorEntities`持有`Door*`的生命周期）、
-  `Source/Forever/Element/DoorComponent.h`（UE层读几何/外观/`IsFlippedSide()`驱动
-  实际渲染和开关动画）。
+  `Source/Forever/Element/DoorComponent.h`（UE层读几何/外观驱动
+  实际渲染和开合）。
 
 ## 待办/后续阶段
 

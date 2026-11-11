@@ -18,7 +18,7 @@
 - 太阳：俯仰角`Lerp(90°, -270°, chronode)`；强度=`SunIntensityFactor×100000×weatherLightScale`，`SunIntensityFactor=relu(-cos(2π·chronode))`
   (太阳仰角的正弦，6~18点亮、地平线以下恰好为0，光不会从地下照上来)。颜色按8个关键帧分段HSV插值，0.3~0.7正午平台，首尾同为夜间色。
 - 大气：`MultiScatteringFactor=Clamp(sunIntensity/50000, 0.1, 1)`，`sunIntensity`含天气缩放。
-- 雾：密度=`(0.08 - (1-|chronode-0.5|*2)^2 * 0.03) * weatherFogScale`，午夜最浓0.08、正午最淡0.05。`bEnableVolumetricFog`在生成时一次性打开。
+- 雾：密度=`(0.08 - (1-|chronode-0.5|*2)^2 * 0.03) * weatherFogScale`，午夜最浓0.08、正午最淡0.05。`bEnableVolumetricFog`在生成时一次性打开。普通雾和体积雾的起始距离都设为5000cm（50米）：近处清晰，远处密度不变；想让近处更清晰就加大`kFogStartDistance`。
 - **白天系数t**(`DayFactor`)：太阳高度正弦在0.03~0.35之间smoothstep，0=深夜、1=白天。区间必须在日出之后，否则破晓前曝光/环境光就先亮、太阳还没出现天就亮了。
 
 ## 夜晚变暗(全部按t插值，`Category="Sky|Night"`，PIE里调)

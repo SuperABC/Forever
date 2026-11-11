@@ -121,17 +121,15 @@ namespace {
 	}
 
 	void WriteDoorSpec(const DoorSpec& s, ByteWriter& w) {
-		w.Str(s.mesh); w.Str(s.frameMesh); w.Str(s.name); w.Str(s.scriptModName);
+		w.Str(s.mesh); w.Str(s.animClass); w.Str(s.name); w.Str(s.scriptModName);
 		WriteStrings(s.milestoneNames, w);
-		w.I32(s.access); w.I32(s.style); w.I32(s.leaves);
-		w.F32(s.openAmount); w.F32(s.openSeconds); w.U8(s.randomSide ? 1 : 0);
+		w.I32(s.access); w.F32(s.openSeconds);
 	}
 	DoorSpec ReadDoorSpec(ByteReader& r) {
 		DoorSpec s;
-		s.mesh = r.Str(); s.frameMesh = r.Str(); s.name = r.Str(); s.scriptModName = r.Str();
+		s.mesh = r.Str(); s.animClass = r.Str(); s.name = r.Str(); s.scriptModName = r.Str();
 		s.milestoneNames = ReadStrings(r);
-		s.access = r.I32(); s.style = r.I32(); s.leaves = r.I32();
-		s.openAmount = r.F32(); s.openSeconds = r.F32(); s.randomSide = r.U8() != 0;
+		s.access = r.I32(); s.openSeconds = r.F32();
 		return s;
 	}
 
@@ -1266,7 +1264,6 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 		w.F32(door->width); w.F32(door->height); w.F32(door->yaw);
 		w.I32(door->level);
 		w.U8(door->vehicleGate ? 1 : 0);
-		w.U8(door->flippedSide ? 1 : 0);
 		w.I32(static_cast<int>(door->access));
 		// 按人登记的门禁例外(名字 + 是否允许)。
 		vector<string> registered = SortedKeys(door->registrations);
@@ -1570,7 +1567,6 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 		float width = r.F32(), height = r.F32(), yaw = r.F32();
 		int level = r.I32();
 		bool vehicleGate = r.U8() != 0;
-		bool flippedSide = r.U8() != 0;
 		DOOR_ACCESS_TYPE access = static_cast<DOOR_ACCESS_TYPE>(r.I32());
 		vector<pair<string, bool>> registrations(r.U32());
 		for (auto& [citizen, pass] : registrations) { citizen = r.Str(); pass = r.U8() != 0; }
@@ -1578,7 +1574,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 		if (r.Failed()) break;
 
 		// 构造函数会按spec创建门的Script(和新开局一样，脚本状态由script_save恢复)。
-		Door* door = new Door(id, kind, tag, spec, zone, building, room, interactName, flippedSide,
+		Door* door = new Door(id, kind, tag, spec, zone, building, room, interactName,
 			x, y, z, width, height, yaw, level, vehicleGate, &map.scriptFactory);
 		door->access = access;
 		for (auto& [citizen, pass] : registrations) door->registrations[citizen] = pass;

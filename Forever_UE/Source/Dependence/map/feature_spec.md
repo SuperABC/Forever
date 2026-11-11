@@ -9,7 +9,7 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
 
 ### 职责
 
-`DoorSpec`：一扇门"长什么样、怎么开"的纯数据描述，供`BuildingMod`/`RoomMod`/`ZoneMod`
+`DoorSpec`：一扇门"长什么样、谁能开"的纯数据描述，供`BuildingMod`/`RoomMod`/`ZoneMod`
 共用，分别填在`doorSpecs`表（按layout标签`tag`索引）或`ZoneGateSpec.door`里。本身不含
 任何UE类型，`mesh`只是一个待`LoadObject`的软路径字符串，和`BuildingMod::lodMaterial`
 这类"纯数据，UE层按路径加载"的字段是同一个约定。
@@ -20,11 +20,7 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
   layout里没有标签的门洞不可选中，永远只是个洞；有标签但查不到对应`DoorSpec`、或者
   查到了但`mesh`为空，同样只是个洞。只有`mesh`非空才会真正创建Core的`Door`实例和UE的
   门组件，见`Core/map/door.h`的`ResolveDoorSpec`。
-- **`randomSide`只是"要不要随机"的开关，不存随机结果本身**：具体随机出来的结果（Slide
-  往哪个方向滑/Swing铰链装哪一边）存在`Door`实例上（`Door::IsFlippedSide()`），在
-  `Map::CreateDoor`创建这扇门的那一刻掷一次硬币决定，之后固定不变——同一扇门以后每次
-  开关都用这个固定结果。这个字段只对单扇门（`leaves==1`）生效，双扇门两扇对称镜像，
-  没有"选哪一边"的歧义，不读这个字段。
+- **门是骨骼动画**：`mesh`是骨骼网格软路径（含门框），`animClass`是动画蓝图类软路径（`…_C`，父类`UDoorAnimInstance`；空=基类，门不动）。Core/Forever层只把一个"开合度"(0~1，`openSeconds`秒走完)喂给动画蓝图，门怎么动完全由骨骼+动画蓝图决定，所以这里没有Slide/Swing/单双扇/开合幅度/随机朝向字段。
 - **`access`用`int`不用`DoorAccess`枚举**：`DoorSpec`是纯数据配置（mod作者在`Layout()`/
   `SetProperty()`里手写的字面值），`Door::DoorAccess`枚举定义在`Core/map/door.h`——
   `Dependence`层不能反向依赖`Core`，所以这里用`int`（0=Open/1=Owner/2=Locked，和

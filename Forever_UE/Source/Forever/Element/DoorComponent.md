@@ -5,7 +5,7 @@
 `UForeverDoorComponent`：一扇真正放了门扇的门在场景里的渲染+交互表现，绑定一个Core端
 `Door*`。挂在"所属对象的渲染Actor"上——建筑门/房间门挂`ABuildingElement`（近景LOD生成/
 清理，见`BuildingElement.md`"门"一节），园区门挂`UForeverZoneFrameworkComponent`的owner
-（常驻，不随LOD）。负责：门扇/门框网格生成、触发盒、开关动画、身份判定+门禁拒绝、
+（常驻，不随LOD）。负责：骨骼门网格生成、挡板、触发盒、开合度插值并喂给动画蓝图、身份判定+门禁拒绝、
 MeetOption交互选项。
 
 ## 关键设计
@@ -19,38 +19,21 @@ MeetOption交互选项。
 方向，和法线正好相差90度——`componentYawDegrees = RadiansToDegrees(door->GetYaw()) -
 90`，不是直接拿GetYaw()当组件朝向用。
 
-### 门扇枢轴(pivot)和可视网格(mesh)分离，动画只改枢轴
+### 门是骨骼网格，Core/组件只给一个"开合度"
 
-每扇门扇是`USceneComponent`(枢轴)+挂在它下面的`UStaticMeshComponent`(可视网格)。
-`AlignMeshToBounds()`在**创建时**按mesh资产的实际包围盒(`UStaticMesh::GetBounds()`)
-算出一次性的缩放+本地offset，让网格的包围盒精确填满目标区间——不管资产的pivot在哪
-(几何中心/边缘/随便哪里)都能摆对，这是为了兼容这次用的占位Cube(pivot在几何中心，和
-"平开门pivot在铰链边底部/推拉门pivot在底边中点"的正式资产约定不一致)。开关动画
-(`TickComponent`)只在`closedTransform`/`openTransform`两个预先算好的枢轴相对Transform
-之间按`SmoothStep`插值`SetRelativeTransform`，从不重新计算mesh的缩放/offset——枢轴的
-旋转/平移中心和网格资产自身的pivot约定完全解耦。
+`DoorSpec.mesh`是**骨骼网格**软路径（门框和门扇在同一个资产里，会动的部分绑在骨上），`DoorSpec.animClass`是动画蓝图类（父类必须是`UDoorAnimInstance`）。组件自己的职责只有：算`openProgress`(0=全关,1=全开，按`openSeconds`线性插值)，每帧写进动画实例的`OpenProgress`/`OpenSide`，**模型怎么动完全由动画蓝图决定**（AnimGraph里用Transform (Modify) Bone或Sequence Evaluator读`OpenProgress`）。组件里没有任何Slide/Swing/铰链代码；`animClass`为空或加载失败回退到`UDoorAnimInstance`基类，门不动（日志告警）。动画实例不是`UDoorAnimInstance`（蓝图父类选错）时只告警一次。
 
-### Slide / Swing 的枢轴摆位
+### 摆位：X、Y等比缩放，Z独立缩放
 
-- **Slide**（建筑门/园区门用）：枢轴本地X=门扇"静止位"（单扇=0，覆盖整个门洞；双扇=
-  各自半个门宽的中心），开门时枢轴沿本地X平移`leafWidth*openAmount`（单扇方向看
-  `Door::IsFlippedSide()`；双扇固定对称往外滑）。
-- **Swing**（房间门用）：枢轴本地X=铰链所在的洞口边缘（单扇看`IsFlippedSide()`选左右边；
-  双扇两扇各自铰链在洞口两端外侧），mesh的包围盒中心offset到"离铰链半个扇宽"处（沿洞口
-  内侧延伸），开门时枢轴绕本地Z转`openAmount`度（默认90度）。
+`BuildSkeletalDoor`按`USkeletalMesh::GetBounds()`（ref-pose包围盒）：X、Y用同一个系数`门宽/包围盒宽`（门厚跟着门宽等比，所以绕Z的平开旋转不会被拉变形），Z单独缩放到门高；包围盒中心落在组件本地`(0,0,门高/2)`，不管资产pivot在哪。代价：很宽的门（园区车行门）门厚也会按比例变厚。网格自己`NoCollision`。
 
-### Swing门永远往远离触发者的一侧开
+### 挡板（blocker）
 
-组件本地+Y就是墙法线方向（local X=沿墙）。每扇门扇记一个`swingYaw = extendSign * amount`
-——"往+Y一侧开"时要转的角度：门扇方向是`extendSign*X`，绕Z转θ后Y分量=`extendSign*sinθ`，
-所以θ必须和`extendSign`同号(不能固定取+amount，否则铰链在+X侧的单扇门会往-Y开，开门方向跟着随机的铰链侧走)。
+骨骼网格不带碰撞，门关着挡人靠一个`UBoxComponent`挡板（宽×`DOOR_BLOCKER_THICKNESS`(10cm，和墙同厚)×高，`BlockAllDynamic`，隐藏）。`openProgress < 0.5`时开启，之后关闭，只在状态变化时切换`SetCollisionEnabled`。
 
-门**从全关状态**被一个`CanPass()`通过的Actor触发时（`!bWantsOpen && openProgress≈0`），
-`ChooseSwingSide`把它的位置变换到组件本地坐标：在+Y一侧就往-Y开，反之往+Y开，所有门扇
-`openTransform`的Yaw改成`side * swingYaw`。效果：从房间外靠近就往房间里推开，从房间里
-靠近就往外推开（不依赖"哪一侧算房间内"的约定，按触发者实际位置判断）。门已经开着、或者
-正在关但还没关严时不改方向——后来的人从另一侧过来就顺着已经开的方向走，门扇不会在半空中
-反向翻转。`randomSide`只决定单扇门铰链装在左边还是右边。Slide门不受影响。
+### 门永远往远离触发者的一侧开（`OpenSide`）
+
+组件本地+Y就是墙法线方向（local X=沿墙）。门**从全关状态**被一个`CanPass()`通过的Actor触发时（`!bWantsOpen && openProgress≈0`），`ChooseOpenSide`把它的位置变换到组件本地坐标：在+Y一侧`OpenSide=-1`，反之`+1`，写进动画实例的`OpenSide`。平开门的动画蓝图可以用它决定转动方向（从房间外靠近就往房间里推开），推拉门忽略即可。门已经开着、或者正在关但还没关严时不改，避免门在半空中反向翻转。
 
 ### 身份判定：`ResolvePasserIdentity`
 
@@ -67,7 +50,7 @@ MeetOption交互选项。
 
 进入触发盒且`Door::CanPass()`通过的Actor才加进`passers`；非空就开，清空后
 `DOOR_CLOSE_DELAY_SECONDS`(1秒)再关，`TickComponent`只在动画进行中/有未完成的开关请求时
-跑(全关且没有待处理请求时`SetComponentTickEnabled(false)`省性能)。门禁拒绝通行的Actor
+跑；全关且没有待处理请求时多Tick一帧让动画实例评估一次0，随后`bPauseAnims=true`并`SetComponentTickEnabled(false)`省性能，下次`UpdateOpenState`唤醒。门禁拒绝通行的Actor
 **不会**被加进`passers`(门不会为它开)，但如果这扇门有`Script`，MeetOption选项照常弹出
 给靠近的玩家——拒绝通行和拒绝对话是两件独立的事。
 
@@ -80,6 +63,7 @@ MeetOption交互选项。
 - 依赖：`Source/Core/map/door.h`（`Door`几何/外观/门禁/交互）、
   `Source/Core/populace/citizen.h`（`Citizen`，身份判定用）、
   `Source/Forever/Element/CitizenElement.h`/`VehicleElement.h`（身份判定）、
+  `Source/Forever/Element/DoorAnimInstance.h`（动画实例基类，见`DoorAnimInstance.md`）、
   `Source/Forever/UI/MeetOptionWidget.h`（交互选项UI）。
 - 被谁依赖：`Source/Forever/Element/BuildingElement.h`/`.cpp`（建筑门/房间门，近景LOD
   生成/清理）、`Source/Forever/Framework/ForeverZoneFrameworkComponent.h`/`.cpp`（园区
@@ -87,6 +71,6 @@ MeetOption交互选项。
 
 ## 待办/后续阶段
 
-- 真实资产到位后(见`door_system_plan.md`第七节)，把Basic层配置里的`frameMesh`/`mesh`路径换成真实路径即可，组件代码不用改。
-- 门扇运动中碰撞保持开启(`ETeleportType::None`)，如果实测发现会把人推飞，改成动画期间
-  关闭门扇碰撞(`SetCollisionEnabled(ECollisionEnabled::NoCollision)`，动画结束再恢复)。
+- 近景LOD一栋楼可能一次生成很多扇门，骨骼组件+动画实例比静态网格贵；`maxDoorsPerOp=4`先不动，PIE看卡顿再调（降批量，或让远处的门不评估动画）。
+- 所有门（entrance/room/home/园区门）目前共用同一个测试门资产，见`Basic/map/door_assets.h`；之后按尺寸/用途分资产。
+- NPC寻路不按门的开合/门禁绕路；挡板关着时NPC靠触发盒开门通过。

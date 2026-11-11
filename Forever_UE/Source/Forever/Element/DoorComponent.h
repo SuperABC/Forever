@@ -7,14 +7,16 @@
 
 class Door;
 class Citizen;
-class UStaticMesh;
-class UStaticMeshComponent;
+class USkeletalMesh;
+class USkeletalMeshComponent;
+class UDoorAnimInstance;
 class UBoxComponent;
 class UPrimitiveComponent;
 struct FHitResult;
 
-// 自动门：门扇+(可选)门框+触发盒+开关动画，绑定Core端Door*，挂在所属对象的渲染Actor上(建筑门/房间门挂ABuildingElement，园区门挂
-// UForeverZoneFrameworkComponent的owner)。门禁判定是Door::CanPass()，这里只负责"谁进触发盒→该不该开→动画插值"，实现要点见DoorComponent.md。
+// 自动门：骨骼网格门+触发盒+挡板+开合度，绑定Core端Door*，挂在所属对象的渲染Actor上(建筑门/房间门挂ABuildingElement，园区门挂
+// UForeverZoneFrameworkComponent的owner)。门禁判定是Door::CanPass()，这里只负责"谁进触发盒→该不该开→开合度插值→写给动画实例"，
+// 模型怎么动由动画蓝图决定，实现要点见DoorComponent.md。
 UCLASS()
 class FOREVER_API UForeverDoorComponent : public USceneComponent
 {
@@ -23,7 +25,7 @@ class FOREVER_API UForeverDoorComponent : public USceneComponent
 public:
 	UForeverDoorComponent();
 
-	// 绑定Core端Door*，按Door的世界坐标/朝向/外观生成门扇/门框/触发盒。
+	// 绑定Core端Door*，按Door的世界坐标/朝向/外观生成骨骼门/挡板/触发盒。
 	void Init(Door* inDoor);
 	// 交互选项在运行中变了(add_option/remove_option，由AForeverFrameworkActor::RefreshInteractOptions
 	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
@@ -42,40 +44,17 @@ public:
 	void ClearDoor() { door = nullptr; }
 
 private:
-	// 门扇的"枢轴"结构——Swing绕Z轴转(铰链)，Slide沿本地X轴平移(滑轨)；pivotClosed/pivotOpen两个目标相对Transform在Init()算好，
-	// Tick()只在两者间SmoothStep插值。不是USTRUCT：GC由SetupAttachment的Attach层级保证(AttachChildren是真正的GC根)。
-	struct FLeaf {
-		TObjectPtr<USceneComponent> pivot;
-		TObjectPtr<UStaticMeshComponent> mesh;
-		FTransform closedTransform;
-		FTransform openTransform;
-		// 仅Swing：这扇门扇"往本地+Y一侧(墙法线一侧)开"时的Yaw角(度，已经带上铰链在哪一边的
-		// 符号)。往-Y一侧开就取反。ChooseSwingSide按触发者在门哪一侧改写openTransform。
-		float swingYaw = 0.f;
-	};
-
-	// 仅Swing：门从全关开始打开时调用一次，按approacher在门平面哪一侧(组件本地Y的正负)，把
-	// 所有门扇的openTransform改成朝另一侧打开——从房间外靠近就往房间内开，从房间内靠近就往
-	// 外开。门已经开着(或正在关、还没关严)时不调用，避免门扇在半空中反向翻转。
-	void ChooseSwingSide(AActor* approacher);
-
-	// 把一个mesh按desiredLocalSize(X=沿墙宽/Y=厚度/Z=高，UE单位)缩放，并按它自己的实际
-	// 包围盒(有些资产pivot不在几何中心，占位Cube是中心pivot)算出本地offset，使包围盒中心
-	// 落在desiredLocalCenterOffset这个相对pivot的本地坐标——这样不管资产pivot约定是什么，
-	// 视觉网格都会精确填满[desiredLocalCenterOffset - size/2, +size/2]这个本地区间，见
-	// door.md"实际摆位"一节。返回值已经RegisterComponent，调用方负责SetupAttachment之后
-	// 再调这个函数设RelativeLocation/Scale(所以这个函数假定mesh组件已经Attach好)。
-	void AlignMeshToBounds(UStaticMeshComponent* meshComp, UStaticMesh* mesh,
-		const FVector& desiredLocalSize, const FVector& desiredLocalCenterOffset) const;
-
-	// 创建所有门扇(leaves==1时1扇，==2时2扇)——按door->GetStyle()分Slide/Swing两套摆位+
-	// 开合目标Transform的算法，统一在这一个函数里做(两种style分支共享"建pivot+建mesh+
-	// AlignMeshToBounds+存closed/open transform"这套机制，只是目标Transform的算法不同，
-	// 拆成两个独立函数反而要重复传一堆已经算好的中间量，见door.md)。
-	void BuildLeaves(UStaticMesh* mesh, float doorWidth, float doorHeight, float thickness);
-
-	void BuildFrame(UStaticMesh* frameMesh, float doorWidth, float doorHeight, float thickness);
+	// 骨骼网格门：按门洞宽高对齐包围盒——X、Y等比缩放(系数=门宽/包围盒宽，厚度跟着等比，绕Z的平开不变形)，
+	// Z独立缩放到门高；包围盒中心落在(0,0,门高/2)。见door.md"实际摆位"一节。
+	void BuildSkeletalDoor(USkeletalMesh* mesh, float doorWidth, float doorHeight);
+	// 挡板：门关着时挡人(骨骼网格自己不带碰撞)，开到一半以上放行。
+	void BuildBlocker(float doorWidth, float doorHeight);
 	void BuildTriggerBox(float doorWidth, float doorHeight);
+
+	// 门从全关开始打开时调用一次，按approacher在门平面哪一侧(组件本地Y的正负)记下OpenSide：
+	// 从房间外靠近就往房间内开，从房间内靠近就往外开。门已经开着(或正在关、还没关严)时不调用，
+	// 避免门在半空中反向翻转。
+	void ChooseOpenSide(AActor* approacher);
 
 	UFUNCTION()
 	void OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -96,11 +75,11 @@ private:
 
 	static TMap<const Door*, TWeakObjectPtr<UForeverDoorComponent>> componentsByDoor;
 
-	// 不是UPROPERTY——FLeaf不是USTRUCT，UHT不认；GC安全性见FLeaf注释。
-	TArray<FLeaf> leaves;
+	UPROPERTY()
+	TObjectPtr<USkeletalMeshComponent> doorMesh;
 
 	UPROPERTY()
-	TObjectPtr<UStaticMeshComponent> frameMeshComp;
+	TObjectPtr<UBoxComponent> blocker;
 
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> trigger;
@@ -111,6 +90,13 @@ private:
 	float closeAtTime = -1.f; // <0表示没有正在倒计时的关门请求
 	bool bWantsOpen = false;
 	float openProgress = 0.f; // 0=全关，1=全开，Tick()按openSeconds插值趋近bWantsOpen对应的目标
+	float openSide = 1.f;     // 见ChooseOpenSide
+
+	// 动画实例的暂停：全关且空闲时，先多Tick一帧把0写给动画实例并让它评估一次，再暂停动画、停Tick。
+	bool bAnimPaused = false;
+	int32 idleTicks = 0;
+	bool bBlockerEnabled = true;
+	bool bWarnedAnimClass = false;
 
 	// 这扇门的交互名(烘焙快照，Overlap回调只读这份，不解引用door)。
 	FString interactNameOnly;

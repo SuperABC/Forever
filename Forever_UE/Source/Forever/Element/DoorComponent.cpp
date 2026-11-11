@@ -4,63 +4,61 @@
 #include "populace/citizen.h"
 
 #include "Element/CitizenElement.h"
+#include "Element/DoorAnimInstance.h"
 #include "Element/VehicleElement.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Player/ForeverPlayerController.h"
 #include "UI/MeetOptionWidget.h"
 
+#include "Animation/AnimInstance.h"
 #include "Components/BoxComponent.h"
-#include "Components/StaticMeshComponent.h"
-#include "Engine/StaticMesh.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Kismet/GameplayStatics.h"
 
 #define DOOR_WORLD_SCALE 1000.f // 地图单位->UE单位，和Building/ZoneWorldScale同一个数值
 #define DOOR_DEFAULT_OPEN_SECONDS 0.5f
 #define DOOR_CLOSE_DELAY_SECONDS 1.f // 触发盒空了之后延迟这么久才真正关门
-// 门扇/门框的厚度(UE单位，即厘米)——必须比墙薄，否则门扇会凸出墙面两侧。墙厚是
-// BuildingElement.cpp::BUILDING_WALL_THICKNESS(0.01地图单位=10UE单位=10厘米)，这里固定
-// 6厘米，不用资产自己的原始厚度——传0.f让AlignMeshToBounds保留Cube资产原厚度会比墙还厚。
-#define DOOR_THICKNESS 6.f
+// 挡板厚度(UE单位，即厘米)：和墙一样厚(BuildingElement.cpp::BUILDING_WALL_THICKNESS=0.01地图单位=10UE单位)，
+// 关着的门把整个门洞堵死。骨骼网格自己的厚度来自资产(按门宽等比)，和这个无关。
+#define DOOR_BLOCKER_THICKNESS 10.f
+#define DOOR_BLOCKER_OPEN_THRESHOLD 0.5f // 开合度到这个值以上挡板放行
 
 namespace {
-	// 门资产缓存：按软路径缓存已解析的UStaticMesh*，避免每扇门Init()各自LoadObject(近LOD生成会变卡)；
+	// 门资产缓存：按软路径缓存已解析的骨骼网格/动画蓝图类，避免每扇门Init()各自Load(近LOD生成会变卡)；
 	// 用TWeakObjectPtr避免永久持有资产不被GC。
-	TMap<FString, TWeakObjectPtr<UStaticMesh>> GDoorMeshCache;
+	TMap<FString, TWeakObjectPtr<USkeletalMesh>> GDoorMeshCache;
+	TMap<FString, TWeakObjectPtr<UClass>> GDoorAnimClassCache;
 
-	UStaticMesh* LoadDoorMesh(const FString& path) {
+	USkeletalMesh* LoadDoorMesh(const FString& path) {
 		if (path.IsEmpty()) return nullptr;
-		if (TWeakObjectPtr<UStaticMesh>* cached = GDoorMeshCache.Find(path)) {
-			if (UStaticMesh* mesh = cached->Get()) return mesh;
+		if (TWeakObjectPtr<USkeletalMesh>* cached = GDoorMeshCache.Find(path)) {
+			if (USkeletalMesh* mesh = cached->Get()) return mesh;
 		}
-		UStaticMesh* mesh = LoadObject<UStaticMesh>(nullptr, *path);
+		USkeletalMesh* mesh = LoadObject<USkeletalMesh>(nullptr, *path);
 		GDoorMeshCache.Add(path, mesh);
 		return mesh;
+	}
+
+	// 动画蓝图类，加载失败或没配路径回退到UDoorAnimInstance基类(门不动)。
+	UClass* LoadDoorAnimClass(const FString& path) {
+		if (!path.IsEmpty()) {
+			if (TWeakObjectPtr<UClass>* cached = GDoorAnimClassCache.Find(path)) {
+				if (UClass* animClass = cached->Get()) return animClass;
+			}
+			UClass* animClass = LoadClass<UAnimInstance>(nullptr, *path);
+			if (animClass) {
+				GDoorAnimClassCache.Add(path, animClass);
+				return animClass;
+			}
+			UE_LOG(LogTemp, Warning, TEXT("UForeverDoorComponent: 门动画蓝图加载失败，回退到UDoorAnimInstance: %s"), *path);
+		}
+		return UDoorAnimInstance::StaticClass();
 	}
 }
 
 UForeverDoorComponent::UForeverDoorComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
-}
-
-void UForeverDoorComponent::AlignMeshToBounds(UStaticMeshComponent* meshComp, UStaticMesh* mesh,
-	const FVector& desiredLocalSize, const FVector& desiredLocalCenterOffset) const {
-	if (!meshComp || !mesh) return;
-
-	FBoxSphereBounds bounds = mesh->GetBounds();
-	FVector extent = bounds.BoxExtent;
-	// desiredLocalSize某个轴给0.f表示"这个轴不缩放，保留资产原样"(比如厚度轴，见
-	// BuildLeaves/BuildFrame的调用)——必须同时判desiredLocalSize>0，否则0/(2*extent)算出
-	// 缩放系数0，把这个轴整个压扁成0厚度，导致门扇/门框整体不可见。
-	FVector scale(
-		(extent.X > KINDA_SMALL_NUMBER && desiredLocalSize.X > KINDA_SMALL_NUMBER) ? desiredLocalSize.X / (2.f * extent.X) : 1.f,
-		(extent.Y > KINDA_SMALL_NUMBER && desiredLocalSize.Y > KINDA_SMALL_NUMBER) ? desiredLocalSize.Y / (2.f * extent.Y) : 1.f,
-		(extent.Z > KINDA_SMALL_NUMBER && desiredLocalSize.Z > KINDA_SMALL_NUMBER) ? desiredLocalSize.Z / (2.f * extent.Z) : 1.f);
-	meshComp->SetRelativeScale3D(scale);
-
-	FVector origin = bounds.Origin;
-	FVector relLoc = desiredLocalCenterOffset -
-		FVector(scale.X * origin.X, scale.Y * origin.Y, scale.Z * origin.Z);
-	meshComp->SetRelativeLocation(relLoc);
 }
 
 TMap<const Door*, TWeakObjectPtr<UForeverDoorComponent>> UForeverDoorComponent::componentsByDoor;
@@ -93,20 +91,15 @@ void UForeverDoorComponent::Init(Door* inDoor) {
 	float doorWidth = door->GetWidth() * DOOR_WORLD_SCALE;
 	float doorHeight = door->GetHeight() * DOOR_WORLD_SCALE;
 
-	UStaticMesh* mesh = LoadDoorMesh(UTF8_TO_TCHAR(door->GetMesh().c_str()));
+	USkeletalMesh* mesh = LoadDoorMesh(UTF8_TO_TCHAR(door->GetMesh().c_str()));
 	if (!mesh) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverDoorComponent::Init: 门资产加载失败: %s (交互名=%s)"),
 			UTF8_TO_TCHAR(door->GetMesh().c_str()), UTF8_TO_TCHAR(door->GetInteractName().c_str()));
 		return;
 	}
 
-	BuildLeaves(mesh, doorWidth, doorHeight, DOOR_THICKNESS);
-
-	if (!door->GetFrameMesh().empty()) {
-		UStaticMesh* frameMesh = LoadDoorMesh(UTF8_TO_TCHAR(door->GetFrameMesh().c_str()));
-		if (frameMesh) BuildFrame(frameMesh, doorWidth, doorHeight, DOOR_THICKNESS);
-	}
-
+	BuildSkeletalDoor(mesh, doorWidth, doorHeight);
+	BuildBlocker(doorWidth, doorHeight);
 	BuildTriggerBox(doorWidth, doorHeight);
 
 	interactNameOnly = UTF8_TO_TCHAR(door->GetInteractName().c_str());
@@ -116,90 +109,63 @@ void UForeverDoorComponent::Init(Door* inDoor) {
 	}
 }
 
-void UForeverDoorComponent::BuildLeaves(UStaticMesh* mesh, float doorWidth, float doorHeight, float thickness) {
-	int32 leafCount = door->GetLeaves() == 2 ? 2 : 1;
-	bool isSwing = (door->GetStyle() == 1);
-	float amount = door->GetOpenAmount() > 0.f ? door->GetOpenAmount() : (isSwing ? 90.f : 1.f);
-
-	for (int32 leafIndex = 0; leafIndex < leafCount; leafIndex++) {
-		USceneComponent* pivot = NewObject<USceneComponent>(this, NAME_None, RF_Transient);
-		pivot->SetupAttachment(this);
-		pivot->RegisterComponent();
-
-		UStaticMeshComponent* meshComp = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
-		meshComp->SetStaticMesh(mesh);
-		meshComp->SetCollisionProfileName(TEXT("BlockAllDynamic"));
-		meshComp->SetMobility(EComponentMobility::Movable);
-		meshComp->SetGenerateOverlapEvents(false);
-		meshComp->SetupAttachment(pivot);
-		meshComp->RegisterComponent();
-
-		FTransform closed, open;
-		float swingYaw = 0.f;
-
-		if (!isSwing) {
-			// Slide：leaves==1整扇覆盖[-doorWidth/2, doorWidth/2]，居中(pivot本地X=0)；
-			// leaves==2每扇各自覆盖一半，pivot本地X偏移到各自那一半的中心。
-			float leafWidth = leafCount == 2 ? doorWidth * 0.5f : doorWidth;
-			float restX = leafCount == 2 ? (leafIndex == 0 ? -leafWidth * 0.5f : leafWidth * 0.5f) : 0.f;
-			AlignMeshToBounds(meshComp, mesh, FVector(leafWidth, thickness, doorHeight),
-				FVector(0.f, 0.f, doorHeight * 0.5f));
-
-			float slideDist = leafWidth * amount;
-			float dir = leafCount == 2 ? (leafIndex == 0 ? -1.f : 1.f) : (door->IsFlippedSide() ? -1.f : 1.f);
-
-			closed = FTransform(FRotator::ZeroRotator, FVector(restX, 0.f, 0.f));
-			open = FTransform(FRotator::ZeroRotator, FVector(restX + dir * slideDist, 0.f, 0.f));
-		} else {
-			// Swing：leaves==1铰链在洞口一侧边缘(IsFlippedSide()决定哪侧)，门扇覆盖整个doorWidth；leaves==2两扇铰链在洞口两端外侧，各覆盖半个doorWidth。
-			// mesh包围盒中心落在离铰链半个扇宽处(pivot本地+X=沿墙)，开门时pivot绕本地Z转amount度；往墙哪一侧开由ChooseSwingSide按触发者位置决定，这里先按+Y侧算默认值。
-			float leafWidth = leafCount == 2 ? doorWidth * 0.5f : doorWidth;
-			float hingeX;
-			if (leafCount == 2) {
-				hingeX = (leafIndex == 0) ? -doorWidth * 0.5f : doorWidth * 0.5f;
-			} else {
-				hingeX = door->IsFlippedSide() ? doorWidth * 0.5f : -doorWidth * 0.5f;
-			}
-			// 门扇从铰链"朝洞口内侧"延伸：leafIndex0(或唯一扇朝+X铰链在-X时)延伸方向取决于
-			// 铰链在哪一侧——铰链在左(-X)就朝+X延伸，铰链在右(+X)就朝-X延伸；双扇时两扇都
-			// 朝洞口中心延伸。
-			float extendSign = (hingeX < 0.f) ? 1.f : -1.f;
-			AlignMeshToBounds(meshComp, mesh, FVector(leafWidth, thickness, doorHeight),
-				FVector(extendSign * leafWidth * 0.5f, 0.f, doorHeight * 0.5f));
-
-			// 门扇方向是extendSign*X，绕Z转θ后它的Y分量=extendSign*sinθ，要让门扇落到本地+Y
-			// 一侧，θ就得和extendSign同号——以前固定θ=+amount(双扇第二扇取反)，铰链在+X侧的
-			// 单扇门(extendSign=-1)就会往-Y开，于是开门方向跟着随机的铰链侧一起随机。
-			swingYaw = extendSign * amount;
-			closed = FTransform(FRotator::ZeroRotator, FVector(hingeX, 0.f, 0.f));
-			open = FTransform(FRotator(0.f, swingYaw, 0.f), FVector(hingeX, 0.f, 0.f));
-		}
-
-		pivot->SetRelativeTransform(closed);
-
-		FLeaf leaf;
-		leaf.pivot = pivot;
-		leaf.mesh = meshComp;
-		leaf.closedTransform = closed;
-		leaf.openTransform = open;
-		leaf.swingYaw = swingYaw;
-		leaves.Add(leaf);
+void UForeverDoorComponent::BuildSkeletalDoor(USkeletalMesh* mesh, float doorWidth, float doorHeight) {
+	USkeletalMeshComponent* comp = NewObject<USkeletalMeshComponent>(this, NAME_None, RF_Transient);
+	comp->SetSkeletalMeshAsset(mesh);
+	if (mesh->GetPhysicsAsset()) {
+		// 骨骼网格带Physics Asset：门扇的碰撞盒挂在door骨上，kinematic随动画转动，开着的门扇也挡人。
+		// 只做查询碰撞(挡角色/载具)，不模拟物理，也不产生重叠事件(否则会和自己的触发盒互相触发)。
+		comp->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+		comp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		comp->SetGenerateOverlapEvents(false);
+		comp->SetCanEverAffectNavigation(false);
+	} else {
+		comp->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 没有Physics Asset：只靠BuildBlocker的挡板挡关着的门
 	}
-}
-
-void UForeverDoorComponent::BuildFrame(UStaticMesh* frameMesh, float doorWidth, float doorHeight, float thickness) {
-	UStaticMeshComponent* comp = NewObject<UStaticMeshComponent>(this, NAME_None, RF_Transient);
-	comp->SetStaticMesh(frameMesh);
-	comp->SetCollisionProfileName(TEXT("BlockAll"));
-	comp->SetMobility(EComponentMobility::Static);
-	comp->SetGenerateOverlapEvents(false);
+	comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	comp->SetAnimInstanceClass(LoadDoorAnimClass(UTF8_TO_TCHAR(door->GetAnimClass().c_str())));
+	// 不按可见性跳过姿势评估：门全关后会暂停动画，若暂停前一次都没评估过(刚生成时还没被渲染)，
+	// 门就会停在动画蓝图未求值的初始姿势上(表现为初始开着，靠近后才瞬间关上)。
+	comp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 	comp->SetupAttachment(this);
 	comp->RegisterComponent();
 
-	AlignMeshToBounds(comp, frameMesh, FVector(doorWidth, thickness, doorHeight),
-		FVector(0.f, 0.f, doorHeight * 0.5f));
+	// 立刻按开合度0同步评估一次姿势，保证第一帧就是关着的。
+	comp->InitAnim(true);
+	if (UDoorAnimInstance* anim = Cast<UDoorAnimInstance>(comp->GetAnimInstance())) {
+		anim->OpenProgress = 0.f;
+		anim->OpenSide = openSide;
+	}
+	comp->TickAnimation(0.f, false);
+	comp->RefreshBoneTransforms();
 
-	frameMeshComp = comp;
+	// 对齐门洞：X、Y等比(系数=门宽/包围盒宽)，Z独立到门高；包围盒中心落在(0,0,门高/2)，不管资产pivot在哪。
+	FBoxSphereBounds bounds = mesh->GetBounds();
+	FVector extent = bounds.BoxExtent;
+	float scaleXY = extent.X > KINDA_SMALL_NUMBER ? doorWidth / (2.f * extent.X) : 1.f;
+	float scaleZ = extent.Z > KINDA_SMALL_NUMBER ? doorHeight / (2.f * extent.Z) : 1.f;
+	FVector scale(scaleXY, scaleXY, scaleZ);
+	comp->SetRelativeScale3D(scale);
+	comp->SetRelativeLocation(FVector(0.f, 0.f, doorHeight * 0.5f) -
+		FVector(scale.X * bounds.Origin.X, scale.Y * bounds.Origin.Y, scale.Z * bounds.Origin.Z));
+
+	doorMesh = comp;
+}
+
+void UForeverDoorComponent::BuildBlocker(float doorWidth, float doorHeight) {
+	UBoxComponent* box = NewObject<UBoxComponent>(this, NAME_None, RF_Transient);
+	box->SetBoxExtent(FVector(doorWidth * 0.5f, DOOR_BLOCKER_THICKNESS * 0.5f, doorHeight * 0.5f));
+	box->SetRelativeLocation(FVector(0.f, 0.f, doorHeight * 0.5f));
+	box->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+	box->SetGenerateOverlapEvents(false);
+	box->SetCanEverAffectNavigation(false);
+	box->SetHiddenInGame(true);
+	box->SetMobility(EComponentMobility::Movable);
+	box->SetupAttachment(this);
+	box->RegisterComponent();
+
+	blocker = box;
+	bBlockerEnabled = true;
 }
 
 void UForeverDoorComponent::BuildTriggerBox(float doorWidth, float doorHeight) {
@@ -261,8 +227,8 @@ void UForeverDoorComponent::OnOverlapBegin(UPrimitiveComponent* OverlappedCompon
 
 	if (door->CanPass(citizen, isPlayer)) {
 		// 门是从全关状态被这个人推开的——按他在哪一侧决定往另一侧开。门已经开着/没关严时
-		// 不改方向，避免门扇半空中反向翻转(后来的人从另一侧过来就顺着已经开的方向走)。
-		if (!bWantsOpen && openProgress <= KINDA_SMALL_NUMBER) ChooseSwingSide(OtherActor);
+		// 不改方向，避免门在半空中反向翻转(后来的人从另一侧过来就顺着已经开的方向走)。
+		if (!bWantsOpen && openProgress <= KINDA_SMALL_NUMBER) ChooseOpenSide(OtherActor);
 		passers.Add(OtherActor);
 		UpdateOpenState();
 	}
@@ -300,15 +266,12 @@ void UForeverDoorComponent::OnOverlapEnd(UPrimitiveComponent* OverlappedComponen
 	}
 }
 
-void UForeverDoorComponent::ChooseSwingSide(AActor* approacher) {
-	if (!door || door->GetStyle() != 1 || !approacher) return;
+void UForeverDoorComponent::ChooseOpenSide(AActor* approacher) {
+	if (!approacher) return;
 	// 组件本地+Y就是墙法线方向(local X=沿墙，见Init里componentYaw=法线yaw-90)。触发者在
 	// +Y一侧就往-Y开，反之往+Y开——永远往远离触发者的一侧推开。
 	float approacherLocalY = GetComponentTransform().InverseTransformPosition(approacher->GetActorLocation()).Y;
-	float side = approacherLocalY >= 0.f ? -1.f : 1.f;
-	for (FLeaf& leaf : leaves) {
-		leaf.openTransform.SetRotation(FRotator(0.f, side * leaf.swingYaw, 0.f).Quaternion());
-	}
+	openSide = approacherLocalY >= 0.f ? -1.f : 1.f;
 }
 
 void UForeverDoorComponent::UpdateOpenState() {
@@ -324,6 +287,10 @@ void UForeverDoorComponent::UpdateOpenState() {
 		closeAtTime = GetWorld() ? GetWorld()->GetTimeSeconds() + DOOR_CLOSE_DELAY_SECONDS : -1.f;
 	}
 
+	// 唤醒：恢复动画评估，重新计空闲帧。
+	bAnimPaused = false;
+	idleTicks = 0;
+	if (doorMesh) doorMesh->bPauseAnims = false;
 	SetComponentTickEnabled(true);
 }
 
@@ -340,17 +307,37 @@ void UForeverDoorComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	float openSeconds = door && door->GetOpenSeconds() > 0.f ? door->GetOpenSeconds() : DOOR_DEFAULT_OPEN_SECONDS;
 	float speed = openSeconds > 0.f ? 1.f / openSeconds : 1.f;
 	openProgress = FMath::FInterpConstantTo(openProgress, target, DeltaTime, speed);
-	float t = FMath::SmoothStep(0.f, 1.f, openProgress);
 
-	for (FLeaf& leaf : leaves) {
-		if (!leaf.pivot) continue;
-		FVector loc = FMath::Lerp(leaf.closedTransform.GetLocation(), leaf.openTransform.GetLocation(), t);
-		FQuat rot = FQuat::Slerp(leaf.closedTransform.GetRotation(), leaf.openTransform.GetRotation(), t);
-		leaf.pivot->SetRelativeTransform(FTransform(rot, loc), false, nullptr, ETeleportType::None);
+	// 把开合度写给动画实例，模型怎么动由动画蓝图决定(缓动也在动画蓝图里加)。
+	if (doorMesh) {
+		if (UDoorAnimInstance* anim = Cast<UDoorAnimInstance>(doorMesh->GetAnimInstance())) {
+			anim->OpenProgress = openProgress;
+			anim->OpenSide = openSide;
+		} else if (!bWarnedAnimClass) {
+			bWarnedAnimClass = true;
+			UE_LOG(LogTemp, Warning, TEXT("UForeverDoorComponent: 门的动画实例不是UDoorAnimInstance(动画蓝图父类要选DoorAnimInstance)，门不会动: %s"),
+				door ? UTF8_TO_TCHAR(door->GetAnimClass().c_str()) : TEXT(""));
+		}
 	}
 
+	// 挡板：关着挡人，开到阈值以上放行；只在状态变化时切换。
+	if (blocker) {
+		bool shouldBlock = openProgress < DOOR_BLOCKER_OPEN_THRESHOLD;
+		if (shouldBlock != bBlockerEnabled) {
+			bBlockerEnabled = shouldBlock;
+			blocker->SetCollisionEnabled(shouldBlock ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
+		}
+	}
+
+	// 全关且没有待处理的开门请求：多Tick一帧让动画实例评估一次0，之后暂停动画并停Tick，见door.md"性能"一节。
 	if (FMath::IsNearlyEqual(openProgress, target) && FMath::IsNearlyEqual(openProgress, 0.f, 0.001f)) {
-		SetComponentTickEnabled(false); // 全关且没有待处理的开门请求时停Tick，见door.md"性能"一节
+		if (++idleTicks >= 2) {
+			if (doorMesh) doorMesh->bPauseAnims = true;
+			bAnimPaused = true;
+			SetComponentTickEnabled(false);
+		}
+	} else {
+		idleTicks = 0;
 	}
 }
 

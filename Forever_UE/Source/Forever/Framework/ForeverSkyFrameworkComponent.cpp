@@ -185,6 +185,10 @@ void UForeverSkyFrameworkComponent::UpdateHeightFog(float chronode) {
 		// 夜间雾比白天浓：午夜0.08，正午0.05，中间按(1-|chronode-0.5|*2)^2过渡。
 		float fogDensity = 0.08f - FMath::Pow(1.0f - FMath::Abs(chronode - 0.5f) * 2.0f, 2.0f) * 0.03f;
 		fogComponent->SetFogDensity(fogDensity * weatherFogScale);
+		// 近处淡、远处不变：起始距离之内不起雾，之外密度照旧，所以远景依旧发糊。
+		constexpr float kFogStartDistance = 5000.0f; // cm
+		fogComponent->SetStartDistance(kFogStartDistance);
+		fogComponent->SetVolumetricFogStartDistance(kFogStartDistance);
 	}
 }
 

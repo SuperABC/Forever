@@ -24,10 +24,10 @@ class Door {
 public:
 	Door() = delete;
 
-	// id/interactName/flippedSide由Map::CreateDoor算好传入；interactName非空才创建Script；
+	// id/interactName由Map::CreateDoor算好传入；interactName非空才创建Script；
 	// zone/building/room按kind只有一个非空，Door不持有它们的生命周期
 	Door(const std::string& id, DOOR_KIND_TYPE kind, const std::string& tag, const DoorSpec& spec,
-		Zone* zone, Building* building, Room* room, const std::string& interactName, bool flippedSide,
+		Zone* zone, Building* building, Room* room, const std::string& interactName,
 		float x, float y, float z, float width, float height, float yaw, int level, bool isVehicleGate,
 		ScriptFactory* scriptFactory);
 	~Door(); // delete script
@@ -42,10 +42,7 @@ public:
 	Room* GetRoom() const;
 
 	const std::string& GetMesh() const;           // 一定非空(为空的根本不会创建Door)
-	const std::string& GetFrameMesh() const;
-	int GetStyle() const;                         // 0=Slide 1=Swing，见feature_spec.h
-	int GetLeaves() const;                        // 1或2
-	float GetOpenAmount() const;                  // 0表示"用默认值"，由Forever层解释具体数值
+	const std::string& GetAnimClass() const;      // 动画蓝图类路径，可为空
 	float GetOpenSeconds() const;
 
 	// 几何(世界坐标、地图单位；Map::CreateDoor创建时算好，之后不会再变)。
@@ -57,9 +54,6 @@ public:
 	float GetYaw() const;                         // 墙体法线方向(弧度，世界坐标)
 	int GetLevel() const;
 	bool IsVehicleGate() const;
-
-	// 单扇门(leaves==1)且spec.randomSide时创建时掷的硬币结果，其余恒为false
-	bool IsFlippedSide() const;
 
 	// 门禁判定顺序见door.md"CanPass判定顺序"
 	DOOR_ACCESS_TYPE GetAccess() const;
@@ -89,8 +83,6 @@ private:
 	float width = 0.f, height = 0.f, yaw = 0.f;
 	int level = 0;
 	bool vehicleGate = false;
-
-	bool flippedSide = false;
 
 	DOOR_ACCESS_TYPE access = DOOR_ACCESS_OPEN;
 	std::unordered_map<std::string, bool> registrations; // 市民名 -> 是否允许通过，见Register
