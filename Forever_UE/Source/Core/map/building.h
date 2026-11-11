@@ -26,11 +26,16 @@ public:
 	void SetDirection(int direction);
 	bool GetWall(int direction) const;
 	void AddWall(int direction);
+	// 每面墙(按墙朝向FACE_DIRECTION)四个侧面的标签/材质，见general_geometry.h WallStyle。
+	const WallStyle& GetWallStyle(int direction) const;
+	const WallStyle* GetWallStyles() const { return wallStyles; } // 4项，下标=墙朝向
+	WallStyle& MutableWallStyle(int direction);
 	void InstanciateQuad(float width, float height);
 
 private:
 	int direction = FACE_WEST;
 	bool walls[4] = { false, false, false, false };
+	WallStyle wallStyles[4];
 	RectParams params;
 };
 
@@ -44,11 +49,16 @@ public:
 	void SetDirection(int direction);
 	bool GetWall(int direction) const;
 	void AddWall(int direction);
+	// 每面墙(按墙朝向FACE_DIRECTION)四个侧面的标签/材质，见general_geometry.h WallStyle。
+	const WallStyle& GetWallStyle(int direction) const;
+	const WallStyle* GetWallStyles() const { return wallStyles; } // 4项，下标=墙朝向
+	WallStyle& MutableWallStyle(int direction);
 	void InstanciateQuad(float width, float height);
 
 private:
 	int direction = FACE_WEST;
 	bool walls[4] = { false, false, false, false };
+	WallStyle wallStyles[4];
 	RectParams params;
 };
 
@@ -62,11 +72,16 @@ public:
 	void SetDirection(int direction);
 	bool GetWall(int direction) const;
 	void AddWall(int direction);
+	// 每面墙(按墙朝向FACE_DIRECTION)四个侧面的标签/材质，见general_geometry.h WallStyle。
+	const WallStyle& GetWallStyle(int direction) const;
+	const WallStyle* GetWallStyles() const { return wallStyles; } // 4项，下标=墙朝向
+	WallStyle& MutableWallStyle(int direction);
 	void InstanciateQuad(float width, float height);
 
 private:
 	int direction = FACE_WEST;
 	bool walls[4] = { false, false, false, false };
+	WallStyle wallStyles[4];
 	RectParams params;
 };
 
@@ -137,6 +152,10 @@ public:
 	void AddDoor(int direction, std::vector<RectParams> positions, std::string tag = "");
 	const WallHole& GetWindows() const;
 	void AddWindow(int direction, std::vector<RectParams> positions);
+	// 每面墙(按墙朝向FACE_DIRECTION)四个侧面的标签/材质，见general_geometry.h WallStyle。
+	const WallStyle& GetWallStyle(int direction) const;
+	const WallStyle* GetWallStyles() const { return wallStyles; } // 4项，下标=墙朝向
+	WallStyle& MutableWallStyle(int direction);
 	void InstanciateQuad(float width, float height);
 
 private:
@@ -144,6 +163,7 @@ private:
 	WallHole doors;
 	DoorTags doorTags;
 	WallHole windows;
+	WallStyle wallStyles[4];
 	RectParams params;
 };
 
@@ -162,6 +182,10 @@ public:
 	void AddDoor(int direction, std::vector<RectParams> positions, std::string tag = "");
 	const WallHole& GetWindows() const;
 	void AddWindow(int direction, std::vector<RectParams> positions);
+	// 每面墙(按墙朝向FACE_DIRECTION)四个侧面的标签/材质，见general_geometry.h WallStyle。
+	const WallStyle& GetWallStyle(int direction) const;
+	const WallStyle* GetWallStyles() const { return wallStyles; } // 4项，下标=墙朝向
+	WallStyle& MutableWallStyle(int direction);
 	void InstanciateQuad(float width, float height);
 
 private:
@@ -169,6 +193,7 @@ private:
 	WallHole doors;
 	DoorTags doorTags;
 	WallHole windows;
+	WallStyle wallStyles[4];
 	RectParams params;
 };
 
@@ -186,6 +211,10 @@ public:
 	void AddDoor(int direction, std::vector<RectParams> positions, std::string tag = "");
 	const WallHole& GetWindows() const;
 	void AddWindow(int direction, std::vector<RectParams> positions);
+	// 每面墙(按墙朝向FACE_DIRECTION)四个侧面的标签/材质，见general_geometry.h WallStyle。
+	const WallStyle& GetWallStyle(int direction) const;
+	const WallStyle* GetWallStyles() const { return wallStyles; } // 4项，下标=墙朝向
+	WallStyle& MutableWallStyle(int direction);
 	void InstanciateQuad(float width, float height);
 
 private:
@@ -193,6 +222,7 @@ private:
 	WallHole doors;
 	DoorTags doorTags;
 	WallHole windows;
+	WallStyle wallStyles[4];
 	RectParams params;
 };
 

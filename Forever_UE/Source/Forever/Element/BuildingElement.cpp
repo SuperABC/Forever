@@ -41,6 +41,8 @@
 #define BUILDING_WALL_THICKNESS 0.01f
 // 天花板slab整体上移、地板slab整体下移的世界单位(cm)，避免slab顶/底面和墙顶/墙底共面z-fighting，见BuildFloorSection。
 #define BUILDING_SLAB_Z_SHIFT 1.f
+// 每个元素的墙整体向自身内侧偏移的距离(世界单位cm)：相邻元素共用的边上两堵墙不再共面，材质不同时不会z-fighting。
+#define BUILDING_WALL_INWARD_SHIFT 1.f
 // UE标准立方体静态网格(/Game/Asset/Common/Mesh/Cube.Cube)的原生边长(cm)——AddCubeInstance/
 // SpawnMesh用这个值把它缩放到目标尺寸，缩放系数=目标尺寸/这个原生边长。
 #define BUILDING_CUBE_MESH_SIZE 100.f
@@ -496,6 +498,38 @@ void ABuildingElement::AddCubeInstance(float centerX, float centerY, float cente
 	pendingCubeTransforms.FindOrAdd(material).Add(worldTransform);
 }
 
+UInstancedStaticMeshComponent* ABuildingElement::GetOrCreateWallInstancePool(const FWallMaterialKey& key) {
+	if (TObjectPtr<UInstancedStaticMeshComponent>* found = wallInstancePools.Find(key)) {
+		return *found;
+	}
+	if (!wallCubeMesh) return nullptr;
+
+	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
+	ism->SetStaticMesh(wallCubeMesh);
+	ism->SetupAttachment(elementRoot);
+	ism->SetMobility(EComponentMobility::Static);
+	ism->SetCollisionProfileName(TEXT("BlockAll"));
+	ism->SetGenerateOverlapEvents(false);
+	for (int32 i = 0; i < 5; i++) {
+		if (key.slots[i]) ism->SetMaterial(i, key.slots[i]);
+	}
+	ism->RegisterComponent();
+	AddInstanceComponent(ism);
+	wallInstancePools.Add(key, ism);
+	return ism;
+}
+
+void ABuildingElement::AddWallInstance(float centerX, float centerY, float centerZ,
+	float sizeX, float sizeY, float sizeZ, float rotation, const FWallMaterialKey& key) {
+	// 同AddCubeInstance：只暂存，一层楼画完后FlushCubeInstances()批量提交。WallCube同样约定边长BUILDING_CUBE_MESH_SIZE。
+	FTransform worldTransform(
+		FRotator(0.f, FMath::RadiansToDegrees(rotation), 0.f),
+		FVector(centerX, centerY, centerZ),
+		FVector(sizeX / BUILDING_CUBE_MESH_SIZE, sizeY / BUILDING_CUBE_MESH_SIZE,
+			sizeZ / BUILDING_CUBE_MESH_SIZE));
+	pendingWallTransforms.FindOrAdd(key).Add(worldTransform);
+}
+
 void ABuildingElement::FlushCubeInstances() {
 	for (auto& [material, transforms] : pendingCubeTransforms) {
 		if (transforms.IsEmpty()) continue;
@@ -504,6 +538,14 @@ void ABuildingElement::FlushCubeInstances() {
 		ism->AddInstances(transforms, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
 	}
 	pendingCubeTransforms.Empty();
+
+	for (auto& [key, transforms] : pendingWallTransforms) {
+		if (transforms.IsEmpty()) continue;
+		UInstancedStaticMeshComponent* ism = GetOrCreateWallInstancePool(key);
+		if (!ism) continue;
+		ism->AddInstances(transforms, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
+	}
+	pendingWallTransforms.Empty();
 }
 
 UStaticMeshComponent* ABuildingElement::SpawnMesh(float centerX, float centerY, float centerZ,
@@ -537,7 +579,7 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 	bool wallWest, bool wallEast, bool wallNorth, bool wallSouth,
 	const unordered_map<int, vector<array<float, 8>>>& doors,
 	const unordered_map<int, vector<array<float, 8>>>& windows,
-	UMaterialInterface* wallMaterial) {
+	UMaterialInterface* wallMaterial, const WallStyle* styles) {
 	// floorBaseZ是Building::GetFloorBaseZ(level)的值：地图单位、相对地坪(grade)的楼层底部
 	// 高度(basements为负、地上楼层为正，见building.h)，不含BUILDING_HEIGHT_EPSILON这个纯
 	// 渲染层的"避免和地形共面z-fighting"偏移——这里换算世界Z时要把grade偏移加回来，和
@@ -577,19 +619,49 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 		// 按沿墙方向的localX/localY(alongY决定跨墙坐标固定用acrossFixed，沿墙坐标用segCenter)
 		// 生成一段墙体cube，zBot/zTop是世界坐标——照抄老工程BuildingBase.cpp::ConstructQuad
 		// 的makePos/makeSize思路，只是这次每段都是独立组件，不是往同一个PMC里追加顶点。
+		// 这面墙有标签对应的材质就走WallCube(东南西北四个侧面各自的材质，没配的侧面退回这层墙材质，上下固定白色)，
+		// WallCube资产还不存在时退回普通Cube；整面墙共用同一个key，门窗洞口切出的每一段都继承它。
+		FWallMaterialKey wallKey;
+		bool useWallCube = false;
+		if (styles && styles[face.dir].HasMaterial()) {
+			if (!wallCubeResolved) {
+				wallCubeResolved = true;
+				wallCubeMesh = framework->ResolveMesh("/Game/Asset/Building/Mesh/Wall.Wall", nullptr);
+			}
+			if (wallCubeMesh) {
+				const WallStyle& style = styles[face.dir];
+				// WallCube槽位 0东 1南 2西 3北 对应WallStyle下标(FACE_DIRECTION) 1东 3南 0西 2北。
+				static const int32 kSideOfSlot[4] = { FACE_EAST, FACE_SOUTH, FACE_WEST, FACE_NORTH };
+				auto resolve = [&](const std::string& path) -> UMaterialInterface* {
+					UMaterialInterface* found = framework->ResolveMaterial(path, nullptr);
+					return found ? found : wallMaterial;
+				};
+				for (int32 slot = 0; slot < 4; slot++) {
+					wallKey.slots[slot] = resolve(style.materials[kSideOfSlot[slot]]);
+				}
+				wallKey.slots[4] = resolve("/Game/Asset/Building/Material/White.White");
+				useWallCube = true;
+			}
+		}
+
 		auto spawnWallBox = [&](float segStart, float segEnd, float zBot, float zTop) {
 			if (segEnd <= segStart || zTop <= zBot) return;
 			float segCenter = (segStart + segEnd) * 0.5f;
 			float segLen = segEnd - segStart;
-			float localX = face.alongY ? face.acrossFixed : segCenter;
-			float localY = face.alongY ? segCenter : face.acrossFixed;
+			// 西/北边的墙往+方向、东/南边的墙往-方向，即朝元素内部偏移。
+			float inward = (face.dir == FACE_WEST || face.dir == FACE_NORTH ? 1.f : -1.f)
+				* BUILDING_WALL_INWARD_SHIFT / BUILDING_WORLD_SCALE;
+			float across = face.acrossFixed + inward;
+			float localX = face.alongY ? across : segCenter;
+			float localY = face.alongY ? segCenter : across;
 			float wx, wy;
 			ComputeWorldPosition(*building, localX, localY, wx, wy);
 			float sizeXWorld = (face.alongY ? BUILDING_WALL_THICKNESS : segLen) * BUILDING_WORLD_SCALE;
 			float sizeYWorld = (face.alongY ? segLen : BUILDING_WALL_THICKNESS) * BUILDING_WORLD_SCALE;
 			float wz = (zBot + zTop) * 0.5f;
 			float sizeZWorld = zTop - zBot;
-			AddCubeInstance(wx, wy, wz, sizeXWorld, sizeYWorld, sizeZWorld, rotation, wallMaterial);
+			if (useWallCube) AddWallInstance(wx, wy, wz, sizeXWorld, sizeYWorld, sizeZWorld, rotation, wallKey);
+			else AddCubeInstance(wx, wy, wz, sizeXWorld, sizeYWorld, sizeZWorld, rotation, wallMaterial);
 			};
 
 		if (openings.empty()) {
@@ -674,7 +746,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, stair.GetPosX(), stair.GetPosY(),
 			stair.GetSizeX(), stair.GetSizeY(),
 			stair.GetWall(FACE_WEST), stair.GetWall(FACE_EAST), stair.GetWall(FACE_NORTH), stair.GetWall(FACE_SOUTH),
-			{}, {}, wallMaterial);
+			{}, {}, wallMaterial, stair.GetWallStyles());
 		float wx, wy;
 		ComputeWorldPosition(*building, stair.GetPosX(), stair.GetPosY(), wx, wy);
 		float wz = floorBaseZ * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
@@ -694,7 +766,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, ramp.GetPosX(), ramp.GetPosY(),
 			ramp.GetSizeX(), ramp.GetSizeY(),
 			ramp.GetWall(FACE_WEST), ramp.GetWall(FACE_EAST), ramp.GetWall(FACE_NORTH), ramp.GetWall(FACE_SOUTH),
-			{}, {}, wallMaterial);
+			{}, {}, wallMaterial, ramp.GetWallStyles());
 		float wx, wy;
 		ComputeWorldPosition(*building, ramp.GetPosX(), ramp.GetPosY(), wx, wy);
 		float wz = floorBaseZ * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
@@ -713,13 +785,13 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, elevator.GetPosX(), elevator.GetPosY(),
 			elevator.GetSizeX(), elevator.GetSizeY(),
 			elevator.GetWall(FACE_WEST), elevator.GetWall(FACE_EAST), elevator.GetWall(FACE_NORTH), elevator.GetWall(FACE_SOUTH),
-			{}, {}, wallMaterial);
+			{}, {}, wallMaterial, elevator.GetWallStyles());
 	}
 	for (const Corridor& corridor : floor->GetCorridors()) {
 		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, corridor.GetPosX(), corridor.GetPosY(),
 			corridor.GetSizeX(), corridor.GetSizeY(),
 			corridor.GetWall(FACE_WEST), corridor.GetWall(FACE_EAST), corridor.GetWall(FACE_NORTH), corridor.GetWall(FACE_SOUTH),
-			corridor.GetDoors(), corridor.GetWindows(), wallMaterial);
+			corridor.GetDoors(), corridor.GetWindows(), wallMaterial, corridor.GetWallStyles());
 	}
 	// 槽位实例化成Room后门/窗/朝向已转移到Room身上，槽位数据不再是最新的，且一个row槽位会被ArrangeRow切成多个Room，
 	// 所以遍历building->GetRooms()按GetLayer()==level筛选，不直接用Floor::GetSingles()/GetRows()。
@@ -728,7 +800,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, room->GetPosX(), room->GetPosY(),
 			room->GetSizeX(), room->GetSizeY(),
 			true, true, true, true, // Single/Row隐含四面都有墙
-			room->GetDoors(), room->GetWindows(), wallMaterial);
+			room->GetDoors(), room->GetWindows(), wallMaterial, room->GetWallStyles());
 	}
 
 	// 门不在这里建——拆到GatherPendingDoors/BuildDoorBatch里单独按批次处理，见
@@ -999,6 +1071,9 @@ void ABuildingElement::ClearNearSections() {
 	// 墙体/地板/天花板cube：ISM组件本身常驻，只清空instance数组，不Register/Destroy——这是
 	// 这次ISM改造消除注册开销的关键，见cubeInstancePools/AddCubeInstance声明处注释。
 	for (auto& [material, ism] : cubeInstancePools) {
+		if (ism) ism->ClearInstances();
+	}
+	for (auto& [key, ism] : wallInstancePools) {
 		if (ism) ism->ClearInstances();
 	}
 	// 楼梯/坡道网格(SpawnMesh产出)不在ISM改造范围内，仍然逐个销毁。

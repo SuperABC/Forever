@@ -67,3 +67,6 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 
 - `MOHAR_*`的footprint、层高、模板、缩放等数值是按实测调的默认值，还要按效果继续调。
 - 二楼模板`fu2`目前和一楼`fg1`内容一样，等二楼房间范围对上模型再调。
+
+## 墙标签测试
+`ResidenceHighBuilding` 登记了 `outer`→`Black`、`inner`→`White`；`preset_residential_wing_fr-.layout` 第一个联排的北墙打了 `{"north":"outer","south":"inner"}` 用来验证墙侧面材质（需先在 UE 里做好 `WallCube`）。

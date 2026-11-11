@@ -104,3 +104,6 @@ UE 控制台命令 `Forever.SaveRoundTrip`：当前地图写段 → 读回成一
 ## Building段：外部连接点
 
 `scriptMilestones`之后、`floors`之前：`U32 count`+每项`I32 锚点id`（`Building::outsideNodes`，没登记进锚点表的丢掉），读档用`LoadTables::AnchorAt`。未加版本号，旧存档读不了。
+
+## 墙样式
+Stair/Elevator/Ramp/Corridor/Single/Row 以及 Room 在原有字段之后各多存 `WallStyle[4]`（每面墙 4 个侧面各 tag+material 两个字符串，`WriteWallStyles/ReadWallStyles`）。没升存档版本号，旧存档读不了。

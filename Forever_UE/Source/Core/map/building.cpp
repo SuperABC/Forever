@@ -117,6 +117,14 @@ void Stair::AddWall(int dir) {
 	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Stair wall direction out of range [0,3].\n");
 	walls[dir] = true;
 }
+const WallStyle& Stair::GetWallStyle(int dir) const {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Stair wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
+WallStyle& Stair::MutableWallStyle(int dir) {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Stair wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
 void Stair::InstanciateQuad(float width, float height) {
 	float x, y, w, h;
 	InstanciateRect(params, width, height, x, y, w, h);
@@ -134,6 +142,14 @@ void Elevator::AddWall(int dir) {
 	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Elevator wall direction out of range [0,3].\n");
 	walls[dir] = true;
 }
+const WallStyle& Elevator::GetWallStyle(int dir) const {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Elevator wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
+WallStyle& Elevator::MutableWallStyle(int dir) {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Elevator wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
 void Elevator::InstanciateQuad(float width, float height) {
 	float x, y, w, h;
 	InstanciateRect(params, width, height, x, y, w, h);
@@ -150,6 +166,14 @@ bool Ramp::GetWall(int dir) const {
 void Ramp::AddWall(int dir) {
 	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Ramp wall direction out of range [0,3].\n");
 	walls[dir] = true;
+}
+const WallStyle& Ramp::GetWallStyle(int dir) const {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Ramp wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
+WallStyle& Ramp::MutableWallStyle(int dir) {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Ramp wall direction out of range [0,3].\n");
+	return wallStyles[dir];
 }
 void Ramp::InstanciateQuad(float width, float height) {
 	float x, y, w, h;
@@ -203,6 +227,14 @@ const WallHole& Corridor::GetWindows() const { return windows; }
 void Corridor::AddWindow(int dir, vector<RectParams> positions) {
 	for (auto& p : positions) windows[dir].push_back(p);
 }
+const WallStyle& Corridor::GetWallStyle(int dir) const {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Corridor wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
+WallStyle& Corridor::MutableWallStyle(int dir) {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Corridor wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
 void Corridor::InstanciateQuad(float width, float height) {
 	float x, y, w, h;
 	InstanciateRect(params, width, height, x, y, w, h);
@@ -224,6 +256,14 @@ const WallHole& Single::GetWindows() const { return windows; }
 void Single::AddWindow(int dir, vector<RectParams> positions) {
 	for (auto& p : positions) windows[dir].push_back(p);
 }
+const WallStyle& Single::GetWallStyle(int dir) const {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Single wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
+WallStyle& Single::MutableWallStyle(int dir) {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Single wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
 void Single::InstanciateQuad(float width, float height) {
 	float x, y, w, h;
 	InstanciateRect(params, width, height, x, y, w, h);
@@ -244,6 +284,14 @@ void Row::AddDoor(int dir, vector<RectParams> positions, string tag) {
 const WallHole& Row::GetWindows() const { return windows; }
 void Row::AddWindow(int dir, vector<RectParams> positions) {
 	for (auto& p : positions) windows[dir].push_back(p);
+}
+const WallStyle& Row::GetWallStyle(int dir) const {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Row wall direction out of range [0,3].\n");
+	return wallStyles[dir];
+}
+WallStyle& Row::MutableWallStyle(int dir) {
+	if (dir < 0 || dir >= 4) THROW_EXCEPTION(InvalidArgumentException, "Row wall direction out of range [0,3].\n");
+	return wallStyles[dir];
 }
 void Row::InstanciateQuad(float width, float height) {
 	float x, y, w, h;
@@ -392,6 +440,26 @@ namespace {
 		return params;
 	}
 
+	// 解析元素上可选的"wallTags"：{"<墙朝向0-3>":{"east":"tag","south":..,"west":..,"north":..}}。
+	// face是模板旋转版本，外层墙朝向和内层侧面方向都经InverseDirection换算(和walls/doors一致)；
+	// 结果按旋转后的墙朝向写进elem的WallStyle，tags下标同样是旋转后的侧面方向(FACE_DIRECTION)。
+	template <class T>
+	void ReadWallTags(const JsonValue& node, int face, T& elem) {
+		if (!node.ValidMember("wallTags")) return;
+		const JsonValue& wallTags = node["wallTags"];
+		static const char* const sideNames[4] = { "west", "east", "north", "south" }; // 下标=FACE_DIRECTION
+		for (int wall = 0; wall < 4; wall++) {
+			string key = std::to_string(wall);
+			if (!wallTags.ValidMember(key)) continue;
+			const JsonValue& sides = wallTags[key];
+			WallStyle& style = elem.MutableWallStyle(BuildingLayoutLibrary::InverseDirection(wall, face));
+			for (int side = 0; side < 4; side++) {
+				if (!sides.ValidMember(sideNames[side])) continue;
+				style.tags[BuildingLayoutLibrary::InverseDirection(side, face)] = sides[sideNames[side]].AsString();
+			}
+		}
+	}
+
 	// 解析一个navigation/pedestrianNavigation/vehicleNavigation块，产出4个朝向各一份的
 	// NavigationTemplate——照抄老工程Building::ReadTemplates对应段落。navRoot为空(节点
 	// 不存在，比如vehicleNavigation这次多数模板都没画)时4份都是默认构造的空NavigationTemplate。
@@ -496,6 +564,7 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 				Stair stair(InverseParams(rect, i));
 				stair.SetDirection(InverseDirection(origDir, i));
 				for (auto& wall : s["walls"]) stair.AddWall(InverseDirection(wall.AsInt(), i));
+				ReadWallTags(s, i, stair);
 				stairs4[i].push_back(stair);
 			}
 		}
@@ -509,6 +578,7 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 				Elevator elevator(InverseParams(rect, i));
 				elevator.SetDirection(InverseDirection(origDir, i));
 				for (auto& wall : e["walls"]) elevator.AddWall(InverseDirection(wall.AsInt(), i));
+				ReadWallTags(e, i, elevator);
 				elevators4[i].push_back(elevator);
 			}
 		}
@@ -522,6 +592,7 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 				Ramp ramp(InverseParams(rect, i));
 				ramp.SetDirection(InverseDirection(origDir, i));
 				for (auto& wall : r["walls"]) ramp.AddWall(InverseDirection(wall.AsInt(), i));
+				ReadWallTags(r, i, ramp);
 				ramps4[i].push_back(ramp);
 			}
 		}
@@ -563,6 +634,7 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 			for (int i = 0; i < 4; i++) {
 				Corridor corridor(InverseParams(rect, i));
 				for (auto& wall : c["walls"]) corridor.AddWall(InverseDirection(wall.AsInt(), i));
+				ReadWallTags(c, i, corridor);
 				for (auto& door : c["doors"]) {
 					int origDir = door["direction"].AsInt();
 					string tag = door["tag"].IsNull() ? "" : door["tag"].AsString();
@@ -588,6 +660,7 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 			for (int i = 0; i < 4; i++) {
 				Single single(InverseParams(rect, i));
 				single.SetDirection(InverseDirection(origDir, i));
+				ReadWallTags(s, i, single);
 				for (auto& door : s["doors"]) {
 					int doorDir = door["direction"].AsInt();
 					string tag = door["tag"].IsNull() ? "" : door["tag"].AsString();
@@ -613,6 +686,7 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 			for (int i = 0; i < 4; i++) {
 				Row row(InverseParams(rect, i));
 				row.SetDirection(InverseDirection(origDir, i));
+				ReadWallTags(r, i, row);
 				for (auto& door : r["doors"]) {
 					int doorDir = door["direction"].AsInt();
 					string tag = door["tag"].IsNull() ? "" : door["tag"].AsString();
@@ -864,24 +938,34 @@ void Building::ReadFloor(int level, int face, const string& templateName, const 
 	float width = bodySizeX, height = bodySizeY;
 	Floor floor(level, width, height);
 
-	for (Stair stair : library.GetStairs(templateName, face)) {
-		stair.InstanciateQuad(width, height);
-		floor.AddStair(stair);
-	}
-	for (Elevator elevator : library.GetElevators(templateName, face)) {
-		elevator.InstanciateQuad(width, height);
-		floor.AddElevator(elevator);
-	}
-	for (Ramp ramp : library.GetRamps(templateName, face)) {
-		ramp.InstanciateQuad(width, height);
-		floor.AddRamp(ramp);
-	}
 	// 带标签的地板/天花板按mod登记的标签->材质表抄上材质路径，没有标签或没登记就留空(渲染层用白色)。
 	auto surfaceMaterial = [&](const string& tag) {
 		if (tag.empty() || !mod) return string();
 		auto found = mod->surfaceMaterials.find(tag);
 		return found != mod->surfaceMaterials.end() ? found->second : string();
 		};
+	// 元素每面墙每个侧面的标签同样查表得到材质(同一张表，标签命名空间和地板/天花板共用)。
+	auto resolveWalls = [&](auto& element) {
+		for (int dir = 0; dir < 4; dir++) {
+			WallStyle& style = element.MutableWallStyle(dir);
+			for (int side = 0; side < 4; side++) style.materials[side] = surfaceMaterial(style.tags[side]);
+		}
+		};
+	for (Stair stair : library.GetStairs(templateName, face)) {
+		stair.InstanciateQuad(width, height);
+		resolveWalls(stair);
+		floor.AddStair(stair);
+	}
+	for (Elevator elevator : library.GetElevators(templateName, face)) {
+		elevator.InstanciateQuad(width, height);
+		resolveWalls(elevator);
+		floor.AddElevator(elevator);
+	}
+	for (Ramp ramp : library.GetRamps(templateName, face)) {
+		ramp.InstanciateQuad(width, height);
+		resolveWalls(ramp);
+		floor.AddRamp(ramp);
+	}
 	for (Ceiling ceiling : library.GetCeilings(templateName, face)) {
 		ceiling.InstanciateQuad(width, height);
 		ceiling.SetMaterial(surfaceMaterial(ceiling.GetTag()));
@@ -894,14 +978,17 @@ void Building::ReadFloor(int level, int face, const string& templateName, const 
 	}
 	for (Corridor corridor : library.GetCorridors(templateName, face)) {
 		corridor.InstanciateQuad(width, height);
+		resolveWalls(corridor);
 		floor.AddCorridor(corridor);
 	}
 	for (Single single : library.GetSingles(templateName, face)) {
 		single.InstanciateQuad(width, height);
+		resolveWalls(single);
 		floor.AddSingle(single);
 	}
 	for (Row row : library.GetRows(templateName, face)) {
 		row.InstanciateQuad(width, height);
+		resolveWalls(row);
 		floor.AddRow(row);
 	}
 	for (Hatch hatch : library.GetHatches(templateName, face)) {
@@ -927,6 +1014,7 @@ void Building::AssignRoom(int level, int slot, const string& roomType, Component
 	room->SetDirection(single.GetDirection());
 	room->SetDoors(single.GetDoors(), single.GetDoorTags());
 	room->SetWindows(single.GetWindows());
+	for (int dir = 0; dir < 4; dir++) room->SetWallStyle(dir, single.GetWallStyle(dir));
 	room->SetNumber(level, floors[idx].AssignNumber());
 	component->AddRoom(room);
 
@@ -963,6 +1051,13 @@ void Building::ArrangeRow(int level, int slot, const string& roomType, float acr
 		room->SetDirection(row.GetDirection());
 		room->SetDoors(row.GetDoors(), row.GetDoorTags());
 		room->SetWindows(row.GetWindows());
+		// 只继承落在联排外边界上的墙；房间之间的隔墙不带标签。
+		for (int dir = 0; dir < 4; dir++) {
+			bool outer;
+			if (alongY) outer = (dir == FACE_WEST || dir == FACE_EAST) || (dir == FACE_NORTH && i == 0) || (dir == FACE_SOUTH && i == count - 1);
+			else outer = (dir == FACE_NORTH || dir == FACE_SOUTH) || (dir == FACE_WEST && i == 0) || (dir == FACE_EAST && i == count - 1);
+			if (outer) room->SetWallStyle(dir, row.GetWallStyle(dir));
+		}
 		room->SetNumber(level, floors[idx].AssignNumber());
 		component->AddRoom(room);
 

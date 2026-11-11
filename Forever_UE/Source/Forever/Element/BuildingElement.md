@@ -39,3 +39,5 @@
 
 - Building 不采样所在位置的真实地形高度(`BUILDING_HEIGHT_EPSILON` 的前提是 lot 地形高度恒为 0)，将来 lot 允许在非 0 高度地形上时需按 building 位置采样 `SampleHeight()`。
 - 单栋 building 内楼层特别多/大时，一次近 LOD 转场里该楼组件数仍从 0 涨到全部楼层之和；若卡顿明显，可把挂载粒度细化成"每层楼一个 Actor"，见 `ForeverBuildingFrameworkComponent.md`"性能排查"一节末尾。
+
+- **墙按侧面材质（WallCube）**：`BuildWallsForElement` 多一个 `const WallStyle* styles`（4 项，下标=墙朝向）。某面墙的 `WallStyle` 有任意材质时，整面墙（门窗洞口切出的每一段都一样）走 `AddWallInstance`，用 `/Game/Asset/Building/Mesh/Wall.Wall`（边长 100，同 Cube；槽 0 东 1南 2西 3北 4上下），四个侧面未配材质的退回这层的墙材质，槽 4 固定 `White`；ISM 池按 5 个材质的组合分组（`wallInstancePools`/`pendingWallTransforms`，`FlushCubeInstances` 一并提交，`ClearNearSections` 一并清空）。没有任何标签的墙继续走原来的单材质 Cube；`WallCube` 资产不存在（`ResolveMesh` 失败）时也退回普通 Cube。WallCube 只随建筑整体 `rotation` 旋转，不随墙方向旋转，所以东/南/西/北始终对应建筑局部坐标轴。

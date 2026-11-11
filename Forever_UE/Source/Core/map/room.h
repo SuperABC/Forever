@@ -58,6 +58,10 @@ public:
 	const WallHole& GetWindows() const;
 	void SetDoors(WallHole doors, DoorTags tags = {});
 	void SetWindows(WallHole windows);
+	// 每面墙(按墙朝向FACE_DIRECTION)四个侧面的标签/材质，由Building::AssignRoom/ArrangeRow从槽位继承。
+	const WallStyle& GetWallStyle(int direction) const;
+	const WallStyle* GetWallStyles() const { return wallStyles; } // 4项，下标=墙朝向
+	void SetWallStyle(int direction, const WallStyle& style);
 
 	// Building::BuildDoors()创建的房间门登记在这里，由Room持有生命周期
 	void AddDoorEntity(Door* door);
@@ -138,6 +142,7 @@ private:
 	WallHole doors;
 	DoorTags doorTags;
 	WallHole windows;
+	WallStyle wallStyles[4];
 	std::string number;
 	Node* navigationNode = nullptr;
 

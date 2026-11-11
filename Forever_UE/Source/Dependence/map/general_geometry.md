@@ -150,3 +150,6 @@
 - **`FindAdaptivePlacement`避免细边**：`RequestPlacement`每裁一刀都要求剩余部分≥`MIN_LOT_EXTENT`加一条小路宽，否则整次放置失败并把命中的子块留在半切状态。所以剩余空间(沿路的总余量、纵深的余量)小于`kMinLeftover`(4)时，不留细边，直接并进占地(margin=0 / depth=子块整个纵深)。
 - **`FindAdaptivePlacement`的margin/depth相对命中子块`best`自己的尺寸反推**，调用方对`best`调`RequestPlacement`：命中的可能贴着原始边界路，也可能贴着之前切割插入的内部小路(同样是接入导航图的真实Road，贴着它盖房子合法)；换算到顶层Lot坐标系再反推，在子块贴内部小路时会落进已被别的mod占用的区域而匹配失败。
 - **`SplitWithPath`的开口标记**：小路端落在"大路"(非小路)上时给那条路加`RoadOpening`(宽度=小路总宽，`t`按直线投影`ProjectT`近似，弯道中间开口不精确)；两条小路互接不标。这只是几何/渲染标记，不接导航图。`endT`不论大路小路都要算(`Map::ConnectPathRoad`需要)。
+
+## WallStyle
+`struct WallStyle { std::string tags[4]; std::string materials[4]; }`：一面墙四个侧面（下标=FACE_DIRECTION，0西 1东 2北 3南，表示该侧面朝向的方向）的 layout 标签与 Core 查表得到的材质实例软路径；`HasTag()/HasMaterial()` 判断是否有设置。

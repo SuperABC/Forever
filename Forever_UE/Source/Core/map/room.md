@@ -100,3 +100,7 @@
 - `FacingYawDegrees()`：局部yaw 0度在建筑局部系里的数学角(逆时针，0度=+X)：W180/E0/N90/S270。
 - `LocalToWorld(u,v)` / `LocalYawToWorld(yawDegrees)`：直接换算成世界XY(地图单位)和世界yaw(弧度，叠加建筑旋转)，给家具/asset放置用。
 - 目前只有停车位(`Traffic::InitParkedVehicles`)用它；房间触发盒/墙/门/导航节点/市民落点都是中心+轴对齐，和朝向无关。
+
+## 墙样式（wallStyles）
+`Room::GetWallStyle(dir)/SetWallStyle`/`GetWallStyles()`：按墙朝向存四个侧面的标签与材质路径，来源见 building.md"墙的侧面标签"。
+存档随 Room 写读（没升版本号）。

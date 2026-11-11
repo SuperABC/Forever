@@ -435,6 +435,21 @@ using WallHole = std::unordered_map<int, std::vector<RectParams>>;
 // 无标签=空字符串,ResolveDoorSpec据此判定"只是个洞",见Core/map/door.h。
 using DoorTags = std::unordered_map<int, std::vector<std::string>>;
 
+// 一面墙(某元素的某个朝向)四个侧面的layout标签与材质实例软路径,下标按FACE_DIRECTION
+// (0西 1东 2北 3南)=该侧面朝向的方向。材质由Core按BuildingMod::surfaceMaterials查标签填入,空=未指定。
+struct WallStyle {
+	std::string tags[4];
+	std::string materials[4];
+	bool HasTag() const {
+		for (int i = 0; i < 4; i++) if (!tags[i].empty()) return true;
+		return false;
+	}
+	bool HasMaterial() const {
+		for (int i = 0; i < 4; i++) if (!materials[i].empty()) return true;
+		return false;
+	}
+};
+
 // Room内部一个停车位。position用PointParams约定:第一对=u轴(沿正面墙)、第二对=v轴(朝正面为正),
 // 原点在房间角点,坐标系由房间自己的朝向(Room::GetDirection())定义,详见general_geometry.md。
 // rotationDegrees:相对房间朝向的旋转角(度,0=朝向房间正面,180=朝房间深处)。

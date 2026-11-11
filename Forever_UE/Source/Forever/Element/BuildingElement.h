@@ -23,6 +23,7 @@ class UMaterialInstanceDynamic;
 class Building;
 class Floor;
 class Room;
+struct WallStyle;
 class Door;
 struct FHitResult;
 class UForeverBuildingFrameworkComponent;
@@ -180,13 +181,32 @@ private:
 		float sizeX, float sizeY, float sizeZ, float rotation, UStaticMesh* mesh, UMaterialInterface* material,
 		bool isMovable = false);
 
-	// 逐段生成墙体cube，门/窗开口处不生成任何东西。
+	// 五材质槽WallCube的ISM池key：东南西北四个侧面的材质+上下面材质，见AddWallInstance。
+	struct FWallMaterialKey {
+		UMaterialInterface* slots[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+		bool operator==(const FWallMaterialKey& other) const {
+			for (int32 i = 0; i < 5; i++) if (slots[i] != other.slots[i]) return false;
+			return true;
+		}
+		friend uint32 GetTypeHash(const FWallMaterialKey& key) {
+			uint32 hash = 0;
+			for (int32 i = 0; i < 5; i++) hash = HashCombine(hash, GetTypeHash(key.slots[i]));
+			return hash;
+		}
+	};
+
+	// 带材质的墙体段走WallCube(槽0东 1南 2西 3北 4上下)，按(五个材质)分组走独立ISM池，其余同AddCubeInstance。
+	void AddWallInstance(float centerX, float centerY, float centerZ,
+		float sizeX, float sizeY, float sizeZ, float rotation, const FWallMaterialKey& key);
+	UInstancedStaticMeshComponent* GetOrCreateWallInstancePool(const FWallMaterialKey& key);
+
+	// 逐段生成墙体cube，门/窗开口处不生成任何东西。styles是4项(下标=墙朝向)的WallStyle，可为nullptr(=都没标签)。
 	void BuildWallsForElement(float floorBaseZ, float floorHeight,
 		float elemCenterX, float elemCenterY, float elemSizeX, float elemSizeY,
 		bool wallWest, bool wallEast, bool wallNorth, bool wallSouth,
 		const std::unordered_map<int, std::vector<std::array<float, 8>>>& doors,
 		const std::unordered_map<int, std::vector<std::array<float, 8>>>& windows,
-		UMaterialInterface* wallMaterial);
+		UMaterialInterface* wallMaterial, const WallStyle* styles = nullptr);
 
 	Building* building = nullptr;
 	TWeakObjectPtr<UForeverBuildingFrameworkComponent> framework;
@@ -207,6 +227,12 @@ private:
 	// AddCubeInstance按材质分组暂存world transform，一层楼画完后由FlushCubeInstances()对每个材质批量AddInstances()一次
 	// (逐个AddInstance在BlockAll碰撞的ISM上每次约0.1~0.4ms)。只在BuildFloorSection内部临时持有，提交后清空。
 	TMap<UMaterialInterface*, TArray<FTransform>> pendingCubeTransforms;
+
+	// WallCube(五材质槽)的ISM池与暂存，结构同上，key换成五个材质的组合。wallCubeMesh首次用到时才解析，失败(用户还没做资产)就一直是nullptr，带标签的墙退回普通Cube。
+	TMap<FWallMaterialKey, TObjectPtr<UInstancedStaticMeshComponent>> wallInstancePools;
+	TMap<FWallMaterialKey, TArray<FTransform>> pendingWallTransforms;
+	TObjectPtr<UStaticMesh> wallCubeMesh;
+	bool wallCubeResolved = false;
 
 	// 近处这栋building当前占用的楼梯/坡道3D网格组件(SpawnMesh产出，网格/材质各不相同、
 	// 数量少，不纳入ISM改造)，按floorIndex分组，方便ClearNearSections整栋清空。墙体/

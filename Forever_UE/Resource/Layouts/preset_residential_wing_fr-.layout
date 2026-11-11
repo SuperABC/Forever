@@ -3,11 +3,13 @@
 		"rect": [0.6, 0, 0.8, 0, 0.6, 0.4, 0.9, 0],
 		"direction": 0,
 		"walls": [3, 2],
+		"wallTags": {"3":{"south":"brick"}},
 	},
 	{
 		"rect": [0.4, -0.4, 0.8, 0, 0.4, 0, 0.9, 0],
 		"direction": 1,
 		"walls": [3, 2],
+		"wallTags": {"3":{"south":"brick"}},
 	}],
 	"ceilings": [
 		{"rect": [0.1, -0.4, 0.2, -0.4, 0.9, 0.4, 0.9, 0.4], "tag": "roof"},
@@ -21,6 +23,7 @@
 	"corridors": [{
 		"rect": [0.1, 0, 0.5, 0, 0.4, 0, 0.6, 0],
 		"walls": [0],
+		"wallTags": {"0":{"west":"brick"}},
 		"windows": [
 			{
 				"direction": 0,
@@ -33,6 +36,7 @@
 	{
 		"rect": [0.6, 0, 0.5, 0, 0.9, 0, 0.6, 0],
 		"walls": [1],
+		"wallTags": {"1":{"east":"brick"}},
 		"windows": [
 			{
 				"direction": 1,
@@ -48,6 +52,7 @@
 	{
 		"rect": [0.4, 0, 0.8, 0, 0.6, 0, 0.9, 0],
 		"walls": [3],
+		"wallTags": {"3":{"south":"brick"}},
 		"windows": [
 			{
 				"direction": 3,
@@ -68,6 +73,7 @@
 	"singles": [{
 		"rect": [0.4, -0.4, 0.2, 0, 0.5, 0, 0.5, 0],
 		"direction": 3,
+		"wallTags": {"2":{"north":"brick"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -88,6 +94,7 @@
 	{
 		"rect": [0.5, 0, 0.2, 0, 0.6, 0.4, 0.5, 0],
 		"direction": 3,
+		"wallTags": {"2":{"north":"brick"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -108,6 +115,7 @@
 	"rows": [{
 		"rect": [0.1, 0, 0.2, 0, 0.4, -0.4, 0.5, 0],
 		"direction": 3,
+		"wallTags": {"0":{"west":"brick"},"2":{"north":"brick"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -128,6 +136,7 @@
 	{
 		"rect": [0.6, 0.4, 0.2, 0, 0.9, 0, 0.5, 0],
 		"direction": 3,
+		"wallTags": {"1":{"east":"brick"},"2":{"north":"brick"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -148,6 +157,7 @@
 	{
 		"rect": [0.1, 0, 0.6, 0, 0.4, -0.4, 0.9, 0],
 		"direction": 2,
+		"wallTags": {"0":{"west":"brick"},"3":{"south":"brick"}},
 		"doors": [
 			{
 				"direction": 2,
@@ -168,6 +178,7 @@
 	{
 		"rect": [0.6, 0.4, 0.6, 0, 0.9, 0, 0.9, 0],
 		"direction": 2,
+		"wallTags": {"1":{"east":"brick"},"3":{"south":"brick"}},
 		"doors": [
 			{
 				"direction": 2,

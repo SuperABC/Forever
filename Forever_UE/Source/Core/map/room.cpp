@@ -110,6 +110,8 @@ const DoorTags& Room::GetDoorTags() const { return doorTags; }
 const WallHole& Room::GetWindows() const { return windows; }
 void Room::SetDoors(WallHole d, DoorTags tags) { doors = std::move(d); doorTags = std::move(tags); }
 void Room::SetWindows(WallHole w) { windows = std::move(w); }
+const WallStyle& Room::GetWallStyle(int dir) const { return wallStyles[dir < 0 || dir >= 4 ? 0 : dir]; }
+void Room::SetWallStyle(int dir, const WallStyle& style) { if (dir >= 0 && dir < 4) wallStyles[dir] = style; }
 
 void Room::AddDoorEntity(Door* door) {
 	if (door) doorEntities.push_back(door);

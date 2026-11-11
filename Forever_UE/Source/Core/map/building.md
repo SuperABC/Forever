@@ -211,3 +211,13 @@ debugf警告）。车行导航**不再支持`outside`**（出现会被忽略并�
 `addConnection`（line投影连接按模板begin/end确定方向）。**上下楼(upstair/downstair)匹配出来的连线车行导航恒定
 双向**，entrance/exit/outside这类标记端点不受影响。`layout_editor.html`在车行导航模式的连接/路径面板里有
 "顺/逆"两个勾选，画布上用箭头显示方向。
+
+## 墙的侧面标签（wallTags）
+`.layout` 里 stairs/elevators/ramps/corridors/singles/rows 可选 `"wallTags": {"<墙朝向0-3>": {"east":"tag","south":..,"west":..,"north":..}}`：
+外层键是墙所在的边（FACE_DIRECTION 0西 1东 2北 3南），内层是这面墙四个侧面朝向的标签，缺省=无标签。
+模板旋转时外层键和内层方位都经 `InverseDirection` 换算（`ReadWallTags`，与 `walls`/`doors` 一致）。
+
+每个元素带 `WallStyle wallStyles[4]`（`general_geometry.h`，下标=墙朝向，`tags[4]`/`materials[4]` 下标=侧面方向）。
+`Building::ReadFloor` 用 `mod->surfaceMaterials`（和地板/天花板同一张 `SetSurfaceMaterial` 表）把标签翻成材质路径填进 `materials`。
+每一面墙单独设置，不合并相邻元素共用的边、不去重；门窗把墙切成多段时每段沿用这面墙的设置。
+`AssignRoom` 把 single 的 4 面全部继承给 Room；`ArrangeRow` 只继承落在联排外边界上的面（房间之间的隔墙不带标签）。

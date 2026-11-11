@@ -125,6 +125,7 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
     <option value="ceilings">房顶</option>
     <option value="grounds">地面</option>
     <option value="others" selected>房间</option>
+    <option value="walls">墙</option>
     <option value="pedestrianNavigation">行人导航</option>
     <option value="vehicleNavigation">车辆导航</option>
   </select>
@@ -285,6 +286,7 @@ const MODE_TYPES = {
   ceilings:   ['ceilings', 'hatches'],
   grounds:    ['grounds'],
   others:     ['corridors', 'singles', 'rows', 'elevators', 'stairs', 'ramps'],
+  walls:      ['corridors', 'singles', 'rows', 'elevators', 'stairs', 'ramps'],
   pedestrianNavigation: [],
   vehicleNavigation: [],
 };
@@ -342,6 +344,7 @@ const S = {
   pedestrianNav: { nodes: [], lines: [], connections: [] },
   vehicleNav:    { nodes: [], lines: [], connections: [] },
   navSel: null,   // nav selection: {kind:'node'|'line'|'conn', idx:N} or null
+  wallSel: null,  // wall-mode selection: {type, idx, dir} (dir 0西 1东 2北 3南) or null
 };
 
 // ── File Tab System ───────────────────────────────────────────────────────────
@@ -604,6 +607,108 @@ function hitTest(lx, ly, params, W, H) {
   const { x1, y1, x2, y2 } = evalRect(params, W, H);
   return lx >= Math.min(x1, x2) && lx <= Math.max(x1, x2)
       && ly >= Math.min(y1, y2) && ly <= Math.max(y1, y2);
+}
+
+// ── Wall Mode Helpers ─────────────────────────────────────────────────────────
+
+const WALL_SIDES = [['east', '东'], ['south', '南'], ['west', '西'], ['north', '北']];
+const WALL_INSET_PX = 4;  // wall line is drawn this many px inside the element edge
+
+// Walls of an element: stairs/ramps/elevators/corridors use item.walls, singles/rows have all four.
+function wallDirsOf(type, item) {
+  return (type === 'singles' || type === 'rows') ? [0, 1, 2, 3] : (item.walls || []);
+}
+
+// Canvas-pixel segment [x1,y1,x2,y2] of one wall, inset towards the element interior.
+function wallSegment(type, item, dir) {
+  const r = evalRect(getParams(type, item), S.W, S.H);
+  const minX = toCanvasX(Math.min(r.x1, r.x2)), maxX = toCanvasX(Math.max(r.x1, r.x2));
+  const minY = toCanvasY(Math.min(r.y1, r.y2)), maxY = toCanvasY(Math.max(r.y1, r.y2));
+  const d = Math.min(WALL_INSET_PX, (maxX - minX) / 2, (maxY - minY) / 2);
+  if (dir === 0) return [minX + d, minY, minX + d, maxY];
+  if (dir === 1) return [maxX - d, minY, maxX - d, maxY];
+  if (dir === 2) return [minX, minY + d, maxX, minY + d];
+  return [minX, maxY - d, maxX, maxY - d];
+}
+
+function wallTagsOf(item, dir) {
+  return (item.wallTags && item.wallTags[dir]) || {};
+}
+function wallHasTag(item, dir) {
+  return Object.values(wallTagsOf(item, dir)).some(v => v);
+}
+
+function wallHitTest(canvX, canvY) {
+  let best = null, bestDist = 6;
+  for (const type of MODE_TYPES.walls) {
+    (S.data[type] || []).forEach((item, idx) => {
+      for (const dir of wallDirsOf(type, item)) {
+        const [ax, ay, bx, by] = wallSegment(type, item, dir);
+        const dist = distToSegment(canvX, canvY, ax, ay, bx, by);
+        if (dist < bestDist) { bestDist = dist; best = { type, idx, dir }; }
+      }
+    });
+  }
+  return best;
+}
+
+// Returns the selected wall's element or null (selection may be stale after undo / file switch).
+function wallSelItem() {
+  const w = S.wallSel;
+  if (!w) return null;
+  const item = (S.data[w.type] || [])[w.idx];
+  if (!item || !wallDirsOf(w.type, item).includes(w.dir)) return null;
+  return item;
+}
+
+function drawWallOverlay() {
+  for (const type of MODE_TYPES.walls) {
+    (S.data[type] || []).forEach((item, idx) => {
+      for (const dir of wallDirsOf(type, item)) {
+        const [ax, ay, bx, by] = wallSegment(type, item, dir);
+        const sel = S.wallSel && S.wallSel.type === type && S.wallSel.idx === idx && S.wallSel.dir === dir;
+        ctx.save();
+        ctx.strokeStyle = sel ? '#ffffff' : (wallHasTag(item, dir) ? '#ffa040' : '#7a7a7a');
+        ctx.lineWidth = sel ? 4 : 2;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+        ctx.restore();
+      }
+    });
+  }
+}
+
+function renderWallPanel(panel) {
+  const item = wallSelItem();
+  const sec = div('sec');
+  if (!item) {
+    sec.appendChild(div('sec-title', '墙'));
+    sec.appendChild(div('field-title', '点击画布上的一面墙，设置它东/南/西/北四个侧面的标签'));
+    panel.appendChild(sec);
+    return;
+  }
+  const { type, idx, dir } = S.wallSel;
+  sec.appendChild(div('sec-title', `${TYPE_LABEL[type]} #${idx}  ${DIR_LABELS[dir]} 墙`));
+  sec.appendChild(div('field-title', '侧面标签 (留空=不指定，对应mod里SetSurfaceMaterial登记的材质)'));
+  const cur = wallTagsOf(item, dir);
+  for (const [key, label] of WALL_SIDES) {
+    const input = Object.assign(document.createElement('input'), {
+      type: 'text', value: cur[key] || '', placeholder: '如 brick'
+    });
+    input.addEventListener('change', () => {
+      snapshot();
+      const v = input.value.trim();
+      if (!item.wallTags) item.wallTags = {};
+      if (!item.wallTags[dir]) item.wallTags[dir] = {};
+      if (v) item.wallTags[dir][key] = v; else delete item.wallTags[dir][key];
+      if (Object.keys(item.wallTags[dir]).length === 0) delete item.wallTags[dir];
+      if (Object.keys(item.wallTags).length === 0) delete item.wallTags;
+      redraw();
+    });
+    const lab = document.createElement('label');
+    lab.textContent = label;
+    sec.appendChild(div('row', lab, input));
+  }
+  panel.appendChild(sec);
 }
 
 // ── Navigation Helpers ────────────────────────────────────────────────────────
@@ -1073,6 +1178,7 @@ function redraw() {
       drawElem(type, params, dir, isSelected, walls, doors, windows);
     }
   }
+  if (S.mode === 'walls') drawWallOverlay();
 
   // Drag-select overlay: drawn last so it appears on top of everything
   if (_isDragging && _dragStart && _dragCurrent) {
@@ -1157,6 +1263,11 @@ function autoDeleteZeroArea() {
 // ── Canvas Click / Rect-Select Handlers ──────────────────────────────────────
 
 function performClick(canvX, canvY, ctrlKey) {
+  if (S.mode === 'walls') {
+    S.multiSel = []; S.sel = null; S.navSel = null;
+    S.wallSel = wallHitTest(canvX, canvY);
+    return;
+  }
   if (isNavMode(S.mode)) {
     const hit = navHitTest(canvX, canvY);
     if (ctrlKey) {
@@ -1196,6 +1307,7 @@ function performClick(canvX, canvY, ctrlKey) {
 }
 
 function performRectSelect(cx1, cy1, cx2, cy2, ctrl) {
+  if (S.mode === 'walls') return;  // walls are selected one at a time by clicking
   if (isNavMode(S.mode)) {
     S.navSel = null;
     const nav = activeNav();
@@ -1421,6 +1533,12 @@ function renderPanel() {
   // ── Navigation modes: hand off to nav panel renderer ──
   if (isNavMode(S.mode)) {
     renderNavPanel(panel);
+    return;
+  }
+
+  // ── Wall mode: tag editor for the selected wall ──
+  if (S.mode === 'walls') {
+    renderWallPanel(panel);
     return;
   }
 
@@ -2262,6 +2380,7 @@ function serializeObj(obj, indent) {
   if (obj.rect      !== undefined) s += `${indent}"rect": ${fmt8(obj.rect)},\n`;
   if (obj.direction !== undefined) s += `${indent}"direction": ${obj.direction},\n`;
   if (obj.walls && obj.walls.length > 0) s += `${indent}"walls": [${obj.walls.join(', ')}],\n`;
+  if (obj.wallTags && Object.keys(obj.wallTags).length > 0) s += `${indent}"wallTags": ${JSON.stringify(obj.wallTags)},\n`;
   if (obj.doors   && obj.doors.length   > 0) s += serializeOpenings(obj.doors,   'doors',   indent);
   if (obj.windows && obj.windows.length > 0) s += serializeOpenings(obj.windows, 'windows', indent);
   s += indent.slice(1) + '}';
@@ -2365,7 +2484,7 @@ function renderLegend() {
 document.getElementById('global-mode').addEventListener('change', e => {
   autoDeleteZeroArea();
   S.mode = e.target.value;
-  S.sel = null; S.navSel = null; S.multiSel = [];
+  S.sel = null; S.navSel = null; S.multiSel = []; S.wallSel = null;
   redraw(); renderLegend(); renderPanel();
 });
 

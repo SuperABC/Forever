@@ -105,6 +105,8 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 
 	// 顶层模板fr-的屋顶打了"roof"标签，对应黑色材质实例。
 	SetSurfaceMaterial("roof", "/Game/Asset/Building/Material/Black.Black");
+	SetSurfaceMaterial("brick", "/Game/Asset/Building/Material/Brick.Brick");
+	SetSurfaceMaterial("concrete", "/Game/Asset/Building/Material/Concrete.Concrete");
 
 	AssignFloor(-1, "preset_residential_wing_bg+", direction);
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);

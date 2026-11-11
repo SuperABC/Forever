@@ -13,11 +13,13 @@
 		"rect": [0.6, 0, 0.8, 0, 0.6, 0.4, 0.9, 0],
 		"direction": 0,
 		"walls": [3, 2],
+		"wallTags": {"3":{"south":"brick"}},
 	},
 	{
 		"rect": [0.4, -0.4, 0.8, 0, 0.4, 0, 0.9, 0],
 		"direction": 1,
 		"walls": [3, 2],
+		"wallTags": {"3":{"south":"brick"}},
 	}],
 	"ceilings": [
 		[0, 0, 0.1, 0, 0.4, -0.4, 1, 0],
@@ -36,6 +38,7 @@
 	"corridors": [{
 		"rect": [0, 0, 0.5, 0, 0.4, -0.4, 0.6, 0],
 		"walls": [0],
+		"wallTags": {"0":{"west":"concrete"}},
 		"windows": [
 			{
 				"direction": 0,
@@ -48,6 +51,7 @@
 	{
 		"rect": [0.4, -0.4, 0, 0, 0.6, 0.4, 0.1, 0],
 		"walls": [0, 1, 2],
+		"wallTags": {"0":{"west":"brick","north":"brick"},"1":{"east":"brick","north":"brick"},"2":{"north":"brick","east":"brick","west":"brick"}},
 		"windows": [
 			{
 				"direction": 2,
@@ -60,6 +64,7 @@
 	{
 		"rect": [0.6, 0.4, 0.5, 0, 1, 0, 0.6, 0],
 		"walls": [1],
+		"wallTags": {"1":{"east":"concrete"}},
 		"windows": [
 			{
 				"direction": 1,
@@ -87,6 +92,7 @@
 	{
 		"rect": [0.4, 0, 0.6, 0, 0.6, 0, 0.9, 0],
 		"walls": [3],
+		"wallTags": {"3":{"south":"brick"}},
 		"windows": [
 			{
 				"direction": 3,
@@ -95,10 +101,16 @@
 				],
 			},
 		],
+	},
+	{
+		"rect": [0.4, -0.4, 0.9, 0, 0.6, 0.4, 1, 0],
+		"walls": [0, 1],
+		"wallTags": {"0":{"east":"concrete","south":"concrete"},"1":{"west":"concrete","south":"concrete"}},
 	}],
 	"rows": [{
 		"rect": [0, 0, 0.1, 0, 0.4, -0.4, 0.5, 0],
 		"direction": 3,
+		"wallTags": {"0":{"west":"concrete","north":"concrete"},"2":{"north":"concrete","west":"concrete"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -119,6 +131,7 @@
 	{
 		"rect": [0.6, 0.4, 0.1, 0, 1, 0, 0.5, 0],
 		"direction": 3,
+		"wallTags": {"1":{"east":"concrete","north":"concrete"},"2":{"north":"concrete","east":"concrete"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -139,6 +152,7 @@
 	{
 		"rect": [0, 0, 0.6, 0, 0.4, -0.4, 1, 0],
 		"direction": 2,
+		"wallTags": {"0":{"west":"concrete","south":"concrete"},"3":{"south":"concrete","east":"concrete","west":"concrete"}},
 		"doors": [
 			{
 				"direction": 2,
@@ -159,6 +173,7 @@
 	{
 		"rect": [0.6, 0.4, 0.6, 0, 1, 0, 1, 0],
 		"direction": 2,
+		"wallTags": {"1":{"east":"concrete","south":"concrete"},"3":{"south":"concrete","west":"concrete","east":"concrete"}},
 		"doors": [
 			{
 				"direction": 2,

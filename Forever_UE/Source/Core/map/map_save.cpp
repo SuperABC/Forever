@@ -102,6 +102,24 @@ namespace {
 		return tags;
 	}
 
+	// 元素/房间每面墙四个侧面的标签+材质路径(没升存档版本号，旧存档读不了)。
+	void WriteWallStyles(const WallStyle* styles, ByteWriter& w) {
+		for (int dir = 0; dir < 4; dir++) {
+			for (int side = 0; side < 4; side++) {
+				w.Str(styles[dir].tags[side]);
+				w.Str(styles[dir].materials[side]);
+			}
+		}
+	}
+	void ReadWallStyles(WallStyle* styles, ByteReader& r) {
+		for (int dir = 0; dir < 4; dir++) {
+			for (int side = 0; side < 4; side++) {
+				styles[dir].tags[side] = r.Str();
+				styles[dir].materials[side] = r.Str();
+			}
+		}
+	}
+
 	void WriteDoorSpec(const DoorSpec& s, ByteWriter& w) {
 		w.Str(s.mesh); w.Str(s.frameMesh); w.Str(s.name); w.Str(s.scriptModName);
 		WriteStrings(s.milestoneNames, w);
@@ -914,6 +932,7 @@ void MapSaveCodec::WriteFloor(const Floor& floor, ByteWriter& w) {
 			WriteQuad(e, w);
 			w.I32(e.direction);
 			for (bool wall : e.walls) w.U8(wall ? 1 : 0);
+			WriteWallStyles(e.wallStyles, w);
 		}
 		};
 	auto writePlain = [&](const auto& list) {
@@ -931,6 +950,7 @@ void MapSaveCodec::WriteFloor(const Floor& floor, ByteWriter& w) {
 			WriteWallHole(e.doors, w);
 			WriteDoorTags(e.doorTags, w);
 			WriteWallHole(e.windows, w);
+			WriteWallStyles(e.wallStyles, w);
 			(void)hasWalls;
 		}
 		};
@@ -975,6 +995,7 @@ void MapSaveCodec::ReadFloor(Floor& floor, ByteReader& r) {
 			ReadQuad(e, r);
 			e.direction = r.I32();
 			for (bool& wall : e.walls) wall = r.U8() != 0;
+			ReadWallStyles(e.wallStyles, r);
 			list.push_back(e);
 		}
 		};
@@ -1000,6 +1021,7 @@ void MapSaveCodec::ReadFloor(Floor& floor, ByteReader& r) {
 			e.doors = ReadWallHole(r);
 			e.doorTags = ReadDoorTags(r);
 			e.windows = ReadWallHole(r);
+			ReadWallStyles(e.wallStyles, r);
 			list.push_back(e);
 		}
 		};
@@ -1163,6 +1185,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			WriteWallHole(room->doors, w);
 			WriteDoorTags(room->doorTags, w);
 			WriteWallHole(room->windows, w);
+		WriteWallStyles(room->wallStyles, w);
 			w.Str(room->number);
 			// 房间导航点通常登记在Map的锚点表里(按id引用)；没登记的按值另存一份。
 			const Node* nav = room->navigationNode;
@@ -1436,6 +1459,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 			room->doors = ReadWallHole(r);
 			room->doorTags = ReadDoorTags(r);
 			room->windows = ReadWallHole(r);
+			ReadWallStyles(room->wallStyles, r);
 			room->number = r.Str();
 			uint8_t navKind = r.U8();
 			if (navKind == 1) {
