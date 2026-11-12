@@ -197,7 +197,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 	};
 	map<string, vector<Need>> needs;
 	for (const Room* room : rooms) {
-		if (!room || !room->IsResidential()) continue;
+		if (!room || !room->IsResidence()) continue;
 		for (Household* household : room->GetHouseholds()) {
 			// 成年人每天1份，未成年(<adultAge)吃一半，整户合计向上取整到整份。
 			int halfPortions = 0;

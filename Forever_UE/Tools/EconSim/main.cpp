@@ -226,7 +226,7 @@ namespace {
 			for (Room* room : building->GetRooms()) {
 				rooms++;
 				if (room->GetStated()) stated++;
-				if (room->IsResidential() && !room->GetHouseholds().empty()) householdsPerRoom[room->GetHouseholds().size()]++;
+				if (room->IsResidence() && !room->GetHouseholds().empty()) householdsPerRoom[room->GetHouseholds().size()]++;
 				for (Household* household : room->GetHouseholds()) {
 					residents += static_cast<int>(household->GetMembers().size());
 					if (household->GetMembers().size() > 1) multiMember++;
@@ -262,7 +262,7 @@ namespace {
 		Room* room = nullptr;
 		for (const auto& [name, building] : city.GetBuildings()) {
 			for (Room* candidate : building->GetRooms()) {
-				if (candidate->IsResidential() && candidate->GetHouseholds().empty()) { room = candidate; break; }
+				if (candidate->IsResidence() && candidate->GetHouseholds().empty()) { room = candidate; break; }
 			}
 			if (room) break;
 		}

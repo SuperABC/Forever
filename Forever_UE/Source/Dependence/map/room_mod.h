@@ -23,8 +23,8 @@ public:
 	virtual void SetProperty() {}
 
 	// 能力声明,各域按这些字段消费,见room_mod.md。
-	bool isResidential = false;
-	int residentialCapacity = 0;      // 床位数
+	bool isResidence = false;
+	int residenceCapacity = 0;      // 床位数
 
 	bool isWorkspace = false;
 	int workspaceCapacity = 0;        // 工位数

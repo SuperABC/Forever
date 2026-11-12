@@ -13,8 +13,8 @@ const char* ResidenceRoom::GetName() {
 }
 
 void ResidenceRoom::SetProperty() {
-	isResidential = true;
-	residentialCapacity = 1;
+	isResidence = true;
+	residenceCapacity = 1;
 	rent = 2000; // 每日房租20元
 	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
 	milestoneNames = { "entity_event" };

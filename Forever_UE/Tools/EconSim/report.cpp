@@ -226,7 +226,7 @@ void Reporter::PrintCity() {
 	int households = 0, residentRooms = 0, multi = 0;
 	for (const auto& [name, building] : city.GetBuildings()) {
 		for (Room* room : building->GetRooms()) {
-			if (!room->IsResidential() || room->GetHouseholds().empty()) continue;
+			if (!room->IsResidence() || room->GetHouseholds().empty()) continue;
 			residentRooms++;
 			households += static_cast<int>(room->GetHouseholds().size());
 			if (room->GetHouseholds().size() > 1) multi++;

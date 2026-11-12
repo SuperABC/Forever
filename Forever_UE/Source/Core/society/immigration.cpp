@@ -44,7 +44,7 @@ vector<Citizen*> Immigration::Daily(Society& society, Populace& populace, Map& m
 	for (const auto& [name, building] : map.GetBuildings()) {
 		if (!building) continue;
 		for (Room* room : building->GetRooms()) {
-			if (room && room->IsResidential() && room->GetHouseholds().empty()) vacancies.push_back(room);
+			if (room && room->IsResidence() && room->GetHouseholds().empty()) vacancies.push_back(room);
 		}
 	}
 

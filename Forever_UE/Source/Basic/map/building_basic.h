@@ -8,7 +8,7 @@
 // 注册)。住宅/商店/工厂/办公楼各分高/中/低三档，12个类各自独立实现、没有共用基类，三档的
 // 逻辑目前是同一份的拷贝，以后各自改。
 
-// 住宅(高密度)：只在住宅高密度分区(AREA_RESIDENTIAL_HIGH)上有权重。
+// 住宅(高密度)：只在住宅高密度分区(AREA_RESIDENCE_HIGH)上有权重。
 class ResidenceHighBuilding : public BuildingMod {
 public:
 	ResidenceHighBuilding();
@@ -36,7 +36,7 @@ private:
 	std::string name;
 };
 
-// 住宅(中密度)：只在住宅中密度分区(AREA_RESIDENTIAL_MIDDLE)上有权重。
+// 住宅(中密度)：只在住宅中密度分区(AREA_RESIDENCE_MIDDLE)上有权重。
 class ResidenceMiddleBuilding : public BuildingMod {
 public:
 	ResidenceMiddleBuilding();
@@ -64,7 +64,7 @@ private:
 	std::string name;
 };
 
-// 住宅(低密度)：只在住宅低密度分区(AREA_RESIDENTIAL_LOW)上有权重。
+// 住宅(低密度)：只在住宅低密度分区(AREA_RESIDENCE_LOW)上有权重。
 class ResidenceLowBuilding : public BuildingMod {
 public:
 	ResidenceLowBuilding();
@@ -92,7 +92,7 @@ private:
 	std::string name;
 };
 
-// 商店(高密度)：只在商店高密度分区(AREA_COMMERCIAL_HIGH)上有权重。
+// 商店(高密度)：只在商店高密度分区(AREA_COMMERCE_HIGH)上有权重。
 class ShopHighBuilding : public BuildingMod {
 public:
 	ShopHighBuilding();
@@ -120,7 +120,7 @@ private:
 	std::string name;
 };
 
-// 商店(中密度)：只在商店中密度分区(AREA_COMMERCIAL_MIDDLE)上有权重。
+// 商店(中密度)：只在商店中密度分区(AREA_COMMERCE_MIDDLE)上有权重。
 class ShopMiddleBuilding : public BuildingMod {
 public:
 	ShopMiddleBuilding();
@@ -148,7 +148,7 @@ private:
 	std::string name;
 };
 
-// 商店(低密度)：只在商店低密度分区(AREA_COMMERCIAL_LOW)上有权重。
+// 商店(低密度)：只在商店低密度分区(AREA_COMMERCE_LOW)上有权重。
 class ShopLowBuilding : public BuildingMod {
 public:
 	ShopLowBuilding();
@@ -176,7 +176,7 @@ private:
 	std::string name;
 };
 
-// 工厂(高密度)：只在工厂高密度分区(AREA_INDUSTRIAL_HIGH)上有权重。
+// 工厂(高密度)：只在工厂高密度分区(AREA_INDUSTRY_HIGH)上有权重。
 class FactoryHighBuilding : public BuildingMod {
 public:
 	FactoryHighBuilding();
@@ -204,7 +204,7 @@ private:
 	std::string name;
 };
 
-// 工厂(中密度)：只在工厂中密度分区(AREA_INDUSTRIAL_MIDDLE)上有权重。
+// 工厂(中密度)：只在工厂中密度分区(AREA_INDUSTRY_MIDDLE)上有权重。
 class FactoryMiddleBuilding : public BuildingMod {
 public:
 	FactoryMiddleBuilding();
@@ -232,7 +232,7 @@ private:
 	std::string name;
 };
 
-// 工厂(低密度)：只在工厂低密度分区(AREA_INDUSTRIAL_LOW)上有权重。
+// 工厂(低密度)：只在工厂低密度分区(AREA_INDUSTRY_LOW)上有权重。
 class FactoryLowBuilding : public BuildingMod {
 public:
 	FactoryLowBuilding();
@@ -260,7 +260,7 @@ private:
 	std::string name;
 };
 
-// 办公楼(高密度)：只在办公楼高密度分区(AREA_OFFICIAL_HIGH)上有权重。
+// 办公楼(高密度)：只在办公楼高密度分区(AREA_OFFICE_HIGH)上有权重。
 class OfficeHighBuilding : public BuildingMod {
 public:
 	OfficeHighBuilding();
@@ -288,7 +288,7 @@ private:
 	std::string name;
 };
 
-// 办公楼(中密度)：只在办公楼中密度分区(AREA_OFFICIAL_MIDDLE)上有权重。
+// 办公楼(中密度)：只在办公楼中密度分区(AREA_OFFICE_MIDDLE)上有权重。
 class OfficeMiddleBuilding : public BuildingMod {
 public:
 	OfficeMiddleBuilding();
@@ -316,7 +316,7 @@ private:
 	std::string name;
 };
 
-// 办公楼(低密度)：只在办公楼低密度分区(AREA_OFFICIAL_LOW)上有权重。
+// 办公楼(低密度)：只在办公楼低密度分区(AREA_OFFICE_LOW)上有权重。
 class OfficeLowBuilding : public BuildingMod {
 public:
 	OfficeLowBuilding();

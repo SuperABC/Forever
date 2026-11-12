@@ -74,7 +74,7 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	constexpr int kComponentId = 0;
 	constexpr float size = 300.f; // 联排房间面积
 
-	// 只用preset_residential_nshape系列模板(地下bg+、1楼fg+-、其余fu+-)(twin / side / wing布局的C++备份见
+	// 只用preset_residence_nshape系列模板(地下bg+、1楼fg+-、其余fu+-)(twin / side / wing布局的C++备份见
 	// building_basic_*_backup.txt)。偏好方向：长边朝向正对的路，
 	// 只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction(否则outside端点会查不到路)。
 	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_NORTH + GetRandom(2) : FACE_WEST + GetRandom(2);
@@ -102,7 +102,7 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	gapMaterial = "/Game/Asset/Building/Material/Pavement.Pavement";
 
 	// 地下1层bg+(4个single、3个row)；1楼fg+-(4个single、4个row)；2楼起fu+-(4个single、3个row)。
-	AssignFloor(-1, "preset_residential_nshape_bg+", direction);
+	AssignFloor(-1, "preset_residence_nshape_bg+", direction);
 	for (int slot = 0; slot < 4; slot++) {
 		AssignRoom(-1, slot, "room_residence", kComponent, kComponentId);
 	}
@@ -110,7 +110,7 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 		ArrangeRow(-1, row, "room_residence", size, kComponent, kComponentId);
 	}
 	for (int level = 0; level < layers; level++) {
-		AssignFloor(level, level == 0 ? "preset_residential_nshape_fg+-" : "preset_residential_nshape_fu+-", direction);
+		AssignFloor(level, level == 0 ? "preset_residence_nshape_fg+-" : "preset_residence_nshape_fu+-", direction);
 		for (int slot = 0; slot < 4; slot++) {
 			AssignRoom(level, slot, "room_residence", kComponent, kComponentId);
 		}
@@ -145,7 +145,7 @@ float ResidenceHighBuilding::GetPower(AREA_TYPE area) {
 	if (area == AREA_TEST) {
 		return 1.f;
 	}
-	if (area == AREA_RESIDENTIAL_HIGH) {
+	if (area == AREA_RESIDENCE_HIGH) {
 		return 1.f;
 	}
 	return 0.f;
@@ -358,7 +358,7 @@ float ResidenceMiddleBuilding::GetAcreageMax() {
 
 float ResidenceMiddleBuilding::GetPower(AREA_TYPE area) {
 	// 只在住宅中密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_RESIDENTIAL_MIDDLE) {
+	if (area == AREA_RESIDENCE_MIDDLE) {
 		return 1.f;
 	}
 	return 0.f;
@@ -571,7 +571,7 @@ float ResidenceLowBuilding::GetAcreageMax() {
 
 float ResidenceLowBuilding::GetPower(AREA_TYPE area) {
 	// 只在住宅低密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_RESIDENTIAL_LOW) {
+	if (area == AREA_RESIDENCE_LOW) {
 		return 1.f;
 	}
 	return 0.f;
@@ -724,7 +724,7 @@ float ShopHighBuilding::GetAcreageMax() {
 
 float ShopHighBuilding::GetPower(AREA_TYPE area) {
 	// 只在商店高密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_COMMERCIAL_HIGH) {
+	if (area == AREA_COMMERCE_HIGH) {
 		return 1.f;
 	}
 	return 0.f;
@@ -877,7 +877,7 @@ float ShopMiddleBuilding::GetAcreageMax() {
 
 float ShopMiddleBuilding::GetPower(AREA_TYPE area) {
 	// 只在商店中密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_COMMERCIAL_MIDDLE) {
+	if (area == AREA_COMMERCE_MIDDLE) {
 		return 1.f;
 	}
 	return 0.f;
@@ -1030,7 +1030,7 @@ float ShopLowBuilding::GetAcreageMax() {
 
 float ShopLowBuilding::GetPower(AREA_TYPE area) {
 	// 只在商店低密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_COMMERCIAL_LOW) {
+	if (area == AREA_COMMERCE_LOW) {
 		return 1.f;
 	}
 	return 0.f;
@@ -1114,7 +1114,7 @@ float FactoryHighBuilding::GetAcreageMax() {
 
 float FactoryHighBuilding::GetPower(AREA_TYPE area) {
 	// 只在工厂高密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_INDUSTRIAL_HIGH) {
+	if (area == AREA_INDUSTRY_HIGH) {
 		return 1.f;
 	}
 	return 0.f;
@@ -1198,7 +1198,7 @@ float FactoryMiddleBuilding::GetAcreageMax() {
 
 float FactoryMiddleBuilding::GetPower(AREA_TYPE area) {
 	// 只在工厂中密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_INDUSTRIAL_MIDDLE) {
+	if (area == AREA_INDUSTRY_MIDDLE) {
 		return 1.f;
 	}
 	return 0.f;
@@ -1282,7 +1282,7 @@ float FactoryLowBuilding::GetAcreageMax() {
 
 float FactoryLowBuilding::GetPower(AREA_TYPE area) {
 	// 只在工厂低密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_INDUSTRIAL_LOW) {
+	if (area == AREA_INDUSTRY_LOW) {
 		return 1.f;
 	}
 	return 0.f;
@@ -1494,7 +1494,7 @@ void OfficeHighBuilding::Layout(int& direction, const Quad& quad,
 
 float OfficeHighBuilding::GetPower(AREA_TYPE area) {
 	// 只在办公楼高密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_OFFICIAL_HIGH) {
+	if (area == AREA_OFFICE_HIGH) {
 		return 1.f;
 	}
 	return 0.f;
@@ -1706,7 +1706,7 @@ void OfficeMiddleBuilding::Layout(int& direction, const Quad& quad,
 
 float OfficeMiddleBuilding::GetPower(AREA_TYPE area) {
 	// 只在办公楼中密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_OFFICIAL_MIDDLE) {
+	if (area == AREA_OFFICE_MIDDLE) {
 		return 1.f;
 	}
 	return 0.f;
@@ -1918,7 +1918,7 @@ void OfficeLowBuilding::Layout(int& direction, const Quad& quad,
 
 float OfficeLowBuilding::GetPower(AREA_TYPE area) {
 	// 只在办公楼低密度分区上有权重，和其余类型的分区互斥，见building_basic.md。
-	if (area == AREA_OFFICIAL_LOW) {
+	if (area == AREA_OFFICE_LOW) {
 		return 1.f;
 	}
 	return 0.f;
@@ -2238,7 +2238,7 @@ float MoharBuilding::GetAcreageMax() {
 }
 
 float MoharBuilding::GetPower(AREA_TYPE area) {
-	if (area == AREA_RESIDENTIAL_HIGH) {
+	if (area == AREA_RESIDENCE_HIGH) {
 		return 0.5f;
 	}
 	return 0.f;

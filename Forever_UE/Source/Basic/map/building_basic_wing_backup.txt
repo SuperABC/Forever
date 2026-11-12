@@ -1,4 +1,4 @@
-// 备份：高密度住宅使用preset_residential_wing_*模板时的ResidenceHighBuilding::Layout()（2026-11-11）。
+// 备份：高密度住宅使用preset_residence_wing_*模板时的ResidenceHighBuilding::Layout()（2026-11-11）。
 // wing的.layout仍在Resource/Layouts里没动。要切回wing：用这份函数体替换building_basic.cpp里的ResidenceHighBuilding::Layout()。
 
 void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
@@ -35,7 +35,7 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
 
-	// 只用preset_residential_wing系列模板：地下1层bg+(停车库)，1楼fg+-，2楼fl+-，3楼及以上fu+-。
+	// 只用preset_residence_wing系列模板：地下1层bg+(停车库)，1楼fg+-，2楼fl+-，3楼及以上fu+-。
 	// 偏好方向沿用原来wing模板的取法：长边朝向正对的路，
 	// 只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction(否则outside端点会查不到路)。
 	constexpr float size = 300.f; // 房间面积
@@ -66,17 +66,17 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	// 楼体与建筑范围之间的空隙铺人行道材质。
 	gapMaterial = "/Game/Asset/Building/Material/Pavement.Pavement";
 
-	AssignFloor(-1, "preset_residential_wing_pg+", direction);
+	AssignFloor(-1, "preset_residence_wing_pg+", direction);
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
-	AssignFloor(0, "preset_residential_wing_fg+-", direction);
-	AssignFloor(1, "preset_residential_wing_fl+-", direction);
+	AssignFloor(0, "preset_residence_wing_fg+-", direction);
+	AssignFloor(1, "preset_residence_wing_fl+-", direction);
 	for (int level = 2; level < layers; level++) {
 		// 最顶上再加一层屋面层fr(只有地面、没有房间)；其下一层(最高住人层)换成顶层模板fr-(没有楼梯、天花板是屋顶)，single/row数量与fu+-一致。
 		if (level == layers - 1) {
-			AssignFloor(level, "preset_residential_wing_fr", direction);
+			AssignFloor(level, "preset_residence_wing_fr", direction);
 			continue;
 		}
-		AssignFloor(level, level == layers - 2 ? "preset_residential_wing_fr-" : "preset_residential_wing_fu+-", direction);
+		AssignFloor(level, level == layers - 2 ? "preset_residence_wing_fr-" : "preset_residence_wing_fu+-", direction);
 		AssignRoom(level, 0, "room_residence", kComponent, kComponentId); // fu+-多出的两个single
 		AssignRoom(level, 1, "room_residence", kComponent, kComponentId);
 	}

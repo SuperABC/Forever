@@ -14,7 +14,7 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 ## 三档密度与办公楼
 
 - **住宅/商店/工厂/办公楼各拆成高/中/低三个注册的mod**，共12个，类名`ResidenceHighBuilding`等：`building_{residence,shop,factory,office}_{high,middle,low}`。**每个类完全独立实现，没有共用基类**：各自有自己的`Layout()`、`Assign`、`RandomAcreage`/`GetAcreageMin`/`GetAcreageMax`、`GetPower`和命名计数器；目前同一类型的三档以及办公楼与住宅，逻辑都是同一份的拷贝，以后各自改，互不影响。
-- `GetPower`只在对应类型和密度的分区返回`1.f`：`AREA_{RESIDENTIAL,COMMERCIAL,INDUSTRIAL,OFFICIAL}_{HIGH,MIDDLE,LOW}`。
+- `GetPower`只在对应类型和密度的分区返回`1.f`：`AREA_{RESIDENCE,COMMERCE,INDUSTRY,OFFICE}_{HIGH,MIDDLE,LOW}`。
 - **办公楼**：`Layout()`是住宅布局的拷贝(同一套模板/电梯/楼层数分档)，房间换成`room_office`、组件换成`component_office`，不挂住宅的`entity_event`示例脚本。
 - 下面`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding`几节描述的是对应类型**当前（三档共同）的逻辑**，指的是三个档次各自那份拷贝。
 
@@ -22,7 +22,7 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 
 - `GetPower`：由三档子类各自决定(见上)。`RandomAcreage()=2000*(1+rand*2)^2`，`GetAcreageMin()=2000`，`GetAcreageMax()=18000`。`Assign()`空实现。
 - 住宅高密度(`ResidenceHighBuilding`)的面积：`RandomAcreage()=8000+8000*rand`(8000~16000线性随机)，`GetAcreageMin()=8000`，`GetAcreageMax()=16000`。
-- `ResidenceHighBuilding::Layout()`：只服务 `preset_residential_nshape_*`（旧 twin / side / wing 版本的 C++ 备份分别在 `building_basic_twin_backup.txt`、`building_basic_side_backup.txt`、`building_basic_wing_backup.txt`，不参与编译）。`basements=1`(层高0.35)、地上 `layers`=7~12 随机(层高0.4)；地下 `bg+`(b=地下正常布局，p=地下停车场)、1 楼 `fg+-`、2 楼起 `fu+-`；每层 4 个 single + 若干 row(地下3、1楼4、其余3，size=300) 都放 `room_residence`；2 台 `elevator_basic` 轿厢从地下到顶层。`footprint`：朝向的那一边贴着 quad 边占满，其余三边各留 0.2(地图单位)的空隙，空隙铺 `gapMaterial`=Pavement，标签 `pavement`→Pavement、`stone`→Stone；朝向偏好长边正对的路(仅对应边界路存在时采用)。大门 `doorSpecs["entrance"]` 给 corridor 的 `entrance` 门洞用。
+- `ResidenceHighBuilding::Layout()`：只服务 `preset_residence_nshape_*`（旧 twin / side / wing 版本的 C++ 备份分别在 `building_basic_twin_backup.txt`、`building_basic_side_backup.txt`、`building_basic_wing_backup.txt`，不参与编译）。`basements=1`(层高0.35)、地上 `layers`=7~12 随机(层高0.4)；地下 `bg+`(b=地下正常布局，p=地下停车场)、1 楼 `fg+-`、2 楼起 `fu+-`；每层 4 个 single + 若干 row(地下3、1楼4、其余3，size=300) 都放 `room_residence`；2 台 `elevator_basic` 轿厢从地下到顶层。`footprint`：朝向的那一边贴着 quad 边占满，其余三边各留 0.2(地图单位)的空隙，空隙铺 `gapMaterial`=Pavement，标签 `pavement`→Pavement、`stone`→Stone；朝向偏好长边正对的路(仅对应边界路存在时采用)。大门 `doorSpecs["entrance"]` 给 corridor 的 `entrance` 门洞用。
 - 大门`doorSpecs["entrance"]`：随机左右滑动单开门(`Cube`资产占位)，只有corridor门洞带`entrance`标签才用到，见`Core/map/door.h`的`ResolveDoorSpec`。
 - 挂示例脚本`entity_event`。
 

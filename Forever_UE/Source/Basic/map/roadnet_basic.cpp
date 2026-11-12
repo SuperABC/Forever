@@ -110,7 +110,7 @@ namespace {
 	// GetPower(AREA_TYPE)竞争lot的前提，分区类型如果单一固定，地图上只会长出一种建筑。
 	AREA_TYPE RandomHighDensityArea() {
 		static constexpr AREA_TYPE kAreas[3] = {
-			AREA_RESIDENTIAL_HIGH, AREA_COMMERCIAL_HIGH, AREA_INDUSTRIAL_HIGH
+			AREA_RESIDENCE_HIGH, AREA_COMMERCE_HIGH, AREA_INDUSTRY_HIGH
 		};
 		return kAreas[GetRandom(3)];
 	}

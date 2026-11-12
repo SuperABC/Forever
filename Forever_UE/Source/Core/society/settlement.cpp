@@ -105,7 +105,7 @@ RentReport Settlement::PayRents(Society& society, const vector<Room*>& rooms, co
 		Party landlord = Party::Government();
 		if (!room->GetStated() && room->GetOwner()) landlord = Party::Of(room->GetOwner());
 
-		if (room->IsResidential()) {
+		if (room->IsResidence()) {
 			const vector<Household*>& households = room->GetHouseholds();
 			if (households.empty()) continue; // 没人住不收租
 			if (households.size() > 1) report.multiHouseholdRooms++;

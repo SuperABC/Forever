@@ -52,7 +52,7 @@ void AForeverPlayerController::TestNavigate() {
 	for (const auto& [name, building] : map->GetBuildings()) {
 		if (!building) continue;
 		for (Room* room : building->GetRooms()) {
-			if (room && (room->IsParking() || room->IsResidential())) candidates.Add(room);
+			if (room && (room->IsParking() || room->IsResidence())) candidates.Add(room);
 		}
 	}
 	if (candidates.Num() == 0) {

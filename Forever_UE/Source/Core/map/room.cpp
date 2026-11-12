@@ -32,8 +32,8 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 	mod->SetProperty();
 	type = mod->GetType();
 	name = mod->GetName();
-	properties.isResidential = mod->isResidential;
-	properties.residentialCapacity = mod->residentialCapacity;
+	properties.isResidence = mod->isResidence;
+	properties.residenceCapacity = mod->residenceCapacity;
 	properties.isWorkspace = mod->isWorkspace;
 	properties.workspaceCapacity = mod->workspaceCapacity;
 	properties.isStorage = mod->isStorage;
@@ -136,8 +136,8 @@ Script* Room::GetScript() const { return script; }
 Node* Room::GetNavigationNode() const { return navigationNode; }
 void Room::SetNavigationNode(Node* node) { navigationNode = node; }
 
-bool Room::IsResidential() const { return properties.isResidential; }
-int Room::ResidentialCapacity() const { return properties.residentialCapacity; }
+bool Room::IsResidence() const { return properties.isResidence; }
+int Room::ResidenceCapacity() const { return properties.residenceCapacity; }
 bool Room::IsWorkspace() const { return properties.isWorkspace; }
 int Room::WorkspaceCapacity() const { return properties.workspaceCapacity; }
 bool Room::IsStorage() const { return properties.isStorage; }

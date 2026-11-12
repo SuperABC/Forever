@@ -1199,7 +1199,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			if (registered) w.I32(nav->GetId());
 			else if (nav) WriteNode(*nav, w);
 			const Room::Properties& p = room->properties;
-			w.U8(p.isResidential ? 1 : 0); w.I32(p.residentialCapacity);
+			w.U8(p.isResidence ? 1 : 0); w.I32(p.residenceCapacity);
 			w.U8(p.isWorkspace ? 1 : 0); w.I32(p.workspaceCapacity);
 			w.U8(p.isStorage ? 1 : 0);
 			w.Str(p.storageType);
@@ -1476,7 +1476,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 				room->navigationNode = nav;
 			}
 			Room::Properties& p = room->properties;
-			p.isResidential = r.U8() != 0; p.residentialCapacity = r.I32();
+			p.isResidence = r.U8() != 0; p.residenceCapacity = r.I32();
 			p.isWorkspace = r.U8() != 0; p.workspaceCapacity = r.I32();
 			p.isStorage = r.U8() != 0;
 			p.storageType = r.Str();

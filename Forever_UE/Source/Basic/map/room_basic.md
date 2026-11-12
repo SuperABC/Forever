@@ -2,11 +2,11 @@
 
 ## 职责
 
-Room域的默认实现，合在同一份`room_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)。`SetProperty()`里按类型声明房间的功能属性(`isResidential`/`isWorkspace`/`isStorage`/`isManufacture`/`isParking`及对应容量、房租、停车位、门规格)，没声明的属性保持`RoomMod`基类默认值。
+Room域的默认实现，合在同一份`room_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)。`SetProperty()`里按类型声明房间的功能属性(`isResidence`/`isWorkspace`/`isStorage`/`isManufacture`/`isParking`及对应容量、房租、停车位、门规格)，没声明的属性保持`RoomMod`基类默认值。
 
 | 类型 | id | 属性 |
 | --- | --- | --- |
-| `ResidenceRoom` | `room_residence` | `isResidential`，`residentialCapacity=1`，房租2000(每日20元)，挂`entity_event`脚本 |
+| `ResidenceRoom` | `room_residence` | `isResidence`，`residenceCapacity=1`，房租2000(每日20元)，挂`entity_event`脚本 |
 | `OfficeRoom` | `room_office` | `isWorkspace`，`workspaceCapacity=5`，房租2000；`OfficeBuilding`(三档密度)的房间，没有挂脚本的门 |
 | `ShopRoom` | `room_shop` | `isWorkspace`，`workspaceCapacity=5`（满编；月结可超编到2倍），房租2000 |
 | `WarehouseRoom` | `room_warehouse` | `isStorage`，`storageType="storage_shop"`；另有管理员工位`isWorkspace`，`workspaceCapacity=1`，房租2000 |

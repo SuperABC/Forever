@@ -47,7 +47,7 @@ vector<Citizen*> Emigration::Monthly(Society& society, const vector<Room*>& room
 	const Citizen* protectedCitizen) {
 	vector<Citizen*> departed;
 	for (const Room* room : rooms) {
-		if (!room || !room->IsResidential()) continue;
+		if (!room || !room->IsResidence()) continue;
 		for (Household* household : room->GetHouseholds()) {
 			if (protectedCitizen && household->Contains(protectedCitizen)) continue;
 			vector<Citizen*> adults = household->GetAdults(now);

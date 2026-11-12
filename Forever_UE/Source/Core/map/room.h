@@ -82,8 +82,8 @@ public:
 
 	// 4类占位能力：构造时mod->SetProperty()之后从mod同名字段拷贝的快照(读档时直接按存档恢复，
 	// 不依赖重新创建的mod再算一遍)。见room_mod.h、map_save.md。
-	bool IsResidential() const;
-	int ResidentialCapacity() const;
+	bool IsResidence() const;
+	int ResidenceCapacity() const;
 	bool IsWorkspace() const;
 	int WorkspaceCapacity() const;
 	bool IsStorage() const;
@@ -117,10 +117,10 @@ public:
 private:
 	RoomMod* mod;
 
-	// mod->SetProperty()产出的属性快照，见IsResidential()注释。
+	// mod->SetProperty()产出的属性快照，见IsResidence()注释。
 	struct Properties {
-		bool isResidential = false;
-		int residentialCapacity = 0;
+		bool isResidence = false;
+		int residenceCapacity = 0;
 		bool isWorkspace = false;
 		int workspaceCapacity = 0;
 		bool isStorage = false;

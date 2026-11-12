@@ -1,4 +1,4 @@
-// 备份：高密度住宅使用preset_residential_twin_*模板时的ResidenceHighBuilding::Layout()（2026-11-12）。
+// 备份：高密度住宅使用preset_residence_twin_*模板时的ResidenceHighBuilding::Layout()（2026-11-12）。
 // twin的.layout仍在Resource/Layouts里没动。要切回twin：用这份函数体替换building_basic.cpp里的ResidenceHighBuilding::Layout()。
 
 void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
@@ -32,7 +32,7 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
 
-	// 只用preset_residential_twin系列模板：地下1层bg+(停车库)，1楼fg+-，2楼fl+-，3楼及以上fu+-
+	// 只用preset_residence_twin系列模板：地下1层bg+(停车库)，1楼fg+-，2楼fl+-，3楼及以上fu+-
 	// (side布局的C++备份见building_basic_side_backup.txt，wing的见building_basic_wing_backup.txt)。
 	// 偏好方向：长边朝向正对的路，
 	// 只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction(否则outside端点会查不到路)。
@@ -67,13 +67,13 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	gapMaterial = "/Game/Asset/Building/Material/Pavement.Pavement";
 
 	// 地下1层停车库bg+；1楼fg+-、2楼fl+-各2个single+1个row；3楼起奇数楼fo+-、偶数楼fe+-，各4个row(联排)。电梯贯穿地下到顶层。
-	AssignFloor(-1, "preset_residential_twin_pg+", direction); // 楼梯用默认的Stair_Return
+	AssignFloor(-1, "preset_residence_twin_pg+", direction); // 楼梯用默认的Stair_Return
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
 	for (int level = 0; level < layers; level++) {
 		// level 0是1楼：3楼(level 2)起奇数楼fo+-、偶数楼fe+-。
-		const char* templateName = level == 0 ? "preset_residential_twin_fg+-"
-			: level == 1 ? "preset_residential_twin_fl+-"
-			: (level + 1) % 2 == 1 ? "preset_residential_twin_fo+-" : "preset_residential_twin_fe+-";
+		const char* templateName = level == 0 ? "preset_residence_twin_fg+-"
+			: level == 1 ? "preset_residence_twin_fl+-"
+			: (level + 1) % 2 == 1 ? "preset_residence_twin_fo+-" : "preset_residence_twin_fe+-";
 		AssignFloor(level, templateName, direction);
 		if (level <= 1) {
 			// 1楼fg+-、2楼fl+-：2个single + 1个row。

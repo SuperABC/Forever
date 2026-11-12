@@ -1,4 +1,4 @@
-// 备份：高密度住宅使用preset_residential_side_*模板时的ResidenceHighBuilding::Layout()（2026-11-12）。
+// 备份：高密度住宅使用preset_residence_side_*模板时的ResidenceHighBuilding::Layout()（2026-11-12）。
 // side的.layout仍在Resource/Layouts里没动。要切回side：用这份函数体替换building_basic.cpp里的ResidenceHighBuilding::Layout()。
 
 void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
@@ -31,7 +31,7 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
 
-	// 只用preset_residential_side系列模板(1楼fg+、顶层fu-、中间fu+-)(原wing布局的C++备份见building_basic_wing_backup.txt)。
+	// 只用preset_residence_side系列模板(1楼fg+、顶层fu-、中间fu+-)(原wing布局的C++备份见building_basic_wing_backup.txt)。
 	// 偏好方向：长边朝向正对的路，
 	// 只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction(否则outside端点会查不到路)。
 	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_NORTH + GetRandom(2) : FACE_WEST + GetRandom(2);
@@ -66,8 +66,8 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	FloorAssetSpec assets;
 	assets.stairMeshPath = "/Game/Asset/Building/Mesh/Stair_Line.Stair_Line"; // 直跑楼梯，不用默认的Stair_Return
 	for (int level = 0; level < layers; level++) {
-		const char* templateName = level == 0 ? "preset_residential_side_fg+"
-			: level == layers - 1 ? "preset_residential_side_fu-" : "preset_residential_side_fu+-";
+		const char* templateName = level == 0 ? "preset_residence_side_fg+"
+			: level == layers - 1 ? "preset_residence_side_fu-" : "preset_residence_side_fu+-";
 		AssignFloor(level, templateName, direction, assets);
 		for (int slot = 0; slot < 8; slot++) {
 			AssignRoom(level, slot, "room_residence", kComponent, kComponentId);

@@ -98,8 +98,8 @@ namespace viz {
 		if (area == AREA_GREEN) return { 60, 170, 70 };
 		if (area == AREA_TEST) return { 220, 50, 50 };
 		int a = static_cast<int>(area);
-		if (a < AREA_RESIDENTIAL_HIGH || a > AREA_OFFICIAL_LOW) return { 128, 128, 128 };
-		int kind = (a - AREA_RESIDENTIAL_HIGH) / 3, level = (a - AREA_RESIDENTIAL_HIGH) % 3;
+		if (a < AREA_RESIDENCE_HIGH || a > AREA_OFFICE_LOW) return { 128, 128, 128 };
+		int kind = (a - AREA_RESIDENCE_HIGH) / 3, level = (a - AREA_RESIDENCE_HIGH) % 3;
 		float mix = level == 0 ? 0.f : level == 1 ? 0.4f : 0.7f;
 		const VizColor& base = kBase[kind];
 		return { static_cast<uint8_t>(base.r + (255 - base.r) * mix), static_cast<uint8_t>(base.g + (255 - base.g) * mix),
@@ -117,10 +117,10 @@ namespace {
 		const int width = canvas.Width();
 		// 图例只写四种lot区域的高/中/低密度。
 		const LegendItem items[] = {
-			{ AreaColor(AREA_RESIDENTIAL_HIGH), L"住宅 高密度" }, { AreaColor(AREA_RESIDENTIAL_MIDDLE), L"住宅 中密度" }, { AreaColor(AREA_RESIDENTIAL_LOW), L"住宅 低密度" },
-			{ AreaColor(AREA_COMMERCIAL_HIGH), L"商业 高密度" }, { AreaColor(AREA_COMMERCIAL_MIDDLE), L"商业 中密度" }, { AreaColor(AREA_COMMERCIAL_LOW), L"商业 低密度" },
-			{ AreaColor(AREA_GREEN), L"绿化(原工业高密度)" }, { AreaColor(AREA_INDUSTRIAL_MIDDLE), L"工业 中密度" }, { AreaColor(AREA_INDUSTRIAL_LOW), L"工业 低密度" },
-			{ AreaColor(AREA_OFFICIAL_HIGH), L"办公 高密度" }, { AreaColor(AREA_OFFICIAL_MIDDLE), L"办公 中密度" }, { AreaColor(AREA_OFFICIAL_LOW), L"办公 低密度" },
+			{ AreaColor(AREA_RESIDENCE_HIGH), L"住宅 高密度" }, { AreaColor(AREA_RESIDENCE_MIDDLE), L"住宅 中密度" }, { AreaColor(AREA_RESIDENCE_LOW), L"住宅 低密度" },
+			{ AreaColor(AREA_COMMERCE_HIGH), L"商业 高密度" }, { AreaColor(AREA_COMMERCE_MIDDLE), L"商业 中密度" }, { AreaColor(AREA_COMMERCE_LOW), L"商业 低密度" },
+			{ AreaColor(AREA_GREEN), L"绿化(原工业高密度)" }, { AreaColor(AREA_INDUSTRY_MIDDLE), L"工业 中密度" }, { AreaColor(AREA_INDUSTRY_LOW), L"工业 低密度" },
+			{ AreaColor(AREA_OFFICE_HIGH), L"办公 高密度" }, { AreaColor(AREA_OFFICE_MIDDLE), L"办公 中密度" }, { AreaColor(AREA_OFFICE_LOW), L"办公 低密度" },
 		};
 		const int itemCount = static_cast<int>(sizeof(items) / sizeof(items[0]));
 		const int perRow = 3, cellWidth = width / perRow, rowHeight = 56, swatch = 32, margin = 20;

@@ -16,7 +16,7 @@
   `navigationNode`（这个房间中心点的导航锚点，供`Building::BuildPedestrianNavigation()`里
   `"single"`/`"row"`类型的导航端点引用）。`Room`本身不持有
   Industry/Populace/Society侧的运行时对象（Storage/Manufacture/Job等由各自的域按`Room`的属性快照创建并反向引用`Room`）。
-- **4类占位能力**：`IsResidential()`/`ResidentialCapacity()`（床位数）/`IsWorkspace()`/
+- **4类占位能力**：`IsResidence()`/`ResidenceCapacity()`（床位数）/`IsWorkspace()`/
   `WorkspaceCapacity()`（工位数）/`IsStorage()`/`StorageType()`（对应StorageMod id，Industry据此生成Storage）/`Rent()`（每日房租，分）/
   `IsManufacture()`/`ManufactureTypes()`（产线描述），读构造时`mod->SetProperty()`之后从`RoomMod`同名字段
   拷贝的快照`properties`（见`Source/Dependence/map/room_mod.h`）——读档时直接按存档恢复这份快照，不依赖重新

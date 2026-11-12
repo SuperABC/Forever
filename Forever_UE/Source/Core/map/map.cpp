@@ -979,19 +979,19 @@ const unordered_map<string, Building*>& Map::GetBuildings() const {
 
 int Map::ComputeAccommodationTarget() const {
 	int capacity = 0;
-	int residentialRooms = 0;
+	int residenceRooms = 0;
 	for (auto& [name, building] : buildings) {
 		if (!building) continue;
 		for (Room* room : building->GetRooms()) {
-			if (room && room->IsResidential()) {
-				capacity += room->ResidentialCapacity();
-				residentialRooms++;
+			if (room && room->IsResidence()) {
+				capacity += room->ResidenceCapacity();
+				residenceRooms++;
 			}
 		}
 	}
 	// 累计容量不到住宅房间数的两倍(房间普遍很小)时，按"每间住宅房间一个人"算，保证每间
 	// 房至少有人住；否则维持累计容量的一半。
-	if (capacity < residentialRooms * 2) return residentialRooms;
+	if (capacity < residenceRooms * 2) return residenceRooms;
 	return capacity / 2;
 }
 
@@ -1111,7 +1111,7 @@ void Map::Checkin(const Populace& populace) {
 	for (auto& [name, building] : buildings) {
 		if (!building) continue;
 		for (Room* room : building->GetRooms()) {
-			if (room && room->IsResidential()) {
+			if (room && room->IsResidence()) {
 				pool.push_back(room);
 			}
 		}
@@ -2723,7 +2723,7 @@ Door* Map::CreateDoor(DOOR_KIND_TYPE kind, Zone* zone, Building* building, Room*
 	string id = "Door" + to_string(doorCount++);
 
 	// 所属对象名：Building/Zone的GetName()本身就全局唯一(mod自己的计数器保证)；Room的
-	// GetName()是RoomMod类型标签("residential"这种，不是实例唯一的)，必须用GetAddress()
+	// GetName()是RoomMod类型标签("residence"这种，不是实例唯一的)，必须用GetAddress()
 	// (含parentBuilding地址+房间号，全局唯一)，见door.md"tag是一类门，不是身份"一节。
 	string ownerName;
 	if (building) ownerName = building->GetName();
