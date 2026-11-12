@@ -59,11 +59,12 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 		}
 	}
 
-	// side布局：地上7~12层随机，没有地下室。
-	basements = 0;
+	// nshape布局：地上7~12层随机，另有地下1层。
+	basements = 1;
 	layers = 7 + GetRandom(6);
 	floorHeights.clear();
-	// 每层高度统一0.4。
+	floorHeights.push_back(0.35f); // 地下室
+	// 地上每层高度统一0.4。
 	for (int i = 0; i < layers; i++) {
 		floorHeights.push_back(0.4f);
 	}
@@ -71,9 +72,10 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 
 	constexpr const char* kComponent = "component_residence";
 	constexpr int kComponentId = 0;
+	constexpr float size = 300.f; // 联排房间面积
 
-	// 只用preset_residential_side系列模板(1楼fg+、顶层fu-、中间fu+-)(原wing布局的C++备份见building_basic_wing_backup.txt)。
-	// 偏好方向：长边朝向正对的路，
+	// 只用preset_residential_nshape系列模板(地下bg+、1楼fg+-、其余fu+-)(twin / side / wing布局的C++备份见
+	// building_basic_*_backup.txt)。偏好方向：长边朝向正对的路，
 	// 只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction(否则outside端点会查不到路)。
 	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_NORTH + GetRandom(2) : FACE_WEST + GetRandom(2);
 	auto roadIt = boundaryRoads.find(preferredDirection);
@@ -81,41 +83,44 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 		direction = preferredDirection;
 	}
 
-	// 楼体摆法：朝向轴(进深)上最多3(地图单位)，地块没这么深就占满，更深就取3并居中；
-	// 垂直于进深的方向(开间)居中，两侧各留kSideGap的空隙。
-	constexpr float kMaxDepth = 3.f;
+	// 楼体贴着朝向的那一边占满，其余三边各留kSideGap的空隙(空隙铺gapMaterial)。
+	// quad局部系里北边y=0、西边x=0：朝向的那一边起点/终点不收缩，对边和两侧各收缩kSideGap。
 	constexpr float kSideGap = 0.2f;
-	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 1.f, 1.f };
-	if (direction == FACE_WEST || direction == FACE_EAST) {
-		footprint.sizeRatioX = min(kMaxDepth, quad.GetSizeX()) / quad.GetSizeX();
-		footprint.sizeRatioY = max(0.f, quad.GetSizeY() - 2.f * kSideGap) / quad.GetSizeY();
-	} else {
-		footprint.sizeRatioY = min(kMaxDepth, quad.GetSizeY()) / quad.GetSizeY();
-		footprint.sizeRatioX = max(0.f, quad.GetSizeX() - 2.f * kSideGap) / quad.GetSizeX();
-	}
-
-	// 墙面/地面/屋顶标签 -> 材质实例(side与wing两套layout用到的标签)。
-	SetSurfaceMaterial("roof", "/Game/Asset/Building/Material/Black.Black");
-	SetSurfaceMaterial("brick", "/Game/Asset/Building/Material/Brick.Brick");
-	SetSurfaceMaterial("concrete", "/Game/Asset/Building/Material/Concrete.Concrete");
-	SetSurfaceMaterial("clay", "/Game/Asset/Building/Material/Clay.Clay");
+	const float quadX = quad.GetSizeX(), quadY = quad.GetSizeY();
+	float x0 = kSideGap, x1 = quadX - kSideGap, y0 = kSideGap, y1 = quadY - kSideGap;
+	if (direction == FACE_WEST) x0 = 0.f;
+	else if (direction == FACE_EAST) x1 = quadX;
+	else if (direction == FACE_NORTH) y0 = 0.f;
+	else if (direction == FACE_SOUTH) y1 = quadY;
+	x1 = max(x0, x1);
+	y1 = max(y0, y1);
+	footprint = BuildingFootprintSpec{ (x0 + x1) * 0.5f / quadX, (y0 + y1) * 0.5f / quadY, (x1 - x0) / quadX, (y1 - y0) / quadY };
 	SetSurfaceMaterial("pavement", "/Game/Asset/Building/Material/Pavement.Pavement");
+	SetSurfaceMaterial("brick", "/Game/Asset/Building/Material/Brick.Brick");
+	SetSurfaceMaterial("stone", "/Game/Asset/Building/Material/Stone.Stone");
 	// 楼体与建筑范围之间的空隙铺人行道材质。
 	gapMaterial = "/Game/Asset/Building/Material/Pavement.Pavement";
 
-	// 1楼fg+，顶层fu-，中间fu+-；每层8个single，4个电梯井道贯穿全楼。
-	FloorAssetSpec assets;
-	assets.stairMeshPath = "/Game/Asset/Building/Mesh/Stair_Line.Stair_Line"; // 直跑楼梯，不用默认的Stair_Return
+	// 地下1层bg+(4个single、3个row)；1楼fg+-(4个single、4个row)；2楼起fu+-(4个single、3个row)。
+	AssignFloor(-1, "preset_residential_nshape_bg+", direction);
+	for (int slot = 0; slot < 4; slot++) {
+		AssignRoom(-1, slot, "room_residence", kComponent, kComponentId);
+	}
+	for (int row = 0; row < 3; row++) {
+		ArrangeRow(-1, row, "room_residence", size, kComponent, kComponentId);
+	}
 	for (int level = 0; level < layers; level++) {
-		const char* templateName = level == 0 ? "preset_residential_side_fg+"
-			: level == layers - 1 ? "preset_residential_side_fu-" : "preset_residential_side_fu+-";
-		AssignFloor(level, templateName, direction, assets);
-		for (int slot = 0; slot < 8; slot++) {
+		AssignFloor(level, level == 0 ? "preset_residential_nshape_fg+-" : "preset_residential_nshape_fu+-", direction);
+		for (int slot = 0; slot < 4; slot++) {
 			AssignRoom(level, slot, "room_residence", kComponent, kComponentId);
 		}
+		const int rows = level == 0 ? 4 : 3;
+		for (int row = 0; row < rows; row++) {
+			ArrangeRow(level, row, "room_residence", size, kComponent, kComponentId);
+		}
 	}
-	for (int elevator = 0; elevator < 4; elevator++) {
-		AssignElevatorCabin(elevator, 0, layers - 1, "", "script_empty", { "elevator_basic" });
+	for (int elevator = 0; elevator < 2; elevator++) {
+		AssignElevatorCabin(elevator, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
 	}
 }
 
@@ -124,15 +129,15 @@ void ResidenceHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc e
 }
 
 float ResidenceHighBuilding::RandomAcreage() {
-	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f, 2); // 2000~8000，平方使小地块更常见
+	return 8000.f + 8000.f * GetRandom(1000) / 1000.f; // 8000~16000线性随机
 }
 
 float ResidenceHighBuilding::GetAcreageMin() {
-	return 2000.f;
+	return 8000.f;
 }
 
 float ResidenceHighBuilding::GetAcreageMax() {
-	return 8000.f;
+	return 16000.f;
 }
 
 float ResidenceHighBuilding::GetPower(AREA_TYPE area) {

@@ -21,8 +21,8 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 ## ResidenceBuilding
 
 - `GetPower`：由三档子类各自决定(见上)。`RandomAcreage()=2000*(1+rand*2)^2`，`GetAcreageMin()=2000`，`GetAcreageMax()=18000`。`Assign()`空实现。
-- 住宅高密度(`ResidenceHighBuilding`)的面积：`RandomAcreage()=2000*(1+rand)^2`(2000~8000)，`GetAcreageMin()=2000`，`GetAcreageMax()=8000`。
-- `ResidenceHighBuilding::Layout()`：只服务 `preset_residential_side_*`（旧 `preset_residential_wing_*` 版本的 C++ 备份在 `building_basic_wing_backup.txt`，不参与编译）。`basements=0`、`layers`=7~12 随机、层高统一 0.4；1 楼 `fg+`、顶层 `fu-`、中间 `fu+-`，每层 8 个 single 放 `room_residence`，4 个电梯井道各配一台 `elevator_basic` 轿厢贯穿全楼；每层 `stairMeshPath`=`Stair_Line`。`footprint`：进深方向(朝向轴)上限 3(地图单位)，地块没这么深就占满，更深取 3 并居中；开间方向居中、两侧各留 0.2；朝向偏好长边正对的路(仅对应边界路存在时采用)。登记的表面标签：`roof`→Black、`brick`→Brick、`concrete`→Concrete、`clay`→Clay、`pavement`→Pavement；`gapMaterial`=Pavement(楼体与建筑范围之间的空隙)。其余两档仍是原来的按尺寸分档随机选模板(`layout` 0-3)。
+- 住宅高密度(`ResidenceHighBuilding`)的面积：`RandomAcreage()=8000+8000*rand`(8000~16000线性随机)，`GetAcreageMin()=8000`，`GetAcreageMax()=16000`。
+- `ResidenceHighBuilding::Layout()`：只服务 `preset_residential_nshape_*`（旧 twin / side / wing 版本的 C++ 备份分别在 `building_basic_twin_backup.txt`、`building_basic_side_backup.txt`、`building_basic_wing_backup.txt`，不参与编译）。`basements=1`(层高0.35)、地上 `layers`=7~12 随机(层高0.4)；地下 `bg+`(b=地下正常布局，p=地下停车场)、1 楼 `fg+-`、2 楼起 `fu+-`；每层 4 个 single + 若干 row(地下3、1楼4、其余3，size=300) 都放 `room_residence`；2 台 `elevator_basic` 轿厢从地下到顶层。`footprint`：朝向的那一边贴着 quad 边占满，其余三边各留 0.2(地图单位)的空隙，空隙铺 `gapMaterial`=Pavement，标签 `pavement`→Pavement、`stone`→Stone；朝向偏好长边正对的路(仅对应边界路存在时采用)。大门 `doorSpecs["entrance"]` 给 corridor 的 `entrance` 门洞用。
 - 大门`doorSpecs["entrance"]`：随机左右滑动单开门(`Cube`资产占位)，只有corridor门洞带`entrance`标签才用到，见`Core/map/door.h`的`ResolveDoorSpec`。
 - 挂示例脚本`entity_event`。
 

@@ -2277,12 +2277,26 @@ async function saveFileAs() {
         startIn: curEntry?.handle || 'documents',
         types: [{ description: 'Layout', accept: { 'text/plain': ['.layout'] } }],
       });
-      if (curEntry) { curEntry.handle = handle; curEntry.name = handle.name; curEntry.savedSnapshot = snapshotState(); }
-      document.getElementById('fname').textContent = handle.name;
       const writable = await handle.createWritable();
       await writable.write(content);
       await writable.close();
-      renderFileList();
+      if (!curEntry) return;
+      // 另存为：新增一个标签页指向新文件；原文件保留在列表里，内容回到它磁盘上的状态。
+      saveCurrentToEntry();
+      const copy = makeBlankEntry(handle.name);
+      copy.handle = handle;
+      copy.data = JSON.parse(JSON.stringify(curEntry.data));
+      copy.pedestrianNav = JSON.parse(JSON.stringify(curEntry.pedestrianNav));
+      copy.vehicleNav = JSON.parse(JSON.stringify(curEntry.vehicleNav));
+      copy.savedSnapshot = snapshotState();
+      copy.undoStack = curEntry.undoStack.slice();
+      copy.redoStack = curEntry.redoStack.slice();
+      const orig = JSON.parse(curEntry.savedSnapshot);
+      curEntry.data = orig.data; curEntry.pedestrianNav = orig.pedestrianNav; curEntry.vehicleNav = orig.vehicleNav;
+      curEntry.sel = null; curEntry.navSel = null; curEntry.multiSel = [];
+      curEntry.undoStack = []; curEntry.redoStack = [];
+      files.splice(activeFileIdx + 1, 0, copy);
+      applyEntry(activeFileIdx + 1);
     } catch (err) { if (err.name !== 'AbortError') alert('保存失败: ' + err.message); }
   } else {
     if (curEntry) curEntry.savedSnapshot = snapshotState();

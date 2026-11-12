@@ -1,0 +1,79 @@
+// 备份：高密度住宅使用preset_residential_side_*模板时的ResidenceHighBuilding::Layout()（2026-11-12）。
+// side的.layout仍在Resource/Layouts里没动。要切回side：用这份函数体替换building_basic.cpp里的ResidenceHighBuilding::Layout()。
+
+void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
+	const std::unordered_map<int, Road*>& boundaryRoads) {
+	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
+	milestoneNames = { "entity_event" };
+	// direction对显式占位是真实方向，权重CDF/FillRemainder落地时是-1：-1时从boundaryRoads随机
+	// 挑一个有真实边界路的方向回写，行人/车辆导航的"outside"端点要靠它找到该连的路，见
+	// building_mod.h的Layout()注释。
+	if (direction < 0) {
+		std::vector<int> candidates;
+		for (auto& [dir, road] : boundaryRoads) {
+			if (road) candidates.push_back(dir);
+		}
+		if (!candidates.empty()) {
+			direction = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		}
+	}
+
+	// side布局：地上7~12层随机，没有地下室。
+	basements = 0;
+	layers = 7 + GetRandom(6);
+	floorHeights.clear();
+	// 每层高度统一0.4。
+	for (int i = 0; i < layers; i++) {
+		floorHeights.push_back(0.4f);
+	}
+	// lodMaterial留空 -> 用渲染层默认灰色Pure MID
+
+	constexpr const char* kComponent = "component_residence";
+	constexpr int kComponentId = 0;
+
+	// 只用preset_residential_side系列模板(1楼fg+、顶层fu-、中间fu+-)(原wing布局的C++备份见building_basic_wing_backup.txt)。
+	// 偏好方向：长边朝向正对的路，
+	// 只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction(否则outside端点会查不到路)。
+	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_NORTH + GetRandom(2) : FACE_WEST + GetRandom(2);
+	auto roadIt = boundaryRoads.find(preferredDirection);
+	if (roadIt != boundaryRoads.end() && roadIt->second) {
+		direction = preferredDirection;
+	}
+
+	// 楼体摆法：朝向轴(进深)上最多3(地图单位)，地块没这么深就占满，更深就取3并居中；
+	// 垂直于进深的方向(开间)居中，两侧各留kSideGap的空隙。
+	constexpr float kMaxDepth = 3.f;
+	constexpr float kSideGap = 0.2f;
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 1.f, 1.f };
+	if (direction == FACE_WEST || direction == FACE_EAST) {
+		footprint.sizeRatioX = min(kMaxDepth, quad.GetSizeX()) / quad.GetSizeX();
+		footprint.sizeRatioY = max(0.f, quad.GetSizeY() - 2.f * kSideGap) / quad.GetSizeY();
+	} else {
+		footprint.sizeRatioY = min(kMaxDepth, quad.GetSizeY()) / quad.GetSizeY();
+		footprint.sizeRatioX = max(0.f, quad.GetSizeX() - 2.f * kSideGap) / quad.GetSizeX();
+	}
+
+	// 墙面/地面/屋顶标签 -> 材质实例(side与wing两套layout用到的标签)。
+	SetSurfaceMaterial("roof", "/Game/Asset/Building/Material/Black.Black");
+	SetSurfaceMaterial("brick", "/Game/Asset/Building/Material/Brick.Brick");
+	SetSurfaceMaterial("concrete", "/Game/Asset/Building/Material/Concrete.Concrete");
+	SetSurfaceMaterial("clay", "/Game/Asset/Building/Material/Clay.Clay");
+	SetSurfaceMaterial("pavement", "/Game/Asset/Building/Material/Pavement.Pavement");
+	// 楼体与建筑范围之间的空隙铺人行道材质。
+	gapMaterial = "/Game/Asset/Building/Material/Pavement.Pavement";
+
+	// 1楼fg+，顶层fu-，中间fu+-；每层8个single，4个电梯井道贯穿全楼。
+	FloorAssetSpec assets;
+	assets.stairMeshPath = "/Game/Asset/Building/Mesh/Stair_Line.Stair_Line"; // 直跑楼梯，不用默认的Stair_Return
+	for (int level = 0; level < layers; level++) {
+		const char* templateName = level == 0 ? "preset_residential_side_fg+"
+			: level == layers - 1 ? "preset_residential_side_fu-" : "preset_residential_side_fu+-";
+		AssignFloor(level, templateName, direction, assets);
+		for (int slot = 0; slot < 8; slot++) {
+			AssignRoom(level, slot, "room_residence", kComponent, kComponentId);
+		}
+	}
+	for (int elevator = 0; elevator < 4; elevator++) {
+		AssignElevatorCabin(elevator, 0, layers - 1, "", "script_empty", { "elevator_basic" });
+	}
+}

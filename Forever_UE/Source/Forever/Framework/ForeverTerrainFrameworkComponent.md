@@ -38,6 +38,8 @@
 挖洞条件是"格子地形为`construction` **或** 该格子有hatch"。隧道口所在格子是`mountain`/`plain`，永远不会被晋升成`construction`，
 如果只认`construction`，隧道口hatch会被忽略、隧道被山体实心地形挡住。`RoadnetMod::AddHatch`记hatch，`Map::InitRoadnet()`转发进`Map::AddHatch`。
 
+**退化碎片过滤**：两条路径的裁剪都会在"顶点正好落在hatch边的直线上"或"相邻两个hatch共边"(例如twin布局进深取满4时，bg+的6个hatch两两首尾相接)时切出重复点/共线点的零面积碎片。碎片`Num()>=3`却面积为0，建成三角形就是退化三角形，Chaos给地形建碰撞体时会报`Input trimesh contains N bad triangles`。所以收下外侧碎片前用`PolygonAreaAbs`过滤：LookupTerrain在格子局部坐标里小于`kMinLocalPieceArea`(1e-6)丢掉，clipGridCell在世界坐标里小于`kMinWorldPieceArea`(10cm²，世界坐标几十万量级时float精度0.03~0.06产生的噪声碎片就在这个量级)丢掉。只按整块面积过滤不够：碎片里有重复点/共线点时整块面积为正，但扇形三角化里会混进零面积三角形，所以扇形输出时还要逐个三角形判面积(`kMinWorldTriArea`=1cm²、局部坐标1e-6)，太小的跳过，交点顶点也只在真正用到时才追加。
+
 两条路径：
 
 1. **construction格子（平地）→`LookupTerrain`整格替换**（仅`levelIdx<=1`）。`BuildLevel`的sub-quad循环遇到这类格子时用`lookupCached`缓存并跳过常规画法，

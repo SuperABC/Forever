@@ -18,7 +18,7 @@ Room域的默认实现，合在同一份`room_basic.h/.cpp`里(每个concept统�
 ## 关键设计
 
 - **`ResidenceRoom`**：每间住宅room=1个名额，多人合住靠`Map::Checkin()`的名额池逻辑，不靠这个capacity强制。
-- **门规格`doorSpecs["home"]`**：`ResidenceRoom` 只登记这一个，只有 `preset_residential_side_*`/`wing_*` 里 single/row 门洞带 `home` 标签才会用到，见`Core/map/door.h`的`ResolveDoorSpec`。门是骨骼动画门，网格/动画蓝图路径直接写在 `SetProperty()` 里(目前共用测试门)。其余房间类型仍用 `doorSpecs["room"]`。
+- **`ResidenceRoom`暂时不登记任何`doorSpecs`**：layout 里 single/row 的门洞(`home`/`room` 标签)没有门规格，`ResolveDoorSpec` 返回 nullptr，只是墙上的缺口，不生成门。要放门时在 `SetProperty()` 里登记对应标签(网格/动画蓝图路径直接写在里面)。其余房间类型仍用 `doorSpecs["room"]`。
 - **`ShopRoom`的门有名字"商店大门"、挂`door_shop_entrance`脚本**(开局加"敲门"选项，靠近会弹交互选项)。挂在房间门而不是`ShopBuilding::doorSpecs["entrance"]`上，是因为商店用的一楼模板(`preset_lobby_linear_fg+`/`preset_circle_double_fg+-`)里门标签全是`room`，没有`entrance`，`ShopBuilding`的`entrance`规格对不上任何门。
 - 带`isWorkspace`的房间(商店/仓库/工坊)，Organization按容纳量一半定员。
 - **`ParkingRoom`**：车位种类`{"car","bus","truck"}`，供`Traffic::Init()`在这里生成预置车辆，见`Source/Core/traffic/traffic.md`；不想要某种车就从这个列表里删。`ShopBuilding`和`FactoryBuilding`共用同一个`ParkingRoom`类。

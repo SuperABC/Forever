@@ -835,6 +835,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	// 地板/天花板：老工程两层独立薄slab的做法——地板贴地坪往上一点点，天花板贴楼层顶往下
 	// 一点点，中间留一条很窄的缝，避免和上/下相邻楼层的对应slab共面z-fighting。
 	constexpr float kSlabThickness = 0.02f; // 地图单位，照抄老工程Ceiling/Ground的0.02f厚度
+	constexpr float kMinSlabSize = 1.f; // 世界单位(cm)：地板/天花板矩形任一边小于它就当作退化，不摆
 	float floorBottomWorld = BUILDING_HEIGHT_EPSILON + floorBaseZ * BUILDING_WORLD_SCALE;
 	float floorTopWorld = BUILDING_HEIGHT_EPSILON + (floorBaseZ + floorHeight) * BUILDING_WORLD_SCALE;
 	if (buildShell) for (const Ground& ground : floor->GetGrounds()) {
@@ -843,6 +844,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		float wz = floorBottomWorld + kSlabThickness * 0.5f * BUILDING_WORLD_SCALE - BUILDING_SLAB_Z_SHIFT;
 		float sizeX = ground.GetSizeX() * BUILDING_WORLD_SCALE, sizeY = ground.GetSizeY() * BUILDING_WORLD_SCALE;
 		float sizeZ = kSlabThickness * BUILDING_WORLD_SCALE;
+		if (sizeX <= kMinSlabSize || sizeY <= kMinSlabSize) continue; // 零宽/零高的矩形不摆：缩放为0的BlockAll cube会留下看不见却挡路的薄片
 		// 带标签的地板用mod登记的材质实例，没有/加载失败退回这一层的地板材质(默认白色)。
 		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, framework->ResolveMaterial(ground.GetMaterial(), floorMaterial));
 	}
@@ -852,6 +854,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		float wz = floorTopWorld - kSlabThickness * 0.5f * BUILDING_WORLD_SCALE + BUILDING_SLAB_Z_SHIFT;
 		float sizeX = ceiling.GetSizeX() * BUILDING_WORLD_SCALE, sizeY = ceiling.GetSizeY() * BUILDING_WORLD_SCALE;
 		float sizeZ = kSlabThickness * BUILDING_WORLD_SCALE;
+		if (sizeX <= kMinSlabSize || sizeY <= kMinSlabSize) continue; // 同地板
 		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, framework->ResolveMaterial(ceiling.GetMaterial(), ceilingMaterial));
 	}
 

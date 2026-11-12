@@ -1,0 +1,300 @@
+{
+	"stairs": [{
+		"rect": [0.4, -0.8, 0.3, 0, 0.4, -0.4, 0.5, -0.2],
+		"direction": 3,
+		"walls": [0, 1, 2],
+	},
+	{
+		"rect": [0.6, 0.4, 0.3, 0, 0.6, 0.8, 0.5, -0.2],
+		"direction": 3,
+		"walls": [0, 1, 2],
+	}],
+	"elevators": [{
+		"rect": [0.4, -0.8, 0.2, 0, 0.4, -0.4, 0.3, 0],
+		"direction": 1,
+		"walls": [0, 2],
+	},
+	{
+		"rect": [0.6, 0.4, 0.2, 0, 0.6, 0.8, 0.3, 0],
+		"direction": 0,
+		"walls": [1, 2],
+	}],
+	"ceilings": [
+		[0.6, 0.8, 0, 0, 1, 0, 1, 0],
+		[0.4, -0.8, 0.5, -0.2, 0.6, 0.8, 1, 0],
+		[0, 0, 0, 0, 0.4, -0.8, 1, 0],
+		[0.4, -0.4, 0, 0, 0.4, 0.4, 0.5, -0.2],
+		[0.6, -0.4, 0, 0, 0.6, 0.4, 0.5, -0.2],
+		[0.4, -0.8, 0, 0, 0.4, -0.4, 0.2, 0],
+		[0.6, 0.4, 0, 0, 0.6, 0.8, 0.2, 0],
+	],
+	"grounds": [
+		[0.6, 0.8, 0, 0, 1, 0, 1, 0],
+		[0, 0, 0, 0, 0.4, -0.8, 1, 0],
+		[0.4, -0.8, 0.5, -0.2, 0.6, 0.8, 1, 0],
+	],
+	"corridors": [{
+		"rect": [0.6, 0, 0, 0, 0.6, 0.8, 0.5, -0.2],
+		"walls": [2],
+		"wallTags": {"2":{"north":"brick"}},
+		"windows": [
+			{
+				"direction": 2,
+				"positions": [
+					[0.1, 0, 0, 0.1, 0.9, 0, 1, -0.1],
+				],
+			},
+		],
+	},
+	{
+		"rect": [0.6, -0.4, 0, 0, 0.6, 0, 0.5, -0.2],
+		"walls": [0, 1, 3],
+		"wallTags": {"0":{"west":"brick"}},
+	},
+	{
+		"rect": [0.4, 0, 0, 0, 0.4, 0.4, 0.5, -0.2],
+		"walls": [0, 1, 3],
+		"wallTags": {"1":{"east":"brick"}},
+	},
+	{
+		"rect": [0.4, -0.8, 0, 0, 0.4, 0, 0.5, -0.2],
+		"walls": [2],
+		"wallTags": {"2":{"north":"brick","east":"brick"}},
+		"windows": [
+			{
+				"direction": 2,
+				"positions": [
+					[0.1, 0, 0, 0.1, 0.9, 0, 1, -0.1],
+				],
+			},
+		],
+	},
+	{
+		"rect": [0, 0, 0.5, -0.2, 0.4, 0.4, 0.5, 0.2],
+		"walls": [0],
+		"wallTags": {"0":{"west":"brick"}},
+		"windows": [
+			{
+				"direction": 0,
+				"positions": [
+					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, -0.1],
+				],
+			},
+		],
+	},
+	{
+		"rect": [0.4, 0.4, 0.5, -0.2, 0.6, -0.4, 0.5, 0.2],
+		"walls": [2],
+		"wallTags": {"2":{"north":"brick"}},
+		"windows": [
+			{
+				"direction": 2,
+				"positions": [
+					[0.1, 0, 0, 0.1, 0.9, 0, 1, -0.1],
+				],
+			},
+		],
+	},
+	{
+		"rect": [0.6, -0.4, 0.5, -0.2, 1, 0, 0.5, 0.2],
+		"walls": [1],
+		"wallTags": {"1":{"east":"brick"}},
+		"windows": [
+			{
+				"direction": 1,
+				"positions": [
+					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, -0.1],
+				],
+			},
+		],
+	}],
+	"singles": [{
+		"rect": [0.6, 0.8, 0, 0, 1, 0, 0.5, -0.2],
+		"direction": 3,
+		"wallTags": {"1":{"east":"brick","north":"brick"},"2":{"east":"brick","north":"brick"}},
+		"doors": [
+			{
+				"direction": 3,
+				"positions": [
+					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
+				],
+			},
+		],
+	},
+	{
+		"rect": [0, 0, 0, 0, 0.4, -0.8, 0.5, -0.2],
+		"direction": 3,
+		"wallTags": {"0":{"west":"brick","north":"brick"},"2":{"west":"brick","north":"brick"}},
+		"doors": [
+			{
+				"direction": 3,
+				"positions": [
+					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
+				],
+			},
+		],
+	}],
+	"rows": [{
+		"rect": [0, 0, 0.5, 0.2, 1, 0, 1, 0],
+		"direction": 2,
+		"wallTags": {"0":{"west":"brick","south":"brick"},"1":{"east":"brick","south":"brick"},"3":{"south":"brick","west":"brick","east":"brick"}},
+		"doors": [
+			{
+				"direction": 2,
+				"positions": [
+					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
+				],
+			},
+		],
+		"windows": [
+			{
+				"direction": 3,
+				"positions": [
+					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, -0.1],
+				],
+			},
+		],
+	}],
+	"pedestrianNavigation": {
+		"nodes": [
+			{
+				"position": [0.4, -0.5, 0.3, 0.1],
+			},
+			{
+				"position": [0.4, -0.7, 0.3, 0.1],
+			},
+			{
+				"position": [0.6, 0.5, 0.3, 0.1],
+			},
+			{
+				"position": [0.6, 0.7, 0.3, 0.1],
+			},
+		],
+		"lines": [
+			{
+				"begin": [0, 0, 0.5, 0],
+				"end": [1, 0, 0.5, 0],
+			},
+		],
+		"connections": [
+			{
+				"begin": {
+					"type": "single",
+					"idx": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 1,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "row",
+					"idx": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+		],
+	},
+	"vehicleNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": [],
+	}
+}

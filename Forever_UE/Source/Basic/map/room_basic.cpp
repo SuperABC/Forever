@@ -18,12 +18,7 @@ void ResidenceRoom::SetProperty() {
 	rent = 2000; // 每日房租20元
 	// 挂示例脚本entity_event(进出事件只发给这个实体自己的Script)，见Resource/Story/entity_event.script。
 	milestoneNames = { "entity_event" };
-
-	// 房间门：骨骼动画门(目前所有门共用测试门)。只有single/row的门洞带了对应tag
-	// 才会用到这份spec，见Core/map/door.h的ResolveDoorSpec。
-	// 住宅房间门洞统一用"home"标签。
-	doorSpecs["home"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
-	doorSpecs["home"].animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
+	// 住宅房间暂时不放门：不登记doorSpecs，layout里single/row的门洞(home/room标签)只是墙上的缺口。
 }
 
 int ShopRoom::count = 0;

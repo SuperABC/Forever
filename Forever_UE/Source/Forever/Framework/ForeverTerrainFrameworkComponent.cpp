@@ -465,6 +465,28 @@ FVector UForeverTerrainFrameworkComponent::GetMapCenterWorldLocation() const {
 }
 
 namespace {
+	// 多边形面积的绝对值(鞋带公式)。裁剪时一个顶点正好落在裁剪线上(side==0)、或相邻两个hatch共边时，会切出
+	// 重复点/共线点的零面积碎片(Num()>=3但面积为0)，画出来就是退化三角形，Chaos建碰撞体时报
+	// "Input trimesh contains N bad triangles"，所以收下碎片前要先用面积过滤掉。
+	template <typename T, typename GetPos>
+	float PolygonAreaAbs(const TArray<T>& polygon, GetPos getPos) {
+		double twice = 0.0;
+		for (int32 i = 0; i < polygon.Num(); i++) {
+			auto a = getPos(polygon[i]);
+			auto b = getPos(polygon[(i + 1) % polygon.Num()]);
+			twice += (double)a.X * b.Y - (double)b.X * a.Y;
+		}
+		return (float)(FMath::Abs(twice) * 0.5);
+	}
+
+	// LookupTerrain在格子局部[0,1]坐标里裁剪：碎片面积小于这个值(约1cm2)当作退化丢掉。
+	constexpr float kMinLocalPieceArea = 1e-6f;
+	// clipGridCell在世界坐标(UE单位)里裁剪：坐标在几十万量级，float精度只有0.03~0.06，共边/过顶点的hatch
+	// 切出的碎片宽度就是这个量级的噪声，面积在10 cm2以内；而一个小格是几千cm2。
+	constexpr float kMinWorldPieceArea = 10.f;
+	// 单个扇形三角形的最小面积(同上世界坐标)：重复点/共线点产生的零面积三角形直接丢掉。
+	constexpr float kMinWorldTriArea = 1.f;
+
 	// 用有向线段(edgeA->edgeB)所在直线，把一个凸多边形(polygon，任意绕序，但假定和
 	// referencePoint的绕序一致——referencePoint是已知严格落在多边形"内部半平面"那一侧的点，
 	// 不会正好落在这条直线上)分成两部分：outInside(和referencePoint同一侧)/outOutside(不同
@@ -546,6 +568,10 @@ namespace {
 	// 三角形后两个顶点对调，泛化到任意点数的凸多边形。
 	void FanTriangulate(const TArray<FVector2D>& polygon, TArray<FTerrainTri2D>& outTris) {
 		for (int32 i = 1; i + 1 < polygon.Num(); i++) {
+			// 多边形里有重复点/共线点时(裁剪线正好过顶点)，扇形里会出零面积三角形，跳过。
+			double cross = ((double)polygon[i].X - polygon[0].X) * ((double)polygon[i + 1].Y - polygon[0].Y)
+				- ((double)polygon[i + 1].X - polygon[0].X) * ((double)polygon[i].Y - polygon[0].Y);
+			if (FMath::Abs(cross) * 0.5 <= kMinLocalPieceArea) continue;
 			outTris.Add({ polygon[0], polygon[i + 1], polygon[i] });
 		}
 	}
@@ -604,7 +630,9 @@ void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FStr
 			for (int32 e = 0; e < 4 && currentInside.Num() >= 3; e++) {
 				TArray<FVector2D> insidePart, outsidePart;
 				SplitConvexPolygonByLine(currentInside, hatchPoly[e], hatchPoly[(e + 1) % 4], hatchCenter, insidePart, outsidePart);
-				if (outsidePart.Num() >= 3) survivingPieces.Add(outsidePart);
+				if (outsidePart.Num() >= 3 && PolygonAreaAbs(outsidePart, [](const FVector2D& p) { return p; }) > kMinLocalPieceArea) {
+					survivingPieces.Add(outsidePart);
+				}
 				currentInside = MoveTemp(insidePart);
 			}
 		}
@@ -743,7 +771,9 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 					for (int32 e = 0; e < 4 && currentInside.Num() >= 3; e++) {
 						TArray<FClipPoint> insidePart, outsidePart;
 						SplitClipPolygonByLine(currentInside, hatchPoly[e], hatchPoly[(e + 1) % 4], hatchCenter, insidePart, outsidePart);
-						if (outsidePart.Num() >= 3) survivingPieces.Add(outsidePart);
+						if (outsidePart.Num() >= 3 && PolygonAreaAbs(outsidePart, [](const FClipPoint& p) { return p.pos; }) > kMinWorldPieceArea) {
+							survivingPieces.Add(outsidePart);
+						}
 						currentInside = MoveTemp(insidePart);
 					}
 				}
@@ -751,10 +781,15 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			}
 
 			for (TArray<FClipPoint>& piece : workPolys) {
-				for (FClipPoint& p : piece) {
-					if (p.index < 0) p.index = vertices.Add(p.pos);
-				}
 				for (int32 i = 1; i + 1 < piece.Num(); i++) {
+					// 多边形里有重复点/共线点时(裁剪线正好过顶点)，扇形里会出零面积三角形，
+					// Chaos建碰撞体会报bad triangles，跳过；只给真正用到的交点追加顶点。
+					const FVector& a = piece[0].pos; const FVector& b = piece[i].pos; const FVector& c = piece[i + 1].pos;
+					double cross = ((double)b.X - a.X) * ((double)c.Y - a.Y) - ((double)c.X - a.X) * ((double)b.Y - a.Y);
+					if (FMath::Abs(cross) * 0.5 <= kMinWorldTriArea) continue;
+					for (int32 k : { 0, i, i + 1 }) {
+						if (piece[k].index < 0) piece[k].index = vertices.Add(piece[k].pos);
+					}
 					triangles.Add(piece[0].index); triangles.Add(piece[i + 1].index); triangles.Add(piece[i].index);
 				}
 			}
@@ -805,13 +840,20 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 
 			for (const FTerrainTri2D& tri : entry.Value) {
 				FVector2D corners[3] = { tri.A, tri.B, tri.C };
-				int32 baseIdx = vertices.Num();
-				for (const FVector2D& corner : corners) {
-					float mapX = ex + corner.X;
-					float mapY = ey + corner.Y;
+				FVector worldCorners[3];
+				for (int32 k = 0; k < 3; k++) {
+					float mapX = ex + corners[k].X;
+					float mapY = ey + corners[k].Y;
 					float h = SampleHeight(mapX, mapY) + HEIGHT_EPSILON;
-					vertices.Add(FVector(mapX * worldScale, mapY * worldScale, h * worldScale));
+					worldCorners[k] = FVector(mapX * worldScale, mapY * worldScale, h * worldScale);
 				}
+				// 格子局部坐标里很细的碎片，加上ex(几百)再乘1000变成世界坐标后float精度只剩0.03~0.06，
+				// 会塌成两个顶点重合的零面积三角形(局部面积阈值拦不住)，按世界坐标再判一次。
+				double cross = ((double)worldCorners[1].X - worldCorners[0].X) * ((double)worldCorners[2].Y - worldCorners[0].Y)
+					- ((double)worldCorners[2].X - worldCorners[0].X) * ((double)worldCorners[1].Y - worldCorners[0].Y);
+				if (FMath::Abs(cross) * 0.5 <= kMinWorldTriArea) continue;
+				int32 baseIdx = vertices.Num();
+				for (const FVector& corner : worldCorners) vertices.Add(corner);
 				triangles.Add(baseIdx); triangles.Add(baseIdx + 1); triangles.Add(baseIdx + 2);
 			}
 		}
