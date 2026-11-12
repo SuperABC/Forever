@@ -806,6 +806,9 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 	// "越往下游越宽"：每条链路自己从0开始数，山体内和流出山体之后两段接续计数，不是从
 	// 全图某个固定点算。
 	vector<int> riverDistance(cellCount, 0);
+	// 每个河流中心线格子的流向(不要求归一化，全0=没记录)——并入别的河时拿来和当前河的流向比夹角：
+	// 山体内是下坡目标方向，流出山体之后是标记那一步的流向角。
+	vector<float> riverFlowX(cellCount, 0.f), riverFlowY(cellCount, 0.f);
 	vector<pair<int, int>> riverOrigins; // 已确认的河流起点坐标，供间距检查用
 
 	auto distanceToAllOriginsOk = [&](int x, int y) {
@@ -848,6 +851,11 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 				isRiver[cur] = true;
 				riverDistance[cur] = (int)touched.size(); // 这条链路自己从0开始数
 				touched.push_back(cur);
+				int towards = flowTarget[cur] >= 0 ? flowTarget[cur] : exitTarget[cur];
+				if (towards >= 0) {
+					riverFlowX[cur] = float(towards % width - cur % width);
+					riverFlowY[cur] = float(towards / width - cur / width);
+				}
 			}
 			int next = flowTarget[cur];
 			if (next < 0 || isRiver[next]) break;
@@ -866,11 +874,14 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 	// 这条链路山体内的那一段一起整体撤销；碰到地图边界/ocean才算成功保留；碰到别的河——
 	// 和"起点+下坡蔓延"规则里的既有机制一致，算并入，不算失败也不算新起点。
 	// (只装新标记的格子，同propagateDownhill的touched，失败时和山体内那段一起撤销)
-	enum class RiverEnd { MapEdge, Ocean, OtherRiver, Mountain, Pit, StepLimit, CenterBlocked };
+	// ObtuseMerge：汇入别的河时两条河的流向夹角是钝角(>90°)，按失败处理整条撤销。
+	enum class RiverEnd { MapEdge, Ocean, OtherRiver, Mountain, Pit, StepLimit, CenterBlocked, ObtuseMerge };
 	auto randf = [](float lo, float hi) { return lo + GetRandom(100000) / 99999.0f * (hi - lo); };
 	auto continueRiverOutsideMountain = [&](int startX, int startY, float initDirX, float initDirY,
 		const vector<int>& ownChainSeed, int startDistance) {
 		vector<int> touched;
+		// 当前这一步的流向，markRiver给新标记的格子记下来(见riverFlowX/Y)。
+		float curDirX = initDirX, curDirY = initDirY;
 		// "自己这条链路已经标记过的格子"不算"别的河"——山体内propagateDownhill那段
 		// (ownChainSeed)和这个函数自己往下走标记的格子都要排除,否则刚走一步,上一个格子
 		// (或者山体内最后那几格)就会被当成"碰到别的河"立刻中止,河流根本流不出去。
@@ -882,6 +893,8 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			if (!isRiver[idx]) {
 				isRiver[idx] = true;
 				riverDistance[idx] = startDistance + (int)touched.size();
+				riverFlowX[idx] = curDirX;
+				riverFlowY[idx] = curDirY;
 				touched.push_back(idx);
 			}
 			ownChainSet.insert(idx);
@@ -898,6 +911,21 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 				if (isRiver[nIdx] && !ownChainSet.count(nIdx)) return true;
 			}
 			return false;
+			};
+		// 汇入别的河时的夹角判定：把自己和8邻居里"别的河"格子的流向相加，再和当前流向(dirX,dirY)求点积，
+		// 小于0就是夹角大于90°(钝角)，这条河就不并入、整条作废。别的河没有流向记录(全0)时点积为0，不算钝角。
+		auto mergesObtusely = [&](int cx, int cy, float dirX, float dirY) {
+			float sumX = 0.f, sumY = 0.f;
+			auto add = [&](int nIdx) {
+				if (isRiver[nIdx] && !ownChainSet.count(nIdx)) { sumX += riverFlowX[nIdx]; sumY += riverFlowY[nIdx]; }
+				};
+			add(cy * width + cx);
+			for (auto& off : neighborOffsets) {
+				int nx = cx + off[0], ny = cy + off[1];
+				if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+				add(ny * width + nx);
+			}
+			return sumX * dirX + sumY * dirY < 0.f;
 			};
 		// 海洋也按8邻居判定——挨着海(哪怕采样点本身还没真的落在海洋格子上)就算到了,不用
 		// 非得真的踩进海里一格才算成功,和"碰到别的河"同一个道理。
@@ -956,7 +984,9 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			return make_pair(RiverEnd::Ocean, touched);
 		}
 		if (startTerrain == "terrain_mountain") return make_pair(RiverEnd::Mountain, touched);
-		if (hasNearbyRiver(startX, startY)) return make_pair(RiverEnd::OtherRiver, touched);
+		if (hasNearbyRiver(startX, startY)) {
+			return make_pair(mergesObtusely(startX, startY, initDirX, initDirY) ? RiverEnd::ObtuseMerge : RiverEnd::OtherRiver, touched);
+		}
 		markRiver(startX, startY);
 
 		float posX = float(startX), posY = float(startY);
@@ -1012,6 +1042,8 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 			}
 
 			float dirX = cosf(theta), dirY = sinf(theta);
+			curDirX = dirX;
+			curDirY = dirY;
 
 			posX += dirX * RIVER_SAMPLE_STEP;
 			posY += dirY * RIVER_SAMPLE_STEP;
@@ -1030,7 +1062,9 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 
 			// 这里查isRiver(内存里的临时状态)而不是getTerrain——真实地图这次要等全部链路都
 			// 决定完才一次性提交，不然先成功的链路还没写进真实地图，后面的链路就看不到它。
-			if (hasNearbyRiver(ex, ey)) return make_pair(RiverEnd::OtherRiver, touched); // 碰到别的河(8邻居范围内),算并入,不是失败
+			if (hasNearbyRiver(ex, ey)) { // 碰到别的河(8邻居范围内),算并入,不是失败——但夹角是钝角就不并入,整条作废
+				return make_pair(mergesObtusely(ex, ey, dirX, dirY) ? RiverEnd::ObtuseMerge : RiverEnd::OtherRiver, touched);
+			}
 			if (hasNearbyOcean(ex, ey)) { // 挨着海(8邻居范围内),算流到海,成功
 				markRiver(ex, ey); // 这一格本身先接上(走到这一步说明还没真正setTerrain过)
 				convertTouchingOceanToRiver(ex, ey); // 把触发判定的海洋格子也并进河流,接上缺口
@@ -1095,10 +1129,14 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 		// 终点flowTarget仍然有效,说明是并入了既有河流,不是独立链路的终点,不用往下判定——
 		// 但长度要求同样适用：这条支流自己在山体内走的格子数不够就整条撤销。
 		if (flowTarget[finalIdx] >= 0) {
-			if ((int)mountainPath.size() < RIVER_MIN_LENGTH) {
+			// 并入既有河的夹角判定：当前河在终点的流向(终点->被并入的格子)和被并入那条河的流向点积小于0(钝角)就整条作废。
+			int merged = flowTarget[finalIdx];
+			float curX = float(merged % width - finalIdx % width), curY = float(merged / width - finalIdx / width);
+			bool obtuse = curX * riverFlowX[merged] + curY * riverFlowY[merged] < 0.f;
+			if (obtuse || (int)mountainPath.size() < RIVER_MIN_LENGTH) {
 				for (int t : mountainTouched) isRiver[t] = false;
 				riverOrigins.pop_back();
-				shortCount++;
+				if (!obtuse) shortCount++;
 			}
 			continue;
 		}

@@ -41,7 +41,7 @@
 - 依赖：`Dependence/traffic/station_mod.h`、`Dependence/map/general_geometry.h`
   (`FACE_DIRECTION`/`PointParams`/`Road`)。
 - 被谁依赖：`Basic/map/building_basic.cpp`的`TrainStationBuilding`/`AirportBuilding`
-  (`stationMod`字段分别指向`"station_train"`/`"station_air"`)；
+  (`stationMod`字段分别指向`"station_train"`/`"station_air"`，依赖表里是楼依赖站点)；
   `Basic/traffic/route_basic.cpp`的`LayoutDualTrackStationLoop`硬编码依赖
   `TrainStation`/`AirStation`声明的4接口固定顺序；`Basic/basic.cpp`注册这三个类型进
   `config.json`的`"station_mods"`。

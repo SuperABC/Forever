@@ -29,7 +29,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts"
    ],
-   "roadnet_mods" : [ "roadnet_jing --length -1" ],
+   "roadnet_mods" : [ "roadnet_checkboard" ],
    "room_mods" : [
       "room_empty",
       "room_parking",

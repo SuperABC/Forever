@@ -80,41 +80,38 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ IndustryHighBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ IndustryMiddleBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ IndustryLowBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
-		{ OfficeHighBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
+		{ OfficeHighBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), ParkingRoom::GetId(), kRoomEmpty } }, // 地下室停车库；占位房间槽
 		{ OfficeMiddleBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ OfficeLowBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
-		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId() } },
-		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId() } },
+		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId(), TrainStation::GetId(), kScriptEmpty } }, // stationMod；电梯脚本
+		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId(), AirStation::GetId() } }, // stationMod
 		{ MoharBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
-
-		{ ResidenceComponent::GetId(), { ResidenceRoom::GetId() } },
-		{ OfficeComponent::GetId(), { OfficeRoom::GetId() } },
-		{ ShopComponent::GetId(), { ShopRoom::GetId(), RestaurantRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId() } },
-		{ FactoryComponent::GetId(), { FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
-		{ TrainStationComponent::GetId(), { TrainStationRoom::GetId() } },
-		{ AirportComponent::GetId(), { AirportRoom::GetId() } },
 
 		{ ShopRoom::GetId(), { kScriptEmpty } }, // 房间门脚本
 		{ WarehouseRoom::GetId(), { ShopStorage::GetId() } }, // storageType="storage_shop"
+		{ FarmRoom::GetId(), { FarmManufacture::GetId() } }, // manufactureTypes
+		{ RanchRoom::GetId(), { RanchManufacture::GetId() } },
+		{ FoodFactoryRoom::GetId(), { FoodFactoryManufacture::GetId() } },
 
 		{ SchedulerBasic::GetId(), { kScriptEmpty } },
-		{ ShopSalerJob::GetId(), { ShopRoom::GetId(), kScriptEmpty } },
-		{ ShopOrganization::GetId(), { ShopSalerJob::GetId(), WarehouseKeeperJob::GetId(), kScriptEmpty } },
-		{ FactoryOrganization::GetId(), { FactoryWorkerJob::GetId() } },
+		{ ShopSalerJob::GetId(), { kScriptEmpty } },
+		{ FactoryWorkerJob::GetId(), { kScriptEmpty } },
+		{ ShopOrganization::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ShopSalerJob::GetId(), WarehouseKeeperJob::GetId(), kScriptEmpty } }, // 按component/room类型生成岗位
+		{ FactoryOrganization::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), FactoryWorkerJob::GetId() } },
 
-		{ FarmManufacture::GetId(), { WheatStorage::GetId(), WheatProduct::GetId() } },
-		{ RanchManufacture::GetId(), { BeefStorage::GetId(), BeefProduct::GetId() } },
-		{ FoodFactoryManufacture::GetId(), { BurgerStorage::GetId(), BurgerProduct::GetId(), WheatProduct::GetId(), BeefProduct::GetId() } }, // 小麦+牛肉做汉堡
+		{ FarmManufacture::GetId(), { WheatProduct::GetId() } },
+		{ RanchManufacture::GetId(), { BeefProduct::GetId() } },
+		{ FoodFactoryManufacture::GetId(), { BurgerProduct::GetId() } },
+		{ BurgerProduct::GetId(), { WheatProduct::GetId(), BeefProduct::GetId() } }, // 配方：小麦+牛肉做汉堡
+		// 仓库和产品靠分类标签(categories)匹配，不按id引用。
 		{ WheatStorage::GetId(), { WheatProduct::GetId() } },
 		{ BeefStorage::GetId(), { BeefProduct::GetId() } },
 		{ BurgerStorage::GetId(), { BurgerProduct::GetId() } },
 
+		// 线路按stationType匹配站点、按vehicleType(id)生成车辆。
 		{ BusRoute::GetId(), { BusStation::GetId(), BusVehicle::GetId() } },
 		{ TrainRoute::GetId(), { TrainStation::GetId(), TrainVehicle::GetId() } },
 		{ AirRoute::GetId(), { AirStation::GetId(), PlaneVehicle::GetId() } },
-		{ BusStation::GetId(), { BusVehicle::GetId() } },
-		{ TrainStation::GetId(), { TrainVehicle::GetId(), TrainStationBuilding::GetId() } }, // 火车站建在火车站楼里
-		{ AirStation::GetId(), { PlaneVehicle::GetId(), AirportBuilding::GetId() } }, // 机场站建在机场楼里
 		// 每辆车都会创建自己的Script。
 		{ VehicleBasic::GetId(), { kScriptEmpty } },
 		{ BusVehicle::GetId(), { kScriptEmpty } },
@@ -122,6 +119,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ TrainVehicle::GetId(), { kScriptEmpty } },
 		{ PlaneVehicle::GetId(), { kScriptEmpty } },
 
+		{ BurgerAsset::GetId(), { BurgerProduct::GetId() } }, // productType：商店零售价
 		{ PistolWeapon::GetId(), { PistolAmmoAsset::GetId() } }, // 换弹消耗的备弹
 		{ RifleWeapon::GetId(), { RifleAmmoAsset::GetId() } },
 		{ ShotgunWeapon::GetId(), { ShotgunAmmoAsset::GetId() } },
