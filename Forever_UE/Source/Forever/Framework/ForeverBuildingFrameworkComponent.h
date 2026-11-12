@@ -64,25 +64,13 @@ public:
 	float GetCabinCruiseSpeed() const { return cabinCruiseSpeed; }
 	float GetCabinEaseSeconds() const { return cabinEaseSeconds; }
 
-	// 每条"门批次"操作最多处理几扇门——门的构造比墙体/地板贵，拆成小批次、和楼层级操作分开节流。
-	UPROPERTY(EditDefaultsOnly, Category = "Building")
-	int32 maxDoorsPerOp = 4;
-	int32 GetMaxDoorsPerOp() const { return maxDoorsPerOp; }
-
 	// 全地图共享的每帧LOD操作预算：Element执行任何LOD操作前先来申请，失败就下一帧再试，预算每帧由
-	// TickComponent重置。门级操作另有全局优先级门槛：全地图任意building还有楼层级操作排队
-	// (pendingFloorTierOps>0)时，所有门级申请都被拒绝，不需要building互相感知。
-	bool TryConsumeLodOpBudget(bool isDoorTierOp) {
-		if (isDoorTierOp && pendingFloorTierOps > 0) return false;
+	// TickComponent重置。
+	bool TryConsumeLodOpBudget() {
 		if (frameOpBudgetRemaining <= 0) return false;
 		frameOpBudgetRemaining--;
 		return true;
 	}
-
-	// 供ABuildingElement排队/执行楼层级操作(不含BuildDoorBatch)时成对调用，维护"排队中的楼层级操作条数"。
-	// 和NotifyLodTransitionStarted/Finished(按转场计数，用于冻结世界)是两件事，不要混用。
-	void NotifyFloorTierOpEnqueued(int32 count) { pendingFloorTierOps += count; }
-	void NotifyFloorTierOpExecuted() { pendingFloorTierOps = FMath::Max(0, pendingFloorTierOps - 1); }
 
 	// 冻结世界(全局时间倍率置0)直到所有building的LOD切换队列清空，TickComponent检测到清空后恢复1。
 	// 由切换玩家控制权(ForeverStoryFrameworkComponent::ApplyControlChange)触发。Tick仍按正常帧率
@@ -154,10 +142,6 @@ private:
 	int32 maxLodOpsPerTick = 1;
 
 	int32 frameOpBudgetRemaining = 0;
-
-	// 全地图范围内还有多少条楼层级操作排队未执行——见TryConsumeLodOpBudget/
-	// NotifyFloorTierOpEnqueued/Executed注释。
-	int32 pendingFloorTierOps = 0;
 
 	// 见RequestFreezeUntilLodSettled/NotifyLodTransitionStarted/Finished注释。
 	int32 pendingLodTransitionCount = 0;

@@ -24,10 +24,8 @@ class Building;
 class Floor;
 class Room;
 struct WallStyle;
-class Door;
 struct FHitResult;
 class UForeverBuildingFrameworkComponent;
-class UForeverDoorComponent;
 
 // 每栋building一个独立Actor：近/远LOD组件、碰撞盒、电梯全部挂在这栋楼自己的Actor上(避免全地图共用一个owner时碰撞体焊接开销拖累)，
 // LOD切换状态机在自己的Tick里跑，只共享框架组件的全局LOD操作预算，详见BuildingElement.md。
@@ -73,8 +71,7 @@ private:
 		BuildFloorMesh,      // 远->近，每层一条
 		BuildElevatorCabins, // 远->近，所有BuildFloorMesh之后、DeleteFarMesh之前
 		DeleteFarMesh,       // 远->近，最后一步(执行完才更新currentLod)
-		BuildDoorBatch,      // 远->近，DeleteFarMesh之后，每条最多处理GetMaxDoorsPerOp()扇门
-		BuildDecorations,    // 远->近，所有BuildFloorMesh之后、BuildElevatorCabins之前(楼层级队列，优先级高于门)
+		BuildDecorations,    // 远->近，所有BuildFloorMesh之后、BuildElevatorCabins之前
 	};
 
 	struct FLodOp {
@@ -134,10 +131,6 @@ private:
 	void ClearNearSections();
 	void ClearFarSection();
 	void ExecuteLodOp(const FLodOp& op);
-
-	// 门从楼层构造里拆出来按批次处理，见BuildingElement.md"门加载优先级"。
-	void GatherPendingDoors();
-	void BuildDoorBatch();
 
 	// building进入/离开检测用的碰撞盒。水平=body矩形，垂直=整栋楼Z范围，三个方向各+0.01
 	// (地图单位)，和Room碰撞盒的各-0.01配对，两者贴合的边界不会因为完全重合而在Overlap判定
@@ -242,22 +235,13 @@ private:
 	// 数量少，不纳入ISM改造)，按floorIndex分组，方便ClearNearSections整栋清空。墙体/
 	// 地板/天花板cube已经改走上面的cubeInstancePools，不再经过这个数组。
 	TArray<TArray<TObjectPtr<UStaticMeshComponent>>> nearComponentsByFloor;
-	// 门(建筑门+这一层所有room的房间门)，近处LOD专属，和nearComponentsByFloor同样按
-	// floorIndex分组、ClearNearSections一并清理。门洞本身由上面的墙体生成逻辑照常挖出，
-	// 跟有没有门扇无关；这里只负责"查到了DoorSpec、真的要放门扇"的那些Door，见
-	// BuildFloorSection()/door_system_plan.md。
-	TArray<TArray<TObjectPtr<UForeverDoorComponent>>> nearDoorsByFloor;
 	// 电梯轿厢，近处LOD专属，DeleteAllNearMeshes时一并清空。
 	TArray<FCabin> cabins;
 	// 自定义模型(BuildDecorations产出)，近处LOD专属，DeleteAllNearMeshes时一并清空。
 	TArray<TObjectPtr<UStaticMeshComponent>> nearDecorations;
 
-	// 楼层级/门级两个队列，不能合并：混在一个FIFO里，门操作在队首被"全地图还有楼层级操作"的门槛挡住时，排在它后面的本楼楼层级操作永远出不了队，
-	// 形成本楼自造的死锁，且因门槛全局而连带卡死全地图的门加载。见Tick()/TryConsumeLodOpBudget。
+	// 近/远LOD切换的操作队列，每帧按框架组件的全局预算出队，见Tick()/TryConsumeLodOpBudget。
 	TQueue<FLodOp> floorTierOpQueue;
-	TQueue<FLodOp> doorTierOpQueue;
-	// 尚未建出UForeverDoorComponent的门：GatherPendingDoors在排队Far->Near时填入，BuildDoorBatch逐批弹出；ClearNearSections也会清空。
-	TArray<Door*> pendingDoors;
 
 	UPROPERTY()
 	TObjectPtr<UBoxComponent> collisionBox;

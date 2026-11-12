@@ -81,6 +81,13 @@ public:
 	// 并忙等到已开始的任务全部结束(后台线程持有map裸指针)。原理见.md。
 	static void WaitForPendingPathfinding();
 
+	// 流式生成/销毁距离(地图单位)和度量，供门的流式加载(ForeverDoorFrameworkComponent)跟随市民用同一套数值。
+	float GetCitizenSpawnDistance() const { return citizenSpawnDistance; }
+	float GetCitizenDespawnDistance() const { return citizenDespawnDistance; }
+	float GetMovingDistanceScale() const { return movingDistanceScale; }
+	// 与市民流式扫描同一个距离度量(Z差放大POPULACE_VERTICAL_DISTANCE_WEIGHT倍)，UE单位。
+	static float StreamingDistanceBetween(const FVector& a, const FVector& b);
+
 	// 这个市民当前在场景里的Actor(没生成时返回nullptr，不会触发生成)。
 	ACitizenElement* FindActiveCitizen(Citizen* citizen) const;
 

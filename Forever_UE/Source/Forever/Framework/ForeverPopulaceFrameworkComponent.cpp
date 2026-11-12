@@ -77,6 +77,10 @@ namespace {
 	}
 }
 
+float UForeverPopulaceFrameworkComponent::StreamingDistanceBetween(const FVector& a, const FVector& b) {
+	return StreamingDistance(a, b);
+}
+
 UForeverPopulaceFrameworkComponent::UForeverPopulaceFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
 }

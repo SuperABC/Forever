@@ -33,8 +33,7 @@ private:
 	FBoxSphereBounds doorLocalBounds = FBoxSphereBounds(FVector::ZeroVector, FVector(50.f), 50.f);
 };
 
-// 自动门：骨骼网格门+触发盒+挡板+开合度，绑定Core端Door*，挂在所属对象的渲染Actor上(建筑门/房间门挂ABuildingElement，园区门挂
-// UForeverZoneFrameworkComponent的owner)。门禁判定是Door::CanPass()，这里只负责"谁进触发盒→该不该开→开合度插值→写给动画实例"，
+// 自动门：骨骼网格门+触发盒+挡板+开合度，绑定Core端Door*，挂在框架Actor上，由UForeverDoorFrameworkComponent按玩家距离流式生成/销毁。门禁判定是Door::CanPass()，这里只负责"谁进触发盒→该不该开→开合度插值→写给动画实例"，
 // 模型怎么动由动画蓝图决定，实现要点见DoorComponent.md。
 UCLASS()
 class FOREVER_API UForeverDoorComponent : public USceneComponent
@@ -50,8 +49,8 @@ public:
 	// 在游戏线程上调用)：重新烘焙cachedOptions；玩家正站在旁边时同步替换MeetOption列表里的选项。
 	void RefreshOptions();
 
-	// 当前存在的门组件(按Door*查)，供RefreshInteractOptions找到要刷新的那一扇门。门组件跟着
-	// 建筑近景LOD创建/销毁，没生成时返回nullptr。
+	// 当前存在的门组件(按Door*查)，供RefreshInteractOptions找到要刷新的那一扇门。门组件按距离
+	// 流式创建/销毁，没生成时返回nullptr。
 	static UForeverDoorComponent* FindForDoor(const Door* door);
 
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;

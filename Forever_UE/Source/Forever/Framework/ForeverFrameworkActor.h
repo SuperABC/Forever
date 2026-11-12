@@ -41,6 +41,7 @@ class UForeverVegetationFrameworkComponent;
 class UForeverLampFrameworkComponent;
 class UForeverWeatherFrameworkComponent;
 class UForeverZoneFrameworkComponent;
+class UForeverDoorFrameworkComponent;
 
 // 场景里唯一的Framework入口Actor,持有Core的7个顶层域对象,按域组件划分UE层职责,
 // 负责世界分阶段生成、每帧Tick编排和Change分发。详见ForeverFrameworkActor.md。
@@ -68,6 +69,7 @@ public:
 	void GenerateRoadnetMesh();
 	void GenerateZoneMesh();
 	void GenerateBuildingMesh();
+	void GenerateDoorMesh();
 	void GenerateVegetationMesh();
 	void GenerateLampMesh();
 
@@ -248,6 +250,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverZoneFrameworkComponent> zoneFramework;
 
+	// 全图门(建筑门/房间门/园区大门)按玩家距离流式加载，见Source/Forever/Framework/ForeverDoorFrameworkComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
+	TObjectPtr<UForeverDoorFrameworkComponent> doorFramework;
+
 public:
 	// jump_time：把游戏时钟快进到target(必须晚于现在)，期间的计时器/经济/事件都照常发生。画面渐黑并显示进度，
 	// 每帧在预算内推进若干小步，完成后渐隐。跳的过程中再次调用被忽略。
@@ -274,4 +280,5 @@ public:
 	FORCEINLINE UForeverTerrainFrameworkComponent* GetTerrainFramework() const { return terrainFramework; }
 	FORCEINLINE UForeverTrafficFrameworkComponent* GetTrafficFramework() const { return trafficFramework; }
 	FORCEINLINE UForeverZoneFrameworkComponent* GetZoneFramework() const { return zoneFramework; }
+	FORCEINLINE UForeverDoorFrameworkComponent* GetDoorFramework() const { return doorFramework; }
 };

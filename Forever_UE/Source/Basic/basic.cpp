@@ -83,15 +83,11 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ OfficeHighBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), ParkingRoom::GetId(), kRoomEmpty } }, // 地下室停车库；占位房间槽
 		{ OfficeMiddleBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ OfficeLowBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
-		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId(), TrainStation::GetId(), kScriptEmpty } }, // stationMod；电梯脚本
-		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId(), AirStation::GetId() } }, // stationMod
+		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId(), kScriptEmpty } }, // 电梯脚本
+		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId() } },
 		{ MoharBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
 
 		{ ShopRoom::GetId(), { kScriptEmpty } }, // 房间门脚本
-		{ WarehouseRoom::GetId(), { ShopStorage::GetId() } }, // storageType="storage_shop"
-		{ FarmRoom::GetId(), { FarmManufacture::GetId() } }, // manufactureTypes
-		{ RanchRoom::GetId(), { RanchManufacture::GetId() } },
-		{ FoodFactoryRoom::GetId(), { FoodFactoryManufacture::GetId() } },
 
 		{ SchedulerBasic::GetId(), { kScriptEmpty } },
 		{ ShopSalerJob::GetId(), { kScriptEmpty } },
@@ -99,9 +95,11 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ ShopOrganization::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ShopSalerJob::GetId(), WarehouseKeeperJob::GetId(), kScriptEmpty } }, // 按component/room类型生成岗位
 		{ FactoryOrganization::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), FactoryWorkerJob::GetId() } },
 
-		{ FarmManufacture::GetId(), { WheatProduct::GetId() } },
-		{ RanchManufacture::GetId(), { BeefProduct::GetId() } },
-		{ FoodFactoryManufacture::GetId(), { BurgerProduct::GetId() } },
+		// 托管型：Manufacture只从房间的manufactureTypes生成、Storage只从房间的storageType生成，没有房间就不会出现，所以它们依赖房间。
+		{ FarmManufacture::GetId(), { FarmRoom::GetId(), WheatProduct::GetId() } },
+		{ RanchManufacture::GetId(), { RanchRoom::GetId(), BeefProduct::GetId() } },
+		{ FoodFactoryManufacture::GetId(), { FoodFactoryRoom::GetId(), BurgerProduct::GetId() } },
+		{ ShopStorage::GetId(), { WarehouseRoom::GetId() } }, // storageType="storage_shop"
 		{ BurgerProduct::GetId(), { WheatProduct::GetId(), BeefProduct::GetId() } }, // 配方：小麦+牛肉做汉堡
 		// 仓库和产品靠分类标签(categories)匹配，不按id引用。
 		{ WheatStorage::GetId(), { WheatProduct::GetId() } },
@@ -112,6 +110,9 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ BusRoute::GetId(), { BusStation::GetId(), BusVehicle::GetId() } },
 		{ TrainRoute::GetId(), { TrainStation::GetId(), TrainVehicle::GetId() } },
 		{ AirRoute::GetId(), { AirStation::GetId(), PlaneVehicle::GetId() } },
+		// 楼里的站点只从带stationMod的楼生成(Traffic::InitStations)，没有楼就不会出现站点，所以站点依赖楼；楼没有站点mod只是少个站点。公交站是路边站，不依赖楼。
+		{ TrainStation::GetId(), { TrainStationBuilding::GetId() } },
+		{ AirStation::GetId(), { AirportBuilding::GetId() } },
 		// 每辆车都会创建自己的Script。
 		{ VehicleBasic::GetId(), { kScriptEmpty } },
 		{ BusVehicle::GetId(), { kScriptEmpty } },

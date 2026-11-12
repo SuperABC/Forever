@@ -73,6 +73,14 @@ void UForeverDoorComponent::OnComponentDestroyed(bool bDestroyingHierarchy) {
 		const TWeakObjectPtr<UForeverDoorComponent>* found = componentsByDoor.Find(door);
 		if (found && found->Get() == this) componentsByDoor.Remove(door);
 	}
+	// 只销毁父组件时，子组件(门网格/挡板/触发盒)会被提升挂到别处而不是销毁，残留的关着的旧门留在原位，
+	// 和新生成的门叠在一起(开了新门，旧门仍挡着)。这里显式销毁。
+	TArray<USceneComponent*> children;
+	GetChildrenComponents(true, children);
+	for (USceneComponent* child : children) {
+		if (child && child->GetOuter() == this) child->DestroyComponent();
+	}
+	doorMesh = nullptr;
 	Super::OnComponentDestroyed(bDestroyingHierarchy);
 }
 
@@ -193,6 +201,15 @@ void UForeverDoorComponent::BuildTriggerBox(float doorWidth, float doorHeight) {
 	box->OnComponentBeginOverlap.AddDynamic(this, &UForeverDoorComponent::OnOverlapBegin);
 	box->OnComponentEndOverlap.AddDynamic(this, &UForeverDoorComponent::OnOverlapEnd);
 	box->RegisterComponent();
+	// 门是按距离流式生成的：玩家可能已经站在触发盒里(开局、读档、切换控制权、下车)，此时不会有"进入"动作。
+	// 先静默刷新重叠记录(不发通知，否则建筑的房间碰撞盒等静态物体也会触发开门)，再只对已经在里面的Pawn
+	// (玩家/市民/载具)手动补一次BeginOverlap；之后它们离开时EndOverlap照常触发。
+	box->UpdateOverlaps(nullptr, /*bDoNotifies=*/false);
+	TArray<AActor*> overlappingPawns;
+	box->GetOverlappingActors(overlappingPawns, APawn::StaticClass());
+	for (AActor* pawn : overlappingPawns) {
+		OnOverlapBegin(box, pawn, nullptr, 0, false, FHitResult());
+	}
 
 	trigger = box;
 }

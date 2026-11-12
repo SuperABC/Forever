@@ -43,6 +43,7 @@
 #include "Element/DoorComponent.h"
 #include "Framework/ForeverWeatherFrameworkComponent.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
+#include "Framework/ForeverDoorFrameworkComponent.h"
 #include "map/building.h"
 #include "map/zone.h"
 #include "Engine/World.h"
@@ -99,6 +100,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	lampFramework = CreateDefaultSubobject<UForeverLampFrameworkComponent>(TEXT("LampFramework"));
 	weatherFramework = CreateDefaultSubobject<UForeverWeatherFrameworkComponent>(TEXT("WeatherFramework"));
 	zoneFramework = CreateDefaultSubobject<UForeverZoneFrameworkComponent>(TEXT("ZoneFramework"));
+	doorFramework = CreateDefaultSubobject<UForeverDoorFrameworkComponent>(TEXT("DoorFramework"));
 }
 
 AForeverFrameworkActor::~AForeverFrameworkActor()
@@ -195,6 +197,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	add(TEXT("生成道路模型"), [this]() { GenerateRoadnetMesh(); });
 	add(TEXT("生成园区模型"), [this]() { GenerateZoneMesh(); });
 	add(TEXT("生成建筑模型"), [this]() { GenerateBuildingMesh(); });
+	add(TEXT("生成门"), [this]() { GenerateDoorMesh(); });
 	add(TEXT("生成植被模型"), [this]() { GenerateVegetationMesh(); });
 	add(TEXT("生成路灯模型"), [this]() { GenerateLampMesh(); });
 	add(TEXT("构建人口"), [this]() { EnsurePopulaceGenerated(); });
@@ -1090,6 +1093,12 @@ void AForeverFrameworkActor::GenerateBuildingMesh()
 {
 		// Room碰撞盒由ABuildingElement自己生成，不需要再调roomFramework，见Source/Forever/Element/BuildingElement.md。
 	if (buildingFramework) buildingFramework->GenerateBuildings(map);
+}
+
+void AForeverFrameworkActor::GenerateDoorMesh()
+{
+	// 门由这个组件按玩家距离流式加载，这里只建空间索引；Door*在Zone/Building/Room生成时就已经创建好。
+	if (doorFramework) doorFramework->GenerateDoors(map);
 }
 
 void AForeverFrameworkActor::GenerateVegetationMesh()

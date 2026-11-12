@@ -21,6 +21,7 @@
   Actor（一次`SpawnActor`约5ms），到上限就停止本帧扫描，`pollCursor`只前进到已处理的位置。
 - **距离度量**：`StreamingDistance`把Z差放大`POPULACE_VERTICAL_DISTANCE_WEIGHT`(5)倍，
   不同楼层的人一般互相看不到；生成和销毁用同一个度量，迟滞区间才一致。
+- **对外暴露**：`GetCitizenSpawnDistance()`/`GetCitizenDespawnDistance()`/`GetMovingDistanceScale()`和静态`StreamingDistanceBetween()`，门的流式加载(`ForeverDoorFrameworkComponent`)直接读这几个值，跟随市民的距离和度量。
 - **迟滞**：`citizenSpawnDistance`(2.0地图单位) < `citizenDespawnDistance`(4.0)，避免临界距离来回生成/销毁。
 - **静止/移动分开**：静止的（Actor没有走路命令）用上述两个距离，最多`maxStationaryCitizens`(16)个；
   移动中的（Actor有走路命令，或Core正在推算路线）距离乘`movingDistanceScale`(2)，最多

@@ -3,9 +3,7 @@
 ## 职责
 
 `UForeverDoorComponent`：一扇真正放了门扇的门在场景里的渲染+交互表现，绑定一个Core端
-`Door*`。挂在"所属对象的渲染Actor"上——建筑门/房间门挂`ABuildingElement`（近景LOD生成/
-清理，见`BuildingElement.md`"门"一节），园区门挂`UForeverZoneFrameworkComponent`的owner
-（常驻，不随LOD）。负责：骨骼门网格生成、挡板、触发盒、开合度插值并喂给动画蓝图、身份判定+门禁拒绝、
+`Door*`。挂在框架Actor上，由`UForeverDoorFrameworkComponent`按玩家距离流式生成/销毁（建筑门/房间门/园区门一视同仁，和建筑LOD无关，见`ForeverDoorFrameworkComponent.md`）。负责：骨骼门网格生成、挡板、触发盒、开合度插值并喂给动画蓝图、身份判定+门禁拒绝、
 MeetOption交互选项。
 
 ## 关键设计
@@ -49,6 +47,7 @@ MeetOption交互选项。
 ### 开关状态：`passers`集合+延迟关门
 
 进入触发盒且`Door::CanPass()`通过的Actor才加进`passers`；非空就开，清空后
+门是流式生成的，生成时玩家/市民/载具可能已在盒内：生成后静默刷新重叠记录，只对盒内的Pawn手动补一次BeginOverlap（不能让静态物体也触发，否则门全开）。
 `DOOR_CLOSE_DELAY_SECONDS`(1秒)再关，`TickComponent`只在动画进行中/有未完成的开关请求时
 跑；全关且没有待处理请求时多Tick一帧让动画实例评估一次0，随后`bPauseAnims=true`并`SetComponentTickEnabled(false)`省性能，下次`UpdateOpenState`唤醒。门禁拒绝通行的Actor
 **不会**被加进`passers`(门不会为它开)，但如果这扇门有`Script`，MeetOption选项照常弹出
@@ -56,7 +55,7 @@ MeetOption交互选项。
 
 - **交互选项运行中变化**：`add_option`/`remove_option`执行后，`AForeverFrameworkActor::RefreshInteractOptions`按名字找到场景里的这个对象调`RefreshOptions()`：重新烘焙`cachedOptions`快照；玩家正站在旁边时用`UMeetOptionWidget::ReplaceOptions`把屏幕上的选项整组换掉。Overlap回调仍然只读快照、不解引用Core对象。
 
-- **`FindForDoor`**：静态登记表`componentsByDoor`(Door* -> 组件)，`Init`时登记、`OnComponentDestroyed`时移除；门组件跟着建筑近景LOD创建/销毁，没生成时查不到。
+- **`FindForDoor`**：静态登记表`componentsByDoor`(Door* -> 组件)，`Init`时登记、`OnComponentDestroyed`时移除；门组件按距离流式创建/销毁，没生成时查不到。
 
 ## 依赖关系
 
@@ -65,13 +64,11 @@ MeetOption交互选项。
   `Source/Forever/Element/CitizenElement.h`/`VehicleElement.h`（身份判定）、
   `Source/Forever/Element/DoorAnimInstance.h`（动画实例基类，见`DoorAnimInstance.md`）、
   `Source/Forever/UI/MeetOptionWidget.h`（交互选项UI）。
-- 被谁依赖：`Source/Forever/Element/BuildingElement.h`/`.cpp`（建筑门/房间门，近景LOD
-  生成/清理）、`Source/Forever/Framework/ForeverZoneFrameworkComponent.h`/`.cpp`（园区
-  大门，常驻生成）。
+- 被谁依赖：`Source/Forever/Framework/ForeverDoorFrameworkComponent.h`/`.cpp`（全部门的流式生成/销毁）。
 
 ## 待办/后续阶段
 
-- 近景LOD一栋楼可能一次生成很多扇门，骨骼组件+动画实例比静态网格贵；`maxDoorsPerOp=4`先不动，PIE看卡顿再调（降批量，或让远处的门不评估动画）。
+- 骨骼组件+动画实例比静态网格贵；每帧生成/销毁数量由`ForeverDoorFrameworkComponent`的`maxSpawnsPerFrame`(4)/`maxDespawnsPerFrame`(8)限流，PIE看卡顿再调。
 - 所有门（entrance/room/home/园区门）目前共用同一个测试门资产，见`Basic/map/door_assets.h`；之后按尺寸/用途分资产。
 - NPC寻路不按门的开合/门禁绕路；挡板关着时NPC靠触发盒开门通过。
 
@@ -79,3 +76,8 @@ MeetOption交互选项。
 
 门用`UDoorMeshComponent`(继承骨骼网格组件)，`CalcBounds`返回固定的局部盒：网格自带范围，Y方向加上`2*extent.X`(门扇绕铰链转开最远扫到的距离，两个方向)。
 不能用默认的每帧按动画/Physics Asset重算：门扇转开后盒子跟不上姿势，门会被可见性/遮挡剔除成一帧有一帧无；也不能用`SetBoundsScale`等比放大(X也跟着放大几十倍，包围球过大，阴影/灯光开销让帧率腰斩)。
+
+## 销毁时必须显式销毁子组件（"有的门打不开"的根因）
+`DestroyComponent()`销毁父`UForeverDoorComponent`时，挂在它下面的门网格/挡板/触发盒不会被一起销毁，而是被提升挂走，残留在原位。
+门流式反复生成/销毁后，同一门洞位置会叠着多个关着的旧门网格(实测最多11个，场景里1000+个)，新门开了旧门仍挡着，表现为"门不动、进不去"。
+`OnComponentDestroyed`里显式销毁所有子组件并置空`doorMesh`。

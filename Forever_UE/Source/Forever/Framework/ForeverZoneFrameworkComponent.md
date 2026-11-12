@@ -9,8 +9,7 @@
 不画园区内部建筑**——`map->GetBuildings()`里的所有building（天然包含园区内部建筑）统一由
 `ForeverBuildingFrameworkComponent`渲染，不按`GetParentZone()`是否为空分流成两个组件各画
 一份。除围墙外还负责：进出检测碰撞盒（`BuildCollisionBox`）、园区自定义模型（`BuildDecorations`）、
-园区大门——对`zone->GetDoorEntities()`每个`Door`建一个常驻的`UForeverDoorComponent`（挂在单例owner上，
-不随LOD）。
+（园区大门不在这里：改由`ForeverDoorFrameworkComponent`和其它门一起按距离流式加载。）
 
 ## 关键设计
 

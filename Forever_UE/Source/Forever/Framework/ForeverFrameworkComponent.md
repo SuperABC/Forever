@@ -20,6 +20,7 @@
 | `UForeverTerrainFrameworkComponent` | Terrain | `TerrainBase`（独立文档见`ForeverTerrainFrameworkComponent.md`） |
 | `UForeverTrafficFrameworkComponent` | Traffic | `TrafficBase`（独立文档见`ForeverTrafficFrameworkComponent.md`） |
 | `UForeverZoneFrameworkComponent` | Zone | `ZoneBase`（独立文档见`ForeverZoneFrameworkComponent.md`） |
+| `UForeverDoorFrameworkComponent` | Door | 无旧工程对应物，全图门的流式加载（独立文档见`ForeverDoorFrameworkComponent.md`） |
 
 新增的4个组件没有旧工程对应物，各有独立`.md`：`UForeverSkyFrameworkComponent`(昼夜循环)、`UForeverVegetationFrameworkComponent`(全图植被+风)、
 `UForeverLampFrameworkComponent`(路灯)、`UForeverWeatherFrameworkComponent`(天气表现)。

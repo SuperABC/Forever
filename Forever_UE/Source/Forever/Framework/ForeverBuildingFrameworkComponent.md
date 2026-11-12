@@ -157,19 +157,15 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 1. **入队自己的队列**：跳过`transitionPending`为true的情况，按水平距离和`currentLod`比较
    决定要不要切换：
    - 近→远（`wantNear=false`且`currentLod==Near`）：往`floorTierOpQueue`入队`BuildFarMesh`+
-     `DeleteAllNearMeshes`两条，`framework->NotifyFloorTierOpEnqueued(2)`。
+     `DeleteAllNearMeshes`两条。
    - 远→近（`wantNear=true`且`currentLod==Far`）：往`floorTierOpQueue`入队
      `nearFloorCount`条`BuildFloorMesh`（每层一条）+`BuildElevatorCabins`+最后一条
-     `DeleteFarMesh`，`NotifyFloorTierOpEnqueued(nearFloorCount+2)`；紧接着调用
-     `GatherPendingDoors()`收集这栋楼全部待建门，往`doorTierOpQueue`入队对应批数的
-     `BuildDoorBatch`（门单独走低优先级队列，详见`BuildingElement.md`"门加载优先级"
-     一节，以及下面"门和楼层分队列、分优先级"一节）。
+     `DeleteFarMesh`。门不在这里排队：门由`ForeverDoorFrameworkComponent`独立流式加载（见`ForeverDoorFrameworkComponent.md`）。
    - 入队后立刻把`transitionPending`置`true`。
-2. **drain自己的两个队列，楼层级永远先尝试**：每次执行一条之前，先向框架组件的
-   `TryConsumeLodOpBudget(bool isDoorTierOp)`申请一份全局共享预算（框架组件的
+2. **drain自己的队列**：每次执行一条之前，先向框架组件的
+   `TryConsumeLodOpBudget()`申请一份全局共享预算（框架组件的
    `TickComponent`每帧把这份预算重置成`maxLodOpsPerTick`，默认1——建筑密集处更高的值
-   仍然会卡顿）——申请失败（这一帧全地图的预算已经被其它building的Element用完，或者
-   申请的是门级操作但全地图还有楼层级操作未完成）就先停手，下一帧再继续。**必须先判断
+   仍然会卡顿）——申请失败（这一帧全地图的预算已经被其它building的Element用完）就先停手，下一帧再继续。**必须先判断
    自己的队列是否为空，再申请预算**，不能反过来：如果反过来，每一栋"这一帧其实无事可做"
    的building也会白白申请（并消耗）一份全局预算，挤占真正需要建楼层的building的份额。
    **只有序列的最后一条**（`DeleteAllNearMeshes`/`DeleteFarMesh`）执行时才更新`currentLod`+
@@ -180,42 +176,6 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 如果完全不设共享预算、让每个Element各自决定自己的每帧处理量，大量building同时穿越距离
 阈值时（比如玩家瞬移/沿着阈值边界走）依然会在同一帧集中爆发，回到"每次LOD切换都巨卡"的
 老问题。
-
-## 门和楼层分队列、分优先级
-
-每扇门的`UForeverDoorComponent::Init`要花4~6次`RegisterComponent()`，如果跟墙体/楼梯/地板一起塞进
-同一个`BuildFloorMesh`操作单位，这部分开销会被悄悄摊进"建一层楼"的预算里。所以门是独立的
-`BuildDoorBatch`操作类型（见`BuildingElement.h`的`ELodOpType`），并有一套**全局优先级门槛**：
-
-```cpp
-bool TryConsumeLodOpBudget(bool isDoorTierOp) {
-    if (isDoorTierOp && pendingFloorTierOps > 0) return false;
-    if (frameOpBudgetRemaining <= 0) return false;
-    frameOpBudgetRemaining--;
-    return true;
-}
-```
-
-`pendingFloorTierOps`是跨所有building共享的全局计数（不是per-building），由
-`ABuildingElement`在排队/执行楼层级操作（`BuildFarMesh`/`DeleteAllNearMeshes`/
-`BuildFloorMesh`/`BuildElevatorCabins`/`DeleteFarMesh`，不含`BuildDoorBatch`）时成对
-调用`NotifyFloorTierOpEnqueued`/`NotifyFloorTierOpExecuted`维护。只要这个计数大于0
-（即全地图任意一栋building还有楼层级操作排队未执行），所有building的门级请求都会被
-拒绝——这正是"任意建筑的楼层加载插队到任意建筑的门加载前面"的实现关键：不需要
-building互相感知彼此是谁、在干什么，只需要都查询这同一份全局计数就天然实现了跨建筑
-优先级。
-
-这套计数和`pendingLodTransitionCount`（见下面"冻结世界"一节）是两件不同的事，不要
-混用：`pendingLodTransitionCount`按"转场"计数（一栋楼一次转场=1，不管排了几条操作），
-给冻结世界用；`pendingFloorTierOps`按"操作条数"计数，只给门级操作的优先级门槛用。
-`maxDoorsPerOp`（默认4，`EditDefaultsOnly`可调）控制每条`BuildDoorBatch`处理几扇门。
-
-每个Element自己也要把`floorTierOpQueue`/`doorTierOpQueue`拆成两个独立的`TQueue`，不能
-用一个混合队列靠`Peek()`队首类型判断——否则一栋楼自己排在队尾的楼层级操作会被排在队头、
-永远等不到执行机会的自己的门操作挡住（队头的门操作被全局门槛拒绝出队，而解除这个门槛
-恰恰需要先执行到排在它后面的那些楼层级操作），变成自己造成的死锁，而且因为门槛是全局的
-会连带卡死全地图所有建筑的门加载。两个独立队列彼此不互相阻塞，不会有这个问题，详见
-`BuildingElement.md`"门加载优先级"一节。
 
 ## 冻结世界直到LOD切换队列清空（`RequestFreezeUntilLodSettled`）
 

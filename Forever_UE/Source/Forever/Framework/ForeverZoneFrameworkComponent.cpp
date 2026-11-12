@@ -1,6 +1,5 @@
 #include "Framework/ForeverZoneFrameworkComponent.h"
 
-#include "Element/DoorComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
 
@@ -57,7 +56,7 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 	if (!owner) return;
 
 	// 园区内部建筑改由ForeverBuildingFrameworkComponent统一渲染(map->GetBuildings()天然包含
-	// 它们，和顶层building走同一套楼体footprint/楼层/LOD逻辑)，这里只处理围墙。
+	// 它们，和顶层building走同一套楼体footprint/楼层/LOD逻辑)；园区大门由ForeverDoorFrameworkComponent按距离流式加载。
 	for (auto& [name, zone] : map->GetZones()) {
 		if (!zone) continue;
 		for (const ZoneWallSpec& wall : zone->GetWalls()) {
@@ -67,17 +66,6 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 		BuildCollisionBox(zone);
 		BuildDecorations(*zone);
 		BuildGround(*zone);
-
-		// 园区大门：常驻，不随LOD(围墙本身就是常驻的)。数量级和Zone本身一样小，同样直接挂
-		// 在这个组件的单例owner上，不需要per-zone的Actor。
-		for (Door* door : zone->GetDoorEntities()) {
-			if (!door) continue;
-			UForeverDoorComponent* comp = NewObject<UForeverDoorComponent>(owner, NAME_None, RF_Transient);
-			comp->SetupAttachment(owner->GetRootComponent());
-			comp->RegisterComponent();
-			comp->Init(door);
-			owner->AddInstanceComponent(comp);
-		}
 	}
 }
 
