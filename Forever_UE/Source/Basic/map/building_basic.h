@@ -31,6 +31,12 @@ public:
 	virtual int GetInstanceCounter() const override { return count; }
 	virtual void SetInstanceCounter(int value) override { count = value; }
 private:
+	// 四种布局，由Layout()按quad面积挑选，见building_basic.md。
+	void LayoutWing(int direction, const Quad& quad);
+	void LayoutSide(int direction, const Quad& quad);
+	void LayoutTwin(int direction, const Quad& quad);
+	void LayoutNshape(int direction, const Quad& quad);
+
 	static int count;
 	int id;
 	std::string name;
@@ -93,12 +99,12 @@ private:
 };
 
 // 商店(高密度)：只在商店高密度分区(AREA_COMMERCE_HIGH)上有权重。
-class ShopHighBuilding : public BuildingMod {
+class CommerceHighBuilding : public BuildingMod {
 public:
-	ShopHighBuilding();
+	CommerceHighBuilding();
 
-	static const char* GetId() { return "building_shop_high"; }
-	virtual const char* GetType() const override { return "building_shop_high"; }
+	static const char* GetId() { return "building_commerce_high"; }
+	virtual const char* GetType() const override { return "building_commerce_high"; }
 	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
@@ -121,12 +127,12 @@ private:
 };
 
 // 商店(中密度)：只在商店中密度分区(AREA_COMMERCE_MIDDLE)上有权重。
-class ShopMiddleBuilding : public BuildingMod {
+class CommerceMiddleBuilding : public BuildingMod {
 public:
-	ShopMiddleBuilding();
+	CommerceMiddleBuilding();
 
-	static const char* GetId() { return "building_shop_middle"; }
-	virtual const char* GetType() const override { return "building_shop_middle"; }
+	static const char* GetId() { return "building_commerce_middle"; }
+	virtual const char* GetType() const override { return "building_commerce_middle"; }
 	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
@@ -149,12 +155,12 @@ private:
 };
 
 // 商店(低密度)：只在商店低密度分区(AREA_COMMERCE_LOW)上有权重。
-class ShopLowBuilding : public BuildingMod {
+class CommerceLowBuilding : public BuildingMod {
 public:
-	ShopLowBuilding();
+	CommerceLowBuilding();
 
-	static const char* GetId() { return "building_shop_low"; }
-	virtual const char* GetType() const override { return "building_shop_low"; }
+	static const char* GetId() { return "building_commerce_low"; }
+	virtual const char* GetType() const override { return "building_commerce_low"; }
 	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
@@ -177,12 +183,12 @@ private:
 };
 
 // 工厂(高密度)：只在工厂高密度分区(AREA_INDUSTRY_HIGH)上有权重。
-class FactoryHighBuilding : public BuildingMod {
+class IndustryHighBuilding : public BuildingMod {
 public:
-	FactoryHighBuilding();
+	IndustryHighBuilding();
 
-	static const char* GetId() { return "building_factory_high"; }
-	virtual const char* GetType() const override { return "building_factory_high"; }
+	static const char* GetId() { return "building_industry_high"; }
+	virtual const char* GetType() const override { return "building_industry_high"; }
 	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
@@ -205,12 +211,12 @@ private:
 };
 
 // 工厂(中密度)：只在工厂中密度分区(AREA_INDUSTRY_MIDDLE)上有权重。
-class FactoryMiddleBuilding : public BuildingMod {
+class IndustryMiddleBuilding : public BuildingMod {
 public:
-	FactoryMiddleBuilding();
+	IndustryMiddleBuilding();
 
-	static const char* GetId() { return "building_factory_middle"; }
-	virtual const char* GetType() const override { return "building_factory_middle"; }
+	static const char* GetId() { return "building_industry_middle"; }
+	virtual const char* GetType() const override { return "building_industry_middle"; }
 	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,
@@ -233,12 +239,12 @@ private:
 };
 
 // 工厂(低密度)：只在工厂低密度分区(AREA_INDUSTRY_LOW)上有权重。
-class FactoryLowBuilding : public BuildingMod {
+class IndustryLowBuilding : public BuildingMod {
 public:
-	FactoryLowBuilding();
+	IndustryLowBuilding();
 
-	static const char* GetId() { return "building_factory_low"; }
-	virtual const char* GetType() const override { return "building_factory_low"; }
+	static const char* GetId() { return "building_industry_low"; }
+	virtual const char* GetType() const override { return "building_industry_low"; }
 	virtual const char* GetName() override;
 
 	virtual void Layout(int& direction, const Quad& quad,

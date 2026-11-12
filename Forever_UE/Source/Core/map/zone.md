@@ -51,6 +51,7 @@
   围墙/大门的局部坐标语义（参考边+margin+depth，原点在Zone矩形中心）不需要额外坐标转换
   字段——渲染时Forever层直接拿`Zone`自己的`GetPosX/PosY/SizeX/SizeY/GetRotation()`+这份
   数据现算世界坐标。
+- **`gapMaterialPath`**：`Layout`时从`mod->gapMaterial`拷贝的园区地面材质快照（`GetGapMaterialPath()`），进存档（紧跟gates之后）。
 - **`Layout(int direction)`**：转发`mod->Layout(direction, *this, GetBoundaryRoads())`，并把`walls`/`gates`/
   脚本字段(`scriptModName`/`milestoneNames`)快照到`Zone`自己身上、记下`direction`、换算`decorations`——读档时mod是
   重新创建的空实例、`Layout`不会再跑，这些快照由`MapSaveCodec`直接还原（`map_save.md`）。`BuildDoors`遍历快照`gates`；读档后门由存档里的`Door`记录重建，不再调用`BuildDoors`

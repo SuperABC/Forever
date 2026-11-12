@@ -159,6 +159,7 @@
 		"doors": [
 			{
 				"direction": 1,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -186,6 +187,7 @@
 		"doors": [
 			{
 				"direction": 1,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -213,6 +215,7 @@
 		"doors": [
 			{
 				"direction": 0,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -240,6 +243,7 @@
 		"doors": [
 			{
 				"direction": 0,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -267,6 +271,7 @@
 		"doors": [
 			{
 				"direction": 1,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -288,6 +293,7 @@
 		"doors": [
 			{
 				"direction": 0,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -309,6 +315,7 @@
 		"doors": [
 			{
 				"direction": 3,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -330,6 +337,7 @@
 		"doors": [
 			{
 				"direction": 3,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -345,9 +353,205 @@
 		],
 	}],
 	"pedestrianNavigation": {
-		"nodes": [],
-		"lines": [],
-		"connections": [],
+		"nodes": [
+			{
+				"position": [0.47, 0, 0.3, 1],
+			},
+			{
+				"position": [0.53, 0, 0.3, 1],
+			},
+			{
+				"position": [0.5, 0, 0, 0],
+			},
+		],
+		"lines": [
+			{
+				"begin": [0.2, 0.2, 0.1, 0],
+				"end": [0.2, 0.2, 1, 0],
+			},
+			{
+				"begin": [0.3, 0, 0.3, 0.2],
+				"end": [0.7, 0, 0.3, 0.2],
+			},
+			{
+				"begin": [0.8, -0.2, 0.1, 0],
+				"end": [0.8, -0.2, 1, 0],
+			},
+		],
+		"connections": [
+			{
+				"begin": {
+					"type": "row",
+					"idx": 2,
+				},
+				"end": {
+					"type": "line",
+					"idx": 1,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 1,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 1,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "line",
+					"idx": 1,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "outside",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "line",
+					"idx": 1,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "row",
+					"idx": 3,
+				},
+				"end": {
+					"type": "line",
+					"idx": 1,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 3,
+				},
+				"end": {
+					"type": "line",
+					"idx": 2,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "row",
+					"idx": 1,
+				},
+				"end": {
+					"type": "line",
+					"idx": 2,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "single",
+					"idx": 2,
+				},
+				"end": {
+					"type": "line",
+					"idx": 2,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "row",
+					"idx": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 1,
+					"vertex": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 1,
+					"vertex": 1,
+				},
+				"end": {
+					"type": "line",
+					"idx": 2,
+					"vertex": -1,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+		],
 	},
 	"vehicleNavigation": {
 		"nodes": [],

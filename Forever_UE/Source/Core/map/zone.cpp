@@ -80,6 +80,7 @@ void Zone::Layout(int inDirection) {
 	scriptMilestones = mod->milestoneNames;
 	walls = mod->walls;
 	gates = mod->gates;
+	gapMaterialPath = mod->gapMaterial;
 
 	decorations.clear();
 	for (const DecorationSpec& spec : mod->decorations) {
@@ -162,6 +163,10 @@ const vector<ZoneWallSpec>& Zone::GetWalls() const {
 
 const vector<ZoneGateSpec>& Zone::GetGates() const {
 	return gates;
+}
+
+const string& Zone::GetGapMaterialPath() const {
+	return gapMaterialPath;
 }
 
 void Zone::SetInternalRoads(const vector<Road*>& roads) {

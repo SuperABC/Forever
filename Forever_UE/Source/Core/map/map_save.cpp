@@ -1106,6 +1106,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			w.I32(s.direction); w.F32(s.marginStart); w.F32(s.marginEnd); w.F32(s.depth);
 			w.U8(s.depthInward ? 1 : 0); WriteDoorSpec(s.door, w);
 		}
+		w.Str(zone->gapMaterialPath);
 	}
 
 	w.U32(static_cast<uint32_t>(t.buildings.size()));
@@ -1350,6 +1351,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 			s.direction = r.I32(); s.marginStart = r.F32(); s.marginEnd = r.F32(); s.depth = r.F32();
 			s.depthInward = r.U8() != 0; s.door = ReadDoorSpec(r);
 		}
+		zone->gapMaterialPath = r.Str();
 		map.zones[zone->name] = zone;
 	}
 

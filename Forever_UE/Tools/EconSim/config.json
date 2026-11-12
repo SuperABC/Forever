@@ -3,16 +3,16 @@
       "building_residence_high",
       "building_residence_middle",
       "building_residence_low",
-      "building_factory_high",
-      "building_factory_middle",
-      "building_factory_low",
+      "building_industry_high",
+      "building_industry_middle",
+      "building_industry_low",
       "building_office_high",
       "building_office_middle",
       "building_office_low",
       "building_park",
-      "building_shop_high",
-      "building_shop_middle",
-      "building_shop_low"
+      "building_commerce_high",
+      "building_commerce_middle",
+      "building_commerce_low"
    ],
    "component_mods" : [
       "component_residence",
@@ -55,5 +55,5 @@
    "script_mods" : [ "script_basic", "script_empty --test true" ],
    "storage_mods" : [ "storage_wheat", "storage_beef", "storage_burger", "storage_shop" ],
    "terrain_mods" : [ "terrain_river", "terrain_ocean", "terrain_mountain" ],
-   "zone_mods" : [ "zone_residence" ]
+   "zone_mods" : [ "zone_residence_high", "zone_residence_middle", "zone_residence_low" ]
 }

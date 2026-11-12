@@ -106,7 +106,7 @@ namespace {
 		}
 
 	// 井字中心lot固定AREA_TEST，其余所有非中心lot(4个紧邻中心的臂lot+更外圈延伸出去
-	// 的lot)按1:1:1随机分配成高密度住宅/商业/工业区——这是ShopBuilding/FactoryBuilding按
+	// 的lot)按1:1:1随机分配成高密度住宅/商业/工业区——这是CommerceBuilding/FactoryBuilding按
 	// GetPower(AREA_TYPE)竞争lot的前提，分区类型如果单一固定，地图上只会长出一种建筑。
 	AREA_TYPE RandomHighDensityArea() {
 		static constexpr AREA_TYPE kAreas[3] = {

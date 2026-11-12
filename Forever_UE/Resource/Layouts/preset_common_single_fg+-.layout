@@ -1,14 +1,22 @@
 {
+	"stairs": [{
+		"rect": [0.5, -0.2, 1, -0.8, 0.5, 0.2, 1, 0],
+		"direction": 2,
+	}],
 	"ceilings": [
-		[0, 0, 0, 0, 1, 0, 1, 0],
+		[0.5, -0.2, 0, 0, 0.5, 0.2, 1, -0.8],
+		[0, 0.4, 0, 0, 0.5, -0.2, 1, 0],
+		[0.5, 0.2, 0, 0, 1, -0.4, 1, 0],
 	],
 	"grounds": [
-		[0, 0, 0, 0, 0.5, -0.2, 1, 0],
-		[0.5, 0.2, 0, 0, 1, 0, 1, 0],
 		[0.5, -0.2, 0, 0, 0.5, 0.2, 1, -0.8],
+		[0, 0.4, 0, 0, 0.5, -0.2, 1, 0],
+		[0.5, 0.2, 0, 0, 1, -0.4, 1, 0],
+		{"rect": [1, -0.4, 0.5, 0, 1, 0, 1, 0], "tag": "clay"},
+		{"rect": [0, 0, 0.5, 0, 0, 0.4, 1, 0], "tag": "clay"},
 	],
 	"singles": [{
-		"rect": [0, 0, 0, 0, 1, 0, 1, 0],
+		"rect": [0, 0.4, 0, 0, 1, -0.4, 1, 0],
 		"direction": 2,
 		"doors": [
 			{
@@ -42,10 +50,13 @@
 	"pedestrianNavigation": {
 		"nodes": [
 			{
+				"position": [0.5, 0, 0, 0],
+			},
+			{
 				"position": [0.5, -0.1, 1, -0.1],
 			},
 			{
-				"position": [0.5, 0, 0, -0.2],
+				"position": [0.5, 0.1, 1, -0.1],
 			},
 		],
 		"lines": [],
@@ -56,13 +67,13 @@
 				},
 				"end": {
 					"type": "node",
-					"idx": 1,
+					"idx": 0,
 				},
 			},
 			{
 				"begin": {
 					"type": "node",
-					"idx": 0,
+					"idx": 1,
 				},
 				"end": {
 					"type": "downstair",
@@ -70,18 +81,37 @@
 			},
 			{
 				"begin": {
-					"type": "node",
+					"type": "single",
 					"idx": 0,
 				},
 				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+			},
+			{
+				"begin": {
 					"type": "single",
 					"idx": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 2,
 				},
 			},
 			{
 				"begin": {
 					"type": "node",
-					"idx": 1,
+					"idx": 2,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
 				},
 				"end": {
 					"type": "single",
@@ -93,10 +123,10 @@
 	"vehicleNavigation": {
 		"nodes": [
 			{
-				"position": [1, 0.5, 0, -0.2],
+				"position": [1, -0.2, 0, 0],
 			},
 			{
-				"position": [0, -0.5, 0, -0.2],
+				"position": [0, 0.2, 0, 0],
 			},
 		],
 		"lines": [],
@@ -122,37 +152,19 @@
 			{
 				"begin": {
 					"type": "node",
-					"idx": 1,
-				},
-				"end": {
-					"type": "entrance",
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 1,
-				},
-				"end": {
-					"type": "exit",
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 0,
-				},
-				"end": {
-					"type": "entrance",
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
 					"idx": 0,
 				},
 				"end": {
 					"type": "exit",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "entrance",
 				},
 			},
 		],

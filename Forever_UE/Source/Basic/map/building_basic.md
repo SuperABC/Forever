@@ -2,7 +2,7 @@
 
 ## 职责
 
-Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档密度，加上火车站/机场/公园/Mohar)，合在同一份`building_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)：`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding`(住宅/商店/工厂)、`TrainStationBuilding`/`AirportBuilding`(火车站/机场)、`ParkBuilding`(公园)、`MoharBuilding`(成品模型住宅)。
+Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档密度，加上火车站/机场/公园/Mohar)，合在同一份`building_basic.h/.cpp`里(每个concept统一一份`<concept>_basic.h/.cpp`，不按业务场景拆文件)：`ResidenceBuilding`/`CommerceBuilding`/`IndustryBuilding`(住宅/商店/工厂)、`TrainStationBuilding`/`AirportBuilding`(火车站/机场)、`ParkBuilding`(公园)、`MoharBuilding`(成品模型住宅)。
 
 ## 关键设计
 
@@ -15,18 +15,21 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 
 - **住宅/商店/工厂/办公楼各拆成高/中/低三个注册的mod**，共12个，类名`ResidenceHighBuilding`等：`building_{residence,shop,factory,office}_{high,middle,low}`。**每个类完全独立实现，没有共用基类**：各自有自己的`Layout()`、`Assign`、`RandomAcreage`/`GetAcreageMin`/`GetAcreageMax`、`GetPower`和命名计数器；目前同一类型的三档以及办公楼与住宅，逻辑都是同一份的拷贝，以后各自改，互不影响。
 - `GetPower`只在对应类型和密度的分区返回`1.f`：`AREA_{RESIDENCE,COMMERCE,INDUSTRY,OFFICE}_{HIGH,MIDDLE,LOW}`。
-- **办公楼**：`Layout()`是住宅布局的拷贝(同一套模板/电梯/楼层数分档)，房间换成`room_office`、组件换成`component_office`，不挂住宅的`entity_event`示例脚本。
-- 下面`ResidenceBuilding`/`ShopBuilding`/`FactoryBuilding`几节描述的是对应类型**当前（三档共同）的逻辑**，指的是三个档次各自那份拷贝。
+- **工厂(高密度 `IndustryHighBuilding`)**：权重分区只有 `AREA_INDUSTRY_HIGH`(已不在 `AREA_TEST`)。面积 `RandomAcreage()=10000+10000*rand`(10000~20000线性随机)，min 10000、max 20000。`Layout()` 只用 `preset_common_single_*`：地下1层 `pg+`(1个 `room_parking`)、地上1层 `fg-`(1个工坊房间，`room_farm`/`room_ranch`/`room_food_factory` 等概率随机)，层高统一0.6，footprint 占地块60%居中，登记 `clay`→Clay 标签材质，`gapMaterial`=Clay。中/低密度工厂仍是旧布局(旧模板名)。
+- **商店(高密度 `CommerceHighBuilding`)**：权重分区只有 `AREA_COMMERCE_HIGH`(已不在 `AREA_TEST`)。面积 `RandomAcreage()=8000+8000*rand`(8000~16000线性随机)，min 8000、max 16000。`Layout()` 只用 `preset_common_tshape_*`：无地下室、地上 3~5 层随机(1楼 `fg+`、其余 `fu+-`)，每层一个 component(`componentId`=层号)，含 1 个 single(`room_empty` 占位)+6 个 row(row 0~3：1楼 `room_restaurant`、2楼及以上 `room_shop`；row 4~5：`room_warehouse`；row 面积120)，2 台 `elevator_basic` 贯穿全楼；footprint 占满地块、四周各留固定 0.2 的空隙，朝向偏好长边正对的路，登记 `clay`→Clay、`concrete`→Concrete，`gapMaterial`=Pavement。中/低密度商店仍是旧布局。
+- **办公楼(高密度 `OfficeHighBuilding`)**：权重分区只有 `AREA_OFFICE_HIGH`(已不在 `AREA_TEST`)。面积 `RandomAcreage()=8000+8000*rand`(8000~16000线性随机)，min 8000、max 16000。`Layout()` 只用 `preset_office_circle_*` 三个模板：地下1层 `pg+`(1个 `room_parking`)、地上固定2层(1楼 `fg+-`：4 single + 6 row，2楼 `fu+-`：5 single + 7 row，其中每层 single 1、2 是 `room_empty`，其余 single 和所有 row 都是 `room_office`，row 面积120；整栋楼一个 `component_office`)，没有电梯；footprint 占地块80%居中，朝向偏好短边正对的路，登记 `brick`→Brick、`pavement`→Pavement 标签材质，`gapMaterial`=Pavement。中/低密度办公楼仍是住宅布局的拷贝。
+- 下面`ResidenceBuilding`/`CommerceBuilding`/`IndustryBuilding`几节描述的是对应类型**当前（三档共同）的逻辑**，指的是三个档次各自那份拷贝。
 
 ## ResidenceBuilding
 
 - `GetPower`：由三档子类各自决定(见上)。`RandomAcreage()=2000*(1+rand*2)^2`，`GetAcreageMin()=2000`，`GetAcreageMax()=18000`。`Assign()`空实现。
-- 住宅高密度(`ResidenceHighBuilding`)的面积：`RandomAcreage()=8000+8000*rand`(8000~16000线性随机)，`GetAcreageMin()=8000`，`GetAcreageMax()=16000`。
-- `ResidenceHighBuilding::Layout()`：只服务 `preset_residence_nshape_*`（旧 twin / side / wing 版本的 C++ 备份分别在 `building_basic_twin_backup.txt`、`building_basic_side_backup.txt`、`building_basic_wing_backup.txt`，不参与编译）。`basements=1`(层高0.35)、地上 `layers`=7~12 随机(层高0.4)；地下 `bg+`(b=地下正常布局，p=地下停车场)、1 楼 `fg+-`、2 楼起 `fu+-`；每层 4 个 single + 若干 row(地下3、1楼4、其余3，size=300) 都放 `room_residence`；2 台 `elevator_basic` 轿厢从地下到顶层。`footprint`：朝向的那一边贴着 quad 边占满，其余三边各留 0.2(地图单位)的空隙，空隙铺 `gapMaterial`=Pavement，标签 `pavement`→Pavement、`stone`→Stone；朝向偏好长边正对的路(仅对应边界路存在时采用)。大门 `doorSpecs["entrance"]` 给 corridor 的 `entrance` 门洞用。
+- 住宅高密度的**`Assign`**：在井字中心lot(`AREA_TEST`)上依次试4个方向，用`FindAdaptivePlacement`找12x8(沿路x纵深)的自由子块，贴边起点角占位(余量全给`marginEnd`)，保证开局有住宅和可控市民；与火车站/机场共存(它们先占的空间自动避开)。
+- 住宅高密度(`ResidenceHighBuilding`)的面积：`RandomAcreage()=4000+12000*r²`(r 为 0~1 均匀随机，4000~16000 按平方随机、偏向小面积)，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`。
+- `ResidenceHighBuilding::Layout()`：四种布局**按 quad 面积(`quad.GetAcreage()`)挑选**：4000~8000 在 side/nshape 里等概率，8000~12000 四种等概率，12000~16000 在 twin/wing 里等概率；`Layout()` 先做四种共用的部分(entity_event、direction 兜底、偏好方向=长边正对的路(仅对应边界路存在时采用)、登记 roof/brick/concrete/clay/pavement/specular/stone 标签材质、`gapMaterial`=Pavement)，再按面积定出的布局调私有的 `LayoutWing/Side/Twin/Nshape`。层数/进深/模板各自为：**wing**＝地下1层 `pg+`(停车库)、地上12~17层(顶上一层只有屋面 `fr`，次顶 `fr-`)，进深≤4，2 台电梯到 `fr-`；**side**＝无地下室、地上5~9层(1楼 `fg+`、顶层 `fu-`、中间 `fu+-`)，进深≤3，每层8个 single、4 台电梯，直跑楼梯 `Stair_Line`；**twin**＝地下1层 `pg+`、地上12~17层(1楼 `fg+-`、2楼 `fl+-`、3楼起奇数楼 `fo+-`/偶数楼 `fe+-`)，进深≤4，row 面积200，2 台电梯；**nshape**＝地下1层 `bg+`、地上5~9层(1楼 `fg+-`、其余 `fu+-`)，row 面积300，2 台电梯，`footprint` 朝向那一边贴 quad 边占满、其余三边各留 0.2 空隙。wing/side/twin 的 `footprint` 统一为朝向轴进深封顶(地块没这么深就占满)、居中，开间两侧各留 0.2。b=地下正常布局，p=地下停车场。
 - 大门`doorSpecs["entrance"]`：随机左右滑动单开门(`Cube`资产占位)，只有corridor门洞带`entrance`标签才用到，见`Core/map/door.h`的`ResolveDoorSpec`。
 - 挂示例脚本`entity_event`。
 
-## ShopBuilding
+## CommerceBuilding
 
 - `GetPower`：由三档子类各自决定。`RandomAcreage()=4000*(1+rand)^2`，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`。
 - `Layout()`：`footprint`居中占0.6(某边`<6`时收到`(size-2.4)/size`)，`layers`固定2，每层`FloorAssetSpec.wallMaterial`为`White`，层高统一0.4。复用`preset_lobby_linear_*`/`preset_circle_double_*`模板：
@@ -34,15 +37,15 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
   - 否则`basements=1`，地下室随机选`preset_circle_double_pg+`(`ParkingRoom`)或`preset_circle_double_bg+`(5间`WarehouseRoom`)；1楼`preset_circle_double_fg+-`(2间`ShopRoom`+4间`WarehouseRoom`)，2楼`preset_circle_double_fu+-`(5间`WarehouseRoom`)。
 - 大门有名字"商店大门"，但脚本挂在`ShopRoom`的房间门上，原因见`room_basic.md`；`doorSpecs["entrance"]`上也设了同名脚本规格。
 
-## FactoryBuilding
+## IndustryBuilding
 
 - `GetPower`：工业三档分区。`RandomAcreage()=2000*(1+rand)^2`，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`——公式基数和Min不一致(随机值可能小于Min)是既有数值，不"修正"。
-- `Layout()`：`footprint`固定0.6x0.6，`layers`固定1，层高统一0.6。偏好方向按`quad`长宽比选`FACE_NORTH+rand(2)`或`FACE_WEST+rand(2)`，对应边长`>4`时才`basements=1`(是否有地下室由`quad`尺寸判定，和地上层数无关)。有地下室：`preset_single_room_pg+`(`ParkingRoom`，和`ShopBuilding`共用)→1楼`preset_single_room_fg-`；否则只有1楼`preset_single_room_fg`。1楼放1个工坊房间，`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`等概率随机选一。
+- `Layout()`：`footprint`固定0.6x0.6，`layers`固定1，层高统一0.6。偏好方向按`quad`长宽比选`FACE_NORTH+rand(2)`或`FACE_WEST+rand(2)`，对应边长`>4`时才`basements=1`(是否有地下室由`quad`尺寸判定，和地上层数无关)。有地下室：`preset_single_room_pg+`(`ParkingRoom`，和`CommerceBuilding`共用)→1楼`preset_single_room_fg-`；否则只有1楼`preset_single_room_fg`。1楼放1个工坊房间，`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`等概率随机选一。
 
 ## TrainStationBuilding / AirportBuilding
 
 - 全图各唯一一个，`GetPower`恒0不参与权重CDF，`RandomAcreage`/`Min`/`Max`固定2000，靠`Assign`显式占位。分别承载`StationMod`的`station_train`/`station_air`(`stationMod`字段)。
-- **`Assign`**：只看井字中心lot(`AREA_TEST`)，依次尝试4个方向用`Lot::FindAdaptivePlacement`按当前实际剩余空间自适应找位置，不挑具体方向，和园区(`ResidenceZone`)共存。火车站要沿路`7`x纵深`4`(地图单位)，余量全挪到`marginEnd`贴边起点角；机场优先`12`x`8`，放不下退回`7`x`4`，余量全挪到`marginStart`贴另一端的角，这样两者即使同在一条边上也占两个对角。`request.lot`是命中的自由子块而不是`lot`本身，`adaptiveParent`仅在二者不同时设，供Core把子块残余空间搬回，见`FindAdaptivePlacement`声明。
+- **`Assign`**：只看井字中心lot(`AREA_TEST`)，依次尝试4个方向用`Lot::FindAdaptivePlacement`按当前实际剩余空间自适应找位置，不挑具体方向，和园区共存。火车站要沿路`7`x纵深`4`(地图单位)，余量全挪到`marginEnd`贴边起点角；机场优先`12`x`8`，放不下退回`7`x`4`，余量全挪到`marginStart`贴另一端的角，这样两者即使同在一条边上也占两个对角。`request.lot`是命中的自由子块而不是`lot`本身，`adaptiveParent`仅在二者不同时设，供Core把子块残余空间搬回，见`FindAdaptivePlacement`声明。
 - **`TrainStationBuilding::Layout`**：`footprint`占满整个Building区域，`basements=1`+`layers=1`，层高0.6；地下1层站台层`preset_train_station_bg+`(楼梯通上来，`Stair_Line`资产)、地面1层大厅`preset_train_station_fg-`放2间`TrainStationRoom`，两层各2台电梯。`TrainStation::Layout`的轨道/接口(`depthRatio` 0.55/0.65)因此落在楼体范围内。
 - **`AirportBuilding::Layout`**：无地下室、1层，层高0.6，模板`preset_single_room_fg`+1间`AirportRoom`。`footprint`用`NearRoadFootprint(direction, 0.18, 0.35, 0.6)`把楼体压到靠路一侧，深处留给`AirStation::Layout`的跑道(`depthRatio` 0.65/0.85)，避免公共交通连线穿过楼体实体。
 
@@ -61,7 +64,7 @@ Building域的默认实现(住宅/商店/工厂/办公楼各分高/中/低三档
 ## 依赖关系
 
 - 依赖：`Source/Dependence/map/building_mod.h`(`BuildingMod`基类)、`common/utility.h`(`GetRandom`)；用字符串引用`room_basic`/`component_basic`里各类型的id(Basic层文件间不互相`#include`)。
-- 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModBuildings`注册七个类型，依赖表声明所需的component/room/script)；`zone_basic.cpp`(`ResidenceZone::Layout()`内部建筑引用`building_residence_high`)；`traffic/station_basic`(`station_train`/`station_air`依赖对应Building)。
+- 被谁依赖：`Source/Basic/basic.cpp`(`RegisterModBuildings`注册七个类型，依赖表声明所需的component/room/script)；`zone_basic.cpp`(`Residence{High,Middle,Low}Zone::Layout()`内部建筑分别引用`building_residence_{high,middle,low}`)；`traffic/station_basic`(`station_train`/`station_air`依赖对应Building)。
 
 ## 待办/后续阶段
 

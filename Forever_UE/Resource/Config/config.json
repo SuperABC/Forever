@@ -1,8 +1,18 @@
 {
    "app_mods" : [],
    "asset_mods" : [],
-   "building_mods" : [ "building_residence_high" ],
-   "component_mods" : [ "component_residence" ],
+   "building_mods" : [
+      "building_residence_high",
+      "building_industry_high",
+      "building_commerce_high",
+      "building_office_high"
+   ],
+   "component_mods" : [
+      "component_residence",
+      "component_factory",
+      "component_shop",
+      "component_office"
+   ],
    "dll_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
@@ -19,18 +29,29 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts"
    ],
-   "roadnet_mods" : [ "roadnet_jing --length 0" ],
-   "room_mods" : [ "room_residence", "room_parking" ],
+   "roadnet_mods" : [ "roadnet_jing --length -1" ],
+   "room_mods" : [
+      "room_empty",
+      "room_parking",
+      "room_residence",
+      "room_farm",
+      "room_ranch",
+      "room_food_factory",
+      "room_office",
+      "room_shop",
+      "room_restaurant",
+      "room_warehouse"
+   ],
    "route_mods" : [],
    "scheduler_mods" : [],
    "script_mods" : [ "script_empty", "script_test" ],
    "station_mods" : [],
-   "storage_mods" : [],
+   "storage_mods" : [ "storage_shop" ],
    "story_scripts" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
    ],
-   "terrain_mods" : [],
+   "terrain_mods" : [ "terrain_ocean", "terrain_mountain", "terrain_river", "terrain_empty" ],
    "vehicle_mods" : [],
    "weapon_mods" : [],
-   "zone_mods" : []
+   "zone_mods" : [ "zone_residence_high" ]
 }

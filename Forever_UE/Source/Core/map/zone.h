@@ -69,6 +69,8 @@ public:
 	// Layout()时从mod拷贝的快照(读档时mod是空实例)，见map_save.md
 	const std::vector<ZoneWallSpec>& GetWalls() const;
 	const std::vector<ZoneGateSpec>& GetGates() const;
+	// 园区地面材质软路径(mod->gapMaterial在Layout时的快照，空=不铺)
+	const std::string& GetGapMaterialPath() const;
 
 	// Map::InitZones()实例化出的内部Road，Zone持有(~Zone() delete)
 	void SetInternalRoads(const std::vector<Road*>& roads);
@@ -98,6 +100,7 @@ private:
 	std::vector<DecorationInstance> decorations;
 	std::vector<ZoneWallSpec> walls;
 	std::vector<ZoneGateSpec> gates;
+	std::string gapMaterialPath;
 	std::unordered_map<int, Road*> boundaryRoads;
 	std::vector<Road*> internalRoads;
 	std::vector<Building*> internalBuildings;

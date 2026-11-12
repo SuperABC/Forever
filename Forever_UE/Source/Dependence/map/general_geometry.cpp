@@ -938,6 +938,55 @@ namespace {
 	}
 }
 
+Lot::SplitResult Lot::SplitPlain(bool splitAlongX, float splitCoordinate) {
+	SplitResult failResult;
+	float extent = splitAlongX ? sizeX : sizeY;
+	float lowerSize = splitCoordinate;
+	float upperSize = extent - splitCoordinate;
+	if (lowerSize < MIN_LOT_EXTENT || upperSize < MIN_LOT_EXTENT) {
+		return failResult;
+	}
+
+	// 方向约定同SplitWithPath：splitAlongX时切割线垂直于X轴，两端落在NORTH/SOUTH边上。
+	int endFace1 = splitAlongX ? FACE_NORTH : FACE_WEST;
+	int endFace2 = splitAlongX ? FACE_SOUTH : FACE_EAST;
+	int lowerKeepFace = splitAlongX ? FACE_WEST : FACE_NORTH;
+	int upperKeepFace = splitAlongX ? FACE_EAST : FACE_SOUTH;
+
+	float lowerW, lowerH, upperW, upperH, lowerLocalCX, lowerLocalCY, upperLocalCX, upperLocalCY;
+	if (splitAlongX) {
+		lowerW = lowerSize; lowerH = sizeY;
+		lowerLocalCX = lowerW / 2.f; lowerLocalCY = sizeY / 2.f;
+		upperW = upperSize; upperH = sizeY;
+		upperLocalCX = splitCoordinate + upperW / 2.f; upperLocalCY = sizeY / 2.f;
+	}
+	else {
+		lowerW = sizeX; lowerH = lowerSize;
+		lowerLocalCX = sizeX / 2.f; lowerLocalCY = lowerH / 2.f;
+		upperW = sizeX; upperH = upperSize;
+		upperLocalCX = sizeX / 2.f; upperLocalCY = splitCoordinate + upperH / 2.f;
+	}
+
+	auto [lowerWorldX, lowerWorldY] = GetPosition(lowerLocalCX, lowerLocalCY);
+	auto [upperWorldX, upperWorldY] = GetPosition(upperLocalCX, upperLocalCY);
+	Lot* lowerLot = new Lot(lowerWorldX, lowerWorldY, lowerW, lowerH, rotation);
+	Lot* upperLot = new Lot(upperWorldX, upperWorldY, upperW, upperH, rotation);
+
+	Road* endRoad1 = GetBoundaryRoad(endFace1);
+	Road* endRoad2 = GetBoundaryRoad(endFace2);
+	if (endRoad1) { lowerLot->SetBoundaryRoad(endFace1, endRoad1); upperLot->SetBoundaryRoad(endFace1, endRoad1); }
+	if (endRoad2) { lowerLot->SetBoundaryRoad(endFace2, endRoad2); upperLot->SetBoundaryRoad(endFace2, endRoad2); }
+	Road* keepRoadLower = GetBoundaryRoad(lowerKeepFace);
+	Road* keepRoadUpper = GetBoundaryRoad(upperKeepFace);
+	if (keepRoadLower) lowerLot->SetBoundaryRoad(lowerKeepFace, keepRoadLower);
+	if (keepRoadUpper) upperLot->SetBoundaryRoad(upperKeepFace, keepRoadUpper);
+
+	SplitResult result;
+	result.lowerLot = lowerLot;
+	result.upperLot = upperLot;
+	return result;
+}
+
 Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, const PathLaneSpec& spec) {
 	SplitResult failResult;
 	float pathWidth = spec.vehicleWidth * 2.f + spec.pedestrianWidth * 2.f;
@@ -1178,35 +1227,67 @@ bool Lot::RequestPlacement(int direction, float marginStart, float marginEnd, fl
 			return true;
 		};
 
+		// 不带小路的普通切分：keepLower=true保留cutCoord较小的一侧作为目标，较大的一侧作为存活子块(有边界Road才留)；
+		// keepLower=false相反。discardRest=true时剩下的那块直接丢弃。切分失败(边长不够)时什么都不动。
+		auto plainSplit = [&](bool alongXAxis, float cutCoord, bool keepLower, bool discardRest) -> bool {
+			auto res = working->SplitPlain(alongXAxis, cutCoord);
+			if (!res.lowerLot) return false;
+			Lot* keep = keepLower ? res.lowerLot : res.upperLot;
+			Lot* rest = keepLower ? res.upperLot : res.lowerLot;
+			if (!discardRest && rest->GetSizeX() >= MIN_LOT_EXTENT && rest->GetSizeY() >= MIN_LOT_EXTENT && HasAnyBoundaryRoad(rest)) {
+				survivors.push_back(rest);
+			}
+			else {
+				delete rest;
+			}
+			delete working;
+			working = keep;
+			return true;
+		};
+
 		bool depthAlongX = (direction == FACE_WEST || direction == FACE_EAST);
 		bool touchesLowEnd = (direction == FACE_WEST || direction == FACE_NORTH);
 
-		// ①深度方向：裁掉目标矩形远离道路一侧的多余部分（如果目标已经顶到这块自由地的最远端
-		// 就跳过）
+		// 固定顺序：先沿道路方向(frontage轴)裁掉marginStart端、marginEnd端的多余部分，最后裁深度方向远离
+		// 道路的一侧。沿路的切割线两端落在请求方向那条路和它对面的边上，请求方向必有路，所以一定能连通；
+		// 沿路切过之后新小路成了深度切割线的端点路，深度这一刀也能连通。target贴着自由地的角/边的那一侧
+		// 本来就不用切，所以居中是两刀沿路、贴角只有一刀。
+		// 每一侧切完要给剩下的地留出一条小路加一块不小于MIN_LOT_EXTENT的地：该侧的空隙(目标边到自由地边
+		// 的距离)不到 小路宽度+MIN_LOT_EXTENT 就不切，目标直接拉伸到那条边，所以实际占地可能比请求的大。
+		const float minGap = pathHalf * 2.f + MIN_LOT_EXTENT;
 		{
 			auto [wxmin, wxmax, wymin, wymax] = reproject();
-			float depthMin = depthAlongX ? wxmin : wymin;
-			float depthMax = depthAlongX ? wxmax : wymax;
-			float depthExtent = depthAlongX ? working->GetSizeX() : working->GetSizeY();
-			if (touchesLowEnd) {
-				if (depthExtent - depthMax > 1e-2f) ok = cutKeepLower(depthAlongX, depthMax + pathHalf);
-			}
-			else {
-				if (depthMin > 1e-2f) ok = cutKeepUpper(depthAlongX, depthMin - pathHalf);
-			}
-		}
-
-		// ②③沿道路方向(frontage轴)：依次裁掉marginStart端、marginEnd端的多余部分
-		if (ok) {
-			auto [wxmin, wxmax, wymin, wymax] = reproject();
 			float frontMin = depthAlongX ? wymin : wxmin;
-			if (frontMin > 1e-2f) ok = cutKeepUpper(!depthAlongX, frontMin - pathHalf);
+			if (frontMin >= minGap) ok = cutKeepUpper(!depthAlongX, frontMin - pathHalf);
 		}
 		if (ok) {
 			auto [wxmin, wxmax, wymin, wymax] = reproject();
 			float frontMax = depthAlongX ? wymax : wxmax;
 			float frontExtent = depthAlongX ? working->GetSizeY() : working->GetSizeX();
-			if (frontExtent - frontMax > 1e-2f) ok = cutKeepLower(!depthAlongX, frontMax + pathHalf);
+			if (frontExtent - frontMax >= minGap) ok = cutKeepLower(!depthAlongX, frontMax + pathHalf);
+		}
+		if (ok) {
+			auto [wxmin, wxmax, wymin, wymax] = reproject();
+			float depthMin = depthAlongX ? wxmin : wymin;
+			float depthMax = depthAlongX ? wxmax : wymax;
+			float depthExtent = depthAlongX ? working->GetSizeX() : working->GetSizeY();
+			// 背后(远离请求方向的那一侧)本来就接着对侧的路时(比如放射臂)，目标和剩余的那块各有各的路，不需要
+			// 再加一条深度小路，直接普通一分为二；背后没路才用小路给剩余地连路，小路也连不通(两个端点边都
+			// 没路，被SplitWithPath拒绝)就按请求的深度普通一分为二、剩下的地块丢弃——都不算请求失败：
+			// 园区只要请求方向有路就能通达。
+			const bool farRoad = working->GetBoundaryRoad(direction ^ 1) != nullptr;
+			if (touchesLowEnd) {
+				if (depthExtent - depthMax >= minGap) {
+					if (farRoad) plainSplit(depthAlongX, depthMax, true, false);
+					else if (!cutKeepLower(depthAlongX, depthMax + pathHalf)) plainSplit(depthAlongX, depthMax, true, true);
+				}
+			}
+			else {
+				if (depthMin >= minGap) {
+					if (farRoad) plainSplit(depthAlongX, depthMin, false, false);
+					else if (!cutKeepUpper(depthAlongX, depthMin - pathHalf)) plainSplit(depthAlongX, depthMin, false, true);
+				}
+			}
 		}
 
 		if (!ok) {
@@ -1299,7 +1380,8 @@ namespace {
 	}
 
 	// 按candidates权重CDF反复抽类型直到累计面积达到acreageBlock;只有"抽到但剩余空间放不下"才计入attempts
-	// (上限MAX_ALLOCATION_ATTEMPTS=16)。凑不满时补FILL_EMPTY_TYPE叶子补齐面积账目。
+	// (上限MAX_ALLOCATION_ATTEMPTS=16)。放完一个元素后剩余面积小于所有候选的下限时:能对半分就把采样减成一半、另一半留给下一次，
+	// 否则并进该元素(可略超上限)，避免留碎空地。凑不满时补FILL_EMPTY_TYPE叶子补齐面积账目。
 	vector<pair<string, float>> SampleFillElements(float acreageBlock,
 		const vector<pair<string, float>>& candidates,
 		const function<float(const string&)>& randomAcreage,
@@ -1309,6 +1391,10 @@ namespace {
 		float totalWeight = 0.f;
 		for (auto& [type, w] : candidates) totalWeight += w;
 		if (totalWeight <= 0.f) return elements;
+
+		// 所有候选类型里最小的下限:放完一个元素后剩余面积若小于它,谁也放不下,会白白空置,见下面的并入。
+		float globalMinAcreage = acreageMinMax(candidates.front().first).first;
+		for (auto& [type, w] : candidates) globalMinAcreage = min(globalMinAcreage, acreageMinMax(type).first);
 
 		constexpr int MAX_SAMPLE_ATTEMPTS = 16;
 		float acreageTmp = 0.f;
@@ -1330,6 +1416,14 @@ namespace {
 			}
 			if (acreageBlock - acreageTmp < acreage) {
 				acreage = acreageBlock - acreageTmp;
+			}
+			// 放完后剩下的面积比任何类型的下限都小(谁也放不下,会留一块空地):
+			// 能对半分且每半都不小于这个类型的下限,就把采样减小成剩余面积的一半,另一半留给下一次采样;
+			// 否则(剩余面积不够分成两个)整块并进这个元素,可略超过它的上限。
+			float remaining = acreageBlock - acreageTmp;
+			float leftover = remaining - acreage;
+			if (leftover > 1e-3f && leftover < globalMinAcreage) {
+				acreage = (remaining * 0.5f >= minA) ? remaining * 0.5f : remaining;
 			}
 			elements.emplace_back(chosenType, acreage);
 			acreageTmp += acreage;

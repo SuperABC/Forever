@@ -22,9 +22,9 @@
       "building_residence_high",
       "building_residence_middle",
       "building_residence_low",
-      "building_factory_high",
-      "building_factory_middle",
-      "building_factory_low",
+      "building_industry_high",
+      "building_industry_middle",
+      "building_industry_low",
       "building_office_high",
       "building_office_middle",
       "building_office_low",
@@ -33,9 +33,9 @@
       "building_park",
       "building_mohar",
       "building_empty --test true",
-      "building_shop_high",
-      "building_shop_middle",
-      "building_shop_low",
+      "building_commerce_high",
+      "building_commerce_middle",
+      "building_commerce_low",
       "building_yuanshen"
    ],
    "component_mods" : [
@@ -126,5 +126,5 @@
       "vehicle_empty --test true"
    ],
    "weapon_mods" : [ "weapon_pistol", "weapon_rifle", "weapon_shotgun", "weapon_sniper" ],
-   "zone_mods" : [ "zone_residence", "zone_empty --test true" ]
+   "zone_mods" : [ "zone_residence_high", "zone_residence_middle", "zone_residence_low", "zone_empty --test true" ]
 }

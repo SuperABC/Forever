@@ -6,6 +6,9 @@
 
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "ProceduralMeshComponent.h"
+#include "Materials/MaterialInterface.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 
@@ -20,6 +23,8 @@
 // 和ForeverRoadnetFrameworkComponent.cpp的ROADNET_HEIGHT_EPSILON同一类问题：Zone没有真实
 // 高度数据，围墙实例统一贴地摆在这个高度，避开和地形网格共面z-fighting。
 #define ZONE_HEIGHT_EPSILON 10.f
+// 园区地面(园区quad扣掉内部建筑quad后的空隙)的高度(cm)：和建筑gap(1楼地面，顶面20cm)同高，BuildingElement.cpp的gap条带顶面。
+#define ZONE_GROUND_TOP 20.f
 
 using namespace std;
 
@@ -61,6 +66,7 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 		// Zone数量级不大(远小于Room)，碰撞盒直接挂在这个组件的单例owner上，不需要per-zone的Actor。
 		BuildCollisionBox(zone);
 		BuildDecorations(*zone);
+		BuildGround(*zone);
 
 		// 园区大门：常驻，不随LOD(围墙本身就是常驻的)。数量级和Zone本身一样小，同样直接挂
 		// 在这个组件的单例owner上，不需要per-zone的Actor。
@@ -73,6 +79,156 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 			owner->AddInstanceComponent(comp);
 		}
 	}
+}
+
+void UForeverZoneFrameworkComponent::BuildGround(const Zone& zone) {
+	const string& materialPath = zone.GetGapMaterialPath();
+	if (materialPath.empty()) return;
+	AActor* owner = GetOwner();
+	if (!owner) return;
+
+	UMaterialInterface* material = LoadObject<UMaterialInterface>(nullptr, UTF8_TO_TCHAR(materialPath.c_str()));
+	if (!material) {
+		UE_LOG(LogTemp, Warning, TEXT("UForeverZoneFrameworkComponent::BuildGround: failed to load material %s"),
+			UTF8_TO_TCHAR(materialPath.c_str()));
+		return;
+	}
+
+	// 全部在园区局部系里算(原点在园区中心、轴向与园区一致)：园区quad是轴对齐矩形，
+	// 要扣掉的内部建筑quad是带相对旋转的矩形。
+	const float halfX = zone.GetSizeX() * 0.5f, halfY = zone.GetSizeY() * 0.5f;
+	const float zoneRot = zone.GetRotation();
+	const float cosZ = FMath::Cos(zoneRot), sinZ = FMath::Sin(zoneRot);
+	auto worldToLocal = [&](float wx, float wy) -> FVector2D {
+		float dx = wx - zone.GetPosX(), dy = wy - zone.GetPosY();
+		return FVector2D(dx * cosZ + dy * sinZ, -dx * sinZ + dy * cosZ);
+	};
+	// 以局部点center为中心、长轴方向角angle、尺寸(sx,sy)的矩形四角。
+	auto rectCorners = [](FVector2D center, float angle, float sx, float sy) {
+		TArray<FVector2D> c;
+		float cs = FMath::Cos(angle), sn = FMath::Sin(angle);
+		const float sgn[4][2] = { {-1, -1}, {1, -1}, {1, 1}, {-1, 1} };
+		for (auto& s : sgn) {
+			float lx = s[0] * sx * 0.5f, ly = s[1] * sy * 0.5f;
+			c.Add(FVector2D(center.X + lx * cs - ly * sn, center.Y + lx * sn + ly * cs));
+		}
+		return c;
+	};
+
+	TArray<TArray<FVector2D>> obstacles;
+	for (const Building* building : zone.GetInternalBuildings()) {
+		if (!building) continue;
+		obstacles.Add(rectCorners(worldToLocal(building->GetPosX(), building->GetPosY()),
+			building->GetRotation() - zoneRot, building->GetSizeX(), building->GetSizeY()));
+	}
+
+	// 凸多边形在水平线y上的x区间；线在多边形y范围外返回false。
+	auto intervalAt = [](const TArray<FVector2D>& poly, float y, float& outMin, float& outMax) {
+		bool hit = false;
+		outMin = TNumericLimits<float>::Max();
+		outMax = TNumericLimits<float>::Lowest();
+		for (int i = 0; i < poly.Num(); i++) {
+			const FVector2D& a = poly[i];
+			const FVector2D& b = poly[(i + 1) % poly.Num()];
+			if (y < FMath::Min(a.Y, b.Y) - 1e-4f || y > FMath::Max(a.Y, b.Y) + 1e-4f) continue;
+			hit = true;
+			if (FMath::Abs(b.Y - a.Y) < 1e-6f) {
+				outMin = FMath::Min(outMin, FMath::Min(a.X, b.X));
+				outMax = FMath::Max(outMax, FMath::Max(a.X, b.X));
+				continue;
+			}
+			float x = a.X + (b.X - a.X) * (y - a.Y) / (b.Y - a.Y);
+			outMin = FMath::Min(outMin, x);
+			outMax = FMath::Max(outMax, x);
+		}
+		return hit;
+	};
+
+	// 水平扫描：断点取所有障碍角点的y，再补上不同障碍边之间交点的y(带内障碍的左右边不再互相穿插)。
+	TArray<float> ys = { -halfY, halfY };
+	for (const auto& poly : obstacles) {
+		for (const FVector2D& p : poly) ys.Add(FMath::Clamp(p.Y, -halfY, halfY));
+	}
+	for (int i = 0; i < obstacles.Num(); i++) {
+		for (int j = i + 1; j < obstacles.Num(); j++) {
+			for (int ei = 0; ei < 4; ei++) {
+				for (int ej = 0; ej < 4; ej++) {
+					FVector2D p = obstacles[i][ei], r = obstacles[i][(ei + 1) % 4] - p;
+					FVector2D q = obstacles[j][ej], s = obstacles[j][(ej + 1) % 4] - q;
+					float denom = r.X * s.Y - r.Y * s.X;
+					if (FMath::Abs(denom) < 1e-8f) continue;
+					float u = ((q.X - p.X) * s.Y - (q.Y - p.Y) * s.X) / denom;
+					float v = ((q.X - p.X) * r.Y - (q.Y - p.Y) * r.X) / denom;
+					if (u < 0.f || u > 1.f || v < 0.f || v > 1.f) continue;
+					ys.Add(FMath::Clamp(p.Y + r.Y * u, -halfY, halfY));
+				}
+			}
+		}
+	}
+	ys.Sort();
+
+	TArray<FVector> vertices;
+	TArray<int32> triangles;
+	const float z = ZONE_GROUND_TOP;
+	auto addQuad = [&](FVector2D a0, FVector2D b0, FVector2D b1, FVector2D a1) {
+		int32 base = vertices.Num();
+		const FVector2D corners[4] = { a0, b0, b1, a1 };
+		for (const FVector2D& p : corners) {
+			// 局部 -> 世界(世界单位)
+			float wx = zone.GetPosX() * ZONE_WORLD_SCALE + (p.X * cosZ - p.Y * sinZ) * ZONE_WORLD_SCALE;
+			float wy = zone.GetPosY() * ZONE_WORLD_SCALE + (p.X * sinZ + p.Y * cosZ) * ZONE_WORLD_SCALE;
+			vertices.Add(FVector(wx, wy, z));
+		}
+		// 正反两种绕序都加：薄片只用来铺材质，不依赖单面剔除方向(两面各只有一面可见，不会互相z-fighting)。
+		const int32 order[] = { 0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2 };
+		for (int32 index : order) triangles.Add(base + index);
+	};
+
+	struct FSpan { float l0, r0, l1, r1, lm; };
+	for (int k = 0; k + 1 < ys.Num(); k++) {
+		float y0 = ys[k], y1 = ys[k + 1];
+		if (y1 - y0 < 1e-4f) continue;
+		float ym = (y0 + y1) * 0.5f;
+		TArray<FSpan> spans;
+		for (const auto& poly : obstacles) {
+			float lm, rm, l0, r0, l1, r1;
+			if (!intervalAt(poly, ym, lm, rm)) continue;
+			intervalAt(poly, y0, l0, r0);
+			intervalAt(poly, y1, l1, r1);
+			spans.Add({ FMath::Clamp(l0, -halfX, halfX), FMath::Clamp(r0, -halfX, halfX),
+				FMath::Clamp(l1, -halfX, halfX), FMath::Clamp(r1, -halfX, halfX), lm });
+		}
+		spans.Sort([](const FSpan& a, const FSpan& b) { return a.lm < b.lm; });
+		// 从左往右：curR0/curR1是目前已被占住的最右边(带底/带顶两端)，下一个障碍左边与它之间就是空隙梯形。
+		float curR0 = -halfX, curR1 = -halfX, curRm = -halfX;
+		for (const FSpan& span : spans) {
+			if (span.lm > curRm + 1e-5f && (span.l0 - curR0 > 1e-4f || span.l1 - curR1 > 1e-4f)) {
+				addQuad(FVector2D(curR0, y0), FVector2D(span.l0, y0), FVector2D(span.l1, y1), FVector2D(curR1, y1));
+			}
+			float rm = (span.r0 + span.r1) * 0.5f;
+			if (rm > curRm) { curRm = rm; curR0 = span.r0; curR1 = span.r1; }
+		}
+		if (halfX - curR0 > 1e-4f || halfX - curR1 > 1e-4f) {
+			addQuad(FVector2D(curR0, y0), FVector2D(halfX, y0), FVector2D(halfX, y1), FVector2D(curR1, y1));
+		}
+	}
+	if (vertices.Num() == 0) return;
+
+	UProceduralMeshComponent* comp = NewObject<UProceduralMeshComponent>(owner, NAME_None, RF_Transient);
+	comp->SetupAttachment(owner->GetRootComponent());
+	comp->SetMobility(EComponentMobility::Static);
+	comp->bUseAsyncCooking = false;
+	TArray<FVector> normals;
+	normals.Init(FVector::UpVector, vertices.Num());
+	TArray<FVector2D> uvs;
+	uvs.Reserve(vertices.Num());
+	for (const FVector& v : vertices) uvs.Add(FVector2D(v.X / ZONE_WORLD_SCALE, v.Y / ZONE_WORLD_SCALE));
+	comp->CreateMeshSection(0, vertices, triangles, normals, uvs, TArray<FColor>(), TArray<FProcMeshTangent>(), true); // 开碰撞：平面三角网格，脚踩在上面
+	comp->SetMaterial(0, material);
+	comp->SetCollisionProfileName(TEXT("BlockAll"));
+	comp->SetGenerateOverlapEvents(false);
+	comp->RegisterComponent();
+	owner->AddInstanceComponent(comp);
 }
 
 void UForeverZoneFrameworkComponent::BuildDecorations(const Zone& zone) {

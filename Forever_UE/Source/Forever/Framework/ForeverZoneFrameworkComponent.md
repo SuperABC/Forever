@@ -47,6 +47,7 @@
   `ForeverBuildingFrameworkComponent`的`EndPlay`野指针教训同一套安全原则），只发进出园区事件
   (`enter_zone`/`leave_zone`，经`UForeverStoryFrameworkComponent::BroadcastPlayerLocation`发给全局和该园区自己的`Script`)。`FindZoneNameOfBox`供`DescribeLocation`按碰撞盒反查园区名。
 
+- **园区地面**——`BuildGround(zone)`：`GetGapMaterialPath()`非空时，在园区局部系里用园区quad减去所有内部建筑quad（旋转矩形；道路不扣，路面自己盖在上面），剩下的空隙做水平扫描：断点取所有障碍角点y和障碍边两两交点y，每个水平带里按左边界排序障碍区间，相邻障碍之间切出梯形，三角化成一块`UProceduralMeshComponent`（高`ZONE_GROUND_TOP`=20cm，和`BuildingElement`的gap条带顶面同高，`CreateMeshSection`开碰撞+`BlockAll`（平面三角网格，复杂碰撞当简单碰撞，角色踩在上面），正反绕序都加）。注意不能整块铺：会盖住建筑1楼下地下室的楼梯口。
 - **园区自定义模型常驻**——`BuildDecorations(zone)`对`Zone::GetDecorations()`每个摆位建一个Static的
   `UStaticMeshComponent`(`LoadObject`，失败打Warning跳过)，摆法和`ABuildingElement::BuildDecorations`
   一致(缩放=资产原尺寸倍数，Z贴`ZONE_HEIGHT_EPSILON`地坪)。园区没有LOD，和围墙/大门一样常驻。

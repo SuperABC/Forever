@@ -143,6 +143,7 @@
 		"doors": [
 			{
 				"direction": 3,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -164,6 +165,7 @@
 		"doors": [
 			{
 				"direction": 3,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -185,6 +187,7 @@
 		"doors": [
 			{
 				"direction": 2,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],
@@ -206,6 +209,7 @@
 		"doors": [
 			{
 				"direction": 2,
+				"tag": "home",
 				"positions": [
 					[0.5, -0.1, 0, 0.1, 0.5, 0.1, 1, 0],
 				],

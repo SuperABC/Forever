@@ -405,6 +405,8 @@ struct PathLaneSpec {
 
 // Zone/Building的mod往Lot里指定一块贴着某条边界路的矩形区域时使用：direction是贴哪一侧
 // (FACE_DIRECTION)，marginStart/marginEnd是沿该路方向距两端的距离，depth是离路的进深。
+// 沿路宽度和进深是最小值：某一侧切完剩下的空隙不到小路宽度+最小地块边长(3个单位)就不切，目标拉伸到那条边，
+// 实际占地可能更大；沿路宽度放不下请求宽度则拒绝，见general_geometry.md。
 struct LotPlacementRequest {
 	Lot* lot = nullptr;
 	int direction = FACE_WEST;
@@ -579,6 +581,11 @@ public:
 		float endT2 = 0.f;
 	};
 	SplitResult SplitWithPath(bool splitAlongX, float splitCoordinate, const PathLaneSpec& spec);
+
+	// 不带小路的普通切分：在splitCoordinate处直接一分为二(没有小路占宽，两块紧挨着)，切割面两侧都没有边界Road，
+	// 其余方向的边界Road各自继承。两块切完都要有边界Road才有意义(调用方判断)，pathRoad为空，切分失败
+	// (坐标越界、任一块边长小于最小地块边长)时lowerLot/upperLot为空。
+	SplitResult SplitPlain(bool splitAlongX, float splitCoordinate);
 
 	// 自由子地块池,惰性初始化(首次访问时new一个Lot并push_back)。该分配只能发生在Core编译的代码里,
 	// mod DLL只能用下面的PeekFreeLots(),原因见general_geometry.md"跨DLL分配器"。

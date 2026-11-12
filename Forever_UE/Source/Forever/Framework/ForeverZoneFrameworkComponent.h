@@ -49,6 +49,9 @@ private:
 	// UStaticMeshComponent，和围墙/大门一样常驻(园区没有LOD)。
 	void BuildDecorations(const Zone& zone);
 
+	// 园区地面：zone.GetGapMaterialPath()非空时，园区quad扣掉内部建筑quad后剩下的空隙，用扫描线拆成梯形铺一块ProceduralMesh(高度ZONE_GROUND_TOP=20cm，与建筑gap同高)。
+	void BuildGround(const Zone& zone);
+
 	UFUNCTION()
 	void OnZoneOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);

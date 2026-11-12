@@ -15,6 +15,7 @@
 ## 关键设计
 
 - **一个本体独占一个mod实例**：`Map::InitZones()`对每个落地成功的Zone单独`CreateZone(id)`，再调一次`mod->Layout(direction, quad, boundaryRoads)`，所以布局可以按这次落地的具体情况决定，不是整个mod类型统一一份配置。`direction`是`Assign`选中的方向；`quad`/`boundaryRoads`是纯只读输入(Zone本身是`Quad`子类)。默认空实现。
+- **园区地面（gapMaterial）**：`std::string gapMaterial`，园区整块quad的地面材质软路径，空=不铺（默认）。Core在`Zone::Layout`拷贝成快照`gapMaterialPath`（进存档，无版本号变化）；渲染层只铺园区quad扣掉内部建筑quad后的空隙（顶面20cm，和建筑gap同高），建筑自己的范围不铺，道路不扣。
 - **布局输出全是值类型**(`string`/`vector`/`unordered_map<int,int>`)，符合跨DLL安全规则：`walls`/`gates`由`Zone::GetWalls()`/`GetGates()`直接转发；`vehicleEntries`/`vehicleExits`/`pedestrianAccess`/`internalRoads`由`Map::InitZones()`读回实例化；`internalBuildings`推迟到`Map::InitBuildings()`读(此时`buildingFactory`才注册好mod)。具体消费见`Source/Core/map/zone.md`和`map.md`"Zone内部布局"。
   - `ZoneWallSpec{direction,marginStart,marginEnd,depth,depthInward,mesh,unit}`：沿`direction`参考边铺设，`depthInward`控制进深往矩形内/外量(哪个正确由围墙资产朝向决定，默认`true`)。`mesh`/`unit`与`Road::GetMesh()`/`GetUnit()`同语义，沿边重复铺设，规则同`ForeverRoadnetFrameworkComponent::BuildRoadInstances`的`tileRange`(缩放后的unit落在`[0.8,1.2]*unit`)，渲染在`ForeverZoneFrameworkComponent`，Core只透传。
   - `ZoneGateSpec`：位置部分与墙同构(围墙据此让出这段空当)，加`door`(`DoorSpec`)；`door.mesh`为空=只是空当不放门，同建筑门/房间门的约定，见`feature_spec.md`。
@@ -24,7 +25,7 @@
 - **`stateOwnedChance`**(默认0.2)：被政府拥有的概率，`Map::Checkin`读取。**`scriptModName`/`milestoneNames`**：园区自己的Script，非空才创建，进出事件只发给它，见`map.md`"实体脚本"。
 - **自定义模型和树**：`AddDecoration(DecorationSpec)`在`Layout()`里调用；园区没有footprint，`position`是相对园区quad(原点西北角，+X东+Y南)的`PointParams`，按"朝北"(大门在北)定义，Core按大门方向用`InversePoint`旋转，yaw叠加`FaceYawDegrees`和园区自身旋转(`Zone::NorthPointToWorld`/`NorthYawToWorld`)，常驻显示(园区没有LOD)。`LayoutTrees(direction, quad, boundaryRoads)`(默认空)由`Map::InitVegetation`调一次，用`AddTreeSingle/Line/Area`提交请求；坐标同样按朝北写，mod只写一份就适配四个朝向(建筑的`AddTreeArea`则不做朝向旋转)。
 - 带存档钩子，默认不存任何东西，见`common/mod_state.md`。
-- `ResidenceZone`(`Source/Basic`)是用这些字段搭的围墙+大门+内部道路测试场景：大门开口两端内侧各放一个急救包(`ZONE_KIT_*`)；沿四面栅栏内侧`ZONE_TREE_INSET`处每`ZONE_TREE_SPACING`种一棵Mossy_Tree，西/东边含两个角，南/北边各收一个间距避开角，北边(大门边)分两段、大门开口两侧各让出半个间距(与行道树避让开口同规则)。
+- `Residence{High,Middle,Low}Zone`(`Source/Basic`)是用这些字段搭的围墙+大门+内部道路测试场景：大门开口两端内侧各放一个急救包(`ZONE_KIT_*`)；沿四面栅栏内侧`ZONE_TREE_INSET`处每`ZONE_TREE_SPACING`种一棵Mossy_Tree，西/东边含两个角，南/北边各收一个间距避开角，北边(大门边)分两段、大门开口两侧各让出半个间距(与行道树避让开口同规则)。
 
 ## 依赖关系
 

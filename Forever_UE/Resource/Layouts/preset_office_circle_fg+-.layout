@@ -2,12 +2,14 @@
 	"stairs": [{
 		"rect": [0.2, 0.4, 0.1, 0.4, 0.4, 0, 0.1, 1.2],
 		"direction": 2,
-		"walls": [1, 3],
+		"walls": [0, 1, 3],
+		"wallTags": {"1":{"east":"brick","south":"brick"},"3":{"east":"brick","south":"brick"}},
 	},
 	{
 		"rect": [0.6, 0, 0.1, 0.4, 0.8, -0.4, 0.1, 1.2],
 		"direction": 2,
-		"walls": [0, 3],
+		"walls": [0, 1, 3],
+		"wallTags": {"0":{"south":"brick","west":"brick"},"3":{"west":"brick","south":"brick"}},
 	}],
 	"ceilings": [
 		[0, 0, 0, 0, 0.4, 0, 0.1, 0.4],
@@ -24,8 +26,9 @@
 		[0.8, -0.4, 0.1, 0.4, 1, 0, 0.9, -0.4],
 		[0, 0, 0.9, -0.4, 0.1, 0.4, 0.9, 0],
 		[0.9, -0.4, 0.9, -0.4, 1, 0, 0.9, 0],
-		{"rect": [0.2, 0.4, 0.1, 0.4, 0.8, -0.4, 0.9, -0.4], "tag": "pavement"},
+		{"rect": [0.2, 0.4, 0.1, 1.2, 0.8, -0.4, 0.9, -0.4], "tag": "pavement"},
 		{"rect": [0.4, 0, 0, 0, 0.6, 0, 0.1, 0.4], "tag": "pavement"},
+		[0.4, 0, 0.1, 0.4, 0.6, 0, 0.1, 1.2],
 	],
 	"corridors": [{
 		"rect": [0.1, 0, 0.1, 0.4, 0.1, 0.4, 0.9, -0.4],
@@ -39,6 +42,7 @@
 	{
 		"rect": [0.2, 0.4, 0.9, -0.4, 0.8, -0.4, 0.9, 0],
 		"walls": [2],
+		"wallTags": {"2":{"north":"brick"}},
 		"doors": [
 			{
 				"direction": 2,
@@ -54,6 +58,7 @@
 	{
 		"rect": [0.5, -0.4, 0.9, 0, 0.5, 0.4, 1, 0],
 		"walls": [3],
+		"wallTags": {"3":{"south":"brick"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -72,14 +77,17 @@
 	{
 		"rect": [0, 0, 0.9, 0, 0.1, 0.4, 1, 0],
 		"walls": [2, 3],
+		"wallTags": {"3":{"east":"brick","south":"brick"}},
 	},
 	{
 		"rect": [0.9, -0.4, 0.9, 0, 1, 0, 1, 0],
 		"walls": [2, 3],
+		"wallTags": {"3":{"east":"brick","south":"brick"}},
 	}],
 	"singles": [{
 		"rect": [0.2, 0.4, 0, 0, 0.4, 0, 0.1, 0.4],
 		"direction": 1,
+		"wallTags": {"1":{"east":"brick","north":"brick"},"2":{"north":"brick","east":"brick"}},
 		"doors": [
 			{
 				"direction": 1,
@@ -112,6 +120,7 @@
 	{
 		"rect": [0.6, 0, 0, 0, 0.8, -0.4, 0.1, 0.4],
 		"direction": 0,
+		"wallTags": {"0":{"west":"brick","north":"brick"},"2":{"north":"brick","west":"brick"}},
 		"doors": [
 			{
 				"direction": 0,
@@ -144,6 +153,7 @@
 	{
 		"rect": [0, 0, 0, 0, 0.2, 0.4, 0.1, 0],
 		"direction": 3,
+		"wallTags": {"0":{"west":"brick","north":"brick"},"2":{"north":"brick","west":"brick"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -171,6 +181,7 @@
 	{
 		"rect": [0.8, -0.4, 0, 0, 1, 0, 0.1, 0],
 		"direction": 3,
+		"wallTags": {"1":{"east":"brick","north":"brick"},"2":{"east":"brick","north":"brick"}},
 		"doors": [
 			{
 				"direction": 3,
@@ -198,6 +209,7 @@
 	"rows": [{
 		"rect": [0, 0, 0.1, 0, 0.1, 0, 0.9, 0],
 		"direction": 1,
+		"wallTags": {"0":{"west":"brick"}},
 		"doors": [
 			{
 				"direction": 1,
@@ -219,6 +231,7 @@
 	{
 		"rect": [0.9, 0, 0.1, 0, 1, 0, 0.9, 0],
 		"direction": 0,
+		"wallTags": {"1":{"east":"brick"}},
 		"doors": [
 			{
 				"direction": 0,
@@ -240,6 +253,7 @@
 	{
 		"rect": [0.1, 0.4, 0.1, 0.4, 0.2, 0.4, 0.9, -0.4],
 		"direction": 0,
+		"wallTags": {"1":{"east":"brick"}},
 		"doors": [
 			{
 				"direction": 0,
@@ -261,6 +275,7 @@
 	{
 		"rect": [0.8, -0.4, 0.1, 0.4, 0.9, -0.4, 0.9, -0.4],
 		"direction": 1,
+		"wallTags": {"0":{"west":"brick"}},
 		"doors": [
 			{
 				"direction": 1,
@@ -282,6 +297,7 @@
 	{
 		"rect": [0.1, 0.4, 0.9, 0, 0.5, -0.4, 1, 0],
 		"direction": 2,
+		"wallTags": {"3":{"south":"brick"}},
 		"doors": [
 			{
 				"direction": 2,
@@ -303,6 +319,7 @@
 	{
 		"rect": [0.5, 0.4, 0.9, 0, 0.9, -0.4, 1, 0],
 		"direction": 2,
+		"wallTags": {"3":{"south":"brick"}},
 		"doors": [
 			{
 				"direction": 2,
@@ -324,7 +341,7 @@
 	"pedestrianNavigation": {
 		"nodes": [
 			{
-				"position": [0.5, 0, 0.1, -0.2],
+				"position": [0.5, 0, 0, 0.4],
 			},
 			{
 				"position": [0.3, 0.4, 0.1, 1],
@@ -346,12 +363,6 @@
 			},
 			{
 				"position": [0.5, 0, 0, -0.2],
-			},
-			{
-				"position": [0.9, -0.2, 0.95, 0],
-			},
-			{
-				"position": [0.1, 0.2, 0.95, 0],
 			},
 		],
 		"lines": [
@@ -638,53 +649,55 @@
 					"vertex": -1,
 				},
 			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 9,
-				},
-				"end": {
-					"type": "line",
-					"idx": 2,
-					"vertex": 0,
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 8,
-				},
-				"end": {
-					"type": "line",
-					"idx": 2,
-					"vertex": 1,
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 9,
-				},
-				"end": {
-					"type": "single",
-					"idx": 4,
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 8,
-				},
-				"end": {
-					"type": "single",
-					"idx": 5,
-				},
-			},
 		],
 	},
 	"vehicleNavigation": {
-		"nodes": [],
+		"nodes": [
+			{
+				"position": [0, -0.2, 0.95, 0],
+			},
+			{
+				"position": [1, 0.2, 0.95, 0],
+			},
+		],
 		"lines": [],
-		"connections": [],
+		"connections": [
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "downstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "entrance",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 1,
+				},
+				"end": {
+					"type": "exit",
+				},
+			},
+		],
 	}
 }

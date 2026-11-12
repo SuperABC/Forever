@@ -67,17 +67,19 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static vector<pair<string, vector<string>>> dependencies = {
 		{ RiverTerrain::GetId(), { MountainTerrain::GetId() } }, // 河从山体里流出来
 
-		{ ResidenceZone::GetId(), { ResidenceHighBuilding::GetId() } },
+		{ ResidenceHighZone::GetId(), { ResidenceHighBuilding::GetId() } },
+		{ ResidenceMiddleZone::GetId(), { ResidenceMiddleBuilding::GetId() } },
+		{ ResidenceLowZone::GetId(), { ResidenceLowBuilding::GetId() } },
 
 		{ ResidenceHighBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 电梯脚本；地下室停车库
 		{ ResidenceMiddleBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ ResidenceLowBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
-		{ ShopHighBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
-		{ ShopMiddleBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
-		{ ShopLowBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
-		{ FactoryHighBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
-		{ FactoryMiddleBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
-		{ FactoryLowBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ CommerceHighBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), RestaurantRoom::GetId(), WarehouseRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
+		{ CommerceMiddleBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
+		{ CommerceLowBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
+		{ IndustryHighBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ IndustryMiddleBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ IndustryLowBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ OfficeHighBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ OfficeMiddleBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ OfficeLowBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
@@ -87,7 +89,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 
 		{ ResidenceComponent::GetId(), { ResidenceRoom::GetId() } },
 		{ OfficeComponent::GetId(), { OfficeRoom::GetId() } },
-		{ ShopComponent::GetId(), { ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId() } },
+		{ ShopComponent::GetId(), { ShopRoom::GetId(), RestaurantRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId() } },
 		{ FactoryComponent::GetId(), { FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ TrainStationComponent::GetId(), { TrainStationRoom::GetId() } },
 		{ AirportComponent::GetId(), { AirportRoom::GetId() } },
@@ -167,14 +169,22 @@ extern "C" __declspec(dllexport) void FinishModRoadnets(RoadnetFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModZones() {
-	static vector<string> mods = { ResidenceZone::GetId() };
+	static vector<string> mods = { ResidenceHighZone::GetId(), ResidenceMiddleZone::GetId(), ResidenceLowZone::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModZones(ZoneFactory* factory) {
-	factory->RegisterZone(ResidenceZone::GetId(),
-		[](const std::string&) -> ZoneMod* { return new ResidenceZone(); },
+	factory->RegisterZone(ResidenceHighZone::GetId(),
+		[](const std::string&) -> ZoneMod* { return new ResidenceHighZone(); },
 		[](ZoneMod* m) { delete m; },
-		&ResidenceZone::Assign);
+		&ResidenceHighZone::Assign);
+	factory->RegisterZone(ResidenceMiddleZone::GetId(),
+		[](const std::string&) -> ZoneMod* { return new ResidenceMiddleZone(); },
+		[](ZoneMod* m) { delete m; },
+		&ResidenceMiddleZone::Assign);
+	factory->RegisterZone(ResidenceLowZone::GetId(),
+		[](const std::string&) -> ZoneMod* { return new ResidenceLowZone(); },
+		[](ZoneMod* m) { delete m; },
+		&ResidenceLowZone::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 }
@@ -182,8 +192,8 @@ extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 extern "C" __declspec(dllexport) void* GetModBuildings() {
 	static vector<string> mods = {
 		ResidenceHighBuilding::GetId(), ResidenceMiddleBuilding::GetId(), ResidenceLowBuilding::GetId(),
-		ShopHighBuilding::GetId(), ShopMiddleBuilding::GetId(), ShopLowBuilding::GetId(),
-		FactoryHighBuilding::GetId(), FactoryMiddleBuilding::GetId(), FactoryLowBuilding::GetId(),
+		CommerceHighBuilding::GetId(), CommerceMiddleBuilding::GetId(), CommerceLowBuilding::GetId(),
+		IndustryHighBuilding::GetId(), IndustryMiddleBuilding::GetId(), IndustryLowBuilding::GetId(),
 		OfficeHighBuilding::GetId(), OfficeMiddleBuilding::GetId(), OfficeLowBuilding::GetId(),
 		TrainStationBuilding::GetId(), AirportBuilding::GetId(), ParkBuilding::GetId(),
 		MoharBuilding::GetId() };
@@ -205,36 +215,36 @@ extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* fact
 		[](BuildingMod* m) { delete m; },
 		&ResidenceLowBuilding::RandomAcreage, &ResidenceLowBuilding::GetAcreageMin, &ResidenceLowBuilding::GetAcreageMax,
 		&ResidenceLowBuilding::GetPower, &ResidenceLowBuilding::Assign);
-	factory->RegisterBuilding(ShopHighBuilding::GetId(),
-		[](const std::string&) -> BuildingMod* { return new ShopHighBuilding(); },
+	factory->RegisterBuilding(CommerceHighBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new CommerceHighBuilding(); },
 		[](BuildingMod* m) { delete m; },
-		&ShopHighBuilding::RandomAcreage, &ShopHighBuilding::GetAcreageMin, &ShopHighBuilding::GetAcreageMax,
-		&ShopHighBuilding::GetPower, &ShopHighBuilding::Assign);
-	factory->RegisterBuilding(ShopMiddleBuilding::GetId(),
-		[](const std::string&) -> BuildingMod* { return new ShopMiddleBuilding(); },
+		&CommerceHighBuilding::RandomAcreage, &CommerceHighBuilding::GetAcreageMin, &CommerceHighBuilding::GetAcreageMax,
+		&CommerceHighBuilding::GetPower, &CommerceHighBuilding::Assign);
+	factory->RegisterBuilding(CommerceMiddleBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new CommerceMiddleBuilding(); },
 		[](BuildingMod* m) { delete m; },
-		&ShopMiddleBuilding::RandomAcreage, &ShopMiddleBuilding::GetAcreageMin, &ShopMiddleBuilding::GetAcreageMax,
-		&ShopMiddleBuilding::GetPower, &ShopMiddleBuilding::Assign);
-	factory->RegisterBuilding(ShopLowBuilding::GetId(),
-		[](const std::string&) -> BuildingMod* { return new ShopLowBuilding(); },
+		&CommerceMiddleBuilding::RandomAcreage, &CommerceMiddleBuilding::GetAcreageMin, &CommerceMiddleBuilding::GetAcreageMax,
+		&CommerceMiddleBuilding::GetPower, &CommerceMiddleBuilding::Assign);
+	factory->RegisterBuilding(CommerceLowBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new CommerceLowBuilding(); },
 		[](BuildingMod* m) { delete m; },
-		&ShopLowBuilding::RandomAcreage, &ShopLowBuilding::GetAcreageMin, &ShopLowBuilding::GetAcreageMax,
-		&ShopLowBuilding::GetPower, &ShopLowBuilding::Assign);
-	factory->RegisterBuilding(FactoryHighBuilding::GetId(),
-		[](const std::string&) -> BuildingMod* { return new FactoryHighBuilding(); },
+		&CommerceLowBuilding::RandomAcreage, &CommerceLowBuilding::GetAcreageMin, &CommerceLowBuilding::GetAcreageMax,
+		&CommerceLowBuilding::GetPower, &CommerceLowBuilding::Assign);
+	factory->RegisterBuilding(IndustryHighBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new IndustryHighBuilding(); },
 		[](BuildingMod* m) { delete m; },
-		&FactoryHighBuilding::RandomAcreage, &FactoryHighBuilding::GetAcreageMin, &FactoryHighBuilding::GetAcreageMax,
-		&FactoryHighBuilding::GetPower, &FactoryHighBuilding::Assign);
-	factory->RegisterBuilding(FactoryMiddleBuilding::GetId(),
-		[](const std::string&) -> BuildingMod* { return new FactoryMiddleBuilding(); },
+		&IndustryHighBuilding::RandomAcreage, &IndustryHighBuilding::GetAcreageMin, &IndustryHighBuilding::GetAcreageMax,
+		&IndustryHighBuilding::GetPower, &IndustryHighBuilding::Assign);
+	factory->RegisterBuilding(IndustryMiddleBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new IndustryMiddleBuilding(); },
 		[](BuildingMod* m) { delete m; },
-		&FactoryMiddleBuilding::RandomAcreage, &FactoryMiddleBuilding::GetAcreageMin, &FactoryMiddleBuilding::GetAcreageMax,
-		&FactoryMiddleBuilding::GetPower, &FactoryMiddleBuilding::Assign);
-	factory->RegisterBuilding(FactoryLowBuilding::GetId(),
-		[](const std::string&) -> BuildingMod* { return new FactoryLowBuilding(); },
+		&IndustryMiddleBuilding::RandomAcreage, &IndustryMiddleBuilding::GetAcreageMin, &IndustryMiddleBuilding::GetAcreageMax,
+		&IndustryMiddleBuilding::GetPower, &IndustryMiddleBuilding::Assign);
+	factory->RegisterBuilding(IndustryLowBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new IndustryLowBuilding(); },
 		[](BuildingMod* m) { delete m; },
-		&FactoryLowBuilding::RandomAcreage, &FactoryLowBuilding::GetAcreageMin, &FactoryLowBuilding::GetAcreageMax,
-		&FactoryLowBuilding::GetPower, &FactoryLowBuilding::Assign);
+		&IndustryLowBuilding::RandomAcreage, &IndustryLowBuilding::GetAcreageMin, &IndustryLowBuilding::GetAcreageMax,
+		&IndustryLowBuilding::GetPower, &IndustryLowBuilding::Assign);
 	factory->RegisterBuilding(OfficeHighBuilding::GetId(),
 		[](const std::string&) -> BuildingMod* { return new OfficeHighBuilding(); },
 		[](BuildingMod* m) { delete m; },
@@ -304,7 +314,7 @@ extern "C" __declspec(dllexport) void FinishModComponents(ComponentFactory* fact
 
 extern "C" __declspec(dllexport) void* GetModRooms() {
 	static vector<string> mods = {
-		ResidenceRoom::GetId(), OfficeRoom::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(),
+		ResidenceRoom::GetId(), OfficeRoom::GetId(), ShopRoom::GetId(), RestaurantRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(),
 		FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(),
 		TrainStationRoom::GetId(), AirportRoom::GetId()
 	};
@@ -319,6 +329,9 @@ extern "C" __declspec(dllexport) void RegisterModRooms(RoomFactory* factory) {
 		[](RoomMod* m) { delete m; });
 	factory->RegisterRoom(ShopRoom::GetId(),
 		[](const std::string&) -> RoomMod* { return new ShopRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(RestaurantRoom::GetId(),
+		[](const std::string&) -> RoomMod* { return new RestaurantRoom(); },
 		[](RoomMod* m) { delete m; });
 	factory->RegisterRoom(WarehouseRoom::GetId(),
 		[](const std::string&) -> RoomMod* { return new WarehouseRoom(); },

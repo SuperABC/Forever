@@ -76,6 +76,8 @@ public:
 	// 围墙/大门/出入口/内部道路/内部建筑,纯值数据,由Map::InitZones()读回处理,在Layout(...)里设置。
 	std::vector<ZoneWallSpec> walls;
 	std::vector<ZoneGateSpec> gates;
+	// 园区地面(建筑和内部道路之外的空隙)的材质软路径,空=不铺。渲染层只铺quad扣掉内部建筑quad后的空隙,见zone_mod.md。
+	std::string gapMaterial;
 	std::vector<ZoneAccessPoint> vehicleEntries;
 	std::vector<ZoneAccessPoint> vehicleExits;
 	std::vector<ZoneAccessPoint> pedestrianAccess;
