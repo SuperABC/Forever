@@ -12,6 +12,7 @@
 #include <climits>
 #include <functional>
 #include <set>
+#include <unordered_map>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -88,6 +89,9 @@ private:
 	ScriptFactory& scriptFactory;
 
 	std::vector<Citizen*> citizens;
+	// 姓名->市民的索引，FindCitizenByName懒加载：citizens只增不减、姓名不改，所以只需把nameIndexedCount之后新增的补进来(同名取最先的)。
+	mutable std::unordered_map<std::string, Citizen*> nameIndex;
+	mutable size_t nameIndexedCount = 0;
 	int currentYear = 2000;
 	int initialPopulation = 0;
 

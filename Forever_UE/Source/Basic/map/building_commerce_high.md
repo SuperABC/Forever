@@ -14,7 +14,7 @@
 ## 三档密度与办公楼
 
 - `GetPower`只在对应类型和密度的分区返回`1.f`：`AREA_{RESIDENCE,COMMERCE,INDUSTRY,OFFICE}_{HIGH,MIDDLE,LOW}`。
-- **商店(高密度 `CommerceHighBuilding`)**：权重分区只有 `AREA_COMMERCE_HIGH`(已不在 `AREA_TEST`)。面积 `RandomAcreage()=8000+8000*rand`(8000~16000线性随机)，min 8000、max 16000。`Layout()` 只用 `preset_common_tshape_*`：无地下室、地上 3~5 层随机(1楼 `fg+`、其余 `fu+-`)，每层一个 component(`componentId`=层号)，含 1 个 single(`room_empty` 占位)+6 个 row(row 0~3：1楼 `room_restaurant`、2楼及以上 `room_shop`；row 4~5：`room_warehouse`；row 面积120)，2 台 `elevator_basic` 贯穿全楼；footprint 占满地块、四周各留固定 0.2 的空隙，朝向偏好长边正对的路，登记 `clay`→Clay、`concrete`→Concrete，`gapMaterial`=Pavement。中/低密度商店仍是旧布局。
+- **商店(高密度 `CommerceHighBuilding`)**：权重分区只有 `AREA_COMMERCE_HIGH`(已不在 `AREA_TEST`)。面积 `RandomAcreage()=8000+8000*rand`(8000~16000线性随机)，min 8000、max 16000。`Layout()` 只用 `preset_common_tshape_*`：无地下室、地上 3~5 层随机(1楼 `fg+`、其余 `fu+-`)，每层一个 component(`componentId`=层号)，含 1 个 single(`room_empty` 占位)+6 个 row(row 0~3：`room_shop`，整栋楼都是商店；row 4~5：`room_warehouse`；row 面积120)，2 台 `elevator_basic` 贯穿全楼；footprint 占满地块、四周各留固定 0.2 的空隙，朝向偏好长边正对的路，登记 `clay`→Clay、`concrete`→Concrete，`gapMaterial`=Pavement。中/低密度商店仍是旧布局。
 - 下面`ResidenceBuilding`/`CommerceBuilding`/`IndustryBuilding`几节描述的是对应类型**当前（三档共同）的逻辑**，指的是三个档次各自那份拷贝。
 
 ## CommerceBuilding

@@ -1,0 +1,49 @@
+{
+	// RestaurantWaiterJob的Script：上下班由计时器驱动。Core在Job::SetOccupant里给脚本写$$self.occupant(上班的人，空串=空岗)/
+	// home/workplace(房间地址)。game_start建两个当天的计时器，到时npc_navigate，再建次日的同名计时器。
+	// 9点出门去餐厅，18点回家；要改成8点半就把time改成"08:30:00"。
+	"milestones": [
+		{
+			"milestone": "game_start",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "create_timer", "name": "leave_home", "time": "09:00:00", "mode": "next" },
+				{ "type": "create_timer", "name": "leave_work", "time": "18:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "leave_home",
+			"triggers": [ { "type": "time_up", "name": "leave_home" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.workplace", "condition": "$$self.occupant != \"\"" },
+				{ "type": "create_timer", "name": "leave_home", "time": "09:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "leave_work",
+			"triggers": [ { "type": "time_up", "name": "leave_work" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\"" },
+				{ "type": "create_timer", "name": "leave_work", "time": "18:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

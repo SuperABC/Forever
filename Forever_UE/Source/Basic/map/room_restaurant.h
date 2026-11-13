@@ -5,7 +5,7 @@
 #include <string>
 
 
-// 餐厅room：CommerceHighBuilding一楼的联排。
+// 餐厅room：ResidenceHighBuilding twin布局一楼的联排。
 class RestaurantRoom : public RoomMod {
 public:
 	RestaurantRoom();

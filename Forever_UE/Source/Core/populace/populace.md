@@ -301,7 +301,7 @@ Organization类型已经在用同一套CDF算法，见`society.md`），详见`s
 返回是否认识这个类型(七个域都不认识时由`AForeverFrameworkActor::ApplyChange`统一打"未实现"警告)。
 
 `Populace::FindCitizenByName(const std::string& name) const`——对`citizens`
-线性扫描比较`GetName()`，找不到返回`nullptr`，不强制生成/持有任何Actor，纯Core层
+查`nameIndex`(姓名->市民的`unordered_map`，懒加载：`citizens`只增不减、姓名不改，每次查前把`nameIndexedCount`之后新增的市民补进索引，同名保留最先的)，平均O(1)；找不到返回`nullptr`，不强制生成/持有任何Actor，纯Core层
 数据查询。`AForeverFrameworkActor::ApplyChange`处理`NPCNavigateChange`时，只能
 反过来用change自带的occupant姓名（`NPCNavigateChange::GetName()`）反查
 `Citizen*`——和`UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName`

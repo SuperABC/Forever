@@ -65,12 +65,12 @@ void CommerceHighBuilding::Layout(int& direction, const Quad& quad,
 	constexpr float size = 120.f; // 联排房间面积
 
 	// 每层一个component(componentId=层号)：1个single(room_empty占位)+6个row，row 0~3是营业房
-	// (1楼餐厅、2楼及以上商店)，row 4~5是仓库；2台电梯贯穿全楼。
+	// (整栋都是商店)，row 4~5是仓库；2台电梯贯穿全楼。
 	for (int level = 0; level < layers; level++) {
 		AssignFloor(level, level == 0 ? "preset_common_tshape_fg+" : "preset_common_tshape_fu+-", direction);
 		AssignRoom(level, 0, "room_empty", kComponent, level);
 		for (int row = 0; row < 6; row++) {
-			const char* room = row >= 4 ? "room_warehouse" : level == 0 ? "room_restaurant" : "room_shop";
+			const char* room = row >= 4 ? "room_warehouse" : "room_shop";
 			ArrangeRow(level, row, room, size, kComponent, level);
 		}
 	}

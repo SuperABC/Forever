@@ -15,6 +15,7 @@
 #include "industry/product.h"
 
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <set>
 #include <unordered_map>
@@ -190,87 +191,117 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 		}
 	}
 
-	// 三、市民按户反馈需求：每人1份food。
+	// 三、市民按户反馈需求：成年人每天1份food，未成年(<adultAge)吃一半，整户合计向上取整到整份。
+	// 预算=全家账户余额合计/30(先写死，以后由scheduler自定义)，在"质量->单份价格"档位表里取
+	// "单份价格*份数<=预算"的最高档，预算连最低档都不够就取最低档(账户允许为负)。
 	struct Need {
 		Household* household;
 		int quantity;
+		float tier; // 选定的质量档(也是该户愿意接受的最高质量)
+		int remaining;
 	};
 	map<string, vector<Need>> needs;
 	for (const Room* room : rooms) {
 		if (!room || !room->IsResidence()) continue;
 		for (Household* household : room->GetHouseholds()) {
-			// 成年人每天1份，未成年(<adultAge)吃一半，整户合计向上取整到整份。
 			int halfPortions = 0;
+			int64_t balance = 0;
 			for (const Citizen* member : household->GetMembers()) {
 				if (!member || !member->IsActive()) continue;
 				halfPortions += member->GetAge(now) < society.GetPolicy().adultAge ? 1 : 2;
+				balance += ledger.Balance(Party::Of(member));
 			}
 			int portions = (halfPortions + 1) / 2;
-			if (portions > 0) needs[kMealServiceType].push_back({ household, portions });
+			if (portions <= 0) continue;
+
+			// 档位表：质量->当日该质量的最低单价(同服务类型下)。
+			const vector<Provider>& typeProviders = providers[kMealServiceType];
+			map<float, int64_t> tierPrice;
+			for (const Provider& provider : typeProviders) {
+				auto it = tierPrice.find(provider.offer.quality);
+				if (it == tierPrice.end() || provider.offer.unitPrice < it->second) tierPrice[provider.offer.quality] = provider.offer.unitPrice;
+			}
+			if (tierPrice.empty()) {
+				needs[kMealServiceType].push_back({ household, portions, 0.f, portions });
+				continue;
+			}
+			int64_t budget = balance / 30;
+			float tier = tierPrice.begin()->first;
+			for (const auto& [quality, price] : tierPrice) {
+				if (price * portions <= budget) tier = quality;
+			}
+			needs[kMealServiceType].push_back({ household, portions, tier, portions });
 		}
 	}
 
-	// 四、按服务类型把需求加权平均分给提供者：权重就是各自当日能提供的份数，供给不足时每家卖光，
-	// 供给充足时按份数比例分。
+	// 四、按质量档从高到低填充：供给按质量分组，从最高质量组往低处理；一组只能服务所选质量档>=该组质量的户，
+	// 高质量供给剩余不会去服务更低档的需求，也就不会提供超过预算的服务。同一组内多家提供者按份数比例分，
+	// 户按所选档从高到低依次领取；最低档供给用完仍没满足的需求直接丢弃(计入unmet)。
 	for (auto& [type, typeNeeds] : needs) {
 		ServiceStat& stat = report.services[type];
-		long long demand = 0;
-		for (const Need& need : typeNeeds) demand += need.quantity;
-		stat.demand = static_cast<int>(demand);
+		for (const Need& need : typeNeeds) stat.demand += need.quantity;
 
 		vector<Provider>& typeProviders = providers[type];
-		long long capacity = 0;
-		for (const Provider& provider : typeProviders) capacity += provider.offer.capacity;
+		map<float, vector<Provider*>, greater<float>> groups;
+		for (Provider& provider : typeProviders) groups[provider.offer.quality].push_back(&provider);
 
-		if (capacity > 0) {
-			if (demand >= capacity) {
-				for (Provider& provider : typeProviders) provider.quota = provider.offer.capacity;
+		vector<Need*> order;
+		for (Need& need : typeNeeds) order.push_back(&need);
+		stable_sort(order.begin(), order.end(), [](const Need* a, const Need* b) { return a->tier > b->tier; });
+
+		for (auto& [quality, group] : groups) {
+			long long capacity = 0;
+			for (const Provider* provider : group) capacity += provider->offer.capacity;
+			long long demand = 0;
+			for (const Need* need : order) {
+				if (need->tier >= quality) demand += need->remaining;
 			}
-			else {
-				// 按份数比例分，余数按小数部分从大到小逐份补。
-				long long assigned = 0;
-				vector<pair<long long, size_t>> remainders;
-				for (size_t i = 0; i < typeProviders.size(); i++) {
-					long long scaled = demand * typeProviders[i].offer.capacity;
-					typeProviders[i].quota = static_cast<int>(scaled / capacity);
-					assigned += typeProviders[i].quota;
-					remainders.push_back({ scaled % capacity, i });
+			if (capacity <= 0 || demand <= 0) continue;
+
+			// 本组总售出份数按组内提供者份数比例分成quota，余数按小数部分从大到小逐份补。
+			long long total = min(demand, capacity);
+			long long assigned = 0;
+			vector<pair<long long, size_t>> remainders;
+			for (size_t i = 0; i < group.size(); i++) {
+				long long scaled = total * group[i]->offer.capacity;
+				group[i]->quota = static_cast<int>(scaled / capacity);
+				assigned += group[i]->quota;
+				remainders.push_back({ scaled % capacity, i });
+			}
+			stable_sort(remainders.begin(), remainders.end(),
+				[](const auto& a, const auto& b) { return a.first > b.first; });
+			for (size_t k = 0; assigned < total && k < remainders.size(); k++, assigned++) {
+				group[remainders[k].second]->quota++;
+			}
+
+			// 五、各户依次从本组配额里买：成年成员均摊付款。
+			for (Need* need : order) {
+				if (need->tier < quality || need->remaining <= 0) continue;
+				vector<Citizen*> payers = need->household->GetAdults(now);
+				if (payers.empty()) {
+					for (Citizen* member : need->household->GetMembers()) {
+						if (member && member->IsActive()) payers.push_back(member);
+					}
 				}
-				stable_sort(remainders.begin(), remainders.end(),
-					[](const auto& a, const auto& b) { return a.first > b.first; });
-				for (size_t k = 0; assigned < demand && k < remainders.size(); k++, assigned++) {
-					typeProviders[remainders[k].second].quota++;
+				for (Provider* provider : group) {
+					if (need->remaining <= 0) break;
+					int take = min(need->remaining, provider->quota);
+					if (take <= 0) continue;
+
+					int64_t cost = provider->offer.unitPrice * take;
+					vector<int64_t> shares = SplitEvenly(cost, payers.size());
+					for (size_t k = 0; k < payers.size(); k++) {
+						ledger.Transfer(Party::Of(payers[k]), Party::Of(provider->organization), shares[k], Flow::SERVICE_PURCHASE);
+					}
+					provider->quota -= take;
+					provider->sold += take;
+					provider->revenue += cost;
+					need->remaining -= take;
+					stat.soldByQuality[quality] += take;
 				}
 			}
 		}
-
-		// 五、各户依次从提供者的配额里买：成年成员均摊付款。市民账户允许为负，每人每天1份food必须满足，只受库存限制。
-		for (const Need& need : typeNeeds) {
-			vector<Citizen*> payers = need.household->GetAdults(now);
-			if (payers.empty()) {
-				for (Citizen* member : need.household->GetMembers()) {
-					if (member && member->IsActive()) payers.push_back(member);
-				}
-			}
-			int remaining = need.quantity;
-			for (Provider& provider : typeProviders) {
-				if (remaining <= 0) break;
-				int64_t price = provider.offer.unitPrice;
-				int take = min(remaining, provider.quota);
-				if (take <= 0) continue;
-
-				int64_t cost = price * take;
-				vector<int64_t> shares = SplitEvenly(cost, payers.size());
-				for (size_t k = 0; k < payers.size(); k++) {
-					ledger.Transfer(Party::Of(payers[k]), Party::Of(provider.organization), shares[k], Flow::SERVICE_PURCHASE);
-				}
-				provider.quota -= take;
-				provider.sold += take;
-				provider.revenue += cost;
-				remaining -= take;
-			}
-			stat.unmet += remaining;
-		}
+		for (const Need& need : typeNeeds) stat.unmet += need.remaining;
 	}
 
 	// 六、组织扣除被用掉的服务（mod只改script变量），再按变量值回写仓库库存。

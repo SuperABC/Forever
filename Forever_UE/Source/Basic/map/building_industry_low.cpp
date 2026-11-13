@@ -61,11 +61,11 @@ void IndustryLowBuilding::Layout(int& direction, const Quad& quad,
 	floorHeights.assign(basements + layers, 0.6f);
 
 	if (basements > 0) {
-		AssignFloor(-1, "preset_single_room_pg+", direction, assets);
+		AssignFloor(-1, "preset_common_single_pg+", direction, assets);
 		AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
-		AssignFloor(0, "preset_single_room_fg-", direction, assets);
+		AssignFloor(0, "preset_common_single_fg-", direction, assets);
 	} else {
-		AssignFloor(0, "preset_single_room_fg", direction, assets);
+		AssignFloor(0, "preset_common_single_fg", direction, assets);
 	}
 	// 三种工坊房间等概率随机选一种：小麦/牛肉/汉堡工厂。
 	static const char* const kFactoryRooms[] = { "room_farm", "room_ranch", "room_food_factory" };

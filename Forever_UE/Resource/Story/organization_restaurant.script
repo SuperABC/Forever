@@ -1,0 +1,17 @@
+{
+	// RestaurantOrganization的Script。开局game_start里原来debug_print自己的名字，用来验证广播链路和名字唯一性；
+	// 验证完了，屏幕上一大串名字会挤掉其它调试信息，已清空，里程碑结构留着给以后加内容。
+	"milestones": [
+		{
+			"milestone": "game_start",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

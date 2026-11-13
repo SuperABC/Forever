@@ -29,7 +29,9 @@
 
 阶段顺序(新游戏/读档同一套)：加载模组(`Registry::RefreshMods`+`ValidateMainStoryDependencies`) → 预热截屏(`UForeverWeaponComponent::WarmUpScreenshot`，相机拍照第一次GPU回读约0.5s卡顿，趁加载界面先偷偷截一张丢掉) → 构建地形 → 路网 → 园区 → 建筑 → 栽种植被 → 布置路灯 →
 构建交通 → 生成地形/道路/园区/建筑/植被/路灯模型 → 构建人口 → 构建社会与产业(Society+Player+Industry) → 执行开局剧情(读档：恢复存档，即`EnsureStoryGenerated`) →
-构建载具(读档：恢复载具与玩家，含`RestoreControlledPawn`/`RestoreWorldAssets`) → (进图后)构建场景。
+构建载具(读档：恢复载具与玩家，含`RestoreControlledPawn`/`RestoreWorldAssets`) → 预热交通(`UForeverTrafficFrameworkComponent::GetJunctionTraffic`) → (进图后)构建场景。
+
+**路口通行表预热**：`JunctionTraffic`原来是懒构建的：第一个市民开始走路、`ACitizenController::GateCrosswalk`第一次调`GetJunctionTraffic()`才`BuildFromMap`(日志"junction traffic built (N connections)"出现在第一个市民走路那一刻，约2秒)，现在"预热交通"阶段提前建好。
 
 - 地图被拆成`BuildMap*`(Core数据，读档时`BuildMapTerrain`恢复整张地图其余跳过)和`Generate*Mesh`(UE网格)两批：Core数据全部算完才统一生成网格，
   因为Roadnet要采样地形/水面，Zone/Building要用Roadnet产出的Lot，路网网格要等`InitZones`/`InitBuildings`新增的小路。**构建交通排在地形网格之前**，因为instantiate线路(火车)铺轨要请求地形抬升/挖隧道洞。

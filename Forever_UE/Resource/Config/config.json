@@ -1,9 +1,11 @@
 {
    "app_mods" : [],
-   "asset_mods" : [],
+   "asset_mods" : [ "asset_burger", "asset_container" ],
    "building_mods" : [
       "building_residence_high",
       "building_industry_high",
+      "building_industry_middle",
+      "building_industry_low",
       "building_commerce_high",
       "building_office_high"
    ],
@@ -11,6 +13,7 @@
       "component_residence",
       "component_manufacture",
       "component_shop",
+      "component_restaurant",
       "component_office"
    ],
    "dll_paths" : [
@@ -18,12 +21,21 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
    ],
-   "job_mods" : [],
+   "job_mods" : [
+      "job_shop_saler",
+      "job_restaurant_waiter",
+      "job_warehouse_keeper",
+      "job_factory_worker"
+   ],
    "main_story" : "script_test",
-   "manufacture_mods" : [],
+   "manufacture_mods" : [ "manufacture_farm", "manufacture_ranch", "manufacture_food" ],
    "name_mods" : [ "name_chinese" ],
-   "organization_mods" : [],
-   "product_mods" : [],
+   "organization_mods" : [
+      "organization_shop",
+      "organization_restaurant",
+      "organization_manufacture"
+   ],
+   "product_mods" : [ "product_wheat", "product_beef", "product_burger" ],
    "puzzle_mods" : [],
    "resource_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story",
@@ -43,10 +55,10 @@
       "room_warehouse"
    ],
    "route_mods" : [],
-   "scheduler_mods" : [],
+   "scheduler_mods" : [ "scheduler_basic" ],
    "script_mods" : [ "script_empty", "script_test" ],
    "station_mods" : [],
-   "storage_mods" : [],
+   "storage_mods" : [ "storage_shop", "storage_restaurant" ],
    "story_scripts" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
    ],

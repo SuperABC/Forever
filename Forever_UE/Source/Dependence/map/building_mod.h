@@ -108,6 +108,9 @@ public:
 	void ArrangeRow(int level, int slot, const std::string& room, float acreage,
 		const std::string& component, int id);
 
+	// 同ArrangeRow,但切出的每个Room各自独立一个componentType类型的Component(不共用)。
+	void ArrangeRowEach(int level, int slot, const std::string& room, float acreage, const std::string& component);
+
 	// 声明一台电梯轿厢,同一口井可声明多台(楼层范围不能重叠,重叠的后一条被跳过)。
 	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "",
 		std::string scriptModName = "script_empty", std::vector<std::string> milestoneNames = {});
@@ -122,6 +125,8 @@ public:
 	// (component,id) -> [(level, slot, roomType, acreage)]，ArrangeRow记录的row槽位。
 	std::unordered_map<std::pair<std::string, int>, std::vector<std::tuple<int, int, std::string, float>>,
 		BuildingComponentKeyHash> rows;
+	// ArrangeRowEach记录的row槽位:(level, slot, roomType, acreage, componentType),每个Room独立Component。
+	std::vector<std::tuple<int, int, std::string, float, std::string>> eachRows;
 	// AssignElevatorCabin记录的电梯轿厢列表。
 	std::vector<ElevatorCabinSpec> cabins;
 

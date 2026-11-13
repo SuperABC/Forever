@@ -478,8 +478,9 @@ private:
 
 	// 按mod->singles/rows实例化Component+Room。
 	void AssignRoom(int level, int slot, const std::string& roomType, Component* component, RoomFactory& roomFactory);
+	// component为空时(ArrangeRowEach)每个Room各建一个componentType类型的独立Component。
 	void ArrangeRow(int level, int slot, const std::string& roomType, float acreage, Component* component,
-		RoomFactory& roomFactory);
+		RoomFactory& roomFactory, const std::string& componentType = "", ComponentFactory* componentFactory = nullptr);
 
 	// 行人导航图(转发BuildNavigationGraph，isVehicle=false, registerRoomNodes=true)，见BuildingNavResult
 	void BuildPedestrianNavigation(const BuildingLayoutLibrary& library, int direction, BuildingNavResult& navOut);

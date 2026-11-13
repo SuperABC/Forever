@@ -42,6 +42,7 @@
    "component_mods" : [
       "component_residence",
       "component_shop",
+      "component_restaurant",
       "component_manufacture",
       "component_office",
       "component_train_station",
@@ -57,6 +58,7 @@
    ],
    "job_mods" : [
       "job_shop_saler",
+      "job_restaurant_waiter",
       "job_empty --test true",
       "job_factory_worker",
       "job_warehouse_keeper"
@@ -71,6 +73,7 @@
    "name_mods" : [ "name_chinese" ],
    "organization_mods" : [
       "organization_shop",
+      "organization_restaurant",
       "organization_empty --test true",
       "organization_manufacture"
    ],
@@ -95,6 +98,7 @@
       "room_residence",
       "room_office",
       "room_shop",
+      "room_restaurant",
       "room_warehouse",
       "room_parking",
       "room_train_station",
@@ -123,7 +127,8 @@
       "storage_beef",
       "storage_burger",
       "storage_empty --test true",
-      "storage_shop"
+      "storage_shop",
+      "storage_restaurant"
    ],
    "story_scripts" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"

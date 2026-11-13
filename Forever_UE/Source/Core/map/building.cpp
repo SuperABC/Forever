@@ -919,6 +919,10 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 			ArrangeRow(level, slot, roomType, acreage, component, roomFactory);
 		}
 	}
+	// ArrangeRowEach：切出的每个Room各自独立一个Component。
+	for (auto& [level, slot, roomType, acreage, componentType] : mod->eachRows) {
+		ArrangeRow(level, slot, roomType, acreage, nullptr, roomFactory, componentType, &componentFactory);
+	}
 
 	// 每个Room自己中心点的导航锚点，供BuildPedestrianNavigation()里"single"/"row"类型的
 	// 导航端点引用。不做ConfigRoom/PlacePivots——那些依赖furniture/pivots，还没有迁移。
@@ -1024,7 +1028,7 @@ void Building::AssignRoom(int level, int slot, const string& roomType, Component
 }
 
 void Building::ArrangeRow(int level, int slot, const string& roomType, float acreage, Component* component,
-	RoomFactory& roomFactory) {
+	RoomFactory& roomFactory, const string& componentType, ComponentFactory* componentFactory) {
 	int idx = basements + level;
 	if (idx < 0 || idx >= static_cast<int>(floors.size())) return;
 	const vector<Row>& rowList = floors[idx].GetRows();
@@ -1040,9 +1044,17 @@ void Building::ArrangeRow(int level, int slot, const string& roomType, float acr
 	float div = alongY ? row.GetSizeY() / count : row.GetSizeX() / count;
 
 	for (int i = 0; i < count; i++) {
+		Component* owner = component;
+		if (!owner) {
+			if (!componentFactory) return;
+			ComponentMod* componentMod = componentFactory->CreateComponent(componentType);
+			if (!componentMod) continue;
+			owner = new Component(componentFactory, componentMod, this);
+			components.push_back(owner);
+		}
 		RoomMod* roomMod = roomFactory.CreateRoom(roomType);
 		if (!roomMod) continue;
-		Room* room = new Room(&roomFactory, roomMod, this, component, level);
+		Room* room = new Room(&roomFactory, roomMod, this, owner, level);
 
 		if (alongY) {
 			room->SetVertices(row.GetLeft(), row.GetBottom() + div * i, row.GetRight(), row.GetBottom() + div * (i + 1));
@@ -1060,7 +1072,7 @@ void Building::ArrangeRow(int level, int slot, const string& roomType, float acr
 			if (outer) room->SetWallStyle(dir, row.GetWallStyle(dir));
 		}
 		room->SetNumber(level, floors[idx].AssignNumber());
-		component->AddRoom(room);
+		owner->AddRoom(room);
 
 		rooms.push_back(room);
 		rowRoomBySlot[level][slot].push_back(room);

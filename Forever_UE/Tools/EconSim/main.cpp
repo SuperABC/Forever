@@ -338,6 +338,7 @@ namespace {
 					totals.sold += stat.sold;
 					totals.unmet += stat.unmet;
 					totals.revenue += stat.revenue;
+					for (const auto& [quality, sold] : stat.soldByQuality) totals.soldByQuality[quality] += sold;
 				}
 				for (Citizen* arrived : Immigration::Daily(society, populace, city, time)) {
 					immigrantSet.insert(arrived);

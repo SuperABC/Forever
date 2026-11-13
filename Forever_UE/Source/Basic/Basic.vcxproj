@@ -109,6 +109,7 @@
     <ClCompile Include="map\component_manufacture.cpp" />
     <ClCompile Include="map\component_office.cpp" />
     <ClCompile Include="map\component_residence.cpp" />
+    <ClCompile Include="map\component_restaurant.cpp" />
     <ClCompile Include="map\component_shop.cpp" />
     <ClCompile Include="map\component_train_station.cpp" />
     <ClCompile Include="map\roadnet_checkboard.cpp" />
@@ -133,10 +134,12 @@
     <ClCompile Include="populace\name_chinese.cpp" />
     <ClCompile Include="populace\scheduler_basic.cpp" />
     <ClCompile Include="society\job_factory_worker.cpp" />
+    <ClCompile Include="society\job_restaurant_waiter.cpp" />
     <ClCompile Include="society\job_shop_saler.cpp" />
     <ClCompile Include="society\job_warehouse_keeper.cpp" />
     <ClCompile Include="society\organization_common.cpp" />
     <ClCompile Include="society\organization_manufacture.cpp" />
+    <ClCompile Include="society\organization_restaurant.cpp" />
     <ClCompile Include="society\organization_shop.cpp" />
     <ClCompile Include="story\script_basic.cpp" />
     <ClCompile Include="industry\manufacture_farm.cpp" />
@@ -147,6 +150,7 @@
     <ClCompile Include="industry\product_wheat.cpp" />
     <ClCompile Include="industry\storage_beef.cpp" />
     <ClCompile Include="industry\storage_burger.cpp" />
+    <ClCompile Include="industry\storage_restaurant.cpp" />
     <ClCompile Include="industry\storage_shop.cpp" />
     <ClCompile Include="industry\storage_wheat.cpp" />
     <ClCompile Include="traffic\route_air.cpp" />
@@ -218,6 +222,7 @@
     <ClInclude Include="map\component_manufacture.h" />
     <ClInclude Include="map\component_office.h" />
     <ClInclude Include="map\component_residence.h" />
+    <ClInclude Include="map\component_restaurant.h" />
     <ClInclude Include="map\component_shop.h" />
     <ClInclude Include="map\component_train_station.h" />
     <ClInclude Include="map\roadnet_checkboard.h" />
@@ -242,10 +247,12 @@
     <ClInclude Include="populace\name_chinese.h" />
     <ClInclude Include="populace\scheduler_basic.h" />
     <ClInclude Include="society\job_factory_worker.h" />
+    <ClInclude Include="society\job_restaurant_waiter.h" />
     <ClInclude Include="society\job_shop_saler.h" />
     <ClInclude Include="society\job_warehouse_keeper.h" />
     <ClInclude Include="society\organization_common.h" />
     <ClInclude Include="society\organization_manufacture.h" />
+    <ClInclude Include="society\organization_restaurant.h" />
     <ClInclude Include="society\organization_shop.h" />
     <ClInclude Include="story\script_basic.h" />
     <ClInclude Include="industry\manufacture_farm.h" />
@@ -256,6 +263,7 @@
     <ClInclude Include="industry\product_wheat.h" />
     <ClInclude Include="industry\storage_beef.h" />
     <ClInclude Include="industry\storage_burger.h" />
+    <ClInclude Include="industry\storage_restaurant.h" />
     <ClInclude Include="industry\storage_shop.h" />
     <ClInclude Include="industry\storage_wheat.h" />
     <ClInclude Include="traffic\route_air.h" />

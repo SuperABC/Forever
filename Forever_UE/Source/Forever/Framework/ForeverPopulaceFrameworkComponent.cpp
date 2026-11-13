@@ -12,6 +12,10 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
+#include "HAL/PlatformMisc.h"
+#include "HAL/PlatformTime.h"
+#include "HAL/ThreadingBase.h"
+#include "Templates/UniquePtr.h"
 
 #include "map/map.h"
 #include "map/building.h"
@@ -32,6 +36,19 @@ std::atomic<bool> UForeverPopulaceFrameworkComponent::bCancelPathfinding{ false 
 #define POPULACE_VERTICAL_DISTANCE_WEIGHT 5.f
 
 namespace {
+	// 寻路专用线程池：整点几千个Dijkstra同时派发，放进引擎共用的GThreadPool会把引擎自己用线程池的工作
+	// (异步加载、纹理/网格构建等)排在后面，第一个市民出现时同步等这些就卡几秒。专用池只占一半物理核、低优先级。
+	TUniquePtr<FQueuedThreadPool> pathfindingPool;
+
+	FQueuedThreadPool& GetPathfindingPool() {
+		if (!pathfindingPool) {
+			pathfindingPool.Reset(FQueuedThreadPool::Allocate());
+			const int32 threads = FMath::Max(1, FPlatformMisc::NumberOfCores() / 2);
+			pathfindingPool->Create(threads, 256 * 1024, TPri_BelowNormal, TEXT("ForeverPathfindingPool"));
+		}
+		return *pathfindingPool;
+	}
+
 	// 没有生成Actor的市民(Core按时间推算位置)走得比Actor快的倍数，省得大批通勤市民要很久才到。
 	// 生成Actor时按推算到的位置接着走，之后用正常速度，所以进度会被拖慢。
 	constexpr float kUnspawnedWalkSpeedScale = 10.f;
@@ -131,9 +148,17 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::SpawnCitizen(Citizen* citiz
 	float worldX, worldY, worldZ;
 	if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) return nullptr;
 
-		ACitizenElement* element = GetWorld()->SpawnActor<ACitizenElement>();
+	const double spawnStart = FPlatformTime::Seconds();
+	ACitizenElement* element = GetWorld()->SpawnActor<ACitizenElement>();
+	const double spawnedSeconds = FPlatformTime::Seconds() - spawnStart;
 	if (element) {
 		element->Init(citizen, this);
+		// 卡顿排查：生成一个市民超过30ms就打日志，区分SpawnActor和Init(头像等)。
+		const double totalSeconds = FPlatformTime::Seconds() - spawnStart;
+		if (totalSeconds > 0.03) {
+			UE_LOG(LogTemp, Warning, TEXT("SpawnCitizen: %s took %.1f ms (SpawnActor %.1f ms, Init %.1f ms)."),
+				UTF8_TO_TCHAR(citizen->GetName().c_str()), totalSeconds * 1000.0, spawnedSeconds * 1000.0, (totalSeconds - spawnedSeconds) * 1000.0);
+		}
 		activeInstances.Add(citizen, element);
 		spawnTimes.Add(citizen, GetWorld()->GetTimeSeconds());
 			}
@@ -186,7 +211,7 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 	// 地图生成完成后导航图不再被写，多线程并发只读安全。
 	pendingPathfindingTasks.fetch_add(1, std::memory_order_relaxed);
 	TWeakObjectPtr<UForeverPopulaceFrameworkComponent> weakThis(this);
-	Async(EAsyncExecution::ThreadPool, [weakThis, mapPtr, fromId, toId, citizen, destination, bInTransit, transitFeet, serial]() {
+	AsyncPool(GetPathfindingPool(), [weakThis, mapPtr, fromId, toId, citizen, destination, bInTransit, transitFeet, serial]() {
 		// 正在关闭：队列里还没轮到的任务直接跳过，不然排着很多Dijkstra时退出会卡很久。
 		if (bCancelPathfinding.load(std::memory_order_acquire)) {
 			pendingPathfindingTasks.fetch_sub(1, std::memory_order_release);
@@ -336,10 +361,18 @@ void UForeverPopulaceFrameworkComponent::BeginTimeSkip() {
 
 void UForeverPopulaceFrameworkComponent::DrainPathResults() {
 	FPendingWalkResult result;
+	const double drainStart = FPlatformTime::Seconds();
+	int32 applied = 0;
 	while (pathResultQueue.Dequeue(result)) {
 		const uint32* latest = latestWalkRequest.Find(result.citizen);
 		if (!latest || *latest != result.serial) continue; // 已被更新的导航/瞬移取代
 		ApplyWalkResult(result.citizen, result.destination, result.waypoints);
+		applied++;
+	}
+	// 卡顿排查：一帧里落地寻路结果超过10ms就打日志。
+	const double drainSeconds = FPlatformTime::Seconds() - drainStart;
+	if (drainSeconds > 0.01) {
+		UE_LOG(LogTemp, Warning, TEXT("DrainPathResults: applied %d results in %.1f ms."), applied, drainSeconds * 1000.0);
 	}
 }
 
@@ -365,6 +398,7 @@ void UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding() {
 	while (pendingPathfindingTasks.load(std::memory_order_acquire) > 0) {
 		FPlatformProcess::Sleep(0.001f);
 	}
+	pathfindingPool.Reset(); // 下一局第一次寻路时重建
 }
 
 bool UForeverPopulaceFrameworkComponent::PlanWalkPath(Citizen* citizen, Room* destination, const FVector& from,

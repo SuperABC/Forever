@@ -19,7 +19,7 @@
 ## IndustryBuilding
 
 - `GetPower`：工业三档分区。`RandomAcreage()=2000*(1+rand)^2`，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`——公式基数和Min不一致(随机值可能小于Min)是既有数值，不"修正"。
-- `Layout()`：`footprint`固定0.6x0.6，`layers`固定1，层高统一0.6。偏好方向按`quad`长宽比选`FACE_NORTH+rand(2)`或`FACE_WEST+rand(2)`，对应边长`>4`时才`basements=1`(是否有地下室由`quad`尺寸判定，和地上层数无关)。有地下室：`preset_single_room_pg+`(`ParkingRoom`，和`CommerceBuilding`共用)→1楼`preset_single_room_fg-`；否则只有1楼`preset_single_room_fg`。1楼放1个工坊房间，`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`等概率随机选一。
+- `Layout()`：`footprint`固定0.6x0.6，`layers`固定1，层高统一0.6。偏好方向按`quad`长宽比选`FACE_NORTH+rand(2)`或`FACE_WEST+rand(2)`，对应边长`>4`时才`basements=1`(是否有地下室由`quad`尺寸判定，和地上层数无关)。有地下室：`preset_common_single_pg+`(`ParkingRoom`，和`CommerceBuilding`共用)→1楼`preset_common_single_fg-`；否则只有1楼`preset_common_single_fg`。1楼放1个工坊房间，`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`等概率随机选一。
 
 ## 依赖关系
 

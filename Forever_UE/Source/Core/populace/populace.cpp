@@ -492,10 +492,12 @@ bool Populace::ApplyChange(const Change* change, const ScriptContext& context) {
 }
 
 Citizen* Populace::FindCitizenByName(const std::string& name) const {
-	for (Citizen* citizen : citizens) {
-		if (citizen && citizen->GetName() == name) return citizen;
+	for (; nameIndexedCount < citizens.size(); nameIndexedCount++) {
+		Citizen* citizen = citizens[nameIndexedCount];
+		if (citizen) nameIndex.emplace(citizen->GetName(), citizen); // 同名保留最先的
 	}
-	return nullptr;
+	auto it = nameIndex.find(name);
+	return it == nameIndex.end() ? nullptr : it->second;
 }
 
 void Populace::GenerateCitizens(int target) {

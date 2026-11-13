@@ -23,6 +23,7 @@ struct ServiceStat {
 	int unmet = 0;  // 没买到（没货或买不起）的份数
 	int64_t revenue = 0;
 	int64_t consumptionTax = 0; // 商店当场缴的消费税
+	std::map<float, int> soldByQuality; // 各质量档卖出的份数
 };
 
 // 月度分红结算汇总（分）。

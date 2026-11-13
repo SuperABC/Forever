@@ -41,6 +41,7 @@ public:
 	// 运行概况：每个月的买饭供需，由主循环累加后传入。
 	struct ServiceTotals {
 		long long demand = 0, sold = 0, unmet = 0;
+		std::map<float, long long> soldByQuality;
 		int64_t revenue = 0;
 		int newBankruptcies = 0, restarts = 0;
 		int hired = 0;                 // 再就业配对成功人数

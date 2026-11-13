@@ -85,6 +85,9 @@
     <ClCompile Include="map\component_residence.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\component_restaurant.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\component_shop.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -157,6 +160,9 @@
     <ClCompile Include="society\job_factory_worker.cpp">
       <Filter>society</Filter>
     </ClCompile>
+    <ClCompile Include="society\job_restaurant_waiter.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
     <ClCompile Include="society\job_shop_saler.cpp">
       <Filter>society</Filter>
     </ClCompile>
@@ -167,6 +173,9 @@
       <Filter>society</Filter>
     </ClCompile>
     <ClCompile Include="society\organization_manufacture.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\organization_restaurant.cpp">
       <Filter>society</Filter>
     </ClCompile>
     <ClCompile Include="society\organization_shop.cpp">
@@ -197,6 +206,9 @@
       <Filter>industry</Filter>
     </ClCompile>
     <ClCompile Include="industry\storage_burger.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\storage_restaurant.cpp">
       <Filter>industry</Filter>
     </ClCompile>
     <ClCompile Include="industry\storage_shop.cpp">
@@ -408,6 +420,9 @@
     <ClInclude Include="map\component_residence.h">
       <Filter>map</Filter>
     </ClInclude>
+    <ClInclude Include="map\component_restaurant.h">
+      <Filter>map</Filter>
+    </ClInclude>
     <ClInclude Include="map\component_shop.h">
       <Filter>map</Filter>
     </ClInclude>
@@ -480,6 +495,9 @@
     <ClInclude Include="society\job_factory_worker.h">
       <Filter>society</Filter>
     </ClInclude>
+    <ClInclude Include="society\job_restaurant_waiter.h">
+      <Filter>society</Filter>
+    </ClInclude>
     <ClInclude Include="society\job_shop_saler.h">
       <Filter>society</Filter>
     </ClInclude>
@@ -490,6 +508,9 @@
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="society\organization_manufacture.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\organization_restaurant.h">
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="society\organization_shop.h">
@@ -520,6 +541,9 @@
       <Filter>industry</Filter>
     </ClInclude>
     <ClInclude Include="industry\storage_burger.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\storage_restaurant.h">
       <Filter>industry</Filter>
     </ClInclude>
     <ClInclude Include="industry\storage_shop.h">

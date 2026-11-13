@@ -222,6 +222,10 @@ void AForeverFrameworkActor::BuildGenerationStages()
 			if (assetFramework) assetFramework->RestoreWorldAssets();
 		}
 	});
+	// 路口通行表(JunctionTraffic)是懒构建的，第一个市民开始走路(过横道时GateCrosswalk)才构建，实测卡2秒：这里先建好。
+	add(TEXT("预热交通"), [this]() {
+		if (trafficFramework) trafficFramework->GetJunctionTraffic();
+	});
 }
 
 void AForeverFrameworkActor::RunGenerationStep()

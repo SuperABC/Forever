@@ -1045,8 +1045,10 @@ bool UForeverStoryFrameworkComponent::FireTimerBatch(size_t maxCount) {
 	Player* player = framework ? framework->GetPlayer() : nullptr;
 	if (!story || !player || !player->GetTime()) return false;
 
+	const double batchStart = FPlatformTime::Seconds();
 	vector<StoryTimer> expired = story->PopExpiredTimers(*player->GetTime(), maxCount);
 	if (expired.empty()) return false;
+	const double popSeconds = FPlatformTime::Seconds() - batchStart;
 
 	PostImplement postImplement(
 		framework->GetMap(), framework->GetPopulace(), framework->GetSociety(), story,
@@ -1063,6 +1065,12 @@ bool UForeverStoryFrameworkComponent::FireTimerBatch(size_t maxCount) {
 		context.global = story->GetGlobalScript();
 		context.local = &event;
 		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
+	}
+	// 卡顿排查：一批计时器超过10ms就打日志，区分是取到时计时器慢还是处理脚本动作慢。
+	const double batchSeconds = FPlatformTime::Seconds() - batchStart;
+	if (batchSeconds > 0.01) {
+		UE_LOG(LogTemp, Warning, TEXT("FireTimerBatch: %d timers took %.1f ms (PopExpiredTimers %.1f ms)."),
+			static_cast<int32>(expired.size()), batchSeconds * 1000.0, popSeconds * 1000.0);
 	}
 	return true;
 }

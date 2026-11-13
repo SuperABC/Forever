@@ -14,6 +14,7 @@
 
 ### 生成与流式
 
+
 - `GenerateVehicles`按`vehicle->GetRoute()`是否为空分两条路径：
   - 非空（公共交通）：`SpawnActor`在原点占位（`blueprintPath`加载出来不是`ATransitVehicleElement`子类——公交带的是停车场驾驶用的BP——就忽略，仍用`ATransitVehicleElement`），
     `Init`后存进`activeTransitVehicles`；之后`Tick`直接读`vehicle->GetTransform()`驱动，第一帧就跳到`Route`算出的位置。

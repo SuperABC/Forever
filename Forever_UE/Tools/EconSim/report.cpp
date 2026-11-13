@@ -414,6 +414,7 @@ void Reporter::PrintRunSummary(const string& title, const ServiceTotals& totals)
 	Out("---- %s运行概况 ----\n", title.c_str());
 	Out("  吃饭: 需求 %lld 份, 卖出 %lld 份, 没买到 %lld 份(%.2f%%), 营业额 %s\n", totals.demand, totals.sold, totals.unmet,
 		totals.demand ? 100.0 * totals.unmet / totals.demand : 0.0, Yuan(totals.revenue).c_str());
+	for (const auto& [quality, sold] : totals.soldByQuality) Out("    质量%.2f 卖出 %lld 份\n", quality, sold);
 	Out("  企业: 本期新倒闭 %d 家, 重启 %d 家\n", totals.newBankruptcies, totals.restarts);
 	{
 		// 岗位与就业：开放岗位/空缺/成年无工作的人数，以及本期的招聘、裁员流动。

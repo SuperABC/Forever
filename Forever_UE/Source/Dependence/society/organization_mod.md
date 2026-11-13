@@ -16,7 +16,7 @@
 - **`DailyPlan`/`ExecNode`**可选(默认空实现)：大部分组织不需要自己的调度(比如发工资)；真要用的具体组织类型重写，直接写自己的`plans`/`changes`成员字段，和`JobMod`同一个模式、接口保持对称。
 - **Script配置**：`scriptModName`/`milestoneNames`，和`JobMod`同一组字段/同一套安全模式；组织也能挂一个自己的`Script`。
 - **经济参数**：`initialFunds`(分)、`shareholders`(每个元素一个股东的占股，Core归一化后随机选成年市民)、`wage`(每员工日工资，分)、`dividendPayoutRatio`(分红率[0,1]，默认1=全分；月度可分配利润缴企业税后，只有这个比例发给股东，其余留在企业账户，抬高净资产和股价)。
-- **服务接口**：`ServiceOffer{name,type,unitPrice,quality,capacity}`，`capacity`是当日最多能提供的份数，系统按它加权分配并防超卖。`CollectServices(script, stockTypes, post)`：系统先把状态写进script(商店是`self.stock.<货物类型>`整数库存)，mod在自己的`services`里填(先`clear`再`push`)；服务名只给组织自己识别，商店直接用货物类型名；`post "product info"`可查零售价。`ApplyServiceUsage(name, count, script)`：mod只改script变量，系统随后按变量值回写`Storage`，mod不碰Core对象。
+- **服务接口**：`ServiceOffer{name,type,unitPrice,quality,capacity}`，`capacity`是当日最多能提供的份数，系统按它在同质量档内加权分配并防超卖(质量档规则见`Core/society/economy.md`)。`CollectServices(script, stockTypes, post)`：系统先把状态写进script(商店是`self.stock.<货物类型>`整数库存)，mod在自己的`services`里填(先`clear`再`push`)；服务名只给组织自己识别，商店直接用货物类型名；`post "product info"`可查零售价。`ApplyServiceUsage(name, count, script)`：mod只改script变量，系统随后按变量值回写`Storage`，mod不碰Core对象。
 
 ## 依赖关系
 

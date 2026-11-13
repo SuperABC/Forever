@@ -85,6 +85,7 @@
 - **楼层先占位再填充**：`Layout()`先按层号(`-basements..layers-1`)建出全部空`Floor`，再用`mod->floors`的模板逐层
   `ReadFloor`填充——mod漏配某一层时`GetFloor(level)`返回"没有任何元素"的空`Floor`而不是nullptr，渲染层不用特殊处理。
   `floorHeights`长度和`basements+layers`对不上时整体按`kDefaultFloorHeight`(0.4)补齐。
+- **`ArrangeRowEach`**：`mod->eachRows`里的row同样按`ArrangeRow`切分，但`component`传空、带`componentType`和`ComponentFactory*`，切出的每个Room各`new`一个独立`Component`(push进`components`)；存档按建筑组件列表通用读写，无需改格式。
 - **`ArrangeRow`切分房间数**：`num = row面积/acreage`，`num<1`或小数部分>=0.5就进一(四舍五入)，至少1间，沿`row`长边等分；
   `acreage<=0`直接不建。
 - **`BuildCabins`的校验**：楼层范围非法(min>max或超出楼层)、或和同一口井里已建的轿厢楼层范围重叠，打warning并跳过该条spec。
