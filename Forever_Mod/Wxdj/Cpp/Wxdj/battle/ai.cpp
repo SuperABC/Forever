@@ -1,7 +1,7 @@
 #include "ai.h"
 
 // 特征定义(招式/局面/出招记录)和训练端共用同一份头文件，保证两边完全一致
-#include "../ai/transformer/features.h"
+#include "../../../Train/env/features.h"
 
 #include <algorithm>
 #include <cmath>
@@ -319,7 +319,7 @@ static void FillState(const Controller& ctl, int seat, int round, float* o) {
 	}
 	i += 4;
 	o[i++] = round / 40.f;
-	wxfeat::StateExtras(ctl, seat, o + SD - 8);
+	wxfeat::StateExtras(ctl, seat, o + SD - 9);
 }
 
 // 出招记录里的一方：类别/属性/消耗/威力/效果种类(照 env.cpp 的 ActionRecord)

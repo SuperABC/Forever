@@ -186,7 +186,7 @@ private:
 	struct ChainStep { std::string name; float ratio; int steps; };
 	// staticPercent返回对静止敌人的增伤百分比(0=没触发)：它和特性的增伤加在同一个增伤乘区里
 	void ApplyPower(int idx, int target, const std::shared_ptr<Action>& act, int& chainBonus, int& critPercent, int& staticPercent, std::vector<ChainStep>& chainSteps);
-	std::vector<char> staticNow;   // 这回合谁是"静止"的：积攒炸弹或放空炸弹(没被禁锢)；ActionTurn开头按双方出的招算好
+	std::vector<char> staticNow;   // 这回合谁是"静止"的：跳过(含被禁锢被迫跳过、放空炸弹)或积攒炸弹；ActionTurn开头按双方出的招算好
 
 	// 特性：每回合类、触发类、命中/闪避乘区
 	void ExecModifiers(STAGE_TYPE stage);

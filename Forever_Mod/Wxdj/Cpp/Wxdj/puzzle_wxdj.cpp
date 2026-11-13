@@ -20,12 +20,13 @@
 #define MAX_LOG_LINES 200
 #define ACTION_FILE_NAME "xiaohua.txt"
 #define AI_FILE_NAME "ai_weights_pvp.bin"
+#define ENEMY_AI_WINDOW 5   // 敌方AI每个家族可用的式数：最高式往下取这么多个(和训练一致，见Train/train/gen_pool.py的WINDOW)
 
-// 双方的标准初始属性(4-6阶位)，见battle/battle.md的"标准初始属性"
-#define STANDARD_HP 25800
-#define STANDARD_ATK 38900
-#define STANDARD_MP 24800
-#define STANDARD_RECOVER 619
+// 双方的标准初始属性(4-6阶位)，来自 Cpp/act/complete.txt 开头的阶位三维表，见battle/battle.md的"标准初始属性"
+#define STANDARD_HP 26200
+#define STANDARD_ATK 35000
+#define STANDARD_MP 27200
+#define STANDARD_RECOVER 1360   // 不再起作用：每回合回复真气 = 真气上限的5%(Cultivator::GetRecover)，这里只是和该公式保持一致
 #define STANDARD_AGI 10
 
 
@@ -593,7 +594,10 @@ void WxdjPuzzle::Init(Canvas* canvas, PostHandle* post) {
 		if (aiResult["result"].AsString() == "success") {
 			auto ai = make_unique<AI>(1);    // 敌方是控制器里的下标1
 			if (ai->Load(aiResult["path"].AsString())) {
-				for (const auto& family : families) enemyFamilyActions.push_back(family.firstAction + family.formCount - 1);   // 每个家族取最高式
+				// 每个家族取最高式往下ENEMY_AI_WINDOW个式(训练用的招式表就是这样的连续窗口，increase连招也有相邻的式可接)
+				for (const auto& family : families) {
+					for (int j = max(0, family.formCount - ENEMY_AI_WINDOW); j < family.formCount; ++j) enemyFamilyActions.push_back(family.firstAction + j);
+				}
 				enemyAI = std::move(ai);
 			}
 		}

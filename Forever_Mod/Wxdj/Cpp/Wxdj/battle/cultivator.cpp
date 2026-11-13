@@ -135,7 +135,7 @@ int Cultivator::GetBomb() const {
 }
 
 int Cultivator::GetRecover() const {
-	return recover;
+	return std::max(1, static_cast<int>(MP_REGEN_FRACTION * GetMaxMP()));   // 每回合自然回复真气=真气上限的5%，构造参数recover不再使用
 }
 
 float Cultivator::GetBombMultiplier() const {
@@ -239,7 +239,7 @@ bool Cultivator::ValidateAction(const shared_ptr<Action> action) const {
 
 void Cultivator::RecoverMP(int amount) {
 	if (amount <= 0) {
-		currentMP += recover;
+		currentMP += GetRecover();
 	}
 	else {
 		currentMP += amount;
@@ -281,11 +281,11 @@ void Cultivator::TakeDamage(int amount, bool physical) {
 		currentHP = max(0, currentHP - amount);
 	}
 	else {
-		if (amount >= currentATK * 0.6) {
-			currentHP = max(0, currentHP - amount);
+		if (amount > currentATK * 0.7) {
+			currentHP = 0;                                              // 单次武力伤害超过当前武力的70%：健康扣光
 		}
-		else if (amount >= currentATK * 0.3) {
-			currentHP = max(0, static_cast<int>(currentHP - amount * 0.5f));
+		else if (amount > currentATK * 0.4) {
+			currentHP = max(0, currentHP - static_cast<int>(currentHP * 0.5));   // 超过40%：扣掉当前健康的一半
 		}
 		currentATK -= amount;
 	}
@@ -353,13 +353,13 @@ void Cultivator::UpdateRealm() {
 }
 
 void Cultivator::AccumulatePower() {
-	// 消耗当前真气的一部分，按倍数存进炸弹
+	// 每次消耗真气上限的一部分(当前真气不够就全部消耗)，按倍数存进炸弹
 	float fraction = ACCUMULATE_FRACTION;
 	if (!modSet.All().empty()) {
 		double adj = ScaledSum(*this, MOD_ACC_RATIO, 0);
 		if (adj != 0) fraction = static_cast<float>(std::min(1.0, std::max(0.0, fraction + adj)));
 	}
-	int spent = static_cast<int>(fraction * currentMP);
+	int spent = std::min(currentMP, static_cast<int>(fraction * GetMaxMP()));
 	currentMP -= spent;
 	bomb += static_cast<int>(spent * bombMultiplier);
 }

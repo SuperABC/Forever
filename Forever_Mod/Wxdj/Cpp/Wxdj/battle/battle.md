@@ -2,7 +2,7 @@
 
 ## 职责
 
-五行斗诀的回合制战斗内核，纯C++、不涉及画面和UE，全部放在`namespace wxdj`里；被`puzzle_wxdj`使用，同一份源码也被`ai/transformer/env.cpp`直接编译成训练环境，网页版`Online/public/ai.html`里有逐项对拍过的JS移植。
+五行斗诀的回合制战斗内核，纯C++、不涉及画面和UE，全部放在`namespace wxdj`里；被`puzzle_wxdj`使用，同一份源码也被`ai/transformer/env.cpp`直接编译成训练环境，网页版`Browser/public/ai.html`里有逐项对拍过的JS移植。
 
 - `def.h`：平衡系数、五行属性/克制表/双招合成属性表、阶位及其武力要求、阶段/招式/效果类型枚举、玩家五行属性位掩码、招式名拆家族/式号的`FamilyOfName`/`FormOfName`。
 - `action.*`：招式(跳过、积攒真气炸弹、释放炸弹、单招`SingleAction`、双招`DualAction`)。`SingleAction`的拷贝构造会深拷贝每个效果(出招用的是副本，运行时改威力/消耗不污染招式表)。
@@ -33,7 +33,7 @@
 | `BOMB_BACKFIRE_FACTOR` | 0.2 | 自己反噬 B x0.2；双方互扔：双方各受 (B1+B2) x0.2 |
 | `BOMB_RUST_FACTOR` | 0.5 | 锈蚀场地下以上几处系数统一为0.5 |
 | `ACCUMULATE_VULNERABILITY` | 0.2 | 积攒的那一回合，自己受到的所有伤害多20% |
-| `SKIP_AGI_FACTOR` | 2 | 跳过时闪避用的敏捷倍数 |
+| `SKIP_AGI_FACTOR` | 1.5 | 跳过时闪避用的敏捷倍数(积攒时另有ACCUMULATE_AGI_FACTOR=0.5) |
 | `SKIP_STREAK_EXTRA_LOSS` | 0.5 | 连续跳过每多一次多扣的敏捷 |
 | `FIELD_EFFECT_ROUNDS` | 3 | 场地效果持续的完整回合数 |
 | `ELEM_POWER_BASE`/`ELEM_RESIST_OWNED`/`ELEM_SHIELD_KEEP` | 1.5/1.5/0.5 | 玩家五行属性相关，见"玩家五行属性" |
@@ -125,14 +125,14 @@
 
 ## AI(`ai.h/.cpp`，通用对战模型的C++推理)
 
-- Perceiver式小Transformer(约92万参数)：输入"双方招式 + 当前局面 + 最近8回合出招记录"，输出招类(跳过/积攒/炸弹/单招/双招) → 第一个招式 → 双招的第二个招式(必须同式)。结构和特征照`ai/transformer`的`model.py`/`features.h`/`env.cpp`，权重文件`Resource/act/ai_weights_pvp.bin`由`export_weights.py`导出(文件头"WXNN"，版本1)，和网页版`ai_weights_pvp.js`是同一份。
+- Perceiver式小Transformer(约92万参数)：输入"双方招式 + 当前局面 + 最近8回合出招记录"，输出招类(跳过/积攒/炸弹/单招/双招) → 第一个招式 → 双招的第二个招式(必须同式)。结构和特征照`ai/transformer`的`model.py`/`features.h`/`env.cpp`，权重文件`Cpp/act/ai_weights_pvp.bin`由`export_weights.py`导出(文件头"WXNN"，版本1)，和网页版`ai_weights_pvp.js`是同一份。
 - `Load`会校验输入层/潜变量/分类头的形状与`features.h`的`FM`/`SD`/`HD`/`HK`一致，对不上就拒绝加载(用错权重会出怪招)；**目前只认PvP维数(招式83/局面49)的权重**，PvE权重(90/89维)需要让`ai.cpp`按权重维数调用`MoveExtrasPvE/StateExtrasPvE`才能接入。`ai.cpp`的`FillState`/`ActionRecord`是`env.cpp`同名函数的复制，改特征时`features.h`、`env.cpp`、`ai.cpp`和网页JS必须同步。
 - 用法：每回合`StartTurn`之后`BeginRound`记下出招前状态，`Choose`出招(候选是每个家族的最高式)，`EndTurn`之后`EndRound`用本回合的日志(闪避记录)和状态变化攒出招记录；新战斗`Reset`。`Choose`推理出错会停用AI并返回空指针，调用方退回随机出招。
 - 对拍程序`ai/transformer/ai_test.cpp`：同一场景下C++与网页JS的logit差应<=1e-4。
 
 ## 数值平衡
 
-平衡目标：以`无招第一式`(消耗100/威力200，无属性无效果)为基准，让同一式里每个家族的"价值"相当，且不存在压倒性策略。招式表的具体数值以`Resource/act/xiaohua.txt`为准(文件头注释记着调整历史和每个家族的效果变化规则；当前18个家族x20式=360个招式)，**规则改动之后表里的"第20式实测强度"都需要重新评估**，最新一轮评测汇总见`ai/transformer/report_all.md`。
+平衡目标：以`无招第一式`(消耗100/威力200，无属性无效果)为基准，让同一式里每个家族的"价值"相当，且不存在压倒性策略。招式表的具体数值以`Cpp/act/xiaohua.txt`为准(文件头注释记着调整历史和每个家族的效果变化规则；当前18个家族x20式=360个招式)，**规则改动之后表里的"第20式实测强度"都需要重新评估**，最新一轮评测汇总见`ai/transformer/report_all.md`。
 
 - **评测方法**：自博弈训练AI(见`ai/transformer/README.md`)，均衡时每个招式的使用率应当接近，长期远高于/远低于平均就说明偏强/偏弱；强弱度量方法是把无招的威力临时加x%(消耗不变)得到"价值曲线"，家族的价值落在曲线哪一点就说它"相当于无招多/少x%的威力"。招式使用率的测量误差约±30%，±10以内的威力/消耗差异没有意义；均衡不唯一(同一张表可能落在"炸弹为主"或"单招双招拉锯"两种局面)。
 - **经验价值换算**(早期规则下的结果，作数量级参考)：威力+1 ≈ 真气-1.2；回复类(伏羲九针)和减伤/反弹类(海龙金身/金钟罩，会作用在伤害很大的炸弹上)价值远大于直觉，效果数值要压得很小；禁锢概率偏强；穿透/持续伤害/回复真气偏弱；物理效果没有可调数值，靠消耗压价。
@@ -152,7 +152,7 @@
   | 4-3 | 11-12 | 4860 | 7420 | 6910 | 156 |
   | 4-4 | 13-14 | 7480 | 11500 | 9800 | 227 |
   | 4-5 | 15-17 | 13300 | 20200 | 14900 | 358 |
-  | 4-6 | 18-20 | 25800 | 38900 | 24800 | 619 |
+  | 4-6 | 18-20 | 26200 | 35000 | 27200 | 1360 |
 
   UE小游戏双方固定用4-6阶位这一行(`puzzle_wxdj.cpp`的`STANDARD_*`)。各阶位抽测对局回合数约12~17(要求5~20)。
 - **强度与属性的关系**：对称对战中强度大致正比于 `健康^a x 武力^1.0 x 真气^0.65`，a从第1式的约0.3增长到第10式及以后的约0.77。保持强度：健康x1.3配武力x0.8(或真气x0.6)；武力x1.2配真气x0.76。武力最适合作"调节难度"的旋钮，真气次之，健康最敏感。
@@ -169,3 +169,12 @@
 - UE的PvE入口还没接：给玩家/敌人传入特性列表、`SetCritBase`、敌人`SetNoAccumulate(true)`，以及让`ai.cpp`加载PvE权重(`ai_weights_pve.bin`)，需要另行批准。
 - 重训：规则/系数改动后按"从零重训"流程重训PvP模型并重新导出；新增的特征维度旧检查点用`pad_checkpoint.py`补零列(输出不变)。AI目前看不到玩家的五行属性。
 - 火之高兴、安如磐石、天动万象三个家族的第20式强度尚未评估。
+
+## 2026-11 规则更新(以代码`def.h`/`controller.cpp`/`cultivator.cpp`为准)
+
+- **静止**：跳过、积攒、空炸弹(炸弹能量为0时放炸弹)、被禁锢而被迫跳过，都算静止；对静止的人出静止增伤招会触发增伤。
+- **积攒炸弹**：每次消耗真气上限的15%(`ACCUMULATE_FRACTION`，不足则全部消耗)，按阶位倍率存进炸弹(3-1=2.0 ... 3-6=4.5，4-1=5 ... 4-6=10，见`BombMultiplierOfForm`)；积攒那一回合闪避用的敏捷减半(`ACCUMULATE_AGI_FACTOR`)，不再有额外易伤(`ACCUMULATE_VULNERABILITY`=0)。
+- **跳过**：闪避用的敏捷 x1.5(`SKIP_AGI_FACTOR`)；空炸弹等于纯跳过，并撤销那一回合的真气回复。
+- **每回合真气回复** = 真气上限的5%(`MP_REGEN_FRACTION`，`Cultivator::GetRecover`按公式算，构造参数里的recover不再生效)。
+- **标准三维**：以`Cpp/act/complete.txt`开头的阶位三维表为准(4-6阶位 26200 / 35000 / 27200)；上面表格里的旧数值已作废。
+- **招式表**：`Cpp/act/complete.txt`是主表(7种属性 x 14种效果)，`xiaohua.txt`由`Train/tools/gen_tables.py`从它生成(19个实际名字的家族)。

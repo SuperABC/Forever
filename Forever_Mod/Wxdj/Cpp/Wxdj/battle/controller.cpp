@@ -138,11 +138,12 @@ void Controller::ActionTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 			actions[j].first = make_shared<SkipAction>();
 	}
 
-	// 静止：这回合积攒炸弹，或者没被禁锢却放了空炸弹(跳过不算)；要在所有人出招之前算好，因为放炸弹会清空炸弹存量
+	// 静止：这回合跳过(主动跳过、被禁锢被迫跳过、空炸弹都是跳过)或积攒炸弹；要在所有人出招之前算好，因为放炸弹会清空炸弹存量
+	// 被禁锢的人除了积攒，选什么都是被迫跳过，所以被禁锢一定静止
 	staticNow.assign(cultivators.size(), 0);
 	for (int j = 0; j < (int)cultivators.size(); ++j) {
 		auto t = actions[j].first->GetType();
-		staticNow[j] = t == ACTION_ACCUMULATE || (t == ACTION_BOMB && !(status[j] & 0x01) && cultivators[j]->GetBomb() <= 0);
+		staticNow[j] = t == ACTION_SKIP || t == ACTION_ACCUMULATE || (status[j] & 0x01) || (t == ACTION_BOMB && cultivators[j]->GetBomb() <= 0);
 	}
 
 	for (int i = 0; i < (int)cultivators.size(); ++i) {
@@ -341,6 +342,7 @@ void Controller::CheckTurn(vector<pair<shared_ptr<Action>, int>> actions) {
 				// 付不起(闪避之后敏捷会低于1)就不翻倍、不扣敏捷，仍用自己原来的敏捷闪避；没跳过的一方照常用自己的敏捷闪避，被禁锢又选了积攒的也一样用当前敏捷闪避
 				float defenderAGI = cultivators[j]->GetAGI();
 				if (skipAgi[j] > 0.f) defenderAGI = skipAgi[j];
+				else if (status[j] & 0x02) defenderAGI *= ACCUMULATE_AGI_FACTOR;   // 这回合在积攒：闪避用的敏捷减半
 				double dodgeChance = DodgeProb(i, j, act_i->GetAttribute(), defenderAGI);
 				if (dist(rng) < dodgeChance) {
 					DodgeSuccess(i, j);

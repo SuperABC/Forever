@@ -81,28 +81,16 @@ Forever_UE/Resource/Avatars/
 Forever_UE/Tools/AvatarGen/node_modules/
 Forever_UE/Tools/AvatarGen/sample.png
 
-# 通用对战模型的训练工具：代码和当前这一版模型(checkpoints_pvp/latest.pt，走Git LFS)进仓库，编译产物和训练生成物不进
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/wxenv.dll
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/build/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/build_*/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/wxenv_dev.*
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/pool_pve*/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_*_smoke/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_enemy/*
-!Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_enemy/latest.pt
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_player/*
-!Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve_player/latest.pt
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/pool/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/pool_eval/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/pool_smoke/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_smoke_pvp/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_smoke_pve/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve/*
-!Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pve/latest.pt
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/progress_*.txt
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/__pycache__/
-Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pvp/*
-!Forever_Mod/Wxdj/Cpp/Wxdj/ai/transformer/checkpoints_pvp/latest.pt
+# 通用对战模型的训练工具(Forever_Mod/Wxdj/Train)：代码和模型(models/*/*.pt，走Git LFS)进仓库，编译产物、历史快照、训练输出、评测结果不进
+Forever_Mod/Wxdj/Train/env/wxenv.dll
+Forever_Mod/Wxdj/Train/env/wxenv.exp
+Forever_Mod/Wxdj/Train/env/wxenv.lib
+Forever_Mod/Wxdj/Train/env/libwxenv.so
+Forever_Mod/Wxdj/Train/env/build_*/
+Forever_Mod/Wxdj/Train/models/**/snaps/
+Forever_Mod/Wxdj/Train/runs/
+Forever_Mod/Wxdj/Train/results/
+Forever_Mod/Wxdj/Train/**/__pycache__/
 
 # EconSim模拟报告(运行产物,不进git)
 Forever_UE/Tools/EconSim/reports/

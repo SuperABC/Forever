@@ -149,7 +149,7 @@ private:
 	std::shared_ptr<wxdj::Cultivator> enemy;
 	std::unique_ptr<wxdj::Controller> controller;
 	std::unique_ptr<wxdj::AI> enemyAI;       // 敌方AI(通用模型)；权重文件缺失/不匹配时为空，敌方退化成随机出招
-	std::vector<int> enemyFamilyActions;     // 敌方每个家族出招用的那一式(最高式)的招式下标
+	std::vector<int> enemyFamilyActions;     // 敌方AI可选的招式下标：每个家族最高式往下ENEMY_AI_WINDOW个式
 
 	std::vector<std::string> logLines; // 滚动战报，超出上限丢弃最旧的
 	std::vector<std::pair<int, int>> lastEnvironment; // 上一回合结束时的场地效果(类型, 剩余回合)

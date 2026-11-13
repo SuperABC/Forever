@@ -37,13 +37,13 @@
   滚轮(`Canvas::ConsumeMouseWheel`)在右半面板内一刻度滚一行；滚动条滑块可按住拖动(拖动期间只看鼠标y，不要求仍在滑块上)，
   点轨道空白处往点击方向翻一页；行数不超过可见行数时不画滚动条。
 - **招式数据走post查路径**：`Init`向宿主发`{"post":"resource path","name":"xiaohua.txt"}`(Core的`PostImplement`)，
-  `xiaohua.txt`放在`Wxdj/Resource/act/`。post为空或加载失败时`loadFailed`置位，`Loop`画一行"招式数据加载失败"并返回`{"result": -1}`。
+  `xiaohua.txt`放在`Wxdj/Cpp/act/`。post为空或加载失败时`loadFailed`置位，`Loop`画一行"招式数据加载失败"并返回`{"result": -1}`。
 - **状态全是实例成员**：宿主每次`start_puzzle`都`new`一个新实例，没有static状态。`GetName()`用`static int count`+`id`拼唯一名，
   `count`通过`GetInstanceCounter`/`SetInstanceCounter`进存档。
 - **Canvas没有自动折行**：`WrapText`按UTF-8码点累加`StringWidth`折行，不劈开多字节字符。
-- **敌方AI**：用`battle/ai.h`的`AI`，加载`Resource/act/ai_weights_pvp.bin`(训练好的通用模型，约92万参数/3.7MB，由`ai/transformer/export_weights.py`导出，和网页版人机对战是同一个模型、同一套特征与推理逻辑)：每回合出招前`BeginRound`，出招结算后`EndRound`(用本回合日志里的闪避记录和状态变化攒最近8回合的出招记录)，出招时从每个家族的最高式(第20式)里选，招类/第一招/双招的第二招(同式)都按网络输出的概率采样。权重文件缺失、结构对不上或推理出错时，敌方退化成纯随机出招(3/4概率出单招，下标范围含积攒/炸弹/跳过，1/4概率出双招)。C++推理和网页JS推理的logit对拍过(两个回合带出招记录，误差<=2e-5)，对拍程序见`ai/transformer/ai_test.cpp`。重训模型后跑`export_weights.py`就同时更新网页和游戏的权重。
+- **敌方AI**：用`battle/ai.h`的`AI`，加载`Cpp/act/ai_weights_pvp.bin`(训练好的通用模型，约92万参数/3.7MB，由`Train/tools/export_weights.py`导出，和网页版人机对战是同一个模型、同一套特征与推理逻辑)：每回合出招前`BeginRound`，出招结算后`EndRound`(用本回合日志里的闪避记录和状态变化攒最近8回合的出招记录)，出招时从每个家族最高式往下5个式(第16~20式，`ENEMY_AI_WINDOW`，和训练用的5式窗口一致)里选，招类/第一招/双招的第二招(同式)都按网络输出的概率采样。权重文件缺失、结构对不上或推理出错时，敌方退化成纯随机出招(3/4概率出单招，下标范围含积攒/炸弹/跳过，1/4概率出双招)。C++推理和网页JS推理的logit对拍过(两个回合带出招记录，误差<=2e-5)，对拍程序在整理项目时移除了(需要时可从git历史找回 ai/transformer/ai_test.cpp)。重训模型后跑`export_weights.py`就同时更新网页和游戏的权重。
 - **阵亡判定**：玩家阵亡(含同归于尽)判负，只有敌方阵亡才判胜。
-- 数值：双方都用4-6阶位标准属性 HP25800/ATK38900/MP24800、回真气619(敏捷：玩家22、售货员20)，见`battle/battle.md`。
+- 数值：双方都用4-6阶位标准属性 HP26200/ATK35000/MP27200、每回合回真气=真气上限的5%(1360)(敏捷：玩家22、售货员20)，见`battle/battle.md`。
 
 ## 依赖关系
 
@@ -58,7 +58,7 @@
 
 ## 待办/后续阶段
 
-- **PvE模型接入**：`battle/ai.cpp`只认PvP维数(83/49)的权重；训练出PvE模型(`ai/transformer`的`train_pve`)后，让`ai.cpp`按权重维数加载`ai_weights_pve.bin`并调用`features.h`的`MoveExtrasPvE/StateExtrasPvE`，再在`SetParam`/剧情里选用。
+- **PvE模型接入**：`battle/ai.cpp`只认PvP维数(83/50)的权重；训练出PvE模型后(PvE训练侧暂时移除了，之后重做)，让`ai.cpp`按权重维数加载`ai_weights_pve.bin`并调用`features.h`的`MoveExtrasPvE/StateExtrasPvE`，再在`SetParam`/剧情里选用。
 
 - **胜负分支**：`Finish()`返回`{"result": 1/-1/0}`(1=胜，-1=负，0=中途退出)，宿主把它展平进`puzzle_result`事件；`Wxdj.script`目前还没有按胜负分支。
 - 战报面板暂不支持滚轮回看历史(只显示最新的若干条，上限200条)。
