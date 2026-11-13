@@ -7,14 +7,16 @@
       "building_industry_middle",
       "building_industry_low",
       "building_commerce_high",
-      "building_office_high"
+      "building_office_high",
+      "building_airport"
    ],
    "component_mods" : [
       "component_residence",
       "component_manufacture",
       "component_shop",
       "component_restaurant",
-      "component_office"
+      "component_office",
+      "component_airport"
    ],
    "dll_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
@@ -52,18 +54,19 @@
       "room_office",
       "room_shop",
       "room_restaurant",
-      "room_warehouse"
+      "room_warehouse",
+      "room_airport"
    ],
-   "route_mods" : [],
+   "route_mods" : [ "route_air" ],
    "scheduler_mods" : [ "scheduler_basic" ],
    "script_mods" : [ "script_empty", "script_test" ],
-   "station_mods" : [],
+   "station_mods" : [ "station_air" ],
    "storage_mods" : [ "storage_shop", "storage_restaurant" ],
    "story_scripts" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
    ],
    "terrain_mods" : [ "terrain_ocean", "terrain_mountain", "terrain_river", "terrain_empty" ],
-   "vehicle_mods" : [],
+   "vehicle_mods" : [ "vehicle_plane" ],
    "weapon_mods" : [],
    "zone_mods" : [ "zone_residence_high" ]
 }

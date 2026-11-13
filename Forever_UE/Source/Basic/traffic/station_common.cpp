@@ -11,8 +11,8 @@ PointParams NearRoadPoint(int direction, float alongRatio, float depthRatio) {
 	switch (direction) {
 		case FACE_WEST:  return { depthRatio, 0.f, alongRatio, 0.f };
 		case FACE_EAST:  return { 1.f - depthRatio, 0.f, alongRatio, 0.f };
-		case FACE_NORTH: return { alongRatio, 0.f, 1.f - depthRatio, 0.f };
-		case FACE_SOUTH: return { alongRatio, 0.f, depthRatio, 0.f };
+		case FACE_NORTH: return { alongRatio, 0.f, depthRatio, 0.f };
+		case FACE_SOUTH: return { alongRatio, 0.f, 1.f - depthRatio, 0.f };
 		default: return { alongRatio, 0.f, depthRatio, 0.f };
 	}
 }

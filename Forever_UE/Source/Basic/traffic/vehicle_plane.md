@@ -14,7 +14,7 @@
 
 ### PlaneVehicle
 
-- 两种用法：线路上的飞机(`Route`生成，`ATransitVehicleElement`，用`transitMeshPath`=`/Game/3rdParty/Low-poly_Airplane/StaticMeshes/low_poly_airplane.low_poly_airplane`，和停机位飞机共用Forever_UE的模型；`meshTransform.scale=0.15`，模型横着建所以`yawOffsetDegrees=-90`)和机场停机位里的飞机(`AirportRoom`车位，`APlaneElement`可驾驶，用`blueprintPath`=`/Game/3rdParty/Low-poly_Airplane/Actor/BP_PlaneElement.BP_PlaneElement_C`，见`Forever/Element/PlaneElement.md`)。`vehicle_plane.script`靠`$$self.on_route`区分：只有`on_route==0`的才提供"驾驶"选项。
+- 两种用法：线路上的飞机(`Route`生成，`ATransitVehicleElement`，用`transitMeshPath`=`/Game/3rdParty/Low-poly_Airplane/StaticMeshes/SKM_low_poly_airplane.SKM_low_poly_airplane`，就是可驾驶飞机蓝图用的那个骨骼网格，缩放/朝向已烘焙进网格，所以`meshTransform`保持默认(1倍、不修正yaw)，两种飞机大小和机头朝向天然一致；骨骼网格走`ATransitVehicleElement`的骨骼网格分支(子组件`skeletalBody`))和机场停机位里的飞机(`AirportRoom`车位，`APlaneElement`可驾驶，用`blueprintPath`=`/Game/3rdParty/Low-poly_Airplane/Actor/BP_PlaneElement.BP_PlaneElement_C`，见`Forever/Element/PlaneElement.md`)。`vehicle_plane.script`靠`$$self.on_route`区分：`on_route==0`的才提供"驾驶"选项；线路上的飞机`boardable=true`、`capacity=150`，停靠跑道中点(`enter_stop`)时提供"上车/下车"(逻辑同`vehicle_train.script`)。
 - `size`=(3000,2500,800)，`drivable=true`。`exitOffset`=(-300,-200,200)：机身左后方，避开机翼；Z=200是因为飞机原点比地面低约9cm，Z=100时胶囊体底部陷进TerrainLod被挡(日志实测命中点Z=2)，抬高后人才能落地。
 
 ## 依赖关系

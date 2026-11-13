@@ -54,7 +54,9 @@ void TrainRoute::SetProperty() {
 }
 
 void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) {
-	LayoutDualTrackStationLoop(interfaces, sizeX, sizeY, false, 0.f, edgeStations, links, lines);
+	if (interfaces.empty()) return;
+	// 单站：边缘站点紧接在真实站点后面。
+	LayoutDualTrackStationLoop(interfaces, sizeX, sizeY, false, 0.f, interfaces[0].stationIndex + 1, edgeStations, links, lines);
 }
 
 void TrainRoute::BuildTrack(const vector<RouteTrackLinkEnds>& linkEnds,

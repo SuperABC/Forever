@@ -2,7 +2,7 @@
 
 ## 职责
 
-TrainRoute/AirRoute共用的单站双跑道(轨道)四接口环线拓扑`LayoutDualTrackStationLoop`。
+TrainRoute/AirRoute共用的单站双跑道(轨道)四接口环线拓扑`LayoutDualTrackStationLoop`(一次处理一个站点，多站各调一次、结果追加)。
 
 ## 关键设计
 
@@ -24,12 +24,12 @@ TrainRoute/AirRoute共用的单站双跑道(轨道)四接口环线拓扑`LayoutD
     代表真的是地图边缘)。`leftIn`/`rightOut`/`rightIn`/`leftOut`和边缘的Out/In端点
     全部标`dwell=false`(纯过路点)，只有`stop1`/`stop2`是`dwell=true`——真正的停靠
     动作只应该发生在跑道/轨道的中点，不是每个过路接口都停一次。
-  - `outEdgeStations`的八个元素(`leftEdgeOut/Mid/In`、`rightEdgeOut/Mid/In`、`stop1/stop2`)顺序决定了它们在
-    `resolvedStations`里的下标(`realStation+1`到`+8`)，这个假设建立在"全图只有这一个真实
-    站点"(`realStation = leftIn.stationIndex`恒定不变)之上，新增元素/调整顺序时要同步检查
-    这几个下标常量。
+  - 追加到`outEdgeStations`的八个元素(`leftEdgeOut/Mid/In`、`rightEdgeOut/Mid/In`、`stop1/stop2`)顺序决定了它们在
+    Core站点总列表里的下标(`edgeBase+0`到`+7`)。`edgeBase`由调用方给(真实站点数+前面已追加的边缘站点数，
+    单站如`TrainRoute`就是`stationIndex+1`)；`stop1`/`stop2`的相对下标是`kDualTrackStop1`/`kDualTrackStop2`
+    (`AirRoute`互联线路要引用)，新增元素/调整顺序时要同步这几个常量。
 - **`LayoutDualTrackStationLoop`的边界节点**：左边界沿`leftIn`朝向的反方向射线出图得到(飞机/火车从图外来的方向)，右边界沿`rightOut`朝向射线出图；边界节点的到达/出发朝向直接复用相邻接口的朝向(同向的复用，掉头的取反)。`overrideEdgeZ`为true时边缘站点z取`edgeHeight`(AirRoute的巡航高度)，否则取接口原本的z。
 
 ## 依赖关系
 
-- 被谁依赖：`route_train`、`route_air`。
+- 被谁依赖：`LayoutDualTrackStationLoop`只有`route_train`在用(`AirRoute`改成自己按天空节点布线，见`route_air.md`)；`RayBoxIntersection`导出给`route_air`算extern。

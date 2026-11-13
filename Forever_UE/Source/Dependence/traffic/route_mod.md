@@ -31,6 +31,9 @@
   真实秒=120个游戏内秒。三个具体子类（`Basic/traffic/route_*.cpp`）都在构造函数里按
   这个120倍换算校准过默认值，新增线路类型时同样要留意这个换算，不能直接抄字面上看起来
   "合理"的数值。
+- `sameStationSpeedScale`(默认1)：行驶区段(两次真正停靠之间的若干条leg)里含同站转场腿(`fromStation==toStation`，如飞机从降落跑道滑行到起飞跑道)时，**整个区段**的速度倍率，<1更慢。由Core的`Route::FinalizeLegTimes`在组装/读档后算进每条leg的`timeLength`，不进存档。
+- `tiltAlongPath`(默认false)：车辆俯仰角跟着路径切线的竖直分量走(飞机用)，`instantiate`的线路本来就跟。
+- `controlRules`：非路网边贝塞尔控制臂长度的按端点覆盖规则(`{fromTag,toTag,arm}`，按顺序第一条匹配的生效，都不匹配用`controlLength`)。tag空=任意站点，`"@real"`=真实站点(建筑上的接口)，其它=站点名包含该子串(边缘站点名=`<线路名>_Edge<i>_<RouteStationInfo::name>`)；`arm<=0`=不加控制点、直线连接；`ratio=true`时`arm`是两端点水平距离的倍数，否则是地图单位长度；`sameGroup=true`时还要求两端是同一组边缘站点(站名里mod站名第一个`_`之前的部分相同，如同一座机场的`air0`)。判定靠站点名/类型，读档重建边时自动一致，所以要在`SetProperty`里填。
 - `useRoadnet`/`instantiate`/`trackMesh`/`trackUnit`/`controlLength`几个选项字段的具体用法
   见`route.md`"非路网边：三次贝塞尔"/"路网边：同车道特例"两节。
 - **`easeSeconds`的单位是真实秒，不是游戏内秒**——和`speed`/`dwellSeconds`刚好相反，因为

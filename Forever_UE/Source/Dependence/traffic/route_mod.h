@@ -82,6 +82,23 @@ public:
 	float speed = 1.f;          // 地图单位/秒
 	float dwellSeconds = 30.f;  // 到站停留秒数
 	float controlLength = 3.f;  // 非路网边贝塞尔控制臂长度(地图单位)
+	// 非路网边贝塞尔控制臂长度的按端点覆盖规则(按顺序，第一条匹配的生效，都不匹配用controlLength)：
+	// fromTag/toTag空=任意站点，"@real"=真实站点(建筑上的接口)，其它=站点名包含该子串(边缘站点名=<线路名>_Edge<i>_<RouteStationInfo::name>)；
+	// arm<=0=不加控制点，直线连接；ratio=true时arm是两端点水平距离的倍数(如1/3)，否则是地图单位长度。规则由站点名/类型判定，读档重建边时自动一致，所以要在SetProperty里填。
+	struct ControlRule {
+		std::string fromTag;
+		std::string toTag;
+		float arm = 0.f;
+		bool ratio = false;
+		// true时还要求两端是同一组边缘站点(站名<RouteStationInfo::name>里第一个"_"之前的部分相同，如同一座机场的"air0")。
+		bool sameGroup = false;
+	};
+	std::vector<ControlRule> controlRules;
+	// 行驶区段(两次真正停靠之间)里含同站转场腿(from/to是同一个站点的两个接口，如飞机从降落跑道滑行到起飞跑道)时，
+	// 整个区段的速度倍率，<1更慢，见route_mod.md。
+	float sameStationSpeedScale = 1.f;
+	// 车辆俯仰角跟着路径切线的竖直分量走(飞机爬升/下降机头抬低)；instantiate的线路本来就跟，不用设。
+	bool tiltAlongPath = false;
 
 	// 进站前/出站后这么久(真实秒)的减速/加速缓动时长,见route_mod.md。
 	float easeSeconds = 3.f;

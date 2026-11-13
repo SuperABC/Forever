@@ -3,7 +3,7 @@
 #include "map/building_mod.h"
 
 
-// 机场，全图唯一一个，承载StationMod"station_air"。
+// 机场，可有多座，承载StationMod"station_air"。
 class AirportBuilding : public BuildingMod {
 public:
 	AirportBuilding();

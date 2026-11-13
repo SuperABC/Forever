@@ -17,7 +17,8 @@ namespace {
 	BuildingFootprintSpec NearRoadFootprint(int direction, float bodyDepthCenterRatio,
 		float bodyDepthSizeRatio, float bodyFrontageSizeRatio) {
 		bool depthAlongX = (direction == FACE_WEST || direction == FACE_EAST);
-		bool flip = (direction == FACE_EAST || direction == FACE_NORTH);
+		// quad局部坐标+X东、+Y南：贴路边在EAST是x=1、SOUTH是y=1，所以这两个方向要翻转(NORTH/WEST贴的是0边)。
+		bool flip = (direction == FACE_EAST || direction == FACE_SOUTH);
 		float depthCenter = flip ? 1.f - bodyDepthCenterRatio : bodyDepthCenterRatio;
 
 		BuildingFootprintSpec spec;
@@ -30,8 +31,6 @@ namespace {
 		}
 		return spec;
 	}
-	constexpr const char* kComponent = "component_residence";
-	constexpr int kComponentId = 0;
 }
 
 int AirportBuilding::count = 0;
@@ -55,22 +54,24 @@ void AirportBuilding::Layout(int& direction, const Quad& quad,
 
 	constexpr const char* kComponent = "component_airport";
 	constexpr int kComponentId = 0;
-	AssignFloor(0, "preset_single_room_fg", direction);
+	AssignFloor(0, "preset_common_single_fg", direction);
 	AssignRoom(0, 0, "room_airport", kComponent, kComponentId);
 }
 
 void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
-	// 同TrainStationBuilding::Assign的自适应思路：FindAdaptivePlacement会看到先处理的建筑留下的最新
-	// freeLots状态(处理顺序由BuildingFactory::GetRegisteredIds()决定，这里不关心)。
-	// 占地(沿路x纵深，地图单位)优先12x8(要放跑道和两侧停机位)，放不下退回和火车站一样的7x4。
+	// 已放机场的中心点，低密度商业区之间要互相离开kMinAirportDistance才再放一座。
+	vector<pair<float, float>> airports;
+
+	// jing路网的AREA_TEST中心地块固定放一座：FindAdaptivePlacement会看到先处理的建筑留下的最新freeLots状态
+	// (处理顺序由BuildingFactory::GetRegisteredIds()决定，这里不关心)。占地(沿路x纵深)优先12x8，放不下退回7x4。
 	constexpr float kFrontages[] = { 12.f, 7.f };
 	constexpr float kDepths[] = { 8.f, 4.f };
-
 	for (Lot* lot : lots) {
 		if (!lot || lot->GetArea() != AREA_TEST) continue;
 
-		for (int size = 0; size < 2; size++)
-		for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {
+		bool placed = false;
+		for (int size = 0; size < 2 && !placed; size++)
+		for (int dir = FACE_WEST; dir <= FACE_SOUTH && !placed; dir++) {
 			Lot* targetLot;
 			float marginStart, marginEnd, depth;
 			if (!lot->FindAdaptivePlacement(dir, kFrontages[size], kDepths[size], targetLot, marginStart, marginEnd, depth)) continue;
@@ -87,9 +88,51 @@ void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, v
 			request.marginEnd = marginEnd;
 			request.depth = depth;
 			emit(context, request);
-			return;
+			airports.push_back({ lot->GetPosX(), lot->GetPosY() });
+			placed = true;
 		}
-		return;
+		break;
+	}
+
+	// 低密度商业区：取最长边为沿路方向，规则见building_airport.md。
+	constexpr float kMinEdge = 20.f;        // 最长边小于它跳过
+	constexpr float kFullEdgeMax = 40.f;    // 最长边小于它沿路占满，否则取一个角
+	constexpr float kCornerFrontage = 30.f; // 取角时的沿路长度
+	constexpr float kMinDepth = 10.f;       // 进深小于它跳过
+	constexpr float kFullDepthMax = 20.f;   // 进深不超过它占满，超过只占kBigDepth
+	constexpr float kBigDepth = 15.f;
+	constexpr float kMinAirportDistance = 800.f;
+	for (Lot* lot : lots) {
+		if (!lot || lot->GetArea() != AREA_COMMERCE_LOW) continue;
+
+		bool alongX = lot->GetSizeX() >= lot->GetSizeY();
+		float edge = alongX ? lot->GetSizeX() : lot->GetSizeY();
+		float lotDepth = alongX ? lot->GetSizeY() : lot->GetSizeX();
+		if (edge < kMinEdge || lotDepth < kMinDepth) continue;
+
+		bool tooClose = false;
+		for (const auto& airport : airports) {
+			float dx = lot->GetPosX() - airport.first, dy = lot->GetPosY() - airport.second;
+			if (dx * dx + dy * dy <= kMinAirportDistance * kMinAirportDistance) { tooClose = true; break; }
+		}
+		if (tooClose) continue;
+
+		// 沿路方向的两侧里取有边界道路的一侧。
+		int dirs[2] = { alongX ? FACE_NORTH : FACE_WEST, alongX ? FACE_SOUTH : FACE_EAST };
+		int direction = -1;
+		for (int dir : dirs) {
+			if (lot->GetBoundaryRoad(dir)) { direction = dir; break; }
+		}
+		if (direction < 0) continue;
+
+		LotPlacementRequest request;
+		request.lot = lot;
+		request.direction = direction;
+		request.marginStart = 0.f;
+		request.marginEnd = edge < kFullEdgeMax ? 0.f : edge - kCornerFrontage;
+		request.depth = lotDepth <= kFullDepthMax ? lotDepth : kBigDepth;
+		emit(context, request);
+		airports.push_back({ lot->GetPosX(), lot->GetPosY() });
 	}
 }
 

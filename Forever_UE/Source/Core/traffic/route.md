@@ -39,7 +39,7 @@
 - **`Update()`是纯函数式实现**——只读`elapsedSeconds`（`Traffic::Tick`按
   `Time::DifferenceInSeconds`累加的游戏总秒数，单调递增），不在`Route`自己身上累积任何状态；
   `DriveVehicle`内部用`localTime`（`elapsedSeconds`按整条线路的`period`取模，每辆车再加一个
-  均匀分布的`phase`）逐腿累减"行驶耗时（`edge->length/speed`）+停靠耗时"直到落在某一段区间，
+  均匀分布的`phase`）逐腿累减"行驶耗时（`leg.timeLength/speed`；`timeLength`默认=边长，含同站转场腿的行驶区段整段按`RouteMod::sameStationSpeedScale`折算(`FinalizeLegTimes`)，`DriveVehicle`定位后再按`length/timeLength`换回几何弧长）+停靠耗时"直到落在某一段区间，
   同一个`elapsedSeconds`重复调用结果完全一致，不依赖调用顺序/调用次数。`speed`/
   `dwellSeconds`的单位是游戏内秒不是真实秒，具体换算见`route_mod.md`。
 - **`DriveVehicle`的缓动按"行驶区段"（两次真正停靠之间的若干条leg合起来）整体套梯形速度

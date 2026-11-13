@@ -61,6 +61,10 @@ public:
 		bool dwellAtDestination = true;
 		// 停靠但不触发进站/离站事件(RouteStop::silent)：DriveVehicle不把这个站报给Update的边沿检测。
 		bool silentDwell = false;
+		// 按行驶时间折算的"等效长度"=edge->length/速度倍率：两次真正停靠之间的行驶区段里只要有一条同站转场腿
+		// (fromStation==toStation，如飞机从降落跑道滑行到起飞跑道)，整个区段都按RouteMod::sameStationSpeedScale降速。
+		// 时刻表/缓动曲线/定位都按它算，EvaluateEdge前再换回几何弧长。由FinalizeLegTimes在组装/读档后填，不存档。
+		float timeLength = 0.f;
 	};
 
 	// 收集map里stationType==mod->stationType的所有Station接口，调mod->LayoutRoute()；为
@@ -130,6 +134,9 @@ public:
 
 private:
 	static int PackStop(int station, int interfaceIndex);
+
+	// 给一条线路的每条leg填timeLength(规则见RouteLeg::timeLength)。
+	void FinalizeLegTimes(std::vector<RouteLeg>& legs) const;
 
 	// 组装(from,fromIface)->(to,toIface)这一条边的实际几何。useRoadnet==true时：两边都成功
 	// EnsureRoadLink()之后，若落在同一段原车道上且from在上游，直接用两个stationNode的直线弦

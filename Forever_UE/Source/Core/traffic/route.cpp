@@ -111,12 +111,42 @@ Route::RouteEdge Route::BuildEdgeGeometry(Map* map, Station* from, int fromInter
 		// 非路网边：三次贝塞尔，端点切线和接口方向一致，相邻边在站点处切线连续，见
 		// route.md"接口与平滑曲线"一节。控制点z分别取A.z/B.z，支持飞机这类有高度变化的线路。
 		float controlLength = mod->controlLength;
+		auto tagMatch = [](const Station* station, const string& tag) {
+			if (tag.empty()) return true;
+			if (tag == "@real") return !station->IsEdge();
+			return station->GetName().find(tag) != string::npos;
+		};
+		// 边缘站点名=<线路名>_Edge<i>_<mod站名>，组=mod站名里第一个"_"之前的部分；真实站点没有组。
+		auto groupOf = [](const Station* station) {
+			if (!station->IsEdge()) return string();
+			const string& stationName = station->GetName();
+			size_t at = stationName.find("_Edge");
+			if (at == string::npos) return string();
+			size_t modName = stationName.find('_', at + 1);
+			if (modName == string::npos) return string();
+			modName++;
+			size_t end = stationName.find('_', modName);
+			return stationName.substr(modName, end == string::npos ? string::npos : end - modName);
+		};
+		for (const RouteMod::ControlRule& rule : mod->controlRules) {
+			if (rule.sameGroup) {
+				string groupFrom = groupOf(from);
+				if (groupFrom.empty() || groupFrom != groupOf(to)) continue;
+			}
+			if (tagMatch(from, rule.fromTag) && tagMatch(to, rule.toTag)) {
+				controlLength = rule.arm;
+				if (rule.ratio) controlLength *= sqrtf((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
+				break;
+			}
+		}
 		Node start("route", a.x, a.y, a.z);
 		Node end("route", b.x, b.y, b.z);
 		Connection* conn = new Connection(start, end);
-		Node control1("route_ctrl", a.x + a.departDirX * controlLength, a.y + a.departDirY * controlLength, a.z);
-		Node control2("route_ctrl", b.x - b.arriveDirX * controlLength, b.y - b.arriveDirY * controlLength, b.z);
-		conn->AddControls({ { control1, 1.f }, { control2, 1.f } });
+		if (controlLength > 0.f) { // <=0：不加控制点，直线
+			Node control1("route_ctrl", a.x + a.departDirX * controlLength, a.y + a.departDirY * controlLength, a.z);
+			Node control2("route_ctrl", b.x - b.arriveDirX * controlLength, b.y - b.arriveDirY * controlLength, b.z);
+			conn->AddControls({ { control1, 1.f }, { control2, 1.f } });
+		}
 		edge.segments.push_back(conn);
 		edge.owned = true;
 	}
@@ -158,7 +188,7 @@ void Route::Build(Map* map, const vector<Station*>& stations, vector<Station*>& 
 
 	for (size_t i = 0; i < mod->edgeStations.size(); i++) {
 		const RouteStationInfo& info = mod->edgeStations[i];
-		string edgeName = name + "_Edge" + to_string(i);
+		string edgeName = name + "_Edge" + to_string(i) + (info.name.empty() ? string() : "_" + info.name);
 		Station* edgeStation = new Station(edgeName, info.x, info.y, info.z,
 			info.arriveDirX, info.arriveDirY, info.departDirX, info.departDirY);
 		resolvedStations.push_back(edgeStation);
@@ -259,10 +289,42 @@ void Route::Build(Map* map, const vector<Station*>& stations, vector<Station*>& 
 			legs.push_back(leg);
 		}
 
-		if (!legs.empty()) lines.push_back(legs);
+		if (!legs.empty()) {
+			FinalizeLegTimes(legs);
+			lines.push_back(legs);
+		}
 	}
 
 	stopStations = resolvedStations;
+}
+
+void Route::FinalizeLegTimes(vector<RouteLeg>& legs) const {
+	float scale = (mod && mod->sameStationSpeedScale > 0.f) ? mod->sameStationSpeedScale : 1.f;
+	size_t n = legs.size();
+	for (RouteLeg& leg : legs) leg.timeLength = leg.edge ? leg.edge->length : 0.f;
+	if (scale == 1.f || n == 0) return;
+
+	// 行驶区段=两条真正停靠的leg之间；环线上从某条停靠leg之后开始逐段扫，没有停靠的线路整条当一个区段。
+	size_t start = 0;
+	for (size_t i = 0; i < n; i++) {
+		if (legs[i].dwellAtDestination) { start = (i + 1) % n; break; }
+	}
+	size_t i = 0;
+	while (i < n) {
+		size_t first = i;
+		bool transfer = false;
+		while (i < n) {
+			const RouteLeg& leg = legs[(start + i) % n];
+			if (leg.fromStation && leg.fromStation == leg.toStation) transfer = true;
+			i++;
+			if (leg.dwellAtDestination) break;
+		}
+		if (!transfer) continue;
+		for (size_t k = first; k < i; k++) {
+			RouteLeg& leg = legs[(start + k) % n];
+			leg.timeLength = (leg.edge ? leg.edge->length : 0.f) / scale;
+		}
+	}
 }
 
 const vector<vector<Route::RouteLeg>>& Route::GetLines() const { return lines; }
@@ -316,7 +378,7 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 	for (size_t i = 0; i < legs.size(); i++) {
 		const RouteLeg& leg = legs[i];
 		if (!leg.edge) continue;
-		float travelTime = (mod->speed > 0.f) ? leg.edge->length / mod->speed : 0.f;
+		float travelTime = (mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
 		if (t < travelTime) { legIndex = i; break; }
 		t -= travelTime;
 
@@ -357,7 +419,7 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 		size_t j = segStart;
 		while (true) {
 			const RouteLeg& segLeg = legs[j];
-			float segLegLength = segLeg.edge ? segLeg.edge->length : 0.f;
+			float segLegLength = segLeg.timeLength;
 			float segLegTravelTime = (mod->speed > 0.f) ? segLegLength / mod->speed : 0.f;
 			if (j == legIndex) {
 				segTimeBeforeCurrentLeg = segTotalTime;
@@ -403,7 +465,7 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 		size_t j = segStart;
 		while (true) {
 			const RouteLeg& segLeg = legs[j];
-			float segLegLength = segLeg.edge ? segLeg.edge->length : 0.f;
+			float segLegLength = segLeg.timeLength;
 			bool isLastInSeg = segLeg.dwellAtDestination;
 			if (segArcLength <= lengthBeforeResultLeg + segLegLength || isLastInSeg) {
 				resultLegIndex = j;
@@ -419,12 +481,14 @@ void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float l
 	const RouteLeg& resultLeg = legs[resultLegIndex];
 	if (!resultLeg.edge) return;
 	float arcLength = segArcLength - lengthBeforeResultLeg;
-	arcLength = max(0.f, min(arcLength, resultLeg.edge->length));
+	arcLength = max(0.f, min(arcLength, resultLeg.timeLength));
+	// 时间等效长度换回几何弧长(降速区段里timeLength>length)。
+	if (resultLeg.timeLength > 1e-6f) arcLength *= resultLeg.edge->length / resultLeg.timeLength;
 
 	float x, y, z, yaw, pitch = 0.f;
 	EvaluateEdge(*resultLeg.edge, arcLength, x, y, z, yaw, pitch);
 	vehicle->SetTransform(x, y, z, yaw);
-	vehicle->SetPitch(mod->instantiate ? pitch : 0.f);
+	vehicle->SetPitch((mod->instantiate || mod->tiltAlongPath) ? pitch : 0.f);
 }
 
 void Route::Update(float elapsedSeconds) {
@@ -438,7 +502,7 @@ void Route::Update(float elapsedSeconds) {
 		float period = 0.f;
 		for (const RouteLeg& leg : legs) {
 			if (!leg.edge) continue;
-			float travelTime = (mod->speed > 0.f) ? leg.edge->length / mod->speed : 0.f;
+			float travelTime = (mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
 			period += travelTime + (leg.dwellAtDestination ? mod->dwellSeconds : 0.f);
 		}
 		if (period <= 0.f) continue;
@@ -501,7 +565,7 @@ Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
 			float period = 0.f;
 			for (const RouteLeg& leg : legs) {
 				if (!leg.edge) continue;
-				float travelTime = (mod->speed > 0.f) ? leg.edge->length / mod->speed : 0.f;
+				float travelTime = (mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
 				period += travelTime + (leg.dwellAtDestination ? mod->dwellSeconds : 0.f);
 			}
 			if (period <= 0.f) return state;
@@ -515,7 +579,7 @@ Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
 			for (size_t i = 0; i < legs.size(); i++) {
 				const RouteLeg& leg = legs[i];
 				if (!leg.edge) continue;
-				float travelTime = (mod->speed > 0.f) ? leg.edge->length / mod->speed : 0.f;
+				float travelTime = (mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
 				if (t < travelTime) {
 					state.valid = true;
 					state.legIndex = static_cast<int>(i);
@@ -557,7 +621,7 @@ bool Route::SyncVehicleProgress(const Vehicle* vehicle, int legIndex, float legF
 			float target = 0.f; // 目标进度对应的时刻表时间
 			for (size_t i = 0; i < legs.size(); i++) {
 				const RouteLeg& leg = legs[i];
-				float travelTime = (leg.edge && mod->speed > 0.f) ? leg.edge->length / mod->speed : 0.f;
+				float travelTime = (leg.edge && mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
 				float dwell = leg.dwellAtDestination ? mod->dwellSeconds : 0.f;
 				if (static_cast<int>(i) < legIndex) target += travelTime + dwell;
 				else if (static_cast<int>(i) == legIndex) {

@@ -10,7 +10,7 @@ TrainStation/AirStation共用的"贴路"坐标换算：`NearRoadPoint`、`AlongA
   - `NearRoadPoint(direction, alongRatio, depthRatio)`——`alongRatio`是沿道路方向(frontage
     轴)的位置，`depthRatio`是垂直道路方向(0=贴着道路那条边，1=远离道路那条边)，按
     `direction`换算成quad局部坐标系下的`PointParams`。`depthRatio`在`FACE_EAST`/
-    `FACE_NORTH`要翻转(`1-depthRatio`)，`alongRatio`任何方向都不翻转——因为`depthRatio`
+    `FACE_SOUTH`要翻转(quad局部坐标+X东、+Y南，贴路那条边在EAST是x=1、在SOUTH是y=1；NORTH/WEST贴的是0边)(`1-depthRatio`)，`alongRatio`任何方向都不翻转——因为`depthRatio`
     的"0=贴路"要跟着`direction`贴的是哪条边走，`alongRatio`只是沿同一条边平移，不需要跟着
     翻。
   - `AlongAxisHeadingDegrees(direction, towardIncreasing)`——沿frontage轴(`alongRatio`

@@ -295,6 +295,7 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 					}
 					if (leg.edge) legs.push_back(leg);
 				}
+				route->FinalizeLegTimes(legs);
 				route->lines.push_back(move(legs));
 			}
 

@@ -10,7 +10,7 @@ using namespace std;
 
 // 射线从(x,y)沿(dirX,dirY)方向和[0,sizeX]x[0,sizeY]地图边界的交点——dirX/dirY不会同时为0
 // (接口朝向不可能是零向量)。
-static pair<float, float> RayBoxIntersection(float x, float y, float dirX, float dirY, int sizeX, int sizeY) {
+pair<float, float> RayBoxIntersection(float x, float y, float dirX, float dirY, int sizeX, int sizeY) {
 	float tBest = 1e9f;
 	if (dirX > 0.f) tBest = min(tBest, (static_cast<float>(sizeX) - x) / dirX);
 	else if (dirX < 0.f) tBest = min(tBest, (0.f - x) / dirX);
@@ -21,9 +21,10 @@ static pair<float, float> RayBoxIntersection(float x, float y, float dirX, float
 }
 
 // TrainRoute/AirRoute共用的单站双跑道(轨道)四接口环线拓扑，见route_common.md。
-// overrideEdgeZ为true时边缘站点的z取edgeHeight(AirRoute用巡航高度)，否则用接口原本的z。
+// overrideEdgeZ为true时边缘站点的z取edgeHeight(AirRoute用巡航高度)。
+// edgeBase是本站8个边缘站点在Core站点总列表里的起始下标；结果追加到out*，多站点各调一次。
 void LayoutDualTrackStationLoop(const vector<RouteStationInfo>& interfaces, int sizeX, int sizeY,
-	bool overrideEdgeZ, float edgeHeight,
+	bool overrideEdgeZ, float edgeHeight, int edgeBase,
 	vector<RouteStationInfo>& outEdgeStations, vector<RouteLink>& outLinks,
 	vector<vector<RouteStop>>& outLines) {
 	if (interfaces.size() < 4) return; // 没有真实站点(或接口不全)，这条线路留空
@@ -102,12 +103,12 @@ void LayoutDualTrackStationLoop(const vector<RouteStationInfo>& interfaces, int 
 	stop2.departDirX = rightIn.departDirX; stop2.departDirY = rightIn.departDirY;
 	stop2.isEdge = true;
 
-	outEdgeStations = { leftEdgeOut, leftEdgeMid, leftEdgeIn, rightEdgeOut, rightEdgeMid, rightEdgeIn, stop1, stop2 };
+	outEdgeStations.insert(outEdgeStations.end(),
+		{ leftEdgeOut, leftEdgeMid, leftEdgeIn, rightEdgeOut, rightEdgeMid, rightEdgeIn, stop1, stop2 });
 
-	// edgeStations接在真实站点后面，这条线路假定全图只有这一个真实站点(下标就是realStation)，
-	// 下标顺序和上面outEdgeStations列表里的顺序一一对应。
+	// edgeStations接在真实站点后面，下标顺序和上面列表里的顺序一一对应(stop1/stop2见route_common.h的常量)。
 	int realStation = leftIn.stationIndex;
-	auto edgeStop = [&](int k, bool dwell, bool silent) { return RouteStop{ realStation + 1 + k, 0, dwell, silent }; };
+	auto edgeStop = [&](int k, bool dwell, bool silent) { return RouteStop{ edgeBase + k, 0, dwell, silent }; };
 
 	RouteStop stopLeftEdgeOut = edgeStop(0, false, false);
 	RouteStop stopLeftEdgeMid = edgeStop(1, true, true);  // 虚拟车站：停靠但不触发事件
@@ -115,8 +116,8 @@ void LayoutDualTrackStationLoop(const vector<RouteStationInfo>& interfaces, int 
 	RouteStop stopRightEdgeOut = edgeStop(3, false, false);
 	RouteStop stopRightEdgeMid = edgeStop(4, true, true);
 	RouteStop stopRightEdgeIn = edgeStop(5, false, false);
-	RouteStop stopMid1 = edgeStop(6, true, false);
-	RouteStop stopMid2 = edgeStop(7, true, false);
+	RouteStop stopMid1 = edgeStop(kDualTrackStop1, true, false);
+	RouteStop stopMid2 = edgeStop(kDualTrackStop2, true, false);
 	RouteStop stopLeftIn{ realStation, leftIn.interfaceIndex, false };
 	RouteStop stopRightOut{ realStation, rightOut.interfaceIndex, false };
 	RouteStop stopRightIn{ realStation, rightIn.interfaceIndex, false };
