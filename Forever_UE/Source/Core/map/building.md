@@ -200,7 +200,7 @@ debugf警告）。车行导航**不再支持`outside`**（出现会被忽略并�
 同一个t上时`BreakThroughLine`会复用同一个access node）。解析在`Building::BuildNavigationGraph`，结果存在
 `BuildingNavResult::vehicleEntranceNodes/vehicleExitNodes`，`Map::MergeBuildingNavigation`直接按清单入
 `pendingBuildingRoadAccess`，不再看度数。
-`Source/layout_editor.html`的"层外连接"里车行导航模式多了"车辆入口/车辆出口"两项。
+`Tools/LayoutEditor/layout_editor.html`的"层外连接"里车行导航模式多了"车辆入口/车辆出口"两项。
 
 ## 车行导航连线的通行方向（forward / backward）
 
@@ -209,7 +209,7 @@ debugf警告）。车行导航**不再支持`outside`**（出现会被忽略并�
 行为（只顺向）。行人导航恒定双向，忽略这两个字段。`NavigationConnectionTemplate/NavigationLineTemplate`在
 `Dependence/map/general_geometry.h`，解析在`ParseNavigationBlock`，展开在`BuildNavigationGraph`的
 `addConnection`（line投影连接按模板begin/end确定方向）。**上下楼(upstair/downstair)匹配出来的连线车行导航恒定
-双向**，entrance/exit/outside这类标记端点不受影响。`layout_editor.html`在车行导航模式的连接/路径面板里有
+双向**，entrance/exit/outside这类标记端点不受影响。`Tools/LayoutEditor/layout_editor.html`在车行导航模式的连接/路径面板里有
 "顺/逆"两个勾选，画布上用箭头显示方向。
 
 ## 墙的侧面标签（wallTags）

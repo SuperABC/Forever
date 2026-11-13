@@ -15,11 +15,19 @@ body { font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ccc
 #main { display: flex; flex: 1; overflow: hidden; }
 
 #canvas-wrap { flex: 0 0 40%; min-width: 0; display: grid;
-               grid-template-rows: 1fr auto;
+               grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
                align-items: center; justify-items: center;
                background: #252525; padding: 16px; gap: 10px; overflow: hidden; }
 canvas { display: block; cursor: crosshair; border: 1px solid #333;
          max-width: 100%; max-height: 100%; }
+#view-bar { display: flex; align-items: center; gap: 8px; width: 100%; color: #aaa; font-size: 12px; white-space: nowrap; }
+#view3d .hint3d { position: absolute; left: 6px; bottom: 4px; color: #777; font-size: 11px; pointer-events: none; }
+#view-bar button.active { background: #4488aa; color: #fff; border-color: #4488aa; }
+#view-bar .p3 { display: none; align-items: center; gap: 4px; }
+#view3d { position: relative; width: 100%; height: 100%; min-height: 0; display: none;
+          border: 1px solid #333; background: #1a1a1a; overflow: hidden; }
+#view3d canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+                 max-width: none; max-height: none; border: 0; cursor: grab; }
 #legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center;
           min-height: 32px; width: 100%; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #aaa; }
@@ -133,7 +141,18 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 <div id="main">
   <div id="file-list"></div>
   <div id="canvas-wrap">
+    <div id="view-bar">
+      <button id="vb-2d" class="active" onclick="setViewMode('2d')">平面</button>
+      <button id="vb-3d" onclick="setViewMode('3d')">3D</button>
+      <span class="p3" id="p3-box">
+        <label>层高</label><input type="number" id="p3-floor" class="sm" step="0.05" min="0.05" value="0.4">
+        <label>墙厚</label><input type="number" id="p3-wall" class="sm" step="0.005" min="0.001" value="0.02">
+      </span>
+      <div style="flex:1"></div>
+      <button onclick="refreshView()" title="重置视图(平面:缩放/平移复位；3D:相机复位)并重新读取磁盘上的当前文件。平面:滚轮缩放 空格+左键平移">重置视图并重读</button>
+    </div>
     <canvas id="c" width="600" height="600"></canvas>
+    <div id="view3d"><div class="hint3d">左键旋转 右键平移 滚轮缩放 WASD移动 Q/E升降 Shift加速</div></div>
     <div id="legend"></div>
   </div>
   <div id="panel"></div>
@@ -141,6 +160,7 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 <!-- Hidden file picker for load; onchange fires after user picks a file -->
 <input type="file" id="finput" accept=".layout" multiple style="display:none" onchange="onFileChosen(event)">
 
+<script src="vendor/three.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
 // COORDINATE SYSTEM
@@ -260,8 +280,10 @@ const CANVAS_PX    = 600;
 const LAYOUT_MIN   = -0.5;   // leftmost/topmost visible normalized coord
 const LAYOUT_RANGE = 2.0;    // total visible range: -0.5 to 1.5
 // Per-axis scale: the larger floor dimension always maps to CANVAS_PX
-function scaleX() { return CANVAS_PX / LAYOUT_RANGE * S.W / Math.max(S.W, S.H); }
-function scaleY() { return CANVAS_PX / LAYOUT_RANGE * S.H / Math.max(S.W, S.H); }
+// view.zoom multiplies the scale and view.panX/panY shift the origin (canvas px), see the wheel / space-drag handlers.
+var view = { zoom: 1, panX: 0, panY: 0 };
+function scaleX() { return CANVAS_PX / LAYOUT_RANGE * S.W / Math.max(S.W, S.H) * view.zoom; }
+function scaleY() { return CANVAS_PX / LAYOUT_RANGE * S.H / Math.max(S.W, S.H) * view.zoom; }
 
 // Fill colors for each geometry element type
 const COLORS = {
@@ -578,10 +600,10 @@ let _isDragging  = false;  // true once pointer moves > 4px from _dragStart
 
 // ── Coordinate Helpers ────────────────────────────────────────────────────────
 
-const toCanvasX = normX => (normX - LAYOUT_MIN) * scaleX();
-const toCanvasY = normY => (normY - LAYOUT_MIN) * scaleY();
-const toLayoutX = canvX =>  canvX / scaleX() + LAYOUT_MIN;
-const toLayoutY = canvY =>  canvY / scaleY() + LAYOUT_MIN;
+const toCanvasX = normX => (normX - LAYOUT_MIN) * scaleX() + view.panX;
+const toCanvasY = normY => (normY - LAYOUT_MIN) * scaleY() + view.panY;
+const toLayoutX = canvX => (canvX - view.panX) / scaleX() + LAYOUT_MIN;
+const toLayoutY = canvY => (canvY - view.panY) / scaleY() + LAYOUT_MIN;
 
 // Evaluate an 8-element rect param array into normalized corner coordinates.
 // Formula: normalizedCoord = ratio + offset/floorDim
@@ -1137,6 +1159,7 @@ function drawNavMode() {
 
 function redraw() {
   updateActiveDirtyMark();
+  if (view3dOn) { schedule3DRebuild(); return; }
   canvas.width  = Math.round(CANVAS_PX * S.W / Math.max(S.W, S.H));
   canvas.height = Math.round(CANVAS_PX * S.H / Math.max(S.W, S.H));
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1379,8 +1402,45 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Space + left drag pans the plane view; wheel zooms around the cursor.
+var _spaceDown = false;
+var _panDrag = null;   // {canvX, canvY, panX, panY} at drag start
+function _isTypingTarget(t) {
+  return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
+}
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || _isTypingTarget(e.target)) return;
+  if (view3dOn) return;
+  e.preventDefault();
+  _spaceDown = true;
+  canvas.style.cursor = 'grab';
+});
+document.addEventListener('keyup', e => {
+  if (e.code !== 'Space') return;
+  if (!_isTypingTarget(e.target) && !view3dOn) e.preventDefault();
+  _spaceDown = false; _panDrag = null;
+  canvas.style.cursor = '';
+});
+window.addEventListener('blur', () => { _spaceDown = false; _panDrag = null; canvas.style.cursor = ''; });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const { canvX, canvY } = getCanvasCoords(e);
+  const lx = toLayoutX(canvX), ly = toLayoutY(canvY);
+  view.zoom = Math.max(0.25, Math.min(8, view.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+  // keep the layout point under the cursor fixed
+  view.panX = canvX - (lx - LAYOUT_MIN) * scaleX();
+  view.panY = canvY - (ly - LAYOUT_MIN) * scaleY();
+  redraw();
+}, { passive: false });
+
 canvas.addEventListener('mousedown', e => {
   const { canvX, canvY } = getCanvasCoords(e);
+  if (_spaceDown && e.button === 0) {
+    _panDrag = { canvX, canvY, panX: view.panX, panY: view.panY };
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
   _dragStart   = { canvX, canvY };
   _dragCurrent = { canvX, canvY };
   _isDragging  = false;
@@ -1391,6 +1451,13 @@ canvas.addEventListener('mousedown', e => {
 });
 
 canvas.addEventListener('mousemove', e => {
+  if (_panDrag) {
+    const c = getCanvasCoords(e);
+    view.panX = _panDrag.panX + c.canvX - _panDrag.canvX;
+    view.panY = _panDrag.panY + c.canvY - _panDrag.canvY;
+    redraw();
+    return;
+  }
   if (!_dragStart) return;
   const { canvX, canvY } = getCanvasCoords(e);
   _dragCurrent = { canvX, canvY };
@@ -1400,6 +1467,7 @@ canvas.addEventListener('mousemove', e => {
 });
 
 canvas.addEventListener('mouseup', e => {
+  if (_panDrag) { _panDrag = null; canvas.style.cursor = _spaceDown ? 'grab' : ''; return; }
   if (!_dragStart) return;
   const { canvX, canvY } = getCanvasCoords(e);
   const ctrl = e.ctrlKey || e.metaKey;
@@ -2199,12 +2267,10 @@ function newFile() {
   applyEntry(files.length - 1);
 }
 
-function parseAndApply(text, name, handle = null) {
-  try {
+// Parse .layout text into an entry's data / navigation layers and reset its saved snapshot.
+function fillEntryFromText(entry, text) {
     let src = text.replace(/,(\s*[}\]])/g, '$1');  // strip trailing commas
     const parsed = JSON.parse(src);
-    const entry = makeBlankEntry(name);
-    entry.handle = handle;
     ALL_KEYS.forEach(k => { entry.data[k] = parsed[k] || []; });
     TAGGED.forEach(k => { entry.data[k] = entry.data[k].map(it => Array.isArray(it) ? { rect: it } : it); });
     // Legacy (pre-migration) files stored the pedestrian layer under the bare
@@ -2218,6 +2284,13 @@ function parseAndApply(text, name, handle = null) {
       ? { nodes: rawVehNav.nodes || [], lines: rawVehNav.lines || [], connections: rawVehNav.connections || [] }
       : { nodes: [], lines: [], connections: [] };
     entry.savedSnapshot = JSON.stringify({ data: entry.data, pedestrianNav: entry.pedestrianNav, vehicleNav: entry.vehicleNav });
+}
+
+function parseAndApply(text, name, handle = null) {
+  try {
+    const entry = makeBlankEntry(name);
+    entry.handle = handle;
+    fillEntryFromText(entry, text);
     saveCurrentToEntry();
     files.push(entry);
     applyEntry(files.length - 1);
@@ -2512,6 +2585,344 @@ document.getElementById('global-mode').addEventListener('change', e => {
     const newVal = Math.max(parseFloat(el.min) || 0, (parseFloat(el.value) || 0) + (e.deltaY < 0 ? step : -step));
     el.value = newVal;
   }, { passive: false });
+});
+
+// ── 3D View (three.js, vendor/three.min.js) ───────────────────────────────────
+//
+// World mapping: plane x -> three x, plane y (down) -> three z, height -> three y,
+// so a top-down camera looks exactly like the plane view. Units are the layout world units (S.W / S.H).
+// Floor height and wall thickness are editor-only parameters (not stored in .layout).
+// Doors / windows are not drawn as models: their positions cut holes in the walls (horizontal span along the wall,
+// vertical span y1/y2 = ratio*floorH + offset measured DOWN from the ceiling, same as Core BuildDoorsForElement).
+
+var view3dOn = false;
+var _3d = null;            // { renderer, scene, camera, root, cam:{yaw,pitch,dist,target}, raf, rebuildPending }
+var _3dKeys = new Set();
+
+function params3D() {
+  const f = parseFloat(document.getElementById('p3-floor').value);
+  const w = parseFloat(document.getElementById('p3-wall').value);
+  return { floorH: f > 0 ? f : 0.4, wallT: w > 0 ? w : 0.02 };
+}
+
+function setViewMode(mode) {
+  const on = mode === '3d';
+  if (on && typeof THREE === 'undefined') { alert('three.min.js 未加载(vendor/three.min.js)'); return; }
+  view3dOn = on;
+  document.getElementById('vb-2d').classList.toggle('active', !on);
+  document.getElementById('vb-3d').classList.toggle('active', on);
+  document.getElementById('p3-box').style.display = on ? 'flex' : 'none';
+  document.getElementById('c').style.display = on ? 'none' : '';
+  document.getElementById('view3d').style.display = on ? 'block' : 'none';
+  document.getElementById('global-mode').disabled = on;
+  if (on) { init3D(); rebuild3D(); start3DLoop(); }
+  else { stop3DLoop(); redraw(); }
+}
+
+// Reset the current view (plane: zoom 1 / no pan, 3D: default camera) and re-read the active file from disk.
+// Files without a handle (new / loaded through the <input> fallback) cannot be re-read: only the view is reset.
+async function refreshView() {
+  if (view3dOn) resetCamera3D();
+  else { view.zoom = 1; view.panX = 0; view.panY = 0; }
+  const f = files[activeFileIdx];
+  if (!f || !f.handle) { redraw(); if (f) alert('该文件没有磁盘句柄(新建或用备用方式加载)，无法重新读取，只重置了视图。'); return; }
+  if (isFileDirty(f, activeFileIdx) && !confirm('当前文件有未保存的修改，重新读取会丢弃它们。继续？')) { redraw(); return; }
+  try {
+    const file = await f.handle.getFile();
+    fillEntryFromText(f, await file.text());
+    f.sel = null; f.navSel = null; f.multiSel = [];
+    f.undoStack = []; f.redoStack = [];
+    applyEntry(activeFileIdx);
+  } catch (err) { alert('重新读取失败: ' + err.message); redraw(); }
+}
+
+function schedule3DRebuild() {
+  if (!_3d || _3d.rebuildPending) return;
+  _3d.rebuildPending = true;
+  requestAnimationFrame(() => { if (_3d) { _3d.rebuildPending = false; if (view3dOn) rebuild3D(); } });
+}
+
+function init3D() {
+  if (_3d) return;
+  const host = document.getElementById('view3d');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  renderer.setClearColor(0x1a1a1a);
+  host.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x555566, 0.9));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+  sun.position.set(-1, 2, 1.5);
+  scene.add(sun);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
+  _3d = { renderer, scene, camera, root: new THREE.Group(), raf: 0, rebuildPending: false,
+          cam: { yaw: 0, pitch: 0.95, dist: 6, target: new THREE.Vector3(2, 0.2, 2) }, w: 0, h: 0 };
+  scene.add(_3d.root);
+  resetCamera3D();
+  bind3DControls(renderer.domElement);
+}
+
+function resetCamera3D() {
+  const { floorH } = params3D();
+  const c = _3d.cam;
+  c.yaw = 0; c.pitch = 0.95;
+  c.dist = Math.max(S.W, S.H) * 1.5;
+  c.target.set(S.W / 2, floorH / 2, S.H / 2);
+}
+
+function bind3DControls(el) {
+  let drag = null;
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('mousedown', e => {
+    drag = { x: e.clientX, y: e.clientY, button: e.button };
+    el.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  window.addEventListener('mouseup', () => { drag = null; el.style.cursor = 'grab'; });
+  window.addEventListener('mousemove', e => {
+    if (!drag || !_3d) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.x = e.clientX; drag.y = e.clientY;
+    const c = _3d.cam;
+    if (drag.button === 0) {
+      c.yaw -= dx * 0.005;
+      c.pitch = Math.max(-1.5, Math.min(1.5, c.pitch + dy * 0.005));
+    } else {
+      const k = c.dist * 0.0015;
+      const { right, up } = camAxes3D();
+      c.target.addScaledVector(right, -dx * k).addScaledVector(up, dy * k);
+    }
+  });
+  el.addEventListener('wheel', e => {
+    e.preventDefault();
+    const c = _3d.cam;
+    c.dist = Math.max(0.1, Math.min(500, c.dist * Math.exp(e.deltaY * 0.001)));
+  }, { passive: false });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Shift') { _3dKeys.add('shift'); return; }
+    if (!view3dOn || e.ctrlKey || e.metaKey || e.altKey || _isTypingTarget(e.target)) return;
+    const k = e.key.toLowerCase();
+    if (k.length === 1 && 'wasdqe'.includes(k)) { _3dKeys.add(k); e.preventDefault(); }
+  });
+  document.addEventListener('keyup', e => _3dKeys.delete(e.key === 'Shift' ? 'shift' : e.key.toLowerCase()));
+  window.addEventListener('blur', () => _3dKeys.clear());
+}
+
+function camAxes3D() {
+  const c = _3d.cam;
+  const fwd = new THREE.Vector3(-Math.sin(c.yaw) * Math.cos(c.pitch), -Math.sin(c.pitch), -Math.cos(c.yaw) * Math.cos(c.pitch));
+  const right = new THREE.Vector3(Math.cos(c.yaw), 0, -Math.sin(c.yaw));
+  const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+  return { fwd, right, up };
+}
+
+function start3DLoop() {
+  if (_3d.raf) return;
+  let last = performance.now();
+  const frame = now => {
+    _3d.raf = requestAnimationFrame(frame);
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    const host = document.getElementById('view3d');
+    const w = host.clientWidth, h = host.clientHeight;
+    if (w > 0 && h > 0 && (w !== _3d.w || h !== _3d.h)) {
+      _3d.w = w; _3d.h = h;
+      _3d.renderer.setSize(w, h, false);
+      _3d.camera.aspect = w / h; _3d.camera.updateProjectionMatrix();
+    }
+    const c = _3d.cam;
+    const moving = ['w', 'a', 's', 'd', 'q', 'e'].some(k => _3dKeys.has(k));
+    if (moving) {
+      const speed = c.dist * 0.8 * dt * (_3dKeys.has('shift') ? 3 : 1);
+      const flat = new THREE.Vector3(-Math.sin(c.yaw), 0, -Math.cos(c.yaw));
+      const right = new THREE.Vector3(Math.cos(c.yaw), 0, -Math.sin(c.yaw));
+      if (_3dKeys.has('w')) c.target.addScaledVector(flat, speed);
+      if (_3dKeys.has('s')) c.target.addScaledVector(flat, -speed);
+      if (_3dKeys.has('d')) c.target.addScaledVector(right, speed);
+      if (_3dKeys.has('a')) c.target.addScaledVector(right, -speed);
+      if (_3dKeys.has('e')) c.target.y += speed;
+      if (_3dKeys.has('q')) c.target.y -= speed;
+    }
+    _3d.camera.position.set(
+      c.target.x + c.dist * Math.sin(c.yaw) * Math.cos(c.pitch),
+      c.target.y + c.dist * Math.sin(c.pitch),
+      c.target.z + c.dist * Math.cos(c.yaw) * Math.cos(c.pitch));
+    _3d.camera.lookAt(c.target);
+    _3d.renderer.render(_3d.scene, _3d.camera);
+  };
+  _3d.raf = requestAnimationFrame(frame);
+}
+
+function stop3DLoop() {
+  if (_3d && _3d.raf) { cancelAnimationFrame(_3d.raf); _3d.raf = 0; }
+  _3dKeys.clear();
+}
+
+function tagColor3D(tag) {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
+  return new THREE.Color().setHSL((h % 360) / 360, 0.55, 0.55);
+}
+
+function clear3DGroup(g) {
+  while (g.children.length) {
+    const o = g.children.pop();
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  }
+}
+
+// Wall openings (doors + windows of this wall direction) as {a,b,lo,hi}: a/b = span along the wall in world units
+// measured from the element's min corner (pos = ratio * wallLen + offset, same as drawWall), lo/hi = height range
+// above the floor. pos[2..3] / pos[6..7] are ratio*floorH + offset measured from the ceiling downward.
+function wallOpenings3D(item, dir, wallLen, floorH) {
+  const holes = [];
+  for (const list of [item.doors || [], item.windows || []]) {
+    for (const o of list) {
+      if (o.direction !== dir) continue;
+      for (const pos of (o.positions || [])) {
+        let a = pos[0] * wallLen + pos[1], b = pos[4] * wallLen + pos[5];
+        if (a > b) [a, b] = [b, a];
+        const y1 = pos[2] * floorH + pos[3], y2 = pos[6] * floorH + pos[7];
+        const lo = Math.max(0, floorH - Math.max(y1, y2)), hi = Math.min(floorH, floorH - Math.min(y1, y2));
+        holes.push({ a, b, lo, hi });
+      }
+    }
+  }
+  return holes;
+}
+
+// Solid pieces of a wall: [from, to, y0, y1] boxes covering the wall except the holes.
+function wallPieces3D(holes, wallLen, floorH) {
+  const cuts = new Set([0, wallLen]);
+  for (const h of holes) { cuts.add(Math.max(0, Math.min(wallLen, h.a))); cuts.add(Math.max(0, Math.min(wallLen, h.b))); }
+  const xs = Array.from(cuts).sort((p, q) => p - q);
+  const pieces = [];
+  for (let i = 0; i + 1 < xs.length; i++) {
+    const s0 = xs[i], s1 = xs[i + 1];
+    if (s1 - s0 <= 1e-6) continue;
+    const mid = (s0 + s1) / 2;
+    // merge the vertical ranges of every hole covering this sub-span, keep what is left solid
+    const cover = holes.filter(h => h.a < mid && mid < h.b && h.hi > h.lo).map(h => [h.lo, h.hi]).sort((p, q) => p[0] - q[0]);
+    let y = 0;
+    for (const [lo, hi] of cover) {
+      if (lo > y) pieces.push([s0, s1, y, lo]);
+      y = Math.max(y, hi);
+    }
+    if (y < floorH) pieces.push([s0, s1, y, floorH]);
+  }
+  return pieces;
+}
+
+function rebuild3D() {
+  if (!_3d) return;
+  const { floorH, wallT } = params3D();
+  const g = _3d.root;
+  clear3DGroup(g);
+  const W = S.W, H = S.H;
+  const world = params => {
+    const r = evalRect(params, W, H);
+    return { x1: Math.min(r.x1, r.x2) * W, x2: Math.max(r.x1, r.x2) * W,
+             z1: Math.min(r.y1, r.y2) * H, z2: Math.max(r.y1, r.y2) * H };
+  };
+  const addBox = (x1, x2, y1, y2, z1, z2, color) => {
+    if (x2 - x1 <= 1e-6 || y2 - y1 <= 1e-6 || z2 - z1 <= 1e-6) return;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x2 - x1, y2 - y1, z2 - z1),
+      new THREE.MeshLambertMaterial({ color }));
+    m.position.set((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2);
+    g.add(m);
+  };
+  const addPlane = (r, y, color, opacity) => {
+    if (r.x2 - r.x1 <= 1e-6 || r.z2 - r.z1 <= 1e-6) return;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(r.x2 - r.x1, r.z2 - r.z1),
+      new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set((r.x1 + r.x2) / 2, y, (r.z1 + r.z2) / 2);
+    g.add(m);
+  };
+  const isSel = (type, idx) => (S.sel && S.sel.type === type && S.sel.idx === idx) || isGeoMultiSelected(type, idx);
+
+  // floor / ceiling / hatch planes
+  const planeOf = (type, y, opacity, baseColor) => (S.data[type] || []).forEach((item, i) => {
+    const color = isSel(type, i) ? new THREE.Color(0x66ccff)
+      : (item && item.tag ? tagColor3D(item.tag) : new THREE.Color(baseColor));
+    addPlane(world(getParams(type, item)), y, color, opacity);
+  });
+  planeOf('grounds', 0, 1, 0x8a8a8a);
+  planeOf('ceilings', floorH, 0.35, 0xbbbbbb);
+  planeOf('hatches', floorH, 0.5, 0x4488ff);
+
+  // walls (stairs / ramps / elevators contribute only their walls)
+  for (const type of ['corridors', 'singles', 'rows', 'elevators', 'stairs', 'ramps']) {
+    (S.data[type] || []).forEach((item, idx) => {
+      const r = world(getParams(type, item));
+      const t = Math.min(wallT, (r.x2 - r.x1) / 2, (r.z2 - r.z1) / 2);
+      for (const dir of wallDirsOf(type, item)) {
+        const alongX = dir === 2 || dir === 3;
+        const from = alongX ? r.x1 : r.z1, len = (alongX ? r.x2 - r.x1 : r.z2 - r.z1);
+        const tagged = wallHasTag(item, dir);
+        const wsel = S.wallSel && S.wallSel.type === type && S.wallSel.idx === idx && S.wallSel.dir === dir;
+        const color = wsel ? 0xffffff : isSel(type, idx) ? 0x66ccff : tagged ? 0xffa040 : 0xb0b0b0;
+        for (const [s0, s1, y0, y1] of wallPieces3D(wallOpenings3D(item, dir, len, floorH), len, floorH)) {
+          if (dir === 0)      addBox(r.x1, r.x1 + t, y0, y1, from + s0, from + s1, color);
+          else if (dir === 1) addBox(r.x2 - t, r.x2, y0, y1, from + s0, from + s1, color);
+          else if (dir === 2) addBox(from + s0, from + s1, y0, y1, r.z1, r.z1 + t, color);
+          else                addBox(from + s0, from + s1, y0, y1, r.z2 - t, r.z2, color);
+        }
+      }
+    });
+  }
+
+  // navigation: nodes as spheres, lines / connections as line segments, just above the floor
+  const navY = Math.min(floorH * 0.1, 0.05) + 0.01;
+  const ballR = Math.max(W, H) * 0.012;
+  const drawNav3D = (nav, color) => {
+    const pts = [];
+    const ballAt = (nx, ny) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(ballR, 12, 8), new THREE.MeshBasicMaterial({ color }));
+      m.position.set(nx * W, navY, ny * H);
+      g.add(m);
+    };
+    const epPos = ep => {
+      if (ep.type === 'node') { const n = nav.nodes[ep.idx]; return n ? evalPoint(n.position) : null; }
+      if (ep.type === 'line') {
+        const l = nav.lines[ep.idx]; if (!l) return null;
+        const a = evalPoint(l.begin), b = evalPoint(l.end);
+        return ep.vertex === 0 ? a : ep.vertex === 1 ? b : [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      }
+      if (ep.type === 'single' || ep.type === 'row') {
+        const it = (S.data[ep.type === 'single' ? 'singles' : 'rows'] || [])[ep.idx]; if (!it) return null;
+        const r = evalRect(it.rect, W, H);
+        return [(r.x1 + r.x2) / 2, (r.y1 + r.y2) / 2];
+      }
+      return null;
+    };
+    nav.nodes.forEach(n => { const p = evalPoint(n.position); ballAt(p[0], p[1]); });
+    nav.lines.forEach(l => {
+      const a = evalPoint(l.begin), b = evalPoint(l.end);
+      pts.push(a[0] * W, navY, a[1] * H, b[0] * W, navY, b[1] * H);
+      ballAt(a[0], a[1]); ballAt(b[0], b[1]);
+    });
+    nav.connections.forEach(c => {
+      if (isExternalEndpoint(c.begin) || isExternalEndpoint(c.end)) return;
+      const a = epPos(c.begin), b = epPos(c.end);
+      if (a && b) pts.push(a[0] * W, navY, a[1] * H, b[0] * W, navY, b[1] * H);
+    });
+    if (!pts.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    g.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color })));
+  };
+  drawNav3D(S.pedestrianNav, 0xffdd44);
+  drawNav3D(S.vehicleNav, 0x44ddff);
+}
+
+['p3-floor', 'p3-wall'].forEach(id => {
+  document.getElementById(id).addEventListener('change', e => {
+    try { localStorage.setItem('le3d_' + id, e.target.value); } catch (err) {}
+    if (view3dOn) rebuild3D();
+  });
+  try { const v = localStorage.getItem('le3d_' + id); if (v) document.getElementById(id).value = v; } catch (err) {}
 });
 
 renderFileList();  // starts with no files: hides canvas-wrap and panel
