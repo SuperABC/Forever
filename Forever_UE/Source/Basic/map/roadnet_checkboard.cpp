@@ -10,7 +10,7 @@
 #include <cfloat>
 #include <unordered_set>
 
-// 过山的做法和井字路网完全一致(抬升/隧道，常量含义见roadnet_basic.cpp开头的注释)。
+// 过山的做法和井字路网完全一致(抬升/隧道，常量含义见roadnet_jing.cpp开头的注释)。
 #define MOUNTAIN_MAX_SLOPE 0.5f
 #define TERRAIN_FIT_FALLOFF 1.5f
 #define TUNNEL_HEIGHT -1.f
@@ -23,7 +23,7 @@
 // 路网只从离地图四边各EDGE_MARGIN_RATIO(10%)以内的位置开始生成，不靠边。
 #define EDGE_MARGIN_RATIO 0.1f
 
-// 行道树/路灯(复制自roadnet_basic.cpp的同名常量)。
+// 行道树/路灯(复制自roadnet_jing.cpp的同名常量)。
 #define TREE_MESH_PATH "/Game/3rdParty/Mossy_Tree/StaticMeshes/mossy-tree.mossy-tree"
 #define TREE_SCALE 0.6f
 #define TREE_SPACING 1.f
@@ -47,7 +47,7 @@
 using namespace std;
 
 namespace {
-		// 路口缩进(写进Road::SetSetback)：必须在所有路的车道都配好之后调用，宽度是后改的。规则同roadnet_basic.cpp的同名函数
+		// 路口缩进(写进Road::SetSetback)：必须在所有路的车道都配好之后调用，宽度是后改的。规则同roadnet_jing.cpp的同名函数
 		// (复制而来，改一边要同步另一边)：两侧都是平角缩进0；两侧最小夹角是直角取构成直角的路(含自己)半宽最大值；有锐角取构成锐角的路半宽最大值的两倍。
 		void AssignJunctionSetbacks(vector<Road>& roads, const vector<Intersection>& intersections) {
 			const float PI = 3.14159265358979f;
@@ -187,7 +187,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 			road.AddPedestrianLane(side, LANE_WIDTH);
 		}
 		};
-	// 资产命名default_左车行_左停车_左人行_右车行_右停车_右人行(隧道内加_T)，见roadnet_basic.md。
+	// 资产命名default_左车行_左停车_左人行_右车行_右停车_右人行(隧道内加_T)，见roadnet_jing.md。
 	auto meshPathFor = [&](bool tunnel) -> string {
 		string suffix = to_string(currentLanes) + "_0_1_" + to_string(currentLanes) + "_0_1";
 		if (tunnel) suffix += "_T";
@@ -1031,7 +1031,7 @@ void CheckboardRoadnet::LayoutLamps(const vector<Road*>& hostRoads) {
 }
 
 void CheckboardRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing, float sidewalkRatio, const RowEmitter& emit) {
-	// 与JingRoadnet::LayoutRows完全相同的几何(复制而来)，缺口规则见roadnet_basic.md"行道树"。
+	// 与JingRoadnet::LayoutRows完全相同的几何(复制而来)，缺口规则见roadnet_jing.md"行道树"。
 	unordered_set<int> intersectionIds;
 	for (const Intersection& intersection : intersections) intersectionIds.insert(intersection.GetId());
 	// 路口收缩距离：hostRoads就是Core建RoadJunction时用的那批大路，含隧道段，全部参与。

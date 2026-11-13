@@ -70,7 +70,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **`BuildPathRoadMeshes`**：遍历`map->GetPathRoads()`（Zone/Building裁剪Lot自由空间时
   自动生成的小路），每条按起止点+`Road::GetTotalWidth()`生成一个贴材质的扁平ribbon，不接入
   `BuildRoadInstances`那套按`default_x_x_x`资产选mesh的ISM管线——小路车道宽度是0.3/0.2这种
-  非整车道宽度，套不进那套命名约定，见`Source/Basic/map/roadnet_basic.md`。材质优先按
+  非整车道宽度，套不进那套命名约定，见`Source/Basic/map/roadnet_jing.md`。材质优先按
   `map->GetPathRoadMaterial()`的字符串路径**运行时**`StaticLoadObject`加载（不是
   `roadPlainBaseMaterial`那种只能在构造函数里用的`ConstructorHelpers::FObjectFinder`，
   因为这个路径是`RoadnetMod`运行时数据，编译期不知道具体是哪个资产），取不到就退化用

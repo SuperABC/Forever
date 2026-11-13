@@ -42,7 +42,7 @@
    "component_mods" : [
       "component_residence",
       "component_shop",
-      "component_factory",
+      "component_manufacture",
       "component_office",
       "component_train_station",
       "component_airport",
@@ -65,14 +65,14 @@
    "manufacture_mods" : [
       "manufacture_farm",
       "manufacture_ranch",
-      "manufacture_food_factory",
+      "manufacture_food",
       "manufacture_empty --test true"
    ],
    "name_mods" : [ "name_chinese" ],
    "organization_mods" : [
       "organization_shop",
       "organization_empty --test true",
-      "organization_factory"
+      "organization_manufacture"
    ],
    "product_mods" : [
       "product_wheat",
@@ -135,7 +135,7 @@
       "terrain_mountain"
    ],
    "vehicle_mods" : [
-      "vehicle_basic",
+      "vehicle_sedan",
       "vehicle_bus",
       "vehicle_train",
       "vehicle_plane",

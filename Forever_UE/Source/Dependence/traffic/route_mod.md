@@ -19,7 +19,7 @@
 - **`RouteStop.dwell`**：`false`表示这一站是纯过路点，到达后不停留、直接接着跑下一腿；
   默认`true`保持原有行为。公交每一站都要停是对的，但火车/飞机的入站/出站接口、地图边缘点
   不该停——真实世界里乘客在跑道/站台**中段**上下客，不是在跑道两端分别停一次。具体用法见
-  `Basic/traffic/route_basic.md`的`LayoutDualTrackStationLoop`一节。
+  `Basic/traffic/route_common.md`一节。
 - **`RouteStop`**：`station`是站点接口列表(真实站点在前、`edgeStations`在后)的下标，`interfaceIndex`是该站点第几个接口；`silent`(仅`dwell=true`时有效)表示停靠但不触发`enter_stop`/`leave_stop`，用于地图边缘的虚拟车站。
 - **`RouteLink.bidirectional`**：`true`表示同一份几何两个方向都能走（比如单线铁路），
   Core建图时会额外登记一条反向边，倒序遍历同一份`segments`、切线取反，不复制几何（见
@@ -28,7 +28,7 @@
 - **`speed`/`dwellSeconds`的单位是"地图单位/游戏内秒"、"游戏内秒"，不是真实秒**——
   `Traffic::Tick`喂给`Route::Update`的`elapsedSeconds`来自`Player::Tick()`里
   `time->AddMilliseconds(delta*60*1000*timeFlowRatio)`，默认`timeFlowRatio=2.0`，即1个
-  真实秒=120个游戏内秒。三个具体子类（`Basic/traffic/route_basic.cpp`）都在构造函数里按
+  真实秒=120个游戏内秒。三个具体子类（`Basic/traffic/route_*.cpp`）都在构造函数里按
   这个120倍换算校准过默认值，新增线路类型时同样要留意这个换算，不能直接抄字面上看起来
   "合理"的数值。
 - `useRoadnet`/`instantiate`/`trackMesh`/`trackUnit`/`controlLength`几个选项字段的具体用法
@@ -43,7 +43,7 @@
 
 - 依赖：`general_geometry.h`（`Connection`/`TerrainHatch`/`TerrainFitRequest`及`BuildHatch`/`BuildTerrainFit`）。
 - 被谁依赖：`Core/traffic/route.h`的`Route::Build()`读取这些结构、调`LayoutRoute()`；
-  `Basic/traffic/route_basic.h`的`BusRoute`/`TrainRoute`/`AirRoute`三个具体实现扩展这个
+  `Basic/traffic/route_*.h`的`BusRoute`/`TrainRoute`/`AirRoute`三个具体实现扩展这个
   基类。
 
 ## 实例化路线（铺轨、过山爬坡/隧道）

@@ -14,12 +14,12 @@
 - **射击参数**：`damage`/`fireRate`(最小开火间隔，秒)/`fullAuto`/`maxRange`/`baseSpread`(散射半角，度，圆锥内随机)。
 - **弹药**：`magazineCapacity`/`reloadDuration`/`ammoType`(换弹时从Player背包按这个type扣备弹，`Player::ConsumeByType`)。
 - **后坐力**：每次开火瞬间踢一下视角，不自动回正，靠玩家压枪抵消。`recoilPitchMin/Max`(都是正数，保证只往上踢)和`recoilYawMin/Max`在范围内随机取值，模拟每发不完全一致的手感，不是精确复刻某支枪的真实轨迹。单发/连发都走同一个`Fire()`调用，所以都会踢。
-- 瞄准倍率明确不做，见`weapon_basic.md`。
+- 瞄准倍率明确不做，见`weapon_*.md`。
 
 ## 依赖关系
 
 - 依赖：`common/mod_state.h`。
-- 被谁依赖：`weapon_factory.h`创建它；`Core/player/weapon.h`消费它；`Source/Forever/Player/ForeverWeaponComponent`、`ForeverWeaponVisualComponent`读它的字段；具体实现在`Source/Basic/player/weapon_basic.*`。
+- 被谁依赖：`weapon_factory.h`创建它；`Core/player/weapon.h`消费它；`Source/Forever/Player/ForeverWeaponComponent`、`ForeverWeaponVisualComponent`读它的字段；具体实现在`Source/Basic/player/weapon_*.*`。
 
 ## 待办/后续阶段
 

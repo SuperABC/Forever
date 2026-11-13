@@ -34,7 +34,7 @@
 车辆的可见外观（骨骼网格、四个轮子的骨骼名）不是`VehicleMod`直接存的数据，而是一个继承
 `AVehicleElement`的蓝图(Blueprint)类——`VehicleMod`只存这个蓝图类的资源路径字符串
 （`blueprintPath`，和`JobMod::scriptModName`同一个"mod自己的字段，Core只读转发"模式，见
-`vehicle_mod.h`）。`VehicleBasic`构造函数里写死指向：
+`vehicle_mod.h`）。`SedanVehicle`构造函数里写死指向：
 
 ```cpp
 blueprintPath = "/Game/3rdParty/Cars_for_Arcade_Demolition_Racing_Games/Actor/BP_VehicleElement.BP_VehicleElement_C";

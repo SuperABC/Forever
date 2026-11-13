@@ -2,7 +2,7 @@
 
 ## 职责
 
-`VehicleMod`：一种具体车型的行为/外观定义(比如`VehicleBasic`小汽车、`BusVehicle`公交、`TruckVehicle`货车)。
+`VehicleMod`：一种具体车型的行为/外观定义(比如`SedanVehicle`小汽车、`BusVehicle`公交、`TruckVehicle`货车)。
 
 ## 关键设计
 

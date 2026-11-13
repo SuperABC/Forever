@@ -95,9 +95,9 @@ python Tools/VehicleRig/make_vehicle_glb.py <export.fbx> <out.glb> --mesh <网�
 
 ## 六、在 Basic 里注册车型（C++）
 
-照 `Source/Basic/traffic/vehicle_basic.{h,cpp}` 里 `VehicleBasic`/`BusVehicle`/`TruckVehicle` 的写法：
+照 `Source/Basic/traffic/vehicle_basic.{h,cpp}` 里 `SedanVehicle`/`BusVehicle`/`TruckVehicle` 的写法：
 
-1. `vehicle_basic.h/.cpp` 新加一个 `XxxVehicle : VehicleMod`：
+1. `vehicle_sedan.h/.cpp` 新加一个 `XxxVehicle : VehicleMod`：
    - `GetId()`（`vehicle_xxx`，id 必须 `<concept>_<name>`）、`GetCategory()`（种类，停车位按种类挑车型）、`GetType()`、`GetName()`（static 计数器 + id）。
    - `SetProperty()` 里填：`blueprintPath`（`/Game/.../BP_XxxElement.BP_XxxElement_C`）、`sizeX/Y/Z`（包围盒）、`scriptModName="script_empty"` 和 `milestoneNames`（可驾驶的车复用 `vehicle_basic`，即靠近弹出"上车"）、`exitOffsetX/Y/Z`（下车点，车身局部坐标，Z 默认 100，站不下人会拒绝下车）、`drivable=true`。
 2. `basic.cpp` 三处：依赖表里加 `{ XxxVehicle::GetId(), { kScriptEmpty } }`；`GetModVehicles` 的列表；`RegisterModVehicles` 里 `factory->RegisterVehicle(...)`。

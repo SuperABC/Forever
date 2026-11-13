@@ -23,7 +23,7 @@
   代入`Building::LocalToWorld`自己的公式（`relX = bodyLocalX - bodySizeX*0.5 + bodyOffsetX`）
   会发现`bodySizeX`/`bodyOffsetX`两项正好完全抵消，最终只剩`relX = quadLocalX - quadSizeX*0.5`
   ——**接口的世界坐标只取决于占地矩形局部坐标，和楼体footprint的偏移（`BuildingFootprintSpec`）
-  完全无关**。这个性质是楼体"贴路"（`NearRoadFootprint`，见`Basic/map/building_basic.md`）
+  完全无关**。这个性质是楼体"贴路"（`NearRoadFootprint`，见`Basic/map/building_airport.md`）
   能够成立的前提：楼体想往路边挪多远，站台/跑道接口的位置都不会跟着挪，不需要在改`footprint`
   的同时也改`StationInterfaceSpec`的数值。
 - **贴路站点（公交站）的世界坐标必须精确落在车道中线上**：`Traffic::InitRoadsideStations()`

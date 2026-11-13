@@ -34,7 +34,7 @@
 - 地图被拆成`BuildMap*`(Core数据，读档时`BuildMapTerrain`恢复整张地图其余跳过)和`Generate*Mesh`(UE网格)两批：Core数据全部算完才统一生成网格，
   因为Roadnet要采样地形/水面，Zone/Building要用Roadnet产出的Lot，路网网格要等`InitZones`/`InitBuildings`新增的小路。**构建交通排在地形网格之前**，因为instantiate线路(火车)铺轨要请求地形抬升/挖隧道洞。
   植被/路灯要等路网开口/园区/建筑齐全才能避开出入口，网格Z取地形高度所以在地形之后。
-- 默认地图`kDefaultMapWidth/Height`=1024：必须是2的整数次幂(LOD网格最粗一级跨度要正好等于边长)，且`w*h/(512*512)`>1才会生成山，见`Source/Basic/map/terrain_basic.md`。
+- 默认地图`kDefaultMapWidth/Height`=1024：必须是2的整数次幂(LOD网格最粗一级跨度要正好等于边长)，且`w*h/(512*512)`>1才会生成山，见`Source/Basic/map/terrain_mountain.md`。
   `GetDefaultSpawnLocation()`给GameMode用(地图中心，地形还没生成)，`AForeverPlayerGameMode`不再提前生成地图。
 - 每个阶段占两帧：第一帧只让`GetLoadProgress`的"当前阶段名"被控件读到并画出来，第二帧才执行(阶段会同步卡住主线程)。`LoadMap`结束后先空等2帧让黑屏渲染。
   每个阶段单独`try/catch ExceptionBase`：`UE_LOG`打`GetDetailedInfo()`后`QuitGame`(不用`FPlatformMisc::RequestExit`，它在PIE里可能连Editor一起关)，之后不再继续、不置完成标志。

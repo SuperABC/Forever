@@ -25,106 +25,451 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="basic.cpp" />
-    <ClCompile Include="map\terrain_basic.cpp">
+    <ClCompile Include="map\building_airport.cpp">
       <Filter>map</Filter>
     </ClCompile>
-    <ClCompile Include="map\roadnet_basic.cpp">
+    <ClCompile Include="map\building_commerce_high.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_commerce_low.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_commerce_middle.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_industry_high.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_industry_low.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_industry_middle.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_mohar.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_office_high.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_office_low.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_office_middle.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_park.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_residence_high.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_residence_low.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_residence_middle.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\building_train_station.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_airport.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_manufacture.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_office.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_residence.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_shop.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_train_station.cpp">
       <Filter>map</Filter>
     </ClCompile>
     <ClCompile Include="map\roadnet_checkboard.cpp">
       <Filter>map</Filter>
     </ClCompile>
-    <ClCompile Include="map\zone_basic.cpp">
+    <ClCompile Include="map\roadnet_jing.cpp">
       <Filter>map</Filter>
     </ClCompile>
-    <ClCompile Include="map\building_basic.cpp">
+    <ClCompile Include="map\room_airport.cpp">
       <Filter>map</Filter>
     </ClCompile>
-    <ClCompile Include="map\room_basic.cpp">
+    <ClCompile Include="map\room_farm.cpp">
       <Filter>map</Filter>
     </ClCompile>
-    <ClCompile Include="map\component_basic.cpp">
+    <ClCompile Include="map\room_food_factory.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_office.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_parking.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_ranch.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_residence.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_restaurant.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_shop.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_train_station.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_warehouse.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\terrain_mountain.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\terrain_ocean.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\terrain_river.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\zone_residence_high.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\zone_residence_low.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\zone_residence_middle.cpp">
       <Filter>map</Filter>
     </ClCompile>
     <ClCompile Include="populace\name_chinese.cpp">
       <Filter>populace</Filter>
     </ClCompile>
-    <ClCompile Include="player\asset_basic.cpp">
-      <Filter>player</Filter>
-    </ClCompile>
-    <ClCompile Include="player\app_basic.cpp">
-      <Filter>player</Filter>
-    </ClCompile>
-    <ClCompile Include="player\puzzle_basic.cpp">
-      <Filter>player</Filter>
-    </ClCompile>
-    <ClCompile Include="player\weapon_basic.cpp">
-      <Filter>player</Filter>
-    </ClCompile>
     <ClCompile Include="populace\scheduler_basic.cpp">
       <Filter>populace</Filter>
     </ClCompile>
-    <ClCompile Include="society\job_basic.cpp">
+    <ClCompile Include="society\job_factory_worker.cpp">
       <Filter>society</Filter>
     </ClCompile>
-    <ClCompile Include="society\organization_basic.cpp">
+    <ClCompile Include="society\job_shop_saler.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\job_warehouse_keeper.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\organization_common.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\organization_manufacture.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\organization_shop.cpp">
       <Filter>society</Filter>
     </ClCompile>
     <ClCompile Include="story\script_basic.cpp">
       <Filter>story</Filter>
     </ClCompile>
-    <ClCompile Include="industry\product_basic.cpp">
+    <ClCompile Include="industry\manufacture_farm.cpp">
       <Filter>industry</Filter>
     </ClCompile>
-    <ClCompile Include="industry\storage_basic.cpp">
+    <ClCompile Include="industry\manufacture_food.cpp">
       <Filter>industry</Filter>
     </ClCompile>
-    <ClCompile Include="industry\manufacture_basic.cpp">
+    <ClCompile Include="industry\manufacture_ranch.cpp">
       <Filter>industry</Filter>
     </ClCompile>
-    <ClCompile Include="traffic\route_basic.cpp">
+    <ClCompile Include="industry\product_beef.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\product_burger.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\product_wheat.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\storage_beef.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\storage_burger.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\storage_shop.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="industry\storage_wheat.cpp">
+      <Filter>industry</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\route_air.cpp">
       <Filter>traffic</Filter>
     </ClCompile>
-    <ClCompile Include="traffic\station_basic.cpp">
+    <ClCompile Include="traffic\route_bus.cpp">
       <Filter>traffic</Filter>
     </ClCompile>
-    <ClCompile Include="traffic\vehicle_basic.cpp">
+    <ClCompile Include="traffic\route_common.cpp">
       <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\route_train.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\station_air.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\station_bus.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\station_common.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\station_train.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\vehicle_bus.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\vehicle_plane.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\vehicle_sedan.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\vehicle_train.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="traffic\vehicle_truck.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
+    <ClCompile Include="player\app_bounce.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\app_notes.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_ammo_pistol.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_ammo_rifle.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_ammo_shotgun.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_ammo_sniper.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_beef.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_burger.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_camera.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_container.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_grenade.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_pistol.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_rifle.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_shotgun.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_smoke_grenade.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_sniper.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_wheat.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_anykey.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_burger.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_chase.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_coins.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_dance.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_dodge.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_miner.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_poker.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_rhythm.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_tetris.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_tower.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\puzzle_tubes.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon_camera.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon_pistol.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon_rifle.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon_shotgun.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon_sniper.cpp">
+      <Filter>player</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="map\terrain_basic.h">
+    <ClInclude Include="map\building_airport.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\roadnet_basic.h">
+    <ClInclude Include="map\building_commerce_high.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_commerce_low.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_commerce_middle.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_industry_high.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_industry_low.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_industry_middle.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_mohar.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_office_high.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_office_low.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_office_middle.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_park.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_residence_high.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_residence_low.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_residence_middle.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\building_train_station.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_airport.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_manufacture.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_office.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_residence.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_shop.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_train_station.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\roadnet_checkboard.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\zone_basic.h">
+    <ClInclude Include="map\roadnet_jing.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\building_basic.h">
+    <ClInclude Include="map\room_airport.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\component_basic.h">
+    <ClInclude Include="map\room_farm.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\room_basic.h">
+    <ClInclude Include="map\room_food_factory.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="player\asset_basic.h">
-      <Filter>player</Filter>
+    <ClInclude Include="map\room_office.h">
+      <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="player\app_basic.h">
-      <Filter>player</Filter>
+    <ClInclude Include="map\room_parking.h">
+      <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="player\puzzle_basic.h">
-      <Filter>player</Filter>
+    <ClInclude Include="map\room_ranch.h">
+      <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="player\weapon_basic.h">
-      <Filter>player</Filter>
+    <ClInclude Include="map\room_residence.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\room_restaurant.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\room_shop.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\room_train_station.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\room_warehouse.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\terrain_mountain.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\terrain_ocean.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\terrain_river.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\zone_residence_high.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\zone_residence_low.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\zone_residence_middle.h">
+      <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="populace\name_chinese.h">
       <Filter>populace</Filter>
@@ -132,32 +477,200 @@
     <ClInclude Include="populace\scheduler_basic.h">
       <Filter>populace</Filter>
     </ClInclude>
-    <ClInclude Include="society\job_basic.h">
+    <ClInclude Include="society\job_factory_worker.h">
       <Filter>society</Filter>
     </ClInclude>
-    <ClInclude Include="society\organization_basic.h">
+    <ClInclude Include="society\job_shop_saler.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\job_warehouse_keeper.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\organization_common.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\organization_manufacture.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\organization_shop.h">
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="story\script_basic.h">
       <Filter>story</Filter>
     </ClInclude>
-    <ClInclude Include="industry\product_basic.h">
+    <ClInclude Include="industry\manufacture_farm.h">
       <Filter>industry</Filter>
     </ClInclude>
-    <ClInclude Include="industry\storage_basic.h">
+    <ClInclude Include="industry\manufacture_food.h">
       <Filter>industry</Filter>
     </ClInclude>
-    <ClInclude Include="industry\manufacture_basic.h">
+    <ClInclude Include="industry\manufacture_ranch.h">
       <Filter>industry</Filter>
     </ClInclude>
-    <ClInclude Include="traffic\route_basic.h">
+    <ClInclude Include="industry\product_beef.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\product_burger.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\product_wheat.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\storage_beef.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\storage_burger.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\storage_shop.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="industry\storage_wheat.h">
+      <Filter>industry</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\route_air.h">
       <Filter>traffic</Filter>
     </ClInclude>
-    <ClInclude Include="traffic\station_basic.h">
+    <ClInclude Include="traffic\route_bus.h">
       <Filter>traffic</Filter>
     </ClInclude>
-    <ClInclude Include="traffic\vehicle_basic.h">
+    <ClInclude Include="traffic\route_common.h">
       <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\route_train.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\station_air.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\station_bus.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\station_common.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\station_train.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\vehicle_bus.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\vehicle_plane.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\vehicle_sedan.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\vehicle_train.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\vehicle_truck.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="player\app_bounce.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\app_notes.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_ammo_pistol.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_ammo_rifle.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_ammo_shotgun.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_ammo_sniper.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_beef.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_burger.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_camera.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_container.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_grenade.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_pistol.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_rifle.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_shotgun.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_smoke_grenade.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_sniper.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_wheat.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_anykey.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_burger.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_chase.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_coins.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_common.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_dance.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_dodge.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_miner.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_poker.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_rhythm.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_tetris.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_tower.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\puzzle_tubes.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\weapon_camera.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\weapon_pistol.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\weapon_rifle.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\weapon_shotgun.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\weapon_sniper.h">
+      <Filter>player</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

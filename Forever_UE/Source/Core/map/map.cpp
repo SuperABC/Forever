@@ -250,7 +250,7 @@ void Map::InitRoadnet() {
 	}
 
 	// 还有一类端点既不是RoadJunction也不是extern：mod把一条路拆成多段独立Road时的中间分段点(如JingRoadnet隧道的flatNode/splitNode，
-	// 见roadnet_basic.md"隧道")。它们不是Intersection(走RoadJunction::Build会摆出强制水平的路口平面)，也不能像extern那样把所有车道
+	// 见roadnet_jing.md"隧道")。它们不是Intersection(走RoadJunction::Build会摆出强制水平的路口平面)，也不能像extern那样把所有车道
 	// 收成一点(两侧车道配置一致，应按真实宽度摆开)，所以现算"直接经过"锚点，详见map.md"InitRoadnet"。
 	// passthroughAnchorCache按(端点id,车行/行人,side,laneIndex)缓存，保证前后两段Road在分段点拿到同一个Node*；key用位运算压缩(节点id远小于2^47)。
 	unordered_map<int64_t, Node*> passthroughAnchorCache;

@@ -3,7 +3,7 @@
 ## 职责
 
 `ALampElement`：一盏灯的基类Actor(不只路灯)。Mesh、灯头动态材质、光斑Decal都在Blueprint子类里摆(父类选`LampElement`，路径见
-`roadnet_basic.cpp`的`LAMP_BLUEPRINT_PATH`)。C++负责三个状态入口，以及近处真实光源的创建/销毁。由
+`roadnet_jing.cpp`的`LAMP_BLUEPRINT_PATH`)。C++负责三个状态入口，以及近处真实光源的创建/销毁。由
 `UForeverLampFrameworkComponent`生成并驱动。
 
 ## 关键设计

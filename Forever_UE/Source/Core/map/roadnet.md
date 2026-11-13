@@ -32,7 +32,7 @@
   - **`Roadnet::~Roadnet()`按`unordered_set<Road*>`去重后统一`delete`一次**，不分两次遍历
     （先删`roads`再删每个lot的边界）——因为两边经常是同一个指针，分两次删会造成同一块内存
     被`delete`两次（double free）。没有匹配上真实路、走了兜底独立拷贝分支的边界`Road*`
-    （理论上不应该出现，见`roadnet_basic.md`"`makeBoundaryRoad`"一节）也会被这个去重集合
+    （理论上不应该出现，见`roadnet_jing.md`"`makeBoundaryRoad`"一节）也会被这个去重集合
     正确收纳，不会漏删。
 - **边界`Road`指针直接存在`Lot`自己身上**（`Dependence/map/general_geometry.h`的`Lot`提供
   `SetBoundaryRoad(dir, Road*)`/`GetBoundaryRoad(dir)`/`GetBoundaryRoads()`（`Lot`不持有

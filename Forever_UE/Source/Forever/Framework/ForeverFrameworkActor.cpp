@@ -996,7 +996,7 @@ void AForeverFrameworkActor::FinishTimeSkip()
 
 namespace {
 		// 默认地图尺寸(地图元素,1元素=10m)，必须是2的整数次幂(LOD网格最粗一级跨度要正好等于边长)，
-		// 且width*height/(512*512)必须大于1才会生成山，详见Source/Basic/map/terrain_basic.md。
+		// 且width*height/(512*512)必须大于1才会生成山，详见Source/Basic/map/terrain_mountain.md。
 	constexpr int kDefaultMapWidth = 1024;
 	constexpr int kDefaultMapHeight = 1024;
 }

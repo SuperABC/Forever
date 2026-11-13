@@ -22,11 +22,11 @@
 - special(跨山)边两侧不建 lot，因此保留的跨山路没有 lot 邻接；隧道放不下(山前后平地<8格)时按井字规则退化为抬升。
 - 路名 "东西第N路/南北第N路"（N为线序号）；无随机种子参数，每次生成不同。
 - 可视化工具：Tools/RoadnetViz。
-- 车道配置对称：普通路 (1,0,1,1,0,1)，资产 `default_1_0_1_1_0_1`；主干道 (2,0,1,2,0,1)，资产 `default_2_0_1_2_0_1`(隧道内都加 `_T`，均在 Roadnet/Default/Mesh 里)；`addRoad`/`layRoad`/`LayoutRows` 与 `JingRoadnet` 的同名逻辑是复制的(规则见 `roadnet_basic.md`)，改一边要同步另一边。
+- 车道配置对称：普通路 (1,0,1,1,0,1)，资产 `default_1_0_1_1_0_1`；主干道 (2,0,1,2,0,1)，资产 `default_2_0_1_2_0_1`(隧道内都加 `_T`，均在 Roadnet/Default/Mesh 里)；`addRoad`/`layRoad`/`LayoutRows` 与 `JingRoadnet` 的同名逻辑是复制的(规则见 `roadnet_jing.md`)，改一边要同步另一边。
 - 构造参数 `--merge`/`--bridge` 夹到[0,1]，`--min` 至少 2、`--max` 不小于 `--min`。
 - 各步骤的 `special`/`keep` 标记都是针对"沿线采样到山/河"的抽象边；大 lot 合并后外圈每边只取第一段所在的链作边界 Road，因此边界 Road 与 lot 该边不一定等长。
 
-- 路口缩进：`DistributeRoadnet`最后调用`AssignJunctionSetbacks`给每条路两端写缩进（规则见`roadnet_basic.md`"路口缩进"，复制而来）：
+- 路口缩进：`DistributeRoadnet`最后调用`AssignJunctionSetbacks`给每条路两端写缩进（规则见`roadnet_jing.md`"路口缩进"，复制而来）：
   两侧平角→0，最小夹角直角→两侧邻路半宽最大值(不含自己)，有锐角→锐角几条路半宽最大值的两倍。
 
 ## 依赖关系

@@ -32,7 +32,7 @@
 - **`headingDegrees`同时代表到达和出发方向**——这个项目目前没有"进站朝向≠出站朝向"的站点
   类型，`Core/traffic/station.cpp`换算时`arriveDir`/`departDir`恒相等。真正需要两个不同
   朝向的"跑道/轨道两端"场景，靠同一个站点声明**两对**接口（比如`TrainStation`/`AirStation`
-  各声明4个接口，见`Basic/traffic/station_basic.md`）解决，不是让单个接口自己有两个朝向。
+  各声明4个接口，见`Basic/traffic/station_*.md`）解决，不是让单个接口自己有两个朝向。
 - **`AssignRoads()`是static方法**，和`BuildingMod::Assign`/`ZoneMod`那组"按类型固定、不需要
   任何实例"的函数指针约定完全同一个模式——这个方法只是跑一次性的全图探测，不读/写任何实例
   状态，没有理由为了调它创建一个`StationMod`实例再销毁：基类不声明，每个具体子类必须实现
@@ -49,7 +49,7 @@
 - 被谁依赖：`Core/traffic/traffic.cpp`（`Traffic::InitRoadsideStations()`调
   `StationFactory::AssignRoads(id, ...)`）；`Core/traffic/station.h`（`Station`三个构造函数
   分别对应"挂建筑"/"边缘站点"/"贴路站点"三种场景）；`Dependence/map/building_mod.h`
-  （`BuildingMod::stationMod`字符串声明"这栋楼配哪个站点"）；`Basic/traffic/station_basic.h`
+  （`BuildingMod::stationMod`字符串声明"这栋楼配哪个站点"）；`Basic/traffic/station_*.h`
   的`BusStation`/`TrainStation`/`AirStation`三个具体实现扩展这个基类。
 
 ## 待办/后续阶段

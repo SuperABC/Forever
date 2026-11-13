@@ -78,7 +78,7 @@ loop:
 `Forever_Mod/Empty`里纯占位的`EmptyOrganization`）会被跳过、不当候选**——这种
 类型永远"满足"、永远不消耗任何Component，会让循环死循环。
 
-### ShopOrganization（`Source/Basic/society/organization_basic.h/.cpp`）
+### ShopOrganization（`Source/Basic/society/organization_shop.h/.cpp`）
 
 用来测试"一个组织随机占1~2个`component_shop`"：
 

@@ -10,7 +10,7 @@
 - **`DistributeRoadnet`有`getTerrain`/`getWater`/`getHeight`三个只读回调，没有`setTerrain`/`setHeight`**：道路高度由mod自己决定。默认可固定Z=0(隧道段用固定`TUNNEL_HEIGHT`常量下探，见`JingRoadnet`)，也可用`getHeight(x,y)`(地图element单位的连续坐标，含细化高度)采样山表面高度作为路面Z，再用`AddTerrainFit`把地形贴到路面上。`JingRoadnet`靠`getTerrain`探测`mountain`/`ocean`判断隧道/抬升，`getWater`目前未被用到。
 - **`nodeStaticCount`**：mod实现必须在`DistributeRoadnet`开头第一步调`Node::SetCount(nodeStaticCount)`(跨DLL的`Node` id计数器同步)，构造的所有`Node`/`Intersection`/`Road`都必须通过`externs`/`intersections`/`roads`/`lots`四个成员返回，不能留下"野"实例，否则宿主和mod的id计数器不同步，后续深拷贝会拿到重复id。
 - **`lots`是`vector<Lot>`，边界`Road`映射记在每个`Lot`自己身上**(`Lot::SetBoundaryRoad`/`GetBoundaryRoads`，键是`FACE_DIRECTION`0-3，缺失=那一侧没有路；`Lot`构造函数的可选`boundary`参数等价于构造后逐个`SetBoundaryRoad`)。不存边界`Intersection`映射：车行/行人导航图直接挂在`Road`/`Intersection`上(`Source/Core/map/roadnet.h`的`RoadJunction`)，不经lot中转。
-- **边界`Road*`必须指向`this->roads`里的同一个元素，不能是独立拷贝**：Zone/Building裁剪Lot空间时(`Lot::SplitWithPath`)会通过这个指针给"大路"加`RoadOpening`，独立拷贝会让开口加不到真正被渲染的那条路上(PIE里看不到开口)。实现方要保证指针有效：取地址前必须把所有往`roads`增长的调用做完，`vector`扩容会让之前取的地址失效，做法见`roadnet_basic.md`的`makeBoundaryRoad`。
+- **边界`Road*`必须指向`this->roads`里的同一个元素，不能是独立拷贝**：Zone/Building裁剪Lot空间时(`Lot::SplitWithPath`)会通过这个指针给"大路"加`RoadOpening`，独立拷贝会让开口加不到真正被渲染的那条路上(PIE里看不到开口)。实现方要保证指针有效：取地址前必须把所有往`roads`增长的调用做完，`vector`扩容会让之前取的地址失效，做法见`roadnet_jing.md`的`makeBoundaryRoad`。
 - **车道/开口数据挂在`Road`自己身上**(`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/`openings`，见`general_geometry.h`)，`RoadnetMod`只负责产出`Road`实例。
 - **挖洞/贴地**：`AddHatch`/`AddTunnelHatch`/`AddTerrainFit`三个非虚工具方法只是转调`general_geometry.h`的`BuildHatch`/`BuildTerrainFit`(`RouteMod`火车铺轨共用同一份实现)。
   - `AddHatch(connection, t1, t2, width)`：取`connection`在`[t1,t2]`两端的点，中点定位、连线方向定朝向、弧长定长度、`width`定宽度，包成`TerrainHatch`追加进`hatches`。消费方`ForeverTerrainFrameworkComponent::LookupTerrain`挖洞判断是"`construction`地形或这个格子有hatch"，隧道口靠这条规则在山体上挖出缺口，否则隧道段被实心地形挡住，见`Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。
@@ -24,7 +24,7 @@
 ## 依赖关系
 
 - 依赖：`map/general_geometry.h`(`Node`/`Intersection`/`Road`/`Lot`/`TerrainHatch`/`TerrainFitRequest`)、`map/feature_spec.h`、`common/mod_state.h`。
-- 被谁依赖：`Source/Core/map/roadnet.h`(`Roadnet`包装类持有`RoadnetMod*`)、`Source/Basic/map/roadnet_basic.h`(`JingRoadnet`)、`Forever_Mod/Empty`的`EmptyRoadnet`、`Source/Core/map/zone.md`/`building.md`(读取lot的边界`Road`映射)。
+- 被谁依赖：`Source/Core/map/roadnet.h`(`Roadnet`包装类持有`RoadnetMod*`)、`Source/Basic/map/roadnet_jing.h`(`JingRoadnet`)、`Forever_Mod/Empty`的`EmptyRoadnet`、`Source/Core/map/zone.md`/`building.md`(读取lot的边界`Road`映射)。
 
 ## 待办/后续阶段
 

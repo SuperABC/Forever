@@ -30,7 +30,7 @@
    "manufacture_mods" : [
       "manufacture_farm",
       "manufacture_ranch",
-      "manufacture_food_factory"
+      "manufacture_food"
    ],
    "name_mods" : [ "name_chinese" ],
    "organization_mods" : [ "organization_shop", "organization_factory" ],

@@ -164,7 +164,7 @@
   只有求值那一刻才用得到`Expression`）。
 - 被谁依赖：`Core/story/milestone.h`（`Milestone::changes`）、`Core/story/script.h`（`Script::BuildChanges`）、各域`ApplyChange`、
   `dialog.h`（`Option::changes`）、`script_mod.h`（`FindLabel`按`dynamic_cast<const PlaceHolderChange*>`查找）、
-  `Forever/Framework/ForeverFrameworkActor.cpp`及各Component（UE层执行）、`Basic/society/job_basic.cpp`（构造`NPCNavigateChange`）、
+  `Forever/Framework/ForeverFrameworkActor.cpp`及各Component（UE层执行）、`Basic/society/job_warehouse_keeper.cpp`（构造`NPCNavigateChange`）、
   `Forever_Mod/Empty/Cpp/Empty/empty_mods.h`（`EmptyScript`持有`ChangeControlChange`）。
 
 ## 待办/后续阶段

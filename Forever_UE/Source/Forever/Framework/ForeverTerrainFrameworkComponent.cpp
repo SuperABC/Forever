@@ -583,7 +583,7 @@ void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FStr
 
 	type = FString(map->GetTerrain(elemX, elemY).c_str());
 	// 挖洞条件是"construction"或这个格子有hatch：隧道口所在格子是mountain/plain，必须因hatch继续
-	// 走裁剪，否则隧道段被山体实心地形挡住，详见roadnet_basic.md"隧道"一节。
+	// 走裁剪，否则隧道段被山体实心地形挡住，详见roadnet_jing.md"隧道"一节。
 	if (type != "construction" && map->GetHatches(elemX, elemY).empty()) return;
 
 	tris.Empty();

@@ -74,7 +74,7 @@ delete c; changes.clear();`清掉上一次的残留）或mod实例最终析构�
 ExecNode`之前会先同步`mod->occupantName = occupant ? occupant->GetName() :
 ""`，供`ExecNode`构造`NPCNavigateChange`这类需要知道"是谁"的Change使用。
 
-### C++调度的例子：WarehouseKeeperJob（`Source/Basic/society/job_basic.h/.cpp`）
+### C++调度的例子：WarehouseKeeperJob（`Source/Basic/society/job_warehouse_keeper.h/.cpp`）
 
 `ShopSalerJob`/`FactoryWorkerJob`的上下班已改为脚本驱动（见下"脚本驱动通勤"），`DailyPlan`为空；
 仓库管理员`WarehouseKeeperJob`仍走C++的`DailyPlan`/`ExecNode`。下面的写法示意这条通道（9点出门、18点回家）：
@@ -128,7 +128,7 @@ address"`取`citizen->GetRoom()->GetAddress()`，`"citizen workplace
 address"`取`citizen->GetJob()->GetPosition()->GetAddress()`
 （`Job::GetPosition()`就是这份工作的工位room），查不到citizen/citizen没有家/
 没有job都返回`{"result":"fail","msg":"..."}`。`WarehouseKeeperJob::ExecNode`把这段
-查询逻辑提炼成`job_basic.cpp`匿名namespace里的`QueryAddress`辅助函数，查询失败（理论上
+查询逻辑提炼成`job_warehouse_keeper.cpp`匿名namespace里的`QueryAddress`辅助函数，查询失败（理论上
 不会发生）直接放弃这次调度、不产出任何`Change`。
 
 `post`这个具体实例由调用方（`AForeverFrameworkActor::Tick`）在调用

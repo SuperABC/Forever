@@ -66,7 +66,7 @@
 - 若武器/瞄准等功能挂在默认关闭Tick的`AForeverCharacter`子类(如`ACitizenElement`)上失效,优先检查该子类自己的`Tick()`覆写是否在条件满足时又把Tick关掉了,而不是只看`PossessedBy`有没有打开Tick——见`CONVENTIONS.md`第11节、memory"Citizen Tick disabled by default"。
 
 ## 资产状态
-`PistolWeapon`/`RifleWeapon`(`Source/Basic/player/weapon_basic.h/.cpp`)的`firstPersonMeshPath`指向`/Game/3rdParty/Weapons_Free/Meshes/Actors/AC_pistol_001`/`AC_rifle_001`的Actor Blueprint类(路径以`_C`结尾；整件武器，枪体和弹匣的相对位置在蓝图里)，由`UForeverWeaponVisualComponent`加载显示。
+`PistolWeapon`/`RifleWeapon`(`Source/Basic/player/weapon_*.h/.cpp`)的`firstPersonMeshPath`指向`/Game/3rdParty/Weapons_Free/Meshes/Actors/AC_pistol_001`/`AC_rifle_001`的Actor Blueprint类(路径以`_C`结尾；整件武器，枪体和弹匣的相对位置在蓝图里)，由`UForeverWeaponVisualComponent`加载显示。
 
 ## 依赖关系
 - 依赖:`Source/Core/player/weapon.h`(`Weapon`,封装`Source/Dependence/player/weapon_mod.h`/`weapon_factory.h`的`WeaponMod`/`WeaponFactory`,见`weapon.md`)、`Source/Core/common/registry.h`(`Registry::Get().GetWeaponFactory()`)、`Source/Core/populace/citizen.h`(`TakeDamage`/`IsDead`)、`Source/Core/player/player.h`(`ConsumeByType`换弹扣备弹)、`Source/Forever/Player/ForeverCharacter.h`(摄像机取值/`IsFirstPerson()`/`IsAiming()`)、`Source/Forever/Element/CitizenElement.h`(`GetCitizen()`反查命中目标)、`Source/Forever/Framework/ForeverFrameworkActor.h`/`ForeverStoryFrameworkComponent.h`/`ForeverPopulaceFrameworkComponent.h`(死亡时广播Event+清理Actor)。

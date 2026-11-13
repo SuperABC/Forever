@@ -14,13 +14,13 @@
   **判定标准**：只有代码里确实点名了另一个mod才算依赖——字符串id或`Xxx::GetId()`(`AssignRoom`/`AssignElevatorCabin`的room、component、script id，`stationMod`/`storageType`/`manufactureTypes`/`productType`/`weaponType`/`ammoType`/`vehicleType`/`scriptModName`，组织按`component_*`/`room_*`类型生成岗位，岗位id，配方里的`product_*`，园区的内部建筑id)；线路按`stationType`匹配站点、仓库按`categories`匹配产品也各保留一条。**依赖方向分两种**：①默认按引用方向，A点名B就是A依赖B(楼→Room/Component/Script，Zone→内部楼，组织→岗位/Component/Room，线路→站点/车辆，Asset→武器/产品)；②**托管型反向**：占用宿主空间、没有宿主就不会出现的依赖宿主——火车站/机场站点只从带`stationMod`的楼生成，所以站点依赖楼(楼没有站点mod只是少个站点；公交站是路边站，不依赖楼)；`*Manufacture`只从房间的`manufactureTypes`生成、`ShopStorage`只从房间的`storageType`生成，所以它们依赖房间。Room/Component只是楼选用的实现，不反向；组件只是个标记类、没有任何引用，不依赖房间(房间由楼指定)；`*Manufacture`依赖自己的房间和产出的Product(不依赖Storage，工坊用内部cache)，`BurgerProduct`依赖配方里的`WheatProduct`/`BeefProduct`。
   **没有列入的软引用**：`Ocean/River`、两个Roadnet、`TrainRoute`会按字符串比较`terrain_mountain`/`terrain_ocean`/`terrain_river`来绕开或穿越，对应地形不存在时只是比较不命中、不影响运行，所以不算依赖(`RiverTerrain`没有山就没有起点，所以依赖`MountainTerrain`)。`milestoneNames`里的`asset_test`/`entity_event`/`job_*`等是`Resource/Story`里的脚本名，不是mod id。
   **闭环**：`Basic`与`Empty`互相只依赖对方的占位id(`script_empty`/`room_empty`)，不引用`Test`/`Wxdj`/`Yuanshen`里的任何id(已全文核对)；`Empty`里20个占位mod互不依赖。
-- **同一concept下多个具体类型合并在同一份`<concept>_basic.h/.cpp`**(如`ResidenceBuilding`/`CommerceBuilding`/`IndustryBuilding`都在`building_basic.*`)，不按业务场景拆文件，见`map/`下各md。
+- **每个mod单独一组`.h/.cpp/.md`，文件名=mod id**(如`building_residence_high.*`、`zone_residence_high.*`、`room_shop.*`)，放在对应domain目录下。只有占位mod用`<concept>_basic`(`script_basic`/`scheduler_basic`)。mod id不能等于`<concept>_factory`(如曾经的`component_factory`，已改名`component_manufacture`/`organization_manufacture`)，否则`basic.cpp`里`#include "map/component_factory.h"`会优先命中同目录的这个mod头文件、而不是Dependence的Factory头文件。多个mod共用的辅助函数放`<concept>_common.h/.cpp`(`route_common`/`station_common`/`organization_common`)；各mod自己的`#define`测试配置不共用，各存一份(如`ZONE_KIT_*`在三个园区文件里各一份)，以后各自改。
 - **creator是无捕获lambda**(转成裸函数指针)，deleter同理，见`Dependence/*/*_factory.md`的跨DLL约束。
 - 新增一个默认mod要改这里三处：依赖表(如有)、`GetMod<Concepts>`列表、`RegisterMod<Concepts>`；还要在`config.json`对应的`<concept>_mods`数组里启用。载具的完整流程见`Forever_UE/Tools/VehicleRig/README.md`。
 
 ## 依赖关系
 
-- 依赖：`Dependence`下所有`*_factory.h`、`Basic`下各concept的`*_basic.h`(以及`roadnet_checkboard.h`、`puzzle_*.h`)。
+- 依赖：`Dependence`下所有`*_factory.h`、`Basic`下各mod自己的头文件(`<mod id>.h`)。
 - 被谁依赖：`Core/common/loader`在运行时按符号名(`GetMod*`/`RegisterMod*`/`FinishMod*`/`GetModDependencies`)`GetProcAddress`调用它。
 
 ## 待办/后续阶段

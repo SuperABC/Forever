@@ -1,6 +1,6 @@
 # puzzle 小游戏集(Basic)
 
-本批 10 个小游戏(`puzzle_dodge/rhythm/dance/poker/chase/burger/tubes/miner/tower/coins`)只做了 mod 本身的逻辑与渲染，在独立的 `Tools/ModHost`(无 UE/Core)里验证过；什么场景调用哪个由剧情/工作系统另行设计。俄罗斯方块和按任意键退出见 `puzzle_basic.md`。每个游戏类的声明里不再写说明，玩法与参数以本文为准。
+本批 10 个小游戏(`puzzle_dodge/rhythm/dance/poker/chase/burger/tubes/miner/tower/coins`)只做了 mod 本身的逻辑与渲染，在独立的 `Tools/ModHost`(无 UE/Core)里验证过；什么场景调用哪个由剧情/工作系统另行设计。俄罗斯方块和按任意键退出见 `puzzle_*.md`。每个游戏类的声明里不再写说明，玩法与参数以本文为准。
 
 ## 公共约定
 

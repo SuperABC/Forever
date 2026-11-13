@@ -96,7 +96,7 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 ## 水面（`BuildOceanMesh`）
 
 筛选条件是`map->GetWater(x,y).first`（有没有水），不检查地形类型，所以海洋和`RiverTerrain`通过Core的per-cell`setWater`设了水面的河流格子都在同一张水面mesh里
-（见`terrain_mod.md`"水面"一节、`terrain_basic.md`）。共享顶点网格（`(width+1)*(height+1)`个格点），有水的格子把4个角写成各自的水位，相邻格子水位不同时共享顶点被后写的覆盖（不是平均），
+（见`terrain_mod.md`"水面"一节、`terrain_*.md`）。共享顶点网格（`(width+1)*(height+1)`个格点），有水的格子把4个角写成各自的水位，相邻格子水位不同时共享顶点被后写的覆盖（不是平均），
 有轻微接缝，暂不处理。河流水面会倾斜，所以按面法线面积加权累加到顶点、归一化提供法线/切线。函数名沿用`BuildOceanMesh`。
 
 ## 依赖关系

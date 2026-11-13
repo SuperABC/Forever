@@ -20,7 +20,7 @@
   `WorkspaceCapacity()`（工位数）/`IsStorage()`/`StorageType()`（对应StorageMod id，Industry据此生成Storage）/`Rent()`（每日房租，分）/
   `IsManufacture()`/`ManufactureTypes()`（产线描述），读构造时`mod->SetProperty()`之后从`RoomMod`同名字段
   拷贝的快照`properties`（见`Source/Dependence/map/room_mod.h`）——读档时直接按存档恢复这份快照，不依赖重新
-  创建的mod再算一遍（见`map_save.md`）。`Source/Basic/map/room_basic.cpp`里的各`RoomMod`子类按用途设置这些标志（住宅、工位、仓储、制造、停车位等）。
+  创建的mod再算一遍（见`map_save.md`）。`Source/Basic/map/room_*.cpp`里的各`RoomMod`子类按用途设置这些标志（住宅、工位、仓储、制造、停车位等）。
   消费方：`Map::ComputeAccommodationTarget()`/`Map::Checkin()`（居住）、`Organization`（工位）、`Industry`（仓储/制造）、
   `Traffic`（停车位）。
 - **`RoomMod`极简，只有`GetType()`/`GetName()`**：`Room`不是像`Zone`/`Building`那样要参与

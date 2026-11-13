@@ -9,7 +9,7 @@
    ],
    "component_mods" : [
       "component_residence",
-      "component_factory",
+      "component_manufacture",
       "component_shop",
       "component_office"
    ],

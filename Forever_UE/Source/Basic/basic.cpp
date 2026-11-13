@@ -20,27 +20,95 @@
 #include "player/puzzle_factory.h"
 #include "player/weapon_factory.h"
 
-#include "map/terrain_basic.h"
-#include "map/roadnet_basic.h"
+#include "map/terrain_mountain.h"
+#include "map/terrain_ocean.h"
+#include "map/terrain_river.h"
+#include "map/roadnet_jing.h"
 #include "map/roadnet_checkboard.h"
-#include "map/zone_basic.h"
-#include "map/building_basic.h"
-#include "map/component_basic.h"
-#include "map/room_basic.h"
+#include "map/zone_residence_high.h"
+#include "map/zone_residence_low.h"
+#include "map/zone_residence_middle.h"
+#include "map/building_airport.h"
+#include "map/building_commerce_high.h"
+#include "map/building_commerce_low.h"
+#include "map/building_commerce_middle.h"
+#include "map/building_industry_high.h"
+#include "map/building_industry_low.h"
+#include "map/building_industry_middle.h"
+#include "map/building_mohar.h"
+#include "map/building_office_high.h"
+#include "map/building_office_low.h"
+#include "map/building_office_middle.h"
+#include "map/building_park.h"
+#include "map/building_residence_high.h"
+#include "map/building_residence_low.h"
+#include "map/building_residence_middle.h"
+#include "map/building_train_station.h"
+#include "map/component_airport.h"
+#include "map/component_manufacture.h"
+#include "map/component_office.h"
+#include "map/component_residence.h"
+#include "map/component_shop.h"
+#include "map/component_train_station.h"
+#include "map/room_airport.h"
+#include "map/room_farm.h"
+#include "map/room_food_factory.h"
+#include "map/room_office.h"
+#include "map/room_parking.h"
+#include "map/room_ranch.h"
+#include "map/room_residence.h"
+#include "map/room_restaurant.h"
+#include "map/room_shop.h"
+#include "map/room_train_station.h"
+#include "map/room_warehouse.h"
 #include "populace/name_chinese.h"
 #include "populace/scheduler_basic.h"
-#include "society/job_basic.h"
-#include "society/organization_basic.h"
+#include "society/job_factory_worker.h"
+#include "society/job_shop_saler.h"
+#include "society/job_warehouse_keeper.h"
+#include "society/organization_manufacture.h"
+#include "society/organization_shop.h"
 #include "story/script_basic.h"
-#include "industry/product_basic.h"
-#include "industry/storage_basic.h"
-#include "industry/manufacture_basic.h"
-#include "traffic/route_basic.h"
-#include "traffic/station_basic.h"
-#include "traffic/vehicle_basic.h"
-#include "player/asset_basic.h"
-#include "player/app_basic.h"
-#include "player/puzzle_basic.h"
+#include "industry/product_beef.h"
+#include "industry/product_burger.h"
+#include "industry/product_wheat.h"
+#include "industry/storage_beef.h"
+#include "industry/storage_burger.h"
+#include "industry/storage_shop.h"
+#include "industry/storage_wheat.h"
+#include "industry/manufacture_farm.h"
+#include "industry/manufacture_food.h"
+#include "industry/manufacture_ranch.h"
+#include "traffic/route_air.h"
+#include "traffic/route_bus.h"
+#include "traffic/route_train.h"
+#include "traffic/station_air.h"
+#include "traffic/station_bus.h"
+#include "traffic/station_train.h"
+#include "traffic/vehicle_sedan.h"
+#include "traffic/vehicle_bus.h"
+#include "traffic/vehicle_plane.h"
+#include "traffic/vehicle_train.h"
+#include "traffic/vehicle_truck.h"
+#include "player/asset_ammo_pistol.h"
+#include "player/asset_ammo_rifle.h"
+#include "player/asset_ammo_shotgun.h"
+#include "player/asset_ammo_sniper.h"
+#include "player/asset_beef.h"
+#include "player/asset_burger.h"
+#include "player/asset_camera.h"
+#include "player/asset_container.h"
+#include "player/asset_grenade.h"
+#include "player/asset_pistol.h"
+#include "player/asset_rifle.h"
+#include "player/asset_shotgun.h"
+#include "player/asset_smoke_grenade.h"
+#include "player/asset_sniper.h"
+#include "player/asset_wheat.h"
+#include "player/app_bounce.h"
+#include "player/app_notes.h"
+#include "player/puzzle_tetris.h"
+#include "player/puzzle_anykey.h"
 #include "player/puzzle_poker.h"
 #include "player/puzzle_burger.h"
 #include "player/puzzle_miner.h"
@@ -51,7 +119,11 @@
 #include "player/puzzle_coins.h"
 #include "player/puzzle_dance.h"
 #include "player/puzzle_dodge.h"
-#include "player/weapon_basic.h"
+#include "player/weapon_camera.h"
+#include "player/weapon_pistol.h"
+#include "player/weapon_rifle.h"
+#include "player/weapon_shotgun.h"
+#include "player/weapon_sniper.h"
 
 #pragma comment(lib, "Dependence.lib")
 
@@ -77,9 +149,9 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ CommerceHighBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), RestaurantRoom::GetId(), WarehouseRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ CommerceMiddleBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
 		{ CommerceLowBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 大门脚本
-		{ IndustryHighBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
-		{ IndustryMiddleBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
-		{ IndustryLowBuilding::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ IndustryHighBuilding::GetId(), { ManufactureComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ IndustryMiddleBuilding::GetId(), { ManufactureComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
+		{ IndustryLowBuilding::GetId(), { ManufactureComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), ParkingRoom::GetId() } },
 		{ OfficeHighBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), ParkingRoom::GetId(), kRoomEmpty } }, // 地下室停车库；占位房间槽
 		{ OfficeMiddleBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ OfficeLowBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
@@ -93,7 +165,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ ShopSalerJob::GetId(), { kScriptEmpty } },
 		{ FactoryWorkerJob::GetId(), { kScriptEmpty } },
 		{ ShopOrganization::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ShopSalerJob::GetId(), WarehouseKeeperJob::GetId(), kScriptEmpty } }, // 按component/room类型生成岗位
-		{ FactoryOrganization::GetId(), { FactoryComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), FactoryWorkerJob::GetId() } },
+		{ ManufactureOrganization::GetId(), { ManufactureComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), FactoryWorkerJob::GetId() } },
 
 		// 托管型：Manufacture只从房间的manufactureTypes生成、Storage只从房间的storageType生成，没有房间就不会出现，所以它们依赖房间。
 		{ FarmManufacture::GetId(), { FarmRoom::GetId(), WheatProduct::GetId() } },
@@ -114,7 +186,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ TrainStation::GetId(), { TrainStationBuilding::GetId() } },
 		{ AirStation::GetId(), { AirportBuilding::GetId() } },
 		// 每辆车都会创建自己的Script。
-		{ VehicleBasic::GetId(), { kScriptEmpty } },
+		{ SedanVehicle::GetId(), { kScriptEmpty } },
 		{ BusVehicle::GetId(), { kScriptEmpty } },
 		{ TruckVehicle::GetId(), { kScriptEmpty } },
 		{ TrainVehicle::GetId(), { kScriptEmpty } },
@@ -284,7 +356,7 @@ extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factor
 }
 
 extern "C" __declspec(dllexport) void* GetModComponents() {
-	static vector<string> mods = { ResidenceComponent::GetId(), ShopComponent::GetId(), FactoryComponent::GetId(), OfficeComponent::GetId(),
+	static vector<string> mods = { ResidenceComponent::GetId(), ShopComponent::GetId(), ManufactureComponent::GetId(), OfficeComponent::GetId(),
 		TrainStationComponent::GetId(), AirportComponent::GetId() };
 	return (void*)&mods;
 }
@@ -295,8 +367,8 @@ extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* fa
 	factory->RegisterComponent(ShopComponent::GetId(),
 		[](const std::string&) -> ComponentMod* { return new ShopComponent(); },
 		[](ComponentMod* m) { delete m; });
-	factory->RegisterComponent(FactoryComponent::GetId(),
-		[](const std::string&) -> ComponentMod* { return new FactoryComponent(); },
+	factory->RegisterComponent(ManufactureComponent::GetId(),
+		[](const std::string&) -> ComponentMod* { return new ManufactureComponent(); },
 		[](ComponentMod* m) { delete m; });
 	factory->RegisterComponent(OfficeComponent::GetId(),
 		[](const std::string&) -> ComponentMod* { return new OfficeComponent(); },
@@ -401,14 +473,14 @@ extern "C" __declspec(dllexport) void FinishModJobs(JobFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModOrganizations() {
-	static vector<string> mods = { ShopOrganization::GetId(), FactoryOrganization::GetId() };
+	static vector<string> mods = { ShopOrganization::GetId(), ManufactureOrganization::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModOrganizations(OrganizationFactory* factory) {
-	factory->RegisterOrganization(FactoryOrganization::GetId(),
-		[](const std::string&) -> OrganizationMod* { return new FactoryOrganization(); },
+	factory->RegisterOrganization(ManufactureOrganization::GetId(),
+		[](const std::string&) -> OrganizationMod* { return new ManufactureOrganization(); },
 		[](OrganizationMod* m) { delete m; },
-		&FactoryOrganization::GetPower, &FactoryOrganization::GetRequirements);
+		&ManufactureOrganization::GetPower, &ManufactureOrganization::GetRequirements);
 	factory->RegisterOrganization(ShopOrganization::GetId(),
 		[](const std::string&) -> OrganizationMod* { return new ShopOrganization(); },
 		[](OrganizationMod* m) { delete m; },
@@ -526,13 +598,13 @@ extern "C" __declspec(dllexport) void FinishModStations(StationFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModVehicles() {
-	static vector<string> mods = { VehicleBasic::GetId(), BusVehicle::GetId(), TruckVehicle::GetId(), TrainVehicle::GetId(), PlaneVehicle::GetId() };
+	static vector<string> mods = { SedanVehicle::GetId(), BusVehicle::GetId(), TruckVehicle::GetId(), TrainVehicle::GetId(), PlaneVehicle::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factory) {
-	factory->RegisterVehicle(VehicleBasic::GetId(),
-		[](const std::string&) -> VehicleMod* { return new VehicleBasic(); },
-		[](VehicleMod* m) { delete m; }, &VehicleBasic::GetCategory);
+	factory->RegisterVehicle(SedanVehicle::GetId(),
+		[](const std::string&) -> VehicleMod* { return new SedanVehicle(); },
+		[](VehicleMod* m) { delete m; }, &SedanVehicle::GetCategory);
 	factory->RegisterVehicle(BusVehicle::GetId(),
 		[](const std::string&) -> VehicleMod* { return new BusVehicle(); },
 		[](VehicleMod* m) { delete m; }, &BusVehicle::GetCategory);

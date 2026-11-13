@@ -45,7 +45,7 @@
 - **`DriveVehicle`的缓动按"行驶区段"（两次真正停靠之间的若干条leg合起来）整体套梯形速度
   曲线，不是按单条leg自己的`[0,1]`区间**——载具运行时完全不感知接口本身的存在，只认"是不是
   一次真正的停靠"（`RouteLeg::dwellAtDestination`）；按单条leg各自做缓动会在纯过路接口
-  （见`station_basic.cpp` `Layout()`的"顺序必须是`[leftIn, rightOut, rightIn, leftOut]`"
+  （见`station_*.cpp` `Layout()`的"顺序必须是`[leftIn, rightOut, rightIn, leftOut]`"
   一节）处产生肉眼可见的减速/卡顿，这是不要按单leg做缓动的原因。做法：`DriveVehicle`开头往回
   扫`dwellAtDestination`找到当前leg所在区段的起点`segStart`，累计这整段的总时长
   `segTotalTime`/总长度`segTotalLength`，套梯形速度曲线（匀加速`ta`→匀速→匀减速`td`，
@@ -63,7 +63,7 @@
     `timeFlowRatio=2.0`），如果以后`timeFlowRatio`被剧情脚本改了要跟着重新校准（和
     `speed`/`dwellSeconds`的既有校准方式一样）。`easeSeconds`是`RouteMod`的字段（默认3秒，
     公交尺度），不是硬编码常量，`TrainRoute`/`AirRoute`在`SetProperty()`里按手感调大，见
-    `route_basic.cpp`。
+    `route_*.cpp`。
 
 - **`stopStations`**：`Build()` 末尾记下交给 mod 的站点表(graph key里的站点下标就是它的下标)，存档要靠它把key换成站点名，见`traffic_save.md`。读档时`TrafficSaveCodec`直接按存档填graph/lines，不再调用`Build()`。
 

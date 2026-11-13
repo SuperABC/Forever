@@ -21,7 +21,7 @@
 - 没有手部动画/IK：瞄准时手臂仍是 Unarmed 动画，枪"悬"在手前。
 
 ## 要调的值（都是大概值）
-- **每把武器各自**（`WeaponMod`，`Basic/player/weapon_basic.cpp`，由 Core 决定）：`modelScale`；`attachOffsetX/Y/Z` = 瞄准锚点（枪托在角色本地的位置）；`backOffsetX/Y/Z` = 背枪锚点（枪托相对背枪骨骼的位置，右肩，左肩取反 Y）。
+- **每把武器各自**（`WeaponMod`，`Basic/player/weapon_*.cpp`，由 Core 决定）：`modelScale`；`attachOffsetX/Y/Z` = 瞄准锚点（枪托在角色本地的位置）；`backOffsetX/Y/Z` = 背枪锚点（枪托相对背枪骨骼的位置，右肩，左肩取反 Y）。
 - **组件上**（`UPROPERTY(EditAnywhere)`）：`holsterBone`、`holsterRotationLeft/Right`（背枪的姿势/朝向）。
 - 生成模型时打一行日志 `scaled model size ... cm, x from ... to ...`，调缩放时对照这行的实测尺寸。
 - 资源包模型实测（从 .uasset 包围盒解出）：手枪约 97cm 长、步枪约 226cm 长，+X 朝前，轴心在枪托附近（X 范围约 -19 到 +78 / +207），比真实尺寸大很多；Basic 里手枪 `modelScale`=0.25（约 24cm）、步枪 0.4（约 90cm）。
