@@ -62,6 +62,7 @@ public:
 	~Station(); // factory->DestroyStation(mod)；delete每个RoadLink的stationNode/inEdge/outEdge
 
 	bool IsValid() const; // mod非空
+	const Road* GetAttachedRoad() const { return attachedRoad; } // 贴路站点所在的道路，挂建筑的站为nullptr
 	const std::string& GetName() const;
 	const std::string& GetStationType() const; // mod->stationType
 	Building* GetBuilding() const; // 贴路站点返回nullptr

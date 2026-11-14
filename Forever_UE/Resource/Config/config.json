@@ -60,16 +60,16 @@
       "room_airport",
       "room_train_station"
    ],
-   "route_mods" : [ "route_air", "route_train" ],
+   "route_mods" : [ "route_air", "route_train", "route_bus" ],
    "scheduler_mods" : [ "scheduler_basic" ],
    "script_mods" : [ "script_empty", "script_test" ],
-   "station_mods" : [ "station_air", "station_train" ],
+   "station_mods" : [ "station_air", "station_train", "station_bus" ],
    "storage_mods" : [ "storage_shop", "storage_restaurant" ],
    "story_scripts" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
    ],
    "terrain_mods" : [ "terrain_ocean", "terrain_mountain", "terrain_river", "terrain_empty" ],
-   "vehicle_mods" : [ "vehicle_plane", "vehicle_train" ],
+   "vehicle_mods" : [ "vehicle_plane", "vehicle_train", "vehicle_bus" ],
    "weapon_mods" : [],
    "zone_mods" : [ "zone_residence_high" ]
 }

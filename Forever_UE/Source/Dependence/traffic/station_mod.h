@@ -53,6 +53,8 @@ struct RoadStationRequest {
 	Road* road = nullptr;
 	float t = 0.5f;
 	bool rightSide = true;
+	// 站名：mod自己起(必须全局唯一，如"东西第3路1")，空=Core按"Station"+计数器生成。
+	std::string name;
 };
 
 // AssignRoads()交回结果的回调(裸函数指针,体编译在调用方一侧,跨DLL安全),同PlacementEmitFunc。

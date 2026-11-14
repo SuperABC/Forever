@@ -103,7 +103,7 @@ void Traffic::InitRoadsideStations(Map* map) {
 
 			float headingDegrees = atan2f(travelDirY, travelDirX) * (180.f / 3.14159265358979323846f);
 
-			string name = "Station" + to_string(stationCounter++);
+			string name = request.name.empty() ? "Station" + to_string(stationCounter++) : request.name;
 			Station* station = new Station(&stationFactory, modId, name,
 				segment.worldX, segment.worldY, segment.worldZ, headingDegrees, request.road);
 			if (!station->IsValid()) {

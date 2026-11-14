@@ -21,6 +21,7 @@ struct RouteStationInfo {
 	int stationIndex = -1; // 站点在Core侧站点列表里的下标，RouteEndpoint::station引用它
 	float x = 0.f, y = 0.f; // 站点中心
 	std::vector<RoutePort> inlets, outlets, stops;
+	std::string roadName; // 贴路站点所在道路的名字(同名=棋盘格里同一条横/竖线)，其余站点为空
 };
 
 // route mod放在地图上的纯路径点(地图边界、天空点等)：没有站点，不停靠、不触发事件、不限速，只能被links当端点、被lines当必经点。

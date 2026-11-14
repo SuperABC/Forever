@@ -111,6 +111,7 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 
 		RouteStationInfo info;
 		info.name = station->GetName();
+		if (station->GetAttachedRoad()) info.roadName = station->GetAttachedRoad()->GetName();
 		info.stationIndex = static_cast<int>(stopStations.size());
 		stopStations.push_back(station);
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cfloat>
+#include <map>
 
 using namespace std;
 
@@ -34,42 +35,34 @@ void BusRoute::SetProperty() {
 
 void BusRoute::LayoutRoute(const vector<RouteStationInfo>& stations, int sizeX, int sizeY) {
 	// 公交站只有一个停靠位(下标0)，贴路站点的实际路线由Core用路网车辆寻路图拼，这里只排停靠顺序。
-	// 从每个站自己的停靠方向反推绕行方向并分两组成环，不假设南北/顺逆时针，见route_bus.md。
-	if (stations.size() < 4) return; // 凑不出两条至少2站的环线，留空
+	// 同名道路(棋盘格里同一条横/竖线)上的站连成一条线：去程站沿路升序、回程站降序首尾相接成环，
+	// 两端尽头靠Core寻路经路口的U形连接掉头回到对侧站，见route_bus.md。
+	constexpr int kStationsPerVehicle = 4; // 估值：每这么多站配一辆车
 
-	float centerX = 0.f, centerY = 0.f;
-	for (const RouteStationInfo& info : stations) { centerX += info.x; centerY += info.y; }
-	centerX /= static_cast<float>(stations.size());
-	centerY /= static_cast<float>(stations.size());
-
-	auto angleAroundCenter = [&](const RouteStationInfo& info) {
-		return atan2f(info.y - centerY, info.x - centerX);
-	};
-	// radial x 行驶方向的2D叉积：>=0的一组按角度升序首尾相接，<0的一组按降序——见下buildLoop。
-	auto rotationSign = [&](const RouteStationInfo& info) {
-		float rx = info.x - centerX, ry = info.y - centerY;
-		const RoutePort& stop = info.stops[0];
-		return rx * stop.dirY - ry * stop.dirX;
-	};
-
-	vector<RouteStationInfo> groupAscending, groupDescending;
+	map<string, vector<const RouteStationInfo*>> byRoad;
 	for (const RouteStationInfo& info : stations) {
-		if (info.stops.empty()) continue;
-		(rotationSign(info) >= 0.f ? groupAscending : groupDescending).push_back(info);
+		if (info.roadName.empty() || info.stops.empty()) continue;
+		byRoad[info.roadName].push_back(&info);
 	}
-	sort(groupAscending.begin(), groupAscending.end(), [&](const RouteStationInfo& a, const RouteStationInfo& b) {
-		return angleAroundCenter(a) < angleAroundCenter(b);
-	});
-	sort(groupDescending.begin(), groupDescending.end(), [&](const RouteStationInfo& a, const RouteStationInfo& b) {
-		return angleAroundCenter(a) > angleAroundCenter(b);
-	});
 
-	auto buildLoop = [&](const vector<RouteStationInfo>& loopStations) {
-		if (loopStations.size() < 2) return; // 单站凑不成环，丢弃
+	for (auto& [roadName, group] : byRoad) {
+		// 参考方向取第一个站的行驶方向；同一条线上的路近似共线(棋盘格旋转不超过约0.2弧度)，用它做沿路坐标。
+		float refX = group[0]->stops[0].dirX, refY = group[0]->stops[0].dirY;
+		auto along = [&](const RouteStationInfo* info) { return info->x * refX + info->y * refY; };
+
+		vector<const RouteStationInfo*> forward, backward;
+		for (const RouteStationInfo* info : group) {
+			const RoutePort& stop = info->stops[0];
+			(stop.dirX * refX + stop.dirY * refY >= 0.f ? forward : backward).push_back(info);
+		}
+		if (forward.empty() || backward.empty()) continue; // 没有对侧站，掉不了头
+		sort(forward.begin(), forward.end(), [&](const RouteStationInfo* a, const RouteStationInfo* b) { return along(a) < along(b); });
+		sort(backward.begin(), backward.end(), [&](const RouteStationInfo* a, const RouteStationInfo* b) { return along(a) > along(b); });
+
 		vector<RouteLineEntry> line;
-		for (const RouteStationInfo& info : loopStations) line.push_back({ info.name, 0 });
+		for (const RouteStationInfo* info : forward) line.push_back({ info->name, 0 });
+		for (const RouteStationInfo* info : backward) line.push_back({ info->name, 0 });
+		lineVehicleCounts.push_back(max(1, static_cast<int>(line.size()) / kStationsPerVehicle));
 		lines.push_back(std::move(line));
-	};
-	buildLoop(groupAscending);
-	buildLoop(groupDescending);
+	}
 }

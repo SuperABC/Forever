@@ -17,6 +17,7 @@
   bodyLocalX = quadLocalX - quadSizeX*0.5 + bodySizeX*0.5 - bodyOffsetX  // 楼体局部
   ```
   代入 `LocalToWorld` 自己的公式会发现 `bodySizeX`/`bodyOffsetX` 两项抵消，世界坐标只取决于占地矩形局部坐标，和楼体 footprint 偏移无关——楼体贴路（`NearRoadFootprint`）能成立的前提。端口和每条连线的每个点（含控制点）都走同一个 `toWorld`，z = 一层地面高度 + 声明的 z，朝向 = 建筑旋转 + `headingDegrees`。
+- **`GetAttachedRoad()`**：贴路站点所在的道路(挂建筑的站为空)，`Route::Build` 用它填 `RouteStationInfo::roadName`。
 - **贴路站点（公交站）的世界坐标必须精确落在车道中线上**：`Traffic::InitRoadsideStations()` 直接用 `Map::GetLaneSegmentAt` 的真实车道坐标，和 `EnsureRoadLink` 查的是同一套逻辑，不会出现到站坐标和行驶坐标不是同一个点的瞬移。`attachedRoad` 记下贴的是哪条路。
 - **`StationRoadLink` 是两点直连的弦，不是对原车道的真正切割**：`stationNode` 新建、只属于这个 `Station`，`inEdge`/`outEdge` 是 `laneFrom->stationNode->laneTo` 两段直线 `Connection`，不登记进 `Map` 的 `throughLines`/`vehicleNavGraph`，但通过 `Map::RegisterAuxNavNode` 登记成辅助导航节点。`t` 是站点在 `sourceEdge` 上的弧长比例，供 `Route` 判断同车道特例。
 - `EnsureRoadLink(map, stopIndex)` 惰性构造并按停靠位下标缓存；查不到可用的 Road/车道（如单行道只有一侧）返回 `nullptr`，`Route::BuildRoadRun` 据此判定这一段不可达。

@@ -17,7 +17,7 @@ Station mod(站内：进站口/出站口/停靠位/站内连线)  ──┐
 Core: RouteStationInfo(站点位置+世界坐标端口)  ───┘
 ```
 
-- **`RouteStationInfo`**（Core→mod，只读快照，世界坐标）：`name`、`stationIndex`（站点在 Core 侧列表的下标，`RouteEndpoint::station` 引用它）、站点中心`x/y`、`inlets/outlets/stops`（`RoutePort{x,y,z,dirX,dirY}`，下标就是站内端口下标）。
+- **`RouteStationInfo`**（Core→mod，只读快照，世界坐标）：`name`、`stationIndex`（站点在 Core 侧列表的下标，`RouteEndpoint::station` 引用它）、站点中心`x/y`、`inlets/outlets/stops`（`RoutePort{x,y,z,dirX,dirY}`，下标就是站内端口下标）、`roadName`（贴路站点所在道路的名字，其余为空；棋盘格里同名=同一条横/竖线，公交按它分组成线）。
 - **输出三个 `vector`**（和 `BuildingMod::floors` 同一个跨 DLL 安全模式：mod 往自己持有的容器里追加，Core 只读）：
   - `externs`：`RouteExternNode{name,x,y,z,dirX,dirY}`，**route mod 告诉 Core 在哪放 extern node**（地图边界、天空点…）。extern 是没有 `Station` 的纯路径点：不停靠、不触发事件、不限速，只能被 links 当端点、被 lines 当必经点。名字在本 route 内唯一。
   - `links`：`RouteLinkSpec{from,to,withinStation,segments}`，**单向**站间连线。端点 `RouteEndpoint{kind(Outlet/Inlet/Extern),station,portIndex,externName}`；合法组合 Outlet→Inlet、Outlet→Extern、Extern→Inlet、Extern→Extern。`segments` 是按行驶顺序首尾相接的 `TrackSegment`（三次贝塞尔+`mesh`/`meshUnit`）。`withinStation=true` 表示同站内转场（如飞机从降落跑道滑行到起飞跑道），所在 run 按 `sameStationSpeed`。

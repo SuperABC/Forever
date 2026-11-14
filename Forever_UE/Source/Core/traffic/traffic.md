@@ -22,7 +22,7 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
    （调一次`StationMod::Layout()`）。
 2. `InitRoadsideStations`：对每个已注册的`StationMod`类型调`StationFactory::AssignRoads`
    （静态方法，不需要实例）探测要贴哪些路/哪一侧，每条请求创建一个不挂建筑的`Station`，
-   坐标取`Map::GetLaneSegmentAt`的真实车道坐标（目前只有公交站用）。
+   坐标取`Map::GetLaneSegmentAt`的真实车道坐标（目前只有公交站用）。站名取请求的`name`(非空)，否则`"Station"+stationCounter`。
 3. `InitRoutes`：对每个已注册且启用的`RouteMod`类型创建`Route`，收集`stationType`匹配的
    `Station`(端口快照)交给`Route::Build()`；线路上的extern点由`Route`自己持有，不再创建额外的`Station`。
 4. `InitParkedVehicles`：对每个停车位按`ParkingSpot::categories`先随机选一个载具种类，再用
