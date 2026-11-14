@@ -40,6 +40,7 @@
 - **开洞(中轴线统一)**：只在两个隧道口各请求靠山的 `TUNNEL_HATCH_LENGTH`(8) 单位，沿中轴线每 1 单位一小段(z 取下沉剖面，洞底高度正确)提交 `AddTunnelHatch`，宽 = 2×`kTrackGauge` = 1.0(两条铁轨合起来)。两条铁轨自己**不再**提交 `AddTunnelHatch`。`AddTunnelHatch` 产出的是 `wall=true` 的 hatch，Core(`Map::AddRouteHatch`)会把它记进 roadnet 的 hatches，UE 侧 `BuildTunnelWalls` 据此在开口两条长边做竖直侧壁(和路网隧道口一样)。
 - **两轨同步**：两条铁轨的下沉/爬升剖面都由中轴线上的 zone 按弧长比例换算(右轨 A→B 按比例，左轨倒着走取 1-比例)，同进同出；每条铁轨自己的采样点自己生成几何(同一条 link 里连续的 `terrainFollow` 段合并成一条链整体处理，只有链首/链尾各 `TRACK_STATION_FLAT_SAMPLES` 个采样点保持水平)。
 - **几何**：平面控制点用 Catmull-Rom 切线(相邻段共用切线、航向连续，控制臂=弦长/3)，Z 用端点坡度 Hermite 并夹到单调范围；完全水平共线的连续采样合并成一段；每段 `mesh`/`meshUnit` 由原段复制(**隧道段目前仍用同一个轨道 mesh**)。
+- **桥墩**：按**中轴线**画，两条铁轨共用一排墩(不是每根铁轨各一排)。`BuildTrack` 末尾沿中轴线每 `TRACK_SAMPLE_STEP`(1) 单位一段造 `Connection`，z=桥面高度(基准线性过渡 + 隧道下沉 + 抬升段 `max(地形,基准)` + 链首尾水平，和铁轨同一套剖面)，一条链，`AddPier("", chains, PIER_DEFAULT_SPACING=4, PIER_MIN_SPACING=2, PIER_RADIUS=0.15)` 提交(资产留空=默认圆柱，墩距 40m/最短 20m/半径 1.5m 是估值)。选位和贴地/隧道内不放墩全在 Core，见 `Core/traffic/route.md`"桥墩"。
 - **拆除**：每条 link 的采样折线+`trackWidth` 提交 `AddDemolition`，Core 拆相交的楼体/园区(带 `stationMod` 的不拆)，见 `map.md`。
 
 ## 依赖关系

@@ -377,6 +377,18 @@ struct DemolishRequest {
 	float width = 0.f;
 };
 
+// 桥墩请求(RouteMod::AddPier产出)：沿每条链(一根轨道，按行驶顺序首尾相接的Connection)放桥墩，宿主Route::PlacePiers
+// 按defaultSpacing/minSpacing选位(避开路网和已有route线路)，墩顶贴链上该点高度、墩底贴地形(水底)。
+// 链按值存(Connection可拷贝)，不依赖mod的容器生命周期。请求链附近(离链不到轨道半宽)的本route轨道不算障碍，比如链是中轴线时两侧的铁轨。
+// mesh空串=默认圆柱(Asset/Common)，radius是墩的半径(地图element单位)，选位判相交和UE缩放都用它。
+struct PierRequest {
+	std::string mesh;
+	std::vector<std::vector<Connection>> chains;
+	float defaultSpacing = 0.f; // 默认墩距(沿链弧长，地图element单位)
+	float minSpacing = 0.f;     // 最短墩距，默认距离放不下时按PIER_SPACING_STEP一档档缩短到这里
+	float radius = 0.f;
+};
+
 // 把connection上[t1,t2]包成Quad追加进out(挖地形洞)。tunnel=true时带侧壁,仅隧道口用。
 // RoadnetMod::AddHatch/AddTunnelHatch、RouteMod的同名辅助都转调这里。
 void BuildHatch(const Connection* connection, float t1, float t2, float width, bool tunnel, std::vector<TerrainHatch>& out);

@@ -29,6 +29,7 @@
 
 ## 关键设计
 
+- **桥墩**：`Route::piers`(选位结果)在每条 route 的 lines 之后、车辆名单之前写 `count × (x,y,topZ,radius,mesh)`；读档不重跑 `PlacePiers`。
 - **线路不重新排，也不存寻路图/运动学**。`Route::Build` 按传入站点顺序给站点编号再交给 mod 的 `LayoutRoute`，站点顺序来自 `unordered_map` 的遍历顺序，读档后会变，所以不能重跑 `Build`。改为直接存 mod 的输出（站点表、externs、links、lines），读档把它们填回 `route->mod`，然后调 `Route::Assemble()` 重建寻路图和每条线路的运动学。这样不需要存逐边/逐腿数据，地图按存档原样恢复，规划结果一致。
 - **instantiate 线路的 links 几何要存最终值**：地形已经按它抬升/挖洞，读档不能重新采样。公交的 links 为空。
 - **站点用原来的构造函数重建**：mod 的创建和 `SetProperty` 和新开局一样，再用存档里的端口和连线覆盖，读档时不会重新调用 mod 的 `Layout` 换算。

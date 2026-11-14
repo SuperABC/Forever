@@ -98,6 +98,9 @@ public:
 	void AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff);
 	// 提交拆除请求：折线(世界xy)扫过width宽的条带，Core拆掉所有相交的楼体及其园区(带stationMod的建筑除外)，见route.md。
 	void AddDemolition(const std::vector<std::pair<float, float>>& centerline, float width);
+	// 提交桥墩请求：chains每条是一根轨道的Connection链(按行驶顺序)，Core按defaultSpacing/minSpacing沿链选位，见route.md"桥墩"。
+	// mesh空串=默认圆柱，radius=墩半径(地图单位)。
+	void AddPier(const std::string& mesh, std::vector<std::vector<Connection>> chains, float defaultSpacing, float minSpacing, float radius);
 
 	// 输出(mod填、Core只读，同BuildingMod::floors的既有模式)。
 	std::vector<RouteExternNode> externs;
@@ -109,6 +112,7 @@ public:
 	std::vector<TerrainHatch> hatches;
 	std::vector<TerrainFitRequest> terrainFits;
 	std::vector<DemolishRequest> demolitions;
+	std::vector<PierRequest> piers;
 
 	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}

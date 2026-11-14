@@ -27,6 +27,7 @@ void AirRoute::SetProperty() {
 	vehicleType = "vehicle_plane";
 	useRoadnet = false;
 	instantiate = false;
+	tiltAlongPath = true; // 爬升/下降时机头跟路径切线俯仰(Core Route::Update 只在这个开关或 instantiate 下写 pitch)
 
 	// 校准依据见route_air.md：跑一圈约100真实秒、停约6真实秒。三个速度都是绝对值(地图单位/游戏秒)。
 	normalSpeed = 0.175f;

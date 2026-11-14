@@ -48,7 +48,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
   `Source/Core/map/map.md`"ConnectPathRoad"一节。`Map::AddRoadAccessNode`本身（同时
   断开导航图车道贯通线+标记`RoadOpening`）作为API继续保留，供其它调用方使用。
 - **导航图调试可视化**：`BuildNavigationDebugMesh()`（公开方法）+`BuildNavGraphDebugMesh()`
-  （私有实现，给车行/行人各调一次），由`bShowNavigationDebug`（`EditAnywhere`，目前默认true）开关控制，
+  （私有实现，给车行/行人各调一次），由`bShowNavigationDebug`（`EditAnywhere`，目前默认false）开关控制，
   关闭时显式`ClearMeshSection(0)`（不是跳过不生成，避免旧可视化mesh残留在场景里）。公开成
   独立方法是因为运行时往导航图里新增锚点/边之后需要能重新调用它刷新可视化。
   - `AppendQuadDoubleSided`（匿名namespace自由函数）：四个角点无论以什么环绕顺序传入，两个

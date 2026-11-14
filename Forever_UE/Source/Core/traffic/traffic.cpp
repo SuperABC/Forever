@@ -135,6 +135,10 @@ void Traffic::InitRoutes(Map* map) {
 		}
 
 		route->Build(map, allStations);
+		// 桥墩要避开路网和先建好的route轨道，所以Build之后、按已建好的route表选位。
+		vector<const Route*> built;
+		for (auto& [builtName, builtRoute] : routes) built.push_back(builtRoute);
+		route->PlacePiers(map, built);
 
 		debugf("Traffic::InitRoutes: route %s built %d line(s).\n", name.c_str(), static_cast<int>(route->GetLines().size()));
 

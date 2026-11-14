@@ -212,6 +212,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 			trafficFramework->GenerateVehicles(map, traffic);
 			trafficFramework->BuildRouteDebugMesh(traffic);
 			trafficFramework->BuildTracks(traffic);
+			trafficFramework->BuildPiers(map, traffic);
 		}
 
 		// 读档跳过了game_start(它本来会随机交给玩家一个市民)：按存档恢复玩家操控的市民/车辆。

@@ -124,12 +124,14 @@ public:
 
 	// 公共交通线路调试画线(每种stationType一个mesh+MID，详见.md)，bShowRouteDebug为false时清空已有section。
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Traffic|Debug")
-	bool bShowRouteDebug = true;
+	bool bShowRouteDebug = false;
 
 	void BuildRouteDebugMesh(Traffic* traffic);
 
 	// 铺instantiate线路(火车)的轨道ISM，只处理ShouldInstantiate()且有trackMesh的线路，详见.md。
 	void BuildTracks(Traffic* traffic);
+	// 画桥墩(Route::GetPiers)：ISM，墩底贴地形、墩顶贴桥面。必须在BuildTracks之后调(它负责清实例)。
+	void BuildPiers(Map* map, Traffic* traffic);
 
 	// 跳时间(jump_time)结束后调用：线路公交的物理表示(实车位置)已经跟时刻表脱节，全部收回运动学、
 	// 以时刻表为准(不对齐实车进度)，靠近玩家的之后会被UpdateBusPhysicsHandoff重新切回物理。

@@ -155,6 +155,13 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive&
 			for (const RouteLineEntry& entry : entries) { w.Str(entry.name); w.I32(entry.stopIndex); }
 		}
 
+		// 桥墩：选位结果直接存(读档不重跑Build/PlacePiers)；墩底不存，UE画时贴当时的地形。
+		w.U32(static_cast<uint32_t>(route->piers.size()));
+		for (const Route::Pier& pier : route->piers) {
+			w.F32(pier.x); w.F32(pier.y); w.F32(pier.topZ); w.F32(pier.radius);
+			w.Str(pier.mesh);
+		}
+
 		w.U32(static_cast<uint32_t>(route->lineVehicles.size()));
 		for (const vector<Vehicle*>& vehicles : route->lineVehicles) {
 			w.U32(static_cast<uint32_t>(vehicles.size()));
@@ -279,6 +286,14 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 			}
 			if (r.Failed()) break;
 			route->Assemble(&map); // 同新开局：建寻路图+规划每条线路，几何都来自存档
+
+			uint32_t pierCount = r.U32();
+			for (uint32_t k = 0; k < pierCount && !r.Failed(); k++) {
+				Route::Pier pier;
+				pier.x = r.F32(); pier.y = r.F32(); pier.topZ = r.F32(); pier.radius = r.F32();
+				pier.mesh = r.Str();
+				route->piers.push_back(std::move(pier));
+			}
 
 			vector<vector<string>> lineVehicles(r.U32());
 			for (vector<string>& names : lineVehicles) names = ReadStrings(r);

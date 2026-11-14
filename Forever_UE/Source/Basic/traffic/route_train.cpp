@@ -21,6 +21,10 @@ using namespace std;
 #define TUNNEL_RAMP_LENGTH 16.f
 #define TUNNEL_HATCH_LENGTH 8.f
 #define TUNNEL_MIN_OPEN_LENGTH 32.f
+// 桥墩(AddPier，Core选位)：默认墩距40m、最短20m、半径1.5m，估值待PIE调。资产留空=Core/UE用默认圆柱。
+#define PIER_DEFAULT_SPACING 4.f
+#define PIER_MIN_SPACING 2.f
+#define PIER_RADIUS 0.15f
 #define TRACK_SAMPLE_STEP 1.f
 
 // 车站两端各留这么多个采样点保持水平，不在车站范围内爬坡/下坡。
@@ -617,5 +621,37 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 			hatchRange(zone.sIn - TUNNEL_HATCH_LENGTH, zone.sIn);
 			hatchRange(zone.sOut, zone.sOut + TUNNEL_HATCH_LENGTH);
 		}
+
+		// ---- 桥墩：按中轴线，两条铁轨共用一排墩(不是每根铁轨各一排)。沿中轴线每TRACK_SAMPLE_STEP一段Connection，
+		// z=桥面高度(和铁轨同一套剖面：基准线性过渡、隧道下沉、抬升段贴地形、链首尾各TRACK_STATION_FLAT_SAMPLES个采样点水平)；
+		// 隧道内/贴地的位置Core自己不放墩。 ----
+		auto deckZ = [&](float s) {
+			float dDepth;
+			float base = zStart + (zEnd - zStart) * s / midLength;
+			if (s < TRACK_STATION_FLAT_SAMPLES * TRACK_SAMPLE_STEP || s > midLength - TRACK_STATION_FLAT_SAMPLES * TRACK_SAMPLE_STEP) return base;
+			if (inRaise(s)) {
+				float x, y, tx, ty;
+				midAt(s, x, y, tx, ty);
+				return max(getHeight(x, y), base);
+			}
+			return base + TUNNEL_DROP * depthAt(s, dDepth);
+		};
+		int pieces = max(1, static_cast<int>(ceilf(midLength / TRACK_SAMPLE_STEP)));
+		vector<Connection> midChain;
+		for (int p = 0; p < pieces; p++) {
+			float sa = midLength * static_cast<float>(p) / static_cast<float>(pieces);
+			float sb = midLength * static_cast<float>(p + 1) / static_cast<float>(pieces);
+			float xa, ya, txa, tya, xb, yb, txb, tyb;
+			midAt(sa, xa, ya, txa, tya); midAt(sb, xb, yb, txb, tyb);
+			float za = deckZ(sa), zb = deckZ(sb);
+			float run = sqrtf((xb - xa) * (xb - xa) + (yb - ya) * (yb - ya));
+			Connection connection(Node("route", xa, ya, za), Node("route", xb, yb, zb));
+			connection.AddControls({ { Node("route_ctrl", xa + txa * run / 3.f, ya + tya * run / 3.f, za + (zb - za) / 3.f), 1.f },
+				{ Node("route_ctrl", xb - txb * run / 3.f, yb - tyb * run / 3.f, zb - (zb - za) / 3.f), 1.f } });
+			midChain.push_back(std::move(connection));
+		}
+		vector<vector<Connection>> pierChains;
+		pierChains.push_back(std::move(midChain));
+		AddPier("", std::move(pierChains), PIER_DEFAULT_SPACING, PIER_MIN_SPACING, PIER_RADIUS);
 	}
 }

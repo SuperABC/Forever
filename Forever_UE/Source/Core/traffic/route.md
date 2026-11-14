@@ -49,6 +49,14 @@ Core 对站/线的类型完全不关心，也不计算任何连线几何：几�
 
 `mod->instantiate && !useRoadnet` 的线路，`Build()` 在 `LayoutRoute` 之后、建图之前调 `mod->BuildTrack()`（地形回调绑 `Map::GetTerrainRef/GetWater/SampleHeight`），把 `hatches`/`terrainFits` 转发给 `Map::AddHatch`/`ApplyTerrainFits`（烘焙进地形，所以 `Traffic` 必须在地形网格生成之前构建），`demolitions` 交给 `Map::DemolishAlongStrips`（`keep` = 建筑有 `stationMod`），见 `map.md`"拆除"。这些发生在存档之前，读档不重跑——读档用存档里的最终 `links` 几何走 `Assemble()`。
 
+### 桥墩（`PlacePiers`）
+
+mod 在 `BuildTrack` 里用 `AddPier(mesh, chains, defaultSpacing, minSpacing, radius)` 提交 `PierRequest`(链=一根轨道的 `Connection` 序列，按值存)，`Traffic::InitRoutes` 在每条 `Route::Build` 之后调 `Route::PlacePiers(map, 已建好的 route 列表)` 选位，结果存进 `Route::piers`(`Pier{x,y,topZ,radius,mesh}`，随 traffic 存档，读档不重跑)。
+- **选位**：每条链链首视为已有支撑，`s` 从 0 起；剩余长度 ≤ 默认墩距时收尾。每根墩先试默认墩距，会碰到障碍就每次缩短 `PIER_SPACING_STEP`(0.5=5m)直到最短墩距；都不行再从默认墩距每次加长 0.5 试，直到超出链尾(找不到就停止这条链)。
+- **障碍**：路网每条路(半宽=`Road::GetTotalWidth()/2`)，加所有 `instantiate && !useRoadnet` 的 route 轨道(半宽=`trackWidth/2`，本 route 里中点离请求链不到 `trackWidth/2` 的 connection 排除——请求链是中轴线，两根铁轨就在它两侧，不排除会挡住每一根墩)。只看 xy(暂不考虑多层桥)，不判建筑，水面不影响。**限制**：后建的 route 避让先建的，先建的不会为后建的让位；本 route 之后新建的路网/建筑也不再检查。
+- **放不放**：候选点 `topZ - SampleHeight < PIER_MIN_HEIGHT`(0.05=0.5m，贴地/隧道内/过山抬升段)不放墩，但 `s` 照样前进(此时不做障碍检测)。
+- **墩底不存**：UE 画时取当时地形，所以地形贴合后高度变了也对得上；水面不影响，贴水底。
+
 ## 依赖关系
 
 - 依赖：`Core/map/map.h`、`Core/traffic/station.h`、`Core/traffic/vehicle.h`、`traffic/route_mod.h`/`route_factory.h`。

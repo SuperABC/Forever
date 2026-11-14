@@ -39,6 +39,7 @@ run 两端（停靠位）速度为 0；中间按各段速度上限做前向/后�
 
 - `BuildTrack(getTerrain, getWater, getHeight)`（虚，默认不处理）：`Route::Build` 在 `LayoutRoute` 之后、建图之前对 instantiate 线路调用一次。mod 把 `links[i].segments` 改成最终几何（沿线采样地形、过山抬升/挖隧道），用 `AddTunnelHatch`/`AddTerrainFit`/`AddDemolition` 提交请求，和 `RoadnetMod::DistributeRoadnet` 同一个模式。
 - `AddDemolition(centerline, width)`：折线扫过 width 宽的条带，Core（`Map::DemolishAlongStrips`）拆掉所有相交的楼体及其园区，带 `stationMod` 的建筑除外。
+- `AddPier(mesh, chains, defaultSpacing, minSpacing, radius)`：桥墩请求(`PierRequest`，`general_geometry.h`)。`chains` 每条是一根轨道的 `Connection` 链(按值存，按行驶顺序首尾相接)，请求链附近(不到 `trackWidth/2`)的本 route 轨道不算障碍；`mesh` 空串=Asset/Common 默认圆柱；`radius` 是墩半径。Core 的 `Route::PlacePiers` 沿链选位(默认墩距→缩短到最短→再加长，避开路网和已有 route 线路)，墩顶贴链上该点高度，墩底贴地形，见 `Core/traffic/route.md`"桥墩"。`BuildTrack` 里调用，结果在 `piers`。
 - `AddHatch`/`AddTunnelHatch`/`AddTerrainFit` 转调 `general_geometry.h` 的 `BuildHatch`/`BuildTerrainFit`。
 
 ## 存档

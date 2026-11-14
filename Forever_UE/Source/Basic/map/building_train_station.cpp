@@ -63,8 +63,15 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 	constexpr float kCos45 = 0.70710678f;
 
 	struct Option { int direction; float frontage; float depth; };
-	// 这块地能放车站的(朝向，沿路边长，进深)选项：朝向必须贴着路。constrained时车站沿路方向(世界坐标)和(ux,uy)的夹角要<=45度。
-	auto optionsOf = [&](Lot* lot, bool constrained, float ux, float uy) {
+	// 车站沿路方向(世界坐标单位向量，按地块旋转换算)：车站的轨道就沿它走。
+	auto alongOf = [](Lot* lot, int dir, float& ax, float& ay) {
+		bool alongLocalX = (dir == FACE_NORTH || dir == FACE_SOUTH);
+		float rotation = lot->GetRotation();
+		ax = alongLocalX ? cosf(rotation) : -sinf(rotation);
+		ay = alongLocalX ? sinf(rotation) : cosf(rotation);
+	};
+	// 这块地能放车站的(朝向，沿路边长，进深)选项：朝向必须贴着路。
+	auto optionsOf = [&](Lot* lot) {
 		vector<Option> result;
 		for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {
 			if (!lot->GetBoundaryRoad(dir)) continue;
@@ -72,12 +79,6 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 			float frontage = alongLocalX ? lot->GetSizeX() : lot->GetSizeY();
 			float depth = alongLocalX ? lot->GetSizeY() : lot->GetSizeX();
 			if (frontage < kMinEdge || depth < kMinLotDepth) continue;
-			if (constrained) {
-				float rotation = lot->GetRotation();
-				float ax = alongLocalX ? cosf(rotation) : -sinf(rotation);
-				float ay = alongLocalX ? sinf(rotation) : cosf(rotation);
-				if (fabsf(ax * ux + ay * uy) < kCos45 - 1e-4f) continue;
-			}
 			result.push_back({ dir, frontage, depth });
 		}
 		return result;
@@ -96,26 +97,30 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 	// 中央车站：随机一块能放的高密度商业区。
 	vector<Lot*> centralCandidates;
 	for (Lot* lot : lots) {
-		if (lot && lot->GetArea() == AREA_COMMERCE_HIGH && !optionsOf(lot, false, 0.f, 0.f).empty()) centralCandidates.push_back(lot);
+		if (lot && lot->GetArea() == AREA_COMMERCE_HIGH && !optionsOf(lot).empty()) centralCandidates.push_back(lot);
 	}
 	if (centralCandidates.empty()) {
 		// 中央车站放不了：退化成在随机一块中/低密度商业区放一座车站(朝向不限)，route里它两端直线连到地图外。
 		vector<Lot*> fallbackCandidates;
 		for (Lot* lot : lots) {
-			if (lot && (lot->GetArea() == AREA_COMMERCE_MIDDLE || lot->GetArea() == AREA_COMMERCE_LOW) && !optionsOf(lot, false, 0.f, 0.f).empty()) fallbackCandidates.push_back(lot);
+			if (lot && (lot->GetArea() == AREA_COMMERCE_MIDDLE || lot->GetArea() == AREA_COMMERCE_LOW) && !optionsOf(lot).empty()) fallbackCandidates.push_back(lot);
 		}
 		if (fallbackCandidates.empty()) return;
 		Lot* lot = fallbackCandidates[GetRandom(static_cast<int>(fallbackCandidates.size()))];
-		vector<Option> lotOptions = optionsOf(lot, false, 0.f, 0.f);
+		vector<Option> lotOptions = optionsOf(lot);
 		emitOption(lot, lotOptions[GetRandom(static_cast<int>(lotOptions.size()))]);
 		return;
 	}
 	Lot* central = centralCandidates[GetRandom(static_cast<int>(centralCandidates.size()))];
-	vector<Option> centralOptions = optionsOf(central, false, 0.f, 0.f);
-	emitOption(central, centralOptions[GetRandom(static_cast<int>(centralOptions.size()))]);
+	vector<Option> centralOptions = optionsOf(central);
+	const Option& centralOption = centralOptions[GetRandom(static_cast<int>(centralOptions.size()))];
+	emitOption(central, centralOption);
+	// 中央车站的走向(世界坐标)：外围车站必须落在它某一端的正前方，不然轨道从中央出来再拐去外围站会是钝角。
+	float centralAx, centralAy;
+	alongOf(central, centralOption.direction, centralAx, centralAy);
 
 	// 东南西北各一座：地块中心到中央地块中心的距离>=200，连线和该方向轴线夹角<=45度(x比中央大就是东，y比中央大就是南)，
-	// 车站沿路方向和连线夹角<=45度。
+	// 连线和中央车站走向夹角<=45度(落在中央车站某一端的正前方)；选边时东西站取沿路方向更贴近东西的边、南北站取更贴近南北的边。
 	const float directionX[4] = { 1.f, 0.f, -1.f, 0.f };  // 东、南、西、北
 	const float directionY[4] = { 0.f, 1.f, 0.f, -1.f };
 	for (int d = 0; d < 4; d++) {
@@ -128,7 +133,19 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 			if (distance < kMinCentralDistance) continue;
 			float ux = dx / distance, uy = dy / distance;
 			if (ux * directionX[d] + uy * directionY[d] < kCos45 - 1e-4f) continue;
-			for (const Option& option : optionsOf(lot, true, ux, uy)) candidates.push_back({ lot, option });
+			// 连线和中央车站走向的夹角<=45度(走向是无向轴，取靠近这座站的那一端)：西南-东北走向的话，西站只能在西南端前方。
+			if (fabsf(ux * centralAx + uy * centralAy) < kCos45 - 1e-4f) continue;
+			// 选边：东/西站取沿路方向更贴近东西走向的那条边，南/北站取更贴近南北走向的(directionX/Y就是该方向的轴)。
+			const Option* best = nullptr;
+			float bestAlign = -1.f;
+			vector<Option> lotOptions = optionsOf(lot);
+			for (const Option& option : lotOptions) {
+				float ax, ay;
+				alongOf(lot, option.direction, ax, ay);
+				float align = fabsf(ax * fabsf(directionX[d]) + ay * fabsf(directionY[d]));
+				if (align > bestAlign) { bestAlign = align; best = &option; }
+			}
+			if (best) candidates.push_back({ lot, *best });
 		}
 		if (candidates.empty()) continue;
 		const Candidate& pick = candidates[GetRandom(static_cast<int>(candidates.size()))];

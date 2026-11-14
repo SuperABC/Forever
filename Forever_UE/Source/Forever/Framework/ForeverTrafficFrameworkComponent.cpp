@@ -1036,6 +1036,41 @@ void UForeverTrafficFrameworkComponent::BuildTracks(Traffic* traffic) {
 	}
 }
 
+void UForeverTrafficFrameworkComponent::BuildPiers(Map* map, Traffic* traffic) {
+	if (!map || !traffic) return;
+
+	// 桥墩和轨道共用trackMeshInstances(同一套ISM缓存)；清实例由BuildTracks开头统一做，所以必须在它之后调用。
+	// mesh空串=Asset/Common默认圆柱。
+	const std::string defaultMesh = "/Game/Asset/Common/Mesh/SM_Cylinder.SM_Cylinder";
+	for (auto& [routeName, route] : traffic->GetRoutes()) {
+		if (!route) continue;
+		int32 pierCount = 0;
+		for (const Route::Pier& pier : route->GetPiers()) {
+			UInstancedStaticMeshComponent* ism = GetOrCreateTrackISM(pier.mesh.empty() ? defaultMesh : pier.mesh);
+			if (!ism || !ism->GetStaticMesh()) continue;
+
+			// 墩底贴地形(水面不管，取到的就是水底)，墩顶贴请求点高度；太矮的Core已经过滤。
+			float baseZ = map->SampleHeight(pier.x, pier.y);
+			float height = (pier.topZ - baseZ) * TRAFFIC_WORLD_SCALE;
+			if (height <= 0.f) continue;
+
+			// 按mesh包围盒适配尺寸(不假设资产原尺寸和轴心)：水平直径=2*radius，竖直正好撑满墩高，包围盒中心对齐墩的中心。
+			const FBoxSphereBounds bounds = ism->GetStaticMesh()->GetBounds();
+			float meshDiameter = FMath::Max(bounds.BoxExtent.X, bounds.BoxExtent.Y) * 2.f;
+			float meshHeight = bounds.BoxExtent.Z * 2.f;
+			if (meshDiameter < KINDA_SMALL_NUMBER || meshHeight < KINDA_SMALL_NUMBER) continue;
+			float horizontalScale = pier.radius * 2.f * TRAFFIC_WORLD_SCALE / meshDiameter;
+			FVector scale(horizontalScale, horizontalScale, height / meshHeight);
+			FVector center(pier.x * TRAFFIC_WORLD_SCALE, pier.y * TRAFFIC_WORLD_SCALE, (baseZ + pier.topZ) * 0.5f * TRAFFIC_WORLD_SCALE);
+			ism->AddInstance(FTransform(FRotator::ZeroRotator, center - bounds.Origin * scale, scale));
+			pierCount++;
+		}
+		if (pierCount > 0) {
+			debugf("UForeverTrafficFrameworkComponent::BuildPiers: route %s placed %d pier instance(s).\n", route->GetName().c_str(), pierCount);
+		}
+	}
+}
+
 AVehicleElement* UForeverTrafficFrameworkComponent::FindVehicleElement(const FString& vehicleName) const {
 	const TObjectPtr<AVehicleElement>* found = activeVehicles.Find(vehicleName);
 	return found ? found->Get() : nullptr;
