@@ -142,7 +142,7 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 		auto getWater = [map](int x, int y) -> pair<bool, float> { return map->GetWater(x, y); };
 		auto getHeight = [map](float x, float y) -> float { return map->SampleHeight(x, y); };
 		mod->BuildTrack(getTerrain, getWater, getHeight);
-		for (const TerrainHatch& hatch : mod->hatches) map->AddHatch(hatch);
+		for (const TerrainHatch& hatch : mod->hatches) map->AddRouteHatch(hatch);
 		map->ApplyTerrainFits(mod->terrainFits);
 		// 拆掉轨道扫过的楼体/园区；带stationMod的建筑不拆(它的Station已经建好，轨道从上方过)。
 		int demolished = map->DemolishAlongStrips(mod->demolitions, [](const Building* building) {

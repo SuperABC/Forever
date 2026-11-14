@@ -11,7 +11,7 @@
   - **车站的"端 e"**=轨道 e 的出站口 `Out(e)` 与轨道 1-e 的进站口 `In(1-e)`(同一侧，相距=楼体进深×0.1，不是定值)。每端在车站外沿航向直线延伸 `kStationExtend=2` 取**轴点 P**=(Out+In)/2+h×2；出站轨连接点 O'=P+右手侧×0.25，进站轨连接点 I'=P−右手侧×0.25(右手侧=(−hy,hx)，+Y 向南；`station_train` 保证出站轨在右手边)。
   - **站端连接(每个车站每端一份，`ensureEnd`)**：`Outlet(e)→Extern <站>_e<e>_out`(Out→O')、`Extern <站>_e<e>_in→Inlet(1-e)`(I'→In)，各一段 Bezier，两端臂长=弦长/3、方向都沿航向，扁 S 形，`terrainFollow=false`。后面不管这一端连出几条轨道都共用这份。extern 只是 Core 图里不停靠、不限速的过路节点(Outlet→Extern→Extern→Inlet 本来就是合法组合)。
   - **站间(`connectEnds`，每对车站端一份)**：中轴线 P_A→P_B 一段 Bezier(臂=两点距离/3)，按弧长 `kOffsetStep=4` 采样，两条铁轨(A→B 偏右、B→A 偏左，倒着走)**共用同一组采样点**偏移，所以永远平行(harness：轨距 0.5，不交叉)；相邻采样点之间 Hermite 三次贝塞尔(`OffsetRail`)，`terrainFollow=true`。links：`Extern A_e_out→Extern B_e_in`、`Extern B_e_out→Extern A_e_in`，两个方向一起生成(环线两方向、快线往返本来就成对使用)。
-  - 桥高就是两端口的 z(火车站端口 z=1.5，3 楼地面)，**没有站内抬升/下降段**。每段都带 `mesh=kTrainTrackMesh`、`meshUnit=kTrainTrackUnit`(0.25)。同一对车站端只生成一次(`pairKeys` 去重)。
+  - 桥高就是两端口的 z(火车站端口 z=1.5，3 楼地面)，**没有站内抬升/下降段**。每段都带 `mesh=kTrainBridgeMesh`、`meshUnit=kTrainBridgeUnit`(0.25，定义在 `route_train.cpp`，站外轨道用带底座的 `TrackBridge`，站内仍用 `station_train.h` 的 `kTrainTrackMesh`；`meshUnit` 必须等于模型沿 X 的实际长度)。同一对车站端只生成一次(`pairKeys` 去重)。
 - **线路拓扑：1 座中央车站 + 东南西北各 1 座**(车站由 `building_train_station` 的 `Assign` 放，见其 md)。`LayoutRoute` 里中央车站=到其它站距离之和最小的站，其它站按相对中央的主方向分到东/南/西/北(每个方向取离中央最近的一座)。
   - **连线几何**：每个外围站朝向中央的那一端 ↔ 中央车站的一端(`connectEnds`)，外围站远离中央的那一端 ↔ 对应方向的地图边界 extern(`boundaryExtern`，半圆掉头)。
   - **线路(2 条)**：北-南线 `北边界→北站→中央→南站→南边界→南站→中央→北站→北边界`(首尾相接)，东-西线同理。每条线路 4 辆车。
@@ -32,10 +32,14 @@
 
 ## BuildTrack（过山爬坡/隧道）
 
-`Route::Build` 在 `LayoutRoute` 之后调用一次。只对 `terrainFollow` 的段处理，其余段(站端连接、半圆弧)原样保留。**同一条 link 里连续的 `terrainFollow` 段合并成一条链整体处理**(偏移铁轨是很多个 4 单位的小段，必须当一整条轨道，不然每个小段两头都会被压平、山和隧道会被切碎)：
-1. 把整条链的平面曲线按弧长每 `TRACK_SAMPLE_STEP`(1 单位=10m)采样，记录地形类型和 `getHeight`；
-2. 连续的 `terrain_mountain` 切成一座座山，规则照抄 `JingRoadnet::buildArm`（常量 `MOUNTAIN_MAX_SLOPE`/`TUNNEL_HEIGHT`/`TUNNEL_HATCH_LENGTH`/`TERRAIN_FIT_FALLOFF` 在 `route_*.cpp` 里重新定义，两边数值要一致）：坡度<=0.5 或山后是海→抬升(`AddTerrainFit`)；否则→隧道（前后各 8 单位 S 形坡道，`AddTunnelHatch` 挖洞，中间水平隧道段），放不下坡道则退化为抬升；整条链的链首/链尾各 `TRACK_STATION_FLAT_SAMPLES` 个采样点保持水平；两条铁轨各自独立处理，山脚地形判定可能差一个采样点，轨距 0.5 远小于采样步长，接受；
-3. 每相邻两点输出一段三次贝塞尔，完全水平共线的合并。**平面控制点用 Catmull-Rom 切线**(每个采样点的切线=前后相邻采样点连线方向，两端取基础曲线的出发/到达方向，控制臂=该段弦长/3)，相邻段在接缝处共用同一条切线、航向连续；以前控制点取弦的三等分点，每 1 单位一段，接缝处航向会突变几度(火车约每秒一次)；每段 `mesh`/`meshUnit` 由原段复制（**隧道段目前仍用同一个轨道 mesh**，没有隧道标志，将来要换资产只需在这里改 `mesh`）。
+`Route::Build` 在 `LayoutRoute` 之后调用一次。**只按高度判定，与地形类型无关**(没有 `getTerrain`/坡度/海的判断)。1 单位=10m：铁轨平时在 z=1.5(15m)，隧道内 z=-1.5(-15m)。
+
+- **配对**：`LayoutRoute` 每生成一对站间铁轨(`connectEnds`、`boundaryExtern`)，就把两条 link 的下标和它们共用的**中轴线**(按 1 单位弧长采样的 `CurveSample`)存进私有成员 `railPairs`；`BuildTrack` 按 pair 逐对处理，不在铁轨上反推中轴线。不在 pair 里的 link(站端连接、半圆)原样保留。
+- **判定(沿中轴线，每对只判一次)**：高度 `getHeight` ≥ 阈值(`TUNNEL_THRESHOLD_Z`=1.5)的连续采样点是一座"山"，第一个/最后一个点是阈值点 sIn/sOut。间隙(低于阈值的地面段)弧长 < `TUNNEL_MIN_OPEN_LENGTH`(32) 的两座山合并成一座(两座山之间，不出地面，一直在隧道里；32 正好是两侧各 16 的坡道)；第一座山之前/最后一座山之后的段连着车站(链首/链尾)，不合并。
+- **隧道 vs 爬升**：入口阈值点距链首(车站端中轴线起点 P)< `TUNNEL_RAMP_LENGTH`(16) 或出口阈值点距链尾 < 16 → 坡道放不下，这座山**沿山体爬升**(`z=max(地形高度, 基准)`，`AddTerrainFit` 让地形贴合轨道，两轨各自提交，宽 `trackWidth`)；否则钻隧道：阈值点前 16 单位内 `SmoothStep` 从 1.5 降到 -1.5，山内保持 -1.5，出山后 16 单位升回(`TUNNEL_DROP`=-3 相对基准)。
+- **开洞(中轴线统一)**：只在两个隧道口各请求靠山的 `TUNNEL_HATCH_LENGTH`(8) 单位，沿中轴线每 1 单位一小段(z 取下沉剖面，洞底高度正确)提交 `AddTunnelHatch`，宽 = 2×`kTrackGauge` = 1.0(两条铁轨合起来)。两条铁轨自己**不再**提交 `AddTunnelHatch`。`AddTunnelHatch` 产出的是 `wall=true` 的 hatch，Core(`Map::AddRouteHatch`)会把它记进 roadnet 的 hatches，UE 侧 `BuildTunnelWalls` 据此在开口两条长边做竖直侧壁(和路网隧道口一样)。
+- **两轨同步**：两条铁轨的下沉/爬升剖面都由中轴线上的 zone 按弧长比例换算(右轨 A→B 按比例，左轨倒着走取 1-比例)，同进同出；每条铁轨自己的采样点自己生成几何(同一条 link 里连续的 `terrainFollow` 段合并成一条链整体处理，只有链首/链尾各 `TRACK_STATION_FLAT_SAMPLES` 个采样点保持水平)。
+- **几何**：平面控制点用 Catmull-Rom 切线(相邻段共用切线、航向连续，控制臂=弦长/3)，Z 用端点坡度 Hermite 并夹到单调范围；完全水平共线的连续采样合并成一段；每段 `mesh`/`meshUnit` 由原段复制(**隧道段目前仍用同一个轨道 mesh**)。
 - **拆除**：每条 link 的采样折线+`trackWidth` 提交 `AddDemolition`，Core 拆相交的楼体/园区(带 `stationMod` 的不拆)，见 `map.md`。
 
 ## 依赖关系
@@ -48,3 +52,4 @@
 - 轨道与轨道、轨道与机场天空线交叉不处理。
 - 无头 harness 验证过(随机地图 4 线路/连续/靠右/导航无悬空/速度表合法)；**未在 PIE 验证**：轨道/桥/拆迁视觉、实际行驶/停靠事件、读档重建、`passSpeed` 穿站路径(默认线路每站都停，没用到 Through 连线)。
 - 隧道内暂无专用轨道资产。
+- 隧道改成按高度判定后，harness 只用假条纹高度场验证过(下沉到-1.5、两山间隙<32合并、阈值点距链端<16爬升、z 无跳变)，**开洞的地形四边形是否正好对准轨道进洞需 PIE 确认**。

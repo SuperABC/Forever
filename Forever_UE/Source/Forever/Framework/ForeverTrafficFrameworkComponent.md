@@ -77,7 +77,7 @@
   遍历`route->GetLines()`的`runs`→`pieces`，按每个`TrackPath`几何采样（`SampleRouteEdge(const TrackPath&)`，每`ROUTE_DEBUG_SAMPLE_STEP`地图单位一个采样点，至少16段，`TSet<const TrackPath*>`去重）连成ribbon，
   路径中点画箭头指示方向，站点的inlet/outlet/stop画小方块。`bShowRouteDebug`（默认true）为false时`ClearMeshSection`而不是跳过，避免旧可视化残留。`stationByNodeId`遍历`RouteLine::runs`。
 - **`BuildTracks`**：对`ShouldInstantiate()`的线路（火车），遍历`route->GetTrackPaths()`（站内连线+站间连线，已去重），**每段用自己的`mesh`/`meshUnit`**（空mesh的段不铺），每个`Connection`段按`BuildRoadInstances`同样的平铺（块数夹在`[0.8,1.2]*unit`，`scaleAlong`拉伸，
-  `GetOrCreateTrackISM`每种mesh一个`RF_Transient`的ISM，重铺前先`ClearInstances`）。区别：轨道mesh轴心在起点边（沿+X延伸），所以每块摆在自己的**起点**，朝向取起点→终点的3D方向（含坡度）。隧道没有专用标志，由mod直接把段的`mesh`换成隧道资产。读档时同样重铺（几何从存档来）。
+  `GetOrCreateTrackISM`每种mesh一个`RF_Transient`的ISM，重铺前先`ClearInstances`）。区别：轨道mesh轴心在中心（沿+X延伸），所以每块摆在自己的**中点**，朝向取起点→终点的3D方向（含坡度）。隧道没有专用标志，由mod直接把段的`mesh`换成隧道资产。读档时同样重铺（几何从存档来）。
 - `GenerateVehicles`每个组件实例只调用一次：新开局/读档都经`LoadMap`重建`AForeverFrameworkActor`及其组件，所以不需要清`carEntries`/`activeVehicles`/`activeTransitVehicles`；同一蓝图路径在公交分支只`LoadClass`一次，transit类与物理表示类共用结果。
 
 ## 脚本驱动的车辆导航（vehicle_navigate / vehicle_arrive）

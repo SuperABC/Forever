@@ -12,12 +12,15 @@
 
 using namespace std;
 
-// ---- TrainRoute::BuildTrack：过山判定和分段常量照抄roadnet_jing.cpp(JingRoadnet::buildArm)，
-// 两边数值需要保持一致，改动时一起看。 ----
-#define MOUNTAIN_MAX_SLOPE 0.5f
+// ---- TrainRoute::BuildTrack：隧道只按高度判定(与地形类型无关)，见route_train.md。1单位=10m：
+// 铁轨平时在z=1.5(15m)，地形高度>=该阈值的位置是"山"，轨道在山前TUNNEL_RAMP_LENGTH单位内从1.5降到-1.5(15m)，
+// 其中靠山的TUNNEL_HATCH_LENGTH单位向地形请求开口；间隙<TUNNEL_MIN_OPEN_LENGTH的两座山合并成一座(一直在隧道里)。 ----
 #define TERRAIN_FIT_FALLOFF 1.5f
-#define TUNNEL_HEIGHT -1.f
+#define TUNNEL_THRESHOLD_Z 1.5f
+#define TUNNEL_DROP -3.f
+#define TUNNEL_RAMP_LENGTH 16.f
 #define TUNNEL_HATCH_LENGTH 8.f
+#define TUNNEL_MIN_OPEN_LENGTH 32.f
 #define TRACK_SAMPLE_STEP 1.f
 
 // 车站两端各留这么多个采样点保持水平，不在车站范围内爬坡/下坡。
@@ -55,6 +58,10 @@ void TrainRoute::SetProperty() {
 }
 
 namespace {
+	// 车站外(站间铁轨、站端连接、边界半圆)铺的轨道资产(带底座)：枢轴在中心、沿局部+X延伸，meshUnit必须等于模型沿X的实际长度(地图单位，1单位=10m)。
+	// 车站里的轨道用station_train.h的kTrainTrackMesh/kTrainTrackUnit。
+	constexpr const char* kTrainBridgeMesh = "/Game/3rdParty/SM_ufekaevdw_tier_3/StaticMeshes/TrackBridge.TrackBridge";
+	constexpr float kTrainBridgeUnit = 0.25f;
 	constexpr int kVehiclesPerTrainLine = 4; // 每条火车线路上的车辆数
 	constexpr float kTrackGauge = 0.5f;    // 中轴线两侧两条铁轨之间的距离(地图单位，1单位=10m)
 	constexpr float kStationExtend = 2.f;  // 车站端口向外直线延伸到轴点的距离
@@ -103,6 +110,7 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		}
 		stations.push_back(std::move(station));
 	}
+	railPairs.clear();
 	if (stations.empty()) return;
 
 	// link：两个端点之间的完整几何由这里算好，Core只按它建曲线。同一条link被多条线路共用只加一次；每段都铺轨道mesh。
@@ -112,7 +120,7 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		RouteLinkSpec link;
 		link.from = from;
 		link.to = to;
-		for (TrackSegment& seg : segments) { seg.mesh = kTrainTrackMesh; seg.meshUnit = kTrainTrackUnit; }
+		for (TrackSegment& seg : segments) { seg.mesh = kTrainBridgeMesh; seg.meshUnit = kTrainBridgeUnit; }
 		link.segments = std::move(segments);
 		links.push_back(std::move(link));
 	};
@@ -165,8 +173,10 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		float arm = sqrtf((gb.px - ga.px) * (gb.px - ga.px) + (gb.py - ga.py) * (gb.py - ga.py)) / 3.f;
 		TrackSegment axis = MakeBezierSegment(ga.px, ga.py, ga.pz, ga.hx, ga.hy, gb.px, gb.py, gb.pz, -gb.hx, -gb.hy, arm);
 		vector<CurveSample> samples = SampleBezier(axis, kOffsetStep, ga.hx, ga.hy);
+		size_t before = links.size();
 		addLink(ExternOf(endName(a, ea, "out")), ExternOf(endName(b, eb, "in")), OffsetRail(samples, kHalfGauge, false, ga.pz, gb.pz, true));
 		addLink(ExternOf(endName(b, eb, "out")), ExternOf(endName(a, ea, "in")), OffsetRail(samples, -kHalfGauge, true, ga.pz, gb.pz, true));
+		if (links.size() == before + 2) railPairs.push_back({ static_cast<int>(before), static_cast<int>(before) + 1, SampleBezier(axis, TRACK_SAMPLE_STEP, ga.hx, ga.hy) });
 	};
 
 	// 沿station的端e向label边界('N'/'S'/'W'/'E')伸出再回来：中轴线从轴点P到边界垂足(从航向前进D/3的控制点到边界的垂足)，两条铁轨是它两侧的偏移，
@@ -229,8 +239,10 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		outbound.push_back(firstArc);
 		vector<TrackSegment> inbound = OffsetRail(samples, -kHalfGauge, true, end.pz, end.pz, true);
 		inbound.insert(inbound.begin(), secondArc);
+		size_t before = links.size();
 		addLink(ExternOf(endName(station, e, "out")), ExternOf(name), std::move(outbound));
 		addLink(ExternOf(name), ExternOf(endName(station, e, "in")), std::move(inbound));
+		if (links.size() == before + 2) railPairs.push_back({ static_cast<int>(before), static_cast<int>(before) + 1, SampleBezier(axis, TRACK_SAMPLE_STEP, end.hx, end.hy) });
 		return name;
 	};
 	// 航向主轴方向的边界。
@@ -329,235 +341,281 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 	const function<pair<bool, float>(int, int)>& getWater,
 	const function<float(float, float)>& getHeight) {
-	// 把一条链(同一条link里连续的terrainFollow段，首尾相接的平面三次贝塞尔+端点高度)按地形采样成最终几何：过山抬升/挖隧道。
-	// 整条链当成一条轨道处理：只有链首/链尾各TRACK_STATION_FLAT_SAMPLES个采样点保持水平，山和隧道在整条链上找。
-	auto refine = [&](const vector<TrackSegment>& chain, size_t linkIndex, vector<TrackSegment>& out) {
-		struct Point { float x, y, z; };
-		const TrackSegment& base = chain.front();
-		Point a{ base.x1, base.y1, base.z1 }, b{ chain.back().x2, chain.back().y2, chain.back().z2 };
-		float c1x = base.c1x, c1y = base.c1y, c2x = chain.back().c2x, c2y = chain.back().c2y;
+	// 隧道区：入口阈值点sIn、出口阈值点sOut(中轴线弧长，A->B方向)，tunnel=false表示这座山不钻隧道，沿山体爬升。
+	struct Zone { float sIn, sOut; bool tunnel; };
 
-		// 逐段细采样，累计弧长。
-		vector<float> fineX, fineY, fineArc;
-		for (size_t k = 0; k < chain.size(); k++) {
-			const TrackSegment& seg = chain[k];
-			float chord = sqrtf((seg.x2 - seg.x1) * (seg.x2 - seg.x1) + (seg.y2 - seg.y1) * (seg.y2 - seg.y1));
-			int fine = max(16, static_cast<int>(ceilf(chord * 8.f)));
-			for (int i = (k == 0 ? 0 : 1); i <= fine; i++) {
-				float t = static_cast<float>(i) / static_cast<float>(fine), m = 1.f - t;
-				float x = m * m * m * seg.x1 + 3.f * m * m * t * seg.c1x + 3.f * m * t * t * seg.c2x + t * t * t * seg.x2;
-				float y = m * m * m * seg.y1 + 3.f * m * m * t * seg.c1y + 3.f * m * t * t * seg.c2y + t * t * t * seg.y2;
-				float length = fineArc.empty() ? 0.f : fineArc.back() + sqrtf((x - fineX.back()) * (x - fineX.back()) + (y - fineY.back()) * (y - fineY.back()));
-				fineX.push_back(x); fineY.push_back(y); fineArc.push_back(length);
+	for (const RailPair& railPair : railPairs) {
+		const vector<CurveSample>& mid = railPair.midline;
+		size_t midCount = mid.size();
+		if (midCount < 2) continue;
+
+		// ---- 中轴线：按弧长累计，沿线取高度。只看高度，与地形类型无关。 ----
+		vector<float> midArc(midCount, 0.f), midHeight(midCount);
+		for (size_t i = 0; i < midCount; i++) {
+			if (i > 0) midArc[i] = midArc[i - 1] + sqrtf((mid[i].x - mid[i - 1].x) * (mid[i].x - mid[i - 1].x) + (mid[i].y - mid[i - 1].y) * (mid[i].y - mid[i - 1].y));
+			midHeight[i] = getHeight(mid[i].x, mid[i].y);
+		}
+		const float midLength = midArc.back();
+		if (midLength < 1e-3f) continue;
+
+		// ---- 切出每座山：连续高度>=阈值的采样点。间隙<TUNNEL_MIN_OPEN_LENGTH的两座山并成一座(两座山之间，不出地面)。 ----
+		struct Span { int first, last; };
+		vector<Span> spans;
+		for (int i = 0; i < static_cast<int>(midCount); i++) {
+			if (midHeight[i] < TUNNEL_THRESHOLD_Z) continue;
+			int first = i;
+			while (i + 1 < static_cast<int>(midCount) && midHeight[i + 1] >= TUNNEL_THRESHOLD_Z) i++;
+			if (!spans.empty() && midArc[first] - midArc[spans.back().last] < TUNNEL_MIN_OPEN_LENGTH) spans.back().last = i;
+			else spans.push_back({ first, i });
+		}
+		// 阈值点距链首/链尾(车站端中轴线起点)不足坡道长度，坡道放不下：这座山沿山体爬升，地形贴合轨道。
+		vector<Zone> zones;
+		for (const Span& span : spans) {
+			Zone zone{ midArc[span.first], midArc[span.last], true };
+			if (zone.sIn < TUNNEL_RAMP_LENGTH || midLength - zone.sOut < TUNNEL_RAMP_LENGTH) zone.tunnel = false;
+			zones.push_back(zone);
+			debugf("Log: TrainRoute pair (%d,%d) mountain arc [%.1f,%.1f] of %.1f -> %s.\n",
+				railPair.right, railPair.left, zone.sIn, zone.sOut, midLength, zone.tunnel ? "tunnel" : "raise");
+		}
+
+		// 中轴线弧长s处的下沉比例(0=地面，1=隧道底)和它对s的导数。
+		auto depthAt = [&](float s, float& dDepth) {
+			dDepth = 0.f;
+			for (const Zone& zone : zones) {
+				if (!zone.tunnel) continue;
+				if (s > zone.sIn - TUNNEL_RAMP_LENGTH && s < zone.sIn) {
+					float u = (s - (zone.sIn - TUNNEL_RAMP_LENGTH)) / TUNNEL_RAMP_LENGTH;
+					dDepth = 6.f * u * (1.f - u) / TUNNEL_RAMP_LENGTH;
+					return SmoothStep(u);
+				}
+				if (s >= zone.sIn && s <= zone.sOut) return 1.f;
+				if (s > zone.sOut && s < zone.sOut + TUNNEL_RAMP_LENGTH) {
+					float u = (s - zone.sOut) / TUNNEL_RAMP_LENGTH;
+					dDepth = -6.f * u * (1.f - u) / TUNNEL_RAMP_LENGTH;
+					return 1.f - SmoothStep(u);
+				}
 			}
-		}
-		int fine = static_cast<int>(fineArc.size()) - 1;
-		float totalLength = fineArc[fine];
-		if (totalLength < 1e-3f) { for (const TrackSegment& seg : chain) out.push_back(seg); return; }
-
-		int count = max(1, static_cast<int>(ceilf(totalLength / TRACK_SAMPLE_STEP)));
-		vector<float> sx(count + 1), sy(count + 1), arc(count + 1);
-		{
-			int cursor = 0;
-			for (int i = 0; i <= count; i++) {
-				float target = totalLength * static_cast<float>(i) / static_cast<float>(count);
-				while (cursor + 1 < fine && fineArc[cursor + 1] < target) cursor++;
-				float span = fineArc[cursor + 1] - fineArc[cursor];
-				float f = span > 1e-9f ? (target - fineArc[cursor]) / span : 0.f;
-				sx[i] = fineX[cursor] + (fineX[cursor + 1] - fineX[cursor]) * f;
-				sy[i] = fineY[cursor] + (fineY[cursor + 1] - fineY[cursor]) * f;
-				arc[i] = target;
-			}
-			sx[0] = a.x; sy[0] = a.y; sx[count] = b.x; sy[count] = b.y;
-		}
-
-		// 拆掉沿线相交的楼体/园区(Core按请求拆，带stationMod的建筑除外)，条带宽=轨道宽。
-		{
-			vector<pair<float, float>> centerline(count + 1);
-			for (int i = 0; i <= count; i++) centerline[i] = { sx[i], sy[i] };
-			AddDemolition(centerline, trackWidth);
-		}
-
-		// ---- 第一遍：每个采样点的地形类型和高度。getTerrain返回""(出图)按平地处理——地图边缘站点正好
-		// 落在边界上。 ----
-		vector<string> terr(count + 1);
-		vector<float> heights(count + 1);
-		for (int i = 0; i <= count; i++) {
-			terr[i] = getTerrain(static_cast<int>(floorf(sx[i])), static_cast<int>(floorf(sy[i])));
-			heights[i] = getHeight(sx[i], sy[i]);
-		}
-		auto isGood = [&](int k) { return terr[k] == "" || terr[k] == "plain" || terr[k] == "construction"; };
-		auto allGood = [&](int from, int to) {
-			for (int i = from; i <= to; i++) if (!isGood(i)) return false;
-			return true;
+			return 0.f;
+		};
+		auto inRaise = [&](float s) {
+			for (const Zone& zone : zones) if (!zone.tunnel && s >= zone.sIn && s <= zone.sOut) return true;
+			return false;
 		};
 
-		// ---- 切出每座山并决定做法(抬升/隧道)，规则同buildArm。 ----
-		struct TunnelSpan { int p; int tIn; int tOut; int q; };
-		vector<TunnelSpan> tunnels;
-		vector<bool> raised(count + 1, false);
-		const int rampSamples = static_cast<int>(ceilf(TUNNEL_HATCH_LENGTH / TRACK_SAMPLE_STEP));
-		const int lastMountainSample = count - TRACK_STATION_FLAT_SAMPLES;
-		int lastQ = TRACK_STATION_FLAT_SAMPLES;
-		for (int k = TRACK_STATION_FLAT_SAMPLES; k <= lastMountainSample; ) {
-			if (terr[k] != "terrain_mountain") { k++; continue; }
-			int first = k;
-			while (k + 1 <= lastMountainSample && terr[k + 1] == "terrain_mountain") k++;
-			int last = k;
-			k++;
-
-			float maxSlope = 0.f;
-			int from = max(0, first - 1), to = min(count, last + 1);
-			for (int i = from; i < to; i++) {
-				maxSlope = max(maxSlope, fabsf(heights[i + 1] - heights[i]) / max(1e-3f, arc[i + 1] - arc[i]));
-			}
-			bool seaBehind = last + 1 <= count && terr[last + 1] == "terrain_ocean";
-			bool raise = seaBehind || maxSlope <= MOUNTAIN_MAX_SLOPE;
-			if (!raise) {
-				TunnelSpan span{ first - 1 - rampSamples, first - 1, last + 1, last + 1 + rampSamples };
-				bool roomBefore = span.p >= lastQ && allGood(span.p, span.tIn);
-				bool roomAfter = span.q <= lastMountainSample && allGood(span.tOut, span.q);
-				if (roomBefore && roomAfter) {
-					tunnels.push_back(span);
-					lastQ = span.q;
-				}
-				else {
-					raise = true;
-				}
-			}
-			if (raise) {
-				for (int i = first; i <= last; i++) raised[i] = true;
-			}
-			debugf("Log: TrainRoute link %d mountain samples [%d,%d] max slope %.3f sea behind %d -> %s.\n",
-				static_cast<int>(linkIndex), first, last, maxSlope, seaBehind ? 1 : 0, raise ? "raise" : "tunnel");
-		}
-
-		// ---- 每个采样点的高度、坡度(Z每水平单位的变化量)和归类。基准高度在两端站点z之间线性过渡。 ----
-		vector<float> z(count + 1), slope(count + 1, 0.f);
-		vector<char> inTunnelLevel(count + 1, 0), inRamp(count + 1, 0);
-		for (int i = 0; i <= count; i++) {
-			float base = a.z + (b.z - a.z) * (arc[i] / totalLength);
-			z[i] = raised[i] ? max(heights[i], base) : base;
-		}
-		for (const TunnelSpan& t : tunnels) {
-			for (int i = t.p; i <= t.q; i++) {
-				float base = a.z + (b.z - a.z) * (arc[i] / totalLength);
-				float depth;
-				float dDepth = 0.f; // 深度对弧长的导数
-				if (i <= t.tIn) {
-					float u = static_cast<float>(i - t.p) / static_cast<float>(t.tIn - t.p);
-					depth = SmoothStep(u);
-					dDepth = 6.f * u * (1.f - u) / (arc[t.tIn] - arc[t.p]);
-				}
-				else if (i < t.tOut) {
-					depth = 1.f;
-				}
-				else {
-					float u = static_cast<float>(i - t.tOut) / static_cast<float>(t.q - t.tOut);
-					depth = 1.f - SmoothStep(u);
-					dDepth = -6.f * u * (1.f - u) / (arc[t.q] - arc[t.tOut]);
-				}
-				z[i] = base + TUNNEL_HEIGHT * depth;
-				slope[i] = TUNNEL_HEIGHT * dDepth;
-				if (i >= t.tIn && i <= t.tOut) inTunnelLevel[i] = 1;
-				else inRamp[i] = 1;
-			}
-		}
-		// 抬升段的坡度取前后相邻点连线的坡度(Catmull-Rom)；山脚/平地/两端取0，不带着惯性冲到基准以下。
-		for (int i = 1; i < count; i++) {
-			if (!raised[i]) continue;
-			float run = arc[i + 1] - arc[i - 1];
-			slope[i] = run > 1e-6f ? (z[i + 1] - z[i - 1]) / run : 0.f;
-		}
-
-		// ---- 第二遍：每相邻两点一段三次贝塞尔(平面上用Catmull-Rom切线做Hermite，相邻段切线连续；Z用端点坡度做Hermite)，坡度夹到单调范围
-		// (与这段高度差同号、不超过3倍平均坡度)，三次曲线不会冲出两端高度。完全水平且共线的连续
-		// 采样点合并成一段，不然火车几百单位的线路会有几百个无谓的小段。 ----
-		auto segmentTag = [&](int i) -> int { // 相邻两点(i,i+1)这一段的归类，合并只能在同类里进行
-			if (inTunnelLevel[i] && inTunnelLevel[i + 1]) return 3;
-			if (raised[i] || raised[i + 1]) return 1;
-			if (inRamp[i] || inRamp[i + 1] || inTunnelLevel[i] || inTunnelLevel[i + 1]) return 2;
-			return 0;
-		};
-		auto isFlat = [&](int i) {
-			return fabsf(z[i] - z[i + 1]) < 1e-4f && fabsf(slope[i]) < 1e-6f && fabsf(slope[i + 1]) < 1e-6f;
-		};
-
-		// 每个采样点的平面切线(Catmull-Rom：前后相邻采样点连线的方向)，两端取基础曲线自己的出发/到达方向。
-		// 相邻两段共用同一条切线，接缝处航向连续，火车过接缝时不会突然转几度。
-		vector<float> tanX(count + 1), tanY(count + 1);
-		for (int k = 0; k <= count; k++) {
-			float dirX, dirY;
-			if (k == 0) { dirX = c1x - a.x; dirY = c1y - a.y; }
-			else if (k == count) { dirX = b.x - c2x; dirY = b.y - c2y; }
-			else { dirX = sx[k + 1] - sx[k - 1]; dirY = sy[k + 1] - sy[k - 1]; }
-			float dirLength = sqrtf(dirX * dirX + dirY * dirY);
-			if (dirLength < 1e-6f) { dirX = sx[min(k + 1, count)] - sx[max(k - 1, 0)]; dirY = sy[min(k + 1, count)] - sy[max(k - 1, 0)]; dirLength = sqrtf(dirX * dirX + dirY * dirY); }
-			tanX[k] = dirLength > 1e-6f ? dirX / dirLength : 0.f;
-			tanY[k] = dirLength > 1e-6f ? dirY / dirLength : 0.f;
-		}
-
-		int i = 0;
-		while (i < count) {
-			int j = i + 1;
-			if (isFlat(i)) {
-				int tag = segmentTag(i);
-				while (j < count && isFlat(j) && segmentTag(j) == tag && fabsf(z[j + 1] - z[i]) < 1e-4f) {
-					// 候选终点j+1：中间点都要贴着弦(偏差<0.01单位)
-					float dx = sx[j + 1] - sx[i], dy = sy[j + 1] - sy[i];
-					float len = sqrtf(dx * dx + dy * dy);
-					bool straight = len > 1e-6f;
-					for (int m = i + 1; m <= j && straight; m++) {
-						float dev = fabsf((sx[m] - sx[i]) * dy - (sy[m] - sy[i]) * dx) / len;
-						if (dev > 0.01f) straight = false;
-					}
-					if (!straight) break;
-					j++;
-				}
-			}
-
-			float dx = sx[j] - sx[i], dy = sy[j] - sy[i];
+		// 相邻两点一段三次贝塞尔：平面用给定切线做Hermite，Z用端点坡度做Hermite，坡度夹到单调范围
+		// (与这段高度差同号、不超过3倍平均坡度)，三次曲线不会冲出两端高度。
+		auto makeSegment = [&](float x1, float y1, float z1, float t1x, float t1y, float slope1,
+			float x2, float y2, float z2, float t2x, float t2y, float slope2) {
+			float dx = x2 - x1, dy = y2 - y1;
 			float run = sqrtf(dx * dx + dy * dy);
-			float delta = run > 1e-6f ? (z[j] - z[i]) / run : 0.f;
+			float delta = run > 1e-6f ? (z2 - z1) / run : 0.f;
 			auto monotone = [delta](float s) {
 				if (delta == 0.f) return 0.f;
 				float aligned = s * (delta > 0.f ? 1.f : -1.f);
 				aligned = max(0.f, min(aligned, 3.f * fabsf(delta)));
 				return aligned * (delta > 0.f ? 1.f : -1.f);
 			};
-			float startSlope = monotone(slope[i]), endSlope = monotone(slope[j]);
-
 			TrackSegment seg;
-			seg.x1 = sx[i]; seg.y1 = sy[i]; seg.z1 = z[i];
-			seg.c1x = sx[i] + tanX[i] * run / 3.f; seg.c1y = sy[i] + tanY[i] * run / 3.f; seg.c1z = z[i] + startSlope * run / 3.f;
-			seg.c2x = sx[j] - tanX[j] * run / 3.f; seg.c2y = sy[j] - tanY[j] * run / 3.f; seg.c2z = z[j] - endSlope * run / 3.f;
-			seg.x2 = sx[j]; seg.y2 = sy[j]; seg.z2 = z[j];
-			seg.mesh = base.mesh;
-			seg.meshUnit = base.meshUnit;
-			out.push_back(seg);
+			seg.x1 = x1; seg.y1 = y1; seg.z1 = z1;
+			seg.c1x = x1 + t1x * run / 3.f; seg.c1y = y1 + t1y * run / 3.f; seg.c1z = z1 + monotone(slope1) * run / 3.f;
+			seg.c2x = x2 - t2x * run / 3.f; seg.c2y = y2 - t2y * run / 3.f; seg.c2z = z2 - monotone(slope2) * run / 3.f;
+			seg.x2 = x2; seg.y2 = y2; seg.z2 = z2;
+			return seg;
+		};
 
-			// 请求：抬升段贴地；隧道口(坡道，tag 2)挖带侧壁的洞。水平隧道段在山体里面不挖。
-			int tag = segmentTag(i);
-			if (tag == 1 || tag == 2) {
+		// ---- 一条铁轨：reversed=false沿中轴线A->B走，true沿B->A走。把整条链(同一条link里连续的terrainFollow段)采样成最终几何：
+		// 隧道下沉剖面直接由中轴线上的zone按弧长比例换算，两条铁轨同进同出。 ----
+		auto refine = [&](const vector<TrackSegment>& chain, bool reversed, vector<TrackSegment>& out) {
+			const TrackSegment& base = chain.front();
+			struct Point { float x, y, z; };
+			Point a{ base.x1, base.y1, base.z1 }, b{ chain.back().x2, chain.back().y2, chain.back().z2 };
+			float c1x = base.c1x, c1y = base.c1y, c2x = chain.back().c2x, c2y = chain.back().c2y;
+
+			// 逐段细采样，累计弧长。
+			vector<float> fineX, fineY, fineArc;
+			for (size_t k = 0; k < chain.size(); k++) {
+				const TrackSegment& seg = chain[k];
+				float chord = sqrtf((seg.x2 - seg.x1) * (seg.x2 - seg.x1) + (seg.y2 - seg.y1) * (seg.y2 - seg.y1));
+				int fine = max(16, static_cast<int>(ceilf(chord * 8.f)));
+				for (int i = (k == 0 ? 0 : 1); i <= fine; i++) {
+					float t = static_cast<float>(i) / static_cast<float>(fine), m = 1.f - t;
+					float x = m * m * m * seg.x1 + 3.f * m * m * t * seg.c1x + 3.f * m * t * t * seg.c2x + t * t * t * seg.x2;
+					float y = m * m * m * seg.y1 + 3.f * m * m * t * seg.c1y + 3.f * m * t * t * seg.c2y + t * t * t * seg.y2;
+					float length = fineArc.empty() ? 0.f : fineArc.back() + sqrtf((x - fineX.back()) * (x - fineX.back()) + (y - fineY.back()) * (y - fineY.back()));
+					fineX.push_back(x); fineY.push_back(y); fineArc.push_back(length);
+				}
+			}
+			int fine = static_cast<int>(fineArc.size()) - 1;
+			float totalLength = fineArc[fine];
+			if (totalLength < 1e-3f) { for (const TrackSegment& seg : chain) out.push_back(seg); return; }
+
+			int count = max(1, static_cast<int>(ceilf(totalLength / TRACK_SAMPLE_STEP)));
+			vector<float> sx(count + 1), sy(count + 1), arc(count + 1);
+			{
+				int cursor = 0;
+				for (int i = 0; i <= count; i++) {
+					float target = totalLength * static_cast<float>(i) / static_cast<float>(count);
+					while (cursor + 1 < fine && fineArc[cursor + 1] < target) cursor++;
+					float span = fineArc[cursor + 1] - fineArc[cursor];
+					float f = span > 1e-9f ? (target - fineArc[cursor]) / span : 0.f;
+					sx[i] = fineX[cursor] + (fineX[cursor + 1] - fineX[cursor]) * f;
+					sy[i] = fineY[cursor] + (fineY[cursor + 1] - fineY[cursor]) * f;
+					arc[i] = target;
+				}
+				sx[0] = a.x; sy[0] = a.y; sx[count] = b.x; sy[count] = b.y;
+			}
+
+			// 拆掉沿线相交的楼体/园区(Core按请求拆，带stationMod的建筑除外)，条带宽=轨道宽。
+			{
+				vector<pair<float, float>> centerline(count + 1);
+				for (int i = 0; i <= count; i++) centerline[i] = { sx[i], sy[i] };
+				AddDemolition(centerline, trackWidth);
+			}
+
+			// ---- 每个采样点的高度、坡度(Z每水平单位的变化量)和归类。基准高度在两端站点z之间线性过渡。 ----
+			// 采样点对应的中轴线弧长sMid；铁轨弧长比中轴线略长/短(弯道内外侧)，按比例换算。反向铁轨沿中轴线倒着走，深度导数反号。
+			const float dirSign = reversed ? -1.f : 1.f;
+			vector<float> z(count + 1), slope(count + 1, 0.f);
+			vector<char> raised(count + 1, 0), inTunnelLevel(count + 1, 0), inRamp(count + 1, 0);
+			for (int i = 0; i <= count; i++) {
+				float fraction = arc[i] / totalLength;
+				float sMid = (reversed ? 1.f - fraction : fraction) * midLength;
+				float base = a.z + (b.z - a.z) * fraction;
+				float dDepth;
+				float depth = depthAt(sMid, dDepth);
+				// 链首/链尾各TRACK_STATION_FLAT_SAMPLES个采样点保持水平，不在车站范围内爬坡。
+				bool flatEnd = i < TRACK_STATION_FLAT_SAMPLES || i > count - TRACK_STATION_FLAT_SAMPLES;
+				if (!flatEnd && inRaise(sMid)) {
+					raised[i] = 1;
+					z[i] = max(getHeight(sx[i], sy[i]), base);
+				}
+				else {
+					z[i] = base + TUNNEL_DROP * depth;
+					slope[i] = TUNNEL_DROP * dDepth * dirSign * midLength / totalLength;
+					if (depth >= 1.f) inTunnelLevel[i] = 1;
+					else if (depth > 0.f) inRamp[i] = 1;
+				}
+			}
+			// 抬升段的坡度取前后相邻点连线的坡度(Catmull-Rom)；山脚/平地/两端取0，不带着惯性冲到基准以下。
+			for (int i = 1; i < count; i++) {
+				if (!raised[i]) continue;
+				float run = arc[i + 1] - arc[i - 1];
+				slope[i] = run > 1e-6f ? (z[i + 1] - z[i - 1]) / run : 0.f;
+			}
+
+			// 完全水平且共线的连续采样点合并成一段，不然火车几百单位的线路会有几百个无谓的小段。
+			auto segmentTag = [&](int i) -> int { // 相邻两点(i,i+1)这一段的归类，合并只能在同类里进行
+				if (inTunnelLevel[i] && inTunnelLevel[i + 1]) return 3;
+				if (raised[i] || raised[i + 1]) return 1;
+				if (inRamp[i] || inRamp[i + 1] || inTunnelLevel[i] || inTunnelLevel[i + 1]) return 2;
+				return 0;
+			};
+			auto isFlat = [&](int i) {
+				return fabsf(z[i] - z[i + 1]) < 1e-4f && fabsf(slope[i]) < 1e-6f && fabsf(slope[i + 1]) < 1e-6f;
+			};
+
+			// 每个采样点的平面切线(Catmull-Rom：前后相邻采样点连线的方向)，两端取基础曲线自己的出发/到达方向。
+			// 相邻两段共用同一条切线，接缝处航向连续，火车过接缝时不会突然转几度。
+			vector<float> tanX(count + 1), tanY(count + 1);
+			for (int k = 0; k <= count; k++) {
+				float dirX, dirY;
+				if (k == 0) { dirX = c1x - a.x; dirY = c1y - a.y; }
+				else if (k == count) { dirX = b.x - c2x; dirY = b.y - c2y; }
+				else { dirX = sx[k + 1] - sx[k - 1]; dirY = sy[k + 1] - sy[k - 1]; }
+				float dirLength = sqrtf(dirX * dirX + dirY * dirY);
+				if (dirLength < 1e-6f) { dirX = sx[min(k + 1, count)] - sx[max(k - 1, 0)]; dirY = sy[min(k + 1, count)] - sy[max(k - 1, 0)]; dirLength = sqrtf(dirX * dirX + dirY * dirY); }
+				tanX[k] = dirLength > 1e-6f ? dirX / dirLength : 0.f;
+				tanY[k] = dirLength > 1e-6f ? dirY / dirLength : 0.f;
+			}
+
+			int i = 0;
+			while (i < count) {
+				int j = i + 1;
+				if (isFlat(i)) {
+					int tag = segmentTag(i);
+					while (j < count && isFlat(j) && segmentTag(j) == tag && fabsf(z[j + 1] - z[i]) < 1e-4f) {
+						// 候选终点j+1：中间点都要贴着弦(偏差<0.01单位)
+						float dx = sx[j + 1] - sx[i], dy = sy[j + 1] - sy[i];
+						float len = sqrtf(dx * dx + dy * dy);
+						bool straight = len > 1e-6f;
+						for (int m = i + 1; m <= j && straight; m++) {
+							float dev = fabsf((sx[m] - sx[i]) * dy - (sy[m] - sy[i]) * dx) / len;
+							if (dev > 0.01f) straight = false;
+						}
+						if (!straight) break;
+						j++;
+					}
+				}
+
+				TrackSegment seg = makeSegment(sx[i], sy[i], z[i], tanX[i], tanY[i], slope[i], sx[j], sy[j], z[j], tanX[j], tanY[j], slope[j]);
+				seg.mesh = base.mesh;
+				seg.meshUnit = base.meshUnit;
+				out.push_back(seg);
+
+				// 抬升段(tag 1)贴地；隧道口的洞由中轴线统一挖(见下)，水平隧道段在山体里面不挖。
+				if (segmentTag(i) == 1) {
+					Connection chordConnection(Node("route", seg.x1, seg.y1, seg.z1), Node("route", seg.x2, seg.y2, seg.z2));
+					chordConnection.AddControls({ { Node("route_ctrl", seg.c1x, seg.c1y, seg.c1z), 1.f }, { Node("route_ctrl", seg.c2x, seg.c2y, seg.c2z), 1.f } });
+					AddTerrainFit(&chordConnection, 0.f, 1.f, trackWidth, TERRAIN_FIT_FALLOFF);
+				}
+				i = j;
+			}
+		};
+
+		// 两条铁轨：右轨沿A->B(中轴线方向)，左轨沿B->A(倒着走)。
+		for (int side = 0; side < 2; side++) {
+			size_t linkIndex = static_cast<size_t>(side == 0 ? railPair.right : railPair.left);
+			vector<TrackSegment> refined;
+			const vector<TrackSegment>& segments = links[linkIndex].segments;
+			for (size_t k = 0; k < segments.size(); ) {
+				if (!segments[k].terrainFollow) { refined.push_back(segments[k]); k++; continue; }
+				size_t end = k;
+				while (end < segments.size() && segments[end].terrainFollow) end++;
+				refine(vector<TrackSegment>(segments.begin() + k, segments.begin() + end), side == 1, refined);
+				k = end;
+			}
+			links[linkIndex].segments = std::move(refined);
+		}
+
+		// ---- 隧道口开洞：由中轴线统一请求(两条铁轨合起来的宽度)，每个隧道口坡道靠山的TUNNEL_HATCH_LENGTH单位。
+		// 沿中轴线每1单位一段，z取下沉剖面。 ----
+		float zStart = 0.f, zEnd = 0.f;
+		{
+			const vector<TrackSegment>& rightSegments = links[static_cast<size_t>(railPair.right)].segments;
+			zStart = rightSegments.front().z1;
+			for (auto it = rightSegments.rbegin(); it != rightSegments.rend(); ++it) {
+				if (it->terrainFollow || it == rightSegments.rbegin()) { zEnd = it->z2; break; }
+			}
+		}
+		auto midAt = [&](float s, float& x, float& y, float& tx, float& ty) {
+			float u = max(0.f, min(1.f, s / midLength)) * static_cast<float>(midCount - 1);
+			size_t i = min(static_cast<size_t>(u), midCount - 2);
+			float f = u - static_cast<float>(i);
+			x = mid[i].x + (mid[i + 1].x - mid[i].x) * f; y = mid[i].y + (mid[i + 1].y - mid[i].y) * f;
+			tx = mid[i].tx + (mid[i + 1].tx - mid[i].tx) * f; ty = mid[i].ty + (mid[i + 1].ty - mid[i].ty) * f;
+			float length = sqrtf(tx * tx + ty * ty);
+			if (length > 1e-6f) { tx /= length; ty /= length; }
+		};
+		auto hatchRange = [&](float s1, float s2) {
+			int pieces = max(1, static_cast<int>(ceilf((s2 - s1) / TRACK_SAMPLE_STEP)));
+			for (int p = 0; p < pieces; p++) {
+				float sa = s1 + (s2 - s1) * static_cast<float>(p) / static_cast<float>(pieces);
+				float sb = s1 + (s2 - s1) * static_cast<float>(p + 1) / static_cast<float>(pieces);
+				float xa, ya, txa, tya, xb, yb, txb, tyb, dA, dB;
+				midAt(sa, xa, ya, txa, tya); midAt(sb, xb, yb, txb, tyb);
+				float depthA = depthAt(sa, dA), depthB = depthAt(sb, dB);
+				float baseA = zStart + (zEnd - zStart) * sa / midLength, baseB = zStart + (zEnd - zStart) * sb / midLength;
+				TrackSegment seg = makeSegment(xa, ya, baseA + TUNNEL_DROP * depthA, txa, tya, TUNNEL_DROP * dA,
+					xb, yb, baseB + TUNNEL_DROP * depthB, txb, tyb, TUNNEL_DROP * dB);
 				Connection chordConnection(Node("route", seg.x1, seg.y1, seg.z1), Node("route", seg.x2, seg.y2, seg.z2));
 				chordConnection.AddControls({ { Node("route_ctrl", seg.c1x, seg.c1y, seg.c1z), 1.f }, { Node("route_ctrl", seg.c2x, seg.c2y, seg.c2z), 1.f } });
-				if (tag == 1) AddTerrainFit(&chordConnection, 0.f, 1.f, trackWidth, TERRAIN_FIT_FALLOFF);
-				else AddTunnelHatch(&chordConnection, 0.f, 1.f, trackWidth);
+				AddTunnelHatch(&chordConnection, 0.f, 1.f, 2.f * kTrackGauge);
 			}
-			i = j;
+		};
+		for (const Zone& zone : zones) {
+			if (!zone.tunnel) continue;
+			hatchRange(zone.sIn - TUNNEL_HATCH_LENGTH, zone.sIn);
+			hatchRange(zone.sOut, zone.sOut + TUNNEL_HATCH_LENGTH);
 		}
-	};
-
-	for (size_t linkIndex = 0; linkIndex < links.size(); linkIndex++) {
-		vector<TrackSegment> refined;
-		const vector<TrackSegment>& segments = links[linkIndex].segments;
-		for (size_t k = 0; k < segments.size(); ) {
-			if (!segments[k].terrainFollow) { refined.push_back(segments[k]); k++; continue; }
-			size_t end = k;
-			while (end < segments.size() && segments[end].terrainFollow) end++;
-			refine(vector<TrackSegment>(segments.begin() + k, segments.begin() + end), linkIndex, refined);
-			k = end;
-		}
-		links[linkIndex].segments = std::move(refined);
 	}
 }

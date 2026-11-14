@@ -1023,10 +1023,10 @@ void UForeverTrafficFrameworkComponent::BuildTracks(Traffic* traffic) {
 					FVector startW(start.GetX() * TRAFFIC_WORLD_SCALE, start.GetY() * TRAFFIC_WORLD_SCALE, start.GetZ() * TRAFFIC_WORLD_SCALE);
 					FVector endW(end.GetX() * TRAFFIC_WORLD_SCALE, end.GetY() * TRAFFIC_WORLD_SCALE, end.GetZ() * TRAFFIC_WORLD_SCALE);
 
-					// 轨道mesh沿局部+X延伸、轴心在起点边：摆在块的起点，朝向取起点->终点的3D方向。
+					// 轨道mesh沿局部+X延伸、轴心在中心：摆在块的中点，朝向取起点->终点的3D方向。
 					FVector fwd = (endW - startW).GetSafeNormal();
 					if (fwd.IsNearlyZero()) fwd = FVector::ForwardVector;
-					ism->AddInstance(FTransform(fwd.Rotation(), startW, FVector(scaleAlong, 1.f, 1.f)));
+					ism->AddInstance(FTransform(fwd.Rotation(), (startW + endW) * 0.5f, FVector(scaleAlong, 1.f, 1.f)));
 					instanceCount++;
 				}
 			}

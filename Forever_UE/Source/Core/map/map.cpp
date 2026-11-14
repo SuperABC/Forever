@@ -2245,6 +2245,11 @@ std::vector<TerrainHatch> Map::GetTunnelWallHatches() const {
 	return result;
 }
 
+void Map::AddRouteHatch(const TerrainHatch& hatch) {
+	AddHatch(hatch);
+	if (hatch.wall && roadnet) roadnet->AppendHatch(hatch);
+}
+
 void Map::AddHatch(const TerrainHatch& hatch) {
 	const Quad& q = hatch.quad;
 	float rotation = hatch.rotation;

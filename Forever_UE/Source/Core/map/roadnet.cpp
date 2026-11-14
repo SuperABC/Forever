@@ -343,6 +343,10 @@ const vector<TerrainHatch>& Roadnet::GetHatches() const {
 	return hatches;
 }
 
+void Roadnet::AppendHatch(const TerrainHatch& hatch) {
+	hatches.push_back(hatch);
+}
+
 const vector<TerrainFitRequest>& Roadnet::GetTerrainFits() const {
 	return terrainFits;
 }

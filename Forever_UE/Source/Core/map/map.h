@@ -78,6 +78,8 @@ public:
 	// 自动分发到所有与q重叠的element(按q的旋转AABB计算重叠范围)。
 	void AddHatch(Quad q, float rotation);
 	void AddHatch(const TerrainHatch& hatch);
+	// 线路(火车隧道)用：AddHatch之外，带侧壁的hatch(wall=true)再记进roadnet的hatches，这样GetTunnelWallHatches拿得到、存档里也有。
+	void AddRouteHatch(const TerrainHatch& hatch);
 
 	// 路网里带侧壁的hatch(隧道口，wall=true)，UE层据此生成侧壁mesh。roadnet为空返回空；读档后
 	// roadnet的hatches还在，所以也能拿到。
