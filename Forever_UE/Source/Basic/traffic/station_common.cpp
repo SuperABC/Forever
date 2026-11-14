@@ -24,3 +24,26 @@ float AlongAxisHeadingDegrees(int direction, bool towardIncreasing) {
 	float baseDegrees = alongIsYAxis ? 90.f : 0.f;
 	return towardIncreasing ? baseDegrees : baseDegrees + 180.f;
 }
+
+StationCurveSpec StraightCurve(const PointParams& from, const PointParams& to, float z, const string& mesh, float meshUnit) {
+	StationCurveSpec curve;
+	curve.p1 = from;
+	curve.p2 = to;
+	for (int i = 0; i < 4; i++) {
+		curve.c1[i] = from[i] + (to[i] - from[i]) / 3.f;
+		curve.c2[i] = from[i] + (to[i] - from[i]) * 2.f / 3.f;
+	}
+	curve.z1 = curve.c1z = curve.c2z = curve.z2 = z;
+	curve.mesh = mesh;
+	curve.meshUnit = meshUnit;
+	return curve;
+}
+
+StationConnectionSpec StraightConnection(PortKind fromKind, int fromIndex, const PointParams& from,
+	PortKind toKind, int toIndex, const PointParams& to, float z, const string& mesh, float meshUnit) {
+	StationConnectionSpec connection;
+	connection.fromKind = fromKind; connection.fromIndex = fromIndex;
+	connection.toKind = toKind; connection.toIndex = toIndex;
+	connection.curves.push_back(StraightCurve(from, to, z, mesh, meshUnit));
+	return connection;
+}

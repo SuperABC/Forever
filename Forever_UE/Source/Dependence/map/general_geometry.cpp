@@ -509,6 +509,16 @@ const vector<RoadOpening>& Road::GetOpenings() const {
 	return openings;
 }
 
+bool Road::RemoveOpening(float t, bool isVehicle) {
+	for (size_t i = 0; i < openings.size(); i++) {
+		if (openings[i].isVehicle == isVehicle && fabsf(openings[i].t - t) < 1e-5f) {
+			openings.erase(openings.begin() + i);
+			return true;
+		}
+	}
+	return false;
+}
+
 void Road::SetPathRoad(bool isPath) {
 	isPathRoad = isPath;
 }

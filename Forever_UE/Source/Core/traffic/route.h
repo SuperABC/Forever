@@ -6,20 +6,43 @@
 #include "traffic/route_factory.h"
 #include "traffic/station.h"
 
+#include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 
+// 一条连续的路径：按行驶顺序首尾相接的Connection链。站内连线、站间连线、公交借用的路网车道都是它，shared_ptr共享。
+// segments是mod给的几何值(存档/UE铺轨用，借用路网的链为空)；owned标记connections是不是自己new出来的(析构要delete)，
+// 借用Station旁路(inEdge/outEdge)或Map既有车道图(FindVehiclePath结果)的不持有所有权。
+struct TrackPath {
+	std::vector<TrackSegment> segments;
+	std::vector<Connection*> connections;
+	std::vector<float> lengths; // 每个connection的CalcDistance()
+	bool owned = false;
+	float length = 0.f;
+
+	TrackPath() = default;
+	TrackPath(const TrackPath&) = delete;
+	TrackPath& operator=(const TrackPath&) = delete;
+	~TrackPath();
+
+	// 按mod给的分段几何(值类型)建Connection链(owned=true)，segments为空返回nullptr。
+	static std::shared_ptr<TrackPath> FromSegments(const std::vector<TrackSegment>& segments);
+	// 在路径上按弧长arcLength取点，写出世界坐标+偏航角(角度制)+俯仰角(角度制)。
+	void Evaluate(float arcLength, float& outX, float& outY, float& outZ, float& outYawDegrees, float& outPitchDegrees) const;
+};
+
 // Route：一类线路的实体，独占持有一个RouteMod实例(照抄Vehicle/Job持有mod的模式)。Build()
-// 收集stationType匹配的Station接口、调mod->LayoutRoute()组织成有向图+若干条环线；Update()
-// 按时刻表驱动绑定在这条线路上的载具，见Core/traffic/route.md。
+// 收集stationType匹配的Station端口、调mod->LayoutRoute()得到extern点/站间连线/停站顺序，建寻路图，按停站顺序寻路，
+// 预算好每条线路的运动学；Update()按预算好的运动学驱动绑定在这条线路上的载具，见Core/traffic/route.md。
 class Route {
 	// 存档：TrafficSaveCodec直接读写私有字段(traffic_save.md)。
 	friend class TrafficSaveCodec;
 public:
 	Route(RouteFactory* factory, const std::string& modId, const std::string& name);
-	~Route(); // factory->DestroyRoute(mod)；delete graph里owned==true的边自己new出来的Connection
+	~Route();
 
 	bool IsValid() const;
 	const std::string& GetName() const;
@@ -27,66 +50,57 @@ public:
 	const std::string& GetVehicleType() const;
 	bool UsesRoadnet() const;
 	bool ShouldInstantiate() const;
-	const std::string& GetTrackMesh() const;
-	const std::string& GetTrackTunnelMesh() const; // 空=复用GetTrackMesh()
 	float GetTrackWidth() const;
-	float GetTrackUnit() const;
-	int GetVehiclesPerLine() const;
+	// 第lineIndex条线路上的车辆数：mod为这条线路指定了(lineVehicleCounts)就用它，否则1辆。
+	int GetLineVehicleCount(size_t lineIndex) const;
 
-	// 一条有向图的边——segments按行驶顺序排列(reversed==true时实际按segments倒序遍历、
-	// 1-f取点、切线取反，见Build()双向边登记那一段)。owned标记segments是不是Route自己new
-	// 出来的(贝塞尔曲线边、同车道特例的直线弦边)，是的话析构要delete；借用Station旁路
-	// (inEdge/outEdge)或Map既有车道图(FindVehiclePath结果)的边不持有所有权，不delete。
-	struct RouteEdge {
-		std::vector<Connection*> segments;
-		bool owned = false;
-		bool reversed = false;
-		float length = 0.f; // 全部segments的CalcDistance()之和
-		// instantiate线路：mod给的分段几何(值类型)，segments就是按它建的Connection链；存档存这份、
-		// 读档按它重建(地形已经被抬升/挖洞，不能重新规划)。空=没有实例化轨道(单段贝塞尔)。
-		std::vector<TrackSegment> track;
+	// 一段行驶路径的一块：path的全长，加这一块的速度上限(通过不停站的站内直通连线上限是passSpeed，其余是run的基础速度)。
+	struct RoutePiece {
+		std::shared_ptr<TrackPath> path;
+		float length = 0.f;
+		float speedCap = 0.f;
 	};
-
-	// 线路上的一腿：从(fromStation,fromInterfaceIndex)到(toStation,toInterfaceIndex)，edge
-	// 指向graph内部存储(不持有所有权，Route存活期间指针稳定)。
-	struct RouteLeg {
+	// 运动学相位(匀加速/匀速/匀减速)：相位内 s = s0 + v0*dt + 0.5*acc*dt^2，dt=t-t0。
+	struct RunPhase {
+		float t0 = 0.f, s0 = 0.f, v0 = 0.f, acc = 0.f, duration = 0.f;
+	};
+	// 线路上的一段：从一个停靠位开到下一个停靠位，两端速度为0。预算好的数据，运行时不再访问寻路图。
+	struct RouteRun {
 		Station* fromStation = nullptr;
-		int fromInterfaceIndex = 0;
+		int fromStop = 0;
 		Station* toStation = nullptr;
-		int toInterfaceIndex = 0;
-		const RouteEdge* edge = nullptr;
-		// 从RouteStop::dwell搬过来(Build()组装legs时按目的地那一站的dwell字段填)——false表示
-		// 到达toStation后不停留，直接接着跑下一腿，DriveVehicle()/Update()的耗时计算都要跳过
-		// 这一腿的停靠耗时(dwellSeconds)，不只是跳过停靠时的渲染。
-		bool dwellAtDestination = true;
-		// 停靠但不触发进站/离站事件(RouteStop::silent)：DriveVehicle不把这个站报给Update的边沿检测。
-		bool silentDwell = false;
-		// 按行驶时间折算的"等效长度"=edge->length/速度倍率：两次真正停靠之间的行驶区段里只要有一条同站转场腿
-		// (fromStation==toStation，如飞机从降落跑道滑行到起飞跑道)，整个区段都按RouteMod::sameStationSpeedScale降速。
-		// 时刻表/缓动曲线/定位都按它算，EvaluateEdge前再换回几何弧长。由FinalizeLegTimes在组装/读档后填，不存档。
-		float timeLength = 0.f;
+		int toStop = 0;
+		std::vector<RoutePiece> pieces;
+		float length = 0.f;
+		std::vector<RunPhase> phases;
+		float travelTime = 0.f;
+	};
+	// 一条运行线路(成环)：runs按行驶顺序，period=一圈的总时长(含每站停靠)。
+	struct RouteLine {
+		std::vector<RouteRun> runs;
+		float period = 0.f;
+		int vehicleCount = 0; // 这条线路上的车辆数，Assemble按mod->lineVehicleCounts填
 	};
 
-	// 收集map里stationType==mod->stationType的所有Station接口，调mod->LayoutRoute()；为
-	// mod->edgeStations创建的新Station通过outCreatedEdgeStations交回调用方(Traffic::InitRoutes)
-	// 持有，Route自己只存一份裸指针引用(stations生命周期不归Route管)；按mod->links建有向图，
-	// 按mod->lines组装成lines(相邻两站在图里查不到边就跳过这一腿，继续处理下一站，保证线路
-	// 仍然成环)。
-	void Build(Map* map, const std::vector<Station*>& stations, std::vector<Station*>& outCreatedEdgeStations);
+	// 收集map里stationType==mod->stationType的所有Station，调mod->LayoutRoute()；instantiate线路再调BuildTrack；
+	// 然后Assemble()建寻路图+规划每条线路。
+	void Build(Map* map, const std::vector<Station*>& stations);
 
-	const std::vector<std::vector<RouteLeg>>& GetLines() const;
+	const std::vector<RouteLine>& GetLines() const;
+	// 非路网线路寻路图里的全部路径(站内连线+站间连线，已去重)，UE按它铺轨/画图。
+	const std::vector<std::shared_ptr<TrackPath>>& GetTrackPaths() const;
 
 	// 把一辆车绑定到第lineIndex条线路，供Update()按时刻表驱动——Traffic::InitRoutes()按
-	// GetVehiclesPerLine()创建车辆后逐个调用这个方法。
+	// GetLineVehicleCount()创建车辆后逐个调用这个方法。
 	void AddVehicleToLine(size_t lineIndex, Vehicle* vehicle);
 
 	// 按elapsedSeconds(Traffic::Tick累加的游戏总秒数，单调递增)算每条线路每辆车当前应该在
-	// 哪条边的哪个位置/停靠在哪个站，直接调vehicle->SetTransform(...)写回——纯函数式实现
+	// 哪个位置/停靠在哪个站，直接调vehicle->SetTransform(...)写回——纯函数式实现
 	// (只读elapsedSeconds，不在Route自己身上累积任何状态)，同一个elapsedSeconds重复调用
 	// 结果完全一致，见route.md"时刻表"一节。
 	void Update(float elapsedSeconds);
 
-	// 停站/离站事件：载具进入/离开停靠(dwell)状态的边沿。Update()每次算完一辆车的相位后，和上一次
+	// 停站/离站事件：载具进入/离开停靠状态的边沿。Update()每次算完一辆车的相位后，和上一次
 	// 记下的状态比较——上次不在站这次在某个站=entering，上次在站这次不在=leaving，上次在站A这次
 	// 在站B(两次Update之间隔了整个停站)=先A的leaving再B的entering。事件放进待取队列，由
 	// Traffic::ConsumeStopEvents()汇总交给UE层发给载具自己的script，Core自己不碰script。
@@ -104,8 +118,7 @@ public:
 	// 载具当前在时刻表上的状态（公交远近切换用：近处换成物理公交+Controller时据此接管，见
 	// Source/Forever/Framework/ForeverTrafficFrameworkComponent.md）。按最近一次Update()的elapsedSeconds算，
 	// 不改变任何状态。载具不在这条Route的任何线路上 -> valid=false。
-	//   line：线路下标；legIndex：正在行驶/刚到达的那一腿（leg i 从 lines[line][i].fromStation 到
-	//   下一个站，环线的 leg i 终点就是 leg (i+1)%n 的起点）；dwelling：正停靠在leg终点站里，
+	//   line：线路下标；legIndex：正在行驶/刚到达的那一段(run)；dwelling：正停靠在run终点站里，
 	//   dwellRemainingSeconds是剩余停靠时间（真实秒）；speedMapPerRealSecond：巡航速度（地图单位/真实秒，
 	//   缓动阶段的瞬时速度不精确，仅供给物理车一个初速度）。
 	struct ScheduleState {
@@ -120,56 +133,69 @@ public:
 
 	// 载具从物理段交还时刻表前调用：把它在时刻表上的进度对齐到实车当前位置，之后时刻表从这里接着走，
 	// 不会因为物理车比名义速度慢而一交还就瞬移到"早该跑完一圈"的位置。做法是给这辆车记一个相位修正量，
-	// 让"现在"对应的时刻表时间正好等于目标进度。legIndex是实车所在的那一腿（leg i 从第 i 站到第 i+1 站），
-	// legFraction是这一腿已走的比例[0,1]；dwelling=true 表示实车停在第 legIndex+1 站里，dwellFraction是停靠已过的比例。
-	// 缓动曲线的影响忽略（按名义匀速换算时间，误差只在加减速段）。找不到这辆车返回false。
+	// 让"现在"对应的时刻表时间正好等于目标进度。legIndex是实车所在的那一段(run)，
+	// legFraction是这一段已走的路程比例[0,1]；dwelling=true 表示实车停在run终点站里，dwellFraction是停靠已过的比例。
+	// 找不到这辆车返回false。
 	bool SyncVehicleProgress(const Vehicle* vehicle, int legIndex, float legFraction, bool dwelling, float dwellFraction);
 
 	// 第lineIndex条线路每一站的车站节点id（Map辅助导航节点，见Map::AuxNavNode），顺序即行驶顺序：
-	// 第i个元素是 leg i 的起点站。任何一站没有road link（没接上路网）时返回空。
+	// 第i个元素是 run i 的起点站。任何一站没有road link（没接上路网）时返回空。
 	std::vector<int> GetLineStopNodeIds(size_t lineIndex) const;
 
 	// 载具从物理段交还给时刻表时调用：忘掉它的停靠状态，下一次Update()当作第一次观察（正好停着就补发进站事件）。
 	void ResetStopState(Vehicle* vehicle);
 
 private:
-	static int PackStop(int station, int interfaceIndex);
+	// 站点表+mod输出(externs/links/lines)都就位后建寻路图并规划每条线路；Build()和读档共用，读档时几何来自存档，不重新LayoutRoute。
+	void Assemble(Map* map);
 
-	// 给一条线路的每条leg填timeLength(规则见RouteLeg::timeLength)。
-	void FinalizeLegTimes(std::vector<RouteLeg>& legs) const;
+	// ---- 寻路图(非路网线路) ----
+	enum EdgeClass { EDGE_STATION_IN, EDGE_STATION_OUT, EDGE_THROUGH, EDGE_LINK };
+	struct GraphNode {
+		int station = -1;           // 站点下标，extern为-1
+		PortKind kind = PortKind::Inlet;
+		int index = 0;              // 端口下标，extern为extern下标
+		bool isExtern = false;
+	};
+	struct GraphEdge {
+		int to = -1;
+		std::shared_ptr<TrackPath> path;
+		EdgeClass edgeClass = EDGE_LINK;
+		bool withinStation = false;
+	};
+	int GraphNodeIndex(const GraphNode& node);
+	void AddGraphEdge(int from, int to, std::shared_ptr<TrackPath> path, EdgeClass edgeClass, bool withinStation);
+	// 从src到dst的最短路径(Dijkstra，边权=长度)；除src/dst外不能经过任何停靠位节点(过站不停只能走站内直通连线)。
+	bool FindGraphPath(int src, int dst, std::vector<const GraphEdge*>& outEdges) const;
+	// 非路网线路：按一圈经过的停靠位+途经点的节点序列规划，生成run并预算运动学。失败返回false。
+	bool PlanGraphLine(const std::vector<int>& waypoints, RouteLine& outLine) const; // waypoints=一圈依次经过的节点(停靠位/extern)
+	// 路网线路(公交)：相邻两个停靠位之间用Station旁路+Map::FindVehiclePath(含同车道特例)拼路径。
+	bool BuildRoadRun(Map* map, Station* from, int fromStop, Station* to, int toStop, RouteRun& outRun) const;
+	// 给run按pieces的速度上限预算相位表(0->限速->0，同一个加速度)。
+	void ComputeRunPhases(RouteRun& run) const;
+	// run内按时间/弧长换算。
+	static float RunArcAtTime(const RouteRun& run, float t);
+	static float RunTimeAtArc(const RouteRun& run, float s);
+	void EvaluateRun(const RouteRun& run, float t, float& x, float& y, float& z, float& yaw, float& pitch) const;
+	void FinalizeLine(RouteLine& line) const;
 
-	// 组装(from,fromIface)->(to,toIface)这一条边的实际几何。useRoadnet==true时：两边都成功
-	// EnsureRoadLink()之后，若落在同一段原车道上且from在上游，直接用两个stationNode的直线弦
-	// (同车道特例，见route.md)；否则用from的outEdge+Map::FindVehiclePath(所在车道下游锚点
-	// ->to的上游锚点)+to的inEdge拼起来(都是借来的边，owned=false)。useRoadnet==false时，
-	// 按2.3节的三次贝塞尔公式新建一条曲线边(owned=true)。任一环节失败时返回的RouteEdge
-	// segments为空，调用方(Build())据此跳过这条link。
-	// track非空(instantiate线路)时，非路网边改用它建分段Connection链，代替单段贝塞尔。
-	RouteEdge BuildEdgeGeometry(Map* map, Station* from, int fromInterfaceIndex,
-		Station* to, int toInterfaceIndex, const std::vector<TrackSegment>* track = nullptr) const;
-
-	// 在edge(可能是多段segments拼起来的)上按弧长arcLength取点，写出世界坐标+偏航角(角度制)。
-	void EvaluateEdge(const RouteEdge& edge, float arcLength,
-		float& outX, float& outY, float& outZ, float& outYawDegrees, float& outPitchDegrees) const;
-
-	// 沿legs(一条环线)按localTime(已经对线路总周期取模)驱动一辆车：逐腿累减"行驶耗时
-	// (edge->length/speed)+停靠耗时(dwellSeconds)"，落在行驶区间就按EvaluateEdge算位置，
-	// 落在停靠区间就直接停在toStation对应接口坐标上。
-	// outDwellStation：这一刻载具正停靠在哪个站(没有停靠=nullptr)，Update()拿它检测停站/离站边沿。
-	void DriveVehicle(Vehicle* vehicle, const std::vector<RouteLeg>& legs, float localTime,
-		Station** outDwellStation) const;
+	// 沿line按localTime(已经对线路总周期取模)驱动一辆车。outDwellStation：这一刻载具正停靠在哪个站(没有停靠=nullptr)，
+	// Update()拿它检测停站/离站边沿。
+	void DriveVehicle(Vehicle* vehicle, const RouteLine& line, float localTime, Station** outDwellStation) const;
 
 	RouteFactory* factory = nullptr;
 	RouteMod* mod = nullptr;
 	std::string name;
 
-	// key是PackStop(station,interfaceIndex)——外层key是起点，内层key是终点。
-	std::unordered_map<int, std::unordered_map<int, RouteEdge>> graph;
-	std::vector<std::vector<RouteLeg>> lines;
-	std::vector<std::vector<Vehicle*>> lineVehicles; // 下标和lines一一对应
-	// Build()里mod->LayoutRoute用的站点表(真实站点+这条线路创建的边缘站点)，graph的key
-	// (PackStop)里的站点下标就是这张表的下标。存档要靠它把key换成站点名，见traffic_save.md。
+	// Build()里mod->LayoutRoute用的站点表，RouteEndpoint::station就是这张表的下标；存档靠它把下标换成站点名。
 	std::vector<Station*> stopStations;
+
+	std::vector<GraphNode> graphNodes;
+	std::vector<std::vector<GraphEdge>> graphEdges;
+	std::map<std::string, int> graphNodeIndexByKey;
+	std::vector<std::shared_ptr<TrackPath>> trackPaths;
+	std::vector<RouteLine> lines;
+	std::vector<std::vector<Vehicle*>> lineVehicles; // 下标和lines一一对应
 
 	// 停站/离站边沿检测：key是载具，value是上次Update()时它正停靠的站(nullptr=在行驶)；key不存在
 	// 表示还没观察过这辆车。不进存档(读档后第一次Update重新观察，见SilenceInitialStopEvents)。

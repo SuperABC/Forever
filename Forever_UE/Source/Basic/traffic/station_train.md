@@ -6,17 +6,11 @@
 
 ## 关键设计
 
-- 接口点坐标/朝向的换算见`station_common.md`(`NearRoadPoint`/`AlongAxisHeadingDegrees`)。
-- **`TrainStation`/`AirStation`的4接口固定顺序`[leftIn, rightOut, rightIn, leftOut]`**——
-  `leftIn`/`rightOut`朝向相同(`headingToRight`)、深度相同(`kTrackDepth1`/`kRunwayDepth1`)，
-  两点连线是"轨道/跑道1"；`rightIn`/`leftOut`朝向相同(`headingToLeft`)、深度相同
-  (`kTrackDepth2`/`kRunwayDepth2`)，连线是"轨道/跑道2"。这个顺序被
-  `Basic/traffic/route_*.cpp`的`LayoutDualTrackStationLoop`硬编码依赖(按下标
-  `0/1/2/3`直接取，不是按名字查)，两边必须保持一致。深度分两档(火车`0.55`/`0.65`，飞机`0.65`/`0.85`)是为了让两条
-  轨道/跑道在空间上分开，不重叠在同一条线上。
-- **同一条轨道的两个接口朝向必须相同**(沿frontage轴同一方向)，`Route::Build()`算出的贝塞尔控制点才会贴着两点连线、是一条直的"轨道"。
-- **机场：楼体贴路、跑道接口留在远离道路一侧**——`AirportBuilding::Layout()`(`Basic/map/building_*.cpp`)用`NearRoadFootprint`把楼体压到靠近道路的一侧，跑道`depthRatio`(`0.65`/`0.85`)在楼体深度范围之外，保证连线不穿过楼体——两边的深度数值改动要互相对照。
-- **火车站：楼体占满整个Building区域**(默认footprint，不贴路一侧)，所以轨道接口(`depthRatio` `0.55`/`0.65`)落在楼体范围内：楼体是地下1层`preset_train_station_bg+`(4条楼梯通上来)+地面1层`preset_train_station_fg-`(大厅+左右两间`room_train_station`)，轨道在地面层之下/之中穿过。接口本身的世界坐标换算不受楼体footprint偏移影响(见`Core/traffic/station.md`"接口坐标换算"一节)。
+- 端口坐标/朝向的换算见`station_common.md`(`NearRoadPoint`/`AlongAxisHeadingDegrees`)。
+- **端口模型**(`station_mod.md`)：每条轨道 t(t=0/1)有 `inlet t`、`outlet t`、`stop t`，下标=轨道号。`inlet`/`outlet` 在沿路比例 0.3/0.7(轨道 0)、0.7/0.3(轨道 1)，`stop` 在 0.5(进出口中点)；深度 0.55/0.65 两档，让两条轨道空间上分开。同一条轨道的三个端口朝向相同，三条连线退化成直线。`Route`/`TrainRoute::LayoutRoute` 按"轨道 t = 端口下标 t"取，不再依赖固定的4接口顺序。
+- **站内连线**(每条轨道三条，`StraightConnection`)：inlet→stop、stop→outlet 带 `mesh=kTrainTrackMesh`、`meshUnit=kTrainTrackUnit`(0.25，在 `station_train.h`)；inlet→outlet(直通，不停站穿过时走它)mesh 为空，避免和前两条重叠铺两遍。
+- **火车站：楼体占满整个Building区域**，轨道端口落在楼体范围内：楼体是地下1层`preset_station_train_bg+`(4条楼梯通上来)+地面1层`preset_station_train_fg-`(大厅+左右两间`room_train_station`)，轨道在地面层之下/之中穿过。端口世界坐标换算不受楼体 footprint 偏移影响(见`Core/traffic/station.md`)。
+- **靠右行驶**：`FACE_NORTH`/`FACE_EAST` 时两条轨道的深度对调(`swapDepths`)，使任何朝向下沿航向走时另一条轨道都在左手边(局部坐标+X东+Y南，右手边=(-hy,hx))。`TrainRoute` 据此让顺时针环靠内侧、逆时针环靠外侧，各站一致。
 
 ## 依赖关系
 
@@ -24,13 +18,11 @@
   (`FACE_DIRECTION`/`PointParams`/`Road`)。
 - 被谁依赖：`Basic/map/building_*.cpp`的`TrainStationBuilding`/`AirportBuilding`
   (`stationMod`字段分别指向`"station_train"`/`"station_air"`，依赖表里是站点依赖楼：没有楼就不会生成站点)；
-  `Basic/traffic/route_*.cpp`的`LayoutDualTrackStationLoop`硬编码依赖
-  `TrainStation`/`AirStation`声明的4接口固定顺序；`Basic/basic.cpp`注册这三个类型进
+  `TrainRoute::LayoutRoute`/`AirRoute::LayoutRoute`依赖"轨道/跑道 t 的端口下标=t"；`Basic/basic.cpp`注册这三个类型进
   `config.json`的`"station_mods"`。
 
 ## 待办/后续阶段
 
 - 火车站楼的新布局(地下层+地面层、轨道接口落在楼体内)还没进游戏看过效果，见`map/building_*.md`。
-- 只验证了"全图恰好一个火车站+一个机场"的场景——`TrainRoute`/`AirRoute`的`LayoutRoute`
-  假设全图只有一个真实站点(见`route_*.md`)，多个同类型站点同时存在的情况没有验证过，
-  暂不支持。
+- `TrainRoute::LayoutRoute`已支持多站(见`route_train.md`)，无头验证过1/2/3/4/7/10站；没进游戏看过。
+- 端口/连线几何由无头 harness 检查过(靠右 0 错、导航无悬空)，**未 PIE**。

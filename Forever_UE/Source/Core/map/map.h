@@ -106,6 +106,11 @@ public:
 	// 把路网产出的地形贴合请求烤进地形高度(InitRoadnet内调用)，不经SetHeight，详见map.md"地形贴合"。
 	void ApplyTerrainFits(const std::vector<TerrainFitRequest>& fits);
 
+	// 拆掉所有被strips条带(折线+宽度)扫到的楼体；命中园区内部建筑则整个园区(含内部建筑/小路)一起拆。keep返回true的建筑
+	// 不拆(带stationMod的建筑：它的Station已建好)；园区里有keep的建筑则整个园区也不拆。只能在生成阶段、
+	// InitVegetation/InitLamps之后、网格生成之前调用，返回拆掉的建筑数(含园区内部建筑)，见map.md"拆除"。
+	int DemolishAlongStrips(const std::vector<DemolishRequest>& strips, const std::function<bool(const Building*)>& keep);
+
 	const std::vector<Road*>& GetRoads() const;
 	const std::vector<Intersection*>& GetIntersections() const;
 	const std::vector<Node*>& GetExterns() const;
@@ -427,8 +432,23 @@ private:
 		// 仅isVehicle==true时有意义：true=出口，连接方向"outsideNode->access node"；false=入口，方向"access node->outsideNode"。
 		// 行人分支不看这个字段(固定双向)。
 		bool isExit = false;
+		// 发起接入的Building，拆除时据此撤销开口。
+		const void* owner = nullptr;
 	};
 	std::vector<PendingRoadAccess> pendingBuildingRoadAccess;
+
+	// 一栋楼/一个园区(key=Building*/Zone*)往全局导航图里加的东西，拆除用(只在生成阶段维护，读档不重建，读档后不再拆)：
+	// 它独占的导航节点(导航图里与这些节点相邻的边都是它的)，以及它在路上挖的车行开口(road,t)。
+	struct EntityNav {
+		std::vector<Node*> nodes;
+		std::vector<std::pair<Road*, float>> openings;
+	};
+	std::unordered_map<const void*, EntityNav> entityNav;
+	// 园区内部小路 -> 所属园区：BreakThroughLine在内部小路上新建的访问点归园区。
+	std::unordered_map<Road*, Zone*> internalRoadOwner;
+	// ForwardBuildingHatches的逆操作：把building地下一层转发进地形的挖洞再删掉。
+	void RemoveBuildingHatches(Building* building);
+	void RemoveHatch(const TerrainHatch& hatch);
 
 	// 按(road,side,laneIndex)分组统一接入building的outside端点，详见map.md"Building内部布局"
 	void FlushPendingBuildingRoadAccess();

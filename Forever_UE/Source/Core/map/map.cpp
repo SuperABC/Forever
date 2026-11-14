@@ -678,11 +678,14 @@ float Map::ProjectPointOntoRoad(Road* road, float px, float py) {
 }
 
 void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& result) {
+	EntityNav& record = entityNav[building];
 	for (Node* node : result.nodes) {
 		navAnchorNodes.push_back(node);
+		record.nodes.push_back(node);
 	}
 	for (Node* node : result.vehicleNodes) {
 		navAnchorNodes.push_back(node);
+		record.nodes.push_back(node);
 	}
 
 	for (Connection* conn : result.connections) {
@@ -726,7 +729,7 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		computeRoadSide(outsideNode, t, useForwardSide);
 
 		// 只记下来，不立即AddRoadAccessNode：同一条路上的断开必须按物理位置(t)排序，见FlushPendingBuildingRoadAccess。
-		pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, outsideNode, false, false });
+		pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, outsideNode, false, false, building });
 	}
 
 	// 显式标记的入口/出口("entrance"/"exit"端点)：方向直接由清单决定，同一个node可以同时
@@ -738,7 +741,7 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 		for (Node* markedNode : markedNodes) {
 			float t; bool useForwardSide;
 			computeRoadSide(markedNode, t, useForwardSide);
-			pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, markedNode, true, isExit });
+			pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, markedNode, true, isExit, building });
 		}
 	}
 }
@@ -845,12 +848,13 @@ void Map::FlushPendingBuildingRoadAccess() {
 		Node* outsideNode;
 		bool isExit; // 仅isVehicle==true时有意义
 		bool useForwardSide; // 原请求的朝向，原样传给AddRoadAccessNode(单行道回退到对侧时不能由解析后的side反推)
+		const void* owner;
 	};
 	unordered_map<Road*, vector<Entry>> grouped;
 	for (const PendingRoadAccess& pending : pendingBuildingRoadAccess) {
 		int side, laneIndex;
 		if (!ResolveAccessLane(pending.road, pending.isVehicle, pending.useForwardSide, side, laneIndex)) continue;
-		grouped[pending.road].push_back({ pending.isVehicle, side, laneIndex, pending.t, pending.outsideNode, pending.isExit, pending.useForwardSide });
+		grouped[pending.road].push_back({ pending.isVehicle, side, laneIndex, pending.t, pending.outsideNode, pending.isExit, pending.useForwardSide, pending.owner });
 	}
 	pendingBuildingRoadAccess.clear();
 
@@ -869,6 +873,7 @@ void Map::FlushPendingBuildingRoadAccess() {
 			Node* accessNode = AddRoadAccessNode(road, entry.t, entry.isVehicle,
 				entry.useForwardSide, kAccessOpeningWidth);
 			if (!accessNode) continue; // 这条Road两侧都没有对应类别车道，没法接，outsideNode保持孤立。
+			if (entry.isVehicle && entry.owner) entityNav[entry.owner].openings.emplace_back(road, entry.t);
 
 			if (!entry.isVehicle) {
 				Connection* conn = new Connection(*entry.outsideNode, *accessNode);
@@ -889,6 +894,63 @@ void Map::FlushPendingBuildingRoadAccess() {
 }
 
 void Map::FlushPendingPathRoadLinks() {
+	// 划地时一块Lot的一条边只记了一条宿主Road，但这条边可能跨过好几段共线的Road(路在T字路口被拆成多段)，小路端点落在宿主之外时
+	// ProjectT夹到宿主端点，锚点就全挤到宿主一端的路口上。这里按端点实际位置重新找宿主，见map.md"小路接入"。
+	{
+		vector<Road*> candidates = GetRoads();
+		for (Road* pathRoad : GetPathRoads()) candidates.push_back(pathRoad);
+		auto roadTolerance = [](const Road* road) { return road->GetTotalWidth() * 0.5f + 1.f; };
+		auto distToChord = [](const Road* road, float px, float py) {
+			Node a = road->GetStart(), b = road->GetEnd();
+			float dx = b.GetX() - a.GetX(), dy = b.GetY() - a.GetY();
+			float lenSq = dx * dx + dy * dy;
+			float t = lenSq > 1e-12f ? ((px - a.GetX()) * dx + (py - a.GetY()) * dy) / lenSq : 0.f;
+			t = max(0.f, min(1.f, t));
+			return hypotf(a.GetX() + dx * t - px, a.GetY() + dy * t - py);
+		};
+		auto distToRoad = [](Road* road, float px, float py, float& outT) {
+			outT = ProjectPointOntoRoad(road, px, py);
+			Node q = road->GetPoint(outT);
+			return hypotf(q.GetX() - px, q.GetY() - py);
+		};
+		for (PathRoadLink& link : pendingPathRoadLinks) {
+			for (int end = 0; end < 2; end++) {
+				Road*& host = end == 0 ? link.endRoad1 : link.endRoad2;
+				float& hostT = end == 0 ? link.endT1 : link.endT2;
+				if (!host || !link.road) continue;
+				Node point = end == 0 ? link.road->GetStart() : link.road->GetEnd();
+				float currentT;
+				if (distToRoad(host, point.GetX(), point.GetY(), currentT) <= roadTolerance(host)) continue;
+
+				Road* best = nullptr;
+				float bestDist = 1e9f, bestT = 0.f;
+				for (Road* candidate : candidates) {
+					if (candidate == link.road || candidate == host) continue;
+					if (distToChord(candidate, point.GetX(), point.GetY()) > roadTolerance(candidate) + 0.5f) continue;
+					float candidateT;
+					float dist = distToRoad(candidate, point.GetX(), point.GetY(), candidateT);
+					if (dist <= roadTolerance(candidate) && dist < bestDist) { best = candidate; bestDist = dist; bestT = candidateT; }
+				}
+				if (!best) continue; // 附近没有别的路能接：保持原宿主(退化成宿主端点)
+
+				// 划地时给原宿主挖的路缘开口跟着搬到新宿主上。
+				if (!host->IsPathRoad()) {
+					RoadOpening moved;
+					bool found = false;
+					for (const RoadOpening& opening : host->GetOpenings()) {
+						if (opening.isVehicle && fabsf(opening.t - hostT) < 1e-5f) { moved = opening; found = true; break; }
+					}
+					if (found) {
+						host->RemoveOpening(hostT, true);
+						if (!best->IsPathRoad()) { moved.t = bestT; best->AddOpening(moved); }
+					}
+				}
+				host = best;
+				hostT = bestT;
+			}
+		}
+	}
+
 	struct Touch {
 		Road* road;
 		int side;
@@ -1407,6 +1469,8 @@ Node* Map::BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex,
 
 	Node* newNode = new Node(isVehicle ? "vehicle" : "pedestrian", worldX, worldY, worldZ);
 	navAnchorNodes.push_back(newNode);
+	auto internalOwner = internalRoadOwner.find(road);
+	if (internalOwner != internalRoadOwner.end()) entityNav[internalOwner->second].nodes.push_back(newNode);
 
 	// 按tLo->tHi方向建两条新Connection（side==0方向沿t递增，fromAnchor在tLo端；side==1
 	// 反过来，fromAnchor在tHi端），同时登记进lines，构成这条车道链上更细的两段。
@@ -1768,10 +1832,12 @@ Node* Map::ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, boo
 		opening.forwardSide = (side == 0);
 		opening.isVehicle = isVehicle;
 		hostRoad->AddOpening(opening);
+		entityNav[zone].openings.emplace_back(hostRoad, t);
 	}
 
 	Node* zoneNode = MakeIsolatedAnchor(worldX, worldY, hostPoint.GetZ(), isVehicle ? "vehicle" : "pedestrian");
 	anchorCache.emplace_back(worldX, worldY, isVehicle, zoneNode);
+	entityNav[zone].nodes.push_back(zoneNode);
 
 	Node* fromNode = isEntry ? roadNode : zoneNode;
 	Node* toNode = isEntry ? zoneNode : roadNode;
@@ -1815,8 +1881,10 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 		}
 		Node* n = MakeIsolatedAnchor(wx, wy, 0.f, wantVehicle ? "vehicle" : "pedestrian");
 		anchorCache.emplace_back(wx, wy, wantVehicle, n);
+		entityNav[zone].nodes.push_back(n);
 		return n;
 		};
+	internalRoadOwner[road] = zone;
 
 	// 锚点位置用ComputeLaneAnchorPosition算(t=0/1，side=0)，与大路/小路同一套写法；单车道时偏移恰为0，等价于中轴线坐标。
 	if (spec.isVehicle) {
@@ -2199,6 +2267,266 @@ void Map::AddHatch(const TerrainHatch& hatch) {
 			At(cx, cy).hatches.push_back(hatch);
 		}
 	}
+}
+
+void Map::RemoveHatch(const TerrainHatch& hatch) {
+	const Quad& q = hatch.quad;
+	float rotation = hatch.rotation;
+	float hw = q.GetSizeX() * 0.5f;
+	float hh = q.GetSizeY() * 0.5f;
+	float absCos = abs(cos(rotation));
+	float absSin = abs(sin(rotation));
+	float ahw = hw * absCos + hh * absSin;
+	float ahh = hw * absSin + hh * absCos;
+
+	float wx = q.GetPosX(), wy = q.GetPosY();
+	int x0 = static_cast<int>(wx - ahw);
+	int x1 = static_cast<int>(wx + ahw);
+	int y0 = static_cast<int>(wy - ahh);
+	int y1 = static_cast<int>(wy + ahh);
+
+	auto same = [&](const TerrainHatch& other) {
+		return other.wall == hatch.wall && fabsf(other.rotation - rotation) < 1e-4f &&
+			fabsf(other.quad.GetPosX() - wx) < 1e-4f && fabsf(other.quad.GetPosY() - wy) < 1e-4f &&
+			fabsf(other.quad.GetSizeX() - q.GetSizeX()) < 1e-4f && fabsf(other.quad.GetSizeY() - q.GetSizeY()) < 1e-4f;
+	};
+	for (int cy = y0; cy <= y1; cy++) {
+		for (int cx = x0; cx <= x1; cx++) {
+			if (!CheckXY(cx, cy)) continue;
+			auto& hatches = At(cx, cy).hatches;
+			for (size_t i = 0; i < hatches.size(); i++) {
+				if (same(hatches[i])) { hatches.erase(hatches.begin() + i); break; }
+			}
+		}
+	}
+}
+
+void Map::RemoveBuildingHatches(Building* building) {
+	if (!building || building->GetBasementCount() <= 0) return;
+	const Floor* floor = building->GetFloor(-1);
+	if (!floor) return;
+
+	float rotation = building->GetRotation();
+	for (const Hatch& hatch : floor->GetHatches()) {
+		auto [wx, wy] = building->LocalToWorld(hatch.GetPosX(), hatch.GetPosY());
+		TerrainHatch removal;
+		removal.quad.SetPosition(wx, wy, hatch.GetSizeX(), hatch.GetSizeY());
+		removal.rotation = rotation;
+		RemoveHatch(removal);
+	}
+}
+
+namespace {
+	float PointSegmentDistSq(float px, float py, float ax, float ay, float bx, float by) {
+		float dx = bx - ax, dy = by - ay;
+		float lenSq = dx * dx + dy * dy;
+		float t = lenSq > 1e-12f ? ((px - ax) * dx + (py - ay) * dy) / lenSq : 0.f;
+		t = max(0.f, min(1.f, t));
+		float cx = ax + dx * t - px, cy = ay + dy * t - py;
+		return cx * cx + cy * cy;
+	}
+
+	bool SegmentsCross(float ax, float ay, float bx, float by, float cx, float cy, float dx, float dy) {
+		auto cross = [](float ox, float oy, float px, float py, float qx, float qy) {
+			return (px - ox) * (qy - oy) - (py - oy) * (qx - ox);
+		};
+		float d1 = cross(cx, cy, dx, dy, ax, ay), d2 = cross(cx, cy, dx, dy, bx, by);
+		float d3 = cross(ax, ay, bx, by, cx, cy), d4 = cross(ax, ay, bx, by, dx, dy);
+		return ((d1 > 0.f) != (d2 > 0.f)) && ((d3 > 0.f) != (d4 > 0.f));
+	}
+
+	float SegmentSegmentDistSq(float ax, float ay, float bx, float by, float cx, float cy, float dx, float dy) {
+		if (SegmentsCross(ax, ay, bx, by, cx, cy, dx, dy)) return 0.f;
+		return min(min(PointSegmentDistSq(ax, ay, cx, cy, dx, dy), PointSegmentDistSq(bx, by, cx, cy, dx, dy)),
+			min(PointSegmentDistSq(cx, cy, ax, ay, bx, by), PointSegmentDistSq(dx, dy, ax, ay, bx, by)));
+	}
+
+	// 凸四边形(顶点顺/逆时针均可)包含点。
+	bool PointInConvexQuad(float px, float py, const float (&xs)[4], const float (&ys)[4]) {
+		bool anyPositive = false, anyNegative = false;
+		for (int i = 0; i < 4; i++) {
+			int j = (i + 1) % 4;
+			float c = (xs[j] - xs[i]) * (py - ys[i]) - (ys[j] - ys[i]) * (px - xs[i]);
+			if (c > 0.f) anyPositive = true;
+			if (c < 0.f) anyNegative = true;
+		}
+		return !(anyPositive && anyNegative);
+	}
+
+	// 折线条带(宽width)是否碰到四边形。
+	bool StripHitsQuad(const DemolishRequest& strip, const float (&xs)[4], const float (&ys)[4]) {
+		float halfWidth = strip.width * 0.5f;
+		float minX = min(min(xs[0], xs[1]), min(xs[2], xs[3])) - halfWidth, maxX = max(max(xs[0], xs[1]), max(xs[2], xs[3])) + halfWidth;
+		float minY = min(min(ys[0], ys[1]), min(ys[2], ys[3])) - halfWidth, maxY = max(max(ys[0], ys[1]), max(ys[2], ys[3])) + halfWidth;
+		const auto& line = strip.centerline;
+		for (size_t i = 0; i + 1 < line.size() || (line.size() == 1 && i == 0); i++) {
+			float ax = line[i].first, ay = line[i].second;
+			float bx = line.size() == 1 ? ax : line[i + 1].first, by = line.size() == 1 ? ay : line[i + 1].second;
+			if (max(ax, bx) < minX || min(ax, bx) > maxX || max(ay, by) < minY || min(ay, by) > maxY) continue;
+			if (PointInConvexQuad(ax, ay, xs, ys) || PointInConvexQuad(bx, by, xs, ys)) return true;
+			for (int k = 0; k < 4; k++) {
+				int m = (k + 1) % 4;
+				if (SegmentSegmentDistSq(ax, ay, bx, by, xs[k], ys[k], xs[m], ys[m]) <= halfWidth * halfWidth) return true;
+			}
+		}
+		return false;
+	}
+}
+
+int Map::DemolishAlongStrips(const vector<DemolishRequest>& strips, const function<bool(const Building*)>& keep) {
+	if (strips.empty()) return 0;
+
+	// ---- 1. 命中的建筑(用楼体四角的世界多边形)。园区内部建筑命中则整个园区进拆除名单；园区里有keep的建筑则整个园区不拆。 ----
+	unordered_set<Building*> hitBuildings;
+	for (auto& [name, building] : buildings) {
+		if (!building) continue;
+		float xs[4], ys[4];
+		const pair<float, float> corners[4] = { { 0.f, 0.f }, { building->GetBodySizeX(), 0.f },
+			{ building->GetBodySizeX(), building->GetBodySizeY() }, { 0.f, building->GetBodySizeY() } };
+		for (int i = 0; i < 4; i++) {
+			auto [wx, wy] = building->LocalToWorld(corners[i].first, corners[i].second);
+			xs[i] = wx; ys[i] = wy;
+		}
+		for (const DemolishRequest& strip : strips) {
+			if (StripHitsQuad(strip, xs, ys)) { hitBuildings.insert(building); break; }
+		}
+	}
+
+	unordered_set<Zone*> doomedZones;
+	unordered_set<Building*> doomedBuildings;
+	for (Building* building : hitBuildings) {
+		Zone* zone = building->GetParentZone();
+		if (zone) {
+			bool zoneKept = false;
+			if (keep) {
+				for (Building* member : zone->GetInternalBuildings()) {
+					if (member && keep(member)) { zoneKept = true; break; }
+				}
+			}
+			if (!zoneKept) doomedZones.insert(zone);
+		}
+		else if (!keep || !keep(building)) {
+			doomedBuildings.insert(building);
+		}
+	}
+	for (Zone* zone : doomedZones) {
+		for (Building* member : zone->GetInternalBuildings()) {
+			if (member) doomedBuildings.insert(member);
+		}
+	}
+	if (doomedBuildings.empty() && doomedZones.empty()) return 0;
+
+	// ---- 2. 门/电梯反注册(索引不持有所有权，对象马上要被delete)。 ----
+	{
+		auto doomedDoor = [&](Door* door) {
+			if (door->GetBuilding() && doomedBuildings.count(door->GetBuilding())) return true;
+			if (door->GetZone() && doomedZones.count(door->GetZone())) return true;
+			if (door->GetRoom() && door->GetRoom()->GetParentBuilding() && doomedBuildings.count(door->GetRoom()->GetParentBuilding())) return true;
+			return false;
+		};
+		vector<Door*> kept;
+		for (Door* door : allDoors) {
+			if (!doomedDoor(door)) { kept.push_back(door); continue; }
+			doorsById.erase(door->GetId());
+			if (!door->GetInteractName().empty()) doorsByInteractName.erase(door->GetInteractName());
+		}
+		allDoors.swap(kept);
+		for (Building* building : doomedBuildings) {
+			for (Cabin* cabin : building->GetCabinEntities()) {
+				if (cabin) cabinsByInteractName.erase(cabin->GetInteractName());
+			}
+		}
+	}
+
+	// ---- 3. 导航图：节点相邻的边全删(楼内连线、接路网的连接边、园区出入口/内部小路)，再删节点本身。路网一侧因断开贯通线
+	// 产生的访问节点留在路网里(二度点，无害)。 ----
+	vector<const void*> entities;
+	for (Building* building : doomedBuildings) entities.push_back(building);
+	for (Zone* zone : doomedZones) entities.push_back(zone);
+
+	unordered_set<Node*> doomedNodes;
+	unordered_set<int> doomedIds;
+	for (const void* entity : entities) {
+		auto found = entityNav.find(entity);
+		if (found == entityNav.end()) continue;
+		for (Node* node : found->second.nodes) {
+			if (doomedNodes.insert(node).second) doomedIds.insert(node->GetId());
+		}
+		for (const auto& [road, t] : found->second.openings) road->RemoveOpening(t, true);
+	}
+	unordered_set<Connection*> doomedEdges;
+	for (auto* graph : { &vehicleNavGraph, &pedestrianNavGraph }) {
+		for (int id : doomedIds) {
+			auto it = graph->find(id);
+			if (it != graph->end()) {
+				for (const auto& [toId, edge] : it->second) {
+					doomedEdges.insert(edge);
+					if (!doomedIds.count(toId)) RemoveGraphEdgeOneWay(*graph, toId, id);
+				}
+				graph->erase(it);
+			}
+		}
+		// 别处有指向被删节点的单向边(车行图)：整图扫一遍清掉。
+		for (auto& [fromId, edges] : *graph) {
+			edges.erase(remove_if(edges.begin(), edges.end(), [&](const pair<int, Connection*>& e) {
+				if (!doomedIds.count(e.first)) return false;
+				doomedEdges.insert(e.second);
+				return true;
+			}), edges.end());
+		}
+	}
+	for (Connection* edge : doomedEdges) delete edge;
+	navAnchorNodes.erase(remove_if(navAnchorNodes.begin(), navAnchorNodes.end(),
+		[&](Node* node) { return doomedNodes.count(node) > 0; }), navAnchorNodes.end());
+	for (Node* node : doomedNodes) delete node;
+	for (Zone* zone : doomedZones) {
+		for (Road* road : zone->GetInternalRoads()) {
+			throughLines.erase(road);
+			internalRoadOwner.erase(road);
+		}
+	}
+	{
+		lock_guard<mutex> lock(nodeIndexMutex);
+		nodeIndex.clear();
+		nodeIndexAnchorCount = static_cast<size_t>(-1);
+		nodeIndexExternCount = static_cast<size_t>(-1);
+	}
+
+	// ---- 4. 基坑洞、树。 ----
+	for (Building* building : doomedBuildings) RemoveBuildingHatches(building);
+	struct Footprint { float x, y, halfX, halfY, cosR, sinR; };
+	vector<Footprint> footprints;
+	constexpr float kTreeMargin = 0.5f;
+	auto addFootprint = [&](const Quad& quad, float rotation) {
+		footprints.push_back({ quad.GetPosX(), quad.GetPosY(), quad.GetSizeX() * 0.5f + kTreeMargin,
+			quad.GetSizeY() * 0.5f + kTreeMargin, cosf(rotation), sinf(rotation) });
+	};
+	for (Building* building : doomedBuildings) addFootprint(*building, building->GetRotation());
+	for (Zone* zone : doomedZones) addFootprint(*zone, zone->GetRotation());
+	int removedTrees = vegetation.RemoveIf([&](const TreeInstance& tree) {
+		for (const Footprint& fp : footprints) {
+			float dx = tree.x - fp.x, dy = tree.y - fp.y;
+			float lx = dx * fp.cosR + dy * fp.sinR, ly = -dx * fp.sinR + dy * fp.cosR;
+			if (fabsf(lx) <= fp.halfX && fabsf(ly) <= fp.halfY) return true;
+		}
+		return false;
+	});
+
+	// ---- 5. 从容器摘掉并delete(先建筑后园区：建筑的boundaryRoad指向园区内部小路)。 ----
+	int count = static_cast<int>(doomedBuildings.size());
+	for (Building* building : doomedBuildings) {
+		buildings.erase(building->GetName());
+		entityNav.erase(building);
+	}
+	for (Zone* zone : doomedZones) {
+		zones.erase(zone->GetName());
+		entityNav.erase(zone);
+	}
+	for (Building* building : doomedBuildings) delete building;
+	for (Zone* zone : doomedZones) delete zone;
+
+	debugf("Map::DemolishAlongStrips: 拆除%d座建筑、%d个园区，清理%d棵树。\n", count, static_cast<int>(doomedZones.size()), removedTrees);
+	return count;
 }
 
 const unordered_map<string, Map::TerrainTextureInfo>& Map::GetTerrainTextures() const {

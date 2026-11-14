@@ -19,6 +19,8 @@ TrainStation/AirStation共用的"贴路"坐标换算：`NearRoadPoint`、`AlongA
     角度(90°或0°)，和`direction`贴的是哪条边无关。不要用`FaceNormalDegrees(direction)
     ±90`这套公式代替——它对`EAST`/`NORTH`两个方向符号会算反。
 
+- **`StraightCurve(from,to,z,mesh,unit)` / `StraightConnection(fromKind,fromIndex,toKind,toIndex,from,to,z,mesh,unit)`**：用两个 `PointParams` 造站内直线 `StationCurveSpec`/`StationConnectionSpec`(控制点取三等分点)，`station_train`/`station_air` 声明连线用。
+
 ## 依赖关系
 
 - 被谁依赖：`station_train`、`station_air`。

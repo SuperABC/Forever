@@ -16,9 +16,12 @@
 #include "map/zone.h"
 #include "map/building.h"
 #include "map/general_geometry.h"
+#include "traffic/traffic.h"
+#include "traffic/route.h"
 
 #include <cmath>
 #include <unordered_map>
+#include <unordered_set>
 
 #undef UpdateResource
 
@@ -256,6 +259,35 @@ void UMapWidget::DrawFullMap() {
 		Color color = ColorForName(building->GetName(), buildingColors);
 		DrawQuadFootprint(canvas, building->GetPosX(), building->GetPosY(), building->GetSizeX(), building->GetSizeY(),
 			building->GetRotation(), scale, color);
+	}
+
+	// 需要显式铺轨的线路(route->ShouldInstantiate()，目前是火车)：把每条link的真实轨道几何画在最上层。
+	// 多条线路共用同一条路径(同一个TrackPath)只画一次，公交/飞机这类不铺轨的线路不画。
+	if (Traffic* traffic = framework->GetTraffic()) {
+		canvas.SetColor(20, 20, 20);
+		int trackPixels = FMath::Max(1, scale / 2);
+		std::unordered_set<const TrackPath*> drawn;
+		for (const auto& [routeName, route] : traffic->GetRoutes()) {
+			if (!route || !route->ShouldInstantiate()) continue;
+			for (const std::shared_ptr<TrackPath>& path : route->GetTrackPaths()) {
+				if (!path || !drawn.insert(path.get()).second) continue;
+				for (size_t segIndex = 0; segIndex < path->connections.size() && segIndex < path->segments.size(); segIndex++) {
+					const Connection* segment = path->connections[segIndex];
+					// 没有铺轨资产的段(站内直通连线等)不画，免得和站内铺轨的两段重叠。
+					if (!segment || path->segments[segIndex].mesh.empty()) continue;
+					constexpr int kSamples = 8;
+					Node prev = segment->GetPoint(0.f);
+					for (int i = 1; i <= kSamples; i++) {
+						Node cur = segment->GetPoint(static_cast<float>(i) / kSamples);
+						canvas.PutLine(
+							FMath::RoundToInt(prev.GetX() * scale), FMath::RoundToInt(prev.GetY() * scale),
+							FMath::RoundToInt(cur.GetX() * scale), FMath::RoundToInt(cur.GetY() * scale),
+							trackPixels);
+						prev = cur;
+					}
+				}
+			}
+		}
 	}
 }
 

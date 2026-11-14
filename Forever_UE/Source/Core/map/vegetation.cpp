@@ -106,6 +106,12 @@ const vector<TreeInstance>& Vegetation::GetTrees() const {
 	return trees;
 }
 
+int Vegetation::RemoveIf(const function<bool(const TreeInstance&)>& pred) {
+	size_t before = trees.size();
+	trees.erase(remove_if(trees.begin(), trees.end(), [&](const TreeInstance& tree) { return pred(tree); }), trees.end());
+	return static_cast<int>(before - trees.size());
+}
+
 void Vegetation::AddTree(float x, float y, float baseScale, int meshIndex) {
 	TreeInstance tree;
 	tree.id = nextId++;

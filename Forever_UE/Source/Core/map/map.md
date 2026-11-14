@@ -62,6 +62,7 @@
 
 - `result.nodes`/`result.vehicleNodes`登记进`navAnchorNodes`；`result.connections`双向插入`pedestrianNavGraph`；`result.vehicleConnections`**只按Connection自己的Start->End单向插入`vehicleNavGraph`**（车道有方向性，方向由`Building::BuildVehicleNavigation`按模板数据算好，Map不重新判断）。`Building`侧的实现是`BuildPedestrianNavigation`/`BuildVehicleNavigation`，共用`Building::BuildNavigationGraph`（按`isVehicle`选读行人/车辆导航数据），见`building.md`。
 - `result.outsideNodes`（行人）以及`result.vehicleEntranceNodes`/`vehicleExitNodes`（车行，方向由layout的`entrance`/`exit`端点直接给出；同一个node可同时在两个清单里，各产生一个开口）：用`building->GetBoundaryRoad(building->GetDirection())`找到朝向的边界Road，`ProjectPointOntoRoad`求t，用法向偏移符号判断building在哪一侧（`>=0`为side0，`useForwardSide=true`，同`RoadJunction::Build`的`perp0`约定）。**这里不立即`AddRoadAccessNode`**，只记进`pendingBuildingRoadAccess`（`PendingRoadAccess`有`isVehicle`/`isExit`两个字段）。building没有可用边界Road（`GetDirection()`仍为-1，mod没能兜底选方向）时不产生pending项，端点仍通过`result.nodes`登记进`navAnchorNodes`（只是不连路网）。
+- **宿主路重选（2026-11-14修复）**：`Lot::SplitWithPath`只记了Lot每条边的一条宿主Road，但检查盘路网里一条边常跨过好几段共线的Road（T字路口把路拆成多段），端点落在宿主之外时`ProjectT`夹到t=0/1，小路的锚点全挤到宿主一端的路口上，表现为一片小路的线在路口处缺掉、斜着连向同一个路口（修复前随机1024图里有70~250条贯通线端点偏离小路中轴线10~30单位）。`FlushPendingPathRoadLinks`开头按端点实际位置检查宿主：端点离宿主中线超过`半宽+1`就在`GetRoads()`+`GetPathRoads()`里找包含该点(距离<=半宽+1，取最近)的Road，换成它并用`ProjectPointOntoRoad`重算t，同时把划地时给原宿主挖的`RoadOpening`搬到新宿主。附近没有别的路时保持原宿主。
 - **小路接小路的处理顺序（2026-11-08修复）**：`FlushPendingPathRoadLinks`用Kahn拓扑排序决定`ConnectPathRoad`顺序。除了同一(road,side)内按物理位置的依赖，还要保证"host是小路时，host自己的link先于挂在它上面的link"：小路的`throughLines`在它自己的`ConnectPathRoad`里才建，host还没建时`BreakThroughLine`找不到线段返回nullptr，这一端退化成孤立锚点，整条小路和它旁边的建筑从行人图里脱开（修复前约13%的建筑孤立、25%的寻路失败，全是小路上的建筑；EconSim `pathtest` 模式可复现统计，修复后失败为0）。小路没有宿主路的那一端（`hostRoad==nullptr`）是自由端，退化成孤立锚点是预期的。
 - **`FlushPendingBuildingRoadAccess()`**（`InitBuildings()`末尾调用）：先用`ResolveAccessLane`预判每项最终落在哪条车道，按`(road, side, laneIndex)`分组（`isVehicle`是第一排序键，车行/人行是独立车道空间），组内按该车道通行方向排序（side0沿Start->End即t升序，side1沿End->Start即t降序）再依次`AddRoadAccessNode`（开口宽度固定`kAccessOpeningWidth=1`）+建`Connection`：人行双向；车行单向，出口`outsideNode->access node`、入口`access node->outsideNode`。**为什么要延后排序**：三段落地循环的遍历顺序（显式占位按注册id、权重按lot、园区内部按`zones`这个`unordered_map`）与building在road上的物理位置无关；若就地断开，物理上靠后的building可能先断，把靠前building还没轮到的"剩余尾巴"抢先切掉，断点次序与物理顺序错位，行人贯通线在可视化上出现连线交叉/跳跃。building内部导航图和路网导航图因此共享同一个断点，不是靠坐标凑近似。
 
@@ -138,6 +139,14 @@
 ## 路径边序列（`NavEdge`）
 
 `VehicleRoutePlan` 除了 `points` 还有 `edges`：每项 `{Connection* edge, firstPoint, lastPoint}` 表示 `points[firstPoint..lastPoint]` 这段折线走的是哪条 Connection（车道边和路口连线都有，相邻两段共用端点）。`PlanVehicleRouteToNode`/`PlanVehicleLeg`/`AppendLegPoints` 车行路线填；室外起点接入车道的第一段是车道边的后半段（垂足→下游锚点），起点到垂足那一小段不属于任何 edge。`PlanPedestrianRoute` 也填（用 `FindPedestrianEdge` 回查）。`FindPedestrianEdge(from,to)` 是只读的行人图查边，线程安全。路口通行管理（`traffic/junction.md`）按 `Connection*` 指针识别路口连线。
+
+### 拆除（DemolishAlongStrips）
+
+`Map::DemolishAlongStrips(strips, keep)`：火车轨道(`RouteMod::AddDemolition`)请求的拆除。只能在生成阶段、`InitVegetation/InitLamps`之后、网格生成之前调用(`Route::Build`里，`Traffic`阶段)。
+- **命中判定**：楼体(body，不是整块Building区域)四角世界多边形，与折线条带(宽width)相交(端点在内，或到边距离<=半宽)。命中园区内部建筑 → 整个园区(含全部内部建筑、内部小路)一起拆；`keep(building)`为true的建筑(`stationMod`)不拆，园区里有keep的建筑则整个园区不拆。
+- **清理清单**(新增的"所属记录"`entityNav`：Building/Zone -> 它独占的导航节点 + 它在路上挖的车行开口)：门/电梯反注册(`doorsById/doorsByInteractName/allDoors/cabinsByInteractName`)；导航图里与这些节点相邻的边全删、节点从`navAnchorNodes`摘掉并delete(车行图是单向边，整图扫一遍清指向被删节点的边)；`Road::RemoveOpening`撤销开口；`RemoveBuildingHatches`撤销基坑洞；`Vegetation::RemoveIf`清掉楼/园区范围内的树；园区内部小路的`throughLines`/`internalRoadOwner`；最后从`buildings/zones`摘掉并delete(先建筑后园区)。
+- **记录来源**：`MergeBuildingNavigation`(楼内节点)、`FlushPendingBuildingRoadAccess`(`PendingRoadAccess::owner`，车行开口)、`ConnectZoneAccessPoint/ConnectZoneInternalRoad`(园区锚点/开口)、`BreakThroughLine`(在园区内部小路上新建的访问点归园区，`internalRoadOwner`)。**接路网时在公共道路贯通线上断出的访问节点留在路网里**(二度点，无害)，只删它与楼之间的连接边。
+- **不处理**：读档时`entityNav`不重建(读档后不再拆)；拆掉后留下的空地不会被重新填充；`Station`已建好的带`stationMod`建筑不拆，所以不会有悬空Station。
 
 ## 存档
 

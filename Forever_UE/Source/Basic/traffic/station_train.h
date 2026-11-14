@@ -6,6 +6,10 @@
 #include <vector>
 
 
+// 火车轨道mesh：沿X轴延伸、轴心在起点边，长约250cm=0.25地图单位(1地图单位=10m)；没有隧道专用资产，隧道内复用。站内连线和站间连线(TrainRoute)共用。
+inline constexpr const char* kTrainTrackMesh = "/Game/3rdParty/SM_ufekaevdw_tier_3/StaticMeshes/SM_ufekaevdw_tier_3.SM_ufekaevdw_tier_3";
+inline constexpr float kTrainTrackUnit = 0.25f;
+
 class TrainStation : public StationMod {
 public:
 	TrainStation();

@@ -2,17 +2,67 @@
 
 #include "traffic/vehicle.h"
 #include "map/map.h"
+#include "map/building.h"
 #include "common/utility.h"
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
+#include <functional>
+#include <queue>
+#include <unordered_map>
 
 using namespace std;
 
 namespace {
 	constexpr float PI = 3.14159265358979323846f;
+	// 游戏内秒/真实秒：默认timeFlowRatio=2.0对应的系数，easeSeconds是真实秒，运动学全部按游戏秒算。
+	constexpr float kGameSecondsPerRealSecond = 120.f;
 
 	float ToDegrees(float radians) { return radians * (180.f / PI); }
+}
+
+TrackPath::~TrackPath() {
+	if (!owned) return;
+	for (Connection* connection : connections) delete connection;
+}
+
+shared_ptr<TrackPath> TrackPath::FromSegments(const vector<TrackSegment>& segments) {
+	if (segments.empty()) return nullptr;
+	auto path = make_shared<TrackPath>();
+	path->segments = segments;
+	path->owned = true;
+	for (const TrackSegment& seg : segments) {
+		Connection* conn = new Connection(Node("route", seg.x1, seg.y1, seg.z1), Node("route", seg.x2, seg.y2, seg.z2));
+		conn->AddControls({ { Node("route_ctrl", seg.c1x, seg.c1y, seg.c1z), 1.f },
+			{ Node("route_ctrl", seg.c2x, seg.c2y, seg.c2z), 1.f } });
+		path->connections.push_back(conn);
+		float segLength = conn->CalcDistance();
+		path->lengths.push_back(segLength);
+		path->length += segLength;
+	}
+	return path;
+}
+
+void TrackPath::Evaluate(float arcLength, float& outX, float& outY, float& outZ,
+	float& outYawDegrees, float& outPitchDegrees) const {
+	float remaining = arcLength;
+	for (size_t i = 0; i < connections.size(); i++) {
+		Connection* seg = connections[i];
+		float segLength = lengths[i];
+		bool isLast = (i + 1 == connections.size());
+		if (remaining <= segLength || isLast) {
+			float f = segLength > 0.f ? max(0.f, min(1.f, remaining / segLength)) : 0.f;
+			Node point = seg->GetPoint(f);
+			float dx, dy, dz;
+			seg->GetTangent(f, dx, dy, dz);
+			outX = point.GetX(); outY = point.GetY(); outZ = point.GetZ();
+			outYawDegrees = ToDegrees(atan2f(dy, dx));
+			outPitchDegrees = ToDegrees(atan2f(dz, sqrtf(dx * dx + dy * dy)));
+			return;
+		}
+		remaining -= segLength;
+	}
 }
 
 Route::Route(RouteFactory* factory, const string& modId, const string& name) :
@@ -22,13 +72,10 @@ Route::Route(RouteFactory* factory, const string& modId, const string& name) :
 }
 
 Route::~Route() {
-	for (auto& [fromKey, inner] : graph) {
-		for (auto& [toKey, edge] : inner) {
-			if (edge.owned) {
-				for (Connection* seg : edge.segments) delete seg;
-			}
-		}
-	}
+	// 先放掉所有路径(借用的Connection不delete，自己建的由TrackPath析构delete)，再销毁mod。
+	lines.clear();
+	graphEdges.clear();
+	trackPaths.clear();
 	if (mod) factory->DestroyRoute(mod);
 }
 
@@ -48,447 +95,493 @@ const string& Route::GetVehicleType() const {
 
 bool Route::UsesRoadnet() const { return mod && mod->useRoadnet; }
 bool Route::ShouldInstantiate() const { return mod && mod->instantiate; }
-
-const string& Route::GetTrackMesh() const {
-	static const string empty;
-	return mod ? mod->trackMesh : empty;
-}
-
-const string& Route::GetTrackTunnelMesh() const {
-	static const string empty;
-	return mod ? mod->trackTunnelMesh : empty;
-}
-
 float Route::GetTrackWidth() const { return mod ? mod->trackWidth : 0.f; }
-float Route::GetTrackUnit() const { return mod ? mod->trackUnit : 0.f; }
-int Route::GetVehiclesPerLine() const { return mod ? mod->vehiclesPerLine : 0; }
-
-int Route::PackStop(int station, int interfaceIndex) { return station * 100 + interfaceIndex; }
-
-Route::RouteEdge Route::BuildEdgeGeometry(Map* map, Station* from, int fromInterfaceIndex,
-	Station* to, int toInterfaceIndex, const vector<TrackSegment>* track) const {
-	RouteEdge edge;
-	if (!mod || !from || !to) return edge;
-	if (fromInterfaceIndex < 0 || fromInterfaceIndex >= static_cast<int>(from->GetInterfaces().size())) return edge;
-	if (toInterfaceIndex < 0 || toInterfaceIndex >= static_cast<int>(to->GetInterfaces().size())) return edge;
-
-	const StationInterface& a = from->GetInterfaces()[fromInterfaceIndex];
-	const StationInterface& b = to->GetInterfaces()[toInterfaceIndex];
-
-	if (mod->useRoadnet) {
-		const StationRoadLink* linkA = from->EnsureRoadLink(map, fromInterfaceIndex);
-		const StationRoadLink* linkB = to->EnsureRoadLink(map, toInterfaceIndex);
-		if (!linkA || !linkB) return edge; // segments留空，调用方据此判定失败
-
-		if (linkA->sourceEdge == linkB->sourceEdge && linkA->sourceEdge && linkA->t < linkB->t) {
-			// 同车道特例：A、B在同一段原车道上且A在上游，直接用两个stationNode间的直线弦，
-			// 不绕一圈FindVehiclePath，见route.md"同车道特例"一节。
-			edge.segments.push_back(new Connection(*linkA->stationNode, *linkB->stationNode));
-			edge.owned = true;
-		} else {
-			vector<Connection*> path = map->FindVehiclePath(linkA->laneTo->GetId(), linkB->laneFrom->GetId());
-			edge.segments.push_back(linkA->outEdge);
-			for (Connection* seg : path) edge.segments.push_back(seg);
-			edge.segments.push_back(linkB->inEdge);
-			edge.owned = false; // 全部借用Station/Map已有的Connection，不持有
-		}
-	} else {
-		if (track && !track->empty()) {
-			// instantiate线路：按mod给的分段值建Connection链(过山抬升/隧道的高度变化都在里面)。
-			for (const TrackSegment& seg : *track) {
-				Connection* conn = new Connection(Node("route", seg.x1, seg.y1, seg.z1), Node("route", seg.x2, seg.y2, seg.z2));
-				conn->AddControls({ { Node("route_ctrl", seg.c1x, seg.c1y, seg.c1z), 1.f },
-					{ Node("route_ctrl", seg.c2x, seg.c2y, seg.c2z), 1.f } });
-				edge.segments.push_back(conn);
-			}
-			edge.owned = true;
-			edge.track = *track;
-			edge.length = 0.f;
-			for (Connection* seg : edge.segments) edge.length += seg->CalcDistance();
-			return edge;
-		}
-
-		// 非路网边：三次贝塞尔，端点切线和接口方向一致，相邻边在站点处切线连续，见
-		// route.md"接口与平滑曲线"一节。控制点z分别取A.z/B.z，支持飞机这类有高度变化的线路。
-		float controlLength = mod->controlLength;
-		auto tagMatch = [](const Station* station, const string& tag) {
-			if (tag.empty()) return true;
-			if (tag == "@real") return !station->IsEdge();
-			return station->GetName().find(tag) != string::npos;
-		};
-		// 边缘站点名=<线路名>_Edge<i>_<mod站名>，组=mod站名里第一个"_"之前的部分；真实站点没有组。
-		auto groupOf = [](const Station* station) {
-			if (!station->IsEdge()) return string();
-			const string& stationName = station->GetName();
-			size_t at = stationName.find("_Edge");
-			if (at == string::npos) return string();
-			size_t modName = stationName.find('_', at + 1);
-			if (modName == string::npos) return string();
-			modName++;
-			size_t end = stationName.find('_', modName);
-			return stationName.substr(modName, end == string::npos ? string::npos : end - modName);
-		};
-		for (const RouteMod::ControlRule& rule : mod->controlRules) {
-			if (rule.sameGroup) {
-				string groupFrom = groupOf(from);
-				if (groupFrom.empty() || groupFrom != groupOf(to)) continue;
-			}
-			if (tagMatch(from, rule.fromTag) && tagMatch(to, rule.toTag)) {
-				controlLength = rule.arm;
-				if (rule.ratio) controlLength *= sqrtf((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
-				break;
-			}
-		}
-		Node start("route", a.x, a.y, a.z);
-		Node end("route", b.x, b.y, b.z);
-		Connection* conn = new Connection(start, end);
-		if (controlLength > 0.f) { // <=0：不加控制点，直线
-			Node control1("route_ctrl", a.x + a.departDirX * controlLength, a.y + a.departDirY * controlLength, a.z);
-			Node control2("route_ctrl", b.x - b.arriveDirX * controlLength, b.y - b.arriveDirY * controlLength, b.z);
-			conn->AddControls({ { control1, 1.f }, { control2, 1.f } });
-		}
-		edge.segments.push_back(conn);
-		edge.owned = true;
-	}
-
-	edge.length = 0.f;
-	for (Connection* seg : edge.segments) edge.length += seg->CalcDistance();
-	return edge;
+int Route::GetLineVehicleCount(size_t lineIndex) const {
+	if (lineIndex < lines.size() && lines[lineIndex].vehicleCount > 0) return lines[lineIndex].vehicleCount;
+	return 1;
 }
 
-void Route::Build(Map* map, const vector<Station*>& stations, vector<Station*>& outCreatedEdgeStations) {
+void Route::Build(Map* map, const vector<Station*>& stations) {
 	if (!mod || !map) return;
 
-	vector<RouteStationInfo> candidateInterfaces;
-	vector<Station*> resolvedStations; // 下标就是RouteStop::station
-
+	vector<RouteStationInfo> infos;
+	stopStations.clear();
 	for (Station* station : stations) {
-		if (!station || station->IsEdge() || station->GetStationType() != mod->stationType) continue;
+		if (!station || station->GetStationType() != mod->stationType) continue;
 
-		int stationIndex = static_cast<int>(resolvedStations.size());
-		resolvedStations.push_back(station);
+		RouteStationInfo info;
+		info.name = station->GetName();
+		info.stationIndex = static_cast<int>(stopStations.size());
+		stopStations.push_back(station);
 
-		const vector<StationInterface>& interfaces = station->GetInterfaces();
-		for (int i = 0; i < static_cast<int>(interfaces.size()); i++) {
-			const StationInterface& iface = interfaces[i];
-			RouteStationInfo info;
-			info.name = station->GetName();
-			info.x = iface.x; info.y = iface.y; info.z = iface.z;
-			info.arriveDirX = iface.arriveDirX; info.arriveDirY = iface.arriveDirY;
-			info.departDirX = iface.departDirX; info.departDirY = iface.departDirY;
-			info.isEdge = false;
-			info.stationIndex = stationIndex;
-			info.interfaceIndex = i;
-			candidateInterfaces.push_back(info);
-		}
+		auto convert = [](const vector<StationPort>& ports) {
+			vector<RoutePort> result;
+			for (const StationPort& port : ports) {
+				RoutePort out;
+				out.x = port.x; out.y = port.y; out.z = port.z; out.dirX = port.dirX; out.dirY = port.dirY;
+				result.push_back(out);
+			}
+			return result;
+		};
+		info.inlets = convert(station->GetInlets());
+		info.outlets = convert(station->GetOutlets());
+		info.stops = convert(station->GetStops());
+		for (const RoutePort& port : info.stops) { info.x += port.x; info.y += port.y; }
+		if (!info.stops.empty()) { info.x /= info.stops.size(); info.y /= info.stops.size(); }
+		infos.push_back(std::move(info));
 	}
 
 	auto [mapSizeX, mapSizeY] = map->GetSize();
-	mod->LayoutRoute(candidateInterfaces, mapSizeX, mapSizeY);
+	mod->LayoutRoute(infos, mapSizeX, mapSizeY);
 
-	for (size_t i = 0; i < mod->edgeStations.size(); i++) {
-		const RouteStationInfo& info = mod->edgeStations[i];
-		string edgeName = name + "_Edge" + to_string(i) + (info.name.empty() ? string() : "_" + info.name);
-		Station* edgeStation = new Station(edgeName, info.x, info.y, info.z,
-			info.arriveDirX, info.arriveDirY, info.departDirX, info.departDirY);
-		resolvedStations.push_back(edgeStation);
-		outCreatedEdgeStations.push_back(edgeStation);
-	}
-
-	// instantiate线路：先让mod沿每条link铺轨(过山抬升/挖隧道)，几何交给BuildEdgeGeometry、请求转发给
+	// instantiate线路：让mod按地形把每条link的几何改成最终形状(过山抬升/挖隧道)，请求转发给
 	// Map——和Map::InitRoadnet对路网的做法一致，所以Traffic必须在地形网格生成之前构建。读档不走这里
 	// (地形已经烘焙，几何从存档读)，见traffic_save.md。
 	if (mod->instantiate && !mod->useRoadnet) {
-		auto interfaceInfo = [&](const RouteStop& stop, RouteStationInfo& out) {
-			if (stop.station < 0 || stop.station >= static_cast<int>(resolvedStations.size())) return false;
-			const vector<StationInterface>& interfaces = resolvedStations[stop.station]->GetInterfaces();
-			if (stop.interfaceIndex < 0 || stop.interfaceIndex >= static_cast<int>(interfaces.size())) return false;
-			const StationInterface& iface = interfaces[stop.interfaceIndex];
-			out.x = iface.x; out.y = iface.y; out.z = iface.z;
-			out.arriveDirX = iface.arriveDirX; out.arriveDirY = iface.arriveDirY;
-			out.departDirX = iface.departDirX; out.departDirY = iface.departDirY;
-			out.stationIndex = stop.station; out.interfaceIndex = stop.interfaceIndex;
-			return true;
-			};
-		vector<RouteTrackLinkEnds> linkEnds(mod->links.size());
-		for (size_t i = 0; i < mod->links.size(); i++) {
-			if (!interfaceInfo(mod->links[i].from, linkEnds[i].from) || !interfaceInfo(mod->links[i].to, linkEnds[i].to)) {
-				linkEnds[i].from.stationIndex = -1; // 越界的link，下面建边时同样会被跳过
-			}
-		}
 		auto getTerrain = [map](int x, int y) -> const string& { return map->GetTerrainRef(x, y); };
 		auto getWater = [map](int x, int y) -> pair<bool, float> { return map->GetWater(x, y); };
 		auto getHeight = [map](float x, float y) -> float { return map->SampleHeight(x, y); };
-		mod->BuildTrack(linkEnds, getTerrain, getWater, getHeight);
+		mod->BuildTrack(getTerrain, getWater, getHeight);
 		for (const TerrainHatch& hatch : mod->hatches) map->AddHatch(hatch);
 		map->ApplyTerrainFits(mod->terrainFits);
+		// 拆掉轨道扫过的楼体/园区；带stationMod的建筑不拆(它的Station已经建好，轨道从上方过)。
+		int demolished = map->DemolishAlongStrips(mod->demolitions, [](const Building* building) {
+			return !building->GetStationMod().empty();
+		});
+		debugf("Route::Build: 线路%s拆除了%d座建筑。\n", name.c_str(), demolished);
 	}
 
-	for (size_t linkIndex = 0; linkIndex < mod->links.size(); linkIndex++) {
-		const RouteLink& link = mod->links[linkIndex];
-		if (link.from.station < 0 || link.from.station >= static_cast<int>(resolvedStations.size()) ||
-			link.to.station < 0 || link.to.station >= static_cast<int>(resolvedStations.size())) {
-			debugf("Route::Build: 线路%s的link引用了越界的站点下标，跳过。\n", name.c_str());
-			continue;
-		}
-
-		Station* fromStation = resolvedStations[link.from.station];
-		Station* toStation = resolvedStations[link.to.station];
-		const vector<TrackSegment>* track = (linkIndex < mod->trackEdges.size() && !mod->trackEdges[linkIndex].segments.empty())
-			? &mod->trackEdges[linkIndex].segments : nullptr;
-		RouteEdge edge = BuildEdgeGeometry(map, fromStation, link.from.interfaceIndex, toStation, link.to.interfaceIndex, track);
-		if (edge.segments.empty()) {
-			debugf("Route::Build: 线路%s的一条link几何构建失败(%s->%s)，跳过。\n",
-				name.c_str(), fromStation->GetName().c_str(), toStation->GetName().c_str());
-			continue;
-		}
-
-		int fromKey = PackStop(link.from.station, link.from.interfaceIndex);
-		int toKey = PackStop(link.to.station, link.to.interfaceIndex);
-		graph[fromKey][toKey] = edge;
-
-		if (link.bidirectional) {
-			RouteEdge reverseEdge = edge;
-			reverseEdge.owned = false; // 共用同一份几何，只有正向entry负责delete
-			reverseEdge.reversed = true;
-			graph[toKey][fromKey] = reverseEdge;
-		}
-	}
-
-	for (const vector<RouteStop>& stopSeq : mod->lines) {
-		if (stopSeq.empty()) continue;
-
-		vector<RouteLeg> legs;
-		for (size_t i = 0; i < stopSeq.size(); i++) {
-			const RouteStop& fromStop = stopSeq[i];
-			const RouteStop& toStop = stopSeq[(i + 1) % stopSeq.size()];
-			if (fromStop.station < 0 || fromStop.station >= static_cast<int>(resolvedStations.size()) ||
-				toStop.station < 0 || toStop.station >= static_cast<int>(resolvedStations.size())) {
-				debugf("Route::Build: 线路%s的lines引用了越界的站点下标，跳过这一腿。\n", name.c_str());
-				continue;
-			}
-
-			int fromKey = PackStop(fromStop.station, fromStop.interfaceIndex);
-			int toKey = PackStop(toStop.station, toStop.interfaceIndex);
-			auto graphIt = graph.find(fromKey);
-			if (graphIt == graph.end() || !graphIt->second.count(toKey)) {
-				debugf("Route::Build: 线路%s里%s->%s没有可走的link，跳过这一腿(线路仍然按剩余站点成环)。\n",
-					name.c_str(), resolvedStations[fromStop.station]->GetName().c_str(),
-					resolvedStations[toStop.station]->GetName().c_str());
-				continue;
-			}
-
-			RouteLeg leg;
-			leg.fromStation = resolvedStations[fromStop.station];
-			leg.fromInterfaceIndex = fromStop.interfaceIndex;
-			leg.toStation = resolvedStations[toStop.station];
-			leg.toInterfaceIndex = toStop.interfaceIndex;
-			leg.edge = &graphIt->second.at(toKey);
-			leg.dwellAtDestination = toStop.dwell;
-			leg.silentDwell = toStop.dwell && toStop.silent;
-			legs.push_back(leg);
-		}
-
-		if (!legs.empty()) {
-			FinalizeLegTimes(legs);
-			lines.push_back(legs);
-		}
-	}
-
-	stopStations = resolvedStations;
+	Assemble(map);
 }
 
-void Route::FinalizeLegTimes(vector<RouteLeg>& legs) const {
-	float scale = (mod && mod->sameStationSpeedScale > 0.f) ? mod->sameStationSpeedScale : 1.f;
-	size_t n = legs.size();
-	for (RouteLeg& leg : legs) leg.timeLength = leg.edge ? leg.edge->length : 0.f;
-	if (scale == 1.f || n == 0) return;
+int Route::GraphNodeIndex(const GraphNode& node) {
+	string key = node.isExtern ? "e:" + to_string(node.index)
+		: to_string(node.station) + ":" + to_string(static_cast<int>(node.kind)) + ":" + to_string(node.index);
+	auto it = graphNodeIndexByKey.find(key);
+	if (it != graphNodeIndexByKey.end()) return it->second;
+	int index = static_cast<int>(graphNodes.size());
+	graphNodes.push_back(node);
+	graphEdges.emplace_back();
+	graphNodeIndexByKey[key] = index;
+	return index;
+}
 
-	// 行驶区段=两条真正停靠的leg之间；环线上从某条停靠leg之后开始逐段扫，没有停靠的线路整条当一个区段。
-	size_t start = 0;
+void Route::AddGraphEdge(int from, int to, shared_ptr<TrackPath> path, EdgeClass edgeClass, bool withinStation) {
+	GraphEdge edge;
+	edge.to = to;
+	edge.path = path;
+	edge.edgeClass = edgeClass;
+	edge.withinStation = withinStation;
+	graphEdges[from].push_back(std::move(edge));
+	trackPaths.push_back(std::move(path));
+}
+
+bool Route::FindGraphPath(int src, int dst, vector<const GraphEdge*>& outEdges) const {
+	outEdges.clear();
+	int count = static_cast<int>(graphNodes.size());
+	vector<float> dist(count, FLT_MAX);
+	vector<const GraphEdge*> via(count, nullptr);
+	vector<int> prev(count, -1);
+
+	using Item = pair<float, int>;
+	priority_queue<Item, vector<Item>, greater<Item>> heap;
+	auto relax = [&](int from, float base) {
+		for (const GraphEdge& edge : graphEdges[from]) {
+			const GraphNode& target = graphNodes[edge.to];
+			// 过站不停只能走站内直通连线：停靠位节点除了终点谁都不能经过。
+			if (!target.isExtern && target.kind == PortKind::Stop && edge.to != dst) continue;
+			float cost = base + edge.path->length;
+			if (cost < dist[edge.to]) {
+				dist[edge.to] = cost; via[edge.to] = &edge; prev[edge.to] = from;
+				heap.push({ cost, edge.to });
+			}
+		}
+	};
+	// src==dst时(整圈只有一个停靠位)必须真的离开再回来，所以不预设dist[src]=0，只从src的出边开始松弛。
+	relax(src, 0.f);
+	while (!heap.empty()) {
+		auto [cost, node] = heap.top();
+		heap.pop();
+		if (cost > dist[node]) continue;
+		if (node == dst) break;
+		relax(node, cost);
+	}
+	if (dist[dst] == FLT_MAX) return false;
+
+	int cursor = dst;
+	do {
+		outEdges.push_back(via[cursor]);
+		cursor = prev[cursor];
+		if (outEdges.size() > graphNodes.size()) { outEdges.clear(); return false; } // 保护性退出
+	} while (cursor != src);
+	reverse(outEdges.begin(), outEdges.end());
+	return true;
+}
+
+void Route::ComputeRunPhases(RouteRun& run) const {
+	run.phases.clear();
+	run.length = 0.f;
+	run.travelTime = 0.f;
+	size_t n = run.pieces.size();
+	if (n == 0) return;
+
+	float ease = max(mod->easeSeconds, 0.01f) * kGameSecondsPerRealSecond;
+	float acc = max(mod->normalSpeed, 1e-6f) / ease;
+
+	// 边界速度：两端为0，其余取相邻两块上限的较小者，再按加速度前向/后向收紧。
+	vector<float> boundary(n + 1, 0.f);
+	for (size_t i = 1; i < n; i++) boundary[i] = min(run.pieces[i - 1].speedCap, run.pieces[i].speedCap);
 	for (size_t i = 0; i < n; i++) {
-		if (legs[i].dwellAtDestination) { start = (i + 1) % n; break; }
+		boundary[i + 1] = min(boundary[i + 1], sqrtf(boundary[i] * boundary[i] + 2.f * acc * run.pieces[i].length));
 	}
-	size_t i = 0;
-	while (i < n) {
-		size_t first = i;
-		bool transfer = false;
-		while (i < n) {
-			const RouteLeg& leg = legs[(start + i) % n];
-			if (leg.fromStation && leg.fromStation == leg.toStation) transfer = true;
-			i++;
-			if (leg.dwellAtDestination) break;
+	for (size_t i = n; i-- > 0;) {
+		boundary[i] = min(boundary[i], sqrtf(boundary[i + 1] * boundary[i + 1] + 2.f * acc * run.pieces[i].length));
+	}
+
+	float t = 0.f, s = 0.f;
+	auto push = [&](float v0, float a, float duration) {
+		if (duration <= 1e-6f) return;
+		RunPhase phase;
+		phase.t0 = t; phase.s0 = s; phase.v0 = v0; phase.acc = a; phase.duration = duration;
+		run.phases.push_back(phase);
+		t += duration;
+		s += v0 * duration + 0.5f * a * duration * duration;
+	};
+	for (size_t i = 0; i < n; i++) {
+		float length = run.pieces[i].length;
+		float cap = max(run.pieces[i].speedCap, 1e-3f);
+		float vin = boundary[i], vout = boundary[i + 1];
+		float peak = min(cap, sqrtf(max(0.f, (2.f * acc * length + vin * vin + vout * vout) * 0.5f)));
+		peak = max(peak, max(vin, vout));
+		float accelDistance = (peak * peak - vin * vin) / (2.f * acc);
+		float decelDistance = (peak * peak - vout * vout) / (2.f * acc);
+		float cruiseDistance = max(0.f, length - accelDistance - decelDistance);
+		push(vin, acc, (peak - vin) / acc);
+		if (peak > 1e-6f) push(peak, 0.f, cruiseDistance / peak);
+		push(peak, -acc, (peak - vout) / acc);
+	}
+	run.travelTime = t;
+	run.length = 0.f;
+	for (const RoutePiece& piece : run.pieces) run.length += piece.length;
+}
+
+float Route::RunArcAtTime(const RouteRun& run, float t) {
+	if (run.phases.empty()) return 0.f;
+	if (t <= 0.f) return 0.f;
+	if (t >= run.travelTime) return run.length;
+	size_t lo = 0, hi = run.phases.size() - 1;
+	while (lo < hi) {
+		size_t mid = (lo + hi + 1) / 2;
+		if (run.phases[mid].t0 <= t) lo = mid; else hi = mid - 1;
+	}
+	const RunPhase& phase = run.phases[lo];
+	float dt = t - phase.t0;
+	return min(run.length, phase.s0 + phase.v0 * dt + 0.5f * phase.acc * dt * dt);
+}
+
+float Route::RunTimeAtArc(const RouteRun& run, float s) {
+	if (run.phases.empty() || s <= 0.f) return 0.f;
+	if (s >= run.length) return run.travelTime;
+	for (const RunPhase& phase : run.phases) {
+		float end = phase.s0 + phase.v0 * phase.duration + 0.5f * phase.acc * phase.duration * phase.duration;
+		if (s > end) continue;
+		float ds = s - phase.s0;
+		float dt;
+		if (fabsf(phase.acc) < 1e-9f) dt = phase.v0 > 1e-9f ? ds / phase.v0 : 0.f;
+		else dt = (-phase.v0 + sqrtf(max(0.f, phase.v0 * phase.v0 + 2.f * phase.acc * ds))) / phase.acc;
+		return phase.t0 + max(0.f, min(dt, phase.duration));
+	}
+	return run.travelTime;
+}
+
+void Route::EvaluateRun(const RouteRun& run, float t, float& x, float& y, float& z, float& yaw, float& pitch) const {
+	float s = RunArcAtTime(run, t);
+	float before = 0.f;
+	for (size_t i = 0; i < run.pieces.size(); i++) {
+		const RoutePiece& piece = run.pieces[i];
+		if (s <= before + piece.length || i + 1 == run.pieces.size()) {
+			piece.path->Evaluate(max(0.f, min(s - before, piece.path->length)), x, y, z, yaw, pitch);
+			return;
 		}
-		if (!transfer) continue;
-		for (size_t k = first; k < i; k++) {
-			RouteLeg& leg = legs[(start + k) % n];
-			leg.timeLength = (leg.edge ? leg.edge->length : 0.f) / scale;
-		}
+		before += piece.length;
 	}
 }
 
-const vector<vector<Route::RouteLeg>>& Route::GetLines() const { return lines; }
+void Route::FinalizeLine(RouteLine& line) const {
+	line.period = 0.f;
+	for (const RouteRun& run : line.runs) line.period += run.travelTime + mod->dwellSeconds;
+}
+
+bool Route::PlanGraphLine(const vector<int>& waypoints, RouteLine& outLine) const {
+	auto isStop = [&](int node) { return !graphNodes[node].isExtern && graphNodes[node].kind == PortKind::Stop; };
+
+	size_t n = waypoints.size();
+	size_t first = n;
+	for (size_t i = 0; i < n; i++) if (isStop(waypoints[i])) { first = i; break; }
+	if (first == n) return false;
+
+	vector<int> rotated;
+	for (size_t i = 0; i < n; i++) rotated.push_back(waypoints[(first + i) % n]);
+	vector<size_t> stopPositions;
+	for (size_t i = 0; i < n; i++) if (isStop(rotated[i])) stopPositions.push_back(i);
+
+	for (size_t k = 0; k < stopPositions.size(); k++) {
+		size_t fromPos = stopPositions[k];
+		size_t toPos = stopPositions[(k + 1) % stopPositions.size()];
+		size_t steps = (toPos + n - fromPos) % n;
+		if (steps == 0) steps = n;
+
+		vector<const GraphEdge*> edges;
+		for (size_t j = 0; j < steps; j++) {
+			vector<const GraphEdge*> hop;
+			int a = rotated[(fromPos + j) % n], b = rotated[(fromPos + j + 1) % n];
+			if (!FindGraphPath(a, b, hop)) return false;
+			edges.insert(edges.end(), hop.begin(), hop.end());
+		}
+
+		RouteRun run;
+		const GraphNode& startNode = graphNodes[rotated[fromPos]];
+		const GraphNode& endNode = graphNodes[rotated[toPos]];
+		run.fromStation = stopStations[startNode.station]; run.fromStop = startNode.index;
+		run.toStation = stopStations[endNode.station]; run.toStop = endNode.index;
+
+		// 速度分类：起止同站且途经的站间连线全是同站转场 -> 整段按同站速度；否则按正常速度，穿过中间站的直通连线降到通过速度。
+		bool sameStation = startNode.station == endNode.station;
+		for (const GraphEdge* edge : edges) {
+			if (edge->edgeClass == EDGE_LINK && !edge->withinStation) sameStation = false;
+		}
+		float base = sameStation ? mod->sameStationSpeed : mod->normalSpeed;
+		for (const GraphEdge* edge : edges) {
+			RoutePiece piece;
+			piece.path = edge->path;
+			piece.length = edge->path->length;
+			piece.speedCap = edge->edgeClass == EDGE_THROUGH ? min(base, mod->passSpeed) : base;
+			if (piece.length > 1e-4f) run.pieces.push_back(std::move(piece));
+		}
+		ComputeRunPhases(run);
+		outLine.runs.push_back(std::move(run));
+	}
+	FinalizeLine(outLine);
+	return !outLine.runs.empty();
+}
+
+bool Route::BuildRoadRun(Map* map, Station* from, int fromStop, Station* to, int toStop, RouteRun& outRun) const {
+	if (!from || !to) return false;
+	const StationRoadLink* linkA = from->EnsureRoadLink(map, fromStop);
+	const StationRoadLink* linkB = to->EnsureRoadLink(map, toStop);
+	if (!linkA || !linkB) return false;
+
+	auto path = make_shared<TrackPath>();
+	if (linkA->sourceEdge == linkB->sourceEdge && linkA->sourceEdge && linkA->t < linkB->t) {
+		// 同车道特例：A、B在同一段原车道上且A在上游，直接用两个stationNode间的直线弦，
+		// 不绕一圈FindVehiclePath，见route.md"同车道特例"一节。
+		path->connections.push_back(new Connection(*linkA->stationNode, *linkB->stationNode));
+		path->owned = true;
+	} else {
+		vector<Connection*> found = map->FindVehiclePath(linkA->laneTo->GetId(), linkB->laneFrom->GetId());
+		path->connections.push_back(linkA->outEdge);
+		for (Connection* seg : found) path->connections.push_back(seg);
+		path->connections.push_back(linkB->inEdge);
+		path->owned = false; // 全部借用Station/Map已有的Connection，不持有
+	}
+	for (Connection* conn : path->connections) {
+		float segLength = conn->CalcDistance();
+		path->lengths.push_back(segLength);
+		path->length += segLength;
+	}
+
+	outRun.fromStation = from; outRun.fromStop = fromStop;
+	outRun.toStation = to; outRun.toStop = toStop;
+	RoutePiece piece;
+	piece.path = path;
+	piece.length = path->length;
+	piece.speedCap = mod->normalSpeed;
+	outRun.pieces.push_back(std::move(piece));
+	ComputeRunPhases(outRun);
+	return true;
+}
+
+void Route::Assemble(Map* map) {
+	lines.clear();
+	graphNodes.clear();
+	graphEdges.clear();
+	graphNodeIndexByKey.clear();
+	trackPaths.clear();
+	if (!mod) return;
+
+	unordered_map<string, int> stationIndexByName;
+	for (size_t i = 0; i < stopStations.size(); i++) {
+		if (stopStations[i]) stationIndexByName[stopStations[i]->GetName()] = static_cast<int>(i);
+	}
+
+	if (mod->useRoadnet) {
+		// 路网线路(公交)：只有停靠顺序，相邻两站之间的路径由Core用路网车辆寻路图拼。
+		for (size_t modLineIdx = 0; modLineIdx < mod->lines.size(); modLineIdx++) {
+		const vector<RouteLineEntry>& entries = mod->lines[modLineIdx];
+			vector<pair<Station*, int>> stops;
+			bool valid = !entries.empty();
+			for (const RouteLineEntry& entry : entries) {
+				auto it = stationIndexByName.find(entry.name);
+				Station* station = it != stationIndexByName.end() ? stopStations[it->second] : nullptr;
+				if (!station || entry.stopIndex < 0 || entry.stopIndex >= static_cast<int>(station->GetStops().size())) {
+					debugf("Route::Assemble: 线路%s的一条线路引用了不存在的站点/停靠位(%s,%d)，整条线路丢弃。\n",
+						name.c_str(), entry.name.c_str(), entry.stopIndex);
+					valid = false;
+					break;
+				}
+				stops.emplace_back(station, entry.stopIndex);
+			}
+			if (!valid) continue;
+
+			RouteLine line;
+			for (size_t i = 0; i < stops.size() && valid; i++) {
+				RouteRun run;
+				const auto& a = stops[i];
+				const auto& b = stops[(i + 1) % stops.size()];
+				if (!BuildRoadRun(map, a.first, a.second, b.first, b.second, run)) {
+					debugf("Route::Assemble: 线路%s里%s->%s在路网上不可达，整条线路丢弃。\n",
+						name.c_str(), a.first->GetName().c_str(), b.first->GetName().c_str());
+					valid = false;
+					break;
+				}
+				line.runs.push_back(std::move(run));
+			}
+			if (!valid) continue;
+			FinalizeLine(line);
+			line.vehicleCount = modLineIdx < mod->lineVehicleCounts.size() ? mod->lineVehicleCounts[modLineIdx] : 0;
+			lines.push_back(std::move(line));
+		}
+		return;
+	}
+
+	// ---- 非路网线路：建寻路图 ----
+	for (size_t i = 0; i < mod->externs.size(); i++) {
+		GraphNode node;
+		node.isExtern = true;
+		node.index = static_cast<int>(i);
+		GraphNodeIndex(node);
+	}
+	unordered_map<string, int> externIndexByName;
+	for (size_t i = 0; i < mod->externs.size(); i++) externIndexByName[mod->externs[i].name] = static_cast<int>(i);
+
+	for (size_t stationIndex = 0; stationIndex < stopStations.size(); stationIndex++) {
+		Station* station = stopStations[stationIndex];
+		if (!station) continue;
+		for (const StationConnection& connection : station->GetConnections()) {
+			shared_ptr<TrackPath> path = TrackPath::FromSegments(connection.segments);
+			if (!path) {
+				debugf("Route::Assemble: 站点%s有一条站内连线没有几何，跳过。\n", station->GetName().c_str());
+				continue;
+			}
+			GraphNode from, to;
+			from.station = to.station = static_cast<int>(stationIndex);
+			from.kind = connection.fromKind; from.index = connection.fromIndex;
+			to.kind = connection.toKind; to.index = connection.toIndex;
+			EdgeClass edgeClass = connection.toKind == PortKind::Stop ? EDGE_STATION_IN
+				: connection.fromKind == PortKind::Stop ? EDGE_STATION_OUT : EDGE_THROUGH;
+			int fromIndex = GraphNodeIndex(from);
+			int toIndex = GraphNodeIndex(to);
+			AddGraphEdge(fromIndex, toIndex, std::move(path), edgeClass, false);
+		}
+	}
+
+	auto endpointNode = [&](const RouteEndpoint& endpoint) -> int {
+		GraphNode node;
+		if (endpoint.kind == RouteEndpoint::Extern) {
+			auto it = externIndexByName.find(endpoint.externName);
+			if (it == externIndexByName.end()) return -1;
+			node.isExtern = true;
+			node.index = it->second;
+			return GraphNodeIndex(node);
+		}
+		if (endpoint.station < 0 || endpoint.station >= static_cast<int>(stopStations.size()) || !stopStations[endpoint.station]) return -1;
+		const Station* station = stopStations[endpoint.station];
+		const vector<StationPort>& ports = endpoint.kind == RouteEndpoint::Outlet ? station->GetOutlets() : station->GetInlets();
+		if (endpoint.portIndex < 0 || endpoint.portIndex >= static_cast<int>(ports.size())) return -1;
+		node.station = endpoint.station;
+		node.kind = endpoint.kind == RouteEndpoint::Outlet ? PortKind::Outlet : PortKind::Inlet;
+		node.index = endpoint.portIndex;
+		return GraphNodeIndex(node);
+	};
+	for (const RouteLinkSpec& link : mod->links) {
+		int from = endpointNode(link.from), to = endpointNode(link.to);
+		shared_ptr<TrackPath> path = TrackPath::FromSegments(link.segments);
+		if (from < 0 || to < 0 || !path) {
+			debugf("Route::Assemble: 线路%s的一条站间连线端点无效或没有几何，跳过。\n", name.c_str());
+			continue;
+		}
+		AddGraphEdge(from, to, std::move(path), EDGE_LINK, link.withinStation);
+	}
+
+	// ---- 规划每条线路 ----
+	for (size_t modLineIdx = 0; modLineIdx < mod->lines.size(); modLineIdx++) {
+		const vector<RouteLineEntry>& entries = mod->lines[modLineIdx];
+		vector<int> waypoints;
+		bool valid = !entries.empty();
+		for (const RouteLineEntry& entry : entries) {
+			GraphNode node;
+			if (entry.stopIndex >= 0) {
+				auto it = stationIndexByName.find(entry.name);
+				if (it == stationIndexByName.end() || entry.stopIndex >= static_cast<int>(stopStations[it->second]->GetStops().size())) {
+					debugf("Route::Assemble: 线路%s的一条线路引用了不存在的站点/停靠位(%s,%d)，整条线路丢弃。\n",
+						name.c_str(), entry.name.c_str(), entry.stopIndex);
+					valid = false;
+					break;
+				}
+				node.station = it->second;
+				node.kind = PortKind::Stop;
+				node.index = entry.stopIndex;
+			} else {
+				auto it = externIndexByName.find(entry.name);
+				if (it == externIndexByName.end()) {
+					debugf("Route::Assemble: 线路%s的一条线路引用了不存在的extern点(%s)，整条线路丢弃。\n", name.c_str(), entry.name.c_str());
+					valid = false;
+					break;
+				}
+				node.isExtern = true;
+				node.index = it->second;
+			}
+			waypoints.push_back(GraphNodeIndex(node));
+		}
+		if (!valid) continue;
+
+		RouteLine line;
+		if (!PlanGraphLine(waypoints, line)) {
+			debugf("Route::Assemble: 线路%s的一条线路在寻路图里不可达(没有停靠位或站间连线不通)，整条线路丢弃。\n", name.c_str());
+			continue;
+		}
+		line.vehicleCount = modLineIdx < mod->lineVehicleCounts.size() ? mod->lineVehicleCounts[modLineIdx] : 0;
+		lines.push_back(std::move(line));
+	}
+}
+
+const vector<Route::RouteLine>& Route::GetLines() const { return lines; }
+
+const vector<shared_ptr<TrackPath>>& Route::GetTrackPaths() const { return trackPaths; }
 
 void Route::AddVehicleToLine(size_t lineIndex, Vehicle* vehicle) {
 	if (lineIndex >= lineVehicles.size()) lineVehicles.resize(lineIndex + 1);
 	lineVehicles[lineIndex].push_back(vehicle);
 }
 
-void Route::EvaluateEdge(const RouteEdge& edge, float arcLength,
-	float& outX, float& outY, float& outZ, float& outYawDegrees, float& outPitchDegrees) const {
-	vector<Connection*> ordered = edge.segments;
-	if (edge.reversed) reverse(ordered.begin(), ordered.end());
-
-	float remaining = arcLength;
-	for (size_t i = 0; i < ordered.size(); i++) {
-		Connection* seg = ordered[i];
-		float segLength = seg->CalcDistance();
-		bool isLast = (i + 1 == ordered.size());
-		if (remaining <= segLength || isLast) {
-			float f = segLength > 0.f ? max(0.f, min(1.f, remaining / segLength)) : 0.f;
-			float effectiveF = edge.reversed ? 1.f - f : f;
-
-			Node point = seg->GetPoint(effectiveF);
-			float dx, dy, dz;
-			seg->GetTangent(effectiveF, dx, dy, dz);
-			if (edge.reversed) { dx = -dx; dy = -dy; dz = -dz; }
-
-			outX = point.GetX(); outY = point.GetY(); outZ = point.GetZ();
-			outYawDegrees = ToDegrees(atan2f(dy, dx));
-			outPitchDegrees = ToDegrees(atan2f(dz, sqrtf(dx * dx + dy * dy)));
-			return;
-		}
-		remaining -= segLength;
-	}
-}
-
-void Route::DriveVehicle(Vehicle* vehicle, const vector<RouteLeg>& legs, float localTime,
-	Station** outDwellStation) const {
+void Route::DriveVehicle(Vehicle* vehicle, const RouteLine& line, float localTime, Station** outDwellStation) const {
 	if (outDwellStation) *outDwellStation = nullptr;
-	if (!vehicle || !mod || legs.empty()) return;
-
-	// 缓动按"行驶区段"(两次真正停靠之间的若干条leg)整体套梯形速度曲线，不按单leg，原因见route.md。
-	// easeSeconds是真实秒，下面都是游戏内秒，系数120对应默认timeFlowRatio=2.0。
-	constexpr float kGameSecondsPerRealSecond = 120.f;
-	float kEaseSeconds = mod->easeSeconds * kGameSecondsPerRealSecond;
+	if (!vehicle || !mod || line.runs.empty()) return;
 
 	float t = localTime;
-	size_t legIndex = legs.size();
-	bool inDwell = false;
-	for (size_t i = 0; i < legs.size(); i++) {
-		const RouteLeg& leg = legs[i];
-		if (!leg.edge) continue;
-		float travelTime = (mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
-		if (t < travelTime) { legIndex = i; break; }
-		t -= travelTime;
+	for (const RouteRun& run : line.runs) {
+		bool driving = t < run.travelTime;
+		bool dwelling = !driving && t - run.travelTime < mod->dwellSeconds;
+		if (!driving && !dwelling) { t -= run.travelTime + mod->dwellSeconds; continue; }
 
-		float dwellSeconds = leg.dwellAtDestination ? mod->dwellSeconds : 0.f;
-		if (t < dwellSeconds) { legIndex = i; inDwell = true; break; }
-		t -= dwellSeconds;
-	}
-	if (legIndex >= legs.size()) return;
-
-	if (inDwell) {
-		const RouteLeg& leg = legs[legIndex];
-		if (outDwellStation && !leg.silentDwell) *outDwellStation = leg.toStation;
-		const vector<StationInterface>& interfaces = leg.toStation->GetInterfaces();
-		if (leg.toInterfaceIndex >= 0 && leg.toInterfaceIndex < static_cast<int>(interfaces.size())) {
-			const StationInterface& iface = interfaces[leg.toInterfaceIndex];
-			float yawDeg = ToDegrees(atan2f(iface.arriveDirY, iface.arriveDirX));
-			vehicle->SetTransform(iface.x, iface.y, iface.z, yawDeg);
-			vehicle->SetPitch(0.f);
-		}
+		float x = 0.f, y = 0.f, z = 0.f, yaw = 0.f, pitch = 0.f;
+		EvaluateRun(run, driving ? t : run.travelTime, x, y, z, yaw, pitch);
+		vehicle->SetTransform(x, y, z, yaw);
+		// 停靠时车身放平；行驶时instantiate/tiltAlongPath的线路跟着路径俯仰。
+		vehicle->SetPitch((driving && (mod->instantiate || mod->tiltAlongPath)) ? pitch : 0.f);
+		if (dwelling && outDwellStation) *outDwellStation = run.toStation;
 		return;
 	}
-
-	// t现在是legIndex这条leg"行驶"阶段已经过去的时间。往回找这条leg所在"行驶区段"的起点——
-	// 上一条真正停靠(dwellAtDestination)的leg之后那一条就是区段起点；绕一整圈都没找到就说明
-	// 这条线路从不停靠(比如还没配置dwell的线路)，把整条线路当一个区段处理。
-	size_t segStart = legIndex;
-	while (true) {
-		size_t prevIdx = (segStart == 0) ? legs.size() - 1 : segStart - 1;
-		if (legs[prevIdx].dwellAtDestination) break;
-		if (prevIdx == legIndex) break;
-		segStart = prevIdx;
-	}
-
-	// 时长累计只用来定位缓动曲线上的点；定位落在哪条leg必须按累计长度重走(见route.md)，否则接口处卡顿/瞬移。
-	float segTotalTime = 0.f, segTotalLength = 0.f;
-	float segTimeBeforeCurrentLeg = 0.f;
-	{
-		size_t j = segStart;
-		while (true) {
-			const RouteLeg& segLeg = legs[j];
-			float segLegLength = segLeg.timeLength;
-			float segLegTravelTime = (mod->speed > 0.f) ? segLegLength / mod->speed : 0.f;
-			if (j == legIndex) {
-				segTimeBeforeCurrentLeg = segTotalTime;
-			}
-			segTotalTime += segLegTravelTime;
-			segTotalLength += segLegLength;
-			if (segLeg.dwellAtDestination) break; // 这条leg自己就是区段终点(真正停靠)
-			size_t nextIdx = (j + 1) % legs.size();
-			if (nextIdx == segStart) break; // 保护性退出：绕完一圈都没碰到停靠
-			j = nextIdx;
-		}
-	}
-
-	float segElapsed = segTimeBeforeCurrentLeg + t;
-
-	// 梯形速度曲线：ta/td钳在区段总时长一半以内，避免区段比2*kEaseSeconds还短时两头的
-	// 加减速阶段重叠打架。cruiseSpeed比配置的mod->speed略高一点，补偿两头比匀速慢那部分
-	// 距离，确保segTotalTime(=Σlength/speed，和原来完全一样)时间内还是正好走完
-	// segTotalLength，不影响Update()按这个值算的时刻表/period。
-	float ta = min(kEaseSeconds, segTotalTime * 0.5f);
-	float td = min(kEaseSeconds, segTotalTime * 0.5f);
-	float cruiseSpan = segTotalTime - ta * 0.5f - td * 0.5f;
-	float cruiseSpeed = (cruiseSpan > 0.f) ? segTotalLength / cruiseSpan : mod->speed;
-
-	float segArcLength;
-	if (ta > 0.f && segElapsed < ta) {
-		segArcLength = cruiseSpeed * segElapsed * segElapsed / (2.f * ta);
-	} else if (segElapsed < segTotalTime - td) {
-		segArcLength = cruiseSpeed * (ta * 0.5f + max(0.f, segElapsed - ta));
-	} else if (td > 0.f) {
-		float remain = max(0.f, segTotalTime - segElapsed);
-		segArcLength = segTotalLength - cruiseSpeed * remain * remain / (2.f * td);
-	} else {
-		segArcLength = segTotalLength;
-	}
-
-	// 按累计长度(不是累计时间)重新从segStart走一遍，找出segArcLength真正落在哪条leg上——
-	// 和EvaluateEdge内部按弧长在多段segments里定位同一个道理，只是这里定位的是"哪条leg"，
-	// 不是"哪个segment"。
-	size_t resultLegIndex = segStart;
-	float lengthBeforeResultLeg = 0.f;
-	{
-		size_t j = segStart;
-		while (true) {
-			const RouteLeg& segLeg = legs[j];
-			float segLegLength = segLeg.timeLength;
-			bool isLastInSeg = segLeg.dwellAtDestination;
-			if (segArcLength <= lengthBeforeResultLeg + segLegLength || isLastInSeg) {
-				resultLegIndex = j;
-				break;
-			}
-			lengthBeforeResultLeg += segLegLength;
-			size_t nextIdx = (j + 1) % legs.size();
-			if (nextIdx == segStart) { resultLegIndex = j; break; } // 保护性退出
-			j = nextIdx;
-		}
-	}
-
-	const RouteLeg& resultLeg = legs[resultLegIndex];
-	if (!resultLeg.edge) return;
-	float arcLength = segArcLength - lengthBeforeResultLeg;
-	arcLength = max(0.f, min(arcLength, resultLeg.timeLength));
-	// 时间等效长度换回几何弧长(降速区段里timeLength>length)。
-	if (resultLeg.timeLength > 1e-6f) arcLength *= resultLeg.edge->length / resultLeg.timeLength;
-
-	float x, y, z, yaw, pitch = 0.f;
-	EvaluateEdge(*resultLeg.edge, arcLength, x, y, z, yaw, pitch);
-	vehicle->SetTransform(x, y, z, yaw);
-	vehicle->SetPitch((mod->instantiate || mod->tiltAlongPath) ? pitch : 0.f);
 }
 
 void Route::Update(float elapsedSeconds) {
@@ -496,29 +589,21 @@ void Route::Update(float elapsedSeconds) {
 	lastElapsedSeconds = elapsedSeconds;
 
 	for (size_t lineIdx = 0; lineIdx < lines.size(); lineIdx++) {
-		const vector<RouteLeg>& legs = lines[lineIdx];
-		if (legs.empty() || lineIdx >= lineVehicles.size()) continue;
-
-		float period = 0.f;
-		for (const RouteLeg& leg : legs) {
-			if (!leg.edge) continue;
-			float travelTime = (mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
-			period += travelTime + (leg.dwellAtDestination ? mod->dwellSeconds : 0.f);
-		}
-		if (period <= 0.f) continue;
+		const RouteLine& line = lines[lineIdx];
+		if (lineIdx >= lineVehicles.size() || line.period <= 0.f) continue;
 
 		const vector<Vehicle*>& vehicles = lineVehicles[lineIdx];
 		int vehicleCount = static_cast<int>(vehicles.size());
 		for (int k = 0; k < vehicleCount; k++) {
-			float phase = period * static_cast<float>(k) / static_cast<float>(vehicleCount);
+			float phase = line.period * static_cast<float>(k) / static_cast<float>(vehicleCount);
 			Vehicle* vehicle = vehicles[k];
-			float localTime = fmodf(elapsedSeconds + phase + GetPhaseAdjust(vehicle), period);
-			if (localTime < 0.f) localTime += period;
+			float localTime = fmodf(elapsedSeconds + phase + GetPhaseAdjust(vehicle), line.period);
+			if (localTime < 0.f) localTime += line.period;
 			// 物理段（UE层的物理公交+Controller在开）：位姿和停站事件都由UE层负责，这里不碰，
 			// 否则时刻表会和实车打架、重复发进站/离站事件。交还时刻表时ResetStopState重新观察。
 			if (vehicle->IsPhysicsDriven()) continue;
 			Station* dwellStation = nullptr;
-			DriveVehicle(vehicle, legs, localTime, &dwellStation);
+			DriveVehicle(vehicle, line, localTime, &dwellStation);
 
 			// 停站/离站边沿检测，见route.h的StopEvent说明。
 			auto last = lastStopStation.find(vehicle);
@@ -553,48 +638,37 @@ void Route::ResetStopState(Vehicle* vehicle) {
 Route::ScheduleState Route::QueryVehicleState(const Vehicle* vehicle) const {
 	ScheduleState state;
 	if (!mod || !vehicle) return state;
-	constexpr float kGameSecondsPerRealSecond = 120.f; // 和DriveVehicle的缓动换算同一个假设
 
 	for (size_t lineIdx = 0; lineIdx < lines.size() && lineIdx < lineVehicles.size(); lineIdx++) {
-		const vector<RouteLeg>& legs = lines[lineIdx];
+		const RouteLine& line = lines[lineIdx];
 		const vector<Vehicle*>& vehicles = lineVehicles[lineIdx];
 		int vehicleCount = static_cast<int>(vehicles.size());
 		for (int k = 0; k < vehicleCount; k++) {
 			if (vehicles[k] != vehicle) continue;
+			if (line.period <= 0.f) return state;
 
-			float period = 0.f;
-			for (const RouteLeg& leg : legs) {
-				if (!leg.edge) continue;
-				float travelTime = (mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
-				period += travelTime + (leg.dwellAtDestination ? mod->dwellSeconds : 0.f);
-			}
-			if (period <= 0.f) return state;
-
-			float phase = period * static_cast<float>(k) / static_cast<float>(vehicleCount);
-			float t = fmodf(lastElapsedSeconds + phase + GetPhaseAdjust(vehicle), period);
-			if (t < 0.f) t += period;
+			float phase = line.period * static_cast<float>(k) / static_cast<float>(vehicleCount);
+			float t = fmodf(lastElapsedSeconds + phase + GetPhaseAdjust(vehicle), line.period);
+			if (t < 0.f) t += line.period;
 
 			state.line = static_cast<int>(lineIdx);
-			state.speedMapPerRealSecond = mod->speed * kGameSecondsPerRealSecond;
-			for (size_t i = 0; i < legs.size(); i++) {
-				const RouteLeg& leg = legs[i];
-				if (!leg.edge) continue;
-				float travelTime = (mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
-				if (t < travelTime) {
+			state.speedMapPerRealSecond = mod->normalSpeed * kGameSecondsPerRealSecond;
+			for (size_t i = 0; i < line.runs.size(); i++) {
+				const RouteRun& run = line.runs[i];
+				if (t < run.travelTime) {
 					state.valid = true;
 					state.legIndex = static_cast<int>(i);
 					return state;
 				}
-				t -= travelTime;
-				float dwell = leg.dwellAtDestination ? mod->dwellSeconds : 0.f;
-				if (t < dwell) {
+				t -= run.travelTime;
+				if (t < mod->dwellSeconds) {
 					state.valid = true;
 					state.legIndex = static_cast<int>(i);
 					state.dwelling = true;
-					state.dwellRemainingSeconds = (dwell - t) / kGameSecondsPerRealSecond;
+					state.dwellRemainingSeconds = (mod->dwellSeconds - t) / kGameSecondsPerRealSecond;
 					return state;
 				}
-				t -= dwell;
+				t -= mod->dwellSeconds;
 			}
 			return state;
 		}
@@ -610,30 +684,22 @@ float Route::GetPhaseAdjust(const Vehicle* vehicle) const {
 bool Route::SyncVehicleProgress(const Vehicle* vehicle, int legIndex, float legFraction, bool dwelling, float dwellFraction) {
 	if (!mod || !vehicle) return false;
 	for (size_t lineIdx = 0; lineIdx < lines.size() && lineIdx < lineVehicles.size(); lineIdx++) {
-		const vector<RouteLeg>& legs = lines[lineIdx];
+		const RouteLine& line = lines[lineIdx];
 		const vector<Vehicle*>& vehicles = lineVehicles[lineIdx];
 		int vehicleCount = static_cast<int>(vehicles.size());
 		for (int k = 0; k < vehicleCount; k++) {
 			if (vehicles[k] != vehicle) continue;
-			if (legIndex < 0 || legIndex >= static_cast<int>(legs.size())) return false;
+			if (legIndex < 0 || legIndex >= static_cast<int>(line.runs.size())) return false;
+			if (line.period <= 0.f) return false;
 
-			float period = 0.f;
 			float target = 0.f; // 目标进度对应的时刻表时间
-			for (size_t i = 0; i < legs.size(); i++) {
-				const RouteLeg& leg = legs[i];
-				float travelTime = (leg.edge && mod->speed > 0.f) ? leg.timeLength / mod->speed : 0.f;
-				float dwell = leg.dwellAtDestination ? mod->dwellSeconds : 0.f;
-				if (static_cast<int>(i) < legIndex) target += travelTime + dwell;
-				else if (static_cast<int>(i) == legIndex) {
-					target += dwelling ? travelTime + dwell * max(0.f, min(1.f, dwellFraction))
-						: travelTime * max(0.f, min(1.f, legFraction));
-				}
-				period += travelTime + dwell;
-			}
-			if (period <= 0.f) return false;
+			for (int i = 0; i < legIndex; i++) target += line.runs[i].travelTime + mod->dwellSeconds;
+			const RouteRun& run = line.runs[legIndex];
+			if (dwelling) target += run.travelTime + mod->dwellSeconds * max(0.f, min(1.f, dwellFraction));
+			else target += RunTimeAtArc(run, run.length * max(0.f, min(1.f, legFraction)));
 
-			float phase = period * static_cast<float>(k) / static_cast<float>(vehicleCount);
-			float adjust = fmodf(target - (lastElapsedSeconds + phase), period);
+			float phase = line.period * static_cast<float>(k) / static_cast<float>(vehicleCount);
+			float adjust = fmodf(target - (lastElapsedSeconds + phase), line.period);
 			phaseAdjust[vehicle] = adjust;
 			return true;
 		}
@@ -644,8 +710,8 @@ bool Route::SyncVehicleProgress(const Vehicle* vehicle, int legIndex, float legF
 vector<int> Route::GetLineStopNodeIds(size_t lineIndex) const {
 	vector<int> ids;
 	if (lineIndex >= lines.size()) return ids;
-	for (const RouteLeg& leg : lines[lineIndex]) {
-		const StationRoadLink* link = leg.fromStation ? leg.fromStation->GetRoadLink(leg.fromInterfaceIndex) : nullptr;
+	for (const RouteRun& run : lines[lineIndex].runs) {
+		const StationRoadLink* link = run.fromStation ? run.fromStation->GetRoadLink(run.fromStop) : nullptr;
 		if (!link || !link->stationNode) return {};
 		ids.push_back(link->stationNode->GetId());
 	}

@@ -24,14 +24,14 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
    （静态方法，不需要实例）探测要贴哪些路/哪一侧，每条请求创建一个不挂建筑的`Station`，
    坐标取`Map::GetLaneSegmentAt`的真实车道坐标（目前只有公交站用）。
 3. `InitRoutes`：对每个已注册且启用的`RouteMod`类型创建`Route`，收集`stationType`匹配的
-   `Station`接口交给`Route::Build()`；`Build()`按需创建的边缘`Station`交回这里持有。
+   `Station`(端口快照)交给`Route::Build()`；线路上的extern点由`Route`自己持有，不再创建额外的`Station`。
 4. `InitParkedVehicles`：对每个停车位按`ParkingSpot::categories`先随机选一个载具种类，再用
    `VehicleFactory::GetIdsByCategory(category)`（每个种类只查一次、本函数内缓存）从该种类已
    启用的车型里随机选一个，**不管是否drivable**；种类为空/该种类没有车型就跳过这个车位。种类
    是各`VehicleMod`的静态`GetCategory()`经`VehicleFactory::RegisterVehicle`注册的，`Vehicle`
    构造时向工厂按mod id查一次存成成员。`ParkingRoom`的车位种类是`{"car","bus"}`，
    `AirportRoom`有左右两个车位，种类`{"plane"}`，停`PlaneVehicle`。
-5. `InitTransitVehicles`：按线路名排序后对每条`Route`（车辆编号`Transit<N>`因此与哈希顺序无关）的每条line按`GetVehiclesPerLine()`创建车辆、
+5. `InitTransitVehicles`：按线路名排序后对每条`Route`（车辆编号`Transit<N>`因此与哈希顺序无关）的每条line按`GetLineVehicleCount(lineIdx)`(mod为每条线路单独指定，缺省1辆)创建车辆、
    `SetRouteBinding`、`AddVehicleToLine`。
 
 ### 停车位坐标

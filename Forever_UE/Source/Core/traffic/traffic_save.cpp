@@ -17,7 +17,6 @@ namespace {
 	enum StationKind : uint8_t {
 		STATION_BUILDING = 0, // 建在建筑里(Traffic::InitStations)
 		STATION_ROADSIDE = 1, // 贴路站点(Traffic::InitRoadsideStations)
-		STATION_EDGE = 2,     // 线路创建的地图边缘站点(Route::Build)
 	};
 
 	int VersionOf(const char* name) {
@@ -46,6 +45,45 @@ namespace {
 		return v;
 	}
 
+	void WriteSegments(const vector<TrackSegment>& segments, ByteWriter& w) {
+		w.U32(static_cast<uint32_t>(segments.size()));
+		for (const TrackSegment& seg : segments) {
+			w.F32(seg.x1); w.F32(seg.y1); w.F32(seg.z1);
+			w.F32(seg.c1x); w.F32(seg.c1y); w.F32(seg.c1z);
+			w.F32(seg.c2x); w.F32(seg.c2y); w.F32(seg.c2z);
+			w.F32(seg.x2); w.F32(seg.y2); w.F32(seg.z2);
+			w.Str(seg.mesh); w.F32(seg.meshUnit);
+		}
+	}
+	vector<TrackSegment> ReadSegments(ByteReader& r) {
+		vector<TrackSegment> segments(r.U32());
+		for (TrackSegment& seg : segments) {
+			seg.x1 = r.F32(); seg.y1 = r.F32(); seg.z1 = r.F32();
+			seg.c1x = r.F32(); seg.c1y = r.F32(); seg.c1z = r.F32();
+			seg.c2x = r.F32(); seg.c2y = r.F32(); seg.c2z = r.F32();
+			seg.x2 = r.F32(); seg.y2 = r.F32(); seg.z2 = r.F32();
+			seg.mesh = r.Str(); seg.meshUnit = r.F32();
+		}
+		return segments;
+	}
+	void WritePorts(const vector<StationPort>& ports, ByteWriter& w) {
+		w.U32(static_cast<uint32_t>(ports.size()));
+		for (const StationPort& p : ports) { w.F32(p.x); w.F32(p.y); w.F32(p.z); w.F32(p.dirX); w.F32(p.dirY); }
+	}
+	vector<StationPort> ReadPorts(ByteReader& r) {
+		vector<StationPort> ports(r.U32());
+		for (StationPort& p : ports) { p.x = r.F32(); p.y = r.F32(); p.z = r.F32(); p.dirX = r.F32(); p.dirY = r.F32(); }
+		return ports;
+	}
+	void WriteEndpoint(const RouteEndpoint& e, ByteWriter& w) {
+		w.U8(static_cast<uint8_t>(e.kind)); w.I32(e.station); w.I32(e.portIndex); w.Str(e.externName);
+	}
+	RouteEndpoint ReadEndpoint(ByteReader& r) {
+		RouteEndpoint e;
+		e.kind = static_cast<RouteEndpoint::Kind>(r.U8()); e.station = r.I32(); e.portIndex = r.I32(); e.externName = r.Str();
+		return e;
+	}
+
 	// 贴路站点挂在哪条路上：按map->GetRoads()的下标(InitRoadsideStations只在这些路上建站)。
 	int RoadIndex(const Map& map, const Road* road) {
 		return road ? SaveRefs::IndexOf(map.GetRoads(), road) : -1;
@@ -68,22 +106,25 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive&
 	w.U32(static_cast<uint32_t>(stationNames.size()));
 	for (const string& name : stationNames) {
 		const Station* s = traffic.stations.at(name);
-		uint8_t kind = s->edge ? STATION_EDGE : (s->building ? STATION_BUILDING : STATION_ROADSIDE);
+		uint8_t kind = s->building ? STATION_BUILDING : STATION_ROADSIDE;
 		w.Str(name);
 		w.U8(kind);
 		w.Str(SaveRefs::LookupId(stationIds, static_cast<const StationMod*>(s->mod)));
 		SaveRefs::WriteModState(s->mod, w);
 		w.Str(s->building ? s->building->GetName() : string());
 		w.I32(RoadIndex(map, s->attachedRoad));
-		w.U32(static_cast<uint32_t>(s->interfaces.size()));
-		for (const StationInterface& i : s->interfaces) {
-			w.F32(i.x); w.F32(i.y); w.F32(i.z);
-			w.F32(i.arriveDirX); w.F32(i.arriveDirY);
-			w.F32(i.departDirX); w.F32(i.departDirY);
+		WritePorts(s->inlets, w);
+		WritePorts(s->outlets, w);
+		WritePorts(s->stops, w);
+		w.U32(static_cast<uint32_t>(s->connections.size()));
+		for (const StationConnection& connection : s->connections) {
+			w.U8(static_cast<uint8_t>(connection.fromKind)); w.I32(connection.fromIndex);
+			w.U8(static_cast<uint8_t>(connection.toKind)); w.I32(connection.toIndex);
+			WriteSegments(connection.segments, w);
 		}
 	}
 
-	// 线路：站点表 + graph里的每条连线(正向/反向) + 各条线路的停靠顺序 + 每条线路上的车。
+	// 线路：mod状态 + 站点表 + extern点/站间连线(最终几何值)/停靠顺序 + 每条线路上的车；寻路图和运动学读档后重建。
 	vector<string> routeNames = SortedKeys(traffic.routes);
 	w.U32(static_cast<uint32_t>(routeNames.size()));
 	for (const string& name : routeNames) {
@@ -92,46 +133,26 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive&
 		w.Str(SaveRefs::LookupId(routeIds, static_cast<const RouteMod*>(route->mod)));
 		SaveRefs::WriteModState(route->mod, w);
 
-		unordered_map<const Station*, int> stopIndex;
 		w.U32(static_cast<uint32_t>(route->stopStations.size()));
-		for (size_t i = 0; i < route->stopStations.size(); i++) {
-			stopIndex[route->stopStations[i]] = static_cast<int>(i);
-			w.Str(route->stopStations[i] ? route->stopStations[i]->GetName() : string());
-		}
+		for (const Station* station : route->stopStations) w.Str(station ? station->GetName() : string());
 
-		vector<tuple<int, int, uint8_t>> edges;
-		for (auto& [fromKey, inner] : route->graph) {
-			for (auto& [toKey, edge] : inner) edges.emplace_back(fromKey, toKey, edge.reversed ? 1 : 0);
+		w.U32(static_cast<uint32_t>(route->mod->externs.size()));
+		for (const RouteExternNode& node : route->mod->externs) {
+			w.Str(node.name);
+			w.F32(node.x); w.F32(node.y); w.F32(node.z); w.F32(node.dirX); w.F32(node.dirY);
 		}
-		sort(edges.begin(), edges.end());
-		w.U32(static_cast<uint32_t>(edges.size()));
-		for (auto& [fromKey, toKey, reversed] : edges) {
-			w.I32(fromKey); w.I32(toKey); w.U8(reversed);
-			if (reversed) continue; // 反向边共用正向那份几何
+		w.U32(static_cast<uint32_t>(route->mod->links.size()));
+		for (const RouteLinkSpec& link : route->mod->links) {
+			WriteEndpoint(link.from, w);
+			WriteEndpoint(link.to, w);
+			w.U8(link.withinStation ? 1 : 0);
 			// instantiate线路的分段几何：地形已经按它抬升/挖洞，读档不能重新规划，直接存值。
-			const vector<TrackSegment>& track = route->graph.at(fromKey).at(toKey).track;
-			w.U32(static_cast<uint32_t>(track.size()));
-			for (const TrackSegment& seg : track) {
-				w.F32(seg.x1); w.F32(seg.y1); w.F32(seg.z1);
-				w.F32(seg.c1x); w.F32(seg.c1y); w.F32(seg.c1z);
-				w.F32(seg.c2x); w.F32(seg.c2y); w.F32(seg.c2z);
-				w.F32(seg.x2); w.F32(seg.y2); w.F32(seg.z2);
-				w.U8(seg.tunnel ? 1 : 0);
-			}
+			WriteSegments(link.segments, w);
 		}
-
-		auto stopOf = [&](const Station* station) {
-			auto it = stopIndex.find(station);
-			return it != stopIndex.end() ? it->second : -1;
-			};
-		w.U32(static_cast<uint32_t>(route->lines.size()));
-		for (const vector<Route::RouteLeg>& legs : route->lines) {
-			w.U32(static_cast<uint32_t>(legs.size()));
-			for (const Route::RouteLeg& leg : legs) {
-				w.I32(stopOf(leg.fromStation)); w.I32(leg.fromInterfaceIndex);
-				w.I32(stopOf(leg.toStation)); w.I32(leg.toInterfaceIndex);
-				w.U8(leg.dwellAtDestination ? (leg.silentDwell ? 2 : 1) : 0); // 2=停靠但不触发事件
-			}
+		w.U32(static_cast<uint32_t>(route->mod->lines.size()));
+		for (const vector<RouteLineEntry>& entries : route->mod->lines) {
+			w.U32(static_cast<uint32_t>(entries.size()));
+			for (const RouteLineEntry& entry : entries) { w.Str(entry.name); w.I32(entry.stopIndex); }
 		}
 
 		w.U32(static_cast<uint32_t>(route->lineVehicles.size()));
@@ -185,27 +206,26 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 			string stateText = r.Str();
 			string buildingName = r.Str();
 			int roadIndex = r.I32();
-			vector<StationInterface> interfaces(r.U32());
-			for (StationInterface& iface : interfaces) {
-				iface.x = r.F32(); iface.y = r.F32(); iface.z = r.F32();
-				iface.arriveDirX = r.F32(); iface.arriveDirY = r.F32();
-				iface.departDirX = r.F32(); iface.departDirY = r.F32();
+				vector<StationPort> inlets = ReadPorts(r), outlets = ReadPorts(r), stops = ReadPorts(r);
+				vector<StationConnection> connections(r.U32());
+			for (StationConnection& connection : connections) {
+				connection.fromKind = static_cast<PortKind>(r.U8()); connection.fromIndex = r.I32();
+				connection.toKind = static_cast<PortKind>(r.U8()); connection.toIndex = r.I32();
+				connection.segments = ReadSegments(r);
 			}
 			if (r.Failed()) break;
 
 			// 用原来的构造函数建(mod创建和SetProperty同新开局)，接口直接用存档里的值覆盖。
 			Station* station = nullptr;
-			if (kind == STATION_EDGE) {
-				station = new Station(name, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f);
-			}
-			else if (kind == STATION_BUILDING) {
+			if (kind == STATION_BUILDING) {
 				station = new Station(&traffic->stationFactory, modId, name, map.GetBuilding(buildingName));
 			}
 			else {
 				Road* road = (roadIndex >= 0 && roadIndex < static_cast<int>(map.GetRoads().size())) ? map.GetRoads()[roadIndex] : nullptr;
 				station = new Station(&traffic->stationFactory, modId, name, 0.f, 0.f, 0.f, 0.f, road);
 			}
-			station->interfaces = interfaces;
+			station->inlets = inlets; station->outlets = outlets; station->stops = stops;
+			station->connections = connections;
 			if (station->mod && !stateText.empty()) {
 				JsonValue root;
 				JsonReader reader;
@@ -234,70 +254,31 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 
 			uint32_t stopCount = r.U32();
 			for (uint32_t k = 0; k < stopCount && !r.Failed(); k++) route->stopStations.push_back(stationByName(r.Str()));
-			auto stopAt = [&](int index) -> Station* {
-				return (index >= 0 && index < static_cast<int>(route->stopStations.size())) ? route->stopStations[index] : nullptr;
-				};
 
-			// 连线：正向的按两端站点接口重新算几何；反向的共用正向那一份(owned=false)。
-			vector<tuple<int, int, uint8_t>> edges(r.U32());
-			vector<vector<TrackSegment>> tracks(edges.size()); // 下标和edges一一对应(反向边留空)
-			for (size_t e = 0; e < edges.size(); e++) {
-				auto& [fromKey, toKey, reversed] = edges[e];
-				fromKey = r.I32(); toKey = r.I32(); reversed = r.U8();
-				if (reversed) continue;
-				vector<TrackSegment>& track = tracks[e];
-				track.resize(r.U32());
-				for (TrackSegment& seg : track) {
-					seg.x1 = r.F32(); seg.y1 = r.F32(); seg.z1 = r.F32();
-					seg.c1x = r.F32(); seg.c1y = r.F32(); seg.c1z = r.F32();
-					seg.c2x = r.F32(); seg.c2y = r.F32(); seg.c2z = r.F32();
-					seg.x2 = r.F32(); seg.y2 = r.F32(); seg.z2 = r.F32();
-					seg.tunnel = r.U8() != 0;
-				}
+			uint32_t externCount = r.U32();
+			for (uint32_t k = 0; k < externCount && !r.Failed(); k++) {
+				RouteExternNode node;
+				node.name = r.Str();
+				node.x = r.F32(); node.y = r.F32(); node.z = r.F32(); node.dirX = r.F32(); node.dirY = r.F32();
+				route->mod->externs.push_back(std::move(node));
 			}
-			for (size_t e = 0; e < edges.size(); e++) {
-				auto& [fromKey, toKey, reversed] = edges[e];
-				if (reversed) continue;
-				Route::RouteEdge edge = route->BuildEdgeGeometry(&map, stopAt(fromKey / 100), fromKey % 100,
-					stopAt(toKey / 100), toKey % 100, &tracks[e]);
-				route->graph[fromKey][toKey] = edge;
+			uint32_t linkCount = r.U32();
+			for (uint32_t k = 0; k < linkCount && !r.Failed(); k++) {
+				RouteLinkSpec link;
+				link.from = ReadEndpoint(r);
+				link.to = ReadEndpoint(r);
+				link.withinStation = r.U8() != 0;
+				link.segments = ReadSegments(r);
+				route->mod->links.push_back(std::move(link));
 			}
-			for (auto& [fromKey, toKey, reversed] : edges) {
-				if (!reversed) continue;
-				auto forward = route->graph.find(toKey);
-				if (forward == route->graph.end() || !forward->second.count(fromKey)) continue;
-				Route::RouteEdge edge = forward->second.at(fromKey);
-				edge.owned = false;
-				edge.reversed = true;
-				route->graph[fromKey][toKey] = edge;
-			}
-
 			uint32_t lineCount = r.U32();
 			for (uint32_t k = 0; k < lineCount && !r.Failed(); k++) {
-				vector<Route::RouteLeg> legs;
-				uint32_t legCount = r.U32();
-				for (uint32_t m = 0; m < legCount && !r.Failed(); m++) {
-					int fromStop = r.I32(), fromInterface = r.I32();
-					int toStop = r.I32(), toInterface = r.I32();
-					uint8_t dwellCode = r.U8();
-					bool dwell = dwellCode != 0;
-					Route::RouteLeg leg;
-					leg.fromStation = stopAt(fromStop);
-					leg.fromInterfaceIndex = fromInterface;
-					leg.toStation = stopAt(toStop);
-					leg.toInterfaceIndex = toInterface;
-					leg.dwellAtDestination = dwell;
-					leg.silentDwell = dwellCode == 2;
-					auto graphIt = route->graph.find(Route::PackStop(fromStop, fromInterface));
-					if (graphIt != route->graph.end()) {
-						auto edgeIt = graphIt->second.find(Route::PackStop(toStop, toInterface));
-						if (edgeIt != graphIt->second.end()) leg.edge = &edgeIt->second;
-					}
-					if (leg.edge) legs.push_back(leg);
-				}
-				route->FinalizeLegTimes(legs);
-				route->lines.push_back(move(legs));
+				vector<RouteLineEntry> entries(r.U32());
+				for (RouteLineEntry& entry : entries) { entry.name = r.Str(); entry.stopIndex = r.I32(); }
+				route->mod->lines.push_back(std::move(entries));
 			}
+			if (r.Failed()) break;
+			route->Assemble(&map); // 同新开局：建寻路图+规划每条线路，几何都来自存档
 
 			vector<vector<string>> lineVehicles(r.U32());
 			for (vector<string>& names : lineVehicles) names = ReadStrings(r);

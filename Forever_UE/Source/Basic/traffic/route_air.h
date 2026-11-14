@@ -14,7 +14,7 @@ public:
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
-	virtual void LayoutRoute(const std::vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) override;
+	virtual void LayoutRoute(const std::vector<RouteStationInfo>& stations, int sizeX, int sizeY) override;
 
 public:
 	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。

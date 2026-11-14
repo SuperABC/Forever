@@ -70,6 +70,9 @@ public:
 	const std::vector<std::string>& GetMeshPaths() const;
 	const std::vector<TreeInstance>& GetTrees() const;
 
+	// 删掉满足pred的树(拆除楼体/园区时清掉范围内的树)，返回删掉的棵数。
+	int RemoveIf(const std::function<bool(const TreeInstance&)>& pred);
+
 private:
 	void AddTree(float x, float y, float baseScale, int meshIndex);
 

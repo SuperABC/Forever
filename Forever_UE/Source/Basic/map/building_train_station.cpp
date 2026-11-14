@@ -38,8 +38,8 @@ void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 	FloorAssetSpec assets;
 	assets.stairMeshPath = "/Game/Asset/Building/Mesh/Stair_Line.Stair_Line";
 	// 地下1层(站台层，楼梯通上来)+地面1层(大厅，左右两间站房)，两层各有2台电梯
-	AssignFloor(-1, "preset_train_station_bg+", direction, assets);
-	AssignFloor(0, "preset_train_station_fg-", direction, assets);
+	AssignFloor(-1, "preset_station_train_bg+", direction, assets);
+	AssignFloor(0, "preset_station_train_fg-", direction, assets);
 	AssignRoom(0, 0, "room_train_station", kComponent, kComponentId);
 	AssignRoom(0, 1, "room_train_station", kComponent, kComponentId);
 	AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
@@ -52,10 +52,14 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 	constexpr float kMinFrontage = 7.f;
 	constexpr float kMinDepth = 4.f;
 
+	// 已放火车站的中心点，商业区之间要互相离开kMinStationDistance才再放一座。
+	vector<pair<float, float>> stations;
+
 	for (Lot* lot : lots) {
 		if (!lot || lot->GetArea() != AREA_TEST) continue;
 
-		for (int dir = FACE_WEST; dir <= FACE_SOUTH; dir++) {
+		bool placed = false;
+		for (int dir = FACE_WEST; dir <= FACE_SOUTH && !placed; dir++) {
 			Lot* targetLot;
 			float marginStart, marginEnd, depth;
 			if (!lot->FindAdaptivePlacement(dir, kMinFrontage, kMinDepth, targetLot, marginStart, marginEnd, depth)) continue;
@@ -75,9 +79,51 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 			request.marginEnd = marginEnd;
 			request.depth = depth;
 			emit(context, request);
-			return;
+			stations.push_back({ lot->GetPosX(), lot->GetPosY() });
+			placed = true;
 		}
-		return; // 中心lot只有一个，4个方向都试过就不用再看其它lot
+		break; // 中心lot只有一个，4个方向都试过就不用再看其它lot
+	}
+
+	// 中/低密度商业区：规则是机场(building_airport)的一半，见building_train_station.md。
+	constexpr float kMinEdge = 10.f;        // 最长边小于它跳过
+	constexpr float kFullEdgeMax = 20.f;    // 最长边小于它沿路占满，否则取一个角
+	constexpr float kCornerFrontage = 15.f; // 取角时的沿路长度
+	constexpr float kMinLotDepth = 5.f;     // 进深小于它跳过
+	constexpr float kFullDepthMax = 10.f;   // 进深不超过它占满，超过只占kBigDepth
+	constexpr float kBigDepth = 7.5f;
+	constexpr float kMinStationDistance = 200.f;
+	for (Lot* lot : lots) {
+		if (!lot || (lot->GetArea() != AREA_COMMERCE_MIDDLE && lot->GetArea() != AREA_COMMERCE_LOW)) continue;
+
+		bool alongX = lot->GetSizeX() >= lot->GetSizeY();
+		float edge = alongX ? lot->GetSizeX() : lot->GetSizeY();
+		float lotDepth = alongX ? lot->GetSizeY() : lot->GetSizeX();
+		if (edge < kMinEdge || lotDepth < kMinLotDepth) continue;
+
+		bool tooClose = false;
+		for (const auto& station : stations) {
+			float dx = lot->GetPosX() - station.first, dy = lot->GetPosY() - station.second;
+			if (dx * dx + dy * dy < kMinStationDistance * kMinStationDistance) { tooClose = true; break; }
+		}
+		if (tooClose) continue;
+
+		int dirs[2] = { alongX ? FACE_NORTH : FACE_WEST, alongX ? FACE_SOUTH : FACE_EAST };
+		int direction = -1;
+		for (int dir : dirs) {
+			if (lot->GetBoundaryRoad(dir)) { direction = dir; break; }
+		}
+		if (direction < 0) continue;
+
+		// 取角贴沿路方向的末端(机场贴起端)，同一块地两者共存时不重叠。
+		LotPlacementRequest request;
+		request.lot = lot;
+		request.direction = direction;
+		request.marginStart = edge < kFullEdgeMax ? 0.f : edge - kCornerFrontage;
+		request.marginEnd = 0.f;
+		request.depth = lotDepth <= kFullDepthMax ? lotDepth : kBigDepth;
+		emit(context, request);
+		stations.push_back({ lot->GetPosX(), lot->GetPosY() });
 	}
 }
 

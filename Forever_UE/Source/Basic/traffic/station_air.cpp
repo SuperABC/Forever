@@ -21,33 +21,25 @@ void AirStation::SetProperty() {
 }
 
 void AirStation::Layout(int direction, float sizeX, float sizeY) {
-	// 两条跑道、四个接口，顺序/分组规则同TrainStation::Layout，见station_air.md。
-	constexpr float kRunwayDepth1 = 0.65f;
-	constexpr float kRunwayDepth2 = 0.85f;
-	constexpr float kInterfaceZ = 0.001f;
+	// 两条跑道，端口规则同TrainStation::Layout(下标=跑道号)，见station_air.md；停靠位在跑道中点。
+	constexpr float kRunwayDepth[2] = { 0.65f, 0.85f };
+	constexpr float kPortZ = 0.001f;
 
-	float headingToRight = AlongAxisHeadingDegrees(direction, true);
-	float headingToLeft = AlongAxisHeadingDegrees(direction, false);
+	float headings[2] = { AlongAxisHeadingDegrees(direction, true), AlongAxisHeadingDegrees(direction, false) };
+	float inAlong[2] = { 0.3f, 0.7f }, outAlong[2] = { 0.7f, 0.3f };
 
-	StationInterfaceSpec leftIn;
-	leftIn.position = NearRoadPoint(direction, 0.3f, kRunwayDepth1);
-	leftIn.headingDegrees = headingToRight;
-	leftIn.z = kInterfaceZ;
+	inlets.clear(); outlets.clear(); stops.clear(); connections.clear();
+	for (int r = 0; r < 2; r++) {
+		StationPortSpec in, out, stop;
+		in.position = NearRoadPoint(direction, inAlong[r], kRunwayDepth[r]);
+		out.position = NearRoadPoint(direction, outAlong[r], kRunwayDepth[r]);
+		stop.position = NearRoadPoint(direction, 0.5f, kRunwayDepth[r]);
+		in.headingDegrees = out.headingDegrees = stop.headingDegrees = headings[r];
+		in.z = out.z = stop.z = kPortZ;
+		inlets.push_back(in); outlets.push_back(out); stops.push_back(stop);
 
-	StationInterfaceSpec rightOut;
-	rightOut.position = NearRoadPoint(direction, 0.7f, kRunwayDepth1);
-	rightOut.headingDegrees = headingToRight; // 和leftIn同向，两点连线才是跑道1这条直线
-	rightOut.z = kInterfaceZ;
-
-	StationInterfaceSpec rightIn;
-	rightIn.position = NearRoadPoint(direction, 0.7f, kRunwayDepth2);
-	rightIn.headingDegrees = headingToLeft;
-	rightIn.z = kInterfaceZ;
-
-	StationInterfaceSpec leftOut;
-	leftOut.position = NearRoadPoint(direction, 0.3f, kRunwayDepth2);
-	leftOut.headingDegrees = headingToLeft; // 和rightIn同向，两点连线是跑道2这条直线
-	leftOut.z = kInterfaceZ;
-
-	interfaces = { leftIn, rightOut, rightIn, leftOut };
+		connections.push_back(StraightConnection(PortKind::Inlet, r, in.position, PortKind::Stop, r, stop.position, kPortZ));
+		connections.push_back(StraightConnection(PortKind::Stop, r, stop.position, PortKind::Outlet, r, out.position, kPortZ));
+		connections.push_back(StraightConnection(PortKind::Inlet, r, in.position, PortKind::Outlet, r, out.position, kPortZ));
+	}
 }

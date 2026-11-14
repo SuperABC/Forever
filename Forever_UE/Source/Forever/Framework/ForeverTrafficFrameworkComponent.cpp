@@ -129,10 +129,9 @@ namespace {
 		RouteAppendQuadDoubleSided(vertices, triangles, from - offset, to - offset, to + offset, from + offset);
 	}
 
-	// 一条edge(多段segments拼起来)按弧长采样成世界坐标折线。edge->reversed只影响遍历方向/切线符号，
-	// 不影响曲线形状，所以不处理。相邻两段共享的端点只采一次。
-	void SampleRouteEdge(const Route::RouteEdge& edge, TArray<FVector>& outPoints) {
-		for (Connection* seg : edge.segments) {
+	// 一条路径(多段connections拼起来)按弧长采样成世界坐标折线。相邻两段共享的端点只采一次。
+	void SampleRouteEdge(const TrackPath& edge, TArray<FVector>& outPoints) {
+		for (Connection* seg : edge.connections) {
 			if (!seg) continue;
 			float segLength = seg->CalcDistance(); // 地图单位
 			int steps = FMath::Max(ROUTE_DEBUG_MIN_STEPS, FMath::CeilToInt(segLength / ROUTE_DEBUG_SAMPLE_STEP));
@@ -201,10 +200,10 @@ void UForeverTrafficFrameworkComponent::GenerateVehicles(Map* map, Traffic* traf
 	// 辅助导航节点 id -> 车站：Controller 进出站时按节点 id 反查是哪个站，发 enter_stop/leave_stop。
 	for (const auto& [routeName, route] : traffic->GetRoutes()) {
 		if (!route) continue;
-		for (const vector<Route::RouteLeg>& legs : route->GetLines()) {
-			for (const Route::RouteLeg& leg : legs) {
-				const StationRoadLink* link = leg.fromStation ? leg.fromStation->GetRoadLink(leg.fromInterfaceIndex) : nullptr;
-				if (link && link->stationNode) stationByNodeId.Add(link->stationNode->GetId(), leg.fromStation);
+		for (const Route::RouteLine& line : route->GetLines()) {
+			for (const Route::RouteRun& run : line.runs) {
+				const StationRoadLink* link = run.fromStation ? run.fromStation->GetRoadLink(run.fromStop) : nullptr;
+				if (link && link->stationNode) stationByNodeId.Add(link->stationNode->GetId(), run.fromStation);
 			}
 		}
 	}
@@ -737,16 +736,21 @@ void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 		TArray<int32>* triangles;
 		targetArrays(stationType, vertices, triangles);
 
-		for (const vector<Route::RouteLeg>& legs : route->GetLines()) {
-			for (const Route::RouteLeg& leg : legs) {
-				if (!leg.edge) continue;
+		// 多条线路共用同一段路径只画一次。
+		TSet<const TrackPath*> drawn;
+		for (const Route::RouteLine& line : route->GetLines()) {
+			for (const Route::RouteRun& run : line.runs) {
+				for (const Route::RoutePiece& piece : run.pieces) {
+					if (!piece.path || drawn.Contains(piece.path.get())) continue;
+					drawn.Add(piece.path.get());
 
-				TArray<FVector> points;
-				SampleRouteEdge(*leg.edge, points);
-				for (int32 i = 0; i + 1 < points.Num(); i++) {
-					AppendRouteEdgeRibbon(*vertices, *triangles, points[i], points[i + 1], ROUTE_DEBUG_EDGE_HALF_WIDTH);
+					TArray<FVector> points;
+					SampleRouteEdge(*piece.path, points);
+					for (int32 i = 0; i + 1 < points.Num(); i++) {
+						AppendRouteEdgeRibbon(*vertices, *triangles, points[i], points[i + 1], ROUTE_DEBUG_EDGE_HALF_WIDTH);
+					}
+					AppendRouteArrow(*vertices, *triangles, points, false);
 				}
-				AppendRouteArrow(*vertices, *triangles, points, leg.edge->reversed);
 			}
 		}
 	}
@@ -759,10 +763,12 @@ void UForeverTrafficFrameworkComponent::BuildRouteDebugMesh(Traffic* traffic) {
 		TArray<int32>* triangles;
 		targetArrays(stationType, vertices, triangles);
 
-		for (const StationInterface& iface : station->GetInterfaces()) {
-			FVector world(iface.x * TRAFFIC_WORLD_SCALE, iface.y * TRAFFIC_WORLD_SCALE, iface.z * TRAFFIC_WORLD_SCALE);
-			AppendRouteStationBox(*vertices, *triangles, FVector2D(world.X, world.Y),
-				ROUTE_DEBUG_NODE_HALF_SIZE, world.Z, world.Z + ROUTE_DEBUG_HEIGHT);
+		for (const vector<StationPort>* ports : { &station->GetInlets(), &station->GetOutlets(), &station->GetStops() }) {
+			for (const StationPort& port : *ports) {
+				FVector world(port.x * TRAFFIC_WORLD_SCALE, port.y * TRAFFIC_WORLD_SCALE, port.z * TRAFFIC_WORLD_SCALE);
+				AppendRouteStationBox(*vertices, *triangles, FVector2D(world.X, world.Y),
+					ROUTE_DEBUG_NODE_HALF_SIZE, world.Z, world.Z + ROUTE_DEBUG_HEIGHT);
+			}
 		}
 	}
 
@@ -990,51 +996,38 @@ void UForeverTrafficFrameworkComponent::BuildTracks(Traffic* traffic) {
 	for (auto& [routeName, route] : traffic->GetRoutes()) {
 		if (!route || !route->ShouldInstantiate()) continue;
 
-		const string& trackMesh = route->GetTrackMesh();
-		float unit = route->GetTrackUnit();
-		if (trackMesh.empty() || unit <= 0.f) {
-			debugf("UForeverTrafficFrameworkComponent::BuildTracks: route %s has no trackMesh/trackUnit, skip laying tracks.\n",
-				route->GetName().c_str());
-			continue;
-		}
-		const string& tunnelMesh = route->GetTrackTunnelMesh().empty() ? trackMesh : route->GetTrackTunnelMesh();
-
-		// 正反向共用同一份几何，同一条边只铺一次(跳过reversed和重复的边指针)。
-		TSet<const Route::RouteEdge*> laid;
+		// 路径图里的每条路径(站内连线+站间连线，已去重)按每一段自带的mesh/meshUnit铺；mesh为空的段(站内直通等)不铺。
 		int32 instanceCount = 0;
-		for (const vector<Route::RouteLeg>& legs : route->GetLines()) {
-			for (const Route::RouteLeg& leg : legs) {
-				const Route::RouteEdge* edge = leg.edge;
-				if (!edge || edge->reversed || laid.Contains(edge)) continue;
-				laid.Add(edge);
+		for (const shared_ptr<TrackPath>& path : route->GetTrackPaths()) {
+			if (!path) continue;
+			for (size_t segIndex = 0; segIndex < path->connections.size() && segIndex < path->segments.size(); segIndex++) {
+				Connection* conn = path->connections[segIndex];
+				const TrackSegment& segment = path->segments[segIndex];
+				float unit = segment.meshUnit;
+				if (!conn || segment.mesh.empty() || unit <= 0.f) continue;
+				UInstancedStaticMeshComponent* ism = GetOrCreateTrackISM(segment.mesh);
+				if (!ism) continue;
 
-				for (size_t segIndex = 0; segIndex < edge->segments.size(); segIndex++) {
-					Connection* conn = edge->segments[segIndex];
-					bool tunnel = segIndex < edge->track.size() && edge->track[segIndex].tunnel;
-					UInstancedStaticMeshComponent* ism = GetOrCreateTrackISM(tunnel ? tunnelMesh : trackMesh);
-					if (!ism || !conn) continue;
+				// 同BuildRoadInstances：n夹在[0.8,1.2]*unit之内，scaleAlong把每块拉伸到实际段长。
+				float segLen = conn->CalcDistance();
+				int nLow = FMath::CeilToInt(segLen / (1.2f * unit));
+				int nHigh = FMath::FloorToInt(segLen / (0.8f * unit));
+				int n = (nLow <= nHigh && nLow > 0) ? FMath::Clamp(FMath::RoundToInt(segLen / unit), nLow, nHigh) : FMath::Max(1, FMath::RoundToInt(segLen / unit));
+				float scaleAlong = (segLen / n) / unit;
 
-					// 同BuildRoadInstances：n夹在[0.8,1.2]*unit之内，scaleAlong把每块拉伸到实际段长。
-					float segLen = conn->CalcDistance();
-					int nLow = FMath::CeilToInt(segLen / (1.2f * unit));
-					int nHigh = FMath::FloorToInt(segLen / (0.8f * unit));
-					int n = (nLow <= nHigh && nLow > 0) ? FMath::Clamp(FMath::RoundToInt(segLen / unit), nLow, nHigh) : FMath::Max(1, FMath::RoundToInt(segLen / unit));
-					float scaleAlong = (segLen / n) / unit;
+				for (int k = 0; k < n; k++) {
+					float t0 = static_cast<float>(k) / n;
+					float t1 = static_cast<float>(k + 1) / n;
+					Node start = conn->GetPoint(t0);
+					Node end = conn->GetPoint(t1);
+					FVector startW(start.GetX() * TRAFFIC_WORLD_SCALE, start.GetY() * TRAFFIC_WORLD_SCALE, start.GetZ() * TRAFFIC_WORLD_SCALE);
+					FVector endW(end.GetX() * TRAFFIC_WORLD_SCALE, end.GetY() * TRAFFIC_WORLD_SCALE, end.GetZ() * TRAFFIC_WORLD_SCALE);
 
-					for (int k = 0; k < n; k++) {
-						float t0 = static_cast<float>(k) / n;
-						float t1 = static_cast<float>(k + 1) / n;
-						Node start = conn->GetPoint(t0);
-						Node end = conn->GetPoint(t1);
-						FVector startW(start.GetX() * TRAFFIC_WORLD_SCALE, start.GetY() * TRAFFIC_WORLD_SCALE, start.GetZ() * TRAFFIC_WORLD_SCALE);
-						FVector endW(end.GetX() * TRAFFIC_WORLD_SCALE, end.GetY() * TRAFFIC_WORLD_SCALE, end.GetZ() * TRAFFIC_WORLD_SCALE);
-
-						// 轨道mesh沿局部+X延伸、轴心在起点边：摆在块的起点，朝向取起点->终点的3D方向。
-						FVector fwd = (endW - startW).GetSafeNormal();
-						if (fwd.IsNearlyZero()) fwd = FVector::ForwardVector;
-						ism->AddInstance(FTransform(fwd.Rotation(), startW, FVector(scaleAlong, 1.f, 1.f)));
-						instanceCount++;
-					}
+					// 轨道mesh沿局部+X延伸、轴心在起点边：摆在块的起点，朝向取起点->终点的3D方向。
+					FVector fwd = (endW - startW).GetSafeNormal();
+					if (fwd.IsNearlyZero()) fwd = FVector::ForwardVector;
+					ism->AddInstance(FTransform(fwd.Rotation(), startW, FVector(scaleAlong, 1.f, 1.f)));
+					instanceCount++;
 				}
 			}
 		}

@@ -134,14 +134,9 @@ void Traffic::InitRoutes(Map* map) {
 			continue;
 		}
 
-		vector<Station*> createdEdgeStations;
-		route->Build(map, allStations, createdEdgeStations);
-		for (Station* edgeStation : createdEdgeStations) {
-			stations.insert_or_assign(edgeStation->GetName(), edgeStation);
-		}
+		route->Build(map, allStations);
 
-		debugf("Traffic::InitRoutes: route %s built %d line(s), %d edge station(s).\n",
-			name.c_str(), static_cast<int>(route->GetLines().size()), static_cast<int>(createdEdgeStations.size()));
+		debugf("Traffic::InitRoutes: route %s built %d line(s).\n", name.c_str(), static_cast<int>(route->GetLines().size()));
 
 		routes.insert_or_assign(name, route);
 	}
@@ -201,9 +196,9 @@ void Traffic::InitTransitVehicles() {
 	sort(routeNames.begin(), routeNames.end());
 	for (const string& routeName : routeNames) {
 		Route* route = routes.at(routeName);
-		const vector<vector<Route::RouteLeg>>& lines = route->GetLines();
+		const vector<Route::RouteLine>& lines = route->GetLines();
 		for (size_t lineIdx = 0; lineIdx < lines.size(); lineIdx++) {
-			for (int k = 0; k < route->GetVehiclesPerLine(); k++) {
+			for (int k = 0; k < route->GetLineVehicleCount(lineIdx); k++) {
 				string name = "Transit" + to_string(vehicleCounter++);
 				Vehicle* vehicle = CreateVehicle(route->GetVehicleType(), name);
 				if (!vehicle) continue;

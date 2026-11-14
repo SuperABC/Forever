@@ -2,34 +2,16 @@
 
 ## 职责
 
-TrainRoute/AirRoute共用的单站双跑道(轨道)四接口环线拓扑`LayoutDualTrackStationLoop`(一次处理一个站点，多站各调一次、结果追加)。
+`TrainRoute`/`AirRoute`共用的小工具。`RayBoxIntersection`(射线与地图边界的交点，`AirRoute`算extern用)和`MakeBezierSegment`(造带端点 z 的 `TrackSegment`)。
 
 ## 关键设计
 
-- **`LayoutDualTrackStationLoop`(TrainRoute/AirRoute共用)的拓扑**：
-  ```
-  leftEdgeIn -> leftIn -(轨道1)-> stop1 -> rightOut -> rightEdgeOut -> rightEdgeMid -> rightEdgeIn -> rightIn -(轨道2)-> stop2 -> leftOut -> leftEdgeOut -> leftEdgeMid -> (回到leftEdgeIn)
-  ```
-  `interfaces`固定顺序`[leftIn, rightOut, rightIn, leftOut]`(`TrainStation`/
-  `AirStation::Layout`保证，见`station_*.md`)。`leftIn`/`rightOut`朝向相同，两点连线
-  是跑道/轨道1；`rightIn`/`leftOut`同理是跑道/轨道2。每个地图边界有两条线：出地图的线（`xxOut`端点，
-  沿出站接口的出发方向射线求和地图边界的交点`RayBoxIntersection`）和进地图的线（`xxIn`端点，沿进站接口
-  出发方向的反向回溯到边界），两个端点之间插一个虚拟车站`xxMid`（位置、`z`取平均）。`Out->Mid->In`是贴着边界的
-  一小段横向连线（Out出发/Mid两头/In到达都朝侧向，三点直线连接）。`Mid`是`dwell=true, silent=true`——火车
-  会在那里停靠`dwellSeconds`，但不触发`enter_stop`/`leave_stop`事件（`Route::DriveVehicle`不把它报给边沿检测，
-  `RouteLeg::silentDwell`，存档里用dwell字节的值2表示）。
-  - `stop1`/`stop2`是各自跑道/轨道两端的中点(位置、朝向、`z`都是简单平均，两端共线同向，
-    中点自然也在同一条线上)，和边缘站点一样借用"没有building的合成站点"
-    机制(`RouteStationInfo.isEdge=true`，只是复用`Route::Build()`已有的创建+收集逻辑，不
-    代表真的是地图边缘)。`leftIn`/`rightOut`/`rightIn`/`leftOut`和边缘的Out/In端点
-    全部标`dwell=false`(纯过路点)，只有`stop1`/`stop2`是`dwell=true`——真正的停靠
-    动作只应该发生在跑道/轨道的中点，不是每个过路接口都停一次。
-  - 追加到`outEdgeStations`的八个元素(`leftEdgeOut/Mid/In`、`rightEdgeOut/Mid/In`、`stop1/stop2`)顺序决定了它们在
-    Core站点总列表里的下标(`edgeBase+0`到`+7`)。`edgeBase`由调用方给(真实站点数+前面已追加的边缘站点数，
-    单站如`TrainRoute`就是`stationIndex+1`)；`stop1`/`stop2`的相对下标是`kDualTrackStop1`/`kDualTrackStop2`
-    (`AirRoute`互联线路要引用)，新增元素/调整顺序时要同步这几个常量。
-- **`LayoutDualTrackStationLoop`的边界节点**：左边界沿`leftIn`朝向的反方向射线出图得到(飞机/火车从图外来的方向)，右边界沿`rightOut`朝向射线出图；边界节点的到达/出发朝向直接复用相邻接口的朝向(同向的复用，掉头的取反)。`overrideEdgeZ`为true时边缘站点z取`edgeHeight`(AirRoute的巡航高度)，否则取接口原本的z。
+- 原来的单站双跑道环线`LayoutDualTrackStationLoop`已删除：飞机改成按天空节点自己布线(见`route_air.md`)，火车改成多站绕地图中心成环(见`route_train.md`)，都不再共用它。
+
+- **`MakeBezierSegment(x1,y1,z1,h1x,h1y,x2,y2,z2,h2x,h2y,arm,terrainFollow=false)`**：由两端点和水平朝向(h1 出发方向、h2 到达方向)造一段三次贝塞尔。`arm<=0` 时控制点取三等分点(直线)，否则沿朝向放 `arm`；控制点 z 取端点 z(两端水平切线)。`mesh`/`meshUnit` 由调用方事后填。
+- `route_train`/`route_air` 的 `LayoutRoute` 用它拼 link 段。
 
 ## 依赖关系
 
-- 被谁依赖：`LayoutDualTrackStationLoop`只有`route_train`在用(`AirRoute`改成自己按天空节点布线，见`route_air.md`)；`RayBoxIntersection`导出给`route_air`算extern。
+- 依赖：`traffic/station_mod.h`(`TrackSegment`)。
+- 被谁依赖：`route_train.cpp`、`route_air.cpp`。

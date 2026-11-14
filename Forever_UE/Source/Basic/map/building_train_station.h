@@ -3,7 +3,7 @@
 #include "map/building_mod.h"
 
 
-// 火车站，全图唯一一个，承载StationMod"station_train"。公交站不走Building/Lot路径，见
+// 火车站，承载StationMod"station_train"。公交站不走Building/Lot路径，见
 // station_*.h的BusStation::AssignRoads。
 class TrainStationBuilding : public BuildingMod {
 public:

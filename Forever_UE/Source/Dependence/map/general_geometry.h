@@ -231,6 +231,8 @@ public:
 	// 车道分裂/开口标记，见RoadOpening注释。
 	void AddOpening(const RoadOpening& opening);
 	const std::vector<RoadOpening>& GetOpenings() const;
+	// 删掉t相同(容差1e-5)的第一个开口，返回是否删到；拆除楼体/园区时撤销它当初挖的出入口。
+	bool RemoveOpening(float t, bool isVehicle);
 
 	// side(0/1)车行+停车+人行道宽度总和。
 	float GetSideWidth(int side) const;
@@ -366,6 +368,13 @@ struct TerrainFitRequest {
 	std::vector<TerrainFitSample> centerline;
 	float width = 0.f;   // 整宽(地图element单位)
 	float falloff = 0.f; // 边缘向外渐变回原地形的距离
+};
+
+// 拆除请求(RouteMod::AddDemolition产出)：沿折线centerline宽width的条带扫过的楼体(及其所在园区)全部拆除，
+// 宿主Map::DemolishAlongStrips处理。折线点是世界xy(地图element单位)。
+struct DemolishRequest {
+	std::vector<std::pair<float, float>> centerline;
+	float width = 0.f;
 };
 
 // 把connection上[t1,t2]包成Quad追加进out(挖地形洞)。tunnel=true时带侧壁,仅隧道口用。

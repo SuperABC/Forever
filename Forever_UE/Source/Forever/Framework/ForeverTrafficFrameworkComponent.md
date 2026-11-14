@@ -74,11 +74,10 @@
 ### 线路调试画线与铺轨
 
 - **`BuildRouteDebugMesh`**：每种`stationType`一个`UProceduralMeshComponent`+MID（bus绿/train蓝/plane红/其它默认色，`GetRouteDebugTarget`选），
-  按`route->GetLines()`里每条腿的edge几何采样（`SampleRouteEdge`，每`ROUTE_DEBUG_SAMPLE_STEP`地图单位一个采样点，至少16段）连成ribbon，
-  边中点画箭头指示方向（`reversed`时反向），站点接口画小方块。`bShowRouteDebug`（默认true）为false时`ClearMeshSection`而不是跳过，避免旧可视化残留。
-- **`BuildTracks`**：对`ShouldInstantiate()`的线路（火车），遍历`GetLines()`的边（跳过`reversed`、按边指针去重），每个`Connection`段按`BuildRoadInstances`同样的平铺（块数夹在`[0.8,1.2]*trackUnit`，`scaleAlong`拉伸，
-  `GetOrCreateTrackISM`每种mesh一个`RF_Transient`的ISM，重铺前先`ClearInstances`）。区别：轨道mesh轴心在起点边（沿+X延伸），所以每块摆在自己的**起点**，朝向取起点→终点的3D方向（含坡度）；
-  `edge->track[i].tunnel`的段换用`GetTrackTunnelMesh()`（空则复用`GetTrackMesh()`）。读档时同样重铺（几何从存档来）。
+  遍历`route->GetLines()`的`runs`→`pieces`，按每个`TrackPath`几何采样（`SampleRouteEdge(const TrackPath&)`，每`ROUTE_DEBUG_SAMPLE_STEP`地图单位一个采样点，至少16段，`TSet<const TrackPath*>`去重）连成ribbon，
+  路径中点画箭头指示方向，站点的inlet/outlet/stop画小方块。`bShowRouteDebug`（默认true）为false时`ClearMeshSection`而不是跳过，避免旧可视化残留。`stationByNodeId`遍历`RouteLine::runs`。
+- **`BuildTracks`**：对`ShouldInstantiate()`的线路（火车），遍历`route->GetTrackPaths()`（站内连线+站间连线，已去重），**每段用自己的`mesh`/`meshUnit`**（空mesh的段不铺），每个`Connection`段按`BuildRoadInstances`同样的平铺（块数夹在`[0.8,1.2]*unit`，`scaleAlong`拉伸，
+  `GetOrCreateTrackISM`每种mesh一个`RF_Transient`的ISM，重铺前先`ClearInstances`）。区别：轨道mesh轴心在起点边（沿+X延伸），所以每块摆在自己的**起点**，朝向取起点→终点的3D方向（含坡度）。隧道没有专用标志，由mod直接把段的`mesh`换成隧道资产。读档时同样重铺（几何从存档来）。
 - `GenerateVehicles`每个组件实例只调用一次：新开局/读档都经`LoadMap`重建`AForeverFrameworkActor`及其组件，所以不需要清`carEntries`/`activeVehicles`/`activeTransitVehicles`；同一蓝图路径在公交分支只`LoadClass`一次，transit类与物理表示类共用结果。
 
 ## 脚本驱动的车辆导航（vehicle_navigate / vehicle_arrive）
@@ -106,7 +105,7 @@
 ## 待办/后续阶段
 
 - 公共交通运动学车辆本身不支持驾驶，见`TransitVehicleElement.md`"待办"一节。
-- 暂无隧道专用轨道资产，隧道内复用`trackMesh`。
+- 暂无隧道专用轨道资产，隧道段目前用普通轨道mesh（改`TrainRoute::BuildTrack`里隧道段的`mesh`即可）。
 
 ## 跳时间后的公交
 `ResyncBusesAfterTimeSkip()`：线路公交的物理车(实车位置)已跟时刻表脱节，全部`BusToKinematic(state, false)`(不对齐实车进度)，

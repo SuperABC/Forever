@@ -2,59 +2,57 @@
 
 #include "common/mod_state.h"
 #include "map/general_geometry.h"
+#include "traffic/station_mod.h"
 
 #include <string>
 #include <vector>
 #include <functional>
 
 
-// Core->mod的只读站点接口快照(世界坐标,地图单位),含stationType匹配的真实站点接口和其它Route已请求的边缘站点(isEdge=true)。
+// Core->mod的端口快照(世界坐标,地图单位)。
+struct RoutePort {
+	float x = 0.f, y = 0.f, z = 0.f;
+	float dirX = 0.f, dirY = 0.f; // 行驶方向(单位向量)
+};
+
+// Core->mod的只读站点快照：stationType匹配的每个真实站点一条。
 struct RouteStationInfo {
 	std::string name;
+	int stationIndex = -1; // 站点在Core侧站点列表里的下标，RouteEndpoint::station引用它
+	float x = 0.f, y = 0.f; // 站点中心
+	std::vector<RoutePort> inlets, outlets, stops;
+};
+
+// route mod放在地图上的纯路径点(地图边界、天空点等)：没有站点，不停靠、不触发事件、不限速，只能被links当端点、被lines当必经点。
+struct RouteExternNode {
+	std::string name; // 本route内唯一
 	float x = 0.f, y = 0.f, z = 0.f;
-	float arriveDirX = 0.f, arriveDirY = 0.f;
-	float departDirX = 0.f, departDirY = 0.f;
-	bool isEdge = false;
-	// 站点在Core侧站点列表里的下标(真实站点在前,edgeStations在后);interfaceIndex是该站点的第几个接口。
-	int stationIndex = -1;
-	int interfaceIndex = 0;
+	float dirX = 0.f, dirY = 0.f;
 };
 
-// 线路上的一站,station是RouteStationInfo列表的下标。dwell=false为纯过路点(到达后不停留),见route_mod.md。
-struct RouteStop {
-	int station = -1;
-	int interfaceIndex = 0;
-	bool dwell = true;
-	// dwell=true时有效:停靠但不触发enter_stop/leave_stop(地图边缘虚拟车站用)。
-	bool silent = false;
+// link的一端：站点的出站口/进站口，或一个extern node。
+struct RouteEndpoint {
+	enum Kind : int { Outlet = 0, Inlet = 1, Extern = 2 };
+	Kind kind = Outlet;
+	int station = -1;       // Outlet/Inlet：RouteStationInfo::stationIndex
+	int portIndex = 0;      // Outlet/Inlet：该站outlets/inlets下标
+	std::string externName; // Extern
 };
 
-// BuildTrack的输入:links[i]两端落在哪两个站点接口上(世界坐标),与trackEdges一一对应。
-struct RouteTrackLinkEnds {
-	RouteStationInfo from;
-	RouteStationInfo to;
-};
-
-// BuildTrack的输出:一条link的一段三次贝塞尔轨道(世界坐标)。纯值类型,不放Node/Connection(避免跨DLL id/所有权问题);
-// tunnel=true时UE侧用trackTunnelMesh。
-struct TrackSegment {
-	float x1 = 0.f, y1 = 0.f, z1 = 0.f;
-	float c1x = 0.f, c1y = 0.f, c1z = 0.f;
-	float c2x = 0.f, c2y = 0.f, c2z = 0.f;
-	float x2 = 0.f, y2 = 0.f, z2 = 0.f;
-	bool tunnel = false;
-};
-
-// 一条link的轨道：segments按行驶顺序首尾相接。
-struct TrackEdgeGeometry {
+// 站间连线：单向，segments是mod算好的完整几何(按行驶顺序首尾相接的三次贝塞尔，含抬升/天空段/绕地图边界出城再回来)，
+// 合法组合Outlet->Inlet、Outlet->Extern、Extern->Inlet、Extern->Extern。Core只按它建曲线、不做任何连线计算。
+// withinStation=true：同站内转场(如飞机从降落跑道滑行到起飞跑道)，所在行驶按sameStationSpeed。
+struct RouteLinkSpec {
+	RouteEndpoint from;
+	RouteEndpoint to;
+	bool withinStation = false;
 	std::vector<TrackSegment> segments;
 };
 
-// 有向图的一条边,bidirectional=true时同一份几何两个方向都能走,见route_mod.md。
-struct RouteLink {
-	RouteStop from;
-	RouteStop to;
-	bool bidirectional = false;
+// 线路上的一个必经点：stopIndex>=0 = 在站name的第stopIndex个停靠位停靠；stopIndex<0 = name是extern名，只经过不停。
+struct RouteLineEntry {
+	std::string name;
+	int stopIndex = -1;
 };
 
 // 设计见route_mod.md。
@@ -72,44 +70,25 @@ public:
 	// 选项——子类SetProperty()里填好，Core只读。
 	std::string stationType;    // 接哪类站点，见station_mod.h
 	std::string vehicleType;    // 这条线路生成的VehicleMod id
-	bool useRoadnet = false;    // 是否接入现有车辆路网(旁路，不破坏原图，见route.md)
+	bool useRoadnet = false;    // 是否接入现有车辆路网(公交)：不给links/externs，Core用路网寻路图拼路线
 	bool instantiate = false;   // 是否实例化路线(沿线铺真实轨道mesh、过山爬坡/开隧道)：火车true，公交/飞机false
-	std::string trackMesh;      // 轨道资产软路径，instantiate时用，留空则不画
-	std::string trackTunnelMesh;// 隧道内的轨道资产，留空=复用trackMesh
-	float trackUnit = 0.f;      // 轨道mesh沿弧长重复的单位长度(地图单位)
 	float trackWidth = 0.f;     // 轨道占地整宽(地图单位)，挖隧道洞/地形贴合用
-	int vehiclesPerLine = 1;    // 每条线路生成几辆车，均匀分布相位
-	float speed = 1.f;          // 地图单位/秒
+	// 三个绝对速度(地图单位/游戏秒)：正常运行 / 同站内运行(同站转场) / 通过但不停站。useRoadnet的线路只用normalSpeed。
+	float normalSpeed = 1.f;
+	float sameStationSpeed = 1.f;
+	float passSpeed = 1.f;
 	float dwellSeconds = 30.f;  // 到站停留秒数
-	float controlLength = 3.f;  // 非路网边贝塞尔控制臂长度(地图单位)
-	// 非路网边贝塞尔控制臂长度的按端点覆盖规则(按顺序，第一条匹配的生效，都不匹配用controlLength)：
-	// fromTag/toTag空=任意站点，"@real"=真实站点(建筑上的接口)，其它=站点名包含该子串(边缘站点名=<线路名>_Edge<i>_<RouteStationInfo::name>)；
-	// arm<=0=不加控制点，直线连接；ratio=true时arm是两端点水平距离的倍数(如1/3)，否则是地图单位长度。规则由站点名/类型判定，读档重建边时自动一致，所以要在SetProperty里填。
-	struct ControlRule {
-		std::string fromTag;
-		std::string toTag;
-		float arm = 0.f;
-		bool ratio = false;
-		// true时还要求两端是同一组边缘站点(站名<RouteStationInfo::name>里第一个"_"之前的部分相同，如同一座机场的"air0")。
-		bool sameGroup = false;
-	};
-	std::vector<ControlRule> controlRules;
-	// 行驶区段(两次真正停靠之间)里含同站转场腿(from/to是同一个站点的两个接口，如飞机从降落跑道滑行到起飞跑道)时，
-	// 整个区段的速度倍率，<1更慢，见route_mod.md。
-	float sameStationSpeedScale = 1.f;
 	// 车辆俯仰角跟着路径切线的竖直分量走(飞机爬升/下降机头抬低)；instantiate的线路本来就跟，不用设。
 	bool tiltAlongPath = false;
-
-	// 进站前/出站后这么久(真实秒)的减速/加速缓动时长,见route_mod.md。
+	// 加减速时间：从0加速到normalSpeed用这么久(真实秒)，同一个加速度也用于其它速度，见route_mod.md。
 	float easeSeconds = 3.f;
 
-	// 组织线路:interfaces是stationType匹配的真实站点接口,sizeX/sizeY是地图尺寸(算边缘站点位置)。输出下面三个字段。
-	virtual void LayoutRoute(const std::vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) = 0;
+	// 组织线路:stations是stationType匹配的真实站点(端口为世界坐标),sizeX/sizeY是地图尺寸。把externs/links/lines填好。
+	virtual void LayoutRoute(const std::vector<RouteStationInfo>& stations, int sizeX, int sizeY) = 0;
 
-	// 铺轨:只对instantiate的线路调用,在LayoutRoute之后。把分段几何填进trackEdges(下标与links对应,留空=沿用Core单段贝塞尔),
+	// 铺轨:只对instantiate的线路调用,在LayoutRoute之后。mod按地形把links[i].segments改成最终几何(过山抬升/挖隧道),
 	// 隧道口/抬升段用AddTunnelHatch/AddTerrainFit提交请求。默认不处理。
-	virtual void BuildTrack(const std::vector<RouteTrackLinkEnds>& linkEnds,
-		const std::function<const std::string&(int, int)>& getTerrain,
+	virtual void BuildTrack(const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		const std::function<float(float, float)>& getHeight) {}
 
@@ -117,15 +96,19 @@ public:
 	void AddHatch(const Connection* connection, float t1, float t2, float width);
 	void AddTunnelHatch(const Connection* connection, float t1, float t2, float width);
 	void AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff);
+	// 提交拆除请求：折线(世界xy)扫过width宽的条带，Core拆掉所有相交的楼体及其园区(带stationMod的建筑除外)，见route.md。
+	void AddDemolition(const std::vector<std::pair<float, float>>& centerline, float width);
 
 	// 输出(mod填、Core只读，同BuildingMod::floors的既有模式)。
-	std::vector<RouteStationInfo> edgeStations;  // 请求创建的无建筑边缘站点(isEdge应设true)
-	std::vector<RouteLink> links;                // 有向图的边
-	std::vector<std::vector<RouteStop>> lines;   // 每条是一个环，相邻两站必须有可走的link
-	// BuildTrack的输出，宿主(Route::Build)读走：分段几何，以及隧道口挖洞/抬升贴地请求。
-	std::vector<TrackEdgeGeometry> trackEdges;
+	std::vector<RouteExternNode> externs;
+	std::vector<RouteLinkSpec> links;                // 单向站间连线，含每条的几何
+	std::vector<std::vector<RouteLineEntry>> lines;  // 每条是一个环，按entry顺序依次经过
+	// 和lines一一对应：每条线路上跑几辆车。LayoutRoute里可选填；缺项或<=0时按1辆。车辆相位在一圈内均匀分布。
+	std::vector<int> lineVehicleCounts;
+	// BuildTrack的输出，宿主(Route::Build)读走：隧道口挖洞/抬升贴地/拆除请求。
 	std::vector<TerrainHatch> hatches;
 	std::vector<TerrainFitRequest> terrainFits;
+	std::vector<DemolishRequest> demolitions;
 
 	// ---- 存档(见common/mod_state.md) ----
 	virtual void SaveState(StateWriter&) const {}

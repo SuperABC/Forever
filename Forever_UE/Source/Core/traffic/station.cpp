@@ -19,39 +19,51 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 	float quadSizeX = building->GetSizeX();
 	float quadSizeY = building->GetSizeY();
 	float buildingRotation = building->GetRotation(); // 弧度
+	float baseZ = building->GetFloorBaseZ(0);
 
-	for (const StationInterfaceSpec& spec : mod->interfaces) {
-		// 占地矩形局部坐标(原点左下角) -> 楼体局部坐标(LocalToWorld要求的输入空间)，公式见
-		// station.md"接口坐标换算"一节：先换到"相对占地矩形中心"，再换算成"相对楼体中心"
-		// (加楼体尺寸一半、减bodyOffset)，这样才能喂给只认楼体局部坐标的LocalToWorld。
-		float quadLocalX = spec.position[0] * quadSizeX + spec.position[1];
-		float quadLocalY = spec.position[2] * quadSizeY + spec.position[3];
+	// 占地矩形局部坐标(原点左下角) -> 世界xy。公式见station.md"接口坐标换算"一节：先换到"相对占地矩形中心"，
+	// 再换算成"相对楼体中心"(加楼体尺寸一半、减bodyOffset)，这样才能喂给只认楼体局部坐标的LocalToWorld。
+	auto toWorld = [&](const PointParams& point) {
+		float quadLocalX = point[0] * quadSizeX + point[1];
+		float quadLocalY = point[2] * quadSizeY + point[3];
 		float bodyLocalX = quadLocalX - quadSizeX * 0.5f + building->GetBodySizeX() * 0.5f - building->GetBodyOffsetX();
 		float bodyLocalY = quadLocalY - quadSizeY * 0.5f + building->GetBodySizeY() * 0.5f - building->GetBodyOffsetY();
+		return building->LocalToWorld(bodyLocalX, bodyLocalY);
+	};
+	auto convertPorts = [&](const vector<StationPortSpec>& specs, vector<StationPort>& out) {
+		for (const StationPortSpec& spec : specs) {
+			auto [worldX, worldY] = toWorld(spec.position);
+			float heading = buildingRotation + spec.headingDegrees * (3.14159265358979323846f / 180.f);
+			StationPort port;
+			port.x = worldX; port.y = worldY; port.z = baseZ + spec.z;
+			port.dirX = cosf(heading); port.dirY = sinf(heading);
+			out.push_back(port);
+		}
+	};
+	convertPorts(mod->inlets, inlets);
+	convertPorts(mod->outlets, outlets);
+	convertPorts(mod->stops, stops);
 
-		auto [worldX, worldY] = building->LocalToWorld(bodyLocalX, bodyLocalY);
-		float worldZ = building->GetFloorBaseZ(0) + spec.z;
-
-		float heading = buildingRotation + spec.headingDegrees * (3.14159265358979323846f / 180.f);
-		float dirX = cosf(heading);
-		float dirY = sinf(heading);
-
-		StationInterface iface;
-		iface.x = worldX; iface.y = worldY; iface.z = worldZ;
-		iface.arriveDirX = dirX; iface.arriveDirY = dirY;
-		iface.departDirX = dirX; iface.departDirY = dirY;
-		interfaces.push_back(iface);
+	for (const StationConnectionSpec& spec : mod->connections) {
+		StationConnection connection;
+		connection.fromKind = spec.fromKind; connection.fromIndex = spec.fromIndex;
+		connection.toKind = spec.toKind; connection.toIndex = spec.toIndex;
+		for (const StationCurveSpec& curve : spec.curves) {
+			TrackSegment segment;
+			auto [x1, y1] = toWorld(curve.p1);
+			auto [cx1, cy1] = toWorld(curve.c1);
+			auto [cx2, cy2] = toWorld(curve.c2);
+			auto [x2, y2] = toWorld(curve.p2);
+			segment.x1 = x1; segment.y1 = y1; segment.z1 = baseZ + curve.z1;
+			segment.c1x = cx1; segment.c1y = cy1; segment.c1z = baseZ + curve.c1z;
+			segment.c2x = cx2; segment.c2y = cy2; segment.c2z = baseZ + curve.c2z;
+			segment.x2 = x2; segment.y2 = y2; segment.z2 = baseZ + curve.z2;
+			segment.mesh = curve.mesh;
+			segment.meshUnit = curve.meshUnit;
+			connection.segments.push_back(std::move(segment));
+		}
+		connections.push_back(std::move(connection));
 	}
-}
-
-Station::Station(const string& name, float x, float y, float z,
-	float arriveDirX, float arriveDirY, float departDirX, float departDirY) :
-	name(name), edge(true) {
-	StationInterface iface;
-	iface.x = x; iface.y = y; iface.z = z;
-	iface.arriveDirX = arriveDirX; iface.arriveDirY = arriveDirY;
-	iface.departDirX = departDirX; iface.departDirY = departDirY;
-	interfaces.push_back(iface);
 }
 
 Station::Station(StationFactory* factory, const string& modId, const string& name,
@@ -62,18 +74,13 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 
 	mod->SetProperty();
 
-	// 没有building，不走mod->Layout()/mod->interfaces那套相对建筑占地矩形的换算——世界坐标/
-	// 朝向都是调用方(Traffic::InitRoadsideStations)已经按道路几何算好的，直接用，到达/出发
-	// 方向相同(见station_mod.h StationInterfaceSpec注释)，arrive==depart。
+	// 没有building，不走mod->Layout()那套相对建筑占地矩形的换算——世界坐标/朝向都是调用方
+	// (Traffic::InitRoadsideStations)已经按道路几何算好的，直接用；贴路站点只有一个停靠位，没有进出站口和站内连线。
 	float heading = headingDegrees * (3.14159265358979323846f / 180.f);
-	float dirX = cosf(heading);
-	float dirY = sinf(heading);
-
-	StationInterface iface;
-	iface.x = worldX; iface.y = worldY; iface.z = worldZ;
-	iface.arriveDirX = dirX; iface.arriveDirY = dirY;
-	iface.departDirX = dirX; iface.departDirY = dirY;
-	interfaces.push_back(iface);
+	StationPort port;
+	port.x = worldX; port.y = worldY; port.z = worldZ;
+	port.dirX = cosf(heading); port.dirY = sinf(heading);
+	stops.push_back(port);
 }
 
 Station::~Station() {
@@ -86,7 +93,7 @@ Station::~Station() {
 	if (mod) factory->DestroyStation(mod);
 }
 
-bool Station::IsValid() const { return edge || mod != nullptr; }
+bool Station::IsValid() const { return mod != nullptr; }
 
 const string& Station::GetName() const { return name; }
 
@@ -95,25 +102,26 @@ const string& Station::GetStationType() const {
 	return mod ? mod->stationType : empty;
 }
 
-bool Station::IsEdge() const { return edge; }
-
 Building* Station::GetBuilding() const { return building; }
 
-const vector<StationInterface>& Station::GetInterfaces() const { return interfaces; }
+const vector<StationPort>& Station::GetInlets() const { return inlets; }
+const vector<StationPort>& Station::GetOutlets() const { return outlets; }
+const vector<StationPort>& Station::GetStops() const { return stops; }
+const vector<StationConnection>& Station::GetConnections() const { return connections; }
 
-const StationRoadLink* Station::EnsureRoadLink(Map* map, int interfaceIndex) {
-	auto it = roadLinks.find(interfaceIndex);
+const StationRoadLink* Station::EnsureRoadLink(Map* map, int stopIndex) {
+	auto it = roadLinks.find(stopIndex);
 	if (it != roadLinks.end()) return &it->second;
 
 	if (!map) return nullptr;
-	if (interfaceIndex < 0 || interfaceIndex >= static_cast<int>(interfaces.size())) return nullptr;
+	if (stopIndex < 0 || stopIndex >= static_cast<int>(stops.size())) return nullptr;
 
 	Road* road = building ? building->GetBoundaryRoad(building->GetDirection()) : attachedRoad;
 	if (!road) return nullptr;
 
-	const StationInterface& iface = interfaces[interfaceIndex];
+	const StationPort& port = stops[stopIndex];
 	Map::LaneSegment segment;
-	if (!map->GetLaneSegmentAt(road, iface.x, iface.y, iface.departDirX, iface.departDirY, segment)) {
+	if (!map->GetLaneSegmentAt(road, port.x, port.y, port.dirX, port.dirY, segment)) {
 		return nullptr;
 	}
 
@@ -138,11 +146,11 @@ const StationRoadLink* Station::EnsureRoadLink(Map* map, int interfaceIndex) {
 	map->RegisterAuxNavNode(aux);
 	linkedMap = map;
 
-	auto result = roadLinks.emplace(interfaceIndex, link);
+	auto result = roadLinks.emplace(stopIndex, link);
 	return &result.first->second;
 }
 
-const StationRoadLink* Station::GetRoadLink(int interfaceIndex) const {
-	auto it = roadLinks.find(interfaceIndex);
+const StationRoadLink* Station::GetRoadLink(int stopIndex) const {
+	auto it = roadLinks.find(stopIndex);
 	return it != roadLinks.end() ? &it->second : nullptr;
 }

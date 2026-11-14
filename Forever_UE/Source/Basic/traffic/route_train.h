@@ -14,11 +14,10 @@ public:
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
 
-	virtual void LayoutRoute(const std::vector<RouteStationInfo>& interfaces, int sizeX, int sizeY) override;
+	virtual void LayoutRoute(const std::vector<RouteStationInfo>& stations, int sizeX, int sizeY) override;
 
 	// 铺轨：过山爬坡/挖隧道，见route_train.md"TrainRoute::BuildTrack"。
-	virtual void BuildTrack(const std::vector<RouteTrackLinkEnds>& linkEnds,
-		const std::function<const std::string&(int, int)>& getTerrain,
+	virtual void BuildTrack(const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		const std::function<float(float, float)>& getHeight) override;
 

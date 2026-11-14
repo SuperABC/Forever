@@ -40,3 +40,5 @@ mesh下标）。由`Map`持有（`Map::GetVegetation()`），UE层`UForeverVeget
 ## 待办/后续阶段
 
 - 无。
+
+- `RemoveIf(pred)`：拆除楼体/园区(`Map::DemolishAlongStrips`)时清掉范围内的树，返回删掉的棵数；树id不复用。

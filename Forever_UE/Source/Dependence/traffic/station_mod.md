@@ -2,57 +2,34 @@
 
 ## 职责
 
-`StationMod`：一类站点（公交站/火车站/机场...）的"上下车接口在哪、朝哪个方向"声明，供Core
-（`Core/traffic/station.h`的`Station`）读取并换算成世界坐标。只描述接口几何，不涉及线路怎么
-连——那是`route_mod.h`（`RouteMod`）的职责，两者靠`stationType`这个通用类别词（不是mod名）
-耦合，解耦"站点外观"和"线路连接逻辑"。
+`StationMod`：一类站点（公交站/火车站/机场...）的声明：**停靠位在哪、进站口/出站口在哪、站内怎么走**，供 Core（`Core/traffic/station.h` 的 `Station`）读取并换算成世界坐标。线路怎么跨站连接是 `route_mod.h`（`RouteMod`）的职责，两者靠 `stationType`（通用类别词，不是 mod 名）耦合。
+
+## 站点模型
+
+一个站点由三类端口和站内连线组成（占地矩形局部坐标，单向）：
+
+- `stops`：**停靠位**（1~n）。车辆停下上下客的位置，由 mod 指定，不再默认是进出口的中点——现在的火车站/机场实现仍把它放在进出口中点，以后做航站楼、停机坪这类"连线之外"的停靠位时不用改 Core。
+- `inlets`：**进站口**（1~n）。车辆从站外进入本站的接口。
+- `outlets`：**出站口**（1~n）。车辆从本站离开的接口。进出口分开是因为所有连线都是单向的。
+- `connections`：`StationConnectionSpec{fromKind,fromIndex,toKind,toIndex,curves}`，只允许三种：进站口→停靠位、停靠位→出站口、进站口→出站口（直通，**不停站穿过本站**时走它）。`curves` 是首尾相接的 `StationCurveSpec`（四个点都是占地矩形局部坐标+z，带 `mesh`/`meshUnit`），一条连线可以由多段贝塞尔组成，每段自带路线资产。
+
+`StationPortSpec.position`/`StationCurveSpec` 的点都用建筑占地矩形（`Building` 自身的 `Quad`，不是楼体 footprint）的局部坐标，原点左下角、未旋转，ratio+offset 约定（`PointParams`，同 `NavigationNodeTemplate`）。`headingDegrees` 相对建筑旋转（度），`z` 相对地面。
 
 ## 关键设计
 
 - **两种挂载方式二选一**：
-  1. 挂在建筑上——`BuildingMod::stationMod`单向声明"这栋楼配哪个站点"，
-     `Traffic::InitStations()`据此创建`Station`、调一次`Layout(direction, sizeX, sizeY)`
-     填好`interfaces`。火车站/机场用这种方式。
-  2. 直接贴着道路摆，不占用任何Lot面积——实现`AssignRoads()`声明想贴哪些路、哪一侧，
-     `Traffic::InitRoadsideStations()`据此直接在道路旁创建`Station`，不经过`Layout()`/
-     `interfaces`这套建筑相对坐标系。公交站用这种方式。
-  两者共用同一个`StationMod`基类/同一套`config.json`"station_mods"注册机制，只是Core侧走的
-  创建路径不同（见`station.md`）。`Layout()`不实现默认空实现；`AssignRoads()`是static方法
-  （见下），每个具体子类都必须实现，不需要就给个空实现。
-- **`StationInterfaceSpec.position`用建筑占地矩形（`Building`自身的`Quad`，不是楼体
-  footprint）的局部坐标声明，原点在占地矩形左下角、未旋转**——和`NavigationNodeTemplate`
-  同一套ratio+offset约定（不是`ParkingSpot`那种"相对中心"的约定），因为轨道/跑道接口经常
-  落在楼体外、靠近占地矩形边缘的空地上，用左下角做原点换算更直观。`Building::LocalToWorld`
-  接的是"楼体局部坐标"而不是这个"占地矩形局部坐标"，两者之间的换算（抵消`bodyOffset`）在
-  `Core/traffic/station.cpp`里做，见`station.md`"接口坐标换算"一节——这个换算的副作用是
-  接口的世界坐标**和楼体footprint的偏移（`BuildingFootprintSpec`）完全无关**，楼体想往路边
-  挪多远都不会牵动接口位置，这正是楼体贴路、把深处空间让给跑道/站台能够不改
-  `StationInterfaceSpec`数值就直接生效的原因。
-- **`SetProperty()`两段式**：stationType必须在`SetProperty()`里填，不能指望在`AssignRoads()`里设(它是static，没有实例)；Core创建完实例后立刻调一次，再读`stationType`/调`Layout()`。`Layout(direction, sizeX, sizeY)`的`direction`是`Building::GetDirection()`缓存值(已解析，非-1)，`sizeX/sizeY`是占地矩形尺寸，不是楼体footprint尺寸。
-- **`headingDegrees`同时代表到达和出发方向**——这个项目目前没有"进站朝向≠出站朝向"的站点
-  类型，`Core/traffic/station.cpp`换算时`arriveDir`/`departDir`恒相等。真正需要两个不同
-  朝向的"跑道/轨道两端"场景，靠同一个站点声明**两对**接口（比如`TrainStation`/`AirStation`
-  各声明4个接口，见`Basic/traffic/station_*.md`）解决，不是让单个接口自己有两个朝向。
-- **`AssignRoads()`是static方法**，和`BuildingMod::Assign`/`ZoneMod`那组"按类型固定、不需要
-  任何实例"的函数指针约定完全同一个模式——这个方法只是跑一次性的全图探测，不读/写任何实例
-  状态，没有理由为了调它创建一个`StationMod`实例再销毁：基类不声明，每个具体子类必须实现
-  同名static方法，通过`StationFactory::RegisterStation`的额外函数指针参数注册
-  （`station_factory.h`）。`Traffic::InitRoadsideStations()`直接调
-  `StationFactory::AssignRoads(id, ...)`转发到注册的函数指针，不创建/销毁任何实例。
-  `RoadStationRequest.rightSide`的物理含义（"沿Road Start->End方向的右手边"）依赖
-  `Map::ComputeLaneAnchorPosition`的`perp0`公式（这个项目`+Y=南`的世界坐标下"右手边"和
-  直觉上的左右是反的，具体推导见该函数声明处）。
+  1. 挂在建筑上：`BuildingMod::stationMod` 单向声明"这栋楼配哪个站点"，`Traffic::InitStations()` 据此创建 `Station`、调一次 `Layout(direction, sizeX, sizeY)` 填好端口和连线。火车站/机场用这种方式。
+  2. 直接贴着道路摆：实现 static `AssignRoads()` 声明想贴哪些路、哪一侧，`Traffic::InitRoadsideStations()` 据此创建 `Station`，不经过 `Layout()`；这种站点只有一个停靠位（下标 0），没有进出站口和站内连线，由路网车道代替。公交站用这种方式。
+- **端口坐标换算**：`Building::LocalToWorld` 接的是"楼体局部坐标"，和占地矩形局部坐标之间的换算（抵消 `bodyOffset`）在 `Core/traffic/station.cpp` 里做，见 `station.md`——世界坐标和楼体 footprint 的偏移无关，楼体贴路、把深处让给跑道/站台不用改这里的数值。
+- **`SetProperty()` 两段式**：`stationType` 必须在 `SetProperty()` 里填（`AssignRoads` 是 static，没有实例）；Core 创建实例后立刻调一次，再调 `Layout()`。`direction` 是 `Building::GetDirection()` 缓存值，`sizeX/sizeY` 是占地矩形尺寸。
+- **`AssignRoads()` 是 static 方法**：和 `BuildingMod::Assign`/`ZoneMod` 那组"按类型固定、不需要实例"的函数指针约定同一个模式，基类不声明，通过 `StationFactory::RegisterStation` 的函数指针参数注册。`RoadStationRequest.rightSide` 是"沿 Road Start->End 方向的右手边"（依赖 `Map::ComputeLaneAnchorPosition` 的 `perp0` 公式；+Y=南的坐标系下和直觉相反）。
+- 端口的朝向就是该端口的行驶方向；同一条轨道/跑道的进站口、停靠位、出站口朝向相同，连线退化成直线。
 
 ## 依赖关系
 
 - 依赖：`Dependence/map/general_geometry.h`（`PointParams`/`Road`）。
-- 被谁依赖：`Core/traffic/traffic.cpp`（`Traffic::InitRoadsideStations()`调
-  `StationFactory::AssignRoads(id, ...)`）；`Core/traffic/station.h`（`Station`三个构造函数
-  分别对应"挂建筑"/"边缘站点"/"贴路站点"三种场景）；`Dependence/map/building_mod.h`
-  （`BuildingMod::stationMod`字符串声明"这栋楼配哪个站点"）；`Basic/traffic/station_*.h`
-  的`BusStation`/`TrainStation`/`AirStation`三个具体实现扩展这个基类。
+- 被谁依赖：`Core/traffic/station.h`、`traffic.cpp`、`route_mod.h`（`TrackSegment`）、`Basic/traffic/station_*.h`。
 
 ## 待办/后续阶段
 
-- 目前只有"挂建筑"和"贴路"两种挂载方式，没有第三种（比如"贴着zone边界摆"）——真需要时再加
-  一个新的虚函数，不需要改现有的两个既有虚函数。
+- 目前只有"挂建筑"和"贴路"两种挂载方式。

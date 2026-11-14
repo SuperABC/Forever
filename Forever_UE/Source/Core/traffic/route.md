@@ -2,104 +2,59 @@
 
 ## 职责
 
-`Route`：一类线路的实体，独占持有一个`RouteMod`实例（照抄`Vehicle`/`Job`持有mod的模式）。
-`Build()`收集`stationType`匹配的`Station`接口、调`mod->LayoutRoute()`拿到拓扑描述，自己把
-每条拓扑边变成真实几何（有向图）+组装成若干条环线；`Update()`按时刻表驱动绑定在这条线路上的
-载具。
+`Route`：一类线路的实体，独占持有一个 `RouteMod` 实例（照抄 `Vehicle`/`Job` 持有 mod 的模式）。流程：
 
-## 关键设计
+1. `Build()` 收集 `stationType` 匹配的 `Station`，把端口快照交给 `mod->LayoutRoute()` 得到 `externs`/`links`/`lines`（`route_mod.md`）；instantiate 线路再调 `BuildTrack`；
+2. `Assemble()` 建**寻路图**，按每条线路的停靠顺序寻路，**预算好**每条线路的运动学（`RouteLine`）；不可达的线路写日志后丢弃；
+3. `Update()` 只读预算好的 `RouteLine` 驱动载具，运行时不再碰寻路图。
 
-- **两段式：mod只给拓扑，Route自己把拓扑变成几何**——`mod->LayoutRoute()`只产出
-  `(station,interfaceIndex)`下标对组成的`links`/`lines`，不碰任何真实坐标/`Connection`；
-  `Route::Build()`拿到这份拓扑后逐条调`BuildEdgeGeometry()`才真正构造几何。几何构造涉及
-  `new`/`delete`/容器增长，必须发生在Core编译的代码里，不能让运行在mod DLL里的
-  `RouteMod::LayoutRoute()`直接碰（跨DLL分配器安全约束，见`[[memory:cross_dll_allocator_crash]]`）。
-- **`BuildEdgeGeometry`两种边的构造方式**：
-  - `useRoadnet==true`（公交）：两端都成功`Station::EnsureRoadLink()`之后，**同车道特例**——
-    若两端落在同一段原车道上（`sourceEdge`相同）且起点在上游（`t`更小），直接用两个
-    `stationNode`间的一条直线弦，不绕一圈路径搜索；否则用起点的`outEdge`+
-    `Map::FindVehiclePath`（起点车道下游锚点→终点车道上游锚点）+终点的`inEdge`拼起来——这三段
-    全部是"借用"Station/Map已有的`Connection`（`owned=false`），`Route`自己不负责delete。
-  - `useRoadnet==false`（火车/飞机）：三次贝塞尔曲线，起止点就是两个接口的世界坐标，两个控制
-    点分别沿起点的`departDir`/终点的`arriveDir`伸出`controlLength`——这样相邻两条边在同一个
-    站点接口处的切线必然连续（同一个`departDir`/`arriveDir`同时决定了上一条边的终点切线方向
-    和下一条边的起点切线方向），不会出现尖角。控制点`z`分别取两端自己的`z`，支持飞机这类有
-    高度变化的线路。四个接口共线、朝向相同时（比如`TrainStation`/`AirStation`同一条跑道的
-    两个接口），两个控制点天然落在同一条直线上，贝塞尔曲线退化成直线，不需要额外判断。
-- **有向图+双向边**：`graph[fromKey][toKey]`是单向边；`RouteLink.bidirectional==true`时
-  额外登记一条`graph[toKey][fromKey]`，**复用同一份`segments`**（`reversed=true`，
-  `owned=false`，只有正向entry负责delete），`EvaluateEdge`/驾驶逻辑按`reversed`决定是否
-  倒序遍历`segments`+取`1-f`+切线取反，不复制几何。内置线路目前全部是单向环线，没有实际用到
-  这条路径，但接口已经打好。
-- **`RouteLeg.dwellAtDestination`**：`Build()`组装`legs`时直接搬运目的地那一站的
-  `RouteStop::dwell`过来；`false`表示到达`toStation`后不停留，`DriveVehicle`/`Update`的
-  耗时计算都要跳过这一腿的`dwellSeconds`（不只是跳过停靠时的渲染，否则时刻表总周期`period`
-  会被白白算长，车辆相位会跟着漂移）。目的是让火车/飞机只在跑道/轨道中点真正停靠一次，入站/
-  出站接口和地图边缘点全部是纯过路点，见`route_mod.md`"RouteStop.dwell"一节。
-- **`Update()`是纯函数式实现**——只读`elapsedSeconds`（`Traffic::Tick`按
-  `Time::DifferenceInSeconds`累加的游戏总秒数，单调递增），不在`Route`自己身上累积任何状态；
-  `DriveVehicle`内部用`localTime`（`elapsedSeconds`按整条线路的`period`取模，每辆车再加一个
-  均匀分布的`phase`）逐腿累减"行驶耗时（`leg.timeLength/speed`；`timeLength`默认=边长，含同站转场腿的行驶区段整段按`RouteMod::sameStationSpeedScale`折算(`FinalizeLegTimes`)，`DriveVehicle`定位后再按`length/timeLength`换回几何弧长）+停靠耗时"直到落在某一段区间，
-  同一个`elapsedSeconds`重复调用结果完全一致，不依赖调用顺序/调用次数。`speed`/
-  `dwellSeconds`的单位是游戏内秒不是真实秒，具体换算见`route_mod.md`。
-- **`DriveVehicle`的缓动按"行驶区段"（两次真正停靠之间的若干条leg合起来）整体套梯形速度
-  曲线，不是按单条leg自己的`[0,1]`区间**——载具运行时完全不感知接口本身的存在，只认"是不是
-  一次真正的停靠"（`RouteLeg::dwellAtDestination`）；按单条leg各自做缓动会在纯过路接口
-  （见`station_*.cpp` `Layout()`的"顺序必须是`[leftIn, rightOut, rightIn, leftOut]`"
-  一节）处产生肉眼可见的减速/卡顿，这是不要按单leg做缓动的原因。做法：`DriveVehicle`开头往回
-  扫`dwellAtDestination`找到当前leg所在区段的起点`segStart`，累计这整段的总时长
-  `segTotalTime`/总长度`segTotalLength`，套梯形速度曲线（匀加速`ta`→匀速→匀减速`td`，
-  `ta`/`td`钳在`mod->easeSeconds`和区段总时长一半之间取小）算出区段内的累计弧长
-  `segArcLength`；定位`segArcLength`落在区段内哪条leg上时，**按累计长度（不是累计时间）
-  重新从`segStart`走一遍**，和`EvaluateEdge`内部按弧长在多段`segments`里定位同一个道理，
-  确保缓动曲线和"用哪条leg的几何算世界坐标"用的是同一套长度基准，接口处不会对不上。匀速段
-  速度`cruiseSpeed`比配置的`mod->speed`略高一点（补偿两头比匀速慢的那部分距离），确保
-  `segTotalTime`（=`Σlength/speed`，和不缓动时完全一样）内还是正好走完`segTotalLength`，
-  `Update()`按这个值算的时刻表/`period`不受影响。公交这类"每一站都要停"（`dwell`恒为
-  `true`）的线路，区段退化成单条leg，效果等价于那条leg自己两端各缓动`ta`/`td`。
-  - **`easeSeconds`是真实秒单位，`segTotalTime`/`segElapsed`是游戏内秒单位**（和
-    `speed`/`dwellSeconds`同一套单位）——`DriveVehicle`里换算成
-    `kEaseSeconds = mod->easeSeconds * 120.f`（1真实秒=120游戏内秒，对应默认
-    `timeFlowRatio=2.0`），如果以后`timeFlowRatio`被剧情脚本改了要跟着重新校准（和
-    `speed`/`dwellSeconds`的既有校准方式一样）。`easeSeconds`是`RouteMod`的字段（默认3秒，
-    公交尺度），不是硬编码常量，`TrainRoute`/`AirRoute`在`SetProperty()`里按手感调大，见
-    `route_*.cpp`。
+Core 对站/线的类型完全不关心，也不计算任何连线几何：几何全来自站点 mod（站内连线）和路线 mod（站间连线）。
 
-- **`stopStations`**：`Build()` 末尾记下交给 mod 的站点表(graph key里的站点下标就是它的下标)，存档要靠它把key换成站点名，见`traffic_save.md`。读档时`TrafficSaveCodec`直接按存档填graph/lines，不再调用`Build()`。
+## 两种线路
 
-## 依赖关系
+- **非路网线路（火车/飞机）**：几何来自 mod，走下面的寻路图。
+- **路网线路（`useRoadnet`，公交）**：mod 只给停靠顺序（每站 stop 0）。每个 run 用 `Station::EnsureRoadLink` + `Map::FindVehiclePath`（含**同车道特例**：两站在同一段原车道上且起点在上游时，直接用两个 `stationNode` 间的直线弦，不绕一圈路径搜索）拼 `TrackPath`，借用路网 `Connection`（`owned=false`）。不动态改路网。不建 Core 寻路图。
 
-- 依赖：`Core/map/map.h`（`FindVehiclePath`）、`Core/traffic/station.h`（`EnsureRoadLink`/
-  `GetInterfaces`）、`Core/traffic/vehicle.h`（`SetTransform`）、`traffic/route_mod.h`/
-  `route_factory.h`。
-- 被谁依赖：`Core/traffic/traffic.cpp`的`InitRoutes`（创建`Route`、调`Build`）/
-  `InitTransitVehicles`（按`GetVehiclesPerLine()`创建车辆、`AddVehicleToLine`）/`Tick`
-  （调`Update`）；`Forever/Framework/ForeverTrafficFrameworkComponent.cpp`的
-  `BuildRouteDebugMesh`（读`GetLines()`画调试线）/`BuildTracks`（读`ShouldInstantiate()`/
-  `GetTrackMesh()`/`GetTrackTunnelMesh()`/`GetTrackUnit()`和每条边的`track`）。
+## 数据结构
+
+- **`TrackPath`**：一条路径=按行驶顺序首尾相接的 `Connection` 链 + 每段长度 + 总长；`segments` 是 mod 给的几何值（存档/UE 铺轨用，借用路网的链为空）；`owned` 标记 `connections` 是不是自己 `new` 的（析构负责 `delete`）。站内连线、站间连线、公交借用的路网车道都是它，`shared_ptr` 共享。`Evaluate(arc)` 按弧长取点/偏航/俯仰。
+- **寻路图（`graphNodes`/`graphEdges`，每个 Route 一份，建完保留）**：节点=站点端口 `(station,kind,index)` 或 extern（按下标）；边=站内连线（`EDGE_STATION_IN` 进站口→停靠位、`EDGE_STATION_OUT` 停靠位→出站口、`EDGE_THROUGH` 进站口→出站口直通）+ 站间连线（`EDGE_LINK`，带 `withinStation`）；边权=长度。保留图是为将来可能的动态增加线路，线路数据本身不依赖它。`trackPaths` 是图里全部路径（已去重，UE 铺轨/画图用）。
+- **`RouteLine`**（每条线路一份，独立于图）：`runs` + `period`（一圈总时长，含每站 `dwellSeconds`）。`RouteRun`：起点/终点 `Station*`+停靠位下标、`pieces`（`RoutePiece{path,length,speedCap}`）、总长、`phases`（运动学相位表）、`travelTime`。
+
+## 规划（`PlanGraphLine`）
+
+线路里的每个 entry 是一个**必经点**：站 entry 固定为该站第 `stopIndex` 个停靠位节点（停靠），extern entry 固定为该 extern 节点（不停）。线路按停靠 entry 切成 run；相邻 entry 之间用 Dijkstra 求最短路（含首尾相接）。**除起点/终点外不能经过任何停靠位节点**，所以过站不停只能走该站的站内直通连线。整圈只有一个停靠位（起点=终点）时必须真的离开再回来。站名/停靠位下标/extern 名不存在或不可达时 `debugf` 说明原因，整条线路丢弃（"静默丢弃"：只写日志，不影响其它线路）。
+
+## 速度与运动学
+
+- **速度分类**：run 起止同站，且途经的站间连线全是 `withinStation` → 整段上限 `sameStationSpeed`；否则 `normalSpeed`，且穿过中间站的 `EDGE_THROUGH` 边上限降到 `min(base, passSpeed)`。extern 不限速、不停（run 内的途经点）。
+- **预算（`ComputeRunPhases`）**：加速度 `a = normalSpeed / (easeSeconds*120)`（游戏秒）。run 两端速度 0；相邻 piece 的边界速度取两侧上限较小者，再按 `v²≤v0²+2aL` 前向/后向收紧，每个 piece 内得到 加速→匀速→减速 相位（`RunPhase{t0,s0,v0,acc,duration}`，`s=s0+v0·dt+½a·dt²`）。run 短到来不及加速到上限时自动变成三角形速度曲线（峰值低于上限，这时一圈时间会比 `长度/限速` 长，调 `easeSeconds` 控制）。
+- **求值**：`RunArcAtTime`（二分取相位）→ 按 piece 累计长度定位 → `TrackPath::Evaluate`。反向 `RunTimeAtArc`（解二次方程）供 `SyncVehicleProgress` 把实车的路程进度换回时刻表时间。
+
+## Update / 停站事件
+
+- `Update(elapsedSeconds)` 是纯函数式：每辆车 `localTime = (elapsedSeconds + 均匀相位 + phaseAdjust) mod period`，逐 run 累减"行驶耗时+停靠耗时"，落在行驶区间用 `EvaluateRun`，落在停靠区间停在该 run 终点（`SetPitch(0)`），停靠事件报 `run.toStation`。俯仰角只在行驶时、instantiate 或 `tiltAlongPath` 的线路才非零。
+- 停站/离站边沿检测：和 `lastStopStation` 比较，在→不在=leaving，不在→在=entering，A→B=先 A leaving 再 B entering；`ConsumeStopEvents()` 取走；读档后 `SilenceInitialStopEvents()` 让第一次 Update 只记状态不发事件。Core 不碰 script，由 `AForeverFrameworkActor::Tick` 转发为 `enter_stop`/`leave_stop`。
+- **每条线路的车辆数**：`RouteLine::vehicleCount`(`Assemble` 从 `mod->lineVehicleCounts[线路下标]` 填，没给就是 0)；`GetLineVehicleCount(lineIdx)` 取它，<=0 按 1 辆。`Traffic::InitTransitVehicles` 按它给每条线路创建车。不存档(读档时车辆按名字恢复)。
+- `Vehicle::IsPhysicsDriven()` 为真时 `Update` 跳过该车，时刻表相位照常累计。
+
+## 物理接管支持
+
+- `QueryVehicleState`：线路下标、`legIndex`（run 下标）、是否停靠、剩余停靠（真实秒）、巡航速度（`normalSpeed*120`，缓动段不精确，仅供给物理车初速度）。
+- `GetLineStopNodeIds(line)`：每个 run 起点站的 `stationNode` id（Map 辅助导航节点），顺序即行驶顺序；任何一站没有 road link 返回空。
+- `ResetStopState(vehicle)`：物理段交还时刻表时忘掉停靠状态。
+- `SyncVehicleProgress(vehicle, legIndex, legFraction, dwelling, dwellFraction)`：给这辆车记一个运行时相位修正量 `phaseAdjust`（游戏秒，不存档），使"现在"对应的时刻表时间等于实车的路程进度（`legFraction` 是路程比例，经 `RunTimeAtArc` 换成时间）。UE 侧在 `BusToKinematic` 里、`ClearCommands` 之前用 `QueryLoopProgress` 取进度调用。
 
 ## 实例化线路（火车铺轨）
 
-- `mod->instantiate && !useRoadnet`的线路，`Build()`在`LayoutRoute`之后、建边几何之前调`mod->BuildTrack()`
-  （地形回调绑`Map::GetTerrainRef/GetWater/SampleHeight`，同`Map::InitRoadnet`），把返回的`hatches`/`terrainFits`
-  转发给`Map::AddHatch`/`Map::ApplyTerrainFits`（烘焙进地形，所以`Traffic`必须在"生成地形模型"之前构建，见
-  `ForeverFrameworkActor.md`阶段顺序）。
-- `trackEdges[i]`非空的link，`BuildEdgeGeometry`按它的分段值建`Connection`链（`owned=true`）代替单段贝塞尔，
-  值同时存进`RouteEdge::track`（存档用，`traffic_save.md`）。
-- `EvaluateEdge`额外算俯仰角，`DriveVehicle`经`Vehicle::SetPitch`带出（instantiate线路才非零，停靠时清零，
-  纯运行时不进存档），`ATransitVehicleElement::Tick`据此让火车上坡/进隧道时跟着倾斜。
+`mod->instantiate && !useRoadnet` 的线路，`Build()` 在 `LayoutRoute` 之后、建图之前调 `mod->BuildTrack()`（地形回调绑 `Map::GetTerrainRef/GetWater/SampleHeight`），把 `hatches`/`terrainFits` 转发给 `Map::AddHatch`/`ApplyTerrainFits`（烘焙进地形，所以 `Traffic` 必须在地形网格生成之前构建），`demolitions` 交给 `Map::DemolishAlongStrips`（`keep` = 建筑有 `stationMod`），见 `map.md`"拆除"。这些发生在存档之前，读档不重跑——读档用存档里的最终 `links` 几何走 `Assemble()`。
+
+## 依赖关系
+
+- 依赖：`Core/map/map.h`、`Core/traffic/station.h`、`Core/traffic/vehicle.h`、`traffic/route_mod.h`/`route_factory.h`。
+- 被谁依赖：`Core/traffic/traffic.cpp`（`InitRoutes`/`InitTransitVehicles`/`Tick`）、`traffic_save.cpp`、`Forever/Framework/ForeverTrafficFrameworkComponent.cpp`（调试线/铺轨/公交物理接管）、`Forever/UI/MapWidget.cpp`。
 
 ## 待办/后续阶段
 
-- `bidirectional`双向边的实际驾驶路径（`reversed`分支）没有被任何内置线路触发过，只验证过
-  代码逻辑自洽，没有PIE实测——以后真的有双向线路类型时要重新验证一遍。
-
-## 停站/离站事件
-`Route::Update`每次算完一辆车的相位后，和`lastStopStation`(上次停靠的站，nullptr=在行驶)比较：不在→在站=entering，在站→不在=leaving，站A→站B(两次Update之间跨过整个停站)=先A的leaving再B的entering。事件进`pendingStopEvents`，`ConsumeStopEvents()`取走(`Traffic::ConsumeStopEvents`汇总所有线路)。`DriveVehicle`通过`outDwellStation`带出当前停靠的站。读档后`SilenceInitialStopEvents()`让第一次Update只记状态不发事件(`traffic_save.cpp`加载线路时调用)；新开局第一次Update正常发。Core不碰script，由`AForeverFrameworkActor::Tick`转发为`enter_stop`/`leave_stop`事件。
-
-## 物理接管支持
-- `Vehicle::IsPhysicsDriven()`（运行时、不存档）为真时 `Route::Update` 跳过该车（不改位姿、不产出停站事件），时刻表相位照常累计。
-- `QueryVehicleState(vehicle)`：当前线路/腿/是否停靠/剩余停靠（真实秒）/巡航速度，不改状态；`GetLineStopNodeIds(line)`：每站 stationNode 的 Map 辅助节点 id（leg i 的起点站）；`ResetStopState(vehicle)`：物理段交还时刻表时忘掉停靠状态。
-
-## SyncVehicleProgress（物理段交还时刻表时对齐进度）
-`Route::SyncVehicleProgress(vehicle, legIndex, legFraction, dwelling, dwellFraction)`：给这辆车记一个运行时相位修正量 `phaseAdjust`（游戏秒，不存档），`Update`/`QueryVehicleState` 算 `localTime` 时加上它，使"现在"对应的时刻表时间等于实车的真实进度。物理公交比名义速度慢，不对齐的话一交还时刻表就按"早已跑完一圈"的位置刷新（瞬移）。按名义匀速换算，缓动段有小误差。UE 侧在 `UForeverTrafficFrameworkComponent::BusToKinematic` 里、`ClearCommands` 之前用 `AVehicleCommandController::QueryLoopProgress` 取循环进度调用。
+- "穿站不停"（`EDGE_THROUGH` 降到 `passSpeed`）目前内置线路都没用到（所有途经站都停），只在逻辑层实现，没有实测。
+- 寻路图保留着但没有动态加线路的入口；路网线路不支持路网动态变化。

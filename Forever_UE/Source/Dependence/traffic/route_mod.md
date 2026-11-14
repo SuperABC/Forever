@@ -2,69 +2,54 @@
 
 ## 职责
 
-`RouteMod`：一类线路（公交/火车/飞机各一个具体子类）的连接逻辑——把Core收集到的、
-`stationType`匹配的所有站点接口组织成一张有向图+若干条环线。Core（`Core/traffic/route.h`
-的`Route`）只负责把这张图变成真实几何、按时刻表驱动车辆，完全不关心"具体怎么连"，这个职责
-全部交给`LayoutRoute()`的具体实现决定。
+`RouteMod`：一类线路（公交/火车/飞机各一个具体子类）的连接逻辑。Core 把 `stationType` 匹配的所有站点（位置+进站口/出站口/停靠位）交给它，它只回答两件事：
 
-## 关键设计
+1. **站间连线的几何**：哪些端点之间怎么连、每条连线由哪些带路线资产的贝塞尔段组成；
+2. **每条运行线路的停靠顺序**：按顺序经过哪些站的哪个停靠位、哪些 extern 点。
 
-- **`RouteStationInfo`是只读、世界坐标的站点接口快照**——`Route::Build()`收集完所有
-  `stationType`匹配的真实接口后，连同"本次调用之前其它`Route`已经请求创建的边缘站点"
-  （`isEdge=true`）一起喂给`LayoutRoute()`；mod只能读，不持有所有权，也不能直接碰Core的
-  任何对象——`RouteMod`本身是运行在mod DLL里的代码，不能像Core对象的非虚成员函数那样直接
-  调用（跨DLL分配器安全约束，见`Dependence/map/general_geometry.md`"跨DLL分配器"一节）。`RouteMod`
-  的输出渠道全部是"往`edgeStations`/`links`/`lines`这三个自己持有的`vector`里追加数据"，
-  和`BuildingMod::floors`同一个安全模式。
-- **`RouteStop.dwell`**：`false`表示这一站是纯过路点，到达后不停留、直接接着跑下一腿；
-  默认`true`保持原有行为。公交每一站都要停是对的，但火车/飞机的入站/出站接口、地图边缘点
-  不该停——真实世界里乘客在跑道/站台**中段**上下客，不是在跑道两端分别停一次。具体用法见
-  `Basic/traffic/route_common.md`一节。
-- **`RouteStop`**：`station`是站点接口列表(真实站点在前、`edgeStations`在后)的下标，`interfaceIndex`是该站点第几个接口；`silent`(仅`dwell=true`时有效)表示停靠但不触发`enter_stop`/`leave_stop`，用于地图边缘的虚拟车站。
-- **`RouteLink.bidirectional`**：`true`表示同一份几何两个方向都能走（比如单线铁路），
-  Core建图时会额外登记一条反向边，倒序遍历同一份`segments`、切线取反，不复制几何（见
-  `route.md`"有向图与双向边"一节）。内置线路（公交/火车/飞机）全部是单向环线，没有实际
-  用到这个字段，留给以后"同一段轨道两个方向都要走"的线路类型用。
-- **`speed`/`dwellSeconds`的单位是"地图单位/游戏内秒"、"游戏内秒"，不是真实秒**——
-  `Traffic::Tick`喂给`Route::Update`的`elapsedSeconds`来自`Player::Tick()`里
-  `time->AddMilliseconds(delta*60*1000*timeFlowRatio)`，默认`timeFlowRatio=2.0`，即1个
-  真实秒=120个游戏内秒。三个具体子类（`Basic/traffic/route_*.cpp`）都在构造函数里按
-  这个120倍换算校准过默认值，新增线路类型时同样要留意这个换算，不能直接抄字面上看起来
-  "合理"的数值。
-- `sameStationSpeedScale`(默认1)：行驶区段(两次真正停靠之间的若干条leg)里含同站转场腿(`fromStation==toStation`，如飞机从降落跑道滑行到起飞跑道)时，**整个区段**的速度倍率，<1更慢。由Core的`Route::FinalizeLegTimes`在组装/读档后算进每条leg的`timeLength`，不进存档。
-- `tiltAlongPath`(默认false)：车辆俯仰角跟着路径切线的竖直分量走(飞机用)，`instantiate`的线路本来就跟。
-- `controlRules`：非路网边贝塞尔控制臂长度的按端点覆盖规则(`{fromTag,toTag,arm}`，按顺序第一条匹配的生效，都不匹配用`controlLength`)。tag空=任意站点，`"@real"`=真实站点(建筑上的接口)，其它=站点名包含该子串(边缘站点名=`<线路名>_Edge<i>_<RouteStationInfo::name>`)；`arm<=0`=不加控制点、直线连接；`ratio=true`时`arm`是两端点水平距离的倍数，否则是地图单位长度；`sameGroup=true`时还要求两端是同一组边缘站点(站名里mod站名第一个`_`之前的部分相同，如同一座机场的`air0`)。判定靠站点名/类型，读档重建边时自动一致，所以要在`SetProperty`里填。
-- `useRoadnet`/`instantiate`/`trackMesh`/`trackUnit`/`controlLength`几个选项字段的具体用法
-  见`route.md`"非路网边：三次贝塞尔"/"路网边：同车道特例"两节。
-- **`easeSeconds`的单位是真实秒，不是游戏内秒**——和`speed`/`dwellSeconds`刚好相反，因为
-  这个字段只是`Route::DriveVehicle()`内部用来算梯形速度曲线的一个"缓动窗口"参数，不直接
-  参与`Update()`按`length/speed`算的时刻表/`period`（那套仍然是游戏内秒），用真实秒更直观
-  （策划/调参时想的是"进站前N秒开始减速"而不是"进站前N个游戏内秒"）。默认3秒（公交尺度），
-  火车/飞机在各自`SetProperty()`里调大，见`route.md`"DriveVehicle的缓动"一节。
+两个站之间实际怎么走由 Core 在寻路图里寻路完成（`route.md`）。Core 完全不关心站/线是什么类型，也不做任何连线计算。
 
-## 依赖关系
+## 数据流
 
-- 依赖：`general_geometry.h`（`Connection`/`TerrainHatch`/`TerrainFitRequest`及`BuildHatch`/`BuildTerrainFit`）。
-- 被谁依赖：`Core/traffic/route.h`的`Route::Build()`读取这些结构、调`LayoutRoute()`；
-  `Basic/traffic/route_*.h`的`BusRoute`/`TrainRoute`/`AirRoute`三个具体实现扩展这个
-  基类。
+```
+Station mod(站内：进站口/出站口/停靠位/站内连线)  ──┐
+                                                    ├─> LayoutRoute(stations) ──> externs / links / lines
+Core: RouteStationInfo(站点位置+世界坐标端口)  ───┘
+```
+
+- **`RouteStationInfo`**（Core→mod，只读快照，世界坐标）：`name`、`stationIndex`（站点在 Core 侧列表的下标，`RouteEndpoint::station` 引用它）、站点中心`x/y`、`inlets/outlets/stops`（`RoutePort{x,y,z,dirX,dirY}`，下标就是站内端口下标）。
+- **输出三个 `vector`**（和 `BuildingMod::floors` 同一个跨 DLL 安全模式：mod 往自己持有的容器里追加，Core 只读）：
+  - `externs`：`RouteExternNode{name,x,y,z,dirX,dirY}`，**route mod 告诉 Core 在哪放 extern node**（地图边界、天空点…）。extern 是没有 `Station` 的纯路径点：不停靠、不触发事件、不限速，只能被 links 当端点、被 lines 当必经点。名字在本 route 内唯一。
+  - `links`：`RouteLinkSpec{from,to,withinStation,segments}`，**单向**站间连线。端点 `RouteEndpoint{kind(Outlet/Inlet/Extern),station,portIndex,externName}`；合法组合 Outlet→Inlet、Outlet→Extern、Extern→Inlet、Extern→Extern。`segments` 是按行驶顺序首尾相接的 `TrackSegment`（三次贝塞尔+`mesh`/`meshUnit`）。`withinStation=true` 表示同站内转场（如飞机从降落跑道滑行到起飞跑道），所在 run 按 `sameStationSpeed`。
+  - `lines`：每条线路是成环的 `RouteLineEntry{name,stopIndex}` 数组。`stopIndex>=0`=在站 `name` 的第 `stopIndex` 个停靠位**停靠**；`stopIndex<0`=`name` 是 extern 名，只经过不停。**没有"相同站名相邻=折返"之类的隐含规则**：出图再回来/边界回转由 route 提供 extern 节点 + links 显式表达。线路可以跨过某站不停（不写那个站的 entry，Core 寻路时走它的站内直通连线）。
+- **`TrackSegment`**（定义在 `station_mod.h`，站内/站间连线共用）：`mesh` 是这一段铺的路线资产（空=不铺），`meshUnit` 是 mesh 沿弧长的重复单位，`terrainFollow` 仅给 mod 自己的 `BuildTrack` 看（Core 不读不存）。隧道段由 mod 直接把 `mesh` 换成隧道资产，没有 `tunnel` 标志。
+
+## 选项（SetProperty 里填，Core 只读）
+
+- `stationType`（接哪类站点）、`vehicleType`、`useRoadnet`（公交：不给 links/externs，Core 用路网车辆寻路图拼路线，每站只有 stop 0）、`instantiate`（火车：Core 调 `BuildTrack` 并转发 hatch/terrainFit/拆除、UE 侧铺轨）、`trackWidth`、`lineVehicleCounts`(`LayoutRoute` 里按 `lines` 的下标给每条线路指定车辆数，缺项或<=0时按 1 辆)、`tiltAlongPath`、`dwellSeconds`。
+- **三个绝对速度**（地图单位/游戏秒，非路网线路用）：`normalSpeed` 正常运行；`sameStationSpeed` 同站内运行（从降落跑道滑到起飞跑道这种同站 run）；`passSpeed` 通过但不停站（穿过中间站的站内直通连线时的上限）。公交只用 `normalSpeed`。
+- **速度单位是游戏内秒，不是真实秒**：`Traffic::Tick` 喂给 `Route::Update` 的 `elapsedSeconds` 来自 `Player::Tick()` 里 `time->AddMilliseconds(delta*60*1000*timeFlowRatio)`，默认 `timeFlowRatio=2.0`，1 真实秒=120 游戏内秒。新增线路类型要按这个换算校准。
+- **`easeSeconds`（真实秒）**：从 0 加速到 `normalSpeed` 用多久，Core 据此得到统一加速度 `a = normalSpeed / (easeSeconds*120)`，三个速度共用。run 太短来不及加速到限速时 Core 自动退化成三角形速度曲线（峰值低于限速）。
+
+## 运动学（Core 预算，mod 只给选项）
+
+run 两端（停靠位）速度为 0；中间按各段速度上限做前向/后向约束，得到加速/匀速/减速相位表。进站/出站、同站内、穿站不停三种速度变化都由同一套约束自然得到：0→加速→normal→减速→0；0→sameStation→0；normal→减速→pass→加速→normal。见 `route.md`。
 
 ## 实例化路线（铺轨、过山爬坡/隧道）
 
-- `instantiate`：true表示这条线路要在世界里实例化成真实轨道——火车true，
-  公交（走现有路网）/飞机false。`trackMesh`是轨道资产，`trackTunnelMesh`是隧道内用的资产（留空=复用
-  `trackMesh`，目前还没有隧道专用资产），`trackUnit`是一块轨道沿弧长的长度，`trackWidth`是占地整宽
-  （挖隧道洞/地形贴合用）。
-- `BuildTrack(linkEnds, getTerrain, getWater, getHeight)`（虚，默认不处理）：`Route::Build`在`LayoutRoute`之后、
-  构建边几何之前对instantiate线路调用一次。`linkEnds[i]`是`links[i]`两端的真实接口位置（Core按
-  `links`顺序填）。做法和`RoadnetMod::DistributeRoadnet`一致：mod自己沿线采样地形，判断过山是抬升还是
-  挖隧道，直接产出**分段几何**`trackEdges[i]`（`TrackSegment`：起点/两个控制点/终点/`tunnel`标记，纯值类型，
-  不放`Node`/`Connection`，避免跨DLL的id/所有权问题），并用`AddTunnelHatch`/`AddTerrainFit`提交请求
-  （`hatches`/`terrainFits`）。`trackEdges[i]`留空=沿用Core的单段贝塞尔。
-- `AddHatch`/`AddTunnelHatch`/`AddTerrainFit`三个工具方法和`RoadnetMod`同名方法实现相同，都转调
-  `general_geometry.h`里的`BuildHatch`/`BuildTerrainFit`；`TerrainFitSample`/`TerrainFitRequest`也定义在那里。
+- `BuildTrack(getTerrain, getWater, getHeight)`（虚，默认不处理）：`Route::Build` 在 `LayoutRoute` 之后、建图之前对 instantiate 线路调用一次。mod 把 `links[i].segments` 改成最终几何（沿线采样地形、过山抬升/挖隧道），用 `AddTunnelHatch`/`AddTerrainFit`/`AddDemolition` 提交请求，和 `RoadnetMod::DistributeRoadnet` 同一个模式。
+- `AddDemolition(centerline, width)`：折线扫过 width 宽的条带，Core（`Map::DemolishAlongStrips`）拆掉所有相交的楼体及其园区，带 `stationMod` 的建筑除外。
+- `AddHatch`/`AddTunnelHatch`/`AddTerrainFit` 转调 `general_geometry.h` 的 `BuildHatch`/`BuildTerrainFit`。
+
+## 存档
+
+`SaveState`/`LoadState` 只管 mod 自己的状态；`externs`/`links`（最终几何）/`lines` 由 `TrafficSaveCodec` 存读，读档后 `Route::Assemble` 重建寻路图和运动学，见 `traffic_save.md`。
+
+## 依赖关系
+
+- 依赖：`station_mod.h`（`TrackSegment`/`PortKind`）、`general_geometry.h`。
+- 被谁依赖：`Core/traffic/route.h`；`Basic/traffic/route_*.h` 扩展这个基类。
 
 ## 待办/后续阶段
 
-- 暂时没有隧道专用的轨道资产，隧道内复用`trackMesh`；有了资产填`TrainRoute::SetProperty`里的
-  `trackTunnelMesh`即可。
+- 暂时没有隧道专用的轨道资产，隧道内复用火车轨道 mesh。
