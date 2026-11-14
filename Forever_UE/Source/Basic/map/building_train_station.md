@@ -18,9 +18,8 @@
 ## TrainStationBuilding / AirportBuilding
 
 - 机场/火车站都不再全图唯一(见各自`Assign`)，`GetPower`恒0不参与权重CDF，`RandomAcreage`/`Min`/`Max`固定2000，靠`Assign`显式占位。分别承载`StationMod`的`station_train`/`station_air`(`stationMod`字段)。
-- **`Assign`(火车站，多座)**：除下面的`AREA_TEST`固定一座外，还遍历`AREA_COMMERCE_MIDDLE/LOW`的Lot，规则是机场(`building_airport.md`)整体减半：沿路取最长边L、进深D；L<10或D<5跳过；L<20沿路占满，否则取沿路末端一角、沿路15；D<=10占满，否则取7.5；与已放火车站(含`AREA_TEST`那座)中心距<200跳过；沿路方向取有`GetBoundaryRoad`的一侧。取角贴末端(机场贴起端)，同块地共存时不重叠，放不下`RequestPlacement`自然失败被跳过。
-- **`Assign`(`AREA_TEST`这座)**：只看井字中心lot(`AREA_TEST`)，依次尝试4个方向用`Lot::FindAdaptivePlacement`按当前实际剩余空间自适应找位置，不挑具体方向，和园区共存。火车站要沿路`7`x纵深`4`(地图单位)，余量全挪到`marginEnd`贴边起点角；机场优先`12`x`8`，放不下退回`7`x`4`，余量全挪到`marginStart`贴另一端的角，这样两者即使同在一条边上也占两个对角。`request.lot`是命中的自由子块而不是`lot`本身，`adaptiveParent`仅在二者不同时设，供Core把子块残余空间搬回，见`FindAdaptivePlacement`声明。
-- **`TrainStationBuilding::Layout`**：`footprint`占满整个Building区域，`basements=1`+`layers=1`，层高0.6；地下1层站台层`preset_station_train_bg+`(楼梯通上来，`Stair_Line`资产)、地面1层大厅`preset_station_train_fg-`放2间`TrainStationRoom`，两层各2台电梯。`TrainStation::Layout`的轨道/接口(`depthRatio` 0.55/0.65)因此落在楼体范围内。
+- **`Assign`(火车站：1座中央 + 东南西北各1座)**：一次扫完全图lot。**中央车站**：随机一块能放的`AREA_COMMERCE_HIGH`地块(**放不了就退化**：在随机一块能放的`AREA_COMMERCE_MIDDLE/LOW`地块放一座车站，朝向不限，不再放外围四座；中/低密度地块也没有则一座都不放)，朝向不限。**外围车站**：在`AREA_COMMERCE_MIDDLE/LOW`里为东、南、西、北各挑一块(随机)，要求：1) 地块中心到中央地块中心距离>=200；2) 方向判定是半个地图：连线(中央->地块)和该方向轴线夹角<=45度(x比中央大=东，y比中央大=南)；3) 选边时车站沿路方向(世界坐标，按地块旋转换算)和连线夹角<=45度，所以东/西站沿路边朝南北、南/北站沿路边朝东西。某个方向没有满足的地块就不放。占位规则同机场的一半：沿路边长L<15或进深D<5拒绝；L<20沿路占满，否则取沿路末端一角、沿路15；D<=10占满，否则取7.5；沿路边长取的是车站朝向对应的那条边，不再按长边选。取角贴末端(机场贴起端)，放不下`RequestPlacement`自然失败被跳过。线路怎么连见`route_train.md`。
+- **`TrainStationBuilding::Layout`**：`footprint`占满整个Building区域，`basements=0`+`layers=3`，层高1楼0.75、2楼0.75、3楼1.0；1楼大厅`preset_station_train_fg+`(楼梯通上去，`Stair_Line`资产)放4间`room_empty`、2楼`preset_station_train_fl+-`、3楼`preset_station_train_fu-`，三层各4台电梯。`TrainStation::Layout`的轨道/接口(`depthRatio` 0.45/0.55，z=1.5)因此落在楼体范围内。
 - **`AirportBuilding::Layout`**：无地下室、1层，层高0.6，模板`preset_single_room_fg`+1间`AirportRoom`。`footprint`用`NearRoadFootprint(direction, 0.18, 0.35, 0.6)`把楼体压到靠路一侧，深处留给`AirStation::Layout`的跑道(`depthRatio` 0.65/0.85)，避免公共交通连线穿过楼体实体。
 
 ## 依赖关系

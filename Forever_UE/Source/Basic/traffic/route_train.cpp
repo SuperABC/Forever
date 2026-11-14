@@ -55,10 +55,10 @@ void TrainRoute::SetProperty() {
 }
 
 namespace {
-	constexpr float kBridgeHeight = 1.5f; // 出站后全程架桥的高度(地图单位，1单位=10m)
-	constexpr float kRiseDistance = 4.f; // 站内出站口到桥高节点的水平距离
-	constexpr float kRiseArm = 0.5f;     // 上升/下降S形曲线的控制臂长
 	constexpr int kVehiclesPerTrainLine = 4; // 每条火车线路上的车辆数
+	constexpr float kTrackGauge = 0.5f;    // 中轴线两侧两条铁轨之间的距离(地图单位，1单位=10m)
+	constexpr float kStationExtend = 2.f;  // 车站端口向外直线延伸到轴点的距离
+	constexpr float kOffsetStep = 4.f;     // 偏移铁轨按这个弧长采样中轴线，相邻采样点之间一段Hermite贝塞尔
 
 	// 一座火车站：两条轨道t=0/1(航向相反)，每条轨道的进站口/出站口/停靠位下标都等于t(`station_train`保证)。
 	struct TrainStationLayout {
@@ -71,17 +71,6 @@ namespace {
 		int BestTrack(float dx, float dy) const {
 			return (hx[0] * dx + hy[0] * dy) >= (hx[1] * dx + hy[1] * dy) ? 0 : 1;
 		}
-	};
-
-	// 一条线路的构建状态：已经排好的必经点，加上最后一个/第一个站的轨道(用来在相邻站之间连link)。
-	struct LineBuilder {
-		vector<RouteLineEntry> entries;
-		const TrainStationLayout* first = nullptr;
-		int firstTrack = 0;
-		const TrainStationLayout* last = nullptr;
-		int lastTrack = 0;
-		char pendingLabel = 0; // 下一次连接要绕地图边界label回转
-		char startLabel = 0;   // 首尾相接(finish)时要绕地图边界label回转
 	};
 
 	RouteEndpoint OutletOf(const TrainStationLayout& station, int t) {
@@ -127,38 +116,62 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		link.segments = std::move(segments);
 		links.push_back(std::move(link));
 	};
-	// 出站端：出站口沿航向kRiseDistance、抬升到桥高；进站端反过来。(桥高节点位置)
-	auto riseOutPoint = [&](const TrainStationLayout& station, int t) {
-		return make_pair(station.Out(t).x + station.hx[t] * kRiseDistance, station.Out(t).y + station.hy[t] * kRiseDistance);
+	// ---- 站间铁轨 = 中轴线 + 两侧偏移 ----
+	// 车站的"端e"=轨道e的出站口Out(e)和轨道1-e的进站口In(1-e)(同一侧，相距随楼体进深变化，不是定值)。
+	// 每端在车站外沿航向直线延伸kStationExtend的位置取一个轴点P，两条铁轨的连接点是P两侧各偏半个轨距：出站轨在行驶方向右手边(O')，进站轨在左手边(I')。
+	// 车站端口到连接点的短连接(扁S形)每个车站每端只做一份，后面连到哪条轨道都共用；中轴线两侧的偏移铁轨共用同一组采样点，所以永远平行。
+	constexpr float kHalfGauge = kTrackGauge * 0.5f;
+	struct EndGeometry { float px, py, pz, hx, hy; };
+	set<string> endKeys, pairKeys;
+	auto endName = [](const TrainStationLayout& station, int e, const char* suffix) {
+		return station.info.name + "_e" + to_string(e) + "_" + suffix;
 	};
-	auto riseInPoint = [&](const TrainStationLayout& station, int t) {
-		return make_pair(station.In(t).x - station.hx[t] * kRiseDistance, station.In(t).y - station.hy[t] * kRiseDistance);
-	};
-	auto riseSegment = [&](const TrainStationLayout& station, int t) {
-		auto [rx, ry] = riseOutPoint(station, t);
-		return MakeBezierSegment(station.Out(t).x, station.Out(t).y, station.Out(t).z, station.hx[t], station.hy[t],
-			rx, ry, kBridgeHeight, station.hx[t], station.hy[t], kRiseArm);
-	};
-	auto descendSegment = [&](const TrainStationLayout& station, int t) {
-		auto [rx, ry] = riseInPoint(station, t);
-		return MakeBezierSegment(rx, ry, kBridgeHeight, station.hx[t], station.hy[t],
-			station.In(t).x, station.In(t).y, station.In(t).z, station.hx[t], station.hy[t], kRiseArm);
+	auto ensureEnd = [&](const TrainStationLayout& station, int e) {
+		const RoutePort& out = station.Out(e);
+		const RoutePort& in = station.In(1 - e);
+		float hx = station.hx[e], hy = station.hy[e];
+		EndGeometry end;
+		end.hx = hx; end.hy = hy;
+		end.px = (out.x + in.x) * 0.5f + hx * kStationExtend;
+		end.py = (out.y + in.y) * 0.5f + hy * kStationExtend;
+		end.pz = out.z;
+		if (endKeys.insert(station.info.name + to_string(e)).second) {
+			float ux = -hy, uy = hx; // 右手侧
+			float ox = end.px + ux * kHalfGauge, oy = end.py + uy * kHalfGauge;
+			float ix = end.px - ux * kHalfGauge, iy = end.py - uy * kHalfGauge;
+			for (int side = 0; side < 2; side++) {
+				RouteExternNode node;
+				node.name = endName(station, e, side == 0 ? "out" : "in");
+				node.x = side == 0 ? ox : ix; node.y = side == 0 ? oy : iy; node.z = end.pz;
+				node.dirX = side == 0 ? hx : -hx; node.dirY = side == 0 ? hy : -hy;
+				externs.push_back(node);
+			}
+			// 两端臂长=弦长/3，方向都沿航向：出站口->O'、I'->进站口，扁S形。
+			float outArm = sqrtf((ox - out.x) * (ox - out.x) + (oy - out.y) * (oy - out.y)) / 3.f;
+			float inArm = sqrtf((in.x - ix) * (in.x - ix) + (in.y - iy) * (in.y - iy)) / 3.f;
+			addLink(OutletOf(station, e), ExternOf(endName(station, e, "out")), {
+				MakeBezierSegment(out.x, out.y, out.z, hx, hy, ox, oy, end.pz, hx, hy, outArm) });
+			addLink(ExternOf(endName(station, e, "in")), InletOf(station, 1 - e), {
+				MakeBezierSegment(ix, iy, end.pz, -hx, -hy, in.x, in.y, in.z, -hx, -hy, inArm) });
+		}
+		return end;
 	};
 
-	// 车站之间：A的出站端(轨道tA)->B的进站端(轨道tB)。抬升->沿地形的桥(控制臂=两点水平距离1/3)->下降。
-	auto connectSegments = [&](const TrainStationLayout& a, int ta, const TrainStationLayout& b, int tb) {
-		auto [ax, ay] = riseOutPoint(a, ta);
-		auto [bx, by] = riseInPoint(b, tb);
-		float arm = sqrtf((bx - ax) * (bx - ax) + (by - ay) * (by - ay)) / 3.f;
-		return vector<TrackSegment>{ riseSegment(a, ta),
-			MakeBezierSegment(ax, ay, kBridgeHeight, a.hx[ta], a.hy[ta], bx, by, kBridgeHeight, b.hx[tb], b.hy[tb], arm, true),
-			descendSegment(b, tb) };
+	// 车站A的端ea和车站B的端eb之间：一条中轴线，两侧各偏半个轨距，A->B 和 B->A 两条铁轨一起生成。
+	auto connectEnds = [&](const TrainStationLayout& a, int ea, const TrainStationLayout& b, int eb) {
+		EndGeometry ga = ensureEnd(a, ea), gb = ensureEnd(b, eb);
+		string keyA = a.info.name + to_string(ea), keyB = b.info.name + to_string(eb);
+		if (!pairKeys.insert(keyA < keyB ? keyA + "|" + keyB : keyB + "|" + keyA).second) return;
+		float arm = sqrtf((gb.px - ga.px) * (gb.px - ga.px) + (gb.py - ga.py) * (gb.py - ga.py)) / 3.f;
+		TrackSegment axis = MakeBezierSegment(ga.px, ga.py, ga.pz, ga.hx, ga.hy, gb.px, gb.py, gb.pz, -gb.hx, -gb.hy, arm);
+		vector<CurveSample> samples = SampleBezier(axis, kOffsetStep, ga.hx, ga.hy);
+		addLink(ExternOf(endName(a, ea, "out")), ExternOf(endName(b, eb, "in")), OffsetRail(samples, kHalfGauge, false, ga.pz, gb.pz, true));
+		addLink(ExternOf(endName(b, eb, "out")), ExternOf(endName(a, ea, "in")), OffsetRail(samples, -kHalfGauge, true, ga.pz, gb.pz, true));
 	};
 
-	// 沿station的端e(轨道e的出站端)向label边界('N'/'S'/'W'/'E')伸出再回来：出图点=向边界做垂线的垂足(边界在侧面时先沿航向前进D)，
-	// 进图点同理(另一条轨道1-e的riseIn)，两点之间沿边界直线回转，从另一条轨道1-e回到车站。
-	// 出图点放一个extern node：出站口->extern(抬升+桥)，extern->另一条轨道的进站口(沿边界回转+回程+下降)。返回extern名字。
-	auto boundaryExtern = [&](const TrainStationLayout& station, int e, char label) {
+	// 沿station的端e向label边界('N'/'S'/'W'/'E')伸出再回来：中轴线从轴点P到边界垂足(从航向前进D/3的控制点到边界的垂足)，两条铁轨是它两侧的偏移，
+	// 在边界用半径=半轨距的半圆掉头；半圆顶点(正好在边界上)就是extern node，返回它的名字。
+	auto boundaryExtern = [&](const TrainStationLayout& station, int e, char label, bool straight) {
 		float nx = 0.f, ny = 0.f;
 		switch (label) {
 		case 'N': ny = -1.f; break;
@@ -177,44 +190,47 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 			default: return make_pair(static_cast<float>(sizeX), clampedY);
 			}
 		};
-		int enter = 1 - e;
-		const RoutePort& out = station.Out(e);
-		const RoutePort& in = station.In(enter);
-		auto [rox, roy] = riseOutPoint(station, e);
-		auto [rix, riy] = riseInPoint(station, enter);
-		// 车站到边界的距离D(从桥高节点量)。边界正对着航向(n·h≈1)时出图点就是正前方的垂足；边界在侧面时，出图点沿航向再前进D再取垂足，
-		// 让轨道从航向平滑拐向边界(约1/4弧)，不在站旁直角拐弯。
-		auto boundaryDistance = [&](float px, float py) {
-			auto [fx, fy] = foot(px, py);
-			return sqrtf((fx - px) * (fx - px) + (fy - py) * (fy - py));
-		};
-		float outDistance = boundaryDistance(rox, roy);
-		float inDistance = boundaryDistance(rix, riy);
-		float outAlong = fabsf(station.hx[e] * nx + station.hy[e] * ny) > 0.5f ? 0.f : outDistance;
-		float inAlong = fabsf(station.hx[enter] * nx + station.hy[enter] * ny) > 0.5f ? 0.f : inDistance;
-		auto [ox, oy] = foot(rox + station.hx[e] * outAlong, roy + station.hy[e] * outAlong);
-		auto [ix, iy] = foot(rix - station.hx[enter] * inAlong, riy - station.hy[enter] * inAlong);
-		float sideX = ix - ox, sideY = iy - oy;
-		float sideLength = sqrtf(sideX * sideX + sideY * sideY);
-		if (sideLength > 1e-6f) { sideX /= sideLength; sideY /= sideLength; }
-		else { sideX = -ny; sideY = nx; } // 两点重合(理论不会)，任取一个垂直方向
+		EndGeometry end = ensureEnd(station, e);
+		// 轴点到边界的距离D；extern的位置=从航向前进D/3的控制点到边界的垂足，轨道从航向平滑拐向边界，不在站旁直角拐弯。
+		// straight=true：不挑边界，沿端的航向直线射到地图边界(label只用来给extern起名)，边界法向取航向。
+		float qx, qy, distance;
+		if (straight) {
+			nx = end.hx; ny = end.hy;
+			auto [hitX, hitY] = RayBoxIntersection(end.px, end.py, end.hx, end.hy, sizeX, sizeY);
+			qx = hitX; qy = hitY;
+			distance = sqrtf((qx - end.px) * (qx - end.px) + (qy - end.py) * (qy - end.py));
+		}
+		else {
+			// 从实际连出来的方向(端的航向)向前延伸 D/3 得到控制点C(D=轴点P到该边界的垂直距离)，C到边界的垂足就是extern的位置。
+			auto [footX, footY] = foot(end.px, end.py);
+			distance = sqrtf((footX - end.px) * (footX - end.px) + (footY - end.py) * (footY - end.py));
+			auto [sideX, sideY] = foot(end.px + end.hx * distance / 3.f, end.py + end.hy * distance / 3.f);
+			qx = sideX; qy = sideY;
+		}
+		// 中轴线终点往里缩半个轨距，半圆顶点才正好落在边界上。
+		float ax = qx - nx * kHalfGauge, ay = qy - ny * kHalfGauge;
 
 		string name = "bd_" + station.info.name + "_" + to_string(e) + "_" + label;
-		if (linkKeys.insert({ "extern", name }).second) {
-			RouteExternNode node;
-			node.name = name;
-			node.x = ox; node.y = oy; node.z = kBridgeHeight; node.dirX = nx; node.dirY = ny;
-			externs.push_back(node);
-		}
-		// 从车站出来/回到车站的控制臂=车站到边界距离的1/3。
-		float outArm = outDistance / 3.f;
-		float inArm = inDistance / 3.f;
-		addLink(OutletOf(station, e), ExternOf(name), { riseSegment(station, e),
-			MakeBezierSegment(rox, roy, kBridgeHeight, station.hx[e], station.hy[e], ox, oy, kBridgeHeight, nx, ny, outArm, true) });
-		addLink(ExternOf(name), InletOf(station, enter), {
-			MakeBezierSegment(ox, oy, kBridgeHeight, sideX, sideY, ix, iy, kBridgeHeight, sideX, sideY, 0.f, true),
-			MakeBezierSegment(ix, iy, kBridgeHeight, -nx, -ny, rix, riy, kBridgeHeight, station.hx[enter], station.hy[enter], inArm, true),
-			descendSegment(station, enter) });
+		if (!linkKeys.insert({ "extern", name }).second) return name;
+		RouteExternNode node;
+		node.name = name;
+		node.x = qx; node.y = qy; node.z = end.pz; node.dirX = ny; node.dirY = -nx; // 顶点处的行进方向(右手侧->左手侧)
+		externs.push_back(node);
+
+		// 控制臂=车站到边界距离的1/3。
+		TrackSegment axis = MakeBezierSegment(end.px, end.py, end.pz, end.hx, end.hy, ax, ay, end.pz, nx, ny, distance / 3.f);
+		vector<CurveSample> samples = SampleBezier(axis, kOffsetStep, end.hx, end.hy);
+		// 半圆：去程铁轨在中轴线右手侧(r=(-ny,nx))走到A+r*g，经顶点掉头到A-r*g，回程铁轨在左手侧。每个1/4圆弧的控制臂=0.5523*半径。
+		float rx = -ny, ry = nx;
+		float arcArm = 0.5523f * kHalfGauge;
+		TrackSegment firstArc = MakeBezierSegment(ax + rx * kHalfGauge, ay + ry * kHalfGauge, end.pz, nx, ny, qx, qy, end.pz, -rx, -ry, arcArm);
+		TrackSegment secondArc = MakeBezierSegment(qx, qy, end.pz, -rx, -ry, ax - rx * kHalfGauge, ay - ry * kHalfGauge, end.pz, -nx, -ny, arcArm);
+		vector<TrackSegment> outbound = OffsetRail(samples, kHalfGauge, false, end.pz, end.pz, true);
+		outbound.push_back(firstArc);
+		vector<TrackSegment> inbound = OffsetRail(samples, -kHalfGauge, true, end.pz, end.pz, true);
+		inbound.insert(inbound.begin(), secondArc);
+		addLink(ExternOf(endName(station, e, "out")), ExternOf(name), std::move(outbound));
+		addLink(ExternOf(name), ExternOf(endName(station, e, "in")), std::move(inbound));
 		return name;
 	};
 	// 航向主轴方向的边界。
@@ -223,167 +239,121 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		return dy >= 0.f ? 'S' : 'N';
 	};
 
-	// 把(from站轨道ta的出站端)连到(to站轨道tb的进站端)；label非0表示绕地图边界回转(from/to是同一座站的两条轨道)，此时在entries里串入extern点。
-	auto connect = [&](LineBuilder& line, const TrainStationLayout& a, int ta, const TrainStationLayout& b, int tb, char label) {
-		if (label) {
-			line.entries.push_back({ boundaryExtern(a, ta, label), -1 });
+	// ---- 线路拓扑：一个中央车站 + 东南西北各一座(`building_train_station`的Assign放的) ----
+	// 中央车站=到其它站距离之和最小的站；其它站按相对中央的主方向分到东/南/西/北，每个方向一座。
+	size_t count = stations.size();
+	size_t central = 0;
+	if (count > 1) {
+		float best = FLT_MAX;
+		for (size_t i = 0; i < count; i++) {
+			float sum = 0.f;
+			for (size_t j = 0; j < count; j++) sum += hypotf(stations[i].info.x - stations[j].info.x, stations[i].info.y - stations[j].info.y);
+			if (sum < best) { best = sum; central = i; }
 		}
-		else {
-			addLink(OutletOf(a, ta), InletOf(b, tb), connectSegments(a, ta, b, tb));
-		}
-	};
-	auto appendPass = [&](LineBuilder& line, const TrainStationLayout& station, int t) {
-		if (line.last) {
-			connect(line, *line.last, line.lastTrack, station, t, line.pendingLabel);
-			line.pendingLabel = 0;
-		}
-		else {
-			line.first = &station;
-			line.firstTrack = t;
-		}
-		line.entries.push_back({ station.info.name, t });
-		line.last = &station;
-		line.lastTrack = t;
-	};
-	// 在当前位置(上一站的出站端)绕地图边界label回转：线路还没开始(空)时记成首尾相接处的回转。
-	auto appendBoundary = [&](LineBuilder& line, char label) {
-		if (line.last) line.pendingLabel = label;
-		else line.startLabel = label;
-	};
-	auto finish = [&](LineBuilder& line) {
-		if (!line.first || !line.last) return;
-		connect(line, *line.last, line.lastTrack, *line.first, line.firstTrack, line.startLabel);
-		lines.push_back(std::move(line.entries));
+	}
+	const TrainStationLayout& hub = stations[central];
+	auto addLine = [&](vector<RouteLineEntry> entries) {
+		lines.push_back(std::move(entries));
 		lineVehicleCounts.push_back(kVehiclesPerTrainLine);
 	};
-	auto unit = [](float dx, float dy) {
-		float length = sqrtf(dx * dx + dy * dy);
+
+	if (count == 1) {
+		// 单站：两端沿航向直线伸到地图外回转，往返各用一条轨道。
+		string bd1 = boundaryExtern(hub, 1, '*', true);
+		string bd0 = boundaryExtern(hub, 0, '*', true);
+		addLine({ { hub.info.name, 1 }, { bd1, -1 }, { hub.info.name, 0 }, { bd0, -1 } });
+		return;
+	}
+
+	const TrainStationLayout* outer[4] = { nullptr, nullptr, nullptr, nullptr }; // 0东 1南 2西 3北
+	for (size_t i = 0; i < count; i++) {
+		if (i == central) continue;
+		float dx = stations[i].info.x - hub.info.x, dy = stations[i].info.y - hub.info.y;
+		int d = fabsf(dx) >= fabsf(dy) ? (dx >= 0.f ? 0 : 2) : (dy >= 0.f ? 1 : 3);
+		if (!outer[d] || hypotf(dx, dy) < hypotf(outer[d]->info.x - hub.info.x, outer[d]->info.y - hub.info.y)) outer[d] = &stations[i];
+	}
+	auto unitToward = [](float fromX, float fromY, float toX, float toY) {
+		float dx = toX - fromX, dy = toY - fromY, length = sqrtf(dx * dx + dy * dy);
 		return length > 1e-6f ? make_pair(dx / length, dy / length) : make_pair(1.f, 0.f);
 	};
 
-	size_t count = stations.size();
-	if (count == 1) {
-		// 单站：两端各伸到边界回转，往返各用一条轨道。
-		const TrainStationLayout& s = stations[0];
-		LineBuilder line;
-		appendBoundary(line, dominantLabel(s.hx[0], s.hy[0]));
-		appendPass(line, s, 1);
-		appendBoundary(line, dominantLabel(s.hx[1], s.hy[1]));
-		appendPass(line, s, 0);
-		finish(line);
-		return;
-	}
-	if (count == 2) {
-		// 两站：A<->B直接相连，两端各自往外伸到边界回转(外端=航向背离对方的那一端)。一条线。
-		const TrainStationLayout& a = stations[0];
-		const TrainStationLayout& b = stations[1];
-		auto [abx, aby] = unit(b.info.x - a.info.x, b.info.y - a.info.y);
-		int ea = a.BestTrack(-abx, -aby), eb = b.BestTrack(abx, aby);
-		LineBuilder line;
-		appendBoundary(line, dominantLabel(a.hx[ea], a.hy[ea]));
-		appendPass(line, a, 1 - ea);
-		appendPass(line, b, eb);
-		appendBoundary(line, dominantLabel(b.hx[eb], b.hy[eb]));
-		appendPass(line, b, 1 - eb);
-		appendPass(line, a, ea);
-		finish(line);
-		return;
-	}
-
-	// >=3站：绕地图中心排序(+Y向南，atan2升序=屏幕上的顺时针)。
-	float centerX = static_cast<float>(sizeX) * 0.5f, centerY = static_cast<float>(sizeY) * 0.5f;
-	vector<int> order(count);
-	for (size_t i = 0; i < count; i++) order[i] = static_cast<int>(i);
-	sort(order.begin(), order.end(), [&](int a, int b) {
-		return atan2f(stations[a].info.y - centerY, stations[a].info.x - centerX) < atan2f(stations[b].info.y - centerY, stations[b].info.x - centerX);
-	});
-	vector<int> position(count);
-	for (size_t i = 0; i < count; i++) position[order[i]] = static_cast<int>(i);
-	// 顺时针环上每站走的轨道：航向最接近环切线(前一站->后一站)的那条；逆时针取另一条(航向正好相反)。
-	vector<int> clockwiseTrack(count);
-	for (size_t i = 0; i < count; i++) {
-		const TrainStationLayout& prev = stations[order[(i + count - 1) % count]];
-		const TrainStationLayout& next = stations[order[(i + 1) % count]];
-		auto [tx, ty] = unit(next.info.x - prev.info.x, next.info.y - prev.info.y);
-		clockwiseTrack[order[i]] = stations[order[i]].BestTrack(tx, ty);
-	}
-
-	{
-		LineBuilder line;
-		for (size_t i = 0; i < count; i++) appendPass(line, stations[order[i]], clockwiseTrack[order[i]]);
-		finish(line);
-	}
-	{
-		LineBuilder line;
-		for (size_t i = count; i-- > 0; ) appendPass(line, stations[order[i]], 1 - clockwiseTrack[order[i]]);
-		finish(line);
-	}
-
-	// 南北线/东西线：去程沿顺时针弧、回程沿逆时针弧，每个站(含端点站)的轨道和环线一致(靠右行驶，顺时针靠内侧、逆时针靠外侧)：
-	// 起点站去程走顺时针轨道，所以extern接在它的进站端(1-clockwiseTrack)；终点站去程走顺时针轨道出站，extern接在它的出站端(clockwiseTrack)。
-	// extern位置仍是该站向label边界做垂线的垂足，端的朝向不一定正对边界(控制点沿航向4单位后转弯)。
-	auto express = [&](int from, char fromLabel, int to, char toLabel) {
-		if (from == to) return;
-		const TrainStationLayout& a = stations[from];
-		const TrainStationLayout& b = stations[to];
-		int ea = 1 - clockwiseTrack[from], eb = clockwiseTrack[to];
-		vector<int> arc; // 顺时针弧上的途经站
-		for (int k = (position[from] + 1) % static_cast<int>(count); k != position[to]; k = (k + 1) % static_cast<int>(count)) {
-			arc.push_back(order[k]);
+	// 一条轴线(北-南、东-西)：A外站 -> 中央 -> B外站 -> B外边界回转 -> B外站 -> 中央 -> A外站 -> A外边界回转，首尾相接。
+	// 中央车站的两端：X端朝A、1-X端朝B(两者都有时按航向和方向的点积之和最大选X)，穿过中央是X端进、1-X端出，所以A/B必须接在相反的两端；
+	// 某个方向没有外站时，中央车站对应的那一端直接连到该方向的城外。
+	auto axisLine = [&](const TrainStationLayout* a, char labelA, const TrainStationLayout* b, char labelB) {
+		// 方向向量：有外站取到外站的方向，没有就取该方向的地图边界方向(北-y、南+y、东+x、西-x)。
+		auto directionOf = [&](const TrainStationLayout* s, char label) {
+			if (s) return unitToward(hub.info.x, hub.info.y, s->info.x, s->info.y);
+			return label == 'N' ? make_pair(0.f, -1.f) : label == 'S' ? make_pair(0.f, 1.f) : label == 'E' ? make_pair(1.f, 0.f) : make_pair(-1.f, 0.f);
+		};
+		auto [uax, uay] = directionOf(a, labelA);
+		auto [ubx, uby] = directionOf(b, labelB);
+		float score0 = hub.hx[0] * uax + hub.hy[0] * uay + hub.hx[1] * ubx + hub.hy[1] * uby;
+		float score1 = hub.hx[1] * uax + hub.hy[1] * uay + hub.hx[0] * ubx + hub.hy[0] * uby;
+		int x = score0 >= score1 ? 0 : 1;
+		const string& hubName = hub.info.name;
+		vector<RouteLineEntry> entries;
+		int ea = 0, eb = 0;
+		string bdA, bdB;
+		if (a) {
+			ea = a->BestTrack(hub.info.x - a->info.x, hub.info.y - a->info.y); // a朝向中央的那一端
+			connectEnds(*a, ea, hub, x);
+			bdA = boundaryExtern(*a, 1 - ea, labelA, false);
 		}
-		LineBuilder line;
-		appendBoundary(line, fromLabel);
-		appendPass(line, a, 1 - ea);
-		for (int s : arc) appendPass(line, stations[s], clockwiseTrack[s]);
-		appendPass(line, b, eb);
-		appendBoundary(line, toLabel);
-		appendPass(line, b, 1 - eb);
-		for (size_t k = arc.size(); k-- > 0; ) appendPass(line, stations[arc[k]], 1 - clockwiseTrack[arc[k]]);
-		appendPass(line, a, ea);
-		finish(line);
+		else {
+			bdA = boundaryExtern(hub, x, labelA, false); // 没有A方向的外站：中央车站直接连到A方向的城外
+		}
+		if (b) {
+			eb = b->BestTrack(hub.info.x - b->info.x, hub.info.y - b->info.y);
+			connectEnds(*b, eb, hub, 1 - x);
+			bdB = boundaryExtern(*b, 1 - eb, labelB, false);
+		}
+		else {
+			bdB = boundaryExtern(hub, 1 - x, labelB, false); // 同理，连到B方向的城外
+		}
+		// 绕一圈：... -> A方向回转点 -> a(进站轨ea) -> 中央(1-x) -> b(1-eb) -> B方向回转点 -> b(eb) -> 中央(x) -> a(1-ea) -> A方向回转点
+		entries.push_back({ bdA, -1 });
+		if (a) entries.push_back({ a->info.name, ea });
+		entries.push_back({ hubName, 1 - x });
+		if (b) entries.push_back({ b->info.name, 1 - eb });
+		entries.push_back({ bdB, -1 });
+		if (b) entries.push_back({ b->info.name, eb });
+		entries.push_back({ hubName, x });
+		if (a) entries.push_back({ a->info.name, 1 - ea });
+		addLine(std::move(entries));
 	};
-	int north = 0, south = 0, west = 0, east = 0;
-	for (size_t i = 1; i < count; i++) {
-		if (stations[i].info.y < stations[north].info.y) north = static_cast<int>(i);
-		if (stations[i].info.y > stations[south].info.y) south = static_cast<int>(i);
-		if (stations[i].info.x < stations[west].info.x) west = static_cast<int>(i);
-		if (stations[i].info.x > stations[east].info.x) east = static_cast<int>(i);
-	}
-	express(north, 'N', south, 'S');
-	express(west, 'W', east, 'E');
+	axisLine(outer[3], 'N', outer[1], 'S');
+	axisLine(outer[0], 'E', outer[2], 'W');
 }
 
 void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 	const function<pair<bool, float>(int, int)>& getWater,
 	const function<float(float, float)>& getHeight) {
-	// 把一段mod自己算的基础曲线(平面三次贝塞尔+端点高度)按地形采样成最终几何：过山抬升/挖隧道。
-	auto refine = [&](const TrackSegment& base, size_t linkIndex, vector<TrackSegment>& out) {
+	// 把一条链(同一条link里连续的terrainFollow段，首尾相接的平面三次贝塞尔+端点高度)按地形采样成最终几何：过山抬升/挖隧道。
+	// 整条链当成一条轨道处理：只有链首/链尾各TRACK_STATION_FLAT_SAMPLES个采样点保持水平，山和隧道在整条链上找。
+	auto refine = [&](const vector<TrackSegment>& chain, size_t linkIndex, vector<TrackSegment>& out) {
 		struct Point { float x, y, z; };
-		Point a{ base.x1, base.y1, base.z1 }, b{ base.x2, base.y2, base.z2 };
-		float c1x = base.c1x, c1y = base.c1y, c2x = base.c2x, c2y = base.c2y;
+		const TrackSegment& base = chain.front();
+		Point a{ base.x1, base.y1, base.z1 }, b{ chain.back().x2, chain.back().y2, chain.back().z2 };
+		float c1x = base.c1x, c1y = base.c1y, c2x = chain.back().c2x, c2y = chain.back().c2y;
 
-		auto bezier = [&](float t, float& x, float& y) {
-			float m = 1.f - t;
-			x = m * m * m * a.x + 3.f * m * m * t * c1x + 3.f * m * t * t * c2x + t * t * t * b.x;
-			y = m * m * m * a.y + 3.f * m * m * t * c1y + 3.f * m * t * t * c2y + t * t * t * b.y;
-		};
-
-		float chord = sqrtf((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
-		int fine = max(16, static_cast<int>(ceilf(chord * 8.f)));
-		vector<float> fineT(fine + 1), fineArc(fine + 1);
-		float px, py;
-		bezier(0.f, px, py);
-		fineT[0] = 0.f; fineArc[0] = 0.f;
-		for (int i = 1; i <= fine; i++) {
-			float x, y;
-			float t = static_cast<float>(i) / static_cast<float>(fine);
-			bezier(t, x, y);
-			fineT[i] = t;
-			fineArc[i] = fineArc[i - 1] + sqrtf((x - px) * (x - px) + (y - py) * (y - py));
-			px = x; py = y;
+		// 逐段细采样，累计弧长。
+		vector<float> fineX, fineY, fineArc;
+		for (size_t k = 0; k < chain.size(); k++) {
+			const TrackSegment& seg = chain[k];
+			float chord = sqrtf((seg.x2 - seg.x1) * (seg.x2 - seg.x1) + (seg.y2 - seg.y1) * (seg.y2 - seg.y1));
+			int fine = max(16, static_cast<int>(ceilf(chord * 8.f)));
+			for (int i = (k == 0 ? 0 : 1); i <= fine; i++) {
+				float t = static_cast<float>(i) / static_cast<float>(fine), m = 1.f - t;
+				float x = m * m * m * seg.x1 + 3.f * m * m * t * seg.c1x + 3.f * m * t * t * seg.c2x + t * t * t * seg.x2;
+				float y = m * m * m * seg.y1 + 3.f * m * m * t * seg.c1y + 3.f * m * t * t * seg.c2y + t * t * t * seg.y2;
+				float length = fineArc.empty() ? 0.f : fineArc.back() + sqrtf((x - fineX.back()) * (x - fineX.back()) + (y - fineY.back()) * (y - fineY.back()));
+				fineX.push_back(x); fineY.push_back(y); fineArc.push_back(length);
+			}
 		}
+		int fine = static_cast<int>(fineArc.size()) - 1;
 		float totalLength = fineArc[fine];
-		if (totalLength < 1e-3f) { out.push_back(base); return; }
+		if (totalLength < 1e-3f) { for (const TrackSegment& seg : chain) out.push_back(seg); return; }
 
 		int count = max(1, static_cast<int>(ceilf(totalLength / TRACK_SAMPLE_STEP)));
 		vector<float> sx(count + 1), sy(count + 1), arc(count + 1);
@@ -394,7 +364,8 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 				while (cursor + 1 < fine && fineArc[cursor + 1] < target) cursor++;
 				float span = fineArc[cursor + 1] - fineArc[cursor];
 				float f = span > 1e-9f ? (target - fineArc[cursor]) / span : 0.f;
-				bezier(fineT[cursor] + (fineT[cursor + 1] - fineT[cursor]) * f, sx[i], sy[i]);
+				sx[i] = fineX[cursor] + (fineX[cursor + 1] - fineX[cursor]) * f;
+				sy[i] = fineY[cursor] + (fineY[cursor + 1] - fineY[cursor]) * f;
 				arc[i] = target;
 			}
 			sx[0] = a.x; sy[0] = a.y; sx[count] = b.x; sy[count] = b.y;
@@ -499,7 +470,7 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 			slope[i] = run > 1e-6f ? (z[i + 1] - z[i - 1]) / run : 0.f;
 		}
 
-		// ---- 第二遍：每相邻两点一段三次贝塞尔(平面上是弦，Z用端点坡度做Hermite)，坡度夹到单调范围
+		// ---- 第二遍：每相邻两点一段三次贝塞尔(平面上用Catmull-Rom切线做Hermite，相邻段切线连续；Z用端点坡度做Hermite)，坡度夹到单调范围
 		// (与这段高度差同号、不超过3倍平均坡度)，三次曲线不会冲出两端高度。完全水平且共线的连续
 		// 采样点合并成一段，不然火车几百单位的线路会有几百个无谓的小段。 ----
 		auto segmentTag = [&](int i) -> int { // 相邻两点(i,i+1)这一段的归类，合并只能在同类里进行
@@ -511,6 +482,20 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 		auto isFlat = [&](int i) {
 			return fabsf(z[i] - z[i + 1]) < 1e-4f && fabsf(slope[i]) < 1e-6f && fabsf(slope[i + 1]) < 1e-6f;
 		};
+
+		// 每个采样点的平面切线(Catmull-Rom：前后相邻采样点连线的方向)，两端取基础曲线自己的出发/到达方向。
+		// 相邻两段共用同一条切线，接缝处航向连续，火车过接缝时不会突然转几度。
+		vector<float> tanX(count + 1), tanY(count + 1);
+		for (int k = 0; k <= count; k++) {
+			float dirX, dirY;
+			if (k == 0) { dirX = c1x - a.x; dirY = c1y - a.y; }
+			else if (k == count) { dirX = b.x - c2x; dirY = b.y - c2y; }
+			else { dirX = sx[k + 1] - sx[k - 1]; dirY = sy[k + 1] - sy[k - 1]; }
+			float dirLength = sqrtf(dirX * dirX + dirY * dirY);
+			if (dirLength < 1e-6f) { dirX = sx[min(k + 1, count)] - sx[max(k - 1, 0)]; dirY = sy[min(k + 1, count)] - sy[max(k - 1, 0)]; dirLength = sqrtf(dirX * dirX + dirY * dirY); }
+			tanX[k] = dirLength > 1e-6f ? dirX / dirLength : 0.f;
+			tanY[k] = dirLength > 1e-6f ? dirY / dirLength : 0.f;
+		}
 
 		int i = 0;
 		while (i < count) {
@@ -544,8 +529,8 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 
 			TrackSegment seg;
 			seg.x1 = sx[i]; seg.y1 = sy[i]; seg.z1 = z[i];
-			seg.c1x = sx[i] + dx / 3.f; seg.c1y = sy[i] + dy / 3.f; seg.c1z = z[i] + startSlope * run / 3.f;
-			seg.c2x = sx[i] + dx * 2.f / 3.f; seg.c2y = sy[i] + dy * 2.f / 3.f; seg.c2z = z[j] - endSlope * run / 3.f;
+			seg.c1x = sx[i] + tanX[i] * run / 3.f; seg.c1y = sy[i] + tanY[i] * run / 3.f; seg.c1z = z[i] + startSlope * run / 3.f;
+			seg.c2x = sx[j] - tanX[j] * run / 3.f; seg.c2y = sy[j] - tanY[j] * run / 3.f; seg.c2z = z[j] - endSlope * run / 3.f;
 			seg.x2 = sx[j]; seg.y2 = sy[j]; seg.z2 = z[j];
 			seg.mesh = base.mesh;
 			seg.meshUnit = base.meshUnit;
@@ -565,9 +550,13 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 
 	for (size_t linkIndex = 0; linkIndex < links.size(); linkIndex++) {
 		vector<TrackSegment> refined;
-		for (const TrackSegment& base : links[linkIndex].segments) {
-			if (!base.terrainFollow) { refined.push_back(base); continue; }
-			refine(base, linkIndex, refined);
+		const vector<TrackSegment>& segments = links[linkIndex].segments;
+		for (size_t k = 0; k < segments.size(); ) {
+			if (!segments[k].terrainFollow) { refined.push_back(segments[k]); k++; continue; }
+			size_t end = k;
+			while (end < segments.size() && segments[end].terrainFollow) end++;
+			refine(vector<TrackSegment>(segments.begin() + k, segments.begin() + end), linkIndex, refined);
+			k = end;
 		}
 		links[linkIndex].segments = std::move(refined);
 	}

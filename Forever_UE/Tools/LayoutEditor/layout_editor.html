@@ -14,12 +14,14 @@ body { font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ccc
 
 #main { display: flex; flex: 1; overflow: hidden; }
 
-#canvas-wrap { flex: 0 0 40%; min-width: 0; display: grid;
+#canvas-wrap { flex: 1 1 0; min-width: 0; display: grid;
                grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
                align-items: center; justify-items: center;
                background: #252525; padding: 16px; gap: 10px; overflow: hidden; }
 canvas { display: block; cursor: crosshair; border: 1px solid #333;
          max-width: 100%; max-height: 100%; }
+.resizer { flex: 0 0 5px; cursor: col-resize; background: #333; }
+.resizer:hover, .resizer.dragging { background: #4488aa; }
 #view-bar { display: flex; align-items: center; gap: 8px; width: 100%; color: #aaa; font-size: 12px; white-space: nowrap; }
 #view3d .hint3d { position: absolute; left: 6px; bottom: 4px; color: #777; font-size: 11px; pointer-events: none; }
 #view-bar button.active { background: #4488aa; color: #fff; border-color: #4488aa; }
@@ -33,7 +35,7 @@ canvas { display: block; cursor: crosshair; border: 1px solid #333;
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #aaa; }
 .legend-swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
 
-#panel { flex: 0 0 30%; min-width: 0; background: #2a2a2a; border-left: 1px solid #444;
+#panel { flex: 0 0 var(--panel-w, 30%); min-width: 0; background: #2a2a2a; border-left: 1px solid #444;
          overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 
 .sec { border: 1px solid #3a3a3a; padding: 8px; border-radius: 2px; }
@@ -81,7 +83,7 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 .hint { font-size: 11px; color: #666; font-style: italic; }
 
 #file-list {
-  flex: 0 0 30%; min-width: 0;
+  flex: 0 0 var(--list-w, 30%); min-width: 0;
   background: #222; border-right: 1px solid #444;
   overflow-y: auto; display: flex; flex-direction: column;
 }
@@ -140,6 +142,7 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 </div>
 <div id="main">
   <div id="file-list"></div>
+  <div class="resizer" id="rs-list" title="拖拽调整文件列表宽度"></div>
   <div id="canvas-wrap">
     <div id="view-bar">
       <button id="vb-2d" class="active" onclick="setViewMode('2d')">平面</button>
@@ -155,6 +158,7 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
     <div id="view3d"><div class="hint3d">左键旋转 右键平移 滚轮缩放 WASD移动 Q/E升降 Shift加速</div></div>
     <div id="legend"></div>
   </div>
+  <div class="resizer" id="rs-panel" title="拖拽调整属性面板宽度"></div>
   <div id="panel"></div>
 </div>
 <!-- Hidden file picker for load; onchange fires after user picks a file -->
@@ -523,6 +527,7 @@ function renderFileList() {
   const hasFile = activeFileIdx >= 0;
   document.getElementById('canvas-wrap').style.display = hasFile ? '' : 'none';
   document.getElementById('panel').style.display       = hasFile ? '' : 'none';
+  document.getElementById('rs-panel').style.display    = hasFile ? '' : 'none';
 
   const el = document.getElementById('file-list');
   if (!el) return;
@@ -1448,6 +1453,39 @@ canvas.addEventListener('mousedown', e => {
     S.sel = null; S.navSel = null; S.multiSel = [];
     redraw(); renderPanel();
   }
+});
+
+// Drag the borders between file list / canvas column / property panel to resize.
+function setupResizer(id, targetId, cssVar, sign) {
+  const rs = document.getElementById(id), target = document.getElementById(targetId);
+  rs.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX = e.clientX, startW = target.getBoundingClientRect().width;
+    const total = document.getElementById('main').clientWidth;
+    rs.classList.add('dragging');
+    const move = ev => {
+      const w = Math.max(120, Math.min(total * 0.6, startW + sign * (ev.clientX - startX)));
+      document.documentElement.style.setProperty(cssVar, w + 'px');
+      redraw();
+    };
+    const up = () => {
+      rs.classList.remove('dragging');
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+}
+setupResizer('rs-list', 'file-list', '--list-w', 1);
+setupResizer('rs-panel', 'panel', '--panel-w', -1);
+
+// Clicking the blank area of the centre column (outside the square canvas) also deselects.
+document.getElementById('canvas-wrap').addEventListener('mousedown', e => {
+  if (e.target !== e.currentTarget || view3dOn) return;
+  if (e.ctrlKey || e.metaKey) return;
+  S.sel = null; S.navSel = null; S.multiSel = []; S.wallSel = null;
+  redraw(); renderPanel();
 });
 
 canvas.addEventListener('mousemove', e => {
