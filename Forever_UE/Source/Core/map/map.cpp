@@ -2499,16 +2499,22 @@ int Map::DemolishAlongStrips(const vector<DemolishRequest>& strips, const functi
 
 	// ---- 4. 基坑洞、树。 ----
 	for (Building* building : doomedBuildings) RemoveBuildingHatches(building);
+	// 只清楼体/园区本身范围内的树：楼体用body(和命中判定一致，不是整块Building区域——后者一直延伸到路边)，不留余量，
+	// 否则会把相邻大路两侧的行道树一并拆掉。
 	struct Footprint { float x, y, halfX, halfY, cosR, sinR; };
 	vector<Footprint> footprints;
-	constexpr float kTreeMargin = 0.5f;
-	auto addFootprint = [&](const Quad& quad, float rotation) {
-		footprints.push_back({ quad.GetPosX(), quad.GetPosY(), quad.GetSizeX() * 0.5f + kTreeMargin,
-			quad.GetSizeY() * 0.5f + kTreeMargin, cosf(rotation), sinf(rotation) });
-	};
-	for (Building* building : doomedBuildings) addFootprint(*building, building->GetRotation());
-	for (Zone* zone : doomedZones) addFootprint(*zone, zone->GetRotation());
+	constexpr float kTreeMargin = 0.1f;
+	for (Zone* zone : doomedZones) {
+		float rotation = zone->GetRotation();
+		footprints.push_back({ zone->GetPosX(), zone->GetPosY(), zone->GetSizeX() * 0.5f + kTreeMargin,
+			zone->GetSizeY() * 0.5f + kTreeMargin, cosf(rotation), sinf(rotation) });
+	}
 	int removedTrees = vegetation.RemoveIf([&](const TreeInstance& tree) {
+		for (Building* building : doomedBuildings) {
+			auto [lx, ly] = building->WorldToLocal(tree.x, tree.y);
+			if (lx >= -kTreeMargin && lx <= building->GetBodySizeX() + kTreeMargin &&
+				ly >= -kTreeMargin && ly <= building->GetBodySizeY() + kTreeMargin) return true;
+		}
 		for (const Footprint& fp : footprints) {
 			float dx = tree.x - fp.x, dy = tree.y - fp.y;
 			float lx = dx * fp.cosR + dy * fp.sinR, ly = -dx * fp.sinR + dy * fp.cosR;

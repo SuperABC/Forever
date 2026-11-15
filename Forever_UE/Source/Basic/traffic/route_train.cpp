@@ -185,7 +185,7 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 
 	// 沿station的端e向label边界('N'/'S'/'W'/'E')伸出再回来：中轴线从轴点P到边界垂足(从航向前进D/3的控制点到边界的垂足)，两条铁轨是它两侧的偏移，
 	// 在边界用半径=半轨距的半圆掉头；半圆顶点(正好在边界上)就是extern node，返回它的名字。
-	auto boundaryExtern = [&](const TrainStationLayout& station, int e, char label, bool straight) {
+	auto boundaryExtern = [&](const TrainStationLayout& station, int e, char label) {
 		float nx = 0.f, ny = 0.f;
 		switch (label) {
 		case 'N': ny = -1.f; break;
@@ -206,21 +206,10 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		};
 		EndGeometry end = ensureEnd(station, e);
 		// 轴点到边界的距离D；extern的位置=从航向前进D/3的控制点到边界的垂足，轨道从航向平滑拐向边界，不在站旁直角拐弯。
-		// straight=true：不挑边界，沿端的航向直线射到地图边界(label只用来给extern起名)，边界法向取航向。
-		float qx, qy, distance;
-		if (straight) {
-			nx = end.hx; ny = end.hy;
-			auto [hitX, hitY] = RayBoxIntersection(end.px, end.py, end.hx, end.hy, sizeX, sizeY);
-			qx = hitX; qy = hitY;
-			distance = sqrtf((qx - end.px) * (qx - end.px) + (qy - end.py) * (qy - end.py));
-		}
-		else {
-			// 从实际连出来的方向(端的航向)向前延伸 D/3 得到控制点C(D=轴点P到该边界的垂直距离)，C到边界的垂足就是extern的位置。
-			auto [footX, footY] = foot(end.px, end.py);
-			distance = sqrtf((footX - end.px) * (footX - end.px) + (footY - end.py) * (footY - end.py));
-			auto [sideX, sideY] = foot(end.px + end.hx * distance / 3.f, end.py + end.hy * distance / 3.f);
-			qx = sideX; qy = sideY;
-		}
+		// 从实际连出来的方向(端的航向)向前延伸 D/3 得到控制点C(D=轴点P到该边界的垂直距离)，C到边界的垂足就是extern的位置。
+		auto [footX, footY] = foot(end.px, end.py);
+		float distance = sqrtf((footX - end.px) * (footX - end.px) + (footY - end.py) * (footY - end.py));
+		auto [qx, qy] = foot(end.px + end.hx * distance / 3.f, end.py + end.hy * distance / 3.f);
 		// 中轴线终点往里缩半个轨距，半圆顶点才正好落在边界上。
 		float ax = qx - nx * kHalfGauge, ay = qy - ny * kHalfGauge;
 
@@ -255,8 +244,9 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		return dy >= 0.f ? 'S' : 'N';
 	};
 
-	// ---- 线路拓扑：一个中央车站 + 东南西北各一座(`building_train_station`的Assign放的) ----
+	// ---- 线路拓扑：一个中央车站 + 东南西北最多各一座(`building_train_station`的Assign放的，没位置的方向就没有) ----
 	// 中央车站=到其它站距离之和最小的站；其它站按相对中央的主方向分到东/南/西/北，每个方向一座。
+	// 没有车站的方向不连地图边界，按外站数量n分情形，见route_train.md。
 	size_t count = stations.size();
 	size_t central = 0;
 	if (count > 1) {
@@ -273,15 +263,8 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		lineVehicleCounts.push_back(kVehiclesPerTrainLine);
 	};
 
-	if (count == 1) {
-		// 单站：两端沿航向直线伸到地图外回转，往返各用一条轨道。
-		string bd1 = boundaryExtern(hub, 1, '*', true);
-		string bd0 = boundaryExtern(hub, 0, '*', true);
-		addLine({ { hub.info.name, 1 }, { bd1, -1 }, { hub.info.name, 0 }, { bd0, -1 } });
-		return;
-	}
-
 	const TrainStationLayout* outer[4] = { nullptr, nullptr, nullptr, nullptr }; // 0东 1南 2西 3北
+	const char labels[4] = { 'E', 'S', 'W', 'N' };
 	for (size_t i = 0; i < count; i++) {
 		if (i == central) continue;
 		float dx = stations[i].info.x - hub.info.x, dy = stations[i].info.y - hub.info.y;
@@ -292,21 +275,24 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		float dx = toX - fromX, dy = toY - fromY, length = sqrtf(dx * dx + dy * dy);
 		return length > 1e-6f ? make_pair(dx / length, dy / length) : make_pair(1.f, 0.f);
 	};
-
-	// 一条轴线(北-南、东-西)：A外站 -> 中央 -> B外站 -> B外边界回转 -> B外站 -> 中央 -> A外站 -> A外边界回转，首尾相接。
-	// 中央车站的两端：X端朝A、1-X端朝B(两者都有时按航向和方向的点积之和最大选X)，穿过中央是X端进、1-X端出，所以A/B必须接在相反的两端；
-	// 某个方向没有外站时，中央车站对应的那一端直接连到该方向的城外。
-	auto axisLine = [&](const TrainStationLayout* a, char labelA, const TrainStationLayout* b, char labelB) {
-		// 方向向量：有外站取到外站的方向，没有就取该方向的地图边界方向(北-y、南+y、东+x、西-x)。
-		auto directionOf = [&](const TrainStationLayout* s, char label) {
-			if (s) return unitToward(hub.info.x, hub.info.y, s->info.x, s->info.y);
-			return label == 'N' ? make_pair(0.f, -1.f) : label == 'S' ? make_pair(0.f, 1.f) : label == 'E' ? make_pair(1.f, 0.f) : make_pair(-1.f, 0.f);
-		};
-		auto [uax, uay] = directionOf(a, labelA);
-		auto [ubx, uby] = directionOf(b, labelB);
+	// 中央车站朝向外站s的那一端(两端航向相反，取航向和到s方向点积大的)。
+	auto hubEndFacing = [&](const TrainStationLayout* s) {
+		auto [ux, uy] = unitToward(hub.info.x, hub.info.y, s->info.x, s->info.y);
+		return (hub.hx[0] * ux + hub.hy[0] * uy) >= (hub.hx[1] * ux + hub.hy[1] * uy) ? 0 : 1;
+	};
+	// 同一条线上的两座外站a、b必须接在中央车站相反的两端(穿过中央是X端进、1-X端出)：返回朝a的那一端X，按航向和方向的点积之和最大选。
+	auto pickHubEnd = [&](const TrainStationLayout* a, const TrainStationLayout* b) {
+		auto [uax, uay] = unitToward(hub.info.x, hub.info.y, a->info.x, a->info.y);
+		auto [ubx, uby] = unitToward(hub.info.x, hub.info.y, b->info.x, b->info.y);
 		float score0 = hub.hx[0] * uax + hub.hy[0] * uay + hub.hx[1] * ubx + hub.hy[1] * uby;
 		float score1 = hub.hx[1] * uax + hub.hy[1] * uay + hub.hx[0] * ubx + hub.hy[0] * uby;
-		int x = score0 >= score1 ? 0 : 1;
+		return score0 >= score1 ? 0 : 1;
+	};
+
+	// 一条经过中央车站的线：A外站 -> 中央 -> B外站 -> B外边界回转 -> B外站 -> 中央 -> A外站 -> A外边界回转，首尾相接。
+	// x=中央车站朝A的那一端，B接在1-x端。a/b为空表示那一侧没有外站，此时中央车站对应的那一端直接连到labelA/labelB方向的地图边界；
+	// a/b非空时labelA/labelB是外站远端要连的边界。
+	auto throughHub = [&](const TrainStationLayout* a, char labelA, const TrainStationLayout* b, char labelB, int x) {
 		const string& hubName = hub.info.name;
 		vector<RouteLineEntry> entries;
 		int ea = 0, eb = 0;
@@ -314,18 +300,18 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		if (a) {
 			ea = a->BestTrack(hub.info.x - a->info.x, hub.info.y - a->info.y); // a朝向中央的那一端
 			connectEnds(*a, ea, hub, x);
-			bdA = boundaryExtern(*a, 1 - ea, labelA, false);
+			bdA = boundaryExtern(*a, 1 - ea, labelA);
 		}
 		else {
-			bdA = boundaryExtern(hub, x, labelA, false); // 没有A方向的外站：中央车站直接连到A方向的城外
+			bdA = boundaryExtern(hub, x, labelA);
 		}
 		if (b) {
 			eb = b->BestTrack(hub.info.x - b->info.x, hub.info.y - b->info.y);
 			connectEnds(*b, eb, hub, 1 - x);
-			bdB = boundaryExtern(*b, 1 - eb, labelB, false);
+			bdB = boundaryExtern(*b, 1 - eb, labelB);
 		}
 		else {
-			bdB = boundaryExtern(hub, 1 - x, labelB, false); // 同理，连到B方向的城外
+			bdB = boundaryExtern(hub, 1 - x, labelB);
 		}
 		// 绕一圈：... -> A方向回转点 -> a(进站轨ea) -> 中央(1-x) -> b(1-eb) -> B方向回转点 -> b(eb) -> 中央(x) -> a(1-ea) -> A方向回转点
 		entries.push_back({ bdA, -1 });
@@ -338,8 +324,57 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		if (a) entries.push_back({ a->info.name, 1 - ea });
 		addLine(std::move(entries));
 	};
-	axisLine(outer[3], 'N', outer[1], 'S');
-	axisLine(outer[0], 'E', outer[2], 'W');
+
+	int present[4], n = 0;
+	for (int d = 0; d < 4; d++) if (outer[d]) present[n++] = d;
+
+	if (n == 0) {
+		// 只有中央车站：按它的中轴线偏南北还是偏东西，两端各连到对向的两条边界，往返各用一条轨道。
+		string bd1 = boundaryExtern(hub, 1, dominantLabel(hub.hx[1], hub.hy[1]));
+		string bd0 = boundaryExtern(hub, 0, dominantLabel(hub.hx[0], hub.hy[0]));
+		addLine({ { hub.info.name, 1 }, { bd1, -1 }, { hub.info.name, 0 }, { bd0, -1 } });
+	}
+	else if (n == 1) {
+		// 一座外站：外站-中央-中央空闲端连到外站方向的对向边界。
+		int d = present[0];
+		throughHub(outer[d], labels[d], nullptr, labels[(d + 2) % 4], hubEndFacing(outer[d]));
+	}
+	else if (n == 2) {
+		int i = present[0], j = present[1];
+		if (j - i == 2) {
+			// 对向两座(只有南北或只有东西)：只建这一条线，另一条轴线不建。
+			throughHub(outer[i], labels[i], outer[j], labels[j], pickHubEnd(outer[i], outer[j]));
+		}
+		else {
+			// 东西轴一座 + 南北轴一座：在中央车站两端 -> 一条线连三站和两侧边界；同一侧 -> 看中轴线偏南北还是偏东西，
+			// 中央车站空闲端连到对应的边界(dominantLabel)，两座外站各一条线。
+			int xi = hubEndFacing(outer[i]), xj = hubEndFacing(outer[j]);
+			if (xi != xj) {
+				throughHub(outer[i], labels[i], outer[j], labels[j], xi);
+			}
+			else {
+				char freeLabel = dominantLabel(hub.hx[1 - xi], hub.hy[1 - xi]);
+				throughHub(outer[i], labels[i], nullptr, freeLabel, xi);
+				throughHub(outer[j], labels[j], nullptr, freeLabel, xi);
+			}
+		}
+	}
+	else if (n == 3) {
+		// 缺方向m：m的对向站o独占一条轴，另一轴上的p、q照常成线；原来经过缺失方向的那条线改成 o-中央-X，
+		// X取p、q中接在中央另一端(不是o所在端)的那一座，该座远端的边界回转点和p-q线共用。
+		int m = 0;
+		while (outer[m]) m++;
+		int o = (m + 2) % 4, p = (m + 1) % 4, q = (m + 3) % 4;
+		int xp = pickHubEnd(outer[p], outer[q]);
+		throughHub(outer[p], labels[p], outer[q], labels[q], xp);
+		int xo = hubEndFacing(outer[o]);
+		int other = xo != xp ? p : q;
+		throughHub(outer[o], labels[o], outer[other], labels[other], xo);
+	}
+	else {
+		throughHub(outer[3], 'N', outer[1], 'S', pickHubEnd(outer[3], outer[1]));
+		throughHub(outer[0], 'E', outer[2], 'W', pickHubEnd(outer[0], outer[2]));
+	}
 }
 
 void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,

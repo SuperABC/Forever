@@ -59,8 +59,9 @@ void IndustryHighBuilding::Layout(int& direction, const Quad& quad,
 
 	AssignFloor(-1, "preset_common_single_pg+", direction, assets);
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
-	AssignParking(-1, 0, 0, 0.4f, { "car", "truck" });
-	AssignParking(-1, 0, 1, 0.4f, { "car", "truck" });
+	AssignParking(-1, 0, 0, 0.5f, { "truck" });
+	AssignParking(-1, 0, 1, 0.5f, { "truck" });
+	AssignParking(-1, 0, 2, 0.5f, { "truck" });
 	AssignFloor(0, "preset_common_single_fg-", direction, assets);
 	// 三种工坊房间等概率随机选一种：小麦/牛肉/汉堡工厂。
 	static const char* const kFactoryRooms[] = { "room_farm", "room_ranch", "room_food_factory" };

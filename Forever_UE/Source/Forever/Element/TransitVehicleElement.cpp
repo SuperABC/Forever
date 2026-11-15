@@ -118,8 +118,6 @@ void ATransitVehicleElement::Init(Vehicle* inVehicle)
 			skeletalBody->SetVisibility(true);
 
 			const FBoxSphereBounds bounds = skeletal->GetBounds();
-			UE_LOG(LogTemp, Log, TEXT("ATransitVehicleElement::Init: %s 骨骼网格包围盒 origin=%s extent=%s (x%.2f)"),
-				UTF8_TO_TCHAR(vehicle->GetName().c_str()), *bounds.Origin.ToString(), *bounds.BoxExtent.ToString(), meshScale);
 			BuildBoardingComponents(bounds);
 			return;
 		}
@@ -132,8 +130,6 @@ void ATransitVehicleElement::Init(Vehicle* inVehicle)
 				staticBody->SetVisibility(true);
 
 				const FBoxSphereBounds bounds = mesh->GetBounds();
-				UE_LOG(LogTemp, Log, TEXT("ATransitVehicleElement::Init: %s 静态网格包围盒 origin=%s extent=%s (x%.2f)"),
-					UTF8_TO_TCHAR(vehicle->GetName().c_str()), *bounds.Origin.ToString(), *bounds.BoxExtent.ToString(), meshScale);
 				BuildBoardingComponents(bounds);
 				return;
 			}

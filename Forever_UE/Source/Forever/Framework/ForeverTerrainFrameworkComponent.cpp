@@ -413,6 +413,7 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 		UProceduralMeshComponent* comp = NewObject<UProceduralMeshComponent>(
 			owner, *FString::Printf(TEXT("TerrainLod_%d"), i));
 		comp->SetupAttachment(owner->GetRootComponent());
+		comp->SetCastShadow(false);
 		comp->RegisterComponent();
 		owner->AddInstanceComponent(comp);
 		gridMeshes[i] = comp;
@@ -1023,6 +1024,7 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 	if (!oceanMesh) {
 		oceanMesh = NewObject<UProceduralMeshComponent>(owner, TEXT("OceanMesh"));
 		oceanMesh->SetupAttachment(owner->GetRootComponent());
+		oceanMesh->SetCastShadow(false);
 		oceanMesh->RegisterComponent();
 		owner->AddInstanceComponent(oceanMesh);
 	}

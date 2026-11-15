@@ -78,10 +78,10 @@ bool UForeverModSubsystem::ReloadConfigFrom(const FString& Path) {
 
 void UForeverModSubsystem::ReadConfigWithFallbacks(const FString& configPath) {
 	// Config内部用std::cerr打印警告，进程(尤其-game Standalone)不一定把它接进Forever.log，所以这里用UE_LOG打印诊断信息。
-	UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: configPath=%s, exists=%d"),
+	UE_LOG(LogTemp, Log, TEXT("ForeverModSubsystem: configPath=%s, exists=%d"),
 		*configPath, FPaths::FileExists(configPath) ? 1 : 0);
 	Config::ReadConfig(TCHAR_TO_UTF8(*configPath));
-	UE_LOG(LogTemp, Warning, TEXT("ForeverModSubsystem: ReadConfig后GetDllPaths().size()=%d, GetMods().size()=%d"),
+	UE_LOG(LogTemp, Log, TEXT("ForeverModSubsystem: ReadConfig后GetDllPaths().size()=%d, GetMods().size()=%d"),
 		static_cast<int>(Config::GetDllPaths().size()), static_cast<int>(Config::GetMods().size()));
 
 	std::vector<std::string> mods = Config::GetMods();

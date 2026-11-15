@@ -144,7 +144,7 @@
 
 `Map::DemolishAlongStrips(strips, keep)`：火车轨道(`RouteMod::AddDemolition`)请求的拆除。只能在生成阶段、`InitVegetation/InitLamps`之后、网格生成之前调用(`Route::Build`里，`Traffic`阶段)。
 - **命中判定**：楼体(body，不是整块Building区域)四角世界多边形，与折线条带(宽width)相交(端点在内，或到边距离<=半宽)。命中园区内部建筑 → 整个园区(含全部内部建筑、内部小路)一起拆；`keep(building)`为true的建筑(`stationMod`)不拆，园区里有keep的建筑则整个园区不拆。
-- **清理清单**(新增的"所属记录"`entityNav`：Building/Zone -> 它独占的导航节点 + 它在路上挖的车行开口)：门/电梯反注册(`doorsById/doorsByInteractName/allDoors/cabinsByInteractName`)；导航图里与这些节点相邻的边全删、节点从`navAnchorNodes`摘掉并delete(车行图是单向边，整图扫一遍清指向被删节点的边)；`Road::RemoveOpening`撤销开口；`RemoveBuildingHatches`撤销基坑洞；`Vegetation::RemoveIf`清掉楼/园区范围内的树；园区内部小路的`throughLines`/`internalRoadOwner`；最后从`buildings/zones`摘掉并delete(先建筑后园区)。
+- **清理清单**(新增的"所属记录"`entityNav`：Building/Zone -> 它独占的导航节点 + 它在路上挖的车行开口)：门/电梯反注册(`doorsById/doorsByInteractName/allDoors/cabinsByInteractName`)；导航图里与这些节点相邻的边全删、节点从`navAnchorNodes`摘掉并delete(车行图是单向边，整图扫一遍清指向被删节点的边)；`Road::RemoveOpening`撤销开口；`RemoveBuildingHatches`撤销基坑洞；`Vegetation::RemoveIf`清掉楼体(body，不是整块Building区域，余量仅0.1)/园区范围内的树(之前用Building区域+0.5余量，会误删相邻大路的行道树)；园区内部小路的`throughLines`/`internalRoadOwner`；最后从`buildings/zones`摘掉并delete(先建筑后园区)。
 - **记录来源**：`MergeBuildingNavigation`(楼内节点)、`FlushPendingBuildingRoadAccess`(`PendingRoadAccess::owner`，车行开口)、`ConnectZoneAccessPoint/ConnectZoneInternalRoad`(园区锚点/开口)、`BreakThroughLine`(在园区内部小路上新建的访问点归园区，`internalRoadOwner`)。**接路网时在公共道路贯通线上断出的访问节点留在路网里**(二度点，无害)，只删它与楼之间的连接边。
 - **不处理**：读档时`entityNav`不重建(读档后不再拆)；拆掉后留下的空地不会被重新填充；`Station`已建好的带`stationMod`建筑不拆，所以不会有悬空Station。
 

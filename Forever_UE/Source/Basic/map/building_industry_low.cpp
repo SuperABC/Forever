@@ -63,8 +63,9 @@ void IndustryLowBuilding::Layout(int& direction, const Quad& quad,
 	if (basements > 0) {
 		AssignFloor(-1, "preset_common_single_pg+", direction, assets);
 		AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
-		AssignParking(-1, 0, 0, 0.4f, { "car", "truck" });
-		AssignParking(-1, 0, 1, 0.4f, { "car", "truck" });
+		AssignParking(-1, 0, 0, 0.5f, { "truck" });
+		AssignParking(-1, 0, 1, 0.5f, { "truck" });
+		AssignParking(-1, 0, 2, 0.5f, { "truck" });
 		AssignFloor(0, "preset_common_single_fg-", direction, assets);
 	} else {
 		AssignFloor(0, "preset_common_single_fg", direction, assets);

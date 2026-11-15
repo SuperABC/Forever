@@ -4,20 +4,20 @@
 		"direction": 2,
 	}],
 	"ramps": [{
-		"rect": [0, 0, 0, 0, 0, 0.4, 0.4, 0],
+		"rect": [0, 0, 0, 0, 0, 0.8, 0.4, 0],
 		"direction": 3,
 		"walls": [1],
 	},
 	{
-		"rect": [1, -0.4, 0, 0, 1, 0, 0.4, 0],
+		"rect": [1, -0.8, 0, 0, 1, 0, 0.4, 0],
 		"direction": 3,
 		"walls": [0],
 	}],
 	"ceilings": [
-		[0, 0.4, 0, 0, 0.5, -0.2, 1, 0],
-		[0.5, 0.2, 0, 0, 1, -0.4, 1, 0],
-		[0, 0, 0.5, 0, 0, 0.4, 1, 0],
-		[1, -0.4, 0.5, 0, 1, 0, 1, 0],
+		[0, 0.8, 0, 0, 0.5, -0.2, 1, 0],
+		[0.5, 0.2, 0, 0, 1, -0.8, 1, 0],
+		[0, 0, 0.5, 0, 0, 0.8, 1, 0],
+		[1, -0.8, 0.5, 0, 1, 0, 1, 0],
 		[0.5, -0.2, 0, 0, 0.5, 0.2, 1, -0.8],
 	],
 	"grounds": [
@@ -25,11 +25,23 @@
 	],
 	"hatches": [
 		[0.5, -0.2, 1, -0.8, 0.5, 0.2, 1, 0],
-		[0, 0, 0, 0, 0, 0.4, 0.5, 0],
-		[1, -0.4, 0, 0, 1, 0, 0.5, 0],
+		[0, 0, 0, 0, 0, 0.8, 0.5, 0],
+		[1, -0.8, 0, 0, 1, 0, 0.5, 0],
 	],
 	"singles": [{
 		"rect": [0, 0, 0, 0, 1, 0, 1, 0],
+		"direction": 2,
+	}],
+	"parkings": [{
+		"rect": [0.2, 0, 0, 0, 0.8, 0, 0.2, 0],
+		"direction": 3,
+	},
+	{
+		"rect": [0.2, 0, 0.8, 0, 0.4, 0, 1, 0],
+		"direction": 2,
+	},
+	{
+		"rect": [0.6, 0, 0.8, 0, 0.8, 0, 1, 0],
 		"direction": 2,
 	}],
 	"pedestrianNavigation": {
@@ -64,13 +76,18 @@
 	"vehicleNavigation": {
 		"nodes": [
 			{
-				"position": [0, 0.2, 0.5, 0],
+				"position": [0, 0.4, 0.4, 0],
 			},
 			{
-				"position": [1, -0.2, 0.5, 0],
+				"position": [1, -0.4, 0.4, 0],
 			},
 		],
-		"lines": [],
+		"lines": [
+			{
+				"begin": [0.1, 0, 0.5, 0],
+				"end": [0.9, 0, 0.5, 0],
+			},
+		],
 		"connections": [
 			{
 				"begin": {
@@ -88,6 +105,67 @@
 				},
 				"end": {
 					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "parking",
+					"idx": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+				"backward": true,
+				"forward": true,
+			},
+			{
+				"begin": {
+					"type": "parking",
+					"idx": 1,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+				"backward": true,
+				"forward": true,
+			},
+			{
+				"begin": {
+					"type": "parking",
+					"idx": 2,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+				"backward": true,
+				"forward": true,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "line",
+					"idx": 0,
+					"vertex": 0,
+				},
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 0,
+					"vertex": 1,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
 				},
 			},
 		],
