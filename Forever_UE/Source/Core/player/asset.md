@@ -11,8 +11,10 @@
 
 ## 四分类：一个枚举字段，不是四个子类
 
-`AssetMobility`(`Estate`/`Vehicle`/`Object`/`Containee`)是`mobility`一个字段，四类共用
-同一个`Asset`类。"是否为容器"是独立的正交属性：`volume > 0`即为容器，和`mobility`无关——
+`AssetMobility`(`Estate`/`Vehicle`/`Object`/`Containee`)是`mobility`一个字段，`Object`/`Containee`用
+`Asset`本身（带`AssetMod`）。`Estate`/`Vehicle`是`Asset`的Core内置子类`EstateAsset`/`VehicleAsset`（没有`AssetMod`，
+`Asset`的无mod保护构造+虚析构为此而加），只存在于`Citizen`/`Organization`/`Society`的资产列表里，不进玩家背包，
+见`estate_asset.md`/`vehicle_asset.md`。"是否为容器"是独立的正交属性：`volume > 0`即为容器，和`mobility`无关——
 一个容器本身还能被装进另一个容器/背包，没有限制。
 
 ## 堆叠：`count`字段
@@ -56,7 +58,7 @@
 
 - 依赖：`Dependence/player/asset_mod.h`/`asset_factory.h`（`AssetMod`/`AssetFactory`）。
 - 被谁依赖：`Player`（`leftHand`/`rightHand`/`backPack`/`leftShoulder`/`rightShoulder`
-  五个槽位+`estateAssets`不动产载具表，均持有所有权）、`Room`（`assets`表，持有所有权）、
+  五个槽位，均持有所有权）、`Room`（`assets`表，持有所有权）、
   `Source/Forever/Framework/ForeverAssetFrameworkComponent`（世界掉落物`AAssetElement`
   持有非owning指针，真正所有权仍在`Room`/容器里）。
 

@@ -6,6 +6,7 @@
 #include "common/registry.h"
 #include "map/room.h"
 #include "player/asset.h"
+#include "player/estate_asset.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "story/change.h"
@@ -100,6 +101,7 @@ Map::~Map() {
 	for (RoadJunction* j : junctions) delete j;
 	delete roadnet;
 
+	for (EstateAsset* asset : estateAssets) delete asset;
 	for (auto& [name, z] : zones) delete z;
 	for (auto& [name, b] : buildings) delete b;
 	for (Lot* lot : orphanLots) delete lot;
@@ -1079,6 +1081,45 @@ void Map::SettleCitizen(Citizen* citizen, Room* room) {
 		citizen->SetLot(building->GetParentLot());
 	}
 	room->AddResident(citizen);
+}
+
+void Map::BuildEstateAssets() {
+	// 旧资产先从各自所有者的列表里摘掉再delete(所有者列表不拥有它们)。
+	for (EstateAsset* asset : estateAssets) {
+		if (asset->GetOwner()) asset->GetOwner()->RemoveAsset(asset);
+		delete asset;
+	}
+	estateAssets.clear();
+	statedEstateAssets.clear();
+
+	auto add = [this](EstateAsset* asset) {
+		estateAssets.push_back(asset);
+		if (asset->GetOwner()) asset->GetOwner()->AddAsset(asset);
+		else statedEstateAssets.push_back(asset);
+	};
+	// owner/stated互斥，两者都没有=没有归属。"同值"=和上一级归属一样(整体下放写进来的)，不再单独建资产。
+	auto owned = [](Citizen* owner, bool stated) { return owner != nullptr || stated; };
+	auto same = [](Citizen* ownerA, bool statedA, Citizen* ownerB, bool statedB) {
+		return ownerA == ownerB && statedA == statedB;
+	};
+
+	for (auto& [name, zone] : zones) {
+		if (zone && owned(zone->GetOwner(), zone->GetStated())) add(new EstateAsset(zone, zone->GetOwner()));
+	}
+	for (auto& [name, building] : buildings) {
+		if (!building || !owned(building->GetOwner(), building->GetStated())) continue;
+		Zone* zone = building->GetParentZone();
+		if (zone && same(zone->GetOwner(), zone->GetStated(), building->GetOwner(), building->GetStated())) continue;
+		add(new EstateAsset(building, building->GetOwner()));
+	}
+	for (auto& [name, building] : buildings) {
+		if (!building) continue;
+		for (Room* room : building->GetRooms()) {
+			if (!room || !owned(room->GetOwner(), room->GetStated())) continue;
+			if (same(building->GetOwner(), building->GetStated(), room->GetOwner(), room->GetStated())) continue;
+			add(new EstateAsset(room, room->GetOwner()));
+		}
+	}
 }
 
 void Map::Checkin(const Populace& populace) {

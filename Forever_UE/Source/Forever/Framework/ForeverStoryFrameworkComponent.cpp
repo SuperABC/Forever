@@ -142,7 +142,6 @@ namespace {
 				player->GetLeftShoulder(), player->GetRightShoulder() }) {
 				add(add, slot);
 			}
-			for (auto& [name, asset] : player->GetEstateAssets()) add(add, asset);
 			for (auto& [name, world] : player->GetWorldAssets()) add(add, world.asset);
 		}
 		if (Map* map = framework ? framework->GetMap() : nullptr) {

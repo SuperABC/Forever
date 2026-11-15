@@ -30,6 +30,20 @@ public:
 
 	void Init(Map* map);
 
+	// 给市民和组织分配载具(开局一次，读档不调用——载具和归属随存档恢复)：成年市民各20%概率在自己家所在
+	// 建筑里找空闲car车位，组织在自己组合的带车位房间里随机1-5次找空闲truck车位；生成车辆和VehicleAsset
+	// (Traffic持有)，挂到所有者资产列表。必须在人口和社会生成之后调用，详见traffic.md。
+	void AssignVehicles(const Populace& populace, const Society& society);
+
+	// 读档用：存档里的载具资产所有者(市民/组织下标)在交通读档时人口/社会还没恢复，先记下，
+	// 人口和社会恢复之后调用这个，按下标把VehicleAsset建出来并挂回所有者；下标越界的丢弃。
+	void ResolveVehicleAssets(const Populace& populace, const Society& society);
+	// 这个Traffic是不是从存档恢复的(读档后不再AssignVehicles)。
+	bool WasRestoredFromSave() const { return restoredFromSave; }
+
+	// 载具资产(Traffic持有)：每辆被分配给市民/组织的车一个。
+	const std::vector<VehicleAsset*>& GetVehicleAssets() const { return vehicleAssets; }
+
 	// 用VehicleFactory以id创建一辆新车、按name存进vehicles(name已存在会先delete旧的)。
 	// 创建失败(id未注册/未在config.json"vehicle_mods"启用)返回nullptr，不会往vehicles里塞
 	// 半成品。
@@ -60,7 +74,11 @@ private:
 	void InitStations(Map* map);
 	void InitRoadsideStations(Map* map);
 	void InitRoutes(Map* map);
-	void InitParkedVehicles(Map* map);
+	void InitAirportVehicles(Map* map);
+	// 生成一辆category类的车放进room的第slotIndex个车位，建VehicleAsset(Traffic持有)并挂到所有者的资产列表。
+	VehicleAsset* CreateOwnedVehicle(const std::string& category, Room* room, int slotIndex,
+		Citizen* ownerCitizen, Organization* ownerOrganization);
+	void RemoveVehicleAsset(const Vehicle* vehicle);
 	void InitTransitVehicles();
 
 	VehicleFactory& vehicleFactory;
@@ -69,6 +87,15 @@ private:
 	ScriptFactory& scriptFactory;
 
 	std::unordered_map<std::string, Vehicle*> vehicles; // 持有所有权
+	std::vector<VehicleAsset*> vehicleAssets;           // 持有所有权，指向vehicles里的车，销毁车时同步删
+
+	struct PendingVehicleAsset {
+		std::string vehicleName;
+		int ownerKind = 0;   // 0市民 1组织
+		int ownerIndex = -1; // populace.citizens / society.organizations下标
+	};
+	std::vector<PendingVehicleAsset> pendingVehicleAssets; // 读档后等ResolveVehicleAssets
+	bool restoredFromSave = false;
 	std::unordered_map<std::string, Station*> stations; // 持有所有权(含Route::Build()产出的边缘站点)
 	std::unordered_map<std::string, Route*> routes;     // 持有所有权
 

@@ -21,7 +21,6 @@ Player::~Player() {
 	delete backPack;
 	delete leftShoulder;
 	delete rightShoulder;
-	for (auto& [name, asset] : estateAssets) delete asset;
 	for (auto& [name, entry] : worldAssets) delete entry.asset;
 }
 
@@ -208,22 +207,6 @@ bool Player::AddByPath(const string& path, Asset* asset) {
 	return container->AddContent(asset);
 }
 
-bool Player::AddEstateAsset(Asset* asset) {
-	if (!asset) return false;
-	if (asset->GetMobility() != AssetMobility::Estate && asset->GetMobility() != AssetMobility::Vehicle) return false;
-	estateAssets.insert_or_assign(asset->GetName(), asset);
-	return true;
-}
-
-Asset* Player::GetEstateAsset(const string& name) const {
-	auto it = estateAssets.find(name);
-	return it != estateAssets.end() ? it->second : nullptr;
-}
-
-void Player::RemoveEstateAsset(const string& name) {
-	estateAssets.erase(name);
-}
-
 int Player::CountByType(const string& type) const {
 	return backPack ? backPack->CountByType(type) : 0;
 }
@@ -348,10 +331,6 @@ Asset* Player::FindAssetByName(const string& name) const {
 		if (!slot) continue;
 		if (slot->GetName() == name) return slot;
 		if (Asset* found = slot->FindDescendant(name)) return found;
-	}
-	for (const auto& [key, asset] : estateAssets) {
-		if (asset->GetName() == name) return asset;
-		if (Asset* found = asset->FindDescendant(name)) return found;
 	}
 	for (const auto& [key, world] : worldAssets) {
 		if (!world.asset) continue;

@@ -443,7 +443,7 @@ SaveArchive SaveGame::BuildArchive(const SaveWorld& world) {
 			if (world.society) SocietySaveCodec::Save(*world.society, *world.map, *world.populace, archive);
 		}
 		if (world.industry) IndustrySaveCodec::Save(*world.industry, archive);
-		if (world.traffic) TrafficSaveCodec::Save(*world.traffic, *world.map, archive);
+		if (world.traffic) TrafficSaveCodec::Save(*world.traffic, *world.map, world.populace, world.society, archive);
 		ScriptSaveCodec::Save(world, archive);
 		if (world.player) PlayerSaveCodec::Save(*world.player, *world.map, archive);
 	}

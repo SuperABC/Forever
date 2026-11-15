@@ -55,9 +55,9 @@ player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
 
 ## 资产系统
 
-`leftHand`/`rightHand`/`backPack`/`leftShoulder`/`rightShoulder`五个槽位+
-`estateAssets`（不动产/载具表，key是`Asset::GetName()`）均持有所有权，析构时全部
-`delete`。
+`leftHand`/`rightHand`/`backPack`/`leftShoulder`/`rightShoulder`五个槽位均持有所有权，析构时全部
+`delete`。不动产/载具资产不在玩家身上：它们挂在`Citizen`/`Organization`/`Society`的资产列表上，
+见`estate_asset.md`/`vehicle_asset.md`（原来的`Player::estateAssets`从未被填充，已删除）。
 
 - `CreateAsset(id)`/`DestroyAsset(asset)`：名字不再由调用方传入，取mod的`GetName()`（mod保证全局唯一，读档时`PlayerSaveCodec`把名字覆写回存档里的）。`SplitAsset(src, n)`从堆叠拆出n个：再`CreateAsset`一个同type的新实例（名字由它的mod保证唯一）、`count=n`，`src->count`减n。`id`需要在`config.json`的
   `"asset_mods"`数组里启用，否则`CreateAsset`返回`nullptr`（内部`new`后立刻检查
@@ -73,8 +73,6 @@ player->SetTime(Time(populace->GetCurrentYear(), 1, 1, 8));
   `asset->IsWeapon()==true`且槽位为空（只能放武器）；`room`要求
   `GetCurrentRoom()!=nullptr`，转发给`currentRoom->AddAsset(asset)`；多段路径转发给
   `container->AddContent(asset)`，无mobility限制。
-- 不动产/载具（`AddEstateAsset`/`GetEstateAsset`/`RemoveEstateAsset`）不走五槽位，
-  `mobility`必须是`Estate`/`Vehicle`。
 - `GetCurrentRoom()`/`SetCurrentRoom()`维护的是真实物理位置（不是剧情/场景语义），由
   `BuildingElement`的Room重叠检测回调维护，见
   `Source/Forever/Element/BuildingElement.cpp`的`OnRoomOverlapBegin`/`End`。
@@ -133,5 +131,5 @@ DeltaTime)`覆写里唯一做的事就是`player->Tick(DeltaTime)`，见
 - `PlanCarry(sizes)`：商店用的携带方案。容器=背包和手里的容器(含嵌套容器)，各自剩余空间`GetSpace()`是一个箱子；先全部装进容器，装不下就把最大的拿在一只空手上，再不行第二大拿在另一只手上，还不行`feasible=false`。装箱用First-Fit-Decreasing(多箱装箱NP难，这是近似，单背包时精确)。返回每件的去处、是否有容器、空手数、容器剩余空间之和。
 - `StoreAsset(asset)`：背包→容器→右手→左手的收纳顺序(见`change.md`的pick_asset)，失败不改变状态。
 - `CountOwned(type)`/`TakeOwned(type, amount, out)`：左右手+背包(递归容器，不含肩膀)里的数量与摘取(必要时拆堆叠)，数量不够不改变状态。
-- `FindAssetByName(name)`：手/肩/背及容器内容、estate、worldAssets里按名字找；房间里的见`Map::FindAssetByName`。
+- `FindAssetByName(name)`：手/肩/背及容器内容、worldAssets里按名字找；房间里的见`Map::FindAssetByName`。
 - `Player::ApplyChange`处理资产的`add_option`/`remove_option`(房间里的资产由`Map::ApplyChange`处理)。

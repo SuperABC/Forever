@@ -24,9 +24,9 @@
 - `route`/`routeLine`：线路公交由`Traffic::InitTransitVehicles`调`SetRouteBinding`设置，
   普通小汽车恒为`nullptr`；UE层据此决定生成`AVehicleElement`还是`ATransitVehicleElement`。
 
-**不存`driver`/`owner`字段**：这一阶段明确不考虑车辆和房间/停车位的关系，"谁在开这辆车"
-这份信息由UE侧`AVehicleElement::previousPawn`自己保留（上车前被占有的pawn，下车时要
-恢复谁），不需要`Vehicle`重复记一份。
+**不存`driver`字段**："谁在开这辆车"这份信息由UE侧`AVehicleElement::previousPawn`自己保留（上车前被占有的pawn，
+下车时要恢复谁），不需要`Vehicle`重复记一份。**`Vehicle`也不存`owner`**：车归谁由`VehicleAsset`（`Traffic`持有，
+记所有者市民/组织）和所有者的资产列表表达，见`player/vehicle_asset.md`。
 
 ## 外观资源路径：`GetBlueprintPath()`转发`mod->blueprintPath`
 

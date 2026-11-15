@@ -350,6 +350,8 @@ namespace {
 			if (current.traffic && !restoredTraffic) {
 				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: traffic load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
 			}
+			// 载具资产的所有者在人口/社会恢复后才能挂回去(交通段里只存下标)，往返比较要带上它。
+			if (restoredTraffic && restoredPopulace && restoredSociety) restoredTraffic->ResolveVehicleAssets(*restoredPopulace, *restoredSociety);
 			Player* restoredPlayer = current.player ? PlayerSaveCodec::Load(first, *restoredMap, error) : nullptr;
 			if (current.player && !restoredPlayer) {
 				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: player load failed: %s"), UTF8_TO_TCHAR(error.c_str()));

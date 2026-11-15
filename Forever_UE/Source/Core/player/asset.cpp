@@ -37,13 +37,21 @@ Asset::Asset(AssetFactory* factory, const string& id) :
 	}
 }
 
+Asset::Asset(AssetMobility builtinMobility, const string& builtinName, const string& builtinType) :
+	factory(nullptr), mod(nullptr) {
+	builtin = true;
+	mobility = builtinMobility;
+	name = builtinName;
+	type = builtinType;
+}
+
 Asset::~Asset() {
 	for (auto& [name, content] : contents) delete content;
 	delete script;
 	if (mod) factory->DestroyAsset(mod);
 }
 
-bool Asset::IsValid() const { return mod != nullptr; }
+bool Asset::IsValid() const { return builtin || mod != nullptr; }
 
 const string& Asset::GetName() const { return name; }
 const string& Asset::GetType() const { return type; }

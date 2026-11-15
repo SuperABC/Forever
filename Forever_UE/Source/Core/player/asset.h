@@ -26,7 +26,7 @@ public:
 	// 名字取mod->GetName()(mod保证全局唯一)，不再由调用方传入；读档时PlayerSaveCodec
 	// 用友元把name覆写回存档里的名字。
 	Asset(AssetFactory* factory, const std::string& id);
-	~Asset(); // 递归delete contents，delete script
+	virtual ~Asset(); // 递归delete contents，delete script；虚析构：EstateAsset/VehicleAsset按Asset*释放
 
 	bool IsValid() const;
 
@@ -80,6 +80,11 @@ public:
 	// 两阶段实现：先只读确认总量够不够，够了再真正扣减；不够返回false且不改动任何状态。
 	bool ConsumeByType(const std::string& type, int amount);
 
+protected:
+	// Core内置资产(EstateAsset/VehicleAsset)用：没有AssetMod，名字/类型/分类由子类直接给，
+	// 不拷贝mod字段，IsValid()恒为true。见estate_asset.md/vehicle_asset.md。
+	Asset(AssetMobility builtinMobility, const std::string& builtinName, const std::string& builtinType);
+
 private:
 	// 递归消耗up to amount份type，返回实际消耗掉的数量(可能小于amount，调用方
 	// (ConsumeByType)已经用CountByType提前确认过整体够不够，正常情况下总能凑够amount)。
@@ -91,6 +96,7 @@ private:
 	std::string type;
 
 	AssetMobility mobility;
+	bool builtin = false; // Core内置资产，没有mod
 	float weight = 0.f;
 	float size = 0.f;
 	float volume = 0.f;

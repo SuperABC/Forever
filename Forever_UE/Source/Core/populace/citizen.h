@@ -204,6 +204,12 @@ public:
 	Room* GetRoom() const;
 	void SetRoom(Room* value);
 
+	// 资产列表：只存不动产(Estate)和载具(Vehicle)，不拥有所有权(EstateAsset归Map、VehicleAsset归Traffic)。
+	// 市民可以有不动产和car；mobility不是Estate/Vehicle的资产拒绝。见citizen.md"资产"。
+	bool AddAsset(Asset* asset);
+	void RemoveAsset(const Asset* asset);
+	const std::vector<Asset*>& GetAssets() const;
+
 	// 所属户（住在家里才有），由Room::AddResident维护。
 	Household* GetHousehold() const;
 	void SetHousehold(Household* value);
@@ -321,6 +327,7 @@ private:
 	Room* room = nullptr;
 	Household* household = nullptr;
 	Room* currentRoom = nullptr;
+	std::vector<Asset*> assets; // 不持有，不存档(不动产由归属推导，载具随traffic段)
 
 	bool hasPosition = false;
 	float posX = 0.f;

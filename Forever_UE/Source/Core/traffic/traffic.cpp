@@ -7,6 +7,12 @@
 #include "map/room.h"
 #include "map/general_geometry.h"
 #include "story/change.h"
+#include "populace/populace.h"
+#include "populace/citizen.h"
+#include "society/society.h"
+#include "society/organization.h"
+#include "map/component.h"
+#include "player/vehicle_asset.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,8 +21,28 @@
 using namespace std;
 
 namespace {
-	// 开局有多大比例的车位停着车(0-1)。车辆还没和市民绑定，先随机；绑定后由市民的车决定，这个常量会删掉。
-	constexpr float kParkedVehicleFraction = 0.5f;
+	// 每个成年市民开局尝试分配一辆car的概率(百分比)。
+	constexpr int kCitizenVehicleChance = 20;
+	// 每个组织开局尝试分配truck的次数范围[1, 5]。
+	constexpr int kOrganizationMaxVehicleAttempts = 5;
+	constexpr int kAdultAge = 18;
+
+	// 在这些房间里挑一个空闲且接受category的车位(随机)，没有返回false。
+	bool PickFreeSlot(const vector<Room*>& rooms, const string& category, Room*& outRoom, int& outIndex) {
+		vector<pair<Room*, int>> candidates;
+		for (Room* room : rooms) {
+			if (!room) continue;
+			const vector<ParkingSlot*>& slots = room->GetParkingSlots();
+			for (size_t i = 0; i < slots.size(); i++) {
+				if (slots[i]->IsFree() && slots[i]->Accepts(category)) candidates.emplace_back(room, static_cast<int>(i));
+			}
+		}
+		if (candidates.empty()) return false;
+		const auto& picked = candidates[GetRandom(static_cast<int>(candidates.size()))];
+		outRoom = picked.first;
+		outIndex = picked.second;
+		return true;
+	}
 
 	struct RoadStationCollector {
 		vector<RoadStationRequest> requests;
@@ -34,7 +60,30 @@ Traffic::Traffic() :
 	scriptFactory(Registry::Get().GetScriptFactory()) {
 }
 
+void Traffic::ResolveVehicleAssets(const Populace& populace, const Society& society) {
+	const vector<Citizen*>& citizens = populace.GetCitizens();
+	const vector<Organization*>& organizations = society.GetOrganizations();
+	for (const PendingVehicleAsset& pending : pendingVehicleAssets) {
+		auto it = vehicles.find(pending.vehicleName);
+		if (it == vehicles.end()) continue;
+		Citizen* ownerCitizen = nullptr;
+		Organization* ownerOrganization = nullptr;
+		if (pending.ownerKind == 0 && pending.ownerIndex >= 0 && pending.ownerIndex < static_cast<int>(citizens.size())) {
+			ownerCitizen = citizens[pending.ownerIndex];
+		} else if (pending.ownerKind == 1 && pending.ownerIndex >= 0 && pending.ownerIndex < static_cast<int>(organizations.size())) {
+			ownerOrganization = organizations[pending.ownerIndex];
+		}
+		if (!ownerCitizen && !ownerOrganization) continue;
+		VehicleAsset* asset = new VehicleAsset(it->second, ownerCitizen, ownerOrganization);
+		vehicleAssets.push_back(asset);
+		if (ownerCitizen) ownerCitizen->AddAsset(asset);
+		if (ownerOrganization) ownerOrganization->AddAsset(asset);
+	}
+	pendingVehicleAssets.clear();
+}
+
 Traffic::~Traffic() {
+	for (VehicleAsset* asset : vehicleAssets) delete asset;
 	for (auto& [name, route] : routes) delete route;
 	for (auto& [name, station] : stations) delete station;
 	for (auto& [name, vehicle] : vehicles) delete vehicle;
@@ -46,7 +95,7 @@ void Traffic::Init(Map* map) {
 	InitStations(map);
 	InitRoadsideStations(map);
 	InitRoutes(map);
-	InitParkedVehicles(map);
+	InitAirportVehicles(map);
 	InitTransitVehicles();
 }
 
@@ -149,47 +198,89 @@ void Traffic::InitRoutes(Map* map) {
 	}
 }
 
-void Traffic::InitParkedVehicles(Map* map) {
-	// 车型按种类查(VehicleFactory::GetIdsByCategory，种类是mod注册的static GetCategory()，不需要
-	// 创建临时mod实例)；同一种类名可以对应多个车型。每个种类查一次，缓存起来。
-	unordered_map<string, vector<string>> idsByCategory;
-	int slotCount = 0;
+void Traffic::InitAirportVehicles(Map* map) {
+	// 机场的飞机还没有对应的组织，先每个机位无条件停一架(不挂资产)；普通停车位的车由AssignVehicles按人分配。
+	// 车型按种类查(VehicleFactory::GetIdsByCategory)。
+	const vector<string> ids = vehicleFactory.GetIdsByCategory("plane");
 	int parkedCount = 0;
-
-	for (auto& [buildingName, building] : map->GetBuildings()) {
-		if (!building) continue;
-		for (Room* room : building->GetRooms()) {
-			if (!room) continue;
-			const vector<ParkingSlot*>& slots = room->GetParkingSlots();
-			for (size_t slotIndex = 0; slotIndex < slots.size(); slotIndex++) {
-				ParkingSlot* slot = slots[slotIndex];
-				slotCount++;
-				// 临时：车辆还没和市民绑定，先让kParkedVehicleFraction的车位停着车(飞机这类每个机位本来就一架，不抽)。
-				// 绑定市民之后停车占用由市民的车决定，这段随机逻辑要整个换掉。
-				if (slot->categories.empty()) continue;
-				const string& category = slot->categories[GetRandom(static_cast<int>(slot->categories.size()))];
-				if (category != "plane" && GetRandom(1000) >= static_cast<int>(kParkedVehicleFraction * 1000.f)) continue;
-				auto found = idsByCategory.find(category);
-				if (found == idsByCategory.end())
-					found = idsByCategory.emplace(category, vehicleFactory.GetIdsByCategory(category)).first;
-				const vector<string>& ids = found->second;
-				if (ids.empty()) continue; // 这个种类没有任何已启用车型，跳过这个车位
-
-				string modId = ids[GetRandom(static_cast<int>(ids.size()))];
-				string name = "Vehicle" + to_string(vehicleCounter++);
-
-				Vehicle* vehicle = CreateVehicle(modId, name);
-				if (!vehicle) continue;
-
-				vehicle->BindSlot(room, static_cast<int>(slotIndex));
-				parkedCount++;
-
-				debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
+	if (!ids.empty()) {
+		for (auto& [buildingName, building] : map->GetBuildings()) {
+			if (!building) continue;
+			for (Room* room : building->GetRooms()) {
+				if (!room) continue;
+				const vector<ParkingSlot*>& slots = room->GetParkingSlots();
+				for (size_t slotIndex = 0; slotIndex < slots.size(); slotIndex++) {
+					if (!slots[slotIndex]->Accepts("plane")) continue;
+					string modId = ids[GetRandom(static_cast<int>(ids.size()))];
+					string name = "Vehicle" + to_string(vehicleCounter++);
+					Vehicle* vehicle = CreateVehicle(modId, name);
+					if (!vehicle) continue;
+					vehicle->BindSlot(room, static_cast<int>(slotIndex));
+					parkedCount++;
+					debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
+				}
 			}
 		}
 	}
+	debugf("Traffic::InitAirportVehicles: %d plane(s).\n", parkedCount);
+}
 
-	debugf("Traffic::InitParkedVehicles: %d parking slot(s), %d parked vehicle(s).\n", slotCount, parkedCount);
+VehicleAsset* Traffic::CreateOwnedVehicle(const string& category, Room* room, int slotIndex,
+	Citizen* ownerCitizen, Organization* ownerOrganization) {
+	const vector<string> ids = vehicleFactory.GetIdsByCategory(category);
+	if (ids.empty()) return nullptr; // 这个种类没有任何已启用车型
+	string modId = ids[GetRandom(static_cast<int>(ids.size()))];
+	string name = "Vehicle" + to_string(vehicleCounter++);
+	Vehicle* vehicle = CreateVehicle(modId, name);
+	if (!vehicle) return nullptr;
+	vehicle->BindSlot(room, slotIndex);
+
+	VehicleAsset* asset = new VehicleAsset(vehicle, ownerCitizen, ownerOrganization);
+	vehicleAssets.push_back(asset);
+	if (ownerCitizen) ownerCitizen->AddAsset(asset);
+	if (ownerOrganization) ownerOrganization->AddAsset(asset);
+	debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
+	return asset;
+}
+
+void Traffic::AssignVehicles(const Populace& populace, const Society& society) {
+	// 市民：每个成年人20%概率尝试在自己家所在的建筑里找一个空闲car车位(建筑里任何带车位的房间，和是不是
+	// room_parking无关)，没有就不分配。
+	int citizenVehicles = 0;
+	int currentYear = populace.GetCurrentYear();
+	for (Citizen* citizen : populace.GetCitizens()) {
+		if (!citizen || citizen->GetAge(currentYear) < kAdultAge) continue;
+		if (GetRandom(100) >= kCitizenVehicleChance) continue;
+		Building* building = citizen->GetBuilding();
+		if (!building) continue;
+		Room* room = nullptr;
+		int slotIndex = -1;
+		if (!PickFreeSlot(building->GetRooms(), "car", room, slotIndex)) continue;
+		if (CreateOwnedVehicle("car", room, slotIndex, citizen, nullptr)) citizenVehicles++;
+	}
+
+	// 组织：在它所有组合(Component)的房间里找带车位的房间，随机1-5次尝试分配truck，找不到空位就停。
+	int organizationVehicles = 0;
+	for (Organization* organization : society.GetOrganizations()) {
+		if (!organization) continue;
+		vector<Room*> parkingRooms;
+		for (Component* component : organization->GetComponents()) {
+			if (!component) continue;
+			for (Room* room : component->GetRooms()) {
+				if (room && !room->GetParkingSlots().empty()) parkingRooms.push_back(room);
+			}
+		}
+		if (parkingRooms.empty()) continue;
+		int attempts = 1 + GetRandom(kOrganizationMaxVehicleAttempts);
+		for (int i = 0; i < attempts; i++) {
+			Room* room = nullptr;
+			int slotIndex = -1;
+			if (!PickFreeSlot(parkingRooms, "truck", room, slotIndex)) break;
+			if (CreateOwnedVehicle("truck", room, slotIndex, nullptr, organization)) organizationVehicles++;
+		}
+	}
+
+	debugf("Traffic::AssignVehicles: %d citizen vehicle(s), %d organization vehicle(s).\n", citizenVehicles, organizationVehicles);
 }
 
 void Traffic::InitTransitVehicles() {
@@ -217,6 +308,7 @@ void Traffic::InitTransitVehicles() {
 Vehicle* Traffic::CreateVehicle(const string& modId, const string& name) {
 	auto it = vehicles.find(name);
 	if (it != vehicles.end()) {
+		RemoveVehicleAsset(it->second);
 		delete it->second;
 		vehicles.erase(it);
 	}
@@ -234,8 +326,20 @@ Vehicle* Traffic::CreateVehicle(const string& modId, const string& name) {
 void Traffic::DestroyVehicle(const string& name) {
 	auto it = vehicles.find(name);
 	if (it == vehicles.end()) return;
+	RemoveVehicleAsset(it->second);
 	delete it->second;
 	vehicles.erase(it);
+}
+
+void Traffic::RemoveVehicleAsset(const Vehicle* vehicle) {
+	for (auto it = vehicleAssets.begin(); it != vehicleAssets.end(); ++it) {
+		if ((*it)->GetVehicle() != vehicle) continue;
+		if ((*it)->GetOwnerCitizen()) (*it)->GetOwnerCitizen()->RemoveAsset(*it);
+		if ((*it)->GetOwnerOrganization()) (*it)->GetOwnerOrganization()->RemoveAsset(*it);
+		delete *it;
+		vehicleAssets.erase(it);
+		return;
+	}
 }
 
 Vehicle* Traffic::FindVehicleByName(const string& name) const {

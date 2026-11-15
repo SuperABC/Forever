@@ -140,6 +140,12 @@ void ShopOrganization::DesignJobsForRoom(const std::string& componentType, const
 不重写`DailyPlan`/`ExecNode`（用基类默认空实现），这套设施目前没有真正产出任何
 Change，是为将来"组织级调度"（比如发工资）预留的接口，不是死代码。
 
+## 资产
+
+`AddAsset/RemoveAsset/GetAssets`：只存`mobility`为`Estate`/`Vehicle`的`Asset*`，不拥有所有权（`VehicleAsset`归`Traffic`），不存档。
+组织不能拥有不动产（房产`owner`只能是市民，`stated`=政府），实际只会有`truck`载具：`Traffic::AssignVehicles`在组织所有组合
+(`Component`)的带车位房间里随机1-5次找空闲truck车位分配，见`traffic.md`。
+
 ## 依赖关系
 
 - 依赖：`Dependence/society/organization_mod.h`/`organization_factory.h`、

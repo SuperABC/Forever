@@ -83,6 +83,12 @@ public:
 	int GetLastMonthKey() const { return lastMonthKey; }
 	void SetLastMonthKey(int value) { lastMonthKey = value; }
 
+	// 政府资产列表：只存不动产(Estate)和载具(Vehicle)，不拥有所有权，不存档。目前只有stated的不动产，
+	// 由Map::BuildEstateAssets产出、框架调用SetGovernmentAssets整体替换。
+	bool AddGovernmentAsset(Asset* asset);
+	void SetGovernmentAssets(const std::vector<Asset*>& assets);
+	const std::vector<Asset*>& GetGovernmentAssets() const { return governmentAssets; }
+
 	// 占用这个房间的组织（房间所在Component被哪个组织claim）；没有组织占用（或room为空）归政府。
 	Party OwnerOf(const Room* room) const;
 
@@ -98,6 +104,7 @@ private:
 	Treasury treasury;
 	Market market;
 	int lastMonthKey = 0;
+	std::vector<Asset*> governmentAssets; // 不持有
 
 	// 房间 -> 占用它的组织，按organizations惰性重建（Init/读档后置脏）。
 	mutable std::unordered_map<const Room*, Organization*> roomOwners;

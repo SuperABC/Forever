@@ -6,6 +6,7 @@
 #include "populace/scheduler.h"
 #include "populace/experience.h"
 #include "map/room.h"
+#include "player/asset.h"
 #include "society/job.h"
 
 #include <algorithm>
@@ -228,6 +229,20 @@ Zone* Citizen::GetZone() const { return zone; }
 void Citizen::SetZone(Zone* value) { zone = value; }
 Building* Citizen::GetBuilding() const { return building; }
 void Citizen::SetBuilding(Building* value) { building = value; }
+bool Citizen::AddAsset(Asset* asset) {
+	if (!asset) return false;
+	if (asset->GetMobility() != AssetMobility::Estate && asset->GetMobility() != AssetMobility::Vehicle) return false;
+	if (find(assets.begin(), assets.end(), asset) != assets.end()) return true;
+	assets.push_back(asset);
+	return true;
+}
+
+void Citizen::RemoveAsset(const Asset* asset) {
+	assets.erase(remove(assets.begin(), assets.end(), asset), assets.end());
+}
+
+const vector<Asset*>& Citizen::GetAssets() const { return assets; }
+
 Room* Citizen::GetRoom() const { return room; }
 Household* Citizen::GetHousehold() const { return household; }
 void Citizen::SetHousehold(Household* value) { household = value; }

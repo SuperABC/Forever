@@ -26,6 +26,7 @@
   - `lines`（每条线路的 `{name,stopIndex}` 条目）；
   - 每条线路上的车：车名，顺序决定发车相位。
 - **车辆**（按名字排序），每辆记：mod 注册 id、mod 状态、交互选项、停车位（房间 + 局部坐标 + 朝向 + `parkState` + `parkingSlotIndex`；读档后对`Parked`的车`BindSlot`、`Vanished`的车`SetVanished`重建占用，在途预定不存）、线路绑定、位置。
+- **载具资产**（分配给市民/组织的车，`VehicleAsset`），追加在车辆之后：车名 + 所有者种类(0市民/1组织) + 所有者在人口/社会里的下标。读档时人口/社会段比交通晚恢复，所以`Load`只把它们记进`Traffic::pendingVehicleAssets`，人口/社会恢复后由`Traffic::ResolveVehicleAssets`按下标建`VehicleAsset`并挂回所有者列表（下标越界的丢弃）。`Save`因此多收`Populace*`/`Society*`参数（可空）。旧存档没有这一段（`AtEnd`）则不恢复载具资产。不动产资产不存（由`owner`/`stated`推导）。
 
 ## 关键设计
 

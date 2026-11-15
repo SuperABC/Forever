@@ -33,6 +33,12 @@ public:
 	std::string GetType() const;
 	const std::vector<Component*>& GetComponents() const;
 	const std::vector<Job*>& GetJobs() const;
+
+	// 资产列表：只存不动产(Estate)和载具(Vehicle)，不拥有所有权(VehicleAsset归Traffic)。组织不能拥有不动产
+	// (房产owner只能是市民或政府)，实际只会有truck；mobility不是Estate/Vehicle的资产拒绝。
+	bool AddAsset(Asset* asset);
+	void RemoveAsset(const Asset* asset);
+	const std::vector<Asset*>& GetAssets() const;
 	// 初始发行股数：每个组织开局（以及倒闭重启后）发行kTotalShares股，增发会抬高GetTotalShares()。
 	static constexpr int64_t kTotalShares = 10000;
 	// 当前总股数：市民持股数之和不超过它，余下的是组织自己的库存股。随社会段存档。
@@ -92,6 +98,7 @@ private:
 	OrganizationMod* mod;
 	Script* script;
 	std::vector<Component*> components; // 不持有
+	std::vector<Asset*> assets;         // 不持有，不存档(载具随traffic段)
 	std::vector<Job*> jobs;             // 持有所有权，Core侧new
 	std::vector<Shareholder> shareholders;
 	int64_t totalShares = kTotalShares;

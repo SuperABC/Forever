@@ -69,7 +69,6 @@ vector<pair<string, Script*>> ScriptSaveCodec::CollectScripts(Map* map, Populace
 			player->GetLeftShoulder(), player->GetRightShoulder() }) {
 			addAssetScripts(addAssetScripts, slot);
 		}
-		for (auto& [name, asset] : player->GetEstateAssets()) addAssetScripts(addAssetScripts, asset);
 		for (auto& [name, world] : player->GetWorldAssets()) addAssetScripts(addAssetScripts, world.asset);
 	}
 	if (story) {

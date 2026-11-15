@@ -52,7 +52,7 @@ void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 }
 
 void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {
-	// 一个中央车站(随机一块高密度商业区) + 东南西北各一座(中/低密度商业区)，规则见building_train_station.md。
+	// 一个中央车站(最靠近地图中心的高密度商业区) + 东南西北各一座(中/低密度商业区)，规则见building_train_station.md。
 	constexpr float kMinEdge = 15.f;        // 沿路边长小于它拒绝
 	constexpr float kFullEdgeMax = 20.f;    // 沿路边长小于它占满，否则只取一个角
 	constexpr float kCornerFrontage = 15.f; // 取角时的沿路长度
@@ -94,7 +94,7 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 		emit(context, request);
 	};
 
-	// 中央车站：随机一块能放的高密度商业区。
+	// 中央车站：最靠近地图中心的能放的高密度商业区。
 	vector<Lot*> centralCandidates;
 	for (Lot* lot : lots) {
 		if (lot && lot->GetArea() == AREA_COMMERCE_HIGH && !optionsOf(lot).empty()) centralCandidates.push_back(lot);
@@ -111,7 +111,20 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 		emitOption(lot, lotOptions[GetRandom(static_cast<int>(lotOptions.size()))]);
 		return;
 	}
-	Lot* central = centralCandidates[GetRandom(static_cast<int>(centralCandidates.size()))];
+	// 中央车站选最靠近地图中心的那块(Assign拿不到地图尺寸，用所有地块的外包围盒中心近似地图中心)。
+	float minX = 1e30f, maxX = -1e30f, minY = 1e30f, maxY = -1e30f;
+	for (Lot* lot : lots) {
+		if (!lot) continue;
+		minX = min(minX, lot->GetPosX()); maxX = max(maxX, lot->GetPosX());
+		minY = min(minY, lot->GetPosY()); maxY = max(maxY, lot->GetPosY());
+	}
+	float mapCenterX = (minX + maxX) * 0.5f, mapCenterY = (minY + maxY) * 0.5f;
+	Lot* central = centralCandidates[0];
+	float bestCenterDistance = 1e30f;
+	for (Lot* lot : centralCandidates) {
+		float distance = hypotf(lot->GetPosX() - mapCenterX, lot->GetPosY() - mapCenterY);
+		if (distance < bestCenterDistance) { bestCenterDistance = distance; central = lot; }
+	}
 	vector<Option> centralOptions = optionsOf(central);
 	const Option& centralOption = centralOptions[GetRandom(static_cast<int>(centralOptions.size()))];
 	emitOption(central, centralOption);

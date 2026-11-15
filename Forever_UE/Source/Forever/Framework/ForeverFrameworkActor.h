@@ -85,6 +85,7 @@ public:
 	void EnsureSocietyGenerated();
 
 	// 玩家:假定populace已生成(开局时间=populace当前年份1月1日8点,见populace.md"生日换算")。
+	void EnsureAssetsGenerated(); // 不动产/载具资产：归属和人口/社会就绪后建，见ForeverFrameworkActor.md
 	void EnsurePlayerGenerated();
 
 	// 产业:按地图的Room生成仓库/工坊。

@@ -205,6 +205,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 		EnsureSocietyGenerated();
 		EnsurePlayerGenerated();
 		EnsureIndustryGenerated();
+		EnsureAssetsGenerated();
 	});
 	add(bLoading ? TEXT("恢复存档") : TEXT("执行开局剧情"), [this]() { EnsureStoryGenerated(); });
 	add(bLoading ? TEXT("恢复载具与玩家") : TEXT("构建载具"), [this]() {
@@ -1194,6 +1195,23 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 	// 新开局:选股东并由城市外账户注资，见Core/society/settlement.md。
 	society->AssignShareholders(populace->GetCitizens(), startTime);
 	Settlement::InitFunds(*society, populace->GetCitizens());
+}
+
+void AForeverFrameworkActor::EnsureAssetsGenerated()
+{
+	// 市民/组织/政府的不动产和载具资产：归属(Map::Checkin或读档的人口段)和人口/社会都就绪之后才能建，
+	// 所以放在"构建社会与产业"最后。不动产资产不存档，每次都按归属重建；载具读档时按存档里的所有者恢复，
+	// 新游戏才按人分配。
+	if (!map) return;
+	map->BuildEstateAssets();
+	if (society) society->SetGovernmentAssets(map->GetStatedEstateAssets());
+	if (!traffic || !populace || !society) return;
+	if (traffic->WasRestoredFromSave()) {
+		if (bPopulaceRestored) traffic->ResolveVehicleAssets(*populace, *society);
+	}
+	else {
+		traffic->AssignVehicles(*populace, *society);
+	}
 }
 
 void AForeverFrameworkActor::EnsurePlayerGenerated()

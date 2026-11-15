@@ -104,6 +104,12 @@ ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。
 `Society::ApplyChange(const Change*, const ScriptContext&)`恒返回false（Society域目前没有自己认识的Change子类；
 七个域都不认识时由`AForeverFrameworkActor::ApplyChange`统一打"未实现"警告）。
 
+## 政府资产列表
+
+政府没有独立的类（`Party::Government()`只是个值），资产列表放在`Society`：`AddGovernmentAsset`/`SetGovernmentAssets`/
+`GetGovernmentAssets`，只存`Estate`/`Vehicle`的`Asset*`，不拥有所有权、不存档。目前只有`stated`(公有)的不动产，
+由`ForeverFrameworkActor::EnsureAssetsGenerated`把`Map::GetStatedEstateAssets()`整体交进来；暂无政府载具。
+
 ## 依赖关系
 
 - 依赖：`Dependence/society/organization_mod.h`/`organization_factory.h`、

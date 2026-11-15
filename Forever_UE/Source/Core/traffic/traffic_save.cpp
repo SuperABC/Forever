@@ -1,6 +1,9 @@
 #include "traffic_save.h"
 
 #include "traffic/traffic.h"
+#include "player/vehicle_asset.h"
+#include "populace/populace.h"
+#include "society/society.h"
 #include "story/script.h"
 
 #include "common/save.h"
@@ -90,7 +93,7 @@ namespace {
 	}
 }
 
-void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive& archive) {
+void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, const Populace* populace, const Society* society, SaveArchive& archive) {
 	ByteWriter w;
 
 	w.I32(traffic.vehicleCounter);
@@ -185,6 +188,38 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive&
 		// 车位占用：只存Parked/Vanished；在途预定读档后没有行驶路径，不存，见vehicle.md"车位"。
 		w.U8(static_cast<uint8_t>(v->parkState));
 		w.I32(v->parkState == Vehicle::ParkState::Parked ? v->parkingSlotIndex : -1);
+	}
+
+	// 载具资产(分配给市民/组织的车)：车名+所有者种类(0市民/1组织)+所有者下标，追加在车辆之后。
+	// 所有者的段(人口/社会)读档时比交通晚恢复，所以Load只记下来，之后由Traffic::ResolveVehicleAssets挂回去。
+	unordered_map<const Citizen*, int> citizenIndex;
+	if (populace) {
+		const vector<Citizen*>& citizens = populace->GetCitizens();
+		for (size_t i = 0; i < citizens.size(); i++) citizenIndex[citizens[i]] = static_cast<int>(i);
+	}
+	unordered_map<const Organization*, int> organizationIndex;
+	if (society) {
+		const vector<Organization*>& organizations = society->GetOrganizations();
+		for (size_t i = 0; i < organizations.size(); i++) organizationIndex[organizations[i]] = static_cast<int>(i);
+	}
+	struct AssetRecord { string vehicleName; uint8_t kind; int index; };
+	vector<AssetRecord> assetRecords;
+	for (const VehicleAsset* asset : traffic.vehicleAssets) {
+		if (!asset->GetVehicle()) continue;
+		if (asset->GetOwnerCitizen()) {
+			auto it = citizenIndex.find(asset->GetOwnerCitizen());
+			if (it != citizenIndex.end()) assetRecords.push_back({ asset->GetVehicle()->GetName(), 0, it->second });
+		} else if (asset->GetOwnerOrganization()) {
+			auto it = organizationIndex.find(asset->GetOwnerOrganization());
+			if (it != organizationIndex.end()) assetRecords.push_back({ asset->GetVehicle()->GetName(), 1, it->second });
+		}
+	}
+	sort(assetRecords.begin(), assetRecords.end(), [](const AssetRecord& a, const AssetRecord& b) { return a.vehicleName < b.vehicleName; });
+	w.U32(static_cast<uint32_t>(assetRecords.size()));
+	for (const AssetRecord& record : assetRecords) {
+		w.Str(record.vehicleName);
+		w.U8(record.kind);
+		w.I32(record.index);
 	}
 
 	archive.SetBinary(SAVE_SECTION_TRAFFIC, VersionOf(SAVE_SECTION_TRAFFIC), w.Take());
@@ -362,10 +397,23 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 			if (route->lineVehicles.size() < lineVehicles.size()) route->lineVehicles.resize(lineVehicles.size());
 		}
 
+		// 载具资产的所有者记录：人口/社会这时还没恢复，先记着，之后由Traffic::ResolveVehicleAssets挂回去。
+		if (!r.Failed() && !r.AtEnd()) {
+			uint32_t assetCount = r.U32();
+			for (uint32_t i = 0; i < assetCount && !r.Failed(); i++) {
+				Traffic::PendingVehicleAsset pending;
+				pending.vehicleName = r.Str();
+				pending.ownerKind = r.U8();
+				pending.ownerIndex = r.I32();
+				if (!r.Failed()) traffic->pendingVehicleAssets.push_back(std::move(pending));
+			}
+		}
+
 		if (r.Failed()) {
 			error = "traffic section is truncated";
 			return nullptr;
 		}
+		traffic->restoredFromSave = true;
 		return traffic;
 	}
 	catch (const exception& e) {

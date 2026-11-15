@@ -4,7 +4,7 @@
 
 `Citizen`：市民数据类。存姓名/性别/生日、头像、所在lot/园区/建筑/房间（家）、当前所在房间、3D坐标、
 配偶/子女链接、所属户、职业(`job`)、行为调度器(`scheduler`)、性格(`Personality`)、人际关系
-(`acquaintances`+`experiences`)、生命值与死亡状态、饱食度、对话选项。不存资产。
+(`acquaintances`+`experiences`)、生命值与死亡状态、饱食度、对话选项。资产列表（`assets`）只存不动产和载具，不拥有所有权、不存档，见下"资产"。
 同文件还有`Personality`（13项性格）和`Relation`（6项关系强度）两个小结构。
 
 ## 关键设计
@@ -76,9 +76,14 @@
   `PopulaceSaveCodec`（友元，直接读写私有字段）、`Society`（`SetJob`）、Forever层的`ACitizenElement`/
   `UForeverPopulaceFrameworkComponent`。
 
+## 资产
+
+`AddAsset/RemoveAsset/GetAssets`：列表里只能放`mobility`为`Estate`/`Vehicle`的`Asset*`（`EstateAsset`归`Map`、
+`VehicleAsset`归`Traffic`，市民不拥有）。市民可以有不动产（`Map::BuildEstateAssets`按归属挂上，只记最高层）和`car`
+载具（`Traffic::AssignVehicles`给成年人20%概率分配）。不存档：不动产由owner推导，载具随traffic段存所有者下标。
+
 ## 待办/后续阶段
 
-- 资产（`Citizen`上没有资产列表）。
 - 没有Job或Job没有产生调度的市民仍是“站在分配到的房间里的固定点”，没有工作驱动之外的自主移动。
 
 ## 行走实例化概率

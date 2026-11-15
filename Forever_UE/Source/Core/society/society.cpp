@@ -5,6 +5,7 @@
 #include "story/script.h"
 #include "map/component.h"
 #include "map/room.h"
+#include "player/asset.h"
 #include "populace/citizen.h"
 #include "populace/experience.h"
 #include "common/registry.h"
@@ -45,6 +46,19 @@ double Society::GovernmentNetRatio() const {
 	int64_t injection = ledger.GetInitialInjection();
 	if (injection <= 0) return 0.0;
 	return static_cast<double>(treasury.NetPosition(ledger)) / static_cast<double>(injection);
+}
+
+bool Society::AddGovernmentAsset(Asset* asset) {
+	if (!asset) return false;
+	if (asset->GetMobility() != AssetMobility::Estate && asset->GetMobility() != AssetMobility::Vehicle) return false;
+	if (find(governmentAssets.begin(), governmentAssets.end(), asset) != governmentAssets.end()) return true;
+	governmentAssets.push_back(asset);
+	return true;
+}
+
+void Society::SetGovernmentAssets(const vector<Asset*>& assets) {
+	governmentAssets.clear();
+	for (Asset* asset : assets) AddGovernmentAsset(asset);
 }
 
 Party Society::OwnerOf(const Room* room) const {

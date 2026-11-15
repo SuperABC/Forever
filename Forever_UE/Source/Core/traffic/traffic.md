@@ -25,14 +25,24 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
    坐标取`Map::GetLaneSegmentAt`的真实车道坐标（目前只有公交站用）。站名取请求的`name`(非空)，否则`"Station"+stationCounter`。
 3. `InitRoutes`：对每个已注册且启用的`RouteMod`类型创建`Route`，收集`stationType`匹配的
    `Station`(端口快照)交给`Route::Build()`；线路上的extern点由`Route`自己持有，不再创建额外的`Station`。
-4. `InitParkedVehicles`：遍历每个房间的每个`ParkingSlot`，**只有`kParkedVehicleFraction`(0.5，`traffic.cpp`顶部常量)的
-   车位生成车辆**(`plane`类别不抽，机位全放)——车辆还没和市民绑定，这段随机逻辑等绑定后要整个换掉。选中的车位按
-   `ParkingSlot::categories`先随机选一个载具种类，再用`VehicleFactory::GetIdsByCategory(category)`（每个种类只查一次、
-   本函数内缓存）从该种类已启用的车型里随机选一个，**不管是否drivable**；种类为空/该种类没有车型就跳过。种类
-   是各`VehicleMod`的静态`GetCategory()`经`VehicleFactory::RegisterVehicle`注册的。车通过`Vehicle::BindSlot(room, slotIndex)`
-   停进车位(车位记`parkedVehicle`，车记`room`/`parkingSlotIndex`)。
+4. `InitAirportVehicles`：机场的飞机还没有对应的组织，先每个`plane`机位无条件停一架（不挂资产，等以后有机场组织再改）。
+   车型用`VehicleFactory::GetIdsByCategory("plane")`随机选，`BindSlot`停进车位。**普通停车位的车不在`Init`里生成**，由
+   `AssignVehicles`按人分配（见下）。
 5. `InitTransitVehicles`：按线路名排序后对每条`Route`（车辆编号`Transit<N>`因此与哈希顺序无关）的每条line按`GetLineVehicleCount(lineIdx)`(mod为每条线路单独指定，缺省1辆)创建车辆、
    `SetRouteBinding`、`AddVehicleToLine`。
+
+### AssignVehicles：按人分配载具（`Traffic::AssignVehicles`）
+
+不在`Init`里：`Init`在人口/社会之前，分配要用人。框架在"构建社会与产业"最后（`Map::BuildEstateAssets`之后）调用一次
+（`ForeverFrameworkActor::EnsureAssetsGenerated`），**读档不调用**（载具和所有者随存档恢复，见`traffic_save.md`）。
+- **市民**：每个成年(≥18)市民20%概率尝试；在`citizen->GetBuilding()`（家所在建筑）里找**任何带停车位的房间**（和是不是
+  `room_parking`无关）的空闲、`Accepts("car")`的车位（多个时随机一个）；没有就不分配。成功：`VehicleFactory::GetIdsByCategory("car")`
+  随机车型，`CreateVehicle`+`BindSlot`，建`VehicleAsset`挂到市民资产列表。
+- **组织**：遍历组织所有`Component`的所有房间，收集带停车位的房间；随机1-5次尝试，每次找空闲`Accepts("truck")`车位，
+  没有空位就停止；成功则生成truck和`VehicleAsset`挂到组织资产列表。
+- 车位的类别标记（`ParkingSlot::categories`）起检查作用：找不到包含要生成的载具类别的空闲车位就当没有空位（目前住宅车位都是
+  car、工厂车位都是truck，不会出现类别拒绝）。
+- `VehicleAsset`归`Traffic`（`vehicleAssets`），销毁车时同步删除并从所有者列表摘除，见`player/vehicle_asset.md`。
 
 ### 停车位坐标
 

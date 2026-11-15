@@ -92,9 +92,6 @@ void PlayerSaveCodec::Save(const Player& player, const Map& map, SaveArchive& ar
 		w.U8(slot ? 1 : 0);
 		if (slot) WriteAsset(slot, w);
 	}
-	vector<const Asset*> estate = SortedAssets(player.estateAssets);
-	w.U32(static_cast<uint32_t>(estate.size()));
-	for (const Asset* asset : estate) WriteAsset(asset, w);
 	SaveRefs::WriteRoom(player.currentRoom, w);
 
 	// 房间里的物品：只写有物品的房间，按(建筑名, 房间下标)排序。
@@ -158,10 +155,6 @@ Player* PlayerSaveCodec::Load(const SaveArchive& archive, Map& map, string& erro
 		Asset** slots[] = { &player->leftHand, &player->rightHand, &player->backPack, &player->leftShoulder, &player->rightShoulder };
 		for (Asset** slot : slots) {
 			if (r.U8() != 0) *slot = ReadAsset(player->assetFactory, r);
-		}
-		uint32_t estateCount = r.U32();
-		for (uint32_t i = 0; i < estateCount && !r.Failed(); i++) {
-			if (Asset* asset = ReadAsset(player->assetFactory, r)) player->estateAssets[asset->name] = asset;
 		}
 		player->currentRoom = SaveRefs::ReadRoom(map, r);
 

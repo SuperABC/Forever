@@ -105,12 +105,6 @@ public:
 	Asset* GetLeftShoulder() const { return leftShoulder; }
 	Asset* GetRightShoulder() const { return rightShoulder; }
 
-	// 不动产/载具——不走五槽位，mobility必须是Estate/Vehicle。
-	bool AddEstateAsset(Asset* asset);
-	Asset* GetEstateAsset(const std::string& name) const;
-	void RemoveEstateAsset(const std::string& name);
-	const std::unordered_map<std::string, Asset*>& GetEstateAssets() const { return estateAssets; }
-
 	// 真实物理位置(不是剧情/场景语义)，由BuildingElement的Room重叠检测回调维护，见
 	// Source/Forever/Element/BuildingElement.cpp的OnRoomOverlapBegin/End。
 	Room* GetCurrentRoom() const { return currentRoom; }
@@ -227,9 +221,6 @@ private:
 	Asset* backPack = nullptr;
 	Asset* leftShoulder = nullptr;
 	Asset* rightShoulder = nullptr;
-
-	// 不动产/载具，key=name，mobility校验在AddEstateAsset里做。
-	std::unordered_map<std::string, Asset*> estateAssets;
 
 	Room* currentRoom = nullptr;
 

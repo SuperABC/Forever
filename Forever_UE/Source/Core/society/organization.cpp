@@ -6,6 +6,7 @@
 #include "common/config.h"
 #include "map/component.h"
 #include "map/room.h"
+#include "player/asset.h"
 #include "populace/citizen.h"
 
 #include <map>
@@ -195,6 +196,20 @@ Organization::~Organization() {
 string Organization::GetType() const {
 	return mod ? mod->GetType() : string();
 }
+
+bool Organization::AddAsset(Asset* asset) {
+	if (!asset) return false;
+	if (asset->GetMobility() != AssetMobility::Estate && asset->GetMobility() != AssetMobility::Vehicle) return false;
+	if (find(assets.begin(), assets.end(), asset) != assets.end()) return true;
+	assets.push_back(asset);
+	return true;
+}
+
+void Organization::RemoveAsset(const Asset* asset) {
+	assets.erase(remove(assets.begin(), assets.end(), asset), assets.end());
+}
+
+const vector<Asset*>& Organization::GetAssets() const { return assets; }
 
 const vector<Component*>& Organization::GetComponents() const { return components; }
 const vector<Job*>& Organization::GetJobs() const { return jobs; }

@@ -152,6 +152,13 @@ public:
 
 	// 房产归属(owner/stated)与住处分配(households/occupants)是两个独立步骤，详见map.md"房产归属与住处分配"
 	void Checkin(const Populace& populace);
+	// 不动产资产：按Checkin写下的归属(owner/stated)建立EstateAsset，只记"最高层"——园区整体归属就只有园区
+	// 一个资产，不再给下属建筑/房间各建一个；建筑整体归属同理。私有的加进该Citizen的资产列表，公有(stated)的
+	// 收进GetStatedEstateAssets()由框架交给政府(Society::SetGovernmentAssets)。EstateAsset由Map持有，
+	// 重复调用会先清掉旧的。必须在Checkin(新游戏)或读档恢复归属(populace段)之后调用，详见map.md。
+	void BuildEstateAssets();
+	const std::vector<Asset*>& GetStatedEstateAssets() const { return statedEstateAssets; }
+
 	// 让citizen住进room：家(Lot/Zone/Building/Room+户)和当前位置(CurrentRoom+occupants)都设成这里。
 	// Checkin和spawn_npc的home字段共用。
 	void SettleCitizen(Citizen* citizen, Room* room);
@@ -341,6 +348,8 @@ private:
 	BuildingLayoutLibrary buildingLayoutLibrary;
 	// 按name索引，GetZone/GetBuilding直接find。
 	std::unordered_map<std::string, Zone*> zones;
+	std::vector<EstateAsset*> estateAssets;   // 持有所有权，BuildEstateAssets重建
+	std::vector<Asset*> statedEstateAssets;   // 公有的那部分，不持有
 	std::unordered_map<std::string, Building*> buildings;
 
 	// 读档时重建出来的"游离"Lot：自适应占位(PromoteAdaptiveRemainder)用过的嵌套子块，生成时
