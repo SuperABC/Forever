@@ -52,6 +52,8 @@ public:
 	// (AVehicleCommandController)走同一条路，AI开车和手动开车的输入语义完全一致。
 	void SetDriveInput(float throttle, float brake, float steer);
 	void SetHandbrake(bool bOn);
+	// 驻车(Chaos ParkingEnabled)：不需要Controller、一直保持。没人开的车必须开着，SetDriveInput会自动解除。
+	void SetParked(bool bParked);
 
 	// 搭乘模式(公交：玩家当乘客)：Possess之前设置。PossessedBy只加视角Context(WASD无效)，常驻显示
 	// 这辆车的选项(停站时的"下车")；Move/手刹/Q键全部忽略；换手时不刹车(AI Controller继续按弱引用开)。

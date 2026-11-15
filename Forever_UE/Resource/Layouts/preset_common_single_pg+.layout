@@ -90,30 +90,6 @@
 					"type": "upstair",
 				},
 			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 0,
-				},
-				"end": {
-					"type": "single",
-					"idx": 0,
-				},
-				"backward": false,
-				"forward": true,
-			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 1,
-				},
-				"end": {
-					"type": "single",
-					"idx": 0,
-				},
-				"backward": true,
-				"forward": false,
-			},
 		],
 	}
 }

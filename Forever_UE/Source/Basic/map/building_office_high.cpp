@@ -81,6 +81,7 @@ void OfficeHighBuilding::Layout(int& direction, const Quad& quad,
 
 	AssignFloor(-1, "preset_office_circle_pg+", direction);
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
+	AssignParking(-1, 0, 0, 0.4f, { "car", "truck" });
 	AssignFloor(0, "preset_office_circle_fg+-", direction); // 4个single(1、2是empty) + 6个row
 	for (int slot = 0; slot < 4; slot++) {
 		AssignRoom(0, slot, slot == 1 || slot == 2 ? "room_empty" : "room_office", kComponent, kComponentId);

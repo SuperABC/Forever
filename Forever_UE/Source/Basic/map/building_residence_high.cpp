@@ -104,6 +104,8 @@ void ResidenceHighBuilding::LayoutWing(int direction, const Quad& quad) {
 	// 地下1层pg+(停车库)，1楼fg+-，2楼fl+-，3楼及以上fu+-。
 	AssignFloor(-1, "preset_residence_wing_pg+", direction);
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
+	AssignParking(-1, 0, 0, 0.4f, { "car" });
+	AssignParking(-1, 0, 1, 0.4f, { "car" });
 	AssignFloor(0, "preset_residence_wing_fg+-", direction);
 	AssignFloor(1, "preset_residence_wing_fl+-", direction);
 	for (int level = 2; level < layers; level++) {
@@ -166,6 +168,8 @@ void ResidenceHighBuilding::LayoutTwin(int direction, const Quad& quad) {
 	// 地下1层停车库pg+；1楼fg+-、2楼fl+-各2个single+1个row(row切成400㎡的房间，1楼的row是餐厅，每个房间独立一个component_restaurant)；3楼起奇数楼fo+-、偶数楼fe+-，各4个row(联排)。电梯贯穿地下到顶层。
 	AssignFloor(-1, "preset_residence_twin_pg+", direction); // 楼梯用默认的Stair_Return
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
+	AssignParking(-1, 0, 0, 0.4f, { "car" });
+	AssignParking(-1, 0, 1, 0.4f, { "car" });
 	for (int level = 0; level < layers; level++) {
 		// level 0是1楼：3楼(level 2)起奇数楼fo+-、偶数楼fe+-。
 		const char* templateName = level == 0 ? "preset_residence_twin_fg+-"

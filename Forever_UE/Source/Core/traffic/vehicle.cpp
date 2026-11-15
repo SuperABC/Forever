@@ -1,5 +1,6 @@
 #include "traffic/vehicle.h"
 
+#include "map/room.h"
 #include "story/script.h"
 #include "story/script_factory.h"
 #include "common/config.h"
@@ -105,6 +106,81 @@ void Vehicle::SetParking(Room* inRoom, float localX, float localY, float localRo
 
 Room* Vehicle::GetRoom() const { return room; }
 
+ParkingSlot* Vehicle::GetParkingSlot() const {
+	if (!room || parkingSlotIndex < 0 || parkState != ParkState::Parked) return nullptr;
+	const vector<ParkingSlot*>& slots = room->GetParkingSlots();
+	if (parkingSlotIndex >= static_cast<int>(slots.size())) return nullptr;
+	return slots[parkingSlotIndex];
+}
+
+void Vehicle::BindSlot(Room* inRoom, int slotIndex) {
+	ReleaseSlot();
+	if (!inRoom || slotIndex < 0 || slotIndex >= static_cast<int>(inRoom->GetParkingSlots().size())) return;
+	ParkingSlot* slot = inRoom->GetParkingSlots()[slotIndex];
+	room = inRoom;
+	parkingSlotIndex = slotIndex;
+	parkState = ParkState::Parked;
+	slot->parkedVehicle = this;
+	if (slot->reservedBy == this) slot->reservedBy = nullptr;
+	// UE层GenerateVehicles按"房间中心+局部偏移"换算世界位置，局部偏移相对房间中心。
+	parkingLocalX = slot->centerX - inRoom->GetPosX();
+	parkingLocalY = slot->centerY - inRoom->GetPosY();
+	parkingRotationDegrees = slot->VehicleYawDegrees();
+	currentRoom = inRoom;
+}
+
+void Vehicle::ReleaseSlot() {
+	if (ParkingSlot* slot = GetParkingSlot()) {
+		if (slot->parkedVehicle == this) slot->parkedVehicle = nullptr;
+	}
+	parkingSlotIndex = -1;
+	parkState = ParkState::None;
+}
+
+ParkingSlot* Vehicle::GetReservedSlot() const {
+	if (!reservedRoom || reservedSlotIndex < 0) return nullptr;
+	const vector<ParkingSlot*>& slots = reservedRoom->GetParkingSlots();
+	if (reservedSlotIndex >= static_cast<int>(slots.size())) return nullptr;
+	return slots[reservedSlotIndex];
+}
+
+bool Vehicle::ReserveSlot(Room* inRoom, int slotIndex) {
+	ClearReservation();
+	if (!inRoom || slotIndex < 0 || slotIndex >= static_cast<int>(inRoom->GetParkingSlots().size())) return false;
+	ParkingSlot* slot = inRoom->GetParkingSlots()[slotIndex];
+	if (slot->reservedBy && slot->reservedBy != this) return false;
+	if (slot->parkedVehicle && slot->parkedVehicle != this) return false;
+	slot->reservedBy = this;
+	reservedRoom = inRoom;
+	reservedSlotIndex = slotIndex;
+	return true;
+}
+
+void Vehicle::ClearReservation() {
+	if (ParkingSlot* slot = GetReservedSlot()) {
+		if (slot->reservedBy == this) slot->reservedBy = nullptr;
+	}
+	reservedRoom = nullptr;
+	reservedSlotIndex = -1;
+}
+
+bool Vehicle::ArriveAtReservedSlot() {
+	Room* targetRoom = reservedRoom;
+	int targetIndex = reservedSlotIndex;
+	if (!GetReservedSlot()) return false;
+	ClearReservation();
+	BindSlot(targetRoom, targetIndex);
+	return true;
+}
+
+void Vehicle::SetVanished(Room* inRoom) {
+	ReleaseSlot();
+	ClearReservation();
+	room = inRoom;
+	currentRoom = inRoom;
+	parkState = ParkState::Vanished;
+}
+
 Room* Vehicle::GetCurrentRoom() const { return currentRoom; }
 void Vehicle::SetCurrentRoom(Room* inRoom) { currentRoom = inRoom; }
 
@@ -139,7 +215,7 @@ void Vehicle::BeginDrive(const std::vector<DrivePoint>& path, Room* destination,
 	driveStartTime = nowSeconds;
 	driveSpeed = speed;
 	float startYaw = yaw;
-	if (path.size() > 1) startYaw = atan2(path[1].y - path[0].y, path[1].x - path[0].x) * 180.f / 3.14159265f;
+	if (path.size() > 1) startYaw = atan2(path[1].y - path[0].y, path[1].x - path[0].x) * 180.f / 3.14159265f + (path[0].reverse ? 180.f : 0.f);
 	SetTransform(path[0].x, path[0].y, path[0].z, startYaw);
 }
 
@@ -151,7 +227,8 @@ void Vehicle::SampleDrive(double nowSeconds, DrivePoint& outPoint, size_t& outSe
 		outSegment = last;
 		outFinished = true;
 		outYaw = yaw;
-		if (last >= 1) outYaw = atan2(drivePath[last].y - drivePath[last - 1].y, drivePath[last].x - drivePath[last - 1].x) * 180.f / 3.14159265f;
+		if (last >= 1) outYaw = atan2(drivePath[last].y - drivePath[last - 1].y, drivePath[last].x - drivePath[last - 1].x) * 180.f / 3.14159265f
+			+ (drivePath[last - 1].reverse ? 180.f : 0.f);
 		return;
 	}
 	outFinished = false;
@@ -161,9 +238,10 @@ void Vehicle::SampleDrive(double nowSeconds, DrivePoint& outPoint, size_t& outSe
 	float t = span > 0.f ? (travelled - driveDistances[i - 1]) / span : 0.f;
 	outPoint = { drivePath[i - 1].x + (drivePath[i].x - drivePath[i - 1].x) * t,
 		drivePath[i - 1].y + (drivePath[i].y - drivePath[i - 1].y) * t,
-		drivePath[i - 1].z + (drivePath[i].z - drivePath[i - 1].z) * t };
+		drivePath[i - 1].z + (drivePath[i].z - drivePath[i - 1].z) * t, drivePath[i - 1].reverse };
 	outSegment = i;
-	outYaw = atan2(drivePath[i].y - drivePath[i - 1].y, drivePath[i].x - drivePath[i - 1].x) * 180.f / 3.14159265f;
+	outYaw = atan2(drivePath[i].y - drivePath[i - 1].y, drivePath[i].x - drivePath[i - 1].x) * 180.f / 3.14159265f
+		+ (drivePath[i - 1].reverse ? 180.f : 0.f);
 }
 
 bool Vehicle::AdvanceDrive(double nowSeconds) {
@@ -181,6 +259,16 @@ bool Vehicle::AdvanceDrive(double nowSeconds) {
 		return true;
 	}
 	return false;
+}
+
+bool Vehicle::IsDriveReversing(double nowSeconds) const {
+	if (!IsDriving()) return false;
+	DrivePoint point;
+	size_t segment;
+	bool finished;
+	float outYaw;
+	SampleDrive(nowSeconds, point, segment, finished, outYaw);
+	return !finished && point.reverse;
 }
 
 void Vehicle::GetRemainingDrive(double nowSeconds, std::vector<DrivePoint>& outPath) const {

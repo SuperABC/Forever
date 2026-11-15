@@ -982,6 +982,8 @@ void MapSaveCodec::WriteFloor(const Floor& floor, ByteWriter& w) {
 	for (const Single& s : floor.singles) w.I32(s.direction);
 	writeOpenings(floor.rows, false);
 	for (const Row& row : floor.rows) w.I32(row.direction);
+	writePlain(floor.parkings);
+	for (const Parking& parking : floor.parkings) w.I32(parking.direction);
 }
 
 void MapSaveCodec::ReadFloor(Floor& floor, ByteReader& r) {
@@ -1056,6 +1058,8 @@ void MapSaveCodec::ReadFloor(Floor& floor, ByteReader& r) {
 	for (Single& s : floor.singles) s.direction = r.I32();
 	readOpenings(floor.rows);
 	for (Row& row : floor.rows) row.direction = r.I32();
+	readPlain(floor.parkings);
+	for (Parking& parking : floor.parkings) parking.direction = r.I32();
 }
 
 // ======== Zone / Building / Room / Component / Door ========
@@ -1207,9 +1211,16 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			w.I64(p.rent);
 			w.U8(p.isManufacture ? 1 : 0);
 			WriteStrings(p.manufactureTypes, w);
-			w.U8(p.isParking ? 1 : 0);
-			w.U32(static_cast<uint32_t>(p.parkingSpots.size()));
-			for (const ParkingSpot& s : p.parkingSpots) { WriteFloats(s.position, w); w.F32(s.rotationDegrees); WriteStrings(s.categories, w); }
+			// 车位：几何+种类+导航节点(都登记在Map的锚点表里，按id引用)；占用状态不存，由车辆的存档反推。
+			w.U32(static_cast<uint32_t>(room->parkingSlots.size()));
+			for (const ParkingSlot* slot : room->parkingSlots) {
+				w.F32(slot->centerX); w.F32(slot->centerY); w.F32(slot->halfWidth); w.F32(slot->halfDepth);
+				w.I32(slot->direction);
+				WriteStrings(slot->categories, w);
+				const Node* slotNode = slot->navigationNode;
+				bool slotRegistered = slotNode && t.anchorsById.count(slotNode->GetId()) && t.anchorsById.at(slotNode->GetId()) == slotNode;
+				w.I32(slotRegistered ? slotNode->GetId() : -1);
+			}
 			w.U8(room->stated ? 1 : 0);
 		}
 
@@ -1485,9 +1496,16 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 			p.rent = r.I64();
 			p.isManufacture = r.U8() != 0;
 			p.manufactureTypes = ReadStrings(r);
-			p.isParking = r.U8() != 0;
-			p.parkingSpots.resize(r.U32());
-			for (ParkingSpot& s : p.parkingSpots) { ReadFloats(s.position, r); s.rotationDegrees = r.F32(); s.categories = ReadStrings(r); }
+			uint32_t slotCount = r.U32();
+			for (uint32_t k = 0; k < slotCount && !r.Failed(); k++) {
+				ParkingSlot slot;
+				slot.centerX = r.F32(); slot.centerY = r.F32(); slot.halfWidth = r.F32(); slot.halfDepth = r.F32();
+				slot.direction = r.I32();
+				slot.categories = ReadStrings(r);
+				int nodeId = r.I32();
+				if (nodeId >= 0) slot.navigationNode = t.AnchorAt(nodeId);
+				room->parkingSlots.push_back(new ParkingSlot(slot));
+			}
 			room->stated = r.U8() != 0;
 		}
 

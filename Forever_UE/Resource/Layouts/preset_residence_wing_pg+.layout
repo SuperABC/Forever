@@ -59,6 +59,14 @@
 			},
 		],
 	}],
+	"parkings": [{
+		"rect": [0, 0.4, 0.2, 0, 0.3, 0, 0.3, 0],
+		"direction": 3,
+	},
+	{
+		"rect": [0.7, 0, 0.2, 0, 1, -0.4, 0.3, 0],
+		"direction": 3,
+	}],
 	"pedestrianNavigation": {
 		"nodes": [
 			{
@@ -183,35 +191,247 @@
 	"vehicleNavigation": {
 		"nodes": [
 			{
-				"position": [0.2, 0, 0.4, 0],
-			},
-			{
-				"position": [0.8, 0, 0.4, 0],
-			},
-			{
 				"position": [0.4, -0.2, 0.4, 0],
 			},
 			{
 				"position": [0.6, 0.2, 0.4, 0],
 			},
 			{
-				"position": [0.2, 0, 0.55, 0],
+				"position": [0, 0.4, 0.7, 0],
 			},
 			{
-				"position": [0.8, 0, 0.55, 0],
+				"position": [0.4, -0.2, 0.5, 0.2],
+			},
+			{
+				"position": [0.6, 0.2, 0.5, 0.2],
+			},
+			{
+				"position": [1, -0.4, 0.7, 0],
+			},
+			{
+				"position": [0.2, 0, 0.5, 0.2],
+			},
+			{
+				"position": [0.2, 0, 0.7, 0],
+			},
+			{
+				"position": [0.8, 0, 0.7, 0],
+			},
+			{
+				"position": [0.8, 0, 0.5, 0.2],
+			},
+			{
+				"position": [0.4, -0.2, 0.3, 0],
+			},
+			{
+				"position": [0.6, 0.2, 0.3, 0],
 			},
 		],
-		"lines": [],
+		"lines": [
+			{
+				"begin": [0, 0.4, 0.4, 0.2],
+				"end": [0.3, 0, 0.4, 0.2],
+				"backward": false,
+				"forward": true,
+			},
+			{
+				"begin": [1, -0.4, 0.4, 0.2],
+				"end": [0.7, 0, 0.4, 0.2],
+				"backward": false,
+				"forward": true,
+			},
+		],
 		"connections": [
 			{
 				"begin": {
+					"type": "line",
+					"idx": 0,
+					"vertex": 0,
+				},
+				"end": {
 					"type": "node",
 					"idx": 2,
+				},
+				"forward": false,
+				"backward": true,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 6,
+				},
+				"end": {
+					"type": "node",
+					"idx": 3,
+				},
+				"forward": false,
+				"backward": true,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
 				},
 				"end": {
 					"type": "node",
 					"idx": 0,
 				},
+				"backward": true,
+				"forward": false,
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 1,
+					"vertex": 1,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+				"backward": false,
+				"forward": true,
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 1,
+					"vertex": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 5,
+				},
+				"forward": false,
+				"backward": true,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 9,
+				},
+				"end": {
+					"type": "node",
+					"idx": 4,
+				},
+				"backward": true,
+				"forward": false,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 4,
+				},
+				"end": {
+					"type": "node",
+					"idx": 1,
+				},
+				"backward": false,
+				"forward": true,
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 0,
+					"vertex": -1,
+				},
+				"end": {
+					"type": "parking",
+					"idx": 0,
+				},
+				"backward": true,
+				"forward": true,
+			},
+			{
+				"begin": {
+					"type": "line",
+					"idx": 1,
+					"vertex": -1,
+				},
+				"end": {
+					"type": "parking",
+					"idx": 1,
+				},
+				"backward": true,
+				"forward": true,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 6,
+				},
+				"end": {
+					"type": "node",
+					"idx": 7,
+				},
+				"forward": true,
+				"backward": false,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 2,
+				},
+				"end": {
+					"type": "node",
+					"idx": 7,
+				},
+				"forward": false,
+				"backward": true,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 9,
+				},
+				"end": {
+					"type": "node",
+					"idx": 8,
+				},
+				"backward": false,
+				"forward": true,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 5,
+				},
+				"end": {
+					"type": "node",
+					"idx": 8,
+				},
+				"backward": true,
+				"forward": false,
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 10,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 11,
+				},
+				"end": {
+					"type": "upstair",
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 0,
+				},
+				"end": {
+					"type": "node",
+					"idx": 10,
+				},
+				"forward": false,
+				"backward": true,
 			},
 			{
 				"begin": {
@@ -220,35 +440,28 @@
 				},
 				"end": {
 					"type": "node",
-					"idx": 3,
+					"idx": 11,
 				},
 			},
 			{
 				"begin": {
-					"type": "node",
-					"idx": 2,
-				},
-				"end": {
-					"type": "upstair",
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 3,
-				},
-				"end": {
-					"type": "upstair",
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
+					"type": "line",
 					"idx": 0,
+					"vertex": 1,
 				},
 				"end": {
 					"type": "node",
-					"idx": 4,
+					"idx": 3,
+				},
+			},
+			{
+				"begin": {
+					"type": "node",
+					"idx": 3,
+				},
+				"end": {
+					"type": "single",
+					"idx": 0,
 				},
 			},
 			{
@@ -260,26 +473,8 @@
 					"type": "single",
 					"idx": 0,
 				},
-			},
-			{
-				"begin": {
-					"type": "single",
-					"idx": 0,
-				},
-				"end": {
-					"type": "node",
-					"idx": 5,
-				},
-			},
-			{
-				"begin": {
-					"type": "node",
-					"idx": 5,
-				},
-				"end": {
-					"type": "node",
-					"idx": 1,
-				},
+				"backward": true,
+				"forward": false,
 			},
 		],
 	}

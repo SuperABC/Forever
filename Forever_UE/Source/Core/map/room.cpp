@@ -12,6 +12,7 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <cmath>
 
 
 using namespace std;
@@ -41,14 +42,13 @@ Room::Room(RoomFactory* factory, RoomMod* mod, Building* parentBuilding, Compone
 	properties.rent = mod->rent;
 	properties.isManufacture = mod->isManufacture;
 	properties.manufactureTypes = mod->manufactureTypes;
-	properties.isParking = mod->isParking;
-	properties.parkingSpots = mod->parkingSpots;
 	scriptModName = mod->scriptModName;
 	scriptMilestones = mod->milestoneNames;
 }
 
 Room::~Room() {
 	for (Household* household : households) delete household;
+	for (ParkingSlot* slot : parkingSlots) delete slot;
 	factory->DestroyRoom(mod);
 	for (auto& [name, asset] : assets) delete asset; // 没人捡走的地上物品，房间销毁时清理
 	for (Door* door : doorEntities) delete door;
@@ -145,8 +145,64 @@ string Room::StorageType() const { return properties.storageType; }
 int64_t Room::Rent() const { return properties.rent; }
 bool Room::IsManufacture() const { return properties.isManufacture; }
 vector<string> Room::ManufactureTypes() const { return properties.manufactureTypes; }
-bool Room::IsParking() const { return properties.isParking; }
-const vector<ParkingSpot>& Room::GetParkingSpots() const { return properties.parkingSpots; }
+
+bool ParkingSlot::Accepts(const string& category) const {
+	return std::find(categories.begin(), categories.end(), category) != categories.end();
+}
+
+float ParkingSlot::FacingYawDegrees() const {
+	// 建筑局部坐标里北=-Y、南=+Y(见building.cpp ComputeDoorFaces)，和Room::FacingYawDegrees(房间网格朝向约定)不同，不能共用。
+	static const float kFacingYawDegrees[4] = { 180.f, 0.f, 270.f, 90.f }; // 下标=FACE_WEST/EAST/NORTH/SOUTH
+	return kFacingYawDegrees[EffectiveFace(direction)];
+}
+
+float ParkingSlot::VehicleYawDegrees() const {
+	float yaw = FacingYawDegrees() + 180.f;
+	return yaw >= 360.f ? yaw - 360.f : yaw;
+}
+
+bool ParkingSlot::Contains(float x, float y) const {
+	// 开口朝向W/E时深度沿X、宽度沿Y，N/S反之。
+	int face = EffectiveFace(direction);
+	bool depthAlongX = (face == FACE_WEST || face == FACE_EAST);
+	float hx = depthAlongX ? halfDepth : halfWidth;
+	float hy = depthAlongX ? halfWidth : halfDepth;
+	return fabsf(x - centerX) <= hx && fabsf(y - centerY) <= hy;
+}
+
+const vector<ParkingSlot*>& Room::GetParkingSlots() const { return parkingSlots; }
+
+ParkingSlot* Room::AddParkingSlot(const ParkingSlot& slot) {
+	ParkingSlot* created = new ParkingSlot(slot);
+	parkingSlots.push_back(created);
+	return created;
+}
+
+int Room::FindFreeSlot(const string& category) const {
+	for (size_t i = 0; i < parkingSlots.size(); i++) {
+		if (parkingSlots[i]->IsFree() && parkingSlots[i]->Accepts(category)) return static_cast<int>(i);
+	}
+	return -1;
+}
+
+bool Room::HasSlotFor(const string& category) const {
+	for (const ParkingSlot* slot : parkingSlots) {
+		if (slot->Accepts(category)) return true;
+	}
+	return false;
+}
+
+int Room::FindSlotContaining(float x, float y, float yawDegrees) const {
+	const float degToRad = 3.14159265358979323846f / 180.f;
+	for (size_t i = 0; i < parkingSlots.size(); i++) {
+		const ParkingSlot* slot = parkingSlots[i];
+		if (slot->parkedVehicle || !slot->Contains(x, y)) continue;
+		// 车头朝向与车位开口朝向相反：点积<-0.8。
+		float dot = cosf((yawDegrees - slot->FacingYawDegrees()) * degToRad);
+		if (dot < -0.8f) return static_cast<int>(i);
+	}
+	return -1;
+}
 
 string Room::GetAddress() const {
 	if (!parentBuilding) return number;

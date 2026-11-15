@@ -270,6 +270,15 @@ void Single::InstanciateQuad(float width, float height) {
 	Quad::SetPosition(x, y, w, h);
 }
 
+Parking::Parking(RectParams params) : params(params) {}
+int Parking::GetDirection() const { return direction; }
+void Parking::SetDirection(int dir) { direction = dir; }
+void Parking::InstanciateQuad(float width, float height) {
+	float x, y, w, h;
+	InstanciateRect(params, width, height, x, y, w, h);
+	Quad::SetPosition(x, y, w, h);
+}
+
 Row::Row(RectParams params) : params(params) {}
 int Row::GetDirection() const { return direction; }
 void Row::SetDirection(int dir) { direction = dir; }
@@ -314,6 +323,7 @@ const vector<Corridor>& Floor::GetCorridors() const { return corridors; }
 const vector<Single>& Floor::GetSingles() const { return singles; }
 const vector<Row>& Floor::GetRows() const { return rows; }
 const vector<Hatch>& Floor::GetHatches() const { return hatches; }
+const vector<Parking>& Floor::GetParkings() const { return parkings; }
 void Floor::AddStair(Stair stair) { stairs.push_back(std::move(stair)); }
 void Floor::AddElevator(Elevator elevator) { elevators.push_back(std::move(elevator)); }
 void Floor::AddRamp(Ramp ramp) { ramps.push_back(std::move(ramp)); }
@@ -323,6 +333,7 @@ void Floor::AddCorridor(Corridor corridor) { corridors.push_back(std::move(corri
 void Floor::AddSingle(Single single) { singles.push_back(std::move(single)); }
 void Floor::AddRow(Row row) { rows.push_back(std::move(row)); }
 void Floor::AddHatch(Hatch hatch) { hatches.push_back(std::move(hatch)); }
+void Floor::AddParking(Parking parking) { parkings.push_back(std::move(parking)); }
 int Floor::AssignNumber() { return number++; }
 
 // ===== BuildingLayoutLibrary =====
@@ -531,6 +542,7 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 	singleTemplates.clear();
 	rowTemplates.clear();
 	hatchTemplates.clear();
+	parkingTemplates.clear();
 	pedestrianNavigationTemplates.clear();
 	vehicleNavigationTemplates.clear();
 
@@ -627,6 +639,18 @@ void BuildingLayoutLibrary::ReadTemplates(const vector<string>& paths) {
 			for (int i = 0; i < 4; i++) hatches4[i].emplace_back(InverseParams(rect, i));
 		}
 		hatchTemplates[basename] = std::move(hatches4);
+
+		array<vector<Parking>, 4> parkings4;
+		for (auto& pk : root["parkings"]) {
+			RectParams rect = ReadRectParams(pk["rect"]);
+			int origDir = pk["direction"].AsInt();
+			for (int i = 0; i < 4; i++) {
+				Parking parking(InverseParams(rect, i));
+				parking.SetDirection(InverseDirection(origDir, i));
+				parkings4[i].push_back(parking);
+			}
+		}
+		parkingTemplates[basename] = std::move(parkings4);
 
 		array<vector<Corridor>, 4> corridors4;
 		for (auto& c : root["corridors"]) {
@@ -765,6 +789,10 @@ const vector<Hatch>& BuildingLayoutLibrary::GetHatches(const string& name, int f
 	return LookupTemplateList(hatchTemplates, name, face);
 }
 
+const vector<Parking>& BuildingLayoutLibrary::GetParkings(const string& name, int face) const {
+	return LookupTemplateList(parkingTemplates, name, face);
+}
+
 const NavigationTemplate& BuildingLayoutLibrary::GetPedestrianNavigation(const string& name, int face) const {
 	static const NavigationTemplate empty;
 	if (face < 0 || face >= 4) return empty;
@@ -892,6 +920,7 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	components.clear();
 	singleRoomBySlot.clear();
 	rowRoomBySlot.clear();
+	parkingSlotsByRect.clear();
 
 	unordered_map<pair<string, int>, Component*, BuildingComponentKeyHash> componentMap;
 	auto getOrCreateComponent = [&](const pair<string, int>& key) -> Component* {
@@ -932,8 +961,60 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 		room->SetNavigationNode(new Node("building", wx, wy, z));
 	}
 
+	BuildParkingSlots();
+
 	BuildPedestrianNavigation(library, resolvedDirection, navOut);
 	BuildVehicleNavigation(library, resolvedDirection, navOut);
+}
+
+void Building::BuildParkingSlots() {
+	for (auto& [key, specs] : mod->parkings) {
+		int level = key.first, slot = key.second;
+		auto levelIt = singleRoomBySlot.find(level);
+		if (levelIt == singleRoomBySlot.end()) continue;
+		auto roomIt = levelIt->second.find(slot);
+		if (roomIt == levelIt->second.end()) continue;
+		Room* room = roomIt->second;
+		int idx = basements + level;
+		if (idx < 0 || idx >= static_cast<int>(floors.size())) continue;
+		const vector<Parking>& parkings = floors[idx].GetParkings();
+		float z = GetFloorBaseZ(level);
+
+		for (const ParkingSlotSpec& spec : specs) {
+			if (spec.parkingIndex < 0 || spec.parkingIndex >= static_cast<int>(parkings.size())) continue;
+			if (spec.spacing <= 0.f) continue;
+			const Parking& parking = parkings[spec.parkingIndex];
+
+			// 沿垂直开口朝向的轴切：开口朝W/E时车位沿Y并排、深度沿X，N/S反之。车位数向下取整，
+			// 所以实际车位宽度>=spacing。
+			int dir = parking.GetDirection();
+			bool splitAlongY = (dir == FACE_WEST || dir == FACE_EAST);
+			float length = splitAlongY ? parking.GetSizeY() : parking.GetSizeX();
+			float depth = splitAlongY ? parking.GetSizeX() : parking.GetSizeY();
+			int count = static_cast<int>(floorf(length / spec.spacing + 1e-4f));
+			if (count < 1) continue;
+			float width = length / count;
+
+			for (int i = 0; i < count; i++) {
+				ParkingSlot slotData;
+				if (splitAlongY) {
+					slotData.centerX = parking.GetPosX();
+					slotData.centerY = parking.GetBottom() + width * (i + 0.5f);
+				} else {
+					slotData.centerX = parking.GetLeft() + width * (i + 0.5f);
+					slotData.centerY = parking.GetPosY();
+				}
+				slotData.halfWidth = width * 0.5f;
+				slotData.halfDepth = depth * 0.5f;
+				slotData.direction = dir;
+				slotData.categories = spec.categories;
+				auto [wx, wy] = LocalToWorld(slotData.centerX, slotData.centerY);
+				slotData.navigationNode = new Node("building", wx, wy, z);
+				ParkingSlot* created = room->AddParkingSlot(slotData);
+				parkingSlotsByRect[level][spec.parkingIndex].push_back(created);
+			}
+		}
+	}
 }
 
 void Building::ReadFloor(int level, int face, const string& templateName, const BuildingLayoutLibrary& library) {
@@ -999,6 +1080,10 @@ void Building::ReadFloor(int level, int face, const string& templateName, const 
 	for (Hatch hatch : library.GetHatches(templateName, face)) {
 		hatch.InstanciateQuad(width, height);
 		floor.AddHatch(hatch);
+	}
+	for (Parking parking : library.GetParkings(templateName, face)) {
+		parking.InstanciateQuad(width, height);
+		floor.AddParking(parking);
 	}
 
 	floors[idx] = std::move(floor);
@@ -1194,6 +1279,15 @@ pair<float, float> Building::LocalToWorld(float localX, float localY) const {
 	return { worldX, worldY };
 }
 
+pair<float, float> Building::WorldToLocal(float worldX, float worldY) const {
+	float rot = GetRotation();
+	float c = cosf(rot), s = sinf(rot);
+	float dx = worldX - GetPosX(), dy = worldY - GetPosY();
+	float relX = dx * c + dy * s;
+	float relY = -dx * s + dy * c;
+	return { relX + bodySizeX * 0.5f - bodyOffsetX, relY + bodySizeY * 0.5f - bodyOffsetY };
+}
+
 pair<float, float> Building::QuadNorthPointToLocal(const PointParams& p) const {
 	int face = (direction >= 0 && direction < 4) ? direction : FACE_NORTH;
 	PointParams rotated = BuildingLayoutLibrary::InversePoint(p, face);
@@ -1361,6 +1455,16 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 				for (Room* room : slotIt->second) result.push_back(room->GetNavigationNode());
 				return result;
 			}
+			if (endpoint.type == "parking") {
+				if (!isVehicle) return {};
+				auto levelIt = parkingSlotsByRect.find(level);
+				if (levelIt == parkingSlotsByRect.end()) return {};
+				auto rectIt = levelIt->second.find(endpoint.idx);
+				if (rectIt == levelIt->second.end()) return {};
+				vector<Node*> result;
+				for (ParkingSlot* parkingSlot : rectIt->second) result.push_back(parkingSlot->navigationNode);
+				return result;
+			}
 			if (endpoint.type == "line") {
 				if (endpoint.idx < 0 || endpoint.idx >= static_cast<int>(lineRuntimes.size())) return {};
 				auto& line = lineRuntimes[endpoint.idx];
@@ -1411,6 +1515,24 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 					vector<Node*> srcNodes = resolveEndpoint(srcSide);
 					if (srcNodes.empty()) continue;
 					srcNode = srcNodes[0];
+				} else if (srcSide.type == "parking") {
+					// 车位和row一样：每个车位把自己的中心投影到line上各生成一个锚点，再连到车位节点。
+					if (!isVehicle) continue;
+					auto levelIt = parkingSlotsByRect.find(level);
+					if (levelIt == parkingSlotsByRect.end()) continue;
+					auto rectIt = levelIt->second.find(srcSide.idx);
+					if (rectIt == levelIt->second.end()) continue;
+					for (ParkingSlot* parkingSlot : rectIt->second) {
+						float t = ProjectOntoLine(parkingSlot->centerX, parkingSlot->centerY, line.beginX, line.beginY, line.endX, line.endY);
+						float px = line.beginX + t * (line.endX - line.beginX);
+						float py = line.beginY + t * (line.endY - line.beginY);
+						Node* projected = makeNode(px, py);
+						newNodes.push_back(projected);
+						line.anchors.emplace_back(t, projected);
+						if (beginIsProjection) addConnection(projected, parkingSlot->navigationNode, connTemplate.forward, connTemplate.backward);
+						else addConnection(parkingSlot->navigationNode, projected, connTemplate.forward, connTemplate.backward);
+					}
+					continue;
 				} else if (srcSide.type == "single" || srcSide.type == "row") {
 					vector<Room*> targetRooms;
 					if (srcSide.type == "single") {
@@ -1510,8 +1632,15 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 
 		for (auto& line : lineRuntimes) {
 			if (line.anchors.size() < 2) continue;
-			sort(line.anchors.begin(), line.anchors.end(),
-				[](const pair<float, Node*>& a, const pair<float, Node*>& b) { return a.first < b.first; });
+			// 投影t被clamp到0/1的锚点(车位/房间超出line范围)会和line端点同t：并列时端点节点排在最外侧(v0最前、v1最后)，
+			// 这样超出的锚点总在端点内侧，既能从上游进、也能顺着line出去；否则会排到端点外面成为死胡同(出不来/进不去)。
+			Node* endpoint0 = line.nodeAt0; Node* endpoint1 = line.nodeAt1;
+			auto tieRank = [&](Node* node) { return node == endpoint0 ? -1 : (node == endpoint1 ? 1 : 0); };
+			stable_sort(line.anchors.begin(), line.anchors.end(),
+				[&](const pair<float, Node*>& a, const pair<float, Node*>& b) {
+					if (a.first != b.first) return a.first < b.first;
+					return tieRank(a.second) < tieRank(b.second);
+				});
 			for (size_t i = 0; i + 1 < line.anchors.size(); i++) {
 				addConnection(line.anchors[i].second, line.anchors[i + 1].second, line.forward, line.backward);
 			}
@@ -1560,6 +1689,15 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 		for (Room* room : rooms) {
 			if (room && room->GetNavigationNode()) {
 				newNodes.push_back(room->GetNavigationNode());
+			}
+		}
+	}
+
+	// 车位导航节点同理由Room的车位持有、不在layout锚点链路里，车行那次调用统一登记(只登记一次)。
+	if (isVehicle) {
+		for (Room* room : rooms) {
+			for (ParkingSlot* parkingSlot : room->GetParkingSlots()) {
+				if (parkingSlot->navigationNode) newNodes.push_back(parkingSlot->navigationNode);
 			}
 		}
 	}

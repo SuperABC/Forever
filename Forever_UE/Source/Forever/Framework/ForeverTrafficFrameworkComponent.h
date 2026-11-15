@@ -243,7 +243,8 @@ private:
 	// Core推算(没有Actor)时的车速倍数：和市民的kUnspawnedWalkSpeedScale一样，实际速度=Controller的maxSpeed×该倍数。
 	static constexpr float kUnspawnedDriveSpeedScale = 10.f;
 
-	Room* PickRandomVehicleRoom(const Room* exclude);
+	// 随机挑一个有空闲车位(允许这辆车的种类、从车当前位置沿车行图走得到)的房间，outSlotIndex是挑中的车位下标；没有返回nullptr。
+	Room* PickRandomVehicleRoom(Vehicle* core, int32& outSlotIndex);
 	AVehicleCommandController* GetOrCreateCarDriver(const FString& vehicleName, AVehicleElement* element);
 	AVehicleCommandController* SpawnDriver(UClass* controllerClass, AVehicleElement* element);
 	void OnCarNavigateFinished(AVehicleCommandController* controller, int32 nodeId, bool bArrived);
@@ -271,6 +272,14 @@ private:
 	// 没有Actor的车在Core里推算行驶时的移交：进入生成距离后生成Actor交给Controller / 走远后把剩余路径交还Core并销毁Actor。
 	void HandOffDriveToActor(FCarEntry& entry);
 	bool HandBackDriveToCore(FCarEntry& entry);
+
+	FCarEntry* FindCarEntry(const Vehicle* vehicle);
+	// 停在车位里的车的世界位姿(UE单位)：房间中心+车位局部偏移，朝向=建筑朝向+车位朝向。车没有停靠房间返回false。
+	bool GetParkedPose(Vehicle* vehicle, FVector& outLocation, float& outYaw) const;
+	// 玩家下车后：车头朝里停进了玩家所在房间的某个空车位就占上它(见ExitVehicle)；原本预定了这个车位的在途车改去同房间别的空车位，没有就消失。
+	void ParkPlayerVehicle(Vehicle* vehicle, const AActor* vehicleActor);
+	// other预定的车位被占了：在room里另找一个空车位重新导航；找不到就让它从地图上消失(视为已到达room)。
+	void RerouteOrVanishVehicle(Vehicle* other, Room* room);
 
 	// 按登记项生成Actor并记进activeVehicles，失败返回nullptr。
 	// bCheckSpace：生成点被别的车占着就不生成（返回nullptr，下次再试），流式生成用；脚本/上车等强制生成不检查。

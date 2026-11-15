@@ -21,6 +21,9 @@ struct FVehicleCommand
 		NavigateToNode,
 		// 按nodes循环行驶，永不结束，直到ClearCommands/StopNow。到站（Map辅助节点）时由子类决定停靠/发事件。
 		LoopNodes,
+		// 沿给定折线(世界坐标，UE单位)开到node，不重新规划；第一个点是起点。
+		// Core推算的车在倒车出库途中生成Actor时用：重新规划会丢掉倒车段。
+		FollowPath,
 	};
 
 	EType type = EType::NavigateToNode;
@@ -31,12 +34,24 @@ struct FVehicleCommand
 	float startDwellSeconds = 0.f;     // bStartAtStop时先在那个站再停多久（真实秒）
 	bool bFireEnterAtStart = false;    // bStartAtStop时是否对那个站补发进站（NavigateToNode刚到站后接循环用）
 	bool bStopAlreadyEntered = false;  // bStartAtStop时进站事件已经发过（Core时刻表接管给物理时），只负责之后补发出站
+	TArray<FVector> waypoints;         // FollowPath：折线
+	bool bReverseFirst = false;        // FollowPath：第一段(waypoints[0]->[1])是倒车
 
 	static FVehicleCommand MakeNavigate(int32 inNode)
 	{
 		FVehicleCommand command;
 		command.type = EType::NavigateToNode;
 		command.node = inNode;
+		return command;
+	}
+
+	static FVehicleCommand MakeFollowPath(int32 inNode, const TArray<FVector>& inWaypoints, bool bInReverseFirst)
+	{
+		FVehicleCommand command;
+		command.type = EType::FollowPath;
+		command.node = inNode;
+		command.waypoints = inWaypoints;
+		command.bReverseFirst = bInReverseFirst;
 		return command;
 	}
 
@@ -77,7 +92,9 @@ public:
 
 	// 正在行驶时的剩余路径（世界坐标，第一个点是车当前位置，其后是路径上还没走过的点）。
 	// 空闲/停靠中/没有有效路径返回false。"你在去哪"折线（UForeverTrafficFrameworkComponent::StartTestNavigation）用它。
-	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints) const;
+	// 倒车出库阶段：waypoints = 车当前位置、倒车终点、之后的路径点，outReverseFirst=true(第一段是倒车)。
+	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints, bool* outReverseFirst = nullptr) const;
+	bool IsReversing() const { return bReversing; }
 
 	// NavigateToNode指令结束时回调(bArrived=false表示规划不到)，在指令已出队、控制器回到Idle之后调用，
 	// 所以回调里可以直接PushCommand。LoopNodes不回调。
@@ -237,6 +254,10 @@ private:
 	void FinishCommand();
 	// fromNode<0 = 从当前车位规划；返回是否规划成功并开始行驶。
 	bool PlanAndFollow(int32 fromNode, int32 toNode);
+	// 沿raw折线开：bReverseFirst时先直线倒车走完第一段(车头不动)，再按raw[1..]正常行驶；spans是路径里的路口连线。
+	bool FollowPoints(const TArray<FVector>& raw, bool bReverseFirst, const TArray<FEdgeSpan>& spans);
+	void TickReversing(AVehicleElement* vehicle, float deltaTime);
+	void FinishReversing(AVehicleElement* vehicle);
 	void BuildPath(const TArray<FVector>& rawInput);
 	void BeginDwell(int32 nodeId, float seconds, bool bFireEnter, bool bAlreadyEntered = false);
 	void OnArrived();
@@ -271,6 +292,15 @@ private:
 	FLeader obstacle;           // ScanObstacles的缓存结果(rearS在路径弧长上)
 	bool bObstacle = false;
 	double nextObstacleScan = 0.0;
+
+	// 倒车出库阶段(state==Driving且path无效)：直线倒到reverseTarget，之后接afterReverseRaw正常行驶。
+	bool bReversing = false;
+	FVector reverseStart = FVector::ZeroVector;
+	FVector reverseTarget = FVector::ZeroVector;
+	float reverseYaw = 0.f;       // 倒车时车头朝向(= 从目标指向起点的方向)
+	float reverseTravelled = 0.f; // 沿倒车线已退出的距离(水平)
+	TArray<FVector> afterReverseRaw;
+	TArray<FEdgeSpan> afterReverseSpans;
 
 	bool bKinematic = false;
 	float kinSpeed = 0.f;

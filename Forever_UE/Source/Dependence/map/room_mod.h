@@ -37,10 +37,6 @@ public:
 	bool isManufacture = false;
 	std::vector<std::string> manufactureTypes;             // 产线描述(类型列表)
 
-	// 停车位,Traffic::InitParkedVehicles遍历isParking的Room生成预置车辆,见room_mod.md。
-	bool isParking = false;
-	std::vector<ParkingSpot> parkingSpots;
-
 	// 房间的Script,milestoneNames非空才创建,见Core/map/map.md"实体脚本"一节。在SetProperty()里设置。
 	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;

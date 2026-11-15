@@ -225,3 +225,11 @@ debugf警告）。车行导航**不再支持`outside`**（出现会被忽略并�
 
 ## 楼体空隙填充
 `Building::GetGapMaterialPath()` 是 `mod->gapMaterial` 的快照（`map_save` 随 Building 写读，没升版本号）。渲染层据此在 1 楼把 quad 与楼体之间的回形空隙铺成地面，见 BuildingElement.md。
+
+## 停车位(`parkings`)
+
+- layout新增顶层键`"parkings": [{"rect":[8 floats], "direction":N}]`(`direction`=车位开口朝向，朝通道)，解析/4向烘焙同`singles`/`rows`
+  (`BuildingLayoutLibrary::GetParkings`、`Floor::GetParkings/AddParking`、`Parking`类)。
+- 车辆导航端点新增`{"type":"parking","idx":i}`，位置=矩形中心，可与`node`/`line`连接，顺/逆(forward/backward)照layout写，不加默认。
+  Core连线方式仿`row`：连`line`时把**每个车位**的中心`ProjectOntoLine`到路径上插锚点，再连到该车位的导航节点；连`node`时每个车位都连到该node。
+- `BuildParkingSlots()`在`Layout`里先于导航图执行，按`BuildingMod::parkings`映射(见`building_mod.md`)切出`ParkingSlot`挂到房间(见`room.md`)。

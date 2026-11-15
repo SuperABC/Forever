@@ -40,15 +40,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Fade")
 	float fadeDuration = 1.5f;
 
-	// 兜底：世界生成流程走完之后(等"构建场景"那一格)超过这么多秒(真实时间)还没排空，也开始渐隐，
-	// 避免没有玩家可操控导致LOD冻结从未被请求时永远黑屏。生成阶段本身不计时——它自己有异常退出。
-	UPROPERTY(EditDefaultsOnly, Category = "Fade")
-	float maxWaitSeconds = 15.f;
-
-	// 兜底：进入World之后一直找不到AForeverFrameworkActor(关卡不对/没生成)超过这么多秒也开始渐隐。
-	UPROPERTY(EditDefaultsOnly, Category = "Fade")
-	float maxWorldWaitSeconds = 120.f;
-
 	// 进度条显示值追赶目标值的速度(百分比/秒，1=满条)：每完成一格让条滑过去，而不是瞬跳。
 	UPROPERTY(EditDefaultsOnly, Category = "Progress")
 	float barInterpSpeed = 3.f;
@@ -72,8 +63,6 @@ private:
 
 	EState state = EState::Waiting;
 	float elapsed = 0.f;
-	// 已经开始等"构建场景"(生成流程走完)之后的秒数，兜底用。
-	float settleElapsed = 0.f;
 	float displayedPercent = 0.f;
 	bool bReleaseRequested = false;
 	TWeakObjectPtr<UWorld> trackedWorld;

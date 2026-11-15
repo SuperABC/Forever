@@ -111,3 +111,17 @@
 ## 跳时间后的公交
 `ResyncBusesAfterTimeSkip()`：线路公交的物理车(实车位置)已跟时刻表脱节，全部`BusToKinematic(state, false)`(不对齐实车进度)，
 靠近玩家的之后由`UpdateBusPhysicsHandoff`按时刻表位置重新切物理。玩家在开/搭乘的不动。
+
+## 车位占用、进出库、玩家停车
+
+- **寻路预定**：`StartVehicleNavigation`先`ClearReservation`，再在目的房间`FindFreeSlot(车的种类)`(`random`目的地由`PickRandomVehicleRoom`
+  挑有空闲且沿车行图走得到的车位的房间)，`ReserveSlot`成功才继续，**没有空闲车位=拒绝**(记一次失败结果，随机目的地会换一个重试)。目标节点=车位的导航节点。
+  到达(`ProcessNavResults`)时`ArriveAtReservedSlot`转成停靠；失败时`ClearReservation`。
+- **出库**：车停在车位里时，Controller的`PlanAndFollow`/Core推算分支都走`Map::PlanVehicleRouteFromSlot`(倒车到与车位相连的connection另一端再远1个`VehicleMod::sizeX`)，规划成功才`ReleaseSlot`。
+  Core推算(无Actor)的路径点`DrivePoint.reverse`标倒车段；`HandOffDriveToActor`遇到还在倒车就用`FVehicleCommand::MakeFollowPath`把剩余路径原样交给Controller
+  (重新规划会丢倒车段)，`HandBackDriveToCore`把`GetRemainingWaypoints`返回的`bReverseFirst`写回`path[0].reverse`。
+- **消失的车**(`Vehicle::ParkState::Vanished`)：`TickComponent`不为它生成Actor；下次`StartVehicleNavigation`直接瞬移：预定转停靠、`SetTransform`/登记项位姿=车位位姿、记一次到达。
+- **玩家上车**(`ApplyEnterVehicle`)：`ReleaseSlot`+`ClearReservation`，清掉它的脚本导航指令。
+- **玩家下车**(`ExitVehicle`→`ParkPlayerVehicle`)：取`Player::GetCurrentRoom()`，车位姿换建筑局部后`Room::FindSlotContaining`，且车位允许这辆车的种类，则`BindSlot`占上。
+  该车位原本被在途车预定的，`RerouteOrVanishVehicle`：同房间另找空车位重新导航(有Actor→Controller重规划；Core推算→重新`BeginDrive`)，找不到就从地图消失(`SetVanished`，销毁Actor，视为已到达，补发到达事件；
+  未到`minVehicleLifetime`的先隐藏、到点再销毁，避免Chaos物理代理未建好就销毁崩溃)。

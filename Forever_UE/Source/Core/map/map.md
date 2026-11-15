@@ -166,3 +166,11 @@
 
 - `Building::GetOutsideNodes()`：行人导航模板里"outside"端点（1楼外部连接点），`Map::MergeBuildingNavigation`在init时从`BuildingNavResult::outsideNodes`记下，节点仍由`navAnchorNodes`持有。进存档：`map_save`的Building段在`scriptMilestones`之后写`U32 count + 每项锚点id`，读档用`AnchorAt`还原（没加版本号，旧存档读不了）。
 - `PlanVehicleRouteToPoint(startRoom,x,y,destX,destY,...)`：终点是室外任意点；取离它最近的车道段（两个方向×`kEntryRoadCandidates`条路），先`PlanVehicleRouteToNode`到该车道边的上游锚点，再补一个垂足点（最后一项`edges`是上游锚点→垂足），取总长最短的。导航线用它给"车到不了的房间"画到建筑外部。
+
+## 车位进出库路线：PlanVehicleRouteFromSlot
+
+`PlanVehicleRouteFromSlot(room, slot, destNodeId, vehicleLength)`：车停在`slot`里出库——从车位导航节点`C`规划到`destNodeId`
+(语义同`PlanVehicleRouteToNode`)，并在最前面加倒车段`C→P`(`P=C+开口方向*(沿开口方向到第一条边终点N的距离+vehicleLength)`，即倒车越过与车位相连的connection另一端N再多一个车长，倒车结束时车身中心离N约1个车长；`vehicleLength`调用方给`VehicleMod::sizeX`，地图单位)，
+`VehicleRoutePlan::reverseFirstSegment=true`；图路线里落在倒车跨度内、与倒车方向共线的前导点丢弃，倒车终点之后接路网上的点。
+入库不需要特殊路线：目的地就是车位节点，layout连线+Core投影已经把锚点连到车位中心，最后一段=直线进车位，车头朝里。
+车辆边是单向的，layout里车位和路径的连线要配成双向(顺+逆)才能既进又出。

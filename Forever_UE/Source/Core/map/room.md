@@ -20,9 +20,9 @@
   `WorkspaceCapacity()`（工位数）/`IsStorage()`/`StorageType()`（对应StorageMod id，Industry据此生成Storage）/`Rent()`（每日房租，分）/
   `IsManufacture()`/`ManufactureTypes()`（产线描述），读构造时`mod->SetProperty()`之后从`RoomMod`同名字段
   拷贝的快照`properties`（见`Source/Dependence/map/room_mod.h`）——读档时直接按存档恢复这份快照，不依赖重新
-  创建的mod再算一遍（见`map_save.md`）。`Source/Basic/map/room_*.cpp`里的各`RoomMod`子类按用途设置这些标志（住宅、工位、仓储、制造、停车位等）。
+  创建的mod再算一遍（见`map_save.md`）。`Source/Basic/map/room_*.cpp`里的各`RoomMod`子类按用途设置这些标志（住宅、工位、仓储、制造等）。
   消费方：`Map::ComputeAccommodationTarget()`/`Map::Checkin()`（居住）、`Organization`（工位）、`Industry`（仓储/制造）、
-  `Traffic`（停车位）。
+  `Traffic`（停车位见下"停车位"，不走这4类能力）。
 - **`RoomMod`极简，只有`GetType()`/`GetName()`**：`Room`不是像`Zone`/`Building`那样要参与
   "在地图上竞争地块"的顶层concept，永远是`Building`自己在`Layout()`里通过`AssignRoom`/
   `ArrangeRow`显式创建的，不需要`Assign`/`RandomAcreage`/`GetPower`这套static注册机制。
@@ -99,8 +99,22 @@
 - `LocalToBuildingLocal(u,v,ox,oy)`：u/v米数 -> 相对房间中心的建筑局部偏移。NORTH `(u-W/2, v-H/2)`、SOUTH `(W/2-u, H/2-v)`、WEST `(v-W/2, H/2-u)`、EAST `(W/2-v, u-H/2)`(W=SizeX，H=SizeY)；朝向无效按NORTH。
 - `FacingYawDegrees()`：局部yaw 0度在建筑局部系里的数学角(逆时针，0度=+X)：W180/E0/N90/S270。
 - `LocalToWorld(u,v)` / `LocalYawToWorld(yawDegrees)`：直接换算成世界XY(地图单位)和世界yaw(弧度，叠加建筑旋转)，给家具/asset放置用。
-- 目前只有停车位(`Traffic::InitParkedVehicles`)用它；房间触发盒/墙/门/导航节点/市民落点都是中心+轴对齐，和朝向无关。
+- 目前没有消费方(车位已经是建筑局部坐标，不再用房间局部坐标)；房间触发盒/墙/门/导航节点/市民落点都是中心+轴对齐，和朝向无关。
 
 ## 墙样式（wallStyles）
 `Room::GetWallStyle(dir)/SetWallStyle`/`GetWallStyles()`：按墙朝向存四个侧面的标签与材质路径，来源见 building.md"墙的侧面标签"。
 存档随 Room 写读（没升版本号）。
+
+## 停车位 `ParkingSlot`
+
+车位属于`Room`(`GetParkingSlots()`，Room持有所有权)，没有车位的房间返回空。几何是**建筑局部坐标**(和`Room::GetPosX/Y`同一套)：
+`centerX/centerY`(矩形切分后每个车位的中心)、`halfWidth`(沿垂直开口的轴)、`halfDepth`(沿开口轴)、`direction`(开口朝向，朝通道；
+车头朝向=开口反向，`VehicleYawDegrees()`)、`categories`(可停种类car/truck/plane)、`navigationNode`(车位中心的车行导航节点，
+`Map`持有生命周期)、`reservedBy`(在途车)、`parkedVehicle`(已停车)。
+
+- **来源**：layout的`parkings`矩形 + `BuildingMod::AssignParking(level, slot, parkingIndex, spacing, categories)`。`Building::BuildParkingSlots()`
+  在`Layout`里(建导航图之前)把矩形沿垂直开口的轴按`spacing`切成`floor(边长/spacing)`份(实际宽度>=spacing，0份=没有车位)，每份生成一个车位挂到
+  (level, singleRoomSlot)对应的房间。
+- **查询**：`FindFreeSlot(category)`(第一个空闲且允许该种类，没有=-1，寻路据此拒绝)、`HasSlotFor(category)`、
+  `FindSlotContaining(x,y,yawDeg)`(玩家下车判定：车头朝里=朝向与开口朝向点积<-0.8、车中心在矩形内、车位没有已停的车)。
+- **存档**：房间存车位几何+categories+导航节点id；占用由车辆反推(`traffic_save.md`)。

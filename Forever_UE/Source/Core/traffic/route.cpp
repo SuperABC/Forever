@@ -242,9 +242,17 @@ void Route::PlacePiers(Map* map, const vector<const Route*>& others) {
 	for (const Route* other : others) if (other != this) addRouteObstacles(other, otherObstacles, nullptr);
 
 	for (const PierRequest& request : mod->piers) {
+		// 链是mod DLL分配的：Connection的弧长缓存是mutable、首次CalcDistance/GetPoint时在本模块(Core)里惰性resize，
+		// 直接在mod的链上算会把Core分配的缓冲挂到mod堆的对象上，销毁时跨堆释放(STATUS_HEAP_CORRUPTION)。
+		// 所以先在本模块深拷贝一份再算，见Dependence/map/general_geometry.md。
+		vector<vector<Connection>> chains;
+		for (const vector<Connection>& sourceChain : request.chains) {
+			chains.emplace_back();
+			for (const Connection& connection : sourceChain) chains.back().push_back(connection);
+		}
 		// 本请求所有链的折线(半宽0)，用来把本route里自己这条轨道(中轴线两侧的两根铁轨)从障碍里剔掉。
 		vector<PierObstacle> chainObstacles;
-		for (const vector<Connection>& chain : request.chains)
+		for (const vector<Connection>& chain : chains)
 			for (const Connection& connection : chain) chainObstacles.push_back(SampleObstacle(connection, 0.f));
 		vector<PierObstacle> ownRouteObstacles;
 		addRouteObstacles(this, ownRouteObstacles, &chainObstacles);
@@ -258,7 +266,7 @@ void Route::PlacePiers(Map* map, const vector<const Route*>& others) {
 
 		float minSpacing = max(request.minSpacing, PIER_SPACING_STEP);
 		float defaultSpacing = max(request.defaultSpacing, minSpacing);
-		for (const vector<Connection>& chain : request.chains) {
+		for (const vector<Connection>& chain : chains) {
 			if (chain.empty()) continue;
 			vector<float> cumulative(chain.size() + 1, 0.f);
 			for (size_t i = 0; i < chain.size(); i++) cumulative[i + 1] = cumulative[i] + chain[i].CalcDistance();

@@ -23,8 +23,7 @@
 - 读档：`RestoreControlledPawn`/`RestoreWorldAssets`走完，人物已恢复；
 - 两种情况占有市民时都调了`RequestFreezeUntilLodSettled()`，`IsLodSettled()`为真即附近建筑LOD已建完。
 - 脚本里的对话/定时器是异步的，不算"响应完"，不会拖住黑屏。
-- 兜底：生成流程走完后真实时间等待超过`maxWaitSeconds`（默认15s）也开始渐隐，避免没有可操控市民、LOD冻结
-  从未请求时永远黑屏。控件感知World更换会重新计时，关卡加载时间不计入。
+- 没有超时兜底：世界没就绪就渐隐，进去也是卡着的，所以只在进度满格时才渐隐。
 
 渐隐用`NativeTick`的`InDeltaTime`（真实时间）——等待期间世界被`SetGlobalTimeDilation(0)`冻结。
 
@@ -35,7 +34,7 @@ C++只写逻辑，外观在`WBP_Fade`（父类`UFadeWidget`）里设计：
 1. 放一个全屏、纯黑的Border/Image（锚点铺满Canvas）。无`BindWidget`依赖，淡出作用在控件根的`RenderOpacity`上。
 2. 在**`BP_ForeverMenuController`和`BP_ForeverPlayerController`两个**类默认值的`fadeWidgetClass`里都指定`WBP_Fade`
    （没指定只打警告；两个指定不同的类时以后登记的为准，旧控件作废）。
-3. 类默认值可调：`fadeDuration`（渐隐秒数，默认1.5）、`maxWaitSeconds`（兜底，默认15）。
+3. 类默认值可调：`fadeDuration`（渐隐秒数，默认1.5）。
 
 控件`HitTestInvisible`，不拦截输入；ZOrder 100（高于PausePanel的10，低于背包拖拽ghost的1000）。
 
@@ -47,8 +46,8 @@ C++只写逻辑，外观在`WBP_Fade`（父类`UFadeWidget`）里设计：
 - 进度条百分比 = done/total，显示值以`barInterpSpeed`(默认3/秒)追赶，每完成一格滑过去；
 - 状态文字 = `"{当前阶段名}  ({序号}/{总格数})"`，如`构建地形  (2/18)`；最后一格是进图后的"构建场景"(等建筑LOD排空)；
   找不到FrameworkActor(OpenLevel还在阻塞加载)时显示`正在载入…`、进度0；
-- 进度满格(显示值也滑到头)才开始渐隐；兜底：生成走完后超过`maxWaitSeconds`(15s，只计"构建场景"这段)还没排空，或进入
-  World后`maxWorldWaitSeconds`(120s)一直找不到FrameworkActor，也开始渐隐。生成阶段本身不计时——它自己有异常退出。
+- 进度满格(显示值也滑到头)才开始渐隐；没有超时兜底，没就绪就一直黑屏
+  (生成阶段异常会自己退出游戏)。
 
 ### 在WBP_Fade里要加的控件(都是`BindWidgetOptional`，没放不影响运行)
 

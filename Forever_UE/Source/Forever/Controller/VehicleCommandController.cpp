@@ -22,6 +22,7 @@ namespace {
 	constexpr float kStuckSeconds = 5.f;
 	constexpr float kStuckRemainDistance = 800.f;
 	constexpr float kDropOnResumeUU = 20.f; // 运动学切回物理时往上抬一点，让它自己落到地面
+	constexpr float kReverseSpeed = 250.f;  // 倒车出库的目标速度
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -165,6 +166,7 @@ void AVehicleCommandController::ClearCommands()
 	commands.Clear();
 	ReleaseJunctions();
 	path = FPath();
+	bReversing = false;
 	state = EState::Idle;
 	lastNodeId = -1;
 	stopNodeId = -1;
@@ -177,6 +179,7 @@ void AVehicleCommandController::FinishCommand()
 	commands.Advance();
 	ReleaseJunctions();
 	path = FPath();
+	bReversing = false;
 	state = EState::Idle;
 	StartNextCommand();
 }
@@ -190,6 +193,18 @@ void AVehicleCommandController::StartNextCommand()
 	if (command->type == FVehicleCommand::EType::NavigateToNode) {
 		targetNode = command->node;
 		if (!PlanAndFollow(-1, command->node)) {
+			const int32 failedNode = command->node;
+			FinishCommand();
+			if (navigateFinished) navigateFinished(this, failedNode, false);
+		}
+		return;
+	}
+
+	if (command->type == FVehicleCommand::EType::FollowPath) {
+		targetNode = command->node;
+		const TArray<FVector> waypoints = command->waypoints;
+		const bool bReverseFirst = command->bReverseFirst;
+		if (!FollowPoints(waypoints, bReverseFirst, TArray<FEdgeSpan>())) {
 			const int32 failedNode = command->node;
 			FinishCommand();
 			if (navigateFinished) navigateFinished(this, failedNode, false);
@@ -233,10 +248,22 @@ bool AVehicleCommandController::PlanAndFollow(int32 fromNode, int32 toNode)
 		const FVector loc = vehicle->GetActorLocation();
 		const FVector forward = vehicle->GetActorForwardVector();
 		Vehicle* core = vehicle->GetVehicle();
-		plan = map->PlanVehicleRouteToNode(core ? core->GetCurrentRoom() : nullptr,
-			loc.X / kVehicleControllerWorldScale, loc.Y / kVehicleControllerWorldScale, toNode, true, forward.X, forward.Y);
-		// 已经从房间/停车位出发了，之后不再算"停在房间里"。
-		if (core && plan.status == Map::VehicleRoutePlan::OK) core->SetCurrentRoom(nullptr);
+		ParkingSlot* parkedSlot = core ? core->GetParkingSlot() : nullptr;
+		if (parkedSlot && core->GetRoom()) {
+			// 停在车位里：从车位节点出发，先倒出到与车位相连的connection另一端再远一个车长，再向前沿导航线拐弯。
+			float sizeX = 450.f, sizeY = 0.f, sizeZ = 0.f;
+			core->GetSize(sizeX, sizeY, sizeZ);
+			plan = map->PlanVehicleRouteFromSlot(core->GetRoom(), parkedSlot, toNode, sizeX / kVehicleControllerWorldScale);
+		}
+		else {
+			plan = map->PlanVehicleRouteToNode(core ? core->GetCurrentRoom() : nullptr,
+				loc.X / kVehicleControllerWorldScale, loc.Y / kVehicleControllerWorldScale, toNode, true, forward.X, forward.Y);
+		}
+		// 已经从房间/停车位出发了，之后不再算"停在房间里"，车位也让出来。
+		if (core && plan.status == Map::VehicleRoutePlan::OK) {
+			core->ReleaseSlot();
+			core->SetCurrentRoom(nullptr);
+		}
 	}
 	if (plan.status != Map::VehicleRoutePlan::OK || plan.points.empty()) {
 		Vehicle* failCore = vehicle->GetVehicle();
@@ -251,19 +278,45 @@ bool AVehicleCommandController::PlanAndFollow(int32 fromNode, int32 toNode)
 	for (const Map::NavPoint& p : plan.points) {
 		raw.Add(FVector(p.x * kVehicleControllerWorldScale, p.y * kVehicleControllerWorldScale, p.z * kVehicleControllerWorldScale));
 	}
-	BuildPath(raw);
-	if (path.IsValid() && ownerFramework.IsValid()) {
-		// 路径里属于路口的连线记成标记，之后在这些弧长区间前向路口请求通行。
+	// 路径里属于路口的连线记成区间，之后在这些弧长区间前向路口请求通行。
+	TArray<FEdgeSpan> spans;
+	if (ownerFramework.IsValid()) {
 		if (JunctionTraffic* junctionTraffic = ownerFramework->GetJunctionTraffic()) {
-			TArray<FEdgeSpan> spans;
 			for (const Map::NavEdge& edge : plan.edges) {
 				if (!edge.edge || !junctionTraffic->IsManaged(edge.edge)) continue;
 				if (edge.firstPoint < 0 || edge.lastPoint >= static_cast<int32>(raw.Num()) || edge.firstPoint >= edge.lastPoint) continue;
 				spans.Add({ edge.edge, raw[edge.firstPoint], raw[edge.lastPoint] });
 			}
-			BuildJunctionMarkers(spans);
 		}
 	}
+	return FollowPoints(raw, plan.reverseFirstSegment, spans);
+}
+
+bool AVehicleCommandController::FollowPoints(const TArray<FVector>& raw, bool bReverseFirst, const TArray<FEdgeSpan>& spans)
+{
+	AVehicleElement* vehicle = drivenVehicle.Get();
+	if (!vehicle || raw.Num() == 0) return false;
+
+	ReleaseJunctions();
+	bReversing = false;
+	if (bReverseFirst && raw.Num() >= 2 && FVector::Dist2D(raw[0], raw[1]) > 50.f) {
+		reverseStart = raw[0];
+		reverseTarget = raw[1];
+		const FVector back = reverseStart - reverseTarget; // 倒车时车头朝向：从倒车终点指向起点
+		reverseYaw = FVector(back.X, back.Y, 0.f).Rotation().Yaw;
+		reverseTravelled = 0.f;
+		afterReverseRaw.Reset();
+		for (int32 i = 1; i < raw.Num(); i++) afterReverseRaw.Add(raw[i]);
+		afterReverseSpans = spans;
+		path = FPath();
+		bReversing = true;
+		stuckSeconds = 0.f;
+		state = EState::Driving;
+		return true;
+	}
+
+	BuildPath(raw);
+	if (path.IsValid()) BuildJunctionMarkers(spans);
 	if (!path.IsValid()) {
 		// 起点就是终点（已经在那里）：当作立刻到达。
 		state = EState::Driving;
@@ -418,9 +471,18 @@ bool AVehicleCommandController::QueryLoopProgress(int32& outLegIndex, float& out
 	return false;
 }
 
-bool AVehicleCommandController::GetRemainingWaypoints(TArray<FVector>& outWaypoints) const
+bool AVehicleCommandController::GetRemainingWaypoints(TArray<FVector>& outWaypoints, bool* outReverseFirst) const
 {
 	AVehicleElement* vehicle = drivenVehicle.Get();
+	if (outReverseFirst) *outReverseFirst = false;
+	if (vehicle && state == EState::Driving && bReversing) {
+		outWaypoints.Reset();
+		outWaypoints.Add(vehicle->GetActorLocation());
+		outWaypoints.Add(reverseTarget);
+		for (int32 i = 1; i < afterReverseRaw.Num(); i++) outWaypoints.Add(afterReverseRaw[i]);
+		if (outReverseFirst) *outReverseFirst = true;
+		return true;
+	}
 	if (!vehicle || state != EState::Driving || !path.IsValid()) return false;
 	outWaypoints.Reset();
 	outWaypoints.Add(vehicle->GetActorLocation());
@@ -456,7 +518,7 @@ void AVehicleCommandController::OnArrived()
 		return;
 	}
 
-	if (command->type == FVehicleCommand::EType::NavigateToNode) {
+	if (command->type == FVehicleCommand::EType::NavigateToNode || command->type == FVehicleCommand::EType::FollowPath) {
 		lastNodeId = targetNode;
 		const int32 arrivedNode = targetNode;
 		FinishCommand();
@@ -778,6 +840,11 @@ void AVehicleCommandController::SwitchToKinematic(AVehicleElement* vehicle)
 		kinZOffset = FMath::Max(0.f, -(local.Origin.Z - local.BoxExtent.Z));
 	}
 	if (path.IsValid()) pathS = path.Project(vehicle->GetActorLocation(), false);
+	if (bReversing) {
+		const FVector axis = FVector(reverseTarget.X - reverseStart.X, reverseTarget.Y - reverseStart.Y, 0.f).GetSafeNormal();
+		reverseTravelled = FMath::Max(reverseTravelled, FVector::DotProduct(vehicle->GetActorLocation() - reverseStart, axis));
+		kinSpeed = FMath::Min(0.f, vehicle->GetForwardSpeed()); // 倒车时kinSpeed为负
+	}
 	vehicle->SetKinematicMode(true);
 	bKinematic = true;
 }
@@ -802,12 +869,110 @@ void AVehicleCommandController::SwitchToPhysics(AVehicleElement* vehicle)
 
 void AVehicleCommandController::TickDriving(AVehicleElement* vehicle, float deltaTime)
 {
+	if (bReversing) {
+		TickReversing(vehicle, deltaTime);
+		return;
+	}
 	if (!path.IsValid()) {
 		FinishCommand();
 		return;
 	}
 	if (bKinematic) TickDrivingKinematic(vehicle, deltaTime);
 	else TickDrivingPhysics(vehicle, deltaTime);
+}
+
+void AVehicleCommandController::TickReversing(AVehicleElement* vehicle, float deltaTime)
+{
+	const FVector axis3 = reverseTarget - reverseStart;
+	const FVector axis(axis3.X, axis3.Y, 0.f);
+	const float total = axis.Size();
+	const FVector dir = axis.GetSafeNormal(); // 倒车方向(车尾朝向)
+	const float maxDecel = maxBrakeDecel;
+
+	if (bKinematic) {
+		float reverseSpeed = -kinSpeed;
+		const float remain = total - reverseTravelled;
+		const float targetSpeed = FMath::Clamp(FMath::Sqrt(2.f * maxDecel * FMath::Max(remain, 0.f)), 60.f, kReverseSpeed);
+		if (reverseSpeed < targetSpeed) reverseSpeed = FMath::Min(targetSpeed, reverseSpeed + maxAccel * deltaTime);
+		else reverseSpeed = FMath::Max(targetSpeed, reverseSpeed - maxDecel * deltaTime);
+		reverseTravelled = FMath::Min(total, reverseTravelled + reverseSpeed * deltaTime);
+		kinSpeed = -reverseSpeed;
+
+		FVector pos = reverseStart + dir * reverseTravelled;
+		pos.Z = FMath::Lerp(reverseStart.Z, reverseTarget.Z, total > 1.f ? reverseTravelled / total : 1.f) + kinZOffset;
+		kinYaw = FMath::FixedTurn(kinYaw, reverseYaw, 120.f * deltaTime);
+		vehicle->SetActorLocationAndRotation(pos, FRotator(0.f, kinYaw, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
+		if (total - reverseTravelled < 5.f) {
+			kinSpeed = 0.f;
+			FinishReversing(vehicle);
+		}
+		return;
+	}
+
+	const FVector pos = vehicle->GetActorLocation();
+	reverseTravelled = FMath::Max(reverseTravelled, FVector::DotProduct(pos - reverseStart, dir));
+	const float remain = total - reverseTravelled;
+	const float speed = vehicle->GetForwardSpeed(); // 倒车为负
+	if (remain < 40.f) {
+		FinishReversing(vehicle);
+		return;
+	}
+	if (FMath::Abs(speed) < 20.f && reverseTravelled > 20.f) { // 被挡住退不动：放弃剩下的倒车，直接往前走
+		stuckSeconds += deltaTime;
+		if (stuckSeconds >= kStuckSeconds) {
+			FinishReversing(vehicle);
+			return;
+		}
+	}
+	else {
+		stuckSeconds = 0.f;
+	}
+
+	// 倒车保持直线：车头朝reverseYaw，横向偏差用小角度修正。倒车时打方向的效果和前进相反，所以取负。
+	float maxSteer = vehicle->GetMaxSteerAngleDegrees();
+	if (maxSteer < 1.f) maxSteer = kDefaultMaxSteerDegrees;
+	const FVector noseDir = -dir;
+	const FVector right(-noseDir.Y, noseDir.X, 0.f);
+	const float crossTrack = FVector::DotProduct(pos - reverseStart, right);
+	const float crossAngle = FMath::Clamp(FMath::RadiansToDegrees(FMath::Atan2(crossTrackGain * crossTrack, 300.f)), -20.f, 20.f);
+	const float headingError = FMath::FindDeltaAngleDegrees(vehicle->GetActorRotation().Yaw, reverseYaw + crossAngle);
+	const float steer = FMath::Clamp(-headingError / maxSteer, -1.f, 1.f);
+
+	const float reverseSpeed = -speed;
+	const float targetSpeed = FMath::Clamp(FMath::Sqrt(2.f * maxDecel * FMath::Max(remain, 0.f)), 60.f, kReverseSpeed);
+	const float error = targetSpeed - reverseSpeed;
+	vehicle->SetHandbrake(false);
+	if (error > 0.f) {
+		// Chaos的"倒车当刹车"：刹车输入在低速/倒车时就是倒挡油门。
+		vehicle->SetDriveInput(0.f, FMath::Clamp(FMath::Max(throttleKp * error, 0.25f), 0.f, 1.f), steer);
+	}
+	else {
+		// 倒车中踩油门就是减速。
+		vehicle->SetDriveInput(FMath::Clamp(-brakeKp * error, 0.f, 1.f), 0.f, steer);
+	}
+}
+
+void AVehicleCommandController::FinishReversing(AVehicleElement* vehicle)
+{
+	bReversing = false;
+	stuckSeconds = 0.f;
+	const TArray<FVector> raw = afterReverseRaw;
+	const TArray<FEdgeSpan> spans = afterReverseSpans;
+	afterReverseRaw.Reset();
+	afterReverseSpans.Reset();
+
+	BuildPath(raw);
+	if (path.IsValid()) BuildJunctionMarkers(spans);
+	if (!path.IsValid()) {
+		if (!bKinematic) {
+			vehicle->SetDriveInput(0.f, 0.f, 0.f);
+			vehicle->SetHandbrake(true);
+		}
+		OnArrived();
+		return;
+	}
+	pathS = path.Project(vehicle->GetActorLocation(), true);
+	state = EState::Driving;
 }
 
 void AVehicleCommandController::TickDrivingPhysics(AVehicleElement* vehicle, float deltaTime)

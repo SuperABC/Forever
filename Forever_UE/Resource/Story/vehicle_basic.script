@@ -2,6 +2,8 @@
 	// 车辆自己的milestone脚本(VehicleBasic::scriptModName="script_empty"+milestoneNames=
 	// {"vehicle_basic"}加载)：开局给自己加一条"上车"选项(靠近车辆时弹出，和市民对话选项
 	// 走同一个MeetOption UI)，选中后触发enter_vehicle真正切换操控。
+	// 另有一条"测试寻路"(寻路压力测试)：选中后车随机挑一个别的房间里的空闲车位导航过去，
+	// 可以对很多辆车都点一遍；不想要就删掉下面ready里的这条add_option和test_navigate这个milestone。
 	"milestones": [
 		{
 			"milestone": "ready",
@@ -11,7 +13,8 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "add_option", "name": "$$self.name", "option": "上车" }
+				{ "type": "add_option", "name": "$$self.name", "option": "上车" },
+				{ "type": "add_option", "name": "$$self.name", "option": "测试寻路" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -25,6 +28,19 @@
 			"goal": "",
 			"changes": [
 				{ "type": "enter_vehicle", "vehicle": "$$self.name" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "test_navigate",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "测试寻路" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "vehicle_navigate", "vehicle": "$$self.name", "destination": "random" }
 			],
 			"dialogs": [],
 			"subsequences": []

@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include <array>
 
+struct ParkingSlot;
+
 
 // 楼梯/电梯/坡道：矩形+朝向+四面是否有墙。params是ratio+offset相对参数，InstanciateQuad(width,height)按楼体尺寸
 // 换算成楼体局部坐标(原点楼体左下角，未旋转)的绝对Quad，世界坐标转换见Building::LocalToWorld
@@ -137,6 +139,23 @@ private:
 	RectParams params;
 };
 
+// 停车位矩形：矩形+开口朝向(朝通道)。BuildingMod::AssignParking按间距沿垂直朝向的方向把它切成若干ParkingSlot
+// 挂到某个房间上，见building.md"停车位"。矩形中心是车行导航里"parking"端点的位置。
+class Parking : public Quad {
+	// 存档：MapSaveCodec直接读写私有字段(map_save.md)。
+	friend class MapSaveCodec;
+public:
+	explicit Parking(RectParams params);
+
+	int GetDirection() const;
+	void SetDirection(int direction);
+	void InstanciateQuad(float width, float height);
+
+private:
+	int direction = FACE_WEST;
+	RectParams params;
+};
+
 // 走廊：矩形+四面是否有墙+门/窗开口，没有朝向概念(老工程Corridor没有direction字段，
 // 门/窗方向各自独立指定)。
 class Corridor : public Quad {
@@ -246,6 +265,7 @@ public:
 	const std::vector<Single>& GetSingles() const;
 	const std::vector<Row>& GetRows() const;
 	const std::vector<Hatch>& GetHatches() const;
+	const std::vector<Parking>& GetParkings() const;
 
 	void AddStair(Stair stair);
 	void AddElevator(Elevator elevator);
@@ -256,6 +276,7 @@ public:
 	void AddSingle(Single single);
 	void AddRow(Row row);
 	void AddHatch(Hatch hatch);
+	void AddParking(Parking parking);
 
 	// 分配并返回下一个房间门牌序号(照抄老工程Floor::AssignNumber，每层楼独立计数)。
 	int AssignNumber();
@@ -272,6 +293,7 @@ private:
 	std::vector<Single> singles;
 	std::vector<Row> rows;
 	std::vector<Hatch> hatches;
+	std::vector<Parking> parkings;
 };
 
 // 一个方向(0-3)的行人/车辆导航模板，结构相同——见general_geometry.h的NavigationXxxTemplate。
@@ -305,6 +327,7 @@ public:
 	const std::vector<Single>& GetSingles(const std::string& name, int face) const;
 	const std::vector<Row>& GetRows(const std::string& name, int face) const;
 	const std::vector<Hatch>& GetHatches(const std::string& name, int face) const;
+	const std::vector<Parking>& GetParkings(const std::string& name, int face) const;
 	const NavigationTemplate& GetPedestrianNavigation(const std::string& name, int face) const;
 		// 车行导航模板，由Building::BuildVehicleNavigation使用。
 	const NavigationTemplate& GetVehicleNavigation(const std::string& name, int face) const;
@@ -329,6 +352,7 @@ private:
 	std::unordered_map<std::string, std::array<std::vector<Single>, 4>> singleTemplates;
 	std::unordered_map<std::string, std::array<std::vector<Row>, 4>> rowTemplates;
 	std::unordered_map<std::string, std::array<std::vector<Hatch>, 4>> hatchTemplates;
+	std::unordered_map<std::string, std::array<std::vector<Parking>, 4>> parkingTemplates;
 	std::unordered_map<std::string, std::array<NavigationTemplate, 4>> pedestrianNavigationTemplates;
 	std::unordered_map<std::string, std::array<NavigationTemplate, 4>> vehicleNavigationTemplates;
 };
@@ -424,6 +448,9 @@ public:
 	// 代表性的"楼层底部"值(用于导航节点的近似高度，不是渲染用的精确范围)。
 	float GetFloorBaseZ(int level) const;
 
+	// LocalToWorld的逆变换：世界坐标(地图单位) -> 楼体局部坐标。
+	std::pair<float, float> WorldToLocal(float worldX, float worldY) const;
+
 	// 把楼体局部坐标(原点在楼体左下角，未旋转，即GetFloor(level)/Room矩形自己的坐标系)
 	// 转换成世界坐标(地图单位)——按bodyOffset+自身旋转换算，和渲染层
 	// ComputeBodyWorldCenter同一套公式，只是这里额外支持任意局部点(不止楼体中心)。
@@ -482,6 +509,9 @@ private:
 	void ArrangeRow(int level, int slot, const std::string& roomType, float acreage, Component* component,
 		RoomFactory& roomFactory, const std::string& componentType = "", ComponentFactory* componentFactory = nullptr);
 
+	// 按mod->parkings把layout停车位矩形分割成ParkingSlot挂到对应房间，并为每个车位建车位中心的导航节点。
+	void BuildParkingSlots();
+
 	// 行人导航图(转发BuildNavigationGraph，isVehicle=false, registerRoomNodes=true)，见BuildingNavResult
 	void BuildPedestrianNavigation(const BuildingLayoutLibrary& library, int direction, BuildingNavResult& navOut);
 
@@ -535,6 +565,9 @@ private:
 	// 解析"single"/"row"类型的导航端点时用。
 	std::unordered_map<int, std::unordered_map<int, Room*>> singleRoomBySlot;
 	std::unordered_map<int, std::unordered_map<int, std::vector<Room*>>> rowRoomBySlot;
+	// 停车位矩形下标 -> 它分割出的车位(非持有，车位归所在Room)：[楼层编号][parking矩形序号]，
+	// 解析车行导航"parking"端点时用；读档时由MapSaveCodec按房间车位重建。
+	std::unordered_map<int, std::unordered_map<int, std::vector<ParkingSlot*>>> parkingSlotsByRect;
 
 	Citizen* owner = nullptr;
 	bool stated = false;

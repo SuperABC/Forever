@@ -12,6 +12,29 @@
 #include <vector>
 
 class Script;
+class Vehicle;
+
+// 房间里的一个停车位：由Building::Layout按BuildingMod::AssignParking把layout的停车位矩形分割而来，设计见room.md。
+// 坐标是建筑局部坐标(和Room::GetPosX/GetPosY同一套，原点楼体左下角，未旋转)。
+struct ParkingSlot {
+	float centerX = 0.f, centerY = 0.f;
+	float halfWidth = 0.f; // 沿垂直开口朝向的轴(车位宽度的一半)
+	float halfDepth = 0.f; // 沿开口朝向的轴(车位深度的一半)
+	int direction = FACE_WEST; // 车位开口朝向(FACE_DIRECTION，朝通道)；车头朝里即车头方向=开口朝向的反向
+	std::vector<std::string> categories;
+	Node* navigationNode = nullptr; // 车位中心的车行导航节点，由Map::navAnchorNodes持有生命周期，不在这里delete
+	Vehicle* reservedBy = nullptr;  // 正在开往这个车位的车(寻路开始即占用)
+	Vehicle* parkedVehicle = nullptr; // 已经停在车位里的车
+
+	bool IsFree() const { return !reservedBy && !parkedVehicle; }
+	bool Accepts(const std::string& category) const;
+	// 开口朝向在建筑局部坐标系里的数学角(度，逆时针，0度=+X)：W180/E0/N270/S90(北=-Y)，和Room::FacingYawDegrees不是同一套。
+	float FacingYawDegrees() const;
+	// 车头朝向(度)=开口朝向的反向。
+	float VehicleYawDegrees() const;
+	// 建筑局部点是否落在车位矩形里。
+	bool Contains(float x, float y) const;
+};
 
 
 // Building内部布局实例化出来的房间，继承Quad(建筑楼体局部坐标系下的矩形)，设计见room.md
@@ -91,8 +114,17 @@ public:
 	int64_t Rent() const;            // 每日房租(分)
 	bool IsManufacture() const;
 	std::vector<std::string> ManufactureTypes() const;
-	bool IsParking() const;
-	const std::vector<ParkingSpot>& GetParkingSpots() const;
+
+	// 停车位：由Building::Layout创建，Room持有。没有车位的房间返回空。
+	const std::vector<ParkingSlot*>& GetParkingSlots() const;
+	ParkingSlot* AddParkingSlot(const ParkingSlot& slot);
+	// 第一个空闲且允许category的车位下标，没有返回-1。
+	int FindFreeSlot(const std::string& category) const;
+	// 房间里有没有任何允许category的车位(不管是否被占)。
+	bool HasSlotFor(const std::string& category) const;
+	// 玩家把车停下时判定它是否停在某个车位里(车头朝里：车朝向与车位开口朝向点积<-0.8，车中心在车位矩形内，
+	// 车位上没有已停的车)，返回下标，没有返回-1。x/y/yawDegrees是建筑局部坐标。
+	int FindSlotContaining(float x, float y, float yawDegrees) const;
 
 	// 归属(owner/stated，二者互斥)、住户(households)、当前在场的人(occupants)是3个独立概念，见room.md
 	Citizen* GetOwner() const;
@@ -128,8 +160,6 @@ private:
 		int64_t rent = 0;
 		bool isManufacture = false;
 		std::vector<std::string> manufactureTypes;
-		bool isParking = false;
-		std::vector<ParkingSpot> parkingSpots;
 	};
 	Properties properties;
 	RoomFactory* factory;
@@ -145,6 +175,7 @@ private:
 	WallStyle wallStyles[4];
 	std::string number;
 	Node* navigationNode = nullptr;
+	std::vector<ParkingSlot*> parkingSlots; // 持有所有权
 
 	std::vector<Door*> doorEntities;
 

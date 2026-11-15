@@ -482,17 +482,6 @@ struct WallStyle {
 	}
 };
 
-// Room内部一个停车位。position用PointParams约定:第一对=u轴(沿正面墙)、第二对=v轴(朝正面为正),
-// 原点在房间角点,坐标系由房间自己的朝向(Room::GetDirection())定义,详见general_geometry.md。
-// rotationDegrees:相对房间朝向的旋转角(度,0=朝向房间正面,180=朝房间深处)。
-// categories:允许停入的载具种类(VehicleMod::GetCategory()的名字,如"car"/"bus"/"plane"),
-// Traffic::InitParkedVehicles对每个车位随机选种类再选车型。
-struct ParkingSpot {
-	PointParams position{};
-	float rotationDegrees = 0.f;
-	std::vector<std::string> categories;
-};
-
 // Building楼层导航模板里的一个固定锚点(和Stair/Row这类槽位无关，模板作者自己在画布上点出来
 // 的点，比如走廊拐角)。
 struct NavigationNodeTemplate {
@@ -510,8 +499,9 @@ struct NavigationLineTemplate {
 };
 
 // 导航连接的端点:type取"outside"(连到building朝向的边界路)/"node"(固定锚点)/"line"(贯通线,
-// vertex=0取begin、1取end、-1动态投影)/"single"或"row"(对应Room自己的锚点)/"upstair"或"downstair"
-// (跨楼层竖向通道匹配,见Building::BuildPedestrianNavigation)。idx是node/line/single/row数组下标。
+// vertex=0取begin、1取end、-1动态投影)/"single"或"row"(对应Room自己的锚点)/"parking"(仅车行,
+// 停车位矩形,展开成该矩形分割出的每个车位的锚点)/"upstair"或"downstair"
+// (跨楼层竖向通道匹配,见Building::BuildPedestrianNavigation)。idx是node/line/single/row/parking数组下标。
 struct NavigationEndpointTemplate {
 	std::string type;
 	int idx = -1;

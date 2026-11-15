@@ -4,7 +4,7 @@
 
 `WarehouseRoom`(`room_warehouse`)：Shop布局里过道/地下室用的仓储room，只有ShopBuilding用到。
 
-Room域的默认实现。`SetProperty()`里按类型声明房间的功能属性(`isResidence`/`isWorkspace`/`isStorage`/`isManufacture`/`isParking`及对应容量、房租、停车位、门规格)，没声明的属性保持`RoomMod`基类默认值。
+Room域的默认实现。`SetProperty()`里按类型声明房间的功能属性(`isResidence`/`isWorkspace`/`isStorage`/`isManufacture`及对应容量、房租、门规格)，没声明的属性保持`RoomMod`基类默认值。
 
 ## 关键设计
 

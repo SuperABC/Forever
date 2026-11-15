@@ -24,7 +24,6 @@ void UFadeWidget::ResetToBlack() {
 	state = EState::Waiting;
 	bReleaseRequested = false;
 	elapsed = 0.f;
-	settleElapsed = 0.f;
 	displayedPercent = 0.f;
 	trackedWorld.Reset();
 	framework.Reset();
@@ -95,26 +94,12 @@ void UFadeWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime) {
 			trackedWorld = world;
 			framework.Reset();
 			elapsed = 0.f;
-			settleElapsed = 0.f;
 		}
 		AForeverFrameworkActor* frameworkActor = FindFramework(world);
 		elapsed += InDeltaTime;
 
-		bool bTimeout = false;
-		if (frameworkActor && frameworkActor->IsInitialGenerationDone()) {
-			settleElapsed += InDeltaTime;
-			bTimeout = settleElapsed >= maxWaitSeconds;
-		}
-		else if (!frameworkActor) {
-			bTimeout = elapsed >= maxWorldWaitSeconds;
-		}
-
+		// 没有超时兜底：渐隐进去世界还没就绪也是卡着的，只在进度满格(世界真的准备好)时才渐隐。
 		if (UpdateProgress(InDeltaTime, frameworkActor)) {
-			state = EState::Fading;
-			elapsed = 0.f;
-		}
-		else if (bTimeout) {
-			UE_LOG(LogTemp, Warning, TEXT("UFadeWidget: 等待世界就绪超时，强制开始渐隐。"));
 			state = EState::Fading;
 			elapsed = 0.f;
 		}

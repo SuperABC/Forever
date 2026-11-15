@@ -125,6 +125,16 @@ void AVehicleElement::Init(Vehicle* inVehicle, APawn* inPreviousPawn)
 
 	// 预置车辆没人操控时刚体处于睡眠、不受重力，会悬在半空直到第一次踩油门才落地，所以生成后主动唤醒一次。
 	if (carMesh) carMesh->WakeAllRigidBodies();
+
+	// 没人操控的车必须驻车：Chaos的输入(含SetHandbrakeInput)默认要有Controller才处理、而且每帧处理完就清零，
+	// 没人开的车拉手刹根本不生效，轮子自由滚动，停着的车会一直慢慢溜。驻车(SetParked)走ParkingEnabled，
+	// 不需要Controller、一直保持。开车的一方(SetDriveInput，玩家和AI每帧都调)会自动解除。
+	SetParked(true);
+}
+
+void AVehicleElement::SetParked(bool bParked)
+{
+	if (vehicleMovement) vehicleMovement->SetParked(bParked);
 }
 
 void AVehicleElement::BeginPlay()
@@ -222,6 +232,7 @@ void AVehicleElement::SetDriveInput(float throttle, float brake, float steer)
 	if (!vehicleMovement) return;
 	vehicleMovement->SetThrottleInput(throttle);
 	vehicleMovement->SetBrakeInput(brake);
+	SetParked(false);
 	vehicleMovement->SetSteeringInput(steer);
 }
 
@@ -344,6 +355,7 @@ void AVehicleElement::PossessedBy(AController* NewController)
 		}
 		else {
 			// 玩家接手驾驶：松开AI可能留下的手刹。
+			SetParked(false);
 			SetHandbrake(false);
 		}
 	}
@@ -370,6 +382,7 @@ void AVehicleElement::UnPossessed()
 		vehicleMovement->SetThrottleInput(0.f);
 		vehicleMovement->SetSteeringInput(0.f);
 		vehicleMovement->SetBrakeInput(1.f);
+		vehicleMovement->SetParked(true); // 没人开了就驻车，不然刹车输入在低速是倒挡油门，且无Controller时输入不处理
 	}
 
 	if (playerController) {

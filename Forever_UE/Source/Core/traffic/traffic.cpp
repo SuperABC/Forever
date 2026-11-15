@@ -15,6 +15,9 @@
 using namespace std;
 
 namespace {
+	// 开局有多大比例的车位停着车(0-1)。车辆还没和市民绑定，先随机；绑定后由市民的车决定，这个常量会删掉。
+	constexpr float kParkedVehicleFraction = 0.5f;
+
 	struct RoadStationCollector {
 		vector<RoadStationRequest> requests;
 	};
@@ -150,18 +153,22 @@ void Traffic::InitParkedVehicles(Map* map) {
 	// 车型按种类查(VehicleFactory::GetIdsByCategory，种类是mod注册的static GetCategory()，不需要
 	// 创建临时mod实例)；同一种类名可以对应多个车型。每个种类查一次，缓存起来。
 	unordered_map<string, vector<string>> idsByCategory;
-	int parkingRoomCount = 0;
+	int slotCount = 0;
+	int parkedCount = 0;
 
 	for (auto& [buildingName, building] : map->GetBuildings()) {
 		if (!building) continue;
 		for (Room* room : building->GetRooms()) {
-			if (!room || !room->IsParking()) continue;
-			parkingRoomCount++;
-
-			for (const ParkingSpot& spot : room->GetParkingSpots()) {
-				// 在这个车位允许的种类里随机挑一个，再在该种类的车型里随机挑一个(不管是否drivable)。
-				if (spot.categories.empty()) continue;
-				const string& category = spot.categories[GetRandom(static_cast<int>(spot.categories.size()))];
+			if (!room) continue;
+			const vector<ParkingSlot*>& slots = room->GetParkingSlots();
+			for (size_t slotIndex = 0; slotIndex < slots.size(); slotIndex++) {
+				ParkingSlot* slot = slots[slotIndex];
+				slotCount++;
+				// 临时：车辆还没和市民绑定，先让kParkedVehicleFraction的车位停着车(飞机这类每个机位本来就一架，不抽)。
+				// 绑定市民之后停车占用由市民的车决定，这段随机逻辑要整个换掉。
+				if (slot->categories.empty()) continue;
+				const string& category = slot->categories[GetRandom(static_cast<int>(slot->categories.size()))];
+				if (category != "plane" && GetRandom(1000) >= static_cast<int>(kParkedVehicleFraction * 1000.f)) continue;
 				auto found = idsByCategory.find(category);
 				if (found == idsByCategory.end())
 					found = idsByCategory.emplace(category, vehicleFactory.GetIdsByCategory(category)).first;
@@ -174,22 +181,15 @@ void Traffic::InitParkedVehicles(Map* map) {
 				Vehicle* vehicle = CreateVehicle(modId, name);
 				if (!vehicle) continue;
 
-				// 房间局部坐标系(见Room::LocalToBuildingLocal)：以房间朝向(正面)定义的角点系，
-				// PointParams是"比例x该轴长度+米数偏移"；换算成相对房间中心的建筑局部偏移存起来，
-				// 旋转角叠加房间朝向。
-				float u = spot.position[0] * room->AxisSizeU() + spot.position[1];
-				float v = spot.position[2] * room->AxisSizeV() + spot.position[3];
-				float localX = 0.f, localY = 0.f;
-				room->LocalToBuildingLocal(u, v, localX, localY);
-				float rotation = spot.rotationDegrees + room->FacingYawDegrees();
-				vehicle->SetParking(room, localX, localY, rotation);
+				vehicle->BindSlot(room, static_cast<int>(slotIndex));
+				parkedCount++;
 
 				debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
 			}
 		}
 	}
 
-	debugf("Traffic::InitParkedVehicles: found %d parking room(s).\n", parkingRoomCount);
+	debugf("Traffic::InitParkedVehicles: %d parking slot(s), %d parked vehicle(s).\n", slotCount, parkedCount);
 }
 
 void Traffic::InitTransitVehicles() {

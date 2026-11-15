@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+struct ParkingSlot;
+
 
 // Vehicle：一辆车的实体，独占持有一个VehicleMod实例(照抄Job持有JobMod)，详见vehicle.md。
 class Vehicle {
@@ -62,6 +64,30 @@ public:
 	void GetParkingLocalPosition(float& outX, float& outY) const;
 	float GetParkingRotationDegrees() const;
 
+	// ---- 车位占用(见Core/map/room.h ParkingSlot、vehicle.md"车位") ----
+	// None：没停在车位里；Parked：已停在车位里(车位的parkedVehicle指向本车)；Vanished：被玩家停车挤掉位置又
+	// 找不到别的车位，已从地图上消失(视为已到达room)，下次寻路直接瞬移到目的车位。
+	// 另有独立的"预定"：寻路开始就占住目的车位(车位的reservedBy指向本车)，和上面的状态互不影响
+	// (出库时先规划再释放原车位)，到达时转成Parked。
+	enum class ParkState { None, Parked, Vanished };
+	ParkState GetParkState() const { return parkState; }
+	int GetParkingSlotIndex() const { return parkingSlotIndex; }
+	ParkingSlot* GetParkingSlot() const; // 只有Parked返回非空
+	// 停进room的第slotIndex个车位(先释放原来停的)：同时把parking*字段刷成车位的位置/朝向，currentRoom=room。
+	void BindSlot(Room* room, int slotIndex);
+	void ReleaseSlot();                    // 离开车位，状态回到None(room保留成最后停靠的房间)
+	void SetVanished(Room* room);          // 离开车位和预定，状态Vanished，room/currentRoom=room
+	// 读档恢复用：只设字段，不碰车位指针。
+	void SetParkStateRaw(ParkState state, int slotIndex) { parkState = state; parkingSlotIndex = slotIndex; }
+
+	bool ReserveSlot(Room* room, int slotIndex); // 目的车位被占用/越界返回false；先取消旧预定
+	void ClearReservation();
+	Room* GetReservedRoom() const { return reservedRoom; }
+	int GetReservedSlotIndex() const { return reservedSlotIndex; }
+	ParkingSlot* GetReservedSlot() const;
+	// 到达：预定的车位转成Parked(没有预定则什么都不做，返回false)。
+	bool ArriveAtReservedSlot();
+
 	// 车辆当前所在的房间（运行时状态，不进存档）：SetParking时初始化成停车位所在房间，
 	// 导航出发时置空，到达目的房间时设成该房间。nullptr表示在室外。导航规划靠它决定起点
 	// 是房间的导航节点还是路网上最近的车道，见Map::PlanVehicleRoute。
@@ -77,7 +103,8 @@ public:
 	// ---- Core行驶推算（没有Actor的车，和Citizen::BeginWalk/AdvanceWalk对称，见vehicle.md）----
 	// 路径点和速度都用UE单位(cm、cm/s)，和SetTransform一致；nowSeconds由调用方给（UE层用世界时间）。
 	// 纯运行时，不进存档（读档后车停在最后一次写入的Transform上）。
-	struct DrivePoint { float x, y, z; };
+	// reverse：从本点到下一点这一段是倒车(车头朝向与行进方向相反)，最后一个点的reverse无意义。
+	struct DrivePoint { float x, y, z; bool reverse = false; };
 	bool IsDriving() const;
 	Room* GetDriveDestination() const;
 	// 开始推算：车位置置为path[0]。path为空/destination为空/speed<=0则什么都不做（等于EndDrive）。
@@ -86,6 +113,8 @@ public:
 	bool AdvanceDrive(double nowSeconds);
 	// 从当前位置起的剩余路径（首点=当前位置）。
 	void GetRemainingDrive(double nowSeconds, std::vector<DrivePoint>& outPath) const;
+	// 现在是否正走在倒车段上(出库倒车)。
+	bool IsDriveReversing(double nowSeconds) const;
 	void EndDrive();
 
 private:
@@ -102,6 +131,10 @@ private:
 	float parkingLocalX = 0.f;
 	float parkingLocalY = 0.f;
 	float parkingRotationDegrees = 0.f;
+	ParkState parkState = ParkState::None;
+	int parkingSlotIndex = -1;
+	Room* reservedRoom = nullptr;
+	int reservedSlotIndex = -1;
 
 	Route* route = nullptr;
 	int routeLine = -1;

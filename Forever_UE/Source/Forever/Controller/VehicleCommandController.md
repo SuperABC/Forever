@@ -42,3 +42,13 @@
 
 - 目前只有公交用；横向加速度/重心(`AVehicleElement::centerOfMassOffset`，蓝图按车型填)等参数需PIE实测调。
 - 起步朝向与首段路径差很大时靠方向盘打满宽转弯，可能蹭墙；不处理倒车掉头；不做避障(公交撞前车会被缓慢推着走)。
+
+## 倒车出库与FollowPath
+
+- `PlanAndFollow`起点车停在车位里(`Vehicle::GetParkingSlot()`)时用`PlanVehicleRouteFromSlot`，规划成功`ReleaseSlot`；`plan.reverseFirstSegment`为真时`FollowPoints`进入**倒车阶段**
+  (`bReversing`，此时`path`无效、`state==Driving`)，倒完再`FinishReversing`用`afterReverseRaw`建正常路径继续(`afterReverseSpans`保留路口区间)。
+- **倒车阶段**(`TickReversing`)：直线退到`reverseTarget`，车头保持`reverseYaw`。运动学：按`kReverseSpeed`(250uu/s)+刹停曲线直接摆位置；
+  物理：Chaos"倒车当刹车"——`SetDriveInput(0, brake, steer)`的刹车输入在低速/倒车时就是倒挡油门，倒车时打方向效果相反所以转向取负，横向偏差用≤20°小角度修正；
+  退不动超过`kStuckSeconds`或剩余<40uu就放弃剩余倒车直接前进。物理↔运动学切换时`reverseTravelled`按位置重新投影。倒车阶段不做跟车/路口请求。
+- **`FollowPath`指令**(`FVehicleCommand::MakeFollowPath(node, waypoints, bReverseFirst)`)：沿给定折线开，不重新规划；Core推算的车在倒车出库途中生成Actor时用。到达后和`NavigateToNode`一样回调`navigateFinished`。
+- `GetRemainingWaypoints(out, &bReverseFirst)`：倒车阶段返回[当前位置, 倒车终点, 之后的点]且`bReverseFirst=true`，交还Core时保留倒车标志。

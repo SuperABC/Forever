@@ -18,8 +18,8 @@ body { font-family: monospace; font-size: 13px; background: #1e1e1e; color: #ccc
                grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr);
                align-items: center; justify-items: center;
                background: #252525; padding: 16px; gap: 10px; overflow: hidden; }
-canvas { display: block; cursor: crosshair; border: 1px solid #333;
-         max-width: 100%; max-height: 100%; }
+#canvas-scroll { display: grid; width: 100%; height: 100%; min-height: 0; overflow: auto; }
+canvas { display: block; cursor: crosshair; border: 1px solid #333; margin: auto; }
 .resizer { flex: 0 0 5px; cursor: col-resize; background: #333; }
 .resizer:hover, .resizer.dragging { background: #4488aa; }
 #view-bar { display: flex; align-items: center; gap: 8px; width: 100%; color: #aaa; font-size: 12px; white-space: nowrap; }
@@ -29,7 +29,7 @@ canvas { display: block; cursor: crosshair; border: 1px solid #333;
 #view3d { position: relative; width: 100%; height: 100%; min-height: 0; display: none;
           border: 1px solid #333; background: #1a1a1a; overflow: hidden; }
 #view3d canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
-                 max-width: none; max-height: none; border: 0; cursor: grab; }
+                 max-width: none; max-height: none; margin: 0; border: 0; cursor: grab; }
 #legend { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center;
           min-height: 32px; width: 100%; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #aaa; }
@@ -154,7 +154,7 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
       <div style="flex:1"></div>
       <button onclick="refreshView()" title="重置视图(平面:缩放/平移复位；3D:相机复位)并重新读取磁盘上的当前文件。平面:滚轮缩放 空格+左键平移">重置视图并重读</button>
     </div>
-    <canvas id="c" width="600" height="600"></canvas>
+    <div id="canvas-scroll"><canvas id="c" width="600" height="600"></canvas></div>
     <div id="view3d"><div class="hint3d">左键旋转 右键平移 滚轮缩放 WASD移动 Q/E升降 Shift加速</div></div>
     <div id="legend"></div>
   </div>
@@ -251,6 +251,7 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 //   { type:'line',      idx:N, vertex:V }  — V=0 start, V=1 end, V=-1 midpoint
 //   { type:'single',    idx:N }            — single room's implicit nav node
 //   { type:'row',       idx:N }            — row room's implicit nav node
+//   { type:'parking',   idx:N }            — parking rect's center node (vehicleNavigation only)
 //   { type:'outside'  }                    — external (no position)
 //   { type:'entrance' }                    — vehicleNavigation only: node is a road->node entrance (no position)
 //   { type:'exit'     }                    — vehicleNavigation only: node is a node->road exit (no position)
@@ -273,6 +274,8 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 //   stairs, ramps, elevators  --> {rect, direction, walls:[int]}
 //   corridors                 --> {rect, walls:[int], doors:[...], windows:[...]}
 //   singles, rows             --> {rect, direction, doors:[...], windows:[...]}
+//   parkings                  --> {rect, direction}  停车位矩形，direction=车位开口朝向(朝通道)；在"车辆导航"模式里编辑，
+//                                 矩形中心是一个车辆导航端点 {type:'parking', idx}，Core按停车间距把矩形切成多个车位
 //
 // Singles and rows always have all 4 walls; no "walls" field appears in the file.
 //
@@ -284,7 +287,8 @@ const CANVAS_PX    = 600;
 const LAYOUT_MIN   = -0.5;   // leftmost/topmost visible normalized coord
 const LAYOUT_RANGE = 2.0;    // total visible range: -0.5 to 1.5
 // Per-axis scale: the larger floor dimension always maps to CANVAS_PX
-// view.zoom multiplies the scale and view.panX/panY shift the origin (canvas px), see the wheel / space-drag handlers.
+// view.zoom resizes the whole canvas (bitmap and element); it is panned by scrolling #canvas-scroll (only the canvas scrolls; the top bar stays fixed) (wheel / space-drag handlers).
+// view.panX/panY stay 0.
 var view = { zoom: 1, panX: 0, panY: 0 };
 function scaleX() { return CANVAS_PX / LAYOUT_RANGE * S.W / Math.max(S.W, S.H) * view.zoom; }
 function scaleY() { return CANVAS_PX / LAYOUT_RANGE * S.H / Math.max(S.W, S.H) * view.zoom; }
@@ -294,12 +298,14 @@ const COLORS = {
   ceilings:'#999999', grounds:'#999999', hatches:'#4488ff',
   stairs:'#4488ff',   ramps:'#ff88cc',  elevators:'#44cc88',
   corridors:'#999999', singles:'#ff4444', rows:'#aa44ff',
+  parkings:'#22bbaa',
 };
 
 const TYPE_LABEL = {
   ceilings:'天花板', grounds:'地板', hatches:'洞口',
   stairs:'楼梯',     ramps:'斜坡',  elevators:'电梯',
   corridors:'走廊',  singles:'独立房间', rows:'联排房间',
+  parkings:'停车位',
 };
 
 const DIR_LABELS = ['← 西(0)', '→ 东(1)', '↑ 北(2)', '↓ 南(3)'];
@@ -314,19 +320,19 @@ const MODE_TYPES = {
   others:     ['corridors', 'singles', 'rows', 'elevators', 'stairs', 'ramps'],
   walls:      ['corridors', 'singles', 'rows', 'elevators', 'stairs', 'ramps'],
   pedestrianNavigation: [],
-  vehicleNavigation: [],
+  vehicleNavigation: ['parkings'],  // 停车位矩形在车辆导航模式里编辑(见drawNavMode/performClick)
 };
 
 // Capability sets for geometry element types
 const SIMPLE   = new Set(['hatches']);
 // 天花板/地板内部是{rect, tag?}对象(tag可选，对应mod里登记的材质)；没有tag时仍按旧格式输出裸8数组。
 const TAGGED   = new Set(['ceilings', 'grounds']);
-const HAS_DIR  = new Set(['stairs', 'ramps', 'elevators', 'singles', 'rows']);
+const HAS_DIR  = new Set(['stairs', 'ramps', 'elevators', 'singles', 'rows', 'parkings']);
 const HAS_WALL = new Set(['stairs', 'ramps', 'elevators', 'corridors']);
 const HAS_DOOR = new Set(['corridors', 'singles', 'rows']);
 const HAS_WIN  = new Set(['corridors', 'singles', 'rows']);
 
-const ALL_KEYS = ['stairs', 'elevators', 'ramps', 'ceilings', 'grounds', 'hatches', 'corridors', 'singles', 'rows'];
+const ALL_KEYS = ['stairs', 'elevators', 'ramps', 'ceilings', 'grounds', 'hatches', 'corridors', 'singles', 'rows', 'parkings'];
 
 // Navigation mode: colors for outer connection rings drawn around nodes
 const OUTER_CONN_COLORS = {
@@ -347,6 +353,7 @@ const NAV_CIRCLE_COLOR = {
   node:      '#ffdd44',  // yellow  — standalone nav node
   single:    '#ff88cc',  // pink    — single room implicit nav node
   row:       '#44cccc',  // cyan    — row room implicit nav node
+  parking:   '#22ddbb',  // teal    — parking rect center node (vehicle navigation only)
   lineStart: '#aa6633',  // brown   — path line start endpoint
   lineEnd:   '#ff8833',  // orange  — path line end endpoint
 };
@@ -357,7 +364,7 @@ const S = {
   data: {
     ceilings:[], grounds:[], hatches:[],
     stairs:[],   ramps:[],   elevators:[],
-    corridors:[], singles:[], rows:[],
+    corridors:[], singles:[], rows:[], parkings:[],
   },
   W: 4,           // floor width in world units
   H: 4,           // floor height in world units
@@ -419,7 +426,7 @@ function redo() {
 // ── File Entry Helpers ────────────────────────────────────────────────────────
 
 function makeBlankEntry(name) {
-  const data = { ceilings:[], grounds:[], hatches:[], stairs:[], ramps:[], elevators:[], corridors:[], singles:[], rows:[] };
+  const data = { ceilings:[], grounds:[], hatches:[], stairs:[], ramps:[], elevators:[], corridors:[], singles:[], rows:[], parkings:[] };
   const pedestrianNav = { nodes: [], lines: [], connections: [] };
   const vehicleNav    = { nodes: [], lines: [], connections: [] };
   return {
@@ -435,10 +442,22 @@ function makeBlankEntry(name) {
 
 // True if entry f's content differs from what's on disk (its last load/save point).
 // Undoing back to that exact content is treated as "not modified" (no false positive star).
+// Compared in canonical form (keys sorted, numbers rounded to 1e-6, so float noise from dragging/typing a value
+// back to what it was does not count as a change). Empty arrays count as absent: selecting an element in the panel fills in
+// empty walls/doors/windows/positions, which must not make the file look modified.
+function canonicalJson(v) {
+  if (typeof v === 'number') return String(Math.round(v * 1e6) / 1e6);
+  if (Array.isArray(v)) return '[' + v.map(canonicalJson).join(',') + ']';
+  if (v && typeof v === 'object') {
+    return '{' + Object.keys(v).sort().filter(k => v[k] !== undefined && !(Array.isArray(v[k]) && v[k].length === 0)).map(k => JSON.stringify(k) + ':' + canonicalJson(v[k])).join(',') + '}';
+  }
+  return JSON.stringify(v);
+}
 function isFileDirty(f, idx) {
   if (!f || !f.savedSnapshot) return false;
   const current = idx === activeFileIdx ? snapshotState() : JSON.stringify({ data: f.data, pedestrianNav: f.pedestrianNav, vehicleNav: f.vehicleNav });
-  return current !== f.savedSnapshot;
+  if (current === f.savedSnapshot) return false;
+  return canonicalJson(JSON.parse(current)) !== canonicalJson(JSON.parse(f.savedSnapshot));
 }
 
 // Cheap per-frame refresh of just the active row's star (avoids rebuilding the
@@ -785,6 +804,12 @@ function resolveEndpointPos(ep) {
     const { x1, y1, x2, y2 } = evalRect(item.rect, S.W, S.H);
     return [(x1 + x2) / 2, (y1 + y2) / 2];
   }
+  if (ep.type === 'parking') {
+    const item = (S.data.parkings || [])[ep.idx];
+    if (!item) return null;
+    const { x1, y1, x2, y2 } = evalRect(item.rect, S.W, S.H);
+    return [(x1 + x2) / 2, (y1 + y2) / 2];
+  }
   return null;  // outside/upstair/downstair
 }
 
@@ -794,6 +819,7 @@ function encodeEndpoint(ep) {
   if (ep.type === 'line')   return `line:${ep.idx}:${ep.vertex}`;
   if (ep.type === 'single') return `single:${ep.idx}`;
   if (ep.type === 'row')    return `row:${ep.idx}`;
+  if (ep.type === 'parking') return `parking:${ep.idx}`;
   return ep.type;  // outside/upstair/downstair (not in inner-conn dropdowns)
 }
 
@@ -804,6 +830,7 @@ function decodeEndpoint(str) {
   if (parts[0] === 'line')   return { type: 'line',   idx: parseInt(parts[1]), vertex: parseInt(parts[2]) };
   if (parts[0] === 'single') return { type: 'single', idx: parseInt(parts[1]) };
   if (parts[0] === 'row')    return { type: 'row',    idx: parseInt(parts[1]) };
+  if (parts[0] === 'parking') return { type: 'parking', idx: parseInt(parts[1]) };
   return { type: str };
 }
 
@@ -820,6 +847,7 @@ function makeEndpointOpts() {
   });
   S.data.singles.forEach((_, i) => opts.push([`single:${i}`, `独立房间 ${i}`]));
   S.data.rows.forEach((_, i)    => opts.push([`row:${i}`,    `联排房间 ${i}`]));
+  if (S.mode === 'vehicleNavigation') (S.data.parkings || []).forEach((_, i) => opts.push([`parking:${i}`, `停车位 ${i}`]));
   return opts;
 }
 
@@ -1034,6 +1062,29 @@ function drawNavMode() {
     }
   }
 
+  // ── 1b. Parking rects (vehicle navigation only): teal fill, arrow towards the opening (aisle) side ──
+  if (S.mode === 'vehicleNavigation') {
+    const openingOffset = [[-1, 0], [1, 0], [0, -1], [0, 1]];  // 西 东 北 南 in canvas space
+    (S.data.parkings || []).forEach((item, i) => {
+      const { x1, y1, x2, y2 } = evalRect(item.rect, S.W, S.H);
+      const left = toCanvasX(Math.min(x1, x2)), top = toCanvasY(Math.min(y1, y2));
+      const pw = toCanvasX(Math.max(x1, x2)) - left, ph = toCanvasY(Math.max(y1, y2)) - top;
+      if (pw <= 0 || ph <= 0) return;
+      const isSel = (S.sel && S.sel.type === 'parkings' && S.sel.idx === i) || isGeoMultiSelected('parkings', i);
+      ctx.fillStyle = hexToRgba(COLORS.parkings, 0.3);
+      ctx.fillRect(left, top, pw, ph);
+      ctx.save();
+      ctx.strokeStyle = isSel ? '#ffffff' : COLORS.parkings;
+      ctx.lineWidth = isSel ? 2 : 1.5;
+      ctx.setLineDash(isSel ? [6, 3] : []);
+      ctx.strokeRect(left, top, pw, ph);
+      ctx.restore();
+      const arrowSz = Math.max(8, Math.min(Math.min(pw, ph) * 0.4, 24));
+      const o = openingOffset[item.direction] || [0, 0];
+      drawArrow(left + pw / 2 + o[0] * pw * 0.28, top + ph / 2 + o[1] * ph * 0.28, item.direction, arrowSz);
+    });
+  }
+
   // ── 2. Inner connection lines ──
   for (let i = 0; i < nav.connections.length; i++) {
     const conn = nav.connections[i];
@@ -1096,6 +1147,13 @@ function drawNavMode() {
   for (let i = 0; i < (S.data.rows || []).length; i++) {
     const { x1, y1, x2, y2 } = evalRect(S.data.rows[i].rect, S.W, S.H);
     drawNavCircle(toCanvasX((x1+x2)/2), toCanvasY((y1+y2)/2), NAV_CIRCLE_R, NAV_CIRCLE_COLOR.row, i);
+  }
+
+  if (S.mode === 'vehicleNavigation') {
+    for (let i = 0; i < (S.data.parkings || []).length; i++) {
+      const { x1, y1, x2, y2 } = evalRect(S.data.parkings[i].rect, S.W, S.H);
+      drawNavCircle(toCanvasX((x1+x2)/2), toCanvasY((y1+y2)/2), NAV_CIRCLE_R, NAV_CIRCLE_COLOR.parking, i);
+    }
   }
 
   // ── 5. Standalone nodes (yellow labeled circles; selected: dashed outer ring) ──
@@ -1165,8 +1223,8 @@ function drawNavMode() {
 function redraw() {
   updateActiveDirtyMark();
   if (view3dOn) { schedule3DRebuild(); return; }
-  canvas.width  = Math.round(CANVAS_PX * S.W / Math.max(S.W, S.H));
-  canvas.height = Math.round(CANVAS_PX * S.H / Math.max(S.W, S.H));
+  canvas.width  = Math.round(CANVAS_PX * view.zoom * S.W / Math.max(S.W, S.H));
+  canvas.height = Math.round(CANVAS_PX * view.zoom * S.H / Math.max(S.W, S.H));
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1271,6 +1329,37 @@ function navHitTest(canvX, canvY) {
   return null;
 }
 
+// Parking rect under the cursor (vehicle navigation mode only), topmost first. Returns {type:'parkings', idx} or null.
+function parkingHitTest(canvX, canvY) {
+  if (S.mode !== 'vehicleNavigation') return null;
+  const lx = toLayoutX(canvX), ly = toLayoutY(canvY);
+  const arr = S.data.parkings || [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (hitTest(lx, ly, getParams('parkings', arr[i]), S.W, S.H)) return { type: 'parkings', idx: i };
+  }
+  return null;
+}
+
+// Delete a parking rect and every vehicle-navigation connection that references it; shift later parking indices down.
+function deleteParking(idx) {
+  snapshot();
+  removeParkingData(idx);
+  S.sel = null;
+  redraw(); renderPanel();
+}
+function removeParkingData(idx) {
+  const nav = S.vehicleNav;
+  nav.connections = nav.connections.filter(c =>
+    !(c.begin.type === 'parking' && c.begin.idx === idx) &&
+    !(c.end.type   === 'parking' && c.end.idx   === idx)
+  );
+  nav.connections.forEach(c => {
+    if (c.begin.type === 'parking' && c.begin.idx > idx) c.begin.idx--;
+    if (c.end.type   === 'parking' && c.end.idx   > idx) c.end.idx--;
+  });
+  S.data.parkings.splice(idx, 1);
+}
+
 // ── Auto-delete Zero-area on Deselect ────────────────────────────────────────
 
 // Call before any operation that clears/changes S.sel in geometry modes.
@@ -1302,10 +1391,13 @@ function performClick(canvX, canvY, ctrlKey) {
       // Promote existing single selection into multiSel before toggling the new hit
       if (S.navSel && !isNavMultiSelected(S.navSel.kind, S.navSel.idx))
         S.multiSel.push({ kind: S.navSel.kind, idx: S.navSel.idx });
+      if (S.sel && S.sel.type === 'parkings' && !isGeoMultiSelected('parkings', S.sel.idx))
+        S.multiSel.push({ type: 'parkings', idx: S.sel.idx });
       if (hit) toggleNavMultiSel(hit.kind, hit.idx);
+      else { const pk = parkingHitTest(canvX, canvY); if (pk) toggleGeoMultiSel('parkings', pk.idx); }
       S.navSel = null; S.sel = null;
     } else {
-      S.multiSel = []; S.navSel = hit; S.sel = null;
+      S.multiSel = []; S.navSel = hit; S.sel = hit ? null : parkingHitTest(canvX, canvY);
     }
   } else {
     if (!ctrlKey) autoDeleteZeroArea();
@@ -1373,6 +1465,17 @@ function performRectSelect(cx1, cy1, cx2, cy2, ctrl) {
         else if (!isNavMultiSelected('conn', i)) S.multiSel.push({ kind: 'conn', idx: i });
       }
     }
+    if (S.mode === 'vehicleNavigation') {
+      (S.data.parkings || []).forEach((item, i) => {
+        const { x1, y1, x2, y2 } = evalRect(item.rect, S.W, S.H);
+        const px = toCanvasX((x1 + x2) / 2), py = toCanvasY((y1 + y2) / 2);
+        if (px >= cx1 && px <= cx2 && py >= cy1 && py <= cy2) {
+          if (ctrl) toggleGeoMultiSel('parkings', i);
+          else if (!isGeoMultiSelected('parkings', i)) S.multiSel.push({ type: 'parkings', idx: i });
+        }
+      });
+    }
+    S.sel = null;
   } else {
     S.sel = null;
     const lx1 = toLayoutX(cx1), ly1 = toLayoutY(cy1);
@@ -1407,9 +1510,9 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Space + left drag pans the plane view; wheel zooms around the cursor.
+// Space + left drag scrolls the canvas; wheel zooms the whole canvas around the cursor.
 var _spaceDown = false;
-var _panDrag = null;   // {canvX, canvY, panX, panY} at drag start
+var _panDrag = null;   // {x, y, left, top}: client pos and wrapper scroll at drag start
 function _isTypingTarget(t) {
   return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
 }
@@ -1433,16 +1536,19 @@ canvas.addEventListener('wheel', e => {
   const { canvX, canvY } = getCanvasCoords(e);
   const lx = toLayoutX(canvX), ly = toLayoutY(canvY);
   view.zoom = Math.max(0.25, Math.min(8, view.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
-  // keep the layout point under the cursor fixed
-  view.panX = canvX - (lx - LAYOUT_MIN) * scaleX();
-  view.panY = canvY - (ly - LAYOUT_MIN) * scaleY();
   redraw();
+  // keep the layout point under the cursor fixed by scrolling the wrapper
+  const wrap = document.getElementById('canvas-scroll');
+  const b = canvas.getBoundingClientRect();
+  wrap.scrollLeft += b.left + toCanvasX(lx) * (b.width / canvas.width) - e.clientX;
+  wrap.scrollTop  += b.top  + toCanvasY(ly) * (b.height / canvas.height) - e.clientY;
 }, { passive: false });
 
 canvas.addEventListener('mousedown', e => {
   const { canvX, canvY } = getCanvasCoords(e);
   if (_spaceDown && e.button === 0) {
-    _panDrag = { canvX, canvY, panX: view.panX, panY: view.panY };
+    const wrap = document.getElementById('canvas-scroll');
+    _panDrag = { x: e.clientX, y: e.clientY, left: wrap.scrollLeft, top: wrap.scrollTop };
     canvas.style.cursor = 'grabbing';
     return;
   }
@@ -1481,6 +1587,12 @@ setupResizer('rs-list', 'file-list', '--list-w', 1);
 setupResizer('rs-panel', 'panel', '--panel-w', -1);
 
 // Clicking the blank area of the centre column (outside the square canvas) also deselects.
+document.getElementById('canvas-scroll').addEventListener('mousedown', e => {
+  if (e.target !== e.currentTarget || e.offsetX > e.currentTarget.clientWidth || e.offsetY > e.currentTarget.clientHeight) return;
+  if (e.ctrlKey || e.metaKey) return;
+  S.sel = null; S.navSel = null; S.multiSel = []; S.wallSel = null;
+  redraw(); renderPanel();
+});
 document.getElementById('canvas-wrap').addEventListener('mousedown', e => {
   if (e.target !== e.currentTarget || view3dOn) return;
   if (e.ctrlKey || e.metaKey) return;
@@ -1490,10 +1602,9 @@ document.getElementById('canvas-wrap').addEventListener('mousedown', e => {
 
 canvas.addEventListener('mousemove', e => {
   if (_panDrag) {
-    const c = getCanvasCoords(e);
-    view.panX = _panDrag.panX + c.canvX - _panDrag.canvX;
-    view.panY = _panDrag.panY + c.canvY - _panDrag.canvY;
-    redraw();
+    const wrap = document.getElementById('canvas-scroll');
+    wrap.scrollLeft = _panDrag.left - (e.clientX - _panDrag.x);
+    wrap.scrollTop  = _panDrag.top  - (e.clientY - _panDrag.y);
     return;
   }
   if (!_dragStart) return;
@@ -1638,6 +1749,11 @@ function renderPanel() {
 
   // ── Navigation modes: hand off to nav panel renderer ──
   if (isNavMode(S.mode)) {
+    // Vehicle navigation: a selected parking rect is edited like a geometry element (rect + direction).
+    if (S.mode === 'vehicleNavigation' && S.sel && S.sel.type === 'parkings') {
+      panel.appendChild(makeSelSec());
+      return;
+    }
     renderNavPanel(panel);
     return;
   }
@@ -1694,6 +1810,16 @@ function renderNavPanel(panel) {
         redraw(); renderPanel();
       })
     ));
+    if (S.mode === 'vehicleNavigation') {
+      newSec.appendChild(div('row',
+        btn('+ 新建停车位', 'primary', () => {
+          snapshot();
+          S.data.parkings.push(makeDefault('parkings'));
+          S.sel = { type: 'parkings', idx: S.data.parkings.length - 1 };
+          redraw(); renderPanel();
+        })
+      ));
+    }
     panel.appendChild(newSec);
 
     // Add inner connection section
@@ -1991,6 +2117,7 @@ function makeSelSec() {
       redraw(); renderPanel();
     }),
     btn('删除', 'danger', () => {
+      if (type === 'parkings') { deleteParking(idx); return; }
       snapshot();
       elemArray.splice(idx, 1);
       S.sel = null;
@@ -2098,6 +2225,8 @@ function deleteSelected() {
         idxs.sort((a, b) => b - a).forEach(i => S.data[type].splice(i, 1));
       }
     } else {
+      S.multiSel.filter(s => s.type === 'parkings').map(s => s.idx).sort((a, b) => b - a)
+        .forEach(i => { if (S.data.parkings && i < S.data.parkings.length) removeParkingData(i); });
       const nodeSet = new Set(S.multiSel.filter(s => s.kind === 'node').map(s => s.idx));
       const lineSet = new Set(S.multiSel.filter(s => s.kind === 'line').map(s => s.idx));
       const connSet = new Set(S.multiSel.filter(s => s.kind === 'conn').map(s => s.idx));
@@ -2130,6 +2259,10 @@ function deleteSelected() {
     }
     S.multiSel = []; S.sel = null; S.navSel = null;
     redraw(); renderPanel();
+    return;
+  }
+  if (isNavMode(S.mode) && S.sel && S.sel.type === 'parkings') {
+    if (S.data.parkings && S.sel.idx < S.data.parkings.length) deleteParking(S.sel.idx);
     return;
   }
   if (!isNavMode(S.mode) && S.sel) {
@@ -2186,7 +2319,8 @@ function copySelected() {
     } else {
       const nav = activeNav();
       elements = S.multiSel
-        .map(({ kind, idx }) => {
+        .map(({ kind, type, idx }) => {
+          if (type === 'parkings') { const e = S.data.parkings?.[idx]; return e ? { type, element: e } : null; }
           const src = kind === 'node' ? nav.nodes[idx]
                     : kind === 'line' ? nav.lines[idx]
                     : nav.connections[idx];
@@ -2231,20 +2365,24 @@ async function pasteElement() {
     snapshot();
     S.multiSel = []; S.sel = null; S.navSel = null;
     const first = p.elements[0];
-    if (first && first.type) {
+    if (first && first.type && !p.elements.some(e => e.navKind)) {
       p.elements.forEach(({ type, element }) => {
         if (!type || S.data[type] === undefined || !element) return;
         S.data[type].push(JSON.parse(JSON.stringify(element)));
         S.multiSel.push({ type, idx: S.data[type].length - 1 });
       });
       S.mode = typeToMode(first.type) || S.mode;
-    } else if (first && first.navKind) {
+    } else if (first && (first.navKind || first.type === 'parkings')) {
       // Stay on the current navigation layer if already viewing one; otherwise
       // default to pedestrianNavigation (matches the old single-layer behavior).
       S.mode = isNavMode(S.mode) ? S.mode : 'pedestrianNavigation';
       const nav = activeNav();
-      p.elements.forEach(({ navKind, element }) => {
+      p.elements.forEach(({ navKind, type, element }) => {
         if (!element) return;
+        if (type === 'parkings' && S.data.parkings) {
+          S.data.parkings.push(JSON.parse(JSON.stringify(element)));
+          S.multiSel.push({ type: 'parkings', idx: S.data.parkings.length - 1 });
+        }
         if (navKind === 'node')  { nav.nodes.push(JSON.parse(JSON.stringify(element)));       S.multiSel.push({ kind: 'node', idx: nav.nodes.length - 1 }); }
         if (navKind === 'line')  { nav.lines.push(JSON.parse(JSON.stringify(element)));       S.multiSel.push({ kind: 'line', idx: nav.lines.length - 1 }); }
         if (navKind === 'conn')  { nav.connections.push(JSON.parse(JSON.stringify(element))); S.multiSel.push({ kind: 'conn', idx: nav.connections.length - 1 }); }
@@ -2569,6 +2707,7 @@ function renderLegend() {
       { color: NAV_CIRCLE_COLOR.node,      label: '独立节点' },
       { color: NAV_CIRCLE_COLOR.single,    label: '独立房间节点' },
       { color: NAV_CIRCLE_COLOR.row,       label: '联排房间节点' },
+      ...(S.mode === 'vehicleNavigation' ? [{ color: NAV_CIRCLE_COLOR.parking, label: '停车位节点(矩形中心)' }] : []),
       { color: NAV_CIRCLE_COLOR.lineStart, label: '路径起点' },
       { color: NAV_CIRCLE_COLOR.lineEnd,   label: '路径终点' },
       { color: 'rgba(255,255,255,0.7)',     label: '层内连接' },
@@ -2650,7 +2789,7 @@ function setViewMode(mode) {
   document.getElementById('vb-2d').classList.toggle('active', !on);
   document.getElementById('vb-3d').classList.toggle('active', on);
   document.getElementById('p3-box').style.display = on ? 'flex' : 'none';
-  document.getElementById('c').style.display = on ? 'none' : '';
+  document.getElementById('canvas-scroll').style.display = on ? 'none' : '';
   document.getElementById('view3d').style.display = on ? 'block' : 'none';
   document.getElementById('global-mode').disabled = on;
   if (on) { init3D(); rebuild3D(); start3DLoop(); }
@@ -2661,7 +2800,7 @@ function setViewMode(mode) {
 // Files without a handle (new / loaded through the <input> fallback) cannot be re-read: only the view is reset.
 async function refreshView() {
   if (view3dOn) resetCamera3D();
-  else { view.zoom = 1; view.panX = 0; view.panY = 0; }
+  else { view.zoom = 1; view.panX = 0; view.panY = 0; const w = document.getElementById('canvas-scroll'); w.scrollLeft = 0; w.scrollTop = 0; }
   const f = files[activeFileIdx];
   if (!f || !f.handle) { redraw(); if (f) alert('该文件没有磁盘句柄(新建或用备用方式加载)，无法重新读取，只重置了视图。'); return; }
   if (isFileDirty(f, activeFileIdx) && !confirm('当前文件有未保存的修改，重新读取会丢弃它们。继续？')) { redraw(); return; }
@@ -2889,6 +3028,7 @@ function rebuild3D() {
   planeOf('grounds', 0, 1, 0x8a8a8a);
   planeOf('ceilings', floorH, 0.35, 0xbbbbbb);
   planeOf('hatches', floorH, 0.5, 0x4488ff);
+  planeOf('parkings', 0.004, 0.6, 0x22bbaa);
 
   // walls (stairs / ramps / elevators contribute only their walls)
   for (const type of ['corridors', 'singles', 'rows', 'elevators', 'stairs', 'ramps']) {
@@ -2928,8 +3068,8 @@ function rebuild3D() {
         const a = evalPoint(l.begin), b = evalPoint(l.end);
         return ep.vertex === 0 ? a : ep.vertex === 1 ? b : [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
       }
-      if (ep.type === 'single' || ep.type === 'row') {
-        const it = (S.data[ep.type === 'single' ? 'singles' : 'rows'] || [])[ep.idx]; if (!it) return null;
+      if (ep.type === 'single' || ep.type === 'row' || ep.type === 'parking') {
+        const it = (S.data[ep.type === 'single' ? 'singles' : ep.type === 'row' ? 'rows' : 'parkings'] || [])[ep.idx]; if (!it) return null;
         const r = evalRect(it.rect, W, H);
         return [(r.x1 + r.x2) / 2, (r.y1 + r.y2) / 2];
       }

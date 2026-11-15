@@ -20,8 +20,7 @@
   通过`SetTransform`/`SetPitch`写回；`pitch`只有沿坡道/隧道行驶的线路载具才非零，纯运行时不存档。
 - `script`/`options`：自己的`Script`（按`mod->scriptModName`创建、按`mod->milestoneNames`加载
   milestone）和交互选项列表（照抄`Citizen`），驱动"靠近弹出上车选项"。
-- `room`+停车位局部坐标+旋转：`Traffic::InitParkedVehicles`生成时`SetParking`一次，只服务
-  于"生成时摆在哪"。
+- `room`+`parkingSlotIndex`+`parkState`+停车位局部偏移/旋转：车停在哪个房间的哪个车位，见下"车位"。
 - `route`/`routeLine`：线路公交由`Traffic::InitTransitVehicles`调`SetRouteBinding`设置，
   普通小汽车恒为`nullptr`；UE层据此决定生成`AVehicleElement`还是`ATransitVehicleElement`。
 
@@ -74,7 +73,7 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
 
 ## 当前所在房间：GetCurrentRoom / SetCurrentRoom
 
-运行时状态，不进存档。`SetParking`时初始化成停车位房间；测试导航出发时置空、到达时设成目的房间；玩家上车
+运行时状态，不进存档。`BindSlot`时初始化成停车位房间；测试导航出发时置空、到达时设成目的房间；玩家上车
 (`ApplyEnterVehicle`)时置空。`Map::PlanVehicleRoute`据此决定起点是房间导航节点还是路网上最近的车道。读档后为
 空（当作在室外）。
 
@@ -85,3 +84,17 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
 ## Core行驶推算（BeginDrive/AdvanceDrive）
 
 和`Citizen::BeginWalk/AdvanceWalk`对称：没有Actor的车由UE层给一条路线（UE单位cm、速度cm/s），Core按`nowSeconds`沿折线推算位置并写`Transform`（含yaw），走完`SetCurrentRoom(目的房间)`并返回true。`GetRemainingDrive`取从当前位置起的剩余路径，`EndDrive`取消。纯运行时，不进存档。用法见`Forever/Framework/ForeverTrafficFrameworkComponent.md`。
+
+## 车位
+
+车和车位互相记录(设计总览见`map/room.md`"停车位")：
+
+- **停靠**：`ParkState::Parked`+`room`+`parkingSlotIndex`，车位的`parkedVehicle`指向本车。`BindSlot(room, idx)`停进去(先`ReleaseSlot`)，
+  `ReleaseSlot()`离开(状态回`None`，`room`留作最后停靠的房间)，`GetParkingSlot()`只有`Parked`才非空。
+- **预定**：独立于停靠，`reservedRoom/reservedSlotIndex`+车位的`reservedBy`。`ReserveSlot(room, idx)`寻路开始就占住目的车位(被占返回false =
+  拒绝这次寻路)，`ClearReservation()`取消，`ArriveAtReservedSlot()`到达时把预定转成`Parked`。出库时先规划(原车位仍占着)、规划成功再`ReleaseSlot`。
+- **消失**：`ParkState::Vanished`——玩家把车停进它预定的车位、同房间又没有别的空位时，`SetVanished(room)`让它离开地图并视为已到达room；
+  它没有Actor，下次寻路由`StartVehicleNavigation`直接瞬移到目的车位(`ArriveAtReservedSlot`+写位姿)。
+- **倒车出库**：`DrivePoint.reverse`标记"以这个点为起点的那一段是倒车"，车头朝向取行进方向的反向；`SampleDrive`/`BeginDrive`据此算yaw，
+  `IsDriveReversing(now)`查当前是否在倒车段。车长取`VehicleMod::sizeX`(UE单位)。
+- 存档：`parkState`(U8)+`parkingSlotIndex`(I32)，见`traffic_save.md`；预定不存(读档没有行驶路径)。

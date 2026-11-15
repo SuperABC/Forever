@@ -182,6 +182,9 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, SaveArchive&
 		w.Str(v->route ? v->route->GetName() : string());
 		w.I32(v->routeLine);
 		w.F32(v->x); w.F32(v->y); w.F32(v->z); w.F32(v->yaw);
+		// 车位占用：只存Parked/Vanished；在途预定读档后没有行驶路径，不存，见vehicle.md"车位"。
+		w.U8(static_cast<uint8_t>(v->parkState));
+		w.I32(v->parkState == Vehicle::ParkState::Parked ? v->parkingSlotIndex : -1);
 	}
 
 	archive.SetBinary(SAVE_SECTION_TRAFFIC, VersionOf(SAVE_SECTION_TRAFFIC), w.Take());
@@ -312,6 +315,8 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 			string routeName = r.Str();
 			int routeLine = r.I32();
 			float x = r.F32(), y = r.F32(), z = r.F32(), yaw = r.F32();
+			int parkState = r.U8();
+			int parkingSlotIndex = r.I32();
 			if (r.Failed()) break;
 
 			Vehicle* vehicle = new Vehicle(&traffic->vehicleFactory, &traffic->scriptFactory, modId, name);
@@ -339,6 +344,12 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 			vehicle->routeLine = routeLine;
 			if (vehicle->script && vehicle->route) vehicle->script->SetValue("on_route", ValueType(1));
 			vehicle->x = x; vehicle->y = y; vehicle->z = z; vehicle->yaw = yaw;
+			if (parkState == static_cast<int>(Vehicle::ParkState::Parked) && room) {
+				vehicle->BindSlot(room, parkingSlotIndex);
+				// BindSlot会刷新parking*字段，位姿以存档的x/y/z/yaw为准。
+			} else if (parkState == static_cast<int>(Vehicle::ParkState::Vanished) && room) {
+				vehicle->SetVanished(room);
+			}
 		}
 
 		for (auto& [route, lineVehicles] : pendingLineVehicles) {

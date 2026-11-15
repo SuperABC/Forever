@@ -54,8 +54,12 @@ void AirportBuilding::Layout(int& direction, const Quad& quad,
 
 	constexpr const char* kComponent = "component_airport";
 	constexpr int kComponentId = 0;
-	AssignFloor(0, "preset_common_single_fg", direction);
+	// 专用模板：在普通single模板上加了两个停机位矩形(停机位在房间两侧外面，机头朝房间深处的跑道)，见building.md"停车位"。
+	AssignFloor(0, "preset_airport_single_fg", direction);
 	AssignRoom(0, 0, "room_airport", kComponent, kComponentId);
+	// 每个矩形只够一架飞机(间距6个地图单位以上才切出第二个)。
+	AssignParking(0, 0, 0, 0.6f, { "plane" });
+	AssignParking(0, 0, 1, 0.6f, { "plane" });
 }
 
 void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

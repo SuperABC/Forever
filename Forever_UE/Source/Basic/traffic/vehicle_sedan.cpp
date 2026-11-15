@@ -21,4 +21,9 @@ void SedanVehicle::SetProperty() {
 	milestoneNames = { "vehicle_basic" };
 
 	drivable = true;
+
+	// 车身尺寸(UE单位cm)：sizeX=车长，Core据此算倒车出库距离(2倍车长)，见vehicle.md"车位"。占位值，按蓝图网格实际包围盒调。
+	sizeX = 450.f;
+	sizeY = 180.f;
+	sizeZ = 150.f;
 }

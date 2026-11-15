@@ -2981,6 +2981,64 @@ Map::VehicleRoutePlan Map::PlanVehicleRouteToNode(Room* startRoom, float x, floa
 	return plan;
 }
 
+Map::VehicleRoutePlan Map::PlanVehicleRouteFromSlot(const Room* room, const ParkingSlot* slot, int destNodeId,
+	float vehicleLength) const {
+	VehicleRoutePlan plan;
+	Node* startNode = slot ? slot->navigationNode : nullptr;
+	if (!startNode) return plan; // NO_ROAD_CONNECTION
+	auto outIt = vehicleNavGraph.find(startNode->GetId());
+	if (outIt == vehicleNavGraph.end() || outIt->second.empty()) return plan;
+
+	if (startNode->GetId() == destNodeId) {
+		plan.status = VehicleRoutePlan::OK;
+		return plan;
+	}
+	plan.points.push_back({ startNode->GetX(), startNode->GetY(), startNode->GetZ() });
+	if (!AppendLegPoints(startNode->GetId(), destNodeId, plan.points, &plan.edges)) {
+		plan.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+		plan.points.resize(1);
+		plan.edges.clear();
+		AppendConnectionPoints(plan.points, outIt->second.front().second, &plan.edges);
+		return plan;
+	}
+	plan.status = VehicleRoutePlan::OK;
+
+	Building* building = room ? room->GetParentBuilding() : nullptr;
+	if (vehicleLength <= 0.f || !building || plan.points.size() < 2) return plan;
+
+	// 倒车方向=车位开口朝向(车头朝里，倒车就是朝开口方向退)，世界yaw=建筑旋转+建筑局部朝向角。
+	float yaw = slot->FacingYawDegrees() * 3.14159265f / 180.f + building->GetRotation();
+	float dx = cosf(yaw), dy = sinf(yaw);
+	const NavPoint start = plan.points[0];
+	// 倒车终点：越过与车位相连的connection另一端(第一条边的终点N)再多倒一个车长，即倒车结束时车身中心离N约1个车长。
+	size_t connectionEnd = plan.edges.empty() ? 1 : static_cast<size_t>(plan.edges.front().lastPoint);
+	if (connectionEnd >= plan.points.size()) connectionEnd = plan.points.size() - 1;
+	float reverseDistance = max(0.f, (plan.points[connectionEnd].x - start.x) * dx + (plan.points[connectionEnd].y - start.y) * dy) + vehicleLength;
+	NavPoint reverseEnd = { start.x + dx * reverseDistance, start.y + dy * reverseDistance, start.z };
+
+	// 丢掉开头和倒车方向共线的点(车位到路网锚点那段直线)，倒车终点之后直接接第一个不共线的点。
+	constexpr float kCollinearEpsilon = 0.01f; // 地图单位(10cm)
+	size_t k = 1;
+	while (k + 1 < plan.points.size()) {
+		float ox = plan.points[k].x - start.x, oy = plan.points[k].y - start.y;
+		float along = ox * dx + oy * dy, lateral = fabsf(ox * dy - oy * dx);
+		if (along < -kCollinearEpsilon || lateral > kCollinearEpsilon) break;
+		k++;
+	}
+	vector<NavPoint> points = { start, reverseEnd };
+	points.insert(points.end(), plan.points.begin() + k, plan.points.end());
+	vector<NavEdge> edges;
+	for (const NavEdge& edge : plan.edges) {
+		if (edge.lastPoint < static_cast<int>(k)) continue;
+		int first = edge.firstPoint < static_cast<int>(k) ? 1 : edge.firstPoint - static_cast<int>(k) + 2;
+		edges.push_back({ edge.edge, first, edge.lastPoint - static_cast<int>(k) + 2 });
+	}
+	plan.points = std::move(points);
+	plan.edges = std::move(edges);
+	plan.reverseFirstSegment = true;
+	return plan;
+}
+
 Map::VehicleRoutePlan Map::PlanVehicleRouteToPoint(Room* startRoom, float x, float y, float destX, float destY,
 	bool useHeading, float headingX, float headingY) const {
 	VehicleRoutePlan best;

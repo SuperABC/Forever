@@ -249,8 +249,16 @@ public:
 		Status status = NO_ROAD_CONNECTION;
 		std::vector<NavPoint> points;
 		std::vector<NavEdge> edges; // 按行进顺序，与points的下标对应
+		// 第一段(points[0]->points[1])是倒车：车头朝向与行进方向相反。只有PlanVehicleRouteFromSlot的出库路线会置位。
+		bool reverseFirstSegment = false;
 	};
 	VehicleRoutePlan PlanVehicleRoute(Room* startRoom, float x, float y, Room* destRoom) const;
+
+	// 车停在room的车位slot里出库：从车位导航节点出发规划到destNodeId(语义同PlanVehicleRouteToNode)，并在最前面
+	// 加一段倒车：车沿车位开口方向倒出，越过与车位相连的connection另一端N再多倒一个车长vehicleLength(地图单位)，之后再向前沿导航线拐弯。
+	// 车位节点到路网之间那段与倒车方向共线的点会被丢弃(倒车终点之后直接接路网上的点)；vehicleLength<=0不加倒车段。
+	VehicleRoutePlan PlanVehicleRouteFromSlot(const Room* room, const ParkingSlot* slot, int destNodeId,
+		float vehicleLength) const;
 
 	// 公交站辅助导航节点：stationNode不在vehicleNavGraph里(Station自己拥有，导航图参与存档/析构)，在此单独登记(运行时、不存档、不拥有)。
 	// 站作终点=路径到laneFrom再走inEdge；作起点=先走outEdge再从laneTo出发；同段车道上起点在上游=两个stationNode直线弦(见route.md"同车道特例")。

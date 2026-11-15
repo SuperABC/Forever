@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <tuple>
 #include <utility>
 
@@ -54,6 +55,14 @@ struct ElevatorCabinSpec {
 	// milestoneNames非空才创建Script,见Core/map/cabin.md。
 	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
+};
+
+// 把layout里第parkingIndex个停车位矩形沿垂直朝向方向按spacing(地图单位)切成若干车位,
+// categories是允许停入的载具种类(VehicleMod::GetCategory()的名字,如"car"/"bus"/"truck"/"plane")。
+struct ParkingSlotSpec {
+	int parkingIndex = 0;
+	float spacing = 0.f;
+	std::vector<std::string> categories;
 };
 
 // 设计见building_mod.md。
@@ -111,6 +120,12 @@ public:
 	// 同ArrangeRow,但切出的每个Room各自独立一个componentType类型的Component(不共用)。
 	void ArrangeRowEach(int level, int slot, const std::string& room, float acreage, const std::string& component);
 
+	// 把第level层第parkingIndex个停车位矩形(layout "parkings")分割出的车位全部归入第slot个single槽位的
+	// 房间(通常是room_parking)。spacing是车位最小宽度(地图单位),车位数=floor(矩形边长/spacing),
+	// categories见ParkingSlotSpec。同一个房间可以归入多个矩形。
+	void AssignParking(int level, int slot, int parkingIndex, float spacing,
+		const std::vector<std::string>& categories);
+
 	// 声明一台电梯轿厢,同一口井可声明多台(楼层范围不能重叠,重叠的后一条被跳过)。
 	void AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, std::string cabinMeshPath = "",
 		std::string scriptModName = "script_empty", std::vector<std::string> milestoneNames = {});
@@ -127,6 +142,8 @@ public:
 		BuildingComponentKeyHash> rows;
 	// ArrangeRowEach记录的row槽位:(level, slot, roomType, acreage, componentType),每个Room独立Component。
 	std::vector<std::tuple<int, int, std::string, float, std::string>> eachRows;
+	// (level, single槽位) -> [车位矩形分割规格],AssignParking记录。
+	std::map<std::pair<int, int>, std::vector<ParkingSlotSpec>> parkings;
 	// AssignElevatorCabin记录的电梯轿厢列表。
 	std::vector<ElevatorCabinSpec> cabins;
 

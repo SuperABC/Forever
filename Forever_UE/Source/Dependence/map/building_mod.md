@@ -34,3 +34,11 @@
 
 ## 楼体空隙填充（gapMaterial）
 `std::string gapMaterial`：building 整块 quad 与楼体(body)之间空隙的地面材质软路径，空=不填充（默认）。Core 在 `Building::Layout` 拷贝成快照 `gapMaterialPath`（进存档）。
+
+## 停车位映射 `parkings` / `AssignParking`
+
+`std::map<std::pair<int,int>, std::vector<ParkingSlotSpec>> parkings`：(楼层, single room slot) → 这个房间用的停车位矩形列表；
+`ParkingSlotSpec{parkingIndex(layout里parkings的下标), spacing(切分间距，地图单位), categories(可停种类)}`。
+`AssignParking(level, slot, parkingIndex, spacing, categories)`是**新增的非虚成员**(仿`AssignRoom`)，不改任何现有虚函数/继承。
+车位数=`floor(矩形沿垂直开口方向的边长/spacing)`，实际车位宽度>=spacing。Basic里各停车场建筑在`AssignRoom(room_parking)`之后调用，
+间距/种类由各建筑mod在`Layout()`里直接写明。

@@ -1,6 +1,20 @@
 {
    "app_mods" : [],
-   "asset_mods" : [ "asset_burger", "asset_container" ],
+   "asset_mods" : [
+      "asset_burger",
+      "asset_container",
+      "asset_ammo_pistol",
+      "asset_ammo_rifle",
+      "asset_ammo_shotgun",
+      "asset_ammo_sniper",
+      "asset_pistol",
+      "asset_rifle",
+      "asset_shotgun",
+      "asset_sniper",
+      "asset_camera",
+      "asset_grenade",
+      "asset_smoke_grenade"
+   ],
    "building_mods" : [
       "building_residence_high",
       "building_industry_high",
@@ -69,7 +83,19 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
    ],
    "terrain_mods" : [ "terrain_ocean", "terrain_mountain", "terrain_river", "terrain_empty" ],
-   "vehicle_mods" : [ "vehicle_plane", "vehicle_train", "vehicle_bus" ],
-   "weapon_mods" : [],
+   "vehicle_mods" : [
+      "vehicle_plane",
+      "vehicle_train",
+      "vehicle_bus",
+      "vehicle_truck",
+      "vehicle_sedan"
+   ],
+   "weapon_mods" : [
+      "weapon_pistol",
+      "weapon_rifle",
+      "weapon_shotgun",
+      "weapon_sniper",
+      "weapon_camera"
+   ],
    "zone_mods" : [ "zone_residence_high" ]
 }

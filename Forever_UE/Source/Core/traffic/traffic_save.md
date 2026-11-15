@@ -25,7 +25,7 @@
   - `links`（两个端点、`withinStation`、**最终几何**的 `TrackSegment` 列表）；
   - `lines`（每条线路的 `{name,stopIndex}` 条目）；
   - 每条线路上的车：车名，顺序决定发车相位。
-- **车辆**（按名字排序），每辆记：mod 注册 id、mod 状态、交互选项、停车位（房间 + 局部坐标 + 朝向）、线路绑定、位置。
+- **车辆**（按名字排序），每辆记：mod 注册 id、mod 状态、交互选项、停车位（房间 + 局部坐标 + 朝向 + `parkState` + `parkingSlotIndex`；读档后对`Parked`的车`BindSlot`、`Vanished`的车`SetVanished`重建占用，在途预定不存）、线路绑定、位置。
 
 ## 关键设计
 
