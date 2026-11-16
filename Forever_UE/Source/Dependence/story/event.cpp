@@ -608,6 +608,35 @@ const std::string& NpcArriveEvent::GetAddress() const {
 	return address;
 }
 
+ExecuteTaskEvent::ExecuteTaskEvent(std::string task, std::string destination) :
+	task(move(task)), destination(move(destination)) {
+
+}
+
+ExecuteTaskEvent::~ExecuteTaskEvent() {
+
+}
+
+const string& ExecuteTaskEvent::GetType() const {
+	static const string type = "execute_task";
+	return type;
+}
+
+bool ExecuteTaskEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<ExecuteTaskEvent*>(e);
+	if (!task.empty() && ToString(EvaluateExpression(task, context)) != other->task) return false;
+	if (!destination.empty() && ToString(EvaluateExpression(destination, context)) != other->destination) return false;
+	return true;
+}
+
+pair<bool, ValueType> ExecuteTaskEvent::GetLocalValue(const string& key) const {
+	if (key == "task") return { true, ValueType(task) };
+	if (key == "destination") return { true, ValueType(destination) };
+	return { false, ValueType() };
+}
+
 VehicleArriveEvent::VehicleArriveEvent(std::string vehicle, std::string address) :
 	vehicle(move(vehicle)), address(move(address)) {
 

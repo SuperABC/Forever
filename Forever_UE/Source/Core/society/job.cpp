@@ -17,6 +17,10 @@ Job::Job(JobFactory* factory, ScriptFactory* scriptFactory, const string& id, Ro
 	if (script) {
 		// 供milestone脚本里$$self.name引用这个Job的唯一名字（JobMod的GetName()）。
 		script->SetValue("name", ValueType(string(mod->GetName())));
+		// 组织派的任务(assign_task)：task=进行中的任务类别标签(空串=空闲)，由Traffic::BeginTask/EndTask写；
+		// overtime=下班时任务还没做完(1)，由脚本置位，见job.md。
+		script->SetValue("task", ValueType(string()));
+		script->SetValue("overtime", ValueType(0));
 	}
 }
 

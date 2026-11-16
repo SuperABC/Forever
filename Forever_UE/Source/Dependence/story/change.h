@@ -504,6 +504,37 @@ private:
 
 };
 
+// 组织派员工执行任务：员工自己走到destination，或(vehicle非空时)开组织的这类载具去destination再回来。
+// 字段都是表达式源码：task=任务类别标签(Core不解释，只写进员工脚本的task变量和execute_task事件)；
+// vehicle=空串走路/载具category(如"truck")；round_trip=空串或"true"表示去完返回；worker=空串自动挑闲置员工，否则员工名。
+class AssignTaskChange : public Change {
+public:
+	AssignTaskChange();
+
+	AssignTaskChange(std::string task, std::string destination, std::string vehicle, std::string roundTrip, std::string worker);
+
+	virtual ~AssignTaskChange();
+
+	virtual const std::string& GetType() const override;
+
+	const std::string& GetTask() const;
+
+	const std::string& GetDestination() const;
+
+	const std::string& GetVehicle() const;
+
+	const std::string& GetRoundTrip() const;
+
+	const std::string& GetWorker() const;
+
+private:
+	std::string task;
+	std::string destination;
+	std::string vehicle;
+	std::string roundTrip;
+	std::string worker;
+};
+
 // 瞬移角色
 class TeleportPlayerChange : public Change {
 public:
@@ -618,6 +649,24 @@ private:
 // 给玩家显示"到某个房间怎么走"的导航线（UE-only效果，见UForeverTrafficFrameworkComponent::StartGuide）：
 // 玩家步行就按人行道画，开车就按车道画（车到不了的房间画到建筑1楼外部连接点附近的车道），其它情况不画；
 // 切换操控时自动刷新，玩家进入目标房间后消失。目前只支持房间地址。
+// 开发调试：切换显示/隐藏某个市民或载具当前寻路轨迹(剩余路径折线，持续刷新)。target是姓名/载具名(表达式)，
+// 先按载具名找，找不到再按市民姓名找。UE-only效果，见UForeverTrafficFrameworkComponent::ToggleRouteWatch。
+class ShowRouteChange : public Change {
+public:
+	ShowRouteChange();
+
+	ShowRouteChange(std::string target);
+
+	virtual ~ShowRouteChange();
+
+	virtual const std::string& GetType() const override;
+
+	const std::string& GetTarget() const;
+
+private:
+	std::string target;
+};
+
 class VisualizeNavigationChange : public Change {
 public:
 	VisualizeNavigationChange();

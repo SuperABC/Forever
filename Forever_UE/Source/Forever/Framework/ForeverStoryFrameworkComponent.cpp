@@ -436,6 +436,24 @@ void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, Room*
 	npcArriveDepth--;
 }
 
+void UForeverStoryFrameworkComponent::BroadcastExecuteTask(Citizen* citizen, const string& task, const string& destination) {
+	if (!story || !GEngine || !citizen || !citizen->GetJob()) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	// 只发给被派任务的员工自己的Job脚本。
+	ExecuteTaskEvent event(task, destination);
+	BroadcastToScript(event, citizen->GetJob()->GetScript(), postImplement);
+}
+
 void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& name, const FString& reason) {
 	CitizenDeceaseEvent event(string(TCHAR_TO_UTF8(*name)), string(TCHAR_TO_UTF8(*reason)));
 	BroadcastCitizenDecease(event);

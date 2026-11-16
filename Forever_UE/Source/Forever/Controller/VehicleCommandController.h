@@ -33,6 +33,8 @@ struct FVehicleCommand
 	bool bStartAtStop = false;         // LoopNodes：车当前就停在nodes[loopStart-1]（循环的上一个节点）
 	float startDwellSeconds = 0.f;     // bStartAtStop时先在那个站再停多久（真实秒）
 	bool bFireEnterAtStart = false;    // bStartAtStop时是否对那个站补发进站（NavigateToNode刚到站后接循环用）
+	int32 legFromNode = -1;            // LoopNodes中途接管(!bStartAtStop)：这一腿的出发站节点。>=0时第一腿按这条站间路线(PlanVehicleLeg，和Core时刻表同一条)走，
+	                                   // 车从离自己最近的点汇入；-1才从当前位置重新规划(会选到别的车道/方向，在路中间掉头)
 	bool bStopAlreadyEntered = false;  // bStartAtStop时进站事件已经发过（Core时刻表接管给物理时），只负责之后补发出站
 	TArray<FVector> waypoints;         // FollowPath：折线
 	bool bReverseFirst = false;        // FollowPath：第一段(waypoints[0]->[1])是倒车

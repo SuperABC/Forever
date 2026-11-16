@@ -603,6 +603,45 @@ const string& NPCNavigateChange::GetDestination() const {
 	return destination;
 }
 
+AssignTaskChange::AssignTaskChange() :
+	task(), destination(), vehicle(), roundTrip(), worker() {
+
+}
+
+AssignTaskChange::AssignTaskChange(string task, string destination, string vehicle, string roundTrip, string worker) :
+	task(move(task)), destination(move(destination)), vehicle(move(vehicle)), roundTrip(move(roundTrip)), worker(move(worker)) {
+
+}
+
+AssignTaskChange::~AssignTaskChange() {
+
+}
+
+const string& AssignTaskChange::GetType() const {
+	static const string type = "assign_task";
+	return type;
+}
+
+const string& AssignTaskChange::GetTask() const {
+	return task;
+}
+
+const string& AssignTaskChange::GetDestination() const {
+	return destination;
+}
+
+const string& AssignTaskChange::GetVehicle() const {
+	return vehicle;
+}
+
+const string& AssignTaskChange::GetRoundTrip() const {
+	return roundTrip;
+}
+
+const string& AssignTaskChange::GetWorker() const {
+	return worker;
+}
+
 TeleportPlayerChange::TeleportPlayerChange() :
 	destination() {
 
@@ -752,6 +791,27 @@ void EnterVehicleChange::SetVehicle(std::string vehicle) {
 
 const std::string& EnterVehicleChange::GetVehicle() const {
 	return vehicle;
+}
+
+ShowRouteChange::ShowRouteChange() : target() {
+
+}
+
+ShowRouteChange::ShowRouteChange(std::string target) : target(move(target)) {
+
+}
+
+ShowRouteChange::~ShowRouteChange() {
+
+}
+
+const string& ShowRouteChange::GetType() const {
+	static const string type = "show_route";
+	return type;
+}
+
+const std::string& ShowRouteChange::GetTarget() const {
+	return target;
 }
 
 VisualizeNavigationChange::VisualizeNavigationChange() :

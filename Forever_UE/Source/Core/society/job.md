@@ -174,3 +174,8 @@ Actor层。
 ## 开放/关闭
 
 `Job::IsOpen()`/`SetClosed()`：岗位关闭后不算空缺、不招人、不发工资，占用者必须已被清掉。月结裁员和企业倒闭走关闭，扩招和重启走重开（先重开已有的再新建），Job对象只增不删——存档按`Organization::jobs`的顺序写、脚本键`job:<组织下标>:<岗位下标>`依赖这个顺序。存档里每个Job记录末尾追加一个`U8 closed`。
+
+## 任务变量（2026-11-16）
+
+Job脚本构造时写`task`(空串)和`overtime`(0)：`task`由Core在组织任务开始时置为任务标签、员工回到工位时清空(`Traffic::BeginTask/EndTask`)；
+`overtime`由脚本在下班时任务未完成时置1，回到工位的`arrive_work`里直接导航回家并清零。见job_factory_worker.script。

@@ -27,6 +27,8 @@
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "player/player.h"
+#include "populace/populace.h"
+#include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "ProceduralMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -400,6 +402,19 @@ AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry, b
 		return nullptr;
 	}
 
+	// 行进中的车(Core推算中)：车头对准当前路线的前进方向(倒车段则车尾朝前进方向)，不用上次记下的朝向，
+	// 否则刚生成就要掉头。取剩余路径里第一段有长度的线段。
+	if (entry.vehicle && entry.vehicle->IsDriving() && GetWorld()) {
+		std::vector<Vehicle::DrivePoint> remaining;
+		entry.vehicle->GetRemainingDrive(GetWorld()->GetTimeSeconds(), remaining);
+		for (size_t i = 1; i < remaining.size(); i++) {
+			const float dx = remaining[i].x - remaining[i - 1].x, dy = remaining[i].y - remaining[i - 1].y;
+			if (dx * dx + dy * dy < 1.f) continue;
+			entry.yaw = FMath::RadiansToDegrees(FMath::Atan2(dy, dx)) + (remaining[i - 1].reverse ? 180.f : 0.f);
+			break;
+		}
+	}
+
 	if (bCheckSpace) {
 		// 行进中的车（Core推算中）路口附近不生成，等它开出去；停着的车不限制。
 		if (entry.vehicle && entry.vehicle->IsDriving() && IsNearJunction(entry.location)) return nullptr;
@@ -445,6 +460,7 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 	UpdateBusPhysicsHandoff();
 	ProcessNavResults();
 	ProcessPendingNavigations();
+	UpdateRouteWatches(DeltaTime);
 
 	// 读档后把存档时有Actor的车强制生成回来(不看距离)，在Core里行驶的接着交给Controller开。
 	if (pendingRestoreVehicleSpawns.Num() > 0 && trafficRef) {
@@ -494,6 +510,7 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 		if (!element) {
 			// 被玩家停车挤掉位置、已从地图上消失的车：不生成，等下次寻路瞬移到目的车位。
 			if (entry.vehicle && entry.vehicle->GetParkState() == Vehicle::ParkState::Vanished) continue;
+			if (skipDrives.Contains(entry.name)) continue; // 跳时间虚拟时钟上的车：没有位置，不生成
 			// 没有Actor但在Core里推算行驶的车（vehicle_navigate）：按时间推进位置，走完发抵达，之后照常按位置判断要不要生成。
 			if (entry.vehicle && entry.vehicle->IsDriving()) {
 				Room* driveDestination = entry.vehicle->GetDriveDestination();
@@ -1524,6 +1541,8 @@ bool UForeverTrafficFrameworkComponent::BusToPhysics(FBusState& state) {
 	}
 	else {
 		command.loopStart = (schedule.legIndex + 1) % count;
+		// 这一腿正在站间路上：控制器沿这一腿的原路线(出发站->下一站)走，不要从当前位置重新规划。
+		command.legFromNode = nodes[schedule.legIndex % count];
 	}
 	controller->PushCommand(command);
 	return true;
@@ -1620,6 +1639,308 @@ void UForeverTrafficFrameworkComponent::NavigateVehicleToSlot(const FString& veh
 	request.presetRoom = room;
 	request.presetSlot = slotIndex;
 	pendingNavigations.Add(request);
+}
+
+bool UForeverTrafficFrameworkComponent::GetVehicleRoutePath(Vehicle* vehicle, TArray<FVector>& outPath) {
+	outPath.Reset();
+	if (!vehicle || !GetWorld()) return false;
+	const FString name = UTF8_TO_TCHAR(vehicle->GetName().c_str());
+	if (const FSkipDrive* drive = skipDrives.Find(name)) {
+		for (const Vehicle::DrivePoint& point : drive->path) outPath.Add(FVector(point.x, point.y, point.z - TRAFFIC_HEIGHT_EPSILON));
+		return outPath.Num() >= 2;
+	}
+	if (FCarEntry* entry = FindCarEntry(vehicle)) {
+		if (entry->element.IsValid()) {
+			if (TWeakObjectPtr<AVehicleCommandController>* driver = carDrivers.Find(name); driver && driver->IsValid()) {
+				return (*driver)->GetRemainingWaypoints(outPath) && outPath.Num() >= 2;
+			}
+			return false;
+		}
+	}
+	if (vehicle->IsDriving()) {
+		std::vector<Vehicle::DrivePoint> remaining;
+		vehicle->GetRemainingDrive(GetWorld()->GetTimeSeconds(), remaining);
+		for (const Vehicle::DrivePoint& point : remaining) outPath.Add(FVector(point.x, point.y, point.z - TRAFFIC_HEIGHT_EPSILON));
+	}
+	return outPath.Num() >= 2;
+}
+
+void UForeverTrafficFrameworkComponent::ToggleRouteWatch(const FString& name) {
+	if (FRouteWatch* existing = routeWatches.Find(name)) {
+		if (existing->mesh) existing->mesh->DestroyComponent();
+		routeWatches.Remove(name);
+		return;
+	}
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	AActor* owner = GetOwner();
+	if (!framework || !owner) return;
+	const std::string nameUtf8 = TCHAR_TO_UTF8(*name);
+	FRouteWatch watch;
+	if (trafficRef && trafficRef->FindVehicleByName(nameUtf8)) {
+		watch.bCitizen = false;
+	}
+	else if (framework->GetPopulace() && framework->GetPopulace()->FindCitizenByName(nameUtf8)) {
+		watch.bCitizen = true;
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("show_route: 找不到载具或市民 %s"), *name);
+		return;
+	}
+	watch.mesh = NewObject<UProceduralMeshComponent>(owner, NAME_None);
+	watch.mesh->SetupAttachment(owner->GetRootComponent());
+	watch.mesh->RegisterComponent();
+	owner->AddInstanceComponent(watch.mesh);
+	if (pureBaseMaterial) {
+		watch.material = UMaterialInstanceDynamic::Create(pureBaseMaterial, this);
+		watch.material->SetVectorParameterValue(TEXT("Color"), watch.bCitizen ? FLinearColor(0.3f, 1.f, 0.35f) : FLinearColor(1.f, 0.6f, 0.15f));
+		watch.mesh->SetMaterial(0, watch.material);
+	}
+	routeWatches.Add(name, watch);
+	routeWatchCountdown = 0.f; // 下一帧就画
+}
+
+void UForeverTrafficFrameworkComponent::UpdateRouteWatches(float deltaTime) {
+	if (routeWatches.Num() == 0) return;
+	routeWatchCountdown -= deltaTime;
+	if (routeWatchCountdown > 0.f) return;
+	routeWatchCountdown = 0.2f;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	for (TPair<FString, FRouteWatch>& pair : routeWatches) {
+		FRouteWatch& watch = pair.Value;
+		if (!watch.mesh) continue;
+		const std::string nameUtf8 = TCHAR_TO_UTF8(*pair.Key);
+		TArray<FVector> path;
+		bool bHasPath = false;
+		if (watch.bCitizen) {
+			Citizen* citizen = framework && framework->GetPopulace() ? framework->GetPopulace()->FindCitizenByName(nameUtf8) : nullptr;
+			UForeverPopulaceFrameworkComponent* populaceFramework = framework ? framework->GetPopulaceFramework() : nullptr;
+			bHasPath = citizen && populaceFramework && populaceFramework->GetRoutePath(citizen, path);
+		}
+		else {
+			bHasPath = GetVehicleRoutePath(trafficRef ? trafficRef->FindVehicleByName(nameUtf8) : nullptr, path);
+		}
+		watch.mesh->ClearMeshSection(0);
+		if (!bHasPath) continue;
+		constexpr float kLift = 80.f, kHalfWidth = 30.f;
+		TArray<FVector> vertices;
+		TArray<int32> triangles;
+		for (int32 i = 0; i + 1 < path.Num(); i++) {
+			AppendRouteEdgeRibbon(vertices, triangles, path[i] + FVector(0.f, 0.f, kLift), path[i + 1] + FVector(0.f, 0.f, kLift), kHalfWidth);
+		}
+		AppendRouteStationBox(vertices, triangles, FVector2D(path.Last().X, path.Last().Y),
+			ROUTE_DEBUG_NODE_HALF_SIZE, path.Last().Z + kLift, path.Last().Z + kLift + 200.f);
+		watch.mesh->CreateMeshSection(0, vertices, triangles,
+			TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), false);
+		if (watch.material) watch.mesh->SetMaterial(0, watch.material);
+	}
+}
+
+void UForeverTrafficFrameworkComponent::TeardownVehicleActor(FCarEntry* entry, const FString& name) {
+	if (!entry) return;
+	if (TWeakObjectPtr<AVehicleCommandController>* driver = carDrivers.Find(name)) {
+		if (driver->IsValid()) driver->Get()->ClearCommands();
+		carDrivers.Remove(name);
+	}
+	if (AVehicleElement* element = entry->element.Get()) {
+		activeVehicles.Remove(name);
+		entry->element = nullptr;
+		const float remaining = minVehicleLifetime - static_cast<float>(GetWorld()->GetTimeSeconds() - entry->spawnedAt);
+		if (remaining > 0.f) {
+			element->SetActorHiddenInGame(true);
+			element->SetActorEnableCollision(false);
+			TWeakObjectPtr<AVehicleElement> weakElement(element);
+			FTimerHandle handle;
+			GetWorld()->GetTimerManager().SetTimer(handle, [weakElement]() {
+				if (weakElement.IsValid()) weakElement->Destroy();
+			}, remaining, false);
+		}
+		else {
+			element->Destroy();
+		}
+	}
+}
+
+namespace {
+	double DrivePathLength(const std::vector<Vehicle::DrivePoint>& path) {
+		double length = 0.0;
+		for (size_t i = 1; i < path.size(); i++) {
+			const double dx = path[i].x - path[i - 1].x, dy = path[i].y - path[i - 1].y, dz = path[i].z - path[i - 1].z;
+			length += FMath::Sqrt(dx * dx + dy * dy + dz * dz);
+		}
+		return length;
+	}
+}
+
+void UForeverTrafficFrameworkComponent::RegisterSkipDrive(Vehicle* core, Room* destination, const std::vector<Vehicle::DrivePoint>& path, bool bRandom) {
+	if (!core || !destination) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	const double gameSecondsPerRealSecond = 60.0 * (player ? player->GetTimeFlowRatio() : 10.0);
+	const double speedUU = FMath::Max(1.0, static_cast<double>(GetDefault<AVehicleCommandController>()->maxSpeed) * kUnspawnedDriveSpeedScale);
+	FSkipDrive& drive = skipDrives.FindOrAdd(UTF8_TO_TCHAR(core->GetName().c_str()));
+	drive.vehicle = core;
+	drive.destination = destination;
+	drive.path = path;
+	drive.bRandom = bRandom;
+	drive.totalSeconds = DrivePathLength(path) / speedUU * gameSecondsPerRealSecond;
+	drive.remainingSeconds = drive.totalSeconds - (framework ? framework->GetSkipCreditSeconds() : 0.0);
+}
+
+void UForeverTrafficFrameworkComponent::BeginTimeSkip() {
+	bTimeSkipping = true;
+	if (!trafficRef || !GetWorld()) return;
+	const double now = GetWorld()->GetTimeSeconds();
+	for (FCarEntry& entry : carEntries) {
+		Vehicle* core = entry.vehicle;
+		if (!core || core->GetRoute() || !navTargets.Contains(entry.name)) continue; // 只转脚本/通勤/任务导航中的车
+		if (AVehicleElement* element = entry.element.Get()) {
+			if (element->IsPlayerControlled()) continue;
+			HandBackDriveToCore(entry); // 交回Core推算，下面按剩余路径转成腿
+		}
+		if (!core->IsDriving()) continue;
+		Room* destination = core->GetDriveDestination();
+		if (!destination) continue;
+		std::vector<Vehicle::DrivePoint> remaining;
+		core->GetRemainingDrive(now, remaining);
+		core->EndDrive();
+		core->SetCurrentRoom(nullptr);
+		RegisterSkipDrive(core, destination, remaining, randomTargets.FindRef(entry.name));
+	}
+}
+
+void UForeverTrafficFrameworkComponent::DecrementSkipLegs(double stepGameSeconds) {
+	for (TPair<FString, FSkipDrive>& pair : skipDrives) pair.Value.remainingSeconds -= stepGameSeconds;
+}
+
+bool UForeverTrafficFrameworkComponent::CompleteSkipLegs() {
+	TArray<FString> due;
+	for (const TPair<FString, FSkipDrive>& pair : skipDrives) {
+		if (pair.Value.remainingSeconds <= 0.0) due.Add(pair.Key);
+	}
+	if (due.Num() == 0) return false;
+	due.Sort(); // 稳定顺序
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	for (const FString& name : due) {
+		FSkipDrive* found = skipDrives.Find(name);
+		if (!found || found->remainingSeconds > 0.0) continue;
+		const FSkipDrive drive = *found;
+		skipDrives.Remove(name);
+		Vehicle* core = drive.vehicle;
+		if (framework) framework->SetSkipCreditSeconds(-drive.remainingSeconds);
+		// 车停进预订的车位(没有预订=被玩家的车占了/已改派，兜底成到达这个房间)，位姿放到车位上。
+		if (!core->ArriveAtReservedSlot()) core->SetCurrentRoom(drive.destination);
+		FVector pose;
+		float poseYaw;
+		if (GetParkedPose(core, pose, poseYaw)) {
+			core->SetTransform(pose.X, pose.Y, pose.Z, poseYaw);
+			if (FCarEntry* entry = FindCarEntry(core)) {
+				entry->location = pose;
+				entry->yaw = poseYaw;
+			}
+		}
+		navTargets.Remove(name);
+		pendingNavResults.Add({ core, drive.destination, true, drive.bRandom });
+		// 到达回调(乘客/任务衔接、vehicle_arrive)可能立刻发起下一段导航：当场处理，带着多出来的时间。
+		for (int32 round = 0; round < 32; round++) {
+			ProcessNavResults();
+			if (pendingNavigations.Num() == 0) break;
+			while (pendingNavigations.Num() > 0) {
+				const FNavRequest request = pendingNavigations[0];
+				pendingNavigations.RemoveAt(0);
+				StartVehicleNavigation(request);
+			}
+			if (pendingNavResults.Num() == 0) break;
+		}
+	}
+	if (framework) framework->SetSkipCreditSeconds(0.0);
+	return true;
+}
+
+void UForeverTrafficFrameworkComponent::EndTimeSkip() {
+	bTimeSkipping = false;
+	if (!GetWorld()) { skipDrives.Empty(); return; }
+	const double now = GetWorld()->GetTimeSeconds();
+	TArray<FString> keys;
+	skipDrives.GetKeys(keys);
+	keys.Sort();
+	for (const FString& name : keys) {
+		const FSkipDrive drive = skipDrives.FindRef(name);
+		skipDrives.Remove(name);
+		Vehicle* core = drive.vehicle;
+		const double fraction = drive.totalSeconds > 0.0 ? FMath::Clamp(1.0 - drive.remainingSeconds / drive.totalSeconds, 0.0, 1.0) : 1.0;
+		// 沿路径走过fraction比例后的位置，之后的点接着开。
+		const double target = DrivePathLength(drive.path) * fraction;
+		std::vector<Vehicle::DrivePoint> rest;
+		double walked = 0.0;
+		for (size_t i = 1; i < drive.path.size(); i++) {
+			const Vehicle::DrivePoint& a = drive.path[i - 1];
+			const Vehicle::DrivePoint& b = drive.path[i];
+			const double segment = FMath::Sqrt(FMath::Square(b.x - a.x) + FMath::Square(b.y - a.y) + FMath::Square(b.z - a.z));
+			if (rest.empty() && walked + segment >= target) {
+				const double t = segment > KINDA_SMALL_NUMBER ? (target - walked) / segment : 0.0;
+				Vehicle::DrivePoint here = a;
+				here.x = static_cast<float>(a.x + (b.x - a.x) * t);
+				here.y = static_cast<float>(a.y + (b.y - a.y) * t);
+				here.z = static_cast<float>(a.z + (b.z - a.z) * t);
+				rest.push_back(here);
+			}
+			if (!rest.empty()) rest.push_back(b);
+			walked += segment;
+		}
+		core->SetCurrentRoom(nullptr);
+		if (rest.size() >= 2) core->BeginDrive(rest, drive.destination, now, GetDefault<AVehicleCommandController>()->maxSpeed * kUnspawnedDriveSpeedScale);
+		if (!core->IsDriving()) {
+			// 没有剩余路径(刚好到了)：当作到达，下一帧Tick处理结果。
+			if (!core->ArriveAtReservedSlot()) core->SetCurrentRoom(drive.destination);
+			navTargets.Remove(name);
+			pendingNavResults.Add({ core, drive.destination, true, drive.bRandom });
+		}
+	}
+}
+
+void UForeverTrafficFrameworkComponent::TeleportVehicleToSlot(Vehicle* vehicle, Room* room, int32 slotIndex) {
+	if (!vehicle || !room) return;
+	const FString name = UTF8_TO_TCHAR(vehicle->GetName().c_str());
+	// 还没处理的导航请求作废。
+	pendingNavigations.RemoveAll([&](const FNavRequest& request) { return request.vehicleName == name; });
+	if (FCarEntry* entry = FindCarEntry(vehicle)) {
+		if (TWeakObjectPtr<AVehicleCommandController>* driver = carDrivers.Find(name)) {
+			if (driver->IsValid()) driver->Get()->ClearCommands();
+			carDrivers.Remove(name);
+		}
+		if (AVehicleElement* element = entry->element.Get()) {
+			activeVehicles.Remove(name);
+			entry->element = nullptr;
+			const float remaining = minVehicleLifetime - static_cast<float>(GetWorld()->GetTimeSeconds() - entry->spawnedAt);
+			if (remaining > 0.f) {
+				element->SetActorHiddenInGame(true);
+				element->SetActorEnableCollision(false);
+				TWeakObjectPtr<AVehicleElement> weakElement(element);
+				FTimerHandle handle;
+				GetWorld()->GetTimerManager().SetTimer(handle, [weakElement]() {
+					if (weakElement.IsValid()) weakElement->Destroy();
+				}, remaining, false);
+			}
+			else {
+				element->Destroy();
+			}
+		}
+	}
+	vehicle->EndDrive();
+	navTargets.Remove(name);
+	if (!vehicle->ReserveSlot(room, slotIndex) || !vehicle->ArriveAtReservedSlot()) {
+		vehicle->SetVanished(room); // 车位被别的车占了：只好消失在这个房间
+		return;
+	}
+	FVector pose;
+	float poseYaw;
+	if (GetParkedPose(vehicle, pose, poseYaw)) {
+		vehicle->SetTransform(pose.X, pose.Y, pose.Z, poseYaw);
+		if (FCarEntry* entry = FindCarEntry(vehicle)) {
+			entry->location = pose;
+			entry->yaw = poseYaw;
+		}
+	}
 }
 
 void UForeverTrafficFrameworkComponent::ProcessPendingNavigations() {
@@ -1824,8 +2145,13 @@ void UForeverTrafficFrameworkComponent::StartVehicleNavigation(const FNavRequest
 		return;
 	}
 
-	// 有Actor（在玩家附近）：交给Controller开。
-	if (element) {
+	// 有Actor（在玩家附近）：交给Controller开。跳时间期间改走Core+虚拟时钟：先拆Actor，位置交给Core。
+	if (element && bTimeSkipping) {
+		const FVector location = element->GetActorLocation();
+		core->SetTransform(location.X, location.Y, location.Z, element->GetActorRotation().Yaw);
+		TeardownVehicleActor(entry, request.vehicleName);
+	}
+	else if (element) {
 		AVehicleCommandController* controller = GetOrCreateCarDriver(request.vehicleName, element);
 		if (!controller) {
 			core->ClearReservation();
@@ -1868,6 +2194,10 @@ void UForeverTrafficFrameworkComponent::StartVehicleNavigation(const FNavRequest
 	if (plan.reverseFirstSegment && !path.empty()) path[0].reverse = true;
 	core->ReleaseSlot();
 	core->SetCurrentRoom(nullptr);
+	if (bTimeSkipping) {
+		RegisterSkipDrive(core, destination, path, bRandom);
+		return;
+	}
 	core->BeginDrive(path, destination, GetWorld()->GetTimeSeconds(),
 		GetDefault<AVehicleCommandController>()->maxSpeed * kUnspawnedDriveSpeedScale);
 	if (!core->IsDriving()) { // 已经在目的地/路线只有一个点：当作立刻到达
@@ -1890,13 +2220,12 @@ void UForeverTrafficFrameworkComponent::HandOffDriveToActor(FCarEntry& entry) {
 	core->GetRemainingDrive(GetWorld()->GetTimeSeconds(), remaining);
 	TArray<FVector> waypoints;
 	const bool bReversing = !remaining.empty() && remaining[0].reverse;
-	if (bReversing) {
-		for (const Vehicle::DrivePoint& p : remaining) waypoints.Add(FVector(p.x, p.y, p.z - TRAFFIC_HEIGHT_EPSILON));
-	}
+	// 不论正向还是倒车，都把Core剩余路径原样交给Controller沿着开：重新规划(Navigate)可能选到相反的方向，车一出现就掉头。
+	for (const Vehicle::DrivePoint& p : remaining) waypoints.Add(FVector(p.x, p.y, p.z - TRAFFIC_HEIGHT_EPSILON));
 	core->EndDrive();
 	if (AVehicleCommandController* controller = GetOrCreateCarDriver(entry.name, element)) {
 		controller->ClearCommands();
-		if (bReversing && waypoints.Num() >= 2) controller->PushCommand(FVehicleCommand::MakeFollowPath(node->GetId(), waypoints, true));
+		if (waypoints.Num() >= 2) controller->PushCommand(FVehicleCommand::MakeFollowPath(node->GetId(), waypoints, bReversing));
 		else controller->PushCommand(FVehicleCommand::MakeNavigate(node->GetId()));
 	}
 }

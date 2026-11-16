@@ -140,3 +140,13 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 
 ## 开车通勤
 `RequestWalk`先问`Traffic::BeginCommute`：成功则`StartCommute`(走向车所在停车房，已在则直接`BoardCar`)；`ReportArrival`拦截到停车房的到达(不广播npc_arrive)→`BoardCar`：销毁市民Actor、currentRoom置空，车`NavigateVehicleToSlot`到预订车位；车到达/失败由`OnPassengerCarFinished`接回(失败落回原停车房)，市民在停车房出现后`RequestWalkInternal`走向最终目的地。Driving阶段的新RequestWalk被忽略；瞬移/死亡/WalkToCar期间的新请求`CancelCommute`。跳时间期间不开车。
+
+## 组织任务与跳时间虚拟时钟（2026-11-16）
+
+- `AssignTask(组织,task,目的房间,category,员工名)`：`Traffic::BeginTask`选人选车选车位，成功后发`execute_task`给员工Job脚本，再走向车(`WalkToVehicle`)或直接走向目的地(走路任务)。
+  `ReportArrival`拦截：走到车=`BoardTruck`(员工消失、车导航去目的车位，不广播npc_arrive)；走路任务到目的地先广播npc_arrive再走回工位；回到工位`EndTask`后照常广播(arrive_work)。
+  `OnPassengerCarFinished`先查任务行程→`OnTaskVehicleFinished`：去程到达立即返程，失败则员工落回原停车房；返程失败`TeleportVehicleToSlot`兜底；`FinishTaskLanding`让员工在停车房出现并走回工位。
+  `RequestWalk`在员工开车时忽略；瞬移/新请求取代走路阶段=`AbortTaskOfWorker`；死亡时车继续开回(worker置空)。
+- **跳时间虚拟时钟**：跳时间期间`RequestWalkInternal`不再瞬移，而是同步规划路径、换算成游戏秒(路径长/Core步速×60×timeFlowRatio)登记为`FSkipWalk`(市民Actor销毁，Core里"在途无位置")。
+  `AdvanceTripsForTimeSkip`每个分步先`DecrementSkipLegs`再反复`CompleteSkipLegs`，腿走完才`ReportArrival`(广播npc_arrive，通勤/任务衔接照常)，多出来的时间(`GetSkipCreditSeconds`)记在下一条腿账上；
+  `BeginTimeSkip`把在途的行走转成腿，`EndTimeSkip`把没走完的腿按进度插值后`ApplyWalkResult`落成真实步行。通勤开车不再在跳时间里禁用。

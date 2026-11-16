@@ -5,6 +5,7 @@
 #include "Containers/Queue.h"
 
 #include <atomic>
+#include "traffic/traffic.h" // Traffic::TaskTrip(组织任务行程)出现在私有成员签名里
 
 #include "ForeverPopulaceFrameworkComponent.generated.h"
 
@@ -14,6 +15,7 @@ class Citizen;
 class Room;
 class Vehicle;
 class Traffic;
+class Organization;
 class ACitizenElement;
 
 // 按玩家距离流式生成/销毁ACitizenElement，并负责市民走路(异步寻路)、瞬移、存档同步。
@@ -53,6 +55,11 @@ public:
 	// 在room(到达)或原来的停车房(失败)出现，再普通步行去最终目的地。没有对应行程什么也不做。
 	void OnPassengerCarFinished(Vehicle* vehicle, Room* room, bool bArrived);
 
+	// 组织派员工执行任务(assign_task)：一次尝试，闲置员工/车/目的车位任一不满足就返回false(不占车不占人)。
+	// category空=员工自己走去destination再走回工位；非空=开组织的这类载具去destination所在建筑的车位再开回原车位、走回工位。
+	// workerName空=自动挑闲置员工。成功后给该员工的Job脚本发execute_task。详见Traffic::BeginTask和traffic.md"组织任务"。
+	bool AssignTask(Organization* organization, const std::string& task, Room* destination, const std::string& category, const std::string& workerName);
+
 	// npc_teleport：立刻把市民放到destination。有Actor就把Actor瞬移过去(取消正在走的路)，没有就只改
 	// 逻辑位置，等进入流式范围时在那里生成。被玩家占有的市民不动，和RequestWalk一样。
 	void TeleportCitizen(Citizen* citizen, Room* destination);
@@ -61,7 +68,12 @@ public:
 	// Begin把全部在途的行走(异步寻路结果、Core推算中的、Actor正在走的)冲刷到各自的目的地，再开启这个模式；
 	// 玩家占有的市民不动。End关闭模式。
 	void BeginTimeSkip();
-	void EndTimeSkip() { bTimeSkipping = false; }
+	// 结束：还没走完的步行腿在目标时刻按进度插值出位置，落成真实步行(Core推算/Actor)接着走。
+	void EndTimeSkip();
+	// 跳时间虚拟时钟：所有步行腿(含普通npc_navigate)按游戏时间推算，每个分步先Decrement(扣掉分步的游戏秒)，
+	// 再反复Complete(落地剩余<=0的腿并触发真正的到达，返回是否有腿完成)直到没有腿再完成。
+	void DecrementSkipLegs(double stepGameSeconds);
+	bool CompleteSkipLegs();
 
 	// ACitizenController的FollowPath指令走完后的回调：更新Citizen::SetCurrentRoom。
 	void NotifyArrived(Citizen* citizen, Room* destination);
@@ -93,6 +105,9 @@ public:
 	float GetMovingDistanceScale() const { return movingDistanceScale; }
 	// 与市民流式扫描同一个距离度量(Z差放大POPULACE_VERTICAL_DISTANCE_WEIGHT倍)，UE单位。
 	static float StreamingDistanceBetween(const FVector& a, const FVector& b);
+
+	// 开发调试(show_route)：市民当前的剩余步行路径(UE单位)，Actor在走/Core推算/跳时间腿都认；没在走返回false。
+	bool GetRoutePath(Citizen* citizen, TArray<FVector>& outPath) const;
 
 	// 这个市民当前在场景里的Actor(没生成时返回nullptr，不会触发生成)。
 	ACitizenElement* FindActiveCitizen(Citizen* citizen) const;
@@ -150,6 +165,25 @@ private:
 	void StartCommute(Citizen* citizen);                 // 第1段：走向车所在的停车房(已经在里面就直接上车)
 	void BoardCar(Citizen* citizen);                     // 走到车：市民消失，车开始自己导航到预订好的目的车位
 	void CancelCommute(Citizen* citizen);                // 取消行程(瞬移/死亡/被新请求取代)
+	// 跳时间步行腿：路径(UE单位)+游戏秒时长，不生成Actor。
+	struct FSkipWalk {
+		Room* destination = nullptr;
+		Room* origin = nullptr;        // 出发时所在房间(到达时ReportArrival的previousRoom)
+		TArray<FVector> waypoints;
+		double totalSeconds = 0.0;
+		double remainingSeconds = 0.0;
+	};
+	TMap<Citizen*, FSkipWalk> skipWalks;
+	void StartSkipWalk(Citizen* citizen, Room* destination);   // 跳时间期间的RequestWalkInternal
+	void RegisterSkipWalk(Citizen* citizen, Room* destination, Room* origin, const TArray<FVector>& waypoints);
+	double GameSecondsPerRealSecond() const;
+	// 组织任务行程：见AssignTask。
+	void BoardTruck(Citizen* citizen);                   // 员工走到组织的车：员工消失，车开往预订好的目的车位
+	void OnTaskVehicleFinished(Traffic::TaskTrip* trip, Room* room, bool bArrived); // 任务车导航结束(去程/返程)
+	// 员工(从车里/原地)在room出现，接着走回工位；没有员工(死亡/离城)就直接结束任务。
+	void FinishTaskLanding(Traffic::TaskTrip* trip, Room* landing);
+	// 员工的任务行程因瞬移/新请求/死亡中断。车在路上的任务继续开回(worker置空)，其它直接取消。
+	void AbortTaskOfWorker(Citizen* citizen);
 	Traffic* GetTrafficCore() const;
 
 

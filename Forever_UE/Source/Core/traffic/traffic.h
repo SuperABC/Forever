@@ -12,6 +12,8 @@
 #include "common/handle.h"
 #include "common/utility.h"
 
+#include <functional>
+#include <list>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -72,6 +74,36 @@ public:
 	// 取消行程：释放预订的目的车位并删记录(车和市民的位置由调用方安排)。
 	void CancelTrip(const Citizen* citizen);
 	const std::unordered_map<const Citizen*, CommuteTrip>& GetTrips() const { return trips; }
+
+	// ---- 组织任务行程(assign_task，详见traffic.md"组织任务")----
+	// 组织派员工走路或开组织的车去某地：开车任务=走到车->开车去目的车位->立即开回原车位->走回工位；
+	// 走路任务=走到目的房间->走回工位。开车任务按车索引(员工中途死亡/离城车仍要开回，worker置空)。
+	enum class TaskPhase { WalkToVehicle = 0, DrivingOut = 1, DrivingBack = 2, WalkOut = 3, WalkBack = 4 };
+	struct TaskTrip {
+		std::string task;
+		Citizen* worker = nullptr;
+		Vehicle* vehicle = nullptr;   // 走路任务为空
+		Room* parkOrigin = nullptr;   // 车原来的停车房(也是员工上车的地方、回来后下车的地方)
+		int originSlot = -1;          // 原车位：车开走后靠reservedBy=车占住，保证开回来时还在
+		Room* parkDest = nullptr;
+		int destSlot = -1;            // 目的车位(开出去前就预订好)
+		Room* destRoom = nullptr;     // 任务指向的房间(走路任务的目的地/开车任务的目的建筑里的存储房间)
+		Room* workRoom = nullptr;     // 员工工位
+		TaskPhase phase = TaskPhase::WalkToVehicle;
+	};
+	// 一次尝试：员工必须是组织在岗员工、闲置(在工位房间、没在走、没有通勤/任务)；category非空时还要有组织的闲置同类载具
+	// (停着、没路线、没预订、停车房和员工同一栋建筑)且目的建筑里有接受该类别的空闲车位。都满足才建行程(预订目的车位、占住原车位、
+	// 写员工脚本的task变量)并返回，否则返回nullptr(不占车不占人)。workerName非空只考虑该员工。
+	// workerAvailable(可空)：UE层补充的闲置判断(如不被玩家操控)。
+	TaskTrip* BeginTask(Organization* organization, const std::string& task, Room* destRoom, const std::string& category,
+		const std::string& workerName, const std::function<bool(const Citizen*)>& workerAvailable = nullptr);
+	TaskTrip* FindTaskByVehicle(const Vehicle* vehicle);
+	TaskTrip* FindTaskByWorker(const Citizen* worker);
+	// 结束行程：释放原车位占位、清员工task变量并删记录(车/员工位置由调用方安排)。
+	void EndTask(TaskTrip* trip);
+	// 取消行程：同EndTask，另外车还没出发(WalkToVehicle)时释放目的车位预订。
+	void CancelTask(TaskTrip* trip);
+	const std::list<TaskTrip>& GetTasks() const { return taskTrips; }
 
 	// 载具资产(Traffic持有)：每辆被分配给市民/组织的车一个。
 	const std::vector<VehicleAsset*>& GetVehicleAssets() const { return vehicleAssets; }
@@ -140,6 +172,20 @@ private:
 		int phase = 0;
 	};
 	std::vector<PendingTrip> pendingTrips; // 读档后等ResolveVehicleAssets(市民下标要等人口恢复)
+	std::list<TaskTrip> taskTrips;         // list：指针/引用在增删其它行程时保持有效
+	struct PendingTask {
+		std::string task;
+		int workerIndex = -1;
+		std::string vehicleName;
+		Room* parkOrigin = nullptr;
+		int originSlot = -1;
+		Room* parkDest = nullptr;
+		int destSlot = -1;
+		Room* destRoom = nullptr;
+		Room* workRoom = nullptr;
+		int phase = 0;
+	};
+	std::vector<PendingTask> pendingTasks; // 读档后等ResolveVehicleAssets
 	std::unordered_map<std::string, Station*> stations; // 持有所有权(含Route::Build()产出的边缘站点)
 	std::unordered_map<std::string, Route*> routes;     // 持有所有权
 

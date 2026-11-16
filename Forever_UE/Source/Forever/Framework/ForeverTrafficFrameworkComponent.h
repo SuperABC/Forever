@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Engine/EngineTypes.h"
 #include <string>
+#include <vector>
+#include "traffic/vehicle.h" // Vehicle::DrivePoint(跳时间的车辆腿路径)
 #include "Framework/ForeverFrameworkComponent.h"
 #include "ForeverTrafficFrameworkComponent.generated.h"
 
@@ -155,6 +157,22 @@ public:
 	// 车位节点不在车行图/规划失败)都会产生bArrived=false的结果，保证OnVehicleNavigationFinished一定被调用。
 	void NavigateVehicleToSlot(const FString& vehicleName, Room* room, int32 slotIndex);
 
+	// 兜底：把车瞬移停进room的第slotIndex个车位(销毁Actor/Controller、结束Core推算、取消导航，再停靠)。
+	// 组织任务的车开不回去时用，保证车位不泄漏。
+	void TeleportVehicleToSlot(Vehicle* vehicle, Room* room, int32 slotIndex);
+
+	// 开发调试(show_route Change)：切换显示/隐藏某个载具(按载具名)或市民(按姓名)的寻路轨迹，剩余路径折线持续刷新；
+	// 没在走/没路径时线隐藏，再点一次选项关掉。载具橙色，市民绿色。
+	void ToggleRouteWatch(const FString& name);
+
+	// 跳时间虚拟时钟(见.md"跳时间")：在途/新发起的车辆导航按路径长度换算成游戏秒，不生成Actor；分步推进，走完才触发真正的
+	// 到达回调(OnVehicleNavigationFinished + vehicle_arrive)并接着下一段。Begin把在途的导航转成腿，End把没走完的腿
+	// 按进度插值后交给Core推算续跑。
+	void BeginTimeSkip();
+	void EndTimeSkip();
+	void DecrementSkipLegs(double stepGameSeconds);
+	bool CompleteSkipLegs();
+
 	// 车辆导航结束(到达或失败)后调用，参数：车、目的房间、是否到达。在ProcessNavResults里、车位预定转成停靠之后、
 	// 发vehicle_arrive事件之前调用(不依赖storyFramework)。随机目的地的重试不算结束。由AForeverFrameworkActor接给市民域。
 	TFunction<void(Vehicle*, Room*, bool)> OnVehicleNavigationFinished;
@@ -290,6 +308,29 @@ private:
 	bool HandBackDriveToCore(FCarEntry& entry);
 
 	FCarEntry* FindCarEntry(const Vehicle* vehicle);
+
+	struct FSkipDrive {
+		Vehicle* vehicle = nullptr;
+		Room* destination = nullptr;
+		std::vector<Vehicle::DrivePoint> path; // UE单位
+		bool bRandom = false;
+		double totalSeconds = 0.0;
+		double remainingSeconds = 0.0;
+	};
+	TMap<FString, FSkipDrive> skipDrives;
+
+	struct FRouteWatch {
+		bool bCitizen = false;
+		UProceduralMeshComponent* mesh = nullptr;
+		UMaterialInstanceDynamic* material = nullptr;
+	};
+	TMap<FString, FRouteWatch> routeWatches;
+	float routeWatchCountdown = 0.f;
+	void UpdateRouteWatches(float deltaTime);
+	bool GetVehicleRoutePath(Vehicle* vehicle, TArray<FVector>& outPath);
+	bool bTimeSkipping = false;
+	void RegisterSkipDrive(Vehicle* core, Room* destination, const std::vector<Vehicle::DrivePoint>& path, bool bRandom);
+	void TeardownVehicleActor(FCarEntry* entry, const FString& name); // 销毁Actor/Controller并摘出activeVehicles
 	// 停在车位里的车的世界位姿(UE单位)：房间中心+车位局部偏移，朝向=建筑朝向+车位朝向。车没有停靠房间返回false。
 	bool GetParkedPose(Vehicle* vehicle, FVector& outLocation, float& outYaw) const;
 	// 玩家下车后：车头朝里停进了玩家所在房间的某个空车位就占上它(见ExitVehicle)；原本预定了这个车位的在途车改去同房间别的空车位，没有就消失。

@@ -41,6 +41,7 @@ public:
 	// 覆盖time_flow_ratio——EnsurePlayerGenerated()读主线脚本global_settings后调用，
 	// 运行时也可由global_setting Change调用；没有声明则保持默认值10.0。
 	void SetTimeFlowRatio(double ratio);
+	double GetTimeFlowRatio() const { return timeFlowRatio; }
 
 	// 获取游戏时钟
 	Time* GetTime() const;

@@ -114,3 +114,9 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
 进度：`GetTimeSkipProgress`(已推进游戏秒/总秒)，黑屏进度条直接用。跳期间再触发jump_time被忽略。
 局限：走路用瞬移代替；`Traffic::elapsedSeconds`是float，超长跳(>约190天)精度下降；`StepWorld`开头把游戏年份同步给`Populace::currentYear`(`SetCurrentYear`，年龄随之增长)，常规Tick和跳时间共用。
 `StepWorld`/`TickPopulaceDomain`/`TickSocietyDomain`是从原Tick里抽出来的，顺序不能变。
+
+## 2026-11-16
+
+- `ApplyChange`新增`AssignTaskChange`分支(`Society::FindOrganizationByScript`→`populaceFramework->AssignTask`)。
+- 跳时间：`BeginTimeSkip`先交通后市民把在途行程转成虚拟时钟腿，`RunTimeSkipBudget`每个分步`StepWorld`之后调`AdvanceTripsForTimeSkip(stepSeconds)`，`FinishTimeSkip`先交通后市民`EndTimeSkip`。
+  `GetSkipCreditSeconds/SetSkipCreditSeconds`传递一条腿提前走完多出来的游戏秒给下一条腿。

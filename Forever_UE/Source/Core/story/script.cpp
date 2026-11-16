@@ -332,6 +332,10 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			// name/address都可以省略(留空=不限)，见NpcArriveEvent::Match；address是房间地址(Room::GetAddress())。
 			event = new NpcArriveEvent(obj["name"].AsString(), obj["address"].AsString());
 		}
+		else if (type == "execute_task") {
+			// task/destination都可以省略(留空=不限)，见ExecuteTaskEvent::Match；事件只发给被派任务的员工的Job脚本。
+			event = new ExecuteTaskEvent(obj["task"].AsString(), obj["destination"].AsString());
+		}
 		else if (type == "vehicle_arrive") {
 			// vehicle/address都可以省略(留空=不限)，见VehicleArriveEvent::Match；事件只发给这辆车自己的script。
 			event = new VehicleArriveEvent(obj["vehicle"].AsString(), obj["address"].AsString());
@@ -445,6 +449,13 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing vehicle or destination for vehicle_navigate change.\n");
 			}
 			change = new VehicleNavigateChange(vehicle.AsString(), destination.AsString());
+		}
+		else if (type == "show_route") {
+			auto target = obj["name"];
+			if (target.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name for show_route change.\n");
+			}
+			change = new ShowRouteChange(target.AsString());
 		}
 		else if (type == "visualize_navigation") {
 			auto address = obj["address"];
@@ -606,6 +617,15 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or destination for npc_navigate change.\n");
 			}
 			change = new NPCNavigateChange(name.AsString(), destination.AsString());
+		}
+		else if (type == "assign_task") {
+			auto destination = obj["destination"];
+			if (destination.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing destination for assign_task change.\n");
+			}
+			// task/vehicle/round_trip/worker都可省略：task空=无标签，vehicle空=走路，round_trip空=true，worker空=自动挑闲置员工。
+			change = new AssignTaskChange(obj["task"].AsString(), destination.AsString(), obj["vehicle"].AsString(),
+				obj["round_trip"].AsString(), obj["worker"].AsString());
 		}
 		else if (type == "change_control") {
 			auto name = obj["name"];

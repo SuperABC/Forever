@@ -15,11 +15,11 @@
 			"changes": [
 				{
 					"type": "for_range", "var": "floor", "from": "$$self.min", "to": "-1",
-					"do": [ { "type": "add_option", "name": "$$self.name", "option": "\"前往B\" + (0 - $$self.floor) + \"层\"" } ]
+					"do": [ { "type": "add_option", "name": "$$self.name", "option": "\"前往B\" + (0 - $$local.floor) + \"层\"" } ]
 				},
 				{
 					"type": "for_range", "var": "floor", "from": "0", "to": "$$self.max",
-					"do": [ { "type": "add_option", "name": "$$self.name", "option": "\"前往\" + ($$self.floor + 1) + \"层\"" } ]
+					"do": [ { "type": "add_option", "name": "$$self.name", "option": "\"前往\" + ($$local.floor + 1) + \"层\"" } ]
 				}
 			],
 			"dialogs": [],

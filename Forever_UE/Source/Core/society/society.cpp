@@ -228,6 +228,14 @@ Job* Society::FindJobByScript(const Container* script) const {
 	return nullptr;
 }
 
+Organization* Society::FindOrganizationByScript(const Container* script) const {
+	if (!script) return nullptr;
+	for (Organization* organization : organizations) {
+		if (organization && static_cast<const Container*>(organization->GetScript()) == script) return organization;
+	}
+	return nullptr;
+}
+
 Organization* Society::FindOrganizationOfJob(const Job* job) const {
 	if (!job) return nullptr;
 	for (Organization* organization : organizations) {

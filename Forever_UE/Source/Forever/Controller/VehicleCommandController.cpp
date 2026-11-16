@@ -226,9 +226,10 @@ void AVehicleCommandController::StartNextCommand()
 		BeginDwell(prev, command->startDwellSeconds, command->bFireEnterAtStart, command->bStopAlreadyEntered);
 		return;
 	}
-	lastNodeId = -1; // 中途接管：第一腿从当前车位出发
+	// 中途接管：给了这一腿的出发站就沿站间原路线走(从最近点汇入)，不从当前位置重新规划；没给才从当前车位/位置出发。
+	lastNodeId = command->legFromNode;
 	targetNode = command->nodes[loopIndex];
-	if (!PlanAndFollow(-1, targetNode)) {
+	if (!PlanAndFollow(command->legFromNode, targetNode)) {
 		// 规划失败：整个循环放弃（站点不通），避免每帧重试。
 		FinishCommand();
 	}

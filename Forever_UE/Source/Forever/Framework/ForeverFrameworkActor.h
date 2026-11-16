@@ -197,8 +197,10 @@ protected:
 
 	// 跳时间(jump_time)：分帧小步推进时钟，见BeginTimeSkip。
 	void RunTimeSkipBudget();
+	void AdvanceTripsForTimeSkip(double stepSeconds); // 虚拟时钟：推进步行/开车腿，见.md"跳时间"
 	void FinishTimeSkip();
 	bool bTimeSkipping = false;
+	double skipCreditSeconds = 0.0;
 	bool bSkipFade = false;          // 黑屏成功显示了(没显示就不等黑屏)
 	Time* skipStart = nullptr;
 	Time* skipTarget = nullptr;
@@ -260,6 +262,10 @@ public:
 	// 每帧在预算内推进若干小步，完成后渐隐。跳的过程中再次调用被忽略。
 	void BeginTimeSkip(const Time& target);
 	FORCEINLINE bool IsTimeSkipping() const { return bTimeSkipping; }
+	// 跳时间虚拟时钟：一条行程腿(步行/开车)在本步里提前走完后多出来的游戏秒，接着开始的下一条腿从中扣掉，
+	// 这样同一步内可以连续走完多条腿。只在腿完成的到达回调期间非零。
+	FORCEINLINE double GetSkipCreditSeconds() const { return skipCreditSeconds; }
+	FORCEINLINE void SetSkipCreditSeconds(double seconds) { skipCreditSeconds = seconds; }
 	// 跳时间进度(0..1)和说明文字，供黑屏进度条用；没在跳返回false。
 	bool GetTimeSkipProgress(float& outFraction, FText& outLabel) const;
 

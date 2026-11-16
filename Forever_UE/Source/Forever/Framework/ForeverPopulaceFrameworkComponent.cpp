@@ -25,6 +25,11 @@
 #include "populace/citizen.h"
 #include "traffic/traffic.h"
 #include "traffic/vehicle.h"
+#include "player/player.h"
+#include "society/society.h"
+#include "society/organization.h"
+#include "society/job.h"
+#include "story/script.h"
 
 std::atomic<int32> UForeverPopulaceFrameworkComponent::pendingPathfindingTasks{ 0 };
 std::atomic<bool> UForeverPopulaceFrameworkComponent::bCancelPathfinding{ false };
@@ -184,11 +189,18 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 		return;
 	}
 
-	// 开车通勤：自己的车停在当前所在的建筑、目的地建筑有空闲车位才开车，否则照常走路。跳时间期间不开车。
-	if (!bTimeSkipping) {
+	// 开车通勤：自己的车停在当前所在的建筑、目的地建筑有空闲车位才开车，否则照常走路。
+	{
 		if (Traffic* traffic = GetTrafficCore()) {
-			if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen)) {
-				if (trip->phase == Traffic::CommutePhase::Driving) {
+			if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
+					if (task->phase == Traffic::TaskPhase::DrivingOut || task->phase == Traffic::TaskPhase::DrivingBack) {
+						UE_LOG(LogTemp, Log, TEXT("RequestWalk: %s is driving a task vehicle, request ignored."), UTF8_TO_TCHAR(citizen->GetName().c_str()));
+						return;
+					}
+					AbortTaskOfWorker(citizen); // 还在走路的任务被新请求取代
+				}
+				if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen)) {
+					if (trip->phase == Traffic::CommutePhase::Driving) {
 					UE_LOG(LogTemp, Log, TEXT("RequestWalk: %s is riding in a car, request ignored."), UTF8_TO_TCHAR(citizen->GetName().c_str()));
 					return; // 人在车里，等车到了再说
 				}
@@ -249,6 +261,10 @@ void UForeverPopulaceFrameworkComponent::CancelCommute(Citizen* citizen) {
 
 void UForeverPopulaceFrameworkComponent::OnPassengerCarFinished(Vehicle* vehicle, Room* room, bool bArrived) {
 	Traffic* traffic = GetTrafficCore();
+	if (Traffic::TaskTrip* task = traffic ? traffic->FindTaskByVehicle(vehicle) : nullptr) {
+		OnTaskVehicleFinished(task, room, bArrived);
+		return;
+	}
 	Traffic::CommuteTrip* trip = traffic ? traffic->FindTripByVehicle(vehicle) : nullptr;
 	if (!trip) return;
 	Citizen* citizen = trip->citizen;
@@ -279,9 +295,9 @@ void UForeverPopulaceFrameworkComponent::RequestWalkInternal(Citizen* citizen, R
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 	if (existing && *existing && (*existing)->IsPlayerControlled()) return;
 
-	// 跳时间期间路走不完(寻路异步、走路要帧)，同步瞬移到目的地并触发npc_arrive。
+	// 跳时间期间：同步算路径，按游戏时间推算(虚拟时钟)，走完时才触发npc_arrive。
 	if (bTimeSkipping) {
-		TeleportCitizen(citizen, destination);
+		StartSkipWalk(citizen, destination);
 		return;
 	}
 
@@ -406,6 +422,16 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 
 void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room* destination) {
 	if (!citizen || !destination) return;
+	skipWalks.Remove(citizen); // 跳时间里的步行腿被瞬移取代
+	// 组织任务：开车途中不受瞬移影响；走路阶段瞬移到别处就中断任务。
+	if (Traffic* traffic = GetTrafficCore()) {
+		if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
+			if (task->phase == Traffic::TaskPhase::DrivingOut || task->phase == Traffic::TaskPhase::DrivingBack) return;
+			Room* expected = task->phase == Traffic::TaskPhase::WalkToVehicle ? task->parkOrigin
+				: task->phase == Traffic::TaskPhase::WalkOut ? task->destRoom : task->workRoom;
+			if (destination != expected) AbortTaskOfWorker(citizen);
+		}
+	}
 	if (!citizen->IsActive()) {
 		UE_LOG(LogTemp, Warning, TEXT("npc_teleport: %s is dead or departed, skipped (use npc_revive first)."),
 			UTF8_TO_TCHAR(citizen->GetName().c_str()));
@@ -441,6 +467,166 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 	ReportArrival(citizen, previous);
 }
 
+namespace {
+	double PathLengthUU(const TArray<FVector>& points) {
+		double length = 0.0;
+		for (int32 i = 1; i < points.Num(); i++) length += FVector::Dist(points[i - 1], points[i]);
+		return length;
+	}
+
+	// 沿路径走fraction(0~1)比例的长度后的位置，并给出之后的第一个路径点下标。
+	FVector PointAlongPath(const TArray<FVector>& points, double fraction, int32& outNextIndex) {
+		outNextIndex = points.Num();
+		if (points.Num() == 0) return FVector::ZeroVector;
+		const double target = PathLengthUU(points) * FMath::Clamp(fraction, 0.0, 1.0);
+		double walked = 0.0;
+		for (int32 i = 1; i < points.Num(); i++) {
+			const double segment = FVector::Dist(points[i - 1], points[i]);
+			if (walked + segment >= target) {
+				outNextIndex = i;
+				const double t = segment > KINDA_SMALL_NUMBER ? (target - walked) / segment : 0.0;
+				return FMath::Lerp(points[i - 1], points[i], t);
+			}
+			walked += segment;
+		}
+		return points.Last();
+	}
+}
+
+bool UForeverPopulaceFrameworkComponent::GetRoutePath(Citizen* citizen, TArray<FVector>& outPath) const {
+	outPath.Reset();
+	if (!citizen) return false;
+	if (const FSkipWalk* walk = skipWalks.Find(citizen)) {
+		int32 nextIndex = 0;
+		const double fraction = walk->totalSeconds > 0.0 ? 1.0 - walk->remainingSeconds / walk->totalSeconds : 1.0;
+		outPath.Add(PointAlongPath(walk->waypoints, fraction, nextIndex));
+		for (int32 i = nextIndex; i < walk->waypoints.Num(); i++) outPath.Add(walk->waypoints[i]);
+		return outPath.Num() >= 2;
+	}
+	if (const TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen); existing && *existing) {
+		const ACitizenController* controller = (*existing)->GetCitizenController();
+		Room* destination = nullptr;
+		return controller && controller->GetRemainingWaypoints(outPath, destination) && outPath.Num() >= 2;
+	}
+	if (citizen->IsWalking() && GetWorld()) {
+		std::vector<Citizen::WalkPoint> remaining;
+		citizen->GetRemainingWalk(GetWorld()->GetTimeSeconds(), remaining);
+		for (const Citizen::WalkPoint& point : remaining) outPath.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
+	}
+	return outPath.Num() >= 2;
+}
+
+double UForeverPopulaceFrameworkComponent::GameSecondsPerRealSecond() const {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	return 60.0 * (player ? player->GetTimeFlowRatio() : 10.0);
+}
+
+void UForeverPopulaceFrameworkComponent::RegisterSkipWalk(Citizen* citizen, Room* destination, Room* origin, const TArray<FVector>& waypoints) {
+	if (!citizen || !destination) return;
+	if (waypoints.Num() < 2) {
+		TeleportCitizen(citizen, destination);
+		return;
+	}
+	// 市民从场景里消失，Core里保留"在途无位置"状态(流式生成会跳过它)。
+	if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen)) {
+		if (*existing) (*existing)->Destroy();
+		activeInstances.Remove(citizen);
+		spawnTimes.Remove(citizen);
+	}
+	++latestWalkRequest.FindOrAdd(citizen);
+	citizen->EndWalk();
+	citizen->SetCurrentRoom(nullptr);
+	citizen->ClearPosition();
+
+	const ACitizenElement* defaults = GetDefault<ACitizenElement>();
+	const double speedUU = FMath::Max(1.0, static_cast<double>(defaults->GetCharacterMovement()->MaxWalkSpeed) * kUnspawnedWalkSpeedScale);
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	FSkipWalk& walk = skipWalks.FindOrAdd(citizen);
+	walk.destination = destination;
+	walk.origin = origin;
+	walk.waypoints = waypoints;
+	walk.totalSeconds = PathLengthUU(waypoints) / speedUU * GameSecondsPerRealSecond();
+	// 上一条腿在本步里提前走完后多出来的时间，记在这条腿的账上。
+	walk.remainingSeconds = walk.totalSeconds - (framework ? framework->GetSkipCreditSeconds() : 0.0);
+}
+
+void UForeverPopulaceFrameworkComponent::StartSkipWalk(Citizen* citizen, Room* destination) {
+	if (!citizen || !destination || !map || !citizen->IsActive()) return;
+	Room* origin = citizen->GetCurrentRoom();
+	TArray<FVector> waypoints;
+	if (FSkipWalk* old = skipWalks.Find(citizen)) {
+		// 上一条腿还没走完：从它当前的位置重新规划(新请求取代旧请求)。
+		int32 nextIndex = 0;
+		const double fraction = old->totalSeconds > 0.0 ? 1.0 - old->remainingSeconds / old->totalSeconds : 1.0;
+		const FVector here = PointAlongPath(old->waypoints, fraction, nextIndex);
+		origin = old->origin;
+		Map::VehicleRoutePlan plan = map->PlanPedestrianRoute(nullptr, static_cast<float>(here.X / POPULACE_WORLD_SCALE),
+			static_cast<float>(here.Y / POPULACE_WORLD_SCALE), destination);
+		if (plan.status == Map::VehicleRoutePlan::OK && !plan.points.empty()) {
+			waypoints.Add(here);
+			for (const Map::NavPoint& point : plan.points) waypoints.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
+		}
+	}
+	else {
+		if (origin == destination) return;
+		Node* fromNode = origin ? origin->GetNavigationNode() : nullptr;
+		if (fromNode) {
+			const FVector from = FVector(fromNode->GetX(), fromNode->GetY(), fromNode->GetZ()) * POPULACE_WORLD_SCALE;
+			PlanWalkPath(citizen, destination, from, waypoints);
+		}
+	}
+	RegisterSkipWalk(citizen, destination, origin, waypoints); // 规划不出来(<2点)按瞬移到达
+}
+
+void UForeverPopulaceFrameworkComponent::DecrementSkipLegs(double stepGameSeconds) {
+	for (TPair<Citizen*, FSkipWalk>& pair : skipWalks) pair.Value.remainingSeconds -= stepGameSeconds;
+}
+
+bool UForeverPopulaceFrameworkComponent::CompleteSkipLegs() {
+	TArray<Citizen*> due;
+	for (const TPair<Citizen*, FSkipWalk>& pair : skipWalks) {
+		if (pair.Value.remainingSeconds <= 0.0) due.Add(pair.Key);
+	}
+	if (due.Num() == 0) return false;
+	due.Sort([](const Citizen& a, const Citizen& b) { return a.GetName() < b.GetName(); }); // TArray<T*>::Sort的谓词收到解引用后的元素 // 同一步多条腿同时完成：按姓名稳定排序
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	for (Citizen* citizen : due) {
+		FSkipWalk* walk = skipWalks.Find(citizen);
+		if (!walk || walk->remainingSeconds > 0.0) continue; // 处理前面的到达时被取代/重新规划了
+		Room* destination = walk->destination;
+		Room* origin = walk->origin;
+		const double credit = -walk->remainingSeconds;
+		skipWalks.Remove(citizen);
+		if (!citizen->IsActive()) continue;
+		if (framework) framework->SetSkipCreditSeconds(credit);
+		++latestWalkRequest.FindOrAdd(citizen);
+		citizen->EndWalk();
+		citizen->SetCurrentRoom(destination);
+		citizen->ClearPosition();
+		ReportArrival(citizen, origin);
+	}
+	if (framework) framework->SetSkipCreditSeconds(0.0);
+	return true;
+}
+
+void UForeverPopulaceFrameworkComponent::EndTimeSkip() {
+	bTimeSkipping = false;
+	TArray<Citizen*> keys;
+	skipWalks.GetKeys(keys);
+	for (Citizen* citizen : keys) {
+		FSkipWalk walk = skipWalks.FindRef(citizen);
+		skipWalks.Remove(citizen);
+		if (!citizen || !citizen->IsActive()) continue;
+		int32 nextIndex = 0;
+		const double fraction = walk.totalSeconds > 0.0 ? 1.0 - walk.remainingSeconds / walk.totalSeconds : 1.0;
+		TArray<FVector> rest;
+		rest.Add(PointAlongPath(walk.waypoints, fraction, nextIndex));
+		for (int32 i = nextIndex; i < walk.waypoints.Num(); i++) rest.Add(walk.waypoints[i]);
+		ApplyWalkResult(citizen, walk.destination, rest); // 落成真实步行：没有Actor就Core推算，进入生成距离再生成
+	}
+}
+
 void UForeverPopulaceFrameworkComponent::BeginTimeSkip() {
 	bTimeSkipping = true;
 
@@ -455,16 +641,23 @@ void UForeverPopulaceFrameworkComponent::BeginTimeSkip() {
 		if (!citizen || !citizen->IsActive()) continue;
 
 		Room* destination = nullptr;
+		TArray<FVector> remaining;
 		if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen); existing && *existing) {
 			if ((*existing)->IsPlayerControlled()) continue;
 			ACitizenController* controller = (*existing)->GetCitizenController();
-			TArray<FVector> remaining;
 			if (controller) controller->GetRemainingWaypoints(remaining, destination);
 		}
 		else if (citizen->IsWalking()) {
 			destination = citizen->GetWalkDestination();
+			std::vector<Citizen::WalkPoint> remainingCore;
+			citizen->GetRemainingWalk(GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0, remainingCore);
+			for (const Citizen::WalkPoint& point : remainingCore) remaining.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
 		}
-		if (destination) TeleportCitizen(citizen, destination);
+		// 在途的行走转成虚拟时钟上的腿(从当前位置接着走)，没有剩余路径(没拿到)才直接到达。
+		if (destination) {
+			if (remaining.Num() >= 2) RegisterSkipWalk(citizen, destination, citizen->GetCurrentRoom(), remaining);
+			else TeleportCitizen(citizen, destination);
+		}
 	}
 }
 
@@ -533,7 +726,25 @@ void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* d
 void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* previousRoom) {
 	if (!citizen || !citizen->IsActive()) return;
 	// 开车通勤第1段：走到了车所在的停车房——不是真正的到达(不广播npc_arrive)，上车；走到了别处就取消通勤。
+	Traffic::TaskTrip* walkBackTask = nullptr; // 走路任务到了目的地：广播npc_arrive之后再走回工位
 	if (Traffic* traffic = GetTrafficCore()) {
+		if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
+			Room* current = citizen->GetCurrentRoom();
+			if (task->phase == Traffic::TaskPhase::WalkToVehicle && current == task->parkOrigin) {
+				BoardTruck(citizen); // 走到了组织的车：不是真正的到达，不广播npc_arrive
+				return;
+			}
+			if (task->phase == Traffic::TaskPhase::WalkOut && current == task->destRoom) {
+				task->phase = Traffic::TaskPhase::WalkBack;
+				walkBackTask = task;
+			}
+			else if (task->phase == Traffic::TaskPhase::WalkBack && current == task->workRoom) {
+				traffic->EndTask(task); // 回到工位：任务结束，下面照常广播npc_arrive(arrive_work)
+			}
+			else if (task->phase != Traffic::TaskPhase::DrivingOut && task->phase != Traffic::TaskPhase::DrivingBack) {
+				AbortTaskOfWorker(citizen); // 走到了别处：任务中断
+			}
+		}
 		if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen); trip && trip->phase == Traffic::CommutePhase::WalkToCar) {
 			if (citizen->GetCurrentRoom() == trip->parkOrigin) {
 				BoardCar(citizen);
@@ -547,6 +758,148 @@ void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* p
 	if (UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr) {
 		story->BroadcastNpcArrive(citizen, citizen->GetCurrentRoom());
 	}
+	if (walkBackTask) {
+		if (Traffic* traffic = GetTrafficCore(); traffic && traffic->FindTaskByWorker(citizen) == walkBackTask) {
+			RequestWalkInternal(citizen, walkBackTask->workRoom);
+		}
+	}
+}
+
+bool UForeverPopulaceFrameworkComponent::AssignTask(Organization* organization, const std::string& task, Room* destination,
+	const std::string& category, const std::string& workerName) {
+	Traffic* traffic = GetTrafficCore();
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (!traffic || !organization || !destination || !framework) return false;
+	if (!category.empty() && !framework->GetTrafficFramework()) return false;
+
+	auto available = [this](const Citizen* candidate) {
+		TObjectPtr<ACitizenElement>* element = activeInstances.Find(const_cast<Citizen*>(candidate));
+		return !(element && *element && (*element)->IsPlayerControlled());
+	};
+	Traffic::TaskTrip* trip = traffic->BeginTask(organization, task, destination, category, workerName, available);
+	if (!trip) {
+		UE_LOG(LogTemp, Verbose, TEXT("assign_task: no idle worker/vehicle/slot for %s, skipped."), UTF8_TO_TCHAR(destination->GetAddress().c_str()));
+		return false;
+	}
+	Citizen* worker = trip->worker;
+	Room* workRoom = trip->workRoom;
+	Room* parkOrigin = trip->parkOrigin;
+	const bool bDrive = trip->vehicle != nullptr;
+	UE_LOG(LogTemp, Log, TEXT("assign_task: %s -> %s (%s) by %s"), UTF8_TO_TCHAR(task.c_str()), UTF8_TO_TCHAR(destination->GetAddress().c_str()),
+		bDrive ? TEXT("truck") : TEXT("walk"), UTF8_TO_TCHAR(worker->GetName().c_str()));
+
+	if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) {
+		story->BroadcastExecuteTask(worker, task, destination->GetAddress());
+	}
+	// 事件脚本里可能又改了行程(极少)：以名字重新取，找不到就不再往下。
+	if (traffic->FindTaskByWorker(worker) != trip) return true;
+	if (bDrive) {
+		if (workRoom == parkOrigin) BoardTruck(worker);
+		else RequestWalkInternal(worker, parkOrigin);
+	}
+	else {
+		RequestWalkInternal(worker, destination);
+	}
+	return true;
+}
+
+void UForeverPopulaceFrameworkComponent::BoardTruck(Citizen* citizen) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Traffic* traffic = GetTrafficCore();
+	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
+	Traffic::TaskTrip* trip = traffic ? traffic->FindTaskByWorker(citizen) : nullptr;
+	if (!trip || !trafficFramework || !trip->vehicle) {
+		AbortTaskOfWorker(citizen);
+		return;
+	}
+	if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen)) {
+		if (*existing) (*existing)->Destroy();
+		activeInstances.Remove(citizen);
+		spawnTimes.Remove(citizen);
+	}
+	++latestWalkRequest.FindOrAdd(citizen);
+	citizen->EndWalk();
+	citizen->SetCurrentRoom(nullptr);
+	citizen->ClearPosition();
+	trip->phase = Traffic::TaskPhase::DrivingOut;
+	trafficFramework->NavigateVehicleToSlot(UTF8_TO_TCHAR(trip->vehicle->GetName().c_str()), trip->parkDest, trip->destSlot);
+}
+
+void UForeverPopulaceFrameworkComponent::FinishTaskLanding(Traffic::TaskTrip* trip, Room* landing) {
+	Traffic* traffic = GetTrafficCore();
+	if (!trip || !traffic) return;
+	Citizen* worker = trip->worker;
+	Room* workRoom = trip->workRoom;
+	if (!worker || !worker->IsActive() || !landing) {
+		traffic->EndTask(trip);
+		return;
+	}
+	trip->phase = Traffic::TaskPhase::WalkBack;
+	trip->vehicle = nullptr; // 车已经停好，不再属于这个行程
+	++latestWalkRequest.FindOrAdd(worker);
+	worker->EndWalk();
+	worker->SetCurrentRoom(landing);
+	worker->ClearPosition();
+	if (landing == workRoom) {
+		traffic->EndTask(trip);
+		ReportArrival(worker, nullptr);
+		return;
+	}
+	RequestWalkInternal(worker, workRoom);
+}
+
+void UForeverPopulaceFrameworkComponent::OnTaskVehicleFinished(Traffic::TaskTrip* trip, Room* room, bool bArrived) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Traffic* traffic = GetTrafficCore();
+	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
+	Vehicle* vehicle = trip->vehicle;
+	if (!traffic || !trafficFramework || !vehicle) {
+		if (traffic) traffic->EndTask(trip);
+		return;
+	}
+	const FString vehicleName = UTF8_TO_TCHAR(vehicle->GetName().c_str());
+
+	if (trip->phase == Traffic::TaskPhase::DrivingOut) {
+		if (bArrived) {
+			// 不停留，立即返程：原车位一直占着(reservedBy=车)，直接预订它再开回去。
+			trip->phase = Traffic::TaskPhase::DrivingBack;
+			if (vehicle->ReserveSlot(trip->parkOrigin, trip->originSlot)) {
+				trafficFramework->NavigateVehicleToSlot(vehicleName, trip->parkOrigin, trip->originSlot);
+				return;
+			}
+			// 原车位没了(理论上不会)：车就停在目的地，员工在那里出现走回去。
+			UE_LOG(LogTemp, Warning, TEXT("assign_task: origin slot lost, truck stays at destination."));
+			FinishTaskLanding(trip, room);
+			return;
+		}
+		// 车没能出发：还停在原车位，员工落回停车房走回工位。
+		vehicle->ClearReservation();
+		FinishTaskLanding(trip, trip->parkOrigin);
+		return;
+	}
+
+	if (trip->phase == Traffic::TaskPhase::DrivingBack) {
+		if (bArrived) {
+			FinishTaskLanding(trip, room ? room : trip->parkOrigin);
+			return;
+		}
+		// 开不回去：瞬移回原车位，保证车位不泄漏。
+		UE_LOG(LogTemp, Warning, TEXT("assign_task: truck failed to return, teleported home."));
+		trafficFramework->TeleportVehicleToSlot(vehicle, trip->parkOrigin, trip->originSlot);
+		FinishTaskLanding(trip, trip->parkOrigin);
+	}
+}
+
+void UForeverPopulaceFrameworkComponent::AbortTaskOfWorker(Citizen* citizen) {
+	Traffic* traffic = GetTrafficCore();
+	Traffic::TaskTrip* trip = traffic ? traffic->FindTaskByWorker(citizen) : nullptr;
+	if (!trip) return;
+	if (trip->phase == Traffic::TaskPhase::DrivingOut || trip->phase == Traffic::TaskPhase::DrivingBack) {
+		trip->worker = nullptr; // 车仍要自己开回原车位，只是不再有员工
+		if (citizen && citizen->GetJob() && citizen->GetJob()->GetScript()) citizen->GetJob()->GetScript()->SetValue("task", ValueType(std::string()));
+		return;
+	}
+	traffic->CancelTask(trip);
 }
 
 void UForeverPopulaceFrameworkComponent::HandleElementEndPlay(Citizen* citizen, ACitizenElement* element) {
@@ -558,6 +911,8 @@ void UForeverPopulaceFrameworkComponent::HandleElementEndPlay(Citizen* citizen, 
 }
 
 void UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen* citizen) {
+	AbortTaskOfWorker(citizen); // 开着车的任务让车自己开回去，其它取消
+	skipWalks.Remove(citizen);
 	if (!citizen) return;
 	CancelCommute(citizen);
 

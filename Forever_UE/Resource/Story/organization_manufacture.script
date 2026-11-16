@@ -1,0 +1,36 @@
+{
+	"milestones": [
+		{
+			"milestone": "game_start",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "create_timer", "name": "deliver", "time": "10:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "deliver",
+			"triggers": [ { "type": "time_up", "name": "deliver" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{
+					"type": "for_range", "var": "i", "from": "0", "to": "$$self.delivery.count - 1",
+					"do": [
+						{ "type": "assign_task", "task": "delivery", "vehicle": "truck", "destination": "$$self.delivery[$$($$local.i)].address" }
+					]
+				},
+				{ "type": "create_timer", "name": "deliver", "time": "10:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

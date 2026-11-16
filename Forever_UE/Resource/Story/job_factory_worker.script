@@ -3,6 +3,8 @@
 	// 到岗(npc_arrive，在自己的工作房间)后给员工加"制作汉堡"选项，下班时移除。玩家操控这个员工去点
 	// 选项：start_puzzle("puzzle_burger"汉堡店小游戏)，结束后puzzle_result触发pay_wage，按得分($$local.score)
 	// 发两倍得分的钱(每分2元，即local.score*200分)，由工厂组织支付(代扣所得税)。玩家去不去打工不影响每日工资结算，这是额外一份工资。
+	// 组织派的任务(organization_manufacture.script的assign_task送货)：execute_task事件收起选项；Core把self.task置为任务标签、
+	// 回到工位时清空。下班时若任务还没做完(task非空)只记加班(overtime=1)，等回到工位触发arrive_work时直接导航回家。
 	"milestones": [
 		{
 			"milestone": "game_start",
@@ -40,7 +42,22 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "add_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\"" }
+				{ "type": "add_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\" && $$self.overtime == 0" },
+				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\" && $$self.overtime == 1" },
+				{ "type": "set_value", "variable": "self.overtime", "value": "0" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "execute_task",
+			"triggers": [ { "type": "execute_task" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "remove_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\"" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -79,8 +96,9 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "remove_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\"" },
-				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\"" },
+				{ "type": "set_value", "variable": "self.overtime", "value": "1", "condition": "$$self.task != \"\"" },
+				{ "type": "remove_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\" && $$self.task == \"\"" },
+				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\" && $$self.task == \"\"" },
 				{ "type": "create_timer", "name": "leave_work", "time": "17:00:00", "mode": "next" }
 			],
 			"dialogs": [],

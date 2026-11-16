@@ -116,3 +116,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 - Change `open_shop`(无参数)、`pay_wage`(amount表达式，单位分)；`spawn_npc`新增`economy`表达式(缺省false)。
 
 - Change`jump_time`(`time`必填，`mode`可选)：解析为`JumpTimeChange`，见`Dependence/story/change.md`。
+
+## 2026-11-16
+
+`BuildEvent`新增`execute_task`，`BuildChanges`新增`assign_task`(见Dependence/story的change.md/event.md)；表达式支持变量名内嵌`$$(...)`(expression.md)。

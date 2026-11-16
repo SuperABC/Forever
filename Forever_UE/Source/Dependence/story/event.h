@@ -375,6 +375,25 @@ private:
 	std::string address;
 };
 
+// 员工接到任务(组织的assign_task成功发起后)：只发给该员工的Job脚本。task=任务类别标签，destination=目的房间地址；
+// 脚本里的触发条件两个字段都可省略(留空=不限)，运行时用$$local.task/$$local.destination读。
+class ExecuteTaskEvent : public Event {
+public:
+	ExecuteTaskEvent(std::string task, std::string destination);
+
+	virtual ~ExecuteTaskEvent();
+
+	virtual const std::string& GetType() const override;
+
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+private:
+	std::string task;
+	std::string destination;
+};
+
 // 载具抵达：车辆Controller导航到房间(vehicle_navigate)后，只发给这辆车自己的script。
 class VehicleArriveEvent : public Event {
 public:

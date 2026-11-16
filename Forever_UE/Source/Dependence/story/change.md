@@ -155,7 +155,7 @@
   默认10.0），由`AForeverFrameworkActor::ApplyChange`执行；未知设置打警告。主线脚本顶层的`global_settings.time_flow_ratio`仍管开局初值。
 - `global_message`(message)：触发`global_message`事件广播，见`event.md`。
 - `add_option`/`remove_option`(name, option)：给名字全局唯一的对象（门/市民/载具/资产/房间里的资产）增删交互选项，找不到静默忽略。
-- `for_range`(var, from, to, step可选默认1, do)：含两端；循环变量写进当前脚本自己的变量池（`$$self.<var>`）；
+- `for_range`(var, from, to, step可选默认1, do)：含两端；循环变量默认写进循环体内的local（`$$local.<var>`，只在循环体内可见、不留在脚本变量里、不存档，外层事件字段照常可读）；`var`显式写`self.xxx`才写进脚本自己的变量池（`$$self.xxx`）；
   `AForeverFrameworkActor::ApplyChange`里有迭代次数上限（`kMaxForRangeIterations`），超出截断并打警告。
 
 ## 依赖关系
@@ -175,3 +175,17 @@
 ## JumpTimeChange(`jump_time`)
 字段`time`、`mode`(均为表达式)，含义同`create_timer`的absolute/relative/next(不支持`real`)；目标不晚于现在静默不执行。
 执行见`ForeverFrameworkActor.md`“跳时间”。JSON：`{ "type": "jump_time", "time": "08:00:00", "mode": "next" }`。
+
+## assign_task（组织派员工执行任务，2026-11-16）
+
+组织脚本里用：员工自己走去某地，或开组织的车去某地再回来。**一次尝试**：没有闲置员工/车/目的车位就静默跳过(不占车不占人)。
+字段都是表达式源码：`destination`(必填，房间地址)、`task`(任务类别标签，如`"delivery"`，Core只写进员工脚本的`task`变量和`execute_task`事件)、
+`vehicle`(空=走路，`"truck"`=开组织的这类载具)、`round_trip`(预留，目前恒为true)、`worker`(空=自动挑闲置员工，否则员工名)。
+只有组织脚本能发(`context.self`反查组织，`Society::FindOrganizationByScript`)。执行见`UForeverPopulaceFrameworkComponent::AssignTask`和traffic.md"组织任务"。
+例：`{ "type": "assign_task", "task": "delivery", "vehicle": "truck", "destination": "$$self.delivery[$$($$local.i)].address" }`。
+
+## show_route（开发调试，2026-11-17）
+
+`show_route`(name)：切换显示/隐藏某个载具(先按载具名找)或市民(再按姓名找)的寻路轨迹——剩余路径折线，0.2秒刷新一次，没在走时线隐藏，再触发一次关掉。载具橙色、市民绿色。
+UE层`UForeverTrafficFrameworkComponent::ToggleRouteWatch`执行(路径来源：Actor的Controller剩余路点 / Core推算 / 跳时间虚拟时钟腿)。与`visualize_navigation`(玩家自己的导航线)互不影响。
+`schedule_empty.script`(所有市民)和`vehicle_basic.script`(轿车/卡车)各有一个"显示路线"选项触发它；公交/飞机/火车不走这套寻路，没加。

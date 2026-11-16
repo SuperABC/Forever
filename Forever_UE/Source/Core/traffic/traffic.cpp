@@ -7,6 +7,7 @@
 #include "map/room.h"
 #include "map/general_geometry.h"
 #include "story/change.h"
+#include "story/script.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "society/society.h"
@@ -159,6 +160,123 @@ void Traffic::CancelTrip(const Citizen* citizen) {
 	trips.erase(it);
 }
 
+namespace {
+	void WriteTaskVariable(Citizen* worker, const string& task) {
+		if (!worker || !worker->GetJob() || !worker->GetJob()->GetScript()) return;
+		worker->GetJob()->GetScript()->SetValue("task", ValueType(task));
+	}
+
+	// 车开走后原车位靠reservedBy=车占住(返程ReserveSlot允许reservedBy==自己)。
+	void HoldOriginSlot(Vehicle* vehicle, Room* room, int index) {
+		if (!vehicle || !room || index < 0 || index >= static_cast<int>(room->GetParkingSlots().size())) return;
+		room->GetParkingSlots()[index]->reservedBy = vehicle;
+	}
+
+	void ReleaseOriginSlot(Vehicle* vehicle, Room* room, int index) {
+		if (!vehicle || !room || index < 0 || index >= static_cast<int>(room->GetParkingSlots().size())) return;
+		ParkingSlot* slot = room->GetParkingSlots()[index];
+		// 车正预订着它(返程中)就保留，由车自己的到达/清预订处理。
+		if (slot->reservedBy == vehicle && vehicle->GetReservedRoom() != room) slot->reservedBy = nullptr;
+	}
+}
+
+Traffic::TaskTrip* Traffic::BeginTask(Organization* organization, const string& task, Room* destRoom, const string& category,
+	const string& workerName, const function<bool(const Citizen*)>& workerAvailable) {
+	if (!organization || !destRoom) return nullptr;
+	Building* destBuilding = destRoom->GetParentBuilding();
+	if (!destBuilding) return nullptr;
+
+	for (Job* job : organization->GetJobs()) {
+		if (!job || !job->IsOpen() || !job->GetPosition()) continue;
+		Citizen* worker = job->GetOccupant();
+		if (!worker || !worker->IsActive()) continue;
+		if (!workerName.empty() && worker->GetName() != workerName) continue;
+		Room* workRoom = job->GetPosition();
+		if (worker->GetCurrentRoom() != workRoom || worker->IsWalking() || trips.count(worker) || FindTaskByWorker(worker)) continue;
+		if (workerAvailable && !workerAvailable(worker)) continue;
+
+		if (category.empty()) {
+			// 走路任务：不用车，目的房间不是工位本身就行。
+			if (destRoom == workRoom) continue;
+			taskTrips.emplace_back();
+			TaskTrip& trip = taskTrips.back();
+			trip.task = task;
+			trip.worker = worker;
+			trip.destRoom = destRoom;
+			trip.workRoom = workRoom;
+			trip.phase = TaskPhase::WalkOut;
+			WriteTaskVariable(worker, task);
+			return &trip;
+		}
+
+		Building* workBuilding = workRoom->GetParentBuilding();
+		if (!workBuilding || workBuilding == destBuilding) continue;
+		for (Asset* asset : organization->GetAssets()) {
+			VehicleAsset* vehicleAsset = dynamic_cast<VehicleAsset*>(asset);
+			Vehicle* vehicle = vehicleAsset ? vehicleAsset->GetVehicle() : nullptr;
+			if (!vehicle || vehicle->GetCategory() != category) continue;
+			if (vehicle->GetParkState() != Vehicle::ParkState::Parked || vehicle->IsDriving()) continue;
+			if (vehicle->GetRoute() || vehicle->GetReservedRoom() || FindTaskByVehicle(vehicle)) continue;
+			Room* parkOrigin = vehicle->GetRoom();
+			if (!parkOrigin || parkOrigin->GetParentBuilding() != workBuilding || !parkOrigin->GetNavigationNode()) continue;
+			int originSlot = vehicle->GetParkingSlotIndex();
+
+			Room* parkDest = nullptr;
+			int destSlot = -1;
+			if (!PickFreeSlot(destBuilding->GetRooms(), category, parkDest, destSlot)) return nullptr; // 目的地没车位：别的车也一样
+			if (!vehicle->ReserveSlot(parkDest, destSlot)) continue;
+			HoldOriginSlot(vehicle, parkOrigin, originSlot);
+
+			taskTrips.emplace_back();
+			TaskTrip& trip = taskTrips.back();
+			trip.task = task;
+			trip.worker = worker;
+			trip.vehicle = vehicle;
+			trip.parkOrigin = parkOrigin;
+			trip.originSlot = originSlot;
+			trip.parkDest = parkDest;
+			trip.destSlot = destSlot;
+			trip.destRoom = destRoom;
+			trip.workRoom = workRoom;
+			trip.phase = TaskPhase::WalkToVehicle;
+			WriteTaskVariable(worker, task);
+			return &trip;
+		}
+	}
+	return nullptr;
+}
+
+Traffic::TaskTrip* Traffic::FindTaskByVehicle(const Vehicle* vehicle) {
+	if (!vehicle) return nullptr;
+	for (TaskTrip& trip : taskTrips) {
+		if (trip.vehicle == vehicle) return &trip;
+	}
+	return nullptr;
+}
+
+Traffic::TaskTrip* Traffic::FindTaskByWorker(const Citizen* worker) {
+	if (!worker) return nullptr;
+	for (TaskTrip& trip : taskTrips) {
+		if (trip.worker == worker) return &trip;
+	}
+	return nullptr;
+}
+
+void Traffic::EndTask(TaskTrip* trip) {
+	if (!trip) return;
+	ReleaseOriginSlot(trip->vehicle, trip->parkOrigin, trip->originSlot);
+	WriteTaskVariable(trip->worker, string());
+	for (auto it = taskTrips.begin(); it != taskTrips.end(); ++it) {
+		if (&*it == trip) { taskTrips.erase(it); return; }
+	}
+}
+
+void Traffic::CancelTask(TaskTrip* trip) {
+	if (!trip) return;
+	if (trip->phase == TaskPhase::WalkToVehicle && trip->vehicle) trip->vehicle->ClearReservation();
+	EndTask(trip);
+}
+
 void Traffic::ResolveVehicleAssets(const Populace& populace, const Society& society) {
 	const vector<Citizen*>& citizens = populace.GetCitizens();
 	const vector<Organization*>& organizations = society.GetOrganizations();
@@ -198,6 +316,30 @@ void Traffic::ResolveVehicleAssets(const Populace& populace, const Society& soci
 		trip.phase = pending.phase == 1 ? CommutePhase::Driving : CommutePhase::WalkToCar;
 	}
 	pendingTrips.clear();
+
+	// 组织任务行程：车必须在，员工可以没了(车仍要开回)；走路任务没员工就丢弃。
+	for (const PendingTask& pending : pendingTasks) {
+		auto vehicleIt = pending.vehicleName.empty() ? vehicles.end() : vehicles.find(pending.vehicleName);
+		Citizen* worker = (pending.workerIndex >= 0 && pending.workerIndex < static_cast<int>(citizens.size())) ? citizens[pending.workerIndex] : nullptr;
+		if (pending.vehicleName.empty() ? !worker : vehicleIt == vehicles.end()) {
+			if (vehicleIt != vehicles.end()) vehicleIt->second->ClearReservation();
+			continue;
+		}
+		taskTrips.emplace_back();
+		TaskTrip& trip = taskTrips.back();
+		trip.task = pending.task;
+		trip.worker = worker;
+		trip.vehicle = vehicleIt != vehicles.end() ? vehicleIt->second : nullptr;
+		trip.parkOrigin = pending.parkOrigin;
+		trip.originSlot = pending.originSlot;
+		trip.parkDest = pending.parkDest;
+		trip.destSlot = pending.destSlot;
+		trip.destRoom = pending.destRoom;
+		trip.workRoom = pending.workRoom;
+		trip.phase = static_cast<TaskPhase>(pending.phase);
+		if (trip.vehicle) HoldOriginSlot(trip.vehicle, trip.parkOrigin, trip.originSlot);
+	}
+	pendingTasks.clear();
 }
 
 Traffic::~Traffic() {

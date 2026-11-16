@@ -98,3 +98,11 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 
 ## 通勤统计报告
 `Traffic::CommuteReport(populace)`返回若干行文本，UE层写日志：成年人数、有车人数、每种职位(无业记`(none)`)的人数和其中有车人数、开车寻路累计(started)/到达/失败/进行中，以及各种走路原因计数。开局分配车之后和读档恢复后各打一次；每次开车通勤出发(`Commute drive pathfinding`)和到达/失败也各打一行累计。
+
+## 组织任务（assign_task，2026-11-16）
+
+`Traffic::TaskTrip`(list存放，指针稳定)：任务标签/员工/车/原停车房+原车位/目的停车房+车位/目的房间/工位/阶段
+`WalkToVehicle→DrivingOut→DrivingBack→WalkBack`(开车)或`WalkOut→WalkBack`(走路)。`BeginTask(组织,task,目的房间,category,员工名,可用性谓词)`：
+员工须在工位房间、没在走、无通勤/任务；开车任务还要组织的闲置同类载具(停着、无路线/预订、停车房与工位同栋建筑)和目的建筑里接受该类别的空闲车位(`PickFreeSlot`)。
+车开走后原车位靠`reservedBy=车`占住(`HoldOriginSlot`)，返程`ReserveSlot`因reservedBy==自己通过；`EndTask/CancelTask`释放。员工死亡/离城时`worker=nullptr`，车仍开回。
+不停留，到目的车位立即返程。任务期间员工脚本变量`task`被置位。存档：traffic段末尾追加任务行程块(AtEnd容错，无版本变化)，`ResolveVehicleAssets`还原。

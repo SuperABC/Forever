@@ -128,3 +128,16 @@
 
 ## 预设车位导航与存档行驶状态
 `NavigateVehicleToSlot(name, room, slot)`：目标车位已预订，直接规划；导航成功/失败都经`OnVehicleNavigationFinished(vehicle, room, bArrived)`回调(由ForeverFrameworkActor接到市民域)。`SyncDrivesToCore/ClearDriveSnapshots`在存档前后写/清行驶快照；`GenerateVehicles`尾部恢复快照并强制生成`wasSpawned`的车。
+
+## 组织任务与跳时间虚拟时钟（2026-11-16）
+
+- `TeleportVehicleToSlot(车,房间,车位)`：兜底瞬移停车(销毁Actor/Controller、结束推算、停靠)，组织任务的车开不回去时用。
+- 跳时间：`BeginTimeSkip`把脚本/通勤/任务导航中的车(有navTargets、无路线)交回Core后按剩余路径转成`FSkipDrive`腿；
+  跳期间`StartVehicleNavigation`改走Core规划+`RegisterSkipDrive`(先拆Actor)，不再`BeginDrive`；`CompleteSkipLegs`停靠到预订车位、
+  `ProcessNavResults`触发`OnVehicleNavigationFinished`+`vehicle_arrive`，并当场处理由此发起的下一段导航(带多出来的时间)；
+  `EndTimeSkip`把没走完的腿按进度插值后`BeginDrive`续跑。腿上的车不参与流式生成。
+
+## 路线调试 show_route（2026-11-17）
+
+`ToggleRouteWatch(name)`建一条`FRouteWatch`(ProceduralMesh+独立颜色MID)，`UpdateRouteWatches`在Tick里每0.2秒刷新；载具路径`GetVehicleRoutePath`(跳时间腿/Actor的VehicleCommandController/Core推算)，
+市民路径`UForeverPopulaceFrameworkComponent::GetRoutePath`。和玩家导航线(`testNavMesh`)是两套，互不覆盖。

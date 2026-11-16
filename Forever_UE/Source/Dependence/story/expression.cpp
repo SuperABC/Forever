@@ -49,11 +49,54 @@ VARIABLE_SCOPE ResolveVariableName(const string& name, string& outKey) {
 	return VARIABLE_SCOPE_GLOBAL;
 }
 
+// 变量名里的内嵌表达式：名字的任意一段可以写成$$(表达式)，先求值、转成字符串(整数不带小数)再替换回名字，
+// 例如delivery[$$($$self.i)].address。括号按配平找(可嵌套、跳过引号里的括号)。
+static size_t FindMatchingParen(const string& text, size_t open) {
+	int depth = 0;
+	for (size_t i = open; i < text.length(); i++) {
+		char c = text[i];
+		if (c == '"' || c == '\'') {
+			size_t end = i + 1;
+			while (end < text.length() && text[end] != c) {
+				if (text[end] == '\\') end++;
+				end++;
+			}
+			i = end;
+			continue;
+		}
+		if (c == '(') depth++;
+		else if (c == ')') {
+			depth--;
+			if (depth == 0) return i;
+		}
+	}
+	return string::npos;
+}
+
+static string ExpandNameExpressions(const string& name, const ScriptContext& context) {
+	if (name.find("$$(") == string::npos) return name;
+	string result;
+	size_t i = 0;
+	while (i < name.length()) {
+		if (name.compare(i, 3, "$$(") == 0) {
+			size_t close = FindMatchingParen(name, i + 2);
+			if (close == string::npos) break;
+			result += ToString(EvaluateExpression(name.substr(i + 3, close - i - 3), context));
+			i = close + 1;
+		}
+		else {
+			result += name[i++];
+		}
+	}
+	return result;
+}
+
 ValueType VariableExpression::Evaluate(const ScriptContext& context) const {
 	// 前缀规则见ResolveVariableName：self./system./local.路由到对应变量池，没有前缀的是全局变量。
 	// 变量不存在时返回0。
 	string key;
-	switch (ResolveVariableName(name, key)) {
+	const string resolvedName = ExpandNameExpressions(name, context); // 名字里的$$(表达式)先展开
+	switch (ResolveVariableName(resolvedName, key)) {
 	case VARIABLE_SCOPE_SELF:
 		if (context.self) {
 			auto value = context.self->GetValue(key);
@@ -504,6 +547,24 @@ vector<string> Expression::Tokenize(const string& expr) {
 			tokens.push_back(quoted);
 			i = end + 1;
 		}
+		else if (c == '$' && expr.compare(i, 3, "$$(") == 0 && (current.empty() || current.compare(0, 2, "$$") == 0)) {
+			// 变量名里的内嵌表达式$$(...)：整段(含括号)并进当前变量token，求值时由ExpandNameExpressions展开
+			size_t close = FindMatchingParen(expr, i + 2);
+			if (close == string::npos) {
+				THROW_EXCEPTION(RuntimeException, "Unmatched parenthesis in variable name expression");
+			}
+			current += expr.substr(i, close - i + 1);
+			i = close + 1;
+		}
+		else if (c == '[' && current.size() > 2 && current.compare(0, 2, "$$") == 0 && expr.compare(i + 1, 3, "$$(") == 0) {
+			// 数组项下标由内嵌表达式给出：[$$(表达式)]，同样整段并进变量token
+			size_t close = FindMatchingParen(expr, i + 3);
+			if (close == string::npos || close + 1 >= expr.length() || expr[close + 1] != ']') {
+				THROW_EXCEPTION(RuntimeException, "Malformed [$$(expr)] index in variable name");
+			}
+			current += expr.substr(i, close + 2 - i);
+			i = close + 2;
+		}
 		else if (c == '[' && current.size() > 2 && current.compare(0, 2, "$$") == 0 && IsIndexSuffix(expr, i)) {
 			// 紧跟在变量名后的[数字]是展平出来的数组项名字(如$$local.items[0].x)，并进变量token，
 			// 不当数组字面量
@@ -760,7 +821,7 @@ shared_ptr<ExpressionNode> Expression::ParseOperand(const string& token) {
 	if (token.length() >= 2 && token.substr(0, 2) == "$$") {
 		string varName = token.substr(2);
 		if (!varName.empty() && (isalpha(static_cast<unsigned char>(varName[0])) ||
-			varName[0] == '_' ||
+			varName[0] == '_' || varName[0] == '(' ||
 			(varName[0] & 0x80))) {
 			return make_unique<VariableExpression>(varName);
 		}

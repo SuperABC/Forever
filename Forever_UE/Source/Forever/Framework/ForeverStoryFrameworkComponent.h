@@ -76,6 +76,9 @@ public:
 	// 构造npc_arrive事件，只发给这个市民自己的Scheduler脚本和Job脚本(不广播)，有嵌套深度保护。
 	void BroadcastNpcArrive(Citizen* citizen, Room* room);
 
+	// 员工接到组织派的任务(assign_task发起成功后)：execute_task事件只发给该员工的Job脚本。
+	void BroadcastExecuteTask(Citizen* citizen, const std::string& task, const std::string& destination);
+
 	// 同上，但直接发一个已经填好击杀信息(凶手/武器/部位/伤害/可见/死亡地址)的事件，武器击杀用。
 	void BroadcastCitizenDecease(CitizenDeceaseEvent& event);
 

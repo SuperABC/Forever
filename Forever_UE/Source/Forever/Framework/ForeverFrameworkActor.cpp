@@ -315,6 +315,26 @@ void AForeverFrameworkActor::ValidateMainStoryDependencies() {
 	}
 }
 
+namespace {
+	// for_range循环体里的local：循环变量优先，其余字段转给原来的local(外层事件/外层循环)。
+	class ForRangeLocalEvent : public Event {
+	public:
+		ForRangeLocalEvent(const Event* outer, std::string name, int value) : outer(outer), name(std::move(name)), value(value) {}
+		virtual const std::string& GetType() const override {
+			static const std::string type = "for_range";
+			return type;
+		}
+		virtual std::pair<bool, ValueType> GetLocalValue(const std::string& key) const override {
+			if (key == name) return { true, ValueType(value) };
+			return outer ? outer->GetLocalValue(key) : std::pair<bool, ValueType>{ false, ValueType() };
+		}
+	private:
+		const Event* outer;
+		std::string name;
+		int value;
+	};
+}
+
 void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptContext& context) {
 	// 所有Change自己的condition：非空且求值为假就不执行。for_range的子change、分支选项的changes、
 	// 里程碑的changes都走这个入口，所以这里统一判断一次。
@@ -330,6 +350,26 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		if (citizen && dest && populaceFramework) {
 			populaceFramework->RequestWalk(citizen, dest);
 		}
+		return;
+	}
+
+	if (auto* assign = dynamic_cast<const AssignTaskChange*>(change)) {
+		// 组织派员工去某地(走路或开组织的车)。只有组织脚本能发；字段都是表达式。一次尝试，条件不满足就静默跳过。
+		Organization* organization = society ? society->FindOrganizationByScript(context.self) : nullptr;
+		if (!organization || !populaceFramework) {
+			UE_LOG(LogTemp, Warning, TEXT("assign_task: 只能由组织脚本发起。"));
+			return;
+		}
+		const std::string task = assign->GetTask().empty() ? std::string() : ToString(EvaluateExpression(assign->GetTask(), context));
+		const std::string destination = ToString(EvaluateExpression(assign->GetDestination(), context));
+		const std::string vehicle = assign->GetVehicle().empty() ? std::string() : ToString(EvaluateExpression(assign->GetVehicle(), context));
+		const std::string worker = assign->GetWorker().empty() ? std::string() : ToString(EvaluateExpression(assign->GetWorker(), context));
+		Room* dest = map ? map->LocateRoom(destination) : nullptr;
+		if (!dest) {
+			UE_LOG(LogTemp, Verbose, TEXT("assign_task: 找不到目的房间 %s"), UTF8_TO_TCHAR(destination.c_str()));
+			return;
+		}
+		populaceFramework->AssignTask(organization, task, dest, vehicle, worker);
 		return;
 	}
 
@@ -387,8 +427,12 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		// 自己的变量池：var写"floor"或"self.floor"都是$$self.floor。含两端，step省略为1；循环次数
 		// 超过kMaxForRangeIterations截断并警告。子Change的condition每轮都按当前循环变量求值。
 		constexpr int kMaxForRangeIterations = 1000;
+		// 循环变量默认放进local($$local.<var>，只在循环体内可见、不留在脚本变量里、不进存档)；
+		// 显式写"self.xxx"才写进脚本自己的变量池。
 		std::string key = forRange->GetVar();
-		if (key.rfind("self.", 0) == 0) key = key.substr(5);
+		const bool bSelfVar = key.rfind("self.", 0) == 0;
+		if (bSelfVar) key = key.substr(5);
+		else if (key.rfind("local.", 0) == 0) key = key.substr(6);
 		int from = ToInt(EvaluateExpression(forRange->GetFrom(), context));
 		int to = ToInt(EvaluateExpression(forRange->GetTo(), context));
 		int step = forRange->GetStep().empty() ? 1 : ToInt(EvaluateExpression(forRange->GetStep(), context));
@@ -399,10 +443,18 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 				UE_LOG(LogTemp, Warning, TEXT("AForeverFrameworkActor::ApplyChange: for_range exceeded %d iterations, truncated."), kMaxForRangeIterations);
 				break;
 			}
-			if (context.self) context.self->SetValue(key, ValueType(value));
+			if (bSelfVar) {
+				if (context.self) context.self->SetValue(key, ValueType(value));
+				for (const Change* child : forRange->GetChanges()) {
+					if (child) ApplyChange(child, context);
+				}
+				continue;
+			}
+			ForRangeLocalEvent loopLocal(context.local, key, value);
+			ScriptContext childContext = context;
+			childContext.local = &loopLocal;
 			for (const Change* child : forRange->GetChanges()) {
-				if (!child) continue;
-				ApplyChange(child, context);
+				if (child) ApplyChange(child, childContext);
 			}
 		}
 		return;
@@ -499,6 +551,11 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 			if (!evaluated.empty()) destination = evaluated;
 		}
 		if (trafficFramework) trafficFramework->NavigateVehicle(vehicleName, UTF8_TO_TCHAR(destination.data()));
+		return;
+	}
+
+	if (auto* showRoute = dynamic_cast<const ShowRouteChange*>(change)) {
+		if (trafficFramework) trafficFramework->ToggleRouteWatch(UTF8_TO_TCHAR(ToString(EvaluateExpression(showRoute->GetTarget(), context)).c_str()));
 		return;
 	}
 
@@ -912,7 +969,8 @@ void AForeverFrameworkActor::BeginTimeSkip(const Time& target)
 	skipDoneSeconds = 0.0;
 	bTimeSkipping = true;
 
-	// 在途的行走一律先到达；跳期间npc_navigate直接瞬移。
+	// 在途的行走/开车转成虚拟时钟上的"腿"，按游戏时间推算位置并触发到达；跳期间新的导航也一样。
+	if (trafficFramework) trafficFramework->BeginTimeSkip();
 	if (populaceFramework) populaceFramework->BeginTimeSkip();
 
 	// 锁住移动/视角输入，黑屏渐变完成后才开始推进。
@@ -962,6 +1020,9 @@ void AForeverFrameworkActor::RunTimeSkipBudget()
 
 		StepWorld(crossedDay);
 
+		// 在途的行程腿(步行/开车)按这一步的游戏时长推进，走完的触发真正的到达(npc_arrive/vehicle_arrive)并接着下一条腿。
+		AdvanceTripsForTimeSkip(stepSeconds);
+
 		// Job/Scheduler/组织的到期项每次Tick有条数上限：同一时刻反复Tick(不再算跨天)直到排空。
 		PostImplement postImplement(map, populace, society, story, industry, traffic, player);
 		for (int round = 0; round < kTimeSkipMaxDrainRounds; round++) {
@@ -978,6 +1039,20 @@ void AForeverFrameworkActor::RunTimeSkipBudget()
 	}
 }
 
+void AForeverFrameworkActor::AdvanceTripsForTimeSkip(double stepSeconds)
+{
+	if (populaceFramework) populaceFramework->DecrementSkipLegs(stepSeconds);
+	if (trafficFramework) trafficFramework->DecrementSkipLegs(stepSeconds);
+	// 腿完成触发的到达会开出新的腿(带着多出来的时间)，反复处理直到没有腿再完成。
+	for (int iteration = 0; iteration < 64; iteration++) {
+		bool bAny = false;
+		if (populaceFramework) bAny |= populaceFramework->CompleteSkipLegs();
+		if (trafficFramework) bAny |= trafficFramework->CompleteSkipLegs();
+		if (!bAny) break;
+	}
+	skipCreditSeconds = 0.0;
+}
+
 void AForeverFrameworkActor::FinishTimeSkip()
 {
 	bTimeSkipping = false;
@@ -986,6 +1061,8 @@ void AForeverFrameworkActor::FinishTimeSkip()
 	skipStart = nullptr;
 	skipTarget = nullptr;
 
+	// 先交通后市民：未走完的车辆腿用Core推算续跑，市民腿落成真实步行。
+	if (trafficFramework) trafficFramework->EndTimeSkip();
 	if (populaceFramework) populaceFramework->EndTimeSkip();
 	if (trafficFramework) trafficFramework->ResyncBusesAfterTimeSkip();
 	if (storyFramework) storyFramework->UpdateSystemTime();

@@ -7,6 +7,7 @@
 #include "industry/industry.h"
 #include "map/component.h"
 #include "map/room.h"
+#include "map/building.h"
 #include "populace/citizen.h"
 #include "populace/household.h"
 #include "story/script.h"
@@ -167,6 +168,35 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 	vector<string> stockTypes;
 	for (Product* product : industry.GetProducts()) stockTypes.push_back(product->GetType());
 
+	// 当日送货目的地(只是给脚本的视觉任务数据，不影响实际物流)：组织自己的仓库发往别的建筑、且目的建筑有停车位的城内流向，
+	// 按目的建筑合并(一栋建筑一天一趟)。只看目的建筑有没有停车位，不看房间类型。
+	struct DeliveryDestination {
+		const Building* building;
+		string address; // 目的存储房间地址(LocateRoom可解析)
+		int quantity;
+	};
+	unordered_map<const Organization*, vector<DeliveryDestination>> deliveries;
+	for (const GoodsFlow& flow : industry.GetFlows()) {
+		if (!flow.from || !flow.to || flow.quantity <= 0) continue;
+		const Room* fromRoom = industry.GetStorageRoom(flow.from);
+		const Room* toRoom = industry.GetStorageRoom(flow.to);
+		if (!fromRoom || !toRoom) continue;
+		const Building* fromBuilding = fromRoom->GetParentBuilding();
+		const Building* toBuilding = toRoom->GetParentBuilding();
+		if (!toBuilding || toBuilding == fromBuilding) continue;
+		bool hasParking = false;
+		for (const Room* candidate : toBuilding->GetRooms()) {
+			if (candidate && !candidate->GetParkingSlots().empty()) { hasParking = true; break; }
+		}
+		if (!hasParking) continue;
+		Party owner = society.OwnerOf(fromRoom);
+		if (owner.kind != Party::ORGANIZATION || !owner.ref) continue;
+		vector<DeliveryDestination>& list = deliveries[static_cast<const Organization*>(owner.ref)];
+		auto found = std::find_if(list.begin(), list.end(), [&](const DeliveryDestination& d) { return d.building == toBuilding; });
+		if (found != list.end()) found->quantity += flow.quantity;
+		else list.push_back({ toBuilding, toRoom->GetAddress(), flow.quantity });
+	}
+
 	// 一、把各组织仓库里的货物写进它的script：self.stock.<货物类型> = 整数库存。
 	unordered_map<Organization*, unordered_map<string, int>> before;
 	vector<Organization*> sellers;
@@ -179,6 +209,24 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 			if (job && job->IsOpen() && job->GetOccupant()) employees++;
 		}
 		organization->GetScript()->SetValue("employees", ValueType(employees));
+		// 当日送货目的地：self.delivery.count、self.delivery[i].address、self.delivery[i].quantity(脚本用$$(表达式)按下标读)。
+		{
+			Script* script = organization->GetScript();
+			const vector<DeliveryDestination> empty;
+			auto listIt = deliveries.find(organization);
+			const vector<DeliveryDestination>& list = listIt != deliveries.end() ? listIt->second : empty;
+			auto oldCount = script->GetValue("delivery.count");
+			int previous = oldCount.first && std::holds_alternative<int>(oldCount.second) ? std::get<int>(oldCount.second) : 0;
+			script->SetValue("delivery.count", ValueType(static_cast<int>(list.size())));
+			for (int i = 0; i < static_cast<int>(list.size()); i++) {
+				script->SetValue("delivery[" + to_string(i) + "].address", ValueType(list[i].address));
+				script->SetValue("delivery[" + to_string(i) + "].quantity", ValueType(list[i].quantity));
+			}
+			for (int i = static_cast<int>(list.size()); i < previous; i++) {
+				script->RemoveValue("delivery[" + to_string(i) + "].address");
+				script->RemoveValue("delivery[" + to_string(i) + "].quantity");
+			}
+		}
 		vector<Storage*> storages = StoragesOf(organization, industry);
 		for (const string& type : stockTypes) {
 			int stock = StockOf(storages, type);

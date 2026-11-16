@@ -21,3 +21,8 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 送货脚本（2026-11-16）
+
+构造里`scriptModName="script_empty"`、`milestoneNames={"organization_manufacture"}`，脚本`Resource/Story/organization_manufacture.script`：
+每天10:00对`delivery.count`个目的地`for_range`发`assign_task`(`vehicle:"truck"`)，员工开组织卡车去目的建筑车位再开回，纯视觉。
