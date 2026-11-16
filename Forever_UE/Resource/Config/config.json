@@ -43,7 +43,8 @@
       "job_shop_saler",
       "job_restaurant_waiter",
       "job_warehouse_keeper",
-      "job_factory_worker"
+      "job_factory_worker",
+      "job_video_maker"
    ],
    "main_story" : "script_test",
    "manufacture_mods" : [ "manufacture_farm", "manufacture_ranch", "manufacture_food" ],
@@ -51,7 +52,8 @@
    "organization_mods" : [
       "organization_shop",
       "organization_restaurant",
-      "organization_manufacture"
+      "organization_manufacture",
+      "organization_video_company"
    ],
    "product_mods" : [ "product_wheat", "product_beef", "product_burger" ],
    "puzzle_mods" : [],

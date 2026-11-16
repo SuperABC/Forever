@@ -67,10 +67,12 @@
 #include "society/job_factory_worker.h"
 #include "society/job_restaurant_waiter.h"
 #include "society/job_shop_saler.h"
+#include "society/job_video_maker.h"
 #include "society/job_warehouse_keeper.h"
 #include "society/organization_manufacture.h"
 #include "society/organization_restaurant.h"
 #include "society/organization_shop.h"
+#include "society/organization_video_company.h"
 #include "story/script_basic.h"
 #include "industry/product_beef.h"
 #include "industry/product_burger.h"
@@ -169,8 +171,10 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ ShopSalerJob::GetId(), { kScriptEmpty } },
 		{ RestaurantWaiterJob::GetId(), { kScriptEmpty } },
 		{ FactoryWorkerJob::GetId(), { kScriptEmpty } },
+		{ VideoMakerJob::GetId(), { kScriptEmpty } },
 		{ ShopOrganization::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), ShopSalerJob::GetId(), WarehouseKeeperJob::GetId(), kScriptEmpty } }, // 按component/room类型生成岗位
 		{ RestaurantOrganization::GetId(), { RestaurantComponent::GetId(), RestaurantRoom::GetId(), RestaurantWaiterJob::GetId(), kScriptEmpty } },
+		{ VideoCompanyOrganization::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), VideoMakerJob::GetId(), kScriptEmpty } },
 		{ ManufactureOrganization::GetId(), { ManufactureComponent::GetId(), FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(), FactoryWorkerJob::GetId() } },
 
 		// 托管型：Manufacture只从房间的manufactureTypes生成、Storage只从房间的storageType生成，没有房间就不会出现，所以它们依赖房间。
@@ -465,7 +469,7 @@ extern "C" __declspec(dllexport) void FinishModSchedulers(SchedulerFactory* fact
 }
 
 extern "C" __declspec(dllexport) void* GetModJobs() {
-	static vector<string> mods = { ShopSalerJob::GetId(), RestaurantWaiterJob::GetId(), WarehouseKeeperJob::GetId(), FactoryWorkerJob::GetId() };
+	static vector<string> mods = { ShopSalerJob::GetId(), RestaurantWaiterJob::GetId(), WarehouseKeeperJob::GetId(), FactoryWorkerJob::GetId(), VideoMakerJob::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModJobs(JobFactory* factory) {
@@ -481,12 +485,15 @@ extern "C" __declspec(dllexport) void RegisterModJobs(JobFactory* factory) {
 	factory->RegisterJob(RestaurantWaiterJob::GetId(),
 		[](const std::string&) -> JobMod* { return new RestaurantWaiterJob(); },
 		[](JobMod* m) { delete m; });
+	factory->RegisterJob(VideoMakerJob::GetId(),
+		[](const std::string&) -> JobMod* { return new VideoMakerJob(); },
+		[](JobMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModJobs(JobFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModOrganizations() {
-	static vector<string> mods = { ShopOrganization::GetId(), RestaurantOrganization::GetId(), ManufactureOrganization::GetId() };
+	static vector<string> mods = { ShopOrganization::GetId(), RestaurantOrganization::GetId(), ManufactureOrganization::GetId(), VideoCompanyOrganization::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModOrganizations(OrganizationFactory* factory) {
@@ -502,6 +509,10 @@ extern "C" __declspec(dllexport) void RegisterModOrganizations(OrganizationFacto
 		[](const std::string&) -> OrganizationMod* { return new RestaurantOrganization(); },
 		[](OrganizationMod* m) { delete m; },
 		&RestaurantOrganization::GetPower, &RestaurantOrganization::GetRequirements);
+	factory->RegisterOrganization(VideoCompanyOrganization::GetId(),
+		[](const std::string&) -> OrganizationMod* { return new VideoCompanyOrganization(); },
+		[](OrganizationMod* m) { delete m; },
+		&VideoCompanyOrganization::GetPower, &VideoCompanyOrganization::GetRequirements);
 }
 extern "C" __declspec(dllexport) void FinishModOrganizations(OrganizationFactory* factory) {
 }

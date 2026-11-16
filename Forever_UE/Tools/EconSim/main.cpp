@@ -28,6 +28,8 @@
 #include "common/registry.h"
 
 #include <algorithm>
+#include <array>
+#include <functional>
 #include <chrono>
 #include <cstdio>
 #include <exception>
@@ -340,6 +342,13 @@ namespace {
 					totals.revenue += stat.revenue;
 					for (const auto& [quality, sold] : stat.soldByQuality) totals.soldByQuality[quality] += sold;
 				}
+				if (daily.services.count("video")) {
+					const ServiceStat& stat = daily.services.at("video");
+					totals.videoDemand += stat.demand;
+					totals.videoSold += stat.sold;
+					totals.videoUnmet += stat.unmet;
+					totals.videoRevenue += stat.revenue;
+				}
 				for (Citizen* arrived : Immigration::Daily(society, populace, city, time)) {
 					immigrantSet.insert(arrived);
 					finance.immigrated++;
@@ -482,6 +491,208 @@ static int RealMain(int argc, char** argv) {
 	city.InitRoadnet();
 	city.InitZones();
 	city.InitBuildings();
+
+	if (argc > 4 && string(argv[4]) == "navcheck") {
+		// 车行导航图连通性：以第一个高层住宅车位为参照，正向/反向BFS，按建筑类型和路名统计每个车位能否开到/开回参照点。
+		const auto& graph = city.GetVehicleNavGraph();
+		std::unordered_map<int, std::vector<int>> reverse;
+		for (const auto& [from, edges] : graph) for (const auto& [to, conn] : edges) reverse[to].push_back(from);
+		auto bfs = [&](int start, bool forward) {
+			std::unordered_set<int> seen = { start };
+			std::vector<int> stack = { start };
+			while (!stack.empty()) {
+				int cur = stack.back(); stack.pop_back();
+				if (forward) {
+					auto it = graph.find(cur);
+					if (it == graph.end()) continue;
+					for (const auto& [to, conn] : it->second) if (seen.insert(to).second) stack.push_back(to);
+				}
+				else {
+					auto it = reverse.find(cur);
+					if (it == reverse.end()) continue;
+					for (int from : it->second) if (seen.insert(from).second) stack.push_back(from);
+				}
+			}
+			return seen;
+		};
+		int refNode = -1;
+		for (const auto& [name, building] : city.GetBuildings()) {
+			if (string(building->GetType()) != "building_residence_high") continue;
+			for (Room* room : building->GetRooms()) {
+				for (ParkingSlot* slot : room->GetParkingSlots()) if (slot->navigationNode && refNode < 0) refNode = slot->navigationNode->GetId();
+			}
+			if (refNode >= 0) break;
+		}
+		auto fwd = bfs(refNode, true), back = bfs(refNode, false);
+		printf("[NavCheck] 图节点 %zu, 参照节点 %d: 可到达 %zu 个, 可回到参照 %zu 个\n", graph.size(), refNode, fwd.size(), back.size());
+		std::map<string, std::array<int, 5>> stats; // 类型 -> {车位总数, 无node, 去得了, 回得来, 双向}
+		std::map<string, std::map<string, int>> badRoads;
+		for (const auto& [name, building] : city.GetBuildings()) {
+			for (Room* room : building->GetRooms()) {
+				for (ParkingSlot* slot : room->GetParkingSlots()) {
+					auto& st = stats[building->GetType()];
+					st[0]++;
+					if (!slot->navigationNode) { st[1]++; continue; }
+					int id = slot->navigationNode->GetId();
+					bool f = fwd.count(id) > 0, b = back.count(id) > 0;
+					if (f) st[2]++;
+					if (b) st[3]++;
+					if (f && b) st[4]++;
+					else {
+						string address = room->GetAddress();
+						badRoads[building->GetType()][address.substr(0, address.find(' ', address.find(' ') + 1))]++;
+					}
+				}
+			}
+		}
+		{
+			// 不连通区域的出口：从参照点到不了的节点U里，指向可达集的边(只能出不能进的边界)，以及可达集指向U的边(应为0才是只出不进)。
+			int exitEdges = 0, entryEdges = 0, unreachable = 0;
+			std::map<string, int> byCategory;
+			for (const auto& [from, edges] : graph) {
+				bool fromReach = fwd.count(from) > 0;
+				if (!fromReach) unreachable++;
+				for (const auto& [to, conn] : edges) {
+					bool toReach = fwd.count(to) > 0;
+					if (!fromReach && toReach) {
+						exitEdges++;
+						if (exitEdges <= 8) printf("[NavCheck] 出口边: (%.1f,%.1f,%.2f) -> (%.1f,%.1f,%.2f) len %.2f\n", conn->GetStart().GetX(), conn->GetStart().GetY(), conn->GetStart().GetZ(), conn->GetEnd().GetX(), conn->GetEnd().GetY(), conn->GetEnd().GetZ(), conn->CalcDistance());
+					}
+					if (fromReach && !toReach) entryEdges++;
+				}
+			}
+			printf("[NavCheck] 从参照不可达节点 %d 个, 不可达->可达边 %d 条, 可达->不可达边 %d 条\n", unreachable, exitEdges, entryEdges);
+		}
+		{
+			// 大块分裂：用节点位置做空间哈希，找"不可达节点"与"可达节点"之间最近的若干对(分裂缝)，同时输出各自包围盒。
+			std::unordered_map<int, Node> nodeById;
+			for (const auto& [from, edges] : graph) for (const auto& [to, conn] : edges) { nodeById.emplace(from, conn->GetStart()); nodeById.emplace(to, conn->GetEnd()); }
+			int unreachableSlots = 0;
+			for (const auto& [name, building] : city.GetBuildings()) {
+				if (string(building->GetType()) != "building_industry_low") continue;
+				for (Room* room : building->GetRooms()) for (ParkingSlot* slot : room->GetParkingSlots()) if (slot->navigationNode && !fwd.count(slot->navigationNode->GetId())) unreachableSlots++;
+			}
+			if (unreachableSlots > 50) {
+				printf("[NavCheck] SPLIT: industry_low不可达车位 %d\n", unreachableSlots);
+				std::unordered_map<long long, std::vector<int>> grid;
+				auto cell = [](float x, float y) { return (long long)((int)(x / 8.f)) * 100000 + (int)(y / 8.f); };
+				for (int id : fwd) { auto it = nodeById.find(id); if (it != nodeById.end()) grid[cell(it->second.GetX(), it->second.GetY())].push_back(id); }
+				struct Pair { float d; int u, r; };
+				std::vector<Pair> pairs;
+				float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+				for (const auto& [id, node] : nodeById) {
+					if (fwd.count(id)) continue;
+					minX = std::min(minX, node.GetX()); maxX = std::max(maxX, node.GetX());
+					minY = std::min(minY, node.GetY()); maxY = std::max(maxY, node.GetY());
+					float best = 1e9f; int bestId = -1;
+					int cx = (int)(node.GetX() / 8.f), cy = (int)(node.GetY() / 8.f);
+					for (int dx = -2; dx <= 2; dx++) for (int dy = -2; dy <= 2; dy++) {
+						auto git = grid.find((long long)(cx + dx) * 100000 + (cy + dy));
+						if (git == grid.end()) continue;
+						for (int rid : git->second) {
+							const Node& rn = nodeById.at(rid);
+							float ddx = rn.GetX() - node.GetX(), ddy = rn.GetY() - node.GetY(), ddz = rn.GetZ() - node.GetZ();
+							float d = ddx * ddx + ddy * ddy + ddz * ddz * 25.f;
+							if (d < best) { best = d; bestId = rid; }
+						}
+					}
+					if (bestId >= 0) pairs.push_back({ best, id, bestId });
+				}
+				std::sort(pairs.begin(), pairs.end(), [](const Pair& a, const Pair& b) { return a.d < b.d; });
+				{
+					// 采样：不可达/可达节点各取一批，找最近的路，统计这些路的车道数(左+右)分布，看分裂是否集中在某类路上。
+					auto probe = [&](bool wantReach, const char* label) {
+						std::map<string, int> hist;
+						int taken = 0, stride = 0;
+						for (const auto& [id, node] : nodeById) {
+							if ((fwd.count(id) > 0) != wantReach) continue;
+							if ((stride++ % 7) != 0) continue;
+							if (taken++ >= 400) break;
+							float best = 1e9f; Road* bestRoad = nullptr;
+							for (Road* road : city.GetRoads()) {
+								for (int k = 0; k <= 20; k++) {
+									Node pt = road->GetPoint(k / 20.f);
+									float dx = pt.GetX() - node.GetX(), dy = pt.GetY() - node.GetY();
+									float d = dx * dx + dy * dy;
+									if (d < best) { best = d; bestRoad = road; }
+								}
+							}
+							if (!bestRoad) continue;
+							hist["lanes " + std::to_string(bestRoad->GetVehicleLanes(0).size()) + "+" + std::to_string(bestRoad->GetVehicleLanes(1).size()) + (best < 4.f ? " (near)" : " (far)")]++;
+						}
+						for (const auto& [k, n] : hist) printf("[NavCheck] %s最近的路 %s: %d\n", label, k.c_str(), n);
+					};
+					probe(false, "不可达节点");
+					probe(true, "可达节点");
+				}
+				{
+					int badBuildings = 0, allBuildings = 0, shown = 0;
+					std::map<string, std::pair<int, int>> byRoad; // 路名->{不可达建筑数, 总建筑数}
+					for (const auto& [name, building] : city.GetBuildings()) {
+						if (string(building->GetType()) != "building_industry_low") continue;
+						int slots = 0, bad = 0; string address;
+						for (Room* room : building->GetRooms()) for (ParkingSlot* slot : room->GetParkingSlots()) {
+							if (!slot->navigationNode) continue;
+							slots++; if (!fwd.count(slot->navigationNode->GetId())) bad++;
+							if (address.empty()) address = room->GetAddress();
+						}
+						if (slots == 0) continue;
+						allBuildings++;
+						string road = address.substr(0, address.find(' ', address.find(' ') + 1));
+						byRoad[road].second++;
+						if (bad > 0) {
+							badBuildings++; byRoad[road].first++;
+							if (shown++ < 10) printf("[NavCheck] 不可达工厂 %s: 车位 %d/%d 不可达, 地址 %s, basements=%d\n", name.c_str(), bad, slots, address.c_str(), building->GetBasementCount());
+						}
+					}
+					printf("[NavCheck] 不可达工厂建筑 %d / %d\n", badBuildings, allBuildings);
+					for (const auto& [road, c] : byRoad) if (c.first > 0) printf("[NavCheck]   路 %s: %d/%d\n", road.c_str(), c.first, c.second);
+				}
+				{
+					// 按lot统计：不可达/可达lot的特征分布(边界路车道数、lot尺寸、小路数、边界路数量)，找分裂是否集中在某类lot上。
+					std::map<string, std::pair<int, int>> feat; // 特征->{不可达lot数, 可达lot数}
+					std::unordered_set<string> seenLots;
+					for (const auto& [name, building] : city.GetBuildings()) {
+						if (string(building->GetType()) != "building_industry_low") continue;
+						string address; bool bad = false; bool any = false;
+						for (Room* room : building->GetRooms()) for (ParkingSlot* slot : room->GetParkingSlots()) {
+							if (!slot->navigationNode) continue;
+							any = true; if (address.empty()) address = room->GetAddress();
+							if (!fwd.count(slot->navigationNode->GetId())) bad = true;
+						}
+						if (!any) continue;
+						size_t sp1 = address.find(' '), sp2 = address.find(' ', sp1 + 1);
+						string road = address.substr(0, sp1);
+						int index = atoi(address.substr(sp1 + 1, sp2 - sp1 - 1).c_str());
+						string key = address.substr(0, sp2);
+						if (!seenLots.insert(key).second) continue;
+						Lot* lot = city.LocateLot(road, index);
+						if (!lot) { feat["lot未找到"].first += bad; feat["lot未找到"].second += !bad; continue; }
+						int maxLanes = 0, boundaryCount = 0; bool anyElevated = false;
+						for (const auto& [dir, br] : lot->GetBoundaryRoads()) {
+							if (!br) continue;
+							boundaryCount++;
+							maxLanes = std::max(maxLanes, (int)std::max(br->GetVehicleLanes(0).size(), br->GetVehicleLanes(1).size()));
+						}
+						auto add = [&](const string& k) { if (bad) feat[k].first++; else feat[k].second++; };
+						add("边界路最大单向车道数=" + std::to_string(maxLanes));
+						add("边界路数量=" + std::to_string(boundaryCount));
+						add("小路数=" + std::to_string(lot->GetPathRoadLinks().size()));
+						add(string("lot宽x高>=") + (lot->GetSizeX() >= 30.f ? "30" : "<30") + "/" + (lot->GetSizeY() >= 30.f ? "30" : "<30"));
+					}
+					for (const auto& [k, c] : feat) printf("[NavCheck] 特征 %s: 不可达lot %d, 可达lot %d\n", k.c_str(), c.first, c.second);
+				}
+				printf("[NavCheck] 不可达区包围盒 x[%.0f,%.0f] y[%.0f,%.0f], 不可达节点 %zu\n", minX, maxX, minY, maxY, nodeById.size() - fwd.size());
+				for (size_t i = 0; i < pairs.size() && i < 12; i++) {
+					const Node& u = nodeById.at(pairs[i].u); const Node& r = nodeById.at(pairs[i].r);
+					printf("[NavCheck] 缝: 不可达(%.1f,%.1f,%.2f)[%s] <-> 可达(%.1f,%.1f,%.2f)[%s] 距离 %.2f\n", u.GetX(), u.GetY(), u.GetZ(), u.GetCategory().c_str(), r.GetX(), r.GetY(), r.GetZ(), r.GetCategory().c_str(), sqrtf(pairs[i].d));
+				}
+			}
+		}
+		for (const auto& [type, st] : stats) printf("[NavCheck] %s: 车位 %d, 无导航节点 %d, 从参照能开到 %d, 能开回参照 %d, 双向连通 %d\n", type.c_str(), st[0], st[1], st[2], st[3], st[4]);
+		for (const auto& [type, roads] : badRoads) for (const auto& [road, n] : roads) printf("[NavCheck] 不连通 %s @ %s: %d\n", type.c_str(), road.c_str(), n);
+		return 0;
+	}
 
 	Populace populace;
 	populace.Init(city.ComputeAccommodationTarget(), city.ComputeWorkCapacity());

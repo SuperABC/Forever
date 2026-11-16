@@ -110,7 +110,7 @@ private:
 	TObjectPtr<UStaticMesh> defaultStairMesh; // 默认楼梯网格(/Game/Asset/Building/Mesh/Stair_Return.Stair_Return)
 
 	UPROPERTY()
-	TObjectPtr<UStaticMesh> defaultRampMesh; // 默认坡道网格(/Game/Asset/Building/Mesh/Ramp.Ramp)
+	TObjectPtr<UStaticMesh> defaultRampMesh; // 默认坡道网格(/Game/Asset/Building/Mesh/Ramp_2cm.Ramp_2cm)
 
 	UPROPERTY()
 	TObjectPtr<UStaticMesh> cubeMesh; // 单位立方体网格(/Game/Asset/Common/Mesh/Cube.Cube)，SpawnCube用

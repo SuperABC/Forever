@@ -188,6 +188,21 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, const Popula
 		// 车位占用：只存Parked/Vanished；在途预定读档后没有行驶路径，不存，见vehicle.md"车位"。
 		w.U8(static_cast<uint8_t>(v->parkState));
 		w.I32(v->parkState == Vehicle::ParkState::Parked ? v->parkingSlotIndex : -1);
+		// 行程状态：存档时是否有Actor、已预订的目的车位、正在行驶的话剩余路径/目的房间/速度。
+		// 行驶快照由UE层存档前写进Vehicle(SyncDrivesToCore)，没有快照就是没在行驶。
+		w.U8(v->wasSpawned ? 1 : 0);
+		SaveRefs::WriteRoom(v->reservedRoom, w);
+		w.I32(v->reservedRoom ? v->reservedSlotIndex : -1);
+		w.U8(v->hasDriveSnapshot ? 1 : 0);
+		if (v->hasDriveSnapshot) {
+			SaveRefs::WriteRoom(v->driveSnapshot.destination, w);
+			w.F32(v->driveSnapshot.speed);
+			w.U32(static_cast<uint32_t>(v->driveSnapshot.path.size()));
+			for (const Vehicle::DrivePoint& point : v->driveSnapshot.path) {
+				w.F32(point.x); w.F32(point.y); w.F32(point.z);
+				w.U8(point.reverse ? 1 : 0);
+			}
+		}
 	}
 
 	// 载具资产(分配给市民/组织的车)：车名+所有者种类(0市民/1组织)+所有者下标，追加在车辆之后。
@@ -220,6 +235,26 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, const Popula
 		w.Str(record.vehicleName);
 		w.U8(record.kind);
 		w.I32(record.index);
+	}
+
+	// 通勤行程(市民下标要等人口恢复，同载具资产)：按市民下标排序。
+	struct TripRecord { int citizenIndex; const Traffic::CommuteTrip* trip; };
+	vector<TripRecord> tripRecords;
+	for (const auto& [citizen, trip] : traffic.trips) {
+		auto it = citizenIndex.find(citizen);
+		if (it == citizenIndex.end() || !trip.vehicle) continue;
+		tripRecords.push_back({ it->second, &trip });
+	}
+	sort(tripRecords.begin(), tripRecords.end(), [](const TripRecord& a, const TripRecord& b) { return a.citizenIndex < b.citizenIndex; });
+	w.U32(static_cast<uint32_t>(tripRecords.size()));
+	for (const TripRecord& record : tripRecords) {
+		w.I32(record.citizenIndex);
+		w.Str(record.trip->vehicle->GetName());
+		SaveRefs::WriteRoom(record.trip->finalDest, w);
+		SaveRefs::WriteRoom(record.trip->parkOrigin, w);
+		SaveRefs::WriteRoom(record.trip->parkDest, w);
+		w.I32(record.trip->destSlot);
+		w.U8(static_cast<uint8_t>(record.trip->phase));
 	}
 
 	archive.SetBinary(SAVE_SECTION_TRAFFIC, VersionOf(SAVE_SECTION_TRAFFIC), w.Take());
@@ -352,6 +387,22 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 			float x = r.F32(), y = r.F32(), z = r.F32(), yaw = r.F32();
 			int parkState = r.U8();
 			int parkingSlotIndex = r.I32();
+			bool wasSpawned = r.U8() != 0;
+			Room* reservedRoom = SaveRefs::ReadRoom(map, r);
+			int reservedSlot = r.I32();
+			Vehicle::DriveSnapshot snapshot;
+			bool hasSnapshot = r.U8() != 0;
+			if (hasSnapshot) {
+				snapshot.destination = SaveRefs::ReadRoom(map, r);
+				snapshot.speed = r.F32();
+				uint32_t pointCount = r.U32();
+				for (uint32_t p = 0; p < pointCount && !r.Failed(); p++) {
+					Vehicle::DrivePoint point;
+					point.x = r.F32(); point.y = r.F32(); point.z = r.F32();
+					point.reverse = r.U8() != 0;
+					snapshot.path.push_back(point);
+				}
+			}
 			if (r.Failed()) break;
 
 			Vehicle* vehicle = new Vehicle(&traffic->vehicleFactory, &traffic->scriptFactory, modId, name);
@@ -385,6 +436,9 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 			} else if (parkState == static_cast<int>(Vehicle::ParkState::Vanished) && room) {
 				vehicle->SetVanished(room);
 			}
+			vehicle->wasSpawned = wasSpawned;
+			if (reservedRoom && reservedSlot >= 0) vehicle->ReserveSlot(reservedRoom, reservedSlot);
+			if (hasSnapshot) vehicle->SetDriveSnapshot(snapshot); // UE层GenerateVehicles里用BeginDrive恢复，再清掉
 		}
 
 		for (auto& [route, lineVehicles] : pendingLineVehicles) {
@@ -406,6 +460,20 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 				pending.ownerKind = r.U8();
 				pending.ownerIndex = r.I32();
 				if (!r.Failed()) traffic->pendingVehicleAssets.push_back(std::move(pending));
+			}
+		}
+		if (!r.Failed() && !r.AtEnd()) {
+			uint32_t tripCount = r.U32();
+			for (uint32_t i = 0; i < tripCount && !r.Failed(); i++) {
+				Traffic::PendingTrip pending;
+				pending.citizenIndex = r.I32();
+				pending.vehicleName = r.Str();
+				pending.finalDest = SaveRefs::ReadRoom(map, r);
+				pending.parkOrigin = SaveRefs::ReadRoom(map, r);
+				pending.parkDest = SaveRefs::ReadRoom(map, r);
+				pending.destSlot = r.I32();
+				pending.phase = r.U8();
+				if (!r.Failed()) traffic->pendingTrips.push_back(pending);
 			}
 		}
 

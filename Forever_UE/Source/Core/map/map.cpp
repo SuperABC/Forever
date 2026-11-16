@@ -256,6 +256,7 @@ void Map::InitRoadnet() {
 	// 收成一点(两侧车道配置一致，应按真实宽度摆开)，所以现算"直接经过"锚点，详见map.md"InitRoadnet"。
 	// passthroughAnchorCache按(端点id,车行/行人,side,laneIndex)缓存，保证前后两段Road在分段点拿到同一个Node*；key用位运算压缩(节点id远小于2^47)。
 	unordered_map<int64_t, Node*> passthroughAnchorCache;
+	unordered_map<int, pair<Road*, bool>> passthroughFirstRoad; // 分段点id -> 第一个经过它的Road及它是不是在起点端，见resolveAnchor里的朝向处理
 	auto makePassthroughKey = [](int nodeId, bool isVehicle, int side, int laneIndex) -> int64_t {
 		return (static_cast<int64_t>(nodeId) << 16) | (isVehicle ? (1LL << 15) : 0)
 			| (static_cast<int64_t>(side) << 8) | static_cast<int64_t>(laneIndex & 0xFF);
@@ -312,7 +313,18 @@ void Map::InitRoadnet() {
 		if (externIt != externById.end()) return externIt->second; // 地图边缘：没有真正分叉，
 			// 所有车道退化成同一个点，见上面externById注释。
 
-		int64_t key = makePassthroughKey(endpoint.GetId(), isVehicle, side, isVehicle ? laneIndex : 0);
+		// 同一个分段点上两段Road的朝向可能相反(隧道口按"地面->隧道"出路，出口侧那段和链方向相反，两段都以该点为终点或都以该点为起点)。
+		// 朝向相反时side0/side1在物理上互换(都朝该点驶入的两条车道会共用同一个side的锚点变成汇点，反向车道共用另一个锚点变成源点，整条路单向不通)，
+		// 所以后到的、与第一段朝向相反(同为起点或同为终点)的Road按物理车道翻转side取锚点；laneIndex从中线往外数，翻转后不变。
+		int keySide = side;
+		auto firstIt = passthroughFirstRoad.find(endpoint.GetId());
+		if (firstIt == passthroughFirstRoad.end()) {
+			passthroughFirstRoad[endpoint.GetId()] = { road, atStart };
+		}
+		else if (firstIt->second.first != road && firstIt->second.second == atStart) {
+			keySide = 1 - side;
+		}
+		int64_t key = makePassthroughKey(endpoint.GetId(), isVehicle, keySide, isVehicle ? laneIndex : 0);
 		auto cacheIt = passthroughAnchorCache.find(key);
 		if (cacheIt != passthroughAnchorCache.end()) return cacheIt->second;
 		Node* anchor = computePassthroughAnchor(road, atStart, isVehicle, side, laneIndex);
@@ -998,6 +1010,10 @@ void Map::FlushPendingPathRoadLinks() {
 
 	// 小路接在另一条小路上时，被接的小路自己的贯通线（throughLines）要先建好，否则BreakThroughLine找不到线段返回nullptr，
 	// 这一端退化成孤立锚点、整条小路及其上的建筑从行人图里脱开。所以host小路的link必须先于挂在它上面的link。
+	// hardAdj：小路挂小路的硬依赖(宿主link必须先建)；adj里的组内相邻只是软顺序。软顺序在相邻小路互相交叉时很容易成环(实测一个城市上千条link几乎全卡在环里)，
+	// 所以环里按"硬依赖已满足、软入度最小"逐个破环，绝不能先于宿主小路处理挂在它上面的link。
+	vector<vector<size_t>> hardAdj(n);
+	vector<int> hardIn(n, 0);
 	unordered_map<Road*, size_t> linkOfRoad;
 	for (size_t i = 0; i < n; i++) linkOfRoad[pendingPathRoadLinks[i].road] = i;
 	for (size_t i = 0; i < n; i++) {
@@ -1008,24 +1024,43 @@ void Map::FlushPendingPathRoadLinks() {
 			if (it == linkOfRoad.end() || it->second == i) continue;
 			adj[it->second].push_back(i);
 			indegree[i]++;
+			hardAdj[it->second].push_back(i);
+			hardIn[i]++;
 		}
 	}
 
 	vector<bool> done(n, false);
+	vector<size_t> order;
+	order.reserve(n);
 	queue<size_t> ready;
 	for (size_t i = 0; i < n; i++) if (indegree[i] == 0) ready.push(i);
-	vector<size_t> order;
-	while (!ready.empty()) {
-		size_t cur = ready.front();
-		ready.pop();
-		if (done[cur]) continue;
+	size_t processed = 0;
+	auto finish = [&](size_t cur) {
 		done[cur] = true;
 		order.push_back(cur);
+		processed++;
 		for (size_t next : adj[cur]) {
-			if (--indegree[next] == 0) ready.push(next);
+			if (!done[next] && --indegree[next] == 0) ready.push(next);
 		}
+		for (size_t next : hardAdj[cur]) hardIn[next]--;
+	};
+	while (processed < n) {
+		while (!ready.empty()) {
+			size_t cur = ready.front();
+			ready.pop();
+			if (done[cur]) continue;
+			finish(cur);
+		}
+		if (processed >= n) break;
+		size_t pick = n;
+		for (int pass = 0; pass < 2 && pick == n; pass++) {
+			for (size_t i = 0; i < n; i++) {
+				if (done[i] || (pass == 0 && hardIn[i] > 0)) continue;
+				if (pick == n || indegree[i] < indegree[pick]) pick = i;
+			}
+		}
+		finish(pick);
 	}
-	for (size_t i = 0; i < n; i++) if (!done[i]) order.push_back(i); // 环兜底：按原始下标追加
 
 	for (size_t idx : order) {
 		ConnectPathRoad(pendingPathRoadLinks[idx]);

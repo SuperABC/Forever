@@ -27,6 +27,10 @@ using namespace std;
 namespace {
 	// 本版市民只需要吃饭：每人每天1份food服务。以后有更多需求类型时扩展这里。
 	constexpr const char* kMealServiceType = "food";
+	// 视频需求：按市民手里的钱(账户余额+存款+国债本金，分)定每天要几份video。
+	constexpr const char* kVideoServiceType = "video";
+	constexpr int64_t kVideoWealthLow = 200000;  // 2000元：不到这个数无视频需求，到了需求1
+	constexpr int64_t kVideoWealthHigh = 500000; // 5000元：超过这个数需求2
 
 	// 增发：总股本最多涨到初始发行量的4倍（是否增发、增发多少由mod在MonthlySettle里决定）。
 	constexpr int64_t kMaxShareMultiple = 4;
@@ -169,6 +173,12 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 	for (Organization* organization : society.GetOrganizations()) {
 		if (!organization->GetMod() || !organization->GetScript() || organization->IsBankrupt()) continue;
 		sellers.push_back(organization);
+		// 在岗人数写进脚本(self.employees)，供没有库存的服务型组织(视频公司)算产能。
+		int employees = 0;
+		for (const Job* job : organization->GetJobs()) {
+			if (job && job->IsOpen() && job->GetOccupant()) employees++;
+		}
+		organization->GetScript()->SetValue("employees", ValueType(employees));
 		vector<Storage*> storages = StoragesOf(organization, industry);
 		for (const string& type : stockTypes) {
 			int stock = StockOf(storages, type);
@@ -205,32 +215,50 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 		if (!room || !room->IsResidence()) continue;
 		for (Household* household : room->GetHouseholds()) {
 			int halfPortions = 0;
-			int64_t balance = 0;
+			int64_t balance = 0;      // 成年成员的账户余额合计(预算只看成年人的钱)
+			int64_t allBalance = 0;   // 全体成员合计，仅在一户没有成年人时当预算
+			bool hasAdult = false;
+			int videoQuantity = 0;
 			for (const Citizen* member : household->GetMembers()) {
 				if (!member || !member->IsActive()) continue;
-				halfPortions += member->GetAge(now) < society.GetPolicy().adultAge ? 1 : 2;
-				balance += ledger.Balance(Party::Of(member));
+				bool adult = member->GetAge(now) >= society.GetPolicy().adultAge;
+				halfPortions += adult ? 2 : 1;
+				int64_t own = ledger.Balance(Party::Of(member));
+				allBalance += own;
+				if (!adult) continue; // 未成年人的钱不参与需求和预算，也不产生视频需求
+				hasAdult = true;
+				balance += own;
+				int64_t wealth = own + society.GetTreasury().DepositOf(member) + society.GetTreasury().BondsOf(member);
+				videoQuantity += wealth > kVideoWealthHigh ? 2 : (wealth >= kVideoWealthLow ? 1 : 0);
 			}
 			int portions = (halfPortions + 1) / 2;
-			if (portions <= 0) continue;
+			if (!hasAdult) balance = allBalance;
 
-			// 档位表：质量->当日该质量的最低单价(同服务类型下)。
-			const vector<Provider>& typeProviders = providers[kMealServiceType];
-			map<float, int64_t> tierPrice;
-			for (const Provider& provider : typeProviders) {
-				auto it = tierPrice.find(provider.offer.quality);
-				if (it == tierPrice.end() || provider.offer.unitPrice < it->second) tierPrice[provider.offer.quality] = provider.offer.unitPrice;
-			}
-			if (tierPrice.empty()) {
-				needs[kMealServiceType].push_back({ household, portions, 0.f, portions });
-				continue;
-			}
-			int64_t budget = balance / 30;
-			float tier = tierPrice.begin()->first;
-			for (const auto& [quality, price] : tierPrice) {
-				if (price * portions <= budget) tier = quality;
-			}
-			needs[kMealServiceType].push_back({ household, portions, tier, portions });
+			// 档位表：质量->当日该质量的最低单价(同服务类型下)；预算内取最高档，预算连最低档都不够就取最低档(账户允许为负)。
+			auto addNeed = [&](const char* type, int quantity, int64_t budget, float fixedTier = -1.f) {
+				if (quantity <= 0) return;
+				if (fixedTier >= 0.f) { // 固定质量档：不看预算，价格再高也买(账户允许为负)
+					needs[type].push_back({ household, quantity, fixedTier, quantity });
+					return;
+				}
+				map<float, int64_t> tierPrice;
+				for (const Provider& provider : providers[type]) {
+					auto it = tierPrice.find(provider.offer.quality);
+					if (it == tierPrice.end() || provider.offer.unitPrice < it->second) tierPrice[provider.offer.quality] = provider.offer.unitPrice;
+				}
+				if (tierPrice.empty()) {
+					needs[type].push_back({ household, quantity, 0.f, quantity });
+					return;
+				}
+				float tier = tierPrice.begin()->first;
+				for (const auto& [quality, price] : tierPrice) {
+					if (price * quantity <= budget) tier = quality;
+				}
+				needs[type].push_back({ household, quantity, tier, quantity });
+			};
+			addNeed(kMealServiceType, portions, balance / 30);
+			// 视频：每人按自己的钱定份数，整户合计；质量档固定为1(接受任何质量的供给)，不看预算。
+			addNeed(kVideoServiceType, videoQuantity, balance / 30, 1.f);
 		}
 	}
 

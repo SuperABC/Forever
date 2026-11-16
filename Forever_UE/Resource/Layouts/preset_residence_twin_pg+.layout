@@ -422,6 +422,8 @@
 					"idx": 1,
 					"vertex": -1,
 				},
+				"backward": true,
+				"forward": true,
 			},
 		],
 	}

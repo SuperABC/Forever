@@ -2,13 +2,13 @@
 	"stairs": [{
 		"rect": [0.2, 0.4, 0.1, 0.4, 0.4, 0, 0.1, 1.2],
 		"direction": 2,
-		"walls": [0, 1, 3],
+		"walls": [1, 3],
 		"wallTags": {"1":{"east":"brick","south":"brick"},"3":{"east":"brick","south":"brick"}},
 	},
 	{
 		"rect": [0.6, 0, 0.1, 0.4, 0.8, -0.4, 0.1, 1.2],
 		"direction": 2,
-		"walls": [0, 1, 3],
+		"walls": [0, 3],
 		"wallTags": {"0":{"south":"brick","west":"brick"},"3":{"west":"brick","south":"brick"}},
 	}],
 	"ceilings": [

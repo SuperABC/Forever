@@ -26,3 +26,6 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 视频公司(2026-11-16)
+`organization_video_company`(认领1~2个`component_office`，日薪150元，提供质量0.1/价格10元的`video`服务，产能=在岗人数x20份/天)+`job_video_maker`(`room_office`，10:00上班20:00下班，脚本`Resource/Story/job_video_maker.script`)。见各自的.md。

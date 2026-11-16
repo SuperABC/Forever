@@ -41,6 +41,38 @@ public:
 	// 这个Traffic是不是从存档恢复的(读档后不再AssignVehicles)。
 	bool WasRestoredFromSave() const { return restoredFromSave; }
 
+	// ---- 开车通勤（详见traffic.md"通勤"）----
+	// 一次通勤分两个阶段：WalkToCar(市民走向停着的车所在的停车房)、Driving(市民已消失，车在开往目的车位)。
+	// 车开到后市民在目的停车房出现，再普通步行去finalDest——那一段不属于行程，到达时行程即删。
+	enum class CommutePhase { WalkToCar = 0, Driving = 1 };
+	struct CommuteTrip {
+		Citizen* citizen = nullptr;
+		Vehicle* vehicle = nullptr;
+		Room* finalDest = nullptr;
+		Room* parkOrigin = nullptr; // 车现在停的停车房(第一段步行的目的地)
+		Room* parkDest = nullptr;   // 目的建筑里的停车房
+		int destSlot = -1;          // parkDest里已为这辆车预订的车位
+		CommutePhase phase = CommutePhase::WalkToCar;
+	};
+	// 判定：市民当前在某栋建筑里，自己的车(VehicleAsset)停在这栋建筑里，finalDest所在的另一栋建筑里有接受该车类别
+	// 的空闲车位 -> 开车；否则返回nullptr(照常走路)。成功则预订目的车位、记下行程(阶段WalkToCar)并返回它。
+	CommuteTrip* BeginCommute(Citizen* citizen, Room* finalDest);
+
+	// 通勤统计(仅日志用，不存档)：每次BeginCommute决策的结果计数。
+	struct CommuteStats {
+		int started = 0, arrived = 0, failed = 0;
+		int walkSameBuilding = 0, walkNoCar = 0, walkCarElsewhere = 0, walkNoSlot = 0;
+	};
+	CommuteStats commuteStats;
+	std::vector<std::string> CommuteReport(const Populace& populace) const; // 成年人/各职位人数/有车人数/开车寻路累计，由UE层逐行写日志
+	CommuteTrip* FindTrip(const Citizen* citizen);
+	CommuteTrip* FindTripByVehicle(const Vehicle* vehicle);
+	// 结束行程：只删记录，不动预订(调用方在车到达/取消时自己处理)。
+	void EndTrip(const Citizen* citizen);
+	// 取消行程：释放预订的目的车位并删记录(车和市民的位置由调用方安排)。
+	void CancelTrip(const Citizen* citizen);
+	const std::unordered_map<const Citizen*, CommuteTrip>& GetTrips() const { return trips; }
+
 	// 载具资产(Traffic持有)：每辆被分配给市民/组织的车一个。
 	const std::vector<VehicleAsset*>& GetVehicleAssets() const { return vehicleAssets; }
 
@@ -96,6 +128,18 @@ private:
 	};
 	std::vector<PendingVehicleAsset> pendingVehicleAssets; // 读档后等ResolveVehicleAssets
 	bool restoredFromSave = false;
+
+	std::unordered_map<const Citizen*, CommuteTrip> trips;
+	struct PendingTrip {
+		int citizenIndex = -1;
+		std::string vehicleName;
+		Room* finalDest = nullptr;
+		Room* parkOrigin = nullptr;
+		Room* parkDest = nullptr;
+		int destSlot = -1;
+		int phase = 0;
+	};
+	std::vector<PendingTrip> pendingTrips; // 读档后等ResolveVehicleAssets(市民下标要等人口恢复)
 	std::unordered_map<std::string, Station*> stations; // 持有所有权(含Route::Build()产出的边缘站点)
 	std::unordered_map<std::string, Route*> routes;     // 持有所有权
 

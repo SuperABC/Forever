@@ -48,6 +48,8 @@ public:
 		int dismissedByBankruptcy = 0; // 企业倒闭裁掉的在岗人数
 		int positionsReopened = 0;     // 重启企业重开/新建的岗位数
 		int positionsOpened = 0, positionsClosed = 0, dismissed = 0; // 月结扩招/裁员
+		long long videoDemand = 0, videoSold = 0, videoUnmet = 0; // 视频服务(video)供需
+		int64_t videoRevenue = 0;
 	};
 	void PrintRunSummary(const std::string& title, const ServiceTotals& totals);
 

@@ -12,6 +12,8 @@ class Map;
 class Populace;
 class Citizen;
 class Room;
+class Vehicle;
+class Traffic;
 class ACitizenElement;
 
 // 按玩家距离流式生成/销毁ACitizenElement，并负责市民走路(异步寻路)、瞬移、存档同步。
@@ -46,6 +48,10 @@ public:
 	// pathResultQueue由TickComponent落地(ApplyWalkResult)；没有可用导航节点时直接同步落地。
 	// 在途的市民从当前位置起算。流程与线程安全见.md。
 	void RequestWalk(Citizen* citizen, Room* destination);
+
+	// 开车通勤：载具导航结束(车到了目的车位或没能出发)后由AForeverFrameworkActor转来。车上的乘客(Traffic的行程)
+	// 在room(到达)或原来的停车房(失败)出现，再普通步行去最终目的地。没有对应行程什么也不做。
+	void OnPassengerCarFinished(Vehicle* vehicle, Room* room, bool bArrived);
 
 	// npc_teleport：立刻把市民放到destination。有Actor就把Actor瞬移过去(取消正在走的路)，没有就只改
 	// 逻辑位置，等进入流式范围时在那里生成。被玩家占有的市民不动，和RequestWalk一样。
@@ -137,6 +143,14 @@ private:
 	// 路径落地(同步分支和异步drain共用)：按落地这一刻的状态重新查activeInstances/占有状态，
 	// 分流为WalkTo / TeleportToRoom / Core推算(BeginWalk) / 纯瞬移，细节见.md。
 	void ApplyWalkResult(Citizen* citizen, Room* destination, const TArray<FVector>& waypoints);
+
+	// RequestWalk的主体：不做通勤判定(通勤的第1/3段步行用它，避免递归)。
+	void RequestWalkInternal(Citizen* citizen, Room* destination);
+	// 通勤行程：见Traffic::BeginCommute和traffic.md"通勤"。
+	void StartCommute(Citizen* citizen);                 // 第1段：走向车所在的停车房(已经在里面就直接上车)
+	void BoardCar(Citizen* citizen);                     // 走到车：市民消失，车开始自己导航到预订好的目的车位
+	void CancelCommute(Citizen* citizen);                // 取消行程(瞬移/死亡/被新请求取代)
+	Traffic* GetTrafficCore() const;
 
 
 

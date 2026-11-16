@@ -92,3 +92,9 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 ## 待办/后续阶段
 
 - 无特别延后的内容。
+
+## 通勤行程（开车上下班）
+`BeginCommute(citizen, finalDest)`：市民当前所在建筑里停着自己的车(`VehicleAsset`、Parked、非线路)、目的地建筑有接受该车类别且有navigationNode的空闲车位、两栋建筑不同，则预订目的车位并登记`CommuteTrip{citizen, vehicle, finalDest, parkOrigin, parkDest, destSlot, phase}`(phase=WalkToCar/Driving)，返回行程；否则返回nullptr(走路)。`FindTrip/FindTripByVehicle/EndTrip/CancelTrip`管理行程，`CancelTrip`在WalkToCar阶段释放预订。行程状态机在UE层(`ForeverPopulaceFrameworkComponent`)，行程记录随traffic段存档(见traffic_save.md)，读档由`ResolveVehicleAssets`还原。
+
+## 通勤统计报告
+`Traffic::CommuteReport(populace)`返回若干行文本，UE层写日志：成年人数、有车人数、每种职位(无业记`(none)`)的人数和其中有车人数、开车寻路累计(started)/到达/失败/进行中，以及各种走路原因计数。开局分配车之后和读档恢复后各打一次；每次开车通勤出发(`Commute drive pathfinding`)和到达/失败也各打一行累计。

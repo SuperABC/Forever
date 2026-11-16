@@ -116,8 +116,29 @@ public:
 	// 现在是否正走在倒车段上(出库倒车)。
 	bool IsDriveReversing(double nowSeconds) const;
 	void EndDrive();
+	float GetDriveSpeed() const { return driveSpeed; }
+
+	// ---- 存档用的行驶快照和"存档时是否有Actor"（见traffic_save.md） ----
+	// 行驶状态平时纯运行时；存档前UE层把正在行驶的车的剩余路径/目的房间/速度写成快照(不论车有没有Actor)，
+	// 存完清掉；读档后快照留到UE层GenerateVehicles里用BeginDrive恢复，再清掉。
+	struct DriveSnapshot {
+		std::vector<DrivePoint> path;
+		Room* destination = nullptr;
+		float speed = 0.f;
+	};
+	void SetDriveSnapshot(const DriveSnapshot& value) { driveSnapshot = value; hasDriveSnapshot = true; }
+	void ClearDriveSnapshot() { driveSnapshot = DriveSnapshot(); hasDriveSnapshot = false; }
+	bool HasDriveSnapshot() const { return hasDriveSnapshot; }
+	const DriveSnapshot& GetDriveSnapshot() const { return driveSnapshot; }
+	// 存档时这辆车是否有Actor(UE层存档前写)，读档后据此把它强制生成回来。
+	bool WasSpawned() const { return wasSpawned; }
+	void SetWasSpawned(bool value) { wasSpawned = value; }
 
 private:
+	DriveSnapshot driveSnapshot;
+	bool hasDriveSnapshot = false;
+	bool wasSpawned = false;
+
 	VehicleFactory* factory;
 	VehicleMod* mod;
 	std::string modId;

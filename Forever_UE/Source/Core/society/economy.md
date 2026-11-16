@@ -61,3 +61,10 @@
 - `PayWage(society, org, worker, amount)`：由岗位所属组织给市民发一笔工资(`Flow::WAGE`)，代扣所得税，同`PayWages`的口径。玩家操控的市民去不去上班不影响每日工资结算，所以玩家手动打工是**额外一份**工资。
 - `ListShopItems(industry, player, organization)`：商店商品列表。组织占用的Component里所有房间对应的仓库库存按productType汇总(向下取整，>=1)，价格取Product零售价，`Player::FindAssetTypeByProduct`找不到对应Asset的不列出，按productType字典序。
 - `PlayerPurchaseCart(society, industry, player, seller, buyer, cart)`：按购物车(productType→数量)买。要求不超库存、总价不超过buyer的账本余额(存款/国债已转到政府账户，不在账本余额里)、`Player::PlanCarry`可行，否则返回NoMoney/NoSpace/Invalid且不改任何状态；成功后按方案把每件(count=1)放进容器(`AddContent`)或手上(`AddByPath`)，只对实际放下的件数付款(buyer→seller `SERVICE_PURCHASE`)、由seller缴消费税，并按仓库顺序`Storage::Output`扣库存。返回`PurchaseResult`{Success, NoMoney, NoSpace, Invalid}。
+
+## video需求与在岗人数(2026-11-16)
+- `RunServices`每天先把各组织在岗人数写进脚本`self.employees`(`Job::IsOpen()`且有人)，供没有库存的服务型组织算产能(视频公司)。
+- 市民按自己的钱(账户余额+存款+国债本金)定每天的`video`需求：不到2000元为0、2000~5000元为1、超过5000元为2，整户合计，未成年人(<adultAge)不产生视频需求；需求质量档固定为1(接受任何质量的供给，不看预算，钱不够照买、账户可为负)，`addNeed`的`fixedTier`参数。video由`organization_video_company`提供(质量0.1，价格10元)。
+
+## 未成年人的钱不参与计算(2026-11-16)
+吃饭/视频的需求份数、预算(全家余额/30)、付款都只用成年成员的钱；未成年人只按年龄贡献半份吃饭需求，不产生视频需求。一户没有成年人时，预算取全体成员余额合计、付款由全体成员均摊(付款原本就是这个口径)。

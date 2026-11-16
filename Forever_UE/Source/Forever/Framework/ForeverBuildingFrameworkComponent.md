@@ -121,7 +121,7 @@ processFace`的约定：`y1`是"开口顶到天花板"这段实心墙(过梁/门
 按`building->GetMod()->floors[level].assets`（`FloorAssetSpec`，`AssignFloor`时mod声明的）
 解析这一层的`wallMaterial`/`floorMaterial`/`ceilingMaterial`（`ResolveMaterial`，留空用
 组件默认，不分内外墙，统一一份默认墙体材质）+`stairMeshPath`/`rampMeshPath`
-（`ResolveMesh`，留空用组件默认的`Stair_Return.Stair_Return`/`Ramp.Ramp`）。地板/天花板两层独立薄slab
+（`ResolveMesh`，留空用组件默认的`Stair_Return.Stair_Return`/`Ramp_2cm.Ramp_2cm`）。地板/天花板两层独立薄slab
 （`kSlabThickness=0.02f`地图单位，照抄老工程），贴地坪往上一点点/贴楼层顶往下一点点，中间
 留一条窄缝，和相邻楼层的对应slab不共面。
 

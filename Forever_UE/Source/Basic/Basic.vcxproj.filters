@@ -166,6 +166,9 @@
     <ClCompile Include="society\job_shop_saler.cpp">
       <Filter>society</Filter>
     </ClCompile>
+    <ClCompile Include="society\job_video_maker.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
     <ClCompile Include="society\job_warehouse_keeper.cpp">
       <Filter>society</Filter>
     </ClCompile>
@@ -179,6 +182,9 @@
       <Filter>society</Filter>
     </ClCompile>
     <ClCompile Include="society\organization_shop.cpp">
+      <Filter>society</Filter>
+    </ClCompile>
+    <ClCompile Include="society\organization_video_company.cpp">
       <Filter>society</Filter>
     </ClCompile>
     <ClCompile Include="story\script_basic.cpp">
@@ -501,6 +507,9 @@
     <ClInclude Include="society\job_shop_saler.h">
       <Filter>society</Filter>
     </ClInclude>
+    <ClInclude Include="society\job_video_maker.h">
+      <Filter>society</Filter>
+    </ClInclude>
     <ClInclude Include="society\job_warehouse_keeper.h">
       <Filter>society</Filter>
     </ClInclude>
@@ -514,6 +523,9 @@
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="society\organization_shop.h">
+      <Filter>society</Filter>
+    </ClInclude>
+    <ClInclude Include="society\organization_video_company.h">
       <Filter>society</Filter>
     </ClInclude>
     <ClInclude Include="story\script_basic.h">

@@ -1,0 +1,16 @@
+{
+	// VideoCompanyOrganization的Script，里程碑结构留空，有Script才会被Economy::RunServices当作卖家。
+	"milestones": [
+		{
+			"milestone": "game_start",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

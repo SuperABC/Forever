@@ -14,7 +14,7 @@ const char* OfficeRoom::GetName() {
 
 void OfficeRoom::SetProperty() {
 	isWorkspace = true;
-	workspaceCapacity = 5;
+	workspaceCapacity = 2;
 	rent = 2000;
 
 	doorSpecs["room"].mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";

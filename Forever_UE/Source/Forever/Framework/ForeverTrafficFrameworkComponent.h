@@ -151,6 +151,18 @@ public:
 	// 请求入队，TickComponent里每帧最多处理maxVehicleSpawnsPerFrame个（必要时生成车辆Actor）。
 	// destination：房间地址，或"random"=随机一个有车行节点的地下室房间。
 	void NavigateVehicle(const FString& vehicleName, const FString& destination);
+	// 开到调用方已经预订好的车位(市民开车通勤用)：不再自己挑车位/不取消预订；任何一步失败(找不到车/玩家在开/
+	// 车位节点不在车行图/规划失败)都会产生bArrived=false的结果，保证OnVehicleNavigationFinished一定被调用。
+	void NavigateVehicleToSlot(const FString& vehicleName, Room* room, int32 slotIndex);
+
+	// 车辆导航结束(到达或失败)后调用，参数：车、目的房间、是否到达。在ProcessNavResults里、车位预定转成停靠之后、
+	// 发vehicle_arrive事件之前调用(不依赖storyFramework)。随机目的地的重试不算结束。由AForeverFrameworkActor接给市民域。
+	TFunction<void(Vehicle*, Room*, bool)> OnVehicleNavigationFinished;
+
+	// 存档前/后：把正在行驶的车(无论Core推算还是Controller在开)的剩余路径/目的房间/速度写成Vehicle上的行驶快照，
+	// 并记下每辆车存档时是否有Actor；先把已入队未处理的导航请求处理完。存完调ClearDriveSnapshots清掉。
+	void SyncDrivesToCore();
+	void ClearDriveSnapshots();
 
 	// 车辆流式生成/销毁的距离(地图单位)，是市民的两倍；判断距离时Z方向放大5倍，和市民同一个度量。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
@@ -219,6 +231,8 @@ private:
 	struct FNavRequest {
 		FString vehicleName;
 		FString destination;
+		Room* presetRoom = nullptr; // 非空=NavigateVehicleToSlot：目的车位已由调用方预订
+		int32 presetSlot = -1;
 	};
 	struct FNavResult {
 		Vehicle* vehicle = nullptr;
@@ -269,6 +283,8 @@ private:
 		TWeakObjectPtr<AVehicleElement> element;
 	};
 	TArray<FCarEntry> carEntries;
+	// 读档后要强制生成回来的车(存档时有Actor的非线路车)：TickComponent每帧限量处理，不看距离。
+	TArray<FString> pendingRestoreVehicleSpawns;
 	// 没有Actor的车在Core里推算行驶时的移交：进入生成距离后生成Actor交给Controller / 走远后把剩余路径交还Core并销毁Actor。
 	void HandOffDriveToActor(FCarEntry& entry);
 	bool HandBackDriveToCore(FCarEntry& entry);

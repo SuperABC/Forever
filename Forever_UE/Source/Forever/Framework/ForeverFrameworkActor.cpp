@@ -1203,14 +1203,25 @@ void AForeverFrameworkActor::EnsureAssetsGenerated()
 	// 所以放在"构建社会与产业"最后。不动产资产不存档，每次都按归属重建；载具读档时按存档里的所有者恢复，
 	// 新游戏才按人分配。
 	if (!map) return;
+	// 开车通勤：载具导航结束(到达/失败)转给市民域，乘客在目的停车房出现。
+	if (trafficFramework && populaceFramework) {
+		UForeverPopulaceFrameworkComponent* populaceComponent = populaceFramework;
+		trafficFramework->OnVehicleNavigationFinished = [populaceComponent](Vehicle* vehicle, Room* room, bool bArrived) {
+			populaceComponent->OnPassengerCarFinished(vehicle, room, bArrived);
+		};
+	}
 	map->BuildEstateAssets();
 	if (society) society->SetGovernmentAssets(map->GetStatedEstateAssets());
 	if (!traffic || !populace || !society) return;
 	if (traffic->WasRestoredFromSave()) {
-		if (bPopulaceRestored) traffic->ResolveVehicleAssets(*populace, *society);
+		if (bPopulaceRestored) {
+			traffic->ResolveVehicleAssets(*populace, *society);
+			for (const std::string& line : traffic->CommuteReport(*populace)) UE_LOG(LogTemp, Log, TEXT("%s"), UTF8_TO_TCHAR(line.c_str()));
+		}
 	}
 	else {
 		traffic->AssignVehicles(*populace, *society);
+		for (const std::string& line : traffic->CommuteReport(*populace)) UE_LOG(LogTemp, Log, TEXT("%s"), UTF8_TO_TCHAR(line.c_str()));
 	}
 }
 

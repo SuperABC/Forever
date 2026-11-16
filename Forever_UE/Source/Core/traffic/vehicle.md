@@ -98,3 +98,6 @@ ToggleVehicle`在生成车辆**之前**（这时已经通过`traffic->CreateVehi
 - **倒车出库**：`DrivePoint.reverse`标记"以这个点为起点的那一段是倒车"，车头朝向取行进方向的反向；`SampleDrive`/`BeginDrive`据此算yaw，
   `IsDriveReversing(now)`查当前是否在倒车段。车长取`VehicleMod::sizeX`(UE单位)。
 - 存档：`parkState`(U8)+`parkingSlotIndex`(I32)，见`traffic_save.md`；预定不存(读档没有行驶路径)。
+
+## 行驶快照与wasSpawned
+`DriveSnapshot`(路径/目的房间/速度)仅供存档：存前由UE层`SyncDrivesToCore`写入、存后`ClearDriveSnapshots`清掉；`WasSpawned`记录存档时是否有Actor，读档后强制生成。

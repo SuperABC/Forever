@@ -125,3 +125,6 @@
 - **玩家下车**(`ExitVehicle`→`ParkPlayerVehicle`)：取`Player::GetCurrentRoom()`，车位姿换建筑局部后`Room::FindSlotContaining`，且车位允许这辆车的种类，则`BindSlot`占上。
   该车位原本被在途车预定的，`RerouteOrVanishVehicle`：同房间另找空车位重新导航(有Actor→Controller重规划；Core推算→重新`BeginDrive`)，找不到就从地图消失(`SetVanished`，销毁Actor，视为已到达，补发到达事件；
   未到`minVehicleLifetime`的先隐藏、到点再销毁，避免Chaos物理代理未建好就销毁崩溃)。
+
+## 预设车位导航与存档行驶状态
+`NavigateVehicleToSlot(name, room, slot)`：目标车位已预订，直接规划；导航成功/失败都经`OnVehicleNavigationFinished(vehicle, room, bArrived)`回调(由ForeverFrameworkActor接到市民域)。`SyncDrivesToCore/ClearDriveSnapshots`在存档前后写/清行驶快照；`GenerateVehicles`尾部恢复快照并强制生成`wasSpawned`的车。

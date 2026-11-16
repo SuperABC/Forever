@@ -1,0 +1,101 @@
+{
+   "app_mods" : [],
+   "asset_mods" : [
+      "asset_burger",
+      "asset_container",
+      "asset_ammo_pistol",
+      "asset_ammo_rifle",
+      "asset_ammo_shotgun",
+      "asset_ammo_sniper",
+      "asset_pistol",
+      "asset_rifle",
+      "asset_shotgun",
+      "asset_sniper",
+      "asset_camera",
+      "asset_grenade",
+      "asset_smoke_grenade"
+   ],
+   "building_mods" : [
+      "building_residence_high",
+      "building_industry_high",
+      "building_industry_middle",
+      "building_industry_low",
+      "building_commerce_high",
+      "building_office_high"
+   ],
+   "component_mods" : [
+      "component_residence",
+      "component_manufacture",
+      "component_shop",
+      "component_restaurant",
+      "component_office",
+      "component_airport",
+      "component_train_station"
+   ],
+   "dll_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
+   ],
+   "job_mods" : [
+      "job_shop_saler",
+      "job_restaurant_waiter",
+      "job_warehouse_keeper",
+      "job_factory_worker",
+      "job_video_maker"
+   ],
+   "main_story" : "script_test",
+   "manufacture_mods" : [ "manufacture_farm", "manufacture_ranch", "manufacture_food" ],
+   "name_mods" : [ "name_chinese" ],
+   "organization_mods" : [
+      "organization_shop",
+      "organization_restaurant",
+      "organization_manufacture",
+      "organization_video_company"
+   ],
+   "product_mods" : [ "product_wheat", "product_beef", "product_burger" ],
+   "puzzle_mods" : [],
+   "resource_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story",
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Layouts"
+   ],
+   "roadnet_mods" : [ "roadnet_checkboard" ],
+   "room_mods" : [
+      "room_empty",
+      "room_parking",
+      "room_residence",
+      "room_farm",
+      "room_ranch",
+      "room_food_factory",
+      "room_office",
+      "room_shop",
+      "room_restaurant",
+      "room_warehouse",
+      "room_airport",
+      "room_train_station"
+   ],
+   "route_mods" : [ "route_air", "route_train", "route_bus" ],
+   "scheduler_mods" : [ "scheduler_basic" ],
+   "script_mods" : [ "script_empty", "script_test" ],
+   "station_mods" : [ "station_air", "station_train", "station_bus" ],
+   "storage_mods" : [ "storage_shop", "storage_restaurant" ],
+   "story_scripts" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
+   ],
+   "terrain_mods" : [ "terrain_ocean", "terrain_mountain", "terrain_river", "terrain_empty" ],
+   "vehicle_mods" : [
+      "vehicle_plane",
+      "vehicle_train",
+      "vehicle_bus",
+      "vehicle_truck",
+      "vehicle_sedan"
+   ],
+   "weapon_mods" : [
+      "weapon_pistol",
+      "weapon_rifle",
+      "weapon_shotgun",
+      "weapon_sniper",
+      "weapon_camera"
+   ],
+   "zone_mods" : [ "zone_residence_high" ]
+}

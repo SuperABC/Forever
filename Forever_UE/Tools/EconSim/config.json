@@ -26,7 +26,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
    ],
-   "job_mods" : [ "job_shop_saler", "job_restaurant_waiter", "job_warehouse_keeper", "job_factory_worker", "job_empty --test true" ],
+   "job_mods" : [ "job_shop_saler", "job_restaurant_waiter", "job_warehouse_keeper", "job_factory_worker", "job_video_maker", "job_empty --test true" ],
    "main_story" : "script_empty",
    "manufacture_mods" : [
       "manufacture_farm",
@@ -34,7 +34,7 @@
       "manufacture_food"
    ],
    "name_mods" : [ "name_chinese" ],
-   "organization_mods" : [ "organization_shop", "organization_restaurant", "organization_manufacture" ],
+   "organization_mods" : [ "organization_shop", "organization_restaurant", "organization_manufacture", "organization_video_company" ],
    "product_mods" : [ "product_wheat", "product_beef", "product_burger" ],
    "resource_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Story",

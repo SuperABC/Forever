@@ -30,6 +30,7 @@
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
+#include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "UI/PuzzleWidget.h"
 #include "UI/FadeSubsystem.h"
 
@@ -138,6 +139,11 @@ bool UForeverSaveSubsystem::SaveToFile(const FString& Path, FString& OutError) {
 	// 保存前把UE侧的状态同步回Core：等后台寻路线程停下(它们读map)，再把场景里市民Actor的位置
 	// 写回Citizen；正在走路的市民按"已经走到目的地"写进存档，存完立刻还原，不影响正在进行的游戏。
 	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
+	// 车辆的行驶状态先同步(会处理掉待发的到达，通勤到达可能触发市民再寻路，所以要在市民同步之前，并再等一次寻路)。
+	if (UForeverTrafficFrameworkComponent* trafficFramework = framework->GetTrafficFramework()) {
+		trafficFramework->SyncDrivesToCore();
+	}
+	UForeverPopulaceFrameworkComponent::WaitForPendingPathfinding();
 	TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> walking;
 	if (UForeverPopulaceFrameworkComponent* populaceFramework = framework->GetPopulaceFramework()) {
 		walking = populaceFramework->SyncPositionsToCore();
@@ -150,6 +156,7 @@ bool UForeverSaveSubsystem::SaveToFile(const FString& Path, FString& OutError) {
 
 	SaveArchive archive = SaveGame::BuildArchive(MakeSaveWorld(framework));
 	UForeverPopulaceFrameworkComponent::RestoreAfterSave(walking);
+	if (UForeverTrafficFrameworkComponent* trafficFramework = framework->GetTrafficFramework()) trafficFramework->ClearDriveSnapshots();
 	archive.SetJson(SAVE_SECTION_UE, 1, BuildUeSection(framework->GetWorld()));
 	UE_LOG(LogTemp, Log, TEXT("ForeverSaveSubsystem: %s"), UTF8_TO_TCHAR(MapSaveCodec::GetLastReport().c_str()));
 	for (const SaveSection& section : archive.GetSections()) {

@@ -36,7 +36,7 @@ UForeverBuildingFrameworkComponent::UForeverBuildingFrameworkComponent() {
 	}
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> rampFinder(
-		TEXT("/Game/Asset/Building/Mesh/Ramp.Ramp"));
+		TEXT("/Game/Asset/Building/Mesh/Ramp_2cm.Ramp_2cm"));
 	if (rampFinder.Succeeded()) {
 		defaultRampMesh = rampFinder.Object;
 	}

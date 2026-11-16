@@ -23,6 +23,8 @@
 #include "map/general_geometry.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
+#include "traffic/traffic.h"
+#include "traffic/vehicle.h"
 
 std::atomic<int32> UForeverPopulaceFrameworkComponent::pendingPathfindingTasks{ 0 };
 std::atomic<bool> UForeverPopulaceFrameworkComponent::bCancelPathfinding{ false };
@@ -165,6 +167,11 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::SpawnCitizen(Citizen* citiz
 	return element;
 }
 
+Traffic* UForeverPopulaceFrameworkComponent::GetTrafficCore() const {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	return framework ? framework->GetTraffic() : nullptr;
+}
+
 void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* destination) {
 	if (!citizen || !destination || !map) return;
 	if (!citizen->IsActive()) return; // 死人和离城的人不再被调度，见Citizen::Die/Depart
@@ -176,6 +183,101 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 		// 都不做，等玩家取消占有之后下一次调度再正常处理。
 		return;
 	}
+
+	// 开车通勤：自己的车停在当前所在的建筑、目的地建筑有空闲车位才开车，否则照常走路。跳时间期间不开车。
+	if (!bTimeSkipping) {
+		if (Traffic* traffic = GetTrafficCore()) {
+			if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen)) {
+				if (trip->phase == Traffic::CommutePhase::Driving) {
+					UE_LOG(LogTemp, Log, TEXT("RequestWalk: %s is riding in a car, request ignored."), UTF8_TO_TCHAR(citizen->GetName().c_str()));
+					return; // 人在车里，等车到了再说
+				}
+				CancelCommute(citizen); // 还在走向车：被新请求取代
+			}
+			if (traffic->BeginCommute(citizen, destination)) {
+				UE_LOG(LogTemp, Log, TEXT("Commute drive pathfinding: %s [total=%d arrived=%d failed=%d]"), UTF8_TO_TCHAR(citizen->GetName().c_str()),
+					traffic->commuteStats.started, traffic->commuteStats.arrived, traffic->commuteStats.failed);
+				StartCommute(citizen);
+				return;
+			}
+		}
+	}
+	RequestWalkInternal(citizen, destination);
+}
+
+void UForeverPopulaceFrameworkComponent::StartCommute(Citizen* citizen) {
+	Traffic* traffic = GetTrafficCore();
+	Traffic::CommuteTrip* trip = traffic ? traffic->FindTrip(citizen) : nullptr;
+	if (!trip) return;
+	if (citizen->GetCurrentRoom() == trip->parkOrigin) {
+		BoardCar(citizen); // 已经在车所在的停车房里
+		return;
+	}
+	RequestWalkInternal(citizen, trip->parkOrigin);
+}
+
+void UForeverPopulaceFrameworkComponent::BoardCar(Citizen* citizen) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Traffic* traffic = GetTrafficCore();
+	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
+	Traffic::CommuteTrip* trip = traffic ? traffic->FindTrip(citizen) : nullptr;
+	if (!trip || !trafficFramework || !trip->vehicle) {
+		CancelCommute(citizen);
+		return;
+	}
+	// 市民消失：销毁Actor，Core里的Citizen保留，处在"在途无位置"状态(流式生成会跳过它)。
+	if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen)) {
+		if (*existing) (*existing)->Destroy();
+		activeInstances.Remove(citizen);
+		spawnTimes.Remove(citizen);
+	}
+	++latestWalkRequest.FindOrAdd(citizen); // 在途的寻路结果作废
+	citizen->EndWalk();
+	citizen->SetCurrentRoom(nullptr);
+	citizen->ClearPosition();
+	trip->phase = Traffic::CommutePhase::Driving;
+	trafficFramework->NavigateVehicleToSlot(UTF8_TO_TCHAR(trip->vehicle->GetName().c_str()), trip->parkDest, trip->destSlot);
+}
+
+void UForeverPopulaceFrameworkComponent::CancelCommute(Citizen* citizen) {
+	Traffic* traffic = GetTrafficCore();
+	Traffic::CommuteTrip* trip = traffic ? traffic->FindTrip(citizen) : nullptr;
+	if (!trip) return;
+	if (trip->phase == Traffic::CommutePhase::WalkToCar) traffic->CancelTrip(citizen); // 车还没出发：释放预订
+	else traffic->EndTrip(citizen); // 车已经在路上：它自己开到预订的车位，只是不再有乘客
+}
+
+void UForeverPopulaceFrameworkComponent::OnPassengerCarFinished(Vehicle* vehicle, Room* room, bool bArrived) {
+	Traffic* traffic = GetTrafficCore();
+	Traffic::CommuteTrip* trip = traffic ? traffic->FindTripByVehicle(vehicle) : nullptr;
+	if (!trip) return;
+	Citizen* citizen = trip->citizen;
+	Room* finalDest = trip->finalDest;
+	Room* landing = bArrived && room ? room : trip->parkOrigin; // 失败：车没动，市民落回原来的停车房
+	if (bArrived) traffic->commuteStats.arrived++;
+	else traffic->commuteStats.failed++;
+	UE_LOG(LogTemp, Log, TEXT("Commute %s: %s [started=%d arrived=%d failed=%d]"), bArrived ? TEXT("arrived") : TEXT("FAILED"), UTF8_TO_TCHAR(citizen ? citizen->GetName().c_str() : "?"),
+		traffic->commuteStats.started, traffic->commuteStats.arrived, traffic->commuteStats.failed);
+	traffic->EndTrip(citizen);
+	if (!citizen || !citizen->IsActive() || !landing) return;
+
+	// 市民在停车房的房间node处出现(没有位置=按房间落点，流式生成会处理)，再普通步行去最终目的地。
+	++latestWalkRequest.FindOrAdd(citizen);
+	citizen->EndWalk();
+	citizen->SetCurrentRoom(landing);
+	citizen->ClearPosition();
+	if (landing == finalDest) {
+		ReportArrival(citizen, nullptr);
+		return;
+	}
+	RequestWalkInternal(citizen, finalDest);
+}
+
+void UForeverPopulaceFrameworkComponent::RequestWalkInternal(Citizen* citizen, Room* destination) {
+	if (!citizen || !destination || !map) return;
+	if (!citizen->IsActive()) return;
+	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
+	if (existing && *existing && (*existing)->IsPlayerControlled()) return;
 
 	// 跳时间期间路走不完(寻路异步、走路要帧)，同步瞬移到目的地并触发npc_arrive。
 	if (bTimeSkipping) {
@@ -317,6 +419,10 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 				UTF8_TO_TCHAR(citizen->GetName().c_str()));
 			return;
 		}
+		// 去往停车房(通勤第1段)的瞬移照常到达、由ReportArrival上车；其它瞬移取消通勤。
+		if (Traffic* traffic = GetTrafficCore()) {
+			if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen); trip && destination != trip->parkOrigin) CancelCommute(citizen);
+		}
 		++latestWalkRequest.FindOrAdd(citizen); // 在途的寻路结果作废
 		Room* previous = citizen->GetCurrentRoom();
 		(*existing)->TeleportToRoom(destination);
@@ -324,6 +430,9 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 		return;
 	}
 
+	if (Traffic* traffic = GetTrafficCore()) {
+		if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen); trip && destination != trip->parkOrigin) CancelCommute(citizen);
+	}
 	++latestWalkRequest.FindOrAdd(citizen); // 在途的寻路结果作废
 	Room* previous = citizen->GetCurrentRoom();
 	citizen->EndWalk();
@@ -422,7 +531,18 @@ void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* d
 }
 
 void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* previousRoom) {
-	if (!citizen || !citizen->IsActive() || citizen->GetCurrentRoom() == previousRoom) return;
+	if (!citizen || !citizen->IsActive()) return;
+	// 开车通勤第1段：走到了车所在的停车房——不是真正的到达(不广播npc_arrive)，上车；走到了别处就取消通勤。
+	if (Traffic* traffic = GetTrafficCore()) {
+		if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen); trip && trip->phase == Traffic::CommutePhase::WalkToCar) {
+			if (citizen->GetCurrentRoom() == trip->parkOrigin) {
+				BoardCar(citizen);
+				return;
+			}
+			CancelCommute(citizen);
+		}
+	}
+	if (citizen->GetCurrentRoom() == previousRoom) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr) {
 		story->BroadcastNpcArrive(citizen, citizen->GetCurrentRoom());
@@ -439,6 +559,7 @@ void UForeverPopulaceFrameworkComponent::HandleElementEndPlay(Citizen* citizen, 
 
 void UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen* citizen) {
 	if (!citizen) return;
+	CancelCommute(citizen);
 
 	if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen)) {
 		if (*existing) {

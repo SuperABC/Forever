@@ -137,3 +137,6 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 ## 跳时间
 `BeginTimeSkip()`：丢弃未落地的寻路结果并使在途任务作废(序号+1)，把所有在途行走(Actor在走的、Core推算中的)`TeleportCitizen`到各自目的地，
 然后`bTimeSkipping`为真，`RequestWalk`直接`TeleportCitizen`。`EndTimeSkip()`关闭。玩家占有的市民不动。
+
+## 开车通勤
+`RequestWalk`先问`Traffic::BeginCommute`：成功则`StartCommute`(走向车所在停车房，已在则直接`BoardCar`)；`ReportArrival`拦截到停车房的到达(不广播npc_arrive)→`BoardCar`：销毁市民Actor、currentRoom置空，车`NavigateVehicleToSlot`到预订车位；车到达/失败由`OnPassengerCarFinished`接回(失败落回原停车房)，市民在停车房出现后`RequestWalkInternal`走向最终目的地。Driving阶段的新RequestWalk被忽略；瞬移/死亡/WalkToCar期间的新请求`CancelCommute`。跳时间期间不开车。
