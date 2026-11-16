@@ -197,6 +197,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	float minVehicleLifetime = 2.f;
 
+	// 脱困：物理车(被Controller驱动)超过这么多现实秒没前进就强制流式销毁，剩余路径交回Core推算；<=0关闭。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	float stuckTimeoutSeconds = 60.f;
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
+	float stuckMoveThreshold = 100.f; // UE单位：离锚点超过这么远才算前进
+
 	// 行进中的车(Core推算中)生成时离玩家至少这个距离(地图单位，默认4=40m)，免得在玩家眼前凭空冒出来。<=0关闭。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic")
 	float minSpawnDistanceFromPlayer = 4.f;
@@ -231,6 +237,9 @@ private:
 	TMap<int32, Station*> stationByNodeId; // 辅助导航节点 id -> 车站，FireStopEvent 用
 
 	void UpdateBusPhysicsHandoff();
+	// 脱困：线路公交卡住时，把Core时刻表进度推到当前这一腿的终点(下一站)并收回物理Actor，之后按时刻表位置重新切物理。
+	// 停靠中/脱离时刻表/玩家在开的不处理，返回false。
+	bool TeleportBusToNextStop(const FString& vehicleName);
 	bool BusToPhysics(FBusState& state);
 	// bSyncProgress=false：不把时刻表对齐到实车位置(跳时间之后实车位置已作废，以时刻表为准)。
 	void BusToKinematic(FBusState& state, bool bSyncProgress = true);
@@ -299,6 +308,10 @@ private:
 		bool bBroken = false; // 加载蓝图失败过，不再重试(避免每帧刷警告)
 		double spawnedAt = 0.0; // 最近一次生成的世界时间；刚生成的车至少存活minVehicleLifetime秒才允许销毁(Chaos载具的物理代理还没建好就销毁会断言崩溃)
 		TWeakObjectPtr<AVehicleElement> element;
+		// 脱困：Controller在开(有命令)的车超过stuckTimeoutSeconds(现实时间)没前进，强制销毁交回Core推算。
+		FVector stuckAnchor = FVector::ZeroVector;
+		double stuckSinceReal = 0.0;
+		double respawnBlockedUntil = 0.0; // 脱困后到这个世界时间前不在原地重新生成
 	};
 	TArray<FCarEntry> carEntries;
 	// 读档后要强制生成回来的车(存档时有Actor的非线路车)：TickComponent每帧限量处理，不看距离。

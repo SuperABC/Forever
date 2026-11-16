@@ -207,6 +207,22 @@ private:
 	TMap<Citizen*, TObjectPtr<ACitizenElement>> activeInstances;
 	TMap<Citizen*, double> spawnTimes; // 最近一次生成的世界时间，minCitizenLifetime内不允许流式销毁
 
+	// 脱困：物理市民在走路(有命令)却超过stuckTimeoutSeconds(现实时间)没前进，强制流式销毁并把剩余路径交回Core推算。
+	struct FStuckState {
+		FVector anchor = FVector::ZeroVector; // 上次"有前进"时的位置
+		double sinceReal = 0.0;               // 在anchor附近停留的起始现实时间
+	};
+	TMap<Citizen*, FStuckState> stuckStates;
+	TMap<Citizen*, double> respawnBlockedUntil; // 脱困后到这个世界时间前不在原地立刻重新生成(否则又卡回去)
+	void CheckStuckCitizens(double now);
+	// 销毁Actor并把剩余路径交回Core(距离销毁和脱困共用)；还在走路但拿不到剩余路径时不销毁，返回false。
+	bool HandBackCitizenToCore(Citizen* citizen, ACitizenElement* element, double now, bool bForce);
+
+	UPROPERTY(EditDefaultsOnly, Category = "Populace")
+	float stuckTimeoutSeconds = 60.f;
+	UPROPERTY(EditDefaultsOnly, Category = "Populace")
+	float stuckMoveThreshold = 100.f; // UE单位：离锚点超过这么远才算前进
+
 	// 市民生成后至少存活这么多秒才允许流式销毁(刚生成就销毁可能碰上物理/组件还没初始化完)。
 	UPROPERTY(EditDefaultsOnly, Category = "Populace")
 	float minCitizenLifetime = 2.f;

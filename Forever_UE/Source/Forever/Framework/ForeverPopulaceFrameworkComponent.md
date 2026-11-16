@@ -150,3 +150,7 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 - **跳时间虚拟时钟**：跳时间期间`RequestWalkInternal`不再瞬移，而是同步规划路径、换算成游戏秒(路径长/Core步速×60×timeFlowRatio)登记为`FSkipWalk`(市民Actor销毁，Core里"在途无位置")。
   `AdvanceTripsForTimeSkip`每个分步先`DecrementSkipLegs`再反复`CompleteSkipLegs`，腿走完才`ReportArrival`(广播npc_arrive，通勤/任务衔接照常)，多出来的时间(`GetSkipCreditSeconds`)记在下一条腿账上；
   `BeginTimeSkip`把在途的行走转成腿，`EndTimeSkip`把没走完的腿按进度插值后`ApplyWalkResult`落成真实步行。通勤开车不再在跳时间里禁用。
+
+## 脱困(2026-11-16)
+
+`CheckStuckCitizens`每帧扫`activeInstances`：Controller有命令(在走路)的物理市民超过`stuckTimeoutSeconds`(默认60现实秒，暂停不计)没离开锚点`stuckMoveThreshold`(100UE单位)，就`HandBackCitizenToCore(..., bForce=true)`销毁Actor并把剩余路径交回Core推算(拿不到剩余路径则不动，下个周期再试)，30游戏秒内`respawnBlockedUntil`不重新生成。距离销毁也复用`HandBackCitizenToCore`。日志`脱困：市民 ...`。

@@ -490,6 +490,26 @@ private:
 	std::vector<int> FindPath(const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph,
 		int fromNodeId, int toNodeId, const std::unordered_map<int, const Node*>* coords = nullptr) const;
 
+	// 寻路用的"编译图"：把unordered_map邻接表一次性转成按下标的数组，边权(CalcDistance要采样17个曲线点，很贵)只算一次，
+	// 并带节点坐标做A*启发、(起点,终点)->id路径的缓存。图的内容变了(节点/边数量或边指针校验和不同)会自动重建(缓存随之作废)。
+	// 多线程(异步行人寻路)会同时用，所以重建/取用加锁，缓存自己另有锁。
+	struct SearchGraph {
+		struct Arc { int to; float weight; };
+		std::unordered_map<int, int> index;      // 节点id -> 下标
+		std::vector<int> ids;                    // 下标 -> 节点id
+		std::vector<float> x, y;                 // 节点坐标(启发值用)
+		std::vector<std::vector<Arc>> adjacency;
+		float heuristicScale = 0.f;              // 启发值=scale*水平直线距离；0=不用启发(缺坐标)，scale<=1保证不高估
+		size_t signature = 0;
+		mutable std::mutex cacheMutex;
+		mutable std::unordered_map<uint64_t, std::vector<int>> pathCache; // (from,to)->含起终点的id序列，空=无路径
+	};
+	std::shared_ptr<SearchGraph> AcquireSearchGraph(const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph,
+		std::shared_ptr<SearchGraph>& slot) const;
+	mutable std::mutex searchGraphMutex;
+	mutable std::shared_ptr<SearchGraph> vehicleSearchGraph;
+	mutable std::shared_ptr<SearchGraph> pedestrianSearchGraph;
+
 	// FindPedestrianPath用的"id -> Node*"索引缓存(节点上万，不能每次寻路重建)。线程池里的多个任务会同时调用，所以检查/重建时加锁；
 	// 节点数量变了会自动重建。
 	mutable std::mutex nodeIndexMutex;

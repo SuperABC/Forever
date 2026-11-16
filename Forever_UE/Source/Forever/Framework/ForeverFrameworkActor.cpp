@@ -364,12 +364,19 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		const std::string destination = ToString(EvaluateExpression(assign->GetDestination(), context));
 		const std::string vehicle = assign->GetVehicle().empty() ? std::string() : ToString(EvaluateExpression(assign->GetVehicle(), context));
 		const std::string worker = assign->GetWorker().empty() ? std::string() : ToString(EvaluateExpression(assign->GetWorker(), context));
+		const double locateStart = FPlatformTime::Seconds();
 		Room* dest = map ? map->LocateRoom(destination) : nullptr;
+		const double assignStart = FPlatformTime::Seconds();
 		if (!dest) {
 			UE_LOG(LogTemp, Verbose, TEXT("assign_task: 找不到目的房间 %s"), UTF8_TO_TCHAR(destination.c_str()));
 			return;
 		}
 		populaceFramework->AssignTask(organization, task, dest, vehicle, worker);
+		const double assignEnd = FPlatformTime::Seconds();
+		if (assignEnd - locateStart > 0.005) {
+			UE_LOG(LogTemp, Warning, TEXT("assign_task: 单次耗时 %.1f ms (LocateRoom %.1f ms, AssignTask %.1f ms)"),
+				(assignEnd - locateStart) * 1000.0, (assignStart - locateStart) * 1000.0, (assignEnd - assignStart) * 1000.0);
+		}
 		return;
 	}
 

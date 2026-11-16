@@ -141,3 +141,13 @@
 
 `ToggleRouteWatch(name)`建一条`FRouteWatch`(ProceduralMesh+独立颜色MID)，`UpdateRouteWatches`在Tick里每0.2秒刷新；载具路径`GetVehicleRoutePath`(跳时间腿/Actor的VehicleCommandController/Core推算)，
 市民路径`UForeverPopulaceFrameworkComponent::GetRoutePath`。和玩家导航线(`testNavMesh`)是两套，互不覆盖。
+
+## 导航请求按毫秒预算(2026-11-16)
+
+`ProcessPendingNavigations`不再按`maxVehicleSpawnsPerFrame`个数限制，改为每帧至少处理1个、之后用满8ms预算(最多64个)；超过30ms会打Warning。`StartVehicleNavigation`里单次路线规划超过20ms也会打Warning，用来在PIE里确认瓶颈。
+
+## 脱困(2026-11-16)
+
+被Controller驱动的物理车(`IsDrivenByController`，非玩家)位置超过`stuckTimeoutSeconds`(默认60，**现实时间**，暂停不计)没离开锚点`stuckMoveThreshold`(100UE单位)，就`HandBackDriveToCore`强制销毁Actor、剩余路径交回Core推算，并在`respawnBlockedUntil`(30游戏秒)内不在原地重新生成。公交等交不回去的失败后再等一个周期。日志`脱困：车辆 ...`。
+
+脱困补充：线路公交(`bRouteBus`、没脱离时刻表)交不回Core导航，卡住后走`TeleportBusToNextStop`：读控制器`QueryLoopProgress`，`Route::SyncVehicleProgress(leg, 1.0)`把时刻表进度推到这一腿终点(下一站)，再`BusToKinematic(state, false)`收回物理Actor，之后`UpdateBusPhysicsHandoff`按时刻表位置重新切物理。停靠中/玩家在开的不处理。日志`脱困：公交 ...`。

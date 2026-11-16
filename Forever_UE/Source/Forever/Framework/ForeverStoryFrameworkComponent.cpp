@@ -769,6 +769,13 @@ string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) c
 			}
 		}
 	}
+	if (Populace* populace = framework->GetPopulace()) {
+		const vector<Citizen*>& citizens = populace->GetCitizens();
+		for (size_t i = 0; i < citizens.size(); i++) {
+			Scheduler* scheduler = citizens[i] ? citizens[i]->GetScheduler() : nullptr;
+			if (scheduler && scheduler->GetScript() == script) return "scheduler:" + to_string(i);
+		}
+	}
 	for (auto& [key, candidate] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
 		framework->GetSociety(), framework->GetTraffic(), story, framework->GetPlayer())) {
 		if (candidate == script) return key;
@@ -779,7 +786,23 @@ string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) c
 Script* UForeverStoryFrameworkComponent::FindScriptByKey(const string& key) const {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!framework || key.empty()) return nullptr;
-	// 同FindScriptKey：岗位/组织键直接解析，不重建全部脚本。
+	// 同FindScriptKey：岗位/组织/日程键直接解析，不重建全部脚本(CollectScripts每次都重建并排序全城脚本，
+	// 几百个组织的送货计时器同时到时，每个都走它就是每个几十毫秒)。
+	if (key.compare(0, 4, "org:") == 0) {
+		Society* society = framework->GetSociety();
+		if (!society) return nullptr;
+		const size_t i = static_cast<size_t>(atoll(key.c_str() + 4));
+		const vector<Organization*>& organizations = society->GetOrganizations();
+		return i < organizations.size() && organizations[i] ? organizations[i]->GetScript() : nullptr;
+	}
+	if (key.compare(0, 10, "scheduler:") == 0) {
+		Populace* populace = framework->GetPopulace();
+		if (!populace) return nullptr;
+		const size_t i = static_cast<size_t>(atoll(key.c_str() + 10));
+		const vector<Citizen*>& citizens = populace->GetCitizens();
+		Scheduler* scheduler = i < citizens.size() && citizens[i] ? citizens[i]->GetScheduler() : nullptr;
+		return scheduler ? scheduler->GetScript() : nullptr;
+	}
 	if (key.compare(0, 4, "job:") == 0) {
 		size_t sep = key.find(':', 4);
 		if (sep == string::npos) return nullptr;
@@ -1081,7 +1104,16 @@ bool UForeverStoryFrameworkComponent::FireTimerBatch(size_t maxCount) {
 		context.system = story->GetSystemScript();
 		context.global = story->GetGlobalScript();
 		context.local = &event;
-		ProcessScriptActions(framework, script->MatchEvent(&event, context, &postImplement), context);
+		const double matchStart = FPlatformTime::Seconds();
+		const vector<ScriptAction> actions = script->MatchEvent(&event, context, &postImplement);
+		const double processStart = FPlatformTime::Seconds();
+		ProcessScriptActions(framework, actions, context);
+		const double timerEnd = FPlatformTime::Seconds();
+		if (timerEnd - matchStart > 0.01) {
+			UE_LOG(LogTemp, Warning, TEXT("慢计时器 %s (owner=%s): MatchEvent %.1f ms, 执行动作 %.1f ms, 动作数 %d"),
+				UTF8_TO_TCHAR(timer.name.c_str()), UTF8_TO_TCHAR(timer.ownerKey.c_str()),
+				(processStart - matchStart) * 1000.0, (timerEnd - processStart) * 1000.0, static_cast<int32>(actions.size()));
+		}
 	}
 	// 卡顿排查：一批计时器超过10ms就打日志，区分是取到时计时器慢还是处理脚本动作慢。
 	const double batchSeconds = FPlatformTime::Seconds() - batchStart;

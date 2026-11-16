@@ -1358,22 +1358,18 @@ Building* Map::LocateBuilding(const string& address) const {
 	if (rest.size() == 1) {
 		// "<road> <index> <buildingName>"：直接落在这个lot上、没有parentZone的building
 		const string& buildingName = rest[0];
-		for (auto& [name, building] : buildings) {
-			if (building && SameBlock(building->GetParentLot(), lot) && !building->GetParentZone()
-				&& name == buildingName) {
-				return building;
-			}
+		// buildings按名字做key：直接查，不要遍历全图(每次LocateRoom都扫上万栋建筑会让批量派任务卡很久)。
+		auto found = buildings.find(buildingName);
+		if (found != buildings.end()) {
+			Building* building = found->second;
+			if (building && SameBlock(building->GetParentLot(), lot) && !building->GetParentZone()) return building;
 		}
 		return nullptr;
 	}
 	// "<road> <index> <zoneName> <buildingName>"：先定位zone，再在这个zone里找building
 	Zone* zone = nullptr;
-	for (auto& [name, z] : zones) {
-		if (z && z->GetParentLot() == lot && name == rest[0]) {
-			zone = z;
-			break;
-		}
-	}
+	auto zoneFound = zones.find(rest[0]);
+	if (zoneFound != zones.end() && zoneFound->second && zoneFound->second->GetParentLot() == lot) zone = zoneFound->second;
 	if (!zone) return nullptr;
 	const string& buildingName = rest[1];
 	for (Building* building : zone->GetInternalBuildings()) {
@@ -2620,72 +2616,147 @@ const unordered_map<string, Map::TerrainTextureInfo>& Map::GetTerrainTextures() 
 	return terrainTextures;
 }
 
-vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>>>& graph,
-	int fromNodeId, int toNodeId, const unordered_map<int, const Node*>* coords) const {
-	if (fromNodeId == toNodeId) return { fromNodeId };
-
-	// A*启发：到终点的水平直线距离。取不到坐标就退化成0（等价Dijkstra）。
-	float goalX = 0.f, goalY = 0.f;
-	bool useHeuristic = false;
-	if (coords) {
-		auto goalIt = coords->find(toNodeId);
-		if (goalIt != coords->end()) {
-			goalX = goalIt->second->GetX();
-			goalY = goalIt->second->GetY();
-			useHeuristic = true;
+std::shared_ptr<Map::SearchGraph> Map::AcquireSearchGraph(const unordered_map<int, vector<pair<int, Connection*>>>& graph,
+	std::shared_ptr<SearchGraph>& slot) const {
+	// 校验和：节点数、边数、边指针和邻居id。比重建便宜得多(只遍历指针，不算几何)。
+	size_t signature = graph.size();
+	for (const auto& [id, edges] : graph) {
+		signature = signature * 1000003u + edges.size();
+		for (const auto& [neighbor, connection] : edges) {
+			signature += reinterpret_cast<uintptr_t>(connection) * 31u + static_cast<size_t>(neighbor);
 		}
 	}
-	auto heuristic = [&](int id) -> float {
-		if (!useHeuristic) return 0.f;
-		auto it = coords->find(id);
-		if (it == coords->end()) return 0.f;
-		float dx = it->second->GetX() - goalX, dy = it->second->GetY() - goalY;
-		return sqrtf(dx * dx + dy * dy);
+	std::lock_guard<std::mutex> lock(searchGraphMutex);
+	if (slot && slot->signature == signature) return slot;
+
+	auto built = std::make_shared<SearchGraph>();
+	built->signature = signature;
+	auto indexOf = [&](int id) {
+		auto [it, inserted] = built->index.emplace(id, static_cast<int>(built->ids.size()));
+		if (inserted) {
+			built->ids.push_back(id);
+			built->x.push_back(0.f);
+			built->y.push_back(0.f);
+		}
+		return it->second;
+	};
+	for (const auto& [id, edges] : graph) {
+		indexOf(id);
+		for (const auto& edge : edges) indexOf(edge.first);
+	}
+	const size_t count = built->ids.size();
+	built->adjacency.resize(count);
+	vector<char> hasCoord(count, 0);
+	struct EdgeGeom { int from, to; float weight; };
+	vector<EdgeGeom> geoms;
+	for (const auto& [id, edges] : graph) {
+		const int from = built->index[id];
+		for (const auto& [neighborId, connection] : edges) {
+			if (!connection) continue;
+			const int to = built->index[neighborId];
+			const float weight = connection->CalcDistance();
+			built->adjacency[from].push_back({ to, weight });
+			geoms.push_back({ from, to, weight });
+			// 坐标：Connection的两端点里id匹配的那个(邻接表里的边可能反向存放)。
+			const Node startNode = connection->GetStart();
+			const Node endNode = connection->GetEnd();
+			auto assign = [&](int nodeIdx, int nodeId) {
+				if (hasCoord[nodeIdx]) return;
+				if (startNode.GetId() == nodeId) { built->x[nodeIdx] = startNode.GetX(); built->y[nodeIdx] = startNode.GetY(); hasCoord[nodeIdx] = 1; }
+				else if (endNode.GetId() == nodeId) { built->x[nodeIdx] = endNode.GetX(); built->y[nodeIdx] = endNode.GetY(); hasCoord[nodeIdx] = 1; }
+			};
+			assign(from, id);
+			assign(to, neighborId);
+		}
+	}
+	bool allCoords = true;
+	for (size_t i = 0; i < count; i++) if (!hasCoord[i]) { allCoords = false; break; }
+	if (allCoords) {
+		// 启发缩放：保证每条边 scale*直线距离 <= 边权(一致性)，坐标/曲线有出入时自动降低而不是算出次优路线。
+		float scale = 1.f;
+		for (const EdgeGeom& g : geoms) {
+			const float dx = built->x[g.from] - built->x[g.to], dy = built->y[g.from] - built->y[g.to];
+			const float dist = sqrtf(dx * dx + dy * dy);
+			if (dist > 1e-4f && g.weight < dist * scale) scale = g.weight / dist;
+		}
+		built->heuristicScale = scale;
+	}
+	slot = built;
+	return built;
+}
+
+vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>>>& graph,
+	int fromNodeId, int toNodeId, const unordered_map<int, const Node*>* coords) const {
+	(void)coords; // 坐标改由编译图自带
+	if (fromNodeId == toNodeId) return { fromNodeId };
+
+	std::shared_ptr<SearchGraph> search = AcquireSearchGraph(graph, &graph == &vehicleNavGraph ? vehicleSearchGraph : pedestrianSearchGraph);
+	auto fromIt = search->index.find(fromNodeId), toIt = search->index.find(toNodeId);
+	if (fromIt == search->index.end() || toIt == search->index.end()) return {};
+	const uint64_t cacheKey = (static_cast<uint64_t>(static_cast<uint32_t>(fromNodeId)) << 32) | static_cast<uint32_t>(toNodeId);
+	{
+		std::lock_guard<std::mutex> lock(search->cacheMutex);
+		auto cached = search->pathCache.find(cacheKey);
+		if (cached != search->pathCache.end()) return cached->second;
+	}
+
+	const int source = fromIt->second, goal = toIt->second;
+	const size_t count = search->ids.size();
+	// 每线程复用的缓冲区：用代数戳代替每次清零/分配。
+	struct Scratch { vector<float> dist; vector<int> prev; vector<uint32_t> seen, closed; uint32_t generation = 0; };
+	thread_local Scratch scratch;
+	if (scratch.dist.size() < count) {
+		scratch.dist.resize(count);
+		scratch.prev.resize(count);
+		scratch.seen.assign(count, 0);
+		scratch.closed.assign(count, 0);
+		scratch.generation = 0;
+	}
+	const uint32_t gen = ++scratch.generation;
+	const float hScale = search->heuristicScale;
+	const float goalX = search->x[goal], goalY = search->y[goal];
+	auto heuristic = [&](int i) -> float {
+		if (hScale <= 0.f) return 0.f;
+		const float dx = search->x[i] - goalX, dy = search->y[i] - goalY;
+		return hScale * sqrtf(dx * dx + dy * dy);
 	};
 
-	unordered_map<int, float> dist;
-	unordered_map<int, int> prev;
-	unordered_set<int> visited;
-	using QueueEntry = pair<float, int>; // (优先级=已走距离+启发值, nodeId)，最小堆
+	using QueueEntry = pair<float, int>; // (已走距离+启发值, 下标)，最小堆
 	priority_queue<QueueEntry, vector<QueueEntry>, greater<QueueEntry>> queue;
-
-	dist[fromNodeId] = 0.f;
-	queue.push({ heuristic(fromNodeId), fromNodeId });
-
+	scratch.seen[source] = gen;
+	scratch.dist[source] = 0.f;
+	scratch.prev[source] = -1;
+	queue.push({ heuristic(source), source });
+	bool found = false;
 	while (!queue.empty()) {
-		auto [priority, id] = queue.top();
+		const int cur = queue.top().second;
 		queue.pop();
-		if (visited.count(id)) continue;
-		visited.insert(id);
-		if (id == toNodeId) break;
-		float d = dist[id];
-
-		auto it = graph.find(id);
-		if (it == graph.end()) continue;
-		for (const auto& [neighborId, connection] : it->second) {
-			if (!connection || visited.count(neighborId)) continue;
-			float weight = connection->CalcDistance();
-			float newDist = d + weight;
-			auto distIt = dist.find(neighborId);
-			if (distIt == dist.end() || newDist < distIt->second) {
-				dist[neighborId] = newDist;
-				prev[neighborId] = id;
-				queue.push({ newDist + heuristic(neighborId), neighborId });
+		if (scratch.closed[cur] == gen) continue;
+		scratch.closed[cur] = gen;
+		if (cur == goal) { found = true; break; }
+		const float d = scratch.dist[cur];
+		for (const SearchGraph::Arc& arc : search->adjacency[cur]) {
+			if (scratch.closed[arc.to] == gen) continue;
+			const float newDist = d + arc.weight;
+			if (scratch.seen[arc.to] != gen || newDist < scratch.dist[arc.to]) {
+				scratch.seen[arc.to] = gen;
+				scratch.dist[arc.to] = newDist;
+				scratch.prev[arc.to] = cur;
+				queue.push({ newDist + heuristic(arc.to), arc.to });
 			}
 		}
 	}
 
-	if (!dist.count(toNodeId)) return {}; // 图不连通，找不到路径
-
 	vector<int> idPath;
-	for (int id = toNodeId; ; ) {
-		idPath.push_back(id);
-		if (id == fromNodeId) break;
-		auto it = prev.find(id);
-		if (it == prev.end()) return {}; // 理论不会发生(dist已确认可达)，防御性兜底
-		id = it->second;
+	if (found) {
+		for (int i = goal; i != -1; i = scratch.prev[i]) idPath.push_back(search->ids[i]);
+		reverse(idPath.begin(), idPath.end());
 	}
-	reverse(idPath.begin(), idPath.end());
+	{
+		std::lock_guard<std::mutex> lock(search->cacheMutex);
+		if (search->pathCache.size() >= 8192) search->pathCache.clear(); // 简单封顶：满了整体丢掉
+		search->pathCache[cacheKey] = idPath;
+	}
 	return idPath;
 }
 

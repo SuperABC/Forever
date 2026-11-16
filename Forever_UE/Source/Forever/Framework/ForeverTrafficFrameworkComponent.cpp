@@ -525,6 +525,7 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 				entry.yaw = dyaw;
 			}
 			if (entry.bBroken || spawned >= FMath::Max(1, maxVehicleSpawnsPerFrame)) continue;
+			if (entry.respawnBlockedUntil > 0.0 && GetWorld()->GetTimeSeconds() < entry.respawnBlockedUntil) continue; // 刚脱困：先让Core带着它走远
 			const bool bMoving = entry.vehicle && entry.vehicle->IsDriving();
 			if (bMoving && movingVehicles >= maxMovingVehicles) continue; // 行进中车辆名额满了：继续由Core推算
 			const float playerDistance = TrafficStreamingDistance(playerLoc, entry.location);
@@ -547,6 +548,32 @@ void UForeverTrafficFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 		entry.yaw = element->GetActorRotation().Yaw;
 		// 正在自己导航的车(测试导航)、被Controller持续驱动的公交也不销毁：跑远了销毁会丢掉运行状态。
 		if (!element->IsPlayerControlled() && IsDrivenByController(element)) {
+			// 脱困：在开却长时间没前进(现实时间)，强制交回Core推算。暂停时不计。
+			if (stuckTimeoutSeconds > 0.f && DeltaTime > 0.f && !GetWorld()->IsPaused()) {
+				const double realNow = FPlatformTime::Seconds();
+				if (entry.stuckSinceReal == 0.0 || FVector::Dist(entry.location, entry.stuckAnchor) > stuckMoveThreshold) {
+					entry.stuckAnchor = entry.location;
+					entry.stuckSinceReal = realNow;
+				}
+				else if (realNow - entry.stuckSinceReal >= stuckTimeoutSeconds) {
+					UE_LOG(LogTemp, Warning, TEXT("脱困：车辆 %s 超过%.0f秒没有前进，强制流式销毁并交回Core推算。"), *entry.name, stuckTimeoutSeconds);
+					entry.stuckSinceReal = realNow; // 交不回去(公交等)就再等一个周期
+					if (HandBackDriveToCore(entry)) {
+						entry.respawnBlockedUntil = GetWorld()->GetTimeSeconds() + 30.0;
+						entry.stuckSinceReal = 0.0;
+						continue;
+					}
+					// 线路公交没有导航目标交不回去：直接传送到下一站。
+					if (TeleportBusToNextStop(entry.name)) {
+						UE_LOG(LogTemp, Warning, TEXT("脱困：公交 %s 传送到下一站。"), *entry.name);
+						entry.stuckSinceReal = 0.0;
+						continue;
+					}
+				}
+			}
+			else {
+				entry.stuckSinceReal = 0.0;
+			}
 			// 脚本导航中的车：走远了把剩余路径交还Core继续推算并销毁Actor（和市民一样）；
 			// 交不回去（公交等）就保留。
 			if (TrafficStreamingDistance(playerLoc, entry.location) > despawnDistUE &&
@@ -1580,6 +1607,24 @@ void UForeverTrafficFrameworkComponent::BusToKinematic(FBusState& state, bool bS
 	if (ATransitVehicleElement* kinematic = state.kinematic.Get()) kinematic->SetSuspended(false);
 }
 
+bool UForeverTrafficFrameworkComponent::TeleportBusToNextStop(const FString& vehicleName) {
+	FBusState* state = busStates.Find(vehicleName);
+	if (!state || !state->bRouteBus || state->bDetached || !state->vehicle) return false;
+	AVehicleElement* element = state->element.Get();
+	ABusController* controller = state->controller.Get();
+	if (!element || !controller || element->IsPlayerControlled()) return false;
+	Route* route = state->vehicle->GetRoute();
+	if (!route) return false;
+	int32 legIndex;
+	float legFraction, dwellFraction;
+	bool bDwelling;
+	if (!controller->QueryLoopProgress(legIndex, legFraction, bDwelling, dwellFraction) || bDwelling) return false;
+	// 这一腿正驶向第legIndex+1站：进度设成这一腿走完(=到站)，再收回物理Actor；位置由时刻表给出。
+	if (!route->SyncVehicleProgress(state->vehicle, legIndex, 1.f, false, 0.f)) return false;
+	BusToKinematic(*state, false);
+	return true;
+}
+
 void UForeverTrafficFrameworkComponent::ResyncBusesAfterTimeSkip() {
 	for (TPair<FString, FBusState>& pair : busStates) {
 		FBusState& state = pair.Value;
@@ -1945,11 +1990,22 @@ void UForeverTrafficFrameworkComponent::TeleportVehicleToSlot(Vehicle* vehicle, 
 
 void UForeverTrafficFrameworkComponent::ProcessPendingNavigations() {
 	if (!mapRef || !trafficRef) return; // 车辆还没登记（GenerateVehicles之前）：请求先留着
-	int32 budget = FMath::Max(1, maxVehicleSpawnsPerFrame);
-	while (pendingNavigations.Num() > 0 && budget-- > 0) {
+	// 按毫秒预算而不是按个数：规划一条路线的耗时差异很大(缓存命中几乎为0，冷启动整图搜索要几十毫秒)，
+	// 每帧至少处理1个保证前进，之后用完预算就留到下一帧。
+	constexpr double kNavBudgetSeconds = 0.008;
+	constexpr int32 kNavMaxPerFrame = 64;
+	const double start = FPlatformTime::Seconds();
+	int32 processed = 0;
+	while (pendingNavigations.Num() > 0 && processed < kNavMaxPerFrame) {
+		if (processed > 0 && FPlatformTime::Seconds() - start >= kNavBudgetSeconds) break;
 		const FNavRequest request = pendingNavigations[0];
 		pendingNavigations.RemoveAt(0);
 		StartVehicleNavigation(request);
+		processed++;
+	}
+	const double elapsedMs = (FPlatformTime::Seconds() - start) * 1000.0;
+	if (elapsedMs > 30.0) {
+		UE_LOG(LogTemp, Warning, TEXT("ProcessPendingNavigations: 处理%d个导航请求耗时%.1f ms，剩余%d个排队"), processed, elapsedMs, pendingNavigations.Num());
 	}
 }
 
@@ -2169,6 +2225,7 @@ void UForeverTrafficFrameworkComponent::StartVehicleNavigation(const FNavRequest
 	core->GetTransform(x, y, z, yaw);
 	const float yawRad = FMath::DegreesToRadians(yaw);
 	Map::VehicleRoutePlan plan;
+	const double planStart = FPlatformTime::Seconds();
 	if (ParkingSlot* parkedSlot = core->GetParkingSlot()) {
 		// 停在车位里：先倒出到与车位相连的connection另一端再远一个车长，再向前沿导航线拐弯。
 		float sizeX, sizeY, sizeZ;
@@ -2179,6 +2236,8 @@ void UForeverTrafficFrameworkComponent::StartVehicleNavigation(const FNavRequest
 		plan = mapRef->PlanVehicleRouteToNode(core->GetCurrentRoom(),
 			x / TRAFFIC_WORLD_SCALE, y / TRAFFIC_WORLD_SCALE, node->GetId(), true, FMath::Cos(yawRad), FMath::Sin(yawRad));
 	}
+	const double planMs = (FPlatformTime::Seconds() - planStart) * 1000.0;
+	if (planMs > 20.0) UE_LOG(LogTemp, Warning, TEXT("vehicle_navigate: 车辆 %s 路线规划耗时 %.1f ms"), *request.vehicleName, planMs);
 	if (plan.status != Map::VehicleRoutePlan::OK) {
 		UE_LOG(LogTemp, Log, TEXT("vehicle_navigate: 车辆 %s 从 %s 规划到 %s 失败，status=%d(1=无路径到终点,2=起点无出路)"), *request.vehicleName,
 			core->GetCurrentRoom() ? UTF8_TO_TCHAR(core->GetCurrentRoom()->GetAddress().c_str()) : TEXT("室外"),
@@ -2290,7 +2349,6 @@ void UForeverTrafficFrameworkComponent::ProcessNavResults() {
 		if (OnVehicleNavigationFinished) OnVehicleNavigationFinished(result.vehicle, result.room, true);
 		if (!storyFramework) continue;
 		randomRetries.Remove(UTF8_TO_TCHAR(result.vehicle->GetName().c_str()));
-		UE_LOG(LogTemp, Log, TEXT("vehicle_arrive: 车辆 %s 抵达 %s"), UTF8_TO_TCHAR(result.vehicle->GetName().c_str()), UTF8_TO_TCHAR(result.room->GetAddress().c_str()));
 		VehicleArriveEvent event(result.vehicle->GetName(), result.room->GetAddress());
 		storyFramework->BroadcastToVehicle(event, result.vehicle);
 	}

@@ -207,8 +207,6 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 				CancelCommute(citizen); // 还在走向车：被新请求取代
 			}
 			if (traffic->BeginCommute(citizen, destination)) {
-				UE_LOG(LogTemp, Log, TEXT("Commute drive pathfinding: %s [total=%d arrived=%d failed=%d]"), UTF8_TO_TCHAR(citizen->GetName().c_str()),
-					traffic->commuteStats.started, traffic->commuteStats.arrived, traffic->commuteStats.failed);
 				StartCommute(citizen);
 				return;
 			}
@@ -272,8 +270,6 @@ void UForeverPopulaceFrameworkComponent::OnPassengerCarFinished(Vehicle* vehicle
 	Room* landing = bArrived && room ? room : trip->parkOrigin; // 失败：车没动，市民落回原来的停车房
 	if (bArrived) traffic->commuteStats.arrived++;
 	else traffic->commuteStats.failed++;
-	UE_LOG(LogTemp, Log, TEXT("Commute %s: %s [started=%d arrived=%d failed=%d]"), bArrived ? TEXT("arrived") : TEXT("FAILED"), UTF8_TO_TCHAR(citizen ? citizen->GetName().c_str() : "?"),
-		traffic->commuteStats.started, traffic->commuteStats.arrived, traffic->commuteStats.failed);
 	traffic->EndTrip(citizen);
 	if (!citizen || !citizen->IsActive() || !landing) return;
 
@@ -938,6 +934,63 @@ ACitizenElement* UForeverPopulaceFrameworkComponent::FindOrSpawnCitizenByName(co
 	return nullptr;
 }
 
+bool UForeverPopulaceFrameworkComponent::HandBackCitizenToCore(Citizen* citizen, ACitizenElement* element, double now, bool bForce) {
+	// 先把当前位置转回地图单位写回Citizen(这样下次重新进入范围直接用这份记录，不再随机抖动一次)，再销毁Actor。
+	FVector loc = element->GetActorLocation();
+	// 还在走路：剩余路径交还Core继续按时间推算，不然目的地就丢了(currentRoom还是出发地)。
+	TArray<FVector> remainingPath;
+	Room* walkDestination = nullptr;
+	ACitizenController* controller = element->GetCitizenController();
+	const bool bHasPath = controller && controller->GetRemainingWaypoints(remainingPath, walkDestination) && remainingPath.Num() > 1;
+	if (bForce && !bHasPath) return false; // 脱困必须能接着走，没拿到路径就不动它
+	citizen->SetPosition(loc.X / POPULACE_WORLD_SCALE, loc.Y / POPULACE_WORLD_SCALE, loc.Z / POPULACE_WORLD_SCALE);
+	if (bHasPath) {
+		std::vector<Citizen::WalkPoint> path;
+		for (const FVector& point : remainingPath) {
+			path.push_back({ static_cast<float>(point.X / POPULACE_WORLD_SCALE),
+				static_cast<float>(point.Y / POPULACE_WORLD_SCALE), static_cast<float>(point.Z / POPULACE_WORLD_SCALE) });
+		}
+		float speedUU = element->GetCharacterMovement()->MaxWalkSpeed;
+		citizen->BeginWalk(path, walkDestination, now, speedUU * kUnspawnedWalkSpeedScale / POPULACE_WORLD_SCALE);
+	}
+	element->Destroy();
+	activeInstances.Remove(citizen);
+	spawnTimes.Remove(citizen);
+	stuckStates.Remove(citizen);
+	return true;
+}
+
+void UForeverPopulaceFrameworkComponent::CheckStuckCitizens(double now) {
+	if (stuckTimeoutSeconds <= 0.f) return;
+	const double realNow = FPlatformTime::Seconds();
+	TArray<Citizen*> toHandBack;
+	for (const auto& [citizen, element] : activeInstances) {
+		if (!citizen || !element || element->IsPlayerControlled() || element->IsDespawnExempt()) { stuckStates.Remove(citizen); continue; }
+		const ACitizenController* controller = element->GetCitizenController();
+		if (!controller || !controller->HasCommands()) { stuckStates.Remove(citizen); continue; } // 没在走路：不算卡住
+		const FVector location = element->GetActorLocation();
+		FStuckState& state = stuckStates.FindOrAdd(citizen);
+		if (state.sinceReal == 0.0 || FVector::Dist(location, state.anchor) > stuckMoveThreshold) {
+			state.anchor = location;
+			state.sinceReal = realNow;
+			continue;
+		}
+		if (realNow - state.sinceReal >= stuckTimeoutSeconds) toHandBack.Add(citizen);
+	}
+	for (Citizen* citizen : toHandBack) {
+		TObjectPtr<ACitizenElement>* found = activeInstances.Find(citizen);
+		if (!found || !*found) continue;
+		UE_LOG(LogTemp, Warning, TEXT("脱困：市民 %s 超过%.0f秒没有前进，强制流式销毁并交回Core推算。"),
+			UTF8_TO_TCHAR(citizen->GetName().c_str()), stuckTimeoutSeconds);
+		if (HandBackCitizenToCore(citizen, *found, now, true)) {
+			respawnBlockedUntil.Add(citizen, now + 30.0);
+		}
+		else if (FStuckState* state = stuckStates.Find(citizen)) {
+			state->sinceReal = FPlatformTime::Seconds(); // 拿不到路径：再等一个周期
+		}
+	}
+}
+
 void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
@@ -950,6 +1003,10 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 
 	// 已算完的寻路结果落地：必须在游戏线程(ApplyWalkResult会碰activeInstances/ACitizenElement)。
 	DrainPathResults();
+
+	// 暂停/时间冻结时不计卡住。
+	if (DeltaTime > 0.f && GetWorld() && !GetWorld()->IsPaused()) CheckStuckCitizens(GetWorld()->GetTimeSeconds());
+	else stuckStates.Reset();
 
 	// 屏幕左上角实时显示寻路队列长度（已派发到线程池、还没算完的任务数，含正在跑的）。
 	if (bShowPathfindingQueue && GEngine) {
@@ -1028,6 +1085,10 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 			// 这次行走被概率排除在实例化之外：一直由Core推算，走完为止。
 			if (moving && !citizen->IsWalkInstantiable()) continue;
 			if (moving ? movingCount >= maxMovingCitizens : stationaryCount >= maxStationaryCitizens) continue;
+			if (const double* blockedUntil = respawnBlockedUntil.Find(citizen)) {
+				if (now < *blockedUntil) continue; // 刚脱困：先让Core带着它走远一段
+				respawnBlockedUntil.Remove(citizen);
+			}
 			if (inRange) {
 				ACitizenElement* element = SpawnCitizen(citizen);
 				spawnCount++;
@@ -1047,26 +1108,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 			// 只按距离销毁；某一类数量超过上限(比如走路的人到站变成静止的而静止名额已满)就超着，只是不再生成新的。
 			if (!element->IsDespawnExempt() && StreamingDistance(playerLoc, element->GetActorLocation()) > despawnLimit &&
 				now - spawnTimes.FindRef(citizen) >= minCitizenLifetime) {
-				// 走远到销毁距离之外：先把当前位置转回地图单位写回Citizen(这样下次重新进入
-				// 范围直接用这份记录，不再随机抖动一次)，再销毁Actor。
-				FVector loc = element->GetActorLocation();
-				citizen->SetPosition(loc.X / POPULACE_WORLD_SCALE, loc.Y / POPULACE_WORLD_SCALE,
-					loc.Z / POPULACE_WORLD_SCALE);
-				// 还在走路：剩余路径交还Core继续按时间推算，不然目的地就丢了(currentRoom还是出发地)。
-				TArray<FVector> remainingPath;
-				Room* walkDestination = nullptr;
-				ACitizenController* controller = element->GetCitizenController();
-				if (controller && controller->GetRemainingWaypoints(remainingPath, walkDestination) && remainingPath.Num() > 1) {
-					std::vector<Citizen::WalkPoint> path;
-					for (const FVector& point : remainingPath) {
-						path.push_back({ static_cast<float>(point.X / POPULACE_WORLD_SCALE),
-							static_cast<float>(point.Y / POPULACE_WORLD_SCALE), static_cast<float>(point.Z / POPULACE_WORLD_SCALE) });
-					}
-					float speedUU = element->GetCharacterMovement()->MaxWalkSpeed;
-					citizen->BeginWalk(path, walkDestination, now, speedUU * kUnspawnedWalkSpeedScale / POPULACE_WORLD_SCALE);
-				}
-				element->Destroy();
-				activeInstances.Remove(citizen);
+				HandBackCitizenToCore(citizen, element, now, false);
 			}
 		}
 	}
