@@ -1,4 +1,5 @@
 #include "puzzle.h"
+#include "common/random.h"
 
 #include "common/error.h"
 
@@ -30,9 +31,11 @@ void Puzzle::SetParam(const string& param) {
 }
 
 void Puzzle::Init(Canvas* canvas, PostHandle* post) {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->Init(canvas, post);
 }
 
 JsonValue* Puzzle::Loop(Canvas* canvas, int ms, PostHandle* post) {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	return mod->Loop(canvas, ms, post);
 }

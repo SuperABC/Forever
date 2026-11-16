@@ -1,4 +1,5 @@
 #include "society/immigration.h"
+#include "common/random.h"
 
 #include "society/society.h"
 #include "society/settlement.h"
@@ -23,6 +24,7 @@ namespace {
 }
 
 vector<Citizen*> Immigration::Daily(Society& society, Populace& populace, Map& map, const Time& now) {
+	CORE_RANDOM_SCOPE("core.society");
 	vector<Citizen*> arrived;
 	int x = populace.GetInitialPopulation();
 	if (x <= 0) return arrived;

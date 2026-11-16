@@ -1,4 +1,5 @@
 #include "name_factory.h"
+#include "common/random.h"
 
 
 using namespace std;
@@ -16,6 +17,7 @@ NameMod* NameFactory::CreateName(const string& id) {
 	NameMod* instance = it->second.creator(argsIt != configuredArgs.end() ? argsIt->second : string());
 	if (instance) {
 		liveInstances[instance] = id;
+		RandomRegistry::BindInstance(instance, id);
 	}
 	return instance;
 }
@@ -32,6 +34,7 @@ void NameFactory::DestroyName(NameMod* instance) {
 	if (regIt != registries.end())
 		regIt->second.deleter(instance);
 
+	RandomRegistry::UnbindInstance(instance);
 	liveInstances.erase(liveIt);
 }
 

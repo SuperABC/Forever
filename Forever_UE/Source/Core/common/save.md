@@ -40,10 +40,9 @@
 
 ## 为什么存结果、不存种子
 
-世界生成不可复现：
-- `GetRandom`/`GetRandomNormal` 每次调用都用 `random_device` 新建引擎；
-- 每个 mod DLL 有自己的一份 Dependence 静态库，随机数状态也各自独立；
-- 生成过程还依赖 `unordered_map` 的遍历顺序，有些地方以指针为键。
+世界生成不保证逐字节复现：
+- 随机数现在是带种子的(见`Dependence/common/random.md`)，但生成过程还依赖 `unordered_map` 的遍历顺序，有些地方以指针为键，同种子也可能有细微差异(EconSim同种子多次运行地图/建筑/房间/3个月经济报表一致，其它域未验证)；
+- 没配种子的流是随机播种的。
 
 所以存档存的是生成结果本身，读档时按结果重建，不调用任何 mod 的 Layout/Distribute。好处是：只改生成算法不影响旧存档，也不用为此升版本号。
 
@@ -116,3 +115,8 @@
 
 - 依赖：`Dependence/common/{save_archive,mod_state,json}.h`、`common/config.h`、`common/registry.h`、各域的 `*_save.h`。
 - 被谁依赖：`Source/Forever/Mod/ForeverSaveSubsystem`、`Source/Forever/Framework/ForeverFrameworkActor`。
+
+
+## 随机流状态(`world.random`)
+
+`BuildArchive`最后追加`world.random`段(`SAVE_SECTION_RANDOM`)：每条流 `key("mod:<id>"/"domain:<name>")、seed、state[4]`(`RandomRegistry::Snapshot`)。**这一段是可选的**——`ValidateArchive`不要求它存在，旧档没有就按config重新播种；不升版本号。读档在所有阶段之后(`ForeverFrameworkActor`的最后一个阶段)调`SaveGame::RestoreRandom`覆盖流状态——重建过程中构造Citizen等会抽随机，最后覆盖才能让随机序列停在存档那一刻。manifest里mod的`args`保留`--seed N`原样，读档`ReloadModArgs`会重新登记同样的mod种子。

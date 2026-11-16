@@ -1,4 +1,5 @@
 #include "map/terrain_factory.h"
+#include "common/random.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
 #include "map/building_factory.h"
@@ -137,6 +138,9 @@
 using namespace std;
 
 // 每个mod id声明依赖的mod id列表，约束见basic.md。
+// 把宿主(Core)的随机host绑进本DLL自己那份Dependence，见Dependence/common/random.md
+FOREVER_MOD_BIND_RANDOM
+
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	// Forever_Mod/Empty里的占位mod，见basic.md。
 	static const string kScriptEmpty = "script_empty";

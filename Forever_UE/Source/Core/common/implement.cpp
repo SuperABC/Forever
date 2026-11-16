@@ -1,4 +1,5 @@
 #include "common/implement.h"
+#include "common/random.h"
 
 #include "common/utility.h"
 #include "common/config.h"
@@ -25,6 +26,7 @@ PostImplement::PostImplement(Map* map, Populace* populace, Society* society, Sto
 }
 
 void PostImplement::Post(const JsonValue& request) {
+	CORE_RANDOM_SCOPE("core.story");
 	result = JsonValue(DATA_OBJECT);
 
 	if (request.IsObject() && request["post"].AsString() == "random citizen") {

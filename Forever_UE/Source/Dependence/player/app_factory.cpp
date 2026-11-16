@@ -1,4 +1,5 @@
 #include "app_factory.h"
+#include "common/random.h"
 
 
 using namespace std;
@@ -18,6 +19,7 @@ AppMod* AppFactory::CreateApp(const string& id) {
 	AppMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
+		RandomRegistry::BindInstance(instance, id);
 	}
 	return instance;
 }
@@ -34,6 +36,7 @@ void AppFactory::DestroyApp(AppMod* instance) {
 	if (regIt != registries.end())
 		regIt->second.deleter(instance);
 
+	RandomRegistry::UnbindInstance(instance);
 	liveInstances.erase(liveIt);
 }
 

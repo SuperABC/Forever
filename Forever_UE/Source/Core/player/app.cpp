@@ -1,4 +1,5 @@
 #include "app.h"
+#include "common/random.h"
 
 #include "common/error.h"
 
@@ -26,10 +27,12 @@ string App::GetName() const {
 }
 
 void App::Init(Canvas* canvas, PostHandle* post) {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->Init(canvas, post);
 }
 
 void App::Loop(Canvas* canvas, int ms, PostHandle* post) {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->Loop(canvas, ms, post);
 }
 

@@ -1,4 +1,5 @@
 #include "building_factory.h"
+#include "common/random.h"
 
 
 using namespace std;
@@ -20,6 +21,7 @@ BuildingMod* BuildingFactory::CreateBuilding(const string& id) {
 	BuildingMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
+		RandomRegistry::BindInstance(instance, id);
 	}
 	return instance;
 }
@@ -36,6 +38,7 @@ void BuildingFactory::DestroyBuilding(BuildingMod* instance) {
 	if (regIt != registries.end())
 		regIt->second.deleter(instance);
 
+	RandomRegistry::UnbindInstance(instance);
 	liveInstances.erase(liveIt);
 }
 
@@ -62,28 +65,37 @@ bool BuildingFactory::IsEnabled(const string& id) const {
 
 float BuildingFactory::RandomAcreage(const string& id) const {
 	auto it = registries.find(id);
-	return IsEnabled(id) ? it->second.randomAcreage() : 0.f;
+	if (!IsEnabled(id)) return 0.f;
+	RandomScope scope(RandomRegistry::GetModStream(id));
+	return it->second.randomAcreage();
 }
 
 float BuildingFactory::GetAcreageMin(const string& id) const {
 	auto it = registries.find(id);
-	return IsEnabled(id) ? it->second.acreageMin() : 0.f;
+	if (!IsEnabled(id)) return 0.f;
+	RandomScope scope(RandomRegistry::GetModStream(id));
+	return it->second.acreageMin();
 }
 
 float BuildingFactory::GetAcreageMax(const string& id) const {
 	auto it = registries.find(id);
-	return IsEnabled(id) ? it->second.acreageMax() : 0.f;
+	if (!IsEnabled(id)) return 0.f;
+	RandomScope scope(RandomRegistry::GetModStream(id));
+	return it->second.acreageMax();
 }
 
 float BuildingFactory::GetPower(const string& id, AREA_TYPE area) const {
 	auto it = registries.find(id);
-	return IsEnabled(id) ? it->second.power(area) : 0.f;
+	if (!IsEnabled(id)) return 0.f;
+	RandomScope scope(RandomRegistry::GetModStream(id));
+	return it->second.power(area);
 }
 
 void BuildingFactory::Assign(const string& id, const vector<Lot*>& lots,
 	PlacementEmitFunc emit, void* context) const {
 	auto it = registries.find(id);
 	if (it != registries.end() && IsEnabled(id)) {
+		RandomScope scope(RandomRegistry::GetModStream(id));
 		it->second.assign(lots, emit, context);
 	}
 }

@@ -1,4 +1,5 @@
 #include "player/weather.h"
+#include "common/random.h"
 
 #include "common/utility.h"
 
@@ -56,11 +57,13 @@ bool Weather::FromName(const string& name, Type& out) {
 }
 
 long long Weather::DrawIntervalMs() {
+	CORE_RANDOM_SCOPE("core.weather");
 	float minutes = max(GetRandomNormal(kIntervalMeanMinutes, kIntervalStddevMinutes), kIntervalMinMinutes);
 	return static_cast<long long>(minutes * 60.f * 1000.f);
 }
 
 Weather::Type Weather::PickRandom(int month) const {
+	CORE_RANDOM_SCOPE("core.weather");
 	const bool winter = IsWinter(month);
 	const Type light = winter ? Type::LightSnow : Type::LightRain;
 	const Type heavy = winter ? Type::HeavySnow : Type::HeavyRain;

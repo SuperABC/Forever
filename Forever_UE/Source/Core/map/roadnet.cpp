@@ -1,4 +1,5 @@
 #include "roadnet.h"
+#include "common/random.h"
 
 #include "common/error.h"
 
@@ -290,6 +291,7 @@ void Roadnet::DistributeRoadnet(int width, int height,
 	const function<pair<bool, float>(int, int)>& getWater,
 	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->DistributeRoadnet(width, height, getTerrain, getWater, getHeight, nodeStaticCount);
 
 	for (const Node& n : mod->externs) externs.push_back(new Node(n));
@@ -356,6 +358,7 @@ const TreeRequests& Roadnet::GetTrees() const {
 }
 
 void Roadnet::LayoutTrees() {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->LayoutTrees(roads);
 	trees = mod->trees;
 }
@@ -365,6 +368,7 @@ const LampRequests& Roadnet::GetLamps() const {
 }
 
 void Roadnet::LayoutLamps() {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->LayoutLamps(roads);
 	lamps = mod->lamps;
 }

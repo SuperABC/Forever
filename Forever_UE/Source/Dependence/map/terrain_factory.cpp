@@ -1,4 +1,5 @@
 #include "terrain_factory.h"
+#include "common/random.h"
 
 
 using namespace std;
@@ -18,6 +19,7 @@ TerrainMod* TerrainFactory::CreateTerrain(const string& id) {
 	TerrainMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
+		RandomRegistry::BindInstance(instance, id);
 	}
 	return instance;
 }
@@ -34,6 +36,7 @@ void TerrainFactory::DestroyTerrain(TerrainMod* instance) {
 	if (regIt != registries.end())
 		regIt->second.deleter(instance);
 
+	RandomRegistry::UnbindInstance(instance);
 	liveInstances.erase(liveIt);
 }
 

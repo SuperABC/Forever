@@ -1,4 +1,5 @@
 #include "map.h"
+#include "common/random.h"
 
 #include "common/utility.h"
 
@@ -108,6 +109,7 @@ Map::~Map() {
 }
 
 void Map::InitTerrains() {
+	CORE_RANDOM_SCOPE("core.map");
 	// 这两个回调会传进Basic等mod DLL：std::string一律按引用传，由各自模块自己拷贝——按值返回/传参时
 	// 一边分配一边释放，mod的CRT堆和Forever模块(UE的FMemory)不是同一个，超过短字符串长度(15字符，
 	// 比如"terrain_mountain")就会在释放时崩溃。
@@ -178,6 +180,7 @@ void Map::InitTerrains() {
 }
 
 void Map::InitRoadnet() {
+	CORE_RANDOM_SCOPE("core.map");
 	if (roadnet) {
 		debugf("Warning: roadnet already exists (generated or restored from save), skip InitRoadnet.\n");
 		return;
@@ -419,6 +422,7 @@ namespace {
 }
 
 void Map::InitZones() {
+	CORE_RANDOM_SCOPE("core.map");
 	// 一个Zone独占一个mod实例：先用static Assign一次扫完全图lot拿到占位请求(不需要实例)，RequestPlacement成功才CreateZone，
 	// 详见map.md"InitZones"。
 	PathLaneSpec pathSpec;
@@ -508,6 +512,7 @@ void Map::PromoteAdaptiveRemainder(Lot* parent, Lot* usedChild) {
 }
 
 void Map::InitBuildings() {
+	CORE_RANDOM_SCOPE("core.map");
 	buildingLayoutLibrary.ReadTemplates(Config::GetLayouts());
 
 	PathLaneSpec pathSpec;
@@ -776,6 +781,7 @@ void Map::ForwardBuildingHatches(Building* building) {
 }
 
 void Map::InitVegetation() {
+	CORE_RANDOM_SCOPE("core.map");
 	auto canPlace = [this](float x, float y) { return CanPlaceTree(x, y); };
 
 	// 三个宿主都支持单棵/一排/一片三种请求(TreeRequests，见feature_spec.h)，各自只提供参考系的换算
@@ -796,6 +802,7 @@ void Map::InitVegetation() {
 	for (auto& [name, building] : buildings) {
 		BuildingMod* mod = building ? building->GetMod() : nullptr;
 		if (!mod) continue;
+		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 		mod->LayoutTrees(*building, building->GetBoundaryRoads());
 		Building* host = building;
 		TreeFrame frame;
@@ -809,6 +816,7 @@ void Map::InitVegetation() {
 	for (auto& [name, zone] : zones) {
 		ZoneMod* mod = zone ? zone->GetMod() : nullptr;
 		if (!mod) continue;
+		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 		mod->LayoutTrees(zone->GetDirection(), *zone, zone->GetBoundaryRoads());
 		Zone* host = zone;
 		TreeFrame frame;
@@ -827,6 +835,7 @@ const Vegetation& Map::GetVegetation() const {
 }
 
 void Map::InitLamps() {
+	CORE_RANDOM_SCOPE("core.map");
 	int roadLamps = 0;
 	if (roadnet) {
 		roadnet->LayoutLamps();
@@ -865,15 +874,19 @@ void Map::FlushPendingBuildingRoadAccess() {
 		const void* owner;
 	};
 	unordered_map<Road*, vector<Entry>> grouped;
+	// 按Road第一次出现的顺序处理：直接遍历grouped(键是Road*地址)会让AddRoadAccessNode分配的节点id和导航邻接表顺序每次运行不同。
+	vector<Road*> roadOrder;
 	for (const PendingRoadAccess& pending : pendingBuildingRoadAccess) {
 		int side, laneIndex;
 		if (!ResolveAccessLane(pending.road, pending.isVehicle, pending.useForwardSide, side, laneIndex)) continue;
+		if (!grouped.count(pending.road)) roadOrder.push_back(pending.road);
 		grouped[pending.road].push_back({ pending.isVehicle, side, laneIndex, pending.t, pending.outsideNode, pending.isExit, pending.useForwardSide, pending.owner });
 	}
 	pendingBuildingRoadAccess.clear();
 
 	constexpr float kAccessOpeningWidth = 1.f; // 门洞大致宽度(地图单位)，供Forever层挖空，固定值不按具体门精细对应
-	for (auto& [road, entries] : grouped) {
+	for (Road* road : roadOrder) {
+		vector<Entry>& entries = grouped[road];
 		// 同一条车道内按通行方向排序(side0 t升序，side1 t降序)，匹配BreakThroughLine"fromAnchor往通行方向前进"的约定；
 		// 前三个键只是让车行/人行、各side、各车道的entry分组。
 		sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) {
@@ -1119,6 +1132,7 @@ void Map::SettleCitizen(Citizen* citizen, Room* room) {
 }
 
 void Map::BuildEstateAssets() {
+	CORE_RANDOM_SCOPE("core.map");
 	// 旧资产先从各自所有者的列表里摘掉再delete(所有者列表不拥有它们)。
 	for (EstateAsset* asset : estateAssets) {
 		if (asset->GetOwner()) asset->GetOwner()->RemoveAsset(asset);
@@ -1158,6 +1172,7 @@ void Map::BuildEstateAssets() {
 }
 
 void Map::Checkin(const Populace& populace) {
+	CORE_RANDOM_SCOPE("core.map");
 	constexpr int kAdultAge = 18;
 	constexpr int kProbabilityScale = 100;
 	constexpr int kZoneOwnershipChance = 2; // zone整体归一个随机成年人私有的百分比概率
@@ -3394,6 +3409,7 @@ void Map::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
 }
 
 bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
+	CORE_RANDOM_SCOPE("core.map");
 	// 门/电梯/资产的选项与门状态Change，全部按交互名查目标，找不到静默忽略(同Traffic::ApplyChange)。
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
 		string name = ToString(EvaluateExpression(addOption->GetName(), context));

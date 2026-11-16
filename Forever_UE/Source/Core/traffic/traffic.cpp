@@ -1,4 +1,5 @@
 #include "traffic.h"
+#include "common/random.h"
 
 #include "common/registry.h"
 #include "common/utility.h"
@@ -459,6 +460,7 @@ void Traffic::InitRoutes(Map* map) {
 }
 
 void Traffic::InitAirportVehicles(Map* map) {
+	CORE_RANDOM_SCOPE("core.traffic");
 	// 机场的飞机还没有对应的组织，先每个机位无条件停一架(不挂资产)；普通停车位的车由AssignVehicles按人分配。
 	// 车型按种类查(VehicleFactory::GetIdsByCategory)。
 	const vector<string> ids = vehicleFactory.GetIdsByCategory("plane");
@@ -487,6 +489,7 @@ void Traffic::InitAirportVehicles(Map* map) {
 
 VehicleAsset* Traffic::CreateOwnedVehicle(const string& category, Room* room, int slotIndex,
 	Citizen* ownerCitizen, Organization* ownerOrganization) {
+	CORE_RANDOM_SCOPE("core.traffic");
 	const vector<string> ids = vehicleFactory.GetIdsByCategory(category);
 	if (ids.empty()) return nullptr; // 这个种类没有任何已启用车型
 	string modId = ids[GetRandom(static_cast<int>(ids.size()))];
@@ -504,6 +507,7 @@ VehicleAsset* Traffic::CreateOwnedVehicle(const string& category, Room* room, in
 }
 
 void Traffic::AssignVehicles(const Populace& populace, const Society& society) {
+	CORE_RANDOM_SCOPE("core.traffic");
 	// 市民：每个成年人20%概率尝试在自己家所在的建筑里找一个空闲car车位(建筑里任何带车位的房间，和是不是
 	// room_parking无关)，没有就不分配。
 	int citizenVehicles = 0;

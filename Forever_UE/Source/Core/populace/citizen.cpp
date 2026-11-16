@@ -1,4 +1,5 @@
 #include "populace/citizen.h"
+#include "common/random.h"
 
 #include "common/utility.h"
 #include "common/error.h"
@@ -19,20 +20,26 @@ namespace {
 constexpr float kPersonalityStddev = 1.0f / 3.0f; // ±1边界大致对应3σ，落在范围外clamp的比例很小
 }
 
+namespace {
+	// 初始化列表里没法放作用域，所以包一层：这两个函数固定从core.populace流取。
+	float PopulaceNormal(float mean, float stddev) { CORE_RANDOM_SCOPE("core.populace"); return GetRandomNormal(mean, stddev); }
+	int PopulaceRandom(int range) { CORE_RANDOM_SCOPE("core.populace"); return GetRandom(range); }
+}
+
 Personality::Personality() :
-	appearance(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	fitness(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	energy(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	intelligence(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	eloquence(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	confidence(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	morality(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	mentality(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	imagination(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	knowledge(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	art(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	reasoning(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
-	perception(clamp(GetRandomNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)) {
+	appearance(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	fitness(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	energy(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	intelligence(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	eloquence(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	confidence(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	morality(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	mentality(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	imagination(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	knowledge(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	art(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	reasoning(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)),
+	perception(clamp(PopulaceNormal(0.0f, kPersonalityStddev), -1.0f, 1.0f)) {
 }
 
 float& Personality::operator[](PERSONALITY_TYPE type) {
@@ -139,7 +146,7 @@ Citizen::Citizen(const string& name, GENDER_TYPE gender, int birthYear, int birt
 	birthYear(birthYear),
 	birthMonth(birthMonth),
 	birthDay(birthDay),
-	avatarIndex(GetRandom(kAvatarIndexRange)) {
+	avatarIndex(PopulaceRandom(kAvatarIndexRange)) {
 }
 
 Citizen::~Citizen() {
@@ -275,6 +282,7 @@ void Citizen::ClearPosition() { hasPosition = false; }
 
 bool Citizen::IsStatsActive() const { return statsActive; }
 void Citizen::ActivateStats() {
+	CORE_RANDOM_SCOPE("core.populace");
 	if (statsActive) return;
 	statsActive = true;
 	satiety = 0.5f + GetRandom(1001) / 2000.f; // [0.5, 1]
@@ -354,6 +362,7 @@ void Citizen::GetRemainingWalk(double nowSeconds, std::vector<WalkPoint>& outPat
 float Citizen::GetWalkInstantiateProbability() const { return walkInstantiateProbability; }
 void Citizen::SetWalkInstantiateProbability(float value) { walkInstantiateProbability = std::min(1.f, std::max(0.f, value)); }
 void Citizen::RollWalkInstantiable(float globalProbability) {
+	CORE_RANDOM_SCOPE("core.populace");
 	float probability = walkInstantiateProbability >= 0.f ? walkInstantiateProbability : std::min(1.f, std::max(0.f, globalProbability));
 	walkInstantiable = probability >= 1.f || GetRandom(10000) < static_cast<int>(probability * 10000.f);
 }

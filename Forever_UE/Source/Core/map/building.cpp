@@ -1,4 +1,5 @@
 #include "building.h"
+#include "common/random.h"
 
 #include "common/error.h"
 #include "common/json.h"
@@ -842,6 +843,7 @@ int Building::GetDirection() const { return direction; }
 void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	RoomFactory& roomFactory, ComponentFactory& componentFactory, BuildingNavResult& navOut) {
 	int resolvedDirection = inputDirection;
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->Layout(resolvedDirection, *this, GetBoundaryRoads());
 	direction = resolvedDirection;
 

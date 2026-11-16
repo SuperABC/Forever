@@ -26,6 +26,7 @@
 #include "common/config.h"
 #include "common/error.h"
 #include "common/save.h"
+#include "common/random.h"
 #include "map/map_save.h"
 #include "industry/industry_save.h"
 #include "populace/populace_save.h"
@@ -227,6 +228,16 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	// 路口通行表(JunctionTraffic)是懒构建的，第一个市民开始走路(过横道时GateCrosswalk)才构建，实测卡2秒：这里先建好。
 	add(TEXT("预热交通"), [this]() {
 		if (trafficFramework) trafficFramework->GetJunctionTraffic();
+
+		// 读档：世界重建完之后再用存档里的流状态覆盖，随机序列才从存档那一刻接着走。
+		if (FForeverPendingLoad* load = FetchActiveLoad()) SaveGame::RestoreRandom(load->archive);
+		// 本局实际用到的种子(没指定的是随机出来的)：想复现就把它写进config的--seed/顶层seed。
+		for (const RandomRegistry::Entry& entry : RandomRegistry::Snapshot()) {
+			UE_LOG(LogTemp, Log, TEXT("Random: %s seed=%llu"), UTF8_TO_TCHAR(entry.key.c_str()), entry.seed);
+		}
+		if (RandomRegistry::UnscopedDraws() > 0) {
+			UE_LOG(LogTemp, Warning, TEXT("Random: 有 %llu 次GetRandom没有包在随机作用域里(不受种子控制)。"), RandomRegistry::UnscopedDraws());
+		}
 	});
 }
 

@@ -1,4 +1,5 @@
 #include "zone.h"
+#include "common/random.h"
 
 #include "common/error.h"
 
@@ -75,6 +76,7 @@ string Zone::GetAddress() const {
 
 void Zone::Layout(int inDirection) {
 	direction = inDirection;
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->Layout(direction, *this, GetBoundaryRoads());
 	scriptModName = mod->scriptModName;
 	scriptMilestones = mod->milestoneNames;

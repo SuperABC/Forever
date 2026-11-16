@@ -1,4 +1,5 @@
 #include "building_yuanshen.h"
+#include "common/random.h"
 
 #include "map/building_factory.h"
 #include "story/script_factory.h"
@@ -8,6 +9,9 @@
 
 
 // 依赖声明见building_yuanshen.md。
+// 把宿主(Core)的随机host绑进本DLL自己那份Dependence，见Dependence/common/random.md
+FOREVER_MOD_BIND_RANDOM
+
 extern "C" __declspec(dllexport) void* GetModDependencies() {
 	static std::vector<std::pair<std::string, std::vector<std::string>>> dependencies = {
 		{ YuanshenBuilding::GetId(), { "room_empty", "component_empty", "script_empty" } },

@@ -3,6 +3,7 @@
 #include "common/config.h"
 #include "common/registry.h"
 #include "common/utility.h"
+#include "common/random.h"
 #include "map/map.h"
 #include "map/map_save.h"
 #include "populace/populace_save.h"
@@ -36,6 +37,7 @@ const vector<SaveSectionVersion>& GetSaveSectionVersions() {
 		{ SAVE_SECTION_UE, 1, 1 },
 		{ SAVE_SECTION_PLAYER, 1, 1 },
 		{ SAVE_SECTION_INDUSTRY, 1, 1 },
+		{ SAVE_SECTION_RANDOM, 1, 1 },
 	};
 	return versions;
 }
@@ -446,8 +448,34 @@ SaveArchive SaveGame::BuildArchive(const SaveWorld& world) {
 		if (world.traffic) TrafficSaveCodec::Save(*world.traffic, *world.map, world.populace, world.society, archive);
 		ScriptSaveCodec::Save(world, archive);
 		if (world.player) PlayerSaveCodec::Save(*world.player, *world.map, archive);
+		// 随机流：key/seed/state。放最后——前面各codec的Save不抽随机，这里的状态就是存档那一刻的状态。
+		ByteWriter w;
+		const vector<RandomRegistry::Entry> entries = RandomRegistry::Snapshot();
+		w.U32(static_cast<uint32_t>(entries.size()));
+		for (const RandomRegistry::Entry& entry : entries) {
+			w.Str(entry.key);
+			w.U64(entry.seed);
+			for (int i = 0; i < 4; i++) w.U64(entry.state[i]);
+		}
+		archive.SetBinary(SAVE_SECTION_RANDOM, 1, w.Take());
 	}
 	return archive;
+}
+
+void SaveGame::RestoreRandom(const SaveArchive& archive) {
+	const SaveSection* section = archive.Find(SAVE_SECTION_RANDOM);
+	if (!section) return;
+	ByteReader r(section->data);
+	vector<RandomRegistry::Entry> entries;
+	const uint32_t count = r.U32();
+	for (uint32_t i = 0; i < count && !r.Failed(); i++) {
+		RandomRegistry::Entry entry;
+		entry.key = r.Str();
+		entry.seed = r.U64();
+		for (int k = 0; k < 4; k++) entry.state[k] = r.U64();
+		if (!r.Failed()) entries.push_back(entry);
+	}
+	RandomRegistry::Restore(entries);
 }
 
 vector<string> SaveGame::ValidateArchive(const SaveArchive& archive, SaveManifest& outManifest) {
@@ -473,7 +501,7 @@ vector<string> SaveGame::ValidateArchive(const SaveArchive& archive, SaveManifes
 	}
 
 	for (const SaveSectionVersion& v : GetSaveSectionVersions()) {
-		if (!archive.Find(v.name)) {
+		if (!archive.Find(v.name) && string(v.name) != SAVE_SECTION_RANDOM) {
 			errors.push_back(string("save has no section '") + v.name + "'");
 		}
 	}

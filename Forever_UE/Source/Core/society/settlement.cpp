@@ -1,4 +1,5 @@
 #include "society/settlement.h"
+#include "common/random.h"
 
 #include "society/society.h"
 #include "society/organization.h"
@@ -28,6 +29,7 @@ namespace {
 }
 
 void Settlement::InitFunds(Society& society, const vector<Citizen*>& citizens) {
+	CORE_RANDOM_SCOPE("core.society");
 	Ledger& ledger = society.GetLedger();
 
 	for (Citizen* citizen : citizens) {
@@ -46,6 +48,7 @@ void Settlement::InitFunds(Society& society, const vector<Citizen*>& citizens) {
 }
 
 void Settlement::InitFunds(Society& society, Citizen* citizen, int64_t amountCents, bool resetBaseline) {
+	CORE_RANDOM_SCOPE("core.society");
 	if (!citizen) return;
 	Ledger& ledger = society.GetLedger();
 	if (amountCents < 0) {

@@ -21,6 +21,8 @@
 // 全部Script的运行时状态(script_save.h)。读档时这一段存在就跳过开局的game_start广播，并恢复
 // 门/市民/车辆上脚本加过的交互选项。
 #define SAVE_SECTION_SCRIPTS "world.scripts"
+// 所有随机流的种子和状态(random.h的RandomRegistry)，读档后接着原序列走。这一段是可选的：旧档没有就按config重新播种。
+#define SAVE_SECTION_RANDOM "world.random"
 // UE侧状态(JSON，由ForeverSaveSubsystem读写)：当前操控的市民/车辆等。
 #define SAVE_SECTION_UE "ue"
 
@@ -158,4 +160,8 @@ public:
 	// 把每个mod类的命名计数器恢复成存档里的值(临时创建一个实例、SetInstanceCounter、再销毁)。
 	// 必须在读档重建完所有mod实例之后调用。
 	static void RestoreInstanceCounters(const SaveManifest& manifest);
+
+	// 把存档里的随机流状态覆盖到RandomRegistry(存档没有这一段=什么都不做)。必须在读档重建完世界之后调用——
+	// 重建过程中构造Citizen等会抽随机，最后覆盖才能让流停在存档时的位置。
+	static void RestoreRandom(const SaveArchive& archive);
 };

@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include "common/random.h"
+
 
 using namespace std;
 
@@ -53,6 +55,10 @@ void* ModLoader::LoadHandle(const string& dllPath) {
 		return nullptr;
 
 	modHandles[dllPath] = handle;
+	// 每个DLL静态链接各自一份Dependence：把Core的随机host交给它，GetRandom才会用到Core的流。没导出就退回不可控随机。
+	if (auto bind = reinterpret_cast<void(*)(RandomHost*)>(GetProcAddress(handle, kBindRandomHostSymbol))) {
+		bind(GetRandomHost());
+	}
 	return handle;
 }
 

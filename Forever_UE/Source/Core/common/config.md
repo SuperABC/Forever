@@ -147,3 +147,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 加载的config里某些mod id当前dll_paths下没有dll提供，UI里不会显示。`WriteConfig`保存前调`PruneUndiscoveredMods`：把这些id从各`<concept>_mods`里删掉
 (`IsModDiscovered`判断)，并且main_story不是"已启用的script mod"时清空。`NormalizeUniqueConcepts`单选收口时优先留第一个已发现的，不会被前面藏起来的陈旧id挤掉。
 `SetModEnabled`取消启用的script mod正是main_story时同时清空main_story。
+
+## 种子
+- 顶层`"seed"`(数字或字符串)：Core各域(`core.map/populace/society/traffic/weather/story`)随机流的种子来源，每域按`hash(seed, 域名)`派生；不写=随机。
+- `<concept>_mods`条目里的`--seed N`：该mod自己的随机流种子，如`"building_residence_high --seed 7"`；不写=随机。实际用到的种子在开局时打到日志(`Random: ...`)，想复现就把它填回去。

@@ -1,4 +1,5 @@
 #include "society/society.h"
+#include "common/random.h"
 
 #include "society/organization.h"
 #include "society/job.h"
@@ -21,6 +22,7 @@ namespace {
 	// 同事关系Relation随机初始化——familiarity/trust中等，competing比同学/亲属更高一些，
 	// 体现职场竞争，数值量级参考，实现后可再调。
 	void RandomizeColleagueRelation(Citizen* citizen, const string& otherName) {
+		CORE_RANDOM_SCOPE("core.society");
 		citizen->SetAcquaintanceValue(otherName, RELATION_FAMILIARITY, clamp(GetRandomNormal(0.5f, 0.2f), 0.0f, 1.0f));
 		citizen->SetAcquaintanceValue(otherName, RELATION_RESPECT, clamp(GetRandomNormal(0.5f, 0.2f), 0.0f, 1.0f));
 		citizen->SetAcquaintanceValue(otherName, RELATION_FAVOUR, clamp(GetRandomNormal(0.45f, 0.2f), 0.0f, 1.0f));
@@ -78,6 +80,7 @@ Party Society::OwnerOf(const Room* room) const {
 }
 
 void Society::AssignShareholders(const vector<Citizen*>& citizens, const Time& now) {
+	CORE_RANDOM_SCOPE("core.society");
 	vector<Citizen*> adults;
 	for (Citizen* citizen : citizens) {
 		if (citizen && citizen->IsInEconomy() && citizen->GetAge(now) >= kMinAdultAge) adults.push_back(citizen);
@@ -108,6 +111,7 @@ void Society::AssignShareholders(const vector<Citizen*>& citizens, const Time& n
 }
 
 void Society::Init(const vector<Component*>& components) {
+	CORE_RANDOM_SCOPE("core.society");
 	roomOwnersDirty = true;
 	// 第一步：直接读各已注册组织类型的static组件需求(不构造mod实例)，只读引用。
 	unordered_map<string, const unordered_map<string, pair<int, int>>*> requirementsByType;
@@ -184,6 +188,7 @@ void Society::RecruitCitizens(const vector<Citizen*>& citizens, const Time& now)
 }
 
 int Society::MatchUnemployed(const vector<Citizen*>& citizens, const Time& now) {
+	CORE_RANDOM_SCOPE("core.society");
 	vector<Job*> vacancies;
 	for (Organization* organization : organizations) {
 		for (Job* job : organization->GetJobs()) {
@@ -247,6 +252,7 @@ Organization* Society::FindOrganizationOfJob(const Job* job) const {
 }
 
 bool Society::RecruitCitizen(Citizen* citizen, const Time& now) {
+	CORE_RANDOM_SCOPE("core.society");
 	if (!citizen || citizen->GetJob()) return false;
 	int age = citizen->GetAge(now);
 	if (age < kMinAdultAge || age >= policy.retirementAge) return false;
@@ -300,6 +306,7 @@ bool Society::ApplyChange(const Change* change, const ScriptContext& context) {
 const vector<Organization*>& Society::GetOrganizations() const { return organizations; }
 
 void Society::GenerateEmploymentHistory(const vector<Citizen*>& citizens, int currentYear) {
+	CORE_RANDOM_SCOPE("core.society");
 	constexpr int kHireEventChancePercent = 15; // 对应平均约6-7年一任
 	constexpr int kColleagueChancePercent = 40;
 

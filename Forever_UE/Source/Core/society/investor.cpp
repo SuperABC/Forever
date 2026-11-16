@@ -1,4 +1,5 @@
 #include "society/investor.h"
+#include "common/random.h"
 
 #include "society/society.h"
 #include "society/organization.h"
@@ -45,6 +46,7 @@ double Investor::Risk(const Citizen* citizen) {
 }
 
 Investor::Summary Investor::Daily(Society& society, const vector<Citizen*>& citizens, const Time& now, int64_t dayIndex) {
+	CORE_RANDOM_SCOPE("core.society");
 	Summary summary;
 	Ledger& ledger = society.GetLedger();
 	Treasury& treasury = society.GetTreasury();
@@ -134,6 +136,7 @@ Investor::Summary Investor::Daily(Society& society, const vector<Citizen*>& citi
 
 int64_t Investor::SubscribeBonds(Society& society, const vector<Citizen*>& citizens, const Time& now,
 	int64_t needed, int rateBp, int termDays) {
+	CORE_RANDOM_SCOPE("core.society");
 	Ledger& ledger = society.GetLedger();
 	const GovernmentPolicy& policy = society.GetPolicy();
 	int64_t raised = 0;

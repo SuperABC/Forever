@@ -1,4 +1,5 @@
 #include "lamp.h"
+#include "common/random.h"
 
 #include "common/utility.h"
 
@@ -11,6 +12,7 @@ namespace {
 	const float kDegToRad = 0.01745329252f;
 
 	float RandomUnit() {
+		CORE_RANDOM_SCOPE("core.map");
 		return GetRandom(100000) / 100000.f;
 	}
 }

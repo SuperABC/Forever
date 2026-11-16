@@ -380,6 +380,13 @@ void AVehicleCommandController::BuildPath(const TArray<FVector>& rawInput)
 		const float segLen = segment.Size();
 		if (segLen < 1.f) continue;
 		const int32 pieces = FMath::Max(1, FMath::CeilToInt(segLen / pathSpacing));
+		// 仅诊断(不改变行为)：单段细分出上千个点基本是路径里混进了坏点(NaN/极远坐标)，下面的循环会因此卡很久
+		// (2026-11-16 游戏内10:40的分钟级卡顿即此处)。先把车辆和坐标打出来，方便下次发生时查根因。
+		if (!(pieces <= 5000)) {
+			UE_LOG(LogTemp, Error, TEXT("BuildPath: 车辆 %s 的路径第 %d 段长度异常(%.0f uu，细分 %d 段)。起点(%.0f, %.0f, %.0f) 终点(%.0f, %.0f, %.0f)，共 %d 个点。"),
+				drivenVehicle.IsValid() ? *drivenVehicle->GetName() : TEXT("?"), i, segLen, pieces, from.X, from.Y, from.Z,
+				raw[i].X, raw[i].Y, raw[i].Z, raw.Num());
+		}
 		for (int32 k = 1; k <= pieces; k++) {
 			const FVector p = from + segment * (static_cast<float>(k) / pieces);
 			const bool bLast = (i == raw.Num() - 1 && k == pieces);

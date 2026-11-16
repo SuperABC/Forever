@@ -1,4 +1,5 @@
 #include "station_factory.h"
+#include "common/random.h"
 
 
 using namespace std;
@@ -19,6 +20,7 @@ StationMod* StationFactory::CreateStation(const string& id) {
 	StationMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
+		RandomRegistry::BindInstance(instance, id);
 	}
 	return instance;
 }
@@ -35,6 +37,7 @@ void StationFactory::DestroyStation(StationMod* instance) {
 	if (regIt != registries.end())
 		regIt->second.deleter(instance);
 
+	RandomRegistry::UnbindInstance(instance);
 	liveInstances.erase(liveIt);
 }
 

@@ -1,4 +1,5 @@
 #include "zone_factory.h"
+#include "common/random.h"
 
 
 using namespace std;
@@ -19,6 +20,7 @@ ZoneMod* ZoneFactory::CreateZone(const string& id) {
 	ZoneMod* instance = it->second.creator(argsIt->second);
 	if (instance) {
 		liveInstances[instance] = id;
+		RandomRegistry::BindInstance(instance, id);
 	}
 	return instance;
 }
@@ -35,6 +37,7 @@ void ZoneFactory::DestroyZone(ZoneMod* instance) {
 	if (regIt != registries.end())
 		regIt->second.deleter(instance);
 
+	RandomRegistry::UnbindInstance(instance);
 	liveInstances.erase(liveIt);
 }
 
@@ -63,6 +66,7 @@ void ZoneFactory::Assign(const string& id, const vector<Lot*>& lots,
 	PlacementEmitFunc emit, void* context) const {
 	auto it = registries.find(id);
 	if (it != registries.end() && IsEnabled(id)) {
+		RandomScope scope(RandomRegistry::GetModStream(id));
 		it->second.assign(lots, emit, context);
 	}
 }

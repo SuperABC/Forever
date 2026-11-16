@@ -1,4 +1,5 @@
 #include "society/organization.h"
+#include "common/random.h"
 
 #include "society/job.h"
 #include "story/script.h"
@@ -60,30 +61,36 @@ void Organization::DesignJobs(bool reset) {
 }
 
 Organization::JobChange Organization::ReconcileJobs() {
+	CORE_RANDOM_SCOPE("core.society");
 	JobChange change;
 	if (!mod) return change;
 
 	unordered_map<string, Room*> roomByName;
 	for (Room* room : WorkspaceRooms()) roomByName[room->GetName()] = room;
 
-	// 计划：(房间, 岗位类型) -> 条数；每个房间总计划数不超过容量的kMaxOvercrowd倍，超出的条目忽略。
-	using Key = pair<Room*, string>;
+	// 键用(房间名, 岗位类型)而不是(Room*, 类型)：map/set按键排序遍历，Room*是内存地址、每次运行不同，
+	// 会让jobs的创建顺序(进而招聘的空缺顺序)随地址变化，同种子也不可复现。房间名在地图里唯一。
+	using Key = pair<string, string>;
+	unordered_map<string, Room*> roomOfName = roomByName; // 已有岗位所在的房间不一定还是工作区，也要能按名字找回
+	for (Job* job : jobs) {
+		if (job && job->GetPosition()) roomOfName.emplace(job->GetPosition()->GetName(), job->GetPosition());
+	}
 	map<Key, int> want;
-	map<Room*, int> roomTotal;
+	unordered_map<string, int> roomTotal;
 	for (const Vacancy& v : mod->vacancies) {
 		auto it = roomByName.find(v.room);
 		if (it == roomByName.end()) continue;
 		Room* room = it->second;
-		if (roomTotal[room] >= max(1, room->WorkspaceCapacity()) * kMaxOvercrowd) continue;
-		roomTotal[room]++;
-		want[{ room, v.type }]++;
+		if (roomTotal[v.room] >= max(1, room->WorkspaceCapacity()) * kMaxOvercrowd) continue;
+		roomTotal[v.room]++;
+		want[{ v.room, v.type }]++;
 	}
 
 	// 现状：开放的和已关闭的Job按(房间, 类型)分组。
 	map<Key, vector<Job*>> openJobs, closedJobs;
 	for (Job* job : jobs) {
 		if (!job) continue;
-		Key key{ job->GetPosition(), job->GetType() };
+		Key key{ job->GetPosition() ? job->GetPosition()->GetName() : string(), job->GetType() };
 		(job->IsOpen() ? openJobs : closedJobs)[key].push_back(job);
 	}
 
@@ -107,7 +114,7 @@ Organization::JobChange Organization::ReconcileJobs() {
 					change.opened++;
 					continue;
 				}
-				Job* job = new Job(jobFactory, scriptFactory, key.second, key.first);
+				Job* job = new Job(jobFactory, scriptFactory, key.second, roomOfName.at(key.first));
 				// 类型对应的JobMod未启用时Job::GetType()为空，这种哑岗位会白占citizen名额，丢弃。
 				if (job->GetType().empty()) {
 					delete job;

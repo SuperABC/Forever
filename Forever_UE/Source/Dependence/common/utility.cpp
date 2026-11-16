@@ -1,6 +1,7 @@
 #include "utility.h"
 
 #include "error.h"
+#include "common/random.h"
 
 #include <ctime>
 #include <chrono>
@@ -32,6 +33,11 @@ int GetRandom(int range) {
 	// 范围无效时直接返回0
 	if (range <= 0)return 0;
 
+	// 当前有作用域(宿主设了这个mod/这个域的种子流)就从流里取，可复现；否则退回不可控随机并计数(排查漏包用)。
+	RandomHost* host = GetRandomHost();
+	if (host->current) return host->current->Range(range);
+	host->unscopedDraws++;
+
 	mt19937 rng(random_device{}());
 	uniform_int_distribution<int> dist(0, range - 1);
 	int ret = dist(rng);
@@ -40,6 +46,16 @@ int GetRandom(int range) {
 }
 
 float GetRandomNormal(float mean, float stddev) {
+	RandomHost* host = GetRandomHost();
+	if (host->current) {
+		// Box-Muller，固定消耗2次抽取，保证序列可复现
+		const double u1 = 1.0 - host->current->NextDouble();
+		const double u2 = host->current->NextDouble();
+		const double z = sqrt(-2.0 * log(u1)) * cos(6.283185307179586 * u2);
+		return static_cast<float>(mean + stddev * z);
+	}
+	host->unscopedDraws++;
+
 	mt19937 rng(random_device{}());
 	normal_distribution<float> dist(mean, stddev);
 	return dist(rng);

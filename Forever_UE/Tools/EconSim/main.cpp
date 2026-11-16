@@ -1,4 +1,5 @@
 #include "map/map.h"
+#include "common/random.h"
 #include "populace/populace.h"
 #include "society/society.h"
 #include "society/organization.h"
@@ -717,6 +718,31 @@ static int RealMain(int argc, char** argv) {
 		for (Organization* organization : society.GetOrganizations()) jobs += (int)organization->GetJobs().size();
 		printf("CENSUS %zu %d %d %d %d\n", populace.GetCitizens().size(), adults, working, jobs, employed);
 		return 0;
+	}
+
+	for (const RandomRegistry::Entry& entry : RandomRegistry::Snapshot()) printf("[Random] %s seed=%llu\n", entry.key.c_str(), static_cast<unsigned long long>(entry.seed));
+	printf("[Random] 未包作用域的抽取 %llu 次\n", static_cast<unsigned long long>(RandomRegistry::UnscopedDraws()));
+
+	// 导航图指纹：按节点id排序后，把每个节点的邻接表(含顺序)和端点坐标哈进去；同种子应一致。
+	{
+		auto fingerprint = [](const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph) {
+			std::vector<int> ids;
+			for (const auto& entry : graph) ids.push_back(entry.first);
+			std::sort(ids.begin(), ids.end());
+			unsigned long long h = 1469598103934665603ULL;
+			auto mix = [&h](unsigned long long v) { h ^= v; h *= 1099511628211ULL; };
+			for (int id : ids) {
+				mix(static_cast<unsigned long long>(id));
+				for (const auto& [to, conn] : graph.at(id)) {
+					mix(static_cast<unsigned long long>(to));
+					mix(static_cast<unsigned long long>(conn->GetStart().GetX() * 100.f) + static_cast<unsigned long long>(conn->GetEnd().GetY() * 100.f));
+				}
+			}
+			return std::make_pair(ids.size(), h);
+		};
+		const auto vehicle = fingerprint(city.GetVehicleNavGraph());
+		const auto pedestrian = fingerprint(city.GetPedestrianNavGraph());
+		printf("[NavHash] 车行 节点%zu hash=%llx | 步行 节点%zu hash=%llx\n", vehicle.first, vehicle.second, pedestrian.first, pedestrian.second);
 	}
 
 	if (argc > 4 && string(argv[4]) == "report") {

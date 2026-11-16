@@ -68,3 +68,6 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 种子(`--seed`)
+`ReloadModArgs`先`RandomRegistry::Reset()`，再读config顶层`seed`登记全局种子，并对每个`<concept>_mods`条目用`RandomRegistry::ExtractSeed`剥掉`--seed N`(mod构造函数收到的参数里没有它)、把种子登记给该mod id。21个concept因此都自动支持`--seed`。`ModLoader::LoadHandle`加载DLL后调用它导出的`BindRandomHost`(见`FOREVER_MOD_BIND_RANDOM`)，把Core的随机host交给DLL自己那份Dependence。详见`Dependence/common/random.md`。

@@ -22,8 +22,7 @@
   整数/浮点/字符串），`ToString`则会把浮点数的多余尾零裁掉（整数值输出`5`，`2.5`输出`2.5`），方便脚本里做字符串比较/拼接。存档按类型下标+二进制值写变量，不经过`ToString`。
 - **`OBJECT_HOLDER`/`COSTOM_INIT`/`COSTOM_RUNTIME`是纯标记宏**（定义为空），用于在声明处
   标注"这个指针成员持有对象所有权"之类的语义，不影响编译，纯粹给读代码的人看。
-- **`GetRandomNormal(mean, stddev)`**：正态分布随机浮点数，和`GetRandom(int)`同样的
-  风格——每次调用现场构造`mt19937`+`normal_distribution`，不做静态/线程局部引擎优化。给
+- **`GetRandomNormal(mean, stddev)`**：正态分布随机浮点数，和`GetRandom(int)`一样先看随机作用域(有流就用Box-Muller，固定消耗2次抽取)，没有才退回现场构造`mt19937`+`normal_distribution`。给
   `Populace`生成市民`Personality`（-1到1正态分布）+四类人际关系的`Relation`数值用，见
   `Source/Core/populace/populace.md`"四类人际关系生成"一节。
 - **`Time`不依赖`<chrono>`做内部存储**，全部用年/月/日/时/分/秒/毫秒整数字段+手写的进位/借位
@@ -41,7 +40,7 @@
   不变"，排查记录见`Source/Core/traffic/route.md`"`Time::DifferenceInSeconds`"一节。
 
 - **`GetRandom(Time, Time)`**：返回[begin,end]内随机一天（时间部分归零到0点），begin>end会自动交换。
-- **`GetRandom(int range)`**：返回[0,range-1]，range<=0时返回0；同样每次现场构造`mt19937`。
+- **`GetRandom(int range)`**：返回[0,range-1]，range<=0时返回0。有随机作用域(`RandomScope`)时从当前种子流取(可复现)，没有作用域才退回每次现场构造`mt19937(random_device)`的不可控随机，详见`random.md`。
 - **`ToInt`/`ToDouble`/`ToBool`对string分支有既定取值**：数值转换返回0，`ToBool`空串false、非空true，调用方可以依赖。
 
 ## 依赖关系

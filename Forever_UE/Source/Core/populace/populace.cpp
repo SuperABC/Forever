@@ -1,4 +1,5 @@
 #include "populace/populace.h"
+#include "common/random.h"
 
 #include "common/utility.h"
 
@@ -287,6 +288,7 @@ Populace::~Populace() {
 }
 
 void Populace::Init(int accommodation, int workCapacity) {
+	CORE_RANDOM_SCOPE("core.populace");
 	InitNames();
 	int target = static_cast<int>(accommodation * expf(GetRandom(1000) / 1000.0f - 0.5f));
 	target = min(target, workCapacity); // 工位总容量只封顶，不参与上面的随机采样
@@ -337,6 +339,7 @@ void Populace::InitNames() {
 }
 
 string Populace::PickSchedulerId() const {
+	CORE_RANDOM_SCOPE("core.populace");
 	// 累加所有已注册Scheduler类型的权重建CDF，和Society::Init选Organization类型同一套
 	// 算法（society.cpp），用SchedulerFactory::GetPower(id)单个查询建CDF。
 	vector<string> ids = schedulerFactory.GetRegisteredIds();
@@ -383,6 +386,7 @@ Citizen* Populace::SpawnCitizen(const string& name, GENDER_TYPE gender, int birt
 }
 
 Citizen* Populace::SpawnImmigrant(int year) {
+	CORE_RANDOM_SCOPE("core.populace");
 	constexpr int kMinAge = 20;
 	constexpr int kAgeSpan = 26; // 20~45岁
 	constexpr int kNameAttempts = 8;
@@ -501,6 +505,7 @@ Citizen* Populace::FindCitizenByName(const std::string& name) const {
 }
 
 void Populace::GenerateCitizens(int target) {
+	CORE_RANDOM_SCOPE("core.populace");
 	// 临时男女数组及年表，见populace.md"年表模拟算法"一节。
 	vector<Human> females(1, { -1, "", 0, 0, LIFE_DEAD, GENDER_FEMALE, -1, -1, -1, {} });
 	vector<Human> males(1, { -1, "", 0, 0, LIFE_DEAD, GENDER_MALE, -1, -1, -1, {} });
@@ -746,6 +751,7 @@ void Populace::GenerateCitizens(int target) {
 }
 
 void Populace::GenerateRomanticRelations() {
+	CORE_RANDOM_SCOPE("core.populace");
 	// 已婚：恋爱开始年份 + 更早的恋爱史 + 婚外情人
 	for (Citizen* citizen : citizens) {
 		Citizen* spouse = citizen->GetSpouse();
@@ -807,6 +813,7 @@ void Populace::GenerateRomanticRelations() {
 }
 
 void Populace::GenerateEducations() {
+	CORE_RANDOM_SCOPE("core.populace");
 	constexpr int kElementaryStartAge = 6;
 	constexpr int kMiddleStartAge = 12;
 	constexpr int kUniversityStartAge = 18;

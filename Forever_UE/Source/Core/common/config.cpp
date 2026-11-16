@@ -22,6 +22,8 @@ unordered_map<string, vector<string>> Config::resourcePaths = {};
 unordered_map<string, vector<string>> Config::pluginPaths = {};
 unordered_map<string, vector<string>> Config::pakPaths = {};
 string Config::mainStoryScriptModName = "";
+bool Config::hasGlobalSeed = false;
+unsigned long long Config::globalSeed = 0;
 unordered_map<string, vector<pair<string, string>>> Config::conceptMods = {};
 unordered_map<string, vector<pair<string, string>>> Config::dllConceptIds = {};
 unordered_map<string, vector<string>> Config::modDependences = {};
@@ -117,6 +119,8 @@ void Config::ReadConfig(const string& path) {
 	pluginPaths.clear();
 	pakPaths.clear();
 	mainStoryScriptModName.clear();
+	hasGlobalSeed = false;
+	globalSeed = 0;
 	conceptMods.clear();
 	dllConceptIds.clear();
 	modDependences.clear();
@@ -165,6 +169,19 @@ void Config::ReadConfig(const string& path) {
 	}
 
 	mainStoryScriptModName = root["main_story"].AsString();
+
+	hasGlobalSeed = false;
+	globalSeed = 0;
+	if (root["seed"].IsString()) {
+		const string text = root["seed"].AsString();
+		char* end = nullptr;
+		unsigned long long value = strtoull(text.c_str(), &end, 10);
+		if (!text.empty() && end != text.c_str()) { hasGlobalSeed = true; globalSeed = value; }
+	}
+	else if (root["seed"].IsNumeric()) {
+		hasGlobalSeed = true;
+		globalSeed = static_cast<unsigned long long>(root["seed"].AsDouble());
+	}
 
 	for (const auto& scriptPath : root["story_scripts"]) {
 		// 和dll_paths/resource_paths同一个相对路径解析规则，相对configDir。
@@ -426,6 +443,11 @@ string Config::GetResourceFilePath(const string& fileName) {
 	return string();
 }
 
+bool Config::GetGlobalSeed(unsigned long long& seed) {
+	seed = globalSeed;
+	return hasGlobalSeed;
+}
+
 string Config::GetMainStoryScriptModName() {
 	return mainStoryScriptModName;
 }
@@ -678,6 +700,7 @@ void Config::WriteConfig(const string& path) {
 	root["resource_paths"] = resourceArr;
 
 	root["main_story"] = JsonValue(mainStoryScriptModName);
+	if (hasGlobalSeed) root["seed"] = JsonValue(to_string(globalSeed));
 
 	JsonValue storyArr(DATA_ARRAY);
 	for (const string& script : storyScriptPaths) {

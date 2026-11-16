@@ -1,4 +1,5 @@
 #include "terrain.h"
+#include "common/random.h"
 
 #include "common/error.h"
 
@@ -43,6 +44,7 @@ float Terrain::GetPriority() const {
 }
 
 void Terrain::SetupTexture() const {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->SetupTexture();
 }
 
@@ -55,6 +57,7 @@ void Terrain::DistributeTerrain(int width, int height,
 	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight,
 	const function<bool(int, int, bool, float)>& setWater,
 	const function<bool(int, int, const float*)>& setFineHeights) const {
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	mod->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater, setFineHeights);
 }
 

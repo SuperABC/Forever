@@ -48,6 +48,9 @@ public:
 	// main_story字段，缺失返回空串(不兜底默认值)
 	static std::string GetMainStoryScriptModName();
 
+	// 顶层"seed"(Core各域随机流的种子来源)；没配置返回false。数字或字符串都接受。
+	static bool GetGlobalSeed(unsigned long long& seed);
+
 	// 目前固定是bare名"test"，集中在这里避免字面量重复
 	static std::string GetMainStoryScriptPath();
 
@@ -157,6 +160,9 @@ private:
 	static std::unordered_map<std::string, std::vector<std::string>> pakPaths;
 
 	static std::string mainStoryScriptModName;
+
+	static bool hasGlobalSeed;
+	static unsigned long long globalSeed;
 
 	// "<concept>_mods" key -> (id, 参数字符串)列表，既是SetModArgs的参数来源，也是启用状态的唯一真相
 	static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> conceptMods;

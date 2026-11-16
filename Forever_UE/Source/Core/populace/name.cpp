@@ -1,4 +1,5 @@
 #include "name.h"
+#include "common/random.h"
 
 #include "common/error.h"
 
@@ -47,6 +48,7 @@ namespace {
 
 string Name::GenerateName(bool allowMale, bool allowFemale, bool allowNeutral) const {
 	string result;
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	for (int attempt = 0; attempt < kMaxReserveRetryAttempts; attempt++) {
 		mod->GenerateName(allowMale, allowFemale, allowNeutral, [&](const string& value) { result = value; });
 		if (result.empty() || reserve.find(result) == reserve.end()) return result;
@@ -58,6 +60,7 @@ string Name::GenerateName(bool allowMale, bool allowFemale, bool allowNeutral) c
 string Name::GenerateName(const string& surname,
 	bool allowMale, bool allowFemale, bool allowNeutral) const {
 	string result;
+	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 	for (int attempt = 0; attempt < kMaxReserveRetryAttempts; attempt++) {
 		mod->GenerateName(surname, allowMale, allowFemale, allowNeutral, [&](const string& value) { result = value; });
 		if (result.empty() || reserve.find(result) == reserve.end()) return result;

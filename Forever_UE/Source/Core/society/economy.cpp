@@ -1,4 +1,5 @@
 #include "society/economy.h"
+#include "common/random.h"
 
 #include "society/society.h"
 #include "society/organization.h"
@@ -719,6 +720,7 @@ void Economy::SyncIndustry(Society& society, Industry& industry) {
 
 void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citizens, const Time& now,
 	DailyReport& report) {
+	CORE_RANDOM_SCOPE("core.society");
 	Ledger& ledger = society.GetLedger();
 	Treasury& treasury = society.GetTreasury();
 

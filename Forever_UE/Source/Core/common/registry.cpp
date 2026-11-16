@@ -1,6 +1,7 @@
 #include "registry.h"
 
 #include "common/config.h"
+#include "common/random.h"
 
 
 using namespace std;
@@ -10,6 +11,18 @@ namespace {
 		unordered_map<string, string> args;
 		for (const auto& [id, value] : entries) {
 			args[id] = value;
+		}
+		return args;
+	}
+
+	// ToArgsMap + 剥离每个条目里的"--seed N"并登记到RandomRegistry(mod构造函数收到的参数里没有--seed)。
+	unordered_map<string, string> ExtractSeeds(const vector<pair<string, string>>& entries) {
+		unordered_map<string, string> args;
+		for (const auto& [id, value] : entries) {
+			bool hasSeed = false;
+			uint64_t seed = 0;
+			args[id] = RandomRegistry::ExtractSeed(value, hasSeed, seed);
+			RandomRegistry::SetModSeed(id, hasSeed, seed);
 		}
 		return args;
 	}
@@ -67,27 +80,31 @@ Registry::Registry() {
 }
 
 void Registry::ReloadModArgs() {
-	terrainFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("terrain_mods")));
-	roadnetFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("roadnet_mods")));
-	zoneFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("zone_mods")));
-	buildingFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("building_mods")));
-	componentFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("component_mods")));
-	roomFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("room_mods")));
-	assetFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("asset_mods")));
-	appFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("app_mods")));
-	puzzleFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("puzzle_mods")));
-	weaponFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("weapon_mods")));
-	nameFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("name_mods")));
-	schedulerFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("scheduler_mods")));
-	jobFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("job_mods")));
-	organizationFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("organization_mods")));
-	scriptFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("script_mods")));
-	productFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("product_mods")));
-	storageFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("storage_mods")));
-	manufactureFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("manufacture_mods")));
-	routeFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("route_mods")));
-	stationFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("station_mods")));
-	vehicleFactory.SetModArgs(ToArgsMap(Config::GetConceptMods("vehicle_mods")));
+	// 种子登记：新开局/读档都会走到这里，先清空旧流再按config重新登记；读档随后用存档状态覆盖流(见save)。
+	RandomRegistry::Reset();
+	unsigned long long globalSeed = 0;
+	RandomRegistry::SetGlobalSeed(Config::GetGlobalSeed(globalSeed), globalSeed);
+	terrainFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("terrain_mods")));
+	roadnetFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("roadnet_mods")));
+	zoneFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("zone_mods")));
+	buildingFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("building_mods")));
+	componentFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("component_mods")));
+	roomFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("room_mods")));
+	assetFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("asset_mods")));
+	appFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("app_mods")));
+	puzzleFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("puzzle_mods")));
+	weaponFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("weapon_mods")));
+	nameFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("name_mods")));
+	schedulerFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("scheduler_mods")));
+	jobFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("job_mods")));
+	organizationFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("organization_mods")));
+	scriptFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("script_mods")));
+	productFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("product_mods")));
+	storageFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("storage_mods")));
+	manufactureFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("manufacture_mods")));
+	routeFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("route_mods")));
+	stationFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("station_mods")));
+	vehicleFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("vehicle_mods")));
 }
 
 bool Registry::CheckModRegistered(const string& id) const {

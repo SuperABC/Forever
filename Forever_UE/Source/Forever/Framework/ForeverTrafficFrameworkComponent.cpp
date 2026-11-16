@@ -18,6 +18,7 @@
 #include "map/room.h"
 #include "map/roadnet.h"
 #include "common/utility.h"
+#include "common/random.h"
 #include "story/event.h"
 
 #include "Engine/Engine.h"
@@ -1653,8 +1654,9 @@ void UForeverTrafficFrameworkComponent::StartBusTestRun(const FString& vehicleNa
 	ABusController* controller = GetOrCreateBusController(*state);
 	if (!controller) return;
 
-	const TArray<int32>& loop = loops[FMath::RandRange(0, loops.Num() - 1)];
-	const int32 stopIndex = FMath::RandRange(0, loop.Num() - 1);
+	CORE_RANDOM_SCOPE("core.traffic");
+	const TArray<int32>& loop = loops[GetRandom(loops.Num())];
+	const int32 stopIndex = GetRandom(loop.Num());
 	controller->ClearCommands();
 	controller->PushCommand(FVehicleCommand::MakeNavigate(loop[stopIndex]));
 	FVehicleCommand loopCommand = FVehicleCommand::MakeLoop(loop, (stopIndex + 1) % loop.Num());
@@ -2080,7 +2082,8 @@ Room* UForeverTrafficFrameworkComponent::PickRandomVehicleRoom(Vehicle* core, in
 		if (index >= 0) candidates.Add(TPair<Room*, int32>(room, index));
 	}
 	if (candidates.Num() == 0) return nullptr;
-	const TPair<Room*, int32>& picked = candidates[FMath::RandRange(0, candidates.Num() - 1)];
+	CORE_RANDOM_SCOPE("core.traffic");
+	const TPair<Room*, int32>& picked = candidates[GetRandom(candidates.Num())];
 	outSlotIndex = picked.Value;
 	return picked.Key;
 }

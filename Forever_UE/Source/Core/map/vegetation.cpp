@@ -1,4 +1,5 @@
 #include "vegetation.h"
+#include "common/random.h"
 
 #include "common/utility.h"
 
@@ -16,6 +17,7 @@ namespace {
 	const float kScaleMax = 1.2f;
 
 	float RandomUnit() {
+		CORE_RANDOM_SCOPE("core.map");
 		return GetRandom(100000) / 100000.f;
 	}
 }
