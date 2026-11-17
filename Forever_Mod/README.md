@@ -92,6 +92,20 @@ lambda内部完成到基类指针的隐式转换。
 
 **未做**：`BusVehicle`这个C++类本身没搬进`Forever_Mod`(它是纯C++ mod，搬法和`YuanshenBuilding`一样，没有技术障碍)；线路公交用的`transitMeshPath`、脚本也没搬。
 
+## 用mod提供特效蓝图
+
+**结论**：爆炸这类特效是主程序里的C++类`AForeverExplosionEffect`(`Forever_UE/Source/Forever/Player/ForeverExplosionEffect.*`，参数都是`UPROPERTY(EditAnywhere)`)。mod不能带新的UE C++类，但可以带**父类为它、只覆盖参数的蓝图**：`Test`迷你工程的plugin里的`/Test/Effect/BP_GrenadeExplosion`(手雷爆炸，半径/时长/烟比枪击大)。脚本里用`spawn_effect`的`effect`字段按路径引用它(`Forever_UE/Resource/Story/asset_grenade.script`)，没有这个蓝图/没装Test plugin时不生成特效，日志里有一条Warning“特效蓝图加载失败”。
+
+**迷你工程里的Forever桩模块**(`Forever_Mod/Test/UE/Test/Source/Forever`，Editor-only)：蓝图要在迷你工程的编辑器里选到父类、保存、cook，就必须有一个叫`Forever`的模块里有这个类。**但不需要整套主程序源码**——特效类是纯UE类，只把`ForeverExplosionEffect.h/.cpp`和`ForeverExplosionShake.h/.cpp`从主工程`Source/Forever/Player/`建**NTFS硬链接**(PowerShell `New-Item -ItemType HardLink`)到迷你工程`Source/Forever/Player/`，`Forever.Build.cs`只依赖`Core/CoreUObject/Engine`，不链接`Dependence`/`Core`。游戏运行时用的永远是主程序exe里的同名类，这个模块不进游戏。以后要给别的类做蓝图，同样把那个类的头/源文件硬链接进来(类依赖`Core`内核的就不适合)，保持"类名/`UPROPERTY`名一经发布就是兼容接口"。硬链接被"替换文件"方式保存的工具断开时要重建。
+
+**重建/生成蓝图**(迷你工程根目录`Forever_Mod/Test/UE/Test`)：
+1. 关掉打开着的迷你工程编辑器，编译：`Build.bat TestEditor Win64 Development -Project=...\Test.uproject -WaitMutex -FromMsBuild`。
+2. 生成蓝图(已生成过就不用)：`UnrealEditor-Cmd.exe Test.uproject -ExecutePythonScript=make_grenade_effect.py -unattended`，脚本在`Forever_Mod/Test/UE/Test/Scripts/`，创建`BP_GrenadeExplosion`并写入手雷用的参数后存盘。之后用编辑器打开`Plugins/Test/Content/Effect/BP_GrenadeExplosion`调参(Class Defaults里的`Explosion`分类)。
+3. 打包：`pak.bat`(cook整个迷你工程，pak输出`Plugins/Test_Pak/Test.pak`)；打包版挂载未实测。
+4. 编辑器/PIE下主程序直接挂载plugin的`Content`目录，要让`Config`发现这个plugin，`config.json`的`resource_paths`里要有`Forever_Mod/Test/UE/Test`(见`Forever_UE/Source/Core/common/config.md`"GetPlugins")。
+
+**手雷用的参数**(目测起点，PIE里调)：`fireballRadius`150、`ringRadius`500、`totalDuration`2.2、`flashIntensity`加大、`smokeRadius`70(默认60/220/1.4/150000/35)。
+
 ## 图片资源约定
 
 mod自带的图片放在`<ModGroup>/Resource/`(内置Basic放`Forever_UE/Resource/Mod/Basic/`)，**文件名必须以所属puzzle的id加下划线开头**(如`puzzle_anykey_icon.png`、`puzzle_dodge_bg.png`)——图片靠`Canvas`的`LoadModImage(post, 文件名, bitmap)`按文件名在`config.json`的`resource_paths`里递归查找，前缀保证全局唯一。支持PNG/JPEG/BMP/GIF/TGA等常见格式(stb_image)，详见`Forever_UE/Source/Dependence/player/canvas.md`。

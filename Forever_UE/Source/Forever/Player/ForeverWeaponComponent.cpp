@@ -22,6 +22,7 @@
 #include "Async/Async.h"
 #include "Engine/GameViewportClient.h"
 #include "ImageUtils.h"
+#include "Containers/Ticker.h"
 #include "Misc/DateTime.h"
 #include "Misc/Paths.h"
 #include "UnrealClient.h"
@@ -207,10 +208,16 @@ void UForeverWeaponComponent::FireCustom(AForeverCharacter* character) {
 		FString path = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Photos"), fileName));
 		// 引擎默认在游戏线程同步压PNG+写盘(约250ms，第一次更久)。这里订阅截屏回调接管：引擎只做GPU回读，
 		// 拿到像素后马上返回，PNG压缩和写盘丢到线程池。回调是一次性的，用完立刻退订，不影响别处的截屏。
+		// 恢复HUD：不能只靠OnScreenshotRequestProcessed(截屏被接管后它不一定触发，HUD就永远关了)，
+		// 所以像素回调里恢复一次，再加一个2秒的兜底定时器；重复恢复无害。
+		auto restoreHud = [hud]() {
+			if (AHUD* h = hud.Get()) h->bShowHUD = true;
+		};
 		auto handle = MakeShared<FDelegateHandle>();
 		*handle = UGameViewportClient::OnScreenshotCaptured().AddLambda(
-			[handle](int32 width, int32 height, const TArray<FColor>& colors) {
+			[handle, restoreHud](int32 width, int32 height, const TArray<FColor>& colors) {
 				UGameViewportClient::OnScreenshotCaptured().Remove(*handle);
+				restoreHud();
 				FString file = FScreenshotRequest::GetFilename();
 				if (file.IsEmpty() || colors.Num() < width * height) return;
 
@@ -225,10 +232,14 @@ void UForeverWeaponComponent::FireCustom(AForeverCharacter* character) {
 			if (hudActor->bShowHUD) {
 				hudActor->bShowHUD = false;
 				auto restoreHandle = MakeShared<FDelegateHandle>();
-				*restoreHandle = FScreenshotRequest::OnScreenshotRequestProcessed().AddLambda([hud, restoreHandle]() {
+				*restoreHandle = FScreenshotRequest::OnScreenshotRequestProcessed().AddLambda([restoreHud, restoreHandle]() {
 					FScreenshotRequest::OnScreenshotRequestProcessed().Remove(*restoreHandle);
-					if (AHUD* h = hud.Get()) h->bShowHUD = true;
+					restoreHud();
 				});
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([restoreHud](float) {
+					restoreHud();
+					return false;
+				}), 2.f);
 			}
 		}
 		FScreenshotRequest::RequestScreenshot(path, /*bInShowUI=*/false, /*bAddFilenameSuffix=*/false);

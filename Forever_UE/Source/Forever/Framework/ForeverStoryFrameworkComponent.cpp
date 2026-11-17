@@ -323,6 +323,21 @@ void UForeverStoryFrameworkComponent::NotifyAssetEvent(Asset* root, bool bGet, c
 	assetEventDepth--;
 }
 
+void UForeverStoryFrameworkComponent::NotifyThrowAsset(Asset* asset) {
+	if (!story || !asset || !asset->GetScript()) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	ThrowAssetEvent event(asset->GetType());
+	BroadcastToScript(event, asset->GetScript(), postImplement);
+}
+
 void UForeverStoryFrameworkComponent::NotifyAssetResult(bool bGet, const string& type, const string& result, Script* sender) {
 	if (!story || !sender) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());

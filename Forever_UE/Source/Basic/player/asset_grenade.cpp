@@ -19,4 +19,6 @@ void GrenadeAsset::SetProperty() {
 	throwable = true;
 	meshPath = "/Game/3rdParty/Pineapple_grenade/StaticMeshes/pineapple_grenade.pineapple_grenade";
 	meshScale = 1.f; // 先按模型原始尺寸，PIE里看大小再调
+	// 脚本：扔出后(throw_asset)计时，到时生成爆炸特效并销毁自己，见Resource/Story/asset_grenade.script。
+	milestoneNames = { "asset_grenade" };
 }

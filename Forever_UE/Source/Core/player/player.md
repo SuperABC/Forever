@@ -133,3 +133,7 @@ DeltaTime)`覆写里唯一做的事就是`player->Tick(DeltaTime)`，见
 - `CountOwned(type)`/`TakeOwned(type, amount, out)`：左右手+背包(递归容器，不含肩膀)里的数量与摘取(必要时拆堆叠)，数量不够不改变状态。
 - `FindAssetByName(name)`：手/肩/背及容器内容、worldAssets里按名字找；房间里的见`Map::FindAssetByName`。
 - `Player::ApplyChange`处理资产的`add_option`/`remove_option`(房间里的资产由`Map::ApplyChange`处理)。
+
+## StoreAsset的堆叠合并（2026-11-17）
+
+放进背包前先找背包直接子项里同type的非容器物品，有且空间够就`SetCount`累加并返回`StoreResult::Merged`，被并入的`Asset`由调用方销毁(发完事件后)。手/肩/后背槽不合并。

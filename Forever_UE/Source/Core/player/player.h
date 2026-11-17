@@ -119,8 +119,10 @@ public:
 	// 把一件资产放到玩家身上，不处理它原来的位置(调用方先把它从房间/地面摘下来；失败时自己放回去)。
 	// 顺序：①没有背包且它是可背的(GetBackpack、Object、count==1)就背上；②有背包且空间够(size*count，
 	// 堆叠整体算)放进背包；③否则右手空放右手、再左手空放左手(手只收Object且count==1的单件)；④都不行失败，
-	// 不改变任何状态。
-	enum class StoreResult { Failed, AsBackpack, InBackpack, RightHand, LeftHand };
+	// 不改变任何状态。②之前先看背包里(直接子项)有没有同type的非容器物品：有且空间够就并进去堆叠(和背包界面往
+	// 容器里拖同类物品一致)，返回Merged——此时asset的数量已加到那一组上，asset本身已无用，由调用方在用完
+	// (比如发事件)之后销毁；脚本里的资产Change在执行脚本所属资产时不能立刻delete，见UForeverAssetFrameworkComponent::QueueDelete。
+	enum class StoreResult { Failed, AsBackpack, InBackpack, RightHand, LeftHand, Merged };
 	StoreResult StoreAsset(Asset* asset);
 
 	// 商店用：哪个Asset类型的productType等于这个Product类型(没有返回空串)。首次调用时临时创建每个已启用的

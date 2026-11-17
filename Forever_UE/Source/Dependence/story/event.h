@@ -837,3 +837,21 @@ private:
 	std::string type;
 	std::string result;
 };
+
+// 投掷：玩家把一件可投掷资产(手雷/烟雾弹等，AssetMod::throwable)扔出去之后，只发给被扔出的这件资产自己的脚本
+// (没有脚本就不发)。脚本里读$$local.type(资产mod id)。手雷脚本在这里create_timer计时爆炸。
+class ThrowAssetEvent : public Event {
+public:
+	ThrowAssetEvent(std::string type);
+	virtual ~ThrowAssetEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetAssetType(std::string type);
+	const std::string& GetAssetType() const;
+
+private:
+	std::string type;
+};

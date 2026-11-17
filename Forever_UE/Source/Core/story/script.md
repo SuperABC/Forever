@@ -120,3 +120,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 ## 2026-11-16
 
 `BuildEvent`新增`execute_task`，`BuildChanges`新增`assign_task`(见Dependence/story的change.md/event.md)；表达式支持变量名内嵌`$$(...)`(expression.md)。
+
+## throw_asset / spawn_effect / destroy_asset（2026-11-17）
+
+`BuildEvent`新增`throw_asset`(`asset_type`可省略)；`BuildChanges`新增`spawn_effect`(`effect`/`scale`/`asset`都可省略)、`destroy_asset`(`asset`可省略)。详见`Dependence/story/event.md`/`change.md`。

@@ -530,6 +530,14 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		if (assetFramework) assetFramework->ApplyDropAsset(dropAsset, context);
 		return;
 	}
+	if (auto* spawnEffect = dynamic_cast<const SpawnEffectChange*>(change)) {
+		if (assetFramework) assetFramework->ApplySpawnEffect(spawnEffect, context);
+		return;
+	}
+	if (auto* destroyAsset = dynamic_cast<const DestroyAssetChange*>(change)) {
+		if (assetFramework) assetFramework->ApplyDestroyAsset(destroyAsset, context);
+		return;
+	}
 
 	if (auto* reviveNpc = dynamic_cast<const NPCReviveChange*>(change)) {
 		ApplyReviveNpc(reviveNpc, context);
@@ -939,6 +947,9 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 
 	// 到时的计时器给各自的归属脚本发time_up。
 	if (storyFramework) storyFramework->FireExpiredTimers(DeltaTime);
+
+	// destroy_asset登记的资产在这里才真正销毁：此刻没有脚本在执行，不会删掉正在用的context.self。
+	if (assetFramework) assetFramework->FlushPendingDestroy();
 }
 
 WorldStepHooks AForeverFrameworkActor::MakeStepHooks()

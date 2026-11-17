@@ -350,6 +350,15 @@ Player::StoreResult Player::StoreAsset(Asset* asset) {
 		backPack = asset;
 		return StoreResult::AsBackpack;
 	}
+	// 背包里已有同type的非容器物品：并进去(堆叠)。
+	if (backPack && !asset->IsContainer() && asset->GetSize() * asset->GetCount() <= backPack->GetSpace()) {
+		for (const auto& [name, content] : backPack->GetContents()) {
+			if (content && content != asset && !content->IsContainer() && content->GetType() == asset->GetType()) {
+				content->SetCount(content->GetCount() + asset->GetCount());
+				return StoreResult::Merged;
+			}
+		}
+	}
 	if (backPack && asset->GetSize() * asset->GetCount() <= backPack->GetSpace() && backPack->AddContent(asset)) {
 		return StoreResult::InBackpack;
 	}

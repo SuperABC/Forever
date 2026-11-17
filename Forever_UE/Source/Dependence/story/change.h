@@ -1537,3 +1537,46 @@ private:
 	std::string type;
 	std::string count;
 };
+
+
+// 在一件资产的位置生成一次特效(纯视觉)。asset可省略(=执行这个Change的脚本所属的资产，规则同PickAssetChange)，
+// 位置取这件资产在场景里的Actor；effect是特效蓝图类路径(表达式，如"/Test/Effect/BP_GrenadeExplosion")，
+// 留空=不生成任何特效，路径加载不出来也不生成(打一条Warning)；scale是整体缩放(表达式，留空=1)。
+class SpawnEffectChange : public Change {
+public:
+	SpawnEffectChange();
+	SpawnEffectChange(std::string effect, std::string scale, std::string asset);
+	virtual ~SpawnEffectChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetEffect(std::string effect);
+	const std::string& GetEffect() const;
+	void SetScale(std::string scale);
+	const std::string& GetScale() const;
+	void SetAsset(std::string asset);
+	const std::string& GetAsset() const;
+
+private:
+	std::string effect;
+	std::string scale;
+	std::string asset;
+};
+
+// 销毁地上(房间根或Player::worldAssets)的一件资产：场景里的Actor和Asset本身都删掉，Asset的脚本/计时器随之消失。
+// asset可省略(=执行这个Change的脚本所属的资产)。执行时只登记，下一帧才真正销毁(同一个里程碑里后面的Change
+// 还要用这件资产的脚本)。身上/背包/容器里的资产不处理。
+class DestroyAssetChange : public Change {
+public:
+	DestroyAssetChange();
+	DestroyAssetChange(std::string asset);
+	virtual ~DestroyAssetChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetAsset(std::string asset);
+	const std::string& GetAsset() const;
+
+private:
+	std::string asset;
+};

@@ -172,6 +172,9 @@ public:
 	// result是"success"或"fail"。
 	void NotifyAssetEvent(Asset* root, bool bGet, const std::string& result, Script* sender);
 
+	// 投掷：资产被扔出去之后发throw_asset事件，只发给这件资产自己的脚本(没有脚本则不发)。
+	void NotifyThrowAsset(Asset* asset);
+
 	// 没有具体资产实例的失败(身上没有指定类型/数量不足)：只按类型发一个事件给sender。
 	void NotifyAssetResult(bool bGet, const std::string& type, const std::string& result, Script* sender);
 

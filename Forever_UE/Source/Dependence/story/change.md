@@ -3,7 +3,7 @@
 ## 职责
 
 `Change`是纯数据类——没有`Apply`之类的虚方法，执行逻辑在调用方按`GetType()`/`dynamic_cast`分派。基类只有
-`GetType()`纯虚 + `condition`（控制条件，`std::string`，`GetCondition`/`SetCondition`）。目前共54个具体子类，
+`GetType()`纯虚 + `condition`（控制条件，`std::string`，`GetCondition`/`SetCondition`）。目前共56个具体子类，
 每个子类只有字段 + getter/setter，`GetType()`返回的snake_case字符串就是JSON里的`type`。
 
 ## 执行分派（谁来执行哪个Change）
@@ -189,3 +189,17 @@
 `show_route`(name)：切换显示/隐藏某个载具(先按载具名找)或市民(再按姓名找)的寻路轨迹——剩余路径折线，0.2秒刷新一次，没在走时线隐藏，再触发一次关掉。载具橙色、市民绿色。
 UE层`UForeverTrafficFrameworkComponent::ToggleRouteWatch`执行(路径来源：Actor的Controller剩余路点 / Core推算 / 跳时间虚拟时钟腿)。与`visualize_navigation`(玩家自己的导航线)互不影响。
 `schedule_empty.script`(所有市民)和`vehicle_basic.script`(轿车/卡车)各有一个"显示路线"选项触发它；公交/飞机/火车不走这套寻路，没加。
+
+## spawn_effect / destroy_asset（2026-11-17）
+
+- `spawn_effect`(`effect`、`scale`、`asset`，都是表达式、都可省略)：在一件资产的场景位置生成一次爆炸类特效(纯视觉)。`asset`缺省=执行脚本所属资产(同`pick_asset`)，位置取它的场景Actor，
+  没有Actor(已被捡进背包/已销毁)打Warning不生成。`effect`是特效**蓝图类路径**(如`"\"/Test/Effect/BP_GrenadeExplosion\""`)，**没有默认特效**：留空=什么都不生成；指定了路径但加载不到=不生成并打一条Warning；`scale`整体缩放，空=1。
+  特效蓝图的父类是主程序里的`AForeverExplosionEffect`、只覆盖参数，所以特效可以完全放在mod的UE工程plugin里，见`Forever_Mod/README.md`"用mod提供特效蓝图"。UE层执行：`UForeverAssetFrameworkComponent::ApplySpawnEffect`。
+- `destroy_asset`(`asset`可省略=自己)：销毁**地上**(房间根或`Player::worldAssets`)的资产——场景Actor和Asset本体都删，Asset的脚本随之消失，它名下的计时器到时按键查不到会自动丢弃。身上/背包/容器里的不处理(打Warning)。
+  **延迟销毁**：执行时只隐藏Actor、关碰撞并登记名字，真正销毁在`AForeverFrameworkActor::Tick`末尾的`FlushPendingDestroy`——同一个里程碑里后面的Change还要用这件资产脚本(`context.self`)，立刻delete会悬垂。
+- 用法见`Resource/Story/asset_grenade.script`：`throw_asset`→`create_timer`(mode `real`)→`time_up`→`spawn_effect`+`destroy_asset`。
+
+## pick_asset/grant_asset 的堆叠合并（2026-11-17）
+
+`Player::StoreAsset`在放进背包之前，先看背包直接子项里有没有**同type的非容器**物品：有且空间够就把数量并进去(和背包界面往容器里拖同类物品一致)，返回`StoreResult::Merged`。
+并入后被捡起/给出的那个`Asset`已无用，UE层用`UForeverAssetFrameworkComponent::QueueDelete`延迟到下一次`FlushPendingDestroy`才delete(执行脚本可能正是它自己的)，它的脚本和计时器随之消失——**被扔出去的手雷用`pick_asset`捡回并进背包，引信随之取消**。手里/肩上/后背的同类物品不参与合并(和手动放进槽位一致)。

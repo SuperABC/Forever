@@ -1935,3 +1935,74 @@ void DropAssetChange::SetCount(std::string count) {
 const std::string& DropAssetChange::GetCount() const {
 	return count;
 }
+
+
+SpawnEffectChange::SpawnEffectChange() :
+	effect(), scale(), asset() {
+
+}
+
+SpawnEffectChange::SpawnEffectChange(std::string effect, std::string scale, std::string asset) :
+	effect(move(effect)), scale(move(scale)), asset(move(asset)) {
+
+}
+
+SpawnEffectChange::~SpawnEffectChange() {
+
+}
+
+const string& SpawnEffectChange::GetType() const {
+	static const string type = "spawn_effect";
+	return type;
+}
+
+void SpawnEffectChange::SetEffect(std::string effect) {
+	this->effect = move(effect);
+}
+
+const std::string& SpawnEffectChange::GetEffect() const {
+	return effect;
+}
+
+void SpawnEffectChange::SetScale(std::string scale) {
+	this->scale = move(scale);
+}
+
+const std::string& SpawnEffectChange::GetScale() const {
+	return scale;
+}
+
+void SpawnEffectChange::SetAsset(std::string asset) {
+	this->asset = move(asset);
+}
+
+const std::string& SpawnEffectChange::GetAsset() const {
+	return asset;
+}
+
+DestroyAssetChange::DestroyAssetChange() :
+	asset() {
+
+}
+
+DestroyAssetChange::DestroyAssetChange(std::string asset) :
+	asset(move(asset)) {
+
+}
+
+DestroyAssetChange::~DestroyAssetChange() {
+
+}
+
+const string& DestroyAssetChange::GetType() const {
+	static const string type = "destroy_asset";
+	return type;
+}
+
+void DestroyAssetChange::SetAsset(std::string asset) {
+	this->asset = move(asset);
+}
+
+const std::string& DestroyAssetChange::GetAsset() const {
+	return asset;
+}

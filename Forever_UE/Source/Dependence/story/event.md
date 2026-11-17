@@ -97,3 +97,9 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 
 员工接到组织的任务(assign_task成功发起)后只发给该员工的Job脚本。字段`task`/`destination`都可省略(留空=不限)；
 脚本里用`$$local.task`/`$$local.destination`读。job_factory_worker.script用它收起"制作汉堡"选项。
+
+## throw_asset（2026-11-17）
+
+`throw_asset`(`asset_type`表达式，留空=不限)：玩家把一件可投掷资产(`AssetMod::throwable`)扔出去后，由`UForeverThrowableComponent::Throw`在`SpawnThrownAsset`成功后
+经`UForeverStoryFrameworkComponent::NotifyThrowAsset`发出，**只发给被扔出的这件资产自己的脚本**(没有脚本=不发)。脚本里`$$local.type`读资产mod id。
+手雷脚本(`Resource/Story/asset_grenade.script`)在这里`create_timer`计时爆炸。

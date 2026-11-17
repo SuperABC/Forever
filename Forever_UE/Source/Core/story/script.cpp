@@ -332,6 +332,10 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			if (type == "get_asset") event = new GetAssetEvent(obj["asset_type"].AsString(), obj["result"].AsString());
 			else event = new LoseAssetEvent(obj["asset_type"].AsString(), obj["result"].AsString());
 		}
+		else if (type == "throw_asset") {
+			// asset_type可以省略(留空=不限)，见ThrowAssetEvent::Match。脚本里读$$local.type。
+			event = new ThrowAssetEvent(obj["asset_type"].AsString());
+		}
 		else if (type == "enter_vehicle" || type == "leave_vehicle") {
 			// vehicle/mode都可以省略(留空=不限)，见EnterVehicleEvent::Match。mode是"drive"/"ride"。
 			if (type == "enter_vehicle") event = new EnterVehicleEvent(obj["vehicle"].AsString(), obj["mode"].AsString());
@@ -564,6 +568,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 		else if (type == "pick_asset") {
 			// asset可以省略(=执行这个Change的脚本所属的资产)。
 			change = new PickAssetChange(obj["asset"].AsString());
+		}
+		else if (type == "spawn_effect") {
+			// effect/scale/asset都可以省略：默认爆炸、缩放1、执行这个Change的脚本所属的资产的位置。
+			change = new SpawnEffectChange(obj["effect"].AsString(), obj["scale"].AsString(), obj["asset"].AsString());
+		}
+		else if (type == "destroy_asset") {
+			// asset可以省略(=执行这个Change的脚本所属的资产)。
+			change = new DestroyAssetChange(obj["asset"].AsString());
 		}
 		else if (type == "grant_asset" || type == "deduct_asset" || type == "drop_asset") {
 			// JSON里的"type"已经是Change类型本身，资产类型的字段叫asset_type。

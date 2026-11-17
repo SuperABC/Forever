@@ -45,3 +45,12 @@
 ## 脚本驱动的背包Change
 
 `ApplyPickAsset/ApplyGrantAsset/ApplyDeductAsset/ApplyDropAsset`(由`AForeverFrameworkActor::ApplyChange`转发)。pick：在房间根/`worldAssets`里找到资产并摘下→`Player::StoreAsset`→成功`DestroyWorldAsset`+`get_asset(success)`，失败放回原处+`get_asset(fail)`。grant：`CreateAsset`+`SetCount`+`StoreAsset`。deduct/drop：`TakeOwned`，drop再`SpawnWorldAsset`到玩家身前。`FindElementByName(name)`按资产名找场景里的`AAssetElement`(带脚本的资产`SpawnWorldAsset`时先补发game_start再`Init`烘焙选项)。
+
+## spawn_effect / destroy_asset（2026-11-17）
+
+`ApplySpawnEffect`：`effect`留空直接返回(没有默认特效)；按`asset`字段(缺省=`context.self`的`name`变量)`FindElementByName`取Actor位置，`AForeverExplosionEffect::Spawn(world, 位置, UpVector, scale, 蓝图路径)`；找不到Actor打Warning。
+`ApplyDestroyAsset`：登记`pendingDestroy`(存名字不存指针)并立刻`SetActorHiddenInGame`+关碰撞；`FlushPendingDestroy`(`AForeverFrameworkActor::Tick`在`FireExpiredTimers`之后调用，此刻没有脚本在执行)按名字`DetachGroundAsset`→`DestroyWorldAsset`→`Player::DestroyAsset`。延迟的原因：同一个里程碑里后面的Change还要用被销毁资产的脚本(`context.self`)。
+
+## 堆叠合并与QueueDelete（2026-11-17）
+
+`ApplyPickAsset`/`ApplyGrantAsset`遇到`StoreResult::Merged`(并进了背包里同类堆叠，见`Player::StoreAsset`)：先发`get_asset(success)`，再`QueueDelete`延迟销毁这件已无用的资产(不能立刻delete：执行pick的脚本可能就是它自己的)，`FlushPendingDestroy`里统一delete。

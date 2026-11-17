@@ -22,3 +22,7 @@
 - 火球可在材质里加Noise做湍流,烟可加柔边贴图。
 - 焦痕贴花、爆炸音效尚未做。震动幅度(`UForeverExplosionShakePattern`的各Amplitude)为目测值。
 - 数值(半径/时长/火花速度)为目测值,需在PIE里调。
+
+## 蓝图子类 / spawn_effect（2026-11-17）
+
+`Spawn(world, location, normal, scale, effectClassPath)`新增可选的蓝图类路径：非空时`LoadClass<AForeverExplosionEffect>`并生成该子类，路径不含`.`时自动补`.<名>_C`；指定了路径却加载不到时**不生成任何特效**(不回退默认爆炸，只打一条Warning`特效蓝图加载失败，不生成特效: <路径>`)；路径留空才用默认类(这是枪击等C++直接调`Spawn`的行为；脚本`spawn_effect`的`effect`留空则根本不调`Spawn`，没有默认特效)。mod的特效就是**父类为本类、只覆盖`UPROPERTY(EditAnywhere)`参数的蓝图**，放在mod的UE迷你工程plugin里(Test：`/Test/Effect/BP_GrenadeExplosion`)，由脚本`spawn_effect`的`effect`字段指定。新增被BP继承的参数时注意名字一经发布就是兼容接口。

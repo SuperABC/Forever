@@ -1341,3 +1341,37 @@ void LoseAssetEvent::SetResult(std::string result) {
 const std::string& LoseAssetEvent::GetResult() const {
 	return result;
 }
+
+ThrowAssetEvent::ThrowAssetEvent(std::string type) :
+	type(move(type)) {
+
+}
+
+ThrowAssetEvent::~ThrowAssetEvent() {
+
+}
+
+const string& ThrowAssetEvent::GetType() const {
+	static const string type = "throw_asset";
+	return type;
+}
+
+bool ThrowAssetEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<ThrowAssetEvent*>(e);
+	return MatchLocationField(type, other->type, context);
+}
+
+pair<bool, ValueType> ThrowAssetEvent::GetLocalValue(const string& key) const {
+	if (key == "type") return { true, ValueType(type) };
+	return { false, ValueType() };
+}
+
+void ThrowAssetEvent::SetAssetType(std::string type) {
+	this->type = move(type);
+}
+
+const std::string& ThrowAssetEvent::GetAssetType() const {
+	return type;
+}

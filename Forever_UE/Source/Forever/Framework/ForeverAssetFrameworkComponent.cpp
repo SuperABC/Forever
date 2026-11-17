@@ -4,6 +4,7 @@
 #include "Framework/ForeverFrameworkActor.h"
 
 #include "Framework/ForeverStoryFrameworkComponent.h"
+#include "Player/ForeverExplosionEffect.h"
 
 #include "player/player.h"
 #include "player/asset.h"
@@ -18,6 +19,7 @@
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 
+#include <algorithm>
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "CollisionQueryParams.h"
@@ -202,6 +204,18 @@ namespace {
 	}
 }
 
+namespace {
+	// 目标资产名：asset字段非空按表达式求值，否则取执行这个Change的脚本所属资产(脚本变量name)。
+	std::string ResolveTargetAssetName(const std::string& assetExpression, const ScriptContext& context) {
+		if (!assetExpression.empty()) return ToString(EvaluateExpression(assetExpression, context));
+		if (context.self) {
+			auto [found, value] = context.self->GetValue("name");
+			if (found) return ToString(value);
+		}
+		return std::string();
+	}
+}
+
 void UForeverAssetFrameworkComponent::ApplyPickAsset(const PickAssetChange* change, const ScriptContext& context) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Player* player = framework ? framework->GetPlayer() : nullptr;
@@ -225,9 +239,12 @@ void UForeverAssetFrameworkComponent::ApplyPickAsset(const PickAssetChange* chan
 		return;
 	}
 
-	if (player->StoreAsset(asset) != Player::StoreResult::Failed) {
+	const Player::StoreResult stored = player->StoreAsset(asset);
+	if (stored != Player::StoreResult::Failed) {
 		DestroyWorldAsset(asset); // 场景里的Actor
 		story->NotifyAssetEvent(asset, /*bGet=*/true, "success", sender);
+		// 并进了背包里同类的堆叠：这件资产已经没用了，但执行脚本可能就是它自己的，延迟销毁。
+		if (stored == Player::StoreResult::Merged) QueueDelete(asset);
 	}
 	else {
 		ReattachGroundAsset(framework, asset, origin);
@@ -255,7 +272,12 @@ void UForeverAssetFrameworkComponent::ApplyGrantAsset(const GrantAssetChange* ch
 	// 多个作为一个堆叠整体：放不下就整体失败，不会只给一部分。
 	asset->SetCount(amount);
 
-	if (player->StoreAsset(asset) != Player::StoreResult::Failed) {
+	const Player::StoreResult stored = player->StoreAsset(asset);
+	if (stored == Player::StoreResult::Merged) {
+		story->NotifyAssetEvent(asset, /*bGet=*/true, "success", sender);
+		QueueDelete(asset);
+	}
+	else if (stored != Player::StoreResult::Failed) {
 		story->StartAssetScript(asset);
 		story->NotifyAssetEvent(asset, /*bGet=*/true, "success", sender);
 	}
@@ -324,5 +346,73 @@ void UForeverAssetFrameworkComponent::ApplyDropAsset(const DropAssetChange* chan
 		}
 		SpawnWorldAsset(asset, location);
 		story->NotifyAssetEvent(asset, /*bGet=*/false, "success", sender);
+	}
+}
+
+void UForeverAssetFrameworkComponent::ApplySpawnEffect(const SpawnEffectChange* change, const ScriptContext& context) {
+	// 没有默认特效：effect留空=什么都不生成(枪击等C++直接调Spawn的路径不受影响)。
+	if (change->GetEffect().empty()) return;
+	const std::string name = ResolveTargetAssetName(change->GetAsset(), context);
+	AAssetElement* element = name.empty() || !GetWorld() ? nullptr : FindElementByName(UTF8_TO_TCHAR(name.c_str()));
+	if (!element) {
+		UE_LOG(LogTemp, Warning, TEXT("spawn_effect: asset \"%s\" has no actor in the world (picked up / destroyed?), skipped."), UTF8_TO_TCHAR(name.c_str()));
+		return;
+	}
+
+	float scale = 1.f;
+	if (!change->GetScale().empty()) scale = static_cast<float>(ToDouble(EvaluateExpression(change->GetScale(), context)));
+	if (scale <= 0.f) scale = 1.f;
+	const FString effect = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetEffect(), context)).c_str());
+	if (effect.IsEmpty()) return;
+
+	AForeverExplosionEffect::Spawn(GetWorld(), element->GetActorLocation(), FVector::UpVector, scale, effect);
+}
+
+void UForeverAssetFrameworkComponent::ApplyDestroyAsset(const DestroyAssetChange* change, const ScriptContext& context) {
+	const std::string name = ResolveTargetAssetName(change->GetAsset(), context);
+	if (name.empty()) {
+		UE_LOG(LogTemp, Warning, TEXT("destroy_asset: no asset name, skipped."));
+		return;
+	}
+	if (std::find(pendingDestroy.begin(), pendingDestroy.end(), name) != pendingDestroy.end()) return;
+	pendingDestroy.push_back(name);
+
+	// 先藏起来、关掉碰撞：视觉上立刻消失，真正的销毁在FlushPendingDestroy。
+	if (AAssetElement* element = FindElementByName(UTF8_TO_TCHAR(name.c_str()))) {
+		element->SetActorHiddenInGame(true);
+		element->SetActorEnableCollision(false);
+	}
+}
+
+void UForeverAssetFrameworkComponent::QueueDelete(Asset* asset) {
+	if (asset) pendingDelete.push_back(asset);
+}
+
+void UForeverAssetFrameworkComponent::FlushPendingDestroy() {
+	if (!pendingDelete.empty()) {
+		AForeverFrameworkActor* owner = Cast<AForeverFrameworkActor>(GetOwner());
+		Player* ownerPlayer = owner ? owner->GetPlayer() : nullptr;
+		std::vector<Asset*> doomed;
+		doomed.swap(pendingDelete);
+		for (Asset* asset : doomed) {
+			if (ownerPlayer) ownerPlayer->DestroyAsset(asset);
+		}
+	}
+	if (pendingDestroy.empty()) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	std::vector<std::string> names;
+	names.swap(pendingDestroy);
+	if (!player) return;
+
+	for (const std::string& name : names) {
+		FGroundOrigin origin;
+		Asset* asset = DetachGroundAsset(framework, name, origin);
+		if (!asset) {
+			UE_LOG(LogTemp, Warning, TEXT("destroy_asset: asset \"%s\" is not lying on the ground, skipped."), UTF8_TO_TCHAR(name.c_str()));
+			continue;
+		}
+		DestroyWorldAsset(asset); // 场景里的Actor
+		player->DestroyAsset(asset); // Asset本身(连带脚本)
 	}
 }

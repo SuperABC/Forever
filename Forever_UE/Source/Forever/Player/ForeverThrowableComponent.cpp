@@ -3,6 +3,7 @@
 #include "Element/AssetElement.h"
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
+#include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Player/ForeverCharacter.h"
 #include "Player/ForeverWeaponComponent.h"
 
@@ -361,6 +362,10 @@ void UForeverThrowableComponent::Throw()
 	ComputeLaunch(start, velocity);
 	if (!assetFramework->SpawnThrownAsset(thrown, start, velocity, GetOwner())) {
 		player->DestroyAsset(thrown); // 没登记成功，Asset没人接手，自己释放
+	}
+	else if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) {
+		// 通知这件资产自己的脚本(手雷在这里开始计时)。脚本里的销毁是延迟到下一帧的，thrown在这之后仍然有效。
+		story->NotifyThrowAsset(thrown);
 	}
 
 	Refresh();

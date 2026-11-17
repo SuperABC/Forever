@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Framework/ForeverFrameworkComponent.h"
+#include <string>
+#include <vector>
 #include "ForeverAssetFrameworkComponent.generated.h"
 
 class AAssetElement;
@@ -11,6 +13,8 @@ class PickAssetChange;
 class GrantAssetChange;
 class DeductAssetChange;
 class DropAssetChange;
+class SpawnEffectChange;
+class DestroyAssetChange;
 struct ScriptContext;
 
 // 世界掉落物的生成/销毁登记。背包UI的Drop/Pick动作分别调用SpawnWorldAsset/DestroyWorldAsset，见
@@ -56,9 +60,23 @@ public:
 	void ApplyDeductAsset(const DeductAssetChange* change, const ScriptContext& context);
 	void ApplyDropAsset(const DropAssetChange* change, const ScriptContext& context);
 
+	// spawn_effect：在指定资产(缺省=执行Change的脚本所属资产)的场景位置生成一次特效。
+	void ApplySpawnEffect(const SpawnEffectChange* change, const ScriptContext& context);
+	// destroy_asset：销毁地面资产。这里只隐藏Actor并登记名字——同一个里程碑里后面的Change还要用这件资产的脚本
+	// (context.self)，所以真正的销毁(Actor+Asset)推迟到FlushPendingDestroy，由AForeverFrameworkActor::Tick调用。
+	void ApplyDestroyAsset(const DestroyAssetChange* change, const ScriptContext& context);
+	void FlushPendingDestroy();
+	// 已经从世界/身上摘下来、数量并进了别的堆叠的资产(StoreResult::Merged)：脚本里的pick/grant可能正是这件资产
+	// 自己的脚本在执行，不能立刻delete，登记到这里，下一次FlushPendingDestroy时才delete。
+	void QueueDelete(Asset* asset);
+
 private:
 	// 不能标UPROPERTY——Asset*是Core层的普通C++类型，不是UObject/USTRUCT，UHT反射不认。
 	// 生命周期不受影响：SpawnActor出来的Actor由World自己的Actor列表持有，不依赖这张表的
 	// 引用来防止GC，和ForeverWeaponComponent::currentWeapon(WeaponMod*)同一个道理。
 	TMap<Asset*, AAssetElement*> worldAssetActors;
+
+	// 等待销毁的资产名(不存指针：销毁前它可能已经被捡走/换了容器，Flush时按名字重新找)。
+	std::vector<std::string> pendingDestroy;
+	std::vector<Asset*> pendingDelete;
 };

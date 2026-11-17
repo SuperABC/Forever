@@ -7,6 +7,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/PackageName.h"
 #include "Player/ForeverExplosionShake.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -66,14 +67,30 @@ FExplosionPart AForeverExplosionEffect::MakePart(const TCHAR* name, bool isSmoke
 	return part;
 }
 
-void AForeverExplosionEffect::Spawn(UWorld* world, const FVector& location, const FVector& normal, float scale)
+void AForeverExplosionEffect::Spawn(UWorld* world, const FVector& location, const FVector& normal, float scale,
+	const FString& effectClassPath)
 {
 	if (!world) return;
+
+	// mod提供的特效蓝图：父类就是本类，只覆盖了参数。路径只写包路径时补上蓝图生成类的名字(<名>_C)。
+	UClass* effectClass = AForeverExplosionEffect::StaticClass();
+	if (!effectClassPath.IsEmpty()) {
+		FString path = effectClassPath;
+		if (!path.Contains(TEXT("."))) {
+			path += TEXT(".") + FPackageName::GetShortName(path) + TEXT("_C");
+		}
+		// 指定了蓝图却加载不到(没装对应mod/plugin)：不生成任何特效(不回退默认爆炸)，只打一条日志。
+		effectClass = LoadClass<AForeverExplosionEffect>(nullptr, *path);
+		if (!effectClass) {
+			UE_LOG(LogTemp, Warning, TEXT("特效蓝图加载失败，不生成特效: %s"), *path);
+			return;
+		}
+	}
 
 	FTransform transform(FRotator::ZeroRotator, location);
 	// 延迟生成：BeginPlay之前先把法线/缩放写进去，BeginPlay里的初始化才能用到。
 	AForeverExplosionEffect* effect = world->SpawnActorDeferred<AForeverExplosionEffect>(
-		AForeverExplosionEffect::StaticClass(), transform, nullptr, nullptr,
+		effectClass, transform, nullptr, nullptr,
 		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!effect) return;
 
