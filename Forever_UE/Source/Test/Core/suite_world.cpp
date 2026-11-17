@@ -16,6 +16,7 @@
 #include "traffic/traffic.h"
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -106,6 +107,83 @@ namespace {
 			to_string(unreachable) + " of " + to_string(slotNodes.size()) + " slots (" + to_string(oneWay) + " one-way)");
 	}
 
+
+	// 车行导航图每条边的采样点必须是有限数且落在地图范围内附近：Bezier权重和接近0时GetPoint会除出天文数字，
+	// 公交沿这种边铺路径时 BuildPath 会细分上亿段而卡死/内存暴涨(见 Controller/VehicleCommandController.cpp 的诊断日志)。
+	void CheckVehicleEdgeGeometry(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		const Graph& graph = world.map->GetVehicleNavGraph();
+		const float limit = 1.0e6f; // 地图单位；1024元素图的边长远小于这个
+		int edges = 0, bad = 0, listed = 0;
+		for (const auto& [from, outs] : graph) {
+			for (const auto& [to, conn] : outs) {
+				if (!conn) continue;
+				edges++;
+				bool ok = true;
+				float worst = 0.f;
+				const int steps = 16;
+				for (int i = 0; i <= steps; i++) {
+					Node p = conn->GetPoint(static_cast<float>(i) / steps);
+					const float x = p.GetX(), y = p.GetY(), z = p.GetZ();
+					if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || std::fabs(x) > limit || std::fabs(y) > limit || std::fabs(z) > limit) {
+						ok = false;
+						worst = std::max(worst, std::max(std::fabs(x), std::fabs(y)));
+					}
+				}
+				if (!ok) {
+					bad++;
+					if (listed++ < 10) {
+						const Node s = conn->GetStart(), e = conn->GetEnd();
+						run.Note("bad vehicle edge " + to_string(from) + "->" + to_string(to) + " start(" + to_string(s.GetX()) + "," + to_string(s.GetY()) + ") end(" + to_string(e.GetX()) + "," + to_string(e.GetY())
+							+ ") controls=" + to_string(conn->GetControls().size()) + " worst=" + to_string(worst));
+					}
+				}
+			}
+		}
+		run.Metric("vehicle nav edges", edges, "");
+		run.Check(bad == 0, "every vehicle nav edge samples to finite, in-range points", to_string(bad) + " of " + to_string(edges) + " edges");
+	}
+
+
+	// 公交/线路站间的规划路径(含站点辅助边)每个点都要有限且在地图范围内、相邻点不能离谱地远：
+	// 控制器沿坏点细分会卡死，见 CheckVehicleEdgeGeometry 的说明。
+	void CheckRouteLegGeometry(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		int legs = 0, bad = 0, failedPlans = 0, listed = 0;
+		for (const auto& [routeName, route] : world.traffic->GetRoutes()) {
+			if (!route) continue;
+			for (size_t line = 0; line < route->GetLines().size(); line++) {
+				const vector<int> ids = route->GetLineStopNodeIds(line);
+				if (ids.size() < 2) continue;
+				for (size_t i = 0; i < ids.size(); i++) {
+					const int from = ids[i], to = ids[(i + 1) % ids.size()];
+					if (from == to) continue;
+					legs++;
+					const Map::VehicleRoutePlan plan = world.map->PlanVehicleLeg(from, to);
+					if (plan.status != Map::VehicleRoutePlan::OK) { failedPlans++; continue; }
+					bool ok = true;
+					float worst = 0.f;
+					for (size_t k = 0; k < plan.points.size(); k++) {
+						const auto& p = plan.points[k];
+						if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) || std::fabs(p.x) > 1.0e6f || std::fabs(p.y) > 1.0e6f) { ok = false; worst = std::max(worst, std::max(std::fabs(p.x), std::fabs(p.y))); }
+						if (k > 0) {
+							const auto& q = plan.points[k - 1];
+							const float d = std::hypot(p.x - q.x, p.y - q.y);
+							if (!(d < 5000.f)) { ok = false; worst = std::max(worst, d); }
+						}
+					}
+					if (!ok) {
+						bad++;
+						if (listed++ < 10) run.Note("bad route leg " + routeName + " line " + to_string(line) + " " + to_string(from) + "->" + to_string(to) + " points=" + to_string(plan.points.size()) + " worst=" + to_string(worst));
+					}
+				}
+			}
+		}
+		run.Metric("route legs", legs, "");
+		run.Metric("route legs without a plan", failedPlans, "");
+		run.Check(bad == 0, "every route leg plans to finite, contiguous points", to_string(bad) + " of " + to_string(legs) + " legs");
+	}
+
 	// 步行导航图：以最大连通块为准，孤立节点比例要低。
 	void CheckPedestrianConnectivity(TestWorld& world) {
 		TestRun& run = TestRun::Get();
@@ -190,6 +268,8 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	(void)options;
 	CheckBuildings(world);
 	CheckVehicleConnectivity(world);
+	CheckVehicleEdgeGeometry(world);
+	CheckRouteLegGeometry(world);
 	CheckPedestrianConnectivity(world);
 	CheckPopulaceAndSociety(world);
 }

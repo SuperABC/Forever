@@ -32,7 +32,10 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - perform：站立空闲帧时间 avg/p50/p95/p99/max、>33ms/>100ms 帧数(无渲染，只测游戏线程)。
 
 ## 打包测试
-`run_tests.bat <档> package`(`full all` 会自动带上)：跑 `pak.bat`(BuildCookRun：编译+烘焙+暂存+pak，日志 `<run>\package\pak.log`)，检查 `Saved\Archive\Windows\Forever.exe` 和 `Forever-Windows.pak` 存在，再用打包出来的 `Forever.exe /Game/Levels/World -nullrhi -ForeverTest=boot,components` 无渲染跑一遍，退出码 = 失败数。很慢(烘焙)，所以 quick 档 `all` 不跑。注意：打包目标是非编辑器的 Game，编辑器专用头文件/API(如 `StaticMeshCompiler.h`)必须包在 `#if WITH_EDITOR` 里，否则只有打包才会暴露编译错误。
+`run_tests.bat <档> package`(`full all` 会自动带上)：跑 `pak.bat`(BuildCookRun：编译+烘焙+暂存+pak，日志 `<run>\package\pak.log`)，检查 `Saved\Archive\Windows\Forever.exe` 和 `Forever-Windows.pak` 存在，再用打包出来的 `Forever.exe /Game/Levels/World -nullrhi -ForeverTest=boot,components` 无渲染跑一遍，最后带窗口跑 `traffic` 180 秒，退出码 = 失败数。很慢(烘焙)，所以 quick 档 `all` 不跑。注意：打包目标是非编辑器的 Game，编辑器专用头文件/API(如 `StaticMeshCompiler.h`)必须包在 `#if WITH_EDITOR` 里，否则只有打包才会暴露编译错误。
+
+## traffic 套件(UE，带窗口)
+`-ForeverTest=traffic [-ForeverTestTrafficSeconds=N]`：跳到早高峰后时间 30 倍速，玩家(步行)每 6 秒被传到一辆行驶中的车旁边，反复触发载具 Actor 的流式生成/销毁和 Chaos 物理，记帧时间、传送次数、场上载具 Actor 峰值。进程崩了由外层按退出码判失败。它复现并帮助修掉了两个问题：打包版 Chaos 悬挂崩溃(交通组件改到 `TG_PostPhysics` tick)、掉头(180°折返)让 `BuildPath` 圆角算出几百亿 uu 的点而卡死(`d` 夹紧)。world 套件另有 `CheckVehicleEdgeGeometry` / `CheckRouteLegGeometry` 检查车行边和线路站间规划点有限且连续，boot 套件有同样的线路检查。
 
 ## 已知发现
 - 已修：存档校验 `Config::FindMissingScripts` 原来只看 resource_paths，story_scripts 里的脚本(如 Test mod 的 test.script)不在其中时存档读不回("missing script: test")；现在 story_scripts 里存在的脚本也算。UE saveload 套件已全过(读档 19.6s，存档 42MB)。

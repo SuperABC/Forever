@@ -148,6 +148,7 @@ void UForeverTestSubsystem::TickCommute(float DeltaTime)
 		}
 		if (!Actor->IsTimeSkipping()) {
 			Metric(TEXT("commute.skip_seconds"), Now - CommutePhaseStart, TEXT("s"));
+			if (!WantSuite(TEXT("commute")) && WantSuite(TEXT("traffic"))) { BeginTraffic(); break; }
 			Actor->GetPlayer()->SetTimeFlowRatio(60.0); // 70分钟的高峰压缩到约70秒
 			CommuteFrames.Reset();
 			CommutePeakPending = 0;
@@ -406,4 +407,66 @@ void UForeverTestSubsystem::RunChangesSuite()
 	}
 	Metric(TEXT("changes.tested"), Entries.Num());
 	Metric(TEXT("changes.over_limit"), Slow);
+}
+
+// traffic：跳到早高峰，时间加速，让步行的玩家每隔几秒被传到一辆正在行驶的车旁边，
+// 反复触发载具Actor的流式生成/销毁和Chaos物理(打包版在路边走路时被过路车辆崩溃过)。进程崩溃由外层脚本按退出码判失败。
+void UForeverTestSubsystem::BeginTraffic()
+{
+	Framework->GetPlayer()->SetTimeFlowRatio(30.0);
+	double Seconds = 300.0;
+	FParse::Value(FCommandLine::Get(), TEXT("-ForeverTestTrafficSeconds="), Seconds);
+	TrafficSeconds = Seconds;
+	TrafficStart = TrafficLastHop = FPlatformTime::Seconds();
+	TrafficHops = TrafficPeakVehicles = TrafficCursor = 0;
+	TrafficFrames.Reset();
+	Phase = EPhase::TrafficRun;
+}
+
+void UForeverTestSubsystem::TickTraffic(float DeltaTime)
+{
+	AForeverFrameworkActor* Actor = Framework.Get();
+	UWorld* World = Actor ? Actor->GetWorld() : nullptr;
+	APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
+	if (!Actor || !Controller || !Controller->GetPawn() || !Actor->GetTraffic()) {
+		Check(false, TEXT("traffic: framework, player controller and pawn available"));
+		WriteReport(TEXT("traffic"));
+		Phase = EPhase::Finish;
+		return;
+	}
+	const double Now = FPlatformTime::Seconds();
+	TrafficFrames.Add(DeltaTime);
+	if (Now - TrafficLastHop >= 6.0) {
+		TrafficLastHop = Now;
+		TArray<Vehicle*> Driving;
+		for (const auto& [Name, V] : Actor->GetTraffic()->GetVehicles()) {
+			if (V && V->GetCategory() == "car" && V->IsDriving()) Driving.Add(V);
+		}
+		if (Driving.Num() > 0) {
+			Vehicle* Target = Driving[TrafficCursor++ % Driving.Num()];
+			float X, Y, Z, Yaw;
+			Target->GetTransform(X, Y, Z, Yaw);
+			Controller->GetPawn()->SetActorLocation(FVector(X, Y, Z + 150.f), false, nullptr, ETeleportType::TeleportPhysics);
+			TrafficHops++;
+		}
+		int32 Spawned = 0;
+		FString Classes;
+		for (TActorIterator<AVehicleElement> It(World); It; ++It) { Spawned++; Classes += It->GetClass()->GetName() + TEXT(" "); }
+		UE_LOG(LogTemp, Display, TEXT("ForeverTest traffic: vehicle actors: %s"), *Classes);
+		TrafficPeakVehicles = FMath::Max(TrafficPeakVehicles, Spawned);
+		UE_LOG(LogTemp, Display, TEXT("ForeverTest traffic: %.0fs, %d driving cars, %d vehicle actors, %d hops"), Now - TrafficStart, Driving.Num(), Spawned, TrafficHops);
+	}
+	if (Now - TrafficStart < TrafficSeconds) return;
+	TArray<float> Sorted = TrafficFrames;
+	Sorted.Sort();
+	Metric(TEXT("traffic.hops"), TrafficHops);
+	Metric(TEXT("traffic.peak_vehicle_actors"), TrafficPeakVehicles);
+	if (Sorted.Num() > 0) {
+		Metric(TEXT("traffic.p99"), static_cast<double>(Sorted[FMath::Min(Sorted.Num() - 1, static_cast<int32>(Sorted.Num() * 0.99))]) * 1000.0, TEXT("ms"));
+		Metric(TEXT("traffic.max"), static_cast<double>(Sorted.Last()) * 1000.0, TEXT("ms"));
+	}
+	Check(TrafficHops > 0, TEXT("traffic: found driving cars to follow"), FString::Printf(TEXT("%d hops"), TrafficHops));
+	Check(true, TEXT("traffic: survived the run without crashing"));
+	WriteReport(TEXT("traffic"));
+	Phase = EPhase::Finish;
 }

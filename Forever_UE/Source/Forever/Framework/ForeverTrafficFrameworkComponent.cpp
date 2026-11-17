@@ -177,6 +177,10 @@ namespace {
 
 UForeverTrafficFrameworkComponent::UForeverTrafficFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
+	// 组件默认在TG_DuringPhysics里tick，和Chaos物理(含载具的异步模拟线程)并行；这里会销毁/生成载具Actor，
+	// 销毁时悬挂约束被释放，而物理线程可能正在ApplySuspensionForces里读它(打包版路边走路时Chaos悬挂崩溃)。
+	// 放到物理结束之后tick，销毁和物理线程就不会重叠。
+	PrimaryComponentTick.TickGroup = TG_PostPhysics;
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> pureFinder(
 		TEXT("/Game/Asset/Common/Material/PureColor.PureColor"));
 	if (pureFinder.Succeeded()) {

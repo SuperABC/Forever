@@ -18,6 +18,7 @@
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverBuildingFrameworkComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
+#include "Element/VehicleElement.h"
 #include "Element/TransitVehicleElement.h"
 #include "traffic/vehicle.h"
 #include <memory>
@@ -39,6 +40,8 @@
 #include "society/organization.h"
 #include "player/player.h"
 #include "traffic/traffic.h"
+#include "traffic/route.h"
+#include <cmath>
 
 DEFINE_LOG_CATEGORY_STATIC(LogForeverTest, Log, All);
 
@@ -131,7 +134,7 @@ bool UForeverTestSubsystem::Tick(float DeltaTime)
 			BeginPerfSample();
 			Phase = EPhase::SamplePerf;
 		}
-		else if (WantSuite(TEXT("commute"))) {
+		else if (WantSuite(TEXT("commute")) || WantSuite(TEXT("traffic"))) {
 			BeginCommute();
 			Phase = EPhase::CommuteSkip;
 		}
@@ -153,6 +156,9 @@ bool UForeverTestSubsystem::Tick(float DeltaTime)
 	case EPhase::CommuteRun:
 	case EPhase::CommuteDrain:
 		TickCommute(DeltaTime);
+		break;
+	case EPhase::TrafficRun:
+		TickTraffic(DeltaTime);
 		break;
 	case EPhase::SaveLoadSave:
 		RunSaveLoadSave();
@@ -184,7 +190,7 @@ bool UForeverTestSubsystem::Tick(float DeltaTime)
 		if (FPlatformTime::Seconds() - PerfStart >= PerfSeconds) {
 			EndPerfSample();
 			WriteReport(TEXT("perform"));
-			if (WantSuite(TEXT("commute"))) { BeginCommute(); Phase = EPhase::CommuteSkip; }
+			if (WantSuite(TEXT("commute")) || WantSuite(TEXT("traffic"))) { BeginCommute(); Phase = EPhase::CommuteSkip; }
 			else if (WantSuite(TEXT("ride"))) BeginRide();
 			else Phase = WantSuite(TEXT("saveload")) ? EPhase::SaveLoadSave : EPhase::Finish;
 		}
@@ -214,6 +220,34 @@ void UForeverTestSubsystem::RunBootSuite()
 	}
 	if (Actor->GetSociety()) Check(Actor->GetSociety()->GetLedger().Total() == 0, TEXT("ledger total is zero after boot"));
 	if (Actor->GetTraffic()) Metric(TEXT("core.vehicles"), static_cast<double>(Actor->GetTraffic()->GetVehicles().size()));
+
+	// 线路站间规划路径(含公交站辅助边)的点必须有限、在范围内、相邻点不离谱：坏点会让 BuildPath 细分上亿段卡死(见Core world套件同名检查)。
+	if (Actor->GetTraffic() && Actor->GetMap()) {
+		int32 Legs = 0, Bad = 0;
+		FString First;
+		for (const auto& [RouteName, RoutePtr] : Actor->GetTraffic()->GetRoutes()) {
+			if (!RoutePtr) continue;
+			for (size_t Line = 0; Line < RoutePtr->GetLines().size(); Line++) {
+				const std::vector<int> Ids = RoutePtr->GetLineStopNodeIds(Line);
+				for (size_t I = 0; I < Ids.size() && Ids.size() >= 2; I++) {
+					const int From = Ids[I], To = Ids[(I + 1) % Ids.size()];
+					if (From == To) continue;
+					Legs++;
+					const Map::VehicleRoutePlan Plan = Actor->GetMap()->PlanVehicleLeg(From, To);
+					if (Plan.status != Map::VehicleRoutePlan::OK) continue;
+					bool bOk = true;
+					for (size_t K = 0; K < Plan.points.size(); K++) {
+						const auto& P = Plan.points[K];
+						if (!std::isfinite(P.x) || !std::isfinite(P.y) || std::fabs(P.x) > 1.0e6f || std::fabs(P.y) > 1.0e6f) bOk = false;
+						if (K > 0 && !(std::hypot(P.x - Plan.points[K - 1].x, P.y - Plan.points[K - 1].y) < 5000.f)) bOk = false;
+					}
+					if (!bOk) { Bad++; if (First.IsEmpty()) First = FString::Printf(TEXT("%s line %d %d->%d (%d points)"), UTF8_TO_TCHAR(RouteName.c_str()), static_cast<int32>(Line), From, To, static_cast<int32>(Plan.points.size())); }
+				}
+			}
+		}
+		Metric(TEXT("core.route_legs"), Legs);
+		Check(Bad == 0, TEXT("every route leg plans to finite, contiguous points"), FString::Printf(TEXT("%d of %d legs, first: %s"), Bad, Legs, *First));
+	}
 
 	// 没包随机作用域的抽取必须为0(行为不固定的信号)。
 	Check(AForeverFrameworkActor::GetUnscopedRandomDraws() == 0, TEXT("no GetRandom outside a random scope"),

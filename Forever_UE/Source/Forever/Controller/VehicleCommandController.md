@@ -52,3 +52,5 @@
   退不动超过`kStuckSeconds`或剩余<40uu就放弃剩余倒车直接前进。物理↔运动学切换时`reverseTravelled`按位置重新投影。倒车阶段不做跟车/路口请求。
 - **`FollowPath`指令**(`FVehicleCommand::MakeFollowPath(node, waypoints, bReverseFirst)`)：沿给定折线开，不重新规划；Core推算的车在倒车出库途中生成Actor时用。到达后和`NavigateToNode`一样回调`navigateFinished`。
 - `GetRemainingWaypoints(out, &bReverseFirst)`：倒车阶段返回[当前位置, 倒车终点, 之后的点]且`bReverseFirst=true`，交还Core时保留倒车标志。
+
+- **圆角的`d`必须夹紧**：`d=R·tan(θ/2)`在θ→180°(路径顶点处原路折返，死胡同掉头边引入后会出现)时爆炸，float下θ恰为π还会算成很大的负数，把圆角控制点推到几百亿uu外，`BuildPath`细分上亿段卡死游戏线程。现在半角限制在85°内并把`d`夹到[0, 相邻两段各一半]；`BuildPath`发现圆角输入异常或单段细分>5000段会打Error并放弃，`PlanAndFollow`发现规划点非有限/离谱量级也会打现场并放弃。

@@ -151,3 +151,5 @@
 被Controller驱动的物理车(`IsDrivenByController`，非玩家)位置超过`stuckTimeoutSeconds`(默认60，**现实时间**，暂停不计)没离开锚点`stuckMoveThreshold`(100UE单位)，就`HandBackDriveToCore`强制销毁Actor、剩余路径交回Core推算，并在`respawnBlockedUntil`(30游戏秒)内不在原地重新生成。公交等交不回去的失败后再等一个周期。日志`脱困：车辆 ...`。
 
 脱困补充：线路公交(`bRouteBus`、没脱离时刻表)交不回Core导航，卡住后走`TeleportBusToNextStop`：读控制器`QueryLoopProgress`，`Route::SyncVehicleProgress(leg, 1.0)`把时刻表进度推到这一腿终点(下一站)，再`BusToKinematic(state, false)`收回物理Actor，之后`UpdateBusPhysicsHandoff`按时刻表位置重新切物理。停靠中/玩家在开的不处理。日志`脱困：公交 ...`。
+
+- **Tick组 = `TG_PostPhysics`**：组件默认`TG_DuringPhysics`，和Chaos(含载具异步模拟线程)并行；本组件的`TickComponent`会销毁载具Actor，悬挂约束随之释放，物理线程可能正在`ApplySuspensionForces`里读它，打包版崩溃(访问`0xffffffffffffffff`)即此；放到物理之后tick避开。`traffic`测试套件(`Source/Test`)带玩家反复传到行驶中的车旁边来复现这类生成/销毁竞争。

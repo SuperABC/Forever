@@ -83,6 +83,13 @@ if errorlevel 1 (
 	echo PACKAGED RUN FAILED, see %PKGOUT%\packaged.log
 	set "RESULT=1"
 )
+rem traffic: the packaged build crashed in Chaos (vehicle destroyed while physics ran) only with a walking player among cars, so run it windowed with rendering.
+echo ==== Package pipeline: packaged exe traffic (windowed) ====
+"%PKGARCH%\Forever.exe" /Game/Levels/World -windowed -ResX=960 -ResY=540 -unattended -nosplash -nosound -ForeverTest=traffic -ForeverTestTrafficSeconds=180 -ForeverTestOut="%PKGOUT%\traffic" > "%PKGOUT%\packaged_traffic.log" 2>&1
+if errorlevel 1 (
+	echo PACKAGED TRAFFIC RUN FAILED, see %PKGOUT%\packaged_traffic.log
+	set "RESULT=1"
+)
 
 :summary
 rem Summarize (compares metrics with Saved\TestReports\baseline\core when it exists)

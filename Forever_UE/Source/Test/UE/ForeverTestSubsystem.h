@@ -23,7 +23,7 @@ private:
 	struct FCheck { FString Name; bool bPassed; FString Detail; };
 	struct FMetric { FString Name; double Value; FString Unit; };
 
-	enum class EPhase : uint8 { WaitForWorld, RunBoot, SamplePerf, CommuteSkip, CommuteRun, CommuteDrain, SaveLoadSave, SaveLoadWait, RideBoard, RideRun, Finish };
+	enum class EPhase : uint8 { WaitForWorld, RunBoot, SamplePerf, CommuteSkip, CommuteRun, CommuteDrain, TrafficRun, SaveLoadSave, SaveLoadWait, RideBoard, RideRun, Finish };
 
 	bool Tick(float DeltaTime);
 	void Check(bool bPassed, const FString& Name, const FString& Detail = FString());
@@ -33,6 +33,8 @@ private:
 	void RunChangesSuite();
 	void BeginRide();
 	void TickRide(float DeltaTime);
+	void BeginTraffic();
+	void TickTraffic(float DeltaTime);
 	void BeginCommute();
 	void TickCommute(float DeltaTime);
 	void RunSaveLoadSave();
@@ -74,6 +76,10 @@ private:
 	int32 CommutePeakPending = 0;
 	TArray<float> CommuteFrames;
 	FString CommuteEndClock;
+	// traffic：跳到早高峰后让玩家(步行)每隔几秒被传到一辆在路上跑的车旁边，反复触发载具Actor的生成/销毁/物理，持续一段时间。
+	double TrafficStart = 0.0, TrafficLastHop = 0.0, TrafficSeconds = 300.0;
+	int32 TrafficHops = 0, TrafficPeakVehicles = 0, TrafficCursor = 0;
+	TArray<float> TrafficFrames;
 	// ride：依次搭乘飞机/火车各一段时间，记录帧时间，检查玩家一直在车上。
 	TArray<FString> RideCategories;
 	int32 RideIndex = 0;

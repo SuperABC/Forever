@@ -279,6 +279,27 @@ bool AVehicleCommandController::PlanAndFollow(int32 fromNode, int32 toNode)
 	for (const Map::NavPoint& p : plan.points) {
 		raw.Add(FVector(p.x * kVehicleControllerWorldScale, p.y * kVehicleControllerWorldScale, p.z * kVehicleControllerWorldScale));
 	}
+	// 规划出的点里混进坏点(非有限数/离地图几百公里)：BuildPath会把那一段细分上亿段，卡死游戏线程并吃光内存
+	// (打包版路边走路时公交被流式生成就触发过)。这里把现场(起终节点、坏点下标/值、覆盖该点的连线及其控制点权重)
+	// 打出来，并放弃这条路径，不再往下建。
+	for (int32 i = 0; i < raw.Num(); i++) {
+		const FVector& p = raw[i];
+		if (FMath::IsFinite(p.X) && FMath::IsFinite(p.Y) && FMath::IsFinite(p.Z) && FMath::Abs(p.X) < 1.0e8f && FMath::Abs(p.Y) < 1.0e8f) continue;
+		FString edgeInfo = TEXT("(无覆盖该点的连线)");
+		for (const Map::NavEdge& edge : plan.edges) {
+			if (!edge.edge || i < edge.firstPoint || i > edge.lastPoint) continue;
+			const Node s = edge.edge->GetStart(), e = edge.edge->GetEnd();
+			const auto controls = edge.edge->GetControls();
+			FString weights;
+			for (const auto& c : controls) weights += FString::Printf(TEXT(" %.4g@(%.1f,%.1f)"), c.second, c.first.GetX(), c.first.GetY());
+			edgeInfo = FString::Printf(TEXT("连线 点[%d..%d] 起(%.2f,%.2f) 终(%.2f,%.2f) 控制点%d个:%s 长度%.2f"),
+				edge.firstPoint, edge.lastPoint, s.GetX(), s.GetY(), e.GetX(), e.GetY(), controls.size(), *weights, edge.edge->CalcDistance());
+			break;
+		}
+		UE_LOG(LogTemp, Error, TEXT("AVehicleCommandController: 规划路径第 %d/%d 点是坏点 (%.4g, %.4g, %.4g)，from=%d to=%d，前一点(%.1f, %.1f)。%s。放弃这条路径。"),
+			i, raw.Num(), p.X, p.Y, p.Z, fromNode, toNode, i > 0 ? raw[i - 1].X : 0.f, i > 0 ? raw[i - 1].Y : 0.f, *edgeInfo);
+		return false;
+	}
 	// 路径里属于路口的连线记成区间，之后在这些弧长区间前向路口请求通行。
 	TArray<FEdgeSpan> spans;
 	if (ownerFramework.IsValid()) {
@@ -361,9 +382,20 @@ void AVehicleCommandController::BuildPath(const TArray<FVector>& rawInput)
 			raw.Add(v);
 			continue;
 		}
-		const float d = FMath::Min(cornerRadius * FMath::Tan(turn * 0.5f), 0.5f * FMath::Min(inLen, outLen));
+		// tan(turn/2)在turn接近180°(掉头：路径顶点处原路折返)时爆炸，float下turn恰好=π还会变成很大的负数，
+		// d为负会把p0/p2推到几百亿uu外，二次贝塞尔再把它放大，BuildPath细分上亿段卡死(死胡同掉头边引入后必现)。
+		// 半角限制在85°内，d再夹到[0, 相邻两段各一半]。
+		const float halfTurn = FMath::Min(turn * 0.5f, FMath::DegreesToRadians(85.f));
+		const float d = FMath::Clamp(cornerRadius * FMath::Tan(halfTurn), 0.f, 0.5f * FMath::Min(inLen, outLen));
 		const FVector p0 = v - FVector(inDir.X, inDir.Y, 0.f) * d;
 		const FVector p2 = v + FVector(outDir.X, outDir.Y, 0.f) * d;
+		// 圆角输入有坏值(非有限数/离谱的量级)：二次贝塞尔会把它放大成上亿uu的点。打出现场并跳过这个圆角。
+		if (!FMath::IsFinite(d) || !FMath::IsFinite(turn) || d < 0.f || FMath::Abs(v.X) > 1.0e8f || FMath::Abs(v.Y) > 1.0e8f || FMath::Abs(p0.X) > 1.0e8f || FMath::Abs(p2.X) > 1.0e8f) {
+			UE_LOG(LogTemp, Error, TEXT("BuildPath: 圆角输入异常，跳过。点%d/%d v=(%.4g,%.4g,%.4g) 前(%.4g,%.4g) 后(%.4g,%.4g) inLen=%.4g outLen=%.4g turn=%.4g d=%.4g cornerRadius=%.4g"),
+				i, rawInput.Num(), v.X, v.Y, v.Z, rawInput[i - 1].X, rawInput[i - 1].Y, rawInput[i + 1].X, rawInput[i + 1].Y, inLen, outLen, turn, d, cornerRadius);
+			raw.Add(v);
+			continue;
+		}
 		const int32 steps = 6;
 		for (int32 k = 0; k <= steps; k++) {
 			const float t = static_cast<float>(k) / steps;
@@ -383,6 +415,13 @@ void AVehicleCommandController::BuildPath(const TArray<FVector>& rawInput)
 		// 仅诊断(不改变行为)：单段细分出上千个点基本是路径里混进了坏点(NaN/极远坐标)，下面的循环会因此卡很久
 		// (2026-11-16 游戏内10:40的分钟级卡顿即此处)。先把车辆和坐标打出来，方便下次发生时查根因。
 		if (!(pieces <= 5000)) {
+			path = FPath();
+			pts.Reset();
+			UE_LOG(LogTemp, Error, TEXT("BuildPath: 放弃这条路径(单段细分超过5000段会卡死游戏线程)。raw共%d点，输入共%d点，输入首尾(%.0f,%.0f)->(%.0f,%.0f)。"),
+				raw.Num(), rawInput.Num(), rawInput[0].X, rawInput[0].Y, rawInput.Last().X, rawInput.Last().Y);
+			return;
+		}
+		if (false) {
 			UE_LOG(LogTemp, Error, TEXT("BuildPath: 车辆 %s 的路径第 %d 段长度异常(%.0f uu，细分 %d 段)。起点(%.0f, %.0f, %.0f) 终点(%.0f, %.0f, %.0f)，共 %d 个点。"),
 				drivenVehicle.IsValid() ? *drivenVehicle->GetName() : TEXT("?"), i, segLen, pieces, from.X, from.Y, from.Z,
 				raw[i].X, raw[i].Y, raw[i].Z, raw.Num());
