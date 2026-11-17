@@ -20,5 +20,5 @@
 
 ## 待办/后续阶段
 
-- 手雷`milestoneNames={"asset_grenade"}`：`Resource/Story/asset_grenade.script`，`throw_asset`→3现实秒引信(`create_timer` mode `real`)→`spawn_effect`(蓝图`/Test/Effect/BP_GrenadeExplosion`，没有就无特效并打Warning，`effect`留空同样无特效)+`destroy_asset`。手雷脚本对`/Test/...`是软依赖。
-- 爆炸没有伤害/冲击力，只有视觉。
+- 手雷`milestoneNames={"asset_grenade"}`：`Resource/Story/asset_grenade.script`，`throw_asset`(记下`$$local.thrower`)→3现实秒引信(`create_timer` mode `real`)→`spawn_effect`(蓝图`/Game/Asset/Effects/BP_GrenadeExplosion`，由`Tools/make_effect_blueprints.py`生成；没有就无特效并打Warning)+`area_damage`(半径500cm、中心伤害150、判断遮挡、线性衰减，凶手=投掷者)+`destroy_asset`。
+- 爆炸没有冲击力，只有视觉和伤害。

@@ -30,4 +30,5 @@
 
 ## 待办/后续阶段
 
-- 弹道/后坐力/模型变换数值留给PIE里调；霰弹枪的多弹丸机制没做。
+- 开火后的表现和伤害在`Resource/Story/weapon_pistol.script`(`milestoneNames={"weapon_pistol"}`)：`weapon_fire`事件→命中点`spawn_effect`枪击特效+打中市民`single_damage`(线性衰减，数值和以前的`damage`/`maxRange`一致)。没有飞行弹道(2026-11-17取消)。
+- 后坐力/模型变换数值留给PIE里调。

@@ -336,6 +336,13 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			// asset_type可以省略(留空=不限)，见ThrowAssetEvent::Match。脚本里读$$local.type。
 			event = new ThrowAssetEvent(obj["asset_type"].AsString());
 		}
+		else if (type == "weapon_fire") {
+			// weapon_type可以省略(留空=不限)，见WeaponFireEvent::Match。脚本里读$$local.hit等，字段见event.h。
+			event = new WeaponFireEvent(obj["weapon_type"].AsString());
+		}
+		else if (type == "projectile_hit") {
+			event = new ProjectileHitEvent();
+		}
 		else if (type == "enter_vehicle" || type == "leave_vehicle") {
 			// vehicle/mode都可以省略(留空=不限)，见EnterVehicleEvent::Match。mode是"drive"/"ride"。
 			if (type == "enter_vehicle") event = new EnterVehicleEvent(obj["vehicle"].AsString(), obj["mode"].AsString());
@@ -570,8 +577,19 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			change = new PickAssetChange(obj["asset"].AsString());
 		}
 		else if (type == "spawn_effect") {
-			// effect/scale/asset都可以省略：默认爆炸、缩放1、执行这个Change的脚本所属的资产的位置。
-			change = new SpawnEffectChange(obj["effect"].AsString(), obj["scale"].AsString(), obj["asset"].AsString());
+			// effect/scale/asset/position/normal都可以省略：不生成特效、缩放1、执行这个Change的脚本所属的资产的位置、朝上。
+			change = new SpawnEffectChange(obj["effect"].AsString(), obj["scale"].AsString(), obj["asset"].AsString(),
+				obj["position"].AsString(), obj["normal"].AsString());
+		}
+		else if (type == "single_damage") {
+			// source/weapon/part只用于击杀信息，可以省略。
+			change = new SingleDamageChange(obj["target"].AsString(), obj["damage"].AsString(), obj["source"].AsString(),
+				obj["weapon"].AsString(), obj["part"].AsString());
+		}
+		else if (type == "area_damage") {
+			// position省略=执行脚本所属资产的位置；occlusion省略=false；power省略=1。
+			change = new AreaDamageChange(obj["position"].AsString(), obj["radius"].AsString(), obj["damage"].AsString(),
+				obj["occlusion"].AsString(), obj["power"].AsString(), obj["source"].AsString(), obj["weapon"].AsString());
 		}
 		else if (type == "destroy_asset") {
 			// asset可以省略(=执行这个Change的脚本所属的资产)。

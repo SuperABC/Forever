@@ -16,13 +16,13 @@ const char* RifleWeapon::GetName() {
 }
 
 void RifleWeapon::SetProperty() {
-	fireMode = FireMode::Ballistic;
-	damage = 40.f;
+	fireMode = FireMode::Hitscan;
+	// 开火后的特效和伤害由武器脚本(Resource/Story/weapon_rifle.script)响应weapon_fire事件完成。
+	milestoneNames = { "weapon_rifle" };
 	fireRate = 0.1f;      // 每秒最多10发，全自动
 	fullAuto = true;
 	maxRange = 10000.f;    // 100米
 	baseSpread = 0.f;      // 随机散射半角(度)，暂时设成0=没有散射
-	muzzleVelocity = 40000.f; // 400m/s，100米处下坠约30cm
 	magazineCapacity = 30;
 	reloadDuration = 1.5f;
 

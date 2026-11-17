@@ -1,5 +1,8 @@
 #include "player/weapon.h"
 
+#include "common/registry.h"
+#include "story/script.h"
+
 using namespace std;
 
 namespace {
@@ -39,13 +42,10 @@ Weapon::Weapon(WeaponFactory* factory, const string& id) :
 	backOffsetY = kBackBaseY + mod->backOffsetY;
 	backOffsetZ = kBackBaseZ + mod->backOffsetZ;
 	fireMode = mod->fireMode;
-	damage = mod->damage;
 	fireRate = mod->fireRate;
 	fullAuto = mod->fullAuto;
 	maxRange = mod->maxRange;
 	baseSpread = mod->baseSpread;
-	muzzleVelocity = mod->muzzleVelocity;
-	bulletGravityScale = mod->bulletGravityScale;
 	pelletCount = mod->pelletCount;
 	magazineCapacity = mod->magazineCapacity;
 	reloadDuration = mod->reloadDuration;
@@ -57,6 +57,7 @@ Weapon::Weapon(WeaponFactory* factory, const string& id) :
 }
 
 Weapon::~Weapon() {
+	delete script;
 	if (mod) factory->DestroyWeapon(mod);
 }
 
@@ -81,13 +82,10 @@ float Weapon::GetBackOffsetY() const { return backOffsetY; }
 float Weapon::GetBackOffsetZ() const { return backOffsetZ; }
 
 FireMode Weapon::GetFireMode() const { return fireMode; }
-float Weapon::GetDamage() const { return damage; }
 float Weapon::GetFireRate() const { return fireRate; }
 bool Weapon::IsFullAuto() const { return fullAuto; }
 float Weapon::GetMaxRange() const { return maxRange; }
 float Weapon::GetBaseSpread() const { return baseSpread; }
-float Weapon::GetMuzzleVelocity() const { return muzzleVelocity; }
-float Weapon::GetBulletGravityScale() const { return bulletGravityScale; }
 int Weapon::GetPelletCount() const { return pelletCount; }
 
 int Weapon::GetMagazineCapacity() const { return magazineCapacity; }
@@ -100,9 +98,17 @@ float Weapon::GetRecoilPitchMax() const { return recoilPitchMax; }
 float Weapon::GetRecoilYawMin() const { return recoilYawMin; }
 float Weapon::GetRecoilYawMax() const { return recoilYawMax; }
 
-float Weapon::ComputeDamage(float distance) const {
-	return mod ? mod->ComputeDamage(distance) : 0.f;
+void Weapon::EnsureScript() {
+	if (script || !mod) return;
+	script = MakeScript(&Registry::Get().GetScriptFactory(), mod->scriptModName, mod->milestoneNames);
+	if (script) {
+		script->SetOwner(ScriptOwnerKind::Weapon, this);
+		script->SetStableKey("weapon:" + type);
+		script->SetValue("type", ValueType(type));
+	}
 }
+
+Script* Weapon::GetScript() const { return script; }
 
 void Weapon::FireCustom(PostHandle* post) const {
 	if (mod) mod->OnFire(post);

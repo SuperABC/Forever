@@ -1545,7 +1545,8 @@ private:
 class SpawnEffectChange : public Change {
 public:
 	SpawnEffectChange();
-	SpawnEffectChange(std::string effect, std::string scale, std::string asset);
+	SpawnEffectChange(std::string effect, std::string scale, std::string asset, std::string position = std::string(),
+		std::string normal = std::string());
 	virtual ~SpawnEffectChange();
 
 	virtual const std::string& GetType() const override;
@@ -1556,11 +1557,19 @@ public:
 	const std::string& GetScale() const;
 	void SetAsset(std::string asset);
 	const std::string& GetAsset() const;
+	// position：特效位置，表达式求值得到"(x, y, z)"字符串(如$$local.hit)；留空=asset字段(缺省=执行脚本所属资产)的位置。
+	// 没有场景实体的脚本(武器脚本)必须填position。normal同格式，特效朝向(命中面法线)，留空=朝上。
+	void SetPosition(std::string position);
+	const std::string& GetPosition() const;
+	void SetNormal(std::string normal);
+	const std::string& GetNormal() const;
 
 private:
 	std::string effect;
 	std::string scale;
 	std::string asset;
+	std::string position;
+	std::string normal;
 };
 
 // 销毁地上(房间根或Player::worldAssets)的一件资产：场景里的Actor和Asset本身都删掉，Asset的脚本/计时器随之消失。
@@ -1579,4 +1588,73 @@ public:
 
 private:
 	std::string asset;
+};
+
+// 单体伤害：对一个目标扣血，扣完是否致死(产生击杀)由UE层处理。目标现在只支持市民(姓名)，以后同一个Change也会支持载具。
+// target：目标名字(表达式，如$$local.sufferer)，必须是场景里已实例化(有Actor)的目标，否则跳过。damage：伤害数值(表达式)，
+// 距离衰减/部位倍率都在脚本里用表达式和condition算。source：凶手(开火/投掷者)姓名，weapon：武器种类，part：命中部位
+// (head/body/legs)，这三个只用于击杀信息(CitizenDeceaseEvent)，都可省略。
+class SingleDamageChange : public Change {
+public:
+	SingleDamageChange();
+	SingleDamageChange(std::string target, std::string damage, std::string source, std::string weapon, std::string part);
+	virtual ~SingleDamageChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetTarget(std::string target);
+	const std::string& GetTarget() const;
+	void SetDamage(std::string damage);
+	const std::string& GetDamage() const;
+	void SetSource(std::string source);
+	const std::string& GetSource() const;
+	void SetWeapon(std::string weapon);
+	const std::string& GetWeapon() const;
+	void SetPart(std::string part);
+	const std::string& GetPart() const;
+
+private:
+	std::string target;
+	std::string damage;
+	std::string source;
+	std::string weapon;
+	std::string part;
+};
+
+// 范围伤害：以position为中心、radius为半径，对范围内已实例化(有Actor)的市民造成伤害。每个市民的伤害 =
+// damage * (1 - dist^power)，dist是该市民到中心的距离与radius的比值(超出半径=0)，power默认1(线性衰减)。
+// occlusion为真时，从中心到该市民连一条线，被挡住就不受伤。position是"(x, y, z)"字符串表达式(如$$local.hit)，
+// 留空=执行脚本所属资产的位置。radius/damage/power是数值表达式，occlusion是布尔表达式。source/weapon含义同SingleDamageChange。
+class AreaDamageChange : public Change {
+public:
+	AreaDamageChange();
+	AreaDamageChange(std::string position, std::string radius, std::string damage, std::string occlusion, std::string power,
+		std::string source, std::string weapon);
+	virtual ~AreaDamageChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetPosition(std::string position);
+	const std::string& GetPosition() const;
+	void SetRadius(std::string radius);
+	const std::string& GetRadius() const;
+	void SetDamage(std::string damage);
+	const std::string& GetDamage() const;
+	void SetOcclusion(std::string occlusion);
+	const std::string& GetOcclusion() const;
+	void SetPower(std::string power);
+	const std::string& GetPower() const;
+	void SetSource(std::string source);
+	const std::string& GetSource() const;
+	void SetWeapon(std::string weapon);
+	const std::string& GetWeapon() const;
+
+private:
+	std::string position;
+	std::string radius;
+	std::string damage;
+	std::string occlusion;
+	std::string power;
+	std::string source;
+	std::string weapon;
 };

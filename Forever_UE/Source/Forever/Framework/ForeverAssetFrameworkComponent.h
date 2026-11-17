@@ -15,6 +15,8 @@ class DeductAssetChange;
 class DropAssetChange;
 class SpawnEffectChange;
 class DestroyAssetChange;
+class SingleDamageChange;
+class AreaDamageChange;
 struct ScriptContext;
 
 // 世界掉落物的生成/销毁登记。背包UI的Drop/Pick动作分别调用SpawnWorldAsset/DestroyWorldAsset，见
@@ -60,8 +62,12 @@ public:
 	void ApplyDeductAsset(const DeductAssetChange* change, const ScriptContext& context);
 	void ApplyDropAsset(const DropAssetChange* change, const ScriptContext& context);
 
-	// spawn_effect：在指定资产(缺省=执行Change的脚本所属资产)的场景位置生成一次特效。
+	// spawn_effect：生成一次特效。位置取position字段("(x, y, z)"表达式，如$$local.hit)；留空则取指定资产
+	// (缺省=执行Change的脚本所属资产)的场景位置；两者都得不到(比如武器脚本没填position)就Warning并跳过。
 	void ApplySpawnEffect(const SpawnEffectChange* change, const ScriptContext& context);
+	// single_damage/area_damage：伤害Change的执行(扣血、致死处理见FForeverDamage)。area_damage的position规则同spawn_effect。
+	void ApplySingleDamage(const SingleDamageChange* change, const ScriptContext& context);
+	void ApplyAreaDamage(const AreaDamageChange* change, const ScriptContext& context);
 	// destroy_asset：销毁地面资产。这里只隐藏Actor并登记名字——同一个里程碑里后面的Change还要用这件资产的脚本
 	// (context.self)，所以真正的销毁(Actor+Asset)推迟到FlushPendingDestroy，由AForeverFrameworkActor::Tick调用。
 	void ApplyDestroyAsset(const DestroyAssetChange* change, const ScriptContext& context);
@@ -75,6 +81,10 @@ private:
 	// 生命周期不受影响：SpawnActor出来的Actor由World自己的Actor列表持有，不依赖这张表的
 	// 引用来防止GC，和ForeverWeaponComponent::currentWeapon(WeaponMod*)同一个道理。
 	TMap<Asset*, AAssetElement*> worldAssetActors;
+
+	// 位置表达式/资产解析成世界坐标：positionExpression非空按"(x, y, z)"解析，否则取asset(缺省=脚本所属资产)的Actor位置。
+	bool ResolvePosition(const std::string& positionExpression, const std::string& assetExpression,
+		const ScriptContext& context, FVector& out) const;
 
 	// 等待销毁的资产名(不存指针：销毁前它可能已经被捡走/换了容器，Flush时按名字重新找)。
 	std::vector<std::string> pendingDestroy;

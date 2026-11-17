@@ -16,13 +16,13 @@ const char* PistolWeapon::GetName() {
 }
 
 void PistolWeapon::SetProperty() {
-	fireMode = FireMode::Ballistic;
-	damage = 20.f;
+	fireMode = FireMode::Hitscan;
+	// 开火后的特效和伤害由武器脚本(Resource/Story/weapon_pistol.script)响应weapon_fire事件完成。
+	milestoneNames = { "weapon_pistol" };
 	fireRate = 0.2f;     // 每秒最多5发
 	fullAuto = false;
 	maxRange = 5000.f;    // 50米
 	baseSpread = 0.f;      // 随机散射半角(度)，暂时设成0=没有散射
-	muzzleVelocity = 25000.f; // 250m/s，游戏化初速(比真实枪低)，50米外下坠约20cm
 	magazineCapacity = 8;
 	reloadDuration = 2.f;
 

@@ -16,15 +16,15 @@ const char* ShotgunWeapon::GetName() {
 }
 
 void ShotgunWeapon::SetProperty() {
-	// 近距离高伤害、射速慢、泵动式(单发)。一次开火射出pelletCount颗弹丸，每颗独立散射、独立结算伤害，
-	// 所以damage是单颗弹丸的伤害(8颗全中约120)。
-	fireMode = FireMode::Ballistic;
-	damage = 15.f;
+	// 近距离高伤害、射速慢、泵动式(单发)。一次开火射出pelletCount颗弹丸，每颗独立散射、各发一次weapon_fire事件、
+	// 独立结算伤害，所以weapon_shotgun.script里的伤害是单颗弹丸的伤害(8颗全中约120)。
+	fireMode = FireMode::Hitscan;
+	// 开火后的特效和伤害由武器脚本(Resource/Story/weapon_shotgun.script)响应weapon_fire事件完成。
+	milestoneNames = { "weapon_shotgun" };
 	fireRate = 0.9f;
 	fullAuto = false;
 	maxRange = 2500.f;     // 25米，射程短
 	baseSpread = 2.5f;     // 随机散射半角(度)
-	muzzleVelocity = 20000.f; // 200m/s
 	pelletCount = 8;
 	magazineCapacity = 6;
 	reloadDuration = 2.5f;

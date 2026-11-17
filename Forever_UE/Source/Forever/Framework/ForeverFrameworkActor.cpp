@@ -538,6 +538,14 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		if (assetFramework) assetFramework->ApplyDestroyAsset(destroyAsset, context);
 		return;
 	}
+	if (auto* singleDamage = dynamic_cast<const SingleDamageChange*>(change)) {
+		if (assetFramework) assetFramework->ApplySingleDamage(singleDamage, context);
+		return;
+	}
+	if (auto* areaDamage = dynamic_cast<const AreaDamageChange*>(change)) {
+		if (assetFramework) assetFramework->ApplyAreaDamage(areaDamage, context);
+		return;
+	}
 
 	if (auto* reviveNpc = dynamic_cast<const NPCReviveChange*>(change)) {
 		ApplyReviveNpc(reviveNpc, context);

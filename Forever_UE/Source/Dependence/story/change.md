@@ -192,8 +192,9 @@ UE层`UForeverTrafficFrameworkComponent::ToggleRouteWatch`执行(路径来源：
 
 ## spawn_effect / destroy_asset（2026-11-17）
 
-- `spawn_effect`(`effect`、`scale`、`asset`，都是表达式、都可省略)：在一件资产的场景位置生成一次爆炸类特效(纯视觉)。`asset`缺省=执行脚本所属资产(同`pick_asset`)，位置取它的场景Actor，
-  没有Actor(已被捡进背包/已销毁)打Warning不生成。`effect`是特效**蓝图类路径**(如`"\"/Test/Effect/BP_GrenadeExplosion\""`)，**没有默认特效**：留空=什么都不生成；指定了路径但加载不到=不生成并打一条Warning；`scale`整体缩放，空=1。
+- `spawn_effect`(`effect`、`scale`、`asset`、`position`、`normal`，都是表达式、都可省略)：生成一次爆炸类特效(纯视觉)。位置：`position`非空时按`"(x, y, z)"`字符串解析(如`$$local.hit`)；
+  留空时取`asset`(缺省=执行脚本所属资产，同`pick_asset`)的场景Actor位置，没有Actor(已被捡进背包/已销毁)打Warning不生成。**没有场景实体的脚本(武器脚本)必须填`position`**。
+  `normal`同格式，是特效朝向(冲击波环贴着这个面)，留空=朝上。`effect`是特效**蓝图类路径**(如`"\"/Test/Effect/BP_GrenadeExplosion\""`)，**没有默认特效**：留空=什么都不生成；指定了路径但加载不到=不生成并打一条Warning；`scale`整体缩放，空=1。
   特效蓝图的父类是主程序里的`AForeverExplosionEffect`、只覆盖参数，所以特效可以完全放在mod的UE工程plugin里，见`Forever_Mod/README.md`"用mod提供特效蓝图"。UE层执行：`UForeverAssetFrameworkComponent::ApplySpawnEffect`。
 - `destroy_asset`(`asset`可省略=自己)：销毁**地上**(房间根或`Player::worldAssets`)的资产——场景Actor和Asset本体都删，Asset的脚本随之消失，它名下的计时器到时按键查不到会自动丢弃。身上/背包/容器里的不处理(打Warning)。
   **延迟销毁**：执行时只隐藏Actor、关碰撞并登记名字，真正销毁在`AForeverFrameworkActor::Tick`末尾的`FlushPendingDestroy`——同一个里程碑里后面的Change还要用这件资产脚本(`context.self`)，立刻delete会悬垂。
@@ -203,3 +204,16 @@ UE层`UForeverTrafficFrameworkComponent::ToggleRouteWatch`执行(路径来源：
 
 `Player::StoreAsset`在放进背包之前，先看背包直接子项里有没有**同type的非容器**物品：有且空间够就把数量并进去(和背包界面往容器里拖同类物品一致)，返回`StoreResult::Merged`。
 并入后被捡起/给出的那个`Asset`已无用，UE层用`UForeverAssetFrameworkComponent::QueueDelete`延迟到下一次`FlushPendingDestroy`才delete(执行脚本可能正是它自己的)，它的脚本和计时器随之消失——**被扔出去的手雷用`pick_asset`捡回并进背包，引信随之取消**。手里/肩上/后背的同类物品不参与合并(和手动放进槽位一致)。
+
+## single_damage / area_damage（2026-11-17）
+
+伤害只由这两个Change产生，枪、手雷、以后的弹射物都用它们，脚本负责算数值；UE层执行(`UForeverAssetFrameworkComponent::ApplySingleDamage/ApplyAreaDamage` → `FForeverDamage`，见`Forever/Player/ForeverDamage.md`)。
+Core里没有任何枪/伤害专用逻辑，`Citizen::TakeDamage`只管扣血。
+
+- `single_damage`(`target`、`damage`、`source`、`weapon`、`part`，都是表达式)：对一个目标扣`damage`点血。`target`现在只支持市民姓名(以后会同一个Change支持载具)，目标没有实例化(场景里没有Actor)就跳过，
+  姓名不存在打Warning。伤害数值/距离衰减/部位倍率都在脚本里用表达式和`condition`算(例：`20 * (1 - $$local.distance / 5000)`)。`source`(凶手姓名)、`weapon`(武器种类)、`part`(`head`/`body`/`legs`)只用于致死时的
+  `CitizenDeceaseEvent`(`reason`固定"player"，凶手是否可见和死亡地址由UE层算)，都可省略。扣完致死则产生击杀(广播死亡事件、处理死亡)，击杀不是Change，是扣血的后果。
+- `area_damage`(`position`、`radius`、`damage`、`occlusion`、`power`、`source`、`weapon`)：以`position`("(x, y, z)"，留空=脚本所属资产位置)为中心、`radius`(cm)为半径，对范围内**已实例化**的市民造成伤害，
+  每个市民的伤害 = `damage` × (1 − dist^power)，dist是该市民到中心的距离与`radius`的比值(超出半径=0)，`power`默认1(线性衰减)。`occlusion`为真时从中心(抬高30cm)到市民中心连一条线，被墙/地形挡住就不受伤(市民自己不算遮挡物)。
+  范围内含玩家当前操控的市民(玩家也是市民)；`Player`自己的血量(`Player::TakeDamage`)不在这里处理。`source`/`weapon`含义同`single_damage`。
+- 用法：`Resource/Story/weapon_*.script`(`weapon_fire`→`spawn_effect`+`single_damage`)、`Resource/Story/asset_grenade.script`(`time_up`→`spawn_effect`+`area_damage`+`destroy_asset`)。

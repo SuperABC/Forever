@@ -39,6 +39,8 @@ public:
 
 	// 手上是否激活了武器。
 	bool HasWeapon() const { return currentWeapon != nullptr; }
+	// 当前装备的武器(没有则nullptr)，只读用：UForeverStoryFrameworkComponent::FindScriptByKey按"weapon:<id>"找武器脚本。
+	Weapon* GetWeapon() const { return currentWeapon; }
 
 	// 清空当前武器，不装备新的(切到空肩膀时手上要跟着空下来)。
 	void ClearWeapon();
@@ -50,11 +52,9 @@ public:
 private:
 	// 一次开火：瞄准/冷却/弹药检查通过后，按WeaponMod的FireMode分派到下面各自的结算路径。
 	void Fire();
-	// Hitscan：从摄像机打一条射线，命中市民则结算伤害，致死则广播事件。
+	// Hitscan：pelletCount颗弹丸各从摄像机打一条射线，每颗发一次weapon_fire事件给武器脚本，特效和伤害由脚本的Change完成。
 	void FireHitscan(AForeverCharacter* character);
-	// Ballistic：从枪口朝摄像机瞄准点发射pelletCount颗子弹，交给UForeverBulletSubsystem逐帧飞行，命中延迟到抵达。
-	void FireBallistic(AForeverCharacter* character);
-	// 每次开火的后坐力(Hitscan/Ballistic共用)。
+	// 每次开火的后坐力(一次开火只踢一次)。
 	void ApplyRecoil(AForeverCharacter* character);
 	// Custom(相机等)：调Weapon::FireCustom → WeaponMod::OnFire，mod通过PostHandle向Core发请求(相机=截屏)。
 	void FireCustom(AForeverCharacter* character);

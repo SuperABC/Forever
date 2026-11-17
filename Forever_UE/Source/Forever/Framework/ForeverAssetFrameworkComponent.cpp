@@ -5,6 +5,11 @@
 
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Player/ForeverExplosionEffect.h"
+#include "Player/ForeverDamage.h"
+#include "Element/CitizenElement.h"
+#include "Framework/ForeverPopulaceFrameworkComponent.h"
+#include "populace/populace.h"
+#include "populace/citizen.h"
 
 #include "player/player.h"
 #include "player/asset.h"
@@ -349,14 +354,74 @@ void UForeverAssetFrameworkComponent::ApplyDropAsset(const DropAssetChange* chan
 	}
 }
 
-void UForeverAssetFrameworkComponent::ApplySpawnEffect(const SpawnEffectChange* change, const ScriptContext& context) {
-	// 没有默认特效：effect留空=什么都不生成(枪击等C++直接调Spawn的路径不受影响)。
-	if (change->GetEffect().empty()) return;
-	const std::string name = ResolveTargetAssetName(change->GetAsset(), context);
+bool UForeverAssetFrameworkComponent::ResolvePosition(const std::string& positionExpression, const std::string& assetExpression,
+	const ScriptContext& context, FVector& out) const {
+	if (!positionExpression.empty()) {
+		return FForeverDamage::ParseVec3(ToString(EvaluateExpression(positionExpression, context)), out);
+	}
+	const std::string name = ResolveTargetAssetName(assetExpression, context);
 	AAssetElement* element = name.empty() || !GetWorld() ? nullptr : FindElementByName(UTF8_TO_TCHAR(name.c_str()));
-	if (!element) {
-		UE_LOG(LogTemp, Warning, TEXT("spawn_effect: asset \"%s\" has no actor in the world (picked up / destroyed?), skipped."), UTF8_TO_TCHAR(name.c_str()));
+	if (!element) return false;
+	out = element->GetActorLocation();
+	return true;
+}
+
+void UForeverAssetFrameworkComponent::ApplySingleDamage(const SingleDamageChange* change, const ScriptContext& context) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (!framework || !GetWorld() || !framework->GetPopulace() || !framework->GetPopulaceFramework()) return;
+
+	const std::string targetName = ToString(EvaluateExpression(change->GetTarget(), context));
+	if (targetName.empty()) return;
+	Citizen* citizen = framework->GetPopulace()->FindCitizenByName(targetName);
+	if (!citizen) {
+		UE_LOG(LogTemp, Warning, TEXT("single_damage: unknown target \"%s\", skipped."), UTF8_TO_TCHAR(targetName.c_str()));
 		return;
+	}
+	// 目标没实例化(没有Actor)就跳过：伤害只对场景里的目标生效。
+	ACitizenElement* element = framework->GetPopulaceFramework()->FindActiveCitizen(citizen);
+	if (!element) return;
+
+	const float damage = static_cast<float>(ToDouble(EvaluateExpression(change->GetDamage(), context)));
+	if (damage <= 0.f) return;
+	auto text = [&](const std::string& expression) {
+		return expression.empty() ? std::string() : ToString(EvaluateExpression(expression, context));
+	};
+	FForeverDamage::DamageCitizen(GetWorld(), element, damage, text(change->GetSource()), text(change->GetWeapon()), text(change->GetPart()));
+}
+
+void UForeverAssetFrameworkComponent::ApplyAreaDamage(const AreaDamageChange* change, const ScriptContext& context) {
+	FVector center;
+	if (!ResolvePosition(change->GetPosition(), std::string(), context, center)) {
+		UE_LOG(LogTemp, Warning, TEXT("area_damage: no position (position missing/invalid and the script has no world actor), skipped."));
+		return;
+	}
+
+	auto number = [&](const std::string& expression, double fallback) {
+		return expression.empty() ? fallback : ToDouble(EvaluateExpression(expression, context));
+	};
+	auto text = [&](const std::string& expression) {
+		return expression.empty() ? std::string() : ToString(EvaluateExpression(expression, context));
+	};
+	const bool occlusion = !change->GetOcclusion().empty() && ToBool(EvaluateExpression(change->GetOcclusion(), context));
+	FForeverDamage::DamageArea(GetWorld(), center, static_cast<float>(number(change->GetRadius(), 0.0)),
+		static_cast<float>(number(change->GetDamage(), 0.0)), occlusion, static_cast<float>(number(change->GetPower(), 1.0)),
+		text(change->GetSource()), text(change->GetWeapon()));
+}
+
+void UForeverAssetFrameworkComponent::ApplySpawnEffect(const SpawnEffectChange* change, const ScriptContext& context) {
+	// 没有默认特效：effect留空=什么都不生成。
+	if (change->GetEffect().empty()) return;
+	FVector location;
+	if (!ResolvePosition(change->GetPosition(), change->GetAsset(), context, location)) {
+		UE_LOG(LogTemp, Warning, TEXT("spawn_effect: no position (position invalid, or the asset has no actor in the world: picked up / destroyed?), skipped."));
+		return;
+	}
+	FVector normal = FVector::UpVector;
+	if (!change->GetNormal().empty()) {
+		FVector parsed;
+		if (FForeverDamage::ParseVec3(ToString(EvaluateExpression(change->GetNormal(), context)), parsed) && !parsed.IsNearlyZero()) {
+			normal = parsed.GetSafeNormal();
+		}
 	}
 
 	float scale = 1.f;
@@ -365,7 +430,7 @@ void UForeverAssetFrameworkComponent::ApplySpawnEffect(const SpawnEffectChange* 
 	const FString effect = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetEffect(), context)).c_str());
 	if (effect.IsEmpty()) return;
 
-	AForeverExplosionEffect::Spawn(GetWorld(), element->GetActorLocation(), FVector::UpVector, scale, effect);
+	AForeverExplosionEffect::Spawn(GetWorld(), location, normal, scale, effect);
 }
 
 void UForeverAssetFrameworkComponent::ApplyDestroyAsset(const DestroyAssetChange* change, const ScriptContext& context) {

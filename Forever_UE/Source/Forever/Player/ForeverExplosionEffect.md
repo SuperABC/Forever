@@ -1,7 +1,7 @@
 # ForeverExplosionEffect
 
 ## 职责
-命中点的一次性程序化爆炸特效(纯视觉)。由`UForeverWeaponComponent::Fire()`在命中`ACitizenElement`时通过`AForeverExplosionEffect::Spawn(world, 位置, 法线, 缩放)`生成,播放`totalDuration`秒后自动`Destroy()`。
+命中点的一次性程序化爆炸特效(纯视觉)。由脚本的`spawn_effect` Change(`UForeverAssetFrameworkComponent::ApplySpawnEffect`，枪的`weapon_fire`/手雷的`time_up`等事件里)通过`AForeverExplosionEffect::Spawn(world, 位置, 法线, 缩放, 蓝图路径)`生成,播放`totalDuration`秒后自动`Destroy()`。
 
 ## 关键设计
 - **几何不依赖手工资产**:网格全部用引擎内置`/Engine/BasicShapes/Sphere`球体网格+`UPointLightComponent`,由Actor的`Tick`驱动。Niagara未启用,也不引入。
@@ -25,4 +25,4 @@
 
 ## 蓝图子类 / spawn_effect（2026-11-17）
 
-`Spawn(world, location, normal, scale, effectClassPath)`新增可选的蓝图类路径：非空时`LoadClass<AForeverExplosionEffect>`并生成该子类，路径不含`.`时自动补`.<名>_C`；指定了路径却加载不到时**不生成任何特效**(不回退默认爆炸，只打一条Warning`特效蓝图加载失败，不生成特效: <路径>`)；路径留空才用默认类(这是枪击等C++直接调`Spawn`的行为；脚本`spawn_effect`的`effect`留空则根本不调`Spawn`，没有默认特效)。mod的特效就是**父类为本类、只覆盖`UPROPERTY(EditAnywhere)`参数的蓝图**，放在mod的UE迷你工程plugin里(Test：`/Test/Effect/BP_GrenadeExplosion`)，由脚本`spawn_effect`的`effect`字段指定。新增被BP继承的参数时注意名字一经发布就是兼容接口。
+`Spawn(world, location, normal, scale, effectClassPath)`新增可选的蓝图类路径：非空时`LoadClass<AForeverExplosionEffect>`并生成该子类，路径不含`.`时自动补`.<名>_C`；指定了路径却加载不到时**不生成任何特效**(不回退默认爆炸，只打一条Warning`特效蓝图加载失败，不生成特效: <路径>`)；路径留空才用默认类(这是枪击等C++直接调`Spawn`的行为；脚本`spawn_effect`的`effect`留空则根本不调`Spawn`，没有默认特效)。mod的特效就是**父类为本类、只覆盖`UPROPERTY(EditAnywhere)`参数的蓝图**，可以放在mod的UE迷你工程plugin里，也可以放在主工程(枪击`/Game/Asset/Effects/BP_BulletImpact`、手雷`/Game/Asset/Effects/BP_GrenadeExplosion`，由`Tools/make_effect_blueprints.py`生成，2026-11-17手雷从Test迷你工程搬回主程序)，由脚本`spawn_effect`的`effect`字段指定。新增被BP继承的参数时注意名字一经发布就是兼容接口。

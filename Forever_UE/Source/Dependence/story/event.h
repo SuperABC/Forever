@@ -842,7 +842,8 @@ private:
 // (没有脚本就不发)。脚本里读$$local.type(资产mod id)。手雷脚本在这里create_timer计时爆炸。
 class ThrowAssetEvent : public Event {
 public:
-	ThrowAssetEvent(std::string type);
+	// thrower：投掷者(玩家当前操控的市民)姓名，只作为local变量给脚本用，不参与Match。
+	ThrowAssetEvent(std::string type, std::string thrower = std::string());
 	virtual ~ThrowAssetEvent();
 
 	virtual const std::string& GetType() const override;
@@ -851,7 +852,57 @@ public:
 
 	void SetAssetType(std::string type);
 	const std::string& GetAssetType() const;
+	void SetThrower(std::string thrower);
+	const std::string& GetThrower() const;
 
 private:
 	std::string type;
+	std::string thrower;
+};
+
+// 开火：玩家用一把武器(WeaponMod)开了一枪(霰弹每颗弹丸各一次)，通过瞄准/冷却/弹药闸门之后由UE层发出，
+// 只发给这把武器自己的脚本(Weapon持有，没有脚本则不发)。触发条件里weapon_type可空=不限，留空匹配所有武器。
+// 脚本里读$$local.xxx：
+//   weapon(武器mod id)、shooter(开火市民姓名)、sufferer(被射线打中的市民姓名，没有则空)、
+//   part(命中部位head/body/legs，没有则空)、distance(浮点，摄像机到hit的距离)；
+//   vec3：asset(武器模型位置)、fire(枪口)、hit(射线交点，没打中是射程终点)、direction(出射单位方向)、
+//   normal(命中面法线，没打中朝上)。每个vec3有字符串形式$$local.hit="(x, y, z)"和浮点分量$$local.hit.x/.y/.z。
+class WeaponFireEvent : public Event {
+public:
+	WeaponFireEvent(std::string weapon);
+	virtual ~WeaponFireEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetWeapon(std::string weapon);
+	const std::string& GetWeapon() const;
+
+	// 设置一个普通local字段(字符串/浮点)。
+	void SetField(const std::string& name, ValueType value);
+	// 设置一个vec3 local：同时写入name="(x, y, z)"和name.x/name.y/name.z三个浮点。
+	void SetVec3(const std::string& name, double x, double y, double z);
+
+private:
+	std::string weapon;
+	std::map<std::string, ValueType> fields;
+};
+
+// 弹射物命中：mod蓝图里的弹射物Actor(UForeverProjectileBridgeComponent)撞到东西后报告，发给发射它的武器脚本。
+// 脚本里读$$local.hit/normal(vec3，规则同WeaponFireEvent)、$$local.sufferer(被击中的市民姓名，可空)。
+class ProjectileHitEvent : public Event {
+public:
+	ProjectileHitEvent();
+	virtual ~ProjectileHitEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	void SetField(const std::string& name, ValueType value);
+	void SetVec3(const std::string& name, double x, double y, double z);
+
+private:
+	std::map<std::string, ValueType> fields;
 };

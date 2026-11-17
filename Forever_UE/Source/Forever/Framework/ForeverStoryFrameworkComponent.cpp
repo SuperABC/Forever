@@ -8,6 +8,9 @@
 #include "Element/AssetElement.h"
 #include "Element/CitizenElement.h"
 #include "Player/ForeverPlayerController.h"
+#include "Player/ForeverWeaponComponent.h"
+#include "Player/ForeverProjectileBridgeComponent.h"
+#include "GameFramework/Pawn.h"
 #include "UI/SectionSpeakingWidget.h"
 #include "UI/BackgroundSpeakingWidget.h"
 #include "UI/SectionOptionWidget.h"
@@ -38,6 +41,7 @@
 #include "traffic/traffic.h"
 #include "traffic/vehicle.h"
 #include "player/asset.h"
+#include "player/weapon.h"
 #include "map/door.h"
 #include "map/map.h"
 #include "map/cabin.h"
@@ -323,7 +327,7 @@ void UForeverStoryFrameworkComponent::NotifyAssetEvent(Asset* root, bool bGet, c
 	assetEventDepth--;
 }
 
-void UForeverStoryFrameworkComponent::NotifyThrowAsset(Asset* asset) {
+void UForeverStoryFrameworkComponent::NotifyThrowAsset(Asset* asset, const string& thrower) {
 	if (!story || !asset || !asset->GetScript()) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	PostImplement postImplement(
@@ -334,8 +338,53 @@ void UForeverStoryFrameworkComponent::NotifyThrowAsset(Asset* asset) {
 		framework ? framework->GetIndustry() : nullptr,
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
-	ThrowAssetEvent event(asset->GetType());
+	ThrowAssetEvent event(asset->GetType(), thrower);
 	BroadcastToScript(event, asset->GetScript(), postImplement);
+}
+
+void UForeverStoryFrameworkComponent::NotifyWeaponFire(Weapon* weapon, const FWeaponFireInfo& info) {
+	if (!story || !weapon || !weapon->GetScript()) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	WeaponFireEvent event(weapon->GetType());
+	event.SetField("shooter", ValueType(info.shooter));
+	event.SetField("sufferer", ValueType(info.sufferer));
+	event.SetField("part", ValueType(info.part));
+	event.SetField("distance", ValueType(static_cast<double>(info.distance)));
+	event.SetVec3("asset", info.asset.X, info.asset.Y, info.asset.Z);
+	event.SetVec3("fire", info.fire.X, info.fire.Y, info.fire.Z);
+	event.SetVec3("hit", info.hit.X, info.hit.Y, info.hit.Z);
+	event.SetVec3("direction", info.direction.X, info.direction.Y, info.direction.Z);
+	event.SetVec3("normal", info.normal.X, info.normal.Y, info.normal.Z);
+	BroadcastToScript(event, weapon->GetScript(), postImplement);
+}
+
+void UForeverStoryFrameworkComponent::NotifyProjectileHit(const string& ownerKey, const FVector& hit, const FVector& normal,
+	const string& sufferer) {
+	if (!story || ownerKey.empty()) return;
+	Script* owner = FindScriptByKey(ownerKey);
+	if (!owner) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	ProjectileHitEvent event;
+	event.SetField("sufferer", ValueType(sufferer));
+	event.SetVec3("hit", hit.X, hit.Y, hit.Z);
+	event.SetVec3("normal", normal.X, normal.Y, normal.Z);
+	BroadcastToScript(event, owner, postImplement);
 }
 
 void UForeverStoryFrameworkComponent::NotifyAssetResult(bool bGet, const string& type, const string& result, Script* sender) {
@@ -929,6 +978,14 @@ Script* UForeverStoryFrameworkComponent::FindScriptByKey(const string& key) cons
 		Vehicle* vehicle = traffic ? traffic->FindVehicleByName(key.substr(8)) : nullptr;
 		return vehicle ? vehicle->GetScript() : nullptr;
 	}
+	if (key.compare(0, 7, "weapon:") == 0) {
+		// 武器脚本：只有玩家当前装备的那把有(Weapon持有，换枪即销毁)，键里是武器id。
+		APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+		UForeverWeaponComponent* weapons = pawn ? pawn->FindComponentByClass<UForeverWeaponComponent>() : nullptr;
+		Weapon* weapon = weapons ? weapons->GetWeapon() : nullptr;
+		Script* weaponScript = weapon ? weapon->GetScript() : nullptr;
+		return weaponScript && weaponScript->GetStableKey() == key ? weaponScript : nullptr;
+	}
 	if (key.compare(0, 6, "asset:") == 0) {
 		// 资产名全局唯一：先找玩家身上/地上的，再找房间里的(都是不分配的遍历)。
 		const string name = key.substr(6);
@@ -1276,7 +1333,17 @@ void UForeverStoryFrameworkComponent::AdvanceBackground() {
 	if (!finishedLabel.empty()) BroadcastSpeakingFinish(finishedLabel);
 }
 
+void UForeverStoryFrameworkComponent::BeginPlay() {
+	Super::BeginPlay();
+	// 弹射物蓝图(mod里)报告命中 -> projectile_hit事件发给所有者脚本。
+	UForeverProjectileBridgeComponent::HitHandler().BindLambda(
+		[this](const FString& ownerKey, const FVector& hit, const FVector& normal, const FString& sufferer) {
+			NotifyProjectileHit(string(TCHAR_TO_UTF8(*ownerKey)), hit, normal, string(TCHAR_TO_UTF8(*sufferer)));
+		});
+}
+
 void UForeverStoryFrameworkComponent::EndPlay(const EEndPlayReason::Type EndPlayReason) {
+	UForeverProjectileBridgeComponent::HitHandler().Unbind();
 	if (UWorld* world = GetWorld()) world->GetTimerManager().ClearTimer(backgroundTimer);
 	backgroundQueue.Reset();
 	Super::EndPlay(EndPlayReason);

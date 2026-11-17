@@ -11,7 +11,7 @@
 ## 关键设计
 
 ### 高频/低频两条路径
-**高频路径**(每次开火/命中):`Fire()`直接调`LineTraceSingleByChannel`+`WeaponMod::ComputeDamage()`+`Citizen::TakeDamage()`,纯C++调用,不经过Story/Change/Event——一场火拼每秒可能打好几发,都走Story的`Script::MatchEvent`(对`mainScript`所有`actives`里程碑做完整匹配)是明显的性能陷阱(参照`ForeverPopulaceFrameworkComponent.md`里`Populace::Tick`集中调度导致卡顿的教训)。
+**开火路径**(2026-11-17改)：`Fire()`通过瞄准/冷却/弹药闸门后，`FireHitscan`对每颗弹丸打一条`LineTraceSingleByChannel`射线，把结果(`hit`/`normal`/`sufferer`/`part`/`distance`/`fire`/`asset`/`direction`)交给`UForeverStoryFrameworkComponent::NotifyWeaponFire`，变成`weapon_fire`事件发给`Weapon`自己的脚本；特效和伤害都由脚本里的`spawn_effect`/`single_damage`完成，UE层不再直接扣血、不再放特效。事件只发给这把武器的脚本，不走全城广播，开火频率下开销可接受。
 **低频/叙事阈值路径**(目前只有一个):命中导致Citizen死亡时广播一次`CitizenDeceaseEvent`——这是唯一"值得让剧情系统知道"的时刻。
 
 ### 为什么不做成通用的"广播任意Event"机制
@@ -20,18 +20,18 @@
 2. 通缉值→警察JobMod这条真正需要通用广播机制的链路不在当前范围内,现有需求用已有写法就能满足。
 
 ### `WeaponMod`没有`Fire()`/`ApplyRecoil()`虚方法
-`WeaponMod`只留纯数据字段(`damage`/`maxRange`/`baseSpread`/`fireRate`/`magazineCapacity`/`reloadDuration`等)+一个纯数学的`ComputeDamage(float distance)`虚方法(只用Core类型,和`BuildingMod::Layout()`只用`Quad`/`Road*`同一约定),真正的开火判定/相机取值/碰撞查询都放在这个UE侧组件里——避免发明一套"Dependence层声明、Forever层实现"的跨层虚方法签名。唯一例外是`OnFire(PostHandle*)`：`Custom`开火方式的武器(相机)开火后回调，mod只能通过`PostHandle`向Core发请求，不碰UE类型。
+`WeaponMod`只留纯数据字段(`maxRange`/`baseSpread`/`fireRate`/`magazineCapacity`/`reloadDuration`等，没有伤害)，真正的开火判定/相机取值/碰撞查询都放在这个UE侧组件里——避免发明一套"Dependence层声明、Forever层实现"的跨层虚方法签名。唯一例外是`OnFire(PostHandle*)`：`Custom`开火方式的武器(相机)开火后回调，mod只能通过`PostHandle`向Core发请求，不碰UE类型。
 
 ### 命中判定用`ECC_Pawn`,不是`ECC_Visibility`
 这个项目的`Pawn`碰撞预设对`Visibility`通道是`Ignore`(见`CONVENTIONS.md`第11节),用`ECC_Visibility`做射线检测会打墙正常、打citizen直接穿过去。`Fire()`用`ECC_Pawn`通道,`BlockAll`/`BlockAllDynamic`对未覆盖通道默认Block(挡墙),`Pawn`预设对`Pawn`通道也是默认Block(挡citizen),两者都正常命中。
-只有打中`ACitizenElement`才算"命中":`Cast<ACitizenElement>(hit.GetActor())`失败(打墙/打别的/未命中)在伤害判定上完全等价,直接返回,不计算`ComputeDamage()`。命中也不往屏幕上打印。
+射线打到什么都发事件(墙/地面/市民/没打中，没打中`hit`取射程终点)。`sufferer`只填打中的**活着的**`ACitizenElement`的姓名，`part`按命中点相对高度粗分(`FForeverDamage::ClassifyPart`)。是否放特效、是否扣血由脚本的`condition`决定。
 
-### 开火的两种命中方式
-- **`FireMode::Hitscan`**：`LineTraceSingleByChannel`的`start`是摄像机位置，瞬间判定。
-- **`FireMode::Ballistic`**(四把枪默认)：`FireBallistic`先从摄像机打一条射线找瞄准点(命中点，没命中取射程终点，保证"看哪打哪")，再让`pelletCount`颗子弹从枪口(`UForeverWeaponVisualComponent::GetActiveMuzzleWorldLocation`)朝瞄准点飞，每颗在`baseSpread`圆锥内独立散射。瞄准点离枪口<50cm或方向与摄像机朝向夹角>45°(第三人称贴墙)时退回摄像机朝向。子弹交给`UForeverBulletSubsystem`飞行和结算，见`ForeverBulletSubsystem.md`；伤害曲线(`ComputeDamage`)在发射时采样9点存进子弹，射手换枪/死亡不影响飞行中的子弹。射线和子弹都忽略射手本人和挂在他身上的Actor(武器模型)。
-- 两者共用`ApplyRecoil`(后坐力)和`UForeverBulletSubsystem::ApplyCitizenHit`(伤害、爆炸特效、击杀事件)。
+### 开火：每颗弹丸一条射线、一个事件
+- `FireHitscan`：起点是摄像机位置(保证"看哪打哪")，`pelletCount`颗弹丸各在`baseSpread`圆锥内随机方向打一条射线，先把所有弹丸的结果都算好(只读场景)，再依次发事件(事件里的Change可能让市民死亡、换枪，每发之前核对武器还在)。
+- `ApplyRecoil`一次开火只踢一次(下一发的朝向)。`fire`取`GetActiveMuzzleWorldLocation`(没有模型退回摄像机位置)，`asset`取`GetActiveWeaponWorldLocation`(武器模型位置，没有退回角色位置)。
+- 没有飞行弹道/曳光线(2026-11-17删了`UForeverBulletSubsystem`)，枪口到命中点的光线以后由脚本放特效Change实现。
 
-命中citizen时在`hit.ImpactPoint`额外生成一个`AForeverExplosionEffect`(程序化爆炸,纯视觉,见`ForeverExplosionEffect.md`);打墙不触发。目前没有枪口火光的真实VFX资产。
+命中点特效不再由C++放：`Resource/Story/weapon_*.script`每次开火在`hit`处`spawn_effect`枪击特效蓝图(`/Game/Asset/Effects/BP_BulletImpact`)，打墙/地面/市民都放。目前没有枪口火光的真实VFX资产。
 
 ### 武器模型和摆放：交给ForeverWeaponVisualComponent
 这个组件不生成/挂载武器模型：模型的生成、背在背后、瞄准时举到枪口位置都在`UForeverWeaponVisualComponent`，见`ForeverWeaponVisualComponent.md`。`WeaponMod::attachOffsetX/Y/Z`的含义是"瞄准时枪口摆放的位置"(角色本地，X前/Y右/Z上，cm)。开火判定仍然只读摄像机，不受模型影响。
@@ -74,7 +74,7 @@
 
 ## 待办/后续阶段
 - 通缉值(`ChangeWantedChange`)/警察`JobMod`/反抗小游戏(`StartPuzzleChange`可复用现成的`PuzzleMod`/`Canvas`/`PuzzleWidget`机制)/`ArrestPlayerChange`——需要先补"任意Event广播给剧情脚本"的通用机制。
-- `Player::TakeDamage`没有调用方,等有会反击的NPC/敌人再接上。
+- `Player::TakeDamage`没有调用方(`area_damage`/`single_damage`只处理市民),等有会反击的NPC/敌人再接上。
 - 武器状态不按角色持久化(每次被占有都重置成默认肩挂装备)。
 - 具体弹道/后坐力/散射数值需在PIE里调优(机制已实现,当前数值为随手定的测试值)。
 - 准心是固定尺寸的原生"+",未换成贴图资产、未跟随`baseSpread`动态张开。随机散射机制在(`baseSpread`半角圆锥)，Basic里手枪/步枪的`baseSpread`目前都设成0(没有散射)。

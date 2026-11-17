@@ -5,6 +5,8 @@
 
 #include <string>
 
+class Script;
+
 
 // Weapon：一把武器的实例——和Asset一致的"factory+mod，构造时把字段原样拷一份到自己身上"
 // 模式(见asset.h/asset.md)，不把WeaponMod*直接暴露给Forever层，所有字段都通过Getter读。
@@ -22,6 +24,13 @@ public:
 	bool IsValid() const;
 
 	const std::string& GetType() const;
+
+	// 武器脚本(mod的scriptModName/milestoneNames，都空则为nullptr，见MakeScript)：开火事件(weapon_fire)发给它，
+	// 开火后的特效和伤害都由它调用Change完成。脚本和武器解耦(不依赖肩上的Asset)，Weapon析构时一起销毁，不进存档。
+	// 构造Weapon时不创建(FindDef这类只读模型参数的临时Weapon不需要)，装备武器的地方调一次EnsureScript。
+	// 稳定键"weapon:<武器id>"，同一时刻只装备一把，create_timer等按键查找脚本靠这个键。
+	void EnsureScript();
+	Script* GetScript() const;
 
 	const std::string& GetFirstPersonMeshPath() const;
 	const std::string& GetGripSocketName() const;
@@ -41,13 +50,10 @@ public:
 	float GetBackOffsetZ() const;
 
 	FireMode GetFireMode() const;
-	float GetDamage() const;
 	float GetFireRate() const;
 	bool IsFullAuto() const;
 	float GetMaxRange() const;
 	float GetBaseSpread() const;
-	float GetMuzzleVelocity() const;
-	float GetBulletGravityScale() const;
 	int GetPelletCount() const;
 
 	int GetMagazineCapacity() const;
@@ -61,17 +67,14 @@ public:
 	float GetRecoilYawMin() const;
 	float GetRecoilYawMax() const;
 
-	// 转发给mod->ComputeDamage(distance)——保留mod指针活到Weapon析构，就是为了这个转发
-	// (唯一一个没法在构造时就拷完值的字段，因为它是按距离算的，不是常量)。
-	float ComputeDamage(float distance) const;
-
-	// fireMode==Custom的武器开火：转发给mod->OnFire(post)，由mod自己通过post向Core发请求。
+	// fireMode==Custom的武器开火：转发给mod->OnFire(post)，由mod自己通过post向Core发请求(保留mod指针活到Weapon析构就是为了这个转发)。
 	void FireCustom(PostHandle* post) const;
 
 private:
 	WeaponFactory* factory;
 	WeaponMod* mod;
 	std::string type;
+	Script* script = nullptr;
 
 	std::string firstPersonMeshPath;
 	std::string gripSocketName;
@@ -91,13 +94,10 @@ private:
 	float backOffsetZ = 0.f;
 
 	FireMode fireMode = FireMode::Hitscan;
-	float damage = 0.f;
 	float fireRate = 0.f;
 	bool fullAuto = false;
 	float maxRange = 0.f;
 	float baseSpread = 0.f;
-	float muzzleVelocity = 0.f;
-	float bulletGravityScale = 1.f;
 	int pelletCount = 1;
 
 	int magazineCapacity = 0;

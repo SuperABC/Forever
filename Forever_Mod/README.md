@@ -94,6 +94,10 @@ lambda内部完成到基类指针的隐式转换。
 
 ## 用mod提供特效蓝图
 
+> **2026-11-17更新**：手雷爆炸和枪击特效的蓝图已搬回主工程(`/Game/Asset/Effects/BP_GrenadeExplosion`、`BP_BulletImpact`，由`Forever_UE/Tools/make_effect_blueprints.py`生成)，
+> Test迷你工程里的`BP_GrenadeExplosion`已删除。下面的做法仍然成立：mod自己的特效/弹射物蓝图继承主程序里的C++类(`AForeverExplosionEffect`特效、
+> `UForeverProjectileBridgeComponent`弹射物命中桥)，桩模块里硬链接的就是这几个文件，迷你工程里的`Scripts/make_grenade_effect.py`保留当作建蓝图的范例。
+
 **结论**：爆炸这类特效是主程序里的C++类`AForeverExplosionEffect`(`Forever_UE/Source/Forever/Player/ForeverExplosionEffect.*`，参数都是`UPROPERTY(EditAnywhere)`)。mod不能带新的UE C++类，但可以带**父类为它、只覆盖参数的蓝图**：`Test`迷你工程的plugin里的`/Test/Effect/BP_GrenadeExplosion`(手雷爆炸，半径/时长/烟比枪击大)。脚本里用`spawn_effect`的`effect`字段按路径引用它(`Forever_UE/Resource/Story/asset_grenade.script`)，没有这个蓝图/没装Test plugin时不生成特效，日志里有一条Warning“特效蓝图加载失败”。
 
 **迷你工程里的Forever桩模块**(`Forever_Mod/Test/UE/Test/Source/Forever`，Editor-only)：蓝图要在迷你工程的编辑器里选到父类、保存、cook，就必须有一个叫`Forever`的模块里有这个类。**但不需要整套主程序源码**——特效类是纯UE类，只把`ForeverExplosionEffect.h/.cpp`和`ForeverExplosionShake.h/.cpp`从主工程`Source/Forever/Player/`建**NTFS硬链接**(PowerShell `New-Item -ItemType HardLink`)到迷你工程`Source/Forever/Player/`，`Forever.Build.cs`只依赖`Core/CoreUObject/Engine`，不链接`Dependence`/`Core`。游戏运行时用的永远是主程序exe里的同名类，这个模块不进游戏。以后要给别的类做蓝图，同样把那个类的头/源文件硬链接进来(类依赖`Core`内核的就不适合)，保持"类名/`UPROPERTY`名一经发布就是兼容接口"。硬链接被"替换文件"方式保存的工具断开时要重建。

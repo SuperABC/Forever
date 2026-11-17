@@ -1,0 +1,24 @@
+{
+	// 手枪：开火(weapon_fire事件，UE层射线求交后发给这把武器自己的脚本，霰弹每颗弹丸各一次)后
+	//   1. 在命中点放枪击特效(打到墙/地面/市民都放；没打中是射程终点)，朝向命中面法线；
+	//   2. 打中了活着的市民才扣血：伤害 = 20 * (1 - 距离/射程5000)，线性衰减(和以前WeaponMod::ComputeDamage一致)。
+	// 特效蓝图路径见Forever_UE/Tools/make_effect_blueprints.py，蓝图不存在时不生成特效并打Warning。
+	"milestones": [
+		{
+			"milestone": "fire",
+			"triggers": [ { "type": "weapon_fire" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "spawn_effect", "effect": "\"/Game/Asset/Effects/BP_BulletImpact\"", "position": "$$local.hit", "normal": "$$local.normal" },
+				{ "type": "single_damage", "condition": "$$local.sufferer != \"\"", "target": "$$local.sufferer",
+					"damage": "20 * (1 - $$local.distance / 5000)",
+					"source": "$$local.shooter", "weapon": "$$local.weapon", "part": "$$local.part" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

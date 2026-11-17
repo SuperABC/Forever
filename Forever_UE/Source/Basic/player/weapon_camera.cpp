@@ -18,7 +18,6 @@ const char* CameraWeapon::GetName() {
 void CameraWeapon::SetProperty() {
 	// 相机：不用弹药(magazineCapacity=0)、没有伤害/散射/后坐力，开火走Custom：OnFire里向Core发"screenshot"请求截屏。
 	fireMode = FireMode::Custom;
-	damage = 0.f;
 	fireRate = 1.f;      // 两次拍照最小间隔
 	fullAuto = false;
 	maxRange = 0.f;

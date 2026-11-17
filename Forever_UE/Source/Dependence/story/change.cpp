@@ -1942,8 +1942,9 @@ SpawnEffectChange::SpawnEffectChange() :
 
 }
 
-SpawnEffectChange::SpawnEffectChange(std::string effect, std::string scale, std::string asset) :
-	effect(move(effect)), scale(move(scale)), asset(move(asset)) {
+SpawnEffectChange::SpawnEffectChange(std::string effect, std::string scale, std::string asset, std::string position,
+	std::string normal) :
+	effect(move(effect)), scale(move(scale)), asset(move(asset)), position(move(position)), normal(move(normal)) {
 
 }
 
@@ -1980,6 +1981,22 @@ const std::string& SpawnEffectChange::GetAsset() const {
 	return asset;
 }
 
+void SpawnEffectChange::SetPosition(std::string position) {
+	this->position = move(position);
+}
+
+const std::string& SpawnEffectChange::GetPosition() const {
+	return position;
+}
+
+void SpawnEffectChange::SetNormal(std::string normal) {
+	this->normal = move(normal);
+}
+
+const std::string& SpawnEffectChange::GetNormal() const {
+	return normal;
+}
+
 DestroyAssetChange::DestroyAssetChange() :
 	asset() {
 
@@ -2005,4 +2022,140 @@ void DestroyAssetChange::SetAsset(std::string asset) {
 
 const std::string& DestroyAssetChange::GetAsset() const {
 	return asset;
+}
+
+SingleDamageChange::SingleDamageChange() :
+	target(), damage(), source(), weapon(), part() {
+
+}
+
+SingleDamageChange::SingleDamageChange(std::string target, std::string damage, std::string source, std::string weapon, std::string part) :
+	target(move(target)), damage(move(damage)), source(move(source)), weapon(move(weapon)), part(move(part)) {
+
+}
+
+SingleDamageChange::~SingleDamageChange() {
+
+}
+
+const string& SingleDamageChange::GetType() const {
+	static const string type = "single_damage";
+	return type;
+}
+
+void SingleDamageChange::SetTarget(std::string target) {
+	this->target = move(target);
+}
+
+const std::string& SingleDamageChange::GetTarget() const {
+	return target;
+}
+
+void SingleDamageChange::SetDamage(std::string damage) {
+	this->damage = move(damage);
+}
+
+const std::string& SingleDamageChange::GetDamage() const {
+	return damage;
+}
+
+void SingleDamageChange::SetSource(std::string source) {
+	this->source = move(source);
+}
+
+const std::string& SingleDamageChange::GetSource() const {
+	return source;
+}
+
+void SingleDamageChange::SetWeapon(std::string weapon) {
+	this->weapon = move(weapon);
+}
+
+const std::string& SingleDamageChange::GetWeapon() const {
+	return weapon;
+}
+
+void SingleDamageChange::SetPart(std::string part) {
+	this->part = move(part);
+}
+
+const std::string& SingleDamageChange::GetPart() const {
+	return part;
+}
+
+AreaDamageChange::AreaDamageChange() :
+	position(), radius(), damage(), occlusion(), power(), source(), weapon() {
+
+}
+
+AreaDamageChange::AreaDamageChange(std::string position, std::string radius, std::string damage, std::string occlusion,
+	std::string power, std::string source, std::string weapon) :
+	position(move(position)), radius(move(radius)), damage(move(damage)), occlusion(move(occlusion)), power(move(power)),
+	source(move(source)), weapon(move(weapon)) {
+
+}
+
+AreaDamageChange::~AreaDamageChange() {
+
+}
+
+const string& AreaDamageChange::GetType() const {
+	static const string type = "area_damage";
+	return type;
+}
+
+void AreaDamageChange::SetPosition(std::string position) {
+	this->position = move(position);
+}
+
+const std::string& AreaDamageChange::GetPosition() const {
+	return position;
+}
+
+void AreaDamageChange::SetRadius(std::string radius) {
+	this->radius = move(radius);
+}
+
+const std::string& AreaDamageChange::GetRadius() const {
+	return radius;
+}
+
+void AreaDamageChange::SetDamage(std::string damage) {
+	this->damage = move(damage);
+}
+
+const std::string& AreaDamageChange::GetDamage() const {
+	return damage;
+}
+
+void AreaDamageChange::SetOcclusion(std::string occlusion) {
+	this->occlusion = move(occlusion);
+}
+
+const std::string& AreaDamageChange::GetOcclusion() const {
+	return occlusion;
+}
+
+void AreaDamageChange::SetPower(std::string power) {
+	this->power = move(power);
+}
+
+const std::string& AreaDamageChange::GetPower() const {
+	return power;
+}
+
+void AreaDamageChange::SetSource(std::string source) {
+	this->source = move(source);
+}
+
+const std::string& AreaDamageChange::GetSource() const {
+	return source;
+}
+
+void AreaDamageChange::SetWeapon(std::string weapon) {
+	this->weapon = move(weapon);
+}
+
+const std::string& AreaDamageChange::GetWeapon() const {
+	return weapon;
 }

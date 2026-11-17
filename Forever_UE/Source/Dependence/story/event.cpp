@@ -1,9 +1,21 @@
 #include "event.h"
 
+#include <cstdio>
+
 
 using namespace std;
 
 namespace {
+	// vec3 local：name="(x, y, z)"字符串 + name.x/name.y/name.z浮点分量。
+	void StoreVec3(map<string, ValueType>& fields, const string& name, double x, double y, double z) {
+		char text[128];
+		snprintf(text, sizeof(text), "(%g, %g, %g)", x, y, z);
+		fields[name] = ValueType(string(text));
+		fields[name + ".x"] = ValueType(x);
+		fields[name + ".y"] = ValueType(y);
+		fields[name + ".z"] = ValueType(z);
+	}
+
 	// 纯字符串字段的匹配（位置/站点/载具/资产事件共用，名字沿用最初的位置类事件）：触发条件里的字段是表达式，留空表示不限。
 	bool MatchLocationField(const string& expr, const string& actual, const ScriptContext& context) {
 		return expr.empty() || ToString(EvaluateExpression(expr, context)) == actual;
@@ -1342,8 +1354,8 @@ const std::string& LoseAssetEvent::GetResult() const {
 	return result;
 }
 
-ThrowAssetEvent::ThrowAssetEvent(std::string type) :
-	type(move(type)) {
+ThrowAssetEvent::ThrowAssetEvent(std::string type, std::string thrower) :
+	type(move(type)), thrower(move(thrower)) {
 
 }
 
@@ -1365,7 +1377,16 @@ bool ThrowAssetEvent::Match(Event* e, const ScriptContext& context) {
 
 pair<bool, ValueType> ThrowAssetEvent::GetLocalValue(const string& key) const {
 	if (key == "type") return { true, ValueType(type) };
+	if (key == "thrower") return { true, ValueType(thrower) };
 	return { false, ValueType() };
+}
+
+void ThrowAssetEvent::SetThrower(std::string thrower) {
+	this->thrower = move(thrower);
+}
+
+const std::string& ThrowAssetEvent::GetThrower() const {
+	return thrower;
 }
 
 void ThrowAssetEvent::SetAssetType(std::string type) {
@@ -1374,4 +1395,79 @@ void ThrowAssetEvent::SetAssetType(std::string type) {
 
 const std::string& ThrowAssetEvent::GetAssetType() const {
 	return type;
+}
+
+WeaponFireEvent::WeaponFireEvent(std::string weapon) :
+	weapon(move(weapon)) {
+
+}
+
+WeaponFireEvent::~WeaponFireEvent() {
+
+}
+
+const string& WeaponFireEvent::GetType() const {
+	static const string type = "weapon_fire";
+	return type;
+}
+
+bool WeaponFireEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<WeaponFireEvent*>(e);
+	return MatchLocationField(weapon, other->weapon, context);
+}
+
+pair<bool, ValueType> WeaponFireEvent::GetLocalValue(const string& key) const {
+	if (key == "weapon") return { true, ValueType(weapon) };
+	auto it = fields.find(key);
+	if (it == fields.end()) return { false, ValueType() };
+	return { true, it->second };
+}
+
+void WeaponFireEvent::SetWeapon(std::string weapon) {
+	this->weapon = move(weapon);
+}
+
+const std::string& WeaponFireEvent::GetWeapon() const {
+	return weapon;
+}
+
+void WeaponFireEvent::SetField(const std::string& name, ValueType value) {
+	fields[name] = move(value);
+}
+
+void WeaponFireEvent::SetVec3(const std::string& name, double x, double y, double z) {
+	StoreVec3(fields, name, x, y, z);
+}
+
+ProjectileHitEvent::ProjectileHitEvent() {
+
+}
+
+ProjectileHitEvent::~ProjectileHitEvent() {
+
+}
+
+const string& ProjectileHitEvent::GetType() const {
+	static const string type = "projectile_hit";
+	return type;
+}
+
+bool ProjectileHitEvent::Match(Event* e, const ScriptContext& context) {
+	return Event::Match(e, context);
+}
+
+pair<bool, ValueType> ProjectileHitEvent::GetLocalValue(const string& key) const {
+	auto it = fields.find(key);
+	if (it == fields.end()) return { false, ValueType() };
+	return { true, it->second };
+}
+
+void ProjectileHitEvent::SetField(const std::string& name, ValueType value) {
+	fields[name] = move(value);
+}
+
+void ProjectileHitEvent::SetVec3(const std::string& name, double x, double y, double z) {
+	StoreVec3(fields, name, x, y, z);
 }

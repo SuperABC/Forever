@@ -27,6 +27,8 @@ public:
 
 	// 当前激活那把枪的枪口世界坐标(WeaponMod::muzzleOffset)，供开火时画弹道debugLine。没有激活的枪模型时返回false。
 	bool GetActiveMuzzleWorldLocation(FVector& OutLocation) const;
+	// 当前激活武器模型的世界位置(weapon_fire事件的local.asset)，没有激活的武器模型返回false。
+	bool GetActiveWeaponWorldLocation(FVector& OutLocation) const;
 
 	// AForeverCharacter::ActivateShoulderWeapon调用：记录手上武器由哪个Asset装备，之后槽位里的Asset变了就自动重新激活。
 	void NotifyActivated(int32 slot, Asset* asset);

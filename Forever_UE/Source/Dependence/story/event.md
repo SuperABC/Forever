@@ -101,5 +101,24 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 ## throw_asset（2026-11-17）
 
 `throw_asset`(`asset_type`表达式，留空=不限)：玩家把一件可投掷资产(`AssetMod::throwable`)扔出去后，由`UForeverThrowableComponent::Throw`在`SpawnThrownAsset`成功后
-经`UForeverStoryFrameworkComponent::NotifyThrowAsset`发出，**只发给被扔出的这件资产自己的脚本**(没有脚本=不发)。脚本里`$$local.type`读资产mod id。
+经`UForeverStoryFrameworkComponent::NotifyThrowAsset`发出，**只发给被扔出的这件资产自己的脚本**(没有脚本=不发)。脚本里`$$local.type`读资产mod id，`$$local.thrower`读投掷者(玩家当前操控的市民)姓名。
 手雷脚本(`Resource/Story/asset_grenade.script`)在这里`create_timer`计时爆炸。
+
+## weapon_fire（2026-11-17）
+
+`weapon_fire`(`weapon_type`表达式，留空=不限)：玩家用一把武器开枪，通过瞄准/冷却/弹药闸门之后，由`UForeverWeaponComponent::FireHitscan`
+射线求交后经`UForeverStoryFrameworkComponent::NotifyWeaponFire`发出，**只发给这把武器自己的脚本**(`Weapon::GetScript()`，没有脚本=不发)。
+霰弹每颗弹丸各发一次(散射各自独立)，没打中也发。脚本里的local变量：
+
+- 字符串/浮点：`weapon`(武器id)、`shooter`(开火市民姓名)、`sufferer`(被射线打中的活着的市民姓名，没有则空)、`part`(`head`/`body`/`legs`，没有则空)、
+  `distance`(浮点，摄像机到`hit`的距离)。
+- vec3(`asset`武器模型位置、`fire`枪口、`hit`射线交点/没打中是射程终点、`direction`出射单位方向、`normal`命中面法线/没打中朝上)：
+  每个vec3同时提供字符串形式`$$local.hit`=`"(x, y, z)"`和浮点分量`$$local.hit.x`/`.y`/`.z`。字符串形式可以直接传给`spawn_effect`/`area_damage`的`position`、`normal`。
+
+武器脚本见`Resource/Story/weapon_pistol.script`等：每次开火`spawn_effect`在`hit`放特效，打中市民再`single_damage`扣血。
+
+## projectile_hit（2026-11-17）
+
+`projectile_hit`(无字段)：mod蓝图里的弹射物Actor撞到东西后，经`UForeverProjectileBridgeComponent::ReportHit`→`NotifyProjectileHit`发给**它的所有者脚本**
+(`OwnerScriptKey`，如`weapon:weapon_rocket`，没找到脚本=丢弃)。local：`hit`、`normal`(vec3，规则同weapon_fire)、`sufferer`。
+火箭筒脚本在这里`spawn_effect`+`area_damage`。本次只有这个事件和桥组件，放置弹射物的`spawn_actor`Change以后再做。

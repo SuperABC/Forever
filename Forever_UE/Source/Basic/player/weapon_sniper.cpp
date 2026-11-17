@@ -17,13 +17,13 @@ const char* SniperWeapon::GetName() {
 
 void SniperWeapon::SetProperty() {
 	// 远距离高伤害、射速最慢、栓动式(单发)、不散射。
-	fireMode = FireMode::Ballistic;
-	damage = 150.f;
+	fireMode = FireMode::Hitscan;
+	// 开火后的特效和伤害由武器脚本(Resource/Story/weapon_sniper.script)响应weapon_fire事件完成。
+	milestoneNames = { "weapon_sniper" };
 	fireRate = 1.5f;
 	fullAuto = false;
 	maxRange = 30000.f;    // 300米
 	baseSpread = 0.f;
-	muzzleVelocity = 70000.f; // 700m/s，300米处下坠约90cm
 	magazineCapacity = 5;
 	reloadDuration = 3.f;
 

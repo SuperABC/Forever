@@ -125,13 +125,11 @@ namespace {
 	}
 	void ValidateConcept(WeaponMod* mod, vector<string>& problems) {
 		mod->SetProperty();
-		// 不开火的工具(如相机)damage/弹匣/射程都是0，不按枪检查。
-		if (mod->damage == 0 && mod->magazineCapacity == 0 && mod->maxRange == 0) return;
-		if (mod->damage <= 0) problems.push_back("weapon damage must be positive");
+		// 不开火的工具(如相机)弹匣/射程都是0，不按枪检查。
+		if (mod->magazineCapacity == 0 && mod->maxRange == 0) return;
 		if (mod->magazineCapacity <= 0) problems.push_back("weapon magazine capacity must be positive");
 		if (mod->maxRange <= 0) problems.push_back("weapon maxRange must be positive");
 		if (mod->modelScale <= 0) problems.push_back("weapon modelScale must be positive");
-		if (mod->ComputeDamage(0.f) < mod->ComputeDamage(mod->maxRange)) problems.push_back("weapon damage must not grow with distance");
 	}
 
 	// 创建实例 -> 在和Core包装类相同的随机作用域里跑UnitTest -> 再创建第二个实例检查名字唯一 -> 销毁。

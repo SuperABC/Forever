@@ -1,11 +1,37 @@
 #include "Player/ForeverHUD.h"
 
 #include "Player/ForeverCharacter.h"
+#include "Element/CitizenElement.h"
 #include "Engine/Canvas.h"
+#include "Engine/Engine.h"
+
+#include "populace/citizen.h"
 
 void AForeverHUD::DrawHUD()
 {
 	Super::DrawHUD();
+
+	// 左上角常驻显示玩家操控的市民的生命值(测试用，方便看什么时候被炸死)。Pawn被销毁(死亡)后保留最后一次的显示并标注已死亡。
+	if (Canvas && GEngine) {
+		static float lastHealth = 0.f, lastMaxHealth = 0.f;
+		bool bDead = false;
+		if (ACitizenElement* citizenElement = Cast<ACitizenElement>(GetOwningPawn())) {
+			if (Citizen* citizen = citizenElement->GetCitizen()) {
+				lastHealth = citizen->GetHealth();
+				lastMaxHealth = citizen->GetMaxHealth();
+				bDead = citizen->IsDead();
+			}
+		}
+		else if (!GetOwningPawn() && lastMaxHealth > 0.f) {
+			bDead = true; // 没有Pawn了(市民被销毁)：当作已死亡。坐载具时Pawn是载具，保持最后一次的血量显示。
+			lastHealth = 0.f;
+		}
+		if (lastMaxHealth > 0.f) {
+			const FString text = FString::Printf(TEXT("生命值: %d/%d%s"), FMath::CeilToInt(lastHealth), FMath::CeilToInt(lastMaxHealth),
+				bDead ? TEXT("  (已死亡)") : TEXT(""));
+			DrawText(text, bDead ? FLinearColor::Red : FLinearColor::White, 20.f, 20.f, GEngine->GetMediumFont(), 1.5f);
+		}
+	}
 
 	AForeverCharacter* character = Cast<AForeverCharacter>(GetOwningPawn());
 	if (!character || !character->IsAiming() || !Canvas) return;

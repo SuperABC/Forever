@@ -33,6 +33,21 @@ class PostImplement;
 class Event;
 class PuzzleResultEvent;
 class CitizenDeceaseEvent;
+class Weapon;
+
+// 一次开火的结果(UForeverWeaponComponent射线求交之后填)，NotifyWeaponFire把它变成weapon_fire事件的local变量，字段含义见WeaponFireEvent。
+struct FWeaponFireInfo
+{
+	std::string shooter;   // 开火市民姓名
+	std::string sufferer;  // 被击中的(活着的)市民姓名，没有则空
+	std::string part;      // head/body/legs，没有则空
+	float distance = 0.f;  // 摄像机到hit的距离
+	FVector asset = FVector::ZeroVector;     // 武器模型位置
+	FVector fire = FVector::ZeroVector;      // 枪口
+	FVector hit = FVector::ZeroVector;       // 射线交点，没打中是射程终点
+	FVector direction = FVector::ForwardVector; // 出射单位方向
+	FVector normal = FVector::UpVector;      // 命中面法线，没打中朝上
+};
 
 // Story域的UE层接线点：事件广播入口、Dialog排队展示、需要UE对象的Change执行、计时器。
 // 详见ForeverStoryFrameworkComponent.md。
@@ -46,6 +61,7 @@ public:
 	// 后台对话不算(它不抢操控，存档时直接丢弃)。
 	bool IsDialogActive() const { return pendingQueue.Num() > 0; }
 
+	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// 由AForeverFrameworkActor在Story::Init()跑完后调用一次。story生命周期由调用方持有。
@@ -172,8 +188,14 @@ public:
 	// result是"success"或"fail"。
 	void NotifyAssetEvent(Asset* root, bool bGet, const std::string& result, Script* sender);
 
-	// 投掷：资产被扔出去之后发throw_asset事件，只发给这件资产自己的脚本(没有脚本则不发)。
-	void NotifyThrowAsset(Asset* asset);
+	// 投掷：资产被扔出去之后发throw_asset事件，只发给这件资产自己的脚本(没有脚本则不发)。thrower=投掷者姓名。
+	void NotifyThrowAsset(Asset* asset, const std::string& thrower = std::string());
+
+	// 开火：一次射线(霰弹每颗弹丸各一次)发一个weapon_fire事件，只发给这把武器自己的脚本(没有脚本则不发)。
+	void NotifyWeaponFire(Weapon* weapon, const FWeaponFireInfo& info);
+
+	// 弹射物命中(UForeverProjectileBridgeComponent::ReportHit调)：发projectile_hit事件给ownerKey对应的脚本(如"weapon:weapon_rocket")。
+	void NotifyProjectileHit(const std::string& ownerKey, const FVector& hit, const FVector& normal, const std::string& sufferer);
 
 	// 没有具体资产实例的失败(身上没有指定类型/数量不足)：只按类型发一个事件给sender。
 	void NotifyAssetResult(bool bGet, const std::string& type, const std::string& result, Script* sender);

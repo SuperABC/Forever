@@ -17,24 +17,29 @@ wrapper → `Basic`默认内容的三层结构，`Weapon`是这套结构里Core�
 
 ## 为什么没有`Fire()`/`ApplyRecoil()`这类虚方法——和Core层wrapper是两件事
 
-`WeaponMod`本身只有纯数据字段+一个`ComputeDamage(float)`虚方法，没有`Fire()`/
-`ApplyRecoil()`——避免发明"Dependence层声明、Forever层实现"的跨层虚方法签名，真正的
-开火判定/相机/碰撞查询整个放在`UForeverWeaponComponent`里，见`weapon_mod.h`文件头
-注释。这条决策管的是`WeaponMod`要不要长虚方法接口，和"要不要有Core层wrapper包一层"是
-两个独立的问题——`Asset`/`AssetMod`同样"瘦"（没有行为虚方法）但照样有Core wrapper。
+`WeaponMod`本身只有纯数据字段(+`Custom`开火方式的`OnFire`回调)，没有`Fire()`/`ApplyRecoil()`——避免发明
+"Dependence层声明、Forever层实现"的跨层虚方法签名，真正的开火判定/相机/碰撞查询整个放在
+`UForeverWeaponComponent`里，见`weapon_mod.h`文件头注释。这条决策管的是`WeaponMod`要不要长虚方法接口，和
+"要不要有Core层wrapper包一层"是两个独立的问题——`Asset`/`AssetMod`同样"瘦"但照样有Core wrapper。
 
-## `ComputeDamage`是唯一没有在构造时静态拷贝的字段
+## 武器脚本(2026-11-17)
 
-其余所有字段（`damage`/`fireRate`/`magazineCapacity`/...）构造时原样拷进`Weapon`自己
-的私有成员，`mod`指针之后只在析构时用来调`factory->DestroyWeapon(mod)`。但
-`ComputeDamage(float distance)`是按距离算伤害衰减的虚方法（默认线性衰减，特殊武器可以
-override成别的曲线），没法在构造时就"拷成一个值"，所以`Weapon::ComputeDamage()`转发
-给`mod->ComputeDamage(distance)`——这是`mod`指针必须活到`Weapon`析构为止的唯一理由。
+`Weapon`自己持有一份`Script`(`GetScript()`)：mod的`scriptModName`/`milestoneNames`按`MakeScript`创建，都空则为`nullptr`。
+开火后的特效和伤害全由这个脚本响应`weapon_fire`事件完成，**不依赖肩上的`Asset`**(武器逻辑和资产逻辑解耦：资产脚本管捡起/丢弃
+等选项，武器脚本管开火)。
+
+- **创建时机**：构造`Weapon`时不建脚本(`UForeverWeaponVisualComponent::FindDef`为读模型参数会临时构造`Weapon`，不该建脚本)，
+  `UForeverWeaponComponent::EquipWeapon`装备时调`EnsureScript()`；`~Weapon`销毁脚本。换枪=新`Weapon`=新脚本，所以武器脚本不该有需要跨换枪保留的状态，也不进存档。
+- **稳定键**`weapon:<武器id>`，`ScriptOwnerKind::Weapon`；`UForeverStoryFrameworkComponent::FindScriptByKey`按它从玩家Pawn的`UForeverWeaponComponent`取装备中的那把，
+  这样`create_timer`等按键查脚本的机制也能用在武器脚本上。
+- 武器脚本没有场景实体：`spawn_effect`/`area_damage`必须填`position`(通常是`$$local.hit`)。
+
+`damage`/`muzzleVelocity`/`bulletGravityScale`/`ComputeDamage`已删，`Weapon::GetFireMode()`只剩`Hitscan`/`Custom`。
 
 ## 依赖关系
 
 - 依赖：`Dependence/player/weapon_mod.h`/`weapon_factory.h`（`WeaponMod`/
-  `WeaponFactory`）。
+  `WeaponFactory`），`story/script.h`（武器脚本）。
 - 被谁依赖：`Source/Forever/Player/ForeverWeaponComponent`（`currentWeapon`成员是
   `Weapon*`）。
 

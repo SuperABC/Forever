@@ -16,7 +16,7 @@
 // 变量池（self.前缀路由的目标）。不假设全局唯一，设计见script.md。
 // 脚本的所有者种类：脚本由哪类对象创建并持有。供"对自己操作"的Change(add_option/remove_option/assign_task/open_shop/
 // pay_wage)直接拿到所有者，不用按名字/脚本指针去全图查找，见script.md"所有者"一节。
-enum class ScriptOwnerKind { None, Door, Cabin, Citizen, Vehicle, Asset, Organization, Job };
+enum class ScriptOwnerKind { None, Door, Cabin, Citizen, Vehicle, Asset, Organization, Job, Weapon };
 
 class Script : public Container {
 	// 存档：ScriptSaveCodec直接读写私有字段(script_save.md)。

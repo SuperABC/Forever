@@ -4,16 +4,15 @@
 #include "common/mod_state.h"
 
 #include <string>
-#include <algorithm>
+#include <vector>
 
 class PostHandle;
 
-// 开火方式:决定Forever层的UForeverWeaponComponent开火时走哪条结算路径(射线伤害/拍照/...),
-// 后续火箭弹、颜料球等抛射物武器各加一个值。
+// 开火方式:决定Forever层的UForeverWeaponComponent开火时走哪条结算路径(射线/拍照/...)。
+// 后续火箭筒等发射物武器的表现不靠FireMode：它们的开火事件照常发给武器脚本，脚本放蓝图Actor，见weapon_mod.md。
 enum class FireMode {
-	Hitscan = 0,	// 摄像机射线瞬间命中判定+伤害
-	Custom = 1,		// 自定义(相机等):开火后调WeaponMod::OnFire,由mod自己通过PostHandle向Core发请求,不走射线伤害
-	Ballistic = 2,	// 真实弹道(手枪/步枪/霰弹枪/狙击枪):从枪口发射pelletCount颗逐帧飞行的子弹,命中延迟到子弹抵达
+	Hitscan = 0,	// 摄像机射线瞬间命中判定：每颗弹丸向武器脚本发一个weapon_fire事件，特效和伤害由脚本的Change完成
+	Custom = 1,		// 自定义(相机等):开火后调WeaponMod::OnFire,由mod自己通过PostHandle向Core发请求,不走射线
 };
 
 // 设计见weapon_mod.md:纯数据描述,开火/命中判定在Forever层的UForeverWeaponComponent里。
@@ -29,6 +28,12 @@ public:
 	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 子类在这里填下面的字段(不在构造函数里),由Core层Weapon::Weapon()创建实例后立刻调一次。
 	virtual void SetProperty() {}
+
+	// ---- 脚本 ----
+	// 空=无自定义ScriptMod;和milestoneNames都空则武器没有Script(Weapon::GetScript()==nullptr，开火事件不发)，见MakeScript。
+	// 开火后的表现(特效)和伤害全由这个脚本响应weapon_fire事件完成。
+	std::string scriptModName;
+	std::vector<std::string> milestoneNames;
 
 	// ---- 资产引用 ----
 	// 武器模型UE软路径,以"_C"结尾=Actor Blueprint类,否则=单个StaticMesh;留空=没有模型(判定逻辑不受影响)。
@@ -63,16 +68,12 @@ public:
 
 	// ---- 射击参数 ----
 	FireMode fireMode = FireMode::Hitscan;
-	float damage = 25.f;
 	float fireRate = 0.15f;        // 两次开火最小间隔，秒
 	bool fullAuto = false;         // false=每次按键最多打一发，true=按住连发
 	float maxRange = 5000.f;       // UE单位(cm)
 	float baseSpread = 1.5f;       // 散射半角，度——命中方向在瞄准方向为轴的这个半角圆锥内随机(0=没有散射)
 
-	// ---- 弹道(仅fireMode==Ballistic使用) ----
-	float muzzleVelocity = 40000.f; // 初速，cm/s
-	float bulletGravityScale = 1.f; // 重力倍率(1=世界重力，0=直线飞行)
-	int pelletCount = 1;            // 一次开火射出的弹丸数(霰弹枪>1)，每颗弹丸独立散射，伤害各自结算
+	int pelletCount = 1;           // 一次开火射出的弹丸数(霰弹枪>1)，每颗弹丸独立散射、各发一次weapon_fire事件
 
 	// ---- 弹药 ----
 	// magazineCapacity=0表示这把武器不用弹药(相机):不扣子弹、不换弹、不显示弹药数。
@@ -87,13 +88,6 @@ public:
 	float recoilPitchMax = 0.5f;
 	float recoilYawMin = -0.25f;   // 左右踢动范围(度,负=向左)
 	float recoilYawMax = 0.25f;
-
-	// 单发伤害怎么算——默认对maxRange做线性衰减，特殊武器可以override成不衰减/更复杂的曲线。
-	virtual float ComputeDamage(float distance) const {
-		if (maxRange <= 0.f) return damage;
-		float falloff = 1.f - std::min(distance, maxRange) / maxRange;
-		return damage * falloff;
-	}
 
 	// fireMode==Custom的武器每次开火(通过瞄准/冷却/弹药闸门之后)调一次:mod在这里通过post向Core发请求
 	// (比如相机发"screenshot"请求截屏),默认什么都不做。post只在这次调用期间有效,不要保存。

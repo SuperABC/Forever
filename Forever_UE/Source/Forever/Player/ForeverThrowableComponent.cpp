@@ -1,6 +1,7 @@
 #include "Player/ForeverThrowableComponent.h"
 
 #include "Element/AssetElement.h"
+#include "Element/CitizenElement.h"
 #include "Framework/ForeverAssetFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
@@ -18,6 +19,7 @@
 #include "Kismet/GameplayStatics.h"
 
 #include "player/asset.h"
+#include "populace/citizen.h"
 #include "player/player.h"
 
 #include <algorithm>
@@ -365,7 +367,11 @@ void UForeverThrowableComponent::Throw()
 	}
 	else if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) {
 		// 通知这件资产自己的脚本(手雷在这里开始计时)。脚本里的销毁是延迟到下一帧的，thrown在这之后仍然有效。
-		story->NotifyThrowAsset(thrown);
+		std::string thrower;
+		if (ACitizenElement* citizen = Cast<ACitizenElement>(GetOwner())) {
+			if (Citizen* core = citizen->GetCitizen()) thrower = core->GetName();
+		}
+		story->NotifyThrowAsset(thrown, thrower);
 	}
 
 	Refresh();

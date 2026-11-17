@@ -1,9 +1,11 @@
 {
-	// 手雷：扔出去(throw_asset事件，由投掷组件发给这件资产自己的脚本)后开始3秒引信，到时在落点生成爆炸特效并销毁自己。
+	// 手雷：扔出去(throw_asset事件，由投掷组件发给这件资产自己的脚本)后开始3秒引信，到时在落点生成爆炸特效、
+	// 对范围内的市民造成伤害，然后销毁自己。
+	//   - thrown里把投掷者姓名($$local.thrower)存进脚本变量self.thrower，爆炸时作为击杀的凶手(source)；
 	//   - create_timer用mode "real"(现实秒)：游戏时间默认1真实秒=10游戏分钟，3游戏秒几乎是瞬间；
-	//   - spawn_effect的effect是mod提供的特效蓝图类路径(见Forever_Mod/README.md"用mod提供特效蓝图")，
-	//     蓝图不存在/没装对应mod时不生成特效并打Warning(effect留空同样无特效)；
-	//   - destroy_asset是延迟销毁(下一帧)，同一个里程碑里的两个Change按顺序执行没有问题。
+	//   - spawn_effect的effect是特效蓝图类路径，蓝图不存在时不生成特效并打Warning(effect留空同样无特效)；
+	//   - area_damage：半径500cm、中心伤害150、判断遮挡(墙后不受伤)、线性衰减；
+	//   - destroy_asset是延迟销毁(下一帧)，同一个里程碑里的几个Change按顺序执行没有问题。
 	"milestones": [
 		{
 			"milestone": "thrown",
@@ -13,6 +15,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
+				{ "type": "set_value", "variable": "self.thrower", "value": "$$local.thrower" },
 				{ "type": "create_timer", "name": "fuse", "time": "00:00:03", "mode": "real" }
 			],
 			"dialogs": [],
@@ -22,11 +25,13 @@
 			"milestone": "explode",
 			"triggers": [ { "type": "time_up", "name": "fuse" } ],
 			"visible": false,
-			"drop": "true",
+			"drop": "false",
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "spawn_effect", "effect": "\"/Test/Effect/BP_GrenadeExplosion\"", "scale": "1" },
+				{ "type": "spawn_effect", "effect": "\"/Game/Asset/Effects/BP_GrenadeExplosion\"", "scale": "1" },
+				{ "type": "area_damage", "radius": "500", "damage": "150", "occlusion": "true", "power": "1",
+					"source": "$$self.thrower", "weapon": "$$self.type" },
 				{ "type": "destroy_asset" }
 			],
 			"dialogs": [],

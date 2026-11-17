@@ -171,6 +171,17 @@ bool UForeverWeaponVisualComponent::GetActiveMuzzleWorldLocation(FVector& OutLoc
 	return true;
 }
 
+bool UForeverWeaponVisualComponent::GetActiveWeaponWorldLocation(FVector& OutLocation) const {
+	AForeverCharacter* character = Cast<AForeverCharacter>(GetOwner());
+	int32 activeSlot = character ? character->GetActiveShoulderSlot() : 0;
+	if (activeSlot != 1 && activeSlot != 2) return false;
+
+	const AActor* actor = slots[activeSlot - 1].actor.Get();
+	if (!actor) return false;
+	OutLocation = actor->GetActorLocation();
+	return true;
+}
+
 void UForeverWeaponVisualComponent::SetHiddenForOwner(FSlotVisual& visual, bool bHide) {
 	AActor* actor = visual.actor.Get();
 	if (!actor || visual.bHiddenForOwner == bHide) return;

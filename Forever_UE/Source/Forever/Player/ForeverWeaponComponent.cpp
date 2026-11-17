@@ -1,8 +1,7 @@
 #include "Player/ForeverWeaponComponent.h"
 
 #include "Player/ForeverCharacter.h"
-#include "Player/ForeverBulletSubsystem.h"
-#include "Player/ForeverExplosionEffect.h"
+#include "Player/ForeverDamage.h"
 #include "Player/ForeverWeaponVisualComponent.h"
 #include "Element/CitizenElement.h"
 #include "Framework/ForeverFrameworkActor.h"
@@ -57,6 +56,7 @@ void UForeverWeaponComponent::EquipWeapon(const FString& weaponId) {
 	delete currentWeapon;
 
 	currentWeapon = newWeapon;
+	currentWeapon->EnsureScript(); // 开火事件(weapon_fire)的接收方，没有脚本的武器(相机)为空
 	currentAmmo = currentWeapon->GetMagazineCapacity();
 	bReloading = false;
 	bWantsToFire = false;
@@ -169,13 +169,10 @@ void UForeverWeaponComponent::Fire() {
 	}
 	lastFireTime = now;
 
-	// 按开火方式分派结算：射线伤害/拍照，后续火箭弹、颜料球等抛射物武器各自加一条，不共用射线逻辑。
+	// 按开火方式分派：射线(发weapon_fire事件，结算在武器脚本里)/拍照。
 	switch (currentWeapon->GetFireMode()) {
 	case FireMode::Custom:
 		FireCustom(character);
-		break;
-	case FireMode::Ballistic:
-		FireBallistic(character);
 		break;
 	case FireMode::Hitscan:
 	default:
@@ -264,85 +261,71 @@ void UForeverWeaponComponent::ApplyRecoil(AForeverCharacter* character) {
 
 void UForeverWeaponComponent::FireHitscan(AForeverCharacter* character) {
 	UCameraComponent* camera = character->IsFirstPerson() ? character->GetFirstPersonCamera() : character->GetFollowCamera();
-	if (!camera) return;
+	if (!camera || !currentWeapon) return;
 
 	// 开火起点用摄像机(眼睛)位置，不是枪口位置——保证"看哪打哪"的精确命中判定。
-	FVector start = camera->GetComponentLocation();
+	const FVector start = camera->GetComponentLocation();
 
-	float spreadRad = FMath::DegreesToRadians(currentWeapon->GetBaseSpread());
-	FVector direction = FMath::VRandCone(camera->GetForwardVector(), spreadRad);
-	FVector end = start + direction * currentWeapon->GetMaxRange();
+	FVector fire = start;
+	if (UForeverWeaponVisualComponent* visual = character->GetWeaponVisualComponent()) {
+		visual->GetActiveMuzzleWorldLocation(fire);
+	}
+	FVector asset = GetOwner()->GetActorLocation();
+	if (UForeverWeaponVisualComponent* visual = character->GetWeaponVisualComponent()) {
+		visual->GetActiveWeaponWorldLocation(asset);
+	}
 
-	// 必须用ECC_Pawn：本项目Pawn碰撞预设忽略ECC_Visibility，射线会穿过市民胶囊体(见CONVENTIONS第11节)。
-	FHitResult hit;
+	string shooter;
+	if (ACitizenElement* shooterElement = Cast<ACitizenElement>(GetOwner())) {
+		if (Citizen* core = shooterElement->GetCitizen()) shooter = core->GetName();
+	}
+
+	// 必须用ECC_Pawn：本项目Pawn碰撞预设忽略ECC_Visibility，射线会穿过市民胶囊体(见CONVENTIONS第11节)；
+	// 墙/地面也挡Pawn通道，所以同一条射线既能打到市民也能打到场景。
 	FCollisionQueryParams params;
 	params.AddIgnoredActor(GetOwner());
-	bool bHit = GetWorld()->LineTraceSingleByChannel(hit, start, end, ECC_Pawn, params);
 
-	ApplyRecoil(character);
-
-	if (!bHit) return;
-	float damage = currentWeapon->ComputeDamage(FVector::Dist(start, hit.ImpactPoint));
-	UForeverBulletSubsystem::ApplyCitizenHit(GetWorld(), GetOwner(), currentWeapon->GetType(), damage, hit);
-}
-
-void UForeverWeaponComponent::FireBallistic(AForeverCharacter* character) {
-	UForeverBulletSubsystem* bullets = GetWorld()->GetSubsystem<UForeverBulletSubsystem>();
-	UCameraComponent* camera = character->IsFirstPerson() ? character->GetFirstPersonCamera() : character->GetFollowCamera();
-	if (!bullets || !camera) return;
-
-	// 射手自己和挂在他身上的Actor(武器模型)都不挡弹道：枪口就在武器模型尖端。
-	TArray<TWeakObjectPtr<AActor>> ignored;
-	FCollisionQueryParams params;
-	{
-		TArray<AActor*> attached;
-		GetOwner()->GetAttachedActors(attached, true, true);
-		attached.Add(GetOwner());
-		for (AActor* actor : attached) {
-			ignored.Add(actor);
-			params.AddIgnoredActor(actor);
-		}
-	}
-
-	// 先从摄像机找瞄准点(保证"看哪打哪")，再让子弹从枪口朝瞄准点飞，真实的飞行和碰撞都从枪口开始。
-	float maxRange = currentWeapon->GetMaxRange();
-	FVector cameraStart = camera->GetComponentLocation();
-	FVector cameraForward = camera->GetForwardVector();
-	FHitResult aimHit;
-	bool bAimHit = GetWorld()->LineTraceSingleByChannel(aimHit, cameraStart, cameraStart + cameraForward * maxRange,
-		ECC_Pawn, params);
-	FVector aimPoint = bAimHit ? aimHit.ImpactPoint : cameraStart + cameraForward * maxRange;
-
-	FVector muzzle = cameraStart;
-	if (UForeverWeaponVisualComponent* visual = character->GetWeaponVisualComponent()) {
-		visual->GetActiveMuzzleWorldLocation(muzzle);
-	}
-
-	// 瞄准点离枪口太近或偏到枪口身后/侧面(第三人称贴墙)时，枪口→瞄准点的方向不可靠，退回摄像机朝向。
-	FVector baseDirection = (aimPoint - muzzle).GetSafeNormal();
-	if (FVector::Dist(aimPoint, muzzle) < 50.f || FVector::DotProduct(baseDirection, cameraForward) < 0.7f) {
-		baseDirection = cameraForward;
-	}
-
-	// 伤害曲线在发射时采样一次，一次开火的所有弹丸共用。
-	FBullet prototype;
-	prototype.position = muzzle;
-	prototype.maxRange = maxRange;
-	prototype.gravityScale = currentWeapon->GetBulletGravityScale();
-	prototype.shooter = GetOwner();
-	prototype.ignored = ignored;
-	prototype.weaponType = currentWeapon->GetType();
-	for (int32 i = 0; i < FBullet::DamageSamples; ++i) {
-		prototype.damageCurve[i] = currentWeapon->ComputeDamage(maxRange * i / (FBullet::DamageSamples - 1));
-	}
-
-	float spreadRad = FMath::DegreesToRadians(currentWeapon->GetBaseSpread());
-	float speed = currentWeapon->GetMuzzleVelocity();
+	// 先把每颗弹丸的射线结果都算出来(只读场景)，再发事件：事件里的Change可能让市民死亡/销毁，不能夹在射线中间。
+	const float spreadRad = FMath::DegreesToRadians(currentWeapon->GetBaseSpread());
+	const float maxRange = currentWeapon->GetMaxRange();
+	TArray<FWeaponFireInfo> shots;
 	for (int32 pellet = 0; pellet < FMath::Max(1, currentWeapon->GetPelletCount()); ++pellet) {
-		FBullet bullet = prototype;
-		bullet.velocity = FMath::VRandCone(baseDirection, spreadRad) * speed;
-		bullets->AddBullet(MoveTemp(bullet));
+		const FVector direction = FMath::VRandCone(camera->GetForwardVector(), spreadRad);
+		const FVector end = start + direction * maxRange;
+
+		FHitResult hit;
+		const bool bHit = GetWorld()->LineTraceSingleByChannel(hit, start, end, ECC_Pawn, params);
+
+		FWeaponFireInfo info;
+		info.shooter = shooter;
+		info.asset = asset;
+		info.fire = fire;
+		info.direction = direction;
+		info.hit = bHit ? FVector(hit.ImpactPoint) : end;
+		info.normal = bHit ? FVector(hit.ImpactNormal) : FVector::UpVector;
+		info.distance = FVector::Dist(start, info.hit);
+		if (bHit) {
+			ACitizenElement* hitCitizen = Cast<ACitizenElement>(hit.GetActor());
+			Citizen* core = hitCitizen ? hitCitizen->GetCitizen() : nullptr;
+			if (core && !core->IsDead()) {
+				info.sufferer = core->GetName();
+				info.part = FForeverDamage::ClassifyPart(hitCitizen, hit.ImpactPoint);
+			}
+		}
+		shots.Add(MoveTemp(info));
 	}
 
 	ApplyRecoil(character);
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr;
+	if (!story) return;
+
+	// 脚本里的Change(伤害致死、换枪等)可能销毁这把武器，每发之后核对一次。
+	Weapon* weapon = currentWeapon;
+	for (const FWeaponFireInfo& info : shots) {
+		if (currentWeapon != weapon) break;
+		story->NotifyWeaponFire(weapon, info);
+	}
 }
