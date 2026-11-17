@@ -8,6 +8,7 @@
 // 设计说明见script_test.md。
 class TestScript : public ScriptMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("script")
 	TestScript() : id(count++) { }
 
 	static const char* GetId() { return "script_test"; }

@@ -98,6 +98,8 @@ public:
 	// 供AForeverFrameworkActor::EndPlay/析构在delete map/populace之前调用：取消排队中的寻路任务，
 	// 并忙等到已开始的任务全部结束(后台线程持有map裸指针)。原理见.md。
 	static void WaitForPendingPathfinding();
+	// 已派发未算完的异步寻路任务数(测试/性能采样用)。
+	static int32 GetPendingPathfindingTasks() { return pendingPathfindingTasks.load(); }
 
 	// 流式生成/销毁距离(地图单位)和度量，供门的流式加载(ForeverDoorFrameworkComponent)跟随市民用同一套数值。
 	float GetCitizenSpawnDistance() const { return citizenSpawnDistance; }

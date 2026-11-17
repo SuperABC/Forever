@@ -59,9 +59,13 @@ void UFadeSubsystem::ShowBlack() {
 bool UFadeSubsystem::BeginHoldBlack() {
 	UFadeWidget* fade = EnsureWidgetShown();
 	if (fade == nullptr) return false;
+	// 先TakeWidget再BeginHold：控件之前被RemoveFromViewport释放过Slate的话，TakeWidget会重建并触发NativeConstruct，
+	// 而NativeConstruct会ResetToBlack把状态打回Waiting——先BeginHold再TakeWidget的话，保持黑屏的状态就被冲掉了，
+	// 随后控件按"加载完成"走Fading→Done自己消失，跳时间永远等不到IsHeldBlack。
+	TSharedRef<SWidget> slateWidget = fade->TakeWidget();
 	fade->BeginHold();
 	if (!bShown) {
-		GetGameInstance()->GetGameViewportClient()->AddViewportWidgetContent(fade->TakeWidget(), kFadeZOrder);
+		GetGameInstance()->GetGameViewportClient()->AddViewportWidgetContent(slateWidget, kFadeZOrder);
 		bShown = true;
 	}
 	return true;

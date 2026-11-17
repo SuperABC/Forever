@@ -8,6 +8,7 @@
 
 class BusStation : public StationMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("station")
 	BusStation();
 
 	static const char* GetId() { return "station_bus"; }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/mod_test.h"
 #include "common/mod_state.h"
 #include "expression.h"
 #include "change.h"
@@ -26,6 +27,8 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 单元测试：print输出关键信息，返回是否通过。没有深度测试的mod用FOREVER_MOD_GENERIC_UNIT_TEST(见common/mod_test.h)。
+	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 脚本逻辑重载入口，Script::MatchEvent匹配出一批actions后调用；重载时先AutoCopy(actions)再改写actionStack.back()。
 	// 默认实现原样透传。必须返回void而不是按值返回vector（跨DLL堆损坏），见script_mod.md
 	virtual void WrapScript(const Event* event,

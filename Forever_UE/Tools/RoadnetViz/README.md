@@ -2,6 +2,12 @@
 
 地形路网可视化测试工具：跑Core的Map::InitTerrains/InitRoadnet，把地形、路网、lot画成PNG。
 
+编译：它不在 `Source/Framework.sln` 里(不随主工程/`build.bat` 编译)，用自己的 `Tools/RoadnetViz/RoadnetViz.sln`(带上 Dependence/Core/Basic)：
+
+    MSBuild Tools\RoadnetViz\RoadnetViz.sln /p:Configuration=Release /p:Platform=x64
+
+输出 `x64\Release\RoadnetViz.exe`。
+
     RoadnetViz.exe [config.json] [out.png] [mapSize=1024] [pixelsPerElement=2]
 
 默认config.json只启用三个地形mod和roadnet_checkboard。图例画在输出图片下方的白色条带里(GDI渲染中文，需Windows)。

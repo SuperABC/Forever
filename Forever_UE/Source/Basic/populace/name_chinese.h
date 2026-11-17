@@ -7,6 +7,7 @@
 
 class ChineseName : public NameMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("name")
 	ChineseName();
 
 	static const char* GetId() { return "name_chinese"; }

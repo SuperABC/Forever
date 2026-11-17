@@ -6,6 +6,7 @@
 // low密度住宅园区：只在low密度住宅区(AREA_RESIDENCE_LOW)的lot里放，园区里放两栋low密度住宅楼。
 class ResidenceLowZone : public ZoneMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("zone")
 	ResidenceLowZone();
 
 	static const char* GetId() { return "zone_residence_low"; }

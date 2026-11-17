@@ -5,6 +5,7 @@
 
 class VideoCompanyOrganization : public OrganizationMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("organization")
 	VideoCompanyOrganization();
 
 	static const char* GetId() { return "organization_video_company"; }

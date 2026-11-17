@@ -4,6 +4,9 @@
 #include "Framework/ForeverFrameworkActor.h"
 
 #include "Engine/StaticMesh.h"
+#if WITH_EDITOR
+#include "StaticMeshCompiler.h"
+#endif
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
@@ -131,11 +134,37 @@ void UForeverBuildingFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 	// 世界因为RequestFreezeUntilLodSettled被冻结、且所有building都已经排空LOD切换队列——
 	// 恢复正常时间倍率。这个检查本身不受时间倍率影响（TickComponent仍然按正常帧率被调用，
 	// 只是DeltaTime被缩放），所以冻结期间也能正常侦测到"排空"这一刻。
-	if (IsWorldGenerationDone()) postGenerationFrames++;
+	if (IsWorldGenerationDone()) {
+		if (!bMeshesPrewarmed) PrewarmMeshes();
+		postGenerationFrames++;
+	}
 	if (bFrozenForLod && postGenerationFrames > kPostGenerationGateFrames && pendingLodTransitionCount <= 0) {
 		bFrozenForLod = false;
 		UGameplayStatics::SetGlobalTimeDilation(GetWorld(), 1.f);
 	}
+}
+
+void UForeverBuildingFrameworkComponent::PrewarmMeshes() {
+	bMeshesPrewarmed = true;
+	const AForeverFrameworkActor* frameworkActor = Cast<AForeverFrameworkActor>(GetOwner());
+	TSet<FString> paths = { TEXT("/Game/Asset/Building/Mesh/Wall.Wall") };
+	if (frameworkActor && frameworkActor->GetMap()) {
+		for (const auto& [name, building] : frameworkActor->GetMap()->GetBuildings()) {
+			if (!building) continue;
+			for (const auto& [level, spec] : building->GetFloorSpecs()) {
+				if (!spec.assets.stairMeshPath.empty()) paths.Add(UTF8_TO_TCHAR(spec.assets.stairMeshPath.c_str()));
+				if (!spec.assets.rampMeshPath.empty()) paths.Add(UTF8_TO_TCHAR(spec.assets.rampMeshPath.c_str()));
+			}
+		}
+	}
+	TArray<UStaticMesh*> loaded;
+	for (const FString& path : paths) {
+		if (UStaticMesh* mesh = ResolveMesh(string(TCHAR_TO_UTF8(*path)), nullptr)) loaded.Add(mesh);
+	}
+#if WITH_EDITOR
+	// 静态网格异步编译只在编辑器里有；打包后的网格是烘焙好的，加载完就能用。
+	if (loaded.Num() > 0) FStaticMeshCompilingManager::Get().FinishCompilation(loaded);
+#endif
 }
 
 bool UForeverBuildingFrameworkComponent::IsWorldGenerationDone() const {

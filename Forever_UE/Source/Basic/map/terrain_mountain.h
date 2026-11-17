@@ -8,6 +8,7 @@
 // 山区地形:随机游走生成若干条山脊多段线,沿脊线衰减+侧向BFS扩散生成高度。详见terrain_mountain.md。
 class MountainTerrain : public TerrainMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("terrain")
 	MountainTerrain();
 	virtual ~MountainTerrain();
 

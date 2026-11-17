@@ -1,0 +1,8 @@
+{
+	"_comment": "perf套件的预算(只告警不判失败)。键: route.p95(ms)、daily_tick.p95(s)、generate.<阶段>(s)。基线按quick(256图)首跑结果放宽约3倍，稳定后再收紧。",
+	"route.p95": 20,
+	"daily_tick.p95": 0.25,
+	"generate.map.buildings": 2.0,
+	"generate.populace": 2.0,
+	"generate.society": 2.0
+}

@@ -7,6 +7,7 @@
 
 class BeefProduct : public ProductMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("product")
 	BeefProduct();
 
 	static const char* GetId() { return "product_beef"; }

@@ -12,6 +12,7 @@
 // 剧情通过Wxdj.script里的record_object(kind=building_wxdj)拿到它的地址，不需要C++。
 class WxdjBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	WxdjBuilding() { lastName = std::string("wxdj") + std::to_string(count++); }
 
 	static const char* GetId() { return "building_wxdj"; }

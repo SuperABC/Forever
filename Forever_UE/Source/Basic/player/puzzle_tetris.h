@@ -7,6 +7,7 @@
 
 class TetrisPuzzle : public PuzzleMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("puzzle")
 	TetrisPuzzle();
 
 	static const char* GetId() { return "puzzle_tetris"; }

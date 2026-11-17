@@ -8,6 +8,7 @@
 // Component域默认内容：五个类型都是无字段无逻辑的trivial占位，合并在本文件，详见component_residence.md。
 class ResidenceComponent : public ComponentMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("component")
 	ResidenceComponent();
 
 	static const char* GetId() { return "component_residence"; }

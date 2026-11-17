@@ -23,6 +23,7 @@
 #include "common/registry.h"
 #include "common/utility.h"
 #include "common/implement.h"
+#include "common/world_step.h"
 #include "common/config.h"
 #include "common/error.h"
 #include "common/save.h"
@@ -871,99 +872,89 @@ void AForeverFrameworkActor::Tick(float DeltaTime)
 	if (storyFramework) storyFramework->FireExpiredTimers(DeltaTime);
 }
 
+WorldStepHooks AForeverFrameworkActor::MakeStepHooks()
+{
+	WorldStepHooks hooks;
+	hooks.onCitizenChanges = [this](Citizen* citizen, const std::vector<Change*>& changes) {
+		ScriptContext context;
+		if (citizen->GetJob()) context.self = citizen->GetJob()->GetScript();
+		context.system = story ? story->GetSystemScript() : nullptr;
+		context.global = story ? story->GetGlobalScript() : nullptr;
+		for (Change* change : changes) {
+			ApplyChange(change, context);
+		}
+	};
+	hooks.onOrganizationChanges = [this](Organization* organization, const std::vector<Change*>& changes) {
+		ScriptContext context;
+		if (organization) context.self = organization->GetScript();
+		context.system = story ? story->GetSystemScript() : nullptr;
+		context.global = story ? story->GetGlobalScript() : nullptr;
+		for (Change* change : changes) {
+			ApplyChange(change, context);
+		}
+	};
+	hooks.controlledCitizen = GetControlledCitizen();
+	// 本月整户离城的市民：移除他们在场景里的Actor。
+	hooks.onDeparted = [this](Citizen* departed) {
+		if (populaceFramework) populaceFramework->HandleCitizenDeath(departed);
+	};
+	// 城外迁入的新市民：登记给人口组件，之后按距离流式生成Actor。
+	hooks.onImmigrated = [this](Citizen* immigrant) {
+		if (populaceFramework) populaceFramework->AddCitizen(immigrant);
+	};
+	// 公交停稳/离站：Core只产出事件队列，转发给载具自己的script(脚本据此控制上下车选项)。
+	hooks.onTrafficTicked = [this]() {
+		if (!storyFramework || !traffic) return;
+		for (const Route::StopEvent& stopEvent : traffic->ConsumeStopEvents()) {
+			if (!stopEvent.vehicle || !stopEvent.station) continue;
+			if (stopEvent.entering) {
+				EnterStopEvent event(stopEvent.station->GetName());
+				storyFramework->BroadcastToVehicle(event, stopEvent.vehicle);
+			}
+			else {
+				LeaveStopEvent event(stopEvent.station->GetName());
+				storyFramework->BroadcastToVehicle(event, stopEvent.vehicle);
+			}
+		}
+	};
+	return hooks;
+}
+
+WorldDomains AForeverFrameworkActor::MakeWorldDomains() const
+{
+	WorldDomains domains;
+	domains.map = map;
+	domains.populace = populace;
+	domains.society = society;
+	domains.industry = industry;
+	domains.traffic = traffic;
+	domains.story = story;
+	domains.player = player;
+	return domains;
+}
+
 void AForeverFrameworkActor::TickPopulaceDomain(bool crossedDay, PostImplement& postImplement) {
-	if (populace) {
-		populace->Tick(*player->GetTime(), crossedDay,
-			[this](Citizen* citizen, const std::vector<Change*>& changes) {
-				ScriptContext context;
-				if (citizen->GetJob()) context.self = citizen->GetJob()->GetScript();
-				context.system = story ? story->GetSystemScript() : nullptr;
-				context.global = story ? story->GetGlobalScript() : nullptr;
-				for (Change* change : changes) {
-					ApplyChange(change, context);
-				}
-			}, &postImplement);
-	}
+	WorldStep::TickPopulace(MakeWorldDomains(), crossedDay, postImplement, MakeStepHooks());
 }
 
 void AForeverFrameworkActor::TickSocietyDomain(bool crossedDay, PostImplement& postImplement) {
-	if (society) {
-		society->Tick(*player->GetTime(), crossedDay,
-			[this](Organization* organization, const std::vector<Change*>& changes) {
-				ScriptContext context;
-				if (organization) context.self = organization->GetScript();
-				context.system = story ? story->GetSystemScript() : nullptr;
-				context.global = story ? story->GetGlobalScript() : nullptr;
-				for (Change* change : changes) {
-					ApplyChange(change, context);
-				}
-			}, &postImplement);
-	}
+	WorldStep::TickSociety(MakeWorldDomains(), crossedDay, postImplement, MakeStepHooks());
 }
 
 void AForeverFrameworkActor::StepWorld(bool crossedDay)
 {
-	// 年份变了就同步给人口(年龄=currentYear-出生年)，要在各域Tick之前，它们当天就用新年龄。
-	if (populace && player->GetTime()->GetYear() != populace->GetCurrentYear()) {
-		populace->SetCurrentYear(player->GetTime()->GetYear());
+	// 各Core域按固定顺序推进一步(Player已经推进了全局时钟)：和自动化测试共用同一份实现，见Core/common/world_step.md。
+	bool economyRan = false;
+	const DailyReport economyReport = WorldStep::Step(MakeWorldDomains(), crossedDay, MakeStepHooks(), &economyRan);
+	if (!economyRan) return;
+	if (!economyReport.departed.empty()) {
+		UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: %d citizens left the city."), static_cast<int32>(economyReport.departed.size()));
 	}
-
-	// 现场构造、只覆盖这一帧的PostImplement(Job/OrganizationMod通过Post()查地址，见Core/common/implement.cpp)。
-	PostImplement postImplement(map, populace, society, story, industry, traffic, player);
-
-	// 各Core域挨个Tick(Player已在上面推进了全局时钟)。
-	if (map) map->Tick(*player->GetTime(), crossedDay, &postImplement);
-
-	TickPopulaceDomain(crossedDay, postImplement);
-	TickSocietyDomain(crossedDay, postImplement);
-
-	if (industry && society) Economy::SyncIndustry(*society, *industry); // 倒闭企业的房间停业
-	if (industry) industry->Tick(*player->GetTime(), crossedDay, &postImplement);
-	if (industry && society && map && populace && crossedDay) {
-		// 每日经济驱动链：货款、服务买卖、房租、工资、补助，月初做月度分红，见Core/society/economy.md。
-		// 全系统资金总和必须始终为0。
-		std::vector<Room*> allRooms;
-		for (const auto& [name, building] : map->GetBuildings()) {
-			if (!building) continue;
-			for (Room* room : building->GetRooms()) allRooms.push_back(room);
-		}
-		DailyReport economyReport = Economy::Daily(*society, *industry, allRooms, populace->GetCitizens(),
-			*player->GetTime(), &postImplement, GetControlledCitizen());
-		// 本月整户离城的市民：移除他们在场景里的Actor。
-		if (populaceFramework) {
-			for (Citizen* departed : economyReport.departed) populaceFramework->HandleCitizenDeath(departed);
-		}
-		// 城外迁入的新市民：登记给人口组件，之后按距离流式生成Actor。
-		for (Citizen* immigrant : Immigration::Daily(*society, *populace, *map, *player->GetTime())) {
-			if (populaceFramework) populaceFramework->AddCitizen(immigrant);
-		}
-		if (!economyReport.departed.empty()) {
-			UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: %d citizens left the city."), static_cast<int32>(economyReport.departed.size()));
-		}
-		if (society->GetLedger().Total() != 0) {
-			UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: ledger total is %lld, expected 0."),
-				static_cast<int64>(society->GetLedger().Total()));
-		}
+	// 全系统资金总和必须始终为0。
+	if (society && society->GetLedger().Total() != 0) {
+		UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: ledger total is %lld, expected 0."),
+			static_cast<int64>(society->GetLedger().Total()));
 	}
-	if (traffic) {
-		traffic->Tick(*player->GetTime(), crossedDay, &postImplement);
-
-		// 公交停稳/离站：Core只产出事件队列，转发给载具自己的script(脚本据此控制上下车选项)。
-		if (storyFramework) {
-			for (const Route::StopEvent& stopEvent : traffic->ConsumeStopEvents()) {
-				if (!stopEvent.vehicle || !stopEvent.station) continue;
-				if (stopEvent.entering) {
-					EnterStopEvent event(stopEvent.station->GetName());
-					storyFramework->BroadcastToVehicle(event, stopEvent.vehicle);
-				}
-				else {
-					LeaveStopEvent event(stopEvent.station->GetName());
-					storyFramework->BroadcastToVehicle(event, stopEvent.vehicle);
-				}
-			}
-		}
-	}
-	if (story) story->Tick(*player->GetTime(), crossedDay, &postImplement);
 }
 
 namespace {
@@ -1487,4 +1478,9 @@ void AForeverFrameworkActor::RestoreControlledPawn(const FForeverPendingLoad& lo
 	if (hasPose && !root["controlYaw"].IsNull()) {
 		playerController->SetControlRotation(FRotator(root["controlPitch"].AsDouble(), root["controlYaw"].AsDouble(), 0.f));
 	}
+}
+
+uint64 AForeverFrameworkActor::GetUnscopedRandomDraws()
+{
+	return static_cast<uint64>(RandomRegistry::UnscopedDraws());
 }

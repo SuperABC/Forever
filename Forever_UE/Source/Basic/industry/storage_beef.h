@@ -7,6 +7,7 @@
 
 class BeefStorage : public StorageMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("storage")
 	BeefStorage();
 
 	static const char* GetId() { return "storage_beef"; }

@@ -7,6 +7,7 @@
 
 class ScriptBasic : public ScriptMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("script")
 	ScriptBasic();
 
 	static const char* GetId() { return "script_basic"; }

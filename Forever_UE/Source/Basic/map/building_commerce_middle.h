@@ -6,6 +6,7 @@
 // 商店(中密度)：只在商店中密度分区(AREA_COMMERCE_MIDDLE)上有权重。
 class CommerceMiddleBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	CommerceMiddleBuilding();
 
 	static const char* GetId() { return "building_commerce_middle"; }

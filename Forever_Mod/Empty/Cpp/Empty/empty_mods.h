@@ -27,6 +27,7 @@
 
 class EmptyTerrain : public TerrainMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("terrain")
 	EmptyTerrain(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "terrain_empty"; }
@@ -49,6 +50,7 @@ private:
 
 class EmptyRoadnet : public RoadnetMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("roadnet")
 	EmptyRoadnet(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "roadnet_empty"; }
@@ -67,6 +69,7 @@ private:
 
 class EmptyZone : public ZoneMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("zone")
 	EmptyZone() { lastName = std::string("empty") + std::to_string(count++); }
 
 	static const char* GetId() { return "zone_empty"; }
@@ -89,6 +92,7 @@ private:
 
 class EmptyBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	EmptyBuilding() { lastName = std::string("empty") + std::to_string(count++); }
 
 	static const char* GetId() { return "building_empty"; }
@@ -113,6 +117,7 @@ private:
 
 class EmptyComponent : public ComponentMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("component")
 	EmptyComponent(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "component_empty"; }
@@ -125,6 +130,7 @@ private:
 
 class EmptyRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	EmptyRoom(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "room_empty"; }
@@ -137,6 +143,7 @@ private:
 
 class EmptyAsset : public AssetMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("asset")
 	EmptyAsset(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "asset_empty"; }
@@ -149,6 +156,7 @@ private:
 
 class EmptyApp : public AppMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("app")
 	EmptyApp(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "app_empty"; }
@@ -167,6 +175,7 @@ private:
 
 class EmptyPuzzle : public PuzzleMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("puzzle")
 	EmptyPuzzle(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "puzzle_empty"; }
@@ -194,6 +203,7 @@ private:
 
 class EmptyName : public NameMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("name")
 	EmptyName(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "name_empty"; }
@@ -215,6 +225,7 @@ private:
 
 class EmptyScheduler : public SchedulerMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("scheduler")
 	EmptyScheduler(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "scheduler_empty"; }
@@ -230,6 +241,7 @@ private:
 
 class EmptyJob : public JobMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("job")
 	EmptyJob(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "job_empty"; }
@@ -244,6 +256,7 @@ private:
 
 class EmptyOrganization : public OrganizationMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("organization")
 	EmptyOrganization(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "organization_empty"; }
@@ -265,6 +278,7 @@ private:
 
 class EmptyScript : public ScriptMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("script")
 	EmptyScript(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "script_empty"; }
@@ -297,6 +311,7 @@ private:
 
 class EmptyProduct : public ProductMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("product")
 	EmptyProduct(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "product_empty"; }
@@ -312,6 +327,7 @@ private:
 
 class EmptyStorage : public StorageMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("storage")
 	EmptyStorage(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "storage_empty"; }
@@ -327,6 +343,7 @@ private:
 
 class EmptyManufacture : public ManufactureMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("manufacture")
 	EmptyManufacture(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "manufacture_empty"; }
@@ -342,6 +359,7 @@ private:
 
 class EmptyRoute : public RouteMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("route")
 	EmptyRoute(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "route_empty"; }
@@ -360,6 +378,7 @@ private:
 
 class EmptyStation : public StationMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("station")
 	EmptyStation(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "station_empty"; }
@@ -378,6 +397,7 @@ private:
 
 class EmptyVehicle : public VehicleMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("vehicle")
 	EmptyVehicle(const std::string& args) { name = "empty(" + args + ")"; }
 
 	static const char* GetId() { return "vehicle_empty"; }

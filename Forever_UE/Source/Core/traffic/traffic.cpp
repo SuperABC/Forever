@@ -34,6 +34,8 @@ namespace {
 
 	// 在这些房间里挑一个空闲且接受category的车位(随机)，没有返回false。
 	bool PickFreeSlot(const vector<Room*>& rooms, const string& category, Room*& outRoom, int& outIndex) {
+		// BeginCommute/任务分配由UE层在运行时直接调用，没有外层作用域，这里自己包上(嵌套同一个域的流是安全的)。
+		CORE_RANDOM_SCOPE("core.traffic");
 		vector<pair<Room*, int>> candidates;
 		for (Room* room : rooms) {
 			if (!room) continue;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/mod_test.h"
 #include "common/mod_state.h"
 
 #include <string>
@@ -21,6 +22,8 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 单元测试：print输出关键信息，返回是否通过。没有深度测试的mod用FOREVER_MOD_GENERIC_UNIT_TEST(见common/mod_test.h)。
+	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 构建优先级,越高越先执行DistributeTerrain(后执行的可以覆盖先执行的地形类型/高度)。
 	virtual float GetPriority() const = 0;
 

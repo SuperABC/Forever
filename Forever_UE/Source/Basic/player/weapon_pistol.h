@@ -5,6 +5,7 @@
 
 class PistolWeapon : public WeaponMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("weapon")
 	PistolWeapon();
 
 	static const char* GetId() { return "weapon_pistol"; }

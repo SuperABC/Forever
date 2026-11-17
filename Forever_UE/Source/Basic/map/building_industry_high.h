@@ -6,6 +6,7 @@
 // 工厂(高密度)：只在工厂高密度分区(AREA_INDUSTRY_HIGH)上有权重。
 class IndustryHighBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	IndustryHighBuilding();
 
 	static const char* GetId() { return "building_industry_high"; }

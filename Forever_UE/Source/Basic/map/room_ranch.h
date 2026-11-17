@@ -7,6 +7,7 @@
 
 class RanchRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	RanchRoom();
 
 	static const char* GetId() { return "room_ranch"; }

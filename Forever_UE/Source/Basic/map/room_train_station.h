@@ -9,6 +9,7 @@
 // AirportRoom声明了停机位。
 class TrainStationRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	TrainStationRoom();
 
 	static const char* GetId() { return "room_train_station"; }

@@ -8,6 +8,7 @@
 // Shop/Factory地下停车场room，ShopBuilding和FactoryBuilding共用。
 class ParkingRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	ParkingRoom();
 
 	static const char* GetId() { return "room_parking"; }

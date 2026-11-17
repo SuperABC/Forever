@@ -12,6 +12,7 @@ inline constexpr float kTrainTrackUnit = 0.25f;
 
 class TrainStation : public StationMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("station")
 	TrainStation();
 
 	static const char* GetId() { return "station_train"; }

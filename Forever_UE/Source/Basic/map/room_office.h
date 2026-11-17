@@ -8,6 +8,7 @@
 // 办公室room：OfficeBuilding(三档密度)的房间。
 class OfficeRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	OfficeRoom();
 
 	static const char* GetId() { return "room_office"; }

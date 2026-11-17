@@ -7,6 +7,7 @@
 // 空壳ScriptMod，设计说明见building_yuanshen.md。
 class YuanshenScript : public ScriptMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("script")
 	YuanshenScript() : id(count++) { }
 
 	static const char* GetId() { return "script_yuanshen"; }

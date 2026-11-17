@@ -6,6 +6,7 @@
 // middle密度住宅园区：只在middle密度住宅区(AREA_RESIDENCE_MIDDLE)的lot里放，园区里放两栋middle密度住宅楼。
 class ResidenceMiddleZone : public ZoneMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("zone")
 	ResidenceMiddleZone();
 
 	static const char* GetId() { return "zone_residence_middle"; }

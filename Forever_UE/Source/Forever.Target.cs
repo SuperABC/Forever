@@ -11,5 +11,6 @@ public class ForeverTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V6;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_7;
 		ExtraModuleNames.Add("Forever");
+		if (Target.Configuration != UnrealTargetConfiguration.Shipping) ExtraModuleNames.Add("ForeverTest"); // 自动化测试驱动，发行版不带
 	}
 }

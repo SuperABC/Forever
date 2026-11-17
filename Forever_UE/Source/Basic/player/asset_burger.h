@@ -7,6 +7,7 @@
 
 class BurgerAsset : public AssetMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("asset")
 	BurgerAsset();
 
 	static const char* GetId() { return "asset_burger"; }

@@ -6,6 +6,7 @@
 // 办公楼(中密度)：只在办公楼中密度分区(AREA_OFFICE_MIDDLE)上有权重。
 class OfficeMiddleBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	OfficeMiddleBuilding();
 
 	static const char* GetId() { return "building_office_middle"; }

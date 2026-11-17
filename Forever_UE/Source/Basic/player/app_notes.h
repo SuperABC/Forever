@@ -8,6 +8,7 @@
 
 class NotesApp : public AppMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("app")
 	NotesApp();
 
 	static const char* GetId() { return "app_notes"; }

@@ -7,6 +7,7 @@
 ## 关键设计
 
 - 入口`StartPuzzle(puzzleId, param)`：由`UForeverStoryFrameworkComponent::ApplyStartPuzzle`(剧情`start_puzzle`)调用；`param`是脚本传的动态启动参数，在`Init`前通过`PuzzleMod::SetParam`交给小游戏，与`config.json`里`puzzle_mods`的静态args不是一回事。
+- **puzzle id 没注册/没在 config `puzzle_mods` 里启用时**：`Puzzle`构造抛`NullPointerException`，`StartPuzzle`在动任何状态之前先创建新的这局并捕获，失败只打Warning日志并直接返回(不暂停世界、不显示界面，正在进行的上一局原样保留)，不会崩游戏。
 - 输入模式用UIOnly：小游戏通过`NativeOnKeyDown`收键盘，UIOnly下Pawn的Enhanced Input收不到任何输入，不会和移动/视角等操作打架(同`SectionSpeakingWidget`)。
 - 画布尺寸=真实视口像素(`GetViewportSize`，1:1填满)，`NativeTick`每帧比对是否resize并重建；查不到时用兜底默认值。
 - `EndPuzzle(result)`(`Loop`返回非空时)：先把结果json展平进`PuzzleResultEvent`(delete后mod持有的json就没了)，再delete puzzle、隐藏自己、恢复游戏输入(`bShowMouseCursor=false`+`SetInputMode_GameOnly`+`SetFocusToGameViewport`)，与`ShowCurrentItem`队列清空分支一致。

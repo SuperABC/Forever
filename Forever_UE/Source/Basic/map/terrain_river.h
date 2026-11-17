@@ -9,6 +9,7 @@
 // 才保留;加宽后降河床、铺水面,河岸附近格子写入17x17细化高度数组让水岸线光滑。详见terrain_river.md。
 class RiverTerrain : public TerrainMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("terrain")
 	RiverTerrain();
 	virtual ~RiverTerrain();
 

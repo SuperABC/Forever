@@ -6,6 +6,7 @@
 // 商店(高密度)：只在商店高密度分区(AREA_COMMERCE_HIGH)上有权重。
 class CommerceHighBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	CommerceHighBuilding();
 
 	static const char* GetId() { return "building_commerce_high"; }

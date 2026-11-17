@@ -10,6 +10,7 @@
 
 class TrainRoute : public RouteMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("route")
 	TrainRoute();
 
 	static const char* GetId() { return "route_train"; }

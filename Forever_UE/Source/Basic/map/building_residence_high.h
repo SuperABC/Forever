@@ -6,6 +6,7 @@
 // 住宅(高密度)：只在住宅高密度分区(AREA_RESIDENCE_HIGH)上有权重。
 class ResidenceHighBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	ResidenceHighBuilding();
 
 	static const char* GetId() { return "building_residence_high"; }

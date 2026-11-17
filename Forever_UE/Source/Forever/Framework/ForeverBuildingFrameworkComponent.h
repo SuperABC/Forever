@@ -150,6 +150,10 @@ private:
 	// 近处LOD排进队列，立刻判定"没有待处理的转场"会提前解冻/误报稳定，所以多等几帧。
 	int32 postGenerationFrames = 0;
 	static constexpr int32 kPostGenerationGateFrames = 2;
+	// 生成完成后一次性把所有建筑用到的楼梯/坡道/墙网格同步加载并等编译完成：否则运行中第一次用到某个网格时在游戏线程
+	// 同步加载+等待静态网格编译，造成数百毫秒的卡顿(测试管线perf套件抓到过)。
+	void PrewarmMeshes();
+	bool bMeshesPrewarmed = false;
 
 	// 电梯轿厢匀速巡航速度(UE单位/秒，默认300≈3m/s)。缓入/缓出速度曲线是cruiseSpeed*smoothstep(u)，
 	// 加速度正比于cruiseSpeed/cabinEaseSeconds。

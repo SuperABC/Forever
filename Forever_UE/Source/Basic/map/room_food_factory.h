@@ -7,6 +7,7 @@
 
 class FoodFactoryRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	FoodFactoryRoom();
 
 	static const char* GetId() { return "room_food_factory"; }

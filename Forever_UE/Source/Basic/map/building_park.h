@@ -6,6 +6,7 @@
 // 公园：0层，不放楼体，只种树。
 class ParkBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	ParkBuilding();
 
 	static const char* GetId() { return "building_park"; }

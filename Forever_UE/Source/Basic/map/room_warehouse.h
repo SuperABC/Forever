@@ -8,6 +8,7 @@
 // Shop布局里过道/地下室用的仓储room，只有ShopBuilding用到。
 class WarehouseRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	WarehouseRoom();
 
 	static const char* GetId() { return "room_warehouse"; }

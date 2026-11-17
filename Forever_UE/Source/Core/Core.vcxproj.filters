@@ -39,6 +39,9 @@
     <ClCompile Include="common\implement.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="common\world_step.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="common\registry.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -234,6 +237,9 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="common\implement.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\world_step.h">
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="common\registry.h">

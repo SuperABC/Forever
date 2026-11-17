@@ -5,6 +5,7 @@
 
 class PokerPuzzle : public PuzzleMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("puzzle")
 	// 牌：0~51，rank=c%13(0=2...12=A)，suit=c/13。牌型分数越大越好：类别(0高牌..8同花顺)<<20 | 5个比较位(每个4位)。
 	static int Evaluate(const std::vector<int>& cards);              // 5~7张取最大5张组合
 	static std::string HandName(int score);

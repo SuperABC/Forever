@@ -6,6 +6,7 @@
 // 办公楼(高密度)：只在办公楼高密度分区(AREA_OFFICE_HIGH)上有权重。
 class OfficeHighBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	OfficeHighBuilding();
 
 	static const char* GetId() { return "building_office_high"; }

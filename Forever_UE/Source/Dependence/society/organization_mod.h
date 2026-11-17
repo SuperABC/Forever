@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/mod_test.h"
 #include "common/mod_state.h"
 #include "common/utility.h"
 #include "common/handle.h"
@@ -55,6 +56,8 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 单元测试：print输出关键信息，返回是否通过。没有深度测试的mod用FOREVER_MOD_GENERIC_UNIT_TEST(见common/mod_test.h)。
+	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 子类还必须实现static GetPower()和static GetRequirements(),通过RegisterOrganization注册,见organization_mod.md。
 
 	// 每个workspace房间调一次,把这个房间要配的岗位以{roomName, job类型}追加进this->vacancies(岗位计划)。

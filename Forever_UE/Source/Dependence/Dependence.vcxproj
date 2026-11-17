@@ -83,6 +83,7 @@
     <ClCompile Include="common\error.cpp" />
     <ClCompile Include="common\json.cpp" />
     <ClCompile Include="common\mod_state.cpp" />
+    <ClCompile Include="common\mod_test.cpp" />
     <ClCompile Include="common\save_archive.cpp" />
     <ClCompile Include="common\random.cpp" />
     <ClCompile Include="common\utility.cpp" />
@@ -142,6 +143,7 @@
     <ClInclude Include="common\json.h" />
     <ClInclude Include="common\save_archive.h" />
     <ClInclude Include="common\mod_state.h" />
+    <ClInclude Include="common\mod_test.h" />
     <ClInclude Include="common\random.h" />
     <ClInclude Include="common\utility.h" />
     <ClInclude Include="common\handle.h" />

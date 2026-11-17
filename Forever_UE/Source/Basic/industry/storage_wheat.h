@@ -7,6 +7,7 @@
 
 class WheatStorage : public StorageMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("storage")
 	WheatStorage();
 
 	static const char* GetId() { return "storage_wheat"; }

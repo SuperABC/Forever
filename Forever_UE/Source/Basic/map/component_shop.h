@@ -7,6 +7,7 @@
 
 class ShopComponent : public ComponentMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("component")
 	ShopComponent();
 
 	static const char* GetId() { return "component_shop"; }

@@ -6,6 +6,7 @@
 // 住宅(中密度)：只在住宅中密度分区(AREA_RESIDENCE_MIDDLE)上有权重。
 class ResidenceMiddleBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	ResidenceMiddleBuilding();
 
 	static const char* GetId() { return "building_residence_middle"; }

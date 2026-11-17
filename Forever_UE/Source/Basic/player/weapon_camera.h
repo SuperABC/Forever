@@ -5,6 +5,7 @@
 
 class CameraWeapon : public WeaponMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("weapon")
 	CameraWeapon();
 
 	static const char* GetId() { return "weapon_camera"; }

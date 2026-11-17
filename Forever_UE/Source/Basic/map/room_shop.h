@@ -8,6 +8,7 @@
 // 商店营业room。
 class ShopRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	ShopRoom();
 
 	static const char* GetId() { return "room_shop"; }

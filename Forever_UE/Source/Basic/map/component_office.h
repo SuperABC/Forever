@@ -7,6 +7,7 @@
 
 class OfficeComponent : public ComponentMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("component")
 	OfficeComponent();
 
 	static const char* GetId() { return "component_office"; }

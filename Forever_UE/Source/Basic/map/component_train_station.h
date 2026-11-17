@@ -8,6 +8,7 @@
 // TrainStationComponent/AirportComponent：火车站/机场建筑用的占位component。
 class TrainStationComponent : public ComponentMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("component")
 	TrainStationComponent();
 
 	static const char* GetId() { return "component_train_station"; }

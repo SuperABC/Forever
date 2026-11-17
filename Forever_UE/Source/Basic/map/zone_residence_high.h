@@ -6,6 +6,7 @@
 // high密度住宅园区：只在high密度住宅区(AREA_RESIDENCE_HIGH)的lot里放，园区里放两栋high密度住宅楼。
 class ResidenceHighZone : public ZoneMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("zone")
 	ResidenceHighZone();
 
 	static const char* GetId() { return "zone_residence_high"; }

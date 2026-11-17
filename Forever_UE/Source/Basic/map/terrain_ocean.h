@@ -8,6 +8,7 @@
 // 海洋地形:从1-4条随机地图边界向内啃出摆动的海岸线,再从海岸线BFS向内陆传播深度。详见terrain_ocean.md。
 class OceanTerrain : public TerrainMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("terrain")
 	OceanTerrain();
 	virtual ~OceanTerrain();
 

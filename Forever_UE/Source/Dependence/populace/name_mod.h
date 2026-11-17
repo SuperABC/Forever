@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/mod_test.h"
 #include "common/mod_state.h"
 
 #include <string>
@@ -15,6 +16,8 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 单元测试：print输出关键信息，返回是否通过。没有深度测试的mod用FOREVER_MOD_GENERIC_UNIT_TEST(见common/mod_test.h)。
+	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 从完整姓名截取"姓"(新生儿继承父亲的姓用);失败(如空字符串)时不调用setResult。
 	virtual void GetSurname(const std::string& fullName,
 		const std::function<void(const std::string&)>& setResult) const = 0;

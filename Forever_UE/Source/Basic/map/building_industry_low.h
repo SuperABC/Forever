@@ -6,6 +6,7 @@
 // 工厂(低密度)：只在工厂低密度分区(AREA_INDUSTRY_LOW)上有权重。
 class IndustryLowBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	IndustryLowBuilding();
 
 	static const char* GetId() { return "building_industry_low"; }

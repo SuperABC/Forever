@@ -7,6 +7,7 @@
 
 class SchedulerBasic : public SchedulerMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("scheduler")
 	SchedulerBasic();
 
 	static const char* GetId() { return "scheduler_basic"; }

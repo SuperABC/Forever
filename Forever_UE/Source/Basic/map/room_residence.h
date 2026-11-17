@@ -8,6 +8,7 @@
 // Room域默认内容：各类型的属性和设计见room_residence.md。
 class ResidenceRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	ResidenceRoom();
 
 	static const char* GetId() { return "room_residence"; }

@@ -1,4 +1,5 @@
 #include "Element/CitizenElement.h"
+#include "common/random.h"
 
 #include "Framework/ForeverPopulaceFrameworkComponent.h"
 #include "Framework/ForeverFrameworkActor.h"
@@ -208,6 +209,8 @@ bool ACitizenElement::ComputeRoomLandingSpot(Room* room, float& outWorldX, float
 	// 房间中心+随机偏移(抖动±0.2地图单位)，Z用Building::GetFloorBaseZ(room->GetLayer())；
 	// actor location是capsule中心，要比楼板高一个capsule半高，脚底才落在楼板上。
 	ComputeCitizenWorldPosition(*building, room->GetPosX(), room->GetPosY(), outWorldX, outWorldY);
+	// 落脚点抖动也取带种子的流(UE层的GetRandom不包作用域会被计入漏包抽取)。
+	CORE_RANDOM_SCOPE("ue.citizen_landing");
 	outWorldX += (GetRandom(11) / 10.f - 0.5f) * 0.4f * CITIZEN_WORLD_SCALE;
 	outWorldY += (GetRandom(11) / 10.f - 0.5f) * 0.4f * CITIZEN_WORLD_SCALE;
 	float floorZ = CITIZEN_HEIGHT_EPSILON + building->GetFloorBaseZ(room->GetLayer()) * CITIZEN_WORLD_SCALE

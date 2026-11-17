@@ -7,6 +7,7 @@
 
 class RanchManufacture : public ManufactureMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("manufacture")
 	RanchManufacture();
 
 	static const char* GetId() { return "manufacture_ranch"; }

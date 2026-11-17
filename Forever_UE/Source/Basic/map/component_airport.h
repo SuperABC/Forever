@@ -7,6 +7,7 @@
 
 class AirportComponent : public ComponentMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("component")
 	AirportComponent();
 
 	static const char* GetId() { return "component_airport"; }

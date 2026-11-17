@@ -6,6 +6,7 @@
 // 办公楼(低密度)：只在办公楼低密度分区(AREA_OFFICE_LOW)上有权重。
 class OfficeLowBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	OfficeLowBuilding();
 
 	static const char* GetId() { return "building_office_low"; }

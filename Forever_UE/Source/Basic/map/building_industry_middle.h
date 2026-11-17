@@ -6,6 +6,7 @@
 // 工厂(中密度)：只在工厂中密度分区(AREA_INDUSTRY_MIDDLE)上有权重。
 class IndustryMiddleBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	IndustryMiddleBuilding();
 
 	static const char* GetId() { return "building_industry_middle"; }

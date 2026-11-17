@@ -7,6 +7,7 @@
 
 class WarehouseKeeperJob : public JobMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("job")
 	WarehouseKeeperJob();
 
 	static const char* GetId() { return "job_warehouse_keeper"; }

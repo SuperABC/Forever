@@ -9,6 +9,7 @@
 // 设计说明见building_yuanshen.md。
 class YuanshenBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	YuanshenBuilding() : id(count++) { }
 
 	static const char* GetId() { return "building_yuanshen"; }

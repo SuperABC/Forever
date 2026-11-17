@@ -7,6 +7,7 @@
 
 class BusRoute : public RouteMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("route")
 	BusRoute();
 
 	static const char* GetId() { return "route_bus"; }

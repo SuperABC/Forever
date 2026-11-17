@@ -7,6 +7,7 @@
 
 class ContainerAsset : public AssetMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("asset")
 	ContainerAsset();
 
 	static const char* GetId() { return "asset_container"; }

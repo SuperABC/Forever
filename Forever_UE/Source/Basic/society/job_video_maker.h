@@ -7,6 +7,7 @@
 
 class VideoMakerJob : public JobMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("job")
 	VideoMakerJob();
 
 	static const char* GetId() { return "job_video_maker"; }

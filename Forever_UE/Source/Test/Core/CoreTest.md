@@ -1,0 +1,22 @@
+# CoreTest
+
+## 职责
+无画面的 Core 自动化测试程序(`x64/Release/CoreTest.exe`)，用法与套件说明见 `Source/Test/README.md`。
+
+## 文件分工
+- `main.cpp`：参数解析、套件表、子进程分发、汇总与退出码。
+- `test_framework.*`：`TestRun`(Check/Metric/Note，写 json/txt 报告，子进程导出/父进程导入)、FNV 哈希。
+- `test_options.h`：命令行选项与 quick/full 默认值(地图 256/1024、3/24 个月、种子 {11,12}/{11..14})。
+- `process_util.*`：自身路径、起子进程(重定向输出+超时)、崩溃过滤器(打印模块+RVA，配合 .map 解析)。
+- `world_build.*`：`LoadTestConfig`(注入顶层 seed 并给每个 mod 条目注入派生 `--seed`)、`BuildWorld`(与 UE 同顺序，逐阶段计时/漏包计数/签名)、`ComputeFingerprint`。
+- `child_world.*`：世界/套件子进程的入口与父进程驱动、指纹比较。
+- `suite_*.cpp`：各套件；在子进程里跑的套件主体在 `FindSuiteBody`(suite_random.cpp)里登记。
+
+## 关键设计
+- 多种子在子进程里跑：Registry/mod 计数器/DLL 静态状态不会复位，同进程第二个世界无法比较；崩溃也只标记该种子失败。
+- 每日推进用 Core `WorldStep`，与 UE 的 StepWorld 是同一份实现。
+- 世界不析构(Core 对象互持裸指针，进程随后退出)。
+
+## 注意
+- 含 C++ 转义的文件不要用 shell heredoc 写(转义会被破坏)，用 Write/Edit。
+- 新增套件：写 `XxxSuiteBody` + `RunXxxSuite`，在 suites.h、`FindSuiteBody`、main.cpp 套件表、vcxproj/filters 里各登记一处。

@@ -5,6 +5,7 @@
 
 class ShopOrganization : public OrganizationMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("organization")
 	ShopOrganization();
 
 	static const char* GetId() { return "organization_shop"; }

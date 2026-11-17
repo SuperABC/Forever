@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/mod_test.h"
 #include "common/mod_state.h"
 #include "map/general_geometry.h"
 #include "map/feature_spec.h"
@@ -19,6 +20,8 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 单元测试：print输出关键信息，返回是否通过。没有深度测试的mod用FOREVER_MOD_GENERIC_UNIT_TEST(见common/mod_test.h)。
+	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 构建路网,结果填进下面externs/intersections/roads/lots。nodeStaticCount是宿主的Node::count,
 	// 实现开头必须先Node::SetCount(nodeStaticCount),否则跨DLL的id会冲突。
 	// getHeight按地图element单位的连续坐标返回地形高度(含细化高度)。

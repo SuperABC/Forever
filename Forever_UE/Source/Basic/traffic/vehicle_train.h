@@ -7,6 +7,7 @@
 
 class TrainVehicle : public VehicleMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("vehicle")
 	TrainVehicle();
 
 	static const char* GetId() { return "vehicle_train"; }

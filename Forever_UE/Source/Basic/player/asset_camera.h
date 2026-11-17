@@ -7,6 +7,7 @@
 
 class CameraWeaponAsset : public AssetMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("asset")
 	CameraWeaponAsset();
 
 	static const char* GetId() { return "asset_camera"; }

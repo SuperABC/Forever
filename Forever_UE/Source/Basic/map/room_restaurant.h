@@ -8,6 +8,7 @@
 // 餐厅room：ResidenceHighBuilding twin布局一楼的联排。
 class RestaurantRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	RestaurantRoom();
 
 	static const char* GetId() { return "room_restaurant"; }

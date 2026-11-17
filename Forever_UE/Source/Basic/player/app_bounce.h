@@ -8,6 +8,7 @@
 
 class BounceApp : public AppMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("app")
 	BounceApp();
 
 	static const char* GetId() { return "app_bounce"; }

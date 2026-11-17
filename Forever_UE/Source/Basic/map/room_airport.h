@@ -7,6 +7,7 @@
 
 class AirportRoom : public RoomMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("room")
 	AirportRoom();
 
 	static const char* GetId() { return "room_airport"; }

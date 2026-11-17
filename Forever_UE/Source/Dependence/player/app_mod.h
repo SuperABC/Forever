@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/mod_test.h"
 #include "common/mod_state.h"
 #include "player/canvas.h"
 #include "common/handle.h"
@@ -16,6 +17,8 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 单元测试：print输出关键信息，返回是否通过。没有深度测试的mod用FOREVER_MOD_GENERIC_UNIT_TEST(见common/mod_test.h)。
+	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 第一次打开时调用一次;canvas只用来读尺寸布局初始状态(分辨率动态),不持有所有权。
 	virtual void Init(Canvas* canvas, PostHandle* post) = 0;
 

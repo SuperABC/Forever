@@ -46,6 +46,13 @@
 *.xcodeproj
 *.xcworkspace
 *.sln
+# 手写的 sln 需要进 git(Forever.sln 由 UE 生成，仍忽略)
+!Forever_UE/Source/Framework.sln
+!Forever_UE/Tools/RoadnetViz/RoadnetViz.sln
+!Forever_Mod/Empty/Cpp/Empty.sln
+!Forever_Mod/Test/Cpp/Test.sln
+!Forever_Mod/Yuanshen/Cpp/Yuanshen.sln
+!Forever_Mod/Wxdj/Cpp/Wxdj.sln
 *.suo
 *.user
 *.opensdf
@@ -94,3 +101,8 @@ Forever_Mod/Wxdj/Train/**/__pycache__/
 
 # EconSim模拟报告(运行产物,不进git)
 Forever_UE/Tools/EconSim/reports/
+
+# ---- 杂项日志 ----
+fullbuild.log
+bash.exe.stackdump
+*.stackdump

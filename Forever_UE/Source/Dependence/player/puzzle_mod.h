@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/mod_test.h"
 #include "common/mod_state.h"
 #include "player/canvas.h"
 #include "common/handle.h"
@@ -17,6 +18,8 @@ public:
 	virtual const char* GetType() const = 0;
 	virtual const char* GetName() = 0;
 
+	// 单元测试：print输出关键信息，返回是否通过。没有深度测试的mod用FOREVER_MOD_GENERIC_UNIT_TEST(见common/mod_test.h)。
+	virtual bool UnitTest(TestPrintFn print) = 0;
 	// 剧情脚本start_puzzle的param动态启动参数,Init之前调一次,默认忽略;不同于config.json的静态args,不进存档,见puzzle_mod.md。
 	virtual void SetParam(const std::string& param) {}
 

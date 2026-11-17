@@ -1846,6 +1846,15 @@ void Map::ConnectPathRoad(const PathRoadLink& link) {
 	vehicleNavGraph[endVeh[1]->GetId()].emplace_back(startVeh[1]->GetId(), veh1);
 	throughLines[path][1].push_back({ veh1, endVeh[1], startVeh[1], 0, 0.f, 1.f });
 
+	// 死胡同端(没接到任何大路/小路)：两条车道各自留下一个孤立锚点，到达侧车道没有出边、离开侧车道没有入边——
+	// 挂在这条小路上的车库入口/出口会变成单向(车进不来或出不去)。在死端把到达侧接到离开侧，车辆可以掉头。
+	auto addUTurn = [&](Node* arriving, Node* departing) {
+		Connection* turn = new Connection(*arriving, *departing);
+		vehicleNavGraph[arriving->GetId()].emplace_back(departing->GetId(), turn);
+		};
+	if (!link.endRoad1) addUTurn(startVeh[1], startVeh[0]); // side1沿End->Start到达Start端，side0从Start端离开
+	if (!link.endRoad2) addUTurn(endVeh[0], endVeh[1]);     // side0到达End端，side1从End端离开
+
 	Connection* ped0 = new Connection(*startPed[0], *endPed[0]);
 	pedestrianNavGraph[startPed[0]->GetId()].emplace_back(endPed[0]->GetId(), ped0);
 	pedestrianNavGraph[endPed[0]->GetId()].emplace_back(startPed[0]->GetId(), ped0);

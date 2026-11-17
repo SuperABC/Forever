@@ -14,6 +14,7 @@
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "common/implement.h"
 #include "common/registry.h"
+#include "common/error.h"
 #include "story/event.h"
 
 #undef UpdateResource
@@ -48,6 +49,17 @@ void UPuzzleWidget::NativeConstruct() {
 }
 
 void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
+	// 先创建新的这局：puzzle id没注册/没在config"puzzle_mods"里启用时Puzzle构造会抛NullPointerException，
+	// 不能让它一路抛出去崩游戏——打日志、静默不执行，正在进行的上一局(如果有)原样保留。
+	Puzzle* created = nullptr;
+	try {
+		created = new Puzzle(&Registry::Get().GetPuzzleFactory(), string(TCHAR_TO_UTF8(*puzzleId)));
+	}
+	catch (const NullPointerException&) {
+		UE_LOG(LogTemp, Warning, TEXT("start_puzzle: puzzle \"%s\" 没有注册或没有在 config 的 puzzle_mods 里启用，已忽略。"), *puzzleId);
+		return;
+	}
+
 	// 重复启动时世界已经被上一局暂停了，不能把暂停后的值当成"之前的值"。
 	const bool alreadyPaused = puzzle != nullptr;
 	if (puzzle) {
@@ -60,7 +72,7 @@ void UPuzzleWidget::StartPuzzle(const FString& puzzleId, const FString& param) {
 	// "Slate单位"的GetViewportSize不是一回事)。
 	FIntPoint canvasSize = GetViewportSize(kFallbackCanvasWidth, kFallbackCanvasHeight);
 	canvas.Init(canvasSize.X, canvasSize.Y);
-	puzzle = new Puzzle(&Registry::Get().GetPuzzleFactory(), string(TCHAR_TO_UTF8(*puzzleId)));
+	puzzle = created;
 	puzzle->SetParam(string(TCHAR_TO_UTF8(*param))); // 必须在Init之前，让Init里就能用上
 	PostImplement post = MakePost(GetWorld());
 	puzzle->Init(&canvas, &post);

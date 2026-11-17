@@ -23,6 +23,8 @@ class Citizen;
 class Change;
 class Time;
 class PostImplement;
+struct WorldStepHooks;
+struct WorldDomains;
 class SpawnNpcChange;
 class NPCReviveChange;
 struct ScriptContext;
@@ -194,6 +196,9 @@ protected:
 	void StepWorld(bool crossedDay);
 	void TickPopulaceDomain(bool crossedDay, PostImplement& postImplement);
 	void TickSocietyDomain(bool crossedDay, PostImplement& postImplement);
+	// 把UE层特有的部分(应用Change、离城/迁入的Actor处理、公交停站事件)交给Core共用的WorldStep。
+	WorldStepHooks MakeStepHooks();
+	WorldDomains MakeWorldDomains() const;
 
 	// 跳时间(jump_time)：分帧小步推进时钟，见BeginTimeSkip。
 	void RunTimeSkipBudget();
@@ -275,6 +280,10 @@ public:
 	// BeginPlay的世界生成流程是否已经全部结束(game_start已广播完/读档的玩家与世界物品已恢复)。
 	// 开局黑屏(UFadeWidget)用它判断世界是否就绪。
 	FORCEINLINE bool IsInitialGenerationDone() const { return bInitialGenerationDone; }
+
+	// 没包随机作用域的GetRandom抽取次数。Core是静态库、每个链接它的模块各有一份静态状态，
+	// 测试模块(ForeverTest)必须通过这里读Forever模块里的那份，直接调RandomRegistry读到的是自己的副本。
+	static uint64 GetUnscopedRandomDraws();
 
 	// 开局进度条用：总格数(生成阶段数+最后一格"构建场景")、已完成格数、当前阶段名。每个阶段完成算一格；
 	// 生成完之后"构建场景"(等建筑LOD排空，IsLodSettled)再占最后一格。BeginPlay之前total为0。

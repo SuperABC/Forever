@@ -492,7 +492,13 @@ void Config::RescanFiles() {
 vector<string> Config::FindMissingScripts(const vector<string>& scripts) {
 	vector<string> missing;
 	for (const string& name : scripts) {
-		if (GetScriptPath(name).empty()) missing.push_back(name);
+		if (!GetScriptPath(name).empty()) continue;
+		// 存档manifest里的脚本名也包括story_scripts配置的脚本，它们的文件可以不在任何resource_paths里。
+		bool isStoryScript = false;
+		for (const string& storyPath : storyScriptPaths) {
+			if (filesystem::path(storyPath).stem().string() == name && filesystem::exists(storyPath)) { isStoryScript = true; break; }
+		}
+		if (!isStoryScript) missing.push_back(name);
 	}
 	return missing;
 }

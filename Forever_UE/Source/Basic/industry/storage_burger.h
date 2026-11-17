@@ -7,6 +7,7 @@
 
 class BurgerStorage : public StorageMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("storage")
 	BurgerStorage();
 
 	static const char* GetId() { return "storage_burger"; }

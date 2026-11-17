@@ -1,4 +1,4 @@
-#include "report.h"
+#include "econ_report.h"
 
 #include "map/map.h"
 #include "map/building.h"

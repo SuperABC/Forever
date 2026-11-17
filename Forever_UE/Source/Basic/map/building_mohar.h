@@ -6,6 +6,7 @@
 // Mohar：用AddDecoration放一个成品建筑模型(3rdParty/Mohar)，并和楼层/房间系统融合，详见building_mohar.md。
 class MoharBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	MoharBuilding();
 
 	static const char* GetId() { return "building_mohar"; }

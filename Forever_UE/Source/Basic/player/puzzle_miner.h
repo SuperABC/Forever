@@ -5,6 +5,7 @@
 
 class MinerPuzzle : public PuzzleMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("puzzle")
 	virtual void SetParam(const std::string& param) override;
 	virtual void Init(Canvas* canvas, PostHandle* post) override;
 	virtual JsonValue* Loop(Canvas* canvas, int ms, PostHandle* post) override;

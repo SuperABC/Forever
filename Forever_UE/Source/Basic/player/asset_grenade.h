@@ -7,6 +7,7 @@
 
 class GrenadeAsset : public AssetMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("asset")
 	GrenadeAsset();
 
 	static const char* GetId() { return "asset_grenade"; }

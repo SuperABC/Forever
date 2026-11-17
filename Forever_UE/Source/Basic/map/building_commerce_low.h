@@ -6,6 +6,7 @@
 // 商店(低密度)：只在商店低密度分区(AREA_COMMERCE_LOW)上有权重。
 class CommerceLowBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	CommerceLowBuilding();
 
 	static const char* GetId() { return "building_commerce_low"; }

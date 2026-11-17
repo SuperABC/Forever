@@ -6,6 +6,7 @@
 // 机场，可有多座，承载StationMod"station_air"。
 class AirportBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	AirportBuilding();
 
 	static const char* GetId() { return "building_airport"; }

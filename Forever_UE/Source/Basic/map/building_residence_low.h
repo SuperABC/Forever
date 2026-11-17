@@ -6,6 +6,7 @@
 // 住宅(低密度)：只在住宅低密度分区(AREA_RESIDENCE_LOW)上有权重。
 class ResidenceLowBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	ResidenceLowBuilding();
 
 	static const char* GetId() { return "building_residence_low"; }

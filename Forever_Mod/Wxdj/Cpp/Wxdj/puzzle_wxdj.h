@@ -21,6 +21,7 @@ class Log;
 // 画面(顶部状态条/左半战报/右半操作栏+招式家族list)和鼠标交互。见puzzle_wxdj.md。
 class WxdjPuzzle : public PuzzleMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("puzzle")
 	WxdjPuzzle();
 	virtual ~WxdjPuzzle();
 

@@ -7,6 +7,7 @@
 // station_*.h的BusStation::AssignRoads。
 class TrainStationBuilding : public BuildingMod {
 public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("building")
 	TrainStationBuilding();
 
 	static const char* GetId() { return "building_train_station"; }
