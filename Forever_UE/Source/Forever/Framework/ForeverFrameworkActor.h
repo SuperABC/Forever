@@ -161,7 +161,11 @@ protected:
 	void RestoreControlledPawn(const FForeverPendingLoad& load);
 
 	// add_option/remove_option执行完之后，让场景里叫这个名字的市民/车辆/门刷新交互选项快照。
-	void RefreshInteractOptions(const std::string& name);
+	void RefreshInteractOptions(const std::string& name, const std::string& category = std::string());
+
+	// add_option/remove_option的name是字面"$$self.name"、执行脚本带所有者信息时，直接作用在所有者上并刷新场景里的Actor，
+	// 返回true；否则返回false，由调用方走按名字查找的老路径。
+	bool ApplySelfOption(const std::string& nameExpression, const std::string& optionExpression, bool add, const ScriptContext& context);
 
 public:
 	// 世界坐标所在的地址文本：房间地址 > 建筑地址 > 园区地址 > 地块(block)地址 > "x,y,z"(地图单位)。

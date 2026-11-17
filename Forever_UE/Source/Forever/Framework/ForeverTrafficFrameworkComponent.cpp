@@ -626,7 +626,9 @@ void UForeverTrafficFrameworkComponent::FireVehicleEvent(Vehicle* vehicle, bool 
 void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicleName, APlayerController* controller, bool bSilent) {
 	if (!controller) return;
 
+	const double enterStart = FPlatformTime::Seconds();
 	AVehicleElement* vehicleElement = FindOrSpawnVehicle(vehicleName);
+	const double spawnedAt = FPlatformTime::Seconds();
 	if (!vehicleElement) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverTrafficFrameworkComponent::ApplyEnterVehicle: 找不到车辆 %s"), *vehicleName);
 		return;
@@ -665,8 +667,16 @@ void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicle
 	currentPawn->SetActorHiddenInGame(true);
 	currentPawn->SetActorEnableCollision(false);
 	vehicleElement->SetPreviousPawn(currentPawn);
+	const double possessStart = FPlatformTime::Seconds();
 	controller->Possess(vehicleElement);
+	const double possessEnd = FPlatformTime::Seconds();
 	if (!bSilent) FireVehicleEvent(vehicleElement->GetVehicle(), true, "drive");
+	const double enterEnd = FPlatformTime::Seconds();
+	if (enterEnd - enterStart > 0.02) {
+		UE_LOG(LogTemp, Warning, TEXT("ApplyEnterVehicle %s: 总 %.1f ms (FindOrSpawnVehicle %.1f, 隐藏原pawn等 %.1f, Possess %.1f, 事件 %.1f)"),
+			*vehicleName, (enterEnd - enterStart) * 1000.0, (spawnedAt - enterStart) * 1000.0,
+			(possessStart - spawnedAt) * 1000.0, (possessEnd - possessStart) * 1000.0, (enterEnd - possessEnd) * 1000.0);
+	}
 }
 
 ATransitVehicleElement* UForeverTrafficFrameworkComponent::FindTransitElement(const FString& vehicleName) const {

@@ -31,8 +31,8 @@
 			"goal": "",
 			"changes": [
 				{ "type": "set_value", "variable": "self.stopped", "value": "1" },
-				{ "type": "add_option", "name": "$$self.name", "option": "上车", "condition": "$$self.aboard == 0" },
-				{ "type": "add_option", "name": "$$self.name", "option": "下车", "condition": "$$self.aboard == 1" }
+				{ "type": "add_option", "category": "vehicle", "name": "$$self.name", "option": "上车", "condition": "$$self.aboard == 0" },
+				{ "type": "add_option", "category": "vehicle", "name": "$$self.name", "option": "下车", "condition": "$$self.aboard == 1" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -46,8 +46,8 @@
 			"goal": "",
 			"changes": [
 				{ "type": "set_value", "variable": "self.stopped", "value": "0" },
-				{ "type": "remove_option", "name": "$$self.name", "option": "上车" },
-				{ "type": "remove_option", "name": "$$self.name", "option": "下车" }
+				{ "type": "remove_option", "category": "vehicle", "name": "$$self.name", "option": "上车" },
+				{ "type": "remove_option", "category": "vehicle", "name": "$$self.name", "option": "下车" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -87,8 +87,8 @@
 			"goal": "",
 			"changes": [
 				{ "type": "set_value", "variable": "self.aboard", "value": "1" },
-				{ "type": "remove_option", "name": "$$self.name", "option": "上车" },
-				{ "type": "add_option", "name": "$$self.name", "option": "下车", "condition": "$$self.stopped == 1" }
+				{ "type": "remove_option", "category": "vehicle", "name": "$$self.name", "option": "上车" },
+				{ "type": "add_option", "category": "vehicle", "name": "$$self.name", "option": "下车", "condition": "$$self.stopped == 1" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -102,8 +102,8 @@
 			"goal": "",
 			"changes": [
 				{ "type": "set_value", "variable": "self.aboard", "value": "0" },
-				{ "type": "remove_option", "name": "$$self.name", "option": "下车" },
-				{ "type": "add_option", "name": "$$self.name", "option": "上车", "condition": "$$self.stopped == 1" }
+				{ "type": "remove_option", "category": "vehicle", "name": "$$self.name", "option": "下车" },
+				{ "type": "add_option", "category": "vehicle", "name": "$$self.name", "option": "上车", "condition": "$$self.stopped == 1" }
 			],
 			"dialogs": [],
 			"subsequences": []

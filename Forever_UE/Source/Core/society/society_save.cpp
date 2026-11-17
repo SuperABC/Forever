@@ -197,6 +197,7 @@ Society* SocietySaveCodec::Load(const SaveArchive& archive, Map& map, Populace& 
 				Job* job = new Job(&society->jobFactory, &society->scriptFactory, jobId, position);
 				job->closed = closed;
 				o->jobs.push_back(job);
+			if (job->GetScript()) job->GetScript()->SetOwnerParent(o);
 				if (job->mod && !stateText.empty()) {
 					JsonValue root;
 					JsonReader reader;

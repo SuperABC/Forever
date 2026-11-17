@@ -352,6 +352,14 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	// 里程碑的changes都走这个入口，所以这里统一判断一次。
 	if (change && !change->GetCondition().empty() && !EvaluateExpressionBool(change->GetCondition(), context)) return;
 
+	// 脚本给自己加/删选项($$self.name)：脚本记着它的所有者，直接作用在所有者上，不按名字去各个域查找。
+	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+		if (ApplySelfOption(addOption->GetName(), addOption->GetOption(), true, context)) return;
+	}
+	else if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		if (ApplySelfOption(removeOption->GetName(), removeOption->GetOption(), false, context)) return;
+	}
+
 	if (auto* nav = dynamic_cast<const NPCNavigateChange*>(change)) {
 		// 按change自带的姓名/房间地址反查(NPCNavigateChange::destination是纯std::string，见change.h)。
 		// mod生成的是现成的姓名/地址;脚本里写的可能是表达式($$self.name)——先按原样查，查不到再求值后查。
@@ -483,7 +491,7 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		// 求出消息文本，广播一个GlobalMessageEvent给所有挂了Script的东西，见
 		// UForeverStoryFrameworkComponent::BroadcastGlobalMessage。
 		if (storyFramework) {
-			storyFramework->BroadcastGlobalMessage(ToString(EvaluateExpression(globalMessage->GetMessage(), context)));
+			storyFramework->BroadcastGlobalMessage(ToString(EvaluateExpression(globalMessage->GetMessage(), context)), globalMessage->GetCategory());
 		}
 		return;
 	}
@@ -628,10 +636,10 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	// 交互选项变了：场景里对应的市民/车辆/门Actor刷新自己的选项快照(玩家站在旁边时连同屏幕上的
 	// 选项列表一起换)，否则要等它下次被重新生成才看得到变化。
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
-		RefreshInteractOptions(ToString(EvaluateExpression(addOption->GetName(), context)));
+		RefreshInteractOptions(ToString(EvaluateExpression(addOption->GetName(), context)), addOption->GetCategory());
 	}
 	else if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
-		RefreshInteractOptions(ToString(EvaluateExpression(removeOption->GetName(), context)));
+		RefreshInteractOptions(ToString(EvaluateExpression(removeOption->GetName(), context)), removeOption->GetCategory());
 	}
 }
 
@@ -793,26 +801,87 @@ std::string AForeverFrameworkActor::DescribeLocation(const FVector& worldLocatio
 	return TCHAR_TO_UTF8(*coordinates);
 }
 
-void AForeverFrameworkActor::RefreshInteractOptions(const std::string& name) {
+bool AForeverFrameworkActor::ApplySelfOption(const std::string& nameExpression, const std::string& optionExpression, bool add,
+	const ScriptContext& context) {
+	// 只认字面的"$$self.name"(去掉空白)：其它写法(如$$self.occupant)指向的是别的对象，走按名字查找。
+	std::string compact;
+	for (char c : nameExpression) if (c != ' ' && c != '\t') compact += c;
+	if (compact != "$$self.name") return false;
+	Script* script = dynamic_cast<Script*>(context.self);
+	if (!script || !script->GetOwner()) return false;
+
+	const std::string option = ToString(EvaluateExpression(optionExpression, context));
+	void* owner = script->GetOwner();
+	switch (script->GetOwnerKind()) {
+	case ScriptOwnerKind::Citizen: {
+		Citizen* citizen = static_cast<Citizen*>(owner);
+		if (add) citizen->AddOption(option); else citizen->RemoveOption(option);
+		if (populaceFramework) {
+			if (ACitizenElement* element = populaceFramework->FindActiveCitizen(citizen)) element->RefreshOptions();
+		}
+		return true;
+	}
+	case ScriptOwnerKind::Vehicle: {
+		Vehicle* vehicle = static_cast<Vehicle*>(owner);
+		if (add) vehicle->AddOption(option); else vehicle->RemoveOption(option);
+		if (trafficFramework) {
+			const FString vehicleName = UTF8_TO_TCHAR(vehicle->GetName().c_str());
+			if (AVehicleElement* element = trafficFramework->FindVehicleElement(vehicleName)) element->RefreshOptions();
+			if (ATransitVehicleElement* element = trafficFramework->FindTransitElement(vehicleName)) element->RefreshOptions();
+		}
+		return true;
+	}
+	case ScriptOwnerKind::Door: {
+		Door* door = static_cast<Door*>(owner);
+		if (add) door->AddOption(option); else door->RemoveOption(option);
+		if (UForeverDoorComponent* component = UForeverDoorComponent::FindForDoor(door)) component->RefreshOptions();
+		return true;
+	}
+	case ScriptOwnerKind::Cabin: {
+		Cabin* cabin = static_cast<Cabin*>(owner);
+		if (add) cabin->AddOption(option); else cabin->RemoveOption(option);
+		if (ABuildingElement* element = ABuildingElement::FindForBuilding(cabin->GetBuilding())) element->RefreshCabinOptions(cabin);
+		return true;
+	}
+	case ScriptOwnerKind::Asset: {
+		Asset* asset = static_cast<Asset*>(owner);
+		if (add) asset->AddOption(option); else asset->RemoveOption(option);
+		if (assetFramework) {
+			if (AAssetElement* element = assetFramework->FindElementByName(UTF8_TO_TCHAR(asset->GetName().c_str()))) element->RefreshOptions();
+		}
+		return true;
+	}
+	default:
+		return false; // 组织/岗位脚本没有交互选项，按旧路径处理(找不到就静默忽略)
+	}
+}
+
+void AForeverFrameworkActor::RefreshInteractOptions(const std::string& name, const std::string& category) {
 	if (name.empty()) return;
-	if (populace && populaceFramework) {
+	// category为空=不知道是哪一类，全试；否则只刷新那一类。
+	const bool all = category.empty();
+	if ((all || category == "citizen") && populace && populaceFramework) {
 		if (Citizen* citizen = populace->FindCitizenByName(name)) {
 			if (ACitizenElement* element = populaceFramework->FindActiveCitizen(citizen)) element->RefreshOptions();
 		}
 	}
-	if (trafficFramework) {
+	if ((all || category == "vehicle") && trafficFramework) {
 		if (AVehicleElement* element = trafficFramework->FindVehicleElement(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
 		if (ATransitVehicleElement* element = trafficFramework->FindTransitElement(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
 	}
-	if (assetFramework) {
+	if ((all || category == "asset") && assetFramework) {
 		if (AAssetElement* element = assetFramework->FindElementByName(UTF8_TO_TCHAR(name.c_str()))) element->RefreshOptions();
 	}
 	if (map) {
-		if (Door* door = map->FindDoorByName(name)) {
-			if (UForeverDoorComponent* component = UForeverDoorComponent::FindForDoor(door)) component->RefreshOptions();
+		if (all || category == "door") {
+			if (Door* door = map->FindDoorByName(name)) {
+				if (UForeverDoorComponent* component = UForeverDoorComponent::FindForDoor(door)) component->RefreshOptions();
+			}
 		}
-		if (Cabin* cabin = map->FindCabinByName(name)) {
-			if (ABuildingElement* element = ABuildingElement::FindForBuilding(cabin->GetBuilding())) element->RefreshCabinOptions(cabin);
+		if (all || category == "elevator") {
+			if (Cabin* cabin = map->FindCabinByName(name)) {
+				if (ABuildingElement* element = ABuildingElement::FindForBuilding(cabin->GetBuilding())) element->RefreshCabinOptions(cabin);
+			}
 		}
 	}
 }

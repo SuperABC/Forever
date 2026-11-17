@@ -233,8 +233,23 @@ Job* Society::FindJobByScript(const Container* script) const {
 	return nullptr;
 }
 
+Organization* Society::FindOrganizationOfJobScript(const Container* script) const {
+	if (!script) return nullptr;
+	if (auto* s = dynamic_cast<const Script*>(script)) {
+		if (s->GetOwnerKind() == ScriptOwnerKind::Job && s->GetOwnerParent()) {
+			return static_cast<Organization*>(s->GetOwnerParent());
+		}
+	}
+	return FindOrganizationOfJob(FindJobByScript(script));
+}
+
 Organization* Society::FindOrganizationByScript(const Container* script) const {
 	if (!script) return nullptr;
+	if (auto* s = dynamic_cast<const Script*>(script)) {
+		if (s->GetOwnerKind() == ScriptOwnerKind::Organization && s->GetOwner()) {
+			return static_cast<Organization*>(s->GetOwner());
+		}
+	}
 	for (Organization* organization : organizations) {
 		if (organization && static_cast<const Container*>(organization->GetScript()) == script) return organization;
 	}

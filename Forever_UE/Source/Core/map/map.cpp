@@ -3411,6 +3411,11 @@ Door* Map::FindDoorByName(const string& interactName) const {
 	return it != doorsByInteractName.end() ? it->second : nullptr;
 }
 
+Door* Map::FindDoorById(const string& id) const {
+	auto it = doorsById.find(id);
+	return it != doorsById.end() ? it->second : nullptr;
+}
+
 const vector<Door*>& Map::GetAllDoors() const { return allDoors; }
 
 void Map::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
@@ -3421,19 +3426,37 @@ bool Map::ApplyChange(const Change* change, const ScriptContext& context) {
 	CORE_RANDOM_SCOPE("core.map");
 	// 门/电梯/资产的选项与门状态Change，全部按交互名查目标，找不到静默忽略(同Traffic::ApplyChange)。
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+		// category指定了就只找那一类(资产要遍历全部房间，不指定时每次都白扫一遍)；没指定保持旧行为，三类都试。
+		const string& category = addOption->GetCategory();
+		if (!category.empty() && category != "door" && category != "elevator" && category != "asset") return false; // citizen/vehicle：别的域处理
 		string name = ToString(EvaluateExpression(addOption->GetName(), context));
 		string option = ToString(EvaluateExpression(addOption->GetOption(), context));
-		if (Door* door = FindDoorByName(name)) door->AddOption(option);
-		if (Cabin* cabin = FindCabinByName(name)) cabin->AddOption(option);
-		if (Asset* asset = FindAssetByName(name)) asset->AddOption(option); // 房间里的资产
+		if (category.empty() || category == "door") {
+			if (Door* door = FindDoorByName(name)) door->AddOption(option);
+		}
+		if (category.empty() || category == "elevator") {
+			if (Cabin* cabin = FindCabinByName(name)) cabin->AddOption(option);
+		}
+		if (category.empty() || category == "asset") {
+			if (Asset* asset = FindAssetByName(name)) asset->AddOption(option); // 房间里的资产
+		}
 		return true;
 	}
 	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		// category指定了就只找那一类(资产要遍历全部房间，不指定时每次都白扫一遍)；没指定保持旧行为，三类都试。
+		const string& category = removeOption->GetCategory();
+		if (!category.empty() && category != "door" && category != "elevator" && category != "asset") return false; // citizen/vehicle：别的域处理
 		string name = ToString(EvaluateExpression(removeOption->GetName(), context));
 		string option = ToString(EvaluateExpression(removeOption->GetOption(), context));
-		if (Door* door = FindDoorByName(name)) door->RemoveOption(option);
-		if (Cabin* cabin = FindCabinByName(name)) cabin->RemoveOption(option);
-		if (Asset* asset = FindAssetByName(name)) asset->RemoveOption(option); // 房间里的资产
+		if (category.empty() || category == "door") {
+			if (Door* door = FindDoorByName(name)) door->RemoveOption(option);
+		}
+		if (category.empty() || category == "elevator") {
+			if (Cabin* cabin = FindCabinByName(name)) cabin->RemoveOption(option);
+		}
+		if (category.empty() || category == "asset") {
+			if (Asset* asset = FindAssetByName(name)) asset->RemoveOption(option); // 房间里的资产
+		}
 		return true;
 	}
 	if (auto* launch = dynamic_cast<const LaunchElevatorChange*>(change)) {

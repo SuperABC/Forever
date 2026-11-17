@@ -88,8 +88,8 @@ GlobalMessageChange::GlobalMessageChange() :
 
 }
 
-GlobalMessageChange::GlobalMessageChange(std::string message) :
-	message(move(message)) {
+GlobalMessageChange::GlobalMessageChange(std::string message, std::string category) :
+	message(move(message)), category(move(category)) {
 
 }
 
@@ -108,6 +108,14 @@ void GlobalMessageChange::SetMessage(std::string message) {
 
 const std::string& GlobalMessageChange::GetMessage() const {
 	return message;
+}
+
+void GlobalMessageChange::SetCategory(std::string category) {
+	this->category = move(category);
+}
+
+const std::string& GlobalMessageChange::GetCategory() const {
+	return category;
 }
 
 DebugPrintChange::DebugPrintChange() :
@@ -279,8 +287,8 @@ AddOptionChange::AddOptionChange() :
 
 }
 
-AddOptionChange::AddOptionChange(std::string name, std::string option) :
-	name(move(name)), option(move(option)) {
+AddOptionChange::AddOptionChange(std::string name, std::string option, std::string category) :
+	name(move(name)), option(move(option)), category(move(category)) {
 
 }
 
@@ -309,13 +317,21 @@ const std::string& AddOptionChange::GetOption() const {
 	return option;
 }
 
+void AddOptionChange::SetCategory(std::string category) {
+	this->category = move(category);
+}
+
+const std::string& AddOptionChange::GetCategory() const {
+	return category;
+}
+
 RemoveOptionChange::RemoveOptionChange() :
 	name(), option() {
 
 }
 
-RemoveOptionChange::RemoveOptionChange(std::string name, std::string option) :
-	name(move(name)), option(move(option)) {
+RemoveOptionChange::RemoveOptionChange(std::string name, std::string option, std::string category) :
+	name(move(name)), option(move(option)), category(move(category)) {
 
 }
 
@@ -342,6 +358,14 @@ void RemoveOptionChange::SetOption(std::string option) {
 
 const std::string& RemoveOptionChange::GetOption() const {
 	return option;
+}
+
+void RemoveOptionChange::SetCategory(std::string category) {
+	this->category = move(category);
+}
+
+const std::string& RemoveOptionChange::GetCategory() const {
+	return category;
 }
 
 SpawnNpcChange::SpawnNpcChange() :

@@ -42,7 +42,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "add_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\" && $$self.overtime == 0" },
+				{ "type": "add_option", "category": "citizen", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\" && $$self.overtime == 0" },
 				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\" && $$self.overtime == 1" },
 				{ "type": "set_value", "variable": "self.overtime", "value": "0" }
 			],
@@ -57,7 +57,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "remove_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\"" }
+				{ "type": "remove_option", "category": "citizen", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\"" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -97,7 +97,7 @@
 			"goal": "",
 			"changes": [
 				{ "type": "set_value", "variable": "self.overtime", "value": "1", "condition": "$$self.task != \"\"" },
-				{ "type": "remove_option", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\" && $$self.task == \"\"" },
+				{ "type": "remove_option", "category": "citizen", "name": "$$self.occupant", "option": "制作汉堡", "condition": "$$self.occupant != \"\" && $$self.task == \"\"" },
 				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\" && $$self.task == \"\"" },
 				{ "type": "create_timer", "name": "leave_work", "time": "17:00:00", "mode": "next" }
 			],

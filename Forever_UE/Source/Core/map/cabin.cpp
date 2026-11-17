@@ -21,6 +21,8 @@ Cabin::Cabin(Building* building, int specIndex, const string& interactName, int 
 		for (const string& milestoneName : milestoneNames) {
 			script->ReadMilestones(Config::GetScriptPath(milestoneName));
 		}
+		script->SetOwner(ScriptOwnerKind::Cabin, this);
+		script->SetStableKey("cabin:" + interactName);
 		script->SetValue("name", ValueType(interactName));
 		script->SetValue("building", ValueType(building ? building->GetName() : string()));
 		script->SetValue("min", ValueType(minLevel));

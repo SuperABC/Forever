@@ -26,6 +26,8 @@ Door::Door(const string& id, DOOR_KIND_TYPE kind, const string& tag, const DoorS
 		for (const string& milestoneName : spec.milestoneNames) {
 			script->ReadMilestones(Config::GetScriptPath(milestoneName));
 		}
+		script->SetOwner(ScriptOwnerKind::Door, this);
+		script->SetStableKey("door:" + id);
 		script->SetValue("name", ValueType(interactName));
 		script->SetValue("label", ValueType(spec.name));
 	}

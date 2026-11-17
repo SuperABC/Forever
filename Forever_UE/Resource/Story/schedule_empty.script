@@ -8,8 +8,8 @@
             "description": "",
             "goal": "",
             "changes": [
-                { "type": "add_option", "name": "$$self.name", "option": "测试" },
-                { "type": "add_option", "name": "$$self.name", "option": "显示路线" }
+                { "type": "add_option", "category": "citizen", "name": "$$self.name", "option": "测试" },
+                { "type": "add_option", "category": "citizen", "name": "$$self.name", "option": "显示路线" }
             ],
             "dialogs": [],
             "subsequences": []

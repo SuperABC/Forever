@@ -52,6 +52,9 @@ public:
 	Organization* FindOrganizationOfJob(const Job* job) const;
 	// 由组织脚本反查组织(assign_task等组织发起的Change用)。
 	Organization* FindOrganizationByScript(const Container* script) const;
+	// 岗位脚本所属的组织(open_shop/pay_wage用)：脚本带所有者信息时直接取，不遍历全部组织的全部岗位；
+	// 不是岗位脚本返回nullptr。
+	Organization* FindOrganizationOfJobScript(const Container* script) const;
 
 	// 阶段3：RecruitCitizens()之后调用，反推入职历史(JobExperience)并派生同事关系，见society.md。
 	void GenerateEmploymentHistory(const std::vector<Citizen*>& citizens, int currentYear);

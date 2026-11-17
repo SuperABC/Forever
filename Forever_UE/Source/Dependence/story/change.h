@@ -94,7 +94,7 @@ class GlobalMessageChange : public Change {
 public:
 	GlobalMessageChange();
 
-	GlobalMessageChange(std::string message);
+	GlobalMessageChange(std::string message, std::string category = std::string());
 
 	virtual ~GlobalMessageChange();
 
@@ -104,9 +104,18 @@ public:
 
 	const std::string& GetMessage() const;
 
+	// 接收方的脚本类别(字面量，可用逗号分隔多个)：main/organization/job/citizen/vehicle/door/elevator/building/room/zone/asset。
+	// 空=所有脚本都收(要遍历全城每个脚本，慢)。
+	void SetCategory(std::string category);
+
+	const std::string& GetCategory() const;
+
 private:
 	// 消息内容
 	std::string message;
+
+	// 接收方类别，见SetCategory
+	std::string category;
 
 };
 
@@ -247,7 +256,7 @@ class AddOptionChange : public Change {
 public:
 	AddOptionChange();
 
-	AddOptionChange(std::string name, std::string option);
+	AddOptionChange(std::string name, std::string option, std::string category = std::string());
 
 	virtual ~AddOptionChange();
 
@@ -261,12 +270,20 @@ public:
 
 	const std::string& GetOption() const;
 
+	// 目标类别(字面量，不是表达式)：citizen/vehicle/door/elevator/asset。空=不指定，每个域各按名字试一遍(慢，且名字要全局唯一)。
+	void SetCategory(std::string category);
+
+	const std::string& GetCategory() const;
+
 private:
 	// 目标名称
 	std::string name;
 
 	// 选项文本
 	std::string option;
+
+	// 目标类别，见SetCategory
+	std::string category;
 
 };
 
@@ -275,7 +292,7 @@ class RemoveOptionChange : public Change {
 public:
 	RemoveOptionChange();
 
-	RemoveOptionChange(std::string name, std::string option);
+	RemoveOptionChange(std::string name, std::string option, std::string category = std::string());
 
 	virtual ~RemoveOptionChange();
 
@@ -289,12 +306,20 @@ public:
 
 	const std::string& GetOption() const;
 
+	// 目标类别(字面量，不是表达式)：citizen/vehicle/door/elevator/asset。空=不指定，每个域各按名字试一遍(慢，且名字要全局唯一)。
+	void SetCategory(std::string category);
+
+	const std::string& GetCategory() const;
+
 private:
 	// 目标名称
 	std::string name;
 
 	// 选项文本
 	std::string option;
+
+	// 目标类别，见SetCategory
+	std::string category;
 
 };
 

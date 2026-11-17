@@ -57,7 +57,8 @@ class FForeverGameModule : public FDefaultGameModuleImpl {
 public:
 	virtual void StartupModule() override {
 		preWorldInitHandle = FWorldDelegates::OnPreWorldInitialization.AddStatic(&FForeverGameModule::DisableNavigation);
-		watchdog = MakeUnique<FForeverHitchWatchdog>();
+		// 烘焙/打包(cook、pak等commandlet)里游戏线程根本不跑游戏帧，GFrameCounter一直是0，看门狗会每2秒误报一次(栈也没符号)，所以只在真正运行游戏时开。
+		if (!IsRunningCommandlet()) watchdog = MakeUnique<FForeverHitchWatchdog>();
 	}
 
 	virtual void ShutdownModule() override {

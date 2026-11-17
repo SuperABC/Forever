@@ -312,12 +312,14 @@ bool Player::ApplyChange(const Change* change, const ScriptContext& context) {
 	// add_option/remove_option作用在玩家身上/地上的资产上(房间里的由Map::ApplyChange处理)，名字全局唯一，
 	// 找不到静默忽略，和其它域一样。
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+		if (!addOption->GetCategory().empty() && addOption->GetCategory() != "asset") return false;
 		if (Asset* asset = FindAssetByName(ToString(EvaluateExpression(addOption->GetName(), context)))) {
 			asset->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
 		}
 		return true;
 	}
 	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		if (!removeOption->GetCategory().empty() && removeOption->GetCategory() != "asset") return false;
 		if (Asset* asset = FindAssetByName(ToString(EvaluateExpression(removeOption->GetName(), context)))) {
 			asset->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
 		}

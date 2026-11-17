@@ -59,7 +59,7 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 	constexpr float kMinLotDepth = 5.f;     // 进深小于它拒绝
 	constexpr float kFullDepthMax = 10.f;   // 进深不超过它占满，超过只占kBigDepth
 	constexpr float kBigDepth = 7.5f;
-	constexpr float kMinCentralDistance = 200.f; // 外围车站所在地块到中央车站所在地块的最小距离
+	constexpr float kMinStationDistance = 200.f; // 任意两座车站所在地块之间的最小距离(外围站到中央站、外围站之间都适用)
 	constexpr float kCos45 = 0.70710678f;
 
 	struct Option { int direction; float frontage; float depth; };
@@ -134,6 +134,7 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 
 	// 东南西北各一座：地块中心到中央地块中心的距离>=200，连线和该方向轴线夹角<=45度(x比中央大就是东，y比中央大就是南)，
 	// 连线和中央车站走向夹角<=45度(落在中央车站某一端的正前方)；选边时东西站取沿路方向更贴近东西的边、南北站取更贴近南北的边。
+	vector<Lot*> placedLots;   // 已放外围车站的地块，后面的外围站要和它们保持距离
 	const float directionX[4] = { 1.f, 0.f, -1.f, 0.f };  // 东、南、西、北
 	const float directionY[4] = { 0.f, 1.f, 0.f, -1.f };
 	for (int d = 0; d < 4; d++) {
@@ -143,7 +144,13 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 			if (!lot || (lot->GetArea() != AREA_COMMERCE_MIDDLE && lot->GetArea() != AREA_COMMERCE_LOW)) continue;
 			float dx = lot->GetPosX() - central->GetPosX(), dy = lot->GetPosY() - central->GetPosY();
 			float distance = sqrtf(dx * dx + dy * dy);
-			if (distance < kMinCentralDistance) continue;
+			if (distance < kMinStationDistance) continue;
+			// 和本次已经放下的其他外围车站也不能近于kMinStationDistance。
+			bool tooClose = false;
+			for (Lot* placed : placedLots) {
+				if (hypotf(lot->GetPosX() - placed->GetPosX(), lot->GetPosY() - placed->GetPosY()) < kMinStationDistance) { tooClose = true; break; }
+			}
+			if (tooClose) continue;
 			float ux = dx / distance, uy = dy / distance;
 			if (ux * directionX[d] + uy * directionY[d] < kCos45 - 1e-4f) continue;
 			// 连线和中央车站走向的夹角<=45度(走向是无向轴，取靠近这座站的那一端)：西南-东北走向的话，西站只能在西南端前方。
@@ -163,6 +170,7 @@ void TrainStationBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 		if (candidates.empty()) continue;
 		const Candidate& pick = candidates[GetRandom(static_cast<int>(candidates.size()))];
 		emitOption(pick.lot, pick.option);
+		placedLots.push_back(pick.lot);
 	}
 }
 

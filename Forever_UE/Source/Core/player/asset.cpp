@@ -32,6 +32,8 @@ Asset::Asset(AssetFactory* factory, const string& id) :
 
 	script = MakeScript(&Registry::Get().GetScriptFactory(), mod->scriptModName, mod->milestoneNames);
 	if (script) {
+		script->SetOwner(ScriptOwnerKind::Asset, this);
+		script->SetStableKey("asset:" + name);
 		script->SetValue("name", ValueType(name));
 		script->SetValue("type", ValueType(type));
 	}

@@ -21,6 +21,8 @@ Vehicle::Vehicle(VehicleFactory* factory, ScriptFactory* scriptFactory, const st
 	// 都空则没有脚本(script为空)，见MakeScript。
 	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
 	if (script) {
+		script->SetOwner(ScriptOwnerKind::Vehicle, this);
+		script->SetStableKey("vehicle:" + name); // 同ScriptSaveCodec::CollectScripts的键
 		// 供milestone脚本里$$self.name引用这辆车的唯一名字——用Vehicle自己的name(调用方在
 		// Traffic::CreateVehicle里传入、Traffic用它做unordered_map键)，不是mod->GetName()，
 		// 因为多个Vehicle实例可能共享同一个VehicleMod子类，mod->GetName()不保证跨实例唯一。

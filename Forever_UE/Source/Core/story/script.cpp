@@ -42,6 +42,19 @@ string Script::GetName() const {
 	return name;
 }
 
+void Script::SetOwner(ScriptOwnerKind kind, void* owner, void* parent) {
+	ownerKind = kind;
+	this->owner = owner;
+	ownerParent = parent;
+}
+
+void Script::SetOwnerParent(void* parent) { ownerParent = parent; }
+ScriptOwnerKind Script::GetOwnerKind() const { return ownerKind; }
+void* Script::GetOwner() const { return owner; }
+void* Script::GetOwnerParent() const { return ownerParent; }
+const std::string& Script::GetStableKey() const { return stableKey; }
+void Script::SetStableKey(std::string key) const { stableKey = std::move(key); }
+
 ScriptMod* Script::GetMod() const {
 	return mod;
 }
@@ -406,7 +419,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			if (name.IsNull() || option.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or option for add_option change.\n");
 			}
-			change = new AddOptionChange(name.AsString(), option.AsString());
+			// category可选：citizen/vehicle/door/elevator/asset，指定后只有对应的域去找目标，不指定就每个域各试一遍(慢)。
+			auto category = obj["category"];
+			string categoryText = category.IsNull() ? string() : category.AsString();
+			if (!categoryText.empty() && categoryText != "citizen" && categoryText != "vehicle" && categoryText != "door"
+				&& categoryText != "elevator" && categoryText != "asset") {
+				THROW_EXCEPTION(RuntimeException, "Unknown category for add_option change (citizen/vehicle/door/elevator/asset).\n");
+			}
+			change = new AddOptionChange(name.AsString(), option.AsString(), categoryText);
 		}
 		else if (type == "start_puzzle") {
 			auto puzzle = obj["puzzle"];
@@ -498,7 +518,27 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			if (message.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing message for global_message change.\n");
 			}
-			change = new GlobalMessageChange(message.AsString());
+			// category可选：接收方的脚本类别，逗号分隔多个(main/organization/job/citizen/vehicle/door/elevator/building/room/zone/asset)，
+			// 缺省=所有脚本都收。写错的类别直接报错。
+			auto category = obj["category"];
+			string categoryText = category.IsNull() ? string() : category.AsString();
+			{
+				static const char* const kCategories[] = { "main", "organization", "job", "citizen", "vehicle", "door",
+					"elevator", "building", "room", "zone", "asset" };
+				size_t start = 0;
+				while (!categoryText.empty() && start <= categoryText.size()) {
+					size_t comma = categoryText.find(',', start);
+					string item = categoryText.substr(start, comma == string::npos ? string::npos : comma - start);
+					bool known = false;
+					for (const char* candidate : kCategories) known |= (item == candidate);
+					if (!known) {
+						THROW_EXCEPTION(RuntimeException, "Unknown category for global_message change (main/organization/job/citizen/vehicle/door/elevator/building/room/zone/asset, comma separated).\n");
+					}
+					if (comma == string::npos) break;
+					start = comma + 1;
+				}
+			}
+			change = new GlobalMessageChange(message.AsString(), categoryText);
 		}
 		else if (type == "change_weather") {
 			// weather是表达式，求值结果是天气名：sunny/cloudy/overcast/light_rain/heavy_rain/light_snow/heavy_snow。
@@ -608,7 +648,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			if (name.IsNull() || option.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or option for remove_option change.\n");
 			}
-			change = new RemoveOptionChange(name.AsString(), option.AsString());
+			// category可选：citizen/vehicle/door/elevator/asset，指定后只有对应的域去找目标，不指定就每个域各试一遍(慢)。
+			auto category = obj["category"];
+			string categoryText = category.IsNull() ? string() : category.AsString();
+			if (!categoryText.empty() && categoryText != "citizen" && categoryText != "vehicle" && categoryText != "door"
+				&& categoryText != "elevator" && categoryText != "asset") {
+				THROW_EXCEPTION(RuntimeException, "Unknown category for remove_option change (citizen/vehicle/door/elevator/asset).\n");
+			}
+			change = new RemoveOptionChange(name.AsString(), option.AsString(), categoryText);
 		}
 		else if (type == "npc_navigate") {
 			auto name = obj["name"];

@@ -170,6 +170,8 @@ public:
 
 	// 按交互名查门(只有spec.name非空的门有交互名)，找不到返回nullptr。
 	Door* FindDoorByName(const std::string& interactName) const;
+	// 按id查门(Door::GetId，计时器归属键"door:<id>"用)，找不到返回nullptr。
+	Door* FindDoorById(const std::string& id) const;
 
 	// 创建一台电梯(Building::BuildCabins调用)：交互名"<building名> 电梯<n>"(n按这栋楼已建的电梯数+1)，
 	// 初始停在1楼(夹到范围内)，登记进cabinsByInteractName。电梯归building的cabinEntities持有。

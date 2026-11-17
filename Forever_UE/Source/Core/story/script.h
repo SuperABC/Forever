@@ -14,6 +14,10 @@
 
 // 剧情脚本：Script->Milestone->Event/Dialog/Change架构的顶层持有者，自己就是一份Container
 // 变量池（self.前缀路由的目标）。不假设全局唯一，设计见script.md。
+// 脚本的所有者种类：脚本由哪类对象创建并持有。供"对自己操作"的Change(add_option/remove_option/assign_task/open_shop/
+// pay_wage)直接拿到所有者，不用按名字/脚本指针去全图查找，见script.md"所有者"一节。
+enum class ScriptOwnerKind { None, Door, Cabin, Citizen, Vehicle, Asset, Organization, Job };
+
 class Script : public Container {
 	// 存档：ScriptSaveCodec直接读写私有字段(script_save.md)。
 	friend class ScriptSaveCodec;
@@ -29,6 +33,19 @@ public:
 	std::string GetName() const;
 
 	ScriptMod* GetMod() const;
+
+	// 所有者：创建这份脚本的对象(Door*/Cabin*/Citizen*/Vehicle*/Asset*/Organization*/Job*，void*由kind决定类型)。
+	// parent只有Job用：它所属的Organization*。创建脚本的地方在构造时设置，读档重建同样走这些构造函数。
+	void SetOwner(ScriptOwnerKind kind, void* owner, void* parent = nullptr);
+	void SetOwnerParent(void* parent);
+	ScriptOwnerKind GetOwnerKind() const;
+	void* GetOwner() const;
+	void* GetOwnerParent() const;
+
+	// 稳定键(ScriptSaveCodec::CollectScripts的键，计时器/小游戏归属用)的缓存，第一次算出后记在这里，
+	// 之后"对自己建计时器"不用任何查找。空=还没算。创建后键不会变(组织/岗位/市民只增不删)。
+	const std::string& GetStableKey() const;
+	void SetStableKey(std::string key) const;
 
 	std::pair<bool, ValueType> GetValue(const std::string& name) const override;
 
@@ -93,6 +110,11 @@ private:
 	std::unordered_map<std::string, MilestoneNode> milestones; // Milestone*引用缓存，不持有所有权
 	std::vector<MilestoneNode*> actives; // 活动里程碑
 	std::unordered_map<std::string, ValueType> variables;
+
+	ScriptOwnerKind ownerKind = ScriptOwnerKind::None;
+	void* owner = nullptr;
+	void* ownerParent = nullptr;
+	mutable std::string stableKey;
 
 };
 

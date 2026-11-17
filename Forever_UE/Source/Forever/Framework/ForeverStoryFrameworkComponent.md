@@ -25,7 +25,7 @@ Story域的UE层接线点。`Core/story`的`Script`/`Story`只做纯C++的匹配
 - **`BroadcastToAllScripts(event, postImplement, includeMain)`**：依次发给主线（可选）、每个`Organization`/`Job`、每个市民`Scheduler`、每辆车、有Script的门、电梯轿厢（`Cabin`）、建筑/房间/园区实体脚本、
   以及资产脚本（玩家身上/estate/地上`worldAssets`/房间里的资产，含容器内容；`game_start`时对已`IsScriptStarted()`的跳过并置位，之后新建资产靠`StartAssetScript`补发）。
   `BroadcastGameStart`、`BroadcastGlobalMessage`、`BroadcastWeatherChange`、`BroadcastSpeakingFinish`共用。
-- **`BroadcastGlobalMessage(message)`**：`global_message` Change触发，发`GlobalMessageEvent`给全部Script（含主线）。嵌套深度`globalMessageDepth`超过`kMaxGlobalMessageDepth`(8)时丢弃并警告，防止里程碑互相触发无限递归。
+- **`BroadcastGlobalMessage(message, category)`**：`global_message` Change触发，发`GlobalMessageEvent`给全部Script（含主线）；category(逗号分隔的脚本类别，空=全部)限定只遍历那几类，`BroadcastToAllScripts`按位掩码跳过不需要的类别。嵌套深度`globalMessageDepth`超过`kMaxGlobalMessageDepth`(8)时丢弃并警告，防止里程碑互相触发无限递归。
 - **`BroadcastWeatherChange(weather)`**：天气变了（自动随机换或`change_weather`）时由`AForeverFrameworkActor::Tick`调用，发`WeatherChangeEvent`给全部Script（含主线）；读档不广播。
 - **`BroadcastSpeakingFinish(label)`**：一句带label的台词播完时由`AdvanceDialog`/`AdvanceBackground`调用，发`SpeakingFinishEvent`给全部Script（含主线）。
 - **`OptionDialog(name, option)`**：玩家点击`MeetOption`选项时调用，构造`OptionDialogEvent`。匹配主线Script，再按`name`分别尝试：市民（其`Scheduler`脚本和`Job`脚本，工作中的市民在Job脚本里加选项）、
@@ -88,7 +88,7 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
 
 - **归属**：计时器按归属脚本的稳定键（`FindScriptKey`/`FindScriptByKey`，键与`ScriptSaveCodec::CollectScripts`一致）存放，到时只发`TimeUpEvent`给归属脚本，不广播；归属对象不在了就丢弃。
   `ResolveTimerOwner`按`category`（空=self；`global`/`main`/`citizen`/`vehicle`/`door`/`elevator`/`zone`/`building`/`room`）+`label`找目标脚本，建筑/房间/园区的`label`写名字或地址都行。
-  岗位/组织脚本数量大（几千），所以`FindScriptKey`/`FindScriptByKey`对`org:`/`job:`键先走不分配的直接扫描/直接解析，再退回`CollectScripts`（它每次重建并排序全部脚本，几千个计时器同时触发会卡很久）。
+  岗位/组织脚本数量大（几千），所以`FindScriptKey`/`FindScriptByKey`对`org:`/`job:`键先走不分配的直接扫描/直接解析，再退回`CollectScripts`（它每次重建并排序全部脚本，几千个计时器同时触发会卡很久）。`story.main/system/global`三个固定键、`door:/cabin:/building:/zone:/room:/vehicle:`键(按名字/id/地址直接找对象，door用`Map::FindDoorById`)也直接解析；`FindScriptKey`对没有直达路径的脚本用`scriptKeyCache`(第一次miss整张重建，命中后用`FindScriptByKey`核对，所以不需要手动失效)；`asset:`键按资产名找(玩家身上/地上→房间里)；其余键(及找不到时)才落到CollectScripts(否则 create_timer/remove_timer 每次落到 CollectScripts，实测 30ms+)。
 - **`mode`**：`absolute`（默认，`time`是完整日期，过去时间忽略并警告）、`relative`（当前时间加偏移）、`real`（现实秒数，`Story::CreateRealTimer`，由`AdvanceRealTimers`推进）、`next`（日期是相对天数，钟点是绝对钟点，钟点早于当前钟点就再晚一天）。
   relative/real/next的`time`用`ParseTimerOffset`解析为"天数+钟点"，支持`[Y年]M月D日[ H:M:S]`、`YYYY-MM-DD[ H:M:S]`、纯`H:M:S`；日期按相对天数算（年月日减0年1月1日，日期不限范围，1月40日=39天），所以不用`Time`类解析（它会校验日期范围）。
 - 每帧最多处理`kMaxStoryTimersPerFrame`(16)个到时计时器，8点/9点这类几千个岗位脚本同时到时，多出的留到后面几帧。

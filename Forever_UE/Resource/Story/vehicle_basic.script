@@ -13,9 +13,9 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "add_option", "name": "$$self.name", "option": "上车" },
-				{ "type": "add_option", "name": "$$self.name", "option": "测试寻路" },
-				{ "type": "add_option", "name": "$$self.name", "option": "显示路线" }
+				{ "type": "add_option", "category": "vehicle", "name": "$$self.name", "option": "上车" },
+				{ "type": "add_option", "category": "vehicle", "name": "$$self.name", "option": "测试寻路" },
+				{ "type": "add_option", "category": "vehicle", "name": "$$self.name", "option": "显示路线" }
 			],
 			"dialogs": [],
 			"subsequences": []

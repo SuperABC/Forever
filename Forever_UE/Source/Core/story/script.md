@@ -27,9 +27,9 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
   `FileCache`结构体（见下"主线剧情.script新增三个顶层字段"一节）。
 - **`BuildDialogs`**：普通台词读`speaker`/`content`/`label`/`voice`，可选`background`(秒，大于0为后台对话，见`Dependence/story/dialog.md`)。
 - **`BuildEvent`识别`"game_start"`/`"option_dialog"`(name/option)/`"citizen_decease"`(name/reason，留空=不限)/`"speaking_finish"`(label，留空=不限)/`"time_up"`(name，留空=不限)/`"enter_zone"`/`"leave_zone"`(zone)/`"enter_building"`/`"leave_building"`(zone/building)/`"enter_room"`/`"leave_room"`(zone/building/room，都留空=不限)/`"global_message"`(message，留空=不限)，
-  `BuildChanges`识别`"set_value"`/`"place_holder"`/`"debug_print"`/`"global_message"`(message)/`"for_range"`(var/from/to/step/do，
+  `BuildChanges`识别`"set_value"`/`"place_holder"`/`"debug_print"`/`"global_message"`(message/可选category：接收方脚本类别，逗号分隔)/`"for_range"`(var/from/to/step/do，
   含两端，循环变量写进`$$self.<var>`，由`AForeverFrameworkActor::ApplyChange`递归执行)/`"npc_teleport"`(name/destination，destination是房间地址；有Actor就瞬移并打断正在走的路，没有就只改逻辑位置，被玩家占有的不动)/`"spawn_npc"`(name/gender/birthday，可选scheduler/home，见`story.md`"spawn_npc")/`"create_timer"`(name/time，可选category/label)/`"remove_timer"`(name，计时器见`story.md`"计时器")/`"launch_elevator"`(building/elevator/command，
-  由Map执行，见`Source/Core/map/cabin.md`)/`"add_option"`/`"remove_option"`(name/option)/
+  由Map执行，见`Source/Core/map/cabin.md`)/`"add_option"`/`"remove_option"`(name/option/可选category：citizen/vehicle/door/elevator/asset，指定后不再各域各找一遍)/
   `"start_puzzle"`(puzzle + 可选param，param是表达式，启动时经`PuzzleMod::SetParam`交给小游戏，跟config.json `puzzle_mods`的静态args无关)/`"enter_vehicle"`/`"set_door"`(name/access)/`"register_door"`(name/citizen/pass)/`"npc_navigate"`(name/destination=房间地址)/
   `"change_control"`(name)**——`set_door`的`access`、`register_door`的`pass`是布尔表达式，JSON里写`true`/`false`
   或者`"true"`/`"false"`都行(`AsString()`把JSON布尔转成字符串，执行时`EvaluateExpressionBool`求值，也可以写

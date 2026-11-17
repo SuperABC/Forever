@@ -13,11 +13,11 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "add_option", "name": "$$self.name", "option": "捡起" },
-				{ "type": "add_option", "name": "$$self.name", "option": "测试获得" },
-				{ "type": "add_option", "name": "$$self.name", "option": "测试扣除" },
-				{ "type": "add_option", "name": "$$self.name", "option": "测试丢弃" },
-				{ "type": "add_option", "name": "$$self.name", "option": "测试扣除过量" }
+				{ "type": "add_option", "category": "asset", "name": "$$self.name", "option": "捡起" },
+				{ "type": "add_option", "category": "asset", "name": "$$self.name", "option": "测试获得" },
+				{ "type": "add_option", "category": "asset", "name": "$$self.name", "option": "测试扣除" },
+				{ "type": "add_option", "category": "asset", "name": "$$self.name", "option": "测试丢弃" },
+				{ "type": "add_option", "category": "asset", "name": "$$self.name", "option": "测试扣除过量" }
 			],
 			"dialogs": [],
 			"subsequences": []

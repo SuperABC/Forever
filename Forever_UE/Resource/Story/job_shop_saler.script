@@ -40,7 +40,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "add_option", "name": "$$self.occupant", "option": "购买汉堡", "condition": "$$self.occupant != \"\"" }
+				{ "type": "add_option", "category": "citizen", "name": "$$self.occupant", "option": "购买汉堡", "condition": "$$self.occupant != \"\"" }
 			],
 			"dialogs": [],
 			"subsequences": []
@@ -66,7 +66,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "remove_option", "name": "$$self.occupant", "option": "购买汉堡", "condition": "$$self.occupant != \"\"" },
+				{ "type": "remove_option", "category": "citizen", "name": "$$self.occupant", "option": "购买汉堡", "condition": "$$self.occupant != \"\"" },
 				{ "type": "npc_navigate", "name": "$$self.occupant", "destination": "$$self.home", "condition": "$$self.occupant != \"\"" },
 				{ "type": "create_timer", "name": "leave_work", "time": "18:00:00", "mode": "next" }
 			],

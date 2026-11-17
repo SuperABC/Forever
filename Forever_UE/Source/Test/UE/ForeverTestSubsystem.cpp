@@ -21,6 +21,7 @@
 #include "Element/VehicleElement.h"
 #include "Element/TransitVehicleElement.h"
 #include "traffic/vehicle.h"
+#include "populace/scheduler.h"
 #include <memory>
 #include "story/change.h"
 #include "story/story.h"

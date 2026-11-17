@@ -153,8 +153,8 @@
 - `open_shop`：无字段。`pay_wage`(amount，分的表达式)：给被玩家操控的市民发工资，由执行它的Job脚本所属岗位的组织支付（`Flow::WAGE`，代扣所得税）。
 - `global_setting`(setting, value)：运行时改全局设置，`value`是表达式。目前只认`time_flow_ratio`（`Player::SetTimeFlowRatio`，1.0=1真实秒1游戏分钟，
   默认10.0），由`AForeverFrameworkActor::ApplyChange`执行；未知设置打警告。主线脚本顶层的`global_settings.time_flow_ratio`仍管开局初值。
-- `global_message`(message)：触发`global_message`事件广播，见`event.md`。
-- `add_option`/`remove_option`(name, option)：给名字全局唯一的对象（门/市民/载具/资产/房间里的资产）增删交互选项，找不到静默忽略。
+- `global_message`(message, category)：触发`global_message`事件广播，见`event.md`。`category`可选，字面量，逗号分隔多个：`main`/`organization`/`job`/`citizen`(市民日程脚本)/`vehicle`/`door`/`elevator`/`building`/`room`/`zone`/`asset`，限定只发给这几类脚本，写别的值解析时报错；不写=发给全部脚本(要遍历全城几千个岗位/日程/房间脚本，约35ms)，所以脚本应该写上。
+- `add_option`/`remove_option`(name, option, category)：给名字全局唯一的对象（门/电梯/市民/载具/资产/房间里的资产）增删交互选项，找不到静默忽略。`category`可选，字面量(不是表达式)：`citizen`/`vehicle`/`door`/`elevator`/`asset`，解析时写别的值会报错。指定后只有对应的域去找目标、场景里也只刷新那一类Actor；不写就保持旧行为，七个域各按名字试一遍(房间里的资产要遍历全部房间，每次约2ms)，所以脚本应该写上。
 - `for_range`(var, from, to, step可选默认1, do)：含两端；循环变量默认写进循环体内的local（`$$local.<var>`，只在循环体内可见、不留在脚本变量里、不存档，外层事件字段照常可读）；`var`显式写`self.xxx`才写进脚本自己的变量池（`$$self.xxx`）；
   `AForeverFrameworkActor::ApplyChange`里有迭代次数上限（`kMaxForRangeIterations`），超出截断并打警告。
 

@@ -481,11 +481,13 @@ void Populace::Tick(const Time& currentTime, bool crossedDay,
 
 bool Populace::ApplyChange(const Change* change, const ScriptContext& context) {
 	if (auto* addOption = dynamic_cast<const AddOptionChange*>(change)) {
+		if (!addOption->GetCategory().empty() && addOption->GetCategory() != "citizen") return false; // 指定了别的类别：不是这个域的
 		Citizen* target = FindCitizenByName(ToString(EvaluateExpression(addOption->GetName(), context)));
 		if (target) target->AddOption(ToString(EvaluateExpression(addOption->GetOption(), context)));
 		return true;
 	}
 	if (auto* removeOption = dynamic_cast<const RemoveOptionChange*>(change)) {
+		if (!removeOption->GetCategory().empty() && removeOption->GetCategory() != "citizen") return false; // 指定了别的类别：不是这个域的
 		Citizen* target = FindCitizenByName(ToString(EvaluateExpression(removeOption->GetName(), context)));
 		if (target) target->RemoveOption(ToString(EvaluateExpression(removeOption->GetOption(), context)));
 		return true;

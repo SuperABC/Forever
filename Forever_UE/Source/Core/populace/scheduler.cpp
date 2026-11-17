@@ -14,6 +14,7 @@ Scheduler::Scheduler(SchedulerFactory* factory, ScriptFactory* scriptFactory, co
 	if (mod) mod->SetProperty();
 	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
 	if (script) {
+		script->SetOwner(ScriptOwnerKind::Citizen, citizen);
 		// 供milestone脚本里$$self.name引用绑定的市民姓名。
 		script->SetValue("name", ValueType(citizen ? citizen->GetName() : string()));
 	}

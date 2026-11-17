@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include <unordered_map>
+#include <string>
 #include "Framework/ForeverFrameworkComponent.h"
 
 #include "story/dialog.h"
@@ -86,7 +88,8 @@ public:
 	// 广播给所有挂了Script的东西(含主线，范围同game_start)。嵌套深度超过kMaxGlobalMessageDepth时
 	// 丢弃并警告，防止两个里程碑互相触发无限递归。
 	// @message: 已经求值好的消息文本
-	void BroadcastGlobalMessage(const std::string& message);
+	// @category: 接收方脚本类别(逗号分隔，见GlobalMessageChange::SetCategory)，空=全部
+	void BroadcastGlobalMessage(const std::string& message, const std::string& category = std::string());
 
 	// 天气变了(自动随机换或脚本change_weather)时由AForeverFrameworkActor::Tick调用：广播
 	// WeatherChangeEvent给所有脚本(含主线)，范围和global_message一样。读档不广播。
@@ -193,14 +196,20 @@ private:
 
 	// 把event广播给组织/岗位/市民Scheduler/车辆/门的全部Script(includeMain为true时连主线也算)，
 	// 匹配出的Dialog/Change交给ProcessScriptActions。BroadcastGameStart和BroadcastGlobalMessage共用。
-	void BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain);
+	// category(逗号分隔的脚本类别，空=全部)只给global_message用，限定遍历哪几类脚本。
+	void BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain, const std::string& category = std::string());
 
 	// 只把event发给一个Script(进出事件用)，匹配出的Dialog/Change交给ProcessScriptActions。
 	void BroadcastToScript(Event& event, Script* script, PostImplement& postImplement);
 
 	// 计时器归属：Script* <-> ScriptSaveCodec::CollectScripts的稳定键。找不到返回空串/nullptr。
 	std::string FindScriptKey(const Container* script) const;
+	// FindScriptKey没缓存时的查找(固定脚本/org/job/scheduler直接扫，其余走scriptKeyCache/CollectScripts)。
+	std::string FindScriptKeySlow(const Container* script) const;
 	Script* FindScriptByKey(const std::string& key) const;
+	// Script* -> 键的缓存。第一次(或脚本是新建的)查不到时用CollectScripts整张重建一次；命中后要用FindScriptByKey核对，
+	// 所以脚本被销毁/地址复用不会返回错键，也不需要在增删脚本时手动失效。
+	mutable std::unordered_map<const Container*, std::string> scriptKeyCache;
 	// create_timer的category/label指定的目标脚本(category为空时就是self)。
 	const Container* ResolveTimerOwner(const std::string& category, const std::string& label, const Container* self) const;
 

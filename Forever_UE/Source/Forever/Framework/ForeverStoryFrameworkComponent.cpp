@@ -130,6 +130,31 @@ void UForeverStoryFrameworkComponent::BroadcastToScript(Event& event, Script* sc
 }
 
 namespace {
+	// global_message的category：接收方脚本类别的位掩码。空=全部。
+	enum ScriptKind : uint32 {
+		KindMain = 1 << 0, KindOrganization = 1 << 1, KindJob = 1 << 2, KindCitizen = 1 << 3, KindVehicle = 1 << 4,
+		KindDoor = 1 << 5, KindElevator = 1 << 6, KindBuilding = 1 << 7, KindRoom = 1 << 8, KindZone = 1 << 9,
+		KindAsset = 1 << 10, KindAll = 0xFFFFFFFFu
+	};
+
+	uint32 ParseScriptKinds(const string& category) {
+		if (category.empty()) return KindAll;
+		static const std::pair<const char*, uint32> kNames[] = {
+			{ "main", KindMain }, { "organization", KindOrganization }, { "job", KindJob }, { "citizen", KindCitizen },
+			{ "vehicle", KindVehicle }, { "door", KindDoor }, { "elevator", KindElevator }, { "building", KindBuilding },
+			{ "room", KindRoom }, { "zone", KindZone }, { "asset", KindAsset } };
+		uint32 mask = 0;
+		size_t start = 0;
+		while (start <= category.size()) {
+			size_t comma = category.find(',', start);
+			const string item = category.substr(start, comma == string::npos ? string::npos : comma - start);
+			for (const auto& [name, bit] : kNames) if (item == name) mask |= bit;
+			if (comma == string::npos) break;
+			start = comma + 1;
+		}
+		return mask;
+	}
+
 	// 玩家身上(手/肩/背)、estate、地上(worldAssets)、全部房间里的资产，含容器内容，摊平成数组。
 	void CollectAllAssets(AForeverFrameworkActor* framework, TArray<Asset*>& out) {
 		auto add = [&](auto&& self, Asset* asset) -> void {
@@ -156,7 +181,7 @@ namespace {
 	}
 }
 
-void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain) {
+void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostImplement& postImplement, bool includeMain, const string& category) {
 	if (!story) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 
@@ -164,19 +189,26 @@ void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostIm
 		BroadcastToScript(event, script, postImplement);
 		};
 
-	if (includeMain) broadcastOne(story->GetMainScript());
+	// 只遍历category指定的那几类脚本(几千个岗位/日程/房间脚本全遍历一遍很慢)；空=全部。
+	const uint32 kinds = ParseScriptKinds(category);
 
-	if (Society* society = framework ? framework->GetSociety() : nullptr) {
-		for (Organization* org : society->GetOrganizations()) {
-			broadcastOne(org->GetScript());
-			for (Job* job : org->GetJobs()) {
-				broadcastOne(job->GetScript());
+	if (includeMain && (kinds & KindMain)) broadcastOne(story->GetMainScript());
+
+	if ((kinds & (KindOrganization | KindJob)) != 0) {
+		if (Society* society = framework ? framework->GetSociety() : nullptr) {
+			for (Organization* org : society->GetOrganizations()) {
+				if (kinds & KindOrganization) broadcastOne(org->GetScript());
+				if (kinds & KindJob) {
+					for (Job* job : org->GetJobs()) {
+						broadcastOne(job->GetScript());
+					}
+				}
 			}
 		}
 	}
 
 	// 每个市民独占持有一份Scheduler，Scheduler自己的Script(schedule_empty.script)。
-	if (Populace* populace = framework ? framework->GetPopulace() : nullptr) {
+	if (Populace* populace = (kinds & KindCitizen) ? (framework ? framework->GetPopulace() : nullptr) : nullptr) {
 		for (Citizen* citizen : populace->GetCitizens()) {
 			if (citizen && citizen->GetScheduler()) {
 				broadcastOne(citizen->GetScheduler()->GetScript());
@@ -185,7 +217,7 @@ void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostIm
 	}
 
 	// 每辆车独占持有一份Script(vehicle_basic.script)。
-	if (Traffic* traffic = framework ? framework->GetTraffic() : nullptr) {
+	if (Traffic* traffic = (kinds & KindVehicle) ? (framework ? framework->GetTraffic() : nullptr) : nullptr) {
 		for (auto& [name, vehicle] : traffic->GetVehicles()) {
 			if (vehicle) broadcastOne(vehicle->GetScript());
 		}
@@ -193,31 +225,41 @@ void UForeverStoryFrameworkComponent::BroadcastToAllScripts(Event& event, PostIm
 
 	// 只有spec.name非空的门才会有Script(见Core/map/door.md)，过滤掉纯自动门；电梯同理(spec指定了
 	// 里程碑文件才有Script)。
-	if (Map* map = framework ? framework->GetMap() : nullptr) {
-		for (Door* door : map->GetAllDoors()) {
-			if (door && door->GetScript()) broadcastOne(door->GetScript());
+	const bool wantBuildings = (kinds & (KindElevator | KindBuilding | KindRoom)) != 0;
+	if (Map* map = (kinds & (KindDoor | KindElevator | KindBuilding | KindRoom | KindZone)) ? (framework ? framework->GetMap() : nullptr) : nullptr) {
+		if (kinds & KindDoor) {
+			for (Door* door : map->GetAllDoors()) {
+				if (door && door->GetScript()) broadcastOne(door->GetScript());
+			}
 		}
 		for (auto& [name, building] : map->GetBuildings()) {
+			if (!wantBuildings) break;
 			if (!building) continue;
-			for (Cabin* cabin : building->GetCabinEntities()) {
-				if (cabin && cabin->GetScript()) broadcastOne(cabin->GetScript());
+			if (kinds & KindElevator) {
+				for (Cabin* cabin : building->GetCabinEntities()) {
+					if (cabin && cabin->GetScript()) broadcastOne(cabin->GetScript());
+				}
 			}
 			// 实体脚本(建筑/房间/园区)：收game_start、计时器等普通广播；它们的进出事件不走这里，
 			// 只由BroadcastPlayerLocation发给被进出的那一个。
-			broadcastOne(building->GetScript());
-			for (Room* room : building->GetRooms()) {
-				if (room) broadcastOne(room->GetScript());
+			if (kinds & KindBuilding) broadcastOne(building->GetScript());
+			if (kinds & KindRoom) {
+				for (Room* room : building->GetRooms()) {
+					if (room) broadcastOne(room->GetScript());
+				}
 			}
 		}
-		for (auto& [name, zone] : map->GetZones()) {
-			if (zone) broadcastOne(zone->GetScript());
+		if (kinds & KindZone) {
+			for (auto& [name, zone] : map->GetZones()) {
+				if (zone) broadcastOne(zone->GetScript());
+			}
 		}
 	}
 
 	// 资产(玩家身上/地上/房间里，含容器内容)带的脚本。game_start同时置scriptStarted，之后新建的资产
 	// 在StartAssetScript里补发。
 	TArray<Asset*> assets;
-	CollectAllAssets(framework, assets);
+	if (kinds & KindAsset) CollectAllAssets(framework, assets);
 	bool bGameStart = dynamic_cast<GameStartEvent*>(&event) != nullptr;
 	for (Asset* asset : assets) {
 		if (!asset->GetScript()) continue;
@@ -302,7 +344,7 @@ void UForeverStoryFrameworkComponent::NotifyAssetResult(bool bGet, const string&
 	}
 }
 
-void UForeverStoryFrameworkComponent::BroadcastGlobalMessage(const string& message) {
+void UForeverStoryFrameworkComponent::BroadcastGlobalMessage(const string& message, const string& category) {
 	if (!story) return;
 	if (globalMessageDepth >= kMaxGlobalMessageDepth) {
 		UE_LOG(LogTemp, Warning, TEXT("UForeverStoryFrameworkComponent::BroadcastGlobalMessage: nested global_message depth exceeded %d, dropped \"%s\" (do two milestones keep triggering each other?)"),
@@ -322,7 +364,7 @@ void UForeverStoryFrameworkComponent::BroadcastGlobalMessage(const string& messa
 
 	GlobalMessageEvent event(message);
 	globalMessageDepth++;
-	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true);
+	BroadcastToAllScripts(event, postImplement, /*includeMain=*/true, category);
 	globalMessageDepth--;
 }
 
@@ -559,7 +601,7 @@ void UForeverStoryFrameworkComponent::ApplyOpenShop(const ScriptContext& context
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Society* society = framework ? framework->GetSociety() : nullptr;
 	if (!society) return;
-	Organization* organization = society->FindOrganizationOfJob(society->FindJobByScript(context.self));
+	Organization* organization = society->FindOrganizationOfJobScript(context.self);
 	if (!organization) {
 		UE_LOG(LogTemp, Warning, TEXT("open_shop: the script is not a Job script, ignored."));
 		return;
@@ -575,7 +617,7 @@ void UForeverStoryFrameworkComponent::ApplyPayWage(const PayWageChange* change, 
 	Society* society = framework ? framework->GetSociety() : nullptr;
 	Citizen* citizen = framework ? framework->GetControlledCitizen() : nullptr;
 	if (!society || !citizen) return;
-	Organization* organization = society->FindOrganizationOfJob(society->FindJobByScript(context.self));
+	Organization* organization = society->FindOrganizationOfJobScript(context.self);
 	if (!organization) {
 		UE_LOG(LogTemp, Warning, TEXT("pay_wage: the script is not a Job script, ignored."));
 		return;
@@ -753,8 +795,29 @@ void UForeverStoryFrameworkComponent::BroadcastPlayerLocation(Event& event, cons
 
 string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) const {
 	if (!script) return string();
+	// 脚本自己记着它的稳定键：第一次算出来存进去，之后(对自己建/删计时器、小游戏归属)不做任何查找。
+	const Script* self = dynamic_cast<const Script*>(script);
+	if (self && !self->GetStableKey().empty()) return self->GetStableKey();
+	string key = FindScriptKeySlow(script);
+	if (self && !key.empty()) self->SetStableKey(key);
+	return key;
+}
+
+string UForeverStoryFrameworkComponent::FindScriptKeySlow(const Container* script) const {
+	if (!script) return string();
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!framework) return string();
+	// 故事的三个固定脚本(main/system/global)直接认，不然下面会先扫全部岗位/市民、再落到CollectScripts(重建并排序全城脚本，
+	// 实测每次create_timer/remove_timer 30ms+)。
+	if (story) {
+		if (script == story->GetMainScript()) return "story.main";
+		if (script == story->GetSystemScript()) return "story.system";
+		if (script == story->GetGlobalScript()) return "story.global";
+	}
+	// 命中缓存并核对通过就直接返回(门/房间/建筑/园区/载具/资产等没有直达路径的脚本靠它)。
+	if (auto cached = scriptKeyCache.find(script); cached != scriptKeyCache.end()) {
+		if (FindScriptByKey(cached->second) == script) return cached->second;
+	}
 	// 岗位/日程脚本数量大(几千)、timer创建和到时都要来回查，先走不分配的直接扫描，
 	// 再退回CollectScripts(它每次都重建并排序全部脚本，几千个timer同时触发时会卡很久)。
 	if (Society* society = framework->GetSociety()) {
@@ -776,16 +839,25 @@ string UForeverStoryFrameworkComponent::FindScriptKey(const Container* script) c
 			if (scheduler && scheduler->GetScript() == script) return "scheduler:" + to_string(i);
 		}
 	}
+	// 最后才整张重建，并把结果全部记进缓存，之后同类脚本都是命中。
+	scriptKeyCache.clear();
+	string found;
 	for (auto& [key, candidate] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
 		framework->GetSociety(), framework->GetTraffic(), story, framework->GetPlayer())) {
-		if (candidate == script) return key;
+		scriptKeyCache[candidate] = key;
+		if (candidate == script) found = key;
 	}
-	return string();
+	return found;
 }
 
 Script* UForeverStoryFrameworkComponent::FindScriptByKey(const string& key) const {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!framework || key.empty()) return nullptr;
+	if (story) {
+		if (key == "story.main") return story->GetMainScript();
+		if (key == "story.system") return story->GetSystemScript();
+		if (key == "story.global") return story->GetGlobalScript();
+	}
 	// 同FindScriptKey：岗位/组织/日程键直接解析，不重建全部脚本(CollectScripts每次都重建并排序全城脚本，
 	// 几百个组织的送货计时器同时到时，每个都走它就是每个几十毫秒)。
 	if (key.compare(0, 4, "org:") == 0) {
@@ -813,6 +885,41 @@ Script* UForeverStoryFrameworkComponent::FindScriptByKey(const string& key) cons
 		if (i >= organizations.size() || !organizations[i]) return nullptr;
 		const vector<Job*>& jobs = organizations[i]->GetJobs();
 		return k < jobs.size() && jobs[k] ? jobs[k]->GetScript() : nullptr;
+	}
+	// 实体类脚本：按键里的名字/地址/id直接找对象。键的写法必须和CollectScripts一致。
+	if (Map* map = framework->GetMap()) {
+		if (key.compare(0, 5, "door:") == 0) {
+			Door* door = map->FindDoorById(key.substr(5));
+			return door ? door->GetScript() : nullptr;
+		}
+		if (key.compare(0, 6, "cabin:") == 0) {
+			Cabin* cabin = map->FindCabinByName(key.substr(6));
+			return cabin ? cabin->GetScript() : nullptr;
+		}
+		if (key.compare(0, 9, "building:") == 0) {
+			Building* building = map->GetBuilding(key.substr(9));
+			return building ? building->GetScript() : nullptr;
+		}
+		if (key.compare(0, 5, "zone:") == 0) {
+			Zone* zone = map->GetZone(key.substr(5));
+			return zone ? zone->GetScript() : nullptr;
+		}
+		if (key.compare(0, 5, "room:") == 0) {
+			Room* room = map->LocateRoom(key.substr(5));
+			return room && room->GetAddress() == key.substr(5) ? room->GetScript() : nullptr;
+		}
+	}
+	if (key.compare(0, 8, "vehicle:") == 0) {
+		Traffic* traffic = framework->GetTraffic();
+		Vehicle* vehicle = traffic ? traffic->FindVehicleByName(key.substr(8)) : nullptr;
+		return vehicle ? vehicle->GetScript() : nullptr;
+	}
+	if (key.compare(0, 6, "asset:") == 0) {
+		// 资产名全局唯一：先找玩家身上/地上的，再找房间里的(都是不分配的遍历)。
+		const string name = key.substr(6);
+		Asset* asset = framework->GetPlayer() ? framework->GetPlayer()->FindAssetByName(name) : nullptr;
+		if (!asset && framework->GetMap()) asset = framework->GetMap()->FindAssetByName(name);
+		return asset ? asset->GetScript() : nullptr;
 	}
 	for (auto& [candidateKey, script] : ScriptSaveCodec::CollectScripts(framework->GetMap(), framework->GetPopulace(),
 		framework->GetSociety(), framework->GetTraffic(), story, framework->GetPlayer())) {

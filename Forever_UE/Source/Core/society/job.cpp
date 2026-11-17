@@ -15,6 +15,7 @@ Job::Job(JobFactory* factory, ScriptFactory* scriptFactory, const string& id, Ro
 	if (mod) mod->SetProperty();
 	script = mod ? MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames) : nullptr;
 	if (script) {
+		script->SetOwner(ScriptOwnerKind::Job, this); // 所属组织由Organization挂上岗位时补(SetOwnerParent)
 		// 供milestone脚本里$$self.name引用这个Job的唯一名字（JobMod的GetName()）。
 		script->SetValue("name", ValueType(string(mod->GetName())));
 		// 组织派的任务(assign_task)：task=进行中的任务类别标签(空串=空闲)，由Traffic::BeginTask/EndTask写；

@@ -25,6 +25,7 @@ Organization::Organization(OrganizationFactory* factory, JobFactory* jobFactory,
 	// scriptModName/milestoneNames由mod决定，都空则没有脚本，和Job同一套机制。
 	script = MakeScript(scriptFactory, mod->scriptModName, mod->milestoneNames);
 	if (script) {
+		script->SetOwner(ScriptOwnerKind::Organization, this);
 		// 供milestone脚本里$$self.name引用这个Organization的唯一名字。
 		script->SetValue("name", ValueType(string(mod->GetName())));
 	}
@@ -121,6 +122,7 @@ Organization::JobChange Organization::ReconcileJobs() {
 					break;
 				}
 				jobs.push_back(job);
+			if (job->GetScript()) job->GetScript()->SetOwnerParent(this);
 				change.opened++;
 			}
 		}

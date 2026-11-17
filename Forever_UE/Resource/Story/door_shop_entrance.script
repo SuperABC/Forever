@@ -13,7 +13,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "add_option", "name": "$$self.name", "option": "敲门" }
+				{ "type": "add_option", "category": "door", "name": "$$self.name", "option": "敲门" }
 			],
 			"dialogs": [],
 			"subsequences": []

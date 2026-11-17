@@ -279,7 +279,7 @@ void UForeverTestSubsystem::TickRide(float DeltaTime)
 	Phase = EPhase::RideBoard;
 }
 
-// changes：对每一种Change在主线程上同步执行并计时(AForeverFrameworkActor::ApplyChange)，每种执行3次，记首次(冷)和最大耗时。
+// changes：对每一种Change在主线程上同步执行并计时(AForeverFrameworkActor::ApplyChange)，每种执行10次，记首次(冷)、除首次外的平均和除首次外的最大耗时。
 // 参数尽量用世界里取得到的真实市民/房间/载具/建筑；取不到的用占位值，这种情况走的是"找不到目标"的快速失败路径，
 // 耗时只代表入口开销，指标里用 .real_args=0 标出。会修改世界状态，建议单独跑或放在其它套件之后。
 static std::string Q(const std::string& s) { return std::string("\"") + s + "\""; }
@@ -306,7 +306,10 @@ void UForeverTestSubsystem::RunChangesSuite()
 		if (Vehicle && Vehicle->GetCategory() == "car") { CarName = Name; break; }
 	}
 	std::string BuildingName = "none";
-	for (const auto& [Name, Building] : Actor->GetMap()->GetBuildings()) { BuildingName = Name; break; }
+	// 计时器要挂在有脚本的实体上才有意义(没脚本的会走"找不到目标"快速失败)，所以挑有脚本的建筑和门。
+	for (const auto& [Name, Building] : Actor->GetMap()->GetBuildings()) { BuildingName = Name; if (Building && Building->GetScript()) break; }
+	std::string DoorName = "none";
+	for (Door* D : Actor->GetMap()->GetAllDoors()) { if (D && D->GetScript() && !D->GetInteractName().empty()) { DoorName = D->GetInteractName(); break; } }
 
 	ScriptContext Context;
 	Context.self = Actor->GetStory()->GetMainScript();
@@ -315,21 +318,47 @@ void UForeverTestSubsystem::RunChangesSuite()
 	Check(Context.self != nullptr, TEXT("changes: main script exists to run Changes against"));
 	if (!Context.self) return;
 
-	struct FEntry { const char* Type; bool bRealArgs; TFunction<Change*()> Make; };
+	// 执行脚本是主线脚本(没有所有者)；Self非空时改用那份脚本当self，测"对自己操作"的直达路径(不查找)。
+	Script* VehicleScript = nullptr;
+	if (Actor->GetTraffic()) for (const auto& [Name, Vehicle] : Actor->GetTraffic()->GetVehicles()) {
+		if (Vehicle && Vehicle->GetScript()) { VehicleScript = Vehicle->GetScript(); break; }
+	}
+	Script* CitizenScript = (A && A->GetScheduler()) ? A->GetScheduler()->GetScript() : nullptr;
+	struct FEntry { const char* Type; bool bRealArgs; TFunction<Change*()> Make; Container* Self = nullptr; };
 	TArray<FEntry> Entries;
 	auto Add = [&](const char* Type, bool bReal, TFunction<Change*()> Make) { Entries.Add({ Type, bReal, MoveTemp(Make) }); };
+	auto AddSelf = [&](const char* Type, Container* Self, TFunction<Change*()> Make) { Entries.Add({ Type, Self != nullptr, MoveTemp(Make), Self }); };
 	// ---- 纯数据/脚本变量类 ----
 	Add("place_holder", true, [] { return new PlaceHolderChange("x"); });
 	Add("debug_print", true, [] { return new DebugPrintChange("changes test"); });
-	Add("global_message", true, [] { return new GlobalMessageChange("changes_test"); });
+	Add("global_message", true, [] { return new GlobalMessageChange("changes_test"); }); // 不带category：发给全部脚本(旧行为)
+	Add("global_message_main", true, [] { return new GlobalMessageChange("changes_test", "main"); });
+	Add("global_message_job", true, [] { return new GlobalMessageChange("changes_test", "job,organization"); });
+	Add("global_message_citizen", true, [] { return new GlobalMessageChange("changes_test", "citizen"); });
 	Add("set_value", true, [] { return new SetValueChange("self.changes_test", "1"); });
 	Add("remove_value", true, [] { return new RemoveValueChange("self.changes_test"); });
 	Add("global_setting", true, [] { return new GlobalSettingChange("time_flow_ratio", "10"); });
-	Add("add_option", true, [&] { return new AddOptionChange(Q(NameA), Q("changes_test_option")); });
+	Add("add_option", true, [&] { return new AddOptionChange(Q(NameA), Q("changes_test_option")); }); // 不带category：每个域各找一遍(旧行为)
 	Add("remove_option", true, [&] { return new RemoveOptionChange(Q(NameA), Q("changes_test_option")); });
+	Add("add_option_citizen", bCitizens, [&] { return new AddOptionChange(Q(NameA), Q("changes_test_option"), "citizen"); });
+	Add("add_option_vehicle", CarName != "none", [&] { return new AddOptionChange(Q(CarName), Q("changes_test_option"), "vehicle"); });
+	Add("add_option_asset", true, [&] { return new AddOptionChange(Q("changes_no_such_asset"), Q("changes_test_option"), "asset"); }); // 找不到的资产名：量遍历房间的开销
+	Add("remove_option_citizen", bCitizens, [&] { return new RemoveOptionChange(Q(NameA), Q("changes_test_option"), "citizen"); });
 	Add("deactivate_milestone", false, [] { return new DeactivateMilestoneChange("changes_test"); });
 	Add("create_timer", true, [] { return new CreateTimerChange("changes_test_timer", "23:00:00", "", "", "next"); });
 	Add("remove_timer", true, [] { return new RemoveTimerChange("changes_test_timer"); });
+	// 对自己操作：脚本记着所有者/稳定键，不应该有任何查找。
+	AddSelf("add_option_self_vehicle", VehicleScript, [] { return new AddOptionChange("$$self.name", Q("changes_self_option")); });
+	AddSelf("remove_option_self_vehicle", VehicleScript, [] { return new RemoveOptionChange("$$self.name", Q("changes_self_option")); });
+	AddSelf("add_option_self_citizen", CitizenScript, [] { return new AddOptionChange("$$self.name", Q("changes_self_option")); });
+	AddSelf("create_timer_self_vehicle", VehicleScript, [] { return new CreateTimerChange("changes_self_timer", "23:00:00", "", "", "next"); });
+	AddSelf("remove_timer_self_vehicle", VehicleScript, [] { return new RemoveTimerChange("changes_self_timer"); });
+	// 其它归属类别：归属脚本换算成稳定键走的是不同的路径(曾经每次重建全城脚本，30ms+)。
+	Add("create_timer_building", BuildingName != "none", [&] { return new CreateTimerChange("changes_test_timer_b", "23:00:00", "building", Q(BuildingName), "next"); });
+	Add("create_timer_room", bCitizens, [&] { return new CreateTimerChange("changes_test_timer_r", "23:00:00", "room", Q(AddrA), "next"); });
+	Add("create_timer_door", DoorName != "none", [&] { return new CreateTimerChange("changes_test_timer_d", "23:00:00", "door", Q(DoorName), "next"); });
+	Add("create_timer_vehicle", CarName != "none", [&] { return new CreateTimerChange("changes_test_timer_v", "23:00:00", "vehicle", Q(CarName), "next"); });
+	Add("create_timer_citizen", bCitizens, [&] { return new CreateTimerChange("changes_test_timer_c", "23:00:00", "citizen", Q(NameA), "next"); });
 	Add("record_object", true, [&] { return new RecordObjectChange(Q("building"), Q("building_empty"), Q("first"), "changes_obj"); });
 	// ---- 市民 ----
 	Add("npc_teleport", bCitizens, [&] { return new NPCTeleportChange(Q(NameA), Q(AddrB)); });
@@ -363,7 +392,6 @@ void UForeverTestSubsystem::RunChangesSuite()
 	Add("vehicle_navigate", CarName != "none", [&] { return new VehicleNavigateChange(Q(CarName), Q(AddrB)); });
 	Add("vehicle_command", CarName != "none", [&] { return new VehicleCommandChange(Q(CarName), Q("stop")); });
 	Add("show_route", false, [] { return new ShowRouteChange(Q("none")); });
-	Add("visualize_navigation", bCitizens, [&] { return new VisualizeNavigationChange(Q(AddrB)); });
 	Add("enter_vehicle", CarName != "none", [&] { return new EnterVehicleChange(Q(CarName)); });
 	Add("leave_vehicle", true, [] { return new LeaveVehicleChange(""); });
 	Add("board_vehicle", false, [] { return new BoardVehicleChange(Q("none")); });
@@ -380,9 +408,11 @@ void UForeverTestSubsystem::RunChangesSuite()
 	Add("stop_bgm", true, [] { return new StopBgmChange(); });
 	// 最后做会删掉测试市民的：
 	Add("remove_npc", true, [] { return new RemoveNpcChange(Q("changes_npc")); });
+	// visualize_navigation会留下一条活动导航线，之后每次换Pawn(上下车)都要按新Pawn重新规划路线(几十毫秒)，所以放在最后。
+	Add("visualize_navigation", bCitizens, [&] { return new VisualizeNavigationChange(Q(AddrB)); });
 	// 不测：game_end(退出游戏)、jump_time(耗时由 commute 套件记录)、for_range(容器，子Change各自已测)。
 
-	constexpr int Repeats = 3;
+	constexpr int Repeats = 10;
 	constexpr double LimitMs = 100.0;
 	int32 Slow = 0;
 	for (const FEntry& Entry : Entries) {
@@ -390,19 +420,22 @@ void UForeverTestSubsystem::RunChangesSuite()
 		for (int32 I = 0; I < Repeats; I++) {
 			std::unique_ptr<Change> Item(Entry.Make());
 			const double Start = FPlatformTime::Seconds();
-			Actor->ApplyChange(Item.get(), Context);
+			ScriptContext RunContext = Context;
+			if (Entry.Self) RunContext.self = Entry.Self;
+			Actor->ApplyChange(Item.get(), RunContext);
 			const double Ms = (FPlatformTime::Seconds() - Start) * 1000.0;
-			if (I == 0) First = Ms;
+			if (I == 0) { First = Ms; continue; }
 			Max = FMath::Max(Max, Ms);
 			Sum += Ms;
 		}
 		const FString Key = FString(TEXT("change.")) + UTF8_TO_TCHAR(Entry.Type);
 		Metric(Key + TEXT(".first_ms"), First, TEXT("ms"));
 		Metric(Key + TEXT(".max_ms"), Max, TEXT("ms"));
-		Metric(Key + TEXT(".avg_ms"), Sum / Repeats, TEXT("ms"));
+		Metric(Key + TEXT(".avg_ms"), Sum / (Repeats - 1), TEXT("ms"));
 		Metric(Key + TEXT(".real_args"), Entry.bRealArgs ? 1 : 0);
-		if (Max > LimitMs) Slow++;
-		Check(Max <= LimitMs, FString::Printf(TEXT("change %s stays under %.0fms on the main thread"), UTF8_TO_TCHAR(Entry.Type), LimitMs),
+		const double Worst = FMath::Max(First, Max);
+		if (Worst > LimitMs) Slow++;
+		Check(Worst <= LimitMs, FString::Printf(TEXT("change %s stays under %.0fms on the main thread"), UTF8_TO_TCHAR(Entry.Type), LimitMs),
 			FString::Printf(TEXT("first %.2fms max %.2fms%s"), First, Max, Entry.bRealArgs ? TEXT("") : TEXT(" (placeholder args)")));
 	}
 	Metric(TEXT("changes.tested"), Entries.Num());

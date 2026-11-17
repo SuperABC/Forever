@@ -27,7 +27,7 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - components：每栋建筑一个 BuildingElement、流式市民数有界、方向光为 Movable、UE NavigationSystem 关闭、玩家有 Pawn、各 FrameworkComponent 齐全。
 - saveload：SaveToFile → RequestLoad → 等新世界生成完，比对市民/建筑/车辆/组织数、账本为0、日期。
 - commute：`BeginTimeSkip` 跳到 07:50(约 24 游戏小时，真实约 70 秒)，时间流速调到 60 倍实时跑过早高峰到 09:00，记录帧时间分布、异步寻路队列峰值、排空耗时、账本为0。必须带渲染运行：跳时间要等黑屏渐变 widget 的 Tick，`-nullrhi` 下渐变不会完成，跳时间会一直卡住(超时失败)。
-- changes：对每种 Change 在主线程上同步 `ApplyChange` 并计时(每种 3 次，记 first/max/avg)，指标 `change.<type>.first_ms/max_ms/avg_ms/real_args`，检查"单个 Change 主线程不超过 100ms"。参数尽量用世界里取到的真实市民/房间/载具；`real_args=0` 的用占位值，走的是"找不到目标"的快速失败路径，耗时只代表入口开销；`real_args=1` 也不保证真正执行了业务(例如目标被拒绝时同样很快)。会改世界状态，建议单独跑(`-ForeverTest=changes`，需要完整世界，带窗口)。不测：game_end、jump_time(见 commute)、for_range(容器)。start_puzzle 用未启用的 id 只测"忽略并打日志"的路径。
+- changes：对每种 Change 在主线程上同步 `ApplyChange` 并计时(每种 10 次，first=首次，avg/max=除首次外的平均/最大)，指标 `change.<type>.first_ms/max_ms/avg_ms/real_args`，检查"单个 Change 主线程不超过 100ms"。参数尽量用世界里取到的真实市民/房间/载具；`real_args=0` 的用占位值，走的是"找不到目标"的快速失败路径，耗时只代表入口开销；`real_args=1` 也不保证真正执行了业务(例如目标被拒绝时同样很快)。会改世界状态，建议单独跑(`-ForeverTest=changes`，需要完整世界，带窗口)。不测：game_end、jump_time(见 commute)、for_range(容器)。start_puzzle 用未启用的 id 只测"忽略并打日志"的路径。
 - ride：把玩家放上飞机、火车(搭乘模式)各 PerfSeconds 秒，记帧时间、检查一直在车上、能下车；世界里没有可搭乘的该类载具只记指标。需要带渲染。
 - perform：站立空闲帧时间 avg/p50/p95/p99/max、>33ms/>100ms 帧数(无渲染，只测游戏线程)。
 
