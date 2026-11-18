@@ -1,10 +1,12 @@
 {
 	// 火箭筒：开火(weapon_fire事件，UE层只提供枪口位置fire、镜头朝向direction、瞄准射线交点hit等)后
 	//   1. 记下开火者(self.shooter)和武器种类(self.weapon)，爆炸时作为击杀信息的凶手/武器(projectile_hit事件里没有这两项)；
-	//   2. spawn_actor在枪口(fire)放出火箭弹蓝图Actor，朝向镜头方向(direction)。之后火箭弹怎么飞(加速/尾焰)、撞到东西后的爆炸特效
+	//   2. sound_effect在枪口播发射音效(/Game/Asset/Sound/rocket_launch)；
+	//   3. spawn_actor在枪口(fire)放出火箭弹蓝图Actor，朝向镜头方向(direction)。之后火箭弹怎么飞(加速/尾焰)、撞到东西后的爆炸特效
 	//      都是Actor自己的事；它通过桥组件(OwnerScriptKey=本脚本)把命中报回来。
 	// 火箭弹撞上任何东西后发projectile_hit事件(local：hit爆心/normal法线/sufferer被直接命中的市民)，这里用area_damage结算范围伤害
-	// (爆炸特效已由火箭弹Actor在撞击点生成，不在这里放)。area_damage：半径800cm、中心伤害250、判断遮挡、线性衰减。数值是估计起点，等PIE里调。
+	// (爆炸特效已由火箭弹Actor在撞击点生成，不在这里放)；同一个里程碑里先用sound_effect在爆心播爆炸音效(rocket_explosion)。
+	// 飞行持续音效不走脚本：火箭弹Actor自己在Tick里用UE的音频组件连续播放(见ForeverRocketProjectile.md)。area_damage：半径800cm、中心伤害250、判断遮挡、线性衰减。数值是估计起点，等PIE里调。
 	// 火箭弹蓝图见Forever_UE/Tools/make_rocket_blueprint.py，蓝图不存在时不生成并打Warning。
 	"milestones": [
 		{
@@ -17,6 +19,7 @@
 			"changes": [
 				{ "type": "set_value", "variable": "self.shooter", "value": "$$local.shooter" },
 				{ "type": "set_value", "variable": "self.weapon", "value": "$$local.weapon" },
+				{ "type": "sound_effect", "sound": "\"/Game/Asset/Sound/rocket_launch\"", "position": "$$local.fire" },
 				{ "type": "spawn_actor", "actor": "\"/Game/Asset/Projectile/BP_RPG7Rocket\"", "position": "$$local.fire", "direction": "$$local.direction" }
 			],
 			"dialogs": [],
@@ -30,6 +33,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
+				{ "type": "sound_effect", "sound": "\"/Game/Asset/Sound/rocket_explosion\"", "position": "$$local.hit" },
 				{ "type": "area_damage", "position": "$$local.hit", "radius": "800", "damage": "250", "occlusion": "true", "power": "1",
 					"source": "$$self.shooter", "weapon": "$$self.weapon" }
 			],

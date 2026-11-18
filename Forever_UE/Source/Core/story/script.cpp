@@ -585,6 +585,11 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			change = new SpawnEffectChange(obj["effect"].AsString(), obj["scale"].AsString(), obj["asset"].AsString(),
 				obj["position"].AsString(), obj["normal"].AsString());
 		}
+		else if (type == "sound_effect") {
+			// position/asset/volume/pitch都可以省略：执行脚本所属资产的位置、音量和音调倍率1。
+			change = new SoundEffectChange(obj["sound"].AsString(), obj["position"].AsString(), obj["asset"].AsString(),
+				obj["volume"].AsString(), obj["pitch"].AsString());
+		}
 		else if (type == "spawn_actor") {
 			// direction/scale可以省略：不旋转、缩放1。
 			change = new SpawnActorChange(obj["actor"].AsString(), obj["position"].AsString(), obj["direction"].AsString(),

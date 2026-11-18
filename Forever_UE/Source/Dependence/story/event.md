@@ -111,7 +111,7 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 霰弹每颗弹丸各发一次(散射各自独立)，没打中也发。脚本里的local变量：
 
 - 字符串/浮点：`weapon`(武器id)、`shooter`(开火市民姓名)、`sufferer`(被射线打中的活着的市民姓名，没有则空)、`part`(`head`/`body`/`legs`，没有则空)、
-  `distance`(浮点，摄像机到`hit`的距离)。
+  `distance`(浮点，摄像机到`hit`的距离)，`pellet`(浮点，这一发里第几颗弹丸，从0开始；每次开火只想做一次的事如开火声用`$$local.pellet == 0`)。
 - vec3(`asset`武器模型位置、`fire`枪口、`hit`射线交点/没打中是射程终点、`direction`出射单位方向、`normal`命中面法线/没打中朝上)：
   每个vec3同时提供字符串形式`$$local.hit`=`"(x, y, z)"`和浮点分量`$$local.hit.x`/`.y`/`.z`。字符串形式可以直接传给`spawn_effect`/`area_damage`的`position`、`normal`。
 

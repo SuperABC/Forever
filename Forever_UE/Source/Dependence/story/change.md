@@ -197,6 +197,13 @@ UE层`UForeverTrafficFrameworkComponent::ToggleRouteWatch`执行(路径来源：
   生成的Actor若带`UForeverProjectileBridgeComponent`，其`OwnerScriptKey`自动设成**执行这个Change的脚本**的稳定键，`Instigator`设为玩家当前操控的Pawn(弹射物据此忽略发射者)。之后怎么运动、出特效、撞击后报告命中(`projectile_hit`)都是Actor自己的事。
   UE层执行：`UForeverStoryFrameworkComponent::ApplySpawnActor`。用法见`Resource/Story/weapon_rpg.script`(`weapon_fire`→`spawn_actor`火箭弹)。
 
+## sound_effect（2026-11-18）
+
+- `sound_effect`(`sound`、`position`、`asset`、`volume`、`pitch`，都是表达式、除`sound`外都可省略)：播放一次音效(纯听觉)。`sound`是**UE音效资产路径**(如`"\"/Game/Asset/Sound/pistol\""`，不含`.`自动补对象名)，游戏里不读磁盘文件；留空=不播放，加载不到=不播放并打一条Warning。
+  位置规则同`spawn_effect`：`position`非空时按`"(x, y, z)"`解析(武器脚本用`$$local.fire`枪口、`projectile_hit`里用`$$local.hit`爆心)，留空=`asset`(缺省=执行脚本所属资产)的位置；都没有则跳过。`volume`/`pitch`是倍率，空=1。
+  UE层执行：`UForeverAssetFrameworkComponent::ApplySoundEffect`(`UGameplayStatics::PlaySoundAtLocation`)。音效由`Tools/SoundGen/soundgen.py`合成、`Tools/import_sounds.py`导入成`/Game/Asset/Sound/`下的资产。
+- 用法：`Resource/Story/weapon_*.script`(`weapon_fire`里枪口播枪声，霰弹枪用`$$local.pellet == 0`只播一次)、`weapon_rpg.script`(发射音/爆炸音)、`asset_grenade.script`(爆炸音)。
+
 ## spawn_effect / destroy_asset（2026-11-17）
 
 - `spawn_effect`(`effect`、`scale`、`asset`、`position`、`normal`，都是表达式、都可省略)：生成一次爆炸类特效(纯视觉)。位置：`position`非空时按`"(x, y, z)"`字符串解析(如`$$local.hit`)；

@@ -9,6 +9,7 @@ class UStaticMesh;
 class UStaticMeshComponent;
 class UPointLightComponent;
 class UProjectileMovementComponent;
+class UAudioComponent;
 class UForeverProjectileBridgeComponent;
 class UMaterialInstanceDynamic;
 
@@ -95,6 +96,17 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Flame")
 	float smokeBrightness = 0.25f;
 
+	// 飞行持续音效：UE音效资产路径(不走脚本系统)，由自己的音频组件在Tick里连续播放，音调随速度升高；留空=无声。
+	UPROPERTY(EditAnywhere, Category = "Sound")
+	FString flightSoundPath = TEXT("/Game/Asset/Sound/rocket_flight");
+	// 音量倍率，以及初速/最大速度时的音调倍率(中间按速度线性插值)。
+	UPROPERTY(EditAnywhere, Category = "Sound")
+	float flightVolume = 1.f;
+	UPROPERTY(EditAnywhere, Category = "Sound")
+	float flightPitchAtStart = 0.85f;
+	UPROPERTY(EditAnywhere, Category = "Sound")
+	float flightPitchAtMax = 1.25f;
+
 private:
 	UFUNCTION()
 	void OnProjectileStop(const FHitResult& hit);
@@ -106,6 +118,7 @@ private:
 	void Explode(const FHitResult& hit);
 	void UpdateFlame(float deltaSeconds);
 	void UpdateSmoke(float deltaSeconds);
+	void UpdateFlightSound();
 
 	static constexpr int32 SmokeCount = 48;
 
@@ -123,6 +136,8 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> flameMaterial;
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> flameLight;
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> flightAudio;
 	UPROPERTY()
 	TArray<FRocketSmokePuff> smokes;
 

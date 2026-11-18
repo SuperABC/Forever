@@ -30,4 +30,5 @@
 
 - 弹道沿镜头方向、从枪口出发(平行于视线)，没有向瞄准点修正。
 - (已解决 2026-11-18)火箭弹飞行中换枪：武器脚本由`Player`常驻持有，`weapon:weapon_rpg`键始终能解析，命中报告不会丢。
-- 只做视觉与命中报告：没有冲击力/载具伤害，没有声音。
+- 只做视觉与命中报告：没有冲击力/载具伤害。
+- 声音(2026-11-18)：发射音/爆炸音在武器脚本里用`sound_effect`(`weapon_fire`/`projectile_hit`)；**飞行持续音效不走脚本**：Actor自己的`UAudioComponent flightAudio`，声音资源由`flightSoundPath`(UE资产路径，默认`/Game/Asset/Sound/rocket_flight`)在`BeginPlay`里加载，`Tick`里`UpdateFlightSound`保证连续播放(没在播就重新`Play`，所以资源不循环也不会断)，音调按速度在`flightPitchAtStart`~`flightPitchAtMax`之间插值，爆炸时`Stop`。加载不到打Warning、静音飞行。

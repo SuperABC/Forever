@@ -1997,6 +1997,66 @@ const std::string& SpawnEffectChange::GetNormal() const {
 	return normal;
 }
 
+SoundEffectChange::SoundEffectChange() :
+	sound(), position(), asset(), volume(), pitch() {
+
+}
+
+SoundEffectChange::SoundEffectChange(std::string sound, std::string position, std::string asset, std::string volume,
+	std::string pitch) :
+	sound(move(sound)), position(move(position)), asset(move(asset)), volume(move(volume)), pitch(move(pitch)) {
+
+}
+
+SoundEffectChange::~SoundEffectChange() {
+
+}
+
+const string& SoundEffectChange::GetType() const {
+	static const string type = "sound_effect";
+	return type;
+}
+
+void SoundEffectChange::SetSound(std::string sound) {
+	this->sound = move(sound);
+}
+
+const std::string& SoundEffectChange::GetSound() const {
+	return sound;
+}
+
+void SoundEffectChange::SetPosition(std::string position) {
+	this->position = move(position);
+}
+
+const std::string& SoundEffectChange::GetPosition() const {
+	return position;
+}
+
+void SoundEffectChange::SetAsset(std::string asset) {
+	this->asset = move(asset);
+}
+
+const std::string& SoundEffectChange::GetAsset() const {
+	return asset;
+}
+
+void SoundEffectChange::SetVolume(std::string volume) {
+	this->volume = move(volume);
+}
+
+const std::string& SoundEffectChange::GetVolume() const {
+	return volume;
+}
+
+void SoundEffectChange::SetPitch(std::string pitch) {
+	this->pitch = move(pitch);
+}
+
+const std::string& SoundEffectChange::GetPitch() const {
+	return pitch;
+}
+
 SpawnActorChange::SpawnActorChange() :
 	actor(), position(), direction(), scale() {
 

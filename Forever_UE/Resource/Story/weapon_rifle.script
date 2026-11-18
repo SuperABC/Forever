@@ -12,6 +12,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
+				{ "type": "sound_effect", "sound": "\"/Game/Asset/Sound/rifle\"", "position": "$$local.fire" },
 				{ "type": "spawn_effect", "effect": "\"/Game/Asset/Effects/BP_BulletImpact\"", "position": "$$local.hit", "normal": "$$local.normal" },
 				{ "type": "single_damage", "condition": "$$local.sufferer != \"\"", "target": "$$local.sufferer",
 					"damage": "40 * (1 - $$local.distance / 10000)",

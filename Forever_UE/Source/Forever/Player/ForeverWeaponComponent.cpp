@@ -313,6 +313,7 @@ void UForeverWeaponComponent::FireHitscan(AForeverCharacter* character) {
 
 		FWeaponFireInfo info;
 		info.shooter = shooter;
+		info.pellet = pellet;
 		info.asset = asset;
 		info.fire = fire;
 		info.direction = direction;

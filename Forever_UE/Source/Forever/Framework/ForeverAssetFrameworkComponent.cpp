@@ -23,6 +23,8 @@
 
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/PackageName.h"
+#include "Sound/SoundBase.h"
 
 #include <algorithm>
 #include "Engine/World.h"
@@ -431,6 +433,29 @@ void UForeverAssetFrameworkComponent::ApplySpawnEffect(const SpawnEffectChange* 
 	if (effect.IsEmpty()) return;
 
 	AForeverExplosionEffect::Spawn(GetWorld(), location, normal, scale, effect);
+}
+
+void UForeverAssetFrameworkComponent::ApplySoundEffect(const SoundEffectChange* change, const ScriptContext& context) {
+	if (change->GetSound().empty()) return;
+	FVector location;
+	if (!ResolvePosition(change->GetPosition(), change->GetAsset(), context, location)) {
+		UE_LOG(LogTemp, Warning, TEXT("sound_effect: no position (position invalid, or the asset has no actor in the world), skipped."));
+		return;
+	}
+	FString path = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetSound(), context)).c_str());
+	if (path.IsEmpty()) return;
+	// 只写包路径时补上对象名(<名>)，同spawn_effect/spawn_actor对蓝图类路径的处理。
+	if (!path.Contains(TEXT("."))) path += TEXT(".") + FPackageName::GetShortName(path);
+	USoundBase* sound = LoadObject<USoundBase>(nullptr, *path);
+	if (!sound) {
+		UE_LOG(LogTemp, Warning, TEXT("sound_effect: failed to load sound %s, skipped."), *path);
+		return;
+	}
+	float volume = 1.f;
+	if (!change->GetVolume().empty()) volume = static_cast<float>(ToDouble(EvaluateExpression(change->GetVolume(), context)));
+	float pitch = 1.f;
+	if (!change->GetPitch().empty()) pitch = static_cast<float>(ToDouble(EvaluateExpression(change->GetPitch(), context)));
+	UGameplayStatics::PlaySoundAtLocation(GetWorld(), sound, location, FMath::Max(volume, 0.f), pitch > 0.f ? pitch : 1.f);
 }
 
 void UForeverAssetFrameworkComponent::ApplyDestroyAsset(const DestroyAssetChange* change, const ScriptContext& context) {

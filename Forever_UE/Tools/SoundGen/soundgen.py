@@ -99,25 +99,7 @@ def shotgun():
 
 
 def sniper():
-    """Heavy shot followed by distinct, separated echoes from distant terrain. Each echo is a fresh
-    noise-only re-synthesis of the shot (no pitched component, which made copies sound like piano
-    notes), so it keeps a clear transient but is a different waveform; later echoes arrive later and
-    are quieter, darker and slightly softer-edged, with silence between them."""
-    out = np.zeros(int(4.2 * SR))
-    mix_at(out, gunshot(0.02, 1.3, 0.12, 2800, 110, 32, 0.22, 1.8, 0.8, 0.3, 0.25, 1.0), 0)
-    # (delay s, gain, low-pass Hz, smear s)
-    echoes = [(0.45, 0.50, 5000, 0.004), (0.98, 0.33, 3200, 0.008), (1.58, 0.21, 2200, 0.014),
-              (2.28, 0.13, 1500, 0.022), (3.05, 0.07, 1000, 0.03)]
-    for delay, gain, cutoff, smear in echoes:
-        echo = gunshot(0.02, 1.3, 0.1, 2800, 110, 32, 0.15, 1.5, 0.25, 0.2, 0.1, 0.6, tonal=0.0)
-        echo = fft_filter(echo, high=cutoff)
-        ir = noise(smear) * decay(smear, smear * 0.4, 0.0005)
-        ir /= np.sum(np.abs(ir)) + 1e-9
-        n = len(echo) + len(ir)
-        echo = np.fft.irfft(np.fft.rfft(echo, n) * np.fft.rfft(ir, n), n)
-        echo /= np.max(np.abs(echo)) + 1e-9
-        mix_at(out, echo, delay, gain)
-    return out
+    return gunshot(0.02, 1.3, 0.12, 2800, 110, 32, 0.22, 1.8, 1.8, 0.45, 0.45, 1.8)
 
 
 def camera():
@@ -207,6 +189,44 @@ def rifle_burst_naive(shots=15, interval=0.1):
     return out
 
 
+def rocket_launch():
+    """Rocket motor ignition: dull boom, rising whoosh and a hiss that fades into the distance."""
+    length = 1.6
+    out = np.zeros(int(length * SR))
+    mix_at(out, fft_filter(noise(0.6), high=500, low=40) * decay(0.6, 0.18, 0.002), 0, 1.4)
+    n = int(1.4 * SR)
+    t = np.arange(n) / SR
+    env = np.minimum(1.0, t / 0.08) * np.exp(-t / 0.5)
+    mix_at(out, fft_filter(noise(1.4), low=300, high=3500) * env, 0, 0.9)
+    mix_at(out, fft_filter(noise(0.15), low=1500) * decay(0.15, 0.02), 0, 0.6)   # ignition snap
+    out = np.tanh(out * 2.0 / (np.max(np.abs(out)) + 1e-9))
+    return reverb(out, 0.5, 0.15, 0.15)
+
+
+def rocket_flight(length=2.0, crossfade=0.3):
+    """Seamless loop of the motor roar: crossfade the tail into the head so it repeats without a click."""
+    total = length + crossfade
+    roar = fft_filter(noise(total), low=120, high=2800)
+    rumble = fft_filter(noise(total), low=50, high=250)
+    hiss = fft_filter(noise(total), low=2500, high=7000)
+    t = t_axis(total)
+    flutter = 1.0 + 0.15 * np.sin(2 * np.pi * 9 * t)
+    x = roar * flutter + rumble * 1.2 + hiss * 0.25
+    n = int(length * SR)
+    xf = min(int(crossfade * SR), len(x) - n)
+    out = x[:n].copy()
+    ramp = np.linspace(0, 1, xf)
+    out[:xf] = out[:xf] * ramp + x[n:n + xf] * (1 - ramp)
+    return out
+
+
+def rocket_explosion():
+    """Bigger and lower than the grenade: the grenade explosion slowed down by 20 percent."""
+    return resample(grenade(), 0.8)
+
+
+LOOPS = {"rocket_flight"}
+
 SOUNDS = {
     "pistol": pistol,
     "rifle": rifle,
@@ -215,15 +235,20 @@ SOUNDS = {
     "camera": camera,
     "grenade": grenade,
     "smoke": smoke,
+    "rocket_launch": rocket_launch,
+    "rocket_flight": rocket_flight,
+    "rocket_explosion": rocket_explosion,
     "rifle_burst": rifle_burst,
     "rifle_burst_naive": rifle_burst_naive,
 }
 
 
-def finish(x, peak=0.9, fade_ms=15):
+def finish(x, peak=0.9, fade_ms=15, loop=False):
     """Trim silence at the end, fade out, normalize the peak and quantize to 16 bit."""
     x = x - np.mean(x)
     x = x / (np.max(np.abs(x)) + 1e-9) * peak
+    if loop:    # a loop must keep its exact length and ends, or the seam clicks
+        return np.round(x * 32767).astype(np.int16)
     above = np.nonzero(np.abs(x) > 0.002)[0]
     if len(above):
         x = x[:above[-1] + 1]
@@ -244,7 +269,7 @@ def main():
     out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent / "out"
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, fn in SOUNDS.items():
-        samples = finish(fn())
+        samples = finish(fn(), loop=name in LOOPS)
         write_wav(out_dir / f"{name}.wav", samples)
         f = samples.astype(np.float64) / 32767
         rms_db = 20 * np.log10(np.sqrt(np.mean(f ** 2)) + 1e-9)

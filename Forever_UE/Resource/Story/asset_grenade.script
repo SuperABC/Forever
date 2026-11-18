@@ -3,6 +3,7 @@
 	// 对范围内的市民造成伤害，然后销毁自己。
 	//   - thrown里把投掷者姓名($$local.thrower)存进脚本变量self.thrower，爆炸时作为击杀的凶手(source)；
 	//   - create_timer用mode "real"(现实秒)：游戏时间默认1真实秒=10游戏分钟，3游戏秒几乎是瞬间；
+	//   - sound_effect播爆炸音效(UE音效资产路径，不写position=这件资产自己的位置)；
 	//   - spawn_effect的effect是特效蓝图类路径，蓝图不存在时不生成特效并打Warning(effect留空同样无特效)；
 	//   - area_damage：半径500cm、中心伤害150、判断遮挡(墙后不受伤)、线性衰减；
 	//   - destroy_asset是延迟销毁(下一帧)，同一个里程碑里的几个Change按顺序执行没有问题。
@@ -29,6 +30,7 @@
 			"description": "",
 			"goal": "",
 			"changes": [
+				{ "type": "sound_effect", "sound": "\"/Game/Asset/Sound/grenade\"" },
 				{ "type": "spawn_effect", "effect": "\"/Game/Asset/Effects/BP_GrenadeExplosion\"", "scale": "1" },
 				{ "type": "area_damage", "radius": "500", "damage": "150", "occlusion": "true", "power": "1",
 					"source": "$$self.thrower", "weapon": "$$self.type" },

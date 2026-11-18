@@ -14,6 +14,7 @@ class GrantAssetChange;
 class DeductAssetChange;
 class DropAssetChange;
 class SpawnEffectChange;
+class SoundEffectChange;
 class DestroyAssetChange;
 class SingleDamageChange;
 class AreaDamageChange;
@@ -66,6 +67,7 @@ public:
 	// spawn_effect：生成一次特效。位置取position字段("(x, y, z)"表达式，如$$local.hit)；留空则取指定资产
 	// (缺省=执行Change的脚本所属资产)的场景位置；两者都得不到(比如武器脚本没填position)就Warning并跳过。
 	void ApplySpawnEffect(const SpawnEffectChange* change, const ScriptContext& context);
+	void ApplySoundEffect(const SoundEffectChange* change, const ScriptContext& context);
 	// single_damage/area_damage：伤害Change的执行(扣血、致死处理见FForeverDamage)。area_damage的position规则同spawn_effect。
 	void ApplySingleDamage(const SingleDamageChange* change, const ScriptContext& context);
 	void ApplyAreaDamage(const AreaDamageChange* change, const ScriptContext& context);

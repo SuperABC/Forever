@@ -4,6 +4,7 @@
 #include "Player/ForeverExplosionEffect.h"
 #include "Player/ForeverProjectileBridgeComponent.h"
 
+#include "Components/AudioComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -11,6 +12,8 @@
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/PackageName.h"
+#include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 
 #include "populace/citizen.h"
@@ -72,6 +75,11 @@ AForeverRocketProjectile::AForeverRocketProjectile()
 	flameLight->SetAttenuationRadius(700.f);
 	flameLight->SetIntensity(0.f);
 
+	// 飞行音效：自己的音频组件，不走脚本系统；声音资源在BeginPlay里按路径加载，Tick里保证连续播放。
+	flightAudio = CreateDefaultSubobject<UAudioComponent>(TEXT("FlightAudio"));
+	flightAudio->SetupAttachment(box);
+	flightAudio->bAutoActivate = false;
+
 	// 烟团：世界坐标，不跟着火箭弹移动；隐藏着环形复用。
 	for (int32 i = 0; i < SmokeCount; i++) {
 		FRocketSmokePuff puff;
@@ -118,6 +126,18 @@ void AForeverRocketProjectile::BeginPlay()
 		if (puff.mesh->GetMaterial(0)) puff.material = puff.mesh->CreateAndSetMaterialInstanceDynamic(0);
 	}
 
+	if (!flightSoundPath.IsEmpty()) {
+		FString path = flightSoundPath;
+		if (!path.Contains(TEXT("."))) path += TEXT(".") + FPackageName::GetShortName(path);
+		if (USoundBase* sound = LoadObject<USoundBase>(nullptr, *path)) {
+			flightAudio->SetSound(sound);
+			flightAudio->SetVolumeMultiplier(flightVolume);
+		}
+		else {
+			UE_LOG(LogTemp, Warning, TEXT("Rocket: failed to load flight sound %s, flying silently."), *path);
+		}
+	}
+
 	SetLifeSpan(lifeSeconds);
 }
 
@@ -135,6 +155,16 @@ void AForeverRocketProjectile::Tick(float deltaSeconds)
 
 	UpdateFlame(deltaSeconds);
 	UpdateSmoke(deltaSeconds);
+	UpdateFlightSound();
+}
+
+void AForeverRocketProjectile::UpdateFlightSound()
+{
+	if (!flightAudio || !flightAudio->Sound) return;
+	// 连续播放：没在播(第一次，或声音资源不是循环的、播完了)就从头再播；音调按当前速度在初速和最大速度之间插值。
+	if (!flightAudio->IsPlaying()) flightAudio->Play();
+	const float u = maxSpeed > initialSpeed ? FMath::Clamp((movement->Velocity.Size() - initialSpeed) / (maxSpeed - initialSpeed), 0.f, 1.f) : 1.f;
+	flightAudio->SetPitchMultiplier(FMath::Lerp(flightPitchAtStart, flightPitchAtMax, u));
 }
 
 void AForeverRocketProjectile::UpdateFlame(float deltaSeconds)
@@ -192,6 +222,7 @@ void AForeverRocketProjectile::Explode(const FHitResult& hit)
 {
 	if (bExploded) return;
 	bExploded = true;
+	if (flightAudio) flightAudio->Stop();
 
 	FVector normal = FVector(hit.ImpactNormal);
 	if (normal.IsNearlyZero()) normal = -GetActorForwardVector();

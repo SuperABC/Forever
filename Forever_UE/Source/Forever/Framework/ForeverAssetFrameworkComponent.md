@@ -54,3 +54,7 @@
 ## 堆叠合并与QueueDelete（2026-11-17）
 
 `ApplyPickAsset`/`ApplyGrantAsset`遇到`StoreResult::Merged`(并进了背包里同类堆叠，见`Player::StoreAsset`)：先发`get_asset(success)`，再`QueueDelete`延迟销毁这件已无用的资产(不能立刻delete：执行pick的脚本可能就是它自己的)，`FlushPendingDestroy`里统一delete。
+
+## ApplySoundEffect（2026-11-18）
+
+`sound_effect`的UE层：`ResolvePosition`求位置(规则同`ApplySpawnEffect`)，`sound`按UE资产路径`LoadObject<USoundBase>`(不含`.`补对象名)，`UGameplayStatics::PlaySoundAtLocation(volume, pitch)`。加载不到/没有位置只打Warning。

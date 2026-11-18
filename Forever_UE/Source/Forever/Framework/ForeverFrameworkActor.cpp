@@ -539,6 +539,10 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		if (assetFramework) assetFramework->ApplySpawnEffect(spawnEffect, context);
 		return;
 	}
+	if (auto* soundEffect = dynamic_cast<const SoundEffectChange*>(change)) {
+		if (assetFramework) assetFramework->ApplySoundEffect(soundEffect, context);
+		return;
+	}
 	if (auto* destroyAsset = dynamic_cast<const DestroyAssetChange*>(change)) {
 		if (assetFramework) assetFramework->ApplyDestroyAsset(destroyAsset, context);
 		return;

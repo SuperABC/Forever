@@ -123,7 +123,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 
 ## throw_asset / spawn_effect / destroy_asset（2026-11-17）
 
-`BuildEvent`新增`throw_asset`(`asset_type`可省略)；`BuildChanges`新增`spawn_effect`(`effect`/`scale`/`asset`都可省略)、`destroy_asset`(`asset`可省略)、`spawn_actor`(`actor`/`position`必填，`direction`/`scale`可省略，2026-11-18)。详见`Dependence/story/event.md`/`change.md`。
+`BuildEvent`新增`throw_asset`(`asset_type`可省略)；`BuildChanges`新增`spawn_effect`(`effect`/`scale`/`asset`都可省略)、`destroy_asset`(`asset`可省略)、`spawn_actor`(`actor`/`position`必填，`direction`/`scale`可省略，2026-11-18)、`sound_effect`(`sound`/`position`/`asset`/`volume`/`pitch`，除`sound`外可省略，2026-11-18)。详见`Dependence/story/event.md`/`change.md`。
 
 ## weapon_fire / projectile_hit / single_damage / area_damage（2026-11-17）
 

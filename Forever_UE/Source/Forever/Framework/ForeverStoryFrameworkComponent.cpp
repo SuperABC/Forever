@@ -375,6 +375,7 @@ void UForeverStoryFrameworkComponent::NotifyWeaponFire(Weapon* weapon, const FWe
 	event.SetField("sufferer", ValueType(info.sufferer));
 	event.SetField("part", ValueType(info.part));
 	event.SetField("distance", ValueType(static_cast<double>(info.distance)));
+	event.SetField("pellet", ValueType(static_cast<double>(info.pellet)));
 	event.SetVec3("asset", info.asset.X, info.asset.Y, info.asset.Z);
 	event.SetVec3("fire", info.fire.X, info.fire.Y, info.fire.Z);
 	event.SetVec3("hit", info.hit.X, info.hit.Y, info.hit.Z);

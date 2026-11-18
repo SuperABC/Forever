@@ -42,6 +42,7 @@ struct FWeaponFireInfo
 	std::string sufferer;  // 被击中的(活着的)市民姓名，没有则空
 	std::string part;      // head/body/legs，没有则空
 	float distance = 0.f;  // 摄像机到hit的距离
+	int32 pellet = 0;      // 这一发里第几颗弹丸(从0开始)；脚本里只想每次开火做一次的事(开火声)用$$local.pellet == 0
 	FVector asset = FVector::ZeroVector;     // 武器模型位置
 	FVector fire = FVector::ZeroVector;      // 枪口
 	FVector hit = FVector::ZeroVector;       // 射线交点，没打中是射程终点

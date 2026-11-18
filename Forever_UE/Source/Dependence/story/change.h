@@ -1572,6 +1572,37 @@ private:
 	std::string normal;
 };
 
+// 播放一次音效(纯听觉)。sound是UE音效资产路径(表达式，如"/Game/Asset/Sound/pistol"，不含'.'自动补"<名>"对象名)，
+// 留空=不播放，加载不到不播放(打一条Warning)；位置规则同SpawnEffectChange：position非空时按"(x, y, z)"字符串解析
+// (如$$local.fire)，留空=asset字段(缺省=执行脚本所属资产)的位置，都没有则跳过。volume/pitch是倍率表达式，留空=1。
+class SoundEffectChange : public Change {
+public:
+	SoundEffectChange();
+	SoundEffectChange(std::string sound, std::string position = std::string(), std::string asset = std::string(),
+		std::string volume = std::string(), std::string pitch = std::string());
+	virtual ~SoundEffectChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetSound(std::string sound);
+	const std::string& GetSound() const;
+	void SetPosition(std::string position);
+	const std::string& GetPosition() const;
+	void SetAsset(std::string asset);
+	const std::string& GetAsset() const;
+	void SetVolume(std::string volume);
+	const std::string& GetVolume() const;
+	void SetPitch(std::string pitch);
+	const std::string& GetPitch() const;
+
+private:
+	std::string sound;
+	std::string position;
+	std::string asset;
+	std::string volume;
+	std::string pitch;
+};
+
 // 在场景里放一个蓝图Actor(通用，不限于火箭弹：以后任何"脚本在某处放一个东西"都用它)。actor是蓝图类路径(表达式，
 // 如"/Game/Asset/Projectile/BP_RPG7Rocket"，不含'.'自动补"_C")，加载不到不生成(打一条Warning)；position是"(x, y, z)"
 // 表达式(如$$local.fire，必填，缺省/无效跳过)；direction同格式，Actor的+X轴朝向(如$$local.direction，留空=不旋转)；
