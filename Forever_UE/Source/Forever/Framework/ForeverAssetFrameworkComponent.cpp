@@ -481,3 +481,24 @@ void UForeverAssetFrameworkComponent::FlushPendingDestroy() {
 		player->DestroyAsset(asset); // Asset本身(连带脚本)
 	}
 }
+
+void UForeverAssetFrameworkComponent::ApplyAddSatiety(const AddSatietyChange* change, const ScriptContext& context) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (!framework) return;
+
+	// target留空=玩家当前操控的市民；写了姓名就按姓名找(不要求已实例化，饱食度是Core数据)。
+	Citizen* citizen = nullptr;
+	const std::string targetName = change->GetTarget().empty() ? std::string() : ToString(EvaluateExpression(change->GetTarget(), context));
+	if (targetName.empty()) {
+		citizen = framework->GetControlledCitizen();
+	} else if (framework->GetPopulace()) {
+		citizen = framework->GetPopulace()->FindCitizenByName(targetName);
+	}
+	if (!citizen) {
+		UE_LOG(LogTemp, Warning, TEXT("add_satiety: no target citizen (\"%s\"), skipped."), UTF8_TO_TCHAR(targetName.c_str()));
+		return;
+	}
+	const float amount = static_cast<float>(ToDouble(EvaluateExpression(change->GetAmount(), context)));
+	citizen->ActivateStats(); // 未实例化动态属性则先实例化
+	citizen->AddSatiety(amount);
+}

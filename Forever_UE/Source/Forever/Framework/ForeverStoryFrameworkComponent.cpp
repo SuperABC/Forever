@@ -342,6 +342,21 @@ void UForeverStoryFrameworkComponent::NotifyThrowAsset(Asset* asset, const strin
 	BroadcastToScript(event, asset->GetScript(), postImplement);
 }
 
+void UForeverStoryFrameworkComponent::NotifyUseAsset(Asset* asset, const string& user) {
+	if (!story || !asset || !asset->GetScript()) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	UseAssetEvent event(asset->GetName(), asset->GetType(), user);
+	BroadcastToScript(event, asset->GetScript(), postImplement);
+}
+
 void UForeverStoryFrameworkComponent::NotifyWeaponFire(Weapon* weapon, const FWeaponFireInfo& info) {
 	if (!story || !weapon || !weapon->GetScript()) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());

@@ -18,13 +18,13 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 - `condition`（`SetCondition`/`GetCondition`）：事件级控制条件，`BuildEvent`统一从JSON的`condition`读入。
 - 类型字符串和成员命名的坑：`GetAssetEvent`/`LoseAssetEvent`的资产类型getter叫`GetAssetType()`，因为`GetType()`已是事件类型。
 
-## 没有字段逻辑的13种
+## 没有字段逻辑的12种
 
 `transaction_result`/`npc_meet`/`citizen_born`/`player_injured`/`player_cured`/`player_ill`/`player_recover`/`player_rest`/`player_sleep`/
-`wanted_change`/`player_arrested`/`player_released`/`use_asset`只搬运了字段和getter/setter，继承默认`Match`，没有`GetLocalValue`，
+`wanted_change`/`player_arrested`/`player_released`只搬运了字段和getter/setter，继承默认`Match`，没有`GetLocalValue`，
 `Script::BuildEvent`也没有分支（遇到会`THROW_EXCEPTION`，不是静默跳过）。等被点名实现时三者一起补。
 
-## 脚本里能用的触发条件（`Script::BuildEvent`识别的21种）
+## 脚本里能用的触发条件（`Script::BuildEvent`识别的22种）
 
 - `game_start`：无字段。
 - `option_dialog`(name/option)：玩家点了某个对象的某个选项。脚本里`local.name`/`local.option`读被点对象名和选项文字。
@@ -122,3 +122,8 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 `projectile_hit`(无字段)：mod蓝图里的弹射物Actor撞到东西后，经`UForeverProjectileBridgeComponent::ReportHit`→`NotifyProjectileHit`发给**它的所有者脚本**
 (`OwnerScriptKey`，如`weapon:weapon_rocket`，没找到脚本=丢弃)。local：`hit`、`normal`(vec3，规则同weapon_fire)、`sufferer`。
 火箭筒脚本在这里`spawn_effect`+`area_damage`。本次只有这个事件和桥组件，放置弹射物的`spawn_actor`Change以后再做。
+
+## use_asset（2026-11-18）
+
+`use_asset`(无过滤字段)：玩家在背包里"使用"一件可用资产(`AssetMod::usable`非0)时，由`UInventoryWidget::HandleUse`调`NotifyUseAsset`发出，只发给这件资产自己的脚本(没有脚本不发)，同步处理完才扣数量/销毁。
+脚本里读`$$local.asset`(资产名)、`$$local.type`(资产mod id)、`$$local.user`(使用者市民姓名)。用法：`Resource/Story/asset_burger.script`(`use_asset`→`add_satiety`)。

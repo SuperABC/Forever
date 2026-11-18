@@ -122,3 +122,7 @@ Player相关的C++类(`ForeverCharacter`/`ForeverPlayerController`/`ForeverGameM
 
 - 这个项目的`DefaultEngine.ini`里`Pawn`碰撞预设**忽略`ECC_Visibility`**——任何意图打到角色身上的射线检测(武器开火、瞄准等)必须用`ECC_Pawn`通道,不能想当然用`ECC_Visibility`。
 - `ACitizenElement`默认关闭Actor Tick(性能优化),玩家附身(`PossessedBy`)一个市民之后如果该市民的原生`Tick()`逻辑里还存在"无待处理路径点就自动再关一次Tick"这类逻辑,要连同`PossessedBy`本身一起检查,否则被操控角色身上依赖`Tick()`的功能会静默失效。
+
+## 12. 存档格式随便改,不考虑兼容
+
+游戏还没发布,也没有需要保留的旧存档(每次测试都重新存)。改存档数据布局(`.fsav`的段、文件外壳、mod状态)时:直接按新格式改读写,**不用**考虑旧存档能不能读,**不升**`SAVE_FILE_VERSION`/各段版本号/mod的`stateVersion`,**不写**旧版本迁移代码,也不要因为"不想动存档格式"而把本该存的状态省掉。只有用户明确要求升版本时才升。详见`Source/Core/common/save.md`的"版本号"。

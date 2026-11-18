@@ -542,6 +542,10 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		if (assetFramework) assetFramework->ApplySingleDamage(singleDamage, context);
 		return;
 	}
+	if (auto* addSatiety = dynamic_cast<const AddSatietyChange*>(change)) {
+		if (assetFramework) assetFramework->ApplyAddSatiety(addSatiety, context);
+		return;
+	}
 	if (auto* areaDamage = dynamic_cast<const AreaDamageChange*>(change)) {
 		if (assetFramework) assetFramework->ApplyAreaDamage(areaDamage, context);
 		return;

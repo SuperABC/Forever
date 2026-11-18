@@ -89,6 +89,10 @@ private:
 	void ClosePanel();
 	void ClickSlot(EInvZone zone);
 	void ClearSelect();
+	// "使用"按钮的目标：选中了身上容器里的某行就是那一件，否则是当前槽位里的资产(和HandleUse一致)，没有则nullptr。
+	Asset* GetUseTarget() const;
+	// 目标不存在或不可使用时隐藏使用按钮。选中/取消选中/刷新列表后调用。
+	void UpdateUseButton();
 	void RefreshAll();
 	void RefreshSlots();
 	void RefreshBody();

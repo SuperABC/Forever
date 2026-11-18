@@ -40,8 +40,9 @@ public:
 	bool GetBackpack() const;
 	bool IsWeapon() const;
 	const std::string& GetWeaponType() const; // IsWeapon()时激活它要装备的WeaponMod id
-	bool IsUsable() const;
-	float GetSatiety() const;                 // 使用时增加的饱食度
+	bool IsUsable() const;                    // usable != 0
+	int GetUsable() const;                    // mod的usable：0=不能用，N>0=每件能用N次，-1=无限次
+	int GetUsesLeft() const;                  // 当前这一件(堆叠里最上面那件)还剩的次数；无限次/不能用时为0。随资产存档
 	const std::string& GetProductType() const; // 商店查价用的Product类型，空=不能买
 	bool IsThrowable() const;
 	const std::string& GetMeshPath() const; // 空=沿用Cube占位
@@ -64,8 +65,9 @@ public:
 	int GetCount() const;
 	void SetCount(int value);
 
-	// 使用：count-1，count降到0时返回true(调用方负责从所在容器/槽位/房间移除+delete这个
-	// Asset)。只有IsUsable()==true时生效，否则直接返回false、不改动count。
+	// 使用一次：IsUsable()==false或count<=0直接返回false；usable==-1(无限次)什么都不扣，返回false；
+	// 否则剩余次数-1，降到0就用完这一件(count-1，剩余次数回满给下一件)，count降到0时返回true
+	// (调用方负责从所在容器/槽位/房间移除+delete这个Asset)。
 	bool Use();
 
 	// 容器行为(仅IsContainer()==true时有意义，否则GetSpace()恒为0、AddContent恒失败)：
@@ -103,8 +105,8 @@ private:
 	bool backpack = false;
 	bool weaponFlag = false;
 	std::string weaponType;
-	bool usableFlag = false;
-	float satietyValue = 0.f;
+	int usableUses = 0;
+	int usesLeft = 0;
 	std::string productType;
 	bool throwableFlag = false;
 	std::string meshPath;

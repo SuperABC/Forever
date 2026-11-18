@@ -23,8 +23,8 @@ Asset::Asset(AssetFactory* factory, const string& id) :
 	backpack = mod->backpack;
 	weaponFlag = mod->weapon;
 	weaponType = mod->weaponType;
-	usableFlag = mod->usable;
-	satietyValue = mod->satiety;
+	usableUses = mod->usable;
+	usesLeft = mod->usable > 0 ? mod->usable : 0;
 	productType = mod->productType;
 	throwableFlag = mod->throwable;
 	meshPath = mod->meshPath;
@@ -65,8 +65,9 @@ float Asset::GetVolume() const { return volume; }
 bool Asset::GetBackpack() const { return backpack; }
 bool Asset::IsWeapon() const { return weaponFlag; }
 const string& Asset::GetWeaponType() const { return weaponType; }
-bool Asset::IsUsable() const { return usableFlag; }
-float Asset::GetSatiety() const { return satietyValue; }
+bool Asset::IsUsable() const { return usableUses != 0; }
+int Asset::GetUsable() const { return usableUses; }
+int Asset::GetUsesLeft() const { return usesLeft; }
 const std::string& Asset::GetProductType() const { return productType; }
 bool Asset::IsThrowable() const { return throwableFlag; }
 const string& Asset::GetMeshPath() const { return meshPath; }
@@ -100,8 +101,12 @@ int Asset::GetCount() const { return count; }
 void Asset::SetCount(int value) { count = value; }
 
 bool Asset::Use() {
-	if (!usableFlag || count <= 0) return false;
+	if (usableUses == 0 || count <= 0) return false;
+	if (usableUses < 0) return false; // 无限次：不消耗
+	if (--usesLeft > 0) return false;
+	// 这一件用完了：数量-1，下一件的剩余次数回满。
 	count--;
+	usesLeft = usableUses;
 	return count <= 0;
 }
 

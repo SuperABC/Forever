@@ -17,6 +17,7 @@ class SpawnEffectChange;
 class DestroyAssetChange;
 class SingleDamageChange;
 class AreaDamageChange;
+class AddSatietyChange;
 struct ScriptContext;
 
 // 世界掉落物的生成/销毁登记。背包UI的Drop/Pick动作分别调用SpawnWorldAsset/DestroyWorldAsset，见
@@ -68,6 +69,8 @@ public:
 	// single_damage/area_damage：伤害Change的执行(扣血、致死处理见FForeverDamage)。area_damage的position规则同spawn_effect。
 	void ApplySingleDamage(const SingleDamageChange* change, const ScriptContext& context);
 	void ApplyAreaDamage(const AreaDamageChange* change, const ScriptContext& context);
+	// add_satiety：给市民加饱食度(target空=玩家当前操控的市民)。
+	void ApplyAddSatiety(const AddSatietyChange* change, const ScriptContext& context);
 	// destroy_asset：销毁地面资产。这里只隐藏Actor并登记名字——同一个里程碑里后面的Change还要用这件资产的脚本
 	// (context.self)，所以真正的销毁(Actor+Asset)推迟到FlushPendingDestroy，由AForeverFrameworkActor::Tick调用。
 	void ApplyDestroyAsset(const DestroyAssetChange* change, const ScriptContext& context);

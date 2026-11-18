@@ -234,7 +234,8 @@ hr { border: none; border-top: 1px solid #3a3a3a; margin: 6px 0; }
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // pedestrianNavigation / vehicleNavigation: {
-//   nodes:       [{ position:[xr,xo,yr,yo] }, ...]
+//   nodes:       [{ position:[xr,xo,yr,yo], height?:float }, ...]
+//                (height: 0 = floor, 1 = ceiling of this level, values outside 0..1 allowed; optional, default 0; only standalone nodes)
 //   lines:       [{ begin:[4], end:[4] }, ...]
 //   connections: [{ begin:endpoint, end:endpoint, forward?:bool, backward?:bool }, ...]
 //   (vehicleNavigation only: forward = begin->end, backward = end->begin, both = two-way;
@@ -1869,6 +1870,15 @@ function makeNavNodeSec() {
     posGrid.appendChild(numInput(node.position[i], v => { node.position[i] = v; redraw(); }));
   });
   sec.appendChild(posGrid);
+
+  // 高度：0=本层地面，1=本层天花板，可超出0~1(缺省0，写文件时为0就不写字段)
+  sec.appendChild(div('field-title', '高度 (0地面, 1天花板, 可超出)'));
+  const heightEl = numInput(node.height || 0, v => {
+    if (v === 0) delete node.height; else node.height = v;
+    redraw();
+  });
+  heightEl.step = '0.5';
+  sec.appendChild(heightEl);
 
   // Outer connections: one row per external type with colored dot + add/remove button
   sec.appendChild(document.createElement('hr'));

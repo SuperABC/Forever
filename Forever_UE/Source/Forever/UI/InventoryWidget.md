@@ -15,5 +15,12 @@
 - **槽位文字**：有物品只显示物品内容（`类型 xN [容器]`），空槽位才显示 WBP 里原来的部位标签。
 - **手只收数量为 1 的物品**：`InventoryTransfer::Transfer` 与 `Player::AddByPath` 都检查。
 
-## 使用物品加饱食度
-`HandleUse`在`asset->Use()`前，若物品可用，给被操控市民`ActivateStats()`并`AddSatiety(asset->GetSatiety())`(汉堡0.5，上限1)。
+## 使用物品
+`HandleUse`在`asset->Use()`前，若物品可用，调`UForeverStoryFrameworkComponent::NotifyUseAsset(asset, 被操控市民姓名)`发`use_asset`事件给这件资产自己的脚本(同步处理完)，效果由脚本的Change完成(汉堡：`add_satiety` +0.5)；之后才`Use()`扣次数：`usable`为-1的无限次物品什么都不扣，正数则剩余次数-1、用完一件才`count`-1，`count`到0销毁。没有脚本就只消耗不产生效果。
+
+## 使用按钮和使用后关闭
+`UpdateUseButton`：目标(`GetUseTarget`：选中了身上容器里的某行就是那一件，否则是当前槽位的资产，和`HandleUse`一致)不存在或不可使用(`IsUsable()`为假)时把`UseButton`设成Collapsed隐藏；`ClearSelect`/`SelectRow`/`RefreshAll`之后都会刷新。
+`HandleUse`真的使用了(目标可用)之后自动`ClosePanel()`；点在不可用物品上不会执行也不会关。
+
+## 可聚焦
+`NativeConstruct`里`SetIsFocusable(true)`：打开背包时控制器切UIOnly输入模式并给面板焦点，不开会在日志里报"Attempting to focus Non-Focusable widget"(和商店/地图等面板一致，在cpp里设，不依赖WBP勾选)。

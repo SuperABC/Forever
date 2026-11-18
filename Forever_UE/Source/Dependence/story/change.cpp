@@ -2159,3 +2159,38 @@ void AreaDamageChange::SetWeapon(std::string weapon) {
 const std::string& AreaDamageChange::GetWeapon() const {
 	return weapon;
 }
+
+AddSatietyChange::AddSatietyChange() :
+	target(), amount() {
+
+}
+
+AddSatietyChange::AddSatietyChange(std::string target, std::string amount) :
+	target(move(target)), amount(move(amount)) {
+
+}
+
+AddSatietyChange::~AddSatietyChange() {
+
+}
+
+const string& AddSatietyChange::GetType() const {
+	static const string type = "add_satiety";
+	return type;
+}
+
+void AddSatietyChange::SetTarget(std::string target) {
+	this->target = move(target);
+}
+
+const std::string& AddSatietyChange::GetTarget() const {
+	return target;
+}
+
+void AddSatietyChange::SetAmount(std::string amount) {
+	this->amount = move(amount);
+}
+
+const std::string& AddSatietyChange::GetAmount() const {
+	return amount;
+}

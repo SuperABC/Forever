@@ -332,6 +332,10 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			if (type == "get_asset") event = new GetAssetEvent(obj["asset_type"].AsString(), obj["result"].AsString());
 			else event = new LoseAssetEvent(obj["asset_type"].AsString(), obj["result"].AsString());
 		}
+		else if (type == "use_asset") {
+			// 没有过滤字段(只发给资产自己的脚本)，脚本里读$$local.asset/type/user。
+			event = new UseAssetEvent(std::string());
+		}
 		else if (type == "throw_asset") {
 			// asset_type可以省略(留空=不限)，见ThrowAssetEvent::Match。脚本里读$$local.type。
 			event = new ThrowAssetEvent(obj["asset_type"].AsString());
@@ -585,6 +589,10 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			// source/weapon/part只用于击杀信息，可以省略。
 			change = new SingleDamageChange(obj["target"].AsString(), obj["damage"].AsString(), obj["source"].AsString(),
 				obj["weapon"].AsString(), obj["part"].AsString());
+		}
+		else if (type == "add_satiety") {
+			// target省略=玩家当前操控的市民。
+			change = new AddSatietyChange(obj["target"].AsString(), obj["amount"].AsString());
 		}
 		else if (type == "area_damage") {
 			// position省略=执行脚本所属资产的位置；occlusion省略=false；power省略=1。

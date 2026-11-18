@@ -88,7 +88,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Roadnet")
 	TObjectPtr<UMaterialInterface> roadPlainBaseMaterial;
 
-	// 导航图debug可视化开关，目前默认关闭(核对导航图时在编辑器里勾选)，开着有常驻开销。
+	// 导航图debug可视化开关，默认关闭(核对导航图时在编辑器里勾选)，开着有常驻开销。
 	UPROPERTY(EditAnywhere, Category = "Roadnet|Debug")
 	bool bShowNavigationDebug = false;
 

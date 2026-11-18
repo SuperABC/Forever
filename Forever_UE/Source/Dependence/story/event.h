@@ -701,21 +701,32 @@ private:
 };
 
 // 使用资产
+// 使用资产：玩家在背包里"使用"一件可用资产(AssetMod::usable!=0，如汉堡)时，只发给这件资产自己的脚本(没有脚本则不发)，
+// 事件发出之后UE层才扣数量/销毁。脚本里读$$local.xxx：asset(这件资产的名字)、type(资产mod id)、user(使用者市民姓名)。
+// 没有过滤字段，不参与Match(只发给自己的脚本)。
 class UseAssetEvent : public Event {
 public:
-	UseAssetEvent(std::string asset);
+	UseAssetEvent(std::string asset, std::string type = std::string(), std::string user = std::string());
 
 	virtual ~UseAssetEvent();
 
 	virtual const std::string& GetType() const override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
 
 	void SetAsset(std::string asset);
-
 	const std::string& GetAsset() const;
+	void SetAssetType(std::string type);
+	const std::string& GetAssetType() const;
+	void SetUser(std::string user);
+	const std::string& GetUser() const;
 
 private:
-	// 资产类型
+	// 资产名字
 	std::string asset;
+	// 资产类型(mod id)
+	std::string type;
+	// 使用者姓名
+	std::string user;
 };
 
 // 载具(公交)进站并停稳。由UE层在Core检测到停靠边沿后发给这辆载具自己的script(不广播)，

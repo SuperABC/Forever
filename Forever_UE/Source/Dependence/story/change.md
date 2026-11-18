@@ -217,3 +217,8 @@ Core里没有任何枪/伤害专用逻辑，`Citizen::TakeDamage`只管扣血。
   每个市民的伤害 = `damage` × (1 − dist^power)，dist是该市民到中心的距离与`radius`的比值(超出半径=0)，`power`默认1(线性衰减)。`occlusion`为真时从中心(抬高30cm)到市民中心连一条线，被墙/地形挡住就不受伤(市民自己不算遮挡物)。
   范围内含玩家当前操控的市民(玩家也是市民)；`Player`自己的血量(`Player::TakeDamage`)不在这里处理。`source`/`weapon`含义同`single_damage`。
 - 用法：`Resource/Story/weapon_*.script`(`weapon_fire`→`spawn_effect`+`single_damage`)、`Resource/Story/asset_grenade.script`(`time_up`→`spawn_effect`+`area_damage`+`destroy_asset`)。
+
+## add_satiety
+
+`add_satiety`(`target`、`amount`，都是表达式)：给一个市民的饱食度加`amount`(可为负，结果截断到[0,1])。`target`是市民姓名，留空=玩家当前操控的市民；
+没实例化动态属性的市民先`ActivateStats()`。UE层由`UForeverAssetFrameworkComponent::ApplyAddSatiety`执行。用法：`Resource/Story/asset_burger.script`(`use_asset`→`add_satiety`，`target: $$local.user`)。

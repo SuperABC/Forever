@@ -477,8 +477,11 @@ namespace {
 	// 不存在，比如vehicleNavigation这次多数模板都没画)时4份都是默认构造的空NavigationTemplate。
 	void ParseNavigationBlock(const JsonValue& navRoot, array<NavigationTemplate, 4>& out) {
 		vector<PointParams> rawNodes;
+		vector<float> rawNodeHeights;
 		for (auto& n : navRoot["nodes"]) {
 			rawNodes.push_back(ReadPointParams(n["position"]));
+			float height = n.ValidMember("height") ? n["height"].AsFloat() : 0.f;
+			rawNodeHeights.push_back(height); // 不限制范围，可低于地面/高于天花板
 		}
 
 		// 可选的通行方向字段（车行导航用）：缺省 forward=true/backward=false，保持旧layout行为。
@@ -527,6 +530,7 @@ namespace {
 				lineTemplate.backward = rawLine.backward;
 				navTemplate.lines.push_back(lineTemplate);
 			}
+			navTemplate.nodeHeights = rawNodeHeights;
 			navTemplate.connections = rawConnections;
 			out[i] = std::move(navTemplate);
 		}
@@ -1398,17 +1402,20 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 		float floorHeight = floor.GetSizeY();
 		float z = GetFloorBaseZ(level);
 
-		auto makeNode = [this, z](float lx, float ly) -> Node* {
+		auto makeNode = [this](float lx, float ly, float nodeZ) -> Node* {
 			auto [wx, wy] = LocalToWorld(lx, ly);
-			return new Node("building", wx, wy, z);
+			return new Node("building", wx, wy, nodeZ);
 			};
+		float thisFloorHeight = idx < static_cast<int>(floorHeights.size()) ? floorHeights[idx] : 0.f;
 
 		vector<Node*> floorFixedNodes;
 		vector<pair<float, float>> floorFixedNodePositions;
-		for (auto& nodeTemplate : navTemplate.nodes) {
+		for (size_t nodeIndex = 0; nodeIndex < navTemplate.nodes.size(); nodeIndex++) {
+			auto& nodeTemplate = navTemplate.nodes[nodeIndex];
 			float lx = nodeTemplate.position[0] * floorWidth + nodeTemplate.position[1];
 			float ly = nodeTemplate.position[2] * floorHeight + nodeTemplate.position[3];
-			Node* node = makeNode(lx, ly);
+			float heightRatio = nodeIndex < navTemplate.nodeHeights.size() ? navTemplate.nodeHeights[nodeIndex] : 0.f;
+			Node* node = makeNode(lx, ly, z + heightRatio * thisFloorHeight);
 			newNodes.push_back(node);
 			floorFixedNodes.push_back(node);
 			floorFixedNodePositions.emplace_back(lx, ly);
@@ -1472,7 +1479,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 				auto& line = lineRuntimes[endpoint.idx];
 				if (endpoint.vertex == 0) {
 					if (!line.nodeAt0) {
-						line.nodeAt0 = makeNode(line.beginX, line.beginY);
+						line.nodeAt0 = makeNode(line.beginX, line.beginY, z);
 						newNodes.push_back(line.nodeAt0);
 						line.anchors.emplace_back(0.f, line.nodeAt0);
 					}
@@ -1480,7 +1487,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 				}
 				if (endpoint.vertex == 1) {
 					if (!line.nodeAt1) {
-						line.nodeAt1 = makeNode(line.endX, line.endY);
+						line.nodeAt1 = makeNode(line.endX, line.endY, z);
 						newNodes.push_back(line.nodeAt1);
 						line.anchors.emplace_back(1.f, line.nodeAt1);
 					}
@@ -1528,7 +1535,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 						float t = ProjectOntoLine(parkingSlot->centerX, parkingSlot->centerY, line.beginX, line.beginY, line.endX, line.endY);
 						float px = line.beginX + t * (line.endX - line.beginX);
 						float py = line.beginY + t * (line.endY - line.beginY);
-						Node* projected = makeNode(px, py);
+						Node* projected = makeNode(px, py, z);
 						newNodes.push_back(projected);
 						line.anchors.emplace_back(t, projected);
 						if (beginIsProjection) addConnection(projected, parkingSlot->navigationNode, connTemplate.forward, connTemplate.backward);
@@ -1554,7 +1561,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 						float t = ProjectOntoLine(room->GetPosX(), room->GetPosY(), line.beginX, line.beginY, line.endX, line.endY);
 						float px = line.beginX + t * (line.endX - line.beginX);
 						float py = line.beginY + t * (line.endY - line.beginY);
-						Node* projected = makeNode(px, py);
+						Node* projected = makeNode(px, py, z);
 						newNodes.push_back(projected);
 						line.anchors.emplace_back(t, projected);
 						// 方向按模板的begin/end：投影端是begin时 projected->room，否则 room->projected。
@@ -1569,7 +1576,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 				float t = ProjectOntoLine(nx, ny, line.beginX, line.beginY, line.endX, line.endY);
 				float px = line.beginX + t * (line.endX - line.beginX);
 				float py = line.beginY + t * (line.endY - line.beginY);
-				Node* projected = makeNode(px, py);
+				Node* projected = makeNode(px, py, z);
 				newNodes.push_back(projected);
 				line.anchors.emplace_back(t, projected);
 				if (beginIsProjection) addConnection(projected, srcNode, connTemplate.forward, connTemplate.backward);

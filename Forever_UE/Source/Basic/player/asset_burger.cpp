@@ -16,7 +16,8 @@ void BurgerAsset::SetProperty() {
 	mobility = AssetMobility::Object;   // Object才能拿在手上：没背包时商店按空手数限制购买量
 	weight = 0.2f;
 	size = 0.2f;
-	usable = true;
-	satiety = 0.5f;               // 吃一个汉堡饱食度+0.5(上限1，超出截断)
+	usable = 1;                   // 吃一次就用完一个(count-1，到0销毁)
+	// 脚本：使用(use_asset)时加饱食度，见Resource/Story/asset_burger.script；使用一次count-1，到0销毁由UE层处理。
+	milestoneNames = { "asset_burger" };
 	productType = "product_burger"; // 商店按这个Product的零售价卖；使用一次count-1，到0销毁
 }

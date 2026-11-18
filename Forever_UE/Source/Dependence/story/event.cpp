@@ -1088,8 +1088,8 @@ const std::string& WeatherChangeEvent::GetWeather() const {
 	return weather;
 }
 
-UseAssetEvent::UseAssetEvent(std::string asset) :
-	asset(move(asset)) {
+UseAssetEvent::UseAssetEvent(std::string asset, std::string type, std::string user) :
+	asset(move(asset)), type(move(type)), user(move(user)) {
 
 }
 
@@ -1108,6 +1108,29 @@ void UseAssetEvent::SetAsset(std::string asset) {
 
 const std::string& UseAssetEvent::GetAsset() const {
 	return asset;
+}
+
+pair<bool, ValueType> UseAssetEvent::GetLocalValue(const string& key) const {
+	if (key == "asset") return { true, ValueType(asset) };
+	if (key == "type") return { true, ValueType(type) };
+	if (key == "user") return { true, ValueType(user) };
+	return { false, ValueType() };
+}
+
+void UseAssetEvent::SetAssetType(std::string type) {
+	this->type = move(type);
+}
+
+const std::string& UseAssetEvent::GetAssetType() const {
+	return type;
+}
+
+void UseAssetEvent::SetUser(std::string user) {
+	this->user = move(user);
+}
+
+const std::string& UseAssetEvent::GetUser() const {
+	return user;
 }
 
 EnterStopEvent::EnterStopEvent(std::string stop) :

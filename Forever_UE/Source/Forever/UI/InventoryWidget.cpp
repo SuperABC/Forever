@@ -17,6 +17,7 @@
 
 #include "Framework/ForeverFrameworkActor.h"
 #include "Framework/ForeverAssetFrameworkComponent.h"
+#include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Player/ForeverCharacter.h"
 #include "Player/ForeverThrowableComponent.h"
 
@@ -148,6 +149,8 @@ FString UInventoryWidget::BuildBreadcrumb(const FString& root, const TArray<Asse
 
 void UInventoryWidget::NativeConstruct() {
 	Super::NativeConstruct();
+	// 打开背包时控制器切UIOnly输入模式并给这个面板焦点，不开可聚焦会报"Attempting to focus Non-Focusable widget"。
+	SetIsFocusable(true);
 
 	// 槽位按钮只负责外观：鼠标事件让它直接落到整个面板上，由面板按位置判断点中/拖中了哪个槽位
 	// (SButton会吞掉按下事件，拖拽检测和松手落点都到不了这一层)。
@@ -209,6 +212,19 @@ void UInventoryWidget::ClearSelect() {
 	if (UAssetButtonWidget* row = selectedOther.Get()) row->SetRowSelected(false);
 	selectedBody = nullptr;
 	selectedOther = nullptr;
+	UpdateUseButton();
+}
+
+Asset* UInventoryWidget::GetUseTarget() const {
+	if (UAssetButtonWidget* row = selectedBody.Get()) return row->GetAsset();
+	return GetSlotAsset(currentSlot);
+}
+
+void UInventoryWidget::UpdateUseButton() {
+	if (!UseButton) return;
+	Asset* target = GetUseTarget();
+	const bool bUsable = target && target->IsUsable() && target->GetCount() > 0;
+	UseButton->SetVisibility(bUsable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
 
 void UInventoryWidget::SelectRow(UAssetButtonWidget* row) {
@@ -222,6 +238,7 @@ void UInventoryWidget::SelectRow(UAssetButtonWidget* row) {
 		selectedOther = row;
 	}
 	row->SetRowSelected(true);
+	UpdateUseButton();
 }
 
 void UInventoryWidget::ShowMessage(const FString& text) {
@@ -257,6 +274,7 @@ void UInventoryWidget::RefreshAll() {
 	RefreshBody();
 	RefreshRoom();
 	RefreshNearby();
+	UpdateUseButton();
 }
 
 void UInventoryWidget::RefreshSlots() {
@@ -394,14 +412,17 @@ void UInventoryWidget::HandleUse() {
 		asset = GetSlotAsset(currentSlot);
 	}
 	if (!asset) return;
+	bool bUsed = false; // 真的使用了才关背包，点在不可用物品上什么都不发生
 
-	// 使用可用物品(汉堡)：给被操控的市民加饱食度(未实例化动态属性则先实例化，上限1超出截断)。
+	// 使用可用物品(汉堡)：发use_asset事件给这件资产自己的脚本，效果(加饱食度等)由脚本的Change完成；
+	// 事件同步处理完才往下走，之后再由Use()扣数量/销毁。没有脚本就只消耗不产生效果。
 	if (asset->IsUsable() && asset->GetCount() > 0) {
+		bUsed = true;
 		if (AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 			UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()))) {
-			if (Citizen* citizen = framework->GetControlledCitizen()) {
-				citizen->ActivateStats();
-				citizen->AddSatiety(asset->GetSatiety());
+			if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) {
+				Citizen* citizen = framework->GetControlledCitizen();
+				story->NotifyUseAsset(asset, citizen ? citizen->GetName() : std::string());
 			}
 		}
 	}
@@ -414,6 +435,7 @@ void UInventoryWidget::HandleUse() {
 
 	ClearSelect();
 	RefreshAll();
+	if (bUsed) ClosePanel(); // 使用之后自动关闭背包
 }
 
 void UInventoryWidget::EnterRow(UAssetButtonWidget* row) {

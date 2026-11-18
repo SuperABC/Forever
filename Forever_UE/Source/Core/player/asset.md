@@ -20,8 +20,9 @@
 ## 堆叠：`count`字段
 
 `Asset`带一个`int count`代表"这一份的数量"——120发子弹是1个`Asset`实例(`count=120`)，
-不是120个实例。`Use()`每次消耗1份(`count--`)，`count`降到0时返回`true`，调用方负责把这个
-`Asset`从所在容器/槽位/房间移除并`delete`。
+不是120个实例。`Use()`按mod的`usable`(每件能用的次数)计：0=不能用；-1=无限次，永不消耗(返回`false`)；
+N>0=这一件剩余次数-1，降到0才用完一件(`count--`，下一件剩余次数回满)，`count`降到0时返回`true`，调用方负责把这个
+`Asset`从所在容器/槽位/房间移除并`delete`。剩余次数(`GetUsesLeft()`)只对多次使用有意义，随资产存档(`PlayerSaveCodec::WriteAsset`在`count`后写一个`I32`)；堆叠拆分/合并不处理剩余次数。现有只有汉堡(`usable=1`)，每次使用都是用完一件，不受影响。
 
 ## 容器：`contents`
 
@@ -65,5 +66,5 @@
 ## 脚本与选项
 `AssetMod::scriptModName/milestoneNames`(默认都空)→`Asset`构造时`MakeScript`创建Script(都空则为空)，`$$self.name`=资产实例名、`$$self.type`=mod id。`Asset`有自己的`options`(`AddOption/RemoveOption/GetOptions`)和`scriptStarted`(是否已收过game_start；新建资产在第一次变成场景物体或`grant_asset`后由`StartAssetScript`补发)。`FindDescendant(name)`递归按名字找容器内容。存档：`options`和`scriptStarted`追加在mod状态之后；脚本状态由`script_save`的`asset:<名字>`键保存。
 
-## satiety / productType
-`GetSatiety()`(使用后加的饱食度)、`GetProductType()`(对应Industry里的产品，购买定价用)，由AssetMod的同名字段拷贝。
+## productType
+`GetProductType()`(对应Industry里的产品，购买定价用)，由AssetMod的同名字段拷贝。使用资产的效果不在Asset里：背包使用时发`use_asset`事件给资产自己的脚本，见`Forever/UI/InventoryWidget.md`。

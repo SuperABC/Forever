@@ -38,6 +38,7 @@ void PlayerSaveCodec::WriteAsset(const Asset* asset, ByteWriter& w) {
 	w.Str(asset->type);
 	w.Str(asset->name);
 	w.I32(asset->count);
+	w.I32(asset->usesLeft); // 多次使用物品当前这一件的剩余次数
 	SaveRefs::WriteModState(asset->mod, w);
 	w.U32(static_cast<uint32_t>(asset->options.size()));
 	for (const string& option : asset->options) w.Str(option);
@@ -51,6 +52,7 @@ Asset* PlayerSaveCodec::ReadAsset(AssetFactory& factory, ByteReader& r) {
 	string type = r.Str();
 	string name = r.Str();
 	int count = r.I32();
+	int usesLeft = r.I32();
 	Asset* asset = new Asset(&factory, type);
 	bool valid = asset->IsValid();
 	asset->name = name; // 覆写回存档里的名字，容器/房间/worldAssets的key都按它索引
@@ -58,6 +60,7 @@ Asset* PlayerSaveCodec::ReadAsset(AssetFactory& factory, ByteReader& r) {
 		debugf("Warning: failed to parse saved state of asset mod %s.\n", type.c_str());
 	}
 	asset->count = count;
+	asset->usesLeft = usesLeft;
 	uint32_t optionCount = r.U32();
 	for (uint32_t i = 0; i < optionCount && !r.Failed(); i++) asset->options.push_back(r.Str());
 	asset->scriptStarted = r.U8() != 0;

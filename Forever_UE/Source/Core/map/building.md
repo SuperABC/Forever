@@ -99,6 +99,7 @@
   `InitBuildings()`三段落地循环各自在`MergeBuildingNavigation`之后调用一次），不在`Building`
   内部——和roadnet隧道口完全复用同一套挖洞机制。
 - **行人导航（`BuildPedestrianNavigation`）**：按各楼层的`pedestrianNavigation`模板解析
+  (独立node可带可选的`height`(0=本层地面、1=本层天花板，可超出0~1，缺省0)，Z=楼层基准Z+height×本层层高，解析进`NavigationTemplate::nodeHeights`；line端点和room锚点仍在地面，2026-11-18)
   node/line/connection，`upstair`/`downstair`按相邻楼层世界坐标贪心最近匹配，产出这栋
   building自己内部的导航节点/连接。`"outside"`端点只在这一步实例化出它自己的世界坐标节点、
   收集进`BuildingNavResult::outsideNodes`——真正"接上道路网"这一步挪到`Map::InitBuildings()`

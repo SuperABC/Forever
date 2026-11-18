@@ -299,6 +299,9 @@ private:
 // 一个方向(0-3)的行人/车辆导航模板，结构相同——见general_geometry.h的NavigationXxxTemplate。
 struct NavigationTemplate {
 	std::vector<NavigationNodeTemplate> nodes;
+	// 和nodes一一对应：独立节点在本层地面(0)到天花板(1)之间的高度比例，layout里节点的可选"height"字段，缺省0。
+	// 不放进NavigationNodeTemplate是因为它在Dependence头里，改它要重编所有mod插件。
+	std::vector<float> nodeHeights;
 	std::vector<NavigationLineTemplate> lines;
 	std::vector<NavigationConnectionTemplate> connections;
 };

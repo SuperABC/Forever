@@ -29,9 +29,10 @@ public:
 	bool backpack = false; // 能否放进"后背"槽(容器类通常为true)
 	bool weapon = false;   // IsWeapon()——能否放进左肩/右肩，也是"左右手拒绝"的判据
 	std::string weaponType; // weapon为true时：在肩膀上激活这件资产时装备的WeaponMod id(比如"weapon_pistol")
-	bool usable = false;   // IsUsable()——能否被"使用"(比如汉堡)
-	// 使用时给使用者增加的饱食度(0~1,超出截断);0=不影响。
-	float satiety = 0.f;
+	// 每件资产能被"使用"的次数：0=不能使用；正数N=用N次后这一件用完(count-1，count到0销毁，比如汉堡=1)；
+	// -1=可以无限使用，永远不消耗。使用的效果不在这里，由这件资产自己的脚本响应use_asset事件(milestoneNames)，
+	// 比如add_satiety加饱食度；没有脚本就只消耗次数不产生效果。
+	int usable = 0;
 	// 对应的Industry Product类型(如"product_burger"),商店据此查零售价;空=不能在商店买。与Asset自己的id无代码关联。
 	std::string productType;
 	// IsThrowable():投掷物(手雷/烟雾弹),与weapon正交。

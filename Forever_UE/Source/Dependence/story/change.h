@@ -1621,6 +1621,27 @@ private:
 	std::string part;
 };
 
+// 增加饱食度：给一个市民的饱食度加amount(0~1，可为负，结果截断到[0,1]，没实例化动态属性的市民先激活)。
+// target：市民姓名(表达式，如$$local.user)，留空=玩家当前操控的市民。amount：数值表达式。
+// 用于可用资产(汉堡)的脚本：use_asset事件里$$local.user就是使用者。
+class AddSatietyChange : public Change {
+public:
+	AddSatietyChange();
+	AddSatietyChange(std::string target, std::string amount);
+	virtual ~AddSatietyChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetTarget(std::string target);
+	const std::string& GetTarget() const;
+	void SetAmount(std::string amount);
+	const std::string& GetAmount() const;
+
+private:
+	std::string target;
+	std::string amount;
+};
+
 // 范围伤害：以position为中心、radius为半径，对范围内已实例化(有Actor)的市民造成伤害。每个市民的伤害 =
 // damage * (1 - dist^power)，dist是该市民到中心的距离与radius的比值(超出半径=0)，power默认1(线性衰减)。
 // occlusion为真时，从中心到该市民连一条线，被挡住就不受伤。position是"(x, y, z)"字符串表达式(如$$local.hit)，

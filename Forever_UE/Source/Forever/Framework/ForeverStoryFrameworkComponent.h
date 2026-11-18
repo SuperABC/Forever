@@ -190,6 +190,9 @@ public:
 
 	// 投掷：资产被扔出去之后发throw_asset事件，只发给这件资产自己的脚本(没有脚本则不发)。thrower=投掷者姓名。
 	void NotifyThrowAsset(Asset* asset, const std::string& thrower = std::string());
+	// 使用：背包里"使用"一件可用资产时发use_asset事件，只发给这件资产自己的脚本(没有脚本则不发)，同步处理完才返回，
+	// 所以调用方可以在这之后再扣数量/销毁资产。user=使用者姓名。
+	void NotifyUseAsset(Asset* asset, const std::string& user);
 
 	// 开火：一次射线(霰弹每颗弹丸各一次)发一个weapon_fire事件，只发给这把武器自己的脚本(没有脚本则不发)。
 	void NotifyWeaponFire(Weapon* weapon, const FWeaponFireInfo& info);

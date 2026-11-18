@@ -129,3 +129,7 @@ Citizen/Elevator等可以各自持有自己的`Script*`。
 
 `BuildEvent`新增`weapon_fire`(`weapon_type`可省略)、`projectile_hit`；`BuildChanges`新增`single_damage`(`target`/`damage`/`source`/`weapon`/`part`)、`area_damage`(`position`/`radius`/`damage`/`occlusion`/`power`/`source`/`weapon`)，
 `spawn_effect`多读`position`/`normal`。`ScriptOwnerKind`新增`Weapon`：`Weapon::EnsureScript`创建的武器脚本(稳定键`weapon:<武器id>`，不进存档)。详见`Dependence/story/event.md`/`change.md`。
+
+## use_asset / add_satiety（2026-11-18）
+
+`BuildEvent`新增`use_asset`(无过滤字段)，`BuildChanges`新增`add_satiety`(`target`省略=玩家当前操控的市民，`amount`)。详见`Dependence/story/event.md`、`change.md`。
