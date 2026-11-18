@@ -76,7 +76,7 @@
 - **`BuildRouteDebugMesh`**：每种`stationType`一个`UProceduralMeshComponent`+MID（bus绿/train蓝/plane红/其它默认色，`GetRouteDebugTarget`选），
   遍历`route->GetLines()`的`runs`→`pieces`，按每个`TrackPath`几何采样（`SampleRouteEdge(const TrackPath&)`，每`ROUTE_DEBUG_SAMPLE_STEP`地图单位一个采样点，至少16段，`TSet<const TrackPath*>`去重）连成ribbon，
   路径中点画箭头指示方向，站点的inlet/outlet/stop画小方块。`bShowRouteDebug`（默认false）为false时`ClearMeshSection`而不是跳过，避免旧可视化残留。`stationByNodeId`遍历`RouteLine::runs`。
-- **`BuildPiers(Map*, Traffic*)`**：画 `Route::GetPiers()`(Core 选好的桥墩)。mesh 空串=`/Game/Asset/Common/Mesh/SM_Cylinder`，用 `GetOrCreateTrackISM` 同一套 ISM 缓存，所以必须在 `BuildTracks`(开头统一清实例)之后调。墩底=`Map::SampleHeight(x,y)`(水面不管，取到的就是水底)，墩顶=`topZ`；缩放读 mesh `GetBounds()`(不假设资产原尺寸和轴心)：水平直径=2×radius，竖直撑满墩高，包围盒中心对齐墩中心。
+- **`BuildPiers(Map*, Traffic*)`**：画 `Route::GetPiers()`(Core 选好的桥墩)。mesh 空串=`/Game/Asset/Common/Mesh/Cylinder`，用 `GetOrCreateTrackISM` 同一套 ISM 缓存，所以必须在 `BuildTracks`(开头统一清实例)之后调。墩底=`Map::SampleHeight(x,y)`(水面不管，取到的就是水底)，墩顶=`topZ`；缩放读 mesh `GetBounds()`(不假设资产原尺寸和轴心)：水平直径=2×radius，竖直撑满墩高，包围盒中心对齐墩中心。
 - **`BuildTracks`**：对`ShouldInstantiate()`的线路（火车），遍历`route->GetTrackPaths()`（站内连线+站间连线，已去重），**每段用自己的`mesh`/`meshUnit`**（空mesh的段不铺），每个`Connection`段按`BuildRoadInstances`同样的平铺（块数夹在`[0.8,1.2]*unit`，`scaleAlong`拉伸，
   `GetOrCreateTrackISM`每种mesh一个`RF_Transient`的ISM，重铺前先`ClearInstances`）。区别：轨道mesh轴心在中心（沿+X延伸），所以每块摆在自己的**中点**，朝向取起点→终点的3D方向（含坡度）。隧道没有专用标志，由mod直接把段的`mesh`换成隧道资产。读档时同样重铺（几何从存档来）。
 - `GenerateVehicles`每个组件实例只调用一次：新开局/读档都经`LoadMap`重建`AForeverFrameworkActor`及其组件，所以不需要清`carEntries`/`activeVehicles`/`activeTransitVehicles`；同一蓝图路径在公交分支只`LoadClass`一次，transit类与物理表示类共用结果。

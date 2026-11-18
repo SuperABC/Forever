@@ -8,10 +8,25 @@
 #include "ForeverBuildingFrameworkComponent.generated.h"
 
 class UStaticMesh;
+class UInstancedStaticMeshComponent;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class Map;
 class Building;
+
+// 五材质槽Wall网格的ISM池key：东南西北四个侧面的材质+上下面材质。
+struct FWallMaterialKey {
+	UMaterialInterface* slots[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+	bool operator==(const FWallMaterialKey& other) const {
+		for (int32 i = 0; i < 5; i++) if (slots[i] != other.slots[i]) return false;
+		return true;
+	}
+	friend uint32 GetTypeHash(const FWallMaterialKey& key) {
+		uint32 hash = 0;
+		for (int32 i = 0; i < 5; i++) hash = HashCombine(hash, GetTypeHash(key.slots[i]));
+		return hash;
+	}
+};
 
 // 每栋Building各有一个专属ABuildingElement(Source/Forever/Element/BuildingElement.h)，两级LOD
 // (远处单box/近处楼层内部结构)、电梯轿厢动画全在Element自己的Tick里做。这个组件只负责按
@@ -72,6 +87,25 @@ public:
 		return true;
 	}
 
+	// 外壳(整栋楼的墙/地板/天花板，开局每栋只建一次，常驻)的每帧预算，和近处LOD操作的预算分开：
+	// 开局全城一千多栋要在冻结期间建完，不能受近处LOD"每帧1条"的限制。
+	bool TryConsumeShellBudget() {
+		if (frameShellBudgetRemaining <= 0) return false;
+		frameShellBudgetRemaining--;
+		return true;
+	}
+
+	// ---- 全城合并的外壳ISM(墙/地板/天花板) ----
+	// 外壳开局建一次就不再增删，所以所有建筑共用ISM：按(网格单元, 材质)分池，每个池一个常驻UInstancedStaticMeshComponent，
+	// 挂在框架Actor上。Element建外壳时只把实例排进来(QueueShell*)，全部建筑建完(NotifyShellBuilt数到
+	// RegisterShellBuilding登记的数量)后一次性提交。网格单元是为了按距离开关阴影(ISM的阴影是组件级的)：
+	// 只有离玩家近的单元投射阴影，见shellCellSize/UpdateShellShadows。
+	// cellPos=这栋建筑的中心(地图单位)，决定放进哪个单元。transform是世界空间，cosR/sinR写进每实例自定义数据。
+	void QueueShellCube(const FVector2D& cellPos, const FTransform& transform, float cosR, float sinR, UMaterialInterface* material);
+	void QueueShellWall(const FVector2D& cellPos, const FTransform& transform, float cosR, float sinR, const FWallMaterialKey& key);
+	void RegisterShellBuilding() { expectedShellBuildings++; }
+	void NotifyShellBuilt();
+
 	// 冻结世界(全局时间倍率置0)直到所有building的LOD切换队列清空，TickComponent检测到清空后恢复1。
 	// 由切换玩家控制权(ForeverStoryFrameworkComponent::ApplyControlChange)触发。Tick仍按正常帧率
 	// 调用、只是DeltaTime缩放为0，而LOD队列的处理不读DeltaTime，所以冻结期间队列照常排空。
@@ -93,6 +127,42 @@ public:
 
 private:
 	Map* map = nullptr;
+
+	// 合并外壳ISM的池。ISM由框架Actor的组件树持有(AddInstanceComponent)，这里是裸指针。
+	struct FShellCubeKey {
+		int32 cx = 0, cy = 0;
+		UMaterialInterface* material = nullptr;
+		bool operator==(const FShellCubeKey& o) const { return cx == o.cx && cy == o.cy && material == o.material; }
+		friend uint32 GetTypeHash(const FShellCubeKey& k) { return HashCombine(HashCombine(::GetTypeHash(k.cx), ::GetTypeHash(k.cy)), ::GetTypeHash(k.material)); }
+	};
+	struct FShellWallKey {
+		int32 cx = 0, cy = 0;
+		FWallMaterialKey wall;
+		bool operator==(const FShellWallKey& o) const { return cx == o.cx && cy == o.cy && wall == o.wall; }
+		friend uint32 GetTypeHash(const FShellWallKey& k) { return HashCombine(HashCombine(::GetTypeHash(k.cx), ::GetTypeHash(k.cy)), GetTypeHash(k.wall)); }
+	};
+	struct FShellPool {
+		UInstancedStaticMeshComponent* ism = nullptr;
+		TArray<FTransform> pending;
+		TArray<float> pendingCustomData; // 每实例(cos, sin)
+		bool casting = false;
+		FVector2D cellMin, cellMax; // 这个单元的范围(地图单位)，按距离开阴影用
+	};
+	int32 ShellCellOf(float mapCoord) const;
+	void ShellCellRange(int32 cx, int32 cy, FVector2D& outMin, FVector2D& outMax) const;
+	UInstancedStaticMeshComponent* CreateShellISM(UStaticMesh* mesh);
+	void FlushShellInstances();
+	void UpdateShellShadows();
+	TMap<FShellCubeKey, FShellPool> shellCubePools;
+	TMap<FShellWallKey, FShellPool> shellWallPools;
+	int32 expectedShellBuildings = 0;
+	int32 builtShellBuildings = 0;
+	bool bShellFlushed = false;
+	float shellShadowTimer = 0.f;
+
+	// 外壳ISM按这个边长(地图单位)分单元；<=0=全城一个单元(组件最少，但阴影没法按距离开关：要么全城投射要么都不投射，此时投射)。
+	UPROPERTY(EditDefaultsOnly, Category = "Building")
+	float shellCellSize = 64.f;
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> defaultLodMaterial; // 远处默认灰色(Pure+Color染灰)
@@ -131,10 +201,10 @@ private:
 	// LOD切换距离(地图单位，1地图单位=1000 UE单位=10米)，两个阈值不同形成迟滞区间，见
 	// GetLodNearEnterDistance/GetLodFarExitDistance注释。
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
-	float lodNearEnterDistance = 40.f;
+	float lodNearEnterDistance = 16.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
-	float lodFarExitDistance = 80.f;
+	float lodFarExitDistance = 32.f;
 
 	// 全地图共享的每帧最多处理LOD操作条数，避免大量建筑同时穿越阈值时卡顿——具体消耗见
 	// TryConsumeLodOpBudget()。
@@ -142,6 +212,11 @@ private:
 	int32 maxLodOpsPerTick = 1;
 
 	int32 frameOpBudgetRemaining = 0;
+
+	// 每帧最多建几栋楼的外壳(开局一次性建完全城，见TryConsumeShellBudget)。
+	UPROPERTY(EditDefaultsOnly, Category = "Building")
+	int32 maxShellOpsPerTick = 8;
+	int32 frameShellBudgetRemaining = 0;
 
 	// 见RequestFreezeUntilLodSettled/NotifyLodTransitionStarted/Finished注释。
 	int32 pendingLodTransitionCount = 0;

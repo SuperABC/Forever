@@ -48,9 +48,6 @@
 // Room碰撞盒在X/Y/Z三个方向各缩小的量(地图单位)，和上面BUILDING_COLLISION_MARGIN的+0.01配对
 // (原来在ForeverRoomFrameworkComponent.cpp里叫ROOM_COLLISION_MARGIN，同一个值挪过来)。
 #define ROOM_COLLISION_MARGIN 0.01f
-// 远处LOD灰box固定用section 0——每栋building现在都有自己专属的farMesh，不再像之前共用一个
-// PMC那样需要按building分配不同的section索引。
-#define BUILDING_FAR_SECTION_INDEX 0
 
 using namespace std;
 
@@ -229,22 +226,13 @@ void ABuildingElement::Init(Building* inBuilding, UForeverBuildingFrameworkCompo
 	nearFloorCount = building->GetBasementCount() + building->GetLayerCount();
 	nearComponentsByFloor.SetNum(nearFloorCount);
 
-	farMesh = NewObject<UProceduralMeshComponent>(this, TEXT("FarMesh"));
-	farMesh->SetupAttachment(elementRoot);
-	farMesh->SetMobility(EComponentMobility::Static); // 整个组件自己不会移动(section增删不算"移动")
-	farMesh->RegisterComponent();
+	// 名字快照在这里烘焙好，Overlap回调绝不解引用building——和EndPlay处理同一套安全原则。
+	buildingNameOnly = building->GetName();
+	zoneNameOnly = building->GetParentZone() ? building->GetParentZone()->GetName() : std::string();
 
-	// 0层建筑(只有自定义模型/植被，没有楼体)：远处方块和进出触发盒高度都是0，没有意义，不建——
-	// 远处LOD什么都不显示，自定义模型只在近处出现，见BuildingElement.md"自定义模型"一节。
-	if (nearFloorCount == 0) return;
-
-	BuildFarSection();
-	// building自己的进入/离开碰撞盒 + 这栋楼所有Room各自的碰撞盒——都常驻到这个Element被
-	// 销毁，不随近/远LOD切换增删。之前排查"碰撞盒常驻数量拖慢注册"时临时禁用过，结论已经
-	// 明确是"全地图共用一个owner Actor"的问题，现在两者都attach到这栋楼专属的Actor上，
-	// 不会再互相拖累。
-	BuildCollisionBox();
-	BuildRoomCollisionBoxes();
+	// 外壳(墙/地板/天花板)由Tick在世界生成完后排进队列建出来；进出建筑/房间的检测盒随近处LOD
+	// 生成和销毁(见BuildTriggers/BuildFloorExtras/ClearNearSections)，Init里不建。
+	// 0层建筑(只有自定义模型/植被，没有楼体)没有外壳，也没有进出检测盒(高度为0)，见BuildingElement.md"自定义模型"一节。
 }
 
 TMap<const Building*, TWeakObjectPtr<ABuildingElement>> ABuildingElement::elementsByBuilding;
@@ -269,30 +257,10 @@ void ABuildingElement::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 	Super::EndPlay(EndPlayReason);
 }
 
-void ABuildingElement::BuildFarSection() {
-	// buildShell只管近处的墙壁/地板/天花板，远处灰色方块照常画(成品模型只在近处显示，远处靠它)。
-	if (!farMesh || !building || !framework.IsValid() || nearFloorCount == 0) return;
-
-	float cx, cy;
-	ComputeBodyWorldCenter(*building, cx, cy);
-	float hx = building->GetBodySizeX() * 0.5f * BUILDING_WORLD_SCALE;
-	float hy = building->GetBodySizeY() * 0.5f * BUILDING_WORLD_SCALE;
-	float zBottom, zTop;
-	ComputeFullZRange(*building, zBottom, zTop);
-
-	TArray<FVector> vertices;
-	TArray<int32> triangles;
-	BuildingAppendFlatBoxExplicit(vertices, triangles, cx, cy, hx, hy, zBottom, zTop, building->GetRotation());
-
-	farMesh->CreateMeshSection(BUILDING_FAR_SECTION_INDEX, vertices, triangles,
-		TArray<FVector>(), TArray<FVector2D>(), TArray<FColor>(), TArray<FProcMeshTangent>(), true);
-	UMaterialInstanceDynamic* material = framework->ResolveLodMaterial(building);
-	if (material) farMesh->SetMaterial(BUILDING_FAR_SECTION_INDEX, material);
-}
-
-void ABuildingElement::ClearFarSection() {
-	if (!farMesh) return;
-	farMesh->ClearMeshSection(BUILDING_FAR_SECTION_INDEX);
+void ABuildingElement::BuildShell() {
+	// 整栋楼所有楼层一次建完，实例都排进框架组件合并的ISM；全城最后一栋建完时框架一次性提交。
+	for (int32 i = 0; i < nearFloorCount; i++) BuildFloorSection(i, /*shell=*/true, /*extras=*/false);
+	if (framework.IsValid()) framework->NotifyShellBuilt();
 }
 
 void ABuildingElement::BuildCollisionBox() {
@@ -323,10 +291,8 @@ void ABuildingElement::BuildCollisionBox() {
 	box->OnComponentEndOverlap.AddDynamic(this, &ABuildingElement::OnOverlapEnd);
 	box->RegisterComponent();
 
-	// 名字快照在这里烘焙好，Overlap回调绝不解引用building——和EndPlay处理同一套安全原则。
-	buildingNameOnly = building->GetName();
-	zoneNameOnly = building->GetParentZone() ? building->GetParentZone()->GetName() : std::string();
 	collisionBox = box;
+	box->UpdateOverlaps(); // 运行中才建的盒子：玩家已经站在里面时主动刷新一次重叠，补发BeginOverlap
 }
 
 namespace {
@@ -368,7 +334,7 @@ void ABuildingElement::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AA
 	}
 }
 
-void ABuildingElement::BuildRoomCollisionBoxes() {
+void ABuildingElement::BuildRoomCollisionBoxes(int32 onlyLevel) {
 	if (!building) return;
 
 	// Room局部矩形按Building::LocalToWorld换算世界中心+building旋转，垂直范围是Room所在楼层的Z范围，
@@ -381,6 +347,7 @@ void ABuildingElement::BuildRoomCollisionBoxes() {
 		if (!room) continue;
 
 		int32 level = room->GetLayer();
+		if (level != onlyLevel) continue;
 		int32 idx = basements + level;
 		if (idx < 0 || idx >= static_cast<int32>(floorHeights.size())) continue;
 		float floorHeight = floorHeights[idx];
@@ -409,6 +376,7 @@ void ABuildingElement::BuildRoomCollisionBoxes() {
 		box->RegisterComponent();
 
 		roomBoxLabels.Add(box, room);
+		box->UpdateOverlaps(); // 同building盒：补发玩家已站在里面的BeginOverlap
 	}
 }
 
@@ -455,119 +423,30 @@ void ABuildingElement::OnRoomOverlapEnd(UPrimitiveComponent* OverlappedComponent
 	}
 }
 
-UInstancedStaticMeshComponent* ABuildingElement::GetOrCreateCubeInstancePool(UMaterialInterface* material) {
-	if (TObjectPtr<UInstancedStaticMeshComponent>* found = cubeInstancePools.Find(material)) {
-		return *found;
-	}
-	if (!framework.IsValid()) return nullptr;
-	UStaticMesh* cubeMesh = framework->GetCubeMesh();
-	if (!cubeMesh) return nullptr;
-
-	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
-	ism->SetStaticMesh(cubeMesh);
-	ism->SetupAttachment(elementRoot);
-	// 常驻组件，不随LOD切换销毁/重建——只在Init()之后首次用到某个材质时创建一次，见
-	// AddCubeInstance/类头文件cubeInstancePools注释。
-	ism->SetMobility(EComponentMobility::Static);
-	// 显式设置成BlockAll——不能依赖"ISM默认碰撞和原来UStaticMeshComponent默认一致"这个
-	// 未经验证的假设，墙体/地板/天花板只需要纯阻挡碰撞，和原SpawnCube的效果一致。
-	ism->SetCollisionProfileName(TEXT("BlockAll"));
-	ism->SetGenerateOverlapEvents(false);
-	if (material) ism->SetMaterial(0, material);
-	// 每实例自定义数据：[0]=cos [1]=sin，建筑朝向的水平单位向量(和路网ISM的约定一致)，材质里用PerInstanceCustomData读。
-	ism->NumCustomDataFloats = 2;
-	ism->RegisterComponent();
-	AddInstanceComponent(ism);
-	cubeInstancePools.Add(material, ism);
-	return ism;
-}
-
 void ABuildingElement::AddCubeInstance(float centerX, float centerY, float centerZ,
 	float sizeX, float sizeY, float sizeZ, float rotation, UMaterialInterface* material) {
-	// 不在这里直接调ism->AddInstance()——按材质暂存，攒够一层楼的全部实例之后由
-	// FlushCubeInstances()一次性批量提交，见pendingCubeTransforms声明处注释(逐个单实例提交
-	// 实测每次约0.1~0.4ms，300+段的楼层能堆到单帧100ms+的卡顿)。
+	if (!framework.IsValid() || !building) return;
+	// 不在这里建组件：实例交给框架组件全城合并的ISM，等全部建筑的外壳排完一次性提交。
 	FTransform worldTransform(
 		FRotator(0.f, FMath::RadiansToDegrees(rotation), 0.f),
 		FVector(centerX, centerY, centerZ),
 		FVector(sizeX / BUILDING_CUBE_MESH_SIZE, sizeY / BUILDING_CUBE_MESH_SIZE,
 			sizeZ / BUILDING_CUBE_MESH_SIZE));
-	pendingCubeTransforms.FindOrAdd(material).Add(worldTransform);
-	TArray<float>& customData = pendingCubeCustomData.FindOrAdd(material);
-	customData.Add(FMath::Cos(rotation));
-	customData.Add(FMath::Sin(rotation));
-}
-
-UInstancedStaticMeshComponent* ABuildingElement::GetOrCreateWallInstancePool(const FWallMaterialKey& key) {
-	if (TObjectPtr<UInstancedStaticMeshComponent>* found = wallInstancePools.Find(key)) {
-		return *found;
-	}
-	if (!wallMesh) return nullptr;
-
-	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
-	ism->SetStaticMesh(wallMesh);
-	ism->SetupAttachment(elementRoot);
-	ism->SetMobility(EComponentMobility::Static);
-	ism->SetCollisionProfileName(TEXT("BlockAll"));
-	ism->SetGenerateOverlapEvents(false);
-	ism->NumCustomDataFloats = 2; // 同cube池：[0]=cos [1]=sin
-	for (int32 i = 0; i < 5; i++) {
-		if (key.slots[i]) ism->SetMaterial(i, key.slots[i]);
-	}
-	ism->RegisterComponent();
-	AddInstanceComponent(ism);
-	wallInstancePools.Add(key, ism);
-	return ism;
+	framework->QueueShellCube(FVector2D(building->GetPosX(), building->GetPosY()), worldTransform,
+		FMath::Cos(rotation), FMath::Sin(rotation), material);
 }
 
 void ABuildingElement::AddWallInstance(float centerX, float centerY, float centerZ,
 	float sizeX, float sizeY, float sizeZ, float rotation, const FWallMaterialKey& key) {
-	// 同AddCubeInstance：只暂存，一层楼画完后FlushCubeInstances()批量提交。Wall同样约定边长BUILDING_CUBE_MESH_SIZE。
+	if (!framework.IsValid() || !building) return;
+	// 同AddCubeInstance。Wall同样约定边长BUILDING_CUBE_MESH_SIZE。
 	FTransform worldTransform(
 		FRotator(0.f, FMath::RadiansToDegrees(rotation), 0.f),
 		FVector(centerX, centerY, centerZ),
 		FVector(sizeX / BUILDING_CUBE_MESH_SIZE, sizeY / BUILDING_CUBE_MESH_SIZE,
 			sizeZ / BUILDING_CUBE_MESH_SIZE));
-	pendingWallTransforms.FindOrAdd(key).Add(worldTransform);
-	TArray<float>& customData = pendingWallCustomData.FindOrAdd(key);
-	customData.Add(FMath::Cos(rotation));
-	customData.Add(FMath::Sin(rotation));
-}
-
-void ABuildingElement::FlushCubeInstances() {
-	for (auto& [material, transforms] : pendingCubeTransforms) {
-		if (transforms.IsEmpty()) continue;
-		UInstancedStaticMeshComponent* ism = GetOrCreateCubeInstancePool(material);
-		if (!ism) continue;
-		TArray<int32> indices = ism->AddInstances(transforms, /*bShouldReturnIndices=*/true, /*bWorldSpace=*/true);
-		const TArray<float>* customData = pendingCubeCustomData.Find(material);
-		if (customData && customData->Num() == indices.Num() * 2) {
-			for (int32 i = 0; i < indices.Num(); i++) {
-				ism->SetCustomDataValue(indices[i], 0, (*customData)[i * 2], false);
-				ism->SetCustomDataValue(indices[i], 1, (*customData)[i * 2 + 1], false);
-			}
-			ism->MarkRenderStateDirty();
-		}
-	}
-	pendingCubeTransforms.Empty();
-	pendingCubeCustomData.Empty();
-
-	for (auto& [key, transforms] : pendingWallTransforms) {
-		if (transforms.IsEmpty()) continue;
-		UInstancedStaticMeshComponent* ism = GetOrCreateWallInstancePool(key);
-		if (!ism) continue;
-		TArray<int32> indices = ism->AddInstances(transforms, /*bShouldReturnIndices=*/true, /*bWorldSpace=*/true);
-		const TArray<float>* customData = pendingWallCustomData.Find(key);
-		if (customData && customData->Num() == indices.Num() * 2) {
-			for (int32 i = 0; i < indices.Num(); i++) {
-				ism->SetCustomDataValue(indices[i], 0, (*customData)[i * 2], false);
-				ism->SetCustomDataValue(indices[i], 1, (*customData)[i * 2 + 1], false);
-			}
-			ism->MarkRenderStateDirty();
-		}
-	}
-	pendingWallTransforms.Empty();
-	pendingWallCustomData.Empty();
+	framework->QueueShellWall(FVector2D(building->GetPosX(), building->GetPosY()), worldTransform,
+		FMath::Cos(rotation), FMath::Sin(rotation), key);
 }
 
 UStaticMeshComponent* ABuildingElement::SpawnMesh(float centerX, float centerY, float centerZ,
@@ -646,10 +525,8 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 		FWallMaterialKey wallKey;
 		bool useWallMesh = false;
 		if (styles && styles[face.dir].HasMaterial()) {
-			if (!wallMeshResolved) {
-				wallMeshResolved = true;
-				wallMesh = framework->ResolveMesh("/Game/Asset/Building/Mesh/Wall.Wall", nullptr);
-			}
+			// Wall网格(框架缓存，没做出来就是nullptr，退回普通Cube)。
+			UStaticMesh* wallMesh = framework->ResolveMesh("/Game/Asset/Building/Mesh/Wall.Wall", nullptr);
 			if (wallMesh) {
 				const WallStyle& style = styles[face.dir];
 				// Wall槽位 0东 1南 2西 3北 对应WallStyle下标(FACE_DIRECTION) 1东 3南 0西 2北。
@@ -724,7 +601,7 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 	}
 }
 
-void ABuildingElement::BuildFloorSection(int32 floorIndex) {
+void ABuildingElement::BuildFloorSection(int32 floorIndex, bool shell, bool extras) {
 	if (!building || !framework.IsValid()) return;
 	if (floorIndex < 0 || floorIndex >= nearFloorCount) return;
 
@@ -760,12 +637,14 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 
 	float rotation = building->GetRotation();
 	auto& slot = nearComponentsByFloor[floorIndex];
+	if (extras) BuildRoomCollisionBoxes(level);
 
-	// 楼梯/坡道：井道墙体(和corridor/single/row同一套BuildWallsForElement)+按该层资产指定的
-	// 3D网格摆一个实体；电梯只有井道墙体，不摆网格(轿厢单独由BuildElevatorCabinsForBuilding
+	// 楼梯/坡道：井道墙体(和corridor/single/row同一套BuildWallsForElement，属于外壳)+按该层资产指定的
+	// 3D网格摆一个实体(extras，只近处)；电梯只有井道墙体，不摆网格(轿厢单独由BuildElevatorCabinsForBuilding
 	// 处理)。
+	const bool buildWalls = shell && buildShell;
 	for (const Stair& stair : floor->GetStairs()) {
-		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, stair.GetPosX(), stair.GetPosY(),
+		if (buildWalls) BuildWallsForElement(floorBaseZ, floorHeight, stair.GetPosX(), stair.GetPosY(),
 			stair.GetSizeX(), stair.GetSizeY(),
 			stair.GetWall(FACE_WEST), stair.GetWall(FACE_EAST), stair.GetWall(FACE_NORTH), stair.GetWall(FACE_SOUTH),
 			{}, {}, wallMaterial, stair.GetWallStyles());
@@ -775,6 +654,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		// 楼梯网格按.layout模板里Stair实际声明的footprint尺寸缩放(X/Y)，Z缩放到整层高度
 		// (楼梯本来就是连接上下相邻楼层的)——地图单位换算成世界单位后再传给SpawnMesh；朝向
 		// 除了building自身的世界旋转，还要叠加这个楼梯自己的局部direction。
+		if (!extras) continue;
 		float meshSizeX, meshSizeY, meshRotation;
 		ComputeDirectionalMeshTransform(stair.GetDirection(), stair.GetSizeX(), stair.GetSizeY(), rotation,
 			meshSizeX, meshSizeY, meshRotation);
@@ -785,7 +665,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		}
 	}
 	for (const Ramp& ramp : floor->GetRamps()) {
-		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, ramp.GetPosX(), ramp.GetPosY(),
+		if (buildWalls) BuildWallsForElement(floorBaseZ, floorHeight, ramp.GetPosX(), ramp.GetPosY(),
 			ramp.GetSizeX(), ramp.GetSizeY(),
 			ramp.GetWall(FACE_WEST), ramp.GetWall(FACE_EAST), ramp.GetWall(FACE_NORTH), ramp.GetWall(FACE_SOUTH),
 			{}, {}, wallMaterial, ramp.GetWallStyles());
@@ -794,6 +674,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		float wz = floorBaseZ * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
 		// 同上：坡道网格按Ramp实际声明的footprint尺寸(X/Y)+整层高度(Z)缩放，朝向叠加自己的
 		// 局部direction。
+		if (!extras) continue;
 		float meshSizeX, meshSizeY, meshRotation;
 		ComputeDirectionalMeshTransform(ramp.GetDirection(), ramp.GetSizeX(), ramp.GetSizeY(), rotation,
 			meshSizeX, meshSizeY, meshRotation);
@@ -804,13 +685,13 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		}
 	}
 	for (const Elevator& elevator : floor->GetElevators()) {
-		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, elevator.GetPosX(), elevator.GetPosY(),
+		if (buildWalls) BuildWallsForElement(floorBaseZ, floorHeight, elevator.GetPosX(), elevator.GetPosY(),
 			elevator.GetSizeX(), elevator.GetSizeY(),
 			elevator.GetWall(FACE_WEST), elevator.GetWall(FACE_EAST), elevator.GetWall(FACE_NORTH), elevator.GetWall(FACE_SOUTH),
 			{}, {}, wallMaterial, elevator.GetWallStyles());
 	}
 	for (const Corridor& corridor : floor->GetCorridors()) {
-		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, corridor.GetPosX(), corridor.GetPosY(),
+		if (buildWalls) BuildWallsForElement(floorBaseZ, floorHeight, corridor.GetPosX(), corridor.GetPosY(),
 			corridor.GetSizeX(), corridor.GetSizeY(),
 			corridor.GetWall(FACE_WEST), corridor.GetWall(FACE_EAST), corridor.GetWall(FACE_NORTH), corridor.GetWall(FACE_SOUTH),
 			corridor.GetDoors(), corridor.GetWindows(), wallMaterial, corridor.GetWallStyles());
@@ -819,7 +700,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	// 所以遍历building->GetRooms()按GetLayer()==level筛选，不直接用Floor::GetSingles()/GetRows()。
 	for (Room* room : building->GetRooms()) {
 		if (!room || room->GetLayer() != level) continue;
-		if (buildShell) BuildWallsForElement(floorBaseZ, floorHeight, room->GetPosX(), room->GetPosY(),
+		if (buildWalls) BuildWallsForElement(floorBaseZ, floorHeight, room->GetPosX(), room->GetPosY(),
 			room->GetSizeX(), room->GetSizeY(),
 			true, true, true, true, // Single/Row隐含四面都有墙
 			room->GetDoors(), room->GetWindows(), wallMaterial, room->GetWallStyles());
@@ -834,7 +715,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 	constexpr float kMinSlabSize = 1.f; // 世界单位(cm)：地板/天花板矩形任一边小于它就当作退化，不摆
 	float floorBottomWorld = BUILDING_HEIGHT_EPSILON + floorBaseZ * BUILDING_WORLD_SCALE;
 	float floorTopWorld = BUILDING_HEIGHT_EPSILON + (floorBaseZ + floorHeight) * BUILDING_WORLD_SCALE;
-	if (buildShell) for (const Ground& ground : floor->GetGrounds()) {
+	if (buildWalls) for (const Ground& ground : floor->GetGrounds()) {
 		float wx, wy;
 		ComputeWorldPosition(*building, ground.GetPosX(), ground.GetPosY(), wx, wy);
 		float wz = floorBottomWorld + kSlabThickness * 0.5f * BUILDING_WORLD_SCALE - BUILDING_SLAB_Z_SHIFT;
@@ -844,7 +725,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		// 带标签的地板用mod登记的材质实例，没有/加载失败退回这一层的地板材质(默认白色)。
 		AddCubeInstance(wx, wy, wz, sizeX, sizeY, sizeZ, rotation, framework->ResolveMaterial(ground.GetMaterial(), floorMaterial));
 	}
-	if (buildShell) for (const Ceiling& ceiling : floor->GetCeilings()) {
+	if (buildWalls) for (const Ceiling& ceiling : floor->GetCeilings()) {
 		float wx, wy;
 		ComputeWorldPosition(*building, ceiling.GetPosX(), ceiling.GetPosY(), wx, wy);
 		float wz = floorTopWorld - kSlabThickness * 0.5f * BUILDING_WORLD_SCALE + BUILDING_SLAB_Z_SHIFT;
@@ -856,7 +737,7 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 
 	// 1楼：把楼体(body)与building整块quad之间的回形空隙用4块cube铺上mod指定的材质，高度/厚度同1楼地面。
 	const std::string& gapPath = building->GetGapMaterialPath();
-	if (level == 0 && !gapPath.empty()) {
+	if (shell && level == 0 && !gapPath.empty()) {
 		// 在building quad中心的未旋转局部系里：quad半宽半高、楼体矩形。
 		float quadHalfX = building->GetSizeX() * 0.5f, quadHalfY = building->GetSizeY() * 0.5f;
 		float bodyX0 = building->GetBodyOffsetX() - building->GetBodySizeX() * 0.5f;
@@ -883,7 +764,6 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex) {
 		addGapStrip(bodyX0, bodyX1, bodyY1, quadHalfY);
 	}
 
-	FlushCubeInstances();
 }
 
 void ABuildingElement::BuildElevatorCabinsForBuilding() {
@@ -1082,15 +962,21 @@ void ABuildingElement::RefreshCabinOptions(const Cabin* coreCabin) {
 }
 
 void ABuildingElement::ClearNearSections() {
-	// 墙体/地板/天花板cube：ISM组件本身常驻，只清空instance数组，不Register/Destroy——这是
-	// 这次ISM改造消除注册开销的关键，见cubeInstancePools/AddCubeInstance声明处注释。
-	for (auto& [material, ism] : cubeInstancePools) {
-		if (ism) ism->ClearInstances();
+	// 进出建筑/房间的检测盒：销毁时UE补发EndOverlap(玩家还在里面时发出离开事件)，回调只读烘焙好的名字/roomBoxLabels，
+	// 所以先销毁盒子再清roomBoxLabels。
+	for (auto& [box, room] : roomBoxLabels) {
+		if (!box) continue;
+		RemoveInstanceComponent(box);
+		box->DestroyComponent();
 	}
-	for (auto& [key, ism] : wallInstancePools) {
-		if (ism) ism->ClearInstances();
+	roomBoxLabels.Empty();
+	if (collisionBox) {
+		RemoveInstanceComponent(collisionBox);
+		collisionBox->DestroyComponent();
+		collisionBox = nullptr;
 	}
-	// 楼梯/坡道网格(SpawnMesh产出)不在ISM改造范围内，仍然逐个销毁。
+	// 墙体/地板/天花板(外壳)是全城合并的ISM，常驻不清；这里只清近处专有的楼梯/坡道网格、电梯轿厢、自定义模型。
+	// 楼梯/坡道网格(SpawnMesh产出)不在ISM改造范围内，逐个销毁。
 	for (TArray<TObjectPtr<UStaticMeshComponent>>& floorComponents : nearComponentsByFloor) {
 		for (UStaticMeshComponent* comp : floorComponents) {
 			if (!comp) continue;
@@ -1151,8 +1037,13 @@ void ABuildingElement::BuildDecorations() {
 
 void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
 	switch (op.type) {
-	case ELodOpType::BuildFarMesh:
-		BuildFarSection();
+	case ELodOpType::BuildShell:
+		BuildShell();
+		transitionPending = false;
+		if (framework.IsValid()) framework->NotifyLodTransitionFinished();
+		break;
+	case ELodOpType::BuildTriggers:
+		if (nearFloorCount > 0) BuildCollisionBox();
 		break;
 	case ELodOpType::DeleteAllNearMeshes:
 		ClearNearSections();
@@ -1160,14 +1051,13 @@ void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
 		transitionPending = false;
 		if (framework.IsValid()) framework->NotifyLodTransitionFinished();
 		break;
-	case ELodOpType::BuildFloorMesh:
-		BuildFloorSection(op.floorIndex);
+	case ELodOpType::BuildFloorExtras:
+		BuildFloorSection(op.floorIndex, /*shell=*/false, /*extras=*/true);
 		break;
 	case ELodOpType::BuildElevatorCabins:
 		BuildElevatorCabinsForBuilding();
 		break;
-	case ELodOpType::DeleteFarMesh:
-		ClearFarSection();
+	case ELodOpType::FinishNear:
 		currentLod = ELod::Near;
 		transitionPending = false;
 		if (framework.IsValid()) framework->NotifyLodTransitionFinished();
@@ -1189,33 +1079,49 @@ void ABuildingElement::Tick(float DeltaTime) {
 	// 电梯行程放在最前面：不依赖玩家Pawn，也不管LOD(远景下电梯照样到站)。
 	UpdateCabins(DeltaTime);
 
-	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	if (!pawn) return;
+	// 外壳(整栋楼的墙/地板/天花板)：世界生成完后每栋建一次，常驻不拆，所以远处LOD不再随距离加载/卸载任何东西。
+	// 排进队列期间算"转场中"(世界冻结/IsLodSettled据此等全城外壳建完)，不做近远判定。
+	if (!bShellQueued) {
+		bShellQueued = true;
+		if (nearFloorCount > 0) {
+			floorTierOpQueue.Enqueue({ ELodOpType::BuildShell, -1 });
+			transitionPending = true;
+			framework->NotifyLodTransitionStarted();
+		}
+	}
 
-	if (!transitionPending) {
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+
+	if (!transitionPending && pawn) {
 		FVector pawnMapPos = pawn->GetActorLocation() / BUILDING_WORLD_SCALE;
 		float dist = FVector2D::Distance(FVector2D(pawnMapPos.X, pawnMapPos.Y),
 			FVector2D(building->GetPosX(), building->GetPosY()));
 
-		// 迟滞区间：远->近用比较小的阈值(默认20)，近->远用比较大的阈值(默认40)，两者不共用
-		// 一个值——已经精细化的building要离得更远才会退化成单box，防止玩家在临界距离附近
-		// 小范围来回走动时反复Near/Far抖动式切换(每次切换都要建/删一整层楼的组件，抖动等于
-		// 反复触发卡顿)。
+		// 两级LOD(外壳/近处)，迟滞区间：远->近阈值小(默认16)，近->远阈值大(默认32)，防止玩家在临界距离
+		// 附近小范围来回走动时反复建/删楼梯/电梯/模型的组件。距离是水平(XY)平面距离，忽略高度差。
 		if (currentLod == ELod::Far && dist <= framework->GetLodNearEnterDistance()) {
+			// 先建这栋楼的进出检测盒。
+			floorTierOpQueue.Enqueue({ ELodOpType::BuildTriggers, -1 });
+			// 楼梯/坡道网格和房间检测盒按层建，只排真有楼梯/坡道/房间的楼层(外壳的墙已经在了)。
+			TSet<int32> levelsWithRooms;
+			for (Room* room : building->GetRooms()) if (room) levelsWithRooms.Add(room->GetLayer());
 			for (int32 i = 0; i < nearFloorCount; i++) {
-				floorTierOpQueue.Enqueue({ ELodOpType::BuildFloorMesh, i });
+				const int32 level = i - building->GetBasementCount();
+				const Floor* floor = building->GetFloor(level);
+				if (!floor) continue;
+				if (floor->GetStairs().empty() && floor->GetRamps().empty() && !levelsWithRooms.Contains(level)) continue;
+				floorTierOpQueue.Enqueue({ ELodOpType::BuildFloorExtras, i });
 			}
 			// 自定义模型单独一条操作，不跟楼层/门一起建，但和楼层同一个优先级(楼层级队列)。
 			int32 decorationOps = building->GetDecorations().empty() ? 0 : 1;
 			if (decorationOps > 0) floorTierOpQueue.Enqueue({ ELodOpType::BuildDecorations, -1 });
 			floorTierOpQueue.Enqueue({ ELodOpType::BuildElevatorCabins, -1 });
-			floorTierOpQueue.Enqueue({ ELodOpType::DeleteFarMesh, -1 });
+			floorTierOpQueue.Enqueue({ ELodOpType::FinishNear, -1 });
 
 			transitionPending = true;
 			framework->NotifyLodTransitionStarted();
 		}
 		else if (currentLod == ELod::Near && dist > framework->GetLodFarExitDistance()) {
-			floorTierOpQueue.Enqueue({ ELodOpType::BuildFarMesh, -1 });
 			floorTierOpQueue.Enqueue({ ELodOpType::DeleteAllNearMeshes, -1 });
 			transitionPending = true;
 			framework->NotifyLodTransitionStarted();
@@ -1224,7 +1130,11 @@ void ABuildingElement::Tick(float DeltaTime) {
 
 	// 每个操作都要先问框架组件要一份全地图共享的预算，耗尽就下一帧再继续。必须先判断队列是否为空再消耗预算，
 	// 否则"这一帧无事可做"的building也会白吃预算。
-	while (!floorTierOpQueue.IsEmpty() && framework->TryConsumeLodOpBudget()) {
+	// 外壳操作走自己的预算，其余近处操作走"每帧1条"的LOD预算。
+	FLodOp next;
+	while (floorTierOpQueue.Peek(next)) {
+		const bool granted = next.type == ELodOpType::BuildShell ? framework->TryConsumeShellBudget() : framework->TryConsumeLodOpBudget();
+		if (!granted) break;
 		FLodOp op;
 		floorTierOpQueue.Dequeue(op);
 		ExecuteLodOp(op);

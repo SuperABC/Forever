@@ -62,7 +62,7 @@ void UForeverZoneFrameworkComponent::GenerateZones(Map* inMap) {
 		for (const ZoneWallSpec& wall : zone->GetWalls()) {
 			BuildWallSegment(wall, *zone);
 		}
-		// Zone数量级不大(远小于Room)，碰撞盒直接挂在这个组件的单例owner上，不需要per-zone的Actor。
+		// Zone数量级不大(远小于Room)，碰撞盒直接挂在这个组件的单例owner上，不需要per-zone的Actor，常驻不随LOD增删。
 		BuildCollisionBox(zone);
 		BuildDecorations(*zone);
 		BuildGround(*zone);

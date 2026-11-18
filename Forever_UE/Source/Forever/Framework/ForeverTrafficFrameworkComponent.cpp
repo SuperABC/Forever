@@ -1319,7 +1319,7 @@ void UForeverTrafficFrameworkComponent::BuildPiers(Map* map, Traffic* traffic) {
 
 	// 桥墩和轨道共用trackMeshInstances(同一套ISM缓存)；清实例由BuildTracks开头统一做，所以必须在它之后调用。
 	// mesh空串=Asset/Common默认圆柱。
-	const std::string defaultMesh = "/Game/Asset/Common/Mesh/SM_Cylinder.SM_Cylinder";
+	const std::string defaultMesh = "/Game/Asset/Common/Mesh/Cylinder.Cylinder";
 	for (auto& [routeName, route] : traffic->GetRoutes()) {
 		if (!route) continue;
 		int32 pierCount = 0;

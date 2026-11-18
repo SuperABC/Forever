@@ -42,7 +42,7 @@ private:
 
 	// 进入/离开检测碰撞盒：水平=zone自己的Quad(不做尺寸调整，只有Room缩小/Building放大)，
 	// 垂直=zone内部所有building的Z范围并集(最深basement底部到最高楼层顶部)——没有内部
-	// building的zone没有意义的"内部"体验，跳过、不创建碰撞盒。
+	// building的zone没有意义的"内部"体验，跳过、不创建碰撞盒。GenerateZones里每个zone建一次，常驻。
 	void BuildCollisionBox(Zone* zone);
 
 	// 园区自定义模型(Zone::GetDecorations()，世界摆位Core已经按大门方向换算好)：每个一个Static的

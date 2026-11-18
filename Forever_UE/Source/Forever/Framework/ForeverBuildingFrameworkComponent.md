@@ -37,46 +37,37 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 - **0层且没有自定义模型的建筑不生成Element**——`GenerateBuildings`跳过
   `GetBasementCount()+GetLayerCount()==0`且`GetDecorations()`为空的building(例如只有植被的
   `ParkBuilding`)；0层但有自定义模型的(`MoharBuilding`)照常生成，模型靠Element的近处LOD加载，
-  Element自己跳过远处方块和进出触发盒，见`BuildingElement.md`"自定义模型"一节。
+  Element自己跳过外壳和进出触发盒，见`BuildingElement.md`"自定义模型"一节。
 
 ## 两级LOD
 
-- **近处（`ELod::Near`）**：完整楼层内部结构，见"近处楼层几何"一节。
-- **远处（`ELod::Far`）**：整栋一个box，贴`ResolveLodMaterial(building)`解析出来的
-  材质——`Building::GetLodMaterialPath()`（转发`BuildingMod::lodMaterial`）非空时按路径
-  `LoadObject`+创建MID（框架组件缓存，避免重复创建）；留空时用框架组件的`defaultLodMaterial`
-  （`Pure`+`SetVectorParameterValue("Color", FLinearColor(0.5,0.5,0.5))`染灰）。每个
-  `ABuildingElement`有自己专属的`farMesh`（`UProceduralMeshComponent`，只有1个section，
-  固定index 0）——每栋building已经是独立Actor，远处box也是"这栋楼自己的组件"，不需要跨
-  building的section索引分配。
-- **切换距离，两个阈值形成迟滞区间**：`lodNearEnterDistance`（默认40，远→近的触发距离）/
-  `lodFarExitDistance`（默认80，近→远的触发距离），都是`UPROPERTY(EditDefaultsOnly)`，
-  地图单位。近→远的阈值故意比远→近的大——已经精细化的building要离得更远才会退化成单box，
-  防止玩家在临界距离附近小范围来回走动时反复Near/Far抖动式切换（每次切换都要建/删一整层楼
+- **外壳（常驻）**：整栋楼所有楼层的墙/地板/天花板(含楼梯/坡道/电梯井道的墙、一楼回形缝)，
+  世界生成完后每栋由`BuildShell`一次建完(不按层)，走`TryConsumeShellBudget`(`maxShellOpsPerTick`，
+  默认每帧8栋)，之后永远不拆。远/近两个LOD都有它。
+- **近处（`ELod::Near`）**：外壳之上再加楼梯/坡道网格(按层、只排有楼梯坡道的层)、电梯轿厢、
+  自定义模型；门由门框架组件按距离另行流式加载。离开近处只销毁这些，外壳不动。
+- **远处（`ELod::Far`）**：只有外壳。旧的"整栋一个灰box"(`farMesh`)已删除，
+  `ResolveLodMaterial`/`defaultLodMaterial`不再有调用方。
+- **切换距离，两个阈值形成迟滞区间**：`lodNearEnterDistance`（默认16，远→近的触发距离）/
+  `lodFarExitDistance`（默认32，近→远的触发距离），都是`UPROPERTY(EditDefaultsOnly)`，
+  地图单位。近→远的阈值故意比远→近的大——已经精细化的building要离得更远才会退回只有外壳，
+  防止玩家在临界距离附近小范围来回走动时反复Near/Far抖动式切换（每次切换都要建/删楼梯/电梯/模型
   的组件，抖动会反复触发下面"性能"一节的那类卡顿）。按viewer
   （`UGameplayStatics::GetPlayerPawn(GetWorld(),0)->GetActorLocation()/
   BUILDING_WORLD_SCALE`）到`building`世界中心的**水平（`FVector2D`）距离**判定，忽略高度差。
 
-## 近处楼层几何：墙体/地板/天花板用ISM批量实例，楼梯/坡道/电梯轿厢仍是独立组件
+## 外壳：全城合并的ISM，楼梯/坡道/电梯轿厢仍是独立组件
 
-墙体分段/地板slab/天花板slab按实际材质指针分组，每组一个常驻的
-`UInstancedStaticMeshComponent`（`ABuildingElement::cubeInstancePools`，key是材质指针，
-通常整栋楼只有墙/地/顶3个key，mod覆盖出不同材质时会多几个）。离开近处
-(`ClearNearSections`)只是对每个ISM调`ClearInstances()`——ISM组件本身从`Init()`之后首次
-用到某个材质时创建一次，常驻到这个`ABuildingElement`被销毁，近/远LOD反复切换不会重复
-`RegisterComponent`/`DestroyComponent`。这个用法只对"整层/整栋同时批量增删"成立：建层
-只追加实例（纯追加，不影响已有实例），清空用`ClearInstances()`（整体清空，不是逐个
-`RemoveInstance`）——如果需要"单独删除/替换批量实例里的某一个"，`RemoveInstance`会导致
-实例数组重排、牵连其它实例的索引，ISM在那种场景下不合适，但这里从不出现那种场景。碰撞显式
-设成`"BlockAll"`（不依赖ISM默认碰撞值），墙体/地板/天花板只需要纯阻挡碰撞（挡住玩家走动、
-挡住`ECC_Pawn`通道的开火线检测）。
-
-**建层时`AddCubeInstance`不逐个调`AddInstance()`，攒够一层再批量提交**：有`BlockAll`碰撞的ISM每次单实例
-`AddInstance`都要同步建一次该实例的碰撞体+更新渲染状态，开销几乎线性于实例数（约0.14ms/实例，
-300+段墙的楼层单帧可达90~120ms）。所以`AddCubeInstance`只是把world transform按材质分组暂存进
-`ABuildingElement::pendingCubeTransforms`（`TMap<UMaterialInterface*, TArray<FTransform>>`），
-`BuildFloorSection`画完一层全部墙体+地板天花板之后统一调`FlushCubeInstances()`，对每个材质各调一次
-批量API`AddInstances(transforms, false, true)`，把实例缓冲区扩容/渲染状态更新/碰撞体创建合并成一次。
+墙体分段/地板slab/天花板slab(外壳)不再每栋楼各建ISM，而是由框架组件按(格子, 材质)合并成全城共享的
+`UInstancedStaticMeshComponent`：
+- `ABuildingElement::AddCubeInstance/AddWallInstance` 只调 `QueueShellCube/QueueShellWall`，把 transform、
+  建筑朝向的 `(cos, sin)`、材质(或 `FWallMaterialKey`)暂存进对应 `FShellPool`(`shellCubePools`/`shellWallPools`)。
+- 格子 = 建筑中心的地图坐标按 `shellCellSize`(默认64地图单位)取整；`<=0` 表示全城一个格子。
+- `GenerateBuildings` 里每个有楼层的建筑 `RegisterShellBuilding()`，每栋 `BuildShell` 完成后 `NotifyShellBuilt()`；
+  全部建完时 `FlushShellInstances()` 对每个池一次 `AddInstances(pending,false,true)` 并写入 `PerInstanceSMCustomData`，
+  之后外壳永远不再增删(LOD不动它)，日志 `Building shell merged: ...`。一次性提交会在开局（时间冻结期间）有一次较长的卡顿。
+- 阴影：池只在玩家水平距离到其格子矩形 ≤ `lodFarExitDistance` 时投射阴影，`TickComponent` 每0.25秒 `UpdateShellShadows()`。
+- 碰撞显式 `BlockAll`，纯阻挡(挡玩家、挡 `ECC_Pawn` 射线)，不产生重叠事件。
 
 楼梯/坡道这类有真实3D资产的元素，和电梯轿厢(`isMovable=true`每帧播动画)、门
 (`UForeverDoorComponent`，独立开合动画)不纳入ISM，用`SpawnMesh`各自生成独立
@@ -148,7 +139,7 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 
 ## LOD切换：每个Element自己的队列 + 框架组件的全局共享预算
 
-`Init()`只同步建远处cube，**不建任何近处楼层几何**——近处楼层完全交给`ABuildingElement`
+`Init()`只建进出触发盒，外壳由`Tick`排`BuildShell`建，**近处专有几何(楼梯/坡道/轿厢/模型)不在Init建**——近处楼层完全交给`ABuildingElement`
 自己的`Tick`按距离增量构建。每个Element自己就是渲染状态（`currentLod`/`transitionPending`/
 `nearFloorCount`/`nearComponentsByFloor`都是Element的成员，不需要一个`TMap<Building*,
 ...>`去存"谁的状态是什么"——Element本身就对应一个building）。`ABuildingElement::Tick`
@@ -223,8 +214,8 @@ building自身的世界旋转，看起来永远朝同一个方向，和building�
 公式），三个方向各**+0.01**（地图单位，`BUILDING_COLLISION_MARGIN`，和
 `BUILDING_WALL_THICKNESS`同一个量级）——和Room碰撞盒的各`-0.01`（见
 `ForeverRoomFrameworkComponent.md`）配对，两者贴合的边界（比如Room贴building外墙的那一侧）
-不会因为完全重合而在Overlap判定上抖动。这个碰撞盒**常驻，不随近/远LOD切换增删**
-（`ABuildingElement::collisionBox`），`Init()`时创建一次，一直存在到这个Element被销毁。
+不会因为完全重合而在Overlap判定上抖动。这个碰撞盒**随近处LOD生成/销毁**
+（`ABuildingElement::collisionBox`），进入近处时由`BuildTriggers`创建，离开近处时`ClearNearSections`销毁(玩家还在里面时引擎补发EndOverlap)；Room碰撞盒同理，随各层的`BuildFloorExtras`创建。园区碰撞盒仍然常驻。
 
 Overlap回调（`OnOverlapBegin/End`）只使用生成时预先烘焙好的名字
 （`ABuildingElement::buildingNameOnly`/`zoneNameOnly`，一个Element只对应一个碰撞盒），绝不解引用
@@ -271,9 +262,7 @@ UE对"同一个Actor根组件下挂大量Static简单碰撞子组件"会做"焊�
   `ABuildingElement`里（见`Source/Forever/Element/BuildingElement.md`），
   `UForeverRoomFrameworkComponent`是空骨架（见`ForeverRoomFrameworkComponent.md`）；Zone一级数量级
   不大，碰撞盒直接留在`ForeverZoneFrameworkComponent`的单例owner上。
-- **墙体/地板/天花板用按材质分组的常驻ISM**（见"近处楼层几何"一节）：单栋楼内部组件数仍会随楼层累积，
-  单组件注册耗时跟着涨；常驻ISM让近/远LOD切换只是`AddInstances`/`ClearInstances()`，不再反复
-  `RegisterComponent`/`DestroyComponent`。
+- **墙体/地板/天花板用全城合并的常驻ISM**（见"外壳"一节）：组件数不随建筑数增长，LOD切换完全不碰它们。
 
 如果某栋特别大的楼转场卡顿仍然明显，可以考虑把挂载粒度再细化成"每栋building的每一层楼一个Actor"，
 目前未验证是否必要。

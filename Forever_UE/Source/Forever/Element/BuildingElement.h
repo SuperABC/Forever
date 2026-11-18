@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Containers/Queue.h"
+#include "Framework/ForeverBuildingFrameworkComponent.h"
 
 #include <array>
 #include <string>
@@ -38,7 +39,7 @@ public:
 	ABuildingElement();
 
 	// 由GenerateBuildings()在SpawnActor之后立刻调用一次：绑定Building和framework(材质/网格解析缓存与共享配置都在framework上)，
-	// 同步建好远处灰色box作为初始状态(currentLod初值为Far)。
+	// 建好进出触发盒；外壳(墙/地板/天花板)由Tick在世界生成完后一次性建出来(currentLod初值为Far)。
 	void Init(Building* inBuilding, UForeverBuildingFrameworkComponent* inFramework);
 
 	virtual void Tick(float DeltaTime) override;
@@ -63,20 +64,22 @@ public:
 	Building* FindBuildingOfBox(UPrimitiveComponent* box) const;
 
 private:
-	enum class ELod : uint8 { Near, Far };
+	// Far=只有外壳(墙/地板/天花板)；Near=外壳+楼梯/坡道/轿厢/自定义模型。
+	enum class ELod : uint8 { Far, Near };
 
 	enum class ELodOpType : uint8 {
-		BuildFarMesh,        // 近->远，第1步
-		DeleteAllNearMeshes, // 近->远，最后一步(执行完才更新currentLod)
-		BuildFloorMesh,      // 远->近，每层一条
-		BuildElevatorCabins, // 远->近，所有BuildFloorMesh之后、DeleteFarMesh之前
-		DeleteFarMesh,       // 远->近，最后一步(执行完才更新currentLod)
-		BuildDecorations,    // 远->近，所有BuildFloorMesh之后、BuildElevatorCabins之前
+		BuildShell,          // 开局一次：整栋楼所有楼层的墙/地板/天花板(远近都有，常驻不拆)，用外壳预算
+		BuildTriggers,       // 远->近，第1步：这栋楼的进出检测盒
+		DeleteAllNearMeshes, // 近->远，清掉近处专有的东西(执行完才更新currentLod)
+		BuildFloorExtras,    // 远->近，每层一条(只排有楼梯/坡道/房间的楼层)：楼梯/坡道网格+这层各房间的进出检测盒
+		BuildElevatorCabins, // 远->近，所有BuildFloorExtras之后、FinishNear之前
+		FinishNear,          // 远->近，最后一步(执行完才更新currentLod)
+		BuildDecorations,    // 远->近，所有BuildFloorExtras之后、BuildElevatorCabins之前
 	};
 
 	struct FLodOp {
-		ELodOpType type = ELodOpType::BuildFarMesh;
-		int32 floorIndex = -1; // 仅BuildFloorMesh使用
+		ELodOpType type = ELodOpType::BuildShell;
+		int32 floorIndex = -1; // 仅BuildFloorExtras使用
 	};
 
 	// 一台电梯轿厢的近处LOD表现——只在currentLod==Near时存在，随DeleteAllNearMeshes一起清空。
@@ -122,19 +125,21 @@ private:
 	// 推进这栋楼所有电梯的行程(不管LOD，远景下电梯也会到站)，到站写回Core；近处时同步轿厢位置。
 	void UpdateCabins(float deltaSeconds);
 
-	void BuildFarSection();
-	void BuildFloorSection(int32 floorIndex);
+	// 一层楼的建造分两部分：shell=墙(含楼梯/坡道/电梯井道墙)/地板/天花板/一楼回形缝(远近都显示，常驻)，
+	// extras=楼梯/坡道网格+这一层各房间的进出检测盒(只近处)。flush=是否立刻把暂存的ISM实例批量提交(BuildShell逐层调用，最后统一提交一次)。
+	void BuildFloorSection(int32 floorIndex, bool shell, bool extras);
+	// 整栋楼所有楼层的外壳，一次建完。
+	void BuildShell();
 	void BuildElevatorCabinsForBuilding();
 	// mod用AddDecoration指定的自定义模型(Building::GetDecorations()，世界摆位Core已经按朝向
 	// 换算好)，近处LOD专属，ClearNearSections一并清理。
 	void BuildDecorations();
 	void ClearNearSections();
-	void ClearFarSection();
 	void ExecuteLodOp(const FLodOp& op);
 
 	// building进入/离开检测用的碰撞盒。水平=body矩形，垂直=整栋楼Z范围，三个方向各+0.01
 	// (地图单位)，和Room碰撞盒的各-0.01配对，两者贴合的边界不会因为完全重合而在Overlap判定
-	// 上抖动。Init()里创建一次，常驻到这个Element被销毁，不随近/远LOD切换增删。
+	// 上抖动。进入近处时(BuildTriggers)创建，离开近处时(ClearNearSections)销毁。
 	void BuildCollisionBox();
 
 	UFUNCTION()
@@ -144,8 +149,8 @@ private:
 	void OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
-	// Room进入/离开检测碰撞盒——这栋building的每个Room各一个，Init()里创建一次，常驻到Element销毁。
-	void BuildRoomCollisionBoxes();
+	// 某一层所有Room的进入/离开检测碰撞盒，随这一层的BuildFloorExtras创建，离开近处时统一销毁。
+	void BuildRoomCollisionBoxes(int32 level);
 
 	UFUNCTION()
 	void OnRoomOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -154,44 +159,18 @@ private:
 	void OnRoomOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
-	// 墙体/地板/天花板slab按材质指针分组走常驻的UInstancedStaticMeshComponent：近处建层只AddInstance，离开近处只ClearInstances，
-	// 组件本身不随LOD切换销毁/重建，见BuildingElement.md。
+	// 墙体/地板/天花板cube不再是这栋楼自己的组件：外壳开局建一次就不再增删，实例排进框架组件里全城合并的ISM
+	// (UForeverBuildingFrameworkComponent::QueueShellCube/QueueShellWall)，见BuildingElement.md。
 	void AddCubeInstance(float centerX, float centerY, float centerZ,
 		float sizeX, float sizeY, float sizeZ, float rotation, UMaterialInterface* material);
-
-	// 按材质指针查/建对应的ISM池条目——找不到就创建一个(复用framework->GetCubeMesh()，
-	// 和原SpawnCube同一份网格资源)。
-	UInstancedStaticMeshComponent* GetOrCreateCubeInstancePool(UMaterialInterface* material);
-
-	// 把pendingCubeTransforms里按材质分组暂存的全部transform批量提交给对应ISM池——每个
-	// 材质只调一次UInstancedStaticMeshComponent::AddInstances()，而不是AddCubeInstance每次
-	// 都调一次单实例AddInstance()。见AddCubeInstance/pendingCubeTransforms声明处注释。
-	void FlushCubeInstances();
+	void AddWallInstance(float centerX, float centerY, float centerZ,
+		float sizeX, float sizeY, float sizeZ, float rotation, const FWallMaterialKey& key);
 
 	// 按目标尺寸缩放摆放一个网格实体，供楼梯/坡道/电梯轿厢这类有真实3D资产的元素用。isMovable
 	// 只有电梯轿厢会传true。
 	UStaticMeshComponent* SpawnMesh(float centerX, float centerY, float centerZ,
 		float sizeX, float sizeY, float sizeZ, float rotation, UStaticMesh* mesh, UMaterialInterface* material,
 		bool isMovable = false);
-
-	// 五材质槽Wall的ISM池key：东南西北四个侧面的材质+上下面材质，见AddWallInstance。
-	struct FWallMaterialKey {
-		UMaterialInterface* slots[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
-		bool operator==(const FWallMaterialKey& other) const {
-			for (int32 i = 0; i < 5; i++) if (slots[i] != other.slots[i]) return false;
-			return true;
-		}
-		friend uint32 GetTypeHash(const FWallMaterialKey& key) {
-			uint32 hash = 0;
-			for (int32 i = 0; i < 5; i++) hash = HashCombine(hash, GetTypeHash(key.slots[i]));
-			return hash;
-		}
-	};
-
-	// 带材质的墙体段走Wall(槽0东 1南 2西 3北 4上下)，按(五个材质)分组走独立ISM池，其余同AddCubeInstance。
-	void AddWallInstance(float centerX, float centerY, float centerZ,
-		float sizeX, float sizeY, float sizeZ, float rotation, const FWallMaterialKey& key);
-	UInstancedStaticMeshComponent* GetOrCreateWallInstancePool(const FWallMaterialKey& key);
 
 	// 逐段生成墙体cube，门/窗开口处不生成任何东西。styles是4项(下标=墙朝向)的WallStyle，可为nullptr(=都没标签)。
 	void BuildWallsForElement(float floorBaseZ, float floorHeight,
@@ -207,33 +186,14 @@ private:
 	UPROPERTY()
 	TObjectPtr<USceneComponent> elementRoot;
 
-	UPROPERTY()
-	TObjectPtr<UProceduralMeshComponent> farMesh; // 这栋楼专属，只有一个section(index 0)
-
 	ELod currentLod = ELod::Far;
 	bool transitionPending = false;
-	int32 nearFloorCount = 0; // basements+layers，BuildFloorMesh按floorIndex 0..nearFloorCount-1处理
-
-	// 墙体/地板/天花板cube的ISM池，key是实际材质指针(通常整栋楼只有3个，mod覆盖材质时会多几个)，Init()之后按需懒创建。
-	TMap<UMaterialInterface*, TObjectPtr<UInstancedStaticMeshComponent>> cubeInstancePools;
-
-	// AddCubeInstance按材质分组暂存world transform，一层楼画完后由FlushCubeInstances()对每个材质批量AddInstances()一次
-	// (逐个AddInstance在BlockAll碰撞的ISM上每次约0.1~0.4ms)。只在BuildFloorSection内部临时持有，提交后清空。
-	TMap<UMaterialInterface*, TArray<FTransform>> pendingCubeTransforms;
-	// 与pendingCubeTransforms逐实例对应的自定义数据(每实例2个float：建筑朝向的(cos, sin))，Flush时写入ISM的PerInstanceCustomData，材质里可读。
-	TMap<UMaterialInterface*, TArray<float>> pendingCubeCustomData;
-
-	// Wall(五材质槽)的ISM池与暂存，结构同上，key换成五个材质的组合。wallMesh首次用到时才解析，失败(用户还没做资产)就一直是nullptr，带标签的墙退回普通Cube。
-	TMap<FWallMaterialKey, TObjectPtr<UInstancedStaticMeshComponent>> wallInstancePools;
-	TMap<FWallMaterialKey, TArray<FTransform>> pendingWallTransforms;
-	// 与pendingWallTransforms逐实例对应的自定义数据(每实例(cos, sin))，同pendingCubeCustomData。
-	TMap<FWallMaterialKey, TArray<float>> pendingWallCustomData;
-	TObjectPtr<UStaticMesh> wallMesh;
-	bool wallMeshResolved = false;
+	bool bShellQueued = false; // 外壳的BuildShell已排进队列(只排一次)
+	int32 nearFloorCount = 0; // basements+layers，BuildShell/BuildFloorExtras按floorIndex 0..nearFloorCount-1处理
 
 	// 近处这栋building当前占用的楼梯/坡道3D网格组件(SpawnMesh产出，网格/材质各不相同、
 	// 数量少，不纳入ISM改造)，按floorIndex分组，方便ClearNearSections整栋清空。墙体/
-	// 地板/天花板cube已经改走上面的cubeInstancePools，不再经过这个数组。
+	// 地板/天花板cube走框架组件合并的外壳ISM，不经过这个数组。
 	TArray<TArray<TObjectPtr<UStaticMeshComponent>>> nearComponentsByFloor;
 	// 电梯轿厢，近处LOD专属，DeleteAllNearMeshes时一并清空。
 	TArray<FCabin> cabins;

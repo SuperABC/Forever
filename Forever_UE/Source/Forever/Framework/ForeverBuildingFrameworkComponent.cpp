@@ -4,6 +4,7 @@
 #include "Framework/ForeverFrameworkActor.h"
 
 #include "Engine/StaticMesh.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #if WITH_EDITOR
 #include "StaticMeshCompiler.h"
 #endif
@@ -84,6 +85,8 @@ void UForeverBuildingFrameworkComponent::GenerateBuildings(Map* inMap) {
 		ABuildingElement* element = GetWorld()->SpawnActor<ABuildingElement>();
 		if (!element) continue;
 		element->Init(building, this);
+		// 有楼层的建筑会建外壳，Element建完调NotifyShellBuilt；全部到齐后一次性提交合并的ISM。
+		if (building->GetBasementCount() + building->GetLayerCount() > 0) RegisterShellBuilding();
 	}
 }
 
@@ -130,6 +133,14 @@ void UForeverBuildingFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 	// 每帧重置一次全地图共享的LOD操作预算，供所有ABuildingElement在自己的Tick里申请
 	// (TryConsumeLodOpBudget)——具体队列/执行现在都在Element自己身上，这里只保留节流总闸。
 	frameOpBudgetRemaining = maxLodOpsPerTick;
+	frameShellBudgetRemaining = maxShellOpsPerTick;
+
+	// 外壳阴影：每0.25秒按玩家位置刷一次(只有离玩家近的单元投射阴影)。
+	shellShadowTimer += DeltaTime;
+	if (bShellFlushed && shellShadowTimer >= 0.25f) {
+		shellShadowTimer = 0.f;
+		UpdateShellShadows();
+	}
 
 	// 世界因为RequestFreezeUntilLodSettled被冻结、且所有building都已经排空LOD切换队列——
 	// 恢复正常时间倍率。这个检查本身不受时间倍率影响（TickComponent仍然按正常帧率被调用，
@@ -183,4 +194,127 @@ void UForeverBuildingFrameworkComponent::NotifyLodTransitionStarted() {
 
 void UForeverBuildingFrameworkComponent::NotifyLodTransitionFinished() {
 	pendingLodTransitionCount = FMath::Max(0, pendingLodTransitionCount - 1);
+}
+
+int32 UForeverBuildingFrameworkComponent::ShellCellOf(float mapCoord) const {
+	return shellCellSize > 0.f ? FMath::FloorToInt(mapCoord / shellCellSize) : 0;
+}
+
+void UForeverBuildingFrameworkComponent::ShellCellRange(int32 cx, int32 cy, FVector2D& outMin, FVector2D& outMax) const {
+	if (shellCellSize <= 0.f) {
+		outMin = FVector2D(-1e9, -1e9);
+		outMax = FVector2D(1e9, 1e9);
+		return;
+	}
+	outMin = FVector2D(cx * shellCellSize, cy * shellCellSize);
+	outMax = outMin + FVector2D(shellCellSize, shellCellSize);
+}
+
+UInstancedStaticMeshComponent* UForeverBuildingFrameworkComponent::CreateShellISM(UStaticMesh* mesh) {
+	AActor* owner = GetOwner();
+	if (!owner || !mesh) return nullptr;
+	UInstancedStaticMeshComponent* ism = NewObject<UInstancedStaticMeshComponent>(owner, NAME_None, RF_Transient);
+	ism->SetStaticMesh(mesh);
+	ism->SetupAttachment(owner->GetRootComponent());
+	// 常驻：开局提交一次实例，之后不再增删。
+	ism->SetMobility(EComponentMobility::Static);
+	ism->SetCollisionProfileName(TEXT("BlockAll"));
+	ism->SetGenerateOverlapEvents(false);
+	// 每实例自定义数据：[0]=cos [1]=sin，建筑朝向的水平单位向量，材质里用PerInstanceCustomData读。
+	ism->NumCustomDataFloats = 2;
+	ism->SetCastShadow(false); // 提交后由UpdateShellShadows按距离开
+	return ism;
+}
+
+void UForeverBuildingFrameworkComponent::QueueShellCube(const FVector2D& cellPos, const FTransform& transform,
+	float cosR, float sinR, UMaterialInterface* material) {
+	FShellCubeKey key;
+	key.cx = ShellCellOf(cellPos.X);
+	key.cy = ShellCellOf(cellPos.Y);
+	key.material = material;
+	FShellPool& pool = shellCubePools.FindOrAdd(key);
+	if (pool.pending.IsEmpty() && !pool.ism) ShellCellRange(key.cx, key.cy, pool.cellMin, pool.cellMax);
+	pool.pending.Add(transform);
+	pool.pendingCustomData.Add(cosR);
+	pool.pendingCustomData.Add(sinR);
+}
+
+void UForeverBuildingFrameworkComponent::QueueShellWall(const FVector2D& cellPos, const FTransform& transform,
+	float cosR, float sinR, const FWallMaterialKey& wall) {
+	FShellWallKey key;
+	key.cx = ShellCellOf(cellPos.X);
+	key.cy = ShellCellOf(cellPos.Y);
+	key.wall = wall;
+	FShellPool& pool = shellWallPools.FindOrAdd(key);
+	if (pool.pending.IsEmpty() && !pool.ism) ShellCellRange(key.cx, key.cy, pool.cellMin, pool.cellMax);
+	pool.pending.Add(transform);
+	pool.pendingCustomData.Add(cosR);
+	pool.pendingCustomData.Add(sinR);
+}
+
+void UForeverBuildingFrameworkComponent::NotifyShellBuilt() {
+	builtShellBuildings++;
+	if (!bShellFlushed && builtShellBuildings >= expectedShellBuildings) FlushShellInstances();
+}
+
+void UForeverBuildingFrameworkComponent::FlushShellInstances() {
+	bShellFlushed = true;
+	AActor* owner = GetOwner();
+	if (!owner) return;
+	const double startTime = FPlatformTime::Seconds();
+	int32 poolCount = 0;
+	int64 instanceCount = 0;
+
+	auto commit = [&](FShellPool& pool, UStaticMesh* mesh, auto&& applyMaterials) {
+		if (pool.pending.IsEmpty()) return;
+		UInstancedStaticMeshComponent* ism = CreateShellISM(mesh);
+		if (!ism) { pool.pending.Empty(); pool.pendingCustomData.Empty(); return; }
+		applyMaterials(ism);
+		ism->RegisterComponent();
+		owner->AddInstanceComponent(ism);
+		ism->AddInstances(pool.pending, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
+		// 整批写自定义数据(逐实例SetCustomDataValue在几十万实例上太慢)；AddInstances已把数组扩成Num*2个0。
+		if (ism->PerInstanceSMCustomData.Num() == pool.pendingCustomData.Num()) {
+			ism->PerInstanceSMCustomData = MoveTemp(pool.pendingCustomData);
+		}
+		ism->MarkRenderStateDirty();
+		pool.ism = ism;
+		poolCount++;
+		instanceCount += pool.pending.Num();
+		pool.pending.Empty();
+		pool.pendingCustomData.Empty();
+	};
+
+	for (auto& [key, pool] : shellCubePools) {
+		commit(pool, cubeMesh, [&](UInstancedStaticMeshComponent* ism) { if (key.material) ism->SetMaterial(0, key.material); });
+	}
+	UStaticMesh* wallMesh = shellWallPools.IsEmpty() ? nullptr : ResolveMesh("/Game/Asset/Building/Mesh/Wall.Wall", nullptr);
+	for (auto& [key, pool] : shellWallPools) {
+		commit(pool, wallMesh, [&](UInstancedStaticMeshComponent* ism) {
+			for (int32 i = 0; i < 5; i++) if (key.wall.slots[i]) ism->SetMaterial(i, key.wall.slots[i]);
+			});
+	}
+	UE_LOG(LogTemp, Log, TEXT("Building shell merged (cell size %.0f): %d ISM components (%d cube pools, %d wall pools), %lld instances, %.0f ms"),
+		shellCellSize, poolCount, shellCubePools.Num(), shellWallPools.Num(), instanceCount,(FPlatformTime::Seconds() - startTime) * 1000.0);
+	UpdateShellShadows();
+}
+
+void UForeverBuildingFrameworkComponent::UpdateShellShadows() {
+	APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (!pawn) return;
+	const FVector location = pawn->GetActorLocation() / 1000.f; // UE单位->地图单位
+	const FVector2D player(location.X, location.Y);
+	// 玩家到单元矩形的水平距离不超过"近处->远处"阈值就投射阴影(和近处LOD同一个范围)。
+	const float radius = lodFarExitDistance;
+	auto update = [&](FShellPool& pool) {
+		if (!pool.ism) return;
+		const float dx = FMath::Max(FMath::Max(pool.cellMin.X - player.X, 0.0), player.X - pool.cellMax.X);
+		const float dy = FMath::Max(FMath::Max(pool.cellMin.Y - player.Y, 0.0), player.Y - pool.cellMax.Y);
+		const bool want = shellCellSize <= 0.f || (dx * dx + dy * dy) <= radius * radius;
+		if (want == pool.casting) return;
+		pool.casting = want;
+		pool.ism->SetCastShadow(want);
+	};
+	for (auto& [key, pool] : shellCubePools) update(pool);
+	for (auto& [key, pool] : shellWallPools) update(pool);
 }
