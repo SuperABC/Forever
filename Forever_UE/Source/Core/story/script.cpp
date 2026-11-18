@@ -585,6 +585,11 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			change = new SpawnEffectChange(obj["effect"].AsString(), obj["scale"].AsString(), obj["asset"].AsString(),
 				obj["position"].AsString(), obj["normal"].AsString());
 		}
+		else if (type == "spawn_actor") {
+			// direction/scale可以省略：不旋转、缩放1。
+			change = new SpawnActorChange(obj["actor"].AsString(), obj["position"].AsString(), obj["direction"].AsString(),
+				obj["scale"].AsString());
+		}
 		else if (type == "single_damage") {
 			// source/weapon/part只用于击杀信息，可以省略。
 			change = new SingleDamageChange(obj["target"].AsString(), obj["damage"].AsString(), obj["source"].AsString(),

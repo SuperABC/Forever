@@ -10,6 +10,7 @@
 #include "Player/ForeverPlayerController.h"
 #include "Player/ForeverWeaponComponent.h"
 #include "Player/ForeverProjectileBridgeComponent.h"
+#include "Player/ForeverDamage.h"
 #include "GameFramework/Pawn.h"
 #include "UI/SectionSpeakingWidget.h"
 #include "UI/BackgroundSpeakingWidget.h"
@@ -19,6 +20,7 @@
 #include "UI/ShopWidget.h"
 
 #include "Engine/Engine.h"
+#include "Misc/PackageName.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
@@ -691,6 +693,49 @@ void UForeverStoryFrameworkComponent::ApplyOpenShop(const ScriptContext& context
 	playerController->GetShopWidget()->OpenShop(organization);
 }
 
+void UForeverStoryFrameworkComponent::ApplySpawnActor(const SpawnActorChange* change, const ScriptContext& context) {
+	UWorld* world = GetWorld();
+	if (!world || change->GetActor().empty()) return;
+
+	FString path = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetActor(), context)).c_str());
+	if (path.IsEmpty()) return;
+	// 路径只写包路径时补上蓝图生成类的名字(<名>_C)，同AForeverExplosionEffect::Spawn。
+	if (!path.Contains(TEXT("."))) path += TEXT(".") + FPackageName::GetShortName(path) + TEXT("_C");
+	UClass* actorClass = LoadClass<AActor>(nullptr, *path);
+	if (!actorClass) {
+		UE_LOG(LogTemp, Warning, TEXT("spawn_actor: failed to load actor class %s, skipped."), *path);
+		return;
+	}
+
+	FVector location;
+	if (change->GetPosition().empty() ||
+		!FForeverDamage::ParseVec3(ToString(EvaluateExpression(change->GetPosition(), context)), location)) {
+		UE_LOG(LogTemp, Warning, TEXT("spawn_actor: position missing or invalid, skipped."));
+		return;
+	}
+	FRotator rotation = FRotator::ZeroRotator;
+	if (!change->GetDirection().empty()) {
+		FVector direction;
+		if (FForeverDamage::ParseVec3(ToString(EvaluateExpression(change->GetDirection(), context)), direction) && !direction.IsNearlyZero()) {
+			rotation = FRotationMatrix::MakeFromX(direction).Rotator();
+		}
+	}
+	float scale = 1.f;
+	if (!change->GetScale().empty()) scale = static_cast<float>(ToDouble(EvaluateExpression(change->GetScale(), context)));
+	if (scale <= 0.f) scale = 1.f;
+
+	const FTransform transform(rotation, location, FVector(scale));
+	APawn* instigator = UGameplayStatics::GetPlayerPawn(world, 0);
+	// 延迟生成：BeginPlay之前先把所有者脚本键/Instigator写进去，Actor的BeginPlay里就能用。
+	AActor* actor = world->SpawnActorDeferred<AActor>(actorClass, transform, nullptr, instigator,
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!actor) return;
+	if (UForeverProjectileBridgeComponent* bridge = actor->FindComponentByClass<UForeverProjectileBridgeComponent>()) {
+		bridge->OwnerScriptKey = UTF8_TO_TCHAR(FindScriptKey(context.self).c_str());
+	}
+	actor->FinishSpawning(transform);
+}
+
 void UForeverStoryFrameworkComponent::ApplyPayWage(const PayWageChange* change, const ScriptContext& context) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Society* society = framework ? framework->GetSociety() : nullptr;
@@ -994,12 +1039,9 @@ Script* UForeverStoryFrameworkComponent::FindScriptByKey(const string& key) cons
 		return vehicle ? vehicle->GetScript() : nullptr;
 	}
 	if (key.compare(0, 7, "weapon:") == 0) {
-		// 武器脚本：只有玩家当前装备的那把有(Weapon持有，换枪即销毁)，键里是武器id。
-		APawn* pawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-		UForeverWeaponComponent* weapons = pawn ? pawn->FindComponentByClass<UForeverWeaponComponent>() : nullptr;
-		Weapon* weapon = weapons ? weapons->GetWeapon() : nullptr;
-		Script* weaponScript = weapon ? weapon->GetScript() : nullptr;
-		return weaponScript && weaponScript->GetStableKey() == key ? weaponScript : nullptr;
+		// 武器脚本：每个已启用的武器都有一份，由Player常驻持有(不随装备/换枪增删)，键里是武器id。
+		Weapon* weapon = framework->GetPlayer() ? framework->GetPlayer()->FindWeapon(key.substr(7)) : nullptr;
+		return weapon ? weapon->GetScript() : nullptr;
 	}
 	if (key.compare(0, 6, "asset:") == 0) {
 		// 资产名全局唯一：先找玩家身上/地上的，再找房间里的(都是不分配的遍历)。

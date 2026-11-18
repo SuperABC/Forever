@@ -101,6 +101,7 @@
 #include "player/asset_ammo_rifle.h"
 #include "player/asset_ammo_shotgun.h"
 #include "player/asset_ammo_sniper.h"
+#include "player/asset_ammo_rpg.h"
 #include "player/asset_beef.h"
 #include "player/asset_burger.h"
 #include "player/asset_camera.h"
@@ -111,6 +112,7 @@
 #include "player/asset_shotgun.h"
 #include "player/asset_smoke_grenade.h"
 #include "player/asset_sniper.h"
+#include "player/asset_rpg.h"
 #include "player/asset_wheat.h"
 #include "player/app_bounce.h"
 #include "player/app_notes.h"
@@ -131,6 +133,7 @@
 #include "player/weapon_rifle.h"
 #include "player/weapon_shotgun.h"
 #include "player/weapon_sniper.h"
+#include "player/weapon_rpg.h"
 
 #pragma comment(lib, "Dependence.lib")
 
@@ -212,10 +215,12 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ RifleWeapon::GetId(), { RifleAmmoAsset::GetId() } },
 		{ ShotgunWeapon::GetId(), { ShotgunAmmoAsset::GetId() } },
 		{ SniperWeapon::GetId(), { SniperAmmoAsset::GetId() } },
+		{ RpgWeapon::GetId(), { RpgAmmoAsset::GetId() } },
 		{ PistolWeaponAsset::GetId(), { PistolWeapon::GetId() } }, // 在肩膀上激活时装备的武器(AssetMod::weaponType)
 		{ RifleWeaponAsset::GetId(), { RifleWeapon::GetId() } },
 		{ ShotgunWeaponAsset::GetId(), { ShotgunWeapon::GetId() } },
 		{ SniperWeaponAsset::GetId(), { SniperWeapon::GetId() } },
+		{ RpgWeaponAsset::GetId(), { RpgWeapon::GetId() } },
 		{ CameraWeaponAsset::GetId(), { CameraWeapon::GetId() } }, // 相机不用弹药，没有对应的弹药资产依赖
 	};
 	return (void*)&dependencies;
@@ -659,9 +664,9 @@ extern "C" __declspec(dllexport) void FinishModVehicles(VehicleFactory* factory)
 extern "C" __declspec(dllexport) void* GetModAssets() {
 	static vector<string> mods = { ContainerAsset::GetId(), WheatAsset::GetId(), BeefAsset::GetId(),
 		BurgerAsset::GetId(), PistolAmmoAsset::GetId(), RifleAmmoAsset::GetId(),
-		ShotgunAmmoAsset::GetId(), SniperAmmoAsset::GetId(),
+		ShotgunAmmoAsset::GetId(), SniperAmmoAsset::GetId(), RpgAmmoAsset::GetId(),
 		PistolWeaponAsset::GetId(), RifleWeaponAsset::GetId(),
-		ShotgunWeaponAsset::GetId(), SniperWeaponAsset::GetId(), CameraWeaponAsset::GetId(),
+		ShotgunWeaponAsset::GetId(), SniperWeaponAsset::GetId(), RpgWeaponAsset::GetId(), CameraWeaponAsset::GetId(),
 		GrenadeAsset::GetId(), SmokeGrenadeAsset::GetId() };
 	return (void*)&mods;
 }
@@ -690,6 +695,9 @@ extern "C" __declspec(dllexport) void RegisterModAssets(AssetFactory* factory) {
 	factory->RegisterAsset(SniperAmmoAsset::GetId(),
 		[](const std::string&) -> AssetMod* { return new SniperAmmoAsset(); },
 		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(RpgAmmoAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new RpgAmmoAsset(); },
+		[](AssetMod* m) { delete m; });
 	factory->RegisterAsset(PistolWeaponAsset::GetId(),
 		[](const std::string&) -> AssetMod* { return new PistolWeaponAsset(); },
 		[](AssetMod* m) { delete m; });
@@ -701,6 +709,9 @@ extern "C" __declspec(dllexport) void RegisterModAssets(AssetFactory* factory) {
 		[](AssetMod* m) { delete m; });
 	factory->RegisterAsset(SniperWeaponAsset::GetId(),
 		[](const std::string&) -> AssetMod* { return new SniperWeaponAsset(); },
+		[](AssetMod* m) { delete m; });
+	factory->RegisterAsset(RpgWeaponAsset::GetId(),
+		[](const std::string&) -> AssetMod* { return new RpgWeaponAsset(); },
 		[](AssetMod* m) { delete m; });
 	factory->RegisterAsset(CameraWeaponAsset::GetId(),
 		[](const std::string&) -> AssetMod* { return new CameraWeaponAsset(); },
@@ -777,7 +788,7 @@ extern "C" __declspec(dllexport) void FinishModPuzzles(PuzzleFactory* factory) {
 
 extern "C" __declspec(dllexport) void* GetModWeapons() {
 	static vector<string> mods = { PistolWeapon::GetId(), RifleWeapon::GetId(),
-		ShotgunWeapon::GetId(), SniperWeapon::GetId(), CameraWeapon::GetId() };
+		ShotgunWeapon::GetId(), SniperWeapon::GetId(), RpgWeapon::GetId(), CameraWeapon::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModWeapons(WeaponFactory* factory) {
@@ -792,6 +803,9 @@ extern "C" __declspec(dllexport) void RegisterModWeapons(WeaponFactory* factory)
 		[](WeaponMod* m) { delete m; });
 	factory->RegisterWeapon(SniperWeapon::GetId(),
 		[](const std::string&) -> WeaponMod* { return new SniperWeapon(); },
+		[](WeaponMod* m) { delete m; });
+	factory->RegisterWeapon(RpgWeapon::GetId(),
+		[](const std::string&) -> WeaponMod* { return new RpgWeapon(); },
 		[](WeaponMod* m) { delete m; });
 	factory->RegisterWeapon(CameraWeapon::GetId(),
 		[](const std::string&) -> WeaponMod* { return new CameraWeapon(); },

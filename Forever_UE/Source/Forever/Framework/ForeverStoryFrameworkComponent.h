@@ -162,6 +162,10 @@ public:
 	// 代扣所得税)。玩家有没有真的去上班不影响每日工资结算，这是玩家手动打工额外拿的一份。
 	void ApplyPayWage(const PayWageChange* change, const ScriptContext& context);
 
+	// spawn_actor：求值蓝图类路径/位置/朝向/缩放，生成Actor；带UForeverProjectileBridgeComponent的把OwnerScriptKey设成执行这个
+	// Change的脚本(FindScriptKey(context.self))，Instigator设为玩家当前操控的Pawn。
+	void ApplySpawnActor(const SpawnActorChange* change, const ScriptContext& context);
+
 	// EnterVehicleChange的实际执行：求值载具名后转发给UForeverTrafficFrameworkComponent::ApplyEnterVehicle
 	// (查找/隐藏原pawn/Possess都在那边)。
 	// @change: 待执行的进入载具变化

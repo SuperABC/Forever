@@ -17,6 +17,7 @@
 // 承载全局时钟、天气、生命值、资产系统(五槽位+不动产/载具表+房外物品+路径寻址)，见player.md。
 
 class Change;
+class Weapon;
 class Player {
 	// 存档：PlayerSaveCodec直接读写私有字段(player_save.md)。
 	friend class PlayerSaveCodec;
@@ -156,6 +157,11 @@ public:
 	// 按名字找资产(手/肩/背及其容器内容、estate、worldAssets)；找不到返回nullptr。房间里的见Map::FindAssetByName。
 	Asset* FindAssetByName(const std::string& name) const;
 
+	// 常驻武器对象：构造Player时给每个已启用的weapon mod各建一个Weapon(连同它的脚本，稳定键"weapon:<id>")，
+	// 不随装备/换枪增删、不进存档，Player析构才销毁。这样飞行中的火箭弹等在换枪后仍能找到武器脚本。
+	// UForeverWeaponComponent装备时从这里取(不持有)。id未启用返回nullptr。
+	Weapon* FindWeapon(const std::string& id) const;
+
 	// ---- 投掷物 ----
 	struct ThrowableEntry {
 		std::string type;
@@ -229,4 +235,5 @@ private:
 
 	// 房间外的物品，Player独占持有，见上面"房间外的物品"一节。
 	std::unordered_map<std::string, WorldAsset> worldAssets;
+	std::unordered_map<std::string, Weapon*> weapons; // 见FindWeapon
 };

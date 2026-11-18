@@ -449,6 +449,11 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* spawnActor = dynamic_cast<const SpawnActorChange*>(change)) {
+		if (storyFramework) storyFramework->ApplySpawnActor(spawnActor, context);
+		return;
+	}
+
 	if (auto* forRange = dynamic_cast<const ForRangeChange*>(change)) {
 		// 子Change可能是任何类型(包括UE层的)，所以循环放在这个统一入口里递归。循环变量写进当前脚本
 		// 自己的变量池：var写"floor"或"self.floor"都是$$self.floor。含两端，step省略为1；循环次数

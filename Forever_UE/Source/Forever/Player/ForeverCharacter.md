@@ -9,7 +9,7 @@
 - 网格体相对Root的`(-96, 0, -90°)`偏移是标准UE Mannequin挂接惯例。
 - `Jump`/`ToggleView`/`Sprint`/`MeetOptionUp/Down/Select`/`FireWeapon`/`ReloadWeapon`/`SwitchWeapon1/2`/`ThrowItem`/`AimWeapon`不直接引用`UInputAction`资源,改从`UForeverKeyBindingSubsystem`(见`Input/ForeverKeyBindingSubsystem.md`)按名字取运行时动态创建的Action,按键从外部配置文件读取。
 - `PossessedBy`/`UnPossessed`只增删这个Pawn自己的`inputMapping`/`inputLookMapping`(`IMC_Default`/`IMC_MouseLook`)——`UForeverKeyBindingSubsystem`那份动态Context改由`AForeverPlayerController::InitializeOnce`常驻添加一次(见`ForeverPlayerController.md`),因为`TogglePhone`等热键要求任何时候都生效,不依赖"当前是否正占有一个真正的Pawn"。移动/视角这类Pawn专属映射仍然跟着"被占有"状态走,保证玩家上/下车、切换被操控角色时映射能跟着当前Pawn切换(见`CONVENTIONS.md`第7节)。
-- `PossessedBy`只对`APlayerController`占有做武器/房间相关初始化(`AIController`占有市民导航测试时只加输入Context、其余直接返回)。只在Player的`leftShoulder`/`rightShoulder`/`back`三个槽位全空时(开局第一次占有)发初始装备:左肩`asset_pistol`、右肩`asset_rifle`,背上一个`asset_container`内放手枪/步枪/霰弹枪/狙击枪备弹各120发、霰弹枪和狙击枪本体各一把(不挂肩膀,要用从背包拖到肩膀激活)、手雷和烟雾弹各一个`count=10`的堆叠(旧存档不补发,需新游戏)。这些槽位挂在Player身上,换人操控时跟着玩家走,不再每次占有都删掉重建(否则子弹每换一次人就回满,读档恢复出来的背包也会被覆盖)。每次占有都先`weaponVisualComponent->BeginShowing()`再`ActivateShoulderWeapon(1)`激活左肩,让新角色手上握着枪;并按胶囊体当前重叠的房间触发盒重新设置`Player::currentRoom`(占有前就站在房间里,引擎不会补发BeginOverlap)。`UnPossessed`时`EndShowing()`、移除本Pawn的Context、关闭投掷物列表。
+- `PossessedBy`只对`APlayerController`占有做武器/房间相关初始化(`AIController`占有市民导航测试时只加输入Context、其余直接返回)。只在Player的`leftShoulder`/`rightShoulder`/`back`三个槽位全空时(开局第一次占有)发初始装备:左肩`asset_pistol`、右肩`asset_rifle`,背上一个`asset_container`内放手枪/步枪/霰弹枪/狙击枪备弹各120发、霰弹枪、狙击枪和火箭筒(`asset_rpg`,配10发`asset_ammo_rpg`)本体各一把(不挂肩膀,要用从背包拖到肩膀激活)、手雷和烟雾弹各一个`count=10`的堆叠(旧存档不补发,需新游戏)。这些槽位挂在Player身上,换人操控时跟着玩家走,不再每次占有都删掉重建(否则子弹每换一次人就回满,读档恢复出来的背包也会被覆盖)。每次占有都先`weaponVisualComponent->BeginShowing()`再`ActivateShoulderWeapon(1)`激活左肩,让新角色手上握着枪;并按胶囊体当前重叠的房间触发盒重新设置`Player::currentRoom`(占有前就站在房间里,引擎不会补发BeginOverlap)。`UnPossessed`时`EndShowing()`、移除本Pawn的Context、关闭投掷物列表。
 - **V键第一/三人称切换**(`ToggleCameraView`):
   - `firstPersonCamera`优先挂到骨骼网格`head`socket;不存在则退化为挂在Root上、用胶囊体半高0.9倍作为眼高近似值。
   - 两个摄像机同一时刻只有一个`Active`(`UCameraComponent::SetActive`),不是靠`SetViewTarget`,因为两者都挂在同一Pawn上。
@@ -44,6 +44,7 @@ Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块
 **按角色换贴图**：`SetAvatarTexture(UTexture2D*)`把贴图存进`avatarTexture`(UPROPERTY，运行时建的贴图靠它存活)并更新动态材质的`Texture`参数；动态材质实例`avatarMaterial`只建一次，`PlaceAvatar`(换身体网格时重复调用)沿用它和当前贴图。市民的头像由`ACitizenElement::Init`通过`UForeverAvatarSubsystem`设置，见`ForeverAvatarSubsystem.md`。
 
 - **存档**：`activeShoulderSlot`记录最近一次`ActivateShoulderWeapon`的槽位；读档时`AForeverFrameworkActor::RestoreControlledPawn`调用`RestoreWeaponState(slot, ammo)`改回存档时激活的武器和弹匣余量(`PossessedBy`默认激活左肩、换满弹匣)。
+- `ActivateShoulderWeapon`装备成功后绑定槽位到武器组件并恢复该Asset的`magazineAmmo`(没用过=满弹匣)，见`ForeverWeaponComponent.md`。
 
 ## 依赖关系
 - 依赖资产:`Content/Asset/Characters/Mannequins/Meshes/SKM_Manny_Simple`、`SKM_Quinn_Simple`、`Anims/Unarmed/ABP_Unarmed`、`Content/Blueprint/Player/Input/Actions/{IA_Move,IA_Look,IA_MouseLook}`、`Content/Blueprint/Player/Input/{IMC_Default,IMC_MouseLook}`。
@@ -55,3 +56,5 @@ Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块
 
 ## 待办/后续阶段
 - 角色外观(骨骼网格/动画蓝图)改为运行时按所控制的NPC数据动态设置,目前仍是构造函数默认值。
+
+- 第一人称下网格OwnerNoSee，`ToggleCameraView`把`VisibilityBasedAnimTickOption`强制成`AlwaysTickPoseAndRefreshBones`：否则动画被当成"没渲染"而停更，第一人称相机(挂head骨骼)1~2秒后不再随步伐晃，瞄准的武器(挂胶囊体)与镜头就变成相对静止。(2026-11-18，推断的原因，待PIE确认)

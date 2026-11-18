@@ -7,10 +7,12 @@
       "asset_ammo_rifle",
       "asset_ammo_shotgun",
       "asset_ammo_sniper",
+      "asset_ammo_rpg",
       "asset_pistol",
       "asset_rifle",
       "asset_shotgun",
       "asset_sniper",
+      "asset_rpg",
       "asset_camera",
       "asset_grenade",
       "asset_smoke_grenade"
@@ -98,6 +100,7 @@
       "weapon_rifle",
       "weapon_shotgun",
       "weapon_sniper",
+      "weapon_rpg",
       "weapon_camera"
    ],
    "zone_mods" : [ "zone_residence_high" ]

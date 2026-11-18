@@ -40,24 +40,21 @@ UForeverWeaponComponent::UForeverWeaponComponent() {
 }
 
 void UForeverWeaponComponent::EndPlay(const EEndPlayReason::Type EndPlayReason) {
-	delete currentWeapon;
-	currentWeapon = nullptr;
+	currentWeapon = nullptr; // Weapon归Core的Player常驻持有，这里只是引用
 	Super::EndPlay(EndPlayReason);
 }
 
-void UForeverWeaponComponent::EquipWeapon(const FString& weaponId) {
-	string idUtf8 = TCHAR_TO_UTF8(*weaponId);
-	Weapon* newWeapon = new Weapon(&Registry::Get().GetWeaponFactory(), idUtf8);
-	if (!newWeapon->IsValid()) { // id未注册/未在config.json"weapon_mods"数组里启用，静默保留原武器
-		delete newWeapon;
-		return;
-	}
-
-	delete currentWeapon;
+bool UForeverWeaponComponent::EquipWeapon(const FString& weaponId) {
+	// Weapon(含脚本)由Player常驻持有、不随装备增删；id未注册/未在config.json"weapon_mods"数组里启用，静默保留原武器。
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	Weapon* newWeapon = player ? player->FindWeapon(TCHAR_TO_UTF8(*weaponId)) : nullptr;
+	if (!newWeapon) return false;
 
 	currentWeapon = newWeapon;
-	currentWeapon->EnsureScript(); // 开火事件(weapon_fire)的接收方，没有脚本的武器(相机)为空
 	currentAmmo = currentWeapon->GetMagazineCapacity();
+	sourceSlot = 0; // 由调用方(ActivateShoulderWeapon)再绑定槽位并恢复该Asset记着的余量
 	bReloading = false;
 	bWantsToFire = false;
 
@@ -71,6 +68,22 @@ void UForeverWeaponComponent::EquipWeapon(const FString& weaponId) {
 			FImageUtils::CompressImage(ignored, TEXT("png"), FImageView(&pixel, 1, 1));
 		}
 	}
+	return true;
+}
+
+void UForeverWeaponComponent::SetCurrentAmmo(int32 value) {
+	currentAmmo = FMath::Clamp(value, 0, GetMagazineCapacity());
+	SyncAmmoToAsset();
+}
+
+void UForeverWeaponComponent::SyncAmmoToAsset() {
+	if (sourceSlot != 1 && sourceSlot != 2 || !currentWeapon || !currentWeapon->UsesAmmo()) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+	Player* player = framework ? framework->GetPlayer() : nullptr;
+	if (!player) return;
+	Asset* asset = sourceSlot == 1 ? player->GetLeftShoulder() : player->GetRightShoulder();
+	if (asset) asset->SetMagazineAmmo(currentAmmo);
 }
 
 void UForeverWeaponComponent::WarmUpScreenshot() {
@@ -90,9 +103,9 @@ void UForeverWeaponComponent::WarmUpScreenshot() {
 void UForeverWeaponComponent::ClearWeapon() {
 	if (!currentWeapon) return;
 
-	delete currentWeapon;
-	currentWeapon = nullptr;
+	currentWeapon = nullptr; // 只放下，Weapon和它的脚本继续由Player持有
 	currentAmmo = 0;
+	sourceSlot = 0;
 	bReloading = false;
 	bWantsToFire = false;
 }
@@ -132,6 +145,7 @@ void UForeverWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType
 				if (Player* player = framework->GetPlayer()) {
 					if (player->ConsumeByType(currentWeapon->GetAmmoType(), currentWeapon->GetMagazineCapacity())) {
 						currentAmmo = currentWeapon->GetMagazineCapacity();
+						SyncAmmoToAsset();
 					}
 				}
 			}
@@ -166,6 +180,7 @@ void UForeverWeaponComponent::Fire() {
 	if (currentWeapon->UsesAmmo()) {
 		if (currentAmmo <= 0) return;
 		currentAmmo--;
+		SyncAmmoToAsset();
 	}
 	lastFireTime = now;
 

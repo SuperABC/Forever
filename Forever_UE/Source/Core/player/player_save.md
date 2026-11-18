@@ -15,7 +15,7 @@
 
 ## 关键设计
 
-- **物品整棵树存**。每个物品记：类型（即 AssetMod 注册 id）、名字、数量、剩余使用次数（`usesLeft`，紧跟数量）、mod 状态，以及它装着的东西（按名字排序，递归）。
+- **物品整棵树存**。每个物品记：类型（即 AssetMod 注册 id）、名字、数量、剩余使用次数（`usesLeft`，紧跟数量）、武器弹匣余量（`magazineAmmo`，紧跟`usesLeft`，-1=没用过）、mod 状态，以及它装着的东西（按名字排序，递归）。
 - **物品重建**：
   - 读档时用原来的构造函数重建物品。重量、体积这些属性来自 mod 的 `SetProperty`，和新开局一样。
   - 装着的东西直接放回容器，不走 `AddContent` 的空间检查：存档里本来就装得下，这样 mod 改了尺寸也不会丢东西。
@@ -34,7 +34,7 @@
 
 存在 `ue` 段，由 `ForeverSaveSubsystem` 写、`AForeverFrameworkActor::RestoreControlledPawn` 读：
 - 玩家操控对象的位置和朝向、视角朝向；
-- 激活的肩膀武器 `weaponSlot` 和弹匣余量 `magazineAmmo`。读档后用 `AForeverCharacter::RestoreWeaponState` 改回存档时的状态。
+- 激活的肩膀武器 `weaponSlot` 和弹匣余量 `magazineAmmo`。(读档时的弹匣余量现在以物品身上的`magazineAmmo`为准，此处是冗余的)读档后用 `AForeverCharacter::RestoreWeaponState` 改回存档时的状态。
 
 ## 资产的options与scriptStarted
 `WriteAsset/ReadAsset`在mod状态之后追加`U32 options数量 + 各Str`、`U8 scriptStarted`；`ReadAsset`读完把脚本里的`name`变量改回存档里的名字。

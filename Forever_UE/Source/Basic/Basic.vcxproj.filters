@@ -280,6 +280,9 @@
     <ClCompile Include="player\asset_ammo_sniper.cpp">
       <Filter>player</Filter>
     </ClCompile>
+    <ClCompile Include="player\asset_ammo_rpg.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
     <ClCompile Include="player\asset_beef.cpp">
       <Filter>player</Filter>
     </ClCompile>
@@ -308,6 +311,9 @@
       <Filter>player</Filter>
     </ClCompile>
     <ClCompile Include="player\asset_sniper.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\asset_rpg.cpp">
       <Filter>player</Filter>
     </ClCompile>
     <ClCompile Include="player\asset_wheat.cpp">
@@ -362,6 +368,9 @@
       <Filter>player</Filter>
     </ClCompile>
     <ClCompile Include="player\weapon_sniper.cpp">
+      <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="player\weapon_rpg.cpp">
       <Filter>player</Filter>
     </ClCompile>
   </ItemGroup>
@@ -621,6 +630,9 @@
     <ClInclude Include="player\asset_ammo_sniper.h">
       <Filter>player</Filter>
     </ClInclude>
+    <ClInclude Include="player\asset_ammo_rpg.h">
+      <Filter>player</Filter>
+    </ClInclude>
     <ClInclude Include="player\asset_beef.h">
       <Filter>player</Filter>
     </ClInclude>
@@ -649,6 +661,9 @@
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="player\asset_sniper.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\asset_rpg.h">
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="player\asset_wheat.h">
@@ -706,6 +721,9 @@
       <Filter>player</Filter>
     </ClInclude>
     <ClInclude Include="player\weapon_sniper.h">
+      <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="player\weapon_rpg.h">
       <Filter>player</Filter>
     </ClInclude>
   </ItemGroup>

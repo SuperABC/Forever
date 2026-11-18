@@ -53,6 +53,7 @@
 
 ### 换弹:按`ammoType`从Player背包扣减整个弹匣容量的备弹
 `Reload()`检查未在换弹中且弹匣未满后启动计时(`reloadDuration`),真正的备弹检查/扣减放在计时结束时(`TickComponent`),不在按下R的瞬间就扣。无论弹匣里剩多少发,一次换弹都按`WeaponMod::GetAmmoType()`扣除整个弹匣容量的备弹(`Player::ConsumeByType`),不是"补齐差额";备弹不够就不扣减、不填满,`currentAmmo`保持原值(没有做"部分填充"这个edge case)。
+- 弹匣余量跟着肩膀上的`Asset`走(2026-11-18)：`Asset::magazineAmmo`(-1=没用过，装备给满)；`ActivateShoulderWeapon`装备后`SetSourceSlot(slot)`并按Asset记着的余量`SetCurrentAmmo`；开火扣弹、换弹完成、`SetCurrentAmmo`都调`SyncAmmoToAsset()`把`currentAmmo`写回槽位上的Asset(只存槽位、写回时现取Asset，不缓存指针)。所以切肩膀/拖走再装上不会重新满弹匣；`EquipWeapon`返回bool表示是否装备成功。
 
 ### 后坐力:仿PUBG手感,无自动回正
 `WeaponMod`的`recoilPitchMin/Max`/`recoilYawMin/Max`(度)每次开火各自在自己的区间内独立取随机值(不是固定角度),`recoilPitchMin/Max`都是正数保证垂直方向只会往上踢。`Fire()`开火后直接改`Controller->GetControlRotation()`的Pitch/Yaw再`SetControlRotation`回去,不用`AddControllerPitchInput`/`AddControllerYawInput`(会被`InputPitchScale`/`InputYawScale`缩放,符号不直观)。故意不做自动回正/衰减——连发时准心会持续走偏,直到玩家自己拉回,这是预期行为。单发/连发走同一个`Fire()`,后坐力逻辑无需区分。`PistolWeapon`后坐力比`RifleWeapon`轻,具体数值为目测值。

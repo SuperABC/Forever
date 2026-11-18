@@ -29,7 +29,7 @@ wrapper → `Basic`默认内容的三层结构，`Weapon`是这套结构里Core�
 等选项，武器脚本管开火)。
 
 - **创建时机**：构造`Weapon`时不建脚本(`UForeverWeaponVisualComponent::FindDef`为读模型参数会临时构造`Weapon`，不该建脚本)，
-  `UForeverWeaponComponent::EquipWeapon`装备时调`EnsureScript()`；`~Weapon`销毁脚本。换枪=新`Weapon`=新脚本，所以武器脚本不该有需要跨换枪保留的状态，也不进存档。
+  `Player`构造时给每个已启用的weapon mod各建一个`Weapon`并调`EnsureScript()`(2026-11-18)，常驻到`~Player`才销毁，不随装备/换枪增删(`Player::FindWeapon(id)`取；`UForeverWeaponComponent::EquipWeapon`只是取引用)。所以飞行中的火箭弹在换枪后仍能通过`weapon:<id>`找到脚本；脚本变量跨换枪保留，但不进存档。
 - **稳定键**`weapon:<武器id>`，`ScriptOwnerKind::Weapon`；`UForeverStoryFrameworkComponent::FindScriptByKey`按它从玩家Pawn的`UForeverWeaponComponent`取装备中的那把，
   这样`create_timer`等按键查脚本的机制也能用在武器脚本上。
 - 武器脚本没有场景实体：`spawn_effect`/`area_damage`必须填`position`(通常是`$$local.hit`)。

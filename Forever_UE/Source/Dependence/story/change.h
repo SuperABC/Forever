@@ -1572,6 +1572,35 @@ private:
 	std::string normal;
 };
 
+// 在场景里放一个蓝图Actor(通用，不限于火箭弹：以后任何"脚本在某处放一个东西"都用它)。actor是蓝图类路径(表达式，
+// 如"/Game/Asset/Projectile/BP_RPG7Rocket"，不含'.'自动补"_C")，加载不到不生成(打一条Warning)；position是"(x, y, z)"
+// 表达式(如$$local.fire，必填，缺省/无效跳过)；direction同格式，Actor的+X轴朝向(如$$local.direction，留空=不旋转)；
+// scale整体缩放(表达式，留空=1)。生成的Actor若带UForeverProjectileBridgeComponent，其OwnerScriptKey自动设成执行这个
+// Change的脚本的稳定键(撞击后projectile_hit事件发回这个脚本)，Instigator设为玩家当前操控的Pawn。之后怎么运动/出特效都是Actor自己的事。
+class SpawnActorChange : public Change {
+public:
+	SpawnActorChange();
+	SpawnActorChange(std::string actor, std::string position, std::string direction = std::string(), std::string scale = std::string());
+	virtual ~SpawnActorChange();
+
+	virtual const std::string& GetType() const override;
+
+	void SetActor(std::string actor);
+	const std::string& GetActor() const;
+	void SetPosition(std::string position);
+	const std::string& GetPosition() const;
+	void SetDirection(std::string direction);
+	const std::string& GetDirection() const;
+	void SetScale(std::string scale);
+	const std::string& GetScale() const;
+
+private:
+	std::string actor;
+	std::string position;
+	std::string direction;
+	std::string scale;
+};
+
 // 销毁地上(房间根或Player::worldAssets)的一件资产：场景里的Actor和Asset本身都删掉，Asset的脚本/计时器随之消失。
 // asset可省略(=执行这个Change的脚本所属的资产)。执行时只登记，下一帧才真正销毁(同一个里程碑里后面的Change
 // 还要用这件资产的脚本)。身上/背包/容器里的资产不处理。

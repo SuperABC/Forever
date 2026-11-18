@@ -65,6 +65,11 @@ public:
 	int GetCount() const;
 	void SetCount(int value);
 
+	// 武器资产的弹匣余量：-1=还没用过(装备时给满弹匣)，>=0=这把枪上次放下时弹匣里的子弹数。
+	// 由UForeverWeaponComponent在开火/换弹/读档时写回，装备时读出，所以切肩膀、捡起再装备都不会重新满弹匣。随Asset存档。
+	int GetMagazineAmmo() const;
+	void SetMagazineAmmo(int value);
+
 	// 使用一次：IsUsable()==false或count<=0直接返回false；usable==-1(无限次)什么都不扣，返回false；
 	// 否则剩余次数-1，降到0就用完这一件(count-1，剩余次数回满给下一件)，count降到0时返回true
 	// (调用方负责从所在容器/槽位/房间移除+delete这个Asset)。
@@ -113,6 +118,7 @@ private:
 	float meshScale = 1.f;
 
 	int count = 1;
+	int magazineAmmo = -1; // 见GetMagazineAmmo
 	std::unordered_map<std::string, Asset*> contents; // 独占持有
 
 	Script* script = nullptr; // 独占持有，可为空

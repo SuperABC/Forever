@@ -53,6 +53,7 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
   `param`是每次启动由剧情传入的动态参数（经`Puzzle::SetParam`→`PuzzleMod::SetParam`），跟`config.json` `puzzle_mods`的静态args是两回事，也不进存档（谜题进行中不能存档）。
 - **`ApplyEnterVehicle` / `ApplyBoardVehicle` / `ApplyLeaveVehicle` / `ApplyForceLeave`**：求值载具名后转发给`UForeverTrafficFrameworkComponent`的同名方法（`ApplyForceLeave`的载具名可为空，`bForce=true`）。
 - **`ApplyOpenShop`**：由执行Change的Job脚本反查所属组织，打开商店界面并让它记住该组织（购买时付款给它）。
+- **`ApplySpawnActor`**（`spawn_actor`，2026-11-18）：求值蓝图类路径(不含`.`补`_C`)/`position`/`direction`(+X朝向)/`scale`，`SpawnActorDeferred`生成；Actor带`UForeverProjectileBridgeComponent`时把`OwnerScriptKey`设成执行Change的脚本的稳定键(`FindScriptKey(context.self)`)，`Instigator`=玩家0的Pawn，再`FinishSpawning`。类加载不到/位置无效只打Warning。
 - **`ApplyPayWage`**：该组织给被操控市民发一笔工资（`Economy::PayWage`，代扣所得税）。玩家有没有真的去上班不影响每日工资结算，这是手动打工额外拿的一份。
 
 ## Dialog展示：排队 + 分支选项

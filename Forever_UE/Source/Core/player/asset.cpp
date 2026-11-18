@@ -99,6 +99,8 @@ Asset* Asset::FindDescendant(const string& childName) const {
 
 int Asset::GetCount() const { return count; }
 void Asset::SetCount(int value) { count = value; }
+int Asset::GetMagazineAmmo() const { return magazineAmmo; }
+void Asset::SetMagazineAmmo(int value) { magazineAmmo = value; }
 
 bool Asset::Use() {
 	if (usableUses == 0 || count <= 0) return false;

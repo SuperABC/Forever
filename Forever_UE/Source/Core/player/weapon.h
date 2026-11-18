@@ -26,9 +26,9 @@ public:
 	const std::string& GetType() const;
 
 	// 武器脚本(mod的scriptModName/milestoneNames，都空则为nullptr，见MakeScript)：开火事件(weapon_fire)发给它，
-	// 开火后的特效和伤害都由它调用Change完成。脚本和武器解耦(不依赖肩上的Asset)，Weapon析构时一起销毁，不进存档。
-	// 构造Weapon时不创建(FindDef这类只读模型参数的临时Weapon不需要)，装备武器的地方调一次EnsureScript。
-	// 稳定键"weapon:<武器id>"，同一时刻只装备一把，create_timer等按键查找脚本靠这个键。
+	// 开火后的特效和伤害都由它调用Change完成。脚本和武器解耦(不依赖肩上的Asset)，Player常驻持有、Weapon析构时一起销毁，不进存档。
+	// 构造Weapon时不创建(FindDef这类只读模型参数的临时Weapon不需要)，Player构造时给每个已启用的武器建一个并调一次EnsureScript(常驻)。
+	// 稳定键"weapon:<武器id>"，每个武器id一份、永久存在，create_timer等按键查找脚本靠这个键。
 	void EnsureScript();
 	Script* GetScript() const;
 

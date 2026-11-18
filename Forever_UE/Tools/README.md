@@ -12,6 +12,10 @@
 | ModWeb | 把 puzzle/app 逻辑 + 手机外壳用 Emscripten 编成单个离线 html，拷到手机直接开 | 需先装 `.emsdk`（已被忽略），`build_web.bat` 产出 `dist\forever_mods.html` |
 | RoadnetViz | 地形/路网/lot 渲染成 PNG 的可视化工具 | 自带 `Tools\RoadnetViz\RoadnetViz.sln`（含 Dependence/Core/Basic）：`MSBuild Tools\RoadnetViz\RoadnetViz.sln /p:Configuration=Release /p:Platform=x64` |
 | VehicleRig | 新载具绑骨：FBX → 带轮子权重的 GLB（靠材质自动识别轮子/车头） | `python Tools/VehicleRig/make_vehicle_glb.py <fbx> <glb> --mesh ... --hub-mat ... --tire-mat ... --front-mats ...`，详见其 README |
+| split_rpg7.py | 把Fab的 `rpg7.glb` 拆成空发射器 `SM_RPG7_Launcher.glb` + 截尾火箭弹 `SM_RPG7_Rocket.glb`（纯python+numpy，`CUT_Y`控制火箭弹截尾位置） | `python Tools/split_rpg7.py`，输出到脚本内配置的目录 |
+| import_rpg7.py | 把上面两个glb导入 `/Game/3rdParty/RPG7/StaticMeshes/`，材质指向现有RPG7材质，日志打印包围盒 | 环境变量 `RPG7_GLB_DIR`=glb目录；`UnrealEditor-Cmd.exe Forever.uproject -ExecutePythonScript="<绝对路径>" -unattended -stdout -FullStdOutLogOutput`，编辑器须关闭 |
+| make_rocket_blueprint.py | 创建 `/Game/Asset/Projectile/BP_RPG7Rocket`（父类 `AForeverRocketProjectile`，只填参数），须先跑import_rpg7 | 同上调用方式 |
+| make_effect_blueprints.py | 创建爆炸等特效蓝图 | 同上调用方式 |
 
 ## 相关
 

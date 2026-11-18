@@ -121,7 +121,7 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 
 `projectile_hit`(无字段)：mod蓝图里的弹射物Actor撞到东西后，经`UForeverProjectileBridgeComponent::ReportHit`→`NotifyProjectileHit`发给**它的所有者脚本**
 (`OwnerScriptKey`，如`weapon:weapon_rocket`，没找到脚本=丢弃)。local：`hit`、`normal`(vec3，规则同weapon_fire)、`sufferer`。
-火箭筒脚本在这里`spawn_effect`+`area_damage`。本次只有这个事件和桥组件，放置弹射物的`spawn_actor`Change以后再做。
+火箭筒脚本(`weapon_rpg.script`)在这里`area_damage`(爆炸特效由火箭弹Actor在撞击点自己生成)；火箭弹由同一脚本在`weapon_fire`里用`spawn_actor`放出(2026-11-18)。
 
 ## use_asset（2026-11-18）
 

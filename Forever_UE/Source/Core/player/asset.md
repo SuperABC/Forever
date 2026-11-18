@@ -17,6 +17,10 @@
 见`estate_asset.md`/`vehicle_asset.md`。"是否为容器"是独立的正交属性：`volume > 0`即为容器，和`mobility`无关——
 一个容器本身还能被装进另一个容器/背包，没有限制。
 
+## 武器弹匣余量：`magazineAmmo`字段
+
+`int magazineAmmo`(`GetMagazineAmmo/SetMagazineAmmo`)：-1=没用过(装备时给满弹匣)，>=0=这把枪放下时弹匣里的子弹数。由`UForeverWeaponComponent`开火/换弹/装备时读写，随资产存档(`WriteAsset`在`usesLeft`后写一个`I32`，旧存档格式不兼容、未升版本)。
+
 ## 堆叠：`count`字段
 
 `Asset`带一个`int count`代表"这一份的数量"——120发子弹是1个`Asset`实例(`count=120`)，

@@ -190,6 +190,13 @@
 UE层`UForeverTrafficFrameworkComponent::ToggleRouteWatch`执行(路径来源：Actor的Controller剩余路点 / Core推算 / 跳时间虚拟时钟腿)。与`visualize_navigation`(玩家自己的导航线)互不影响。
 `schedule_empty.script`(所有市民)和`vehicle_basic.script`(轿车/卡车)各有一个"显示路线"选项触发它；公交/飞机/火车不走这套寻路，没加。
 
+## spawn_actor（2026-11-18）
+
+- `spawn_actor`(`actor`、`position`、`direction`、`scale`，都是表达式)：在场景里放一个**蓝图Actor**，通用的"脚本在某处放一个东西"。`actor`是蓝图类路径(如`"\"/Game/Asset/Projectile/BP_RPG7Rocket\""`，不含`.`自动补`_C`)，加载不到不生成并打Warning；
+  `position`必填(`"(x, y, z)"`表达式，如`$$local.fire`)；`direction`是Actor+X轴朝向(如`$$local.direction`)，留空=不旋转；`scale`空=1。
+  生成的Actor若带`UForeverProjectileBridgeComponent`，其`OwnerScriptKey`自动设成**执行这个Change的脚本**的稳定键，`Instigator`设为玩家当前操控的Pawn(弹射物据此忽略发射者)。之后怎么运动、出特效、撞击后报告命中(`projectile_hit`)都是Actor自己的事。
+  UE层执行：`UForeverStoryFrameworkComponent::ApplySpawnActor`。用法见`Resource/Story/weapon_rpg.script`(`weapon_fire`→`spawn_actor`火箭弹)。
+
 ## spawn_effect / destroy_asset（2026-11-17）
 
 - `spawn_effect`(`effect`、`scale`、`asset`、`position`、`normal`，都是表达式、都可省略)：生成一次爆炸类特效(纯视觉)。位置：`position`非空时按`"(x, y, z)"`字符串解析(如`$$local.hit`)；

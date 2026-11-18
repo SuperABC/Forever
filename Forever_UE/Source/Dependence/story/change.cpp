@@ -1997,6 +1997,57 @@ const std::string& SpawnEffectChange::GetNormal() const {
 	return normal;
 }
 
+SpawnActorChange::SpawnActorChange() :
+	actor(), position(), direction(), scale() {
+
+}
+
+SpawnActorChange::SpawnActorChange(std::string actor, std::string position, std::string direction, std::string scale) :
+	actor(move(actor)), position(move(position)), direction(move(direction)), scale(move(scale)) {
+
+}
+
+SpawnActorChange::~SpawnActorChange() {
+
+}
+
+const string& SpawnActorChange::GetType() const {
+	static const string type = "spawn_actor";
+	return type;
+}
+
+void SpawnActorChange::SetActor(std::string actor) {
+	this->actor = move(actor);
+}
+
+const std::string& SpawnActorChange::GetActor() const {
+	return actor;
+}
+
+void SpawnActorChange::SetPosition(std::string position) {
+	this->position = move(position);
+}
+
+const std::string& SpawnActorChange::GetPosition() const {
+	return position;
+}
+
+void SpawnActorChange::SetDirection(std::string direction) {
+	this->direction = move(direction);
+}
+
+const std::string& SpawnActorChange::GetDirection() const {
+	return direction;
+}
+
+void SpawnActorChange::SetScale(std::string scale) {
+	this->scale = move(scale);
+}
+
+const std::string& SpawnActorChange::GetScale() const {
+	return scale;
+}
+
 DestroyAssetChange::DestroyAssetChange() :
 	asset() {
 

@@ -22,7 +22,8 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// 按WeaponFactory里注册的id切换武器；id未注册/未启用时静默保留当前武器。
-	void EquipWeapon(const FString& weaponId);
+	// 返回是否装备成功(id没启用则保持原状返回false)。
+	bool EquipWeapon(const FString& weaponId);
 
 	// 按下/松开开火键。单发武器只在按下瞬间打一发；全自动武器按住期间由TickComponent按冷却连发。
 	void StartFire();
@@ -34,7 +35,10 @@ public:
 	bool IsReloading() const { return bReloading; }
 	int32 GetCurrentAmmo() const { return currentAmmo; }
 	// 读档恢复弹匣余量(夹到[0, 弹匣容量])。
-	void SetCurrentAmmo(int32 value) { currentAmmo = FMath::Clamp(value, 0, GetMagazineCapacity()); }
+	void SetCurrentAmmo(int32 value);
+	// 弹匣余量跟着肩膀槽位上的Asset走(1=左肩，2=右肩，0=不绑定)：ActivateShoulderWeapon装备后调，余量变化时写回那个Asset。
+	// 只存槽位、写回时现取Asset，不缓存Asset指针(拖走/丢掉后不会悬空)。
+	void SetSourceSlot(int32 slot) { sourceSlot = slot; }
 	int32 GetMagazineCapacity() const;
 
 	// 手上是否激活了武器。
@@ -63,6 +67,9 @@ private:
 	Weapon* currentWeapon = nullptr;
 
 	int32 currentAmmo = 0;
+	int32 sourceSlot = 0;
+	// 把currentAmmo写回sourceSlot上的Asset(没有绑定/不用弹药的武器什么都不做)。
+	void SyncAmmoToAsset();
 	float lastFireTime = -1000.f;
 	bool bWantsToFire = false;
 	bool bReloading = false;

@@ -1,5 +1,7 @@
 #include "player/player.h"
 
+#include "player/weapon.h"
+
 #include "common/utility.h"
 #include "common/registry.h"
 #include "map/room.h"
@@ -11,6 +13,21 @@
 using namespace std;
 
 Player::Player() : assetFactory(Registry::Get().GetAssetFactory()) {
+	WeaponFactory& weaponFactory = Registry::Get().GetWeaponFactory();
+	for (const string& id : weaponFactory.GetRegisteredIds()) {
+		Weapon* weapon = new Weapon(&weaponFactory, id);
+		if (!weapon->IsValid()) { // 注册了但没在config.json"weapon_mods"里启用
+			delete weapon;
+			continue;
+		}
+		weapon->EnsureScript();
+		weapons[id] = weapon;
+	}
+}
+
+Weapon* Player::FindWeapon(const string& id) const {
+	auto it = weapons.find(id);
+	return it == weapons.end() ? nullptr : it->second;
 }
 
 Player::~Player() {
@@ -22,6 +39,7 @@ Player::~Player() {
 	delete leftShoulder;
 	delete rightShoulder;
 	for (auto& [name, entry] : worldAssets) delete entry.asset;
+	for (auto& [id, weapon] : weapons) delete weapon;
 }
 
 void Player::Init() {

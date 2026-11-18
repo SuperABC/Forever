@@ -217,6 +217,14 @@ void AForeverCharacter::PossessedBy(AController* NewController)
 						sniperAmmo->SetCount(120);
 						bag->AddContent(sniperAmmo);
 					}
+					// 火箭筒：放背包里(不挂肩膀)，配10发火箭弹；从背包拖到肩膀上激活，开火的火箭弹由脚本spawn_actor放出。
+					if (Asset* rpg = player->CreateAsset("asset_rpg")) {
+						bag->AddContent(rpg);
+					}
+					if (Asset* rpgAmmo = player->CreateAsset("asset_ammo_rpg")) {
+						rpgAmmo->SetCount(10);
+						bag->AddContent(rpgAmmo);
+					}
 					// 相机：不用弹药，同样放背包里，从背包拖到肩膀上激活后右键瞄准。
 					if (Asset* camera = player->CreateAsset("asset_camera")) {
 						bag->AddContent(camera);
@@ -396,6 +404,9 @@ void AForeverCharacter::ToggleCameraView()
 	firstPersonCamera->SetActive(bIsFirstPerson);
 
 	GetMesh()->SetOwnerNoSee(bIsFirstPerson);
+	// 第一人称里网格对自己不可见(OwnerNoSee)，会被当成"没渲染"；若动画只在渲染时才更新，过1~2秒头骨(第一人称相机挂在上面)
+	// 就停止摆动，武器相对镜头的步伐起伏消失。强制一直更新姿势和骨骼。
+	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 
 	UpdateRotationMode();
 }
@@ -557,7 +568,11 @@ void AForeverCharacter::ActivateShoulderWeapon(int32 slot)
 	// 武器Asset留在肩膀槽位上不动，EquipWeapon只让组件额外持有一份"活的"WeaponMod副本(会先销毁旧副本)。
 	// 资产id(asset_pistol)和武器id(weapon_pistol)分属两个concept，由资产自己声明对应哪把武器。
 	FString activatedType = UTF8_TO_TCHAR(toActivate->GetWeaponType().c_str());
-	weaponComponent->EquipWeapon(activatedType);
+	if (weaponComponent->EquipWeapon(activatedType)) {
+		// 弹匣余量跟着这把枪的Asset走：绑定槽位(之后开火/换弹写回)，Asset记着余量就恢复，否则保持满弹匣。
+		weaponComponent->SetSourceSlot(slot);
+		if (toActivate->GetMagazineAmmo() >= 0) weaponComponent->SetCurrentAmmo(toActivate->GetMagazineAmmo());
+	}
 
 	// 固定Key，切枪刷新同一行。
 	if (GEngine) {
