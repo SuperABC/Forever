@@ -27,7 +27,7 @@ mesh下标）。由`Map`持有（`Map::GetVegetation()`），UE层`UForeverVeget
   园区是`NorthPointToLocal`/`LocalToWorld`。单棵/一排两端直接换世界坐标；一片的两个对角先换局部坐标
   取矩形中心和尺寸，中心换世界坐标后按`rotation`在矩形内采样。只读遍历mod的容器，跨DLL安全。
 - **mesh路径去重**：`RegisterMesh`返回下标，`TreeInstance::meshIndex`指向`GetMeshPaths()`——UE层
-  先把所有mesh一次性加载好、每个mesh建一个HISM，再批量添加实例。
+  先把所有mesh一次性加载好、每个mesh建一个ISM，再批量添加实例。
 - **不存高度**——Z由UE层按`Map::SampleHeight`(含细化高度)现场取，不在Core里重复存一份。
 - `id`从0递增，目前只供诊断/UE层映射使用；运行时的增删在UE层组件里做，Core这份是初始列表。
 

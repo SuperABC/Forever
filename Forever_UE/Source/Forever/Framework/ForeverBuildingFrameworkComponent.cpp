@@ -7,6 +7,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #if WITH_EDITOR
 #include "StaticMeshCompiler.h"
+#include "StaticMeshResources.h"
 #endif
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
@@ -270,6 +271,8 @@ void UForeverBuildingFrameworkComponent::FlushShellInstances() {
 		UInstancedStaticMeshComponent* ism = CreateShellISM(mesh);
 		if (!ism) { pool.pending.Empty(); pool.pendingCustomData.Empty(); return; }
 		applyMaterials(ism);
+		// 整组件距离剔除(引擎在渲染时判断，不重建代理)：视点离该单元包围球超过这个距离就不画，含阴影；碰撞不受影响。
+		if (shellCullDistance > 0.f) ism->SetCullDistance(shellCullDistance * 1000.f);
 		ism->RegisterComponent();
 		owner->AddInstanceComponent(ism);
 		ism->AddInstances(pool.pending, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
@@ -294,6 +297,9 @@ void UForeverBuildingFrameworkComponent::FlushShellInstances() {
 			for (int32 i = 0; i < 5; i++) if (key.wall.slots[i]) ism->SetMaterial(i, key.wall.slots[i]);
 			});
 	}
+	if (shellCullDistance > 0.f && cubeMesh && cubeMesh->GetRenderData() && cubeMesh->GetRenderData()->HasValidNaniteData()) {
+		UE_LOG(LogTemp, Warning, TEXT("Building shell: Cube mesh still has Nanite enabled, shellCullDistance will not take effect."));
+	}
 	UE_LOG(LogTemp, Log, TEXT("Building shell merged (cell size %.0f): %d ISM components (%d cube pools, %d wall pools), %lld instances, %.0f ms"),
 		shellCellSize, poolCount, shellCubePools.Num(), shellWallPools.Num(), instanceCount,(FPlatformTime::Seconds() - startTime) * 1000.0);
 	UpdateShellShadows();
@@ -304,16 +310,19 @@ void UForeverBuildingFrameworkComponent::UpdateShellShadows() {
 	if (!pawn) return;
 	const FVector location = pawn->GetActorLocation() / 1000.f; // UE单位->地图单位
 	const FVector2D player(location.X, location.Y);
-	// 玩家到单元矩形的水平距离不超过"近处->远处"阈值就投射阴影(和近处LOD同一个范围)。
-	const float radius = lodFarExitDistance;
+	// 玩家到单元矩形的水平距离不超过shellShadowDistance就投射阴影。
+	const float radius = shellShadowDistance;
 	auto update = [&](FShellPool& pool) {
 		if (!pool.ism) return;
 		const float dx = FMath::Max(FMath::Max(pool.cellMin.X - player.X, 0.0), player.X - pool.cellMax.X);
 		const float dy = FMath::Max(FMath::Max(pool.cellMin.Y - player.Y, 0.0), player.Y - pool.cellMax.Y);
-		const bool want = shellCellSize <= 0.f || (dx * dx + dy * dy) <= radius * radius;
-		if (want == pool.casting) return;
-		pool.casting = want;
-		pool.ism->SetCastShadow(want);
+		const float distSq = dx * dx + dy * dy;
+		const bool want = shellCellSize <= 0.f || distSq <= radius * radius;
+		if (want != pool.casting) {
+			pool.casting = want;
+			pool.ism->SetCastShadow(want);
+		}
+
 	};
 	for (auto& [key, pool] : shellCubePools) update(pool);
 	for (auto& [key, pool] : shellWallPools) update(pool);

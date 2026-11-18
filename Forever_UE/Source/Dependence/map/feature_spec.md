@@ -65,7 +65,7 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
   过滤全部由Core统一处理，规则只有一份。
 - **跨DLL安全**——mod只往自己对象的`trees`里写(`TreeRequests`的Add方法编译在Dependence里、
   链进各自DLL)，Core只按值拷贝/只读遍历，符合CONVENTIONS.md §4。num<=0或meshPath为空的请求直接忽略。
-- **`meshPath`是StaticMesh资产软路径**——UE层每个mesh一个HISM实例化渲染，不支持蓝图。
+- **`meshPath`是StaticMesh资产软路径**——UE层每个mesh一个ISM实例化渲染，不支持蓝图。
 
 ### 依赖关系
 

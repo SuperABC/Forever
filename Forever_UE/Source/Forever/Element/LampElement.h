@@ -55,6 +55,42 @@ struct FLampLightSettings
 	bool castShadows = false;
 };
 
+// 灯杆网格改走全城共享ISM时，每种灯(灯蓝图类)自己的参数，在蓝图Class Defaults里填(ALampElement::meshSettings)。
+// UForeverLampFrameworkComponent按灯蓝图类读它来建ISM，同一种灯的所有实例共用。
+USTRUCT(BlueprintType)
+struct FLampMeshSettings
+{
+	GENERATED_BODY()
+
+	// 灯头发光的材质槽下标(对应蓝图里原来Create Dynamic Material Instance的Element Index)；<0=这种灯没有会发光的槽。
+	// 该槽会换成这种灯所有实例共享的一个动态材质，其它槽直接用网格组件原来的材质。
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	int32 emissiveMaterialSlot = 0;
+
+	// 昼夜要改的发光强度标量参数名(要和灯头材质里的参数名一致)。
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	FName emissiveParameterName = TEXT("EmissiveStrength");
+
+	// 亮灯(亮度1)和灭灯(亮度0)时写进上面参数的值，亮度在两者之间线性插值。原蓝图里是亮度×100，即on=100、off=0。
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float emissiveStrengthOn = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float emissiveStrengthOff = 0.f;
+
+	// 灯杆实例的最大绘制距离(cm)，逐实例剔除，只对非Nanite网格生效；<=0不剔除。网格开了Nanite就留0。
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float cullDistance = 0.f;
+
+	// 灯杆是否投射阴影。
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	bool castShadow = true;
+
+	// 灯杆是否有碰撞(用ISM默认的碰撞设置；关掉=无碰撞，开局创建物理体的开销也省掉)。
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	bool hasCollision = true;
+};
+
 // 路灯的基类Actor：每盏灯一个实例，由UForeverLampFrameworkComponent生成并按昼夜、距离驱动。
 // 近处用真实光源、远处用光斑Decal，详见LampElement.md。
 UCLASS()
@@ -82,6 +118,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Lamp")
 	bool IsNear() const { return bNear; }
+
+	// 灯杆网格的共享ISM参数，框架组件按这种灯的蓝图类读取。
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Lamp|Mesh")
+	FLampMeshSettings meshSettings;
 
 protected:
 	virtual void BeginPlay() override;

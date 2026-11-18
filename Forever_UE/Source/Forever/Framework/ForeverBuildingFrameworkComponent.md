@@ -66,7 +66,8 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 - `GenerateBuildings` 里每个有楼层的建筑 `RegisterShellBuilding()`，每栋 `BuildShell` 完成后 `NotifyShellBuilt()`；
   全部建完时 `FlushShellInstances()` 对每个池一次 `AddInstances(pending,false,true)` 并写入 `PerInstanceSMCustomData`，
   之后外壳永远不再增删(LOD不动它)，日志 `Building shell merged: ...`。一次性提交会在开局（时间冻结期间）有一次较长的卡顿。
-- 阴影：池只在玩家水平距离到其格子矩形 ≤ `lodFarExitDistance` 时投射阴影，`TickComponent` 每0.25秒 `UpdateShellShadows()`。
+- 距离剔除：每个ISM组件`SetCullDistance(shellCullDistance*1000)`(默认0=不剔除；设正数才生效)，由引擎渲染时按视点到包围球的距离判断，超过就不画(含阴影)；碰撞不受影响。**要求Cube/Wall两个网格关掉Nanite**(Nanite不理会图元最大绘制距离，开着时实测不生效；改用`SetVisibility`手动隐藏会重建渲染代理，实测明显更卡)。Cube仍开Nanite时提交日志会警告。**实测结论(2026-11-18)：关Nanite+距离剔除，性能比开Nanite画全图更差，所以默认关闭剔除、网格保持Nanite。**
+- 阴影：池只在玩家水平距离到其格子矩形 ≤ `shellShadowDistance`(默认128地图单位，独立于近处LOD阈值)时投射阴影，`TickComponent` 每0.25秒 `UpdateShellShadows()`。
 - 碰撞显式 `BlockAll`，纯阻挡(挡玩家、挡 `ECC_Pawn` 射线)，不产生重叠事件。
 
 楼梯/坡道这类有真实3D资产的元素，和电梯轿厢(`isMovable=true`每帧播动画)、门

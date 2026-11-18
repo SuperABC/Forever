@@ -4,22 +4,22 @@
 
 全图植被的统一渲染。Core的`Map::GetVegetation()`里存着已经展开好的每一棵树（见
 `Source/Core/map/vegetation.md`），这个组件把它们按mesh分组，每个StaticMesh一个
-`UHierarchicalInstancedStaticMeshComponent`，所有树都是HISM的实例。
+`UInstancedStaticMeshComponent`，所有树都是ISM的实例。
 
 ## 关键设计
 
 - **加载放在最开始，运行时只增删实例**——`GenerateVegetation(map)`先对`GetMeshPaths()`逐个
-  `LoadObject<UStaticMesh>`并建好HISM(加载失败打Warning，那个mesh的树全部跳过)，再按mesh分组
-  每个HISM只调一次`AddInstances`批量添加(只触发一次树重建)。之后`AddTree`/`RemoveTree`只增删
+  `LoadObject<UStaticMesh>`并建好ISM(加载失败打Warning，那个mesh的树全部跳过)，再按mesh分组
+  每个ISM只调一次`AddInstances`批量添加(只触发一次渲染数据更新)。之后`AddTree`/`RemoveTree`只增删
   实例；`AddTree`遇到没预加载过的mesh会现场加载一次并打Warning，正常情况下不应该发生。
-- **只支持StaticMesh**——HISM只能实例化StaticMesh，蓝图Actor不能这样批量渲染。
-- **树id和实例下标的映射**——HISM开了`SetRemoveSwap()`，删除时最后一个实例会被挪到被删的位置；
-  `treeSlots`(treeId→mesh+实例下标)和`instanceTreeIds`(每个HISM的实例下标→treeId)两张表在
+- **只支持StaticMesh**——ISM只能实例化StaticMesh，蓝图Actor不能这样批量渲染。
+- **树id和实例下标的映射**——ISM开了`SetRemoveSwap()`(基类ISM支持)，删除时最后一个实例会被挪到被删的位置；
+  `treeSlots`(treeId→mesh+实例下标)和`instanceTreeIds`(每个ISM的实例下标→treeId)两张表在
   `RemoveTree`里一起修正。初始树沿用Core的`TreeInstance::id`，运行时新增的id接着往后数。
 - **Transform**——位置=地图element坐标×1000，Z=`Map::SampleHeight`(含细化高度)×1000，
   `FRotator(0, yaw°, 0)`，等比缩放直接用Core算好的最终scale(随机已经在Core里叠加过)。
-- **剔除距离**——`cullDistanceStart/End`(UU，默认0~60000)是`EditDefaultsOnly`，HISM按
-  cluster剔除远处的树。mobility设成Static，和FrameworkActor的sceneRoot一致。
+- **剔除距离**——`cullDistanceStart/End`(UU，默认0~60000)是`EditDefaultsOnly`，ISM按实例
+  剔除距离隐藏远处的树(没有HISM那种层次树/逐实例LOD，2026-11-18由HISM改成ISM：树初始化后不再增删，不需要层次树)。mobility设成Static，和FrameworkActor的sceneRoot一致。
 - 调用时机：`AForeverFrameworkActor::EnsureMapGenerated`在`GenerateBuildings`之后调用。
 
 ## 风(树随风摇摆)

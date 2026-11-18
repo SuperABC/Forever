@@ -26,6 +26,10 @@
   一盏灯可以有多个。创建=`NewObject`+Movable+挂到根+`RegisterComponent`，销毁=`DestroyComponent`。`lights`为空=这种灯没有真实光源。
 - **Decal是可选组件**：`ULampDecalComponent`(见`LampDecalComponent.md`)，蓝图里按需添加；`RefreshLampEffects`用`GetComponents`找到全部并调`SetLampActive`，
   蓝图里不用写Decal的节点。`BeginPlay`里刷新一次，让Decal初始隐藏。
+- **灯杆ISM参数`meshSettings`**(`FLampMeshSettings`，蓝图Class Defaults里填，每种灯一份)：灯杆网格不由Actor渲染而是进全城共享ISM时，
+  `UForeverLampFrameworkComponent`按这种灯的蓝图类读它来建ISM：`emissiveMaterialSlot`(灯头材质槽，<0=没有)、`emissiveParameterName`、
+  `emissiveStrengthOn/Off`(亮/灭时的参数值，亮度线性插值)、`cullDistance`(逐实例剔除，非Nanite才生效，0=不剔除)、`castShadow`、`hasCollision`。
+  新增一种路灯只需要新建`LampElement`的蓝图子类、摆网格/Decal、填这些参数，不用改C++。
 - 根组件是空`SceneComponent`，Tick关闭(状态只在变化时由框架组件推送)。灯不持有任何Core对象，没有`Init`。
 
 ## 依赖关系

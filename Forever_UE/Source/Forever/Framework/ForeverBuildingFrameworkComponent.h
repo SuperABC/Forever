@@ -164,6 +164,15 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Building")
 	float shellCellSize = 64.f;
 
+	// 外壳ISM投射阴影的距离(地图单位，1单位=10米)：玩家水平距离到单元矩形不超过它才投射阴影。与近处LOD阈值无关。
+	UPROPERTY(EditDefaultsOnly, Category = "Building")
+	float shellShadowDistance = 128.f;
+
+	// 外壳ISM的整组件最大绘制距离(地图单位，1单位=10米)，走引擎SetCullDistance，<=0不剔除(默认关)。
+	// 要求外壳网格(Cube/Wall)关掉Nanite，但实测关Nanite后整体性能比开Nanite画全图更差，所以默认不用。
+	UPROPERTY(EditDefaultsOnly, Category = "Building")
+	float shellCullDistance = 0.f;
+
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> defaultLodMaterial; // 远处默认灰色(Pure+Color染灰)
 

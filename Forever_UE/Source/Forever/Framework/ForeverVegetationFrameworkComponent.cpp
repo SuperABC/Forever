@@ -1,6 +1,6 @@
 #include "Framework/ForeverVegetationFrameworkComponent.h"
 
-#include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialParameterCollection.h"
 #include "Materials/MaterialParameterCollectionInstance.h"
@@ -24,14 +24,14 @@ void UForeverVegetationFrameworkComponent::GenerateVegetation(Map* inMap) {
 	const auto& meshPaths = vegetation.GetMeshPaths();
 	const auto& trees = vegetation.GetTrees();
 
-	// 第一步：所有mesh一次性加载、每个mesh建好一个HISM。Core的meshIndex -> 这里的下标。
+	// 第一步：所有mesh一次性加载、每个mesh建好一个ISM。Core的meshIndex -> 这里的下标。
 	TArray<int32> localMeshIndex;
 	localMeshIndex.SetNum(static_cast<int32>(meshPaths.size()));
 	for (int32 i = 0; i < localMeshIndex.Num(); i++) {
 		localMeshIndex[i] = GetOrCreateMesh(UTF8_TO_TCHAR(meshPaths[i].c_str()));
 	}
 
-	// 第二步：按mesh分组，每个HISM只调一次AddInstances(批量添加比逐个AddInstance快得多，
+	// 第二步：按mesh分组，每个ISM只调一次AddInstances(批量添加比逐个AddInstance快得多，
 	// 而且只触发一次树重建)。
 	TArray<TArray<FTransform>> transforms;
 	TArray<TArray<int32>> treeIds;
@@ -80,9 +80,9 @@ bool UForeverVegetationFrameworkComponent::RemoveTree(int32 treeId) {
 	FTreeSlot slot;
 	if (!treeSlots.RemoveAndCopyValue(treeId, slot)) return false;
 
-	UHierarchicalInstancedStaticMeshComponent* hism = meshComponents[slot.meshIndex];
+	UInstancedStaticMeshComponent* ism = meshComponents[slot.meshIndex];
 	TArray<int32>& ids = instanceTreeIds[slot.meshIndex];
-	if (!hism->RemoveInstance(slot.instanceIndex)) return false;
+	if (!ism->RemoveInstance(slot.instanceIndex)) return false;
 
 	// SetRemoveSwap()之后删除是RemoveAtSwap：最后一个实例被挪到被删的位置，修正它的映射。
 	int32 lastIndex = ids.Num() - 1;
@@ -138,17 +138,17 @@ int32 UForeverVegetationFrameworkComponent::GetOrCreateMesh(const FString& meshP
 		return INDEX_NONE;
 	}
 
-	UHierarchicalInstancedStaticMeshComponent* hism =
-		NewObject<UHierarchicalInstancedStaticMeshComponent>(owner, NAME_None, RF_Transient);
-	hism->SetStaticMesh(mesh);
-	hism->SetMobility(EComponentMobility::Static);
-	hism->SetRemoveSwap();
-	hism->SetCullDistances(cullDistanceStart, cullDistanceEnd);
-	hism->SetupAttachment(owner->GetRootComponent());
-	hism->RegisterComponent();
-	owner->AddInstanceComponent(hism);
+	UInstancedStaticMeshComponent* ism =
+		NewObject<UInstancedStaticMeshComponent>(owner, NAME_None, RF_Transient);
+	ism->SetStaticMesh(mesh);
+	ism->SetMobility(EComponentMobility::Static);
+	ism->SetRemoveSwap();
+	ism->SetCullDistances(cullDistanceStart, cullDistanceEnd);
+	ism->SetupAttachment(owner->GetRootComponent());
+	ism->RegisterComponent();
+	owner->AddInstanceComponent(ism);
 
-	int32 meshIndex = meshComponents.Add(hism);
+	int32 meshIndex = meshComponents.Add(ism);
 	instanceTreeIds.AddDefaulted();
 	meshIndexByPath.Add(meshPath, meshIndex);
 	return meshIndex;

@@ -4,13 +4,13 @@
 #include "Framework/ForeverFrameworkComponent.h"
 #include "ForeverVegetationFrameworkComponent.generated.h"
 
-class UHierarchicalInstancedStaticMeshComponent;
+class UInstancedStaticMeshComponent;
 class UStaticMesh;
 class UMaterialParameterCollection;
 class Map;
 
-// 全图植被的统一渲染：每个StaticMesh一个HISM，所有树都是它的实例。GenerateVegetation一开始就把
-// Core(Map::GetVegetation())里用到的mesh全部加载好、建好HISM，再批量添加初始实例；之后运行时
+// 全图植被的统一渲染：每个StaticMesh一个ISM，所有树都是它的实例。GenerateVegetation一开始就把
+// Core(Map::GetVegetation())里用到的mesh全部加载好、建好ISM，再批量添加初始实例；之后运行时
 // 只通过AddTree/RemoveTree增删实例，不再创建组件。详见ForeverVegetationFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverVegetationFrameworkComponent : public UForeverFrameworkComponent
@@ -58,7 +58,7 @@ private:
 
 	Map* map = nullptr; // 非持有,AForeverFrameworkActor拥有生命周期
 
-	// HISM实例的剔除距离(UU)，超过End的树不渲染。
+	// ISM实例的剔除距离(UU)，超过End的树不渲染。
 	UPROPERTY(EditDefaultsOnly, Category = "Vegetation")
 	int32 cullDistanceStart = 0;
 
@@ -85,12 +85,12 @@ private:
 	float windPhase = 0.f;
 
 	UPROPERTY()
-	TArray<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>> meshComponents;
+	TArray<TObjectPtr<UInstancedStaticMeshComponent>> meshComponents;
 
 	TMap<FString, int32> meshIndexByPath;
-	// treeId -> 它当前所在的HISM和实例下标
+	// treeId -> 它当前所在的ISM和实例下标
 	TMap<int32, FTreeSlot> treeSlots;
-	// 每个HISM的实例下标 -> treeId(RemoveAtSwap之后用来修正被换过来的那棵树)
+	// 每个ISM的实例下标 -> treeId(RemoveAtSwap之后用来修正被换过来的那棵树)
 	TArray<TArray<int32>> instanceTreeIds;
 	int32 nextTreeId = 0;
 };

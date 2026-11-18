@@ -5,6 +5,8 @@
 #include "ForeverLampFrameworkComponent.generated.h"
 
 class ALampElement;
+class UInstancedStaticMeshComponent;
+class UMaterialInstanceDynamic;
 class Map;
 class Time;
 
@@ -36,6 +38,21 @@ private:
 	// 返回蓝图类，已加载过的直接取缓存，加载失败返回nullptr(只打一次Warning)。
 	UClass* GetOrLoadClass(const FString& blueprintPath);
 	ALampElement* SpawnLamp(UClass* lampClass, float mapX, float mapY, float yaw);
+
+	// 灯杆网格是全城共享的ISM：每种(灯蓝图类, 蓝图里的静态网格组件)一个ISM(FLampMeshPart)，灯Actor自己的网格组件隐藏掉。
+	struct FLampMeshPart {
+		UInstancedStaticMeshComponent* ism = nullptr;
+		UMaterialInstanceDynamic* emissive = nullptr; // 该ISM灯头材质槽的共享动态材质，昼夜统一写一次
+		FName emissiveParameter;                      // 下面三项来自这种灯的ALampElement::meshSettings
+		float emissiveOn = 0.f;
+		float emissiveOff = 0.f;
+		TArray<FTransform> pending;                  // GenerateLamps期间攒着，结束时一次性AddInstances
+	};
+	// 读灯Actor蓝图里的静态网格组件：把它的世界变换排进对应ISM(没有就新建)，并隐藏Actor自己的网格组件。
+	// batch=true时只攒进pending(由CommitLampInstances统一提交)，否则立即AddInstance。
+	void RegisterLampMesh(int32 lampId, ALampElement* actor, bool batch);
+	void CommitLampInstances();
+	void ApplyEmissive(float brightness);
 	// 按相机位置给每盏灯切换近/远：灯自己的IsNear()就是当前状态，滞回区间内保持不变。
 	void UpdateNearFar();
 
@@ -60,6 +77,10 @@ private:
 	float updateInterval = 0.2f;
 
 	float nearFarTimer = 0.f;
+
+	TArray<FLampMeshPart> meshParts;
+	TMap<FString, int32> partByKey; // "蓝图类路径#组件名" -> meshParts下标
+	TMap<int32, TArray<TPair<int32, int32>>> lampInstances; // 灯id -> (meshParts下标, 实例下标)
 
 	UPROPERTY()
 	TMap<FString, TObjectPtr<UClass>> classByPath;
