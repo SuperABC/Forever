@@ -86,5 +86,10 @@
 
 - 没有Job或Job没有产生调度的市民仍是“站在分配到的房间里的固定点”，没有工作驱动之外的自主移动。
 
+## 走路速度倍率（2026-11-19）
+`GetWalkSpeedFactor()=walkSpeedScale×walkSpeedJitter`：`walkSpeedScale`是脚本给的`speed`(npc_navigate/assign_task每次执行都重设，省略=1.0，下限0无上限)，
+`walkSpeedJitter`是构造时抽的0.8~1.2固定扰动(临时放Core里，脚本有随机数后迁到脚本)。两者都存人口段(行走实例化概率之后)。UE层把因子乘到基准走路速度(`ForeverCharacter::walkSpeed`=180)上：
+`ACitizenElement::WalkTo`写进Controller指令的`speedScale`，Core推算(`ApplyWalkResult`/`RegisterSkipWalk`)也乘它。
+
 ## 行走实例化概率
 `GetWalkInstantiateProbability/SetWalkInstantiateProbability/RollWalkInstantiable/IsWalkInstantiable`：见 ForeverPopulaceFrameworkComponent.md“行走实例化概率”。

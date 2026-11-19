@@ -193,10 +193,11 @@ protected:
 	float aimTransitionSpeed = 10.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
-	float walkSpeed = 500.f;
+	float walkSpeed = 180.f; // 平常走路的基准速度；市民脚本speed倍率(1.0=按它走)和Core推算的走路速度都以它为准
 
+	// 冲刺速度=walkSpeed×倍数。走路速度从500降到180时倍数同步提到27.8，冲刺速度仍约5000。
 	UPROPERTY(EditDefaultsOnly, Category = "Movement")
-	float sprintSpeedMultiplier = 10.f;
+	float sprintSpeedMultiplier = 27.8f;
 
 	bool bIsSprinting = false;
 

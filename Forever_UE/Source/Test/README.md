@@ -6,13 +6,14 @@
 ```
 Source\Test\run_tests.bat [quick|full] [core|ue|all]
 ```
-或直接 `x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,save,perform|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
+或直接 `x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,save,perform,route|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
 先编译：`MSBuild Source\Framework.sln /p:Configuration=Release /p:Platform=x64`(必须编整个 sln：只编 `Source/Test/Core/Test.vcxproj`(输出仍是 `CoreTest.exe`)不会重编 Core.lib，改了 Core 会测到旧代码)。改了 `Dependence` 头文件要把 `Forever_Mod` 下 Empty/Test/Wxdj/Yuanshen 也各自重编，lint 会检查 DLL 是否比头文件旧。UE 代码用 UBT 编 `ForeverEditor Win64 Development`。
 
 ## 套件
 - random：同种子跨进程所有阶段严格一致、各阶段无未包作用域的随机、DLL 导出 BindRandomHost、源码里无绕过 GetRandom 的随机源、流状态快照恢复。
 - mods：枚举所有已注册 mod，调 `UnitTest`，检查无漏包随机、名字唯一(`*_empty` 模板除外)，并按 concept 做字段合法性检查(见文末"字段检查")。
 - lint：mod DLL 不旧于 Dependence 头文件。
+- route：随机行人房间→房间、车辆车位→车位的寻路耗时分布(mean/p50/p90/p95/p99/max + 对数直方图)、平均路径点数、失败率(>5%判失败)，样本由世界种子派生可复现。
 - perform：各阶段耗时、路线规划 p50/p95/max、每日 tick 耗时，预算见 `budgets.json`(只告警)。
 - world：多种子世界不变量(建筑/房间/车行与步行连通——飞机位不计/人口/账本/股份)。
 - econ：每月经济报表(原 EconSim 的 Reporter，`econ_report.*`)写到 `<out>/econ_digests/econ_report_seed<S>.txt`；分红、倒闭重启场景作为检查项。`Tools/EconSim` 已移除。

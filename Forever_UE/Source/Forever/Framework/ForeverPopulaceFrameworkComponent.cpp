@@ -405,7 +405,8 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 			path.push_back({ static_cast<float>(point.X / POPULACE_WORLD_SCALE),
 				static_cast<float>(point.Y / POPULACE_WORLD_SCALE), static_cast<float>(point.Z / POPULACE_WORLD_SCALE) });
 		}
-		citizen->BeginWalk(path, destination, GetWorld()->GetTimeSeconds(), speedUU * kUnspawnedWalkSpeedScale / POPULACE_WORLD_SCALE);
+		citizen->BeginWalk(path, destination, GetWorld()->GetTimeSeconds(),
+			speedUU * citizen->GetWalkSpeedFactor() * kUnspawnedWalkSpeedScale / POPULACE_WORLD_SCALE);
 		citizen->SetCurrentRoom(nullptr); // 在路上，见上
 		return;
 	}
@@ -535,7 +536,8 @@ void UForeverPopulaceFrameworkComponent::RegisterSkipWalk(Citizen* citizen, Room
 	citizen->ClearPosition();
 
 	const ACitizenElement* defaults = GetDefault<ACitizenElement>();
-	const double speedUU = FMath::Max(1.0, static_cast<double>(defaults->GetCharacterMovement()->MaxWalkSpeed) * kUnspawnedWalkSpeedScale);
+	const double speedUU = FMath::Max(1.0,
+		static_cast<double>(defaults->GetCharacterMovement()->MaxWalkSpeed) * citizen->GetWalkSpeedFactor() * kUnspawnedWalkSpeedScale);
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	FSkipWalk& walk = skipWalks.FindOrAdd(citizen);
 	walk.destination = destination;
@@ -773,7 +775,7 @@ void UForeverPopulaceFrameworkComponent::NotifyTaskResult(Citizen* worker, const
 }
 
 bool UForeverPopulaceFrameworkComponent::AssignTask(Organization* organization, const std::string& task, Room* destination,
-	const std::vector<std::string>& categories, const std::string& workerName) {
+	const std::vector<std::string>& categories, const std::string& workerName, float speedScale) {
 	Traffic* traffic = GetTrafficCore();
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!traffic || !organization || !destination || !framework) return false;
@@ -790,6 +792,7 @@ bool UForeverPopulaceFrameworkComponent::AssignTask(Organization* organization, 
 	};
 	std::string failReason;
 	Traffic::TaskTrip* trip = traffic->BeginTask(organization, task, destination, usable, workerName, available, &failReason);
+	if (trip && trip->worker) trip->worker->SetWalkSpeedScale(speedScale); // 任务里员工所有走路段用这个倍率
 	if (!trip) {
 		UE_LOG(LogTemp, Log, TEXT("assign_task: %s -> %s not dispatched (%s)."), UTF8_TO_TCHAR(task.c_str()),
 			UTF8_TO_TCHAR(destination->GetAddress().c_str()), UTF8_TO_TCHAR(failReason.c_str()));

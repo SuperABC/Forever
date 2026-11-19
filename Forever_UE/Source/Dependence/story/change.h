@@ -501,12 +501,12 @@ private:
 };
 
 // NPC自动导航。mod（Basic的Job）构造时传的是已算好的姓名/房间地址，脚本里的npc_navigate写的是表达式，
-// 执行端两种都兼容，见change.md
+// 执行端两种都兼容，见change.md。speed是表达式源码：走路速度倍率，1.0=按基准速度(180)走，下限0无上限，空串=1.0。
 class NPCNavigateChange : public Change {
 public:
 	NPCNavigateChange();
 
-	NPCNavigateChange(std::string name, std::string destination);
+	NPCNavigateChange(std::string name, std::string destination, std::string speed = std::string());
 
 	virtual ~NPCNavigateChange();
 
@@ -520,12 +520,17 @@ public:
 
 	const std::string& GetDestination() const;
 
+	const std::string& GetSpeed() const;
+
 private:
 	// NPC姓名
 	std::string name;
 
 	// 目标位置名称
 	std::string destination;
+
+	// 走路速度倍率(表达式源码)，空=1.0
+	std::string speed;
 
 };
 
@@ -534,12 +539,14 @@ private:
 // 字段都是表达式源码：task=任务类别标签(Core不解释，只写进员工脚本的task变量和各事件)；
 // vehicles=备选交通方式的列表(JSON数组，每一项各自按表达式求值)，按顺序取第一个可行的：每项求值结果是载具category(如"truck"，
 // 从员工当前所在建筑的停车位里找组织名下停着的这类车，并要求目的建筑有接受它的空闲车位)，空串=走路；列表为空等于只走路；
-// worker=空串自动挑工位上的闲置员工，否则指定员工名(此时员工在哪都行，不要求在工位)。
+// worker=空串自动挑工位上的闲置员工，否则指定员工名(此时员工在哪都行，不要求在工位)；
+// speed=走路速度倍率(表达式源码)：1.0=按基准速度(180)走，下限0无上限，空串=1.0，作用于任务里员工的所有走路段。
 class AssignTaskChange : public Change {
 public:
 	AssignTaskChange();
 
-	AssignTaskChange(std::string task, std::string destination, std::vector<std::string> vehicles, std::string worker);
+	AssignTaskChange(std::string task, std::string destination, std::vector<std::string> vehicles, std::string worker,
+		std::string speed = std::string());
 
 	virtual ~AssignTaskChange();
 
@@ -553,11 +560,14 @@ public:
 
 	const std::string& GetWorker() const;
 
+	const std::string& GetSpeed() const;
+
 private:
 	std::string task;
 	std::string destination;
 	std::vector<std::string> vehicles;
 	std::string worker;
+	std::string speed;
 };
 
 // 瞬移角色

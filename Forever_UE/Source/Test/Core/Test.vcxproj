@@ -107,6 +107,7 @@
     <ClCompile Include="suite_save.cpp" />
     <ClCompile Include="suite_lint.cpp" />
     <ClCompile Include="suite_perf.cpp" />
+    <ClCompile Include="suite_route.cpp" />
     <ClCompile Include="econ_report.cpp" />
   </ItemGroup>
   <ItemGroup>

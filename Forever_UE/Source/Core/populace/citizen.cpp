@@ -147,6 +147,7 @@ Citizen::Citizen(const string& name, GENDER_TYPE gender, int birthYear, int birt
 	birthMonth(birthMonth),
 	birthDay(birthDay),
 	avatarIndex(PopulaceRandom(kAvatarIndexRange)) {
+	walkSpeedJitter = 0.8f + PopulaceRandom(4001) / 10000.f; // [0.8, 1.2]
 }
 
 Citizen::~Citizen() {
@@ -375,6 +376,10 @@ void Citizen::EndWalk() {
 }
 
 float Citizen::GetWalkSpeed() const { return walkSpeed; }
+float Citizen::GetWalkSpeedScale() const { return walkSpeedScale; }
+void Citizen::SetWalkSpeedScale(float scale) { walkSpeedScale = std::max(0.f, scale); }
+float Citizen::GetWalkSpeedJitter() const { return walkSpeedJitter; }
+float Citizen::GetWalkSpeedFactor() const { return walkSpeedScale * walkSpeedJitter; }
 
 void Citizen::RebaseWalk(double nowSeconds) {
 	if (!IsWalking()) return;

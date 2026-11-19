@@ -191,5 +191,6 @@ SuiteBody FindSuiteBody(const std::string& name) {
 	if (name == "econ") return EconSuiteBody;
 	if (name == "save") return SaveSuiteBody;
 	if (name == "perform") return PerfSuiteBody;
+	if (name == "route") return RouteSuiteBody;
 	return nullptr;
 }

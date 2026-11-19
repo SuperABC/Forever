@@ -241,6 +241,13 @@ public:
 	void GetRemainingWalk(double nowSeconds, std::vector<WalkPoint>& outPath) const;
 	void EndWalk();
 	float GetWalkSpeed() const;
+	// 走路速度倍率：总倍率=脚本给的speed(walkSpeedScale，1.0=基准速度，下限0无上限)×每个市民固定的0.8~1.2随机扰动(walkSpeedJitter，
+	// 创建时抽、随存档保存；等脚本有随机数功能后这部分逻辑迁到脚本里)。UE层把它乘到基准走路速度(ForeverCharacter::walkSpeed)上。
+	// npc_navigate/assign_task每次执行都会重设walkSpeedScale(省略speed=1.0)。
+	float GetWalkSpeedScale() const;
+	void SetWalkSpeedScale(float scale);
+	float GetWalkSpeedJitter() const;
+	float GetWalkSpeedFactor() const;
 	// 把行进改写成"从nowSeconds推算出的当前位置起的剩余路径"，起算时间设为nowSeconds：轨迹不变，
 	// 但路径首点就是当前位置、已走弧长为0。存档前调用，读档后用它把起算时间对齐到新的游戏时钟。
 	void RebaseWalk(double nowSeconds);
@@ -348,6 +355,8 @@ private:
 	std::vector<float> walkDistances;
 	double walkStartTime = 0.0;
 	float walkSpeed = 0.f;
+	float walkSpeedScale = 1.f;  // 脚本给的走路速度倍率，见GetWalkSpeedFactor
+	float walkSpeedJitter = 1.f; // 每个市民固定的0.8~1.2扰动，构造时抽
 	// 推算(nowSeconds)对应的位置和已经走过的路径段下标。
 	void SampleWalk(double nowSeconds, WalkPoint& outPoint, size_t& outSegment, bool& outFinished) const;
 

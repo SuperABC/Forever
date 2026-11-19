@@ -59,8 +59,9 @@ public:
 	// destination所在建筑的车位)，取第一个可行的；闲置员工/车/目的车位都不满足就返回false(不占车不占人)，并给组织脚本发task_failed。
 	// workerName空=自动挑工位上的闲置员工。成功后给该员工的Job脚本发execute_task；员工走进目的房间后给组织脚本发task_complete。
 	// 详见Traffic::BeginTask和traffic.md"组织任务"。
+	// speedScale=员工走路速度倍率(见Citizen::GetWalkSpeedFactor)，成功派出后写到员工身上。
 	bool AssignTask(Organization* organization, const std::string& task, Room* destination,
-		const std::vector<std::string>& categories, const std::string& workerName);
+		const std::vector<std::string>& categories, const std::string& workerName, float speedScale = 1.f);
 
 	// 任务车被玩家开走(ApplyEnterVehicle)：取消这辆车的任务行程并给组织脚本发task_failed(vehicle_taken)，没有对应行程什么也不做。
 	void OnTaskVehicleTaken(Vehicle* vehicle);

@@ -45,6 +45,7 @@
 
 `NPCNavigateChange`特殊：Basic的Job构造时传入的是已经算好的姓名/房间地址（不是表达式），脚本里的`npc_navigate`写的
 可能是表达式（如`$$self.name`），所以执行端先按原样查，查不到再当表达式求值后查。
+`npc_navigate`另有可选`speed`字段(走路速度倍率表达式，1.0=按基准速度180走，下限0无上限，省略=1.0，每次导航都重设)；`assign_task`的`speed`同理，作用于任务里员工的所有走路段。
 
 ## 所有权：`ForRangeChange`
 
@@ -180,7 +181,7 @@
 
 组织脚本里用：员工自己走去某地，或开组织的车去某地再回来。**一次尝试**：没有闲置员工/车/目的车位就静默跳过(不占车不占人)。
 字段都是表达式源码：`destination`(必填，房间地址)、`task`(任务类别标签，如`"delivery"`，Core只写进员工脚本的`task`变量和`execute_task`事件)、
-`vehicles`(**JSON数组**，每一项各自是表达式、载入时做语法检查，求值结果是载具类别，空串=走路；按顺序取第一个可行的，如`["\"truck\"", "\"\""]`=优先开卡车、不行就走路)、
+`speed`(走路速度倍率表达式，1.0=按基准速度180走，下限0无上限，省略=1.0；npc_navigate同样有`speed`字段)、`vehicles`(**JSON数组**，每一项各自是表达式、载入时做语法检查，求值结果是载具类别，空串=走路；按顺序取第一个可行的，如`["\"truck\"", "\"\""]`=优先开卡车、不行就走路)、
 `worker`(空=自动挑工位上的闲置员工，否则员工名，且不要求在工位)。任务只有**单程**：到达后组织脚本收到`task_complete`，派不出去/半路出问题收到`task_failed`，由脚本决定往返(见event.md)。
 只有组织脚本能发(`context.self`反查组织，`Society::FindOrganizationByScript`)。执行见`UForeverPopulaceFrameworkComponent::AssignTask`和traffic.md"组织任务"。
 例：`{ "type": "assign_task", "task": "\"delivery\"", "vehicles": [ "\"truck\"" ], "destination": "$$self.delivery[$$($$local.i)].address" }`。

@@ -593,12 +593,12 @@ const std::string& NPCTeleportChange::GetDestination() const {
 }
 
 NPCNavigateChange::NPCNavigateChange() :
-	name(), destination() {
+	name(), destination(), speed() {
 
 }
 
-NPCNavigateChange::NPCNavigateChange(string name, string destination) :
-	name(move(name)), destination(move(destination)) {
+NPCNavigateChange::NPCNavigateChange(string name, string destination, string speed) :
+	name(move(name)), destination(move(destination)), speed(move(speed)) {
 
 }
 
@@ -627,13 +627,17 @@ const string& NPCNavigateChange::GetDestination() const {
 	return destination;
 }
 
+const string& NPCNavigateChange::GetSpeed() const {
+	return speed;
+}
+
 AssignTaskChange::AssignTaskChange() :
-	task(), destination(), vehicles(), worker() {
+	task(), destination(), vehicles(), worker(), speed() {
 
 }
 
-AssignTaskChange::AssignTaskChange(string task, string destination, vector<string> vehicles, string worker) :
-	task(move(task)), destination(move(destination)), vehicles(move(vehicles)), worker(move(worker)) {
+AssignTaskChange::AssignTaskChange(string task, string destination, vector<string> vehicles, string worker, string speed) :
+	task(move(task)), destination(move(destination)), vehicles(move(vehicles)), worker(move(worker)), speed(move(speed)) {
 
 }
 
@@ -660,6 +664,10 @@ const vector<string>& AssignTaskChange::GetVehicles() const {
 
 const string& AssignTaskChange::GetWorker() const {
 	return worker;
+}
+
+const string& AssignTaskChange::GetSpeed() const {
+	return speed;
 }
 
 TeleportPlayerChange::TeleportPlayerChange() :

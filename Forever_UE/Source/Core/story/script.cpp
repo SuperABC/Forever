@@ -716,7 +716,15 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			if (name.IsNull() || destination.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing name or destination for npc_navigate change.\n");
 			}
-			change = new NPCNavigateChange(name.AsString(), destination.AsString());
+			// speed可省略(空=1.0)：走路速度倍率表达式，载入时检查语法。
+			string speed = obj["speed"].AsString();
+			{
+				Expression checker;
+				if (!speed.empty() && !checker.Parse(speed)) {
+					THROW_EXCEPTION(RuntimeException, "Invalid expression \"" + speed + "\" in speed of npc_navigate change.\n");
+				}
+			}
+			change = new NPCNavigateChange(name.AsString(), destination.AsString(), move(speed));
 		}
 		else if (type == "assign_task") {
 			auto destination = obj["destination"];
@@ -734,7 +742,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				}
 				vehicles.push_back(move(source));
 			}
-			change = new AssignTaskChange(obj["task"].AsString(), destination.AsString(), move(vehicles), obj["worker"].AsString());
+			string speed = obj["speed"].AsString();
+			{
+				Expression checker;
+				if (!speed.empty() && !checker.Parse(speed)) {
+					THROW_EXCEPTION(RuntimeException, "Invalid expression \"" + speed + "\" in speed of assign_task change.\n");
+				}
+			}
+			change = new AssignTaskChange(obj["task"].AsString(), destination.AsString(), move(vehicles), obj["worker"].AsString(), move(speed));
 		}
 		else if (type == "change_control") {
 			auto name = obj["name"];

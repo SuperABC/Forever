@@ -368,6 +368,9 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		Room* dest = map ? map->LocateRoom(nav->GetDestination()) : nullptr;
 		if (!dest && map) dest = map->LocateRoom(ToString(EvaluateExpression(nav->GetDestination(), context)));
 		if (citizen && dest && populaceFramework) {
+			// speed：走路速度倍率表达式，省略=1.0，下限0。每次导航都重设，所以不写speed就回到基准速度。
+			citizen->SetWalkSpeedScale(nav->GetSpeed().empty() ? 1.f
+				: static_cast<float>(FMath::Max(0.0, ToDouble(EvaluateExpression(nav->GetSpeed(), context)))));
 			populaceFramework->RequestWalk(citizen, dest);
 		}
 		return;
@@ -395,7 +398,9 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 			UE_LOG(LogTemp, Verbose, TEXT("assign_task: 找不到目的房间 %s"), UTF8_TO_TCHAR(destination.c_str()));
 			return;
 		}
-		populaceFramework->AssignTask(organization, task, dest, vehicles, worker);
+		const float speed = assign->GetSpeed().empty() ? 1.f
+			: static_cast<float>(FMath::Max(0.0, ToDouble(EvaluateExpression(assign->GetSpeed(), context))));
+		populaceFramework->AssignTask(organization, task, dest, vehicles, worker, speed);
 		const double assignEnd = FPlatformTime::Seconds();
 		if (assignEnd - locateStart > 0.005) {
 			UE_LOG(LogTemp, Warning, TEXT("assign_task: 单次耗时 %.1f ms (LocateRoom %.1f ms, AssignTask %.1f ms)"),

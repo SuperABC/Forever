@@ -423,6 +423,15 @@ AVehicleElement* UForeverTrafficFrameworkComponent::SpawnCar(FCarEntry& entry, b
 	if (bCheckSpace) {
 		// 行进中的车（Core推算中）路口附近不生成，等它开出去；停着的车不限制。
 		if (entry.vehicle && entry.vehicle->IsDriving() && IsNearJunction(entry.location)) return nullptr;
+		// 行进中的车车头朝向远离玩家(车头方向和"玩家→车"的水平方向夹角小于90度)：不生成，等它开远或转向朝着玩家再说；停着的车不限制。
+		if (entry.vehicle && entry.vehicle->IsDriving()) {
+			if (const APawn* playerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0)) {
+				const FVector playerLocation = playerPawn->GetActorLocation();
+				const FVector2D toVehicle(entry.location.X - playerLocation.X, entry.location.Y - playerLocation.Y);
+				const float yawRad = FMath::DegreesToRadians(entry.yaw);
+				if (FVector2D::DotProduct(toVehicle, FVector2D(FMath::Cos(yawRad), FMath::Sin(yawRad))) > 0.f) return nullptr;
+			}
+		}
 		// 生成点和别的车（Vehicle通道：物理车、Controller驱动的车）的车身重叠就先不生成，免得叠在一起。
 		// 车身尺寸取蓝图默认对象的carMesh包围盒（略微缩小，贴着停的车不算占用）。
 		const AVehicleElement* defaults = vehicleClass->GetDefaultObject<AVehicleElement>();
