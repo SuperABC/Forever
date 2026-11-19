@@ -116,6 +116,14 @@ public:
 	std::vector<std::string> ManufactureTypes() const;
 
 	// 停车位：由Building::Layout创建，Room持有。没有车位的房间返回空。
+	// 家具：位置/朝向/门窗都设好之后Building::AssignRoom/ArrangeRow调一次LayoutFurniture()，用房间mod自己的随机流
+	// 调mod->Layout(BuildLayoutInfo())，把mod用AddFurniture摆的家具(房间局部米)换算成世界摆位存到这里；
+	// 随Room存档，读档不再重新Layout。UE层只读GetFurniture()。
+	void LayoutFurniture();
+	// 房间局部矩形(米)、层高和门窗洞(换算到房间局部系的墙)，见feature_spec.h的RoomLayoutInfo。
+	RoomLayoutInfo BuildLayoutInfo() const;
+	const std::vector<DecorationInstance>& GetFurniture() const;
+
 	const std::vector<ParkingSlot*>& GetParkingSlots() const;
 	ParkingSlot* AddParkingSlot(const ParkingSlot& slot);
 	// 第一个空闲且允许category的车位下标，没有返回-1。
@@ -178,6 +186,7 @@ private:
 	std::vector<ParkingSlot*> parkingSlots; // 持有所有权
 
 	std::vector<Door*> doorEntities;
+	std::vector<DecorationInstance> furniture; // 世界摆位(LayoutFurniture算好)，存档
 
 	// RoomMod::scriptModName/milestoneNames的快照(构造函数里SetProperty()之后拷贝，读档重建时同样会跑)。
 	std::string scriptModName = "script_empty";

@@ -15,6 +15,8 @@ public:
 	virtual const char* GetType() const override { return "room_residence"; }
 	virtual const char* GetName() override;
 	virtual void SetProperty() override;
+	// 随机户型+家具布局，设计见room_residence.md"家具布局"。
+	virtual void Layout(const RoomLayoutInfo& info) override;
 
 public:
 	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。

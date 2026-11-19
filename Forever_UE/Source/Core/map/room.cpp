@@ -1,6 +1,7 @@
 #include "room.h"
 
 #include "common/error.h"
+#include "common/random.h"
 
 #include "map/building.h"
 #include "map/door.h"
@@ -88,7 +89,7 @@ void Room::LocalToBuildingLocal(float u, float v, float& offsetX, float& offsetY
 }
 
 float Room::FacingYawDegrees() const {
-	static const float kFacingYawDegrees[4] = { 180.f, 0.f, 90.f, 270.f }; // 下标=FACE_WEST/EAST/NORTH/SOUTH
+	static const float kFacingYawDegrees[4] = { 0.f, 180.f, 90.f, 270.f }; // 下标=FACE_WEST/EAST/NORTH/SOUTH；必须和LocalToBuildingLocal的v轴方向一致(WEST时v->+X、EAST时v->-X)，CoreTest save套件校验
 	return kFacingYawDegrees[EffectiveFace(direction)];
 }
 
@@ -102,6 +103,107 @@ float Room::LocalYawToWorld(float yawDegrees) const {
 	const float degToRad = 3.14159265358979323846f / 180.f;
 	return parentBuilding->GetRotation() + (FacingYawDegrees() + yawDegrees) * degToRad;
 }
+
+// ---- 家具 ----
+
+namespace {
+	// 地图单位1=10米。
+	constexpr float kMetersPerUnit = 10.f;
+}
+
+// 建筑局部相对房间中心的偏移 -> 房间局部(u,v)地图单位，是LocalToBuildingLocal的逆。
+static void BuildingOffsetToLocal(int face, float halfX, float halfY, float ox, float oy, float& u, float& v) {
+	switch (face) {
+	case FACE_WEST:  v = ox + halfX; u = halfY - oy; break;
+	case FACE_EAST:  v = halfX - ox; u = oy + halfY; break;
+	case FACE_SOUTH: u = halfX - ox; v = halfY - oy; break;
+	default:         u = ox + halfX; v = oy + halfY; break; // FACE_NORTH
+	}
+}
+
+RoomLayoutInfo Room::BuildLayoutInfo() const {
+	RoomLayoutInfo info;
+	float widthUnits = AxisSizeU(), depthUnits = AxisSizeV();
+	info.width = widthUnits * kMetersPerUnit;
+	info.depth = depthUnits * kMetersPerUnit;
+
+	const vector<float>& heights = parentBuilding->GetFloorHeights();
+	int idx = parentBuilding->GetBasementCount() + layer;
+	float floorHeight = (idx >= 0 && idx < static_cast<int>(heights.size())) ? heights[idx] : 0.4f;
+	info.height = floorHeight * kMetersPerUnit;
+
+	int face = EffectiveFace(direction);
+	float halfX = GetSizeX() * 0.5f, halfY = GetSizeY() * 0.5f;
+	// 建筑局部墙(按FACE)上沿墙量的s(地图单位，0=沿墙最小端)转相对房间中心的偏移；公式同building.cpp的ComputeDoorFaces。
+	auto wallPoint = [&](int wallFace, float s, float& ox, float& oy) {
+		switch (wallFace) {
+		case FACE_WEST:  ox = -halfX; oy = -halfY + s; break;
+		case FACE_EAST:  ox = halfX;  oy = -halfY + s; break;
+		case FACE_NORTH: ox = -halfX + s; oy = -halfY; break;
+		default:         ox = -halfX + s; oy = halfY;  break; // FACE_SOUTH
+		}
+	};
+	auto convert = [&](const WallHole& holes, const DoorTags* tags, vector<RoomOpening>& out) {
+		for (const auto& [wallFace, positions] : holes) {
+			if (wallFace < 0 || wallFace >= 4) continue;
+			float span = (wallFace == FACE_WEST || wallFace == FACE_EAST) ? GetSizeY() : GetSizeX();
+			auto tagIt = tags ? tags->find(wallFace) : DoorTags::const_iterator();
+			for (size_t i = 0; i < positions.size(); i++) {
+				const RectParams& p = positions[i];
+				float s1 = p[0] * span + p[1], s2 = p[4] * span + p[5];
+				float ox1, oy1, ox2, oy2, u1, v1, u2, v2;
+				wallPoint(wallFace, s1, ox1, oy1);
+				wallPoint(wallFace, s2, ox2, oy2);
+				BuildingOffsetToLocal(face, halfX, halfY, ox1, oy1, u1, v1);
+				BuildingOffsetToLocal(face, halfX, halfY, ox2, oy2, u2, v2);
+
+				RoomOpening opening;
+				bool alongU = fabsf(v1 - v2) < fabsf(u1 - u2); // 洞沿u方向延伸 = 在正面/背面墙上
+				if (alongU) {
+					opening.wall = (v1 + v2) * 0.5f > depthUnits * 0.5f ? ROOM_WALL_FRONT : ROOM_WALL_BACK;
+					opening.a0 = min(u1, u2); opening.a1 = max(u1, u2);
+				} else {
+					opening.wall = (u1 + u2) * 0.5f > widthUnits * 0.5f ? ROOM_WALL_U_MAX : ROOM_WALL_U_MIN;
+					opening.a0 = min(v1, v2); opening.a1 = max(v1, v2);
+				}
+				opening.a0 *= kMetersPerUnit; opening.a1 *= kMetersPerUnit;
+				// y1/y2是"从天花板往下量"的距离(和BuildDoorsForElement一致)。
+				float y1 = p[2] * floorHeight + p[3], y2 = p[6] * floorHeight + p[7];
+				opening.z0 = (floorHeight - max(y1, y2)) * kMetersPerUnit;
+				opening.z1 = (floorHeight - min(y1, y2)) * kMetersPerUnit;
+				if (tags && tagIt != tags->end() && i < tagIt->second.size()) opening.tag = tagIt->second[i];
+				out.push_back(opening);
+			}
+		}
+	};
+	convert(doors, &doorTags, info.doors);
+	convert(windows, nullptr, info.windows);
+	return info;
+}
+
+void Room::LayoutFurniture() {
+	furniture.clear();
+	if (!mod) return;
+	{
+		// 房间mod在自己的随机流里摆(GetRandom可复现，--seed按mod id生效)。
+		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
+		mod->Layout(BuildLayoutInfo());
+	}
+	float baseZ = parentBuilding->GetFloorBaseZ(layer);
+	for (const FurnitureSpec& spec : mod->furniture) { // 只读，不改mod的容器(跨DLL分配器)
+		DecorationInstance instance;
+		instance.meshPath = spec.meshPath;
+		pair<float, float> world = LocalToWorld(spec.u / kMetersPerUnit, spec.v / kMetersPerUnit);
+		instance.x = world.first;
+		instance.y = world.second;
+		instance.z = baseZ + spec.z / kMetersPerUnit;
+		instance.yaw = LocalYawToWorld(spec.yaw);
+		instance.scaleX = spec.scaleX; instance.scaleY = spec.scaleY; instance.scaleZ = spec.scaleZ;
+		furniture.push_back(std::move(instance));
+	}
+}
+
+const vector<DecorationInstance>& Room::GetFurniture() const { return furniture; }
 
 Building* Room::GetParentBuilding() const { return parentBuilding; }
 Component* Room::GetParentComponent() const { return parentComponent; }

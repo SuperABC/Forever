@@ -23,6 +23,7 @@
 // 关着的门把整个门洞堵死。骨骼网格自己的厚度来自资产(按门宽等比)，和这个无关。
 #define DOOR_BLOCKER_THICKNESS 10.f
 #define DOOR_BLOCKER_OPEN_THRESHOLD 0.5f // 开合度到这个值以上挡板放行
+#define DOOR_PASSER_CHECK_INTERVAL 0.5f // 门开着时核对passers的间隔(秒)：EndOverlap漏掉(Pawn被流式销毁等)时靠它自己关上
 
 namespace {
 	// 门资产缓存：按软路径缓存已解析的骨骼网格/动画蓝图类，避免每扇门Init()各自Load(近LOD生成会变卡)；
@@ -246,7 +247,9 @@ void UForeverDoorComponent::ResolvePasserIdentity(AActor* actor, Citizen*& outCi
 
 void UForeverDoorComponent::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) {
-	if (!door || !OtherActor || OtherActor == GetOwner()) return;
+	// 门只响应Pawn(玩家/市民/载具)：Trigger预设会和WorldStatic/WorldDynamic/PhysicsBody等一切重叠，
+	// 建筑碰撞盒、电梯轿厢、被扔出的物品等非Pawn进盒子既不该开门，也可能很久不离开让门常开。
+	if (!door || !OtherActor || OtherActor == GetOwner() || !OtherActor->IsA<APawn>()) return;
 
 	Citizen* citizen = nullptr;
 	bool isPlayer = false;
@@ -278,13 +281,20 @@ void UForeverDoorComponent::OnOverlapBegin(UPrimitiveComponent* OverlappedCompon
 
 void UForeverDoorComponent::OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) {
-	if (!OtherActor) return;
+	if (!OtherActor || !OtherActor->IsA<APawn>()) return;
+
+	// 一个Pawn有多个碰撞部件(胶囊体、网格...)，每个部件各自Begin/End；这里只在最后一个部件离开
+	// (触发盒里已经没有这个Actor的任何部件)时才算离开，否则会提前关门/撤掉选项。
+	if (trigger && trigger->IsOverlappingActor(OtherActor)) return;
 
 	passers.Remove(OtherActor);
 	UpdateOpenState();
+	RemoveMeetOptions(OtherActor);
+}
 
+void UForeverDoorComponent::RemoveMeetOptions(AActor* actor) {
 	APawn* playerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	if (OtherActor != playerPawn || !door || door->GetScript() == nullptr) return;
+	if (actor != playerPawn || !door || door->GetScript() == nullptr) return;
 
 	if (AForeverPlayerController* playerController = Cast<AForeverPlayerController>(UGameplayStatics::GetPlayerController(GetWorld(), 0))) {
 		if (UMeetOptionWidget* meetOption = playerController->GetMeetOptionWidget()) {
@@ -324,6 +334,26 @@ void UForeverDoorComponent::UpdateOpenState() {
 void UForeverDoorComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction) {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	// 兜底核对：EndOverlap可能漏掉(Pawn在盒内被按距离流式销毁、被隐藏/关碰撞...)，passers里就会留着
+	// 已经不在盒里的项，门永远开着。门开着时隔一段时间用触发盒的实际重叠记录核对一次。
+	if (passers.Num() > 0 && trigger) {
+		passerCheckTimer += DeltaTime;
+		if (passerCheckTimer >= DOOR_PASSER_CHECK_INTERVAL) {
+			passerCheckTimer = 0.f;
+			bool changed = false;
+			for (auto it = passers.CreateIterator(); it; ++it) {
+				AActor* passer = it->Get();
+				if (passer && trigger->IsOverlappingActor(passer)) continue;
+				if (passer) RemoveMeetOptions(passer);
+				it.RemoveCurrent();
+				changed = true;
+			}
+			if (changed) UpdateOpenState();
+		}
+	} else {
+		passerCheckTimer = 0.f;
+	}
 
 	if (closeAtTime >= 0.f && GetWorld() && GetWorld()->GetTimeSeconds() >= closeAtTime) {
 		bWantsOpen = false;

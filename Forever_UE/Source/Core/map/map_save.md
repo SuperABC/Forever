@@ -56,7 +56,7 @@
 - **mod 实例重新创建**。每个 Zone/Building/Room/Component 用存档里记的注册 id（不是 `GetType()`）调用 `Factory::Create*`，再调用 `LoadState` 恢复 mod 自己的私有数据。mod 的公共声明式字段（`floors`、`cabins`、`walls`……）在读档后是空的。所以 UE 和 Core 运行时只能读包装类在生成时拷下来的快照：
   - `Building::GetFloorSpec`、`GetCabins`、`GetStationMod`；
   - `Zone::GetWalls`、`GetGates`；
-  - `Room` 的属性。
+  - `Room` 的属性、家具(`Room::furniture`，写在`wallStyles`之后，没升版本号，旧存档不兼容；`mod->furniture`读档后为空，运行时只读`Room::GetFurniture()`)。
 
   **以后新增"运行时要读的 mod 公共字段"时，也必须在包装类里拷一份快照，并加进这里的存档。**
 - **不从 Core 往 mod 的容器里写数据**。Core 和 mod DLL 的分配器不同（见 CONVENTIONS §4），所以 Core 不能写 mod 自己的 `std::vector` 等容器。这也是用快照而不是"把字段写回 mod"的原因。

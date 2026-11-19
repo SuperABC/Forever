@@ -238,6 +238,7 @@
     <ClInclude Include="map\room_office.h" />
     <ClInclude Include="map\room_parking.h" />
     <ClInclude Include="map\room_ranch.h" />
+    <ClInclude Include="map\room_furniture_catalog.h" />
     <ClInclude Include="map\room_residence.h" />
     <ClInclude Include="map\room_restaurant.h" />
     <ClInclude Include="map\room_shop.h" />

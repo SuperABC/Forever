@@ -1112,6 +1112,7 @@ void Building::AssignRoom(int level, int slot, const string& roomType, Component
 	room->SetWindows(single.GetWindows());
 	for (int dir = 0; dir < 4; dir++) room->SetWallStyle(dir, single.GetWallStyle(dir));
 	room->SetNumber(level, floors[idx].AssignNumber());
+	room->LayoutFurniture();
 	component->AddRoom(room);
 
 	rooms.push_back(room);
@@ -1163,6 +1164,7 @@ void Building::ArrangeRow(int level, int slot, const string& roomType, float acr
 			if (outer) room->SetWallStyle(dir, row.GetWallStyle(dir));
 		}
 		room->SetNumber(level, floors[idx].AssignNumber());
+		room->LayoutFurniture();
 		owner->AddRoom(room);
 
 		rooms.push_back(room);

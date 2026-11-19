@@ -53,6 +53,11 @@ MeetOption交互选项。
 **不会**被加进`passers`(门不会为它开)，但如果这扇门有`Script`，MeetOption选项照常弹出
 给靠近的玩家——拒绝通行和拒绝对话是两件独立的事。
 
+- **只响应Pawn，EndOverlap要核对，门开着会定期自检(2026-11-19，修"门莫名一直开着")**：
+  触发盒是`Trigger`预设，会和WorldStatic/WorldDynamic/PhysicsBody/Vehicle等一切重叠；`OnOverlapBegin/End`只处理`APawn`，建筑碰撞盒、电梯轿厢、扔出的物品等非Pawn一律忽略
+  (否则`Open`门/公有门会把它们当通行者，它们不离开门就常开)。一个Pawn有多个碰撞部件各自Begin/End，`OnOverlapEnd`先用`trigger->IsOverlappingActor`确认这个Actor已经没有任何部件在盒里才算离开。
+  EndOverlap漏掉(Pawn在盒内被按距离流式销毁等)时`passers`会残留：门开着时`TickComponent`每`DOOR_PASSER_CHECK_INTERVAL`(0.5秒)用触发盒的实际重叠记录核对一次，已失效/不在盒里的移出，门自己关上。
+
 - **交互选项运行中变化**：`add_option`/`remove_option`执行后，`AForeverFrameworkActor::RefreshInteractOptions`按名字找到场景里的这个对象调`RefreshOptions()`：重新烘焙`cachedOptions`快照；玩家正站在旁边时用`UMeetOptionWidget::ReplaceOptions`把屏幕上的选项整组换掉。Overlap回调仍然只读快照、不解引用Core对象。
 
 - **`FindForDoor`**：静态登记表`componentsByDoor`(Door* -> 组件)，`Init`时登记、`OnComponentDestroyed`时移除；门组件按距离流式创建/销毁，没生成时查不到。

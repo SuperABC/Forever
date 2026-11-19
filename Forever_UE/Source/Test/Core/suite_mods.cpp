@@ -11,6 +11,7 @@
 #include "player/weapon_mod.h"
 #include "society/job_mod.h"
 #include "map/room_mod.h"
+#include "../../Basic/map/room_furniture_catalog.h"
 #include "map/terrain_mod.h"
 #include "populace/scheduler_mod.h"
 #include "player/asset_mod.h"
@@ -20,6 +21,8 @@
 #include "industry/storage_mod.h"
 #include "industry/manufacture_mod.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <functional>
@@ -87,6 +90,114 @@ namespace {
 		if (string(mod->stationType) != "bus" && mod->stops.empty() && mod->inlets.empty() && mod->outlets.empty()) problems.push_back("station has no ports");
 	}
 	bool IsRegistered(const string& id) { return Registry::Get().CheckModRegistered(id); }
+	// 房间家具布局检查：对一批尺寸/门窗组合调Layout，家具必须在房间内、互不重叠、不压门前、不挡窗；
+	// 环境变量FURNITURE_DUMP=<路径>时把每个样本的布局写成json给Tools/Furniture/preview.html看。
+	struct FootRect { float u0, u1, v0, v1; };
+	bool Overlap(const FootRect& a, const FootRect& b, float eps) {
+		return a.u0 < b.u1 - eps && b.u0 < a.u1 - eps && a.v0 < b.v1 - eps && b.v0 < a.v1 - eps;
+	}
+	void CheckRoomLayouts(const string& id, vector<string>& problems) {
+		RoomFactory& factory = Registry::Get().GetRoomFactory();
+		struct Sample { float w, d; int doorWall; float doorA; bool windows; };
+		const vector<Sample> samples = {
+			{ 4, 3, ROOM_WALL_FRONT, 1.0f, false }, { 6, 5, ROOM_WALL_FRONT, 1.5f, true }, { 8, 7, ROOM_WALL_FRONT, 3.0f, true },
+			{ 12, 10, ROOM_WALL_FRONT, 2.0f, true }, { 15, 20, ROOM_WALL_FRONT, 7.0f, true }, { 20, 15, ROOM_WALL_BACK, 10.0f, true },
+			{ 10, 30, ROOM_WALL_FRONT, 4.0f, true }, { 3, 12, ROOM_WALL_FRONT, 1.0f, true }, { 25, 12, ROOM_WALL_U_MIN, 5.0f, true },
+			{ 16, 16, ROOM_WALL_FRONT, 12.0f, true }, { 30, 8, ROOM_WALL_FRONT, 20.0f, true }, { 9, 9, ROOM_WALL_FRONT, 4.0f, false },
+		};
+		char* dumpEnv = nullptr; size_t dumpLen = 0;
+		_dupenv_s(&dumpEnv, &dumpLen, "FURNITURE_DUMP");
+		const char* dumpPath = (dumpEnv && dumpEnv[0] && id == "room_residence") ? dumpEnv : nullptr;
+		string dump = "[";
+		bool residence = false;
+		int total = 0;
+		for (int round = 0; round < 8; round++) {
+			for (size_t si = 0; si < samples.size(); si++) {
+				const Sample& sm = samples[si];
+				RoomMod* mod = factory.CreateRoom(id);
+				if (!mod) return;
+				mod->SetProperty();
+				residence = mod->isResidence;
+				RoomLayoutInfo info;
+				info.width = sm.w; info.depth = sm.d; info.height = 4.f;
+				RoomOpening door; door.wall = sm.doorWall; door.a0 = sm.doorA; door.a1 = sm.doorA + 1.0f; door.z0 = 0.f; door.z1 = 2.2f; door.tag = "home";
+				info.doors.push_back(door);
+				if (sm.windows) {
+					float wallLen = (sm.doorWall == ROOM_WALL_BACK) ? sm.w : sm.w;
+					int wallForWindows = sm.doorWall == ROOM_WALL_BACK ? ROOM_WALL_FRONT : ROOM_WALL_BACK;
+					for (int k = 0; k < 3; k++) {
+						RoomOpening win; win.wall = wallForWindows; win.a0 = wallLen * (0.15f + 0.3f * k); win.a1 = win.a0 + 1.6f; win.z0 = 0.9f; win.z1 = 2.4f;
+						if (win.a1 < wallLen) info.windows.push_back(win);
+					}
+				}
+				{
+					RandomScope scope(RandomRegistry::GetInstanceStream(mod));
+					mod->Layout(info);
+				}
+				string label = "w" + to_string(static_cast<int>(sm.w)) + "d" + to_string(static_cast<int>(sm.d)) + " round" + to_string(round);
+				vector<FootRect> feet, overheadFeet;
+				vector<string> names;
+				string items;
+				for (const FurnitureSpec& spec : mod->furniture) {
+					const RoomFurnitureDims* dims = nullptr;
+					string base = spec.meshPath.substr(spec.meshPath.rfind('/') + 1);
+					base = base.substr(0, base.find('.'));
+					for (const RoomFurnitureDims& d : kRoomFurnitureCatalog) if (base == d.name) dims = &d;
+					if (!dims) { problems.push_back("unknown furniture mesh " + spec.meshPath); continue; }
+					int yaw = static_cast<int>(lround(spec.yaw));
+					bool sideways = (abs(yaw) == 90);
+					float eu = (sideways ? dims->depth : dims->width) * spec.scaleX, ev = (sideways ? dims->width : dims->depth) * spec.scaleX;
+					FootRect f{ spec.u - eu / 2, spec.u + eu / 2, spec.v - ev / 2, spec.v + ev / 2 };
+					bool flat = base.rfind("Rug", 0) == 0, overhead = spec.z > 1.5f;
+					if (f.u0 < -0.03f || f.u1 > sm.w + 0.03f || f.v0 < -0.03f || f.v1 > sm.d + 0.03f)
+						problems.push_back(label + ": " + base + " outside the room");
+					if (yaw != 0 && yaw != 180 && yaw != -180 && !sideways) problems.push_back(label + ": " + base + " has odd yaw " + to_string(yaw));
+					if (overhead) {
+						for (const FootRect& o : overheadFeet) if (Overlap(o, f, 0.02f)) problems.push_back(label + ": " + base + " (wall cabinet) overlaps another overhead piece");
+						overheadFeet.push_back(f);
+					}
+					if (!flat && !overhead) {
+						for (size_t i = 0; i < feet.size(); i++) {
+							if (Overlap(feet[i], f, 0.02f)) problems.push_back(label + ": " + base + " overlaps " + names[i]);
+						}
+						// 门前
+						FootRect dz{ 0, 0, 0, 0 };
+						// 门前清空区 = 1.3m深、门两侧各0.4m，家具整体放大1.5倍后清空区同比放大(见room_residence.cpp ROOM_FURNITURE_SCALE)。
+						const float k = 1.5f, clearDepth = 1.6f * k, clearSide = 0.6f * k;
+						float a0 = door.a0 - clearSide, a1 = door.a1 + clearSide;
+						if (door.wall == ROOM_WALL_FRONT) dz = { a0, a1, sm.d - clearDepth, sm.d };
+						else if (door.wall == ROOM_WALL_BACK) dz = { a0, a1, 0.f, clearDepth };
+						else dz = { 0.f, clearDepth, a0, a1 };
+						if (Overlap(dz, f, 0.02f)) problems.push_back(label + ": " + base + " blocks the door");
+						feet.push_back(f);
+						names.push_back(base);
+					}
+					items += string(items.empty() ? "" : ",") + "{\"n\":\"" + base + "\",\"u\":" + to_string(spec.u) + ",\"v\":" + to_string(spec.v) +
+						",\"yaw\":" + to_string(yaw) + ",\"z\":" + to_string(spec.z) + ",\"s\":" + to_string(spec.scaleX) +
+						",\"d\":" + to_string(dims->depth) + ",\"w\":" + to_string(dims->width) + ",\"h\":" + to_string(dims->height) + "}";
+				}
+				total += static_cast<int>(mod->furniture.size());
+				if (residence && min(sm.w, sm.d) >= 5.f && sm.w * sm.d >= 40.f && mod->furniture.size() < 5) problems.push_back(label + ": only " + to_string(mod->furniture.size()) + " furniture in a " + to_string(sm.w * sm.d) + " m2 home");
+				if (dumpPath) {
+					auto openings = [](const vector<RoomOpening>& v) {
+						string r = "[";
+						for (size_t i = 0; i < v.size(); i++) r += string(i ? "," : "") + "[" + to_string(v[i].wall) + "," + to_string(v[i].a0) + "," + to_string(v[i].a1) + "]";
+						return r + "]";
+					};
+					dump += string(dump.size() > 1 ? "," : "") + "{\"label\":\"" + label + "\",\"w\":" + to_string(sm.w) + ",\"d\":" + to_string(sm.d) +
+						",\"doors\":" + openings(info.doors) + ",\"windows\":" + openings(info.windows) + ",\"items\":[" + items + "]}";
+				}
+				factory.DestroyRoom(mod);
+			}
+		}
+		if (dumpPath) {
+			dump += "]";
+			FILE* file = nullptr;
+			if (fopen_s(&file, dumpPath, "wb") == 0 && file) { fwrite(dump.data(), 1, dump.size(), file); fclose(file); }
+		}
+		free(dumpEnv);
+		if (residence && total == 0) problems.push_back("room_residence placed no furniture at all");
+	}
 	void ValidateConcept(RoomMod* mod, vector<string>& problems) {
 		mod->SetProperty();
 		if (mod->residenceCapacity < 0 || mod->workspaceCapacity < 0) problems.push_back("room capacity is negative");
@@ -96,6 +207,7 @@ namespace {
 		if (mod->isStorage && !mod->storageType.empty() && !IsRegistered(mod->storageType)) problems.push_back("room storageType '" + mod->storageType + "' is not a registered mod");
 		if (mod->isManufacture) for (const string& type : mod->manufactureTypes) if (!IsRegistered(type)) problems.push_back("room manufactureType '" + type + "' is not a registered mod");
 		if (!mod->scriptModName.empty() && !IsRegistered(mod->scriptModName)) problems.push_back("room scriptModName '" + mod->scriptModName + "' is not a registered mod");
+		CheckRoomLayouts(g_currentModId, problems);
 	}
 	void ValidateConcept(SchedulerMod* mod, vector<string>& problems) {
 		mod->SetProperty();

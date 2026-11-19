@@ -16,6 +16,6 @@ void ContainerAsset::SetProperty() {
 	mobility = AssetMobility::Object;
 	weight = 2.0f;
 	size = 5.0f;
-	volume = 50.0f;
+	volume = 80.0f;
 	backpack = true;
 }

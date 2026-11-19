@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room Layout Preview</title>
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; margin: 12px; background: #fafafa; color: #222; }
+  #bar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  canvas { background: #fff; border: 1px solid #bbb; max-width: 100%; }
+  .key span { display: inline-block; padding: 1px 6px; margin: 0 4px 2px 0; border-radius: 3px; color: #fff; font-size: 11px; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <button id="prev">◀</button><select id="sel"></select><button id="next">▶</button>
+  <span id="info"></span>
+</div>
+<canvas id="cv"></canvas>
+<div class="key" id="key"></div>
+<p>俯视，房间局部系：u向右，v向上(顶边=正面墙，门侧)。箭头=家具朝向；虚线框=吊柜；绿=门，蓝=窗。数据来自 CoreTest(FURNITURE_DUMP=layouts.json)，由 make_preview_data.py 转成 layouts.js。</p>
+<script src="layouts.js"></script>
+<script>
+const COLORS = { Bed: '#8e6bbf', Nightstand: '#a58bd0', Wardrobe: '#8a6d3b', Desk: '#b0833d', Chair: '#c9a063', Sofa: '#3f7fbf', Armchair: '#5b9bd5',
+  CoffeeTable: '#7aa6c2', TvStand: '#444', DiningTable: '#b5651d', DiningChair: '#d08a3d', Fridge: '#6b7b8c', Counter: '#7a8b99', Stove: '#566573',
+  SinkCounter: '#5d8aa8', WallCabinet: '#999', Toilet: '#2a9d8f', Washbasin: '#43b3a5', Bathtub: '#1d7f74', Shower: '#2f9e92', WashingMachine: '#60a3a0',
+  Bookshelf: '#7b5e3b', Rug: '#e8b4b4', Plant: '#4caf50', FloorLamp: '#e6c200', ShoeCabinet: '#8d6e63', Dresser: '#9c7a4a' };
+const colorOf = n => COLORS[n.split('_')[0]] || COLORS[n.replace(/\d.*/, '')] || '#888';
+const sel = document.getElementById('sel'), cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+LAYOUTS.forEach((s, i) => { const o = document.createElement('option'); o.value = i; o.textContent = s.label + ` (${s.items.length}件)`; sel.appendChild(o); });
+function draw() {
+  const s = LAYOUTS[+sel.value], scale = Math.min(900 / s.w, 700 / s.d), pad = 30;
+  cv.width = s.w * scale + pad * 2; cv.height = s.d * scale + pad * 2;
+  const X = u => pad + u * scale, Y = v => pad + (s.d - v) * scale;
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 3; ctx.strokeRect(X(0), Y(s.d), s.w * scale, s.d * scale);
+  const hole = (arr, color) => arr.forEach(([wall, a0, a1]) => { ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.beginPath();
+    if (wall === 0) { ctx.moveTo(X(a0), Y(s.d)); ctx.lineTo(X(a1), Y(s.d)); }
+    else if (wall === 1) { ctx.moveTo(X(a0), Y(0)); ctx.lineTo(X(a1), Y(0)); }
+    else if (wall === 2) { ctx.moveTo(X(0), Y(a0)); ctx.lineTo(X(0), Y(a1)); }
+    else { ctx.moveTo(X(s.w), Y(a0)); ctx.lineTo(X(s.w), Y(a1)); } ctx.stroke(); });
+  hole(s.doors, '#2e7d32'); hole(s.windows, '#1976d2');
+  const dirs = { 0: [0, 1], 180: [0, -1], '-180': [0, -1], '-90': [1, 0], 90: [-1, 0] };
+  s.items.slice().sort((a, b) => a.z - b.z).forEach(it => {
+    const side = Math.abs(it.yaw) === 90, eu = (side ? it.d : it.w) * it.s, ev = (side ? it.w : it.d) * it.s;
+    const overhead = it.z > 1.0, flat = it.n.startsWith('Rug');
+    ctx.globalAlpha = flat ? 0.45 : 0.9; ctx.fillStyle = colorOf(it.n); ctx.fillRect(X(it.u - eu / 2), Y(it.v + ev / 2), eu * scale, ev * scale);
+    ctx.globalAlpha = 1; ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.setLineDash(overhead ? [4, 3] : []);
+    ctx.strokeRect(X(it.u - eu / 2), Y(it.v + ev / 2), eu * scale, ev * scale); ctx.setLineDash([]);
+    const d = dirs[it.yaw] || [0, 1]; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(X(it.u), Y(it.v)); ctx.lineTo(X(it.u) + d[0] * Math.min(eu, ev) * scale * 0.4, Y(it.v) - d[1] * Math.min(eu, ev) * scale * 0.4); ctx.stroke();
+  });
+  document.getElementById('info').textContent = `${s.w}m × ${s.d}m = ${(s.w * s.d).toFixed(0)} m²，家具 ${s.items.length} 件`;
+}
+sel.onchange = draw;
+document.getElementById('prev').onclick = () => { sel.value = (+sel.value + LAYOUTS.length - 1) % LAYOUTS.length; draw(); };
+document.getElementById('next').onclick = () => { sel.value = (+sel.value + 1) % LAYOUTS.length; draw(); };
+document.getElementById('key').innerHTML = Object.entries(COLORS).map(([k, c]) => `<span style="background:${c}">${k}</span>`).join('');
+draw();
+</script>
+</body>
+</html>

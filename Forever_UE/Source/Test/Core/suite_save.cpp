@@ -123,6 +123,63 @@ namespace {
 		run.Check(populace2->GetCitizens().size() == world.populace->GetCitizens().size(), "citizen count survives the round trip");
 	}
 
+	// 房间家具存读一致：读档不重新Layout，所以每个Room的家具(网格路径+位置+朝向+缩放)必须原样回来。
+	void CheckFurnitureRoundTrip(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		SaveArchive archive;
+		MapSaveCodec::Save(*world.map, archive);
+		string error;
+		Map* loaded = MapSaveCodec::Load(archive, error);
+		run.Check(loaded != nullptr, "map loads back for the furniture check", error);
+		if (!loaded) return;
+		size_t total = 0, mismatchedRooms = 0, missingBuildings = 0;
+		for (const auto& entry : world.map->GetBuildings()) {
+			auto other = loaded->GetBuildings().find(entry.first);
+			if (other == loaded->GetBuildings().end()) { missingBuildings++; continue; }
+			const vector<Room*>& a = entry.second->GetRooms();
+			const vector<Room*>& b = other->second->GetRooms();
+			if (a.size() != b.size()) { mismatchedRooms++; continue; }
+			for (size_t i = 0; i < a.size(); i++) {
+				const vector<DecorationInstance>& fa = a[i]->GetFurniture();
+				const vector<DecorationInstance>& fb = b[i]->GetFurniture();
+				total += fa.size();
+				bool same = fa.size() == fb.size();
+				for (size_t k = 0; same && k < fa.size(); k++) {
+					same = fa[k].meshPath == fb[k].meshPath && fa[k].x == fb[k].x && fa[k].y == fb[k].y && fa[k].z == fb[k].z &&
+						fa[k].yaw == fb[k].yaw && fa[k].scaleX == fb[k].scaleX && fa[k].scaleY == fb[k].scaleY && fa[k].scaleZ == fb[k].scaleZ;
+				}
+				if (!same) mismatchedRooms++;
+			}
+		}
+		run.Metric("room furniture pieces", static_cast<double>(total), "");
+		run.Check(missingBuildings == 0, "every building comes back for the furniture check");
+		run.Check(mismatchedRooms == 0, "room furniture survives the save round trip", to_string(mismatchedRooms) + " rooms differ");
+		if (total == 0) run.Note("no furnished rooms in this seed's world (small map without residences?), round trip not exercised");
+	}
+
+	// 房间局部系的约定自洽：局部yaw 0度朝向 = 局部+v方向在世界里的方向(家具"正面朝向+v")。
+	void CheckRoomYawConvention(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		size_t rooms = 0, bad = 0;
+		int badByFace[8] = { 0 }, totalByFace[8] = { 0 };
+		for (const auto& entry : world.map->GetBuildings()) {
+			for (Room* room : entry.second->GetRooms()) {
+				pair<float, float> a = room->LocalToWorld(0.f, 0.f), b = room->LocalToWorld(0.f, 1.f);
+				float fx = b.first - a.first, fy = b.second - a.second;
+				const float length = sqrtf(fx * fx + fy * fy);
+				if (length < 1e-6f) continue;
+				const float yaw = room->LocalYawToWorld(0.f);
+				const float dot = (fx * cosf(yaw) + fy * sinf(yaw)) / length;
+				const int face = static_cast<int>(room->GetDirection()) & 7;
+				rooms++; totalByFace[face]++;
+				if (dot < 0.99f) { bad++; badByFace[face]++; }
+			}
+		}
+		string detail;
+		for (int i = 0; i < 8; i++) if (totalByFace[i]) detail += " face" + to_string(i) + ":" + to_string(badByFace[i]) + "/" + to_string(totalByFace[i]);
+		run.Check(bad == 0, "room local yaw 0 faces local +v in world space", to_string(bad) + "/" + to_string(rooms) + " rooms off;" + detail);
+	}
+
 	void CheckSocietyRoundTrip(TestWorld& world) {
 		TestRun& run = TestRun::Get();
 		SaveArchive first;
@@ -187,6 +244,8 @@ void SaveSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckArchiveContainer(first);
 	CheckRandomRestore(world);
 	CheckPopulaceRoundTrip(world);
+	CheckFurnitureRoundTrip(world);
+	CheckRoomYawConvention(world);
 	CheckSocietyRoundTrip(world);
 }
 

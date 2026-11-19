@@ -468,6 +468,9 @@
     <ClInclude Include="map\room_ranch.h">
       <Filter>map</Filter>
     </ClInclude>
+    <ClInclude Include="map\room_furniture_catalog.h">
+      <Filter>map</Filter>
+    </ClInclude>
     <ClInclude Include="map\room_residence.h">
       <Filter>map</Filter>
     </ClInclude>

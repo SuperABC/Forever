@@ -25,6 +25,14 @@ public:
 	// 子类在这里填下面的字段(不在构造函数里);Core创建实例后立刻调一次。
 	virtual void SetProperty() {}
 
+	// 房间位置/朝向/门窗都定下来之后Core调一次(读档不调，家具随Room存档)，在这个房间mod自己的随机流里
+	// (GetRandom可复现)。mod在这里用AddFurniture摆家具，info是房间局部矩形和门窗洞(米)，见feature_spec.h。
+	// 默认什么都不摆。
+	virtual void Layout(const RoomLayoutInfo& info) { (void)info; }
+	// 摆一件家具(非虚helper，同BuildingMod::AddDecoration)：meshPath为空忽略。Core只读furniture，不改它(跨DLL分配器)。
+	void AddFurniture(const FurnitureSpec& spec) { if (!spec.meshPath.empty()) furniture.push_back(spec); }
+	std::vector<FurnitureSpec> furniture;
+
 	// 能力声明,各域按这些字段消费,见room_mod.md。
 	bool isResidence = false;
 	int residenceCapacity = 0;      // 床位数

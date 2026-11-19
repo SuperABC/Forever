@@ -11,6 +11,7 @@
 - 武器资产的`weaponType`指向`WeaponMod` id(`weapon_pistol`等，见`weapon_*.md`)：在肩膀上激活时装备对应武器(激活只走肩膀；`weapon=true`的资产左右手拒绝)，桥接机制见`Core/player/player.h`的`ActivateShoulderWeapon`。武器资产的`milestoneNames={"asset_test"}`，对应`Resource/Story/asset_test.script`的测试脚本(捡起/测试获得/测试扣除/测试丢弃/测试扣除过量选项，`get_asset`/`lose_asset`里程碑`debug_print`)。
 - 备弹资产重量/体积很小(0.01~0.02)；武器资产重量3~4.5、体积8~10；`WeaponMod::ammoType`引用备弹资产id。
 - 投掷物是`Object`机动性：能拿在手上、放进容器，不能挂肩膀。网格用`/Game/3rdParty/Pineapple_grenade/StaticMeshes/pineapple_grenade`(破片雷和烟雾弹共用)，`meshScale=1`先按模型原始尺寸，大小待PIE里看了再调。
+- 背包(`asset_container`)体积80：开局物品(5种备弹、霰弹枪、狙击枪、火箭筒+10发火箭弹、相机、手雷、烟雾弹各10个)合计约56.6，体积不够时`Asset::AddContent`静默返回false、物品直接丢掉——原来体积50，加了火箭筒和火箭弹后后面的相机/手雷/烟雾弹放不进去。往开局背包里加东西要先核对总体积(`ForeverCharacter.cpp`的`PossessedBy`)。
 - `GetName()`必须全局唯一：`GetType()`+id现拼，计数器存档见`Dependence/common/mod_state.md`。
 
 ## 依赖关系

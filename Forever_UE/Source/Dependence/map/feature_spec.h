@@ -133,3 +133,40 @@ struct DecorationInstance {
 	float pitch = 0.f, roll = 0.f;
 	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f;
 };
+
+// ---------------------------------------------------------------- 房间家具
+
+// 房间局部系里的墙(见room.md"房间局部坐标系"：u沿正面墙，v朝正面为正，原点在角上)。
+enum ROOM_WALL : int {
+	ROOM_WALL_FRONT = 0, // v = depth(正面墙，门/临路一侧)
+	ROOM_WALL_BACK = 1,  // v = 0
+	ROOM_WALL_U_MIN = 2, // u = 0
+	ROOM_WALL_U_MAX = 3, // u = width
+};
+
+// 房间墙上的一个门/窗洞(米)。a0<a1是沿墙的范围：FRONT/BACK墙上是u，U_MIN/U_MAX墙上是v；z0<z1是离地高度。
+struct RoomOpening {
+	int wall = ROOM_WALL_FRONT;
+	float a0 = 0.f, a1 = 0.f;
+	float z0 = 0.f, z1 = 0.f;
+	std::string tag; // 门洞的tag(如"home")，窗为空
+};
+
+// Core在调RoomMod::Layout时交给房间mod的几何信息(米)：房间局部矩形width(u轴)x depth(v轴)，层高，门窗洞。
+struct RoomLayoutInfo {
+	float width = 0.f;  // u轴长(米)
+	float depth = 0.f;  // v轴长(米)
+	float height = 0.f; // 层高(米)
+	std::vector<RoomOpening> doors;
+	std::vector<RoomOpening> windows;
+};
+
+// 房间mod放置的一件家具(RoomMod::AddFurniture记录)，位置是房间局部系(米，原点在房间角上)，
+// 和DecorationSpec不同，不需要考虑朝向：Core按房间朝向换算成DecorationInstance。
+struct FurnitureSpec {
+	std::string meshPath;                           // StaticMesh资产软路径
+	float u = 0.f, v = 0.f;                         // 家具原点(资产原点，通常是底面中心)在房间局部系的位置(米)
+	float z = 0.f;                                  // 离地板高度(米)
+	float yaw = 0.f;                                // 度，0=朝正面(+v)
+	float scaleX = 1.f, scaleY = 1.f, scaleZ = 1.f; // 资产原尺寸的倍数
+};

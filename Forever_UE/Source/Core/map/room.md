@@ -88,7 +88,7 @@
 
 ## 待办/后续阶段
 
-- furniture/pivots等家具类字段：目前没有。
+- 家具没有碰撞、市民不感知家具(只是视觉)；分区之间没有隔墙。
 
 ## 房间局部坐标系
 
@@ -97,9 +97,17 @@
 房间局部坐标系和建筑/layout一样以角为原点：房间"朝北"时原点在房间(minX,minY)角(建筑局部系原点那种角)，u=沿正面墙、v=朝正面为正，yaw 0度=朝向正面；朝向是W/E/S时整套坐标系做纯旋转(和`BuildingLayoutLibrary::InversePoint`同一套)。所以家具/车位等按"房间朝北"写一次，转向由Core换算。PointParams的"比例x该轴长度+米数偏移"里，比例乘`AxisSizeU()`/`AxisSizeV()`(W/E朝向时u轴长=建筑局部SizeY，v轴长=SizeX)。
 
 - `LocalToBuildingLocal(u,v,ox,oy)`：u/v米数 -> 相对房间中心的建筑局部偏移。NORTH `(u-W/2, v-H/2)`、SOUTH `(W/2-u, H/2-v)`、WEST `(v-W/2, H/2-u)`、EAST `(W/2-v, u-H/2)`(W=SizeX，H=SizeY)；朝向无效按NORTH。
-- `FacingYawDegrees()`：局部yaw 0度在建筑局部系里的数学角(逆时针，0度=+X)：W180/E0/N90/S270。
+- `FacingYawDegrees()`：局部yaw 0度在建筑局部系里的数学角(逆时针，0度=+X)：W0/E180/N90/S270(等于局部+v轴在建筑局部系里的方向，和`LocalToBuildingLocal`一致；曾经W/E写反，W/E朝向的房间家具前后全反)。
 - `LocalToWorld(u,v)` / `LocalYawToWorld(yawDegrees)`：直接换算成世界XY(地图单位)和世界yaw(弧度，叠加建筑旋转)，给家具/asset放置用。
-- 目前没有消费方(车位已经是建筑局部坐标，不再用房间局部坐标)；房间触发盒/墙/门/导航节点/市民落点都是中心+轴对齐，和朝向无关。
+- 消费方：家具(`LayoutFurniture`/`BuildLayoutInfo`，见下"家具")；车位已经是建筑局部坐标，不用房间局部坐标；房间触发盒/墙/门/导航节点/市民落点都是中心+轴对齐，和朝向无关。
+
+## 家具
+
+`Room`持有`furniture`(`std::vector<DecorationInstance>`，世界坐标，和建筑装饰同结构)，`GetFurniture()`只读，UE侧`ABuildingElement::BuildRoomFurniture`据此摆(见`BuildingElement.md`)。
+
+- `LayoutFurniture()`：`Building::AssignRoom`/`ArrangeRow`在设好位置/朝向/门窗/墙样式/门牌号之后调用(创建room时就算，不是读档时)。流程：`BuildLayoutInfo()`构造`RoomLayoutInfo` -> 在`RandomScope(RandomRegistry::GetInstanceStream(mod))`里调`mod->Layout(info)` -> 读`mod->furniture`，每件换算：`x,y=LocalToWorld(u/10,v/10)`(地图单位=10米)、`z=building->GetFloorBaseZ(layer)+spec.z/10`、`yaw=LocalYawToWorld(spec.yaw)`。**只读不清**`mod->furniture`(跨DLL堆)；mod对象是新建的、vector本来为空。
+- `BuildLayoutInfo()`：宽/深取房间局部系(`AxisSizeU/V`，乘10转米)，层高取所在层；每个`WallHole`洞按房间朝向用`BuildingOffsetToLocal`(`LocalToBuildingLocal`的逆)换回房间局部(u,v)，再判定落在哪面墙(`ROOM_WALL_*`)、沿墙范围、离地高度(洞口高度是从天花板往下量的，这里换成离地)。门窗方向/位置的换算和墙体开洞(`ComputeDoorFaces`)是同一套。
+- **存档**：`map_save.cpp`房间段在`wallStyles`之后写读`furniture`(`WriteDecorations`/`ReadDecorations`)，读档**不重新布局**(否则读档会改摆放)；没升版本号，旧存档不兼容。
 
 ## 墙样式（wallStyles）
 `Room::GetWallStyle(dir)/SetWallStyle`/`GetWallStyles()`：按墙朝向存四个侧面的标签与材质路径，来源见 building.md"墙的侧面标签"。

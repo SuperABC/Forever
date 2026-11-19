@@ -75,11 +75,12 @@ private:
 		BuildElevatorCabins, // 远->近，所有BuildFloorExtras之后、FinishNear之前
 		FinishNear,          // 远->近，最后一步(执行完才更新currentLod)
 		BuildDecorations,    // 远->近，所有BuildFloorExtras之后、BuildElevatorCabins之前
+		BuildRoomFurniture,  // 远->近，每层一条(只排有家具的楼层)，BuildDecorations之后、BuildElevatorCabins之前
 	};
 
 	struct FLodOp {
 		ELodOpType type = ELodOpType::BuildShell;
-		int32 floorIndex = -1; // 仅BuildFloorExtras使用
+		int32 floorIndex = -1; // 仅BuildFloorExtras/BuildRoomFurniture使用
 	};
 
 	// 一台电梯轿厢的近处LOD表现——只在currentLod==Near时存在，随DeleteAllNearMeshes一起清空。
@@ -134,6 +135,9 @@ private:
 	// mod用AddDecoration指定的自定义模型(Building::GetDecorations()，世界摆位Core已经按朝向
 	// 换算好)，近处LOD专属，ClearNearSections一并清理。
 	void BuildDecorations();
+	// 这一层(floorIndex=basements+level)所有房间的家具(Room::GetFurniture()，世界摆位Core已算好)：
+	// 按mesh聚合进每栋楼每种mesh一个的ISM(跨楼层复用，无碰撞)，近处LOD专属，ClearNearSections一并销毁。
+	void BuildRoomFurniture(int32 floorIndex);
 	void ClearNearSections();
 	void ExecuteLodOp(const FLodOp& op);
 
@@ -199,6 +203,9 @@ private:
 	TArray<FCabin> cabins;
 	// 自定义模型(BuildDecorations产出)，近处LOD专属，DeleteAllNearMeshes时一并清空。
 	TArray<TObjectPtr<UStaticMeshComponent>> nearDecorations;
+	// 房间家具ISM(BuildRoomFurniture产出)：key=mesh路径，近处LOD专属，ClearNearSections时销毁。
+	UPROPERTY(Transient)
+	TMap<FString, TObjectPtr<UInstancedStaticMeshComponent>> nearFurnitureISM;
 
 	// 近/远LOD切换的操作队列，每帧按框架组件的全局预算出队，见Tick()/TryConsumeLodOpBudget。
 	TQueue<FLodOp> floorTierOpQueue;

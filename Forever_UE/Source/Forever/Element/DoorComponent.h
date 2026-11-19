@@ -88,6 +88,8 @@ private:
 	void ResolvePasserIdentity(AActor* actor, Citizen*& outCitizen, bool& outIsPlayer) const;
 
 	void UpdateOpenState();
+	// 玩家离开(或被核对移出passers)时撤掉这扇门弹出的交互选项。
+	void RemoveMeetOptions(AActor* actor);
 
 	Door* door = nullptr;
 
@@ -106,6 +108,7 @@ private:
 	// 秒再关，见door.md"开关状态"一节。TWeakObjectPtr防止Actor销毁后变成悬空指针。
 	TSet<TWeakObjectPtr<AActor>> passers;
 	float closeAtTime = -1.f; // <0表示没有正在倒计时的关门请求
+	float passerCheckTimer = 0.f; // 门开着时每隔一段时间核对passers，见TickComponent
 	bool bWantsOpen = false;
 	float openProgress = 0.f; // 0=全关，1=全开，Tick()按openSeconds插值趋近bWantsOpen对应的目标
 	float openSide = 1.f;     // 见ChooseOpenSide

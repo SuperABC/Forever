@@ -1196,6 +1196,7 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			WriteDoorTags(room->doorTags, w);
 			WriteWallHole(room->windows, w);
 		WriteWallStyles(room->wallStyles, w);
+			WriteDecorations(room->furniture, w);
 			w.Str(room->number);
 			// 房间导航点通常登记在Map的锚点表里(按id引用)；没登记的按值另存一份。
 			const Node* nav = room->navigationNode;
@@ -1478,6 +1479,7 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 			room->doorTags = ReadDoorTags(r);
 			room->windows = ReadWallHole(r);
 			ReadWallStyles(room->wallStyles, r);
+			room->furniture = ReadDecorations(r);
 			room->number = r.Str();
 			uint8_t navKind = r.U8();
 			if (navKind == 1) {

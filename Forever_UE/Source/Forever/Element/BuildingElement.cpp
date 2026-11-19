@@ -1007,6 +1007,54 @@ void ABuildingElement::ClearNearSections() {
 		comp->DestroyComponent();
 	}
 	nearDecorations.Empty();
+	for (auto& pair : nearFurnitureISM) {
+		if (UInstancedStaticMeshComponent* ism = pair.Value) {
+			RemoveInstanceComponent(ism);
+			ism->DestroyComponent();
+		}
+	}
+	nearFurnitureISM.Empty();
+}
+
+void ABuildingElement::BuildRoomFurniture(int32 floorIndex) {
+	if (!building || !framework.IsValid()) return;
+	const int32 level = floorIndex - building->GetBasementCount();
+
+	// 先按mesh聚合这一层所有房间的家具，再每种mesh一次AddInstances(批量，只重建一次树)。
+	TMap<FString, TArray<FTransform>> transformsByMesh;
+	for (Room* room : building->GetRooms()) {
+		if (!room || room->GetLayer() != level) continue;
+		for (const DecorationInstance& item : room->GetFurniture()) {
+			transformsByMesh.FindOrAdd(UTF8_TO_TCHAR(item.meshPath.c_str())).Add(FTransform(
+				FRotator(item.pitch, FMath::RadiansToDegrees(item.yaw), item.roll),
+				FVector(item.x * BUILDING_WORLD_SCALE, item.y * BUILDING_WORLD_SCALE,
+					BUILDING_HEIGHT_EPSILON + item.z * BUILDING_WORLD_SCALE),
+				FVector(item.scaleX, item.scaleY, item.scaleZ)));
+		}
+	}
+
+	for (auto& pair : transformsByMesh) {
+		TObjectPtr<UInstancedStaticMeshComponent>* found = nearFurnitureISM.Find(pair.Key);
+		UInstancedStaticMeshComponent* ism = found ? found->Get() : nullptr;
+		if (!ism) {
+			UStaticMesh* mesh = framework->ResolveMesh(TCHAR_TO_UTF8(*pair.Key), nullptr);
+			if (!mesh) {
+				UE_LOG(LogTemp, Warning, TEXT("ABuildingElement::BuildRoomFurniture: failed to load mesh %s"), *pair.Key);
+				continue;
+			}
+			ism = NewObject<UInstancedStaticMeshComponent>(this, NAME_None, RF_Transient);
+			ism->SetStaticMesh(mesh);
+			ism->SetupAttachment(elementRoot);
+			ism->SetMobility(EComponentMobility::Static);
+			ism->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 家具先不碰撞，玩家穿过
+			ism->SetGenerateOverlapEvents(false);
+			ism->SetCastShadow(false); // 室内小件，省阴影开销
+			ism->RegisterComponent();
+			AddInstanceComponent(ism);
+			nearFurnitureISM.Add(pair.Key, ism);
+		}
+		ism->AddInstances(pair.Value, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
+	}
 }
 
 void ABuildingElement::BuildDecorations() {
@@ -1065,6 +1113,9 @@ void ABuildingElement::ExecuteLodOp(const FLodOp& op) {
 	case ELodOpType::BuildDecorations:
 		BuildDecorations();
 		break;
+	case ELodOpType::BuildRoomFurniture:
+		BuildRoomFurniture(op.floorIndex);
+		break;
 	}
 }
 
@@ -1115,6 +1166,14 @@ void ABuildingElement::Tick(float DeltaTime) {
 			// 自定义模型单独一条操作，不跟楼层/门一起建，但和楼层同一个优先级(楼层级队列)。
 			int32 decorationOps = building->GetDecorations().empty() ? 0 : 1;
 			if (decorationOps > 0) floorTierOpQueue.Enqueue({ ELodOpType::BuildDecorations, -1 });
+			// 房间家具按层建(每层一条，只排有家具的楼层)。
+			TSet<int32> levelsWithFurniture;
+			for (Room* room : building->GetRooms()) if (room && !room->GetFurniture().empty()) levelsWithFurniture.Add(room->GetLayer());
+			for (int32 i = 0; i < nearFloorCount; i++) {
+				if (levelsWithFurniture.Contains(i - building->GetBasementCount())) {
+					floorTierOpQueue.Enqueue({ ELodOpType::BuildRoomFurniture, i });
+				}
+			}
 			floorTierOpQueue.Enqueue({ ELodOpType::BuildElevatorCabins, -1 });
 			floorTierOpQueue.Enqueue({ ELodOpType::FinishNear, -1 });
 
