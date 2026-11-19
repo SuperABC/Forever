@@ -138,7 +138,37 @@ void UForeverRoadnetFrameworkComponent::GenerateRoadnet(Map* inMap) {
 
 	BuildPathRoadMeshes();
 
+	BuildPiers();
+
 	BuildNavigationDebugMesh();
+}
+
+void UForeverRoadnetFrameworkComponent::BuildPiers() {
+	if (!map) return;
+
+	const string defaultMesh = "/Game/Asset/Common/Mesh/Cylinder.Cylinder";
+	int32 pierCount = 0;
+	for (const Pier& pier : map->GetRoadPiers()) {
+		UInstancedStaticMeshComponent* ism = GetOrCreateRoadISM(pier.mesh.empty() ? defaultMesh : pier.mesh);
+		if (!ism || !ism->GetStaticMesh()) continue;
+
+		float baseZ = map->SampleHeight(pier.x, pier.y);
+		float height = (pier.topZ - baseZ) * ROAD_WORLD_SCALE;
+		if (height <= 0.f) continue;
+
+		const FBoxSphereBounds bounds = ism->GetStaticMesh()->GetBounds();
+		float meshDiameter = FMath::Max(bounds.BoxExtent.X, bounds.BoxExtent.Y) * 2.f;
+		float meshHeight = bounds.BoxExtent.Z * 2.f;
+		if (meshDiameter < KINDA_SMALL_NUMBER || meshHeight < KINDA_SMALL_NUMBER) continue;
+		float horizontalScale = pier.radius * 2.f * ROAD_WORLD_SCALE / meshDiameter;
+		FVector scale(horizontalScale, horizontalScale, height / meshHeight);
+		FVector center(pier.x * ROAD_WORLD_SCALE, pier.y * ROAD_WORLD_SCALE, (baseZ + pier.topZ) * 0.5f * ROAD_WORLD_SCALE);
+		ism->AddInstance(FTransform(FRotator::ZeroRotator, center - bounds.Origin * scale, scale));
+		pierCount++;
+	}
+	if (pierCount > 0) {
+		debugf("UForeverRoadnetFrameworkComponent::BuildPiers: placed %d pier instance(s).\n", pierCount);
+	}
 }
 
 void UForeverRoadnetFrameworkComponent::BuildPathRoadMeshes() {

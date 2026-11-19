@@ -165,6 +165,9 @@
     <ClCompile Include="map\roadnet.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\pier.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\zone.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -363,6 +366,9 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\roadnet.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\pier.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\zone.h">

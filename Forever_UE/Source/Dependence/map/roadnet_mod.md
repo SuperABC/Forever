@@ -12,6 +12,7 @@
 - **`lots`是`vector<Lot>`，边界`Road`映射记在每个`Lot`自己身上**(`Lot::SetBoundaryRoad`/`GetBoundaryRoads`，键是`FACE_DIRECTION`0-3，缺失=那一侧没有路；`Lot`构造函数的可选`boundary`参数等价于构造后逐个`SetBoundaryRoad`)。不存边界`Intersection`映射：车行/行人导航图直接挂在`Road`/`Intersection`上(`Source/Core/map/roadnet.h`的`RoadJunction`)，不经lot中转。
 - **边界`Road*`必须指向`this->roads`里的同一个元素，不能是独立拷贝**：Zone/Building裁剪Lot空间时(`Lot::SplitWithPath`)会通过这个指针给"大路"加`RoadOpening`，独立拷贝会让开口加不到真正被渲染的那条路上(PIE里看不到开口)。实现方要保证指针有效：取地址前必须把所有往`roads`增长的调用做完，`vector`扩容会让之前取的地址失效，做法见`roadnet_jing.md`的`makeBoundaryRoad`。
 - **车道/开口数据挂在`Road`自己身上**(`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/`openings`，见`general_geometry.h`)，`RoadnetMod`只负责产出`Road`实例。
+- **桥墩**：`AddPier(mesh, chains, defaultSpacing, minSpacing, radius)`镜像`RouteMod::AddPier`，把一个`PierRequest`追加进`piers`（链按值存，Core用`Roadnet::PlacePiers`深拷贝后选位，见`Core/map/pier.md`）。要求链是路面中轴线(`Connection`)，端点Node沿用对应`Road`的Node（保留id），Core据此把链自己的路段从障碍里排除。`mesh`空串用UE默认圆柱。
 - **挖洞/贴地**：`AddHatch`/`AddTunnelHatch`/`AddTerrainFit`三个非虚工具方法只是转调`general_geometry.h`的`BuildHatch`/`BuildTerrainFit`(`RouteMod`火车铺轨共用同一份实现)。
   - `AddHatch(connection, t1, t2, width)`：取`connection`在`[t1,t2]`两端的点，中点定位、连线方向定朝向、弧长定长度、`width`定宽度，包成`TerrainHatch`追加进`hatches`。消费方`ForeverTerrainFrameworkComponent::LookupTerrain`挖洞判断是"`construction`地形或这个格子有hatch"，隧道口靠这条规则在山体上挖出缺口，否则隧道段被实心地形挡住，见`Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。
   - `AddTunnelHatch`：隧道口专用，`TerrainHatch`带`wall=true`、`floorStart/floorEnd`=`connection`在`t1/t2`处的路面高度，UE层据此在洞的两条长边生成竖直侧壁；其它挖洞一律用`AddHatch`。

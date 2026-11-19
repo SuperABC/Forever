@@ -59,6 +59,10 @@
 - 依赖：`map/terrain_mod.h`、`common/utility.h`；River依赖Mountain+Ocean先跑完(`basic.cpp`依赖表声明`terrain_river`依赖`terrain_mountain`)。
 - 被谁依赖：`Source/Basic/basic.cpp`(`GetModTerrains`/`RegisterModTerrains`)；路网(`roadnet_*`)读地形分类；`ForeverTerrainFrameworkComponent::BuildOceanMesh()`按"有没有水"铺水面，河流格自动纳入。
 
+## 参数
+
+`--distribute=false`(`--distribute false`、`0/no/off` 同义)：跳过`DistributeTerrain`，只提供贴图(`SetupTexture`)。配合`terrain_file`用——地图由文件给定，这几个mod只负责让文件里的`terrain_mountain`字符串有材质。解析见`terrain_args.h`。
+
 ## 待办/后续阶段
 
 - `RIVER_FLOW_THRESHOLD`等数值是起始值，按效果继续调。

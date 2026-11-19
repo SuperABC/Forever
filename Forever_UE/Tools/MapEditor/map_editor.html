@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forever 地图编辑器</title>
+<style>
+:root { --bg:#1d1f23; --panel:#262a30; --line:#3a3f48; --text:#d8dce2; --dim:#8b93a0; --accent:#4c9ffe; --warn:#e8a33c; --bad:#e5534b; }
+* { box-sizing: border-box; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.4 "Segoe UI","Microsoft YaHei",sans-serif; overflow:hidden; }
+#top { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:6px 8px; background:var(--panel); border-bottom:1px solid var(--line); }
+#top .sep { width:1px; align-self:stretch; background:var(--line); margin:0 4px; }
+button, select, input { font:inherit; color:var(--text); background:#30353d; border:1px solid var(--line); border-radius:4px; padding:3px 8px; }
+button { cursor:pointer; } button:hover { border-color:var(--accent); } button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+button:disabled { opacity:.4; cursor:default; }
+input[type=number] { width:70px; } input[type=text] { width:150px; } input[type=range] { padding:0; }
+#main { display:flex; height:calc(100% - 41px - 22px); }
+#left { width:250px; overflow:auto; padding:8px; background:var(--panel); border-right:1px solid var(--line); }
+#right { width:280px; overflow:auto; padding:8px; background:var(--panel); border-left:1px solid var(--line); }
+#center { flex:1; position:relative; min-width:0; }
+#c2d, #c3d { position:absolute; inset:0; width:100%; height:100%; display:block; }
+#c3dWrap { position:absolute; inset:0; display:none; }
+#status { height:22px; padding:2px 8px; background:var(--panel); border-top:1px solid var(--line); color:var(--dim); white-space:nowrap; overflow:hidden; }
+h4 { margin:10px 0 4px; color:var(--dim); font-weight:600; font-size:12px; letter-spacing:.05em; }
+.row { display:flex; align-items:center; gap:6px; margin:4px 0; } .row > label { width:64px; color:var(--dim); flex:none; } .row > * { min-width:0; }
+.tabs { display:flex; gap:4px; flex-wrap:wrap; } .tabs button { flex:1; }
+.chips { display:flex; flex-wrap:wrap; gap:4px; } .chip { display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border:1px solid var(--line); border-radius:10px; cursor:pointer; } .chip.on { border-color:var(--accent); } .chip i { width:10px; height:10px; border-radius:50%; display:inline-block; }
+.warn { color:var(--warn); margin:3px 0; } .hint { color:var(--dim); margin:4px 0; }
+.msg { position:absolute; left:50%; top:10px; transform:translateX(-50%); background:#000c; padding:6px 12px; border-radius:6px; pointer-events:none; display:none; z-index:3; }
+</style>
+</head>
+<body>
+<div id="top"></div>
+<div id="main">
+	<div id="left"></div>
+	<div id="center">
+		<canvas id="c2d"></canvas>
+		<div id="c3dWrap"><canvas id="c3d"></canvas></div>
+		<div class="msg" id="msg"></div>
+	</div>
+	<div id="right"></div>
+</div>
+<div id="status"></div>
+<input type="file" id="fileInput" style="display:none">
+
+<script src="vendor/three.min.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/io.js"></script>
+<script src="js/roadnet.js"></script>
+<script src="js/lots.js"></script>
+<script>
+'use strict';
+// Forever 地图编辑器：地形/路网/地块，导出 .terrain / .roadnet。操作见 README.md，文件格式见 Source/Basic/map/*.md。
+const ME = window.ME;
+
+// ======================= 状态 =======================
+const S = {
+	terrain: new ME.Terrain(256, 256),
+	model: ME.newModel(256, 256),
+	view: { scale: 3, ox: 20, oy: 20 },
+	mode3d: false,
+	tool: 'terrain',            // terrain / road / lot / select
+	// 地形笔刷
+	brush: { op: 'paint', terrain: 'terrain_mountain', radius: 6, strength: 0.5, target: 0, level: ME.SEA_LEVEL, erase: false, lockTerrain: false },
+		contour: { on: true, interval: 1 },   // 2D等高线(间距单位element=10m，每5条一条主等高线)
+	// 路网
+	// headZ/tailZ=新建的起点/终点节点高度；headTerrain/tailTerrain=改用点击处的地形高度。点在已有节点上沿用它自己的高度。
+		road: { shape: 'line', type: 'ground', preset: 0, headZ: 0, tailZ: 0, headTerrain: false, tailTerrain: false, snap: true, snapRight: true, name: '' },
+	pending: null,              // 路/地块正在画的状态
+	lotArea: 'AREA_RESIDENCE_HIGH',
+	sel: null,                  // {kind:'node'|'road'|'lot', id}
+	colors: {},                 // 地形字符串→自定义颜色
+	mouse: null,                // 世界坐标
+	warnings: [],
+	files: { terrain: null, roadnet: null },
+	dirty3d: true, dirty2d: true, terrainDirty: null, terrainVersion: 0,
+};
+const HISTORY_LIMIT = 80;
+const hist = { undo: [], redo: [] };
+
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function say(text) { const m = $('msg'); m.textContent = text; m.style.display = 'block'; clearTimeout(say.t); say.t = setTimeout(() => { m.style.display = 'none'; }, 3500); }
+function ctxHeight() { return { height: (x, y) => S.terrain.sampleHeight(x, y) }; }
+
+// ======================= 撤销/重做 =======================
+function pushAction(a) { hist.undo.push(a); if (hist.undo.length > HISTORY_LIMIT) hist.undo.shift(); hist.redo = []; afterChange(); }
+function applyAction(a, undo) {
+	if (a.kind === 't') {
+		S.terrain.applyCells(a.indices, undo ? a.before : a.after);
+		markTerrainDirtyIndices(a.indices);
+	} else if (a.kind === 'm') {
+		S.model = ME.cloneModel(undo ? a.before : a.after);
+		if (S.sel && !selExists()) S.sel = null;
+		S.pending = null;
+	}
+}
+function undo() { const a = hist.undo.pop(); if (!a) return; applyAction(a, true); hist.redo.push(a); afterChange(); }
+function redo() { const a = hist.redo.pop(); if (!a) return; applyAction(a, false); hist.undo.push(a); afterChange(); }
+function clearHistory() { hist.undo = []; hist.redo = []; }
+
+// 对model做一次可撤销的修改；fn返回{error}则整体回滚。
+function modelOp(fn) {
+	const before = ME.cloneModel(S.model);
+	let result;
+	try { result = fn(S.model); } catch (e) { result = { error: String(e && e.message || e) }; }
+	if (result && result.error) { S.model = before; say(result.error); renderRight(); S.dirty2d = true; return result; }
+	pushAction({ kind: 'm', before, after: ME.cloneModel(S.model) });
+	return result || {};
+}
+
+function afterChange() { S.dirty2d = true; S.dirty3d = true; scheduleWarnings(); updateTop(); renderRight(); }
+let warnTimer = 0;
+function scheduleWarnings() {
+	clearTimeout(warnTimer);
+	warnTimer = setTimeout(() => {
+		try { S.warnings = ME.exportRoadnet(S.model, S.terrain).warnings; } catch (e) { S.warnings = ['检查失败：' + e.message]; }
+		updateTop(); renderRight();
+	}, 400);
+}
+
+// ======================= 文件读写 =======================
+async function openFile(accept) {
+	if (window.showOpenFilePicker) {
+		try {
+			const [handle] = await window.showOpenFilePicker({ types: [{ description: accept.name, accept: { 'application/octet-stream': accept.ext } }] });
+			const file = await handle.getFile();
+			return { name: file.name, buffer: await file.arrayBuffer(), handle };
+		} catch (e) { if (e.name === 'AbortError') return null; throw e; }
+	}
+	return new Promise((resolve) => {
+		const input = $('fileInput');
+		input.accept = accept.ext.join(',');
+		input.onchange = async () => { const f = input.files[0]; input.value = ''; resolve(f ? { name: f.name, buffer: await f.arrayBuffer(), handle: null } : null); };
+		input.click();
+	});
+}
+async function saveFile(suggested, data, accept, handle, forceAs) {
+	if (window.showSaveFilePicker) {
+		try {
+			if (!handle || forceAs) handle = await window.showSaveFilePicker({ suggestedName: suggested, types: [{ description: accept.name, accept: { 'application/octet-stream': accept.ext } }] });
+			const writable = await handle.createWritable();
+			await writable.write(data);
+			await writable.close();
+			return handle;
+		} catch (e) { if (e.name === 'AbortError') return handle; throw e; }
+	}
+	const blob = new Blob([data], { type: 'application/octet-stream' });
+	const a = document.createElement('a');
+	a.href = URL.createObjectURL(blob); a.download = suggested; a.click();
+	setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+	return null;
+}
+const TERRAIN_FILE = { name: '地形', ext: ['.terrain'] };
+const ROADNET_FILE = { name: '路网', ext: ['.roadnet'] };
+
+async function doOpenTerrain() {
+	try {
+		const f = await openFile(TERRAIN_FILE); if (!f) return;
+		S.terrain = ME.readTerrain(f.buffer);
+		S.model.mapW = S.terrain.w; S.model.mapH = S.terrain.h;
+		S.files.terrain = f.handle; rebuildTerrainImage(); clearHistory(); fitView(); afterChange(); say('已打开 ' + f.name);
+	} catch (e) { say('打开地形失败：' + e.message); }
+}
+async function doSaveTerrain(as) {
+	try {
+		const data = ME.writeTerrain(S.terrain);
+		S.files.terrain = await saveFile('map.terrain', data, TERRAIN_FILE, S.files.terrain, as);
+		say('已保存地形');
+	} catch (e) { say('保存地形失败：' + e.message); }
+}
+async function doOpenRoadnet() {
+	try {
+		const f = await openFile(ROADNET_FILE); if (!f) return;
+		const data = ME.readRoadnet(new TextDecoder().decode(f.buffer));
+		if (!data.source) throw new Error('这个.roadnet里没有source段(不是编辑器导出的)，无法继续编辑');
+		const legacy = !(data.source.version >= 2);
+					S.model = ME.migrateModel(data.source, ctxHeight()); S.sel = null; S.pending = null;
+		S.files.roadnet = f.handle; clearHistory(); afterChange(); say('已打开 ' + f.name + (legacy ? '(旧版文件，已迁移成节点高度；隧道/桥已按旧布局拆成多条路)' : ''));
+	} catch (e) { say('打开路网失败：' + e.message); }
+}
+async function doSaveRoadnet(as) {
+	try {
+		const { output, warnings } = ME.exportRoadnet(S.model, S.terrain);
+		S.warnings = warnings;
+		const text = ME.writeRoadnet(S.model, output);
+		S.files.roadnet = await saveFile('map.roadnet', text, ROADNET_FILE, S.files.roadnet, as);
+		say('已保存路网' + (warnings.length ? `(有${warnings.length}条警告)` : ''));
+		updateTop(); renderRight();
+	} catch (e) { say('保存路网失败：' + e.message); }
+}
+function doNew() {
+	const w = parseInt(prompt('地图宽(element，1个=10m；游戏默认1024，必须是2的幂)', '1024'), 10);
+	if (!w) return;
+	const h = parseInt(prompt('地图高(element)', String(w)), 10);
+	if (!h) return;
+	if (w * h > 4096 * 4096) { say('太大了'); return; }
+	S.terrain = new ME.Terrain(w, h);
+	S.model = ME.newModel(w, h);
+	S.sel = null; S.pending = null; S.files = { terrain: null, roadnet: null };
+	rebuildTerrainImage(); clearHistory(); fitView(); afterChange();
+}
+
+// ======================= 2D 视图 =======================
+const c2d = $('c2d');
+const g = c2d.getContext('2d');
+let terrCanvas = document.createElement('canvas');
+let terrImage = null;
+
+function rebuildTerrainImage() {
+	const T = S.terrain;
+	terrCanvas.width = T.w; terrCanvas.height = T.h;
+	terrImage = terrCanvas.getContext('2d').createImageData(T.w, T.h);
+	for (let i = 0; i < T.w * T.h; i++) paintCell(i);
+			terrCanvas.getContext('2d').putImageData(terrImage, 0, 0);
+			S.terrainVersion++;
+			S.dirty2d = true; S.dirty3d = true;
+}
+function cellRGB(i, noWater) {
+	const T = S.terrain;
+	let c = ME.colorOf(T.nameAt(i), S.colors);
+	const h = T.height[i];
+	const shade = 1 + clamp(h * 0.05, -0.45, 0.7);
+	let r = c[0] * shade, gg = c[1] * shade, b = c[2] * shade;
+	if (!noWater && !isNaN(T.water[i])) { r = r * 0.35 + 30 * 0.65; gg = gg * 0.35 + 90 * 0.65; b = b * 0.35 + 200 * 0.65; }
+	return [clamp(r, 0, 255), clamp(gg, 0, 255), clamp(b, 0, 255)];
+}
+function paintCell(i) {
+	const [r, gg, b] = cellRGB(i);
+	terrImage.data[i * 4] = r; terrImage.data[i * 4 + 1] = gg; terrImage.data[i * 4 + 2] = b; terrImage.data[i * 4 + 3] = 255;
+}
+function markTerrainDirtyIndices(indices) {
+	const T = S.terrain;
+	let r = S.terrainDirty;
+	for (const i of indices) {
+		const x = i % T.w, y = (i / T.w) | 0;
+		if (!r) r = { x0: x, y0: y, x1: x, y1: y };
+		else { r.x0 = Math.min(r.x0, x); r.y0 = Math.min(r.y0, y); r.x1 = Math.max(r.x1, x); r.y1 = Math.max(r.y1, y); }
+		paintCell(i);
+	}
+	S.terrainDirty = r; S.terrainVersion++; S.dirty2d = true; S.dirty3d = true;
+}
+function flushTerrainImage() {
+	const r = S.terrainDirty; if (!r) return;
+	terrCanvas.getContext('2d').putImageData(terrImage, 0, 0, r.x0, r.y0, r.x1 - r.x0 + 1, r.y1 - r.y0 + 1);
+	S.terrainDirty = null;
+}
+function resize2d() {
+	const rect = $('center').getBoundingClientRect();
+	const dpr = window.devicePixelRatio || 1;
+	c2d.width = Math.max(1, Math.floor(rect.width * dpr)); c2d.height = Math.max(1, Math.floor(rect.height * dpr));
+	S.dirty2d = true;
+}
+function fitView() {
+	const rect = $('center').getBoundingClientRect();
+	S.view.scale = Math.max(0.2, Math.min(rect.width / S.terrain.w, rect.height / S.terrain.h) * 0.95);
+	S.view.ox = (rect.width - S.terrain.w * S.view.scale) / 2; S.view.oy = (rect.height - S.terrain.h * S.view.scale) / 2;
+	S.dirty2d = true;
+}
+const toWorld = (sx, sy) => [(sx - S.view.ox) / S.view.scale, (sy - S.view.oy) / S.view.scale];
+const toScreen = (x, y) => [x * S.view.scale + S.view.ox, y * S.view.scale + S.view.oy];
+
+const ROAD_COLORS = { ground: '#4a4f58', hug: '#6f8f5a', mouth: '#7a4b9a', tunnel: '#b46ae0', bridge: '#e0962f' };
+const ROAD_TYPES = [['ground', '平地'], ['hug', '贴合地形'], ['mouth', '隧道口'], ['tunnel', '隧道'], ['bridge', '桥']];
+const AREA_COLORS = { RESIDENCE: '#3b82f6', COMMERCE: '#f59e0b', INDUSTRY: '#a855f7', OFFICE: '#ef4444', GREEN: '#22c55e', TEST: '#94a3b8' };
+const areaColor = (area) => AREA_COLORS[area.replace('AREA_', '').split('_')[0]] || '#888';
+
+function pathQuad(q) {
+	const poly = ME.polyline(q);
+	g.beginPath();
+	poly.forEach((p, i) => { const [sx, sy] = toScreen(p.x, p.y); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); });
+}
+// 等高线缓存：地形改动(terrainVersion)或间距变了才重算；拖笔刷中最多每60ms重算一次(实时跟手)，松手后再算最终的。
+const contourCache = { segs: null, interval: 0, version: -1, want: 0 };
+function drawContours() {
+	const C = S.contour;
+	if (!C.on) return;
+	const cc = contourCache;
+	if (cc.version !== S.terrainVersion || cc.want !== C.interval) {
+		const now = performance.now();
+		if (!(drag && drag.type === 'brush') || !cc.segs || now - (cc.t || 0) > 60) {
+			cc.t = now;
+			const r = ME.contourSegments(S.terrain, C.interval);
+			cc.segs = r.segs; cc.interval = r.interval; cc.version = S.terrainVersion; cc.want = C.interval;
+		}
+	}
+	const segs = cc.segs;
+	if (!segs || !segs.length) return;
+	const v = S.view, dpr = window.devicePixelRatio || 1;
+	const [wx0, wy0] = toWorld(0, 0), [wx1, wy1] = toWorld(c2d.width / dpr, c2d.height / dpr);
+	const minor = new Path2D(), major = new Path2D();
+	for (let i = 0; i < segs.length; i += 5) {
+		const x0 = segs[i], y0 = segs[i + 1], x1 = segs[i + 2], y1 = segs[i + 3];
+		if (Math.max(x0, x1) < wx0 || Math.min(x0, x1) > wx1 || Math.max(y0, y1) < wy0 || Math.min(y0, y1) > wy1) continue;
+		const path = segs[i + 4] ? major : minor;
+		path.moveTo(x0 * v.scale + v.ox, y0 * v.scale + v.oy); path.lineTo(x1 * v.scale + v.ox, y1 * v.scale + v.oy);
+	}
+	g.lineJoin = 'round';
+	g.strokeStyle = 'rgba(45,28,12,0.40)'; g.lineWidth = 1; g.stroke(minor);
+	g.strokeStyle = 'rgba(35,20,6,0.80)'; g.lineWidth = 1.8; g.stroke(major);
+}
+function draw2D() {
+	if (S.mode3d) return;
+	flushTerrainImage();
+	const dpr = window.devicePixelRatio || 1;
+	g.setTransform(dpr, 0, 0, dpr, 0, 0);
+	g.fillStyle = '#15171a'; g.fillRect(0, 0, c2d.width, c2d.height);
+	const T = S.terrain, v = S.view, M = S.model;
+	g.imageSmoothingEnabled = false;
+	g.drawImage(terrCanvas, v.ox, v.oy, T.w * v.scale, T.h * v.scale);
+	drawContours();
+	// 网格
+	if (v.scale >= 6) {
+		g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 1; g.beginPath();
+		const [wx0, wy0] = toWorld(0, 0), [wx1, wy1] = toWorld(c2d.width / dpr, c2d.height / dpr);
+		for (let x = Math.max(0, Math.floor(wx0)); x <= Math.min(T.w, Math.ceil(wx1)); x++) { const sx = x * v.scale + v.ox; g.moveTo(sx, v.oy); g.lineTo(sx, v.oy + T.h * v.scale); }
+		for (let y = Math.max(0, Math.floor(wy0)); y <= Math.min(T.h, Math.ceil(wy1)); y++) { const sy = y * v.scale + v.oy; g.moveTo(v.ox, sy); g.lineTo(v.ox + T.w * v.scale, sy); }
+		g.stroke();
+	}
+	g.strokeStyle = '#6a7280'; g.lineWidth = 1; g.strokeRect(v.ox, v.oy, T.w * v.scale, T.h * v.scale);
+
+	// 地块
+	for (const lot of M.lots) {
+		const corners = ME.lotCorners(M, lot); if (!corners) continue;
+		g.beginPath();
+		corners.forEach((c, i) => { const [sx, sy] = toScreen(c[0], c[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); });
+		g.closePath();
+		g.fillStyle = areaColor(lot.area) + '66'; g.fill();
+		g.strokeStyle = (S.sel && S.sel.kind === 'lot' && S.sel.id === lot.id) ? '#fff' : areaColor(lot.area);
+		g.lineWidth = (S.sel && S.sel.kind === 'lot' && S.sel.id === lot.id) ? 2.5 : 1.5; g.stroke();
+	}
+	// 道路
+	for (const r of M.roads) {
+		const q = ME.quadOf(M, r);
+		const w = Math.max(2, ME.roadWidth(r) * v.scale);
+		pathQuad(q);
+		g.lineCap = 'butt'; g.lineJoin = 'round';
+		g.strokeStyle = ROAD_COLORS[r.type]; g.lineWidth = w;
+		g.setLineDash(r.type === 'tunnel' ? [8, 5] : []);
+		g.stroke();
+		g.setLineDash([]);
+		if (S.sel && S.sel.kind === 'road' && S.sel.id === r.id) { pathQuad(q); g.strokeStyle = '#fff'; g.lineWidth = Math.max(1.5, w * 0.25); g.stroke(); }
+				// 头尾高度不同：在中点画一个朝高处的小箭头
+				const za = ME.nodeOf(M, r.a).z || 0, zb = ME.nodeOf(M, r.b).z || 0;
+				if (Math.abs(za - zb) > 1e-6 && r.type !== 'hug') {
+					const pm = ME.evalQuad(q, 0.5), pn = ME.evalQuad(q, zb > za ? 0.56 : 0.44);
+					const [mx, my] = toScreen(pm[0], pm[1]), [nx, ny] = toScreen(pn[0], pn[1]);
+					const ang = Math.atan2(ny - my, nx - mx);
+					g.fillStyle = '#ffffffcc'; g.beginPath();
+					g.moveTo(mx + Math.cos(ang) * 6, my + Math.sin(ang) * 6);
+					g.lineTo(mx + Math.cos(ang + 2.5) * 5, my + Math.sin(ang + 2.5) * 5);
+					g.lineTo(mx + Math.cos(ang - 2.5) * 5, my + Math.sin(ang - 2.5) * 5);
+					g.closePath(); g.fill();
+				}
+			}
+	// 节点
+	for (const n of M.nodes) {
+		const [sx, sy] = toScreen(n.x, n.y);
+		const deg = ME.nodeDegree(M, n.id);
+		const sel = S.sel && S.sel.kind === 'node' && S.sel.id === n.id;
+		g.fillStyle = n.extern ? '#ff5e5e' : (deg === 2 ? '#cbd5e1' : '#fff');
+		g.strokeStyle = sel ? '#4c9ffe' : '#111'; g.lineWidth = sel ? 3 : 1.5;
+		g.beginPath();
+		if (n.extern) g.rect(sx - 5, sy - 5, 10, 10); else g.arc(sx, sy, deg === 2 ? 3 : 4.5, 0, Math.PI * 2);
+		g.fill(); g.stroke();
+				if (Math.abs(n.z || 0) > 1e-6) {
+					g.font = '11px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000a'; g.fillStyle = '#ffe9a8';
+					const label = 'z' + (n.z || 0).toFixed(1);
+					g.strokeText(label, sx + 7, sy - 6); g.fillText(label, sx + 7, sy - 6);
+				}
+			}
+			// 选中道路的控制点把手
+	if (S.sel && S.sel.kind === 'road') {
+		const r = ME.roadOf(M, S.sel.id);
+		if (r) {
+			const q = ME.quadOf(M, r);
+			const h = q.c || [(q.p0[0] + q.p1[0]) / 2, (q.p0[1] + q.p1[1]) / 2];
+			const [sx, sy] = toScreen(h[0], h[1]);
+			g.fillStyle = '#4c9ffe'; g.strokeStyle = '#fff'; g.lineWidth = 1.5;
+			g.beginPath(); g.moveTo(sx, sy - 6); g.lineTo(sx + 6, sy); g.lineTo(sx, sy + 6); g.lineTo(sx - 6, sy); g.closePath(); g.fill(); g.stroke();
+		}
+	}
+	drawOverlay();
+}
+function drawOverlay() {
+	const m = S.mouse, v = S.view;
+	if (!m) return;
+	if (S.tool === 'terrain') {
+		const [sx, sy] = toScreen(m[0], m[1]);
+		g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.arc(sx, sy, S.brush.radius * v.scale, 0, Math.PI * 2); g.stroke();
+	}
+	const p = S.pending;
+	if (S.tool === 'road' && p) {
+		const end = snapPoint(m).point;
+		const a = p.a;
+		const [ax, ay] = [a.x, a.y];
+		let ctrl = p.ctrl;
+		g.setLineDash([6, 4]); g.strokeStyle = '#fff'; g.lineWidth = 2;
+		g.beginPath();
+		const [sx0, sy0] = toScreen(ax, ay);
+		g.moveTo(sx0, sy0);
+		if (S.road.shape === 'curve') {
+			if (ctrl) { const [cx, cy] = toScreen(ctrl[0], ctrl[1]); const [ex, ey] = toScreen(end[0], end[1]); g.quadraticCurveTo(cx, cy, ex, ey); }
+			else { const [ex, ey] = toScreen(end[0], end[1]); g.lineTo(ex, ey); }
+		} else { const [ex, ey] = toScreen(end[0], end[1]); g.lineTo(ex, ey); }
+		g.stroke(); g.setLineDash([]);
+		// 头/尾高度标注
+		const endSnap = snapPoint(m);
+		const label = (txt, wx, wy) => { const [lx, ly] = toScreen(wx, wy); g.font = '12px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000b'; g.fillStyle = '#ffe9a8'; g.strokeText(txt, lx + 10, ly - 10); g.fillText(txt, lx + 10, ly - 10); };
+		label('头 z' + (p.a.z || 0).toFixed(2), ax, ay);
+		label('尾 z' + previewZ(endSnap, false).toFixed(2), end[0], end[1]);
+		// 吸附直角的引导线：直线看终点，曲线在选控制点阶段看控制点。
+		const guide = S.road.shape === 'line' ? snapPoint(m).rightAngle : (!ctrl ? rightAngle(m) : null);
+		if (guide) {
+			const reach = Math.hypot(guide.point[0] - guide.origin[0], guide.point[1] - guide.origin[1]) + 2;
+			const [gx0, gy0] = toScreen(guide.origin[0] - guide.dir[0] * 2, guide.origin[1] - guide.dir[1] * 2);
+			const [gx1, gy1] = toScreen(guide.origin[0] + guide.dir[0] * reach, guide.origin[1] + guide.dir[1] * reach);
+			g.save(); g.setLineDash([2, 4]); g.strokeStyle = '#ffd24c'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(gx0, gy0); g.lineTo(gx1, gy1); g.stroke();
+			if (S.road.shape === 'curve') { const [cx, cy] = toScreen(guide.point[0], guide.point[1]); g.setLineDash([]); g.fillStyle = '#ffd24c'; g.beginPath(); g.arc(cx, cy, 4, 0, Math.PI * 2); g.fill(); }
+			g.restore();
+		}
+	}
+	if (S.tool === 'road') {
+		const sp = snapPoint(m);
+		const [sx, sy] = toScreen(sp.point[0], sp.point[1]);
+		g.strokeStyle = sp.kind === 'free' ? '#aaa' : '#4cff9e'; g.lineWidth = 2;
+		g.beginPath(); g.arc(sx, sy, 7, 0, Math.PI * 2); g.stroke();
+	}
+	if (S.tool === 'lot' && S.pending) {
+		const lot = lotPreview();
+		if (lot) {
+			const corners = ME.lotCorners(S.model, lot);
+			if (corners) {
+				g.beginPath();
+				corners.forEach((c, i) => { const [sx, sy] = toScreen(c[0], c[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); });
+				g.closePath(); g.fillStyle = areaColor(S.lotArea) + '55'; g.fill(); g.setLineDash([6, 4]); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke(); g.setLineDash([]);
+			}
+		} else if (S.pending.a !== undefined) {
+			const a = ME.nodeOf(S.model, S.pending.a); const [sx, sy] = toScreen(a.x, a.y); const [ex, ey] = toScreen(m[0], m[1]);
+			g.setLineDash([6, 4]); g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
+		}
+	}
+	if ((S.tool === 'lot' || S.tool === 'select') && S.mouse) {
+		const n = ME.pickNode(S.model, m[0], m[1], 9 / v.scale);
+		if (n) { const [sx, sy] = toScreen(n.x, n.y); g.strokeStyle = '#4cff9e'; g.lineWidth = 2; g.beginPath(); g.arc(sx, sy, 8, 0, Math.PI * 2); g.stroke(); }
+	}
+}
+
+// 路工具的落点：节点(吸附) / 路上(T口) / 地图边界(城外连接点) / 自由点。返回 {kind, point:[x,y], ref}
+const RIGHT_ANGLE_DEG = 10;
+// 吸附直角：起点是已连了道路的节点(或路中间)时，终点(直线)/控制点(曲线)吸到垂直于已连道路的射线上。
+function rightAngle(w) {
+	const p = S.pending;
+	if (!S.road.snapRight || !p || !p.a.ref) return null;
+	const origin = p.a.ref.node !== undefined ? { node: p.a.ref.node } : (p.a.ref.road !== undefined ? { road: p.a.ref.road, t: p.a.ref.t } : null);
+	return origin ? ME.rightAngleAt(S.model, origin, w[0], w[1], RIGHT_ANGLE_DEG) : null;
+}
+// 路工具的落点：吸附直角优先于路中间/自由点，但显式落在节点/城外连接点上时以那个目标为准。
+function snapPoint(w) {
+	const base = snapPointBase(w);
+	if (base.kind === 'node' || base.kind === 'extern') return base;
+	const p = S.pending;
+	if (!p || S.road.shape !== 'line') return base;
+	let ra = rightAngle(w);
+	if (!ra) return base;
+	// 射线刚好穿过另一条路：落在那条路上建T口。沿射线迭代两次，让落点贴近射线。
+	if (S.road.snap) {
+		const r = 9 / S.view.scale;
+		let pt = ra.point;
+		for (let i = 0; i < 2; i++) {
+			const hit = ME.pickRoad(S.model, pt[0], pt[1], r);
+			if (!hit) break;
+			const along = (hit.x - ra.origin[0]) * ra.dir[0] + (hit.y - ra.origin[1]) * ra.dir[1];
+			pt = [ra.origin[0] + ra.dir[0] * along, ra.origin[1] + ra.dir[1] * along];
+		}
+		const hit = ME.pickRoad(S.model, pt[0], pt[1], r);
+		if (hit && ME.canSplit(hit.road)) return { kind: 'road', point: [hit.x, hit.y], ref: { road: hit.road.id, t: hit.t }, rightAngle: ra };
+	}
+	return { kind: 'free', point: ra.point, ref: { x: ra.point[0], y: ra.point[1] }, rightAngle: ra };
+}
+
+function snapPointBase(w) {
+	const M = S.model, r = 9 / S.view.scale;
+	if (!S.road.snap) return { kind: 'free', point: w, ref: { x: w[0], y: w[1] } };
+	const node = ME.pickNode(M, w[0], w[1], r);
+	if (node) return { kind: 'node', point: [node.x, node.y], ref: { node: node.id } };
+	// 靠近地图边界 → 城外连接点
+	const edgeR = Math.max(r, 1.2);
+	const W = S.terrain.w, H = S.terrain.h;
+	const dists = [w[0], w[1], W - w[0], H - w[1]];
+	const k = dists.indexOf(Math.min(...dists));
+	if (dists[k] <= edgeR) {
+		const p = k === 0 ? [0, w[1]] : k === 1 ? [w[0], 0] : k === 2 ? [W, w[1]] : [w[0], H];
+		const existing = M.nodes.find((n) => n.extern && Math.hypot(n.x - p[0], n.y - p[1]) < 0.3);
+		if (existing) return { kind: 'node', point: [existing.x, existing.y], ref: { node: existing.id } };
+		return { kind: 'extern', point: p, ref: { x: p[0], y: p[1], extern: true } };
+	}
+	const hit = ME.pickRoad(M, w[0], w[1], r);
+	if (hit && ME.canSplit(hit.road)) return { kind: 'road', point: [hit.x, hit.y], ref: { road: hit.road.id, t: hit.t } };
+	return { kind: 'free', point: w, ref: { x: w[0], y: w[1] } };
+}
+
+// ======================= 地块工具 =======================
+function lotPreview() {
+	const p = S.pending;
+	if (!p || p.a === undefined || p.b === undefined || !S.mouse) return null;
+	const a = ME.nodeOf(S.model, p.a), b = ME.nodeOf(S.model, p.b);
+	const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+	if (len < 1e-6) return null;
+	const nx = -dy / len, ny = dx / len;
+	let depth = (S.mouse[0] - b.x) * nx + (S.mouse[1] - b.y) * ny;
+	// 深度吸附：另一侧角点正好有节点时对齐(这样那条边才能有临街的路)。
+	for (const n of S.model.nodes) {
+		if (n.id === a.id || n.id === b.id) continue;
+		const d = (n.x - b.x) * nx + (n.y - b.y) * ny;
+		const along = (n.x - b.x) * (dx / len) + (n.y - b.y) * (dy / len);
+		if (Math.abs(along) < 0.4 && Math.abs(d - depth) < 8 / S.view.scale) { depth = d; break; }
+	}
+	depth = Math.round(depth * 100) / 100;
+	if (Math.abs(depth) < 0.5) return null;
+	return { id: -1, a: p.a, b: p.b, depth, area: S.lotArea, margin: [null, null, null, null] };
+}
+
+// ======================= 鼠标交互 =======================
+let drag = null;
+c2d.addEventListener('contextmenu', (e) => e.preventDefault());
+c2d.addEventListener('mousedown', (e) => {
+	const rect = c2d.getBoundingClientRect();
+	const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+	const w = toWorld(sx, sy);
+	S.mouse = w;
+	if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown)) {
+		if (e.button === 2 && S.pending) { S.pending = null; S.dirty2d = true; return; }
+		drag = { type: 'pan', sx, sy, ox: S.view.ox, oy: S.view.oy }; return;
+	}
+	if (e.button !== 0) return;
+	if (S.tool === 'terrain') {
+			S.terrain.beginStroke();
+			// 限定单一地形：按下时笔刷中心所在格的地形，整次笔画都只改这个地形的格子。
+			let only;
+			if (S.brush.lockTerrain && HEIGHT_OPS.includes(S.brush.op)) {
+				const x = Math.floor(w[0]), y = Math.floor(w[1]);
+				if (S.terrain.inside(x, y)) only = S.terrain.idx[y * S.terrain.w + x];
+			}
+			drag = { type: 'brush', only };
+			applyBrush(w, only);
+			return;
+		}
+	if (S.tool === 'road') { roadClick(w); return; }
+	if (S.tool === 'lot') { lotClick(w); return; }
+	if (S.tool === 'select') { selectClick(w, e); return; }
+});
+window.addEventListener('mousemove', (e) => {
+	const rect = c2d.getBoundingClientRect();
+	const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+	const w = toWorld(sx, sy);
+	S.mouse = (sx >= 0 && sy >= 0 && sx <= rect.width && sy <= rect.height) || drag ? w : null;
+	updateStatus();
+	if (drag) {
+		if (drag.type === 'pan') { S.view.ox = drag.ox + (sx - drag.sx); S.view.oy = drag.oy + (sy - drag.sy); }
+		else if (drag.type === 'brush') applyBrush(w, drag.only);
+		else if (drag.type === 'node') { const n = ME.nodeOf(S.model, drag.id); ME.moveNode(S.model, drag.id, snapToGrid(w[0], e), snapToGrid(w[1], e)); drag.moved = true; S.dirty3d = true; void n; }
+		else if (drag.type === 'ctrl') { const r = ME.roadOf(S.model, drag.id); if (r) { r.ctrl = [w[0], w[1]]; drag.moved = true; S.dirty3d = true; } }
+	}
+	S.dirty2d = true;
+});
+window.addEventListener('mouseup', () => {
+	if (!drag) return;
+	if (drag.type === 'brush') { const a = S.terrain.endStroke(); if (a) pushAction(Object.assign({ kind: 't' }, a)); }
+	else if (drag.type === 'node' || drag.type === 'ctrl') {
+		if (drag.moved) pushAction({ kind: 'm', before: drag.before, after: ME.cloneModel(S.model) });
+		else S.model = ME.cloneModel(drag.before);
+	}
+	drag = null; S.dirty2d = true;
+});
+const snapToGrid = (v, e) => (e && e.altKey ? Math.round(v) : v);
+c2d.addEventListener('wheel', (e) => {
+	e.preventDefault();
+	const rect = c2d.getBoundingClientRect();
+	const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+	const [wx, wy] = toWorld(sx, sy);
+	S.view.scale = clamp(S.view.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 0.15, 80);
+	S.view.ox = sx - wx * S.view.scale; S.view.oy = sy - wy * S.view.scale;
+	S.dirty2d = true;
+}, { passive: false });
+let spaceDown = false;
+window.addEventListener('keydown', (e) => {
+	if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.key !== 'Escape') return;
+	if (e.key === ' ') { spaceDown = true; e.preventDefault(); }
+	else if (e.key === 'Escape') { S.pending = null; S.dirty2d = true; renderRight(); }
+	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); doSaveRoadnet(false); }
+	else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
+	else if (e.key === '[') { S.brush.radius = Math.max(1, S.brush.radius - 1); renderLeft(); }
+	else if (e.key === ']') { S.brush.radius += 1; renderLeft(); }
+});
+window.addEventListener('keyup', (e) => { if (e.key === ' ') spaceDown = false; });
+
+const HEIGHT_OPS = ['raise', 'lower', 'flatten', 'smooth'];
+function applyBrush(w, only) {
+	const B = S.brush;
+	const params = { terrain: B.terrain, strength: B.strength, target: B.target, level: B.level, erase: B.erase, only };
+	const changed = S.terrain.brush(B.op, w[0], w[1], B.radius, params);
+	if (changed && S.terrain.stroke) {
+		markTerrainDirtyIndices(Array.from(S.terrain.stroke.before.keys()));
+	}
+	S.dirty3d = true;
+}
+
+// 落点sp(snapPoint的结果)上的节点高度：已有节点沿用自己的；路中间(T口)取路在该处的高度；新点用面板的头/尾高度(或地形高度)。
+function previewZ(sp, isHead) {
+	const R = S.road;
+	if (sp.ref.node !== undefined) { const n = ME.nodeOf(S.model, sp.ref.node); return n ? (n.z || 0) : 0; }
+	if (sp.ref.road !== undefined) { const r = ME.roadOf(S.model, sp.ref.road); return r ? ME.zAt(S.model, r, ctxHeight(), sp.ref.t) : 0; }
+	const useTerrain = isHead ? R.headTerrain : R.tailTerrain;
+	return useTerrain ? S.terrain.sampleHeight(sp.point[0], sp.point[1]) : (isHead ? R.headZ : R.tailZ);
+}
+function roadClick(w) {
+	const sp = snapPoint(w);
+	const R = S.road;
+	if (!S.pending) {
+		S.pending = { a: { x: sp.point[0], y: sp.point[1], ref: Object.assign({}, sp.ref), z: previewZ(sp, true) } };
+		if (S.pending.a.ref.node === undefined && S.pending.a.ref.road === undefined) S.pending.a.ref.z = S.pending.a.z;
+		S.dirty2d = true; return;
+	}
+	const p = S.pending;
+	if (R.shape === 'curve' && !p.ctrl) { const ra = rightAngle(w); p.ctrl = ra ? ra.point : [w[0], w[1]]; S.dirty2d = true; return; }
+	const refB = Object.assign({}, sp.ref);
+	if (refB.node === undefined && refB.road === undefined) refB.z = previewZ(sp, false);
+	const spec = { a: p.a.ref, b: refB, ctrl: p.ctrl || null, type: R.type, lanes: ME.LANE_PRESETS[R.preset].lanes, name: R.name };
+	S.pending = null;
+	const res = modelOp((m) => ME.addRoad(m, spec, ctxHeight()));
+	if (res.road) S.sel = { kind: 'road', id: res.road.id };
+	S.dirty2d = true;
+}
+function lotClick(w) {
+	const n = ME.pickNode(S.model, w[0], w[1], 10 / S.view.scale);
+	const p = S.pending;
+	if (!p) { if (n) { S.pending = { a: n.id }; } else say('先点一个路口/节点作为地块的第一个角'); S.dirty2d = true; return; }
+	if (p.b === undefined) {
+		if (n && n.id !== p.a) S.pending.b = n.id; else say('再点另一个节点');
+		S.dirty2d = true; return;
+	}
+	const lot = lotPreview();
+	if (!lot) { say('把鼠标拉开一点决定深度'); return; }
+	S.pending = null;
+	const res = modelOp((m) => ({ lot: ME.addLot(m, lot.a, lot.b, lot.depth, S.lotArea) }));
+	if (res.lot) { S.sel = { kind: 'lot', id: res.lot.id }; }
+	S.dirty2d = true;
+}
+function pointInPoly(x, y, poly) {
+	let inside = false;
+	for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+		if (((poly[i][1] > y) !== (poly[j][1] > y)) && (x < (poly[j][0] - poly[i][0]) * (y - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0])) inside = !inside;
+	}
+	return inside;
+}
+function selectClick(w, e) {
+	const M = S.model, r = 9 / S.view.scale;
+	// 选中的路的把手优先
+	if (S.sel && S.sel.kind === 'road') {
+		const road = ME.roadOf(M, S.sel.id);
+		if (road) {
+			const q = ME.quadOf(M, road);
+			const h = q.c || [(q.p0[0] + q.p1[0]) / 2, (q.p0[1] + q.p1[1]) / 2];
+			if (Math.hypot(h[0] - w[0], h[1] - w[1]) < r) { drag = { type: 'ctrl', id: road.id, before: ME.cloneModel(M) }; return; }
+		}
+	}
+	const n = ME.pickNode(M, w[0], w[1], r);
+	if (n) { S.sel = { kind: 'node', id: n.id }; drag = { type: 'node', id: n.id, before: ME.cloneModel(M) }; renderRight(); S.dirty2d = true; return; }
+	const hit = ME.pickRoad(M, w[0], w[1], Math.max(r, 0.6));
+	if (hit) { S.sel = { kind: 'road', id: hit.road.id }; renderRight(); S.dirty2d = true; return; }
+	for (const lot of M.lots) {
+		const corners = ME.lotCorners(M, lot);
+		if (corners && pointInPoly(w[0], w[1], corners)) { S.sel = { kind: 'lot', id: lot.id }; renderRight(); S.dirty2d = true; return; }
+	}
+	S.sel = null; renderRight(); S.dirty2d = true;
+}
+function selExists() {
+	if (!S.sel) return false;
+	const M = S.model;
+	if (S.sel.kind === 'node') return !!ME.nodeOf(M, S.sel.id);
+	if (S.sel.kind === 'road') return !!ME.roadOf(M, S.sel.id);
+	return M.lots.some((l) => l.id === S.sel.id);
+}
+function deleteSelection() {
+	if (!S.sel || !selExists()) return;
+	const sel = S.sel; S.sel = null;
+	modelOp((m) => {
+		if (sel.kind === 'road') ME.deleteRoad(m, sel.id);
+		else if (sel.kind === 'node') ME.deleteNode(m, sel.id);
+		else { m.lots = m.lots.filter((l) => l.id !== sel.id); ME.cleanup(m); }
+	});
+}
+
+// ======================= 界面 =======================
+function el(tag, props, ...kids) {
+	const e = document.createElement(tag);
+	for (const k in (props || {})) {
+		if (k === 'class') e.className = props[k];
+		else if (k.startsWith('on')) e.addEventListener(k.slice(2), props[k]);
+		else if (k === 'value') e.value = props[k];
+		else if (props[k] === null || props[k] === undefined || props[k] === false) continue; // null/false=不设这个属性(setAttribute会把它变成字符串"null"，让checked之类永远为真)
+		else if (k === 'checked') e.checked = !!props[k];
+		else e.setAttribute(k, props[k]);
+	}
+	for (const kid of kids) if (kid !== null && kid !== undefined) e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+	return e;
+}
+const row = (label, ...inputs) => el('div', { class: 'row' }, el('label', null, label), ...inputs);
+function num(value, onchange, attrs) { const i = el('input', Object.assign({ type: 'number', value }, attrs || {})); i.addEventListener('change', () => onchange(parseFloat(i.value))); return i; }
+function sel(options, value, onchange) {
+	const s = el('select');
+	for (const [v, label] of options) { const o = el('option', { value: v }, label); if (String(v) === String(value)) o.selected = true; s.append(o); }
+	s.addEventListener('change', () => onchange(s.value));
+	return s;
+}
+function btn(text, onclick, on) { const b = el('button', { class: on ? 'on' : '', onclick }, text); return b; }
+
+function updateTop() {
+	const top = $('top'); top.innerHTML = '';
+	top.append(
+		btn('新建', doNew),
+		el('span', { class: 'sep' }),
+		btn('打开地形', doOpenTerrain), btn('保存地形', () => doSaveTerrain(false)), btn('另存地形', () => doSaveTerrain(true)),
+		el('span', { class: 'sep' }),
+		btn('打开路网', doOpenRoadnet), btn('保存路网', () => doSaveRoadnet(false)), btn('另存路网', () => doSaveRoadnet(true)),
+		el('span', { class: 'sep' }),
+		Object.assign(btn('撤销', undo), { disabled: !hist.undo.length }), Object.assign(btn('重做', redo), { disabled: !hist.redo.length }),
+		el('span', { class: 'sep' }),
+		btn('2D', () => setMode3d(false), !S.mode3d), btn('3D', () => setMode3d(true), S.mode3d),
+		btn('适应窗口', () => { fitView(); }),
+				el('span', { class: 'sep' }),
+				btn('等高线', () => { S.contour.on = !S.contour.on; S.dirty2d = true; updateTop(); }, S.contour.on),
+				sel([[0.25, '0.25'], [0.5, '0.5'], [1, '1'], [2, '2'], [5, '5'], [10, '10']], S.contour.interval, (v) => { S.contour.interval = parseFloat(v); S.dirty2d = true; }),
+				el('span', { class: 'hint' }, '间距(10m)，每5条加粗'),
+		el('span', { class: 'sep' }),
+		el('span', { style: S.warnings.length ? 'color:var(--warn)' : 'color:var(--dim)' }, S.warnings.length ? `⚠ ${S.warnings.length} 条警告` : '无警告'),
+		el('span', { class: 'hint', style: 'margin-left:auto' }, `${S.terrain.w}×${S.terrain.h}  Ctrl+Z/Y 撤销重做 · 空格/中键拖动平移 · 滚轮缩放`),
+	);
+}
+function updateStatus() {
+	const m = S.mouse, T = S.terrain;
+	let text = '';
+	if (m) {
+		text = `(${m[0].toFixed(2)}, ${m[1].toFixed(2)})`;
+		const x = Math.floor(m[0]), y = Math.floor(m[1]);
+		if (T.inside(x, y)) {
+			const i = y * T.w + x;
+			text += `  地形 ${T.nameAt(i)}  高度 ${T.height[i].toFixed(2)}` + (isNaN(T.water[i]) ? '' : `  水位 ${T.water[i].toFixed(2)}`);
+		}
+	}
+	$('status').textContent = text;
+}
+
+// 抬高/降低/抹平/平滑共用的"限定单一地形"开关：打开后按下鼠标时笔刷中心在哪个地形上，这一笔就只改这个地形的格子。
+function lockRow() {
+	const B = S.brush;
+	return el('div', null,
+		row('限定地形', el('input', { type: 'checkbox', checked: B.lockTerrain ? 'checked' : null, onchange: (e) => { B.lockTerrain = e.target.checked; renderLeft(); } }), el('span', { class: 'hint' }, '只改按下处的地形')),
+		B.lockTerrain ? el('div', { class: 'hint' }, '按下鼠标时笔刷中心所在格的地形决定这一笔的范围，笔画途中扫过别的地形不会改它们(平滑时也不参考别的地形的高度)。') : null);
+}
+const ROAD_TYPE_HINTS = {
+	ground: '贴着地形的平路。路面高度要和地形一致(平原就是0)，不在水上。',
+	hug: '路面跟随地形起伏(每10m取一段)，头尾节点高度和地形的差值逐渐过渡。',
+	mouth: '隧道口：用平地的路面资产，但给地形开口(整段挖洞)。通常一头在地面、一头在隧道里，做下坡/上坡。',
+	tunnel: '隧道内的路面(隧道资产，没有开口)。',
+	bridge: '桥面(放桥墩)。连续的桥自动归成一条桥墩链。桥上不能从中间接路。',
+};
+// 节点高度输入行：数字+"地形"开关(打开=用点击处的地形高度)。
+function heightRow(label, key, terrainKey) {
+	const R = S.road;
+	const input = num(R[key], (v) => { R[key] = isNaN(v) ? 0 : v; }, { step: 0.5 });
+	if (R[terrainKey]) input.disabled = true;
+	return row(label, input, btn('地形', () => { R[terrainKey] = !R[terrainKey]; renderLeft(); }, R[terrainKey]));
+}
+const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块'], ['select', '选择']];
+function renderLeft() {
+	const left = $('left'); left.innerHTML = '';
+	const tabs = el('div', { class: 'tabs' });
+	for (const [id, label] of TOOLS) tabs.append(btn(label, () => { S.tool = id; S.pending = null; renderLeft(); renderRight(); S.dirty2d = true; }, S.tool === id));
+	left.append(tabs);
+	if (S.tool === 'terrain') {
+		const B = S.brush;
+		left.append(el('h4', null, '笔刷'));
+		const ops = [['paint', '刷地形'], ['water', '刷水'], ['raise', '抬高'], ['lower', '降低'], ['flatten', '抹平到'], ['smooth', '平滑']];
+		const grid = el('div', { class: 'tabs' });
+		for (const [id, label] of ops) grid.append(btn(label, () => { B.op = id; renderLeft(); }, B.op === id));
+		left.append(grid);
+		left.append(row('半径', num(B.radius, (v) => { B.radius = Math.max(0.5, v || 1); }, { min: 0.5, step: 0.5 }), el('span', { class: 'hint' }, '[ ] 调整')));
+		if (B.op === 'paint') {
+			left.append(row('地形', el('input', { type: 'text', value: B.terrain, onchange: (e) => { B.terrain = e.target.value.trim() || 'plain'; renderLeft(); } })));
+			left.append(row('颜色', el('input', { type: 'color', value: rgbHex(ME.colorOf(B.terrain, S.colors)), onchange: (e) => { S.colors[B.terrain] = hexRgb(e.target.value); rebuildTerrainImage(); renderLeft(); } })));
+			left.append(el('div', { class: 'hint' }, 'plain 是平原：高度锁0，建筑只建在平原上(水可以放在任意格子)。其他字符串随便写，游戏里只有已有地形mod的名字(terrain_mountain/ocean/river)有对应贴图。'));
+			left.append(el('h4', null, '已用字符串'));
+			const chips = el('div', { class: 'chips' });
+			const names = Array.from(new Set(['plain', 'terrain_mountain', 'terrain_ocean', 'terrain_river'].concat(S.terrain.palette)));
+			for (const n of names) {
+				const c = ME.colorOf(n, S.colors);
+				chips.append(el('span', { class: 'chip' + (B.terrain === n ? ' on' : ''), onclick: () => { B.terrain = n; renderLeft(); } }, el('i', { style: `background:rgb(${c[0]},${c[1]},${c[2]})` }), n));
+			}
+			left.append(chips);
+		} else if (B.op === 'water') {
+			left.append(row('水位', num(B.level, (v) => { B.level = isNaN(v) ? ME.SEA_LEVEL : v; }, { step: 0.1 })));
+			left.append(row('擦除', el('input', { type: 'checkbox', checked: B.erase ? 'checked' : null, onchange: (e) => { B.erase = e.target.checked; } })));
+			left.append(el('div', { class: 'hint' }, '水可以放在任意格子，包括岸边的平原格(否则水面和地面之间会露出缝隙)。海平面 -0.1。'));
+		} else if (B.op === 'flatten') {
+			left.append(row('目标高度', num(B.target, (v) => { B.target = v || 0; }, { step: 0.5 })));
+			left.append(row('强度', num(B.strength, (v) => { B.strength = clamp(v || 0.5, 0.05, 1); }, { step: 0.1, min: 0.05, max: 1 })));
+						left.append(lockRow());
+						left.append(el('div', { class: 'hint' }, '只对非平原格生效。强度1=一次抹平。'));
+		} else {
+			left.append(row('强度', num(B.strength, (v) => { B.strength = Math.max(0.05, v || 0.5); }, { step: 0.1, min: 0.05 })));
+						left.append(lockRow());
+						left.append(el('div', { class: 'hint' }, (B.op === 'smooth' ? '强度可以大于1：每次相当于多遍平滑，越大抹得越平。只对非平原格生效。' : '高度只能改在非平原格(先把区域刷成山/海等地形字符串，再抬高/降低)。')));
+		}
+	} else if (S.tool === 'road') {
+		const R = S.road;
+		left.append(el('h4', null, '画法'));
+		left.append(el('div', { class: 'tabs' }, btn('直线', () => { R.shape = 'line'; S.pending = null; renderLeft(); }, R.shape === 'line'), btn('曲线', () => { R.shape = 'curve'; S.pending = null; renderLeft(); }, R.shape === 'curve')));
+		left.append(el('div', { class: 'hint' }, R.shape === 'line' ? '点击起点，再点击终点。' : '点击起点，再点控制点，最后点终点。'));
+		left.append(el('h4', null, '道路类型'));
+		left.append(row('类型', sel(ROAD_TYPES, R.type, (v) => { R.type = v; renderLeft(); })));
+				left.append(el('div', { class: 'hint' }, ROAD_TYPE_HINTS[R.type]));
+				left.append(el('h4', null, '节点高度(单位10m)'));
+				left.append(heightRow('头高度', 'headZ', 'headTerrain'));
+				left.append(heightRow('尾高度', 'tailZ', 'tailTerrain'));
+				left.append(el('div', { class: 'hint' }, '点第一下建起点(用头高度)，点第二下建终点(用尾高度)。头尾高度相同走直线(平路)，不同走扁S形。点在已有节点上沿用节点自己的高度；点在路中间(T口)取那条路在该处的高度。'));
+		left.append(row('车道', sel(ME.LANE_PRESETS.map((p, i) => [i, p.name]), R.preset, (v) => { R.preset = parseInt(v, 10); })));
+		left.append(row('名称', el('input', { type: 'text', value: R.name, placeholder: '默认 路N', onchange: (e) => { R.name = e.target.value.trim(); } })));
+		left.append(row('吸附', el('input', { type: 'checkbox', checked: R.snap ? 'checked' : null, onchange: (e) => { R.snap = e.target.checked; } }), el('span', { class: 'hint' }, '节点/路中间/地图边界')));
+		left.append(row('吸附直角', el('input', { type: 'checkbox', checked: R.snapRight ? 'checked' : null, onchange: (e) => { R.snapRight = e.target.checked; S.dirty2d = true; } }), el('span', { class: 'hint' }, '从已连路的节点/路中间拉出时')));
+		left.append(el('div', { class: 'hint' }, '吸附直角：起点已连着道路(或在路中间)时，终点(曲线是控制点)在 10° 内吸到垂直于该路的方向，黄色虚线是引导线；节点上连了多条路时取最接近鼠标方向的那条的垂线。'));
+		left.append(el('div', { class: 'hint' }, '吸附到路中间 = 自动建T口；与同层的路交叉 = 自动建十字路口；靠近地图边界 = 城外连接点。隧道口/隧道/桥只能接在两端的节点上。右键/Esc取消。'));
+	} else if (S.tool === 'lot') {
+		left.append(el('h4', null, '地块'));
+		left.append(row('类型', sel(ME.AREAS.map((a) => [a, areaLabel(a)]), S.lotArea, (v) => { S.lotArea = v; S.dirty2d = true; })));
+		left.append(el('div', { class: 'hint' }, '依次点击两个节点(矩形的一条边)，再移动鼠标拉出深度，点击确认。深度会吸附到对面正好有节点的位置。四个方向的缩进在右侧编辑。'));
+	} else {
+		left.append(el('div', { class: 'hint' }, '点击选中节点/道路/地块；拖动节点移动，拖动选中道路的菱形把手调整弧度。Delete 删除选中。按住 Alt 拖节点时对齐整数格。'));
+	}
+}
+function areaLabel(a) {
+	const kinds = { RESIDENCE: '住宅', COMMERCE: '商业', INDUSTRY: '工业', OFFICE: '办公', GREEN: '绿化', TEST: '测试' };
+	const lv = { HIGH: '高', MIDDLE: '中', LOW: '低' };
+	const p = a.replace('AREA_', '').split('_');
+	return kinds[p[0]] + (p[1] ? lv[p[1]] + '密度' : '');
+}
+const rgbHex = (c) => '#' + c.map((v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
+const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+
+function renderRight() {
+	const right = $('right'); right.innerHTML = '';
+	const M = S.model;
+	right.append(el('h4', null, '选中'));
+	if (!S.sel || !selExists()) right.append(el('div', { class: 'hint' }, '无'));
+	else if (S.sel.kind === 'node') {
+		const n = ME.nodeOf(M, S.sel.id);
+		right.append(el('div', null, `节点 ${n.id}${n.extern ? '(城外连接点)' : ''}  度数 ${ME.nodeDegree(M, n.id)}`));
+		right.append(row('x', num(n.x.toFixed(2), (v) => modelOp((m) => { const nn = ME.nodeOf(m, n.id); ME.moveNode(m, n.id, v, nn.y); }), { step: 0.5 })));
+		right.append(row('y', num(n.y.toFixed(2), (v) => modelOp((m) => { const nn = ME.nodeOf(m, n.id); ME.moveNode(m, n.id, nn.x, v); }), { step: 0.5 })));
+				right.append(nodeHeightRow(n));
+				right.append(btn('删除节点及其道路', deleteSelection));
+	} else if (S.sel.kind === 'road') {
+		const r = ME.roadOf(M, S.sel.id);
+		const L = ME.roadLength(M, r);
+		right.append(el('div', null, `道路 ${r.id}  长度 ${L.toFixed(1)}(${(L * 10).toFixed(0)}m)`));
+		right.append(row('名称', el('input', { type: 'text', value: r.name, onchange: (e) => modelOp((m) => { ME.roadOf(m, r.id).name = e.target.value.trim() || ('路' + r.id); }) })));
+		right.append(row('类型', sel(ROAD_TYPES, r.type, (v) => modelOp((m) => { ME.roadOf(m, r.id).type = v; }))));
+				right.append(nodeHeightRow(ME.nodeOf(M, r.a), '头高度'));
+				right.append(nodeHeightRow(ME.nodeOf(M, r.b), '尾高度'));
+		const cur = ME.LANE_PRESETS.findIndex((p) => p.lanes.join() === r.lanes.join());
+		right.append(row('车道', sel([[-1, '自定义']].concat(ME.LANE_PRESETS.map((p, i) => [i, p.name])), cur, (v) => { if (v >= 0) modelOp((m) => { ME.roadOf(m, r.id).lanes = ME.LANE_PRESETS[v].lanes.slice(); }); })));
+		right.append(row('弧度', btn('拉直', () => modelOp((m) => { ME.roadOf(m, r.id).ctrl = null; }))));
+		right.append(btn('删除道路', deleteSelection));
+	} else {
+		const lot = M.lots.find((l) => l.id === S.sel.id);
+		right.append(el('div', null, `地块 ${lot.id}`));
+		right.append(row('类型', sel(ME.AREAS.map((a) => [a, areaLabel(a)]), lot.area, (v) => modelOp((m) => { m.lots.find((l) => l.id === lot.id).area = v; }))));
+		right.append(row('深度', num(lot.depth.toFixed(2), (v) => modelOp((m) => { if (v) m.lots.find((l) => l.id === lot.id).depth = v; }), { step: 0.5 })));
+		const info = ME.describeLot(M, lot, roadPiecesForUI());
+		if (info) {
+			right.append(el('h4', null, '四向缩进(留空=自动)'));
+			info.directions.forEach((d, i) => {
+				const input = el('input', { type: 'number', step: 0.1, placeholder: d.auto.toFixed(2), value: d.custom === null ? '' : d.custom });
+				input.addEventListener('change', () => modelOp((m) => { m.lots.find((l) => l.id === lot.id).margin[i] = input.value === '' ? null : parseFloat(input.value); }));
+				right.append(row(d.name, input, el('span', { class: 'hint' }, d.road ? '临街 ' + (d.road.name || d.road.id) : '无路')));
+			});
+		}
+		right.append(btn('删除地块', deleteSelection));
+	}
+	right.append(el('h4', null, `检查(${S.warnings.length})`));
+	if (!S.warnings.length) right.append(el('div', { class: 'hint' }, '没有问题'));
+	for (const w of S.warnings.slice(0, 60)) right.append(el('div', { class: 'warn' }, w));
+}
+// 节点高度编辑行：数字 + "=地形"按钮(把这个节点的高度设成它所在位置的地形高度)。
+function nodeHeightRow(n, label) {
+	const terrainZ = S.terrain.sampleHeight(n.x, n.y);
+	return row(label || '高度',
+		num((n.z || 0).toFixed(2), (v) => modelOp((m) => { ME.nodeOf(m, n.id).z = isNaN(v) ? 0 : v; }), { step: 0.5 }),
+		el('button', { title: '把这个节点的高度设成它所在位置的地形高度(' + terrainZ.toFixed(2) + ')', onclick: () => modelOp((m) => { const nn = ME.nodeOf(m, n.id); nn.z = S.terrain.sampleHeight(nn.x, nn.y); }) }, '=地形'));
+}
+function roadPiecesForUI() {
+	try { return ME.exportRoadnet(S.model, S.terrain).roadPieces; } catch (e) { return new Map(); }
+}
+
+// ======================= 3D 视图 =======================
+let r3 = null;
+function setMode3d(on) {
+	S.mode3d = on;
+	$('c2d').style.display = on ? 'none' : 'block';
+	$('c3dWrap').style.display = on ? 'block' : 'none';
+	if (on) { if (!r3) init3D(); resize3d(); S.dirty3d = true; } else S.dirty2d = true;
+	updateTop();
+}
+function init3D() {
+	const canvas = $('c3d');
+	const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+	const scene = new THREE.Scene();
+	scene.background = new THREE.Color(0x15171a);
+	const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
+	scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.5));
+	const sun = new THREE.DirectionalLight(0xffffff, 0.45); sun.position.set(-1, 2, 1); scene.add(sun);
+	r3 = { renderer, scene, camera, root: new THREE.Group(), cam: { yaw: 0.6, pitch: 0.8, dist: 200, target: new THREE.Vector3(128, 0, 128) } };
+	scene.add(r3.root);
+	let d3 = null;
+	canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+	canvas.addEventListener('mousedown', (e) => { d3 = { x: e.clientX, y: e.clientY, button: e.button }; });
+	window.addEventListener('mouseup', () => { d3 = null; });
+	window.addEventListener('mousemove', (e) => {
+		if (!d3) return;
+		const dx = e.clientX - d3.x, dy = e.clientY - d3.y; d3.x = e.clientX; d3.y = e.clientY;
+		const c = r3.cam;
+		if (d3.button === 0) { c.yaw -= dx * 0.005; c.pitch = clamp(c.pitch + dy * 0.005, 0.05, 1.55); }
+		else {
+			const k = c.dist * 0.0015;
+			const right = new THREE.Vector3(Math.cos(c.yaw), 0, -Math.sin(c.yaw)), fwd = new THREE.Vector3(-Math.sin(c.yaw), 0, -Math.cos(c.yaw));
+			c.target.addScaledVector(right, -dx * k).addScaledVector(fwd, dy * k);
+		}
+	});
+	canvas.addEventListener('wheel', (e) => { e.preventDefault(); r3.cam.dist = clamp(r3.cam.dist * (e.deltaY < 0 ? 0.88 : 1.14), 5, 4000); }, { passive: false });
+	r3.cam.target.set(S.terrain.w / 2, 0, S.terrain.h / 2); r3.cam.dist = Math.max(S.terrain.w, S.terrain.h) * 0.9;
+}
+function resize3d() {
+	if (!r3) return;
+	const rect = $('center').getBoundingClientRect();
+	r3.renderer.setPixelRatio(window.devicePixelRatio || 1);
+	r3.renderer.setSize(rect.width, rect.height, false);
+	r3.camera.aspect = rect.width / rect.height; r3.camera.updateProjectionMatrix();
+}
+function bezier3(points, t) {
+	let pts = points.map((p) => p.slice());
+	for (let n = pts.length - 1; n > 0; n--) for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) pts[i][k] = pts[i][k] * (1 - t) + pts[i + 1][k] * t;
+	return pts[0];
+}
+function disposeGroup(group) {
+	while (group.children.length) {
+		const c = group.children.pop();
+		if (c.geometry) c.geometry.dispose();
+		if (c.material) c.material.dispose();
+	}
+}
+function build3D() {
+	disposeGroup(r3.root);
+	const T = S.terrain;
+	// 按格子画：element(x,y)=[x,x+1]x[y,y+1]一块面片，整格一个颜色；四角高度取格点高度(和游戏、sampleHeight同一套，越界取边缘)。
+	// 用flatShading(按三角面算光照，不用顶点法线)：平地格光照恒定，坡面的暗色只留在坡面自己那一格，不会插值到相邻格子。
+	// 格子数超过1024x1024时每step x step格合成一块(取块左上格的颜色)。
+	const step = Math.max(1, Math.ceil(Math.max(T.w, T.h) / 1024));
+	const bw = Math.ceil(T.w / step), bh = Math.ceil(T.h / step);
+	const HL = (x, y) => T.height[Math.min(T.h - 1, y) * T.w + Math.min(T.w - 1, x)];
+	const pos = new Float32Array(bw * bh * 12), col = new Uint8Array(bw * bh * 12);
+	const index = new Uint32Array(bw * bh * 6);
+	for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
+		const x = bx * step, y = by * step, x2 = Math.min(T.w, x + step), y2 = Math.min(T.h, y + step);
+		const c = cellRGB(y * T.w + x, true), blk = by * bw + bx, v0 = blk * 4;
+		const cx = [x, x2, x, x2], cy = [y, y, y2, y2];
+		for (let k = 0; k < 4; k++) {
+			const o = (v0 + k) * 3;
+			pos[o] = cx[k]; pos[o + 1] = HL(cx[k], cy[k]); pos[o + 2] = cy[k];
+			col[o] = c[0]; col[o + 1] = c[1]; col[o + 2] = c[2];
+		}
+		const o6 = blk * 6;
+		index[o6] = v0; index[o6 + 1] = v0 + 2; index[o6 + 2] = v0 + 1; index[o6 + 3] = v0 + 1; index[o6 + 4] = v0 + 2; index[o6 + 5] = v0 + 3;
+	}
+	const geo = new THREE.BufferGeometry();
+	geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3, true));
+	geo.setIndex(new THREE.BufferAttribute(index, 1));
+	r3.root.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })));
+	// 水面：只有高过地形才可见——四角地形都不低于水位的格子跳过(其余部分由深度测试被地面挡住)。
+	const wetCell = (x, y) => {
+		const lv = T.water[y * T.w + x];
+		if (isNaN(lv)) return NaN;
+		const x2 = Math.min(T.w, x + step), y2 = Math.min(T.h, y + step);
+		return Math.min(HL(x, y), HL(x2, y), HL(x, y2), HL(x2, y2)) >= lv ? NaN : lv;
+	};
+	let wetCount = 0;
+	for (let y = 0; y < T.h; y += step) for (let x = 0; x < T.w; x += step) if (!isNaN(wetCell(x, y))) wetCount++;
+	if (wetCount) {
+		const wp = new Float32Array(wetCount * 18);
+		let o = 0;
+		for (let y = 0; y < T.h; y += step) for (let x = 0; x < T.w; x += step) {
+			const lv = wetCell(x, y);
+			if (isNaN(lv)) continue;
+			const x2 = Math.min(T.w, x + step), y2 = Math.min(T.h, y + step);
+			wp.set([x, lv, y, x, lv, y2, x2, lv, y, x2, lv, y, x, lv, y2, x2, lv, y2], o); o += 18;
+		}
+		const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.BufferAttribute(wp, 3));
+		r3.root.add(new THREE.Mesh(wg, new THREE.MeshBasicMaterial({ color: 0x2f6fd6, transparent: true, opacity: 0.55, side: THREE.DoubleSide })));
+	}
+	// 路(用导出结果展开，所见即所得)
+	let out;
+	try { out = ME.exportRoadnet(S.model, T).output; } catch (e) { out = null; }
+	if (out) {
+		const nodeById = new Map(out.nodes.map((n) => [n.id, n]));
+		const buckets = {};
+		const pillars = [];
+		for (const road of out.roads) {
+			const a = nodeById.get(road.from), b = nodeById.get(road.to);
+			if (!a || !b) continue;
+			const pts = [[a.x, a.z, a.y]].concat(road.controls.map((c) => [c[0], c[2], c[1]])).concat([[b.x, b.z, b.y]]);
+			const width = road.lanes.reduce((s, v) => s + v, 0) * ME.LANE_WIDTH;
+			const n = road.controls.length ? 12 : 1;
+			const kind = road.kind;
+			const bucket = buckets[kind] = buckets[kind] || { p: [], i: [] };
+			const base = bucket.p.length / 3;
+			let prev = null;
+			for (let k = 0; k <= n; k++) {
+				const p = bezier3(pts, k / n), q = bezier3(pts, Math.min(1, (k + 0.01) / n)), r = bezier3(pts, Math.max(0, (k - 0.01) / n));
+				let tx = q[0] - r[0], tz = q[2] - r[2]; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+				const lx = -tz * width / 2, lz = tx * width / 2;
+				const lift = 0.05;
+				bucket.p.push(p[0] + lx, p[1] + lift, p[2] + lz, p[0] - lx, p[1] + lift, p[2] - lz);
+				if (k > 0) { const i0 = base + (k - 1) * 2; bucket.i.push(i0, i0 + 1, i0 + 2, i0 + 1, i0 + 3, i0 + 2); }
+				if (kind === 'bridge' && (!prev || Math.hypot(p[0] - prev[0], p[2] - prev[2]) > 3)) { const th = T.sampleHeight(p[0], p[2]); if (p[1] - th > 0.05) pillars.push(p[0], th, p[2], p[0], p[1], p[2]); prev = p; }
+			}
+		}
+		const KC = { ground: 0x40454d, hug: 0x5f7f4a, mouth: 0x7a4b9a, tunnel: 0xb46ae0, bridge: 0xe0962f };
+		for (const kind in buckets) {
+			const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(buckets[kind].p, 3)); bg.setIndex(buckets[kind].i); bg.computeVertexNormals();
+			r3.root.add(new THREE.Mesh(bg, new THREE.MeshLambertMaterial({ color: KC[kind] || 0x555555, side: THREE.DoubleSide, transparent: kind === 'tunnel', opacity: kind === 'tunnel' ? 0.6 : 1 })));
+		}
+		if (pillars.length) { const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(pillars, 3)); r3.root.add(new THREE.LineSegments(pg, new THREE.LineBasicMaterial({ color: 0xaaaaaa }))); }
+		// 地块
+		for (const lot of out.lots) {
+			const c = lot.corners; const p = [];
+			for (const k of [0, 1, 2, 0, 2, 3]) p.push(c[k][0], 0.08, c[k][1]);
+			const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+			r3.root.add(new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: new THREE.Color(areaColor(lot.area)), transparent: true, opacity: 0.5, side: THREE.DoubleSide })));
+		}
+	}
+	S.dirty3d = false;
+}
+function render3D() {
+	if (!r3) return;
+	if (S.dirty3d) build3D();
+	const c = r3.cam;
+	r3.camera.position.set(c.target.x + Math.sin(c.yaw) * Math.cos(c.pitch) * c.dist, c.target.y + Math.sin(c.pitch) * c.dist, c.target.z + Math.cos(c.yaw) * Math.cos(c.pitch) * c.dist);
+	r3.camera.lookAt(c.target);
+	r3.renderer.render(r3.scene, r3.camera);
+}
+
+// ======================= 主循环 =======================
+function frame() {
+	if (S.mode3d) render3D();
+	else if (S.dirty2d) { draw2D(); S.dirty2d = false; }
+	requestAnimationFrame(frame);
+}
+window.addEventListener('resize', () => { resize2d(); resize3d(); });
+window.addEventListener('beforeunload', (e) => { if (hist.undo.length) { e.preventDefault(); e.returnValue = ''; } });
+
+resize2d(); rebuildTerrainImage(); fitView(); updateTop(); renderLeft(); renderRight(); updateStatus();
+window.addEventListener('load', () => { resize2d(); fitView(); S.dirty2d = true; });
+requestAnimationFrame(frame);
+window.__S = S; // 调试用
+</script>
+</body>
+</html>

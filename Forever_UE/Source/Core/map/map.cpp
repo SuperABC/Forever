@@ -222,6 +222,9 @@ void Map::InitRoadnet() {
 	// 地形贴合：路面高度已经由mod定好，把路面下和路边的地形高度烤到路面上。
 	ApplyTerrainFits(roadnet->GetTerrainFits());
 
+	// 桥墩：地形贴合之后选位(墩要不要放取决于桥面离地形多高)，障碍是路网里其它道路。
+	roadnet->PlacePiers(this);
+
 	// 按Intersection收集与之相连的Road，逐个建RoadJunction。
 	unordered_map<int, vector<Road*>> roadsByIntersection;
 	for (Road* road : roadnet->GetRoads()) {
@@ -2330,6 +2333,11 @@ void Map::AddHatch(Quad q, float rotation) {
 	hatch.quad = q;
 	hatch.rotation = rotation;
 	AddHatch(hatch);
+}
+
+std::vector<Pier> Map::GetRoadPiers() const {
+	if (!roadnet) return {};
+	return roadnet->GetPiers();
 }
 
 std::vector<TerrainHatch> Map::GetTunnelWallHatches() const {

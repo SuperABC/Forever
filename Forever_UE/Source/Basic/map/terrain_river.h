@@ -10,7 +10,7 @@
 class RiverTerrain : public TerrainMod {
 public:
 	FOREVER_MOD_GENERIC_UNIT_TEST("terrain")
-	RiverTerrain();
+	explicit RiverTerrain(const std::string& args = "");
 	virtual ~RiverTerrain();
 
 	static const char* GetId();
@@ -33,5 +33,6 @@ public:
 private:
 	static int count;
 	int id;
+	bool distribute = true; // --distribute=false时跳过DistributeTerrain，只提供贴图
 	std::string name;
 };

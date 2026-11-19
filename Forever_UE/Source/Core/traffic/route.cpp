@@ -157,80 +157,27 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 
 const vector<Route::Pier>& Route::GetPiers() const { return piers; }
 
-namespace {
-	// 桥墩选位参数(地图单位，1=10m)。
-	constexpr float PIER_SPACING_STEP = 0.5f;   // 墩距一档=5m
-	constexpr float PIER_MIN_HEIGHT = 0.05f;    // 墩顶离地不足0.5m(贴地/隧道内/过山抬升段)不放墩
-	constexpr float PIER_SAMPLE_STEP = 0.25f;   // 障碍线按这个间距采样成折线
-
-	// 一条障碍折线：采样点+AABB(预筛)+半宽。
-	struct PierObstacle {
-		vector<pair<float, float>> points;
-		float minX = FLT_MAX, minY = FLT_MAX, maxX = -FLT_MAX, maxY = -FLT_MAX;
-		float halfWidth = 0.f;
-	};
-
-	PierObstacle SampleObstacle(const Connection& connection, float halfWidth) {
-		PierObstacle obstacle;
-		obstacle.halfWidth = halfWidth;
-		float length = connection.CalcDistance();
-		int count = max(1, static_cast<int>(ceilf(length / PIER_SAMPLE_STEP)));
-		for (int i = 0; i <= count; i++) {
-			Node point = connection.GetPoint(static_cast<float>(i) / static_cast<float>(count));
-			float x = point.GetX(), y = point.GetY();
-			obstacle.points.emplace_back(x, y);
-			obstacle.minX = min(obstacle.minX, x); obstacle.maxX = max(obstacle.maxX, x);
-			obstacle.minY = min(obstacle.minY, y); obstacle.maxY = max(obstacle.maxY, y);
-		}
-		return obstacle;
-	}
-
-	float PointSegmentDistSq(float px, float py, float ax, float ay, float bx, float by) {
-		float dx = bx - ax, dy = by - ay;
-		float lengthSq = dx * dx + dy * dy;
-		float t = lengthSq > 1e-12f ? max(0.f, min(1.f, ((px - ax) * dx + (py - ay) * dy) / lengthSq)) : 0.f;
-		float cx = ax + dx * t - px, cy = ay + dy * t - py;
-		return cx * cx + cy * cy;
-	}
-
-	// (x,y)处半径radius的墩是否碰到这条障碍(到折线距离<radius+halfWidth)。
-	bool PierHitsObstacle(const PierObstacle& obstacle, float x, float y, float radius) {
-		float reach = radius + obstacle.halfWidth;
-		if (x < obstacle.minX - reach || x > obstacle.maxX + reach || y < obstacle.minY - reach || y > obstacle.maxY + reach) return false;
-		float reachSq = reach * reach;
-		if (obstacle.points.size() == 1) {
-			float dx = obstacle.points[0].first - x, dy = obstacle.points[0].second - y;
-			return dx * dx + dy * dy < reachSq;
-		}
-		for (size_t i = 0; i + 1 < obstacle.points.size(); i++) {
-			if (PointSegmentDistSq(x, y, obstacle.points[i].first, obstacle.points[i].second,
-				obstacle.points[i + 1].first, obstacle.points[i + 1].second) < reachSq) return true;
-		}
-		return false;
-	}
-}
-
 void Route::PlacePiers(Map* map, const vector<const Route*>& others) {
 	piers.clear();
 	if (!mod || !map || mod->piers.empty()) return;
 
 	// 障碍：路网每条路(半宽=路总宽/2)，加所有instantiate的route轨道(半宽=轨道占地/2，含本route里不属于请求链的部分)。
-	vector<PierObstacle> roadObstacles;
+	vector<PierPlacer::Obstacle> roadObstacles;
 	for (const Road* road : map->GetRoads()) {
-		if (road) roadObstacles.push_back(SampleObstacle(*road, road->GetTotalWidth() * 0.5f));
+		if (road) roadObstacles.push_back(PierPlacer::SampleObstacle(*road, road->GetTotalWidth() * 0.5f));
 	}
-	auto addRouteObstacles = [](const Route* route, vector<PierObstacle>& out, const vector<PierObstacle>* ownChains) {
+	auto addRouteObstacles = [](const Route* route, vector<PierPlacer::Obstacle>& out, const vector<PierPlacer::Obstacle>* ownChains) {
 		if (!route || !route->ShouldInstantiate() || route->UsesRoadnet()) return;
 		for (const shared_ptr<TrackPath>& path : route->GetTrackPaths()) {
 			if (!path) continue;
 			for (const Connection* connection : path->connections) {
-				PierObstacle obstacle = SampleObstacle(*connection, route->GetTrackWidth() * 0.5f);
+				PierPlacer::Obstacle obstacle = PierPlacer::SampleObstacle(*connection, route->GetTrackWidth() * 0.5f);
 				if (ownChains) {
 					// 本请求自己那根轨道不算障碍：中点离请求链(中轴线)不到轨道半宽就是它(双轨各在中轴线两侧，不排除会挡住每一根墩)。
 					const pair<float, float>& middle = obstacle.points[obstacle.points.size() / 2];
 					bool own = false;
-					for (const PierObstacle& chain : *ownChains) {
-						if (PierHitsObstacle(chain, middle.first, middle.second, route->GetTrackWidth() * 0.5f)) { own = true; break; }
+					for (const PierPlacer::Obstacle& chain : *ownChains) {
+						if (PierPlacer::HitsObstacle(chain, middle.first, middle.second, route->GetTrackWidth() * 0.5f)) { own = true; break; }
 					}
 					if (own) continue;
 				}
@@ -238,7 +185,7 @@ void Route::PlacePiers(Map* map, const vector<const Route*>& others) {
 			}
 		}
 	};
-	vector<PierObstacle> otherObstacles;
+	vector<PierPlacer::Obstacle> otherObstacles;
 	for (const Route* other : others) if (other != this) addRouteObstacles(other, otherObstacles, nullptr);
 
 	for (const PierRequest& request : mod->piers) {
@@ -251,61 +198,20 @@ void Route::PlacePiers(Map* map, const vector<const Route*>& others) {
 			for (const Connection& connection : sourceChain) chains.back().push_back(connection);
 		}
 		// 本请求所有链的折线(半宽0)，用来把本route里自己这条轨道(中轴线两侧的两根铁轨)从障碍里剔掉。
-		vector<PierObstacle> chainObstacles;
+		vector<PierPlacer::Obstacle> chainObstacles;
 		for (const vector<Connection>& chain : chains)
-			for (const Connection& connection : chain) chainObstacles.push_back(SampleObstacle(connection, 0.f));
-		vector<PierObstacle> ownRouteObstacles;
+			for (const Connection& connection : chain) chainObstacles.push_back(PierPlacer::SampleObstacle(connection, 0.f));
+		vector<PierPlacer::Obstacle> ownRouteObstacles;
 		addRouteObstacles(this, ownRouteObstacles, &chainObstacles);
 
 		auto blocked = [&](float x, float y) {
-			for (const PierObstacle& obstacle : roadObstacles) if (PierHitsObstacle(obstacle, x, y, request.radius)) return true;
-			for (const PierObstacle& obstacle : otherObstacles) if (PierHitsObstacle(obstacle, x, y, request.radius)) return true;
-			for (const PierObstacle& obstacle : ownRouteObstacles) if (PierHitsObstacle(obstacle, x, y, request.radius)) return true;
+			for (const PierPlacer::Obstacle& obstacle : roadObstacles) if (PierPlacer::HitsObstacle(obstacle, x, y, request.radius)) return true;
+			for (const PierPlacer::Obstacle& obstacle : otherObstacles) if (PierPlacer::HitsObstacle(obstacle, x, y, request.radius)) return true;
+			for (const PierPlacer::Obstacle& obstacle : ownRouteObstacles) if (PierPlacer::HitsObstacle(obstacle, x, y, request.radius)) return true;
 			return false;
 		};
 
-		float minSpacing = max(request.minSpacing, PIER_SPACING_STEP);
-		float defaultSpacing = max(request.defaultSpacing, minSpacing);
-		for (const vector<Connection>& chain : chains) {
-			if (chain.empty()) continue;
-			vector<float> cumulative(chain.size() + 1, 0.f);
-			for (size_t i = 0; i < chain.size(); i++) cumulative[i + 1] = cumulative[i] + chain[i].CalcDistance();
-			float total = cumulative.back();
-			auto pointAt = [&](float s, float& x, float& y, float& z) {
-				size_t i = 0;
-				while (i + 1 < chain.size() && s > cumulative[i + 1]) i++;
-				float length = cumulative[i + 1] - cumulative[i];
-				Node point = chain[i].GetPoint(length > 1e-6f ? max(0.f, min(1.f, (s - cumulative[i]) / length)) : 0.f);
-				x = point.GetX(); y = point.GetY(); z = point.GetZ();
-			};
-
-			// 链首是车站，视为已有支撑：从那里往后一根根放，剩余长度不足默认墩距时收尾(尾端也是车站/落地)。
-			float s = 0.f;
-			while (total - s > defaultSpacing) {
-				// 候选墩距：默认→每次缩短一档到最短；都放不下再从默认每次加长一档，直到超出链尾。
-				vector<float> candidates;
-				for (float d = defaultSpacing; d >= minSpacing - 1e-4f; d -= PIER_SPACING_STEP) candidates.push_back(d);
-				for (float d = defaultSpacing + PIER_SPACING_STEP; s + d <= total; d += PIER_SPACING_STEP) candidates.push_back(d);
-
-				bool found = false;
-				for (float d : candidates) {
-					if (s + d > total) continue;
-					float x, y, z;
-					pointAt(s + d, x, y, z);
-					bool needPier = z - map->SampleHeight(x, y) >= PIER_MIN_HEIGHT;
-					if (needPier && blocked(x, y)) continue;
-					if (needPier) {
-						Pier pier;
-						pier.x = x; pier.y = y; pier.topZ = z; pier.radius = request.radius; pier.mesh = request.mesh;
-						piers.push_back(std::move(pier));
-					}
-					s += d;
-					found = true;
-					break;
-				}
-				if (!found) break;
-			}
-		}
+		PierPlacer::PlaceAlongChains(map, request, chains, blocked, piers);
 	}
 	debugf("Route::PlacePiers: 线路%s放了%d根桥墩。\n", name.c_str(), static_cast<int>(piers.size()));
 }

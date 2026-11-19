@@ -24,6 +24,8 @@
 #include "map/terrain_mountain.h"
 #include "map/terrain_ocean.h"
 #include "map/terrain_river.h"
+#include "map/terrain_file.h"
+#include "map/roadnet_file.h"
 #include "map/roadnet_jing.h"
 #include "map/roadnet_checkboard.h"
 #include "map/zone_residence_high.h"
@@ -227,25 +229,28 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 }
 
 extern "C" __declspec(dllexport) void* GetModTerrains() {
-	static vector<string> mods = { OceanTerrain::GetId(), MountainTerrain::GetId(), RiverTerrain::GetId() };
+	static vector<string> mods = { OceanTerrain::GetId(), MountainTerrain::GetId(), RiverTerrain::GetId(), FileTerrain::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModTerrains(TerrainFactory* factory) {
 	factory->RegisterTerrain(OceanTerrain::GetId(),
-		[](const std::string&) -> TerrainMod* { return new OceanTerrain(); },
+		[](const std::string& args) -> TerrainMod* { return new OceanTerrain(args); },
 		[](TerrainMod* m) { delete m; });
 	factory->RegisterTerrain(MountainTerrain::GetId(),
-		[](const std::string&) -> TerrainMod* { return new MountainTerrain(); },
+		[](const std::string& args) -> TerrainMod* { return new MountainTerrain(args); },
 		[](TerrainMod* m) { delete m; });
 	factory->RegisterTerrain(RiverTerrain::GetId(),
-		[](const std::string&) -> TerrainMod* { return new RiverTerrain(); },
+		[](const std::string& args) -> TerrainMod* { return new RiverTerrain(args); },
+		[](TerrainMod* m) { delete m; });
+	factory->RegisterTerrain(FileTerrain::GetId(),
+		[](const std::string& args) -> TerrainMod* { return new FileTerrain(args); },
 		[](TerrainMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModTerrains(TerrainFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModRoadnets() {
-	static vector<string> mods = { JingRoadnet::GetId(), CheckboardRoadnet::GetId() };
+	static vector<string> mods = { JingRoadnet::GetId(), CheckboardRoadnet::GetId(), FileRoadnet::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModRoadnets(RoadnetFactory* factory) {
@@ -254,6 +259,9 @@ extern "C" __declspec(dllexport) void RegisterModRoadnets(RoadnetFactory* factor
 		[](RoadnetMod* m) { delete m; });
 	factory->RegisterRoadnet(CheckboardRoadnet::GetId(),
 		[](const std::string& args) -> RoadnetMod* { return new CheckboardRoadnet(args); },
+		[](RoadnetMod* m) { delete m; });
+	factory->RegisterRoadnet(FileRoadnet::GetId(),
+		[](const std::string& args) -> RoadnetMod* { return new FileRoadnet(args); },
 		[](RoadnetMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModRoadnets(RoadnetFactory* factory) {

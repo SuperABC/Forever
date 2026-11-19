@@ -62,6 +62,10 @@ private:
 	// 材质优先用map->GetPathRoadMaterial()运行时加载，取不到退化用roadPlainBaseMaterial。
 	void BuildPathRoadMeshes();
 
+	// map->GetRoadPiers()(公路桥的桥墩)每根一个ISM实例，和火车桥墩(ForeverTrafficFrameworkComponent::BuildPiers)同一套适配：
+	// 墩底贴地形，墩顶贴请求点高度，按mesh包围盒缩放到墩径/墩高。mesh空串用Asset/Common默认圆柱。
+	void BuildPiers();
+
 	// 按mesh资产路径复用/新建ISM组件(同一路径的mesh只创建一个ISM，不同Road共用)。
 	UInstancedStaticMeshComponent* GetOrCreateRoadISM(const std::string& meshPath);
 

@@ -8,6 +8,7 @@
 | DoorRig | 用 UE Python 重写门骨骼网格的蒙皮权重 | `UnrealEditor-Cmd.exe Forever.uproject -run=pythonscript -script=Tools/DoorRig/fix_door_weights.py`，编辑器须关闭；环境变量 `DOOR_APPLY=1` 才写回，否则只打印 |
 | JunctionTest | `Core/traffic/junction.h` 单测控制台程序，返回值=失败数 | `MSBuild Tools\JunctionTest\JunctionTest.vcxproj /p:Configuration=Release /p:Platform=x64`，运行 `x64\Release\JunctionTest.exe` |
 | LayoutEditor | `.layout`（`Resource/Layouts/`）可视化编辑器，平面 + three.js 3D 视图，单个 HTML | 用 Chromium 系浏览器直接打开 `layout_editor.html`（需要 File System Access API 才能原地保存） |
+| MapEditor | 地形 + 路网 + 地块手工编辑器（地形字符串笔刷、高度/水、直线/曲线路、隧道/桥/爬升、T口/十字自动路口、城外连接点、地块），导出 `.terrain`/`.roadnet`，由 Basic 的 `terrain_file`/`roadnet_file` mod 读取；单个 HTML + three.js | 用 Chromium 系浏览器直接打开 `map_editor.html`；纯逻辑测试 `node tests/test_*.js`，详见其 README |
 | ModHost | 原生宿主：加载 mod DLL 单独运行 puzzle / 手机 app，可开窗口、可脚本化截图 | 见其 README（`ModHost.exe --list / --puzzle <id> --window / --phone ...`） |
 | ModWeb | 把 puzzle/app 逻辑 + 手机外壳用 Emscripten 编成单个离线 html，拷到手机直接开 | 需先装 `.emsdk`（已被忽略），`build_web.bat` 产出 `dist\forever_mods.html` |
 | RoadnetViz | 地形/路网/lot 渲染成 PNG 的可视化工具 | 自带 `Tools\RoadnetViz\RoadnetViz.sln`（含 Dependence/Core/Basic）：`MSBuild Tools\RoadnetViz\RoadnetViz.sln /p:Configuration=Release /p:Platform=x64` |

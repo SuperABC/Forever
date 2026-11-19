@@ -1,0 +1,7 @@
+{
+   "dll_paths" : [
+      "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release"
+   ],
+   "roadnet_mods" : [ "roadnet_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Tools/MapEditor/samples/demo.roadnet" ],
+   "terrain_mods" : [ "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Tools/MapEditor/samples/demo.terrain" ]
+}

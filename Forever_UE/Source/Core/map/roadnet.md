@@ -166,6 +166,10 @@
 地形高度，细节见`map.md`"地形贴合"。请求不进存档（`MapSaveCodec`不写`terrainFits`），因为高度已经
 随`Element`存档。
 
+## 桥墩
+
+`RoadnetMod::AddPier`提交的`PierRequest`（每条链=一段公路桥的`Connection`序列）由`Map::InitRoadnet`在`ApplyTerrainFits`之后调`Roadnet::PlacePiers(map)`选位，结果存进`Roadnet::piers`（`GetPiers()`，`Map::GetRoadPiers()`转发给UE层）。选位算法与火车桥墩共用`map/pier.h`的`PierPlacer`，见`pier.md`。障碍是**不属于请求链的其它道路**（按起止点node id匹配排除链上的路段）。桥墩进存档（`MapSaveCodec`在hatches之后追加`piers`），读档不重跑。
+
 ## 待办/后续阶段
 
 - 无。寻路由`Map::FindPedestrianPath`/`FindVehiclePath`提供（见`map.md`），`Roadnet`/`RoadJunction`只负责建图。

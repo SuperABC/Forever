@@ -85,6 +85,9 @@ public:
 	// roadnet的hatches还在，所以也能拿到。
 	std::vector<TerrainHatch> GetTunnelWallHatches() const;
 
+	// 路网(公路桥)的桥墩，UE层据此生成墩的mesh。roadnet为空返回空；读档后来自存档。
+	std::vector<Pier> GetRoadPiers() const;
+
 	// 地形类型 -> {纹理数组槽位索引, diffuse/normal/roughness三套资产路径}
 	struct TerrainTextureInfo {
 		int slice = 0;

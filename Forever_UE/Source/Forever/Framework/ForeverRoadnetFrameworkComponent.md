@@ -67,6 +67,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **和Terrain一样固定`worldScale=1000.f`（1地图单位=10m=1000cm）**，`Node`/`Connection`/
   `Road`等Core层几何类型的坐标都是地图单位，Forever层建mesh时统一在最后一步乘以这个系数转
   世界坐标，中间计算全部保持地图单位，避免在算式里混用两种单位。
+- **`BuildPiers`**（`GenerateRoadnet`末尾调用）：遍历`map->GetRoadPiers()`（公路桥桥墩，选位在Core，见`Core/map/pier.md`），每根一个ISM实例，复用`GetOrCreateRoadISM`；mesh空串用`/Game/Asset/Common/Mesh/Cylinder`。适配方式与`ForeverTrafficFrameworkComponent::BuildPiers`（火车桥墩）完全一致：墩底`Map::SampleHeight`贴地形，墩顶贴`topZ`，按mesh包围盒把水平直径缩放到`2*radius`、竖直撑满墩高。
 - **`BuildPathRoadMeshes`**：遍历`map->GetPathRoads()`（Zone/Building裁剪Lot自由空间时
   自动生成的小路），每条按起止点+`Road::GetTotalWidth()`生成一个贴材质的扁平ribbon，不接入
   `BuildRoadInstances`那套按`default_x_x_x`资产选mesh的ISM管线——小路车道宽度是0.3/0.2这种

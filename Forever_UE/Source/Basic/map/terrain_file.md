@@ -1,0 +1,19 @@
+# terrain_file
+
+## 职责
+从第三方工具 `Tools/MapEditor` 导出的 `.terrain` 文件里读出整张地图的地形字符串、高度、水位，写进地图。配置示例：`"terrain_file --path=C:/maps/city.terrain"`（放进 `terrain_mods`；`--path value` 写法也行）。
+
+## 关键设计
+- **文件格式**（二进制，小端）：魔数 `FTRN`；`u32 width, height`；**调色板**：`u16` 条数，每条 `u16` 长度 + UTF8 字符串（下标0固定 `plain`）；然后 `u16[w*h]` 每个 element 的调色板下标（行优先 `y*w+x`）；`f32[w*h]` 高度；`f32[w*h]` 水位（NaN=无水）。单位同 Core：1 element=10m，高度同单位。不含 fine heights。
+- **路径**：TerrainMod 没有 PostHandle，所以只能是绝对路径或相对进程工作目录的路径；路径里可以有空格（取到下一个 ` --` 或结尾）。`--seed` 已被 Core 在构造前剥掉。
+- **plain/construction 强制高度0**：建筑假定在高度0的平原上（Core 对 3×3 全 plain 的区域自动升格为 construction），所以文件里写了高度也会被忽略；编辑器本身就不允许这样画。**水不受限制**：岸边的平原格也要放水，否则水面和地面之间会露出缝隙。Core 的升格只看地形名、不看水，所以 3×3 全 plain 的区域里放了水也会被升格成 construction（编辑器不对此警告：地面以下有水、岸边地面以上有水都合理）。
+- **尺寸不一致**：以游戏地图尺寸为准，裁剪或留 plain，并 `debugf` 警告。文件缺失/损坏：`debugf` 后不动地图。
+- **优先级1.0**：最先跑。若同时启用山/海/河，它们只会作用在文件没占用的 plain 格上；用文件地形时建议 `terrain_mods` 里只留 `terrain_file`。
+- **贴图**：只给自己的 `GetType()`（`terrain_file`）登记了 Plain 贴图，文件里其它字符串（含 `terrain_mountain` 等）只有对应 mod 也启用时才有自己的贴图，否则显示成平原贴图。**要让文件里的山/海/河有材质，就把这几个 mod 也启用并加 `--distribute=false`**（只提供贴图、不再随机生成），例如 `terrain_mods`: `["terrain_file --path=…", "terrain_mountain --distribute=false", "terrain_ocean --distribute=false", "terrain_river --distribute=false"]`（河 mod 依赖山 mod，三个一起开）。
+- 不写 fine heights，所以没有河岸精细高度。
+
+## 依赖关系
+只依赖 Dependence（`map/terrain_mod.h`、`common/utility.h`）。编辑器侧读写见 `Tools/MapEditor/js/io.js`。
+
+## 待办/后续阶段
+- 河岸精细高度（17×17）。

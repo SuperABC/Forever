@@ -54,6 +54,11 @@ public:
 	// 且登记前roads不能再增长,原因见roadnet_mod.md。
 	std::vector<Lot> lots;
 
+	// 工具方法(非虚):请求给一段桥(chains里每条链是按行驶顺序首尾相接的Connection，通常是同一座桥拆出的几段Road)放桥墩,
+	// 宿主(Roadnet::PlacePiers)按defaultSpacing/minSpacing选位、避开其它道路。链按值拷贝保存。参数含义同RouteMod::AddPier(PierRequest)。
+	void AddPier(const std::string& mesh, std::vector<std::vector<Connection>> chains, float defaultSpacing, float minSpacing, float radius);
+	std::vector<PierRequest> piers;
+
 	// AddHatch/AddTunnelHatch产出的挖洞标记,宿主(Map::InitRoadnet)转发进Map::AddHatch。
 	std::vector<TerrainHatch> hatches;
 

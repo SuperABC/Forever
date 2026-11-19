@@ -2,6 +2,7 @@
 
 #include "map/roadnet_mod.h"
 #include "map/roadnet_factory.h"
+#include "map/pier.h"
 
 #include <string>
 #include <vector>
@@ -9,6 +10,8 @@
 #include <unordered_map>
 #include <functional>
 
+
+class Map;
 
 // 路口一条"进路"的车行/行人锚点+路缘角点数据，由RoadJunction::Build构造。
 struct RoadJunctionApproach {
@@ -97,6 +100,11 @@ public:
 	// 地形贴合请求，值拷贝自mod->terrainFits，由Map::ApplyTerrainFits烤进地形高度，不进存档
 	const std::vector<TerrainFitRequest>& GetTerrainFits() const;
 
+	// 桥墩：把mod->piers请求选位成piers(只新开局，读档的桥墩来自存档)，要在地形贴合之后调(用地形高度判断是否需要墩)。
+	// 障碍是不属于请求链的其它道路；选位算法见pier.md。
+	void PlacePiers(Map* map);
+	const std::vector<Pier>& GetPiers() const;
+
 	// 树请求(参考系是整张地图)，由Map::InitVegetation交给Vegetation展开
 	const TreeRequests& GetTrees() const;
 
@@ -128,6 +136,7 @@ private:
 	std::vector<Lot*> lots;
 	std::vector<TerrainHatch> hatches;
 	std::vector<TerrainFitRequest> terrainFits;
+	std::vector<Pier> piers;
 	TreeRequests trees;
 	LampRequests lamps;
 	std::string pathRoadMaterial;

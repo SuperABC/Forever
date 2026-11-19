@@ -1,6 +1,7 @@
 #include "terrain_mountain.h"
 
 #include "common/utility.h"
+#include "terrain_args.h"
 
 #include <vector>
 #include <cmath>
@@ -40,7 +41,7 @@ static const int neighborOffsets[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1
 
 int MountainTerrain::count = 0;
 
-MountainTerrain::MountainTerrain() : id(count++) {
+MountainTerrain::MountainTerrain(const string& args) : id(count++), distribute(ParseDistributeArg(args)) {
 
 }
 
@@ -77,6 +78,7 @@ void MountainTerrain::DistributeTerrain(int width, int height,
 	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight,
 	const function<bool(int, int, bool, float)>& setWater,
 	const function<bool(int, int, const float*)>& setFineHeights) const {
+	if (!distribute) return; // --distribute=false：只提供贴图，地形由别的mod(如terrain_file)给定
 
 	auto randf = [](float lo, float hi) -> float {
 		return lo + static_cast<float>(GetRandom(100000)) / 99999.0f * (hi - lo);

@@ -139,6 +139,12 @@
     <ClCompile Include="map\terrain_ocean.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\terrain_file.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\roadnet_file.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\terrain_river.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -490,6 +496,15 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\terrain_ocean.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\terrain_file.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\terrain_args.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\roadnet_file.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\terrain_river.h">

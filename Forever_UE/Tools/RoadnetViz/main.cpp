@@ -290,6 +290,7 @@ static int RealMain(int argc, char** argv) {
 	printf("[RoadnetViz] 输出 %s (%dx%d)\n", outPath.c_str(), canvas.Width(), canvas.Height());
 	printf("[RoadnetViz] 路口 %zu, 路段 %zu (含隧道的 %d, 含抬升的 %d), lot %zu\n", city.GetIntersections().size(),
 		city.GetRoads().size(), tunnelRoads, raisedRoads, city.GetLots().size());
+	printf("[RoadnetViz] 桥墩 %zu\n", city.GetRoadPiers().size());
 	for (const auto& [area, count] : areaCount) printf("[RoadnetViz]   area %d: %d\n", area, count);
 	return 0;
 }

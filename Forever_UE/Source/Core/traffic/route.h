@@ -3,6 +3,7 @@
 #include "class.h"
 
 #include "traffic/route_mod.h"
+#include "map/pier.h"
 #include "traffic/route_factory.h"
 #include "traffic/station.h"
 
@@ -87,10 +88,7 @@ public:
 	void Build(Map* map, const std::vector<Station*>& stations);
 
 	// 桥墩：墩顶(x,y,topZ)是链上该点；墩底不存，UE画时贴当时的地形(水底)。mesh空串=默认圆柱。
-	struct Pier {
-		float x = 0.f, y = 0.f, topZ = 0.f, radius = 0.f;
-		std::string mesh;
-	};
+	using Pier = ::Pier; // 共用定义见map/pier.h
 	// Build()之后调(只新开局，读档的桥墩来自存档)：把mod->piers请求选位成piers。others是已经建好的其它route，
 	// 它们的轨道(instantiate且不借路网)和路网一样是墩的障碍；先建的route不会为后建的让位。见route.md"桥墩"。
 	void PlacePiers(Map* map, const std::vector<const Route*>& others);

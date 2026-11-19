@@ -1,7 +1,9 @@
 #include "roadnet.h"
+#include "map/map.h"
 #include "common/random.h"
 
 #include "common/error.h"
+#include "common/utility.h"
 
 #include <cmath>
 #include <algorithm>
@@ -323,6 +325,48 @@ void Roadnet::DistributeRoadnet(int width, int height,
 	hatches = mod->hatches;
 	terrainFits = mod->terrainFits;
 	pathRoadMaterial = mod->pathRoadMaterial;
+}
+
+const vector<Pier>& Roadnet::GetPiers() const {
+	return piers;
+}
+
+void Roadnet::PlacePiers(Map* map) {
+	piers.clear();
+	if (!mod || !map || mod->piers.empty()) return;
+
+	// 障碍=所有道路(半宽=路总宽/2)，请求链自己的那几段(同起止节点id)除外：链就是路的一部分，不能挡自己的墩。
+	vector<PierPlacer::Obstacle> obstacles;
+	obstacles.reserve(roads.size());
+	for (const Road* road : roads) obstacles.push_back(PierPlacer::SampleObstacle(*road, road->GetTotalWidth() * 0.5f));
+
+	for (const PierRequest& request : mod->piers) {
+		// 链是mod DLL分配的：Connection的弧长缓存是mutable、首次CalcDistance/GetPoint时在本模块(Core)里惰性resize，
+		// 所以先在本模块深拷贝一份再算(同Route::PlacePiers)。
+		vector<vector<Connection>> chains;
+		unordered_set<long long> ownKeys;
+		for (const vector<Connection>& sourceChain : request.chains) {
+			chains.emplace_back();
+			for (const Connection& connection : sourceChain) {
+				chains.back().push_back(connection);
+				long long a = connection.GetStart().GetId(), b = connection.GetEnd().GetId();
+				ownKeys.insert((a << 32) | b);
+				ownKeys.insert((b << 32) | a);
+			}
+		}
+		vector<const PierPlacer::Obstacle*> active;
+		for (size_t i = 0; i < roads.size(); i++) {
+			long long a = roads[i]->GetStart().GetId(), b = roads[i]->GetEnd().GetId();
+			if (ownKeys.count((a << 32) | b)) continue;
+			active.push_back(&obstacles[i]);
+		}
+		auto blocked = [&](float x, float y) {
+			for (const PierPlacer::Obstacle* obstacle : active) if (PierPlacer::HitsObstacle(*obstacle, x, y, request.radius)) return true;
+			return false;
+		};
+		PierPlacer::PlaceAlongChains(map, request, chains, blocked, piers);
+	}
+	debugf("Roadnet::PlacePiers: placed %d pier(s).\n", static_cast<int>(piers.size()));
 }
 
 const vector<Node*>& Roadnet::GetExterns() const {

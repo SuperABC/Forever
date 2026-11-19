@@ -612,6 +612,12 @@ void MapSaveCodec::WriteRoadnet(const Map& map, const SaveTables& t, ByteWriter&
 		w.U32(static_cast<uint32_t>(roadnet->intersections.size()));
 		for (const Intersection* node : roadnet->intersections) WriteNode(*node, w);
 		WriteHatches(roadnet->hatches, w);
+		// 桥墩：选位结果直接存(读档不重跑PlacePiers)；墩底不存，UE画时贴当时的地形。
+		w.U32(static_cast<uint32_t>(roadnet->piers.size()));
+		for (const Pier& pier : roadnet->piers) {
+			w.F32(pier.x); w.F32(pier.y); w.F32(pier.topZ); w.F32(pier.radius);
+			w.Str(pier.mesh);
+		}
 	}
 
 	w.U32(static_cast<uint32_t>(t.roads.size()));
@@ -744,6 +750,13 @@ bool MapSaveCodec::ReadRoadnet(Map& map, LoadTables& t, ByteReader& r, string& e
 		uint32_t intersectionCount = r.U32();
 		for (uint32_t i = 0; i < intersectionCount && !r.Failed(); i++) roadnet->intersections.push_back(new Intersection(ReadNode(r)));
 		roadnet->hatches = ReadHatches(r);
+		uint32_t pierCount = r.U32();
+		for (uint32_t i = 0; i < pierCount && !r.Failed(); i++) {
+			Pier pier;
+			pier.x = r.F32(); pier.y = r.F32(); pier.topZ = r.F32(); pier.radius = r.F32();
+			pier.mesh = r.Str();
+			roadnet->piers.push_back(std::move(pier));
+		}
 		intersections = roadnet->intersections;
 	}
 

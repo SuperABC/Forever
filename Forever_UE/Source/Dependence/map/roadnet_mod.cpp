@@ -13,6 +13,16 @@ void RoadnetMod::AddTunnelHatch(const Connection* connection, float t1, float t2
 	BuildHatch(connection, t1, t2, width, true, hatches);
 }
 
+void RoadnetMod::AddPier(const string& mesh, vector<vector<Connection>> chains, float defaultSpacing, float minSpacing, float radius) {
+	PierRequest request;
+	request.mesh = mesh;
+	request.chains = std::move(chains);
+	request.defaultSpacing = defaultSpacing;
+	request.minSpacing = minSpacing;
+	request.radius = radius;
+	piers.push_back(std::move(request));
+}
+
 void RoadnetMod::AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff) {
 	BuildTerrainFit(connection, t1, t2, width, falloff, terrainFits);
 }
