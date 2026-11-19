@@ -65,7 +65,7 @@ void OfficeHighBuilding::Layout(int& direction, const Quad& quad,
 	basements = 1;
 	layers = 2;
 	floorHeights.clear();
-	floorHeights.push_back(0.35f); // 地下室
+	floorHeights.push_back(0.4f); // 地下室
 	for (int i = 0; i < layers; i++) {
 		floorHeights.push_back(0.4f);
 	}

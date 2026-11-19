@@ -193,7 +193,7 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 	{
 		if (Traffic* traffic = GetTrafficCore()) {
 			if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
-					if (task->phase == Traffic::TaskPhase::DrivingOut || task->phase == Traffic::TaskPhase::DrivingBack) {
+					if (task->phase == Traffic::TaskPhase::Driving) {
 						UE_LOG(LogTemp, Log, TEXT("RequestWalk: %s is driving a task vehicle, request ignored."), UTF8_TO_TCHAR(citizen->GetName().c_str()));
 						return;
 					}
@@ -422,9 +422,8 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 	// 组织任务：开车途中不受瞬移影响；走路阶段瞬移到别处就中断任务。
 	if (Traffic* traffic = GetTrafficCore()) {
 		if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
-			if (task->phase == Traffic::TaskPhase::DrivingOut || task->phase == Traffic::TaskPhase::DrivingBack) return;
-			Room* expected = task->phase == Traffic::TaskPhase::WalkToVehicle ? task->parkOrigin
-				: task->phase == Traffic::TaskPhase::WalkOut ? task->destRoom : task->workRoom;
+			if (task->phase == Traffic::TaskPhase::Driving) return;
+			Room* expected = task->phase == Traffic::TaskPhase::WalkToVehicle ? task->parkOrigin : task->destRoom;
 			if (destination != expected) AbortTaskOfWorker(citizen);
 		}
 	}
@@ -721,8 +720,10 @@ void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* d
 
 void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* previousRoom) {
 	if (!citizen || !citizen->IsActive()) return;
-	// 开车通勤第1段：走到了车所在的停车房——不是真正的到达(不广播npc_arrive)，上车；走到了别处就取消通勤。
-	Traffic::TaskTrip* walkBackTask = nullptr; // 走路任务到了目的地：广播npc_arrive之后再走回工位
+	// 组织任务：走到了组织的车所在的停车房——不是真正的到达(不广播npc_arrive)，上车；走进了目的房间——任务完成，
+	// 下面照常广播npc_arrive之后再给组织脚本发task_complete；走到了别处——任务中断。
+	bool bTaskComplete = false;
+	std::string taskLabel, taskOrigin, taskDestination;
 	if (Traffic* traffic = GetTrafficCore()) {
 		if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
 			Room* current = citizen->GetCurrentRoom();
@@ -731,13 +732,13 @@ void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* p
 				return;
 			}
 			if (task->phase == Traffic::TaskPhase::WalkOut && current == task->destRoom) {
-				task->phase = Traffic::TaskPhase::WalkBack;
-				walkBackTask = task;
+				bTaskComplete = true;
+				taskLabel = task->task;
+				taskOrigin = task->originRoom ? task->originRoom->GetAddress() : std::string();
+				taskDestination = task->destRoom->GetAddress();
+				traffic->EndTask(task); // 单程到此结束，往返由组织脚本再派任务
 			}
-			else if (task->phase == Traffic::TaskPhase::WalkBack && current == task->workRoom) {
-				traffic->EndTask(task); // 回到工位：任务结束，下面照常广播npc_arrive(arrive_work)
-			}
-			else if (task->phase != Traffic::TaskPhase::DrivingOut && task->phase != Traffic::TaskPhase::DrivingBack) {
+			else if (task->phase != Traffic::TaskPhase::Driving) {
 				AbortTaskOfWorker(citizen); // 走到了别处：任务中断
 			}
 		}
@@ -749,40 +750,60 @@ void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* p
 			CancelCommute(citizen);
 		}
 	}
-	if (citizen->GetCurrentRoom() == previousRoom) return;
+	if (citizen->GetCurrentRoom() == previousRoom) {
+		if (bTaskComplete) NotifyTaskResult(citizen, taskLabel, taskDestination, taskOrigin, nullptr);
+		return;
+	}
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr) {
 		story->BroadcastNpcArrive(citizen, citizen->GetCurrentRoom());
 	}
-	if (walkBackTask) {
-		if (Traffic* traffic = GetTrafficCore(); traffic && traffic->FindTaskByWorker(citizen) == walkBackTask) {
-			RequestWalkInternal(citizen, walkBackTask->workRoom);
-		}
-	}
+	if (bTaskComplete) NotifyTaskResult(citizen, taskLabel, taskDestination, taskOrigin, nullptr);
+}
+
+void UForeverPopulaceFrameworkComponent::NotifyTaskResult(Citizen* worker, const std::string& task, const std::string& destination,
+	const std::string& origin, const char* failReason) {
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr;
+	if (!story || !worker || !worker->GetJob() || !framework->GetSociety()) return;
+	Organization* organization = framework->GetSociety()->FindOrganizationOfJob(worker->GetJob());
+	if (!organization) return;
+	if (failReason) story->BroadcastTaskFailed(organization, task, destination, worker->GetName(), origin, failReason);
+	else story->BroadcastTaskComplete(organization, task, destination, worker->GetName(), origin);
 }
 
 bool UForeverPopulaceFrameworkComponent::AssignTask(Organization* organization, const std::string& task, Room* destination,
-	const std::string& category, const std::string& workerName) {
+	const std::vector<std::string>& categories, const std::string& workerName) {
 	Traffic* traffic = GetTrafficCore();
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	if (!traffic || !organization || !destination || !framework) return false;
-	if (!category.empty() && !framework->GetTrafficFramework()) return false;
+
+	// 没有交通框架(比如测试里)就没法开车，只留走路那几项。
+	std::vector<std::string> usable;
+	for (const std::string& category : categories) {
+		if (category.empty() || framework->GetTrafficFramework()) usable.push_back(category);
+	}
 
 	auto available = [this](const Citizen* candidate) {
 		TObjectPtr<ACitizenElement>* element = activeInstances.Find(const_cast<Citizen*>(candidate));
 		return !(element && *element && (*element)->IsPlayerControlled());
 	};
-	Traffic::TaskTrip* trip = traffic->BeginTask(organization, task, destination, category, workerName, available);
+	std::string failReason;
+	Traffic::TaskTrip* trip = traffic->BeginTask(organization, task, destination, usable, workerName, available, &failReason);
 	if (!trip) {
-		UE_LOG(LogTemp, Verbose, TEXT("assign_task: no idle worker/vehicle/slot for %s, skipped."), UTF8_TO_TCHAR(destination->GetAddress().c_str()));
+		UE_LOG(LogTemp, Log, TEXT("assign_task: %s -> %s not dispatched (%s)."), UTF8_TO_TCHAR(task.c_str()),
+			UTF8_TO_TCHAR(destination->GetAddress().c_str()), UTF8_TO_TCHAR(failReason.c_str()));
+		if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) {
+			story->BroadcastTaskFailed(organization, task, destination->GetAddress(), workerName, std::string(), failReason);
+		}
 		return false;
 	}
 	Citizen* worker = trip->worker;
-	Room* workRoom = trip->workRoom;
+	Room* originRoom = trip->originRoom;
 	Room* parkOrigin = trip->parkOrigin;
 	const bool bDrive = trip->vehicle != nullptr;
 	UE_LOG(LogTemp, Log, TEXT("assign_task: %s -> %s (%s) by %s"), UTF8_TO_TCHAR(task.c_str()), UTF8_TO_TCHAR(destination->GetAddress().c_str()),
-		bDrive ? TEXT("truck") : TEXT("walk"), UTF8_TO_TCHAR(worker->GetName().c_str()));
+		bDrive ? TEXT("drive") : TEXT("walk"), UTF8_TO_TCHAR(worker->GetName().c_str()));
 
 	if (UForeverStoryFrameworkComponent* story = framework->GetStoryFramework()) {
 		story->BroadcastExecuteTask(worker, task, destination->GetAddress());
@@ -790,7 +811,7 @@ bool UForeverPopulaceFrameworkComponent::AssignTask(Organization* organization, 
 	// 事件脚本里可能又改了行程(极少)：以名字重新取，找不到就不再往下。
 	if (traffic->FindTaskByWorker(worker) != trip) return true;
 	if (bDrive) {
-		if (workRoom == parkOrigin) BoardTruck(worker);
+		if (originRoom == parkOrigin) BoardTruck(worker);
 		else RequestWalkInternal(worker, parkOrigin);
 	}
 	else {
@@ -817,81 +838,85 @@ void UForeverPopulaceFrameworkComponent::BoardTruck(Citizen* citizen) {
 	citizen->EndWalk();
 	citizen->SetCurrentRoom(nullptr);
 	citizen->ClearPosition();
-	trip->phase = Traffic::TaskPhase::DrivingOut;
+	trip->phase = Traffic::TaskPhase::Driving;
 	trafficFramework->NavigateVehicleToSlot(UTF8_TO_TCHAR(trip->vehicle->GetName().c_str()), trip->parkDest, trip->destSlot);
 }
 
-void UForeverPopulaceFrameworkComponent::FinishTaskLanding(Traffic::TaskTrip* trip, Room* landing) {
+void UForeverPopulaceFrameworkComponent::FinishTaskLanding(Traffic::TaskTrip* trip, Room* landing, const char* failReason) {
 	Traffic* traffic = GetTrafficCore();
 	if (!trip || !traffic) return;
 	Citizen* worker = trip->worker;
-	Room* workRoom = trip->workRoom;
 	if (!worker || !worker->IsActive() || !landing) {
 		traffic->EndTask(trip);
 		return;
 	}
-	trip->phase = Traffic::TaskPhase::WalkBack;
-	trip->vehicle = nullptr; // 车已经停好，不再属于这个行程
+	trip->vehicle = nullptr; // 车已经停好(或根本没动)，不再属于这个行程
 	++latestWalkRequest.FindOrAdd(worker);
 	worker->EndWalk();
 	worker->SetCurrentRoom(landing);
 	worker->ClearPosition();
-	if (landing == workRoom) {
+	if (failReason) {
+		// 车没能开成：员工落回出发的停车房，任务失败，由组织脚本决定怎么办。
+		const std::string task = trip->task;
+		const std::string origin = trip->originRoom ? trip->originRoom->GetAddress() : std::string();
+		const std::string destination = trip->destRoom ? trip->destRoom->GetAddress() : std::string();
 		traffic->EndTask(trip);
 		ReportArrival(worker, nullptr);
+		NotifyTaskResult(worker, task, destination, origin, failReason);
 		return;
 	}
-	RequestWalkInternal(worker, workRoom);
+	trip->phase = Traffic::TaskPhase::WalkOut;
+	if (landing == trip->destRoom) {
+		ReportArrival(worker, nullptr); // 目的房间就在停车的那个房间：直接完成
+		return;
+	}
+	RequestWalkInternal(worker, trip->destRoom);
 }
 
 void UForeverPopulaceFrameworkComponent::OnTaskVehicleFinished(Traffic::TaskTrip* trip, Room* room, bool bArrived) {
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Traffic* traffic = GetTrafficCore();
-	UForeverTrafficFrameworkComponent* trafficFramework = framework ? framework->GetTrafficFramework() : nullptr;
 	Vehicle* vehicle = trip->vehicle;
-	if (!traffic || !trafficFramework || !vehicle) {
+	if (!traffic || !framework || !framework->GetTrafficFramework() || !vehicle) {
 		if (traffic) traffic->EndTask(trip);
 		return;
 	}
-	const FString vehicleName = UTF8_TO_TCHAR(vehicle->GetName().c_str());
+	if (trip->phase != Traffic::TaskPhase::Driving) return;
 
-	if (trip->phase == Traffic::TaskPhase::DrivingOut) {
-		if (bArrived) {
-			// 不停留，立即返程：原车位一直占着(reservedBy=车)，直接预订它再开回去。
-			trip->phase = Traffic::TaskPhase::DrivingBack;
-			if (vehicle->ReserveSlot(trip->parkOrigin, trip->originSlot)) {
-				trafficFramework->NavigateVehicleToSlot(vehicleName, trip->parkOrigin, trip->originSlot);
-				return;
-			}
-			// 原车位没了(理论上不会)：车就停在目的地，员工在那里出现走回去。
-			UE_LOG(LogTemp, Warning, TEXT("assign_task: origin slot lost, truck stays at destination."));
-			FinishTaskLanding(trip, room);
-			return;
-		}
-		// 车没能出发：还停在原车位，员工落回停车房走回工位。
-		vehicle->ClearReservation();
-		FinishTaskLanding(trip, trip->parkOrigin);
+	if (bArrived) {
+		// 车停在了目的车位：员工在那里下车，走向目的房间。
+		FinishTaskLanding(trip, room ? room : trip->parkDest, nullptr);
 		return;
 	}
+	// 车没能出发/开不到：还停在原车位，员工落回停车房，任务失败。
+	vehicle->ClearReservation();
+	UE_LOG(LogTemp, Warning, TEXT("assign_task: truck navigation failed, worker lands back at the origin."));
+	FinishTaskLanding(trip, trip->parkOrigin, "navigation");
+}
 
-	if (trip->phase == Traffic::TaskPhase::DrivingBack) {
-		if (bArrived) {
-			FinishTaskLanding(trip, room ? room : trip->parkOrigin);
-			return;
-		}
-		// 开不回去：瞬移回原车位，保证车位不泄漏。
-		UE_LOG(LogTemp, Warning, TEXT("assign_task: truck failed to return, teleported home."));
-		trafficFramework->TeleportVehicleToSlot(vehicle, trip->parkOrigin, trip->originSlot);
-		FinishTaskLanding(trip, trip->parkOrigin);
+void UForeverPopulaceFrameworkComponent::OnTaskVehicleTaken(Vehicle* vehicle) {
+	Traffic* traffic = GetTrafficCore();
+	Traffic::TaskTrip* trip = traffic ? traffic->FindTaskByVehicle(vehicle) : nullptr;
+	if (!trip) return;
+	Citizen* worker = trip->worker;
+	const std::string task = trip->task;
+	const std::string origin = trip->originRoom ? trip->originRoom->GetAddress() : std::string();
+	const std::string destination = trip->destRoom ? trip->destRoom->GetAddress() : std::string();
+	if (trip->phase == Traffic::TaskPhase::Driving) {
+		// 员工已经在车里：他在原来的停车房下车，任务失败(车现在归玩家开了)。
+		FinishTaskLanding(trip, trip->parkOrigin, "vehicle_taken");
+		return;
 	}
+	traffic->CancelTask(trip); // 员工还在走向车：任务取消，他继续走到停车房就是了
+	NotifyTaskResult(worker, task, destination, origin, "vehicle_taken");
 }
 
 void UForeverPopulaceFrameworkComponent::AbortTaskOfWorker(Citizen* citizen) {
 	Traffic* traffic = GetTrafficCore();
 	Traffic::TaskTrip* trip = traffic ? traffic->FindTaskByWorker(citizen) : nullptr;
 	if (!trip) return;
-	if (trip->phase == Traffic::TaskPhase::DrivingOut || trip->phase == Traffic::TaskPhase::DrivingBack) {
-		trip->worker = nullptr; // 车仍要自己开回原车位，只是不再有员工
+	if (trip->phase == Traffic::TaskPhase::Driving) {
+		trip->worker = nullptr; // 车仍要自己开到站，只是不再有员工
 		if (citizen && citizen->GetJob() && citizen->GetJob()->GetScript()) citizen->GetJob()->GetScript()->SetValue("task", ValueType(std::string()));
 		return;
 	}
@@ -907,7 +932,7 @@ void UForeverPopulaceFrameworkComponent::HandleElementEndPlay(Citizen* citizen, 
 }
 
 void UForeverPopulaceFrameworkComponent::HandleCitizenDeath(Citizen* citizen) {
-	AbortTaskOfWorker(citizen); // 开着车的任务让车自己开回去，其它取消
+	AbortTaskOfWorker(citizen); // 开着车的任务让车自己开到站，其它取消
 	skipWalks.Remove(citizen);
 	if (!citizen) return;
 	CancelCommute(citizen);

@@ -66,7 +66,7 @@ void OfficeLowBuilding::Layout(int& direction, const Quad& quad,
 		layers = 10 + GetRandom(5);
 	}
 	floorHeights.clear();
-	floorHeights.push_back(0.35f); // 地下室
+	floorHeights.push_back(0.4f); // 地下室
 	// 地上每层高度统一0.4，不循环取不同值。
 	for (int i = 0; i < layers; i++) {
 		floorHeights.push_back(0.4f);

@@ -578,6 +578,43 @@ void UForeverStoryFrameworkComponent::BroadcastExecuteTask(Citizen* citizen, con
 	BroadcastToScript(event, citizen->GetJob()->GetScript(), postImplement);
 }
 
+void UForeverStoryFrameworkComponent::BroadcastTaskComplete(Organization* organization, const string& task, const string& destination,
+	const string& worker, const string& origin) {
+	if (!story || !GEngine || !organization || !organization->GetScript()) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	// 只发给派任务的组织自己的脚本。
+	TaskCompleteEvent event(task, destination, worker, origin);
+	BroadcastToScript(event, organization->GetScript(), postImplement);
+}
+
+void UForeverStoryFrameworkComponent::BroadcastTaskFailed(Organization* organization, const string& task, const string& destination,
+	const string& worker, const string& origin, const string& reason) {
+	if (!story || !GEngine || !organization || !organization->GetScript()) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	TaskFailedEvent event(task, destination, worker, origin, reason);
+	BroadcastToScript(event, organization->GetScript(), postImplement);
+}
+
 void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(const FString& name, const FString& reason) {
 	CitizenDeceaseEvent event(string(TCHAR_TO_UTF8(*name)), string(TCHAR_TO_UTF8(*reason)));
 	BroadcastCitizenDecease(event);

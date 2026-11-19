@@ -654,6 +654,11 @@ void UForeverTrafficFrameworkComponent::ApplyEnterVehicle(const FString& vehicle
 			if (driver->IsValid()) driver->Get()->ClearCommands();
 		}
 		navTargets.Remove(enteredName);
+		// 这辆车正在执行组织任务：任务取消，员工下车，组织脚本收到task_failed。
+		AForeverFrameworkActor* taskFramework = Cast<AForeverFrameworkActor>(GetOwner());
+		if (UForeverPopulaceFrameworkComponent* taskPopulace = taskFramework ? taskFramework->GetPopulaceFramework() : nullptr) {
+			taskPopulace->OnTaskVehicleTaken(coreVehicle);
+		}
 	}
 
 	// 隐藏后的pawn留在原地，玩家开车远离后会被Populace的距离流式销毁当成"走远的市民"Destroy掉，

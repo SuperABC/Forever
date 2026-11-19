@@ -56,6 +56,7 @@ void IndustryHighBuilding::Layout(int& direction, const Quad& quad,
 	basements = 1;
 	layers = 1;
 	floorHeights.assign(basements + layers, 0.6f);
+	if (basements > 0) floorHeights[0] = 0.4f; // 地下停车库4米(原6米，楼体上不去)
 
 	AssignFloor(-1, "preset_common_single_pg+", direction, assets);
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);

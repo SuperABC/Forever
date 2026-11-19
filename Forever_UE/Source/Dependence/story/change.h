@@ -529,14 +529,17 @@ private:
 
 };
 
-// 组织派员工执行任务：员工自己走到destination，或(vehicle非空时)开组织的这类载具去destination再回来。
-// 字段都是表达式源码：task=任务类别标签(Core不解释，只写进员工脚本的task变量和execute_task事件)；
-// vehicle=空串走路/载具category(如"truck")；round_trip=空串或"true"表示去完返回；worker=空串自动挑闲置员工，否则员工名。
+// 组织派员工执行任务(单程)：员工从当前所在的建筑出发，走路或开组织的载具到destination房间；到了之后给组织脚本发task_complete，
+// 去不成给组织脚本发task_failed，往返由脚本自己决定(到达后再派一个返程任务)。
+// 字段都是表达式源码：task=任务类别标签(Core不解释，只写进员工脚本的task变量和各事件)；
+// vehicles=备选交通方式的列表(JSON数组，每一项各自按表达式求值)，按顺序取第一个可行的：每项求值结果是载具category(如"truck"，
+// 从员工当前所在建筑的停车位里找组织名下停着的这类车，并要求目的建筑有接受它的空闲车位)，空串=走路；列表为空等于只走路；
+// worker=空串自动挑工位上的闲置员工，否则指定员工名(此时员工在哪都行，不要求在工位)。
 class AssignTaskChange : public Change {
 public:
 	AssignTaskChange();
 
-	AssignTaskChange(std::string task, std::string destination, std::string vehicle, std::string roundTrip, std::string worker);
+	AssignTaskChange(std::string task, std::string destination, std::vector<std::string> vehicles, std::string worker);
 
 	virtual ~AssignTaskChange();
 
@@ -546,17 +549,14 @@ public:
 
 	const std::string& GetDestination() const;
 
-	const std::string& GetVehicle() const;
-
-	const std::string& GetRoundTrip() const;
+	const std::vector<std::string>& GetVehicles() const;
 
 	const std::string& GetWorker() const;
 
 private:
 	std::string task;
 	std::string destination;
-	std::string vehicle;
-	std::string roundTrip;
+	std::vector<std::string> vehicles;
 	std::string worker;
 };
 

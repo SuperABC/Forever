@@ -101,8 +101,12 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 
 ## 组织任务（assign_task，2026-11-16）
 
-`Traffic::TaskTrip`(list存放，指针稳定)：任务标签/员工/车/原停车房+原车位/目的停车房+车位/目的房间/工位/阶段
-`WalkToVehicle→DrivingOut→DrivingBack→WalkBack`(开车)或`WalkOut→WalkBack`(走路)。`BeginTask(组织,task,目的房间,category,员工名,可用性谓词)`：
-员工须在工位房间、没在走、无通勤/任务；开车任务还要组织的闲置同类载具(停着、无路线/预订、停车房与工位同栋建筑)和目的建筑里接受该类别的空闲车位(`PickFreeSlot`)。
-车开走后原车位靠`reservedBy=车`占住(`HoldOriginSlot`)，返程`ReserveSlot`因reservedBy==自己通过；`EndTask/CancelTask`释放。员工死亡/离城时`worker=nullptr`，车仍开回。
-不停留，到目的车位立即返程。任务期间员工脚本变量`task`被置位。存档：traffic段末尾追加任务行程块(AtEnd容错，无版本变化)，`ResolveVehicleAssets`还原。
+**单程**：一个任务只负责从员工当前所在建筑到目的房间这一段，往返由组织脚本收到`task_complete`后再派任务(2026-11-19改)。
+`Traffic::TaskTrip`(list存放，指针稳定)：任务标签/员工/车/出发停车房`parkOrigin`/目的停车房+车位/目的房间/出发房间`originRoom`/阶段
+`WalkToVehicle→Driving→WalkOut`(开车)或直接`WalkOut`(走路)。
+`BeginTask(组织,task,目的房间,categories,员工名,可用性谓词,&failReason)`：员工指定了名字则不要求在工位(没指定=必须在工位房间)，都要没在走、无通勤/任务；
+`categories`按顺序试，第一个可行的赢：空串=走路(目的房间≠当前房间)；非空=开组织的这类载具——停着、无路线/预订/其他任务、停车房与员工**当前所在建筑**同栋，
+且目的建筑里有接受该类别的空闲车位(`PickFreeSlot`)，目的车位出发时预订。员工已在目的建筑里则不开车(`already_there`)。
+都不行就不建行程、不占车，`failReason`=`no_worker`/`no_vehicle`/`no_slot`/`already_there`。**没有原车位预留**：车开走后原车位空出来，返程由脚本再派任务另找车。
+到达(走进目的房间)`EndTask`；`CancelTask`在非WalkOut阶段清车的预订；车被销毁`DestroyVehicle`会连带取消行程；员工死亡/离城时`worker=nullptr`，车仍开到站。
+任务期间员工脚本变量`task`被置位。存档：traffic段末尾任务行程块(task/员工下标/车名/parkOrigin/parkDest/destSlot/destRoom/originRoom/phase)，`ResolveVehicleAssets`还原。

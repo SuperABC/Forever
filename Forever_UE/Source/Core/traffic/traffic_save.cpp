@@ -257,8 +257,8 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, const Popula
 		w.U8(static_cast<uint8_t>(record.trip->phase));
 	}
 
-	// 组织任务行程(追加在通勤行程之后，旧存档没有这一块)：任务标签、员工下标(-1=已不在)、车名(走路任务为空)、
-	// 原停车房/原车位/目的停车房/目的车位/目的房间/工位、阶段。
+	// 组织任务行程(追加在通勤行程之后)：任务标签、员工下标(-1=已不在)、车名(走路任务为空)、
+	// 车停的停车房/目的停车房/目的车位/目的房间/出发房间、阶段。
 	w.U32(static_cast<uint32_t>(traffic.taskTrips.size()));
 	for (const Traffic::TaskTrip& trip : traffic.taskTrips) {
 		auto workerIt = trip.worker ? citizenIndex.find(trip.worker) : citizenIndex.end();
@@ -266,11 +266,10 @@ void TrafficSaveCodec::Save(const Traffic& traffic, const Map& map, const Popula
 		w.I32(workerIt != citizenIndex.end() ? workerIt->second : -1);
 		w.Str(trip.vehicle ? trip.vehicle->GetName() : string());
 		SaveRefs::WriteRoom(trip.parkOrigin, w);
-		w.I32(trip.originSlot);
 		SaveRefs::WriteRoom(trip.parkDest, w);
 		w.I32(trip.destSlot);
 		SaveRefs::WriteRoom(trip.destRoom, w);
-		SaveRefs::WriteRoom(trip.workRoom, w);
+		SaveRefs::WriteRoom(trip.originRoom, w);
 		w.U8(static_cast<uint8_t>(trip.phase));
 	}
 
@@ -501,11 +500,10 @@ Traffic* TrafficSaveCodec::Load(const SaveArchive& archive, Map& map, string& er
 				pending.workerIndex = r.I32();
 				pending.vehicleName = r.Str();
 				pending.parkOrigin = SaveRefs::ReadRoom(map, r);
-				pending.originSlot = r.I32();
 				pending.parkDest = SaveRefs::ReadRoom(map, r);
 				pending.destSlot = r.I32();
 				pending.destRoom = SaveRefs::ReadRoom(map, r);
-				pending.workRoom = SaveRefs::ReadRoom(map, r);
+				pending.originRoom = SaveRefs::ReadRoom(map, r);
 				pending.phase = r.U8();
 				if (!r.Failed()) traffic->pendingTasks.push_back(pending);
 			}

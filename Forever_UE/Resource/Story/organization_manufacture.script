@@ -1,4 +1,10 @@
 {
+	// 工厂送货：每天10:00按$$self.delivery列表给每个目的地派一个员工开卡车去(delivery任务)，员工走进目的房间后
+	// 组织脚本收到task_complete，再派他开卡车(return任务)回出发的房间；回不去(卡车没了/被开走)就改派return_walk任务走路回去(用$$local.destination，失败的任务原来的目的地；
+	// 走路回去的任务不再监听失败，避免死循环)。
+	//   - vehicles是备选交通方式的JSON数组，每一项是表达式，按顺序取第一个可行的：卡车要停在员工当前所在建筑的停车位里，
+	//     且目的建筑有能停卡车的空闲车位；空串=走路；
+	//   - task_complete/task_failed里$$local.worker是员工姓名，$$local.origin是这一段出发时员工所在的房间地址。
 	"milestones": [
 		{
 			"milestone": "game_start",
@@ -24,10 +30,36 @@
 				{
 					"type": "for_range", "var": "i", "from": "0", "to": "$$self.delivery.count - 1",
 					"do": [
-						{ "type": "assign_task", "task": "delivery", "vehicle": "truck", "destination": "$$self.delivery[$$($$local.i)].address" }
+						{ "type": "assign_task", "task": "\"delivery\"", "vehicles": [ "\"truck\"" ], "destination": "$$self.delivery[$$($$local.i)].address" }
 					]
 				},
 				{ "type": "create_timer", "name": "deliver", "time": "10:00:00", "mode": "next" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "delivered",
+			"triggers": [ { "type": "task_complete", "task": "\"delivery\"" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "assign_task", "task": "\"return\"", "vehicles": [ "\"truck\"" ], "worker": "$$local.worker", "destination": "$$local.origin" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "return_failed",
+			"triggers": [ { "type": "task_failed", "task": "\"return\"" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "assign_task", "task": "\"return_walk\"", "vehicles": [ "\"\"" ], "worker": "$$local.worker", "destination": "$$local.destination" }
 			],
 			"dialogs": [],
 			"subsequences": []

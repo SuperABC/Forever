@@ -117,6 +117,6 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
 
 ## 2026-11-16
 
-- `ApplyChange`新增`AssignTaskChange`分支(`Society::FindOrganizationByScript`→`populaceFramework->AssignTask`)。
+- `ApplyChange`新增`AssignTaskChange`分支(`Society::FindOrganizationByScript`→`populaceFramework->AssignTask`；`vehicles`每项各自`EvaluateExpression`得到载具类别列表)。
 - 跳时间：`BeginTimeSkip`先交通后市民把在途行程转成虚拟时钟腿，`RunTimeSkipBudget`每个分步`StepWorld`之后调`AdvanceTripsForTimeSkip(stepSeconds)`，`FinishTimeSkip`先交通后市民`EndTimeSkip`。
   `GetSkipCreditSeconds/SetSkipCreditSeconds`传递一条腿提前走完多出来的游戏秒给下一条腿。

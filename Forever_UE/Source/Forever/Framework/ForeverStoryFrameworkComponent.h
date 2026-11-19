@@ -19,6 +19,7 @@ class JumpTimeChange;
 class RemoveTimerChange;
 class Script;
 class Citizen;
+class Organization;
 class Room;
 class Container;
 class EnterVehicleChange;
@@ -97,6 +98,11 @@ public:
 
 	// 员工接到组织派的任务(assign_task发起成功后)：execute_task事件只发给该员工的Job脚本。
 	void BroadcastExecuteTask(Citizen* citizen, const std::string& task, const std::string& destination);
+	// 任务结果：只发给派任务的组织自己的脚本(见TaskCompleteEvent/TaskFailedEvent)。origin=这一段出发时员工所在房间地址。
+	void BroadcastTaskComplete(Organization* organization, const std::string& task, const std::string& destination,
+		const std::string& worker, const std::string& origin);
+	void BroadcastTaskFailed(Organization* organization, const std::string& task, const std::string& destination,
+		const std::string& worker, const std::string& origin, const std::string& reason);
 
 	// 同上，但直接发一个已经填好击杀信息(凶手/武器/部位/伤害/可见/死亡地址)的事件，武器击杀用。
 	void BroadcastCitizenDecease(CitizenDeceaseEvent& event);

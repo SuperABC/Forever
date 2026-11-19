@@ -59,6 +59,7 @@ void IndustryMiddleBuilding::Layout(int& direction, const Quad& quad,
 	// 地上固定1层，显式赋值不依赖BuildingMod基类默认值。
 	layers = 1;
 	floorHeights.assign(basements + layers, 0.6f);
+	if (basements > 0) floorHeights[0] = 0.4f; // 地下停车库4米(原6米，楼体上不去)
 
 	if (basements > 0) {
 		AssignFloor(-1, "preset_common_single_pg+", direction, assets);

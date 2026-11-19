@@ -649,6 +649,69 @@ pair<bool, ValueType> ExecuteTaskEvent::GetLocalValue(const string& key) const {
 	return { false, ValueType() };
 }
 
+TaskCompleteEvent::TaskCompleteEvent(std::string task, std::string destination, std::string worker, std::string origin) :
+	task(move(task)), destination(move(destination)), worker(move(worker)), origin(move(origin)) {
+
+}
+
+TaskCompleteEvent::~TaskCompleteEvent() {
+
+}
+
+const string& TaskCompleteEvent::GetType() const {
+	static const string type = "task_complete";
+	return type;
+}
+
+bool TaskCompleteEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<TaskCompleteEvent*>(e);
+	if (!task.empty() && ToString(EvaluateExpression(task, context)) != other->task) return false;
+	if (!destination.empty() && ToString(EvaluateExpression(destination, context)) != other->destination) return false;
+	return true;
+}
+
+pair<bool, ValueType> TaskCompleteEvent::GetLocalValue(const string& key) const {
+	if (key == "task") return { true, ValueType(task) };
+	if (key == "destination") return { true, ValueType(destination) };
+	if (key == "worker") return { true, ValueType(worker) };
+	if (key == "origin") return { true, ValueType(origin) };
+	return { false, ValueType() };
+}
+
+TaskFailedEvent::TaskFailedEvent(std::string task, std::string destination, std::string worker, std::string origin, std::string reason) :
+	task(move(task)), destination(move(destination)), worker(move(worker)), origin(move(origin)), reason(move(reason)) {
+
+}
+
+TaskFailedEvent::~TaskFailedEvent() {
+
+}
+
+const string& TaskFailedEvent::GetType() const {
+	static const string type = "task_failed";
+	return type;
+}
+
+bool TaskFailedEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<TaskFailedEvent*>(e);
+	if (!task.empty() && ToString(EvaluateExpression(task, context)) != other->task) return false;
+	if (!destination.empty() && ToString(EvaluateExpression(destination, context)) != other->destination) return false;
+	return true;
+}
+
+pair<bool, ValueType> TaskFailedEvent::GetLocalValue(const string& key) const {
+	if (key == "task") return { true, ValueType(task) };
+	if (key == "destination") return { true, ValueType(destination) };
+	if (key == "worker") return { true, ValueType(worker) };
+	if (key == "origin") return { true, ValueType(origin) };
+	if (key == "reason") return { true, ValueType(reason) };
+	return { false, ValueType() };
+}
+
 VehicleArriveEvent::VehicleArriveEvent(std::string vehicle, std::string address) :
 	vehicle(move(vehicle)), address(move(address)) {
 

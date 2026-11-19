@@ -364,7 +364,7 @@ void UForeverTestSubsystem::RunChangesSuite()
 	Add("npc_teleport", bCitizens, [&] { return new NPCTeleportChange(Q(NameA), Q(AddrB)); });
 	Add("npc_navigate", bCitizens, [&] { return new NPCNavigateChange(Q(NameA), Q(AddrB)); });
 	Add("npc_revive", false, [&] { return new NPCReviveChange(Q(NameA), "50"); });
-	Add("assign_task", false, [&] { return new AssignTaskChange(Q("deliver"), Q(AddrB), "", "", ""); });
+	Add("assign_task", false, [&] { return new AssignTaskChange(Q("deliver"), Q(AddrB), { Q("") }, ""); });
 	Add("pay_wage", false, [] { return new PayWageChange("0"); });
 	Add("spawn_npc", true, [] { return new SpawnNpcChange("", Q("changes_npc"), Q("male"), Q("2000-01-01"), "", "", "", "", "", "", {}, "", ""); });
 	// ---- 玩家/世界 ----

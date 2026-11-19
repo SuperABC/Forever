@@ -98,6 +98,13 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 员工接到组织的任务(assign_task成功发起)后只发给该员工的Job脚本。字段`task`/`destination`都可省略(留空=不限)；
 脚本里用`$$local.task`/`$$local.destination`读。job_factory_worker.script用它收起"制作汉堡"选项。
 
+## task_complete / task_failed（2026-11-19）
+
+组织的`assign_task`单程任务的结果，**只发给派任务的组织自己的脚本**(`Society::FindOrganizationOfJob(员工Job)`)。字段`task`/`destination`可省略(留空=不限)。
+`$$local`：`task`、`destination`(目的房间地址)、`worker`(员工姓名)、`origin`(这一段出发时员工所在房间地址)，`task_failed`另有`reason`：
+`no_worker`/`no_vehicle`/`no_slot`/`already_there`(派不出去，此时`origin`为空)，`navigation`(车开不过去，员工落回出发停车房)，`vehicle_taken`(车被玩家开走)。
+`task_complete`在`npc_arrive`之后发出。典型用法见`Resource/Story/organization_manufacture.script`(送货到了再派`return`任务，失败改走路)。
+
 ## throw_asset（2026-11-17）
 
 `throw_asset`(`asset_type`表达式，留空=不限)：玩家把一件可投掷资产(`AssetMod::throwable`)扔出去后，由`UForeverThrowableComponent::Throw`在`SpawnThrownAsset`成功后

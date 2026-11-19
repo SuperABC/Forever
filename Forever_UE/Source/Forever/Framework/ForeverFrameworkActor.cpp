@@ -374,7 +374,7 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 	}
 
 	if (auto* assign = dynamic_cast<const AssignTaskChange*>(change)) {
-		// 组织派员工去某地(走路或开组织的车)。只有组织脚本能发；字段都是表达式。一次尝试，条件不满足就静默跳过。
+		// 组织派员工去某地(走路或开组织的车，单程)。只有组织脚本能发；字段都是表达式。一次尝试，派不出去给组织脚本发task_failed。
 		Organization* organization = society ? society->FindOrganizationByScript(context.self) : nullptr;
 		if (!organization || !populaceFramework) {
 			UE_LOG(LogTemp, Warning, TEXT("assign_task: 只能由组织脚本发起。"));
@@ -382,7 +382,11 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		}
 		const std::string task = assign->GetTask().empty() ? std::string() : ToString(EvaluateExpression(assign->GetTask(), context));
 		const std::string destination = ToString(EvaluateExpression(assign->GetDestination(), context));
-		const std::string vehicle = assign->GetVehicle().empty() ? std::string() : ToString(EvaluateExpression(assign->GetVehicle(), context));
+		// vehicles每一项各自按表达式求值，结果是载具category(空串=走路)。
+		std::vector<std::string> vehicles;
+		for (const std::string& item : assign->GetVehicles()) {
+			vehicles.push_back(item.empty() ? std::string() : ToString(EvaluateExpression(item, context)));
+		}
 		const std::string worker = assign->GetWorker().empty() ? std::string() : ToString(EvaluateExpression(assign->GetWorker(), context));
 		const double locateStart = FPlatformTime::Seconds();
 		Room* dest = map ? map->LocateRoom(destination) : nullptr;
@@ -391,7 +395,7 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 			UE_LOG(LogTemp, Verbose, TEXT("assign_task: 找不到目的房间 %s"), UTF8_TO_TCHAR(destination.c_str()));
 			return;
 		}
-		populaceFramework->AssignTask(organization, task, dest, vehicle, worker);
+		populaceFramework->AssignTask(organization, task, dest, vehicles, worker);
 		const double assignEnd = FPlatformTime::Seconds();
 		if (assignEnd - locateStart > 0.005) {
 			UE_LOG(LogTemp, Warning, TEXT("assign_task: 单次耗时 %.1f ms (LocateRoom %.1f ms, AssignTask %.1f ms)"),

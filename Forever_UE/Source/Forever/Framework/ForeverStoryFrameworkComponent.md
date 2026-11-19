@@ -33,6 +33,8 @@ Story域的UE层接线点。`Core/story`的`Script`/`Story`只做纯C++的匹配
 - **`BroadcastCitizenDecease`**（两个重载，字符串版转到事件版）：市民死亡时调用，匹配主线Script + 死者自己的`Scheduler`脚本（死亡只销毁UE侧Actor，Core里的`Citizen`和`Scheduler`还在）。
   不做通用的"任意Event广播给任意Script"机制，原因见`Player/ForeverWeaponComponent.md`。
 - **`BroadcastNpcArrive(citizen, room)`**：由`UForeverPopulaceFrameworkComponent::ReportArrival`调用，发`npc_arrive`给该市民自己的`Scheduler`脚本和`Job`脚本，嵌套深度`npcArriveDepth`超过`kMaxNpcArriveDepth`(8)丢弃并警告。
+- **`BroadcastExecuteTask(citizen, task, destination)`**：员工接到组织任务，只发给该员工的Job脚本。
+- **`BroadcastTaskComplete(org, task, destination, worker, origin)` / `BroadcastTaskFailed(..., reason)`**：单程任务到达/失败，只发给派任务的组织自己的脚本(`org->GetScript()`)。
 - **`BroadcastToVehicle(event, vehicle)`**：只发给这辆载具自己的Script（`enter_stop`/`leave_stop`/`enter_vehicle`/`leave_vehicle`）。
 - **`BroadcastPlayerLocation(event, kind, name, entering, target)`**：玩家进出园区/建筑/房间的Trigger盒回调里调用。先更新系统变量`system.player.zone/building/room`（进入写名字；离开时只有当前值还是这个名字才清空，
   避免"先进B后离开A"的回调顺序把刚写进去的B清掉），再把事件**只发给`target`**（被进出的那个实体自己的Script，为空=没挂脚本）。

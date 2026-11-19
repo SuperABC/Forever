@@ -25,4 +25,5 @@
 ## 送货脚本（2026-11-16）
 
 构造里`scriptModName="script_empty"`、`milestoneNames={"organization_manufacture"}`，脚本`Resource/Story/organization_manufacture.script`：
-每天10:00对`delivery.count`个目的地`for_range`发`assign_task`(`vehicle:"truck"`)，员工开组织卡车去目的建筑车位再开回，纯视觉。
+每天10:00对`delivery.count`个目的地`for_range`发`assign_task`(`task:"delivery"`、`vehicles:["truck"]`)，员工开组织卡车去目的建筑车位、走进目的房间；
+`task_complete(delivery)`后脚本再派`return`任务(`vehicles:["truck"]`、`worker=$$local.worker`、`destination=$$local.origin`)开车回；`task_failed(return)`改派`return_walk`走路回去。纯视觉。

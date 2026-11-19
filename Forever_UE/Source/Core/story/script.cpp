@@ -360,6 +360,11 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			// name/address都可以省略(留空=不限)，见NpcArriveEvent::Match；address是房间地址(Room::GetAddress())。
 			event = new NpcArriveEvent(obj["name"].AsString(), obj["address"].AsString());
 		}
+		else if (type == "task_complete" || type == "task_failed") {
+			// task/destination都可以省略(留空=不限)，见TaskCompleteEvent::Match；事件只发给派任务的组织的脚本。
+			if (type == "task_complete") event = new TaskCompleteEvent(obj["task"].AsString(), obj["destination"].AsString());
+			else event = new TaskFailedEvent(obj["task"].AsString(), obj["destination"].AsString());
+		}
 		else if (type == "execute_task") {
 			// task/destination都可以省略(留空=不限)，见ExecuteTaskEvent::Match；事件只发给被派任务的员工的Job脚本。
 			event = new ExecuteTaskEvent(obj["task"].AsString(), obj["destination"].AsString());
@@ -718,9 +723,18 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 			if (destination.IsNull()) {
 				THROW_EXCEPTION(RuntimeException, "Missing destination for assign_task change.\n");
 			}
-			// task/vehicle/round_trip/worker都可省略：task空=无标签，vehicle空=走路，round_trip空=true，worker空=自动挑闲置员工。
-			change = new AssignTaskChange(obj["task"].AsString(), destination.AsString(), obj["vehicle"].AsString(),
-				obj["round_trip"].AsString(), obj["worker"].AsString());
+			// task/vehicles/worker都可省略：task空=无标签，vehicles空=只走路，worker空=自动挑闲置员工。
+			// vehicles是JSON数组，每一项各自是一个表达式(求值结果是载具category，空串=走路)，载入时就检查语法，写错立刻报错。
+			vector<string> vehicles;
+			for (auto vehicle : obj["vehicles"]) {
+				string source = vehicle.AsString();
+				Expression checker;
+				if (!source.empty() && !checker.Parse(source)) {
+					THROW_EXCEPTION(RuntimeException, "Invalid expression \"" + source + "\" in vehicles of assign_task change.\n");
+				}
+				vehicles.push_back(move(source));
+			}
+			change = new AssignTaskChange(obj["task"].AsString(), destination.AsString(), move(vehicles), obj["worker"].AsString());
 		}
 		else if (type == "change_control") {
 			auto name = obj["name"];

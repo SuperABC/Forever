@@ -180,9 +180,10 @@
 
 组织脚本里用：员工自己走去某地，或开组织的车去某地再回来。**一次尝试**：没有闲置员工/车/目的车位就静默跳过(不占车不占人)。
 字段都是表达式源码：`destination`(必填，房间地址)、`task`(任务类别标签，如`"delivery"`，Core只写进员工脚本的`task`变量和`execute_task`事件)、
-`vehicle`(空=走路，`"truck"`=开组织的这类载具)、`round_trip`(预留，目前恒为true)、`worker`(空=自动挑闲置员工，否则员工名)。
+`vehicles`(**JSON数组**，每一项各自是表达式、载入时做语法检查，求值结果是载具类别，空串=走路；按顺序取第一个可行的，如`["\"truck\"", "\"\""]`=优先开卡车、不行就走路)、
+`worker`(空=自动挑工位上的闲置员工，否则员工名，且不要求在工位)。任务只有**单程**：到达后组织脚本收到`task_complete`，派不出去/半路出问题收到`task_failed`，由脚本决定往返(见event.md)。
 只有组织脚本能发(`context.self`反查组织，`Society::FindOrganizationByScript`)。执行见`UForeverPopulaceFrameworkComponent::AssignTask`和traffic.md"组织任务"。
-例：`{ "type": "assign_task", "task": "delivery", "vehicle": "truck", "destination": "$$self.delivery[$$($$local.i)].address" }`。
+例：`{ "type": "assign_task", "task": "\"delivery\"", "vehicles": [ "\"truck\"" ], "destination": "$$self.delivery[$$($$local.i)].address" }`。
 
 ## show_route（开发调试，2026-11-17）
 

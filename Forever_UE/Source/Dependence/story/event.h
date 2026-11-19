@@ -394,6 +394,53 @@ private:
 	std::string destination;
 };
 
+// 任务完成(组织的assign_task派出的员工走进了目的房间)：只发给该员工所在组织的脚本，由它决定下一步(比如再派一个返程任务)。
+// task/destination触发条件可省略(留空=不限)。脚本里读$$local.xxx：task(任务标签)、destination(目的房间地址)、
+// worker(员工姓名)、origin(这一段出发时员工所在的房间地址)。
+class TaskCompleteEvent : public Event {
+public:
+	TaskCompleteEvent(std::string task, std::string destination, std::string worker = std::string(), std::string origin = std::string());
+
+	virtual ~TaskCompleteEvent();
+
+	virtual const std::string& GetType() const override;
+
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+private:
+	std::string task;
+	std::string destination;
+	std::string worker;
+	std::string origin;
+};
+
+// 任务失败(assign_task派不出去，或派出后因路上出了问题取消)：只发给组织的脚本。除了TaskCompleteEvent的task/destination/
+// worker/origin之外多一个reason(no_worker没有可用员工/no_vehicle没有可用载具/no_slot目的地没有能停的车位/
+// already_there员工已经在目的房间或同一栋建筑里不用开车/navigation导航失败/vehicle_taken车被玩家开走)。
+// 派不出去时worker是指定的员工名(自动挑员工时为空)、origin为空；destination始终是这个任务原来的目的房间地址。
+class TaskFailedEvent : public Event {
+public:
+	TaskFailedEvent(std::string task, std::string destination, std::string worker = std::string(), std::string origin = std::string(),
+		std::string reason = std::string());
+
+	virtual ~TaskFailedEvent();
+
+	virtual const std::string& GetType() const override;
+
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+private:
+	std::string task;
+	std::string destination;
+	std::string worker;
+	std::string origin;
+	std::string reason;
+};
+
 // 载具抵达：车辆Controller导航到房间(vehicle_navigate)后，只发给这辆车自己的script。
 class VehicleArriveEvent : public Event {
 public:

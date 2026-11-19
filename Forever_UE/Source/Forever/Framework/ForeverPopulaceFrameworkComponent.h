@@ -55,10 +55,15 @@ public:
 	// 在room(到达)或原来的停车房(失败)出现，再普通步行去最终目的地。没有对应行程什么也不做。
 	void OnPassengerCarFinished(Vehicle* vehicle, Room* room, bool bArrived);
 
-	// 组织派员工执行任务(assign_task)：一次尝试，闲置员工/车/目的车位任一不满足就返回false(不占车不占人)。
-	// category空=员工自己走去destination再走回工位；非空=开组织的这类载具去destination所在建筑的车位再开回原车位、走回工位。
-	// workerName空=自动挑闲置员工。成功后给该员工的Job脚本发execute_task。详见Traffic::BeginTask和traffic.md"组织任务"。
-	bool AssignTask(Organization* organization, const std::string& task, Room* destination, const std::string& category, const std::string& workerName);
+	// 组织派员工执行任务(assign_task，单程)：categories按顺序试(空串=走路，非空=开组织在员工当前建筑停车位里的这类载具去
+	// destination所在建筑的车位)，取第一个可行的；闲置员工/车/目的车位都不满足就返回false(不占车不占人)，并给组织脚本发task_failed。
+	// workerName空=自动挑工位上的闲置员工。成功后给该员工的Job脚本发execute_task；员工走进目的房间后给组织脚本发task_complete。
+	// 详见Traffic::BeginTask和traffic.md"组织任务"。
+	bool AssignTask(Organization* organization, const std::string& task, Room* destination,
+		const std::vector<std::string>& categories, const std::string& workerName);
+
+	// 任务车被玩家开走(ApplyEnterVehicle)：取消这辆车的任务行程并给组织脚本发task_failed(vehicle_taken)，没有对应行程什么也不做。
+	void OnTaskVehicleTaken(Vehicle* vehicle);
 
 	// npc_teleport：立刻把市民放到destination。有Actor就把Actor瞬移过去(取消正在走的路)，没有就只改
 	// 逻辑位置，等进入流式范围时在那里生成。被玩家占有的市民不动，和RequestWalk一样。
@@ -181,10 +186,14 @@ private:
 	double GameSecondsPerRealSecond() const;
 	// 组织任务行程：见AssignTask。
 	void BoardTruck(Citizen* citizen);                   // 员工走到组织的车：员工消失，车开往预订好的目的车位
-	void OnTaskVehicleFinished(Traffic::TaskTrip* trip, Room* room, bool bArrived); // 任务车导航结束(去程/返程)
-	// 员工(从车里/原地)在room出现，接着走回工位；没有员工(死亡/离城)就直接结束任务。
-	void FinishTaskLanding(Traffic::TaskTrip* trip, Room* landing);
-	// 员工的任务行程因瞬移/新请求/死亡中断。车在路上的任务继续开回(worker置空)，其它直接取消。
+	void OnTaskVehicleFinished(Traffic::TaskTrip* trip, Room* room, bool bArrived); // 任务车导航结束
+	// 员工从车里在room出现：failReason为空=接着走向目的房间；非空=车没能开成/被玩家开走，员工落在room、任务结束并给组织脚本发task_failed。
+	// 没有员工(死亡/离城)就直接结束任务。
+	void FinishTaskLanding(Traffic::TaskTrip* trip, Room* landing, const char* failReason);
+	// 给员工所在组织的脚本发task_complete(failReason为空)或task_failed。员工没有组织/岗位就什么也不做。
+	void NotifyTaskResult(Citizen* worker, const std::string& task, const std::string& destination, const std::string& origin,
+		const char* failReason);
+	// 员工的任务行程因瞬移/新请求/死亡中断。车在路上的任务继续开到站(worker置空)，其它直接取消。
 	void AbortTaskOfWorker(Citizen* citizen);
 	Traffic* GetTrafficCore() const;
 

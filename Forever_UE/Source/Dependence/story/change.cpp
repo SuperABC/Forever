@@ -628,12 +628,12 @@ const string& NPCNavigateChange::GetDestination() const {
 }
 
 AssignTaskChange::AssignTaskChange() :
-	task(), destination(), vehicle(), roundTrip(), worker() {
+	task(), destination(), vehicles(), worker() {
 
 }
 
-AssignTaskChange::AssignTaskChange(string task, string destination, string vehicle, string roundTrip, string worker) :
-	task(move(task)), destination(move(destination)), vehicle(move(vehicle)), roundTrip(move(roundTrip)), worker(move(worker)) {
+AssignTaskChange::AssignTaskChange(string task, string destination, vector<string> vehicles, string worker) :
+	task(move(task)), destination(move(destination)), vehicles(move(vehicles)), worker(move(worker)) {
 
 }
 
@@ -654,12 +654,8 @@ const string& AssignTaskChange::GetDestination() const {
 	return destination;
 }
 
-const string& AssignTaskChange::GetVehicle() const {
-	return vehicle;
-}
-
-const string& AssignTaskChange::GetRoundTrip() const {
-	return roundTrip;
+const vector<string>& AssignTaskChange::GetVehicles() const {
+	return vehicles;
 }
 
 const string& AssignTaskChange::GetWorker() const {
