@@ -34,6 +34,7 @@ class PostImplement;
 class Event;
 class PuzzleResultEvent;
 class CitizenDeceaseEvent;
+class CitizenInjuredEvent;
 class Weapon;
 
 // 一次开火的结果(UForeverWeaponComponent射线求交之后填)，NotifyWeaponFire把它变成weapon_fire事件的local变量，字段含义见WeaponFireEvent。
@@ -106,6 +107,14 @@ public:
 
 	// 同上，但直接发一个已经填好击杀信息(凶手/武器/部位/伤害/可见/死亡地址)的事件，武器击杀用。
 	void BroadcastCitizenDecease(CitizenDeceaseEvent& event);
+
+	// 市民受伤(单体/范围伤害都发，不含致死那一击)：发给主脚本和受伤市民自己的Scheduler脚本，同citizen_decease。
+	void BroadcastCitizenInjured(CitizenInjuredEvent& event);
+
+	// 逃跑开始/结束：只发给这个市民自己的Scheduler脚本。reason见FleeEndEvent(far/lost/interrupted)。
+	// destination=开始逃跑时要回到的房间地址，见FleeStartEvent。
+	void BroadcastFleeStart(const std::string& name, const std::string& from, const std::string& destination);
+	void BroadcastFleeEnd(const std::string& name, const std::string& from, const std::string& reason);
 
 	// 执行global_message这个Change时调用(AForeverFrameworkActor::ApplyChange)：构造GlobalMessageEvent，
 	// 广播给所有挂了Script的东西(含主线，范围同game_start)。嵌套深度超过kMaxGlobalMessageDepth时

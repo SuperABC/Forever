@@ -964,3 +964,80 @@ public:
 private:
 	std::map<std::string, ValueType> fields;
 };
+
+// 市民受伤(单体伤害和范围伤害都发，不区分；致死的那一击只发CitizenDeceaseEvent)：发给主脚本和受伤市民自己的Scheduler脚本。
+// 过滤字段name/attacker/weapon/part都可省略(留空=不限)；damage/health只在运行时事件里有，不能做过滤。
+// $$local：name受伤者、attacker攻击者姓名(没有为空)、weapon、part、damage本次伤害、health剩余血量。
+class CitizenInjuredEvent : public Event {
+public:
+	CitizenInjuredEvent(std::string name, std::string attacker = std::string(), std::string weapon = std::string(),
+		std::string part = std::string(), double damage = 0.0, double health = 0.0);
+
+	virtual ~CitizenInjuredEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	const std::string& GetName() const;
+	const std::string& GetAttacker() const;
+	const std::string& GetWeapon() const;
+	const std::string& GetPart() const;
+	double GetDamage() const;
+	double GetHealth() const;
+
+private:
+	std::string name;
+	std::string attacker;
+	std::string weapon;
+	std::string part;
+	double damage;
+	double health;
+};
+
+// 市民开始逃跑(citizen_flee真的生效时，已经在逃的只换目标不发)：只发给逃跑市民自己的Scheduler脚本。name=逃跑者，from=要远离的市民姓名；
+// 过滤字段name/from可省略；destination只在运行时事件里有，不能做过滤。
+// destination=开始逃跑那一刻"要回到的房间地址"：正在走路=走向的目的房间，没在走=当前所在房间，两者都没有=空串，
+// 供脚本记下来、flee_end之后导航回去(公共脚本citizen_common就是这么用的)。
+class FleeStartEvent : public Event {
+public:
+	FleeStartEvent(std::string name, std::string from = std::string(), std::string destination = std::string());
+
+	virtual ~FleeStartEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	const std::string& GetName() const;
+	const std::string& GetFrom() const;
+	const std::string& GetDestination() const;
+
+private:
+	std::string name;
+	std::string from;
+	std::string destination;
+};
+
+// 市民结束逃跑：只发给逃跑市民自己的Scheduler脚本。$$local：name、from、reason——
+// far=跑出了实例化距离阈值，lost=要远离的市民没了(被销毁/死亡/离城/不在场)，interrupted=被新的导航/任务/瞬移/死亡/玩家接管打断。
+// 过滤字段name/from/reason都可省略(留空=不限)。
+class FleeEndEvent : public Event {
+public:
+	FleeEndEvent(std::string name, std::string from = std::string(), std::string reason = std::string());
+
+	virtual ~FleeEndEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	const std::string& GetName() const;
+	const std::string& GetFrom() const;
+	const std::string& GetReason() const;
+
+private:
+	std::string name;
+	std::string from;
+	std::string reason;
+};

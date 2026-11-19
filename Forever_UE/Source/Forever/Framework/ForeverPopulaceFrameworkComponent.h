@@ -63,6 +63,23 @@ public:
 	bool AssignTask(Organization* organization, const std::string& task, Room* destination,
 		const std::vector<std::string>& categories, const std::string& workerName, float speedScale = 1.f);
 
+	// 让citizen逃离target(citizen_flee Change转发到这里)，速度是它自己的走路速度的kFleeSpeedMultiplier倍(4)，沿行人导航线远离，
+	// 见CitizenController的Flee指令。fromName是脚本里写的目标姓名(target没找到时也要能报告)。
+	// 不能逃的(没有Actor/被玩家占有/在车里/目标无效/就是自己/跳时间中)直接返回，不进入逃跑状态、不发任何事件(脚本在flee_start里才记状态，
+	// 所以不需要回滚)。已经在逃的只换目标、不发事件。真正开始时发flee_start(带上要回到的房间地址)。
+	void RequestFlee(Citizen* citizen, Citizen* target, const std::string& fromName);
+
+	// 逃跑选路(CitizenController调)：坐标是UE世界坐标。PlanFleeStart取离location最近的行人线，选两个端点里更背离awayFrom的；
+	// PlanFleeNext从node出发选邻接里最背离awayFrom的(不回头走prev)。outPoint是下一个路点(脚底高度)，outNode/outPrev记在尾部供下一步用。
+	bool PlanFleeStart(const FVector& location, const FVector& awayFrom, FVector& outPoint, int32& outNode, int32& outPrev) const;
+	bool PlanFleeNext(int32 node, int32 prev, const FVector& awayFrom, FVector& outPoint, int32& outNode, int32& outPrev) const;
+	// 逃跑中的市民是否已经跑出实例化距离阈值(取移动中市民的销毁距离的9成，保证先结束逃跑再被销毁)。
+	bool IsFleeRangeExceeded(const FVector& location) const;
+	// 逃跑结束(CitizenController::EndCommand回调)：清Citizen::fleeFrom并给它的Scheduler脚本发flee_end(reason: far/lost/interrupted)。
+	void NotifyFleeEnded(Citizen* citizen, const char* reason);
+	// 市民"要回到的房间地址"(flee_start事件的destination)：正在走路=目的房间，没在走=当前所在房间，都没有=空串。
+	std::string DescribeReturnAddress(Citizen* citizen) const;
+
 	// 任务车被玩家开走(ApplyEnterVehicle)：取消这辆车的任务行程并给组织脚本发task_failed(vehicle_taken)，没有对应行程什么也不做。
 	void OnTaskVehicleTaken(Vehicle* vehicle);
 
@@ -206,6 +223,8 @@ private:
 
 	// 刚生成了Actor的市民如果在Core里行进，把剩余路径交给Actor接着走(流式生成和读档恢复共用)。
 	void HandOffWalkToElement(Citizen* citizen, ACitizenElement* element, double now);
+	// 读档/流式生成出Actor时：存档里这个市民正在逃跑(Citizen::IsFleeing)就让Actor接着逃；目标已经没了就以lost结束。
+	void ResumeFleeOnSpawn(Citizen* citizen, ACitizenElement* element);
 
 	// 生成citizen对应的ACitizenElement并登记进activeInstances(TickComponent和FindOrSpawnCitizenByName共用)。
 	// 调用方负责保证citizen不为空、不在activeInstances里。

@@ -1557,3 +1557,116 @@ void ProjectileHitEvent::SetField(const std::string& name, ValueType value) {
 void ProjectileHitEvent::SetVec3(const std::string& name, double x, double y, double z) {
 	StoreVec3(fields, name, x, y, z);
 }
+
+CitizenInjuredEvent::CitizenInjuredEvent(std::string name, std::string attacker, std::string weapon, std::string part,
+	double damage, double health) :
+	name(move(name)), attacker(move(attacker)), weapon(move(weapon)), part(move(part)),
+	damage(damage), health(health) {
+
+}
+
+CitizenInjuredEvent::~CitizenInjuredEvent() {
+
+}
+
+const string& CitizenInjuredEvent::GetType() const {
+	static const string type = "citizen_injured";
+	return type;
+}
+
+bool CitizenInjuredEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<CitizenInjuredEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	if (!attacker.empty() && ToString(EvaluateExpression(attacker, context)) != other->attacker) return false;
+	if (!weapon.empty() && ToString(EvaluateExpression(weapon, context)) != other->weapon) return false;
+	if (!part.empty() && ToString(EvaluateExpression(part, context)) != other->part) return false;
+	return true;
+}
+
+pair<bool, ValueType> CitizenInjuredEvent::GetLocalValue(const string& key) const {
+	if (key == "name") return { true, ValueType(name) };
+	if (key == "attacker") return { true, ValueType(attacker) };
+	if (key == "weapon") return { true, ValueType(weapon) };
+	if (key == "part") return { true, ValueType(part) };
+	if (key == "damage") return { true, ValueType(damage) };
+	if (key == "health") return { true, ValueType(health) };
+	return { false, ValueType() };
+}
+
+const std::string& CitizenInjuredEvent::GetName() const { return name; }
+const std::string& CitizenInjuredEvent::GetAttacker() const { return attacker; }
+const std::string& CitizenInjuredEvent::GetWeapon() const { return weapon; }
+const std::string& CitizenInjuredEvent::GetPart() const { return part; }
+double CitizenInjuredEvent::GetDamage() const { return damage; }
+double CitizenInjuredEvent::GetHealth() const { return health; }
+
+FleeStartEvent::FleeStartEvent(std::string name, std::string from, std::string destination) :
+	name(move(name)), from(move(from)), destination(move(destination)) {
+
+}
+
+FleeStartEvent::~FleeStartEvent() {
+
+}
+
+const string& FleeStartEvent::GetType() const {
+	static const string type = "flee_start";
+	return type;
+}
+
+bool FleeStartEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<FleeStartEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	if (!from.empty() && ToString(EvaluateExpression(from, context)) != other->from) return false;
+	return true;
+}
+
+pair<bool, ValueType> FleeStartEvent::GetLocalValue(const string& key) const {
+	if (key == "name") return { true, ValueType(name) };
+	if (key == "from") return { true, ValueType(from) };
+	if (key == "destination") return { true, ValueType(destination) };
+	return { false, ValueType() };
+}
+
+const std::string& FleeStartEvent::GetName() const { return name; }
+const std::string& FleeStartEvent::GetFrom() const { return from; }
+const std::string& FleeStartEvent::GetDestination() const { return destination; }
+
+FleeEndEvent::FleeEndEvent(std::string name, std::string from, std::string reason) :
+	name(move(name)), from(move(from)), reason(move(reason)) {
+
+}
+
+FleeEndEvent::~FleeEndEvent() {
+
+}
+
+const string& FleeEndEvent::GetType() const {
+	static const string type = "flee_end";
+	return type;
+}
+
+bool FleeEndEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<FleeEndEvent*>(e);
+	if (!name.empty() && ToString(EvaluateExpression(name, context)) != other->name) return false;
+	if (!from.empty() && ToString(EvaluateExpression(from, context)) != other->from) return false;
+	if (!reason.empty() && ToString(EvaluateExpression(reason, context)) != other->reason) return false;
+	return true;
+}
+
+pair<bool, ValueType> FleeEndEvent::GetLocalValue(const string& key) const {
+	if (key == "name") return { true, ValueType(name) };
+	if (key == "from") return { true, ValueType(from) };
+	if (key == "reason") return { true, ValueType(reason) };
+	return { false, ValueType() };
+}
+
+const std::string& FleeEndEvent::GetName() const { return name; }
+const std::string& FleeEndEvent::GetFrom() const { return from; }
+const std::string& FleeEndEvent::GetReason() const { return reason; }

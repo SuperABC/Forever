@@ -2309,3 +2309,30 @@ void AddSatietyChange::SetAmount(std::string amount) {
 const std::string& AddSatietyChange::GetAmount() const {
 	return amount;
 }
+
+CitizenFleeChange::CitizenFleeChange() :
+	name(), from() {
+
+}
+
+CitizenFleeChange::CitizenFleeChange(string name, string from) :
+	name(move(name)), from(move(from)) {
+
+}
+
+CitizenFleeChange::~CitizenFleeChange() {
+
+}
+
+const string& CitizenFleeChange::GetType() const {
+	static const string type = "citizen_flee";
+	return type;
+}
+
+const string& CitizenFleeChange::GetName() const {
+	return name;
+}
+
+const string& CitizenFleeChange::GetFrom() const {
+	return from;
+}

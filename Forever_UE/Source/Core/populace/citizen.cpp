@@ -368,6 +368,7 @@ void Citizen::RollWalkInstantiable(float globalProbability) {
 	walkInstantiable = probability >= 1.f || GetRandom(10000) < static_cast<int>(probability * 10000.f);
 }
 bool Citizen::IsWalkInstantiable() const { return walkInstantiable; }
+void Citizen::SetWalkInstantiable(bool value) { walkInstantiable = value; }
 
 void Citizen::EndWalk() {
 	walkDestination = nullptr;
@@ -380,6 +381,9 @@ float Citizen::GetWalkSpeedScale() const { return walkSpeedScale; }
 void Citizen::SetWalkSpeedScale(float scale) { walkSpeedScale = std::max(0.f, scale); }
 float Citizen::GetWalkSpeedJitter() const { return walkSpeedJitter; }
 float Citizen::GetWalkSpeedFactor() const { return walkSpeedScale * walkSpeedJitter; }
+const string& Citizen::GetFleeFrom() const { return fleeFrom; }
+void Citizen::SetFleeFrom(const string& from) { fleeFrom = from; }
+bool Citizen::IsFleeing() const { return !fleeFrom.empty(); }
 
 void Citizen::RebaseWalk(double nowSeconds) {
 	if (!IsWalking()) return;

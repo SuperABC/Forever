@@ -383,6 +383,17 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			event = new CitizenDeceaseEvent(obj["name"].AsString(), obj["reason"].AsString(), obj["killer"].AsString(),
 				obj["weapon"].AsString(), obj["part"].AsString(), 0.0, false, std::string());
 		}
+		else if (type == "citizen_injured") {
+			// name/attacker/weapon/part都可以省略(留空=不限)；damage/health/destination只在运行时事件里有，不能做过滤。
+			event = new CitizenInjuredEvent(obj["name"].AsString(), obj["attacker"].AsString(), obj["weapon"].AsString(),
+				obj["part"].AsString());
+		}
+		else if (type == "flee_start") {
+			event = new FleeStartEvent(obj["name"].AsString(), obj["from"].AsString());
+		}
+		else if (type == "flee_end") {
+			event = new FleeEndEvent(obj["name"].AsString(), obj["from"].AsString(), obj["reason"].AsString());
+		}
 		else {
 			// 其余事件类型的JSON分发分支等该类型被点名实现时再补，见Core/story/script.md。
 			THROW_EXCEPTION(RuntimeException, "Event type not implemented yet: " + type + ".\n");
@@ -725,6 +736,14 @@ vector<Change*> Script::BuildChanges(const JsonValue& root) {
 				}
 			}
 			change = new NPCNavigateChange(name.AsString(), destination.AsString(), move(speed));
+		}
+		else if (type == "citizen_flee") {
+			auto name = obj["name"];
+			auto from = obj["from"];
+			if (name.IsNull() || from.IsNull()) {
+				THROW_EXCEPTION(RuntimeException, "Missing name or from for citizen_flee change.\n");
+			}
+			change = new CitizenFleeChange(name.AsString(), from.AsString());
 		}
 		else if (type == "assign_task") {
 			auto destination = obj["destination"];

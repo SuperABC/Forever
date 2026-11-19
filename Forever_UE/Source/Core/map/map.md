@@ -180,3 +180,8 @@
 
 `FindPath`(行人/车行共用)改走"编译图"`SearchGraph`：邻接表一次性转成下标数组，边权`CalcDistance`只算一次(原来每次松弛都采样17个曲线点)，节点坐标做A*启发(车行图以前没传坐标，等于整图Dijkstra)，启发缩放`heuristicScale`按边校验保证不高估；
 每线程复用`thread_local`缓冲区(代数戳)，不再每次分配map/set；(起点,终点)->id路径带缓存(含"无路径"，封顶8192条满了清空)。图的节点数/边数/边指针校验和变了自动重建并作废缓存。
+
+## 逃跑选路（2026-11-19）
+`StartPedestrianFlee(x,y,awayX,awayY)`：遍历行人图所有边取离(x,y)最近的线(点到线段水平距离)，两端点里选更背离目标的作下一个节点(另一端点记prev)；
+`NextPedestrianFlee(nodeId,prevId,awayX,awayY)`：邻接里选终点方向与"目标→当前节点"方向点积最大的，不回头走prev，死胡同才回头。返回`FleeStep{ok,nodeId,prevNodeId,x,y,z}`(地图单位)。
+`EnsureNodeIndex()`从`FindPedestrianPath`里抽出，两者共用。CoreTest route套件`CheckFlee`覆盖(每步选得出、度数>=2不回头)。

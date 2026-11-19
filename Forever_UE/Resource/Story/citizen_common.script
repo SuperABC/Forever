@@ -1,0 +1,68 @@
+{
+	// 所有市民共用的基础事件响应：每个Scheduler在自己的milestoneNames里加上"citizen_common"就行，自己独立的逻辑照常写在自己的脚本里。
+	// 本文件的里程碑名一律以common_开头，避免和别的脚本文件里的里程碑重名(同名后者会覆盖前者)。
+	//
+	// 受伤 -> 逃跑 -> 恢复：
+	//   - citizen_injured：让这个市民逃离攻击者$$local.attacker(沿行人导航线4倍速，直到跑出实例化距离阈值或攻击者没了)；
+	//     没有攻击者(空串)不逃。已经在逃跑途中再受伤，citizen_flee只是换逃离的目标，不会再发flee_start。
+	//   - flee_start：真的开始逃跑时，把"要回到的房间"$$local.destination(正在走路=目的房间，没在走=当前所在房间)记到$$self.flee_dest。
+	//     逃跑被拒绝(没实例化/被玩家占有/在车里等)不会发flee_start，所以不用回滚。
+	//   - flee_end：reason是far/lost就导航回$$self.flee_dest，interrupted(被别的导航/任务/瞬移/死亡/玩家接管打断)不导航，
+	//     无论如何都清掉记录。
+	//   - citizen_decease：清掉记录。
+	"milestones": [
+		{
+			"milestone": "common_injured",
+			"triggers": [ { "type": "citizen_injured", "name": "$$self.name" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "citizen_flee", "name": "$$self.name", "from": "$$local.attacker", "condition": "$$local.attacker != \"\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "common_flee_start",
+			"triggers": [ { "type": "flee_start", "name": "$$self.name" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.flee_dest", "value": "$$local.destination" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "common_flee_end",
+			"triggers": [ { "type": "flee_end", "name": "$$self.name" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "npc_navigate", "name": "$$self.name", "destination": "$$self.flee_dest", "condition": "$$local.reason != \"interrupted\" && $$self.flee_dest != \"\"" },
+				{ "type": "set_value", "variable": "self.flee_dest", "value": "\"\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "common_decease",
+			"triggers": [ { "type": "citizen_decease", "name": "$$self.name" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.flee_dest", "value": "\"\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

@@ -363,6 +363,7 @@ void UForeverTestSubsystem::RunChangesSuite()
 	// ---- 市民 ----
 	Add("npc_teleport", bCitizens, [&] { return new NPCTeleportChange(Q(NameA), Q(AddrB)); });
 	Add("npc_navigate", bCitizens, [&] { return new NPCNavigateChange(Q(NameA), Q(AddrB)); });
+	Add("citizen_flee", bCitizens, [&] { return new CitizenFleeChange(Q(NameA), Q(NameB)); });
 	Add("npc_revive", false, [&] { return new NPCReviveChange(Q(NameA), "50"); });
 	Add("assign_task", false, [&] { return new AssignTaskChange(Q("deliver"), Q(AddrB), { Q("") }, ""); });
 	Add("pay_wage", false, [] { return new PayWageChange("0"); });

@@ -122,6 +122,13 @@ void ACitizenElement::WalkTo(const TArray<FVector>& waypoints, Room* destination
 	aiController->PushCommand(command);
 }
 
+void ACitizenElement::FleeFrom(Citizen* target, float speedScale) {
+	if (!aiController || !target) return;
+	if (aiController->RetargetFlee(target)) return; // 连续受伤：不重新开始，也不发事件
+	aiController->ClearCommands();
+	aiController->PushCommand(FCharacterCommand::MakeFlee(target, speedScale));
+}
+
 Room* ACitizenElement::GetWalkDestination() const {
 	return aiController ? aiController->GetCurrentDestination() : nullptr;
 }

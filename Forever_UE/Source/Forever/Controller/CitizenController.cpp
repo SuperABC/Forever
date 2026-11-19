@@ -55,6 +55,13 @@ Room* ACitizenController::GetCurrentDestination() const {
 	return (command && bCommandStarted) ? command->room : nullptr;
 }
 
+bool ACitizenController::RetargetFlee(Citizen* target) {
+	FCharacterCommand* command = commands.Current();
+	if (!command || command->type != FCharacterCommand::EType::Flee) return false;
+	command->fleeTarget = target;
+	return true;
+}
+
 bool ACitizenController::GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination) const {
 	const FCharacterCommand* command = commands.Current();
 	ACitizenElement* element = citizenElement.Get();
@@ -84,6 +91,32 @@ void ACitizenController::BeginCommand(FCharacterCommand& command) {
 		command.waypoints = MoveTemp(planned);
 	}
 
+	if (command.type == FCharacterCommand::EType::Flee) {
+		// 起点：离市民最近的行人导航线，在两个端点里选更背离目标的；再提前选好下一个节点。
+		UForeverPopulaceFrameworkComponent* framework = element->GetFramework();
+		ACitizenElement* targetElement = (framework && command.fleeTarget) ? framework->FindActiveCitizen(command.fleeTarget) : nullptr;
+		FVector start;
+		int32 node = -1, prev = -1;
+		const FVector feet = element->GetActorLocation();
+		if (!targetElement || !command.fleeTarget->IsActive()) {
+			fleeEndReason = "lost";
+			EndCommand(false);
+			return;
+		}
+		fleeTargetLocation = targetElement->GetActorLocation();
+		command.waypoints.Reset();
+		if (!framework->PlanFleeStart(feet, fleeTargetLocation, start, node, prev)) {
+			fleeEndReason = "far";
+			EndCommand(false);
+			return;
+		}
+		command.waypoints.Add(start);
+		fleeTailNode = node;
+		fleePrevNode = prev;
+		fleeCheckTimer = 0.25f;
+		ExtendFlee(command);
+	}
+
 	if (command.waypoints.Num() == 0) {
 		EndCommand(false);
 		return;
@@ -105,6 +138,8 @@ void ACitizenController::EndCommand(bool arrived) {
 	if (!current) return;
 	ReleaseCrosswalk();
 	FCharacterCommand finished = *current;
+	const char* fleeReason = fleeEndReason; // 取走：EndCommand里面可能再被脚本事件重入
+	fleeEndReason = nullptr;
 
 	ACitizenElement* element = citizenElement.Get();
 	if (bCommandStarted && element) {
@@ -124,9 +159,80 @@ void ACitizenController::EndCommand(bool arrived) {
 	UForeverPopulaceFrameworkComponent* framework = element ? element->GetFramework() : nullptr;
 	Citizen* citizen = element ? element->GetCitizen() : nullptr;
 	if (!framework || !citizen) return;
+	if (finished.type == FCharacterCommand::EType::Flee) {
+		// 逃跑结束：自己判定的原因优先；路径选不下去(arrived)算far，被清空/取代(其余)算interrupted。
+		framework->NotifyFleeEnded(citizen, fleeReason ? fleeReason : (arrived ? "far" : "interrupted"));
+		return;
+	}
 	if (arrived && finished.room) {
 		framework->NotifyArrived(citizen, finished.room);
 	}
+}
+
+bool ACitizenController::ExtendFlee(FCharacterCommand& command) {
+	ACitizenElement* element = citizenElement.Get();
+	UForeverPopulaceFrameworkComponent* framework = element ? element->GetFramework() : nullptr;
+	if (!framework) return false;
+	FVector point;
+	int32 node = -1, prev = -1;
+	if (!framework->PlanFleeNext(fleeTailNode, fleePrevNode, fleeTargetLocation, point, node, prev)) return false;
+	command.waypoints.Add(point);
+	fleeTailNode = node;
+	fleePrevNode = prev;
+	return true;
+}
+
+void ACitizenController::ExtendFleeAhead(FCharacterCommand& command) {
+	while (command.waypoints.Num() < waypointIndex + 2) {
+		if (!ExtendFlee(command)) break;
+	}
+}
+
+bool ACitizenController::TickFlee(ACitizenElement* element, FCharacterCommand& command, float deltaTime) {
+	fleeTurnCooldown -= deltaTime;
+	fleeCheckTimer -= deltaTime;
+	if (fleeCheckTimer > 0.f) return false;
+	fleeCheckTimer = 0.25f;
+
+	UForeverPopulaceFrameworkComponent* framework = element->GetFramework();
+	ACitizenElement* targetElement = (framework && command.fleeTarget) ? framework->FindActiveCitizen(command.fleeTarget) : nullptr;
+	if (!targetElement || !command.fleeTarget->IsActive()) {
+		fleeEndReason = "lost"; // 目标被销毁(流式销毁/死亡/离城)
+		EndCommand(false);
+		return true;
+	}
+	fleeTargetLocation = targetElement->GetActorLocation();
+	if (framework && framework->IsFleeRangeExceeded(element->GetActorLocation())) {
+		fleeEndReason = "far"; // 跑出实例化距离阈值
+		EndCommand(false);
+		return true;
+	}
+
+	// 检查跑的方向：当前前进方向(指向下一个路点)和"市民→目标"连线的夹角小于90度，说明已经在朝目标跑了(目标绕过来了/
+	// 路线拐向了目标)，立刻掉头：以现在的位置重新选最近的行人线、取背离目标的端点，路径点整个换掉。
+	// 正在过横道时不掉头(横道占用要先放掉再转，等过完)。
+	if (fleeTurnCooldown <= 0.f && !crossing && command.waypoints.IsValidIndex(waypointIndex)) {
+		const FVector here = element->GetActorLocation();
+		FVector heading = command.waypoints[waypointIndex] - here;
+		FVector toTarget = fleeTargetLocation - here;
+		heading.Z = 0.f;
+		toTarget.Z = 0.f;
+		if (heading.Normalize() && toTarget.Normalize() && FVector::DotProduct(heading, toTarget) > 0.f) {
+			FVector start;
+			int32 node = -1, prev = -1;
+			if (framework && framework->PlanFleeStart(here, fleeTargetLocation, start, node, prev)) {
+				ReleaseCrosswalk();
+				command.waypoints.Reset();
+				command.waypoints.Add(start);
+				fleeTailNode = node;
+				fleePrevNode = prev;
+				waypointIndex = 0;
+				ExtendFlee(command);
+				fleeTurnCooldown = 0.75f;
+			}
+		}
+	}
+	return false;
 }
 
 void ACitizenController::ReleaseCrosswalk() {
@@ -217,6 +323,8 @@ void ACitizenController::Tick(float deltaTime) {
 		if (!bCommandStarted || !command) return;
 	}
 
+	if (command->type == FCharacterCommand::EType::Flee && TickFlee(element, *command, deltaTime)) return;
+
 	if (waypointIndex >= command->waypoints.Num()) {
 		EndCommand(true);
 		return;
@@ -226,6 +334,7 @@ void ACitizenController::Tick(float deltaTime) {
 	toTarget.Z = 0.f;
 	if (toTarget.SizeSquared() <= kWaypointArrivalThresholdUU * kWaypointArrivalThresholdUU) {
 		waypointIndex++;
+		if (command->type == FCharacterCommand::EType::Flee) ExtendFleeAhead(*command);
 		if (waypointIndex >= command->waypoints.Num()) EndCommand(true);
 		return;
 	}

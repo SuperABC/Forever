@@ -155,3 +155,11 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 ## 脱困(2026-11-16)
 
 `CheckStuckCitizens`每帧扫`activeInstances`：Controller有命令(在走路)的物理市民超过`stuckTimeoutSeconds`(默认60现实秒，暂停不计)没离开锚点`stuckMoveThreshold`(100UE单位)，就`HandBackCitizenToCore(..., bForce=true)`销毁Actor并把剩余路径交回Core推算(拿不到剩余路径则不动，下个周期再试)，30游戏秒内`respawnBlockedUntil`不重新生成。距离销毁也复用`HandBackCitizenToCore`。日志`脱困：市民 ...`。
+
+## 逃跑（2026-11-19）
+`RequestFlee(citizen, target, fromName)`：拒绝条件(目标无效/就是自己/没有Actor/玩家占有/跳时间/在车里)静默返回(不进入逃跑状态、不发事件，脚本在`flee_start`里才记状态所以不用回滚)；还在走向车的通勤/任务行程像`RequestWalk`那样先取消；
+作废在途寻路、写`fleeFrom`、`currentRoom`置空(在路上)、`ACitizenElement::FleeFrom`推Flee指令，首次开始发`flee_start`(带`DescribeReturnAddress`在清指令/置空currentRoom之前取的要回到的房间)。`GetTransitPosition`现在把"没在走但不在任何房间"的市民也当在路上(逃跑结束后停在半路，新的导航从原地起算)。
+`PlanFleeStart/PlanFleeNext`包`Map::StartPedestrianFlee/NextPedestrianFlee`；`IsFleeRangeExceeded`；`NotifyFleeEnded`清`fleeFrom`并发`flee_end`(关卡卸载时不发)；`DescribeReturnAddress`给`flee_start`的destination；`ResumeFleeOnSpawn`读档恢复。
+
+## 流式生成防重叠（2026-11-19）
+流式生成(TickComponent扫描)市民前，若生成点和任一已实例化市民的距离(三维)小于1m(`kSpawnMinSeparation`=100uu)就跳过，并`Citizen::SetWalkInstantiable(false)`，这趟路后续不再实例化(Core推算到走完，下次开始走路重新抽)。只对走路中的市民判断，没在走路的直接生成、不看距离。读档恢复、`EnsureSpawned`等强制生成不受影响。

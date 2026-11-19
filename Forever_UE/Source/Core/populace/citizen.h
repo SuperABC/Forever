@@ -248,6 +248,12 @@ public:
 	void SetWalkSpeedScale(float scale);
 	float GetWalkSpeedJitter() const;
 	float GetWalkSpeedFactor() const;
+
+	// 逃跑状态：fleeFrom是要远离的市民姓名，空=没在逃跑。随人口段存档，读档后UE层在市民生成Actor时据此接着逃，
+	// 逃跑的具体行为(沿行人导航线远离)在UE层，见ForeverPopulaceFrameworkComponent.md"逃跑"。
+	const std::string& GetFleeFrom() const;
+	void SetFleeFrom(const std::string& from);
+	bool IsFleeing() const;
 	// 把行进改写成"从nowSeconds推算出的当前位置起的剩余路径"，起算时间设为nowSeconds：轨迹不变，
 	// 但路径首点就是当前位置、已走弧长为0。存档前调用，读档后用它把起算时间对齐到新的游戏时钟。
 	void RebaseWalk(double nowSeconds);
@@ -262,6 +268,8 @@ public:
 	// globalProbability：自己没单独设过概率(默认-1)时采用的全局概率。
 	void RollWalkInstantiable(float globalProbability);
 	bool IsWalkInstantiable() const;
+	// 强制把这趟行走标成不参与实例化(比如流式生成时发现和已有市民重叠)，下次开始走路时会重新抽。
+	void SetWalkInstantiable(bool value);
 
 	// 存档时这个市民是否有Actor(已实例化)。只在存档/读档之间有意义：存档前由UE侧按场景写入，读档后
 	// UE侧据此强制先生成这些市民，生成完清掉。不参与任何游戏逻辑。
@@ -357,6 +365,7 @@ private:
 	float walkSpeed = 0.f;
 	float walkSpeedScale = 1.f;  // 脚本给的走路速度倍率，见GetWalkSpeedFactor
 	float walkSpeedJitter = 1.f; // 每个市民固定的0.8~1.2扰动，构造时抽
+	std::string fleeFrom;        // 正在远离的市民姓名，空=没在逃跑
 	// 推算(nowSeconds)对应的位置和已经走过的路径段下标。
 	void SampleWalk(double nowSeconds, WalkPoint& outPoint, size_t& outSegment, bool& outFinished) const;
 

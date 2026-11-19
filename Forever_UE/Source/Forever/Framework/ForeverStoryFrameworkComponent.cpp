@@ -657,6 +657,65 @@ void UForeverStoryFrameworkComponent::BroadcastCitizenDecease(CitizenDeceaseEven
 	}
 }
 
+void UForeverStoryFrameworkComponent::BroadcastCitizenInjured(CitizenInjuredEvent& event) {
+	if (!story || !GEngine) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	// 和citizen_decease一样：主线脚本 + 受伤者自己的Scheduler脚本(按name找)。
+	if (story->GetMainScript()) BroadcastToScript(event, story->GetMainScript(), postImplement);
+	Populace* populace = framework ? framework->GetPopulace() : nullptr;
+	Citizen* target = populace ? populace->FindCitizenByName(event.GetName()) : nullptr;
+	if (target && target->GetScheduler() && target->GetScheduler()->GetScript()) {
+		BroadcastToScript(event, target->GetScheduler()->GetScript(), postImplement);
+	}
+}
+
+void UForeverStoryFrameworkComponent::BroadcastFleeStart(const string& name, const string& from, const string& destination) {
+	if (!story || !GEngine) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	Populace* populace = framework ? framework->GetPopulace() : nullptr;
+	Citizen* target = populace ? populace->FindCitizenByName(name) : nullptr;
+	if (!target || !target->GetScheduler() || !target->GetScheduler()->GetScript()) return;
+	FleeStartEvent event(name, from, destination);
+	BroadcastToScript(event, target->GetScheduler()->GetScript(), postImplement);
+}
+
+void UForeverStoryFrameworkComponent::BroadcastFleeEnd(const string& name, const string& from, const string& reason) {
+	if (!story || !GEngine) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+	Populace* populace = framework ? framework->GetPopulace() : nullptr;
+	Citizen* target = populace ? populace->FindCitizenByName(name) : nullptr;
+	if (!target || !target->GetScheduler() || !target->GetScheduler()->GetScript()) return;
+	FleeEndEvent event(name, from, reason);
+	BroadcastToScript(event, target->GetScheduler()->GetScript(), postImplement);
+}
+
 void UForeverStoryFrameworkComponent::ApplyControlChange(const ChangeControlChange* change, const ScriptContext& context) {
 	FString name = UTF8_TO_TCHAR(ToString(EvaluateExpression(change->GetName(), context)).data());
 

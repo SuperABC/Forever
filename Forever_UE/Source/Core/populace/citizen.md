@@ -93,3 +93,8 @@
 
 ## 行走实例化概率
 `GetWalkInstantiateProbability/SetWalkInstantiateProbability/RollWalkInstantiable/IsWalkInstantiable`：见 ForeverPopulaceFrameworkComponent.md“行走实例化概率”。
+
+## 逃跑状态（2026-11-19）
+`fleeFrom`(要远离的市民姓名，空=没在逃)：`GetFleeFrom/SetFleeFrom/IsFleeing`，随人口段存档(walkSpeedJitter之后)。具体行为在UE层(CitizenController的Flee指令)，读档后市民生成Actor时`ResumeFleeOnSpawn`接着逃。
+
+`SetWalkInstantiable(bool)`：强制标记这趟行走不参与实例化(流式生成发现和已实例化市民重叠<1m时用)。

@@ -376,6 +376,21 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		return;
 	}
 
+	if (auto* flee = dynamic_cast<const CitizenFleeChange*>(change)) {
+		// name/from都是市民姓名：先按原样查，查不到再当表达式求值后查(和npc_navigate一致)。
+		auto findByName = [&](const std::string& text) -> Citizen* {
+			Citizen* found = populace ? populace->FindCitizenByName(text) : nullptr;
+			if (!found && populace && !text.empty()) found = populace->FindCitizenByName(ToString(EvaluateExpression(text, context)));
+			return found;
+		};
+		Citizen* citizen = findByName(flee->GetName());
+		Citizen* target = findByName(flee->GetFrom());
+		if (citizen && populaceFramework) {
+			populaceFramework->RequestFlee(citizen, target, (flee->GetFrom().empty() ? std::string() : ToString(EvaluateExpression(flee->GetFrom(), context))));
+		}
+		return;
+	}
+
 	if (auto* assign = dynamic_cast<const AssignTaskChange*>(change)) {
 		// 组织派员工去某地(走路或开组织的车，单程)。只有组织脚本能发；字段都是表达式。一次尝试，派不出去给组织脚本发task_failed。
 		Organization* organization = society ? society->FindOrganizationByScript(context.self) : nullptr;

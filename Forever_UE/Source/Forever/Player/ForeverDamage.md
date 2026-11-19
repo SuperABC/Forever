@@ -23,6 +23,7 @@
 
 ## 待办/后续阶段
 
-- "受到伤害"事件(伤害结算后给受害者/攻击者的脚本发事件)还没做；做了之后`single_damage`/`area_damage`的击杀信息字段可能调整。
+- 受伤事件已做(2026-11-19)：`DamageCitizen`里`TakeDamage`之后，没死就发`citizen_injured`(attacker=source、weapon、part、damage、health)，
+  致死的那一击只发`citizen_decease`；单体/范围伤害都走这里不区分。攻击者那边仍没有"造成伤害"事件。
 - 载具受到伤害(`DamageVehicle`、`single_damage`的`target`支持载具)。
 - `area_damage`的遮挡只测中心到中心一条线，不做部分遮挡比例；没有`ignore`字段(手雷会炸到自己)。

@@ -115,3 +115,6 @@ Core层`Story::ApplyChange`不认识`AActor`/`APlayerController`/UMG Widget，�
 ## 跳时间相关
 - `ResolveJumpTarget(change, context, out)`：jump_time目标时刻(和create_timer共用匿名函数`ResolveTimerTarget`)，返回是否需要跳。
 - `DrainExpiredTimers(maxIterations)`：把到期的game计时器全部发完(不推进real计时器)，供跳时间每一步使用；`FireExpiredTimers`也走同一个`FireTimerBatch`。
+
+- **`BroadcastCitizenInjured(event)`**：受伤事件，发给主脚本和受伤者自己的Scheduler脚本(同`BroadcastCitizenDecease`)。
+- **`BroadcastFleeStart(name, from, destination)` / `BroadcastFleeEnd(name, from, reason)`**：只发给逃跑者自己的Scheduler脚本。

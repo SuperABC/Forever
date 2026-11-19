@@ -153,6 +153,7 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		w.U8(c->walkInstantiable ? 1 : 0);
 		w.F32(c->walkSpeedScale);
 		w.F32(c->walkSpeedJitter);
+		w.Str(c->fleeFrom);
 	}
 
 	// 班级。
@@ -356,6 +357,7 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			c->walkInstantiable = r.U8() != 0;
 			c->walkSpeedScale = r.F32();
 			c->walkSpeedJitter = r.F32();
+			c->fleeFrom = r.Str();
 		}
 		auto citizenAt = [&](int index) -> Citizen* {
 			return (index >= 0 && index < static_cast<int>(citizens.size())) ? citizens[index] : nullptr;

@@ -142,6 +142,110 @@ void UForeverPopulaceFrameworkComponent::HandOffWalkToElement(Citizen* citizen, 
 	element->WalkTo(waypoints, destination);
 }
 
+namespace {
+	// 逃跑速度是走路速度的倍数。
+	constexpr float kFleeSpeedMultiplier = 4.f;
+	// 流式生成市民时，和已实例化市民的最小间距(uu，1m)。
+	constexpr float kSpawnMinSeparation = 100.f;
+}
+
+void UForeverPopulaceFrameworkComponent::RequestFlee(Citizen* citizen, Citizen* target, const std::string& fromName) {
+	if (!citizen) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr;
+	const std::string name = citizen->GetName();
+
+	// 不能逃的直接返回：不进入逃跑状态，也不发事件。
+	if (!target || target == citizen || !citizen->IsActive() || !target->IsActive()) return;
+	ACitizenElement* element = FindActiveCitizen(citizen);
+	if (!element) return; // 不在场景里(没实例化)：没有可逃的
+	if (element->IsPlayerControlled() || bTimeSkipping) return;
+
+	// 和RequestWalk一样处理通勤/任务：人在车里的不逃，还在走向车的取消行程。
+	if (Traffic* traffic = GetTrafficCore()) {
+		if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
+			if (task->phase == Traffic::TaskPhase::Driving) return;
+			AbortTaskOfWorker(citizen);
+		}
+		if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen)) {
+			if (trip->phase == Traffic::CommutePhase::Driving) return;
+			CancelCommute(citizen);
+		}
+	}
+
+	const bool bAlreadyFleeing = citizen->IsFleeing();
+	// 要回到的房间：必须在清掉走路指令、置空currentRoom之前取(正在走路=目的房间，没在走=当前房间)。
+	const std::string returnAddress = bAlreadyFleeing ? std::string() : DescribeReturnAddress(citizen);
+	++latestWalkRequest.FindOrAdd(citizen); // 在途的寻路结果作废，逃跑取代走路
+	citizen->SetFleeFrom(target->GetName());
+	citizen->SetCurrentRoom(nullptr); // 出发后在路上，不属于任何房间(和走路一样)
+	element->FleeFrom(target, kFleeSpeedMultiplier * citizen->GetWalkSpeedJitter());
+	if (!bAlreadyFleeing && story) story->BroadcastFleeStart(name, target->GetName(), returnAddress);
+}
+
+bool UForeverPopulaceFrameworkComponent::PlanFleeStart(const FVector& location, const FVector& awayFrom, FVector& outPoint,
+	int32& outNode, int32& outPrev) const {
+	if (!map) return false;
+	Map::FleeStep step = map->StartPedestrianFlee(location.X / POPULACE_WORLD_SCALE, location.Y / POPULACE_WORLD_SCALE,
+		awayFrom.X / POPULACE_WORLD_SCALE, awayFrom.Y / POPULACE_WORLD_SCALE);
+	if (!step.ok) return false;
+	outPoint = FVector(step.x, step.y, step.z) * POPULACE_WORLD_SCALE;
+	outNode = step.nodeId;
+	outPrev = step.prevNodeId;
+	return true;
+}
+
+bool UForeverPopulaceFrameworkComponent::PlanFleeNext(int32 node, int32 prev, const FVector& awayFrom, FVector& outPoint,
+	int32& outNode, int32& outPrev) const {
+	if (!map) return false;
+	Map::FleeStep step = map->NextPedestrianFlee(node, prev, awayFrom.X / POPULACE_WORLD_SCALE, awayFrom.Y / POPULACE_WORLD_SCALE);
+	if (!step.ok) return false;
+	outPoint = FVector(step.x, step.y, step.z) * POPULACE_WORLD_SCALE;
+	outNode = step.nodeId;
+	outPrev = step.prevNodeId;
+	return true;
+}
+
+bool UForeverPopulaceFrameworkComponent::IsFleeRangeExceeded(const FVector& location) const {
+	const APawn* pawn = GetWorld() ? UGameplayStatics::GetPlayerPawn(GetWorld(), 0) : nullptr;
+	if (!pawn) return false;
+	const float limit = citizenDespawnDistance * POPULACE_WORLD_SCALE * movingDistanceScale * 0.9f;
+	return StreamingDistance(pawn->GetActorLocation(), location) > limit;
+}
+
+void UForeverPopulaceFrameworkComponent::NotifyFleeEnded(Citizen* citizen, const char* reason) {
+	if (!citizen) return;
+	const std::string from = citizen->GetFleeFrom();
+	citizen->SetFleeFrom(std::string());
+	if (!GetWorld() || GetWorld()->bIsTearingDown) return; // 关卡正在卸载：Actor销毁引发的打断不再发事件
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr) {
+		story->BroadcastFleeEnd(citizen->GetName(), from, reason ? reason : "interrupted");
+	}
+}
+
+std::string UForeverPopulaceFrameworkComponent::DescribeReturnAddress(Citizen* citizen) const {
+	if (!citizen) return std::string();
+	Room* destination = nullptr;
+	if (const TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen); existing && *existing) {
+		if (const ACitizenController* controller = (*existing)->GetCitizenController()) destination = controller->GetCurrentDestination();
+	}
+	if (!destination) destination = citizen->GetWalkDestination();
+	if (!destination) destination = citizen->GetCurrentRoom();
+	return destination ? destination->GetAddress() : std::string();
+}
+
+void UForeverPopulaceFrameworkComponent::ResumeFleeOnSpawn(Citizen* citizen, ACitizenElement* element) {
+	if (!citizen || !element || !citizen->IsFleeing()) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	Citizen* target = (framework && framework->GetPopulace()) ? framework->GetPopulace()->FindCitizenByName(citizen->GetFleeFrom()) : nullptr;
+	if (!target || !target->IsActive()) {
+		NotifyFleeEnded(citizen, "lost");
+		return;
+	}
+	element->FleeFrom(target, kFleeSpeedMultiplier * citizen->GetWalkSpeedJitter());
+}
+
 void UForeverPopulaceFrameworkComponent::AddCitizen(Citizen* citizen) {
 	if (citizen) allCitizens.AddUnique(citizen);
 }
@@ -679,7 +783,8 @@ bool UForeverPopulaceFrameworkComponent::GetTransitPosition(Citizen* citizen, FV
 	if (!citizen) return false;
 	if (const TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen); existing && *existing) {
 		const ACitizenController* controller = (*existing)->GetCitizenController();
-		if (!controller || !controller->HasCommands()) return false;
+		// 没在走但也不在任何房间(逃跑结束后停在半路)：就站在原地，当作在路上，新的导航从这里起算。
+		if ((!controller || !controller->HasCommands()) && citizen->GetCurrentRoom()) return false;
 		// Actor位置是胶囊体中心，路径点是脚底高度。
 		outFeet = (*existing)->GetActorLocation() - FVector(0.f, 0.f, (*existing)->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 		return true;
@@ -1055,6 +1160,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 			if (!citizen || !citizen->IsActive() || activeInstances.Contains(citizen)) continue;
 			if (ACitizenElement* element = SpawnCitizen(citizen)) {
 				HandOffWalkToElement(citizen, element, restoreNow);
+				ResumeFleeOnSpawn(citizen, element);
 				restored++;
 			}
 		}
@@ -1118,10 +1224,25 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 				respawnBlockedUntil.Remove(citizen);
 			}
 			if (inRange) {
+				// 走路中的市民：和任一已实例化市民距离不足1m就不生成，这趟路后续都不再实例化(Core继续推算到走完)。
+				// 没在走路的市民不判断距离，直接生成；读档恢复等强制生成也不走这里。
+				const FVector spawnPoint(worldX, worldY, worldZ);
+				bool bOverlap = false;
+				if (moving) for (const auto& [activeCitizen, activeElement] : activeInstances) {
+					if (activeElement && FVector::DistSquared(activeElement->GetActorLocation(), spawnPoint) < kSpawnMinSeparation * kSpawnMinSeparation) {
+						bOverlap = true;
+						break;
+					}
+				}
+				if (bOverlap) {
+					citizen->SetWalkInstantiable(false);
+					continue;
+				}
 				ACitizenElement* element = SpawnCitizen(citizen);
 				spawnCount++;
 				if (element) (moving ? movingCount : stationaryCount)++;
 				if (element) HandOffWalkToElement(citizen, element, now);
+				if (element) ResumeFleeOnSpawn(citizen, element);
 			}
 		}
 		else {

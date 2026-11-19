@@ -1749,3 +1749,25 @@ private:
 	std::string source;
 	std::string weapon;
 };
+
+// 市民逃跑：让name这个市民沿行人导航线远离from这个市民(不一定是玩家，任何市民都行)，4倍走路速度，
+// 没有路线序列，逐个导航节点向"最背离目标"的方向推进，直到跑出实例化距离阈值或目标消失，之后发flee_end。
+// 两个字段都是表达式源码，求值结果是市民姓名；被玩家占有/在车里的市民不逃。
+class CitizenFleeChange : public Change {
+public:
+	CitizenFleeChange();
+
+	CitizenFleeChange(std::string name, std::string from);
+
+	virtual ~CitizenFleeChange();
+
+	virtual const std::string& GetType() const override;
+
+	const std::string& GetName() const;
+
+	const std::string& GetFrom() const;
+
+private:
+	std::string name;
+	std::string from;
+};

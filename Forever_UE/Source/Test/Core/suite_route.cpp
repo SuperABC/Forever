@@ -126,12 +126,51 @@ namespace {
 		run.Check(failed * 20 <= samples, "at most 5% of random slot-to-slot vehicle routes fail",
 			to_string(failed) + "/" + to_string(samples));
 	}
+	// 逃跑选路(Map::StartPedestrianFlee/NextPedestrianFlee)：从随机房间旁出发、远离随机点，连走40步，
+	// 每一步都要选得出来，度数>=2的节点不回头，整体离"远离点"越来越远(最终距离>=起点距离)。
+	void CheckFlee(TestWorld& world, unsigned long long seed) {
+		TestRun& run = TestRun::Get();
+		vector<Room*> rooms;
+		for (const auto& [name, building] : world.map->GetBuildings()) {
+			for (Room* room : building->GetRooms()) if (room->GetNavigationNode()) rooms.push_back(room);
+		}
+		if (rooms.size() < 2) return;
+		Pick pick(seed ^ 0x51ed270b0b1d4eaeULL);
+		const auto& graph = world.map->GetPedestrianNavGraph();
+		int started = 0, stepFailures = 0, reversals = 0, notFarther = 0, samples = 200;
+		for (int i = 0; i < samples; i++) {
+			Node* start = rooms[pick.Next(rooms.size())]->GetNavigationNode();
+			Node* away = rooms[pick.Next(rooms.size())]->GetNavigationNode();
+			if (!start || !away) continue;
+			Map::FleeStep step = world.map->StartPedestrianFlee(start->GetX(), start->GetY(), away->GetX(), away->GetY());
+			if (!step.ok) continue;
+			started++;
+			const float startDx = step.x - away->GetX(), startDy = step.y - away->GetY();
+			float lastDx = startDx, lastDy = startDy;
+			for (int n = 0; n < 40; n++) {
+				auto it = graph.find(step.nodeId);
+				const size_t degree = it == graph.end() ? 0 : it->second.size();
+				Map::FleeStep next = world.map->NextPedestrianFlee(step.nodeId, step.prevNodeId, away->GetX(), away->GetY());
+				if (!next.ok) { stepFailures++; break; }
+				if (degree >= 2 && next.nodeId == step.prevNodeId) reversals++;
+				step = next;
+				lastDx = step.x - away->GetX(); lastDy = step.y - away->GetY();
+			}
+			if (lastDx * lastDx + lastDy * lastDy + 1e-3f < startDx * startDx + startDy * startDy) notFarther++;
+		}
+		run.Metric("flee samples started", started, "");
+		run.Check(started > samples / 2, "flee start finds a nearest pedestrian line");
+		run.Check(stepFailures == 0, "flee steps are always selectable");
+		run.Check(reversals == 0, "flee does not turn back at nodes with 2+ neighbours");
+		run.Metric("flee runs ending closer to the target", notFarther, "");
+	}
 }
 
 void RouteSuiteBody(TestWorld& world, const TestOptions& options) {
 	const unsigned long long seed = options.childSeed ? options.childSeed : 1;
 	MeasurePedestrians(world, options, seed);
 	MeasureVehicles(world, options, seed);
+	CheckFlee(world, seed);
 }
 
 void RunRouteSuite(const TestOptions& options) {

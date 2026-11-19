@@ -2784,21 +2784,111 @@ vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>
 	return idPath;
 }
 
+void Map::EnsureNodeIndex() const {
+	std::lock_guard<std::mutex> lock(nodeIndexMutex);
+	const vector<Node*>& externs = GetExterns();
+	if (nodeIndexAnchorCount != navAnchorNodes.size() || nodeIndexExternCount != externs.size()) {
+		nodeIndex.clear();
+		for (const Node* node : navAnchorNodes) nodeIndex[node->GetId()] = node;
+		for (const Node* node : externs) nodeIndex[node->GetId()] = node;
+		nodeIndexAnchorCount = navAnchorNodes.size();
+		nodeIndexExternCount = externs.size();
+	}
+}
+
+namespace {
+	// 单位化(dx,dy)；零向量返回(0,0)。
+	void NormalizeFlee(float& dx, float& dy) {
+		float length = std::sqrt(dx * dx + dy * dy);
+		if (length < 1e-6f) { dx = 0.f; dy = 0.f; return; }
+		dx /= length; dy /= length;
+	}
+}
+
+Map::FleeStep Map::StartPedestrianFlee(float x, float y, float awayFromX, float awayFromY) const {
+	FleeStep step;
+	EnsureNodeIndex();
+	// 最近的行人线：双向边只看一个方向(id < 邻居id)，点到线段的水平距离。
+	float bestDistance = FLT_MAX;
+	int bestA = -1, bestB = -1;
+	for (const auto& [id, neighbors] : pedestrianNavGraph) {
+		auto itA = nodeIndex.find(id);
+		if (itA == nodeIndex.end()) continue;
+		const Node* a = itA->second;
+		for (const auto& [neighborId, connection] : neighbors) {
+			if (neighborId < id) continue;
+			auto itB = nodeIndex.find(neighborId);
+			if (itB == nodeIndex.end()) continue;
+			const Node* b = itB->second;
+			float abx = b->GetX() - a->GetX(), aby = b->GetY() - a->GetY();
+			float lengthSq = abx * abx + aby * aby;
+			float t = lengthSq > 1e-9f ? ((x - a->GetX()) * abx + (y - a->GetY()) * aby) / lengthSq : 0.f;
+			t = max(0.f, min(1.f, t));
+			float px = a->GetX() + abx * t - x, py = a->GetY() + aby * t - y;
+			float distance = px * px + py * py;
+			if (distance < bestDistance) { bestDistance = distance; bestA = id; bestB = neighborId; }
+		}
+	}
+	if (bestA < 0) return step;
+
+	// 两个端点里选更背离目标的：端点方向(相对市民)和"目标→市民"方向的点积大者。
+	float awayX = x - awayFromX, awayY = y - awayFromY;
+	NormalizeFlee(awayX, awayY);
+	const Node* a = nodeIndex.at(bestA);
+	const Node* b = nodeIndex.at(bestB);
+	auto score = [&](const Node* node) {
+		float dx = node->GetX() - x, dy = node->GetY() - y;
+		NormalizeFlee(dx, dy);
+		return dx * awayX + dy * awayY;
+	};
+	const bool chooseA = score(a) >= score(b);
+	const Node* next = chooseA ? a : b;
+	step.ok = true;
+	step.nodeId = next->GetId();
+	step.prevNodeId = chooseA ? bestB : bestA;
+	step.x = next->GetX(); step.y = next->GetY(); step.z = next->GetZ();
+	return step;
+}
+
+Map::FleeStep Map::NextPedestrianFlee(int nodeId, int prevNodeId, float awayFromX, float awayFromY) const {
+	FleeStep step;
+	EnsureNodeIndex();
+	auto graphIt = pedestrianNavGraph.find(nodeId);
+	auto nodeIt = nodeIndex.find(nodeId);
+	if (graphIt == pedestrianNavGraph.end() || nodeIt == nodeIndex.end()) return step;
+	const Node* here = nodeIt->second;
+	float awayX = here->GetX() - awayFromX, awayY = here->GetY() - awayFromY;
+	NormalizeFlee(awayX, awayY);
+
+	float bestScore = -FLT_MAX;
+	const Node* best = nullptr;
+	bool hasPrev = false;
+	for (const auto& [neighborId, connection] : graphIt->second) {
+		if (neighborId == prevNodeId) { hasPrev = true; continue; } // 不回头，死胡同时再用
+		auto it = nodeIndex.find(neighborId);
+		if (it == nodeIndex.end()) continue;
+		float dx = it->second->GetX() - here->GetX(), dy = it->second->GetY() - here->GetY();
+		NormalizeFlee(dx, dy);
+		float score = dx * awayX + dy * awayY;
+		if (score > bestScore) { bestScore = score; best = it->second; }
+	}
+	if (!best && hasPrev) {
+		auto it = nodeIndex.find(prevNodeId);
+		if (it != nodeIndex.end()) best = it->second;
+	}
+	if (!best) return step;
+	step.ok = true;
+	step.nodeId = best->GetId();
+	step.prevNodeId = nodeId;
+	step.x = best->GetX(); step.y = best->GetY(); step.z = best->GetZ();
+	return step;
+}
+
 vector<const Node*> Map::FindPedestrianPath(int fromNodeId, int toNodeId) const {
 	// id -> 拥有生命周期的Node*，供按id序列反查真正的指针（Connection::GetStart()/GetEnd()
 	// 返回的是Node副本，不能直接拿它们的地址）。缓存起来，节点数量变了才重建。
 	// 只在检查/重建时持锁；之后多个线程并发只读nodeIndex（重建只会发生在地图生成阶段，那时还没有异步寻路）。
-	{
-		std::lock_guard<std::mutex> lock(nodeIndexMutex);
-		const vector<Node*>& externs = GetExterns();
-		if (nodeIndexAnchorCount != navAnchorNodes.size() || nodeIndexExternCount != externs.size()) {
-			nodeIndex.clear();
-			for (const Node* node : navAnchorNodes) nodeIndex[node->GetId()] = node;
-			for (const Node* node : externs) nodeIndex[node->GetId()] = node;
-			nodeIndexAnchorCount = navAnchorNodes.size();
-			nodeIndexExternCount = externs.size();
-		}
-	}
+	EnsureNodeIndex();
 
 	vector<int> idPath = FindPath(pedestrianNavGraph, fromNodeId, toNodeId, &nodeIndex);
 	if (idPath.empty()) return {};

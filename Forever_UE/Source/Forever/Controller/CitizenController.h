@@ -8,6 +8,7 @@
 
 class ACitizenElement;
 class Room;
+class Citizen;
 class Connection;
 class JunctionTraffic;
 class UForeverTrafficFrameworkComponent;
@@ -21,6 +22,9 @@ struct FCharacterCommand
 		FollowPath,
 		// Controller自己向framework要一条从当前位置到room的行人路径再走（见UForeverPopulaceFrameworkComponent::PlanWalkPath）。
 		GoToRoom,
+		// 逃跑：沿行人导航线逐个节点远离fleeTarget，没有路线序列(waypoints是边走边追加的，始终比当前目标点多提前一个)，
+		// 直到跑出销毁距离阈值(far)或目标没了(lost)，被别的指令取代/清空算interrupted，结束时回调framework->NotifyFleeEnded。
+		Flee,
 	};
 
 	EType type = EType::FollowPath;
@@ -28,6 +32,7 @@ struct FCharacterCommand
 	Room* room = nullptr;
 	float speedScale = 1.f;       // 走路速度倍率
 	bool bExemptDespawn = false;  // 执行期间不被距离流式销毁
+	Citizen* fleeTarget = nullptr; // 仅Flee：要远离的市民
 
 	static FCharacterCommand MakeFollowPath(const TArray<FVector>& inWaypoints, Room* inRoom)
 	{
@@ -35,6 +40,16 @@ struct FCharacterCommand
 		command.type = EType::FollowPath;
 		command.waypoints = inWaypoints;
 		command.room = inRoom;
+		return command;
+	}
+
+	static FCharacterCommand MakeFlee(Citizen* inTarget, float inSpeedScale)
+	{
+		FCharacterCommand command;
+		command.type = EType::Flee;
+		command.fleeTarget = inTarget;
+		command.speedScale = inSpeedScale;
+		command.bExemptDespawn = true; // 逃跑中不被距离销毁(逃出阈值时自己结束)，也不被卡住检测强制交回Core
 		return command;
 	}
 
@@ -70,6 +85,8 @@ public:
 	// 当前FollowPath指令的剩余路径（世界坐标，第一个点是市民当前位置）和目标房间。没有可走的指令返回false。
 	// 市民被流式销毁时用它把行进交还给Core（Citizen::ResumeWalk），"你在去哪"折线也用它。
 	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination) const;
+	// 当前指令正在逃跑时把要远离的目标换成target(不重新开始、不发事件)并返回true；否则返回false。
+	bool RetargetFlee(Citizen* target);
 
 	virtual void OnPossess(APawn* inPawn) override;
 	virtual void OnUnPossess() override;
@@ -81,6 +98,13 @@ private:
 	bool GateCrosswalk(ACitizenElement* element, const FCharacterCommand& command, const FVector& toTarget);
 	void ReleaseCrosswalk();
 
+	// 逃跑：每0.25秒检查结束条件和跑向(跑向目标就立刻掉头)，返回true=这条指令已经结束(command失效)。
+	bool TickFlee(ACitizenElement* element, FCharacterCommand& command, float deltaTime);
+	// 从当前尾节点再选一个更背离目标的节点追加成路径点，选不出来返回false。
+	bool ExtendFlee(FCharacterCommand& command);
+	// 保证路径点始终比当前目标点多提前一个(跨过横道的判定要看下一个点)。
+	void ExtendFleeAhead(FCharacterCommand& command);
+
 	void BeginCommand(FCharacterCommand& command);
 	// arrived=true 表示走到了终点；false 表示被打断。
 	void EndCommand(bool arrived);
@@ -91,6 +115,14 @@ private:
 	bool bCommandStarted = false;
 	int32 waypointIndex = 0;
 	float savedMaxWalkSpeed = 0.f;
+
+	// 逃跑状态：路径尾节点和它的"前一个节点"(下一步不回头)，目标最近一次检查到的位置，检查计时，结束原因(空=按arrived判断)。
+	int32 fleeTailNode = -1;
+	int32 fleePrevNode = -1;
+	FVector fleeTargetLocation = FVector::ZeroVector;
+	float fleeCheckTimer = 0.f;
+	float fleeTurnCooldown = 0.f; // 掉头之后的冷却(秒)，避免在两个都朝向目标的端点之间来回抖
+	const char* fleeEndReason = nullptr;
 
 	// 前进方向的横向扰动：相向而行的两个人沿同一条线对撞时会顶牛，每个人加一个随时间缓慢摆动的横向分量
 	// （相位每人随机），两人摆到不同侧就错开了。amplitude是横向分量占前进分量的比例（0=关闭），

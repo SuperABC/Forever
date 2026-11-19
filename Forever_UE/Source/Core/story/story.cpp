@@ -130,16 +130,10 @@ void Story::RemoveTimer(const string& name, const string& ownerKey) {
 
 vector<StoryTimer> Story::PopExpiredTimers(const Time& now, size_t maxCount) {
 	vector<StoryTimer> expired;
-	// 游戏时间计时器已按到时时刻排好，只弹队首；同一时刻的保持创建先后。
-	while (expired.size() < maxCount && !gameTimers.empty() && gameTimers.begin()->first <= now) {
-		auto it = gameTimers.begin();
-		timerIndex.erase({ it->second.name, it->second.ownerKey });
-		expired.push_back(std::move(it->second));
-		gameTimers.erase(it);
-	}
-	// 现实时间计时器排在后面，按剩余时间(越负越早到)。
+	// 现实时间计时器(手雷引信这类要求准时的)排在最前面，按剩余时间(越负越早到)，不占maxCount：
+	// 整点几千个游戏时间计时器同时到时会把每帧的名额占满，现实计时器排在后面会被饿住好几秒。数量很少，不会造成卡顿。
 	vector<StoryTimer> realExpired;
-	for (size_t i = 0; i < realTimers.size() && expired.size() + realExpired.size() < maxCount;) {
+	for (size_t i = 0; i < realTimers.size();) {
 		if (realTimers[i].remaining <= 0.0) {
 			realExpired.push_back(std::move(realTimers[i]));
 			realTimers.erase(realTimers.begin() + i);
@@ -152,6 +146,15 @@ vector<StoryTimer> Story::PopExpiredTimers(const Time& now, size_t maxCount) {
 		return a.remaining < b.remaining;
 		});
 	for (StoryTimer& timer : realExpired) expired.push_back(std::move(timer));
+	// 游戏时间计时器已按到时时刻排好，只弹队首；同一时刻的保持创建先后。
+	size_t gameCount = 0;
+	while (gameCount < maxCount && !gameTimers.empty() && gameTimers.begin()->first <= now) {
+		auto it = gameTimers.begin();
+		timerIndex.erase({ it->second.name, it->second.ownerKey });
+		expired.push_back(std::move(it->second));
+		gameTimers.erase(it);
+		gameCount++;
+	}
 	return expired;
 }
 

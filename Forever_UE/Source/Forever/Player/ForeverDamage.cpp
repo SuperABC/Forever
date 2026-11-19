@@ -46,11 +46,19 @@ void FForeverDamage::DamageCitizen(UWorld* world, ACitizenElement* target, float
 	if (!citizen || citizen->IsDead()) return;
 
 	citizen->TakeDamage(damage);
-	if (!citizen->IsDead()) return;
 
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(
 		UGameplayStatics::GetActorOfClass(world, AForeverFrameworkActor::StaticClass()));
 	if (!framework) return;
+
+	if (!citizen->IsDead()) {
+		// 受伤(没死)：发citizen_injured(单体/范围伤害都走这里，不区分)。致死的那一击只发下面的citizen_decease。
+		if (framework->GetStoryFramework()) {
+			CitizenInjuredEvent injured(citizen->GetName(), source, weapon, part, damage, citizen->GetHealth());
+			framework->GetStoryFramework()->BroadcastCitizenInjured(injured);
+		}
+		return;
+	}
 
 	if (framework->GetStoryFramework()) {
 		// 击杀信息：凶手(source姓名)、武器种类、命中部位、致死伤害、凶手是否可见、死亡地址。

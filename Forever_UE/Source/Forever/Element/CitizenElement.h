@@ -39,6 +39,10 @@ public:
 	// 见Controller/CitizenController.h。
 	void WalkTo(const TArray<FVector>& waypoints, Room* destination);
 
+	// 逃跑：已经在逃就只把要远离的目标换成target；否则取代当前所有指令，开始以speedScale倍速沿行人导航线远离target，
+	// 见FCharacterCommand::EType::Flee。
+	void FleeFrom(Citizen* target, float speedScale);
+
 	// 自己的AI Controller（Init里创建，随Actor销毁）。玩家占有期间它不是GetController()，但对象仍在。
 	ACitizenController* GetCitizenController() const { return aiController; }
 	UForeverPopulaceFrameworkComponent* GetFramework() const { return framework.Get(); }

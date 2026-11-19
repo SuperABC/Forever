@@ -80,3 +80,7 @@ milestone内容。`script->SetValue("name", ...)`填的是`citizen->GetName()`�
 - 被谁依赖：`Citizen`（持有所有权，`~Citizen()`里delete）、
   `Populace::AssignSchedulers()`（构造时`new Scheduler(...)`）、
   `Populace::Tick`（驱动调度）。
+
+## 公共脚本 citizen_common（2026-11-19）
+`Resource/Story/citizen_common.script`是所有市民共用的基础事件响应(里程碑名`common_`前缀，避免同名覆盖)：`common_injured`(逃离攻击者)、`common_flee_start`(记要回到的房间)、`common_flee_end`(导航回去)、`common_decease`(清状态)。
+Scheduler mod在`SetProperty`里把`"citizen_common"`加进`milestoneNames`即可(`SchedulerBasic`已加)，自己独立的逻辑照常写在自己的脚本里。

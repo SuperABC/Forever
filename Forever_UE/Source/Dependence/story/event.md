@@ -134,3 +134,11 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 
 `use_asset`(无过滤字段)：玩家在背包里"使用"一件可用资产(`AssetMod::usable`非0)时，由`UInventoryWidget::HandleUse`调`NotifyUseAsset`发出，只发给这件资产自己的脚本(没有脚本不发)，同步处理完才扣数量/销毁。
 脚本里读`$$local.asset`(资产名)、`$$local.type`(资产mod id)、`$$local.user`(使用者市民姓名)。用法：`Resource/Story/asset_burger.script`(`use_asset`→`add_satiety`)。
+
+## citizen_injured / flee_start / flee_end（2026-11-19）
+
+- `citizen_injured`：市民受伤没死(单体/范围伤害都发，不区分)，发给主脚本和受伤者自己的Scheduler脚本(同`citizen_decease`)。过滤字段`name/attacker/weapon/part`可省略。
+  `$$local`：`name`、`attacker`(攻击者姓名，可为空)、`weapon`、`part`、`damage`(本次)、`health`(剩余)。
+- `flee_start`(`name`、`from`)：`citizen_flee`真的生效(开始逃跑，已在逃的只换目标不发)时发给逃跑者自己的Scheduler脚本。`$$local.destination`=开始逃跑时要回到的房间地址(正在走路=目的房间，没在走=当前所在房间，都没有=空串)，不能做过滤。被拒绝的逃跑(没实例化/被玩家占有/在车里等)不发任何事件。
+- `flee_end`(`name`、`from`、`reason`)：逃跑结束发给逃跑者自己的Scheduler脚本。`reason`：`far`(跑出实例化距离阈值)、`lost`(要远离的市民没了)、`interrupted`(被新导航/任务/瞬移/死亡/玩家接管打断)。
+- 公共脚本`Resource/Story/citizen_common.script`串起来：`citizen_injured`→`citizen_flee`；`flee_start`→记`self.flee_dest=$$local.destination`；`flee_end`(reason非interrupted)→`npc_navigate`回去并清记录。

@@ -238,3 +238,9 @@ Core里没有任何枪/伤害专用逻辑，`Citizen::TakeDamage`只管扣血。
 
 `add_satiety`(`target`、`amount`，都是表达式)：给一个市民的饱食度加`amount`(可为负，结果截断到[0,1])。`target`是市民姓名，留空=玩家当前操控的市民；
 没实例化动态属性的市民先`ActivateStats()`。UE层由`UForeverAssetFrameworkComponent::ApplyAddSatiety`执行。用法：`Resource/Story/asset_burger.script`(`use_asset`→`add_satiety`，`target: $$local.user`)。
+
+## citizen_flee（2026-11-19）
+
+`{ "type": "citizen_flee", "name": "<市民>", "from": "<要远离的市民>" }`，两个字段都是表达式(求值结果是市民姓名)，`from`可以是任何市民(不一定是玩家)。
+让`name`沿行人导航线以4倍走路速度逐节点远离`from`，跑的方向一旦变成朝向`from`(夹角<90度)就立刻掉头，直到跑出实例化距离阈值或`from`消失，结束发`flee_end`；开始发`flee_start`。执行见`UForeverPopulaceFrameworkComponent::RequestFlee`和
+`CitizenController`的Flee指令；已在逃的只换目标。没有Actor/被玩家占有/在车里的市民不逃，静默返回(不进入逃跑状态、不发任何事件)。

@@ -14,5 +14,5 @@ const char* SchedulerBasic::GetName() {
 
 void SchedulerBasic::SetProperty() {
 	scriptModName = "script_empty";
-	milestoneNames = { "schedule_empty" };
+	milestoneNames = { "schedule_empty", "citizen_common" };
 }

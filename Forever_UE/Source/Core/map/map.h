@@ -229,6 +229,23 @@ public:
 	// 对vehicleNavGraph寻路(共享私有FindPath)，返回依次经过的Connection*序列(公交线路要拼接真实车道几何，见traffic/route.md)；找不到返回空。
 	std::vector<Connection*> FindVehiclePath(int fromNodeId, int toNodeId) const;
 
+	// 逃跑选路(市民逃跑，见Forever层UForeverPopulaceFrameworkComponent::RequestFlee)：不规划整条路线，一个节点一个节点地选。
+	// FleeStep：ok=false表示选不出(行人图里没有线/节点)；否则nodeId/x/y/z是下一个要去的行人导航节点，prevNodeId是"刚来的节点"
+	// (下一步不回头走它)，没有时为-1。坐标是地图单位。
+	struct FleeStep {
+		bool ok = false;
+		int nodeId = -1;
+		int prevNodeId = -1;
+		float x = 0.f, y = 0.f, z = 0.f;
+	};
+	// 起点：找离(x,y)最近的行人导航线(点到线段水平距离最小)，在它的两个端点里选"更背离(awayFromX,awayFromY)"的那个当下一个节点，
+	// 另一个端点记作prevNodeId。(取线不取节点：市民通常站在两个节点之间的线上，取最近节点可能要先朝目标方向跑过去。)
+	// 一次要遍历全部行人边，只在开始逃跑时调用，不在每帧热路径上。
+	FleeStep StartPedestrianFlee(float x, float y, float awayFromX, float awayFromY) const;
+	// 到达nodeId之后：在它所有邻接线里选终点方向最背离(awayFromX,awayFromY)的那个节点，不回头走prevNodeId，
+	// 死胡同(只剩prevNodeId)才回头。节点不在行人图里返回ok=false。
+	FleeStep NextPedestrianFlee(int nodeId, int prevNodeId, float awayFromX, float awayFromY) const;
+
 	// 行人图里fromNodeId与toNodeId之间的边(双向边，两个方向查到同一个Connection*)；没有直接相连返回nullptr。
 	// 供FindPedestrianPath的结果回查边(路口管理按Connection*限行，见traffic/junction.md)，只读、线程安全。
 	Connection* FindPedestrianEdge(int fromNodeId, int toNodeId) const;
@@ -514,6 +531,8 @@ private:
 
 	// FindPedestrianPath用的"id -> Node*"索引缓存(节点上万，不能每次寻路重建)。线程池里的多个任务会同时调用，所以检查/重建时加锁；
 	// 节点数量变了会自动重建。
+	// 按需(重)建nodeIndex(锚点/地图边缘残端数量变了才重建)，FindPedestrianPath和逃跑选路共用。
+	void EnsureNodeIndex() const;
 	mutable std::mutex nodeIndexMutex;
 	mutable std::unordered_map<int, const Node*> nodeIndex;
 	mutable size_t nodeIndexAnchorCount = (size_t)-1;

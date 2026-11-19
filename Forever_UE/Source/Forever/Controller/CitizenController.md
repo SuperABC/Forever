@@ -25,3 +25,10 @@
 
 ## 剩余路径
 `GetRemainingWaypoints(out, outDestination)`：当前 FollowPath 指令的剩余路径点和目的地。第一个点是市民当前位置，**换算成脚底高度**（Actor 位置减胶囊半高；路径点本身是脚底高度，否则折线/交还 Core 的路径整体抬高）。市民被流式销毁时用它把行进交还 Core（`Citizen::ResumeWalk`），"你在去哪"折线也用它。`GetCurrentDestination()` 供存档把走路中的市民记成"已经到了"。
+
+## 逃跑指令 Flee（2026-11-19）
+`FCharacterCommand::EType::Flee`(`fleeTarget`、`speedScale`=4×该市民扰动、`bExemptDespawn=true`)：没有路线序列，路径点边走边追加且始终比当前目标点多提前一个(给横道判定看下一点)。
+`BeginCommand`：`framework->PlanFleeStart`取最近行人线并选背离端点，再`ExtendFlee`提前选下一个；走到节点后`ExtendFleeAhead`→`PlanFleeNext`。`TickFlee`每0.25秒检查：目标没了(`FindActiveCitizen`为空/不活跃)=lost，
+`IsFleeRangeExceeded`(移动中销毁距离的9成)=far。路径选不下去(`EndCommand(true)`)=far；被清空/取代=interrupted。`EndCommand`里统一回调`NotifyFleeEnded(citizen, reason)`。
+`TickFlee`同一个0.25秒检查里还测跑的方向：前进方向(指向下一个路点)和"市民→目标"连线夹角小于90度就立刻掉头——以当前位置重新`PlanFleeStart`(最近线、背离端点)并整个换掉路径点，掉头后冷却0.75秒，过横道时不掉头。逃跑速度倍率4。
+`RetargetFlee`：已在逃时连续受伤只换目标。`GetRemainingWaypoints`对Flee返回false，存档时按"没路线"处理(位置照存、`fleeFrom`存档，读档后接着逃)。
