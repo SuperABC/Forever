@@ -501,9 +501,6 @@
     <ClInclude Include="map\terrain_file.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\terrain_args.h">
-      <Filter>map</Filter>
-    </ClInclude>
     <ClInclude Include="map\roadnet_file.h">
       <Filter>map</Filter>
     </ClInclude>

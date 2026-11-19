@@ -72,7 +72,7 @@
 
 - `<Concept>Factory`和对应的`<Concept>Mod`**同放在`Source/Dependence`,不放在`Source/Core`**——Mod DLL只链接`Dependence.lib`,如果`Factory`的方法实现编译进`Core.lib`,Mod就无法调用`factory->RegisterXxx(...)`这个方法。
 - **`GetId()`不放进`<Concept>Mod`基类**,只是具体mod子类自己的静态方法约定(如`PengzhanBuilding::GetId()`),不通过基类指针调用,也不是DLL导出符号本身。
-- **给mod传参数的唯一路径是`Factory::SetModArgs`+`Create<Concept>(id)`创建实例那一刻把参数字符串直接传给注册的creator函数**,不经过DLL导出函数的参数,也不经过创建后再调用的钩子方法。`config.json`里每个concept一个`"<concept>_mods"`数组,元素是`"id"`或`"id 参数..."`(命令行式写法);`CreateFunc`的函数指针类型是`<Concept>Mod*(*)(const std::string&)`,`RegisterX`只登记creator/deleter,不复制参数;mod自己的creator决定怎么用参数(传给具体子类构造函数最常见)。**两个被否掉的方案不要重新尝试**:按`dll_paths`根目录配一份共用参数经导出函数传给mod(和"每个mod id有自己的参数"的真实需求对不上);创建实例**之后**再调用`instance->ApplyArgs(args)`钩子(此时构造函数已经跑完,`const`成员没法再赋值,参数到手已经太晚)。
+- **给mod传参数的唯一路径是`Factory::SetModArgs`+`Create<Concept>(id)`创建实例那一刻把参数字符串直接传给注册的creator函数**,不经过DLL导出函数的参数,也不经过创建后再调用的钩子方法。`config.json`里每个concept一个`"<concept>_mods"`数组,元素是`"id"`或`"id 参数..."`(命令行式写法);`CreateFunc`的函数指针类型是`<Concept>Mod*(*)(const std::string&)`,`RegisterX`只登记creator/deleter,不复制参数;mod自己的creator决定怎么用参数(传给具体子类构造函数最常见)。**参数串统一用`Dependence/common/mod_args.h`的`ModArgs`解析**(`--key value`/`--key=value`/`--flag`，取值带默认值和范围夹取，见`mod_args.md`)，mod里不要再自己`istringstream`/`find("--xxx")`手写解析。**两个被否掉的方案不要重新尝试**:按`dll_paths`根目录配一份共用参数经导出函数传给mod(和"每个mod id有自己的参数"的真实需求对不上);创建实例**之后**再调用`instance->ApplyArgs(args)`钩子(此时构造函数已经跑完,`const`成员没法再赋值,参数到手已经太晚)。
 - **所有`XxxMod`具体子类的`GetName()`返回值必须在整个进程生命周期内全局唯一**——不能是固定的类型名字符串,同一类型创建多个实例时每个实例的名字都要不一样。统一用`static int count`+构造函数`id(count++)`+`GetName()`里现拼`name = <前缀> + std::to_string(id)`返回`name.data()`这个固定模式实现:
 
 ```cpp

@@ -1,4 +1,5 @@
 #include "roadnet_jing.h"
+#include "common/mod_args.h"
 
 #include <cmath>
 #include <algorithm>
@@ -118,14 +119,8 @@ namespace {
 int JingRoadnet::count = 0;
 
 JingRoadnet::JingRoadnet(const string& args) : id(count++) {
-	istringstream stream(args);
-	string token;
-	while (stream >> token) {
-		if (token == "--length") {
-			int value;
-			if (stream >> value) length = value;
-		}
-	}
+	ModArgs parsed(args);
+	length = parsed.GetInt("length", length);
 }
 
 JingRoadnet::~JingRoadnet() {

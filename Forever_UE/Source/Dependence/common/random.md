@@ -15,6 +15,7 @@
 
 ## 种子
 - `<concept>_mods`条目`--seed N` → 该mod流；顶层`"seed"` → Core各域(`hash(seed,域名)`)。不给=`random_device`，实际种子写日志`Random: <key> seed=N`。
+- `--seed`由Core在mod构造前从参数串里剥掉(`ExtractSeed`，用`ModArgs::Remove`，其余参数原样留给mod，见`mod_args.md`)，mod自己的参数里读不到它。
 - 存档：`world.random`段存每条流的seed+state，读档最后覆盖，见`Core/common/save.md`。
 - `puzzle_common.h`的`PuzzleRng`有自己的`seed`参数(显式传才用它)，缺省取种子时走GetRandom，因此自动受puzzle mod流控制。Wxdj战斗里的`mt19937`是战斗内部随机，不受此约束。
 

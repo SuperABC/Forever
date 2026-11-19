@@ -36,6 +36,9 @@
     <ClCompile Include="common\mod_state.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="common\mod_args.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
     <ClCompile Include="common\mod_test.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -207,6 +210,9 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="common\mod_state.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="common\mod_args.h">
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="common\mod_test.h">

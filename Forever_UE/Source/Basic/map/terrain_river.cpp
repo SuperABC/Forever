@@ -1,7 +1,7 @@
 #include "terrain_river.h"
 
 #include "common/utility.h"
-#include "terrain_args.h"
+#include "common/mod_args.h"
 
 #include <vector>
 #include <cmath>
@@ -93,7 +93,7 @@ static const int neighborOffsets[8][2] = { {1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1
 
 int RiverTerrain::count = 0;
 
-RiverTerrain::RiverTerrain(const string& args) : id(count++), distribute(ParseDistributeArg(args)) {
+RiverTerrain::RiverTerrain(const string& args) : id(count++), skip(ModArgs(args).GetBool("skip")) {
 
 }
 
@@ -131,7 +131,7 @@ void RiverTerrain::DistributeTerrain(int width, int height,
 	const function<float(int, int)>& getHeight, const function<bool(int, int, float)>& setHeight,
 	const function<bool(int, int, bool, float)>& setWater,
 	const function<bool(int, int, const float*)>& setFineHeights) const {
-	if (!distribute) return; // --distribute=false：只提供贴图，地形由别的mod(如terrain_file)给定
+	if (skip) return; // --skip：只提供贴图，地形由别的mod(如terrain_file)给定
 
 	int cellCount = width * height;
 	vector<float> heights(cellCount);

@@ -32,6 +32,6 @@ public:
 private:
 	static int count;
 	int id;
-	bool distribute = true; // --distribute=false时跳过DistributeTerrain，只提供贴图
+	bool skip = false; // --skip时跳过DistributeTerrain，只提供贴图
 	std::string name;
 };

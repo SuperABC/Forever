@@ -1,4 +1,5 @@
 #include "roadnet_checkboard.h"
+#include "common/mod_args.h"
 
 #include "common/utility.h"
 
@@ -127,26 +128,11 @@ namespace {
 int CheckboardRoadnet::count = 0;
 
 CheckboardRoadnet::CheckboardRoadnet(const string& args) : id(count++) {
-	istringstream stream(args);
-	string token;
-	while (stream >> token) {
-		if (token == "--merge") {
-			float value;
-			if (stream >> value) mergeProbability = max(0.f, min(1.f, value));
-		}
-		else if (token == "--bridge") {
-			float value;
-			if (stream >> value) bridgeProbability = max(0.f, min(1.f, value));
-		}
-		else if (token == "--min") {
-			int value;
-			if (stream >> value) minSpacing = value;
-		}
-		else if (token == "--max") {
-			int value;
-			if (stream >> value) maxSpacing = value;
-		}
-	}
+	ModArgs parsed(args);
+	mergeProbability = parsed.GetFloat("merge", mergeProbability, 0.f, 1.f);
+	bridgeProbability = parsed.GetFloat("bridge", bridgeProbability, 0.f, 1.f);
+	minSpacing = parsed.GetInt("min", minSpacing);
+	maxSpacing = parsed.GetInt("max", maxSpacing);
 	minSpacing = max(2, minSpacing);
 	maxSpacing = max(minSpacing, maxSpacing);
 }

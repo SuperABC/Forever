@@ -54,7 +54,7 @@
 
 ## 参数
 
-`--distribute=false`(`--distribute false`、`0/no/off` 同义)：跳过`DistributeTerrain`，只提供贴图(`SetupTexture`)。配合`terrain_file`用——地图由文件给定，这几个mod只负责让文件里的`terrain_river`字符串有材质。解析见`terrain_args.h`。
+`--skip`(flag，不带值；`--skip=false`/`0`/`no`/`off`等于没写)：跳过`DistributeTerrain`，只提供贴图(`SetupTexture`)。配合`terrain_file`用——地图由文件给定，这几个mod只负责让文件里的`terrain_river`字符串有材质。解析用统一的`ModArgs`(`Dependence/common/mod_args.h`)。
 
 ## 待办/后续阶段
 

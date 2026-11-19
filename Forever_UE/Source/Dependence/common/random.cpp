@@ -1,4 +1,5 @@
 #include "common/random.h"
+#include "common/mod_args.h"
 
 #include "common/utility.h"
 
@@ -142,27 +143,16 @@ uint64_t RandomRegistry::UnscopedDraws() { return currentHost ? currentHost->uns
 string RandomRegistry::ExtractSeed(const string& args, bool& hasSeed, uint64_t& seed) {
 	hasSeed = false;
 	seed = 0;
-	istringstream stream(args);
-	vector<string> tokens;
-	string token;
-	while (stream >> token) tokens.push_back(token);
-	string rest;
+	ModArgs parsed(args);
+	if (!parsed.Has("seed")) return args; // 没有--seed：参数串原样返回(不动引号里的空白)
+	string text = parsed.GetString("seed");
+	char* end = nullptr;
+	unsigned long long value = strtoull(text.c_str(), &end, 10);
+	if (text.empty() || end == text.c_str() || *end != '\0') return args; // 值不是数字：当没写，原样留给mod
 	bool found = false;
-	for (const string& t : tokens) if (t == "--seed") found = true;
-	if (!found) return args; // 没有--seed：参数串原样返回(不动引号里的空白)
-	for (size_t i = 0; i < tokens.size(); i++) {
-		if (tokens[i] == "--seed" && i + 1 < tokens.size()) {
-			char* end = nullptr;
-			unsigned long long value = strtoull(tokens[i + 1].c_str(), &end, 10);
-			if (end != tokens[i + 1].c_str()) {
-				hasSeed = true;
-				seed = value;
-				i++;
-				continue;
-			}
-		}
-		if (!rest.empty()) rest += ' ';
-		rest += tokens[i];
-	}
+	string removed;
+	string rest = ModArgs::Remove(args, "seed", found, removed);
+	hasSeed = true;
+	seed = value;
 	return rest;
 }

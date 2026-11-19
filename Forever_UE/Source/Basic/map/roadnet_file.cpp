@@ -1,4 +1,5 @@
 #include "roadnet_file.h"
+#include "common/mod_args.h"
 
 #include "common/json.h"
 #include "common/utility.h"
@@ -22,17 +23,6 @@
 using namespace std;
 
 namespace {
-	string ParsePathArg(const string& args) {
-		size_t position = args.find("--path");
-		if (position == string::npos) return "";
-		position += 6;
-		while (position < args.size() && (args[position] == '=' || args[position] == ' ' || args[position] == '\t')) position++;
-		size_t end = args.find(" --", position);
-		string value = args.substr(position, end == string::npos ? string::npos : end - position);
-		while (!value.empty() && (value.back() == ' ' || value.back() == '\t' || value.back() == '\r' || value.back() == '\n')) value.pop_back();
-		return value;
-	}
-
 	float NumberOr(const JsonValue& value, float fallback) {
 		return value.IsNumeric() ? value.AsFloat() : fallback;
 	}
@@ -115,7 +105,7 @@ namespace {
 int FileRoadnet::count = 0;
 
 FileRoadnet::FileRoadnet(const string& args) : id(count++) {
-	path = ParsePathArg(args);
+	path = ModArgs(args).GetString("path");
 }
 
 FileRoadnet::~FileRoadnet() {

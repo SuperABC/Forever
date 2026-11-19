@@ -4,6 +4,7 @@
 #include "test_framework.h"
 
 #include "common/config.h"
+#include "common/mod_args.h"
 #include "common/random.h"
 
 #ifndef NOMINMAX
@@ -12,6 +13,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -171,6 +173,38 @@ namespace {
 		run.Check(firstA != firstC, "different global seeds give different streams");
 		RandomRegistry::Reset();
 	}
+
+	// 统一参数解析器(Dependence/common/mod_args.h)：语法、取值规则、--seed剥离。
+	void CheckModArgs() {
+		TestRun& run = TestRun::Get();
+		ModArgs a("--merge 0.3 --bridge=0.5 --min 4 --flag --path C:/my maps/a.terrain --max -2");
+		run.Check(fabs(a.GetFloat("merge", 0.f) - 0.3f) < 1e-6f, "ModArgs: --key value");
+		run.Check(fabs(a.GetFloat("bridge", 0.f) - 0.5f) < 1e-6f, "ModArgs: --key=value");
+		run.Check(a.GetInt("min", 0) == 4, "ModArgs: int");
+		run.Check(a.GetInt("max", 0) == -2, "ModArgs: negative number is a value, not a key");
+		run.Check(a.GetBool("flag", false) && a.Has("flag") && a.GetString("flag", "x").empty(), "ModArgs: valueless flag");
+		run.Check(a.GetString("path") == "C:/my maps/a.terrain", "ModArgs: unquoted value with spaces");
+		run.Check(a.GetInt("absent", 7) == 7 && !a.Has("absent"), "ModArgs: default when absent");
+		run.Check(ModArgs("--n 12abc").GetInt("n", 5) == 5, "ModArgs: partial number falls back to default");
+		run.Check(ModArgs("--p 5").GetFloat("p", 0.f, 0.f, 1.f) == 1.f, "ModArgs: clamp");
+		run.Check(!ModArgs("--d=false").GetBool("d", true) && !ModArgs("--d 0").GetBool("d", true) && !ModArgs("--d OFF").GetBool("d", true), "ModArgs: false spellings");
+		run.Check(ModArgs("--d=yes").GetBool("d", false) && ModArgs("").GetBool("d", true), "ModArgs: true / default");
+		run.Check(ModArgs("--path=\"C:/a b/--x.t\" --n 1").GetString("path") == "C:/a b/--x.t", "ModArgs: quoted value hides --");
+		run.Check(ModArgs("--k 1 --k 2").GetInt("k", 0) == 2, "ModArgs: last occurrence wins");
+		run.Check(ModArgs("lead tokens --k 1").Positionals().size() == 2, "ModArgs: positionals");
+
+		bool has = false; uint64_t seed = 0;
+		string rest = RandomRegistry::ExtractSeed("--merge 0.3 --seed 42 --min 4", has, seed);
+		run.Check(has && seed == 42 && rest == "--merge 0.3 --min 4", "ExtractSeed: strips --seed N", rest);
+		rest = RandomRegistry::ExtractSeed("--seed=7", has, seed);
+		run.Check(has && seed == 7 && rest.empty(), "ExtractSeed: --seed=N");
+		rest = RandomRegistry::ExtractSeed("--path  C:/a b/x.t  --min 1", has, seed);
+		run.Check(!has && rest == "--path  C:/a b/x.t  --min 1", "ExtractSeed: no seed leaves string untouched");
+		rest = RandomRegistry::ExtractSeed("--seed abc --min 1", has, seed);
+		run.Check(!has && rest == "--seed abc --min 1", "ExtractSeed: non-numeric seed is left for the mod");
+		rest = RandomRegistry::ExtractSeed("--path=\"C:/a b/x.t\" --seed 3", has, seed);
+		run.Check(has && seed == 3 && rest == "--path=\"C:/a b/x.t\"", "ExtractSeed: keeps quotes on remaining args", rest);
+	}
 }
 
 void RunRandomSuite(const TestOptions& options) {
@@ -181,6 +215,7 @@ void RunRandomSuite(const TestOptions& options) {
 		return;
 	}
 	CheckBindRandomHost();
+	CheckModArgs();
 	CheckRandomSources(options);
 	CheckSnapshotRestore();
 	CheckDeterminism(options);

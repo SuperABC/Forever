@@ -1,6 +1,7 @@
 #include "terrain_file.h"
 
 #include "common/utility.h"
+#include "common/mod_args.h"
 
 #include <fstream>
 #include <vector>
@@ -14,18 +15,6 @@ using namespace std;
 int FileTerrain::count = 0;
 
 namespace {
-	// 取"--path=xxx"或"--path xxx"的值：到下一个" --"或结尾，首尾空白去掉(路径里可以有空格)。
-	string ParsePathArg(const string& args) {
-		size_t position = args.find("--path");
-		if (position == string::npos) return "";
-		position += 6;
-		while (position < args.size() && (args[position] == '=' || args[position] == ' ' || args[position] == '\t')) position++;
-		size_t end = args.find(" --", position);
-		string value = args.substr(position, end == string::npos ? string::npos : end - position);
-		while (!value.empty() && (value.back() == ' ' || value.back() == '\t' || value.back() == '\r' || value.back() == '\n')) value.pop_back();
-		return value;
-	}
-
 	struct Reader {
 		const vector<char>& data;
 		size_t offset = 0;
@@ -48,7 +37,7 @@ namespace {
 }
 
 FileTerrain::FileTerrain(const string& args) : id(count++) {
-	path = ParsePathArg(args);
+	path = ModArgs(args).GetString("path");
 }
 
 FileTerrain::~FileTerrain() {
