@@ -81,6 +81,11 @@ public:
 	// 是否是单选concept(Roadnets/Names)
 	static bool IsUniqueConcept(const std::string& conceptKey);
 
+	// 某个mod的参数字符串(整串，如"--path=x --skip")。已启用的读写conceptMods；未启用的读写内存暂存(不存盘)，
+	// 之后启用该mod时带上暂存的参数，所以"禁用再启用"不丢参数。ReadConfig会清空暂存。
+	static std::string GetModArgs(const std::string& conceptKey, const std::string& modId);
+	static void SetModArgs(const std::string& conceptKey, const std::string& modId, const std::string& args);
+
 	// 没列出的id视为未启用，新发现的mod默认禁用
 	static bool IsModEnabled(const std::string& conceptKey, const std::string& modId);
 
@@ -166,6 +171,9 @@ private:
 
 	// "<concept>_mods" key -> (id, 参数字符串)列表，既是SetModArgs的参数来源，也是启用状态的唯一真相
 	static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> conceptMods;
+	// 被禁用(或被单选挤掉)的mod的参数，仅内存、不写盘；key = jsonKey + '\n' + id。
+	static std::unordered_map<std::string, std::string> stashedModArgs;
+	static std::string StashKey(const std::string& jsonKey, const std::string& modId);
 
 	static std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> dllConceptIds;
 

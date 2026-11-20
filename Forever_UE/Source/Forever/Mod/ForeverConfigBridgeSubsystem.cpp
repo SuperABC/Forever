@@ -65,6 +65,7 @@ TArray<FModRow> UForeverConfigBridgeSubsystem::GetModRows() const {
 		row.ConceptKey = UTF8_TO_TCHAR(entry.conceptKey.c_str());
 		row.ModId = UTF8_TO_TCHAR(entry.modId.c_str());
 		row.bEnabled = entry.enabled;
+		row.Args = UTF8_TO_TCHAR(Config::GetModArgs(entry.conceptKey, entry.modId).c_str());
 		if (const TArray<FString>* dependents = required.Find(row.ModId)) {
 			row.bLocked = true;
 			row.Dependents = *dependents;
@@ -81,6 +82,14 @@ void UForeverConfigBridgeSubsystem::AddDllPath(const FString& Path) {
 
 void UForeverConfigBridgeSubsystem::RemoveDllPath(const FString& Path) {
 	Config::RemoveDllPath(TCHAR_TO_UTF8(*Path));
+}
+
+FString UForeverConfigBridgeSubsystem::GetModArgs(const FString& ConceptKey, const FString& ModId) const {
+	return UTF8_TO_TCHAR(Config::GetModArgs(TCHAR_TO_UTF8(*ConceptKey), TCHAR_TO_UTF8(*ModId)).c_str());
+}
+
+void UForeverConfigBridgeSubsystem::SetModArgs(const FString& ConceptKey, const FString& ModId, const FString& Args) {
+	Config::SetModArgs(TCHAR_TO_UTF8(*ConceptKey), TCHAR_TO_UTF8(*ModId), TCHAR_TO_UTF8(*Args.TrimStartAndEnd()));
 }
 
 void UForeverConfigBridgeSubsystem::SetModEnabled(const FString& ConceptKey, const FString& ModId, bool bEnabled) {

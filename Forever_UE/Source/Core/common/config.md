@@ -151,3 +151,7 @@ Story screen的`.script`列表，并能把当前内存状态写回文件（`Writ
 ## 种子
 - 顶层`"seed"`(数字或字符串)：Core各域(`core.map/populace/society/traffic/weather/story`)随机流的种子来源，每域按`hash(seed, 域名)`派生；不写=随机。
 - `<concept>_mods`条目里的`--seed N`：该mod自己的随机流种子，如`"building_residence_high --seed 7"`；不写=随机。实际用到的种子在开局时打到日志(`Random: ...`)，想复现就把它填回去。
+
+## 参数字符串读写（GetModArgs / SetModArgs）
+`GetModArgs/SetModArgs(conceptKey, modId[, args])`读写某个mod的整串参数（如`--path=x --skip`）。已启用的mod读写`conceptMods`；**未启用的读写内存暂存表`stashedModArgs`**（key=jsonKey+'
+'+id）：`SetModEnabled(false)`和单选concept被挤掉时把该条目的参数暂存，`SetModEnabled(true)`时带回，所以"禁用再启用"不丢参数。暂存表只在内存，`WriteConfig`不写它，`ReadConfig`开头清空。给Menu的Mod参数编辑用。

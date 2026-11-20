@@ -6,6 +6,9 @@
 #include "Components/TextBlock.h"
 #include "Components/CheckBox.h"
 #include "Components/Border.h"
+#include "Components/EditableTextBox.h"
+#include "Components/Button.h"
+#include "ModArgsDialogWidget.h"
 
 namespace {
 	// 引擎默认ToolTip字号是8(CoreStyle "ToolTip.Font")，太小，放大到20。
@@ -18,6 +21,47 @@ void UModCheckRowWidget::NativeConstruct() {
 	if (EnableCheckBox) {
 		EnableCheckBox->OnCheckStateChanged.AddDynamic(this, &UModCheckRowWidget::HandleCheckChanged);
 	}
+	if (ArgsBox) {
+		ArgsBox->OnTextCommitted.AddDynamic(this, &UModCheckRowWidget::HandleArgsCommitted);
+	}
+	if (ArgsDetailButton) {
+		ArgsDetailButton->OnClicked.AddDynamic(this, &UModCheckRowWidget::HandleArgsDetailClicked);
+	}
+}
+
+void UModCheckRowWidget::HandleArgsCommitted(const FText& Text, ETextCommit::Type CommitMethod) {
+	if (onSelect) return;
+	if (UGameInstance* gameInstance = GetGameInstance()) {
+		if (UForeverConfigBridgeSubsystem* bridge = gameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>()) {
+			bridge->SetModArgs(conceptKey, modId, Text.ToString());
+		}
+	}
+}
+
+void UModCheckRowWidget::HandleArgsDetailClicked() {
+	if (onSelect) return;
+	FString current = ArgsBox ? ArgsBox->GetText().ToString() : FString();
+	if (!ArgsBox) {
+		if (UGameInstance* gameInstance = GetGameInstance()) {
+			if (UForeverConfigBridgeSubsystem* bridge = gameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>()) {
+				current = bridge->GetModArgs(conceptKey, modId);
+			}
+		}
+	}
+	UModArgsDialogWidget* dialog = CreateWidget<UModArgsDialogWidget>(this, UModArgsDialogWidget::StaticClass());
+	if (!dialog) return;
+	TWeakObjectPtr<UModCheckRowWidget> weakThis(this);
+	dialog->Open(modId, current, [weakThis](const FString& NewArgs) {
+		UModCheckRowWidget* row = weakThis.Get();
+		if (!row) return;
+		if (row->ArgsBox) row->ArgsBox->SetText(FText::FromString(NewArgs));
+		if (UGameInstance* gameInstance = row->GetGameInstance()) {
+			if (UForeverConfigBridgeSubsystem* bridge = gameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>()) {
+				bridge->SetModArgs(row->conceptKey, row->modId, NewArgs);
+			}
+		}
+	});
+	dialog->AddToViewport(1000);
 }
 
 void UModCheckRowWidget::SetRowData(const FString& InDllPath, const FString& InConceptKey,
@@ -46,7 +90,19 @@ void UModCheckRowWidget::SetRowData(const FString& InDllPath, const FString& InC
 		const bool bRadioSelected = bEnabled && Config::IsUniqueConcept(TCHAR_TO_UTF8(*conceptKey));
 		EnableCheckBox->SetIsEnabled(!bLockedOn && !bRadioSelected);
 	}
-	SetIsEnabled(!bLockedOn);
+	// 整行保持可用(参数输入框/详情按钮要能点)；被依赖且已勾选时只有勾选框锁死，名字变灰表示锁定。
+	SetIsEnabled(true);
+	if (ModIdLabel) ModIdLabel->SetRenderOpacity(bLockedOn ? 0.5f : 1.f);
+
+	if (ArgsBox) {
+		FString args;
+		if (UGameInstance* gameInstance = GetGameInstance()) {
+			if (UForeverConfigBridgeSubsystem* bridge = gameInstance->GetSubsystem<UForeverConfigBridgeSubsystem>()) {
+				args = bridge->GetModArgs(conceptKey, modId);
+			}
+		}
+		ArgsBox->SetText(FText::FromString(args));
+	}
 
 	// 悬停提示：Slate对禁用(变灰)的控件照样显示ToolTip。没被依赖时不设提示。
 	UWidget* tooltip = nullptr;
@@ -66,6 +122,9 @@ void UModCheckRowWidget::SetSelectRowData(const FString& InModId, bool bSelected
 	modId = InModId;
 	onSelect = MoveTemp(InOnSelect);
 	onChanged = nullptr;
+	// 单选行(主线剧情)没有参数可编辑。
+	if (ArgsBox) ArgsBox->SetVisibility(ESlateVisibility::Collapsed);
+	if (ArgsDetailButton) ArgsDetailButton->SetVisibility(ESlateVisibility::Collapsed);
 
 	if (ModIdLabel) {
 		ModIdLabel->SetText(FText::FromString(modId));

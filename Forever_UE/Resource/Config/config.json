@@ -90,11 +90,11 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/test.script"
    ],
    "terrain_mods" : [
-      "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/test.terrain",
       "terrain_mountain --skip",
       "terrain_ocean --skip",
       "terrain_river --skip",
-      "terrain_empty"
+      "terrain_empty",
+      "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/test.terrain"
    ],
    "vehicle_mods" : [
       "vehicle_plane",

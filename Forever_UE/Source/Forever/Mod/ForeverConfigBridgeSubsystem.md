@@ -32,3 +32,7 @@
 `GetEnabledScriptMods()`/`GetMainStory()`/`SetMainStory(id)`：main_story只能是已启用的script mod。`ValidateAndStartGame`校验main_story非空且在script_mods里，否则在menu输出框报错。
 
 `GetEnabledScriptMods`只返回当前dll提供的已启用script mod；`GetMainStory`在所选mod被取消启用或不在当前dll里时返回空，所以开局报错是“没有选择主线剧情mod”而不是“未启用”。
+
+
+## Mod参数
+`FModRow::Args`、`GetModArgs/SetModArgs(ConceptKey, ModId[, Args])`：包装`Config::GetModArgs/SetModArgs`。未启用的mod也能读写(暂存内存，不存盘，启用时带上)；`SetModArgs`会先去掉首尾空白。

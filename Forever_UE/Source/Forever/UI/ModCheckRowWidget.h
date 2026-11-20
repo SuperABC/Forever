@@ -6,6 +6,8 @@
 
 class UTextBlock;
 class UCheckBox;
+class UEditableTextBox;
+class UButton;
 
 // 一行=一个mod id的勾选框。被依赖(bLocked)且已勾选时整行变灰不能取消；被依赖但未勾选时文字标红。
 // 切换时调ForeverConfigBridgeSubsystem::SetModEnabled，再回调拥有者ModPanelWidget::RefreshAllRows做级联刷新。
@@ -37,6 +39,20 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UCheckBox> EnableCheckBox;
+
+	// 参数编辑（可选控件，WBP里按名字摆放，没有就不显示/不生效）：ArgsBox=整串参数的单行输入框，回车/失焦提交；
+	// ArgsDetailButton=点击弹出"一行一个参数"的编辑弹窗。未勾选的mod也能编辑，参数暂存内存，勾选时带上。
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UEditableTextBox> ArgsBox;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> ArgsDetailButton;
+
+	UFUNCTION()
+	void HandleArgsCommitted(const FText& Text, ETextCommit::Type CommitMethod);
+
+	UFUNCTION()
+	void HandleArgsDetailClicked();
 
 private:
 	FString dllPath;

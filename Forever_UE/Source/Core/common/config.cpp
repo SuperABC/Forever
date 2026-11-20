@@ -25,6 +25,7 @@ string Config::mainStoryScriptModName = "";
 bool Config::hasGlobalSeed = false;
 unsigned long long Config::globalSeed = 0;
 unordered_map<string, vector<pair<string, string>>> Config::conceptMods = {};
+unordered_map<string, string> Config::stashedModArgs = {};
 unordered_map<string, vector<pair<string, string>>> Config::dllConceptIds = {};
 unordered_map<string, vector<string>> Config::modDependences = {};
 vector<string> Config::storyScriptPaths = {};
@@ -122,6 +123,7 @@ void Config::ReadConfig(const string& path) {
 	hasGlobalSeed = false;
 	globalSeed = 0;
 	conceptMods.clear();
+	stashedModArgs.clear();
 	dllConceptIds.clear();
 	modDependences.clear();
 	storyScriptPaths.clear();
@@ -558,11 +560,15 @@ void Config::SetModEnabled(const string& conceptKey, const string& modId, bool e
 
 	if (enabled) {
 		if (it == entries.end()) {
-			// 新启用的id还没有参数字符串,给空串,和AddDllPath发现新mod时的默认行为一致。
-			entries.push_back({ modId, string() });
+			// 新启用的id：带上之前禁用时暂存的参数(只在内存)，没有就给空串，和AddDllPath发现新mod时的默认行为一致。
+			string args;
+			auto stash = stashedModArgs.find(StashKey(jsonKey, modId));
+			if (stash != stashedModArgs.end()) { args = stash->second; stashedModArgs.erase(stash); }
+			entries.push_back({ modId, args });
 		}
 		// 已经在数组里就不用动,保留原有的参数字符串。
 	} else if (it != entries.end()) {
+		if (!it->second.empty()) stashedModArgs[StashKey(jsonKey, modId)] = it->second;
 		entries.erase(it);
 	}
 
@@ -573,6 +579,9 @@ void Config::SetModEnabled(const string& conceptKey, const string& modId, bool e
 			for (const auto& [ck, id] : ids) {
 				if (ck == conceptKey && id != modId) {
 					auto& list = conceptMods[jsonKey];
+					for (const auto& e : list) {
+						if (e.first == id && !e.second.empty()) stashedModArgs[StashKey(jsonKey, id)] = e.second;
+					}
 					list.erase(
 						remove_if(list.begin(), list.end(),
 							[&id](const pair<string, string>& e) { return e.first == id; }),
@@ -581,6 +590,35 @@ void Config::SetModEnabled(const string& conceptKey, const string& modId, bool e
 			}
 		}
 	}
+}
+
+string Config::StashKey(const string& jsonKey, const string& modId) {
+	return jsonKey + '\n' + modId;
+}
+
+string Config::GetModArgs(const string& conceptKey, const string& modId) {
+	string jsonKey = ConceptKeyToJsonKey(conceptKey);
+	auto conceptIt = conceptMods.find(jsonKey);
+	if (conceptIt != conceptMods.end()) {
+		for (const auto& [id, args] : conceptIt->second) {
+			if (id == modId) return args;
+		}
+	}
+	auto stash = stashedModArgs.find(StashKey(jsonKey, modId));
+	return stash == stashedModArgs.end() ? string() : stash->second;
+}
+
+void Config::SetModArgs(const string& conceptKey, const string& modId, const string& args) {
+	string jsonKey = ConceptKeyToJsonKey(conceptKey);
+	auto conceptIt = conceptMods.find(jsonKey);
+	if (conceptIt != conceptMods.end()) {
+		for (auto& entry : conceptIt->second) {
+			if (entry.first == modId) { entry.second = args; return; }
+		}
+	}
+	// 没启用：暂存在内存，下次启用时带上；空串就是清掉暂存。
+	if (args.empty()) stashedModArgs.erase(StashKey(jsonKey, modId));
+	else stashedModArgs[StashKey(jsonKey, modId)] = args;
 }
 
 bool Config::IsModEnabled(const string& conceptKey, const string& modId) {

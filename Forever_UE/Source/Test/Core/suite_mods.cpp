@@ -1,5 +1,9 @@
 #include "suites.h"
 
+#include <cstdio>
+#include <fstream>
+#include <iterator>
+
 #include "test_framework.h"
 #include "world_build.h"
 
@@ -361,4 +365,35 @@ void RunModsSuite(const TestOptions& options) {
 		run.Check(Registry::Get().CheckModRegistered(entry.modId), "mod is registered in its Factory: " + entry.modId);
 	}
 	for (const auto& [conceptKey, count] : perConcept) run.Metric("mods tested: " + conceptKey, count, "");
+
+	// Config::Get/SetModArgs：已启用读写conceptMods；禁用后参数暂存内存(不落盘)，再启用带回。
+	for (const Config::ModEntry& entry : entries) {
+		if (Config::IsUniqueConcept(entry.conceptKey)) continue;
+		const string& ck = entry.conceptKey;
+		const string& id = entry.modId;
+		Config::SetModEnabled(ck, id, true);
+		Config::SetModArgs(ck, id, "--a=1 --b");
+		run.Check(Config::GetModArgs(ck, id) == "--a=1 --b", "mod args: set on enabled mod");
+		Config::SetModEnabled(ck, id, false);
+		run.Check(Config::GetModArgs(ck, id) == "--a=1 --b", "mod args: kept in memory after disable");
+		Config::SetModArgs(ck, id, "--c");
+		const string tmp = options.outDir + "/_modargs_test.json";
+		Config::WriteConfig(tmp);
+		{
+			ifstream in(tmp);
+			string text((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
+			run.Check(text.find("--c") == string::npos, "mod args: stashed args are not written to disk");
+		}
+		Config::SetModEnabled(ck, id, true);
+		run.Check(Config::GetModArgs(ck, id) == "--c", "mod args: restored on re-enable");
+		Config::WriteConfig(tmp);
+		{
+			ifstream in(tmp);
+			string text((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
+			run.Check(text.find(id + " --c") != string::npos, "mod args: enabled args are written to disk");
+		}
+		remove(tmp.c_str());
+		Config::SetModArgs(ck, id, "");
+		break;
+	}
 }

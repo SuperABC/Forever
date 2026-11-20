@@ -23,6 +23,10 @@ struct FModRow
 	UPROPERTY(BlueprintReadOnly)
 	bool bEnabled = true;
 
+	// 参数字符串(config.json里id后面的部分)，未启用时是内存暂存的。
+	UPROPERTY(BlueprintReadOnly)
+	FString Args;
+
 	// 这个(ConceptKey,ModId)当前是否被"其它已启用mod/已添加主线剧情脚本"依赖。bEnabled为真时对应行
 	// 整行变灰且不能取消勾选；bEnabled为假时对应行标红、勾选框保持未勾选(可点)，见ModCheckRowWidget。
 	UPROPERTY(BlueprintReadOnly)
@@ -59,6 +63,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Config")
 	void SetModEnabled(const FString& ConceptKey, const FString& ModId, bool bEnabled);
+
+	// 某个mod的参数字符串(如"--path=x --skip")。未启用的mod也能读写(暂存在内存，不存盘，启用时带上)。
+	UFUNCTION(BlueprintCallable, Category = "Config")
+	FString GetModArgs(const FString& ConceptKey, const FString& ModId) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Config")
+	void SetModArgs(const FString& ConceptKey, const FString& ModId, const FString& Args);
 
 	// 这个(ConceptKey,ModId)当前是否被锁定(被其它已启用mod的DLL级依赖，或任一Story screen
 	// 脚本的mod_dependences，声明为必需)——锁定判定不看concept，只认mod id字符串，和
