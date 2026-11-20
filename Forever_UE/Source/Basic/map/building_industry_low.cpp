@@ -49,7 +49,7 @@ void IndustryLowBuilding::Layout(int& direction, const Quad& quad,
 		direction = preferredDirection;
 	}
 
-	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.6f, 0.6f };
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f };
 
 	constexpr const char* kComponent = "component_manufacture";
 	constexpr int kComponentId = 0;
@@ -80,9 +80,8 @@ void IndustryLowBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emi
 	// 不用显式占位。
 }
 
-// 公式基数2000和GetAcreageMin的4000不一致(RandomAcreage可能小于Min)，是既有数值。
 float IndustryLowBuilding::RandomAcreage() {
-	return 2000.f * powf(1.f + GetRandom(1000) / 1000.f * 1.f, 2);
+	return 4000.f * powf(1.f + GetRandom(1000) / 1000.f, 2); // 4000~16000(平方随机，和Min/Max一致)
 }
 
 float IndustryLowBuilding::GetAcreageMin() {

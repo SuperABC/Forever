@@ -295,7 +295,20 @@ void UForeverRoadnetFrameworkComponent::BuildNavGraphDebugMesh(
 			float toZTop = end.GetZ() * ROAD_WORLD_SCALE + ROADNET_HEIGHT_EPSILON + NAV_DEBUG_HEIGHT;
 			FVector fromTop(start.GetX() * ROAD_WORLD_SCALE, start.GetY() * ROAD_WORLD_SCALE, fromZTop);
 			FVector toTop(end.GetX() * ROAD_WORLD_SCALE, end.GetY() * ROAD_WORLD_SCALE, toZTop);
-			AppendNavEdgeRibbon(vertices, triangles, fromTop, toTop, NAV_DEBUG_EDGE_HALF_WIDTH);
+			if (conn->GetControls().empty()) {
+				AppendNavEdgeRibbon(vertices, triangles, fromTop, toTop, NAV_DEBUG_EDGE_HALF_WIDTH);
+			}
+			else {
+				// 曲线边(曲线路上的车道/行人道)：沿曲线每约0.5地图单位一段，画成折线，不画成两端之间的弦。
+				const int steps = FMath::Clamp(FMath::CeilToInt(conn->CalcDistance() / 0.5f), 2, 64);
+				FVector prev = fromTop;
+				for (int i = 1; i <= steps; i++) {
+					Node p = conn->GetPoint(static_cast<float>(i) / steps);
+					FVector cur(p.GetX() * ROAD_WORLD_SCALE, p.GetY() * ROAD_WORLD_SCALE, p.GetZ() * ROAD_WORLD_SCALE + ROADNET_HEIGHT_EPSILON + NAV_DEBUG_HEIGHT);
+					AppendNavEdgeRibbon(vertices, triangles, prev, cur, NAV_DEBUG_EDGE_HALF_WIDTH);
+					prev = cur;
+				}
+			}
 
 			if (visitedNodes.insert(fromId).second) {
 				float zBottom = start.GetZ() * ROAD_WORLD_SCALE + ROADNET_HEIGHT_EPSILON;
@@ -426,7 +439,6 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 		}
 
 		float actualSegLen = rangeLen / n;
-		float scaleAlong = actualSegLen / unit;
 
 		for (int k = 0; k < n; k++) {
 			float t0 = rangeStart + (rangeEnd - rangeStart) * static_cast<float>(k) / n;
@@ -445,7 +457,31 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 			FVector fwd = FVector(dx, dy, dz).GetSafeNormal();
 			if (fwd.IsNearlyZero()) fwd = FVector::ForwardVector;
 
-			FTransform xform(fwd.Rotation(), mid, FVector(scaleAlong, 1.f, 1.f));
+			// 曲线上相邻两节朝向差delta，刚性的直段在外侧会张开一个楔形缝(内侧则互相重叠)。
+			// 把内部接缝处每节的两端各沿自身轴向多伸 e=(W/2)*tan(delta/2)，外侧的角正好碰上，缝就合上了；
+			// 路段首尾(靠路口/开口)的那一端不伸，免得戳进路口mesh或开口里。直路delta=0，e=0，不变。
+			float extStart = 0.f, extEnd = 0.f;
+			{
+				float ax, ay, az, bx, by, bz;
+				road->GetTangent(t0, ax, ay, az);
+				road->GetTangent(t1, bx, by, bz);
+				FVector2D ta(ax, ay), tb(bx, by);
+				ta = ta.GetSafeNormal(); tb = tb.GetSafeNormal();
+				if (!ta.IsNearlyZero() && !tb.IsNearlyZero()) {
+					float delta = FMath::Acos(FMath::Clamp(FVector2D::DotProduct(ta, tb), -1.f, 1.f));
+					float e = FMath::Min(road->GetTotalWidth() * 0.5f * FMath::Tan(delta * 0.5f), actualSegLen * 0.5f);
+					// 整条路的首尾若没连路口(不收缩)，也要伸：编辑器把一段曲线(贴合地形/隧道口等)切成很多条首尾相接的短路，路和路的交界处
+					// 和节内接缝一样会张开楔形缝；这里按本节的曲率估计交界处的转角(相邻两条路是C1连续的)。连着路口的一端(收缩过)不伸；
+					// 死胡同端点多伸的只有(W/2)*tan(delta/2)，很小。
+					const bool bRoadStartFree = k == 0 && rangeStart <= 1e-6f && trimStart <= 1e-6f;
+					const bool bRoadEndFree = k == n - 1 && rangeEnd >= 1.f - 1e-6f && trimEnd <= 1e-6f;
+					if (k > 0 || bRoadStartFree) extStart = e;
+					if (k < n - 1 || bRoadEndFree) extEnd = e;
+				}
+			}
+			mid += fwd * ((extEnd - extStart) * 0.5f * ROAD_WORLD_SCALE);
+
+			FTransform xform(fwd.Rotation(), mid, FVector((actualSegLen + extStart + extEnd) / unit, 1.f, 1.f));
 			int32 instanceIndex = ism->AddInstance(xform);
 			FVector2D dirXY(fwd.X, fwd.Y);
 			dirXY = dirXY.GetSafeNormal();

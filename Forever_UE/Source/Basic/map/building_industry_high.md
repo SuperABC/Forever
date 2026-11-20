@@ -14,12 +14,12 @@
 ## 三档密度与办公楼
 
 - `GetPower`只在对应类型和密度的分区返回`1.f`：`AREA_{RESIDENCE,COMMERCE,INDUSTRY,OFFICE}_{HIGH,MIDDLE,LOW}`。
-- **工厂(高密度 `IndustryHighBuilding`)**：权重分区只有 `AREA_INDUSTRY_HIGH`(已不在 `AREA_TEST`)。面积 `RandomAcreage()=10000+10000*rand`(10000~20000线性随机)，min 10000、max 20000。`Layout()` 只用 `preset_common_single_*`：地下1层 `pg+`(1个 `room_parking`)、地上1层 `fg-`(1个工坊房间，`room_farm`/`room_ranch`/`room_food_factory` 等概率随机)，层高统一0.6，footprint 占地块60%居中，登记 `clay`→Clay 标签材质，`gapMaterial`=Clay。中/低密度工厂仍是旧布局(旧模板名)。
+- **工厂(高密度 `IndustryHighBuilding`)**：权重分区只有 `AREA_INDUSTRY_HIGH`(已不在 `AREA_TEST`)。面积 `RandomAcreage()=4000*(1+rand)^2`(4000~16000平方随机)，min 4000、max 16000。`Layout()` 只用 `preset_common_single_*`：地下1层 `pg+`(1个 `room_parking`)、地上1层 `fg-`(1个工坊房间，`room_farm`/`room_ranch`/`room_food_factory` 等概率随机)，层高统一0.6，footprint 占地块80%居中，登记 `clay`→Clay 标签材质，`gapMaterial`=Clay。中/低密度工厂仍是旧布局(旧模板名)。
 - 下面`ResidenceBuilding`/`CommerceBuilding`/`IndustryBuilding`几节描述的是对应类型**当前（三档共同）的逻辑**，指的是三个档次各自那份拷贝。
 
 ## IndustryBuilding
 
-- `GetPower`：工业三档分区。`RandomAcreage()=2000*(1+rand)^2`，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`——公式基数和Min不一致(随机值可能小于Min)是既有数值，不"修正"。
+- `GetPower`：工业三档分区。`RandomAcreage()=4000*(1+rand)^2`(4000~16000)，`GetAcreageMin()=4000`，`GetAcreageMax()=16000`。
 - `Layout()`：`footprint`固定0.6x0.6，`layers`固定1，层高统一0.6。偏好方向按`quad`长宽比选`FACE_NORTH+rand(2)`或`FACE_WEST+rand(2)`，对应边长`>4`时才`basements=1`(是否有地下室由`quad`尺寸判定，和地上层数无关)。有地下室：`preset_single_room_pg+`(`ParkingRoom`，和`CommerceBuilding`共用)→1楼`preset_single_room_fg-`；否则只有1楼`preset_single_room_fg`。1楼放1个工坊房间，`FarmRoom`/`RanchRoom`/`FoodFactoryRoom`等概率随机选一。
 
 ## 依赖关系

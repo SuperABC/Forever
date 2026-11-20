@@ -14,6 +14,8 @@
 
 #define DIFFUSE_TEX_SIZE 2048
 #define HEIGHT_EPSILON 0.002f
+// 顶点法线用高度场中心差分求，差分步长(element)：各级LOD统一，大于L0顶点间距(1/16)以抹开单个格点的台阶感。
+#define NORMAL_SAMPLE_STEP 0.25f
 // 每级LOD mesh的网格细分数(每级都是这个数,级与级之间只有size不一样；64即65x65个顶点，128实测太卡)。
 // BuildLevel里所有跟它绑定的数(顶点数、行跨度、父子边界偏移)都由它推导，调这一个数即可。
 #define TERRAIN_LOD_GRID_SUBDIV 64
@@ -480,48 +482,11 @@ namespace {
 		return (float)(FMath::Abs(twice) * 0.5);
 	}
 
-	// LookupTerrain在格子局部[0,1]坐标里裁剪：碎片面积小于这个值(约1cm2)当作退化丢掉。
-	constexpr float kMinLocalPieceArea = 1e-6f;
 	// clipGridCell在世界坐标(UE单位)里裁剪：坐标在几十万量级，float精度只有0.03~0.06，共边/过顶点的hatch
 	// 切出的碎片宽度就是这个量级的噪声，面积在10 cm2以内；而一个小格是几千cm2。
 	constexpr float kMinWorldPieceArea = 10.f;
 	// 单个扇形三角形的最小面积(同上世界坐标)：重复点/共线点产生的零面积三角形直接丢掉。
 	constexpr float kMinWorldTriArea = 1.f;
-
-	// 用有向线段(edgeA->edgeB)所在直线，把一个凸多边形(polygon，任意绕序，但假定和
-	// referencePoint的绕序一致——referencePoint是已知严格落在多边形"内部半平面"那一侧的点，
-	// 不会正好落在这条直线上)分成两部分：outInside(和referencePoint同一侧)/outOutside(不同
-	// 侧)，标准Sutherland-Hodgman单边裁剪算法的双输出版本——outInside/outOutside都保持
-	// 原polygon的绕序不变(交点按遍历顺序插入)，可以直接继续参与下一条边的裁剪或直接扇形三角化。
-	void SplitConvexPolygonByLine(const TArray<FVector2D>& polygon, const FVector2D& edgeA, const FVector2D& edgeB,
-		const FVector2D& referencePoint, TArray<FVector2D>& outInside, TArray<FVector2D>& outOutside) {
-		outInside.Reset();
-		outOutside.Reset();
-		int32 n = polygon.Num();
-		if (n < 3) return;
-
-		FVector2D dir = edgeB - edgeA;
-		auto side = [&](const FVector2D& p) { return dir.X * (p.Y - edgeA.Y) - dir.Y * (p.X - edgeA.X); };
-		bool refPositive = side(referencePoint) >= 0.f;
-
-		for (int32 i = 0; i < n; i++) {
-			const FVector2D& cur = polygon[i];
-			const FVector2D& next = polygon[(i + 1) % n];
-			float curSide = side(cur);
-			float nextSide = side(next);
-			bool curInside = (curSide >= 0.f) == refPositive;
-			bool nextInside = (nextSide >= 0.f) == refPositive;
-
-			if (curInside) outInside.Add(cur); else outOutside.Add(cur);
-
-			if (curInside != nextInside) {
-				float t = curSide / (curSide - nextSide);
-				FVector2D intersection = cur + (next - cur) * t;
-				outInside.Add(intersection);
-				outOutside.Add(intersection);
-			}
-		}
-	}
 
 	// 网格小格的三角形被hatch裁剪时用的多边形顶点：pos是世界坐标(已经含LOD接缝修正和HEIGHT_EPSILON，
 	// 即这个三角形真正渲染的位置)，index是它在BuildLevel里vertices数组中的下标——三角形原有的
@@ -531,7 +496,7 @@ namespace {
 		int32 index;
 	};
 
-	// SplitConvexPolygonByLine的FClipPoint版本：交点在三角形所在平面上做3D线性插值(原三角形是
+	// 用有向线段把凸多边形分成两部分：交点在三角形所在平面上做3D线性插值(原三角形是
 	// 平面，边是直线，所以交点的高度正好落在原来的渲染表面上，不会漂)，侧判断只看XY。
 	void SplitClipPolygonByLine(const TArray<FClipPoint>& polygon, const FVector2D& edgeA, const FVector2D& edgeB,
 		const FVector2D& referencePoint, TArray<FClipPoint>& outInside, TArray<FClipPoint>& outOutside) {
@@ -563,88 +528,6 @@ namespace {
 		}
 	}
 
-	// 把一个凸多边形(CCW，同本文件主网格quad(v00,v11,v10)/(v00,v01,v11)那一套已验证过的绕序
-	// 约定：对(左下,右下,右上,左上)这种CCW四边形要输出(v0,v2,v1)+(v0,v3,v2)而不是朴素的
-	// (v0,v1,v2)+(v0,v2,v3)才能让法线朝上)扇形三角化成FTerrainTri2D列表——把朴素fan的每个
-	// 三角形后两个顶点对调，泛化到任意点数的凸多边形。
-	void FanTriangulate(const TArray<FVector2D>& polygon, TArray<FTerrainTri2D>& outTris) {
-		for (int32 i = 1; i + 1 < polygon.Num(); i++) {
-			// 多边形里有重复点/共线点时(裁剪线正好过顶点)，扇形里会出零面积三角形，跳过。
-			double cross = ((double)polygon[i].X - polygon[0].X) * ((double)polygon[i + 1].Y - polygon[0].Y)
-				- ((double)polygon[i + 1].X - polygon[0].X) * ((double)polygon[i].Y - polygon[0].Y);
-			if (FMath::Abs(cross) * 0.5 <= kMinLocalPieceArea) continue;
-			outTris.Add({ polygon[0], polygon[i + 1], polygon[i] });
-		}
-	}
-}
-
-void UForeverTerrainFrameworkComponent::LookupTerrain(int elemX, int elemY, FString& type,
-	TArray<FTerrainTri2D>& tris) const {
-	if (!map) return;
-
-	type = FString(map->GetTerrain(elemX, elemY).c_str());
-	// 挖洞条件是"construction"或这个格子有hatch：隧道口所在格子是mountain/plain，必须因hatch继续
-	// 走裁剪，否则隧道段被山体实心地形挡住，详见roadnet_jing.md"隧道"一节。
-	if (type != "construction" && map->GetHatches(elemX, elemY).empty()) return;
-
-	tris.Empty();
-
-	// 这个格子里还需要跟下一个hatch比对的剩余区域(可能不止一块)，局部坐标[0,1]x[0,1]，
-	// 初始是整个格子(CCW:左下->右下->右上->左上，和主网格quad同一套绕序约定)。
-	TArray<TArray<FVector2D>> workPolys;
-	workPolys.Add({ {0.f,0.f}, {1.f,0.f}, {1.f,1.f}, {0.f,1.f} });
-
-	for (const TerrainHatch& terrainHatch : map->GetHatches(elemX, elemY)) {
-		const Quad& quad = terrainHatch.quad;
-		float rotation = terrainHatch.rotation;
-		if (workPolys.Num() == 0) break; // 这个格子已经被之前的hatch挖空了，不用再判断了
-
-		float hatchCenterX = quad.GetPosX() - elemX;
-		float hatchCenterY = quad.GetPosY() - elemY;
-		float halfSizeX = quad.GetSizeX() * 0.5f;
-		float halfSizeY = quad.GetSizeY() * 0.5f;
-		float cosRot = FMath::Cos(rotation), sinRot = FMath::Sin(rotation);
-
-		// 旋转矩形AABB快速剔除：这个hatch的外接矩形都不沾这个格子的边，直接跳过，不用做4次
-		// 多边形裁剪。
-		float aabbHalfX = FMath::Abs(halfSizeX * cosRot) + FMath::Abs(halfSizeY * sinRot);
-		float aabbHalfY = FMath::Abs(halfSizeX * sinRot) + FMath::Abs(halfSizeY * cosRot);
-		if (hatchCenterX + aabbHalfX <= 0.f || hatchCenterX - aabbHalfX >= 1.f) continue;
-		if (hatchCenterY + aabbHalfY <= 0.f || hatchCenterY - aabbHalfY >= 1.f) continue;
-
-		// hatch矩形自己的4个顶点(局部坐标)——绕序(顺时针还是逆时针不重要，下面裁剪用
-		// "和hatchCenter同一侧"判断，不依赖绝对绕序方向)。
-		FVector2D hatchCenter(hatchCenterX, hatchCenterY);
-		FVector2D hatchPoly[4] = {
-			{ hatchCenterX + halfSizeX * cosRot - halfSizeY * sinRot, hatchCenterY + halfSizeX * sinRot + halfSizeY * cosRot },
-			{ hatchCenterX - halfSizeX * cosRot - halfSizeY * sinRot, hatchCenterY - halfSizeX * sinRot + halfSizeY * cosRot },
-			{ hatchCenterX - halfSizeX * cosRot + halfSizeY * sinRot, hatchCenterY - halfSizeX * sinRot - halfSizeY * cosRot },
-			{ hatchCenterX + halfSizeX * cosRot + halfSizeY * sinRot, hatchCenterY + halfSizeX * sinRot - halfSizeY * cosRot },
-		};
-
-	// 依次按hatch矩形的4条边裁剪(任意旋转矩形的4个半平面)：某块剩余区域只要落在一条边的外侧，就确定在hatch外面，
-	// 直接进survivingPieces留给下一个hatch；内侧部分继续拿下一条边判断。4条边都在内侧的才是被挖穿的洞，丢弃。
-	// hatch跨几个格子都无所谓，每个格子独立按自己的[0,1]范围精确裁剪。
-		TArray<TArray<FVector2D>> survivingPieces;
-		for (const TArray<FVector2D>& piece : workPolys) {
-			TArray<FVector2D> currentInside = piece;
-			for (int32 e = 0; e < 4 && currentInside.Num() >= 3; e++) {
-				TArray<FVector2D> insidePart, outsidePart;
-				SplitConvexPolygonByLine(currentInside, hatchPoly[e], hatchPoly[(e + 1) % 4], hatchCenter, insidePart, outsidePart);
-				if (outsidePart.Num() >= 3 && PolygonAreaAbs(outsidePart, [](const FVector2D& p) { return p; }) > kMinLocalPieceArea) {
-					survivingPieces.Add(outsidePart);
-				}
-				currentInside = MoveTemp(insidePart);
-			}
-		}
-		workPolys = MoveTemp(survivingPieces);
-	}
-
-	// workPolys现在就是这个格子里真正的实心地形区域(可能是好几块互不相连的多边形)，扇形三角化
-	// 输出；没有hatch命中时就是整格方块，输出2个三角形。
-	for (const TArray<FVector2D>& piece : workPolys) {
-		FanTriangulate(piece, tris);
-	}
 }
 
 void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> pos, float size, int childPos,
@@ -703,30 +586,21 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		for (int vy = 1; vy < TERRAIN_LOD_GRID_SUBDIV; vy += 2)
 			vertices[vertIdx(edgeVx, vy)] = (vertices[vertIdx(edgeVx, vy - 1)] + vertices[vertIdx(edgeVx, vy + 1)]) * 0.5f;
 
-	// construction格子:只在levelIdx<=1(近处精细LOD)用LookupTerrain的精确三角形整格替换(construction在平地上)；
-	// 其它有hatch的格子(可能在起伏地形上)在levelIdx<=TERRAIN_HATCH_MAX_LEVEL时走clipGridCell，详见.md"挖洞"一节。
-	TMap<TPair<int32, int32>, TArray<FTerrainTri2D>> constructionCache;
-	auto lookupCached = [this, &constructionCache](int ex, int ey) -> const TArray<FTerrainTri2D>& {
-		TPair<int32, int32> key(ex, ey);
-		if (auto* found = constructionCache.Find(key)) return *found;
-		FString type;
-		TArray<FTerrainTri2D> tris;
-		LookupTerrain(ex, ey, type, tris);
-		return constructionCache.Add(key, MoveTemp(tris));
-		};
-
-	// 有hatch(且不是construction)的element里，一个网格小格(cx,cy)的两个三角形按这个element的全部
+	// 有hatch的element里(construction格子也一样)，一个网格小格(cx,cy)的两个三角形按这个element的全部
 	// hatch旋转矩形裁剪，洞里的部分丢掉，洞外的部分用原三角形的平面插值出交点(高度和原渲染表面一致)，
 	// 角点复用网格顶点。小格不会跨element(L0/L1的小格边长是1/16、1/8 element，网格和element对齐)。
 	// 三角形和BuildLevel主循环同一对角线、同一绕序：(v00,v10,v11)/(v00,v11,v01)是CCW，扇形输出
 	// (p0,p[i+1],p[i])就是主循环里的(v00,v11,v10)/(v00,v01,v11)。
-	auto clipGridCell = [this, &vertices, &triangles, worldScale](int cx, int cy, int ex, int ey) {
+	auto clipGridCell = [this, &vertices, &triangles, worldScale](int cx, int cy, int ex, int ey, bool anti) {
 		const auto& hatches = map->GetHatches(ex, ey);
 		int32 v00 = cy * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx;
 		int32 v10 = v00 + 1;
 		int32 v01 = v00 + (TERRAIN_LOD_GRID_SUBDIV + 1);
 		int32 v11 = v01 + 1;
-		const int32 cellTris[2][3] = { { v00, v10, v11 }, { v00, v11, v01 } };
+		// 对角线随这个小格的自适应选择(anti=副对角线v10-v01)，和主循环一致。
+		const int32 cellTrisMain[2][3] = { { v00, v10, v11 }, { v00, v11, v01 } };
+		const int32 cellTrisAnti[2][3] = { { v00, v10, v01 }, { v10, v11, v01 } };
+		const int32 (*cellTris)[3] = anti ? cellTrisAnti : cellTrisMain;
 
 		for (int t = 0; t < 2; t++) {
 			TArray<FClipPoint> start;
@@ -764,7 +638,7 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 					{ hatchCenter.X + halfSizeX * cosRot + halfSizeY * sinRot, hatchCenter.Y + halfSizeX * sinRot - halfSizeY * cosRot },
 				};
 
-				// 和LookupTerrain同一个思路：依次按矩形4条边分割，外侧部分确定在矩形外，收下；
+				// 依次按矩形4条边分割，外侧部分确定在矩形外，收下；
 				// 4条边都留在内侧的部分才是洞，丢弃。
 				TArray<TArray<FClipPoint>> survivingPieces;
 				for (const TArray<FClipPoint>& piece : workPolys) {
@@ -803,22 +677,32 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			int s = (cy / quadrantSize) * 4 + (cx / quadrantSize);
 			if ((childPos >> (15 - s)) & 1) continue;
 
+			// 这个小格拆三角形的对角线：和Map::SampleHeight的"自适应对角线"一致，斜着走的地形交界才是一道笔直的斜坡。
+			// L0~L3的小格不跨element，没有细化数组的element直接用Map的判断(采样和网格严格同一对角线)；
+			// 有细化数组或更粗的LOD(小格跨多个element)就看这个小格4个顶点自己的高度，取高度差较小的那条对角线。
+			bool anti;
+			{
+				const int32 w00 = cy * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx;
+				const int32 w01 = w00 + (TERRAIN_LOD_GRID_SUBDIV + 1);
+				bool fromMap = false;
+				if (levelIdx <= TERRAIN_HATCH_MAX_LEVEL) {
+					int dex = FMath::Clamp(FMath::FloorToInt(startX + (cx + 0.5f) * cellSize), 0, mapSize.first - 1);
+					int dey = FMath::Clamp(FMath::FloorToInt(startY + (cy + 0.5f) * cellSize), 0, mapSize.second - 1);
+					if (!map->GetFineHeights(dex, dey)) { anti = map->UsesAntiDiagonal(dex, dey); fromMap = true; }
+				}
+				if (!fromMap) anti = FMath::Abs(vertices[w00 + 1].Z - vertices[w01].Z) < FMath::Abs(vertices[w00].Z - vertices[w01 + 1].Z);
+			}
+
 			bool drawQuad = true;
 			if (levelIdx <= TERRAIN_HATCH_MAX_LEVEL) {
 				float quadCenterMapX = startX + (cx + 0.5f) * cellSize;
 				float quadCenterMapY = startY + (cy + 0.5f) * cellSize;
 				int ex = FMath::Clamp(FMath::FloorToInt(quadCenterMapX), 0, mapSize.first - 1);
 				int ey = FMath::Clamp(FMath::FloorToInt(quadCenterMapY), 0, mapSize.second - 1);
-				// "construction"格子整格交给下面LookupTerrain的精确geometry处理(平地，不需要细化高度)；
-					// 其它被Map::AddHatch记过洞的格子(Roadnet隧道口等，可能在有起伏的地形上)不能整格
-					// 换成"只有四角"的画法——那样会丢掉格子里的细化高度、和邻格的边对不上产生裂缝——
-					// 而是只对这个小格自己的两个三角形做hatch裁剪，没被切到的小格仍用共享的网格顶点。
-					if (levelIdx <= 1 && map->GetTerrain(ex, ey) == "construction") {
-						lookupCached(ex, ey);
-						drawQuad = false;
-					}
-					else if (!map->GetHatches(ex, ey).empty()) {
-						clipGridCell(cx, cy, ex, ey);
+				// 被Map::AddHatch记过洞的格子(construction的地下室井口、隧道口等，可能在有起伏的地形上)只对这个小格自己的
+				// 两个三角形做hatch裁剪，没被切到的小格仍用共享的网格顶点，不丢细化高度也没有裂缝。
+				if (!map->GetHatches(ex, ey).empty()) {
+						clipGridCell(cx, cy, ex, ey, anti);
 						drawQuad = false;
 					}
 			}
@@ -828,51 +712,29 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			int32 v10 = cy * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx + 1;
 			int32 v01 = (cy + 1) * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx;
 			int32 v11 = (cy + 1) * (TERRAIN_LOD_GRID_SUBDIV + 1) + cx + 1;
-			triangles.Add(v00); triangles.Add(v11); triangles.Add(v10);
-			triangles.Add(v00); triangles.Add(v01); triangles.Add(v11);
-		}
-	}
-
-	// 为每个涉及到的construction Element画出LookupTerrain裁剪出的实心地形三角形；绕序(A,B,C)
-	// 已在FanTriangulate里按主网格quad同一套约定处理过，这里直接按原顺序建。
-	if (levelIdx <= 1) {
-		for (const auto& entry : constructionCache) {
-			int32 ex = entry.Key.Key, ey = entry.Key.Value;
-
-			for (const FTerrainTri2D& tri : entry.Value) {
-				FVector2D corners[3] = { tri.A, tri.B, tri.C };
-				FVector worldCorners[3];
-				for (int32 k = 0; k < 3; k++) {
-					float mapX = ex + corners[k].X;
-					float mapY = ey + corners[k].Y;
-					float h = SampleHeight(mapX, mapY) + HEIGHT_EPSILON;
-					worldCorners[k] = FVector(mapX * worldScale, mapY * worldScale, h * worldScale);
-				}
-				// 格子局部坐标里很细的碎片，加上ex(几百)再乘1000变成世界坐标后float精度只剩0.03~0.06，
-				// 会塌成两个顶点重合的零面积三角形(局部面积阈值拦不住)，按世界坐标再判一次。
-				double cross = ((double)worldCorners[1].X - worldCorners[0].X) * ((double)worldCorners[2].Y - worldCorners[0].Y)
-					- ((double)worldCorners[2].X - worldCorners[0].X) * ((double)worldCorners[1].Y - worldCorners[0].Y);
-				if (FMath::Abs(cross) * 0.5 <= kMinWorldTriArea) continue;
-				int32 baseIdx = vertices.Num();
-				for (const FVector& corner : worldCorners) vertices.Add(corner);
-				triangles.Add(baseIdx); triangles.Add(baseIdx + 1); triangles.Add(baseIdx + 2);
+			if (anti) {
+				triangles.Add(v00); triangles.Add(v01); triangles.Add(v10);
+				triangles.Add(v10); triangles.Add(v01); triangles.Add(v11);
+			} else {
+				triangles.Add(v00); triangles.Add(v11); triangles.Add(v10);
+				triangles.Add(v00); triangles.Add(v01); triangles.Add(v11);
 			}
 		}
 	}
 
-	// ProceduralMeshComponent不会自动算法线：按面法线面积加权累加到顶点再归一化得到平滑法线;
-	// 切线把世界X轴投影到切平面做Gram-Schmidt正交化，和材质里"U方向=世界X"
-	// (TileUV=P*TilesPerElement,P=世界XY/1000)的约定对上，否则法线贴图凹凸方向会和纹理对不齐。
+	// ProceduralMeshComponent不会自动算法线。法线放在顶点上、由GPU在三角形内插值：这里不再用相邻三角形的面法线累加
+	// (那样法线取决于三角形怎么拆，对角线一变/顶点不共享——construction整格替换、hatch裁剪交点都是各自独立的顶点——
+	// 三角形边界就会出棱角)，而是直接对高度场求梯度：顶点位置处用SampleHeight做中心差分，
+	// 法线只取决于位置，所以相邻三角形、各级LOD、独立顶点在同一位置上法线完全一致，插值出来是连续变化的。
+	// 差分步长固定为NORMAL_SAMPLE_STEP个element(各级LOD一致，也比L0的1/16顶点间距宽，把单个格点的台阶感抹开)。
+	const float normalStep = NORMAL_SAMPLE_STEP;
 	TArray<FVector> normals;
-	normals.SetNumZeroed(vertices.Num());
-	for (int32 t = 0; t < triangles.Num(); t += 3) {
-		const FVector& a = vertices[triangles[t]];
-		const FVector& b = vertices[triangles[t + 1]];
-		const FVector& c = vertices[triangles[t + 2]];
-		FVector faceNormal = FVector::CrossProduct(c - a, b - a);
-		normals[triangles[t]] += faceNormal;
-		normals[triangles[t + 1]] += faceNormal;
-		normals[triangles[t + 2]] += faceNormal;
+	normals.SetNumUninitialized(vertices.Num());
+	for (int32 i = 0; i < vertices.Num(); i++) {
+		const float mx = vertices[i].X / worldScale, my = vertices[i].Y / worldScale;
+		const float dhdx = (SampleHeight(mx + normalStep, my) - SampleHeight(mx - normalStep, my)) / (2.f * normalStep);
+		const float dhdy = (SampleHeight(mx, my + normalStep) - SampleHeight(mx, my - normalStep)) / (2.f * normalStep);
+		normals[i] = FVector(-dhdx, -dhdy, 1.f).GetSafeNormal(); // XY(地图element)和Z(高度)同单位
 	}
 	TArray<FProcMeshTangent> tangents;
 	tangents.SetNumUninitialized(vertices.Num());
@@ -1041,11 +903,10 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 
 // 隧道口侧壁：对每个wall=true的hatch(RoadnetMod::AddTunnelHatch)，在洞的两条长边(沿rotation，横向
 // 偏移+-sizeY/2)各做一条竖直的墙；不加两个端头(起点端是和地面齐平的路面入口，终点端是隧道本身，隧道里
-// 的墙和顶棚用资产)。墙顶=地形高度，墙底=洞底(floorStart->floorEnd，smoothstep)再往下埋一点；做成有
+// 的墙和顶棚用资产)。墙顶=不低于所在地形(取附近内外两侧地形最高处，可略突出地面，不留空缺)，墙底=洞底(floorStart->floorEnd，smoothstep)再往下埋一点；做成有
 // 厚度的小板(朝洞内的内面+朝洞外的外面+顶面)，内面可见、可碰撞。其它hatch(wall=false)一概没有墙。
 #define TUNNEL_WALL_SEGMENT 0.25f       // 沿长度的断面间距(地图element单位)，墙顶跟着地形起伏
 #define TUNNEL_WALL_THICKNESS 0.1f      // 墙厚度
-#define TUNNEL_WALL_TOP_INSET 0.005f    // 墙顶比地形低多少(10m*0.005=5cm)，保证墙顶不会冒出地面
 #define TUNNEL_WALL_BOTTOM_EXTRA 0.1f   // 墙底比洞底再往下埋多少(埋在路面下)
 
 void UForeverTerrainFrameworkComponent::BuildTunnelWalls() {
@@ -1098,13 +959,20 @@ void UForeverTerrainFrameworkComponent::BuildTunnelWalls() {
 				float floor0 = floorAt(u0), floor1 = floorAt(u1);
 				FVector2D o0 = p0 + perp * (side * TUNNEL_WALL_THICKNESS);
 				FVector2D o1 = p1 + perp * (side * TUNNEL_WALL_THICKNESS);
-				// 墙顶比地形低一点，内外两侧各自取自己位置的地形高度再取较低的，外侧的墙板往洞外延伸的那一
-				// 部分在地形下面，不能因为地形往外变低就冒出地面。
-				float inner0 = SampleHeight(p0.X, p0.Y) - TUNNEL_WALL_TOP_INSET;
-				float inner1 = SampleHeight(p1.X, p1.Y) - TUNNEL_WALL_TOP_INSET;
-				float top0 = inner0, top1 = inner1;
-				float outerTop0 = FMath::Min(inner0, SampleHeight(o0.X, o0.Y) - TUNNEL_WALL_TOP_INSET);
-				float outerTop1 = FMath::Min(inner1, SampleHeight(o1.X, o1.Y) - TUNNEL_WALL_TOP_INSET);
+				// 墙顶不低于所在地形(和两端的端墙一致)：墙顶点取附近一小段(前后各半个断面间距)里内外两侧地形高度的最大值，
+				// 可以略突出地面，但不留空缺；内外两侧同高，顶面是平的。
+				auto topAt = [&](float u) {
+					float best = -FLT_MAX;
+					for (float du : { -0.5f, 0.f, 0.5f }) {
+						float uu = FMath::Clamp(u + du / segments, 0.f, 1.f);
+						FVector2D q = center + forward * ((uu - 0.5f) * length) + perp * (side * halfWidth);
+						FVector2D qo = q + perp * (side * TUNNEL_WALL_THICKNESS);
+						best = FMath::Max(best, FMath::Max(SampleHeight(q.X, q.Y), SampleHeight(qo.X, qo.Y)));
+					}
+					return best;
+				};
+				float top0 = topAt(u0), top1 = topAt(u1);
+				float outerTop0 = top0, outerTop1 = top1;
 				// 这一段地形不比洞底高(洞底和地面齐平的入口附近)就不需要墙。
 				if (top0 <= floor0 && top1 <= floor1) continue;
 				float bottom0 = floor0 - TUNNEL_WALL_BOTTOM_EXTRA, bottom1 = floor1 - TUNNEL_WALL_BOTTOM_EXTRA;
@@ -1115,6 +983,39 @@ void UForeverTerrainFrameworkComponent::BuildTunnelWalls() {
 				addQuad(world(p0, top0), world(p1, top1), world(o1, outerTop1), world(o0, outerTop0), FVector::UpVector);
 			}
 		}
+
+		// 端墙：洞的t1端/t2端各自可选，封住隧道资产房顶和地形之间的空洞。墙是一块矩形板，横向盖满洞宽(两端再各多一个
+		// 厚度，和侧壁外侧板接上)，沿长度方向从端头线向洞外厚TUNNEL_WALL_THICKNESS；墙底=指定高度，墙顶=端头线段
+		// 范围内地形的最高处(山坡上取最高点，墙顶不降inset，允许略突出地面但不留缺口)。
+		auto addEndWall = [&](float endU, float bottom) {
+			const float outwardSign = endU > 0.5f ? 1.f : -1.f;
+			FVector2D endCenter = center + forward * ((endU - 0.5f) * length);
+			FVector2D outwardDir = forward * outwardSign;
+			float lateral = halfWidth + TUNNEL_WALL_THICKNESS;
+			int samples = FMath::Max(1, FMath::CeilToInt(2.f * lateral / TUNNEL_WALL_SEGMENT));
+			float top = -FLT_MAX;
+			for (int i = 0; i <= samples; i++) {
+				float v = -lateral + 2.f * lateral * static_cast<float>(i) / samples;
+				FVector2D base = endCenter + perp * v;
+				FVector2D outer = base + outwardDir * TUNNEL_WALL_THICKNESS;
+				top = FMath::Max(top, FMath::Max(SampleHeight(base.X, base.Y), SampleHeight(outer.X, outer.Y)));
+			}
+			if (top <= bottom) return;
+			FVector2D a = endCenter - perp * lateral, b = endCenter + perp * lateral;
+			FVector2D ao = a + outwardDir * TUNNEL_WALL_THICKNESS, bo = b + outwardDir * TUNNEL_WALL_THICKNESS;
+			auto world = [&](const FVector2D& p, float z) { return FVector(p.X * worldScale, p.Y * worldScale, z * worldScale); };
+			FVector outward(outwardDir.X, outwardDir.Y, 0.f);
+			addQuad(world(a, bottom), world(b, bottom), world(b, top), world(a, top), -outward); // 内面：朝洞内
+			addQuad(world(ao, bottom), world(bo, bottom), world(bo, top), world(ao, top), outward);
+			addQuad(world(a, top), world(b, top), world(bo, top), world(ao, top), FVector::UpVector);
+			// 补全长方体的其余三面：墙顶可能突出地面，两个侧面和底面都可能露出来，不能省。
+			const FVector perpDir(perp.X, perp.Y, 0.f);
+			addQuad(world(a, bottom), world(ao, bottom), world(ao, top), world(a, top), -perpDir);
+			addQuad(world(b, bottom), world(bo, bottom), world(bo, top), world(b, top), perpDir);
+			addQuad(world(a, bottom), world(b, bottom), world(bo, bottom), world(ao, bottom), -FVector::UpVector);
+		};
+		if (hatch.startWall) addEndWall(0.f, hatch.startWallBottom);
+		if (hatch.endWall) addEndWall(1.f, hatch.endWallBottom);
 	}
 
 	if (!tunnelWallMesh) {

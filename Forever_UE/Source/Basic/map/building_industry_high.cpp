@@ -42,7 +42,7 @@ void IndustryHighBuilding::Layout(int& direction, const Quad& quad,
 		direction = preferredDirection;
 	}
 
-	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.6f, 0.6f };
+	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f };
 	SetSurfaceMaterial("clay", "/Game/Asset/Building/Material/Clay.Clay");
 	// 楼体与建筑范围之间的空隙铺黏土材质。
 	gapMaterial = "/Game/Asset/Building/Material/Clay.Clay";
@@ -74,15 +74,15 @@ void IndustryHighBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc em
 }
 
 float IndustryHighBuilding::RandomAcreage() {
-	return 10000.f + 10000.f * GetRandom(1000) / 1000.f; // 10000~20000线性随机
+	return 4000.f * powf(1.f + GetRandom(1000) / 1000.f, 2); // 4000~16000(平方随机，和Min/Max一致)
 }
 
 float IndustryHighBuilding::GetAcreageMin() {
-	return 10000.f;
+	return 4000.f;
 }
 
 float IndustryHighBuilding::GetAcreageMax() {
-	return 20000.f;
+	return 16000.f;
 }
 
 float IndustryHighBuilding::GetPower(AREA_TYPE area) {

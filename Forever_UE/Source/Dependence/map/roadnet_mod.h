@@ -41,7 +41,10 @@ public:
 	void AddHatch(const Connection* connection, float t1, float t2, float width);
 
 	// 工具方法(非虚):隧道口专用,挖洞并带侧壁;其它挖洞用AddHatch。
-	void AddTunnelHatch(const Connection* connection, float t1, float t2, float width);
+	// startWallBottom/endWallBottom：洞的t1端/t2端的端墙底部绝对高度(地图element单位)，默认kNoEndWall=这端不做墙。
+	// 端墙从该端头地形最高处一直封到墙底，用来堵住隧道资产房顶和地形之间的空洞。
+	void AddTunnelHatch(const Connection* connection, float t1, float t2, float width,
+		float startWallBottom = kNoEndWall, float endWallBottom = kNoEndWall);
 
 	// 工具方法(非虚):请求把地形贴合到connection上[t1,t2]的路面高度,立即采样成折线进terrainFits,不保留指针。
 	void AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff);

@@ -1613,7 +1613,8 @@ void Lot::ClearCandidates() {
 // 贴合请求折线的采样间距(地图element单位)：路/轨道是平滑曲线，0.5对地形贴合(格点间距1/16)足够。
 #define TERRAIN_FIT_SAMPLE_SPACING 0.5f
 
-void BuildHatch(const Connection* connection, float t1, float t2, float width, bool tunnel, vector<TerrainHatch>& out) {
+void BuildHatch(const Connection* connection, float t1, float t2, float width, bool tunnel, vector<TerrainHatch>& out,
+	float startWallBottom, float endWallBottom) {
 	if (!connection) return;
 
 	Node p1 = connection->GetPoint(t1);
@@ -1635,6 +1636,8 @@ void BuildHatch(const Connection* connection, float t1, float t2, float width, b
 		hatch.wall = true;
 		hatch.floorStart = p1.GetZ();
 		hatch.floorEnd = p2.GetZ();
+		if (startWallBottom != kNoEndWall) { hatch.startWall = true; hatch.startWallBottom = startWallBottom; }
+		if (endWallBottom != kNoEndWall) { hatch.endWall = true; hatch.endWallBottom = endWallBottom; }
 	}
 	out.push_back(hatch);
 }

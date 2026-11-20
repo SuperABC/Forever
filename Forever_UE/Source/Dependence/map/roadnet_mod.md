@@ -14,7 +14,7 @@
 - **车道/开口数据挂在`Road`自己身上**(`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/`openings`，见`general_geometry.h`)，`RoadnetMod`只负责产出`Road`实例。
 - **桥墩**：`AddPier(mesh, chains, defaultSpacing, minSpacing, radius)`镜像`RouteMod::AddPier`，把一个`PierRequest`追加进`piers`（链按值存，Core用`Roadnet::PlacePiers`深拷贝后选位，见`Core/map/pier.md`）。要求链是路面中轴线(`Connection`)，端点Node沿用对应`Road`的Node（保留id），Core据此把链自己的路段从障碍里排除。`mesh`空串用UE默认圆柱。
 - **挖洞/贴地**：`AddHatch`/`AddTunnelHatch`/`AddTerrainFit`三个非虚工具方法只是转调`general_geometry.h`的`BuildHatch`/`BuildTerrainFit`(`RouteMod`火车铺轨共用同一份实现)。
-  - `AddHatch(connection, t1, t2, width)`：取`connection`在`[t1,t2]`两端的点，中点定位、连线方向定朝向、弧长定长度、`width`定宽度，包成`TerrainHatch`追加进`hatches`。消费方`ForeverTerrainFrameworkComponent::LookupTerrain`挖洞判断是"`construction`地形或这个格子有hatch"，隧道口靠这条规则在山体上挖出缺口，否则隧道段被实心地形挡住，见`Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。
+  - `AddHatch(connection, t1, t2, width)`：取`connection`在`[t1,t2]`两端的点，中点定位、连线方向定朝向、弧长定长度、`width`定宽度，包成`TerrainHatch`追加进`hatches`。消费方`ForeverTerrainFrameworkComponent::BuildLevel`的`clipGridCell`对"这个格子有hatch"的格子挖洞，隧道口靠这条规则在山体上挖出缺口，否则隧道段被实心地形挡住，见`Source/Forever/Framework/ForeverTerrainFrameworkComponent.md`。
   - `AddTunnelHatch`：隧道口专用，`TerrainHatch`带`wall=true`、`floorStart/floorEnd`=`connection`在`t1/t2`处的路面高度，UE层据此在洞的两条长边生成竖直侧壁；其它挖洞一律用`AddHatch`。
   - `AddTerrainFit(connection, t1, t2, width, falloff)`：沿`[t1,t2]`按弧长约0.5单位一个点采样成路面中轴折线(x,y,z，z=Node Z即路面高度)，连同`width`(路面整宽)和`falloff`(边缘向外渐变回原地形的距离)包成`TerrainFitRequest`追加进`terrainFits`。存折线而不是`Connection*`，因为mod的`roads`会扩容、指针失效。宿主`Map::InitRoadnet`把请求交给`Map::ApplyTerrainFits`，路面比地形高就填、低就切，见`Source/Core/map/map.md`"地形贴合"。
 - **`pathRoadMaterial`**：Zone/Building裁剪`Lot`自由空间时每次真正的切分都会自动生成一条1单位宽的小路(`Lot::SplitWithPath`)。小路不走"按左右车道数选`default_x_x_x`资产"的管线(0.3车行/0.2人行这种非整车道宽度套不进去)，Forever层直接画贴材质的扁cube，材质就是这个字段；留空退化用`Road`(`JingRoadnet`不设置也是合法状态)。`Roadnet`在`DistributeRoadnet`时原样拷贝一份。
@@ -30,3 +30,6 @@
 ## 待办/后续阶段
 
 - 无。
+
+## 端墙（2026-11-20）
+`AddTunnelHatch(connection,t1,t2,width, startWallBottom=kNoEndWall, endWallBottom=kNoEndWall)`：给洞的t1端/t2端各自加端墙，墙底是传入的绝对高度(地图单位，1=10m)，默认不加。`TerrainHatch`新增`startWall/startWallBottom/endWall/endWallBottom`(随地图存档)。UE层`BuildTunnelWalls`在端头造一块矩形板：墙顶取该端头线段范围内地形最高处(可略突出地面、不留缺口)，墙底=传入高度，用来封住隧道资产房顶和地形之间的空洞。Basic各mod传"隧道端路面高度+宏`TUNNEL_ROOF_CLEARANCE`(1=10m，隧道资产房顶)"，即房顶以下留洞口，宏可调。

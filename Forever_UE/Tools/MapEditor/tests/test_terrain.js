@@ -89,7 +89,7 @@ assert.ok(b.countNonBuildable(5, 5, 9, 9) > 0);
 	assert.strictEqual(w.countNonBuildable(2, 2, 6, 6), 0);
 }
 
-// 限定单一地形(only)：抬高/降低/抹平/平滑只改这个地形的格子，平滑也只看同地形邻格。
+// 限定单一地形(only)：抬高/降低/抹平/平滑只改这个地形的格子，平滑时交界邻格也参与平均。
 {
 	const o = new ME.Terrain(32, 32);
 	o.beginStroke(); o.brush('paint', 12, 16, 4, { terrain: 'A' }); o.brush('paint', 20, 16, 4, { terrain: 'B' }); o.endStroke();
@@ -105,12 +105,22 @@ assert.ok(b.countNonBuildable(5, 5, 9, 9) > 0);
 	o.beginStroke(); o.brush('flatten', 16, 16, 8, { target: 0, strength: 1, only: ib }); o.endStroke();
 	assert.strictEqual(o.height[cellA], hA);
 	assert.ok(o.height[cellB] < 0.5);
-	// 平滑：A格子的邻格里有B时不被B拉动(B整体抬高100也不影响A的平均)
-	const p = new ME.Terrain(16, 16);
-	p.beginStroke(); p.brush('paint', 4, 8, 2.5, { terrain: 'A' }); p.brush('paint', 10, 8, 3.5, { terrain: 'B' }); p.endStroke();
-	for (let i = 0; i < p.idx.length; i++) p.height[i] = p.nameAt(i) === 'B' ? 100 : 0;
-	p.beginStroke(); p.brush('smooth', 4, 8, 6, { strength: 1, only: p.paletteIndex('A') }); p.endStroke();
-	for (let i = 0; i < p.idx.length; i++) if (p.nameAt(i) === 'A') assert.ok(Math.abs(p.height[i]) < 1e-6, 'A cell ' + i + ' h=' + p.height[i]);
+	// 平滑(限定地形)：邻格里的别的地形/平原也参与平均，交界处被拉向邻格高度，悬崖越抹越矮而不是越高。
+	const q = new ME.Terrain(32, 32);
+	q.beginStroke(); q.brush('paint', 16, 16, 8, { terrain: 'M' }); q.endStroke();
+	const im = q.paletteIndex('M');
+	for (let i = 0; i < q.idx.length; i++) q.height[i] = q.idx[i] === im ? 10 : 0;
+	const edge = 16 * 32 + 8, mid = 16 * 32 + 12; // 山体左缘(紧挨平原)和中间
+	assert.strictEqual(q.nameAt(edge), 'M');
+	assert.ok(q.height[edge] === 10 && q.nameAt(edge - 1) === 'plain');
+	let prev = q.height[edge];
+	for (let k = 0; k < 4; k++) {
+		q.beginStroke(); q.brush('smooth', 16, 16, 12, { strength: 1, only: im }); q.endStroke();
+		assert.ok(q.height[edge] < prev, 'edge must drop, pass ' + k + ' h=' + q.height[edge]);
+		prev = q.height[edge];
+	}
+	assert.ok(q.height[edge] < 8 && q.height[mid] > q.height[edge]); // 从中间到边缘单调下降成坡
+	assert.ok(q.idx.every((v, i) => v === im || q.height[i] === 0)); // 平原格没被动
 }
 
 // 等高线：一座圆锥山，主等高线(每5条)标记，线段端点落在对应高度上。
@@ -137,5 +147,68 @@ assert.ok(b.countNonBuildable(5, 5, 9, 9) > 0);
 	a.beginStroke(); a.brush('smooth', 16, 16, 6, { strength: 1 }); a.endStroke();
 	b.beginStroke(); b.brush('smooth', 16, 16, 6, { strength: 3 }); b.endStroke();
 	assert.ok(b.height[16 * 32 + 16] < a.height[16 * 32 + 16] && a.height[16 * 32 + 16] < 10);
+}
+// 允许修改平地：默认平原格高度不动，allowFlat打开后可改；被抬高的平原格地块检查不合格；导出读回不被清零。
+{
+	const f = new ME.Terrain(32, 32);
+	f.beginStroke(); f.brush('raise', 16, 16, 6, { strength: 1 }); f.endStroke();
+	assert.strictEqual(f.height[16 * 32 + 16], 0);
+	assert.strictEqual(f.countNonBuildable(12, 12, 20, 20), 0);
+	f.beginStroke(); f.brush('raise', 16, 16, 6, { strength: 1, allowFlat: true }); f.endStroke();
+	assert.ok(f.height[16 * 32 + 16] > 0.5);
+	assert.ok(f.countNonBuildable(12, 12, 20, 20) > 0);
+	const back = ME.readTerrain(ME.writeTerrain(f));
+	assert.ok(Math.abs(back.height[16 * 32 + 16] - f.height[16 * 32 + 16]) < 1e-6);
+}
+// 一键平滑高度：山体/海底朝平原缓降，平原不动，宽度以外不动。
+{
+	const t = new ME.Terrain(64, 64);
+	t.beginStroke(); t.brush('paint', 32, 32, 20, { terrain: 'm' }); t.endStroke();
+	const im = t.paletteIndex('m');
+	for (let i = 0; i < t.idx.length; i++) t.height[i] = t.idx[i] === im ? 10 : 0;
+	const edge = 32 * 64 + 12, mid = 32 * 64 + 32; // 山左缘(紧邻平原)和山心
+	assert.strictEqual(t.nameAt(edge), 'm'); assert.strictEqual(t.nameAt(edge - 1), 'plain');
+	t.beginStroke(); const n = t.relaxFlatBoundary(4); t.endStroke();
+	assert.ok(n > 0);
+	assert.ok(t.height[edge] < 2, 'edge near 0, got ' + t.height[edge]);
+	assert.ok(t.height[edge + 1] > t.height[edge] && t.height[edge + 3] > t.height[edge + 1]); // 向内单调升
+	assert.strictEqual(t.height[mid], 10); // 宽度以外不动
+	assert.ok(t.idx.every((v, i) => v === im || t.height[i] === 0)); // 平原不动
+	// 海底(负高度)同样朝0缓降
+	const s2 = new ME.Terrain(64, 64);
+	s2.beginStroke(); s2.brush('paint', 32, 32, 20, { terrain: 'sea' }); s2.endStroke();
+	for (let i = 0; i < s2.idx.length; i++) s2.height[i] = s2.nameAt(i) === 'sea' ? -6 : 0;
+	s2.beginStroke(); s2.relaxFlatBoundary(4); s2.endStroke();
+	assert.ok(s2.height[32 * 64 + 12] > -2 && s2.height[32 * 64 + 32] === -6);
+	// 没有平原：不动
+	const full = new ME.Terrain(8, 8); full.palette = ['plain', 'm']; full.idx.fill(1); full.height.fill(5);
+	assert.strictEqual(full.relaxFlatBoundary(4), 0);
+	// 撤销
+	const a = (() => { const q = new ME.Terrain(16, 16); q.beginStroke(); q.brush('paint', 8, 8, 5, { terrain: 'm' }); q.endStroke(); for (let i = 0; i < 256; i++) if (q.nameAt(i) === 'm') q.height[i] = 8; q.beginStroke(); q.relaxFlatBoundary(3); const act = q.endStroke(); q.applyCells(act.indices, act.before); return q; })();
+	assert.ok(a.idx.every((v, i) => a.nameAt(i) !== 'm' || a.height[i] === 8));
+}
+
+// 一键平滑类型：毛刺/突角被去掉，大块不变，任何类型字符串都行。
+{
+	const t = new ME.Terrain(32, 32);
+	t.beginStroke(); t.brush('paint', 16, 16, 9, { terrain: 'rock' }); t.endStroke();
+	const ir = t.paletteIndex('rock');
+	// 平原里的1格毛刺
+	t.idx[3 * 32 + 3] = ir; t.height[3 * 32 + 3] = 4;
+	// 岩石里的1格洞(别的类型)
+	t.idx[16 * 32 + 16] = 0;
+	const before = Array.from(t.idx).filter((v) => v === ir).length;
+	t.beginStroke(); const n = t.smoothTypes(1); t.endStroke();
+	assert.ok(n >= 2);
+	assert.strictEqual(t.idx[3 * 32 + 3], 0); assert.strictEqual(t.height[3 * 32 + 3], 0); // 毛刺没了，变平原高度清0
+	assert.strictEqual(t.idx[16 * 32 + 16], ir); // 洞补上了
+	assert.ok(Array.from(t.idx).filter((v) => v === ir).length > before - 40); // 大块基本保留
+	// 再跑一遍已经平滑的：改动很少
+	t.beginStroke(); const n2 = t.smoothTypes(1); t.endStroke();
+	assert.ok(n2 < n + 10);
+	// 两种非平原类型之间的毛刺也去掉
+	const u = new ME.Terrain(16, 16); u.palette = ['plain', 'a', 'b']; u.idx.fill(1);
+	u.idx[8 * 16 + 8] = 2; u.height.fill(3);
+	assert.ok(u.smoothTypes(1) >= 1); assert.strictEqual(u.idx[8 * 16 + 8], 1);
 }
 console.log('test_terrain OK');

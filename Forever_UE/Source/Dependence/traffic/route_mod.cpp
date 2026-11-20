@@ -4,8 +4,8 @@ void RouteMod::AddHatch(const Connection* connection, float t1, float t2, float 
 	BuildHatch(connection, t1, t2, width, false, hatches);
 }
 
-void RouteMod::AddTunnelHatch(const Connection* connection, float t1, float t2, float width) {
-	BuildHatch(connection, t1, t2, width, true, hatches);
+void RouteMod::AddTunnelHatch(const Connection* connection, float t1, float t2, float width, float startWallBottom, float endWallBottom) {
+	BuildHatch(connection, t1, t2, width, true, hatches, startWallBottom, endWallBottom);
 }
 
 void RouteMod::AddDemolition(const std::vector<std::pair<float, float>>& centerline, float width) {

@@ -97,6 +97,19 @@
 		return { corners, ordered, directions };
 	}
 
+	// 扣掉四向缩进后的内矩形4个角(按n0..n3的顺序)。margin=[西,东,北,南]，都是数。缩进吃光时返回null。
+	function insetCorners(corners, margin) {
+		const [n0, n1, n2] = orderCorners(corners).nodes;
+		const l1 = Math.hypot(n1[0] - n0[0], n1[1] - n0[1]), l2 = Math.hypot(n2[0] - n1[0], n2[1] - n1[1]);
+		if (l1 < 1e-9 || l2 < 1e-9) return null;
+		const [mw, me, mn, ms] = margin;
+		if (l1 - mw - me <= 0.01 || l2 - mn - ms <= 0.01) return null;
+		const ux = (n1[0] - n0[0]) / l1, uy = (n1[1] - n0[1]) / l1, vx = (n2[0] - n1[0]) / l2, vy = (n2[1] - n1[1]) / l2;
+		const at = (b, su, sv) => [b[0] + ux * su + vx * sv, b[1] + uy * su + vy * sv];
+		const nodes = orderCorners(corners).nodes;
+		return [at(nodes[0], mw, ms), at(nodes[1], -me, ms), at(nodes[2], -me, -mn), at(nodes[3], mw, -mn)];
+	}
+
 	function exportLots(model, terrain, output, roadPieces, warnings) {
 		for (const lot of model.lots) {
 			const info = describeLot(model, lot, roadPieces);
@@ -130,6 +143,7 @@
 	ME.orderCorners = orderCorners;
 	ME.addLot = addLot;
 	ME.describeLot = describeLot;
+	ME.insetCorners = insetCorners;
 	ME.nonBuildableCount = nonBuildableCount;
 	ME.exportLots = exportLots;
 	if (typeof module !== 'undefined') module.exports = ME;

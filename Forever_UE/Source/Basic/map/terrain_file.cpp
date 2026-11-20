@@ -125,12 +125,10 @@ void FileTerrain::DistributeTerrain(int width, int height,
 			memcpy(&index, indices + cell * sizeof(uint16_t), sizeof(index));
 			const string& terrain = index < palette.size() ? palette[index] : palette[0];
 			setTerrain(x, y, terrain);
-			// 建筑假定在高度0的平原上：plain/construction强制高度0。水不限制：岸边的平原格也要有水面，否则水面和地面之间会露出缝隙。
-			bool flat = terrain == "plain" || terrain == "construction";
+			// 平原格的高度照文件读(编辑器的"允许改平地"可以抬高/压低平原)；Core只把3x3全是平原且高度都为0的区域升格成建设用地。
 			float elementHeight, elementWater;
 			memcpy(&elementHeight, heights + cell * sizeof(float), sizeof(float));
 			memcpy(&elementWater, waters + cell * sizeof(float), sizeof(float));
-			if (flat) elementHeight = 0.f;
 			// 先setHeight后setWater(SetHeight会重置fine heights，且这里本来就没有fine heights)。
 			if (elementHeight != 0.f) setHeight(x, y, elementHeight);
 			if (!std::isnan(elementWater)) setWater(x, y, true, elementWater);

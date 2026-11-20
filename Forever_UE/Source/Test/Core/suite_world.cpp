@@ -108,6 +108,53 @@ namespace {
 	}
 
 
+	// 曲线路上的车道导航线要跟着路的弯走(不是两个锚点之间的弦)：沿每条有控制点的路取若干t，
+	// 车道中心线上的点(GetLaneSegmentAt给出)到所属车道边的最近距离要很小。
+	void CheckCurvedLaneEdges(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		int roads = 0, samples = 0, bad = 0, curvedEdges = 0;
+		float worst = 0.f;
+		unordered_set<int> externIds;
+		for (const Node* e : world.map->GetExterns()) externIds.insert(e->GetId());
+		for (Road* road : world.map->GetRoads()) {
+			if (road->GetControls().empty() || road->GetVehicleLanes(0).empty()) continue;
+			// 接在城外连接点上的路：端点处所有车道收成同一个点，那一头的车道边不在车道中心线上。
+			if (externIds.count(road->GetStart().GetId()) || externIds.count(road->GetEnd().GetId())) continue;
+			const float len = road->CalcDistance();
+			if (len < 3.f) continue; // 极短的路两端锚点几乎贴在一起，没有"弯"可言
+			roads++;
+			const float tMin = road->GetSetback(true) / len + 0.02f, tMax = 1.f - road->GetSetback(false) / len - 0.02f; // 路口收缩区里没有车道边(路口连线接管)
+			for (int i = 1; i < 20; i++) {
+				const float t = i / 20.f;
+				// 只看路中间：个别路口端的锚点不在路端点上(沿路方向错开)，端部附近的偏差来自锚点位置，不是曲线拟合。
+				if (t < tMin || t > tMax || t < 0.15f || t > 0.75f) continue;
+				Node p = road->GetPoint(t);
+				float dx, dy, dz;
+				road->GetTangent(t, dx, dy, dz);
+				Map::LaneSegment seg;
+				if (!world.map->GetLaneSegmentAt(road, p.GetX(), p.GetY(), dx, dy, seg) || !seg.edge) continue;
+				samples++;
+				float best = 1e9f;
+				for (int k = 0; k <= 64; k++) {
+					Node q = seg.edge->GetPoint(k / 64.f);
+					best = std::min(best, std::hypot(q.GetX() - seg.worldX, q.GetY() - seg.worldY));
+				}
+				worst = std::max(worst, best);
+				if (best > 0.15f) { bad++; if (bad <= 8) run.Note("off-lane sample road " + road->GetName() + " len=" + to_string(road->CalcDistance()) + " t=" + to_string(t) + " dev=" + to_string(best)); }
+				if (!seg.edge->GetControls().empty()) curvedEdges++;
+			}
+		}
+		run.Metric("curved roads", roads, "");
+		run.Metric("curved lane edge worst deviation", worst, "");
+		run.Check(bad == 0, "vehicle lane edges follow curved roads", to_string(bad) + " of " + to_string(samples) + " samples off the lane centerline (worst " + to_string(worst) + ")");
+		if (roads > 0) run.Check(curvedEdges > 0, "curved roads have curved lane edges");
+		// 行人车道边同样带控制点(行人规划PlanPedestrianRoute沿边采样，不再只连节点)。
+		int pedCurved = 0;
+		for (const auto& [from, outs] : world.map->GetPedestrianNavGraph()) for (const auto& [to, conn] : outs) if (conn && !conn->GetControls().empty()) pedCurved++;
+		run.Metric("pedestrian nav edges with controls", pedCurved, "");
+		if (roads > 0) run.Check(pedCurved > 0, "curved roads have curved pedestrian lane edges");
+	}
+
 	// 车行导航图每条边的采样点必须是有限数且落在地图范围内附近：Bezier权重和接近0时GetPoint会除出天文数字，
 	// 公交沿这种边铺路径时 BuildPath 会细分上亿段而卡死/内存暴涨(见 Controller/VehicleCommandController.cpp 的诊断日志)。
 	void CheckVehicleEdgeGeometry(TestWorld& world) {
@@ -217,6 +264,42 @@ namespace {
 		run.Check(share >= 0.9, "pedestrian navigation is one connected network", "largest component " + to_string(share * 100.0) + "%");
 	}
 
+	// 粗高度采样：格点上等于GetHeight，格子里不过冲(落在4个角的最小/最大之间)，跨格子边连续，4角相等时是平的。
+	// 对角线自适应(UsesAntiDiagonal)改过采样方式，这里守住这些不变量。
+	void CheckTerrainSampling(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		const auto size = world.map->GetSize();
+		int checked = 0, badLattice = 0, badRange = 0, badEdge = 0, badFlat = 0;
+		for (int y = 0; y + 1 < size.second; y++) {
+			for (int x = 0; x + 1 < size.first; x++) {
+				if (world.map->GetFineHeights(x, y)) continue; // 有细化数组的格子走另一条路径(1/16网格双线性)
+				const float h00 = world.map->GetHeight(x, y), h10 = world.map->GetHeight(x + 1, y);
+				const float h01 = world.map->GetHeight(x, y + 1), h11 = world.map->GetHeight(x + 1, y + 1);
+				const float lo = min(min(h00, h10), min(h01, h11)), hi = max(max(h00, h10), max(h01, h11));
+				checked++;
+				if (world.map->SampleHeight(static_cast<float>(x), static_cast<float>(y)) != h00) badLattice++;
+				bool flat = h00 == h10 && h00 == h01 && h00 == h11;
+				for (int i = 0; i <= 4; i++) for (int j = 0; j <= 4; j++) {
+					const float v = world.map->SampleHeight(x + i / 4.f, y + j / 4.f);
+					if (v < lo - 1e-4f || v > hi + 1e-4f) badRange++;
+					if (flat && v != h00) badFlat++;
+				}
+				// 右边：从本格内侧和邻格外侧各取一点，差只能是很小的坡度量(两格各自的最大落差*2e-3级)。
+				if (x + 2 < size.first && !world.map->GetFineHeights(x + 1, y)) {
+					const float n10 = world.map->GetHeight(x + 2, y), n11 = world.map->GetHeight(x + 2, y + 1);
+					const float span = max(hi - lo, max(fabsf(n10 - h10), fabsf(n11 - h11)));
+					const float a = world.map->SampleHeight(x + 1 - 1e-3f, y + 0.37f), b = world.map->SampleHeight(x + 1 + 1e-3f, y + 0.37f);
+					if (fabsf(a - b) > span * 0.01f + 1e-3f) badEdge++;
+				}
+			}
+		}
+		run.Metric("terrain cells sampled", checked, "");
+		run.Check(badLattice == 0, "SampleHeight on a lattice point equals GetHeight", to_string(badLattice) + " cells");
+		run.Check(badRange == 0, "SampleHeight stays inside the corner heights (no overshoot)", to_string(badRange) + " samples");
+		run.Check(badFlat == 0, "SampleHeight is flat where all four corners are equal", to_string(badFlat) + " samples");
+		run.Check(badEdge == 0, "SampleHeight is continuous across element edges", to_string(badEdge) + " cells");
+	}
+
 	void CheckBuildings(TestWorld& world) {
 		TestRun& run = TestRun::Get();
 		int badHeights = 0, roomsWithoutBuilding = 0, buildings = 0;
@@ -267,8 +350,13 @@ namespace {
 void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	(void)options;
 	CheckBuildings(world);
+	CheckTerrainSampling(world);
 	CheckVehicleConnectivity(world);
 	CheckVehicleEdgeGeometry(world);
+	// 行道树/路灯总数(信息性，看roadnet mod有没有放；不同路网差异很大，不做通过条件)。
+	TestRun::Get().Metric("trees", static_cast<double>(world.map->GetVegetation().GetTrees().size()), "");
+	TestRun::Get().Metric("lamps", static_cast<double>(world.map->GetLamps().GetLamps().size()), "");
+	CheckCurvedLaneEdges(world);
 	CheckRouteLegGeometry(world);
 	CheckPedestrianConnectivity(world);
 	CheckPopulaceAndSociety(world);

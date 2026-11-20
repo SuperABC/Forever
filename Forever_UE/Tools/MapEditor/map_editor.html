@@ -22,7 +22,7 @@ input[type=number] { width:70px; } input[type=text] { width:150px; } input[type=
 #c3dWrap { position:absolute; inset:0; display:none; }
 #status { height:22px; padding:2px 8px; background:var(--panel); border-top:1px solid var(--line); color:var(--dim); white-space:nowrap; overflow:hidden; }
 h4 { margin:10px 0 4px; color:var(--dim); font-weight:600; font-size:12px; letter-spacing:.05em; }
-.row { display:flex; align-items:center; gap:6px; margin:4px 0; } .row > label { width:64px; color:var(--dim); flex:none; } .row > * { min-width:0; }
+.row { display:flex; align-items:center; gap:6px; margin:4px 0; } .row > label { width:64px; color:var(--dim); flex:none; } .row > * { min-width:0; } .row > input[type=checkbox] { flex:none; }
 .tabs { display:flex; gap:4px; flex-wrap:wrap; } .tabs button { flex:1; }
 .chips { display:flex; flex-wrap:wrap; gap:4px; } .chip { display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border:1px solid var(--line); border-radius:10px; cursor:pointer; } .chip.on { border-color:var(--accent); } .chip i { width:10px; height:10px; border-radius:50%; display:inline-block; }
 .warn { color:var(--warn); margin:3px 0; } .hint { color:var(--dim); margin:4px 0; }
@@ -55,17 +55,29 @@ const ME = window.ME;
 
 // ======================= 状态 =======================
 const S = {
-	terrain: new ME.Terrain(256, 256),
-	model: ME.newModel(256, 256),
+	terrain: new ME.Terrain(1024, 1024),
+	model: ME.newModel(1024, 1024),
 	view: { scale: 3, ox: 20, oy: 20 },
 	mode3d: false,
 	tool: 'terrain',            // terrain / road / lot / select
 	// 地形笔刷
-	brush: { op: 'paint', terrain: 'terrain_mountain', radius: 6, strength: 0.5, target: 0, level: ME.SEA_LEVEL, erase: false, lockTerrain: false },
-		contour: { on: true, interval: 1 },   // 2D等高线(间距单位element=10m，每5条一条主等高线)
+	// 每种笔刷各存一份参数(半径/强度/目标高度/水位/限定地形...)，切换笔刷不会互相覆盖。S.brush 是当前笔刷的那一份。
+	brushOp: 'paint',
+	brushes: {
+		paint: { op: 'paint', radius: 6, terrain: 'terrain_mountain' },
+		water: { op: 'water', radius: 6, level: ME.SEA_LEVEL, erase: false },
+		raise: { op: 'raise', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: false },
+		lower: { op: 'lower', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: false },
+		flatten: { op: 'flatten', radius: 6, strength: 0.5, target: 0, lockTerrain: false, allowFlat: false },
+		smooth: { op: 'smooth', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: false },
+	},
+	get brush() { return this.brushes[this.brushOp]; },
+		cleanup: { width: 4, passes: 1 },   // 一键整理的参数：缓降宽度(格数)、平滑类型遍数
+		showWater: true,   // 显示水面(2D 底图的蓝色着色 + 3D 水面)；只影响显示，不改数据
+		contour: { on: true, interval: 5 },   // 2D等高线(间距单位element=10m，每5条一条主等高线)
 	// 路网
-	// headZ/tailZ=新建的起点/终点节点高度；headTerrain/tailTerrain=改用点击处的地形高度。点在已有节点上沿用它自己的高度。
-		road: { shape: 'line', type: 'ground', preset: 0, headZ: 0, tailZ: 0, headTerrain: false, tailTerrain: false, snap: true, snapRight: true, name: '' },
+	// z=下一个新建节点的高度；zTerrain=改用点击处的地形高度。点在已有节点上沿用它自己的高度。Alt+滚轮快捷调整z。
+		road: { shape: 'line', type: 'ground', preset: 0, z: 0, zTerrain: false, snapNode: true, snapRoad: true, snapEdge: true, snapLot: true, snapAngle: true, name: '', tree: 'default', lamp: 'default' },
 	pending: null,              // 路/地块正在画的状态
 	lotArea: 'AREA_RESIDENCE_HIGH',
 	sel: null,                  // {kind:'node'|'road'|'lot', id}
@@ -109,12 +121,25 @@ function modelOp(fn) {
 	return result || {};
 }
 
+let piecesCache = null, piecesSig = '';
+// 临街路表缓存：按模型内容(节点位置/道路端点控制点类型车道)做签名，签名变了才重算；
+// 不能只靠afterChange失效——载入文件、拖动、撤销等路径不一定经过它，缓存过期时地块缩进会算成0。
+function getRoadPieces() {
+	const M = S.model;
+	const sig = M.nodes.map((n) => n.id + ',' + n.x + ',' + n.y + ',' + (n.z || 0)).join(';') + '|' +
+		M.roads.map((r) => r.id + ',' + r.a + ',' + r.b + ',' + r.type + ',' + (r.ctrl ? r.ctrl.join(',') : '') + ',' + (r.lanes || []).join(',')).join(';');
+	if (!piecesCache || sig !== piecesSig) {
+		try { piecesCache = ME.exportRoadnet(M, S.terrain).roadPieces; } catch (e) { piecesCache = new Map(); }
+		piecesSig = sig;
+	}
+	return piecesCache;
+}
 function afterChange() { S.dirty2d = true; S.dirty3d = true; scheduleWarnings(); updateTop(); renderRight(); }
 let warnTimer = 0;
 function scheduleWarnings() {
 	clearTimeout(warnTimer);
 	warnTimer = setTimeout(() => {
-		try { S.warnings = ME.exportRoadnet(S.model, S.terrain).warnings; } catch (e) { S.warnings = ['检查失败：' + e.message]; }
+		try { const ex = ME.exportRoadnet(S.model, S.terrain); S.warnings = ex.warnings; S.dirty2d = true; } catch (e) { S.warnings = ['检查失败：' + e.message]; }
 		updateTop(); renderRight();
 	}, 400);
 }
@@ -179,6 +204,8 @@ async function doOpenRoadnet() {
 		S.files.roadnet = f.handle; clearHistory(); afterChange(); say('已打开 ' + f.name + (legacy ? '(旧版文件，已迁移成节点高度；隧道/桥已按旧布局拆成多条路)' : ''));
 	} catch (e) { say('打开路网失败：' + e.message); }
 }
+// Ctrl+S：地形和路网一起保存(各自已有文件就直接覆盖，没有就各弹一次另存为)。
+async function doSaveAll() { await doSaveTerrain(false); await doSaveRoadnet(false); }
 async function doSaveRoadnet(as) {
 	try {
 		const { output, warnings } = ME.exportRoadnet(S.model, S.terrain);
@@ -203,7 +230,8 @@ function doNew() {
 
 // ======================= 2D 视图 =======================
 const c2d = $('c2d');
-const g = c2d.getContext('2d');
+// willReadFrequently=软件(CPU)光栅化：部分显卡/缩放下，GPU画布对近似水平的斜边(路边、地块边)会掉像素，露出一格格没盖到的底图；软件渲染不受影响。
+const g = c2d.getContext('2d', { willReadFrequently: true });
 let terrCanvas = document.createElement('canvas');
 let terrImage = null;
 
@@ -226,8 +254,13 @@ function cellRGB(i, noWater) {
 	return [clamp(r, 0, 255), clamp(gg, 0, 255), clamp(b, 0, 255)];
 }
 function paintCell(i) {
-	const [r, gg, b] = cellRGB(i);
+	const [r, gg, b] = cellRGB(i, !S.showWater);
 	terrImage.data[i * 4] = r; terrImage.data[i * 4 + 1] = gg; terrImage.data[i * 4 + 2] = b; terrImage.data[i * 4 + 3] = 255;
+}
+function repaintTerrainImage() { // 只重涂颜色(显隐水面)：不动地形数据，不触发等高线重算
+	for (let i = 0; i < S.terrain.w * S.terrain.h; i++) paintCell(i);
+	terrCanvas.getContext('2d').putImageData(terrImage, 0, 0);
+	S.terrainDirty = null; S.dirty2d = true; S.dirty3d = true;
 }
 function markTerrainDirtyIndices(indices) {
 	const T = S.terrain;
@@ -262,8 +295,15 @@ const toScreen = (x, y) => [x * S.view.scale + S.view.ox, y * S.view.scale + S.v
 
 const ROAD_COLORS = { ground: '#4a4f58', hug: '#6f8f5a', mouth: '#7a4b9a', tunnel: '#b46ae0', bridge: '#e0962f' };
 const ROAD_TYPES = [['ground', '平地'], ['hug', '贴合地形'], ['mouth', '隧道口'], ['tunnel', '隧道'], ['bridge', '桥']];
-const AREA_COLORS = { RESIDENCE: '#3b82f6', COMMERCE: '#f59e0b', INDUSTRY: '#a855f7', OFFICE: '#ef4444', GREEN: '#22c55e', TEST: '#94a3b8' };
-const areaColor = (area) => AREA_COLORS[area.replace('AREA_', '').split('_')[0]] || '#888';
+// 地块类型颜色：住宅=浅绿/深绿/墨绿，商业=浅蓝/深蓝/藏蓝，工业=浅黄/深黄/棕，办公=浅粉/深粉/紫(都是 低/中/高)，测试=红，绿化=青。必须是6位hex(后面会拼透明度后缀)。
+const AREA_COLORS = {
+	AREA_RESIDENCE_LOW: '#86efac', AREA_RESIDENCE_MIDDLE: '#16a34a', AREA_RESIDENCE_HIGH: '#14532d',
+	AREA_COMMERCE_LOW: '#7dd3fc', AREA_COMMERCE_MIDDLE: '#2563eb', AREA_COMMERCE_HIGH: '#1e2a78',
+	AREA_INDUSTRY_LOW: '#fde68a', AREA_INDUSTRY_MIDDLE: '#eab308', AREA_INDUSTRY_HIGH: '#92400e',
+	AREA_OFFICE_LOW: '#f9a8d4', AREA_OFFICE_MIDDLE: '#db2777', AREA_OFFICE_HIGH: '#7e22ce',
+	AREA_TEST: '#ef4444', AREA_GREEN: '#06b6d4',
+};
+const areaColor = (area) => AREA_COLORS[area] || '#888888';
 
 function pathQuad(q) {
 	const poly = ME.polyline(q);
@@ -272,6 +312,7 @@ function pathQuad(q) {
 }
 // 等高线缓存：地形改动(terrainVersion)或间距变了才重算；拖笔刷中最多每60ms重算一次(实时跟手)，松手后再算最终的。
 const contourCache = { segs: null, interval: 0, version: -1, want: 0 };
+const contourLayer = { canvas: document.createElement('canvas'), base: '', ox: 0, oy: 0, t: 0 };
 function drawContours() {
 	const C = S.contour;
 	if (!C.on) return;
@@ -287,17 +328,31 @@ function drawContours() {
 	const segs = cc.segs;
 	if (!segs || !segs.length) return;
 	const v = S.view, dpr = window.devicePixelRatio || 1;
-	const [wx0, wy0] = toWorld(0, 0), [wx1, wy1] = toWorld(c2d.width / dpr, c2d.height / dpr);
-	const minor = new Path2D(), major = new Path2D();
-	for (let i = 0; i < segs.length; i += 5) {
-		const x0 = segs[i], y0 = segs[i + 1], x1 = segs[i + 2], y1 = segs[i + 3];
-		if (Math.max(x0, x1) < wx0 || Math.min(x0, x1) > wx1 || Math.max(y0, y1) < wy0 || Math.min(y0, y1) > wy1) continue;
-		const path = segs[i + 4] ? major : minor;
-		path.moveTo(x0 * v.scale + v.ox, y0 * v.scale + v.oy); path.lineTo(x1 * v.scale + v.ox, y1 * v.scale + v.oy);
+	// 等高线可能有几十万段：画进离屏图层缓存，鼠标移动/画路这类只重绘覆盖层的帧直接贴图，不再每帧重建路径。
+	// 图层只在 地形/间距/缩放/画布尺寸/平移 变了才重画；平移拖动中先贴位移后的旧图，隔250ms补一次。
+	const L = contourLayer, base = cc.version + '|' + cc.interval + '|' + c2d.width + '|' + c2d.height + '|' + v.scale;
+	const same = L.base === base;
+	if (!(same && L.ox === v.ox && L.oy === v.oy)) {
+		const now = performance.now();
+		if (!(same && drag && drag.type === 'pan' && now - L.t < 250)) {
+			L.canvas.width = c2d.width; L.canvas.height = c2d.height;
+			const lg = L.canvas.getContext('2d');
+			lg.setTransform(dpr, 0, 0, dpr, 0, 0);
+			const [wx0, wy0] = toWorld(0, 0), [wx1, wy1] = toWorld(c2d.width / dpr, c2d.height / dpr);
+			const minor = new Path2D(), major = new Path2D();
+			for (let i = 0; i < segs.length; i += 5) {
+				const x0 = segs[i], y0 = segs[i + 1], x1 = segs[i + 2], y1 = segs[i + 3];
+				if (Math.max(x0, x1) < wx0 || Math.min(x0, x1) > wx1 || Math.max(y0, y1) < wy0 || Math.min(y0, y1) > wy1) continue;
+				const path = segs[i + 4] ? major : minor;
+				path.moveTo(x0 * v.scale + v.ox, y0 * v.scale + v.oy); path.lineTo(x1 * v.scale + v.ox, y1 * v.scale + v.oy);
+			}
+			lg.lineJoin = 'round';
+			lg.strokeStyle = 'rgba(45,28,12,0.40)'; lg.lineWidth = 1; lg.stroke(minor);
+			lg.strokeStyle = 'rgba(35,20,6,0.80)'; lg.lineWidth = 1.8; lg.stroke(major);
+			L.base = base; L.ox = v.ox; L.oy = v.oy; L.t = now;
+		}
 	}
-	g.lineJoin = 'round';
-	g.strokeStyle = 'rgba(45,28,12,0.40)'; g.lineWidth = 1; g.stroke(minor);
-	g.strokeStyle = 'rgba(35,20,6,0.80)'; g.lineWidth = 1.8; g.stroke(major);
+	g.drawImage(L.canvas, v.ox - L.ox, v.oy - L.oy, c2d.width / dpr, c2d.height / dpr);
 }
 function draw2D() {
 	if (S.mode3d) return;
@@ -319,16 +374,6 @@ function draw2D() {
 	}
 	g.strokeStyle = '#6a7280'; g.lineWidth = 1; g.strokeRect(v.ox, v.oy, T.w * v.scale, T.h * v.scale);
 
-	// 地块
-	for (const lot of M.lots) {
-		const corners = ME.lotCorners(M, lot); if (!corners) continue;
-		g.beginPath();
-		corners.forEach((c, i) => { const [sx, sy] = toScreen(c[0], c[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); });
-		g.closePath();
-		g.fillStyle = areaColor(lot.area) + '66'; g.fill();
-		g.strokeStyle = (S.sel && S.sel.kind === 'lot' && S.sel.id === lot.id) ? '#fff' : areaColor(lot.area);
-		g.lineWidth = (S.sel && S.sel.kind === 'lot' && S.sel.id === lot.id) ? 2.5 : 1.5; g.stroke();
-	}
 	// 道路
 	for (const r of M.roads) {
 		const q = ME.quadOf(M, r);
@@ -353,11 +398,45 @@ function draw2D() {
 					g.closePath(); g.fill();
 				}
 			}
+	// 地块(画在道路上层)：只画扣掉四向缩进后的实际可用矩形(外框不画：它和道路边缘重合，画出来会有锯齿)。
+	// 填充：同一种地块类型的所有地块合成一条路径一次填充(统一绕向)。相邻地块共边时，分开填充两次抗锯齿会在斜边上留下一条断续的缝，合成一条路径后就没有了。
+	{
+		const pieces = getRoadPieces();
+		const infos = [];
+		for (const lot of M.lots) {
+			const info = ME.describeLot(M, lot, pieces); if (!info) continue;
+			// 有缩进的边向路方向多探出约1像素：路边和地块边几乎重合但斜率有微小差别时，两条抗锯齿边会叠出断续的缝，让地块压住路边就没有了。
+			const bleed = 1 / v.scale;
+			const inner = ME.insetCorners(info.corners, info.directions.map((d) => (d.margin > 0 ? Math.max(0, d.margin - bleed) : 0)));
+			infos.push({ lot, outer: info.corners, inner });
+		}
+		const byColor = new Map();
+		for (const { lot, inner } of infos) {
+			if (!inner) continue;
+			const pts = inner.map((c) => toScreen(c[0], c[1]));
+			let area2 = 0;
+			for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; area2 += p[0] * q[1] - q[0] * p[1]; }
+			if (area2 < 0) pts.reverse();
+			const key = areaColor(lot.area);
+			if (!byColor.has(key)) byColor.set(key, []);
+			byColor.get(key).push(pts);
+		}
+		for (const [color, polys] of byColor) {
+			g.beginPath();
+			for (const pts of polys) { pts.forEach((p, i) => { if (i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]); }); g.closePath(); }
+			g.fillStyle = color + '88'; g.fill('nonzero');
+		}
+		const trace = (cs) => { g.beginPath(); cs.forEach((c, i) => { const [sx, sy] = toScreen(c[0], c[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); }); g.closePath(); };
+		for (const { lot, outer, inner } of infos) {
+			const selected = S.sel && S.sel.kind === 'lot' && S.sel.id === lot.id;
+			if (inner) { trace(inner); g.strokeStyle = selected ? '#fff' : areaColor(lot.area); g.lineWidth = selected ? 2.5 : 1.5; g.stroke(); }
+		}
+	}
 	// 节点
 	for (const n of M.nodes) {
 		const [sx, sy] = toScreen(n.x, n.y);
 		const deg = ME.nodeDegree(M, n.id);
-		const sel = S.sel && S.sel.kind === 'node' && S.sel.id === n.id;
+		const sel = S.sel && ((S.sel.kind === 'node' && S.sel.id === n.id) || (S.sel.kind === 'nodes' && S.sel.ids.includes(n.id)));
 		g.fillStyle = n.extern ? '#ff5e5e' : (deg === 2 ? '#cbd5e1' : '#fff');
 		g.strokeStyle = sel ? '#4c9ffe' : '#111'; g.lineWidth = sel ? 3 : 1.5;
 		g.beginPath();
@@ -385,13 +464,19 @@ function draw2D() {
 function drawOverlay() {
 	const m = S.mouse, v = S.view;
 	if (!m) return;
+	if (drag && drag.type === 'box' && drag.moved) {
+		const [bx0, by0] = toScreen(Math.min(drag.x0, drag.x1), Math.min(drag.y0, drag.y1)), [bx1, by1] = toScreen(Math.max(drag.x0, drag.x1), Math.max(drag.y0, drag.y1));
+		g.fillStyle = 'rgba(76,159,254,0.15)'; g.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+		g.setLineDash([5, 3]); g.strokeStyle = '#4c9ffe'; g.lineWidth = 1.5; g.strokeRect(bx0, by0, bx1 - bx0, by1 - by0); g.setLineDash([]);
+	}
+	const roadSnap = S.tool === 'road' ? snapPoint(m) : null; // 每帧只算一次(里面要扫所有道路)
 	if (S.tool === 'terrain') {
 		const [sx, sy] = toScreen(m[0], m[1]);
 		g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.arc(sx, sy, S.brush.radius * v.scale, 0, Math.PI * 2); g.stroke();
 	}
 	const p = S.pending;
 	if (S.tool === 'road' && p) {
-		const end = snapPoint(m).point;
+		const end = roadSnap.point;
 		const a = p.a;
 		const [ax, ay] = [a.x, a.y];
 		let ctrl = p.ctrl;
@@ -405,12 +490,26 @@ function drawOverlay() {
 		} else { const [ex, ey] = toScreen(end[0], end[1]); g.lineTo(ex, ey); }
 		g.stroke(); g.setLineDash([]);
 		// 头/尾高度标注
-		const endSnap = snapPoint(m);
+		const endSnap = roadSnap;
 		const label = (txt, wx, wy) => { const [lx, ly] = toScreen(wx, wy); g.font = '12px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000b'; g.fillStyle = '#ffe9a8'; g.strokeText(txt, lx + 10, ly - 10); g.fillText(txt, lx + 10, ly - 10); };
-		label('头 z' + (p.a.z || 0).toFixed(2), ax, ay);
-		label('尾 z' + previewZ(endSnap, false).toFixed(2), end[0], end[1]);
-		// 吸附直角的引导线：直线看终点，曲线在选控制点阶段看控制点。
-		const guide = S.road.shape === 'line' ? snapPoint(m).rightAngle : (!ctrl ? rightAngle(m) : null);
+		label('z' + (p.a.z || 0).toFixed(2), ax, ay);
+		label('z' + previewZ(endSnap).toFixed(2), end[0], end[1]);
+		// 当前拉出的路的长度(平面长度；1 element = 10m)，跟在鼠标旁边。曲线按二次Bezier折线求和。
+		let len = 0;
+		if (S.road.shape === 'curve' && ctrl) {
+			let prev = [ax, ay];
+			for (let k = 1; k <= 32; k++) { const t = k / 32, u = 1 - t; const q = [u * u * ax + 2 * u * t * ctrl[0] + t * t * end[0], u * u * ay + 2 * u * t * ctrl[1] + t * t * end[1]]; len += Math.hypot(q[0] - prev[0], q[1] - prev[1]); prev = q; }
+		} else len = Math.hypot(end[0] - ax, end[1] - ay);
+		{
+			const [mx, my] = toScreen(m[0], m[1]);
+			const txt = (len * 10).toFixed(1) + ' m';
+			g.font = '13px sans-serif'; g.lineWidth = 3.5; g.strokeStyle = '#000c'; g.fillStyle = '#9ff0b4';
+			g.textAlign = 'right'; // 放在鼠标左边，不被鼠标图标挡住
+			g.strokeText(txt, mx - 16, my + 4); g.fillText(txt, mx - 16, my + 4);
+			g.textAlign = 'left';
+		}
+		// 吸附角度的引导线：直线看终点，曲线在选控制点阶段看控制点。
+		const guide = S.road.shape === 'line' ? roadSnap.angleSnap : (!ctrl ? angleSnap(m) : null);
 		if (guide) {
 			const reach = Math.hypot(guide.point[0] - guide.origin[0], guide.point[1] - guide.origin[1]) + 2;
 			const [gx0, gy0] = toScreen(guide.origin[0] - guide.dir[0] * 2, guide.origin[1] - guide.dir[1] * 2);
@@ -421,7 +520,7 @@ function drawOverlay() {
 		}
 	}
 	if (S.tool === 'road') {
-		const sp = snapPoint(m);
+		const sp = roadSnap;
 		const [sx, sy] = toScreen(sp.point[0], sp.point[1]);
 		g.strokeStyle = sp.kind === 'free' ? '#aaa' : '#4cff9e'; g.lineWidth = 2;
 		g.beginPath(); g.arc(sx, sy, 7, 0, Math.PI * 2); g.stroke();
@@ -440,31 +539,31 @@ function drawOverlay() {
 			g.setLineDash([6, 4]); g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
 		}
 	}
-	if ((S.tool === 'lot' || S.tool === 'select') && S.mouse) {
+	if (S.tool === 'lot' && S.mouse) {
 		const n = ME.pickNode(S.model, m[0], m[1], 9 / v.scale);
 		if (n) { const [sx, sy] = toScreen(n.x, n.y); g.strokeStyle = '#4cff9e'; g.lineWidth = 2; g.beginPath(); g.arc(sx, sy, 8, 0, Math.PI * 2); g.stroke(); }
 	}
 }
 
 // 路工具的落点：节点(吸附) / 路上(T口) / 地图边界(城外连接点) / 自由点。返回 {kind, point:[x,y], ref}
-const RIGHT_ANGLE_DEG = 10;
-// 吸附直角：起点是已连了道路的节点(或路中间)时，终点(直线)/控制点(曲线)吸到垂直于已连道路的射线上。
-function rightAngle(w) {
+const ANGLE_SNAP_DEG = 10;
+// 吸附角度：起点是已连了道路的节点(或路中间)时，终点(直线)/控制点(曲线)吸到垂直(直角)或沿已连道路延长(平角，只限节点)的射线上。
+function angleSnap(w) {
 	const p = S.pending;
-	if (!S.road.snapRight || !p || !p.a.ref) return null;
+	if (!S.road.snapAngle || !p || !p.a.ref) return null;
 	const origin = p.a.ref.node !== undefined ? { node: p.a.ref.node } : (p.a.ref.road !== undefined ? { road: p.a.ref.road, t: p.a.ref.t } : null);
-	return origin ? ME.rightAngleAt(S.model, origin, w[0], w[1], RIGHT_ANGLE_DEG) : null;
+	return origin ? ME.angleSnapAt(S.model, origin, w[0], w[1], ANGLE_SNAP_DEG) : null;
 }
-// 路工具的落点：吸附直角优先于路中间/自由点，但显式落在节点/城外连接点上时以那个目标为准。
+// 路工具的落点：吸附角度优先于路中间/自由点，但显式落在节点/城外连接点上时以那个目标为准。
 function snapPoint(w) {
 	const base = snapPointBase(w);
-	if (base.kind === 'node' || base.kind === 'extern') return base;
+	if (base.kind === 'node' || base.kind === 'extern' || base.kind === 'corner') return base;
 	const p = S.pending;
 	if (!p || S.road.shape !== 'line') return base;
-	let ra = rightAngle(w);
+	let ra = angleSnap(w);
 	if (!ra) return base;
 	// 射线刚好穿过另一条路：落在那条路上建T口。沿射线迭代两次，让落点贴近射线。
-	if (S.road.snap) {
+	if (S.road.snapRoad) {
 		const r = 9 / S.view.scale;
 		let pt = ra.point;
 		for (let i = 0; i < 2; i++) {
@@ -474,30 +573,53 @@ function snapPoint(w) {
 			pt = [ra.origin[0] + ra.dir[0] * along, ra.origin[1] + ra.dir[1] * along];
 		}
 		const hit = ME.pickRoad(S.model, pt[0], pt[1], r);
-		if (hit && ME.canSplit(hit.road)) return { kind: 'road', point: [hit.x, hit.y], ref: { road: hit.road.id, t: hit.t }, rightAngle: ra };
+		if (hit && ME.canSplit(hit.road)) return { kind: 'road', point: [hit.x, hit.y], ref: { road: hit.road.id, t: hit.t }, angleSnap: ra };
 	}
-	return { kind: 'free', point: ra.point, ref: { x: ra.point[0], y: ra.point[1] }, rightAngle: ra };
+	return { kind: 'free', point: ra.point, ref: { x: ra.point[0], y: ra.point[1] }, angleSnap: ra };
+}
+
+// 最近的地块角点(屏幕9像素内)。excludeNode：正在拖的节点，它自己连着的地块角点会跟着动，不参与吸附。
+function lotCornerSnap(w, excludeNode) {
+	const M = S.model, r = 9 / S.view.scale;
+	let best = null, bd = r;
+	for (const lot of M.lots) {
+		if (excludeNode !== null && (lot.a === excludeNode || lot.b === excludeNode)) continue;
+		const cs = ME.lotCorners(M, lot);
+		if (!cs) continue;
+		for (const c of cs) { const d = Math.hypot(c[0] - w[0], c[1] - w[1]); if (d < bd) { bd = d; best = [c[0], c[1]]; } }
+	}
+	return best;
 }
 
 function snapPointBase(w) {
-	const M = S.model, r = 9 / S.view.scale;
-	if (!S.road.snap) return { kind: 'free', point: w, ref: { x: w[0], y: w[1] } };
-	const node = ME.pickNode(M, w[0], w[1], r);
-	if (node) return { kind: 'node', point: [node.x, node.y], ref: { node: node.id } };
-	// 靠近地图边界 → 城外连接点
-	const edgeR = Math.max(r, 1.2);
-	const W = S.terrain.w, H = S.terrain.h;
-	const dists = [w[0], w[1], W - w[0], H - w[1]];
-	const k = dists.indexOf(Math.min(...dists));
-	if (dists[k] <= edgeR) {
-		const p = k === 0 ? [0, w[1]] : k === 1 ? [w[0], 0] : k === 2 ? [W, w[1]] : [w[0], H];
-		const existing = M.nodes.find((n) => n.extern && Math.hypot(n.x - p[0], n.y - p[1]) < 0.3);
-		if (existing) return { kind: 'node', point: [existing.x, existing.y], ref: { node: existing.id } };
-		return { kind: 'extern', point: p, ref: { x: p[0], y: p[1], extern: true } };
+	const M = S.model, r = 9 / S.view.scale, R = S.road;
+	const free = { kind: 'free', point: w, ref: { x: w[0], y: w[1] } };
+	// 四种吸附各自独立开关：节点 / 地图边界(城外连接点) / 道路(路中间建T口) / 角度(在snapPoint里)。
+	if (R.snapNode) {
+		const node = ME.pickNode(M, w[0], w[1], r);
+		if (node) return { kind: 'node', point: [node.x, node.y], ref: { node: node.id } };
 	}
-	const hit = ME.pickRoad(M, w[0], w[1], r);
-	if (hit && ME.canSplit(hit.road)) return { kind: 'road', point: [hit.x, hit.y], ref: { road: hit.road.id, t: hit.t } };
-	return { kind: 'free', point: w, ref: { x: w[0], y: w[1] } };
+	if (R.snapLot) {
+		const c = lotCornerSnap(w, null);
+		if (c) return { kind: 'corner', point: c, ref: { x: c[0], y: c[1] } };
+	}
+	if (R.snapEdge) {
+		const edgeR = Math.max(r, 1.2);
+		const W = S.terrain.w, H = S.terrain.h;
+		const dists = [w[0], w[1], W - w[0], H - w[1]];
+		const k = dists.indexOf(Math.min(...dists));
+		if (dists[k] <= edgeR) {
+			const p = k === 0 ? [0, w[1]] : k === 1 ? [w[0], 0] : k === 2 ? [W, w[1]] : [w[0], H];
+			const existing = M.nodes.find((n) => n.extern && Math.hypot(n.x - p[0], n.y - p[1]) < 0.3);
+			if (existing) return { kind: 'node', point: [existing.x, existing.y], ref: { node: existing.id } };
+			return { kind: 'extern', point: p, ref: { x: p[0], y: p[1], extern: true } };
+		}
+	}
+	if (R.snapRoad) {
+		const hit = ME.pickRoad(M, w[0], w[1], r);
+		if (hit && ME.canSplit(hit.road)) return { kind: 'road', point: [hit.x, hit.y], ref: { road: hit.road.id, t: hit.t } };
+	}
+	return free;
 }
 
 // ======================= 地块工具 =======================
@@ -529,9 +651,10 @@ c2d.addEventListener('mousedown', (e) => {
 	const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
 	const w = toWorld(sx, sy);
 	S.mouse = w;
+	// Alt+左键：路网/地块工具里是"选择"(空地取消选择)；右键/中键/空格+左键是平移，右键点一下(不拖)结束正在画的路/地块。
+	if (e.button === 0 && e.altKey && (S.tool === 'road' || S.tool === 'lot')) { selectClick(w, e, S.tool); return; }
 	if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown)) {
-		if (e.button === 2 && S.pending) { S.pending = null; S.dirty2d = true; return; }
-		drag = { type: 'pan', sx, sy, ox: S.view.ox, oy: S.view.oy }; return;
+		drag = { type: 'pan', rc: e.button === 2, moved: false, sx, sy, ox: S.view.ox, oy: S.view.oy }; return;
 	}
 	if (e.button !== 0) return;
 	if (S.tool === 'terrain') {
@@ -546,9 +669,12 @@ c2d.addEventListener('mousedown', (e) => {
 			applyBrush(w, only);
 			return;
 		}
-	if (S.tool === 'road') { roadClick(w); return; }
+	if (S.tool === 'road') {
+		if (e.detail === 1) dblPendingBefore = !!S.pending;
+		if (e.detail === 2) { doubleClickSplit(w); return; }
+		roadClick(w); return;
+	}
 	if (S.tool === 'lot') { lotClick(w); return; }
-	if (S.tool === 'select') { selectClick(w, e); return; }
 });
 window.addEventListener('mousemove', (e) => {
 	const rect = c2d.getBoundingClientRect();
@@ -557,16 +683,26 @@ window.addEventListener('mousemove', (e) => {
 	S.mouse = (sx >= 0 && sy >= 0 && sx <= rect.width && sy <= rect.height) || drag ? w : null;
 	updateStatus();
 	if (drag) {
-		if (drag.type === 'pan') { S.view.ox = drag.ox + (sx - drag.sx); S.view.oy = drag.oy + (sy - drag.sy); }
+		if (drag.type === 'pan') { if (Math.hypot(sx - drag.sx, sy - drag.sy) > 4) drag.moved = true; S.view.ox = drag.ox + (sx - drag.sx); S.view.oy = drag.oy + (sy - drag.sy); }
 		else if (drag.type === 'brush') applyBrush(w, drag.only);
-		else if (drag.type === 'node') { const n = ME.nodeOf(S.model, drag.id); ME.moveNode(S.model, drag.id, snapToGrid(w[0], e), snapToGrid(w[1], e)); drag.moved = true; S.dirty3d = true; void n; }
+		else if (drag.type === 'box') { drag.x1 = w[0]; drag.y1 = w[1]; drag.moved = Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 4; }
+		else if (drag.type === 'node') { const n = ME.nodeOf(S.model, drag.id); const lc = S.road.snapLot ? lotCornerSnap(w, drag.id) : null; ME.moveNode(S.model, drag.id, lc ? lc[0] : snapToGrid(w[0], e), lc ? lc[1] : snapToGrid(w[1], e)); drag.moved = true; S.dirty3d = true; void n; }
 		else if (drag.type === 'ctrl') { const r = ME.roadOf(S.model, drag.id); if (r) { r.ctrl = [w[0], w[1]]; drag.moved = true; S.dirty3d = true; } }
 	}
 	S.dirty2d = true;
 });
 window.addEventListener('mouseup', () => {
 	if (!drag) return;
-	if (drag.type === 'brush') { const a = S.terrain.endStroke(); if (a) pushAction(Object.assign({ kind: 't' }, a)); }
+	if (drag.type === 'pan' && drag.rc && !drag.moved && S.pending) S.pending = null; // 右键点一下(没拖动)：结束正在画的路/地块
+	if (drag.type === 'box') {
+		if (drag.moved) {
+			const xa = Math.min(drag.x0, drag.x1), xb = Math.max(drag.x0, drag.x1), ya = Math.min(drag.y0, drag.y1), yb = Math.max(drag.y0, drag.y1);
+			const ids = S.model.nodes.filter((n) => n.x >= xa && n.x <= xb && n.y >= ya && n.y <= yb).map((n) => n.id);
+			S.sel = ids.length ? { kind: 'nodes', ids } : null;
+			renderRight();
+		}
+	}
+	else if (drag.type === 'brush') { const a = S.terrain.endStroke(); if (a) pushAction(Object.assign({ kind: 't' }, a)); }
 	else if (drag.type === 'node' || drag.type === 'ctrl') {
 		if (drag.moved) pushAction({ kind: 'm', before: drag.before, after: ME.cloneModel(S.model) });
 		else S.model = ME.cloneModel(drag.before);
@@ -576,6 +712,12 @@ window.addEventListener('mouseup', () => {
 const snapToGrid = (v, e) => (e && e.altKey ? Math.round(v) : v);
 c2d.addEventListener('wheel', (e) => {
 	e.preventDefault();
+	// Alt+滚轮：路网工具里调整下一个新建节点的高度(步长0.5，不再跟地形)。
+	if (e.altKey && S.tool === 'road') {
+		S.road.zTerrain = false;
+		S.road.z = Math.round((S.road.z + (e.deltaY < 0 ? 0.5 : -0.5)) * 100) / 100;
+		say('节点高度 ' + S.road.z.toFixed(1)); renderLeft(); S.dirty2d = true; return;
+	}
 	const rect = c2d.getBoundingClientRect();
 	const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
 	const [wx, wy] = toWorld(sx, sy);
@@ -590,17 +732,29 @@ window.addEventListener('keydown', (e) => {
 	else if (e.key === 'Escape') { S.pending = null; S.dirty2d = true; renderRight(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
-	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); doSaveRoadnet(false); }
+	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); doSaveAll(); }
 	else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
-	else if (e.key === '[') { S.brush.radius = Math.max(1, S.brush.radius - 1); renderLeft(); }
-	else if (e.key === ']') { S.brush.radius += 1; renderLeft(); }
+	else if ((e.key === 't' || e.key === 'T') && S.tool === 'road' && !e.ctrlKey && !e.metaKey && !e.altKey) { S.road.shape = S.road.shape === 'line' ? 'curve' : 'line'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }
+	else if (e.key === '[') { S.brush.radius = Math.max(1, S.brush.radius - 1); renderLeft(); S.dirty2d = true; }
+	else if (e.key === ']') { S.brush.radius += 1; renderLeft(); S.dirty2d = true; }
 });
 window.addEventListener('keyup', (e) => { if (e.key === ' ') spaceDown = false; });
 
+// 一键整理：整张地图一次操作，进撤销栈。kind='height'平滑高度 / 'types'平滑类型。
+function runCleanup(kind) {
+	const T = S.terrain;
+	T.beginStroke();
+	const n = kind === 'height' ? T.relaxFlatBoundary(S.cleanup.width) : T.smoothTypes(S.cleanup.passes);
+	if (T.stroke && T.stroke.before.size) markTerrainDirtyIndices(Array.from(T.stroke.before.keys()));
+	const a = T.endStroke();
+	if (a) pushAction(Object.assign({ kind: 't' }, a));
+	say(n ? (kind === 'height' ? `已平滑高度：改了 ${n} 个格点` : `已平滑类型：改了 ${n} 个格子`) : (kind === 'height' ? '没有需要平滑的高度(没有平原，或边界已经平缓)' : '没有需要平滑的类型'));
+	if (n) renderLeft();
+}
 const HEIGHT_OPS = ['raise', 'lower', 'flatten', 'smooth'];
 function applyBrush(w, only) {
 	const B = S.brush;
-	const params = { terrain: B.terrain, strength: B.strength, target: B.target, level: B.level, erase: B.erase, only };
+	const params = { terrain: B.terrain, strength: B.strength, target: B.target, level: B.level, erase: B.erase, only, allowFlat: B.allowFlat };
 	const changed = S.terrain.brush(B.op, w[0], w[1], B.radius, params);
 	if (changed && S.terrain.stroke) {
 		markTerrainDirtyIndices(Array.from(S.terrain.stroke.before.keys()));
@@ -609,29 +763,47 @@ function applyBrush(w, only) {
 }
 
 // 落点sp(snapPoint的结果)上的节点高度：已有节点沿用自己的；路中间(T口)取路在该处的高度；新点用面板的头/尾高度(或地形高度)。
-function previewZ(sp, isHead) {
+function previewZ(sp) {
 	const R = S.road;
 	if (sp.ref.node !== undefined) { const n = ME.nodeOf(S.model, sp.ref.node); return n ? (n.z || 0) : 0; }
 	if (sp.ref.road !== undefined) { const r = ME.roadOf(S.model, sp.ref.road); return r ? ME.zAt(S.model, r, ctxHeight(), sp.ref.t) : 0; }
-	const useTerrain = isHead ? R.headTerrain : R.tailTerrain;
-	return useTerrain ? S.terrain.sampleHeight(sp.point[0], sp.point[1]) : (isHead ? R.headZ : R.tailZ);
+	return R.zTerrain ? S.terrain.sampleHeight(sp.point[0], sp.point[1]) : R.z;
+}
+// 路网工具里双击路上一点：在此处新增一个路口，把这条路分成两半(两半沿用原来的类型/车道/名字，曲线按该点切开保持形状)。
+// 双击的第一下已经按"单击"处理过了：原来没在连路 -> 第一下只是设了起点，取消它；原来在连路 -> 第一下已经把路连到这里了，第二下什么都不做。
+let dblPendingBefore = false;
+function doubleClickSplit(w) {
+	if (!dblPendingBefore) S.pending = null;
+	const hit = ME.pickRoad(S.model, w[0], w[1], 9 / S.view.scale);
+	S.dirty2d = true;
+	if (!hit) return;
+	if (ME.pickNode(S.model, w[0], w[1], 9 / S.view.scale)) { say('这里已经有节点了'); return; }
+	if (!ME.canSplit(hit.road)) { say('隧道/桥不能从中间切开'); return; }
+	let nodeId = null;
+	const res = modelOp((m) => { const n = ME.splitRoadAt(m, hit.road.id, hit.t, undefined, ctxHeight()); if (!n) return { error: '这里不能切开' }; nodeId = n.id; });
+	if (!res.error && nodeId !== null) { S.sel = { kind: 'node', id: nodeId }; say('已在此处新增路口'); }
 }
 function roadClick(w) {
 	const sp = snapPoint(w);
 	const R = S.road;
 	if (!S.pending) {
-		S.pending = { a: { x: sp.point[0], y: sp.point[1], ref: Object.assign({}, sp.ref), z: previewZ(sp, true) } };
+		S.pending = { a: { x: sp.point[0], y: sp.point[1], ref: Object.assign({}, sp.ref), z: previewZ(sp) } };
 		if (S.pending.a.ref.node === undefined && S.pending.a.ref.road === undefined) S.pending.a.ref.z = S.pending.a.z;
 		S.dirty2d = true; return;
 	}
 	const p = S.pending;
-	if (R.shape === 'curve' && !p.ctrl) { const ra = rightAngle(w); p.ctrl = ra ? ra.point : [w[0], w[1]]; S.dirty2d = true; return; }
+	if (R.shape === 'curve' && !p.ctrl) { const ra = angleSnap(w); p.ctrl = ra ? ra.point : [w[0], w[1]]; S.dirty2d = true; return; }
 	const refB = Object.assign({}, sp.ref);
-	if (refB.node === undefined && refB.road === undefined) refB.z = previewZ(sp, false);
-	const spec = { a: p.a.ref, b: refB, ctrl: p.ctrl || null, type: R.type, lanes: ME.LANE_PRESETS[R.preset].lanes, name: R.name };
+	if (refB.node === undefined && refB.road === undefined) refB.z = previewZ(sp);
+	const spec = { a: p.a.ref, b: refB, ctrl: p.ctrl || null, type: R.type, lanes: ME.LANE_PRESETS[R.preset].lanes, name: R.name, tree: R.tree, lamp: R.lamp };
 	S.pending = null;
 	const res = modelOp((m) => ME.addRoad(m, spec, ctxHeight()));
-	if (res.road) S.sel = { kind: 'road', id: res.road.id };
+	if (res.road) {
+		S.sel = { kind: 'road', id: res.road.id };
+		// 连续画路：以刚建好的终点为起点，直接进入下一条路的连接状态(终点是城外连接点则结束)。右键/Esc结束。
+		const end = res.endNode !== undefined ? ME.nodeOf(S.model, res.endNode) : null;
+		if (end && !end.extern) S.pending = { a: { x: end.x, y: end.y, ref: { node: end.id }, z: end.z || 0 } };
+	}
 	S.dirty2d = true;
 }
 function lotClick(w) {
@@ -656,10 +828,12 @@ function pointInPoly(x, y, poly) {
 	}
 	return inside;
 }
-function selectClick(w, e) {
+// Alt+左键选择。mode='road'：节点/道路(含选中路的把手)，空地取消选择并可拖框选节点；mode='lot'：只选地块，空地取消选择。
+function selectClick(w, e, mode) {
 	const M = S.model, r = 9 / S.view.scale;
+	const roadMode = mode !== 'lot';
 	// 选中的路的把手优先
-	if (S.sel && S.sel.kind === 'road') {
+	if (roadMode && S.sel && S.sel.kind === 'road') {
 		const road = ME.roadOf(M, S.sel.id);
 		if (road) {
 			const q = ME.quadOf(M, road);
@@ -667,19 +841,21 @@ function selectClick(w, e) {
 			if (Math.hypot(h[0] - w[0], h[1] - w[1]) < r) { drag = { type: 'ctrl', id: road.id, before: ME.cloneModel(M) }; return; }
 		}
 	}
-	const n = ME.pickNode(M, w[0], w[1], r);
+	const n = roadMode ? ME.pickNode(M, w[0], w[1], r) : null;
 	if (n) { S.sel = { kind: 'node', id: n.id }; drag = { type: 'node', id: n.id, before: ME.cloneModel(M) }; renderRight(); S.dirty2d = true; return; }
-	const hit = ME.pickRoad(M, w[0], w[1], Math.max(r, 0.6));
+	const hit = roadMode ? ME.pickRoad(M, w[0], w[1], Math.max(r, 0.6)) : null;
 	if (hit) { S.sel = { kind: 'road', id: hit.road.id }; renderRight(); S.dirty2d = true; return; }
-	for (const lot of M.lots) {
+	for (const lot of (roadMode ? [] : M.lots)) {
 		const corners = ME.lotCorners(M, lot);
 		if (corners && pointInPoly(w[0], w[1], corners)) { S.sel = { kind: 'lot', id: lot.id }; renderRight(); S.dirty2d = true; return; }
 	}
 	S.sel = null; renderRight(); S.dirty2d = true;
+	if (roadMode) drag = { type: 'box', x0: w[0], y0: w[1], x1: w[0], y1: w[1], sx: e.clientX, sy: e.clientY }; // 点在空白处拖动 = 框选节点
 }
 function selExists() {
 	if (!S.sel) return false;
 	const M = S.model;
+	if (S.sel.kind === 'nodes') return S.sel.ids.some((id) => !!ME.nodeOf(M, id));
 	if (S.sel.kind === 'node') return !!ME.nodeOf(M, S.sel.id);
 	if (S.sel.kind === 'road') return !!ME.roadOf(M, S.sel.id);
 	return M.lots.some((l) => l.id === S.sel.id);
@@ -688,7 +864,8 @@ function deleteSelection() {
 	if (!S.sel || !selExists()) return;
 	const sel = S.sel; S.sel = null;
 	modelOp((m) => {
-		if (sel.kind === 'road') ME.deleteRoad(m, sel.id);
+		if (sel.kind === 'nodes') for (const id of sel.ids) ME.deleteNode(m, id); // 框选的节点：连着的路、地块一起删
+		else if (sel.kind === 'road') ME.deleteRoad(m, sel.id);
 		else if (sel.kind === 'node') ME.deleteNode(m, sel.id);
 		else { m.lots = m.lots.filter((l) => l.id !== sel.id); ME.cleanup(m); }
 	});
@@ -734,10 +911,10 @@ function updateTop() {
 				el('span', { class: 'sep' }),
 				btn('等高线', () => { S.contour.on = !S.contour.on; S.dirty2d = true; updateTop(); }, S.contour.on),
 				sel([[0.25, '0.25'], [0.5, '0.5'], [1, '1'], [2, '2'], [5, '5'], [10, '10']], S.contour.interval, (v) => { S.contour.interval = parseFloat(v); S.dirty2d = true; }),
-				el('span', { class: 'hint' }, '间距(10m)，每5条加粗'),
+				btn('水面', () => { S.showWater = !S.showWater; repaintTerrainImage(); updateTop(); }, S.showWater),
 		el('span', { class: 'sep' }),
 		el('span', { style: S.warnings.length ? 'color:var(--warn)' : 'color:var(--dim)' }, S.warnings.length ? `⚠ ${S.warnings.length} 条警告` : '无警告'),
-		el('span', { class: 'hint', style: 'margin-left:auto' }, `${S.terrain.w}×${S.terrain.h}  Ctrl+Z/Y 撤销重做 · 空格/中键拖动平移 · 滚轮缩放`),
+		el('span', { class: 'hint', style: 'margin-left:auto' }, `${S.terrain.w}×${S.terrain.h}`),
 	);
 }
 function updateStatus() {
@@ -758,16 +935,11 @@ function updateStatus() {
 function lockRow() {
 	const B = S.brush;
 	return el('div', null,
+		row('允许改平地', el('input', { type: 'checkbox', checked: B.allowFlat ? 'checked' : null, onchange: (e) => { B.allowFlat = e.target.checked; renderLeft(); } }), el('span', { class: 'hint' }, 'plain 格也能改高度')),
+		null,
 		row('限定地形', el('input', { type: 'checkbox', checked: B.lockTerrain ? 'checked' : null, onchange: (e) => { B.lockTerrain = e.target.checked; renderLeft(); } }), el('span', { class: 'hint' }, '只改按下处的地形')),
-		B.lockTerrain ? el('div', { class: 'hint' }, '按下鼠标时笔刷中心所在格的地形决定这一笔的范围，笔画途中扫过别的地形不会改它们(平滑时也不参考别的地形的高度)。') : null);
+		null);
 }
-const ROAD_TYPE_HINTS = {
-	ground: '贴着地形的平路。路面高度要和地形一致(平原就是0)，不在水上。',
-	hug: '路面跟随地形起伏(每10m取一段)，头尾节点高度和地形的差值逐渐过渡。',
-	mouth: '隧道口：用平地的路面资产，但给地形开口(整段挖洞)。通常一头在地面、一头在隧道里，做下坡/上坡。',
-	tunnel: '隧道内的路面(隧道资产，没有开口)。',
-	bridge: '桥面(放桥墩)。连续的桥自动归成一条桥墩链。桥上不能从中间接路。',
-};
 // 节点高度输入行：数字+"地形"开关(打开=用点击处的地形高度)。
 function heightRow(label, key, terrainKey) {
 	const R = S.road;
@@ -775,7 +947,7 @@ function heightRow(label, key, terrainKey) {
 	if (R[terrainKey]) input.disabled = true;
 	return row(label, input, btn('地形', () => { R[terrainKey] = !R[terrainKey]; renderLeft(); }, R[terrainKey]));
 }
-const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块'], ['select', '选择']];
+const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块']];
 function renderLeft() {
 	const left = $('left'); left.innerHTML = '';
 	const tabs = el('div', { class: 'tabs' });
@@ -786,13 +958,14 @@ function renderLeft() {
 		left.append(el('h4', null, '笔刷'));
 		const ops = [['paint', '刷地形'], ['water', '刷水'], ['raise', '抬高'], ['lower', '降低'], ['flatten', '抹平到'], ['smooth', '平滑']];
 		const grid = el('div', { class: 'tabs' });
-		for (const [id, label] of ops) grid.append(btn(label, () => { B.op = id; renderLeft(); }, B.op === id));
+		for (const [id, label] of ops) grid.append(btn(label, () => { S.brushOp = id; S.dirty2d = true; renderLeft(); }, B.op === id));
 		left.append(grid);
-		left.append(row('半径', num(B.radius, (v) => { B.radius = Math.max(0.5, v || 1); }, { min: 0.5, step: 0.5 }), el('span', { class: 'hint' }, '[ ] 调整')));
+		{ const radiusInput = num(B.radius, (v) => { B.radius = Math.max(0.5, v || 1); S.dirty2d = true; }, { min: 1, step: 1 });
+		radiusInput.addEventListener('input', () => { const v = parseFloat(radiusInput.value); if (v > 0) { B.radius = Math.max(0.5, v); S.dirty2d = true; } }); // 滚轮/箭头/打字时立即刷新预览圆圈
+		left.append(row('半径', radiusInput, el('span', { class: 'hint' }, '[ ] 调整'))); }
 		if (B.op === 'paint') {
 			left.append(row('地形', el('input', { type: 'text', value: B.terrain, onchange: (e) => { B.terrain = e.target.value.trim() || 'plain'; renderLeft(); } })));
 			left.append(row('颜色', el('input', { type: 'color', value: rgbHex(ME.colorOf(B.terrain, S.colors)), onchange: (e) => { S.colors[B.terrain] = hexRgb(e.target.value); rebuildTerrainImage(); renderLeft(); } })));
-			left.append(el('div', { class: 'hint' }, 'plain 是平原：高度锁0，建筑只建在平原上(水可以放在任意格子)。其他字符串随便写，游戏里只有已有地形mod的名字(terrain_mountain/ocean/river)有对应贴图。'));
 			left.append(el('h4', null, '已用字符串'));
 			const chips = el('div', { class: 'chips' });
 			const names = Array.from(new Set(['plain', 'terrain_mountain', 'terrain_ocean', 'terrain_river'].concat(S.terrain.palette)));
@@ -804,41 +977,44 @@ function renderLeft() {
 		} else if (B.op === 'water') {
 			left.append(row('水位', num(B.level, (v) => { B.level = isNaN(v) ? ME.SEA_LEVEL : v; }, { step: 0.1 })));
 			left.append(row('擦除', el('input', { type: 'checkbox', checked: B.erase ? 'checked' : null, onchange: (e) => { B.erase = e.target.checked; } })));
-			left.append(el('div', { class: 'hint' }, '水可以放在任意格子，包括岸边的平原格(否则水面和地面之间会露出缝隙)。海平面 -0.1。'));
 		} else if (B.op === 'flatten') {
 			left.append(row('目标高度', num(B.target, (v) => { B.target = v || 0; }, { step: 0.5 })));
 			left.append(row('强度', num(B.strength, (v) => { B.strength = clamp(v || 0.5, 0.05, 1); }, { step: 0.1, min: 0.05, max: 1 })));
 						left.append(lockRow());
-						left.append(el('div', { class: 'hint' }, '只对非平原格生效。强度1=一次抹平。'));
 		} else {
 			left.append(row('强度', num(B.strength, (v) => { B.strength = Math.max(0.05, v || 0.5); }, { step: 0.1, min: 0.05 })));
 						left.append(lockRow());
-						left.append(el('div', { class: 'hint' }, (B.op === 'smooth' ? '强度可以大于1：每次相当于多遍平滑，越大抹得越平。只对非平原格生效。' : '高度只能改在非平原格(先把区域刷成山/海等地形字符串，再抬高/降低)。')));
 		}
+		left.append(el('h4', null, '一键整理(整张地图，可撤销)'));
+		left.append(row('缓降宽度', num(S.cleanup.width, (v) => { S.cleanup.width = Math.max(1, Math.round(v) || 4); renderLeft(); }, { min: 1, step: 1 }), el('span', { class: 'hint' }, '格')));
+		left.append(btn('一键平滑高度', () => runCleanup('height')));
+		left.append(row('遍数', num(S.cleanup.passes, (v) => { S.cleanup.passes = Math.max(1, Math.round(v) || 1); renderLeft(); }, { min: 1, step: 1 })));
+		left.append(btn('一键平滑类型', () => runCleanup('types')));
 	} else if (S.tool === 'road') {
 		const R = S.road;
 		left.append(el('h4', null, '画法'));
-		left.append(el('div', { class: 'tabs' }, btn('直线', () => { R.shape = 'line'; S.pending = null; renderLeft(); }, R.shape === 'line'), btn('曲线', () => { R.shape = 'curve'; S.pending = null; renderLeft(); }, R.shape === 'curve')));
-		left.append(el('div', { class: 'hint' }, R.shape === 'line' ? '点击起点，再点击终点。' : '点击起点，再点控制点，最后点终点。'));
+		left.append(el('div', { class: 'tabs' }, btn('直线', () => { R.shape = 'line'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }, R.shape === 'line'), btn('曲线', () => { R.shape = 'curve'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }, R.shape === 'curve')));
 		left.append(el('h4', null, '道路类型'));
-		left.append(row('类型', sel(ROAD_TYPES, R.type, (v) => { R.type = v; renderLeft(); })));
-				left.append(el('div', { class: 'hint' }, ROAD_TYPE_HINTS[R.type]));
+		left.append(row('类型', sel(ROAD_TYPES, R.type, (v) => { R.type = v; renderLeft(); S.dirty2d = true; })));
 				left.append(el('h4', null, '节点高度(单位10m)'));
-				left.append(heightRow('头高度', 'headZ', 'headTerrain'));
-				left.append(heightRow('尾高度', 'tailZ', 'tailTerrain'));
-				left.append(el('div', { class: 'hint' }, '点第一下建起点(用头高度)，点第二下建终点(用尾高度)。头尾高度相同走直线(平路)，不同走扁S形。点在已有节点上沿用节点自己的高度；点在路中间(T口)取那条路在该处的高度。'));
+				left.append(heightRow('高度', 'z', 'zTerrain'));
 		left.append(row('车道', sel(ME.LANE_PRESETS.map((p, i) => [i, p.name]), R.preset, (v) => { R.preset = parseInt(v, 10); })));
 		left.append(row('名称', el('input', { type: 'text', value: R.name, placeholder: '默认 路N', onchange: (e) => { R.name = e.target.value.trim(); } })));
-		left.append(row('吸附', el('input', { type: 'checkbox', checked: R.snap ? 'checked' : null, onchange: (e) => { R.snap = e.target.checked; } }), el('span', { class: 'hint' }, '节点/路中间/地图边界')));
-		left.append(row('吸附直角', el('input', { type: 'checkbox', checked: R.snapRight ? 'checked' : null, onchange: (e) => { R.snapRight = e.target.checked; S.dirty2d = true; } }), el('span', { class: 'hint' }, '从已连路的节点/路中间拉出时')));
-		left.append(el('div', { class: 'hint' }, '吸附直角：起点已连着道路(或在路中间)时，终点(曲线是控制点)在 10° 内吸到垂直于该路的方向，黄色虚线是引导线；节点上连了多条路时取最接近鼠标方向的那条的垂线。'));
-		left.append(el('div', { class: 'hint' }, '吸附到路中间 = 自动建T口；与同层的路交叉 = 自动建十字路口；靠近地图边界 = 城外连接点。隧道口/隧道/桥只能接在两端的节点上。右键/Esc取消。'));
+		left.append(row('行道树', el('input', { type: 'text', value: R.tree, placeholder: '空=无', onchange: (e) => { R.tree = e.target.value.trim(); } })));
+		left.append(row('路灯', el('input', { type: 'text', value: R.lamp, placeholder: '空=无', onchange: (e) => { R.lamp = e.target.value.trim(); } })));
+		// 吸附板块：四种吸附各一个独立开关
+		const snapSwitch = (key, label, tip) => row(label, el('input', { type: 'checkbox', checked: R[key] ? 'checked' : null, onchange: (e) => { R[key] = e.target.checked; S.dirty2d = true; } }), el('span', { class: 'hint' }, tip));
+		left.append(el('div', { class: 'hint', style: 'margin-top:6px;font-weight:600' }, '吸附'));
+		left.append(snapSwitch('snapNode', '吸附节点', '点到已有节点上'));
+		left.append(snapSwitch('snapRoad', '吸附道路', '路中间(自动建T口)'));
+		left.append(snapSwitch('snapEdge', '吸附边界', '地图边界(城外连接点)'));
+		left.append(snapSwitch('snapLot', '吸附地块角点', '新建/移动节点时'));
+		left.append(snapSwitch('snapAngle', '吸附角度', '直角/平角(从已连路的节点或路中间拉出时)'));
 	} else if (S.tool === 'lot') {
 		left.append(el('h4', null, '地块'));
 		left.append(row('类型', sel(ME.AREAS.map((a) => [a, areaLabel(a)]), S.lotArea, (v) => { S.lotArea = v; S.dirty2d = true; })));
-		left.append(el('div', { class: 'hint' }, '依次点击两个节点(矩形的一条边)，再移动鼠标拉出深度，点击确认。深度会吸附到对面正好有节点的位置。四个方向的缩进在右侧编辑。'));
 	} else {
-		left.append(el('div', { class: 'hint' }, '点击选中节点/道路/地块；拖动节点移动，拖动选中道路的菱形把手调整弧度。Delete 删除选中。按住 Alt 拖节点时对齐整数格。'));
+
 	}
 }
 function areaLabel(a) {
@@ -855,7 +1031,11 @@ function renderRight() {
 	const M = S.model;
 	right.append(el('h4', null, '选中'));
 	if (!S.sel || !selExists()) right.append(el('div', { class: 'hint' }, '无'));
-	else if (S.sel.kind === 'node') {
+	else if (S.sel.kind === 'nodes') {
+		const ids = S.sel.ids.filter((id) => ME.nodeOf(M, id));
+		right.append(el('div', null, `框选了 ${ids.length} 个节点`));
+		right.append(btn('删除选中节点', deleteSelection));
+	} else if (S.sel.kind === 'node') {
 		const n = ME.nodeOf(M, S.sel.id);
 		right.append(el('div', null, `节点 ${n.id}${n.extern ? '(城外连接点)' : ''}  度数 ${ME.nodeDegree(M, n.id)}`));
 		right.append(row('x', num(n.x.toFixed(2), (v) => modelOp((m) => { const nn = ME.nodeOf(m, n.id); ME.moveNode(m, n.id, v, nn.y); }), { step: 0.5 })));
@@ -868,6 +1048,8 @@ function renderRight() {
 		right.append(el('div', null, `道路 ${r.id}  长度 ${L.toFixed(1)}(${(L * 10).toFixed(0)}m)`));
 		right.append(row('名称', el('input', { type: 'text', value: r.name, onchange: (e) => modelOp((m) => { ME.roadOf(m, r.id).name = e.target.value.trim() || ('路' + r.id); }) })));
 		right.append(row('类型', sel(ROAD_TYPES, r.type, (v) => modelOp((m) => { ME.roadOf(m, r.id).type = v; }))));
+		right.append(row('行道树', el('input', { type: 'text', value: r.tree || '', placeholder: '空=无', onchange: (e) => modelOp((m) => { ME.roadOf(m, r.id).tree = e.target.value.trim(); }) })));
+		right.append(row('路灯', el('input', { type: 'text', value: r.lamp || '', placeholder: '空=无', onchange: (e) => modelOp((m) => { ME.roadOf(m, r.id).lamp = e.target.value.trim(); }) })));
 				right.append(nodeHeightRow(ME.nodeOf(M, r.a), '头高度'));
 				right.append(nodeHeightRow(ME.nodeOf(M, r.b), '尾高度'));
 		const cur = ME.LANE_PRESETS.findIndex((p) => p.lanes.join() === r.lanes.join());
@@ -997,7 +1179,7 @@ function build3D() {
 	};
 	let wetCount = 0;
 	for (let y = 0; y < T.h; y += step) for (let x = 0; x < T.w; x += step) if (!isNaN(wetCell(x, y))) wetCount++;
-	if (wetCount) {
+	if (wetCount && S.showWater) {
 		const wp = new Float32Array(wetCount * 18);
 		let o = 0;
 		for (let y = 0; y < T.h; y += step) for (let x = 0; x < T.w; x += step) {
@@ -1044,8 +1226,8 @@ function build3D() {
 		if (pillars.length) { const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(pillars, 3)); r3.root.add(new THREE.LineSegments(pg, new THREE.LineBasicMaterial({ color: 0xaaaaaa }))); }
 		// 地块
 		for (const lot of out.lots) {
-			const c = lot.corners; const p = [];
-			for (const k of [0, 1, 2, 0, 2, 3]) p.push(c[k][0], 0.08, c[k][1]);
+			const c = ME.insetCorners(lot.corners, lot.margin) || lot.corners; const p = [];
+			for (const k of [0, 1, 2, 0, 2, 3]) p.push(c[k][0], 0.2, c[k][1]);
 			const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
 			r3.root.add(new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: new THREE.Color(areaColor(lot.area)), transparent: true, opacity: 0.5, side: THREE.DoubleSide })));
 		}

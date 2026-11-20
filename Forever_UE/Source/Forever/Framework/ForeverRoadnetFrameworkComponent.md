@@ -20,6 +20,7 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - **每条唯一的mesh资产路径对应一个共享的`UInstancedStaticMeshComponent`**（`GetOrCreateRoadISM`
   按路径查/建），不是每条Road各自一个ISM——目前所有Road都用同一个`default_1_1`，只会建
   一个ISM，但接口上支持未来mod给不同Road配不同mesh资产。
+- **曲线上的节间补缝**：每节是刚性的直段，曲线上相邻两节朝向差`delta`，外侧会张开楔形缝（内侧重叠）。`BuildRoadInstances`把内部接缝处每节的两端各沿自身轴向多伸`e=(W/2)·tan(delta/2)`（`W`=路总宽，`delta`取该节两端切线的水平夹角，`e`不超过节长一半），外侧的角正好碰上；这一段首尾（靠路口/开口）的那一端不伸。直路`delta=0`不变。内侧会有重叠，路面材质按世界坐标取样所以不闪，但没在PIE里确认。ISM是刚性实例，做不到像样条网格那样真正沿曲线弯曲，要彻底消除得改成CPU变形的程序网格。
 - **开口按侧处理**（`BuildRoadInstances`一并完成，原来的`BuildOpeningMeshes`已删）：同一条路上重叠的`RoadOpening`先合并成一段
   （同一物理开口的车行/行人两条同t同宽，合并后只处理一次），每段记录落在哪一侧（`RoadOpening.forwardSide`，true=side0）。
   - **开口只在一侧、这侧有人行道、且`Road::GetSidewalkFreeMesh(side)`配了无人行道资产（能加载）**：开口段不画整宽cube，
@@ -126,3 +127,5 @@ mesh生成，以及可开关的导航图调试可视化。模式上参照`Foreve
 - 小路mesh（`BuildPathRoadMeshes`）是按起止点的直线ribbon，高度固定为`ROADNET_HEIGHT_EPSILON`，不跟随地形起伏。
 
 - **路面ISM的自定义数据**：`GetOrCreateRoadISM`给每个ISM设`NumCustomDataFloats=2`，`BuildRoadInstances`每加一个实例写入沿路方向的水平单位向量`(cos, sin)`(索引0/1)。材质里用`PerInstanceCustomData`读出来：沿路方向=`(c, s)`，横向=`(-s, c)`，与世界坐标XY点乘得到顺着路的UV(材质的`TransformVector`在ISM上不带实例旋转，不能用)。
+
+- **路与路交界处的补缝（2026-11-20）**：编辑器把曲线(贴合地形/隧道口)切成很多条首尾相接的短路，交界处和节内接缝一样会张开楔形缝，而之前首尾一律不伸。现在整条路的首/尾若没连路口(`trim==0`且这一节是路的真正首/尾，不是开口旁边的)，也按本节曲率估计的 `e` 伸出去。连路口的一端不伸；死胡同端点只多伸很小一截。

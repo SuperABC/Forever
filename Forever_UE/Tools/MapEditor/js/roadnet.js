@@ -3,7 +3,7 @@
 // 模型(source)：
 //   version: 2
 //   nodes: [{id, x, y, z, extern?}]                   用户节点(路口/端点)，z=节点高度(element,10m)，extern=城外连接点(必须在地图边界上)
-//   roads: [{id, a, b, ctrl:[x,y]|null, type, lanes:[6], name}]
+//   roads: [{id, a, b, ctrl:[x,y]|null, type, lanes:[6], name, tree, lamp}]   tree/lamp=行道树/路灯tag字符串，''或缺省=没有
 //          type: ground平地 / hug贴合地形 / mouth隧道口 / tunnel隧道 / bridge桥；ctrl是二次Bezier控制点(null=直线)
 //          路面高度由头尾节点的z决定：相同走直线(平路)，不同走扁S形(两端水平、1/3长度处的控制点)；hug则跟随地形，头尾按节点z做偏移。
 //          mouth用平地的路面资产但要给地形开口；tunnel用隧道资产；bridge放桥墩。
@@ -16,8 +16,10 @@
 	const LANE_WIDTH = 0.5;
 	const FLAT_APPROACH = 1.5;      // (仅旧版文件迁移用)隧道口/桥头的水平引道
 	const TUNNEL_RAMP = 8;          // (仅旧版文件迁移用)隧道口S坡长度
-	const MAX_SLOPE = 0.2;          // 扁S坡最大坡度(每单位水平长度的高度变化)，超过就警告
+	const MAX_SLOPE = 0.25;          // 扁S坡最大坡度(每单位水平长度的高度变化)，超过就警告
+	const CORNER_MIN_BEND = 5 * Math.PI / 180; // 度数2节点的拐弯超过这个角度才导成路口
 	const HUG_STEP = 1;             // 贴地形爬升采样间距
+	const HUG_LEVEL_RATIO = 0.25;   // 贴合段接非hug路的那一端，最后这么大比例的路长缓入到水平(两端各自算)
 	const NODE_EPS = 0.05;          // 判断"就在节点上"的距离
 	const SAME_LEVEL = 0.25;        // 交叉时两条路高度差小于这个才算同一层，才建路口
 
@@ -133,16 +135,18 @@
 		return len < 1e-9 ? null : [dx / len, dy / len];
 	}
 
-	// 吸附直角：从已有道路的节点(origin={node:id})或路中间(origin={road:id,t})往外拉新路时，
-	// 把朝向(x,y)的射线吸到"垂直于已连道路"的方向上。节点上连了多条路时，取与鼠标方向夹角最小的那条的垂线(两侧都算)。
-	// 夹角在maxDeg度内才吸附。返回 {point:[x,y], dir:[dx,dy], angle(度)}；不适用(节点没连路、鼠标太近、夹角太大)返回null。
-	function rightAngleAt(model, origin, x, y, maxDeg) {
+	// 吸附角度：从已有道路的节点(origin={node:id})或路中间(origin={road:id,t})往外拉新路时，
+	// 把朝向(x,y)的射线吸到特殊角度上：直角(垂直于已连道路，两侧都算)；节点上还有平角(沿已连道路的延长线继续直走，kind='straight')。
+	// 节点上连了多条路时，取与鼠标方向夹角最小的那个候选。路中间只有直角(沿路走会和原路重叠，没有意义)。
+	// 夹角在maxDeg度内才吸附。返回 {point:[x,y], dir:[dx,dy], angle(度), kind:'right'|'straight'}；不适用(节点没连路、鼠标太近、夹角太大)返回null。
+	function angleSnapAt(model, origin, x, y, maxDeg) {
 		let ox, oy;
+		let straight = false; // 平角只对节点起点有效
 		const dirs = [];
 		if (origin && origin.node !== undefined) {
 			const n = nodeOf(model, origin.node);
 			if (!n) return null;
-			ox = n.x; oy = n.y;
+			ox = n.x; oy = n.y; straight = true;
 			for (const r of model.roads) {
 				let toward = null;
 				if (r.a === n.id) toward = r.ctrl ? r.ctrl : (() => { const b = nodeOf(model, r.b); return [b.x, b.y]; })();
@@ -163,17 +167,18 @@
 		const vx = x - ox, vy = y - oy, vlen = Math.hypot(vx, vy);
 		if (vlen < 0.05) return null;
 		let best = null;
+		const consider = (px, py, kind) => {
+			const dot = (vx * px + vy * py) / vlen;
+			const ang = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+			if (!best || ang < best.angle) best = { angle: ang, dir: [px, py], kind };
+		};
 		for (const d of dirs) {
-			for (const s of [1, -1]) {
-				const px = -d[1] * s, py = d[0] * s;
-				const dot = (vx * px + vy * py) / vlen;
-				const ang = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
-				if (!best || ang < best.angle) best = { angle: ang, dir: [px, py] };
-			}
+			consider(-d[1], d[0], 'right'); consider(d[1], -d[0], 'right');
+			if (straight) consider(-d[0], -d[1], 'straight'); // d指向已连道路那一侧，延长线是反方向
 		}
 		if (best.angle > maxDeg) return null;
 		const along = vx * best.dir[0] + vy * best.dir[1];
-		return { point: [ox + best.dir[0] * along, oy + best.dir[1] * along], dir: best.dir, origin: [ox, oy], angle: best.angle };
+		return { point: [ox + best.dir[0] * along, oy + best.dir[1] * along], dir: best.dir, origin: [ox, oy], angle: best.angle, kind: best.kind };
 	}
 	function pickNode(model, x, y, radius) {
 		let best = null, bestD = radius;
@@ -309,6 +314,7 @@
 			type: spec.type || 'ground',
 			lanes: (spec.lanes || LANE_PRESETS[0].lanes).slice(),
 			name: spec.name || '',
+			tree: spec.tree || '', lamp: spec.lamp || '',   // 行道树/路灯tag(''=没有)，游戏侧roadnet_file按tag选资产
 		};
 		// (路面高度来自头尾节点z)
 		model.roads.push(road);
@@ -349,7 +355,7 @@
 				current = model.roads[model.roads.length - 1];
 			}
 		}
-		return { road };
+		return { road, endNode: b.id };
 	}
 
 	function deleteRoad(model, roadId) {
@@ -431,7 +437,21 @@
 			ss.push(s); ts.push(t); zs.push(z); maxZ = Math.max(maxZ, Math.abs(z));
 		}
 		if (maxZ < 0.02) return [{ t0: 0, t1: 1, z0: 0, z1: 0, sl0: 0, sl1: 0, kind: 'ground' }];
+		// 连着非hug路(mouth/tunnel/ground/bridge，它们的端点都是水平的)的那一端：最后HUG_LEVEL_RATIO(1/4)路长内
+		// 用smoothstep从"贴地形的高度"缓入到端点高度，终点斜率为0，和后面的平路接上不留折角。
+		const levelEnd = (nodeId) => model.roads.some((r) => r.id !== road.id && (r.a === nodeId || r.b === nodeId) && r.type !== 'hug');
+		const ramp = L * HUG_LEVEL_RATIO;
+		const level0 = levelEnd(road.a), level1 = levelEnd(road.b);
+		if (ramp > 1e-9) {
+			const zFirst = zs[0], zLast = zs[count];
+			for (let i = 0; i <= count; i++) {
+				if (level0 && ss[i] < ramp) zs[i] = zFirst + (zs[i] - zFirst) * smooth(ss[i] / ramp);
+				if (level1 && L - ss[i] < ramp) zs[i] = zLast + (zs[i] - zLast) * smooth((L - ss[i]) / ramp);
+			}
+		}
 		const m = pchipSlopes(ss, zs);
+		if (level0) m[0] = 0;
+		if (level1) m[count] = 0;
 		const out = [];
 		for (let i = 0; i < count; i++) out.push({ t0: ts[i], t1: ts[i + 1], z0: zs[i], z1: zs[i + 1], sl0: m[i], sl1: m[i + 1], kind: 'hug' });
 		return out;
@@ -474,6 +494,21 @@
 		return result;
 	}
 
+	// 度数2的节点是不是拐角：两条路离开节点的方向夹角小于180度-CORNER_MIN_BEND(约5度)。
+	function isCorner(model, nodeId) {
+		const dirs = [];
+		for (const r of model.roads) {
+			if (r.a !== nodeId && r.b !== nodeId) continue;
+			const q = quadOf(model, r);
+			const from = r.a === nodeId ? q.p0 : q.p1, toward = r.a === nodeId ? (q.c || q.p1) : (q.c || q.p0);
+			const dx = toward[0] - from[0], dy = toward[1] - from[1], len = Math.hypot(dx, dy);
+			if (len > 1e-9) dirs.push([dx / len, dy / len]);
+		}
+		if (dirs.length !== 2) return false;
+		const cos = dirs[0][0] * dirs[1][0] + dirs[0][1] * dirs[1][1];
+		return Math.acos(Math.max(-1, Math.min(1, cos))) < Math.PI - CORNER_MIN_BEND;
+	}
+
 	function exportRoadnet(model, terrain) {
 		const ctx = { height: terrain ? (x, y) => terrain.sampleHeight(x, y) : () => 0 };
 		const warnings = [];
@@ -488,10 +523,14 @@
 		for (const n of model.nodes) {
 			const d = degree.get(n.id) || 0;
 			if (d === 0 && !n.extern) continue;
-			const type = n.extern ? 'extern' : (d === 2 ? 'plain' : 'intersection');
+			// 度数2的节点：两条路夹角偏离直线(拐角)才导成路口(才有缩进和路口mesh，避免拐角处两条路重叠)；近似直线的仍是plain(坡段/隧道衔接点)。
+			const type = n.extern ? 'extern' : (d === 2 ? (isCorner(model, n.id) ? 'intersection' : 'plain') : 'intersection');
 			nodes.push({ id: 'n' + n.id, x: n.x, y: n.y, z: n.z || 0, type });
 		}
 		const chains = bridgeChains(model);
+		// 连着隧道(type=tunnel的路)的节点：隧道口(mouth)靠这些节点的那一端要加端墙，封住隧道资产房顶和地形之间的空洞。
+		const tunnelNodes = new Set();
+		for (const r of model.roads) if (r.type === 'tunnel') { tunnelNodes.add(r.a); tunnelNodes.add(r.b); }
 
 		for (const r of model.roads) {
 			const q = quadOf(model, r);
@@ -515,6 +554,13 @@
 					controls: makeControls(sub, p.z0, p.z1, p.sl0, p.sl1, length),
 					lanes: r.lanes.slice(), kind: p.kind,
 				};
+				// 行道树/路灯tag：只给平面(ground)路段导出；空串=这条路不种树/不放灯。
+				if (p.kind === 'ground') { entry.treeTag = r.tree || ''; entry.lampTag = r.lamp || ''; }
+				if (p.kind === 'mouth') {
+					// 隧道口靠隧道的那一端加端墙(写wallFrom/wallTo给游戏侧)，和两端高度无关
+					if (i === 0 && tunnelNodes.has(r.a)) entry.wallFrom = true;
+					if (i === pieces.length - 1 && tunnelNodes.has(r.b)) entry.wallTo = true;
+				}
 				if (p.kind === 'bridge' && chains.has(r.id)) Object.assign(entry, chains.get(r.id));
 				roads.push(entry);
 				idx.push(roads.length - 1);
@@ -633,7 +679,7 @@
 	ME.roadLength = roadLength;
 	ME.nearestOnRoad = nearestOnRoad;
 	ME.pickNode = pickNode;
-	ME.rightAngleAt = rightAngleAt;
+	ME.angleSnapAt = angleSnapAt;
 	ME.pickRoad = pickRoad;
 	ME.zAt = zAt;
 	ME.canSplit = canSplit;

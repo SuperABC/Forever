@@ -166,7 +166,8 @@ void Map::InitTerrains() {
 					}
 					else {
 						string t = getTerrain(nx, ny);
-						if (t != "plain" && t != "construction") {
+						// 高度非0的平原(被抬高/压低过)不升格：建筑假定建在高度0的地面上。
+						if ((t != "plain" && t != "construction") || getHeight(nx, ny) != 0.f) {
 							allPlain = false;
 						}
 					}
@@ -358,13 +359,36 @@ void Map::InitRoadnet() {
 					Node* toAnchor = resolveAnchor(road, !fromIsStart, isVehicle, side, laneIndex);
 					if (!fromAnchor || !toAnchor) continue;
 
-					Connection* edge = new Connection(*fromAnchor, *toAnchor);
-					auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;
-					graph[fromAnchor->GetId()].emplace_back(toAnchor->GetId(), edge);
-					if (!isVehicle) {
-						graph[toAnchor->GetId()].emplace_back(fromAnchor->GetId(), edge);
+					// 沿t递增排的锚点链：低t端锚点 -> (曲线路的内部拆分点) -> 高t端锚点。直线路只有两端，和以前一样一整条。
+					Node* ascLo = fromIsStart ? fromAnchor : toAnchor;
+					Node* ascHi = fromIsStart ? toAnchor : fromAnchor;
+					vector<float> knots = LaneSplitKnots(road, ProjectPointOntoRoad(road, ascLo->GetX(), ascLo->GetY()),
+						ProjectPointOntoRoad(road, ascHi->GetX(), ascHi->GetY()));
+					vector<Node*> chain{ ascLo };
+					for (float kt : knots) {
+						auto [kx, ky] = ComputeLaneAnchorPosition(road, kt, isVehicle, side, laneIndex);
+						Node* kn = new Node(isVehicle ? "vehicle" : "pedestrian", kx, ky, road->GetPoint(kt).GetZ());
+						navAnchorNodes.push_back(kn);
+						chain.push_back(kn);
 					}
-					throughLines[road][idx].push_back({ edge, fromAnchor, toAnchor, laneIndex, 0.f, 1.f });
+					chain.push_back(ascHi);
+
+					auto& graph = isVehicle ? vehicleNavGraph : pedestrianNavGraph;
+					for (size_t i = 0; i + 1 < chain.size(); i++) {
+						// side0沿t递增(from=低t端)，side1沿t递减(from=高t端)。贯通线的t范围首段从0、末段到1(锚点本身离路口setback)。
+						Node* a = chain[i];
+						Node* b = chain[i + 1];
+						Node* from = (side == 0) ? a : b;
+						Node* to = (side == 0) ? b : a;
+						float tA = (i == 0) ? 0.f : knots[i - 1];
+						float tB = (i + 2 == chain.size()) ? 1.f : knots[i];
+						Connection* edge = MakeLaneConnection(road, isVehicle, side, laneIndex, from, to);
+						graph[from->GetId()].emplace_back(to->GetId(), edge);
+						if (!isVehicle) {
+							graph[to->GetId()].emplace_back(from->GetId(), edge);
+						}
+						throughLines[road][idx].push_back({ edge, from, to, laneIndex, tA, tB });
+					}
 				}
 			}
 		}
@@ -1565,7 +1589,7 @@ Node* Map::BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex,
 	// 按tLo->tHi方向建两条新Connection（side==0方向沿t递增，fromAnchor在tLo端；side==1
 	// 反过来，fromAnchor在tHi端），同时登记进lines，构成这条车道链上更细的两段。
 	auto makeSeg = [&](Node* from, Node* to, float tA, float tB) {
-		Connection* c = new Connection(*from, *to);
+		Connection* c = MakeLaneConnection(road, isVehicle, side, laneIndex, from, to);
 		graph[from->GetId()].emplace_back(to->GetId(), c);
 		if (!isVehicle) graph[to->GetId()].emplace_back(from->GetId(), c);
 		lines.push_back({ c, from, to, laneIndex, tA, tB });
@@ -1580,6 +1604,65 @@ Node* Map::BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex,
 	}
 
 	return newNode;
+}
+
+vector<float> Map::LaneSplitKnots(Road* road, float tA, float tB) {
+	vector<float> out;
+	if (!road || road->GetControls().empty() || tB - tA < 1e-4f) return out;
+	float unit = road->GetUnit(), total = road->CalcDistance();
+	if (unit <= 0.f || total <= 0.f) return out;
+
+	// 和Forever BuildRoadInstances::tileRange同一套分段数规则(缩放后的单节长度落在[0.8,1.2]*unit，取最接近rangeLen/unit的整数)，
+	// 在[tA,tB]上按t等分(t本身是弧长参数)，网格点就是路面单元的接缝。开口会把路面切成几段各自重新分节，这里不跟(静态没法知道)，只是大致对齐。
+	float rangeLen = total * (tB - tA);
+	int nLow = static_cast<int>(ceilf(rangeLen / (1.2f * unit)));
+	int nHigh = static_cast<int>(floorf(rangeLen / (0.8f * unit)));
+	int n = (nLow <= nHigh && nLow > 0) ? max(nLow, min(nHigh, static_cast<int>(roundf(rangeLen / unit)))) : 0;
+	if (n <= 1) return out;
+
+	auto heading = [&](float t) {
+		float dx, dy, dz;
+		road->GetTangent(t, dx, dy, dz);
+		return atan2f(dy, dx);
+	};
+	auto gridT = [&](int k) { return tA + (tB - tA) * static_cast<float>(k) / n; };
+	constexpr float kMaxTurn = 0.15f;  // 一段内累计转角上限(弧度，约9度)：二次Bezier拟合在这个转角内误差可以忽略
+	constexpr int kMaxTiles = 12;      // 一段最多包含的路面单元数(S形坡道的高度变化也靠它限制)
+
+	int startK = 0;
+	float startHeading = heading(gridT(0));
+	int k = 1;
+	while (k < n) {
+		float turn = fabsf(heading(gridT(k)) - startHeading);
+		if (turn > 3.14159265f) turn = 2.f * 3.14159265f - turn;
+		if (turn > kMaxTurn || k - startK > kMaxTiles) {
+			int b = (k - 1 > startK) ? k - 1 : k; // 超限的前一个网格点作为拆分点；一个单元本身就超限则只能在这里拆
+			out.push_back(gridT(b));
+			startK = b;
+			startHeading = heading(gridT(b));
+			if (b == k) k++;
+			continue;
+		}
+		k++;
+	}
+	return out;
+}
+
+Connection* Map::MakeLaneConnection(Road* road, bool isVehicle, int side, int laneIndex, Node* from, Node* to) const {
+	Connection* c = new Connection(*from, *to);
+	if (!road || road->GetControls().empty()) return c;
+	float ta = ProjectPointOntoRoad(road, from->GetX(), from->GetY());
+	float tb = ProjectPointOntoRoad(road, to->GetX(), to->GetY());
+	if (fabsf(tb - ta) < 1e-3f) return c;
+	// 二次Bezier经过车道中心线在两端中间t处的点M：控制点 = 2M - (P0+P2)/2(u=0.5时曲线正好过M)。z同理，坡道上高度也跟着。
+	float tm = (ta + tb) * 0.5f;
+	auto [mx, my] = ComputeLaneAnchorPosition(road, tm, isVehicle, side, laneIndex);
+	float mz = road->GetPoint(tm).GetZ();
+	float cx = 2.f * mx - 0.5f * (from->GetX() + to->GetX());
+	float cy = 2.f * my - 0.5f * (from->GetY() + to->GetY());
+	float cz = 2.f * mz - 0.5f * (from->GetZ() + to->GetZ());
+	c->AddControls({ { Node("lane_ctrl", cx, cy, cz), 1.f } });
+	return c;
 }
 
 Node* Map::MakeIsolatedAnchor(float worldX, float worldY, float worldZ, const char* category) {
@@ -2173,10 +2256,23 @@ float Map::SampleHeight(float x, float y) const {
 
 	int ex1 = min(ex0 + 1, width - 1);
 	int ey1 = min(ey0 + 1, height - 1);
-	return At(ex0, ey0).height * (1 - tx) * (1 - ty) +
-		At(ex1, ey0).height * tx * (1 - ty) +
-		At(ex0, ey1).height * (1 - tx) * ty +
-		At(ex1, ey1).height * tx * ty;
+	float h00 = At(ex0, ey0).height, h10 = At(ex1, ey0).height;
+	float h01 = At(ex0, ey1).height, h11 = At(ex1, ey1).height;
+	// 格子拆成两个三角形线性插值(对角线见UsesAntiDiagonal)：4个格点值不变，4个角相等时仍然是平的，不会过冲。
+	if (fabsf(h10 - h01) < fabsf(h00 - h11)) {
+		if (tx + ty <= 1.f) return h00 + tx * (h10 - h00) + ty * (h01 - h00);
+		return h11 + (1.f - tx) * (h01 - h11) + (1.f - ty) * (h10 - h11);
+	}
+	if (tx >= ty) return h00 + tx * (h10 - h00) + ty * (h11 - h10);
+	return h00 + ty * (h01 - h00) + tx * (h11 - h01);
+}
+
+bool Map::UsesAntiDiagonal(int ex, int ey) const {
+	if (width <= 0 || height <= 0) return false;
+	ex = max(0, min(width - 1, ex));
+	ey = max(0, min(height - 1, ey));
+	int ex1 = min(ex + 1, width - 1), ey1 = min(ey + 1, height - 1);
+	return fabsf(At(ex1, ey).height - At(ex, ey1).height) < fabsf(At(ex, ey).height - At(ex1, ey1).height);
 }
 
 pair<bool, float> Map::GetWater(int x, int y) const {
@@ -2968,6 +3064,11 @@ bool Map::GetLaneSegmentAt(Road* road, float x, float y, float dirX, float dirY,
 	return false; // 理论不会发生：每条车道全长应该被throughLines的若干段完整覆盖
 }
 
+namespace {
+	// 定义在下面(PlanPedestrianRoute也要用)，默认参数只能写在这里。
+	void AppendConnectionPoints(vector<Map::NavPoint>& points, Connection* connection, vector<Map::NavEdge>* edges = nullptr, bool reverse = false);
+}
+
 Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y, Room* destRoom) const {
 	VehicleRoutePlan plan;
 	Node* destNode = destRoom ? destRoom->GetNavigationNode() : nullptr;
@@ -3003,9 +3104,16 @@ Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y
 		vector<const Node*> path = FindPedestrianPath(candidate->GetId(), destNode->GetId());
 		if (path.empty()) continue;
 		plan.status = VehicleRoutePlan::OK;
-		for (const Node* node : path) plan.points.push_back(toPoint(node));
+		// 沿每条边的曲线采样(曲线路上的行人车道边带控制点，只连节点会切弦)；边双向，起点不是Start就倒着走。
+		plan.points.push_back(toPoint(path.front()));
 		for (size_t i = 0; i + 1 < path.size(); i++) {
-			plan.edges.push_back({ FindPedestrianEdge(path[i]->GetId(), path[i + 1]->GetId()), static_cast<int>(i), static_cast<int>(i + 1) });
+			Connection* edge = FindPedestrianEdge(path[i]->GetId(), path[i + 1]->GetId());
+			if (!edge) {
+				plan.points.push_back(toPoint(path[i + 1]));
+				plan.edges.push_back({ nullptr, static_cast<int>(plan.points.size()) - 2, static_cast<int>(plan.points.size()) - 1 });
+				continue;
+			}
+			AppendConnectionPoints(plan.points, edge, &plan.edges, edge->GetStart().GetId() != path[i]->GetId());
 		}
 		return plan;
 	}
@@ -3016,13 +3124,14 @@ Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y
 }
 
 namespace {
-	// 沿Connection从起点到终点采样（车行边都是单向Start->End）；和上一段首尾重合的点不重复加。
+	// 沿Connection采样；和上一段首尾重合的点不重复加。车行边都是单向Start->End；行人边双向，reverse=true时从End走到Start。
 	// edges非空时记录这条Connection占用的点下标范围(首点是和上一段共用的端点)。
-	void AppendConnectionPoints(vector<Map::NavPoint>& points, Connection* connection, vector<Map::NavEdge>* edges = nullptr) {
+	void AppendConnectionPoints(vector<Map::NavPoint>& points, Connection* connection, vector<Map::NavEdge>* edges, bool reverse) {
 		int steps = std::clamp(static_cast<int>(ceilf(connection->CalcDistance() / 0.5f)), 2, 64);
 		int first = points.empty() ? 0 : static_cast<int>(points.size()) - 1;
 		for (int i = points.empty() ? 0 : 1; i <= steps; i++) {
-			Node p = connection->GetPoint(static_cast<float>(i) / steps);
+			float f = static_cast<float>(i) / steps;
+			Node p = connection->GetPoint(reverse ? 1.f - f : f);
 			points.push_back({ p.GetX(), p.GetY(), p.GetZ() });
 		}
 		if (edges) edges->push_back({ connection, first, static_cast<int>(points.size()) - 1 });

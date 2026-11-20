@@ -4,6 +4,7 @@
 #include "../common/error.h"
 
 #include <vector>
+#include <limits>
 #include <unordered_map>
 #include <functional>
 #include <array>
@@ -346,15 +347,24 @@ protected:
 	float acreage;
 };
 
+// AddTunnelHatch的"这一端不做端墙"哨兵值(默认)。
+constexpr float kNoEndWall = std::numeric_limits<float>::max();
+
 // 地形挖洞标记。quad.sizeX=沿rotation(长边方向,弧度)的长度,sizeY=宽度。wall=true(隧道口,
 // RoadnetMod::AddTunnelHatch)时在两条长边加竖直侧壁,floorStart/floorEnd是洞底在起/终点端的绝对高度
 // (地图element单位,沿路smoothstep过渡)。
+// startWall/endWall：洞的起点端(t1)/终点端(t2)是否加端墙，墙底是startWallBottom/endWallBottom(绝对高度，地图element单位)，
+// 墙顶由UE层取该端头线段范围内地形最高处；用来封住隧道资产房顶和地形之间的空洞。
 struct TerrainHatch {
 	Quad quad;
 	float rotation = 0.f;
 	bool wall = false;
 	float floorStart = 0.f;
 	float floorEnd = 0.f;
+	bool startWall = false;
+	float startWallBottom = 0.f;
+	bool endWall = false;
+	float endWallBottom = 0.f;
 };
 
 // 地形贴合请求(BuildTerrainFit产出),宿主Map::ApplyTerrainFits把面下和边上的地形贴到线高度,
@@ -390,8 +400,10 @@ struct PierRequest {
 };
 
 // 把connection上[t1,t2]包成Quad追加进out(挖地形洞)。tunnel=true时带侧壁,仅隧道口用。
+// startWallBottom/endWallBottom(仅tunnel有效)：非kNoEndWall就在对应端头加端墙，墙底是这个绝对高度。
 // RoadnetMod::AddHatch/AddTunnelHatch、RouteMod的同名辅助都转调这里。
-void BuildHatch(const Connection* connection, float t1, float t2, float width, bool tunnel, std::vector<TerrainHatch>& out);
+void BuildHatch(const Connection* connection, float t1, float t2, float width, bool tunnel, std::vector<TerrainHatch>& out,
+	float startWallBottom = kNoEndWall, float endWallBottom = kNoEndWall);
 
 // 把connection上[t1,t2]这一段沿弧长按固定间距采样成折线，追加一个TerrainFitRequest进out。
 void BuildTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff, std::vector<TerrainFitRequest>& out);

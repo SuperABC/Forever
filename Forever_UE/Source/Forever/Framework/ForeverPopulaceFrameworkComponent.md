@@ -162,4 +162,4 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 `PlanFleeStart/PlanFleeNext`包`Map::StartPedestrianFlee/NextPedestrianFlee`；`IsFleeRangeExceeded`；`NotifyFleeEnded`清`fleeFrom`并发`flee_end`(关卡卸载时不发)；`DescribeReturnAddress`给`flee_start`的destination；`ResumeFleeOnSpawn`读档恢复。
 
 ## 流式生成防重叠（2026-11-19）
-流式生成(TickComponent扫描)市民前，若生成点和任一已实例化市民的距离(三维)小于1m(`kSpawnMinSeparation`=100uu)就跳过，并`Citizen::SetWalkInstantiable(false)`，这趟路后续不再实例化(Core推算到走完，下次开始走路重新抽)。只对走路中的市民判断，没在走路的直接生成、不看距离。读档恢复、`EnsureSpawned`等强制生成不受影响。
+流式生成(TickComponent扫描)市民前，若生成点和任一已实例化市民的距离(三维)小于2m(`kSpawnMinSeparation`=200uu)就跳过，并`Citizen::SetWalkInstantiable(false)`，这趟路后续不再实例化(Core推算到走完，下次开始走路重新抽)。只对走路中的市民判断，没在走路的直接生成、不看距离。读档恢复、`EnsureSpawned`等强制生成不受影响。

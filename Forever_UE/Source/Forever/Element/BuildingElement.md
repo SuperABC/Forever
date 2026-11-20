@@ -50,3 +50,4 @@
 - 带标签的墙(框架的Wall池)同样设`NumCustomDataFloats=2`并写入`(cos, sin)`，约定与上面一致。
 
 - **楼体空隙填充**：`BuildFloorSection` 画 1 楼(level 0)时，若 `building->GetGapMaterialPath()` 非空，用 4 块普通 cube 把 building quad 与楼体矩形之间的回形空隙铺上（左右两条占满 quad 高度，上下两条只占楼体宽度，互不重叠），z/厚度与 1 楼 `Ground` 完全一致（20cm，含 `BUILDING_SLAB_Z_SHIFT`），材质 `ResolveMaterial(gapPath, 地板材质)`；走 `AddCubeInstance`，所以同样带 `(cos, sin)` 的 PerInstanceCustomData。
+- **电梯轿厢竖直定位（2026-11-20）**：轿厢底面对齐每层地板面(`GetFloorBaseZ`+`BUILDING_HEIGHT_EPSILON`)，只固定抬高 `kCabinFloorLift`(2cm，不再按层高5%)避免和地板共面 z-fighting，高度=层高−2×`kCabinFloorLift`(顶面也比天花板低2cm)；水平方向仍缩到 `kCabinScale`(0.95) 避开井道墙面。层高很高时轿厢地板不会再被抬高到走不进去。

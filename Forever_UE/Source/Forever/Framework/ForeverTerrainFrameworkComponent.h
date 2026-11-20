@@ -19,12 +19,6 @@ class UTexture2D;
 class UTexture2DArray;
 class Map;
 
-// 局部坐标(单位:地形格,1格=10m,相对格子左下角)三角形:construction/挖洞格子的实心地形
-// 经精确多边形裁剪、扇形三角化后的输出。
-struct FTerrainTri2D {
-	FVector2D A, B, C;
-};
-
 // 某一级LOD mesh经过接缝修正后的四条边界顶点(每条边TERRAIN_LOD_GRID_SUBDIV+1个点,
 // 见ForeverTerrainFrameworkComponent.cpp里这个常量)
 struct FForeverLodBoundary {
@@ -80,11 +74,6 @@ private:
 
 	// 采样地图高度(mapX/mapY为地图元素单位坐标),转发Map::SampleHeight(含细化高度),BuildLevel与出生点计算共用
 	float SampleHeight(float mapX, float mapY) const;
-
-	// construction/有hatch格子的实心地形几何(精确凸多边形裁剪+扇形三角化，可能不止一块，算法见.md)。
-	// 格子既不是"construction"也没有hatch时没有输出。
-	void LookupTerrain(int elemX, int elemY, FString& type,
-		TArray<FTerrainTri2D>& tris) const;
 
 	Map* map = nullptr; // 非持有,AForeverFrameworkActor拥有生命周期
 

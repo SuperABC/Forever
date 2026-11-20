@@ -801,14 +801,17 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 
 		UStaticMesh* cabinMesh = framework->ResolveMesh(spec.cabinMeshPath, framework->GetDefaultCabinMesh());
 		// isMovable=true——轿厢要随行程SetWorldLocation，必须是Movable。
-		// 整体缩到0.99：轿厢的上下面和楼层地板/天花板正好重合会z-fighting(闪烁竞争)，缩一点点错开。
+		// 水平方向缩到kCabinScale：轿厢的侧面和井道墙面重合会z-fighting，缩一点点错开。
 		constexpr float kCabinScale = 0.95f;
-		// 缩放以mesh原点(底部)为基准，整体抬高层高的0.05，缩小后的轿厢上下留的缝才对称。
-		constexpr float kCabinZLift = 0.05f;
-		float cabinMeshZOffset = minFloorHeight * BUILDING_WORLD_SCALE * kCabinZLift;
+		// 竖直方向不按层高比例缩，而是固定留kCabinFloorLift(UE单位，cm)：轿厢底面比楼层地板面高这么多，顶面比天花板低这么多，
+		// 避免和地板/天花板共面z-fighting；层高很高时也只抬几厘米，玩家走得进去(原先按层高的5%抬，层高6米就抬30cm，迈不上去)。
+		// 地板面本身已经含BUILDING_HEIGHT_EPSILON(1cm)，轿厢底面实际比地板面高kCabinFloorLift+1cm。
+		constexpr float kCabinFloorLift = 2.f;
+		float cabinMeshZOffset = kCabinFloorLift;
+		float cabinMeshHeight = FMath::Max(minFloorHeight * BUILDING_WORLD_SCALE - 2.f * kCabinFloorLift, 1.f);
 		UStaticMeshComponent* comp = SpawnMesh(wx, wy, cabinZ + cabinMeshZOffset,
 			meshSizeX * BUILDING_WORLD_SCALE * kCabinScale, meshSizeY * BUILDING_WORLD_SCALE * kCabinScale,
-			minFloorHeight * BUILDING_WORLD_SCALE * kCabinScale,
+			cabinMeshHeight,
 			meshRotation, cabinMesh, nullptr, /*isMovable=*/true);
 		if (!comp) continue;
 

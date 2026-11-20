@@ -68,8 +68,13 @@ public:
 	bool SetFineHeights(int x, int y, const float* data);
 	// 连续坐标(地图element单位)高度采样：落在有细化数组的格子里，就在1/16细化网格上双线性
 	// (坐标正好在细化网格点上时等于直接查表——UE各级LOD顶点都是这种情况)；否则退回4个格点
-	// 粗高度的双线性。UE地形网格/出生点都走这个函数，见map.md"细化高度"一节。
+	// 粗高度：每个格子按"自适应对角线"分成两个三角形线性插值(见UsesAntiDiagonal)，而不是双线性。
+	// UE地形网格/出生点都走这个函数，见map.md"细化高度"一节。
 	float SampleHeight(float x, float y) const;
+	// 格子(ex,ey)的粗高度插值用哪条对角线：false=主对角线(左上(x,y)-右下(x+1,y+1))，true=副对角线((x+1,y)-(x,y+1))。
+	// 取两端高度差较小的那条：斜着走的地形交界(锯齿状台阶)上，格子往往是"三高一低"，对角线选在两个高点之间，
+	// 整条交界就是一道笔直的斜坡，而不是双线性的锯齿鞍面。UE网格的小格拆三角形必须用同一个判断，网格和采样才一致。
+	bool UsesAntiDiagonal(int ex, int ey) const;
 	std::pair<bool, float> GetWater(int x, int y) const;
 	// 每个element的水面独立设置(同一次DistributeTerrain里不同格子可有不同水位)，见terrain_mod.md"水面"一节。
 	bool SetWater(int x, int y, bool hasWater, float height);
@@ -428,6 +433,15 @@ private:
 
 	// 把世界坐标投影回road弧长参数t，在贯通线上断出新node，详见map.md"导航图与贯通线"
 	Node* BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex, float worldX, float worldY, float worldZ);
+
+	// 曲线路(有控制点)上车道贯通线的拆分点：在[tA,tB]内按路面单元(Forever BuildRoadInstances)同样的等弧长网格取点，
+	// 再按转角(>约17度)/节数上限把相邻单元合并成一段，返回内部拆分点t(不含tA、tB)。直线路/不需要拆返回空。
+	// 拆出来的每一段由MakeLaneConnection拟合成一条带控制点的曲线，所以不用采得和路面单元一样密。
+	static std::vector<float> LaneSplitKnots(Road* road, float tA, float tB);
+
+	// 建车道贯通线的一段Connection(from->to)：路是直线=两点直线；路有控制点=加一个控制点，让曲线经过车道中心线在两端中间t处的点
+	// (二次Bezier)，这样导航线跟着路的弯走而不是切弦。两端t由端点投影回road得到。
+	Connection* MakeLaneConnection(Road* road, bool isVehicle, int side, int laneIndex, Node* from, Node* to) const;
 
 	// 算road在t处某条车道/人行道的中心世界坐标，详见map.md"导航图与贯通线"
 	std::pair<float, float> ComputeLaneAnchorPosition(Road* road, float t, bool isVehicle, int side, int laneIndex) const;

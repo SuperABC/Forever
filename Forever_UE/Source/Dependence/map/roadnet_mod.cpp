@@ -9,8 +9,8 @@ void RoadnetMod::AddHatch(const Connection* connection, float t1, float t2, floa
 	BuildHatch(connection, t1, t2, width, false, hatches);
 }
 
-void RoadnetMod::AddTunnelHatch(const Connection* connection, float t1, float t2, float width) {
-	BuildHatch(connection, t1, t2, width, true, hatches);
+void RoadnetMod::AddTunnelHatch(const Connection* connection, float t1, float t2, float width, float startWallBottom, float endWallBottom) {
+	BuildHatch(connection, t1, t2, width, true, hatches, startWallBottom, endWallBottom);
 }
 
 void RoadnetMod::AddPier(const string& mesh, vector<vector<Connection>> chains, float defaultSpacing, float minSpacing, float radius) {

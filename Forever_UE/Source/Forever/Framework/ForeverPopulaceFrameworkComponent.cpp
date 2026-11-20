@@ -145,8 +145,8 @@ void UForeverPopulaceFrameworkComponent::HandOffWalkToElement(Citizen* citizen, 
 namespace {
 	// 逃跑速度是走路速度的倍数。
 	constexpr float kFleeSpeedMultiplier = 4.f;
-	// 流式生成市民时，和已实例化市民的最小间距(uu，1m)。
-	constexpr float kSpawnMinSeparation = 100.f;
+	// 流式生成市民时，和已实例化市民的最小间距(uu，2m)。
+	constexpr float kSpawnMinSeparation = 200.f;
 }
 
 void UForeverPopulaceFrameworkComponent::RequestFlee(Citizen* citizen, Citizen* target, const std::string& fromName) {
@@ -1224,7 +1224,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 				respawnBlockedUntil.Remove(citizen);
 			}
 			if (inRange) {
-				// 走路中的市民：和任一已实例化市民距离不足1m就不生成，这趟路后续都不再实例化(Core继续推算到走完)。
+				// 走路中的市民：和任一已实例化市民距离不足2m就不生成，这趟路后续都不再实例化(Core继续推算到走完)。
 				// 没在走路的市民不判断距离，直接生成；读档恢复等强制生成也不走这里。
 				const FVector spawnPoint(worldX, worldY, worldZ);
 				bool bOverlap = false;

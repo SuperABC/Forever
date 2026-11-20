@@ -73,6 +73,16 @@ const free = (x, y, extern) => ({ x, y, extern });
 	const f = ME.profileOf(m2, r, { height: () => 0 });
 	assert.ok(Math.abs(f(0.5) + 0.5) < 1e-9);
 	assert.ok(Math.abs(f(0.02)) < 0.01);
+	// 隧道口连着隧道的那一端写端墙标记(wallFrom/wallTo)，和两端高度无关(山坡上两端一样高也要)
+	const m4 = ME.newModel(256, 256);
+	const mouth = ME.addRoad(m4, { a: { x: 10, y: 50, z: 0 }, b: { x: 30, y: 50, z: 0 }, type: 'mouth' }).road;
+	const tun = ME.addRoad(m4, { a: { node: mouth.b }, b: { x: 60, y: 50, z: 0 }, type: 'tunnel' }).road;
+	ME.addRoad(m4, { a: { x: 90, y: 50, z: 0 }, b: { node: tun.b }, type: 'mouth' });
+	out = ME.exportRoadnet(m4, null).output;
+	const mouths = out.roads.filter((x) => x.kind === 'mouth');
+	assert.strictEqual(mouths.length, 2);
+	assert.ok(!mouths[0].wallFrom && mouths[0].wallTo === true);
+	assert.ok(!mouths[1].wallFrom && mouths[1].wallTo === true);
 	// 坡度太陡警告：10单位长要降3
 	const m3 = ME.newModel(256, 256);
 	ME.addRoad(m3, { a: { x: 10, y: 50, z: 0 }, b: { x: 20, y: 50, z: -3 }, type: 'mouth' });
@@ -194,40 +204,96 @@ const free = (x, y, extern) => ({ x, y, extern });
 	assert.strictEqual(back.output.roads.length, output.roads.length);
 }
 
-// 吸附直角：从已连了路的节点/路中间往外拉。
+// 吸附角度(直角+平角)：从已连了路的节点/路中间往外拉。
 {
 	const m = ME.newModel(256, 256);
 	const r1 = ME.addRoad(m, { a: free(10, 50), b: free(50, 50) }).road; // 横路，终点(50,50)度1
 	const end = ME.nodeOf(m, r1.b);
 	// 鼠标在正下方偏5度：吸到(50, y)垂直线上
 	const ang = 5 * Math.PI / 180;
-	let ra = ME.rightAngleAt(m, { node: end.id }, 50 + Math.sin(ang) * 20, 50 + Math.cos(ang) * 20, 10);
+	let ra = ME.angleSnapAt(m, { node: end.id }, 50 + Math.sin(ang) * 20, 50 + Math.cos(ang) * 20, 10);
 	assert.ok(ra);
 	assert.ok(Math.abs(ra.point[0] - 50) < 1e-6 && ra.point[1] > 50);
 	assert.ok(Math.abs(ra.point[1] - (50 + Math.hypot(Math.sin(ang) * 20, Math.cos(ang) * 20) * Math.cos(ang))) < 1e-6);
 	// 向上也行(两侧都算)
-	ra = ME.rightAngleAt(m, { node: end.id }, 52, 30, 10);
+	ra = ME.angleSnapAt(m, { node: end.id }, 52, 30, 10);
 	assert.ok(ra && Math.abs(ra.point[0] - 50) < 1e-6 && ra.point[1] < 50);
 	// 夹角太大：不吸附
-	assert.strictEqual(ME.rightAngleAt(m, { node: end.id }, 70, 70, 10), null);
+	assert.strictEqual(ME.angleSnapAt(m, { node: end.id }, 70, 70, 10), null);
 	// 没连路的节点：不适用
 	const lone = ME.addNode(m, 100, 100);
-	assert.strictEqual(ME.rightAngleAt(m, { node: lone.id }, 100, 120, 10), null);
+	assert.strictEqual(ME.angleSnapAt(m, { node: lone.id }, 100, 120, 10), null);
 	// 节点上连了两条路(横+竖)：取夹角最小的垂线
 	ME.addRoad(m, { a: { node: end.id }, b: free(50, 90) });
-	ra = ME.rightAngleAt(m, { node: end.id }, 80, 52, 10); // 靠近水平方向：垂直于竖路 → 水平
+	ra = ME.angleSnapAt(m, { node: end.id }, 80, 52, 10); // 靠近水平方向：垂直于竖路 → 水平
 	assert.ok(ra && Math.abs(ra.point[1] - 50) < 1e-6 && ra.point[0] > 50);
 	// 曲线的切线用控制点：控制点在(50,0)偏上的曲线，端点处切线竖直 → 垂线水平
 	const m2 = ME.newModel(256, 256);
 	const c = ME.addRoad(m2, { a: free(10, 50), b: free(50, 50), ctrl: [50, 10] }).road;
 	const e2 = ME.nodeOf(m2, c.b);
-	ra = ME.rightAngleAt(m2, { node: e2.id }, 80, 53, 10);
+	ra = ME.angleSnapAt(m2, { node: e2.id }, 80, 53, 10);
 	assert.ok(ra && Math.abs(ra.point[1] - 50) < 1e-6);
 	// 路中间(T口起点)：垂直于该处切线
 	const m3 = ME.newModel(256, 256);
 	const h = ME.addRoad(m3, { a: free(10, 50), b: free(90, 50) }).road;
-	ra = ME.rightAngleAt(m3, { road: h.id, t: 0.5 }, 51, 70, 10);
+	ra = ME.angleSnapAt(m3, { road: h.id, t: 0.5 }, 51, 70, 10);
 	assert.ok(ra && Math.abs(ra.point[0] - 50) < 1e-6 && Math.abs(ra.origin[0] - 50) < 1e-6);
+	// 平角：节点上沿已连道路延长线直走(节点上的横路 → 向右延长)
+	const m4 = ME.newModel(256, 256);
+	const s1 = ME.addRoad(m4, { a: free(10, 50), b: free(50, 50) }).road;
+	const sEnd = ME.nodeOf(m4, s1.b);
+	ra = ME.angleSnapAt(m4, { node: sEnd.id }, 80, 53, 10);
+	assert.ok(ra && ra.kind === 'straight' && Math.abs(ra.point[1] - 50) < 1e-6 && ra.point[0] > 50);
+	// 往回(压在原路上)不吸附成平角
+	assert.strictEqual(ME.angleSnapAt(m4, { node: sEnd.id }, 20, 51, 10), null);
+	// 路中间只有直角，没有平角
+	assert.strictEqual(ME.angleSnapAt(m3, { road: h.id, t: 0.5 }, 80, 51, 10), null);
+	assert.strictEqual(ME.angleSnapAt(m4, { node: sEnd.id }, 52, 80, 10).kind, 'right');
 }
 
 console.log('test_roadnet OK');
+
+// 贴合段接平路的一端缓入到水平：终点斜率为0(最后一段第二个控制点z=终点z)，
+{
+	const t = new ME.Terrain(128, 128);
+	t.beginStroke(); t.brush('paint', 64, 50, 20, { terrain: 'terrain_mountain' }); t.endStroke();
+	t.beginStroke(); for (let i = 0; i < 6; i++) t.brush('raise', 64, 50, 15, { strength: 1 }); t.endStroke();
+	const m = ME.newModel(128, 128);
+	const h0 = t.sampleHeight(40, 50), h1 = t.sampleHeight(56, 50);
+	const hug = ME.addRoad(m, { a: { x: 40, y: 50, z: h0 }, b: { x: 56, y: 50, z: h1 }, type: 'hug' }).road;
+	ME.addRoad(m, { a: { node: hug.b }, b: { x: 72, y: 50, z: h1 }, type: 'ground' });
+	const out = ME.exportRoadnet(m, t).output;
+	const hugs = out.roads.filter((x) => x.kind === 'hug');
+	assert.ok(hugs.length > 10 && h1 > 0.5);
+	const last = hugs[hugs.length - 1];
+	const zOf = new Map(out.nodes.map((n) => [n.id, n.z]));
+	assert.strictEqual(last.controls.length, 2);
+	assert.ok(Math.abs(last.controls[1][2] - zOf.get(last.to)) < 1e-6, '终点斜率应为0');
+}
+
+// 度数2的节点：拐角导成intersection(有缩进和路口mesh)，近似直线的仍是plain。
+{
+	const m = ME.newModel(256, 256);
+	const r1 = ME.addRoad(m, { a: free(10, 50), b: free(50, 50), type: 'ground' }).road;
+	const r2 = ME.addRoad(m, { a: { node: r1.b }, b: free(50, 90), type: 'ground' }).road; // 90度拐角
+	const r3 = ME.addRoad(m, { a: { node: r2.b }, b: free(50, 130), type: 'ground' }).road; // 直行
+	const nodes = ME.exportRoadnet(m, null).output.nodes;
+	const typeOf = (id) => nodes.find((n) => n.id === 'n' + id).type;
+	assert.strictEqual(typeOf(r1.b), 'intersection');
+	assert.strictEqual(typeOf(r2.b), 'plain');
+}
+
+// 行道树/路灯tag：写进road，T口/切分后两半都继承；只有平面(ground)路段导出treeTag/lampTag，tag为空导出空串。
+{
+	const m = ME.newModel(256, 256);
+	const r1 = ME.addRoad(m, { a: free(10, 50), b: free(90, 50), type: 'ground', tree: 'default', lamp: 'default' }).road;
+	ME.addRoad(m, { a: free(10, 90), b: free(90, 90), type: 'ground' });   // 没填tag
+	ME.splitRoadAt(m, r1.id, 0.5);
+	assert.strictEqual(m.roads.filter((r) => r.tree === 'default' && r.lamp === 'default').length, 2);
+	const out = ME.exportRoadnet(m, null).output;
+	const tagged = out.roads.filter((r) => r.treeTag === 'default' && r.lampTag === 'default');
+	assert.strictEqual(tagged.length, 2);
+	const untagged = out.roads.filter((r) => r.treeTag === '' && r.lampTag === '');
+	assert.strictEqual(untagged.length, 1);
+	assert.ok(out.roads.every((r) => r.kind === 'ground'));
+}

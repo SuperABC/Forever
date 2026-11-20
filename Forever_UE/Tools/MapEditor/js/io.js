@@ -5,7 +5,6 @@
 	// ---- .terrain ----
 	// 魔数FTRN；u32 w,h；u16调色板条数，每条u16长度+UTF8；u16[w*h]下标；f32[w*h]高度；f32[w*h]水位(NaN=无水)。小端。
 	function writeTerrain(terrain) {
-		terrain.enforceFlat();
 		const encoder = new TextEncoder();
 		const names = terrain.palette.map((name) => encoder.encode(name));
 		let header = 4 + 4 + 4 + 2;
@@ -52,7 +51,6 @@
 		for (let i = 0; i < cells; i++) { terrain.idx[i] = view.getUint16(o, true); o += 2; }
 		for (let i = 0; i < cells; i++) { terrain.height[i] = view.getFloat32(o, true); o += 4; }
 		for (let i = 0; i < cells; i++) { terrain.water[i] = view.getFloat32(o, true); o += 4; }
-		terrain.enforceFlat();
 		return terrain;
 	}
 

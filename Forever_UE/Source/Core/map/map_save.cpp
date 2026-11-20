@@ -161,6 +161,10 @@ namespace {
 			w.U8(hatch.wall ? 1 : 0);
 			w.F32(hatch.floorStart);
 			w.F32(hatch.floorEnd);
+			w.U8(hatch.startWall ? 1 : 0);
+			w.F32(hatch.startWallBottom);
+			w.U8(hatch.endWall ? 1 : 0);
+			w.F32(hatch.endWallBottom);
 		}
 	}
 	vector<TerrainHatch> ReadHatches(ByteReader& r) {
@@ -171,6 +175,10 @@ namespace {
 			hatch.wall = r.U8() != 0;
 			hatch.floorStart = r.F32();
 			hatch.floorEnd = r.F32();
+			hatch.startWall = r.U8() != 0;
+			hatch.startWallBottom = r.F32();
+			hatch.endWall = r.U8() != 0;
+			hatch.endWallBottom = r.F32();
 		}
 		return v;
 	}

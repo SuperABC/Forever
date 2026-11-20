@@ -20,6 +20,8 @@ using namespace std;
 #define TUNNEL_DROP -3.f
 #define TUNNEL_RAMP_LENGTH 16.f
 #define TUNNEL_HATCH_LENGTH 8.f
+// 隧道资产房顶比路面高多少(地图单位，1=10m)：端墙从隧道端头的地形最高处封到"该端路面高度+这个值"(也就是资产房顶)，房顶以下留着洞口。
+#define TUNNEL_ROOF_CLEARANCE 1.f
 #define TUNNEL_MIN_OPEN_LENGTH 32.f
 // 桥墩(AddPier，Core选位)：默认墩距40m、最短20m、半径1.5m，估值待PIE调。资产留空=Core/UE用默认圆柱。
 #define PIER_DEFAULT_SPACING 4.f
@@ -635,7 +637,8 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 			float length = sqrtf(tx * tx + ty * ty);
 			if (length > 1e-6f) { tx /= length; ty /= length; }
 		};
-		auto hatchRange = [&](float s1, float s2) {
+		// tunnelAtEnd：隧道在[s1,s2]的s2端(入口侧)还是s1端(出口侧)；只有最靠隧道的那一片的隧道端加端墙。
+		auto hatchRange = [&](float s1, float s2, bool tunnelAtEnd) {
 			int pieces = max(1, static_cast<int>(ceilf((s2 - s1) / TRACK_SAMPLE_STEP)));
 			for (int p = 0; p < pieces; p++) {
 				float sa = s1 + (s2 - s1) * static_cast<float>(p) / static_cast<float>(pieces);
@@ -648,13 +651,15 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 					xb, yb, baseB + TUNNEL_DROP * depthB, txb, tyb, TUNNEL_DROP * dB);
 				Connection chordConnection(Node("route", seg.x1, seg.y1, seg.z1), Node("route", seg.x2, seg.y2, seg.z2));
 				chordConnection.AddControls({ { Node("route_ctrl", seg.c1x, seg.c1y, seg.c1z), 1.f }, { Node("route_ctrl", seg.c2x, seg.c2y, seg.c2z), 1.f } });
-				AddTunnelHatch(&chordConnection, 0.f, 1.f, 2.f * kTrackGauge);
+				bool wallEnd = tunnelAtEnd && p == pieces - 1, wallStart = !tunnelAtEnd && p == 0;
+				AddTunnelHatch(&chordConnection, 0.f, 1.f, 2.f * kTrackGauge,
+					wallStart ? seg.z1 + TUNNEL_ROOF_CLEARANCE : kNoEndWall, wallEnd ? seg.z2 + TUNNEL_ROOF_CLEARANCE : kNoEndWall);
 			}
 		};
 		for (const Zone& zone : zones) {
 			if (!zone.tunnel) continue;
-			hatchRange(zone.sIn - TUNNEL_HATCH_LENGTH, zone.sIn);
-			hatchRange(zone.sOut, zone.sOut + TUNNEL_HATCH_LENGTH);
+			hatchRange(zone.sIn - TUNNEL_HATCH_LENGTH, zone.sIn, true);
+			hatchRange(zone.sOut, zone.sOut + TUNNEL_HATCH_LENGTH, false);
 		}
 
 		// ---- 桥墩：按中轴线，两条铁轨共用一排墩(不是每根铁轨各一排)。沿中轴线每TRACK_SAMPLE_STEP一段Connection，

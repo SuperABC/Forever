@@ -98,7 +98,8 @@ public:
 
 	// 工具方法(非虚),同RoadnetMod同名方法。
 	void AddHatch(const Connection* connection, float t1, float t2, float width);
-	void AddTunnelHatch(const Connection* connection, float t1, float t2, float width);
+	void AddTunnelHatch(const Connection* connection, float t1, float t2, float width,
+		float startWallBottom = kNoEndWall, float endWallBottom = kNoEndWall);
 	void AddTerrainFit(const Connection* connection, float t1, float t2, float width, float falloff);
 	// 提交拆除请求：折线(世界xy)扫过width宽的条带，Core拆掉所有相交的楼体及其园区(带stationMod的建筑除外)，见route.md。
 	void AddDemolition(const std::vector<std::pair<float, float>>& centerline, float width);

@@ -16,6 +16,8 @@
 #define TERRAIN_FIT_FALLOFF 1.5f
 #define TUNNEL_HEIGHT -1.f
 #define TUNNEL_HATCH_LENGTH 8.f
+// 隧道资产房顶比路面高多少(地图单位，1=10m)：端墙从隧道端头的地形最高处封到"该端路面高度+这个值"(也就是资产房顶)，房顶以下留着洞口。
+#define TUNNEL_ROOF_CLEARANCE 1.f
 #define TUNNEL_FLAT_APPROACH_LENGTH 1.5f
 #define ARM_SAMPLE_STEP 1.f
 
@@ -71,6 +73,23 @@ namespace {
 			}
 			for (auto& [nodeId, arms] : armsByNode) {
 				sort(arms.begin(), arms.end(), [](const Arm& a, const Arm& b) { return a.angle < b.angle; });
+				// 只连两条路的路口(拐角)：缩进按两条路的夹角phi和各自半宽算，让两条路朝向对方那侧的路缘线正好在角点相交、不再重叠：
+				// 沿本路中线的缩进 = (对方半宽 + 本路半宽*cos(phi)) / sin(phi)，等宽时就是 半宽/tan(phi/2)；平角(phi>=PI-EPS)不缩进。
+				if (arms.size() == 2) {
+					float phi = arms[1].angle - arms[0].angle;
+					while (phi < 0.f) phi += 2.f * PI;
+					if (phi > PI) phi = 2.f * PI - phi;
+					for (size_t k = 0; k < 2; k++) {
+						float setback = 0.f;
+						if (phi < PI - EPS && phi > 1e-3f) {
+							setback = max(0.f, (arms[1 - k].halfWidth + arms[k].halfWidth * cosf(phi)) / sinf(phi));
+						}
+						float length = arms[k].road->CalcDistance();
+						if (length > 1e-6f) setback = min(setback, length * 0.45f);
+						arms[k].road->SetSetback(arms[k].isStart, setback);
+					}
+					continue;
+				}
 				size_t count = arms.size();
 				for (size_t k = 0; k < count; k++) {
 					// 逆时针方向到下一条、顺时针方向到上一条的夹角，只有一条路时两侧都是整圈。
@@ -230,7 +249,8 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 			addControls(roads.back(), flatNode, splitNode);
 			configureLanes(roads.back());
 			setSidewalkFree(roads.back());
-			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
+			// 这一段的t2端就是隧道端(隧道资产从这里接上)：加端墙。
+			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth(), kNoEndWall, splitNode.GetZ() + TUNNEL_ROOF_CLEARANCE);
 
 			if (!noLevelPart) {
 				roads.emplace_back(name, splitNode, tunnelNode, tunnelMeshPath, meshUnit);
