@@ -62,10 +62,18 @@ bool ACitizenController::RetargetFlee(Citizen* target) {
 	return true;
 }
 
-bool ACitizenController::GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination) const {
+bool ACitizenController::GetCurrentGreenDestination(Green*& outGreen, int32& outCircle) const {
+	const FCharacterCommand* command = commands.Current();
+	if (!command || !bCommandStarted || !command->green) return false;
+	outGreen = command->green;
+	outCircle = command->greenCircle;
+	return true;
+}
+
+bool ACitizenController::GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination, Green** outGreen, int32* outGreenCircle) const {
 	const FCharacterCommand* command = commands.Current();
 	ACitizenElement* element = citizenElement.Get();
-	if (!command || !element || command->type != FCharacterCommand::EType::FollowPath || !command->room) return false;
+	if (!command || !element || command->type != FCharacterCommand::EType::FollowPath || (!command->room && !command->green)) return false;
 	outWaypoints.Reset();
 	// 路径点是脚底高度（行人图节点在地面上），Actor位置是胶囊体中心，要减掉半高，否则折线/交还Core的路径会整体抬高。
 	outWaypoints.Add(element->GetActorLocation() - FVector(0.f, 0.f, element->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
@@ -73,6 +81,8 @@ bool ACitizenController::GetRemainingWaypoints(TArray<FVector>& outWaypoints, Ro
 		outWaypoints.Add(command->waypoints[i]);
 	}
 	outDestination = command->room;
+	if (outGreen) *outGreen = command->green;
+	if (outGreenCircle) *outGreenCircle = command->greenCircle;
 	return true;
 }
 
@@ -166,6 +176,9 @@ void ACitizenController::EndCommand(bool arrived) {
 	}
 	if (arrived && finished.room) {
 		framework->NotifyArrived(citizen, finished.room);
+	}
+	else if (arrived && finished.green) {
+		framework->NotifyArrivedGreen(citizen, finished.green, finished.greenCircle);
 	}
 }
 

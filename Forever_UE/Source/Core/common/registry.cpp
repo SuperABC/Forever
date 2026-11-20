@@ -37,6 +37,7 @@ void Registry::RegisterMods(const vector<string>& mods) {
 	modLoader.RegisterConcept<TerrainFactory>(mods, "RegisterModTerrains", "FinishModTerrains", &terrainFactory);
 	modLoader.RegisterConcept<RoadnetFactory>(mods, "RegisterModRoadnets", "FinishModRoadnets", &roadnetFactory);
 	modLoader.RegisterConcept<ZoneFactory>(mods, "RegisterModZones", "FinishModZones", &zoneFactory);
+	modLoader.RegisterConcept<GreenFactory>(mods, "RegisterModGreens", "FinishModGreens", &greenFactory);
 	modLoader.RegisterConcept<BuildingFactory>(mods, "RegisterModBuildings", "FinishModBuildings", &buildingFactory);
 	modLoader.RegisterConcept<ComponentFactory>(mods, "RegisterModComponents", "FinishModComponents", &componentFactory);
 	modLoader.RegisterConcept<RoomFactory>(mods, "RegisterModRooms", "FinishModRooms", &roomFactory);
@@ -87,6 +88,7 @@ void Registry::ReloadModArgs() {
 	terrainFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("terrain_mods")));
 	roadnetFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("roadnet_mods")));
 	zoneFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("zone_mods")));
+	greenFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("green_mods")));
 	buildingFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("building_mods")));
 	componentFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("component_mods")));
 	roomFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("room_mods")));
@@ -111,6 +113,7 @@ bool Registry::CheckModRegistered(const string& id) const {
 	return terrainFactory.CheckRegistered(id)
 		|| roadnetFactory.CheckRegistered(id)
 		|| zoneFactory.CheckRegistered(id)
+		|| greenFactory.CheckRegistered(id)
 		|| buildingFactory.CheckRegistered(id)
 		|| componentFactory.CheckRegistered(id)
 		|| roomFactory.CheckRegistered(id)

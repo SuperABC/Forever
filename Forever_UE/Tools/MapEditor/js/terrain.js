@@ -1,10 +1,15 @@
 // 地形数据与笔刷(纯逻辑，无DOM)。格式与约束见 Source/Basic/map/terrain_file.md。
-// 一个element = 地图上10m x 10m的格子；字符串为plain/construction的格子是"平原"：高度锁0(建筑假定建在高度0平原上)。
+// 一个element = 地图上10m x 10m的格子；字符串为plain的格子是"平原"：笔刷默认不改它的高度(建筑假定建在高度0的地面上)；游戏里能不能建只看3x3邻域高度是否全为0，和地形字符串无关。
 // 水可以放在任意格子(含平原)：岸边的平原格也要有水面，否则水面和地面之间会露出缝隙。
 (function (root) {
 	const ME = root.ME = root.ME || {};
 
 	const SEA_LEVEL = -0.1;
+	// 高度吸附：|h|小于ZERO_SNAP就当0。抬高再压低同样的量会留下1e-8级的浮点残留，而游戏的可建设判断要求高度精确为0，残留会让周围一圈格子永远不可建。
+	const ZERO_SNAP = 1e-4;
+	// 抹平到目标时，离目标小于FLATTEN_SNAP就直接吸附成目标(指数逼近永远到不了)。
+	const FLATTEN_SNAP = 1e-3;
+	const snapZero = (v) => (Math.abs(v) < ZERO_SNAP ? 0 : v);
 
 	function isFlatName(name) { return name === 'plain' || name === 'construction'; }
 
@@ -123,14 +128,16 @@
 						const delta = (op === 'raise' ? 1 : -1) * strength * falloff;
 						if (Math.abs(delta) < 1e-6) continue;
 						this._touch(i);
-						this.height[i] += delta;
+						this.height[i] = snapZero(this.height[i] + delta);
 						changed++;
 					} else if (op === 'flatten') {
 						const target = params.target === undefined ? 0 : params.target;
-						const next = this.height[i] + (target - this.height[i]) * Math.min(1, strength * 2 * falloff);
-						if (Math.abs(next - this.height[i]) < 1e-6) continue;
+						let next = this.height[i] + (target - this.height[i]) * Math.min(1, strength * 2 * falloff);
+						if (Math.abs(next - target) < FLATTEN_SNAP) next = target; // 吸附到目标：指数逼近永远到不了，而游戏的可建设判断要求高度精确为0
+						else if (Math.abs(next - this.height[i]) < 1e-6) continue;
+						if (next === this.height[i]) continue;
 						this._touch(i);
-						this.height[i] = next;
+						this.height[i] = snapZero(next);
 						changed++;
 					} else if (op === 'smooth') {
 						let sum = 0, n = 0;
@@ -143,7 +150,7 @@
 						const next = this.height[i] + (avg - this.height[i]) * Math.min(1, strength * 2 * falloff);
 						if (Math.abs(next - this.height[i]) < 1e-6) continue;
 						this._touch(i);
-						this.height[i] = next;
+						this.height[i] = snapZero(next);
 						changed++;
 					}
 				}
@@ -263,23 +270,27 @@
 			return total;
 		}
 
-		// 检查：lot覆盖区域要求每个element的3x3邻域都是plain/construction，高度0(水不影响：地面以下有水、岸边地面以上有水都合理)。返回不合格格子数。
+		// 检查：lot覆盖区域要求每个element的3x3邻域高度都为0，和游戏里Map::InitTerrains标记construction(可建设)的规则一致：
+		// 不看地形类型(沙滩等也能建)，也不看水(地面以下有水、岸边地面以上有水都合理)。返回不合格格子数。
 		countNonBuildable(x0, y0, x1, y1) {
 			let bad = 0;
 			for (let y = Math.floor(y0); y < Math.ceil(y1); y++) {
 				for (let x = Math.floor(x0); x < Math.ceil(x1); x++) {
-					if (!this.inside(x, y)) { bad++; continue; }
-					let ok = true;
-					for (let oy = -1; oy <= 1 && ok; oy++) for (let ox = -1; ox <= 1 && ok; ox++) {
-						const nx = x + ox, ny = y + oy;
-						if (!this.inside(nx, ny)) { ok = false; break; }
-						const i = ny * this.w + nx;
-						if (!this.isFlat(i) || this.height[i] !== 0) ok = false; // 平原格但被抬高/压低过也不能建
-					}
-					if (!ok) bad++;
+					if (!this.isBuildable(x, y)) bad++;
 				}
 			}
 			return bad;
+		}
+
+		// 单个element是否可建设(construction)：3x3邻域(含自身)都在图内且高度都为0。规则同countNonBuildable。
+		isBuildable(x, y) {
+			if (!this.inside(x, y)) return false;
+			for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+				const nx = x + ox, ny = y + oy;
+				if (!this.inside(nx, ny)) return false;
+				if (this.height[ny * this.w + nx] !== 0) return false; // 被抬高/压低过的格子不能建
+			}
+			return true;
 		}
 	}
 

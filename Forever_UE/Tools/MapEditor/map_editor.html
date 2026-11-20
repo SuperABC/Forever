@@ -48,6 +48,7 @@ h4 { margin:10px 0 4px; color:var(--dim); font-weight:600; font-size:12px; lette
 <script src="js/io.js"></script>
 <script src="js/roadnet.js"></script>
 <script src="js/lots.js"></script>
+<script src="js/greens.js"></script>
 <script>
 'use strict';
 // Forever 地图编辑器：地形/路网/地块，导出 .terrain / .roadnet。操作见 README.md，文件格式见 Source/Basic/map/*.md。
@@ -59,21 +60,23 @@ const S = {
 	model: ME.newModel(1024, 1024),
 	view: { scale: 3, ox: 20, oy: 20 },
 	mode3d: false,
-	tool: 'terrain',            // terrain / road / lot / select
+	tool: 'terrain',            // terrain / road / lot / green
+	greenMode: 'draw',          // 绿化工具的子模式：draw=画多边形 / link=连接道路(先点绿化的边，再点路)
 	// 地形笔刷
 	// 每种笔刷各存一份参数(半径/强度/目标高度/水位/限定地形...)，切换笔刷不会互相覆盖。S.brush 是当前笔刷的那一份。
 	brushOp: 'paint',
 	brushes: {
 		paint: { op: 'paint', radius: 6, terrain: 'terrain_mountain' },
 		water: { op: 'water', radius: 6, level: ME.SEA_LEVEL, erase: false },
-		raise: { op: 'raise', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: false },
-		lower: { op: 'lower', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: false },
-		flatten: { op: 'flatten', radius: 6, strength: 0.5, target: 0, lockTerrain: false, allowFlat: false },
-		smooth: { op: 'smooth', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: false },
+		raise: { op: 'raise', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: true },
+		lower: { op: 'lower', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: true },
+		flatten: { op: 'flatten', radius: 6, strength: 0.5, target: 0, lockTerrain: false, allowFlat: true },
+		smooth: { op: 'smooth', radius: 6, strength: 0.5, lockTerrain: false, allowFlat: true },
 	},
 	get brush() { return this.brushes[this.brushOp]; },
 		cleanup: { width: 4, passes: 1 },   // 一键整理的参数：缓降宽度(格数)、平滑类型遍数
 		cpuRender: (() => { try { return localStorage.getItem('me_cpuRender') !== '0'; } catch (e) { return true; } })(),   // 2D路/地块用CPU光栅化(无显卡锯齿但慢)还是canvas(GPU，快)
+		buildView: false,  // 可建设视图(地形栏开关)：2D底图改成 可建设/不可建设 两色+高度渐变，不显示各地形颜色；只影响显示
 		showWater: true,   // 显示水面(2D 底图的蓝色着色 + 3D 水面)；只影响显示，不改数据
 		contour: { on: true, interval: 5 },   // 2D等高线(间距单位element=10m，每5条一条主等高线)
 	// 路网
@@ -81,7 +84,7 @@ const S = {
 		road: { shape: 'line', type: 'ground', preset: 0, z: 0, zTerrain: false, snapNode: true, snapRoad: true, snapEdge: true, snapLot: true, snapAngle: true, name: '', tree: 'default', lamp: 'default' },
 	pending: null,              // 路/地块正在画的状态
 	lotArea: 'AREA_RESIDENCE_HIGH',
-	sel: null,                  // {kind:'node'|'road'|'lot', id}
+	sel: null,                  // {kind:'node'|'road'|'lot'|'green', id}
 	colors: {},                 // 地形字符串→自定义颜色
 	mouse: null,                // 世界坐标
 	warnings: [],
@@ -254,8 +257,18 @@ function cellRGB(i, noWater) {
 	if (!noWater && !isNaN(T.water[i])) { r = r * 0.35 + 30 * 0.65; gg = gg * 0.35 + 90 * 0.65; b = b * 0.35 + 200 * 0.65; }
 	return [clamp(r, 0, 255), clamp(gg, 0, 255), clamp(b, 0, 255)];
 }
+// 可建设视图(只影响2D底图)：按isBuildable分两种底色(绿=可建设，红=不可建设)，再叠加高度渐变(负=偏蓝变暗，正=偏暖变亮)，不显示各地形自己的颜色。
+function buildRGB(i) {
+	const T = S.terrain;
+	const base = T.isBuildable(i % T.w, (i / T.w) | 0) ? [70, 185, 100] : [205, 80, 70];
+	const t = clamp(T.height[i] / 15, -1, 1);
+	const grad = t < 0
+		? [160 + (40 - 160) * -t, 160 + (70 - 160) * -t, 160 + (190 - 160) * -t]
+		: [160 + (255 - 160) * t, 160 + (235 - 160) * t, 160 + (150 - 160) * t];
+	return [base[0] * 0.55 + grad[0] * 0.45, base[1] * 0.55 + grad[1] * 0.45, base[2] * 0.55 + grad[2] * 0.45];
+}
 function paintCell(i) {
-	const [r, gg, b] = cellRGB(i, !S.showWater);
+	const [r, gg, b] = S.buildView ? buildRGB(i) : cellRGB(i, !S.showWater);
 	terrImage.data[i * 4] = r; terrImage.data[i * 4 + 1] = gg; terrImage.data[i * 4 + 2] = b; terrImage.data[i * 4 + 3] = 255;
 }
 function repaintTerrainImage() { // 只重涂颜色(显隐水面)：不动地形数据，不触发等高线重算
@@ -266,11 +279,20 @@ function repaintTerrainImage() { // 只重涂颜色(显隐水面)：不动地形
 function markTerrainDirtyIndices(indices) {
 	const T = S.terrain;
 	let r = S.terrainDirty;
+	// 可建设视图下，一个格子的高度变了会影响它3x3邻域里所有格子的可建设状态，所以外扩一圈一起重涂。
+	const grow = S.buildView ? 1 : 0;
+	const seen = grow ? new Set() : null;
 	for (const i of indices) {
 		const x = i % T.w, y = (i / T.w) | 0;
-		if (!r) r = { x0: x, y0: y, x1: x, y1: y };
-		else { r.x0 = Math.min(r.x0, x); r.y0 = Math.min(r.y0, y); r.x1 = Math.max(r.x1, x); r.y1 = Math.max(r.y1, y); }
-		paintCell(i);
+		for (let dy = -grow; dy <= grow; dy++) for (let dx = -grow; dx <= grow; dx++) {
+			const nx = x + dx, ny = y + dy;
+			if (nx < 0 || ny < 0 || nx >= T.w || ny >= T.h) continue;
+			const j = ny * T.w + nx;
+			if (seen) { if (seen.has(j)) continue; seen.add(j); }
+			if (!r) r = { x0: nx, y0: ny, x1: nx, y1: ny };
+			else { r.x0 = Math.min(r.x0, nx); r.y0 = Math.min(r.y0, ny); r.x1 = Math.max(r.x1, nx); r.y1 = Math.max(r.y1, ny); }
+			paintCell(j);
+		}
 	}
 	S.terrainDirty = r; S.terrainVersion++; S.dirty2d = true; S.dirty3d = true;
 }
@@ -302,7 +324,7 @@ const AREA_COLORS = {
 	AREA_COMMERCE_LOW: '#7dd3fc', AREA_COMMERCE_MIDDLE: '#2563eb', AREA_COMMERCE_HIGH: '#1e2a78',
 	AREA_INDUSTRY_LOW: '#fde68a', AREA_INDUSTRY_MIDDLE: '#eab308', AREA_INDUSTRY_HIGH: '#92400e',
 	AREA_OFFICE_LOW: '#f9a8d4', AREA_OFFICE_MIDDLE: '#db2777', AREA_OFFICE_HIGH: '#7e22ce',
-	AREA_TEST: '#ef4444', AREA_GREEN: '#06b6d4',
+	AREA_TEST: '#ef4444',
 };
 const areaColor = (area) => AREA_COLORS[area] || '#888888';
 
@@ -500,6 +522,15 @@ function draw2D() {
 	// 路和地块：软件光栅化到一张图再贴上去(见 rsFill)。顺序：路 → 地块可用矩形淡填充 → 轮廓。
 	const cpu = S.cpuRender;
 	if (cpu) rsBegin();
+	// 绿化区垫在路下面：半透明绿填充 + 轮廓(选中的亮一点)。
+	for (const gr of M.greens) {
+		const selected = S.sel && S.sel.kind === 'green' && S.sel.id === gr.id;
+		if (cpu) { rsFill(gr.pts.map((p) => toScreen(p[0], p[1])), '#3fae5a77'); rsLotOutline(gr.pts, selected ? '#ffffff' : '#7ee08f', selected ? 2.5 : 1.5); }
+		else {
+			g.beginPath(); gr.pts.forEach((p, i) => { const [sx, sy] = toScreen(p[0], p[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); }); g.closePath();
+			g.fillStyle = '#3fae5a77'; g.fill(); g.strokeStyle = selected ? '#fff' : '#7ee08f'; g.lineWidth = selected ? 2.5 : 1.5; g.stroke();
+		}
+	}
 	const lotInfos = [];
 	{
 		const pieces = getRoadPieces();
@@ -533,6 +564,7 @@ function draw2D() {
 			g.strokeStyle = selected ? '#fff' : areaColor(lot.area); g.lineWidth = selected ? 2.5 : 1.5; g.stroke();
 		}
 	}
+	drawGreenLinks();
 	// 选中高亮和高度箭头
 	for (const r of M.roads) {
 		const q = ME.quadOf(M, r);
@@ -659,6 +691,7 @@ function drawOverlay() {
 			g.setLineDash([6, 4]); g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(sx, sy); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
 		}
 	}
+	if (S.tool === 'green') drawGreenOverlay(m);
 	if (S.tool === 'lot' && S.mouse) {
 		const n = ME.pickNode(S.model, m[0], m[1], 9 / v.scale);
 		if (n) { const [sx, sy] = toScreen(n.x, n.y); g.strokeStyle = '#4cff9e'; g.lineWidth = 2; g.beginPath(); g.arc(sx, sy, 8, 0, Math.PI * 2); g.stroke(); }
@@ -763,6 +796,113 @@ function lotPreview() {
 	return { id: -1, a: p.a, b: p.b, depth, area: S.lotArea, margin: [null, null, null, null] };
 }
 
+// ======================= 绿化工具 =======================
+// 画多边形：连续点顶点，鼠标靠近第一个点时点击=闭合成环(至少3点、边不能相交，凹多边形可以)；Backspace撤销最后一点，Esc/右键点一下取消。
+// 连接道路：先点绿化的某条边(高亮)，再点一条路；一条边只连一条路，重复点覆盖；在右侧面板里可以删除连接。
+function greenSnap(w) {
+	const ring = S.pending && S.pending.green ? S.pending.green.pts : [];
+	if (ring.length >= 3 && Math.hypot(w[0] - ring[0][0], w[1] - ring[0][1]) <= 10 / S.view.scale) return { point: ring[0].slice(), close: true };
+	const n = ME.pickNode(S.model, w[0], w[1], 9 / S.view.scale);
+	if (n) return { point: [n.x, n.y], close: false };
+	return { point: [w[0], w[1]], close: false };
+}
+function greenClick(w) {
+	const M = S.model, r = 9 / S.view.scale;
+	if (S.greenMode === 'link') {
+		const p = S.pending && S.pending.linkGreen !== undefined ? S.pending : null;
+		if (p) {
+			const hit = ME.pickRoad(M, w[0], w[1], Math.max(r, 0.6));
+			if (hit) {
+				const gid = p.linkGreen, edge = p.edge;
+				S.pending = null;
+				modelOp((m) => { const gr = ME.greenOf(m, gid); if (!gr) return { error: '绿化已不存在' }; ME.setGreenLink(gr, edge, ME.roadOf(m, hit.road.id), hit.t, hit.x, hit.y); });
+				say('已把绿化的这条边连到 ' + (hit.road.name || ('路' + hit.road.id)));
+				S.dirty2d = true; return;
+			}
+		}
+		const e = ME.pickGreenEdge(M, w[0], w[1], r);
+		if (e) { S.pending = { linkGreen: e.green.id, edge: e.edge }; S.sel = { kind: 'green', id: e.green.id }; renderRight(); }
+		else say(p ? '点一条路(或点别的绿化边重新选)' : '先点绿化区的一条边');
+		S.dirty2d = true; return;
+	}
+	// 画多边形
+	if (!S.pending || !S.pending.green) S.pending = { green: { pts: [] } };
+	const ring = S.pending.green.pts;
+	const sp = greenSnap(w);
+	if (sp.close) {
+		if (!ME.canCloseGreen(ring)) { say('不能闭合：边自相交或面积为0'); return; }
+		const pts = ring.map((q) => q.slice());
+		S.pending = null;
+		const res = modelOp((m) => ({ green: ME.addGreen(m, pts) }));
+		if (res.green) { S.sel = { kind: 'green', id: res.green.id }; renderRight(); }
+		S.dirty2d = true; return;
+	}
+	if (!ME.canAppendVertex(ring, sp.point)) { say('这条边会和已画的边相交'); return; }
+	ring.push(sp.point);
+	S.dirty2d = true;
+}
+// 已有绿化连到路的连接：边加粗成橙色，从边上最近点连到路上的落点(路已不存在=红色)。
+function drawGreenLinks() {
+	const M = S.model;
+	const showVerts = S.tool === 'green';
+	for (const gr of M.greens) {
+		const n = gr.pts.length;
+		for (const link of gr.links) {
+			if (link.edge < 0 || link.edge >= n) continue;
+			const a = gr.pts[link.edge], b = gr.pts[(link.edge + 1) % n];
+			const ok = !!ME.resolveGreenLink(M, link);
+			const [ax, ay] = toScreen(a[0], a[1]), [bx, by] = toScreen(b[0], b[1]);
+			g.setLineDash([]); g.strokeStyle = ok ? '#ffb347' : '#e5534b'; g.lineWidth = 3.5;
+			g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+			const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+			const [sx, sy] = toScreen(mx, my), [tx, ty] = toScreen(link.x, link.y);
+			g.setLineDash([4, 3]); g.lineWidth = 1.5;
+			g.beginPath(); g.moveTo(sx, sy); g.lineTo(tx, ty); g.stroke(); g.setLineDash([]);
+			g.fillStyle = ok ? '#ffb347' : '#e5534b'; g.beginPath(); g.arc(tx, ty, 3, 0, Math.PI * 2); g.fill();
+		}
+		const selected = S.sel && S.sel.kind === 'green' && S.sel.id === gr.id;
+		if (showVerts || selected) {
+			g.fillStyle = '#ffffff'; g.strokeStyle = '#1a5a2a'; g.lineWidth = 1.5;
+			for (const p of gr.pts) { const [sx, sy] = toScreen(p[0], p[1]); g.beginPath(); g.arc(sx, sy, 3.5, 0, Math.PI * 2); g.fill(); g.stroke(); }
+		}
+	}
+}
+function drawGreenOverlay(m) {
+	const M = S.model, v = S.view;
+	if (S.greenMode === 'link') {
+		const p = S.pending && S.pending.linkGreen !== undefined ? S.pending : null;
+		const hov = ME.pickGreenEdge(M, m[0], m[1], 9 / v.scale);
+		const strokeEdge = (gr, edge, color, w) => {
+			const a = gr.pts[edge], b = gr.pts[(edge + 1) % gr.pts.length];
+			const [ax, ay] = toScreen(a[0], a[1]), [bx, by] = toScreen(b[0], b[1]);
+			g.setLineDash([]); g.strokeStyle = color; g.lineWidth = w; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+		};
+		if (hov) strokeEdge(hov.green, hov.edge, '#ffffffaa', 4);
+		if (p) {
+			const gr = ME.greenOf(M, p.linkGreen);
+			if (gr) strokeEdge(gr, p.edge, '#4cc9ff', 4.5);
+			const road = ME.pickRoad(M, m[0], m[1], Math.max(9 / v.scale, 0.6));
+			if (road) { pathQuad(ME.quadOf(M, road.road)); g.strokeStyle = '#4cc9ff'; g.lineWidth = 3; g.setLineDash([]); g.stroke(); }
+		}
+		return;
+	}
+	const ring = S.pending && S.pending.green ? S.pending.green.pts : null;
+	const sp = greenSnap(m);
+	if (ring && ring.length) {
+		g.setLineDash([]); g.strokeStyle = '#7ee08f'; g.lineWidth = 2; g.beginPath();
+		ring.forEach((q, i) => { const [sx, sy] = toScreen(q[0], q[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); });
+		g.stroke();
+		const bad = sp.close ? !ME.canCloseGreen(ring) : !ME.canAppendVertex(ring, sp.point);
+		const last = ring[ring.length - 1];
+		const [lx, ly] = toScreen(last[0], last[1]), [ex, ey] = toScreen(sp.point[0], sp.point[1]);
+		g.setLineDash([6, 4]); g.strokeStyle = bad ? '#e5534b' : '#fff'; g.beginPath(); g.moveTo(lx, ly); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
+		g.fillStyle = '#fff'; for (const q of ring) { const [sx, sy] = toScreen(q[0], q[1]); g.beginPath(); g.arc(sx, sy, 3.5, 0, Math.PI * 2); g.fill(); }
+		if (ring.length >= 3) { const [fx, fy] = toScreen(ring[0][0], ring[0][1]); g.strokeStyle = sp.close ? '#4cff9e' : '#7ee08f'; g.lineWidth = 2; g.beginPath(); g.arc(fx, fy, 8, 0, Math.PI * 2); g.stroke(); }
+	}
+	const [sx, sy] = toScreen(sp.point[0], sp.point[1]);
+	g.strokeStyle = sp.close ? '#4cff9e' : '#aaa'; g.lineWidth = 2; g.beginPath(); g.arc(sx, sy, 7, 0, Math.PI * 2); g.stroke();
+}
+
 // ======================= 鼠标交互 =======================
 let drag = null;
 c2d.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -772,7 +912,7 @@ c2d.addEventListener('mousedown', (e) => {
 	const w = toWorld(sx, sy);
 	S.mouse = w;
 	// Alt+左键：路网/地块工具里是"选择"(空地取消选择)；右键/中键/空格+左键是平移，右键点一下(不拖)结束正在画的路/地块。
-	if (e.button === 0 && e.altKey && (S.tool === 'road' || S.tool === 'lot')) { selectClick(w, e, S.tool); return; }
+	if (e.button === 0 && e.altKey && (S.tool === 'road' || S.tool === 'lot' || S.tool === 'green')) { selectClick(w, e, S.tool); return; }
 	if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown)) {
 		drag = { type: 'pan', rc: e.button === 2, moved: false, sx, sy, ox: S.view.ox, oy: S.view.oy }; return;
 	}
@@ -795,6 +935,7 @@ c2d.addEventListener('mousedown', (e) => {
 		roadClick(w); return;
 	}
 	if (S.tool === 'lot') { lotClick(w); return; }
+	if (S.tool === 'green') { greenClick(w); return; }
 });
 window.addEventListener('mousemove', (e) => {
 	const rect = c2d.getBoundingClientRect();
@@ -853,6 +994,7 @@ window.addEventListener('keydown', (e) => {
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); doSaveAll(); }
+	else if (e.key === 'Backspace' && S.tool === 'green' && S.pending && S.pending.green && S.pending.green.pts.length) { e.preventDefault(); S.pending.green.pts.pop(); if (!S.pending.green.pts.length) S.pending = null; S.dirty2d = true; }
 	else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
 	else if ((e.key === 't' || e.key === 'T') && S.tool === 'road' && !e.ctrlKey && !e.metaKey && !e.altKey) { S.road.shape = S.road.shape === 'line' ? 'curve' : 'line'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }
 	else if (e.key === '[') { S.brush.radius = Math.max(1, S.brush.radius - 1); renderLeft(); S.dirty2d = true; }
@@ -951,6 +1093,13 @@ function pointInPoly(x, y, poly) {
 // Alt+左键选择。mode='road'：节点/道路(含选中路的把手)，空地取消选择并可拖框选节点；mode='lot'：只选地块，空地取消选择。
 function selectClick(w, e, mode) {
 	const M = S.model, r = 9 / S.view.scale;
+	if (mode === 'green') {
+		// 绿化工具：Alt+点 = 选中点到的绿化(点在多边形内，或离边很近)，空地取消选择。
+		const edge = ME.pickGreenEdge(M, w[0], w[1], r), inside = ME.pickGreen(M, w[0], w[1]);
+		const gr = edge ? edge.green : inside;
+		S.sel = gr ? { kind: 'green', id: gr.id } : null;
+		renderRight(); S.dirty2d = true; return;
+	}
 	const roadMode = mode !== 'lot';
 	// 选中的路的把手优先
 	if (roadMode && S.sel && S.sel.kind === 'road') {
@@ -978,6 +1127,7 @@ function selExists() {
 	if (S.sel.kind === 'nodes') return S.sel.ids.some((id) => !!ME.nodeOf(M, id));
 	if (S.sel.kind === 'node') return !!ME.nodeOf(M, S.sel.id);
 	if (S.sel.kind === 'road') return !!ME.roadOf(M, S.sel.id);
+	if (S.sel.kind === 'green') return !!ME.greenOf(M, S.sel.id);
 	return M.lots.some((l) => l.id === S.sel.id);
 }
 function deleteSelection() {
@@ -987,6 +1137,7 @@ function deleteSelection() {
 		if (sel.kind === 'nodes') for (const id of sel.ids) ME.deleteNode(m, id); // 框选的节点：连着的路、地块一起删
 		else if (sel.kind === 'road') ME.deleteRoad(m, sel.id);
 		else if (sel.kind === 'node') ME.deleteNode(m, sel.id);
+		else if (sel.kind === 'green') ME.deleteGreen(m, sel.id);
 		else { m.lots = m.lots.filter((l) => l.id !== sel.id); ME.cleanup(m); }
 	});
 }
@@ -1068,7 +1219,7 @@ function heightRow(label, key, terrainKey) {
 	if (R[terrainKey]) input.disabled = true;
 	return row(label, input, btn('地形', () => { R[terrainKey] = !R[terrainKey]; renderLeft(); }, R[terrainKey]));
 }
-const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块']];
+const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块'], ['green', '绿化']];
 function renderLeft() {
 	const left = $('left'); left.innerHTML = '';
 	const tabs = el('div', { class: 'tabs' });
@@ -1076,6 +1227,7 @@ function renderLeft() {
 	left.append(tabs);
 	if (S.tool === 'terrain') {
 		const B = S.brush;
+		left.append(row('可建设视图', el('input', { type: 'checkbox', checked: S.buildView ? 'checked' : null, onchange: (e) => { S.buildView = e.target.checked; repaintTerrainImage(); renderLeft(); } }), el('span', { class: 'hint' }, '绿=可建设 红=不可建设，叠加高度渐变')));
 		left.append(el('h4', null, '笔刷'));
 		const ops = [['paint', '刷地形'], ['water', '刷水'], ['raise', '抬高'], ['lower', '降低'], ['flatten', '抹平到'], ['smooth', '平滑']];
 		const grid = el('div', { class: 'tabs' });
@@ -1134,12 +1286,23 @@ function renderLeft() {
 	} else if (S.tool === 'lot') {
 		left.append(el('h4', null, '地块'));
 		left.append(row('类型', sel(ME.AREAS.map((a) => [a, areaLabel(a)]), S.lotArea, (v) => { S.lotArea = v; S.dirty2d = true; })));
-	} else {
-
+	} else if (S.tool === 'green') {
+		left.append(el('h4', null, '绿化区(成环多边形)'));
+		left.append(el('div', { class: 'tabs' },
+			btn('画多边形', () => { S.greenMode = 'draw'; S.pending = null; renderLeft(); S.dirty2d = true; }, S.greenMode === 'draw'),
+			btn('连接道路', () => { S.greenMode = 'link'; S.pending = null; renderLeft(); S.dirty2d = true; }, S.greenMode === 'link')));
+		if (S.greenMode === 'draw') {
+			left.append(el('div', { class: 'hint' }, '依次点顶点；鼠标靠近第一个点(出现绿圈)再点一下=闭合。凹多边形可以，边不能自交。'));
+			left.append(el('div', { class: 'hint' }, 'Backspace 撤销最后一点，Esc/右键点一下取消。顶点会吸附到路口节点。'));
+		} else {
+			left.append(el('div', { class: 'hint' }, '先点绿化区的一条边(变蓝)，再点一条路，这条边就连到那条路。一条边只连一条路，重复点覆盖。'));
+			left.append(el('div', { class: 'hint' }, '没有连任何路的绿化区只做景观(不能用地址导航)；连了路的才有行人入口。'));
+		}
+		left.append(el('div', { class: 'hint' }, 'Alt+点 = 选中绿化区，Delete 删除。'));
 	}
 }
 function areaLabel(a) {
-	const kinds = { RESIDENCE: '住宅', COMMERCE: '商业', INDUSTRY: '工业', OFFICE: '办公', GREEN: '绿化', TEST: '测试' };
+	const kinds = { RESIDENCE: '住宅', COMMERCE: '商业', INDUSTRY: '工业', OFFICE: '办公', TEST: '测试' };
 	const lv = { HIGH: '高', MIDDLE: '中', LOW: '低' };
 	const p = a.replace('AREA_', '').split('_');
 	return kinds[p[0]] + (p[1] ? lv[p[1]] + '密度' : '');
@@ -1177,6 +1340,20 @@ function renderRight() {
 		right.append(row('车道', sel([[-1, '自定义']].concat(ME.LANE_PRESETS.map((p, i) => [i, p.name])), cur, (v) => { if (v >= 0) modelOp((m) => { ME.roadOf(m, r.id).lanes = ME.LANE_PRESETS[v].lanes.slice(); }); })));
 		right.append(row('弧度', btn('拉直', () => modelOp((m) => { ME.roadOf(m, r.id).ctrl = null; }))));
 		right.append(btn('删除道路', deleteSelection));
+	} else if (S.sel.kind === 'green') {
+		const gr = ME.greenOf(M, S.sel.id);
+		const area = Math.abs(ME.greenSignedArea(gr.pts));
+		right.append(el('div', null, `绿化 ${gr.id}  ${gr.pts.length} 个顶点  面积 ${(area * 100).toFixed(0)} m²`));
+		if (ME.ringSelfIntersects(gr.pts)) right.append(el('div', { class: 'warn' }, '边自相交，导出时会被跳过'));
+		right.append(el('h4', null, `连接的道路(${gr.links.length})`));
+		if (!gr.links.length) right.append(el('div', { class: 'hint' }, '没有连路：只做景观，不能用地址导航。用"连接道路"模式接入。'));
+		for (const link of gr.links) {
+			const hit = ME.resolveGreenLink(M, link);
+			const name = hit ? (hit.road.name || ('路' + hit.road.id)) : '(路已不存在)';
+			right.append(row('边' + link.edge, el('span', { style: hit ? '' : 'color:var(--bad)' }, name),
+				btn('删除', () => modelOp((m) => { const g2 = ME.greenOf(m, gr.id); if (g2) ME.removeGreenLink(g2, link.edge); }))));
+		}
+		right.append(btn('删除绿化', deleteSelection));
 	} else {
 		const lot = M.lots.find((l) => l.id === S.sel.id);
 		right.append(el('div', null, `地块 ${lot.id}`));
@@ -1352,6 +1529,25 @@ function build3D() {
 			const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
 			r3.root.add(new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: new THREE.Color(areaColor(lot.area)), transparent: true, opacity: 0.5, side: THREE.DoubleSide })));
 		}
+	}
+	// 绿化区：三角化后铺在地形上方一点，顶点高度取该处地形高度；轮廓画成线。
+	for (const gr of S.model.greens || []) {
+		if (gr.pts.length < 3 || ME.ringSelfIntersects(gr.pts)) continue;
+		const contour = gr.pts.map((p) => new THREE.Vector2(p[0], p[1]));
+		const tris = THREE.ShapeUtils.triangulateShape(contour, []);
+		const lift = 0.25, p = [];
+		for (const tri of tris) for (const k of tri) { const q = gr.pts[k]; p.push(q[0], T.sampleHeight(q[0], q[1]) + lift, q[1]); }
+		if (p.length) {
+			const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+			r3.root.add(new THREE.Mesh(gg, new THREE.MeshBasicMaterial({ color: 0x3fae5a, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })));
+		}
+		const lp = [];
+		for (let i = 0; i < gr.pts.length; i++) {
+			const a = gr.pts[i], b = gr.pts[(i + 1) % gr.pts.length];
+			lp.push(a[0], T.sampleHeight(a[0], a[1]) + lift + 0.05, a[1], b[0], T.sampleHeight(b[0], b[1]) + lift + 0.05, b[1]);
+		}
+		const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+		r3.root.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x7ee08f })));
 	}
 	S.dirty3d = false;
 }

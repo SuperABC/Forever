@@ -13,6 +13,7 @@ class AVehicleElement;
 class ATransitVehicleElement;
 class ABusController;
 class Station;
+class Green;
 class Route;
 class UProceduralMeshComponent;
 class UInstancedStaticMeshComponent;
@@ -104,11 +105,15 @@ public:
 	// 连接点附近的车道（线终止在外部，车到了也不消失，下车后刷新成步行线）；乘客/其它Pawn不画。
 	// target留着，切换操控（AForeverPlayerController::OnPossess）时RefreshGuide重新规划。
 	void StartGuide(Room* target);
+	// 导航到绿化区的第circleIndex个活动圆里的(endX,endY)(地图单位，圆内随机点，调用方用Green::RandomPointInCircle取)。
+	// 步行：人行道到圆心再走到终点；开车：车到不了绿化区，画到圆心附近的车道(同房间"终止在外部"的处理)。
+	// 到达判定按和终点的水平距离(guideArriveDistance)，不依赖房间。
+	void StartGuideToGreen(Green* green, int circleIndex, float endX, float endY);
 	// 按玩家当前Pawn重新规划并画线；没有活动导航时什么都不做。
 	void RefreshGuide();
 	// 取消导航并清线。
 	void ClearGuide();
-	bool HasGuide() const { return guide.target != nullptr; }
+	bool HasGuide() const { return guide.target != nullptr || guide.green != nullptr; }
 
 	// 导航线刷新间隔(秒)：每次裁剪玩家已经走过的前缀、判断偏离/到达。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic|Guide")
@@ -116,6 +121,9 @@ public:
 	// 玩家偏离折线超过这个距离(地图单位，1=10m，默认2=20m)就重新规划。
 	UPROPERTY(EditDefaultsOnly, Category = "Traffic|Guide")
 	float guideReplanDistance = 2.f;
+	// 绿化区导航：玩家离圆内终点水平距离小于这个(地图单位，1=10m)就算到达，导航结束。
+	UPROPERTY(EditDefaultsOnly, Category = "Traffic|Guide")
+	float guideArriveDistance = 0.3f;
 
 	// 清掉导航调试折线并停止跟踪。
 	void ClearTestNavigationLine();
@@ -385,7 +393,11 @@ private:
 
 	struct FGuide {
 		Room* target = nullptr;
-		bool bEndsAtOutside = false; // 线终止在建筑外部连接点，不是目标房间
+		// 目标是绿化区时用这组(target为空)：圆序号和圆内终点(地图单位)。
+		Green* green = nullptr;
+		int greenCircle = -1;
+		float greenEndX = 0.f, greenEndY = 0.f;
+		bool bEndsAtOutside = false; // 线终止在建筑外部连接点/绿化圆附近的车道，不是目标本身
 		TArray<FVector> path;        // 剩余路径（UE单位），随玩家前进被裁剪
 	};
 	FGuide guide;

@@ -256,7 +256,16 @@ Household* Citizen::GetHousehold() const { return household; }
 void Citizen::SetHousehold(Household* value) { household = value; }
 void Citizen::SetRoom(Room* value) { room = value; }
 Room* Citizen::GetCurrentRoom() const { return currentRoom; }
+Green* Citizen::GetCurrentGreen() const { return currentGreen; }
+int Citizen::GetCurrentGreenCircle() const { return currentGreenCircle; }
+void Citizen::SetCurrentGreen(Green* green, int circleIndex) {
+	currentGreen = green;
+	currentGreenCircle = green ? circleIndex : -1;
+	if (green) SetCurrentRoom(nullptr); // 站在绿化里就不在任何房间里
+}
+
 void Citizen::SetCurrentRoom(Room* value) {
+	if (value) { currentGreen = nullptr; currentGreenCircle = -1; } // 走进房间=离开绿化
 	// 房间的occupants跟着currentRoom走(旧房间移出、新房间加入)。读档直接赋值字段，不经过这里。
 	if (currentRoom == value) return;
 	if (currentRoom) currentRoom->RemoveOccupant(this);
@@ -295,8 +304,10 @@ void Citizen::DecaySatiety(double days) { if (days > 0) satiety *= static_cast<f
 bool Citizen::IsInEconomy() const { return inEconomy; }
 void Citizen::SetInEconomy(bool value) { inEconomy = value; }
 
-bool Citizen::IsWalking() const { return walkDestination != nullptr; }
+bool Citizen::IsWalking() const { return walkDestination != nullptr || walkGreen != nullptr; }
 Room* Citizen::GetWalkDestination() const { return walkDestination; }
+Green* Citizen::GetWalkGreen() const { return walkGreen; }
+int Citizen::GetWalkGreenCircle() const { return walkGreenCircle; }
 
 void Citizen::BeginWalk(const std::vector<WalkPoint>& path, Room* destination, double nowSeconds, float speed) {
 	EndWalk();
@@ -308,6 +319,26 @@ void Citizen::BeginWalk(const std::vector<WalkPoint>& path, Room* destination, d
 		walkDistances[i] = walkDistances[i - 1] + std::sqrt(dx * dx + dy * dy + dz * dz);
 	}
 	walkDestination = destination;
+	currentGreen = nullptr; // 出发=离开绿化(在路上不属于任何房间/绿化)
+	currentGreenCircle = -1;
+	walkStartTime = nowSeconds;
+	walkSpeed = speed;
+	SetPosition(path[0].x, path[0].y, path[0].z);
+}
+
+void Citizen::BeginWalkToGreen(const std::vector<WalkPoint>& path, Green* destination, int circleIndex, double nowSeconds, float speed) {
+	EndWalk();
+	if (path.empty() || !destination || speed <= 0.f) return;
+	walkPath = path;
+	walkDistances.assign(path.size(), 0.f);
+	for (size_t i = 1; i < path.size(); i++) {
+		float dx = path[i].x - path[i - 1].x, dy = path[i].y - path[i - 1].y, dz = path[i].z - path[i - 1].z;
+		walkDistances[i] = walkDistances[i - 1] + std::sqrt(dx * dx + dy * dy + dz * dz);
+	}
+	walkGreen = destination;
+	walkGreenCircle = circleIndex;
+	currentGreen = nullptr;
+	currentGreenCircle = -1;
 	walkStartTime = nowSeconds;
 	walkSpeed = speed;
 	SetPosition(path[0].x, path[0].y, path[0].z);
@@ -340,7 +371,15 @@ bool Citizen::AdvanceWalk(double nowSeconds) {
 	SampleWalk(nowSeconds, point, segment, finished);
 	if (finished) {
 		Room* destination = walkDestination;
+		Green* green = walkGreen;
+		int circle = walkGreenCircle;
 		EndWalk();
+		if (green) {
+			// 到了绿化区：不在任何房间，位置留在路径终点(圆内的点)。
+			SetCurrentGreen(green, circle);
+			SetPosition(point.x, point.y, point.z);
+			return true;
+		}
 		SetCurrentRoom(destination);
 		ClearPosition();
 		return true;
@@ -372,6 +411,8 @@ void Citizen::SetWalkInstantiable(bool value) { walkInstantiable = value; }
 
 void Citizen::EndWalk() {
 	walkDestination = nullptr;
+	walkGreen = nullptr;
+	walkGreenCircle = -1;
 	walkPath.clear();
 	walkDistances.clear();
 }
@@ -390,8 +431,11 @@ void Citizen::RebaseWalk(double nowSeconds) {
 	std::vector<WalkPoint> remaining;
 	GetRemainingWalk(nowSeconds, remaining);
 	Room* destination = walkDestination;
+	Green* green = walkGreen;
+	int circle = walkGreenCircle;
 	float speed = walkSpeed;
-	BeginWalk(remaining, destination, nowSeconds, speed);
+	if (green) BeginWalkToGreen(remaining, green, circle, nowSeconds, speed);
+	else BeginWalk(remaining, destination, nowSeconds, speed);
 }
 
 void Citizen::RestartWalk(double nowSeconds) {
@@ -435,6 +479,7 @@ void Citizen::Die() {
 	health = 0.f;
 	EndWalk();
 	SetCurrentRoom(nullptr);
+	SetCurrentGreen(nullptr, -1);
 	ClearPosition();
 }
 
@@ -449,6 +494,7 @@ void Citizen::Depart() {
 	}
 	EndWalk();
 	SetCurrentRoom(nullptr);
+	SetCurrentGreen(nullptr, -1);
 	ClearPosition();
 }
 

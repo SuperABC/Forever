@@ -19,6 +19,7 @@ public:
 
 	virtual void DistributeRoadnet(int width, int height,
 		const std::function<const std::string&(int, int)>& getTerrain,
+		const std::function<bool(int, int)>& isConstruction,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		const std::function<float(float, float)>& getHeight,
 		int nodeStaticCount) override;

@@ -96,6 +96,8 @@ public:
 	// 市民真正走到一个新房间时调用(UForeverPopulaceFrameworkComponent::ReportArrival)：
 	// 构造npc_arrive事件，只发给这个市民自己的Scheduler脚本和Job脚本(不广播)，有嵌套深度保护。
 	void BroadcastNpcArrive(Citizen* citizen, Room* room);
+	// 同上，到达的是绿化区某个圆(address=Green::GetCircleAddress)。
+	void BroadcastNpcArrive(Citizen* citizen, const std::string& address);
 
 	// 员工接到组织派的任务(assign_task发起成功后)：execute_task事件只发给该员工的Job脚本。
 	void BroadcastExecuteTask(Citizen* citizen, const std::string& task, const std::string& destination);

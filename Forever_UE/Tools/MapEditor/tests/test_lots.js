@@ -34,7 +34,7 @@ assert.strictEqual(out.margin[2], 1); // 2车道+2人行道=4条*0.5=宽2，半�
 assert.strictEqual(out.margin[0], 0);
 assert.strictEqual(out.margin[1], 0);
 assert.strictEqual(out.margin[3], 0);
-assert.ok(!warnings.some((w) => w.includes('不可建造')));
+assert.ok(!warnings.some((w) => w.includes('不是可建设区域')));
 
 // 自定义缩进覆盖自动值。
 lot.margin = [1, null, 0.25, null];
@@ -42,14 +42,16 @@ const o2 = ME.exportRoadnet(m, t).output.lots[0];
 assert.strictEqual(o2.margin[0], 1);
 assert.strictEqual(o2.margin[2], 0.25);
 
-// 山体上的地块报警。
+// 可建设只看高度：高度为0的山地形不报警，抬高之后的地块报警。
 t.beginStroke(); t.brush('paint', 120, 115, 5, { terrain: 'terrain_mountain' }); t.endStroke();
-assert.ok(ME.exportRoadnet(m, t).warnings.some((w) => w.includes('不可建造')));
+assert.ok(!ME.exportRoadnet(m, t).warnings.some((w) => w.includes('不是可建设区域')));
+t.beginStroke(); t.brush('raise', 120, 115, 5, { strength: 1 }); t.endStroke();
+assert.ok(ME.exportRoadnet(m, t).warnings.some((w) => w.includes('不是可建设区域')));
 
 // 旋转后的方向标签仍是四个互不相同的边。
 const m2 = ME.newModel(256, 256);
 const a = ME.addNode(m2, 100, 100), b = ME.addNode(m2, 120, 112);
-const l2 = ME.addLot(m2, a.id, b.id, 15, 'AREA_GREEN');
+const l2 = ME.addLot(m2, a.id, b.id, 15, 'AREA_TEST');
 const c2 = ME.lotCorners(m2, l2);
 const o = ME.orderCorners(c2);
 assert.strictEqual(new Set(Object.values(o.edges).map((e) => JSON.stringify(e))).size, 4);

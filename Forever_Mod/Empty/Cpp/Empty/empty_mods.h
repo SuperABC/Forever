@@ -7,6 +7,7 @@
 #include "map/terrain_mod.h"
 #include "map/roadnet_mod.h"
 #include "map/zone_mod.h"
+#include "map/green_mod.h"
 #include "map/building_mod.h"
 #include "map/component_mod.h"
 #include "map/room_mod.h"
@@ -59,6 +60,7 @@ public:
 
 	virtual void DistributeRoadnet(int width, int height,
 		const std::function<const std::string&(int, int)>& getTerrain,
+		const std::function<bool(int, int)>& isConstruction,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		const std::function<float(float, float)>& getHeight,
 		int nodeStaticCount) override {}
@@ -79,6 +81,28 @@ public:
 	static void Assign(const std::vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {}
 	virtual void Layout(int direction, const Quad& quad,
 		const std::unordered_map<int, Road*>& boundaryRoads) override {}
+
+private:
+	std::string lastName;
+public:
+	// 存档保存/恢复命名计数器count，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+};
+
+class EmptyGreen : public GreenMod {
+public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("green")
+	EmptyGreen() { lastName = std::string("empty") + std::to_string(count++); }
+
+	static const char* GetId() { return "green_empty"; }
+	virtual const char* GetType() const override { return "green_empty"; }
+	virtual const char* GetName() override { return lastName.c_str(); }
+
+	static float GetPowerFree() { return 0.f; }
+	static float GetPowerLinked() { return 0.f; }
 
 private:
 	std::string lastName;

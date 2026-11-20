@@ -19,9 +19,9 @@
 
 | 段 | 内容 |
 |---|---|
-| `world.map.terrain` | 宽高；地形类型名调色板；每个格子的地形下标、高度、水面、hatches、细高度（可选 17×17）；`terrainTextures` |
+| `world.map.terrain` | 宽高；地形类型名调色板；每个格子的地形下标、可建设标记（1 字节，2026-11-21 起）、高度、水面、hatches、细高度（可选 17×17）；`terrainTextures` |
 | `world.map.roadnet` | 宿主的 `Node::count`；Roadnet（mod 注册 id、externs、intersections、hatches、桥墩 piers）；Road 表；Lot 表；`addressesByRoad`；路口；导航锚点；导航边表；车行图和行人图；贯通线 |
-| `world.map.structures` | 门计数器；Zone；Building（含 Floor、Component、Room）；门；门的持有者列表 |
+| `world.map.structures` | 门计数器；Zone；Building（含 Floor、Component、Room）；门；门的持有者列表；Green（mod id+状态、名字、多边形、links、保留的圆含节点id、装饰物，读档不重跑Layout） |
 | `world.map.vegetation` | mesh 路径表、全部 `TreeInstance`、`nextId` |
 | `world.map.lamps` | 蓝图路径表、全部 `LampInstance`、`nextId` |
 

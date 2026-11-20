@@ -11,8 +11,8 @@
 ### 存储与地形
 
 - **用扁平`std::vector<Element>`（行主序，`y*width+x`）存格子，不分块**：默认1024x1024=1048576个`Element`，扁平数组足够。将来要分块（更大地图/流式卸载）只换内部存储，`GetTerrain`/`SetTerrain`等accessor签名不用变。
-- **`InitTerrains()`**：按`GetPriority()`降序对所有已注册地形依次执行`DistributeTerrain`，再统一跑一次"3x3晋升"规则，最后重建`terrainTextures`索引表。mod的发现/注册不在这里，归`Registry`（`common/registry.md`）。Core不内置兜底地形，见`terrain.md`。传给mod DLL的回调里`std::string`一律按引用传（`GetTerrainRef`），各模块自己拷贝——按值返回会一边分配一边释放，超过SSO长度（15字符，如`terrain_mountain`）就在释放时崩溃。
-- **3x3晋升**：3x3邻域（含自身）全是`plain`/`construction`**且element高度都为0**才把格子改成`construction`（被抬高/压低过的平原不晋升）；任一邻居越界（地图边缘）则永不晋升。
+- **`InitTerrains()`**：按`GetPriority()`降序对所有已注册地形依次执行`DistributeTerrain`，再统一标一次"可建设"(construction)，最后重建`terrainTextures`索引表。mod的发现/注册不在这里，归`Registry`（`common/registry.md`）。Core不内置兜底地形，见`terrain.md`。传给mod DLL的回调里`std::string`一律按引用传（`GetTerrainRef`），各模块自己拷贝——按值返回会一边分配一边释放，超过SSO长度（15字符，如`terrain_mountain`）就在释放时崩溃。
+- **可建设标记（2026-11-21改）**：`Element::construction`是独立的bool，`terrain`始终是原始地形名（`"construction"`不再是地形名，`terrainTextures`里也没有它，建筑下面的贴图跟着原地形走）。标记规则：3x3邻域（含自身）内所有element**粗高度都为0**（有细化数组的话细化高度也全为0）；**不看地形类型**（沙滩等也能建），**不看水**（水为了填满岸边会伸到地面以下，对建筑没影响）；任一邻居越界（地图边缘）则不标。`Map::IsConstruction(x,y)`查询，存档里每个格子多写一个字节。路网mod通过`DistributeRoadnet`的`isConstruction`回调读它。注意：山/河/海mod里按`"plain"`判断的逻辑发生在标记之前，不受影响。
 - **水面按格子独立设置**（`SetWater`）：同一次`DistributeTerrain`里不同格子可以有不同水位（倾斜水面），见`terrain_mod.md`"水面"。
 - **细化高度**：`Element::fineHeights`默认为空，只有起伏大的格子（目前是河岸）才分配17x17数组（约定见`terrain_mod.md`），存成`unique_ptr<array>`让没有数组的格子只多8字节（1024x1024约8MB）。mod通过`setFineHeights`回调（`Map::SetFineHeights`）提交。`SampleHeight(x,y)`取`floor`落到的格子：有细化数组就在1/16网格上双线性（UE各级LOD顶点正好落在网格点上，等于直接查表），否则用4个格点粗高度——**按"自适应对角线"拆成两个三角形线性插值**（`UsesAntiDiagonal(ex,ey)`：取两端高度差较小的那条对角线，false=主对角线、true=副对角线；4个角相等仍是平的、不过冲、跨格子边连续）。斜着走的地形交界（锯齿状台阶）上格子多是"三高一低"，对角线落在两个高点之间，整条交界就是一道笔直的斜坡，而不是双线性的锯齿鞍面——以前这种交界在网格上"格子感"很重；UE侧`UForeverTerrainFrameworkComponent::SampleHeight`直接转发到这里。`SetHeight`会清掉共用格点`(x,y)`的4块细化数组，保证"数组角点=粗高度"，所以mod必须先`SetHeight`再`SetFineHeights`。`GetHeight`只返回粗高度。
 - **hatch（地形挖洞）**：类型是`TerrainHatch`（`quad`+`rotation`+`wall`+`floorStart`+`floorEnd`，见`general_geometry.h`）。`AddHatch(const TerrainHatch&)`是主入口，按`quad`的旋转AABB算出重叠的格子范围，逐个`Element::hatches.push_back`；`AddHatch(Quad,float)`（建筑地下室用）包成`wall=false`。`GetTunnelWallHatches()`返回路网里`wall=true`的hatch（隧道口），UE层据此生成侧壁。线路(火车隧道)的hatch由`Route::Build`走`AddRouteHatch`：在`AddHatch`之外把`wall=true`的也追加进`roadnet->hatches`(`Roadnet::AppendHatch`)，侧壁和存档才认得到。存档里每个hatch存`wall`(U8)+`floorStart/floorEnd`(F32)，Element和Roadnet两处共用`WriteHatches/ReadHatches`。
@@ -56,6 +56,17 @@
 - **`Building`独占一个mod实例，和`Zone`一样**：`Building(BuildingFactory*, BuildingMod*)`构造，`~Building()`里`factory->DestroyBuilding(mod)`；`RandomAcreage`/`GetPower`等"按类型"查询都是不需要实例的static方法。
 - **自适应占位**：`request.adaptiveParent`非空时，`request.lot`是`Lot::FindAdaptivePlacement`（在mod DLL内纯读）命中的嵌套子块`usedChild`。`RequestPlacement`成功后调`PromoteAdaptiveRemainder(parent, usedChild)`：把`usedChild`的残余`freeLots`搬回`parent->GetFreeLots()`，把`usedChild`自己从`parent->GetFreeLots()`摘掉（否则它仍带着当初完整未用的尺寸，下一个类型会当成整块可用，重复分配同一块地），并把它新产生的小路（`TakePathRoadLinks()`）记到`parent`身上（Forever层扫的是`GetLots()`里的顶层Lot）。`usedChild`本身不`delete`（`building->SetParentLot(usedChild)`还引用着）：新开局无人持有、泄漏到进程结束，读档时进`orphanLots`由Map持有。这个函数只能在Core编译的`map.cpp`里做，mod DLL不能调`GetFreeLots()`/`TakePathRoadLinks()`这类会分配/移动容器内容的方法（原因见`general_geometry.h`）。子块没有路网分配的地址，`GetAddresses()`为空会让`building->GetAddress()`退化成空路名、按地址找房间失败，所以沿用`adaptiveParent`的地址；`LocateBuilding`用`SameBlock`（指针相同或地址相同）比较所属地块。
 - **小路归属**：`Map`自己不持有任何小路`Road*`。小路是`RequestPlacement`/`FillRemainder`裁剪顶层`Lot`空闲空间的副产品，记在那个`Lot`的`pathRoadLinks`里（`GetPathRoadLinks()`/`GetPathRoads()`），由`Lot`析构释放；`Road::IsPathRoad()`标分类；`Map::GetPathRoads()`只遍历`GetLots()`汇总，按值返回。
+
+### InitGreens（绿化区，2026-11-20）
+
+放在`InitBuildings`之后(接路要用`FlushPendingBuildingRoadAccess`的断开顺序)、`InitVegetation`之前；读档(`bMapRestored`)跳过。数据来自`Roadnet::GetGreenSites()`(路网文件`greens[]`，`RoadnetMod::greens`深拷贝并把`Road*`重映射，同lots)。每块绿化区：
+1. 校验≥3点、规整成有符号面积>0、算包围盒；`linked`=存在非空连路。
+2. **选mod**：对已注册启用的`green_*`按`linked ? GetPowerLinked : GetPowerFree`取权重做CDF轮盘(同`PickSchedulerId`)，全0=这块绿化区没有mod、不落地；`CreateGreen`后`Green::Layout`(在mod实例的`RandomScope`里)。
+3. **圆校验/装饰物过滤/地址**见`green.md`。
+4. **行人导航**(只行人)：每个保留圆建圆心节点`MakeIsolatedAnchor`和边上垂足节点，两者连行人`Connection`，垂足投影到连路边的路上接入路网。一次性在生成阶段完成，守住"异步寻路开始后不能再加锚点"。
+
+`GetGreens()`按生成顺序(存档下标)；`GetGreen(name)`按名字；`LocateGreen(address, circleIndex)`解析`<路名> -1 <绿化名> [圆序号]`(没写序号时`circleIndex==-1`)。植被：`InitVegetation`对每块绿化区把mod的`AddTreeSingle/Line/Area`展开，参考系=包围盒、`PlaceFilter`多加`PointInPolygon`。
+路径：`PlanPedestrianRouteToGreen`(到圆心节点再追加圆内目标点，行人)、`PlanPedestrianRouteFromGreen`(从圆心节点出发，离开绿化=调用方先直线走到圆心)；**车辆不进绿化区**，车规划仍回退到最近车道点。
 
 ### Building内部布局（组合/房间/楼层几何/行人导航）
 
@@ -103,7 +114,7 @@
 - **名字唯一性由mod自己保证**：`Zone::GetName()`/`Building::GetName()`转发`mod->GetName()`，mod构造函数里用`static int count`编号拼进返回值（每个mod实例独占服务一个Zone/Building，计数器天然对应"第几个真正落地的实例"）。`AddZone`/`AddBuilding`（私有）按`GetName()`插入，重名返回false并`debugf`警告、不生成消歧名字（只是兜底，触发说明某个mod的计数器有问题）；调用方发现false就`delete`刚构造的对象（`~Zone()`/`~Building()`顺带销毁独占的mod实例，不泄漏）。
 - `GetZone(name)`/`GetBuilding(name)`是对map的简单`find`。
 - **`LocateZone`/`LocateBuilding`**：按"Block->Zone->Building"解析地址，"Block"等价于顶层`Lot`。`Roadnet::AllocateAddress()`已在`InitRoadnet()`给每个顶层Lot登记了所有临街道路的`(road,index)`地址对（角地块可有多个，`Lot::AddAddress`/`GetAddresses()`），`LocateLot(road,index)`转发`Roadnet::LocateLot`——角地块的多个地址都指向同一个Lot，用哪个都查得到。格式：`"<road> <index> <zoneName>"`、`"<road> <index> <buildingName>"`（直接落在这个Lot上、没有`parentZone`的Building）、`"<road> <index> <zoneName> <buildingName>"`（Zone内部的Building，`Zone::GetInternalBuildings()`按name匹配）。`istringstream`按空格切分，找不到返回`nullptr`。
-- **`LocateRoom`**：格式末尾再加房间号（`"... <buildingName> <number>"`或`"... <zoneName> <buildingName> <number>"`）；取最后一个token当房间号，其余拼回交给`LocateBuilding`，再在`building->GetRooms()`里线性找`GetNumber()`匹配的Room。没有`LocateComponent`：Component没有`GetAddress`，不参与地址体系。正向查询（对象->地址）是`Lot::GetAddress()`（取`GetAddresses()[0]`）/`Zone::GetAddress()`/`Building::GetAddress()`/`Room::GetAddress()`，每层是"上一层地址 + 空格 + 自己的Name/门牌号"，格式与上面一一对应。
+- **`LocateRoom`**：格式末尾再加房间号（`"... <buildingName> <number>"`或`"... <zoneName> <buildingName> <number>"`）；取最后一个token当房间号，其余拼回交给`LocateBuilding`，再在`building->GetRooms()`里线性找`GetNumber()`匹配的Room。**绿化区地址**：`"<路名> -1 <绿化名> <圆序号>"`(连了路的绿化区)，`-1`让`LocateZone/Building/Room`返回空，由`LocateGreen`接手，见上面InitGreens和`green.md`。没有`LocateComponent`：Component没有`GetAddress`，不参与地址体系。正向查询（对象->地址）是`Lot::GetAddress()`（取`GetAddresses()[0]`）/`Zone::GetAddress()`/`Building::GetAddress()`/`Room::GetAddress()`，每层是"上一层地址 + 空格 + 自己的Name/门牌号"，格式与上面一一对应。
 
 ### 人口对接（Map不持有Citizen/Populace）
 

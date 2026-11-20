@@ -129,7 +129,7 @@ namespace {
 		static constexpr AREA_TYPE kAreas[4][3] = {
 			{ AREA_RESIDENCE_HIGH, AREA_RESIDENCE_MIDDLE, AREA_RESIDENCE_LOW },
 			{ AREA_COMMERCE_HIGH, AREA_COMMERCE_MIDDLE, AREA_COMMERCE_LOW },
-			{ AREA_GREEN, AREA_GREEN, AREA_INDUSTRY_LOW }, // 工厂只放低密度工业区，高/中密度的工业位置改成绿地
+			{ AREA_INDUSTRY_HIGH, AREA_INDUSTRY_MIDDLE, AREA_INDUSTRY_LOW },
 			{ AREA_OFFICE_HIGH, AREA_OFFICE_MIDDLE, AREA_OFFICE_LOW }
 		};
 		return kAreas[GetRandom(4)][level];
@@ -175,6 +175,7 @@ const char* CheckboardRoadnet::GetName() {
 
 void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 	const function<const string&(int, int)>& getTerrain,
+	const function<bool(int, int)>& isConstruction,
 	const function<pair<bool, float>(int, int)>& getWater,
 	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
@@ -281,18 +282,21 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		float kExt = length / ARM_SAMPLE_STEP;
 
 		vector<string> terr;
+		vector<char> cons;
 		vector<float> heights;
 		terr.push_back(getTerrain(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))));
+		cons.push_back(isConstruction(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))) ? 1 : 0);
 		heights.push_back(getHeight(cx, cy));
 		for (int k = 1; static_cast<float>(k) <= kExt - 1.f; k++) {
 			string t = getTerrain(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k)));
 			if (t == "") break;
 			terr.push_back(t);
+			cons.push_back(isConstruction(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k))) ? 1 : 0);
 			heights.push_back(getHeight(cx + dx * k, cy + dy * k));
 		}
 		int sampleCount = static_cast<int>(terr.size()) - 1;
 
-		auto isGood = [&](int k) { return terr[k] == "plain" || terr[k] == "construction"; };
+		auto isGood = [&](int k) { return terr[k] == "plain" || cons[k]; };
 		auto allGood = [&](int from, int to) {
 			for (int i = from; i <= to; i++) if (!isGood(i)) return false;
 			return true;
@@ -417,7 +421,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 			for (int x = x0; x <= x1; x++) {
 				if (!isPointInQuad(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f, qx, qy)) continue;
 				if (x < 0 || y < 0 || x >= width || y >= height) return false;
-				if (getTerrain(x, y) != "construction") return false;
+				if (!isConstruction(x, y)) return false;
 			}
 		}
 		return true;
@@ -463,7 +467,7 @@ void CheckboardRoadnet::DistributeRoadnet(int width, int height,
 		if (posX[idx] < width * EDGE_MARGIN_RATIO || posX[idx] > width * (1.f - EDGE_MARGIN_RATIO)
 			|| posY[idx] < height * EDGE_MARGIN_RATIO || posY[idx] > height * (1.f - EDGE_MARGIN_RATIO)) continue;
 		if (ix < 0 || iy < 0 || ix >= width || iy >= height) continue;
-		alive[idx] = getTerrain(ix, iy) == "construction";
+		alive[idx] = isConstruction(ix, iy);
 	}
 
 	// =========================================================================================

@@ -2,7 +2,7 @@
 
 ## 职责
 
-持有全部21个concept(对照表见`common/loader.md`)的`ModLoader`+21个Factory，把"mod dll的发现/注册"和
+持有全部22个concept(对照表见`common/loader.md`)的`ModLoader`+22个Factory，把"mod dll的发现/注册"和
 "每个持有者(`Map`/`Populace`/`Society`/`Story`/`Industry`/`Traffic`/`Player`)每次开局实际生成一遍对象、
 结束时释放、下次开局重新生成"这两件事在生命周期上彻底分开：dll只加载一次，持有者只持有Factory的引用。
 `common/`是Core里各域都可以依赖的顶层位置(和`implement.h`的`PostHandle`实现同款定位)。
@@ -13,12 +13,12 @@
   `RegisterMods`)，不挂在任何UE Subsystem的生命周期上——Core必须保持engine-agnostic(见CONVENTIONS.md)，
   纯C++单例足够满足"全局只注册一次"：`Core.lib`静态链接进`UnrealEditor-Forever.dll`，只要这个dll不被
   卸载/热重载，函数内static对象活得比任何一次PIE开的持有者都长。
-- 21个Factory对"已注册mod id列表"之外没有跨局累积的状态——`CreateXxx`/`DestroyXxx`只是按注册时存的
+- 22个Factory对"已注册mod id列表"之外没有跨局累积的状态——`CreateXxx`/`DestroyXxx`只是按注册时存的
   creator/deleter函数指针创建/销毁一个实例，所以多局共用同一个Factory实例是安全的，不需要每局重新注册。
 - 各持有者(`Map`/`Populace`/`Society`/`Story`/`Industry`/`Traffic`/`Player`及`Asset`/`Phone`等)不自己持有
   Factory和`ModLoader`，在构造函数初始化列表里把引用成员绑定到这个单例对应的Factory。引用成员的声明顺序
   必须和初始化列表顺序一致(C++按声明顺序初始化)。
-- **`modLoader`必须活得比21个Factory一样长**：Factory存的creator/deleter函数指针指向mod dll的代码段，
+- **`modLoader`必须活得比22个Factory一样长**：Factory存的creator/deleter函数指针指向mod dll的代码段，
   句柄一旦被`FreeLibrary`这些指针就悬空；它们都是这个单例的成员，生命周期天然一致。
 - **注册(`RegisterConcept`)和参数(`SetModArgs`)是两个不同调用频率的操作**：前者只要mod dll没变就只需要
   跑一次；后者把`config.json`的`"<concept>_mods"`数组解析出的id->参数字符串表交给Factory，不同局可能指向
@@ -26,7 +26,7 @@
   构造函数末尾也调一次兜底，保证`Get()`刚拿到实例时Factory就有参数可用。读档恢复/换config之后
   (`SaveGame`)也会单独调`ReloadModArgs()`。
 - **`RefreshMods()`：增量加载新增的dll**。每次真正开局(`AForeverFrameworkActor::BeginPlay`)调用：只对
-  `loadedDllPaths`里没有的路径补做21个concept的`RegisterConcept`(`ModLoader`按路径缓存句柄)，然后
+  `loadedDllPaths`里没有的路径补做22个concept的`RegisterConcept`(`ModLoader`按路径缓存句柄)，然后
   `ReloadModArgs()`。这样退出游戏回菜单、在配置界面新增dll路径之后再开局，新dll的mod也能用。
   - 已加载的dll**不卸载**：从配置里移除的dll保持加载，但它的mod id不在`configuredArgs`里，
     `Factory::IsEnabled`判为未启用，照样是禁用状态。
@@ -34,7 +34,7 @@
 
 ## `CheckModRegistered(id)`：主线剧情`.script`的`mod_dependences`校验用
 
-对全部21个Factory各查一次`CheckRegistered(id)`，只要有任意一个认得这个id就返回`true`——mod id不带concept
+对全部22个Factory各查一次`CheckRegistered(id)`，只要有任意一个认得这个id就返回`true`——mod id不带concept
 前缀，不能靠字符串猜它属于哪个concept(`"building_clean"`完全可能是个Job mod)，所以不按concept分流，直接
 全局OR匹配，供`AForeverFrameworkActor::ValidateMainStoryDependencies()`校验用，见`Core/story/script.md`。
 
@@ -70,4 +70,4 @@
 - 无。
 
 ## 种子(`--seed`)
-`ReloadModArgs`先`RandomRegistry::Reset()`，再读config顶层`seed`登记全局种子，并对每个`<concept>_mods`条目用`RandomRegistry::ExtractSeed`剥掉`--seed N`(mod构造函数收到的参数里没有它)、把种子登记给该mod id。21个concept因此都自动支持`--seed`。`ModLoader::LoadHandle`加载DLL后调用它导出的`BindRandomHost`(见`FOREVER_MOD_BIND_RANDOM`)，把Core的随机host交给DLL自己那份Dependence。详见`Dependence/common/random.md`。
+`ReloadModArgs`先`RandomRegistry::Reset()`，再读config顶层`seed`登记全局种子，并对每个`<concept>_mods`条目用`RandomRegistry::ExtractSeed`剥掉`--seed N`(mod构造函数收到的参数里没有它)、把种子登记给该mod id。22个concept因此都自动支持`--seed`。`ModLoader::LoadHandle`加载DLL后调用它导出的`BindRandomHost`(见`FOREVER_MOD_BIND_RANDOM`)，把Core的随机host交给DLL自己那份Dependence。详见`Dependence/common/random.md`。

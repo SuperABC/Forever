@@ -8,6 +8,7 @@
 
 class ACitizenElement;
 class Room;
+class Green;
 class Citizen;
 class Connection;
 class JunctionTraffic;
@@ -30,6 +31,8 @@ struct FCharacterCommand
 	EType type = EType::FollowPath;
 	TArray<FVector> waypoints;
 	Room* room = nullptr;
+	Green* green = nullptr;       // FollowPath目的地是绿化区的圆(此时room为空)，走完回调framework->NotifyArrivedGreen
+	int32 greenCircle = -1;
 	float speedScale = 1.f;       // 走路速度倍率
 	bool bExemptDespawn = false;  // 执行期间不被距离流式销毁
 	Citizen* fleeTarget = nullptr; // 仅Flee：要远离的市民
@@ -40,6 +43,16 @@ struct FCharacterCommand
 		command.type = EType::FollowPath;
 		command.waypoints = inWaypoints;
 		command.room = inRoom;
+		return command;
+	}
+
+	static FCharacterCommand MakeFollowPathToGreen(const TArray<FVector>& inWaypoints, Green* inGreen, int32 inCircle)
+	{
+		FCharacterCommand command;
+		command.type = EType::FollowPath;
+		command.waypoints = inWaypoints;
+		command.green = inGreen;
+		command.greenCircle = inCircle;
 		return command;
 	}
 
@@ -84,7 +97,10 @@ public:
 	Room* GetCurrentDestination() const;
 	// 当前FollowPath指令的剩余路径（世界坐标，第一个点是市民当前位置）和目标房间。没有可走的指令返回false。
 	// 市民被流式销毁时用它把行进交还给Core（Citizen::ResumeWalk），"你在去哪"折线也用它。
-	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination) const;
+	// 目的地是绿化区时outDestination为空、outGreen/outGreenCircle有值(不关心绿化区的调用方可以不传后两个，但这时要自己判断返回true且outDestination为空的情况)。
+	bool GetRemainingWaypoints(TArray<FVector>& outWaypoints, Room*& outDestination, Green** outGreen = nullptr, int32* outGreenCircle = nullptr) const;
+	// 当前正在走的指令的目的地是绿化区的圆时返回true。
+	bool GetCurrentGreenDestination(Green*& outGreen, int32& outCircle) const;
 	// 当前指令正在逃跑时把要远离的目标换成target(不重新开始、不发事件)并返回true；否则返回false。
 	bool RetargetFlee(Citizen* target);
 

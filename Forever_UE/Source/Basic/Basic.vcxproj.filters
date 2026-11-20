@@ -58,7 +58,7 @@
     <ClCompile Include="map\building_office_middle.cpp">
       <Filter>map</Filter>
     </ClCompile>
-    <ClCompile Include="map\building_park.cpp">
+    <ClCompile Include="map\green_park.cpp">
       <Filter>map</Filter>
     </ClCompile>
     <ClCompile Include="map\building_residence_high.cpp">
@@ -414,7 +414,7 @@
     <ClInclude Include="map\building_office_middle.h">
       <Filter>map</Filter>
     </ClInclude>
-    <ClInclude Include="map\building_park.h">
+    <ClInclude Include="map\green_park.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\building_residence_high.h">

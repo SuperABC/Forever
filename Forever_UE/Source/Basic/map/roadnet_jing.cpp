@@ -161,6 +161,7 @@ const char* JingRoadnet::GetName() {
 
 void JingRoadnet::DistributeRoadnet(int width, int height,
 	const function<const string&(int, int)>& getTerrain,
+	const function<bool(int, int)>& isConstruction,
 	const function<pair<bool, float>(int, int)>& getWater,
 	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
@@ -335,7 +336,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 				// 用格子中心点做点在四边形内测试，比测试格子角点更准确地反映"这个element
 				// 算不算在lot范围内"。
 				if (!isPointInQuad(static_cast<float>(x) + 0.5f, static_cast<float>(y) + 0.5f, nw, ne, se, sw)) continue;
-				if (getTerrain(x, y) != "construction") return false;
+				if (!isConstruction(x, y)) return false;
 			}
 		}
 		return true;
@@ -383,18 +384,21 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 		// ---- 第一遍：记录采样点的地形类型和高度，k=0是角点；最后一个采样点至少离extern一个采样步，
 		// 免得最后一段Road短到退化。getTerrain返回""表示出图。 ----
 		vector<string> terr;
+		vector<char> cons;
 		vector<float> heights;
 		terr.push_back(getTerrain(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))));
+		cons.push_back(isConstruction(static_cast<int>(floorf(cx)), static_cast<int>(floorf(cy))) ? 1 : 0);
 		heights.push_back(getHeight(cx, cy));
 		for (int k = 1; static_cast<float>(k) <= kExt - 1.f; k++) {
 			string t = getTerrain(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k)));
 			if (t == "") break;
 			terr.push_back(t);
+			cons.push_back(isConstruction(static_cast<int>(floorf(cx + dx * k)), static_cast<int>(floorf(cy + dy * k))) ? 1 : 0);
 			heights.push_back(getHeight(cx + dx * k, cy + dy * k));
 		}
 		int sampleCount = static_cast<int>(terr.size()) - 1;
 
-		auto isGood = [&](int k) { return terr[k] == "plain" || terr[k] == "construction"; };
+		auto isGood = [&](int k) { return terr[k] == "plain" || cons[k]; };
 		auto allGood = [&](int from, int to) {
 			for (int i = from; i <= to; i++) if (!isGood(i)) return false;
 			return true;

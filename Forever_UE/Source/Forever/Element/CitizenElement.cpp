@@ -28,6 +28,7 @@
 #include "society/organization.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "map/green.h"
 #include "common/utility.h"
 
 // 地图单位 -> UE单位，和BuildingElement.cpp的BUILDING_WORLD_SCALE同值(各文件各自维护一份)。
@@ -122,11 +123,26 @@ void ACitizenElement::WalkTo(const TArray<FVector>& waypoints, Room* destination
 	aiController->PushCommand(command);
 }
 
+void ACitizenElement::WalkToGreen(const TArray<FVector>& waypoints, Green* destination, int32 circle) {
+	if (waypoints.Num() == 0 || !aiController) return;
+	aiController->ClearCommands();
+	FCharacterCommand command = FCharacterCommand::MakeFollowPathToGreen(waypoints, destination, circle);
+	if (citizen) command.speedScale = citizen->GetWalkSpeedFactor();
+	aiController->PushCommand(command);
+}
+
 void ACitizenElement::FleeFrom(Citizen* target, float speedScale) {
 	if (!aiController || !target) return;
 	if (aiController->RetargetFlee(target)) return; // 连续受伤：不重新开始，也不发事件
 	aiController->ClearCommands();
 	aiController->PushCommand(FCharacterCommand::MakeFlee(target, speedScale));
+}
+
+Green* ACitizenElement::GetWalkGreen(int32& outCircle) const {
+	Green* green = nullptr;
+	outCircle = -1;
+	if (aiController) aiController->GetCurrentGreenDestination(green, outCircle);
+	return green;
 }
 
 Room* ACitizenElement::GetWalkDestination() const {
@@ -153,7 +169,8 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 		citizen->GetPosition(mapX, mapY, mapZ);
 		worldX = mapX * CITIZEN_WORLD_SCALE;
 		worldY = mapY * CITIZEN_WORLD_SCALE;
-		worldZ = mapZ * CITIZEN_WORLD_SCALE;
+		// Citizen记录的位置统一是脚底高度(和Core推算行走的路径点一致)，Actor位置是胶囊体中心，抬一个半高。
+		worldZ = mapZ * CITIZEN_WORLD_SCALE + GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	}
 	else {
 		// 换了新房间之后从未在场景里实例化过：房间中心+随机偏移+楼层高度换算落脚点，见
@@ -161,7 +178,7 @@ void ACitizenElement::Init(Citizen* inCitizen, UForeverPopulaceFrameworkComponen
 		// 记录在这一步就完成。
 		ComputeRoomLandingSpot(citizen->GetCurrentRoom(), worldX, worldY, worldZ);
 		citizen->SetPosition(worldX / CITIZEN_WORLD_SCALE, worldY / CITIZEN_WORLD_SCALE,
-			worldZ / CITIZEN_WORLD_SCALE);
+			(worldZ - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / CITIZEN_WORLD_SCALE);
 	}
 
 	SetActorLocation(FVector(worldX, worldY, worldZ));
@@ -239,7 +256,31 @@ void ACitizenElement::TeleportToRoom(Room* destination) {
 
 	SetActorLocation(FVector(worldX, worldY, worldZ));
 	citizen->SetCurrentRoom(destination);
-	citizen->SetPosition(worldX / CITIZEN_WORLD_SCALE, worldY / CITIZEN_WORLD_SCALE, worldZ / CITIZEN_WORLD_SCALE);
+	citizen->SetPosition(worldX / CITIZEN_WORLD_SCALE, worldY / CITIZEN_WORLD_SCALE,
+		(worldZ - GetCapsuleComponent()->GetScaledCapsuleHalfHeight()) / CITIZEN_WORLD_SCALE);
+}
+
+bool ACitizenElement::ComputeGreenLandingSpot(Green* green, int32 circle, FVector& outFeet) {
+	if (!green || circle < 0 || circle >= static_cast<int32>(green->GetCircles().size())) return false;
+	const Node* center = green->GetCircles()[circle].centerNode;
+	if (!center) return false;
+	CORE_RANDOM_SCOPE("ue.citizen_landing");
+	const std::pair<float, float> point = green->RandomPointInCircle(circle);
+	outFeet = FVector(point.first, point.second, center->GetZ()) * CITIZEN_WORLD_SCALE;
+	return true;
+}
+
+void ACitizenElement::TeleportToGreen(Green* destination, int32 circle) {
+	if (!citizen || !destination) return;
+	FVector feet;
+	if (!ComputeGreenLandingSpot(destination, circle, feet)) return;
+
+	// 同TeleportToRoom：打断正在走的路。
+	if (aiController) aiController->ClearCommands();
+
+	SetActorLocation(feet + FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
+	citizen->SetCurrentGreen(destination, circle);
+	citizen->SetPosition(feet.X / CITIZEN_WORLD_SCALE, feet.Y / CITIZEN_WORLD_SCALE, feet.Z / CITIZEN_WORLD_SCALE);
 }
 
 void ACitizenElement::BuildProximityBox() {

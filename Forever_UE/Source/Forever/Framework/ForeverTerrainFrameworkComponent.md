@@ -37,7 +37,7 @@
 ### 挖洞（construction格子与hatch）
 
 挖洞在网格生成时用精确凸多边形裁剪完成，不用ISM小立方体。`Map::AddHatch`登记的hatch是旋转矩形（`Quad`+`rotation`），
-挖洞条件是"该格子有hatch"(不论地形类型)。隧道口所在格子是`mountain`/`plain`，永远不会被晋升成`construction`，
+挖洞条件是"该格子有hatch"(不论地形类型)。隧道口所在格子多半是`mountain`/`plain`，不一定被标成可建设(construction)，
 如果只认`construction`，隧道口hatch会被忽略、隧道被山体实心地形挡住。`RoadnetMod::AddHatch`记hatch，`Map::InitRoadnet()`转发进`Map::AddHatch`。
 
 **退化碎片过滤**：裁剪会在"顶点正好落在hatch边的直线上"或"相邻两个hatch共边"(例如twin布局进深取满4时，bg+的6个hatch两两首尾相接)时切出重复点/共线点的零面积碎片。碎片`Num()>=3`却面积为0，建成三角形就是退化三角形，Chaos给地形建碰撞体时会报`Input trimesh contains N bad triangles`。所以收下外侧碎片前用`PolygonAreaAbs`过滤：clipGridCell在世界坐标里小于`kMinWorldPieceArea`(10cm²，世界坐标几十万量级时float精度0.03~0.06产生的噪声碎片就在这个量级)丢掉。只按整块面积过滤不够：碎片里有重复点/共线点时整块面积为正，但扇形三角化里会混进零面积三角形，所以扇形输出时还要逐个三角形判面积(`kMinWorldTriArea`=1cm²)，太小的跳过，交点顶点也只在真正用到时才追加。
@@ -64,7 +64,7 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 数据来源`Map::GetTunnelWallHatches()`（取自`Roadnet::hatches`，读档后也在）：
 
 - 洞的两条长边（沿`rotation`，横向±sizeY/2）各一条竖直墙，**不加两个端头**（起点端是和地面齐平的路面入口，终点端是隧道本身，隧道里的墙和顶棚用资产）。
-- 沿长度每`TUNNEL_WALL_SEGMENT`(0.25)一个断面；墙顶不低于所在地形(2026-11-20改：墙顶点取前后各半个断面间距内、墙内外两侧`SampleHeight`的最大值，可略突出地面但不留空缺，和端墙一致；原先是`SampleHeight`−5cm，已删`TUNNEL_WALL_TOP_INSET`)；
+- 沿长度每`TUNNEL_WALL_SEGMENT`(0.25)一个断面；墙顶不低于所在地形(2026-11-20改：墙顶点取前后各半个断面间距内、墙内外两侧`SampleHeight`的最大值，可略突出地面但不留空缺，和端墙一致；原先是`SampleHeight`−5cm，已删`TUNNEL_WALL_TOP_INSET`；2026-11-20再加`TUNNEL_WALL_TOP_MARGIN`=0.005(5cm)余量，侧墙和端墙都加)；
   墙底=洞底（`floorStart→floorEnd`的smoothstep，和S形下坡曲线两端水平一致）−`TUNNEL_WALL_BOTTOM_EXTRA`(埋在路面下)；地形不比洞底高的断面跳过。
 - 做成有厚度（`TUNNEL_WALL_THICKNESS`）的小板：朝洞内的内面+朝洞外的外面+顶面，三角形绕序按期望法线校正，`CreateMeshSection`带碰撞。
 - 材质用单色`Pure`（`tunnelWallBaseMaterial`，Color参数）：地形材质按世界XY投影采样，竖直面上是拉伸的竖条纹。
@@ -112,6 +112,6 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
   只在这条边界线附近、地形交界恰好经过时能看出，未彻底解决。
 
 ## 隧道口端墙（2026-11-20）
-`BuildTunnelWalls`对`startWall/endWall`为真的端头各造一块端墙板(横向盖满洞宽并比侧壁外侧再多一个厚度，沿长度向洞外厚`TUNNEL_WALL_THICKNESS`)：墙顶=端头线段(含外侧)范围内`SampleHeight`最大值，墙底=`startWallBottom/endWallBottom`，墙顶不高于墙底则不造。内面朝洞内可碰撞。
+`BuildTunnelWalls`对`startWall/endWall`为真的端头各造一块端墙板(横向盖满洞宽并比侧壁外侧再多一个厚度，沿长度向洞外厚`TUNNEL_WALL_THICKNESS`)：墙顶=端头线段(含外侧)范围内`SampleHeight`最大值+`TUNNEL_WALL_TOP_MARGIN`(5cm)，墙底=`startWallBottom/endWallBottom`，墙顶不高于墙底则不造。内面朝洞内可碰撞。
 
 端墙是完整长方体(内面/外面/顶面/两个侧面/底面)，墙顶突出地面时侧面和顶面都能看到。

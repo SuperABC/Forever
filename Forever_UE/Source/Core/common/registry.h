@@ -3,6 +3,7 @@
 #include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
+#include "map/green_factory.h"
 #include "map/building_factory.h"
 #include "map/component_factory.h"
 #include "map/room_factory.h"
@@ -29,7 +30,7 @@
 #include <vector>
 
 
-// 21个concept的mod注册表(全局单例)，设计见registry.md
+// 22个concept的mod注册表(全局单例)，设计见registry.md
 class Registry {
 public:
 	static Registry& Get();
@@ -49,6 +50,7 @@ public:
 	TerrainFactory& GetTerrainFactory() { return terrainFactory; }
 	RoadnetFactory& GetRoadnetFactory() { return roadnetFactory; }
 	ZoneFactory& GetZoneFactory() { return zoneFactory; }
+	GreenFactory& GetGreenFactory() { return greenFactory; }
 	BuildingFactory& GetBuildingFactory() { return buildingFactory; }
 	ComponentFactory& GetComponentFactory() { return componentFactory; }
 	RoomFactory& GetRoomFactory() { return roomFactory; }
@@ -77,18 +79,19 @@ public:
 private:
 	Registry();
 
-	// 对paths里的dll做21个concept的RegisterConcept，成功加载的记进loadedDllPaths
+	// 对paths里的dll做22个concept的RegisterConcept，成功加载的记进loadedDllPaths
 	void RegisterMods(const std::vector<std::string>& paths);
 
 	// 已经成功加载并注册过的dll路径，RefreshMods只处理不在这里的。
 	std::unordered_set<std::string> loadedDllPaths;
 
-	// 必须活得比21个Factory一样长(creator/deleter指向dll代码段)
+	// 必须活得比22个Factory一样长(creator/deleter指向dll代码段)
 	ModLoader modLoader;
 
 	TerrainFactory terrainFactory;
 	RoadnetFactory roadnetFactory;
 	ZoneFactory zoneFactory;
+	GreenFactory greenFactory;
 	BuildingFactory buildingFactory;
 	ComponentFactory componentFactory;
 	RoomFactory roomFactory;

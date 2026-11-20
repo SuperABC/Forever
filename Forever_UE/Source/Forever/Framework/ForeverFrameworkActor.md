@@ -120,3 +120,8 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
 - `ApplyChange`新增`AssignTaskChange`分支(`Society::FindOrganizationByScript`→`populaceFramework->AssignTask`；`vehicles`每项各自`EvaluateExpression`得到载具类别列表)。
 - 跳时间：`BeginTimeSkip`先交通后市民把在途行程转成虚拟时钟腿，`RunTimeSkipBudget`每个分步`StepWorld`之后调`AdvanceTripsForTimeSkip(stepSeconds)`，`FinishTimeSkip`先交通后市民`EndTimeSkip`。
   `GetSkipCreditSeconds/SetSkipCreditSeconds`传递一条腿提前走完多出来的游戏秒给下一条腿。
+
+## 绿化区（2026-11-20）
+- 创建/初始化阶段：`greenFramework`(`UForeverGreenFrameworkComponent`，见其.md)`GenerateGreens(map)`；`InitGreens`阶段在世界生成里放在`InitBuildings`之后、`InitVegetation`之前。
+- `npc_navigate`：目的地先按房间地址找，找不到再`Map::LocateGreen`(没写圆序号=第0个圆)，转发`RequestWalkToGreen`。`visualize_navigation`同样有绿化地址分支(导航线终点取圆内随机点)。
+- `DescribeLocation`：落在绿化多边形内时，在某个活动圆里返回圆地址，否则返回绿化区地址(没连路的绿化区返回绿化名)。

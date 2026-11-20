@@ -290,11 +290,12 @@ RoadnetMod* Roadnet::GetMod() const {
 
 void Roadnet::DistributeRoadnet(int width, int height,
 	const function<const string&(int, int)>& getTerrain,
+	const function<bool(int, int)>& isConstruction,
 	const function<pair<bool, float>(int, int)>& getWater,
 	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
 	RandomScope scope(RandomRegistry::GetInstanceStream(mod));
-	mod->DistributeRoadnet(width, height, getTerrain, getWater, getHeight, nodeStaticCount);
+	mod->DistributeRoadnet(width, height, getTerrain, isConstruction, getWater, getHeight, nodeStaticCount);
 
 	for (const Node& n : mod->externs) externs.push_back(new Node(n));
 	for (const Intersection& i : mod->intersections) intersections.push_back(new Intersection(i));
@@ -321,10 +322,26 @@ void Roadnet::DistributeRoadnet(int width, int height,
 		lots.push_back(newLot);
 	}
 
+	// 绿化区：xy按值拷贝，links里的road下标翻译成本Roadnet自己的Road*(下标越界的link丢弃)。
+	greenSites.clear();
+	for (const RoadnetMod::GreenSite& site : mod->greens) {
+		GreenSite copy;
+		copy.xy = site.xy;
+		for (const RoadnetMod::GreenSite::Link& link : site.links) {
+			if (link.road < 0 || link.road >= static_cast<int>(roads.size())) continue;
+			copy.links.emplace_back(link.edge, roads[link.road]);
+		}
+		greenSites.push_back(std::move(copy));
+	}
+
 	// Quad+float是纯值类型，不含所有权指针，直接整体拷贝，不需要像上面几个逐个new。
 	hatches = mod->hatches;
 	terrainFits = mod->terrainFits;
 	pathRoadMaterial = mod->pathRoadMaterial;
+}
+
+const vector<Roadnet::GreenSite>& Roadnet::GetGreenSites() const {
+	return greenSites;
 }
 
 const vector<Pier>& Roadnet::GetPiers() const {

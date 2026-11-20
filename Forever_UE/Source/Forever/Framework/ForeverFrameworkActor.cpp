@@ -2,6 +2,8 @@
 
 #include "map/map.h"
 #include "map/room.h"
+#include "map/green.h"
+#include "map/polygon_util.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
 #include "society/society.h"
@@ -45,6 +47,7 @@
 #include "Element/DoorComponent.h"
 #include "Framework/ForeverWeatherFrameworkComponent.h"
 #include "Framework/ForeverZoneFrameworkComponent.h"
+#include "Framework/ForeverGreenFrameworkComponent.h"
 #include "Framework/ForeverDoorFrameworkComponent.h"
 #include "map/building.h"
 #include "map/zone.h"
@@ -102,6 +105,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	lampFramework = CreateDefaultSubobject<UForeverLampFrameworkComponent>(TEXT("LampFramework"));
 	weatherFramework = CreateDefaultSubobject<UForeverWeatherFrameworkComponent>(TEXT("WeatherFramework"));
 	zoneFramework = CreateDefaultSubobject<UForeverZoneFrameworkComponent>(TEXT("ZoneFramework"));
+	greenFramework = CreateDefaultSubobject<UForeverGreenFrameworkComponent>(TEXT("GreenFramework"));
 	doorFramework = CreateDefaultSubobject<UForeverDoorFrameworkComponent>(TEXT("DoorFramework"));
 }
 
@@ -200,6 +204,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	add(TEXT("生成园区模型"), [this]() { GenerateZoneMesh(); });
 	add(TEXT("生成建筑模型"), [this]() { GenerateBuildingMesh(); });
 	add(TEXT("生成门"), [this]() { GenerateDoorMesh(); });
+	add(TEXT("生成绿化模型"), [this]() { GenerateGreenMesh(); });
 	add(TEXT("生成植被模型"), [this]() { GenerateVegetationMesh(); });
 	add(TEXT("生成路灯模型"), [this]() { GenerateLampMesh(); });
 	add(TEXT("构建人口"), [this]() { EnsurePopulaceGenerated(); });
@@ -367,11 +372,20 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		if (!citizen && populace) citizen = populace->FindCitizenByName(ToString(EvaluateExpression(nav->GetName(), context)));
 		Room* dest = map ? map->LocateRoom(nav->GetDestination()) : nullptr;
 		if (!dest && map) dest = map->LocateRoom(ToString(EvaluateExpression(nav->GetDestination(), context)));
-		if (citizen && dest && populaceFramework) {
+		// 不是房间地址：试试绿化区地址("<路名> -1 <绿化名> <圆序号>"，没写序号=第一个圆)。
+		Green* destGreen = nullptr;
+		int destCircle = -1;
+		if (!dest && map) {
+			destGreen = map->LocateGreen(nav->GetDestination(), destCircle);
+			if (!destGreen) destGreen = map->LocateGreen(ToString(EvaluateExpression(nav->GetDestination(), context)), destCircle);
+			if (destGreen && destCircle < 0) destCircle = 0;
+		}
+		if (citizen && (dest || destGreen) && populaceFramework) {
 			// speed：走路速度倍率表达式，省略=1.0，下限0。每次导航都重设，所以不写speed就回到基准速度。
 			citizen->SetWalkSpeedScale(nav->GetSpeed().empty() ? 1.f
 				: static_cast<float>(FMath::Max(0.0, ToDouble(EvaluateExpression(nav->GetSpeed(), context)))));
-			populaceFramework->RequestWalk(citizen, dest);
+			if (dest) populaceFramework->RequestWalk(citizen, dest);
+			else populaceFramework->RequestWalkToGreen(citizen, destGreen, destCircle);
 		}
 		return;
 	}
@@ -643,8 +657,22 @@ void AForeverFrameworkActor::ApplyChange(const Change* change, const ScriptConte
 		// 地址先按原文查，查不到再当表达式求值（和npc_navigate一致）。
 		Room* target = map ? map->LocateRoom(visualize->GetAddress()) : nullptr;
 		if (!target && map) target = map->LocateRoom(ToString(EvaluateExpression(visualize->GetAddress(), context)));
+		if (!target && map) {
+			// 不是房间：试绿化区地址"<路名> -1 <绿化名> <圆序号>"(圆序号省略=随机一个圆)，终点是圆内随机一点。
+			int circleIndex = -1;
+			Green* green = map->LocateGreen(visualize->GetAddress(), circleIndex);
+			if (!green) green = map->LocateGreen(ToString(EvaluateExpression(visualize->GetAddress(), context)), circleIndex);
+			const int circleCount = green ? static_cast<int>(green->GetCircles().size()) : 0;
+			if (green && circleCount > 0) {
+				if (circleIndex < 0 || circleIndex >= circleCount) circleIndex = FMath::RandRange(0, circleCount - 1);
+				const Green::Circle& circle = green->GetCircles()[circleIndex];
+				const float radius = circle.r * FMath::Sqrt(FMath::FRand()), angle = FMath::FRand() * 2.f * PI;
+				if (trafficFramework) trafficFramework->StartGuideToGreen(green, circleIndex, circle.x + radius * FMath::Cos(angle), circle.y + radius * FMath::Sin(angle));
+				return;
+			}
+		}
 		if (!target) {
-			UE_LOG(LogTemp, Warning, TEXT("visualize_navigation: 找不到房间 %s"), UTF8_TO_TCHAR(visualize->GetAddress().c_str()));
+			UE_LOG(LogTemp, Warning, TEXT("visualize_navigation: 找不到房间或绿化区 %s"), UTF8_TO_TCHAR(visualize->GetAddress().c_str()));
 			return;
 		}
 		if (trafficFramework) trafficFramework->StartGuide(target);
@@ -825,6 +853,22 @@ std::string AForeverFrameworkActor::DescribeLocation(const FVector& worldLocatio
 	if (building) {
 		std::string address = building->GetAddress();
 		if (!address.empty()) return address;
+	}
+	// 绿化区：落在多边形里。连了路的给"圆地址"(落在某个活动圆里)或绿化区地址，没连路的返回绿化名。
+	if (map) {
+		const float gx = worldLocation.X / kWorldScale, gy = worldLocation.Y / kWorldScale;
+		for (Green* green : map->GetGreens()) {
+			if (!green || !PointInPolygon(green->GetPolygon(), gx, gy)) continue;
+			const std::vector<Green::Circle>& circles = green->GetCircles();
+			for (int i = 0; i < static_cast<int>(circles.size()); i++) {
+				const float dx = gx - circles[i].x, dy = gy - circles[i].y;
+				if (dx * dx + dy * dy > circles[i].r * circles[i].r) continue;
+				std::string address = green->GetCircleAddress(i);
+				if (!address.empty()) return address;
+				break;
+			}
+			return green->GetAddress();
+		}
 	}
 	if (zoneName && map) {
 		if (Zone* zone = map->GetZone(*zoneName)) {
@@ -1274,7 +1318,11 @@ void AForeverFrameworkActor::BuildMapZones()
 
 void AForeverFrameworkActor::BuildMapBuildings()
 {
-	if (!bMapRestored) map->InitBuildings();
+	if (!bMapRestored) {
+		map->InitBuildings();
+		// 绿化多边形要接行人导航图，必须在建筑的outside端点接路之后，见Map::InitGreens。
+		map->InitGreens();
+	}
 }
 
 void AForeverFrameworkActor::BuildMapVegetation()
@@ -1316,6 +1364,12 @@ void AForeverFrameworkActor::GenerateDoorMesh()
 {
 	// 门由这个组件按玩家距离流式加载，这里只建空间索引；Door*在Zone/Building/Room生成时就已经创建好。
 	if (doorFramework) doorFramework->GenerateDoors(map);
+}
+
+void AForeverFrameworkActor::GenerateGreenMesh()
+{
+	// 绿化区自定义模型，Z取地形高度，必须在地形生成之后。
+	if (greenFramework) greenFramework->GenerateGreens(map);
 }
 
 void AForeverFrameworkActor::GenerateVegetationMesh()

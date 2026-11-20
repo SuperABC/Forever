@@ -128,6 +128,7 @@
     <ClCompile Include="map\roadnet.cpp" />
     <ClCompile Include="map\pier.cpp" />
     <ClCompile Include="map\zone.cpp" />
+    <ClCompile Include="map\green.cpp" />
     <ClCompile Include="map\building.cpp" />
     <ClCompile Include="map\room.cpp" />
     <ClCompile Include="map\component.cpp" />
@@ -197,6 +198,7 @@
     <ClInclude Include="map\roadnet.h" />
     <ClInclude Include="map\pier.h" />
     <ClInclude Include="map\zone.h" />
+    <ClInclude Include="map\green.h" />
     <ClInclude Include="map\building.h" />
     <ClInclude Include="map\room.h" />
     <ClInclude Include="map\component.h" />

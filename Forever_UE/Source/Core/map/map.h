@@ -6,11 +6,13 @@
 #include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
+#include "map/green_factory.h"
 #include "map/building_factory.h"
 
 #include "map/terrain.h"
 #include "map/roadnet.h"
 #include "map/zone.h"
+#include "map/green.h"
 #include "map/building.h"
 #include "map/door.h"
 #include "map/vegetation.h"
@@ -31,6 +33,8 @@
 // 10m*10m地图元素；hatches是地形挖洞标记(隧道口/地下室)，详见map.md。
 struct Element {
 	std::string terrain = "plain";
+	// 可建设标记(InitTerrains标出)：3x3范围内高度都为0。和地形类型无关，terrain始终是原始地形名。
+	bool construction = false;
 	float height = 0.f;
 	std::pair<bool, float> water{ false, 0.f };
 	std::vector<TerrainHatch> hatches;
@@ -47,7 +51,7 @@ public:
 	Map(int width, int height);
 	~Map();
 
-	// 按GetPriority()降序对所有已注册地形执行DistributeTerrain，再做plain->construction晋升、重建terrainTextures。
+	// 按GetPriority()降序对所有已注册地形执行DistributeTerrain，再按"3x3范围内高度都为0"标记construction(可建设)、重建terrainTextures。
 	// 不含mod dll的发现/注册(归Registry，整个进程只跑一次)，见map.md。
 	void InitTerrains();
 
@@ -56,6 +60,8 @@ public:
 	std::string GetTerrain(int x, int y) const;
 	// 同GetTerrain，但返回地图自己存的那份(越界返回空串)——给跨DLL的回调用，见Map::InitTerrains。
 	const std::string& GetTerrainRef(int x, int y) const;
+	// 该element是否可建设(Element::construction)，越界返回false。
+	bool IsConstruction(int x, int y) const;
 
 	bool SetTerrain(int x, int y, const std::string& terrain);
 	float GetHeight(int x, int y) const;
@@ -144,6 +150,11 @@ public:
 	// 按显式占位+权重CDF/FillRemainder落地Building，假定InitZones已跑完，详见map.md"InitBuildings"
 	void InitBuildings();
 
+	// 路网指定的绿化多边形(Roadnet::GetGreenSites)逐个落地：按"有没有连路"选一套权重挑mod，mod布置活动圆/树/装饰物，
+	// 通过检查的圆接入行人导航图。必须在InitBuildings()之后(接路要用FlushPendingBuildingRoadAccess的断开顺序)、
+	// InitVegetation()之前，详见map.md"InitGreens"。
+	void InitGreens();
+
 	// 植被是最后一个阶段，必须在InitBuildings()之后(行道树要避开Road::GetOpenings)：路网/building/zone各自展开树请求，
 	// 过滤规则见CanPlaceTree，详见vegetation.md。
 	void InitVegetation();
@@ -200,6 +211,9 @@ public:
 	const std::vector<Door*>& GetAllDoors() const;
 
 	const std::unordered_map<std::string, Zone*>& GetZones() const;
+	// 绿化区按生成顺序排列(存档下标就是这个顺序)。
+	const std::vector<Green*>& GetGreens() const;
+	Green* GetGreen(const std::string& name) const;
 	const std::unordered_map<std::string, Building*>& GetBuildings() const;
 
 	// 按Zone/Building自己的唯一name做扁平查找(唯一性由mod自己的GetName()/构造函数计数器
@@ -215,6 +229,11 @@ public:
 
 	// 地址在LocateBuilding的格式末尾再加房间号，找不到返回nullptr，见map.md"寻址"。
 	Room* LocateRoom(const std::string& address) const;
+
+	// 绿化区地址："<路名> -1 <绿化名> <圆序号>"(连了路的绿化区)。-1代表目标不在lot里，LocateZone/Building/Room
+	// 遇到它都返回nullptr。circleIndex输出圆序号(地址里没写则-1)，找不到返回nullptr。
+	// 没连路的绿化区地址就是名字本身，不支持寻址，见map.md"寻址"。
+	Green* LocateGreen(const std::string& address, int& circleIndex) const;
 
 	// 汇总每个顶层Lot自己的GetPathRoads()(小路归Lot所有，Map不持有)，按值返回。
 	std::vector<Road*> GetPathRoads() const;
@@ -334,6 +353,17 @@ public:
 	//   NO_ROAD_CONNECTION：行人图里没有任何可用起点节点，points为空。
 	VehicleRoutePlan PlanPedestrianRoute(Room* startRoom, float x, float y, Room* destRoom) const;
 
+	// 同PlanPedestrianRoute，但起点/终点直接给节点：startNode非空且有出边就从它出发，否则按(x,y)找最近的行人节点；destNode必须非空。
+	VehicleRoutePlan PlanPedestrianRouteFromNode(const Node* startNode, float x, float y, const Node* destNode) const;
+
+	// 到绿化区第circleIndex个圆：图上走到圆心，再追加最后一段圆心->(targetX,targetY)(圆内随机点，调用方用
+	// Green::RandomPointInCircle取)。startRoom/(x,y)含义同PlanPedestrianRoute。绿化区没连路/圆没有导航节点返回NO_ROAD_CONNECTION。
+	VehicleRoutePlan PlanPedestrianRouteToGreen(Room* startRoom, float x, float y, const Green* green, int circleIndex,
+		float targetX, float targetY) const;
+
+	// 从绿化区第circleIndex个圆出发(离开绿化区：先到圆心再按导航图走)，终点是room。
+	VehicleRoutePlan PlanPedestrianRouteFromGreen(const Green* green, int circleIndex, Room* destRoom) const;
+
 	// 拍平所有building的component，供Society::Init(Society不知道Map/Building)。
 	std::vector<Component*> GetAllComponents() const;
 
@@ -356,6 +386,7 @@ private:
 	TerrainFactory& terrainFactory;
 	RoadnetFactory& roadnetFactory;
 	ZoneFactory& zoneFactory;
+	GreenFactory& greenFactory;
 	BuildingFactory& buildingFactory;
 	RoomFactory& roomFactory;
 	ComponentFactory& componentFactory;
@@ -375,6 +406,7 @@ private:
 	BuildingLayoutLibrary buildingLayoutLibrary;
 	// 按name索引，GetZone/GetBuilding直接find。
 	std::unordered_map<std::string, Zone*> zones;
+	std::vector<Green*> greens;
 	std::vector<EstateAsset*> estateAssets;   // 持有所有权，BuildEstateAssets重建
 	std::vector<Asset*> statedEstateAssets;   // 公有的那部分，不持有
 	std::unordered_map<std::string, Building*> buildings;

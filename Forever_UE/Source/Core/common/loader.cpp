@@ -13,6 +13,7 @@ namespace {
 		{ "Terrains",      "GetModTerrains",      "RegisterModTerrains",      "FinishModTerrains" },
 		{ "Roadnets",      "GetModRoadnets",      "RegisterModRoadnets",      "FinishModRoadnets" },
 		{ "Zones",         "GetModZones",         "RegisterModZones",         "FinishModZones" },
+		{ "Greens",        "GetModGreens",        "RegisterModGreens",        "FinishModGreens" },
 		{ "Buildings",     "GetModBuildings",     "RegisterModBuildings",     "FinishModBuildings" },
 		{ "Components",    "GetModComponents",    "RegisterModComponents",    "FinishModComponents" },
 		{ "Rooms",         "GetModRooms",         "RegisterModRooms",         "FinishModRooms" },

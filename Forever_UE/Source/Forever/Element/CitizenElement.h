@@ -10,6 +10,7 @@ class UBoxComponent;
 class UPrimitiveComponent;
 class Citizen;
 class Room;
+class Green;
 struct FHitResult;
 class UForeverPopulaceFrameworkComponent;
 
@@ -38,6 +39,8 @@ public:
 	// 沿一串世界坐标路径点走过去：往自己的ACitizenController推一条FollowPath指令，走路本身全在Controller里，
 	// 见Controller/CitizenController.h。
 	void WalkTo(const TArray<FVector>& waypoints, Room* destination);
+	// 同WalkTo，目的地是绿化区的第circle个圆：走完回调framework->NotifyArrivedGreen。
+	void WalkToGreen(const TArray<FVector>& waypoints, Green* destination, int32 circle);
 
 	// 逃跑：已经在逃就只把要远离的目标换成target；否则取代当前所有指令，开始以speedScale倍速沿行人导航线远离target，
 	// 见FCharacterCommand::EType::Flee。
@@ -50,6 +53,12 @@ public:
 	// 把已生成的Actor瞬移到destination房间(落点计算同Init())，并同步Citizen::SetCurrentRoom+SetPosition；
 	// 寻路失败(起点/终点没有导航节点，或图不连通)时由UForeverPopulaceFrameworkComponent::RequestWalk调用，否则Core已"到家"而可见的Actor冻结在原地。
 	void TeleportToRoom(Room* destination);
+	// 同TeleportToRoom，目的地是绿化区第circle个圆里的随机点：同步Citizen::SetCurrentGreen+SetPosition(绿化里记的是脚底高度)。
+	void TeleportToGreen(Green* destination, int32 circle);
+	// 绿化区第circle个圆内随机一点的脚底世界坐标(Z取圆心导航节点高度)；圆没有导航节点/序号越界返回false。内部自带随机作用域。
+	static bool ComputeGreenLandingSpot(Green* green, int32 circle, FVector& outFeet);
+	// 正在WalkToGreen的目标绿化区(没在走或目的地是房间时返回nullptr)。存档时用来把走路中的市民记成"已经到了"。
+	Green* GetWalkGreen(int32& outCircle) const;
 
 	// 上车时标记这个市民暂时不参与距离销毁判定：上车后Actor隐藏在原地，玩家开车走远会被当成"走远的市民"Destroy，
 	// 下车时previousPawn就悬空了。下车时再调一次传false解除。

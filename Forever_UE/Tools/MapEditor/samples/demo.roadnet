@@ -154,7 +154,9 @@
 					0,
 					1
 				],
-				"name": "路3"
+				"name": "路3",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 5,
@@ -170,7 +172,9 @@
 					0,
 					1
 				],
-				"name": "路5"
+				"name": "路5",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 8,
@@ -186,7 +190,9 @@
 					0,
 					1
 				],
-				"name": "路8"
+				"name": "路8",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 9,
@@ -202,7 +208,9 @@
 					0,
 					1
 				],
-				"name": "路8"
+				"name": "路8",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 11,
@@ -218,7 +226,9 @@
 					0,
 					1
 				],
-				"name": "路11"
+				"name": "路11",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 13,
@@ -234,7 +244,9 @@
 					0,
 					1
 				],
-				"name": "路13"
+				"name": "路13",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 14,
@@ -250,7 +262,9 @@
 					0,
 					1
 				],
-				"name": "路14"
+				"name": "路14",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 15,
@@ -266,7 +280,9 @@
 					0,
 					1
 				],
-				"name": "路15"
+				"name": "路15",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 17,
@@ -285,7 +301,9 @@
 					0,
 					1
 				],
-				"name": "路17"
+				"name": "路17",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 20,
@@ -301,7 +319,9 @@
 					0,
 					1
 				],
-				"name": "路20"
+				"name": "路20",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 22,
@@ -317,7 +337,9 @@
 					0,
 					1
 				],
-				"name": "路22"
+				"name": "路22",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 24,
@@ -333,7 +355,9 @@
 					0,
 					1
 				],
-				"name": "路24"
+				"name": "路24",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 26,
@@ -349,7 +373,9 @@
 					0,
 					1
 				],
-				"name": "路26"
+				"name": "路26",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 28,
@@ -365,7 +391,9 @@
 					0,
 					1
 				],
-				"name": "路28"
+				"name": "路28",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 30,
@@ -381,7 +409,9 @@
 					0,
 					1
 				],
-				"name": "路30"
+				"name": "路30",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 32,
@@ -397,7 +427,9 @@
 					0,
 					1
 				],
-				"name": "路32"
+				"name": "路32",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 34,
@@ -413,7 +445,9 @@
 					0,
 					1
 				],
-				"name": "路34"
+				"name": "路34",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 36,
@@ -429,7 +463,9 @@
 					0,
 					1
 				],
-				"name": "路36"
+				"name": "路36",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 39,
@@ -445,7 +481,9 @@
 					0,
 					1
 				],
-				"name": "路39"
+				"name": "路39",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 41,
@@ -461,7 +499,9 @@
 					0,
 					1
 				],
-				"name": "路41"
+				"name": "路41",
+				"tree": "",
+				"lamp": ""
 			},
 			{
 				"id": 43,
@@ -477,12 +517,50 @@
 					0,
 					1
 				],
-				"name": "路43"
+				"name": "路43",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 44,
+				"a": 7,
+				"b": 18,
+				"ctrl": null,
+				"type": "ground",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路44",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 45,
+				"a": 18,
+				"b": 40,
+				"ctrl": null,
+				"type": "ground",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路45",
+				"tree": "",
+				"lamp": ""
 			}
 		],
 		"lots": [
 			{
-				"id": 44,
+				"id": 46,
 				"a": 2,
 				"b": 4,
 				"depth": 30,
@@ -495,7 +573,7 @@
 				]
 			},
 			{
-				"id": 45,
+				"id": 47,
 				"a": 6,
 				"b": 10,
 				"depth": 30,
@@ -508,7 +586,69 @@
 				]
 			}
 		],
-		"nextId": 46
+		"greens": [
+			{
+				"id": 48,
+				"pts": [
+					[
+						30,
+						152
+					],
+					[
+						60,
+						152
+					],
+					[
+						60,
+						172
+					],
+					[
+						30,
+						172
+					]
+				],
+				"links": [
+					{
+						"edge": 0,
+						"roadId": 41,
+						"t": 0.375,
+						"x": 45,
+						"y": 150
+					}
+				]
+			},
+			{
+				"id": 49,
+				"pts": [
+					[
+						210,
+						150
+					],
+					[
+						240,
+						150
+					],
+					[
+						240,
+						165
+					],
+					[
+						225,
+						165
+					],
+					[
+						225,
+						185
+					],
+					[
+						210,
+						185
+					]
+				],
+				"links": []
+			}
+		],
+		"nextId": 50
 	},
 	"output": {
 		"nodes": [
@@ -538,28 +678,28 @@
 				"x": 40,
 				"y": 30,
 				"z": 0,
-				"type": "plain"
+				"type": "intersection"
 			},
 			{
 				"id": "n7",
 				"x": 40,
 				"y": 90,
 				"z": 0,
-				"type": "plain"
+				"type": "intersection"
 			},
 			{
 				"id": "n10",
 				"x": 70,
 				"y": 30,
 				"z": 0,
-				"type": "plain"
+				"type": "intersection"
 			},
 			{
 				"id": "n12",
 				"x": 70,
 				"y": 90,
 				"z": 0,
-				"type": "plain"
+				"type": "intersection"
 			},
 			{
 				"id": "n16",
@@ -681,7 +821,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路5",
@@ -696,7 +838,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路8",
@@ -711,7 +855,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路8",
@@ -726,7 +872,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路11",
@@ -741,7 +889,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路13",
@@ -756,7 +906,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路14",
@@ -771,7 +923,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路15",
@@ -786,7 +940,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路17",
@@ -808,7 +964,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路20",
@@ -823,7 +981,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路22",
@@ -851,7 +1011,8 @@
 					0,
 					1
 				],
-				"kind": "mouth"
+				"kind": "mouth",
+				"wallTo": true
 			},
 			{
 				"name": "路24",
@@ -894,7 +1055,8 @@
 					0,
 					1
 				],
-				"kind": "mouth"
+				"kind": "mouth",
+				"wallFrom": true
 			},
 			{
 				"name": "路28",
@@ -909,7 +1071,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路30",
@@ -1004,7 +1168,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路39",
@@ -1019,7 +1185,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路41",
@@ -1034,7 +1202,9 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			},
 			{
 				"name": "路43",
@@ -1049,7 +1219,43 @@
 					0,
 					1
 				],
-				"kind": "ground"
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路44",
+				"from": "n7",
+				"to": "n18",
+				"controls": [],
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路45",
+				"from": "n18",
+				"to": "n40",
+				"controls": [],
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
 			}
 		],
 		"lots": [
@@ -1118,6 +1324,63 @@
 					"3": 1
 				},
 				"area": "AREA_COMMERCE_HIGH"
+			}
+		],
+		"greens": [
+			{
+				"points": [
+					[
+						30,
+						152
+					],
+					[
+						60,
+						152
+					],
+					[
+						60,
+						172
+					],
+					[
+						30,
+						172
+					]
+				],
+				"links": [
+					{
+						"edge": 0,
+						"road": 19
+					}
+				]
+			},
+			{
+				"points": [
+					[
+						210,
+						150
+					],
+					[
+						240,
+						150
+					],
+					[
+						240,
+						165
+					],
+					[
+						225,
+						165
+					],
+					[
+						225,
+						185
+					],
+					[
+						210,
+						185
+					]
+				],
+				"links": []
 			}
 		]
 	}

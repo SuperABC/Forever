@@ -27,3 +27,7 @@
 - 真实资产替换占位小白人；靠近盒尺寸是经验值，可能需按真实资产微调。
 - Controller 化后的走路未在 PIE 完整验证。
 - `bRunPhysicsWithNoController=true`(构造函数里)可能是 Controller 化前的遗留，未确认是否仍需要；涉及行为风险，暂未改。
+
+## 绿化区（2026-11-20）
+`WalkToGreen(waypoints, green, circle)`：同`WalkTo`，目的地是绿化区的圆。`TeleportToGreen`：Actor瞬移到圆内随机点(`ComputeGreenLandingSpot`，脚底高度=圆心节点Z)并`SetCurrentGreen`+记脚底位置。
+`GetWalkGreen(outCircle)`：正在去的绿化区(存档用)。`Init`：Citizen记录的位置统一是脚底高度(房间落点和`TeleportToRoom`也写脚底)，Actor位置补半个胶囊高。

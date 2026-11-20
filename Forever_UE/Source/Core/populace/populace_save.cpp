@@ -154,6 +154,11 @@ void PopulaceSaveCodec::Save(const Populace& populace, const Map& map, const Soc
 		w.F32(c->walkSpeedScale);
 		w.F32(c->walkSpeedJitter);
 		w.Str(c->fleeFrom);
+		// 绿化区：当前所在的圆，以及行进目的地是绿化区时的目的地(追加在记录最后，按项目约定没升段版本)。
+		SaveRefs::WriteGreen(map, c->currentGreen, w);
+		w.I32(c->currentGreenCircle);
+		SaveRefs::WriteGreen(map, c->walkGreen, w);
+		w.I32(c->walkGreenCircle);
 	}
 
 	// 班级。
@@ -340,24 +345,37 @@ Populace* PopulaceSaveCodec::Load(const SaveArchive& archive, Map& map,
 			c->satiety = r.F32();
 			c->departed = r.U8() != 0;
 			c->wasSpawned = r.U8() != 0;
-			if (r.U8() != 0) {
-				Room* destination = SaveRefs::ReadRoom(map, r);
-				float speed = r.F32();
+			// 行进目的地可能是房间或绿化区(绿化区的在记录最后读到，所以BeginWalk推迟到下面)。
+			bool savedWalking = r.U8() != 0;
+			Room* walkRoom = nullptr;
+			float walkSpeedSaved = 0.f;
+			vector<Citizen::WalkPoint> walkPathSaved;
+			if (savedWalking) {
+				walkRoom = SaveRefs::ReadRoom(map, r);
+				walkSpeedSaved = r.F32();
 				uint32_t pointCount = r.U32();
-				vector<Citizen::WalkPoint> path;
 				for (uint32_t k = 0; k < pointCount && !r.Failed(); k++) {
 					Citizen::WalkPoint point;
 					point.x = r.F32(); point.y = r.F32(); point.z = r.F32();
-					path.push_back(point);
+					walkPathSaved.push_back(point);
 				}
-				// 起算时间先记0，UE侧GenerateCitizens再用RebaseWalk对齐到当前游戏时钟。
-				if (!r.Failed()) c->BeginWalk(path, destination, 0.0, speed);
 			}
 			c->walkInstantiateProbability = r.F32();
 			c->walkInstantiable = r.U8() != 0;
 			c->walkSpeedScale = r.F32();
 			c->walkSpeedJitter = r.F32();
 			c->fleeFrom = r.Str();
+			c->currentGreen = SaveRefs::ReadGreen(map, r);
+			c->currentGreenCircle = r.I32();
+			if (!c->currentGreen) c->currentGreenCircle = -1;
+			Green* walkGreenSaved = SaveRefs::ReadGreen(map, r);
+			int walkGreenCircleSaved = r.I32();
+			if (savedWalking && !r.Failed()) {
+				// 起算时间先记0，UE侧GenerateCitizens再用RebaseWalk对齐到当前游戏时钟。
+				if (walkGreenSaved) c->BeginWalkToGreen(walkPathSaved, walkGreenSaved, walkGreenCircleSaved, 0.0, walkSpeedSaved);
+				else c->BeginWalk(walkPathSaved, walkRoom, 0.0, walkSpeedSaved);
+				// BeginWalk会清currentGreen(出发=离开)，读档的状态里正在走的人本来就没有currentGreen，无需还原。
+			}
 		}
 		auto citizenAt = [&](int index) -> Citizen* {
 			return (index >= 0 && index < static_cast<int>(citizens.size())) ? citizens[index] : nullptr;

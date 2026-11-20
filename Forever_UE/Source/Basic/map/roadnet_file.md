@@ -10,6 +10,7 @@
   - `roads[]`：`{name, from, to, controls:[[x,y,z,weight]…], lanes:[左车行,左停车,左人行,右车行,右停车,右人行], kind}`。`from/to` 是 node id；`controls` 是有理 Bezier 控制点（直线不写）；断面 mesh 由 `lanes` 拼出 `default_*`（`kind=tunnel` 加 `_T`），车道宽 0.5。
   - `kind`：`ground` 平地；`hug` 贴合地形（请求 `AddTerrainFit`，宽=路总宽，falloff 1.5，编辑器已按地形每 1 单位采样成一段）；`mouth` 隧道口（用平地的路面资产，整段 `AddTunnelHatch` 给地形开口，两侧用无人行道资产）；`tunnel` 隧道内（`_T` 资产，没有开口）；`bridge` 桥（桥墩由 Core 选位，见下）。一条编辑器里的路对应一条 `roads[]`（hug 除外）；头尾节点高度不同就是扁 S 坡（`controls` 里两个控制点，z 取头尾高度，两端水平）。这样隧道口/隧道/平地不再靠高度差猜，由用户显式选。
   - `lots[]`：`{corners:[[x,y]×4], margin:[西,东,北,南], boundary:{"0":road下标…}, area:"AREA_…"}`。corners 按顺时针（屏幕坐标 y 向下）给出，第一条边 n1→n2 为"北"边，其余依次东、南、西（同 `Lot` 构造的约定）；`boundary` 的下标是 `roads[]` 的下标，只在该边正好是一条平直道路时才写；area 用枚举名字符串。
+  - `greens[]`：`{points:[[x,y]…], links:[{edge, road}]}`。绿化区的闭合多边形（地图单位，不重复首点，可以是凹多边形，不能自交；导出时统一成有符号面积>0）；`links` 是"多边形第 edge 条边（points[edge]→points[(edge+1)%n]）连到 roads[] 下标 road 那条路"，可以为空（只做景观、不能地址导航）。接入点不存，Core 按每个活动圆的垂足投影到那条路上再算。读入时 edge/road 越界的 link 被丢弃，点数<3 的绿化被丢弃。绿化类型/圆/树由 Core 的 `Map::InitGreens` 选 green mod 决定，不在文件里。
 - **路口缩进（setback）**：`AssignJunctionSetbacks` 是 `roadnet_jing.cpp` 里那份的拷贝（Basic 里 mod 互不 include），改一处要同步。
 - **`source` 段**：编辑器自己的编辑模型，mod 完全忽略，让同一个文件能被编辑器原样读回继续编辑。
 - **路径**：同 `terrain_file`，绝对路径或相对进程工作目录，`--path=x` 与 `--path x` 都行，路径里可以有空格。

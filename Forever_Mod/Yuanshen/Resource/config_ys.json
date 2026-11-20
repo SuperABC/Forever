@@ -30,7 +30,6 @@
       "building_office_low",
       "building_train_station",
       "building_airport",
-      "building_park",
       "building_mohar",
       "building_empty --test true",
       "building_commerce_high",
@@ -130,5 +129,6 @@
       "vehicle_empty --test true"
    ],
    "weapon_mods" : [ "weapon_pistol", "weapon_rifle", "weapon_shotgun", "weapon_sniper" ],
-   "zone_mods" : [ "zone_residence_high", "zone_residence_middle", "zone_residence_low", "zone_empty --test true" ]
+   "zone_mods" : [ "zone_residence_high", "zone_residence_middle", "zone_residence_low", "zone_empty --test true" ],
+   "green_mods" : [ "green_park" ]
 }

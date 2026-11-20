@@ -16,6 +16,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "map/green.h"
 #include "map/roadnet.h"
 #include "common/utility.h"
 #include "common/random.h"
@@ -1090,8 +1091,17 @@ void UForeverTrafficFrameworkComponent::TrackTestNavigationLine(TFunction<bool(T
 }
 
 void UForeverTrafficFrameworkComponent::StartGuide(Room* target) {
+	guide = FGuide();
 	guide.target = target;
-	guide.path.Reset();
+	RefreshGuide();
+}
+
+void UForeverTrafficFrameworkComponent::StartGuideToGreen(Green* green, int circleIndex, float endX, float endY) {
+	guide = FGuide();
+	guide.green = green;
+	guide.greenCircle = circleIndex;
+	guide.greenEndX = endX;
+	guide.greenEndY = endY;
 	RefreshGuide();
 }
 
@@ -1106,7 +1116,7 @@ void UForeverTrafficFrameworkComponent::HideGuideLine() {
 }
 
 void UForeverTrafficFrameworkComponent::RefreshGuide() {
-	if (!guide.target) return;
+	if (!guide.target && !guide.green) return;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Map* map = framework ? framework->GetMap() : nullptr;
 	Player* corePlayer = framework ? framework->GetPlayer() : nullptr;
@@ -1120,8 +1130,15 @@ void UForeverTrafficFrameworkComponent::RefreshGuide() {
 		// 步行（含玩家占有的市民）：人行道导航，终点就是目标房间。
 		FVector feet = pawn->GetActorLocation();
 		if (const UCapsuleComponent* capsule = character->GetCapsuleComponent()) feet.Z -= capsule->GetScaledCapsuleHalfHeight();
-		plan = map->PlanPedestrianRoute(corePlayer ? corePlayer->GetCurrentRoom() : nullptr,
-			feet.X / TRAFFIC_WORLD_SCALE, feet.Y / TRAFFIC_WORLD_SCALE, guide.target);
+		if (guide.green) {
+			plan = map->PlanPedestrianRouteToGreen(corePlayer ? corePlayer->GetCurrentRoom() : nullptr,
+				feet.X / TRAFFIC_WORLD_SCALE, feet.Y / TRAFFIC_WORLD_SCALE, guide.green, guide.greenCircle,
+				guide.greenEndX, guide.greenEndY);
+		}
+		else {
+			plan = map->PlanPedestrianRoute(corePlayer ? corePlayer->GetCurrentRoom() : nullptr,
+				feet.X / TRAFFIC_WORLD_SCALE, feet.Y / TRAFFIC_WORLD_SCALE, guide.target);
+		}
 	}
 	else if (const AVehicleElement* vehicle = Cast<AVehicleElement>(pawn)) {
 		if (vehicle->IsRideMode()) { HideGuideLine(); return; } // 公交乘客：不画
@@ -1130,8 +1147,17 @@ void UForeverTrafficFrameworkComponent::RefreshGuide() {
 		const FVector forward = pawn->GetActorForwardVector();
 		const float x = location.X / TRAFFIC_WORLD_SCALE, y = location.Y / TRAFFIC_WORLD_SCALE;
 		Room* startRoom = vehicle->GetVehicle() ? vehicle->GetVehicle()->GetCurrentRoom() : nullptr;
-		plan = map->PlanVehicleRoute(startRoom, x, y, guide.target);
-		if (plan.status != Map::VehicleRoutePlan::OK || plan.points.empty()) {
+		if (guide.green) {
+			// 车进不了绿化区：规划到圆心最近的车道点，线终止在那里(下车后刷新成步行线)。
+			bOutside = true;
+			const std::vector<Green::Circle>& circles = guide.green->GetCircles();
+			if (guide.greenCircle >= 0 && guide.greenCircle < static_cast<int>(circles.size())) {
+				const Green::Circle& circle = circles[guide.greenCircle];
+				plan = map->PlanVehicleRouteToPoint(startRoom, x, y, circle.x, circle.y, true, forward.X, forward.Y);
+			}
+		}
+		else plan = map->PlanVehicleRoute(startRoom, x, y, guide.target);
+		if (!guide.green && (plan.status != Map::VehicleRoutePlan::OK || plan.points.empty())) {
 			bOutside = true;
 			plan = Map::VehicleRoutePlan();
 			Building* building = guide.target->GetParentBuilding();
@@ -1158,7 +1184,8 @@ void UForeverTrafficFrameworkComponent::RefreshGuide() {
 
 	if (plan.status != Map::VehicleRoutePlan::OK || plan.points.size() < 2) {
 		UE_LOG(LogTemp, Warning, TEXT("visualize_navigation: 规划不到 %s（status=%d）"),
-			UTF8_TO_TCHAR(guide.target->GetAddress().c_str()), static_cast<int32>(plan.status));
+			*FString(UTF8_TO_TCHAR((guide.target ? guide.target->GetAddress() : guide.green->GetAddress()).c_str())),
+			static_cast<int32>(plan.status));
 		HideGuideLine();
 		return;
 	}
@@ -1175,7 +1202,7 @@ void UForeverTrafficFrameworkComponent::RefreshGuide() {
 }
 
 bool UForeverTrafficFrameworkComponent::UpdateGuide(TArray<FVector>& outPath) {
-	if (!guide.target || guide.path.Num() < 2) return false;
+	if ((!guide.target && !guide.green) || guide.path.Num() < 2) return false;
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	Player* corePlayer = framework ? framework->GetPlayer() : nullptr;
 	APlayerController* controller = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
@@ -1183,9 +1210,18 @@ bool UForeverTrafficFrameworkComponent::UpdateGuide(TArray<FVector>& outPath) {
 	if (!pawn) return false;
 
 	// 到达目标房间：导航完成（线终止在外部连接点的不销毁，要下车刷新后再走进房间）。
-	if (!guide.bEndsAtOutside && corePlayer && corePlayer->GetCurrentRoom() == guide.target) {
+	if (!guide.bEndsAtOutside && guide.target && corePlayer && corePlayer->GetCurrentRoom() == guide.target) {
 		guide = FGuide();
 		return false;
+	}
+	// 到达绿化区圆内终点：按水平距离判定(线终止在车道上的不算，要下车刷新成步行线后再走)。
+	if (!guide.bEndsAtOutside && guide.green) {
+		const FVector end = guide.path.Last();
+		const float arrive = guideArriveDistance * TRAFFIC_WORLD_SCALE;
+		if (FVector::DistSquared2D(pawn->GetActorLocation(), end) <= arrive * arrive) {
+			guide = FGuide();
+			return false;
+		}
 	}
 
 	// 玩家投影到折线上最近的一段：已走过的前缀裁掉；偏离太远重新规划。
@@ -1201,7 +1237,7 @@ bool UForeverTrafficFrameworkComponent::UpdateGuide(TArray<FVector>& outPath) {
 	const float replan = guideReplanDistance * TRAFFIC_WORLD_SCALE;
 	if (nearestDistanceSq > replan * replan) {
 		RefreshGuide();
-		if (!guide.target || guide.path.Num() < 2) return false;
+		if ((!guide.target && !guide.green) || guide.path.Num() < 2) return false;
 		outPath = guide.path;
 		return true;
 	}

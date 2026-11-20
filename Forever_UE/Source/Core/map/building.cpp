@@ -858,8 +858,8 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	bodySizeY = fp.sizeRatioY * GetSizeY();
 
 	basements = std::max(0, mod->basements);
-	// 允许0层(basements也为0时整栋没有任何Floor，GetFloor(level)恒返回nullptr)——ParkBuilding
-	// 这类只有植被、不放楼体的"建筑"用，UE层会直接跳过这种building不渲染，见building.md。
+	// 允许0层(basements也为0时整栋没有任何Floor，GetFloor(level)恒返回nullptr)——只有植被、
+	// 不放楼体的"建筑"用，UE层会直接跳过这种building不渲染，见building.md。
 	layers = std::max(0, mod->layers);
 	int expected = basements + layers;
 	floorHeights = mod->floorHeights;

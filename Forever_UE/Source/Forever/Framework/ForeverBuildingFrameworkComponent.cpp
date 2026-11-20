@@ -78,7 +78,7 @@ void UForeverBuildingFrameworkComponent::GenerateBuildings(Map* inMap) {
 	// 独立建筑和园区内部建筑一视同仁，都在这里统一创建Element；LOD/电梯轿厢全部由Element自己管理。
 	for (auto& [name, building] : map->GetBuildings()) {
 		if (!building) continue;
-		// 0层且没有自定义模型的建筑(ParkBuilding这类只有植被的)不生成Element；0层但有自定义
+		// 0层且没有自定义模型的建筑(只有植被的)不生成Element；0层但有自定义
 		// 模型的(MoharBuilding)要生成——模型靠Element的近处LOD加载，Element自己会跳过远处方块
 		// 和进出触发盒，见BuildingElement.md"自定义模型"一节。
 		if (building->GetBasementCount() + building->GetLayerCount() == 0 && building->GetDecorations().empty()) continue;

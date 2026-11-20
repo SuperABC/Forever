@@ -2,6 +2,7 @@
 #include "common/random.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
+#include "map/green_factory.h"
 #include "map/building_factory.h"
 #include "map/component_factory.h"
 #include "map/room_factory.h"
@@ -42,7 +43,7 @@
 #include "map/building_office_high.h"
 #include "map/building_office_low.h"
 #include "map/building_office_middle.h"
-#include "map/building_park.h"
+#include "map/green_park.h"
 #include "map/building_residence_high.h"
 #include "map/building_residence_low.h"
 #include "map/building_residence_middle.h"
@@ -288,13 +289,26 @@ extern "C" __declspec(dllexport) void RegisterModZones(ZoneFactory* factory) {
 extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
 }
 
+extern "C" __declspec(dllexport) void* GetModGreens() {
+	static vector<string> mods = { ParkGreen::GetId() };
+	return (void*)&mods;
+}
+extern "C" __declspec(dllexport) void RegisterModGreens(GreenFactory* factory) {
+	factory->RegisterGreen(ParkGreen::GetId(),
+		[](const std::string&) -> GreenMod* { return new ParkGreen(); },
+		[](GreenMod* m) { delete m; },
+		&ParkGreen::GetPowerFree, &ParkGreen::GetPowerLinked);
+}
+extern "C" __declspec(dllexport) void FinishModGreens(GreenFactory* factory) {
+}
+
 extern "C" __declspec(dllexport) void* GetModBuildings() {
 	static vector<string> mods = {
 		ResidenceHighBuilding::GetId(), ResidenceMiddleBuilding::GetId(), ResidenceLowBuilding::GetId(),
 		CommerceHighBuilding::GetId(), CommerceMiddleBuilding::GetId(), CommerceLowBuilding::GetId(),
 		IndustryHighBuilding::GetId(), IndustryMiddleBuilding::GetId(), IndustryLowBuilding::GetId(),
 		OfficeHighBuilding::GetId(), OfficeMiddleBuilding::GetId(), OfficeLowBuilding::GetId(),
-		TrainStationBuilding::GetId(), AirportBuilding::GetId(), ParkBuilding::GetId(),
+		TrainStationBuilding::GetId(), AirportBuilding::GetId(),
 		MoharBuilding::GetId() };
 	return (void*)&mods;
 }
@@ -369,11 +383,6 @@ extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* fact
 		[](BuildingMod* m) { delete m; },
 		&AirportBuilding::RandomAcreage, &AirportBuilding::GetAcreageMin, &AirportBuilding::GetAcreageMax,
 		&AirportBuilding::GetPower, &AirportBuilding::Assign);
-	factory->RegisterBuilding(ParkBuilding::GetId(),
-		[](const std::string&) -> BuildingMod* { return new ParkBuilding(); },
-		[](BuildingMod* m) { delete m; },
-		&ParkBuilding::RandomAcreage, &ParkBuilding::GetAcreageMin, &ParkBuilding::GetAcreageMax,
-		&ParkBuilding::GetPower, &ParkBuilding::Assign);
 	factory->RegisterBuilding(MoharBuilding::GetId(),
 		[](const std::string&) -> BuildingMod* { return new MoharBuilding(); },
 		[](BuildingMod* m) { delete m; },

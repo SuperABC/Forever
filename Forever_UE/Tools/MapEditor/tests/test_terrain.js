@@ -74,8 +74,37 @@ for (let i = 0; i < r.water.length; i++) assert.ok(Object.is(back.water[i], r.wa
 // 3x3邻域可建造检查。
 const b = new ME.Terrain(32, 32);
 assert.strictEqual(b.countNonBuildable(5, 5, 9, 9), 0);
+// 可建设只看高度、不看地形类型：高度为0的rock格仍可建，抬高后才不可建。
 b.beginStroke(); b.brush('paint', 7, 7, 1, { terrain: 'rock' }); b.endStroke();
+assert.strictEqual(b.countNonBuildable(5, 5, 9, 9), 0);
+b.beginStroke(); b.brush('raise', 7, 7, 1, { strength: 1 }); b.endStroke();
+assert.ok(b.height[7 * 32 + 7] > 0);
 assert.ok(b.countNonBuildable(5, 5, 9, 9) > 0);
+// isBuildable：抬高的格子及其3x3邻域都不可建；离得够远的仍可建；地图边缘一圈永远不可建。
+assert.strictEqual(b.isBuildable(7, 7), false);
+assert.strictEqual(b.isBuildable(8, 8), false);
+assert.strictEqual(b.isBuildable(10, 7), true);
+assert.strictEqual(b.isBuildable(0, 5), false);
+assert.strictEqual(b.isBuildable(-1, 5), false);
+assert.strictEqual(b.isBuildable(16, 16), true);
+
+// 抹平到0必须能把格子精确清成0：抬高再压低留下的浮点残留、1e-7级的小高度、指数逼近的尾巴都要吸附成0(游戏的可建设判断要求高度精确为0)。
+{
+	const f = new ME.Terrain(32, 32);
+	f.beginStroke(); f.brush('raise', 16.5, 16.5, 6, { strength: 0.37, allowFlat: true }); f.endStroke();
+	f.beginStroke(); f.brush('lower', 16.5, 16.5, 6, { strength: 0.37, allowFlat: true }); f.endStroke();
+	assert.ok(f.height.every((v) => v === 0), '抬高再压低同样的量不应留下残留');
+	f.height[16 * 32 + 16] = 3e-7; f.height[17 * 32 + 16] = 0.0004;
+	f.beginStroke(); f.brush('flatten', 16.5, 16.5, 8, { strength: 1, target: 0, allowFlat: true }); f.endStroke();
+	assert.strictEqual(f.height[16 * 32 + 16], 0);
+	assert.strictEqual(f.height[17 * 32 + 16], 0);
+	assert.ok(f.isBuildable(16, 16));
+	// 平缓抬高后用中等强度反复抹平，笔刷范围内最终全部精确为0
+	for (let y = 10; y < 22; y++) for (let x = 10; x < 22; x++) f.height[y * 32 + x] = 0.8;
+	for (let k = 0; k < 30; k++) { f.beginStroke(); f.brush('flatten', 16, 16, 10, { strength: 0.5, target: 0, allowFlat: true }); f.endStroke(); }
+	assert.ok(f.isBuildable(16, 16));
+	assert.strictEqual(f.height[16 * 32 + 16], 0);
+}
 
 // 平原格上有水：刷成plain不清水，只清高度；enforceFlat不动水；地块检查不看水。
 {

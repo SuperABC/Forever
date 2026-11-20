@@ -43,6 +43,7 @@ class UForeverVegetationFrameworkComponent;
 class UForeverLampFrameworkComponent;
 class UForeverWeatherFrameworkComponent;
 class UForeverZoneFrameworkComponent;
+class UForeverGreenFrameworkComponent;
 class UForeverDoorFrameworkComponent;
 
 // 场景里唯一的Framework入口Actor,持有Core的7个顶层域对象,按域组件划分UE层职责,
@@ -72,6 +73,7 @@ public:
 	void GenerateZoneMesh();
 	void GenerateBuildingMesh();
 	void GenerateDoorMesh();
+	void GenerateGreenMesh();
 	void GenerateVegetationMesh();
 	void GenerateLampMesh();
 
@@ -261,6 +263,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverZoneFrameworkComponent> zoneFramework;
+
+	// 绿化区自定义模型(装饰物ISM)，见Source/Forever/Framework/ForeverGreenFrameworkComponent.md。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
+	TObjectPtr<UForeverGreenFrameworkComponent> greenFramework;
 
 	// 全图门(建筑门/房间门/园区大门)按玩家距离流式加载，见Source/Forever/Framework/ForeverDoorFrameworkComponent.md。
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")

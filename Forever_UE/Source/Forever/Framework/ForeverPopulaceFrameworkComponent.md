@@ -163,3 +163,19 @@ Actor以任何方式结束（流式销毁、掉出世界被引擎销毁）都从
 
 ## 流式生成防重叠（2026-11-19）
 流式生成(TickComponent扫描)市民前，若生成点和任一已实例化市民的距离(三维)小于2m(`kSpawnMinSeparation`=200uu)就跳过，并`Citizen::SetWalkInstantiable(false)`，这趟路后续不再实例化(Core推算到走完，下次开始走路重新抽)。只对走路中的市民判断，没在走路的直接生成、不看距离。读档恢复、`EnsureSpawned`等强制生成不受影响。
+
+## 绿化区行走（2026-11-20）
+- **去绿化区**：`RequestWalkToGreen(citizen, green, circle)`(`npc_navigate`的目的地不是房间时，`AForeverFrameworkActor`用`Map::LocateGreen`解析地址，没写圆序号=第0个圆)。
+  不开车通勤(绿化里没有车位，进行中的任务/通勤被取代)，其余同`RequestWalk`。`RequestWalkInternal`/`ApplyWalkResult`/`FPendingWalkResult`都多带`greenDest/greenCircle`
+  (房间目的地和绿化目的地二选一)；终点是圆内随机一点，在游戏线程用`ACitizenElement::ComputeGreenLandingSpot`取(自带随机作用域，Z取圆心节点高度)，
+  线程池里用`Map::PlanPedestrianRouteToGreen`规划(图上走到圆心，再追加终点)。有Actor=`WalkToGreen`，没有=`Citizen::BeginWalkToGreen`(Core推算)，路径为空=直接`PlaceCitizenInGreen`。
+- **走出绿化区**：市民`currentGreen`非空(含Actor站着的情况)时起点改成"当前位置→所在圆的圆心→导航图"(`PlanPedestrianRouteFromGreen`，或绿化到绿化用`PlanPedestrianRouteToGreen`从圆心起算)；
+  `GetStandingFeet`取站立脚底位置(Actor在取Actor，否则取Core记录)。出发(`WalkTo/WalkToGreen`落地、`RegisterSkipWalk`)清`currentGreen`；`RequestFlee`也清。
+- **到达**：Actor走完由`ACitizenController::EndCommand`回调`NotifyArrivedGreen`(`SetCurrentGreen`+记脚底位置+`ReportArrivalGreen`)；Core推算走完在流式扫描里`AdvanceWalk`返回true时`ReportArrivalGreen`；
+  `ReportArrivalGreen`发`npc_arrive`，地址是`Green::GetCircleAddress(circle)`(`UForeverStoryFrameworkComponent::BroadcastNpcArrive`加了按地址字符串的重载)。
+- **瞬移/跳时间**：`TeleportCitizenToGreen`(同`TeleportCitizen`：取消任务/通勤、作废在途寻路)；跳时间腿`FSkipWalk`也支持绿化目的地(`greenDest/greenCircle`，目的地是房间时为空)：
+  `StartSkipWalk`按"房间→绿化 / 绿化→房间 / 绿化→绿化 / 重新规划"四种起点规划路径(终点圆内随机点，从圆心起算)，`CompleteSkipLegs`到达时`SetCurrentGreen`+位置落在路径终点+`ReportArrivalGreen`，
+  `EndTimeSkip`没走完的腿按进度落成真实步行(`ApplyWalkResult`带绿化目的地)，`BeginTimeSkip`把在途的绿化行走也转成腿(拿不到剩余路径才直接到达)。
+- **流式生成/销毁/存档**：`HandOffWalkToElement`/`HandBackCitizenToCore`/`SyncPositionsToCore`都认绿化目的地(`GetRemainingWaypoints`带绿化出参、`ACitizenElement::GetWalkGreen`)；
+  所有市民的位置统一按脚底高度存(`Init`再补半个胶囊高，所以`HandOffWalkToElement`不用再抬)；存档时Actor还在走去绿化的，路径交给Core(`BeginWalkToGreen`)，路径取不到就临时记成"已站在圆里"，`RestoreAfterSave`撤掉。
+- `DescribeReturnAddress`(flee_start的返回地址)在没有房间时给绿化圆地址；`AForeverFrameworkActor::DescribeLocation`落在绿化多边形内时返回圆地址/绿化地址。

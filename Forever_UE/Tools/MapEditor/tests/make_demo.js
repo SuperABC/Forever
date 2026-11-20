@@ -6,6 +6,7 @@ require('../js/terrain.js');
 require('../js/io.js');
 require('../js/roadnet.js');
 require('../js/lots.js');
+require('../js/greens.js');
 const ME = globalThis.ME;
 
 const outDir = process.argv[2] || path.join(__dirname, '..', 'samples');
@@ -63,14 +64,25 @@ road(at(218, 120), { x: 256, y: 120, extern: true });
 road({ x: 70, y: 150, z: ctx.height(70, 150) }, { x: 150, y: 150, z: ctx.height(150, 150) }, { type: 'hug' });
 road({ x: 30, y: 150 }, at(70, 150));
 road(at(150, 150), { x: 175, y: 150 });
+// 把山南坡的贴合路接回路网(绿化区在它旁边，行人要能从房间走到绿化)。
+road(at(40, 90), at(20, 120));
+road(at(20, 120), at(30, 150));
 // 地块：中间小方框的南面，深度30。
 const nodeAt = (x, y) => ME.pickNode(m, x, y, 0.2);
 const a = nodeAt(40, 60), b = nodeAt(70, 60);
 ME.addLot(m, a.id, b.id, 30, 'AREA_RESIDENCE_HIGH');
 ME.addLot(m, nodeAt(40, 30).id, nodeAt(70, 30).id, 30, 'AREA_COMMERCE_HIGH');
 
+// 绿化：一块连路的(上边紧贴y=150的平地路)，一块不连路的凹多边形(L形)。
+{
+	const linked = ME.addGreen(m, [[30, 152], [60, 152], [60, 172], [30, 172]]);
+	const hit = ME.pickRoad(m, 45, 150, 0.2);
+	ME.setGreenLink(linked, 0, hit.road, hit.t, hit.x, hit.y);
+	ME.addGreen(m, [[210, 150], [240, 150], [240, 165], [225, 165], [225, 185], [210, 185]]);
+}
+
 const { output, warnings } = ME.exportRoadnet(m, t);
 fs.writeFileSync(path.join(outDir, 'demo.terrain'), Buffer.from(ME.writeTerrain(t)));
 fs.writeFileSync(path.join(outDir, 'demo.roadnet'), ME.writeRoadnet(m, output));
-console.log(`roads(user)=${m.roads.length} roads(out)=${output.roads.length} nodes=${output.nodes.length} lots=${output.lots.length}`);
+console.log(`roads(user)=${m.roads.length} roads(out)=${output.roads.length} nodes=${output.nodes.length} lots=${output.lots.length} greens=${output.greens.length}`);
 console.log('warnings:', warnings);

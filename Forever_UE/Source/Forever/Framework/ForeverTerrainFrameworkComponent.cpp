@@ -371,7 +371,7 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 					terrainIndex = (uint8)FMath::Min(terrainIter->second.slice, 255);
 				indexPixels[y * mapWidth + x] = terrainIndex;
 				nearSliceIds[(size_t)y * mapWidth + x] = terrainIndex;
-				nearIsConstruction[(size_t)y * mapWidth + x] = (terrainName == "construction") ? 1 : 0;
+				nearIsConstruction[(size_t)y * mapWidth + x] = map->IsConstruction(x, y) ? 1 : 0;
 			}
 		indexMip.BulkData.Unlock();
 		terrainIndexMap->UpdateResource();
@@ -908,6 +908,7 @@ void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
 #define TUNNEL_WALL_SEGMENT 0.25f       // 沿长度的断面间距(地图element单位)，墙顶跟着地形起伏
 #define TUNNEL_WALL_THICKNESS 0.1f      // 墙厚度
 #define TUNNEL_WALL_BOTTOM_EXTRA 0.1f   // 墙底比洞底再往下埋多少(埋在路面下)
+#define TUNNEL_WALL_TOP_MARGIN 0.005f   // 侧墙/端墙顶比所在地形再高多少(0.005地图单位=5cm)，保证稳定凸出地形
 
 void UForeverTerrainFrameworkComponent::BuildTunnelWalls() {
 	if (!map) return;
@@ -972,9 +973,11 @@ void UForeverTerrainFrameworkComponent::BuildTunnelWalls() {
 					return best;
 				};
 				float top0 = topAt(u0), top1 = topAt(u1);
-				float outerTop0 = top0, outerTop1 = top1;
 				// 这一段地形不比洞底高(洞底和地面齐平的入口附近)就不需要墙。
 				if (top0 <= floor0 && top1 <= floor1) continue;
+				// 再留1cm余量，墙顶稳定凸出地形(地形网格是三角面片，SampleHeight取最大值仍可能被插值误差反超)。
+				top0 += TUNNEL_WALL_TOP_MARGIN; top1 += TUNNEL_WALL_TOP_MARGIN;
+				float outerTop0 = top0, outerTop1 = top1;
 				float bottom0 = floor0 - TUNNEL_WALL_BOTTOM_EXTRA, bottom1 = floor1 - TUNNEL_WALL_BOTTOM_EXTRA;
 				auto world = [&](const FVector2D& p, float z) { return FVector(p.X * worldScale, p.Y * worldScale, z * worldScale); };
 
@@ -1000,6 +1003,7 @@ void UForeverTerrainFrameworkComponent::BuildTunnelWalls() {
 				FVector2D outer = base + outwardDir * TUNNEL_WALL_THICKNESS;
 				top = FMath::Max(top, FMath::Max(SampleHeight(base.X, base.Y), SampleHeight(outer.X, outer.Y)));
 			}
+			top += TUNNEL_WALL_TOP_MARGIN; // 端墙顶也留余量，稳定凸出地形
 			if (top <= bottom) return;
 			FVector2D a = endCenter - perp * lateral, b = endCenter + perp * lateral;
 			FVector2D ao = a + outwardDir * TUNNEL_WALL_THICKNESS, bo = b + outwardDir * TUNNEL_WALL_THICKNESS;

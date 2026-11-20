@@ -14,6 +14,8 @@
 #include <unordered_set>
 
 #define ROAD_WORLD_SCALE 1000.f
+// 道路单元(每节tiling实例)头尾的高度偏移(地图单位)：头抬高、尾压低各这么多，见BuildRoadInstances。
+#define ROAD_TILE_TILT 1e-5f
 // 开口cube/路口mesh等的高度偏移，避免和地形网格共面z-fighting
 // (和ForeverTerrainFrameworkComponent.cpp的HEIGHT_EPSILON同类问题)；相对10m一格的尺度可忽略。
 #define ROADNET_HEIGHT_EPSILON 10.f
@@ -481,7 +483,11 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 			}
 			mid += fwd * ((extEnd - extStart) * 0.5f * ROAD_WORLD_SCALE);
 
-			FTransform xform(fwd.Rotation(), mid, FVector((actualSegLen + extStart + extEnd) / unit, 1.f, 1.f));
+			// 每节头抬高、尾压低ROAD_TILE_TILT(地图单位)：中心高度不变，整节微微倾斜，相邻两节重叠处(曲线内侧)
+			// 后一节的头永远压在前一节的尾上面，不再共面z-fighting。
+			const float tileLen = actualSegLen + extStart + extEnd;
+			const FVector tiltedFwd = (fwd * tileLen + FVector(0.f, 0.f, -2.f * ROAD_TILE_TILT)).GetSafeNormal();
+			FTransform xform(tiltedFwd.Rotation(), mid, FVector(tileLen / unit, 1.f, 1.f));
 			int32 instanceIndex = ism->AddInstance(xform);
 			FVector2D dirXY(fwd.X, fwd.Y);
 			dirXY = dirXY.GetSafeNormal();
@@ -530,7 +536,8 @@ void UForeverRoadnetFrameworkComponent::BuildRoadInstances(Road* road, float tri
 		mid.X += perp0.X * originShift * ROAD_WORLD_SCALE;
 		mid.Y += perp0.Y * originShift * ROAD_WORLD_SCALE;
 
-		FTransform xform(fwd.Rotation(), mid, FVector(segLen / unit, 1.f, 1.f));
+		const FVector tiltedFwd = (fwd * segLen + FVector(0.f, 0.f, -2.f * ROAD_TILE_TILT)).GetSafeNormal(); // 同主tiling的头尾倾斜
+		FTransform xform(tiltedFwd.Rotation(), mid, FVector(segLen / unit, 1.f, 1.f));
 		int32 instanceIndex = freeIsm->AddInstance(xform);
 		FVector2D dirXY(fwd.X, fwd.Y);
 		dirXY = dirXY.GetSafeNormal();

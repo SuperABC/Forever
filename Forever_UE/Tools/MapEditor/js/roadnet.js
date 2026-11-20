@@ -8,6 +8,7 @@
 //          路面高度由头尾节点的z决定：相同走直线(平路)，不同走扁S形(两端水平、1/3长度处的控制点)；hug则跟随地形，头尾按节点z做偏移。
 //          mouth用平地的路面资产但要给地形开口；tunnel用隧道资产；bridge放桥墩。
 //   lots:  见lots.js
+//   greens: 见greens.js(绿化区多边形，可连道路)
 // 一条用户road在导出时展开成Core Road("piece")：除hug(每1单位一段，跟随地形)外一对一。
 // 坐标：element单位(10m)，+Y向南。
 (function (root) {
@@ -41,7 +42,7 @@
 
 	// ---------------- 模型 ----------------
 	function newModel(mapW, mapH) {
-		return { version: 2, mapW, mapH, nodes: [], roads: [], lots: [], nextId: 1 };
+		return { version: 2, mapW, mapH, nodes: [], roads: [], lots: [], greens: [], nextId: 1 };
 	}
 	function cloneModel(model) { return JSON.parse(JSON.stringify(model)); }
 	function nodeOf(model, id) { return model.nodes.find((n) => n.id === id); }
@@ -515,6 +516,7 @@
 		const nodes = [];
 		const roads = [];
 		const roadPieces = new Map();   // 用户roadId -> output roads下标数组
+		const pieceRanges = new Map();  // 用户roadId -> [{t0,t1}]，和roadPieces一一对应(每段占用户road的Bezier参数区间)
 		let internal = 0;
 
 		// 用户节点：类型按度数定，高度就是节点z。
@@ -567,10 +569,12 @@
 				prevId = toId;
 			}
 			roadPieces.set(r.id, idx);
+			pieceRanges.set(r.id, pieces.map((p) => ({ t0: p.t0, t1: p.t1 })));
 		}
 
-		const output = { nodes, roads, lots: [] };
+		const output = { nodes, roads, lots: [], greens: [] };
 		if (ME.exportLots) ME.exportLots(model, terrain, output, roadPieces, warnings);
+		if (ME.exportGreens) ME.exportGreens(model, terrain, output, roadPieces, warnings, pieceRanges);
 		for (const w of validate(model, terrain, ctx)) warnings.push(w);
 		return { output, warnings, roadPieces };
 	}
@@ -628,6 +632,7 @@
 
 	// 旧版(version 1，路自己带height、隧道/桥导出时自动拆段)迁移成新版：节点补z，隧道/桥按旧布局拆成多条路(引道/坡=隧道口或桥，平路=隧道或桥)。
 	function migrateModel(model, ctx) {
+		if (!model.greens) model.greens = [];
 		if (model.version >= 2) return model;
 		ctx = ctx || { height: () => 0 };
 		for (const n of model.nodes) n.z = n.z || 0;

@@ -219,6 +219,13 @@ public:
 	Room* GetCurrentRoom() const;
 	void SetCurrentRoom(Room* value);
 
+	// 当前站在哪块绿化区的第几个活动圆里(和currentRoom互斥：走进房间清空绿化，走进绿化时currentRoom是空的)。
+	// 在绿化区里时hasPosition仍为true(在圆内的某一点)。开始行进(BeginWalk/BeginWalkToGreen)和死亡/离城会清空。
+	// 只有市民对象记这个，Green不记人，见map/green.md。存档按Map::GetGreens()下标。
+	Green* GetCurrentGreen() const;
+	int GetCurrentGreenCircle() const;
+	void SetCurrentGreen(Green* green, int circleIndex);
+
 	// 3D坐标：hasPosition为false表示还没有实例化过位置，见citizen.md。
 	bool HasPosition() const;
 	void GetPosition(float& outX, float& outY, float& outZ) const;
@@ -232,6 +239,10 @@ public:
 	struct WalkPoint { float x, y, z; };
 	bool IsWalking() const;
 	Room* GetWalkDestination() const;
+	// 行进目的地是绿化区的某个圆(此时GetWalkDestination()为空)。到达时SetCurrentGreen+保留位置(不清)。
+	Green* GetWalkGreen() const;
+	int GetWalkGreenCircle() const;
+	void BeginWalkToGreen(const std::vector<WalkPoint>& path, Green* destination, int circleIndex, double nowSeconds, float speed);
 	// 开始行进：路径第一个点就是当前位置(写进SetPosition)。本函数不碰currentRoom。
 	void BeginWalk(const std::vector<WalkPoint>& path, Room* destination, double nowSeconds, float speed);
 	// 推进到nowSeconds：到达时SetCurrentRoom(destination)+ClearPosition+结束行进并返回true；
@@ -342,6 +353,8 @@ private:
 	Room* room = nullptr;
 	Household* household = nullptr;
 	Room* currentRoom = nullptr;
+	Green* currentGreen = nullptr;
+	int currentGreenCircle = -1;
 	std::vector<Asset*> assets; // 不持有，不存档(不动产由归属推导，载具随traffic段)
 
 	bool hasPosition = false;
@@ -359,6 +372,8 @@ private:
 
 	// 行进模拟状态，见BeginWalk。walkDistances[i]是路径起点到第i个点的累计弧长。
 	Room* walkDestination = nullptr;
+	Green* walkGreen = nullptr;     // 目的地是绿化区时用(此时walkDestination为空)
+	int walkGreenCircle = -1;
 	std::vector<WalkPoint> walkPath;
 	std::vector<float> walkDistances;
 	double walkStartTime = 0.0;

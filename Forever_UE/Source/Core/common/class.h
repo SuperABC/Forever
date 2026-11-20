@@ -11,6 +11,7 @@ class JsonValue;
 class Node;
 class Lot;
 class Zone;
+class Green;
 class Building;
 class Cabin;
 class Component;

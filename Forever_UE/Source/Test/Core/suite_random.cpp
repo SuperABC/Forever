@@ -227,5 +227,6 @@ SuiteBody FindSuiteBody(const std::string& name) {
 	if (name == "save") return SaveSuiteBody;
 	if (name == "perform") return PerfSuiteBody;
 	if (name == "route") return RouteSuiteBody;
+	if (name == "green") return GreenSuiteBody;
 	return nullptr;
 }

@@ -4,6 +4,7 @@
 #include "map/terrain_factory.h"
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
+#include "map/green_factory.h"
 #include "map/building_factory.h"
 #include "map/component_factory.h"
 #include "map/room_factory.h"
@@ -25,6 +26,7 @@
 #pragma comment(lib, "Dependence.lib")
 
 int EmptyZone::count = 0;
+int EmptyGreen::count = 0;
 int EmptyBuilding::count = 0;
 
 // 这个DLL里每个concept各有一个占位id"<concept>_empty"，都不依赖任何其它mod。
@@ -36,6 +38,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ "terrain_empty", {} },
 		{ "roadnet_empty", {} },
 		{ "zone_empty", {} },
+		{ "green_empty", {} },
 		{ "building_empty", {} },
 		{ "component_empty", {} },
 		{ "room_empty", {} },
@@ -92,6 +95,19 @@ extern "C" __declspec(dllexport) void RegisterModZones(ZoneFactory* factory) {
 		&EmptyZone::Assign);
 }
 extern "C" __declspec(dllexport) void FinishModZones(ZoneFactory* factory) {
+}
+
+extern "C" __declspec(dllexport) void* GetModGreens() {
+	static std::vector<std::string> mods = { "green_empty" };
+	return (void*)&mods;
+}
+extern "C" __declspec(dllexport) void RegisterModGreens(GreenFactory* factory) {
+	factory->RegisterGreen(EmptyGreen::GetId(),
+		[](const std::string&) -> GreenMod* { return new EmptyGreen(); },
+		[](GreenMod* m) { delete m; },
+		&EmptyGreen::GetPowerFree, &EmptyGreen::GetPowerLinked);
+}
+extern "C" __declspec(dllexport) void FinishModGreens(GreenFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModBuildings() {

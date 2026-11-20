@@ -289,6 +289,7 @@ namespace {
 		return {
 			{ "Terrains", [&r](const string& id, ModOutcome& o) { RunMod(r.GetTerrainFactory(), &TerrainFactory::CreateTerrain, &TerrainFactory::DestroyTerrain, id, o); } },
 			{ "Roadnets", [&r](const string& id, ModOutcome& o) { RunMod(r.GetRoadnetFactory(), &RoadnetFactory::CreateRoadnet, &RoadnetFactory::DestroyRoadnet, id, o); } },
+			{ "Greens", [&r](const string& id, ModOutcome& o) { RunMod(r.GetGreenFactory(), &GreenFactory::CreateGreen, &GreenFactory::DestroyGreen, id, o); } },
 			{ "Zones", [&r](const string& id, ModOutcome& o) { RunMod(r.GetZoneFactory(), &ZoneFactory::CreateZone, &ZoneFactory::DestroyZone, id, o); } },
 			{ "Buildings", [&r](const string& id, ModOutcome& o) { RunMod(r.GetBuildingFactory(), &BuildingFactory::CreateBuilding, &BuildingFactory::DestroyBuilding, id, o); } },
 			{ "Components", [&r](const string& id, ModOutcome& o) { RunMod(r.GetComponentFactory(), &ComponentFactory::CreateComponent, &ComponentFactory::DestroyComponent, id, o); } },

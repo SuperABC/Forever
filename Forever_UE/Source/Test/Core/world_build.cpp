@@ -161,6 +161,7 @@ bool BuildWorld(TestWorld& world, int mapSize, string& error) {
 	if (!stage("map.roadnet", [&] { world.map->InitRoadnet(); })) return false;
 	if (!stage("map.zones", [&] { world.map->InitZones(); })) return false;
 	if (!stage("map.buildings", [&] { world.map->InitBuildings(); })) return false;
+	if (!stage("map.greens", [&] { world.map->InitGreens(); })) return false;
 	if (!stage("map.vegetation", [&] { world.map->InitVegetation(); })) return false;
 	if (!stage("map.lamps", [&] { world.map->InitLamps(); })) return false;
 	// 交通在地形网格之前、人口之前构建(和UE同序)；载具分配在人口/社会/资产就绪之后。

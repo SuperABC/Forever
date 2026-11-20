@@ -40,7 +40,7 @@
   `rampSamples`格——进山之前就已经下到隧道高度，出山之后才开始爬回地面。隧道内（`tIn`到`tOut`）的格点
   `z=TUNNEL_HEIGHT=-1.f`(相对平坦Z=0基准往下10m)，`p`/`q`和其余格点`z=0`；`p`到`tIn`、`tOut`到`q`之间的
   格点去掉（只有一段完整的80m过渡，那里离山不到80m也铺不了lot）。山前/山后的平地（`p..tIn`、
-  `tOut..q`必须全是`plain`/`construction`）不够`rampSamples+1`格，或者隧道口和上一个隧道的口重叠，就放不下
+  `tOut..q`必须全是`plain`或可建设的格子）不够`rampSamples+1`格，或者隧道口和上一个隧道的口重叠，就放不下
   隧道口，这座山改成抬升（日志里写原因）；不再有"隧道穿过水面"、"一直延伸到extern"的情况。隧道口
   斜坡段额外调`AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth())`挖开地形(同时让UE层给洞的
   两条长边加侧壁)，否则隧道段会被
@@ -94,10 +94,10 @@
 - **放lot之前必须整块扫描地形，不能只抽样四个角**：`isLotFullyConstruction(nw,ne,se,sw)`
   先按四个角算出lot的坐标范围(可能是旋转过的，因为整套井字路网带一个随机`theta`旋转角)，
   对范围内每个element用`isPointInQuad`(凸四边形叉积法，四条边同号即在内部)判断是不是真的
-  落在这个lot内部，是的话就要求`getTerrain(x,y)=="construction"`，只要有一个不是就整块
-  lot放弃(`break`/跳过，不`emplace_back`)。严格只认`"construction"`，不认`"plain"`——
-  `"construction"`是`Map::InitTerrains`"周围3x3全是plain/construction才晋升"规则筛出来的
-  (见`Source/Core/map/map.md`)，plain但没被晋升的那一圈格子，本质就是贴着mountain/river/
+  落在这个lot内部，是的话就要求`isConstruction(x,y)`，只要有一个不是就整块
+  lot放弃(`break`/跳过，不`emplace_back`)。严格只认可建设标记，不认`"plain"`——
+  可建设标记是`Map::InitTerrains`"周围3x3高度都为0"规则标出来的
+  (见`Source/Core/map/map.md`，2026-11-21前是把地形名改成`"construction"`)，没被标记的那一圈格子，本质就是贴着mountain/river/
   ocean这类不规则地形的边缘地带；之前的做法(`isBuildable`)只抽样四个角、而且plain和
   construction都放过，会漏判——四个角都在晋升区内，lot中间却可能横穿一条贴着山体边缘的
   窄长plain地带，那种地方实际地形不规则，不适合铺建筑用地。所有9处`lots.emplace_back`

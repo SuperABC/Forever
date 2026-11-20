@@ -7,8 +7,9 @@
 ## 关键设计
 
 - **一次只有一个路网布局方案生效**，不是Terrain那种`GetPriority()`多mod叠加分发——`RoadnetFactory::SetConfig`/`GetRoadnet()`做单选，见`roadnet_factory.md`。
-- **`DistributeRoadnet`有`getTerrain`/`getWater`/`getHeight`三个只读回调，没有`setTerrain`/`setHeight`**：道路高度由mod自己决定。默认可固定Z=0(隧道段用固定`TUNNEL_HEIGHT`常量下探，见`JingRoadnet`)，也可用`getHeight(x,y)`(地图element单位的连续坐标，含细化高度)采样山表面高度作为路面Z，再用`AddTerrainFit`把地形贴到路面上。`JingRoadnet`靠`getTerrain`探测`mountain`/`ocean`判断隧道/抬升，`getWater`目前未被用到。
+- **`DistributeRoadnet`有`getTerrain`/`isConstruction`/`getWater`/`getHeight`四个只读回调(`isConstruction`2026-11-21加入：该element是否可建设，见`Source/Core/map/map.md`"可建设标记"；`getTerrain`始终是原始地形名，不会再返回`"construction"`)，没有`setTerrain`/`setHeight`**：道路高度由mod自己决定。默认可固定Z=0(隧道段用固定`TUNNEL_HEIGHT`常量下探，见`JingRoadnet`)，也可用`getHeight(x,y)`(地图element单位的连续坐标，含细化高度)采样山表面高度作为路面Z，再用`AddTerrainFit`把地形贴到路面上。`JingRoadnet`靠`getTerrain`探测`mountain`/`ocean`判断隧道/抬升，`getWater`目前未被用到。
 - **`nodeStaticCount`**：mod实现必须在`DistributeRoadnet`开头第一步调`Node::SetCount(nodeStaticCount)`(跨DLL的`Node` id计数器同步)，构造的所有`Node`/`Intersection`/`Road`都必须通过`externs`/`intersections`/`roads`/`lots`四个成员返回，不能留下"野"实例，否则宿主和mod的id计数器不同步，后续深拷贝会拿到重复id。
+- **`greens`(2026-11-20)是`vector<GreenSpec>`**：路网指定的绿化多边形，`GreenSpec{xy(扁平顶点), links(vector<pair<int,Road*>>，边下标+连的路)}`，`Road*`指向`roads`里的元素(同lots的边界road，`Roadnet::DistributeRoadnet`深拷贝时用同一张`roadPtrMap`重映射)。Core的`Map::InitGreens`读它，见`Source/Core/map/map.md`和`green.md`。
 - **`lots`是`vector<Lot>`，边界`Road`映射记在每个`Lot`自己身上**(`Lot::SetBoundaryRoad`/`GetBoundaryRoads`，键是`FACE_DIRECTION`0-3，缺失=那一侧没有路；`Lot`构造函数的可选`boundary`参数等价于构造后逐个`SetBoundaryRoad`)。不存边界`Intersection`映射：车行/行人导航图直接挂在`Road`/`Intersection`上(`Source/Core/map/roadnet.h`的`RoadJunction`)，不经lot中转。
 - **边界`Road*`必须指向`this->roads`里的同一个元素，不能是独立拷贝**：Zone/Building裁剪Lot空间时(`Lot::SplitWithPath`)会通过这个指针给"大路"加`RoadOpening`，独立拷贝会让开口加不到真正被渲染的那条路上(PIE里看不到开口)。实现方要保证指针有效：取地址前必须把所有往`roads`增长的调用做完，`vector`扩容会让之前取的地址失效，做法见`roadnet_jing.md`的`makeBoundaryRoad`。
 - **车道/开口数据挂在`Road`自己身上**(`vehicleLanes`/`parkingLanes`/`pedestrianLanes`/`openings`，见`general_geometry.h`)，`RoadnetMod`只负责产出`Road`实例。

@@ -32,3 +32,7 @@
 `IsFleeRangeExceeded`(移动中销毁距离的9成)=far。路径选不下去(`EndCommand(true)`)=far；被清空/取代=interrupted。`EndCommand`里统一回调`NotifyFleeEnded(citizen, reason)`。
 `TickFlee`同一个0.25秒检查里还测跑的方向：前进方向(指向下一个路点)和"市民→目标"连线夹角小于90度就立刻掉头——以当前位置重新`PlanFleeStart`(最近线、背离端点)并整个换掉路径点，掉头后冷却0.75秒，过横道时不掉头。逃跑速度倍率4。
 `RetargetFlee`：已在逃时连续受伤只换目标。`GetRemainingWaypoints`对Flee返回false，存档时按"没路线"处理(位置照存、`fleeFrom`存档，读档后接着逃)。
+
+## 绿化区目的地（2026-11-20）
+`FCharacterCommand`加`green/greenCircle`(`MakeFollowPathToGreen`)：FollowPath的目的地是绿化区的圆时`room`为空，走完`EndCommand`回调`framework->NotifyArrivedGreen`而不是`NotifyArrived`。
+`GetRemainingWaypoints(out, outRoom, outGreen*, outCircle*)`两种目的地都返回true(绿化目的地时`outRoom`为空)；`GetCurrentGreenDestination`单独问"正在去哪个绿化圆"。

@@ -25,8 +25,11 @@ public:
 	// 构建路网,结果填进下面externs/intersections/roads/lots。nodeStaticCount是宿主的Node::count,
 	// 实现开头必须先Node::SetCount(nodeStaticCount),否则跨DLL的id会冲突。
 	// getHeight按地图element单位的连续坐标返回地形高度(含细化高度)。
+	// getTerrain返回原始地形名(越界返回空串)；isConstruction返回该element是否可建设(3x3范围内高度都为0，
+	// 和地形类型、水都无关，越界为false)。放建筑/地块只认isConstruction，不要再拿地形名判断。
 	virtual void DistributeRoadnet(int width, int height,
 		const std::function<const std::string&(int, int)>& getTerrain,
+		const std::function<bool(int, int)>& isConstruction,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		const std::function<float(float, float)>& getHeight,
 		int nodeStaticCount) = 0;
@@ -56,6 +59,18 @@ public:
 	// 每个lot自己登记边界Road映射。边界Road*必须指向this->roads里的元素本身(不能复制),
 	// 且登记前roads不能再增长,原因见roadnet_mod.md。
 	std::vector<Lot> lots;
+
+	// 路网指定的绿化区(多边形)，mod在DistributeRoadnet里填，宿主(Map::InitGreens)读走，见green_mod.md。
+	// links里的road是roads下标(不是指针)，Core按下标翻译成自己的Road*副本。
+	struct GreenSite {
+		struct Link {
+			int edge = 0;   // 多边形第edge条边：points[edge] -> points[(edge+1)%n]
+			int road = -1;  // roads下标
+		};
+		std::vector<float> xy;   // 顶点{x0,y0,x1,y1,...}，地图单位，宿主会规整成有符号面积>0
+		std::vector<Link> links;
+	};
+	std::vector<GreenSite> greens;
 
 	// 工具方法(非虚):请求给一段桥(chains里每条链是按行驶顺序首尾相接的Connection，通常是同一座桥拆出的几段Road)放桥墩,
 	// 宿主(Roadnet::PlacePiers)按defaultSpacing/minSpacing选位、避开其它道路。链按值拷贝保存。参数含义同RouteMod::AddPier(PierRequest)。

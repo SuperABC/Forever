@@ -71,7 +71,7 @@ namespace {
 			{ "AREA_COMMERCE_HIGH", AREA_COMMERCE_HIGH }, { "AREA_COMMERCE_MIDDLE", AREA_COMMERCE_MIDDLE }, { "AREA_COMMERCE_LOW", AREA_COMMERCE_LOW },
 			{ "AREA_INDUSTRY_HIGH", AREA_INDUSTRY_HIGH }, { "AREA_INDUSTRY_MIDDLE", AREA_INDUSTRY_MIDDLE }, { "AREA_INDUSTRY_LOW", AREA_INDUSTRY_LOW },
 			{ "AREA_OFFICE_HIGH", AREA_OFFICE_HIGH }, { "AREA_OFFICE_MIDDLE", AREA_OFFICE_MIDDLE }, { "AREA_OFFICE_LOW", AREA_OFFICE_LOW },
-			{ "AREA_GREEN", AREA_GREEN }, { "AREA_TEST", AREA_TEST },
+			{ "AREA_TEST", AREA_TEST },
 		};
 		auto it = table.find(areaName);
 		return it == table.end() ? AREA_NONE : it->second;
@@ -174,6 +174,7 @@ const char* FileRoadnet::GetName() {
 
 void FileRoadnet::DistributeRoadnet(int width, int height,
 	const function<const string&(int, int)>& getTerrain,
+	const function<bool(int, int)>& isConstruction,
 	const function<pair<bool, float>(int, int)>& getWater,
 	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
@@ -335,9 +336,35 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 		}
 	}
 
+	// 绿化区：points是闭合多边形顶点(不重复首点)，links{edge,road}是"哪条边连哪条road(roads下标)"。
+	// 行为(挑mod、摆圆/树、接导航)全在Core的Map::InitGreens，这里只搬数据。
+	const JsonValue& greenArray = output["greens"];
+	for (unsigned int i = 0; i < greenArray.size(); i++) {
+		const JsonValue& entry = greenArray[i];
+		const JsonValue& points = entry["points"];
+		if (!points.IsArray() || points.size() < 3) continue;
+		GreenSite site;
+		for (unsigned int k = 0; k < points.size(); k++) {
+			site.xy.push_back(points[k][0].AsFloat());
+			site.xy.push_back(points[k][1].AsFloat());
+		}
+		const JsonValue& linkArray = entry["links"];
+		for (unsigned int k = 0; k < linkArray.size(); k++) {
+			const JsonValue& link = linkArray[k];
+			if (!link["edge"].IsNumeric() || !link["road"].IsNumeric()) continue;
+			GreenSite::Link item;
+			item.edge = link["edge"].AsInt();
+			item.road = link["road"].AsInt();
+			if (item.edge < 0 || item.edge >= static_cast<int>(points.size())) continue;
+			if (item.road < 0 || item.road >= static_cast<int>(roads.size())) continue;
+			site.links.push_back(item);
+		}
+		greens.push_back(std::move(site));
+	}
+
 	AssignJunctionSetbacks(roads, intersections);
-	debugf("Log: FileRoadnet loaded %s: %d roads, %d intersections, %d lots.\n", path.c_str(),
-		static_cast<int>(roads.size()), static_cast<int>(intersections.size()), static_cast<int>(lots.size()));
+	debugf("Log: FileRoadnet loaded %s: %d roads, %d intersections, %d lots, %d greens.\n", path.c_str(),
+		static_cast<int>(roads.size()), static_cast<int>(intersections.size()), static_cast<int>(lots.size()), static_cast<int>(greens.size()));
 }
 
 void FileRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {

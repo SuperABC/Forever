@@ -35,8 +35,7 @@ Actor根组件下挂大量Static简单碰撞子组件"会做"焊接"（weld）�
 算法本身；承载这些算法的代码在`ABuildingElement`里。
 
 - **0层且没有自定义模型的建筑不生成Element**——`GenerateBuildings`跳过
-  `GetBasementCount()+GetLayerCount()==0`且`GetDecorations()`为空的building(例如只有植被的
-  `ParkBuilding`)；0层但有自定义模型的(`MoharBuilding`)照常生成，模型靠Element的近处LOD加载，
+  `GetBasementCount()+GetLayerCount()==0`且`GetDecorations()`为空的building(例如只有植被的建筑；公园现在是绿化区`Green`，不再是建筑)；0层但有自定义模型的(`MoharBuilding`)照常生成，模型靠Element的近处LOD加载，
   Element自己跳过外壳和进出触发盒，见`BuildingElement.md`"自定义模型"一节。
 
 ## 两级LOD

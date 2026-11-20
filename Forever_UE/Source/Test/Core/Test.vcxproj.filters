@@ -18,6 +18,7 @@
     <ClCompile Include="suite_lint.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_perf.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_route.cpp"><Filter>suites</Filter></ClCompile>
+    <ClCompile Include="suite_green.cpp"><Filter>suites</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test_framework.h"><Filter>framework</Filter></ClInclude>

@@ -171,6 +171,9 @@
     <ClCompile Include="map\zone.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\green.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\building.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -372,6 +375,9 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\zone.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\green.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\building.h">

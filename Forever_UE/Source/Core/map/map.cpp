@@ -6,6 +6,7 @@
 #include "common/config.h"
 #include "common/registry.h"
 #include "map/room.h"
+#include "map/polygon_util.h"
 #include "player/asset.h"
 #include "player/estate_asset.h"
 #include "populace/populace.h"
@@ -73,6 +74,7 @@ Map::Map(int width, int height) :
 	terrainFactory(Registry::Get().GetTerrainFactory()),
 	roadnetFactory(Registry::Get().GetRoadnetFactory()),
 	zoneFactory(Registry::Get().GetZoneFactory()),
+	greenFactory(Registry::Get().GetGreenFactory()),
 	buildingFactory(Registry::Get().GetBuildingFactory()),
 	roomFactory(Registry::Get().GetRoomFactory()),
 	componentFactory(Registry::Get().GetComponentFactory()),
@@ -83,8 +85,7 @@ Map::Map(int width, int height) :
 		"/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal",
 		"/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness" };
 	terrainTextures = {
-		{ "plain", plainTexture },
-		{ "construction", plainTexture }
+		{ "plain", plainTexture }
 	};
 }
 
@@ -104,6 +105,7 @@ Map::~Map() {
 
 	for (EstateAsset* asset : estateAssets) delete asset;
 	for (auto& [name, z] : zones) delete z;
+	for (Green* g : greens) delete g;
 	for (auto& [name, b] : buildings) delete b;
 	for (Lot* lot : orphanLots) delete lot;
 }
@@ -154,28 +156,28 @@ void Map::InitTerrains() {
 	}
 	terrains.clear();
 
-	debugf("Log: Filter plain elements to construction.\n");
+	// 可建设标记：3x3范围(含自身)内所有element高度都为0(粗高度为0，有细化数组的话细化高度也全为0)。
+	// 不看地形类型(沙滩等也能建)，也不看水(水为了填满岸边会伸到地面以下，对建筑没有影响)；任一邻居越界(地图边缘)不标记。
+	debugf("Log: Mark flat elements as construction.\n");
+	auto isFlat = [this](int x, int y) {
+		const Element& e = At(x, y);
+		if (e.height != 0.f) return false;
+		if (e.fineHeights) {
+			for (float v : *e.fineHeights) if (v != 0.f) return false;
+		}
+		return true;
+	};
+	for (Element& e : elements) e.construction = false;
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
-			bool allPlain = true;
-			for (int dy = -1; dy <= 1 && allPlain; dy++) {
-				for (int dx = -1; dx <= 1 && allPlain; dx++) {
+			bool allFlat = true;
+			for (int dy = -1; dy <= 1 && allFlat; dy++) {
+				for (int dx = -1; dx <= 1 && allFlat; dx++) {
 					int nx = x + dx, ny = y + dy;
-					if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-						allPlain = false;
-					}
-					else {
-						string t = getTerrain(nx, ny);
-						// 高度非0的平原(被抬高/压低过)不升格：建筑假定建在高度0的地面上。
-						if ((t != "plain" && t != "construction") || getHeight(nx, ny) != 0.f) {
-							allPlain = false;
-						}
-					}
+					if (nx < 0 || nx >= width || ny < 0 || ny >= height || !isFlat(nx, ny)) allFlat = false;
 				}
 			}
-			if (allPlain) {
-				setTerrain(x, y, "construction");
-			}
+			At(x, y).construction = allFlat;
 		}
 	}
 }
@@ -209,9 +211,10 @@ void Map::InitRoadnet() {
 	roadnet = new Roadnet(&roadnetFactory, activeId);
 
 	auto getTerrain = [this](int x, int y) -> const string& { return this->GetTerrainRef(x, y); };
+	auto isConstruction = [this](int x, int y) -> bool { return this->IsConstruction(x, y); };
 	auto getWater = [this](int x, int y) -> pair<bool, float> { return this->GetWater(x, y); };
 	auto getHeight = [this](float x, float y) -> float { return this->SampleHeight(x, y); };
-	roadnet->DistributeRoadnet(width, height, getTerrain, getWater, getHeight, Node::GetCount());
+	roadnet->DistributeRoadnet(width, height, getTerrain, isConstruction, getWater, getHeight, Node::GetCount());
 	roadnet->AllocateAddress();
 
 	// 把mod通过RoadnetMod::AddHatch产出的地形挖洞标记(隧道口用)转发进Map::AddHatch，
@@ -684,6 +687,94 @@ void Map::InitBuildings() {
 	FlushPendingBuildingRoadAccess();
 }
 
+void Map::InitGreens() {
+	CORE_RANDOM_SCOPE("core.map");
+	if (!roadnet || !greens.empty()) return;
+
+	// 启用的绿化mod按id排序，保证同一个种子下选择顺序稳定(GetRegisteredIds来自无序表)。
+	vector<string> ids = greenFactory.GetRegisteredIds();
+	sort(ids.begin(), ids.end());
+
+	int created = 0, skipped = 0, circleCount = 0;
+	for (const Roadnet::GreenSite& site : roadnet->GetGreenSites()) {
+		vector<float> xy = site.xy;
+		int n = static_cast<int>(xy.size() / 2);
+		if (n < 3 || PolygonSelfIntersects(xy)) {
+			debugf("Warning: Green polygon skipped (points=%d, self-intersecting or <3 points).\n", n);
+			skipped++;
+			continue;
+		}
+		vector<Green::Link> links;
+		for (const auto& [edge, road] : site.links) {
+			if (!road || edge < 0 || edge >= n) continue;
+			links.push_back({ edge, road });
+		}
+		// 规整成有符号面积>0；顶点顺序翻转后，原来第i条边(i->i+1)变成第(n-2-i)条边。
+		if (EnsurePositiveArea(xy)) {
+			for (Green::Link& link : links) link.edge = (n - 2 - link.edge + 2 * n) % n;
+		}
+
+		// 按有没有连路选一套权重，权重0的mod不参与；全0=这块绿化区留空(不报错)。
+		bool linked = !links.empty();
+		vector<float> weights;
+		float total = 0.f;
+		for (const string& id : ids) {
+			float w = linked ? greenFactory.GetPowerLinked(id) : greenFactory.GetPowerFree(id);
+			weights.push_back(max(0.f, w));
+			total += weights.back();
+		}
+		if (total <= 0.f) { skipped++; continue; }
+		float pick = static_cast<float>(GetRandom(10000)) / 10000.f * total;
+		size_t chosen = 0;
+		float acc = 0.f;
+		for (size_t i = 0; i < ids.size(); i++) {
+			acc += weights[i];
+			if (weights[i] > 0.f) chosen = i;
+			if (pick < acc) break;
+		}
+
+		GreenMod* mod = greenFactory.CreateGreen(ids[chosen]);
+		if (!mod) { skipped++; continue; }
+		Green* green = new Green(&greenFactory, mod);
+		green->Layout(xy, links);
+
+		// 行人导航：圆心 -> 边上最近点 -> 路上的访问点(访问点统一在最后按物理顺序接)。
+		for (Green::Circle& circle : green->circles) {
+			if (circle.edge < 0) continue;
+			Road* road = nullptr;
+			for (const Green::Link& link : green->links) {
+				if (link.edge == circle.edge) { road = link.road; break; }
+			}
+			if (!road) continue;
+
+			circle.centerNode = MakeIsolatedAnchor(circle.x, circle.y, SampleHeight(circle.x, circle.y), "pedestrian");
+			circle.footNode = MakeIsolatedAnchor(circle.footX, circle.footY, SampleHeight(circle.footX, circle.footY), "pedestrian");
+			// 圆心和垂足重合(圆心就在边上)时只留一个节点，避免零长度边。
+			Connection* inner = new Connection(*circle.centerNode, *circle.footNode);
+			pedestrianNavGraph[circle.centerNode->GetId()].emplace_back(circle.footNode->GetId(), inner);
+			pedestrianNavGraph[circle.footNode->GetId()].emplace_back(circle.centerNode->GetId(), inner);
+
+			float t = ProjectPointOntoRoad(road, circle.footX, circle.footY);
+			Node basePoint = road->GetPoint(t);
+			float tdx, tdy, tdz;
+			road->GetTangent(t, tdx, tdy, tdz);
+			float tlen = sqrtf(tdx * tdx + tdy * tdy);
+			if (tlen < 1e-6f) tlen = 1.f;
+			// 右手边是(-tdy,tdx)，和MergeBuildingNavigation同一套约定。
+			float perp0X = -tdy / tlen, perp0Y = tdx / tlen;
+			bool useForwardSide = ((circle.footX - basePoint.GetX()) * perp0X + (circle.footY - basePoint.GetY()) * perp0Y) >= 0.f;
+			pendingBuildingRoadAccess.push_back({ road, t, useForwardSide, circle.footNode, false, false, green });
+			circleCount++;
+		}
+
+		greens.push_back(green);
+		created++;
+	}
+
+	FlushPendingBuildingRoadAccess();
+	debugf("Log: Greens created=%d, skipped=%d, circles=%d.\n", created, skipped, circleCount);
+}
+
 float Map::ProjectPointOntoRoad(Road* road, float px, float py) {
 	if (road->GetControls().empty()) {
 		// 直线：Start到End，点到线段投影公式，O(1)精确——井字路网里绝大多数路段都是这种情况。
@@ -853,7 +944,25 @@ void Map::InitVegetation() {
 		zoneTrees += vegetation.ExpandRequests(mod->trees, frame, canPlace);
 	}
 
-	debugf("Log: Vegetation road trees=%d, building trees=%d, zone trees=%d, total=%d, meshes=%d.\n", roadTrees, buildingTrees, zoneTrees,
+	// 绿化区：参考系是自己的包围盒(不旋转)，ratio相对包围盒宽高；多边形外的点由过滤器丢掉。
+	int greenTrees = 0;
+	for (Green* green : greens) {
+		GreenMod* mod = green ? green->GetMod() : nullptr;
+		if (!mod) continue;
+		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
+		float gMinX, gMinY, gMaxX, gMaxY;
+		green->GetBounds(gMinX, gMinY, gMaxX, gMaxY);
+		TreeFrame frame;
+		frame.toLocal = [gMinX, gMinY, gMaxX, gMaxY](const PointParams& p) {
+			return std::make_pair(gMinX + p[0] * (gMaxX - gMinX) + p[1], gMinY + p[2] * (gMaxY - gMinY) + p[3]);
+			};
+		frame.localToWorld = [](float x, float y) { return std::make_pair(x, y); };
+		const vector<float>& polygon = green->GetPolygon();
+		auto greenCanPlace = [&canPlace, &polygon](float x, float y) { return PointInPolygon(polygon, x, y) && canPlace(x, y); };
+		greenTrees += vegetation.ExpandRequests(mod->trees, frame, greenCanPlace);
+	}
+
+	debugf("Log: Vegetation road trees=%d, building trees=%d, zone trees=%d, green trees=%d, total=%d, meshes=%d.\n", roadTrees, buildingTrees, zoneTrees, greenTrees,
 		(int)vegetation.GetTrees().size(), (int)vegetation.GetMeshPaths().size());
 }
 
@@ -1440,6 +1549,37 @@ Room* Map::LocateRoom(const string& address) const {
 		if (room && room->GetNumber() == number) return room;
 	}
 	return nullptr;
+}
+
+const vector<Green*>& Map::GetGreens() const {
+	return greens;
+}
+
+Green* Map::GetGreen(const string& name) const {
+	for (Green* green : greens) {
+		if (green && green->GetName() == name) return green;
+	}
+	return nullptr;
+}
+
+Green* Map::LocateGreen(const string& address, int& circleIndex) const {
+	circleIndex = -1;
+	istringstream iss(address);
+	vector<string> tokens;
+	string token;
+	while (iss >> token) tokens.push_back(token);
+	// "<路名> -1 <绿化名>" 或 "<路名> -1 <绿化名> <圆序号>"
+	if (tokens.size() < 3 || tokens.size() > 4 || tokens[1] != "-1") return nullptr;
+	Green* green = GetGreen(tokens[2]);
+	if (!green || !green->IsLinked()) return nullptr;
+	if (tokens.size() == 4) {
+		char* end = nullptr;
+		long index = strtol(tokens[3].c_str(), &end, 10);
+		if (end == tokens[3].c_str() || *end != '\0') return nullptr;
+		if (index < 0 || index >= static_cast<long>(green->GetCircles().size())) return nullptr;
+		circleIndex = static_cast<int>(index);
+	}
+	return green;
 }
 
 vector<Road*> Map::GetPathRoads() const {
@@ -2170,6 +2310,10 @@ const string& Map::GetTerrainRef(int x, int y) const {
 	static const string kEmpty;
 	if (!CheckXY(x, y)) return kEmpty;
 	return At(x, y).terrain;
+}
+
+bool Map::IsConstruction(int x, int y) const {
+	return CheckXY(x, y) && At(x, y).construction;
 }
 
 string Map::GetTerrain(int x, int y) const {
@@ -3070,13 +3214,39 @@ namespace {
 }
 
 Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y, Room* destRoom) const {
+	return PlanPedestrianRouteFromNode(startRoom ? startRoom->GetNavigationNode() : nullptr, x, y,
+		destRoom ? destRoom->GetNavigationNode() : nullptr);
+}
+
+Map::VehicleRoutePlan Map::PlanPedestrianRouteToGreen(Room* startRoom, float x, float y, const Green* green, int circleIndex,
+	float targetX, float targetY) const {
 	VehicleRoutePlan plan;
-	Node* destNode = destRoom ? destRoom->GetNavigationNode() : nullptr;
+	if (!green || circleIndex < 0 || circleIndex >= static_cast<int>(green->GetCircles().size())) return plan;
+	const Node* center = green->GetCircles()[circleIndex].centerNode;
+	if (!center) return plan;
+	plan = PlanPedestrianRouteFromNode(startRoom ? startRoom->GetNavigationNode() : nullptr, x, y, center);
+	if (plan.status == VehicleRoutePlan::OK) {
+		// 最后一段：圆心 -> 圆内随机点
+		plan.points.push_back(NavPoint{ targetX, targetY, center->GetZ() });
+		plan.edges.push_back({ nullptr, static_cast<int>(plan.points.size()) - 2, static_cast<int>(plan.points.size()) - 1 });
+	}
+	return plan;
+}
+
+Map::VehicleRoutePlan Map::PlanPedestrianRouteFromGreen(const Green* green, int circleIndex, Room* destRoom) const {
+	VehicleRoutePlan plan;
+	if (!green || circleIndex < 0 || circleIndex >= static_cast<int>(green->GetCircles().size())) return plan;
+	const Node* center = green->GetCircles()[circleIndex].centerNode;
+	if (!center) return plan;
+	return PlanPedestrianRouteFromNode(center, center->GetX(), center->GetY(), destRoom ? destRoom->GetNavigationNode() : nullptr);
+}
+
+Map::VehicleRoutePlan Map::PlanPedestrianRouteFromNode(const Node* startNode, float x, float y, const Node* destNode) const {
+	VehicleRoutePlan plan;
 	if (!destNode) return plan;
 
-	// 起点候选：房间节点优先；否则按水平距离排序的行人图节点（有出边的才算），逐个试。
+	// 起点候选：给定节点优先；否则按水平距离排序的行人图节点（有出边的才算），逐个试。
 	vector<const Node*> candidates;
-	Node* startNode = startRoom ? startRoom->GetNavigationNode() : nullptr;
 	if (startNode && pedestrianNavGraph.count(startNode->GetId())) {
 		candidates.push_back(startNode);
 	}

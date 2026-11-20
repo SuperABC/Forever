@@ -24,7 +24,7 @@
   所以模型和楼层布局一样跟着建筑朝向转。UE层只在近处LOD生成，见`BuildingElement.md`。
 - **允许0层建筑**——`Layout()`里`layers = max(0, mod->layers)`。
   `basements`和`layers`都为0时整栋没有任何`Floor`，`GetFloor(level)`恒返回nullptr，导航/门/
-  hatch转发这些按`floors`或`mod->floors`遍历的循环自然什么都不做。给`ParkBuilding`这类只有植被、
+  hatch转发这些按`floors`或`mod->floors`遍历的循环自然什么都不做。给只有植被、
   不放楼体的"建筑"用(植被走`BuildingMod::AddTreeArea`，见`vegetation.md`)；UE层
   `ForeverBuildingFrameworkComponent`直接跳过这种building，不生成`ABuildingElement`。
 - **模板数据模型（`RectParams`/`PointParams`/`WallHole`，定义在`general_geometry.h`）**：`.layout`

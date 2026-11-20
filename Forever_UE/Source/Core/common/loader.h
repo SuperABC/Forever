@@ -5,7 +5,7 @@
 #include <unordered_map>
 
 
-// 21个concept的DLL导出符号名(concept->domain对照表见loader.md)
+// 22个concept的DLL导出符号名(concept->domain对照表见loader.md)
 struct ModConceptDescriptor {
 	const char* conceptKey;
 	const char* getModSymbol;

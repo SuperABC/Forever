@@ -84,6 +84,9 @@
     <ClCompile Include="map\zone_factory.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\green_factory.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\building_factory.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -145,6 +148,12 @@
       <Filter>map</Filter>
     </ClCompile>
     <ClCompile Include="map\zone_mod.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\green_mod.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\polygon_util.cpp">
       <Filter>map</Filter>
     </ClCompile>
     <ClCompile Include="map\component_mod.cpp">
@@ -251,6 +260,12 @@
     <ClInclude Include="map\zone_mod.h">
       <Filter>map</Filter>
     </ClInclude>
+    <ClInclude Include="map\green_mod.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\polygon_util.h">
+      <Filter>map</Filter>
+    </ClInclude>
     <ClInclude Include="map\building_mod.h">
       <Filter>map</Filter>
     </ClInclude>
@@ -309,6 +324,9 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\zone_factory.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\green_factory.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\building_factory.h">

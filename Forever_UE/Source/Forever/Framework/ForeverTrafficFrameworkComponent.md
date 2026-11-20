@@ -71,6 +71,8 @@
 
 `StartGuide(Room* target)`保存目标并`RefreshGuide()`：按玩家当前Pawn分三种——`ACharacter`（步行，含占有的市民）→`Map::PlanPedestrianRoute`终点是目标房间；非乘客模式的`AVehicleElement`→先`Map::PlanVehicleRoute`到房间，规划不出来（车到不了）就在`target->GetParentBuilding()->GetOutsideNodes()`（建筑init时记下、进存档的1楼行人外部连接点）里取离车最近且`Map::PlanVehicleRouteToPoint`可达的一个，线终止在那条车道上的垂足（`bEndsAtOutside`）；乘客模式/其它Pawn→只清线，目标保留。线复用`TrackTestNavigationLine`（间隔`guideRefreshInterval`=0.5s），`UpdateGuide`每次把玩家投影到折线上，裁掉已走前缀，偏离折线超过`guideReplanDistance`(2=20m)重新规划；`!bEndsAtOutside`且`Player::GetCurrentRoom()==target`时销毁；终止在外部的线永远不因靠近终点销毁（下车→`AForeverPlayerController::OnPossess`触发`RefreshGuide`→变成步行线）。`TrackTestNavigationLine`每次调用前拷贝`testNavSource`，所以source里可以安全地重新规划。T键入口见`ForeverPlayerController.md`。
 
+**绿化区目标**：`StartGuideToGreen(Green*, circleIndex, endX, endY)`把`FGuide.green/greenCircle/greenEndX/Y`填上(`target`为空)，`HasGuide`两者任一非空即真。步行→`Map::PlanPedestrianRouteToGreen`(人行道走到圆心节点，末尾追加圆内终点)；开车→`PlanVehicleRouteToPoint`到圆心，线终止在车道上(`bEndsAtOutside`，车进不了绿化区，下车后刷新成步行线)。到达判定不看房间：`!bEndsAtOutside`且玩家和终点水平距离<`guideArriveDistance`(0.3=3m)就销毁导航。`visualize_navigation`对地址先试`LocateRoom`，找不到再试`LocateGreen`(圆序号省略=随机一个圆，终点圆内随机)。
+
 ### 线路调试画线与铺轨
 
 - **`BuildRouteDebugMesh`**：每种`stationType`一个`UProceduralMeshComponent`+MID（bus绿/train蓝/plane红/其它默认色，`GetRouteDebugTarget`选），

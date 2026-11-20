@@ -13,6 +13,7 @@ class Map;
 class Populace;
 class Citizen;
 class Room;
+class Green;
 class Vehicle;
 class Traffic;
 class Organization;
@@ -50,6 +51,14 @@ public:
 	// pathResultQueue由TickComponent落地(ApplyWalkResult)；没有可用导航节点时直接同步落地。
 	// 在途的市民从当前位置起算。流程与线程安全见.md。
 	void RequestWalk(Citizen* citizen, Room* destination);
+	// 让市民走向绿化区第circle个圆(npc_navigate的目的地是绿化地址时转发到这里)，终点是圆内随机一点。
+	// 流程同RequestWalk，但不开车通勤、绿化里没有车位(进行中的通勤/任务被取消)。市民现在站在绿化区里：先直线走到
+	// 所在圆的圆心再接导航图。到达后Citizen::SetCurrentGreen并给脚本发npc_arrive(address=Green::GetCircleAddress)。
+	void RequestWalkToGreen(Citizen* citizen, Green* destination, int32 circle);
+	// 立刻把市民放到绿化区第circle个圆内的随机点(同TeleportCitizen)。
+	void TeleportCitizenToGreen(Citizen* citizen, Green* destination, int32 circle);
+	// ACitizenController的FollowPath走完后目的地是绿化区的回调：SetCurrentGreen+记脚底位置+发npc_arrive。
+	void NotifyArrivedGreen(Citizen* citizen, Green* destination, int32 circle);
 
 	// 开车通勤：载具导航结束(车到了目的车位或没能出发)后由AForeverFrameworkActor转来。车上的乘客(Traffic的行程)
 	// 在room(到达)或原来的停车房(失败)出现，再普通步行去最终目的地。没有对应行程什么也不做。
@@ -105,6 +114,8 @@ public:
 	// Scheduler/Job脚本发npc_arrive。只在真正到达的地方调用(走完路、瞬移、寻路失败落地)，
 	// 存档用的SyncPositionsToCore/RestoreAfterSave不发。
 	void ReportArrival(Citizen* citizen, Room* previousRoom);
+	// 绿化区版本：市民已经站在绿化区的圆里，广播npc_arrive(地址是圆地址)。
+	void ReportArrivalGreen(Citizen* citizen, Green* green, int32 circle);
 
 	// ACitizenController的GoToRoom指令用：规划from（世界坐标）到destination房间的行人路径点（世界坐标）。
 	// 起点按citizen当前房间/from位置（Map::PlanPedestrianRoute），成功且路径非空返回true。
@@ -159,6 +170,8 @@ private:
 	struct FPendingWalkResult {
 		Citizen* citizen = nullptr;
 		Room* destination = nullptr;
+		Green* greenDest = nullptr; // 目的地是绿化区的圆时destination为空
+		int32 greenCircle = -1;
 		TArray<FVector> waypoints;
 		uint32 serial = 0; // 发起时的请求序号，落地时和latestWalkRequest比，不是最新的说明已被新导航/瞬移取代
 	};
@@ -182,25 +195,33 @@ private:
 
 	// 路径落地(同步分支和异步drain共用)：按落地这一刻的状态重新查activeInstances/占有状态，
 	// 分流为WalkTo / TeleportToRoom / Core推算(BeginWalk) / 纯瞬移，细节见.md。
-	void ApplyWalkResult(Citizen* citizen, Room* destination, const TArray<FVector>& waypoints);
+	void ApplyWalkResult(Citizen* citizen, Room* destination, const TArray<FVector>& waypoints, Green* greenDest = nullptr, int32 greenCircle = -1);
 
 	// RequestWalk的主体：不做通勤判定(通勤的第1/3段步行用它，避免递归)。
-	void RequestWalkInternal(Citizen* citizen, Room* destination);
+	// 目的地是房间(destination)或绿化区的圆(greenDest+greenCircle)，二选一。
+	void RequestWalkInternal(Citizen* citizen, Room* destination, Green* greenDest = nullptr, int32 greenCircle = -1);
+	// 市民站着(没在走路)时的脚底世界坐标：Actor在就取Actor，否则取Core记录的位置(没有位置返回false)。
+	bool GetStandingFeet(Citizen* citizen, FVector& outFeet) const;
+	// Core里直接把市民放进绿化区的圆(没有Actor的瞬移/寻路失败落地)：EndWalk+SetCurrentGreen+记圆内随机点的脚底位置。
+	void PlaceCitizenInGreen(Citizen* citizen, Green* green, int32 circle);
 	// 通勤行程：见Traffic::BeginCommute和traffic.md"通勤"。
 	void StartCommute(Citizen* citizen);                 // 第1段：走向车所在的停车房(已经在里面就直接上车)
 	void BoardCar(Citizen* citizen);                     // 走到车：市民消失，车开始自己导航到预订好的目的车位
 	void CancelCommute(Citizen* citizen);                // 取消行程(瞬移/死亡/被新请求取代)
 	// 跳时间步行腿：路径(UE单位)+游戏秒时长，不生成Actor。
 	struct FSkipWalk {
-		Room* destination = nullptr;
+		Room* destination = nullptr;   // 目的地是绿化区的圆时为空
+		Green* greenDest = nullptr;
+		int32 greenCircle = -1;
 		Room* origin = nullptr;        // 出发时所在房间(到达时ReportArrival的previousRoom)
 		TArray<FVector> waypoints;
 		double totalSeconds = 0.0;
 		double remainingSeconds = 0.0;
 	};
 	TMap<Citizen*, FSkipWalk> skipWalks;
-	void StartSkipWalk(Citizen* citizen, Room* destination);   // 跳时间期间的RequestWalkInternal
-	void RegisterSkipWalk(Citizen* citizen, Room* destination, Room* origin, const TArray<FVector>& waypoints);
+	void StartSkipWalk(Citizen* citizen, Room* destination, Green* greenDest = nullptr, int32 greenCircle = -1);   // 跳时间期间的RequestWalkInternal
+	void RegisterSkipWalk(Citizen* citizen, Room* destination, Room* origin, const TArray<FVector>& waypoints,
+		Green* greenDest = nullptr, int32 greenCircle = -1);
 	double GameSecondsPerRealSecond() const;
 	// 组织任务行程：见AssignTask。
 	void BoardTruck(Citizen* citizen);                   // 员工走到组织的车：员工消失，车开往预订好的目的车位

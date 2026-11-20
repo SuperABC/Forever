@@ -95,7 +95,6 @@ namespace viz {
 	// 住宅蓝、商业橙、工业紫、办公红；高密度饱和、低密度浅。
 	VizColor AreaColor(AREA_TYPE area) {
 		static const VizColor kBase[4] = { { 40, 110, 230 }, { 240, 150, 30 }, { 150, 70, 190 }, { 220, 50, 50 } };
-		if (area == AREA_GREEN) return { 60, 170, 70 };
 		if (area == AREA_TEST) return { 220, 50, 50 };
 		int a = static_cast<int>(area);
 		if (a < AREA_RESIDENCE_HIGH || a > AREA_OFFICE_LOW) return { 128, 128, 128 };
@@ -119,7 +118,7 @@ namespace {
 		const LegendItem items[] = {
 			{ AreaColor(AREA_RESIDENCE_HIGH), L"住宅 高密度" }, { AreaColor(AREA_RESIDENCE_MIDDLE), L"住宅 中密度" }, { AreaColor(AREA_RESIDENCE_LOW), L"住宅 低密度" },
 			{ AreaColor(AREA_COMMERCE_HIGH), L"商业 高密度" }, { AreaColor(AREA_COMMERCE_MIDDLE), L"商业 中密度" }, { AreaColor(AREA_COMMERCE_LOW), L"商业 低密度" },
-			{ AreaColor(AREA_GREEN), L"绿化(原工业高密度)" }, { AreaColor(AREA_INDUSTRY_MIDDLE), L"工业 中密度" }, { AreaColor(AREA_INDUSTRY_LOW), L"工业 低密度" },
+			{ AreaColor(AREA_INDUSTRY_HIGH), L"工业 高密度" }, { AreaColor(AREA_INDUSTRY_MIDDLE), L"工业 中密度" }, { AreaColor(AREA_INDUSTRY_LOW), L"工业 低密度" },
 			{ AreaColor(AREA_OFFICE_HIGH), L"办公 高密度" }, { AreaColor(AREA_OFFICE_MIDDLE), L"办公 中密度" }, { AreaColor(AREA_OFFICE_LOW), L"办公 低密度" },
 		};
 		const int itemCount = static_cast<int>(sizeof(items) / sizeof(items[0]));

@@ -1,4 +1,5 @@
 #include "map_save.h"
+#include "map/polygon_util.h"
 
 #include "map/map.h"
 #include "map/room.h"
@@ -442,6 +443,7 @@ void MapSaveCodec::WriteTerrain(const Map& map, ByteWriter& w) {
 
 	for (const Element& e : map.elements) {
 		w.U32(paletteIndex[e.terrain]);
+		w.U8(e.construction ? 1 : 0);
 		w.F32(e.height);
 		w.U8(e.water.first ? 1 : 0);
 		w.F32(e.water.second);
@@ -474,6 +476,7 @@ bool MapSaveCodec::ReadTerrain(Map& map, ByteReader& r, string& error) {
 			return false;
 		}
 		e.terrain = palette[index];
+		e.construction = r.U8() != 0;
 		e.height = r.F32();
 		e.water.first = r.U8() != 0;
 		e.water.second = r.F32();
@@ -1328,6 +1331,28 @@ void MapSaveCodec::WriteStructures(const Map& map, const SaveTables& t, ByteWrit
 			for (const Door* door : room->doorEntities) w.I32(t.DoorRef(door));
 		}
 	}
+
+	// 绿化区(路网指定的多边形)：mod id+状态、名字、多边形、连路的边、保留的活动圆(导航节点按锚点id引用)、装饰物。
+	auto greenIds = LiveIds<GreenFactory, GreenMod>(map.greenFactory);
+	w.U32(static_cast<uint32_t>(map.greens.size()));
+	for (const Green* green : map.greens) {
+		w.Str(LookupId(greenIds, static_cast<const GreenMod*>(green->mod)));
+		WriteModState(green->mod, w);
+		w.Str(green->type);
+		w.Str(green->name);
+		w.U32(static_cast<uint32_t>(green->polygon.size()));
+		for (float value : green->polygon) w.F32(value);
+		w.U32(static_cast<uint32_t>(green->links.size()));
+		for (const Green::Link& link : green->links) { w.I32(link.edge); w.I32(t.RoadRef(link.road)); }
+		w.U32(static_cast<uint32_t>(green->circles.size()));
+		for (const Green::Circle& circle : green->circles) {
+			w.F32(circle.x); w.F32(circle.y); w.F32(circle.r);
+			w.I32(circle.edge); w.F32(circle.footX); w.F32(circle.footY);
+			w.I32(t.AnchorRef(circle.centerNode));
+			w.I32(t.AnchorRef(circle.footNode));
+		}
+		WriteDecorations(green->decorations, w);
+	}
 }
 
 bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string& error) {
@@ -1647,6 +1672,42 @@ bool MapSaveCodec::ReadStructures(Map& map, LoadTables& t, ByteReader& r, string
 			uint32_t m = r.U32();
 			for (uint32_t i = 0; i < m && !r.Failed(); i++) if (Door* door = t.DoorAt(r.I32())) room->doorEntities.push_back(door);
 		}
+	}
+
+	uint32_t greenCount = r.U32();
+	for (uint32_t i = 0; i < greenCount && !r.Failed(); i++) {
+		string id = r.Str();
+		GreenMod* mod = map.greenFactory.CreateGreen(id);
+		if (!mod) {
+			error = "green mod '" + id + "' is not available";
+			return false;
+		}
+		Green* green = new Green(&map.greenFactory, mod);
+		map.greens.push_back(green);
+		if (!ReadModState(mod, r)) debugf("Warning: failed to parse saved state of green mod %s.\n", id.c_str());
+		green->type = r.Str();
+		green->name = r.Str();
+		uint32_t polygonSize = r.U32();
+		green->polygon.reserve(polygonSize);
+		for (uint32_t j = 0; j < polygonSize && !r.Failed(); j++) green->polygon.push_back(r.F32());
+		PolygonBounds(green->polygon, green->minX, green->minY, green->maxX, green->maxY);
+		uint32_t linkCount = r.U32();
+		for (uint32_t j = 0; j < linkCount && !r.Failed(); j++) {
+			Green::Link link;
+			link.edge = r.I32();
+			link.road = t.RoadAt(r.I32());
+			green->links.push_back(link);
+		}
+		uint32_t circleCount = r.U32();
+		for (uint32_t j = 0; j < circleCount && !r.Failed(); j++) {
+			Green::Circle circle;
+			circle.x = r.F32(); circle.y = r.F32(); circle.r = r.F32();
+			circle.edge = r.I32(); circle.footX = r.F32(); circle.footY = r.F32();
+			circle.centerNode = t.AnchorAt(r.I32());
+			circle.footNode = t.AnchorAt(r.I32());
+			green->circles.push_back(circle);
+		}
+		green->decorations = ReadDecorations(r);
 	}
 
 	if (r.Failed()) {

@@ -6,13 +6,14 @@
 ```
 Source\Test\run_tests.bat [quick|full] [core|ue|all]
 ```
-或直接 `x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,save,perform,route|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
+或直接 `x64\Release\CoreTest.exe Resource\Config\config.json --suite random,mods,lint,world,econ,save,perform,route,green|all [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]`。
 先编译：`MSBuild Source\Framework.sln /p:Configuration=Release /p:Platform=x64`(必须编整个 sln：只编 `Source/Test/Core/Test.vcxproj`(输出仍是 `CoreTest.exe`)不会重编 Core.lib，改了 Core 会测到旧代码)。改了 `Dependence` 头文件要把 `Forever_Mod` 下 Empty/Test/Wxdj/Yuanshen 也各自重编，lint 会检查 DLL 是否比头文件旧。UE 代码用 UBT 编 `ForeverEditor Win64 Development`。
 
 ## 套件
 - random：同种子跨进程所有阶段严格一致、各阶段无未包作用域的随机、DLL 导出 BindRandomHost、源码里无绕过 GetRandom 的随机源、流状态快照恢复。
 - mods：枚举所有已注册 mod，调 `UnitTest`，检查无漏包随机、名字唯一(`*_empty` 模板除外)，并按 concept 做字段合法性检查(见文末"字段检查")。
 - lint：mod DLL 不旧于 Dependence 头文件。
+- green：绿化区(2026-11-20)。纯函数(`polygon_util`)、直接构造`green_park`测凹多边形圆/连路圆校验丢弃，再用`Tools/MapEditor/samples/demo.roadnet`(一块连路、一块不连路的凹多边形绿化)+`demo.terrain`替换config里的路网/地形生成世界：圆在多边形内且互不重叠、装饰物在多边形内、`LocateGreen`地址往返、房间↔圆的行人路线、地图存档往返字节稳定、市民站在/走向绿化区的存档往返和Core行进到达。demo文件缺失=失败；`make_demo.js`改动后要重新生成。
 - route：随机行人房间→房间、车辆车位→车位的寻路耗时分布(mean/p50/p90/p95/p99/max + 对数直方图)、平均路径点数、失败率(>5%判失败)，样本由世界种子派生可复现。
 - perform：各阶段耗时、路线规划 p50/p95/max、每日 tick 耗时，预算见 `budgets.json`(只告警)。
 - world：多种子世界不变量(建筑/房间/车行与步行连通——飞机位不计/人口/账本/股份)。

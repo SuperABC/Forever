@@ -10,7 +10,7 @@
 		'AREA_COMMERCE_HIGH', 'AREA_COMMERCE_MIDDLE', 'AREA_COMMERCE_LOW',
 		'AREA_INDUSTRY_HIGH', 'AREA_INDUSTRY_MIDDLE', 'AREA_INDUSTRY_LOW',
 		'AREA_OFFICE_HIGH', 'AREA_OFFICE_MIDDLE', 'AREA_OFFICE_LOW',
-		'AREA_GREEN', 'AREA_TEST',
+		'AREA_TEST',
 	];
 	const DIRECTION_NAMES = ['西', '东', '北', '南'];
 	const END_EPS = 0.06;
@@ -61,7 +61,7 @@
 		return true;
 	}
 
-	// 地块覆盖的element里不可建造的个数(3x3邻域不全是plain/construction)。
+	// 地块覆盖的element里不可建造的个数(3x3邻域高度不全为0，和游戏的construction标记一致)。
 	function nonBuildableCount(terrain, corners) {
 		if (!terrain) return 0;
 		const xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]);
@@ -129,7 +129,7 @@
 				continue;
 			}
 			const bad = nonBuildableCount(terrain, info.corners);
-			if (bad > 0) warnings.push(`地块${lot.id}有${bad}个格子不可建造(非平原或邻格非平原)，游戏里这块地会被丢弃`);
+			if (bad > 0) warnings.push(`地块${lot.id}有${bad}个格子不是可建设区域(自身或3×3邻域内有高度不为0的格子，或贴着地图边缘)，游戏里这块地会被丢弃`);
 			output.lots.push({
 				corners: info.corners.map((c) => [c[0], c[1]]),
 				margin, boundary, area: lot.area,

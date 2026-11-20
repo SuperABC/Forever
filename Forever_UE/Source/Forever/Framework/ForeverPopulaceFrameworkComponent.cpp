@@ -20,6 +20,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "map/green.h"
 #include "map/general_geometry.h"
 #include "populace/populace.h"
 #include "populace/citizen.h"
@@ -137,9 +138,12 @@ void UForeverPopulaceFrameworkComponent::HandOffWalkToElement(Citizen* citizen, 
 		waypoints.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
 	}
 	Room* destination = citizen->GetWalkDestination();
+	Green* walkGreen = citizen->GetWalkGreen();
+	const int32 walkCircle = citizen->GetWalkGreenCircle();
 	citizen->EndWalk();
-	element->AddActorWorldOffset(FVector(0.f, 0.f, element->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
-	element->WalkTo(waypoints, destination);
+	// Actor是按Citizen记录的脚底位置生成的(Init已经抬了半个胶囊高)，这里不用再抬。
+	if (walkGreen) element->WalkToGreen(waypoints, walkGreen, walkCircle);
+	else element->WalkTo(waypoints, destination);
 }
 
 namespace {
@@ -179,6 +183,7 @@ void UForeverPopulaceFrameworkComponent::RequestFlee(Citizen* citizen, Citizen* 
 	++latestWalkRequest.FindOrAdd(citizen); // 在途的寻路结果作废，逃跑取代走路
 	citizen->SetFleeFrom(target->GetName());
 	citizen->SetCurrentRoom(nullptr); // 出发后在路上，不属于任何房间(和走路一样)
+	citizen->SetCurrentGreen(nullptr, -1); // 也不再属于任何绿化区的圆
 	element->FleeFrom(target, kFleeSpeedMultiplier * citizen->GetWalkSpeedJitter());
 	if (!bAlreadyFleeing && story) story->BroadcastFleeStart(name, target->GetName(), returnAddress);
 }
@@ -232,7 +237,15 @@ std::string UForeverPopulaceFrameworkComponent::DescribeReturnAddress(Citizen* c
 	}
 	if (!destination) destination = citizen->GetWalkDestination();
 	if (!destination) destination = citizen->GetCurrentRoom();
-	return destination ? destination->GetAddress() : std::string();
+	if (destination) return destination->GetAddress();
+	// 目的地/所在是绿化区的圆(没有连路的绿化区没有圆地址，返回空串)。
+	Green* green = citizen->GetWalkGreen();
+	int32 circle = citizen->GetWalkGreenCircle();
+	if (const TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen); existing && *existing) {
+		if (const ACitizenController* controller = (*existing)->GetCitizenController()) controller->GetCurrentGreenDestination(green, circle);
+	}
+	if (!green) { green = citizen->GetCurrentGreen(); circle = citizen->GetCurrentGreenCircle(); }
+	return green ? green->GetCircleAddress(circle) : std::string();
 }
 
 void UForeverPopulaceFrameworkComponent::ResumeFleeOnSpawn(Citizen* citizen, ACitizenElement* element) {
@@ -319,6 +332,31 @@ void UForeverPopulaceFrameworkComponent::RequestWalk(Citizen* citizen, Room* des
 	RequestWalkInternal(citizen, destination);
 }
 
+void UForeverPopulaceFrameworkComponent::RequestWalkToGreen(Citizen* citizen, Green* destination, int32 circle) {
+	if (!citizen || !destination || !map) return;
+	if (!citizen->IsActive()) return;
+	if (circle < 0 || circle >= static_cast<int32>(destination->GetCircles().size()) || !destination->GetCircles()[circle].centerNode) {
+		UE_LOG(LogTemp, Warning, TEXT("RequestWalkToGreen: %s circle %d of %s is not navigable, ignored."),
+			UTF8_TO_TCHAR(citizen->GetName().c_str()), circle, UTF8_TO_TCHAR(destination->GetName().c_str()));
+		return;
+	}
+	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
+	if (existing && *existing && (*existing)->IsPlayerControlled()) return; // 同RequestWalk：被玩家占有的不处理
+
+	// 绿化里没有车位：不开车通勤，进行中的任务/通勤被这次新请求取代(人在车里就等车到)。
+	if (Traffic* traffic = GetTrafficCore()) {
+		if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
+			if (task->phase == Traffic::TaskPhase::Driving) return;
+			AbortTaskOfWorker(citizen);
+		}
+		if (Traffic::CommuteTrip* trip = traffic->FindTrip(citizen)) {
+			if (trip->phase == Traffic::CommutePhase::Driving) return;
+			CancelCommute(citizen);
+		}
+	}
+	RequestWalkInternal(citizen, nullptr, destination, circle);
+}
+
 void UForeverPopulaceFrameworkComponent::StartCommute(Citizen* citizen) {
 	Traffic* traffic = GetTrafficCore();
 	Traffic::CommuteTrip* trip = traffic ? traffic->FindTrip(citizen) : nullptr;
@@ -389,63 +427,133 @@ void UForeverPopulaceFrameworkComponent::OnPassengerCarFinished(Vehicle* vehicle
 	RequestWalkInternal(citizen, finalDest);
 }
 
-void UForeverPopulaceFrameworkComponent::RequestWalkInternal(Citizen* citizen, Room* destination) {
-	if (!citizen || !destination || !map) return;
+bool UForeverPopulaceFrameworkComponent::GetStandingFeet(Citizen* citizen, FVector& outFeet) const {
+	if (!citizen) return false;
+	if (const TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen); existing && *existing) {
+		outFeet = (*existing)->GetActorLocation() - FVector(0.f, 0.f, (*existing)->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+		return true;
+	}
+	if (!citizen->HasPosition()) return false;
+	float x, y, z;
+	citizen->GetPosition(x, y, z);
+	outFeet = FVector(x, y, z) * POPULACE_WORLD_SCALE; // 绿化里记的是脚底高度
+	return true;
+}
+
+void UForeverPopulaceFrameworkComponent::PlaceCitizenInGreen(Citizen* citizen, Green* green, int32 circle) {
+	citizen->EndWalk();
+	FVector feet;
+	if (!ACitizenElement::ComputeGreenLandingSpot(green, circle, feet)) {
+		citizen->SetCurrentGreen(green, circle);
+		citizen->ClearPosition();
+		return;
+	}
+	citizen->SetCurrentGreen(green, circle);
+	citizen->SetPosition(feet.X / POPULACE_WORLD_SCALE, feet.Y / POPULACE_WORLD_SCALE, feet.Z / POPULACE_WORLD_SCALE);
+}
+
+void UForeverPopulaceFrameworkComponent::RequestWalkInternal(Citizen* citizen, Room* destination, Green* greenDest, int32 greenCircle) {
+	if (!citizen || (!destination && !greenDest) || !map) return;
 	if (!citizen->IsActive()) return;
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
 	if (existing && *existing && (*existing)->IsPlayerControlled()) return;
 
-	// 跳时间期间：同步算路径，按游戏时间推算(虚拟时钟)，走完时才触发npc_arrive。
+	// 跳时间期间：同步算路径，按游戏时间推算(虚拟时钟)，走完时才触发npc_arrive(去绿化区的也一样)。
 	if (bTimeSkipping) {
-		StartSkipWalk(citizen, destination);
+		StartSkipWalk(citizen, destination, greenDest, greenCircle);
 		return;
 	}
 
 	// 新的一次导航：在途的旧寻路结果（晚到的）作废。
 	const uint32 serial = ++latestWalkRequest.FindOrAdd(citizen);
 
+	// 站着(没在走)且就在目标圆里：什么也不用做。currentGreen只在站着时才非空(出发/逃跑会清掉)。
+	if (greenDest && citizen->GetCurrentGreen() == greenDest && citizen->GetCurrentGreenCircle() == greenCircle) return;
+
 	// 正在路上（currentRoom是空的）：从当前实际位置起算，新路线立刻取代旧路线；
 	// 不在路上：从当前房间的导航节点起算，已经在目的地房间就什么也不用做。
 	FVector transitFeet;
 	const bool bInTransit = GetTransitPosition(citizen, transitFeet);
 	Room* current = citizen->GetCurrentRoom();
-	if (!bInTransit && current == destination) return;
+	if (!bInTransit && destination && current == destination) return;
+
+	// 站在绿化区的圆里(含Actor站着的情况)：先直线走到所在圆的圆心，再按导航图走(从圆心节点起算)。
+	Green* fromGreen = citizen->GetCurrentGreen();
+	const int32 fromCircle = citizen->GetCurrentGreenCircle();
+	const bool bFromGreen = fromGreen && fromCircle >= 0 && fromCircle < static_cast<int32>(fromGreen->GetCircles().size())
+		&& fromGreen->GetCircles()[fromCircle].centerNode;
+	FVector startFeet = transitFeet;
+	bool bHaveStart = bInTransit;
+	if (bFromGreen && !bHaveStart) bHaveStart = GetStandingFeet(citizen, startFeet);
 
 	Node* fromNode = current ? current->GetNavigationNode() : nullptr;
-	Node* toNode = destination->GetNavigationNode();
+	const Node* toNode = nullptr;
+	if (destination) toNode = destination->GetNavigationNode();
+	else if (greenCircle >= 0 && greenCircle < static_cast<int32>(greenDest->GetCircles().size())) toNode = greenDest->GetCircles()[greenCircle].centerNode;
 
-	if (!toNode || (!bInTransit && !fromNode)) {
+	if (!toNode || (!bInTransit && !fromNode && !bFromGreen)) {
 		// 没有可用导航节点，没有Dijkstra可算，直接同步走落地逻辑(ApplyWalkResult内部按
 		// 空路径处理，效果和以前一致)，不需要派发到线程池。
-		ApplyWalkResult(citizen, destination, TArray<FVector>());
+		ApplyWalkResult(citizen, destination, TArray<FVector>(), greenDest, greenCircle);
+		return;
+	}
+
+	// 去绿化区：终点是圆内随机一点，在游戏线程取(随机作用域)；Z取圆心节点高度。
+	FVector endFeet = FVector::ZeroVector;
+	if (greenDest && !ACitizenElement::ComputeGreenLandingSpot(greenDest, greenCircle, endFeet)) {
+		ApplyWalkResult(citizen, destination, TArray<FVector>(), greenDest, greenCircle);
 		return;
 	}
 
 	Map* mapPtr = map;
-	int32 fromId = fromNode ? fromNode->GetId() : -1;
-	int32 toId = toNode->GetId();
+	const int32 fromId = fromNode ? fromNode->GetId() : -1;
+	const int32 toId = toNode->GetId();
 
 	// Dijkstra派发到线程池异步算(整点集中调度时放游戏线程会持续卡顿)。FindPedestrianPath是纯读操作，
 	// 地图生成完成后导航图不再被写，多线程并发只读安全。
 	pendingPathfindingTasks.fetch_add(1, std::memory_order_relaxed);
 	TWeakObjectPtr<UForeverPopulaceFrameworkComponent> weakThis(this);
-	AsyncPool(GetPathfindingPool(), [weakThis, mapPtr, fromId, toId, citizen, destination, bInTransit, transitFeet, serial]() {
+	AsyncPool(GetPathfindingPool(), [weakThis, mapPtr, fromId, toId, citizen, destination, bInTransit, transitFeet, serial,
+		greenDest, greenCircle, endFeet, bFromGreen, fromGreen, fromCircle, bHaveStart, startFeet, current]() {
 		// 正在关闭：队列里还没轮到的任务直接跳过，不然排着很多Dijkstra时退出会卡很久。
 		if (bCancelPathfinding.load(std::memory_order_acquire)) {
 			pendingPathfindingTasks.fetch_sub(1, std::memory_order_release);
 			return;
 		}
 		TArray<FVector> waypoints;
-		if (bInTransit) {
+		auto appendPlan = [&waypoints](const Map::VehicleRoutePlan& plan) {
+			for (const Map::NavPoint& point : plan.points) {
+				waypoints.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
+			}
+		};
+		if (greenDest || bFromGreen) {
+			// 涉及绿化区的路线：用带曲线采样的Plan系列(起点/终点的圆心节点都在行人图里)。
+			Map::VehicleRoutePlan plan;
+			const float endX = static_cast<float>(endFeet.X / POPULACE_WORLD_SCALE);
+			const float endY = static_cast<float>(endFeet.Y / POPULACE_WORLD_SCALE);
+			if (bFromGreen) {
+				const Green::Circle& circle = fromGreen->GetCircles()[fromCircle];
+				if (destination) plan = mapPtr->PlanPedestrianRouteFromGreen(fromGreen, fromCircle, destination);
+				else plan = mapPtr->PlanPedestrianRouteToGreen(nullptr, circle.x, circle.y, greenDest, greenCircle, endX, endY);
+			}
+			else {
+				plan = mapPtr->PlanPedestrianRouteToGreen(bInTransit ? nullptr : current,
+					static_cast<float>(transitFeet.X / POPULACE_WORLD_SCALE), static_cast<float>(transitFeet.Y / POPULACE_WORLD_SCALE),
+					greenDest, greenCircle, endX, endY);
+			}
+			if (plan.status == Map::VehicleRoutePlan::OK && !plan.points.empty()) {
+				if (bHaveStart) waypoints.Add(startFeet); // 从当前位置先走到圆心(或最近的图节点)
+				appendPlan(plan);
+			}
+		}
+		else if (bInTransit) {
 			// 在路上：起点是当前位置，接到离它最近的行人图节点（PlanPedestrianRoute内部逐个试最近的几个），
 			// 路径第一个点就是当前位置，这样Core推算/Actor都从原地接着走，不会跳回节点。
 			Map::VehicleRoutePlan plan = mapPtr->PlanPedestrianRoute(nullptr,
 				static_cast<float>(transitFeet.X / POPULACE_WORLD_SCALE), static_cast<float>(transitFeet.Y / POPULACE_WORLD_SCALE), destination);
 			if (plan.status == Map::VehicleRoutePlan::OK && !plan.points.empty()) {
 				waypoints.Add(transitFeet);
-				for (const Map::NavPoint& point : plan.points) {
-					waypoints.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
-				}
+				appendPlan(plan);
 			}
 		}
 		else {
@@ -458,15 +566,22 @@ void UForeverPopulaceFrameworkComponent::RequestWalkInternal(Citizen* citizen, R
 		// weakThis.Get()可在后台线程解析，只用来判断组件是否已销毁，之后只做入队这一个动作。
 		// 计数器是static的，组件已销毁也照常递减。
 		if (UForeverPopulaceFrameworkComponent* component = weakThis.Get()) {
-			component->pathResultQueue.Enqueue({ citizen, destination, MoveTemp(waypoints), serial });
+			FPendingWalkResult result;
+			result.citizen = citizen;
+			result.destination = destination;
+			result.greenDest = greenDest;
+			result.greenCircle = greenCircle;
+			result.waypoints = MoveTemp(waypoints);
+			result.serial = serial;
+			component->pathResultQueue.Enqueue(MoveTemp(result));
 		}
 		pendingPathfindingTasks.fetch_sub(1, std::memory_order_release);
 		});
 }
 
 void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room* destination,
-	const TArray<FVector>& waypoints) {
-	if (!citizen || !destination || !citizen->IsActive()) return;
+	const TArray<FVector>& waypoints, Green* greenDest, int32 greenCircle) {
+	if (!citizen || (!destination && !greenDest) || !citizen->IsActive()) return;
 
 	// 重新查一次activeInstances：从发起到落地隔了若干帧，citizen可能已被流式销毁/重新生成或被玩家占有。
 	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
@@ -479,8 +594,19 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 
 	if (waypoints.Num() > 0 && existing && *existing) {
 		// WalkTo会取代正在走的旧路线；出发后人在路上，不属于任何房间，走到了NotifyArrived才换成目的地。
-		(*existing)->WalkTo(waypoints, destination);
+		if (greenDest) (*existing)->WalkToGreen(waypoints, greenDest, greenCircle);
+		else (*existing)->WalkTo(waypoints, destination);
 		citizen->SetCurrentRoom(nullptr);
+		citizen->SetCurrentGreen(nullptr, -1); // 出发=离开绿化区的圆
+		return;
+	}
+
+	if (existing && *existing && greenDest) {
+		// 同下：寻路失败时Actor也瞬移过去(去绿化区)。
+		UE_LOG(LogTemp, Warning, TEXT("ApplyWalkResult: no path for visible citizen %s to green %s, teleported."),
+			UTF8_TO_TCHAR(citizen->GetName().c_str()), UTF8_TO_TCHAR(greenDest->GetName().c_str()));
+		(*existing)->TeleportToGreen(greenDest, greenCircle);
+		ReportArrivalGreen(citizen, greenDest, greenCircle);
 		return;
 	}
 
@@ -509,9 +635,17 @@ void UForeverPopulaceFrameworkComponent::ApplyWalkResult(Citizen* citizen, Room*
 			path.push_back({ static_cast<float>(point.X / POPULACE_WORLD_SCALE),
 				static_cast<float>(point.Y / POPULACE_WORLD_SCALE), static_cast<float>(point.Z / POPULACE_WORLD_SCALE) });
 		}
-		citizen->BeginWalk(path, destination, GetWorld()->GetTimeSeconds(),
-			speedUU * citizen->GetWalkSpeedFactor() * kUnspawnedWalkSpeedScale / POPULACE_WORLD_SCALE);
+		const float coreSpeed = speedUU * citizen->GetWalkSpeedFactor() * kUnspawnedWalkSpeedScale / POPULACE_WORLD_SCALE;
+		if (greenDest) citizen->BeginWalkToGreen(path, greenDest, greenCircle, GetWorld()->GetTimeSeconds(), coreSpeed);
+		else citizen->BeginWalk(path, destination, GetWorld()->GetTimeSeconds(), coreSpeed);
 		citizen->SetCurrentRoom(nullptr); // 在路上，见上
+		citizen->SetCurrentGreen(nullptr, -1);
+		return;
+	}
+	if (greenDest) {
+		// 路径为空(寻路失败/没有导航节点)：直接把市民放进圆里。
+		PlaceCitizenInGreen(citizen, greenDest, greenCircle);
+		ReportArrivalGreen(citizen, greenDest, greenCircle);
 		return;
 	}
 	Room* previous = citizen->GetCurrentRoom();
@@ -565,6 +699,32 @@ void UForeverPopulaceFrameworkComponent::TeleportCitizen(Citizen* citizen, Room*
 	citizen->SetCurrentRoom(destination);
 	citizen->ClearPosition();
 	ReportArrival(citizen, previous);
+}
+
+void UForeverPopulaceFrameworkComponent::TeleportCitizenToGreen(Citizen* citizen, Green* destination, int32 circle) {
+	if (!citizen || !destination) return;
+	skipWalks.Remove(citizen); // 跳时间里的步行腿被瞬移取代
+	// 同TeleportCitizen：开车途中不受影响；走路阶段的任务/通勤被中断(绿化里没有车位)。
+	if (Traffic* traffic = GetTrafficCore()) {
+		if (Traffic::TaskTrip* task = traffic->FindTaskByWorker(citizen)) {
+			if (task->phase == Traffic::TaskPhase::Driving) return;
+			AbortTaskOfWorker(citizen);
+		}
+		if (traffic->FindTrip(citizen)) CancelCommute(citizen);
+	}
+	if (!citizen->IsActive()) return;
+
+	TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen);
+	if (existing && *existing) {
+		if ((*existing)->IsPlayerControlled()) return;
+		++latestWalkRequest.FindOrAdd(citizen); // 在途的寻路结果作废
+		(*existing)->TeleportToGreen(destination, circle);
+		ReportArrivalGreen(citizen, destination, circle);
+		return;
+	}
+	++latestWalkRequest.FindOrAdd(citizen);
+	PlaceCitizenInGreen(citizen, destination, circle);
+	ReportArrivalGreen(citizen, destination, circle);
 }
 
 namespace {
@@ -622,10 +782,12 @@ double UForeverPopulaceFrameworkComponent::GameSecondsPerRealSecond() const {
 	return 60.0 * (player ? player->GetTimeFlowRatio() : 10.0);
 }
 
-void UForeverPopulaceFrameworkComponent::RegisterSkipWalk(Citizen* citizen, Room* destination, Room* origin, const TArray<FVector>& waypoints) {
-	if (!citizen || !destination) return;
+void UForeverPopulaceFrameworkComponent::RegisterSkipWalk(Citizen* citizen, Room* destination, Room* origin, const TArray<FVector>& waypoints,
+	Green* greenDest, int32 greenCircle) {
+	if (!citizen || (!destination && !greenDest)) return;
 	if (waypoints.Num() < 2) {
-		TeleportCitizen(citizen, destination);
+		if (greenDest) TeleportCitizenToGreen(citizen, greenDest, greenCircle);
+		else TeleportCitizen(citizen, destination);
 		return;
 	}
 	// 市民从场景里消失，Core里保留"在途无位置"状态(流式生成会跳过它)。
@@ -637,6 +799,7 @@ void UForeverPopulaceFrameworkComponent::RegisterSkipWalk(Citizen* citizen, Room
 	++latestWalkRequest.FindOrAdd(citizen);
 	citizen->EndWalk();
 	citizen->SetCurrentRoom(nullptr);
+	citizen->SetCurrentGreen(nullptr, -1);
 	citizen->ClearPosition();
 
 	const ACitizenElement* defaults = GetDefault<ACitizenElement>();
@@ -645,6 +808,8 @@ void UForeverPopulaceFrameworkComponent::RegisterSkipWalk(Citizen* citizen, Room
 	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
 	FSkipWalk& walk = skipWalks.FindOrAdd(citizen);
 	walk.destination = destination;
+	walk.greenDest = greenDest;
+	walk.greenCircle = greenCircle;
 	walk.origin = origin;
 	walk.waypoints = waypoints;
 	walk.totalSeconds = PathLengthUU(waypoints) / speedUU * GameSecondsPerRealSecond();
@@ -652,9 +817,22 @@ void UForeverPopulaceFrameworkComponent::RegisterSkipWalk(Citizen* citizen, Room
 	walk.remainingSeconds = walk.totalSeconds - (framework ? framework->GetSkipCreditSeconds() : 0.0);
 }
 
-void UForeverPopulaceFrameworkComponent::StartSkipWalk(Citizen* citizen, Room* destination) {
-	if (!citizen || !destination || !map || !citizen->IsActive()) return;
+void UForeverPopulaceFrameworkComponent::StartSkipWalk(Citizen* citizen, Room* destination, Green* greenDest, int32 greenCircle) {
+	if (!citizen || (!destination && !greenDest) || !map || !citizen->IsActive()) return;
 	Room* origin = citizen->GetCurrentRoom();
+
+	// 去绿化区：终点是圆内随机一点(同RequestWalkInternal，游戏线程取)。
+	FVector endFeet = FVector::ZeroVector;
+	if (greenDest && !ACitizenElement::ComputeGreenLandingSpot(greenDest, greenCircle, endFeet)) {
+		TeleportCitizenToGreen(citizen, greenDest, greenCircle);
+		return;
+	}
+	const float endX = static_cast<float>(endFeet.X / POPULACE_WORLD_SCALE);
+	const float endY = static_cast<float>(endFeet.Y / POPULACE_WORLD_SCALE);
+	auto appendPlan = [](TArray<FVector>& out, const Map::VehicleRoutePlan& plan) {
+		for (const Map::NavPoint& point : plan.points) out.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
+	};
+
 	TArray<FVector> waypoints;
 	if (FSkipWalk* old = skipWalks.Find(citizen)) {
 		// 上一条腿还没走完：从它当前的位置重新规划(新请求取代旧请求)。
@@ -662,12 +840,34 @@ void UForeverPopulaceFrameworkComponent::StartSkipWalk(Citizen* citizen, Room* d
 		const double fraction = old->totalSeconds > 0.0 ? 1.0 - old->remainingSeconds / old->totalSeconds : 1.0;
 		const FVector here = PointAlongPath(old->waypoints, fraction, nextIndex);
 		origin = old->origin;
-		Map::VehicleRoutePlan plan = map->PlanPedestrianRoute(nullptr, static_cast<float>(here.X / POPULACE_WORLD_SCALE),
-			static_cast<float>(here.Y / POPULACE_WORLD_SCALE), destination);
+		const float hereX = static_cast<float>(here.X / POPULACE_WORLD_SCALE), hereY = static_cast<float>(here.Y / POPULACE_WORLD_SCALE);
+		Map::VehicleRoutePlan plan = greenDest ? map->PlanPedestrianRouteToGreen(nullptr, hereX, hereY, greenDest, greenCircle, endX, endY)
+			: map->PlanPedestrianRoute(nullptr, hereX, hereY, destination);
 		if (plan.status == Map::VehicleRoutePlan::OK && !plan.points.empty()) {
 			waypoints.Add(here);
-			for (const Map::NavPoint& point : plan.points) waypoints.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
+			appendPlan(waypoints, plan);
 		}
+	}
+	else if (Green* fromGreen = citizen->GetCurrentGreen()) {
+		// 站在绿化区的圆里：先到圆心再走导航图(同RequestWalkInternal)。
+		const int32 fromCircle = citizen->GetCurrentGreenCircle();
+		if (greenDest && fromGreen == greenDest && fromCircle == greenCircle) return;
+		Map::VehicleRoutePlan plan;
+		if (fromCircle >= 0 && fromCircle < static_cast<int32>(fromGreen->GetCircles().size())) {
+			const Green::Circle& circle = fromGreen->GetCircles()[fromCircle];
+			plan = greenDest ? map->PlanPedestrianRouteToGreen(nullptr, circle.x, circle.y, greenDest, greenCircle, endX, endY)
+				: map->PlanPedestrianRouteFromGreen(fromGreen, fromCircle, destination);
+		}
+		if (plan.status == Map::VehicleRoutePlan::OK && !plan.points.empty()) {
+			FVector feet;
+			if (GetStandingFeet(citizen, feet)) waypoints.Add(feet);
+			appendPlan(waypoints, plan);
+		}
+	}
+	else if (greenDest) {
+		// 从房间去绿化区：从房间的导航节点起算。
+		Map::VehicleRoutePlan plan = map->PlanPedestrianRouteToGreen(origin, 0.f, 0.f, greenDest, greenCircle, endX, endY);
+		if (origin && plan.status == Map::VehicleRoutePlan::OK && !plan.points.empty()) appendPlan(waypoints, plan);
 	}
 	else {
 		if (origin == destination) return;
@@ -677,7 +877,7 @@ void UForeverPopulaceFrameworkComponent::StartSkipWalk(Citizen* citizen, Room* d
 			PlanWalkPath(citizen, destination, from, waypoints);
 		}
 	}
-	RegisterSkipWalk(citizen, destination, origin, waypoints); // 规划不出来(<2点)按瞬移到达
+	RegisterSkipWalk(citizen, destination, origin, waypoints, greenDest, greenCircle); // 规划不出来(<2点)按瞬移到达
 }
 
 void UForeverPopulaceFrameworkComponent::DecrementSkipLegs(double stepGameSeconds) {
@@ -696,13 +896,23 @@ bool UForeverPopulaceFrameworkComponent::CompleteSkipLegs() {
 		FSkipWalk* walk = skipWalks.Find(citizen);
 		if (!walk || walk->remainingSeconds > 0.0) continue; // 处理前面的到达时被取代/重新规划了
 		Room* destination = walk->destination;
+		Green* greenDest = walk->greenDest;
+		const int32 greenCircle = walk->greenCircle;
 		Room* origin = walk->origin;
+		const FVector endPoint = walk->waypoints.Num() > 0 ? walk->waypoints.Last() : FVector::ZeroVector;
 		const double credit = -walk->remainingSeconds;
 		skipWalks.Remove(citizen);
 		if (!citizen->IsActive()) continue;
 		if (framework) framework->SetSkipCreditSeconds(credit);
 		++latestWalkRequest.FindOrAdd(citizen);
 		citizen->EndWalk();
+		if (greenDest) {
+			// 站在路径终点(圆内随机点，脚底高度)。
+			citizen->SetCurrentGreen(greenDest, greenCircle);
+			citizen->SetPosition(endPoint.X / POPULACE_WORLD_SCALE, endPoint.Y / POPULACE_WORLD_SCALE, endPoint.Z / POPULACE_WORLD_SCALE);
+			ReportArrivalGreen(citizen, greenDest, greenCircle);
+			continue;
+		}
 		citizen->SetCurrentRoom(destination);
 		citizen->ClearPosition();
 		ReportArrival(citizen, origin);
@@ -724,7 +934,7 @@ void UForeverPopulaceFrameworkComponent::EndTimeSkip() {
 		TArray<FVector> rest;
 		rest.Add(PointAlongPath(walk.waypoints, fraction, nextIndex));
 		for (int32 i = nextIndex; i < walk.waypoints.Num(); i++) rest.Add(walk.waypoints[i]);
-		ApplyWalkResult(citizen, walk.destination, rest); // 落成真实步行：没有Actor就Core推算，进入生成距离再生成
+		ApplyWalkResult(citizen, walk.destination, rest, walk.greenDest, walk.greenCircle); // 落成真实步行：没有Actor就Core推算，进入生成距离再生成
 	}
 }
 
@@ -742,14 +952,18 @@ void UForeverPopulaceFrameworkComponent::BeginTimeSkip() {
 		if (!citizen || !citizen->IsActive()) continue;
 
 		Room* destination = nullptr;
+		Green* greenDest = nullptr;
+		int32 greenCircle = -1;
 		TArray<FVector> remaining;
 		if (TObjectPtr<ACitizenElement>* existing = activeInstances.Find(citizen); existing && *existing) {
 			if ((*existing)->IsPlayerControlled()) continue;
 			ACitizenController* controller = (*existing)->GetCitizenController();
-			if (controller) controller->GetRemainingWaypoints(remaining, destination);
+			if (controller) controller->GetRemainingWaypoints(remaining, destination, &greenDest, &greenCircle);
 		}
 		else if (citizen->IsWalking()) {
 			destination = citizen->GetWalkDestination();
+			greenDest = citizen->GetWalkGreen();
+			greenCircle = citizen->GetWalkGreenCircle();
 			std::vector<Citizen::WalkPoint> remainingCore;
 			citizen->GetRemainingWalk(GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0, remainingCore);
 			for (const Citizen::WalkPoint& point : remainingCore) remaining.Add(FVector(point.x, point.y, point.z) * POPULACE_WORLD_SCALE);
@@ -758,6 +972,10 @@ void UForeverPopulaceFrameworkComponent::BeginTimeSkip() {
 		if (destination) {
 			if (remaining.Num() >= 2) RegisterSkipWalk(citizen, destination, citizen->GetCurrentRoom(), remaining);
 			else TeleportCitizen(citizen, destination);
+		}
+		else if (greenDest) {
+			if (remaining.Num() >= 2) RegisterSkipWalk(citizen, nullptr, citizen->GetCurrentRoom(), remaining, greenDest, greenCircle);
+			else TeleportCitizenToGreen(citizen, greenDest, greenCircle);
 		}
 	}
 }
@@ -769,7 +987,7 @@ void UForeverPopulaceFrameworkComponent::DrainPathResults() {
 	while (pathResultQueue.Dequeue(result)) {
 		const uint32* latest = latestWalkRequest.Find(result.citizen);
 		if (!latest || *latest != result.serial) continue; // 已被更新的导航/瞬移取代
-		ApplyWalkResult(result.citizen, result.destination, result.waypoints);
+		ApplyWalkResult(result.citizen, result.destination, result.waypoints, result.greenDest, result.greenCircle);
 		applied++;
 	}
 	// 卡顿排查：一帧里落地寻路结果超过10ms就打日志。
@@ -823,6 +1041,25 @@ void UForeverPopulaceFrameworkComponent::NotifyArrived(Citizen* citizen, Room* d
 	Room* previous = citizen->GetCurrentRoom();
 	citizen->SetCurrentRoom(destination);
 	ReportArrival(citizen, previous);
+}
+
+void UForeverPopulaceFrameworkComponent::NotifyArrivedGreen(Citizen* citizen, Green* destination, int32 circle) {
+	if (!citizen || !destination || !citizen->IsActive()) return;
+	citizen->SetCurrentGreen(destination, circle);
+	// 绿化里记的是脚底高度(Init/TeleportToGreen同一约定)。
+	FVector feet;
+	if (GetStandingFeet(citizen, feet)) {
+		citizen->SetPosition(feet.X / POPULACE_WORLD_SCALE, feet.Y / POPULACE_WORLD_SCALE, feet.Z / POPULACE_WORLD_SCALE);
+	}
+	ReportArrivalGreen(citizen, destination, circle);
+}
+
+void UForeverPopulaceFrameworkComponent::ReportArrivalGreen(Citizen* citizen, Green* green, int32 circle) {
+	if (!citizen || !green || !citizen->IsActive()) return;
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	if (UForeverStoryFrameworkComponent* story = framework ? framework->GetStoryFramework() : nullptr) {
+		story->BroadcastNpcArrive(citizen, green->GetCircleAddress(circle));
+	}
 }
 
 void UForeverPopulaceFrameworkComponent::ReportArrival(Citizen* citizen, Room* previousRoom) {
@@ -1073,10 +1310,14 @@ bool UForeverPopulaceFrameworkComponent::HandBackCitizenToCore(Citizen* citizen,
 	// 还在走路：剩余路径交还Core继续按时间推算，不然目的地就丢了(currentRoom还是出发地)。
 	TArray<FVector> remainingPath;
 	Room* walkDestination = nullptr;
+	Green* walkGreen = nullptr;
+	int32 walkCircle = -1;
 	ACitizenController* controller = element->GetCitizenController();
-	const bool bHasPath = controller && controller->GetRemainingWaypoints(remainingPath, walkDestination) && remainingPath.Num() > 1;
+	const bool bHasPath = controller && controller->GetRemainingWaypoints(remainingPath, walkDestination, &walkGreen, &walkCircle) && remainingPath.Num() > 1;
 	if (bForce && !bHasPath) return false; // 脱困必须能接着走，没拿到路径就不动它
-	citizen->SetPosition(loc.X / POPULACE_WORLD_SCALE, loc.Y / POPULACE_WORLD_SCALE, loc.Z / POPULACE_WORLD_SCALE);
+	// Citizen记录的位置统一是脚底高度(见ACitizenElement::Init)。
+	const float savedZ = loc.Z - element->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	citizen->SetPosition(loc.X / POPULACE_WORLD_SCALE, loc.Y / POPULACE_WORLD_SCALE, savedZ / POPULACE_WORLD_SCALE);
 	if (bHasPath) {
 		std::vector<Citizen::WalkPoint> path;
 		for (const FVector& point : remainingPath) {
@@ -1084,7 +1325,9 @@ bool UForeverPopulaceFrameworkComponent::HandBackCitizenToCore(Citizen* citizen,
 				static_cast<float>(point.Y / POPULACE_WORLD_SCALE), static_cast<float>(point.Z / POPULACE_WORLD_SCALE) });
 		}
 		float speedUU = element->GetCharacterMovement()->MaxWalkSpeed;
-		citizen->BeginWalk(path, walkDestination, now, speedUU * kUnspawnedWalkSpeedScale / POPULACE_WORLD_SCALE);
+		const float coreSpeed = speedUU * kUnspawnedWalkSpeedScale / POPULACE_WORLD_SCALE;
+		if (walkGreen) citizen->BeginWalkToGreen(path, walkGreen, walkCircle, now, coreSpeed);
+		else citizen->BeginWalk(path, walkDestination, now, coreSpeed);
 	}
 	element->Destroy();
 	activeInstances.Remove(citizen);
@@ -1207,7 +1450,12 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 			// 之后照常按位置判断要不要生成。
 			if (citizen->IsWalking()) {
 				Room* previous = citizen->GetCurrentRoom();
-				if (citizen->AdvanceWalk(now)) ReportArrival(citizen, previous);
+				Green* walkGreen = citizen->GetWalkGreen();
+				const int32 walkCircle = citizen->GetWalkGreenCircle();
+				if (citizen->AdvanceWalk(now)) {
+					if (walkGreen) ReportArrivalGreen(citizen, walkGreen, walkCircle);
+					else ReportArrival(citizen, previous);
+				}
 			}
 			float worldX, worldY, worldZ;
 			if (!ComputeLogicalPosition(citizen, worldX, worldY, worldZ)) continue;
@@ -1229,7 +1477,7 @@ void UForeverPopulaceFrameworkComponent::TickComponent(float DeltaTime, ELevelTi
 				const FVector spawnPoint(worldX, worldY, worldZ);
 				bool bOverlap = false;
 				if (moving) for (const auto& [activeCitizen, activeElement] : activeInstances) {
-					if (activeElement && FVector::DistSquared(activeElement->GetActorLocation(), spawnPoint) < kSpawnMinSeparation * kSpawnMinSeparation) {
+					if (activeElement && FVector::DistSquared(activeElement->GetActorLocation() - FVector(0.f, 0.f, activeElement->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), spawnPoint) < kSpawnMinSeparation * kSpawnMinSeparation) {
 						bOverlap = true;
 						break;
 					}
@@ -1291,10 +1539,14 @@ TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> UForeverPopulaceFra
 	for (auto& [citizen, element] : activeInstances) {
 		if (!citizen || !element) continue;
 		FVector loc = element->GetActorLocation();
-		citizen->SetPosition(loc.X / POPULACE_WORLD_SCALE, loc.Y / POPULACE_WORLD_SCALE, loc.Z / POPULACE_WORLD_SCALE);
+		// 统一记脚底高度(见ACitizenElement::Init)。
+		const float savedZ = loc.Z - element->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+		citizen->SetPosition(loc.X / POPULACE_WORLD_SCALE, loc.Y / POPULACE_WORLD_SCALE, savedZ / POPULACE_WORLD_SCALE);
 
 		Room* destination = element->GetWalkDestination();
-		if (!destination) continue;
+		int32 destCircle = -1;
+		Green* destGreen = destination ? nullptr : element->GetWalkGreen(destCircle);
+		if (!destination && !destGreen) continue;
 		FWalkingSnapshot snapshot;
 		snapshot.citizen = citizen;
 		snapshot.currentRoom = citizen->GetCurrentRoom();
@@ -1305,15 +1557,18 @@ TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> UForeverPopulaceFra
 		// 速度取Actor的真实速度；存完RestoreAfterSave撤掉。
 		TArray<FVector> remainingPath;
 		Room* walkDestination = nullptr;
+		Green* walkGreen = nullptr;
+		int32 walkCircle = -1;
 		const ACitizenController* controller = element->GetCitizenController();
-		if (controller && controller->GetRemainingWaypoints(remainingPath, walkDestination) && remainingPath.Num() > 0) {
+		if (controller && controller->GetRemainingWaypoints(remainingPath, walkDestination, &walkGreen, &walkCircle) && remainingPath.Num() > 0) {
 			std::vector<Citizen::WalkPoint> path;
 			for (const FVector& point : remainingPath) {
 				path.push_back({ static_cast<float>(point.X / POPULACE_WORLD_SCALE),
 					static_cast<float>(point.Y / POPULACE_WORLD_SCALE), static_cast<float>(point.Z / POPULACE_WORLD_SCALE) });
 			}
 			float speedUU = element->GetCharacterMovement()->MaxWalkSpeed;
-			citizen->BeginWalk(path, walkDestination, now, speedUU / POPULACE_WORLD_SCALE);
+			if (walkGreen) citizen->BeginWalkToGreen(path, walkGreen, walkCircle, now, speedUU / POPULACE_WORLD_SCALE);
+			else citizen->BeginWalk(path, walkDestination, now, speedUU / POPULACE_WORLD_SCALE);
 			snapshot.bCoreWalk = citizen->IsWalking();
 			if (snapshot.bCoreWalk) {
 				walking.Add(snapshot);
@@ -1323,8 +1578,14 @@ TArray<UForeverPopulaceFrameworkComponent::FWalkingSnapshot> UForeverPopulaceFra
 
 		// 路线还没开始(指令还没展开成路径)等没法取剩余路径的情况：退回按"已经走到目的地"记。
 		walking.Add(snapshot);
-		citizen->SetCurrentRoom(destination);
-		citizen->ClearPosition();
+		if (destination) {
+			citizen->SetCurrentRoom(destination);
+			citizen->ClearPosition();
+		}
+		else {
+			// 去绿化区：记成已经站在圆里(位置保持Actor当前位置)，RestoreAfterSave清掉。
+			citizen->SetCurrentGreen(destGreen, destCircle);
+		}
 	}
 	return walking;
 }
@@ -1333,6 +1594,7 @@ void UForeverPopulaceFrameworkComponent::RestoreAfterSave(const TArray<FWalkingS
 	for (const FWalkingSnapshot& snapshot : walking) {
 		if (!snapshot.citizen) continue;
 		if (snapshot.bCoreWalk) snapshot.citizen->EndWalk();
+		snapshot.citizen->SetCurrentGreen(nullptr, -1); // 存档时临时记的"已到绿化区"(见SyncPositionsToCore)
 		snapshot.citizen->SetCurrentRoom(snapshot.currentRoom);
 		if (snapshot.hasPosition) snapshot.citizen->SetPosition(snapshot.x, snapshot.y, snapshot.z);
 		else snapshot.citizen->ClearPosition();

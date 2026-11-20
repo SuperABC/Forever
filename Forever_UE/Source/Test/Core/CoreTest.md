@@ -19,4 +19,5 @@
 
 ## 注意
 - 含 C++ 转义的文件不要用 shell heredoc 写(转义会被破坏)，用 Write/Edit。
+- `suite_green.cpp`的套件父进程自己派生一份config(只换路网/地形为MapEditor的demo)，再用`RunSuiteInChildren`起子进程，所以子进程读的是派生config。
 - 新增套件：写 `XxxSuiteBody` + `RunXxxSuite`，在 suites.h、`FindSuiteBody`、main.cpp 套件表、vcxproj/filters 里各登记一处。

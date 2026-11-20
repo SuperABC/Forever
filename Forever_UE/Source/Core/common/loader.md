@@ -12,7 +12,7 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
   dll是合法mod"(探测完即释放句柄,详见`config.md`);`ModLoader`回答"把这些合法dll接入
   某个具体系统的Factory"(常驻句柄,按需调用注册/收尾)。这是两件调用频率不同的事:探测在
   `ReadConfig`时做一次,注册要按每个系统(Building/Script/……)各自的Factory分别做。
-- **`GetModConceptDescriptors()`是全部21个concept的DLL导出符号名唯一权威列表**——
+- **`GetModConceptDescriptors()`是全部22个concept的DLL导出符号名唯一权威列表**——
   `conceptKey`只是内部使用的可读标签(`"Buildings"`/`"Scripts"`等),真正决定探测/注册
   行为的是`getModSymbol`/`registerModSymbol`/`finishModSymbol`三个字符串。
   `Config::AddDllPath`复用这份列表的`getModSymbol`做探测,避免两处维护同一份符号表。
@@ -45,7 +45,7 @@ concept,真正`LoadLibraryA`并常驻句柄、解析`RegisterMod<Concept>`/`Fini
 
 | domain | concept |
 |---|---|
-| map | Terrains / Roadnets / Zones / Buildings / Components / Rooms |
+| map | Terrains / Roadnets / Zones / Buildings / Greens / Components / Rooms |
 | populace | Names / Schedulers |
 | society | Jobs / Organizations |
 | story | Scripts |
@@ -67,7 +67,7 @@ concept前缀。给游戏启动配置界面的依赖校验用，见`config.md`�
 
 - 依赖:无引擎依赖,纯C++(`<windows.h>`只在`.cpp`里)。
 - 被谁依赖:`Source/Core/common/config.cpp`(用`GetModConceptDescriptors()`做探测)、
-  `Source/Core/common/registry.cpp`(持有全部21个concept唯一的`ModLoader`实例，`RegisterMods`里
+  `Source/Core/common/registry.cpp`(持有全部22个concept唯一的`ModLoader`实例，`RegisterMods`里
   对每个concept各调一次`RegisterConcept`，见`registry.md`)、
   `Source/Forever/Mod/ForeverModSubsystem.cpp`(验证用途,构造独立的临时`ModLoader`
   实例,和`Registry`那份互不相关)。

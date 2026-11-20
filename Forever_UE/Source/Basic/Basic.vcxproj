@@ -100,7 +100,7 @@
     <ClCompile Include="map\building_office_high.cpp" />
     <ClCompile Include="map\building_office_low.cpp" />
     <ClCompile Include="map\building_office_middle.cpp" />
-    <ClCompile Include="map\building_park.cpp" />
+    <ClCompile Include="map\green_park.cpp" />
     <ClCompile Include="map\building_residence_high.cpp" />
     <ClCompile Include="map\building_residence_low.cpp" />
     <ClCompile Include="map\building_residence_middle.cpp" />
@@ -220,7 +220,7 @@
     <ClInclude Include="map\building_office_high.h" />
     <ClInclude Include="map\building_office_low.h" />
     <ClInclude Include="map\building_office_middle.h" />
-    <ClInclude Include="map\building_park.h" />
+    <ClInclude Include="map\green_park.h" />
     <ClInclude Include="map\building_residence_high.h" />
     <ClInclude Include="map\building_residence_low.h" />
     <ClInclude Include="map\building_residence_middle.h" />

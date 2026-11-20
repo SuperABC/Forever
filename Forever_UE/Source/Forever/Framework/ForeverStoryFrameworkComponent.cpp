@@ -537,7 +537,12 @@ void UForeverStoryFrameworkComponent::OptionDialog(const FString& name, const FS
 }
 
 void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, Room* room) {
-	if (!story || !GEngine || !citizen || !room) return;
+	if (!room) return;
+	BroadcastNpcArrive(citizen, room->GetAddress());
+}
+
+void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, const string& address) {
+	if (!story || !GEngine || !citizen || address.empty()) return;
 	if (npcArriveDepth >= kMaxNpcArriveDepth) {
 		UE_LOG(LogTemp, Warning, TEXT("npc_arrive nesting too deep, dropped."));
 		return;
@@ -553,7 +558,7 @@ void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, Room*
 		framework ? framework->GetTraffic() : nullptr,
 		framework ? framework->GetPlayer() : nullptr);
 
-	NpcArriveEvent event(citizen->GetName(), room->GetAddress());
+	NpcArriveEvent event(citizen->GetName(), address);
 	npcArriveDepth++;
 	if (citizen->GetScheduler()) BroadcastToScript(event, citizen->GetScheduler()->GetScript(), postImplement);
 	if (citizen->GetJob()) BroadcastToScript(event, citizen->GetJob()->GetScript(), postImplement);

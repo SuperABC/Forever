@@ -14,6 +14,7 @@
 | map | Roadnet | `map/roadnet_mod.h` → `RoadnetMod` | `map/roadnet_factory.h/.cpp` → `RoadnetFactory` | `GetModRoadnets` |
 | map | Zone | `map/zone_mod.h` → `ZoneMod` | `map/zone_factory.h/.cpp` → `ZoneFactory` | `GetModZones` |
 | map | Building | `map/building_mod.h` → `BuildingMod` | `map/building_factory.h/.cpp` → `BuildingFactory` | `GetModBuildings` |
+| map | Green | `map/green_mod.h` → `GreenMod` | `map/green_factory.h/.cpp` → `GreenFactory` | `GetModGreens` |
 | map | Component | `map/component_mod.h` → `ComponentMod` | `map/component_factory.h/.cpp` → `ComponentFactory` | `GetModComponents` |
 | map | Room | `map/room_mod.h` → `RoomMod` | `map/room_factory.h/.cpp` → `RoomFactory` | `GetModRooms` |
 | player | Asset | `player/asset_mod.h` → `AssetMod` | `player/asset_factory.h/.cpp` → `AssetFactory` | `GetModAssets` |

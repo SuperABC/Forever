@@ -54,8 +54,8 @@
   texel 的槽位对齐。
 - **量化**用最大余数法，保证每个 texel 的 4 个字节恰好加起来是 255，且每项误差小于 1/255。
 - **construction 保险**（`constructionGuard`）：texel 所在 element 是 construction 时直接输出纯槽位。
-  `radius ≤ 1.5` 时按现有规则（construction 的 3×3 邻域全是槽位 0 的 plain / construction）核本身
-  就是纯的，这一条只是防止规则变了出现隐性错误。
+  2026-11-21起 construction 只是"3×3 高度都为 0"的标记、不再限制地形类型，所以升格格子的邻域可能是不同地形，核本身不再
+  保证是纯的，这一条保险（连同下面的拉力）是真正生效的：升格格子保持自己的地形槽位，邻居靠拉力过渡过来。
 - **construction 拉力**（`constructionRamp`，只在 `radius > 1.5` 时启用）：`radius > 1.5` 时核会越过
   construction 外的第二圈，不处理的话 construction 内外在边界上会有约 12% 的权重跳变（实测）。
   对 construction 外的 texel，按到最近 construction element 的距离算一个拉力

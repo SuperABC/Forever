@@ -83,6 +83,7 @@ public:
 
 	void DistributeRoadnet(int width, int height,
 		const std::function<const std::string&(int, int)>& getTerrain,
+		const std::function<bool(int, int)>& isConstruction,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		const std::function<float(float, float)>& getHeight,
 		int nodeStaticCount);
@@ -124,6 +125,13 @@ public:
 	void AllocateAddress();
 	Lot* LocateLot(const std::string& road, int index) const;
 
+	// 路网指定的绿化区：多边形+连到道路的边(Road*指向本Roadnet自己的副本)，Map::InitGreens读。
+	struct GreenSite {
+		std::vector<float> xy;
+		std::vector<std::pair<int, Road*>> links; // (边下标, 路)
+	};
+	const std::vector<GreenSite>& GetGreenSites() const;
+
 private:
 	RoadnetMod* mod;
 	RoadnetFactory* factory;
@@ -134,6 +142,7 @@ private:
 	std::vector<Intersection*> intersections;
 	std::vector<Road*> roads;
 	std::vector<Lot*> lots;
+	std::vector<GreenSite> greenSites;
 	std::vector<TerrainHatch> hatches;
 	std::vector<TerrainFitRequest> terrainFits;
 	std::vector<Pier> piers;

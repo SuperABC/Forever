@@ -26,6 +26,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "map/green.h"
 
 AForeverPlayerController::AForeverPlayerController() {
 	identifyComponent = CreateDefaultSubobject<UForeverIdentifyComponent>(TEXT("IdentifyComponent"));
@@ -47,22 +48,26 @@ void AForeverPlayerController::TestNavigate() {
 	UForeverTrafficFrameworkComponent* traffic = framework ? framework->GetTrafficFramework() : nullptr;
 	if (!map || !traffic) return;
 
-	// 所有停车场和住宅房间合成一个列表，等概率取一个。
-	TArray<Room*> candidates;
-	for (const auto& [name, building] : map->GetBuildings()) {
-		if (!building) continue;
-		for (Room* room : building->GetRooms()) {
-			if (room && (!room->GetParkingSlots().empty() || room->IsResidence())) candidates.Add(room);
-		}
+	// 所有green_park绿化区里取一个有活动圆的，再随机一个圆、圆内随机一点，显示导航线；找不到就跳过(理论上总能找到)。
+	TArray<Green*> candidates;
+	for (Green* green : map->GetGreens()) {
+		if (green && green->GetType() == "green_park" && !green->GetCircles().empty()) candidates.Add(green);
 	}
 	if (candidates.Num() == 0) {
-		UE_LOG(LogTemp, Warning, TEXT("TestNavigate: 没有停车场或住宅房间"));
+		UE_LOG(LogTemp, Warning, TEXT("TestNavigate: 没有带活动圆的green_park绿化区，跳过"));
 		return;
 	}
-	Room* target = candidates[FMath::RandRange(0, candidates.Num() - 1)];
-	UE_LOG(LogTemp, Log, TEXT("TestNavigate: 导航到 %s（%s，%d 个候选）"), UTF8_TO_TCHAR(target->GetAddress().c_str()),
-		UTF8_TO_TCHAR(target->GetType().c_str()), candidates.Num());
-	traffic->StartGuide(target);
+	Green* target = candidates[FMath::RandRange(0, candidates.Num() - 1)];
+	const std::vector<Green::Circle>& circles = target->GetCircles();
+	const int32 circleIndex = FMath::RandRange(0, static_cast<int32>(circles.size()) - 1);
+	const Green::Circle& circle = circles[circleIndex];
+	// 圆内均匀随机点(半径取sqrt)。这里是UE层的测试入口，不走Core的确定性随机。
+	const float radius = circle.r * FMath::Sqrt(FMath::FRand());
+	const float angle = FMath::FRand() * 2.f * PI;
+	const float endX = circle.x + radius * FMath::Cos(angle), endY = circle.y + radius * FMath::Sin(angle);
+	UE_LOG(LogTemp, Log, TEXT("TestNavigate: 导航到绿化 %s 的第%d个圆(%d个绿化候选)，终点(%.2f, %.2f)"),
+		UTF8_TO_TCHAR(target->GetAddress().c_str()), circleIndex, candidates.Num(), endX, endY);
+	traffic->StartGuideToGreen(target, circleIndex, endX, endY);
 }
 
 void AForeverPlayerController::BeginPlay() {

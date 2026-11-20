@@ -8,6 +8,7 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "map/green.h"
 #include "map/component.h"
 
 #include <string>
@@ -38,6 +39,16 @@ namespace SaveRefs {
 		Building* building = map.GetBuilding(buildingName);
 		if (!building || index >= static_cast<int>(building->GetRooms().size())) return nullptr;
 		return building->GetRooms()[index];
+	}
+
+	// 绿化区按Map::GetGreens()下标(生成/读档顺序一致)，-1=空。
+	inline void WriteGreen(const Map& map, const Green* green, ByteWriter& w) {
+		w.I32(green ? IndexOf(map.GetGreens(), green) : -1);
+	}
+	inline Green* ReadGreen(const Map& map, ByteReader& r) {
+		int index = r.I32();
+		if (index < 0 || index >= static_cast<int>(map.GetGreens().size())) return nullptr;
+		return map.GetGreens()[index];
 	}
 
 	inline void WriteComponent(const Component* component, ByteWriter& w) {

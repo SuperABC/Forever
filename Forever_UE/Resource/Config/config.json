@@ -41,6 +41,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Cpp/x64/Release",
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Empty/Cpp/x64/Release"
    ],
+   "green_mods" : [ "green_park" ],
    "job_mods" : [
       "job_shop_saler",
       "job_restaurant_waiter",

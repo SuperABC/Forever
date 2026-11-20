@@ -100,6 +100,7 @@
     <ClCompile Include="map\terrain_factory.cpp" />
     <ClCompile Include="map\roadnet_factory.cpp" />
     <ClCompile Include="map\zone_factory.cpp" />
+    <ClCompile Include="map\green_factory.cpp" />
     <ClCompile Include="map\building_factory.cpp" />
     <ClCompile Include="map\component_factory.cpp" />
     <ClCompile Include="map\room_factory.cpp" />
@@ -121,6 +122,8 @@
     <ClCompile Include="traffic\vehicle_factory.cpp" />
     <ClCompile Include="map\terrain_mod.cpp" />
     <ClCompile Include="map\zone_mod.cpp" />
+    <ClCompile Include="map\green_mod.cpp" />
+    <ClCompile Include="map\polygon_util.cpp" />
     <ClCompile Include="map\component_mod.cpp" />
     <ClCompile Include="map\room_mod.cpp" />
     <ClCompile Include="player\asset_mod.cpp" />
@@ -158,6 +161,8 @@
     <ClInclude Include="map\terrain_mod.h" />
     <ClInclude Include="map\roadnet_mod.h" />
     <ClInclude Include="map\zone_mod.h" />
+    <ClInclude Include="map\green_mod.h" />
+    <ClInclude Include="map\polygon_util.h" />
     <ClInclude Include="map\building_mod.h" />
     <ClInclude Include="map\component_mod.h" />
     <ClInclude Include="map\room_mod.h" />
@@ -179,6 +184,7 @@
     <ClInclude Include="map\terrain_factory.h" />
     <ClInclude Include="map\roadnet_factory.h" />
     <ClInclude Include="map\zone_factory.h" />
+    <ClInclude Include="map\green_factory.h" />
     <ClInclude Include="map\building_factory.h" />
     <ClInclude Include="map\component_factory.h" />
     <ClInclude Include="map\room_factory.h" />

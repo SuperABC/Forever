@@ -98,3 +98,12 @@
 `fleeFrom`(要远离的市民姓名，空=没在逃)：`GetFleeFrom/SetFleeFrom/IsFleeing`，随人口段存档(walkSpeedJitter之后)。具体行为在UE层(CitizenController的Flee指令)，读档后市民生成Actor时`ResumeFleeOnSpawn`接着逃。
 
 `SetWalkInstantiable(bool)`：强制标记这趟行走不参与实例化(流式生成发现和已实例化市民重叠<1m时用)。
+
+## 绿化区状态（2026-11-20）
+`currentGreen`/`currentGreenCircle`(`GetCurrentGreen/GetCurrentGreenCircle/SetCurrentGreen`)：市民站在哪块绿化区的第几个活动圆里，和`currentRoom`**互斥**
+(`SetCurrentGreen(非空)`清房间，`SetCurrentRoom(非空)`清绿化；`SetCurrentRoom(nullptr)`不碰绿化，所以出发/逃跑要显式`SetCurrentGreen(nullptr,-1)`)。
+站在绿化里时`hasPosition`仍为true(圆内某一点)。**Citizen记录的位置统一是脚底高度**(和Core推算行走的路径点一致；2026-11-20起房间里的也改成脚底，不再是胶囊体中心)，UE层只在`ACitizenElement::Init`(生成)抬一个半胶囊高、在回收/存档/瞬移写回时减掉。
+行进目的地可以是绿化区：`BeginWalkToGreen(path, green, circle, now, speed)`写`walkGreen/walkGreenCircle`(此时`walkDestination`为空)，`GetWalkGreen/GetWalkGreenCircle`读；
+`IsWalking()`两种目的地都算。`AdvanceWalk`走完：目的地是绿化区=`SetCurrentGreen`+位置落在路径终点(不`ClearPosition`)，是房间=`SetCurrentRoom`+`ClearPosition`；
+`RebaseWalk`(存档时改写剩余路径)和`BeginWalk`/`EndWalk`/`Die`/`Depart`都认绿化目的地并清绿化状态。
+存档(`populace_save.cpp`，追加在人口段末尾)：`currentGreen`(`Map::GetGreens()`下标+圆序号)和`walkGreen`(同)，读档依赖地图绿化区先恢复。

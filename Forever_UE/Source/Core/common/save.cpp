@@ -161,6 +161,7 @@ namespace {
 			t.push_back(MakeOps("vehicle_mods", r.GetVehicleFactory(), &VehicleFactory::CreateVehicle, &VehicleFactory::DestroyVehicle));
 			t.push_back(MakeOps("weapon_mods", r.GetWeaponFactory(), &WeaponFactory::CreateWeapon, &WeaponFactory::DestroyWeapon));
 			t.push_back(MakeOps("zone_mods", r.GetZoneFactory(), &ZoneFactory::CreateZone, &ZoneFactory::DestroyZone));
+			t.push_back(MakeOps("green_mods", r.GetGreenFactory(), &GreenFactory::CreateGreen, &GreenFactory::DestroyGreen));
 			return t;
 		}();
 		return table;
