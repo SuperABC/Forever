@@ -106,6 +106,17 @@ public:
 	std::string scriptModName = "script_empty";
 	std::vector<std::string> milestoneNames;
 
+	// 长短边朝向偏好的统一落点:preferred是偏好那条边(FACE_WEST/EAST或FACE_NORTH/SOUTH，成对)里随机抽到的一侧。
+	// 这一侧在boundaryRoads里有非空路就用它；没有就换同一对的另一侧(preferred^1，同样是长边)；
+	// 两侧都没路返回-1，调用方保留原direction(否则outside端点会查不到路)。
+	static int ResolvePreferredDirection(int preferred, const std::unordered_map<int, Road*>& boundaryRoads) {
+		for (int dir : { preferred, preferred ^ 1 }) {
+			auto it = boundaryRoads.find(dir);
+			if (it != boundaryRoads.end() && it->second) return dir;
+		}
+		return -1;
+	}
+
 	// level:0=1楼,负数=地下室(-1=地下一层);同一level重复调用覆盖。
 	void AssignFloor(int level, const std::string& templateName, int face, FloorAssetSpec assets = {});
 	// 所有层(从-basements到layers-1)都用同一个模板+资产。

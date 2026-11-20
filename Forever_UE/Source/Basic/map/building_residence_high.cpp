@@ -56,10 +56,8 @@ void ResidenceHighBuilding::Layout(int& direction, const Quad& quad,
 	// 偏好方向(四种布局相同)：长边朝向正对的路，
 	// 只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction(否则outside端点会查不到路)。
 	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_NORTH + GetRandom(2) : FACE_WEST + GetRandom(2);
-	auto roadIt = boundaryRoads.find(preferredDirection);
-	if (roadIt != boundaryRoads.end() && roadIt->second) {
-		direction = preferredDirection;
-	}
+	int resolvedDirection = ResolvePreferredDirection(preferredDirection, boundaryRoads);
+	if (resolvedDirection >= 0) direction = resolvedDirection;
 
 	// 四种布局用到的墙面/地面/屋顶标签 -> 材质实例，统一登记。
 	SetSurfaceMaterial("roof", "/Game/Asset/Building/Material/Black.Black");

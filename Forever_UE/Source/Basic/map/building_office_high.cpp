@@ -55,10 +55,8 @@ void OfficeHighBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// 偏好方向：短边朝向正对的路，只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction。
 	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_WEST + GetRandom(2) : FACE_NORTH + GetRandom(2);
-	auto roadIt = boundaryRoads.find(preferredDirection);
-	if (roadIt != boundaryRoads.end() && roadIt->second) {
-		direction = preferredDirection;
-	}
+	int resolvedDirection = ResolvePreferredDirection(preferredDirection, boundaryRoads);
+	if (resolvedDirection >= 0) direction = resolvedDirection;
 
 	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f }; // 楼体占地块80%，居中
 	// office_circle：地下1层pg+(停车库)，地上2层(1楼fg+-、2楼fu+-)。

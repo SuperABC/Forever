@@ -38,10 +38,8 @@ void CommerceHighBuilding::Layout(int& direction, const Quad& quad,
 	}
 	// 偏好方向：长边朝向正对的路，只有boundaryRoads里确实有非空条目时才采用，否则保留上面兜底出来的direction。
 	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_NORTH + GetRandom(2) : FACE_WEST + GetRandom(2);
-	auto roadIt = boundaryRoads.find(preferredDirection);
-	if (roadIt != boundaryRoads.end() && roadIt->second) {
-		direction = preferredDirection;
-	}
+	int resolvedDirection = ResolvePreferredDirection(preferredDirection, boundaryRoads);
+	if (resolvedDirection >= 0) direction = resolvedDirection;
 
 	// 楼体占满地块，四周各留固定kSideGap的空隙(空隙铺gapMaterial)；地块太小时退化成居中的最小尺寸。
 	constexpr float kSideGap = 0.2f;

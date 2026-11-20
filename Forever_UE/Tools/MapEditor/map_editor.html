@@ -73,6 +73,7 @@ const S = {
 	},
 	get brush() { return this.brushes[this.brushOp]; },
 		cleanup: { width: 4, passes: 1 },   // 一键整理的参数：缓降宽度(格数)、平滑类型遍数
+		cpuRender: (() => { try { return localStorage.getItem('me_cpuRender') !== '0'; } catch (e) { return true; } })(),   // 2D路/地块用CPU光栅化(无显卡锯齿但慢)还是canvas(GPU，快)
 		showWater: true,   // 显示水面(2D 底图的蓝色着色 + 3D 水面)；只影响显示，不改数据
 		contour: { on: true, interval: 5 },   // 2D等高线(间距单位element=10m，每5条一条主等高线)
 	// 路网
@@ -310,6 +311,128 @@ function pathQuad(q) {
 	g.beginPath();
 	poly.forEach((p, i) => { const [sx, sy] = toScreen(p.x, p.y); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); });
 }
+// ---- 软件光栅化：路和地块自己在CPU上抗锯齿填充再贴到画布 ----
+// 部分显卡/Chrome硬件加速下，canvas2D的粗描边和相邻填充会在斜边上掉像素(露出底图)，所以这些矢量图形不交给canvas路径，自己画进像素缓冲。
+const RS = { w: 0, h: 0, buf: null, canvas: document.createElement('canvas'), id: null };
+function rsBegin() {
+	const W = c2d.width, H = c2d.height;
+	if (RS.w !== W || RS.h !== H || !RS.buf) { RS.w = W; RS.h = H; RS.buf = new Float32Array(W * H * 4); RS.canvas.width = W; RS.canvas.height = H; RS.id = null; }
+	RS.buf.fill(0);
+}
+function hexRGBA(c) {
+	const h = c.replace('#', '');
+	return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16), h.length >= 8 ? parseInt(h.substr(6, 2), 16) / 255 : 1];
+}
+// pts: 屏幕css像素坐标的多边形(非零环绕)；4x纵向子采样 + 横向精确区间覆盖。
+function rsFill(pts, color) {
+	if (pts.length < 3) return;
+	const dpr = window.devicePixelRatio || 1, W = RS.w, H = RS.h, buf = RS.buf;
+	const [cr, cg, cb, ca] = hexRGBA(color);
+	const P = pts.map((p) => [p[0] * dpr, p[1] * dpr]);
+	let y0 = Infinity, y1 = -Infinity;
+	for (const p of P) { if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
+	const ys = Math.max(0, Math.floor(y0)), ye = Math.min(H - 1, Math.ceil(y1));
+	const SUB = 4, cov = new Float32Array(W + 1), xs_ = [];
+	for (let y = ys; y <= ye; y++) {
+		let xmin = Infinity, xmax = -Infinity;
+		cov.fill(0);
+		for (let s = 0; s < SUB; s++) {
+			const sy = y + (s + 0.5) / SUB;
+			xs_.length = 0;
+			for (let i = 0; i < P.length; i++) {
+				const a = P[i], b = P[(i + 1) % P.length];
+				if ((a[1] <= sy) === (b[1] <= sy)) continue;
+				const x = a[0] + (sy - a[1]) * (b[0] - a[0]) / (b[1] - a[1]);
+				xs_.push([x, b[1] > a[1] ? 1 : -1]);
+			}
+			if (xs_.length < 2) continue;
+			xs_.sort((m, n) => m[0] - n[0]);
+			let wind = 0;
+			for (let i = 0; i < xs_.length - 1; i++) {
+				wind += xs_[i][1];
+				if (wind === 0) continue;
+				const xa = Math.max(0, xs_[i][0]), xb = Math.min(W, xs_[i + 1][0]);
+				if (xb <= xa) continue;
+				if (xa < xmin) xmin = xa;
+				if (xb > xmax) xmax = xb;
+				const ia = Math.floor(xa), ib = Math.floor(xb);
+				if (ia === ib) cov[ia] += (xb - xa) / SUB;
+				else {
+					cov[ia] += (ia + 1 - xa) / SUB;
+					for (let x = ia + 1; x < ib; x++) cov[x] += 1 / SUB;
+					if (ib < W) cov[ib] += (xb - ib) / SUB;
+				}
+			}
+		}
+		if (xmin > xmax) continue;
+		const xs = Math.max(0, Math.floor(xmin)), xe = Math.min(W - 1, Math.ceil(xmax));
+		for (let x = xs; x <= xe; x++) {
+			const c = cov[x]; if (c <= 0) continue;
+			const a = Math.min(1, c) * ca, o = (y * W + x) * 4, inv = 1 - a;
+			buf[o] = buf[o] * inv + cr * a; buf[o + 1] = buf[o + 1] * inv + cg * a; buf[o + 2] = buf[o + 2] * inv + cb * a; buf[o + 3] = buf[o + 3] * inv + a;
+		}
+	}
+}
+function rsFlush() {
+	const W = RS.w, H = RS.h, buf = RS.buf, rg = RS.canvas.getContext('2d');
+	if (!RS.id) RS.id = rg.createImageData(W, H);
+	const d = RS.id.data;
+	for (let i = 0; i < W * H; i++) {
+		const o = i * 4, a = buf[o + 3];
+		if (a <= 0) { d[o] = d[o + 1] = d[o + 2] = d[o + 3] = 0; continue; }
+		d[o] = Math.min(255, buf[o] / a); d[o + 1] = Math.min(255, buf[o + 1] / a); d[o + 2] = Math.min(255, buf[o + 2] / a); d[o + 3] = Math.min(255, a * 255 + 0.5);
+	}
+	rg.putImageData(RS.id, 0, 0);
+	g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.drawImage(RS.canvas, 0, 0); g.restore();
+}
+// 屏幕折线 → 两侧各偏半宽的多边形(转角取平均法线，斜接限制2倍)。
+function bandOf(pts0, widthPx) {
+	const pts = [];
+	for (const s of pts0) if (!pts.length || Math.hypot(s[0] - pts[pts.length - 1][0], s[1] - pts[pts.length - 1][1]) > 1e-3) pts.push(s);
+	if (pts.length < 2) return null;
+	const half = widthPx / 2, left = [], right = [];
+	const norm = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; };
+	for (let i = 0; i < pts.length; i++) {
+		const n0 = i > 0 ? norm(pts[i - 1], pts[i]) : norm(pts[0], pts[1]);
+		const n1 = i + 1 < pts.length ? norm(pts[i], pts[i + 1]) : n0;
+		let nx = n0[0] + n1[0], ny = n0[1] + n1[1];
+		const nl = Math.hypot(nx, ny);
+		if (nl < 1e-6) { nx = n0[0]; ny = n0[1]; } else { nx /= nl; ny /= nl; }
+		const k = half / Math.max(0.5, nx * n0[0] + ny * n0[1]);
+		left.push([pts[i][0] + nx * k, pts[i][1] + ny * k]);
+		right.push([pts[i][0] - nx * k, pts[i][1] - ny * k]);
+	}
+	return left.concat(right.reverse());
+}
+function rsRoad(q, widthPx, color, dashed) {
+	const pts = ME.polyline(q).map((p) => toScreen(p.x, p.y));
+	if (!dashed) { const b = bandOf(pts, widthPx); if (b) rsFill(b, color); return; }
+	// 虚线：按屏幕弧长切成 8 画 5 空
+	let acc = 0, cur = [pts[0]], on = true;
+	for (let i = 1; i < pts.length; i++) {
+		const a = pts[i - 1], b = pts[i], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+		let pos = 0;
+		while (pos < len) {
+			const lim = on ? 8 : 5, take = Math.min(len - pos, lim - acc);
+			pos += take; acc += take;
+			const p = [a[0] + (b[0] - a[0]) * pos / len, a[1] + (b[1] - a[1]) * pos / len];
+			if (on) cur.push(p);
+			if (acc >= lim - 1e-9) { if (on) { const bb = bandOf(cur, widthPx); if (bb) rsFill(bb, color); } on = !on; acc = 0; cur = [p]; }
+		}
+	}
+	if (on && cur.length > 1) { const bb = bandOf(cur, widthPx); if (bb) rsFill(bb, color); }
+}
+function rsLotFill(corners, color) { if (corners) rsFill(corners.map((c) => toScreen(c[0], c[1])), color); }
+function rsLotOutline(corners, color, w) {
+	if (!corners) return;
+	const P = corners.map((c) => toScreen(c[0], c[1]));
+	for (let i = 0; i < P.length; i++) {
+		const a = P[i], b = P[(i + 1) % P.length], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, e = w / 2;
+		const ux = (b[0] - a[0]) / l * e, uy = (b[1] - a[1]) / l * e;
+		const band = bandOf([[a[0] - ux, a[1] - uy], [b[0] + ux, b[1] + uy]], w);
+		if (band) rsFill(band, color);
+	}
+}
 // 等高线缓存：地形改动(terrainVersion)或间距变了才重算；拖笔刷中最多每60ms重算一次(实时跟手)，松手后再算最终的。
 const contourCache = { segs: null, interval: 0, version: -1, want: 0 };
 const contourLayer = { canvas: document.createElement('canvas'), base: '', ox: 0, oy: 0, t: 0 };
@@ -374,15 +497,46 @@ function draw2D() {
 	}
 	g.strokeStyle = '#6a7280'; g.lineWidth = 1; g.strokeRect(v.ox, v.oy, T.w * v.scale, T.h * v.scale);
 
-	// 道路
+	// 路和地块：软件光栅化到一张图再贴上去(见 rsFill)。顺序：路 → 地块可用矩形淡填充 → 轮廓。
+	const cpu = S.cpuRender;
+	if (cpu) rsBegin();
+	const lotInfos = [];
+	{
+		const pieces = getRoadPieces();
+		for (const lot of M.lots) {
+			const info = ME.describeLot(M, lot, pieces); if (!info) continue;
+			lotInfos.push({ lot, inner: ME.insetCorners(info.corners, info.directions.map((d) => d.margin)) });
+		}
+	}
+	if (cpu) for (const r of M.roads) rsRoad(ME.quadOf(M, r), Math.max(2, ME.roadWidth(r) * v.scale), ROAD_COLORS[r.type], r.type === 'tunnel');
+	else for (const r of M.roads) {
+		pathQuad(ME.quadOf(M, r));
+		g.lineCap = 'butt'; g.lineJoin = 'round';
+		g.strokeStyle = ROAD_COLORS[r.type]; g.lineWidth = Math.max(2, ME.roadWidth(r) * v.scale);
+		g.setLineDash(r.type === 'tunnel' ? [8, 5] : []);
+		g.stroke();
+	}
+	g.setLineDash([]);
+	if (cpu) {
+		for (const { lot, inner } of lotInfos) rsLotFill(inner, areaColor(lot.area) + '88');
+		for (const { lot, inner } of lotInfos) {
+			const selected = S.sel && S.sel.kind === 'lot' && S.sel.id === lot.id;
+			rsLotOutline(inner, selected ? '#ffffff' : areaColor(lot.area), selected ? 2.5 : 1.5);
+		}
+		rsFlush();
+	} else {
+		for (const { lot, inner } of lotInfos) {
+			if (!inner) continue;
+			const selected = S.sel && S.sel.kind === 'lot' && S.sel.id === lot.id;
+			g.beginPath(); inner.forEach((c, i) => { const [sx, sy] = toScreen(c[0], c[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); }); g.closePath();
+			g.fillStyle = areaColor(lot.area) + '88'; g.fill();
+			g.strokeStyle = selected ? '#fff' : areaColor(lot.area); g.lineWidth = selected ? 2.5 : 1.5; g.stroke();
+		}
+	}
+	// 选中高亮和高度箭头
 	for (const r of M.roads) {
 		const q = ME.quadOf(M, r);
 		const w = Math.max(2, ME.roadWidth(r) * v.scale);
-		pathQuad(q);
-		g.lineCap = 'butt'; g.lineJoin = 'round';
-		g.strokeStyle = ROAD_COLORS[r.type]; g.lineWidth = w;
-		g.setLineDash(r.type === 'tunnel' ? [8, 5] : []);
-		g.stroke();
 		g.setLineDash([]);
 		if (S.sel && S.sel.kind === 'road' && S.sel.id === r.id) { pathQuad(q); g.strokeStyle = '#fff'; g.lineWidth = Math.max(1.5, w * 0.25); g.stroke(); }
 				// 头尾高度不同：在中点画一个朝高处的小箭头
@@ -397,40 +551,6 @@ function draw2D() {
 					g.lineTo(mx + Math.cos(ang - 2.5) * 5, my + Math.sin(ang - 2.5) * 5);
 					g.closePath(); g.fill();
 				}
-			}
-	// 地块(画在道路上层)：只画扣掉四向缩进后的实际可用矩形(外框不画：它和道路边缘重合，画出来会有锯齿)。
-	// 填充：同一种地块类型的所有地块合成一条路径一次填充(统一绕向)。相邻地块共边时，分开填充两次抗锯齿会在斜边上留下一条断续的缝，合成一条路径后就没有了。
-	{
-		const pieces = getRoadPieces();
-		const infos = [];
-		for (const lot of M.lots) {
-			const info = ME.describeLot(M, lot, pieces); if (!info) continue;
-			// 有缩进的边向路方向多探出约1像素：路边和地块边几乎重合但斜率有微小差别时，两条抗锯齿边会叠出断续的缝，让地块压住路边就没有了。
-			const bleed = 1 / v.scale;
-			const inner = ME.insetCorners(info.corners, info.directions.map((d) => (d.margin > 0 ? Math.max(0, d.margin - bleed) : 0)));
-			infos.push({ lot, outer: info.corners, inner });
-		}
-		const byColor = new Map();
-		for (const { lot, inner } of infos) {
-			if (!inner) continue;
-			const pts = inner.map((c) => toScreen(c[0], c[1]));
-			let area2 = 0;
-			for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; area2 += p[0] * q[1] - q[0] * p[1]; }
-			if (area2 < 0) pts.reverse();
-			const key = areaColor(lot.area);
-			if (!byColor.has(key)) byColor.set(key, []);
-			byColor.get(key).push(pts);
-		}
-		for (const [color, polys] of byColor) {
-			g.beginPath();
-			for (const pts of polys) { pts.forEach((p, i) => { if (i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]); }); g.closePath(); }
-			g.fillStyle = color + '88'; g.fill('nonzero');
-		}
-		const trace = (cs) => { g.beginPath(); cs.forEach((c, i) => { const [sx, sy] = toScreen(c[0], c[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); }); g.closePath(); };
-		for (const { lot, outer, inner } of infos) {
-			const selected = S.sel && S.sel.kind === 'lot' && S.sel.id === lot.id;
-			if (inner) { trace(inner); g.strokeStyle = selected ? '#fff' : areaColor(lot.area); g.lineWidth = selected ? 2.5 : 1.5; g.stroke(); }
-		}
 	}
 	// 节点
 	for (const n of M.nodes) {
@@ -912,6 +1032,7 @@ function updateTop() {
 				btn('等高线', () => { S.contour.on = !S.contour.on; S.dirty2d = true; updateTop(); }, S.contour.on),
 				sel([[0.25, '0.25'], [0.5, '0.5'], [1, '1'], [2, '2'], [5, '5'], [10, '10']], S.contour.interval, (v) => { S.contour.interval = parseFloat(v); S.dirty2d = true; }),
 				btn('水面', () => { S.showWater = !S.showWater; repaintTerrainImage(); updateTop(); }, S.showWater),
+				btn('CPU渲染', () => { S.cpuRender = !S.cpuRender; try { localStorage.setItem('me_cpuRender', S.cpuRender ? '1' : '0'); } catch (e) {} S.dirty2d = true; updateTop(); }, S.cpuRender),
 		el('span', { class: 'sep' }),
 		el('span', { style: S.warnings.length ? 'color:var(--warn)' : 'color:var(--dim)' }, S.warnings.length ? `⚠ ${S.warnings.length} 条警告` : '无警告'),
 		el('span', { class: 'hint', style: 'margin-left:auto' }, `${S.terrain.w}×${S.terrain.h}`),
@@ -1236,8 +1357,13 @@ function build3D() {
 }
 function render3D() {
 	if (!r3) return;
-	if (S.dirty3d) build3D();
+	let rebuilt = false;
+	if (S.dirty3d) { build3D(); rebuilt = true; }
 	const c = r3.cam;
+	// 按需渲染：地形是100万格/200万三角形，相机、场景、画布尺寸都没变就不重画(以前每帧都全画一遍，空闲时也白烧显卡)。
+	const key = [c.yaw, c.pitch, c.dist, c.target.x, c.target.y, c.target.z, r3.renderer.domElement.width, r3.renderer.domElement.height].join(',');
+	if (!rebuilt && key === r3.lastKey) return;
+	r3.lastKey = key;
 	r3.camera.position.set(c.target.x + Math.sin(c.yaw) * Math.cos(c.pitch) * c.dist, c.target.y + Math.sin(c.pitch) * c.dist, c.target.z + Math.cos(c.yaw) * Math.cos(c.pitch) * c.dist);
 	r3.camera.lookAt(c.target);
 	r3.renderer.render(r3.scene, r3.camera);

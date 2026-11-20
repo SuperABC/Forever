@@ -94,10 +94,8 @@ void ResidenceMiddleBuilding::Layout(int& direction, const Quad& quad,
 		if (quad.GetSizeX() > quad.GetSizeY()) preferredDirection = FACE_WEST + GetRandom(2);
 		else preferredDirection = FACE_NORTH + GetRandom(2);
 	}
-	auto roadIt = boundaryRoads.find(preferredDirection);
-	if (roadIt != boundaryRoads.end() && roadIt->second) {
-		direction = preferredDirection;
-	}
+	int resolvedDirection = ResolvePreferredDirection(preferredDirection, boundaryRoads);
+	if (resolvedDirection >= 0) direction = resolvedDirection;
 
 	if (layout == 0) {
 		AssignFloor(-1, "preset_straight_linear_bg+", direction);

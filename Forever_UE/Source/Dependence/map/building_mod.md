@@ -16,6 +16,7 @@
 - **`ElevatorCabinSpec`/`AssignElevatorCabin`**：`shaftIndex`是每层`.layout`模板`elevators`数组里的下标，**不从几何位置反推**，要求mod保证模板里elevator条目顺序跨楼层一致。同一口井可按楼层分段声明多台(范围不能重叠，重叠的后一条被跳过)。`scriptModName`/`milestoneNames`指定电梯自己的Script。`Building::Layout()`把`cabins`快照下来创建电梯实体`Cabin`，见`Source/Core/map/cabin.md`。
 - **`SetSurfaceMaterial(tag, materialPath)`/`surfaceMaterials`**：地板/天花板标签->材质实例软路径。`.layout`的`ceilings`/`grounds`条目可写成`{"rect":[8个数], "tag":"roof"}`(旧的纯数组写法仍可用，无标签)；`Building::ReadFloor`实例化时按标签查这张表，把路径抄到每块`Ceiling`/`Ground`上(随存档保存)，Forever层渲染时用它，没有标签、标签没登记、或材质加载失败都退回楼层`FloorAssetSpec`指定的材质/框架默认的白色。在`Layout()`里调用。
 - **`doorSpecs`**：tag->`DoorSpec`，负责非single/row元素(目前只有corridor)上的门；layout里门洞带的tag查不到、或查到但mesh为空，就只是个洞(见`feature_spec.md`/`Source/Core/map/door.md`)。
+- **长短边朝向偏好**：`BuildingMod::ResolvePreferredDirection(preferred, boundaryRoads)`(静态非虚工具)——`preferred`是偏好边(西/东或北/南成对)随机抽到的一侧，该侧有真实路就用它，没有就换同一对的另一侧(`preferred^1`，同样是长边)，两侧都没路返回-1(调用方保留原`direction`)。住宅/商业/办公/工厂各high/middle/low的`Layout()`统一用它，避免只有随机到的那侧没路就退回短边。
 - **树**：`LayoutTrees(quad, boundaryRoads)`(默认空)在整张地图生成完后由`Map::InitVegetation`对每栋building调用一次，mod里调`AddTreeSingle/AddTreeLine/AddTreeArea`只记请求进`trees`(`TreeRequests`，见`feature_spec.md`)。参考系是整块建筑quad(不是楼体footprint)，按朝北写，Core按建筑朝向换算。
 - **`AddDecoration`/`decorations`**：放自定义StaticMesh(如成品建筑模型)，位置/yaw按face=2定义，Core按最终朝向换算；`meshPath`为空直接忽略；只在近处LOD显示。`Building::Layout()`在`mod->Layout()`之后读取。
 - **存档钩子**：`SaveState`/`LoadState`/`GetStateVersion`/`GetInstanceCounter`/`SetInstanceCounter`，默认什么都不存；公共声明字段由Core直接快照，只有mod私有数据走钩子，见`Source/Dependence/common/mod_state.md`。

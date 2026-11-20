@@ -44,10 +44,8 @@ void IndustryMiddleBuilding::Layout(int& direction, const Quad& quad,
 		preferredDirection = FACE_WEST + GetRandom(2);
 		if (quad.GetSizeY() > 4.f) basements = 1;
 	}
-	auto roadIt = boundaryRoads.find(preferredDirection);
-	if (roadIt != boundaryRoads.end() && roadIt->second) {
-		direction = preferredDirection;
-	}
+	int resolvedDirection = ResolvePreferredDirection(preferredDirection, boundaryRoads);
+	if (resolvedDirection >= 0) direction = resolvedDirection;
 
 	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f };
 

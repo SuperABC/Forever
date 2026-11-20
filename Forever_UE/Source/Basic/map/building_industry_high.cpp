@@ -37,10 +37,8 @@ void IndustryHighBuilding::Layout(int& direction, const Quad& quad,
 
 	// 同ResidenceBuilding：偏好方向在boundaryRoads里有路才采用。
 	int preferredDirection = quad.GetSizeX() > quad.GetSizeY() ? FACE_NORTH + GetRandom(2) : FACE_WEST + GetRandom(2);
-	auto roadIt = boundaryRoads.find(preferredDirection);
-	if (roadIt != boundaryRoads.end() && roadIt->second) {
-		direction = preferredDirection;
-	}
+	int resolvedDirection = ResolvePreferredDirection(preferredDirection, boundaryRoads);
+	if (resolvedDirection >= 0) direction = resolvedDirection;
 
 	footprint = BuildingFootprintSpec{ 0.5f, 0.5f, 0.8f, 0.8f };
 	SetSurfaceMaterial("clay", "/Game/Asset/Building/Material/Clay.Clay");
