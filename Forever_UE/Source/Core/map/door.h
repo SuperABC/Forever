@@ -44,6 +44,9 @@ public:
 	const std::string& GetMesh() const;           // 一定非空(为空的根本不会创建Door)
 	const std::string& GetAnimClass() const;      // 动画蓝图类路径，可为空
 	float GetOpenSeconds() const;
+	float GetWidthScale() const;                  // 见DoorSpec::widthScale/heightScale/thicknessFollowsHeight
+	float GetHeightScale() const;
+	bool GetThicknessFollowsHeight() const;
 
 	// 几何(世界坐标、地图单位；Map::CreateDoor创建时算好，之后不会再变)。
 	float GetX() const;

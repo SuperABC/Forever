@@ -64,7 +64,8 @@ public:
 private:
 	// 骨骼网格门：按门洞宽高对齐包围盒——X、Y等比缩放(系数=门宽/包围盒宽，厚度跟着等比，绕Z的平开不变形)，
 	// Z独立缩放到门高；包围盒中心落在(0,0,门高/2)。见door.md"实际摆位"一节。
-	void BuildSkeletalDoor(USkeletalMesh* mesh, float doorWidth, float doorHeight);
+	// outWidth/outHeight：缩放后门实际的宽/高(cm)，挡板、触发盒按它摆。
+	void BuildSkeletalDoor(USkeletalMesh* mesh, float doorWidth, float doorHeight, float& outWidth, float& outHeight);
 	// 挡板：门关着时挡人(骨骼网格自己不带碰撞)，开到一半以上放行。
 	void BuildBlocker(float doorWidth, float doorHeight);
 	void BuildTriggerBox(float doorWidth, float doorHeight);

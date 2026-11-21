@@ -107,9 +107,11 @@ void UForeverDoorComponent::Init(Door* inDoor) {
 		return;
 	}
 
-	BuildSkeletalDoor(mesh, doorWidth, doorHeight);
-	BuildBlocker(doorWidth, doorHeight);
-	BuildTriggerBox(doorWidth, doorHeight);
+	// 门实际的宽高由缩放规则决定(见BuildSkeletalDoor)，挡板/触发盒按实际尺寸摆，不一定等于门洞尺寸。
+	float actualWidth = doorWidth, actualHeight = doorHeight;
+	BuildSkeletalDoor(mesh, doorWidth, doorHeight, actualWidth, actualHeight);
+	BuildBlocker(actualWidth, actualHeight);
+	BuildTriggerBox(actualWidth, actualHeight);
 
 	interactNameOnly = UTF8_TO_TCHAR(door->GetInteractName().c_str());
 	cachedOptions.Reset();
@@ -118,7 +120,7 @@ void UForeverDoorComponent::Init(Door* inDoor) {
 	}
 }
 
-void UForeverDoorComponent::BuildSkeletalDoor(USkeletalMesh* mesh, float doorWidth, float doorHeight) {
+void UForeverDoorComponent::BuildSkeletalDoor(USkeletalMesh* mesh, float doorWidth, float doorHeight, float& outWidth, float& outHeight) {
 	UDoorMeshComponent* comp = NewObject<UDoorMeshComponent>(this, NAME_None, RF_Transient);
 	comp->SetSkeletalMeshAsset(mesh);
 	if (mesh->GetPhysicsAsset()) {
@@ -150,21 +152,35 @@ void UForeverDoorComponent::BuildSkeletalDoor(USkeletalMesh* mesh, float doorWid
 	comp->TickAnimation(0.f, false);
 	comp->RefreshBoneTransforms();
 
-	// 对齐门洞：X、Y等比(系数=门宽/包围盒宽)，Z独立到门高；包围盒中心落在(0,0,门高/2)，不管资产pivot在哪。
+	// 缩放规则(DoorSpec::widthScale/heightScale/thicknessFollowsHeight)：
+	//  宽度(X)：widthScale非0直接用，否则=门洞宽/包围盒宽。
+	//  高度(Z)：heightScale非0直接用；否则园区门跟随宽度缩放(没有门洞高度的概念)，建筑/房间门=门洞高/包围盒高。
+	//  厚度(Y)：thicknessFollowsHeight为false跟随宽度缩放，为true跟随高度缩放。
+	// 包围盒中心落在(0,0,实际高/2)，不管资产pivot在哪。
 	FBoxSphereBounds bounds = mesh->GetBounds();
 	FVector extent = bounds.BoxExtent;
-	float scaleXY = extent.X > KINDA_SMALL_NUMBER ? doorWidth / (2.f * extent.X) : 1.f;
-	float scaleZ = extent.Z > KINDA_SMALL_NUMBER ? doorHeight / (2.f * extent.Z) : 1.f;
-	FVector scale(scaleXY, scaleXY, scaleZ);
+	float scaleX = door->GetWidthScale() > KINDA_SMALL_NUMBER ? door->GetWidthScale()
+		: (extent.X > KINDA_SMALL_NUMBER ? doorWidth / (2.f * extent.X) : 1.f);
+	float scaleZ;
+	if (door->GetHeightScale() > KINDA_SMALL_NUMBER) scaleZ = door->GetHeightScale();
+	else if (door->GetKind() == DOOR_KIND_ZONE) scaleZ = scaleX;
+	else scaleZ = extent.Z > KINDA_SMALL_NUMBER ? doorHeight / (2.f * extent.Z) : 1.f;
+	const bool thicknessFollowsHeight = door->GetThicknessFollowsHeight();
+	float scaleY = thicknessFollowsHeight ? scaleZ : scaleX;
+	FVector scale(scaleX, scaleY, scaleZ);
 	comp->SetRelativeScale3D(scale);
+	outWidth = 2.f * extent.X * scaleX;
+	outHeight = 2.f * extent.Z * scaleZ;
 
-	comp->SetRelativeLocation(FVector(0.f, 0.f, doorHeight * 0.5f) -
+	comp->SetRelativeLocation(FVector(0.f, 0.f, outHeight * 0.5f) -
 		FVector(scale.X * bounds.Origin.X, scale.Y * bounds.Origin.Y, scale.Z * bounds.Origin.Z));
 
 	// 包围盒(网格局部空间，UDoorMeshComponent::CalcBounds里再乘组件变换)：门扇绕铰链(在门洞边缘)转开，最远扫到离门洞
-	// 约一个门宽(2*extent.X)的位置，两个方向都可能(OpenSide)，所以Y方向在原厚度上加这么多；X、Z保持网格自带范围。
+	// 约一个门宽的位置(厚度跟随高度的掀开门是一个门高)，两个方向都可能(OpenSide)，所以Y方向在原厚度上加这么多
+	// (世界尺寸要除以Y缩放换回网格局部)；X、Z保持网格自带范围。
 	// 默认的包围盒每帧按动画重算，跟不上门扇姿势会被剔除成一帧有一帧无；等比放大又会让包围球过大拖慢阴影/灯光。
-	FVector doorExtent(extent.X, extent.Y + 2.f * extent.X, extent.Z);
+	const float sweepWorld = thicknessFollowsHeight ? outHeight : outWidth;
+	FVector doorExtent(extent.X, extent.Y + sweepWorld / FMath::Max(scaleY, KINDA_SMALL_NUMBER), extent.Z);
 	comp->SetDoorLocalBounds(FBoxSphereBounds(bounds.Origin, doorExtent, doorExtent.Size()));
 	comp->UpdateBounds();
 

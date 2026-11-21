@@ -2196,11 +2196,16 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 	// 容差要大于车道偏移量级(0.15~0.4)，才能让出入口锚点(mod声明的原始坐标)与带偏移的车道锚点自动桥接；又远小于zone尺寸，不会误合并。
 	constexpr float ZONE_ANCHOR_MERGE_RADIUS_SQ = 1.f;
 	auto findOrCreate = [&](float wx, float wy, bool wantVehicle) -> Node* {
+		// 取容差内最近的一个(不是第一个)：车行入口/出口坐标相距很近，取第一个会让出口锚点永远接不上内部车道。
+		Node* nearest = nullptr;
+		float nearestDistSq = ZONE_ANCHOR_MERGE_RADIUS_SQ;
 		for (auto& [cx, cy, cIsVehicle, node] : anchorCache) {
 			if (cIsVehicle != wantVehicle) continue;
 			float dx = cx - wx, dy = cy - wy;
-			if (dx * dx + dy * dy < ZONE_ANCHOR_MERGE_RADIUS_SQ) return node;
+			float distSq = dx * dx + dy * dy;
+			if (distSq < nearestDistSq) { nearestDistSq = distSq; nearest = node; }
 		}
+		if (nearest) return nearest;
 		Node* n = MakeIsolatedAnchor(wx, wy, 0.f, wantVehicle ? "vehicle" : "pedestrian");
 		anchorCache.emplace_back(wx, wy, wantVehicle, n);
 		entityNav[zone].nodes.push_back(n);

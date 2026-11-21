@@ -125,12 +125,14 @@ namespace {
 		w.Str(s.mesh); w.Str(s.animClass); w.Str(s.name); w.Str(s.scriptModName);
 		WriteStrings(s.milestoneNames, w);
 		w.I32(s.access); w.F32(s.openSeconds);
+		w.F32(s.widthScale); w.F32(s.heightScale); w.I32(s.thicknessFollowsHeight ? 1 : 0);
 	}
 	DoorSpec ReadDoorSpec(ByteReader& r) {
 		DoorSpec s;
 		s.mesh = r.Str(); s.animClass = r.Str(); s.name = r.Str(); s.scriptModName = r.Str();
 		s.milestoneNames = ReadStrings(r);
 		s.access = r.I32(); s.openSeconds = r.F32();
+		s.widthScale = r.F32(); s.heightScale = r.F32(); s.thicknessFollowsHeight = r.I32() != 0;
 		return s;
 	}
 

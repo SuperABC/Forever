@@ -21,9 +21,14 @@ MeetOption交互选项。
 
 `DoorSpec.mesh`是**骨骼网格**软路径（门框和门扇在同一个资产里，会动的部分绑在骨上），`DoorSpec.animClass`是动画蓝图类（父类必须是`UDoorAnimInstance`）。组件自己的职责只有：算`openProgress`(0=全关,1=全开，按`openSeconds`线性插值)，每帧写进动画实例的`OpenProgress`/`OpenSide`，**模型怎么动完全由动画蓝图决定**（AnimGraph里用Transform (Modify) Bone或Sequence Evaluator读`OpenProgress`）。组件里没有任何Slide/Swing/铰链代码；`animClass`为空或加载失败回退到`UDoorAnimInstance`基类，门不动（日志告警）。动画实例不是`UDoorAnimInstance`（蓝图父类选错）时只告警一次。
 
-### 摆位：X、Y等比缩放，Z独立缩放
+### 摆位：缩放由DoorSpec的三个字段决定(2026-11-21)
 
-`BuildSkeletalDoor`按`USkeletalMesh::GetBounds()`（ref-pose包围盒）：X、Y用同一个系数`门宽/包围盒宽`（门厚跟着门宽等比，所以绕Z的平开旋转不会被拉变形），Z单独缩放到门高；包围盒中心落在组件本地`(0,0,门高/2)`，不管资产pivot在哪。代价：很宽的门（园区车行门）门厚也会按比例变厚。网格自己`NoCollision`。
+`BuildSkeletalDoor`按`USkeletalMesh::GetBounds()`（ref-pose包围盒）算三个轴的缩放系数（相对网格原始尺寸的倍数）：
+- **宽度(X)**：`DoorSpec::widthScale`非0直接用，否则=`门洞宽/包围盒宽`。
+- **高度(Z)**：`heightScale`非0直接用；为0时园区门(`DOOR_KIND_ZONE`，没有门洞高度)跟随宽度系数，建筑/房间门=`门洞高/包围盒高`。
+- **厚度(Y)**：`thicknessFollowsHeight`为false跟随宽度系数（平开/推拉门绕Z转动，XY必须等比，否则门扇转开会变窄/变宽），为true跟随高度系数（掀开的车库门）。
+
+缩放后的实际宽高(`2*extent*系数`)回传给`BuildBlocker`/`BuildTriggerBox`，所以挡板和触发盒按门实际大小摆，不一定等于门洞尺寸；包围盒中心落在组件本地`(0,0,实际高/2)`，不管资产pivot在哪。包围盒的Y向扩展(门扇转开扫过的范围)取门宽（厚度跟随高度时取门高），除以Y缩放换回网格局部单位。网格自己`NoCollision`。
 
 ### 挡板（blocker）
 

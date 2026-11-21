@@ -95,7 +95,7 @@ void ResidenceMiddleZone::Layout(int direction, const Quad& quad,
 	// 目标面积换算成近似正方形的边长；围墙进深、大门宽度占边长的比例。
 	constexpr float TARGET_ACREAGE = 20000.f;
 	constexpr float WALL_DEPTH = 0.2f;
-	constexpr float GATE_WIDTH_RATIO = 0.2f;
+	constexpr float GATE_WIDTH = 0.8f; // 大门开口宽(地图单位，1单位=10米，即8米；园区门高度见gate.door.heightScale)
 	// 园区实际尺寸以quad为准(占位时尽量是TARGET_ACREAGE开方的正方形，但某一侧空隙不够切时会被拉伸)。
 	const float halfX = quad.GetSizeX() / 2.f, halfY = quad.GetSizeY() / 2.f;
 	int dir = direction;
@@ -108,7 +108,7 @@ void ResidenceMiddleZone::Layout(int direction, const Quad& quad,
 	// 倍数，估大了铺出来的实例之间会留出明显空当。
 	constexpr float wallUnit = 0.2f;
 
-	float gateWidth = side * GATE_WIDTH_RATIO;
+	float gateWidth = GATE_WIDTH;
 	float gateMargin = (side - gateWidth) / 2.f;
 
 	walls.clear();
@@ -123,9 +123,10 @@ void ResidenceMiddleZone::Layout(int direction, const Quad& quad,
 	gate.marginStart = gateMargin;
 	gate.marginEnd = gateMargin;
 	gate.depth = WALL_DEPTH;
-	// 园区大门：骨骼动画门(目前所有门共用测试门)，车行门很宽，会被拉得很大。
-	gate.door.mesh = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/SKM_door_with_cardreader.SKM_door_with_cardreader";
-	gate.door.animClass = "/Game/3rdParty/Door_with_cardreader/StaticMeshes/ABP_Door.ABP_Door_C";
+	// 园区大门：骨骼动画双开门(Historic_Medieval_Church_Ruin_Gate_Metal_Fence_01_xjurfet，两扇拼成一个骨骼网格，见DoorAnimInstance.md)。
+	gate.door.mesh = "/Game/3rdParty/Historic_Medieval_Church_Ruin_Gate_Metal_Fence_01_xjurfet/StaticMeshes/SKM_Gate.SKM_Gate";
+	gate.door.animClass = "/Game/3rdParty/Historic_Medieval_Church_Ruin_Gate_Metal_Fence_01_xjurfet/StaticMeshes/ABP_Gate.ABP_Gate_C";
+	gate.door.heightScale = 2.0f; // 高度缩放直接取2倍网格原高(不跟随宽度)
 	gates.push_back(gate);
 
 	// 四个方向的进深统一都是WALL_DEPTH，每条边贴墙角的一端缩进也统一都是WALL_DEPTH，
@@ -220,13 +221,13 @@ void ResidenceMiddleZone::Layout(int direction, const Quad& quad,
 	internalBuildings.push_back(buildingA);
 	internalBuildings.push_back(buildingB);
 
-	// 急救包(测试园区放置mesh)：按朝北坐标写，大门在北边正中间、开口宽GATE_WIDTH_RATIO倍边长，
+	// 急救包(测试园区放置mesh)：按朝北坐标写，大门在北边正中间、开口宽GATE_WIDTH，
 	// 两个急救包放在开口两端(x=0.5∓开口半宽)、离北边ZONE_KIT_INSET的园区内侧。
 	decorations.clear();
 	for (float sign : { -1.f, 1.f }) {
 		DecorationSpec kit;
 		kit.meshPath = ZONE_KIT_MESH_PATH;
-		kit.position = { 0.5f + sign * GATE_WIDTH_RATIO * 0.5f, 0.f, 0.f, ZONE_KIT_INSET };
+		kit.position = { 0.5f, sign * GATE_WIDTH * 0.5f, 0.f, ZONE_KIT_INSET };
 		kit.scaleX = kit.scaleY = kit.scaleZ = ZONE_KIT_SCALE;
 		kit.yaw = ZONE_KIT_YAW;
 		AddDecoration(kit);
@@ -237,7 +238,7 @@ void ResidenceMiddleZone::LayoutTrees(int direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
 	// 按朝北坐标(大门在北边y=0，原点在quad西北角，+X东+Y南)沿四面栅栏内侧种树，Core按大门方向
 	// 旋转。位置用PointParams的ratio+offset：ratio=0/1对应西(北)/东(南)边，offset是离边的距离。
-	constexpr float GATE_WIDTH_RATIO = 0.2f; // 同Layout()的大门宽度占边长的比例
+	constexpr float GATE_WIDTH = 0.8f; // 同Layout()的大门开口宽(地图单位)
 	trees = TreeRequests();
 	// 朝北坐标系里大门所在的边(北边)长度side、南北方向深度depth：大门朝西/东时和quad的X/Y互换。
 	const bool gateAlongY = (direction == FACE_WEST || direction == FACE_EAST);
@@ -259,7 +260,7 @@ void ResidenceMiddleZone::LayoutTrees(int direction, const Quad& quad,
 	addLine({ 0.f, inset + spacing, 1.f, -inset }, { 1.f, -inset - spacing, 1.f, -inset }, side - 2.f * inset - 2.f * spacing);
 	// 北边(大门边)：分成大门两侧两段，大门开口两侧各再让出半个间距(和行道树避让开口同一个规则)，
 	// 靠角的一端同样收一个间距避开西/东边已经种过的角。
-	float gateClear = GATE_WIDTH_RATIO * 0.5f * side + spacing * 0.5f;
+	float gateClear = GATE_WIDTH * 0.5f + spacing * 0.5f;
 	float northSegment = side * 0.5f - gateClear - inset - spacing;
 	addLine({ 0.f, inset + spacing, 0.f, inset }, { 0.5f, -gateClear, 0.f, inset }, northSegment);
 	addLine({ 0.5f, gateClear, 0.f, inset }, { 1.f, -inset - spacing, 0.f, inset }, northSegment);

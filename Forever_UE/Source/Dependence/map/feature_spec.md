@@ -21,6 +21,7 @@ Dependence/map里所有"feature"的纯数据描述(spec)统一放在这一个文
   查到了但`mesh`为空，同样只是个洞。只有`mesh`非空才会真正创建Core的`Door`实例和UE的
   门组件，见`Core/map/door.h`的`ResolveDoorSpec`。
 - **门是骨骼动画**：`mesh`是骨骼网格软路径（含门框），`animClass`是动画蓝图类软路径（`…_C`，父类`UDoorAnimInstance`；空=基类，门不动）。Core/Forever层只把一个"开合度"(0~1，`openSeconds`秒走完)喂给动画蓝图，门怎么动完全由骨骼+动画蓝图决定，所以这里没有Slide/Swing/单双扇/开合幅度/随机朝向字段。
+- **门的缩放(2026-11-21)**：`widthScale`/`heightScale`/`thicknessFollowsHeight`控制Forever层怎么把骨骼网格缩放进门洞，缩放系数都是相对网格原始(ref-pose包围盒)尺寸的倍数。`widthScale`默认0=让包围盒宽度匹配门洞宽度，非0=直接用；`heightScale`默认0=建筑/房间门匹配门洞高度、园区门(没有门洞高度)跟随宽度缩放，非0=直接用；`thicknessFollowsHeight`默认false=厚度跟随宽度缩放(平开/推拉门绕竖直轴转动，XY等比才不会让转开的门扇变形)，true=厚度跟随高度缩放(掀开的车库门)。这三个字段随DoorSpec一起存档(`map_save`，没升版本)。
 - **`access`用`int`不用`DoorAccess`枚举**：`DoorSpec`是纯数据配置（mod作者在`Layout()`/
   `SetProperty()`里手写的字面值），`Door::DoorAccess`枚举定义在`Core/map/door.h`——
   `Dependence`层不能反向依赖`Core`，所以这里用`int`（0=Open/1=Owner/2=Locked，和

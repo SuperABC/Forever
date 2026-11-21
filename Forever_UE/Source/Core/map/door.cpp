@@ -49,6 +49,9 @@ Room* Door::GetRoom() const { return room; }
 const string& Door::GetMesh() const { return spec.mesh; }
 const string& Door::GetAnimClass() const { return spec.animClass; }
 float Door::GetOpenSeconds() const { return spec.openSeconds; }
+float Door::GetWidthScale() const { return spec.widthScale; }
+float Door::GetHeightScale() const { return spec.heightScale; }
+bool Door::GetThicknessFollowsHeight() const { return spec.thicknessFollowsHeight; }
 
 float Door::GetX() const { return x; }
 float Door::GetY() const { return y; }
