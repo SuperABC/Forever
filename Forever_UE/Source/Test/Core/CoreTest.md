@@ -5,7 +5,7 @@
 
 ## 文件分工
 - `main.cpp`：参数解析、套件表、子进程分发、汇总与退出码。
-- `test_framework.*`：`TestRun`(Check/Metric/Note，写 json/txt 报告，子进程导出/父进程导入)、FNV 哈希。
+- `test_framework.*`：`TestRun`(Check/Metric/Note，写 json/txt 报告，子进程导出/父进程导入)、FNV 哈希、`ReadProcessMemory`/`RecordMemory`(进程私有内存 MB 与相对上次记录的增量，各套件在关键点调用)。
 - `test_options.h`：命令行选项与 quick/full 默认值(地图 256/1024、3/24 个月、种子 {11,12}/{11..14})。
 - `process_util.*`：自身路径、起子进程(重定向输出+超时)、崩溃过滤器(打印模块+RVA，配合 .map 解析)。
 - `world_build.*`：`LoadTestConfig`(注入顶层 seed 并给每个 mod 条目注入派生 `--seed`)、`BuildWorld`(与 UE 同顺序，逐阶段计时/漏包计数/签名)、`ComputeFingerprint`。

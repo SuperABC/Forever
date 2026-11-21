@@ -230,6 +230,7 @@ void EconSuiteBody(TestWorld& world, const TestOptions& options) {
 			run.Metric(prefix + "employed", static_cast<double>(CountEmployed(*world.populace)), "");
 			run.Metric(prefix + "citizens funds", static_cast<double>(ledger.CitizensTotal()), "");
 			run.Metric(prefix + "organizations funds", static_cast<double>(ledger.OrganizationsTotal()), "");
+			RecordMemory(prefix + "end"); // 每月内存：持续单调增长=泄漏/无上限的缓存，要查
 		}
 	}
 

@@ -132,13 +132,14 @@ namespace {
 		stage.name = name;
 		stage.seconds = chrono::duration<double>(chrono::steady_clock::now() - begin).count();
 		stage.unscopedDelta = RandomRegistry::UnscopedDraws() - before;
+		stage.privateMB = ReadProcessMemory().privateMB;
 		stage.signature = StageSignature(world);
 		world.stages.push_back(stage);
 		return true;
 	}
 
 	// 导航图指纹：按节点id排序后，把邻接表(含顺序)和端点坐标哈进去。
-	string GraphFingerprint(const unordered_map<int, vector<pair<int, Connection*>>>& graph) {
+	string GraphFingerprint(const NavGraph& graph) {
 		vector<int> ids;
 		for (const auto& entry : graph) ids.push_back(entry.first);
 		sort(ids.begin(), ids.end());

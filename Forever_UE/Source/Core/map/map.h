@@ -28,6 +28,8 @@
 #include <tuple>
 #include <memory>
 #include <mutex>
+#include <atomic>
+#include <algorithm>
 
 
 // 10m*10m地图元素；hatches是地形挖洞标记(隧道口/地下室)，详见map.md。
@@ -41,6 +43,55 @@ struct Element {
 	// 细化高度数组(17x17,覆盖[x,x+1]x[y,y+1],约定见terrain_mod.h的TERRAIN_FINE_SUBDIV),
 	// 默认为空——只有起伏大的格子(目前是河岸)才分配,用unique_ptr让没有数组的格子只多8字节。
 	std::unique_ptr<std::array<float, TERRAIN_FINE_SIZE * TERRAIN_FINE_SIZE>> fineHeights;
+};
+
+// 导航图邻接表：节点id -> (邻居id, 边)。读接口和unordered_map一致(begin/end/find/count/size，都是const)，
+// 修改只能走下面的成员函数，每个都让revision+1：寻路的"编译图"和行人路线缓存据此O(1)判断图有没有变
+// (原来每次寻路遍历所有边算校验和，约0.5ms，比命中缓存本身贵得多)。
+// 故意不继承unordered_map、也不暴露内部容器的非const引用：这样没有任何办法绕过revision去改图。
+class NavGraph {
+public:
+	using Edges = std::vector<std::pair<int, Connection*>>;
+	using Container = std::unordered_map<int, Edges>;
+	using const_iterator = Container::const_iterator;
+
+	// ---- 只读 ----
+	const_iterator begin() const { return data.begin(); }
+	const_iterator end() const { return data.end(); }
+	const_iterator find(int id) const { return data.find(id); }
+	size_t count(int id) const { return data.count(id); }
+	size_t size() const { return data.size(); }
+	bool empty() const { return data.empty(); }
+	const Edges& at(int id) const { return data.at(id); }
+	uint64_t Revision() const { return revision; }
+	// 全部节点id升序(存档按key排序写，保证字节稳定)。
+	std::vector<int> SortedIds() const { std::vector<int> ids; ids.reserve(data.size()); for (const auto& entry : data) ids.push_back(entry.first); std::sort(ids.begin(), ids.end()); return ids; }
+
+	// ---- 修改(都会revision+1) ----
+	void AddEdge(int from, int to, Connection* connection) { revision++; data[from].emplace_back(to, connection); }
+	// 取(没有就建)from的出边表，供读档按顺序往里填；返回的引用只在本次填充期间用，不要保存。
+	Edges& EdgesOf(int from) { revision++; return data[from]; }
+	// 删from->to的所有边(只删这个方向)。
+	void RemoveEdges(int from, int to) {
+		revision++;
+		auto it = data.find(from);
+		if (it == data.end()) return;
+		Edges& edges = it->second;
+		edges.erase(std::remove_if(edges.begin(), edges.end(), [to](const std::pair<int, Connection*>& e) { return e.first == to; }), edges.end());
+	}
+	// 整张图里删掉所有满足pred(fromId, edge)的边。
+	template <class Pred> void RemoveEdgesIf(Pred pred) {
+		revision++;
+		for (auto& [from, edges] : data) {
+			edges.erase(std::remove_if(edges.begin(), edges.end(), [&](const std::pair<int, Connection*>& e) { return pred(from, e); }), edges.end());
+		}
+	}
+	// 删掉节点自己的出边表(别的节点指向它的边另外用RemoveEdges/RemoveEdgesIf删)。
+	void EraseNode(int id) { revision++; data.erase(id); }
+
+private:
+	Container data;
+	uint64_t revision = 0;
 };
 
 // 地图聚合：Element存储、地形/路网/Zone/Building/植被/路灯的生成流程、导航图、寻址、门/电梯实体，详见map.md
@@ -245,8 +296,8 @@ public:
 	// 车行/行人导航图只读访问，供Forever层可视化/未来Traffic域寻路使用。key/邻接id都是锚点
 	// Node::GetId()，锚点本身的坐标通过GetNavAnchorNodes()（路口/车道分裂新增锚点）+
 	// GetExterns()（地图边缘残端，也可能是graph里的端点）查到。
-	const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& GetVehicleNavGraph() const;
-	const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& GetPedestrianNavGraph() const;
+	const NavGraph& GetVehicleNavGraph() const;
+	const NavGraph& GetPedestrianNavGraph() const;
 	const std::vector<Node*>& GetNavAnchorNodes() const;
 
 	// 对pedestrianNavGraph做A*寻路(边权=Connection::CalcDistance())，返回含起终点的路径点；不连通/id不存在返回空。
@@ -356,6 +407,20 @@ public:
 	// 同PlanPedestrianRoute，但起点/终点直接给节点：startNode非空且有出边就从它出发，否则按(x,y)找最近的行人节点；destNode必须非空。
 	VehicleRoutePlan PlanPedestrianRouteFromNode(const Node* startNode, float x, float y, const Node* destNode) const;
 
+	// 行人路线缓存(只缓存行人，车辆因为车位每次不同不缓存)：按(起点节点,终点节点)存完整折线，A->B和B->A共用一条(行人边都是双向的，
+	// 反向命中时把点序和edges倒过来)，不连通的结果也缓存。25游戏小时(kPedestrianRouteCacheLifetime)内没被命中的条目由Tick清掉，
+	// 暂不设数量/内存上限。导航图内容变了(SearchGraph重建)缓存随之整体作废。线程安全。
+	static constexpr double kPedestrianRouteCacheLifetime = 25.0 * 3600.0; // 游戏秒
+	struct RouteCacheStats {
+		size_t entries = 0;
+		size_t bytes = 0;      // 条目占用的堆内存估算(points/edges的capacity + 表项)
+		size_t hits = 0;       // 累计(Clear不归零)
+		size_t misses = 0;
+		size_t purged = 0;     // 累计因过期清掉的条目数
+	};
+	RouteCacheStats GetPedestrianRouteCacheStats() const;
+	void ClearPedestrianRouteCache() const;
+
 	// 到绿化区第circleIndex个圆：图上走到圆心，再追加最后一段圆心->(targetX,targetY)(圆内随机点，调用方用
 	// Green::RandomPointInCircle取)。startRoom/(x,y)含义同PlanPedestrianRoute。绿化区没连路/圆没有导航节点返回NO_ROAD_CONNECTION。
 	VehicleRoutePlan PlanPedestrianRouteToGreen(Room* startRoom, float x, float y, const Green* green, int circleIndex,
@@ -437,8 +502,8 @@ private:
 	// 车行/行人导航图：key是锚点Node::GetId()，value是(邻接锚点id, 边)列表。车行边只按实际
 	// 通行方向单向插入；行人边(横道/转角/贯通线)双向插入，可能出现同一个Connection*被两条
 	// 邻接记录共同引用，析构时用set去重删除一次。
-	std::unordered_map<int, std::vector<std::pair<int, Connection*>>> vehicleNavGraph;
-	std::unordered_map<int, std::vector<std::pair<int, Connection*>>> pedestrianNavGraph;
+	NavGraph vehicleNavGraph;
+	NavGraph pedestrianNavGraph;
 
 	// 公交站辅助导航节点（见AuxNavNode），key是stationNode的id。运行时登记，不存档。
 	std::unordered_map<int, AuxNavNode> auxNavNodes;
@@ -555,11 +620,11 @@ private:
 
 	// FindPedestrianPath/FindVehiclePath共享的寻路核心，只按节点id运算，边权=Connection::CalcDistance()；返回含起终点的id序列，
 	// 不连通/id不存在返回空。coords非空时按A*运算(启发值=到终点的水平直线距离，不超过真实路径长度，保证最优)。
-	std::vector<int> FindPath(const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph,
+	std::vector<int> FindPath(const NavGraph& graph,
 		int fromNodeId, int toNodeId, const std::unordered_map<int, const Node*>* coords = nullptr) const;
 
 	// 寻路用的"编译图"：把unordered_map邻接表一次性转成按下标的数组，边权(CalcDistance要采样17个曲线点，很贵)只算一次，
-	// 并带节点坐标做A*启发、(起点,终点)->id路径的缓存。图的内容变了(节点/边数量或边指针校验和不同)会自动重建(缓存随之作废)。
+	// 并带节点坐标做A*启发、行人完整路线缓存。NavGraph::revision变了会自动重建(缓存随之作废)。
 	// 多线程(异步行人寻路)会同时用，所以重建/取用加锁，缓存自己另有锁。
 	struct SearchGraph {
 		struct Arc { int to; float weight; };
@@ -568,11 +633,17 @@ private:
 		std::vector<float> x, y;                 // 节点坐标(启发值用)
 		std::vector<std::vector<Arc>> adjacency;
 		float heuristicScale = 0.f;              // 启发值=scale*水平直线距离；0=不用启发(缺坐标)，scale<=1保证不高估
-		size_t signature = 0;
+		uint64_t revision = 0;                   // 编译时NavGraph::revision，和当前不同就重建
+		// 行人完整路线缓存(只行人图用)：key=(min(a,b),max(a,b))，plan按min->max方向存；status!=OK表示不连通(也缓存)。lastHit=游戏秒。
+		struct RouteEntry { VehicleRoutePlan plan; double lastHit = 0; };
 		mutable std::mutex cacheMutex;
-		mutable std::unordered_map<uint64_t, std::vector<int>> pathCache; // (from,to)->含起终点的id序列，空=无路径
+		mutable std::unordered_map<uint64_t, RouteEntry> routes;
 	};
-	std::shared_ptr<SearchGraph> AcquireSearchGraph(const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph,
+	// 路线缓存的游戏时钟(秒)：Tick里更新，缓存命中/过期都用它。线程安全。
+	mutable std::atomic<double> routeClock{ 0.0 };
+	mutable std::atomic<double> routeLastPurge{ 0.0 };
+	mutable std::atomic<size_t> routeHits{ 0 }, routeMisses{ 0 }, routePurged{ 0 };
+	std::shared_ptr<SearchGraph> AcquireSearchGraph(const NavGraph& graph,
 		std::shared_ptr<SearchGraph>& slot) const;
 	mutable std::mutex searchGraphMutex;
 	mutable std::shared_ptr<SearchGraph> vehicleSearchGraph;

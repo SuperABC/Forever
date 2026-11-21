@@ -125,8 +125,11 @@ void PerfSuiteBody(TestWorld& world, const TestOptions& options) {
 			TestRun::Get().Note("PERF WARNING: generate." + stage.name + " " + to_string(stage.seconds) + "s exceeds budget " + to_string(budget) + "s");
 		}
 	}
+	RecordMemory("perform: before routing");
 	MeasureRouting(world, options);
+	RecordMemory("perform: after routing");
 	MeasureDailyTick(world, options);
+	RecordMemory("perform: after daily ticks");
 }
 
 void RunPerfSuite(const TestOptions& options) {

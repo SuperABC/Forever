@@ -1,5 +1,10 @@
 #include "test_framework.h"
 
+#define NOMINMAX
+#include <windows.h>
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
+
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -8,6 +13,26 @@
 
 
 using namespace std;
+
+ProcessMemory ReadProcessMemory() {
+	ProcessMemory memory;
+	PROCESS_MEMORY_COUNTERS_EX counters = {};
+	if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof(counters))) {
+		constexpr double kMB = 1024.0 * 1024.0;
+		memory.privateMB = static_cast<double>(counters.PrivateUsage) / kMB;
+		memory.workingSetMB = static_cast<double>(counters.WorkingSetSize) / kMB;
+		memory.peakWorkingSetMB = static_cast<double>(counters.PeakWorkingSetSize) / kMB;
+	}
+	return memory;
+}
+
+void RecordMemory(const string& label) {
+	static double lastPrivateMB = -1.0;
+	const ProcessMemory memory = ReadProcessMemory();
+	TestRun::Get().Metric("memory " + label + " private", memory.privateMB, "MB");
+	TestRun::Get().Metric("memory " + label + " delta", lastPrivateMB < 0 ? 0.0 : memory.privateMB - lastPrivateMB, "MB");
+	lastPrivateMB = memory.privateMB;
+}
 
 TestRun& TestRun::Get() {
 	static TestRun run;

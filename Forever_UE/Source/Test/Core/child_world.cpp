@@ -49,11 +49,17 @@ int RunSuiteChild(const TestOptions& options, SuiteBody body) {
 		run.Export(options.childOut);
 		return 3;
 	}
+	double previousMB = 0;
 	for (const WorldStage& stage : world.stages) {
 		run.Metric("stage." + stage.name, stage.seconds, "s");
+		run.Metric("stage." + stage.name + " memory", stage.privateMB - previousMB, "MB");
+		previousMB = stage.privateMB;
 		run.Check(stage.unscopedDelta == 0, "no unscoped GetRandom in stage " + stage.name, to_string(stage.unscopedDelta) + " draws");
 	}
+	RecordMemory("after world generation");
 	body(world, options);
+	RecordMemory("after suite body");
+	run.Metric("memory peak working set", ReadProcessMemory().peakWorkingSetMB, "MB");
 	run.Export(options.childOut);
 	return 0;
 }

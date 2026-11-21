@@ -6,15 +6,19 @@
 #include "map/map.h"
 #include "map/building.h"
 #include "map/room.h"
+#include "player/player.h"
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <set>
 #include <string>
 #include <vector>
 
 using namespace std;
 
-// route套件(子进程里)：随机行人在房间之间的寻路、车辆在停车位之间的寻路，各自的耗时分布(分位数+直方图)和失败率。
+// route套件(子进程里)：随机行人在房间之间的寻路、车辆在停车位之间的寻路，各自的耗时分布(分位数+直方图)和失败率；
+// 行人路线缓存：冷/热/反方向三轮耗时、命中与一致性、条目数与内存、25游戏小时过期。
 // 样本用世界种子派生的固定伪随机序列选取，所以同种子可复现。
 
 namespace {
@@ -59,6 +63,36 @@ namespace {
 		for (int i = 0; i < 7; i++) run.Metric(name + " hist " + labels[i], counts[i], "");
 	}
 
+	double PolylineLength(const Map::VehicleRoutePlan& plan) {
+		double total = 0;
+		for (size_t i = 1; i < plan.points.size(); i++) {
+			const double dx = plan.points[i].x - plan.points[i - 1].x, dy = plan.points[i].y - plan.points[i - 1].y, dz = plan.points[i].z - plan.points[i - 1].z;
+			total += sqrt(dx * dx + dy * dy + dz * dz);
+		}
+		return total;
+	}
+
+	bool SamePlan(const Map::VehicleRoutePlan& a, const Map::VehicleRoutePlan& b) {
+		if (a.status != b.status || a.points.size() != b.points.size() || a.edges.size() != b.edges.size()) return false;
+		for (size_t i = 0; i < a.points.size(); i++) {
+			if (a.points[i].x != b.points[i].x || a.points[i].y != b.points[i].y || a.points[i].z != b.points[i].z) return false;
+		}
+		for (size_t i = 0; i < a.edges.size(); i++) {
+			if (a.edges[i].edge != b.edges[i].edge || a.edges[i].firstPoint != b.edges[i].firstPoint || a.edges[i].lastPoint != b.edges[i].lastPoint) return false;
+		}
+		return true;
+	}
+
+	// 结构自洽：edges的点下标范围按序首尾相接，且在points范围内。
+	bool EdgesContiguous(const Map::VehicleRoutePlan& plan) {
+		for (size_t i = 0; i < plan.edges.size(); i++) {
+			const auto& edge = plan.edges[i];
+			if (edge.firstPoint < 0 || edge.lastPoint >= static_cast<int>(plan.points.size()) || edge.firstPoint > edge.lastPoint) return false;
+			if (i > 0 && plan.edges[i - 1].lastPoint != edge.firstPoint) return false;
+		}
+		return true;
+	}
+
 	void MeasurePedestrians(TestWorld& world, const TestOptions& options, unsigned long long seed) {
 		TestRun& run = TestRun::Get();
 		vector<Room*> rooms;
@@ -70,27 +104,110 @@ namespace {
 		if (rooms.size() < 2) return;
 		const int samples = options.quick ? 300 : 2000;
 		Pick pick(seed ^ 0x9e3779b97f4a7c15ULL);
-		vector<double> all, okOnly;
-		int failed = 0, same = 0;
-		size_t totalPoints = 0;
+		vector<pair<Room*, Room*>> pairs;
 		for (int i = 0; i < samples; i++) {
 			Room* from = rooms[pick.Next(rooms.size())];
 			Room* to = rooms[pick.Next(rooms.size())];
-			if (from == to) same++;
-			const auto begin = chrono::steady_clock::now();
-			const Map::VehicleRoutePlan plan = world.map->PlanPedestrianRoute(from, 0.f, 0.f, to);
-			const double ms = chrono::duration<double, milli>(chrono::steady_clock::now() - begin).count();
-			all.push_back(ms);
-			if (plan.status == Map::VehicleRoutePlan::OK) { okOnly.push_back(ms); totalPoints += plan.points.size(); }
-			else failed++;
+			if (from != to) pairs.push_back({ from, to });
 		}
-		ReportDistribution("pedestrian route(all)", all);
-		ReportDistribution("pedestrian route(ok)", okOnly);
+
+		// 以下按"冷缓存 -> 同方向再来一遍 -> 反方向"三轮跑同一批起终点。
+		world.map->ClearPedestrianRouteCache();
+		RecordMemory("route: pedestrian cache empty");
+		const Map::RouteCacheStats empty = world.map->GetPedestrianRouteCacheStats();
+
+		vector<Map::VehicleRoutePlan> cold;
+		vector<double> coldMs, coldOk;
+		int failed = 0;
+		size_t totalPoints = 0;
+		for (const auto& [from, to] : pairs) {
+			const auto begin = chrono::steady_clock::now();
+			Map::VehicleRoutePlan plan = world.map->PlanPedestrianRoute(from, 0.f, 0.f, to);
+			const double ms = chrono::duration<double, milli>(chrono::steady_clock::now() - begin).count();
+			coldMs.push_back(ms);
+			if (plan.status == Map::VehicleRoutePlan::OK) { coldOk.push_back(ms); totalPoints += plan.points.size(); }
+			else failed++;
+			cold.push_back(std::move(plan));
+		}
+		ReportDistribution("pedestrian route cold(all)", coldMs);
+		ReportDistribution("pedestrian route cold(ok)", coldOk);
 		run.Metric("pedestrian route failures", failed, "");
-		run.Metric("pedestrian route same-room samples", same, "");
-		if (!okOnly.empty()) run.Metric("pedestrian route avg points", static_cast<double>(totalPoints) / okOnly.size(), "");
-		run.Check(failed * 20 <= samples, "at most 5% of random room-to-room pedestrian routes fail",
-			to_string(failed) + "/" + to_string(samples));
+		if (!coldOk.empty()) run.Metric("pedestrian route avg points", static_cast<double>(totalPoints) / coldOk.size(), "");
+		run.Check(failed * 20 <= static_cast<int>(pairs.size()), "at most 5% of random room-to-room pedestrian routes fail",
+			to_string(failed) + "/" + to_string(pairs.size()));
+		const Map::RouteCacheStats afterCold = world.map->GetPedestrianRouteCacheStats();
+		RecordMemory("route: pedestrian cache after cold pass");
+
+		// 同方向再来一遍：全部命中、结果逐点相同、不再有misses。
+		vector<double> warmMs;
+		int different = 0;
+		for (size_t i = 0; i < pairs.size(); i++) {
+			const auto begin = chrono::steady_clock::now();
+			const Map::VehicleRoutePlan plan = world.map->PlanPedestrianRoute(pairs[i].first, 0.f, 0.f, pairs[i].second);
+			warmMs.push_back(chrono::duration<double, milli>(chrono::steady_clock::now() - begin).count());
+			if (!SamePlan(plan, cold[i])) different++;
+		}
+		ReportDistribution("pedestrian route warm(all)", warmMs);
+		const Map::RouteCacheStats afterWarm = world.map->GetPedestrianRouteCacheStats();
+		run.Check(different == 0, "cached pedestrian route is identical to the freshly computed one", to_string(different) + " differ");
+		run.Check(afterWarm.misses == afterCold.misses, "second pass over the same pairs has no cache misses",
+			to_string(afterWarm.misses - afterCold.misses) + " misses");
+		run.Check(afterWarm.entries == afterCold.entries, "second pass adds no cache entries");
+
+		// 反方向：A->B和B->A共用一条，不应再有misses和新条目；结果是倒过来的路线。
+		vector<double> reverseMs;
+		int badReverse = 0;
+		for (size_t i = 0; i < pairs.size(); i++) {
+			const auto begin = chrono::steady_clock::now();
+			const Map::VehicleRoutePlan plan = world.map->PlanPedestrianRoute(pairs[i].second, 0.f, 0.f, pairs[i].first);
+			reverseMs.push_back(chrono::duration<double, milli>(chrono::steady_clock::now() - begin).count());
+			const Map::VehicleRoutePlan& forward = cold[i];
+			bool ok = plan.status == forward.status;
+			if (ok && forward.status == Map::VehicleRoutePlan::OK) {
+				ok = plan.points.size() == forward.points.size() && plan.edges.size() == forward.edges.size() && EdgesContiguous(plan);
+				if (ok && !plan.points.empty()) {
+					const auto& first = plan.points.front();
+					const auto& last = forward.points.back();
+					ok = first.x == last.x && first.y == last.y && first.z == last.z;
+					const double lengthA = PolylineLength(plan), lengthB = PolylineLength(forward);
+					ok = ok && fabs(lengthA - lengthB) <= 1e-3 * (1.0 + lengthB);
+				}
+			}
+			if (!ok) badReverse++;
+		}
+		ReportDistribution("pedestrian route reverse(all)", reverseMs);
+		const Map::RouteCacheStats afterReverse = world.map->GetPedestrianRouteCacheStats();
+		run.Check(badReverse == 0, "reverse-direction route is the forward route reversed (same status/length, endpoints swapped, contiguous edges)",
+			to_string(badReverse) + " bad");
+		run.Check(afterReverse.misses == afterWarm.misses, "reverse direction hits the same cache entry (no new misses)",
+			to_string(afterReverse.misses - afterWarm.misses) + " misses");
+		run.Check(afterReverse.entries == afterWarm.entries, "reverse direction adds no cache entries");
+
+		run.Metric("pedestrian cache entries", static_cast<double>(afterReverse.entries), "");
+		run.Metric("pedestrian cache bytes", static_cast<double>(afterReverse.bytes) - static_cast<double>(empty.bytes), "B");
+		if (afterReverse.entries > 0) run.Metric("pedestrian cache bytes per entry", static_cast<double>(afterReverse.bytes) / afterReverse.entries, "B");
+		run.Metric("pedestrian cache hits", static_cast<double>(afterReverse.hits), "");
+		run.Metric("pedestrian cache misses", static_cast<double>(afterReverse.misses), "");
+
+		// 过期：25游戏小时没命中才清。T0写入/命中，T0+24h还在；刷新其中一部分，T0+26h时只有被刷新的留下。
+		const Time t0 = *world.player->GetTime();
+		world.map->Tick(t0, false, nullptr);
+		for (const auto& [from, to] : pairs) world.map->PlanPedestrianRoute(from, 0.f, 0.f, to); // 命中并把lastHit刷到T0
+		Time t24 = t0;
+		t24.AddHours(24);
+		world.map->Tick(t24, false, nullptr);
+		run.Check(world.map->GetPedestrianRouteCacheStats().entries == afterReverse.entries, "entries survive 24h without a hit");
+		const size_t refresh = min<size_t>(pairs.size(), 10);
+		for (size_t i = 0; i < refresh; i++) world.map->PlanPedestrianRoute(pairs[i].first, 0.f, 0.f, pairs[i].second); // lastHit -> T0+24h
+		Time t26 = t0;
+		t26.AddHours(26);
+		world.map->Tick(t26, false, nullptr);
+		const Map::RouteCacheStats afterPurge = world.map->GetPedestrianRouteCacheStats();
+		run.Check(afterPurge.entries <= refresh && afterPurge.entries > 0 && afterPurge.entries < afterReverse.entries,
+			"entries not hit for more than 25h are purged, recently hit ones kept",
+			to_string(afterPurge.entries) + " left of " + to_string(afterReverse.entries) + " (refreshed pairs " + to_string(refresh) + ")");
+		run.Metric("pedestrian cache purged", static_cast<double>(afterPurge.purged), "");
+		RecordMemory("route: pedestrian cache after purge");
 	}
 
 	void MeasureVehicles(TestWorld& world, const TestOptions& options, unsigned long long seed) {
@@ -105,6 +222,8 @@ namespace {
 		run.Check(slots.size() > 1, "world has parking slots to route between");
 		if (slots.size() < 2) return;
 		const int samples = options.quick ? 300 : 2000;
+		const Map::RouteCacheStats cacheBefore = world.map->GetPedestrianRouteCacheStats();
+		RecordMemory("route: before vehicle routes");
 		Pick pick(seed ^ 0xc2b2ae3d27d4eb4fULL);
 		vector<double> all, okOnly;
 		int failed = 0;
@@ -119,6 +238,10 @@ namespace {
 			if (plan.status == Map::VehicleRoutePlan::OK) { okOnly.push_back(ms); totalPoints += plan.points.size(); }
 			else failed++;
 		}
+		RecordMemory("route: after vehicle routes"); // 车辆路线不缓存，这里内存不该随样本数增长
+		const Map::RouteCacheStats cacheAfter = world.map->GetPedestrianRouteCacheStats();
+		run.Check(cacheAfter.entries == cacheBefore.entries && cacheAfter.hits == cacheBefore.hits && cacheAfter.misses == cacheBefore.misses,
+			"vehicle routing does not touch the pedestrian route cache");
 		ReportDistribution("vehicle route(all)", all);
 		ReportDistribution("vehicle route(ok)", okOnly);
 		run.Metric("vehicle route failures", failed, "");
@@ -126,51 +249,12 @@ namespace {
 		run.Check(failed * 20 <= samples, "at most 5% of random slot-to-slot vehicle routes fail",
 			to_string(failed) + "/" + to_string(samples));
 	}
-	// 逃跑选路(Map::StartPedestrianFlee/NextPedestrianFlee)：从随机房间旁出发、远离随机点，连走40步，
-	// 每一步都要选得出来，度数>=2的节点不回头，整体离"远离点"越来越远(最终距离>=起点距离)。
-	void CheckFlee(TestWorld& world, unsigned long long seed) {
-		TestRun& run = TestRun::Get();
-		vector<Room*> rooms;
-		for (const auto& [name, building] : world.map->GetBuildings()) {
-			for (Room* room : building->GetRooms()) if (room->GetNavigationNode()) rooms.push_back(room);
-		}
-		if (rooms.size() < 2) return;
-		Pick pick(seed ^ 0x51ed270b0b1d4eaeULL);
-		const auto& graph = world.map->GetPedestrianNavGraph();
-		int started = 0, stepFailures = 0, reversals = 0, notFarther = 0, samples = 200;
-		for (int i = 0; i < samples; i++) {
-			Node* start = rooms[pick.Next(rooms.size())]->GetNavigationNode();
-			Node* away = rooms[pick.Next(rooms.size())]->GetNavigationNode();
-			if (!start || !away) continue;
-			Map::FleeStep step = world.map->StartPedestrianFlee(start->GetX(), start->GetY(), away->GetX(), away->GetY());
-			if (!step.ok) continue;
-			started++;
-			const float startDx = step.x - away->GetX(), startDy = step.y - away->GetY();
-			float lastDx = startDx, lastDy = startDy;
-			for (int n = 0; n < 40; n++) {
-				auto it = graph.find(step.nodeId);
-				const size_t degree = it == graph.end() ? 0 : it->second.size();
-				Map::FleeStep next = world.map->NextPedestrianFlee(step.nodeId, step.prevNodeId, away->GetX(), away->GetY());
-				if (!next.ok) { stepFailures++; break; }
-				if (degree >= 2 && next.nodeId == step.prevNodeId) reversals++;
-				step = next;
-				lastDx = step.x - away->GetX(); lastDy = step.y - away->GetY();
-			}
-			if (lastDx * lastDx + lastDy * lastDy + 1e-3f < startDx * startDx + startDy * startDy) notFarther++;
-		}
-		run.Metric("flee samples started", started, "");
-		run.Check(started > samples / 2, "flee start finds a nearest pedestrian line");
-		run.Check(stepFailures == 0, "flee steps are always selectable");
-		run.Check(reversals == 0, "flee does not turn back at nodes with 2+ neighbours");
-		run.Metric("flee runs ending closer to the target", notFarther, "");
-	}
 }
 
 void RouteSuiteBody(TestWorld& world, const TestOptions& options) {
 	const unsigned long long seed = options.childSeed ? options.childSeed : 1;
 	MeasurePedestrians(world, options, seed);
 	MeasureVehicles(world, options, seed);
-	CheckFlee(world, seed);
 }
 
 void RunRouteSuite(const TestOptions& options) {

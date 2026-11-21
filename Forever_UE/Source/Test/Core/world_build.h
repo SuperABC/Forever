@@ -10,6 +10,7 @@
 struct WorldStage {
 	std::string name;
 	double seconds = 0;
+	double privateMB = 0;                 // 阶段结束时进程私有内存(MB)，相邻阶段之差就是该阶段的内存占用
 	unsigned long long unscopedDelta = 0; // 这个阶段里没包随机作用域的抽取次数
 	std::string signature;                // 阶段结束时的状态签名(随机流状态+各域计数+地形哈希)，同种子必须逐阶段一致
 };

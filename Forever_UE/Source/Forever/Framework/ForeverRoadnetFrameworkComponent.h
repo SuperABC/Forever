@@ -17,6 +17,7 @@ class UStaticMesh;
 class Map;
 class Road;
 class Connection;
+class NavGraph;
 
 // 路网渲染：沿每条Road按其mesh/unit用ISM重复摆放，路口mesh，开口cube，小路mesh，导航图debug可视化。
 // 详见ForeverRoadnetFrameworkComponent.md。
@@ -37,7 +38,7 @@ public:
 
 private:
 	// BuildNavigationDebugMesh的实现细节：给一张导航图(车行或行人)建出对应的debug mesh。
-	void BuildNavGraphDebugMesh(const std::unordered_map<int, std::vector<std::pair<int, Connection*>>>& graph,
+	void BuildNavGraphDebugMesh(const NavGraph& graph,
 		UProceduralMeshComponent* mesh, UMaterialInstanceDynamic* material);
 
 	// 沿road弧长按其mesh/unit重复摆放ISM实例，同时处理这条路上的开口(重叠的开口先合并成一段)：

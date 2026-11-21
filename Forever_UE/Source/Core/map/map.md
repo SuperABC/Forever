@@ -173,7 +173,7 @@
 ## 待办/后续阶段
 
 - `InitTerrains()`假定调用方（`AForeverFrameworkActor::BeginPlay`）之前已经跑过`Config::ReadConfig`（由`ForeverModSubsystem`在game instance启动时做，早于任何关卡的`BeginPlay`）——这个顺序依赖只是约定，没有代码层面强制。
-- `Map::Tick`目前是空实现，等Map域有每帧逻辑再补。
+- `Map::Tick`没有每帧逻辑，只做一件事：把游戏时钟(`routeClock`，秒)推进到`currentTime`，并每游戏小时清一次行人路线缓存里超过25游戏小时没命中的条目(见"行人路线缓存")。
 
 ## 导航线相关：外部连接点与到任意点的车行规划
 
@@ -191,7 +191,13 @@
 ## 寻路性能(2026-11-16)
 
 `FindPath`(行人/车行共用)改走"编译图"`SearchGraph`：邻接表一次性转成下标数组，边权`CalcDistance`只算一次(原来每次松弛都采样17个曲线点)，节点坐标做A*启发(车行图以前没传坐标，等于整图Dijkstra)，启发缩放`heuristicScale`按边校验保证不高估；
-每线程复用`thread_local`缓冲区(代数戳)，不再每次分配map/set；(起点,终点)->id路径带缓存(含"无路径"，封顶8192条满了清空)。图的节点数/边数/边指针校验和变了自动重建并作废缓存。
+每线程复用`thread_local`缓冲区(代数戳)，不再每次分配map/set；`FindPath`本身不再缓存(车辆路线因停车位每次不同、占内存大，不缓存)。图是否变了只看`NavGraph::Revision()`(O(1))：`vehicleNavGraph`/`pedestrianNavGraph`都是`NavGraph`类型。`NavGraph`**不继承unordered_map、也不暴露内部容器的非const引用**，所以没有办法绕过revision去改图：读接口(`begin/end/find/count/size/empty/at/SortedIds`，全是const)和unordered_map一致，修改只能走`AddEdge(from,to,conn)`、`EdgesOf(from)`(取/建出边表，读档用)、`RemoveEdges(from,to)`、`RemoveEdgesIf(pred)`、`EraseNode(id)`，每个都让revision+1，`SearchGraph`据此重建。以前用遍历所有边的校验和，每次寻路约0.5ms，比命中缓存本身还贵。车辆和行人用同一个接口，区别只是行人路线有缓存、车辆没有。外部(UE/测试/工具)按`const NavGraph&`取`GetVehicleNavGraph()`/`GetPedestrianNavGraph()`，别再用`const unordered_map<...>&`接。
+
+**行人路线缓存**(`PlanPedestrianRouteFromNode`，`Plan*Green`系列经它也走缓存；从坐标出发/在路上的起点按最近节点候选逐个查，也命中)：
+- 缓存完整折线(points+edges)，放在行人`SearchGraph`里(图重建=整体作废)，键=(min(起点id,终点id),max(...))。**A→B与B→A共用一条**(行人边双向)：按min→max方向存，反向命中时`ReversePedestrianPlan`把点序倒过来、edges倒序并镜像点下标。不连通(`NO_PATH_TO_DESTINATION`)也缓存。
+- 过期：条目带`lastHit`(游戏秒)，命中时刷新；`Map::Tick`每游戏小时扫一遍，`now-lastHit>25h`(`kPedestrianRouteCacheLifetime`)的删除，时钟倒退(读更早的存档)时把lastHit拉回now。暂不设数量/内存上限。
+- 线程安全：缓存自己的`cacheMutex`，命中时拷贝一份返回；`GetPedestrianRouteCacheStats()`给条目数/估算字节/命中/未命中/已清理数，`ClearPedestrianRouteCache()`给测试用。
+- 实测(256图，quick)：冷缓存p50约0.6ms，命中约0.002ms(正反向相同)；一条缓存约5.7KB(行人路线点数多，因为沿曲线采样)，300条约1.7MB。
 
 ## 逃跑选路（2026-11-19）
 `StartPedestrianFlee(x,y,awayX,awayY)`：遍历行人图所有边取离(x,y)最近的线(点到线段水平距离)，两端点里选更背离目标的作下一个节点(另一端点记prev)；

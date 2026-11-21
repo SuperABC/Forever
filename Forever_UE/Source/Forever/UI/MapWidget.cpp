@@ -64,14 +64,15 @@ namespace {
 			return it->second;
 		}
 
-		// 色相离散分桶(12桶x30度，桶内小抖动)，饱和度/明度各二选一：名字少时纯连续映射会让相邻哈希的颜色
+		// 色相离散分桶(12桶x30度，桶内小抖动)，饱和度/明度各二选一(柔和低饱和)：名字少时纯连续映射会让相邻哈希的颜色
 		// 几乎分不出来。纯按名字算，同名字跨session同色。固定异或盐值只是把"plain"挪出和玩家朝向箭头撞色的蓝色桶。
 		uint32 h = HashStringFNV1a(name) ^ 0x9E3779B9u;
 		int hueBin = h % 12;
 		float hueJitter = static_cast<float>((h / 12) % 100) / 100.f * 20.f; // 0~20°，不超出30°一格的范围
 		float hue = hueBin * 30.f + hueJitter;
-		float saturation = ((h / 1200) % 2 == 0) ? 0.55f : 0.85f;
-		float value = ((h / 2400) % 2 == 0) ? 0.75f : 0.95f;
+		// 低饱和柔和色调(莫兰迪风)：高饱和纯色铺满地图很刺眼，饱和度压到0.28~0.48，明度0.72~0.88。
+		float saturation = ((h / 1200) % 2 == 0) ? 0.28f : 0.48f;
+		float value = ((h / 2400) % 2 == 0) ? 0.72f : 0.88f;
 
 		Color color = HSVtoRGB(hue, saturation, value);
 		cache[name] = color;

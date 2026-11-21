@@ -580,8 +580,8 @@ void MapSaveCodec::BuildSaveTables(const Map& map, SaveTables& t) {
 	if (looseRoads > 0) debugf("Warning: map save found %d referenced roads without an owner.\n", looseRoads);
 
 	// 导航边：车行图、行人图按key排序遍历，去重编号(行人边双向各引用一次同一个Connection*)。
-	auto addEdges = [&](const unordered_map<int, vector<pair<int, Connection*>>>& graph) {
-		for (int from : SortedKeys(graph)) {
+	auto addEdges = [&](const NavGraph& graph) {
+		for (int from : graph.SortedIds()) {
 			for (auto& [to, edge] : graph.at(from)) {
 				if (edge && !t.edgeIndex.count(edge)) {
 					t.edgeIndex[edge] = static_cast<int>(t.edges.size());
@@ -706,9 +706,9 @@ void MapSaveCodec::WriteRoadnet(const Map& map, const SaveTables& t, ByteWriter&
 	w.U32(static_cast<uint32_t>(t.edges.size()));
 	for (const Connection* edge : t.edges) WriteConnection(*edge, w);
 
-	auto writeGraph = [&](const unordered_map<int, vector<pair<int, Connection*>>>& graph) {
+	auto writeGraph = [&](const NavGraph& graph) {
 		w.U32(static_cast<uint32_t>(graph.size()));
-		for (int from : SortedKeys(graph)) {
+		for (int from : graph.SortedIds()) {
 			const auto& edges = graph.at(from);
 			w.I32(from);
 			w.U32(static_cast<uint32_t>(edges.size()));
@@ -902,11 +902,11 @@ bool MapSaveCodec::ReadRoadnet(Map& map, LoadTables& t, ByteReader& r, string& e
 	uint32_t edgeCount = r.U32();
 	for (uint32_t i = 0; i < edgeCount && !r.Failed(); i++) t.edges.push_back(ReadConnection(r));
 
-	auto readGraph = [&](unordered_map<int, vector<pair<int, Connection*>>>& graph) {
+	auto readGraph = [&](NavGraph& graph) {
 		uint32_t keys = r.U32();
 		for (uint32_t i = 0; i < keys && !r.Failed(); i++) {
 			int from = r.I32();
-			auto& edges = graph[from];
+			auto& edges = graph.EdgesOf(from);
 			uint32_t n = r.U32();
 			for (uint32_t j = 0; j < n && !r.Failed(); j++) {
 				int to = r.I32();

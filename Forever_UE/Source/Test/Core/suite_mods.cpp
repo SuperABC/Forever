@@ -327,6 +327,7 @@ void RunModsSuite(const TestOptions& options) {
 	map<string, ConceptTester> byConcept;
 	for (const ConceptTester& tester : testers) byConcept.emplace(tester.conceptKey, tester);
 
+	RecordMemory("mods: before unit tests");
 	const unsigned long long testSeed = options.EffectiveSeeds()[0];
 	const vector<Config::ModEntry> entries = Config::GetModEnables();
 	run.Metric("mods discovered", static_cast<double>(entries.size()), "");
@@ -367,6 +368,7 @@ void RunModsSuite(const TestOptions& options) {
 		run.Check(Registry::Get().CheckModRegistered(entry.modId), "mod is registered in its Factory: " + entry.modId);
 	}
 	for (const auto& [conceptKey, count] : perConcept) run.Metric("mods tested: " + conceptKey, count, "");
+	RecordMemory("mods: after unit tests"); // 每个mod实例的UnitTest创建后是否释放
 
 	// Config::Get/SetModArgs：已启用读写conceptMods；禁用后参数暂存内存(不落盘)，再启用带回。
 	for (const Config::ModEntry& entry : entries) {

@@ -273,7 +273,7 @@ void UForeverRoadnetFrameworkComponent::BuildNavigationDebugMesh() {
 }
 
 void UForeverRoadnetFrameworkComponent::BuildNavGraphDebugMesh(
-	const unordered_map<int, vector<pair<int, Connection*>>>& graph,
+	const NavGraph& graph,
 	UProceduralMeshComponent* mesh, UMaterialInstanceDynamic* material) {
 	if (!mesh) return;
 

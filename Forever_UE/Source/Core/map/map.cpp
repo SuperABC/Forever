@@ -53,12 +53,8 @@ namespace {
 		return sum;
 	}
 
-	void RemoveGraphEdgeOneWay(unordered_map<int, vector<pair<int, Connection*>>>& graph, int fromId, int toId) {
-		auto it = graph.find(fromId);
-		if (it == graph.end()) return;
-		auto& edges = it->second;
-		edges.erase(remove_if(edges.begin(), edges.end(),
-			[toId](const pair<int, Connection*>& e) { return e.first == toId; }), edges.end());
+	void RemoveGraphEdgeOneWay(NavGraph& graph, int fromId, int toId) {
+		graph.RemoveEdges(fromId, toId);
 	}
 
 		// Assign()通过PlacementEmitFunc回调交回占位请求：函数体编译在Core这一侧，push_back用Core自己的分配器(跨DLL安全)。
@@ -386,9 +382,9 @@ void Map::InitRoadnet() {
 						float tA = (i == 0) ? 0.f : knots[i - 1];
 						float tB = (i + 2 == chain.size()) ? 1.f : knots[i];
 						Connection* edge = MakeLaneConnection(road, isVehicle, side, laneIndex, from, to);
-						graph[from->GetId()].emplace_back(to->GetId(), edge);
+						graph.AddEdge(from->GetId(), to->GetId(), edge);
 						if (!isVehicle) {
-							graph[to->GetId()].emplace_back(from->GetId(), edge);
+							graph.AddEdge(to->GetId(), from->GetId(), edge);
 						}
 						throughLines[road][idx].push_back({ edge, from, to, laneIndex, tA, tB });
 					}
@@ -405,13 +401,13 @@ void Map::InitRoadnet() {
 		for (Connection* conn : vehicleConns) {
 			Node start = conn->GetStart();
 			Node end = conn->GetEnd();
-			vehicleNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
+			vehicleNavGraph.AddEdge(start.GetId(), end.GetId(), conn);
 		}
 		for (Connection* conn : pedestrianConns) {
 			Node start = conn->GetStart();
 			Node end = conn->GetEnd();
-			pedestrianNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
-			pedestrianNavGraph[end.GetId()].emplace_back(start.GetId(), conn);
+			pedestrianNavGraph.AddEdge(start.GetId(), end.GetId(), conn);
+			pedestrianNavGraph.AddEdge(end.GetId(), start.GetId(), conn);
 		}
 	}
 }
@@ -751,8 +747,8 @@ void Map::InitGreens() {
 			circle.footNode = MakeIsolatedAnchor(circle.footX, circle.footY, SampleHeight(circle.footX, circle.footY), "pedestrian");
 			// 圆心和垂足重合(圆心就在边上)时只留一个节点，避免零长度边。
 			Connection* inner = new Connection(*circle.centerNode, *circle.footNode);
-			pedestrianNavGraph[circle.centerNode->GetId()].emplace_back(circle.footNode->GetId(), inner);
-			pedestrianNavGraph[circle.footNode->GetId()].emplace_back(circle.centerNode->GetId(), inner);
+			pedestrianNavGraph.AddEdge(circle.centerNode->GetId(), circle.footNode->GetId(), inner);
+			pedestrianNavGraph.AddEdge(circle.footNode->GetId(), circle.centerNode->GetId(), inner);
 
 			float t = ProjectPointOntoRoad(road, circle.footX, circle.footY);
 			Node basePoint = road->GetPoint(t);
@@ -827,13 +823,13 @@ void Map::MergeBuildingNavigation(Building* building, const BuildingNavResult& r
 
 	for (Connection* conn : result.connections) {
 		Node start = conn->GetStart(), end = conn->GetEnd();
-		pedestrianNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
-		pedestrianNavGraph[end.GetId()].emplace_back(start.GetId(), conn);
+		pedestrianNavGraph.AddEdge(start.GetId(), end.GetId(), conn);
+		pedestrianNavGraph.AddEdge(end.GetId(), start.GetId(), conn);
 	}
 	// 车行图只按Connection的Start->End单向插入(方向由Building::BuildVehicleNavigation算好，Map不重新判断)。
 	for (Connection* conn : result.vehicleConnections) {
 		Node start = conn->GetStart(), end = conn->GetEnd();
-		vehicleNavGraph[start.GetId()].emplace_back(end.GetId(), conn);
+		vehicleNavGraph.AddEdge(start.GetId(), end.GetId(), conn);
 	}
 
 	building->SetOutsideNodes(result.outsideNodes); // 导航线要用：到不了房间的车改去1楼外部连接点
@@ -1040,8 +1036,8 @@ void Map::FlushPendingBuildingRoadAccess() {
 
 			if (!entry.isVehicle) {
 				Connection* conn = new Connection(*entry.outsideNode, *accessNode);
-				pedestrianNavGraph[entry.outsideNode->GetId()].emplace_back(accessNode->GetId(), conn);
-				pedestrianNavGraph[accessNode->GetId()].emplace_back(entry.outsideNode->GetId(), conn);
+				pedestrianNavGraph.AddEdge(entry.outsideNode->GetId(), accessNode->GetId(), conn);
+				pedestrianNavGraph.AddEdge(accessNode->GetId(), entry.outsideNode->GetId(), conn);
 				continue;
 			}
 
@@ -1051,7 +1047,7 @@ void Map::FlushPendingBuildingRoadAccess() {
 			Connection* conn = entry.isExit
 				? new Connection(*entry.outsideNode, *accessNode)
 				: new Connection(*accessNode, *entry.outsideNode);
-			vehicleNavGraph[conn->GetStart().GetId()].emplace_back(conn->GetEnd().GetId(), conn);
+			vehicleNavGraph.AddEdge(conn->GetStart().GetId(), conn->GetEnd().GetId(), conn);
 		}
 	}
 }
@@ -1730,8 +1726,8 @@ Node* Map::BreakThroughLine(Road* road, bool isVehicle, int side, int laneIndex,
 	// 反过来，fromAnchor在tHi端），同时登记进lines，构成这条车道链上更细的两段。
 	auto makeSeg = [&](Node* from, Node* to, float tA, float tB) {
 		Connection* c = MakeLaneConnection(road, isVehicle, side, laneIndex, from, to);
-		graph[from->GetId()].emplace_back(to->GetId(), c);
-		if (!isVehicle) graph[to->GetId()].emplace_back(from->GetId(), c);
+		graph.AddEdge(from->GetId(), to->GetId(), c);
+		if (!isVehicle) graph.AddEdge(to->GetId(), from->GetId(), c);
 		lines.push_back({ c, from, to, laneIndex, tA, tB });
 		};
 	if (side == 0) {
@@ -1993,11 +1989,11 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 				fvx - pathPerp0X * vehOffset * enterSign, fvy - pathPerp0Y * vehOffset * enterSign, hostZ);
 			if (NfIn && NnIn) {
 				Connection* bridgeIn = new Connection(*NfIn, *NnIn);
-				vehicleNavGraph[NfIn->GetId()].emplace_back(NnIn->GetId(), bridgeIn);
+				vehicleNavGraph.AddEdge(NfIn->GetId(), NnIn->GetId(), bridgeIn);
 			}
 			if (NnOut && NfOut) {
 				Connection* bridgeOut = new Connection(*NnOut, *NfOut);
-				vehicleNavGraph[NnOut->GetId()].emplace_back(NfOut->GetId(), bridgeOut);
+				vehicleNavGraph.AddEdge(NnOut->GetId(), NfOut->GetId(), bridgeOut);
 			}
 		}
 		if (NnIn && NnOut) {
@@ -2029,13 +2025,13 @@ void Map::ResolvePathEndAnchors(Road* path, bool isStartEnd, Road* hostRoad, flo
 				fpx - pathPerp0X * pedOffset, fpy - pathPerp0Y * pedOffset, hostZ);
 			if (PfA) {
 				Connection* c = new Connection(*PfA, *PnA);
-				pedestrianNavGraph[PfA->GetId()].emplace_back(PnA->GetId(), c);
-				pedestrianNavGraph[PnA->GetId()].emplace_back(PfA->GetId(), c);
+				pedestrianNavGraph.AddEdge(PfA->GetId(), PnA->GetId(), c);
+				pedestrianNavGraph.AddEdge(PnA->GetId(), PfA->GetId(), c);
 			}
 			if (PfB) {
 				Connection* c = new Connection(*PfB, *PnB);
-				pedestrianNavGraph[PfB->GetId()].emplace_back(PnB->GetId(), c);
-				pedestrianNavGraph[PnB->GetId()].emplace_back(PfB->GetId(), c);
+				pedestrianNavGraph.AddEdge(PfB->GetId(), PnB->GetId(), c);
+				pedestrianNavGraph.AddEdge(PnB->GetId(), PfB->GetId(), c);
 			}
 		}
 		if (PnA && PnB) {
@@ -2065,30 +2061,30 @@ void Map::ConnectPathRoad(const PathRoadLink& link) {
 	// 普通Road的建图规则一致)；人行两侧各自双向。同时登记进throughLines[path]，保持和
 	// 普通Road一样的基础设施(万一以后小路自己也要被AddRoadAccessNode打开口)。
 	Connection* veh0 = new Connection(*startVeh[0], *endVeh[0]);
-	vehicleNavGraph[startVeh[0]->GetId()].emplace_back(endVeh[0]->GetId(), veh0);
+	vehicleNavGraph.AddEdge(startVeh[0]->GetId(), endVeh[0]->GetId(), veh0);
 	throughLines[path][0].push_back({ veh0, startVeh[0], endVeh[0], 0, 0.f, 1.f });
 
 	Connection* veh1 = new Connection(*endVeh[1], *startVeh[1]);
-	vehicleNavGraph[endVeh[1]->GetId()].emplace_back(startVeh[1]->GetId(), veh1);
+	vehicleNavGraph.AddEdge(endVeh[1]->GetId(), startVeh[1]->GetId(), veh1);
 	throughLines[path][1].push_back({ veh1, endVeh[1], startVeh[1], 0, 0.f, 1.f });
 
 	// 死胡同端(没接到任何大路/小路)：两条车道各自留下一个孤立锚点，到达侧车道没有出边、离开侧车道没有入边——
 	// 挂在这条小路上的车库入口/出口会变成单向(车进不来或出不去)。在死端把到达侧接到离开侧，车辆可以掉头。
 	auto addUTurn = [&](Node* arriving, Node* departing) {
 		Connection* turn = new Connection(*arriving, *departing);
-		vehicleNavGraph[arriving->GetId()].emplace_back(departing->GetId(), turn);
+		vehicleNavGraph.AddEdge(arriving->GetId(), departing->GetId(), turn);
 		};
 	if (!link.endRoad1) addUTurn(startVeh[1], startVeh[0]); // side1沿End->Start到达Start端，side0从Start端离开
 	if (!link.endRoad2) addUTurn(endVeh[0], endVeh[1]);     // side0到达End端，side1从End端离开
 
 	Connection* ped0 = new Connection(*startPed[0], *endPed[0]);
-	pedestrianNavGraph[startPed[0]->GetId()].emplace_back(endPed[0]->GetId(), ped0);
-	pedestrianNavGraph[endPed[0]->GetId()].emplace_back(startPed[0]->GetId(), ped0);
+	pedestrianNavGraph.AddEdge(startPed[0]->GetId(), endPed[0]->GetId(), ped0);
+	pedestrianNavGraph.AddEdge(endPed[0]->GetId(), startPed[0]->GetId(), ped0);
 	throughLines[path][2].push_back({ ped0, startPed[0], endPed[0], 0, 0.f, 1.f });
 
 	Connection* ped1 = new Connection(*startPed[1], *endPed[1]);
-	pedestrianNavGraph[startPed[1]->GetId()].emplace_back(endPed[1]->GetId(), ped1);
-	pedestrianNavGraph[endPed[1]->GetId()].emplace_back(startPed[1]->GetId(), ped1);
+	pedestrianNavGraph.AddEdge(startPed[1]->GetId(), endPed[1]->GetId(), ped1);
+	pedestrianNavGraph.AddEdge(endPed[1]->GetId(), startPed[1]->GetId(), ped1);
 	throughLines[path][3].push_back({ ped1, startPed[1], endPed[1], 0, 0.f, 1.f });
 }
 
@@ -2165,11 +2161,11 @@ Node* Map::ConnectZoneAccessPoint(Zone* zone, float x, float y, float width, boo
 	Node* toNode = isEntry ? zoneNode : roadNode;
 	Connection* edge = new Connection(*fromNode, *toNode);
 	if (isVehicle) {
-		vehicleNavGraph[fromNode->GetId()].emplace_back(toNode->GetId(), edge);
+		vehicleNavGraph.AddEdge(fromNode->GetId(), toNode->GetId(), edge);
 	}
 	else {
-		pedestrianNavGraph[fromNode->GetId()].emplace_back(toNode->GetId(), edge);
-		pedestrianNavGraph[toNode->GetId()].emplace_back(fromNode->GetId(), edge);
+		pedestrianNavGraph.AddEdge(fromNode->GetId(), toNode->GetId(), edge);
+		pedestrianNavGraph.AddEdge(toNode->GetId(), fromNode->GetId(), edge);
 	}
 
 	return zoneNode;
@@ -2220,7 +2216,7 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 		Node* fromAnchor = findOrCreate(fx, fy, true);
 		Node* toAnchor = findOrCreate(tx, ty, true);
 		Connection* edge = new Connection(*fromAnchor, *toAnchor);
-		vehicleNavGraph[fromAnchor->GetId()].emplace_back(toAnchor->GetId(), edge);
+		vehicleNavGraph.AddEdge(fromAnchor->GetId(), toAnchor->GetId(), edge);
 		throughLines[road][0].push_back({ edge, fromAnchor, toAnchor, 0, 0.f, 1.f });
 	}
 	else {
@@ -2229,8 +2225,8 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 		Node* startAnchor = findOrCreate(sx, sy, false);
 		Node* endAnchor = findOrCreate(ex, ey, false);
 		Connection* edge = new Connection(*startAnchor, *endAnchor);
-		pedestrianNavGraph[startAnchor->GetId()].emplace_back(endAnchor->GetId(), edge);
-		pedestrianNavGraph[endAnchor->GetId()].emplace_back(startAnchor->GetId(), edge);
+		pedestrianNavGraph.AddEdge(startAnchor->GetId(), endAnchor->GetId(), edge);
+		pedestrianNavGraph.AddEdge(endAnchor->GetId(), startAnchor->GetId(), edge);
 		throughLines[road][2].push_back({ edge, startAnchor, endAnchor, 0, 0.f, 1.f });
 	}
 
@@ -2283,11 +2279,11 @@ Lot* Map::LocateLot(const string& road, int index) const {
 	return roadnet ? roadnet->LocateLot(road, index) : nullptr;
 }
 
-const unordered_map<int, vector<pair<int, Connection*>>>& Map::GetVehicleNavGraph() const {
+const NavGraph& Map::GetVehicleNavGraph() const {
 	return vehicleNavGraph;
 }
 
-const unordered_map<int, vector<pair<int, Connection*>>>& Map::GetPedestrianNavGraph() const {
+const NavGraph& Map::GetPedestrianNavGraph() const {
 	return pedestrianNavGraph;
 }
 
@@ -2817,17 +2813,15 @@ int Map::DemolishAlongStrips(const vector<DemolishRequest>& strips, const functi
 					doomedEdges.insert(edge);
 					if (!doomedIds.count(toId)) RemoveGraphEdgeOneWay(*graph, toId, id);
 				}
-				graph->erase(it);
+				graph->EraseNode(id);
 			}
 		}
 		// 别处有指向被删节点的单向边(车行图)：整图扫一遍清掉。
-		for (auto& [fromId, edges] : *graph) {
-			edges.erase(remove_if(edges.begin(), edges.end(), [&](const pair<int, Connection*>& e) {
-				if (!doomedIds.count(e.first)) return false;
-				doomedEdges.insert(e.second);
-				return true;
-			}), edges.end());
-		}
+		graph->RemoveEdgesIf([&](int, const pair<int, Connection*>& e) {
+			if (!doomedIds.count(e.first)) return false;
+			doomedEdges.insert(e.second);
+			return true;
+		});
 	}
 	for (Connection* edge : doomedEdges) delete edge;
 	navAnchorNodes.erase(remove_if(navAnchorNodes.begin(), navAnchorNodes.end(),
@@ -2893,21 +2887,14 @@ const unordered_map<string, Map::TerrainTextureInfo>& Map::GetTerrainTextures() 
 	return terrainTextures;
 }
 
-std::shared_ptr<Map::SearchGraph> Map::AcquireSearchGraph(const unordered_map<int, vector<pair<int, Connection*>>>& graph,
+std::shared_ptr<Map::SearchGraph> Map::AcquireSearchGraph(const NavGraph& graph,
 	std::shared_ptr<SearchGraph>& slot) const {
-	// 校验和：节点数、边数、边指针和邻居id。比重建便宜得多(只遍历指针，不算几何)。
-	size_t signature = graph.size();
-	for (const auto& [id, edges] : graph) {
-		signature = signature * 1000003u + edges.size();
-		for (const auto& [neighbor, connection] : edges) {
-			signature += reinterpret_cast<uintptr_t>(connection) * 31u + static_cast<size_t>(neighbor);
-		}
-	}
+	// 图有没有变只看NavGraph::revision(O(1))；原来遍历所有边算校验和，每次寻路约0.5ms。
 	std::lock_guard<std::mutex> lock(searchGraphMutex);
-	if (slot && slot->signature == signature) return slot;
+	if (slot && slot->revision == graph.Revision()) return slot;
 
 	auto built = std::make_shared<SearchGraph>();
-	built->signature = signature;
+	built->revision = graph.Revision();
 	auto indexOf = [&](int id) {
 		auto [it, inserted] = built->index.emplace(id, static_cast<int>(built->ids.size()));
 		if (inserted) {
@@ -2962,7 +2949,7 @@ std::shared_ptr<Map::SearchGraph> Map::AcquireSearchGraph(const unordered_map<in
 	return built;
 }
 
-vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>>>& graph,
+vector<int> Map::FindPath(const NavGraph& graph,
 	int fromNodeId, int toNodeId, const unordered_map<int, const Node*>* coords) const {
 	(void)coords; // 坐标改由编译图自带
 	if (fromNodeId == toNodeId) return { fromNodeId };
@@ -2970,13 +2957,6 @@ vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>
 	std::shared_ptr<SearchGraph> search = AcquireSearchGraph(graph, &graph == &vehicleNavGraph ? vehicleSearchGraph : pedestrianSearchGraph);
 	auto fromIt = search->index.find(fromNodeId), toIt = search->index.find(toNodeId);
 	if (fromIt == search->index.end() || toIt == search->index.end()) return {};
-	const uint64_t cacheKey = (static_cast<uint64_t>(static_cast<uint32_t>(fromNodeId)) << 32) | static_cast<uint32_t>(toNodeId);
-	{
-		std::lock_guard<std::mutex> lock(search->cacheMutex);
-		auto cached = search->pathCache.find(cacheKey);
-		if (cached != search->pathCache.end()) return cached->second;
-	}
-
 	const int source = fromIt->second, goal = toIt->second;
 	const size_t count = search->ids.size();
 	// 每线程复用的缓冲区：用代数戳代替每次清零/分配。
@@ -3028,11 +3008,6 @@ vector<int> Map::FindPath(const unordered_map<int, vector<pair<int, Connection*>
 	if (found) {
 		for (int i = goal; i != -1; i = scratch.prev[i]) idPath.push_back(search->ids[i]);
 		reverse(idPath.begin(), idPath.end());
-	}
-	{
-		std::lock_guard<std::mutex> lock(search->cacheMutex);
-		if (search->pathCache.size() >= 8192) search->pathCache.clear(); // 简单封顶：满了整体丢掉
-		search->pathCache[cacheKey] = idPath;
 	}
 	return idPath;
 }
@@ -3216,6 +3191,9 @@ bool Map::GetLaneSegmentAt(Road* road, float x, float y, float dirX, float dirY,
 namespace {
 	// 定义在下面(PlanPedestrianRoute也要用)，默认参数只能写在这里。
 	void AppendConnectionPoints(vector<Map::NavPoint>& points, Connection* connection, vector<Map::NavEdge>* edges = nullptr, bool reverse = false);
+	// 行人路线缓存用，定义在Map::Tick附近。
+	Map::VehicleRoutePlan ReversePedestrianPlan(const Map::VehicleRoutePlan& plan);
+	uint64_t RouteKey(int a, int b);
 }
 
 Map::VehicleRoutePlan Map::PlanPedestrianRoute(Room* startRoom, float x, float y, Room* destRoom) const {
@@ -3270,14 +3248,41 @@ Map::VehicleRoutePlan Map::PlanPedestrianRouteFromNode(const Node* startNode, fl
 	if (candidates.empty()) return plan;
 
 	auto toPoint = [](const Node* node) { return NavPoint{ node->GetX(), node->GetY(), node->GetZ() }; };
+	std::shared_ptr<SearchGraph> search = AcquireSearchGraph(pedestrianNavGraph, pedestrianSearchGraph);
 	for (const Node* candidate : candidates) {
 		if (candidate->GetId() == destNode->GetId()) {
 			plan.status = VehicleRoutePlan::OK;
 			plan.points = { toPoint(candidate) };
 			return plan;
 		}
-		vector<const Node*> path = FindPedestrianPath(candidate->GetId(), destNode->GetId());
-		if (path.empty()) continue;
+		// 缓存：A->B与B->A同一条，按min->max方向存；命中后按需倒过来；不连通也缓存。
+		const int fromId = candidate->GetId(), toId = destNode->GetId();
+		const uint64_t routeKey = RouteKey(fromId, toId);
+		const bool forward = fromId < toId;
+		{
+			std::lock_guard<std::mutex> lock(search->cacheMutex);
+			auto cached = search->routes.find(routeKey);
+			if (cached != search->routes.end()) {
+				cached->second.lastHit = routeClock.load();
+				routeHits++;
+				if (cached->second.plan.status != VehicleRoutePlan::OK) continue;
+				return forward ? cached->second.plan : ReversePedestrianPlan(cached->second.plan);
+			}
+		}
+		routeMisses++;
+		auto store = [&](const VehicleRoutePlan& result) {
+			std::lock_guard<std::mutex> lock(search->cacheMutex);
+			SearchGraph::RouteEntry& entry = search->routes[routeKey];
+			entry.plan = forward ? result : ReversePedestrianPlan(result);
+			entry.lastHit = routeClock.load();
+		};
+		vector<const Node*> path = FindPedestrianPath(fromId, toId);
+		if (path.empty()) {
+			VehicleRoutePlan none;
+			none.status = VehicleRoutePlan::NO_PATH_TO_DESTINATION;
+			store(none);
+			continue;
+		}
 		plan.status = VehicleRoutePlan::OK;
 		// 沿每条边的曲线采样(曲线路上的行人车道边带控制点，只连节点会切弦)；边双向，起点不是Start就倒着走。
 		plan.points.push_back(toPoint(path.front()));
@@ -3290,6 +3295,7 @@ Map::VehicleRoutePlan Map::PlanPedestrianRouteFromNode(const Node* startNode, fl
 			}
 			AppendConnectionPoints(plan.points, edge, &plan.edges, edge->GetStart().GetId() != path[i]->GetId());
 		}
+		store(plan);
 		return plan;
 	}
 
@@ -3801,7 +3807,74 @@ Door* Map::FindDoorById(const string& id) const {
 const vector<Door*>& Map::GetAllDoors() const { return allDoors; }
 
 void Map::Tick(const Time& currentTime, bool crossedDay, PostHandle* post) {
-	// 空实现，见map.md。
+	// 没有每帧逻辑；只推进行人路线缓存的游戏时钟，并每游戏小时清一次超过25小时没命中的条目，见map.md。
+	const double now = Time::DaysBetween(Time(1, 1, 1), currentTime) * 86400.0 + currentTime.GetOnlySecond();
+	routeClock.store(now);
+	if (now - routeLastPurge.load() < 3600.0 && now >= routeLastPurge.load()) return;
+	routeLastPurge.store(now);
+	std::shared_ptr<SearchGraph> search;
+	{
+		std::lock_guard<std::mutex> lock(searchGraphMutex);
+		search = pedestrianSearchGraph;
+	}
+	if (!search) return;
+	std::lock_guard<std::mutex> lock(search->cacheMutex);
+	for (auto it = search->routes.begin(); it != search->routes.end();) {
+		if (it->second.lastHit > now) it->second.lastHit = now; // 时钟倒退(读了更早的存档)
+		if (now - it->second.lastHit > kPedestrianRouteCacheLifetime) { it = search->routes.erase(it); routePurged++; }
+		else ++it;
+	}
+}
+
+namespace {
+	// 行人路线反向：点序倒过来，edges顺序倒过来并把点下标镜像(行人边双向，Connection*不变)。
+	Map::VehicleRoutePlan ReversePedestrianPlan(const Map::VehicleRoutePlan& plan) {
+		Map::VehicleRoutePlan out;
+		out.status = plan.status;
+		out.points.assign(plan.points.rbegin(), plan.points.rend());
+		const int last = static_cast<int>(plan.points.size()) - 1;
+		out.edges.reserve(plan.edges.size());
+		for (auto it = plan.edges.rbegin(); it != plan.edges.rend(); ++it) {
+			out.edges.push_back({ it->edge, last - it->lastPoint, last - it->firstPoint });
+		}
+		return out;
+	}
+
+	uint64_t RouteKey(int a, int b) {
+		const uint32_t lo = static_cast<uint32_t>(a < b ? a : b), hi = static_cast<uint32_t>(a < b ? b : a);
+		return (static_cast<uint64_t>(lo) << 32) | hi;
+	}
+}
+
+Map::RouteCacheStats Map::GetPedestrianRouteCacheStats() const {
+	RouteCacheStats stats;
+	stats.hits = routeHits.load();
+	stats.misses = routeMisses.load();
+	stats.purged = routePurged.load();
+	std::shared_ptr<SearchGraph> search;
+	{
+		std::lock_guard<std::mutex> lock(searchGraphMutex);
+		search = pedestrianSearchGraph;
+	}
+	if (!search) return stats;
+	std::lock_guard<std::mutex> lock(search->cacheMutex);
+	stats.entries = search->routes.size();
+	for (const auto& [key, entry] : search->routes) {
+		stats.bytes += sizeof(key) + sizeof(entry) + 32 /*哈希表节点开销*/
+			+ entry.plan.points.capacity() * sizeof(NavPoint) + entry.plan.edges.capacity() * sizeof(NavEdge);
+	}
+	return stats;
+}
+
+void Map::ClearPedestrianRouteCache() const {
+	std::shared_ptr<SearchGraph> search;
+	{
+		std::lock_guard<std::mutex> lock(searchGraphMutex);
+		search = pedestrianSearchGraph;
+	}
+	if (!search) return;
+	std::lock_guard<std::mutex> lock(search->cacheMutex);
+	search->routes.clear();
 }
 
 bool Map::ApplyChange(const Change* change, const ScriptContext& context) {

@@ -54,6 +54,13 @@ private:
 // mod UnitTest的print回调：裸函数指针(跨DLL安全)，把一行输出记进当前套件的Note并打到控制台。
 void TestPrintLine(const char* line);
 
+// 进程内存(MB)：privateMB=提交的私有内存(堆+栈，最能反映"这个世界占了多少")，workingSetMB=物理驻留，peakWorkingSetMB=历史峰值。
+struct ProcessMemory { double privateMB = 0, workingSetMB = 0, peakWorkingSetMB = 0; };
+ProcessMemory ReadProcessMemory();
+// 记两条Metric："memory <label> private"(MB)和"memory <label> delta"(和上一次RecordMemory相比的增量，第一次为0)，并随后更新基线。
+// 所有套件在"阶段/规模变化/大对象建好"之后调用，内存增长和泄漏就能在报告里按标签对比。
+void RecordMemory(const std::string& label);
+
 std::string JsonEscape(const std::string& text);
 // FNV-1a 64位，指纹/哈希统一用它。
 unsigned long long Fnv1a(const void* data, size_t size, unsigned long long seed = 1469598103934665603ULL);

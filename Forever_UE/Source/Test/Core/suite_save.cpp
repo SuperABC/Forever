@@ -269,8 +269,10 @@ void SaveSuiteBody(TestWorld& world, const TestOptions& options) {
 	TestRun& run = TestRun::Get();
 	AdvanceDays(world, 5); // 让存档里有行驶/计时器/账本流水，而不是刚生成的状态
 
+	RecordMemory("save: before archive");
 	const SaveWorld saveWorld = ToSaveWorld(world);
 	const SaveArchive first = SaveGame::BuildArchive(saveWorld);
+	RecordMemory("save: after one archive"); // 一份存档(各段字节)的内存开销
 	const SaveArchive second = SaveGame::BuildArchive(saveWorld);
 	const string different = FirstDifferentSection(first, second);
 	run.Check(different.empty(), "saving twice without changes gives identical sections", different);
@@ -282,6 +284,7 @@ void SaveSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckFurnitureRoundTrip(world);
 	CheckRoomYawConvention(world);
 	CheckSocietyRoundTrip(world);
+	RecordMemory("save: after round trips"); // 回环重建的域如果没释放会在这里涨
 }
 
 void RunSaveSuite(const TestOptions& options) {

@@ -26,7 +26,7 @@
 using namespace std;
 
 namespace {
-	using Graph = unordered_map<int, vector<pair<int, Connection*>>>;
+	using Graph = NavGraph;
 
 	unordered_set<int> Bfs(const Graph& graph, const unordered_map<int, vector<int>>& reverse, int start, bool forward) {
 		unordered_set<int> seen = { start };
@@ -349,10 +349,12 @@ namespace {
 
 void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	(void)options;
+	RecordMemory("world: before checks");
 	CheckBuildings(world);
 	CheckTerrainSampling(world);
 	CheckVehicleConnectivity(world);
 	CheckVehicleEdgeGeometry(world);
+	RecordMemory("world: after connectivity checks"); // 寻路校验会填满寻路缓存和线程局部缓冲，这里能看到它们的内存
 	// 行道树/路灯总数(信息性，看roadnet mod有没有放；不同路网差异很大，不做通过条件)。
 	TestRun::Get().Metric("trees", static_cast<double>(world.map->GetVegetation().GetTrees().size()), "");
 	TestRun::Get().Metric("lamps", static_cast<double>(world.map->GetLamps().GetLamps().size()), "");
