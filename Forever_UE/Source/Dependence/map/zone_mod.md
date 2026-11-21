@@ -37,3 +37,7 @@
 - Zone内部对自己的剩余空间再跑一次Building分配流程(现有`internalBuildings`是mod显式指定的固定列表，不自动填充)。
 - 围墙"贴合不满整数unit时"的退化兜底渲染(见`ForeverZoneFrameworkComponent.md`)。
 - Building自己的出入口逻辑(`ConnectZoneAccessPoint`只服务Zone)。
+
+## --skip 参数(2026-11-21)
+
+所有`zone_*`/`building_*`mod都认`--skip`(config里写`"id --skip"`)：工厂层的`Assign`看到它就直接返回，该mod不再自己选地块；按权重的分布(`GetPower`/`AddCandidate`)和`CreateXxx`(预设创建)不受影响。mod本体不用处理它。

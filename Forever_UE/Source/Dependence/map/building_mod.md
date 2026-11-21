@@ -43,3 +43,7 @@
 `AssignParking(level, slot, parkingIndex, spacing, categories)`是**新增的非虚成员**(仿`AssignRoom`)，不改任何现有虚函数/继承。
 车位数=`floor(矩形沿垂直开口方向的边长/spacing)`，实际车位宽度>=spacing。Basic里各停车场建筑在`AssignRoom(room_parking)`之后调用，
 间距/种类由各建筑mod在`Layout()`里直接写明。
+
+## --skip 参数(2026-11-21)
+
+所有`zone_*`/`building_*`mod都认`--skip`(config里写`"id --skip"`)：工厂层的`Assign`看到它就直接返回，该mod不再自己选地块；按权重的分布(`GetPower`/`AddCandidate`)和`CreateXxx`(预设创建)不受影响。mod本体不用处理它。

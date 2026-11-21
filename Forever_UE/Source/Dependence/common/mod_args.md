@@ -25,3 +25,8 @@
 
 ## 待办/后续阶段
 - 无。新mod要加参数，直接在构造函数里用`ModArgs`读，并在mod自己的`.md`里写参数表。
+
+## 保留参数
+
+- `--seed N`：Core剥掉，mod读不到。
+- `--skip`(zone/building mod)：`ZoneFactory/BuildingFactory::Assign`在工厂层读，mod本体不用处理。

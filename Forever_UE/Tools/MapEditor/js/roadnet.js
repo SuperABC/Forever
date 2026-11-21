@@ -633,6 +633,7 @@
 	// 旧版(version 1，路自己带height、隧道/桥导出时自动拆段)迁移成新版：节点补z，隧道/桥按旧布局拆成多条路(引道/坡=隧道口或桥，平路=隧道或桥)。
 	function migrateModel(model, ctx) {
 		if (!model.greens) model.greens = [];
+		for (const l of model.lots) if (!l.presets) l.presets = [];
 		if (model.version >= 2) return model;
 		ctx = ctx || { height: () => 0 };
 		for (const n of model.nodes) n.z = n.z || 0;

@@ -71,7 +71,7 @@ namespace {
 			{ "AREA_COMMERCE_HIGH", AREA_COMMERCE_HIGH }, { "AREA_COMMERCE_MIDDLE", AREA_COMMERCE_MIDDLE }, { "AREA_COMMERCE_LOW", AREA_COMMERCE_LOW },
 			{ "AREA_INDUSTRY_HIGH", AREA_INDUSTRY_HIGH }, { "AREA_INDUSTRY_MIDDLE", AREA_INDUSTRY_MIDDLE }, { "AREA_INDUSTRY_LOW", AREA_INDUSTRY_LOW },
 			{ "AREA_OFFICE_HIGH", AREA_OFFICE_HIGH }, { "AREA_OFFICE_MIDDLE", AREA_OFFICE_MIDDLE }, { "AREA_OFFICE_LOW", AREA_OFFICE_LOW },
-			{ "AREA_TEST", AREA_TEST },
+			{ "AREA_TEST", AREA_TEST }, { "AREA_PLACEHOLDER", AREA_PLACEHOLDER },
 		};
 		auto it = table.find(areaName);
 		return it == table.end() ? AREA_NONE : it->second;
@@ -310,6 +310,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 	// 地块：corners是4个角(按环绕顺序)，margin按FACE_DIRECTION(西/东/北/南)，boundary{方向:roads下标}。
 	// 必须在roads不再增长之后再取边界Road指针。
 	const JsonValue& lotArray = output["lots"];
+	vector<int> lotOfOutput(lotArray.size(), -1); // output.lots下标 -> lots下标(无效的lot被跳过，下标会错开)，presets用
 	for (unsigned int i = 0; i < lotArray.size(); i++) {
 		const JsonValue& entry = lotArray[i];
 		const JsonValue& corners = entry["corners"];
@@ -330,6 +331,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 		try {
 			lots.emplace_back(cornerNodes[0], cornerNodes[1], cornerNodes[2], cornerNodes[3], margin, boundary);
 			lots.back().SetArea(AreaFromName(entry["area"].AsString()));
+			lotOfOutput[i] = static_cast<int>(lots.size()) - 1;
 		}
 		catch (...) {
 			debugf("Warning: FileRoadnet lot %u is not a valid rectangle, skipped.\n", i);
@@ -360,6 +362,29 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 			site.links.push_back(item);
 		}
 		greens.push_back(std::move(site));
+	}
+
+	// 园区/建筑预设：lot是output.lots下标，rect=[x0,x1,y0,y1]在该lot本地坐标系(见RoadnetMod::PlacementPreset)，id以zone_开头是园区。
+	// 全部在Core(Map::PlacePresets)里落地，这里只搬数据。
+	const JsonValue& presetArray = output["presets"];
+	for (unsigned int i = 0; i < presetArray.size(); i++) {
+		const JsonValue& entry = presetArray[i];
+		const JsonValue& rect = entry["rect"];
+		if (!entry["lot"].IsNumeric() || !entry["direction"].IsNumeric() || !rect.IsArray() || rect.size() != 4) continue;
+		int outputLot = entry["lot"].AsInt();
+		if (outputLot < 0 || outputLot >= static_cast<int>(lotOfOutput.size()) || lotOfOutput[outputLot] < 0) {
+			debugf("Warning: FileRoadnet preset %u refers to a missing lot, skipped.\n", i);
+			continue;
+		}
+		int direction = entry["direction"].AsInt();
+		if (direction < 0 || direction > 3) continue;
+		PlacementPreset preset;
+		preset.lotIndex = lotOfOutput[outputLot];
+		preset.modId = entry["id"].IsString() ? entry["id"].AsString() : "";
+		preset.direction = direction;
+		preset.x0 = NumberOr(rect[0], 0.f); preset.x1 = NumberOr(rect[1], 0.f);
+		preset.y0 = NumberOr(rect[2], 0.f); preset.y1 = NumberOr(rect[3], 0.f);
+		presets.push_back(std::move(preset));
 	}
 
 	AssignJunctionSetbacks(roads, intersections);

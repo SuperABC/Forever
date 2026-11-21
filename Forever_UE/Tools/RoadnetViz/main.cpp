@@ -96,6 +96,7 @@ namespace viz {
 	VizColor AreaColor(AREA_TYPE area) {
 		static const VizColor kBase[4] = { { 40, 110, 230 }, { 240, 150, 30 }, { 150, 70, 190 }, { 220, 50, 50 } };
 		if (area == AREA_TEST) return { 220, 50, 50 };
+		if (area == AREA_PLACEHOLDER) return { 163, 163, 163 };
 		int a = static_cast<int>(area);
 		if (a < AREA_RESIDENCE_HIGH || a > AREA_OFFICE_LOW) return { 128, 128, 128 };
 		int kind = (a - AREA_RESIDENCE_HIGH) / 3, level = (a - AREA_RESIDENCE_HIGH) % 3;

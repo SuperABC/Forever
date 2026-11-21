@@ -57,6 +57,10 @@
 - **自适应占位**：`request.adaptiveParent`非空时，`request.lot`是`Lot::FindAdaptivePlacement`（在mod DLL内纯读）命中的嵌套子块`usedChild`。`RequestPlacement`成功后调`PromoteAdaptiveRemainder(parent, usedChild)`：把`usedChild`的残余`freeLots`搬回`parent->GetFreeLots()`，把`usedChild`自己从`parent->GetFreeLots()`摘掉（否则它仍带着当初完整未用的尺寸，下一个类型会当成整块可用，重复分配同一块地），并把它新产生的小路（`TakePathRoadLinks()`）记到`parent`身上（Forever层扫的是`GetLots()`里的顶层Lot）。`usedChild`本身不`delete`（`building->SetParentLot(usedChild)`还引用着）：新开局无人持有、泄漏到进程结束，读档时进`orphanLots`由Map持有。这个函数只能在Core编译的`map.cpp`里做，mod DLL不能调`GetFreeLots()`/`TakePathRoadLinks()`这类会分配/移动容器内容的方法（原因见`general_geometry.h`）。子块没有路网分配的地址，`GetAddresses()`为空会让`building->GetAddress()`退化成空路名、按地址找房间失败，所以沿用`adaptiveParent`的地址；`LocateBuilding`用`SameBlock`（指针相同或地址相同）比较所属地块。
 - **小路归属**：`Map`自己不持有任何小路`Road*`。小路是`RequestPlacement`/`FillRemainder`裁剪顶层`Lot`空闲空间的副产品，记在那个`Lot`的`pathRoadLinks`里（`GetPathRoadLinks()`/`GetPathRoads()`），由`Lot`析构释放；`Road::IsPathRoad()`标分类；`Map::GetPathRoads()`只遍历`GetLots()`汇总，按值返回。
 
+### PlacePresets（路网预设，2026-11-21）
+
+`InitZones`开头、Assign之前调用一次，数据来自`Roadnet::GetPresets()`。按文件顺序对每个预设：在`lot->GetFreeLots()`里找完整包含矩形的自由子地块(跨小路=找不到=失败)，把矩形换算成该子块本地的`marginStart/marginEnd/depth`(WEST: depth=rx1; EAST: depth=tw-rx0; NORTH: depth=ry1; SOUTH: depth=th-ry0)，子块就是lot自己直接`lot->RequestPlacement`，否则`sub->RequestPlacement`+`PromoteAdaptiveRemainder(lot, sub)`(同Assign的自适应路径)，路径连接登记`pendingPathRoadLinks`。**无论id是否有效都占位**，保证和编辑器按创建顺序重放的结果一致。占位成功后：`zone_`开头立即`CreateZoneAt`；其余存进`pendingBuildingPresets`，`InitBuildings`开头`CreateBuildingAt`。id未注册/未启用只告警。`CreateZoneAt/CreateBuildingAt`是和Assign共用的创建函数。存档存实例，预设不用进存档。各mod的`--skip`(见`zone_mod.md`/`building_mod.md`)只跳过自己的Assign，预设先放，所以和预设互不冲突。CoreTest的`presets`套件对照编辑器模拟器验证(注意Quad位置是中心)。
+
 ### InitGreens（绿化区，2026-11-20）
 
 放在`InitBuildings`之后(接路要用`FlushPendingBuildingRoadAccess`的断开顺序)、`InitVegetation`之前；读档(`bMapRestored`)跳过。数据来自`Roadnet::GetGreenSites()`(路网文件`greens[]`，`RoadnetMod::greens`深拷贝并把`Road*`重映射，同lots)。每块绿化区：

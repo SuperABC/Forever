@@ -72,6 +72,17 @@ public:
 	};
 	std::vector<GreenSite> greens;
 
+	// 路网指定的园区/建筑"预设"：当作该mod自己Assign出来的结果，Core在所有mod的Assign之前先按顺序落地(Map::PlacePresets)。
+	// lotIndex是lots下标；矩形(x0,x1,y0,y1)在该lot本地坐标系里(原点WEST-NORTH角、x向东、y向南，单位同lot尺寸，lot尺寸已扣四向缩进)，
+	// direction=矩形贴靠的那条有路的边(FACE_WEST/EAST/NORTH/SOUTH，指矩形所在子地块的那一侧)。modId以zone_开头走ZoneFactory，否则走BuildingFactory。
+	struct PlacementPreset {
+		int lotIndex = -1;
+		std::string modId;
+		int direction = 0;
+		float x0 = 0.f, x1 = 0.f, y0 = 0.f, y1 = 0.f;
+	};
+	std::vector<PlacementPreset> presets;
+
 	// 工具方法(非虚):请求给一段桥(chains里每条链是按行驶顺序首尾相接的Connection，通常是同一座桥拆出的几段Road)放桥墩,
 	// 宿主(Roadnet::PlacePiers)按defaultSpacing/minSpacing选位、避开其它道路。链按值拷贝保存。参数含义同RouteMod::AddPier(PierRequest)。
 	void AddPier(const std::string& mesh, std::vector<std::vector<Connection>> chains, float defaultSpacing, float minSpacing, float radius);

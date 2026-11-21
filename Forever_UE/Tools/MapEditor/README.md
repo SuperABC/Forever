@@ -17,6 +17,12 @@
 - **撤销/重做**：`Ctrl+Z` / `Ctrl+Shift+Z`（或 `Ctrl+Y`），上限 80 步；地形按笔画差分。`Ctrl+S` 保存路网。
 - **视图**：2D 顶视图（滚轮缩放，空格+左键、中键或右键拖动平移）与 three.js 3D 视图（轨道相机）切换；右侧面板显示属性和校验警告（道路穿过非平原/有水、地块压在不可建设区域(3×3 邻域高度不全为 0，和地形类型无关)等）。
 
+## 园区/建筑预设
+
+手动指定游戏里 Assign 的结果：地块工具下选中一个地块 → 右面板"添加预设" → 依次点三下：沿路段起点、沿路段终点（都必须靠近这块地**有路的边**）、进深。端点离角/对边不到 3 会强制吸附到角/对边（和 Core 的拉伸规则一致），其余按 0.5 取整。第一个预设放下后，小路会把地块切成若干子地块，后面的预设只能落在某一块子地块里并吸附它的边和角，不能跨小路。建好后点预设填 id（`zone_` 开头=园区，否则=建筑）；右键/Esc 取消绘制。
+
+导出到 `.roadnet` 的 `presets[]`，由 roadnet_file 传给 Core，Core 在各 mod 的 Assign 之前先放预设；mod 参数 `--skip` 只跳过该 mod 自己的 Assign，权重填充不受影响。预设在 2D/3D 视图里都有显示。
+
 ## 文件格式
 设计和解析代码在 `Source/Basic/map/terrain_file.md`、`Source/Basic/map/roadnet_file.md`。单位 = element（10m），+Y 向南。
 - **`.terrain`**（小端二进制）：魔数 `FTRN`；u32 宽、高；调色板（u16 条数，每条 u16 长度+UTF-8，下标 0 固定 `plain`）；`u16[w*h]` 地形下标；`f32[w*h]` 高度；`f32[w*h]` 水位（NaN=无水）。
@@ -41,6 +47,8 @@ node tests/test_terrain.js
 node tests/test_roadnet.js
 node tests/test_lots.js
 node tests/test_greens.js
+node tests/test_presets.js
+node tests/make_presets.js  # 重新生成 samples/presets.*(CoreTest presets套件用，改了要同步suite_presets.cpp里的期望)
 node tests/make_demo.js     # 重新生成 samples/
 ```
 

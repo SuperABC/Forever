@@ -108,7 +108,7 @@ function applyAction(a, undo) {
 	} else if (a.kind === 'm') {
 		S.model = ME.cloneModel(undo ? a.before : a.after);
 		if (S.sel && !selExists()) S.sel = null;
-		S.pending = null;
+		S.pending = null; S.presetDraw = null;
 	}
 }
 function undo() { const a = hist.undo.pop(); if (!a) return; applyAction(a, true); hist.redo.push(a); afterChange(); }
@@ -324,7 +324,7 @@ const AREA_COLORS = {
 	AREA_COMMERCE_LOW: '#7dd3fc', AREA_COMMERCE_MIDDLE: '#2563eb', AREA_COMMERCE_HIGH: '#1e2a78',
 	AREA_INDUSTRY_LOW: '#fde68a', AREA_INDUSTRY_MIDDLE: '#eab308', AREA_INDUSTRY_HIGH: '#92400e',
 	AREA_OFFICE_LOW: '#f9a8d4', AREA_OFFICE_MIDDLE: '#db2777', AREA_OFFICE_HIGH: '#7e22ce',
-	AREA_TEST: '#ef4444',
+	AREA_TEST: '#ef4444', AREA_PLACEHOLDER: '#a3a3a3',
 };
 const areaColor = (area) => AREA_COLORS[area] || '#888888';
 
@@ -565,6 +565,7 @@ function draw2D() {
 		}
 	}
 	drawGreenLinks();
+	drawPresets();
 	// 选中高亮和高度箭头
 	for (const r of M.roads) {
 		const q = ME.quadOf(M, r);
@@ -692,7 +693,8 @@ function drawOverlay() {
 		}
 	}
 	if (S.tool === 'green') drawGreenOverlay(m);
-	if (S.tool === 'lot' && S.mouse) {
+	if (S.presetDraw) drawPresetOverlay(m);
+	else if (S.tool === 'lot' && S.mouse) {
 		const n = ME.pickNode(S.model, m[0], m[1], 9 / v.scale);
 		if (n) { const [sx, sy] = toScreen(n.x, n.y); g.strokeStyle = '#4cff9e'; g.lineWidth = 2; g.beginPath(); g.arc(sx, sy, 8, 0, Math.PI * 2); g.stroke(); }
 	}
@@ -934,7 +936,7 @@ c2d.addEventListener('mousedown', (e) => {
 		if (e.detail === 2) { doubleClickSplit(w); return; }
 		roadClick(w); return;
 	}
-	if (S.tool === 'lot') { lotClick(w); return; }
+	if (S.tool === 'lot') { if (S.presetDraw) presetClick(w); else lotClick(w); return; }
 	if (S.tool === 'green') { greenClick(w); return; }
 });
 window.addEventListener('mousemove', (e) => {
@@ -954,7 +956,8 @@ window.addEventListener('mousemove', (e) => {
 });
 window.addEventListener('mouseup', () => {
 	if (!drag) return;
-	if (drag.type === 'pan' && drag.rc && !drag.moved && S.pending) S.pending = null; // 右键点一下(没拖动)：结束正在画的路/地块
+	if (drag.type === 'pan' && drag.rc && !drag.moved && S.presetDraw) cancelPreset();
+	else if (drag.type === 'pan' && drag.rc && !drag.moved && S.pending) S.pending = null; // 右键点一下(没拖动)：结束正在画的路/地块
 	if (drag.type === 'box') {
 		if (drag.moved) {
 			const xa = Math.min(drag.x0, drag.x1), xb = Math.max(drag.x0, drag.x1), ya = Math.min(drag.y0, drag.y1), yb = Math.max(drag.y0, drag.y1);
@@ -990,7 +993,7 @@ let spaceDown = false;
 window.addEventListener('keydown', (e) => {
 	if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.key !== 'Escape') return;
 	if (e.key === ' ') { spaceDown = true; e.preventDefault(); }
-	else if (e.key === 'Escape') { S.pending = null; S.dirty2d = true; renderRight(); }
+	else if (e.key === 'Escape') { S.pending = null; S.presetDraw = null; S.dirty2d = true; renderRight(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); doSaveAll(); }
@@ -1083,6 +1086,150 @@ function lotClick(w) {
 	if (res.lot) { S.sel = { kind: 'lot', id: res.lot.id }; }
 	S.dirty2d = true;
 }
+
+// ======================= 园区/建筑预设 =======================
+// 选中地块 → "添加预设" → 点3次：沿路段起点、沿路段终点(都必须在一条有路的边上)、进深。吸附和放置校验都用 lots.js 里和Core一一对应的pool模拟器。
+// S.presetDraw = {lotId, step:1|2|3, dir, sub, a, b}；sub是第1次点击命中的那块自由地(本地坐标)。
+function presetFrameOf(lot) {
+	const rep = ME.replayPresets(S.model, lot, getRoadPieces());
+	return rep;
+}
+function startPreset() {
+	if (!S.sel || S.sel.kind !== 'lot') return;
+	const lot = S.model.lots.find((l) => l.id === S.sel.id);
+	if (!lot || !ME.replayPresets(S.model, lot, getRoadPieces())) { say('这块地的缩进把它吃光了，不能加预设'); return; }
+	S.tool = 'lot'; S.pending = null;
+	S.presetDraw = { lotId: lot.id, step: 1 };
+	renderLeft(); renderRight(); S.dirty2d = true;
+	say('点沿路段的起点(必须靠近这块地有路的边)，Esc/右键取消');
+}
+function cancelPreset() { if (S.presetDraw) { S.presetDraw = null; renderRight(); S.dirty2d = true; } }
+function presetAlong(d, lx, ly) { return d.dir <= 1 ? ly : lx; }
+function presetDepthAt(d, lx, ly) {
+	const sub = d.sub;
+	const v = d.dir === 0 ? lx - sub.x0 : d.dir === 1 ? sub.x1 - lx : d.dir === 2 ? ly - sub.y0 : sub.y1 - ly;
+	return ME.snapDepth(v, ME.edgeSpan(sub, d.dir).depthMax);
+}
+// 鼠标当前位置对应的预设预览：返回 {rect|null, hint, bad}，供点击和绘制共用。
+function presetPreview(w) {
+	const d = S.presetDraw; if (!d) return null;
+	const lot = S.model.lots.find((l) => l.id === d.lotId); if (!lot) return null;
+	const rep = presetFrameOf(lot); if (!rep) return null;
+	const [lx, ly] = ME.worldToLocal(rep.frame, w[0], w[1]);
+	if (d.step === 1) {
+		const idx = ME.poolIndexAt(rep.pool, lx, ly);
+		if (idx < 0) return { rep, hint: '点在这块地的空闲区域里(小路和已有预设上不行)', bad: true };
+		const sub = rep.pool[idx];
+		const dist = [Math.abs(lx - sub.x0), Math.abs(lx - sub.x1), Math.abs(ly - sub.y0), Math.abs(ly - sub.y1)];
+		let dir = 0; for (let k = 1; k < 4; k++) if (dist[k] < dist[dir]) dir = k;
+		if (!sub.road[dir]) return { rep, sub, dir, hint: `${ME.DIRECTION_NAMES[dir]}边没有路，不能用来放预设`, bad: true };
+		const span = ME.edgeSpan(sub, dir);
+		const a = ME.snapValue(dir <= 1 ? ly : lx, span.lo, span.hi);
+		return { rep, sub, dir, a, mark: { p: presetEdgePoint(sub, dir, a), snapped: a === span.lo || a === span.hi }, hint: `${ME.DIRECTION_NAMES[dir]}边临街：点沿路段的起点` };
+	}
+	const span = ME.edgeSpan(d.sub, d.dir);
+	const b = ME.snapValue(presetAlong(d, lx, ly), span.lo, span.hi);
+	if (d.step === 2) return { rep, sub: d.sub, dir: d.dir, a: d.a, b, mark: { p: presetEdgePoint(d.sub, d.dir, b), snapped: b === span.lo || b === span.hi }, hint: '点沿路段的终点' };
+	const depth = presetDepthAt(d, lx, ly);
+	const lo = Math.min(d.a, d.b), hi = Math.max(d.a, d.b);
+	// 进深点：落在进深线上，沿路方向取鼠标位置夹在[lo,hi]内；吸附=进深吃满子块(对边)。
+	const alongMouse = Math.max(lo, Math.min(hi, presetAlong(d, lx, ly)));
+	const dEdge = d.dir === 0 ? [d.sub.x0 + depth, alongMouse] : d.dir === 1 ? [d.sub.x1 - depth, alongMouse] : d.dir === 2 ? [alongMouse, d.sub.y0 + depth] : [alongMouse, d.sub.y1 - depth];
+	const depthMark = { p: dEdge, snapped: depth === ME.edgeSpan(d.sub, d.dir).depthMax };
+	if (depth < ME.PRESET.MIN_LOT_EXTENT) return { rep, sub: d.sub, dir: d.dir, a: lo, b: hi, depth, mark: depthMark, hint: '进深至少' + ME.PRESET.MIN_LOT_EXTENT, bad: true };
+	const rect = ME.rectFromEdge(d.sub, d.dir, lo, hi, depth);
+	const res = ME.placePresetRect(rep.pool, rect, d.dir);
+	return { rep, sub: d.sub, dir: d.dir, a: lo, b: hi, depth, mark: depthMark, rect, placed: res.placed || null, hint: res.error ? res.error : `进深 ${depth}：点击确定`, bad: !!res.error };
+}
+// 沿边坐标v对应的边上本地点。
+function presetEdgePoint(sub, dir, v) { return dir === 0 ? [sub.x0, v] : dir === 1 ? [sub.x1, v] : dir === 2 ? [v, sub.y0] : [v, sub.y1]; }
+function presetClick(w) {
+	const d = S.presetDraw; if (!d) return;
+	const pv = presetPreview(w);
+	if (!pv) { cancelPreset(); return; }
+	if (pv.bad) { say(pv.hint); return; }
+	if (d.step === 1) { Object.assign(d, { step: 2, dir: pv.dir, sub: pv.sub, a: pv.a }); say('点沿路段的终点'); S.dirty2d = true; return; }
+	if (d.step === 2) {
+		if (Math.abs(pv.b - d.a) < ME.PRESET.MIN_LOT_EXTENT) { say(`沿路段至少 ${ME.PRESET.MIN_LOT_EXTENT} 长`); return; }
+		d.b = pv.b; d.step = 3; say('移动鼠标决定进深，再点一下确定'); S.dirty2d = true; return;
+	}
+	const rect = pv.rect, dir = d.dir, lotId = d.lotId;
+	S.presetDraw = null;
+	const res = modelOp((m) => ({ preset: ME.addPreset(m, m.lots.find((l) => l.id === lotId), dir, rect) }));
+	if (res.preset) S.sel = { kind: 'preset', id: res.preset.id, lotId };
+	renderLeft(); renderRight(); S.dirty2d = true;
+	say('预设已建，在右边填写要放的园区/建筑 id');
+}
+function findPreset(id) {
+	for (const lot of S.model.lots) { const p = (lot.presets || []).find((q) => q.id === id); if (p) return { lot, preset: p }; }
+	return null;
+}
+// 预设的显示色：按id哈希，没填id用橙色提醒。
+function presetColor(modId) {
+	if (!modId) return '#ff9f43';
+	let h = 0; for (let i = 0; i < modId.length; i++) h = (h * 31 + modId.charCodeAt(i)) >>> 0;
+	const hue = h % 360, c = 0.55, x = c * (1 - Math.abs((hue / 60) % 2 - 1)), m0 = 0.35;
+	const [r, gg, b] = hue < 60 ? [c, x, 0] : hue < 120 ? [x, c, 0] : hue < 180 ? [0, c, x] : hue < 240 ? [0, x, c] : hue < 300 ? [x, 0, c] : [c, 0, x];
+	return '#' + [r, gg, b].map((v) => Math.round((v + m0) * 255).toString(16).padStart(2, '0')).join('');
+}
+const quadWorld = (f, r) => [ME.localToWorld(f, r.x0, r.y0), ME.localToWorld(f, r.x1, r.y0), ME.localToWorld(f, r.x1, r.y1), ME.localToWorld(f, r.x0, r.y1)];
+function tracePoly(pts) { g.beginPath(); pts.forEach((c, i) => { const [sx, sy] = toScreen(c[0], c[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); }); g.closePath(); }
+// 画出所有已建的预设(含自由地块的轮廓：小路缝隙一目了然)。画在canvas上(不走CPU光栅化)：这些边不和别的图形共边。
+function drawPresets() {
+	const M = S.model, pieces = getRoadPieces();
+	for (const lot of M.lots) {
+		if (!lot.presets || !lot.presets.length) continue;
+		const rep = ME.replayPresets(M, lot, pieces); if (!rep) continue;
+		g.setLineDash([4, 4]); g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1;
+		for (const sub of rep.pool) { tracePoly(quadWorld(rep.frame, sub)); g.stroke(); }
+		g.setLineDash([]);
+		lot.presets.forEach((p, i) => {
+			const step = rep.steps[i];
+			const selected = S.sel && S.sel.kind === 'preset' && S.sel.id === p.id;
+			const col = presetColor(p.modId);
+			if (!step.placed) { tracePoly(quadWorld(rep.frame, p)); g.setLineDash([3, 3]); g.strokeStyle = '#ff4d4d'; g.lineWidth = 2; g.stroke(); g.setLineDash([]); return; }
+			const pts = quadWorld(rep.frame, step.placed);
+			tracePoly(pts); g.fillStyle = col + '99'; g.fill(); g.strokeStyle = selected ? '#fff' : col; g.lineWidth = selected ? 3 : 2; g.stroke();
+			const cx = pts.reduce((a, c) => a + c[0], 0) / 4, cy = pts.reduce((a, c) => a + c[1], 0) / 4;
+			const [sx, sy] = toScreen(cx, cy), wpx = Math.hypot(...[pts[1][0] - pts[0][0], pts[1][1] - pts[0][1]]) * S.view.scale;
+			if (wpx > 40) { g.font = '11px sans-serif'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = '#000a'; g.fillStyle = '#fff'; const t = p.modId || '(未填id)'; g.strokeText(t, sx, sy + 4); g.fillText(t, sx, sy + 4); g.textAlign = 'start'; }
+		});
+	}
+}
+// 绘制中的预览：自由地块轮廓、悬停的边、已定的沿路段、进深矩形。
+function drawPresetOverlay(m) {
+	const d = S.presetDraw; if (!d) return;
+	const lot = S.model.lots.find((l) => l.id === d.lotId); if (!lot) return;
+	const rep = presetFrameOf(lot); if (!rep) return;
+	g.setLineDash([5, 4]); g.strokeStyle = '#4cc9ff'; g.lineWidth = 1.5;
+	for (const sub of rep.pool) { tracePoly(quadWorld(rep.frame, sub)); g.stroke(); }
+	g.setLineDash([]);
+	const pv = S.mouse ? presetPreview(m) : null;
+	if (!pv) return;
+	const edgePts = (sub, dir, a, b) => dir === 0 ? [[sub.x0, a], [sub.x0, b]] : dir === 1 ? [[sub.x1, a], [sub.x1, b]] : dir === 2 ? [[a, sub.y0], [b, sub.y0]] : [[a, sub.y1], [b, sub.y1]];
+	const worldLine = (pts, col, wd) => { g.beginPath(); pts.forEach((q, i) => { const [wx, wy] = ME.localToWorld(rep.frame, q[0], q[1]); const [sx, sy] = toScreen(wx, wy); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); }); g.strokeStyle = col; g.lineWidth = wd; g.stroke(); };
+	if (d.step === 1 && pv.sub && pv.dir !== undefined) {
+		const span = ME.edgeSpan(pv.sub, pv.dir);
+		worldLine(edgePts(pv.sub, pv.dir, span.lo, span.hi), pv.bad ? '#ff4d4d' : '#4cff9e', 4);
+	}
+	if (d.step >= 2 && pv.a !== undefined && pv.b !== undefined) worldLine(edgePts(pv.sub, pv.dir, Math.min(pv.a, pv.b), Math.max(pv.a, pv.b)), '#4cff9e', 4);
+	else if (d.step === 2 && pv.a !== undefined) { const [wx, wy] = ME.localToWorld(rep.frame, ...(pv.dir <= 1 ? [pv.dir === 0 ? pv.sub.x0 : pv.sub.x1, pv.a] : [pv.a, pv.dir === 2 ? pv.sub.y0 : pv.sub.y1])); const [sx, sy] = toScreen(wx, wy); g.fillStyle = '#4cff9e'; g.beginPath(); g.arc(sx, sy, 5, 0, Math.PI * 2); g.fill(); }
+	if (d.step === 3 && pv.rect) {
+		tracePoly(quadWorld(rep.frame, pv.placed || pv.rect));
+		g.fillStyle = (pv.bad ? '#ff4d4d' : '#4cff9e') + '55'; g.fill(); g.setLineDash([6, 4]); g.strokeStyle = pv.bad ? '#ff4d4d' : '#fff'; g.lineWidth = 2; g.stroke(); g.setLineDash([]);
+	}
+	if (pv.mark) {
+		// 吸附后的落点小圆圈：橙色大圈=吸附到了角/端点/对边，白色小圈=在边上的普通位置(按0.5取整)；红=这次点击会被拒绝。
+		const [wx, wy] = ME.localToWorld(rep.frame, pv.mark.p[0], pv.mark.p[1]); const [sx, sy] = toScreen(wx, wy);
+		const col = pv.bad ? '#ff4d4d' : pv.mark.snapped ? '#ff9f1a' : '#ffffff';
+		g.beginPath(); g.arc(sx, sy, pv.mark.snapped ? 8 : 6, 0, Math.PI * 2);
+		g.fillStyle = col + '55'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = col; g.stroke();
+		g.beginPath(); g.arc(sx, sy, 1.8, 0, Math.PI * 2); g.fillStyle = col; g.fill();
+		if (pv.mark.snapped) { g.font = '11px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000c'; g.fillStyle = '#ffd08a'; g.strokeText('吸附', sx + 11, sy + 15); g.fillText('吸附', sx + 11, sy + 15); }
+	}
+	if (pv.hint) { const [sx, sy] = toScreen(m[0], m[1]); g.font = '12px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000c'; g.fillStyle = pv.bad ? '#ff9a9a' : '#fff'; g.strokeText(pv.hint, sx + 14, sy - 10); g.fillText(pv.hint, sx + 14, sy - 10); }
+}
+
 function pointInPoly(x, y, poly) {
 	let inside = false;
 	for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -1114,6 +1261,19 @@ function selectClick(w, e, mode) {
 	if (n) { S.sel = { kind: 'node', id: n.id }; drag = { type: 'node', id: n.id, before: ME.cloneModel(M) }; renderRight(); S.dirty2d = true; return; }
 	const hit = roadMode ? ME.pickRoad(M, w[0], w[1], Math.max(r, 0.6)) : null;
 	if (hit) { S.sel = { kind: 'road', id: hit.road.id }; renderRight(); S.dirty2d = true; return; }
+	if (!roadMode) {
+		// 预设在地块里面：先判断有没有点中某个已放置的预设矩形。
+		const pieces = getRoadPieces();
+		for (const lot of M.lots) {
+			if (!lot.presets || !lot.presets.length) continue;
+			const rep = ME.replayPresets(M, lot, pieces); if (!rep) continue;
+			const [lx, ly] = ME.worldToLocal(rep.frame, w[0], w[1]);
+			for (let i = lot.presets.length - 1; i >= 0; i--) {
+				const pl = rep.steps[i].placed || lot.presets[i];
+				if (lx >= pl.x0 && lx <= pl.x1 && ly >= pl.y0 && ly <= pl.y1) { S.sel = { kind: 'preset', id: lot.presets[i].id, lotId: lot.id }; renderRight(); S.dirty2d = true; return; }
+			}
+		}
+	}
 	for (const lot of (roadMode ? [] : M.lots)) {
 		const corners = ME.lotCorners(M, lot);
 		if (corners && pointInPoly(w[0], w[1], corners)) { S.sel = { kind: 'lot', id: lot.id }; renderRight(); S.dirty2d = true; return; }
@@ -1128,6 +1288,7 @@ function selExists() {
 	if (S.sel.kind === 'node') return !!ME.nodeOf(M, S.sel.id);
 	if (S.sel.kind === 'road') return !!ME.roadOf(M, S.sel.id);
 	if (S.sel.kind === 'green') return !!ME.greenOf(M, S.sel.id);
+	if (S.sel.kind === 'preset') return !!findPreset(S.sel.id);
 	return M.lots.some((l) => l.id === S.sel.id);
 }
 function deleteSelection() {
@@ -1138,6 +1299,7 @@ function deleteSelection() {
 		else if (sel.kind === 'road') ME.deleteRoad(m, sel.id);
 		else if (sel.kind === 'node') ME.deleteNode(m, sel.id);
 		else if (sel.kind === 'green') ME.deleteGreen(m, sel.id);
+		else if (sel.kind === 'preset') { for (const l of m.lots) l.presets = (l.presets || []).filter((p) => p.id !== sel.id); }
 		else { m.lots = m.lots.filter((l) => l.id !== sel.id); ME.cleanup(m); }
 	});
 }
@@ -1223,7 +1385,7 @@ const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块'], ['g
 function renderLeft() {
 	const left = $('left'); left.innerHTML = '';
 	const tabs = el('div', { class: 'tabs' });
-	for (const [id, label] of TOOLS) tabs.append(btn(label, () => { S.tool = id; S.pending = null; renderLeft(); renderRight(); S.dirty2d = true; }, S.tool === id));
+	for (const [id, label] of TOOLS) tabs.append(btn(label, () => { S.tool = id; S.pending = null; S.presetDraw = null; renderLeft(); renderRight(); S.dirty2d = true; }, S.tool === id));
 	left.append(tabs);
 	if (S.tool === 'terrain') {
 		const B = S.brush;
@@ -1302,7 +1464,7 @@ function renderLeft() {
 	}
 }
 function areaLabel(a) {
-	const kinds = { RESIDENCE: '住宅', COMMERCE: '商业', INDUSTRY: '工业', OFFICE: '办公', TEST: '测试' };
+	const kinds = { RESIDENCE: '住宅', COMMERCE: '商业', INDUSTRY: '工业', OFFICE: '办公', TEST: '测试', PLACEHOLDER: '占位(只放预设)' };
 	const lv = { HIGH: '高', MIDDLE: '中', LOW: '低' };
 	const p = a.replace('AREA_', '').split('_');
 	return kinds[p[0]] + (p[1] ? lv[p[1]] + '密度' : '');
@@ -1354,6 +1516,19 @@ function renderRight() {
 				btn('删除', () => modelOp((m) => { const g2 = ME.greenOf(m, gr.id); if (g2) ME.removeGreenLink(g2, link.edge); }))));
 		}
 		right.append(btn('删除绿化', deleteSelection));
+	} else if (S.sel.kind === 'preset') {
+			const hit = findPreset(S.sel.id), p = hit.preset, lot = hit.lot;
+			const rep = ME.replayPresets(M, lot, getRoadPieces());
+			const step = rep && rep.steps[lot.presets.indexOf(p)];
+			right.append(el('div', null, `预设 ${p.id}(地块 ${lot.id})`));
+			right.append(row('id', el('input', { type: 'text', value: p.modId || '', placeholder: 'zone_xxx 或 building_xxx', onchange: (e) => modelOp((m) => { const h = (m.lots.flatMap((l) => l.presets || [])).find((q) => q.id === p.id); if (h) h.modId = e.target.value.trim(); }) })));
+			right.append(row('临街', el('span', null, ME.DIRECTION_NAMES[p.dir] + '边')));
+			const pl = step && step.placed ? step.placed : p;
+			right.append(row('尺寸', el('span', null, `${(pl.x1 - pl.x0).toFixed(1)} × ${(pl.y1 - pl.y0).toFixed(1)}  (${((pl.x1 - pl.x0) * 10).toFixed(0)}m × ${((pl.y1 - pl.y0) * 10).toFixed(0)}m)`)));
+			if (step && step.error) right.append(el('div', { class: 'warn' }, '无效：' + step.error));
+			right.append(el('div', { class: 'hint' }, 'id 以 zone_ 开头=园区，否则=建筑；游戏里该 mod 必须已启用。'));
+			right.append(btn('返回地块', () => { S.sel = { kind: 'lot', id: lot.id }; renderRight(); S.dirty2d = true; }));
+			right.append(btn('删除预设', deleteSelection));
 	} else {
 		const lot = M.lots.find((l) => l.id === S.sel.id);
 		right.append(el('div', null, `地块 ${lot.id}`));
@@ -1368,6 +1543,10 @@ function renderRight() {
 				right.append(row(d.name, input, el('span', { class: 'hint' }, d.road ? '临街 ' + (d.road.name || d.road.id) : '无路')));
 			});
 		}
+			right.append(el('h4', null, `园区/建筑预设(${(lot.presets || []).length})`));
+		if (S.presetDraw && S.presetDraw.lotId === lot.id) right.append(el('div', { class: 'hint' }, ['', '点沿路段起点(靠近有路的边)', '点沿路段终点', '移动鼠标定进深，点击确定'][S.presetDraw.step] + '；Esc/右键取消'), btn('取消添加', cancelPreset));
+		else right.append(btn('添加预设', startPreset));
+		for (const p of lot.presets || []) right.append(btn(`预设${p.id}  ${p.modId || '(未填id)'}`, () => { S.sel = { kind: 'preset', id: p.id, lotId: lot.id }; renderRight(); S.dirty2d = true; }));
 		right.append(btn('删除地块', deleteSelection));
 	}
 	right.append(el('h4', null, `检查(${S.warnings.length})`));
@@ -1528,6 +1707,18 @@ function build3D() {
 			for (const k of [0, 1, 2, 0, 2, 3]) p.push(c[k][0], 0.2, c[k][1]);
 			const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
 			r3.root.add(new THREE.Mesh(lg, new THREE.MeshBasicMaterial({ color: new THREE.Color(areaColor(lot.area)), transparent: true, opacity: 0.5, side: THREE.DoubleSide })));
+		}
+		// 预设：比地块高一点的同色薄片
+		for (const lot of S.model.lots) {
+			if (!lot.presets || !lot.presets.length) continue;
+			const rep = ME.replayPresets(S.model, lot, getRoadPieces()); if (!rep) continue;
+			rep.steps.forEach((st, i) => {
+				if (!st.placed) return;
+				const q = quadWorld(rep.frame, st.placed), p = [];
+				for (const k of [0, 1, 2, 0, 2, 3]) p.push(q[k][0], 0.35, q[k][1]);
+				const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+				r3.root.add(new THREE.Mesh(pg, new THREE.MeshBasicMaterial({ color: new THREE.Color(presetColor(lot.presets[i].modId)), side: THREE.DoubleSide })));
+			});
 		}
 	}
 	// 绿化区：三角化后铺在地形上方一点，顶点高度取该处地形高度；轮廓画成线。

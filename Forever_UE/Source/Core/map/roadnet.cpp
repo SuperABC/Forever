@@ -334,6 +334,18 @@ void Roadnet::DistributeRoadnet(int width, int height,
 		greenSites.push_back(std::move(copy));
 	}
 
+	// 预设：lotIndex翻译成本Roadnet自己的Lot*(越界丢弃)。
+	presets.clear();
+	for (const RoadnetMod::PlacementPreset& p : mod->presets) {
+		if (p.lotIndex < 0 || p.lotIndex >= static_cast<int>(lots.size())) continue;
+		Preset copy;
+		copy.lot = lots[p.lotIndex];
+		copy.modId = p.modId;
+		copy.direction = p.direction;
+		copy.x0 = p.x0; copy.x1 = p.x1; copy.y0 = p.y0; copy.y1 = p.y1;
+		presets.push_back(std::move(copy));
+	}
+
 	// Quad+float是纯值类型，不含所有权指针，直接整体拷贝，不需要像上面几个逐个new。
 	hatches = mod->hatches;
 	terrainFits = mod->terrainFits;
@@ -342,6 +354,10 @@ void Roadnet::DistributeRoadnet(int width, int height,
 
 const vector<Roadnet::GreenSite>& Roadnet::GetGreenSites() const {
 	return greenSites;
+}
+
+const vector<Roadnet::Preset>& Roadnet::GetPresets() const {
+	return presets;
 }
 
 const vector<Pier>& Roadnet::GetPiers() const {

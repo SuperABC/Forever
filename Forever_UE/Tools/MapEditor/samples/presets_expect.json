@@ -1,0 +1,30 @@
+[
+ {
+  "id": "zone_residence_high",
+  "x": 101,
+  "y": 101,
+  "w": 10,
+  "h": 10
+ },
+ {
+  "id": "zone_residence_high",
+  "x": 101,
+  "y": 129,
+  "w": 10,
+  "h": 10
+ },
+ {
+  "id": "zone_residence_high",
+  "x": 129,
+  "y": 101,
+  "w": 10,
+  "h": 10
+ },
+ {
+  "id": "zone_not_exist",
+  "x": 112,
+  "y": 129,
+  "w": 10,
+  "h": 10
+ }
+]

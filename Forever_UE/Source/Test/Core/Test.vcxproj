@@ -109,6 +109,7 @@
     <ClCompile Include="suite_perf.cpp" />
     <ClCompile Include="suite_route.cpp" />
     <ClCompile Include="suite_green.cpp" />
+    <ClCompile Include="suite_presets.cpp" />
     <ClCompile Include="econ_report.cpp" />
     <ClCompile Include="suite_polit.cpp" />
   </ItemGroup>

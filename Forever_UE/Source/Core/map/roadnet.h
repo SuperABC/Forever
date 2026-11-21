@@ -132,6 +132,15 @@ public:
 	};
 	const std::vector<GreenSite>& GetGreenSites() const;
 
+	// 路网指定的园区/建筑预设(见RoadnetMod::PlacementPreset)：lot指向本Roadnet自己的Lot副本，Map::InitZones开头落地。
+	struct Preset {
+		Lot* lot = nullptr;
+		std::string modId;
+		int direction = 0;
+		float x0 = 0.f, x1 = 0.f, y0 = 0.f, y1 = 0.f;
+	};
+	const std::vector<Preset>& GetPresets() const;
+
 private:
 	RoadnetMod* mod;
 	RoadnetFactory* factory;
@@ -143,6 +152,7 @@ private:
 	std::vector<Road*> roads;
 	std::vector<Lot*> lots;
 	std::vector<GreenSite> greenSites;
+	std::vector<Preset> presets;
 	std::vector<TerrainHatch> hatches;
 	std::vector<TerrainFitRequest> terrainFits;
 	std::vector<Pier> piers;

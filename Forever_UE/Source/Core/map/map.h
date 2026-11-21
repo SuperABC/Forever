@@ -197,6 +197,22 @@ public:
 	// 自适应占位成功后把usedChild的残余freeLots搬回parent，详见map.md"自适应占位"
 	void PromoteAdaptiveRemainder(Lot* parent, Lot* usedChild);
 
+	// 路网预设(Roadnet::GetPresets)：把"请求→RequestPlacement→CreateZone/CreateBuilding→Layout"拆成占位和落地两步，
+	// Assign和预设共用落地函数。预设在InitZones开头一次性按顺序占位(无论id是否有效都占，保证和编辑器按创建顺序重放的结果一致)，
+	// zone预设立即落地，building预设存进pendingBuildingPresets，InitBuildings开头(模板库加载后)落地。详见map.md"路网预设"。
+	struct PlacedPreset {
+		std::string id;
+		Lot* lot = nullptr;            // 落地用的父lot(占位发生的那块lot，预设落在子块时是子块)
+		Lot* adaptiveParent = nullptr; // 非空=lot是嵌套子块，落地时继承它的地址
+		Quad quad;
+		std::unordered_map<int, Road*> boundaryRoads;
+		int direction = 0;
+	};
+	std::vector<PlacedPreset> pendingBuildingPresets;
+	void PlacePresets();
+	bool CreateZoneAt(const std::string& id, Lot* lot, const Quad& placedQuad, const std::unordered_map<int, Road*>& boundaryRoads, int direction);
+	bool CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent, const Quad& placedQuad, const std::unordered_map<int, Road*>& boundaryRoads, int direction);
+
 	// 用已注册的zoneFactory按显式占位生成zone(Assign->RequestPlacement->CreateZone->Layout)，假定InitRoadnet已跑完，
 	// 详见map.md"InitZones"。
 	void InitZones();

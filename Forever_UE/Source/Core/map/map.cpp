@@ -453,6 +453,7 @@ void Map::InitZones() {
 	// 一个Zone独占一个mod实例：先用static Assign一次扫完全图lot拿到占位请求(不需要实例)，RequestPlacement成功才CreateZone，
 	// 详见map.md"InitZones"。
 	PathLaneSpec pathSpec;
+	PlacePresets(); // 路网预设先于所有mod的Assign占位，之后Assign看到的是扣掉预设后的空闲区
 	for (auto& id : zoneFactory.GetRegisteredIds()) {
 		vector<Lot*> lots = SortLotsByFreeAcreage(GetLots());
 		vector<LotPlacementRequest> requests;
@@ -476,42 +477,7 @@ void Map::InitZones() {
 			}
 			if (!success) continue;
 
-			ZoneMod* mod = zoneFactory.CreateZone(id); // 到这里才真正创建，唯一一次
-			if (!mod) continue;
-			Zone* zone = new Zone(&zoneFactory, mod);
-			zone->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(), placedQuad.GetSizeX(), placedQuad.GetSizeY());
-			// Zone::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
-			zone->SetParentLot(lot);
-			for (auto& [dir, road] : boundaryRoads) {
-				zone->SetBoundaryRoad(dir, road);
-			}
-			zone->Layout(request.direction); // 必须在SetPosition/SetBoundaryRoad之后
-			zone->BuildDoors(*this); // 园区大门——Layout()填好mod->gates之后才能读到数据
-			BuildZoneScript(zone);
-
-			// 出入口和内部道路共用一份anchorCache(每个zone一份)：坐标+类别重合就复用同一个zone侧锚点。围墙/大门无需搬运(Zone直接转发mod)。
-			vector<tuple<float, float, bool, Node*>> anchorCache;
-			for (const ZoneAccessPoint& pt : mod->vehicleEntries) {
-				ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, true, anchorCache);
-			}
-			for (const ZoneAccessPoint& pt : mod->vehicleExits) {
-				ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, false, anchorCache);
-			}
-			for (const ZoneAccessPoint& pt : mod->pedestrianAccess) {
-				ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, false, true, anchorCache);
-			}
-
-			vector<Road*> builtInternalRoads;
-			for (const ZoneInternalRoadSpec& roadSpec : mod->internalRoads) {
-				builtInternalRoads.push_back(ConnectZoneInternalRoad(zone, roadSpec, anchorCache));
-			}
-			zone->SetInternalRoads(builtInternalRoads);
-
-			// 内部建筑统一由InitBuildings落地(Layout要用InitBuildings开头才加载的buildingLayoutLibrary)，直接读zone->GetMod()->internalBuildings。
-
-			if (!AddZone(zone)) {
-				delete zone; // ~Zone()里factory->DestroyZone(mod)会跟着跑，重名时不留悬空引用
-			}
+			CreateZoneAt(id, lot, placedQuad, boundaryRoads, request.direction);
 		}
 	}
 }
@@ -538,11 +504,165 @@ void Map::PromoteAdaptiveRemainder(Lot* parent, Lot* usedChild) {
 	parent->AdoptPathRoadLinks(usedChild->TakePathRoadLinks());
 }
 
+// 路网预设占位：矩形是顶层lot本地坐标(原点WEST-NORTH角、x向东、y向南)，在lot的free pool里找完整包含它的那块自由地，
+// 换算成相对该块的(marginStart,marginEnd,depth)后走和Assign一致的RequestPlacement：块就是整个lot时直接对lot占位，
+// 否则对子块占位并PromoteAdaptiveRemainder(同FindAdaptivePlacement命中子块的路径)。无论id是否有效都占位，保证后面的预设坐标不错位。
+void Map::PlacePresets() {
+	pendingBuildingPresets.clear();
+	if (!roadnet) return;
+	PathLaneSpec pathSpec;
+	const float eps = 1e-2f;
+	for (const Roadnet::Preset& preset : roadnet->GetPresets()) {
+		Lot* lot = preset.lot;
+		if (!lot) continue;
+		const bool isZone = preset.modId.rfind("zone_", 0) == 0;
+
+		// 子块在顶层lot本地坐标系里的范围
+		const float c = cosf(lot->GetRotation()), sn = sinf(lot->GetRotation());
+		auto toLotLocal = [&](const Lot* sub, float& ox, float& oy) {
+			float dx = sub->GetPosX() - lot->GetPosX(), dy = sub->GetPosY() - lot->GetPosY();
+			ox = dx * c + dy * sn + lot->GetSizeX() / 2.f - sub->GetSizeX() / 2.f;
+			oy = -dx * sn + dy * c + lot->GetSizeY() / 2.f - sub->GetSizeY() / 2.f;
+		};
+		Lot* target = nullptr;
+		float sx0 = 0.f, sy0 = 0.f;
+		for (Lot* candidate : lot->GetFreeLots()) {
+			float ox, oy;
+			toLotLocal(candidate, ox, oy);
+			if (preset.x0 >= ox - eps && preset.x1 <= ox + candidate->GetSizeX() + eps &&
+				preset.y0 >= oy - eps && preset.y1 <= oy + candidate->GetSizeY() + eps) {
+				target = candidate; sx0 = ox; sy0 = oy;
+				break;
+			}
+		}
+		if (!target) {
+			debugf("Warning: preset \"%s\" does not fit in a single free sub-lot (crosses a path road or overlaps an earlier placement), skipped.\n", preset.modId.c_str());
+			continue;
+		}
+
+		const float rx0 = preset.x0 - sx0, rx1 = preset.x1 - sx0, ry0 = preset.y0 - sy0, ry1 = preset.y1 - sy0;
+		const float tw = target->GetSizeX(), th = target->GetSizeY();
+		float marginStart, marginEnd, depth;
+		switch (preset.direction) {
+		case FACE_WEST: depth = rx1; marginStart = ry0; marginEnd = th - ry1; break;
+		case FACE_EAST: depth = tw - rx0; marginStart = ry0; marginEnd = th - ry1; break;
+		case FACE_NORTH: depth = ry1; marginStart = rx0; marginEnd = tw - rx1; break;
+		default: depth = th - ry0; marginStart = rx0; marginEnd = tw - rx1; break;
+		}
+		marginStart = max(0.f, marginStart); marginEnd = max(0.f, marginEnd);
+
+		const bool wholeLot = fabsf(target->GetSizeX() - lot->GetSizeX()) < eps && fabsf(target->GetSizeY() - lot->GetSizeY()) < eps;
+		Lot* placer = wholeLot ? lot : target;
+		Quad placedQuad;
+		unordered_map<int, Road*> boundaryRoads;
+		size_t linksBefore = placer->GetPathRoadLinks().size();
+		bool success = placer->RequestPlacement(preset.direction, marginStart, marginEnd, depth, pathSpec, &placedQuad, &boundaryRoads);
+		const auto& allLinks = placer->GetPathRoadLinks();
+		for (size_t i = linksBefore; i < allLinks.size(); i++) {
+			pendingPathRoadLinks.push_back(allLinks[i]);
+		}
+		if (!success) {
+			debugf("Warning: preset \"%s\" RequestPlacement failed (direction has no road or rectangle too small), skipped.\n", preset.modId.c_str());
+			continue;
+		}
+		Lot* parent = wholeLot ? nullptr : lot;
+		if (parent) PromoteAdaptiveRemainder(parent, placer);
+		if (isZone) {
+			// mod没注册/没启用时CreateZone返回null，空间已经占了，只告警。
+			if (!CreateZoneAt(preset.modId, placer, placedQuad, boundaryRoads, preset.direction))
+				debugf("Warning: preset zone mod \"%s\" is not enabled/registered, space is reserved but nothing is created.\n", preset.modId.c_str());
+		}
+		else {
+			PlacedPreset placed;
+			placed.id = preset.modId; placed.lot = placer; placed.adaptiveParent = parent;
+			placed.quad = placedQuad; placed.boundaryRoads = std::move(boundaryRoads); placed.direction = preset.direction;
+			pendingBuildingPresets.push_back(std::move(placed));
+		}
+	}
+}
+
+bool Map::CreateZoneAt(const std::string& id, Lot* lot, const Quad& placedQuad, const unordered_map<int, Road*>& boundaryRoads, int direction) {
+	ZoneMod* mod = zoneFactory.CreateZone(id); // 到这里才真正创建，唯一一次
+	if (!mod) return false;
+	Zone* zone = new Zone(&zoneFactory, mod);
+	zone->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(), placedQuad.GetSizeX(), placedQuad.GetSizeY());
+	// Zone::GetRotation()直接转发parentLot->GetRotation()，不需要另外调SetRotation。
+	zone->SetParentLot(lot);
+	for (auto& [dir, road] : boundaryRoads) {
+		zone->SetBoundaryRoad(dir, road);
+	}
+	zone->Layout(direction); // 必须在SetPosition/SetBoundaryRoad之后
+	zone->BuildDoors(*this); // 园区大门——Layout()填好mod->gates之后才能读到数据
+	BuildZoneScript(zone);
+
+	// 出入口和内部道路共用一份anchorCache(每个zone一份)：坐标+类别重合就复用同一个zone侧锚点。围墙/大门无需搬运(Zone直接转发mod)。
+	vector<tuple<float, float, bool, Node*>> anchorCache;
+	for (const ZoneAccessPoint& pt : mod->vehicleEntries) {
+		ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, true, anchorCache);
+	}
+	for (const ZoneAccessPoint& pt : mod->vehicleExits) {
+		ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, true, false, anchorCache);
+	}
+	for (const ZoneAccessPoint& pt : mod->pedestrianAccess) {
+		ConnectZoneAccessPoint(zone, pt.x, pt.y, pt.width, false, true, anchorCache);
+	}
+
+	vector<Road*> builtInternalRoads;
+	for (const ZoneInternalRoadSpec& roadSpec : mod->internalRoads) {
+		builtInternalRoads.push_back(ConnectZoneInternalRoad(zone, roadSpec, anchorCache));
+	}
+	zone->SetInternalRoads(builtInternalRoads);
+
+	// 内部建筑统一由InitBuildings落地(Layout要用InitBuildings开头才加载的buildingLayoutLibrary)，直接读zone->GetMod()->internalBuildings。
+
+	if (!AddZone(zone)) {
+		delete zone; // ~Zone()里factory->DestroyZone(mod)会跟着跑，重名时不留悬空引用
+	}
+	return true;
+}
+
+bool Map::CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent, const Quad& placedQuad, const unordered_map<int, Road*>& boundaryRoads, int direction) {
+	// 嵌套子块不是路网分配过地址的顶层Lot，GetAddresses()为空，building->GetAddress()会退化成空路名(" <楼名>")，
+	// Map::LocateBuilding/LocateRoom、npc_teleport这类按地址找房间的都找不到它。子块属于adaptiveParent这块地，直接沿用它的地址
+	// (LocateBuilding按地址比较所属地块，见SameBlock)。
+	if (adaptiveParent && lot->GetAddresses().empty()) {
+		for (const auto& [road, index] : adaptiveParent->GetAddresses()) {
+			lot->AddAddress(road, index);
+		}
+	}
+	BuildingMod* mod = buildingFactory.CreateBuilding(id); // 到这里才真正创建，唯一一次
+	if (!mod) return false;
+	Building* building = new Building(&buildingFactory, mod);
+	building->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(),
+		placedQuad.GetSizeX(), placedQuad.GetSizeY());
+	building->SetParentLot(lot);
+	for (auto& [dir, road] : boundaryRoads) {
+		building->SetBoundaryRoad(dir, road);
+	}
+	BuildingNavResult navResult;
+	building->Layout(direction, buildingLayoutLibrary, roomFactory, componentFactory, navResult);
+	// 显式占位传真实direction
+	MergeBuildingNavigation(building, navResult);
+	ForwardBuildingHatches(building);
+	building->BuildDoors(*this);
+	building->BuildCabins(*this);
+	BuildBuildingScripts(building);
+	if (!AddBuilding(building)) delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
+	return true;
+}
+
 void Map::InitBuildings() {
 	CORE_RANDOM_SCOPE("core.map");
 	buildingLayoutLibrary.ReadTemplates(Config::GetLayouts());
 
 	PathLaneSpec pathSpec;
+
+	// 路网预设里的building：InitZones开头已占好位，模板库加载完才能Layout，在这里落地。
+	for (const PlacedPreset& placed : pendingBuildingPresets) {
+		if (!CreateBuildingAt(placed.id, placed.lot, placed.adaptiveParent, placed.quad, placed.boundaryRoads, placed.direction))
+			debugf("Warning: preset building mod \"%s\" is not enabled/registered, space is reserved but nothing is created.\n", placed.id.c_str());
+	}
+	pendingBuildingPresets.clear();
 
 	// 显式占位：static Assign一次扫完全部lot拿到占位请求，RequestPlacement成功才CreateBuilding(问的过程不需要实例)。
 	for (auto& id : buildingFactory.GetRegisteredIds()) {
@@ -563,39 +683,8 @@ void Map::InitBuildings() {
 			}
 			if (!success) continue;
 
-			// request.lot是FindAdaptivePlacement(mod DLL内纯读)命中的嵌套子块时adaptiveParent非空：要把子块用剩的空间/新小路搬回
-			// adaptiveParent，下一个building类型才能看到真实剩余空间，见map.md"自适应占位"。
-			if (request.adaptiveParent) {
-				PromoteAdaptiveRemainder(request.adaptiveParent, lot);
-				// 自适应命中的子块是Lot::FindAdaptivePlacement点中的freeLots嵌套子块，不是路网分配过地址
-				// 的顶层Lot，GetAddresses()为空，building->GetAddress()会退化成空路名(" <楼名>")，
-				// Map::LocateBuilding/LocateRoom、npc_teleport这类按地址找房间的都找不到它。子块属于
-				// adaptiveParent这块地，直接沿用它的地址(LocateBuilding按地址比较所属地块，见SameBlock)。
-				if (lot->GetAddresses().empty()) {
-					for (const auto& [road, index] : request.adaptiveParent->GetAddresses()) {
-						lot->AddAddress(road, index);
-					}
-				}
-			}
-
-			BuildingMod* mod = buildingFactory.CreateBuilding(id); // 到这里才真正创建，唯一一次
-			if (!mod) continue;
-			Building* building = new Building(&buildingFactory, mod);
-			building->SetPosition(placedQuad.GetPosX(), placedQuad.GetPosY(),
-				placedQuad.GetSizeX(), placedQuad.GetSizeY());
-			building->SetParentLot(lot);
-			for (auto& [dir, road] : boundaryRoads) {
-				building->SetBoundaryRoad(dir, road);
-			}
-			BuildingNavResult navResult;
-			building->Layout(request.direction, buildingLayoutLibrary, roomFactory, componentFactory, navResult);
-			// 显式占位传真实direction
-			MergeBuildingNavigation(building, navResult);
-			ForwardBuildingHatches(building);
-			building->BuildDoors(*this);
-			building->BuildCabins(*this);
-			BuildBuildingScripts(building);
-			if (!AddBuilding(building)) delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
+			if (request.adaptiveParent) PromoteAdaptiveRemainder(request.adaptiveParent, lot);
+			CreateBuildingAt(id, lot, request.adaptiveParent, placedQuad, boundaryRoads, request.direction);
 		}
 	}
 
@@ -603,6 +692,7 @@ void Map::InitBuildings() {
 	// lot->GetArea()索引，登记进lot->AddCandidate(...)供下面FillRemainder使用。
 	for (auto& id : buildingFactory.GetRegisteredIds()) {
 		for (Lot* lot : GetLots()) {
+			if (lot->GetArea() == AREA_PLACEHOLDER) continue;   // 占位分区不按权重填充
 			float weight = buildingFactory.GetPower(id, lot->GetArea());
 			if (weight > 0.f) lot->AddCandidate(id, weight);
 		}

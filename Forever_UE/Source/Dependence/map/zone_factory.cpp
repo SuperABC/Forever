@@ -1,3 +1,4 @@
+#include "../common/mod_args.h"
 #include "zone_factory.h"
 #include "common/random.h"
 
@@ -66,6 +67,8 @@ void ZoneFactory::Assign(const string& id, const vector<Lot*>& lots,
 	PlacementEmitFunc emit, void* context) const {
 	auto it = registries.find(id);
 	if (it != registries.end() && IsEnabled(id)) {
+		// --skip：只跳过Assign(显式占位)，mod仍启用——按权重分布(GetPower/FillRemainder)和路网预设落地都不受影响。
+		if (ModArgs(configuredArgs.at(id)).GetBool("skip")) return;
 		RandomScope scope(RandomRegistry::GetModStream(id));
 		it->second.assign(lots, emit, context);
 	}

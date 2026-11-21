@@ -24,8 +24,8 @@
       "building_industry_low",
       "building_commerce_high",
       "building_office_high",
-      "building_airport",
-      "building_train_station"
+      "building_airport --skip",
+      "building_train_station --skip"
    ],
    "component_mods" : [
       "component_residence",

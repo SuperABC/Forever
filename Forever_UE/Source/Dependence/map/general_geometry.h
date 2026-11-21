@@ -423,6 +423,7 @@ enum AREA_TYPE : int {
 	AREA_OFFICE_MIDDLE,
 	AREA_OFFICE_LOW,
 	AREA_TEST,	// 测试分区：井字路网中心lot专用，原先放在AREA_OFFICE_HIGH里的建筑都改放这里
+	AREA_PLACEHOLDER,	// 占位分区：只给显式Assign/路网预设用，Core不为它登记任何权重候选(不按权重填充)，建筑mod的GetPower也不给它权重
 	AREA_END
 };
 
