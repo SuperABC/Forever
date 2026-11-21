@@ -206,6 +206,9 @@ private:
 	// 房间家具ISM(BuildRoomFurniture产出)：key=mesh路径，近处LOD专属，ClearNearSections时销毁。
 	UPROPERTY(Transient)
 	TMap<FString, TObjectPtr<UInstancedStaticMeshComponent>> nearFurnitureISM;
+	// 房间家具的碰撞体：每件家具一个包围盒，整栋楼共用一个隐藏的立方体ISM(只有碰撞、不渲染)，随BuildRoomFurniture按层追加实例，ClearNearSections时销毁。
+	UPROPERTY(Transient)
+	TObjectPtr<UInstancedStaticMeshComponent> nearFurnitureCollisionISM;
 
 	// 近/远LOD切换的操作队列，每帧按框架组件的全局预算出队，见Tick()/TryConsumeLodOpBudget。
 	TQueue<FLodOp> floorTierOpQueue;

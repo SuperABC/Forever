@@ -313,7 +313,7 @@
 				warnings.push(`地块${lot.id}的缩进把地块吃光了，已跳过`);
 				continue;
 			}
-			const bad = nonBuildableCount(terrain, info.corners);
+			const bad = lot.area === 'AREA_PLACEHOLDER' ? 0 : nonBuildableCount(terrain, info.corners);   // 占位分区不检查可建设性(允许放在非平地上)
 			if (bad > 0) warnings.push(`地块${lot.id}有${bad}个格子不是可建设区域(自身或3×3邻域内有高度不为0的格子，或贴着地图边缘)，游戏里这块地会被丢弃`);
 			output.lots.push({
 				corners: info.corners.map((c) => [c[0], c[1]]),

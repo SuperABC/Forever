@@ -53,8 +53,8 @@
 		[0.8, 0, 0.1, 0, 0.9, 0, 0.9, 0],
 		[0.6, 0, 0.3, 0, 0.8, 0, 0.7, 0],
 		[0.2, 0, 0.3, 0, 0.4, 0, 0.7, 0],
-		[0, 0, 0.3, 0, 0.1, 0, 0.7, 0],
-		[0.9, 0, 0.3, 0, 1, 0, 0.7, 0],
+		{"rect": [0, 0, 0.3, 0, 0.1, 0, 0.7, 0], "tag": "clay"},
+		{"rect": [0.9, 0, 0.3, 0, 1, 0, 0.7, 0], "tag": "clay"},
 	],
 	"grounds": [
 		[0.1, 0, 0.1, 0, 0.2, 0, 0.9, 0],
@@ -67,26 +67,32 @@
 	"corridors": [{
 		"rect": [0.2, 0, 0.1, 0, 0.8, 0, 0.9, 0],
 		"walls": [2, 3],
+		"wallTags": {"2":{"north":"specular"},"3":{"south":"specular"}},
 	},
 	{
 		"rect": [0.1, 0, 0.1, 0, 0.2, 0, 0.3, 0],
 		"walls": [0, 2],
+		"wallTags": {"0":{"west":"specular","north":"specular"},"2":{"west":"specular","north":"specular"}},
 	},
 	{
 		"rect": [0.8, 0, 0.1, 0, 0.9, 0, 0.3, 0],
 		"walls": [1, 2],
+		"wallTags": {"1":{"east":"specular","north":"specular"},"2":{"east":"specular","north":"specular"}},
 	},
 	{
 		"rect": [0.1, 0, 0.7, 0, 0.2, 0, 0.9, 0],
 		"walls": [0, 3],
+		"wallTags": {"0":{"west":"specular","south":"specular"},"3":{"west":"specular","south":"specular"}},
 	},
 	{
 		"rect": [0.8, 0, 0.7, 0, 0.9, 0, 0.9, 0],
 		"walls": [1, 3],
+		"wallTags": {"1":{"east":"specular","south":"specular"},"3":{"east":"specular","south":"specular"}},
 	},
 	{
 		"rect": [0.1, 0, 0.3, 0, 0.2, 0, 0.7, 0],
 		"walls": [0, 1],
+		"wallTags": {"0":{"west":"specular"}},
 		"windows": [
 			{
 				"direction": 1,
@@ -99,6 +105,7 @@
 	{
 		"rect": [0.8, 0, 0.3, 0, 0.9, 0, 0.7, 0],
 		"walls": [0, 1],
+		"wallTags": {"1":{"east":"specular"}},
 		"windows": [
 			{
 				"direction": 0,
@@ -111,10 +118,12 @@
 	{
 		"rect": [0, 0, 0.3, 0, 0.1, 0, 0.7, 0],
 		"walls": [0],
+		"wallTags": {"0":{"east":"clay","west":"clay"}},
 	},
 	{
 		"rect": [0.9, 0, 0.3, 0, 1, 0, 0.7, 0],
 		"walls": [1],
+		"wallTags": {"1":{"east":"clay","west":"clay"}},
 	}],
 	"pedestrianNavigation": {
 		"nodes": [],

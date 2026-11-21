@@ -41,7 +41,8 @@ void ResidenceRoom::SetProperty() {
 #define ROOM_MARGIN 0.05f          // 家具离墙的最小间隙
 #define ROOM_DOOR_CLEAR_DEPTH 1.6f // 门前留空深度(开门扫过的范围，比门宽留得更多)
 #define ROOM_DOOR_CLEAR_SIDE 0.6f  // 门洞两侧各多留
-#define ROOM_WINDOW_CLEAR 0.30f    // 窗洞前这个距离内不放高过窗台的家具
+#define ROOM_WINDOW_DEPTH 0.7f     // 窗洞前这个距离内不放任何家具(含吊柜，地毯除外)，缩小后的空间里，真实约1m
+#define ROOM_WINDOW_SIDE 0.25f     // 窗洞两侧各多留这么宽(缩小后空间)，免得家具紧贴窗框侧面把窗挡一半
 #define ROOM_WALL_CABINET_Z 1.4f   // 吊柜离地
 #define ROOM_TWO_BAND_MIN_DEPTH 7.f
 #define ROOM_TWO_BAND_MIN_WIDTH 6.f
@@ -49,7 +50,6 @@ void ResidenceRoom::SetProperty() {
 #define ROOM_CORE_INSET_MIN 1.3f
 #define ROOM_CORE_INSET_MAX 2.5f
 #define ROOM_FURNITURE_SCALE 1.5f  // 家具整体放大倍数(含间距、走道、吊柜高度)，见 Layout()
-#define ROOM_WINDOW_SILL_TOL 0.25f // 家具高出窗台这么多以内仍可贴窗放(床头板略高于窗台)
 #define ROOM_ZONE_SHRINK 0.75f     // 功能区总最小长度允许压缩到多少比例而不丢区
 
 namespace {
@@ -95,6 +95,7 @@ namespace {
 			core = { inset, W - inset, inset, D - inset };
 			for (const RoomOpening& door : info.doors) AddDoorZone(door);
 			windows = info.windows;
+			for (const RoomOpening& win : windows) AddWindowZone(win);
 		}
 
 		void Run() {
@@ -149,6 +150,7 @@ namespace {
 		bool studio = false;
 		bool twoBandMode = false;
 		vector<Rect> doorZones;
+		vector<Rect> windowZones; // 窗前禁放区(AddWindowZone)
 		vector<RoomOpening> windows;
 		vector<RoomOpening> doorList;
 		vector<Rect> occupied;
@@ -164,6 +166,16 @@ namespace {
 			case ROOM_WALL_BACK: doorZones.push_back({ a0, a1, 0.f, ROOM_DOOR_CLEAR_DEPTH }); break;
 			case ROOM_WALL_U_MIN: doorZones.push_back({ 0.f, ROOM_DOOR_CLEAR_DEPTH, a0, a1 }); break;
 			default: doorZones.push_back({ W - ROOM_DOOR_CLEAR_DEPTH, W, a0, a1 }); break;
+			}
+		}
+		// 窗前禁放区：窗洞沿墙的范围两侧各扩ROOM_WINDOW_SIDE、向房内ROOM_WINDOW_DEPTH，任何高度的家具(含吊柜)都不许压进来。
+		void AddWindowZone(const RoomOpening& win) {
+			float a0 = win.a0 - ROOM_WINDOW_SIDE, a1 = win.a1 + ROOM_WINDOW_SIDE;
+			switch (win.wall) {
+			case ROOM_WALL_FRONT: windowZones.push_back({ a0, a1, D - ROOM_WINDOW_DEPTH, D }); break;
+			case ROOM_WALL_BACK: windowZones.push_back({ a0, a1, 0.f, ROOM_WINDOW_DEPTH }); break;
+			case ROOM_WALL_U_MIN: windowZones.push_back({ 0.f, ROOM_WINDOW_DEPTH, a0, a1 }); break;
+			default: windowZones.push_back({ W - ROOM_WINDOW_DEPTH, W, a0, a1 }); break;
 			}
 		}
 		int DoorWall() const { return doorList.empty() ? ROOM_WALL_FRONT : doorList[0].wall; }
@@ -203,25 +215,15 @@ namespace {
 			if (overhead) {
 				// 吊柜：不悬在门洞上方(开门会穿模)，吊柜之间不重叠。
 				for (const Rect& r : doorZones) if (box.Overlaps(r)) return false;
+				for (const Rect& r : windowZones) if (box.Overlaps(r)) return false; // 吊柜也不挡窗
 				for (const Rect& r : overheadOccupied) if (box.Overlaps(r)) return false;
 				overheadOccupied.push_back(box);
 			}
 			if (!overhead && !flat) {
 				for (const Rect& r : occupied) if (box.Overlaps(r)) return false;
 				for (const Rect& r : doorZones) if (box.Overlaps(r)) return false;
-				// 窗：高过窗台的家具不贴着窗放。
-				float top = z + dims->height * (flat ? 1.f : scale);
-				for (const RoomOpening& win : windows) {
-					if (top <= win.z0 + ROOM_WINDOW_SILL_TOL) continue;
-					Rect zone;
-					switch (win.wall) {
-					case ROOM_WALL_FRONT: zone = { win.a0, win.a1, D - ROOM_WINDOW_CLEAR, D }; break;
-					case ROOM_WALL_BACK: zone = { win.a0, win.a1, 0.f, ROOM_WINDOW_CLEAR }; break;
-					case ROOM_WALL_U_MIN: zone = { 0.f, ROOM_WINDOW_CLEAR, win.a0, win.a1 }; break;
-					default: zone = { W - ROOM_WINDOW_CLEAR, W, win.a0, win.a1 }; break;
-					}
-					if (box.Overlaps(zone)) return false;
-				}
+				// 窗：任何落地家具(不论高矮)都不进窗前禁放区，窗要完整露出来。
+				for (const Rect& r : windowZones) if (box.Overlaps(r)) return false;
 				occupied.push_back(box);
 			}
 			FurnitureSpec spec;

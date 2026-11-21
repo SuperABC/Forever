@@ -12,7 +12,7 @@
   - `lots[]`：`{corners:[[x,y]×4], margin:[西,东,北,南], boundary:{"0":road下标…}, area:"AREA_…"}`。corners 按顺时针（屏幕坐标 y 向下）给出，第一条边 n1→n2 为"北"边，其余依次东、南、西（同 `Lot` 构造的约定）；`boundary` 的下标是 `roads[]` 的下标，只在该边正好是一条平直道路时才写；area 用枚举名字符串。
   - `greens[]`：`{points:[[x,y]…], links:[{edge, road}]}`。绿化区的闭合多边形（地图单位，不重复首点，可以是凹多边形，不能自交；导出时统一成有符号面积>0）；`links` 是"多边形第 edge 条边（points[edge]→points[(edge+1)%n]）连到 roads[] 下标 road 那条路"，可以为空（只做景观、不能地址导航）。接入点不存，Core 按每个活动圆的垂足投影到那条路上再算。读入时 edge/road 越界的 link 被丢弃，点数<3 的绿化被丢弃。绿化类型/圆/树由 Core 的 `Map::InitGreens` 选 green mod 决定，不在文件里。
   - `presets[]`(2026-11-21)：`{lot, id, direction, rect:[x0,x1,y0,y1]}`。`lot`=`lots[]`下标，`id`=要放的zone/building mod id(`zone_`开头=园区，其余=建筑，可为空=只占位)，`direction`0..3=矩形贴靠的有路的边，`rect`=顶层lot本地坐标(缩进后的lot，西北角为原点，x东y南)。direction越界、lot不存在的项告警跳过。MapEditor的"添加预设"产生它。
-  - **`AREA_PLACEHOLDER`(2026-11-21)**：lots[].area 可写这个占位分区，专给预设/显式Assign用——`Map::InitBuildings`的权重登记跳过它，`BuildingFactory::GetPower`对它恒0，所以这块地只会有预设和各mod `Assign`放出的东西，不会按权重填充。编辑器的地块类型里也有"占位(只放预设)"。路网mod(roadnet_jing/checkboard等)也可以直接`SetArea(AREA_PLACEHOLDER)`。
+  - **`AREA_PLACEHOLDER`(2026-11-21)**：lots[].area 可写这个占位分区，专给预设/显式Assign用——`Map::InitBuildings`的权重登记跳过它，`BuildingFactory::GetPower`对它恒0，所以这块地只会有预设和各mod `Assign`放出的东西，不会按权重填充；**不检查可建设性**(编辑器导出不报"不是可建设区域"，roadnet_file读入时本来就不看isConstruction)，允许放在非平地上。编辑器的地块类型里也有"占位(只放预设)"。路网mod(roadnet_jing/checkboard等)也可以直接`SetArea(AREA_PLACEHOLDER)`。
 - **路口缩进（setback）**：`AssignJunctionSetbacks` 是 `roadnet_jing.cpp` 里那份的拷贝（Basic 里 mod 互不 include），改一处要同步。
 - **`source` 段**：编辑器自己的编辑模型，mod 完全忽略，让同一个文件能被编辑器原样读回继续编辑。
 - **路径**：同 `terrain_file`，绝对路径或相对进程工作目录，`--path=x` 与 `--path x` 都行，路径里可以有空格。

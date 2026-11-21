@@ -37,6 +37,10 @@ void TrainStationBuilding::Layout(int& direction, const Quad& quad,
 	constexpr int kComponentId = 0;
 	FloorAssetSpec assets;
 	assets.stairMeshPath = "/Game/Asset/Building/Mesh/Stair_Line.Stair_Line";
+	// 三层layout用到的墙面/地面/屋顶标签 -> 材质实例(标签名要和layout里的tag/wallTags一致)。
+	SetSurfaceMaterial("clay", "/Game/Asset/Building/Material/Clay.Clay");
+	SetSurfaceMaterial("pavement", "/Game/Asset/Building/Material/Pavement.Pavement");
+	SetSurfaceMaterial("specular", "/Game/Asset/Building/Material/Specular.Specular");
 	// 1楼大厅fg+(4间空房)+2楼fl+-+3楼fu-，三层各有4台电梯，没有地下层
 	AssignFloor(0, "preset_station_train_fg+", direction, assets);
 	AssignFloor(1, "preset_station_train_fl+-", direction, assets);

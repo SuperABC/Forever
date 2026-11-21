@@ -156,6 +156,20 @@ namespace {
 					if (f.u0 < -0.03f || f.u1 > sm.w + 0.03f || f.v0 < -0.03f || f.v1 > sm.d + 0.03f)
 						problems.push_back(label + ": " + base + " outside the room");
 					if (yaw != 0 && yaw != 180 && yaw != -180 && !sideways) problems.push_back(label + ": " + base + " has odd yaw " + to_string(yaw));
+					if (!flat) {
+						// 窗前禁放区：窗洞两侧各0.25、向房内0.7(缩小后空间)，家具整体放大1.5倍(见room_residence.cpp ROOM_WINDOW_*)，
+						// 任何高度的家具(含吊柜)都不许压进来。
+						const float k = 1.5f, winDepth = 0.7f * k, winSide = 0.25f * k;
+						for (const RoomOpening& win : info.windows) {
+							float a0 = win.a0 - winSide, a1 = win.a1 + winSide;
+							FootRect wz{ 0, 0, 0, 0 };
+							if (win.wall == ROOM_WALL_FRONT) wz = { a0, a1, sm.d - winDepth, sm.d };
+							else if (win.wall == ROOM_WALL_BACK) wz = { a0, a1, 0.f, winDepth };
+							else if (win.wall == ROOM_WALL_U_MIN) wz = { 0.f, winDepth, a0, a1 };
+							else wz = { sm.w - winDepth, sm.w, a0, a1 };
+							if (Overlap(wz, f, 0.02f)) problems.push_back(label + ": " + base + " blocks a window");
+						}
+					}
 					if (overhead) {
 						for (const FootRect& o : overheadFeet) if (Overlap(o, f, 0.02f)) problems.push_back(label + ": " + base + " (wall cabinet) overlaps another overhead piece");
 						overheadFeet.push_back(f);

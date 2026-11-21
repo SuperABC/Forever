@@ -3842,7 +3842,17 @@
 					null,
 					null
 				],
-				"presets": []
+				"presets": [
+					{
+						"id": 535,
+						"modId": "building_airport",
+						"dir": 2,
+						"x0": 0,
+						"x1": 18.580275,
+						"y0": 0,
+						"y1": 9
+					}
+				]
 			},
 			{
 				"id": 451,
@@ -4148,7 +4158,7 @@
 					null,
 					null,
 					null,
-					null
+					1
 				],
 				"presets": []
 			},
@@ -4203,9 +4213,23 @@
 						"y1": 23.930335
 					}
 				]
+			},
+			{
+				"id": 536,
+				"a": 399,
+				"b": 397,
+				"depth": -9.49,
+				"area": "AREA_INDUSTRY_LOW",
+				"margin": [
+					null,
+					null,
+					null,
+					null
+				],
+				"presets": []
 			}
 		],
-		"nextId": 535,
+		"nextId": 537,
 		"greens": [
 			{
 				"id": 479,
@@ -23122,7 +23146,7 @@
 					1.5,
 					0,
 					0,
-					0
+					1
 				],
 				"boundary": {
 					"0": 516
@@ -23221,6 +23245,34 @@
 					"3": 519
 				},
 				"area": "AREA_PLACEHOLDER"
+			},
+			{
+				"corners": [
+					[
+						791.160943,
+						877.874491
+					],
+					[
+						791.688093,
+						867.561843
+					],
+					[
+						782.210467,
+						867.077377
+					],
+					[
+						781.683317,
+						877.390025
+					]
+				],
+				"margin": [
+					0,
+					0,
+					0,
+					0
+				],
+				"boundary": {},
+				"area": "AREA_INDUSTRY_LOW"
 			}
 		],
 		"greens": [
@@ -23419,6 +23471,17 @@
 			}
 		],
 		"presets": [
+			{
+				"lot": 30,
+				"id": "building_airport",
+				"direction": 2,
+				"rect": [
+					0,
+					18.580275,
+					0,
+					9
+				]
+			},
 			{
 				"lot": 55,
 				"id": "building_train_station",

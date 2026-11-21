@@ -47,6 +47,10 @@ t.beginStroke(); t.brush('paint', 120, 115, 5, { terrain: 'terrain_mountain' });
 assert.ok(!ME.exportRoadnet(m, t).warnings.some((w) => w.includes('不是可建设区域')));
 t.beginStroke(); t.brush('raise', 120, 115, 5, { strength: 1 }); t.endStroke();
 assert.ok(ME.exportRoadnet(m, t).warnings.some((w) => w.includes('不是可建设区域')));
+// 占位分区不检查可建设性：同一块地改成AREA_PLACEHOLDER就不再报警，仍然导出。
+const oldArea = lot.area; lot.area = 'AREA_PLACEHOLDER';
+{ const r = ME.exportRoadnet(m, t); assert.ok(!r.warnings.some((w) => w.includes('不是可建设区域'))); assert.strictEqual(r.output.lots[0].area, 'AREA_PLACEHOLDER'); }
+lot.area = oldArea;
 
 // 旋转后的方向标签仍是四个互不相同的边。
 const m2 = ME.newModel(256, 256);

@@ -23,12 +23,12 @@ Room域的默认实现。`SetProperty()`里按类型声明房间的功能属性(
 - **户型分档**(按面积)：卧室数 <40㎡=0(单间，床放客厅区)、<85=1、<150=2、<230=3、其余4；卫生间 <150㎡=1，否则2；>=150㎡加书房；<8㎡或某边<2.5m不装。
 - **分带**：进深>=7m且宽>=6m用"双带"(靠门一带=公共区客厅+厨餐，另一带=卧室/卫生间/书房，打乱顺序)，否则单带沿长轴排(公共区靠门)。每个带按`ZoneWeight`/`ZoneMin`切成功能区(最小长度允许压缩到`ROOM_ZONE_SHRINK`才丢区，保住小户型的厨卫)。
 - **功能区**：客厅(沙发+地毯+茶几+电视柜、玄关鞋柜在门边、绿植/落地灯/书架/扶手椅按概率)、厨房(靠墙一排冰箱/台面/水槽/灶台+吊柜，可再来对面一排，剩余空间摆餐桌椅)、卧室(床靠墙+床头柜+床尾地毯+衣柜，可选书桌椅/梳妆台/绿植)、卫生间(马桶/洗手台优先，其次浴缸或淋浴、洗衣机)、书房(书桌椅+书架)。
-- **靠墙放法**：`WallPlace`在若干条边、每条边多个沿墙位置依次试，窗/门/已摆家具挡住就换位置换边；卫浴/衣柜/书桌/梳妆台/床在双带模式下只贴**真墙**(分区之间没有隔墙，贴虚拟边会悬在房间中间，宁可不放)，单带/单间才退一步用虚拟边。`TryPlace`统一检查：在区域内、不压已摆家具、不压门前清空区(`ROOM_DOOR_CLEAR_*`)、高过窗台(`ROOM_WINDOW_SILL_TOL`以上)的不贴窗(`ROOM_WINDOW_CLEAR`)；吊柜只查边界、不悬在门洞上方(`doorZones`)、吊柜之间不重叠(`overheadOccupied`，厨房吊柜比灶台宽，撞上就沿墙错开0.25/0.5m再试，还不行就丢)，地毯只查边界。门前清空区`ROOM_DOOR_CLEAR_DEPTH`1.6/`_SIDE`0.6(缩小后空间，真实2.4m/0.9m，给开门扫过的范围留够)。
+- **靠墙放法**：`WallPlace`在若干条边、每条边多个沿墙位置依次试，窗/门/已摆家具挡住就换位置换边；卫浴/衣柜/书桌/梳妆台/床在双带模式下只贴**真墙**(分区之间没有隔墙，贴虚拟边会悬在房间中间，宁可不放)，单带/单间才退一步用虚拟边。`TryPlace`统一检查：在区域内、不压已摆家具、不压门前清空区(`ROOM_DOOR_CLEAR_*`)、不压**窗前禁放区**(窗洞沿墙范围两侧各扩`ROOM_WINDOW_SIDE`0.25、向房内`ROOM_WINDOW_DEPTH`0.7，缩小后空间，真实约0.4m/1m)——**任何高度的落地家具都不许进(床头板、矮柜也不行)，吊柜也不许**，只有地毯(flat)可以铺过；吊柜只查边界、不悬在门洞上方(`doorZones`)、吊柜之间不重叠(`overheadOccupied`，厨房吊柜比灶台宽，撞上就沿墙错开0.25/0.5m再试，还不行就丢)，地毯只查边界。门前清空区`ROOM_DOOR_CLEAR_DEPTH`1.6/`_SIDE`0.6(缩小后空间，真实2.4m/0.9m，给开门扫过的范围留够)。
 - **网格必须居中**：布局把家具当"原点居中的矩形"，`make_furniture.py`的`build_catalog`末尾对每件`recenter()`(X/Y包围盒居中)，否则不对称的件(马桶水箱在背面、水龙头在台面一侧)靠墙时会有一部分穿出墙外。
 - **随机性**：整体镜像(门窗镜像后布局，再把结果镜回来，保证和真实门窗一致)、功能区顺序、每类家具的款式变体(`Variant`)、沿墙位置、可选件概率。全走`GetRandom`(mod流，`--seed`可复现)。摆不下就丢件，不报错。
-- **可调项**：文件顶部的`#define`(`ROOM_MARGIN`/`ROOM_DOOR_CLEAR_*`/`ROOM_WINDOW_*`/`ROOM_WALL_CABINET_Z`/`ROOM_TWO_BAND_*`/`ROOM_ZONE_SHRINK`)，以及`ZoneWeight`/`ZoneMin`和各区概率。
-- **验证**：`Source/Test/Core/suite_mods.cpp`的`CheckRoomLayouts`(12种尺寸×8次)断言：在房间内、非吊柜/地毯互不重叠、吊柜之间互不重叠、不堵门、yaw只有0/±90/180、>=20㎡至少5件。环境变量`FURNITURE_DUMP=<路径>.json`时把`room_residence`的布局导出，用`Tools/Furniture/make_preview_data.py`生成俯视预览页看。
-- **局限**：没有隔墙(开放式摆放)；家具无碰撞；市民不感知家具；预览页只是俯视方块，真实观感要进游戏看。
+- **可调项**：文件顶部的`#define`(`ROOM_MARGIN`/`ROOM_DOOR_CLEAR_*`/`ROOM_WINDOW_DEPTH`/`ROOM_WINDOW_SIDE`/`ROOM_WALL_CABINET_Z`/`ROOM_TWO_BAND_*`/`ROOM_ZONE_SHRINK`)，以及`ZoneWeight`/`ZoneMin`和各区概率。
+- **验证**：`Source/Test/Core/suite_mods.cpp`的`CheckRoomLayouts`(12种尺寸×8次)断言：在房间内、非吊柜/地毯互不重叠、吊柜之间互不重叠、不堵门、不压窗前禁放区(`blocks a window`)、yaw只有0/±90/180、>=20㎡至少5件。环境变量`FURNITURE_DUMP=<路径>.json`时把`room_residence`的布局导出，用`Tools/Furniture/make_preview_data.py`生成俯视预览页看。
+- **局限**：没有隔墙(开放式摆放)；家具碰撞是每件一个包围盒(UE侧，见`BuildingElement.md`)；市民寻路不感知家具；预览页只是俯视方块，真实观感要进游戏看。
 
 ## 依赖关系
 
