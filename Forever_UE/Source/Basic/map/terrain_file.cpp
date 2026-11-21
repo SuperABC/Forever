@@ -63,6 +63,7 @@ float FileTerrain::GetPriority() const {
 }
 
 void FileTerrain::SetupTexture() {
+	SetMapColor(124, 152, 92);
 	diffusePath = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
 	normalPath = "/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal";
 	roughnessPath = "/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness";

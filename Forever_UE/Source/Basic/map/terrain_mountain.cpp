@@ -68,6 +68,7 @@ float MountainTerrain::GetPriority() const {
 }
 
 void MountainTerrain::SetupTexture() {
+	SetMapColor(128, 118, 108);
 	diffusePath = "/Game/Asset/Terrain/Rock/RockDiffuse.RockDiffuse";
 	normalPath = "/Game/Asset/Terrain/Rock/RockNormal.RockNormal";
 	roughnessPath = "/Game/Asset/Terrain/Rock/RockRoughness.RockRoughness";

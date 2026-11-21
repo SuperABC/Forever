@@ -4,6 +4,7 @@
 #include "common/mod_state.h"
 
 #include <string>
+#include <cstdint>
 #include <utility>
 #include <functional>
 
@@ -43,6 +44,11 @@ public:
 
 	// 地形贴图资产路径,SetupTexture()里填充。
 	std::string diffusePath;
+
+	// 小地图/地图界面绘制本地形用的颜色(0~255)，SetupTexture()里填充；hasMapColor为false则界面按名字哈希出一个颜色。
+	bool hasMapColor = false;
+	uint8_t mapColorR = 0, mapColorG = 0, mapColorB = 0;
+	void SetMapColor(uint8_t r, uint8_t g, uint8_t b) { hasMapColor = true; mapColorR = r; mapColorG = g; mapColorB = b; }
 
 	// 法线/粗糙度贴图资产路径,SetupTexture()里填充,留空则UE侧用平法线+中性粗糙度。
 	std::string normalPath;

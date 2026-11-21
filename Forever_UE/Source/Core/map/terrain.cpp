@@ -49,7 +49,12 @@ void Terrain::SetupTexture() const {
 }
 
 TerrainTexturePaths Terrain::GetTextures() const {
-	return { mod->diffusePath, mod->normalPath, mod->roughnessPath };
+	TerrainTexturePaths paths{ mod->diffusePath, mod->normalPath, mod->roughnessPath };
+	paths.hasMapColor = mod->hasMapColor;
+	paths.mapColorR = mod->mapColorR;
+	paths.mapColorG = mod->mapColorG;
+	paths.mapColorB = mod->mapColorB;
+	return paths;
 }
 
 void Terrain::DistributeTerrain(int width, int height,

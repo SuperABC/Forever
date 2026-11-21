@@ -57,6 +57,7 @@ float OceanTerrain::GetPriority() const {
 }
 
 void OceanTerrain::SetupTexture() {
+	SetMapColor(52, 96, 140);
 	diffusePath = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
 	normalPath = "/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal";
 	roughnessPath = "/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness";

@@ -17,6 +17,7 @@
   `normalPath`/`roughnessPath`都可以留空——UE侧`ForeverTerrainFrameworkComponent`遇到
   空路径时会给对应贴图数组槡位填平的法线+中性粗糙度，不是必填项（只有`diffusePath`留空
   会导致这个地形类型完全没有视觉表现）。
+- **地图界面颜色**：`SetupTexture()`里可调`SetMapColor(r,g,b)`(0~255)指定这个地形在地图界面(`MapWidget`)里画什么颜色，数据经`Map::TerrainTextureInfo`带出；不调用则界面按地形名哈希一个颜色。无mod的默认地形`plain`由界面固定画草地绿。
 - **`DistributeTerrain`用6个`std::function`回调读写地图，不直接依赖`Map`/`Element`类型**——
   这是Dependence层一贯的做法（Mod DLL不知道也不需要知道`Map`的具体实现），调用方（`Map`）
   把自己的`GetTerrain`/`SetTerrain`/`GetHeight`/`SetHeight`/`SetWater`/`SetFineHeights`包成闭包传进去。

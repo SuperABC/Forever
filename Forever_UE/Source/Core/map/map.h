@@ -156,6 +156,9 @@ public:
 		std::string diffuse;
 		std::string normal;
 		std::string roughness;
+		// mod指定的地图界面颜色，hasMapColor为false表示未指定
+		bool hasMapColor = false;
+		uint8_t mapColorR = 0, mapColorG = 0, mapColorB = 0;
 	};
 	const std::unordered_map<std::string, TerrainTextureInfo>& GetTerrainTextures() const;
 

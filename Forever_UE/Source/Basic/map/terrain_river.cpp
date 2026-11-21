@@ -122,6 +122,7 @@ float RiverTerrain::GetPriority() const {
 
 void RiverTerrain::SetupTexture() {
 	// 和平地同一张贴图：河道靠地形凹陷+水面mesh表现，不需要地表材质额外强调。
+	SetMapColor(88, 148, 176);
 	diffusePath = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
 	// normalPath/roughnessPath留空——现有fallback逻辑会填平的法线+中性粗糙度
 }

@@ -144,7 +144,8 @@ void Map::InitTerrains() {
 	for (size_t i = 0; i < terrains.size(); i++) {
 		TerrainTexturePaths texturePaths = terrains[i]->GetTextures();
 		terrainTextures[terrains[i]->GetType()] = { static_cast<int>(i) + preset,
-			texturePaths.diffuse, texturePaths.normal, texturePaths.roughness };
+			texturePaths.diffuse, texturePaths.normal, texturePaths.roughness,
+			texturePaths.hasMapColor, texturePaths.mapColorR, texturePaths.mapColorG, texturePaths.mapColorB };
 		terrains[i]->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater, setFineHeights);
 	}
 	for (auto* terrain : terrains) {

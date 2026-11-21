@@ -66,13 +66,13 @@ namespace {
 
 		// 色相离散分桶(12桶x30度，桶内小抖动)，饱和度/明度各二选一(柔和低饱和)：名字少时纯连续映射会让相邻哈希的颜色
 		// 几乎分不出来。纯按名字算，同名字跨session同色。固定异或盐值只是把"plain"挪出和玩家朝向箭头撞色的蓝色桶。
-		uint32 h = HashStringFNV1a(name) ^ 0x9E3779B9u;
+		uint32 h = HashStringFNV1a(name) ^ 0x27D4EB2Fu;
 		int hueBin = h % 12;
 		float hueJitter = static_cast<float>((h / 12) % 100) / 100.f * 20.f; // 0~20°，不超出30°一格的范围
 		float hue = hueBin * 30.f + hueJitter;
-		// 低饱和柔和色调(莫兰迪风)：高饱和纯色铺满地图很刺眼，饱和度压到0.28~0.48，明度0.72~0.88。
-		float saturation = ((h / 1200) % 2 == 0) ? 0.28f : 0.48f;
-		float value = ((h / 2400) % 2 == 0) ? 0.72f : 0.88f;
+		// 低饱和柔和色调(莫兰迪风)：高饱和纯色铺满地图很刺眼，饱和度0.42~0.62，明度0.58~0.74。
+		float saturation = ((h / 1200) % 2 == 0) ? 0.42f : 0.62f;
+		float value = ((h / 2400) % 2 == 0) ? 0.58f : 0.74f;
 
 		Color color = HSVtoRGB(hue, saturation, value);
 		cache[name] = color;
@@ -215,7 +215,12 @@ void UMapWidget::DrawFullMap() {
 
 	// 地形：按格填块，PutRect只用在这里——地形格子是轴对齐规则网格，没有旋转角，PutRect
 	// 填一个倍数×倍数的色块代替单像素PutPixel，画布分辨率更高、边界更清晰。
+	// 颜色由地形mod指定(TerrainMod::SetMapColor)；没有mod的默认地形"plain"用草地绿，其余没指定的退回名字哈希色。
 	std::unordered_map<std::string, Color> terrainColors;
+	for (const auto& [terrainName, info] : map->GetTerrainTextures()) {
+		if (info.hasMapColor) terrainColors[terrainName] = Color{ info.mapColorR, info.mapColorG, info.mapColorB, 255 };
+	}
+	if (!terrainColors.count("plain")) terrainColors["plain"] = Color{ 150, 176, 112, 255 };
 	for (int y = 0; y < mapHeight; y++) {
 		for (int x = 0; x < mapWidth; x++) {
 			Color color = ColorForName(map->GetTerrain(x, y), terrainColors);

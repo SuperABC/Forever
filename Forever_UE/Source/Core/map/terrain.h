@@ -15,6 +15,8 @@ struct TerrainTexturePaths {
 	std::string diffuse;
 	std::string normal;
 	std::string roughness;
+	bool hasMapColor = false;
+	uint8_t mapColorR = 0, mapColorG = 0, mapColorB = 0;
 };
 
 // 某个TerrainMod实例的薄包装，不持有地图格子数据，详见terrain.md
