@@ -8,6 +8,7 @@
 #include "map/map_save.h"
 #include "populace/populace_save.h"
 #include "society/society_save.h"
+#include "polit/polit_save.h"
 #include "industry/industry_save.h"
 #include "traffic/traffic_save.h"
 #include "story/script_save.h"
@@ -32,6 +33,7 @@ const vector<SaveSectionVersion>& GetSaveSectionVersions() {
 		{ SAVE_SECTION_MAP_LAMPS, 1, 1 },
 		{ SAVE_SECTION_POPULACE, 1, 1 },
 		{ SAVE_SECTION_SOCIETY, 1, 1 },
+		{ SAVE_SECTION_POLIT, 1, 1 },
 		{ SAVE_SECTION_TRAFFIC, 1, 1 },
 		{ SAVE_SECTION_SCRIPTS, 1, 1 },
 		{ SAVE_SECTION_UE, 1, 1 },
@@ -98,7 +100,7 @@ namespace {
 		return filesystem::path(path).stem().string();
 	}
 
-	// 21个concept的统一操作表：按jsonKey枚举存活实例(id+计数器+状态版本)、临时创建实例取状态
+	// 23个concept的统一操作表：按jsonKey枚举存活实例(id+计数器+状态版本)、临时创建实例取状态
 	// 版本、恢复计数器。每个concept的Factory/Mod类型不同，用模板+成员函数指针生成，避免手写21遍。
 	struct ConceptOps {
 		string jsonKey;
@@ -162,6 +164,7 @@ namespace {
 			t.push_back(MakeOps("weapon_mods", r.GetWeaponFactory(), &WeaponFactory::CreateWeapon, &WeaponFactory::DestroyWeapon));
 			t.push_back(MakeOps("zone_mods", r.GetZoneFactory(), &ZoneFactory::CreateZone, &ZoneFactory::DestroyZone));
 			t.push_back(MakeOps("green_mods", r.GetGreenFactory(), &GreenFactory::CreateGreen, &GreenFactory::DestroyGreen));
+			t.push_back(MakeOps("party_mods", r.GetPartyFactory(), &PartyFactory::CreateParty, &PartyFactory::DestroyParty));
 			return t;
 		}();
 		return table;
@@ -444,6 +447,7 @@ SaveArchive SaveGame::BuildArchive(const SaveWorld& world) {
 		if (world.populace) {
 			PopulaceSaveCodec::Save(*world.populace, *world.map, world.society, archive);
 			if (world.society) SocietySaveCodec::Save(*world.society, *world.map, *world.populace, archive);
+			if (world.polit) PolitSaveCodec::Save(*world.polit, *world.populace, archive);
 		}
 		if (world.industry) IndustrySaveCodec::Save(*world.industry, archive);
 		if (world.traffic) TrafficSaveCodec::Save(*world.traffic, *world.map, world.populace, world.society, archive);

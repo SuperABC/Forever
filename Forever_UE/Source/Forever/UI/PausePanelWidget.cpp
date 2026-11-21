@@ -67,7 +67,7 @@ void UPausePanelWidget::RefreshStatus() {
 		// 玩家的钱就是被操控市民在Ledger里的账户(分)，见Core/society/economy.md"玩家参与经济"。
 		Society* society = framework->GetSociety();
 		if (citizen && society) {
-			int64_t cents = society->GetLedger().Balance(Party::Of(citizen));
+			int64_t cents = society->GetLedger().Balance(Holder::Of(citizen));
 			money = FString::Printf(TEXT("%.2f元"), static_cast<double>(cents) / 100.0);
 		}
 	}

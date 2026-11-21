@@ -122,7 +122,7 @@ bool UShopWidget::Refresh() {
 
 	Player::CarryPlan plan;
 	if (player) plan = player->PlanCarry(sizes);
-	const int64 balance = (society && buyer) ? society->GetLedger().Balance(Party::Of(buyer)) : 0;
+	const int64 balance = (society && buyer) ? society->GetLedger().Balance(Holder::Of(buyer)) : 0;
 	const bool affordable = totalPrice <= balance;
 
 	// 体积上限=所有容器剩余空间+手上能多拿的最大几件(空手数那么多件)；没有容器时体积不受限，只受空手个数限制。

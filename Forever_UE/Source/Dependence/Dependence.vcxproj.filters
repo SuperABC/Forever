@@ -25,6 +25,9 @@
     <Filter Include="player">
       <UniqueIdentifier>{506F0F15-5F9A-481C-91AF-B3F0379270A1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="polit">
+      <UniqueIdentifier>{b9cea169-b81e-4042-aebb-e6ec7485cfa7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="common\error.cpp">
@@ -207,6 +210,9 @@
     <ClCompile Include="traffic\vehicle_mod.cpp">
       <Filter>traffic</Filter>
     </ClCompile>
+    <ClCompile Include="polit\party_factory.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\error.h">
@@ -388,6 +394,15 @@
     </ClInclude>
     <ClInclude Include="traffic\vehicle_factory.h">
       <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\party_mod.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\party_factory.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\policy_ids.h">
+      <Filter>polit</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

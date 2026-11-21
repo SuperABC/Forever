@@ -32,6 +32,7 @@ namespace {
 		{ "Puzzles",       "GetModPuzzles",       "RegisterModPuzzles",       "FinishModPuzzles" },
 		{ "Apps",          "GetModApps",          "RegisterModApps",          "FinishModApps" },
 		{ "Weapons",       "GetModWeapons",       "RegisterModWeapons",       "FinishModWeapons" },
+		{ "Parties",       "GetModParties",       "RegisterModParties",       "FinishModParties" },
 	};
 }
 

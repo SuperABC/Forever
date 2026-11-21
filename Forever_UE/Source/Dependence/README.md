@@ -24,6 +24,7 @@
 | populace | Scheduler | `populace/scheduler_mod.h` → `SchedulerMod` | `populace/scheduler_factory.h/.cpp` → `SchedulerFactory` | `GetModSchedulers` |
 | society | Job | `society/job_mod.h` → `JobMod` | `society/job_factory.h/.cpp` → `JobFactory` | `GetModJobs` |
 | society | Organization | `society/organization_mod.h` → `OrganizationMod` | `society/organization_factory.h/.cpp` → `OrganizationFactory` | `GetModOrganizations` |
+| polit | Party | `polit/party_mod.h` → `PartyMod` | `polit/party_factory.h/.cpp` → `PartyFactory` | `GetModParties` |
 | story | Script | `story/script_mod.h` → `ScriptMod` | `story/script_factory.h/.cpp` → `ScriptFactory` | `GetModScripts` |
 | industry | Product | `industry/product_mod.h` → `ProductMod` | `industry/product_factory.h/.cpp` → `ProductFactory` | `GetModProducts` |
 | industry | Storage | `industry/storage_mod.h` → `StorageMod` | `industry/storage_factory.h/.cpp` → `StorageFactory` | `GetModStorages` |

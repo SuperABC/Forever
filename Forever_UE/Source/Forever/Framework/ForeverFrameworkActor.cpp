@@ -34,6 +34,9 @@
 #include "industry/industry_save.h"
 #include "populace/populace_save.h"
 #include "society/society_save.h"
+#include "polit/polit.h"
+#include "polit/polit_save.h"
+#include "polit/polit_log.h"
 #include "traffic/traffic_save.h"
 #include "story/script_save.h"
 #include "player/player_save.h"
@@ -109,6 +112,9 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	doorFramework = CreateDefaultSubobject<UForeverDoorFrameworkComponent>(TEXT("DoorFramework"));
 }
 
+// 政治域日志的UE落点：Core只产出"[polit] <游戏时间> <类别> k=v"单行文本，这里原样写进LogPolit(PIE日志里搜"LogPolit")。
+DEFINE_LOG_CATEGORY_STATIC(LogPolit, Log, All);
+
 AForeverFrameworkActor::~AForeverFrameworkActor()
 {
 	// 先等异步寻路任务跑完才能delete map/populace(后台线程还持有它们的裸指针)。
@@ -118,6 +124,7 @@ AForeverFrameworkActor::~AForeverFrameworkActor()
 	delete player;
 	delete traffic;
 	delete industry;
+	delete polit; // 先于society：polit持有被society绑定的政策值
 	delete society;
 	delete story;
 	delete populace;
@@ -137,6 +144,8 @@ void AForeverFrameworkActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	traffic = nullptr;
 	delete industry;
 	industry = nullptr;
+	delete polit;
+	polit = nullptr;
 	delete society;
 	society = nullptr;
 	delete story;
@@ -210,6 +219,7 @@ void AForeverFrameworkActor::BuildGenerationStages()
 	add(TEXT("构建人口"), [this]() { EnsurePopulaceGenerated(); });
 	add(TEXT("构建社会与产业"), [this]() {
 		EnsureSocietyGenerated();
+		EnsurePolitGenerated();
 		EnsurePlayerGenerated();
 		EnsureIndustryGenerated();
 		EnsureAssetsGenerated();
@@ -1086,6 +1096,18 @@ WorldStepHooks AForeverFrameworkActor::MakeStepHooks()
 			}
 		}
 	};
+	// 党代会开始/结束：Core只产出通知队列，转发给每个党员自己的脚本(玩家操控的市民不被自动安排)。
+	hooks.onPoliticsTicked = [this]() {
+		if (!polit) return;
+		const Citizen* controlled = GetControlledCitizen();
+		for (const MeetingNotice& notice : polit->ConsumeMeetingNotices()) {
+			if (!storyFramework) continue;
+			for (Citizen* member : notice.members) {
+				if (!member || member == controlled) continue;
+				storyFramework->BroadcastMeeting(member, notice.start, notice.party, notice.address);
+			}
+		}
+	};
 	return hooks;
 }
 
@@ -1099,6 +1121,7 @@ WorldDomains AForeverFrameworkActor::MakeWorldDomains() const
 	domains.traffic = traffic;
 	domains.story = story;
 	domains.player = player;
+	domains.polit = polit;
 	return domains;
 }
 
@@ -1460,6 +1483,38 @@ void AForeverFrameworkActor::EnsureSocietyGenerated()
 	// 新开局:选股东并由城市外账户注资，见Core/society/settlement.md。
 	society->AssignShareholders(populace->GetCitizens(), startTime);
 	Settlement::InitFunds(*society, populace->GetCitizens());
+}
+
+void AForeverFrameworkActor::EnsurePolitGenerated()
+{
+	if (polit) return;
+	if (!map || !populace || !society) return;
+
+	// 政治日志落到LogPolit(每行自带游戏时间)。
+	SetPolitLogSink([](const std::string& line) {
+		UE_LOG(LogPolit, Log, TEXT("%s"), UTF8_TO_TCHAR(line.c_str()));
+	});
+
+	// 读档：按polit段恢复党派/党员/党首/会议室/政策值(会议室不再重选)，失败退回重新生成。
+	if (FForeverPendingLoad* load = FetchActiveLoad()) {
+		if (bPopulaceRestored) {
+			std::string error;
+			polit = PolitSaveCodec::Load(load->archive, *map, *populace, *society, error);
+			if (polit) {
+				UE_LOG(LogTemp, Log, TEXT("AForeverFrameworkActor: polit restored from the save (%d parties)."),
+					static_cast<int32>(polit->GetParties().size()));
+				return;
+			}
+			if (!error.empty()) UE_LOG(LogTemp, Error, TEXT("AForeverFrameworkActor: failed to restore polit (%s); generating it instead."), UTF8_TO_TCHAR(error.c_str()));
+		}
+	}
+
+	// 新开局：党派的成员/会议室在这里一次性确定(Init不会在读档时再调)。
+	const Time startTime(populace->GetCurrentYear(), 1, 1, 8);
+	PostImplement postImplement(map, populace, society, nullptr, nullptr, nullptr, nullptr);
+	polit = new Polit();
+	polit->Bind(*map, *populace, *society);
+	polit->Init(postImplement, startTime);
 }
 
 void AForeverFrameworkActor::EnsureAssetsGenerated()

@@ -63,7 +63,7 @@ void Society::SetGovernmentAssets(const vector<Asset*>& assets) {
 	for (Asset* asset : assets) AddGovernmentAsset(asset);
 }
 
-Party Society::OwnerOf(const Room* room) const {
+Holder Society::OwnerOf(const Room* room) const {
 	if (roomOwnersDirty) {
 		roomOwners.clear();
 		for (Organization* organization : organizations) {
@@ -74,9 +74,9 @@ Party Society::OwnerOf(const Room* room) const {
 		}
 		roomOwnersDirty = false;
 	}
-	if (!room) return Party::Government();
+	if (!room) return Holder::Government();
 	auto it = roomOwners.find(room);
-	return it != roomOwners.end() ? Party::Of(it->second) : Party::Government();
+	return it != roomOwners.end() ? Holder::Of(it->second) : Holder::Government();
 }
 
 void Society::AssignShareholders(const vector<Citizen*>& citizens, const Time& now) {
@@ -202,7 +202,7 @@ int Society::MatchUnemployed(const vector<Citizen*>& citizens, const Time& now) 
 	for (Citizen* citizen : citizens) {
 		if (!citizen || !citizen->IsActive() || !citizen->IsInEconomy() || citizen->GetJob()) continue;
 		int age = citizen->GetAge(now);
-		if (age >= kMinAdultAge && age < policy.retirementAge) adults.push_back(citizen);
+		if (age >= kMinAdultAge && age < GetPolicy().retirementAge) adults.push_back(citizen);
 	}
 
 	// Fisher-Yates洗牌，用项目统一的GetRandom(n)（不引入std::shuffle额外的<random>引擎）。
@@ -270,7 +270,7 @@ bool Society::RecruitCitizen(Citizen* citizen, const Time& now) {
 	CORE_RANDOM_SCOPE("core.society");
 	if (!citizen || citizen->GetJob()) return false;
 	int age = citizen->GetAge(now);
-	if (age < kMinAdultAge || age >= policy.retirementAge) return false;
+	if (age < kMinAdultAge || age >= GetPolicy().retirementAge) return false;
 
 	vector<Job*> vacancies;
 	for (Organization* organization : organizations) {

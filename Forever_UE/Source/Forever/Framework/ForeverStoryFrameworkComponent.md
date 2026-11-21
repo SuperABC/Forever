@@ -32,6 +32,7 @@ Story域的UE层接线点。`Core/story`的`Script`/`Story`只做纯C++的匹配
   车辆（`Traffic::FindVehicleByName`）、门（`Map::FindDoorByName`）、场景里的资产（`AssetFramework::FindElementByName`）、电梯（`Map::FindCabinByName`），命中哪个就额外匹配哪个的Script。
 - **`BroadcastCitizenDecease`**（两个重载，字符串版转到事件版）：市民死亡时调用，匹配主线Script + 死者自己的`Scheduler`脚本（死亡只销毁UE侧Actor，Core里的`Citizen`和`Scheduler`还在）。
   不做通用的"任意Event广播给任意Script"机制，原因见`Player/ForeverWeaponComponent.md`。
+- **`BroadcastMeeting(citizen, bStart, party, address)`**：党代会开始/结束(`meeting_start/end`)，由`ForeverFrameworkActor`的`onPoliticsTicked`对每个党员调用，只发给该市民自己的`Scheduler`脚本；`$$local.home`取自`citizen->GetRoom()->GetAddress()`，见`event.md`。
 - **`BroadcastNpcArrive(citizen, room)`**：由`UForeverPopulaceFrameworkComponent::ReportArrival`调用，发`npc_arrive`给该市民自己的`Scheduler`脚本和`Job`脚本，嵌套深度`npcArriveDepth`超过`kMaxNpcArriveDepth`(8)丢弃并警告。
 - **`BroadcastExecuteTask(citizen, task, destination)`**：员工接到组织任务，只发给该员工的Job脚本。
 - **`BroadcastTaskComplete(org, task, destination, worker, origin)` / `BroadcastTaskFailed(..., reason)`**：单程任务到达/失败，只发给派任务的组织自己的脚本(`org->GetScript()`)。

@@ -22,6 +22,9 @@
 #include "map/map_save.h"
 #include "populace/populace_save.h"
 #include "society/society_save.h"
+#include "polit/polit.h"
+#include "polit/polit_save.h"
+#include "common/implement.h"
 #include "industry/industry_save.h"
 #include "traffic/traffic_save.h"
 #include "player/player_save.h"
@@ -202,6 +205,13 @@ bool BuildWorld(TestWorld& world, int mapSize, string& error) {
 		world.story = new Story();
 		world.story->Init();
 	})) return false;
+	// 政治域放最后：党派随机流独立，不影响前面各阶段的签名。没启用任何党派时只是绑定默认政策。
+	if (!stage("polit", [&] {
+		PostImplement post(world.map, world.populace, world.society, world.story, world.industry, world.traffic, world.player);
+		world.polit = new Polit();
+		world.polit->Bind(*world.map, *world.populace, *world.society);
+		world.polit->Init(post, *world.player->GetTime());
+	})) return false;
 	return true;
 }
 
@@ -236,6 +246,7 @@ map<string, string> ComputeFingerprint(TestWorld& world) {
 	save.traffic = world.traffic;
 	save.story = world.story;
 	save.player = world.player;
+	save.polit = world.polit;
 
 	// 和SaveGame::BuildArchive同一组codec，但逐个捕获异常，失败时能指出是哪个域。
 	SaveArchive archive;
@@ -250,6 +261,7 @@ map<string, string> ComputeFingerprint(TestWorld& world) {
 	section("map", [&] { MapSaveCodec::Save(*world.map, archive); });
 	if (world.populace) section("populace", [&] { PopulaceSaveCodec::Save(*world.populace, *world.map, world.society, archive); });
 	if (world.populace && world.society) section("society", [&] { SocietySaveCodec::Save(*world.society, *world.map, *world.populace, archive); });
+	if (world.populace && world.polit) section("polit", [&] { PolitSaveCodec::Save(*world.polit, *world.populace, archive); });
 	if (world.industry) section("industry", [&] { IndustrySaveCodec::Save(*world.industry, archive); });
 	if (world.traffic) section("traffic", [&] { TrafficSaveCodec::Save(*world.traffic, *world.map, world.populace, world.society, archive); });
 	section("scripts", [&] { ScriptSaveCodec::Save(save, archive); });

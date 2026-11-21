@@ -147,7 +147,7 @@ void Economy::FundGovernment(Society& society, const vector<Citizen*>& citizens,
 	DailyReport& report) {
 	Ledger& ledger = society.GetLedger();
 	const GovernmentPolicy& policy = society.GetPolicy();
-	int64_t shortfall = -ledger.Balance(Party::Government());
+	int64_t shortfall = -ledger.Balance(Holder::Government());
 	if (shortfall <= 0) return;
 
 	// 先向市民发国债，利率比存款高。募集的钱进政府账户，但同时记国债负债，不会抬高净头寸。
@@ -157,7 +157,7 @@ void Economy::FundGovernment(Society& society, const vector<Citizen*>& citizens,
 
 	// 国债补不满的缺口直接印钞：城市外账户直接打给政府，没有负债，净头寸随之回升。
 	if (shortfall > 0) {
-		ledger.Transfer(Party::Outside(), Party::Government(), shortfall, Flow::PRINT_MONEY);
+		ledger.Transfer(Holder::Outside(), Holder::Government(), shortfall, Flow::PRINT_MONEY);
 		report.moneyPrinted = shortfall;
 	}
 }
@@ -190,8 +190,8 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 			if (candidate && !candidate->GetParkingSlots().empty()) { hasParking = true; break; }
 		}
 		if (!hasParking) continue;
-		Party owner = society.OwnerOf(fromRoom);
-		if (owner.kind != Party::ORGANIZATION || !owner.ref) continue;
+		Holder owner = society.OwnerOf(fromRoom);
+		if (owner.kind != Holder::ORGANIZATION || !owner.ref) continue;
 		vector<DeliveryDestination>& list = deliveries[static_cast<const Organization*>(owner.ref)];
 		auto found = std::find_if(list.begin(), list.end(), [&](const DeliveryDestination& d) { return d.building == toBuilding; });
 		if (found != list.end()) found->quantity += flow.quantity;
@@ -272,7 +272,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 				if (!member || !member->IsActive()) continue;
 				bool adult = member->GetAge(now) >= society.GetPolicy().adultAge;
 				halfPortions += adult ? 2 : 1;
-				int64_t own = ledger.Balance(Party::Of(member));
+				int64_t own = ledger.Balance(Holder::Of(member));
 				allBalance += own;
 				if (!adult) continue; // 未成年人的钱不参与需求和预算，也不产生视频需求
 				hasAdult = true;
@@ -368,7 +368,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 					int64_t cost = provider->offer.unitPrice * take;
 					vector<int64_t> shares = SplitEvenly(cost, payers.size());
 					for (size_t k = 0; k < payers.size(); k++) {
-						ledger.Transfer(Party::Of(payers[k]), Party::Of(provider->organization), shares[k], Flow::SERVICE_PURCHASE);
+						ledger.Transfer(Holder::Of(payers[k]), Holder::Of(provider->organization), shares[k], Flow::SERVICE_PURCHASE);
 					}
 					provider->quota -= take;
 					provider->sold += take;
@@ -390,7 +390,7 @@ void Economy::RunServices(Society& society, Industry& industry, const vector<Roo
 				provider.organization->GetScript());
 			// 消费税即时缴纳：商店每笔销售当场把销售额的一部分交给政府。
 			int64_t consumptionTax = society.GetPolicy().Tax(provider.revenue, society.GetPolicy().consumptionTaxPercent);
-			society.GetLedger().Transfer(Party::Of(provider.organization), Party::Government(), consumptionTax, Flow::CONSUMPTION_TAX);
+			society.GetLedger().Transfer(Holder::Of(provider.organization), Holder::Government(), consumptionTax, Flow::CONSUMPTION_TAX);
 			stat.sold += provider.sold;
 			stat.revenue += provider.revenue;
 			stat.consumptionTax += consumptionTax;
@@ -418,10 +418,10 @@ void Economy::PayWages(Society& society, DailyReport& report) {
 		for (Job* job : organization->GetJobs()) {
 			Citizen* worker = job ? job->GetOccupant() : nullptr;
 			if (!worker || !worker->IsActive()) continue;
-			ledger.Transfer(Party::Of(organization), Party::Of(worker), mod->wage, Flow::WAGE);
+			ledger.Transfer(Holder::Of(organization), Holder::Of(worker), mod->wage, Flow::WAGE);
 			// 所得税即时缴纳：发工资时当场代扣。
 			int64_t incomeTax = society.GetPolicy().Tax(mod->wage, society.GetPolicy().incomeTaxPercent);
-			ledger.Transfer(Party::Of(worker), Party::Government(), incomeTax, Flow::INCOME_TAX);
+			ledger.Transfer(Holder::Of(worker), Holder::Government(), incomeTax, Flow::INCOME_TAX);
 			report.wageIncomeTax += incomeTax;
 			report.wages += mod->wage;
 			report.wagesPaid++;
@@ -432,9 +432,9 @@ void Economy::PayWages(Society& society, DailyReport& report) {
 void Economy::PayWage(Society& society, Organization* organization, Citizen* worker, int64_t amountCents) {
 	if (!organization || !worker || amountCents <= 0) return;
 	Ledger& ledger = society.GetLedger();
-	ledger.Transfer(Party::Of(organization), Party::Of(worker), amountCents, Flow::WAGE);
+	ledger.Transfer(Holder::Of(organization), Holder::Of(worker), amountCents, Flow::WAGE);
 	int64_t incomeTax = society.GetPolicy().Tax(amountCents, society.GetPolicy().incomeTaxPercent);
-	ledger.Transfer(Party::Of(worker), Party::Government(), incomeTax, Flow::INCOME_TAX);
+	ledger.Transfer(Holder::Of(worker), Holder::Government(), incomeTax, Flow::INCOME_TAX);
 }
 
 vector<Economy::ShopItem> Economy::ListShopItems(Industry& industry, Player& player, const Organization* organization) {
@@ -497,7 +497,7 @@ Economy::PurchaseResult Economy::PlayerPurchaseCart(Society& society, Industry& 
 	if (unitTypes.empty()) return PurchaseResult::Invalid;
 
 	Ledger& ledger = society.GetLedger();
-	if (ledger.Balance(Party::Of(buyer)) < total) return PurchaseResult::NoMoney;
+	if (ledger.Balance(Holder::Of(buyer)) < total) return PurchaseResult::NoMoney;
 	Player::CarryPlan plan = player.PlanCarry(unitSizes);
 	if (!plan.feasible) return PurchaseResult::NoSpace;
 
@@ -527,9 +527,9 @@ Economy::PurchaseResult Economy::PlayerPurchaseCart(Society& society, Industry& 
 			remaining -= storage->Output(productType, remaining);
 		}
 	}
-	ledger.Transfer(Party::Of(buyer), Party::Of(seller), charged, Flow::SERVICE_PURCHASE);
+	ledger.Transfer(Holder::Of(buyer), Holder::Of(seller), charged, Flow::SERVICE_PURCHASE);
 	int64_t consumptionTax = society.GetPolicy().Tax(charged, society.GetPolicy().consumptionTaxPercent);
-	ledger.Transfer(Party::Of(seller), Party::Government(), consumptionTax, Flow::CONSUMPTION_TAX);
+	ledger.Transfer(Holder::Of(seller), Holder::Government(), consumptionTax, Flow::CONSUMPTION_TAX);
 	return charged > 0 ? PurchaseResult::Success : PurchaseResult::NoSpace;
 }
 
@@ -547,12 +547,12 @@ void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, c
 			vector<Citizen*> guardians;
 			if (citizen->GetHousehold()) guardians = citizen->GetHousehold()->GetAdults(now);
 			if (guardians.empty()) {
-				ledger.Transfer(Party::Government(), Party::Of(citizen), allowance, Flow::MINOR_ALLOWANCE);
+				ledger.Transfer(Holder::Government(), Holder::Of(citizen), allowance, Flow::MINOR_ALLOWANCE);
 			}
 			else {
 				vector<int64_t> shares = SplitEvenly(allowance, guardians.size());
 				for (size_t k = 0; k < guardians.size(); k++) {
-					ledger.Transfer(Party::Government(), Party::Of(guardians[k]), shares[k], Flow::MINOR_ALLOWANCE);
+					ledger.Transfer(Holder::Government(), Holder::Of(guardians[k]), shares[k], Flow::MINOR_ALLOWANCE);
 				}
 			}
 			report.minorAllowance += allowance;
@@ -560,13 +560,13 @@ void Economy::PaySubsidies(Society& society, const vector<Citizen*>& citizens, c
 		}
 		else if (age >= policy.retirementAge) {
 			int64_t allowance = policy.Allowance(policy.pension);
-			ledger.Transfer(Party::Government(), Party::Of(citizen), allowance, Flow::PENSION);
+			ledger.Transfer(Holder::Government(), Holder::Of(citizen), allowance, Flow::PENSION);
 			report.pensions += allowance;
 			report.pensionCount++;
 		}
 		else if (!citizen->GetJob()) {
 			int64_t allowance = policy.Allowance(policy.unemploymentBenefit);
-			ledger.Transfer(Party::Government(), Party::Of(citizen), allowance, Flow::UNEMPLOYMENT);
+			ledger.Transfer(Holder::Government(), Holder::Of(citizen), allowance, Flow::UNEMPLOYMENT);
 			report.unemployment += allowance;
 			report.unemploymentCount++;
 		}
@@ -588,7 +588,7 @@ MonthlyReport Economy::Monthly(Society& society, const vector<Room*>& rooms, con
 	for (Organization* organization : society.GetOrganizations()) {
 		OrganizationMod* mod = organization->GetMod();
 		if (!mod || organization->IsBankrupt()) continue;
-		int64_t balance = ledger.Balance(Party::Of(organization));
+		int64_t balance = ledger.Balance(Holder::Of(organization));
 		int64_t last = organization->GetLastSettledBalance();
 		int64_t profit = balance - (last == Organization::kUnsettled ? mod->initialFunds : last);
 		SettleOrganization(society, organization, balance, profit, report);
@@ -599,7 +599,7 @@ MonthlyReport Economy::Monthly(Society& society, const vector<Room*>& rooms, con
 		paidThisMonth.insert(organization);
 
 		int64_t corporateTax = policy.Tax(base, policy.corporateTaxPercent);
-		ledger.Transfer(Party::Of(organization), Party::Government(), corporateTax, Flow::CORPORATE_TAX);
+		ledger.Transfer(Holder::Of(organization), Holder::Government(), corporateTax, Flow::CORPORATE_TAX);
 		report.corporateTax += corporateTax;
 
 		// 税后利润只发分红率那一部分，其余留在企业账户（抬高净资产，股价随之上涨）。
@@ -609,9 +609,9 @@ MonthlyReport Economy::Monthly(Society& society, const vector<Room*>& rooms, con
 		for (const Organization::Shareholder& shareholder : shareholders) {
 			int64_t dividend = distributable * shareholder.shares / organization->GetTotalShares();
 			if (dividend <= 0) continue;
-			ledger.Transfer(Party::Of(organization), Party::Of(shareholder.citizen), dividend, Flow::DIVIDEND);
+			ledger.Transfer(Holder::Of(organization), Holder::Of(shareholder.citizen), dividend, Flow::DIVIDEND);
 			int64_t incomeTax = policy.Tax(dividend, policy.incomeTaxPercent);
-			ledger.Transfer(Party::Of(shareholder.citizen), Party::Government(), incomeTax, Flow::INCOME_TAX);
+			ledger.Transfer(Holder::Of(shareholder.citizen), Holder::Government(), incomeTax, Flow::INCOME_TAX);
 			report.dividendIncomeTax += incomeTax;
 			paid += dividend;
 		}
@@ -628,7 +628,7 @@ MonthlyReport Economy::Monthly(Society& society, const vector<Room*>& rooms, con
 
 	// 记下月结完成后的余额，下个月的当月利润从它算起。
 	for (Organization* organization : society.GetOrganizations()) {
-		if (!organization->IsBankrupt()) organization->SetLastSettledBalance(ledger.Balance(Party::Of(organization)));
+		if (!organization->IsBankrupt()) organization->SetLastSettledBalance(ledger.Balance(Holder::Of(organization)));
 	}
 
 	// 存款和国债结息（政府付息，市民当场缴所得税）。
@@ -664,10 +664,10 @@ void Economy::IssueShares(Society& society, MonthlyReport& report) {
 		vector<Organization::Shareholder> holders = organization->GetShareholders();
 		for (const Organization::Shareholder& holder : holders) {
 			int64_t entitlement = issue * holder.shares / total;
-			int64_t cash = max<int64_t>(0, ledger.Balance(Party::Of(holder.citizen)) - policy.reserve);
+			int64_t cash = max<int64_t>(0, ledger.Balance(Holder::Of(holder.citizen)) - policy.reserve);
 			int64_t take = min(entitlement, cash / price);
 			if (take <= 0) continue;
-			ledger.Transfer(Party::Of(holder.citizen), Party::Of(organization), take * price, Flow::STOCK_TRADE);
+			ledger.Transfer(Holder::Of(holder.citizen), Holder::Of(organization), take * price, Flow::STOCK_TRADE);
 			organization->AdjustShares(holder.citizen, take);
 			sold += take;
 		}
@@ -726,7 +726,7 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 
 	// 一、资金为负的企业倒闭。
 	for (Organization* organization : society.GetOrganizations()) {
-		if (!organization->IsBankrupt() && ledger.Balance(Party::Of(organization)) < 0) {
+		if (!organization->IsBankrupt() && ledger.Balance(Holder::Of(organization)) < 0) {
 			organization->SetBankrupt(true);
 			report.dismissedByBankruptcy += organization->LayOffAll(); // 员工全部裁掉，重启后重新招聘
 			report.newBankruptcies++;
@@ -760,7 +760,7 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 			int64_t required = static_cast<int64_t>(static_cast<double>(mod->initialFunds) * weight / weightSum);
 			vector<Citizen*> candidates;
 			for (Citizen* citizen : adults) {
-				if (!taken.count(citizen) && ledger.Balance(Party::Of(citizen)) + treasury.DepositOf(citizen) > required) candidates.push_back(citizen);
+				if (!taken.count(citizen) && ledger.Balance(Holder::Of(citizen)) + treasury.DepositOf(citizen) > required) candidates.push_back(citizen);
 			}
 			if (candidates.empty()) {
 				complete = false;
@@ -775,18 +775,18 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 		vector<Organization::Shareholder> chosen = Organization::SplitShares(pickedCitizens, pickedWeights);
 
 		// 核销旧负债（城市外账户承担），股东按占股比例集齐初始资金，重新营业。
-		int64_t debt = -ledger.Balance(Party::Of(organization));
+		int64_t debt = -ledger.Balance(Holder::Of(organization));
 		if (debt > 0) {
-			ledger.Transfer(Party::Outside(), Party::Of(organization), debt, Flow::DEBT_WRITE_OFF);
+			ledger.Transfer(Holder::Outside(), Holder::Of(organization), debt, Flow::DEBT_WRITE_OFF);
 			report.debtWrittenOff += debt;
 		}
 		int64_t contributed = 0;
 		for (size_t i = 0; i < chosen.size(); i++) {
 			int64_t share = mod->initialFunds * chosen[i].shares / Organization::kTotalShares;
 			if (i + 1 == chosen.size()) share = mod->initialFunds - contributed; // 最后一位补齐，总额正好等于初始资金
-			int64_t cash = ledger.Balance(Party::Of(chosen[i].citizen));
+			int64_t cash = ledger.Balance(Holder::Of(chosen[i].citizen));
 			if (cash < share) treasury.Withdraw(ledger, chosen[i].citizen, share - cash);
-			ledger.Transfer(Party::Of(chosen[i].citizen), Party::Of(organization), share, Flow::RESTART_FUNDS);
+			ledger.Transfer(Holder::Of(chosen[i].citizen), Holder::Of(organization), share, Flow::RESTART_FUNDS);
 			contributed += share;
 		}
 		organization->SetShareholders(chosen);
@@ -794,7 +794,7 @@ void Economy::UpdateBankruptcies(Society& society, const vector<Citizen*>& citiz
 		society.GetMarket().ResetQuote(organization);
 		organization->SetBankrupt(false);
 		report.positionsReopened += organization->ReopenInitial().opened; // 岗位恢复到开局满编，由每天的再就业补人
-		organization->SetLastSettledBalance(ledger.Balance(Party::Of(organization)));
+		organization->SetLastSettledBalance(ledger.Balance(Holder::Of(organization)));
 		report.restarts++;
 		report.restartFunds += contributed;
 	}

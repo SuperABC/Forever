@@ -99,6 +99,9 @@ public:
 	// 同上，到达的是绿化区某个圆(address=Green::GetCircleAddress)。
 	void BroadcastNpcArrive(Citizen* citizen, const std::string& address);
 
+	// 党代会开始/结束(meeting_start/meeting_end)：只发给这个党员自己的Scheduler脚本，由脚本里程碑决定去会议室/回家，见citizen_common.script。
+	void BroadcastMeeting(Citizen* citizen, bool bStart, const std::string& party, const std::string& address);
+
 	// 员工接到组织派的任务(assign_task发起成功后)：execute_task事件只发给该员工的Job脚本。
 	void BroadcastExecuteTask(Citizen* citizen, const std::string& task, const std::string& destination);
 	// 任务结果：只发给派任务的组织自己的脚本(见TaskCompleteEvent/TaskFailedEvent)。origin=这一段出发时员工所在房间地址。

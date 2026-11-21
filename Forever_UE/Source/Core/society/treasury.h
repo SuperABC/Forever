@@ -3,7 +3,7 @@
 #include "class.h"
 
 #include "society/ledger.h"
-#include "society/policy.h"
+#include "polit/policy.h"
 
 #include <cstdint>
 #include <unordered_map>

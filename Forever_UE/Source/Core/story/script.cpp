@@ -365,6 +365,13 @@ vector<Event*> Script::BuildEvent(const JsonValue& root) {
 			if (type == "task_complete") event = new TaskCompleteEvent(obj["task"].AsString(), obj["destination"].AsString());
 			else event = new TaskFailedEvent(obj["task"].AsString(), obj["destination"].AsString());
 		}
+		else if (type == "meeting_start") {
+			// party/address都可以省略(留空=不限)，见MeetingStartEvent::Match；事件只发给该党党员自己的Scheduler脚本。
+			event = new MeetingStartEvent(obj["party"].AsString(), obj["address"].AsString());
+		}
+		else if (type == "meeting_end") {
+			event = new MeetingEndEvent(obj["party"].AsString(), obj["address"].AsString());
+		}
 		else if (type == "execute_task") {
 			// task/destination都可以省略(留空=不限)，见ExecuteTaskEvent::Match；事件只发给被派任务的员工的Job脚本。
 			event = new ExecuteTaskEvent(obj["task"].AsString(), obj["destination"].AsString());

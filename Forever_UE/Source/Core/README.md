@@ -32,3 +32,6 @@
 
 - `Core`会按迁移进度逐步为其余domain补齐真正的领域系统类(如`Map`/`Story`)，取代目前由
   `ForeverModSubsystem`临时代管Factory的做法。
+
+## 政治域(2026-11-21)
+`polit/`：党派(Party concept)、可调政策`GovernmentPolicy`/`PolicyCatalog`、权力词汇`PowerCatalog`、月末选举、党代会、政治日志、存档，和Map/Populace/Society平级，设计见`polit/polit.md`。

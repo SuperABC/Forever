@@ -89,7 +89,7 @@ private:
 
 	Snapshot Take() const;
 	void Out(const char* format, ...);
-	void PrintFlows(const Snapshot& begin, const Snapshot& end, Party::Kind account);
+	void PrintFlows(const Snapshot& begin, const Snapshot& end, Holder::Kind account);
 	void PrintGovernment(const Snapshot& begin, const Snapshot& end);
 	void PrintCitizens(const Snapshot& begin, const Snapshot& end);
 	void PrintOrganizations(const Snapshot& begin, const Snapshot& end);

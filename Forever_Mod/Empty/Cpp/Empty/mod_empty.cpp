@@ -5,6 +5,7 @@
 #include "map/roadnet_factory.h"
 #include "map/zone_factory.h"
 #include "map/green_factory.h"
+#include "polit/party_factory.h"
 #include "map/building_factory.h"
 #include "map/component_factory.h"
 #include "map/room_factory.h"
@@ -27,6 +28,7 @@
 
 int EmptyZone::count = 0;
 int EmptyGreen::count = 0;
+int EmptyParty::count = 0;
 int EmptyBuilding::count = 0;
 
 // 这个DLL里每个concept各有一个占位id"<concept>_empty"，都不依赖任何其它mod。
@@ -39,6 +41,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ "roadnet_empty", {} },
 		{ "zone_empty", {} },
 		{ "green_empty", {} },
+		{ "party_empty", {} },
 		{ "building_empty", {} },
 		{ "component_empty", {} },
 		{ "room_empty", {} },
@@ -108,6 +111,18 @@ extern "C" __declspec(dllexport) void RegisterModGreens(GreenFactory* factory) {
 		&EmptyGreen::GetPowerFree, &EmptyGreen::GetPowerLinked);
 }
 extern "C" __declspec(dllexport) void FinishModGreens(GreenFactory* factory) {
+}
+
+extern "C" __declspec(dllexport) void* GetModParties() {
+	static std::vector<std::string> mods = { "party_empty" };
+	return (void*)&mods;
+}
+extern "C" __declspec(dllexport) void RegisterModParties(PartyFactory* factory) {
+	factory->RegisterParty(EmptyParty::GetId(),
+		[](const std::string&) -> PartyMod* { return new EmptyParty(); },
+		[](PartyMod* m) { delete m; });
+}
+extern "C" __declspec(dllexport) void FinishModParties(PartyFactory* factory) {
 }
 
 extern "C" __declspec(dllexport) void* GetModBuildings() {

@@ -106,7 +106,7 @@ ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。
 
 ## 政府资产列表
 
-政府没有独立的类（`Party::Government()`只是个值），资产列表放在`Society`：`AddGovernmentAsset`/`SetGovernmentAssets`/
+政府没有独立的类（`Holder::Government()`只是个值），资产列表放在`Society`：`AddGovernmentAsset`/`SetGovernmentAssets`/
 `GetGovernmentAssets`，只存`Estate`/`Vehicle`的`Asset*`，不拥有所有权、不存档。目前只有`stated`(公有)的不动产，
 由`ForeverFrameworkActor::EnsureAssetsGenerated`把`Map::GetStatedEstateAssets()`整体交进来；暂无政府载具。
 
@@ -131,7 +131,7 @@ ForeverFrameworkActor.md`"统一的Change消费入口：`ApplyChange`"一节。
 企业资金为负即倒闭，员工全部裁掉（变失业者）；股东凑齐资金后重启，岗位恢复满编并由每天的再就业（`Society::MatchUnemployed`）重新招人，规则见`economy.md`。`MatchUnemployed`每天把在场的成年无工作者随机配对到开放空缺（`Job::IsOpen()`），`RecruitCitizens`是它的开局入口。`Organization`的倒闭标记和重启后更新的股东名单随社会段存档。
 
 ## 资金（Step 3）
-- `Society`持有一个`Ledger`（`ledger.h`，全城账户，总和恒为0）、一份`GovernmentPolicy`（`policy.h`）、政府负债簿`Treasury`（存款/国债，`treasury.h`）和股市`Market`（`market.h`）。`GovernmentNetRatio()`=政府净头寸/开局注资，负反馈用它。
+- `Society`持有一个`Ledger`（`ledger.h`，全城账户，总和恒为0）、一个指向`GovernmentPolicy`的绑定指针（`polit/policy.h`；政策值由政治域`Polit`持有并在`Bind`时经`Society::BindPolicy`绑定，没有绑定时退回Society内部的兜底实例，所以econ等不建Polit的测试照常运行；`GetPolicy()`始终返回当前生效的那份，调用点不用改，见`polit/polit.md`）、政府负债簿`Treasury`（存款/国债，`treasury.h`）和股市`Market`（`market.h`）。`GovernmentNetRatio()`=政府净头寸/开局注资，负反馈用它。
 - `OwnerOf(room)`：房间所在Component被哪个组织claim，就归哪个组织；没有组织占用的房间归政府。结算货款时用它把
   Industry流水里的仓库/工坊对应到付款方，索引按`organizations`惰性重建。
 - 开局注资和货款结算见`settlement.md`。账本余额写进社会段（市民/组织按下标引用）。

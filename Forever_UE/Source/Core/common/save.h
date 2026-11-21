@@ -124,6 +124,7 @@ struct SaveWorld {
 	const Traffic* traffic = nullptr;
 	const Story* story = nullptr;
 	const Player* player = nullptr;
+	const Polit* polit = nullptr;
 };
 
 class SaveGame {

@@ -110,6 +110,7 @@
     <ClCompile Include="suite_route.cpp" />
     <ClCompile Include="suite_green.cpp" />
     <ClCompile Include="econ_report.cpp" />
+    <ClCompile Include="suite_polit.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="test_framework.h" />

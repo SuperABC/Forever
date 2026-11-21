@@ -10,6 +10,8 @@
 #include "populace/populace_save.h"
 #include "society/society.h"
 #include "society/society_save.h"
+#include "polit/polit.h"
+#include "polit/polit_save.h"
 #include "traffic/traffic.h"
 #include "industry/industry.h"
 #include "industry/industry_save.h"
@@ -71,6 +73,7 @@ namespace {
 		world.map = framework->GetMap();
 		world.populace = framework->GetPopulace();
 		world.society = framework->GetSociety();
+		world.polit = framework->GetPolit();
 		world.industry = framework->GetIndustry();
 		world.traffic = framework->GetTraffic();
 		world.story = framework->GetStory();
@@ -349,6 +352,12 @@ namespace {
 				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: society load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
 			}
 
+			Polit* restoredPolit = (current.polit && restoredPopulace && restoredSociety)
+				? PolitSaveCodec::Load(first, *restoredMap, *restoredPopulace, *restoredSociety, error) : nullptr;
+			if (current.polit && restoredPopulace && restoredSociety && !restoredPolit) {
+				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: polit load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
+			}
+
 			Industry* restoredIndustry = current.industry ? IndustrySaveCodec::Load(first, *restoredMap, error) : nullptr;
 			if (current.industry && !restoredIndustry) {
 				UE_LOG(LogTemp, Error, TEXT("Forever.SaveRoundTrip: industry load failed: %s"), UTF8_TO_TCHAR(error.c_str()));
@@ -376,6 +385,7 @@ namespace {
 			restoredWorld.map = restoredMap;
 			restoredWorld.populace = restoredPopulace;
 			restoredWorld.society = restoredSociety;
+			restoredWorld.polit = restoredPolit;
 			restoredWorld.industry = restoredIndustry;
 			restoredWorld.traffic = restoredTraffic;
 			restoredWorld.story = restoredStory;
@@ -389,6 +399,7 @@ namespace {
 			delete restoredStory;
 			delete restoredTraffic;
 			delete restoredIndustry;
+			delete restoredPolit;
 			delete restoredSociety;
 			delete restoredPopulace;
 			delete restoredMap;

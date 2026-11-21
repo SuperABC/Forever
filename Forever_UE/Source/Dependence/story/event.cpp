@@ -1670,3 +1670,71 @@ pair<bool, ValueType> FleeEndEvent::GetLocalValue(const string& key) const {
 const std::string& FleeEndEvent::GetName() const { return name; }
 const std::string& FleeEndEvent::GetFrom() const { return from; }
 const std::string& FleeEndEvent::GetReason() const { return reason; }
+
+MeetingStartEvent::MeetingStartEvent(std::string party, std::string address, std::string home) :
+	party(move(party)), address(move(address)), home(move(home)) {
+
+}
+
+MeetingStartEvent::~MeetingStartEvent() {
+
+}
+
+const string& MeetingStartEvent::GetType() const {
+	static const string type = "meeting_start";
+	return type;
+}
+
+bool MeetingStartEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<MeetingStartEvent*>(e);
+	if (!party.empty() && ToString(EvaluateExpression(party, context)) != other->party) return false;
+	if (!address.empty() && ToString(EvaluateExpression(address, context)) != other->address) return false;
+	return true;
+}
+
+pair<bool, ValueType> MeetingStartEvent::GetLocalValue(const string& key) const {
+	if (key == "party") return { true, ValueType(party) };
+	if (key == "address") return { true, ValueType(address) };
+	if (key == "home") return { true, ValueType(home) };
+	return { false, ValueType() };
+}
+
+const std::string& MeetingStartEvent::GetParty() const { return party; }
+const std::string& MeetingStartEvent::GetAddress() const { return address; }
+const std::string& MeetingStartEvent::GetHome() const { return home; }
+
+MeetingEndEvent::MeetingEndEvent(std::string party, std::string address, std::string home) :
+	party(move(party)), address(move(address)), home(move(home)) {
+
+}
+
+MeetingEndEvent::~MeetingEndEvent() {
+
+}
+
+const string& MeetingEndEvent::GetType() const {
+	static const string type = "meeting_end";
+	return type;
+}
+
+bool MeetingEndEvent::Match(Event* e, const ScriptContext& context) {
+	if (!Event::Match(e, context)) return false;
+
+	auto* other = static_cast<MeetingEndEvent*>(e);
+	if (!party.empty() && ToString(EvaluateExpression(party, context)) != other->party) return false;
+	if (!address.empty() && ToString(EvaluateExpression(address, context)) != other->address) return false;
+	return true;
+}
+
+pair<bool, ValueType> MeetingEndEvent::GetLocalValue(const string& key) const {
+	if (key == "party") return { true, ValueType(party) };
+	if (key == "address") return { true, ValueType(address) };
+	if (key == "home") return { true, ValueType(home) };
+	return { false, ValueType() };
+}
+
+const std::string& MeetingEndEvent::GetParty() const { return party; }
+const std::string& MeetingEndEvent::GetAddress() const { return address; }
+const std::string& MeetingEndEvent::GetHome() const { return home; }

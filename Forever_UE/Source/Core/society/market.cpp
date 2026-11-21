@@ -51,7 +51,7 @@ namespace {
 
 int64_t Market::Price(const Ledger& ledger, const Organization* organization) const {
 	if (!organization || organization->IsBankrupt()) return 0;
-	int64_t fundamental = max(kMinPrice, ledger.Balance(Party::Of(organization)) / organization->GetTotalShares());
+	int64_t fundamental = max(kMinPrice, ledger.Balance(Holder::Of(organization)) / organization->GetTotalShares());
 	auto it = quotes.find(organization);
 	double factor = it != quotes.end() ? it->second.priceFactor : 1.0;
 	return max(kMinPrice, static_cast<int64_t>(llround(static_cast<double>(fundamental) * factor)));
@@ -102,7 +102,7 @@ Market::ClearReport Market::Clear(Ledger& ledger, const vector<Organization*>& o
 		vector<int64_t> buyQty;
 		if (auto it = bidsBy.find(organization); it != bidsBy.end()) Merge(it->second, buyers, buyQty);
 		for (size_t k = 0; k < buyers.size(); k++) {
-			int64_t cash = max<int64_t>(0, ledger.Balance(Party::Of(buyers[k])));
+			int64_t cash = max<int64_t>(0, ledger.Balance(Holder::Of(buyers[k])));
 			buyQty[k] = min(buyQty[k], cash / price);
 		}
 
@@ -145,11 +145,11 @@ Market::ClearReport Market::Clear(Ledger& ledger, const vector<Organization*>& o
 				while (s < sellers.size() && sellLeft[s] <= 0) s++;
 				int64_t chunk = 0;
 				Citizen* sellerCitizen = nullptr;
-				Party seller = Party::Of(organization);
+				Holder seller = Holder::Of(organization);
 				if (s < sellers.size()) {
 					chunk = min(buyLeft[b], sellLeft[s]);
 					sellerCitizen = sellers[s];
-					seller = Party::Of(sellerCitizen);
+					seller = Holder::Of(sellerCitizen);
 					sellLeft[s] -= chunk;
 				}
 				else if (treasuryLeft > 0) {
@@ -159,7 +159,7 @@ Market::ClearReport Market::Clear(Ledger& ledger, const vector<Organization*>& o
 				else {
 					break;
 				}
-				ledger.Transfer(Party::Of(buyers[b]), seller, chunk * price, Flow::STOCK_TRADE);
+				ledger.Transfer(Holder::Of(buyers[b]), seller, chunk * price, Flow::STOCK_TRADE);
 				organization->AdjustShares(buyers[b], chunk);
 				if (sellerCitizen) organization->AdjustShares(sellerCitizen, -chunk);
 				buyLeft[b] -= chunk;
@@ -179,7 +179,7 @@ int64_t Market::SellAllToTreasury(Ledger& ledger, Organization* organization, Ci
 	int64_t shares = organization->SharesOf(citizen);
 	if (shares <= 0) return 0;
 	int64_t payment = shares * Price(ledger, organization);
-	ledger.Transfer(Party::Of(organization), Party::Of(citizen), payment, Flow::STOCK_TRADE);
+	ledger.Transfer(Holder::Of(organization), Holder::Of(citizen), payment, Flow::STOCK_TRADE);
 	organization->AdjustShares(citizen, -shares);
 	return payment;
 }

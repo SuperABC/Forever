@@ -2,7 +2,7 @@
 
 ## 职责
 
-`Basic.dll`的**运行时导出入口**：把Basic里所有默认mod(地形/路网/分区/建筑/绿化/组合/房间/姓名/调度/工作/组织/脚本/产品/仓库/工坊/线路/站点/载具/资产/应用/小游戏/武器，共22个concept)按concept注册进各自的`Factory`。没有对应的`basic.h`。
+`Basic.dll`的**运行时导出入口**：把Basic里所有默认mod(地形/路网/分区/建筑/绿化/组合/房间/姓名/调度/工作/组织/脚本/产品/仓库/工坊/线路/站点/载具/资产/应用/小游戏/武器，共23个concept)按concept注册进各自的`Factory`。没有对应的`basic.h`。
 
 ## 关键设计
 
@@ -29,3 +29,6 @@
 
 ## 视频公司(2026-11-16)
 `organization_video_company`(认领1~2个`component_office`，日薪150元，提供质量0.1/价格10元的`video`服务，产能=在岗人数x20份/天)+`job_video_maker`(`room_office`，10:00上班20:00下班，脚本`Resource/Story/job_video_maker.script`)。见各自的.md。
+
+## 党派与会议室(2026-11-21)
+`polit/party_republican`(共和党：涨税涨福利减移民)、`polit/party_democratic`(民主党：减税减福利涨移民)，共用工具`polit/party_common`；每个党12名党员、每月1号12:00~15:00党代会，提议目标值是文件顶部宏，占位初值等调参。`map/room_meeting`+`map/component_meeting`是党派会议室(双拼twin住宅楼1、2楼的single槽)。注册走`GetModParties/RegisterModParties/FinishModParties`。政治域设计见`Core/polit/polit.md`，config.json的`party_mods`启用。

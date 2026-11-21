@@ -8,6 +8,7 @@
 #include "map/roadnet_mod.h"
 #include "map/zone_mod.h"
 #include "map/green_mod.h"
+#include "polit/party_mod.h"
 #include "map/building_mod.h"
 #include "map/component_mod.h"
 #include "map/room_mod.h"
@@ -103,6 +104,26 @@ public:
 
 	static float GetPowerFree() { return 0.f; }
 	static float GetPowerLinked() { return 0.f; }
+
+private:
+	std::string lastName;
+public:
+	// 存档保存/恢复命名计数器count，见Source/Dependence/common/mod_state.md。
+	virtual int GetInstanceCounter() const override { return count; }
+	virtual void SetInstanceCounter(int value) override { count = value; }
+private:
+	static int count;
+};
+
+class EmptyParty : public PartyMod {
+public:
+	FOREVER_MOD_GENERIC_UNIT_TEST("party")
+	EmptyParty() { lastName = std::string("empty") + std::to_string(count++); }
+
+	static const char* GetId() { return "party_empty"; }
+	virtual const char* GetType() const override { return "party_empty"; }
+	virtual const char* GetName() override { return lastName.c_str(); }
+	// memberCount保持0：没有党员、没有提议、没有党代会、没有会议室。
 
 private:
 	std::string lastName;

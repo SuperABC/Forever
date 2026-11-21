@@ -135,6 +135,16 @@ C++广播出来的**事件实例**（字段是字面量）。`Script::MatchEvent
 `use_asset`(无过滤字段)：玩家在背包里"使用"一件可用资产(`AssetMod::usable`非0)时，由`UInventoryWidget::HandleUse`调`NotifyUseAsset`发出，只发给这件资产自己的脚本(没有脚本不发)，同步处理完才扣数量/销毁。
 脚本里读`$$local.asset`(资产名)、`$$local.type`(资产mod id)、`$$local.user`(使用者市民姓名)。用法：`Resource/Story/asset_burger.script`(`use_asset`→`add_satiety`)。
 
+## meeting_start / meeting_end（2026-11-21）
+
+- 党代会开始/结束。Core(`Polit::Step`)只产出通知队列，UE层(`ForeverFrameworkActor`的`onPoliticsTicked`)取走后对每个在城党员(跳过玩家操控的市民)
+  调`UForeverStoryFrameworkComponent::BroadcastMeeting`，**只发给该党员自己的Scheduler脚本**。执政党执政期间不开党代会。
+- 过滤字段`party`(党派mod id)、`address`(会议室地址)都可省略(留空=不限)。
+  `$$local`：`party`、`address`(会议室地址，没有会议室时为空串)、`home`(收到事件的这个党员的家的地址；脚本里没有"家"关键字，回家用它)。
+- `start`在党代会开始时发；`end`在到场统计和党首选举结算之后发。
+- 公共脚本`citizen_common.script`的里程碑：`common_meeting_start`(`address`非空时记`self.meeting_party`并`npc_navigate`到会议室)、
+  `common_meeting_end`(`self.meeting_party`非空时`npc_navigate`回`$$local.home`，再清记录)。
+
 ## citizen_injured / flee_start / flee_end（2026-11-19）
 
 - `citizen_injured`：市民受伤没死(单体/范围伤害都发，不区分)，发给主脚本和受伤者自己的Scheduler脚本(同`citizen_decease`)。过滤字段`name/attacker/weapon/part`可省略。

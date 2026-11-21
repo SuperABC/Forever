@@ -25,6 +25,9 @@
     <Filter Include="player">
       <UniqueIdentifier>{F8FD286C-7D43-48EF-AA32-7EE34C3BBC00}</UniqueIdentifier>
     </Filter>
+    <Filter Include="polit">
+      <UniqueIdentifier>{9af7b9d0-0862-49b8-bf86-c9b2129ca582}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="common\config.cpp">
@@ -69,8 +72,8 @@
     <ClCompile Include="society\emigration.cpp">
       <Filter>society</Filter>
     </ClCompile>
-    <ClCompile Include="society\policy.cpp">
-      <Filter>society</Filter>
+    <ClCompile Include="polit\policy.cpp">
+      <Filter>polit</Filter>
     </ClCompile>
     <ClCompile Include="society\settlement.cpp">
       <Filter>society</Filter>
@@ -225,6 +228,27 @@
     <ClCompile Include="story\story.cpp">
       <Filter>story</Filter>
     </ClCompile>
+    <ClCompile Include="polit\party.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\power.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\polit.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\election.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\congress.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\polit_log.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\polit_save.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\class.h">
@@ -275,8 +299,8 @@
     <ClInclude Include="society\emigration.h">
       <Filter>society</Filter>
     </ClInclude>
-    <ClInclude Include="society\policy.h">
-      <Filter>society</Filter>
+    <ClInclude Include="polit\policy.h">
+      <Filter>polit</Filter>
     </ClInclude>
     <ClInclude Include="society\settlement.h">
       <Filter>society</Filter>
@@ -430,6 +454,21 @@
     </ClInclude>
     <ClInclude Include="story\story.h">
       <Filter>story</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\party.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\power.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\polit.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\polit_log.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\polit_save.h">
+      <Filter>polit</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

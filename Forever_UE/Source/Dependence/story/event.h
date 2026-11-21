@@ -1041,3 +1041,46 @@ private:
 	std::string from;
 	std::string reason;
 };
+
+// 党代会开始/结束：只发给该党每个党员自己的Scheduler脚本(Core产出通知队列，UE层转发，见Core/polit/polit.md)。
+// $$local：party(党派mod名)、address(会议室地址，没有会议室时为空串)、home(收到事件的这个党员的家的地址，UE层广播时填)。过滤字段两个都可省略(留空=不限)。
+// start在党代会开始时发，end在结算完到场统计和党首选举之后发。
+class MeetingStartEvent : public Event {
+public:
+	MeetingStartEvent(std::string party = std::string(), std::string address = std::string(), std::string home = std::string());
+
+	virtual ~MeetingStartEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	const std::string& GetParty() const;
+	const std::string& GetAddress() const;
+	const std::string& GetHome() const;
+
+private:
+	std::string party;
+	std::string address;
+	std::string home; // 收到事件的这个党员的家(UE层广播时填，不参与Match)，脚本散会后用$$local.home回家
+};
+
+class MeetingEndEvent : public Event {
+public:
+	MeetingEndEvent(std::string party = std::string(), std::string address = std::string(), std::string home = std::string());
+
+	virtual ~MeetingEndEvent();
+
+	virtual const std::string& GetType() const override;
+	virtual bool Match(Event* e, const ScriptContext& context) override;
+	virtual std::pair<bool, ValueType> GetLocalValue(const std::string& name) const override;
+
+	const std::string& GetParty() const;
+	const std::string& GetAddress() const;
+	const std::string& GetHome() const;
+
+private:
+	std::string party;
+	std::string address;
+	std::string home;
+};

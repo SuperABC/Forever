@@ -565,6 +565,31 @@ void UForeverStoryFrameworkComponent::BroadcastNpcArrive(Citizen* citizen, const
 	npcArriveDepth--;
 }
 
+void UForeverStoryFrameworkComponent::BroadcastMeeting(Citizen* citizen, bool bStart, const string& party, const string& address) {
+	if (!story || !GEngine || !citizen || !citizen->GetScheduler()) return;
+
+	AForeverFrameworkActor* framework = Cast<AForeverFrameworkActor>(GetOwner());
+	PostImplement postImplement(
+		framework ? framework->GetMap() : nullptr,
+		framework ? framework->GetPopulace() : nullptr,
+		framework ? framework->GetSociety() : nullptr,
+		story,
+		framework ? framework->GetIndustry() : nullptr,
+		framework ? framework->GetTraffic() : nullptr,
+		framework ? framework->GetPlayer() : nullptr);
+
+	// 家的地址随事件带给脚本($$local.home)：散会后npc_navigate回家用，脚本里没有"家"这个关键字。
+	const string home = citizen->GetRoom() ? citizen->GetRoom()->GetAddress() : string();
+	if (bStart) {
+		MeetingStartEvent event(party, address, home);
+		BroadcastToScript(event, citizen->GetScheduler()->GetScript(), postImplement);
+	}
+	else {
+		MeetingEndEvent event(party, address, home);
+		BroadcastToScript(event, citizen->GetScheduler()->GetScript(), postImplement);
+	}
+}
+
 void UForeverStoryFrameworkComponent::BroadcastExecuteTask(Citizen* citizen, const string& task, const string& destination) {
 	if (!story || !GEngine || !citizen || !citizen->GetJob()) return;
 

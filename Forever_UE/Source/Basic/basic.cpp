@@ -137,6 +137,11 @@
 #include "player/weapon_shotgun.h"
 #include "player/weapon_sniper.h"
 #include "player/weapon_rpg.h"
+#include "map/room_meeting.h"
+#include "map/component_meeting.h"
+#include "polit/party_factory.h"
+#include "polit/party_republican.h"
+#include "polit/party_democratic.h"
 
 #pragma comment(lib, "Dependence.lib")
 
@@ -159,7 +164,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ ResidenceMiddleZone::GetId(), { ResidenceMiddleBuilding::GetId() } },
 		{ ResidenceLowZone::GetId(), { ResidenceLowBuilding::GetId() } },
 
-		{ ResidenceHighBuilding::GetId(), { ResidenceComponent::GetId(), RestaurantComponent::GetId(), ResidenceRoom::GetId(), RestaurantRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 电梯脚本；地下室停车库
+		{ ResidenceHighBuilding::GetId(), { ResidenceComponent::GetId(), RestaurantComponent::GetId(), MeetingComponent::GetId(), ResidenceRoom::GetId(), RestaurantRoom::GetId(), MeetingRoom::GetId(), ParkingRoom::GetId(), kScriptEmpty } }, // 电梯脚本；地下室停车库；twin的1/2楼single是党派会议室
 		{ ResidenceMiddleBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ ResidenceLowBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ CommerceHighBuilding::GetId(), { ShopComponent::GetId(), ShopRoom::GetId(), WarehouseRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
@@ -302,6 +307,21 @@ extern "C" __declspec(dllexport) void RegisterModGreens(GreenFactory* factory) {
 extern "C" __declspec(dllexport) void FinishModGreens(GreenFactory* factory) {
 }
 
+extern "C" __declspec(dllexport) void* GetModParties() {
+	static vector<string> mods = { RepublicanParty::GetId(), DemocraticParty::GetId() };
+	return (void*)&mods;
+}
+extern "C" __declspec(dllexport) void RegisterModParties(PartyFactory* factory) {
+	factory->RegisterParty(RepublicanParty::GetId(),
+		[](const std::string&) -> PartyMod* { return new RepublicanParty(); },
+		[](PartyMod* m) { delete m; });
+	factory->RegisterParty(DemocraticParty::GetId(),
+		[](const std::string&) -> PartyMod* { return new DemocraticParty(); },
+		[](PartyMod* m) { delete m; });
+}
+extern "C" __declspec(dllexport) void FinishModParties(PartyFactory* factory) {
+}
+
 extern "C" __declspec(dllexport) void* GetModBuildings() {
 	static vector<string> mods = {
 		ResidenceHighBuilding::GetId(), ResidenceMiddleBuilding::GetId(), ResidenceLowBuilding::GetId(),
@@ -394,7 +414,7 @@ extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factor
 
 extern "C" __declspec(dllexport) void* GetModComponents() {
 	static vector<string> mods = { ResidenceComponent::GetId(), ShopComponent::GetId(), RestaurantComponent::GetId(), ManufactureComponent::GetId(), OfficeComponent::GetId(),
-		TrainStationComponent::GetId(), AirportComponent::GetId() };
+		TrainStationComponent::GetId(), AirportComponent::GetId(), MeetingComponent::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* factory) {
@@ -419,6 +439,9 @@ extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* fa
 	factory->RegisterComponent(AirportComponent::GetId(),
 		[](const std::string&) -> ComponentMod* { return new AirportComponent(); },
 		[](ComponentMod* m) { delete m; });
+	factory->RegisterComponent(MeetingComponent::GetId(),
+		[](const std::string&) -> ComponentMod* { return new MeetingComponent(); },
+		[](ComponentMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModComponents(ComponentFactory* factory) {
 }
@@ -427,7 +450,7 @@ extern "C" __declspec(dllexport) void* GetModRooms() {
 	static vector<string> mods = {
 		ResidenceRoom::GetId(), OfficeRoom::GetId(), ShopRoom::GetId(), RestaurantRoom::GetId(), WarehouseRoom::GetId(), ParkingRoom::GetId(),
 		FarmRoom::GetId(), RanchRoom::GetId(), FoodFactoryRoom::GetId(),
-		TrainStationRoom::GetId(), AirportRoom::GetId()
+		TrainStationRoom::GetId(), AirportRoom::GetId(), MeetingRoom::GetId()
 	};
 	return (void*)&mods;
 }
@@ -464,6 +487,9 @@ extern "C" __declspec(dllexport) void RegisterModRooms(RoomFactory* factory) {
 		[](RoomMod* m) { delete m; });
 	factory->RegisterRoom(AirportRoom::GetId(),
 		[](const std::string&) -> RoomMod* { return new AirportRoom(); },
+		[](RoomMod* m) { delete m; });
+	factory->RegisterRoom(MeetingRoom::GetId(),
+		[](const std::string&) -> RoomMod* { return new MeetingRoom(); },
 		[](RoomMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModRooms(RoomFactory* factory) {

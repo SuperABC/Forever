@@ -17,7 +17,7 @@
 - **做成 GameInstance 子系统**：读档要跨一次 `OpenLevel`，`pendingLoad` 必须活过关卡切换；
   `AForeverFrameworkActor::FetchActiveLoad` 开局时 `ConsumePendingLoad()` 取走（GameMode 找出生点时就会触发，比
   `BeginPlay` 早，见 `ForeverFrameworkActor.md`）。
-- **保存**：从当前关卡里的 `AForeverFrameworkActor` 取 Map/Populace/Society/Traffic/Story 组成 `SaveWorld` 传给
+- **保存**：从当前关卡里的 `AForeverFrameworkActor` 取 Map/Populace/Society/Polit/Traffic/Story 组成 `SaveWorld` 传给
   `SaveGame::BuildArchive`，再写 UE 段(JSON：玩家操控的市民 `controlledCitizen`、车辆 `controlledVehicle`、位置朝向
   `pawnX/Y/Z/pawnYaw`、视角 `controlPitch/controlYaw`、`weaponSlot`、`magazineAmmo`)；
   保存前先等后台寻路线程停下(`WaitForPendingPathfinding`)，再把场景里市民Actor的位置写回Core(`SyncPositionsToCore`，正在走路的市民存即时状态——剩余路径、目的地、速度，并记下每个市民是否已实例化，读档后按存档先把已实例化的市民全部生成出来；Actor在走的临时交给Core行进模拟，存完用`RestoreAfterSave`还原)；

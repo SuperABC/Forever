@@ -22,6 +22,9 @@
     <Filter Include="player">
       <UniqueIdentifier>{6C60759F-9BA0-4865-ACA2-0416D122AA87}</UniqueIdentifier>
     </Filter>
+    <Filter Include="polit">
+      <UniqueIdentifier>{3c470af8-1f72-4c7d-8bf8-c1d4eb81c7f5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="basic.cpp" />
@@ -378,6 +381,21 @@
     </ClCompile>
     <ClCompile Include="player\weapon_rpg.cpp">
       <Filter>player</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\party_common.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\party_republican.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="polit\party_democratic.cpp">
+      <Filter>polit</Filter>
+    </ClCompile>
+    <ClCompile Include="map\room_meeting.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_meeting.cpp">
+      <Filter>map</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -740,6 +758,21 @@
     </ClInclude>
     <ClInclude Include="player\weapon_rpg.h">
       <Filter>player</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\party_common.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\party_republican.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="polit\party_democratic.h">
+      <Filter>polit</Filter>
+    </ClInclude>
+    <ClInclude Include="map\room_meeting.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_meeting.h">
+      <Filter>map</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

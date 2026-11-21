@@ -22,6 +22,7 @@
 #include "player/app_factory.h"
 #include "player/puzzle_factory.h"
 #include "player/weapon_factory.h"
+#include "polit/party_factory.h"
 
 #include "common/loader.h"
 
@@ -30,7 +31,7 @@
 #include <vector>
 
 
-// 22个concept的mod注册表(全局单例)，设计见registry.md
+// 23个concept的mod注册表(全局单例)，设计见registry.md
 class Registry {
 public:
 	static Registry& Get();
@@ -76,16 +77,18 @@ public:
 	PuzzleFactory& GetPuzzleFactory() { return puzzleFactory; }
 	WeaponFactory& GetWeaponFactory() { return weaponFactory; }
 
+	PartyFactory& GetPartyFactory() { return partyFactory; }
+
 private:
 	Registry();
 
-	// 对paths里的dll做22个concept的RegisterConcept，成功加载的记进loadedDllPaths
+	// 对paths里的dll做23个concept的RegisterConcept，成功加载的记进loadedDllPaths
 	void RegisterMods(const std::vector<std::string>& paths);
 
 	// 已经成功加载并注册过的dll路径，RefreshMods只处理不在这里的。
 	std::unordered_set<std::string> loadedDllPaths;
 
-	// 必须活得比22个Factory一样长(creator/deleter指向dll代码段)
+	// 必须活得比23个Factory一样长(creator/deleter指向dll代码段)
 	ModLoader modLoader;
 
 	TerrainFactory terrainFactory;
@@ -116,5 +119,7 @@ private:
 	AppFactory appFactory;
 	PuzzleFactory puzzleFactory;
 	WeaponFactory weaponFactory;
+
+	PartyFactory partyFactory;
 
 };

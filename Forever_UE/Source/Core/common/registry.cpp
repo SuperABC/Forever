@@ -45,6 +45,7 @@ void Registry::RegisterMods(const vector<string>& mods) {
 	modLoader.RegisterConcept<AppFactory>(mods, "RegisterModApps", "FinishModApps", &appFactory);
 	modLoader.RegisterConcept<PuzzleFactory>(mods, "RegisterModPuzzles", "FinishModPuzzles", &puzzleFactory);
 	modLoader.RegisterConcept<WeaponFactory>(mods, "RegisterModWeapons", "FinishModWeapons", &weaponFactory);
+	modLoader.RegisterConcept<PartyFactory>(mods, "RegisterModParties", "FinishModParties", &partyFactory);
 	modLoader.RegisterConcept<NameFactory>(mods, "RegisterModNames", "FinishModNames", &nameFactory);
 	modLoader.RegisterConcept<SchedulerFactory>(mods, "RegisterModSchedulers", "FinishModSchedulers", &schedulerFactory);
 	modLoader.RegisterConcept<JobFactory>(mods, "RegisterModJobs", "FinishModJobs", &jobFactory);
@@ -96,6 +97,7 @@ void Registry::ReloadModArgs() {
 	appFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("app_mods")));
 	puzzleFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("puzzle_mods")));
 	weaponFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("weapon_mods")));
+	partyFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("party_mods")));
 	nameFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("name_mods")));
 	schedulerFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("scheduler_mods")));
 	jobFactory.SetModArgs(ExtractSeeds(Config::GetConceptMods("job_mods")));
@@ -114,6 +116,7 @@ bool Registry::CheckModRegistered(const string& id) const {
 		|| roadnetFactory.CheckRegistered(id)
 		|| zoneFactory.CheckRegistered(id)
 		|| greenFactory.CheckRegistered(id)
+		|| partyFactory.CheckRegistered(id)
 		|| buildingFactory.CheckRegistered(id)
 		|| componentFactory.CheckRegistered(id)
 		|| roomFactory.CheckRegistered(id)

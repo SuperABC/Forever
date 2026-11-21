@@ -141,6 +141,7 @@
     <ClCompile Include="traffic\route_mod.cpp" />
     <ClCompile Include="traffic\station_mod.cpp" />
     <ClCompile Include="traffic\vehicle_mod.cpp" />
+    <ClCompile Include="polit\party_factory.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\error.h" />
@@ -204,6 +205,9 @@
     <ClInclude Include="traffic\route_factory.h" />
     <ClInclude Include="traffic\station_factory.h" />
     <ClInclude Include="traffic\vehicle_factory.h" />
+    <ClInclude Include="polit\party_mod.h" />
+    <ClInclude Include="polit\party_factory.h" />
+    <ClInclude Include="polit\policy_ids.h" />
 </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

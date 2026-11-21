@@ -33,12 +33,12 @@ int64_t Treasury::TotalBonds() const {
 }
 
 int64_t Treasury::NetPosition(const Ledger& ledger) const {
-	return ledger.Balance(Party::Government()) - TotalDeposits() - TotalBonds();
+	return ledger.Balance(Holder::Government()) - TotalDeposits() - TotalBonds();
 }
 
 void Treasury::Deposit(Ledger& ledger, Citizen* citizen, int64_t amount) {
 	if (!citizen || amount <= 0) return;
-	ledger.Transfer(Party::Of(citizen), Party::Government(), amount, Flow::DEPOSIT);
+	ledger.Transfer(Holder::Of(citizen), Holder::Government(), amount, Flow::DEPOSIT);
 	deposits[citizen] += amount;
 }
 
@@ -46,7 +46,7 @@ int64_t Treasury::Withdraw(Ledger& ledger, Citizen* citizen, int64_t amount) {
 	auto it = deposits.find(citizen);
 	if (it == deposits.end() || amount <= 0) return 0;
 	int64_t taken = min(amount, it->second);
-	ledger.Transfer(Party::Government(), Party::Of(citizen), taken, Flow::WITHDRAW);
+	ledger.Transfer(Holder::Government(), Holder::Of(citizen), taken, Flow::WITHDRAW);
 	it->second -= taken;
 	if (it->second <= 0) deposits.erase(it);
 	return taken;
@@ -54,7 +54,7 @@ int64_t Treasury::Withdraw(Ledger& ledger, Citizen* citizen, int64_t amount) {
 
 void Treasury::Subscribe(Ledger& ledger, Citizen* citizen, int64_t amount, int rateBp, int termDays) {
 	if (!citizen || amount <= 0) return;
-	ledger.Transfer(Party::Of(citizen), Party::Government(), amount, Flow::BOND_ISSUE);
+	ledger.Transfer(Holder::Of(citizen), Holder::Government(), amount, Flow::BOND_ISSUE);
 	bonds.push_back({ citizen, amount, rateBp, day + termDays });
 }
 
@@ -65,7 +65,7 @@ int64_t Treasury::RedeemBonds(Ledger& ledger, Citizen* citizen) {
 			i++;
 			continue;
 		}
-		ledger.Transfer(Party::Government(), Party::Of(citizen), bonds[i].principal, Flow::BOND_REPAY);
+		ledger.Transfer(Holder::Government(), Holder::Of(citizen), bonds[i].principal, Flow::BOND_REPAY);
 		total += bonds[i].principal;
 		bonds.erase(bonds.begin() + i);
 	}
@@ -79,7 +79,7 @@ int64_t Treasury::RepayMatured(Ledger& ledger) {
 			i++;
 			continue;
 		}
-		ledger.Transfer(Party::Government(), Party::Of(bonds[i].holder), bonds[i].principal, Flow::BOND_REPAY);
+		ledger.Transfer(Holder::Government(), Holder::Of(bonds[i].holder), bonds[i].principal, Flow::BOND_REPAY);
 		total += bonds[i].principal;
 		bonds.erase(bonds.begin() + i);
 	}
@@ -90,9 +90,9 @@ Treasury::Interest Treasury::PayInterest(Ledger& ledger, const GovernmentPolicy&
 	Interest result;
 	auto pay = [&](Citizen* citizen, int64_t interest, Flow flow, int64_t& sum) {
 		if (interest <= 0) return;
-		ledger.Transfer(Party::Government(), Party::Of(citizen), interest, flow);
+		ledger.Transfer(Holder::Government(), Holder::Of(citizen), interest, flow);
 		int64_t tax = policy.Tax(interest, policy.incomeTaxPercent);
-		ledger.Transfer(Party::Of(citizen), Party::Government(), tax, Flow::INCOME_TAX);
+		ledger.Transfer(Holder::Of(citizen), Holder::Government(), tax, Flow::INCOME_TAX);
 		sum += interest;
 		result.tax += tax;
 	};

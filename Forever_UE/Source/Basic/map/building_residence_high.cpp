@@ -163,7 +163,7 @@ void ResidenceHighBuilding::LayoutTwin(int direction, const Quad& quad) {
 	constexpr float lowSize = 400.f; // 1、2楼联排房间面积
 	footprint = DepthLimitedFootprint(direction, quad, 4.f);
 
-	// 地下1层停车库pg+；1楼fg+-、2楼fl+-各2个single+1个row(row切成400㎡的房间，1楼的row是餐厅，每个房间独立一个component_restaurant)；3楼起奇数楼fo+-、偶数楼fe+-，各4个row(联排)。电梯贯穿地下到顶层。
+	// 地下1层停车库pg+；1楼fg+-、2楼fl+-各2个single(room_meeting党派会议室)+1个row(row切成400㎡的房间，1楼的row是餐厅，每个房间独立一个component_restaurant)；3楼起奇数楼fo+-、偶数楼fe+-，各4个row(联排)。电梯贯穿地下到顶层。
 	AssignFloor(-1, "preset_residence_twin_pg+", direction); // 楼梯用默认的Stair_Return
 	AssignRoom(-1, 0, "room_parking", kComponent, kComponentId);
 	AssignParking(-1, 0, 0, 0.4f, { "car" });
@@ -176,7 +176,8 @@ void ResidenceHighBuilding::LayoutTwin(int direction, const Quad& quad) {
 		AssignFloor(level, templateName, direction);
 		if (level <= 1) {
 			for (int slot = 0; slot < 2; slot++) {
-				AssignRoom(level, slot, "room_residence", kComponent, kComponentId);
+				// 1、2楼的两个single是党派会议室(党派mod通过post random room挑其中一间)，不再是住宅。
+				AssignRoom(level, slot, "room_meeting", "component_meeting", 0);
 			}
 			if (level == 0) ArrangeRowEach(level, 0, "room_restaurant", lowSize, "component_restaurant");
 			else ArrangeRow(level, 0, "room_residence", lowSize, kComponent, kComponentId);

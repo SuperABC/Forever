@@ -7,23 +7,23 @@
 
 using namespace std;
 
-int64_t& Ledger::Slot(const Party& party) {
+int64_t& Ledger::Slot(const Holder& party) {
 	switch (party.kind) {
-	case Party::GOVERNMENT: return government;
-	case Party::CITIZEN: return citizens[static_cast<const Citizen*>(party.ref)];
-	case Party::ORGANIZATION: return organizations[static_cast<const Organization*>(party.ref)];
+	case Holder::GOVERNMENT: return government;
+	case Holder::CITIZEN: return citizens[static_cast<const Citizen*>(party.ref)];
+	case Holder::ORGANIZATION: return organizations[static_cast<const Organization*>(party.ref)];
 	default: return outside;
 	}
 }
 
-int64_t Ledger::Balance(const Party& party) const {
+int64_t Ledger::Balance(const Holder& party) const {
 	switch (party.kind) {
-	case Party::GOVERNMENT: return government;
-	case Party::CITIZEN: {
+	case Holder::GOVERNMENT: return government;
+	case Holder::CITIZEN: {
 		auto it = citizens.find(static_cast<const Citizen*>(party.ref));
 		return it != citizens.end() ? it->second : 0;
 	}
-	case Party::ORGANIZATION: {
+	case Holder::ORGANIZATION: {
 		auto it = organizations.find(static_cast<const Organization*>(party.ref));
 		return it != organizations.end() ? it->second : 0;
 	}
@@ -69,11 +69,11 @@ const char* FlowName(Flow flow) {
 	}
 }
 
-int64_t Ledger::FlowTotal(Flow kind, Party::Kind from, Party::Kind to) const {
+int64_t Ledger::FlowTotal(Flow kind, Holder::Kind from, Holder::Kind to) const {
 	return flowTotals[static_cast<size_t>(kind) * 16 + static_cast<size_t>(from) * 4 + static_cast<size_t>(to)];
 }
 
-void Ledger::Transfer(const Party& from, const Party& to, int64_t amount, Flow kind) {
+void Ledger::Transfer(const Holder& from, const Holder& to, int64_t amount, Flow kind) {
 	if (amount <= 0) return;
 	if (from.kind == to.kind && from.ref == to.ref) return;
 	flowTotals[static_cast<size_t>(kind) * 16 + static_cast<size_t>(from.kind) * 4 + static_cast<size_t>(to.kind)] += amount;

@@ -1,7 +1,7 @@
 # empty_mods.h / mod_empty.cpp
 
 ## 职责
-外部Mod示例/占位DLL:20个concept各注册一个`Empty<Concept>`,id统一为`<concept>_empty`(如`room_empty`、`script_empty`)。不含玩法内容,用来验证`config.json`→`Config`→`ModLoader`→mod DLL这条加载与参数传递链路,同时是新写一个外部Mod时可抄的最小骨架。
+外部Mod示例/占位DLL:22个concept各注册一个`Empty<Concept>`,id统一为`<concept>_empty`(如`room_empty`、`script_empty`)。不含玩法内容,用来验证`config.json`→`Config`→`ModLoader`→mod DLL这条加载与参数传递链路,同时是新写一个外部Mod时可抄的最小骨架。
 
 ## 关键设计
 - `mod_empty.cpp`导出每个concept的`GetMod<Concept>s`/`RegisterMod<Concept>s`/`FinishMod<Concept>s`三件套,以及`GetModDependencies`(每个id都声明无依赖)。`Register`里只登记creator/deleter(以及该concept要求的静态函数指针),`Finish`为空。creator/deleter是DLL内的lambda,销毁走本DLL的`delete`,符合跨DLL内存安全约定。
@@ -12,7 +12,7 @@
 - `EmptyScript::WrapScript`是唯一带真实逻辑的占位:`AutoCopy`后用`FindLabel("control")`找到`PlaceHolderChange{label:"control"}`(如`Resource/Story/test.json`里`game_start`那个milestone的最后一项),向Core Post查询`"random citizen"`,把姓名写进成员`controlChange`,再原地替换`actionStack.back()`里的占位。`controlChange`是mod自己长期持有的成员,不会被delete,符合"mod塞进actionStack的指针必须由mod长期维护"的约定(见`script_mod.md`)。
 
 ## 依赖关系
-- 依赖:`Source/Dependence`全部20个concept的`<Concept>Mod`/`<Concept>Factory`头文件,链接`Dependence.lib`(`#pragma comment(lib)`);不依赖Core、不依赖UE。
+- 依赖:`Source/Dependence`全部22个concept的`<Concept>Mod`/`<Concept>Factory`头文件,链接`Dependence.lib`(`#pragma comment(lib)`);不依赖Core、不依赖UE。
 - 不在`Framework.sln`里,Dependence公共头文件变动后需单独重编(见CONVENTIONS第9节)。
 
 ## 待办/后续阶段

@@ -25,11 +25,11 @@
 using namespace std;
 
 namespace {
-	const char* AccountName(Party::Kind kind) {
+	const char* AccountName(Holder::Kind kind) {
 		switch (kind) {
-		case Party::OUTSIDE: return "外部";
-		case Party::GOVERNMENT: return "政府";
-		case Party::CITIZEN: return "个人";
+		case Holder::OUTSIDE: return "外部";
+		case Holder::GOVERNMENT: return "政府";
+		case Holder::CITIZEN: return "个人";
 		default: return "组织";
 		}
 	}
@@ -103,8 +103,8 @@ Reporter::Snapshot Reporter::Take() const {
 	Snapshot snapshot;
 	const Ledger& ledger = society.GetLedger();
 	snapshot.flows = ledger.GetFlowTotals();
-	snapshot.government = ledger.Balance(Party::Government());
-	snapshot.outside = ledger.Balance(Party::Outside());
+	snapshot.government = ledger.Balance(Holder::Government());
+	snapshot.outside = ledger.Balance(Holder::Outside());
 	snapshot.citizens = ledger.CitizensTotal();
 	snapshot.organizations = ledger.OrganizationsTotal();
 	return snapshot;
@@ -129,8 +129,8 @@ map<string, double> Reporter::DailyCapacity(bool onlyOpen) const {
 	map<string, double> capacity;
 	for (const auto& [name, manufacture] : industry.GetManufactures()) {
 		if (onlyOpen) {
-			Party owner = society.OwnerOf(industry.GetManufactureRoom(manufacture));
-			if (owner.kind == Party::ORGANIZATION && static_cast<const Organization*>(owner.ref)->IsBankrupt()) continue;
+			Holder owner = society.OwnerOf(industry.GetManufactureRoom(manufacture));
+			if (owner.kind == Holder::ORGANIZATION && static_cast<const Organization*>(owner.ref)->IsBankrupt()) continue;
 		}
 		for (const auto& [type, batches] : manufacture->GetTargets()) {
 			const Product* product = industry.FindProduct(type);
@@ -245,7 +245,7 @@ void Reporter::PrintCity() {
 	Out("住宅: 有人住的房间 %d 间, 共 %d 户(其中多户合住的房间 %d 间)\n", residentRooms, households, multi);
 }
 
-void Reporter::PrintFlows(const Snapshot& begin, const Snapshot& end, Party::Kind account) {
+void Reporter::PrintFlows(const Snapshot& begin, const Snapshot& end, Holder::Kind account) {
 	// 某账户类别在该时期各类别的总收入/总支出。
 	int64_t incomeTotal = 0, expenseTotal = 0;
 	vector<pair<string, int64_t>> incomes, expenses;
@@ -272,21 +272,21 @@ void Reporter::PrintFlows(const Snapshot& begin, const Snapshot& end, Party::Kin
 void Reporter::PrintGovernment(const Snapshot& begin, const Snapshot& end) {
 	Out("---- 政府 ----\n");
 	Out("  期初余额 %s\n", Yuan(begin.government).c_str());
-	PrintFlows(begin, end, Party::GOVERNMENT);
+	PrintFlows(begin, end, Holder::GOVERNMENT);
 	Out("  期末余额 %s\n", Yuan(end.government).c_str());
 }
 
 void Reporter::PrintOutside(const Snapshot& begin, const Snapshot& end) {
 	Out("---- 外部(城市外) ----\n");
 	Out("  期初余额 %s\n", Yuan(begin.outside).c_str());
-	PrintFlows(begin, end, Party::OUTSIDE);
+	PrintFlows(begin, end, Holder::OUTSIDE);
 	Out("  期末余额 %s (负数=累计净流入城市的资金)\n", Yuan(end.outside).c_str());
 }
 
 void Reporter::PrintCitizens(const Snapshot& begin, const Snapshot& end) {
 	Out("---- 个人(全体市民合计) ----\n");
 	Out("  期初存款合计 %s\n", Yuan(begin.citizens).c_str());
-	PrintFlows(begin, end, Party::CITIZEN);
+	PrintFlows(begin, end, Holder::CITIZEN);
 	Out("  期末存款合计 %s\n", Yuan(end.citizens).c_str());
 
 	// 净资产分布：活期余额+存款+国债本金。
@@ -294,7 +294,7 @@ void Reporter::PrintCitizens(const Snapshot& begin, const Snapshot& end) {
 	const Treasury& treasury = society.GetTreasury();
 	vector<int64_t> balances;
 	for (Citizen* citizen : populace.GetCitizens()) {
-		if (citizen->IsActive()) balances.push_back(ledger.Balance(Party::Of(citizen)) + treasury.DepositOf(citizen) + treasury.BondsOf(citizen));
+		if (citizen->IsActive()) balances.push_back(ledger.Balance(Holder::Of(citizen)) + treasury.DepositOf(citizen) + treasury.BondsOf(citizen));
 	}
 	if (balances.empty()) return;
 	sort(balances.begin(), balances.end());
@@ -339,7 +339,7 @@ void Reporter::PrintCitizens(const Snapshot& begin, const Snapshot& end) {
 		if (!citizen->IsActive()) continue;
 		int age = citizen->GetAge(year);
 		int g = age < society.GetPolicy().adultAge ? 0 : age >= 60 ? 3 : citizen->GetJob() ? 1 : 2;
-		int64_t cash = ledger.Balance(Party::Of(citizen));
+		int64_t cash = ledger.Balance(Holder::Of(citizen));
 		int64_t worth = cash + treasury.DepositOf(citizen) + treasury.BondsOf(citizen);
 		groups[g].count++;
 		groups[g].cash += cash;
@@ -359,14 +359,14 @@ void Reporter::PrintCitizens(const Snapshot& begin, const Snapshot& end) {
 void Reporter::PrintOrganizations(const Snapshot& begin, const Snapshot& end) {
 	Out("---- 组织(全体合计) ----\n");
 	Out("  期初资金合计 %s\n", Yuan(begin.organizations).c_str());
-	PrintFlows(begin, end, Party::ORGANIZATION);
+	PrintFlows(begin, end, Holder::ORGANIZATION);
 	Out("  期末资金合计 %s\n", Yuan(end.organizations).c_str());
 
 	const Ledger& ledger = society.GetLedger();
 	vector<int64_t> balances;
 	int bankrupt = 0;
 	for (Organization* organization : society.GetOrganizations()) {
-		balances.push_back(ledger.Balance(Party::Of(organization)));
+		balances.push_back(ledger.Balance(Holder::Of(organization)));
 		if (organization->IsBankrupt()) bankrupt++;
 	}
 	if (balances.empty()) return;
@@ -509,8 +509,8 @@ void Reporter::PrintFinance(const string& title, const string& label, const Fina
 		static_cast<int>(treasury.GetBonds().size()), Yuan(totals.bondIssued).c_str(), Yuan(totals.bondRepaid).c_str(),
 		Yuan(totals.printed).c_str());
 	Out("  政府账户 %s, 净头寸 %s(账户−存款−国债); 城市外账户 %s; 税率系数 %.3f, 补助系数 %.3f\n",
-		Yuan(ledger.Balance(Party::Government())).c_str(), Yuan(treasury.NetPosition(ledger)).c_str(),
-		Yuan(ledger.Balance(Party::Outside())).c_str(), society.GetPolicy().taxFactor, society.GetPolicy().allowanceFactor);
+		Yuan(ledger.Balance(Holder::Government())).c_str(), Yuan(treasury.NetPosition(ledger)).c_str(),
+		Yuan(ledger.Balance(Holder::Outside())).c_str(), society.GetPolicy().taxFactor, society.GetPolicy().allowanceFactor);
 
 	FinanceRow row;
 	row.label = label;
@@ -522,7 +522,7 @@ void Reporter::PrintFinance(const string& title, const string& label, const Fina
 	row.deposits = treasury.TotalDeposits();
 	row.bonds = treasury.TotalBonds();
 	row.printed = totals.printed;
-	row.government = ledger.Balance(Party::Government());
+	row.government = ledger.Balance(Holder::Government());
 	row.net = treasury.NetPosition(ledger);
 	row.marketCap = cap;
 	row.avgPrice = avgPrice;
@@ -547,12 +547,12 @@ void Reporter::RecordSummaryRow(const string& label) {
 	const Treasury& treasury = society.GetTreasury();
 	// 存款和国债本金在账本上记在政府名下，这里归还给市民：个人合计含存款+国债，政府取扣除负债后的净额。
 	row.government = treasury.NetPosition(ledger);
-	row.outside = ledger.Balance(Party::Outside());
+	row.outside = ledger.Balance(Holder::Outside());
 	row.citizens = ledger.CitizensTotal() + treasury.TotalDeposits() + treasury.TotalBonds();
 	row.organizations = ledger.OrganizationsTotal();
 	for (Citizen* citizen : populace.GetCitizens()) {
 		if (!citizen->IsActive()) continue;
-		int64_t balance = ledger.Balance(Party::Of(citizen)) + society.GetTreasury().DepositOf(citizen) + society.GetTreasury().BondsOf(citizen);
+		int64_t balance = ledger.Balance(Holder::Of(citizen)) + society.GetTreasury().DepositOf(citizen) + society.GetTreasury().BondsOf(citizen);
 		if (balance < 2500 * 100) row.poor++;
 		else if (balance >= 10000 * 100) row.rich++;
 	}

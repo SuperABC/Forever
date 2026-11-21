@@ -15,6 +15,9 @@
 #include "industry/industry.h"
 #include "industry/product.h"
 
+#include <algorithm>
+#include <vector>
+
 
 using namespace std;
 
@@ -151,6 +154,33 @@ void PostImplement::Post(const JsonValue& request) {
 		}
 		result["result"] = "success";
 		result["addresses"] = addresses;
+		return;
+	}
+
+	// "random room"：从指定type的房间里随机挑一间，返回它的地址。先按地址排序再用当前随机流抽(底层容器无序，
+	// 不排序同种子结果就不可复现)。党派mod选会议室用，见polit/polit.md。
+	if (request.IsObject() && request["post"].AsString() == "random room") {
+		string type = request["type"].AsString();
+		if (!map) {
+			result["result"] = "fail";
+			result["msg"] = "no map available.";
+			return;
+		}
+		vector<string> addresses;
+		for (const auto& [name, building] : map->GetBuildings()) {
+			if (!building) continue;
+			for (Room* room : building->GetRooms()) {
+				if (room && room->GetType() == type) addresses.push_back(room->GetAddress());
+			}
+		}
+		if (addresses.empty()) {
+			result["result"] = "fail";
+			result["msg"] = "no room of type: " + type;
+			return;
+		}
+		sort(addresses.begin(), addresses.end());
+		result["result"] = "success";
+		result["address"] = addresses[static_cast<size_t>(GetRandom(static_cast<int>(addresses.size())))];
 		return;
 	}
 

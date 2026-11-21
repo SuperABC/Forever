@@ -15,6 +15,7 @@ class JobExperience;
 class Map;
 class Populace;
 class Society;
+class Polit;
 class Story;
 class Industry;
 class Traffic;
@@ -88,6 +89,9 @@ public:
 	// 社会:假定map/populace已生成,见society.md。
 	void EnsureSocietyGenerated();
 
+	// 政治域:假定map/populace/society已生成;新开局建党派/抽党员/选会议室,读档按polit段恢复。并把政策绑给Society,见Core/polit/polit.md。
+	void EnsurePolitGenerated();
+
 	// 玩家:假定populace已生成(开局时间=populace当前年份1月1日8点,见populace.md"生日换算")。
 	void EnsureAssetsGenerated(); // 不动产/载具资产：归属和人口/社会就绪后建，见ForeverFrameworkActor.md
 	void EnsurePlayerGenerated();
@@ -104,6 +108,7 @@ public:
 	Map* GetMap() const { return map; }
 	Populace* GetPopulace() const { return populace; }
 	Society* GetSociety() const { return society; }
+	Polit* GetPolit() const { return polit; }
 	Story* GetStory() const { return story; }
 	Industry* GetIndustry() const { return industry; }
 	Traffic* GetTraffic() const { return traffic; }
@@ -190,6 +195,7 @@ protected:
 	Populace* populace = nullptr;
 	Story* story = nullptr;
 	Society* society = nullptr;
+	Polit* polit = nullptr;
 	Industry* industry = nullptr;
 	Traffic* traffic = nullptr;
 	Player* player = nullptr;

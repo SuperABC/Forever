@@ -80,9 +80,9 @@ namespace {
 		// 分红：给第一个有股东的组织注入1万元利润，月初应先缴企业税(25%)再分红，股东再缴所得税。
 		for (Organization* organization : world.society->GetOrganizations()) {
 			if (organization->GetShareholders().empty()) continue;
-			const int64_t gap = organization->GetMod()->initialFunds - ledger.Balance(Party::Of(organization));
+			const int64_t gap = organization->GetMod()->initialFunds - ledger.Balance(Holder::Of(organization));
 			const int64_t profit = 1000000;
-			ledger.Transfer(Party::Outside(), Party::Of(organization), max<int64_t>(0, gap) + profit, Flow::INJECTION);
+			ledger.Transfer(Holder::Outside(), Holder::Of(organization), max<int64_t>(0, gap) + profit, Flow::INJECTION);
 			const DailyReport report = RunMonthStartDay(world, domains);
 			run.Check(report.month.settled, "dividend scenario: month settlement ran on the first day of the month");
 			run.Check(report.month.corporateTax >= profit * 25 / 100, "dividend scenario: corporate tax is at least 25% of the injected profit",
@@ -100,12 +100,12 @@ namespace {
 			for (Citizen* citizen : world.populace->GetCitizens()) {
 				if (enriched >= 12) break;
 				if (citizen->GetAge(world.populace->GetCurrentYear()) >= 18 && !citizen->IsDead()) {
-					ledger.Transfer(Party::Outside(), Party::Of(citizen), 3000000, Flow::INJECTION);
+					ledger.Transfer(Holder::Outside(), Holder::Of(citizen), 3000000, Flow::INJECTION);
 					enriched++;
 				}
 			}
-			ledger.Transfer(Party::Of(victim), Party::Outside(), ledger.Balance(Party::Of(victim)) + 5000000, Flow::INJECTION);
-			run.Check(ledger.Balance(Party::Of(victim)) < 0, "bankruptcy scenario: organization was driven into negative equity");
+			ledger.Transfer(Holder::Of(victim), Holder::Outside(), ledger.Balance(Holder::Of(victim)) + 5000000, Flow::INJECTION);
+			run.Check(ledger.Balance(Holder::Of(victim)) < 0, "bankruptcy scenario: organization was driven into negative equity");
 			Time next = *world.player->GetTime();
 			next.SetTime(0, 0, 0, 0);
 			next.AddDays(1);
@@ -136,6 +136,7 @@ void EconSuiteBody(TestWorld& world, const TestOptions& options) {
 	domains.traffic = world.traffic;
 	domains.story = world.story;
 	domains.player = world.player;
+	domains.polit = world.polit;
 	WorldStepHooks hooks; // 不注入：测试里脚本Change被忽略
 	// 本次模拟中迁入的市民(月报表里统计"迁入后又离城"用)。
 	unordered_set<const Citizen*> immigrantSet;
@@ -248,7 +249,7 @@ void EconSuiteBody(TestWorld& world, const TestOptions& options) {
 	// 逐人检查：没有NaN/极端资金，岗位互指。
 	int badFunds = 0, jobMismatch = 0;
 	for (Citizen* citizen : world.populace->GetCitizens()) {
-		const double funds = static_cast<double>(world.society->GetLedger().Balance(Party::Of(citizen)));
+		const double funds = static_cast<double>(world.society->GetLedger().Balance(Holder::Of(citizen)));
 		if (std::isnan(funds)) badFunds++;
 		if (citizen->GetJob() && citizen->GetJob()->GetOccupant() != citizen) jobMismatch++;
 	}

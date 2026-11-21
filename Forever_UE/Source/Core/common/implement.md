@@ -67,6 +67,11 @@ ForeverStoryFrameworkComponent.md`"PostImplement"一节。
   为空返回`{"result":"fail","msg":"no map available."}`。返回顺序不保证稳定（底层是无序容器）。
   地址可以直接给`Map::LocateRoom`/`LocateBuilding`、`npc_navigate`的`destination`用。
 
+- `request["post"] == "random room"`（党派mod在`PartyMod::ChooseMeetingRoom`里挑会议室用）：`request["type"]`是Room的mod type(如`room_meeting`)，
+  遍历`map`所有建筑的房间，把type匹配的房间地址**先排序再用`GetRandom`随机挑一个**(遍历顺序不稳定，排序后同一种子才可复现)，
+  成功返回`{"result":"success","address":"<地址>"}`，没有匹配的房间返回`{"result":"fail","msg":...}`；`map`为空同样fail。
+  不负责去重：Core(`Polit::Init`)拿到地址后自己校验有效且没被别的党占用，重叠就让mod重调，最多4次。
+
 - `request["post"] == "resource path"`（供mod读自己随包的数据文件，比如`puzzle_wxdj`的招式表
   `xiaohua.txt`）：`request["name"]`是带扩展名的文件名，交给`Config::GetResourceFilePath`在
   `resource_paths`配置的各根目录下递归找同名文件，成功返回`{"result":"success","path":"<绝对路径>"}`，

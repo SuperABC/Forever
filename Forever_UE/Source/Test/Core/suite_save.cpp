@@ -5,6 +5,8 @@
 
 #include "common/random.h"
 #include "common/save.h"
+#include "polit/polit.h"
+#include "polit/polit_save.h"
 #include "common/save_archive.h"
 #include "common/world_step.h"
 #include "map/map.h"
@@ -36,6 +38,7 @@ namespace {
 		save.traffic = world.traffic;
 		save.story = world.story;
 		save.player = world.player;
+		save.polit = world.polit;
 		return save;
 	}
 
@@ -48,6 +51,7 @@ namespace {
 		domains.traffic = world.traffic;
 		domains.story = world.story;
 		domains.player = world.player;
+		domains.polit = world.polit;
 		for (int day = 0; day < days; day++) {
 			Time next = *world.player->GetTime();
 			next.SetTime(0, 0, 0, 0);
@@ -206,6 +210,36 @@ namespace {
 		run.Note(string("society section whole-section identical=") + (da == db ? "yes" : "no (mod name counters)"));
 	}
 
+	// 政治域：先举行一次选举让执政党/权力/政策值有内容，再存-读-存，字节必须一致，关键字段读回相同。
+	void CheckPolitRoundTrip(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		if (!world.polit) return;
+		world.polit->HoldElection(*world.player->GetTime());
+		SaveArchive first;
+		PolitSaveCodec::Save(*world.polit, *world.populace, first);
+		string error;
+		Polit* restored = PolitSaveCodec::Load(first, *world.map, *world.populace, *world.society, error);
+		world.society->BindPolicy(&world.polit->GetPolicy()); // Load把Society绑到了新Polit，绑回原来的
+		run.Check(restored != nullptr, "polit section loads back", error);
+		if (!restored) return;
+		SaveArchive second;
+		PolitSaveCodec::Save(*restored, *world.populace, second);
+		run.Check(first.Find(SAVE_SECTION_POLIT)->data == second.Find(SAVE_SECTION_POLIT)->data, "polit section round trips byte-identical");
+		run.Check(restored->GetParties().size() == world.polit->GetParties().size(), "party count survives the round trip");
+		bool same = true;
+		for (const Party* party : world.polit->GetParties()) {
+			const Party* other = restored->FindParty(party->GetId());
+			if (!other || other->members != party->members || other->leader != party->leader || other->terms != party->terms ||
+				other->ruling != party->ruling || other->meetingAddress != party->meetingAddress || other->powers != party->powers) same = false;
+		}
+		run.Check(same, "party members/leader/terms/ruling/meeting room/powers survive the round trip");
+		const GovernmentPolicy& a = world.polit->GetPolicy();
+		const GovernmentPolicy& b = restored->GetPolicy();
+		run.Check(a.corporateTaxPercent == b.corporateTaxPercent && a.incomeTaxPercent == b.incomeTaxPercent &&
+			a.pension == b.pension && a.immigrationTargetRatio == b.immigrationTargetRatio, "policy values survive the round trip");
+		run.Check(world.society->GetPolicy().corporateTaxPercent == a.corporateTaxPercent, "society reads the policy owned by the polit domain");
+	}
+
 	void CheckRandomRestore(TestWorld& world) {
 		TestRun& run = TestRun::Get();
 		const SaveArchive archive = SaveGame::BuildArchive(ToSaveWorld(world));
@@ -244,6 +278,7 @@ void SaveSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckArchiveContainer(first);
 	CheckRandomRestore(world);
 	CheckPopulaceRoundTrip(world);
+	CheckPolitRoundTrip(world);
 	CheckFurnitureRoundTrip(world);
 	CheckRoomYawConvention(world);
 	CheckSocietyRoundTrip(world);

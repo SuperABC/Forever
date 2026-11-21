@@ -34,7 +34,8 @@
       "component_restaurant",
       "component_office",
       "component_airport",
-      "component_train_station"
+      "component_train_station",
+      "component_meeting"
    ],
    "dll_paths" : [
       "C:/Workspace/UE5/Projects/Forever/Forever_UE/x64/Release",
@@ -58,6 +59,7 @@
       "organization_manufacture",
       "organization_video_company"
    ],
+   "party_mods" : [ "party_republican", "party_democratic" ],
    "product_mods" : [ "product_wheat", "product_beef", "product_burger" ],
    "puzzle_mods" : [],
    "resource_paths" : [
@@ -80,7 +82,8 @@
       "room_restaurant",
       "room_warehouse",
       "room_airport",
-      "room_train_station"
+      "room_train_station",
+      "room_meeting"
    ],
    "route_mods" : [ "route_air", "route_train", "route_bus" ],
    "scheduler_mods" : [ "scheduler_basic" ],

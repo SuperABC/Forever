@@ -2,7 +2,7 @@
 
 ## 职责
 
-`AForeverFrameworkActor`是场景里唯一的Framework入口Actor：持有Core的7个顶层域对象(`Map`/`Populace`/`Society`/`Industry`/`Traffic`/`Story`/`Player`)，
+`AForeverFrameworkActor`是场景里唯一的Framework入口Actor：持有Core的8个顶层域对象(`Map`/`Populace`/`Society`/`Polit`/`Industry`/`Traffic`/`Story`/`Player`)，
 按域划分为13个`UForeverFrameworkComponent`子类(Asset/Building/Populace/Roadnet/Room/Sky/Story/Terrain/Traffic/Vegetation/Lamp/Weather/Zone，
 前面几个见`ForeverFrameworkComponent.md`对照表)，负责**分阶段生成世界**、**每帧Tick编排**和**Change分发**。`Map`不属于任何单一域组件，
 是Terrain/Zone/Building/Roadnet等共同读写的公共数据，所以放在Actor层面持有。没有"Global"域组件——串联各域的编排逻辑就落在这个Actor自己身上。
@@ -114,6 +114,12 @@ populace/society的Tick回调、`UForeverStoryFrameworkComponent::BroadcastGameS
 进度：`GetTimeSkipProgress`(已推进游戏秒/总秒)，黑屏进度条直接用。跳期间再触发jump_time被忽略。
 局限：走路用瞬移代替；`Traffic::elapsedSeconds`是float，超长跳(>约190天)精度下降；`StepWorld`开头把游戏年份同步给`Populace::currentYear`(`SetCurrentYear`，年龄随之增长)，常规Tick和跳时间共用。
 `StepWorld`/`TickPopulaceDomain`/`TickSocietyDomain`是从原Tick里抽出来的，顺序不能变。
+
+## 政治域(2026-11-21)
+- `EnsurePolitGenerated`(在`EnsureSocietyGenerated`之后)：设`SetPolitLogSink`(Core的政治日志落到`LogPolit`，PIE日志里搜"LogPolit"，每行自带游戏时间)；读档走`PolitSaveCodec::Load`(会议室地址按存档，不再重选)，失败退回新开局`Polit::Init`(党员/会议室一次性确定)。
+- `MakeWorldDomains`带上`polit`；`MakeStepHooks`的`onPoliticsTicked`取`polit->ConsumeMeetingNotices()`，对每个党员(跳过玩家操控的市民)调`UForeverStoryFrameworkComponent::BroadcastMeeting`。
+- 析构/`Reset`里`polit`先于`society`删除(Polit持有被Society绑定的政策值，Society不拥有它)。
+- PIE只验证第一天的党内选举(1号12:00党员去会议室、15:00散会选党首)，其它长期行为靠CoreTest的polit套件。
 
 ## 2026-11-16
 

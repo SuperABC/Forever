@@ -207,6 +207,11 @@
     <ClCompile Include="player\weapon_shotgun.cpp" />
     <ClCompile Include="player\weapon_sniper.cpp" />
     <ClCompile Include="player\weapon_rpg.cpp" />
+    <ClCompile Include="polit\party_common.cpp" />
+    <ClCompile Include="polit\party_republican.cpp" />
+    <ClCompile Include="polit\party_democratic.cpp" />
+    <ClCompile Include="map\room_meeting.cpp" />
+    <ClCompile Include="map\component_meeting.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\building_airport.h" />
@@ -329,6 +334,11 @@
     <ClInclude Include="player\weapon_shotgun.h" />
     <ClInclude Include="player\weapon_sniper.h" />
     <ClInclude Include="player\weapon_rpg.h" />
+    <ClInclude Include="polit\party_common.h" />
+    <ClInclude Include="polit\party_republican.h" />
+    <ClInclude Include="polit\party_democratic.h" />
+    <ClInclude Include="map\room_meeting.h" />
+    <ClInclude Include="map\component_meeting.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

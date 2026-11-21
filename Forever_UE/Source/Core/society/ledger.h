@@ -9,16 +9,16 @@
 
 
 // 一个账户的持有者：城市外、政府、某个市民、某个组织。
-struct Party {
+struct Holder {
 	enum Kind { OUTSIDE, GOVERNMENT, CITIZEN, ORGANIZATION };
 
 	Kind kind = OUTSIDE;
 	const void* ref = nullptr; // CITIZEN/ORGANIZATION时是对应对象的指针
 
-	static Party Outside() { return { OUTSIDE, nullptr }; }
-	static Party Government() { return { GOVERNMENT, nullptr }; }
-	static Party Of(const Citizen* citizen) { return { CITIZEN, citizen }; }
-	static Party Of(const Organization* organization) { return { ORGANIZATION, organization }; }
+	static Holder Outside() { return { OUTSIDE, nullptr }; }
+	static Holder Government() { return { GOVERNMENT, nullptr }; }
+	static Holder Of(const Citizen* citizen) { return { CITIZEN, citizen }; }
+	static Holder Of(const Organization* organization) { return { ORGANIZATION, organization }; }
 };
 
 // 每笔转账的类别，用于统计各类账户的收入/支出明细。
@@ -59,7 +59,7 @@ const char* FlowName(Flow flow); // 中文名
 class Ledger {
 	friend class SocietySaveCodec;
 public:
-	int64_t Balance(const Party& party) const;
+	int64_t Balance(const Holder& party) const;
 
 	// 开局外部给全城的注资总额(分，正数)，InitFunds注资完记下，是三重负反馈的基准。状态，随社会段存档。
 	int64_t GetInitialInjection() const { return initialInjection; }
@@ -69,10 +69,10 @@ public:
 
 	// from付给to amount分。amount<=0或者from==to不做任何事。不检查余额：账户可以变成负数
 	// （企业资金为负即倒闭，由上层判断）。
-	void Transfer(const Party& from, const Party& to, int64_t amount, Flow kind);
+	void Transfer(const Holder& from, const Holder& to, int64_t amount, Flow kind);
 
 	// 累计流水：某类别、从某类账户到某类账户的累计金额（分），报表用月初/月末两次快照相减得到当月值。
-	int64_t FlowTotal(Flow kind, Party::Kind from, Party::Kind to) const;
+	int64_t FlowTotal(Flow kind, Holder::Kind from, Holder::Kind to) const;
 	const std::array<int64_t, static_cast<size_t>(Flow::COUNT) * 16>& GetFlowTotals() const { return flowTotals; }
 
 	// 全部账户之和，正常情况下恒为0。
@@ -86,7 +86,7 @@ public:
 	const std::unordered_map<const Organization*, int64_t>& GetOrganizationBalances() const { return organizations; }
 
 private:
-	int64_t& Slot(const Party& party);
+	int64_t& Slot(const Holder& party);
 
 	std::array<int64_t, static_cast<size_t>(Flow::COUNT) * 16> flowTotals{}; // [类别][付款方类][收款方类]
 	int64_t outside = 0;

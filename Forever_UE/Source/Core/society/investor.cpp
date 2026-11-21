@@ -63,7 +63,7 @@ Investor::Summary Investor::Daily(Society& society, const vector<Citizen*>& citi
 		if (!CanInvest(citizen, now, policy.adultAge)) continue;
 		summary.deciders++;
 
-		int64_t cash = ledger.Balance(Party::Of(citizen));
+		int64_t cash = ledger.Balance(Holder::Of(citizen));
 		if (cash < policy.reserve) {
 			// 现金不够缓冲：先取存款，还不够就挂卖单，先卖股息率低的。
 			int64_t need = policy.reserve - cash;
@@ -147,7 +147,7 @@ int64_t Investor::SubscribeBonds(Society& society, const vector<Citizen*>& citiz
 	for (size_t offset = 0; offset < citizens.size() && raised < needed; offset++) {
 		Citizen* citizen = citizens[(start + offset) % citizens.size()];
 		if (!CanInvest(citizen, now, policy.adultAge)) continue;
-		int64_t surplus = ledger.Balance(Party::Of(citizen)) - policy.reserve;
+		int64_t surplus = ledger.Balance(Holder::Of(citizen)) - policy.reserve;
 		if (surplus <= 0) continue;
 		int64_t willing = static_cast<int64_t>(static_cast<double>(surplus) * (1.0 - Risk(citizen)) * 0.5);
 		int64_t amount = min(willing, needed - raised);

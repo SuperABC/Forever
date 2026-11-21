@@ -58,7 +58,7 @@ namespace {
 			else options.configPath = arg;
 		}
 		if (options.configPath.empty()) {
-			fprintf(stderr, "usage: CoreTest <config.json> [--suite random,mods,lint,world,econ,save,perform,route,green|all] [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]\n");
+			fprintf(stderr, "usage: CoreTest <config.json> [--suite random,mods,lint,world,econ,save,perform,route,green,polit|all] [--seed S|--seeds N] [--size N] [--months N] [--quick|--full] [--out dir]\n");
 			return false;
 		}
 		return true;
@@ -93,6 +93,7 @@ static int RealMain(int argc, char** argv) {
 		{ "perform", RunPerfSuite },
 		{ "route", RunRouteSuite },
 		{ "green", RunGreenSuite },
+		{ "polit", RunPolitSuite },
 	};
 
 	int totalFailures = 0, totalPasses = 0;

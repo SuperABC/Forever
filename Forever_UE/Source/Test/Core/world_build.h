@@ -24,6 +24,7 @@ struct TestWorld {
 	Traffic* traffic = nullptr;
 	Story* story = nullptr;
 	Player* player = nullptr;
+	Polit* polit = nullptr;
 	std::vector<WorldStage> stages;
 	int mapSize = 0;
 };

@@ -94,7 +94,7 @@
     <ClCompile Include="society\investor.cpp" />
     <ClCompile Include="society\emigration.cpp" />
     <ClCompile Include="society\immigration.cpp" />
-    <ClCompile Include="society\policy.cpp" />
+    <ClCompile Include="polit\policy.cpp" />
     <ClCompile Include="society\settlement.cpp" />
     <ClCompile Include="society\society.cpp" />
     <ClCompile Include="society\society_save.cpp" />
@@ -146,6 +146,13 @@
     <ClCompile Include="story\script.cpp" />
     <ClCompile Include="story\script_save.cpp" />
     <ClCompile Include="story\story.cpp" />
+    <ClCompile Include="polit\party.cpp" />
+    <ClCompile Include="polit\power.cpp" />
+    <ClCompile Include="polit\polit.cpp" />
+    <ClCompile Include="polit\election.cpp" />
+    <ClCompile Include="polit\congress.cpp" />
+    <ClCompile Include="polit\polit_log.cpp" />
+    <ClCompile Include="polit\polit_save.cpp" />
 </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common\class.h" />
@@ -164,7 +171,7 @@
     <ClInclude Include="society\investor.h" />
     <ClInclude Include="society\emigration.h" />
     <ClInclude Include="society\immigration.h" />
-    <ClInclude Include="society\policy.h" />
+    <ClInclude Include="polit\policy.h" />
     <ClInclude Include="society\settlement.h" />
     <ClInclude Include="society\society.h" />
     <ClInclude Include="society\society_save.h" />
@@ -216,6 +223,11 @@
     <ClInclude Include="story\script.h" />
     <ClInclude Include="story\script_save.h" />
     <ClInclude Include="story\story.h" />
+    <ClInclude Include="polit\party.h" />
+    <ClInclude Include="polit\power.h" />
+    <ClInclude Include="polit\polit.h" />
+    <ClInclude Include="polit\polit_log.h" />
+    <ClInclude Include="polit\polit_save.h" />
 </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

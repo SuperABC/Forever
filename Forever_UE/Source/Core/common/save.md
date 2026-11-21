@@ -28,6 +28,7 @@
 | `world.industry` | 产业（产品、仓储、制造） | `Source/Core/industry/industry_save.md` |
 | `world.populace` | 市民、班级、定时器、房产和住处归属 | `Source/Core/populace/populace_save.md` |
 | `world.society` | 组织、岗位、组织定时器 | `Source/Core/society/society_save.md` |
+| `world.polit` | 政策值、各党成员/党首/会议室/执政期数/党代会进度/权力 | `Source/Core/polit/polit_save.md` |
 | `world.traffic` | 站点、线路、车辆 | `Source/Core/traffic/traffic_save.md` |
 | `world.scripts` | 全部 Script 的状态 | `Source/Core/story/script_save.md` |
 | `world.player` | 时钟、生命值、物品、房间里的物品 | `Source/Core/player/player_save.md` |
@@ -92,7 +93,7 @@
   - `scripts` / `layouts`：资源检查用的脚本名和 `.layout` 模板名（模板名取自各建筑的 `GetFloorSpecs` 快照）。
   - `gameVersion`：只用于显示和排查。
 - **存档里不出现文件路径**：脚本、布局、mod 都只存名字和 id；`dll_paths/resource_paths` 不进存档。
-- **22 个 concept 的统一操作表**（`GetConceptOps`，用模板 + 成员函数指针生成）：枚举存活实例（计数器、状态版本）、临时建实例取状态版本、恢复计数器、检查是否已注册。
+- **23 个 concept 的统一操作表**（`GetConceptOps`，用模板 + 成员函数指针生成）：枚举存活实例（计数器、状态版本）、临时建实例取状态版本、恢复计数器、检查是否已注册。
 - **加载前校验分两步**：
   1. `ValidateArchive`（不改状态）：段版本 → manifest → 每个 `(concept, id)` 都有已发现的 DLL 提供 → 每个 mod 声明的依赖也在存档的 mod 集合里 → 脚本和布局资源都能在配置的目录里找到。资源检查前会先 `Config::RescanFiles`，因为文件列表是启动时扫描缓存的。
   2. `ApplyManifestConfig` 把存档的 mod 集合和剧情脚本设成当前 Config（只改内存，不写回 config.json），并 `ReloadModArgs`。之后做两项检查：

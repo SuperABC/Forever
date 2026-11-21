@@ -97,6 +97,7 @@ namespace {
 		domains.traffic = world.traffic;
 		domains.story = world.story;
 		domains.player = world.player;
+		domains.polit = world.polit;
 		vector<double> seconds;
 		const int days = options.quick ? 10 : 30;
 		for (int day = 0; day < days; day++) {

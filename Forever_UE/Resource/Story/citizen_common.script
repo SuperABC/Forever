@@ -10,6 +10,10 @@
 	//   - flee_end：reason是far/lost就导航回$$self.flee_dest，interrupted(被别的导航/任务/瞬移/死亡/玩家接管打断)不导航，
 	//     无论如何都清掉记录。
 	//   - citizen_decease：清掉记录。
+	//
+	// 党代会(Core/polit，只发给该党的党员)：
+	//   - meeting_start：有会议室($$local.address非空)就把党派记到$$self.meeting_party并导航过去；没有会议室什么都不做。
+	//   - meeting_end：散会，$$self.meeting_party非空(即之前真的去开会了)就导航回家$$local.home，然后清掉记录。
 	"milestones": [
 		{
 			"milestone": "common_injured",
@@ -59,7 +63,36 @@
 			"description": "",
 			"goal": "",
 			"changes": [
-				{ "type": "set_value", "variable": "self.flee_dest", "value": "\"\"" }
+				{ "type": "set_value", "variable": "self.flee_dest", "value": "\"\"" },
+				{ "type": "set_value", "variable": "self.meeting_party", "value": "\"\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "common_meeting_start",
+			"triggers": [ { "type": "meeting_start" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "set_value", "variable": "self.meeting_party", "value": "$$local.party", "condition": "$$local.address != \"\"" },
+				{ "type": "npc_navigate", "name": "$$self.name", "destination": "$$local.address", "condition": "$$local.address != \"\"" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "common_meeting_end",
+			"triggers": [ { "type": "meeting_end" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "npc_navigate", "name": "$$self.name", "destination": "$$local.home", "condition": "$$self.meeting_party != \"\" && $$local.home != \"\"" },
+				{ "type": "set_value", "variable": "self.meeting_party", "value": "\"\"" }
 			],
 			"dialogs": [],
 			"subsequences": []

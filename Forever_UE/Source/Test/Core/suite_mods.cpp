@@ -309,6 +309,7 @@ namespace {
 			{ "Apps", [&r](const string& id, ModOutcome& o) { RunMod(r.GetAppFactory(), &AppFactory::CreateApp, &AppFactory::DestroyApp, id, o); } },
 			{ "Puzzles", [&r](const string& id, ModOutcome& o) { RunMod(r.GetPuzzleFactory(), &PuzzleFactory::CreatePuzzle, &PuzzleFactory::DestroyPuzzle, id, o); } },
 			{ "Weapons", [&r](const string& id, ModOutcome& o) { RunMod(r.GetWeaponFactory(), &WeaponFactory::CreateWeapon, &WeaponFactory::DestroyWeapon, id, o); } },
+			{ "Parties", [&r](const string& id, ModOutcome& o) { RunMod(r.GetPartyFactory(), &PartyFactory::CreateParty, &PartyFactory::DestroyParty, id, o); } },
 		};
 	}
 }

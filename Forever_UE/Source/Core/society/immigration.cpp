@@ -20,7 +20,6 @@ using namespace std;
 namespace {
 	constexpr float kMaxRate = 0.005f; // r的上限
 	constexpr int kRateSteps = 10000;
-	constexpr double kTargetRatio = 1.5; // 目标人口 = 开局人口 × 1.5
 }
 
 vector<Citizen*> Immigration::Daily(Society& society, Populace& populace, Map& map, const Time& now) {
@@ -35,7 +34,8 @@ vector<Citizen*> Immigration::Daily(Society& society, Populace& populace, Map& m
 	}
 
 	double rate = kMaxRate * static_cast<double>(GetRandom(kRateSteps + 1)) / kRateSteps;
-	double expected = (kTargetRatio * x - y) * rate;
+	// 目标人口 = 开局人口 × 政策"移民目标比例"(默认1.5，由政治域调整)。
+	double expected = (society.GetPolicy().immigrationTargetRatio * x - y) * rate;
 	if (expected <= 0.0) return arrived;
 	int count = static_cast<int>(expected);
 	if (static_cast<double>(GetRandom(kRateSteps)) / kRateSteps < expected - count) count++;

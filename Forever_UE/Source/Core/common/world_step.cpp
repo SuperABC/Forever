@@ -11,6 +11,7 @@
 #include "traffic/traffic.h"
 #include "story/story.h"
 #include "player/player.h"
+#include "polit/polit.h"
 
 
 using namespace std;
@@ -64,6 +65,11 @@ DailyReport WorldStep::Step(const WorldDomains& domains, bool crossedDay, const 
 		for (Citizen* immigrant : Immigration::Daily(*domains.society, *domains.populace, *domains.map, now)) {
 			if (hooks.onImmigrated) hooks.onImmigrated(immigrant);
 		}
+	}
+	// 政治域每步都推进(不受crossedDay限制)：党代会按小时级时间窗口走。
+	if (domains.polit) {
+		domains.polit->Step(now);
+		if (hooks.onPoliticsTicked) hooks.onPoliticsTicked();
 	}
 	if (domains.traffic) {
 		domains.traffic->Tick(now, crossedDay, &post);

@@ -18,6 +18,7 @@ struct WorldDomains {
 	Traffic* traffic = nullptr;
 	Story* story = nullptr;
 	Player* player = nullptr;
+	Polit* polit = nullptr;
 };
 
 // 调用方(UE层/测试程序)注入的、Core看不到的那部分：怎么应用脚本产出的Change、离城/迁入的市民怎么处理。
@@ -32,6 +33,8 @@ struct WorldStepHooks {
 	std::function<void(Citizen*)> onImmigrated;
 	// Traffic::Tick之后、Story::Tick之前：UE层在这里消费公交停站事件，转发给载具脚本。
 	std::function<void()> onTrafficTicked;
+	// Polit::Step之后：UE层在这里取党代会开始/结束通知(Polit::ConsumeMeetingNotices)，转发给党员的脚本。
+	std::function<void()> onPoliticsTicked;
 };
 
 // 世界按时间推进一步的唯一实现，UE的AForeverFrameworkActor::StepWorld和测试程序共用，见world_step.md。

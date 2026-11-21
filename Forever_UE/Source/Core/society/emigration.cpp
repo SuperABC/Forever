@@ -13,7 +13,7 @@ using namespace std;
 
 int64_t Emigration::NetWorth(const Society& society, const Citizen* citizen) {
 	const Ledger& ledger = society.GetLedger();
-	int64_t worth = ledger.Balance(Party::Of(citizen)) + society.GetTreasury().DepositOf(citizen)
+	int64_t worth = ledger.Balance(Holder::Of(citizen)) + society.GetTreasury().DepositOf(citizen)
 		+ society.GetTreasury().BondsOf(citizen);
 	for (const Organization* organization : society.GetOrganizations()) {
 		int64_t shares = organization->SharesOf(citizen);
@@ -33,9 +33,9 @@ void Emigration::Depart(Society& society, const vector<Room*>& rooms, Citizen* c
 	society.GetTreasury().RedeemBonds(ledger, citizen);
 
 	// 余额归零：欠款由城市外账户核销，剩下的钱被带走。
-	int64_t balance = ledger.Balance(Party::Of(citizen));
-	if (balance < 0) ledger.Transfer(Party::Outside(), Party::Of(citizen), -balance, Flow::DEBT_WRITE_OFF);
-	else if (balance > 0) ledger.Transfer(Party::Of(citizen), Party::Outside(), balance, Flow::EMIGRATE);
+	int64_t balance = ledger.Balance(Holder::Of(citizen));
+	if (balance < 0) ledger.Transfer(Holder::Outside(), Holder::Of(citizen), -balance, Flow::DEBT_WRITE_OFF);
+	else if (balance > 0) ledger.Transfer(Holder::Of(citizen), Holder::Outside(), balance, Flow::EMIGRATE);
 
 	for (Room* room : rooms) {
 		if (room && room->GetOwner() == citizen) room->SetOwner(nullptr);

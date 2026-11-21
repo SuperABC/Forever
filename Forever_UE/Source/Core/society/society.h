@@ -7,7 +7,7 @@
 #include "story/script_factory.h"
 
 #include "society/ledger.h"
-#include "society/policy.h"
+#include "polit/policy.h"
 #include "society/treasury.h"
 #include "society/market.h"
 
@@ -75,8 +75,10 @@ public:
 	// 账本与财政参数，见ledger.h/policy.h。
 	Ledger& GetLedger() { return ledger; }
 	const Ledger& GetLedger() const { return ledger; }
-	const GovernmentPolicy& GetPolicy() const { return policy; }
-	GovernmentPolicy& GetPolicy() { return policy; } // 负反馈系数由Economy每天写入
+	// 政策值由政治域(Polit)持有，开局/读档后用BindPolicy绑定；没绑定时用Society自带的默认实例(不建Polit的测试照常)。
+	const GovernmentPolicy& GetPolicy() const { return boundPolicy ? *boundPolicy : ownPolicy; }
+	GovernmentPolicy& GetPolicy() { return boundPolicy ? *boundPolicy : ownPolicy; } // 负反馈系数由Economy每天写入
+	void BindPolicy(GovernmentPolicy* value) { boundPolicy = value; }
 	// 政府的存款/国债负债簿和股市，见treasury.h/market.h。
 	Treasury& GetTreasury() { return treasury; }
 	const Treasury& GetTreasury() const { return treasury; }
@@ -95,7 +97,7 @@ public:
 	const std::vector<Asset*>& GetGovernmentAssets() const { return governmentAssets; }
 
 	// 占用这个房间的组织（房间所在Component被哪个组织claim）；没有组织占用（或room为空）归政府。
-	Party OwnerOf(const Room* room) const;
+	Holder OwnerOf(const Room* room) const;
 
 private:
 	OrganizationFactory& organizationFactory;
@@ -105,7 +107,8 @@ private:
 	std::vector<Organization*> organizations; // 持有所有权
 
 	Ledger ledger;
-	GovernmentPolicy policy;
+	GovernmentPolicy ownPolicy;
+	GovernmentPolicy* boundPolicy = nullptr;
 	Treasury treasury;
 	Market market;
 	int lastMonthKey = 0;

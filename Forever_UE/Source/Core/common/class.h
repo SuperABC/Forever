@@ -65,3 +65,8 @@ class Player;
 class Asset;
 class EstateAsset;
 class VehicleAsset;
+
+// Polit
+
+class Polit;
+class Party;

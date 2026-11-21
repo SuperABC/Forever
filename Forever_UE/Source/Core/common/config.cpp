@@ -80,7 +80,13 @@ void Config::PruneUndiscoveredMods() {
 }
 
 string Config::ConceptKeyToJsonKey(const string& conceptKey) {
-	string singular = conceptKey.empty() ? conceptKey : conceptKey.substr(0, conceptKey.size() - 1);
+	// 去复数：Parties -> Party(以ies结尾改y)，其余去末字符(Terrains -> Terrain)。
+	string singular;
+	if (conceptKey.size() > 3 && conceptKey.compare(conceptKey.size() - 3, 3, "ies") == 0) {
+		singular = conceptKey.substr(0, conceptKey.size() - 3) + "y";
+	} else {
+		singular = conceptKey.empty() ? conceptKey : conceptKey.substr(0, conceptKey.size() - 1);
+	}
 	for (char& c : singular) {
 		c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
 	}
