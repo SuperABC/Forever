@@ -7,7 +7,7 @@
 - 材质：引擎Water插件的`Water_Material_CustomMesh`（`LoadObject`+`MaterialInstanceDynamic`）。`Content/Asset/Water/M_WaterSurface`是之前自建的水面材质，当前**不使用**。
 
 ## 每帧（`UpdateWaterParameters`）
-- 写`MPC_Water`：`WaterTime`、`WaterBaseLevel`（相机所在地形格水位×1000）。
+- 写`MPC_Water`：`WaterTime`、`WaterBaseLevel`（相机所在地形格水位×1000；所在格没水时写-1e9，让后处理判据永不成立，避免没水格的地下区域沿用旧水位出水下效果）。
 - 相机所在地形格有水（`GetWater`，带范围保护）→ `PP_Underwater`的blendable权重1，否则0（挂在Sky组件的PostProcessVolume上，`GetPostProcessVolume()`）。
 - 相机在所在格水面下（`kHideSurfaceDepth`=0）时把`oceanMesh`的相对缩放缩到1e-6（不用SetVisibility：它会重建整图mesh的渲染代理，相机在水面附近来回时严重掉帧且晚一帧）：水下看水面由后处理自己画，避免mesh自带的SSR反射。相机在水面上方时mesh始终显示（半水面画面从水上看水下正常）；曾取30cm，结果相机刚没入水面时mesh进场景深度、后处理的"穿出水面"判断和mesh深度打架导致闪烁、露出mesh的倒影，所以改成0。
 - 后处理判据：视线在近裁切面上的起点在水面下才加效果（见`Tools/WaterMaterial/README.md`）。

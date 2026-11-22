@@ -988,7 +988,8 @@ void Building::BuildParkingSlots() {
 
 		for (const ParkingSlotSpec& spec : specs) {
 			if (spec.parkingIndex < 0 || spec.parkingIndex >= static_cast<int>(parkings.size())) continue;
-			if (spec.spacing <= 0.f) continue;
+			if (spec.spacing == 0.f) continue;
+			const bool wholeRect = spec.spacing < 0.f; // 负数(约定-1)：整个矩形就是一个车位，不按宽度切
 			const Parking& parking = parkings[spec.parkingIndex];
 
 			// 沿垂直开口朝向的轴切：开口朝W/E时车位沿Y并排、深度沿X，N/S反之。车位数向下取整，
@@ -997,7 +998,7 @@ void Building::BuildParkingSlots() {
 			bool splitAlongY = (dir == FACE_WEST || dir == FACE_EAST);
 			float length = splitAlongY ? parking.GetSizeY() : parking.GetSizeX();
 			float depth = splitAlongY ? parking.GetSizeX() : parking.GetSizeY();
-			int count = static_cast<int>(floorf(length / spec.spacing + 1e-4f));
+			int count = wholeRect ? 1 : static_cast<int>(floorf(length / spec.spacing + 1e-4f));
 			if (count < 1) continue;
 			float width = length / count;
 

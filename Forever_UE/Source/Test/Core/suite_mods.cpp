@@ -1,6 +1,7 @@
 #include "suites.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 
@@ -395,6 +396,7 @@ void RunModsSuite(const TestOptions& options) {
 		Config::SetModEnabled(ck, id, false);
 		run.Check(Config::GetModArgs(ck, id) == "--a=1 --b", "mod args: kept in memory after disable");
 		Config::SetModArgs(ck, id, "--c");
+		std::filesystem::create_directories(options.outDir); // 手动运行时--out目录可能还不存在，写不出文件会让下面的检查误判
 		const string tmp = options.outDir + "/_modargs_test.json";
 		Config::WriteConfig(tmp);
 		{
@@ -408,7 +410,7 @@ void RunModsSuite(const TestOptions& options) {
 		{
 			ifstream in(tmp);
 			string text((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
-			run.Check(text.find(id + " --c") != string::npos, "mod args: enabled args are written to disk");
+			run.Check(text.find(id + " --c") != string::npos, "mod args: enabled args are written to disk", text.empty() ? "config file was not written (does the --out directory exist?)" : "");
 		}
 		remove(tmp.c_str());
 		Config::SetModArgs(ck, id, "");

@@ -100,6 +100,34 @@ namespace {
 			for (Room* room : building->GetRooms()) if (room->GetNavigationNode()) rooms.push_back(room);
 		}
 		run.Metric("pedestrian rooms", static_cast<double>(rooms.size()), "");
+		{
+			// 行人边全是双向的：a->b存在则b->a也必须存在，否则正反向寻路结果不同。
+			const NavGraph& graph = world.map->GetPedestrianNavGraph();
+			int asymmetric = 0;
+			for (const auto& [from, edges] : graph) {
+				for (const auto& [to, connection] : edges) {
+					bool reverseExists = false;
+					auto back = graph.find(to);
+					if (back != graph.end()) for (const auto& [target, c2] : back->second) if (target == from) { reverseExists = true; break; }
+					if (reverseExists) continue;
+					if (asymmetric++ < 8) {
+						const Node s = connection->GetStart(), e = connection->GetEnd();
+						run.Note("one-way pedestrian edge " + to_string(from) + " -> " + to_string(to) + " conn start=" + to_string(s.GetId()) + "(" + to_string(s.GetX()) + "," + to_string(s.GetY()) + ")"
+							+ " end=" + to_string(e.GetId()) + "(" + to_string(e.GetX()) + "," + to_string(e.GetY()) + ") len=" + to_string(connection->CalcDistance()));
+					}
+				}
+			}
+			run.Metric("pedestrian one-way edges", asymmetric, "");
+			run.Check(asymmetric == 0, "pedestrian graph edges are all two-way", to_string(asymmetric) + " one-way");
+			// 每个有导航节点的房间都必须接进行人图：不在图里的房间，作为终点永远NO_PATH，作为起点则退化成"取离原点最近的节点"算出凭空的路线。
+			int isolated = 0;
+			for (Room* room : rooms) {
+				if (graph.count(room->GetNavigationNode()->GetId()) > 0) continue;
+				if (isolated++ < 12) run.Note("room not connected to the pedestrian graph: " + room->GetAddress() + " (" + room->GetName() + ") node=" + to_string(room->GetNavigationNode()->GetId()));
+			}
+			run.Metric("pedestrian isolated rooms", isolated, "");
+			run.Check(isolated == 0, "every room with a navigation node is connected to the pedestrian graph", to_string(isolated) + " isolated");
+		}
 		run.Check(rooms.size() > 1, "world has rooms with pedestrian nodes");
 		if (rooms.size() < 2) return;
 		const int samples = options.quick ? 300 : 2000;
@@ -173,7 +201,13 @@ namespace {
 					ok = ok && fabs(lengthA - lengthB) <= 1e-3 * (1.0 + lengthB);
 				}
 			}
-			if (!ok) badReverse++;
+			if (!ok) {
+				badReverse++;
+				run.Note("reverse mismatch: " + pairs[i].first->GetAddress() + " (" + pairs[i].first->GetName() + ") -> " + pairs[i].second->GetAddress()
+					+ " (" + pairs[i].second->GetName() + ") forward status=" + to_string(static_cast<int>(forward.status)) + " points=" + to_string(forward.points.size())
+					+ " reverse status=" + to_string(static_cast<int>(plan.status)) + " points=" + to_string(plan.points.size())
+					+ " fromNode=" + to_string(pairs[i].first->GetNavigationNode()->GetId()) + " toNode=" + to_string(pairs[i].second->GetNavigationNode()->GetId()));
+			}
 		}
 		ReportDistribution("pedestrian route reverse(all)", reverseMs);
 		const Map::RouteCacheStats afterReverse = world.map->GetPedestrianRouteCacheStats();

@@ -8,31 +8,6 @@
 
 using namespace std;
 
-namespace {
-	// 把楼体压到靠近道路的一侧：深度方向只占bodyDepthSizeRatio、贴着道路那条边，剩下的深处空间
-	// 留给StationMod的站台/跑道，避免公共交通连线穿过楼体。bodyDepthCenterRatio按"贴道路=0、
-	// 远离道路=1"给，direction->深度轴的映射和station_common.cpp的NearRoadPoint一致(那边用
-	// 单点坐标，这里用区间(centerRatio,sizeRatio)，换算不同所以单独写一份)。
-	// bodyFrontageSizeRatio是沿道路方向的占比，不随direction变化。
-	BuildingFootprintSpec NearRoadFootprint(int direction, float bodyDepthCenterRatio,
-		float bodyDepthSizeRatio, float bodyFrontageSizeRatio) {
-		bool depthAlongX = (direction == FACE_WEST || direction == FACE_EAST);
-		// quad局部坐标+X东、+Y南：贴路边在EAST是x=1、SOUTH是y=1，所以这两个方向要翻转(NORTH/WEST贴的是0边)。
-		bool flip = (direction == FACE_EAST || direction == FACE_SOUTH);
-		float depthCenter = flip ? 1.f - bodyDepthCenterRatio : bodyDepthCenterRatio;
-
-		BuildingFootprintSpec spec;
-		if (depthAlongX) {
-			spec.centerRatioX = depthCenter; spec.sizeRatioX = bodyDepthSizeRatio;
-			spec.centerRatioY = 0.5f; spec.sizeRatioY = bodyFrontageSizeRatio;
-		} else {
-			spec.centerRatioY = depthCenter; spec.sizeRatioY = bodyDepthSizeRatio;
-			spec.centerRatioX = 0.5f; spec.sizeRatioX = bodyFrontageSizeRatio;
-		}
-		return spec;
-	}
-}
-
 int AirportBuilding::count = 0;
 
 AirportBuilding::AirportBuilding() : id(count++) {
@@ -45,21 +20,29 @@ const char* AirportBuilding::GetName() {
 
 void AirportBuilding::Layout(int& direction, const Quad& quad,
 	const std::unordered_map<int, Road*>& boundaryRoads) {
-	// 楼体贴路一侧(NearRoadFootprint)，深处留给AirStation::Layout的两条跑道(depthRatio 0.65/0.85)。
+	// 楼体占满整个Building区域(默认footprint，同火车站)，AirStation::Layout的两条跑道(depthRatio 0.7/0.9)因此落在楼体范围之内。
 	stationMod = "station_air";
-	footprint = NearRoadFootprint(direction, 0.18f, 0.35f, 0.6f);
+	footprint = BuildingFootprintSpec();   // 默认就是中心(0.5,0.5)、占满(1,1)
 	basements = 0;
-	layers = 1;
-	floorHeights.assign(1, 0.6f);
+	layers = 2;
+	floorHeights = { 0.6f, 0.6f };
 
 	constexpr const char* kComponent = "component_airport";
 	constexpr int kComponentId = 0;
-	// 专用模板：在普通single模板上加了两个停机位矩形(停机位在房间两侧外面，机头朝房间深处的跑道)，见building.md"停车位"。
-	AssignFloor(0, "preset_airport_single_fg", direction);
-	AssignRoom(0, 0, "room_airport", kComponent, kComponentId);
-	// 每个矩形只够一架飞机(间距6个地图单位以上才切出第二个)。
-	AssignParking(0, 0, 0, 0.6f, { "plane" });
-	AssignParking(0, 0, 1, 0.6f, { "plane" });
+	FloorAssetSpec assets;
+	assets.stairMeshPath = "/Game/Asset/Building/Mesh/Stair_Line.Stair_Line";
+	// 1楼大厅airport_fg+(10间房+2个停机坪+2台电梯井+楼梯)，2楼airport_fu-(2间房+2台电梯井)。
+	AssignFloor(0, "preset_airport_fg+", direction, assets);
+	AssignFloor(1, "preset_airport_fu-", direction, assets);
+	// 房间先全部是空房(1楼10个single槽位、2楼2个)；机场的业务房间以后再换。
+	for (int slot = 0; slot < 10; slot++) AssignRoom(0, slot, "room_empty", kComponent, kComponentId);
+	for (int slot = 0; slot < 2; slot++) AssignRoom(1, slot, "room_empty", kComponent, kComponentId);
+	// 1楼2个停机坪(layout的parkings 0~1，各自和single 0~1同一个矩形)：spacing=-1=整个矩形就是一个机位，
+	// 所以矩形多宽都只会有一架飞机(机场占地随地块变，不能靠固定间距凑)。机位归入矩形对应的空房。
+	for (int i = 0; i < 2; i++) AssignParking(0, i, i, -1.f, { "plane" });
+	// 两层各2台电梯，3台电梯井编号同layout的elevators。
+	AssignElevatorCabin(0, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
+	AssignElevatorCabin(1, -basements, layers - 1, "", "script_empty", { "elevator_basic" });
 }
 
 void AirportBuilding::Assign(const vector<Lot*>& lots, PlacementEmitFunc emit, void* context) {

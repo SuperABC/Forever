@@ -177,7 +177,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ OfficeMiddleBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ OfficeLowBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId(), kScriptEmpty } }, // 电梯脚本
-		{ AirportBuilding::GetId(), { AirportComponent::GetId(), AirportRoom::GetId() } },
+		{ AirportBuilding::GetId(), { AirportComponent::GetId(), kRoomEmpty, kScriptEmpty } }, // 房间先全是空房(room_airport暂不用)；电梯脚本
 		{ MoharBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
 
 		{ ShopRoom::GetId(), { kScriptEmpty } }, // 房间门脚本

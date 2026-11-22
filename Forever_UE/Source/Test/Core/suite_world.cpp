@@ -48,6 +48,30 @@ namespace {
 		return seen;
 	}
 
+	// 机场停机坪：layout的4个parkings矩形各只切一个机位(AssignParking spacing=-1)，每个机位停一架飞机；
+	// 恰好2个机位=2个矩形各一份，没有被切成多份。
+	void CheckAirportBays(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		int airports = 0, badCount = 0, unparked = 0;
+		for (const auto& [name, building] : world.map->GetBuildings()) {
+			if (string(building->GetType()) != "building_airport") continue;
+			airports++;
+			int planeSlots = 0;
+			for (Room* room : building->GetRooms()) {
+				for (ParkingSlot* slot : room->GetParkingSlots()) {
+					if (!slot->Accepts("plane")) continue;
+					planeSlots++;
+					if (!slot->parkedVehicle) unparked++;
+				}
+			}
+			if (planeSlots != 2) badCount++;
+		}
+		run.Metric("airports", airports, "");
+		if (airports == 0) return;
+		run.Check(badCount == 0, "every airport has exactly 2 plane bays (one slot per parking rect)", to_string(badCount) + " of " + to_string(airports) + " airports differ");
+		run.Check(unparked == 0, "every plane bay has a parked plane", to_string(unparked) + " empty");
+	}
+
 	// 车行导航图：每个停车位的导航节点必须和参照点双向连通(隧道出口方向、停车位单向的历史坑)。
 	void CheckVehicleConnectivity(TestWorld& world) {
 		TestRun& run = TestRun::Get();
@@ -353,6 +377,7 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckBuildings(world);
 	CheckTerrainSampling(world);
 	CheckVehicleConnectivity(world);
+	CheckAirportBays(world);
 	CheckVehicleEdgeGeometry(world);
 	RecordMemory("world: after connectivity checks"); // 寻路校验会填满寻路缓存和线程局部缓冲，这里能看到它们的内存
 	// 行道树/路灯总数(信息性，看roadnet mod有没有放；不同路网差异很大，不做通过条件)。

@@ -161,7 +161,9 @@ void UForeverWaterFrameworkComponent::UpdateWaterParameters() {
 			const UForeverSkyFrameworkComponent* lightSky = lightActor ? lightActor->GetSkyFramework() : nullptr;
 			const float referenceRadiance = lightSky ? lightSky->GetCurrentLightLux() * 0.5f / UE_PI : 10000.f;
 			ok &= instance->SetScalarParameterValue(TEXT("WaterLightScale"), referenceRadiance);
-			if (cameraInWaterCell) ok &= instance->SetScalarParameterValue(TEXT("WaterBaseLevel"), baseLevel);
+			// 相机所在格没水时把水面基准高度设成极低(-1e9)：后处理判据"视线起点低于水面"永远不成立，
+			// 不会拿着上一次进过的水格的旧水位，在没水格的地下区域也画出水下效果(权重极小的预热阶段同理)。
+			ok &= instance->SetScalarParameterValue(TEXT("WaterBaseLevel"), cameraInWaterCell ? baseLevel : -1.0e9f);
 			if (!ok && !bCollectionWarned) {
 				bCollectionWarned = true;
 				UE_LOG(LogTemp, Warning, TEXT("UForeverWaterFrameworkComponent: MPC_Water lacks WaterTime/WaterBaseLevel/WaterLightScale (rerun Tools/WaterMaterial/build_water_assets.py)."));
@@ -183,8 +185,13 @@ void UForeverWaterFrameworkComponent::UpdateWaterParameters() {
 			// 权重0时引擎整个跳过这个后处理，它的shader也就一直没被请求编译：第一次进水才开始编译，那几帧画面会异常(默认后处理)。
 			// 所以没编译完之前用一个极小的权重让它每帧"在用"，提前触发编译；编译完就回到0，没进水时不产生开销。
 			if (!bUnderwaterShaderReady) {
+#if WITH_EDITOR
+				// IsCompilationFinished是编辑器专用API(打包版编译不过)；打包版shader是烘焙好的，没有"等编译"这回事。
 				const FMaterialResource* resource = underwaterMaterial->GetMaterialResource(world->GetFeatureLevel());
 				if (resource && resource->IsCompilationFinished()) bUnderwaterShaderReady = true;
+#else
+				bUnderwaterShaderReady = true;
+#endif
 			}
 			const float weight = cameraInWaterCell ? 1.f : (bUnderwaterShaderReady ? 0.f : 0.001f);
 			if (weight != underwaterWeight) {

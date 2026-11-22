@@ -41,7 +41,7 @@
 `std::map<std::pair<int,int>, std::vector<ParkingSlotSpec>> parkings`：(楼层, single room slot) → 这个房间用的停车位矩形列表；
 `ParkingSlotSpec{parkingIndex(layout里parkings的下标), spacing(切分间距，地图单位), categories(可停种类)}`。
 `AssignParking(level, slot, parkingIndex, spacing, categories)`是**新增的非虚成员**(仿`AssignRoom`)，不改任何现有虚函数/继承。
-车位数=`floor(矩形沿垂直开口方向的边长/spacing)`，实际车位宽度>=spacing。Basic里各停车场建筑在`AssignRoom(room_parking)`之后调用，
+车位数=`floor(矩形沿垂直开口方向的边长/spacing)`，实际车位宽度>=spacing；`spacing<0`(约定-1)=整个矩形是一个车位(2026-11-22，只改Core的切分，没动头文件)；`spacing==0`=不生成。Basic里各停车场建筑在`AssignRoom(room_parking)`之后调用，
 间距/种类由各建筑mod在`Layout()`里直接写明。
 
 ## --skip 参数(2026-11-21)

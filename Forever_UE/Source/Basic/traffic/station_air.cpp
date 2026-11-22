@@ -22,7 +22,7 @@ void AirStation::SetProperty() {
 
 void AirStation::Layout(int direction, float sizeX, float sizeY) {
 	// 两条跑道，端口规则同TrainStation::Layout(下标=跑道号)，见station_air.md；停靠位在跑道中点。
-	constexpr float kRunwayDepth[2] = { 0.65f, 0.85f };
+	constexpr float kRunwayDepth[2] = { 0.7f, 0.9f };
 	constexpr float kPortZ = 0.001f;
 
 	float headings[2] = { AlongAxisHeadingDegrees(direction, true), AlongAxisHeadingDegrees(direction, false) };
