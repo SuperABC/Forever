@@ -57,7 +57,7 @@
 ## 依赖关系
 
 - 依赖：`map/terrain_mod.h`、`common/utility.h`；River依赖Mountain+Ocean先跑完(`basic.cpp`依赖表声明`terrain_river`依赖`terrain_mountain`)。
-- 被谁依赖：`Source/Basic/basic.cpp`(`GetModTerrains`/`RegisterModTerrains`)；路网(`roadnet_*`)读地形分类；`ForeverTerrainFrameworkComponent::BuildOceanMesh()`按"有没有水"铺水面，河流格自动纳入。
+- 被谁依赖：`Source/Basic/basic.cpp`(`GetModTerrains`/`RegisterModTerrains`)；路网(`roadnet_*`)读地形分类；`ForeverWaterFrameworkComponent`按"有没有水"铺水面，河流格自动纳入。
 
 ## 参数
 

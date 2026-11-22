@@ -47,12 +47,6 @@ UForeverTerrainFrameworkComponent::UForeverTerrainFrameworkComponent() {
 	if (tunnelWallMatFinder.Succeeded()) {
 		tunnelWallBaseMaterial = tunnelWallMatFinder.Object;
 	}
-
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> oceanMatFinder(
-		TEXT("/Water/Materials/WaterSurface/Water_Material_CustomMesh.Water_Material_CustomMesh"));
-	if (oceanMatFinder.Succeeded()) {
-		oceanBaseMaterial = oceanMatFinder.Object;
-	}
 }
 
 void UForeverTerrainFrameworkComponent::TickComponent(float DeltaTime, ELevelTick TickType,
@@ -429,7 +423,6 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 		boundary.right.SetNum(TERRAIN_LOD_GRID_SUBDIV + 1);
 	}
 
-	BuildOceanMesh();
 	BuildTunnelWalls();
 }
 
@@ -818,87 +811,6 @@ void UForeverTerrainFrameworkComponent::RebuildNearControl(float originX, float 
 	double elapsedMs = (FPlatformTime::Seconds() - startTime) * 1000.0;
 	UE_LOG(LogTemp, Log, TEXT("UForeverTerrainFrameworkComponent::RebuildNearControl origin=(%d,%d) size=%d res=%d elapsed=%.2fms"),
 		clampedOriginX, clampedOriginY, sizeElements, res, elapsedMs);
-}
-
-void UForeverTerrainFrameworkComponent::BuildOceanMesh() {
-	if (!map) return;
-
-	AActor* owner = GetOwner();
-	if (!owner) return;
-
-	auto [width, height] = map->GetSize();
-	const float worldScale = 1000.f;
-
-	// 共享网格顶点:(width+1)*(height+1)个格点,高度初始0，有水的格子把4个角写成水位(相邻格水位不同时后写的覆盖)
-	TArray<FVector> vertices;
-	TArray<FVector2D> uvs;
-	vertices.Reserve((width + 1) * (height + 1));
-	uvs.Reserve((width + 1) * (height + 1));
-	for (int vy = 0; vy <= height; vy++)
-		for (int vx = 0; vx <= width; vx++) {
-			vertices.Add(FVector(vx * worldScale, vy * worldScale, 0.f));
-			uvs.Add(FVector2D(vx, vy));
-		}
-
-	// 只为有水面的格子(map->GetWater(x,y).first，海洋和河流)生成两个三角形
-	TArray<int32> triangles;
-	auto vertIdx = [width](int vx, int vy) { return vy * (width + 1) + vx; };
-	for (int y = 0; y < height; y++) {
-		for (int x = 0; x < width; x++) {
-			auto [water, h] = map->GetWater(x, y);
-			if (!water) continue;
-
-			int idxBL = vertIdx(x, y), idxBR = vertIdx(x + 1, y);
-			int idxTL = vertIdx(x, y + 1), idxTR = vertIdx(x + 1, y + 1);
-			vertices[idxBL].Z = h * worldScale;
-			vertices[idxBR].Z = h * worldScale;
-			vertices[idxTL].Z = h * worldScale;
-			vertices[idxTR].Z = h * worldScale;
-			triangles.Add(idxBL); triangles.Add(idxTL); triangles.Add(idxTR);
-			triangles.Add(idxBL); triangles.Add(idxTR); triangles.Add(idxBR);
-		}
-	}
-	if (triangles.Num() == 0) return;
-
-	// 河流水面每个格子高度不同会倾斜，必须带法线：按面法线面积加权累加到顶点再归一化(同BuildLevel)。
-	TArray<FVector> normals;
-	normals.SetNumZeroed(vertices.Num());
-	for (int32 t = 0; t < triangles.Num(); t += 3) {
-		const FVector& a = vertices[triangles[t]];
-		const FVector& b = vertices[triangles[t + 1]];
-		const FVector& c = vertices[triangles[t + 2]];
-		FVector faceNormal = FVector::CrossProduct(c - a, b - a);
-		normals[triangles[t]] += faceNormal;
-		normals[triangles[t + 1]] += faceNormal;
-		normals[triangles[t + 2]] += faceNormal;
-	}
-	TArray<FProcMeshTangent> tangents;
-	tangents.SetNumUninitialized(vertices.Num());
-	for (int32 i = 0; i < normals.Num(); i++) {
-		FVector n = normals[i].GetSafeNormal();
-		if (n.IsNearlyZero()) n = FVector::UpVector;
-		normals[i] = n;
-		FVector t = (FVector::ForwardVector - n * FVector::DotProduct(FVector::ForwardVector, n)).GetSafeNormal();
-		if (t.IsNearlyZero()) t = FVector::RightVector;
-		tangents[i] = FProcMeshTangent(t, false);
-	}
-
-	if (!oceanMesh) {
-		oceanMesh = NewObject<UProceduralMeshComponent>(owner, TEXT("OceanMesh"));
-		oceanMesh->SetupAttachment(owner->GetRootComponent());
-		oceanMesh->SetCastShadow(false);
-		oceanMesh->RegisterComponent();
-		owner->AddInstanceComponent(oceanMesh);
-	}
-
-	oceanMesh->CreateMeshSection(0, vertices, triangles,
-		normals, uvs, TArray<FColor>(), tangents, false);
-
-	if (!oceanMaterial && oceanBaseMaterial) {
-		oceanMaterial = UMaterialInstanceDynamic::Create(oceanBaseMaterial, this);
-	}
-	if (oceanMaterial)
-		oceanMesh->SetMaterial(0, oceanMaterial);
 }
 
 // 隧道口侧壁：对每个wall=true的hatch(RoadnetMod::AddTunnelHatch)，在洞的两条长边(沿rotation，横向

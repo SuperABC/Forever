@@ -39,6 +39,7 @@ class UForeverRoomFrameworkComponent;
 class UForeverSkyFrameworkComponent;
 class UForeverStoryFrameworkComponent;
 class UForeverTerrainFrameworkComponent;
+class UForeverWaterFrameworkComponent;
 class UForeverTrafficFrameworkComponent;
 class UForeverVegetationFrameworkComponent;
 class UForeverLampFrameworkComponent;
@@ -251,6 +252,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverTerrainFrameworkComponent> terrainFramework;
+
+	UPROPERTY()
+	TObjectPtr<UForeverWaterFrameworkComponent> waterFramework;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Framework")
 	TObjectPtr<UForeverTrafficFrameworkComponent> trafficFramework;

@@ -28,7 +28,7 @@ struct FForeverLodBoundary {
 	TArray<FVector> right;  // vx=TERRAIN_LOD_GRID_SUBDIV
 };
 
-// 动态LOD(clipmap式)地形网格 + 水面网格 + 隧道口侧壁。挖洞在网格生成时用凸多边形裁剪完成。
+// 动态LOD(clipmap式)地形网格 + 隧道口侧壁(水面见ForeverWaterFrameworkComponent)。挖洞在网格生成时用凸多边形裁剪完成。
 // 详见ForeverTerrainFrameworkComponent.md。
 UCLASS()
 class FOREVER_API UForeverTerrainFrameworkComponent : public UForeverFrameworkComponent
@@ -42,7 +42,7 @@ public:
 		FActorComponentTickFunction* ThisTickFunction) override;
 
 	// 由AForeverFrameworkActor在Map::InitTerrains跑完后调用一次:创建LOD网格
-	// 组件、构建材质/纹理数组、构建海面网格。map生命周期由调用方(AForeverFrameworkActor)持有。
+	// 组件、构建材质/纹理数组、构建隧道口侧壁。map生命周期由调用方(AForeverFrameworkActor)持有。
 	void GenerateTerrain(Map* inMap);
 
 	// 地图正中心的世界坐标(含地形高度采样,向上留出安全余量),供ForeverPlayerGameMode计算出生点用。
@@ -60,9 +60,6 @@ private:
 	void BuildLevel(int levelIdx, std::pair<int, int> pos, float size, int childPos,
 		const FForeverLodBoundary* parentBoundary, int parentOffsetX, int parentOffsetY, int edgeFlags);
 
-	// 构建覆盖所有"ocean"地形格的海面网格
-	void BuildOceanMesh();
-
 	// 隧道口侧壁mesh：对Map::GetTunnelWallHatches()的每个hatch在洞的两条长边各做一条竖直的墙(有厚度，
 	// 内面可见、可碰撞)，其它hatch没有墙，见.cpp注释。
 	void BuildTunnelWalls();
@@ -79,9 +76,6 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UProceduralMeshComponent>> gridMeshes;
-
-	UPROPERTY()
-	TObjectPtr<UProceduralMeshComponent> oceanMesh;
 
 	UPROPERTY()
 	TObjectPtr<UProceduralMeshComponent> tunnelWallMesh;
@@ -108,15 +102,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<UTexture2DArray> terrainNormalRoughArray;
 
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> oceanMaterial;
-
 	// 固定的基础材质(编辑器可覆盖),构造函数里ConstructorHelpers加载
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
 	TObjectPtr<UMaterialInterface> terrainBaseMaterial;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
-	TObjectPtr<UMaterialInterface> oceanBaseMaterial;
 
 	// 近处(细LOD)材质和它的控制纹理——见terrain.md和.md的"近处地形混合"一节。
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")

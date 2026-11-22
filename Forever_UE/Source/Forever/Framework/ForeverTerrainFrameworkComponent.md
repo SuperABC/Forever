@@ -3,7 +3,7 @@
 ## 职责
 
 对应旧Framework Actor `Terrain`（C++ Base: `TerrainBase`）。负责动态LOD（clipmap式）地形网格、
-水面网格、隧道口侧壁mesh的生成，以及随玩家位置更新LOD；同时维护近/远两套地形材质的贴图数组和控制纹理。
+隧道口侧壁mesh的生成，以及随玩家位置更新LOD；同时维护近/远两套地形材质的贴图数组和控制纹理。
 
 ## 关键设计
 
@@ -89,11 +89,9 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 - **远处的2×2双线性**：`TemplateFar`继续用全图一张`terrainIndexMap`（PF_G8，每像素=地形槽位下标），在着色器里对相邻4个element的id双线性混合；
   `TerrainMapSize`材质参数（真实地图宽高）供着色器越界时夹到边缘element。
 
-## 水面（`BuildOceanMesh`）
+## 水面
 
-筛选条件是`map->GetWater(x,y).first`（有没有水），不检查地形类型，所以海洋和`RiverTerrain`通过Core的per-cell`setWater`设了水面的河流格子都在同一张水面mesh里
-（见`terrain_mod.md`"水面"一节、`terrain_*.md`）。共享顶点网格（`(width+1)*(height+1)`个格点），有水的格子把4个角写成各自的水位，相邻格子水位不同时共享顶点被后写的覆盖（不是平均），
-有轻微接缝，暂不处理。河流水面会倾斜，所以按面法线面积加权累加到顶点、归一化提供法线/切线。函数名沿用`BuildOceanMesh`。
+水面已移到`ForeverWaterFrameworkComponent`（分级细分+波浪+水下后处理，见其.md），本组件不再生成水面mesh，只向它提供LOD pivot。
 
 ## 依赖关系
 

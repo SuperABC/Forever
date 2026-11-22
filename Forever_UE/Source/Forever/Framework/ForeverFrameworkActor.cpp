@@ -77,6 +77,7 @@
 #include "Framework/ForeverSkyFrameworkComponent.h"
 #include "Framework/ForeverStoryFrameworkComponent.h"
 #include "Framework/ForeverTerrainFrameworkComponent.h"
+#include "Framework/ForeverWaterFrameworkComponent.h"
 #include "Framework/ForeverTrafficFrameworkComponent.h"
 #include "Framework/ForeverVegetationFrameworkComponent.h"
 #include "Framework/ForeverLampFrameworkComponent.h"
@@ -103,6 +104,7 @@ AForeverFrameworkActor::AForeverFrameworkActor()
 	skyFramework = CreateDefaultSubobject<UForeverSkyFrameworkComponent>(TEXT("SkyFramework"));
 	storyFramework = CreateDefaultSubobject<UForeverStoryFrameworkComponent>(TEXT("StoryFramework"));
 	terrainFramework = CreateDefaultSubobject<UForeverTerrainFrameworkComponent>(TEXT("TerrainFramework"));
+	waterFramework = CreateDefaultSubobject<UForeverWaterFrameworkComponent>(TEXT("WaterFramework"));
 	trafficFramework = CreateDefaultSubobject<UForeverTrafficFrameworkComponent>(TEXT("TrafficFramework"));
 	vegetationFramework = CreateDefaultSubobject<UForeverVegetationFrameworkComponent>(TEXT("VegetationFramework"));
 	lampFramework = CreateDefaultSubobject<UForeverLampFrameworkComponent>(TEXT("LampFramework"));
@@ -1363,6 +1365,7 @@ void AForeverFrameworkActor::BuildMapLamps()
 void AForeverFrameworkActor::GenerateTerrainMesh()
 {
 	if (terrainFramework) terrainFramework->GenerateTerrain(map);
+	if (waterFramework) waterFramework->GenerateWater(map);
 }
 
 void AForeverFrameworkActor::GenerateRoadnetMesh()

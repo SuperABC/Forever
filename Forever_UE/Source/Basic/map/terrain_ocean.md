@@ -57,7 +57,7 @@
 
 ## 依赖关系
 
-- 被谁依赖：`Source/Basic/basic.cpp`(`GetModTerrains`/`RegisterModTerrains`)；路网(`roadnet_*`)读地形分类；`ForeverTerrainFrameworkComponent::BuildOceanMesh()`按"有没有水"铺水面，河流格自动纳入。
+- 被谁依赖：`Source/Basic/basic.cpp`(`GetModTerrains`/`RegisterModTerrains`)；路网(`roadnet_*`)读地形分类；`ForeverWaterFrameworkComponent`按"有没有水"铺水面，河流格自动纳入。
 
 ## 参数
 

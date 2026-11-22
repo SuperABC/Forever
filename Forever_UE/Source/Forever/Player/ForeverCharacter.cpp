@@ -37,6 +37,7 @@
 #include "player/asset.h"
 #include "map/room.h"
 #include "map/map.h"
+#include "Water/WaterWave.h"
 
 AForeverCharacter::AForeverCharacter()
 {
@@ -481,7 +482,7 @@ void AForeverCharacter::JumpReleased()
 	StopJumping();
 }
 
-bool AForeverCharacter::QueryWater(const FVector& worldLocation, float& outSurfaceZ, float& outBedZ) const
+bool AForeverCharacter::QueryWater(const FVector& worldLocation, float& outSurfaceZ, float& outBedZ, float* outBaseSurfaceZ) const
 {
 	// 地图1单位=10米=1000厘米，和地形/水面mesh生成时的worldScale一致(见ForeverTerrainFrameworkComponent)。
 	constexpr float kMapUnitCm = 1000.f;
@@ -503,7 +504,10 @@ bool AForeverCharacter::QueryWater(const FVector& worldLocation, float& outSurfa
 	auto [hasWater, level] = map->GetWater(cellX, cellY);
 	if (!hasWater) return false;
 
-	outSurfaceZ = level * kMapUnitCm;
+	const float baseSurfaceZ = level * kMapUnitCm;
+	if (outBaseSurfaceZ) *outBaseSurfaceZ = baseSurfaceZ;
+	// 波浪：和水面材质的WPO同一个表达式(ForeverWater::WaveHeight)，时间用世界时间(材质读的MPC WaterTime也是它)。
+	outSurfaceZ = baseSurfaceZ + ForeverWater::WaveHeight(worldLocation.X, worldLocation.Y, GetWorld()->GetTimeSeconds());
 	outBedZ = map->SampleHeight(worldLocation.X / kMapUnitCm, worldLocation.Y / kMapUnitCm) * kMapUnitCm;
 	return true;
 }
@@ -513,8 +517,8 @@ void AForeverCharacter::UpdateWaterState(float DeltaTime)
 	UCharacterMovementComponent* movement = GetCharacterMovement();
 
 	// 只有玩家操控的角色游泳；市民走Core导航，不会下水。
-	float surfaceZ = 0.f, bedZ = 0.f;
-	const bool bInWater = IsPlayerControlled() && QueryWater(GetActorLocation(), surfaceZ, bedZ);
+	float surfaceZ = 0.f, bedZ = 0.f, baseSurfaceZ = 0.f;
+	const bool bInWater = IsPlayerControlled() && QueryWater(GetActorLocation(), surfaceZ, bedZ, &baseSurfaceZ);
 	if (!bInWater) {
 		if (bSwimState) ExitSwimming();
 		bIsSwimming = false;
@@ -529,8 +533,9 @@ void AForeverCharacter::UpdateWaterState(float DeltaTime)
 	// 入水/出水阈值按站立身高算(游泳时胶囊体被缩短了，不能读当前值)。
 	const float halfHeight = standingCapsuleHalfHeight * GetCapsuleComponent()->GetShapeScale();
 	const float fullHeight = halfHeight * 2.f;
-	const float feetSubmerge = surfaceZ - (location.Z - halfHeight); // 脚底在水面下多深
-	const float bedDepth = surfaceZ - bedZ;                          // 水底到水面的深度
+	// 入水/出水阈值用不带波浪的水位：浪是几十厘米的上下起伏，会让阈值边缘来回抖。
+	const float feetSubmerge = baseSurfaceZ - (location.Z - halfHeight); // 脚底在水面下多深
+	const float bedDepth = baseSurfaceZ - bedZ;                          // 水底到水面的深度
 
 	if (!bSwimState) {
 		// 只有脚底淹没到enterRatio×身高才入水(缓坡上岸要退到exitRatio×身高以下的水深才算出水)。
@@ -565,8 +570,8 @@ void AForeverCharacter::UpdateWaterState(float DeltaTime)
 		if (bDiveState) {
 			if (bSwimUpHeld) AddMovementInput(FVector::UpVector, 1.f);
 			FVector velocity = movement->Velocity;
-			// 没有任何输入时缓慢上浮；水下平游不自动上浮。
-			if (!bHasInput && !bSwimUpHeld && centerZ < floatZ) velocity.Z = FMath::Max(velocity.Z, swimBuoyancySpeed);
+			// 没有任何输入时按swimBuoyancySpeed上浮(默认0=原地悬停，不自动上浮)。
+			if (swimBuoyancySpeed > 0.f && !bHasInput && !bSwimUpHeld && centerZ < floatZ) velocity.Z = FMath::Max(velocity.Z, swimBuoyancySpeed);
 			// 不能浮出水面太多：向上的速度不超过"到浮起位置的距离/帧时间"。
 			velocity.Z = FMath::Min(velocity.Z, (floatZ - centerZ) / FMath::Max(DeltaTime, UE_KINDA_SMALL_NUMBER));
 			movement->Velocity = velocity;

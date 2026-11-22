@@ -28,6 +28,11 @@ public:
 	// 世界空间的UI(比如识别名牌)乘的是固定亮度，要按曝光变化换算，见ForeverIdentifyComponent。
 	float GetCurrentExposureEV() const { return currentExposureEV; }
 	float GetReferenceDayEV() const { return referenceDayEV; }
+	// 当前太阳+环境光照度之和(lux)：水下后处理按它定雾的亮度，雾和阳光照亮的海底保持固定比例，夜里自然变暗。
+	float GetCurrentLightLux() const { return currentSunLux + currentAmbientLux; }
+
+	// 全局后处理体积(没有时为空)，水下后处理等往它的Settings里加blendable，见ForeverWaterFrameworkComponent。
+	APostProcessVolume* GetPostProcessVolume() const { return postProcessVolume; }
 
 	// 天气对光照/雾的缩放，由UForeverWeatherFrameworkComponent每帧写入(已平滑)，晴天都是1，见.md。
 	void SetWeatherScales(float lightScale, float fogScale) {
@@ -86,6 +91,8 @@ private:
 
 	// 当前帧曝光EV，UpdatePostProcess写，GetCurrentExposureEV读。
 	float currentExposureEV = 15.f;
+	float currentSunLux = 0.f;
+	float currentAmbientLux = 0.f;
 
 	float weatherLightScale = 1.f;
 	float weatherFogScale = 1.f;

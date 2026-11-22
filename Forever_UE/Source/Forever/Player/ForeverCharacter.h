@@ -239,13 +239,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Swim")
 	float swimCapsuleHalfHeight = 45.f;
 
-	// 游泳→潜水：视线方向与竖直向下的点积大于该值(0.8≈俯角53度)，并且按住冲刺。
+	// 游泳→潜水：视线方向与竖直向下的点积大于该值(0.5≈俯角30度，即视线与水平面夹角>30度)，并且按住冲刺。
 	UPROPERTY(EditDefaultsOnly, Category = "Swim")
-	float swimDiveLookDot = 0.8f;
+	float swimDiveLookDot = 0.5f;
 
 	// 潜水时没有任何移动输入的上浮速度(厘米/秒)，0=悬停不浮。
 	UPROPERTY(EditDefaultsOnly, Category = "Swim")
-	float swimBuoyancySpeed = 100.f;
+	float swimBuoyancySpeed = 0.f;
 
 	// 水平速度超过游泳最大速度的部分的衰减速度(1/秒，指数衰减，越大入水后减速越快)。冲刺入水时速度可达几千厘米/秒。
 	UPROPERTY(EditDefaultsOnly, Category = "Swim")
@@ -335,7 +335,9 @@ public:
 	FORCEINLINE bool IsAiming() const { return bIsAiming; }
 
 	// 世界坐标(厘米)所在地图格有没有水：有则返回水面高度和该点地形(水底)高度(世界Z，厘米)。水体数据来自Core的Map::GetWater。
-	bool QueryWater(const FVector& worldLocation, float& outSurfaceZ, float& outBedZ) const;
+	// outSurfaceZ是带波浪的水面高度(本格水位+WaterWave.inc的波浪，和水面材质WPO是同一个表达式)；
+	// outBaseSurfaceZ(可选)是不带波浪的本格水位，入水/出水阈值用它，免得在阈值边缘被浪推着抖动。
+	bool QueryWater(const FVector& worldLocation, float& outSurfaceZ, float& outBedZ, float* outBaseSurfaceZ = nullptr) const;
 	FORCEINLINE bool IsSwimmingNow() const { return bIsSwimming; }
 	FORCEINLINE bool IsDivingNow() const { return bIsDiving; }
 	FORCEINLINE bool IsUnderwaterNow() const { return bIsUnderwater; }

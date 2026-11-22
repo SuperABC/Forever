@@ -139,7 +139,8 @@ void UForeverSkyFrameworkComponent::UpdateSunLight(float chronode) {
 	if (!sunComponent) return;
 
 	sunLight->SetActorRotation(FRotator(FMath::Lerp(90.0f, -270.0f, chronode), 0.0f, 0.0f));
-	sunComponent->SetIntensity(SunIntensityFactor(chronode) * kSunMaxIntensity * weatherLightScale);
+	currentSunLux = SunIntensityFactor(chronode) * kSunMaxIntensity * weatherLightScale;
+	sunComponent->SetIntensity(currentSunLux);
 
 	// 颜色关键帧分段插值(HSV)；0.3~0.7正午平台，首尾同为夜间色，跨午夜连续。
 	static const TArray<TPair<float, FLinearColor>> colorKeyframes = {
@@ -210,6 +211,7 @@ void UForeverSkyFrameworkComponent::UpdateAmbientLight(float chronode) {
 
 	if (UDirectionalLightComponent* ambientComponent = Cast<UDirectionalLightComponent>(ambientLight->GetLightComponent())) {
 		// 天气只压一半：阴天的室内/背光处不至于比晴天暗得太多。
-		ambientComponent->SetIntensity(FMath::Lerp(nightAmbientLux, dayAmbientLux, DayFactor(chronode)) * FMath::Lerp(1.f, weatherLightScale, 0.5f));
+		currentAmbientLux = FMath::Lerp(nightAmbientLux, dayAmbientLux, DayFactor(chronode)) * FMath::Lerp(1.f, weatherLightScale, 0.5f);
+		ambientComponent->SetIntensity(currentAmbientLux);
 	}
 }
