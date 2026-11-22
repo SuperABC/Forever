@@ -25,8 +25,10 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
    坐标取`Map::GetLaneSegmentAt`的真实车道坐标（目前只有公交站用）。站名取请求的`name`(非空)，否则`"Station"+stationCounter`。
 3. `InitRoutes`：对每个已注册且启用的`RouteMod`类型创建`Route`，收集`stationType`匹配的
    `Station`(端口快照)交给`Route::Build()`；线路上的extern点由`Route`自己持有，不再创建额外的`Station`。
-4. `InitAirportVehicles`：机场的飞机还没有对应的组织，先每个`plane`机位无条件停一架（不挂资产，等以后有机场组织再改）。
-   车型用`VehicleFactory::GetIdsByCategory("plane")`随机选，`BindSlot`停进车位。**普通停车位的车不在`Init`里生成**，由
+4. `InitStockedVehicles`：机场的飞机、港口的船这类没有"主人"的载具，由建筑mod用`BuildingMod::AssignStockedParking`声明车位
+   (`ParkingSlot::stocked`)，开局每个这样的车位停一辆（不挂资产）：从车位自己的`categories`随机选一个种类，再用
+   `VehicleFactory::GetIdsByCategory(种类)`随机选车型，`BindSlot`停进车位。Core不写死任何具体种类。**只在新开局的`Init`里跑一次**，
+   读档(`TrafficSaveCodec::Load`)不再调`Init`，所以不会补车：玩家开走的船读档后还是1艘、在存档时的位置。**普通停车位的车不在`Init`里生成**，由
    `AssignVehicles`按人分配（见下）。
 5. `InitTransitVehicles`：按线路名排序后对每条`Route`（车辆编号`Transit<N>`因此与哈希顺序无关）的每条line按`GetLineVehicleCount(lineIdx)`(mod为每条线路单独指定，缺省1辆)创建车辆、
    `SetRouteBinding`、`AddVehicleToLine`。

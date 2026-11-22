@@ -37,6 +37,7 @@
 #include "player/asset.h"
 #include "map/room.h"
 #include "map/map.h"
+#include "Water/WaterQuery.h"
 #include "Water/WaterWave.h"
 
 AForeverCharacter::AForeverCharacter()
@@ -484,32 +485,14 @@ void AForeverCharacter::JumpReleased()
 
 bool AForeverCharacter::QueryWater(const FVector& worldLocation, float& outSurfaceZ, float& outBedZ, float* outBaseSurfaceZ) const
 {
-	// 地图1单位=10米=1000厘米，和地形/水面mesh生成时的worldScale一致(见ForeverTerrainFrameworkComponent)。
-	constexpr float kMapUnitCm = 1000.f;
-
 	AForeverFrameworkActor* framework = cachedFramework.Get();
 	if (!framework) {
 		framework = Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
 		cachedFramework = framework;
 	}
 	Map* map = framework ? framework->GetMap() : nullptr;
-	if (!map) return false;
-
-	// 先判范围：Map::GetWater越界会打警告，这里每帧调用，不能刷屏。
-	auto [width, height] = map->GetSize();
-	int cellX = FMath::FloorToInt(worldLocation.X / kMapUnitCm);
-	int cellY = FMath::FloorToInt(worldLocation.Y / kMapUnitCm);
-	if (cellX < 0 || cellY < 0 || cellX >= width || cellY >= height) return false;
-
-	auto [hasWater, level] = map->GetWater(cellX, cellY);
-	if (!hasWater) return false;
-
-	const float baseSurfaceZ = level * kMapUnitCm;
-	if (outBaseSurfaceZ) *outBaseSurfaceZ = baseSurfaceZ;
-	// 波浪：和水面材质的WPO同一个表达式(ForeverWater::WaveHeight)，时间用世界时间(材质读的MPC WaterTime也是它)。
-	outSurfaceZ = baseSurfaceZ + ForeverWater::WaveHeight(worldLocation.X, worldLocation.Y, GetWorld()->GetTimeSeconds());
-	outBedZ = map->SampleHeight(worldLocation.X / kMapUnitCm, worldLocation.Y / kMapUnitCm) * kMapUnitCm;
-	return true;
+	// 格子范围/水位/波浪/水底的计算和船的浮力共用ForeverWater::QuerySurface(Water/WaterQuery.h)。
+	return ForeverWater::QuerySurface(map, worldLocation, GetWorld()->GetTimeSeconds(), outSurfaceZ, outBedZ, outBaseSurfaceZ);
 }
 
 void AForeverCharacter::UpdateWaterState(float DeltaTime)

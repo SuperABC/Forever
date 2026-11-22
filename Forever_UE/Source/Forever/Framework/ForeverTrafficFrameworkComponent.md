@@ -91,6 +91,7 @@
 ## 有序通行的基础设施
 
 - `RegisterDriver/GetDrivers`：被 `AVehicleCommandController` 驱动的车辆登记表（`Setup` 时登记，弱引用，每帧清理失效项），跟车判断遍历它。
+- `WarmVehicleClasses()`(2026-11-22)：加载界面"预热车辆"阶段(`AForeverFrameworkActor`)调用，对`carEntries`里每种蓝图路径`LoadClass`(存进`warmedVehicleClasses`防GC)并在高空临时生成销毁一次，免得玩家第一次走近时`SpawnCar`同步加载+建物理卡2-3秒(拖网渔船实测)。
 - `GetJunctionTraffic()`：第一次用到时按 `mapRef` 的路口建 `JunctionTraffic`（`BuildFromMap`），`GenerateVehicles` 换地图时重置；不依赖 `Traffic::Init`（读档不会重跑它）。
 - `GetTrafficClock()`：交通时钟，`TickComponent` 开头（所有早返回之前）累加 `min(DeltaTime, 0.25)`；暂停时 time dilation=0 所以不走。路口的 0.1s 请求间隔和 1s 租约都按它。
 - 市民（`ACitizenController::GateCrosswalk`）也通过它拿路口管理器和时钟。

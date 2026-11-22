@@ -140,7 +140,8 @@ private:
 	void InitStations(Map* map);
 	void InitRoadsideStations(Map* map);
 	void InitRoutes(Map* map);
-	void InitAirportVehicles(Map* map);
+	// 给所有stocked车位(BuildingMod::AssignStockedParking，如机场的飞机、港口的船)预置一辆车，不挂资产；Core不认识具体种类。
+	void InitStockedVehicles(Map* map);
 	// 生成一辆category类的车放进room的第slotIndex个车位，建VehicleAsset(Traffic持有)并挂到所有者的资产列表。
 	VehicleAsset* CreateOwnedVehicle(const std::string& category, Room* room, int slotIndex,
 		Citizen* ownerCitizen, Organization* ownerOrganization);

@@ -39,7 +39,12 @@ void BuildingMod::ArrangeRowEach(int level, int slot, const string& room, float 
 
 void BuildingMod::AssignParking(int level, int slot, int parkingIndex, float spacing,
 	const vector<string>& categories) {
-	parkings[{level, slot}].push_back(ParkingSlotSpec{ parkingIndex, spacing, categories });
+	parkings[{level, slot}].push_back(ParkingSlotSpec{ parkingIndex, spacing, categories, false });
+}
+
+void BuildingMod::AssignStockedParking(int level, int slot, int parkingIndex, float spacing,
+	const vector<string>& categories) {
+	parkings[{level, slot}].push_back(ParkingSlotSpec{ parkingIndex, spacing, categories, true });
 }
 
 void BuildingMod::AssignElevatorCabin(int shaftIndex, int minFloor, int maxFloor, string cabinMeshPath,

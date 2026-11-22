@@ -22,6 +22,7 @@ struct ParkingSlot {
 	float halfDepth = 0.f; // 沿开口朝向的轴(车位深度的一半)
 	int direction = FACE_WEST; // 车位开口朝向(FACE_DIRECTION，朝通道)；车头朝里即车头方向=开口朝向的反向
 	std::vector<std::string> categories;
+	bool stocked = false; // 开局预置一辆车(BuildingMod::AssignStockedParking)；只有新开局的Traffic::Init用，不进存档(读档不再Init)
 	Node* navigationNode = nullptr; // 车位中心的车行导航节点，由Map::navAnchorNodes持有生命周期，不在这里delete
 	Vehicle* reservedBy = nullptr;  // 正在开往这个车位的车(寻路开始即占用)
 	Vehicle* parkedVehicle = nullptr; // 已经停在车位里的车

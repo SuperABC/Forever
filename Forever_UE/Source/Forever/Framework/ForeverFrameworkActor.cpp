@@ -243,6 +243,10 @@ void AForeverFrameworkActor::BuildGenerationStages()
 			if (assetFramework) assetFramework->RestoreWorldAssets();
 		}
 	});
+	// 停车位车辆蓝图(拖网渔船等大模型)第一次生成要同步加载+建物理，实测卡2-3秒：这里先加载并临时生成销毁一次。
+	add(TEXT("预热车辆"), [this]() {
+		if (trafficFramework) trafficFramework->WarmVehicleClasses();
+	});
 	// 路口通行表(JunctionTraffic)是懒构建的，第一个市民开始走路(过横道时GateCrosswalk)才构建，实测卡2秒：这里先建好。
 	add(TEXT("预热交通"), [this]() {
 		if (trafficFramework) trafficFramework->GetJunctionTraffic();

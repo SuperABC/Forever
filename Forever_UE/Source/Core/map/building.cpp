@@ -1015,6 +1015,7 @@ void Building::BuildParkingSlots() {
 				slotData.halfDepth = depth * 0.5f;
 				slotData.direction = dir;
 				slotData.categories = spec.categories;
+				slotData.stocked = spec.stocked;
 				auto [wx, wy] = LocalToWorld(slotData.centerX, slotData.centerY);
 				slotData.navigationNode = new Node("building", wx, wy, z);
 				ParkingSlot* created = room->AddParkingSlot(slotData);

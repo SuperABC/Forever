@@ -72,6 +72,38 @@ namespace {
 		run.Check(unparked == 0, "every plane bay has a parked plane", to_string(unparked) + " empty");
 	}
 
+	// 港口：layout的1个parkings矩形只切一个船位(AssignStockedParking spacing=-1)，开局停一艘船。
+	// 另外通用检查：所有stocked车位(机场飞机/港口船)开局都停了车(Traffic::InitStockedVehicles)，没有stocked的车位不会被它抢先占用
+	// ——由人/组织拥有的车才走AssignVehicles，所以这里只验stocked那一侧。
+	void CheckPortBoats(TestWorld& world) {
+		TestRun& run = TestRun::Get();
+		int ports = 0, badCount = 0, unparked = 0, stockedSlots = 0, stockedUnparked = 0;
+		for (const auto& [name, building] : world.map->GetBuildings()) {
+			const bool isPort = string(building->GetType()) == "building_port";
+			if (isPort) ports++;
+			int boatSlots = 0;
+			for (Room* room : building->GetRooms()) {
+				for (ParkingSlot* slot : room->GetParkingSlots()) {
+					if (slot->stocked) {
+						stockedSlots++;
+						if (!slot->parkedVehicle) stockedUnparked++;
+					}
+					if (isPort && slot->Accepts("boat")) {
+						boatSlots++;
+						if (!slot->parkedVehicle) unparked++;
+					}
+				}
+			}
+			if (isPort && boatSlots != 8) badCount++;
+		}
+		run.Metric("ports", ports, "");
+		run.Metric("stocked slots", stockedSlots, "");
+		run.Check(stockedUnparked == 0, "every stocked parking slot has a parked vehicle", to_string(stockedUnparked) + " empty");
+		if (ports == 0) return;
+		run.Check(badCount == 0, "every port has exactly 8 boat slots (one slot per parking rect)", to_string(badCount) + " of " + to_string(ports) + " ports differ");
+		run.Check(unparked == 0, "every boat slot has a parked boat", to_string(unparked) + " empty");
+	}
+
 	// 车行导航图：每个停车位的导航节点必须和参照点双向连通(隧道出口方向、停车位单向的历史坑)。
 	void CheckVehicleConnectivity(TestWorld& world) {
 		TestRun& run = TestRun::Get();
@@ -378,6 +410,7 @@ void WorldSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckTerrainSampling(world);
 	CheckVehicleConnectivity(world);
 	CheckAirportBays(world);
+	CheckPortBoats(world);
 	CheckVehicleEdgeGeometry(world);
 	RecordMemory("world: after connectivity checks"); // 寻路校验会填满寻路缓存和线程局部缓冲，这里能看到它们的内存
 	// 行道树/路灯总数(信息性，看roadnet mod有没有放；不同路网差异很大，不做通过条件)。

@@ -1,0 +1,32 @@
+{
+	// 船自己的milestone脚本(BoatVehicle::milestoneNames={"vehicle_boat"}加载)。
+	// 只有最基础的上船："驾驶"选项 -> enter_vehicle。没有公交船，不含站点/乘客逻辑；下船走载具通用的Q键。
+	"milestones": [
+		{
+			"milestone": "ready",
+			"triggers": [ { "type": "game_start" } ],
+			"visible": false,
+			"drop": "true",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "add_option", "category": "vehicle", "name": "$$self.name", "option": "驾驶", "condition": "$$self.on_route == 0" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		},
+		{
+			"milestone": "drive",
+			"triggers": [ { "type": "option_dialog", "name": "$$self.name", "option": "驾驶" } ],
+			"visible": false,
+			"drop": "false",
+			"description": "",
+			"goal": "",
+			"changes": [
+				{ "type": "enter_vehicle", "vehicle": "$$self.name" }
+			],
+			"dialogs": [],
+			"subsequences": []
+		}
+	]
+}

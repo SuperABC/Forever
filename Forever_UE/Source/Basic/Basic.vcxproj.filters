@@ -31,6 +31,9 @@
     <ClCompile Include="map\building_airport.cpp">
       <Filter>map</Filter>
     </ClCompile>
+    <ClCompile Include="map\building_port.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
     <ClCompile Include="map\building_commerce_high.cpp">
       <Filter>map</Filter>
     </ClCompile>
@@ -77,6 +80,9 @@
       <Filter>map</Filter>
     </ClCompile>
     <ClCompile Include="map\component_airport.cpp">
+      <Filter>map</Filter>
+    </ClCompile>
+    <ClCompile Include="map\component_port.cpp">
       <Filter>map</Filter>
     </ClCompile>
     <ClCompile Include="map\component_manufacture.cpp">
@@ -262,6 +268,9 @@
     <ClCompile Include="traffic\vehicle_plane.cpp">
       <Filter>traffic</Filter>
     </ClCompile>
+    <ClCompile Include="traffic\vehicle_boat.cpp">
+      <Filter>traffic</Filter>
+    </ClCompile>
     <ClCompile Include="traffic\vehicle_sedan.cpp">
       <Filter>traffic</Filter>
     </ClCompile>
@@ -402,6 +411,9 @@
     <ClInclude Include="map\building_airport.h">
       <Filter>map</Filter>
     </ClInclude>
+    <ClInclude Include="map\building_port.h">
+      <Filter>map</Filter>
+    </ClInclude>
     <ClInclude Include="map\building_commerce_high.h">
       <Filter>map</Filter>
     </ClInclude>
@@ -448,6 +460,9 @@
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\component_airport.h">
+      <Filter>map</Filter>
+    </ClInclude>
+    <ClInclude Include="map\component_port.h">
       <Filter>map</Filter>
     </ClInclude>
     <ClInclude Include="map\component_manufacture.h">
@@ -634,6 +649,9 @@
       <Filter>traffic</Filter>
     </ClInclude>
     <ClInclude Include="traffic\vehicle_plane.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
+    <ClInclude Include="traffic\vehicle_boat.h">
       <Filter>traffic</Filter>
     </ClInclude>
     <ClInclude Include="traffic\vehicle_sedan.h">

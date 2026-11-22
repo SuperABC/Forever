@@ -25,6 +25,7 @@
       "building_commerce_high",
       "building_office_high",
       "building_airport --skip",
+      "building_port",
       "building_train_station --skip"
    ],
    "component_mods" : [
@@ -34,6 +35,7 @@
       "component_restaurant",
       "component_office",
       "component_airport",
+      "component_port",
       "component_train_station",
       "component_meeting"
    ],
@@ -102,6 +104,7 @@
    ],
    "vehicle_mods" : [
       "vehicle_plane",
+      "vehicle_boat",
       "vehicle_train",
       "vehicle_bus",
       "vehicle_truck",

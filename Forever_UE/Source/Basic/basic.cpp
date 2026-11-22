@@ -33,6 +33,7 @@
 #include "map/zone_residence_low.h"
 #include "map/zone_residence_middle.h"
 #include "map/building_airport.h"
+#include "map/building_port.h"
 #include "map/building_commerce_high.h"
 #include "map/building_commerce_low.h"
 #include "map/building_commerce_middle.h"
@@ -49,6 +50,7 @@
 #include "map/building_residence_middle.h"
 #include "map/building_train_station.h"
 #include "map/component_airport.h"
+#include "map/component_port.h"
 #include "map/component_manufacture.h"
 #include "map/component_office.h"
 #include "map/component_residence.h"
@@ -98,6 +100,7 @@
 #include "traffic/vehicle_sedan.h"
 #include "traffic/vehicle_bus.h"
 #include "traffic/vehicle_plane.h"
+#include "traffic/vehicle_boat.h"
 #include "traffic/vehicle_train.h"
 #include "traffic/vehicle_truck.h"
 #include "player/asset_ammo_pistol.h"
@@ -178,6 +181,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ OfficeLowBuilding::GetId(), { OfficeComponent::GetId(), OfficeRoom::GetId(), kRoomEmpty, kScriptEmpty } }, // 电梯脚本
 		{ TrainStationBuilding::GetId(), { TrainStationComponent::GetId(), TrainStationRoom::GetId(), kScriptEmpty } }, // 电梯脚本
 		{ AirportBuilding::GetId(), { AirportComponent::GetId(), kRoomEmpty, kScriptEmpty } }, // 房间先全是空房(room_airport暂不用)；电梯脚本
+		{ PortBuilding::GetId(), { PortComponent::GetId(), kRoomEmpty, kScriptEmpty } }, // 港口：一间小空房，船位见building_port.cpp
 		{ MoharBuilding::GetId(), { ResidenceComponent::GetId(), ResidenceRoom::GetId() } },
 
 		{ ShopRoom::GetId(), { kScriptEmpty } }, // 房间门脚本
@@ -217,6 +221,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 		{ TruckVehicle::GetId(), { kScriptEmpty } },
 		{ TrainVehicle::GetId(), { kScriptEmpty } },
 		{ PlaneVehicle::GetId(), { kScriptEmpty } },
+		{ BoatVehicle::GetId(), { kScriptEmpty } },
 
 		{ BurgerAsset::GetId(), { BurgerProduct::GetId() } }, // productType：商店零售价
 		{ PistolWeapon::GetId(), { PistolAmmoAsset::GetId() } }, // 换弹消耗的备弹
@@ -328,7 +333,7 @@ extern "C" __declspec(dllexport) void* GetModBuildings() {
 		CommerceHighBuilding::GetId(), CommerceMiddleBuilding::GetId(), CommerceLowBuilding::GetId(),
 		IndustryHighBuilding::GetId(), IndustryMiddleBuilding::GetId(), IndustryLowBuilding::GetId(),
 		OfficeHighBuilding::GetId(), OfficeMiddleBuilding::GetId(), OfficeLowBuilding::GetId(),
-		TrainStationBuilding::GetId(), AirportBuilding::GetId(),
+		TrainStationBuilding::GetId(), AirportBuilding::GetId(), PortBuilding::GetId(),
 		MoharBuilding::GetId() };
 	return (void*)&mods;
 }
@@ -403,6 +408,11 @@ extern "C" __declspec(dllexport) void RegisterModBuildings(BuildingFactory* fact
 		[](BuildingMod* m) { delete m; },
 		&AirportBuilding::RandomAcreage, &AirportBuilding::GetAcreageMin, &AirportBuilding::GetAcreageMax,
 		&AirportBuilding::GetPower, &AirportBuilding::Assign);
+	factory->RegisterBuilding(PortBuilding::GetId(),
+		[](const std::string&) -> BuildingMod* { return new PortBuilding(); },
+		[](BuildingMod* m) { delete m; },
+		&PortBuilding::RandomAcreage, &PortBuilding::GetAcreageMin, &PortBuilding::GetAcreageMax,
+		&PortBuilding::GetPower, &PortBuilding::Assign);
 	factory->RegisterBuilding(MoharBuilding::GetId(),
 		[](const std::string&) -> BuildingMod* { return new MoharBuilding(); },
 		[](BuildingMod* m) { delete m; },
@@ -414,7 +424,7 @@ extern "C" __declspec(dllexport) void FinishModBuildings(BuildingFactory* factor
 
 extern "C" __declspec(dllexport) void* GetModComponents() {
 	static vector<string> mods = { ResidenceComponent::GetId(), ShopComponent::GetId(), RestaurantComponent::GetId(), ManufactureComponent::GetId(), OfficeComponent::GetId(),
-		TrainStationComponent::GetId(), AirportComponent::GetId(), MeetingComponent::GetId() };
+		TrainStationComponent::GetId(), AirportComponent::GetId(), PortComponent::GetId(), MeetingComponent::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* factory) {
@@ -438,6 +448,9 @@ extern "C" __declspec(dllexport) void RegisterModComponents(ComponentFactory* fa
 		[](ComponentMod* m) { delete m; });
 	factory->RegisterComponent(AirportComponent::GetId(),
 		[](const std::string&) -> ComponentMod* { return new AirportComponent(); },
+		[](ComponentMod* m) { delete m; });
+	factory->RegisterComponent(PortComponent::GetId(),
+		[](const std::string&) -> ComponentMod* { return new PortComponent(); },
 		[](ComponentMod* m) { delete m; });
 	factory->RegisterComponent(MeetingComponent::GetId(),
 		[](const std::string&) -> ComponentMod* { return new MeetingComponent(); },
@@ -681,7 +694,7 @@ extern "C" __declspec(dllexport) void FinishModStations(StationFactory* factory)
 }
 
 extern "C" __declspec(dllexport) void* GetModVehicles() {
-	static vector<string> mods = { SedanVehicle::GetId(), BusVehicle::GetId(), TruckVehicle::GetId(), TrainVehicle::GetId(), PlaneVehicle::GetId() };
+	static vector<string> mods = { SedanVehicle::GetId(), BusVehicle::GetId(), TruckVehicle::GetId(), TrainVehicle::GetId(), PlaneVehicle::GetId(), BoatVehicle::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factory) {
@@ -700,6 +713,9 @@ extern "C" __declspec(dllexport) void RegisterModVehicles(VehicleFactory* factor
 	factory->RegisterVehicle(PlaneVehicle::GetId(),
 		[](const std::string&) -> VehicleMod* { return new PlaneVehicle(); },
 		[](VehicleMod* m) { delete m; }, &PlaneVehicle::GetCategory);
+	factory->RegisterVehicle(BoatVehicle::GetId(),
+		[](const std::string&) -> VehicleMod* { return new BoatVehicle(); },
+		[](VehicleMod* m) { delete m; }, &BoatVehicle::GetCategory);
 }
 extern "C" __declspec(dllexport) void FinishModVehicles(VehicleFactory* factory) {
 }

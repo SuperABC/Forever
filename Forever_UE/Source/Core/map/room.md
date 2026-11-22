@@ -122,7 +122,7 @@
 
 - **来源**：layout的`parkings`矩形 + `BuildingMod::AssignParking(level, slot, parkingIndex, spacing, categories)`。`Building::BuildParkingSlots()`
   在`Layout`里(建导航图之前)把矩形沿垂直开口的轴按`spacing`切成`floor(边长/spacing)`份(实际宽度>=spacing，0份=没有车位；**`spacing<0`(约定-1)=整个矩形就是一个车位**，不管矩形多宽，机场停机坪用它)，每份生成一个车位挂到
-  (level, singleRoomSlot)对应的房间。
+  (level, singleRoomSlot)对应的房间。`ParkingSlot::stocked`来自`AssignStockedParking`，开局由`Traffic::InitStockedVehicles`预置车辆(机场飞机/港口船)，不进存档。
 - **查询**：`FindFreeSlot(category)`(第一个空闲且允许该种类，没有=-1，寻路据此拒绝)、`HasSlotFor(category)`、
   `FindSlotContaining(x,y,yawDeg)`(玩家下车判定：车头朝里=朝向与开口朝向点积<-0.8、车中心在矩形内、车位没有已停的车)。
 - **存档**：房间存车位几何+categories+导航节点id；占用由车辆反推(`traffic_save.md`)。

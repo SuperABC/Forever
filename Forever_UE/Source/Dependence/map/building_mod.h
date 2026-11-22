@@ -64,6 +64,9 @@ struct ParkingSlotSpec {
 	int parkingIndex = 0;
 	float spacing = 0.f;
 	std::vector<std::string> categories;
+	// true=开局由Traffic::InitStockedVehicles在每个切出的车位里预置一辆车(从categories里随机选种类再选车型，不挂资产)，
+	// 用于没有"主人"的载具(机场的飞机、港口的船)；false=车位留给Traffic::AssignVehicles按市民/组织所有权分配。
+	bool stocked = false;
 };
 
 // 设计见building_mod.md。
@@ -138,6 +141,10 @@ public:
 	// 房间(通常是room_parking)。spacing是车位最小宽度(地图单位),车位数=floor(矩形边长/spacing),
 	// categories见ParkingSlotSpec。同一个房间可以归入多个矩形。
 	void AssignParking(int level, int slot, int parkingIndex, float spacing,
+		const std::vector<std::string>& categories);
+	// 同AssignParking，但切出的每个车位开局就停一辆车(ParkingSlotSpec::stocked)。机场的机位/港口的船位用；
+	// spacing=-1=整个矩形一个车位。
+	void AssignStockedParking(int level, int slot, int parkingIndex, float spacing,
 		const std::vector<std::string>& categories);
 
 	// 声明一台电梯轿厢,同一口井可声明多台(楼层范围不能重叠,重叠的后一条被跳过)。

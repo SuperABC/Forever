@@ -358,7 +358,7 @@ void Traffic::Init(Map* map) {
 	InitStations(map);
 	InitRoadsideStations(map);
 	InitRoutes(map);
-	InitAirportVehicles(map);
+	InitStockedVehicles(map);
 	InitTransitVehicles();
 }
 
@@ -461,32 +461,34 @@ void Traffic::InitRoutes(Map* map) {
 	}
 }
 
-void Traffic::InitAirportVehicles(Map* map) {
+void Traffic::InitStockedVehicles(Map* map) {
 	CORE_RANDOM_SCOPE("core.traffic");
-	// 机场的飞机还没有对应的组织，先每个机位无条件停一架(不挂资产)；普通停车位的车由AssignVehicles按人分配。
-	// 车型按种类查(VehicleFactory::GetIdsByCategory)。
-	const vector<string> ids = vehicleFactory.GetIdsByCategory("plane");
+	// 机场的飞机、港口的船这类没有"主人"的载具：建筑mod用AssignStockedParking声明车位，开局每个这样的车位停一辆(不挂资产)。
+	// 种类和车型都由车位自己的categories+VehicleFactory决定，这里不认识具体种类；普通停车位的车由AssignVehicles按人分配。
 	int parkedCount = 0;
-	if (!ids.empty()) {
-		for (auto& [buildingName, building] : map->GetBuildings()) {
-			if (!building) continue;
-			for (Room* room : building->GetRooms()) {
-				if (!room) continue;
-				const vector<ParkingSlot*>& slots = room->GetParkingSlots();
-				for (size_t slotIndex = 0; slotIndex < slots.size(); slotIndex++) {
-					if (!slots[slotIndex]->Accepts("plane")) continue;
-					string modId = ids[GetRandom(static_cast<int>(ids.size()))];
-					string name = "Vehicle" + to_string(vehicleCounter++);
-					Vehicle* vehicle = CreateVehicle(modId, name);
-					if (!vehicle) continue;
-					vehicle->BindSlot(room, static_cast<int>(slotIndex));
-					parkedCount++;
-					debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
-				}
+	for (auto& [buildingName, building] : map->GetBuildings()) {
+		if (!building) continue;
+		for (Room* room : building->GetRooms()) {
+			if (!room) continue;
+			const vector<ParkingSlot*>& slots = room->GetParkingSlots();
+			for (size_t slotIndex = 0; slotIndex < slots.size(); slotIndex++) {
+				const ParkingSlot* slot = slots[slotIndex];
+				if (!slot->stocked || !slot->IsFree() || slot->categories.empty()) continue;
+				// 先随机一个种类，再在该种类已启用的车型里随机；该种类没有已启用车型就空着。
+				const string& category = slot->categories[GetRandom(static_cast<int>(slot->categories.size()))];
+				const vector<string> ids = vehicleFactory.GetIdsByCategory(category);
+				if (ids.empty()) continue;
+				string modId = ids[GetRandom(static_cast<int>(ids.size()))];
+				string name = "Vehicle" + to_string(vehicleCounter++);
+				Vehicle* vehicle = CreateVehicle(modId, name);
+				if (!vehicle) continue;
+				vehicle->BindSlot(room, static_cast<int>(slotIndex));
+				parkedCount++;
+				debugf("Vehicle %s (%s) parked at %s.\n", name.c_str(), modId.c_str(), room->GetAddress().c_str());
 			}
 		}
 	}
-	debugf("Traffic::InitAirportVehicles: %d plane(s).\n", parkedCount);
+	debugf("Traffic::InitStockedVehicles: %d vehicle(s).\n", parkedCount);
 }
 
 VehicleAsset* Traffic::CreateOwnedVehicle(const string& category, Room* room, int slotIndex,

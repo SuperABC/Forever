@@ -153,6 +153,9 @@ public:
 	const TArray<TWeakObjectPtr<AVehicleCommandController>>& GetDrivers() const { return drivers; }
 	// 路口通行管理器，第一次要用时按Map的路口建（读档/新开局都走这条，不依赖Traffic::Init）；没有Map时返回nullptr。
 	JunctionTraffic* GetJunctionTraffic();
+	// 预热停车位车辆(carEntries)的蓝图：每种蓝图提前同步加载(骨骼网格/物理资产/材质/贴图)并临时生成销毁一次(建好物理/组件)，
+	// 免得玩家第一次走近时SpawnCar里现加载卡几秒(大模型如拖网渔船实测2-3秒)。要在GenerateVehicles之后、加载界面里调。
+	void WarmVehicleClasses();
 	// 交通时钟（秒）：只在游戏未暂停时累加（暂停=time dilation 0，DeltaTime为0），单帧增量夹到0.25s；
 	// 路口请求的0.1s间隔和1s租约都按它计，不随游戏内时间加速。
 	double GetTrafficClock() const { return trafficClock; }
@@ -242,6 +245,9 @@ private:
 	// 所以另存一份 UPROPERTY 让 GC 看得见。
 	UPROPERTY()
 	TSet<TObjectPtr<UClass>> busPhysicsClasses;
+	// WarmVehicleClasses加载出来的停车位车辆蓝图类，另存UPROPERTY防止GC回收(回收了第一次生成又要重新加载)。
+	UPROPERTY()
+	TSet<TObjectPtr<UClass>> warmedVehicleClasses;
 	TMap<int32, Station*> stationByNodeId; // 辅助导航节点 id -> 车站，FireStopEvent 用
 
 	void UpdateBusPhysicsHandoff();

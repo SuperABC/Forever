@@ -1,0 +1,19 @@
+{
+	"ceilings": [
+		[0, 0, 0, 0, 1, 0, 0.5, 0],
+	],
+	"corridors": [{
+		"rect": [0, 0, 0, 0, 1, 0, 0.5, 0],
+		"walls": [0, 1, 2, 3],
+	}],
+	"pedestrianNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": [],
+	},
+	"vehicleNavigation": {
+		"nodes": [],
+		"lines": [],
+		"connections": [],
+	}
+}

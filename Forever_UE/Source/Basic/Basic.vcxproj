@@ -90,6 +90,7 @@
   <ItemGroup>
     <ClCompile Include="basic.cpp" />
     <ClCompile Include="map\building_airport.cpp" />
+    <ClCompile Include="map\building_port.cpp" />
     <ClCompile Include="map\building_commerce_high.cpp" />
     <ClCompile Include="map\building_commerce_low.cpp" />
     <ClCompile Include="map\building_commerce_middle.cpp" />
@@ -106,6 +107,7 @@
     <ClCompile Include="map\building_residence_middle.cpp" />
     <ClCompile Include="map\building_train_station.cpp" />
     <ClCompile Include="map\component_airport.cpp" />
+    <ClCompile Include="map\component_port.cpp" />
     <ClCompile Include="map\component_manufacture.cpp" />
     <ClCompile Include="map\component_office.cpp" />
     <ClCompile Include="map\component_residence.cpp" />
@@ -167,6 +169,7 @@
     <ClCompile Include="traffic\station_train.cpp" />
     <ClCompile Include="traffic\vehicle_bus.cpp" />
     <ClCompile Include="traffic\vehicle_plane.cpp" />
+    <ClCompile Include="traffic\vehicle_boat.cpp" />
     <ClCompile Include="traffic\vehicle_sedan.cpp" />
     <ClCompile Include="traffic\vehicle_train.cpp" />
     <ClCompile Include="traffic\vehicle_truck.cpp" />
@@ -215,6 +218,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="map\building_airport.h" />
+    <ClInclude Include="map\building_port.h" />
     <ClInclude Include="map\building_commerce_high.h" />
     <ClInclude Include="map\building_commerce_low.h" />
     <ClInclude Include="map\building_commerce_middle.h" />
@@ -231,6 +235,7 @@
     <ClInclude Include="map\building_residence_middle.h" />
     <ClInclude Include="map\building_train_station.h" />
     <ClInclude Include="map\component_airport.h" />
+    <ClInclude Include="map\component_port.h" />
     <ClInclude Include="map\component_manufacture.h" />
     <ClInclude Include="map\component_office.h" />
     <ClInclude Include="map\component_residence.h" />
@@ -293,6 +298,7 @@
     <ClInclude Include="traffic\station_train.h" />
     <ClInclude Include="traffic\vehicle_bus.h" />
     <ClInclude Include="traffic\vehicle_plane.h" />
+    <ClInclude Include="traffic\vehicle_boat.h" />
     <ClInclude Include="traffic\vehicle_sedan.h" />
     <ClInclude Include="traffic\vehicle_train.h" />
     <ClInclude Include="traffic\vehicle_truck.h" />

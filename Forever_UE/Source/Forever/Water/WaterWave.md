@@ -2,7 +2,7 @@
 
 水面高度 `H(x, y, t, iterations)`（厘米，零均值）只有一份源码：`WaterWave.inc`（Shadertoy MdXyzX / afl_ext 的 `getwaves`，MIT，移植版）。
 
-- C++：`WaterWave.h` 的 `ForeverWater::WaveHeight(x, y, t, iterations=12)` `#include` 该文件作为函数体。游泳/浮力（`ForeverCharacter::QueryWater`）用它。
+- C++：`WaterWave.h` 的 `ForeverWater::WaveHeight(x, y, t, iterations=12)` `#include` 该文件作为函数体。游泳/浮力经`WaterQuery.h`的`ForeverWater::QuerySurface`(角色的`QueryWater`和`ABoatElement`的浮力共用，水位+波浪+水底一次查出)用它。
 - Shader：`Tools/WaterMaterial/build_water_assets.py` 把 `.inc` 文本内联进 `M_WaterSurface`（WPO/法线）和 `PP_Underwater`（水面高度）的 Custom 节点。
 - 两边各自实时算同一表达式，不传算好的数据。
 

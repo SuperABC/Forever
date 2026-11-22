@@ -43,6 +43,8 @@
 `AssignParking(level, slot, parkingIndex, spacing, categories)`是**新增的非虚成员**(仿`AssignRoom`)，不改任何现有虚函数/继承。
 车位数=`floor(矩形沿垂直开口方向的边长/spacing)`，实际车位宽度>=spacing；`spacing<0`(约定-1)=整个矩形是一个车位(2026-11-22，只改Core的切分，没动头文件)；`spacing==0`=不生成。Basic里各停车场建筑在`AssignRoom(room_parking)`之后调用，
 间距/种类由各建筑mod在`Layout()`里直接写明。
+`ParkingSlotSpec::stocked`(默认false)：`AssignStockedParking(...)`(同`AssignParking`的另一个新增非虚成员)记录为true，Core切出的每个车位带`ParkingSlot::stocked`，
+开局由`Traffic::InitStockedVehicles`预置一辆车(种类从`categories`里随机)，用于没有"主人"的载具——机场的飞机(`{"plane"}`)、港口的船(`{"boat"}`)，Core里不写死种类。
 
 ## --skip 参数(2026-11-21)
 

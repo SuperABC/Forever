@@ -1477,6 +1477,27 @@ void UForeverTrafficFrameworkComponent::RegisterDriver(AVehicleCommandController
 	if (driver) drivers.AddUnique(driver);
 }
 
+void UForeverTrafficFrameworkComponent::WarmVehicleClasses() {
+	UWorld* world = GetWorld();
+	if (!world) return;
+	TSet<FString> donePaths;
+	for (const FCarEntry& entry : carEntries) {
+		if (entry.blueprintPath.IsEmpty() || donePaths.Contains(entry.blueprintPath)) continue;
+		donePaths.Add(entry.blueprintPath);
+		UClass* vehicleClass = LoadClass<AVehicleElement>(nullptr, *entry.blueprintPath);
+		if (!vehicleClass) continue; // 加载失败的警告留给真正SpawnCar时报
+		warmedVehicleClasses.Add(vehicleClass);
+
+		// 临时生成一辆再销毁：把组件注册/物理体创建(骨骼网格物理资产、Chaos载具)的一次性开销摊到加载界面。
+		// 放在车位上方很高处，生成后同一帧销毁(不会Tick)，不会和真车重叠或产生任何游戏效果；没调Init，车辆Actor的vehicle指针为空。
+		FActorSpawnParameters spawnParams;
+		spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (AVehicleElement* temp = world->SpawnActor<AVehicleElement>(vehicleClass, entry.location + FVector(0.f, 0.f, 500000.f), FRotator::ZeroRotator, spawnParams)) {
+			temp->Destroy();
+		}
+	}
+}
+
 JunctionTraffic* UForeverTrafficFrameworkComponent::GetJunctionTraffic() {
 	if (!junctionTraffic.IsValid() && mapRef) {
 		junctionTraffic = MakeShared<JunctionTraffic>();
