@@ -3,6 +3,7 @@
 #include "Animation/AnimInstance.h"
 #include "AnimationRuntime.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -35,6 +36,7 @@
 #include "player/player.h"
 #include "player/asset.h"
 #include "map/room.h"
+#include "map/map.h"
 
 AForeverCharacter::AForeverCharacter()
 {
@@ -60,6 +62,7 @@ AForeverCharacter::AForeverCharacter()
 	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
+	UpdateMoveSpeeds(); // 含游泳(MOVE_Flying)的MaxFlySpeed/BrakingDecelerationFlying
 
 	cameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	cameraBoom->SetupAttachment(RootComponent);
@@ -280,12 +283,21 @@ void AForeverCharacter::UnPossessed()
 	}
 	bThrowKeyHeld = false;
 
+	// 换人/上车时不能把旧身体留在游泳状态。
+	if (bSwimState) ExitSwimming();
+
 	Super::UnPossessed();
 }
 
 void AForeverCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	meshDefaultLocation = GetMesh()->GetRelativeLocation();
+	meshDefaultRotation = GetMesh()->GetRelativeRotation().Quaternion();
+	bMeshDefaultCaptured = true;
+	boomBaseLocation = cameraBoom->GetRelativeLocation();
+	standingCapsuleRadius = GetCapsuleComponent()->GetUnscaledCapsuleRadius();
+	standingCapsuleHalfHeight = GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight();
 	// 构造函数里已经按默认值摆过一次；这里按(可能被子类/蓝图默认值改过的)属性再摆一遍。
 	PlaceAvatar();
 }
@@ -356,6 +368,18 @@ void AForeverCharacter::Tick(float DeltaTime)
 		OpenThrowList();
 	}
 
+	UpdateWaterState(DeltaTime);
+
+	// 第一人称相机抬高：相机挂在head骨骼上，偏移要按骨骼朝向把"世界向上"转成骨骼局部坐标。
+	if (bIsFirstPerson) {
+		if (GetMesh()->DoesSocketExist(TEXT("head"))) {
+			const FTransform socket = GetMesh()->GetSocketTransform(TEXT("head"), RTS_World);
+			firstPersonCamera->SetRelativeLocation(socket.InverseTransformVectorNoScale(FVector(0.f, 0.f, firstPersonCameraRaise)));
+		} else {
+			firstPersonCamera->SetRelativeLocation(FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight() * 0.9f + firstPersonCameraRaise));
+		}
+	}
+
 	// 瞄准摄像机平滑过渡。依赖Actor Tick没被关掉：ACitizenElement默认关闭Tick，被玩家占有时由PossessedBy重新打开。
 	FVector targetSocketOffset = bIsAiming ? aimSocketOffset : defaultSocketOffset;
 	float targetArmLength = bIsAiming ? aimArmLength : defaultArmLength;
@@ -374,8 +398,8 @@ void AForeverCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 		if (UGameInstance* gameInstance = GetGameInstance()) {
 			if (UForeverKeyBindingSubsystem* keyBindings = gameInstance->GetSubsystem<UForeverKeyBindingSubsystem>()) {
-				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Jump")), ETriggerEvent::Started, this, &ACharacter::Jump);
-				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Jump")), ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Jump")), ETriggerEvent::Started, this, &AForeverCharacter::JumpPressed);
+				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Jump")), ETriggerEvent::Completed, this, &AForeverCharacter::JumpReleased);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("ToggleView")), ETriggerEvent::Started, this, &AForeverCharacter::ToggleCameraView);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Started, this, &AForeverCharacter::StartSprint);
 				enhancedInput->BindAction(keyBindings->GetAction(TEXT("Sprint")), ETriggerEvent::Completed, this, &AForeverCharacter::StopSprint);
@@ -416,19 +440,269 @@ void AForeverCharacter::UpdateRotationMode()
 	// 第一人称或瞄准中，角色朝向跟摄像机走而不是移动方向。
 	bool bFaceCamera = bIsFirstPerson || bIsAiming;
 	bUseControllerRotationYaw = bFaceCamera;
-	GetCharacterMovement()->bOrientRotationToMovement = !bFaceCamera;
+	// 游泳/潜水时偏航朝向自己算(UpdateSwimBody)：引擎在Flying模式会让胶囊体跟着加速度方向俯仰。
+	GetCharacterMovement()->bOrientRotationToMovement = !bFaceCamera && !bSwimState;
 }
 
 void AForeverCharacter::StartSprint()
 {
 	bIsSprinting = true;
-	GetCharacterMovement()->MaxWalkSpeed = walkSpeed * sprintSpeedMultiplier;
+	UpdateMoveSpeeds();
 }
 
 void AForeverCharacter::StopSprint()
 {
 	bIsSprinting = false;
-	GetCharacterMovement()->MaxWalkSpeed = walkSpeed;
+	UpdateMoveSpeeds();
+}
+
+void AForeverCharacter::UpdateMoveSpeeds()
+{
+	UCharacterMovementComponent* movement = GetCharacterMovement();
+	movement->MaxWalkSpeed = bIsSprinting ? walkSpeed * sprintSpeedMultiplier : walkSpeed;
+	// 游泳借用MOVE_Flying，速度由MaxFlySpeed控制；冲刺键=快速游泳。
+	movement->MaxFlySpeed = walkSpeed * swimSpeedMultiplier * (bIsSprinting ? swimSprintMultiplier : 1.f);
+	movement->BrakingDecelerationFlying = swimBrakingDeceleration;
+}
+
+void AForeverCharacter::JumpPressed()
+{
+	if (bSwimState) {
+		// 游泳(水面)没有跳跃；潜水时空格=上浮。
+		bSwimUpHeld = bDiveState;
+		return;
+	}
+	Jump();
+}
+
+void AForeverCharacter::JumpReleased()
+{
+	bSwimUpHeld = false;
+	StopJumping();
+}
+
+bool AForeverCharacter::QueryWater(const FVector& worldLocation, float& outSurfaceZ, float& outBedZ) const
+{
+	// 地图1单位=10米=1000厘米，和地形/水面mesh生成时的worldScale一致(见ForeverTerrainFrameworkComponent)。
+	constexpr float kMapUnitCm = 1000.f;
+
+	AForeverFrameworkActor* framework = cachedFramework.Get();
+	if (!framework) {
+		framework = Cast<AForeverFrameworkActor>(UGameplayStatics::GetActorOfClass(GetWorld(), AForeverFrameworkActor::StaticClass()));
+		cachedFramework = framework;
+	}
+	Map* map = framework ? framework->GetMap() : nullptr;
+	if (!map) return false;
+
+	// 先判范围：Map::GetWater越界会打警告，这里每帧调用，不能刷屏。
+	auto [width, height] = map->GetSize();
+	int cellX = FMath::FloorToInt(worldLocation.X / kMapUnitCm);
+	int cellY = FMath::FloorToInt(worldLocation.Y / kMapUnitCm);
+	if (cellX < 0 || cellY < 0 || cellX >= width || cellY >= height) return false;
+
+	auto [hasWater, level] = map->GetWater(cellX, cellY);
+	if (!hasWater) return false;
+
+	outSurfaceZ = level * kMapUnitCm;
+	outBedZ = map->SampleHeight(worldLocation.X / kMapUnitCm, worldLocation.Y / kMapUnitCm) * kMapUnitCm;
+	return true;
+}
+
+void AForeverCharacter::UpdateWaterState(float DeltaTime)
+{
+	UCharacterMovementComponent* movement = GetCharacterMovement();
+
+	// 只有玩家操控的角色游泳；市民走Core导航，不会下水。
+	float surfaceZ = 0.f, bedZ = 0.f;
+	const bool bInWater = IsPlayerControlled() && QueryWater(GetActorLocation(), surfaceZ, bedZ);
+	if (!bInWater) {
+		if (bSwimState) ExitSwimming();
+		bIsSwimming = false;
+		bIsDiving = false;
+		bIsUnderwater = false;
+		bIsFastSwimming = false;
+		UpdateSwimBody(DeltaTime);
+		return;
+	}
+
+	const FVector location = GetActorLocation();
+	// 入水/出水阈值按站立身高算(游泳时胶囊体被缩短了，不能读当前值)。
+	const float halfHeight = standingCapsuleHalfHeight * GetCapsuleComponent()->GetShapeScale();
+	const float fullHeight = halfHeight * 2.f;
+	const float feetSubmerge = surfaceZ - (location.Z - halfHeight); // 脚底在水面下多深
+	const float bedDepth = surfaceZ - bedZ;                          // 水底到水面的深度
+
+	if (!bSwimState) {
+		// 只有脚底淹没到enterRatio×身高才入水(缓坡上岸要退到exitRatio×身高以下的水深才算出水)。
+		if (feetSubmerge >= swimEnterDepthRatio * fullHeight
+			&& (movement->IsMovingOnGround() || movement->IsFalling())) {
+			EnterSwimming();
+		}
+	} else if (!bDiveState && bedDepth < swimExitDepthRatio * fullHeight) {
+		// 出水只在游泳状态判：潜水一定在深水里。
+		ExitSwimming();
+	}
+
+	if (bSwimState) {
+		// 引擎可能因为别的原因把模式切走(如别的系统SetMovementMode)，保持游泳模式。
+		if (movement->MovementMode != MOVE_Flying) movement->SetMovementMode(MOVE_Flying);
+
+		const bool bHasInput = !GetLastMovementInputVector().IsNearlyZero();
+		const FVector viewDirection = Controller ? Controller->GetControlRotation().Vector() : GetActorForwardVector();
+		// 下潜意图：按住冲刺并且视线朝水下(与竖直向下的点积 > 阈值)。
+		const bool bDiveIntent = bIsSprinting && FVector::DotProduct(viewDirection, FVector::DownVector) > swimDiveLookDot;
+
+		const float floatZ = surfaceZ + swimFloatOffset; // 浮在水面时胶囊体中心的高度(原地/游动同一个高度，姿势高度差在动画里补)
+		const float centerZ = location.Z;
+
+		if (!bDiveState) {
+			if (bDiveIntent) SetDiving(true);
+		} else if (!bDiveIntent && centerZ >= floatZ - 10.f) {
+			// 回到水面且不再满足下潜条件：回游泳。
+			SetDiving(false);
+		}
+
+		if (bDiveState) {
+			if (bSwimUpHeld) AddMovementInput(FVector::UpVector, 1.f);
+			FVector velocity = movement->Velocity;
+			// 没有任何输入时缓慢上浮；水下平游不自动上浮。
+			if (!bHasInput && !bSwimUpHeld && centerZ < floatZ) velocity.Z = FMath::Max(velocity.Z, swimBuoyancySpeed);
+			// 不能浮出水面太多：向上的速度不超过"到浮起位置的距离/帧时间"。
+			velocity.Z = FMath::Min(velocity.Z, (floatZ - centerZ) / FMath::Max(DeltaTime, UE_KINDA_SMALL_NUMBER));
+			movement->Velocity = velocity;
+		} else {
+			// 游泳：竖直方向一帧内到浮起位置(不会下潜，不做平滑，姿势切换时高度直接跳到位)。
+			FVector velocity = movement->Velocity;
+			velocity.Z = (floatZ - centerZ) / FMath::Max(DeltaTime, UE_KINDA_SMALL_NUMBER);
+			movement->Velocity = velocity;
+		}
+	}
+
+	// 水的阻力：超过游泳最大速度的部分(冲刺入水带进来的速度)快速衰减。引擎Flying模式的摩擦很小，不处理会高速滑很久。
+	if (bSwimState) {
+		FVector velocity = movement->Velocity;
+		const float maxSpeed = movement->MaxFlySpeed;
+		const float horizontalSpeed = velocity.Size2D();
+		if (horizontalSpeed > maxSpeed && horizontalSpeed > UE_KINDA_SMALL_NUMBER) {
+			const float newSpeed = FMath::FInterpTo(horizontalSpeed, maxSpeed, DeltaTime, swimOverspeedDecay);
+			velocity.X *= newSpeed / horizontalSpeed;
+			velocity.Y *= newSpeed / horizontalSpeed;
+			movement->Velocity = velocity;
+		}
+	}
+
+	const float headZ = GetMesh()->DoesSocketExist(TEXT("head"))
+		? GetMesh()->GetSocketLocation(TEXT("head")).Z
+		: location.Z + halfHeight;
+	bIsUnderwater = headZ < surfaceZ;
+	bIsSwimming = bSwimState;
+	bIsDiving = bSwimState && bDiveState;
+	bIsFastSwimming = bSwimState && bIsSprinting;
+	bIsSwimMoving = bSwimState && !GetLastMovementInputVector().IsNearlyZero();
+	UpdateSwimBody(DeltaTime);
+}
+
+void AForeverCharacter::EnterSwimming()
+{
+	bSwimState = true;
+	bDiveState = false;
+	// 缩短胶囊体：竖直的长胶囊体下端比趴着的身体深得多，会在到出水深度之前就顶住岸坡。以中心为基准缩，网格/相机/浮高不受影响。
+	if (!bCapsuleShrunk) {
+		GetCapsuleComponent()->SetCapsuleSize(standingCapsuleRadius, swimCapsuleHalfHeight);
+		bCapsuleShrunk = true;
+	}
+	// 游泳时第三人称弹簧臂连接点从胶囊体中心抬到头部，出水恢复。
+	cameraBoom->SetRelativeLocation(boomBaseLocation + FVector(0.f, 0.f, cameraBoomHeight));
+	StopJumping();
+	UpdateMoveSpeeds();
+	UpdateRotationMode();
+	SetSwimCameraLimit(true);
+	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+}
+
+void AForeverCharacter::ExitSwimming()
+{
+	bSwimState = false;
+	bDiveState = false;
+	bSwimUpHeld = false;
+	// 恢复站立胶囊体，同时整体上移半高的差值，保持下端位置不变，免得嵌进岸坡。
+	if (bCapsuleShrunk) {
+		const float currentHalfHeight = GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight();
+		GetCapsuleComponent()->SetCapsuleSize(standingCapsuleRadius, standingCapsuleHalfHeight);
+		AddActorWorldOffset(FVector(0.f, 0.f, (standingCapsuleHalfHeight - currentHalfHeight) * GetCapsuleComponent()->GetShapeScale()), false, nullptr, ETeleportType::TeleportPhysics);
+		bCapsuleShrunk = false;
+	}
+	cameraBoom->SetRelativeLocation(boomBaseLocation);
+	bIsSwimming = false;
+	bIsDiving = false;
+	bIsFastSwimming = false;
+	UpdateRotationMode();
+	SetSwimCameraLimit(false);
+	// 切回Falling：脚下有地面时引擎下一帧自动落地变回Walking。
+	UCharacterMovementComponent* movement = GetCharacterMovement();
+	if (movement->MovementMode == MOVE_Flying) movement->SetMovementMode(MOVE_Falling);
+}
+
+void AForeverCharacter::SetDiving(bool bDive)
+{
+	if (bDiveState == bDive) return;
+	bDiveState = bDive;
+	if (!bDive) bSwimUpHeld = false;
+	// 游泳时镜头不能朝上(不进入水下)，潜水解锁全视角。
+	SetSwimCameraLimit(!bDive);
+}
+
+void AForeverCharacter::SetSwimCameraLimit(bool bLimit)
+{
+	APlayerController* playerController = Cast<APlayerController>(GetController());
+	if (!playerController || !playerController->PlayerCameraManager) return;
+	APlayerCameraManager* cameraManager = playerController->PlayerCameraManager;
+	if (bLimit && !bCameraLimited) {
+		savedViewPitchMax = cameraManager->ViewPitchMax;
+		cameraManager->ViewPitchMax = 0.f; // 水平为止，不能再抬头
+		bCameraLimited = true;
+	} else if (!bLimit && bCameraLimited) {
+		cameraManager->ViewPitchMax = savedViewPitchMax;
+		bCameraLimited = false;
+	}
+}
+
+void AForeverCharacter::UpdateSwimBody(float DeltaTime)
+{
+	if (!bMeshDefaultCaptured) return;
+
+	// 偏航：胶囊体只转偏航(不跟加速度俯仰)。有水平输入就朝输入方向转；面朝镜头模式交给引擎。
+	if (bSwimState && !bUseControllerRotationYaw) {
+		FVector input = GetLastMovementInputVector();
+		input.Z = 0.f;
+		if (!input.IsNearlyZero()) {
+			const FRotator current = GetActorRotation();
+			const FRotator target(0.f, input.Rotation().Yaw, 0.f);
+			SetActorRotation(FMath::RInterpConstantTo(current, target, DeltaTime, GetCharacterMovement()->RotationRate.Yaw));
+		}
+	}
+
+	// 身体俯仰：潜水=镜头俯仰×跟随比例，上浮再加一个向上转的分量；其余状态回正。
+	float targetPitch = 0.f;
+	if (bSwimState && bDiveState && Controller) {
+		const float cameraPitch = FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
+		targetPitch = cameraPitch * diveBodyPitchFollow;
+		if (bSwimUpHeld) targetPitch += diveRiseBodyPitch;
+		targetPitch = FMath::Clamp(targetPitch, -80.f, 80.f);
+	}
+	bodyPitch = FMath::FInterpTo(bodyPitch, targetPitch, DeltaTime, diveBodyPitchInterpSpeed);
+	if (FMath::IsNearlyZero(bodyPitch, 0.05f) && targetPitch == 0.f) bodyPitch = 0.f;
+
+	// 绕胶囊体中心转网格(网格原点在脚底，要把位置一起绕中心转)，胶囊体本身保持竖直。
+	if (bodyPitch == 0.f) {
+		// 没俯仰时只在网格偏离默认姿态(刚结束潜水)时回正一次，平时不动它。
+		if (!GetMesh()->GetRelativeLocation().Equals(meshDefaultLocation, 0.01f)) {
+			GetMesh()->SetRelativeLocationAndRotation(meshDefaultLocation, meshDefaultRotation);
+		}
+		return;
+	}
+	const FQuat pitchQuat(FVector::RightVector, FMath::DegreesToRadians(-bodyPitch));
+	GetMesh()->SetRelativeLocationAndRotation(pitchQuat.RotateVector(meshDefaultLocation), pitchQuat * meshDefaultRotation);
 }
 
 void AForeverCharacter::MeetOptionFocusUp()
@@ -620,7 +894,9 @@ void AForeverCharacter::Move(const FInputActionValue& value)
 	if (Controller != nullptr) {
 		const FRotator yawRotation(0, Controller->GetControlRotation().Yaw, 0);
 
-		AddMovementInput(FRotationMatrix(yawRotation).GetUnitAxis(EAxis::X), movement.Y);
+		// 潜水时前进方向带俯仰：抬头往上游，低头往下潜；水面游泳只在水平面内。
+		const FRotator forwardRotation = bDiveState ? Controller->GetControlRotation() : yawRotation;
+		AddMovementInput(FRotationMatrix(forwardRotation).GetUnitAxis(EAxis::X), movement.Y);
 		AddMovementInput(FRotationMatrix(yawRotation).GetUnitAxis(EAxis::Y), movement.X);
 	}
 }

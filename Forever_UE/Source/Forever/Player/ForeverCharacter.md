@@ -24,6 +24,16 @@
   (拿着它的手就是投掷手，或至少一只手空)；两只手都被别的东西占着时仍保持激活但不能瞄准。左键`StartFireWeapon`
   在投掷物激活时转`Throw()`(一次一个)，不走武器连发。`bIsAiming`与武器共用，`IsAimingThrow()`供HUD区分。
   投掷出去的物品记进`Player::worldAssets`，不会自动消失。`UForeverThrowableComponent`和`UForeverWeaponVisualComponent`是friend,前者需要直接开关`StartAim`/`StopAim`,后者需要调`ActivateShoulderWeapon`。
+- **游泳**(`UpdateWaterState`，Tick里每帧调，只对`IsPlayerControlled()`的角色生效；市民走Core导航不下水)：
+  - **水体数据**：`QueryWater(世界坐标)`把厘米坐标除以1000得到地图格，读Core的`Map::GetWater(x,y)`(有没有水+水位，地图单位)和`Map::SampleHeight`(水底高度)，都乘1000换算成世界Z。水面mesh(`ForeverTerrainFrameworkComponent`)也是同一套数据，所以判定和画面一致；先判格子范围，因为`GetWater`越界会打警告、这里每帧调。水位逐格定值(河流格子各自不同)，没有水体Actor/`PhysicsVolume`。
+  - **借用`MOVE_Flying`，不用`MOVE_Swimming`**：引擎的`PhysSwimming`每帧检查`GetPhysicsVolume()->bWaterVolume`，没有水体体积就立刻`SetMovementMode(MOVE_Falling)`踢出游泳(`CharacterMovementComponent.cpp`的PhysSwimming末尾)。`MOVE_Flying`无重力、三维移动、没有这个检查，`MaxFlySpeed`/`BrakingDecelerationFlying`控制速度和停止。自己维护`bSwimState`，动画蓝图读`bIsSwimming`而不是`IsSwimming()`/`IsFlying()`。
+  - **两个状态**：游泳(浮在水面，不下潜，镜头`ViewPitchMax=0`不能朝上看)和潜水(可上下，镜头全视角)。从地面入水先进游泳；游泳时按住冲刺且视线与竖直向下的点积>`swimDiveLookDot`(0.8)才进潜水；潜水回到水面且不再满足下潜条件时回游泳。`bSwimState`=游泳或潜水，`bDiveState`=潜水。
+  - **入水/出水**：`脚底淹没深度 >= swimEnterDepthRatio(0.8)×身高`才入水；游泳(水面)中`水底到水面深度 < swimExitDepthRatio(0.6)×身高`才出水，所以只能从很缓的沙滩坡走上岸，没有跳跃出水。两个比例之间是滞回。出水用`SetMovementMode(MOVE_Falling)`。出水判据用地形水底深度而不是脚底，因为浮在水面时胶囊体离水底很远。
+  - **浮高**：胶囊体中心浮在`水面+swimFloatOffset`(默认-60，原地踩水用)；原地/游动同一个高度，两种姿势头的高度差在AnimBP里用Transform (Modify) Bone(root，Component Space的Z)补。游泳状态竖直速度每帧直接补到浮高(一帧到位，不平滑，不会下潜)；潜水时没有输入以`swimBuoyancySpeed`缓慢上浮，向上速度钳在"到浮高的距离/帧时间"以内，不冲出水面。
+  - **操控**：游泳时前进方向只在水平面内；潜水时带视角俯仰(低头下潜)，空格=上浮(游泳状态空格无效)。Shift冲刺=快速游泳(`swimSpeedMultiplier`0.7×`swimSprintMultiplier`2.5×`walkSpeed`)。游泳/潜水时`bOrientRotationToMovement`关掉，偏航由`UpdateSwimBody`自己转(引擎Flying模式会让胶囊体跟加速度俯仰)。
+  - **身体俯仰**：胶囊体始终竖直，只转网格(绕胶囊中心)。潜水时俯仰=镜头俯仰×`diveBodyPitchFollow`(0.6)，按住空格上浮再加`diveRiseBodyPitch`(35度)，`FInterpTo`平滑；不是等于镜头方向，也不是全程平的。
+  - **给动画蓝图的变量**(蓝图里Cast成`AForeverCharacter`)：`bIsSwimming`(游泳或潜水都为真)、`bIsDiving`(仅潜水)、`bIsSwimMoving`(游泳/潜水且有移动输入，动画蓝图可用它在游动/踩水间切)、`bIsUnderwater`(头部——`head`socket，没有则胶囊顶——低于水面)、`bIsFastSwimming`；速度从移动组件的`Velocity`取。游泳动画(Mixamo重定向的`Swimming`/`Treading_Water`，流程见`Tools/MixamoRetarget/README.md`)本身带趴姿，胶囊体保持竖直、不旋转网格；中心高度对不上就调`swimFloatOffset`。
+  - **未做**：氧气/溺水、水下相机碰撞和后处理(雾/色调/焦散)、水花粒子和音效。
 - 蹲下(C键)和挥拳(左键)未实现:蹲姿需要在AnimGraph加`Blend Poses by bool`才能平滑过渡,效果不理想,已放弃。
 
 ### 头像方块
@@ -58,3 +68,6 @@ Cube每个面都是0-1 UV，6个面都显示头像；第一人称相机在方块
 - 角色外观(骨骼网格/动画蓝图)改为运行时按所控制的NPC数据动态设置,目前仍是构造函数默认值。
 
 - 第一人称下网格OwnerNoSee，`ToggleCameraView`把`VisibilityBasedAnimTickOption`强制成`AlwaysTickPoseAndRefreshBones`：否则动画被当成"没渲染"而停更，第一人称相机(挂head骨骼)1~2秒后不再随步伐晃，瞄准的武器(挂胶囊体)与镜头就变成相对静止。(2026-11-18，推断的原因，待PIE确认)
+- **相机**：第三人称弹簧臂连接点只在游泳/潜水时从胶囊体中心抬到头部(`cameraBoomHeight`默认70cm，`EnterSwimming`加上、`ExitSwimming`恢复到BeginPlay记下的原位置)。第一人称相机每帧在head骨骼上加`firstPersonCameraRaise`(默认15cm，世界向上，转成骨骼局部坐标)。
+- **游泳时缩短胶囊体**：竖直的站立胶囊体下端在水面下约`-swimFloatOffset+半高`(≈156cm)，比出水深度(0.6身高≈115cm)深，会在能出水之前就顶住岸坡。`EnterSwimming`把胶囊体缩成`swimCapsuleHalfHeight`(默认45，半径不变，以中心为基准，网格/相机/浮高不动)；`ExitSwimming`恢复站立尺寸并同时上移半高差值，保持下端位置不变，免得嵌进岸坡(出水时会有一点上移)。入水/出水阈值用BeginPlay缓存的站立身高，不读当前胶囊体。
+- **入水阻力**：引擎Flying模式摩擦很小，冲刺入水(速度可达几千厘米/秒)会滑很久。游泳状态下水平速度超过`MaxFlySpeed`的部分按`swimOverspeedDecay`(默认8/秒，指数衰减)快速衰减，约半秒回到游泳速度。

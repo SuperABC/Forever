@@ -16,6 +16,7 @@ class UStaticMeshComponent;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class UTexture2D;
+class AForeverFrameworkActor;
 
 UCLASS()
 class FOREVER_API AForeverCharacter : public ACharacter
@@ -201,6 +202,120 @@ protected:
 
 	bool bIsSprinting = false;
 
+	// 第一人称相机在head骨骼基础上再抬高的距离(厘米，世界向上)。
+	UPROPERTY(EditDefaultsOnly, Category = "Camera")
+	float firstPersonCameraRaise = 15.f;
+
+	// 游泳/潜水时第三人称弹簧臂连接点相对胶囊体中心的高度(厘米)，=头部高度；平时在胶囊体中心。
+	UPROPERTY(EditDefaultsOnly, Category = "Camera")
+	float cameraBoomHeight = 70.f;
+	FVector boomBaseLocation = FVector::ZeroVector; // 弹簧臂平时的相对位置
+
+	// ---- 游泳/潜水(见ForeverCharacter.md"游泳") ----
+	// 两个状态：游泳(浮在水面，不下潜，镜头不能朝上看)和潜水(可上下，镜头全视角)。从地面入水先进游泳；
+	// 游泳时按住冲刺并且视线朝下(与竖直向下的点积大于swimDiveLookDot)才切潜水；潜水回到水面且不再满足下潜条件时回游泳。
+	// 入水：脚底被水淹没的深度达到身高(胶囊体全高)的这个比例才切成游泳。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimEnterDepthRatio = 0.8f;
+
+	// 出水：脚下水底到水面的深度低于身高的这个比例才切回走路(只能从缓坡沙滩走上岸，没有跳跃出水)。必须小于入水比例，中间是滞回区间。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimExitDepthRatio = 0.6f;
+
+	// 游泳速度=walkSpeed×该值；按住冲刺键再×swimSprintMultiplier(快速游泳)。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimSpeedMultiplier = 0.7f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimSprintMultiplier = 2.5f;
+
+	// 浮在水面时胶囊体中心相对水面的高度(厘米，正=中心在水面上方)，游泳(原地/游动)统一用这一个值，高度不随姿势变。
+	// 要让水面到脖子、头露一点就调它。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimFloatOffset = -60.f;
+
+	// 游泳/潜水时胶囊体缩成这个半高(厘米，半径不变)，以中心为基准缩。要小于"浮高对应的下端深度"，
+	// 即 < 出水深度(swimExitDepthRatio×身高) + swimFloatOffset，这样走到出水深度之前胶囊体不会先顶住岸坡。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimCapsuleHalfHeight = 45.f;
+
+	// 游泳→潜水：视线方向与竖直向下的点积大于该值(0.8≈俯角53度)，并且按住冲刺。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimDiveLookDot = 0.8f;
+
+	// 潜水时没有任何移动输入的上浮速度(厘米/秒)，0=悬停不浮。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimBuoyancySpeed = 100.f;
+
+	// 水平速度超过游泳最大速度的部分的衰减速度(1/秒，指数衰减，越大入水后减速越快)。冲刺入水时速度可达几千厘米/秒。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimOverspeedDecay = 8.f;
+
+	// 游泳时的减速度，越大松开按键停得越快。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float swimBrakingDeceleration = 400.f;
+
+	// 潜水时身体俯仰=镜头俯仰×该比例(0=身体一直平的，1=和镜头方向完全一致)。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float diveBodyPitchFollow = 0.6f;
+
+	// 潜水时按住空格上浮，身体额外向上转的角度(度)。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float diveRiseBodyPitch = 35.f;
+
+	// 身体俯仰的插值速度(1/秒)。
+	UPROPERTY(EditDefaultsOnly, Category = "Swim")
+	float diveBodyPitchInterpSpeed = 5.f;
+
+	// 给动画蓝图读的状态(蓝图里Cast成AForeverCharacter)：游泳或潜水(两者都为真，用同一套游泳动画) / 在潜水 / 头部在水面以下 / 按着冲刺键在游。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Swim")
+	bool bIsSwimming = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Swim")
+	bool bIsDiving = false;
+
+	// 游泳/潜水且有移动输入(趴姿)。动画蓝图可用它在"游动/踩水"间切(比用速度同步)。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Swim")
+	bool bIsSwimMoving = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Swim")
+	bool bIsUnderwater = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Swim")
+	bool bIsFastSwimming = false;
+
+	// 跳跃键：潜水时是"上浮"，否则是普通跳跃(游泳时无效)。
+	void JumpPressed();
+	void JumpReleased();
+	bool bSwimUpHeld = false;
+
+	// 每帧判定入水/出水、游泳/潜水切换、浮力和水下状态，Tick里调；只对玩家操控的角色生效。
+	void UpdateWaterState(float DeltaTime);
+	void EnterSwimming();
+	void ExitSwimming();
+	void SetDiving(bool bDive);
+	// 游泳时限制镜头不能朝上看，潜水/出水后恢复。
+	void SetSwimCameraLimit(bool bLimit);
+	// 身体俯仰(转网格，胶囊体保持竖直)和游泳时的偏航朝向。
+	void UpdateSwimBody(float DeltaTime);
+
+	// 按是否冲刺/游泳刷新MaxWalkSpeed和MaxFlySpeed。
+	void UpdateMoveSpeeds();
+
+	// 自己的游泳状态：游泳借用MOVE_Flying实现(没有水体PhysicsVolume，引擎的MOVE_Swimming会立刻被踢回Falling)。
+	bool bSwimState = false;
+	bool bCapsuleShrunk = false;
+	float standingCapsuleRadius = 34.f;
+	float standingCapsuleHalfHeight = 96.f; // 站立时的胶囊体尺寸，BeginPlay缓存
+	bool bDiveState = false;
+	float bodyPitch = 0.f;       // 当前身体俯仰(度)
+	bool bCameraLimited = false;
+	float savedViewPitchMax = 89.9f;
+	FVector meshDefaultLocation = FVector::ZeroVector;
+	FQuat meshDefaultRotation = FQuat::Identity;
+	bool bMeshDefaultCaptured = false;
+	mutable TWeakObjectPtr<AForeverFrameworkActor> cachedFramework;
+
 public:
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return cameraBoom; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return followCamera; }
@@ -218,4 +333,10 @@ public:
 	void RestoreWeaponState(int32 slot, int32 magazineAmmo);
 	// 供AForeverHUD判断要不要画屏幕中心的准星。
 	FORCEINLINE bool IsAiming() const { return bIsAiming; }
+
+	// 世界坐标(厘米)所在地图格有没有水：有则返回水面高度和该点地形(水底)高度(世界Z，厘米)。水体数据来自Core的Map::GetWater。
+	bool QueryWater(const FVector& worldLocation, float& outSurfaceZ, float& outBedZ) const;
+	FORCEINLINE bool IsSwimmingNow() const { return bIsSwimming; }
+	FORCEINLINE bool IsDivingNow() const { return bIsDiving; }
+	FORCEINLINE bool IsUnderwaterNow() const { return bIsUnderwater; }
 };
