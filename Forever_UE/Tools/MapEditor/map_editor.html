@@ -52,6 +52,7 @@ h4 { margin:10px 0 4px; color:var(--dim); font-weight:600; font-size:12px; lette
 <script src="js/lots.js"></script>
 <script src="js/greens.js"></script>
 <script src="js/transit.js"></script>
+<script src="js/busline.js"></script>
 <script>
 'use strict';
 // Forever 地图编辑器：地形/路网/地块，导出 .terrain / .roadnet。操作见 README.md，文件格式见 Source/Basic/map/*.md。
@@ -84,11 +85,12 @@ const S = {
 		contour: { on: true, interval: 5 },   // 2D等高线(间距单位element=10m，每5条一条主等高线)
 	// 路网
 	// z=下一个新建节点的高度；zTerrain=改用点击处的地形高度。点在已有节点上沿用它自己的高度。Alt+滚轮快捷调整z。
-		road: { shape: 'line', type: 'ground', preset: 0, z: 0, zTerrain: false, snapNode: true, snapRoad: true, snapEdge: true, snapLot: true, snapAngle: true, name: '', tree: 'default', lamp: 'default' },
+		road: { shape: 'line', type: 'ground', preset: 0, asset: 'default', z: 0, zTerrain: false, snapNode: true, snapRoad: true, snapEdge: true, snapLot: true, snapAngle: true, name: '', tree: 'default', lamp: 'default' },
 	pending: null,              // 路/地块正在画的状态
-	// 线路工具(火车铁轨/飞机航线)：mode=line画实体线路 / loop连接路线环；z=下一个新建node的高度(zTerrain=用点击处地形高度)
-	transit: { mode: 'line', routeId: '', shape: 'line', type: 'ground', z: 0, zTerrain: false, snapNode: true, snapEdge: true, snapConn: true, snapAngle: true },
-	tloop: [],                  // loop模式正在连的环 [{kind:'preset'|'node', ref}]
+	// 线路工具(火车铁轨/飞机航线/公交)：mode=line独立线路 / loop独立路线环 / bus路网路线(公交)；z=下一个新建node的高度(zTerrain=用点击处地形高度)
+	transit: { mode: 'line', routeId: '', shape: 'line', type: 'ground', z: 0, zTerrain: false, snapNode: true, snapEdge: true, snapConn: true, snapAngle: true, station: 'station_bus' },
+	tloop: [],
+	bline: [],                  // bus模式正在建的公交线 [{road, t, side, station}]                  // loop模式正在连的环 [{kind:'preset'|'node', ref}]
 	lotArea: 'AREA_RESIDENCE_HIGH',
 	sel: null,                  // {kind:'node'|'road'|'lot'|'green', id}
 	colors: {},                 // 地形字符串→自定义颜色
@@ -114,7 +116,7 @@ function applyAction(a, undo) {
 	} else if (a.kind === 'm') {
 		S.model = ME.cloneModel(undo ? a.before : a.after);
 		if (S.sel && !selExists()) S.sel = null;
-		S.pending = null; S.presetDraw = null; S.tloop = [];
+		S.pending = null; S.presetDraw = null; S.tloop = []; S.bline = [];
 	}
 }
 function undo() { const a = hist.undo.pop(); if (!a) return; applyAction(a, true); hist.redo.push(a); afterChange(); }
@@ -137,7 +139,7 @@ let piecesCache = null, piecesSig = '';
 function getRoadPieces() {
 	const M = S.model;
 	const sig = M.nodes.map((n) => n.id + ',' + n.x + ',' + n.y + ',' + (n.z || 0)).join(';') + '|' +
-		M.roads.map((r) => r.id + ',' + r.a + ',' + r.b + ',' + r.type + ',' + (r.ctrl ? r.ctrl.join(',') : '') + ',' + (r.lanes || []).join(',')).join(';');
+		M.roads.map((r) => r.id + ',' + r.a + ',' + r.b + ',' + r.type + ',' + (r.ctrl ? r.ctrl.join(',') : '') + ',' + (r.asset || '') + ',' + (r.lanes || []).join(',')).join(';');
 	if (!piecesCache || sig !== piecesSig) {
 		try { piecesCache = ME.exportRoadnet(M, S.terrain).roadPieces; } catch (e) { piecesCache = new Map(); }
 		piecesSig = sig;
@@ -210,7 +212,7 @@ async function doOpenRoadnet() {
 		const data = ME.readRoadnet(new TextDecoder().decode(f.buffer));
 		if (!data.source) throw new Error('这个.roadnet里没有source段(不是编辑器导出的)，无法继续编辑');
 		const legacy = !(data.source.version >= 2);
-					S.model = ME.migrateModel(data.source, ctxHeight()); S.sel = null; S.pending = null; S.tloop = [];
+					S.model = ME.migrateModel(data.source, ctxHeight()); S.sel = null; S.pending = null; S.tloop = []; S.bline = [];
 		S.files.roadnet = f.handle; clearHistory(); afterChange(); say('已打开 ' + f.name + (legacy ? '(旧版文件，已迁移成节点高度；隧道/桥已按旧布局拆成多条路)' : ''));
 	} catch (e) { say('打开路网失败：' + e.message); }
 }
@@ -234,7 +236,7 @@ function doNew() {
 	if (w * h > 4096 * 4096) { say('太大了'); return; }
 	S.terrain = new ME.Terrain(w, h);
 	S.model = ME.newModel(w, h);
-	S.sel = null; S.pending = null; S.tloop = []; S.files = { terrain: null, roadnet: null };
+	S.sel = null; S.pending = null; S.tloop = []; S.bline = []; S.files = { terrain: null, roadnet: null };
 	rebuildTerrainImage(); clearHistory(); fitView(); afterChange();
 }
 
@@ -505,6 +507,57 @@ function drawContours() {
 	}
 	g.drawImage(L.canvas, v.ox - L.ox, v.oy - L.oy, c2d.width / dpr, c2d.height / dpr);
 }
+// 车道标线：只在路画得够宽(视角放得够大)时画。
+//  - 双向(两侧都有车行道)：一条黄线代表双黄线，画在两个行车方向的分界上；两侧车道数不对称时，黄线偏向车道少的一侧(粗略看出哪个方向车道多)。
+//  - 单行道(只有一侧有车行道)：沿车行道中线每隔一段画一个行车方向的箭头。
+// 方向约定(Core roadnet.md)：lanes前三项=side0=前进方向(a→b)的右手边(横向偏移方向(-fy,fx))，通行方向 a→b；后三项=side1，通行方向 b→a。
+const LANE_MARK_MIN_PX = 16;
+function drawLaneMarks(r, q) {
+	const v = S.view, LW = ME.LANE_WIDTH, ln = r.lanes;
+	const w0 = (ln[0] + ln[1] + ln[2]) * LW, w1 = (ln[3] + ln[4] + ln[5]) * LW, total = w0 + w1;
+	if (total * v.scale < LANE_MARK_MIN_PX || ln[0] + ln[3] === 0) return;
+	const two = ln[0] > 0 && ln[3] > 0;
+	// 分界线相对路中心线沿 side0 方向的偏移(世界单位)；车行道中线(单行道用)在分界线向外 一半车行道宽
+	const divider = total / 2 - w0;
+	const lanePx = two ? 0 : (ln[0] > 0 ? ln[0] : ln[3]) * LW * v.scale;
+	const centerOff = two ? divider : (ln[0] > 0 ? divider + ln[0] * LW / 2 : divider - ln[3] * LW / 2);
+	const forward = ln[0] > 0; // 单行道：side0有车道=a→b
+	// 沿路采样成屏幕折线，每点带偏移后的位置和前进方向
+	const lenPx = ME.roadLength(S.model, r) * v.scale;
+	const N = Math.max(8, Math.min(400, Math.ceil(lenPx / 5)));
+	const pts = [];
+	for (let i = 0; i <= N; i++) {
+		const t = i / N, p = ME.evalQuad(q, t), pn = ME.evalQuad(q, Math.min(1, t + 1 / (N * 4))), pp = ME.evalQuad(q, Math.max(0, t - 1 / (N * 4)));
+		let fx = pn[0] - pp[0], fy = pn[1] - pp[1]; const fl = Math.hypot(fx, fy) || 1; fx /= fl; fy /= fl;
+		const [sx, sy] = toScreen(p[0], p[1]), off = centerOff * v.scale;
+		pts.push({ x: sx - fy * off, y: sy + fx * off, fx, fy });
+	}
+	g.save();
+	g.setLineDash([]);
+	if (two) {
+		g.strokeStyle = '#f5c518'; g.lineWidth = Math.max(1.5, Math.min(3, 0.08 * v.scale)); g.lineCap = 'butt';
+		g.beginPath(); pts.forEach((p, i) => { if (i === 0) g.moveTo(p.x, p.y); else g.lineTo(p.x, p.y); }); g.stroke();
+	} else {
+		const sz = Math.max(4, Math.min(11, lanePx * 0.35)), spacing = Math.max(36, sz * 6);
+		let acc = spacing / 2;
+		g.fillStyle = '#5fd4ff'; g.strokeStyle = '#000a'; g.lineWidth = 1; g.lineJoin = 'round'; 
+		for (let i = 1; i < pts.length; i++) {
+			const a = pts[i - 1], b = pts[i], seg = Math.hypot(b.x - a.x, b.y - a.y);
+			acc -= seg;
+			if (acc > 0) continue;
+			acc += spacing;
+			let dx = b.fx, dy = b.fy; if (!forward) { dx = -dx; dy = -dy; }
+			const cx = b.x, cy = b.y, nx = -dy, ny = dx;
+			g.beginPath();
+			g.moveTo(cx + dx * sz, cy + dy * sz);
+			g.lineTo(cx - dx * sz * 0.7 + nx * sz * 0.75, cy - dy * sz * 0.7 + ny * sz * 0.75);
+			g.lineTo(cx - dx * sz * 0.25, cy - dy * sz * 0.25);
+			g.lineTo(cx - dx * sz * 0.7 - nx * sz * 0.75, cy - dy * sz * 0.7 - ny * sz * 0.75);
+			g.closePath(); g.fill(); g.stroke();
+		}
+	}
+	g.restore();
+}
 function draw2D() {
 	if (S.mode3d) return;
 	flushTerrainImage();
@@ -572,24 +625,13 @@ function draw2D() {
 	}
 	drawGreenLinks();
 	drawPresets();
-	// 选中高亮和高度箭头
+	// 选中高亮和车道标线
 	for (const r of M.roads) {
 		const q = ME.quadOf(M, r);
 		const w = Math.max(2, ME.roadWidth(r) * v.scale);
 		g.setLineDash([]);
 		if (S.sel && S.sel.kind === 'road' && S.sel.id === r.id) { pathQuad(q); g.strokeStyle = '#fff'; g.lineWidth = Math.max(1.5, w * 0.25); g.stroke(); }
-				// 头尾高度不同：在中点画一个朝高处的小箭头
-				const za = ME.nodeOf(M, r.a).z || 0, zb = ME.nodeOf(M, r.b).z || 0;
-				if (Math.abs(za - zb) > 1e-6 && r.type !== 'hug') {
-					const pm = ME.evalQuad(q, 0.5), pn = ME.evalQuad(q, zb > za ? 0.56 : 0.44);
-					const [mx, my] = toScreen(pm[0], pm[1]), [nx, ny] = toScreen(pn[0], pn[1]);
-					const ang = Math.atan2(ny - my, nx - mx);
-					g.fillStyle = '#ffffffcc'; g.beginPath();
-					g.moveTo(mx + Math.cos(ang) * 6, my + Math.sin(ang) * 6);
-					g.lineTo(mx + Math.cos(ang + 2.5) * 5, my + Math.sin(ang + 2.5) * 5);
-					g.lineTo(mx + Math.cos(ang - 2.5) * 5, my + Math.sin(ang - 2.5) * 5);
-					g.closePath(); g.fill();
-				}
+			drawLaneMarks(r, q);
 	}
 	// 节点
 	for (const n of M.nodes) {
@@ -619,6 +661,7 @@ function draw2D() {
 		}
 	}
 	drawTransit();
+	drawBus();
 	drawOverlay();
 }
 function drawOverlay() {
@@ -913,8 +956,9 @@ function drawGreenOverlay(m) {
 	g.strokeStyle = sp.close ? '#4cff9e' : '#aaa'; g.lineWidth = 2; g.beginPath(); g.arc(sx, sy, 7, 0, Math.PI * 2); g.stroke();
 }
 
-// ======================= 线路工具(火车铁轨/飞机航线 + 线路环) =======================
-// 两个模式：line=画实体线路(node+conn，每条conn有route id)；loop=把 预设建筑/线路node 依次连成环。数据模型/规则/导出见 js/transit.js。
+// ======================= 线路工具(火车铁轨/飞机航线 + 线路环 + 公交) =======================
+// 三个模式：line=独立线路(node+conn，每条conn有route id)；loop=独立路线环(把 预设建筑/线路node 依次连成环)；bus=路网路线(在路网的路侧点公交站连成环线)。
+// 数据模型/规则/导出见 js/transit.js、js/busline.js。
 // 状态：S.transit(面板参数)；line模式画线中途的起点放在 S.pending；loop模式正在连的环放在 S.tloop=[{kind,ref}]；
 // 已有的环被选中时 S.sel={kind:'tloop', id, index(选中的项|null)}，此时吸附只吸这个环上的项。
 let presetCache = null, presetSig = '';
@@ -927,7 +971,7 @@ function getPresetPlacements() {
 	return presetCache;
 }
 function tSetMode(mode) {
-	S.transit.mode = mode; S.pending = null; S.tloop = []; S.sel = null;
+	S.transit.mode = mode; S.pending = null; S.tloop = []; S.bline = []; S.sel = null;
 	renderLeft(); renderRight(); S.dirty2d = true;
 }
 function tRouteIds() {
@@ -1007,6 +1051,7 @@ function tLineClick(w) {
 function tSelectClick(w, e) {
 	const M = S.model, r = 9 / S.view.scale;
 	if (S.transit.mode === 'loop') { tLoopPick(w); return; }
+	if (S.transit.mode === 'bus') { tBusPick(w); return; }
 	if (S.sel && S.sel.kind === 'tconn') {
 		const c = ME.tConnOf(M, S.sel.id);
 		if (c) {
@@ -1076,7 +1121,7 @@ function tLoopFinish() {
 	if (items.length < 2) { say('环至少要2个点'); return; }
 	if (items.length > 2 && sameItem(items[0], items[items.length - 1])) items.pop();   // 点回了起点：末项就是闭合，去掉
 	const res = modelOp((m) => ME.addTLoop(m, items, S.transit.routeId));
-	if (res.loop) { S.tloop = []; say(`已建线路环${res.loop.id}：每个点默认都不停站，Alt+点这个环选中后再设置停站`); }
+	if (res.loop) { S.tloop = []; S.bline = []; say(`已建线路环${res.loop.id}：每个点默认都不停站，Alt+点这个环选中后再设置停站`); }
 	S.dirty2d = true;
 }
 // Alt+左键(loop模式)：选中点到的环(点在环的线上/项上)；点别处=取消选择。
@@ -1092,9 +1137,189 @@ function tLoopPick(w) {
 		}
 		if (d <= bd) { bd = d; best = l; }
 	}
-	S.tloop = [];
+	S.tloop = []; S.bline = [];
 	S.sel = best ? { kind: 'tloop', id: best.id, index: null } : null;
-	renderRight(); S.dirty2d = true;
+	renderLeft(); renderRight(); S.dirty2d = true;
+}
+
+// ---- 路网路线(公交) ----
+// 在路的某一侧点一串站，点回起始站闭合成环线。上一站→当前点的行车路线实时预览(受单行道约束)，开不通的不能建站。数据/规则见 js/busline.js。
+// S.bline=正在建的站草稿；已建的线在 model.transit.roadLines；选中 S.sel={kind:'bstop'|'bline', id}。
+let busCache = null;
+function busSigOf(M) {
+	return M.roads.map((r) => r.id + ',' + r.a + ',' + r.b + ',' + (r.ctrl ? r.ctrl.join(',') : '') + ',' + r.lanes.join('')).join(';') + '|' +
+		M.nodes.map((n) => n.id + ',' + n.x + ',' + n.y + (n.extern ? 'e' : '')).join(';') + '|' + JSON.stringify((M.transit && M.transit.roadLines) || []);
+}
+// 行车图+路线缓存：路网/线变了才重算(每帧重算Dijkstra太贵)。
+function getBusCache() {
+	const sig = busSigOf(S.model);
+	if (!busCache || busCache.sig !== sig) busCache = { sig, graph: ME.busDriveGraph(S.model), paths: new Map() };
+	return busCache;
+}
+const busKey = (s) => s.road + ':' + s.t.toFixed(5) + ':' + s.side;
+function busHop(A, B) {
+	const c = getBusCache(), key = busKey(A) + '>' + busKey(B);
+	if (!c.paths.has(key)) c.paths.set(key, ME.busPath(S.model, A, B, c.graph));
+	return c.paths.get(key);
+}
+function busLineHops(line) {
+	const n = line.stops.length;
+	return line.stops.map((s, i) => busHop(s, line.stops[(i + 1) % n]));
+}
+const busColor = (id) => ME.routeColor('bus' + id);
+const BUS_PICK_PX = 10;
+function busStopHit(stop, w) {
+	const p = ME.busStopPoint(S.model, stop);
+	return !!p && Math.hypot((p.x - w[0]) * S.view.scale, (p.y - w[1]) * S.view.scale) <= BUS_PICK_PX;
+}
+function tBusClick(w) {
+	const M = S.model, draft = S.bline;
+	if (draft.length >= 2 && busStopHit(draft[0], w)) { tBusFinish(); return; }   // 点回起始站 = 闭合
+	const snap = ME.busSnap(M, w[0], w[1], 8 / S.view.scale);
+	if (!snap) { say('点在路的某一侧来放公交站(不吸附节点/路口)'); return; }
+	if (!snap.ok) { say(snap.reason); return; }
+	const stop = { road: snap.road, t: snap.t, side: snap.side, station: S.transit.station };
+	if (draft.length) {
+		const last = draft[draft.length - 1];
+		if (busStopHit(last, w)) return;   // 点在上一站上：忽略
+		if (!busHop(last, stop)) { say('从上一站开不到这里(单行道/不连通)，不能在这里建站'); return; }
+	}
+	draft.push(stop);
+	renderLeft(); S.dirty2d = true;
+}
+function tBusFinish() {
+	const draft = S.bline;
+	if (draft.length < 2) { say('公交线至少要2个站'); return; }
+	const res = modelOp((m) => ME.addBusLine(m, draft));
+	if (res.line) { S.bline = []; S.sel = { kind: 'bline', id: res.line.id }; say(`已建公交线${res.line.id}(${res.line.stops.length}站)`); renderLeft(); renderRight(); }
+	S.dirty2d = true;
+}
+// Alt+左键(bus模式)：点到站选站，点到线选线，别处取消选择。
+function tBusPick(w) {
+	const M = S.model, lines = (M.transit && M.transit.roadLines) || [];
+	S.bline = [];
+	for (const line of lines) for (const s of line.stops) if (busStopHit(s, w)) { S.sel = { kind: 'bstop', id: s.id }; renderLeft(); renderRight(); S.dirty2d = true; return; }
+	const r = Math.max(6 / S.view.scale, 0.4);
+	let best = null, bd = r;
+	for (const line of lines) {
+		for (const hop of busLineHops(line)) {
+			if (!hop) continue;
+			for (let i = 0; i + 1 < hop.pts.length; i++) { const d = distPtSeg(w[0], w[1], hop.pts[i], hop.pts[i + 1]); if (d <= bd) { bd = d; best = line; } }
+		}
+	}
+	S.sel = best ? { kind: 'bline', id: best.id } : null;
+	renderLeft(); renderRight(); S.dirty2d = true;
+}
+function drawBusStopMarker(stop, col, selected, label) {
+	const p = ME.busStopPoint(S.model, stop);
+	if (!p) return;
+	const [sx, sy] = toScreen(p.x, p.y);
+	g.fillStyle = col; g.strokeStyle = selected ? '#4c9ffe' : '#111'; g.lineWidth = selected ? 3 : 1.5;
+	g.beginPath(); g.rect(sx - 6, sy - 6, 12, 12); g.fill(); g.stroke();
+	// 行车方向小三角
+	const fx = p.fx, fy = p.fy;
+	g.fillStyle = '#fff'; g.beginPath();
+	g.moveTo(sx + fx * 4, sy + fy * 4); g.lineTo(sx - fx * 2 - fy * 3, sy - fy * 2 + fx * 3); g.lineTo(sx - fx * 2 + fy * 3, sy - fy * 2 - fx * 3); g.closePath(); g.fill();
+	if (label !== undefined) {
+		g.font = '11px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000c'; g.fillStyle = '#fff'; g.textAlign = 'center';
+		g.strokeText(String(label), sx, sy - 10); g.fillText(String(label), sx, sy - 10); g.textAlign = 'start';
+	}
+}
+function drawBus() {
+	const M = S.model, lines = (M.transit && M.transit.roadLines) || [];
+	const inTool = S.tool === 'transit', active = inTool && S.transit.mode === 'bus';
+	if (!lines.length && !(active && S.bline.length)) return;
+	g.save();
+	g.globalAlpha = active ? 1 : (inTool ? 0.5 : 0.35);
+	g.lineCap = 'round'; g.lineJoin = 'round';
+	for (const line of lines) {
+		const col = busColor(line.id), n = line.stops.length;
+		const picked = S.sel && ((S.sel.kind === 'bline' && S.sel.id === line.id) || (S.sel.kind === 'bstop' && (ME.busStopOf(M, S.sel.id) || { line: {} }).line.id === line.id));
+		busLineHops(line).forEach((hop, i) => {
+			if (hop) { tPolyPath(hop.pts); g.setLineDash([]); g.strokeStyle = col; g.lineWidth = picked ? 5 : 3.5; g.stroke(); }
+			else {   // 开不通(路网被改过)：红色虚线直连
+				const a = ME.busStopPoint(M, line.stops[i]), b = ME.busStopPoint(M, line.stops[(i + 1) % n]);
+				if (a && b) { tPolyPath([[a.x, a.y], [b.x, b.y]]); g.setLineDash([7, 5]); g.strokeStyle = '#ff4d4d'; g.lineWidth = 2.5; g.stroke(); g.setLineDash([]); }
+			}
+		});
+		line.stops.forEach((s, i) => drawBusStopMarker(s, col, S.sel && S.sel.kind === 'bstop' && S.sel.id === s.id, (active || S.view.scale > 4) ? i + 1 : undefined));
+	}
+	if (active && S.bline.length) {
+		const draft = S.bline, col = '#ffffff';
+		for (let i = 0; i + 1 < draft.length; i++) { const hop = busHop(draft[i], draft[i + 1]); if (hop) { tPolyPath(hop.pts); g.strokeStyle = col + 'cc'; g.lineWidth = 3.5; g.stroke(); } }
+		draft.forEach((s, i) => drawBusStopMarker(s, '#ffd24c', false, i + 1));
+	}
+	g.restore();
+}
+// 鼠标预览：吸附的路侧落点(绿=可建/红=不可)；上一站→落点的行车路线(实线)，开不通则虚线直连并提示。
+function drawBusOverlay(m) {
+	const M = S.model, draft = S.bline, last = draft.length ? draft[draft.length - 1] : null;
+	const closing = draft.length >= 2 && busStopHit(draft[0], m);
+	let target = null, good = true, tip = '';
+	if (closing) { target = draft[0]; good = !!busHop(last, draft[0]); if (!good) tip = '最后一站开不回起始站'; else tip = '点击闭合成环'; }
+	else {
+		const snap = ME.busSnap(M, m[0], m[1], 8 / S.view.scale);
+		if (snap) {
+			if (!snap.ok) { good = false; tip = snap.reason; target = snap; }
+			else { target = snap; if (last && busHop(last, snap)) tip = ''; else if (last) { good = false; tip = '从上一站开不到这里，不能建站'; } }
+		}
+	}
+	if (last) {
+		const lp = ME.busStopPoint(M, last), tp = target ? ME.busStopPoint(M, target) : null;
+		const hop = target && good ? busHop(last, target) : null;
+		g.save();
+		if (hop) { tPolyPath(hop.pts); g.setLineDash([]); g.strokeStyle = '#4cff9e'; g.lineWidth = 3.5; g.lineCap = 'round'; g.lineJoin = 'round'; g.stroke(); }
+		else if (lp) { tPolyPath([[lp.x, lp.y], tp ? [tp.x, tp.y] : m]); g.setLineDash([7, 5]); g.strokeStyle = '#ff4d4d'; g.lineWidth = 2.5; g.stroke(); }
+		g.restore();
+		if (hop) {
+			const [mx, my] = toScreen(m[0], m[1]);
+			g.font = '13px sans-serif'; g.lineWidth = 3.5; g.strokeStyle = '#000c'; g.fillStyle = '#9ff0b4'; g.textAlign = 'right';
+			const txt = (hop.length * 10).toFixed(0) + ' m'; g.strokeText(txt, mx - 16, my + 4); g.fillText(txt, mx - 16, my + 4); g.textAlign = 'start';
+		}
+	}
+	if (target) {
+		const tp = ME.busStopPoint(M, target);
+		if (tp) { const [sx, sy] = toScreen(tp.x, tp.y); g.strokeStyle = good ? '#4cff9e' : '#ff4d4d'; g.lineWidth = 2; g.beginPath(); g.arc(sx, sy, 9, 0, Math.PI * 2); g.stroke(); }
+	}
+	if (tip) {
+		const [mx, my] = toScreen(m[0], m[1]);
+		g.font = '12px sans-serif'; g.lineWidth = 3.5; g.strokeStyle = '#000c'; g.fillStyle = good ? '#9ff0b4' : '#ffb3b3';
+		g.strokeText(tip, mx + 14, my - 12); g.fillText(tip, mx + 14, my - 12);
+	}
+}
+function renderBusLeft(left) {
+	const T = S.transit;
+	left.append(el('div', { class: 'hint' }, '在路的某一侧点一个公交站(站在该侧的行车方向上，不吸附节点/路口)，依次点下一站；点回起始站闭合成环线(也可按 Enter / 下面的按钮)。'));
+	left.append(row('站点资产', sel(ME.BUS_STATION_IDS.map((v) => [v, v]), T.station, (v) => { T.station = v; })));
+	left.append(el('div', { class: 'hint' }, `正在建：${S.bline.length} 站` + (S.bline.length ? '(Backspace/右键 撤销上一站，Esc 取消全部)' : '')));
+	left.append(el('div', { class: 'tabs' }, btn('完成(回到起点)', () => tBusFinish()), btn('撤销上一站', () => { S.bline.pop(); renderLeft(); S.dirty2d = true; })));
+	left.append(el('div', { class: 'hint' }, '预览：鼠标处会画出从上一站开到这里的路线(绿实线)；开不通(单行道/路不连通)时画红色虚线直连，且不能在这里建站。单行道没有车道的一侧不能放站。'));
+	left.append(el('div', { class: 'hint' }, 'Alt+点 = 选中站/线(右栏改站点资产、删除)，Delete 删除。游戏里 station_bus 会在站点附近避开路面开口摆放；config 写 "route_bus --skip" 才读这些线。'));
+}
+function renderBusList(right) {
+	const lines = (S.model.transit && S.model.transit.roadLines) || [];
+	right.append(el('h4', null, `公交线(${lines.length})`));
+	for (const l of lines) right.append(btn(`线${l.id}  ${l.stops.length}站`, () => { S.bline = []; S.sel = { kind: 'bline', id: l.id }; renderLeft(); renderRight(); S.dirty2d = true; }, S.sel && S.sel.kind === 'bline' && S.sel.id === l.id));
+}
+function renderBusRight(right) {
+	const M = S.model;
+	const stationOptions = (cur) => [...new Set(ME.BUS_STATION_IDS.concat(cur ? [cur] : []))].map((v) => [v, v]);
+	if (S.sel.kind === 'bstop') {
+		const h = ME.busStopOf(M, S.sel.id), line = h.line, stop = h.stop, road = ME.roadOf(M, stop.road);
+		right.append(el('div', { style: 'color:' + busColor(line.id) }, `公交站 ${stop.id}  线${line.id} 第 ${h.index + 1}/${line.stops.length} 站`));
+		right.append(row('所在路', el('span', null, road ? (road.name || ('路' + road.id)) : '(路已不存在)')));
+		right.append(row('侧', el('span', null, stop.side === 0 ? '沿 a→b 的右手侧(行车 a→b)' : '另一侧(行车 b→a)')));
+		right.append(row('站点资产', sel(stationOptions(stop.station), stop.station, (v) => modelOp((m) => { ME.setBusStopStation(m, stop.id, v); }))));
+		right.append(btn('选中整条线', () => { S.sel = { kind: 'bline', id: line.id }; renderRight(); S.dirty2d = true; }));
+		right.append(btn('删除这个站', deleteSelection));
+	} else {
+		const line = ME.busLineOf(M, S.sel.id), hops = busLineHops(line);
+		const total = hops.reduce((s, hp) => s + (hp ? hp.length : 0), 0);
+		right.append(el('div', { style: 'color:' + busColor(line.id) }, `公交线 ${line.id}  ${line.stops.length} 站  全程约 ${(total * 10).toFixed(0)} m`));
+		if (hops.some((hp) => !hp)) right.append(el('div', { class: 'warn' }, '有一段开不通(路网被改过)，游戏里这条线会被丢弃'));
+		line.stops.forEach((s, i) => right.append(btn(`${i + 1}. 站${s.id}  ${s.station}${hops[i] ? '' : '  ⚠下一站开不通'}`, () => { S.sel = { kind: 'bstop', id: s.id }; renderRight(); S.dirty2d = true; })));
+		right.append(btn('删除公交线', deleteSelection));
+	}
 }
 
 // ---- 绘制 ----
@@ -1221,6 +1446,7 @@ function drawTransit() {
 // 鼠标预览：line模式=待画的线+落点+长度/高度；loop模式=悬停目标+到鼠标的虚线。
 function drawTransitOverlay(m) {
 	const T = S.transit, M = S.model;
+	if (T.mode === 'bus') { drawBusOverlay(m); return; }
 	if (T.mode === 'line') {
 		const sp = tSnapPoint(m), bad = !!tRefProblem(sp.ref);
 		const [sx, sy] = toScreen(sp.point[0], sp.point[1]);
@@ -1352,7 +1578,7 @@ c2d.addEventListener('mousedown', (e) => {
 	}
 	if (S.tool === 'lot') { if (S.presetDraw) presetClick(w); else lotClick(w); return; }
 	if (S.tool === 'green') { greenClick(w); return; }
-	if (S.tool === 'transit') { if (S.transit.mode === 'line') tLineClick(w); else tLoopClick(w); return; }
+	if (S.tool === 'transit') { const mode = S.transit.mode; if (mode === 'line') tLineClick(w); else if (mode === 'bus') tBusClick(w); else tLoopClick(w); return; }
 });
 window.addEventListener('mousemove', (e) => {
 	const rect = c2d.getBoundingClientRect();
@@ -1378,7 +1604,11 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', () => {
 	if (!drag) return;
 	if (drag.type === 'pan' && drag.rc && !drag.moved && S.presetDraw) cancelPreset();
-	else if (drag.type === 'pan' && drag.rc && !drag.moved && S.tool === 'transit' && S.tloop.length) S.tloop = [];
+	else if (drag.type === 'pan' && drag.rc && !drag.moved && S.tool === 'transit' && (S.tloop.length || S.bline.length)) {
+		// 路网路线/独立路线环：右键撤销上一站/上一点(整条草稿用Esc取消)
+		if (S.bline.length) S.bline.pop(); else S.tloop.pop();
+		S.dirty2d = true; renderLeft();
+	}
 	else if (drag.type === 'pan' && drag.rc && !drag.moved && S.pending) S.pending = null; // 右键点一下(没拖动)：结束正在画的路/地块
 	if (drag.type === 'box') {
 		if (drag.moved) {
@@ -1420,8 +1650,10 @@ let spaceDown = false;
 window.addEventListener('keydown', (e) => {
 	if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.key !== 'Escape') return;
 	if (e.key === ' ') { spaceDown = true; e.preventDefault(); }
-	else if (e.key === 'Escape') { S.pending = null; S.presetDraw = null; S.tloop = []; if (S.tool === 'transit' && S.sel && S.sel.kind === 'tloop') S.sel = null; S.dirty2d = true; renderRight(); }
+	else if (e.key === 'Escape') { S.pending = null; S.presetDraw = null; S.tloop = []; S.bline = []; if (S.tool === 'transit' && S.sel && S.sel.kind === 'tloop') S.sel = null; S.dirty2d = true; renderLeft(); renderRight(); }
 	else if (e.key === 'Enter' && S.tool === 'transit' && S.transit.mode === 'loop' && S.tloop.length) { tLoopFinish(); }
+	else if (e.key === 'Enter' && S.tool === 'transit' && S.transit.mode === 'bus' && S.bline.length) { tBusFinish(); }
+	else if (e.key === 'Backspace' && S.tool === 'transit' && S.transit.mode === 'bus' && S.bline.length) { e.preventDefault(); S.bline.pop(); renderLeft(); S.dirty2d = true; }
 	else if (e.key === 'Backspace' && S.tool === 'transit' && S.transit.mode === 'loop' && S.tloop.length) { e.preventDefault(); S.tloop.pop(); S.dirty2d = true; }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
@@ -1490,7 +1722,7 @@ function roadClick(w) {
 	if (R.shape === 'curve' && !p.ctrl) { const ra = angleSnap(w); p.ctrl = ra ? ra.point : [w[0], w[1]]; S.dirty2d = true; return; }
 	const refB = Object.assign({}, sp.ref);
 	if (refB.node === undefined && refB.road === undefined) refB.z = previewZ(sp);
-	const spec = { a: p.a.ref, b: refB, ctrl: p.ctrl || null, type: R.type, lanes: ME.LANE_PRESETS[R.preset].lanes, name: R.name, tree: R.tree, lamp: R.lamp };
+	const spec = { a: p.a.ref, b: refB, ctrl: p.ctrl || null, type: R.type, asset: R.asset || ME.DEFAULT_ASSET, lanes: ME.LANE_PRESETS[R.preset].lanes, name: R.name, tree: R.tree, lamp: R.lamp };
 	S.pending = null;
 	const res = modelOp((m) => ME.addRoad(m, spec, ctxHeight()));
 	if (res.road) {
@@ -1722,6 +1954,8 @@ function selExists() {
 	if (S.sel.kind === 'tnode') return !!ME.tNodeOf(M, S.sel.id);
 	if (S.sel.kind === 'tconn') return !!ME.tConnOf(M, S.sel.id);
 	if (S.sel.kind === 'tloop') return !!ME.tLoopOf(M, S.sel.id);
+	if (S.sel.kind === 'bstop') return !!ME.busStopOf(M, S.sel.id);
+	if (S.sel.kind === 'bline') return !!ME.busLineOf(M, S.sel.id);
 	if (S.sel.kind === 'preset') return !!findPreset(S.sel.id);
 	return M.lots.some((l) => l.id === S.sel.id);
 }
@@ -1736,6 +1970,8 @@ function deleteSelection() {
 		else if (sel.kind === 'tnode') ME.deleteTNode(m, sel.id);
 		else if (sel.kind === 'tconn') ME.deleteTConn(m, sel.id);
 		else if (sel.kind === 'tloop') ME.deleteTLoop(m, sel.id);
+		else if (sel.kind === 'bstop') ME.deleteBusStop(m, sel.id);
+		else if (sel.kind === 'bline') ME.deleteBusLine(m, sel.id);
 		else if (sel.kind === 'preset') { for (const l of m.lots) l.presets = (l.presets || []).filter((p) => p.id !== sel.id); }
 		else { m.lots = m.lots.filter((l) => l.id !== sel.id); ME.cleanup(m); }
 	});
@@ -1822,7 +2058,7 @@ const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块'], ['g
 function renderLeft() {
 	const left = $('left'); left.innerHTML = '';
 	const tabs = el('div', { class: 'tabs' });
-	for (const [id, label] of TOOLS) tabs.append(btn(label, () => { S.tool = id; S.pending = null; S.presetDraw = null; S.tloop = []; renderLeft(); renderRight(); S.dirty2d = true; }, S.tool === id));
+	for (const [id, label] of TOOLS) tabs.append(btn(label, () => { S.tool = id; S.pending = null; S.presetDraw = null; S.tloop = []; S.bline = []; renderLeft(); renderRight(); S.dirty2d = true; }, S.tool === id));
 	left.append(tabs);
 	if (S.tool === 'terrain') {
 		const B = S.brush;
@@ -1870,6 +2106,7 @@ function renderLeft() {
 		left.append(row('类型', sel(ROAD_TYPES, R.type, (v) => { R.type = v; renderLeft(); S.dirty2d = true; })));
 				left.append(el('h4', null, '节点高度(单位10m)'));
 				left.append(heightRow('高度', 'z', 'zTerrain'));
+		left.append(row('车道资产', el('input', { type: 'text', value: R.asset, placeholder: ME.DEFAULT_ASSET, onchange: (e) => { R.asset = e.target.value.trim() || ME.DEFAULT_ASSET; e.target.value = R.asset; } })));
 		left.append(row('车道', sel(ME.LANE_PRESETS.map((p, i) => [i, p.name]), R.preset, (v) => { R.preset = parseInt(v, 10); })));
 		left.append(row('名称', el('input', { type: 'text', value: R.name, placeholder: '默认 路N', onchange: (e) => { R.name = e.target.value.trim(); } })));
 		left.append(row('行道树', el('input', { type: 'text', value: R.tree, placeholder: '空=无', onchange: (e) => { R.tree = e.target.value.trim(); } })));
@@ -1901,7 +2138,8 @@ function renderLeft() {
 	} else if (S.tool === 'transit') {
 		const T = S.transit;
 		left.append(el('h4', null, '模式'));
-		left.append(el('div', { class: 'tabs' }, btn('画实体线路', () => tSetMode('line'), T.mode === 'line'), btn('连接路线环', () => tSetMode('loop'), T.mode === 'loop')));
+		left.append(el('div', { class: 'tabs' }, btn('独立线路', () => tSetMode('line'), T.mode === 'line'), btn('独立路线环', () => tSetMode('loop'), T.mode === 'loop'), btn('路网路线', () => tSetMode('bus'), T.mode === 'bus')));
+		if (T.mode === 'bus') { renderBusLeft(left); return; }
 		const idInput = el('input', { type: 'text', value: T.routeId, list: 'routeIdList', placeholder: '空=自动(继承起点)', onchange: (e) => { T.routeId = e.target.value.trim(); renderLeft(); S.dirty2d = true; } });
 		left.append(row('route id', idInput, el('datalist', { id: 'routeIdList' }, ...tRouteIds().map((v) => el('option', { value: v })))));
 		if (T.routeId) left.append(el('div', { class: 'hint', style: 'color:' + ME.routeColor(T.routeId) }, '■ ' + T.routeId));
@@ -1923,7 +2161,7 @@ function renderLeft() {
 			left.append(el('div', { class: 'hint' }, 'route id 已填：只能从同 id 的线路端点/中间接线；没填：空地可起头，从有 id 的线路接出会继承它的 id。'));
 			left.append(el('div', { class: 'hint' }, 'Alt+点 = 选节点/连线(可拖动)，Delete 删除。实体线路不连车站，站到线路的缺口由游戏里的 route mod(--skip)补扁S曲线。'));
 		} else {
-			left.append(el('div', { class: 'hint' }, '依次点 预设建筑 / 线路节点 连成环：点击一律追加，同一个点可以加多次(比如车站往返各停一次)；Enter / 双击 / 下面的按钮完成(首尾自动相连)；Backspace 撤销上一点；右键/Esc 取消。'));
+			left.append(el('div', { class: 'hint' }, '依次点 预设建筑 / 线路节点 连成环：点击一律追加，同一个点可以加多次(比如车站往返各停一次)；Enter / 双击 / 下面的按钮完成(首尾自动相连)；Backspace/右键 撤销上一点；Esc 取消全部。'));
 			left.append(el('div', { class: 'tabs' }, btn('完成环', () => tLoopFinish()), btn('撤销上一点', () => { S.tloop.pop(); S.dirty2d = true; })));
 			left.append(el('div', { class: 'hint' }, '相邻两点若能经同 id 的实体线路连通就沿线路画实线，否则画虚线(游戏里由 route mod 补扁S曲线)。'));
 			left.append(el('div', { class: 'hint' }, '环里的点只表示"经过"，新环全部不停站。Alt+点环 = 选中它(此时只吸附环上的点)，点环上的预设 = 选中它(同一个点出现多次时连点轮换每一次经过)，右栏勾"停站"(每次经过各自设置)；点其它地方取消选择。线路节点不能停站。'));
@@ -1966,6 +2204,7 @@ function renderRight() {
 				right.append(nodeHeightRow(ME.nodeOf(M, r.a), '头高度'));
 				right.append(nodeHeightRow(ME.nodeOf(M, r.b), '尾高度'));
 		const cur = ME.LANE_PRESETS.findIndex((p) => p.lanes.join() === r.lanes.join());
+		right.append(row('车道资产', el('input', { type: 'text', value: r.asset || ME.DEFAULT_ASSET, onchange: (e) => modelOp((m) => { ME.roadOf(m, r.id).asset = e.target.value.trim() || ME.DEFAULT_ASSET; }) })));
 		right.append(row('车道', sel([[-1, '自定义']].concat(ME.LANE_PRESETS.map((p, i) => [i, p.name])), cur, (v) => { if (v >= 0) modelOp((m) => { ME.roadOf(m, r.id).lanes = ME.LANE_PRESETS[v].lanes.slice(); }); })));
 		right.append(row('弧度', btn('拉直', () => modelOp((m) => { ME.roadOf(m, r.id).ctrl = null; }))));
 		right.append(btn('删除道路', deleteSelection));
@@ -1992,6 +2231,8 @@ function renderRight() {
 		}
 		right.append(row('弧度', btn('拉直', () => modelOp((m) => { ME.tConnOf(m, c.id).ctrl = null; }))));
 		right.append(btn('删除连线', deleteSelection));
+	} else if (S.sel.kind === 'bstop' || S.sel.kind === 'bline') {
+		renderBusRight(right);
 	} else if (S.sel.kind === 'tloop') {
 		const l = ME.tLoopOf(M, S.sel.id), pres = getPresetPlacements();
 		right.append(el('div', { style: 'color:' + ME.routeColor(l.routeId) }, `线路环 ${l.id}  ${l.routeId}  ${l.items.length} 个点`));
@@ -2057,8 +2298,9 @@ function renderRight() {
 	}
 	if (S.tool === 'transit') {
 		const loops = M.transit.loops;
+		if (S.transit.mode === 'bus') renderBusList(right);
 		right.append(el('h4', null, `线路环(${loops.length})`));
-		for (const l of loops) right.append(btn(`环${l.id}  ${l.routeId}  ${l.items.length}点  停${l.items.filter((it) => it.stop).length}站`, () => { S.transit.mode = 'loop'; S.tloop = []; S.pending = null; S.sel = { kind: 'tloop', id: l.id, index: null }; renderLeft(); renderRight(); S.dirty2d = true; }, S.sel && S.sel.kind === 'tloop' && S.sel.id === l.id));
+		for (const l of loops) right.append(btn(`环${l.id}  ${l.routeId}  ${l.items.length}点  停${l.items.filter((it) => it.stop).length}站`, () => { S.transit.mode = 'loop'; S.tloop = []; S.bline = []; S.pending = null; S.sel = { kind: 'tloop', id: l.id, index: null }; renderLeft(); renderRight(); S.dirty2d = true; }, S.sel && S.sel.kind === 'tloop' && S.sel.id === l.id));
 	}
 	right.append(el('h4', null, `检查(${S.warnings.length})`));
 	if (!S.warnings.length) right.append(el('div', { class: 'hint' }, '没有问题'));

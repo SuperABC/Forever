@@ -29,6 +29,7 @@ void PresetsSuiteBody(TestWorld& world, const TestOptions& options);
 void PolitSuiteBody(TestWorld& world, const TestOptions& options);
 void TransitSuiteBody(TestWorld& world, const TestOptions& options);
 void TransitTwiceSuiteBody(TestWorld& world, const TestOptions& options);
+void TransitBusSuiteBody(TestWorld& world, const TestOptions& options);
 
 // 在子进程里(世界已生成)执行的套件主体；按套件名查找，没有返回nullptr。
 SuiteBody FindSuiteBody(const std::string& name);

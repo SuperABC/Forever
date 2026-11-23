@@ -288,6 +288,7 @@
     <ClInclude Include="industry\storage_restaurant.h" />
     <ClInclude Include="industry\storage_shop.h" />
     <ClInclude Include="industry\storage_wheat.h" />
+    <ClInclude Include="traffic\bus_stop_name.h" />
     <ClInclude Include="traffic\route_air.h" />
     <ClInclude Include="traffic\route_bus.h" />
     <ClInclude Include="traffic\route_common.h" />

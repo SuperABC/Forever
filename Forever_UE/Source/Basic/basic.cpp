@@ -660,7 +660,7 @@ extern "C" __declspec(dllexport) void* GetModRoutes() {
 }
 extern "C" __declspec(dllexport) void RegisterModRoutes(RouteFactory* factory) {
 	factory->RegisterRoute(BusRoute::GetId(),
-		[](const std::string&) -> RouteMod* { return new BusRoute(); },
+		[](const std::string& args) -> RouteMod* { return new BusRoute(args); },
 		[](RouteMod* m) { delete m; });
 	factory->RegisterRoute(TrainRoute::GetId(),
 		[](const std::string& args) -> RouteMod* { return new TrainRoute(args); },
@@ -681,6 +681,7 @@ extern "C" __declspec(dllexport) void RegisterModStations(StationFactory* factor
 		[](const std::string&) -> StationMod* { return new BusStation(); },
 		[](StationMod* m) { delete m; },
 		&BusStation::AssignRoads);
+	factory->RegisterManualAssign(BusStation::GetId(), &BusStation::AssignManualRoads);
 	factory->RegisterStation(TrainStation::GetId(),
 		[](const std::string&) -> StationMod* { return new TrainStation(); },
 		[](StationMod* m) { delete m; },

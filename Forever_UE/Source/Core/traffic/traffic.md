@@ -23,6 +23,7 @@ Possess切换逻辑在那边）不是一回事——`Traffic`不知道UE Actor/C
 2. `InitRoadsideStations`：对每个已注册的`StationMod`类型调`StationFactory::AssignRoads`
    （静态方法，不需要实例）探测要贴哪些路/哪一侧，每条请求创建一个不挂建筑的`Station`，
    坐标取`Map::GetLaneSegmentAt`的真实车道坐标（目前只有公交站用）。站名取请求的`name`(非空)，否则`"Station"+stationCounter`。
+   编辑器"路网路线"画了手动公交站(`Map::GetTransit().roadLines`)时：数据里 `stop.station==某mod` 且该mod登记了`RegisterManualAssign`，就改调它的`AssignManualRoads`(跳过自动`AssignRoads`)；指向没登记手动函数的id的站告警忽略；站名重复丢弃后到的并告警(不再`insert_or_assign`覆盖泄漏)。见`station_mod.md`。
 3. `InitRoutes`：对每个已注册且启用的`RouteMod`类型创建`Route`，收集`stationType`匹配的
    `Station`(端口快照)交给`Route::Build()`；线路上的extern点由`Route`自己持有，不再创建额外的`Station`。
 4. `InitStockedVehicles`：机场的飞机、港口的船这类没有"主人"的载具，由建筑mod用`BuildingMod::AssignStockedParking`声明车位

@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <set>
 #include <unordered_map>
 
 using namespace std;
@@ -387,6 +388,18 @@ void Traffic::InitRoadsideStations(Map* map) {
 	vector<string> ids = stationFactory.GetRegisteredIds();
 	int createdCount = 0;
 
+	// 编辑器"路网路线"画的手动公交站：站数据里的station字段指定由哪个station mod摆放。
+	// 某个mod只要在数据里有自己的站，并且登记了手动摆放函数，就改走手动(跳过它的自动AssignRoads)；
+	// 数据里指向未知/没登记手动函数的mod的站直接忽略并告警，该mod仍走自动。
+	const TransitData& transit = map->GetTransit();
+	set<string> manualModIds;
+	for (const TransitData::RoadLine& line : transit.roadLines) {
+		for (const TransitData::RoadStop& stop : line.stops) {
+			if (stationFactory.HasManualAssign(stop.station)) manualModIds.insert(stop.station);
+			else debugf("Warning: Traffic::InitRoadsideStations: bus stop references station '%s' that supports no manual placement, ignored.\n", stop.station.c_str());
+		}
+	}
+
 	for (const string& modId : ids) {
 		if (modId == "station_empty") continue;
 
@@ -394,7 +407,12 @@ void Traffic::InitRoadsideStations(Map* map) {
 		// StationMod::AssignRoads的说明)，不需要创建/销毁任何StationMod实例，直接转发
 		// 到注册时提供的函数指针，和BuildingFactory::Assign同一个模式。
 		RoadStationCollector collector;
-		stationFactory.AssignRoads(modId, map->GetRoads(), &CollectRoadStationRequest, &collector);
+		if (manualModIds.count(modId)) {
+			stationFactory.AssignManualRoads(modId, map->GetRoads(), transit, &CollectRoadStationRequest, &collector);
+		}
+		else {
+			stationFactory.AssignRoads(modId, map->GetRoads(), &CollectRoadStationRequest, &collector);
+		}
 
 		for (const RoadStationRequest& request : collector.requests) {
 			if (!request.road) continue;
@@ -419,6 +437,11 @@ void Traffic::InitRoadsideStations(Map* map) {
 			float headingDegrees = atan2f(travelDirY, travelDirX) * (180.f / 3.14159265358979323846f);
 
 			string name = request.name.empty() ? "Station" + to_string(stationCounter++) : request.name;
+			if (stations.count(name)) {
+				// insert_or_assign会静默覆盖并泄漏旧Station；重名一律丢弃新站(后到的不算)。
+				debugf("Warning: Traffic::InitRoadsideStations: duplicate station name '%s', discarded.\n", name.c_str());
+				continue;
+			}
 			Station* station = new Station(&stationFactory, modId, name,
 				segment.worldX, segment.worldY, segment.worldZ, headingDegrees, request.road);
 			if (!station->IsValid()) {

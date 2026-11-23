@@ -34,9 +34,25 @@ struct TransitData {
 		std::vector<Item> items;
 	};
 
+	// 路网路线(公交)的一个站：贴在路网某条路的某一侧。road=roadnet output.roads的下标(= Map::GetRoads()的下标)，
+	// (x,y)=站点在该路中线上的垂足(Core/mod自己投影出沿路的t)，rightSide=沿Start->End的右手边(side0，行车方向Start->End)，
+	// station=站点mod id(如station_bus)，由持有该id的StationMod::AssignManualRoads摆放(避开路面开口)。
+	struct RoadStop {
+		int road = -1;
+		float x = 0.f, y = 0.f;
+		bool rightSide = true;
+		std::string station;
+	};
+	// 一条公交环线：站依次首尾相接。route=所属route mod id(route_bus)。
+	struct RoadLine {
+		std::string route;
+		std::vector<RoadStop> stops;
+	};
+
 	std::vector<Node> nodes;
 	std::vector<Conn> conns;
 	std::vector<Loop> loops;
+	std::vector<RoadLine> roadLines;
 
-	bool Empty() const { return nodes.empty() && conns.empty() && loops.empty(); }
+	bool Empty() const { return nodes.empty() && conns.empty() && loops.empty() && roadLines.empty(); }
 };

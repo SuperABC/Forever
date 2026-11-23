@@ -7,7 +7,7 @@
 - **mod 只读结果，不做几何决策**：路口切分（T 口、十字）、贴合路的地形采样、头尾节点高度不同时的扁 S 坡控制点、桥墩链分组、地块矩形都在编辑器导出时算好。Core 不会自动建路口（`Map::InitRoadnet` 只对 `intersections` 里的点建 `RoadJunction`），所以编辑器必须把被接的路切开、让端点共用同一个节点 id。
 - **`output` 结构**：
   - `nodes[]`：`{id, x, y, z, type}`，`type` = `intersection`（登记进 `intersections`）/ `extern`（登记进 `externs`，城外连接点）/ `plain`（普通衔接点，两条路首尾相接）。度数不为2的点编辑器一律导出为 `intersection`。
-  - `roads[]`：`{name, from, to, controls:[[x,y,z,weight]…], lanes:[左车行,左停车,左人行,右车行,右停车,右人行], kind}`。`from/to` 是 node id；`controls` 是有理 Bezier 控制点（直线不写）；断面 mesh 由 `lanes` 拼出 `default_*`（`kind=tunnel` 加 `_T`），车道宽 0.5。
+  - `roads[]`：`{name, from, to, controls:[[x,y,z,weight]…], asset, lanes:[左车行,左停车,左人行,右车行,右停车,右人行], kind}`。`from/to` 是 node id；`controls` 是有理 Bezier 控制点（直线不写）；`asset`=车道资产名（缺省/空=`default`），`lanes`=车道类型；断面 mesh 路径 = `/Game/Asset/Roadnet/<首字母大写的asset>/Mesh/<asset>_<lanes 用_连接>`（如 `default_1_0_1_1_0_1`，`kind=tunnel` 加 `_T`，开口用的无人行道版同理），车道宽 0.5。**方向**：`lanes` 前三项（左\*，side0）是 from→to 方向通行的那一侧，后三项（右\*，side1）是 to→from 那一侧；某一侧车行道为 0 就是单行道（见 `Core/map/roadnet.h` 的 outbound/inbound 约定，未经 PIE 验证）。
   - `kind`：`ground` 平地；`hug` 贴合地形（请求 `AddTerrainFit`，宽=路总宽，falloff 1.5，编辑器已按地形每 1 单位采样成一段）；`mouth` 隧道口（用平地的路面资产，整段 `AddTunnelHatch` 给地形开口，两侧用无人行道资产）；`tunnel` 隧道内（`_T` 资产，没有开口）；`bridge` 桥（桥墩由 Core 选位，见下）。一条编辑器里的路对应一条 `roads[]`（hug 除外）；头尾节点高度不同就是扁 S 坡（`controls` 里两个控制点，z 取头尾高度，两端水平）。这样隧道口/隧道/平地不再靠高度差猜，由用户显式选。
   - `lots[]`：`{corners:[[x,y]×4], margin:[西,东,北,南], boundary:{"0":road下标…}, area:"AREA_…"}`。corners 按顺时针（屏幕坐标 y 向下）给出，第一条边 n1→n2 为"北"边，其余依次东、南、西（同 `Lot` 构造的约定）；`boundary` 的下标是 `roads[]` 的下标，只在该边正好是一条平直道路时才写；area 用枚举名字符串。
   - `greens[]`：`{points:[[x,y]…], links:[{edge, road}]}`。绿化区的闭合多边形（地图单位，不重复首点，可以是凹多边形，不能自交；导出时统一成有符号面积>0）；`links` 是"多边形第 edge 条边（points[edge]→points[(edge+1)%n]）连到 roads[] 下标 road 那条路"，可以为空（只做景观、不能地址导航）。接入点不存，Core 按每个活动圆的垂足投影到那条路上再算。读入时 edge/road 越界的 link 被丢弃，点数<3 的绿化被丢弃。绿化类型/圆/树由 Core 的 `Map::InitGreens` 选 green mod 决定，不在文件里。
@@ -35,3 +35,5 @@
 ## output.transit（2026-11-23）
 
 `output.transit = {nodes:[{x,y,z,extern?}], conns:[{from,to,ctrl:[x,y]|null,kind,route}], loops:[{route, items:[{preset:<output.presets 下标>,stop}|{node:<nodes 下标>}]}]}`。conns 是二次 Bezier（`ctrl` 空=直线），`kind` ∈ ground/hug/mouth/tunnel/bridge，`route`=route mod id。解析时丢弃：from/to 越界或相同的连线、缺 route 的连线、引用越界的 node 项、预设下标<0 的项、不足 2 项的环；`preset.outputIndex` 记原下标。数据原样放进 `RoadnetMod::transit`，由 route mod（`--skip`）使用，见 `route_mod.md`"手动线路"。
+
+`output.transit.roadLines = [{route, stops:[{road:<output.roads 下标>, x, y, side:0|1, station}]}]`（公交，2026-11-23）：路下标越界/缺 road 或 station 字段的站丢弃（`debugf` 告警），不足 2 站的线丢弃；解析进 `TransitData::roadLines`（`side` 1=反向，`rightSide=false`）。站由 `station_bus::AssignManualRoads` 摆，线由 `route_bus --skip` 连，见 `station_bus.md`/`route_bus.md`"手动线路"。

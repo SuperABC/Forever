@@ -633,6 +633,9 @@
     <ClInclude Include="traffic\route_train.h">
       <Filter>traffic</Filter>
     </ClInclude>
+    <ClInclude Include="traffic\bus_stop_name.h">
+      <Filter>traffic</Filter>
+    </ClInclude>
     <ClInclude Include="traffic\station_air.h">
       <Filter>traffic</Filter>
     </ClInclude>

@@ -4,6 +4,7 @@
 #include "common/json.h"
 #include "common/utility.h"
 
+#include <cctype>
 #include <cmath>
 #include <algorithm>
 #include <fstream>
@@ -57,11 +58,14 @@ namespace {
 		return value.IsNumeric() ? value.AsFloat() : fallback;
 	}
 
-	string MeshPathFor(const int lanes[6], bool tunnel) {
+	// asset=车道资产名(.roadnet roads[].asset，缺省default)：资产在Content/Asset/Roadnet/<首字母大写的asset>/Mesh/<asset>_<车道类型>。
+	string MeshPathFor(const string& asset, const int lanes[6], bool tunnel) {
 		string suffix = to_string(lanes[0]) + "_" + to_string(lanes[1]) + "_" + to_string(lanes[2]) + "_"
 			+ to_string(lanes[3]) + "_" + to_string(lanes[4]) + "_" + to_string(lanes[5]);
 		if (tunnel) suffix += "_T";
-		return "/Game/Asset/Roadnet/Default/Mesh/default_" + suffix + ".default_" + suffix;
+		string folder = asset;
+		if (!folder.empty()) folder[0] = static_cast<char>(toupper(static_cast<unsigned char>(folder[0])));
+		return "/Game/Asset/Roadnet/" + folder + "/Mesh/" + asset + "_" + suffix + "." + asset + "_" + suffix;
 	}
 
 	AREA_TYPE AreaFromName(const string& areaName) {
@@ -238,7 +242,8 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 		string kind = entry["kind"].IsString() ? entry["kind"].AsString() : "ground";
 		string roadName = entry["name"].IsString() ? entry["name"].AsString() : "road" + to_string(i);
 
-		string meshPath = MeshPathFor(lanes, kind == "tunnel");
+		string asset = entry["asset"].IsString() && !entry["asset"].AsString().empty() ? entry["asset"].AsString() : "default";
+		string meshPath = MeshPathFor(asset, lanes, kind == "tunnel");
 		roads.emplace_back(roadName, fromIt->second, toIt->second, meshPath, MESH_UNIT);
 		Road& road = roads.back();
 		treeTags.push_back(entry["treeTag"].IsString() ? entry["treeTag"].AsString() : "");
@@ -263,8 +268,8 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 
 		// 开口落在某一侧时换用"该侧不含人行道"的资产；隧道内路面没有开口。
 		if (kind != "tunnel") {
-			if (lanes[2] > 0) { int l[6] = { lanes[0], lanes[1], 0, lanes[3], lanes[4], lanes[5] }; road.SetSidewalkFreeMesh(0, MeshPathFor(l, false)); }
-			if (lanes[5] > 0) { int l[6] = { lanes[0], lanes[1], lanes[2], lanes[3], lanes[4], 0 }; road.SetSidewalkFreeMesh(1, MeshPathFor(l, false)); }
+			if (lanes[2] > 0) { int l[6] = { lanes[0], lanes[1], 0, lanes[3], lanes[4], lanes[5] }; road.SetSidewalkFreeMesh(0, MeshPathFor(asset, l, false)); }
+			if (lanes[5] > 0) { int l[6] = { lanes[0], lanes[1], lanes[2], lanes[3], lanes[4], 0 }; road.SetSidewalkFreeMesh(1, MeshPathFor(asset, l, false)); }
 		}
 		if (kind == "mouth") {
 			// wallFrom/wallTo由编辑器写：这一端连着隧道(kind=tunnel的路)就加端墙(from=t1端/to=t2端)，和两端高度无关。
@@ -436,12 +441,33 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 			}
 			if (loop.items.size() >= 2) transit.loops.push_back(std::move(loop));
 		}
+		// 路网路线(公交)：站引用output.roads下标，越界/缺字段的站丢弃，不足2站的线丢弃。
+		const JsonValue& roadLineArray = transitObject["roadLines"];
+		for (unsigned int i = 0; i < roadLineArray.size(); i++) {
+			const JsonValue& entry = roadLineArray[i];
+			const JsonValue& stopArray = entry["stops"];
+			if (!entry["route"].IsString() || !stopArray.IsArray()) continue;
+			TransitData::RoadLine line;
+			line.route = entry["route"].AsString();
+			for (unsigned int k = 0; k < stopArray.size(); k++) {
+				const JsonValue& stop = stopArray[k];
+				if (!stop["road"].IsNumeric() || !stop["station"].IsString()) continue;
+				TransitData::RoadStop parsed;
+				parsed.road = stop["road"].AsInt();
+				if (parsed.road < 0 || parsed.road >= static_cast<int>(roads.size())) { debugf("Warning: FileRoadnet bus line %u stop %u references road %d out of range, skipped.\n", i, k, parsed.road); continue; }
+				parsed.x = NumberOr(stop["x"], 0.f); parsed.y = NumberOr(stop["y"], 0.f);
+				parsed.rightSide = !(stop["side"].IsNumeric() && stop["side"].AsInt() == 1);
+				parsed.station = stop["station"].AsString();
+				line.stops.push_back(std::move(parsed));
+			}
+			if (line.stops.size() >= 2) transit.roadLines.push_back(std::move(line));
+		}
 	}
 
 	AssignJunctionSetbacks(roads, intersections);
-	debugf("Log: FileRoadnet loaded %s: %d roads, %d intersections, %d lots, %d greens, transit %d nodes/%d conns/%d loops.\n", path.c_str(),
+	debugf("Log: FileRoadnet loaded %s: %d roads, %d intersections, %d lots, %d greens, transit %d nodes/%d conns/%d loops/%d bus lines.\n", path.c_str(),
 		static_cast<int>(roads.size()), static_cast<int>(intersections.size()), static_cast<int>(lots.size()), static_cast<int>(greens.size()),
-		static_cast<int>(transit.nodes.size()), static_cast<int>(transit.conns.size()), static_cast<int>(transit.loops.size()));
+		static_cast<int>(transit.nodes.size()), static_cast<int>(transit.conns.size()), static_cast<int>(transit.loops.size()), static_cast<int>(transit.roadLines.size()));
 }
 
 void FileRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {

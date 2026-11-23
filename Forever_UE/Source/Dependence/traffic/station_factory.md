@@ -13,6 +13,7 @@
 - **参数传递**：调用方在`RegisterConcept`之前调用`SetModArgs`，把`config.json`数组解析出的(id, 参数字符串)表交给Factory，一直保留在`configuredArgs`里；`CreateStation`直接按id查出参数字符串传给`creator`，由mod自己的`creator`决定怎么用，Factory不替mod调用任何"创建后初始化"钩子。
 - **`GetLiveInstances()`**：返回当前存活实例和它们的注册id，存档收集各mod的命名计数器/状态版本用，见`Source/Dependence/common/mod_state.md`。
 - `RegisterStation`多一个`RoadAssignFunc assign`(static、无捕获，裸函数指针)，`AssignRoads(id, roads, emit, context)`转发调用：站点要在已有道路上选位置，和`BuildingFactory::Assign`同一个模式，通过`RoadStationEmitFunc`回调把结果交回调用方，id未注册/未启用时直接不调用emit。
+- `ManualAssignFunc` + `RegisterManualAssign / HasManualAssign / AssignManualRoads`（2026-11-23，追加在类末尾，不动已有虚函数）：和 `RoadAssignFunc` 同一个模式，多拿一份只读 `TransitData`，给编辑器"路网路线"的手动站用。`HasManualAssign(id)`=登记过且已启用；`AssignManualRoads` 在 id 没登记手动函数时不调用 emit。`station_factory.h` 因此包含 `map/transit_data.h`。
 
 ## 依赖关系
 

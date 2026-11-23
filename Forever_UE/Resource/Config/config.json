@@ -87,7 +87,7 @@
       "room_train_station",
       "room_meeting"
    ],
-   "route_mods" : [ "route_air", "route_train --skip", "route_bus" ],
+   "route_mods" : [ "route_air", "route_train --skip", "route_bus --skip" ],
    "scheduler_mods" : [ "scheduler_basic" ],
    "script_mods" : [ "script_empty", "script_test" ],
    "station_mods" : [ "station_air", "station_train", "station_bus" ],

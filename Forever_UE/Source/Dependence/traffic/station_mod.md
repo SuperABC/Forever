@@ -23,6 +23,8 @@
 - **端口坐标换算**：`Building::LocalToWorld` 接的是"楼体局部坐标"，和占地矩形局部坐标之间的换算（抵消 `bodyOffset`）在 `Core/traffic/station.cpp` 里做，见 `station.md`——世界坐标和楼体 footprint 的偏移无关，楼体贴路、把深处让给跑道/站台不用改这里的数值。
 - **`SetProperty()` 两段式**：`stationType` 必须在 `SetProperty()` 里填（`AssignRoads` 是 static，没有实例）；Core 创建实例后立刻调一次，再调 `Layout()`。`direction` 是 `Building::GetDirection()` 缓存值，`sizeX/sizeY` 是占地矩形尺寸。
 - **`AssignRoads()` 是 static 方法**：和 `BuildingMod::Assign`/`ZoneMod` 那组"按类型固定、不需要实例"的函数指针约定同一个模式，基类不声明，通过 `StationFactory::RegisterStation` 的函数指针参数注册。`RoadStationRequest.rightSide` 是"沿 Road Start->End 方向的右手边"（依赖 `Map::ComputeLaneAnchorPosition` 的 `perp0` 公式；+Y=南的坐标系下和直觉相反）。`RoadStationRequest.name` 非空时 Core 直接用它当站名(mod 保证全局唯一，如公交站的"路名+序号")，空则按 `"Station"+计数器`。
+
+- **可选的手动摆放函数（2026-11-23）**：想接编辑器手动站的 station mod 另外提供一个 static `AssignManualRoads(roads, const TransitData&, emit, context)`，通过 `StationFactory::RegisterManualAssign(id, fn)` 登记（没登记=不支持手动站，`AssignRoads` 和 `StationMod` 基类都不变）。理由和 `AssignRoads` 相同：它决定"哪里有站"，调用时还没有任何 `Station`/`StationMod` 实例。数据只读，mod 只处理 `stop.station==自己` 的站。`Traffic::InitRoadsideStations` 的防呆：数据里指向没登记手动函数的 station id 的站告警并忽略；站名重复丢弃后到的并告警（原来的 `insert_or_assign` 会静默覆盖并泄漏旧 `Station`）。
 - 端口的朝向就是该端口的行驶方向；同一条轨道/跑道的进站口、停靠位、出站口朝向相同，连线退化成直线。
 
 ## 依赖关系

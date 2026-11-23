@@ -70,6 +70,21 @@ void StationFactory::AssignRoads(const string& id, const vector<Road*>& roads,
 	}
 }
 
+void StationFactory::RegisterManualAssign(const string& id, ManualAssignFunc assign) {
+	manualAssigns[id] = assign;
+}
+
+bool StationFactory::HasManualAssign(const string& id) const {
+	auto it = manualAssigns.find(id);
+	return it != manualAssigns.end() && it->second && IsEnabled(id);
+}
+
+void StationFactory::AssignManualRoads(const string& id, const vector<Road*>& roads, const TransitData& data,
+	RoadStationEmitFunc emit, void* context) const {
+	if (!HasManualAssign(id)) return;
+	manualAssigns.at(id)(roads, data, emit, context);
+}
+
 vector<pair<string, StationMod*>> StationFactory::GetLiveInstances() const {
 	vector<pair<string, StationMod*>> result;
 	result.reserve(liveInstances.size());

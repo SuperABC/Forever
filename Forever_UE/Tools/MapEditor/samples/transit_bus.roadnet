@@ -1,0 +1,446 @@
+{
+	"source": {
+		"version": 2,
+		"mapW": 256,
+		"mapH": 256,
+		"nodes": [
+			{
+				"id": 1,
+				"x": 100,
+				"y": 100,
+				"z": 0
+			},
+			{
+				"id": 2,
+				"x": 140,
+				"y": 100,
+				"z": 0
+			},
+			{
+				"id": 4,
+				"x": 140,
+				"y": 140,
+				"z": 0
+			},
+			{
+				"id": 6,
+				"x": 100,
+				"y": 140,
+				"z": 0
+			},
+			{
+				"id": 9,
+				"x": 0,
+				"y": 140,
+				"z": 0,
+				"extern": true
+			}
+		],
+		"roads": [
+			{
+				"id": 3,
+				"a": 1,
+				"b": 2,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路3",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 5,
+				"a": 2,
+				"b": 4,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路5",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 7,
+				"a": 4,
+				"b": 6,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路7",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 8,
+				"a": 6,
+				"b": 1,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路8",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 10,
+				"a": 9,
+				"b": 6,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路10",
+				"tree": "",
+				"lamp": ""
+			}
+		],
+		"lots": [
+			{
+				"id": 11,
+				"a": 1,
+				"b": 2,
+				"depth": 40,
+				"area": "AREA_RESIDENCE_HIGH",
+				"margin": [
+					null,
+					null,
+					null,
+					null
+				],
+				"presets": [
+					{
+						"id": 12,
+						"modId": "building_train_station",
+						"dir": 2,
+						"x0": 0,
+						"x1": 10,
+						"y0": 0,
+						"y1": 10
+					},
+					{
+						"id": 13,
+						"modId": "building_train_station",
+						"dir": 3,
+						"x0": 0,
+						"x1": 10,
+						"y0": 28,
+						"y1": 38
+					}
+				]
+			}
+		],
+		"greens": [],
+		"transit": {
+			"nodes": [],
+			"conns": [],
+			"loops": [],
+			"roadLines": [
+				{
+					"id": 18,
+					"route": "route_bus",
+					"stops": [
+						{
+							"id": 14,
+							"road": 3,
+							"t": 0.5,
+							"side": 0,
+							"station": "station_bus"
+						},
+						{
+							"id": 15,
+							"road": 5,
+							"t": 0.5,
+							"side": 0,
+							"station": "station_bus"
+						},
+						{
+							"id": 16,
+							"road": 7,
+							"t": 0.5,
+							"side": 0,
+							"station": "station_bus"
+						},
+						{
+							"id": 17,
+							"road": 8,
+							"t": 0.5,
+							"side": 0,
+							"station": "station_bus"
+						}
+					]
+				}
+			]
+		},
+		"nextId": 19
+	},
+	"output": {
+		"nodes": [
+			{
+				"id": "n1",
+				"x": 100,
+				"y": 100,
+				"z": 0,
+				"type": "intersection"
+			},
+			{
+				"id": "n2",
+				"x": 140,
+				"y": 100,
+				"z": 0,
+				"type": "intersection"
+			},
+			{
+				"id": "n4",
+				"x": 140,
+				"y": 140,
+				"z": 0,
+				"type": "intersection"
+			},
+			{
+				"id": "n6",
+				"x": 100,
+				"y": 140,
+				"z": 0,
+				"type": "intersection"
+			},
+			{
+				"id": "n9",
+				"x": 0,
+				"y": 140,
+				"z": 0,
+				"type": "extern"
+			}
+		],
+		"roads": [
+			{
+				"name": "路3",
+				"from": "n1",
+				"to": "n2",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路5",
+				"from": "n2",
+				"to": "n4",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路7",
+				"from": "n4",
+				"to": "n6",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路8",
+				"from": "n6",
+				"to": "n1",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路10",
+				"from": "n9",
+				"to": "n6",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			}
+		],
+		"lots": [
+			{
+				"corners": [
+					[
+						100,
+						100
+					],
+					[
+						140,
+						100
+					],
+					[
+						140,
+						140
+					],
+					[
+						100,
+						140
+					]
+				],
+				"margin": [
+					1,
+					1,
+					1,
+					1
+				],
+				"boundary": {
+					"0": 3,
+					"1": 1,
+					"2": 0,
+					"3": 2
+				},
+				"area": "AREA_RESIDENCE_HIGH"
+			}
+		],
+		"greens": [],
+		"presets": [
+			{
+				"lot": 0,
+				"id": "building_train_station",
+				"direction": 2,
+				"rect": [
+					0,
+					10,
+					0,
+					10
+				]
+			},
+			{
+				"lot": 0,
+				"id": "building_train_station",
+				"direction": 3,
+				"rect": [
+					0,
+					10,
+					28,
+					38
+				]
+			}
+		],
+		"transit": {
+			"nodes": [],
+			"conns": [],
+			"loops": [],
+			"roadLines": [
+				{
+					"route": "route_bus",
+					"stops": [
+						{
+							"road": 0,
+							"x": 120,
+							"y": 100,
+							"side": 0,
+							"station": "station_bus"
+						},
+						{
+							"road": 1,
+							"x": 140,
+							"y": 120,
+							"side": 0,
+							"station": "station_bus"
+						},
+						{
+							"road": 2,
+							"x": 120,
+							"y": 140,
+							"side": 0,
+							"station": "station_bus"
+						},
+						{
+							"road": 3,
+							"x": 100,
+							"y": 120,
+							"side": 0,
+							"station": "station_bus"
+						}
+					]
+				}
+			]
+		}
+	}
+}

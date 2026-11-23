@@ -188,5 +188,6 @@
 	ME.removeGreenLink = removeLink;
 	ME.resolveGreenLink = resolveLink;
 	ME.exportGreens = exportGreens;
+	ME.pieceIndexAt = pieceIndexAt;
 	if (typeof module !== 'undefined') module.exports = ME;
 })(typeof window !== 'undefined' ? window : globalThis);

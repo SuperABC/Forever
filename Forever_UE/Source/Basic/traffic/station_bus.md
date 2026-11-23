@@ -13,6 +13,7 @@
   - 只放在平直地面段：资产名以`_T`结尾(隧道)、端点z<0、两端高度差>0.05(坡道)的不放。
   - 站所在的"被切开的路段"长度必须>2：每侧单独把路口缩进(`GetSetback`)和本侧车辆开口(`GetOpenings()`里`isVehicle`且`forwardSide`同侧，含小路接入和建筑出入口，`AssignRoads`在建筑/小路建好之后才跑)当堵点，补集里长度>2的路段中取离中点最近的，站落在该段内最靠近中点的位置(离段端>=1)；任一侧没有合格路段就整条路不放站(成对才能掉头)。
   - 站名=路名+序号(`RoadStationRequest::name`，如`东西第3路1`)，按路名计数，同名路(棋盘格里同一条横/竖线被路口切成多段`Road`)序号接着往下走。站在每侧最外侧车道上由Core的`ResolveAccessLane`保证，这里不处理。
+- **手动站 `AssignManualRoads`（2026-11-23）**：编辑器"路网路线"里 `station=="station_bus"` 的站由它摆放（`StationFactory::RegisterManualAssign` 登记；Core `InitRoadsideStations` 发现数据里有本 mod 的站且登记了手动函数时**只**调它、跳过自动 `AssignRoads`——站按数据切换）。每站：`roads[stop.road]` → `BusProjectToRoad`（64 段采样找 (x,y) 的垂足，线性插值得弧长 t）→ `BusFindStopPosition(road, side, length, target)`（和自动站共用：路口缩进+本侧车辆开口当堵点，补集里长度>2 的段内取离 target 最近、离段端>=1 的位置，即**从目标 t 往两侧找最近的合格位置**）；整条路都没有合格段则**硬放在 t 上**并告警。单行道空侧兜底换到有车行道的一侧（两侧都没有则丢弃）。站名=`BusStopName(线下标,站下标)`（`bus_stop_name.h`，`BusStop_L<线>_S<站>`，下标是 `roadLines` 全局下标），route_bus 用同一个名字连线。
 
 ## 依赖关系
 

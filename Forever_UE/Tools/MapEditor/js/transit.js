@@ -16,8 +16,8 @@
 	const TYPES = ['ground', 'hug', 'mouth', 'tunnel', 'bridge'];
 	const TYPE_NAMES = { ground: '平地', hug: '贴合地形', mouth: '隧道口', tunnel: '隧道', bridge: '桥' };
 
-	function newTransit() { return { nodes: [], conns: [], loops: [] }; }
-	function ensure(model) { if (!model.transit) model.transit = newTransit(); const t = model.transit; t.nodes = t.nodes || []; t.conns = t.conns || []; t.loops = t.loops || []; return t; }
+	function newTransit() { return { nodes: [], conns: [], loops: [], roadLines: [] }; }
+	function ensure(model) { if (!model.transit) model.transit = newTransit(); const t = model.transit; t.nodes = t.nodes || []; t.conns = t.conns || []; t.loops = t.loops || []; t.roadLines = t.roadLines || []; return t; }
 	// 让 roadnet.js 里的曲线函数(quadOf/nearestOnRoad/profileOf…)直接用线路数据：nodes→nodes，conns→roads。
 	function view(model) { const t = ensure(model); return { nodes: t.nodes, roads: t.conns }; }
 	const nodeOf = (model, id) => ensure(model).nodes.find((n) => n.id === id);

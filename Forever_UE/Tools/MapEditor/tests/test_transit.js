@@ -225,7 +225,7 @@ function buildMap() {
 	assert.ok(!('transit' in ME.exportRoadnet(m, T).output));
 	const old = { version: 2, mapW: 256, mapH: 256, nodes: [], roads: [], lots: [], nextId: 1 };
 	ME.migrateModel(old);
-	assert.deepStrictEqual(old.transit, { nodes: [], conns: [], loops: [] });
+	assert.deepStrictEqual(old.transit, { nodes: [], conns: [], loops: [], roadLines: [] });
 	assert.ok(ME.cloneModel(m).transit);
 }
 

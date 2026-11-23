@@ -3,7 +3,7 @@
 // 模型(source)：
 //   version: 2
 //   nodes: [{id, x, y, z, extern?}]                   用户节点(路口/端点)，z=节点高度(element,10m)，extern=城外连接点(必须在地图边界上)
-//   roads: [{id, a, b, ctrl:[x,y]|null, type, lanes:[6], name, tree, lamp}]   tree/lamp=行道树/路灯tag字符串，''或缺省=没有
+//   roads: [{id, a, b, ctrl:[x,y]|null, type, asset, lanes:[6], name, tree, lamp}]   tree/lamp=行道树/路灯tag字符串，''或缺省=没有
 //          type: ground平地 / hug贴合地形 / mouth隧道口 / tunnel隧道 / bridge桥；ctrl是二次Bezier控制点(null=直线)
 //          路面高度由头尾节点的z决定：相同走直线(平路)，不同走扁S形(两端水平、1/3长度处的控制点)；hug则跟随地形，头尾按节点z做偏移。
 //          mouth用平地的路面资产但要给地形开口；tunnel用隧道资产；bridge放桥墩。
@@ -25,15 +25,22 @@
 	const NODE_EPS = 0.05;          // 判断"就在节点上"的距离
 	const SAME_LEVEL = 0.25;        // 交叉时两条路高度差小于这个才算同一层，才建路口
 
-	// 车道预设(左车行,左停车,左人行,右车行,右停车,右人行)：都有对应的 default_* 资产、_T隧道资产和"无人行道"资产。
+	// 车道资产(road.asset)：资产名，资产文件是 <asset>_<车道类型id>(隧道内加_T)，目前游戏里只有 default。
+	const DEFAULT_ASSET = 'default';
+
+	// 车道类型(road.lanes = 左车行,左停车,左人行,右车行,右停车,右人行)，是 default 资产的全集：
+	// 每个类型都有对应的 default_<id> 资产、_T隧道资产和"无人行道"资产。
+	// 方向：车道数组的前三项是道路正向(起点a→终点b)那一侧，后三项是反向(b→a)那一侧；下拉里名字的"左x右y"是道路从下往上走(屏幕上)时左边/右边的车行道数，所以 右y=lanes[0](a→b)、左x=lanes[3](b→a)；
+	// 车行道只在某一侧时就是单行道，通行方向由哪一侧有车行道决定(forward=a→b的车道数，backward=b→a的车道数)。
 	const LANE_PRESETS = [
-		{ id: '1_0_1_1_0_1', name: '双向2车道', lanes: [1, 0, 1, 1, 0, 1] },
-		{ id: '2_0_1_1_0_1', name: '3车道(左2右1)', lanes: [2, 0, 1, 1, 0, 1] },
-		{ id: '1_0_1_2_0_1', name: '3车道(左1右2)', lanes: [1, 0, 1, 2, 0, 1] },
-		{ id: '2_0_1_2_0_1', name: '双向4车道', lanes: [2, 0, 1, 2, 0, 1] },
-		{ id: '0_0_1_2_0_1', name: '单向2车道', lanes: [0, 0, 1, 2, 0, 1] },
-		{ id: '2_0_1_0_0_1', name: '单向2车道(反)', lanes: [2, 0, 1, 0, 0, 1] },
+		{ id: '1_0_1_1_0_1', name: '双向2车道(左1右1)', lanes: [1, 0, 1, 1, 0, 1] },
+		{ id: '2_0_1_1_0_1', name: '3车道(左1右2)', lanes: [2, 0, 1, 1, 0, 1] },
+		{ id: '1_0_1_2_0_1', name: '3车道(左2右1)', lanes: [1, 0, 1, 2, 0, 1] },
+		{ id: '2_0_1_2_0_1', name: '双向4车道(左2右2)', lanes: [2, 0, 1, 2, 0, 1] },
+		{ id: '2_0_1_0_0_1', name: '单向2车道(左0右2)', lanes: [2, 0, 1, 0, 0, 1] },
+		{ id: '0_0_1_2_0_1', name: '单向2车道(左2右0)', lanes: [0, 0, 1, 2, 0, 1] },
 	];
+	for (const p of LANE_PRESETS) { p.forward = p.lanes[0]; p.backward = p.lanes[3]; }
 
 	function roadWidth(road) {
 		let n = 0;
@@ -43,7 +50,7 @@
 
 	// ---------------- 模型 ----------------
 	function newModel(mapW, mapH) {
-		return { version: 2, mapW, mapH, nodes: [], roads: [], lots: [], greens: [], transit: { nodes: [], conns: [], loops: [] }, nextId: 1 };
+		return { version: 2, mapW, mapH, nodes: [], roads: [], lots: [], greens: [], transit: { nodes: [], conns: [], loops: [], roadLines: [] }, nextId: 1 };
 	}
 	function cloneModel(model) { return JSON.parse(JSON.stringify(model)); }
 	function nodeOf(model, id) { return model.nodes.find((n) => n.id === id); }
@@ -250,6 +257,7 @@
 		road.b = node.id;
 		road.ctrl = left.c ? [left.c[0], left.c[1]] : null;
 		model.roads.push(second);
+		if (ME.remapBusStops) ME.remapBusStops(model, road.id, t, second.id); // 公交站跟着落到后半段
 		return node;
 	}
 
@@ -314,6 +322,7 @@
 			id: model.nextId++, a: a.id, b: b.id,
 			ctrl: spec.ctrl ? [spec.ctrl[0], spec.ctrl[1]] : null,
 			type: spec.type || 'ground',
+			asset: spec.asset || DEFAULT_ASSET,
 			lanes: (spec.lanes || LANE_PRESETS[0].lanes).slice(),
 			name: spec.name || '',
 			tree: spec.tree || '', lamp: spec.lamp || '',   // 行道树/路灯tag(''=没有)，游戏侧roadnet_file按tag选资产
@@ -372,6 +381,7 @@
 		model.nodes = model.nodes.filter((n) => used.has(n.id) || n.extern);
 		const ids = new Set(model.nodes.map((n) => n.id));
 		model.lots = model.lots.filter((l) => ids.has(l.a) && ids.has(l.b));
+		if (ME.cleanupBusLines) ME.cleanupBusLines(model);
 	}
 	function deleteNode(model, nodeId) {
 		model.roads = model.roads.filter((r) => r.a !== nodeId && r.b !== nodeId);
@@ -555,7 +565,7 @@
 				const entry = {
 					name, from: prevId, to: toId,
 					controls: makeControls(sub, p.z0, p.z1, p.sl0, p.sl1, length),
-					lanes: r.lanes.slice(), kind: p.kind,
+					asset: r.asset || DEFAULT_ASSET, lanes: r.lanes.slice(), kind: p.kind,
 				};
 				// 行道树/路灯tag：只给平面(ground)路段导出；空串=这条路不种树/不放灯。
 				if (p.kind === 'ground') { entry.treeTag = r.tree || ''; entry.lampTag = r.lamp || ''; }
@@ -577,6 +587,7 @@
 		if (ME.exportLots) ME.exportLots(model, terrain, output, roadPieces, warnings);
 		if (ME.exportGreens) ME.exportGreens(model, terrain, output, roadPieces, warnings, pieceRanges);
 		if (ME.exportTransit) ME.exportTransit(model, terrain, output, warnings);
+		if (ME.exportBusLines) ME.exportBusLines(model, output, roadPieces, pieceRanges, warnings);
 		for (const w of validate(model, terrain, ctx)) warnings.push(w);
 		return { output, warnings, roadPieces };
 	}
@@ -635,7 +646,9 @@
 	// 旧版(version 1，路自己带height、隧道/桥导出时自动拆段)迁移成新版：节点补z，隧道/桥按旧布局拆成多条路(引道/坡=隧道口或桥，平路=隧道或桥)。
 	function migrateModel(model, ctx) {
 		if (!model.greens) model.greens = [];
-		if (!model.transit) model.transit = { nodes: [], conns: [], loops: [] };
+		for (const r of model.roads) if (!r.asset) r.asset = DEFAULT_ASSET; // 旧文件没有车道资产字段，补默认资产
+		if (!model.transit) model.transit = { nodes: [], conns: [], loops: [], roadLines: [] };
+		if (!model.transit.roadLines) model.transit.roadLines = [];
 		for (const l of model.lots) if (!l.presets) l.presets = [];
 		if (model.version >= 2) return model;
 		ctx = ctx || { height: () => 0 };
@@ -665,7 +678,7 @@
 				const sub = subQuad(q, t0, t1);
 				const last = i === defs.length - 1;
 				const next = last ? nodeOf(model, r.b) : addNode(model, sub.p1[0], sub.p1[1], false, d.z1);
-				model.roads.push({ id: model.nextId++, a: prev.id, b: next.id, ctrl: sub.c ? [sub.c[0], sub.c[1]] : null, type: d.kind, lanes: r.lanes.slice(), name: r.name });
+				model.roads.push({ id: model.nextId++, a: prev.id, b: next.id, ctrl: sub.c ? [sub.c[0], sub.c[1]] : null, type: d.kind, asset: r.asset || DEFAULT_ASSET, lanes: r.lanes.slice(), name: r.name });
 				prev = next;
 			});
 		}
@@ -674,6 +687,7 @@
 	}
 
 	ME.LANE_PRESETS = LANE_PRESETS;
+	ME.DEFAULT_ASSET = DEFAULT_ASSET;
 	ME.LANE_WIDTH = LANE_WIDTH;
 	ME.roadWidth = roadWidth;
 	ME.newModel = newModel;
@@ -687,6 +701,7 @@
 	ME.polyline = polyline;
 	ME.roadLength = roadLength;
 	ME.nearestOnRoad = nearestOnRoad;
+	ME.tangentAt = tangentAt;
 	ME.pickNode = pickNode;
 	ME.angleSnapAt = angleSnapAt;
 	ME.pickRoad = pickRoad;

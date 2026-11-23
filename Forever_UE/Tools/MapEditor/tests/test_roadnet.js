@@ -297,3 +297,20 @@ console.log('test_roadnet OK');
 	assert.strictEqual(untagged.length, 1);
 	assert.ok(out.roads.every((r) => r.kind === 'ground'));
 }
+
+// 车道资产 + 车道类型：新路默认 asset=default，导出带 asset；旧文件(没有asset)迁移后补 default；车道类型带方向(forward=a→b 车道数, backward=b→a 车道数)。
+{
+	const m = ME.newModel(256, 256);
+	const r = ME.addRoad(m, { a: { x: 10, y: 10 }, b: { x: 60, y: 10 }, lanes: ME.LANE_PRESETS[4].lanes }).road;
+	assert.strictEqual(r.asset, 'default');
+	assert.strictEqual(ME.exportRoadnet(m, null).output.roads[0].asset, 'default');
+	delete r.asset;
+	assert.strictEqual(ME.migrateModel(m).roads[0].asset, 'default');
+	ME.roadOf(m, r.id).asset = 'city';
+	assert.strictEqual(ME.exportRoadnet(m, null).output.roads[0].asset, 'city');
+	// 每个车道类型的资产id和lanes一致，单行道一侧车道为0
+	for (const p of ME.LANE_PRESETS) assert.strictEqual(p.id, p.lanes.join('_'));
+	const oneWay = ME.LANE_PRESETS.filter((p) => p.forward === 0 || p.backward === 0);
+	assert.strictEqual(oneWay.length, 2);
+	assert.ok(oneWay.some((p) => p.forward === 2) && oneWay.some((p) => p.backward === 2));
+}

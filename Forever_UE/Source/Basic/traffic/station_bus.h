@@ -1,6 +1,7 @@
 #pragma once
 
 #include "traffic/station_mod.h"
+#include "map/transit_data.h"
 
 #include <string>
 #include <vector>
@@ -17,6 +18,8 @@ public:
 	virtual void SetProperty() override;
 
 	static void AssignRoads(const std::vector<Road*>& roads, RoadStationEmitFunc emit, void* context);
+	// 手动站：编辑器"路网路线"里station==station_bus的站，见station_bus.md"手动站"。
+	static void AssignManualRoads(const std::vector<Road*>& roads, const TransitData& data, RoadStationEmitFunc emit, void* context);
 
 public:
 	// 存档保存/恢复下面这个命名计数器(count)，见Source/Dependence/common/mod_state.md。

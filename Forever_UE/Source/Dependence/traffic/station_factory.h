@@ -1,6 +1,7 @@
 #pragma once
 
 #include "traffic/station_mod.h"
+#include "map/transit_data.h"
 
 #include <string>
 #include <unordered_map>
@@ -13,6 +14,8 @@ public:
 	using CreateFunc = StationMod*(*)(const std::string&);
 	using DestroyFunc = void(*)(StationMod*);
 	using RoadAssignFunc = void(*)(const std::vector<Road*>&, RoadStationEmitFunc, void*);
+	// 手动站(编辑器"路网路线"画的公交站)：和RoadAssignFunc同一个static函数指针模式，多拿一份只读的TransitData。
+	using ManualAssignFunc = void(*)(const std::vector<Road*>&, const TransitData&, RoadStationEmitFunc, void*);
 
 	StationFactory() = default;
 	virtual ~StationFactory() = default;
@@ -42,6 +45,13 @@ public:
 	virtual void AssignRoads(const std::string& id, const std::vector<Road*>& roads,
 		RoadStationEmitFunc emit, void* context) const;
 
+	// 可选：给id登记手动站的摆放函数(没登记=这个mod不支持手动站)。追加在类末尾，不动已有虚函数。
+	virtual void RegisterManualAssign(const std::string& id, ManualAssignFunc assign);
+	virtual bool HasManualAssign(const std::string& id) const;
+	// 转发id登记的ManualAssignFunc；id未注册/未启用/没登记手动函数时不调用emit。
+	virtual void AssignManualRoads(const std::string& id, const std::vector<Road*>& roads, const TransitData& data,
+		RoadStationEmitFunc emit, void* context) const;
+
 private:
 	// 启用=已注册且id在configuredArgs里,详见配对md。
 	bool IsEnabled(const std::string& id) const;
@@ -55,4 +65,5 @@ private:
 	std::unordered_map<std::string, Entry> registries;
 	std::unordered_map<StationMod*, std::string> liveInstances;
 	std::unordered_map<std::string, std::string> configuredArgs;
+	std::unordered_map<std::string, ManualAssignFunc> manualAssigns;
 };

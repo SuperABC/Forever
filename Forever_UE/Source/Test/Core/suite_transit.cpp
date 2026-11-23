@@ -8,7 +8,9 @@
 #include "world_build.h"
 
 #include "common/json.h"
+#include "map/general_geometry.h"
 #include "traffic/route.h"
+#include "traffic/station.h"
 #include "traffic/traffic.h"
 
 using namespace std;
@@ -21,6 +23,9 @@ using namespace std;
 //   环 = [s0停, 东1, 东2, 东1, s0停, 西1, 西2, 西1]：规划成1条线、2段，两次停靠落在车站的两条不同轨道(t0向东、t1向西)，
 //   两段都从s0出发回到s0，铁轨在东2/西2原路掉头。
 // transit_hub：没有铁轨，两个孤立节点夹在s0两侧：环 = [s0停, 东点, s0停, 西点]，节点前后都是缺口且折回→要在节点处掉头，断言同transit_twice。
+// transit_bus：MapEditor"路网路线"设计的手动公交线(config里route_bus带--skip)。方框路上顺时针4个站(每条边中点、行车方向右手边)成一个环：
+//   station_bus按手动站建出4个BusStop_L0_S*(而不是自动的"每条4车道大路两侧各一站")、route_bus连成1条线4段、
+//   每个站都挂在路上且不压在同侧的车辆开口上。
 // 重新生成fixture后期望值要同步更新下面的常量。
 
 namespace {
@@ -126,9 +131,67 @@ void TransitTwiceSuiteBody(TestWorld& world, const TestOptions& options) {
 	CheckJoints(line, false);
 }
 
+void TransitBusSuiteBody(TestWorld& world, const TestOptions& options) {
+	(void)options;
+	TestRun& run = TestRun::Get();
+	const Route* bus = nullptr;
+	for (const auto& [name, route] : world.traffic->GetRoutes()) {
+		if (route && route->IsValid() && route->GetStationType() == "bus") bus = route;
+	}
+	run.Check(bus != nullptr, "a valid bus route exists");
+	if (!bus) return;
+
+	// 手动站：只有编辑器画的4个，没有自动的"4车道大路两侧各一站"。
+	int manualStations = 0, otherBusStations = 0, overlaps = 0;
+	for (const auto& [name, station] : world.traffic->GetStations()) {
+		if (!station || !station->IsValid() || station->GetStationType() != "bus") continue;
+		if (name.rfind("BusStop_L0_S", 0) != 0) { otherBusStations++; continue; }
+		manualStations++;
+		const Road* road = station->GetAttachedRoad();
+		run.Check(road != nullptr && station->GetStops().size() == 1, "a manual bus stop is attached to a road with one stop", name);
+		if (!road || station->GetStops().empty()) continue;
+
+		// 站位在路上的沿路距离和所在侧：采样中心线找最近点(side0=沿a->b的右手边=(-ty,tx))
+		const StationPort& stop = station->GetStops()[0];
+		float length = road->CalcDistance();
+		float bestDistance = 1e30f, bestT = 0.f, side = 0.f;
+		for (int i = 0; i <= 200; i++) {
+			float t = i / 200.f;
+			Node p = road->GetPoint(t);
+			float distance = (p.GetX() - stop.x) * (p.GetX() - stop.x) + (p.GetY() - stop.y) * (p.GetY() - stop.y);
+			if (distance < bestDistance) {
+				bestDistance = distance; bestT = t;
+				float dx, dy, dz;
+				road->GetTangent(t, dx, dy, dz);
+				side = (stop.x - p.GetX()) * (-dy) + (stop.y - p.GetY()) * dx;
+			}
+		}
+		bool forwardSide = side >= 0.f;
+		for (const RoadOpening& opening : road->GetOpenings()) {
+			if (!opening.isVehicle || opening.forwardSide != forwardSide) continue;
+			if (fabsf(opening.t * length - bestT * length) < opening.width * 0.5f) overlaps++;
+		}
+	}
+	run.Check(manualStations == 4, "exactly the 4 editor-drawn bus stops exist", to_string(manualStations));
+	run.Check(otherBusStations == 0, "the manual stops replace the automatic roadside stations", to_string(otherBusStations));
+	run.Check(overlaps == 0, "no manual bus stop sits on a same-side vehicle opening", to_string(overlaps));
+
+	const auto& lines = bus->GetLines();
+	run.Check(lines.size() == 1, "the editor bus line became exactly one line", to_string(lines.size()));
+	if (lines.empty()) return;
+	const Route::RouteLine& line = lines[0];
+	run.Check(line.runs.size() == 4, "four stops -> four runs around the loop", to_string(line.runs.size()));
+	run.Check(line.period > 0.f && line.vehicleCount >= 1, "the line has a period and at least one bus", to_string(line.period) + " / " + to_string(line.vehicleCount));
+	for (size_t r = 0; r < line.runs.size(); r++) {
+		const Route::RouteRun& leg = line.runs[r];
+		run.Check(leg.fromStation && leg.toStation && leg.fromStation != leg.toStation, "a run joins two different bus stops", to_string(r));
+		run.Check(leg.length > 1.f, "a run has length", to_string(leg.length));
+	}
+}
+
 namespace {
 	// 派生一份config：路网/地形换成sample，route_mods只留route_train --skip。
-	bool WriteTransitConfig(const TestOptions& options, const string& stem, filesystem::path& derived) {
+	bool WriteTransitConfig(const TestOptions& options, const string& stem, filesystem::path& derived, const string& routeMod = "route_train --skip") {
 		TestRun& run = TestRun::Get();
 		filesystem::path samples = filesystem::path(options.sourceRoot).parent_path() / "Tools" / "MapEditor" / "samples";
 		const filesystem::path roadnet = samples / (stem + ".roadnet"), terrain = samples / (stem + ".terrain");
@@ -149,7 +212,7 @@ namespace {
 		JsonValue roadnets(DATA_ARRAY), terrains(DATA_ARRAY), routes(DATA_ARRAY);
 		roadnets.append(JsonValue("roadnet_file --path=" + slashes(roadnet.string())));
 		terrains.append(JsonValue("terrain_file --path=" + slashes(terrain.string())));
-		routes.append(JsonValue("route_train --skip"));
+		routes.append(JsonValue(routeMod));
 		root["roadnet_mods"] = roadnets;
 		root["terrain_mods"] = terrains;
 		root["route_mods"] = routes;
@@ -167,9 +230,9 @@ namespace {
 void RunTransitSuite(const TestOptions& options) {
 	TestRun& run = TestRun::Get();
 	run.Begin("transit", 0, options.selfCommand + " --suite transit");
-	for (const char* stem : { "transit", "transit_twice", "transit_hub" }) {
+	for (const char* stem : { "transit", "transit_twice", "transit_hub", "transit_bus" }) {
 		filesystem::path derived;
-		if (!WriteTransitConfig(options, stem, derived)) continue;
+		if (!WriteTransitConfig(options, stem, derived, string(stem) == "transit_bus" ? "route_bus --skip" : "route_train --skip")) continue;
 		TestOptions copy = options;
 		copy.configPath = derived.string();
 		RunSuiteInChildren(copy, stem, 256);

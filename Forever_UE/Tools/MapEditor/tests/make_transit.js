@@ -86,3 +86,20 @@ console.log('transit', JSON.stringify(tr));
 	fs.writeFileSync(path.join(outDir, 'transit_hub.roadnet'), ME.writeRoadnet(b.m, exported.output));
 	console.log('transit_hub', JSON.stringify(exported.output.transit));
 }
+
+// 第四份：公交(路网路线)：方框路上顺时针4个站(每条边一个，都在行车方向右手边、边中点)，一条线首尾成环(transit_bus)。
+// 游戏里station_bus按这些站摆放(避开路面开口)，route_bus --skip连成线。
+{
+	const b = baseModel();
+	require('../js/busline.js');
+	const roads = b.m.roads.slice(0, 4);
+	const r = ME.addBusLine(b.m, roads.map((road) => ({ road: road.id, t: 0.5, side: 0 })));
+	if (r.error) throw new Error(r.error);
+	const exported = ME.exportRoadnet(b.m, b.t);
+	if (exported.warnings.length) console.log('warnings(bus):', exported.warnings);
+	const rl = exported.output.transit.roadLines;
+	if (!rl || rl.length !== 1 || rl[0].stops.length !== 4) throw new Error('bus导出不对: ' + JSON.stringify(rl));
+	fs.writeFileSync(path.join(outDir, 'transit_bus.terrain'), Buffer.from(ME.writeTerrain(b.t)));
+	fs.writeFileSync(path.join(outDir, 'transit_bus.roadnet'), ME.writeRoadnet(b.m, exported.output));
+	console.log('transit_bus', JSON.stringify(rl));
+}
