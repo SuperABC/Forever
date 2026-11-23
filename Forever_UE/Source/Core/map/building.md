@@ -15,6 +15,7 @@
 
 ## 关键设计
 
+- **地坪高度(2026-11-23)**：`GetGroundZ()`=所属地块`parentLot->GetZ()`（没有地块为0；地块可放在抹平出来的非0高度平台上）。`GetFloorBaseZ(level)`语义不变，仍是"相对地坪"的楼层底高度；**写进世界坐标的z一律用`GetFloorWorldZ(level)`=`GetGroundZ()+GetFloorBaseZ(level)`**：房间导航节点、停车位、导航模板节点、门(`CreateDoor`的floorBaseZ参数)、站口(`Station`)、家具、电梯轿厢初始高度、装饰(`decoration.z=GetGroundZ()+spec.z`)。UE侧渲染把楼层相对高度叠在`GetGroundZ()*世界缩放`上。园区内部建筑的`parentLot`是`zone->GetParentLot()`，所以同样跟随园区高度。
 - **自定义模型(`DecorationInstance`/`GetDecorations()`，结构体定义在feature_spec.h，和园区共用)**——mod在`Layout()`里用
   `BuildingMod::AddDecoration(DecorationSpec)`指定放置的StaticMesh，`Building::Layout()`在
   `mod->Layout()`、算完body尺寸之后按**最终**`direction`换算成世界摆位：

@@ -29,6 +29,10 @@
 using namespace std;
 
 namespace {
+	// 高度比较的容差：只防float32/序列化的舍入误差(高度<=约50时ulp<=4e-6，.roadnet保留6位小数)，不是容差。
+	// 编辑器(Tools/MapEditor的HEIGHT_EPS)用同一个值。
+	constexpr float kHeightEps = 1e-5f;
+
 	// 室外起点接入车道时，车道方向与车头夹角180度折合的额外距离（地图单位，1.5=15m）。
 	constexpr float kHeadingPenaltyMapUnits = 1.5f;
 	constexpr int kEntryRoadCandidates = 2; // 入线时只比较最近的几条有车道的路（每条两个方向，最多 2x 次寻路）
@@ -153,28 +157,27 @@ void Map::InitTerrains() {
 	}
 	terrains.clear();
 
-	// 可建设标记：3x3范围(含自身)内所有element高度都为0(粗高度为0，有细化数组的话细化高度也全为0)。
-	// 不看地形类型(沙滩等也能建)，也不看水(水为了填满岸边会伸到地面以下，对建筑没有影响)；任一邻居越界(地图边缘)不标记。
+	// 可建设标记：3x3范围(含自身)内所有element的高度(粗高度，有细化数组的话含细化高度)极差小于kHeightEps，
+	// 高度本身可以不为0(抹平出来的半山腰/山顶平台)。不看地形类型(沙滩等也能建)，也不看水(水为了填满岸边会伸到
+	// 地面以下，对建筑没有影响)；任一邻居越界(地图边缘)不标记。自然/程序化地形几乎不可能满足，只有抹平笔刷抹出来的区域才会。
 	debugf("Log: Mark flat elements as construction.\n");
-	auto isFlat = [this](int x, int y) {
-		const Element& e = At(x, y);
-		if (e.height != 0.f) return false;
-		if (e.fineHeights) {
-			for (float v : *e.fineHeights) if (v != 0.f) return false;
-		}
-		return true;
-	};
 	for (Element& e : elements) e.construction = false;
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
-			bool allFlat = true;
-			for (int dy = -1; dy <= 1 && allFlat; dy++) {
-				for (int dx = -1; dx <= 1 && allFlat; dx++) {
+			float lowest = FLT_MAX, highest = -FLT_MAX;
+			bool inside = true;
+			for (int dy = -1; dy <= 1 && inside; dy++) {
+				for (int dx = -1; dx <= 1 && inside; dx++) {
 					int nx = x + dx, ny = y + dy;
-					if (nx < 0 || nx >= width || ny < 0 || ny >= height || !isFlat(nx, ny)) allFlat = false;
+					if (nx < 0 || nx >= width || ny < 0 || ny >= height) { inside = false; break; }
+					const Element& e = At(nx, ny);
+					lowest = min(lowest, e.height); highest = max(highest, e.height);
+					if (e.fineHeights) {
+						for (float v : *e.fineHeights) { lowest = min(lowest, v); highest = max(highest, v); }
+					}
 				}
 			}
-			At(x, y).construction = allFlat;
+			At(x, y).construction = inside && (highest - lowest) < kHeightEps;
 		}
 	}
 }
@@ -208,7 +211,9 @@ void Map::InitRoadnet() {
 	roadnet = new Roadnet(&roadnetFactory, activeId);
 
 	auto getTerrain = [this](int x, int y) -> const string& { return this->GetTerrainRef(x, y); };
-	auto isConstruction = [this](int x, int y) -> bool { return this->IsConstruction(x, y); };
+	// 路网mod(棋盘格/井字)把"可建设"当成z=0的平地用，所以给它们的是"平且高度为0"的格子(IsGroundConstruction)；
+	// 非0高度的平台只有roadnet_file(编辑器路网)会用，它自己不看这个回调。
+	auto isConstruction = [this](int x, int y) -> bool { return this->IsGroundConstruction(x, y); };
 	auto getWater = [this](int x, int y) -> pair<bool, float> { return this->GetWater(x, y); };
 	auto getHeight = [this](float x, float y) -> float { return this->SampleHeight(x, y); };
 	roadnet->DistributeRoadnet(width, height, getTerrain, isConstruction, getWater, getHeight, Node::GetCount());
@@ -1004,7 +1009,10 @@ void Map::InitVegetation() {
 			return std::make_pair(p[0] * width + p[1], p[2] * height + p[3]);
 			};
 		frame.localToWorld = [](float x, float y) { return std::make_pair(x, y); };
-		roadTrees = vegetation.ExpandRequests(roadnet->GetTrees(), frame, canPlace);
+		// mod的filterRoadPlants=false(路网文件)时路树位置完全由每条路自己的指定决定，只丢掉出图的点，不按水/隧道口挖洞过滤。
+		bool filter = !roadnet->GetMod() || roadnet->GetMod()->filterRoadPlants;
+		roadTrees = vegetation.ExpandRequests(roadnet->GetTrees(), frame, [this, filter](float x, float y) {
+			return filter ? CanPlaceTree(x, y) : CheckXY((int)floorf(x), (int)floorf(y)); });
 	}
 
 	int buildingTrees = 0;
@@ -1072,7 +1080,10 @@ void Map::InitLamps() {
 			return std::make_pair(p[0] * width + p[1], p[2] * height + p[3]);
 			};
 		frame.localToWorld = [](float x, float y) { return std::make_pair(x, y); };
-		roadLamps = lamps.ExpandRequests(roadnet->GetLamps(), frame, [this](float x, float y) { return CanPlaceTree(x, y); });
+		// 同InitVegetation：filterRoadPlants=false时只丢掉出图的点(桥上/隧道口的路灯也是路自己指定的)。
+		bool filter = !roadnet->GetMod() || roadnet->GetMod()->filterRoadPlants;
+		roadLamps = lamps.ExpandRequests(roadnet->GetLamps(), frame, [this, filter](float x, float y) {
+			return filter ? CanPlaceTree(x, y) : CheckXY((int)floorf(x), (int)floorf(y)); });
 	}
 	debugf("Log: Lamps road lamps=%d, total=%d, blueprints=%d.\n", roadLamps,
 		(int)lamps.GetLamps().size(), (int)lamps.GetBlueprintPaths().size());
@@ -2282,7 +2293,8 @@ Road* Map::ConnectZoneInternalRoad(Zone* zone, const ZoneInternalRoadSpec& spec,
 	auto [wx1, wy1] = ZoneLocalToWorld(zone, spec.x1, spec.y1);
 	auto [wx2, wy2] = ZoneLocalToWorld(zone, spec.x2, spec.y2);
 
-	Road* road = new Road("zone_internal", Node("road", wx1, wy1, 0.f), Node("road", wx2, wy2, 0.f), "", 0.f);
+	float groundZ = zone->GetGroundZ();
+	Road* road = new Road("zone_internal", Node("road", wx1, wy1, groundZ), Node("road", wx2, wy2, groundZ), "", 0.f);
 	// 只能是"一条车辆单行道"或"一条人行道"二选一(和vehicleEntries/vehicleExits/
 	// pedestrianAccess分开指定的模型保持一致，不支持多车道/双向车行道混在一个spec里，见
 	// ZoneInternalRoadSpec注释)，固定用side0——这是唯一一条车道，没有"另一侧"需要区分。
@@ -2420,6 +2432,11 @@ const string& Map::GetTerrainRef(int x, int y) const {
 
 bool Map::IsConstruction(int x, int y) const {
 	return CheckXY(x, y) && At(x, y).construction;
+}
+
+bool Map::IsGroundConstruction(int x, int y) const {
+	// 3x3极差已小于kHeightEps，自身高度接近0就等于整片接近0。
+	return IsConstruction(x, y) && fabsf(At(x, y).height) <= kHeightEps;
 }
 
 string Map::GetTerrain(int x, int y) const {
@@ -3813,7 +3830,7 @@ Cabin* Map::CreateCabin(Building* building, int specIndex, const ElevatorCabinSp
 	string interactName = building->GetName() + " 电梯" + to_string(building->GetCabinEntities().size() + 1);
 	int initialLevel = std::clamp(0, spec.minFloor, spec.maxFloor);
 	Cabin* cabin = new Cabin(building, specIndex, interactName, spec.shaftIndex, spec.minFloor, spec.maxFloor,
-		initialLevel, building->GetFloorBaseZ(initialLevel), spec.scriptModName, spec.milestoneNames, &scriptFactory);
+		initialLevel, building->GetFloorWorldZ(initialLevel), spec.scriptModName, spec.milestoneNames, &scriptFactory);
 	cabinsByInteractName[interactName] = cabin;
 	return cabin;
 }

@@ -59,6 +59,8 @@ public:
 	const std::vector<DecorationInstance>& GetDecorations() const;
 
 	Lot* GetParentLot() const;
+	// 园区地坪的世界高度(地图单位)：所属地块的z，没有地块为0。
+	float GetGroundZ() const;
 	void SetParentLot(Lot* lot);
 
 	// 下标按FACE_DIRECTION(0-3)，不持有Road

@@ -240,4 +240,24 @@ assert.strictEqual(b.isBuildable(16, 16), true);
 	u.idx[8 * 16 + 8] = 2; u.height.fill(3);
 	assert.ok(u.smoothTypes(1) >= 1); assert.strictEqual(u.idx[8 * 16 + 8], 1);
 }
+
+// 非0高度平台：抹平到目标高度h后，平台内部(含3x3邻域)可建；平台边缘一圈(邻居是斜坡/平地)不可建；斜坡不可建；极差>=HEIGHT_EPS不可建。
+{
+	assert.strictEqual(ME.HEIGHT_EPS, 1e-5);
+	const p = new ME.Terrain(48, 48);
+	for (let y = 10; y < 40; y++) for (let x = 10; x < 40; x++) p.height[y * 48 + x] = 2 + (x + y) * 0.01;   // 一片斜坡
+	assert.ok(!p.isBuildable(20, 20), '斜坡不可建');
+	p.beginStroke(); p.brush('flatten', 24, 24, 8, { strength: 1, target: 3.7, allowFlat: true }); p.endStroke();
+	assert.strictEqual(p.height[24 * 48 + 24], Math.fround(3.7));
+	assert.ok(p.isBuildable(24, 24), '抹平到3.7的平台中心可建(高度不一定是0)');
+	assert.strictEqual(p.countNonBuildable(22, 22, 26, 26), 0);
+	assert.ok(!p.isBuildable(24 + 8, 24), '平台边缘的邻居不是平台，不可建');
+	assert.ok(!p.isBuildable(24 + 9, 24), '平台外的斜坡不可建');
+	// 容差：极差刚好小于/大于HEIGHT_EPS
+	const q = new ME.Terrain(16, 16);
+	q.height.fill(5); q.height[8 * 16 + 8] = 5 + 4e-6;
+	assert.ok(q.isBuildable(8, 8), '极差4e-6<1e-5仍算平');
+	q.height[8 * 16 + 8] = 5 + 1e-4;
+	assert.ok(!q.isBuildable(8, 8), '极差1e-4>=1e-5不算平');
+}
 console.log('test_terrain OK');

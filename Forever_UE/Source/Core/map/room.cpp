@@ -189,7 +189,7 @@ void Room::LayoutFurniture() {
 		RandomScope scope(RandomRegistry::GetInstanceStream(mod));
 		mod->Layout(BuildLayoutInfo());
 	}
-	float baseZ = parentBuilding->GetFloorBaseZ(layer);
+	float baseZ = parentBuilding->GetFloorWorldZ(layer);
 	for (const FurnitureSpec& spec : mod->furniture) { // 只读，不改mod的容器(跨DLL分配器)
 		DecorationInstance instance;
 		instance.meshPath = spec.meshPath;

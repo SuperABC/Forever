@@ -451,6 +451,12 @@ public:
 	// 代表性的"楼层底部"值(用于导航节点的近似高度，不是渲染用的精确范围)。
 	float GetFloorBaseZ(int level) const;
 
+	// 地坪的世界高度(地图单位)：所属地块(parentLot)的z，没有地块为0。地块放在抹平的非0高度平台上时>0。
+	float GetGroundZ() const;
+	// 这层楼底部的世界Z = GetGroundZ() + GetFloorBaseZ(level)。导航节点/门/车位/站口/电梯轿厢这些写进世界坐标的z都用它；
+	// GetFloorBaseZ本身仍是"相对地坪"的值(渲染层的楼层堆叠按相对高度算，再加地坪)。
+	float GetFloorWorldZ(int level) const;
+
 	// LocalToWorld的逆变换：世界坐标(地图单位) -> 楼体局部坐标。
 	std::pair<float, float> WorldToLocal(float worldX, float worldY) const;
 

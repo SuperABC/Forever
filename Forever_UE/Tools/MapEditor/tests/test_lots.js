@@ -60,4 +60,47 @@ const c2 = ME.lotCorners(m2, l2);
 const o = ME.orderCorners(c2);
 assert.strictEqual(new Set(Object.values(o.edges).map((e) => JSON.stringify(e))).size, 4);
 
+
+// 非0高度地块：地块z=两个基准节点z的均值，corners带第3个数；路必须水平且和地块等高才算边界路；基准节点高度不一致报警告；平台上可建设性只看极差。
+{
+	const H = 3.7;
+	const m3 = ME.newModel(256, 256);
+	const pts = [[100, 100], [140, 100], [140, 140], [100, 140]];
+	const ids = pts.map((p) => ME.addNode(m3, p[0], p[1], false, H).id);
+	for (let i = 0; i < 4; i++) ME.addRoad(m3, { a: { node: ids[i] }, b: { node: ids[(i + 1) % 4] } });
+	assert.strictEqual(m3.roads.length, 4);
+	const lot3 = ME.addLot(m3, ids[0], ids[1], 40, 'AREA_RESIDENCE_HIGH');
+	assert.strictEqual(ME.lotZ(m3, lot3), H);
+	assert.ok(ME.lotCorners(m3, lot3).every((c) => c.length === 3 && c[2] === H));
+	const t3 = new ME.Terrain(256, 256);
+	t3.beginStroke(); t3.brush('flatten', 120, 120, 60, { strength: 1, target: H, allowFlat: true }); t3.endStroke();
+	const r3 = ME.exportRoadnet(m3, t3);
+	assert.ok(!r3.warnings.some((w) => w.includes('不是可建设区域')), '抹平到H的平台上可建: ' + r3.warnings.join('|'));
+	assert.ok(!r3.warnings.some((w) => w.includes('基准节点高度不一致')));
+	const o3 = r3.output.lots[0];
+	assert.ok(o3.corners.every((c) => c.length === 3 && c[2] === H), JSON.stringify(o3.corners));
+	assert.ok(o3.boundary['2'] !== undefined && o3.boundary['0'] !== undefined && o3.boundary['1'] !== undefined && o3.boundary['3'] !== undefined, '四边都有同高的路');
+	// 没抹平的地方(z=0平地的地形)：平台高度和地形没关系，但地形不平(斜坡)就报警
+	const slope = new ME.Terrain(256, 256);
+	for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) slope.height[y * 256 + x] = x * 0.01;
+	assert.ok(ME.exportRoadnet(m3, slope).warnings.some((w) => w.includes('不是可建设区域')));
+	// 其中一条路抬高0.5：不水平的路不是边界路；整条南边路(和地块不同高)也不是
+	m3.nodes.find((n) => n.id === ids[2]).z = H + 0.5;
+	const o4 = ME.exportRoadnet(m3, t3).output.lots[0];
+	assert.ok(o4.boundary['1'] === undefined && o4.boundary['3'] === undefined, '连着抬高节点的路(不水平)不算边界: ' + JSON.stringify(o4.boundary));
+	assert.ok(o4.boundary['2'] !== undefined && o4.boundary['0'] !== undefined, '另外两条水平且等高的路仍是边界');
+	// 路水平但和地块不同高：南边两个节点都抬高0.5(南边路水平但z=H+0.5)，东西路不水平，只有基准边(北边路)同高
+	m3.nodes.find((n) => n.id === ids[3]).z = H + 0.5;
+	const o5 = ME.exportRoadnet(m3, t3).output.lots[0];
+	assert.deepStrictEqual(Object.keys(o5.boundary), ['2'], '只有和地块同高的北边路是边界: ' + JSON.stringify(o5.boundary));
+	// 基准节点高度不一致 -> 警告，z取均值
+	const m4 = ME.newModel(256, 256);
+	const p = ME.addNode(m4, 100, 100, false, 2), q = ME.addNode(m4, 120, 100, false, 2.5);
+	const l4 = ME.addLot(m4, p.id, q.id, 10, 'AREA_TEST');
+	assert.strictEqual(ME.lotZ(m4, l4), 2.25);
+	assert.ok(ME.exportRoadnet(m4, new ME.Terrain(256, 256)).warnings.some((w) => w.includes('基准节点高度不一致')));
+	// 容差：z差4e-6不算不一致，也不影响边界判断
+	q.z = 2 + 4e-6;
+	assert.ok(!ME.exportRoadnet(m4, new ME.Terrain(256, 256)).warnings.some((w) => w.includes('基准节点高度不一致')));
+}
 console.log('test_lots OK');

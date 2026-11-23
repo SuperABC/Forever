@@ -229,6 +229,7 @@ SuiteBody FindSuiteBody(const std::string& name) {
 	if (name == "route") return RouteSuiteBody;
 	if (name == "green") return GreenSuiteBody;
 	if (name == "presets") return PresetsSuiteBody;
+	if (name == "plateau") return PlateauSuiteBody;
 	if (name == "polit") return PolitSuiteBody;
 	if (name == "transit") return TransitSuiteBody;
 	if (name == "transit_twice" || name == "transit_hub") return TransitTwiceSuiteBody;

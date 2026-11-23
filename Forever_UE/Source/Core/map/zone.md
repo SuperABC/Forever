@@ -12,6 +12,7 @@
 
 ## 关键设计
 
+- **地坪高度(2026-11-23)**：`GetGroundZ()`=所属地块`parentLot->GetZ()`（没有地块为0）。园区的装饰(`decoration.z`)、大门(`CreateDoor`的z)、内部路(`ConnectZoneInternalRoad`的`zone_internal`路端点z)、UE侧的围墙/大门/装饰高度都以它为地面；园区内部建筑的`parentLot`也是这块地块，所以建筑跟着一起抬高。
 - **`Zone`从构造到析构只持有一个`ZoneMod`实例**：`ZoneMod::Assign(lots, emit, context)`是
   不需要任何实例的static方法——`Map::InitZones()`先对这个类型调一次`zoneFactory.Assign(id,
   排好序的GetLots(), &EmitPlacementRequest, &requests)`，一次性扫完全地图的lot拿到这个类型

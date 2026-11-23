@@ -15,6 +15,7 @@ void RunPerfSuite(const TestOptions& options);
 void RunRouteSuite(const TestOptions& options);
 void RunGreenSuite(const TestOptions& options);
 void RunPresetsSuite(const TestOptions& options);
+void RunPlateauSuite(const TestOptions& options);
 void RunPolitSuite(const TestOptions& options);
 void RunTransitSuite(const TestOptions& options);
 
@@ -26,6 +27,7 @@ void PerfSuiteBody(TestWorld& world, const TestOptions& options);
 void RouteSuiteBody(TestWorld& world, const TestOptions& options);
 void GreenSuiteBody(TestWorld& world, const TestOptions& options);
 void PresetsSuiteBody(TestWorld& world, const TestOptions& options);
+void PlateauSuiteBody(TestWorld& world, const TestOptions& options);
 void PolitSuiteBody(TestWorld& world, const TestOptions& options);
 void TransitSuiteBody(TestWorld& world, const TestOptions& options);
 void TransitTwiceSuiteBody(TestWorld& world, const TestOptions& options);

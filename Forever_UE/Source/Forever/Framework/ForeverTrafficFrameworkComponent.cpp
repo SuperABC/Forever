@@ -370,7 +370,7 @@ bool UForeverTrafficFrameworkComponent::GetParkedPose(Vehicle* vehicle, FVector&
 	vehicle->GetParkingLocalPosition(localX, localY);
 	float worldX, worldY;
 	TrafficComputeWorldPosition(*building, room->GetPosX() + localX, room->GetPosY() + localY, worldX, worldY);
-	outLocation = FVector(worldX, worldY, TRAFFIC_HEIGHT_EPSILON + building->GetFloorBaseZ(room->GetLayer()) * TRAFFIC_WORLD_SCALE);
+	outLocation = FVector(worldX, worldY, TRAFFIC_HEIGHT_EPSILON + building->GetFloorWorldZ(room->GetLayer()) * TRAFFIC_WORLD_SCALE);
 	outYaw = FMath::RadiansToDegrees(building->GetRotation()) + vehicle->GetParkingRotationDegrees();
 	return true;
 }

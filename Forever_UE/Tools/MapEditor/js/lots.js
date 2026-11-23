@@ -15,7 +15,17 @@
 	const DIRECTION_NAMES = ['西', '东', '北', '南'];
 	const END_EPS = 0.06;
 
-	// 矩形4个角(A, B, B+n*d, A+n*d)；depth带符号。
+	// 高度比较容差，和ME.HEIGHT_EPS(terrain.js)/Core的kHeightEps同值；lots.js在terrain.js之前被测试单独加载时也能用。
+	const heightEps = () => (ME.HEIGHT_EPS !== undefined ? ME.HEIGHT_EPS : 1e-5);
+
+	// 地块高度z：两个基准节点z的均值(游戏里Lot::z取各角z均值，4个角z相同)。节点不存在返回0。
+	function lotZ(model, lot) {
+		const a = ME.nodeOf(model, lot.a), b = ME.nodeOf(model, lot.b);
+		if (!a || !b) return 0;
+		return ((a.z || 0) + (b.z || 0)) / 2;
+	}
+
+	// 矩形4个角(A, B, B+n*d, A+n*d)；depth带符号。每个角 [x, y, z]，z=地块高度(lotZ)。
 	function lotCorners(model, lot) {
 		const a = ME.nodeOf(model, lot.a), b = ME.nodeOf(model, lot.b);
 		if (!a || !b) return null;
@@ -23,7 +33,8 @@
 		const len = Math.hypot(dx, dy);
 		if (len < 1e-6 || Math.abs(lot.depth) < 1e-6) return null;
 		const nx = -dy / len * lot.depth, ny = dx / len * lot.depth;
-		return [[a.x, a.y], [b.x, b.y], [b.x + nx, b.y + ny], [a.x + nx, a.y + ny]];
+		const z = lotZ(model, lot);
+		return [[a.x, a.y, z], [b.x, b.y, z], [b.x + nx, b.y + ny, z], [a.x + nx, a.y + ny, z]];
 	}
 
 	// 按Core的顺序排序，返回 {nodes:[n0..n3], edges:{0:[p,q],1:..,2:..,3:..}}。
@@ -36,12 +47,15 @@
 	}
 
 	// 找刚好贴在这条边上的用户road(两个端点各落在边的两个端点上)，且必须是展开后只有1段的直线地面路(Core的边界Road是单条Road)。
-	function boundaryRoadFor(model, edge, roadPieces) {
+	// 地块和路不同高就不算相邻：路必须水平(两端z差<=HEIGHT_EPS)且高度等于地块z(zLot，差<=HEIGHT_EPS)；zLot省略时不检查高度(只检查水平)。
+	function boundaryRoadFor(model, edge, roadPieces, zLot) {
 		for (const r of model.roads) {
-			if (r.type !== 'ground' || r.ctrl) continue;
+			if ((r.type !== 'ground' && r.type !== 'fit') || r.ctrl) continue;
 			const pieces = roadPieces.get(r.id);
 			if (!pieces || pieces.length !== 1) continue;
 			const a = ME.nodeOf(model, r.a), b = ME.nodeOf(model, r.b);
+			if (Math.abs((a.z || 0) - (b.z || 0)) > heightEps()) continue;
+			if (zLot !== undefined && Math.abs((a.z || 0) - zLot) > heightEps()) continue;
 			const d = (p, q) => Math.hypot(p[0] - q.x, p[1] - q.y);
 			if ((d(edge[0], a) < END_EPS && d(edge[1], b) < END_EPS) || (d(edge[0], b) < END_EPS && d(edge[1], a) < END_EPS)) return r;
 		}
@@ -61,7 +75,7 @@
 		return true;
 	}
 
-	// 地块覆盖的element里不可建造的个数(3x3邻域高度不全为0，和游戏的construction标记一致)。
+	// 地块覆盖的element里不可建造的个数(3x3邻域高度极差>=HEIGHT_EPS，和游戏的construction标记一致；高度本身不一定是0)。
 	function nonBuildableCount(terrain, corners) {
 		if (!terrain) return 0;
 		const xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]);
@@ -89,7 +103,7 @@
 		const ordered = orderCorners(corners);
 		const directions = [];
 		for (let d = 0; d < 4; d++) {
-			const road = roadPieces ? boundaryRoadFor(model, ordered.edges[d], roadPieces) : null;
+			const road = roadPieces ? boundaryRoadFor(model, ordered.edges[d], roadPieces, corners[0][2]) : null;
 			const auto = road ? ME.roadWidth(road) / 2 : 0;
 			const custom = lot.margin && lot.margin[d] !== null && lot.margin[d] !== undefined ? lot.margin[d] : null;
 			directions.push({ name: DIRECTION_NAMES[d], road, auto, margin: custom !== null ? custom : auto, custom });
@@ -314,9 +328,11 @@
 				continue;
 			}
 			const bad = lot.area === 'AREA_PLACEHOLDER' ? 0 : nonBuildableCount(terrain, info.corners);   // 占位分区不检查可建设性(允许放在非平地上)
-			if (bad > 0) warnings.push(`地块${lot.id}有${bad}个格子不是可建设区域(自身或3×3邻域内有高度不为0的格子，或贴着地图边缘)，游戏里这块地会被丢弃`);
+			if (bad > 0) warnings.push(`地块${lot.id}有${bad}个格子不是可建设区域(自身或3×3邻域内高度不平，或贴着地图边缘)，建筑会悬空或被埋进地里；可以用地形的"抹平"笔刷把地块下抹成同一高度`);
+			const na = ME.nodeOf(model, lot.a), nb = ME.nodeOf(model, lot.b);
+			if (Math.abs((na.z || 0) - (nb.z || 0)) > heightEps()) warnings.push(`地块${lot.id}的两个基准节点高度不一致(${na.z || 0} / ${nb.z || 0})，地块按平均高度放置`);
 			output.lots.push({
-				corners: info.corners.map((c) => [c[0], c[1]]),
+				corners: info.corners.map((c) => [c[0], c[1], c[2]]),
 				margin, boundary, area: lot.area,
 			});
 			const replay = (lot.presets && lot.presets.length) ? replayPresets(model, lot, roadPieces) : null;
@@ -338,6 +354,7 @@
 	ME.AREAS = AREAS;
 	ME.DIRECTION_NAMES = DIRECTION_NAMES;
 	ME.lotCorners = lotCorners;
+	ME.lotZ = lotZ;
 	ME.orderCorners = orderCorners;
 	ME.addLot = addLot;
 	ME.describeLot = describeLot;

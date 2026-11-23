@@ -156,6 +156,7 @@ namespace {
 int FileRoadnet::count = 0;
 
 FileRoadnet::FileRoadnet(const string& args) : id(count++) {
+	filterRoadPlants = false; // 行道树/路灯只看每条路自己的tag，见LayoutRows
 	path = ModArgs(args).GetString("path");
 }
 
@@ -278,7 +279,8 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 			AddTunnelHatch(&road, 0.f, 1.f, road.GetTotalWidth(),
 				wallFrom ? fromIt->second.GetZ() + TUNNEL_ROOF_CLEARANCE : kNoEndWall, wallTo ? toIt->second.GetZ() + TUNNEL_ROOF_CLEARANCE : kNoEndWall);
 		}
-		if (kind == "hug") AddTerrainFit(&road, 0.f, 1.f, road.GetTotalWidth(), TERRAIN_FIT_FALLOFF);
+		// hug=路面贴合地形(路面高度已由编辑器按地形采样好，请求把地形再贴合到路面上做过渡)；fit=地形贴合路面(路面高度取节点z，整段把地形削平/填平到路面)。
+		if (kind == "hug" || kind == "fit") AddTerrainFit(&road, 0.f, 1.f, road.GetTotalWidth(), TERRAIN_FIT_FALLOFF);
 
 		// 桥：kind=bridge的段按"chain"归成一条链(编辑器把经过只连着两条桥的节点的连续桥归一组)，
 		// "order"是行进顺序，"reverse"表示这一段是反着画的(链里要把首尾和控制点倒过来才能首尾相接)，交给Core选位放桥墩。
@@ -520,8 +522,7 @@ void FileRoadnet::LayoutRows(const vector<Road*>& hostRoads, const vector<string
 			if (warned.insert(tag).second) debugf("Warning: FileRoadnet unknown tree/lamp tag \"%s\", skipped.\n", tag.c_str());
 			continue;
 		}
-		Node start = road->GetStart(), end = road->GetEnd();
-		if (start.GetZ() < 0.f || end.GetZ() < 0.f) continue;
+		// 不按路的类型/高度筛：tag是编辑器里这条路自己指定的(隧道/桥/隧道口也可以指定)，指定放什么就放什么。
 		float len = road->CalcDistance();
 		if (len < 1e-4f) continue;
 		float startInset = endGap(road, true) + spacing * 0.5f;

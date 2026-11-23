@@ -19,7 +19,7 @@ Station::Station(StationFactory* factory, const string& modId, const string& nam
 	float quadSizeX = building->GetSizeX();
 	float quadSizeY = building->GetSizeY();
 	float buildingRotation = building->GetRotation(); // 弧度
-	float baseZ = building->GetFloorBaseZ(0);
+	float baseZ = building->GetFloorWorldZ(0);
 
 	// 占地矩形局部坐标(原点左下角) -> 世界xy。公式见station.md"接口坐标换算"一节：先换到"相对占地矩形中心"，
 	// 再换算成"相对楼体中心"(加楼体尺寸一半、减bodyOffset)，这样才能喂给只认楼体局部坐标的LocalToWorld。

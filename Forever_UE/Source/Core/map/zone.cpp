@@ -91,7 +91,7 @@ void Zone::Layout(int inDirection) {
 		decoration.meshPath = spec.meshPath;
 		decoration.x = worldX;
 		decoration.y = worldY;
-		decoration.z = spec.z;
+		decoration.z = GetGroundZ() + spec.z;
 		decoration.yaw = NorthYawToWorld(spec.yaw);
 		decoration.pitch = spec.pitch;
 		decoration.roll = spec.roll;
@@ -140,6 +140,10 @@ const vector<DecorationInstance>& Zone::GetDecorations() const {
 
 Lot* Zone::GetParentLot() const {
 	return parentLot;
+}
+
+float Zone::GetGroundZ() const {
+	return parentLot ? parentLot->GetZ() : 0.f;
 }
 
 void Zone::SetParentLot(Lot* lot) {
@@ -262,7 +266,7 @@ void Zone::BuildDoors(Map& map) {
 		}
 
 		Door* door = map.CreateDoor(DOOR_KIND_ZONE, this, nullptr, nullptr, string(), gate.door,
-			worldPos.first, worldPos.second, 0.f, lenEnd - lenStart, kZoneGateHeight,
+			worldPos.first, worldPos.second, GetGroundZ(), lenEnd - lenStart, kZoneGateHeight,
 			FaceNormalYaw(gate.direction) + rot, 0, isVehicleGate);
 		if (door) doorEntities.push_back(door);
 	}

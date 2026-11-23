@@ -556,6 +556,11 @@ public:
 	// 设置旋转
 	void SetRotation(float r);
 
+	// 地块所在平台的高度(地图单位，z)：Zone/Building的地面高度取自它(Building::GetGroundZ)。
+	// 由Node构造/SetPosition(Node...)时取各角z的均值；子地块(SplitWithPath/SplitPlain/GetFreeLots产出)继承父块。默认0。
+	float GetZ() const;
+	void SetZ(float height);
+
 	// 获取地块类型
 	AREA_TYPE GetArea() const;
 
@@ -665,6 +670,9 @@ public:
 protected:
 	// 旋转角度
 	float rotation;
+
+	// 地块所在平台高度，见GetZ()
+	float z = 0.f;
 
 	// 地块类型
 	AREA_TYPE area;

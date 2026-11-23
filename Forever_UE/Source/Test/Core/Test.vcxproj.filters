@@ -19,6 +19,7 @@
     <ClCompile Include="suite_perf.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_route.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_green.cpp"><Filter>suites</Filter></ClCompile>
+    <ClCompile Include="suite_plateau.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_presets.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_transit.cpp"><Filter>suites</Filter></ClCompile>
     <ClCompile Include="suite_polit.cpp"><Filter>suites</Filter></ClCompile>

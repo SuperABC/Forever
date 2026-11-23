@@ -696,6 +696,14 @@ float Lot::GetRotation() const {
 	return rotation;
 }
 
+float Lot::GetZ() const {
+	return z;
+}
+
+void Lot::SetZ(float height) {
+	z = height;
+}
+
 void Lot::SetRotation(float r) {
 	rotation = r;
 }
@@ -749,6 +757,7 @@ void Lot::SetPosition(Node n1, Node n2, Node n3, const vector<float>& margin) {
 	if (margin.size() != 4) {
 		THROW_EXCEPTION(InvalidArgumentException, "Block must have 4 margins.\n");
 	}
+	z = (n1.GetZ() + n2.GetZ() + n3.GetZ()) / 3.f;
 
 	float x1 = n1.GetX(), y1 = n1.GetY();
 	float x2 = n2.GetX(), y2 = n2.GetY();
@@ -825,6 +834,7 @@ void Lot::SetPosition(Node n1, Node n2, Node n3, Node n4, const vector<float>& m
 	if (margin.size() != 4) {
 		THROW_EXCEPTION(InvalidArgumentException, "Block must have 4 margins.\n");
 	}
+	z = (n1.GetZ() + n2.GetZ() + n3.GetZ() + n4.GetZ()) / 4.f;
 
 	vector<Node> nodes = { n1, n2, n3, n4 };
 
@@ -981,6 +991,8 @@ Lot::SplitResult Lot::SplitPlain(bool splitAlongX, float splitCoordinate) {
 	auto [upperWorldX, upperWorldY] = GetPosition(upperLocalCX, upperLocalCY);
 	Lot* lowerLot = new Lot(lowerWorldX, lowerWorldY, lowerW, lowerH, rotation);
 	Lot* upperLot = new Lot(upperWorldX, upperWorldY, upperW, upperH, rotation);
+	lowerLot->SetZ(z);
+	upperLot->SetZ(z);
 
 	Road* endRoad1 = GetBoundaryRoad(endFace1);
 	Road* endRoad2 = GetBoundaryRoad(endFace2);
@@ -1104,6 +1116,8 @@ Lot::SplitResult Lot::SplitWithPath(bool splitAlongX, float splitCoordinate, con
 
 	Lot* lowerLot = new Lot(lowerWorldX, lowerWorldY, lowerW, lowerH, rotation);
 	Lot* upperLot = new Lot(upperWorldX, upperWorldY, upperW, upperH, rotation);
+	lowerLot->SetZ(z);
+	upperLot->SetZ(z);
 
 	if (endRoad1) { lowerLot->SetBoundaryRoad(endFace1, endRoad1); upperLot->SetBoundaryRoad(endFace1, endRoad1); }
 	if (endRoad2) { lowerLot->SetBoundaryRoad(endFace2, endRoad2); upperLot->SetBoundaryRoad(endFace2, endRoad2); }
@@ -1130,6 +1144,7 @@ vector<Lot*>& Lot::GetFreeLots() {
 	if (!freeLotsInitialized) {
 		freeLotsInitialized = true;
 		Lot* self = new Lot(posX, posY, sizeX, sizeY, rotation);
+		self->SetZ(z);
 		for (auto& [dir, road] : boundaryRoads) {
 			self->SetBoundaryRoad(dir, road);
 		}

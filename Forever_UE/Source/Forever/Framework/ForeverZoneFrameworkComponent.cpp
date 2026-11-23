@@ -39,8 +39,9 @@ namespace {
 		for (int i = 0; i < basements && i < static_cast<int>(heights.size()); i++) totalBasementDepth += heights[i];
 		float totalAboveHeight = 0.f;
 		for (int i = basements; i < static_cast<int>(heights.size()); i++) totalAboveHeight += heights[i];
-		outZBottom = ZONE_HEIGHT_EPSILON - totalBasementDepth * ZONE_WORLD_SCALE;
-		outZTop = ZONE_HEIGHT_EPSILON + totalAboveHeight * ZONE_WORLD_SCALE;
+		float grade = ZONE_HEIGHT_EPSILON + building.GetGroundZ() * ZONE_WORLD_SCALE; // 地坪世界高度(平台地块>0)
+		outZBottom = grade - totalBasementDepth * ZONE_WORLD_SCALE;
+		outZTop = grade + totalAboveHeight * ZONE_WORLD_SCALE;
 	}
 }
 
@@ -317,7 +318,7 @@ void UForeverZoneFrameworkComponent::BuildWallSegment(const ZoneWallSpec& wall, 
 		float ly = alongY ? alongCoord : centerAcrossY;
 		float wx = zone.GetPosX() + lx * cosR - ly * sinR;
 		float wy = zone.GetPosY() + lx * sinR + ly * cosR;
-		return FVector(wx * ZONE_WORLD_SCALE, wy * ZONE_WORLD_SCALE, ZONE_HEIGHT_EPSILON);
+		return FVector(wx * ZONE_WORLD_SCALE, wy * ZONE_WORLD_SCALE, ZONE_HEIGHT_EPSILON + zone.GetGroundZ() * ZONE_WORLD_SCALE);
 		};
 
 	float rangeLenWorld = rangeLenMapUnits * ZONE_WORLD_SCALE;

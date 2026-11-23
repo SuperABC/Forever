@@ -1,0 +1,345 @@
+{
+	"source": {
+		"version": 2,
+		"mapW": 256,
+		"mapH": 256,
+		"nodes": [
+			{
+				"id": 1,
+				"x": 100,
+				"y": 100,
+				"z": 3
+			},
+			{
+				"id": 2,
+				"x": 140,
+				"y": 100,
+				"z": 3
+			},
+			{
+				"id": 3,
+				"x": 140,
+				"y": 140,
+				"z": 3
+			},
+			{
+				"id": 4,
+				"x": 100,
+				"y": 140,
+				"z": 3
+			},
+			{
+				"id": 9,
+				"x": 0,
+				"y": 140,
+				"z": 0,
+				"extern": true
+			}
+		],
+		"roads": [
+			{
+				"id": 5,
+				"a": 1,
+				"b": 2,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路5",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 6,
+				"a": 2,
+				"b": 3,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路6",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 7,
+				"a": 3,
+				"b": 4,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路7",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 8,
+				"a": 4,
+				"b": 1,
+				"ctrl": null,
+				"type": "ground",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路8",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 10,
+				"a": 9,
+				"b": 4,
+				"ctrl": null,
+				"type": "fit",
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路10",
+				"tree": "",
+				"lamp": ""
+			}
+		],
+		"lots": [
+			{
+				"id": 11,
+				"a": 1,
+				"b": 2,
+				"depth": 40,
+				"area": "AREA_RESIDENCE_HIGH",
+				"margin": [
+					null,
+					null,
+					null,
+					null
+				],
+				"presets": []
+			}
+		],
+		"greens": [],
+		"transit": {
+			"nodes": [],
+			"conns": [],
+			"loops": [],
+			"roadLines": []
+		},
+		"nextId": 12
+	},
+	"output": {
+		"nodes": [
+			{
+				"id": "n1",
+				"x": 100,
+				"y": 100,
+				"z": 3,
+				"type": "intersection"
+			},
+			{
+				"id": "n2",
+				"x": 140,
+				"y": 100,
+				"z": 3,
+				"type": "intersection"
+			},
+			{
+				"id": "n3",
+				"x": 140,
+				"y": 140,
+				"z": 3,
+				"type": "intersection"
+			},
+			{
+				"id": "n4",
+				"x": 100,
+				"y": 140,
+				"z": 3,
+				"type": "intersection"
+			},
+			{
+				"id": "n9",
+				"x": 0,
+				"y": 140,
+				"z": 0,
+				"type": "extern"
+			}
+		],
+		"roads": [
+			{
+				"name": "路5",
+				"from": "n1",
+				"to": "n2",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路6",
+				"from": "n2",
+				"to": "n3",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路7",
+				"from": "n3",
+				"to": "n4",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路8",
+				"from": "n4",
+				"to": "n1",
+				"controls": [],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路10",
+				"from": "n9",
+				"to": "n4",
+				"controls": [
+					[
+						33.333333,
+						140,
+						0,
+						1
+					],
+					[
+						66.666667,
+						140,
+						3,
+						1
+					]
+				],
+				"asset": "default",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "fit",
+				"treeTag": "",
+				"lampTag": ""
+			}
+		],
+		"lots": [
+			{
+				"corners": [
+					[
+						100,
+						100,
+						3
+					],
+					[
+						140,
+						100,
+						3
+					],
+					[
+						140,
+						140,
+						3
+					],
+					[
+						100,
+						140,
+						3
+					]
+				],
+				"margin": [
+					1,
+					1,
+					1,
+					1
+				],
+				"boundary": {
+					"0": 3,
+					"1": 1,
+					"2": 0,
+					"3": 2
+				},
+				"area": "AREA_RESIDENCE_HIGH"
+			}
+		],
+		"greens": []
+	}
+}

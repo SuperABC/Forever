@@ -105,7 +105,7 @@
   的细分循环是检查不通过就`break`(停止沿这条臂继续往外细分，和原来`isBuildable`的失败
   语义一致)。
 - **行道树(`JingRoadnet::LayoutTrees`，粗估，待细调)**——地图全部生成完之后才调用，遍历Core
-  传进来的大路(跳过小路、两端有隧道Z<0的路段)，对每一侧有人行道的种一排：横向偏移沿用`Map::ComputeLaneAnchorPosition`的约定
+  传进来的大路(跳过小路；只放在平地和贴合地形(抬升山路)的路上——隧道口挖洞段和隧道内的段不放，和编辑器路网"只有ground/hug默认有树灯"一致；由`plantable`(和`roads`并行，建路时记)决定)，对每一侧有人行道的种一排：横向偏移沿用`Map::ComputeLaneAnchorPosition`的约定
   (`perp0=(-dy,dx)`、`shift=(side0宽-side1宽)/2`)，从人行道内侧量起占人行道宽度的`TREE_SIDEWALK_RATIO`(0.25)处；间距`TREE_SPACING`(1格=10m)。mesh是`TREE_MESH_PATH`(Mossy_Tree测试
   树)，scale=`TREE_SCALE`(0.6)。纵向让出的距离不用定值，统一规则是"缺口边缘之外再留半个间距"：
   - 端点是Intersection(按`this->intersections`的id判断，Core深拷贝保留id)：缺口=路口收缩距离，
@@ -115,7 +115,7 @@
     间距，树不断也不重复；
   - 开口(`Road::GetOpenings`，只有小路接口和建筑/园区出入口两种来源)：缺口=开口自己的`width`，
     中心两侧各`width/2`，两侧人行道都去(小路开口没有可靠的side信息)。
-  剩下连续的几棵合成一条`AddTreeLine`。河上的桥/隧道口引道由Core的`Map::CanPlaceTree`统一跳过。
+  剩下连续的几棵合成一条`AddTreeLine`。河面和隧道口挖洞格子仍由Core的`Map::CanPlaceTree`跳过(程序化路网`filterRoadPlants`保持默认true)。
 - **路灯(`JingRoadnet::LayoutLamps`，先随便摆，待用户看效果再调)**——和行道树共用私有的`LayoutRows(hostRoads, spacing,
   sidewalkRatio, emit)`（路口收缩距离、开口避让、每侧偏移都在这里，`emit`每次收到一段连续位置：side、起止点、盏数、沿路方向角）。
   灯行放在行道树**外侧**：`LAMP_SIDEWALK_RATIO`(0.9，树是0.25)，间距`LAMP_SPACING`(1.5格=15m)，蓝图路径`LAMP_BLUEPRINT_PATH`

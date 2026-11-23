@@ -240,7 +240,7 @@
 	}
 
 	// ---------------- 编辑操作 ----------------
-	function canSplit(road) { return road.type === 'ground' || road.type === 'hug'; }
+	function canSplit(road) { return road.type === 'ground' || road.type === 'hug' || road.type === 'fit'; }
 
 	// 在road的t处切开，返回新节点(已存在的端点/近端点直接返回对应节点)。隧道/桥不能从中间切，返回null。
 	function splitRoadAt(model, roadId, t, existingNodeId, ctx) {
@@ -567,8 +567,8 @@
 					controls: makeControls(sub, p.z0, p.z1, p.sl0, p.sl1, length),
 					asset: r.asset || DEFAULT_ASSET, lanes: r.lanes.slice(), kind: p.kind,
 				};
-				// 行道树/路灯tag：只给平面(ground)路段导出；空串=这条路不种树/不放灯。
-				if (p.kind === 'ground') { entry.treeTag = r.tree || ''; entry.lampTag = r.lamp || ''; }
+					// 行道树/路灯tag：每个路段都导出(不分路段类型)，空串=这条路不种树/不放灯；游戏只看这里，指定放什么就放什么。
+					entry.treeTag = r.tree || ''; entry.lampTag = r.lamp || '';
 				if (p.kind === 'mouth') {
 					// 隧道口靠隧道的那一端加端墙(写wallFrom/wallTo给游戏侧)，和两端高度无关
 					if (i === 0 && tunnelNodes.has(r.a)) entry.wallFrom = true;

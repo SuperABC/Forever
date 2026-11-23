@@ -18,7 +18,7 @@
   第i级LOD每段长`4·2^i/64`个element（L0=1/16、L1=1/8、L2=1/4、L3=1/2、L4起≥1），起点都是整数element坐标，
   所以各级顶点正好落在17x17细化网格的下标上，只点采样，不平均；L4及以上只读到角点（=粗高度）。
   细化数组的约定见`Source/Core/map/map.md`"细化高度"一节、`terrain_mod.md`。
-- **小格拆三角形的对角线自适应**（`BuildLevel`里的`anti`）：和`Map::SampleHeight`的粗高度插值同一个规则（取两端高度差较小的对角线），斜着走的地形交界才会是笔直的斜坡而不是锯齿。L0~L3的小格不跨element：没有细化数组的element直接问`Map::UsesAntiDiagonal`（网格和采样严格同一对角线）；有细化数组的element和更粗的LOD（小格跨多个element）看这个小格4个顶点自己的高度。`clipGridCell`（hatch裁剪）按同一个`anti`选两个三角形，construction整格替换不受影响（平地）。
+- **小格拆三角形的对角线自适应**（`BuildLevel`里的`anti`）：和`Map::SampleHeight`的粗高度插值同一个规则（取两端高度差较小的对角线），斜着走的地形交界才会是笔直的斜坡而不是锯齿。L0~L4的小格不跨element：没有细化数组的element直接问`Map::UsesAntiDiagonal`（网格和采样严格同一对角线）；有细化数组的element和更粗的LOD（小格跨多个element）看这个小格4个顶点自己的高度。`clipGridCell`（hatch裁剪）按同一个`anti`选两个三角形，construction整格替换不受影响（平地）。
 - **法线放在顶点上、从高度场求**：`BuildLevel`里每个顶点的法线=`SampleHeight`在`NORMAL_SAMPLE_STEP`(0.25 element，各级LOD一致)步长下的中心差分梯度，不再用相邻三角形面法线累加。法线只取决于位置，所以对角线怎么拆、construction整格替换/hatch裁剪交点这些不共享的独立顶点、各级LOD之间，同一位置的法线完全相同，GPU在三角形内插值后连续变化，三角形边界不会出棱角。代价是整数格点处的陡坎被抹开约0.25 element。水面/隧道墙的法线逻辑没动。
 - **`UActorComponent`不是Actor**：运行时创建的子组件要挂在`GetOwner()`上
   （`NewObject<...>(owner)`+`SetupAttachment(owner->GetRootComponent())`+`owner->AddInstanceComponent`），不是`this`。
@@ -42,7 +42,7 @@
 
 **退化碎片过滤**：裁剪会在"顶点正好落在hatch边的直线上"或"相邻两个hatch共边"(例如twin布局进深取满4时，bg+的6个hatch两两首尾相接)时切出重复点/共线点的零面积碎片。碎片`Num()>=3`却面积为0，建成三角形就是退化三角形，Chaos给地形建碰撞体时会报`Input trimesh contains N bad triangles`。所以收下外侧碎片前用`PolygonAreaAbs`过滤：clipGridCell在世界坐标里小于`kMinWorldPieceArea`(10cm²，世界坐标几十万量级时float精度0.03~0.06产生的噪声碎片就在这个量级)丢掉。只按整块面积过滤不够：碎片里有重复点/共线点时整块面积为正，但扇形三角化里会混进零面积三角形，所以扇形输出时还要逐个三角形判面积(`kMinWorldTriArea`=1cm²)，太小的跳过，交点顶点也只在真正用到时才追加。
 
-**一条路径（2026-11-20起）→`BuildLevel`里的`clipGridCell`**（`levelIdx<=TERRAIN_HATCH_MAX_LEVEL`=3，L0~L3的网格小格都不跨element）：
+**一条路径（2026-11-20起）→`BuildLevel`里的`clipGridCell`**（`levelIdx<=TERRAIN_HATCH_MAX_LEVEL`=4(2026-11-23从3改成4，hatch显示距离翻倍)，L0~L4的网格小格都不跨element，L5起小格跨element不能直接用）：
 有hatch的格子(不论地形类型，construction也一样)，只对这个网格小格的两个三角形，按该element全部hatch的旋转矩形做4边半平面裁剪
 （`FClipPoint`/`SplitClipPolygonByLine`，Sutherland-Hodgman单边裁剪的双输出版本，保持原绕序，顶点带世界坐标和网格顶点下标）：
 落在某条边外侧的确定在矩形外，收进`survivingPieces`；4条边都在内侧的才是洞，丢弃；每个格子独立裁剪，不依赖"hatch完全落在单一格子内"。

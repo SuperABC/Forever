@@ -166,6 +166,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 	const function<float(float, float)>& getHeight,
 	int nodeStaticCount) {
 	Node::SetCount(nodeStaticCount);
+	plantable.clear();
 
 	float meshUnit = 0.5f;
 	const float LANE_WIDTH = 0.5f;
@@ -253,12 +254,14 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 			// 挖洞宽度必须取配好车道后的GetTotalWidth()，不能用固定常量：洞窄于路面会在两侧留下
 			// 实心山体，走近隧道口时在地形和路面碰撞咬合不上的边界穿模掉下去。
 			roads.emplace_back(name, groundNode, flatNode, thisMeshPath, meshUnit);
+			plantable.push_back(0); // 行道树/路灯只放在平地/贴合的路上；隧道口(挖洞)段和隧道内的段不放
 			addControls(roads.back(), groundNode, flatNode);
 			configureThis(roads.back());
 			setSidewalkFree(roads.back());
 			AddTunnelHatch(&roads.back(), 0.f, 1.f, roads.back().GetTotalWidth());
 
 			roads.emplace_back(name, flatNode, splitNode, thisMeshPath, meshUnit);
+			plantable.push_back(0);
 			addControls(roads.back(), flatNode, splitNode);
 			configureThis(roads.back());
 			setSidewalkFree(roads.back());
@@ -267,6 +270,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 
 			if (!noLevelPart) {
 				roads.emplace_back(name, splitNode, tunnelNode, tunnelMeshPath, meshUnit);
+				plantable.push_back(0);
 				configureThis(roads.back());
 			}
 			return;
@@ -274,6 +278,7 @@ void JingRoadnet::DistributeRoadnet(int width, int height,
 
 		// 两端都在隧道里(Z<0)的路段是隧道内路面，用隧道内的资产。
 		roads.emplace_back(name, n1, n2, (n1Tunnel && n2Tunnel) ? tunnelMeshPath : thisMeshPath, meshUnit);
+		plantable.push_back((n1Tunnel && n2Tunnel) ? 0 : 1);
 		// 两端等高且坡度为0的路段(地面上的路、隧道里的路)直接是直线，不加控制点；只有高度变化的路段才是曲线。
 		bool level = fabsf(n1.GetZ() - n2.GetZ()) < 1e-4f && fabsf(startSlope) < 1e-6f && fabsf(endSlope) < 1e-6f;
 		if (!level) addControls(roads.back(), n1, n2, startSlope, endSlope);
@@ -725,10 +730,13 @@ void JingRoadnet::LayoutRows(const vector<Road*>& hostRoads, float spacing, floa
 		return intersectionIds.count(endId) ? road->GetSetback(isStart) : 0.f;
 		};
 
-	for (const Road* road : hostRoads) {
+	for (size_t roadIndex = 0; roadIndex < hostRoads.size(); roadIndex++) {
+		const Road* road = hostRoads[roadIndex];
 		if (!road || road->IsPathRoad()) continue;
+		// 只种在平地/贴合地形的路上：hostRoads前面和mod->roads一一对应(plantable是DistributeRoadnet里按建路顺序记的)，
+		// 起点id对不上说明顺序变了，宁可不种也不种错。隧道口段/隧道段的plantable为0。
+		if (roadIndex >= plantable.size() || !plantable[roadIndex] || road->GetStart().GetId() != roads[roadIndex].GetStart().GetId()) continue;
 		Node start = road->GetStart(), end = road->GetEnd();
-		if (start.GetZ() < 0.f || end.GetZ() < 0.f) continue;
 		float dx = end.GetX() - start.GetX(), dy = end.GetY() - start.GetY();
 		float len = sqrt(dx * dx + dy * dy);
 		float startInset = endGap(road, true) + spacing * 0.5f;

@@ -85,7 +85,7 @@ const S = {
 		contour: { on: true, interval: 5 },   // 2D等高线(间距单位element=10m，每5条一条主等高线)
 	// 路网
 	// z=下一个新建节点的高度；zTerrain=改用点击处的地形高度。点在已有节点上沿用它自己的高度。Alt+滚轮快捷调整z。
-		road: { shape: 'line', type: 'ground', preset: 0, asset: 'default', z: 0, zTerrain: false, snapNode: true, snapRoad: true, snapEdge: true, snapLot: true, snapAngle: true, name: '', tree: 'default', lamp: 'default' },
+		road: { shape: 'line', type: 'ground', preset: 0, asset: 'default', z: 0, zTerrain: false, snapNode: true, snapRoad: true, snapEdge: true, snapLot: true, snapAngle: true, name: '', tree: 'default', lamp: 'default', treeFitOnly: true, lampFitOnly: true, treeSaved: null, lampSaved: null },
 	pending: null,              // 路/地块正在画的状态
 	// 线路工具(火车铁轨/飞机航线/公交)：mode=line独立线路 / loop独立路线环 / bus路网路线(公交)；z=下一个新建node的高度(zTerrain=用点击处地形高度)
 	transit: { mode: 'line', routeId: '', shape: 'line', type: 'ground', z: 0, zTerrain: false, snapNode: true, snapEdge: true, snapConn: true, snapAngle: true, station: 'station_bus' },
@@ -103,6 +103,19 @@ const HISTORY_LIMIT = 80;
 const hist = { undo: [], redo: [] };
 
 const $ = (id) => document.getElementById(id);
+// 行道树/路灯的"仅贴合路面"：平地/贴合地形类型才允许有内容。R是S.road(新建路的默认值)。
+const isFitType = (type) => type === 'ground' || type === 'hug' || type === 'fit';
+function applyFitOnly(R) {
+	for (const [key, fitKey, savedKey] of [['tree', 'treeFitOnly', 'treeSaved'], ['lamp', 'lampFitOnly', 'lampSaved']]) {
+		if (R[fitKey] && !isFitType(R.type)) {
+			if (R[savedKey] === null) R[savedKey] = R[key];   // 置空前的内容存起来
+			R[key] = '';
+		} else if (R[savedKey] !== null) {                     // 回到平地/贴合，或取消勾选：复原
+			R[key] = R[savedKey];
+			R[savedKey] = null;
+		}
+	}
+}
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function say(text) { const m = $('msg'); m.textContent = text; m.style.display = 'block'; clearTimeout(say.t); say.t = setTimeout(() => { m.style.display = 'none'; }, 3500); }
 function ctxHeight() { return { height: (x, y) => S.terrain.sampleHeight(x, y) }; }
@@ -324,8 +337,8 @@ function fitView() {
 const toWorld = (sx, sy) => [(sx - S.view.ox) / S.view.scale, (sy - S.view.oy) / S.view.scale];
 const toScreen = (x, y) => [x * S.view.scale + S.view.ox, y * S.view.scale + S.view.oy];
 
-const ROAD_COLORS = { ground: '#4a4f58', hug: '#6f8f5a', mouth: '#7a4b9a', tunnel: '#b46ae0', bridge: '#e0962f' };
-const ROAD_TYPES = [['ground', '平地'], ['hug', '贴合地形'], ['mouth', '隧道口'], ['tunnel', '隧道'], ['bridge', '桥']];
+const ROAD_COLORS = { ground: '#4a4f58', hug: '#6f8f5a', fit: '#5a8f8f', mouth: '#7a4b9a', tunnel: '#b46ae0', bridge: '#e0962f' };
+const ROAD_TYPES = [['ground', '平地'], ['hug', '路面贴合地形'], ['fit', '地形贴合路面'], ['mouth', '隧道口'], ['tunnel', '隧道'], ['bridge', '桥']];
 // 地块类型颜色：住宅=浅绿/深绿/墨绿，商业=浅蓝/深蓝/藏蓝，工业=浅黄/深黄/棕，办公=浅粉/深粉/紫(都是 低/中/高)，测试=红，绿化=青。必须是6位hex(后面会拼透明度后缀)。
 const AREA_COLORS = {
 	AREA_RESIDENCE_LOW: '#86efac', AREA_RESIDENCE_MIDDLE: '#16a34a', AREA_RESIDENCE_HIGH: '#14532d',
@@ -2103,14 +2116,20 @@ function renderLeft() {
 		left.append(el('h4', null, '画法'));
 		left.append(el('div', { class: 'tabs' }, btn('直线', () => { R.shape = 'line'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }, R.shape === 'line'), btn('曲线', () => { R.shape = 'curve'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }, R.shape === 'curve')));
 		left.append(el('h4', null, '道路类型'));
-		left.append(row('类型', sel(ROAD_TYPES, R.type, (v) => { R.type = v; renderLeft(); S.dirty2d = true; })));
+		left.append(row('类型', sel(ROAD_TYPES, R.type, (v) => { R.type = v; applyFitOnly(R); renderLeft(); S.dirty2d = true; })));
 				left.append(el('h4', null, '节点高度(单位10m)'));
 				left.append(heightRow('高度', 'z', 'zTerrain'));
 		left.append(row('车道资产', el('input', { type: 'text', value: R.asset, placeholder: ME.DEFAULT_ASSET, onchange: (e) => { R.asset = e.target.value.trim() || ME.DEFAULT_ASSET; e.target.value = R.asset; } })));
 		left.append(row('车道', sel(ME.LANE_PRESETS.map((p, i) => [i, p.name]), R.preset, (v) => { R.preset = parseInt(v, 10); })));
 		left.append(row('名称', el('input', { type: 'text', value: R.name, placeholder: '默认 路N', onchange: (e) => { R.name = e.target.value.trim(); } })));
-		left.append(row('行道树', el('input', { type: 'text', value: R.tree, placeholder: '空=无', onchange: (e) => { R.tree = e.target.value.trim(); } })));
-		left.append(row('路灯', el('input', { type: 'text', value: R.lamp, placeholder: '空=无', onchange: (e) => { R.lamp = e.target.value.trim(); } })));
+		// "仅贴合路面"：勾选时只有类型是平地/贴合地形才有内容；换成别的类型自动置空(框禁用)，先把置空前的内容存起来，类型回到平地/贴合时复原。
+		for (const [key, label, fitKey, savedKey] of [['tree', '行道树', 'treeFitOnly', 'treeSaved'], ['lamp', '路灯', 'lampFitOnly', 'lampSaved']]) {
+			const blocked = R[fitKey] && !isFitType(R.type);
+			left.append(row(label,
+				el('input', { type: 'text', value: R[key], placeholder: blocked ? '该类型无' : '空=无', disabled: blocked ? 'disabled' : null, onchange: (e) => { R[key] = e.target.value.trim(); } }),
+				el('label', { class: 'hint', title: '勾选：只有类型是平地/贴合地形时才有内容，换成别的类型自动置空，换回来复原' },
+					el('input', { type: 'checkbox', checked: R[fitKey] ? 'checked' : null, onchange: (e) => { R[fitKey] = e.target.checked; applyFitOnly(R); renderLeft(); } }), '仅贴合路面')));
+		}
 		// 吸附板块：四种吸附各一个独立开关
 		const snapSwitch = (key, label, tip) => row(label, el('input', { type: 'checkbox', checked: R[key] ? 'checked' : null, onchange: (e) => { R[key] = e.target.checked; S.dirty2d = true; } }), el('span', { class: 'hint' }, tip));
 		left.append(el('div', { class: 'hint', style: 'margin-top:6px;font-weight:600' }, '吸附'));
@@ -2448,7 +2467,7 @@ function build3D() {
 				if (kind === 'bridge' && (!prev || Math.hypot(p[0] - prev[0], p[2] - prev[2]) > 3)) { const th = T.sampleHeight(p[0], p[2]); if (p[1] - th > 0.05) pillars.push(p[0], th, p[2], p[0], p[1], p[2]); prev = p; }
 			}
 		}
-		const KC = { ground: 0x40454d, hug: 0x5f7f4a, mouth: 0x7a4b9a, tunnel: 0xb46ae0, bridge: 0xe0962f };
+		const KC = { ground: 0x40454d, hug: 0x5f7f4a, fit: 0x4a7f7f, mouth: 0x7a4b9a, tunnel: 0xb46ae0, bridge: 0xe0962f };
 		for (const kind in buckets) {
 			const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(buckets[kind].p, 3)); bg.setIndex(buckets[kind].i); bg.computeVertexNormals();
 			r3.root.add(new THREE.Mesh(bg, new THREE.MeshLambertMaterial({ color: KC[kind] || 0x555555, side: THREE.DoubleSide, transparent: kind === 'tunnel', opacity: kind === 'tunnel' ? 0.6 : 1 })));

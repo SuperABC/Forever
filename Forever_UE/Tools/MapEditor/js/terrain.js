@@ -1,13 +1,16 @@
 // 地形数据与笔刷(纯逻辑，无DOM)。格式与约束见 Source/Basic/map/terrain_file.md。
-// 一个element = 地图上10m x 10m的格子；字符串为plain的格子是"平原"：笔刷默认不改它的高度(建筑假定建在高度0的地面上)；游戏里能不能建只看3x3邻域高度是否全为0，和地形字符串无关。
+// 一个element = 地图上10m x 10m的格子；字符串为plain的格子是"平原"：笔刷默认不改它的高度；游戏里能不能建只看3x3邻域高度是否几乎相等(极差<HEIGHT_EPS，高度不一定是0，抹平出来的半山腰/山顶平台也能建)，和地形字符串无关。
 // 水可以放在任意格子(含平原)：岸边的平原格也要有水面，否则水面和地面之间会露出缝隙。
 (function (root) {
 	const ME = root.ME = root.ME || {};
 
 	const SEA_LEVEL = -0.1;
-	// 高度吸附：|h|小于ZERO_SNAP就当0。抬高再压低同样的量会留下1e-8级的浮点残留，而游戏的可建设判断要求高度精确为0，残留会让周围一圈格子永远不可建。
+	// 高度比较的容差，只防float32/序列化的舍入误差：必须和Core的kHeightEps(Source/Core/map/map.cpp)同值。
+	// 可建设=3x3高度极差<HEIGHT_EPS；地块和相邻路的z比较也用它。
+	const HEIGHT_EPS = 1e-5;
+	// 高度吸附：|h|小于ZERO_SNAP就当0。抬高再压低同样的量会留下1e-8级的浮点残留，会让本该是0的平地周围一圈格子永远不可建。
 	const ZERO_SNAP = 1e-4;
-	// 抹平到目标时，离目标小于FLATTEN_SNAP就直接吸附成目标(指数逼近永远到不了)。
+	// 抹平到目标时，离目标小于FLATTEN_SNAP就直接吸附成目标(指数逼近永远到不了)；吸附后整块平台高度逐位相同，极差为0。
 	const FLATTEN_SNAP = 1e-3;
 	const snapZero = (v) => (Math.abs(v) < ZERO_SNAP ? 0 : v);
 
@@ -133,7 +136,7 @@
 					} else if (op === 'flatten') {
 						const target = params.target === undefined ? 0 : params.target;
 						let next = this.height[i] + (target - this.height[i]) * Math.min(1, strength * 2 * falloff);
-						if (Math.abs(next - target) < FLATTEN_SNAP) next = target; // 吸附到目标：指数逼近永远到不了，而游戏的可建设判断要求高度精确为0
+						if (Math.abs(next - target) < FLATTEN_SNAP) next = target; // 吸附到目标：指数逼近永远到不了，而游戏的可建设判断要求3x3极差<HEIGHT_EPS
 						else if (Math.abs(next - this.height[i]) < 1e-6) continue;
 						if (next === this.height[i]) continue;
 						this._touch(i);
@@ -270,7 +273,7 @@
 			return total;
 		}
 
-		// 检查：lot覆盖区域要求每个element的3x3邻域高度都为0，和游戏里Map::InitTerrains标记construction(可建设)的规则一致：
+		// 检查：lot覆盖区域要求每个element的3x3邻域高度极差<HEIGHT_EPS(高度可以不为0)，和游戏里Map::InitTerrains标记construction(可建设)的规则一致：
 		// 不看地形类型(沙滩等也能建)，也不看水(地面以下有水、岸边地面以上有水都合理)。返回不合格格子数。
 		countNonBuildable(x0, y0, x1, y1) {
 			let bad = 0;
@@ -282,15 +285,18 @@
 			return bad;
 		}
 
-		// 单个element是否可建设(construction)：3x3邻域(含自身)都在图内且高度都为0。规则同countNonBuildable。
+		// 单个element是否可建设(construction)：3x3邻域(含自身)都在图内且高度极差<HEIGHT_EPS。规则同countNonBuildable。
 		isBuildable(x, y) {
 			if (!this.inside(x, y)) return false;
+			let lo = Infinity, hi = -Infinity;
 			for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
 				const nx = x + ox, ny = y + oy;
 				if (!this.inside(nx, ny)) return false;
-				if (this.height[ny * this.w + nx] !== 0) return false; // 被抬高/压低过的格子不能建
+				const v = this.height[ny * this.w + nx];
+				if (v < lo) lo = v;
+				if (v > hi) hi = v;
 			}
-			return true;
+			return hi - lo < HEIGHT_EPS; // 斜坡/没抹平的格子不能建
 		}
 	}
 
@@ -360,6 +366,7 @@
 	}
 
 	ME.SEA_LEVEL = SEA_LEVEL;
+	ME.HEIGHT_EPS = HEIGHT_EPS;
 	ME.Terrain = Terrain;
 	ME.isFlatName = isFlatName;
 	ME.colorOf = colorOf;

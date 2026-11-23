@@ -13,7 +13,7 @@
   灯不是Mesh而是Actor蓝图，所以登记的是蓝图路径(`RegisterBlueprint`去重，`blueprintIndex`指向`GetBlueprintPaths()`)。
 - **朝向由请求指定，不做随机旋转/缩放**——请求里的`rotationDegrees`是宿主局部系下的度数，展开时转成弧度并叠加宿主旋转
   (`TreeFrame::rotation`)，得到`LampInstance::yaw`(弧度，世界朝向，数学角0=+X逆时针，UE层直接转成`FRotator`的yaw)。
-- **过滤沿用`Map::CanPlaceTree`**：越界、有水面、有hatch的格子不放灯，过滤掉的直接跳过。
+- **过滤沿用`Map::CanPlaceTree`**：越界、有水面、有hatch的格子不放灯，过滤掉的直接跳过。例外：路网mod的`filterRoadPlants=false`（路网文件）时路灯/路树只丢出图的点，不看水/挖洞，位置完全由路自己的tag决定。
 - **`Map::InitLamps()`紧跟`InitVegetation()`**(开口已齐全)：`roadnet->LayoutLamps()`(内部调
   `RoadnetMod::LayoutLamps(hostRoads)`再拷贝`mod->lamps`)后用路网的整图参考系展开。园区/建筑宿主目前没接，要接时照
   `InitVegetation`的写法给`ZoneMod`/`BuildingMod`加`LayoutLamps`/`lamps`即可，`ExpandRequests`已经与宿主无关。

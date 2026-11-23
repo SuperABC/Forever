@@ -21,6 +21,7 @@
 
 ## 关键设计
 
+- **`Lot::z`(2026-11-23)**：地块所在平台的高度（地图单位）。`GetZ()/SetZ()`；`SetPosition(Node...)`取各角节点z的均值（编辑器保证4个角同高），`.roadnet`的corners第3个数就是它；`SplitWithPath`/`SplitPlain`/`GetFreeLots`产出的子地块继承父块z；存档存`Lot::z`。`Building`/`Zone`的地坪高度取自它。地块**不感知地形高度**——"能不能建"只看覆盖的格子是不是`construction`（见`map.md`），地块与相邻路的"同高"由编辑器判定（路必须水平且z与地块差≤1e-5才写进`boundary`）。
 - **`Connection`按值语义管理其端点/控制点**——构造函数、拷贝构造、赋值运算符里都会
   `new Node(...)`拷贝一份，析构时对应`delete`，不共享指针；这是因为`Node`本身很轻量（几个
   float+id），按值复制比引入引用计数更简单，唯一的例外是`Node::count`静态自增id计数器，拷贝

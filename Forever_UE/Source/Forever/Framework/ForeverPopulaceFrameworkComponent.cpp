@@ -97,7 +97,7 @@ namespace {
 		float c = FMath::Cos(rot), s = FMath::Sin(rot);
 		outWorldX = (building->GetPosX() + relX * c - relY * s) * POPULACE_WORLD_SCALE;
 		outWorldY = (building->GetPosY() + relX * s + relY * c) * POPULACE_WORLD_SCALE;
-		outWorldZ = POPULACE_HEIGHT_EPSILON + building->GetFloorBaseZ(room->GetLayer()) * POPULACE_WORLD_SCALE;
+		outWorldZ = POPULACE_HEIGHT_EPSILON + building->GetFloorWorldZ(room->GetLayer()) * POPULACE_WORLD_SCALE;
 		return true;
 	}
 }

@@ -19,9 +19,9 @@
 // 每级LOD mesh的网格细分数(每级都是这个数,级与级之间只有size不一样；64即65x65个顶点，128实测太卡)。
 // BuildLevel里所有跟它绑定的数(顶点数、行跨度、父子边界偏移)都由它推导，调这一个数即可。
 #define TERRAIN_LOD_GRID_SUBDIV 64
-// 显示hatch(挖洞)的最远LOD级别(含)：L0~L3的网格小格边长是1/16、1/8、1/4、1/2 element，都不跨element，
+// 显示hatch(挖洞)的最远LOD级别(含)：L0~L4的网格小格边长是1/16、1/8、1/4、1/2、1 element，都不跨element(L5起小格跨element，不能直接逐格裁剪)，
 // 可以逐格对三角形做hatch裁剪；construction格子的精确几何仍然只在L0/L1做。
-#define TERRAIN_HATCH_MAX_LEVEL 3
+#define TERRAIN_HATCH_MAX_LEVEL 4
 // L0覆盖4个element、64段，每个element正好16段=TERRAIN_FINE_SUBDIV，各级LOD顶点都落在细化高度
 // 网格点上，Map::SampleHeight直接查表；改了这个数也不会出错，只是L0顶点落到网格点之间，改为插值。
 
@@ -671,7 +671,7 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 			if ((childPos >> (15 - s)) & 1) continue;
 
 			// 这个小格拆三角形的对角线：和Map::SampleHeight的"自适应对角线"一致，斜着走的地形交界才是一道笔直的斜坡。
-			// L0~L3的小格不跨element，没有细化数组的element直接用Map的判断(采样和网格严格同一对角线)；
+			// L0~L4的小格不跨element，没有细化数组的element直接用Map的判断(采样和网格严格同一对角线)；
 			// 有细化数组或更粗的LOD(小格跨多个element)就看这个小格4个顶点自己的高度，取高度差较小的那条对角线。
 			bool anti;
 			{

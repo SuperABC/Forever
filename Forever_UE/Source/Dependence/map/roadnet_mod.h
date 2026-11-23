@@ -102,6 +102,10 @@ public:
 	// Zone/Building裁剪Lot时自动生成的小路材质路径,留空由Forever层退化用默认材质。
 	std::string pathRoadMaterial;
 
+	// 路树/路灯位置是否还要过Map::CanPlaceTree(有水面/有隧道口挖洞的格子不放)：默认true(程序化路网按几何排点，靠它避开河面)；
+	// 路网文件(roadnet_file)置false——每条路自己指定放什么就放什么，Core只丢掉出图的点。构造函数里设置。
+	bool filterRoadPlants = true;
+
 	// 工具方法(非虚):在LayoutTrees里提交树请求(记进trees),参考系为整张地图,见roadnet_mod.md。
 	void AddTreeSingle(const PointParams& position, float scale, const std::string& meshPath);
 	void AddTreeLine(const PointParams& from, const PointParams& to, int num, float scale,

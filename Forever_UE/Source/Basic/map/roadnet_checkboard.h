@@ -36,6 +36,9 @@ private:
 	using RowEmitter = std::function<void(int side, float x0, float y0, float x1, float y1, int count, float roadAngleDegrees)>;
 	void LayoutRows(const std::vector<Road*>& hostRoads, float spacing, float sidewalkRatio, const RowEmitter& emit);
 
+	// 和roads并行：这条路是不是平地/贴合地形的路(隧道口挖洞段、隧道内的段为0)，LayoutRows只在为1的路上种树/放灯。
+	std::vector<char> plantable;
+
 	static int count;
 	int id;
 	std::string name;

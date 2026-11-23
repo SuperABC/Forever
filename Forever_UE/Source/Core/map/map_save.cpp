@@ -646,6 +646,7 @@ void MapSaveCodec::WriteRoadnet(const Map& map, const SaveTables& t, ByteWriter&
 		w.I32(t.lotParents[i]);
 		WriteQuad(*lot, w);
 		w.F32(lot->rotation);
+		w.F32(lot->z);
 		w.I32(static_cast<int>(lot->area));
 		w.U32(static_cast<uint32_t>(lot->addresses.size()));
 		for (auto& [road, index] : lot->addresses) { w.Str(road); w.I32(index); }
@@ -792,6 +793,7 @@ bool MapSaveCodec::ReadRoadnet(Map& map, LoadTables& t, ByteReader& r, string& e
 		Lot* lot = new Lot();
 		ReadQuad(*lot, r);
 		lot->rotation = r.F32();
+		lot->z = r.F32();
 		lot->area = static_cast<AREA_TYPE>(r.I32());
 		uint32_t addressCount = r.U32();
 		for (uint32_t j = 0; j < addressCount && !r.Failed(); j++) {

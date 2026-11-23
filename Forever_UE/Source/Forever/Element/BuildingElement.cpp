@@ -126,7 +126,7 @@ namespace {
 		for (int32 i = 0; i < basements; i++) totalBasementDepth += heights[i];
 		float totalAboveHeight = 0.f;
 		for (int32 i = basements; i < static_cast<int32>(heights.size()); i++) totalAboveHeight += heights[i];
-		float grade = BUILDING_HEIGHT_EPSILON;
+		float grade = BUILDING_HEIGHT_EPSILON + building.GetGroundZ() * BUILDING_WORLD_SCALE; // 地坪世界高度(平台地块>0)
 		outZBottom = grade - totalBasementDepth * BUILDING_WORLD_SCALE;
 		outZTop = grade + totalAboveHeight * BUILDING_WORLD_SCALE;
 	}
@@ -376,7 +376,7 @@ void ABuildingElement::BuildRoomCollisionBoxes(int32 onlyLevel) {
 
 		float hx = room->GetSizeX() * 0.5f * BUILDING_WORLD_SCALE - margin;
 		float hy = room->GetSizeY() * 0.5f * BUILDING_WORLD_SCALE - margin;
-		float floorBaseZ = building->GetFloorBaseZ(level);
+		float floorBaseZ = building->GetFloorWorldZ(level);
 		float zBottom = BUILDING_HEIGHT_EPSILON + floorBaseZ * BUILDING_WORLD_SCALE + margin;
 		float zTop = BUILDING_HEIGHT_EPSILON + (floorBaseZ + floorHeight) * BUILDING_WORLD_SCALE - margin;
 		if (hx <= 0.f || hy <= 0.f || zTop <= zBottom) continue; // 房间/楼层太薄，缩小后变成非法尺寸
@@ -503,7 +503,7 @@ void ABuildingElement::BuildWallsForElement(float floorBaseZ, float floorHeight,
 	const unordered_map<int, vector<array<float, 8>>>& doors,
 	const unordered_map<int, vector<array<float, 8>>>& windows,
 	UMaterialInterface* wallMaterial, const WallStyle* styles) {
-	// floorBaseZ是Building::GetFloorBaseZ(level)的值：地图单位、相对地坪(grade)的楼层底部
+	// floorBaseZ是Building::GetFloorWorldZ(level)的值：地图单位、含地块平台高度(GetGroundZ)的楼层底部
 	// 高度(basements为负、地上楼层为正，见building.h)，不含BUILDING_HEIGHT_EPSILON这个纯
 	// 渲染层的"避免和地形共面z-fighting"偏移——这里换算世界Z时要把grade偏移加回来，和
 	// ComputeFullZRange同一套约定。
@@ -631,10 +631,9 @@ void ABuildingElement::BuildFloorSection(int32 floorIndex, bool shell, bool extr
 	const Floor* floor = building->GetFloor(level);
 	if (!floor) return;
 
-	// floorBaseZ(地图单位，相对地坪grade、不含BUILDING_HEIGHT_EPSILON这个纯渲染层偏移)直接
-	// 用Core侧现成的GetFloorBaseZ()，不用像ComputeFullZRange那样另外反推——两者算的是同一个
-	// 值(grade-相对的楼层底部高度)，见Building::GetFloorBaseZ()注释。
-	float floorBaseZ = building->GetFloorBaseZ(level);
+	// floorBaseZ(地图单位，含地块平台高度、不含BUILDING_HEIGHT_EPSILON这个纯渲染层偏移)直接
+	// 用Core侧现成的GetFloorWorldZ()(=GetGroundZ()+GetFloorBaseZ())，不用像ComputeFullZRange那样另外反推。
+	float floorBaseZ = building->GetFloorWorldZ(level);
 	float floorHeight = building->GetFloorHeights()[floorIndex];
 
 	// 材质/网格：按mod在AssignFloor里给这一层指定的FloorAssetSpec，留空用框架组件的默认值。
@@ -894,7 +893,7 @@ void ABuildingElement::BuildElevatorCabinsForBuilding() {
 			float fx, fy;
 			ComputeWorldPosition(*building, localX, localY, fx, fy);
 			float levelHeight = floorHeights[idx];
-			float fz = (building->GetFloorBaseZ(level) + levelHeight * 0.5f) * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
+			float fz = (building->GetFloorWorldZ(level) + levelHeight * 0.5f) * BUILDING_WORLD_SCALE + BUILDING_HEIGHT_EPSILON;
 			if (UBoxComponent* trigger = SpawnCabinTrigger(fx, fy, fz,
 				boxSizeX * BUILDING_WORLD_SCALE, boxSizeY * BUILDING_WORLD_SCALE,
 				levelHeight * kElevatorMarkerScale * BUILDING_WORLD_SCALE, rotation, /*isMovable=*/false)) {
@@ -1282,7 +1281,7 @@ void ABuildingElement::UpdateCabins(float deltaSeconds) {
 	for (Cabin* cabin : building->GetCabinEntities()) {
 		if (!cabin || !cabin->IsMoving()) continue;
 		cabin->Advance(deltaSeconds);
-		float targetZ = building->GetFloorBaseZ(cabin->GetTargetLevel());
+		float targetZ = building->GetFloorWorldZ(cabin->GetTargetLevel());
 		float cruise = framework->GetCabinCruiseSpeed();
 		float accel = cruise / FMath::Max(framework->GetCabinEaseSeconds(), 0.01f);
 		float worldZ = cabin->GetCurrentZ() * BUILDING_WORLD_SCALE;

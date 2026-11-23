@@ -113,6 +113,8 @@ public:
 	const std::string& GetTerrainRef(int x, int y) const;
 	// 该element是否可建设(Element::construction)，越界返回false。
 	bool IsConstruction(int x, int y) const;
+	// IsConstruction且高度为0(z=0的平地)：给DistributeRoadnet的isConstruction回调用，棋盘格/井字路网只会把建筑放在z=0的地面上。
+	bool IsGroundConstruction(int x, int y) const;
 
 	bool SetTerrain(int x, int y, const std::string& terrain);
 	float GetHeight(int x, int y) const;

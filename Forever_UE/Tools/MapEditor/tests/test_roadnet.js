@@ -251,6 +251,29 @@ const free = (x, y, extern) => ({ x, y, extern });
 	assert.strictEqual(ME.angleSnapAt(m4, { node: sEnd.id }, 52, 80, 10).kind, 'right');
 }
 
+// 地形贴合路面(fit)：路面高度取节点z(首尾、中间都是1)，不随地形起伏，也不报"高度和地形对不上"(游戏侧会把地形贴合到路面)；
+// 对比平地(ground)在起伏地形上会报警告，贴合地形(hug)的路面则跟着地形走。
+{
+	const t = new ME.Terrain(128, 128);
+	for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) t.height[y * 128 + x] = (x >= 40 && x <= 60) ? 1 + 1.5 * Math.sin((x - 40) / 20 * Math.PI) : 1;
+	const build = (type) => {
+		const m = ME.newModel(128, 128);
+		const a = ME.addNode(m, 10, 50, false, 1), b = ME.addNode(m, 100, 50, false, 1);
+		ME.addRoad(m, { a: { node: a.id }, b: { node: b.id }, type });
+		return ME.exportRoadnet(m, t);
+	};
+	const fit = build('fit'), ground = build('ground'), hug = build('hug');
+	assert.ok(fit.output.roads.length === 1 && fit.output.roads[0].kind === 'fit', JSON.stringify(fit.output.roads.map((r) => r.kind)));
+	const zs = (o) => (o.roads[0].controls || []).map((c) => c[2]);
+	assert.ok(zs(fit.output).every((z) => Math.abs(z - 1) < 1e-6), '路面一直是z=1: ' + zs(fit.output));
+	assert.ok(!fit.warnings.some((w) => w.includes('对不上')), '地形贴合路面不报"高度和地形对不上"');
+	assert.ok(ground.warnings.some((w) => w.includes('对不上')), '平地在起伏地形上仍报警告');
+	assert.ok(hug.output.roads.length > 1 && hug.output.roads.every((r) => r.kind === 'hug' || r.kind === 'ground'));
+	// fit路可从中间切开(T口)，tag照样跟着路走
+	const m2 = ME.newModel(128, 128);
+	const r = ME.addRoad(m2, { a: { x: 10, y: 50 }, b: { x: 100, y: 50 }, type: 'fit', tree: 'default' }).road;
+	assert.ok(ME.splitRoadAt(m2, r.id, 0.5), 'fit路可切开');
+}
 console.log('test_roadnet OK');
 
 // 贴合段接平路的一端缓入到水平：终点斜率为0(最后一段第二个控制点z=终点z)，
@@ -283,7 +306,7 @@ console.log('test_roadnet OK');
 	assert.strictEqual(typeOf(r2.b), 'plain');
 }
 
-// 行道树/路灯tag：写进road，T口/切分后两半都继承；只有平面(ground)路段导出treeTag/lampTag，tag为空导出空串。
+// 行道树/路灯tag：写进road，T口/切分后两半都继承；每个路段(不分类型)都导出treeTag/lampTag，tag为空导出空串。
 {
 	const m = ME.newModel(256, 256);
 	const r1 = ME.addRoad(m, { a: free(10, 50), b: free(90, 50), type: 'ground', tree: 'default', lamp: 'default' }).road;
@@ -295,7 +318,14 @@ console.log('test_roadnet OK');
 	assert.strictEqual(tagged.length, 2);
 	const untagged = out.roads.filter((r) => r.treeTag === '' && r.lampTag === '');
 	assert.strictEqual(untagged.length, 1);
-	assert.ok(out.roads.every((r) => r.kind === 'ground'));
+	assert.ok(out.roads.every((r) => r.kind === 'ground'));	// 非平面路段(隧道/桥/贴合)也按路自己的tag导出
+	const m2 = ME.newModel(256, 256);
+	ME.addRoad(m2, { a: free(10, 50), b: free(90, 50), type: 'bridge', tree: 'default', lamp: '' });
+	ME.addRoad(m2, { a: free(10, 90), b: free(90, 90), type: 'hug', tree: '', lamp: 'default' });
+	const out2 = ME.exportRoadnet(m2, new ME.Terrain(256, 256)).output;
+	const bridge = out2.roads.filter((r) => r.kind === 'bridge'), hug = out2.roads.filter((r) => r.kind !== 'bridge');   // 平地上的hug路段导出成ground，tag照样跟着路走
+	assert.ok(bridge.length && bridge.every((r) => r.treeTag === 'default' && r.lampTag === ''));
+	assert.ok(hug.length && hug.every((r) => r.treeTag === '' && r.lampTag === 'default'));
 }
 
 // 车道资产 + 车道类型：新路默认 asset=default，导出带 asset；旧文件(没有asset)迁移后补 default；车道类型带方向(forward=a→b 车道数, backward=b→a 车道数)。

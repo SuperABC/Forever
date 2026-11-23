@@ -889,7 +889,7 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 			decoration.meshPath = spec.meshPath;
 			decoration.x = worldX;
 			decoration.y = worldY;
-			decoration.z = spec.z;
+			decoration.z = GetGroundZ() + spec.z;
 			decoration.yaw = GetRotation() + (faceYawDegrees + spec.yaw) * degToRad;
 			decoration.pitch = spec.pitch;
 			decoration.roll = spec.roll;
@@ -963,7 +963,7 @@ void Building::Layout(int inputDirection, const BuildingLayoutLibrary& library,
 	// 导航端点引用。不做ConfigRoom/PlacePivots——那些依赖furniture/pivots，还没有迁移。
 	for (Room* room : rooms) {
 		auto [wx, wy] = LocalToWorld(room->GetPosX(), room->GetPosY());
-		float z = GetFloorBaseZ(room->GetLayer());
+		float z = GetFloorWorldZ(room->GetLayer());
 		room->SetNavigationNode(new Node("building", wx, wy, z));
 	}
 
@@ -984,7 +984,7 @@ void Building::BuildParkingSlots() {
 		int idx = basements + level;
 		if (idx < 0 || idx >= static_cast<int>(floors.size())) continue;
 		const vector<Parking>& parkings = floors[idx].GetParkings();
-		float z = GetFloorBaseZ(level);
+		float z = GetFloorWorldZ(level);
 
 		for (const ParkingSlotSpec& spec : specs) {
 			if (spec.parkingIndex < 0 || spec.parkingIndex >= static_cast<int>(parkings.size())) continue;
@@ -1180,7 +1180,7 @@ void Building::BuildDoors(Map& map) {
 		int idx = basements + level;
 		if (idx < 0 || idx >= static_cast<int>(floorHeights.size())) continue;
 		float floorHeight = floorHeights[idx];
-		float floorBaseZ = GetFloorBaseZ(level);
+		float floorBaseZ = GetFloorWorldZ(level); // 门的z是世界高度
 
 		for (const Corridor& corridor : floor.GetCorridors()) {
 			BuildDoorsForElement(map, corridor.GetDoors(), corridor.GetDoorTags(), mod->doorSpecs,
@@ -1194,7 +1194,7 @@ void Building::BuildDoors(Map& map) {
 		int idx = basements + level;
 		if (idx < 0 || idx >= static_cast<int>(floorHeights.size())) continue;
 		float floorHeight = floorHeights[idx];
-		float floorBaseZ = GetFloorBaseZ(level);
+		float floorBaseZ = GetFloorWorldZ(level); // 门的z是世界高度
 
 		vector<Door*> roomDoors;
 		BuildDoorsForElement(map, room->GetDoors(), room->GetDoorTags(), room->GetMod()->doorSpecs,
@@ -1277,6 +1277,14 @@ float Building::GetFloorBaseZ(int level) const {
 		for (int i = idx; i < basements && i >= 0; i++) z -= floorHeights[i];
 	}
 	return z;
+}
+
+float Building::GetGroundZ() const {
+	return parentLot ? parentLot->GetZ() : 0.f;
+}
+
+float Building::GetFloorWorldZ(int level) const {
+	return GetGroundZ() + GetFloorBaseZ(level);
 }
 
 pair<float, float> Building::LocalToWorld(float localX, float localY) const {
@@ -1404,7 +1412,7 @@ void Building::BuildNavigationGraph(const BuildingLayoutLibrary& library, int in
 
 		float floorWidth = floor.GetSizeX();
 		float floorHeight = floor.GetSizeY();
-		float z = GetFloorBaseZ(level);
+		float z = GetFloorWorldZ(level);
 
 		auto makeNode = [this](float lx, float ly, float nodeZ) -> Node* {
 			auto [wx, wy] = LocalToWorld(lx, ly);
