@@ -2,6 +2,7 @@
 
 #include "route_common.h"
 #include "station_train.h"
+#include "common/mod_args.h"
 
 #include <algorithm>
 #include <array>
@@ -38,7 +39,8 @@ namespace {
 
 int TrainRoute::count = 0;
 
-TrainRoute::TrainRoute() : id(count++) {
+TrainRoute::TrainRoute(const string& args) : id(count++) {
+	skipAuto = ModArgs(args).GetBool("skip");
 }
 
 const char* TrainRoute::GetName() {
@@ -117,6 +119,9 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 		stations.push_back(std::move(station));
 	}
 	railPairs.clear();
+	manualPairs.clear();
+	manualGapLinks.clear();
+	if (skipAuto) { LayoutManual(stationInfos); return; }
 	if (stations.empty()) return;
 
 	// link：两个端点之间的完整几何由这里算好，Core只按它建曲线。同一条link被多条线路共用只加一次；每段都铺轨道mesh。
@@ -382,6 +387,7 @@ void TrainRoute::LayoutRoute(const vector<RouteStationInfo>& stationInfos, int s
 void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 	const function<pair<bool, float>(int, int)>& getWater,
 	const function<float(float, float)>& getHeight) {
+	if (skipAuto) { BuildManualTrack(getHeight); return; }
 	// 隧道区：入口阈值点sIn、出口阈值点sOut(中轴线弧长，A->B方向)，tunnel=false表示这座山不钻隧道，沿山体爬升。
 	struct Zone { float sIn, sOut; bool tunnel; };
 
@@ -693,5 +699,345 @@ void TrainRoute::BuildTrack(const function<const string&(int, int)>& getTerrain,
 		vector<vector<Connection>> pierChains;
 		pierChains.push_back(std::move(midChain));
 		AddPier("", std::move(pierChains), PIER_DEFAULT_SPACING, PIER_MIN_SPACING, PIER_RADIUS);
+	}
+}
+
+
+// ================= 手动线路(--skip)：编辑器output.transit的火车线路，设计见route_train.md"手动线路" =================
+namespace {
+	pair<float, float> SegmentStartHeading(const TrackSegment& s) {
+		float dx = s.c1x - s.x1, dy = s.c1y - s.y1;
+		if (dx * dx + dy * dy < 1e-10f) { dx = s.c2x - s.x1; dy = s.c2y - s.y1; }
+		if (dx * dx + dy * dy < 1e-10f) { dx = s.x2 - s.x1; dy = s.y2 - s.y1; }
+		float length = sqrtf(dx * dx + dy * dy);
+		return length > 1e-6f ? make_pair(dx / length, dy / length) : make_pair(1.f, 0.f);
+	}
+	pair<float, float> SegmentEndHeading(const TrackSegment& s) {
+		float dx = s.x2 - s.c2x, dy = s.y2 - s.c2y;
+		if (dx * dx + dy * dy < 1e-10f) { dx = s.x2 - s.c1x; dy = s.y2 - s.c1y; }
+		if (dx * dx + dy * dy < 1e-10f) { dx = s.x2 - s.x1; dy = s.y2 - s.y1; }
+		float length = sqrtf(dx * dx + dy * dy);
+		return length > 1e-6f ? make_pair(dx / length, dy / length) : make_pair(1.f, 0.f);
+	}
+	// 沿采样点偏移的铁轨：z按序号比例走扁S(两端节点高度)，和编辑器里中轴线的高度剖面一致。
+	vector<TrackSegment> ManualRail(const vector<CurveSample>& samples, float offset, bool reverse, float zStart, float zEnd) {
+		vector<TrackSegment> segments = OffsetRail(samples, offset, reverse, zStart, zEnd, false);
+		const float m = static_cast<float>(segments.size());
+		for (size_t k = 0; k < segments.size(); k++) {
+			float z1 = zStart + (zEnd - zStart) * SmoothStep(static_cast<float>(k) / m);
+			float z2 = zStart + (zEnd - zStart) * SmoothStep(static_cast<float>(k + 1) / m);
+			segments[k].z1 = segments[k].c1z = z1;
+			segments[k].z2 = segments[k].c2z = z2;
+		}
+		return segments;
+	}
+	// 直线弦(三等分控制点)，给AddTerrainFit/AddTunnelHatch/AddPier用。
+	Connection ChordConnection(float xa, float ya, float za, float xb, float yb, float zb) {
+		Connection chord(Node("route", xa, ya, za), Node("route", xb, yb, zb));
+		chord.AddControls({ { Node("route_ctrl", xa + (xb - xa) / 3.f, ya + (yb - ya) / 3.f, za + (zb - za) / 3.f), 1.f },
+			{ Node("route_ctrl", xb - (xb - xa) / 3.f, yb - (yb - ya) / 3.f, zb - (zb - za) / 3.f), 1.f } });
+		return chord;
+	}
+}
+
+void TrainRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
+	if (!manual || manual->Empty()) {
+		debugf("Warning: TrainRoute --skip but the roadnet has no manual transit data, no train lines.\n");
+		return;
+	}
+	const TransitData& data = *manual;
+	const string routeId = GetType();
+	ManualPlan plan = PlanManualRoute(data, routeId, stationInfos, false);
+	for (const string& warning : plan.warnings) debugf("Warning: TrainRoute manual: %s\n", warning.c_str());
+	if (plan.lines.empty()) {
+		debugf("Warning: TrainRoute manual: no usable train line in the roadnet loops of %s.\n", routeId.c_str());
+		return;
+	}
+
+	constexpr float kHalfGauge = kTrackGauge * 0.5f;
+	set<pair<string, string>> linkKeys;
+	auto addLink = [&](const RouteEndpoint& from, const RouteEndpoint& to, vector<TrackSegment> segments) -> int {
+		if (!linkKeys.insert({ EndpointKey(from), EndpointKey(to) }).second) return -1;
+		RouteLinkSpec link;
+		link.from = from;
+		link.to = to;
+		for (TrackSegment& seg : segments) { seg.mesh = kTrainBridgeMesh; seg.meshUnit = kTrainBridgeUnit; }
+		link.segments = std::move(segments);
+		links.push_back(std::move(link));
+		return static_cast<int>(links.size()) - 1;
+	};
+
+	// extern按位置去重：同一节点上位置相差<0.02的端点是同一个extern(直线通过的节点，到达端和离开端正好重合，不用转向link)。
+	struct ExternRec { float x, y; string name; };
+	map<int, vector<ExternRec>> externsAtNode;
+	auto ensureExtern = [&](int node, float x, float y, float z, float hx, float hy) -> string {
+		vector<ExternRec>& list = externsAtNode[node];
+		for (const ExternRec& rec : list) if (hypotf(rec.x - x, rec.y - y) < 0.02f) return rec.name;
+		RouteExternNode extern_;
+		extern_.name = "mt" + to_string(node) + "_" + to_string(list.size());
+		extern_.x = x; extern_.y = y; extern_.z = z; extern_.dirX = hx; extern_.dirY = hy;
+		externs.push_back(extern_);
+		list.push_back({ x, y, extern_.name });
+		return extern_.name;
+	};
+
+	// 端口几何：(node,conn,in?) -> extern名+位置+行驶方向。
+	struct PortGeo { string name; float x, y, z, hx, hy; };
+	map<array<int, 3>, PortGeo> portGeo;
+	auto registerPort = [&](int node, int conn, int in, const TrackSegment& seg, bool atEnd) {
+		float x = atEnd ? seg.x2 : seg.x1, y = atEnd ? seg.y2 : seg.y1, z = atEnd ? seg.z2 : seg.z1;
+		auto heading = atEnd ? SegmentEndHeading(seg) : SegmentStartHeading(seg);
+		PortGeo geo;
+		geo.name = ensureExtern(node, x, y, z, heading.first, heading.second);
+		geo.x = x; geo.y = y; geo.z = z; geo.hx = heading.first; geo.hy = heading.second;
+		portGeo[{ node, conn, in }] = geo;
+	};
+
+	// 掉头：以两端中点为圆心的半圆，顶点沿到达方向往前凸出，两个1/4圆弧。
+	auto addUTurn = [&](const PortGeo& in, const PortGeo& out) {
+		float cx = (in.x + out.x) * 0.5f, cy = (in.y + out.y) * 0.5f;
+		float radius = hypotf(out.x - in.x, out.y - in.y) * 0.5f;
+		float gx = out.x - in.x, gy = out.y - in.y, gl = hypotf(gx, gy);
+		if (gl < 1e-6f) return;
+		gx /= gl; gy /= gl;
+		float ax = cx + in.hx * radius, ay = cy + in.hy * radius;
+		float arm = 0.5523f * radius;
+		addLink(ExternOf(in.name), ExternOf(out.name), {
+			MakeBezierSegment(in.x, in.y, in.z, in.hx, in.hy, ax, ay, in.z, gx, gy, arm),
+			MakeBezierSegment(ax, ay, in.z, gx, gy, out.x, out.y, out.z, out.hx, out.hy, arm) });
+	};
+
+	// ---- 实体线路：每条用到的连线 = 中轴线 + 两侧各偏半个轨距的两条铁轨 ----
+	for (int c : plan.conns) {
+		const TransitData::Conn& conn = data.conns[c];
+		TrackSegment axis = ManualAxis(data, c);
+		vector<CurveSample> samples = SampleBezier(axis, kOffsetStep, axis.x2 - axis.x1, axis.y2 - axis.y1);
+		vector<TrackSegment> rightRail = ManualRail(samples, kHalfGauge, false, axis.z1, axis.z2);
+		vector<TrackSegment> leftRail = ManualRail(samples, -kHalfGauge, true, axis.z2, axis.z1);
+		if (rightRail.empty() || leftRail.empty()) continue;
+		registerPort(conn.from, c, 0, rightRail.front(), false); // 右轨从from出发
+		registerPort(conn.to, c, 1, rightRail.back(), true);     // 右轨到达to
+		registerPort(conn.to, c, 0, leftRail.front(), false);    // 左轨从to出发
+		registerPort(conn.from, c, 1, leftRail.back(), true);    // 左轨到达from
+		int right = addLink(ExternOf(portGeo[{ conn.from, c, 0 }].name), ExternOf(portGeo[{ conn.to, c, 1 }].name), std::move(rightRail));
+		int left = addLink(ExternOf(portGeo[{ conn.to, c, 0 }].name), ExternOf(portGeo[{ conn.from, c, 1 }].name), std::move(leftRail));
+		if (right >= 0 && left >= 0) manualPairs.push_back({ c, right, left, axis });
+	}
+
+	// ---- 节点转向：到达连线的到达端 -> 离开连线的离开端；位置重合(直线通过)的已经是同一个extern，不用加 ----
+	for (const array<int, 3>& turn : plan.turns) {
+		auto inIt = portGeo.find({ turn[0], turn[1], 1 }), outIt = portGeo.find({ turn[0], turn[2], 0 });
+		if (inIt == portGeo.end() || outIt == portGeo.end()) continue;
+		const PortGeo& in = inIt->second;
+		const PortGeo& out = outIt->second;
+		if (in.name == out.name) continue;
+		if (turn[1] == turn[2]) { addUTurn(in, out); continue; }
+		if (in.hx * out.hx + in.hy * out.hy < 0.5f) {
+			debugf("Warning: TrainRoute manual: sharp turn (>60 deg) at transit node %d between connections %d and %d.\n", turn[0], turn[1], turn[2]);
+		}
+		float chord = hypotf(out.x - in.x, out.y - in.y);
+		addLink(ExternOf(in.name), ExternOf(out.name), { MakeBezierSegment(in.x, in.y, in.z, in.hx, in.hy, out.x, out.y, out.z, out.hx, out.hy, chord / 3.f) });
+	}
+
+	// ---- 缺口(编辑器里的虚线)：站端口/节点端口之间用扁S补 ----
+	// 节点中心点(Hub)：前后都是缺口。掉头的节点(同时有HubOut)到达端/离开端各一个extern，靠右错开半个轨距，中间一个半圆。
+	map<int, pair<float, float>> hubHeading;       // Hub：到达(或单一)朝向
+	set<int> hubTurnNodes;
+	for (const ManualPort& hub : plan.hubs) {
+		if (hub.kind == ManualPort::HubOut) hubTurnNodes.insert(hub.node);
+		else hubHeading[hub.node] = { hub.hx, hub.hy };
+	}
+	for (int nodeIndex : hubTurnNodes) {
+		auto headingIt = hubHeading.find(nodeIndex);
+		if (headingIt == hubHeading.end()) continue;
+		const TransitData::Node& node = data.nodes[nodeIndex];
+		float hx = headingIt->second.first, hy = headingIt->second.second;
+		float rx = -hy, ry = hx; // 到达方向的右手侧
+		PortGeo in, out;
+		in.x = node.x + rx * kHalfGauge; in.y = node.y + ry * kHalfGauge; in.z = node.z; in.hx = hx; in.hy = hy;
+		out.x = node.x - rx * kHalfGauge; out.y = node.y - ry * kHalfGauge; out.z = node.z; out.hx = -hx; out.hy = -hy;
+		in.name = ensureExtern(nodeIndex, in.x, in.y, in.z, in.hx, in.hy);
+		out.name = ensureExtern(nodeIndex, out.x, out.y, out.z, out.hx, out.hy);
+		portGeo[{ nodeIndex, -1, 1 }] = in;
+		portGeo[{ nodeIndex, -1, 0 }] = out;
+		addUTurn(in, out);
+	}
+	struct Resolved { RouteEndpoint endpoint; float x = 0.f, y = 0.f, z = 0.f, hx = 1.f, hy = 0.f; bool ok = false; };
+	auto resolve = [&](const ManualPort& port) {
+		Resolved r;
+		if (port.kind == ManualPort::StationIn || port.kind == ManualPort::StationOut) {
+			const RouteStationInfo& info = stationInfos[port.station];
+			bool isIn = port.kind == ManualPort::StationIn;
+			const RoutePort& p = isIn ? info.inlets[port.track] : info.outlets[port.track];
+			const RoutePort& heading = info.inlets[port.track];
+			float length = hypotf(heading.dirX, heading.dirY);
+			r.x = p.x; r.y = p.y; r.z = p.z;
+			if (length > 1e-6f) { r.hx = heading.dirX / length; r.hy = heading.dirY / length; }
+			r.endpoint.kind = isIn ? RouteEndpoint::Inlet : RouteEndpoint::Outlet;
+			r.endpoint.station = info.stationIndex; r.endpoint.portIndex = port.track;
+			r.ok = true;
+		}
+		else if ((port.kind == ManualPort::Hub || port.kind == ManualPort::HubOut) && hubTurnNodes.count(port.node)) {
+			auto it = portGeo.find({ port.node, -1, port.kind == ManualPort::Hub ? 1 : 0 });
+			if (it != portGeo.end()) {
+				r.x = it->second.x; r.y = it->second.y; r.z = it->second.z; r.hx = it->second.hx; r.hy = it->second.hy;
+				r.endpoint = ExternOf(it->second.name);
+				r.ok = true;
+			}
+		}
+		else if (port.kind == ManualPort::Hub) {
+			const TransitData::Node& node = data.nodes[port.node];
+			auto heading = hubHeading.count(port.node) ? hubHeading[port.node] : make_pair(port.hx, port.hy);
+			r.x = node.x; r.y = node.y; r.z = node.z; r.hx = heading.first; r.hy = heading.second;
+			r.endpoint = ExternOf(ensureExtern(port.node, node.x, node.y, node.z, r.hx, r.hy));
+			r.ok = true;
+		}
+		else {
+			auto it = portGeo.find({ port.node, port.conn, port.kind == ManualPort::NodeIn ? 1 : 0 });
+			if (it != portGeo.end()) {
+				r.x = it->second.x; r.y = it->second.y; r.z = it->second.z; r.hx = it->second.hx; r.hy = it->second.hy;
+				r.endpoint = ExternOf(it->second.name);
+				r.ok = true;
+			}
+		}
+		return r;
+	};
+	for (const ManualGap& gap : plan.gaps) {
+		Resolved from = resolve(gap.from), to = resolve(gap.to);
+		if (!from.ok || !to.ok) continue;
+		float chord = hypotf(to.x - from.x, to.y - from.y);
+		if (chord < 1e-3f) continue;
+		float cx = (to.x - from.x) / chord, cy = (to.y - from.y) / chord;
+		if (from.hx * cx + from.hy * cy < 0.5f || to.hx * cx + to.hy * cy < 0.5f) {
+			debugf("Warning: TrainRoute manual: gap link (%.1f,%.1f)->(%.1f,%.1f) bends more than 60 deg at an end; move the nearest transit node in line with the station track.\n",
+				from.x, from.y, to.x, to.y);
+		}
+		int index = addLink(from.endpoint, to.endpoint, { MakeBezierSegment(from.x, from.y, from.z, from.hx, from.hy, to.x, to.y, to.z, to.hx, to.hy, chord / 3.f) });
+		if (index >= 0) manualGapLinks.push_back(index);
+	}
+
+	// ---- 线路 ----
+	for (const vector<ManualLineEntry>& line : plan.lines) {
+		vector<RouteLineEntry> entries;
+		for (const ManualLineEntry& entry : line) {
+			RouteLineEntry out;
+			if (entry.station >= 0) { out.name = stationInfos[entry.station].name; out.stopIndex = entry.track; }
+			else {
+				Resolved r = resolve(entry.via);
+				if (!r.ok) continue;
+				out.name = r.endpoint.externName; out.stopIndex = -1;
+			}
+			entries.push_back(out);
+		}
+		if (entries.size() < 2) { debugf("Warning: TrainRoute manual: a line has fewer than 2 waypoints, dropped.\n"); continue; }
+		lines.push_back(std::move(entries));
+		lineVehicleCounts.push_back(kVehiclesPerTrainLine);
+	}
+	debugf("Log: TrainRoute manual: %d rail pairs, %d turn/gap links, %d lines.\n",
+		static_cast<int>(manualPairs.size()), static_cast<int>(links.size()) - 2 * static_cast<int>(manualPairs.size()), static_cast<int>(lines.size()));
+}
+
+void TrainRoute::BuildManualTrack(const function<float(float, float)>& getHeight) {
+	if (!manual) return;
+	const TransitData& data = *manual;
+	constexpr float kHalfGauge = kTrackGauge * 0.5f;
+
+	for (const ManualPair& mp : manualPairs) {
+		const TransitData::Conn& conn = data.conns[mp.conn];
+		const string& kind = conn.kind;
+		if (kind == "tunnel") continue; // 隧道段：在山体里，不动地形、不拆迁
+
+		vector<CurveSample> mid = SampleBezier(mp.axis, TRACK_SAMPLE_STEP, mp.axis.x2 - mp.axis.x1, mp.axis.y2 - mp.axis.y1);
+		const size_t n = mid.size();
+		if (n < 2) continue;
+		vector<float> arc(n, 0.f);
+		for (size_t i = 1; i < n; i++) arc[i] = arc[i - 1] + hypotf(mid[i].x - mid[i - 1].x, mid[i].y - mid[i - 1].y);
+		const float total = max(arc.back(), 1e-6f);
+		// 中轴线每个采样点的高度：默认=两端节点高度的扁S；hug=地形高度+两端偏差的线性过渡。
+		vector<float> z(n);
+		for (size_t i = 0; i < n; i++) z[i] = mp.axis.z1 + (mp.axis.z2 - mp.axis.z1) * SmoothStep(arc[i] / total);
+		if (kind == "hug") {
+			float offA = mp.axis.z1 - getHeight(mid.front().x, mid.front().y);
+			float offB = mp.axis.z2 - getHeight(mid.back().x, mid.back().y);
+			for (size_t i = 0; i < n; i++) {
+				float u = arc[i] / total;
+				z[i] = getHeight(mid[i].x, mid[i].y) + offA + (offB - offA) * u;
+			}
+			z.front() = mp.axis.z1; z.back() = mp.axis.z2;
+			// 铁轨按这条z剖面重铺(位置和端点不变，接缝仍然连续)。
+			vector<TrackSegment> right = OffsetRail(mid, kHalfGauge, false, 0.f, 0.f, false);
+			vector<TrackSegment> left = OffsetRail(mid, -kHalfGauge, true, 0.f, 0.f, false);
+			for (size_t k = 0; k < right.size(); k++) {
+				right[k].z1 = right[k].c1z = z[k];
+				right[k].z2 = right[k].c2z = z[k + 1];
+				right[k].mesh = kTrainBridgeMesh; right[k].meshUnit = kTrainBridgeUnit;
+			}
+			for (size_t k = 0; k < left.size(); k++) {
+				left[k].z1 = left[k].c1z = z[n - 1 - k];
+				left[k].z2 = left[k].c2z = z[n - 2 - k];
+				left[k].mesh = kTrainBridgeMesh; left[k].meshUnit = kTrainBridgeUnit;
+			}
+			links[static_cast<size_t>(mp.right)].segments = std::move(right);
+			links[static_cast<size_t>(mp.left)].segments = std::move(left);
+		}
+
+		vector<pair<float, float>> centerline(n);
+		for (size_t i = 0; i < n; i++) centerline[i] = { mid[i].x, mid[i].y };
+		AddDemolition(centerline, trackWidth);
+
+		if (kind == "mouth") {
+			auto adjoinsTunnel = [&](int node) {
+				for (size_t k = 0; k < data.conns.size(); k++) {
+					if (static_cast<int>(k) == mp.conn) continue;
+					const TransitData::Conn& other = data.conns[k];
+					if (other.route == conn.route && other.kind == "tunnel" && (other.from == node || other.to == node)) return true;
+				}
+				return false;
+			};
+			bool wallStart = adjoinsTunnel(conn.from), wallEnd = adjoinsTunnel(conn.to);
+			for (size_t i = 0; i + 1 < n; i++) {
+				Connection chord = ChordConnection(mid[i].x, mid[i].y, z[i], mid[i + 1].x, mid[i + 1].y, z[i + 1]);
+				AddTunnelHatch(&chord, 0.f, 1.f, 2.f * kTrackGauge,
+					(wallStart && i == 0) ? z[i] + TUNNEL_ROOF_CLEARANCE : kNoEndWall,
+					(wallEnd && i + 2 == n) ? z[i + 1] + TUNNEL_ROOF_CLEARANCE : kNoEndWall);
+			}
+		}
+		else if (kind == "bridge") {
+			vector<Connection> chain;
+			for (size_t i = 0; i + 1 < n; i++) chain.push_back(ChordConnection(mid[i].x, mid[i].y, z[i], mid[i + 1].x, mid[i + 1].y, z[i + 1]));
+			vector<vector<Connection>> chains;
+			chains.push_back(std::move(chain));
+			AddPier("", std::move(chains), PIER_DEFAULT_SPACING, PIER_MIN_SPACING, PIER_RADIUS);
+		}
+		else if (kind == "hug") { // 贴合地形：地形贴合轨道；ground(平地)只拆迁、不改地形，和路网一致
+			for (size_t i = 0; i + 1 < n; i++) {
+				Connection chord = ChordConnection(mid[i].x, mid[i].y, z[i], mid[i + 1].x, mid[i + 1].y, z[i + 1]);
+				AddTerrainFit(&chord, 0.f, 1.f, trackWidth, TERRAIN_FIT_FALLOFF);
+			}
+		}
+	}
+
+	// 缺口连线(站端到节点)：火车route一律按桥处理——拆迁 + 沿线放桥墩(编辑器里没有这段线，没有类型可选)。
+	for (int index : manualGapLinks) {
+		for (const TrackSegment& seg : links[static_cast<size_t>(index)].segments) {
+			vector<CurveSample> mid = SampleBezier(seg, TRACK_SAMPLE_STEP, seg.x2 - seg.x1, seg.y2 - seg.y1);
+			const size_t n = mid.size();
+			if (n < 2) continue;
+			vector<float> arc(n, 0.f);
+			for (size_t i = 1; i < n; i++) arc[i] = arc[i - 1] + hypotf(mid[i].x - mid[i - 1].x, mid[i].y - mid[i - 1].y);
+			const float total = max(arc.back(), 1e-6f);
+			vector<pair<float, float>> centerline(n);
+			for (size_t i = 0; i < n; i++) centerline[i] = { mid[i].x, mid[i].y };
+			AddDemolition(centerline, trackWidth);
+			vector<Connection> chain;
+			for (size_t i = 0; i + 1 < n; i++) {
+				float za = seg.z1 + (seg.z2 - seg.z1) * SmoothStep(arc[i] / total);
+				float zb = seg.z1 + (seg.z2 - seg.z1) * SmoothStep(arc[i + 1] / total);
+				chain.push_back(ChordConnection(mid[i].x, mid[i].y, za, mid[i + 1].x, mid[i + 1].y, zb));
+			}
+			vector<vector<Connection>> chains;
+			chains.push_back(std::move(chain));
+			AddPier("", std::move(chains), PIER_DEFAULT_SPACING, PIER_MIN_SPACING, PIER_RADIUS);
+		}
 	}
 }

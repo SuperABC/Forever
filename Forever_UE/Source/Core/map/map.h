@@ -207,11 +207,14 @@ public:
 		Quad quad;
 		std::unordered_map<int, Road*> boundaryRoads;
 		int direction = 0;
+		int outputIndex = -1;          // Roadnet::Preset::outputIndex，落地后登记进presetOfBuilding
 	};
 	std::vector<PlacedPreset> pendingBuildingPresets;
+	// 预设落地成功的建筑 -> 预设在.roadnet output.presets里的原下标。线路环按它找到站(Route::Build填RouteStationInfo::presetIndex)。不存档(读档不重新Build线路)。
+	std::unordered_map<const Building*, int> presetOfBuilding;
 	void PlacePresets();
 	bool CreateZoneAt(const std::string& id, Lot* lot, const Quad& placedQuad, const std::unordered_map<int, Road*>& boundaryRoads, int direction);
-	bool CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent, const Quad& placedQuad, const std::unordered_map<int, Road*>& boundaryRoads, int direction);
+	bool CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent, const Quad& placedQuad, const std::unordered_map<int, Road*>& boundaryRoads, int direction, Building** created = nullptr);
 
 	// 用已注册的zoneFactory按显式占位生成zone(Assign->RequestPlacement->CreateZone->Layout)，假定InitRoadnet已跑完，
 	// 详见map.md"InitZones"。
@@ -311,6 +314,11 @@ public:
 	// 转发roadnet->GetPathRoadMaterial()，供InitZones/InitBuildings构造PathLaneSpec、
 	// Forever层渲染小路时查。roadnet为空(InitRoadnet没跑或没有可用mod)时返回空字符串。
 	const std::string& GetPathRoadMaterial() const;
+
+	// 路网里编辑器手工设计的独立线路(见transit_data.h)，roadnet为空时返回空数据；Route::Build在--skip的route mod里用。
+	const TransitData& GetTransit() const;
+	// 该建筑是不是路网预设放出来的：是返回预设在output.presets里的原下标，否则-1。
+	int GetPresetIndexOfBuilding(const Building* building) const;
 
 	// 车行/行人导航图只读访问，供Forever层可视化/未来Traffic域寻路使用。key/邻接id都是锚点
 	// Node::GetId()，锚点本身的坐标通过GetNavAnchorNodes()（路口/车道分裂新增锚点）+

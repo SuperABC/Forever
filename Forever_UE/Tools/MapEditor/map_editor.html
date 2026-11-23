@@ -15,7 +15,8 @@ button { cursor:pointer; } button:hover { border-color:var(--accent); } button.o
 button:disabled { opacity:.4; cursor:default; }
 input[type=number] { width:70px; } input[type=text] { width:150px; } input[type=range] { padding:0; }
 #main { display:flex; height:calc(100% - 41px - 22px); }
-#left { width:250px; overflow:auto; padding:8px; background:var(--panel); border-right:1px solid var(--line); }
+#left { width:250px; flex:none; overflow:auto; padding:8px; background:var(--panel); }
+#leftResizer { width:5px; flex:none; cursor:col-resize; background:var(--line); } #leftResizer:hover, #leftResizer.on { background:var(--accent); }
 #right { width:280px; overflow:auto; padding:8px; background:var(--panel); border-left:1px solid var(--line); }
 #center { flex:1; position:relative; min-width:0; }
 #c2d, #c3d { position:absolute; inset:0; width:100%; height:100%; display:block; }
@@ -33,6 +34,7 @@ h4 { margin:10px 0 4px; color:var(--dim); font-weight:600; font-size:12px; lette
 <div id="top"></div>
 <div id="main">
 	<div id="left"></div>
+	<div id="leftResizer" title="拖动调整左侧栏宽度，双击恢复默认"></div>
 	<div id="center">
 		<canvas id="c2d"></canvas>
 		<div id="c3dWrap"><canvas id="c3d"></canvas></div>
@@ -49,6 +51,7 @@ h4 { margin:10px 0 4px; color:var(--dim); font-weight:600; font-size:12px; lette
 <script src="js/roadnet.js"></script>
 <script src="js/lots.js"></script>
 <script src="js/greens.js"></script>
+<script src="js/transit.js"></script>
 <script>
 'use strict';
 // Forever 地图编辑器：地形/路网/地块，导出 .terrain / .roadnet。操作见 README.md，文件格式见 Source/Basic/map/*.md。
@@ -83,6 +86,9 @@ const S = {
 	// z=下一个新建节点的高度；zTerrain=改用点击处的地形高度。点在已有节点上沿用它自己的高度。Alt+滚轮快捷调整z。
 		road: { shape: 'line', type: 'ground', preset: 0, z: 0, zTerrain: false, snapNode: true, snapRoad: true, snapEdge: true, snapLot: true, snapAngle: true, name: '', tree: 'default', lamp: 'default' },
 	pending: null,              // 路/地块正在画的状态
+	// 线路工具(火车铁轨/飞机航线)：mode=line画实体线路 / loop连接路线环；z=下一个新建node的高度(zTerrain=用点击处地形高度)
+	transit: { mode: 'line', routeId: '', shape: 'line', type: 'ground', z: 0, zTerrain: false, snapNode: true, snapEdge: true, snapConn: true, snapAngle: true },
+	tloop: [],                  // loop模式正在连的环 [{kind:'preset'|'node', ref}]
 	lotArea: 'AREA_RESIDENCE_HIGH',
 	sel: null,                  // {kind:'node'|'road'|'lot'|'green', id}
 	colors: {},                 // 地形字符串→自定义颜色
@@ -108,7 +114,7 @@ function applyAction(a, undo) {
 	} else if (a.kind === 'm') {
 		S.model = ME.cloneModel(undo ? a.before : a.after);
 		if (S.sel && !selExists()) S.sel = null;
-		S.pending = null; S.presetDraw = null;
+		S.pending = null; S.presetDraw = null; S.tloop = [];
 	}
 }
 function undo() { const a = hist.undo.pop(); if (!a) return; applyAction(a, true); hist.redo.push(a); afterChange(); }
@@ -204,7 +210,7 @@ async function doOpenRoadnet() {
 		const data = ME.readRoadnet(new TextDecoder().decode(f.buffer));
 		if (!data.source) throw new Error('这个.roadnet里没有source段(不是编辑器导出的)，无法继续编辑');
 		const legacy = !(data.source.version >= 2);
-					S.model = ME.migrateModel(data.source, ctxHeight()); S.sel = null; S.pending = null;
+					S.model = ME.migrateModel(data.source, ctxHeight()); S.sel = null; S.pending = null; S.tloop = [];
 		S.files.roadnet = f.handle; clearHistory(); afterChange(); say('已打开 ' + f.name + (legacy ? '(旧版文件，已迁移成节点高度；隧道/桥已按旧布局拆成多条路)' : ''));
 	} catch (e) { say('打开路网失败：' + e.message); }
 }
@@ -228,7 +234,7 @@ function doNew() {
 	if (w * h > 4096 * 4096) { say('太大了'); return; }
 	S.terrain = new ME.Terrain(w, h);
 	S.model = ME.newModel(w, h);
-	S.sel = null; S.pending = null; S.files = { terrain: null, roadnet: null };
+	S.sel = null; S.pending = null; S.tloop = []; S.files = { terrain: null, roadnet: null };
 	rebuildTerrainImage(); clearHistory(); fitView(); afterChange();
 }
 
@@ -612,6 +618,7 @@ function draw2D() {
 			g.beginPath(); g.moveTo(sx, sy - 6); g.lineTo(sx + 6, sy); g.lineTo(sx, sy + 6); g.lineTo(sx - 6, sy); g.closePath(); g.fill(); g.stroke();
 		}
 	}
+	drawTransit();
 	drawOverlay();
 }
 function drawOverlay() {
@@ -693,6 +700,7 @@ function drawOverlay() {
 		}
 	}
 	if (S.tool === 'green') drawGreenOverlay(m);
+	if (S.tool === 'transit') drawTransitOverlay(m);
 	if (S.presetDraw) drawPresetOverlay(m);
 	else if (S.tool === 'lot' && S.mouse) {
 		const n = ME.pickNode(S.model, m[0], m[1], 9 / v.scale);
@@ -905,16 +913,422 @@ function drawGreenOverlay(m) {
 	g.strokeStyle = sp.close ? '#4cff9e' : '#aaa'; g.lineWidth = 2; g.beginPath(); g.arc(sx, sy, 7, 0, Math.PI * 2); g.stroke();
 }
 
+// ======================= 线路工具(火车铁轨/飞机航线 + 线路环) =======================
+// 两个模式：line=画实体线路(node+conn，每条conn有route id)；loop=把 预设建筑/线路node 依次连成环。数据模型/规则/导出见 js/transit.js。
+// 状态：S.transit(面板参数)；line模式画线中途的起点放在 S.pending；loop模式正在连的环放在 S.tloop=[{kind,ref}]；
+// 已有的环被选中时 S.sel={kind:'tloop', id, index(选中的项|null)}，此时吸附只吸这个环上的项。
+let presetCache = null, presetSig = '';
+// 已放置预设的世界坐标(缓存：按路网签名+地块/预设内容签名，签名变了才重放)。
+function getPresetPlacements() {
+	const M = S.model;
+	const pieces = getRoadPieces();   // 先刷新路网签名
+	const sig = piecesSig + '|' + JSON.stringify(M.lots.map((l) => [l.id, l.a, l.b, l.depth, l.margin, (l.presets || []).map((p) => [p.id, p.dir, p.x0, p.x1, p.y0, p.y1])]));
+	if (!presetCache || sig !== presetSig) { presetCache = ME.presetPlacements(M, pieces); presetSig = sig; }
+	return presetCache;
+}
+function tSetMode(mode) {
+	S.transit.mode = mode; S.pending = null; S.tloop = []; S.sel = null;
+	renderLeft(); renderRight(); S.dirty2d = true;
+}
+function tRouteIds() {
+	const ids = new Set(['route_train', 'route_air']);
+	for (const c of S.model.transit.conns) if (c.routeId) ids.add(c.routeId);
+	return [...ids];
+}
+function tSnap(w) {
+	const M = S.model, T = S.transit, r = 9 / S.view.scale;
+	if (T.snapNode) { const n = ME.pickTNode(M, w[0], w[1], r); if (n) return { kind: 'node', point: [n.x, n.y], ref: { node: n.id } }; }
+	if (T.snapEdge) {   // 地图边界：建城外连接点(extern node)，已有的extern就吸到它上面
+		const edgeR = Math.max(r, 1.2), W = S.terrain.w, H = S.terrain.h;
+		const dists = [w[0], w[1], W - w[0], H - w[1]];
+		const k = dists.indexOf(Math.min(...dists));
+		if (dists[k] <= edgeR) {
+			const p = k === 0 ? [0, w[1]] : k === 1 ? [w[0], 0] : k === 2 ? [W, w[1]] : [w[0], H];
+			const existing = M.transit.nodes.find((n) => n.extern && Math.hypot(n.x - p[0], n.y - p[1]) < 0.3);
+			if (existing) return { kind: 'node', point: [existing.x, existing.y], ref: { node: existing.id } };
+			return { kind: 'extern', point: p, ref: { x: p[0], y: p[1], extern: true } };
+		}
+	}
+	if (T.snapConn) { const hit = ME.pickTConn(M, w[0], w[1], r); if (hit) return { kind: 'conn', point: [hit.x, hit.y], ref: { conn: hit.conn.id, t: hit.t } }; }
+	return { kind: 'free', point: w, ref: { x: w[0], y: w[1] } };
+}
+// 吸附角度：同路网(直角/平角)，参照物是线路数据。
+function tAngleSnap(w) {
+	const p = S.pending;
+	if (!S.transit.snapAngle || !p || !p.a.ref) return null;
+	const origin = p.a.ref.node !== undefined ? { node: p.a.ref.node } : (p.a.ref.conn !== undefined ? { road: p.a.ref.conn, t: p.a.ref.t } : null);
+	return origin ? ME.angleSnapAt(ME.transitView(S.model), origin, w[0], w[1], ANGLE_SNAP_DEG) : null;
+}
+function tSnapPoint(w) {
+	const base = tSnap(w);
+	if (base.kind !== 'free' || !S.pending || S.transit.shape !== 'line') return base;
+	const ra = tAngleSnap(w);
+	return ra ? { kind: 'free', point: ra.point, ref: { x: ra.point[0], y: ra.point[1] }, angleSnap: ra } : base;
+}
+function tPreviewZ(sp) {
+	const T = S.transit;
+	if (sp.ref.node !== undefined) { const n = ME.tNodeOf(S.model, sp.ref.node); return n ? (n.z || 0) : 0; }
+	if (sp.ref.conn !== undefined) { const c = ME.tConnOf(S.model, sp.ref.conn); return c ? ME.tZProfile(S.model, c, ctxHeight())(sp.ref.t) : 0; }
+	return T.zTerrain ? S.terrain.sampleHeight(sp.point[0], sp.point[1]) : T.z;
+}
+// 这个落点按route id规则能不能用(起点/终点)；能用返回null，不能返回原因。
+function tRefProblem(ref) {
+	const a = S.pending ? S.pending.a.ref : ref;
+	const r = ME.resolveRouteId(S.model, S.transit.routeId, a, ref);
+	return r.error || null;
+}
+function tLineClick(w) {
+	const T = S.transit, sp = tSnapPoint(w);
+	if (S.pending && sp.ref.node !== undefined && S.pending.a.ref.node === sp.ref.node) return;   // 双击的第二下/点在起点上：忽略
+	const err = tRefProblem(sp.ref);
+	if (err) { say(err); return; }
+	const z = tPreviewZ(sp);
+	if (!S.pending) {
+		S.pending = { a: { x: sp.point[0], y: sp.point[1], ref: Object.assign({}, sp.ref), z } };
+		if (S.pending.a.ref.node === undefined && S.pending.a.ref.conn === undefined) S.pending.a.ref.z = z;
+		S.dirty2d = true; return;
+	}
+	const p = S.pending;
+	if (T.shape === 'curve' && !p.ctrl) { const ra = tAngleSnap(w); p.ctrl = ra ? ra.point : [w[0], w[1]]; S.dirty2d = true; return; }
+	const refB = Object.assign({}, sp.ref);
+	if (refB.node === undefined && refB.conn === undefined) refB.z = z;
+	const spec = { a: p.a.ref, b: refB, ctrl: p.ctrl || null, type: T.type, routeId: T.routeId };
+	S.pending = null;
+	const res = modelOp((m) => ME.addTConn(m, spec, ctxHeight()));
+	if (res.conn) {
+		S.sel = { kind: 'tconn', id: res.conn.id };
+		// 连续画：以刚建好的终点为起点继续，右键/Esc结束。
+		const end = ME.tNodeOf(S.model, res.conn.b);
+		if (end) S.pending = { a: { x: end.x, y: end.y, ref: { node: end.id }, z: end.z || 0 } };
+	}
+	S.dirty2d = true;
+}
+// Alt+左键(线路工具)：line模式选node/conn(node可拖动、选中conn的把手可拖)，loop模式选环。
+function tSelectClick(w, e) {
+	const M = S.model, r = 9 / S.view.scale;
+	if (S.transit.mode === 'loop') { tLoopPick(w); return; }
+	if (S.sel && S.sel.kind === 'tconn') {
+		const c = ME.tConnOf(M, S.sel.id);
+		if (c) {
+			const q = ME.tQuadOf(M, c);
+			const h = q.c || [(q.p0[0] + q.p1[0]) / 2, (q.p0[1] + q.p1[1]) / 2];
+			if (Math.hypot(h[0] - w[0], h[1] - w[1]) < r) { drag = { type: 'tctrl', id: c.id, before: ME.cloneModel(M) }; return; }
+		}
+	}
+	const n = ME.pickTNode(M, w[0], w[1], r);
+	if (n) { S.sel = { kind: 'tnode', id: n.id }; drag = { type: 'tnode', id: n.id, before: ME.cloneModel(M) }; renderRight(); S.dirty2d = true; return; }
+	const hit = ME.pickTConn(M, w[0], w[1], Math.max(r, 0.6));
+	S.sel = hit ? { kind: 'tconn', id: hit.conn.id } : null;
+	renderRight(); S.dirty2d = true;
+}
+
+// ---- 线路环 ----
+function distPtSeg(px, py, a, b) {
+	const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+	const f = len2 > 1e-12 ? clamp(((px - a[0]) * dx + (py - a[1]) * dy) / len2, 0, 1) : 0;
+	return Math.hypot(px - (a[0] + dx * f), py - (a[1] + dy * f));
+}
+// 鼠标下的"可连的东西"：线路node(优先) 或 预设矩形。onlyItems 给定时只在这些项里找(选中环的状态)。返回 {kind, ref, pos, poly?}|null
+function tLoopHit(w, onlyItems) {
+	const M = S.model, r = 9 / S.view.scale;
+	const allowed = (kind, ref) => !onlyItems || onlyItems.some((it) => it.kind === kind && it.ref === ref);
+	let best = null, bd = r;
+	for (const n of M.transit.nodes) {
+		if (!allowed('node', n.id)) continue;
+		const d = Math.hypot(n.x - w[0], n.y - w[1]);
+		if (d <= bd) { bd = d; best = { kind: 'node', ref: n.id, pos: [n.x, n.y] }; }
+	}
+	if (best) return best;
+	for (const p of getPresetPlacements().values()) {
+		if (!allowed('preset', p.id)) continue;
+		if (pointInPoly(w[0], w[1], p.poly)) return { kind: 'preset', ref: p.id, pos: [p.cx, p.cy], poly: p.poly };
+	}
+	return null;
+}
+const sameItem = (a, b) => a.kind === b.kind && a.ref === b.ref;
+let tLoopLastAdd = 0;
+function tLoopClick(w) {
+	const loop = S.sel && S.sel.kind === 'tloop' ? ME.tLoopOf(S.model, S.sel.id) : null;
+	if (loop) {
+		// 选中了一个环：只吸附环上的项；点中=选中这一项，点别处=取消选择。
+		const hit = tLoopHit(w, loop.items);
+		if (!hit) { S.sel = null; renderRight(); S.dirty2d = true; return; }
+		// 同一个点在环里出现多次时，连点依次轮换选中它的每一次经过。
+		const occ = [];
+		loop.items.forEach((it, i) => { if (sameItem(it, hit)) occ.push(i); });
+		const k = occ.indexOf(S.sel.index);
+		S.sel = { kind: 'tloop', id: loop.id, index: k >= 0 ? occ[(k + 1) % occ.length] : occ[0] };
+		renderRight(); S.dirty2d = true; return;
+	}
+	const hit = tLoopHit(w, null);
+	if (!hit) { say('点预设建筑或线路节点来连环'); return; }
+	const items = S.tloop;
+	// 点击一律追加：同一个点可以多次加入(车站往返各停一次)；完成用 Enter / 双击 / 左栏按钮。
+	if (items.length && sameItem(items[items.length - 1], hit)) { if (Date.now() - tLoopLastAdd > 500) say('和上一个点相同(双击或 Enter 完成环)'); return; }
+	tLoopLastAdd = Date.now();
+	const trial = ME.loopRouteId(S.model, items.concat([{ kind: hit.kind, ref: hit.ref }]), S.transit.routeId);
+	if (trial.error && !/没有线路id/.test(trial.error)) { say(trial.error); return; }
+	items.push({ kind: hit.kind, ref: hit.ref });
+	S.dirty2d = true;
+}
+function tLoopFinish() {
+	const items = S.tloop;
+	if (items.length < 2) { say('环至少要2个点'); return; }
+	if (items.length > 2 && sameItem(items[0], items[items.length - 1])) items.pop();   // 点回了起点：末项就是闭合，去掉
+	const res = modelOp((m) => ME.addTLoop(m, items, S.transit.routeId));
+	if (res.loop) { S.tloop = []; say(`已建线路环${res.loop.id}：每个点默认都不停站，Alt+点这个环选中后再设置停站`); }
+	S.dirty2d = true;
+}
+// Alt+左键(loop模式)：选中点到的环(点在环的线上/项上)；点别处=取消选择。
+function tLoopPick(w) {
+	const M = S.model, r = Math.max(9 / S.view.scale, 0.6), pres = getPresetPlacements();
+	let best = null, bd = r;
+	for (const l of M.transit.loops) {
+		let d = Infinity;
+		for (const seg of ME.loopSegments(M, l, pres)) for (let i = 0; i + 1 < seg.pts.length; i++) d = Math.min(d, distPtSeg(w[0], w[1], seg.pts[i], seg.pts[i + 1]));
+		for (const it of l.items) {
+			if (it.kind === 'preset') { const p = pres.get(it.ref); if (p && pointInPoly(w[0], w[1], p.poly)) d = 0; }
+			else { const n = ME.tNodeOf(M, it.ref); if (n) d = Math.min(d, Math.hypot(n.x - w[0], n.y - w[1])); }
+		}
+		if (d <= bd) { bd = d; best = l; }
+	}
+	S.tloop = [];
+	S.sel = best ? { kind: 'tloop', id: best.id, index: null } : null;
+	renderRight(); S.dirty2d = true;
+}
+
+// ---- 绘制 ----
+function tPolyPath(pts) { g.beginPath(); pts.forEach((p, i) => { const [sx, sy] = toScreen(p[0], p[1]); if (i === 0) g.moveTo(sx, sy); else g.lineTo(sx, sy); }); }
+function drawArrow(a, b, color) {
+	const [ax, ay] = toScreen(a[0], a[1]), [bx, by] = toScreen(b[0], b[1]);
+	const mx = (ax + bx) / 2, my = (ay + by) / 2, ang = Math.atan2(by - ay, bx - ax);
+	g.save(); g.translate(mx, my); g.rotate(ang); g.fillStyle = color; g.strokeStyle = '#000b'; g.lineWidth = 1;
+	g.beginPath(); g.moveTo(6, 0); g.lineTo(-5, -5); g.lineTo(-5, 5); g.closePath(); g.fill(); g.stroke(); g.restore();
+}
+// 折线向行进方向右侧平移d(世界单位)：同一个点出现多次的环，往返重叠的线分开画。
+function offsetPts(pts, d) {
+	const n = pts.length;
+	if (n < 2) return pts;
+	const nrm = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; };
+	return pts.map((p, i) => {
+		const a = i > 0 ? nrm(pts[i - 1], p) : null, b = i < n - 1 ? nrm(p, pts[i + 1]) : null;
+		let nx = (a ? a[0] : 0) + (b ? b[0] : 0), ny = (a ? a[1] : 0) + (b ? b[1] : 0);
+		const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+		return [p[0] + nx * d, p[1] + ny * d];
+	});
+}
+const loopHasRepeat = (items) => items.some((it, i) => items.findIndex((o) => sameItem(o, it)) !== i);
+// 一个点只画一个标记，序号列出它在环里的每一次经过(如 1·4)。
+function drawLoopMarkers(items, pres, col, selected, selIndex) {
+	const groups = new Map();
+	items.forEach((it, i) => { const k = it.kind + ':' + it.ref; if (!groups.has(k)) groups.set(k, { it, idx: [] }); groups.get(k).idx.push(i); });
+	for (const { it, idx } of groups.values()) {
+		let pos = null;
+		if (it.kind === 'node') { const n = ME.tNodeOf(S.model, it.ref); if (n) pos = [n.x, n.y]; }
+		else { const p = pres.get(it.ref); if (p) pos = [p.cx, p.cy]; }
+		if (pos) drawLoopMarker(it, pos, idx, items, col, selected && idx.includes(selIndex));
+	}
+}
+function drawTransitLoop(l, pres, selected, selIndex) {
+	const M = S.model, col = ME.routeColor(l.routeId);
+	const segs = ME.loopSegments(M, l, pres);
+	const shift = loopHasRepeat(l.items) ? 4 / S.view.scale : 0;
+	if (shift) for (const seg of segs) seg.pts = offsetPts(seg.pts, shift);
+	for (const seg of segs) {
+		if (seg.kind === 'path') {
+			tPolyPath(seg.pts); g.setLineDash([]); g.strokeStyle = selected ? '#ffffffcc' : col + '88'; g.lineWidth = selected ? 11 : 9; g.lineCap = 'round'; g.stroke(); g.lineCap = 'butt';
+		} else {
+			tPolyPath(seg.pts); g.setLineDash([7, 5]); g.strokeStyle = selected ? '#fff' : col; g.lineWidth = selected ? 3 : 2.5; g.stroke(); g.setLineDash([]);
+		}
+		if (seg.pts.length >= 2) { const k = Math.floor((seg.pts.length - 1) / 2); drawArrow(seg.pts[k], seg.pts[k + 1], selected ? '#fff' : col); }
+	}
+	drawLoopMarkers(l.items, pres, col, selected, selIndex);
+}
+function drawLoopMarker(it, pos, idxList, items, col, picked) {
+	const [sx, sy] = toScreen(pos[0], pos[1]);
+	const anyStop = it.kind === 'preset' && idxList.some((i) => items[i].stop);
+	g.lineWidth = picked ? 3.5 : 2; g.strokeStyle = picked ? '#fff' : '#111'; g.fillStyle = it.kind === 'preset' ? (anyStop ? col : '#15171a') : col + 'cc';
+	if (it.kind === 'preset') { g.beginPath(); g.rect(sx - 7, sy - 7, 14, 14); g.fill(); g.stroke(); g.lineWidth = 2; g.strokeStyle = col; g.strokeRect(sx - 7, sy - 7, 14, 14); }
+	else { g.beginPath(); g.arc(sx, sy, 6, 0, Math.PI * 2); g.fill(); g.stroke(); }
+	g.font = '11px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000c'; g.fillStyle = '#fff'; g.textAlign = 'center';
+	const t = idxList.map((i) => String(i + 1) + (it.kind === 'preset' && items[i].stop ? '停' : '')).join('·');
+	g.strokeText(t, sx, sy - 11); g.fillText(t, sx, sy - 11); g.textAlign = 'start';
+}
+function drawTransit() {
+	const M = S.model, T = S.transit, t = M.transit;
+	const active = S.tool === 'transit';
+	if (!t || (!t.nodes.length && !active)) return;
+	g.save();
+	g.globalAlpha = active ? 1 : 0.5;
+	for (const c of t.conns) {
+		const q = ME.tQuadOf(M, c), poly = ME.polyline(q).map((p) => [p.x, p.y]);
+		const col = ME.routeColor(c.routeId);
+		const selected = S.sel && S.sel.kind === 'tconn' && S.sel.id === c.id;
+		g.lineCap = 'butt';
+		if (selected) { tPolyPath(poly); g.setLineDash([]); g.strokeStyle = '#fff'; g.lineWidth = 8; g.stroke(); }
+		tPolyPath(poly);
+		if (c.type === 'bridge') { g.setLineDash([]); g.strokeStyle = '#222'; g.lineWidth = 7; g.stroke(); tPolyPath(poly); g.strokeStyle = col; g.lineWidth = 3.5; g.stroke(); }
+		else {
+			g.setLineDash(c.type === 'mouth' ? [7, 3] : c.type === 'tunnel' ? [3, 4] : []);
+			g.strokeStyle = col; g.lineWidth = c.type === 'hug' ? 2.5 : 4; g.stroke(); g.setLineDash([]);
+		}
+		if (!c.routeId) { tPolyPath(poly); g.setLineDash([2, 6]); g.strokeStyle = '#ff4d4d'; g.lineWidth = 1.5; g.stroke(); g.setLineDash([]); }   // 没填route id：红色点线提醒
+	}
+	// 选中连线的把手
+	if (S.sel && S.sel.kind === 'tconn') {
+		const c = ME.tConnOf(M, S.sel.id);
+		if (c) {
+			const q = ME.tQuadOf(M, c), h = q.c || [(q.p0[0] + q.p1[0]) / 2, (q.p0[1] + q.p1[1]) / 2];
+			const [sx, sy] = toScreen(h[0], h[1]);
+			g.fillStyle = '#4c9ffe'; g.strokeStyle = '#fff'; g.lineWidth = 1.5;
+			g.beginPath(); g.moveTo(sx, sy - 6); g.lineTo(sx + 6, sy); g.lineTo(sx, sy + 6); g.lineTo(sx - 6, sy); g.closePath(); g.fill(); g.stroke();
+		}
+	}
+	for (const n of t.nodes) {
+		const [sx, sy] = toScreen(n.x, n.y);
+		const ids = [...ME.tNodeRouteIds(M, n.id)];
+		const selected = S.sel && S.sel.kind === 'tnode' && S.sel.id === n.id;
+		g.fillStyle = ME.routeColor(ids[0] || ''); g.strokeStyle = selected ? '#4c9ffe' : '#111'; g.lineWidth = selected ? 3 : 1.5;
+		g.beginPath();
+		if (n.extern) g.rect(sx - 6, sy - 6, 12, 12); else g.arc(sx, sy, 5, 0, Math.PI * 2);
+		g.fill(); g.stroke();
+		if (Math.abs(n.z || 0) > 1e-6 && (active || S.view.scale > 4)) {
+			g.font = '11px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000a'; g.fillStyle = '#ffe9a8';
+			const label = 'z' + (n.z || 0).toFixed(1);
+			g.strokeText(label, sx + 7, sy - 6); g.fillText(label, sx + 7, sy - 6);
+		}
+	}
+	// 线路环(只在loop模式显示)
+	if (active && T.mode === 'loop') {
+		const pres = getPresetPlacements();
+		for (const l of t.loops) drawTransitLoop(l, pres, S.sel && S.sel.kind === 'tloop' && S.sel.id === l.id, S.sel && S.sel.index);
+		if (S.tloop.length) {
+			const rid = ME.loopRouteId(M, S.tloop, T.routeId);
+			const tmp = { routeId: rid.routeId || T.routeId || '', items: S.tloop.map((it) => it.kind === 'preset' ? { kind: 'preset', ref: it.ref, stop: false } : { kind: 'node', ref: it.ref }) };
+			const col = ME.routeColor(tmp.routeId);
+			// 已连的部分(不闭合)：相邻项之间的分段
+			const segs = ME.loopSegments(M, tmp, pres).filter((s) => s.to !== 0);
+			if (loopHasRepeat(tmp.items)) for (const seg of segs) seg.pts = offsetPts(seg.pts, 4 / S.view.scale);
+			for (const seg of segs) {
+				if (seg.kind === 'path') { tPolyPath(seg.pts); g.strokeStyle = col + '88'; g.lineWidth = 9; g.lineCap = 'round'; g.stroke(); g.lineCap = 'butt'; }
+				else { tPolyPath(seg.pts); g.setLineDash([7, 5]); g.strokeStyle = col; g.lineWidth = 2.5; g.stroke(); g.setLineDash([]); }
+			}
+			drawLoopMarkers(tmp.items, pres, col, false, -1);
+		}
+	}
+	g.restore();
+}
+// 鼠标预览：line模式=待画的线+落点+长度/高度；loop模式=悬停目标+到鼠标的虚线。
+function drawTransitOverlay(m) {
+	const T = S.transit, M = S.model;
+	if (T.mode === 'line') {
+		const sp = tSnapPoint(m), bad = !!tRefProblem(sp.ref);
+		const [sx, sy] = toScreen(sp.point[0], sp.point[1]);
+		const p = S.pending;
+		if (p) {
+			const end = sp.point, col = ME.routeColor(T.routeId || refRid(p.a.ref));
+			g.setLineDash([6, 4]); g.strokeStyle = bad ? '#ff4d4d' : col; g.lineWidth = 2.5; g.beginPath();
+			const [ax, ay] = toScreen(p.a.x, p.a.y); g.moveTo(ax, ay);
+			if (T.shape === 'curve' && p.ctrl) { const [cx, cy] = toScreen(p.ctrl[0], p.ctrl[1]); g.quadraticCurveTo(cx, cy, sx, sy); } else g.lineTo(sx, sy);
+			g.stroke(); g.setLineDash([]);
+			const label = (txt, wx, wy) => { const [lx, ly] = toScreen(wx, wy); g.font = '12px sans-serif'; g.lineWidth = 3; g.strokeStyle = '#000b'; g.fillStyle = '#ffe9a8'; g.strokeText(txt, lx + 10, ly - 10); g.fillText(txt, lx + 10, ly - 10); };
+			label('z' + (p.a.z || 0).toFixed(2), p.a.x, p.a.y);
+			label('z' + tPreviewZ(sp).toFixed(2), end[0], end[1]);
+			let len = 0;
+			if (T.shape === 'curve' && p.ctrl) { let prev = [p.a.x, p.a.y]; for (let k = 1; k <= 32; k++) { const t = k / 32, u = 1 - t; const q = [u * u * p.a.x + 2 * u * t * p.ctrl[0] + t * t * end[0], u * u * p.a.y + 2 * u * t * p.ctrl[1] + t * t * end[1]]; len += Math.hypot(q[0] - prev[0], q[1] - prev[1]); prev = q; } }
+			else len = Math.hypot(end[0] - p.a.x, end[1] - p.a.y);
+			const [mx, my] = toScreen(m[0], m[1]);
+			g.font = '13px sans-serif'; g.lineWidth = 3.5; g.strokeStyle = '#000c'; g.fillStyle = '#9ff0b4'; g.textAlign = 'right';
+			const txt = (len * 10).toFixed(1) + ' m'; g.strokeText(txt, mx - 16, my + 4); g.fillText(txt, mx - 16, my + 4); g.textAlign = 'start';
+			const guide = T.shape === 'line' ? sp.angleSnap : (!p.ctrl ? tAngleSnap(m) : null);
+			if (guide) {
+				const reach = Math.hypot(guide.point[0] - guide.origin[0], guide.point[1] - guide.origin[1]) + 2;
+				const [gx0, gy0] = toScreen(guide.origin[0] - guide.dir[0] * 2, guide.origin[1] - guide.dir[1] * 2);
+				const [gx1, gy1] = toScreen(guide.origin[0] + guide.dir[0] * reach, guide.origin[1] + guide.dir[1] * reach);
+				g.save(); g.setLineDash([2, 4]); g.strokeStyle = '#ffd24c'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(gx0, gy0); g.lineTo(gx1, gy1); g.stroke(); g.restore();
+			}
+		}
+		g.strokeStyle = bad ? '#ff4d4d' : (sp.kind === 'free' ? '#aaa' : '#4cff9e'); g.lineWidth = 2;
+		g.beginPath(); g.arc(sx, sy, 7, 0, Math.PI * 2); g.stroke();
+		return;
+	}
+	// loop模式
+	const loop = S.sel && S.sel.kind === 'tloop' ? ME.tLoopOf(M, S.sel.id) : null;
+	const hit = tLoopHit(m, loop ? loop.items : null);
+	const pres = getPresetPlacements();
+	if (!loop && S.tloop.length) {
+		const last = S.tloop[S.tloop.length - 1];
+		const lp = last.kind === 'node' ? ME.tNodeOf(M, last.ref) : pres.get(last.ref);
+		if (lp) {
+			const [ax, ay] = toScreen(last.kind === 'node' ? lp.x : lp.cx, last.kind === 'node' ? lp.y : lp.cy);
+			const [bx, by] = hit ? toScreen(hit.pos[0], hit.pos[1]) : toScreen(m[0], m[1]);
+			g.setLineDash([3, 5]); g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); g.setLineDash([]);
+		}
+	}
+	if (hit) {
+		const col = '#4c9ffe';
+		if (hit.poly) { tracePoly(hit.poly); g.fillStyle = col + '33'; g.fill(); g.strokeStyle = col; g.lineWidth = 2.5; g.stroke(); }
+		const [sx, sy] = toScreen(hit.pos[0], hit.pos[1]);
+		g.strokeStyle = col; g.lineWidth = 2.5; g.beginPath(); g.arc(sx, sy, 9, 0, Math.PI * 2); g.stroke();
+	}
+}
+function refRid(ref) {
+	if (ref.node !== undefined) { const ids = [...ME.tNodeRouteIds(S.model, ref.node)]; return ids[0] || ''; }
+	if (ref.conn !== undefined) { const c = ME.tConnOf(S.model, ref.conn); return c ? c.routeId : ''; }
+	return '';
+}
+
+// ---- 3D：连线画成带状(高度取剖面)，节点画成竖线(到地面)。隧道半透明。 ----
+function buildTransit3D() {
+	const M = S.model, T = S.terrain, ctx = ctxHeight();
+	const buckets = new Map();   // 颜色(+隧道标记) → {p, i}
+	for (const c of M.transit.conns) {
+		const q = ME.tQuadOf(M, c), poly = ME.polyline(q), zOf = ME.tZProfile(M, c, ctx);
+		const key = ME.routeColor(c.routeId) + (c.type === 'tunnel' ? 't' : '');
+		if (!buckets.has(key)) buckets.set(key, { p: [], i: [] });
+		const b = buckets.get(key), base = b.p.length / 3, hw = 0.3;
+		for (let k = 0; k < poly.length; k++) {
+			const pt = poly[k], prev = poly[Math.max(0, k - 1)], next = poly[Math.min(poly.length - 1, k + 1)];
+			let dx = next.x - prev.x, dy = next.y - prev.y; const len = Math.hypot(dx, dy) || 1; dx /= len; dy /= len;
+			const nx = -dy * hw, ny = dx * hw, z = zOf(pt.t) + 0.05;
+			b.p.push(pt.x + nx, z, pt.y + ny, pt.x - nx, z, pt.y - ny);
+			if (k + 1 < poly.length) { const o = base + k * 2; b.i.push(o, o + 1, o + 2, o + 1, o + 3, o + 2); }
+		}
+	}
+	for (const [key, b] of buckets) {
+		const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(b.p, 3)); geo.setIndex(b.i);
+		const tunnel = key.endsWith('t');
+		r3.root.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: new THREE.Color(tunnel ? key.slice(0, -1) : key), side: THREE.DoubleSide, transparent: tunnel, opacity: tunnel ? 0.5 : 1 })));
+	}
+	const stakes = [];
+	for (const n of M.transit.nodes) stakes.push(n.x, T.sampleHeight(n.x, n.y), n.y, n.x, (n.z || 0) + 0.05, n.y);
+	if (stakes.length) { const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(stakes, 3)); r3.root.add(new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ color: 0xffe9a8 }))); }
+}
+
 // ======================= 鼠标交互 =======================
 let drag = null;
+const DRAG_THRESHOLD_PX = 5;   // Alt+拖拽节点/把手：鼠标离开按下点超过这么多屏幕像素才真正开始拖
 c2d.addEventListener('contextmenu', (e) => e.preventDefault());
+c2d.addEventListener('dblclick', () => { if (S.tool === 'transit' && S.transit.mode === 'loop' && S.tloop.length >= 2 && !(S.sel && S.sel.kind === 'tloop')) tLoopFinish(); });
+// 右栏输入框的change在失焦时才触发；点画布时canvas的mousedown先于失焦，如果处理里重建了右栏，输入框被销毁，没提交的修改就丢了。
+// 所以画布按下的第一件事：把正在编辑的输入框失焦(同步触发change，把修改提交进模型)。
+function commitFocusedInput() {
+	const a = document.activeElement;
+	if (a && a !== document.body && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA')) a.blur();
+}
 c2d.addEventListener('mousedown', (e) => {
+	commitFocusedInput();
 	const rect = c2d.getBoundingClientRect();
 	const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
 	const w = toWorld(sx, sy);
 	S.mouse = w;
 	// Alt+左键：路网/地块工具里是"选择"(空地取消选择)；右键/中键/空格+左键是平移，右键点一下(不拖)结束正在画的路/地块。
-	if (e.button === 0 && e.altKey && (S.tool === 'road' || S.tool === 'lot' || S.tool === 'green')) { selectClick(w, e, S.tool); return; }
+	if (e.button === 0 && e.altKey && (S.tool === 'road' || S.tool === 'lot' || S.tool === 'green' || S.tool === 'transit')) {
+		selectClick(w, e, S.tool);
+		// 点中节点/把手后开始拖拽，但要鼠标移动超过阈值才真正移动，避免点击时的微小抖动变成误拖拽。
+		if (drag && drag.before) { drag.cx = e.clientX; drag.cy = e.clientY; drag.started = false; }
+		return;
+	}
 	if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceDown)) {
 		drag = { type: 'pan', rc: e.button === 2, moved: false, sx, sy, ox: S.view.ox, oy: S.view.oy }; return;
 	}
@@ -938,6 +1352,7 @@ c2d.addEventListener('mousedown', (e) => {
 	}
 	if (S.tool === 'lot') { if (S.presetDraw) presetClick(w); else lotClick(w); return; }
 	if (S.tool === 'green') { greenClick(w); return; }
+	if (S.tool === 'transit') { if (S.transit.mode === 'line') tLineClick(w); else tLoopClick(w); return; }
 });
 window.addEventListener('mousemove', (e) => {
 	const rect = c2d.getBoundingClientRect();
@@ -945,11 +1360,17 @@ window.addEventListener('mousemove', (e) => {
 	const w = toWorld(sx, sy);
 	S.mouse = (sx >= 0 && sy >= 0 && sx <= rect.width && sy <= rect.height) || drag ? w : null;
 	updateStatus();
+	if (drag && drag.before && !drag.started) {
+		if (Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < DRAG_THRESHOLD_PX) { S.dirty2d = true; return; }
+		drag.started = true;
+	}
 	if (drag) {
 		if (drag.type === 'pan') { if (Math.hypot(sx - drag.sx, sy - drag.sy) > 4) drag.moved = true; S.view.ox = drag.ox + (sx - drag.sx); S.view.oy = drag.oy + (sy - drag.sy); }
 		else if (drag.type === 'brush') applyBrush(w, drag.only);
 		else if (drag.type === 'box') { drag.x1 = w[0]; drag.y1 = w[1]; drag.moved = Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 4; }
 		else if (drag.type === 'node') { const n = ME.nodeOf(S.model, drag.id); const lc = S.road.snapLot ? lotCornerSnap(w, drag.id) : null; ME.moveNode(S.model, drag.id, lc ? lc[0] : snapToGrid(w[0], e), lc ? lc[1] : snapToGrid(w[1], e)); drag.moved = true; S.dirty3d = true; void n; }
+		else if (drag.type === 'tnode') { ME.moveTNode(S.model, drag.id, snapToGrid(w[0], e), snapToGrid(w[1], e)); drag.moved = true; S.dirty3d = true; }
+		else if (drag.type === 'tctrl') { const c = ME.tConnOf(S.model, drag.id); if (c) { c.ctrl = [w[0], w[1]]; drag.moved = true; S.dirty3d = true; } }
 		else if (drag.type === 'ctrl') { const r = ME.roadOf(S.model, drag.id); if (r) { r.ctrl = [w[0], w[1]]; drag.moved = true; S.dirty3d = true; } }
 	}
 	S.dirty2d = true;
@@ -957,6 +1378,7 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', () => {
 	if (!drag) return;
 	if (drag.type === 'pan' && drag.rc && !drag.moved && S.presetDraw) cancelPreset();
+	else if (drag.type === 'pan' && drag.rc && !drag.moved && S.tool === 'transit' && S.tloop.length) S.tloop = [];
 	else if (drag.type === 'pan' && drag.rc && !drag.moved && S.pending) S.pending = null; // 右键点一下(没拖动)：结束正在画的路/地块
 	if (drag.type === 'box') {
 		if (drag.moved) {
@@ -967,7 +1389,7 @@ window.addEventListener('mouseup', () => {
 		}
 	}
 	else if (drag.type === 'brush') { const a = S.terrain.endStroke(); if (a) pushAction(Object.assign({ kind: 't' }, a)); }
-	else if (drag.type === 'node' || drag.type === 'ctrl') {
+	else if (drag.type === 'node' || drag.type === 'ctrl' || drag.type === 'tnode' || drag.type === 'tctrl') {
 		if (drag.moved) pushAction({ kind: 'm', before: drag.before, after: ME.cloneModel(S.model) });
 		else S.model = ME.cloneModel(drag.before);
 	}
@@ -977,6 +1399,11 @@ const snapToGrid = (v, e) => (e && e.altKey ? Math.round(v) : v);
 c2d.addEventListener('wheel', (e) => {
 	e.preventDefault();
 	// Alt+滚轮：路网工具里调整下一个新建节点的高度(步长0.5，不再跟地形)。
+	if (e.altKey && S.tool === 'transit' && S.transit.mode === 'line') {
+		S.transit.zTerrain = false;
+		S.transit.z = Math.round((S.transit.z + (e.deltaY < 0 ? 0.5 : -0.5)) * 100) / 100;
+		say('节点高度 ' + S.transit.z.toFixed(1)); renderLeft(); S.dirty2d = true; return;
+	}
 	if (e.altKey && S.tool === 'road') {
 		S.road.zTerrain = false;
 		S.road.z = Math.round((S.road.z + (e.deltaY < 0 ? 0.5 : -0.5)) * 100) / 100;
@@ -993,12 +1420,15 @@ let spaceDown = false;
 window.addEventListener('keydown', (e) => {
 	if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.key !== 'Escape') return;
 	if (e.key === ' ') { spaceDown = true; e.preventDefault(); }
-	else if (e.key === 'Escape') { S.pending = null; S.presetDraw = null; S.dirty2d = true; renderRight(); }
+	else if (e.key === 'Escape') { S.pending = null; S.presetDraw = null; S.tloop = []; if (S.tool === 'transit' && S.sel && S.sel.kind === 'tloop') S.sel = null; S.dirty2d = true; renderRight(); }
+	else if (e.key === 'Enter' && S.tool === 'transit' && S.transit.mode === 'loop' && S.tloop.length) { tLoopFinish(); }
+	else if (e.key === 'Backspace' && S.tool === 'transit' && S.transit.mode === 'loop' && S.tloop.length) { e.preventDefault(); S.tloop.pop(); S.dirty2d = true; }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); doSaveAll(); }
 	else if (e.key === 'Backspace' && S.tool === 'green' && S.pending && S.pending.green && S.pending.green.pts.length) { e.preventDefault(); S.pending.green.pts.pop(); if (!S.pending.green.pts.length) S.pending = null; S.dirty2d = true; }
 	else if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
+	else if ((e.key === 't' || e.key === 'T') && S.tool === 'transit' && S.transit.mode === 'line' && !e.ctrlKey && !e.metaKey && !e.altKey) { S.transit.shape = S.transit.shape === 'line' ? 'curve' : 'line'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }
 	else if ((e.key === 't' || e.key === 'T') && S.tool === 'road' && !e.ctrlKey && !e.metaKey && !e.altKey) { S.road.shape = S.road.shape === 'line' ? 'curve' : 'line'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }
 	else if (e.key === '[') { S.brush.radius = Math.max(1, S.brush.radius - 1); renderLeft(); S.dirty2d = true; }
 	else if (e.key === ']') { S.brush.radius += 1; renderLeft(); S.dirty2d = true; }
@@ -1239,6 +1669,7 @@ function pointInPoly(x, y, poly) {
 }
 // Alt+左键选择。mode='road'：节点/道路(含选中路的把手)，空地取消选择并可拖框选节点；mode='lot'：只选地块，空地取消选择。
 function selectClick(w, e, mode) {
+	if (mode === 'transit') { tSelectClick(w, e); return; }
 	const M = S.model, r = 9 / S.view.scale;
 	if (mode === 'green') {
 		// 绿化工具：Alt+点 = 选中点到的绿化(点在多边形内，或离边很近)，空地取消选择。
@@ -1288,6 +1719,9 @@ function selExists() {
 	if (S.sel.kind === 'node') return !!ME.nodeOf(M, S.sel.id);
 	if (S.sel.kind === 'road') return !!ME.roadOf(M, S.sel.id);
 	if (S.sel.kind === 'green') return !!ME.greenOf(M, S.sel.id);
+	if (S.sel.kind === 'tnode') return !!ME.tNodeOf(M, S.sel.id);
+	if (S.sel.kind === 'tconn') return !!ME.tConnOf(M, S.sel.id);
+	if (S.sel.kind === 'tloop') return !!ME.tLoopOf(M, S.sel.id);
 	if (S.sel.kind === 'preset') return !!findPreset(S.sel.id);
 	return M.lots.some((l) => l.id === S.sel.id);
 }
@@ -1299,6 +1733,9 @@ function deleteSelection() {
 		else if (sel.kind === 'road') ME.deleteRoad(m, sel.id);
 		else if (sel.kind === 'node') ME.deleteNode(m, sel.id);
 		else if (sel.kind === 'green') ME.deleteGreen(m, sel.id);
+		else if (sel.kind === 'tnode') ME.deleteTNode(m, sel.id);
+		else if (sel.kind === 'tconn') ME.deleteTConn(m, sel.id);
+		else if (sel.kind === 'tloop') ME.deleteTLoop(m, sel.id);
 		else if (sel.kind === 'preset') { for (const l of m.lots) l.presets = (l.presets || []).filter((p) => p.id !== sel.id); }
 		else { m.lots = m.lots.filter((l) => l.id !== sel.id); ME.cleanup(m); }
 	});
@@ -1375,17 +1812,17 @@ function lockRow() {
 		null);
 }
 // 节点高度输入行：数字+"地形"开关(打开=用点击处的地形高度)。
-function heightRow(label, key, terrainKey) {
-	const R = S.road;
+function heightRow(label, key, terrainKey, obj) {
+	const R = obj || S.road;
 	const input = num(R[key], (v) => { R[key] = isNaN(v) ? 0 : v; }, { step: 0.5 });
 	if (R[terrainKey]) input.disabled = true;
 	return row(label, input, btn('地形', () => { R[terrainKey] = !R[terrainKey]; renderLeft(); }, R[terrainKey]));
 }
-const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块'], ['green', '绿化']];
+const TOOLS = [['terrain', '地形'], ['road', '路网'], ['lot', '地块'], ['green', '绿化'], ['transit', '线路']];
 function renderLeft() {
 	const left = $('left'); left.innerHTML = '';
 	const tabs = el('div', { class: 'tabs' });
-	for (const [id, label] of TOOLS) tabs.append(btn(label, () => { S.tool = id; S.pending = null; S.presetDraw = null; renderLeft(); renderRight(); S.dirty2d = true; }, S.tool === id));
+	for (const [id, label] of TOOLS) tabs.append(btn(label, () => { S.tool = id; S.pending = null; S.presetDraw = null; S.tloop = []; renderLeft(); renderRight(); S.dirty2d = true; }, S.tool === id));
 	left.append(tabs);
 	if (S.tool === 'terrain') {
 		const B = S.brush;
@@ -1461,6 +1898,36 @@ function renderLeft() {
 			left.append(el('div', { class: 'hint' }, '没有连任何路的绿化区只做景观(不能用地址导航)；连了路的才有行人入口。'));
 		}
 		left.append(el('div', { class: 'hint' }, 'Alt+点 = 选中绿化区，Delete 删除。'));
+	} else if (S.tool === 'transit') {
+		const T = S.transit;
+		left.append(el('h4', null, '模式'));
+		left.append(el('div', { class: 'tabs' }, btn('画实体线路', () => tSetMode('line'), T.mode === 'line'), btn('连接路线环', () => tSetMode('loop'), T.mode === 'loop')));
+		const idInput = el('input', { type: 'text', value: T.routeId, list: 'routeIdList', placeholder: '空=自动(继承起点)', onchange: (e) => { T.routeId = e.target.value.trim(); renderLeft(); S.dirty2d = true; } });
+		left.append(row('route id', idInput, el('datalist', { id: 'routeIdList' }, ...tRouteIds().map((v) => el('option', { value: v })))));
+		if (T.routeId) left.append(el('div', { class: 'hint', style: 'color:' + ME.routeColor(T.routeId) }, '■ ' + T.routeId));
+		if (T.mode === 'line') {
+			left.append(el('div', { class: 'hint' }, 'route id = 线路所属 route mod 的 id(如 route_train / route_air)；每个 id 一个颜色。'));
+			left.append(el('h4', null, '画法'));
+			left.append(el('div', { class: 'tabs' }, btn('直线', () => { T.shape = 'line'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }, T.shape === 'line'), btn('曲线', () => { T.shape = 'curve'; if (S.pending) S.pending.ctrl = null; renderLeft(); S.dirty2d = true; }, T.shape === 'curve')));
+			left.append(row('类型', sel(ME.TRANSIT_TYPES.map((k) => [k, ME.TRANSIT_TYPE_NAMES[k]]), T.type, (v) => { T.type = v; renderLeft(); })));
+			left.append(el('div', { class: 'hint' }, { ground: '平地：轨面取节点高度(扁S)，只拆迁，不改地形', hug: '贴合地形：高度跟着地形走，并请求地形贴合', mouth: '隧道口：开洞+拆迁', tunnel: '隧道：高度取节点，不改地形/不拆迁', bridge: '桥：高度取节点，沿线放桥墩+拆迁' }[T.type]));
+			left.append(el('h4', null, '节点高度(单位10m)'));
+			left.append(heightRow('高度', 'z', 'zTerrain', T));
+			const snapSwitch = (key, label, tip) => row(label, el('input', { type: 'checkbox', checked: T[key] ? 'checked' : null, onchange: (e) => { T[key] = e.target.checked; S.dirty2d = true; } }), el('span', { class: 'hint' }, tip));
+			left.append(el('div', { class: 'hint', style: 'margin-top:6px;font-weight:600' }, '吸附'));
+			left.append(snapSwitch('snapNode', '吸附节点', '点到已有节点上'));
+			left.append(snapSwitch('snapEdge', '吸附边界', '地图边界(建城外连接点)'));
+			left.append(snapSwitch('snapConn', '吸附线路', '线路中间(自动切开)'));
+			left.append(snapSwitch('snapAngle', '吸附角度', '直角/平角'));
+			left.append(el('div', { class: 'hint', style: 'margin-top:6px' }, '点击=起点→(曲线再点控制点)→终点，终点自动成为下一条的起点；右键/Esc 结束。T 切直线/曲线，Alt+滚轮调高度。'));
+			left.append(el('div', { class: 'hint' }, 'route id 已填：只能从同 id 的线路端点/中间接线；没填：空地可起头，从有 id 的线路接出会继承它的 id。'));
+			left.append(el('div', { class: 'hint' }, 'Alt+点 = 选节点/连线(可拖动)，Delete 删除。实体线路不连车站，站到线路的缺口由游戏里的 route mod(--skip)补扁S曲线。'));
+		} else {
+			left.append(el('div', { class: 'hint' }, '依次点 预设建筑 / 线路节点 连成环：点击一律追加，同一个点可以加多次(比如车站往返各停一次)；Enter / 双击 / 下面的按钮完成(首尾自动相连)；Backspace 撤销上一点；右键/Esc 取消。'));
+			left.append(el('div', { class: 'tabs' }, btn('完成环', () => tLoopFinish()), btn('撤销上一点', () => { S.tloop.pop(); S.dirty2d = true; })));
+			left.append(el('div', { class: 'hint' }, '相邻两点若能经同 id 的实体线路连通就沿线路画实线，否则画虚线(游戏里由 route mod 补扁S曲线)。'));
+			left.append(el('div', { class: 'hint' }, '环里的点只表示"经过"，新环全部不停站。Alt+点环 = 选中它(此时只吸附环上的点)，点环上的预设 = 选中它(同一个点出现多次时连点轮换每一次经过)，右栏勾"停站"(每次经过各自设置)；点其它地方取消选择。线路节点不能停站。'));
+		}
 	}
 }
 function areaLabel(a) {
@@ -1502,6 +1969,45 @@ function renderRight() {
 		right.append(row('车道', sel([[-1, '自定义']].concat(ME.LANE_PRESETS.map((p, i) => [i, p.name])), cur, (v) => { if (v >= 0) modelOp((m) => { ME.roadOf(m, r.id).lanes = ME.LANE_PRESETS[v].lanes.slice(); }); })));
 		right.append(row('弧度', btn('拉直', () => modelOp((m) => { ME.roadOf(m, r.id).ctrl = null; }))));
 		right.append(btn('删除道路', deleteSelection));
+	} else if (S.sel.kind === 'tnode') {
+		const n = ME.tNodeOf(M, S.sel.id);
+		const ids = [...ME.tNodeRouteIds(M, n.id)];
+		right.append(el('div', null, `线路节点 ${n.id}${n.extern ? '(城外连接点)' : ''}  连线 ${ME.tNodeDegree(M, n.id)}  ${ids.length ? ids.join(',') : '(无 route id)'}`));
+		right.append(row('x', num(n.x.toFixed(2), (v) => modelOp((m) => { const nn = ME.tNodeOf(m, n.id); ME.moveTNode(m, n.id, v, nn.y); }), { step: 0.5 })));
+		right.append(row('y', num(n.y.toFixed(2), (v) => modelOp((m) => { const nn = ME.tNodeOf(m, n.id); ME.moveTNode(m, n.id, nn.x, v); }), { step: 0.5 })));
+		right.append(row('高度', num((n.z || 0).toFixed(2), (v) => modelOp((m) => { ME.tNodeOf(m, n.id).z = isNaN(v) ? 0 : v; }), { step: 0.5 }),
+			el('button', { title: '设成该位置的地形高度', onclick: () => modelOp((m) => { const nn = ME.tNodeOf(m, n.id); nn.z = S.terrain.sampleHeight(nn.x, nn.y); }) }, '=地形')));
+		right.append(btn('删除节点及其线路', deleteSelection));
+	} else if (S.sel.kind === 'tconn') {
+		const c = ME.tConnOf(M, S.sel.id);
+		const L = ME.tConnLength(M, c);
+		right.append(el('div', null, `线路连线 ${c.id}  长度 ${L.toFixed(1)}(${(L * 10).toFixed(0)}m)`));
+		right.append(row('route id', el('input', { type: 'text', value: c.routeId, list: 'routeIdList', placeholder: '必填', onchange: (e) => modelOp((m) => ME.setTRouteId(m, c.id, e.target.value.trim())) }), el('datalist', { id: 'routeIdList' }, ...tRouteIds().map((v) => el('option', { value: v })))));
+		right.append(el('div', { class: 'hint' }, '改 id 会同时改同一串(相连且原 id 相同)的所有连线。'));
+		right.append(row('类型', sel(ME.TRANSIT_TYPES.map((k) => [k, ME.TRANSIT_TYPE_NAMES[k]]), c.type, (v) => modelOp((m) => { ME.tConnOf(m, c.id).type = v; }))));
+		for (const [label, id] of [['头高度', c.a], ['尾高度', c.b]]) {
+			const n = ME.tNodeOf(M, id);
+			right.append(row(label, num((n.z || 0).toFixed(2), (v) => modelOp((m) => { ME.tNodeOf(m, id).z = isNaN(v) ? 0 : v; }), { step: 0.5 }),
+				el('button', { title: '设成该位置的地形高度', onclick: () => modelOp((m) => { const nn = ME.tNodeOf(m, id); nn.z = S.terrain.sampleHeight(nn.x, nn.y); }) }, '=地形')));
+		}
+		right.append(row('弧度', btn('拉直', () => modelOp((m) => { ME.tConnOf(m, c.id).ctrl = null; }))));
+		right.append(btn('删除连线', deleteSelection));
+	} else if (S.sel.kind === 'tloop') {
+		const l = ME.tLoopOf(M, S.sel.id), pres = getPresetPlacements();
+		right.append(el('div', { style: 'color:' + ME.routeColor(l.routeId) }, `线路环 ${l.id}  ${l.routeId}  ${l.items.length} 个点`));
+		l.items.forEach((it, i) => {
+			const label = it.kind === 'preset' ? `预设${it.ref} ${(pres.get(it.ref) || {}).modId || '(未填id)'}${pres.has(it.ref) ? '' : ' ⚠无效'}${it.stop ? '  [停站]' : ''}` : `节点${it.ref}(经过)`;
+			right.append(btn(`${i + 1}. ${label}`, () => { S.sel = { kind: 'tloop', id: l.id, index: i }; renderRight(); S.dirty2d = true; }, S.sel.index === i));
+		});
+		const idx = S.sel.index;
+		if (idx !== null && idx !== undefined && l.items[idx]) {
+			const it = l.items[idx];
+			const times = l.items.map((o, i) => (sameItem(o, it) ? i : -1)).filter((i) => i >= 0);
+			right.append(el('h4', null, `第 ${idx + 1} 个点` + (times.length > 1 ? `（该点在环里第 ${times.indexOf(idx) + 1}/${times.length} 次经过：${times.map((i) => i + 1).join('、')}）` : '')));
+			if (it.kind === 'preset') right.append(row('停站', el('input', { type: 'checkbox', checked: it.stop ? 'checked' : null, onchange: (e) => modelOp((m) => { ME.setLoopStop(m, l.id, idx, e.target.checked); }) }), el('span', { class: 'hint' }, '勾上=列车/飞机在这个站停靠')));
+			else right.append(el('div', { class: 'hint' }, '线路节点只表示"经过"，不能停站。'));
+		}
+		right.append(btn('删除线路环', deleteSelection));
 	} else if (S.sel.kind === 'green') {
 		const gr = ME.greenOf(M, S.sel.id);
 		const area = Math.abs(ME.greenSignedArea(gr.pts));
@@ -1549,6 +2055,11 @@ function renderRight() {
 		for (const p of lot.presets || []) right.append(btn(`预设${p.id}  ${p.modId || '(未填id)'}`, () => { S.sel = { kind: 'preset', id: p.id, lotId: lot.id }; renderRight(); S.dirty2d = true; }));
 		right.append(btn('删除地块', deleteSelection));
 	}
+	if (S.tool === 'transit') {
+		const loops = M.transit.loops;
+		right.append(el('h4', null, `线路环(${loops.length})`));
+		for (const l of loops) right.append(btn(`环${l.id}  ${l.routeId}  ${l.items.length}点  停${l.items.filter((it) => it.stop).length}站`, () => { S.transit.mode = 'loop'; S.tloop = []; S.pending = null; S.sel = { kind: 'tloop', id: l.id, index: null }; renderLeft(); renderRight(); S.dirty2d = true; }, S.sel && S.sel.kind === 'tloop' && S.sel.id === l.id));
+	}
 	right.append(el('h4', null, `检查(${S.warnings.length})`));
 	if (!S.warnings.length) right.append(el('div', { class: 'hint' }, '没有问题'));
 	for (const w of S.warnings.slice(0, 60)) right.append(el('div', { class: 'warn' }, w));
@@ -1585,7 +2096,7 @@ function init3D() {
 	scene.add(r3.root);
 	let d3 = null;
 	canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-	canvas.addEventListener('mousedown', (e) => { d3 = { x: e.clientX, y: e.clientY, button: e.button }; });
+	canvas.addEventListener('mousedown', (e) => { commitFocusedInput(); d3 = { x: e.clientX, y: e.clientY, button: e.button }; });
 	window.addEventListener('mouseup', () => { d3 = null; });
 	window.addEventListener('mousemove', (e) => {
 		if (!d3) return;
@@ -1740,6 +2251,7 @@ function build3D() {
 		const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
 		r3.root.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x7ee08f })));
 	}
+	buildTransit3D();
 	S.dirty3d = false;
 }
 function render3D() {
@@ -1763,6 +2275,26 @@ function frame() {
 	requestAnimationFrame(frame);
 }
 window.addEventListener('resize', () => { resize2d(); resize3d(); });
+
+// 左侧栏宽度：拖右边线调节(180~600)，双击恢复250，宽度存localStorage。用自己的resizing标志，不走地图的drag状态。
+const LEFT_W = { min: 180, max: 600, def: 250 };
+function setLeftWidth(w, save) {
+	w = clamp(Math.round(w), LEFT_W.min, Math.min(LEFT_W.max, Math.max(LEFT_W.min, window.innerWidth - 400)));
+	$('left').style.width = w + 'px';
+	resize2d(); resize3d(); S.dirty2d = true;
+	if (save) { try { localStorage.setItem('me_leftW', String(w)); } catch (e) {} }
+}
+{
+	let savedW = LEFT_W.def;
+	try { const v = parseInt(localStorage.getItem('me_leftW'), 10); if (v >= LEFT_W.min) savedW = v; } catch (e) {}
+	$('left').style.width = clamp(savedW, LEFT_W.min, LEFT_W.max) + 'px';
+	const bar = $('leftResizer');
+	let resizing = false;
+	bar.addEventListener('mousedown', (e) => { if (e.button !== 0) return; resizing = true; bar.classList.add('on'); e.preventDefault(); });
+	window.addEventListener('mousemove', (e) => { if (resizing) setLeftWidth(e.clientX - $('left').getBoundingClientRect().left, false); });
+	window.addEventListener('mouseup', () => { if (!resizing) return; resizing = false; bar.classList.remove('on'); setLeftWidth($('left').getBoundingClientRect().width, true); });
+	bar.addEventListener('dblclick', () => setLeftWidth(LEFT_W.def, true));
+}
 window.addEventListener('beforeunload', (e) => { if (hist.undo.length) { e.preventDefault(); e.returnValue = ''; } });
 
 resize2d(); rebuildTerrainImage(); fitView(); updateTop(); renderLeft(); renderRight(); updateStatus();

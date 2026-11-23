@@ -343,8 +343,10 @@ void Roadnet::DistributeRoadnet(int width, int height,
 		copy.modId = p.modId;
 		copy.direction = p.direction;
 		copy.x0 = p.x0; copy.x1 = p.x1; copy.y0 = p.y0; copy.y1 = p.y1;
+		copy.outputIndex = p.outputIndex;
 		presets.push_back(std::move(copy));
 	}
+	transit = mod->transit; // 值类型，在Core堆上深拷贝
 
 	// Quad+float是纯值类型，不含所有权指针，直接整体拷贝，不需要像上面几个逐个new。
 	hatches = mod->hatches;
@@ -358,6 +360,10 @@ const vector<Roadnet::GreenSite>& Roadnet::GetGreenSites() const {
 
 const vector<Roadnet::Preset>& Roadnet::GetPresets() const {
 	return presets;
+}
+
+const TransitData& Roadnet::GetTransit() const {
+	return transit;
 }
 
 const vector<Pier>& Roadnet::GetPiers() const {

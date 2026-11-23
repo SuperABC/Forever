@@ -112,6 +112,7 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 		RouteStationInfo info;
 		info.name = station->GetName();
 		if (station->GetAttachedRoad()) info.roadName = station->GetAttachedRoad()->GetName();
+		if (station->GetBuilding()) info.presetIndex = map->GetPresetIndexOfBuilding(station->GetBuilding());
 		info.stationIndex = static_cast<int>(stopStations.size());
 		stopStations.push_back(station);
 
@@ -133,6 +134,7 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 	}
 
 	auto [mapSizeX, mapSizeY] = map->GetSize();
+	mod->SetManualTransit(&map->GetTransit()); // 编辑器手工线路(--skip的mod用)，指向Map/Roadnet拥有的数据，Build结束后撤掉
 	mod->LayoutRoute(infos, mapSizeX, mapSizeY);
 
 	// instantiate线路：让mod按地形把每条link的几何改成最终形状(过山抬升/挖隧道)，请求转发给
@@ -151,6 +153,7 @@ void Route::Build(Map* map, const vector<Station*>& stations) {
 		});
 		debugf("Route::Build: 线路%s拆除了%d座建筑。\n", name.c_str(), demolished);
 	}
+	mod->SetManualTransit(nullptr);
 
 	Assemble(map);
 }

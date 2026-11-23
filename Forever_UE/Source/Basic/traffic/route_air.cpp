@@ -1,6 +1,7 @@
 #include "route_air.h"
 
 #include "route_common.h"
+#include "common/mod_args.h"
 
 #include <algorithm>
 #include <array>
@@ -14,7 +15,8 @@ using namespace std;
 
 int AirRoute::count = 0;
 
-AirRoute::AirRoute() : id(count++) {
+AirRoute::AirRoute(const string& args) : id(count++) {
+	skipAuto = ModArgs(args).GetBool("skip");
 }
 
 const char* AirRoute::GetName() {
@@ -93,6 +95,7 @@ namespace {
 }
 
 void AirRoute::LayoutRoute(const vector<RouteStationInfo>& stations, int sizeX, int sizeY) {
+	if (skipAuto) { LayoutManual(stations); return; }
 	vector<Airport> airports;
 	for (const RouteStationInfo& info : stations) {
 		if (info.inlets.size() < 2 || info.outlets.size() < 2 || info.stops.size() < 2) continue;
@@ -227,4 +230,149 @@ void AirRoute::LayoutRoute(const vector<RouteStationInfo>& stations, int sizeX, 
 		stay(B, landingB, takeoffB, line);
 		lines.push_back(std::move(line));
 	}
+}
+
+
+// ================= 手动线路(--skip)：编辑器output.transit的航线，设计见route_air.md"手动线路" =================
+// 节点z=飞行高度。每个节点一个extern(飞机在extern处直接转向，同自动布局)，每条连线两个方向各一条link(无偏移、一段三次Bezier)。
+// 站和节点之间的缺口：一段Bezier(沿跑道朝向起降)；两座机场之间没有航线的缺口：起飞爬升->天空点->降落，同自动互联。
+void AirRoute::LayoutManual(const vector<RouteStationInfo>& stationInfos) {
+	if (!manual || manual->Empty()) {
+		debugf("Warning: AirRoute --skip but the roadnet has no manual transit data, no air lines.\n");
+		return;
+	}
+	const TransitData& data = *manual;
+	const string routeId = GetType();
+	ManualPlan plan = PlanManualRoute(data, routeId, stationInfos, true);
+	for (const string& warning : plan.warnings) debugf("Warning: AirRoute manual: %s\n", warning.c_str());
+	if (plan.lines.empty()) {
+		debugf("Warning: AirRoute manual: no usable air line in the roadnet loops of %s.\n", routeId.c_str());
+		return;
+	}
+
+	set<pair<string, string>> linkKeys;
+	auto addLink = [&](const RouteEndpoint& from, const RouteEndpoint& to, vector<TrackSegment> segments, bool withinStation = false) {
+		if (!linkKeys.insert({ EndpointKey(from), EndpointKey(to) }).second) return;
+		RouteLinkSpec link;
+		link.from = from;
+		link.to = to;
+		link.withinStation = withinStation;
+		link.segments = std::move(segments);
+		links.push_back(std::move(link));
+	};
+	set<int> madeNodes;
+	auto nodeExtern = [&](int node) {
+		string name = "air_n" + to_string(node);
+		if (madeNodes.insert(node).second) {
+			const TransitData::Node& n = data.nodes[node];
+			RouteExternNode extern_;
+			extern_.name = name; extern_.x = n.x; extern_.y = n.y; extern_.z = n.z; extern_.dirX = 1.f; extern_.dirY = 0.f;
+			externs.push_back(extern_);
+		}
+		return name;
+	};
+	auto heading = [&](const RouteStationInfo& info, int t) {
+		const RoutePort& in = info.inlets[t];
+		float length = sqrtf(in.dirX * in.dirX + in.dirY * in.dirY);
+		return length > 1e-6f ? make_pair(in.dirX / length, in.dirY / length) : make_pair(1.f, 0.f);
+	};
+
+	// 实体航线：每条用到的连线两个方向各一条link。
+	for (int c : plan.conns) {
+		const TransitData::Conn& conn = data.conns[c];
+		TrackSegment axis = ManualAxis(data, c);
+		TrackSegment back = axis;
+		back.x1 = axis.x2; back.y1 = axis.y2; back.z1 = axis.z2;
+		back.c1x = axis.c2x; back.c1y = axis.c2y; back.c1z = axis.c2z;
+		back.c2x = axis.c1x; back.c2y = axis.c1y; back.c2z = axis.c1z;
+		back.x2 = axis.x1; back.y2 = axis.y1; back.z2 = axis.z1;
+		addLink(ExternOf(nodeExtern(conn.from)), ExternOf(nodeExtern(conn.to)), { axis });
+		addLink(ExternOf(nodeExtern(conn.to)), ExternOf(nodeExtern(conn.from)), { back });
+	}
+
+	// 缺口。
+	for (const ManualGap& gap : plan.gaps) {
+		const ManualPort& pf = gap.from;
+		const ManualPort& pt = gap.to;
+		bool fromStation = pf.kind == ManualPort::StationOut, toStation = pt.kind == ManualPort::StationIn;
+		if (fromStation && toStation && gap.withinStation) {
+			const RouteStationInfo& info = stationInfos[pf.station];
+			auto [hx, hy] = heading(info, pf.track);
+			auto [tx, ty] = heading(info, pt.track);
+			const RoutePort& out = info.outlets[pf.track];
+			const RoutePort& in = info.inlets[pt.track];
+			RouteEndpoint from; from.kind = RouteEndpoint::Outlet; from.station = info.stationIndex; from.portIndex = pf.track;
+			RouteEndpoint to; to.kind = RouteEndpoint::Inlet; to.station = info.stationIndex; to.portIndex = pt.track;
+			addLink(from, to, { MakeBezierSegment(out.x, out.y, out.z, hx, hy, in.x, in.y, in.z, tx, ty, kTaxiArm) }, true);
+		}
+		else if (fromStation && toStation) {
+			const RouteStationInfo& A = stationInfos[pf.station];
+			const RouteStationInfo& B = stationInfos[pt.station];
+			auto [hx, hy] = heading(A, pf.track);
+			auto [tx, ty] = heading(B, pt.track);
+			const RoutePort& out = A.outlets[pf.track];
+			const RoutePort& in = B.inlets[pt.track];
+			float sox = out.x + hx * kSkyLead, soy = out.y + hy * kSkyLead;
+			float six = in.x - tx * kSkyLead, siy = in.y - ty * kSkyLead;
+			float arm = hypotf(six - sox, siy - soy) / 3.f;
+			RouteEndpoint from; from.kind = RouteEndpoint::Outlet; from.station = A.stationIndex; from.portIndex = pf.track;
+			RouteEndpoint to; to.kind = RouteEndpoint::Inlet; to.station = B.stationIndex; to.portIndex = pt.track;
+			addLink(from, to, { MakeBezierSegment(out.x, out.y, out.z, hx, hy, sox, soy, kCruiseHeight, hx, hy, kClimbArm),
+				MakeBezierSegment(sox, soy, kCruiseHeight, hx, hy, six, siy, kCruiseHeight, tx, ty, arm),
+				MakeBezierSegment(six, siy, kCruiseHeight, tx, ty, in.x, in.y, in.z, tx, ty, kClimbArm) });
+		}
+		else if (fromStation || toStation) {
+			// 站<->节点：一段Bezier，站端沿跑道朝向，节点端沿弦的方向。
+			const RouteStationInfo& info = stationInfos[fromStation ? pf.station : pt.station];
+			int track = fromStation ? pf.track : pt.track;
+			const ManualPort& nodePort = fromStation ? pt : pf;
+			const TransitData::Node& node = data.nodes[nodePort.node];
+			auto [hx, hy] = heading(info, track);
+			const RoutePort& port = fromStation ? info.outlets[track] : info.inlets[track];
+			float dx = node.x - port.x, dy = node.y - port.y, chord = hypotf(dx, dy);
+			if (chord < 1e-3f) continue;
+			float gx = fromStation ? dx / chord : -dx / chord, gy = fromStation ? dy / chord : -dy / chord; // 行驶方向的弦向
+			float alongStation = (fromStation ? 1.f : -1.f) * (hx * dx + hy * dy) / chord;
+			if (alongStation < 0.5f) {
+				debugf("Warning: AirRoute manual: gap between station %s runway %d and transit node %d bends more than 60 deg; move the node in line with the runway.\n",
+					info.name.c_str(), track, nodePort.node);
+			}
+			if (fabsf(node.z - port.z) / chord > 0.6f) {
+				debugf("Warning: AirRoute manual: gap between station %s runway %d and transit node %d climbs steeper than 0.6; raise the node farther away or lower its height.\n",
+					info.name.c_str(), track, nodePort.node);
+			}
+			string externName = nodeExtern(nodePort.node);
+			if (fromStation) {
+				RouteEndpoint from; from.kind = RouteEndpoint::Outlet; from.station = info.stationIndex; from.portIndex = track;
+				addLink(from, ExternOf(externName), { MakeBezierSegment(port.x, port.y, port.z, hx, hy, node.x, node.y, node.z, gx, gy, chord / 3.f) });
+			}
+			else {
+				RouteEndpoint to; to.kind = RouteEndpoint::Inlet; to.station = info.stationIndex; to.portIndex = track;
+				addLink(ExternOf(externName), to, { MakeBezierSegment(node.x, node.y, node.z, gx, gy, port.x, port.y, port.z, hx, hy, chord / 3.f) });
+			}
+		}
+		else if (pf.node >= 0 && pt.node >= 0 && pf.node != pt.node) {
+			// 节点<->节点没有实体航线：直连。
+			const TransitData::Node& a = data.nodes[pf.node];
+			const TransitData::Node& b = data.nodes[pt.node];
+			float dx = b.x - a.x, dy = b.y - a.y, chord = hypotf(dx, dy);
+			if (chord < 1e-3f) continue;
+			addLink(ExternOf(nodeExtern(pf.node)), ExternOf(nodeExtern(pt.node)),
+				{ MakeBezierSegment(a.x, a.y, a.z, dx / chord, dy / chord, b.x, b.y, b.z, dx / chord, dy / chord, 0.f) });
+		}
+	}
+
+	// 线路
+	for (const vector<ManualLineEntry>& line : plan.lines) {
+		vector<RouteLineEntry> entries;
+		for (const ManualLineEntry& entry : line) {
+			RouteLineEntry out;
+			if (entry.station >= 0) { out.name = stationInfos[entry.station].name; out.stopIndex = entry.track; }
+			else { out.name = nodeExtern(entry.via.node); out.stopIndex = -1; }
+			entries.push_back(out);
+		}
+		if (entries.size() < 2) { debugf("Warning: AirRoute manual: a line has fewer than 2 waypoints, dropped.\n"); continue; }
+		lines.push_back(std::move(entries));
+	}
+	debugf("Log: AirRoute manual: %d links, %d lines.\n", static_cast<int>(links.size()), static_cast<int>(lines.size()));
 }

@@ -663,10 +663,10 @@ extern "C" __declspec(dllexport) void RegisterModRoutes(RouteFactory* factory) {
 		[](const std::string&) -> RouteMod* { return new BusRoute(); },
 		[](RouteMod* m) { delete m; });
 	factory->RegisterRoute(TrainRoute::GetId(),
-		[](const std::string&) -> RouteMod* { return new TrainRoute(); },
+		[](const std::string& args) -> RouteMod* { return new TrainRoute(args); },
 		[](RouteMod* m) { delete m; });
 	factory->RegisterRoute(AirRoute::GetId(),
-		[](const std::string&) -> RouteMod* { return new AirRoute(); },
+		[](const std::string& args) -> RouteMod* { return new AirRoute(args); },
 		[](RouteMod* m) { delete m; });
 }
 extern "C" __declspec(dllexport) void FinishModRoutes(RouteFactory* factory) {

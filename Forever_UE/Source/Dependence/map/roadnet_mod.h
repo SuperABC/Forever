@@ -4,6 +4,7 @@
 #include "common/mod_state.h"
 #include "map/general_geometry.h"
 #include "map/feature_spec.h"
+#include "map/transit_data.h"
 
 #include <string>
 #include <vector>
@@ -80,8 +81,12 @@ public:
 		std::string modId;
 		int direction = 0;
 		float x0 = 0.f, x1 = 0.f, y0 = 0.f, y1 = 0.f;
+		int outputIndex = -1; // 该预设在.roadnet output.presets里的原下标(解析时丢弃无效项会让presets下标错位，线路环靠它引用预设)
 	};
 	std::vector<PlacementPreset> presets;
+
+	// 编辑器手工设计的独立线路(火车铁轨/飞机航线)和线路环，见transit_data.h；Core原样拷贝，Route mod在--skip时使用。
+	TransitData transit;
 
 	// 工具方法(非虚):请求给一段桥(chains里每条链是按行驶顺序首尾相接的Connection，通常是同一座桥拆出的几段Road)放桥墩,
 	// 宿主(Roadnet::PlacePiers)按defaultSpacing/minSpacing选位、避开其它道路。链按值拷贝保存。参数含义同RouteMod::AddPier(PierRequest)。

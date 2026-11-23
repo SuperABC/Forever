@@ -1,0 +1,483 @@
+{
+	"source": {
+		"version": 2,
+		"mapW": 256,
+		"mapH": 256,
+		"nodes": [
+			{
+				"id": 1,
+				"x": 100,
+				"y": 100,
+				"z": 0
+			},
+			{
+				"id": 2,
+				"x": 140,
+				"y": 100,
+				"z": 0
+			},
+			{
+				"id": 4,
+				"x": 140,
+				"y": 140,
+				"z": 0
+			},
+			{
+				"id": 6,
+				"x": 100,
+				"y": 140,
+				"z": 0
+			},
+			{
+				"id": 9,
+				"x": 0,
+				"y": 140,
+				"z": 0,
+				"extern": true
+			}
+		],
+		"roads": [
+			{
+				"id": 3,
+				"a": 1,
+				"b": 2,
+				"ctrl": null,
+				"type": "ground",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路3",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 5,
+				"a": 2,
+				"b": 4,
+				"ctrl": null,
+				"type": "ground",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路5",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 7,
+				"a": 4,
+				"b": 6,
+				"ctrl": null,
+				"type": "ground",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路7",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 8,
+				"a": 6,
+				"b": 1,
+				"ctrl": null,
+				"type": "ground",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路8",
+				"tree": "",
+				"lamp": ""
+			},
+			{
+				"id": 10,
+				"a": 9,
+				"b": 6,
+				"ctrl": null,
+				"type": "ground",
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"name": "路10",
+				"tree": "",
+				"lamp": ""
+			}
+		],
+		"lots": [
+			{
+				"id": 11,
+				"a": 1,
+				"b": 2,
+				"depth": 40,
+				"area": "AREA_RESIDENCE_HIGH",
+				"margin": [
+					null,
+					null,
+					null,
+					null
+				],
+				"presets": [
+					{
+						"id": 12,
+						"modId": "building_train_station",
+						"dir": 2,
+						"x0": 0,
+						"x1": 10,
+						"y0": 0,
+						"y1": 10
+					},
+					{
+						"id": 13,
+						"modId": "building_train_station",
+						"dir": 3,
+						"x0": 0,
+						"x1": 10,
+						"y0": 28,
+						"y1": 38
+					}
+				]
+			}
+		],
+		"greens": [],
+		"transit": {
+			"nodes": [
+				{
+					"id": 14,
+					"x": 40,
+					"y": 120,
+					"z": 0
+				},
+				{
+					"id": 15,
+					"x": 80,
+					"y": 120,
+					"z": 0
+				},
+				{
+					"id": 17,
+					"x": 80,
+					"y": 180,
+					"z": 2
+				}
+			],
+			"conns": [
+				{
+					"id": 16,
+					"a": 14,
+					"b": 15,
+					"ctrl": null,
+					"type": "ground",
+					"routeId": "route_train"
+				},
+				{
+					"id": 18,
+					"a": 15,
+					"b": 17,
+					"ctrl": [
+						80,
+						150
+					],
+					"type": "bridge",
+					"routeId": "route_train"
+				}
+			],
+			"loops": [
+				{
+					"id": 19,
+					"routeId": "route_train",
+					"items": [
+						{
+							"kind": "preset",
+							"ref": 12,
+							"stop": true
+						},
+						{
+							"kind": "node",
+							"ref": 14
+						},
+						{
+							"kind": "node",
+							"ref": 17
+						},
+						{
+							"kind": "preset",
+							"ref": 13,
+							"stop": true
+						}
+					]
+				}
+			]
+		},
+		"nextId": 20
+	},
+	"output": {
+		"nodes": [
+			{
+				"id": "n1",
+				"x": 100,
+				"y": 100,
+				"z": 0,
+				"type": "intersection"
+			},
+			{
+				"id": "n2",
+				"x": 140,
+				"y": 100,
+				"z": 0,
+				"type": "intersection"
+			},
+			{
+				"id": "n4",
+				"x": 140,
+				"y": 140,
+				"z": 0,
+				"type": "intersection"
+			},
+			{
+				"id": "n6",
+				"x": 100,
+				"y": 140,
+				"z": 0,
+				"type": "intersection"
+			},
+			{
+				"id": "n9",
+				"x": 0,
+				"y": 140,
+				"z": 0,
+				"type": "extern"
+			}
+		],
+		"roads": [
+			{
+				"name": "路3",
+				"from": "n1",
+				"to": "n2",
+				"controls": [],
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路5",
+				"from": "n2",
+				"to": "n4",
+				"controls": [],
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路7",
+				"from": "n4",
+				"to": "n6",
+				"controls": [],
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路8",
+				"from": "n6",
+				"to": "n1",
+				"controls": [],
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			},
+			{
+				"name": "路10",
+				"from": "n9",
+				"to": "n6",
+				"controls": [],
+				"lanes": [
+					1,
+					0,
+					1,
+					1,
+					0,
+					1
+				],
+				"kind": "ground",
+				"treeTag": "",
+				"lampTag": ""
+			}
+		],
+		"lots": [
+			{
+				"corners": [
+					[
+						100,
+						100
+					],
+					[
+						140,
+						100
+					],
+					[
+						140,
+						140
+					],
+					[
+						100,
+						140
+					]
+				],
+				"margin": [
+					1,
+					1,
+					1,
+					1
+				],
+				"boundary": {
+					"0": 3,
+					"1": 1,
+					"2": 0,
+					"3": 2
+				},
+				"area": "AREA_RESIDENCE_HIGH"
+			}
+		],
+		"greens": [],
+		"presets": [
+			{
+				"lot": 0,
+				"id": "building_train_station",
+				"direction": 2,
+				"rect": [
+					0,
+					10,
+					0,
+					10
+				]
+			},
+			{
+				"lot": 0,
+				"id": "building_train_station",
+				"direction": 3,
+				"rect": [
+					0,
+					10,
+					28,
+					38
+				]
+			}
+		],
+		"transit": {
+			"nodes": [
+				{
+					"x": 40,
+					"y": 120,
+					"z": 0
+				},
+				{
+					"x": 80,
+					"y": 120,
+					"z": 0
+				},
+				{
+					"x": 80,
+					"y": 180,
+					"z": 2
+				}
+			],
+			"conns": [
+				{
+					"from": 0,
+					"to": 1,
+					"ctrl": null,
+					"kind": "ground",
+					"route": "route_train"
+				},
+				{
+					"from": 1,
+					"to": 2,
+					"ctrl": [
+						80,
+						150
+					],
+					"kind": "bridge",
+					"route": "route_train"
+				}
+			],
+			"loops": [
+				{
+					"route": "route_train",
+					"items": [
+						{
+							"preset": 0,
+							"stop": true
+						},
+						{
+							"node": 0
+						},
+						{
+							"node": 2
+						},
+						{
+							"preset": 1,
+							"stop": true
+						}
+					]
+				}
+			]
+		}
+	}
+}

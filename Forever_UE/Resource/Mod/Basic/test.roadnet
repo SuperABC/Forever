@@ -4301,7 +4301,7 @@
 				]
 			}
 		],
-		"nextId": 546,
+		"nextId": 561,
 		"greens": [
 			{
 				"id": 479,
@@ -4532,7 +4532,159 @@
 				],
 				"links": []
 			}
-		]
+		],
+		"transit": {
+			"nodes": [
+				{
+					"id": 546,
+					"x": 872.867831,
+					"y": 722.876037,
+					"z": 1.5
+				},
+				{
+					"id": 547,
+					"x": 937,
+					"y": 769,
+					"z": 1.5
+				},
+				{
+					"id": 549,
+					"x": 1017.960435,
+					"y": 770.982123,
+					"z": 1.5
+				},
+				{
+					"id": 551,
+					"x": 1024,
+					"y": 771,
+					"z": 1.5,
+					"extern": true
+				},
+				{
+					"id": 553,
+					"x": 869.47799,
+					"y": 684.401248,
+					"z": 1.5
+				},
+				{
+					"id": 554,
+					"x": 915.498487,
+					"y": 647.371901,
+					"z": 1.5
+				},
+				{
+					"id": 556,
+					"x": 1018.09532,
+					"y": 645.870484,
+					"z": 1.5
+				},
+				{
+					"id": 558,
+					"x": 1024,
+					"y": 645.747347,
+					"z": 1.5,
+					"extern": true
+				}
+			],
+			"conns": [
+				{
+					"id": 548,
+					"a": 546,
+					"b": 547,
+					"ctrl": [
+						876.592311,
+						767.569789
+					],
+					"type": "bridge",
+					"routeId": "route_train"
+				},
+				{
+					"id": 550,
+					"a": 547,
+					"b": 549,
+					"ctrl": null,
+					"type": "bridge",
+					"routeId": "route_train"
+				},
+				{
+					"id": 552,
+					"a": 549,
+					"b": 551,
+					"ctrl": null,
+					"type": "bridge",
+					"routeId": "route_train"
+				},
+				{
+					"id": 555,
+					"a": 553,
+					"b": 554,
+					"ctrl": [
+						866.993593,
+						648.081729
+					],
+					"type": "bridge",
+					"routeId": "route_train"
+				},
+				{
+					"id": 557,
+					"a": 554,
+					"b": 556,
+					"ctrl": null,
+					"type": "bridge",
+					"routeId": "route_train"
+				},
+				{
+					"id": 559,
+					"a": 556,
+					"b": 558,
+					"ctrl": null,
+					"type": "bridge",
+					"routeId": "route_train"
+				}
+			],
+			"loops": [
+				{
+					"id": 560,
+					"routeId": "route_train",
+					"items": [
+						{
+							"kind": "node",
+							"ref": 551
+						},
+						{
+							"kind": "node",
+							"ref": 546
+						},
+						{
+							"kind": "preset",
+							"ref": 534,
+							"stop": true
+						},
+						{
+							"kind": "node",
+							"ref": 553
+						},
+						{
+							"kind": "node",
+							"ref": 558
+						},
+						{
+							"kind": "node",
+							"ref": 553
+						},
+						{
+							"kind": "preset",
+							"ref": 534,
+							"stop": true
+						},
+						{
+							"kind": "node",
+							"ref": 546
+						}
+					]
+				}
+			]
+		}
 	},
 	"output": {
 		"nodes": [
@@ -23654,6 +23806,135 @@
 					21.938474
 				]
 			}
-		]
+		],
+		"transit": {
+			"nodes": [
+				{
+					"x": 872.867831,
+					"y": 722.876037,
+					"z": 1.5
+				},
+				{
+					"x": 937,
+					"y": 769,
+					"z": 1.5
+				},
+				{
+					"x": 1017.960435,
+					"y": 770.982123,
+					"z": 1.5
+				},
+				{
+					"x": 1024,
+					"y": 771,
+					"z": 1.5,
+					"extern": true
+				},
+				{
+					"x": 869.47799,
+					"y": 684.401248,
+					"z": 1.5
+				},
+				{
+					"x": 915.498487,
+					"y": 647.371901,
+					"z": 1.5
+				},
+				{
+					"x": 1018.09532,
+					"y": 645.870484,
+					"z": 1.5
+				},
+				{
+					"x": 1024,
+					"y": 645.747347,
+					"z": 1.5,
+					"extern": true
+				}
+			],
+			"conns": [
+				{
+					"from": 0,
+					"to": 1,
+					"ctrl": [
+						876.592311,
+						767.569789
+					],
+					"kind": "bridge",
+					"route": "route_train"
+				},
+				{
+					"from": 1,
+					"to": 2,
+					"ctrl": null,
+					"kind": "bridge",
+					"route": "route_train"
+				},
+				{
+					"from": 2,
+					"to": 3,
+					"ctrl": null,
+					"kind": "bridge",
+					"route": "route_train"
+				},
+				{
+					"from": 4,
+					"to": 5,
+					"ctrl": [
+						866.993593,
+						648.081729
+					],
+					"kind": "bridge",
+					"route": "route_train"
+				},
+				{
+					"from": 5,
+					"to": 6,
+					"ctrl": null,
+					"kind": "bridge",
+					"route": "route_train"
+				},
+				{
+					"from": 6,
+					"to": 7,
+					"ctrl": null,
+					"kind": "bridge",
+					"route": "route_train"
+				}
+			],
+			"loops": [
+				{
+					"route": "route_train",
+					"items": [
+						{
+							"node": 3
+						},
+						{
+							"node": 0
+						},
+						{
+							"preset": 1,
+							"stop": true
+						},
+						{
+							"node": 4
+						},
+						{
+							"node": 7
+						},
+						{
+							"node": 4
+						},
+						{
+							"preset": 1,
+							"stop": true
+						},
+						{
+							"node": 0
+						}
+					]
+				}
+			]
+		}
 	}
 }

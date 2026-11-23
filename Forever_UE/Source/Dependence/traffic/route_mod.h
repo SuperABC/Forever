@@ -3,6 +3,7 @@
 #include "common/mod_test.h"
 #include "common/mod_state.h"
 #include "map/general_geometry.h"
+#include "map/transit_data.h"
 #include "traffic/station_mod.h"
 
 #include <string>
@@ -23,6 +24,7 @@ struct RouteStationInfo {
 	float x = 0.f, y = 0.f; // 站点中心
 	std::vector<RoutePort> inlets, outlets, stops;
 	std::string roadName; // 贴路站点所在道路的名字(同名=棋盘格里同一条横/竖线)，其余站点为空
+	int presetIndex = -1; // 站所在建筑是路网预设放的：预设在.roadnet output.presets里的原下标(线路环按它找站)，否则-1
 };
 
 // route mod放在地图上的纯路径点(地图边界、天空点等)：没有站点，不停靠、不触发事件、不限速，只能被links当端点、被lines当必经点。
@@ -95,6 +97,12 @@ public:
 	virtual void BuildTrack(const std::function<const std::string&(int, int)>& getTerrain,
 		const std::function<std::pair<bool, float>(int, int)>& getWater,
 		const std::function<float(float, float)>& getHeight) {}
+
+	// 手动线路(--skip)：true=跳过自己的自动布局，LayoutRoute改用编辑器设计的线路环/实体线路(manual，见transit_data.h)。
+	// mod在自己的构造函数里按参数设置(creator收到的args里的--skip)。manual由宿主在LayoutRoute之前通过SetManualTransit给，指向宿主拥有的数据(只读，生命周期覆盖Build)。
+	bool skipAuto = false;
+	void SetManualTransit(const TransitData* data) { manual = data; }
+	const TransitData* manual = nullptr;
 
 	// 工具方法(非虚),同RoadnetMod同名方法。
 	void AddHatch(const Connection* connection, float t1, float t2, float width);

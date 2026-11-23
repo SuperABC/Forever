@@ -384,12 +384,64 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 		preset.direction = direction;
 		preset.x0 = NumberOr(rect[0], 0.f); preset.x1 = NumberOr(rect[1], 0.f);
 		preset.y0 = NumberOr(rect[2], 0.f); preset.y1 = NumberOr(rect[3], 0.f);
+		preset.outputIndex = static_cast<int>(i);
 		presets.push_back(std::move(preset));
 	}
 
+	// 独立线路(output.transit，MapEditor"线路"工具)：节点/连线/线路环，只搬数据，route mod在--skip时才用，见transit_data.h。
+	const JsonValue& transitObject = output["transit"];
+	if (transitObject.IsObject()) {
+		const JsonValue& nodeArray = transitObject["nodes"];
+		for (unsigned int i = 0; i < nodeArray.size(); i++) {
+			TransitData::Node node;
+			node.x = NumberOr(nodeArray[i]["x"], 0.f); node.y = NumberOr(nodeArray[i]["y"], 0.f); node.z = NumberOr(nodeArray[i]["z"], 0.f);
+				node.isExtern = nodeArray[i]["extern"].IsBool() && nodeArray[i]["extern"].AsBool();
+			transit.nodes.push_back(node);
+		}
+		const int nodeCount = static_cast<int>(transit.nodes.size());
+		const JsonValue& connArray = transitObject["conns"];
+		for (unsigned int i = 0; i < connArray.size(); i++) {
+			const JsonValue& entry = connArray[i];
+			if (!entry["from"].IsNumeric() || !entry["to"].IsNumeric() || !entry["route"].IsString()) continue;
+			TransitData::Conn conn;
+			conn.from = entry["from"].AsInt(); conn.to = entry["to"].AsInt();
+			if (conn.from < 0 || conn.from >= nodeCount || conn.to < 0 || conn.to >= nodeCount || conn.from == conn.to) continue;
+			const JsonValue& ctrl = entry["ctrl"];
+			if (ctrl.IsArray() && ctrl.size() == 2) { conn.hasCtrl = true; conn.cx = NumberOr(ctrl[0], 0.f); conn.cy = NumberOr(ctrl[1], 0.f); }
+			if (entry["kind"].IsString()) conn.kind = entry["kind"].AsString();
+			conn.route = entry["route"].AsString();
+			transit.conns.push_back(std::move(conn));
+		}
+		const JsonValue& loopArray = transitObject["loops"];
+		for (unsigned int i = 0; i < loopArray.size(); i++) {
+			const JsonValue& entry = loopArray[i];
+			const JsonValue& itemArray = entry["items"];
+			if (!entry["route"].IsString() || !itemArray.IsArray()) continue;
+			TransitData::Loop loop;
+			loop.route = entry["route"].AsString();
+			for (unsigned int k = 0; k < itemArray.size(); k++) {
+				const JsonValue& item = itemArray[k];
+				TransitData::Item parsed;
+				if (item["preset"].IsNumeric()) {
+					parsed.preset = item["preset"].AsInt();
+					parsed.stop = item["stop"].IsBool() && item["stop"].AsBool();
+					if (parsed.preset < 0) continue;
+				}
+				else if (item["node"].IsNumeric()) {
+					parsed.node = item["node"].AsInt();
+					if (parsed.node < 0 || parsed.node >= nodeCount) continue;
+				}
+				else continue;
+				loop.items.push_back(parsed);
+			}
+			if (loop.items.size() >= 2) transit.loops.push_back(std::move(loop));
+		}
+	}
+
 	AssignJunctionSetbacks(roads, intersections);
-	debugf("Log: FileRoadnet loaded %s: %d roads, %d intersections, %d lots, %d greens.\n", path.c_str(),
-		static_cast<int>(roads.size()), static_cast<int>(intersections.size()), static_cast<int>(lots.size()), static_cast<int>(greens.size()));
+	debugf("Log: FileRoadnet loaded %s: %d roads, %d intersections, %d lots, %d greens, transit %d nodes/%d conns/%d loops.\n", path.c_str(),
+		static_cast<int>(roads.size()), static_cast<int>(intersections.size()), static_cast<int>(lots.size()), static_cast<int>(greens.size()),
+		static_cast<int>(transit.nodes.size()), static_cast<int>(transit.conns.size()), static_cast<int>(transit.loops.size()));
 }
 
 void FileRoadnet::LayoutTrees(const vector<Road*>& hostRoads) {

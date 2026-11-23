@@ -35,3 +35,7 @@
 
 ## 端墙（2026-11-20）
 `AddTunnelHatch(connection,t1,t2,width, startWallBottom=kNoEndWall, endWallBottom=kNoEndWall)`：给洞的t1端/t2端各自加端墙，墙底是传入的绝对高度(地图单位，1=10m)，默认不加。`TerrainHatch`新增`startWall/startWallBottom/endWall/endWallBottom`(随地图存档)。UE层`BuildTunnelWalls`在端头造一块矩形板：墙顶取该端头线段范围内地形最高处(可略突出地面、不留缺口)，墙底=传入高度，用来封住隧道资产房顶和地形之间的空洞。Basic各mod传"隧道端路面高度+宏`TUNNEL_ROOF_CLEARANCE`(1=10m，隧道资产房顶)"，即房顶以下留洞口，宏可调。
+
+## 独立线路 `transit`（2026-11-23）
+
+`RoadnetMod::transit`（`TransitData`，见 `transit_data.h`）：MapEditor"线路"工具设计的实体线路（节点/连线）和线路环，route mod 在 `--skip` 时使用。`roadnet_file` 填它，Core 在 `Roadnet::Init` 里拷一份，原样不解释。`PlacementPreset::outputIndex` = 预设在 `.roadnet output.presets` 里的原下标（解析时丢弃无效项也不会错位），线路环用它引用预设。

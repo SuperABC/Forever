@@ -209,3 +209,7 @@
 `EnsureNodeIndex()`从`FindPedestrianPath`里抽出，两者共用。CoreTest route套件`CheckFlee`覆盖(每步选得出、度数>=2不回头)。
 
 隧道口hatch(wall=true)存档多了`startWall/startWallBottom/endWall/endWallBottom`(端墙，见Dependence/map/roadnet_mod.md)。
+
+## 预设→建筑（2026-11-23，线路环用）
+
+`PlacedPreset::outputIndex`（预设在 `.roadnet output.presets` 里的原下标）；`InitBuildings` 里 `CreateBuildingAt(..., Building** created)` 建好后记 `presetOfBuilding[created]=outputIndex`（不存档）；`GetPresetIndexOfBuilding(const Building*)` 无记录返回 -1。`Map::GetTransit()` 返回 `Roadnet::GetTransit()` 的独立线路数据。

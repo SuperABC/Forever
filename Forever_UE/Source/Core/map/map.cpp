@@ -576,6 +576,7 @@ void Map::PlacePresets() {
 			PlacedPreset placed;
 			placed.id = preset.modId; placed.lot = placer; placed.adaptiveParent = parent;
 			placed.quad = placedQuad; placed.boundaryRoads = std::move(boundaryRoads); placed.direction = preset.direction;
+			placed.outputIndex = preset.outputIndex;
 			pendingBuildingPresets.push_back(std::move(placed));
 		}
 	}
@@ -621,7 +622,7 @@ bool Map::CreateZoneAt(const std::string& id, Lot* lot, const Quad& placedQuad, 
 	return true;
 }
 
-bool Map::CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent, const Quad& placedQuad, const unordered_map<int, Road*>& boundaryRoads, int direction) {
+bool Map::CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent, const Quad& placedQuad, const unordered_map<int, Road*>& boundaryRoads, int direction, Building** created) {
 	// 嵌套子块不是路网分配过地址的顶层Lot，GetAddresses()为空，building->GetAddress()会退化成空路名(" <楼名>")，
 	// Map::LocateBuilding/LocateRoom、npc_teleport这类按地址找房间的都找不到它。子块属于adaptiveParent这块地，直接沿用它的地址
 	// (LocateBuilding按地址比较所属地块，见SameBlock)。
@@ -647,7 +648,8 @@ bool Map::CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent,
 	building->BuildDoors(*this);
 	building->BuildCabins(*this);
 	BuildBuildingScripts(building);
-	if (!AddBuilding(building)) delete building; // ~Building()里DestroyBuilding(mod)会跟着跑
+	if (!AddBuilding(building)) { delete building; building = nullptr; } // ~Building()里DestroyBuilding(mod)会跟着跑
+	if (created) *created = building;
 	return true;
 }
 
@@ -659,8 +661,10 @@ void Map::InitBuildings() {
 
 	// 路网预设里的building：InitZones开头已占好位，模板库加载完才能Layout，在这里落地。
 	for (const PlacedPreset& placed : pendingBuildingPresets) {
-		if (!CreateBuildingAt(placed.id, placed.lot, placed.adaptiveParent, placed.quad, placed.boundaryRoads, placed.direction))
+		Building* created = nullptr;
+		if (!CreateBuildingAt(placed.id, placed.lot, placed.adaptiveParent, placed.quad, placed.boundaryRoads, placed.direction, &created))
 			debugf("Warning: preset building mod \"%s\" is not enabled/registered, space is reserved but nothing is created.\n", placed.id.c_str());
+		else if (created && placed.outputIndex >= 0) presetOfBuilding[created] = placed.outputIndex;
 	}
 	pendingBuildingPresets.clear();
 
@@ -1677,6 +1681,16 @@ vector<Road*> Map::GetPathRoads() const {
 		}
 	}
 	return result;
+}
+
+const TransitData& Map::GetTransit() const {
+	static const TransitData empty;
+	return roadnet ? roadnet->GetTransit() : empty;
+}
+
+int Map::GetPresetIndexOfBuilding(const Building* building) const {
+	auto it = presetOfBuilding.find(building);
+	return it == presetOfBuilding.end() ? -1 : it->second;
 }
 
 const string& Map::GetPathRoadMaterial() const {

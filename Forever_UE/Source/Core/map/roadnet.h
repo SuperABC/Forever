@@ -138,8 +138,12 @@ public:
 		std::string modId;
 		int direction = 0;
 		float x0 = 0.f, x1 = 0.f, y0 = 0.f, y1 = 0.f;
+		int outputIndex = -1; // 预设在.roadnet output.presets里的原下标(线路环引用预设靠它)
 	};
 	const std::vector<Preset>& GetPresets() const;
+
+	// 编辑器手工设计的独立线路(见transit_data.h)：Init时从mod拷一份，Route::Build在--skip的route mod里读。
+	const TransitData& GetTransit() const;
 
 private:
 	RoadnetMod* mod;
@@ -153,6 +157,7 @@ private:
 	std::vector<Lot*> lots;
 	std::vector<GreenSite> greenSites;
 	std::vector<Preset> presets;
+	TransitData transit;
 	std::vector<TerrainHatch> hatches;
 	std::vector<TerrainFitRequest> terrainFits;
 	std::vector<Pier> piers;

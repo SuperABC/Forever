@@ -17,3 +17,13 @@
 
 - 依赖：`traffic/station_mod.h`(`TrackSegment`)。
 - 被谁依赖：`route_train.cpp`、`route_air.cpp`。
+
+## 手动线路规划（2026-11-23）
+
+`TrainRoute`/`AirRoute` 在 `--skip` 时共用的规划，不碰 Core 容器，纯函数：
+
+- **`PlanManualRoute(data, routeId, stations, allowTrackChange)`**：对 `data.loops` 里 `route==routeId` 的每个环：预设项用 `RouteStationInfo::presetIndex` 找站（找不到/端口不齐的项丢弃并写 `warnings`）；整环没有停靠站或可用项<2 → 丢弃整环并写 `warnings`。相邻两项若都是节点，在本 route 的连线图上按弧长求最短路：有 → "沿实体线路"（记用到的连线、途经节点的转向 `{node,到达连线,离开连线}`）；没有 → 一个**缺口**（`ManualGap`，编辑器里的虚线）。含站的相邻对一律是缺口。
+- **站轨道选择**：站项按 `(本站-前一项)+(后一项-本站)` 的方向选航向最接近的那条轨道/跑道（`BestPort`）；`allowTrackChange=true`（飞机）时降落和起飞跑道分别按各自方向选，不同时在站内加一个 `withinStation` 缺口（滑行）并停两条跑道。不停的站不进线路条目，靠两侧缺口穿过站（`EDGE_THROUGH`）。
+- **节点端口 `ManualPort`**：`NodeIn/NodeOut`=某连线在某节点的到达端/离开端，`Hub`=前后都是缺口时节点自己的中心点（朝向=前→后）。前后项在节点同一侧折回（如终点节点夹在同一个站两次之间，`dot(前→节点,节点→后)<-0.5`）时是**掉头节点**：`Hub`=到达端（朝向=前→节点）、`HubOut`=离开端（朝向相反），两个都进 `hubs`，火车侧在节点处各建一个 extern 并连半圆。
+- **同一项在环里出现多次**：规划按环里的位置逐项处理，同一个站出现两次时轨道各按自己的前后方向选（往返→两条不同轨道），各自的停靠标志独立。线路条目里的节点项用它的"进入端口"当必经点（extern）。
+- **几何小工具**：`ManualAxis`（连线的中轴线：二次 Bezier 升成三次，控制点 z 取端点 z → z 剖面是 smoothstep 扁 S，和编辑器一致）、`CubicPoint/CubicTangent`、`SubCubic`（de Casteljau 子段）、`ManualEndDirection`（连线在某节点向外的单位切线）。

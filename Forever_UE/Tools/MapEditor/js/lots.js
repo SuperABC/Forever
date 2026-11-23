@@ -327,6 +327,9 @@
 					if (!step.placed) { warnings.push(`地块${lot.id}的预设${p.id}无效：${step.error}，已跳过`); return; }
 					if (!p.modId) warnings.push(`地块${lot.id}的预设${p.id}还没有填id(游戏里只会占位，不会生成园区/建筑)`);
 					output.presets.push({ lot: output.lots.length - 1, id: p.modId || '', direction: p.dir, rect: [p.x0, p.x1, p.y0, p.y1] });
+					// presetId→output.presets下标，给transit导出用(不可枚举，不会写进文件)
+					if (!output.presetIndexById) Object.defineProperty(output, 'presetIndexById', { value: new Map(), enumerable: false });
+					output.presetIndexById.set(p.id, output.presets.length - 1);
 				});
 			}
 		}

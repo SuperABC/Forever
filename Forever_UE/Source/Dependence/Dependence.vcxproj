@@ -161,6 +161,7 @@
     <ClInclude Include="story\dialog.h" />
     <ClInclude Include="map\terrain_mod.h" />
     <ClInclude Include="map\roadnet_mod.h" />
+    <ClInclude Include="map\transit_data.h" />
     <ClInclude Include="map\zone_mod.h" />
     <ClInclude Include="map\green_mod.h" />
     <ClInclude Include="map\polygon_util.h" />

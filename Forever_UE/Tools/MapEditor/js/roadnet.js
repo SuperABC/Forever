@@ -9,6 +9,7 @@
 //          mouth用平地的路面资产但要给地形开口；tunnel用隧道资产；bridge放桥墩。
 //   lots:  见lots.js
 //   greens: 见greens.js(绿化区多边形，可连道路)
+//   transit: 见transit.js(独立线路：火车铁轨/飞机航线 + 线路环)
 // 一条用户road在导出时展开成Core Road("piece")：除hug(每1单位一段，跟随地形)外一对一。
 // 坐标：element单位(10m)，+Y向南。
 (function (root) {
@@ -42,7 +43,7 @@
 
 	// ---------------- 模型 ----------------
 	function newModel(mapW, mapH) {
-		return { version: 2, mapW, mapH, nodes: [], roads: [], lots: [], greens: [], nextId: 1 };
+		return { version: 2, mapW, mapH, nodes: [], roads: [], lots: [], greens: [], transit: { nodes: [], conns: [], loops: [] }, nextId: 1 };
 	}
 	function cloneModel(model) { return JSON.parse(JSON.stringify(model)); }
 	function nodeOf(model, id) { return model.nodes.find((n) => n.id === id); }
@@ -575,6 +576,7 @@
 		const output = { nodes, roads, lots: [], greens: [] };
 		if (ME.exportLots) ME.exportLots(model, terrain, output, roadPieces, warnings);
 		if (ME.exportGreens) ME.exportGreens(model, terrain, output, roadPieces, warnings, pieceRanges);
+		if (ME.exportTransit) ME.exportTransit(model, terrain, output, warnings);
 		for (const w of validate(model, terrain, ctx)) warnings.push(w);
 		return { output, warnings, roadPieces };
 	}
@@ -633,6 +635,7 @@
 	// 旧版(version 1，路自己带height、隧道/桥导出时自动拆段)迁移成新版：节点补z，隧道/桥按旧布局拆成多条路(引道/坡=隧道口或桥，平路=隧道或桥)。
 	function migrateModel(model, ctx) {
 		if (!model.greens) model.greens = [];
+		if (!model.transit) model.transit = { nodes: [], conns: [], loops: [] };
 		for (const l of model.lots) if (!l.presets) l.presets = [];
 		if (model.version >= 2) return model;
 		ctx = ctx || { height: () => 0 };

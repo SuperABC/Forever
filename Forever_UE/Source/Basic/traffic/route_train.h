@@ -11,7 +11,8 @@
 class TrainRoute : public RouteMod {
 public:
 	FOREVER_MOD_GENERIC_UNIT_TEST("route")
-	TrainRoute();
+	// args：mod参数串，--skip=跳过自动布局、改用编辑器的手动线路，见route_mod.md"手动线路"。
+	explicit TrainRoute(const std::string& args = std::string());
 
 	static const char* GetId() { return "route_train"; }
 	virtual const char* GetType() const override { return "route_train"; }
@@ -33,6 +34,13 @@ private:
 	// 站间的一对铁轨(right沿中轴线方向，left倒着走)和它们共用的中轴线(按1单位弧长采样)；BuildTrack据此统一判定隧道、统一开洞。
 	struct RailPair { int right, left; std::vector<CurveSample> midline; };
 	std::vector<RailPair> railPairs;
+
+	// 手动线路(--skip)：LayoutManual按编辑器数据出links/lines，BuildManualTrack按连线类型铺轨。
+	struct ManualPair { int conn; int right, left; TrackSegment axis; };
+	std::vector<ManualPair> manualPairs;
+	std::vector<int> manualGapLinks; // 站/节点之间补缝的link下标(按桥处理：拆迁+桥墩)
+	void LayoutManual(const std::vector<RouteStationInfo>& stationInfos);
+	void BuildManualTrack(const std::function<float(float, float)>& getHeight);
 	static int count;
 	int id;
 	std::string name;

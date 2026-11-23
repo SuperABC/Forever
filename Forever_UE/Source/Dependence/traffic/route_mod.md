@@ -57,3 +57,14 @@ run 两端（停靠位）速度为 0；中间按各段速度上限做前向/后�
 
 ## 端墙（2026-11-20）
 `AddTunnelHatch`末尾两个可选参数`startWallBottom/endWallBottom`(默认`kNoEndWall`=不加)，同RoadnetMod，见Dependence/map/roadnet_mod.md。火车`hatchRange`只在最靠隧道的那一片的隧道端加(入口侧t2端、出口侧t1端)，墙底=隧道端路面高度+`TUNNEL_ROOF_CLEARANCE`(1)。
+
+## 手动线路 `--skip`（2026-11-23）
+
+MapEditor 的"线路"工具可以手动设计火车/飞机线路：**实体线路**（节点 + 连线，每个节点有高度 z，连线有类型 ground/hug/mouth/tunnel/bridge 和所属 route id = route mod id）和**线路环**（预设建筑 + 实体线路节点依次连成的闭环，预设可设"停靠"，节点只表示"经过"）。数据在 `.roadnet` 的 `output.transit`，格式见 `map/transit_data.h`、`roadnet_file.md`。
+
+- **`TransitData`**（`map/transit_data.h`）：纯值类型，`RoadnetMod::transit` 持有，Core 在 `Roadnet::Init` 里拷一份（`Map::GetTransit()`）。route mod 只读，**不要往里写**（跨 DLL 堆规则）。
+- **`RouteMod::skipAuto`**：mod 在自己的构造函数里按参数设置（config 写 `"route_train --skip"` / `"route_air --skip"`，creator 把参数串交给 `ModArgs(args).GetBool("skip")`）。`true`=跳过自己的自动几何/连环逻辑，`LayoutRoute` 改走 `LayoutManual`；没写就和以前完全一样，手动数据被忽略。
+- **`RouteMod::SetManualTransit(const TransitData*)`**（非虚）：`Route::Build` 在 `LayoutRoute` 之前给，`BuildTrack`（instantiate 线路）之后清空；指针指向 Core 持有的数据，生命周期覆盖 `Build`。`manual` 为空或没有数据时 `LayoutManual` 只打一行警告、不出任何线路。
+- **`RouteStationInfo::presetIndex`**：站所在建筑是路网预设放出来的，则为该预设在 `.roadnet output.presets` 里的原下标（`PlacementPreset::outputIndex`→`Map::GetPresetIndexOfBuilding`），否则 -1。线路环里的预设项靠它找站（站名是 `"Station"+计数器`，哈希序，不稳定，不能用来引用）。
+- 规划部分（线路环→用到的连线、节点转向、缺口、停靠线路）是火车/飞机共用的纯函数 `PlanManualRoute`（`Basic/traffic/route_common.h`），见 `route_common.md`；两个 mod 各自把规划落成自己的几何，见 `route_train.md`/`route_air.md`。
+- Core 一侧**不需要新逻辑**：extern 途经点、站停靠、站穿过不停（`EDGE_THROUGH`，按 `passSpeed`）原本就支持。

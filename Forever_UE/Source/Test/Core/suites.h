@@ -16,6 +16,7 @@ void RunRouteSuite(const TestOptions& options);
 void RunGreenSuite(const TestOptions& options);
 void RunPresetsSuite(const TestOptions& options);
 void RunPolitSuite(const TestOptions& options);
+void RunTransitSuite(const TestOptions& options);
 
 // 子进程里的套件主体(世界已生成)。
 void WorldSuiteBody(TestWorld& world, const TestOptions& options);
@@ -26,6 +27,8 @@ void RouteSuiteBody(TestWorld& world, const TestOptions& options);
 void GreenSuiteBody(TestWorld& world, const TestOptions& options);
 void PresetsSuiteBody(TestWorld& world, const TestOptions& options);
 void PolitSuiteBody(TestWorld& world, const TestOptions& options);
+void TransitSuiteBody(TestWorld& world, const TestOptions& options);
+void TransitTwiceSuiteBody(TestWorld& world, const TestOptions& options);
 
 // 在子进程里(世界已生成)执行的套件主体；按套件名查找，没有返回nullptr。
 SuiteBody FindSuiteBody(const std::string& name);

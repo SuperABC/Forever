@@ -23,3 +23,13 @@
 
 - 互联线路只用前两条跑道；专用起飞/降落跑道未实现。
 - 天空段间距/高度/滑行速度是估值。harness 验证过线路规划(1 座环线，2 座 3 条线；滑行 run 上限 0.0175、飞行 0.175)，**未 PIE**。
+
+## 手动线路 `--skip`（2026-11-23）
+
+`"route_air --skip"`：`LayoutRoute` 走 `LayoutManual`；数据与规划见 `route_mod.md`"手动线路"、`route_common.md`。
+
+- **节点 z = 飞行高度**。每个节点一个 extern（`air_n<节点下标>`，飞机在 extern 处直接转向，和自动布局的 extern 一样），每条用到的连线两个方向各一条 link（无偏移、一段 `ManualAxis` 三次 Bezier；反向 link 把端点和控制点倒过来），连线类型对飞机无意义。
+- **缺口**：站↔节点一段 Bezier（站端沿跑道朝向、节点端沿弦的方向；偏离跑道方向>60° 或坡度 |Δz|/弦>0.6 打警告）；站↔站（两座机场之间没有航线）= 起飞爬升 → 天空点之间 Bezier → 降落，同自动互联；节点↔节点没有实体航线时直连；同站内跑道转场（`withinStation`）= 滑行 link，按 `sameStationSpeed`。
+- 降落跑道和起飞跑道分别按各自方向选（`allowTrackChange=true`），不同时停两条跑道，和自动布局的 `stay` 一致。
+- 线路：停靠站 `{机场名, 跑道}`，节点 `{extern名,-1}`；<2 个条目丢弃并警告。每条线 1 辆（没填 `lineVehicleCounts`）。
+- 未经 PIE 验证，也没有 CoreTest 夹具（transit 套件只测火车）。

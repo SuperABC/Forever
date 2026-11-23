@@ -263,6 +263,9 @@
     <ClInclude Include="map\roadnet_mod.h">
       <Filter>map</Filter>
     </ClInclude>
+    <ClInclude Include="map\transit_data.h">
+      <Filter>map</Filter>
+    </ClInclude>
     <ClInclude Include="map\zone_mod.h">
       <Filter>map</Filter>
     </ClInclude>

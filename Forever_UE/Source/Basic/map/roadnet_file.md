@@ -31,3 +31,7 @@
 
 - **两条路的路口(拐角)的缩进（2026-11-20）**：`AssignJunctionSetbacks`里只连两条路的节点单独算：夹角phi(两条路离开节点方向的夹角，<=PI)，沿本路中线缩进 `(对方半宽 + 本路半宽*cos(phi)) / sin(phi)`(等宽时=半宽/tan(phi/2))，让两条路朝向对方那侧的路缘线正好在角点相交、不再重叠；平角(phi>=PI-EPS)缩进0，缩进不超过路长的45
 - **两条路的路口(拐角)的缩进（2026-11-20）**：`AssignJunctionSetbacks`里只连两条路的节点单独算：夹角phi(两条路离开节点方向的夹角，<=PI)，沿本路中线缩进 `(对方半宽 + 本路半宽*cos(phi)) / sin(phi)`(等宽时=半宽/tan(phi/2))，让两条路朝向对方那侧的路缘线正好在角点相交、不再重叠；平角(phi>=PI-EPS)缩进0，缩进不超过路长的45%。jing/checkboard/file三份同步。
+
+## output.transit（2026-11-23）
+
+`output.transit = {nodes:[{x,y,z,extern?}], conns:[{from,to,ctrl:[x,y]|null,kind,route}], loops:[{route, items:[{preset:<output.presets 下标>,stop}|{node:<nodes 下标>}]}]}`。conns 是二次 Bezier（`ctrl` 空=直线），`kind` ∈ ground/hug/mouth/tunnel/bridge，`route`=route mod id。解析时丢弃：from/to 越界或相同的连线、缺 route 的连线、引用越界的 node 项、预设下标<0 的项、不足 2 项的环；`preset.outputIndex` 记原下标。数据原样放进 `RoadnetMod::transit`，由 route mod（`--skip`）使用，见 `route_mod.md`"手动线路"。
