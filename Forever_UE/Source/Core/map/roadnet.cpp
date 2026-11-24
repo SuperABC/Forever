@@ -327,6 +327,7 @@ void Roadnet::DistributeRoadnet(int width, int height,
 	for (const RoadnetMod::GreenSite& site : mod->greens) {
 		GreenSite copy;
 		copy.xy = site.xy;
+		copy.modId = site.modId;
 		for (const RoadnetMod::GreenSite::Link& link : site.links) {
 			if (link.road < 0 || link.road >= static_cast<int>(roads.size())) continue;
 			copy.links.emplace_back(link.edge, roads[link.road]);

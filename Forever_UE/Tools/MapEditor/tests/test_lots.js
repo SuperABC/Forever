@@ -103,4 +103,79 @@ assert.strictEqual(new Set(Object.values(o.edges).map((e) => JSON.stringify(e)))
 	q.z = 2 + 4e-6;
 	assert.ok(!ME.exportRoadnet(m4, new ME.Terrain(256, 256)).warnings.some((w) => w.includes('基准节点高度不一致')));
 }
+// 建地块的强制规则：基准路校验 + 足迹抹平 + 锁定掩码。
+{
+	const build = (type, za, zb) => {
+		const mm = ME.newModel(128, 128);
+		const a = ME.addNode(mm, 40, 40, false, za), b = ME.addNode(mm, 80, 40, false, zb);
+		const res = ME.addRoad(mm, { a: { node: a.id }, b: { node: b.id }, type });
+		return { mm, a, b, road: res.road };
+	};
+	const flat = new ME.Terrain(128, 128);
+	// 没有路
+	{ const mm = ME.newModel(128, 128); const a = ME.addNode(mm, 10, 10), b = ME.addNode(mm, 30, 10); assert.ok(ME.lotBaseRoadCheck(mm, flat, a.id, b.id).error.includes('没有路')); }
+	// 平地路：两端等高且等于地形(0) -> 通过，z=0
+	{ const { mm, a, b } = build('ground', 0, 0); const r = ME.lotBaseRoadCheck(mm, flat, a.id, b.id); assert.ok(r.road && r.z === 0, JSON.stringify(r)); }
+	// 平地路：两端等高但不等于地形 -> 不通过
+	{ const { mm, a, b } = build('ground', 1, 1); assert.ok(ME.lotBaseRoadCheck(mm, flat, a.id, b.id).error.includes('地形高度')); }
+	// 平地路：两端不等高 -> 不通过
+	{ const { mm, a, b } = build('ground', 0, 0.5); assert.ok(ME.lotBaseRoadCheck(mm, flat, a.id, b.id).error); }
+	// 地形贴合路面(fit)：两端等高即可，不要求等于地形
+	{ const { mm, a, b } = build('fit', 3.7, 3.7); const r = ME.lotBaseRoadCheck(mm, flat, a.id, b.id); assert.ok(r.road && r.z === 3.7, JSON.stringify(r)); }
+	{ const { mm, a, b } = build('fit', 3.7, 3.8); assert.ok(ME.lotBaseRoadCheck(mm, flat, a.id, b.id).error.includes('两端高度不同')); }
+	// 路面贴合地形(hug)/桥等其他类型 -> 不通过；曲线路 -> 不通过
+	{ const { mm, a, b } = build('hug', 0, 0); assert.ok(ME.lotBaseRoadCheck(mm, flat, a.id, b.id).error.includes('路面贴合地形')); }
+	{ const { mm, a, b, road } = build('fit', 2, 2); road.ctrl = [60, 50]; assert.ok(ME.lotBaseRoadCheck(mm, flat, a.id, b.id).error.includes('曲线')); }
+
+	// 足迹 = 覆盖格(格心在矩形内)外扩一圈；抹平到地块z；锁定掩码；占位分区不锁
+	const { mm, a, b } = build('fit', 6, 6);
+	const lot = ME.addLot(mm, a.id, b.id, 20, 'AREA_RESIDENCE_HIGH');
+	const t = new ME.Terrain(128, 128);
+	for (let i = 0; i < t.height.length; i++) t.height[i] = ((i % 128) * 0.37 + ((i / 128) | 0) * 0.11) % 3;   // 起伏地形
+	const corners = ME.lotCorners(mm, lot);
+	const foot = ME.lotFootprint(t, corners);
+	assert.strictEqual(foot.length, (40 + 2) * (20 + 2), '足迹=40x20覆盖格外扩一圈');
+	{ // 边界不在整数上：只要格子和地块有重叠(哪怕格心在外面)，它的3x3都在足迹里；贴边不算重叠
+		const fc = [[10.3, 10.3, 0], [30.3, 10.3, 0], [30.3, 20.3, 0], [10.3, 20.3, 0]];
+		const set = new Set(ME.lotFootprint(t, fc));
+		for (let y = 9; y <= 21; y++) for (let x = 9; x <= 31; x++) {
+			if (!(x + 1 > 10.3 && x < 30.3 && y + 1 > 10.3 && y < 20.3)) continue;
+			for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) assert.ok(set.has((y + oy) * 128 + x + ox), `cell ${x},${y} 的3x3缺 ${ox},${oy}`);
+		}
+		// 旋转45度的菱形：任取格子中心在菱形内的格子，3x3也都在
+		const dc = [[40, 30, 0], [50, 40, 0], [40, 50, 0], [30, 40, 0]];
+		const dset = new Set(ME.lotFootprint(t, dc));
+		for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+			if (Math.abs(x + 0.5 - 40) + Math.abs(y + 0.5 - 40) >= 10) continue;
+			for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) assert.ok(dset.has((y + oy) * 128 + x + ox));
+		}
+	}
+	t.beginStroke();
+	const n = ME.flattenLotTerrain(t, mm, lot, null);
+	const act = t.endStroke();
+	assert.strictEqual(n, foot.length);
+	assert.ok(foot.every((i) => t.height[i] === Math.fround(6)));
+	assert.strictEqual(t.countNonBuildable(40, 40, 80, 60), 0, '覆盖区全部可建设');
+	assert.ok(ME.exportRoadnet(mm, t).warnings.every((w) => !w.includes('不是可建设区域')));
+	t.applyCells(act.indices, act.before);
+	assert.ok(t.countNonBuildable(40, 40, 80, 60) > 0, '撤销后恢复起伏');
+	const mask = ME.lotLockMask(mm, t);
+	assert.ok(foot.every((i) => mask[i] === 1) && mask.reduce((s, v) => s + v, 0) === foot.length);
+	assert.strictEqual(ME.lotLockMask(mm, t, lot.id), null, 'excludeLotId排除自己');
+	lot.area = 'AREA_PLACEHOLDER';
+	assert.strictEqual(ME.lotLockMask(mm, t), null, '占位分区不锁定');
+	lot.area = 'AREA_RESIDENCE_HIGH';
+	// 抹平时避开别的地块的足迹
+	const c = ME.addNode(mm, 40, 120, false, 6), d = ME.addNode(mm, 80, 120, false, 6);
+	ME.addRoad(mm, { a: { node: c.id }, b: { node: d.id }, type: 'fit' });
+	const lot2 = ME.addLot(mm, c.id, d.id, -20, 'AREA_RESIDENCE_HIGH');   // 向北伸出，足迹y=100..121，和lot(y=40..61)不重叠
+	assert.ok(ME.lotFootprint(t, ME.lotCorners(mm, lot2)).every((i) => !mask[i]));
+	// 把lot2的足迹拉大到和lot的足迹重叠，重叠格不被抹平
+	lot2.depth = -64;   // 一直到y=56
+	const lock1 = ME.lotLockMask(mm, t, lot2.id);
+	const probe = 58 * 128 + 60;   // lot足迹里(y 39..61)且在lot2覆盖内
+	t.height[probe] = 1.234;
+	t.beginStroke(); ME.flattenLotTerrain(t, mm, lot2, lock1); t.endStroke();
+	assert.strictEqual(t.height[probe], Math.fround(1.234), '别的地块足迹里的格子不动');
+}
 console.log('test_lots OK');

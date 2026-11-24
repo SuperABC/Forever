@@ -129,6 +129,7 @@ public:
 	struct GreenSite {
 		std::vector<float> xy;
 		std::vector<std::pair<int, Road*>> links; // (边下标, 路)
+		std::string modId; // 指定的green mod id，空=按权重随机
 	};
 	const std::vector<GreenSite>& GetGreenSites() const;
 

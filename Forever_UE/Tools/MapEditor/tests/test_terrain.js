@@ -260,4 +260,62 @@ assert.strictEqual(b.isBuildable(16, 16), true);
 	q.height[8 * 16 + 8] = 5 + 1e-4;
 	assert.ok(!q.isBuildable(8, 8), '极差1e-4>=1e-5不算平');
 }
+// 锁定格(地块覆盖)：所有高度笔刷/一键整理都不改它们的高度；平滑把周围格子拉向锁定格的高度(而不是0)。
+{
+	const mk = () => {
+		const t = new ME.Terrain(64, 64);
+		t.beginStroke(); t.brush('paint', 32, 32, 24, { terrain: 'm' }); t.endStroke();   // 大块非平原，里面可以随意改高度
+		t.height.fill(0);
+		t.locked = new Uint8Array(64 * 64);
+		for (let y = 28; y < 36; y++) for (let x = 28; x < 36; x++) { t.locked[y * 64 + x] = 1; t.height[y * 64 + x] = 5; }
+		return t;
+	};
+	const lockedHeights = (t) => { for (let i = 0; i < t.locked.length; i++) if (t.locked[i] && t.height[i] !== 5) return false; return true; };
+	for (const op of ['raise', 'lower', 'flatten', 'smooth']) {
+		const t = mk();
+		t.beginStroke(); t.brush(op, 32, 32, 14, { strength: 1, target: 0, allowFlat: true }); t.endStroke();
+		assert.ok(lockedHeights(t), op + '不改锁定格');
+	}
+	{ // 画平原(会把高度清0)也不能动锁定格的高度，只换类型
+		const t = mk();
+		t.beginStroke(); t.brush('paint', 32, 32, 10, { terrain: 'plain' }); t.endStroke();
+		assert.ok(lockedHeights(t));
+		assert.strictEqual(t.nameAt(32 * 64 + 32), 'plain');
+	}
+	{ // 抬高在锁定格以外照常生效
+		const t = mk();
+		t.beginStroke(); const n = t.brush('raise', 32, 32, 14, { strength: 1, allowFlat: true }); t.endStroke();
+		assert.ok(n > 0 && t.height[32 * 64 + 40] > 0);
+	}
+	{ // 平滑笔刷：外面的格子(高度0)朝锁定格(5)靠拢，多遍后单调靠近
+		const t = mk();
+		const probe = 32 * 64 + 36;   // 紧挨锁定块东缘
+		for (let k = 0; k < 6; k++) { t.beginStroke(); t.brush('smooth', 34, 32, 10, { strength: 1, allowFlat: true }); t.endStroke(); }
+		assert.ok(lockedHeights(t));
+		assert.ok(t.height[probe] > 1, '紧邻锁定块的格子被拉高: ' + t.height[probe]);
+		assert.ok(t.height[probe] > t.height[probe + 4], '离锁定块越远越低');
+	}
+	{ // 一键平滑高度：锁定格是锚点，周围朝5缓降，且不动锁定格
+		const t = mk();
+		for (let y = 20; y < 44; y++) for (let x = 20; x < 44; x++) if (!t.locked[y * 64 + x]) t.height[y * 64 + x] = 10;   // 周围一圈山
+		t.beginStroke(); const n = t.relaxFlatBoundary(4); t.endStroke();
+		assert.ok(n > 0 && lockedHeights(t));
+		const next = 32 * 64 + 36;   // 紧邻锁定块
+		assert.ok(t.height[next] < 7 && t.height[next] >= 5, '紧邻锁定格的山朝锁定高度5缓降: ' + t.height[next]);
+		assert.ok(t.height[next + 3] > t.height[next], '向外单调升');
+		// 没有锁定格时行为不变(朝0)：第二个对象
+		const u = mk(); u.locked = null; u.height.fill(0);
+		for (let y = 20; y < 44; y++) for (let x = 20; x < 44; x++) u.height[y * 64 + x] = 10;
+		u.beginStroke(); u.relaxFlatBoundary(4); u.endStroke();
+		assert.ok(u.height[32 * 64 + 21] <= 10 && u.height[32 * 64 + 32] === 10);
+	}
+	{ // 平滑类型：锁定格换类型但高度不动
+		const t = new ME.Terrain(16, 16); t.palette = ['plain', 'a']; t.idx.fill(1); t.height.fill(3);
+		t.idx[8 * 16 + 8] = 0; t.height[8 * 16 + 8] = 0;   // 平原毛刺
+		t.locked = new Uint8Array(256); t.locked[8 * 16 + 8] = 1; t.height[8 * 16 + 8] = 7;
+		t.smoothTypes(1);
+		assert.strictEqual(t.idx[8 * 16 + 8], 1); assert.strictEqual(t.height[8 * 16 + 8], 7);
+	}
+}
+
 console.log('test_terrain OK');

@@ -210,7 +210,9 @@ public:
 		std::unordered_map<int, Road*> boundaryRoads;
 		int direction = 0;
 		int outputIndex = -1;          // Roadnet::Preset::outputIndex，落地后登记进presetOfBuilding
+		AREA_TYPE area = AREA_NONE;    // 顶层lot的分区：id落空时按它的权重随机退化(PickRandomBuildingId)
 	};
+	std::string PickRandomBuildingId(AREA_TYPE area);
 	std::vector<PlacedPreset> pendingBuildingPresets;
 	// 预设落地成功的建筑 -> 预设在.roadnet output.presets里的原下标。线路环按它找到站(Route::Build填RouteStationInfo::presetIndex)。不存档(读档不重新Build线路)。
 	std::unordered_map<const Building*, int> presetOfBuilding;

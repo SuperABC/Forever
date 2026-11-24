@@ -92,7 +92,8 @@ const S = {
 	tloop: [],
 	bline: [],                  // bus模式正在建的公交线 [{road, t, side, station}]                  // loop模式正在连的环 [{kind:'preset'|'node', ref}]
 	lotArea: 'AREA_RESIDENCE_HIGH',
-	sel: null,                  // {kind:'node'|'road'|'lot'|'green', id}
+	greenId: '',                // 绿化工具：新画绿化区的green id默认值，''=游戏按权重随机
+	sel: null,                 // {kind:'node'|'road'|'lot'|'green', id}
 	colors: {},                 // 地形字符串→自定义颜色
 	mouse: null,                // 世界坐标
 	warnings: [],
@@ -123,7 +124,10 @@ function ctxHeight() { return { height: (x, y) => S.terrain.sampleHeight(x, y) }
 // ======================= 撤销/重做 =======================
 function pushAction(a) { hist.undo.push(a); if (hist.undo.length > HISTORY_LIMIT) hist.undo.shift(); hist.redo = []; afterChange(); }
 function applyAction(a, undo) {
-	if (a.kind === 't') {
+	if (a.kind === 'multi') {   // 一步撤销里包含多个动作(建地块 = 模型改动 + 地形抹平)
+		const list = undo ? a.list.slice().reverse() : a.list;
+		for (const x of list) applyAction(x, undo);
+	} else if (a.kind === 't') {
 		S.terrain.applyCells(a.indices, undo ? a.before : a.after);
 		markTerrainDirtyIndices(a.indices);
 	} else if (a.kind === 'm') {
@@ -899,7 +903,7 @@ function greenClick(w) {
 		if (!ME.canCloseGreen(ring)) { say('不能闭合：边自相交或面积为0'); return; }
 		const pts = ring.map((q) => q.slice());
 		S.pending = null;
-		const res = modelOp((m) => ({ green: ME.addGreen(m, pts) }));
+		const res = modelOp((m) => ({ green: ME.addGreen(m, pts, S.greenId) }));
 		if (res.green) { S.sel = { kind: 'green', id: res.green.id }; renderRight(); }
 		S.dirty2d = true; return;
 	}
@@ -1573,6 +1577,7 @@ c2d.addEventListener('mousedown', (e) => {
 	}
 	if (e.button !== 0) return;
 	if (S.tool === 'terrain') {
+			syncTerrainLock();
 			S.terrain.beginStroke();
 			// 限定单一地形：按下时笔刷中心所在格的地形，整次笔画都只改这个地形的格子。
 			let only;
@@ -1683,6 +1688,7 @@ window.addEventListener('keyup', (e) => { if (e.key === ' ') spaceDown = false; 
 // 一键整理：整张地图一次操作，进撤销栈。kind='height'平滑高度 / 'types'平滑类型。
 function runCleanup(kind) {
 	const T = S.terrain;
+	syncTerrainLock();
 	T.beginStroke();
 	const n = kind === 'height' ? T.relaxFlatBoundary(S.cleanup.width) : T.smoothTypes(S.cleanup.passes);
 	if (T.stroke && T.stroke.before.size) markTerrainDirtyIndices(Array.from(T.stroke.before.keys()));
@@ -1690,6 +1696,19 @@ function runCleanup(kind) {
 	if (a) pushAction(Object.assign({ kind: 't' }, a));
 	say(n ? (kind === 'height' ? `已平滑高度：改了 ${n} 个格点` : `已平滑类型：改了 ${n} 个格子`) : (kind === 'height' ? '没有需要平滑的高度(没有平原，或边界已经平缓)' : '没有需要平滑的类型'));
 	if (n) renderLeft();
+}
+// 地块覆盖的格子(足迹，见lots.js)按当前地块重算后锁到地形上：笔刷/一键整理都不会改它们的高度。
+function syncTerrainLock() { S.terrain.locked = ME.lotLockMask(S.model, S.terrain); }
+// 把地块足迹抹平到地块高度(避开别的地块的足迹)，返回可进撤销栈的地形动作(没改动返回null)。占位分区不抹。
+function flattenLotAction(lot) {
+	if (lot.area === 'AREA_PLACEHOLDER') return null;
+	const T = S.terrain;
+	const locked = ME.lotLockMask(S.model, T, lot.id);
+	T.beginStroke();
+	ME.flattenLotTerrain(T, S.model, lot, locked);
+	if (T.stroke && T.stroke.before.size) markTerrainDirtyIndices(Array.from(T.stroke.before.keys()));
+	const a = T.endStroke();
+	return a ? Object.assign({ kind: 't' }, a) : null;
 }
 const HEIGHT_OPS = ['raise', 'lower', 'flatten', 'smooth'];
 function applyBrush(w, only) {
@@ -1751,14 +1770,26 @@ function lotClick(w) {
 	const p = S.pending;
 	if (!p) { if (n) { S.pending = { a: n.id }; } else say('先点一个路口/节点作为地块的第一个角'); S.dirty2d = true; return; }
 	if (p.b === undefined) {
-		if (n && n.id !== p.a) S.pending.b = n.id; else say('再点另一个节点');
+		if (n && n.id !== p.a) {
+			// 强制规则：前两个点之间必须是一条平地路(两端=地形高度、等高)或地形贴合路面的路(两端等高)，否则不能建地块(占位分区除外)。
+			const chk = S.lotArea === 'AREA_PLACEHOLDER' ? {} : ME.lotBaseRoadCheck(S.model, S.terrain, p.a, n.id);
+			if (chk.error) { say(chk.error); S.dirty2d = true; return; }
+			S.pending.b = n.id;
+		} else say('再点另一个节点');
 		S.dirty2d = true; return;
 	}
 	const lot = lotPreview();
 	if (!lot) { say('把鼠标拉开一点决定深度'); return; }
 	S.pending = null;
-	const res = modelOp((m) => ({ lot: ME.addLot(m, lot.a, lot.b, lot.depth, S.lotArea) }));
-	if (res.lot) { S.sel = { kind: 'lot', id: res.lot.id }; }
+	// 建地块 = 加地块 + 把地块足迹抹平到路的高度，合成一步撤销。
+	const before = ME.cloneModel(S.model);
+	const created = ME.addLot(S.model, lot.a, lot.b, lot.depth, S.lotArea);
+	const actions = [{ kind: 'm', before, after: ME.cloneModel(S.model) }];
+	const flatten = flattenLotAction(created);
+	if (flatten) actions.push(flatten);
+	pushAction(actions.length > 1 ? { kind: 'multi', list: actions } : actions[0]);
+	S.sel = { kind: 'lot', id: created.id };
+	if (flatten) say(`已建地块，并把它下面 ${flatten.indices.length} 个格子抹平到高度 ${ME.lotZ(S.model, created).toFixed(3)}`);
 	S.dirty2d = true;
 }
 
@@ -2143,6 +2174,8 @@ function renderLeft() {
 		left.append(row('类型', sel(ME.AREAS.map((a) => [a, areaLabel(a)]), S.lotArea, (v) => { S.lotArea = v; S.dirty2d = true; })));
 	} else if (S.tool === 'green') {
 		left.append(el('h4', null, '绿化区(成环多边形)'));
+		left.append(row('green id', el('input', { type: 'text', value: S.greenId, list: 'greenIdList', placeholder: '空=按权重随机', onchange: (e) => { S.greenId = e.target.value.trim(); e.target.value = S.greenId; } }), el('datalist', { id: 'greenIdList' }, el('option', { value: 'green_park' }))));
+		left.append(el('div', { class: 'hint' }, '新画的绿化区用这个 id；留空=游戏按权重随机选 green mod。填了的 id 游戏里没启用也会退化成随机。'));
 		left.append(el('div', { class: 'tabs' },
 			btn('画多边形', () => { S.greenMode = 'draw'; S.pending = null; renderLeft(); S.dirty2d = true; }, S.greenMode === 'draw'),
 			btn('连接道路', () => { S.greenMode = 'link'; S.pending = null; renderLeft(); S.dirty2d = true; }, S.greenMode === 'link')));
@@ -2273,6 +2306,7 @@ function renderRight() {
 		const area = Math.abs(ME.greenSignedArea(gr.pts));
 		right.append(el('div', null, `绿化 ${gr.id}  ${gr.pts.length} 个顶点  面积 ${(area * 100).toFixed(0)} m²`));
 		if (ME.ringSelfIntersects(gr.pts)) right.append(el('div', { class: 'warn' }, '边自相交，导出时会被跳过'));
+		right.append(row('green id', el('input', { type: 'text', value: gr.modId || '', list: 'greenIdListR', placeholder: '空=按权重随机', onchange: (e) => modelOp((m) => { const g2 = ME.greenOf(m, gr.id); if (g2) g2.modId = e.target.value.trim(); }) }), el('datalist', { id: 'greenIdListR' }, el('option', { value: 'green_park' }))));
 		right.append(el('h4', null, `连接的道路(${gr.links.length})`));
 		if (!gr.links.length) right.append(el('div', { class: 'hint' }, '没有连路：只做景观，不能用地址导航。用"连接道路"模式接入。'));
 		for (const link of gr.links) {
@@ -2299,7 +2333,16 @@ function renderRight() {
 		const lot = M.lots.find((l) => l.id === S.sel.id);
 		right.append(el('div', null, `地块 ${lot.id}`));
 		right.append(row('类型', sel(ME.AREAS.map((a) => [a, areaLabel(a)]), lot.area, (v) => modelOp((m) => { m.lots.find((l) => l.id === lot.id).area = v; }))));
-		right.append(row('深度', num(lot.depth.toFixed(2), (v) => modelOp((m) => { if (v) m.lots.find((l) => l.id === lot.id).depth = v; }), { step: 0.5 })));
+		right.append(row('深度', num(lot.depth.toFixed(2), (v) => {
+				if (!v) return;
+				// 改深度会让地块盖到新的格子：和建地块一样把新足迹抹平(合成一步撤销)。
+				const before = ME.cloneModel(S.model);
+				S.model.lots.find((l) => l.id === lot.id).depth = v;
+				const actions = [{ kind: 'm', before, after: ME.cloneModel(S.model) }];
+				const flatten = flattenLotAction(S.model.lots.find((l) => l.id === lot.id));
+				if (flatten) actions.push(flatten);
+				pushAction(actions.length > 1 ? { kind: 'multi', list: actions } : actions[0]);
+			}, { step: 0.5 })));
 		const info = ME.describeLot(M, lot, roadPiecesForUI());
 		if (info) {
 			right.append(el('h4', null, '四向缩进(留空=自动)'));

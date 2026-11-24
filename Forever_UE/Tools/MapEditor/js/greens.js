@@ -1,9 +1,10 @@
 // 绿化区(green)：一个成环的2D多边形(可以是凹的，不能自交)，可选地把若干条边"连"到真实道路上。
-// 模型：model.greens = [{id, pts:[[x,y],...], links:[{edge, roadId, t, x, y}]}]
+// 模型：model.greens = [{id, pts:[[x,y],...], links:[{edge, roadId, t, x, y}], modId}]
+//   modId 指定的green mod id；''(旧文件没有这个字段也当空)=游戏按权重随机选。游戏里该id没注册/没启用时也退化成随机。
 //   pts   顶点，不重复首点；edge=i 指 pts[i]->pts[(i+1)%n] 这条边。
 //   links 这条边连到哪条用户road；(x,y)=用户点路时路上的落点，t=该点的Bezier参数。
 //         用户road被切开(双击加路口)后roadId/t会失效，所以导出时优先按roadId+落点复核，不行再按落点找最近的路(容差LINK_TOL)。
-// 导出格式见 Source/Basic/map/roadnet_file.md：output.greens=[{points:[[x,y]..], links:[{edge, road:output.roads下标}]}]，顶点统一成有符号面积>0。
+// 导出格式见 Source/Basic/map/roadnet_file.md：output.greens=[{points:[[x,y]..], links:[{edge, road:output.roads下标}], id}]，顶点统一成有符号面积>0。
 (function (root) {
 	const ME = root.ME = root.ME || {};
 
@@ -86,8 +87,9 @@
 		return Math.hypot(x - (a[0] + dx * f), y - (a[1] + dy * f));
 	}
 
-	function addGreen(model, pts) {
-		const green = { id: model.nextId++, pts: pts.map((p) => [p[0], p[1]]), links: [] };
+	// modId：指定的green mod id(如green_park)，''=交给游戏按权重随机选。
+	function addGreen(model, pts, modId) {
+		const green = { id: model.nextId++, pts: pts.map((p) => [p[0], p[1]]), links: [], modId: modId || '' };
 		model.greens.push(green);
 		return green;
 	}
@@ -165,7 +167,7 @@
 				links.push({ edge: reversed ? (n - 2 - link.edge + 2 * n) % n : link.edge, road: pieces[Math.min(k, pieces.length - 1)] });
 			}
 			links.sort((a, b) => a.edge - b.edge);
-			output.greens.push({ points: pts, links });
+			output.greens.push({ points: pts, links, id: g.modId || '' });
 			if (terrain) {
 				for (const p of pts) {
 					if (p[0] < 0 || p[1] < 0 || p[0] > terrain.w || p[1] > terrain.h) { warnings.push(`绿化${g.id}超出地图`); break; }

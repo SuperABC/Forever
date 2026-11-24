@@ -464,6 +464,21 @@ void Traffic::InitRoutes(Map* map) {
 	vector<string> routeIds = routeFactory.GetRegisteredIds();
 	routeIds.erase(remove(routeIds.begin(), routeIds.end(), "route_empty"), routeIds.end());
 
+	// 编辑器手工线路(独立线路/线路环/路网路线)的route id指向没注册/没启用的route mod时没人消费这些数据：
+	// 线路没有"随机"可退化(站点是编辑器手摆的)，只能丢弃，这里统一告警一次，方便发现id写错。
+	{
+		const TransitData& transit = map->GetTransit();
+		set<string> missing;
+		auto check = [&](const string& route) {
+			if (!route.empty() && find(routeIds.begin(), routeIds.end(), route) == routeIds.end()) missing.insert(route);
+		};
+		for (const auto& conn : transit.conns) check(conn.route);
+		for (const auto& loop : transit.loops) check(loop.route);
+		for (const auto& line : transit.roadLines) check(line.route);
+		for (const string& route : missing)
+			debugf("Warning: Traffic::InitRoutes: editor transit data references route '%s' which is not enabled/registered, those lines are ignored.\n", route.c_str());
+	}
+
 	for (const string& modId : routeIds) {
 		string name = "Route_" + modId;
 		Route* route = new Route(&routeFactory, modId, name);

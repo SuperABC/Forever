@@ -70,6 +70,7 @@ public:
 		};
 		std::vector<float> xy;   // 顶点{x0,y0,x1,y1,...}，地图单位，宿主会规整成有符号面积>0
 		std::vector<Link> links;
+		std::string modId;       // 指定的green mod id；空=Core按权重随机选。id没注册/没启用时Core也退化成随机
 	};
 	std::vector<GreenSite> greens;
 

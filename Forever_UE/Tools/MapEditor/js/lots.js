@@ -90,6 +90,101 @@
 		return bad;
 	}
 
+	// ---- 建地块的强制规则 ----
+	// 1) 前两次点击选的两个节点a、b之间必须正好有一条直线路(地块的第一条边)，而且：
+	//    平地路(ground)：两端高度相同，并且都等于该处地形高度(TERRAIN_MATCH_EPS)；
+	//    地形贴合路面(fit)：两端高度相同(地形会被拉到路面上，不要求等于现有地形)。
+	//    其他类型(路面贴合地形/隧道口/隧道/桥)或曲线路都不行。地块高度=这条路的高度。
+	// 2) 建好后把地块"足迹"抹平到这个高度(flattenLotTerrain)；足迹被锁定(lotLockMask)，之后任何笔刷/一键整理都不改它。
+	// AREA_PLACEHOLDER(占位分区)不受这些约束(它本来就允许放在非平地上)。
+	const TERRAIN_MATCH_EPS = 1e-4;
+	const ROAD_TYPE_NAMES = { ground: '平地', hug: '路面贴合地形', fit: '地形贴合路面', mouth: '隧道口', tunnel: '隧道', bridge: '桥' };
+	function lotBaseRoadCheck(model, terrain, aId, bId) {
+		const a = ME.nodeOf(model, aId), b = ME.nodeOf(model, bId);
+		if (!a || !b) return { error: '节点不存在' };
+		const candidates = model.roads.filter((r) => (r.a === aId && r.b === bId) || (r.a === bId && r.b === aId));
+		if (!candidates.length) return { error: '这两个节点之间没有路：地块的第一条边必须正好是一条路，请先画好这条路，再点它的两个端点' };
+		const za = a.z || 0, zb = b.z || 0;
+		let reason = '';
+		for (const r of candidates) {
+			const typeName = ROAD_TYPE_NAMES[r.type] || r.type;
+			if (r.ctrl) { reason = '这条路是曲线，地块的第一条边必须是直线路'; continue; }
+			if (r.type !== 'ground' && r.type !== 'fit') { reason = `这条路是"${typeName}"，地块的第一条边只能是"平地"路(两端高度=地形高度)或"地形贴合路面"的路`; continue; }
+			if (Math.abs(za - zb) > heightEps()) { reason = `这条路两端高度不同(${za} / ${zb})，地块的第一条边必须两端等高`; continue; }
+			if (r.type === 'ground' && terrain) {
+				const ta = terrain.sampleHeight(a.x, a.y), tb = terrain.sampleHeight(b.x, b.y);
+				if (Math.abs(za - ta) > TERRAIN_MATCH_EPS || Math.abs(zb - tb) > TERRAIN_MATCH_EPS) {
+					reason = `这条平地路的端点高度(${za} / ${zb})和地形高度(${ta.toFixed(4)} / ${tb.toFixed(4)})不一致：平地路要两端都贴着地形，否则请改用"地形贴合路面"`;
+					continue;
+				}
+			}
+			return { road: r, z: (za + zb) / 2 };
+		}
+		return { error: reason };
+	}
+
+	// 单位格[x,x+1]x[y,y+1]和凸四边形(nodes)面积是否有重叠(分离轴法；只是贴边/贴角不算)。
+	function cellOverlapsQuad(x, y, nodes) {
+		const EPS = 1e-9;
+		const cell = [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]];
+		const axes = [[1, 0], [0, 1]];
+		for (let i = 0; i < 4; i++) { const p = nodes[i], q = nodes[(i + 1) % 4]; axes.push([-(q[1] - p[1]), q[0] - p[0]]); }
+		for (const [ax, ay] of axes) {
+			let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+			for (const p of cell) { const d = p[0] * ax + p[1] * ay; if (d < a0) a0 = d; if (d > a1) a1 = d; }
+			for (const p of nodes) { const d = p[0] * ax + p[1] * ay; if (d < b0) b0 = d; if (d > b1) b1 = d; }
+			const scale = Math.hypot(ax, ay) || 1;
+			if (a1 <= b0 + EPS * scale || b1 <= a0 + EPS * scale) return false;
+		}
+		return true;
+	}
+
+	// 地块足迹：和地块矩形有重叠的每个格子(哪怕只擦到一角，格心在外面)，各自取3x3邻域(外扩一圈)——
+	// 游戏的可建设判断看3x3邻域，这些格子要可建设，它们的邻居也得同高；格子的地表还用到右/下邻格的顶点高度。返回地形下标数组。
+	function lotFootprint(terrain, corners) {
+		const xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]);
+		const x0 = Math.floor(Math.min(...xs)), x1 = Math.ceil(Math.max(...xs));
+		const y0 = Math.floor(Math.min(...ys)), y1 = Math.ceil(Math.max(...ys));
+		const nodes = orderCorners(corners).nodes;
+		const out = new Set();
+		for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+			if (!cellOverlapsQuad(x, y, nodes)) continue;
+			for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+				const nx = x + ox, ny = y + oy;
+				if (terrain.inside(nx, ny)) out.add(ny * terrain.w + nx);
+			}
+		}
+		return Array.from(out);
+	}
+
+	// 所有地块(占位分区除外)的足迹并集，Uint8Array(1=锁定)；没有任何锁定格返回null。excludeLotId：不算这块(建它时抹平要避开"别的"地块)。
+	function lotLockMask(model, terrain, excludeLotId) {
+		let mask = null;
+		for (const lot of model.lots) {
+			if (lot.id === excludeLotId || lot.area === 'AREA_PLACEHOLDER') continue;
+			const corners = lotCorners(model, lot);
+			if (!corners) continue;
+			for (const i of lotFootprint(terrain, corners)) {
+				if (!mask) mask = new Uint8Array(terrain.w * terrain.h);
+				mask[i] = 1;
+			}
+		}
+		return mask;
+	}
+
+	// 把地块足迹抹平到地块高度(跳过locked里的格子)。调用方包在terrain.beginStroke/endStroke里。返回改了多少格。
+	function flattenLotTerrain(terrain, model, lot, locked) {
+		const corners = lotCorners(model, lot);
+		if (!corners) return 0;
+		const z = corners[0][2];
+		let changed = 0;
+		for (const i of lotFootprint(terrain, corners)) {
+			if (locked && locked[i]) continue;
+			if (terrain.setHeight(i, z)) changed++;
+		}
+		return changed;
+	}
+
 	function addLot(model, a, b, depth, area) {
 		const lot = { id: model.nextId++, a, b, depth, area: area || 'AREA_RESIDENCE_HIGH', margin: [null, null, null, null], presets: [] };
 		model.lots.push(lot);
@@ -341,7 +436,7 @@
 				lot.presets.forEach((p, i) => {
 					const step = replay.steps[i];
 					if (!step.placed) { warnings.push(`地块${lot.id}的预设${p.id}无效：${step.error}，已跳过`); return; }
-					if (!p.modId) warnings.push(`地块${lot.id}的预设${p.id}还没有填id(游戏里只会占位，不会生成园区/建筑)`);
+					if (!p.modId) warnings.push(`地块${lot.id}的预设${p.id}还没有填id(游戏里会按这块地的分区权重随机放一栋建筑；占位分区则只占位)`);
 					output.presets.push({ lot: output.lots.length - 1, id: p.modId || '', direction: p.dir, rect: [p.x0, p.x1, p.y0, p.y1] });
 					// presetId→output.presets下标，给transit导出用(不可枚举，不会写进文件)
 					if (!output.presetIndexById) Object.defineProperty(output, 'presetIndexById', { value: new Map(), enumerable: false });
@@ -360,6 +455,10 @@
 	ME.describeLot = describeLot;
 	ME.insetCorners = insetCorners;
 	ME.nonBuildableCount = nonBuildableCount;
+	ME.lotBaseRoadCheck = lotBaseRoadCheck;
+	ME.lotFootprint = lotFootprint;
+	ME.lotLockMask = lotLockMask;
+	ME.flattenLotTerrain = flattenLotTerrain;
 	ME.exportLots = exportLots;
 	ME.PRESET = { PATH_HALF, MIN_LOT_EXTENT, MIN_GAP };
 	ME.lotFrame = lotFrame;

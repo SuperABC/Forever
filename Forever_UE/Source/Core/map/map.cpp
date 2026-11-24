@@ -572,18 +572,15 @@ void Map::PlacePresets() {
 		}
 		Lot* parent = wholeLot ? nullptr : lot;
 		if (parent) PromoteAdaptiveRemainder(parent, placer);
-		if (isZone) {
-			// mod没注册/没启用时CreateZone返回null，空间已经占了，只告警。
-			if (!CreateZoneAt(preset.modId, placer, placedQuad, boundaryRoads, preset.direction))
-				debugf("Warning: preset zone mod \"%s\" is not enabled/registered, space is reserved but nothing is created.\n", preset.modId.c_str());
-		}
-		else {
-			PlacedPreset placed;
-			placed.id = preset.modId; placed.lot = placer; placed.adaptiveParent = parent;
-			placed.quad = placedQuad; placed.boundaryRoads = std::move(boundaryRoads); placed.direction = preset.direction;
-			placed.outputIndex = preset.outputIndex;
-			pendingBuildingPresets.push_back(std::move(placed));
-		}
+		// 园区mod没注册/没启用时CreateZone返回null：空间已经占了，改成按building预设处理(id不是building也一样不会创建成功)，
+		// InitBuildings里会退化成按这块地的分区权重随机放一栋建筑，见PickRandomBuildingId。
+		if (isZone && CreateZoneAt(preset.modId, placer, placedQuad, boundaryRoads, preset.direction)) continue;
+		PlacedPreset placed;
+		placed.id = preset.modId; placed.lot = placer; placed.adaptiveParent = parent;
+		placed.quad = placedQuad; placed.boundaryRoads = std::move(boundaryRoads); placed.direction = preset.direction;
+		placed.outputIndex = preset.outputIndex;
+		placed.area = lot->GetArea();   // 子块的分区不一定继承，随机退化按顶层lot的分区算
+		pendingBuildingPresets.push_back(std::move(placed));
 	}
 }
 
@@ -627,6 +624,29 @@ bool Map::CreateZoneAt(const std::string& id, Lot* lot, const Quad& placedQuad, 
 	return true;
 }
 
+// 按分区权重(BuildingFactory::GetPower)从已启用的building mod里随机挑一个id；占位分区/全是0权重返回空串。
+string Map::PickRandomBuildingId(AREA_TYPE area) {
+	if (area == AREA_PLACEHOLDER) return "";
+	vector<string> ids = buildingFactory.GetRegisteredIds();
+	sort(ids.begin(), ids.end()); // 无序表，排序保证同种子下选择稳定
+	vector<float> weights;
+	float total = 0.f;
+	for (const string& id : ids) {
+		weights.push_back(max(0.f, buildingFactory.GetPower(id, area)));
+		total += weights.back();
+	}
+	if (total <= 0.f) return "";
+	float pick = static_cast<float>(GetRandom(10000)) / 10000.f * total;
+	size_t chosen = 0;
+	float acc = 0.f;
+	for (size_t i = 0; i < ids.size(); i++) {
+		acc += weights[i];
+		if (weights[i] > 0.f) chosen = i;
+		if (pick < acc) break;
+	}
+	return ids[chosen];
+}
+
 bool Map::CreateBuildingAt(const std::string& id, Lot* lot, Lot* adaptiveParent, const Quad& placedQuad, const unordered_map<int, Road*>& boundaryRoads, int direction, Building** created) {
 	// 嵌套子块不是路网分配过地址的顶层Lot，GetAddresses()为空，building->GetAddress()会退化成空路名(" <楼名>")，
 	// Map::LocateBuilding/LocateRoom、npc_teleport这类按地址找房间的都找不到它。子块属于adaptiveParent这块地，直接沿用它的地址
@@ -665,10 +685,18 @@ void Map::InitBuildings() {
 	PathLaneSpec pathSpec;
 
 	// 路网预设里的building：InitZones开头已占好位，模板库加载完才能Layout，在这里落地。
+	// 没填id、或指定的id(包括落空的zone_id)没注册/没启用时，退化成按这块地的分区权重随机放一栋(占位分区/没有候选就只占位)。
 	for (const PlacedPreset& placed : pendingBuildingPresets) {
 		Building* created = nullptr;
-		if (!CreateBuildingAt(placed.id, placed.lot, placed.adaptiveParent, placed.quad, placed.boundaryRoads, placed.direction, &created))
-			debugf("Warning: preset building mod \"%s\" is not enabled/registered, space is reserved but nothing is created.\n", placed.id.c_str());
+		bool ok = CreateBuildingAt(placed.id, placed.lot, placed.adaptiveParent, placed.quad, placed.boundaryRoads, placed.direction, &created);
+		if (!ok) {
+			string fallback = PickRandomBuildingId(placed.area);
+			if (!fallback.empty()) {
+				if (!placed.id.empty()) debugf("Warning: preset mod \"%s\" is not enabled/registered, falling back to random building \"%s\".\n", placed.id.c_str(), fallback.c_str());
+				ok = CreateBuildingAt(fallback, placed.lot, placed.adaptiveParent, placed.quad, placed.boundaryRoads, placed.direction, &created);
+			}
+		}
+		if (!ok) debugf("Warning: preset \"%s\" created nothing (no random candidate for the lot area, e.g. placeholder area); space is reserved.\n", placed.id.c_str());
 		else if (created && placed.outputIndex >= 0) presetOfBuilding[created] = placed.outputIndex;
 	}
 	pendingBuildingPresets.clear();
@@ -810,26 +838,33 @@ void Map::InitGreens() {
 			for (Green::Link& link : links) link.edge = (n - 2 - link.edge + 2 * n) % n;
 		}
 
-		// 按有没有连路选一套权重，权重0的mod不参与；全0=这块绿化区留空(不报错)。
-		bool linked = !links.empty();
-		vector<float> weights;
-		float total = 0.f;
-		for (const string& id : ids) {
-			float w = linked ? greenFactory.GetPowerLinked(id) : greenFactory.GetPowerFree(id);
-			weights.push_back(max(0.f, w));
-			total += weights.back();
+		// 路网指定了id：用指定的mod，不走随机(也不消耗随机数)；该id没注册/没启用就告警并退化成下面的权重随机。
+		GreenMod* mod = nullptr;
+		if (!site.modId.empty()) {
+			if (find(ids.begin(), ids.end(), site.modId) != ids.end()) mod = greenFactory.CreateGreen(site.modId);
+			if (!mod) debugf("Warning: Green site specifies mod \"%s\" which is not enabled/registered, falling back to weighted random.\n", site.modId.c_str());
 		}
-		if (total <= 0.f) { skipped++; continue; }
-		float pick = static_cast<float>(GetRandom(10000)) / 10000.f * total;
-		size_t chosen = 0;
-		float acc = 0.f;
-		for (size_t i = 0; i < ids.size(); i++) {
-			acc += weights[i];
-			if (weights[i] > 0.f) chosen = i;
-			if (pick < acc) break;
+		if (!mod) {
+			// 按有没有连路选一套权重，权重0的mod不参与；全0=这块绿化区留空(不报错)。
+			bool linked = !links.empty();
+			vector<float> weights;
+			float total = 0.f;
+			for (const string& id : ids) {
+				float w = linked ? greenFactory.GetPowerLinked(id) : greenFactory.GetPowerFree(id);
+				weights.push_back(max(0.f, w));
+				total += weights.back();
+			}
+			if (total <= 0.f) { skipped++; continue; }
+			float pick = static_cast<float>(GetRandom(10000)) / 10000.f * total;
+			size_t chosen = 0;
+			float acc = 0.f;
+			for (size_t i = 0; i < ids.size(); i++) {
+				acc += weights[i];
+				if (weights[i] > 0.f) chosen = i;
+				if (pick < acc) break;
+			}
+			mod = greenFactory.CreateGreen(ids[chosen]);
 		}
-
-		GreenMod* mod = greenFactory.CreateGreen(ids[chosen]);
 		if (!mod) { skipped++; continue; }
 		Green* green = new Green(&greenFactory, mod);
 		green->Layout(xy, links);

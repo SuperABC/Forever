@@ -353,6 +353,7 @@ void FileRoadnet::DistributeRoadnet(int width, int height,
 		const JsonValue& points = entry["points"];
 		if (!points.IsArray() || points.size() < 3) continue;
 		GreenSite site;
+		if (entry["id"].IsString()) site.modId = entry["id"].AsString();   // 空/缺省=Core按权重随机
 		for (unsigned int k = 0; k < points.size(); k++) {
 			site.xy.push_back(points[k][0].AsFloat());
 			site.xy.push_back(points[k][1].AsFloat());

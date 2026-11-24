@@ -70,7 +70,7 @@
       "C:/Workspace/UE5/Projects/Forever/Forever_Mod/Test/Resource/../../../../../Projects/Forever/Forever_UE/Resource/Story"
    ],
    "roadnet_mods" : [
-      "roadnet_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/test.roadnet"
+      "roadnet_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/large.roadnet"
    ],
    "room_mods" : [
       "room_empty",
@@ -100,7 +100,7 @@
       "terrain_ocean --skip",
       "terrain_river --skip",
       "terrain_empty",
-      "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/test.terrain"
+      "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/large.terrain"
    ],
    "vehicle_mods" : [
       "vehicle_plane",

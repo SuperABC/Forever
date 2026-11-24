@@ -8,6 +8,7 @@
 #include "world_build.h"
 
 #include "common/json.h"
+#include "map/building.h"
 #include "map/map.h"
 #include "map/zone.h"
 
@@ -41,6 +42,13 @@ void PresetsSuiteBody(TestWorld& world, const TestOptions& options) {
 		run.Check(kv.second->GetParentLot() != nullptr, "preset zone has a parent lot");
 		run.Check(kv.second->GetDirection() >= 0, "preset zone was laid out");
 	}
+	// 第4个预设(zone_not_exist，落在(111,129)起的10x10)的id找不到：空间照占，并且退化成按分区(居住高)权重随机放了一栋建筑。
+	bool fallbackBuilding = false;
+	for (const auto& kv : world.map->GetBuildings()) {
+		const Building* b = kv.second;
+		if (b && b->GetPosX() > 111.f && b->GetPosX() < 121.f && b->GetPosY() > 129.f && b->GetPosY() < 139.f) fallbackBuilding = true;
+	}
+	run.Check(fallbackBuilding, "a preset whose mod id is not registered falls back to a random building on its reserved space");
 }
 
 void RunPresetsSuite(const TestOptions& options) {

@@ -25,6 +25,9 @@
 			this.height = new Float32Array(w * h);
 			this.water = new Float32Array(w * h).fill(NaN); // NaN=无水
 			this.stroke = null;
+			// 锁定掩码(Uint8Array 1=锁定，或null)：地块覆盖的格子(见lots.js lotLockMask)。锁定格的高度任何笔刷/一键整理都不改，
+			// 由调用方在每次笔画/整理前按当前地块重算后赋值；它不进存档，只是编辑期的保护。
+			this.locked = null;
 		}
 
 		paletteIndex(name) {
@@ -35,6 +38,14 @@
 		nameAt(i) { return this.palette[this.idx[i]]; }
 		isFlat(i) { return isFlatName(this.palette[this.idx[i]]); }
 		inside(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h; }
+		isLocked(i) { return !!(this.locked && this.locked[i]); }
+		// 直接设一个格子的高度(进笔画撤销记录)，不看锁定——给"建地块时抹平"用。返回是否真的改了。
+		setHeight(i, v) {
+			if (this.height[i] === Math.fround(v)) return false;
+			this._touch(i);
+			this.height[i] = v;
+			return true;
+		}
 
 		// 任意连续坐标的高度(同Core Map::SampleHeight：格子按"自适应对角线"拆成两个三角形线性插值——
 		// 对角线取两端高度差较小的那条，斜着走的交界就是一道笔直的斜坡；右/下越界按边缘夹取)。
@@ -115,7 +126,7 @@
 						if (this.idx[i] === index) continue;
 						this._touch(i);
 						this.idx[i] = index;
-						if (isFlatName(this.palette[index])) this.height[i] = 0;
+						if (isFlatName(this.palette[index]) && !this.isLocked(i)) this.height[i] = 0;   // 锁定格只换类型，高度不动
 						changed++;
 					} else if (op === 'water') {
 						const level = params.erase ? NaN : (params.level === undefined ? SEA_LEVEL : params.level);
@@ -123,6 +134,8 @@
 						this._touch(i);
 						this.water[i] = level;
 						changed++;
+					} else if (this.locked && this.locked[i]) {
+						continue; // 地块覆盖的格子：高度固定，任何高度笔刷都不改(平滑时它仍作为邻格参与平均，周围的格子会被拉向它)
 					} else if (this.isFlat(i) && !params.allowFlat) {
 						continue; // 默认高度只能落在非平原格；params.allowFlat=true时允许改平地的高度
 					} else if (params.only !== undefined && this.idx[i] !== params.only) {
@@ -166,13 +179,16 @@
 		// 平滑高度：每个非平原格点到最近平原格点的欧氏距离d(格点单位)，高度乘 smoothstep(d/width)：
 		// 紧贴平原的一圈接近0，随距离缓升，d>=width以外不动。山的抬升和海的下降(负高度)都朝0缓降，
 		// 所以交界处的"三高一低/三低一高"格子会消失。距离先做两遍3x3平均，抹掉锯齿台阶带来的距离抖动。返回改了多少格点。
+		// 锁定格(地块覆盖，见this.locked)不会被改，并且和平原一样当锚点：它周围的格子朝它自己的高度缓降/缓升(而不是朝0)，高度=锚点高度+(原高度-锚点高度)*smoothstep。
 		relaxFlatBoundary(width) {
 			width = Math.max(1, width || 1);
 			const w = this.w, h = this.h, n = w * h;
 			const INF = 1e20;
+			// 锚点：平原格(目标高度0) + 锁定格(地块覆盖，目标高度=它自己的高度，优先于平原)。非锚点格被拉向离它最近的锚点的高度。
+			const locked = this.locked;
 			let anyFlat = false;
 			const g = new Float64Array(n);
-			for (let i = 0; i < n; i++) { if (this.isFlat(i)) { g[i] = 0; anyFlat = true; } else g[i] = INF; }
+			for (let i = 0; i < n; i++) { if (this.isFlat(i) || (locked && locked[i])) { g[i] = 0; anyFlat = true; } else g[i] = INF; }
 			if (!anyFlat) return 0;
 			// Felzenszwalb精确欧氏距离变换：先列后行，输入/输出都是平方距离。
 			const size = Math.max(w, h);
@@ -211,12 +227,59 @@
 				}
 				dist = next;
 			}
+			// 每格的"目标高度"：最近锚点的高度(跳跃泛洪求最近锚点，近似即可)，再做几遍平均(锚点格不动)，让两个不同高度的锚点之间过渡平缓。
+			// 没有非0锚点(没有锁定格，平原都是0)时处处为0，行为和以前完全一样。
+			const anchorOf = (i) => (locked && locked[i] ? this.height[i] : 0);
+			let target = new Float32Array(n);
+			let hasNonZeroAnchor = false;
+			if (locked) for (let i = 0; i < n; i++) if (locked[i] && this.height[i] !== 0) { hasNonZeroAnchor = true; break; }
+			if (hasNonZeroAnchor) {
+				let near = new Int32Array(n).fill(-1);
+				for (let i = 0; i < n; i++) if (this.isFlat(i) || locked[i]) near[i] = i;
+				const sq = (i, j) => { const dx = (i % w) - (j % w), dy = ((i / w) | 0) - ((j / w) | 0); return dx * dx + dy * dy; };
+				let step = 1;
+				while (step < Math.max(w, h)) step <<= 1;
+				for (step >>= 1; step >= 1; step >>= 1) {
+					const nxt = near.slice();
+					for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+						const i = y * w + x;
+						let best = near[i], bd = best >= 0 ? sq(i, best) : Infinity;
+						for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+							const nx = x + ox * step, ny = y + oy * step;
+							if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+							const c = near[ny * w + nx];
+							if (c < 0) continue;
+							const d = sq(i, c);
+							if (d < bd) { bd = d; best = c; }
+						}
+						nxt[i] = best;
+					}
+					near = nxt;
+				}
+				for (let i = 0; i < n; i++) target[i] = near[i] >= 0 ? anchorOf(near[i]) : 0;
+				for (let rep = 0; rep < 3; rep++) {
+					const next = new Float32Array(n);
+					for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+						const i = y * w + x;
+						if (dist[i] === 0) { next[i] = target[i]; continue; }
+						let sum = 0, cnt = 0;
+						for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+							const nx = x + ox, ny = y + oy;
+							if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+							sum += target[ny * w + nx]; cnt++;
+						}
+						next[i] = sum / cnt;
+					}
+					target = next;
+				}
+			}
 			let changed = 0;
 			for (let i = 0; i < n; i++) {
-				if (this.isFlat(i)) continue;
+				if (this.isFlat(i) || (locked && locked[i])) continue;
 				const t = Math.min(1, dist[i] / width);
 				if (t >= 1) continue;
-				const nh = this.height[i] * (t * t * (3 - 2 * t));
+				const a = target[i];
+				const nh = a + (this.height[i] - a) * (t * t * (3 - 2 * t));
 				if (Math.abs(nh - this.height[i]) < 1e-6) continue;
 				this._touch(i);
 				this.height[i] = nh;
@@ -255,7 +318,8 @@
 					this._touch(i);
 					const wasFlat = this.isFlat(i);
 					this.idx[i] = best;
-					if (this.isFlat(i)) this.height[i] = 0;
+					if (this.isLocked(i)) { /* 锁定格只换类型，高度不动 */ }
+					else if (this.isFlat(i)) this.height[i] = 0;
 					else if (wasFlat) {
 						let sum = 0, cnt = 0;
 						for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {

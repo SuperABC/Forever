@@ -59,13 +59,13 @@
 
 ### PlacePresets（路网预设，2026-11-21）
 
-`InitZones`开头、Assign之前调用一次，数据来自`Roadnet::GetPresets()`。按文件顺序对每个预设：在`lot->GetFreeLots()`里找完整包含矩形的自由子地块(跨小路=找不到=失败)，把矩形换算成该子块本地的`marginStart/marginEnd/depth`(WEST: depth=rx1; EAST: depth=tw-rx0; NORTH: depth=ry1; SOUTH: depth=th-ry0)，子块就是lot自己直接`lot->RequestPlacement`，否则`sub->RequestPlacement`+`PromoteAdaptiveRemainder(lot, sub)`(同Assign的自适应路径)，路径连接登记`pendingPathRoadLinks`。**无论id是否有效都占位**，保证和编辑器按创建顺序重放的结果一致。占位成功后：`zone_`开头立即`CreateZoneAt`；其余存进`pendingBuildingPresets`，`InitBuildings`开头`CreateBuildingAt`。id未注册/未启用只告警。`CreateZoneAt/CreateBuildingAt`是和Assign共用的创建函数。存档存实例，预设不用进存档。各mod的`--skip`(见`zone_mod.md`/`building_mod.md`)只跳过自己的Assign，预设先放，所以和预设互不冲突。CoreTest的`presets`套件对照编辑器模拟器验证(注意Quad位置是中心)。
+`InitZones`开头、Assign之前调用一次，数据来自`Roadnet::GetPresets()`。按文件顺序对每个预设：在`lot->GetFreeLots()`里找完整包含矩形的自由子地块(跨小路=找不到=失败)，把矩形换算成该子块本地的`marginStart/marginEnd/depth`(WEST: depth=rx1; EAST: depth=tw-rx0; NORTH: depth=ry1; SOUTH: depth=th-ry0)，子块就是lot自己直接`lot->RequestPlacement`，否则`sub->RequestPlacement`+`PromoteAdaptiveRemainder(lot, sub)`(同Assign的自适应路径)，路径连接登记`pendingPathRoadLinks`。**无论id是否有效都占位**，保证和编辑器按创建顺序重放的结果一致。占位成功后：`zone_`开头立即`CreateZoneAt`；其余存进`pendingBuildingPresets`，`InitBuildings`开头`CreateBuildingAt`。id为空、或未注册/未启用(含落空的zone_id，后者告警)都退化：`InitBuildings`里按顶层lot的分区权重(`PickRandomBuildingId`，`BuildingFactory::GetPower`)随机放一栋建筑，占位分区/没有候选则只占位。`CreateZoneAt/CreateBuildingAt`是和Assign共用的创建函数。存档存实例，预设不用进存档。各mod的`--skip`(见`zone_mod.md`/`building_mod.md`)只跳过自己的Assign，预设先放，所以和预设互不冲突。CoreTest的`presets`套件对照编辑器模拟器验证(注意Quad位置是中心)。
 
 ### InitGreens（绿化区，2026-11-20）
 
 放在`InitBuildings`之后(接路要用`FlushPendingBuildingRoadAccess`的断开顺序)、`InitVegetation`之前；读档(`bMapRestored`)跳过。数据来自`Roadnet::GetGreenSites()`(路网文件`greens[]`，`RoadnetMod::greens`深拷贝并把`Road*`重映射，同lots)。每块绿化区：
 1. 校验≥3点、规整成有符号面积>0、算包围盒；`linked`=存在非空连路。
-2. **选mod**：对已注册启用的`green_*`按`linked ? GetPowerLinked : GetPowerFree`取权重做CDF轮盘(同`PickSchedulerId`)，全0=这块绿化区没有mod、不落地；`CreateGreen`后`Green::Layout`(在mod实例的`RandomScope`里)。
+2. **选mod**：路网指定了id(`GreenSite::modId`，`.roadnet greens[].id`)且该id已注册启用 → 直接用它，不走随机、不消耗随机数；id没填、或填了没注册/没启用(告警)→ 下面的权重随机。随机：对已注册启用的`green_*`按`linked ? GetPowerLinked : GetPowerFree`取权重做CDF轮盘(同`PickSchedulerId`)，全0=这块绿化区没有mod、不落地；`CreateGreen`后`Green::Layout`(在mod实例的`RandomScope`里)。
 3. **圆校验/装饰物过滤/地址**见`green.md`。
 4. **行人导航**(只行人)：每个保留圆建圆心节点`MakeIsolatedAnchor`和边上垂足节点，两者连行人`Connection`，垂足投影到连路边的路上接入路网。一次性在生成阶段完成，守住"异步寻路开始后不能再加锚点"。
 

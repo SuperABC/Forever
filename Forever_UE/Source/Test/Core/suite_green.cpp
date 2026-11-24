@@ -368,14 +368,33 @@ void RunGreenSuite(const TestOptions& options) {
 		}
 	}
 	auto slashes = [](string text) { for (char& c : text) if (c == '\\') c = '/'; return text; };
-	JsonValue roadnets(DATA_ARRAY), terrains(DATA_ARRAY);
-	roadnets.append(JsonValue("roadnet_file --path=" + slashes(roadnet.string())));
-	terrains.append(JsonValue("terrain_file --path=" + slashes(terrain.string())));
-	root["roadnet_mods"] = roadnets;
-	root["terrain_mods"] = terrains;
 	error_code ec;
 	const filesystem::path dir = filesystem::path(options.outDir) / "child";
 	filesystem::create_directories(dir, ec);
+
+	// 给demo路网的两块绿化写上id：第一块指定green_park(指定路径)，第二块指定一个不存在的id(找不到就退化成按权重随机，不能被丢弃)。
+	// 两块都还得是green_park(世界里只启用了这一个green mod)，CheckWorldGreens里"必须有2块绿化"同时证明了两条路径都落地了。
+	filesystem::path idRoadnet = dir / "demo_green_ids.roadnet";
+	{
+		JsonValue rn;
+		ifstream in(roadnet);
+		JsonReader reader;
+		if (!in || !reader.Parse(in, rn) || !rn["output"]["greens"].IsArray() || rn["output"]["greens"].size() != 2) {
+			run.Check(false, "demo roadnet has two greens to tag with ids", roadnet.string());
+			return;
+		}
+		rn["output"]["greens"][0u]["id"] = JsonValue("green_park");
+		rn["output"]["greens"][1u]["id"] = JsonValue("green_not_registered");
+		ofstream out(idRoadnet, ios::binary);
+		StyledWriter writer;
+		out << writer.Write(rn);
+	}
+
+	JsonValue roadnets(DATA_ARRAY), terrains(DATA_ARRAY);
+	roadnets.append(JsonValue("roadnet_file --path=" + slashes(idRoadnet.string())));
+	terrains.append(JsonValue("terrain_file --path=" + slashes(terrain.string())));
+	root["roadnet_mods"] = roadnets;
+	root["terrain_mods"] = terrains;
 	const filesystem::path derived = dir / "config_green.json";
 	{
 		ofstream out(derived, ios::binary);

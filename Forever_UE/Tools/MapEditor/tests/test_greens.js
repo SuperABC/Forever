@@ -139,4 +139,17 @@ assert.ok(!ME.canAppendVertex([[0, 0], [10, 0]], [10, 0]));
 	assert.strictEqual(m.greens.length, 0);
 }
 
+// green id(modId)：默认''，export成output.greens[].id；旧模型(没有modId字段)导出也是''；克隆后保留。
+{
+	const m = ME.newModel(256, 256);
+	const a = ME.addGreen(m, [[10, 10], [30, 10], [30, 30], [10, 30]]);
+	const b = ME.addGreen(m, [[50, 10], [70, 10], [70, 30], [50, 30]], 'green_park');
+	assert.strictEqual(a.modId, '');
+	assert.strictEqual(b.modId, 'green_park');
+	delete a.modId;   // 旧文件
+	const out = ME.exportRoadnet(ME.cloneModel(m), t).output.greens;
+	assert.strictEqual(out.length, 2);
+	assert.strictEqual(out[0].id, '');
+	assert.strictEqual(out[1].id, 'green_park');
+}
 console.log('test_greens OK');
