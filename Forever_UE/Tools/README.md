@@ -12,6 +12,7 @@
 | MixamoRetarget | Mixamo 人形动画重定向到 Manny 的编辑器手工流程(含已建好的 `IK_XBot`/`IK_Mannequin`/`RTG_NewRetargeter` 资产清单，游泳动画就是这么做的) | 只有文档，见其 README |
 | ModHost | 原生宿主：加载 mod DLL 单独运行 puzzle / 手机 app，可开窗口、可脚本化截图 | 见其 README（`ModHost.exe --list / --puzzle <id> --window / --phone ...`） |
 | ModWeb | 把 puzzle/app 逻辑 + 手机外壳用 Emscripten 编成单个离线 html，拷到手机直接开 | 需先装 `.emsdk`（已被忽略），`build_web.bat` 产出 `dist\forever_mods.html` |
+| TerrainMaterial | 生成统一地形材质`M_Terrain`(单个Custom HLSL节点)：`UnrealEditor-Cmd Forever.uproject -run=pythonscript -script=<绝对路径>\build_terrain_material.py -unattended -AllowCommandletRendering`，要先关编辑器；改`terrain_material.hlsl`或节点连接后重跑 | 见 `Tools\TerrainMaterial\README.md` |
 | RoadnetViz | 地形/路网/lot 渲染成 PNG 的可视化工具 | 自带 `Tools\RoadnetViz\RoadnetViz.sln`（含 Dependence/Core/Basic）：`MSBuild Tools\RoadnetViz\RoadnetViz.sln /p:Configuration=Release /p:Platform=x64` |
 | VehicleRig | 新载具绑骨：FBX → 带轮子权重的 GLB（靠材质自动识别轮子/车头） | `python Tools/VehicleRig/make_vehicle_glb.py <fbx> <glb> --mesh ... --hub-mat ... --tire-mat ... --front-mats ...`，详见其 README |
 | WaterMaterial | 生成水面材质/后处理/MPC（波浪公式内联自 WaterWave.inc） | 关编辑器后跑 `UnrealEditor-Cmd.exe <uproject绝对路径> -run=pythonscript -script=<绝对路径>/Tools/WaterMaterial/build_water_assets.py ...`，详见其 README |

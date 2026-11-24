@@ -417,6 +417,7 @@
 		if (name === 'terrain_mountain') return [135, 115, 95];
 		if (name === 'terrain_ocean') return [60, 110, 190];
 		if (name === 'terrain_river') return [90, 160, 220];
+		if (name === 'terrain_beach') return [222, 204, 150];
 		let hash = 2166136261;
 		for (let i = 0; i < name.length; i++) { hash ^= name.charCodeAt(i); hash = Math.imul(hash, 16777619); }
 		const hue = ((hash >>> 0) % 360) / 360;

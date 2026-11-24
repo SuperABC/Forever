@@ -241,7 +241,7 @@ namespace {
 	}
 	void ValidateConcept(TerrainMod* mod, vector<string>& problems) {
 		mod->SetupTexture();
-		if (mod->diffusePath.empty() && !IsEmptyTemplateId(g_currentModId)) problems.push_back("terrain diffusePath is empty after SetupTexture");
+		if (!mod->hasMapColor && !IsEmptyTemplateId(g_currentModId)) problems.push_back("terrain has no map colour after SetupTexture (call SetMapColor)");
 	}
 	void ValidateConcept(StorageMod* mod, vector<string>& problems) {
 		mod->SetProperty();

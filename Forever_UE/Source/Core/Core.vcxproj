@@ -122,6 +122,7 @@
     <ClCompile Include="player\phone.cpp" />
     <ClCompile Include="player\puzzle.cpp" />
     <ClCompile Include="map\terrain.cpp" />
+    <ClCompile Include="map\terrain_coverage.cpp" />
     <ClCompile Include="map\vegetation.cpp" />
     <ClCompile Include="map\lamp.cpp" />
     <ClCompile Include="map\map_save.cpp" />
@@ -199,6 +200,7 @@
     <ClInclude Include="player\phone.h" />
     <ClInclude Include="player\puzzle.h" />
     <ClInclude Include="map\terrain.h" />
+    <ClInclude Include="map\terrain_coverage.h" />
     <ClInclude Include="map\vegetation.h" />
     <ClInclude Include="map\lamp.h" />
     <ClInclude Include="map\map_save.h" />

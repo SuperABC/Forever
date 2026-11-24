@@ -18,6 +18,7 @@ void RunPresetsSuite(const TestOptions& options);
 void RunPlateauSuite(const TestOptions& options);
 void RunPolitSuite(const TestOptions& options);
 void RunTransitSuite(const TestOptions& options);
+void RunTerrainSuite(const TestOptions& options);
 
 // 子进程里的套件主体(世界已生成)。
 void WorldSuiteBody(TestWorld& world, const TestOptions& options);

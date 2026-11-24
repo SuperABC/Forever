@@ -13,6 +13,8 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - random：同种子跨进程所有阶段严格一致、各阶段无未包作用域的随机、DLL 导出 BindRandomHost、源码里无绕过 GetRandom 的随机源、流状态快照恢复。
 - mods：枚举所有已注册 mod，调 `UnitTest`，检查无漏包随机、名字唯一(`*_empty` 模板除外)，并按 concept 做字段合法性检查(见文末"字段检查")。
 - lint：mod DLL 不旧于 Dependence 头文件。
+- terrainshot(UE，带窗口渲染，2026-11-24)：`UnrealEditor.exe Forever.uproject /Game/Levels/World -game -windowed -ResX=1280 -ResY=720 -unattended -ForeverTest=terrainshot -ForeverTestOut=<dir>`。相机依次放到山顶(斜视/俯视/地面)、最陡山坡(近/远)、海/河/沙滩/平原的代表格(斜视/俯视)，每个机位等约4秒让LOD稳定后截图 `shot_NN_<名>.png` 到输出目录——我看不到PIE，地形材质靠它出图自查(2026-11-24靠它发现覆盖图R/B通道串台)。
+- terrain：地形覆盖图烘焙(2026-11-24)。`terrain_coverage`的纯函数：覆盖度和=255、对称、直边单调、45°斜线边界模糊后沿对角线波纹≤8(不模糊>100)、mip链、降采样、非法输入、大图耗时。UE侧材质画面只能 PIE 目测。
 - green：绿化区(2026-11-20)。纯函数(`polygon_util`)、直接构造`green_park`测凹多边形圆/连路圆校验丢弃，再用`Tools/MapEditor/samples/demo.roadnet`(一块连路、一块不连路的凹多边形绿化)+`demo.terrain`替换config里的路网/地形生成世界：圆在多边形内且互不重叠、装饰物在多边形内、`LocateGreen`地址往返、房间↔圆的行人路线、地图存档往返字节稳定、市民站在/走向绿化区的存档往返和Core行进到达。demo文件缺失=失败；`make_demo.js`改动后要重新生成。
 - plateau：非0高度地块(2026-11-23)。`Tools/MapEditor/samples/plateau.roadnet/.terrain`(make_plateau.js生成：抹平出z=3的平台+平台上方框路(节点z=3)+一块居住地块+一条贴合路下山)，config仅换路网/地形mod，其余mod照常自动填充地块。对每个所属地块z≠0的建筑/园区检查：平台格`IsConstruction`但非`IsGroundConstruction`、地块z=平台高度、`GetGroundZ()`=地块z、房间导航节点z=`GetFloorWorldZ`、建筑门不低于地坪、园区大门/内部路z=地坪、地块边界路水平且同高。夹具缺失=失败。
 - presets：路网预设(2026-11-21)。`Tools/MapEditor/samples/presets.roadnet`(make_presets.js生成：方框路+一块地+4个预设，含子地块里的、一个id不存在的)，config里`zone_residence_high --skip`：zone只有3个预设的、矩形(Quad中心位置)和编辑器模拟器一致、`--skip`生效、无效id只告警不崩。
@@ -66,4 +68,4 @@ Source\Test\run_tests.bat [quick|full] [core|ue|all]
 - 字段检查(组织/路线/房间/地形/路网等)；已做：车辆、武器、产品、仓储、制造、岗位、建筑、站点、房间、调度、资产、地形(组织/路线/路网/地块/脚本/名字/组件/应用/谜题没有可校验的静态字段，靠 UnitTest 和 world 套件覆盖)。
 
 ## 字段检查(mods 套件)
-车辆(尺寸/载客量/蓝图)、武器(伤害/弹匣/射程，不开火的工具跳过)、产品(价格 retail>import>export>0、原料数量)、仓储(容量/能存能取/需求值)、制造(目标批数)、岗位(脚本 mod 已注册)、建筑(国有概率、脚本/车站 mod 已注册、电梯楼层范围)、站点(类型/端口，公交站贴路无端口)、房间(容量/租金/引用的 mod 已注册)、调度、资产(重量体积/武器类型/引用已注册)、地形(SetupTexture 后有贴图路径)。`*_empty` 占位模板按 id 跳过。其余 concept 靠 UnitTest 与 world 套件覆盖。
+车辆(尺寸/载客量/蓝图)、武器(伤害/弹匣/射程，不开火的工具跳过)、产品(价格 retail>import>export>0、原料数量)、仓储(容量/能存能取/需求值)、制造(目标批数)、岗位(脚本 mod 已注册)、建筑(国有概率、脚本/车站 mod 已注册、电梯楼层范围)、站点(类型/端口，公交站贴路无端口)、房间(容量/租金/引用的 mod 已注册)、调度、资产(重量体积/武器类型/引用已注册)、地形(SetupTexture 后声明了材质或地图色)。`*_empty` 占位模板按 id 跳过。其余 concept 靠 UnitTest 与 world 套件覆盖。

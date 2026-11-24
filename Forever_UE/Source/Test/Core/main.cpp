@@ -97,6 +97,7 @@ static int RealMain(int argc, char** argv) {
 		{ "plateau", RunPlateauSuite },
 		{ "polit", RunPolitSuite },
 		{ "transit", RunTransitSuite },
+		{ "terrain", RunTerrainSuite },
 	};
 
 	int totalFailures = 0, totalPasses = 0;

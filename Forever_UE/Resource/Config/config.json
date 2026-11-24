@@ -98,6 +98,7 @@
    "terrain_mods" : [
       "terrain_mountain --skip",
       "terrain_ocean --skip",
+      "terrain_beach",
       "terrain_river --skip",
       "terrain_empty",
       "terrain_file --path=C:/Workspace/UE5/Projects/Forever/Forever_UE/Resource/Mod/Basic/large.terrain"

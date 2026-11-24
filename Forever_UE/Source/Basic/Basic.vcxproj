@@ -131,6 +131,7 @@
     <ClCompile Include="map\roadnet_file.cpp" />
     <ClCompile Include="map\terrain_mountain.cpp" />
     <ClCompile Include="map\terrain_ocean.cpp" />
+    <ClCompile Include="map\terrain_beach.cpp" />
     <ClCompile Include="map\terrain_river.cpp" />
     <ClCompile Include="map\zone_residence_high.cpp" />
     <ClCompile Include="map\zone_residence_low.cpp" />
@@ -260,6 +261,7 @@
     <ClInclude Include="map\roadnet_file.h" />
     <ClInclude Include="map\terrain_mountain.h" />
     <ClInclude Include="map\terrain_ocean.h" />
+    <ClInclude Include="map\terrain_beach.h" />
     <ClInclude Include="map\terrain_river.h" />
     <ClInclude Include="map\zone_residence_high.h" />
     <ClInclude Include="map\zone_residence_low.h" />

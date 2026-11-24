@@ -9,14 +9,11 @@
 
 #include "CoreMinimal.h"
 #include "Framework/ForeverFrameworkComponent.h"
-#include "map/terrain.h"
 #include "ForeverTerrainFrameworkComponent.generated.h"
 
 class UProceduralMeshComponent;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
-class UTexture2D;
-class UTexture2DArray;
 class Map;
 
 // 某一级LOD mesh经过接缝修正后的四条边界顶点(每条边TERRAIN_LOD_GRID_SUBDIV+1个点,
@@ -64,11 +61,6 @@ private:
 	// 内面可见、可碰撞)，其它hatch没有墙，见.cpp注释。
 	void BuildTunnelWalls();
 
-	// 重建近处混合控制纹理(NearIndexMap/NearWeightMap)，覆盖范围是以(originX,originY)为
-	// 左下角、边长sizeElements(地图元素单位)的正方形区域——只在nearControlLevel那一级LOD
-	// 自己的pivot变化时调用，见ForeverTerrainFrameworkComponent.md"近处地形混合"一节。
-	void RebuildNearControl(float originX, float originY, int32 sizeElements);
-
 	// 采样地图高度(mapX/mapY为地图元素单位坐标),转发Map::SampleHeight(含细化高度),BuildLevel与出生点计算共用
 	float SampleHeight(float mapX, float mapY) const;
 
@@ -91,50 +83,16 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> terrainMaterial;
 
-	UPROPERTY()
-	TObjectPtr<UTexture2DArray> terrainDiffuseArray;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> terrainIndexMap;
-
-	// 法线+粗糙度打包数组(BGRA8,sRGB关,R/G=法线xy,B=粗糙度,A=255)，和terrainDiffuseArray
-	// 槽位对齐，近/远两个材质共用一份。
-	UPROPERTY()
-	TObjectPtr<UTexture2DArray> terrainNormalRoughArray;
-
-	// 固定的基础材质(编辑器可覆盖),构造函数里ConstructorHelpers加载
+	// 固定的基础材质M_Terrain(编辑器可覆盖),构造函数里ConstructorHelpers加载。材质实例的全部纹理/参数由FTerrainMaterialBuilder创建。
 	UPROPERTY(EditDefaultsOnly, Category = "Terrain")
 	TObjectPtr<UMaterialInterface> terrainBaseMaterial;
 
-	// 近处(细LOD)材质和它的控制纹理——见terrain.md和.md的"近处地形混合"一节。
-	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
-	int32 nearControlLevel = 3; // 控制纹理对应哪一级LOD的覆盖区域，夹到[0,num-1]；取大一些把near/far缝合线挪远，缓解K在两种材质里算法不一致导致的法线接缝（见.md）
+	// 每个element的最近水面高度(见FTerrainMaterialBuilder::BuildWaterLevelField)，BuildLevel用它给顶点算水深(顶点色R)。
+	std::vector<float> waterLevelField;
+	int32 waterFieldWidth = 0;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
-	int32 nearTexelsPerElement = 16;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
-	float nearBlendRadius = 2.f; // 夹到[1,3]，见NearBlendParams；越大近处混合过渡带越宽
-
-	UPROPERTY(EditDefaultsOnly, Category = "Terrain|Near")
-	TObjectPtr<UMaterialInterface> nearBaseMaterial;
-
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> nearMaterial;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> nearIndexMap;
-
-	UPROPERTY()
-	TObjectPtr<UTexture2D> nearWeightMap;
-
-	std::unique_ptr<NearTerrainBlend> nearBlend;
-	// 整张地图的槽位id/construction标记，GenerateTerrain里填一次，RebuildNearControl每次
-	// 调用NearTerrainBlend::BuildRegion时复用，不用每次重新扫全图。
-	std::vector<uint8_t> nearSliceIds, nearIsConstruction;
-	// 当前控制纹理覆盖区域的左下角(地图元素坐标，取整)，RebuildNearControl只在这个值真的
-	// 变化时才重建纹理。
-	std::pair<int, int> nearRegionPivot{ INT_MIN, INT_MIN };
+	// 顶点处的水深(米，正=在水下)，没有水返回WaterDepthMinMeters。mapX/mapY是element坐标，height是该点地面高度(element)。
+	float SampleWaterDepthMeters(float mapX, float mapY, float height) const;
 
 	// {{pivotX,pivotY}, size(地图元素单位)},下标即LOD等级(0最细)
 	std::vector<std::pair<std::pair<int, int>, float>> currentPivots;

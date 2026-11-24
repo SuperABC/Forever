@@ -3,7 +3,7 @@
 ## 职责
 
 对应旧Framework Actor `Terrain`（C++ Base: `TerrainBase`）。负责动态LOD（clipmap式）地形网格、
-隧道口侧壁mesh的生成，以及随玩家位置更新LOD；同时维护近/远两套地形材质的贴图数组和控制纹理。
+隧道口侧壁mesh的生成，以及随玩家位置更新LOD；同时用`FTerrainMaterialBuilder`生成唯一的地形材质实例(见"地形材质"一节)。
 
 ## 关键设计
 
@@ -26,12 +26,8 @@
   组件只是非持有地引用它。玩家位置取`GetPlayerPawn(0)`（Terrain不依赖其它concept，项目无分屏）。
 - **`IsInsideLodLevel(worldPos, level, scale)`**：判断某点是否在第level级LOD当前覆盖的正方形内（scale<1时按中心缩小，做进入/离开滞回），
   供`ForeverTrafficFrameworkComponent`的公交远近（物理/非物理）切换使用。
-- **材质参数名**：`terrainMaterial`（远处，`TemplateFar`）用`TerrainDiffuseArray`/`TerrainNormalRoughArray`/
-  `TerrainIndexMap`/`TerrainMapSize`；`nearMaterial`（近处，`TemplateNear`）用`TerrainDiffuseArray`/
-  `TerrainNormalRoughArray`/`NearIndexMap`/`NearWeightMap`/`NearRegion`。名字要和材质图里的参数名一致，
-  设错不报错只是静默不生效，PIE看贴图是否正确显示是唯一验证手段。
-- **固定基础材质**（`TemplateFar`/`TemplateNear`/`Pure`/Water插件材质）走`ConstructorHelpers::FObjectFinder`（`EditDefaultsOnly`可覆盖）；
-  每个地形Mod实例的diffuse/normal/roughness贴图路径是运行时字符串，走`LoadObject<UTexture2D>`。
+- **材质**：所有LOD共用一个`terrainMaterial`(MID，基础材质`/Game/Asset/Terrain/M_Terrain`，`GenerateTerrain`里运行时`LoadObject`——不能在构造函数里FObjectFinder，
+  否则编辑器里跑`Tools/TerrainMaterial/build_terrain_material.py`重建材质时它已被CDO引用着，清节点会断言)。侧壁/隧道墙用`Pure`单色材质(`ConstructorHelpers`)。
 - `FForeverLodBoundary`是普通C++结构体，不是`USTRUCT`（没有Blueprint消费方）。
 
 ### 挖洞（construction格子与hatch）
@@ -69,25 +65,34 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 - 做成有厚度（`TUNNEL_WALL_THICKNESS`）的小板：朝洞内的内面+朝洞外的外面+顶面，三角形绕序按期望法线校正，`CreateMeshSection`带碰撞。
 - 材质用单色`Pure`（`tunnelWallBaseMaterial`，Color参数）：地形材质按世界XY投影采样，竖直面上是拉伸的竖条纹。
 
-## 近处地形混合
+## 地形材质
 
-近处（细LOD）与远处使用不同材质，材质**不读网格UV，全部用世界坐标**（`AbsoluteWorldPosition/1000`=地图element坐标`P`）：
-`BuildLevel`的`CreateMeshSection`不传UV，主网格与construction/挖洞三角形因此天然统一（混用两种UV会采到回绕后的随机内容）。
+一张材质`M_Terrain`负责所有LOD、所有地形(旧的Near/Far两套材质、CPU生成的近处控制纹理、`NearTerrainBlend`、`terrainIndexMap`已全部删除，没有兜底)。
+材质**不读网格UV**，全部用世界坐标(`AbsoluteWorldPosition/1000`=element坐标)；`CreateMeshSection`不传UV。数据侧在`TerrainMaterialBuilder.h/.cpp`，材质图是`Tools/TerrainMaterial/terrain_material.hlsl`(单个Custom节点)，生成脚本见`Tools/TerrainMaterial/README.md`。
 
-- **控制纹理区域=`nearControlLevel`那一级LOD的覆盖区域**（`EditDefaultsOnly`，默认3，夹到`[0,num-1]`，即32个element）：
-  `NearIndexMap`/`NearWeightMap`两张持久纹理（`GenerateTerrain`创建一次，`RebuildNearControl`原地更新），
-  分辨率`size×nearTexelsPerElement`（默认16 texel/element）。内容只取决于地图数据和texel的世界位置，区域平移/重建时同一个世界点颜色不跳变。
-  算法见`Source/Core/map/terrain.md`"近处地形混合"一节，UE侧只是把`NearTerrainBlend::BuildRegion`的输出字节数组拷进纹理。
-  `nearControlLevel`取大一些把近/远缝合线挪远，缓解K在两种材质里算法不一致导致的法线接缝；`nearBlendRadius`（默认2，夹到[1,3]）决定近处过渡带宽度。
-- **只在`nearControlLevel`自己的pivot变化时重建纹理**：`TickComponent`从粗到细的重建循环里，`i==nearControlLevel`那次迭代在`BuildLevel`之前先调`RebuildNearControl`；
-  粗一级pivot变化时更细级必然也重建，所以纹理和网格总是同一帧更新。`RebuildNearControl`内部还有`nearRegionPivot`比较，没变化直接跳过。
-- **`levelIdx<=nearControlLevel`的所有LOD共用同一个`nearMaterial`**。`nearSliceIds`/`nearIsConstruction`（整张地图，`GenerateTerrain`里和`terrainIndexMap`同一次扫描填好）
-  是`BuildRegion`的输入，不用每次重扫全图。
-- **法线+粗糙度**：`TerrainNormalRoughArray`（BGRA8，sRGB关，和`TerrainDiffuseArray`槽位对齐），每个槽位把法线源的R/G和粗糙度源的R打包进B/G/R通道，A=255。
-  近/远材质都只采样"权重最高的那个地形"的法线粗糙度（近处是槽位0，远处是四个角里总权重最高的id），省采样次数，交界处细节借助基于主导权重的淡入系数淡成平的。
-  源贴图路径为空/加载失败时，该槽位整层填平法线`(128,128)`+中性粗糙度`204`（约0.8）并打Warning；diffuse读不到时填中性灰。
-- **远处的2×2双线性**：`TemplateFar`继续用全图一张`terrainIndexMap`（PF_G8，每像素=地形槽位下标），在着色器里对相邻4个element的id双线性混合；
-  `TerrainMapSize`材质参数（真实地图宽高）供着色器越界时夹到边缘element。
+**材质声明在各地形mod里**：`TerrainMod::SetupTexture()`里调`SetMaterial(...)`声明1~2层(UE贴图资产路径、平铺米数、是否三向投影)和选择器(`None`/`Slope`坡度/`WaterDepth`水深)及范围；
+默认地形`plain`(没有mod)在`Map::GetTerrainAppearances()`里声明。`Map::GetTerrainAppearances()`向已注册mod收集后缓存(新世界和读档后都可用)，Builder只读它。
+新增一个地形mod=在它自己的`SetupTexture`里写`SetMaterial`，不用改任何中央配置。没声明/声明不合法/贴图读不到的地形渲染成纯灰并`UE_LOG(Error)`(`LogTerrainMaterial`)，没有旧贴图可退。
+
+**`FTerrainMaterialBuilder::Build`(`GenerateTerrain`里一次性，运行中不再重建，headless约2.7秒)**：
+1. 扫描地图实际出现的地形id(最多`MaxTerrainTypes`=8，超出打Error)，按id排序编号；层按`name`去重编号。
+2. **层贴图数组**`TerrainDiffuseArray`(BC7 sRGB)/`TerrainNormalArray`(BC5，RG=法线xy，DirectX约定)/`TerrainMaskArray`(BC7线性，ORM：R=AO、G=粗糙度)，1024²，11级mip。
+   **数据是cook后的压缩块，原样拷进数组切片**(`ReadCompressedMips`经`UTexture2D::GetMipData`取每级mip的原始字节，编辑器走DDC、打包版走资产内联的bulk data，同一条路径；不碰像素，所以打包版也能用)。
+   前提由`Tools/TerrainMaterial/prepare_terrain_textures.py`保证：层贴图必须是1024最大尺寸、不流送、漫反射BC7/法线BC5/遮罩BC7(法线的`flip_green_channel`在cook时生效，Megascans的ORM是R=AO、G=粗糙度、B=金属度)。
+   格式/尺寸/mip数不符时对应层打Error(提示去跑脚本)、渲染成灰，不退回任何贴图。单独的粗糙度图(Plain)当遮罩用，层表里标志"无AO"(AO=1)。各工程的`pak.bat`cook前自动跑这个脚本。
+3. **覆盖图**`TerrainCoverageArray`：`Core/map/terrain_coverage`把每格的one-hot地形展开成2 texel/element，做σ=1 element的高斯模糊，4种地形一个RGBA8切片，带mip，clamp。模糊把阶梯边界(含45°斜线)磨成圆滑曲线。
+4. **类型表**`TerrainTypeTable`(2×8，RGBA32F：layerA,layerB,selector,0 / range0,range1)和**层表**`TerrainLayerTable`(1×层数：tile cm,三向标志,遮罩有无AO)；**噪声**`TerrainNoise`(256²四通道可平铺值噪声，固定哈希)。
+5. MID参数：纹理同名，`TerrainMapInfo`=(宽,高,种类数,覆盖切片数)，`TerrainWaterEncoding`=(水深编码min,range)。调参向量`TerrainTuning0/1/2`的默认值在材质里(见Tools README)。
+
+**顶点色R=水深**：`GenerateTerrain`用`BuildWaterLevelField`算每格"最近水面高度"(有水的格取自己，其余4邻域向外扩6格取最近，更远=无水)，`BuildLevel`按顶点位置算
+`(水位-地面高度)*10`米，编码到[-4,20]米的8 bit(精度约0.09米，`SetMaterial`的水深范围不能超过上限)写进顶点色R(无水=最小值=干)。位置决定值，与LOD/三角形怎么拆无关，hatch裁剪新增的交点顶点也一样。
+
+**着色器(`terrain_material.hlsl`)**：覆盖图用噪声扭曲采样位置+每种地形叠一点噪声再"锐化"(只留离最大权重一个带宽以内的种类)，格内大多数像素只剩1~2种；
+每种地形的两层按选择器混合(坡度=`1-顶点法线z`，水深=顶点色解码)，只采样权重非0的层；陡峭层(rock_cliff)近处用三向投影(Golus whiteout)；
+距离分档全部连续过渡：≥`TerrainTuning1.x..y`米渐变到"平均色"(采样数组最低mip=1x1，只2次采样，不做细节采样；压缩贴图CPU读不出像素所以不预先算平均色)，细节法线`z..w`米淡出，中距离起丢次要地形。材质输出世界空间法线(`tangent_space_normal=False`)。
+所有`SampleGrad`的导数在分支外算好，故可以放进动态分支。
+
+**待PIE确认**(我看不到画面)：斜线边界在高空是否圆滑；山体草/岩过渡；沙滩→湿沙→海底、河岸→河床；距离档切换有无跳变；帧率；法线绿通道/粗糙度是否正常；`tile`米数是否合适。
 
 ## 水面
 
@@ -95,19 +100,20 @@ UE这边照常读`SampleHeight`。hatch只用来挖洞。
 
 ## 依赖关系
 
-- 依赖：`Source/Core/map/map.h`（`Map`，非拥有指针）、`Source/Core/map/terrain.h`（`NearTerrainBlend`，纯标准库）、
-  UE的`ProceduralMeshComponent`/`Water`插件模块（见`Forever.Build.cs`）、`Content/Asset/Materials/{TemplateFar,TemplateNear,Pure}.uasset`
-  （编辑器里手工搭建的材质图）、`Content/Asset/Textures/Terrain/*`（diffuse+normal+roughness三套贴图）。
+- 依赖：`Source/Core/map/map.h`（`Map`，非拥有指针；`GetTerrainAppearances`、`GetWater`）、`Source/Core/map/terrain_coverage.h`（覆盖图烘焙、mip降采样，纯标准库）、
+  UE的`ProceduralMeshComponent`/`Water`插件模块（见`Forever.Build.cs`）、`Content/Asset/Terrain/M_Terrain.uasset`(脚本生成)、
+  各地形mod声明的贴图(`Content/3rdParty/Megascans/Surfaces/*`、`Content/Asset/Terrain/Plain/*`)。
 - 被谁依赖：`AForeverFrameworkActor`（`CreateDefaultSubobject`创建、`EnsureTerrainGenerated()`里调用`GenerateTerrain`）、
   `AForeverPlayerGameMode`（`GetMapCenterWorldLocation()`算出生点）、`UForeverTrafficFrameworkComponent`（`IsInsideLodLevel`）。
 
 ## 待办/后续阶段
 
 - `clipGridCell`假定每个hatch是矩形（`Quad`+`rotation`），不支持任意多边形；Building场景出现非矩形hatch时再扩展。
-- **贴图数组构建依赖源贴图未压缩**：`LoadRawBGRA8`在编辑器下读`Source`原始字节，要求未压缩BGRA8；打包版读`PlatformData`首个mip，同样要求未压缩。
-  正式打包前若源贴图被压缩，对应槽位会整层填后备色，需要把这几张贴图的压缩设置改成未压缩。分辨率不是硬性要求：按源贴图实际尺寸最近邻重采样到`DIFFUSE_TEX_SIZE`(2048)方形。
-- **近远接缝的软边差异**：`nearControlLevel`内是近处核的距离加权软过渡（约1.4个element宽），其外是远处2×2双线性的较硬过渡（1个element宽），
-  只在这条边界线附近、地形交界恰好经过时能看出，未彻底解决。
+- **打包版**：层贴图靠cook后的压缩块拷贝，需要`prepare_terrain_textures.py`先处理(已写进`Forever_UE/pak.bat`和`Forever_Mod/{Test,Yuanshen}/UE/*/pak.bat`；mod把地形层贴图放在自己插件的`TerrainLayers/`目录下，pak.bat会自动处理)。
+  编辑器/PIE不经pak.bat：`PrepareTextureInEditor`在加载层贴图时按同样规则在内存里修正属性(不存盘不标脏，打Warning带改前属性，首次重新压缩几秒)；规则和脚本各一份，改一边同步另一边。
+  mod工程是它自己的迷你UE工程，没有Forever的C++，所以这一步只用引擎Python设置贴图属性，运行时合并由主程序完成。
+- 构建在游戏线程里同步跑(约3~6秒，HitchWatchdog会报一次)，只发生在加载阶段。层贴图数组是压缩的：8层×3张×1024²含mip约33MB显存，覆盖图约43MB。
+- 没做抗平铺(只有一个低频明暗调制)；大片平地上能看出重复时再加。
 
 ## 隧道口端墙（2026-11-20）
 `BuildTunnelWalls`对`startWall/endWall`为真的端头各造一块端墙板(横向盖满洞宽并比侧壁外侧再多一个厚度，沿长度向洞外厚`TUNNEL_WALL_THICKNESS`)：墙顶=端头线段(含外侧)范围内`SampleHeight`最大值+`TUNNEL_WALL_TOP_MARGIN`(5cm)，墙底=`startWallBottom/endWallBottom`，墙顶不高于墙底则不造。内面朝洞内可碰撞。

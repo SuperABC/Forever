@@ -58,9 +58,10 @@ float OceanTerrain::GetPriority() const {
 
 void OceanTerrain::SetupTexture() {
 	SetMapColor(52, 96, 140);
-	diffusePath = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
-	normalPath = "/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal";
-	roughnessPath = "/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness";
+	// 岸边湿沙，水深10米起渐变、15米处完全变成水底波纹沙(水深编码上限20米，见TerrainMaterialBuilder.h)。
+	SetMaterial(MakeMegascansLayer("wet_sand", "Wet_Sand_rldapzp0", "rldapzp0", 3.f),
+		MakeMegascansLayer("seabed_sand", "Rippled_Sand_vlziefgfw", "vlziefgfw", 3.f),
+		TerrainMaterialSelector::WaterDepth, 10.0f, 15.0f);
 }
 
 void OceanTerrain::DistributeTerrain(int width, int height,

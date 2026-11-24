@@ -121,10 +121,11 @@ float RiverTerrain::GetPriority() const {
 }
 
 void RiverTerrain::SetupTexture() {
-	// 和平地同一张贴图：河道靠地形凹陷+水面mesh表现，不需要地表材质额外强调。
 	SetMapColor(88, 148, 176);
-	diffusePath = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
-	// normalPath/roughnessPath留空——现有fallback逻辑会填平的法线+中性粗糙度
+	// 河岸泥地，水深0.2~1.2米渐变到河床碎石。
+	SetMaterial(MakeMegascansLayer("river_mud", "Soil_Mud_olsfA0", "olsfA0", 3.f),
+		MakeMegascansLayer("river_gravel", "Round_Gravel_okosxhp0", "okosxhp0", 2.f),
+		TerrainMaterialSelector::WaterDepth, 0.2f, 1.2f);
 }
 
 void RiverTerrain::DistributeTerrain(int width, int height,

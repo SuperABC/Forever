@@ -8,7 +8,7 @@
 
 ## MountainTerrain
 
-贴图是Rock三张，唯一和plain视觉不同的地形。
+地表材质`SetMaterial`两层按坡度选择：平缓处`Wild_Grass`、陡处`Rough_Rock_Cliff`(陡峭层近处三向投影)，过渡区约37°~52°。
 
 - 山脊数：`densityScale=width*height/(512*512)`(整数除法)，`>1`时`4+GetRandom(densityScale*2)`条，否则0。**地图必须严格大于512x512才会生成山**；地图尺寸同时必须保持2的整数次幂(LOD覆盖范围计算依赖，见`ForeverFrameworkActor.cpp`的`kDefaultMapWidth`注释)。
 

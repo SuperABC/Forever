@@ -8,7 +8,7 @@
 
 ## RiverTerrain
 
-贴图复用plain的diffuse，`normalPath`/`roughnessPath`留空走引擎fallback；河道靠地形凹陷+水面mesh表现。
+地表材质`SetMaterial`两层按水深选择：河岸泥土(`Soil_Mud`)→河床卵石(`Round_Gravel`)；河道本身靠地形凹陷+水面mesh表现，水深来自顶点色(见`ForeverTerrainFrameworkComponent.md`"地形材质")。
 
 ### 起点与山体内段(D8)
 

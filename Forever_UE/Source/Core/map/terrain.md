@@ -3,11 +3,11 @@
 ## 职责
 
 `Terrain`是某个具体`TerrainMod`实例的薄包装——构造时向`TerrainFactory`要一个实例（按id，如
-`"terrain_ocean"`/`"terrain_mountain"`），把`GetType`/`GetName`/`GetPriority`/`SetupTexture`/`GetTextures`/
+`"terrain_ocean"`/`"terrain_mountain"`），把`GetType`/`GetName`/`GetPriority`/`SetupTexture`/
 `DistributeTerrain`原样转发出去，析构时交还给Factory销毁（水面是per-cell设置的，不经过
-`Terrain`/`TerrainMod`的getter，见`terrain_mod.md`"水面"一节）。`GetTextures()`返回
-`TerrainTexturePaths{diffuse, normal, roughness}`三个路径打包的小结构体（normal/roughness
-也走这条通路，见`ForeverTerrainFrameworkComponent.md`"近处地形混合"一节）。
+`Terrain`/`TerrainMod`的getter，见`terrain_mod.md`"水面"一节）。`SetupTexture()`之后可取
+`GetMapColor()`(地图界面颜色)和`GetMaterialSpec()`(地表材质声明)，由`Map::GetTerrainAppearances()`
+收集成`TerrainAppearance{mapColor, material}`表，UE侧据此生成地形材质(见`ForeverTerrainFrameworkComponent.md`"地形材质"一节)。
 
 ## 关键设计
 
@@ -27,53 +27,29 @@
 - 被谁依赖：`Source/Core/map/map.h`（`Map::InitTerrains()`临时构造`Terrain*`跑
   `DistributeTerrain`，见`map.md`）。
 
-## 近处地形混合（`NearTerrainBlend`）
+## 覆盖图（`terrain_coverage.h/.cpp`）
 
 ### 职责
 
-为近处地形的材质生成"混合权重"：给定一块方形区域（若干个地形 element），输出两块字节数组，
-每个 texel 记录这个位置最大的 4 个地形槽位 id（`outIds`）和它们的权重（`outWeights`，4 个字节的
-和恒为 255）。UE 侧把这两块数组拷进两张纹理，近处材质固定采样 4 个漫反射并加权混合，从而在不同
-地形的交界处平滑过渡。纯 C++17，只依赖标准库，不碰 `Map` 和任何 UE 类型。
+把"每个 element 一种地形"的离散地图烘焙成**平滑的覆盖度图**，给UE侧地形材质做地形间混合。纯 C++17，只依赖标准库，不碰`Map`和UE类型。
+替代了旧的`NearTerrainBlend`(近处CPU控制图，已删除)。
 
 ### 关键设计
 
-- **输出只取决于地图数据和 texel 的世界位置，与区域怎么划分无关。** 用不同大小、不同起点的区域
-  拼出来的结果逐字节相同。UE 侧因此可以随意平移控制区域，而不会让画面跳变。
-- **平滑核**：以 texel 中心为圆心、半径 `radius`（element 单位，夹到 [1,3]）内所有 element，
-  按到 element 中心的距离加权，`f(t) = (1 − t²)²`（t = d / radius，t ≥ 1 时为 0）。同一地形 id 的
-  权重累加。`radius = 1.5` 大致覆盖 3×3 个 element，`2.0` 大致覆盖 4×4（实际是 5×5 的角被裁掉）。
-- **核权重表**：核权重只和 texel 在 element 内的位置有关，构造时预计算一张
-  `texelsPerElement² × (2·reach+1)²` 的表，`reach = ceil(radius + 0.5) − 1`。
-- **前四大截断**：不同 id 超过 4 个时，设第 5 大的权重为 `w5`，前四大各自改成 `max(w − w5, 0)`
-  再归一化；这样一个 id 从第 4 名掉到第 5 名时权重连续地降到 0，不会在排名交换处跳变。四项全为
-  0（五个权重完全相等）时退回直接取前四大再归一化。
-  - 代价：当 5 个以上 id 的权重几乎相等时，归一化会放大梯度，场仍然连续但在那个点附近非常陡。
-    这只会出现在 5 种以上地形挤在 1.5 个 element 内的极端情况，自然地形几乎遇不到。
-- **槽位顺序**按权重从大到小（并列按 id 升序）。消费方对两张纹理都用最近点采样，不依赖相邻
-  texel 的槽位对齐。
-- **量化**用最大余数法，保证每个 texel 的 4 个字节恰好加起来是 255，且每项误差小于 1/255。
-- **construction 保险**（`constructionGuard`）：texel 所在 element 是 construction 时直接输出纯槽位。
-  2026-11-21起 construction 只是"3×3 高度都为 0"的标记、不再限制地形类型，所以升格格子的邻域可能是不同地形，核本身不再
-  保证是纯的，这一条保险（连同下面的拉力）是真正生效的：升格格子保持自己的地形槽位，邻居靠拉力过渡过来。
-- **construction 拉力**（`constructionRamp`，只在 `radius > 1.5` 时启用）：`radius > 1.5` 时核会越过
-  construction 外的第二圈，不处理的话 construction 内外在边界上会有约 12% 的权重跳变（实测）。
-  对 construction 外的 texel，按到最近 construction element 的距离算一个拉力
-  `s = clamp(1 − d / constructionRamp, 0, 1)`，权重改成 `(1 − s) × 原权重 + s × 纯槽位`，边界上 `s = 1`。
-- **快速路径**：texel 所在 element 的 `(2·reach+1)²` 邻域里所有槽位 id 都相同，或者命中 construction
-  保险时，直接写纯槽位，跳过核累加；结果与慢速路径逐字节相同（`BuildRegion` 的 `useFastPath`
-  开关就是为了验证这一点）。
-- **纹理坐标约定**：输出下标 `(ty * res + tx) * 4 + slot`，`res = size * texelsPerElement`，
-  texel (tx, ty) 的中心在地图坐标 `origin + ((tx + 0.5) / tpe, (ty + 0.5) / tpe)`，ty 向地图 +Y 增长，
-  对应纹理第 ty 行，不需要翻转。
-- 越出地图范围的 element 坐标夹到边缘 element。
+- **输入**：每个 element 的地形种类下标`ids[y*W+x]`(0..typeCount-1，越界抛`std::invalid_argument`)；**输出**`TerrainCoverage`：每种地形一张覆盖度，4种地形打包成一个RGBA8切片(`sliceCount=ceil(typeCount/4)`)，每个切片带完整mip链(到1x1)。
+- **做法**：每个 element 展开成`texelsPerElement²`个texel的one-hot掩码(默认2 texel/element)，再做可分离高斯模糊(`sigma`以element为单位，默认1，核半径`3σ`，出界取边缘格)。
+  模糊把"一格一格"的阶梯边界磨成圆滑曲线，**包括45°斜线边界**(量化前各地形覆盖度之和恒为1，量化后误差≤3/255)。材质再用噪声扭曲采样位置并"锐化"，边界才不会显得太糊或太规整。
+- **字节顺序**：输出是RGBA顺序(通道c=地形种类 slice*4+c)；UE纹理是`PF_B8G8R8A8`，`TerrainMaterialBuilder`上传前必须把每个texel的R/B字节交换，否则着色器的`.x`和`.z`互换、0号和2号地形串台(2026-11-24踩过：平原与山地材质互换)。
+- **不处理construction**：建筑占的格子渲染上和其它格一样，地形种类就是`Element::terrain`。
+- **`DownsampleRgba8`**：2×2盒式降采样，`srgb=true`时在线性空间平均(颜色贴图)，false直接平均(覆盖图/法线)；`FullMipCount`算mip层数。覆盖图的mip用它生成(层贴图数组的mip由引擎cook时生成，不用它)。
+- 1024×1024地图2 texel/element、8种地形(2个切片)：2048²×4B×2含mip≈43MB；烘焙耗时见`suite_terrain`的perf用例。
 
 ### 依赖关系
 
-- 依赖：算法本身只用标准库(和文件里`Terrain`类的Dependence依赖无关)。
-- 被谁依赖：`Source/Forever/Framework/ForeverTerrainFrameworkComponent`（`RebuildNearControl`）。
+- 依赖：只用标准库。
+- 被谁依赖：`Source/Forever/Framework/TerrainMaterialBuilder`；`Source/Test/Core/suite_terrain.cpp`。
 
-### 待办/后续阶段
+### 测试
 
-- UE 侧集成（两张控制纹理、近处材质 `TemplateNear`）见`ForeverTerrainFrameworkComponent.md`，这个文件本身不依赖它们。
-- `ComputeTexelReference` 只用于验证，不在游戏里调用。
+`CoreTest --suite terrain`：尺寸/切片数、覆盖度和为255(误差≤3)、超出typeCount的通道为0、单一地形全图255、`sigma=0`退化成硬边、镜像对称、直边单调下降、
+**45°阶梯边界模糊后沿对角线的覆盖度几乎恒定(波纹≤8，不模糊时>100)且50%等值线仍在真实对角线上**、mip链到1x1且末级=全图均值、`buildMips=false`、降采样(线性/sRGB/奇数尺寸)、非法输入、大图耗时。

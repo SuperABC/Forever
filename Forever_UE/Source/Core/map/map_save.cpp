@@ -455,14 +455,6 @@ void MapSaveCodec::WriteTerrain(const Map& map, ByteWriter& w) {
 			for (float v : *e.fineHeights) w.F32(v);
 		}
 	}
-
-	w.U32(static_cast<uint32_t>(map.terrainTextures.size()));
-	for (const string& key : SortedKeys(map.terrainTextures)) {
-		const Map::TerrainTextureInfo& info = map.terrainTextures.at(key);
-		w.Str(key);
-		w.I32(info.slice);
-		w.Str(info.diffuse); w.Str(info.normal); w.Str(info.roughness);
-	}
 }
 
 bool MapSaveCodec::ReadTerrain(Map& map, ByteReader& r, string& error) {
@@ -492,15 +484,6 @@ bool MapSaveCodec::ReadTerrain(Map& map, ByteReader& r, string& error) {
 		}
 	}
 
-	map.terrainTextures.clear();
-	uint32_t textureCount = r.U32();
-	for (uint32_t i = 0; i < textureCount && !r.Failed(); i++) {
-		string key = r.Str();
-		Map::TerrainTextureInfo info;
-		info.slice = r.I32();
-		info.diffuse = r.Str(); info.normal = r.Str(); info.roughness = r.Str();
-		map.terrainTextures[key] = info;
-	}
 	if (r.Failed()) {
 		error = "terrain section is truncated";
 		return false;

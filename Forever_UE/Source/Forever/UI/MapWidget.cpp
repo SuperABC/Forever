@@ -217,8 +217,9 @@ void UMapWidget::DrawFullMap() {
 	// 填一个倍数×倍数的色块代替单像素PutPixel，画布分辨率更高、边界更清晰。
 	// 颜色由地形mod指定(TerrainMod::SetMapColor)；没有mod的默认地形"plain"用草地绿，其余没指定的退回名字哈希色。
 	std::unordered_map<std::string, Color> terrainColors;
-	for (const auto& [terrainName, info] : map->GetTerrainTextures()) {
-		if (info.hasMapColor) terrainColors[terrainName] = Color{ info.mapColorR, info.mapColorG, info.mapColorB, 255 };
+	for (const auto& [terrainName, appearance] : map->GetTerrainAppearances()) {
+		const TerrainMapColor& mapColor = appearance.mapColor;
+		if (mapColor.has) terrainColors[terrainName] = Color{ mapColor.r, mapColor.g, mapColor.b, 255 };
 	}
 	if (!terrainColors.count("plain")) terrainColors["plain"] = Color{ 150, 176, 112, 255 };
 	for (int y = 0; y < mapHeight; y++) {

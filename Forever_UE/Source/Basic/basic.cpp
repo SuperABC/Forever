@@ -24,6 +24,7 @@
 
 #include "map/terrain_mountain.h"
 #include "map/terrain_ocean.h"
+#include "map/terrain_beach.h"
 #include "map/terrain_river.h"
 #include "map/terrain_file.h"
 #include "map/roadnet_file.h"
@@ -240,7 +241,7 @@ extern "C" __declspec(dllexport) void* GetModDependencies() {
 }
 
 extern "C" __declspec(dllexport) void* GetModTerrains() {
-	static vector<string> mods = { OceanTerrain::GetId(), MountainTerrain::GetId(), RiverTerrain::GetId(), FileTerrain::GetId() };
+	static vector<string> mods = { OceanTerrain::GetId(), MountainTerrain::GetId(), RiverTerrain::GetId(), FileTerrain::GetId(), BeachTerrain::GetId() };
 	return (void*)&mods;
 }
 extern "C" __declspec(dllexport) void RegisterModTerrains(TerrainFactory* factory) {
@@ -252,6 +253,9 @@ extern "C" __declspec(dllexport) void RegisterModTerrains(TerrainFactory* factor
 		[](TerrainMod* m) { delete m; });
 	factory->RegisterTerrain(RiverTerrain::GetId(),
 		[](const std::string& args) -> TerrainMod* { return new RiverTerrain(args); },
+		[](TerrainMod* m) { delete m; });
+	factory->RegisterTerrain(BeachTerrain::GetId(),
+		[](const std::string& args) -> TerrainMod* { return new BeachTerrain(args); },
 		[](TerrainMod* m) { delete m; });
 	factory->RegisterTerrain(FileTerrain::GetId(),
 		[](const std::string& args) -> TerrainMod* { return new FileTerrain(args); },

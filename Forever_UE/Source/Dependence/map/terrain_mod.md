@@ -10,14 +10,20 @@
   依次调用`DistributeTerrain`。数值越高越先跑，后跑的地形理论上可以覆盖先跑的（但具体覆盖
   策略由每个Mod自己在`DistributeTerrain`内部决定，接口本身不强制）。已知取值：Ocean=1.0f，
   Mountain=0.9f。
-- **`SetupTexture()`和`DistributeTerrain()`分两步**——`SetupTexture`只填`diffusePath`/
-  `normalPath`/`roughnessPath`这几个数据字段，`DistributeTerrain`才是真正改地图的算法。
-  这样`Map::InitTerrains`可以先统一调用一轮`SetupTexture`拿到所有地形的贴图路径去构建
-  `terrainTextures`索引表，再按优先级顺序跑`DistributeTerrain`，两件事互不依赖执行顺序。
-  `normalPath`/`roughnessPath`都可以留空——UE侧`ForeverTerrainFrameworkComponent`遇到
-  空路径时会给对应贴图数组槡位填平的法线+中性粗糙度，不是必填项（只有`diffusePath`留空
-  会导致这个地形类型完全没有视觉表现）。
-- **地图界面颜色**：`SetupTexture()`里可调`SetMapColor(r,g,b)`(0~255)指定这个地形在地图界面(`MapWidget`)里画什么颜色，数据经`Map::TerrainTextureInfo`带出；不调用则界面按地形名哈希一个颜色。无mod的默认地形`plain`由界面固定画草地绿。
+- **`SetupTexture()`和`DistributeTerrain()`分两步**——`SetupTexture`只声明外观(地图界面颜色`SetMapColor`、地表材质`SetMaterial`)，`DistributeTerrain`才是真正改地图的算法。
+  这样`Map`可以先统一调用一轮`SetupTexture`收集所有地形的外观(`Map::GetTerrainAppearances()`)，再按优先级顺序跑`DistributeTerrain`，两件事互不依赖执行顺序。
+  `SetupTexture`是纯虚函数，但**材质不是必填**：没调`SetMaterial`的地形在UE侧渲染成纯灰并打`LogTerrainMaterial`错误，没有任何兜底贴图。
+- **地表材质(`SetMaterial`，2026-11-24)**：材质声明活在各地形mod的C++里(不再有`diffusePath/normalPath/roughnessPath`，也没有JSON配置)，新增地形mod=在自己的`SetupTexture`里写一行。
+  一个地形最多2个"层"`TerrainMaterialLayer{name, diffuse, normal, orm|roughness, tileMeters, triplanar}`(路径是UE资产路径，如`/Game/Asset/Terrain/Plain/T_Plain_D.T_Plain_D`；
+  Megascans Surface用辅助函数`MakeMegascansLayer(name, folder, id, tileMeters, triplanar)`按Fab导入的固定布局拼路径)。两种形式：
+  - `SetMaterial(only)`：单层；
+  - `SetMaterial(a, b, selector, range0, range1)`：两层，`TerrainMaterialSelector`决定怎么混——`Slope`按坡度`1-法线z`在range0..range1间从a(平缓)渐变到b(陡峭)；`WaterDepth`按水深(米，正=水下，由UE侧顶点色给出)从a(干)渐变到b(水下)；`None`只用a。
+  层按`name`去重：不同地形可以共用同名层(如沙滩和海洋共用`wet_sand`)，贴图只加载一份。`normal`必填，`orm`(Megascans约定R=AO,G=粗糙度,B=金属度)和`roughness`(单独灰度图)二选一。
+  整个游戏最多8种地形(`MaxTerrainTypes`)、层贴图须是正方形2的幂且≥1024，约束在UE侧`TerrainMaterialBuilder`检查并报错。
+  **层贴图必须先过一遍`Tools/TerrainMaterial/prepare_terrain_textures.py`**(设成1024、不流送、diffuse BC7/normal BC5/orm或roughness BC7；运行时直接拷cook后的压缩块进贴图数组，格式不符该层报Error并渲染成灰)。
+  - 打包：各工程`pak.bat`在cook前自动跑，主工程处理`/Game/3rdParty/Megascans/Surfaces`和`/Game/Asset/Terrain/Plain`，mod工程处理`/<插件名>/TerrainLayers`——**mod的层贴图要放进插件的`Content/TerrainLayers/`，名字后缀`_B/_N/_ORM`(或`Diffuse/Normal/Roughness`)**，放别处不会被处理。
+  - 编辑器/PIE：不经过`pak.bat`，但`TerrainMaterialBuilder`加载层贴图时发现属性不对会**在内存里自动改成同样的属性**(不存盘、不标脏)并打`LogTerrainMaterial` Warning(带改前的属性)，首次重新压缩要几秒，之后进DDC。源图不是方形2的幂或<1024改不了，报Error。想让资产文件本身也改好(或打包前确认)，手动跑一次脚本，命令见`Tools/TerrainMaterial/README.md`。
+- **地图界面颜色**：`SetupTexture()`里可调`SetMapColor(r,g,b)`(0~255)指定这个地形在地图界面(`MapWidget`)里画什么颜色，数据经`TerrainAppearance::mapColor`带出；不调用则界面按地形名哈希一个颜色。无mod的默认地形`plain`由界面固定画草地绿。
 - **`DistributeTerrain`用6个`std::function`回调读写地图，不直接依赖`Map`/`Element`类型**——
   这是Dependence层一贯的做法（Mod DLL不知道也不需要知道`Map`的具体实现），调用方（`Map`）
   把自己的`GetTerrain`/`SetTerrain`/`GetHeight`/`SetHeight`/`SetWater`/`SetFineHeights`包成闭包传进去。
@@ -32,10 +38,8 @@
   `setHeight`再`setFineHeights`，因为`Map::SetHeight`会清掉共用该格点的4块细化数组，防止
   后跑的mod改了粗高度之后细化数据过期。数据只传`const float*`，Core自己分配内存拷贝，不会
   跨DLL释放mod分配的内存。目前只有`RiverTerrain`的河岸用到，见`terrain_*.md`。
-- **`diffusePath`/`normalPath`/`roughnessPath`是公开数据成员，不是私有+getter**——
-  `Terrain`包装类（`Source/Core/map/terrain.h`）的`GetTextures()`直接读
-  `mod->diffusePath`/`mod->normalPath`/`mod->roughnessPath`打包成`TerrainTexturePaths`
-  返回，不通过虚函数转发，减少一层调用。
+- **`materialSpec`/`hasMapColor`等是公开数据成员，不是私有+getter**——`Terrain`包装类直接读`mod->materialSpec`/`mod->mapColor*`返回，不通过虚函数转发。
+  它们是非虚的数据+非虚辅助函数，所以不改`TerrainMod`虚表/签名，旧mod DLL不用跟着改接口(但`Dependence`头变了，外部mod要重编，见记忆里的"外部mod构建"提醒)。
 
 ## 依赖关系
 

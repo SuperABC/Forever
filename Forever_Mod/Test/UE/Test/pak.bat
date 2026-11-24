@@ -10,6 +10,13 @@ if not exist "%PAK_DIR%" mkdir "%PAK_DIR%"
 if exist "%PAK_DIR%\%NAME%.pak" del "%PAK_DIR%\%NAME%.pak"
 if exist "%~dp0Saved\Cooked" rmdir /s /q "%~dp0Saved\Cooked"
 
+rem Terrain layer textures (<plugin>/TerrainLayers/*, names ending _B/_N/_ORM or Diffuse/Normal/Roughness) must be 1024 BC7/BC5
+rem and non-streamed so the game can copy their cooked blocks into its terrain layer arrays. Folder missing = nothing to do.
+rem See Forever_UE\Tools\TerrainMaterial\README.md. (Forward slashes in the script path: "\U" would be read as an escape.)
+for %%I in ("%~dp0..\..\..\..\Forever_UE\Tools\TerrainMaterial\prepare_terrain_textures.py") do set "PREP=%%~fI"
+"%ENGINE%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%PROJECT%" -run=pythonscript -script="%PREP:\=/% /%NAME%/TerrainLayers" -unattended
+if errorlevel 1 goto :fail
+
 "%ENGINE%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%PROJECT%" ^
   -run=Cook -TargetPlatform=Windows -unversioned -CookAll -stdout -unattended
 if errorlevel 1 goto :fail

@@ -1,18 +1,16 @@
 #include "Framework/ForeverTerrainFrameworkComponent.h"
 
 #include "ProceduralMeshComponent.h"
-#include "Engine/Texture2D.h"
-#include "Engine/Texture2DArray.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Kismet/GameplayStatics.h"
 #include "Framework/ForeverFrameworkActor.h"
+#include "Framework/TerrainMaterialBuilder.h"
 #include "UObject/ConstructorHelpers.h"
 
 #include "map/map.h"
 #include "map/general_geometry.h"
 
-#define DIFFUSE_TEX_SIZE 2048
 #define HEIGHT_EPSILON 0.002f
 // 顶点法线用高度场中心差分求，差分步长(element)：各级LOD统一，大于L0顶点间距(1/16)以抹开单个格点的台阶感。
 #define NORMAL_SAMPLE_STEP 0.25f
@@ -29,18 +27,6 @@ using namespace std;
 
 UForeverTerrainFrameworkComponent::UForeverTerrainFrameworkComponent() {
 	PrimaryComponentTick.bCanEverTick = true;
-
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> terrainMatFinder(
-		TEXT("/Game/Asset/Terrain/Template/TemplateFar.TemplateFar"));
-	if (terrainMatFinder.Succeeded()) {
-		terrainBaseMaterial = terrainMatFinder.Object;
-	}
-
-	static ConstructorHelpers::FObjectFinder<UMaterialInterface> nearMatFinder(
-		TEXT("/Game/Asset/Terrain/Template/TemplateNear.TemplateNear"));
-	if (nearMatFinder.Succeeded()) {
-		nearBaseMaterial = nearMatFinder.Object;
-	}
 
 	static ConstructorHelpers::FObjectFinder<UMaterialInterface> tunnelWallMatFinder(
 		TEXT("/Game/Asset/Common/Material/PureColor.PureColor"));
@@ -131,72 +117,10 @@ void UForeverTerrainFrameworkComponent::TickComponent(float DeltaTime, ELevelTic
 			parentOffsetY = idxY * (TERRAIN_LOD_GRID_SUBDIV / 4);
 		}
 
-		// 只在nearControlLevel自己的pivot变化时重建近处混合控制纹理——粗级pivot变化时所有
-		// 更细的级必然也要重建(上面boundaryChanged的传播已经保证needsRebuild[i]对更细级为真)，
-		// 所以纹理和网格总是同一帧一起更新，不会出现"网格已经移动但控制纹理还没跟上"的一帧。
-		if (i == nearControlLevel) {
-			float regionSize = currentPivots[i].second;
-			float originX = newPivots[i].first * (regionSize / 2.f) - regionSize / 2.f;
-			float originY = newPivots[i].second * (regionSize / 2.f) - regionSize / 2.f;
-			RebuildNearControl(originX, originY, FMath::RoundToInt(regionSize));
-		}
-
 		const FForeverLodBoundary* parentBoundary = (i < numLevels - 1) ? &lodBoundaries[i + 1] : nullptr;
 		BuildLevel(i, newPivots[i], currentPivots[i].second, childPos,
 			parentBoundary, parentOffsetX, parentOffsetY, edgeFlags);
 		currentPivots[i].first = newPivots[i];
-	}
-}
-
-namespace {
-	// 读取srcTexture的原始像素，按源分辨率最近邻重采样到expectedSize x expectedSize(BGRA8逐像素拷贝)，
-	// 源贴图比目标大/小/非正方形都能处理，只有读不到源数据(纹理空/没有mip)才失败。diffuse/normal/roughness数组共用。
-	bool LoadRawBGRA8(UTexture2D* srcTexture, int32 expectedSize, TArray64<uint8>& outBytes) {
-		if (!srcTexture) return false;
-		int64 expectedBytes = (int64)expectedSize * expectedSize * 4;
-
-		TArray64<uint8> rawBytes;
-		int32 srcW = 0, srcH = 0;
-#if WITH_EDITOR
-		srcW = srcTexture->Source.GetSizeX();
-		srcH = srcTexture->Source.GetSizeY();
-		if (srcW <= 0 || srcH <= 0 || !srcTexture->Source.GetMipData(rawBytes, 0)) return false;
-		int64 rawExpected = (int64)srcW * srcH * 4;
-		if (rawBytes.Num() < rawExpected) return false;
-#else
-		FTexturePlatformData* srcPlatformData = srcTexture->GetPlatformData();
-		if (!srcPlatformData || srcPlatformData->Mips.Num() == 0) return false;
-		srcW = srcPlatformData->Mips[0].SizeX;
-		srcH = srcPlatformData->Mips[0].SizeY;
-		FByteBulkData& bulkData = srcPlatformData->Mips[0].BulkData;
-		const void* srcData = bulkData.Lock(LOCK_READ_ONLY);
-		int64 rawExpected = (int64)srcW * srcH * 4;
-		bool ok = srcData && srcW > 0 && srcH > 0 && bulkData.GetBulkDataSize() >= rawExpected;
-		if (ok) {
-			rawBytes.SetNumUninitialized(rawExpected);
-			FMemory::Memcpy(rawBytes.GetData(), srcData, rawExpected);
-		}
-		bulkData.Unlock();
-		if (!ok) return false;
-#endif
-
-		if (srcW == expectedSize && srcH == expectedSize) {
-			outBytes = MoveTemp(rawBytes);
-			outBytes.SetNum(expectedBytes, EAllowShrinking::No);
-			return true;
-		}
-
-		outBytes.SetNumUninitialized(expectedBytes);
-		for (int32 dy = 0; dy < expectedSize; dy++) {
-			int32 sy = FMath::Clamp((dy * srcH) / expectedSize, 0, srcH - 1);
-			for (int32 dx = 0; dx < expectedSize; dx++) {
-				int32 sx = FMath::Clamp((dx * srcW) / expectedSize, 0, srcW - 1);
-				const uint8* srcPixel = rawBytes.GetData() + ((int64)sy * srcW + sx) * 4;
-				uint8* dstPixel = outBytes.GetData() + ((int64)dy * expectedSize + dx) * 4;
-				dstPixel[0] = srcPixel[0]; dstPixel[1] = srcPixel[1]; dstPixel[2] = srcPixel[2]; dstPixel[3] = srcPixel[3];
-			}
-		}
-		return true;
 	}
 }
 
@@ -215,193 +139,17 @@ void UForeverTerrainFrameworkComponent::GenerateTerrain(Map* inMap) {
 	for (int i = 0; i < num; i++) {
 		currentPivots[i] = { { INT_MIN, INT_MIN }, 4.f * powf(2.f, static_cast<float>(i)) };
 	}
-	nearControlLevel = FMath::Clamp(nearControlLevel, 0, num - 1);
-	nearTexelsPerElement = FMath::Max(nearTexelsPerElement, 1);
-	nearBlendRadius = FMath::Clamp(nearBlendRadius, 1.f, 3.f);
 
-	const auto& terrainTextures = map->GetTerrainTextures();
-	if (!terrainTextures.empty()) {
-		int32 numSlices = static_cast<int32>(terrainTextures.size());
-		int32 sliceBytes = DIFFUSE_TEX_SIZE * DIFFUSE_TEX_SIZE * 4;
-
-		TArray<UTexture2D*> diffuseTextures, normalTextures, roughnessTextures;
-		diffuseTextures.SetNum(numSlices);
-		normalTextures.SetNum(numSlices);
-		roughnessTextures.SetNum(numSlices);
-		for (auto& [textureName, textureInfo] : terrainTextures) {
-			if (!diffuseTextures.IsValidIndex(textureInfo.slice)) continue;
-			if (!textureInfo.diffuse.empty())
-				diffuseTextures[textureInfo.slice] = LoadObject<UTexture2D>(nullptr, *FString(textureInfo.diffuse.c_str()));
-			if (!textureInfo.normal.empty())
-				normalTextures[textureInfo.slice] = LoadObject<UTexture2D>(nullptr, *FString(textureInfo.normal.c_str()));
-			if (!textureInfo.roughness.empty())
-				roughnessTextures[textureInfo.slice] = LoadObject<UTexture2D>(nullptr, *FString(textureInfo.roughness.c_str()));
-		}
-
-		// 构建TerrainDiffuseArray:逐槽位拷贝源贴图的BGRA8字节(按源尺寸最近邻重采样到DIFFUSE_TEX_SIZE),
-		// 读不到数据时整层填中性灰(128,128,128,255)并打一条Warning。
-		terrainDiffuseArray = NewObject<UTexture2DArray>(this, NAME_None, RF_Transient);
-		terrainDiffuseArray->Filter = TF_Bilinear;
-		terrainDiffuseArray->SRGB = true;
-#if WITH_EDITOR
-		terrainDiffuseArray->MipGenSettings = TMGS_NoMipmaps;
-#endif
-		terrainDiffuseArray->NeverStream = true;
-		{
-			FTexturePlatformData* platformData = new FTexturePlatformData();
-			platformData->SizeX = DIFFUSE_TEX_SIZE;
-			platformData->SizeY = DIFFUSE_TEX_SIZE;
-			platformData->SetNumSlices(numSlices);
-			platformData->PixelFormat = PF_B8G8R8A8;
-
-			FTexture2DMipMap* mip = new FTexture2DMipMap();
-			mip->SizeX = DIFFUSE_TEX_SIZE;
-			mip->SizeY = DIFFUSE_TEX_SIZE;
-			mip->SizeZ = numSlices;
-
-			mip->BulkData.Lock(LOCK_READ_WRITE);
-			uint8* destPixels = (uint8*)mip->BulkData.Realloc((int64)sliceBytes * numSlices);
-			FMemory::Memzero(destPixels, (int64)sliceBytes * numSlices);
-
-			for (int32 sliceIndex = 0; sliceIndex < numSlices; sliceIndex++) {
-				uint8* slicePixels = destPixels + (int64)sliceIndex * sliceBytes;
-				TArray64<uint8> srcBytes;
-				if (LoadRawBGRA8(diffuseTextures[sliceIndex], DIFFUSE_TEX_SIZE, srcBytes)) {
-					FMemory::Memcpy(slicePixels, srcBytes.GetData(), sliceBytes);
-				}
-				else {
-					if (diffuseTextures[sliceIndex]) {
-						UE_LOG(LogTemp, Warning, TEXT("UForeverTerrainFrameworkComponent: diffuse texture at slot %d failed to load or is not %dx%d, filling fallback gray."),
-							sliceIndex, DIFFUSE_TEX_SIZE, DIFFUSE_TEX_SIZE);
-					}
-					for (int64 p = 0; p < (int64)DIFFUSE_TEX_SIZE * DIFFUSE_TEX_SIZE; p++) {
-						slicePixels[p * 4 + 0] = 128; slicePixels[p * 4 + 1] = 128;
-						slicePixels[p * 4 + 2] = 128; slicePixels[p * 4 + 3] = 255;
-					}
-				}
-			}
-
-			mip->BulkData.Unlock();
-			platformData->Mips.Add(mip);
-			terrainDiffuseArray->SetPlatformData(platformData);
-			terrainDiffuseArray->UpdateResource();
-		}
-
-		// 构建TerrainNormalRoughArray:每个槽位把法线源的R/G(法线xy)和粗糙度源的R(灰度)
-		// 打包进同一层,sRGB关(存的是打包数据不是颜色)。源缺失/读不到时填平的
-		// 法线(128,128)+中性粗糙度(204≈0.8)。
-		terrainNormalRoughArray = NewObject<UTexture2DArray>(this, NAME_None, RF_Transient);
-		terrainNormalRoughArray->Filter = TF_Bilinear;
-		terrainNormalRoughArray->SRGB = false;
-#if WITH_EDITOR
-		terrainNormalRoughArray->MipGenSettings = TMGS_NoMipmaps;
-#endif
-		terrainNormalRoughArray->NeverStream = true;
-		{
-			FTexturePlatformData* platformData = new FTexturePlatformData();
-			platformData->SizeX = DIFFUSE_TEX_SIZE;
-			platformData->SizeY = DIFFUSE_TEX_SIZE;
-			platformData->SetNumSlices(numSlices);
-			platformData->PixelFormat = PF_B8G8R8A8;
-
-			FTexture2DMipMap* mip = new FTexture2DMipMap();
-			mip->SizeX = DIFFUSE_TEX_SIZE;
-			mip->SizeY = DIFFUSE_TEX_SIZE;
-			mip->SizeZ = numSlices;
-
-			mip->BulkData.Lock(LOCK_READ_WRITE);
-			uint8* destPixels = (uint8*)mip->BulkData.Realloc((int64)sliceBytes * numSlices);
-			FMemory::Memzero(destPixels, (int64)sliceBytes * numSlices);
-
-			for (int32 sliceIndex = 0; sliceIndex < numSlices; sliceIndex++) {
-				uint8* slicePixels = destPixels + (int64)sliceIndex * sliceBytes;
-				TArray64<uint8> normalBytes, roughBytes;
-				bool normalOk = LoadRawBGRA8(normalTextures[sliceIndex], DIFFUSE_TEX_SIZE, normalBytes);
-				bool roughOk = LoadRawBGRA8(roughnessTextures[sliceIndex], DIFFUSE_TEX_SIZE, roughBytes);
-				if (normalTextures[sliceIndex] && !normalOk) {
-					UE_LOG(LogTemp, Warning, TEXT("UForeverTerrainFrameworkComponent: normal texture at slot %d failed to load or is not %dx%d, filling flat normal."),
-						sliceIndex, DIFFUSE_TEX_SIZE, DIFFUSE_TEX_SIZE);
-				}
-				if (roughnessTextures[sliceIndex] && !roughOk) {
-					UE_LOG(LogTemp, Warning, TEXT("UForeverTerrainFrameworkComponent: roughness texture at slot %d failed to load or is not %dx%d, filling neutral roughness."),
-						sliceIndex, DIFFUSE_TEX_SIZE, DIFFUSE_TEX_SIZE);
-				}
-				for (int64 p = 0; p < (int64)DIFFUSE_TEX_SIZE * DIFFUSE_TEX_SIZE; p++) {
-					// 源贴图也是BGRA8,R通道在字节下标2,G通道在字节下标1。
-					uint8 normalSrcR = normalOk ? normalBytes[p * 4 + 2] : 128;
-					uint8 normalSrcG = normalOk ? normalBytes[p * 4 + 1] : 128;
-					uint8 roughSrcR = roughOk ? roughBytes[p * 4 + 2] : 204;
-					slicePixels[p * 4 + 0] = roughSrcR;  // 输出B=粗糙度
-					slicePixels[p * 4 + 1] = normalSrcG; // 输出G=法线y
-					slicePixels[p * 4 + 2] = normalSrcR; // 输出R=法线x
-					slicePixels[p * 4 + 3] = 255;
-				}
-			}
-
-			mip->BulkData.Unlock();
-			platformData->Mips.Add(mip);
-			terrainNormalRoughArray->SetPlatformData(platformData);
-			terrainNormalRoughArray->UpdateResource();
-		}
-
-		// 构建地形索引图(远处用):每像素存储该元素的地形类型槽位索引(PF_G8);同时顺手填好
-		// nearSliceIds/nearIsConstruction(近处混合用),两份数据来自同一次扫描,不重复遍历。
-		auto [mapWidth, mapHeight] = map->GetSize();
-		terrainIndexMap = UTexture2D::CreateTransient(mapWidth, mapHeight, PF_G8, TEXT("TerrainIndexMap"));
-		terrainIndexMap->NeverStream = true;
-		terrainIndexMap->Filter = TF_Nearest;
-
-		nearSliceIds.assign((size_t)mapWidth * mapHeight, 0);
-		nearIsConstruction.assign((size_t)mapWidth * mapHeight, 0);
-
-		FTexture2DMipMap& indexMip = terrainIndexMap->GetPlatformData()->Mips[0];
-		uint8* indexPixels = (uint8*)indexMip.BulkData.Lock(LOCK_READ_WRITE);
-		for (int y = 0; y < mapHeight; y++)
-			for (int x = 0; x < mapWidth; x++) {
-				const string& terrainName = map->GetTerrain(x, y);
-				uint8 terrainIndex = 0;
-				auto terrainIter = terrainTextures.find(terrainName);
-				if (terrainIter != terrainTextures.end())
-					terrainIndex = (uint8)FMath::Min(terrainIter->second.slice, 255);
-				indexPixels[y * mapWidth + x] = terrainIndex;
-				nearSliceIds[(size_t)y * mapWidth + x] = terrainIndex;
-				nearIsConstruction[(size_t)y * mapWidth + x] = map->IsConstruction(x, y) ? 1 : 0;
-			}
-		indexMip.BulkData.Unlock();
-		terrainIndexMap->UpdateResource();
-
-		if (terrainBaseMaterial) {
-			terrainMaterial = UMaterialInstanceDynamic::Create(terrainBaseMaterial, this);
-			terrainMaterial->SetTextureParameterValue(TEXT("TerrainDiffuseArray"), terrainDiffuseArray);
-			terrainMaterial->SetTextureParameterValue(TEXT("TerrainNormalRoughArray"), terrainNormalRoughArray);
-			terrainMaterial->SetTextureParameterValue(TEXT("TerrainIndexMap"), terrainIndexMap);
-			terrainMaterial->SetVectorParameterValue(TEXT("TerrainMapSize"), FLinearColor((float)mapWidth, (float)mapHeight, 0.f, 0.f));
-		}
-
-		// 近处材质+它的两张控制纹理(持久化,原地更新,不是每次CreateTransient)。
-		nearBlend = std::make_unique<NearTerrainBlend>(NearBlendParams{ nearTexelsPerElement, nearBlendRadius });
-		if (nearBaseMaterial) {
-			nearMaterial = UMaterialInstanceDynamic::Create(nearBaseMaterial, this);
-			nearMaterial->SetTextureParameterValue(TEXT("TerrainDiffuseArray"), terrainDiffuseArray);
-			nearMaterial->SetTextureParameterValue(TEXT("TerrainNormalRoughArray"), terrainNormalRoughArray);
-		}
-
-		int32 nearRegionSize = FMath::RoundToInt(currentPivots[nearControlLevel].second);
-		int32 nearRes = nearRegionSize * nearTexelsPerElement;
-		nearIndexMap = UTexture2D::CreateTransient(nearRes, nearRes, PF_B8G8R8A8, TEXT("NearIndexMap"));
-		nearWeightMap = UTexture2D::CreateTransient(nearRes, nearRes, PF_B8G8R8A8, TEXT("NearWeightMap"));
-		for (UTexture2D* tex : { nearIndexMap, nearWeightMap }) {
-			if (!tex) continue;
-			tex->Filter = TF_Nearest;
-			tex->AddressX = TA_Clamp;
-			tex->AddressY = TA_Clamp;
-			tex->SRGB = false;
-			tex->NeverStream = true;
-		}
-		if (nearMaterial) {
-			nearMaterial->SetTextureParameterValue(TEXT("NearIndexMap"), nearIndexMap);
-			nearMaterial->SetTextureParameterValue(TEXT("NearWeightMap"), nearWeightMap);
-		}
+	// 材质：层贴图数组/覆盖图/表/噪声都在这里一次性生成，之后不再重建。基础材质M_Terrain由Tools/TerrainMaterial/build_terrain_material.py生成；
+	// 这里运行时才加载(不在构造函数里FObjectFinder)，否则编辑器里跑那个脚本重建材质时它已被CDO引用着，清节点会断言。找不到就是没有地形材质(Build打Error)。
+	if (!terrainBaseMaterial) {
+		terrainBaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Asset/Terrain/M_Terrain.M_Terrain"));
+	}
+	terrainMaterial = FTerrainMaterialBuilder::Build(this, map, terrainBaseMaterial);
+	{
+		const auto [mapWidth, mapHeight] = map->GetSize();
+		waterFieldWidth = mapWidth;
+		FTerrainMaterialBuilder::BuildWaterLevelField(map, 6, waterLevelField);
 	}
 
 	gridMeshes.SetNum(num);
@@ -536,7 +284,7 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 	const float worldScale = 1000.f;
 
 	// 材质不读网格UV,全部用世界坐标(AbsoluteWorldPosition/1000=地图element坐标)采样,
-	// 所以CreateMeshSection不传UV,见.md"近处地形混合"一节。
+	// 所以CreateMeshSection不传UV,见.md"地形材质"一节。
 	TArray<FVector> vertices;
 	TArray<int32> triangles;
 
@@ -740,8 +488,18 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		tangents[i] = FProcMeshTangent(t, false);
 	}
 
+	// 顶点色R=水深(最近水面高度-地面高度)，材质据此给河/海/沙滩按水线分层。位置决定值，和LOD、三角形怎么拆无关；
+	// hatch裁剪新增的交点顶点也按自己的位置算。GBA未用。
+	TArray<FColor> vertexColors;
+	vertexColors.SetNumUninitialized(vertices.Num());
+	for (int32 i = 0; i < vertices.Num(); i++) {
+		const float mx = vertices[i].X / worldScale, my = vertices[i].Y / worldScale;
+		const float depth = SampleWaterDepthMeters(mx, my, vertices[i].Z / worldScale);
+		vertexColors[i] = FColor(FTerrainMaterialBuilder::EncodeWaterDepth(depth), 0, 0, 255);
+	}
+
 	mesh->CreateMeshSection(0, vertices, triangles,
-		normals, TArray<FVector2D>(), TArray<FColor>(), tangents, true);
+		normals, TArray<FVector2D>(), vertexColors, tangents, true);
 
 	// 保存修正后的四条边界顶点,供更细一级LOD进行接缝修正时使用
 	if (levelIdx < (int)lodBoundaries.size()) {
@@ -754,63 +512,20 @@ void UForeverTerrainFrameworkComponent::BuildLevel(int levelIdx, pair<int, int> 
 		}
 	}
 
-	// levelIdx<=nearControlLevel的LOD都在近处控制纹理覆盖的区域内,用同一个nearMaterial
-	// (纹理内容由RebuildNearControl按nearControlLevel那一级的pivot更新,不是每级各自建一份)。
-	if (levelIdx <= nearControlLevel && nearMaterial) {
-		mesh->SetMaterial(0, nearMaterial);
-	}
-	else if (terrainMaterial) {
+	if (terrainMaterial) {
 		mesh->SetMaterial(0, terrainMaterial);
 	}
 }
 
-void UForeverTerrainFrameworkComponent::RebuildNearControl(float originX, float originY, int32 sizeElements) {
-	if (!map || !nearBlend || !nearIndexMap || !nearWeightMap) return;
-
-	int32 clampedOriginX = FMath::FloorToInt(originX);
-	int32 clampedOriginY = FMath::FloorToInt(originY);
-	if (nearRegionPivot.first == clampedOriginX && nearRegionPivot.second == clampedOriginY) return;
-
-	double startTime = FPlatformTime::Seconds();
-	auto [mapWidth, mapHeight] = map->GetSize();
-
-	NearBlendRegion region;
-	region.originX = clampedOriginX;
-	region.originY = clampedOriginY;
-	region.size = sizeElements;
-	region.mapWidth = mapWidth;
-	region.mapHeight = mapHeight;
-	region.sliceIds = nearSliceIds.data();
-	region.isConstruction = nearIsConstruction.data();
-
-	std::vector<uint8_t> outIds, outWeights;
-	nearBlend->BuildRegion(region, outIds, outWeights);
-
-	// res和GenerateTerrain里创建纹理时恒定一致，原地Realloc到同样字节数更新，不重新CreateTransient。
-	int32 res = sizeElements * nearTexelsPerElement;
-	int64 expectedBytes = (int64)res * res * 4;
-	auto writeTexture = [expectedBytes](UTexture2D* tex, const std::vector<uint8_t>& bytes) {
-		FTexturePlatformData* pd = tex->GetPlatformData();
-		if (!pd || pd->Mips.Num() == 0) return;
-		FTexture2DMipMap& mip = pd->Mips[0];
-		mip.BulkData.Lock(LOCK_READ_WRITE);
-		void* dest = mip.BulkData.Realloc(expectedBytes);
-		FMemory::Memcpy(dest, bytes.data(), expectedBytes);
-		mip.BulkData.Unlock();
-		tex->UpdateResource();
-		};
-	writeTexture(nearIndexMap, outIds);
-	writeTexture(nearWeightMap, outWeights);
-
-	if (nearMaterial) {
-		nearMaterial->SetVectorParameterValue(TEXT("NearRegion"),
-			FLinearColor((float)clampedOriginX, (float)clampedOriginY, (float)sizeElements, 0.f));
-	}
-
-	nearRegionPivot = { clampedOriginX, clampedOriginY };
-	double elapsedMs = (FPlatformTime::Seconds() - startTime) * 1000.0;
-	UE_LOG(LogTemp, Log, TEXT("UForeverTerrainFrameworkComponent::RebuildNearControl origin=(%d,%d) size=%d res=%d elapsed=%.2fms"),
-		clampedOriginX, clampedOriginY, sizeElements, res, elapsedMs);
+float UForeverTerrainFrameworkComponent::SampleWaterDepthMeters(float mapX, float mapY, float height) const {
+	const float none = FTerrainMaterialBuilder::WaterDepthMinMeters;
+	if (waterLevelField.empty() || waterFieldWidth <= 0 || !map) return none;
+	const auto [width, mapHeight] = map->GetSize();
+	const int32 ex = FMath::Clamp(FMath::FloorToInt(mapX), 0, width - 1);
+	const int32 ey = FMath::Clamp(FMath::FloorToInt(mapY), 0, mapHeight - 1);
+	const float level = waterLevelField[(size_t)ey * waterFieldWidth + ex];
+	if (level <= FTerrainMaterialBuilder::NoWater * 0.5f) return none;
+	return (level - height) * FTerrainMaterialBuilder::MetersPerElement;
 }
 
 // 隧道口侧壁：对每个wall=true的hatch(RoadnetMod::AddTunnelHatch)，在洞的两条长边(沿rotation，横向

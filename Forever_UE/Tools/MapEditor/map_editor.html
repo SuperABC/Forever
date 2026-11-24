@@ -2120,7 +2120,7 @@ function renderLeft() {
 			left.append(row('颜色', el('input', { type: 'color', value: rgbHex(ME.colorOf(B.terrain, S.colors)), onchange: (e) => { S.colors[B.terrain] = hexRgb(e.target.value); rebuildTerrainImage(); renderLeft(); } })));
 			left.append(el('h4', null, '已用字符串'));
 			const chips = el('div', { class: 'chips' });
-			const names = Array.from(new Set(['plain', 'terrain_mountain', 'terrain_ocean', 'terrain_river'].concat(S.terrain.palette)));
+			const names = Array.from(new Set(['plain', 'terrain_mountain', 'terrain_ocean', 'terrain_river', 'terrain_beach'].concat(S.terrain.palette)));
 			for (const n of names) {
 				const c = ME.colorOf(n, S.colors);
 				chips.append(el('span', { class: 'chip' + (B.terrain === n ? ' on' : ''), onclick: () => { B.terrain = n; renderLeft(); } }, el('i', { style: `background:rgb(${c[0]},${c[1]},${c[2]})` }), n));

@@ -69,9 +69,10 @@ float MountainTerrain::GetPriority() const {
 
 void MountainTerrain::SetupTexture() {
 	SetMapColor(128, 118, 108);
-	diffusePath = "/Game/Asset/Terrain/Rock/RockDiffuse.RockDiffuse";
-	normalPath = "/Game/Asset/Terrain/Rock/RockNormal.RockNormal";
-	roughnessPath = "/Game/Asset/Terrain/Rock/RockRoughness.RockRoughness";
+	// 平缓处是山地草，陡处是垂直岩壁(1-法线z在0.2~0.4即约37~52度之间过渡)。
+	SetMaterial(MakeMegascansLayer("wild_grass", "Wild_Grass_pjvtR0", "pjvtR0", 4.f),
+		MakeMegascansLayer("rock_cliff", "Rough_Rock_Cliff_vl0fffao", "vl0fffao", 4.f, true),
+		TerrainMaterialSelector::Slope, 0.2f, 0.4f);
 }
 
 void MountainTerrain::DistributeTerrain(int width, int height,

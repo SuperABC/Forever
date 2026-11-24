@@ -79,14 +79,7 @@ Map::Map(int width, int height) :
 	roomFactory(Registry::Get().GetRoomFactory()),
 	componentFactory(Registry::Get().GetComponentFactory()),
 	scriptFactory(Registry::Get().GetScriptFactory()),
-	terrainTextures() {
-	TerrainTextureInfo plainTexture{ 0,
-		"/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse",
-		"/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal",
-		"/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness" };
-	terrainTextures = {
-		{ "plain", plainTexture }
-	};
+	terrainAppearances() {
 }
 
 Map::~Map() {
@@ -144,12 +137,7 @@ void Map::InitTerrains() {
 		return a->GetPriority() > b->GetPriority();
 		});
 
-	int preset = static_cast<int>(terrainTextures.size());
 	for (size_t i = 0; i < terrains.size(); i++) {
-		TerrainTexturePaths texturePaths = terrains[i]->GetTextures();
-		terrainTextures[terrains[i]->GetType()] = { static_cast<int>(i) + preset,
-			texturePaths.diffuse, texturePaths.normal, texturePaths.roughness,
-			texturePaths.hasMapColor, texturePaths.mapColorR, texturePaths.mapColorG, texturePaths.mapColorB };
 		terrains[i]->DistributeTerrain(width, height, getTerrain, setTerrain, getHeight, setHeight, setWater, setFineHeights);
 	}
 	for (auto* terrain : terrains) {
@@ -3040,8 +3028,26 @@ int Map::DemolishAlongStrips(const vector<DemolishRequest>& strips, const functi
 	return count;
 }
 
-const unordered_map<string, Map::TerrainTextureInfo>& Map::GetTerrainTextures() const {
-	return terrainTextures;
+const unordered_map<string, TerrainAppearance>& Map::GetTerrainAppearances() const {
+	if (terrainAppearancesBuilt) return terrainAppearances;
+	terrainAppearancesBuilt = true;
+	// 默认地形"plain"没有mod：材质固定为干砂地(PlainDiffuse/Normal/Roughness，UE资产)，地图颜色不指定(界面自己画)。
+	TerrainAppearance plain;
+	plain.material.defined = true;
+	TerrainMaterialLayer sand;
+	sand.name = "plain_sand";
+	sand.diffuse = "/Game/Asset/Terrain/Plain/PlainDiffuse.PlainDiffuse";
+	sand.normal = "/Game/Asset/Terrain/Plain/PlainNormal.PlainNormal";
+	sand.roughness = "/Game/Asset/Terrain/Plain/PlainRoughness.PlainRoughness";
+	sand.tileMeters = 10.f;
+	plain.material.layers = { sand };
+	terrainAppearances["plain"] = plain;
+	for (const auto& id : terrainFactory.GetRegisteredIds()) {
+		Terrain terrain(&terrainFactory, id);
+		terrain.SetupTexture();
+		terrainAppearances[terrain.GetType()] = { terrain.GetMapColor(), terrain.GetMaterialSpec() };
+	}
+	return terrainAppearances;
 }
 
 std::shared_ptr<Map::SearchGraph> Map::AcquireSearchGraph(const NavGraph& graph,

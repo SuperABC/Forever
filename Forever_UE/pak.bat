@@ -12,6 +12,13 @@ del /f /q "%BINDIR%\Forever.target" 2>nul
 del /f /q "%BINDIR%\Forever.lib"    2>nul
 del /f /q "%BINDIR%\Forever.exp"    2>nul
 
+rem Terrain layer textures must be 1024 BC7/BC5 and non-streamed: TerrainMaterialBuilder copies their cooked blocks into the
+rem terrain layer arrays at runtime (it can not read source pixels in a packaged build). See Tools\TerrainMaterial\README.md.
+rem (The script path needs forward slashes: unreal's -script parser treats "\U" in "UE5" as an escape.)
+set "PREP=%~dp0Tools\TerrainMaterial\prepare_terrain_textures.py"
+"%ENGINE%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%PROJECT%" -run=pythonscript -script="%PREP:\=/% /Game/3rdParty/Megascans/Surfaces /Game/Asset/Terrain/Plain" -unattended
+if errorlevel 1 goto :fail
+
 call "%ENGINE%\Engine\Build\BatchFiles\RunUAT.bat" BuildCookRun ^
   -project="%PROJECT%" -noP4 -platform=Win64 -clientconfig=Development ^
   -build -cook -allmaps -stage -pak -archive ^

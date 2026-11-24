@@ -102,7 +102,7 @@ public:
 	Map(int width, int height);
 	~Map();
 
-	// 按GetPriority()降序对所有已注册地形执行DistributeTerrain，再按"3x3范围内高度都为0"标记construction(可建设)、重建terrainTextures。
+	// 按GetPriority()降序对所有已注册地形执行DistributeTerrain，再按"3x3范围内高度都为0"标记construction(可建设)。
 	// 不含mod dll的发现/注册(归Registry，整个进程只跑一次)，见map.md。
 	void InitTerrains();
 
@@ -152,17 +152,9 @@ public:
 	// 路网(公路桥)的桥墩，UE层据此生成墩的mesh。roadnet为空返回空；读档后来自存档。
 	std::vector<Pier> GetRoadPiers() const;
 
-	// 地形类型 -> {纹理数组槽位索引, diffuse/normal/roughness三套资产路径}
-	struct TerrainTextureInfo {
-		int slice = 0;
-		std::string diffuse;
-		std::string normal;
-		std::string roughness;
-		// mod指定的地图界面颜色，hasMapColor为false表示未指定
-		bool hasMapColor = false;
-		uint8_t mapColorR = 0, mapColorG = 0, mapColorB = 0;
-	};
-	const std::unordered_map<std::string, TerrainTextureInfo>& GetTerrainTextures() const;
+	// 地形类型 -> 外观(地图界面颜色+地表材质声明)。向已注册的地形mod收集(调SetupTexture)后缓存，所以新建的世界和读档后的世界都能用；
+	// 另含默认地形"plain"(没有mod，材质在Map里声明)。
+	const std::unordered_map<std::string, TerrainAppearance>& GetTerrainAppearances() const;
 
 	// 全图植被(InitVegetation里展开)，UE层UForeverVegetationFrameworkComponent一次性读取
 	// 渲染，见vegetation.md。
@@ -489,7 +481,8 @@ private:
 	// 门/电梯/实体Script创建用。
 	ScriptFactory& scriptFactory;
 
-	std::unordered_map<std::string, TerrainTextureInfo> terrainTextures;
+	mutable std::unordered_map<std::string, TerrainAppearance> terrainAppearances;
+	mutable bool terrainAppearancesBuilt = false;
 
 	Vegetation vegetation;
 	Lamps lamps;
